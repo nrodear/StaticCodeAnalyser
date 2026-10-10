@@ -18,6 +18,8 @@ program reDelphix.Test;
 //                        SCA139 auf Text, ohne Parser
 //   * uTestRdxStructFixes - Editorhilfen SCA007/SCA168 (uses-Eintrag,
 //                        case-else) auf Text, ohne Parser
+//   * uTestRdxBlockFixes - Editorhilfe SCA101/SCA099 (begin..end) auf
+//                        Text, ohne Parser
 //   * uTestRdxExprFixes - Editorhilfen SCA066/SCA072/SCA084 (uQuickFix-
 //                        Umzug) auf Text, ohne Parser
 //   * uTestRdxNilFix   - Editorhilfe SCA126 auf Text, ohne Parser
@@ -60,6 +62,7 @@ uses
   uTestRdxSimpleFixes in 'uTestRdxSimpleFixes.pas',
   uTestRdxExprFixes in 'uTestRdxExprFixes.pas',
   uTestRdxStructFixes in 'uTestRdxStructFixes.pas',
+  uTestRdxBlockFixes in 'uTestRdxBlockFixes.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',
   uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas',
   uTestRdxCodeMap in 'uTestRdxCodeMap.pas',

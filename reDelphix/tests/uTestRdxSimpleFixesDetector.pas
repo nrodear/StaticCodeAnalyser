@@ -130,6 +130,8 @@ type
     [Test] procedure Sca101_SameMeaning;
     [Test] procedure Sca099_RoundTrip_SilencesSca101;
     [Test] procedure Sca099_CatalogExample;
+    // Gegen-Review 2026-10-10, Blocker 1.
+    [Test] procedure Sca099_AnonMethodHeader_NoHelp;
   end;
 
 implementation
@@ -1333,6 +1335,19 @@ begin
   Meta := TRuleCatalog.GetRuleCanonical(fkIfElseBegin);
   Assert.AreEqual(InRoutine(Snip(Meta.GoodExample)),
     FixAll(InRoutine(Snip(Meta.BadExample)), fkIfElseBegin));
+end;
+
+procedure TTestRdxSimpleFixesDetector5.Sca099_AnonMethodHeader_NoHelp;
+var
+  Src : string;
+begin
+  // Das ';' im var-Teil der anonymen Methode ist kein case-else: beide
+  // Regeln bieten nichts an, statt 'H();' in den else-Zweig zu ziehen.
+  Src := InRoutine(Join(['if Obj = nil then', '  H := procedure', '    var',
+    '      S: string;', '    begin', '      S := ''x'';', '    end', 'else',
+    '  H := nil;', 'H();']));
+  AssertNoHelp(Src, fkIfElseBegin, 'anonymen Methode');
+  AssertNoHelpAt(Src, fkBeginEndRequired, 16, 'anonymen Methode');
 end;
 
 initialization

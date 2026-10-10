@@ -104,7 +104,8 @@ function PrevToken(AMap: TRdxCodeMap; ALine, ACol: Integer): TRdxToken;
 function Before(AMap: TRdxCodeMap; const ATok: TRdxToken): TRdxToken;
 
 // Beginnt an (ALine, ACol) eine Compiler-Direktive ('{$' oder '(*$')? Die
-// Code-Sicht fuehrt Direktiven als Kommentar ('k').
+// Code-Sicht fuehrt Direktiven als Kommentar ('k'); '{$' in einem
+// '//'-Kommentar ist keine (Gegen-Review SCA101, Nit 6).
 function DirectiveAt(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
 // Beginnt zwischen (AFromLine, 1) und dem Token ATo eine Direktive? Bis
 // Dateiende, wenn ATo leer ist.
@@ -472,10 +473,13 @@ end;
 
 function DirectiveAt(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
 var
-  L : string;
+  L     : string;
+  Slash : Integer;
 begin
   L := AMap.Raw(ALine);
+  Slash := AMap.LineCommentCol(ALine);
   Result := (AMap.ClassAt(ALine, ACol) = 'k')
+    and ((Slash = 0) or (ACol < Slash))
     and ((Copy(L, ACol, 2) = '{$') or (Copy(L, ACol, 3) = '(*$'));
 end;
 

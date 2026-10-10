@@ -129,9 +129,24 @@ const
   // Obergrenze fuer then/else-Spruenge rueckwaerts (StartsStatement) - eine
   // else-if-Kette ist so lang wie ihre Zweige.
   MAX_HOPS = 10000;
-  // Hier endet die Suche nach dem Besitzer eines else ohne Fund.
-  ELSE_STOPS: array[0..6] of string = ('begin', 'try', 'asm', 'record',
-    'repeat', 'until', 'finally');
+  // Hier endet die Suche nach dem Besitzer eines else ohne Fund (auf
+  // oberster Ebene; repeat..until wird wie begin..end uebersprungen).
+  ELSE_STOPS: array[0..4] of string = ('begin', 'try', 'asm', 'repeat',
+    'finally');
+  // Deklarationen: rueckwaerts hinter einem ';' der Kopf einer anonymen
+  // Methode (Gegen-Review SCA101, Blocker 1).
+  DECL_WORDS: array[0..5] of string = ('procedure', 'function', 'var',
+    'const', 'type', 'label');
+  // Hinter 'end else' meldet uIfElseBegin diese Woerter nicht.
+  SCA099_ALLOWED: array[0..7] of string = ('begin', 'if', 'case', 'try',
+    'for', 'while', 'repeat', 'with');
+  // Rueckwaerts vor einem ':' auf oberster Ebene: Anfang einer Anweisung -
+  // der ':' ist eine case-Marke oder ein Label (ColonInParens).
+  COLON_STOPS: array[0..9] of string = ('begin', 'of', 'then', 'else', 'do',
+    'try', 'except', 'finally', 'repeat', 'end');
+  // Vor 'on' eines Handlers steht ';' oder except - sonst ist On ein
+  // Bezeichner ('while not On do').
+  HANDLER_PREV: array[0..1] of string = (';', 'except');
   // Hinter diesen Token ist ein Wort ein Bezeichner ('&End', '@@End',
   // 'X.Then').
   IDENT_PREFIXES: array[0..2] of string = ('&', '@', '.');
@@ -159,6 +174,9 @@ type
     HasSemi  : Boolean;
     IsList   : Boolean;     // else eines case/except: Liste bis vor das end
     Indent   : string;      // fuer begin und end
+    // Erste Zeile der Direktiven-Pruefung: die des Schluesselworts, beim
+    // else die des Tokens, das seinen Besitzer entschied (then, of, except).
+    CheckFrom : Integer;
   end;
 
   // Ein Schritt einer Token-Suche: weiter, gefunden, abbrechen.
@@ -168,18 +186,23 @@ type
   TRdxElseOwner = (eoUnknown, eoIf, eoList);
 
   // Die Rueckwaerts-Suche nach dem Besitzer eines else: offene Bloecke
-  // (end ohne Anfang) und else ohne then; das Ergebnis in Owner, ThenTok
-  // (eoIf) oder Reason. Die Schritte liefern True, wenn die Suche endet.
+  // (end bzw. until ohne Anfang), else ohne then und ob schon ein ';' auf
+  // oberster Ebene dahinter liegt; das Ergebnis in Owner und Decider (das
+  // then bzw. of/case/except) oder Reason. Die Schritte liefern True, wenn
+  // die Suche endet.
   TRdxElseScan = record
-    Block   : Integer;
-    Pending : Integer;
-    Owner   : TRdxElseOwner;
-    ThenTok : TRdxToken;
-    Reason  : string;
+    Block     : Integer;
+    Pending   : Integer;
+    AfterSemi : Boolean;
+    Owner     : TRdxElseOwner;
+    Decider   : TRdxToken;
+    Reason    : string;
     function StepWord(const T: TRdxToken): Boolean;     // ein Schluesselwort
+    function StepTopWord(const T: TRdxToken): Boolean;  // ... auf oberster Ebene
     function StepSymbol(const T: TRdxToken): Boolean;   // ein Satzzeichen
     function TakeThen(const T: TRdxToken): Boolean;
-    function TakeList: Boolean;
+    function TakeList(const T: TRdxToken): Boolean;
+    function Fail(const AReason: string): Boolean;
   end;
 
 function IsEndOpener(const ALow: string): Boolean;
@@ -615,7 +638,8 @@ begin
   else
   begin
     AKeyword := TokenAt(AMap, ALine, ACol);
-    if not InList(AKeyword.Low, BRANCH_KEYWORDS) then
+    if not InList(AKeyword.Low, BRANCH_KEYWORDS)
+       or InList(Before(AMap, AKeyword).Low, IDENT_PREFIXES) then
       AReason := R_BRANCH_MOVED;
   end;
   Result := AReason = '';
@@ -635,8 +659,10 @@ begin
   while (T.Low <> '') and (T.Line = ALine) do
   begin
     N := After(AMap, T);
+    // Nur Paare, die uIfElseBegin meldet - nicht 'end else if' usw.
     if (T.Low = 'end') and (N.Low = 'else')
-       and not InList(Prev.Low, IDENT_PREFIXES) then
+       and not InList(Prev.Low, IDENT_PREFIXES)
+       and not InList(After(AMap, N).Low, SCA099_ALLOWED) then
     begin
       Inc(Count);
       AKeyword := N;
@@ -682,6 +708,8 @@ begin
     Result := rsStop
   else if not IsKeywordAfter(T, APrev) then
     Exit
+  else if (T.Low = 'on') and not InList(APrev.Low, HANDLER_PREV) then
+    Exit
   else if InList(T.Low, AOwners) then
     Result := rsFound
   else if InList(T.Low, OWNER_STOPS) then
@@ -724,6 +752,13 @@ end;
 
 { TRdxElseScan }
 
+function TRdxElseScan.Fail(const AReason: string): Boolean;
+begin
+  Owner := eoUnknown;
+  Reason := AReason;
+  Result := True;
+end;
+
 function TRdxElseScan.TakeThen(const T: TRdxToken): Boolean;
 begin
   Result := Pending = 0;
@@ -732,51 +767,73 @@ begin
   else
   begin
     Owner := eoIf;
-    ThenTok := T;
+    Decider := T;
   end;
 end;
 
-function TRdxElseScan.TakeList: Boolean;
+function TRdxElseScan.TakeList(const T: TRdxToken): Boolean;
 begin
-  Owner := eoList;
   if Pending > 0 then
-    Reason := 'das else passt zu keinem if';
+    Exit(Fail('das else passt zu keinem if'));
+  Owner := eoList;
+  Decider := T;
   Result := True;
 end;
 
+// Bloecke rueckwaerts ueberspringen (end..begin/case/try/asm, until..repeat).
+// Ein record bricht ab: ein case in seinem Variantenteil hat kein eigenes
+// end, die Bilanz stimmte nicht mehr.
 function TRdxElseScan.StepWord(const T: TRdxToken): Boolean;
 begin
   Result := False;
-  if T.Low = 'end' then
+  if T.Low = 'record' then
+    Result := Fail('record vor dem else - die end-Bilanz ist unsicher')
+  else if (T.Low = 'end') or (T.Low = 'until') then
     Inc(Block)
-  else if IsEndOpener(T.Low) and (Block > 0) then
+  else if (IsEndOpener(T.Low) or (T.Low = 'repeat')) and (Block > 0) then
     Dec(Block)
-  else if Block > 0 then
+  else if Block = 0 then
+    Result := StepTopWord(T);
+end;
+
+// Ein Schluesselwort auf oberster Ebene. Liegt schon ein ';' dahinter
+// (AfterSemi), kommt nur noch ein case oder except in Frage - then und else
+// gehoeren dann zu dessen Armen. Eine Deklaration zeigt, dass das ';' im
+// Kopf einer anonymen Methode stand ('H := procedure var S: string; begin
+// ... end else'): abbrechen, sonst zoege die Hilfe den Rest des Blocks in
+// den else-Zweig (Gegen-Review SCA101, Blocker 1).
+function TRdxElseScan.StepTopWord(const T: TRdxToken): Boolean;
+begin
+  Result := False;
+  if InList(T.Low, LIST_ELSE_OWNERS) then
+    Result := TakeList(T)
+  else if InList(T.Low, ELSE_STOPS) then
+    Result := Fail(R_NO_ELSE_OWNER)
+  else if AfterSemi and InList(T.Low, DECL_WORDS) then
+    Result := Fail(Format('"%s" hinter einem ";" vor dem else - Kopf einer '
+      + 'anonymen Methode? Wem das else gehoert, ist unklar', [T.Low]))
+  else if AfterSemi then
     Exit
   else if T.Low = 'else' then
     Inc(Pending)
   else if T.Low = 'then' then
-    Result := TakeThen(T)
-  else if InList(T.Low, LIST_ELSE_OWNERS) then
-    Result := TakeList
-  else if InList(T.Low, ELSE_STOPS) then
-  begin
-    Reason := R_NO_ELSE_OWNER;
-    Result := True;
-  end;
+    Result := TakeThen(T);
 end;
 
+// Ein ';' auf oberster Ebene: ein if-else kann es nicht mehr sein - aber
+// erst ein of oder except entscheidet (StepTopWord).
 function TRdxElseScan.StepSymbol(const T: TRdxToken): Boolean;
 begin
-  Result := False;
   if (Block = 0) and (T.Low = ';') then
-    Result := TakeList;
+    AfterSemi := True;
+  Result := False;
 end;
 
 // Wem gehoert das else? Rueckwaerts ausserhalb von Klammern und Bloecken:
-// das erste then ohne eigenes else -> eoIf (ThenTok); ';', of, case oder
-// except davor -> eoList (else eines case oder except: dahinter steht eine
-// Anweisungsliste bis zum end). Sonst Reason.
+// das erste then ohne eigenes else -> eoIf; of, case oder except davor ->
+// eoList (else eines case oder except: dahinter steht eine
+// Anweisungsliste bis zum end); Decider ist das entscheidende Token. Sonst
+// Reason.
 function ElseOwner(AMap: TRdxCodeMap; const AElse: TRdxToken): TRdxElseScan;
 var
   T, P  : TRdxToken;
@@ -805,6 +862,27 @@ begin
     Result.Reason := R_NO_ELSE_OWNER;
 end;
 
+// Steht der ':' vor einem if in Klammern ('Write(X: if A then 1 else 2)')?
+// Dann ist das if ein Ausdruck - keine case-Marke, kein Label.
+function ColonInParens(AMap: TRdxCodeMap; const AColon: TRdxToken): Boolean;
+var
+  T     : TRdxToken;
+  Paren : Integer;
+begin
+  Result := False;
+  Paren := 0;
+  T := Before(AMap, AColon);
+  while (T.Low <> '') and (T.Low <> ';') do
+  begin
+    if ParenBack(T, Paren) and (Paren < 0) then
+      Exit(True);
+    if (Paren = 0) and IsKeywordAfter(T, Before(AMap, T))
+       and InList(T.Low, COLON_STOPS) then
+      Exit;
+    T := Before(AMap, T);
+  end;
+end;
+
 // Ein Sprung von StartsStatement - AThenOrElse ist then oder else: rsGoOn
 // mit dem if davor (AIf), dessen Anfang weiter zu pruefen ist; rsFound,
 // wenn das else zu case/except gehoert (eine Anweisungsliste); rsStop ohne
@@ -822,7 +900,7 @@ begin
     Scan := ElseOwner(AMap, AThenOrElse);
     if Scan.Reason <> '' then Exit(rsStop);
     if Scan.Owner = eoList then Exit(rsFound);
-    ThenTok := Scan.ThenTok;
+    ThenTok := Scan.Decider;
   end;
   Result := rsGoOn;
   if FindOwner(AMap, ThenTok, IF_OWNERS, AIf) <> '' then
@@ -844,6 +922,7 @@ begin
   for Hop := 1 to MAX_HOPS do
   begin
     if not InList(P.Low, STATEMENT_PREV) then Exit;
+    if (P.Low = ':') and ColonInParens(AMap, P) then Exit;
     if (P.Low <> 'then') and (P.Low <> 'else') then Exit(True);
     Step := HopToIf(AMap, P, IfTok);
     if Step <> rsGoOn then Exit(Step = rsFound);
@@ -871,6 +950,7 @@ var
   L         : string;
 begin
   Kw := ABranch.Keyword;
+  ABranch.CheckFrom := Kw.Line;
   if Kw.Low = 'then' then
     Result := StatementOwner(AMap, Kw, IF_OWNERS, Owner)
   else if Kw.Low = 'do' then
@@ -880,8 +960,9 @@ begin
     Scan := ElseOwner(AMap, Kw);
     Result := Scan.Reason;
     ABranch.IsList := Scan.Owner = eoList;
+    ABranch.CheckFrom := Scan.Decider.Line;
     if (Result = '') and (Scan.Owner = eoIf) then
-      Result := StatementOwner(AMap, Scan.ThenTok, IF_OWNERS, Owner);
+      Result := StatementOwner(AMap, Scan.Decider, IF_OWNERS, Owner);
     Owner := Kw;
   end;
   L := AMap.Raw(Owner.Line);
@@ -1039,18 +1120,22 @@ begin
     Result := 'Ende der Anweisung nicht gefunden';
 end;
 
-// Eine Direktive ab AKeyword bis zum Ende der Zeile ALastLine? Sie stuende
-// danach womoeglich auf der anderen Seite von begin oder end.
-function DirectiveFrom(AMap: TRdxCodeMap; const AKeyword: TRdxToken;
-  ALastLine: Integer): Boolean;
+// Eine Direktive in den Zeilen B.CheckFrom bis zur letzten Zeile der
+// Anweisung bzw. ihres Stoppers? Sie stuende nach der Hilfe womoeglich auf
+// der anderen Seite von begin oder end - oder sie entschied, wem ein else
+// gehoert ('{$IFDEF A} if X then Y {$ELSE} case K of 1: Y; {$ENDIF} else',
+// Gegen-Review SCA101, Minor 2). Zeilenweise: lieber zu streng.
+function DirectiveInRange(AMap: TRdxCodeMap; const B: TRdxBranch): Boolean;
 var
-  Li, Co : Integer;
+  Li, Co, Last : Integer;
 begin
   Result := False;
-  for Li := AKeyword.Line to ALastLine do
+  Last := B.LastLine;
+  if B.Stop.Line > Last then
+    Last := B.Stop.Line;
+  for Li := B.CheckFrom to Last do
     for Co := 1 to Length(AMap.Raw(Li)) do
-      if ((Li > AKeyword.Line) or (Co >= AKeyword.Col))
-         and DirectiveAt(AMap, Li, Co) then
+      if DirectiveAt(AMap, Li, Co) then
         Exit(True);
 end;
 
@@ -1207,7 +1292,7 @@ begin
     AReason := BranchOwner(AMap, B);
   if AReason = '' then
     AReason := BranchEnd(AMap, B);
-  if (AReason = '') and DirectiveFrom(AMap, AKeyword, B.LastLine) then
+  if (AReason = '') and DirectiveInRange(AMap, B) then
     AReason := 'Compiler-Direktive im Bereich - begin oder end stuende auf '
       + 'der anderen Seite';
   if AReason <> '' then Exit;
