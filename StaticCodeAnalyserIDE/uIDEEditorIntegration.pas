@@ -111,27 +111,6 @@ type
     // sofort ohne Augen-Tracking-Aufwand.
     class procedure CenterCurrentViewOnLine(LineNumber: Integer); static;
 
-    // Ersetzt die KOMPLETTE Zeile LineNumber in der Datei AbsPath durch
-    // NewLine. Nutzt IOTAEditWriter (Buffer-Writer): die Aenderung ist
-    // ein normaler Edit-Operation und kann mit Ctrl+Z rueckgaengig
-    // gemacht werden.
-    //
-    // Vorgehen:
-    //   1. Modul finden / oeffnen (FindModule + OpenFile als Fallback)
-    //   2. SourceEditor + EditWriter holen
-    //   3. Byte-Offset des Zeilen-Anfangs via Buffer.GetSubText / Lesen
-    //      bestimmen (Pascal-IDE-Buffer = UTF-8)
-    //   4. DeleteTo (Ende der Zeile vor LineBreak) + Insert(NewLine)
-    //
-    // Liefert True wenn der Replace durchgefuehrt wurde. False bei
-    // jedem Fehler (Datei nicht offen / Service fehlt / Zeile out of
-    // range). Caller zeigt in dem Fall einen Status-Bar-Hint.
-    //
-    // Notiz fuer Anrufer: NewLine darf KEINEN Trailing-LineBreak
-    // enthalten - das System uebernimmt die Zeilenenden des Buffers.
-    class function ApplyLineReplacement(const AbsPath: string;
-      LineNumber: Integer; const NewLine: string): Boolean; static;
-
     // Fuegt eine neue Zeile DIREKT VOR der angegebenen LineNumber ein.
     // Wird vom Auto-Suppress benutzt: `// noinspection <RuleName>`
     // ueber der Befund-Zeile. NewLine wird mit der Einrueckung der
@@ -424,7 +403,9 @@ function TryGetEditPosition(const AbsPath: string;
 // Unit (ApplyLineReplacement und InsertLineAbove). Ein Fix an einer der
 // beiden Kopien - etwa der aktive View statt EditViews[0], oder ein
 // MarkModified - haette Quick-Fix und Auto-Suppress fuer dieselbe Datei
-// auseinanderlaufen lassen.
+// auseinanderlaufen lassen. ApplyLineReplacement (Ctrl+Alt+F ueber
+// uQuickFix: Zeile von der Platte, ohne Pufferabgleich) entfiel am
+// 2026-10-10 - Ctrl+Alt+F laeuft ueber die Anbieter-Registry (reDelphix).
 //
 // Der Source-Editor wird ueber die ModuleFileEditors gesucht und nicht
 // ueber Index 0: ein Form-Modul liefert dort auch den DFM-Editor, und
@@ -474,102 +455,10 @@ begin
   Result := AEditPos <> nil;
 end;
 
-class function TIDEEditor.ApplyLineReplacement(const AbsPath: string;
-  LineNumber: Integer; const NewLine: string): Boolean;
-// Strategie (echte API - keine Byte-Offset-Arithmetik):
-//   1. Modul finden (FindModule / OpenModule)
-//   2. SourceEditor via Module.ModuleFileEditors
-//   3. Buffer.EditPosition -> IOTAEditPosition (Cursor-API)
-//   4. GotoLine(LineNumber); MoveEOL; -> Column = Zeilen-Laenge
-//   5. MoveBOL; Delete(ColAfterEOL - 1); InsertText(NewLine);
-//
-// IOTAEditPosition kennt KEIN Address-Property - die API ist row/col +
-// relative Deletes/Inserts vom aktuellen Cursor aus. Das ist langfristig
-// die stabilere Variante (UTF-8/UTF-16-Konversion uebernimmt der IDE-
-// Buffer-Layer selbst).
-//
-// Undo: jede EditPosition-Modifikation laeuft durch den IDE-Edit-Stack,
-// Ctrl+Z reverts. Delete + InsertText in derselben Action-Sequenz
-// koennen 2 Undo-Steps werden - akzeptabel, kostet einen zusaetzlichen
-// Ctrl+Z bei Bedarf.
-var
-  EditPos     : IOTAEditPosition;
-  LineEndCol  : Integer;
-begin
-  Result := False;
-  if (LineNumber <= 0) or (AbsPath = '') or (NewLine = '') then Exit;
-  // Schritte 1-3 (Modul -> Source-Editor -> EditPosition) im geteilten
-  // Helfer, s. TryGetEditPosition.
-  if not TryGetEditPosition(AbsPath, EditPos) then Exit;
-
-  try
-    // 4) Zielzeile positionieren + Zeilen-Laenge ermitteln.
-    EditPos.GotoLine(LineNumber);
-    EditPos.MoveEOL;
-    LineEndCol := EditPos.Column; // Column ist 1-basiert; bei leerer Zeile = 1.
-    EditPos.MoveBOL;
-
-    // 5) Komplette Zeile loeschen + Replacement einfuegen.
-    if LineEndCol > 1 then
-    begin
-      // ZEICHENLAENGE statt Anzeige-Spalte (G6-2, Vollausbau 2026-08-26):
-      // Column ist eine ANZEIGE-Spalte (Tabs expandiert), Delete(n)
-      // loescht n ZEICHEN - auf Tab-Zeilen fraesse Delete(Column-1) ueber
-      // den Zeilenumbruch in die Folgezeile.
-      //
-      // Der Weg zur wahren Laenge braucht keine EditView-Konvertierung:
-      // Read(Column-1) liefert ZEICHEN ab Zeilenanfang, und weil die
-      // Anzeige-Spalte nie KLEINER ist als die Zeichenzahl (ein Tab
-      // expandiert auf >= 1 Spalte, alles andere ist 1:1), enthaelt das
-      // Gelesene immer die komplette Zeile - auf Tab-Zeilen dazu den
-      // Zeilenumbruch und den Anfang der Folgezeile. Der Anteil VOR dem
-      // ersten Umbruch IST die Zeichenlaenge der Zeile.
-      //
-      // Die Zwischenfassung vom 2026-08-25 hat mit derselben Probe nur
-      // VERWEIGERT (Tab -> Exit); jetzt wird sie zum Werkzeug und der
-      // Fix greift auch auf Tab-Zeilen. Abnahme: F4 auf einer
-      // Tab-eingerueckten Zeile ersetzt exakt diese Zeile.
-      // BEWUSST einen Buchstaben MEHR lesen als die Anzeige-Spalten:
-      // so endet auch eine tab-freie Zeile sichtbar mit ihrem Umbruch
-      // in der Probe. Fehlt der Umbruch trotzdem UND ist die Probe voll,
-      // dann ist die Zeile LAENGER als ihre Anzeige-Spalten - das gibt
-      // es (Surrogatpaare: ein Emoji ist 1 Spalte, 2 Zeichen), und dann
-      // ist keine Laengen-Aussage moeglich: verweigern statt
-      // verstuemmeln (Gegenpruefung V4).
-      var Probe := EditPos.Read(LineEndCol + 1);
-      var WahreLaenge := Pos(#13, Probe) - 1;
-      if WahreLaenge < 0 then
-        WahreLaenge := Pos(#10, Probe) - 1;   // reine LF-Puffer
-      if WahreLaenge < 0 then
-      begin
-        if Length(Probe) > LineEndCol then
-          Exit;   // Zeile laenger als ihre Spalten (Surrogate) - Finger weg
-        WahreLaenge := Length(Probe);         // letzte Zeile ohne Umbruch
-      end;
-      // NEU POSITIONIEREN, nicht bloss MoveBOL: Read hat den Cursor ans
-      // LESEENDE bewegt, und das liegt auf Tab-Zeilen absichtlich in der
-      // FOLGEZEILE. Ein blankes MoveBOL stuende dann am Anfang von N+1,
-      // und Delete/InsertText zerstoerten exakt die Zeile, die der Fix
-      // schuetzen soll - die Gegenpruefung hat es gefangen (V1), bevor
-      // es je in einer IDE lief. InsertLineAbove macht es seit jeher so
-      // ("zurueck nach Read").
-      EditPos.GotoLine(LineNumber);
-      EditPos.MoveBOL;
-      if WahreLaenge > 0 then
-        EditPos.Delete(WahreLaenge);
-    end;
-    EditPos.InsertText(NewLine);
-  except
-    Exit; // Out-of-range Line oder API-Edge-Case
-  end;
-
-  Result := True;
-end;
-
 class function TIDEEditor.InsertLineAbove(const AbsPath: string;
   LineNumber: Integer; const NewLine: string): Boolean;
 // Strategie:
-//   1. Modul / Source-Editor wie in ApplyLineReplacement
+//   1. Modul / Source-Editor ueber TryGetEditPosition
 //   2. EditPosition.GotoLine(LineNumber); MoveBOL;
 //   3. Read(MaxIndent) -> Einrueckungs-String der Befund-Zeile lesen
 //   4. EditPosition.GotoLine(LineNumber); MoveBOL; (zurueck nach Read)
@@ -587,7 +476,7 @@ var
 begin
   Result := False;
   if (LineNumber <= 0) or (AbsPath = '') or (NewLine = '') then Exit;
-  // Schritt 1 der Strategie oben - geteilt mit ApplyLineReplacement.
+  // Schritt 1 der Strategie oben (TryGetEditPosition).
   if not TryGetEditPosition(AbsPath, EditPos) then Exit;
 
   try

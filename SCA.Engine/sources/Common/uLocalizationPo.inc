@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2362 Zeilen, 79441 Bytes
-  CPoLines_de: array[0..2361] of string = (
+  // i18n\de.po - 2371 Zeilen, 79714 Bytes
+  CPoLines_de: array[0..2370] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1329,6 +1329,15 @@ const
     '',
     'msgid "Quick-Fix applied: %s"',
     'msgstr "Quick-Fix angewendet: %s"',
+    '',
+    'msgid "Quick-Fix not available: %s"',
+    'msgstr "Quick-Fix nicht verf'#$00FC'gbar: %s"',
+    '',
+    'msgid "Quick-Fix: the reDelphix package is not loaded"',
+    'msgstr "Quick-Fix: das Package reDelphix ist nicht geladen"',
+    '',
+    'msgid "Suppress not available: %s"',
+    'msgstr "Unterdr'#$00FC'cken nicht verf'#$00FC'gbar: %s"',
     '',
     'msgid "Quick-Fix: cannot locate source line"',
     'msgstr "Quick-Fix: Quell-Zeile nicht erreichbar"',
@@ -2651,8 +2660,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2358 Zeilen, 83247 Bytes
-  CPoLines_fr: array[0..2357] of string = (
+  // i18n\fr.po - 2367 Zeilen, 83512 Bytes
+  CPoLines_fr: array[0..2366] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -3975,6 +3984,15 @@ const
     '',
     'msgid "Quick-Fix applied: %s"',
     'msgstr "Quick-Fix appliqu'#$00E9' : %s"',
+    '',
+    'msgid "Quick-Fix not available: %s"',
+    'msgstr "Quick-Fix indisponible : %s"',
+    '',
+    'msgid "Quick-Fix: the reDelphix package is not loaded"',
+    'msgstr "Quick-Fix : le package reDelphix n''est pas charg'#$00E9'"',
+    '',
+    'msgid "Suppress not available: %s"',
+    'msgstr "Suppression indisponible : %s"',
     '',
     'msgid "Quick-Fix: cannot locate source line"',
     'msgstr "Quick-Fix : ligne source introuvable"',

@@ -1321,6 +1321,15 @@ msgstr "Quick-Fix + prompt IA copiés dans le presse-papiers : %s, ligne %s (%s)
 msgid "Quick-Fix applied: %s"
 msgstr "Quick-Fix appliqué : %s"
 
+msgid "Quick-Fix not available: %s"
+msgstr "Quick-Fix indisponible : %s"
+
+msgid "Quick-Fix: the reDelphix package is not loaded"
+msgstr "Quick-Fix : le package reDelphix n'est pas chargé"
+
+msgid "Suppress not available: %s"
+msgstr "Suppression indisponible : %s"
+
 msgid "Quick-Fix: cannot locate source line"
 msgstr "Quick-Fix : ligne source introuvable"
 

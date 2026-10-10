@@ -483,19 +483,28 @@ type
     procedure GridMenuCopyJiraClick(Sender: TObject);
     procedure GridMenuPopup(Sender: TObject);
     // Klick auf einen dynamischen Eintrag aus uFindingActions: fuehrt
-    // Execute des Anbieters aus; Fehler des Anbieters landen in der
-    // Status-Bar, nicht in der IDE.
+    // Execute des Anbieters aus (ExecuteAction).
     procedure GridMenuActionClick(Sender: TObject);
-    // Wendet einen Quick-Fix DIREKT im IDE-Editor an (TIDEEditor.
-    // ApplyLineReplacement). Trigger: F4 auf der Grid-Zeile. No-op
-    // wenn der Befund-Kind keinen Quick-Fix-Provider hat oder der
-    // Provider auf der Original-Zeile kein Pattern matched. Status-
-    // bar zeigt Ergebnis (success/failure/unsupported).
+    // Fuehrt A aus; Fehler des Anbieters landen in der Status-Bar, nicht in
+    // der IDE (Grid-Menue, Ctrl+Alt+F/S). True, wenn Execute ohne Ausnahme
+    // lief.
+    function ExecuteAction(const A: TFindingAction; Sender: TObject): Boolean;
+    // Fuehrt fuer den Fund der Grid-Zeile die erste verfuegbare Aktion der
+    // Art AKind aus der Anbieter-Registry aus (dasselbe Modell wie
+    // Gluehbirne und Grid-Menue) und meldet in der Status-Bar: ADoneFmt
+    // mit ihrer Caption; sonst AMissingFmt mit Caption und Grund der
+    // ersten gesperrten dieser Art bzw. mit der Regel, wenn es keine gibt.
+    procedure RunFirstAction(RowIdx: Integer; AKind: TFindingActionKind;
+      const ADoneFmt, AMissingFmt: string);
+    // Ctrl+Alt+F: die erste verfuegbare Hilfe (fakFix) der Registry - mit
+    // reDelphix dieselbe wie in der Gluehbirne (Pufferabgleich, ein
+    // Undo-Schritt). Status-Bar zeigt Ergebnis oder Grund.
     procedure ApplyQuickFixForRow(RowIdx: Integer);
 
-    // Fuegt `// noinspection <RuleName>` direkt ueber der Befund-Zeile
-    // im IDE-Editor ein. Trigger: Ctrl+Alt+S auf der Grid-Zeile.
-    // Beim naechsten Analyse-Lauf filtert uSuppression den Befund.
+    // Ctrl+Alt+S: der erste Unterdrueck-Eintrag der Registry (reDelphix:
+    // Marker ueber der Zeile, ein vorhandener Marker bekommt die Art dazu).
+    // Ohne Anbieter der alte Weg: eine neue Zeile `// noinspection
+    // <RuleName>` ueber dem Befund.
     procedure ApplySuppressForRow(RowIdx: Integer);
     procedure UpdateHelp(Row: Integer);
     // Sammelt alle Befunde aus FDisplayedFindings die zur gleichen Datei
@@ -2127,20 +2136,19 @@ procedure TAnalyserFrame.GridKeyDown(Sender: TObject; var Key: Word;
 begin
   if (Key = Ord('F')) and (ssCtrl in Shift) and (ssAlt in Shift) then
   begin
-    // Ctrl+Alt+F = Apply Quick-Fix: ersetzt die Zeile direkt im IDE-Editor
-    // (TIDEEditor.ApplyLineReplacement). Konflikt-frei mit RAD-Studio-
-    // Defaults (F4 ist "Run to Cursor", Ctrl+. konfliktet mit Code-
-    // Completion; Ctrl+Alt+F ist die IntelliJ-Quick-Fix-Konvention).
-    // No-op wenn kein Provider registriert oder Pattern auf der Zeile
-    // nicht matched - Status-Bar zeigt jeweils den Grund.
+    // Ctrl+Alt+F = Hilfe anwenden: die erste verfuegbare Hilfe der
+    // Anbieter-Registry (ApplyQuickFixForRow). Konflikt-frei mit RAD-
+    // Studio-Defaults (F4 ist "Run to Cursor", Ctrl+. konfliktet mit
+    // Code-Completion; Ctrl+Alt+F ist die IntelliJ-Quick-Fix-Konvention).
+    // Status-Bar zeigt das Ergebnis oder den Grund.
     ApplyQuickFixForRow(FResultGrid.Row);
     Key := 0;
   end
   else if (Key = Ord('S')) and (ssCtrl in Shift) and (ssAlt in Shift) then
   begin
-    // Ctrl+Alt+S = Insert Suppression: fuegt `// noinspection <RuleName>`
-    // ueber die Befund-Zeile im IDE-Editor ein. Naechster Analyse-Lauf
-    // filtert den Befund weg. Ctrl+Z reverts den Insert.
+    // Ctrl+Alt+S = Unterdruecken: `// noinspection <RuleName>` ueber der
+    // Befund-Zeile (ApplySuppressForRow). Naechster Analyse-Lauf filtert
+    // den Befund weg, Ctrl+Z nimmt den Marker zurueck.
     ApplySuppressForRow(FResultGrid.Row);
     Key := 0;
   end
@@ -2878,9 +2886,17 @@ begin
   if not (Sender is TMenuItem) then Exit;
   Idx := TMenuItem(Sender).Tag - GRID_ACTION_TAG;
   if (Idx < 0) or (Idx > High(FGridActions)) then Exit;
-  if not Assigned(FGridActions[Idx].Execute) then Exit;
+  ExecuteAction(FGridActions[Idx], Sender);
+end;
+
+function TAnalyserFrame.ExecuteAction(const A: TFindingAction;
+  Sender: TObject): Boolean;
+begin
+  Result := False;
+  if not Assigned(A.Execute) then Exit;
   try
-    FGridActions[Idx].Execute(Sender);
+    A.Execute(Sender);
+    Result := True;
   except
     on EStackExhausted do raise;
     on EAbort do raise;   // ein stiller Abbruch ist keine Statusmeldung wert
@@ -3012,82 +3028,65 @@ begin
   end;
 end;
 
-procedure TAnalyserFrame.ApplyQuickFixForRow(RowIdx: Integer);
-// Pipeline:
-//   1. Finding fuer Grid-Zeile holen
-//   2. Source-Zeile aus der Datei lesen (UTF-8 mit ANSI-Fallback)
-//   3. TQuickFix.ProposeFix
-//   4. TIDEEditor.ApplyLineReplacement
-// Bei jedem Schritt: Status-Bar-Hint, kein Crash bei Fehler.
+procedure TAnalyserFrame.RunFirstAction(RowIdx: Integer;
+  AKind: TFindingActionKind; const ADoneFmt, AMissingFmt: string);
 var
-  F          : TLeakFinding;
-  LineNo     : Integer;
-  SrcLines   : TStringList;
-  Fix        : TQuickFixResult;
-  OK         : Boolean;
+  F     : TLeakFinding;
+  Model : TFindingMenuModel;
+  A     : TFindingAction;
+  Why   : string;
 begin
-  if not Assigned(FDisplayedFindings) then Exit;
-  if (RowIdx <= 0) or (RowIdx > FDisplayedFindings.Count) then Exit;
-
+  if not Assigned(FDisplayedFindings) or (RowIdx <= 0)
+     or (RowIdx > FDisplayedFindings.Count) then Exit;
   F := FDisplayedFindings[RowIdx - 1];
   if not Assigned(F) then Exit;
-
-  if not TQuickFix.HasProviderFor(F.Kind) then
+  Why := F.RuleID;
+  Model := BuildFindingMenuModel(TArray<TLeakFinding>.Create(F), []);
+  for A in Model.Actions do
   begin
-    StatusMode(Format(
-      _('Quick-Fix: no provider for ''%s'' - manual fix required'),
-      [F.RuleID]));
-    Exit;
-  end;
-
-  LineNo := StrToIntDef(F.LineNumber, 0);
-  if (LineNo <= 0) or (F.FileName = '') or not FileExists(F.FileName) then
-  begin
-    StatusMode(_('Quick-Fix: cannot locate source line'));
-    Exit;
-  end;
-
-  SrcLines := TStringList.Create;
-  try
-    try
-      SrcLines.LoadFromFile(F.FileName, TEncoding.UTF8);
-    except
-      try SrcLines.LoadFromFile(F.FileName); except SrcLines.Clear; end;
-    end;
-    if LineNo > SrcLines.Count then
+    if A.Kind <> AKind then Continue;
+    if not A.Enabled or not Assigned(A.Execute) then
     begin
-      StatusMode(_('Quick-Fix: line out of range'));
-      Exit;
+      if Why = F.RuleID then
+        Why := A.Caption + ' - ' + A.Hint;
+      Continue;
     end;
-    Fix := TQuickFix.ProposeFix(F, SrcLines[LineNo - 1]);
-  finally
-    SrcLines.Free;
-  end;
-
-  if not Fix.Applied then
-  begin
-    StatusMode(Format(
-      _('Quick-Fix: pattern not matched on line %d - manual fix required'),
-      [LineNo]));
+    if ExecuteAction(A, Self) then
+      StatusMode(Format(ADoneFmt, [A.Caption]));
     Exit;
   end;
+  StatusMode(Format(AMissingFmt, [Why]));
+end;
 
-  OK := TIDEEditor.ApplyLineReplacement(F.FileName, LineNo, Fix.Fixed);
-  if OK then
-    StatusMode(Format(_('Quick-Fix applied: %s'), [Fix.Description]))
+procedure TAnalyserFrame.ApplyQuickFixForRow(RowIdx: Integer);
+// Bis 2026-10-10 lief hier uQuickFix: Zeile von der Platte lesen, in den
+// Puffer schreiben ohne Abgleich (bei ungespeicherten Aenderungen darueber
+// die falsche Zeile), nur vier Regeln. Jetzt die Registry (Beschluss
+// 2026-10-09: alles auf reDelphix).
+begin
+  if TFindingActions.ProviderCount = 0 then
+    StatusMode(_('Quick-Fix: the reDelphix package is not loaded'))
   else
-    StatusMode(_('Quick-Fix: editor write failed (file not in IDE?)'));
+    RunFirstAction(RowIdx, fakFix, _('Quick-Fix applied: %s'),
+      _('Quick-Fix not available: %s'));
 end;
 
 procedure TAnalyserFrame.ApplySuppressForRow(RowIdx: Integer);
-// Holt das Finding fuer die Grid-Zeile + ruft TIDEEditor.InsertLineAbove
-// mit `// noinspection <KindName>`. Schreibt das Result in die Status-Bar.
+// Mit Anbieter (reDelphix) dessen Unterdrueck-Eintrag - derselbe wie im
+// Menue; ohne Anbieter TIDEEditor.InsertLineAbove mit `// noinspection
+// <KindName>`. Schreibt das Ergebnis in die Status-Bar.
 var
   F      : TLeakFinding;
   LineNo : Integer;
   OK     : Boolean;
   Marker : string;
 begin
+  if TFindingActions.ProviderCount > 0 then
+  begin
+    RunFirstAction(RowIdx, fakSuppress, _('Suppress inserted: %s'),
+      _('Suppress not available: %s'));
+    Exit;
+  end;
   if not Assigned(FDisplayedFindings) then Exit;
   if (RowIdx <= 0) or (RowIdx > FDisplayedFindings.Count) then Exit;
   F := FDisplayedFindings[RowIdx - 1];

@@ -1313,6 +1313,15 @@ msgstr "Quick-Fix + KI-Prompt in Zwischenablage: %s, Zeile %s (%s)"
 msgid "Quick-Fix applied: %s"
 msgstr "Quick-Fix angewendet: %s"
 
+msgid "Quick-Fix not available: %s"
+msgstr "Quick-Fix nicht verfügbar: %s"
+
+msgid "Quick-Fix: the reDelphix package is not loaded"
+msgstr "Quick-Fix: das Package reDelphix ist nicht geladen"
+
+msgid "Suppress not available: %s"
+msgstr "Unterdrücken nicht verfügbar: %s"
+
 msgid "Quick-Fix: cannot locate source line"
 msgstr "Quick-Fix: Quell-Zeile nicht erreichbar"
 
