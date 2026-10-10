@@ -61,6 +61,9 @@ type
 
 implementation
 
+uses
+  uRdxStructFixes;   // StartsStatementAt (SCA120: kein bedingter Ausdruck)
+
 const
   SPAN_020 = 'sca020';
   SPAN_120 = 'sca120';
@@ -72,6 +75,10 @@ const
     'except', 'finally');
   KEY_EXCEPTION = 'Exception ';
   KEY_CREATE    = '.Create';
+  // Wie uMissingRaise.CreateSuffixOk: nur diese Create-Varianten meldet der
+  // Detektor ('CreateAndRaise' nicht).
+  CREATE_SUFFIXES: array[0..7] of string = ('', 'fmt', 'res', 'help',
+    'resfmt', 'reshelp', 'fmthelp', 'resfmthelp');
 
 { ---- SCA020 ---- }
 
@@ -84,36 +91,80 @@ type
     EndTok   : TRdxToken;
   end;
 
-// Das Routinen-Wort auf ALine (nach 'class'). '' oder der Grund.
+// Das eine Routinen-Wort auf ALine. Zwei Koepfe auf einer Zeile
+// ('procedure P1; begin end; procedure P2; ...') heissen mehrdeutig - der
+// Fund koennte jeden meinen (Gegen-Review Ausnahme-Hilfen, Major 3).
+// '' oder der Grund.
 function HeaderOn(AMap: TRdxCodeMap; ALine: Integer;
   out AKeyword: TRdxToken): string;
 var
-  T : TRdxToken;
+  T, Prev : TRdxToken;
+  n       : Integer;
 begin
   Result := '';
   AKeyword := Default(TRdxToken);
+  n := 0;
+  Prev := PrevToken(AMap, ALine, 1);
   T := NextToken(AMap, ALine, 1);
-  if T.Low = 'class' then
+  while (T.Low <> '') and (T.Line = ALine) do
+  begin
+    if IsKeywordAfter(T, Prev) and InList(T.Low, ROUTINE_WORDS) then
+    begin
+      Inc(n);
+      AKeyword := T;
+    end;
+    Prev := T;
     T := After(AMap, T);
-  if (T.Line <> ALine) or not InList(T.Low, ROUTINE_WORDS) then
-    Exit('kein Methodenkopf auf der gemeldeten Zeile - Zeile verschoben? '
-      + 'Datei neu pruefen');
-  AKeyword := T;
+  end;
+  if n = 0 then
+    Result := 'kein Methodenkopf auf der gemeldeten Zeile - Zeile verschoben? '
+      + 'Datei neu pruefen'
+  else if n > 1 then
+    Result := Format('Zeile %d traegt %d Routinenkoepfe - mehrdeutig',
+      [ALine, n]);
 end;
 
-// Der Name hinter dem Routinen-Wort bis vor '(' ':' ';' (gleiche Zeile).
+// Der Name hinter dem Routinen-Wort bis vor '(' ':' ';' oder bis zum
+// Zeilenende (die Parameter auf der Folgezeile). '' ohne Name.
 function NameAfter(AMap: TRdxCodeMap; const AKeyword: TRdxToken): string;
 var
   First, T : TRdxToken;
+  L        : string;
+  Stop     : Integer;
 begin
   Result := '';
   First := After(AMap, AKeyword);
+  if (First.Line <> AKeyword.Line) or not First.IsWord then Exit;
+  L := AMap.Raw(AKeyword.Line);
   T := First;
   while (T.Low <> '') and (T.Line = AKeyword.Line)
      and not InList(T.Low, ['(', ':', ';']) do
     T := After(AMap, T);
-  if (T.Low = '') or (T.Line <> AKeyword.Line) then Exit;
-  Result := Trim(Copy(AMap.Raw(AKeyword.Line), First.Col, T.Col - First.Col));
+  Stop := Length(L) + 1;
+  if T.Line = AKeyword.Line then
+    Stop := T.Col
+  else if AMap.LineCommentCol(AKeyword.Line) > 0 then
+    Stop := AMap.LineCommentCol(AKeyword.Line);
+  Result := Trim(Copy(L, First.Col, Stop - First.Col));
+end;
+
+// Ein Kommentar (oder eine Direktive) zwischen den Token A und B?
+function CommentBetween(AMap: TRdxCodeMap; const A, B: TRdxToken): Boolean;
+var
+  Li, First, Last : Integer;
+begin
+  Result := False;
+  for Li := A.Line to B.Line do
+  begin
+    First := 1;
+    if Li = A.Line then
+      First := A.EndCol;
+    Last := Length(AMap.Raw(Li));
+    if Li = B.Line then
+      Last := B.Col - 1;
+    if AMap.HasComment(Li, First, Last) then
+      Exit(True);
+  end;
 end;
 
 // Ab dem Kopf das begin des Rumpfs - ohne lokale Routine dazwischen
@@ -152,14 +203,20 @@ begin
   Result := HeaderOn(AMap, ALine, ABody.Keyword);
   if Result <> '' then Exit;
   ABody.Name := NameAfter(AMap, ABody.Keyword);
-  if ABody.Name = '' then
-    Exit('Name der Methode nicht auf der Kopfzeile');
   Result := BodyBegin(AMap, ABody.Keyword, ABody.BeginTok);
   if Result <> '' then Exit;
   ABody.EndTok := After(AMap, ABody.BeginTok);
   if ABody.EndTok.Low <> 'end' then
-    Result := 'der Rumpf ist nicht leer - Code unter einer Direktive (der '
-      + 'Detektor sieht nur den aktiven Zweig) oder Fund veraltet';
+    Result := 'der Rumpf ist nicht leer - Code unter einer Direktive bzw. ein '
+      + 'asm-Block (der Detektor sieht nur den aktiven Zweig) oder Fund '
+      + 'veraltet'
+  // Ein Kommentar im Rumpf ist keine Absicht (sonst schwiege der Detektor):
+  // auskommentierter Code (SCA070) - der Absichtskommentar verdeckte ihn,
+  // und ein schon eingefuegter Kommentar kaeme doppelt (Gegen-Review,
+  // Minor 4/5).
+  else if CommentBetween(AMap, ABody.BeginTok, ABody.EndTok) then
+    Result := 'im Rumpf steht schon ein Kommentar ohne Absicht - '
+      + 'auskommentierter Code (SCA070)? Von Hand entscheiden';
 end;
 
 // Die Ersetzung fuer das begin: AText inline dahinter oder (begin und end
@@ -186,6 +243,9 @@ begin
     Exit('hinter dem begin steht noch etwas - eine eigene Zeile passte nicht');
   if AMap.StartsInside(B.Line + 1) then
     Exit('hinter dem begin beginnt ein Kommentar ueber Zeilen');
+  // Eingerueckt wie die Zeile des end - das begin kann auf der Kopfzeile
+  // stehen ('procedure P; begin').
+  L := AMap.Raw(ABody.EndTok.Line);
   Indent := Copy(L, 1, SkipBlanks(L, 1) - 1);
   AEdit.NewText := AEdit.Expected + #10 + Indent + IndentStep(Indent, '')
     + AText;
@@ -205,6 +265,8 @@ begin
      and InList(Body.Keyword.Low, ['constructor', 'destructor']) then
     AReason := Format('%s - eine Exception dort hinterliesse ein halbes '
       + 'Objekt bzw. keinen Destruktor', [Body.Keyword.Low]);
+  if (AReason = '') and (AStatementFmt <> '') and (Body.Name = '') then
+    AReason := 'Name der Methode nicht auf der Kopfzeile';
   if AReason <> '' then Exit;
   if AStatementFmt = '' then
     AReason := BodyEdit(AMap, Body, INTENT_LINE, INTENT_INLINE, AEdit)
@@ -264,13 +326,18 @@ begin
     Exit;
   Dot := After(AMap, T);
   C := After(AMap, Dot);
-  if (Dot.Low <> '.') or (Copy(C.Low, 1, 6) <> 'create') then
+  if (Dot.Low <> '.') or (Copy(C.Low, 1, 6) <> 'create')
+     or not InList(Copy(C.Low, 7, MaxInt), CREATE_SUFFIXES) then
     Exit;
   Result := True;
   N := After(AMap, C);
   if N.Low = '(' then
     N := AfterParens(AMap, N);
-  AWhole := InList(APrev.Low, STATEMENT_PREV) and InList(N.Low, STATEMENT_ENDS);
+  // Ein then-Zweig ist nur dann eine Anweisung, wenn sein if eine ist -
+  // in 'Foo(if C then EFoo.Create(..) else nil)' waere raise E2029
+  // (Gegen-Review Ausnahme-Hilfen, Major 2).
+  AWhole := InList(N.Low, STATEMENT_ENDS)
+    and TRdxStructFixes.StartsStatementAt(AMap, T);
 end;
 
 class function TRdxRaiseFixes.MissingRaise(AMap: TRdxCodeMap; ALine: Integer;
@@ -377,7 +444,16 @@ begin
   end;
   if InList(T.Low, ['procedure', 'function']) then
   begin
-    AReason := 'raise steht in einer anonymen Methode';
+    AReason := 'anonyme Methode im Handler (das raise darin oder eine davor) '
+      + '- nicht sicher pruefbar';
+    Exit(rsStop);
+  end;
+  // 'with H do raise E': E kann ein Member von H sein - 'raise;' wuerfe
+  // dann eine andere Exception (Gegen-Review Ausnahme-Hilfen, Blocker 1).
+  if T.Low = 'with' then
+  begin
+    AReason := 'with-Anweisung zwischen Handler und raise - der Name koennte '
+      + 'ein Member sein';
     Exit(rsStop);
   end;
   if (T.Low <> 'do') or not HandlerOf(AMap, T, Bound) then Exit;

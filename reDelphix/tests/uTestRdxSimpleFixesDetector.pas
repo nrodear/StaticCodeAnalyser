@@ -334,7 +334,7 @@ begin
 end;
 
 // Der zweite Eintrag (TRdxFixRunner.AlternativeFixFor) fuer EINEN Fund -
-// heute nur SCA168 (else mit raise).
+// SCA168 (else mit raise) und SCA020 (raise ENotImplemented).
 function PlanAltFix(const ASource: string; AKind: TFindingKind;
   const ASeen: TSeen): TRdxFixOutcome;
 var
@@ -1291,7 +1291,7 @@ begin
   Seen.Msg := 'System.Classes';
   Assert.AreEqual<Integer>(0, PlanAltFix(Format(UNIT_007,
     ['uses System.Classes;']), fkUnusedUses, Seen).Variant,
-    'nur SCA168 hat einen zweiten Eintrag');
+    'nur SCA168 und SCA020 haben einen zweiten Eintrag');
 end;
 
 { ---- SCA101 / SCA099 ---- }

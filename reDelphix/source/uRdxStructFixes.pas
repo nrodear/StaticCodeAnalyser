@@ -89,6 +89,13 @@ type
     // einer leeren Anweisung.
     class function WrapInBlock(AMap: TRdxCodeMap; const AKeyword: TRdxToken;
       out AEdits: TArray<TRdxEdit>; out AReason: string): Boolean; static;
+
+    // Beginnt an ATok eine Anweisung? Davor ein Anweisungsanfang
+    // (STATEMENT_PREV); ist es then oder else, muss auch das if davor eine
+    // beginnen (kein bedingter Ausdruck, Delphi 13), ein ':' darf nicht in
+    // Klammern stehen ('Write(X: ...)'). Geteilt mit SCA120 (uRdxRaiseFixes).
+    class function StartsStatementAt(AMap: TRdxCodeMap;
+      const ATok: TRdxToken): Boolean; static;
   end;
 
 implementation
@@ -1257,6 +1264,12 @@ begin
   if AReason <> '' then Exit;
   AEdits := BlockEdits(AMap, B);
   Result := True;
+end;
+
+class function TRdxStructFixes.StartsStatementAt(AMap: TRdxCodeMap;
+  const ATok: TRdxToken): Boolean;
+begin
+  Result := StartsStatement(AMap, ATok);
 end;
 
 end.

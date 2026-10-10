@@ -100,12 +100,12 @@ type
     Name    : string;    // X fuer den Menuetext: SCA085 wie im Puffer, SCA139 wie in der Meldung
     Hint    : string;    // bei Enabled = True
     Reason  : string;    // bei Enabled = False
-    // 0 = die Hilfe (FixFor), 1 = der zweite Eintrag (AlternativeFixFor,
-    // SCA168: else mit raise).
+    // 0 = die Hilfe (FixFor), 1 = der zweite Eintrag (AlternativeFixFor:
+    // SCA168 else mit raise, SCA020 raise ENotImplemented).
     Variant : Integer;
     // Entscheid E2 (Konzept Editorhilfen): der Menuetext traegt
     // '(aendert Verhalten)' - SCA007 (initialization-Abschnitt der Unit),
-    // SCA168 mit raise.
+    // SCA168 und SCA020 mit raise, SCA120 (raise davor).
     ChangesBehavior : Boolean;
   end;
 

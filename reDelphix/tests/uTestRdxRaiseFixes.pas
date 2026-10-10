@@ -29,6 +29,10 @@ type
     [Test] procedure Sca120_Refusals;
     [Test] procedure Sca122_ReRaise;
     [Test] procedure Sca122_Refusals;
+    // Gegen-Review 2026-10-11: with, bedingter Ausdruck, zwei Koepfe auf
+    // einer Zeile, Kommentar im Rumpf, Kopf ueber zwei Zeilen.
+    [Test] procedure Review_Refusals;
+    [Test] procedure Review_Forms;
   end;
 
 implementation
@@ -197,10 +201,10 @@ begin
   Assert.AreEqual('', Fix(rkEmpty, InImpl(['procedure P;', 'begin', 'end;']), 5, '',
     R));
   Assert.IsTrue(Pos('kein Methodenkopf', R) > 0, R);
-  // Hinter dem begin steht noch ein Kommentar ohne Absicht.
+  // Hinter dem begin steht ein Kommentar ohne Absicht.
   Assert.AreEqual('', Fix(rkEmpty, InImpl(['procedure P;', 'begin //', 'end;']), 4,
     '', R));
-  Assert.IsTrue(Pos('hinter dem begin', R) > 0, R);
+  Assert.IsTrue(Pos('Kommentar', R) > 0, R);
 end;
 
 // ---- SCA120 ----
@@ -280,11 +284,64 @@ begin
   Assert.AreEqual('', Fix(rkReRaise, InProc(['  try X; except on E: EFoo do '
     + 'TThread.Queue(nil, procedure begin raise E; end); end;']), 6,
     ReRaiseMsg('E'), R));
-  Assert.IsTrue(Pos('anonymen Methode', R) > 0, R);
+  Assert.IsTrue(Pos('anonyme Methode', R) > 0, R);
   // 'raise E at Addr' ist kein blosses 'raise E'.
   Assert.AreEqual('', Fix(rkReRaise, InProc(['  try X; except on E: EFoo do '
     + 'raise E at A; end;']), 6, ReRaiseMsg('E'), R));
   Assert.IsTrue(Pos('raise E', R) > 0, R);
+end;
+
+procedure TTestRdxRaiseFixes.Review_Refusals;
+var
+  R : string;
+begin
+  // SCA122: 'with H do raise E' - E koennte H.E sein.
+  Assert.AreEqual('', Fix(rkReRaise, InProc(['  try X; except on E: Exception do '
+    + 'with H do raise E; end;']), 6, ReRaiseMsg('E'), R));
+  Assert.IsTrue(Pos('with', R) > 0, R);
+  // SCA120: then-Zweig eines bedingten Ausdrucks (Delphi 13) - raise ist dort
+  // kein Ausdruck.
+  Assert.AreEqual('', Fix(rkMissing, InProc(['  Foo(if C then EFoo.Create(''a'') '
+    + 'else nil);']), 6, MissingMsg('EFoo'), R));
+  Assert.IsTrue(Pos('ganze Anweisung', R) > 0, R);
+  // SCA120: nur die Create-Varianten des Detektors.
+  Assert.AreEqual('', Fix(rkMissing, InProc(['  EFoo.CreateAndRaise(1);']), 6,
+    MissingMsg('EFoo'), R));
+  Assert.IsTrue(Pos('verschoben', R) > 0, R);
+  // SCA020: zwei Koepfe auf einer Zeile.
+  Assert.AreEqual('', Fix(rkEmpty, InImpl(['procedure TFoo.P1; begin end; '
+    + 'procedure TFoo.P2; begin end;']), 4, '', R));
+  Assert.IsTrue(Pos('mehrdeutig', R) > 0, R);
+  // SCA020: auskommentierter Code im Rumpf - beide Eintraege lehnen ab (der
+  // Kommentar verdeckte SCA070, ein zweiter Lauf schriebe doppelt).
+  Assert.AreEqual('', Fix(rkEmpty, InImpl(['procedure P;', 'begin',
+    '  //X := 1;', 'end;']), 4, '', R));
+  Assert.IsTrue(Pos('Kommentar', R) > 0, R);
+  Assert.AreEqual('', Fix(rkEmpty, InImpl(['procedure P;', 'begin',
+    '  ' + INTENT_LINE, 'end;']), 4, RAISE_NOT_IMPLEMENTED, R));
+  Assert.IsTrue(Pos('Kommentar', R) > 0, R);
+  // SCA020: kein raise im constructor.
+  Assert.AreEqual('', Fix(rkEmpty, InImpl(['constructor TFoo.Create;', 'begin',
+    'end;']), 4, RAISE_NOT_IMPLEMENTED, R));
+  Assert.IsTrue(Pos('constructor', R) > 0, R);
+end;
+
+procedure TTestRdxRaiseFixes.Review_Forms;
+var
+  R : string;
+begin
+  // Kopf ueber zwei Zeilen: der Name endet am Zeilenende.
+  Assert.AreEqual(InImpl(['procedure TFoo.Bar', '  (A: Integer);', 'begin',
+      '  raise ENotImplemented.Create(''TFoo.Bar'');', 'end;']),
+    Fix(rkEmpty, InImpl(['procedure TFoo.Bar', '  (A: Integer);', 'begin', 'end;']),
+      4, RAISE_NOT_IMPLEMENTED, R), R);
+  // Kopf und Rumpfbeginn auf einer Zeile: Einrueckung der Schlusszeile.
+  Assert.AreEqual(InImpl(['procedure P; begin', '  ' + INTENT_LINE, 'end;']),
+    Fix(rkEmpty, InImpl(['procedure P; begin', 'end;']), 4, '', R), R);
+  // Ein Kopf hinter dem end der Routine davor.
+  Assert.AreEqual(InImpl(['end; procedure P;', 'begin', '  ' + INTENT_LINE,
+      'end;']),
+    Fix(rkEmpty, InImpl(['end; procedure P;', 'begin', 'end;']), 4, '', R), R);
 end;
 
 initialization

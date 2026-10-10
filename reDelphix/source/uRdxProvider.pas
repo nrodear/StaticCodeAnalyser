@@ -737,7 +737,7 @@ begin
      or (ACtx.FixMode = FIX_NONE) then Exit;
   AddOutcome(TRdxFixRunner.FixFor(FSource.Places, ACtx.Lines, ACtx.Finding,
     FUsesNames));
-  // Zweiter Eintrag derselben Regel (SCA168: else mit raise).
+  // Zweiter Eintrag derselben Regel (SCA168, SCA020: jeweils mit raise).
   Alt := TRdxFixRunner.AlternativeFixFor(FSource.Places, ACtx.Lines,
     ACtx.Finding, FUsesNames);
   if Alt.Variant > 0 then

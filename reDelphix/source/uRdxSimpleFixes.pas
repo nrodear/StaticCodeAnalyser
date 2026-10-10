@@ -1531,7 +1531,7 @@ type
   end;
 
   // Ein Schritt beim Lesen eines Operanden nach links.
-  TRdxStep = (stMore, stDone, stFail);
+  TRdxScanStep = (stMore, stDone, stFail);
 
 // Ende einer Klammergruppe ab dem oeffnenden Token (gleiche Klammerart);
 // Low = '' wenn nicht gefunden.
@@ -1595,7 +1595,7 @@ end;
 
 // T steht auf ')' bzw. ']': ueber die Gruppe nach links.
 function StepLeftOverGroup(AMap: TRdxCodeMap; var T: TRdxToken;
-  var AFirst: TRdxToken): TRdxStep;
+  var AFirst: TRdxToken): TRdxScanStep;
 var
   Open, P : TRdxToken;
 begin
@@ -1615,7 +1615,7 @@ end;
 // Ein Schritt nach links ueber '^', eine Klammergruppe oder 'Name' bzw.
 // '.Name'.
 function StepLeft(AMap: TRdxCodeMap; var T: TRdxToken;
-  var AFirst: TRdxToken): TRdxStep;
+  var AFirst: TRdxToken): TRdxScanStep;
 var
   P : TRdxToken;
 begin
@@ -1643,7 +1643,7 @@ function OperandBefore(AMap: TRdxCodeMap; const AOp: TRdxToken;
   out AFirst, ALast: TRdxToken): Boolean;
 var
   T    : TRdxToken;
-  Step : TRdxStep;
+  Step : TRdxScanStep;
 begin
   ALast := Before(AMap, AOp);
   AFirst := Default(TRdxToken);
