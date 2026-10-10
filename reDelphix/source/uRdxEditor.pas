@@ -23,8 +23,9 @@ unit uRdxEditor;
 // NICHTS WIRD BLIND GESCHRIEBEN
 //
 // Vor dem Schreiben wird JEDER Bereich einer Aktion zweimal gegen den
-// Scan-Text geprueft: als Zeilen (SpanText, wie der Dienst ihn gebildet
-// hat) und als Bytes (der Ausschnitt, der tatsaechlich geloescht wird) -
+// Text beim Menueaufbau geprueft (den der Anbieter beschrieben hat - nicht
+// den Scan): als Zeilen (SpanText, wie der Dienst ihn gebildet hat) und
+// als Bytes (der Ausschnitt, der tatsaechlich geloescht wird) -
 // uRdxBufferMath.PlanByteEdits, getestet. Weicht einer ab, wird KEINER
 // geschrieben. Dann laufen alle Ersetzungen durch EINEN
 // CreateUndoableWriter: eine Aktion = ein Strg+Z (Review reDelphiX
@@ -106,8 +107,6 @@ const
   // Ueber _() (Editorhilfen E6); die vier oben folgen mit dem E6-Rest.
   S_PAST_END = 'Range %d:%d to %d:%d lies behind the end of the editor '
     + 'buffer (%d lines) - rescan the file';
-  S_TOO_LONG = 'Line too long for the editor selection (the editor '
-    + 'reaches at most column %d)';
   S_NO_MOVE  = 'Cannot move the editor cursor to line %d, column %d';
 
 function WithLogHint(const AMsg: string): string;

@@ -223,7 +223,7 @@ TFindingType      = (ftBug, ftCodeSmell, ftVulnerability,
 
 Describes places in a source file **on request** — for consumers that want to rewrite code (e.g. the "Source Refactor" module reDelphix). It only reads: no scan runs, no finding, field or export is touched, and no detector uses it. One instance per file.
 
-`uEngineApi` re-exports the class and record types: `TSourcePlaces`, `TNodeRef`, `TSourceLineRange`, `TUsesSection`, `TNodeKind`, `TNodeKinds`, `TRefactorInfo`, `TRefactorSpan`. It does **not** re-export constants and enum values: the roles (`ROLE_*`), value types (`rv*`, `TRefactorValueType`) and flags (`rf*`, `TRefactorFlags`) need `uses uRefactorInfo`, the contract version `SOURCE_PLACES_VERSION` needs `uses uSourcePlaces`. Both units are in the package.
+`uEngineApi` re-exports the types `TSourcePlaces`, `TNodeRef`, `TSourceLineRange`, `TUsesSection`, `TNodeKind`, `TNodeKinds`, `TRefactorInfo`, `TRefactorSpan`; values of the aliased enums work qualified through the alias (`TNodeKind.nkAssign`, `TUsesSection.usImplementation`). It does **not** re-export the constants and the other enums: the roles (`ROLE_*`), value types (`rv*`, `TRefactorValueType`) and flags (`rf*`, `TRefactorFlags`) need `uses uRefactorInfo`, the contract version `SOURCE_PLACES_VERSION` needs `uses uSourcePlaces`. Both units are in the package.
 
 ```pascal
 Places := TSourcePlaces.Create;
@@ -271,7 +271,7 @@ end;
 | `UsesEntries(Section)` | `TArray<TRefactorSpan>` | Every unit name of the `uses` clauses with its span (`Resolved` = the name as written). `usAny` (default) also covers the clause of a program or library. |
 | `IdentifiersIn(Span)` | `TArray<TRefactorSpan>` | Identifiers inside a span as `ident` parts; keywords are not filtered. Strings and comments are excluded — also when the span starts inside one, because the file is read up to the span. Limitation: a Delphi 12 multi-line string (`'''`) before the span is not recognised. |
 | `CodeViewOf` / `TextOf` / `HashOf` | | Column-true code view, raw text and SHA-256 of a span, all on the text of the last `Open`/`OpenSource`. In the code view strings are `~` fill (`TRefactorInfoBuilder.VIEW_FILL`), while comments and compiler directives, delimiters included, are blanks. `HashOf` does not see a later change: to detect one, open the current text again and compare `HashOf(Info.Span)` with `Info.SpanHash`, or compare `TextOf(Span)` with the target buffer right before writing (reDelphix does the latter). |
-| `ConditionalRanges` | `TArray<TSourceLineRange>` | `{$IFDEF}` ranges of the file. |
+| `ConditionalRanges` | `TArray<TSourceLineRange>` | Conditional ranges of the file, in source order: one range per branch (`{$IFDEF}`..`{$ELSE}`, `{$ELSE}`..`{$ENDIF}`), for every conditional directive (`$IF`, `$IFDEF`, `$IFNDEF`, `$IFOPT`). |
 | `SectionLine(Section)` | `Integer` | Line of the `interface` / `implementation` keyword; `0` if the section is missing (program, library) and for `usAny`. |
 | `LineText(Line)` | `string` | Text of one line of the opened text; `''` outside. |
 | `SpanHasComment(Span)` | `Boolean` | `True` if the span contains a comment or a compiler directive — for a consumer that replaces only part of a statement (`rfHasComment` covers the whole statement). |

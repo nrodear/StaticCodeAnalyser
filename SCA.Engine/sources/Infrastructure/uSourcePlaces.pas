@@ -141,6 +141,11 @@ const
   // Vorgabewert und bei einer Ableitung, die nur STRENGER wird (mehr
   // rvUnknown, seltener FixSafe) - darauf kann sich jeder Konsument der
   // alten Version weiter verlassen.
+  // AUCH DAZU gehoert die Form des abgeflachten Parser-Texts in
+  // TNodeRef.Name/TypeRef: reDelphix zaehlt darin die '+' (Gegenprobe zu
+  // ChainOf) und nimmt den Kopf eines Aufrufs (TRdxRecipeRunner.HeadOf).
+  // Ein Parser-Fix, der diese Form aendert, braucht eine neue Version
+  // oder einen Test im Modul (Review nach Bereichen 2026-10-10, Nit 5).
   SOURCE_PLACES_VERSION = 1;
 
 type
@@ -289,8 +294,10 @@ type
     function TextOf(const ASpan: TRefactorSpan): string;
     function HashOf(const ASpan: TRefactorSpan): string;
 
-    // P7 - {$IFDEF}-Bereiche der Datei (Zeile der oeffnenden bis Zeile der
-    // schliessenden Direktive), in Quelltext-Reihenfolge.
+    // P7 - bedingte Bereiche der Datei in Quelltext-Reihenfolge: EIN
+    // Bereich je Zweig ({$IFDEF}..{$ELSE}, {$ELSE}..{$ENDIF}), fuer jede
+    // bedingte Direktive ($IF, $IFDEF, $IFNDEF, $IFOPT) - wie der Lexer
+    // sie ablegt (Review nach Bereichen 2026-10-10, Nit 6).
     function ConditionalRanges: TArray<TSourceLineRange>;
 
     // P10 - Zeile des Abschnitts-Schluesselworts ('interface' bzw.

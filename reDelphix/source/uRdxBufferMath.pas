@@ -30,6 +30,11 @@ const
   // (ToolsAPI.pas, Studio 23.0): weiter rechts kann die Editor-Markierung
   // nicht zeigen (Review reDelphiX 2026-10-07, Nit 8).
   EDITOR_MAX_COLUMN = 32767;
+  // msgid zu EDITOR_MAX_COLUMN (Format-Argument: die Spalte), EINMAL fuer
+  // Anbieter und Editor - der Aufrufer uebersetzt per _() (Review nach
+  // Bereichen 2026-10-10, Nit 34).
+  S_TOO_LONG = 'Line too long for the editor selection (the editor '
+    + 'reaches at most column %d)';
 
 type
   // Woher der Anbieter den Text einer Datei nimmt (Review Nit 24).
@@ -91,8 +96,9 @@ function ChooseTextSource(AIsOpen, AReadOk: Boolean;
 // CRLF und CR -> LF.
 function NormalizeEol(const S: string): string;
 
-// Das Zeilenende, das der Puffer benutzt: CRLF, wenn das erste Zeilenende
-// eins ist, sonst LF (ein Puffer ohne Umbruch bekommt CRLF).
+// Das Zeilenende, das der Puffer benutzt: das erste Zeilenende des
+// Puffers (CRLF, LF oder ein einzelnes CR); ein Puffer ohne Umbruch
+// bekommt CRLF.
 function BufferEol(const ABytes: TBytes): string;
 
 // Zeilenumbrueche und Tabulatoren sichtbar machen (Meldung, Protokoll).
@@ -123,7 +129,8 @@ uses
   uRefactorInfoBuilder;   // SpanText: derselbe Bereichstext wie beim Scan
 
 const
-  SDiffers = 'Quelltext im Editor weicht vom Scan ab - nicht geschrieben';
+  SDiffers = 'Quelltext im Editor weicht vom Stand beim Menueaufbau ab - '
+    + 'nicht geschrieben (Menue neu oeffnen)';
   BYTE_CR  = 13;
   BYTE_LF  = 10;
 
@@ -249,7 +256,7 @@ begin
   while (i <= n) and (AExpected[i] = AActual[i]) do Inc(i);
   From := i - BEFORE;
   if From < 1 then From := 1;
-  Result := Format(' (ab Zeichen %d: Scan "%s", Editor "%s")', [i,
+  Result := Format(' (ab Zeichen %d: erwartet "%s", Editor "%s")', [i,
     Visible(Copy(AExpected, From, CTX)), Visible(Copy(AActual, From, CTX))]);
 end;
 
@@ -286,7 +293,7 @@ begin
     AError := 'kein gueltiger Bereich';
     Exit;
   end;
-  // 1) als Zeilen gegen den Scan-Text
+  // 1) als Zeilen gegen den erwarteten Text (Stand beim Menueaufbau)
   if AEdit.Span.EndLine > AView.Lines.Count then
   begin
     AError := SDiffers + Format(' (Zeile %d, der Puffer hat %d Zeilen)',
@@ -300,7 +307,7 @@ begin
     Exit;
   end;
   // 2) Byte-Offsets aus demselben Puffer; der Ausschnitt muss den
-  //    Scan-Text ergeben - sonst stimmt die Offset-Rechnung nicht.
+  //    erwarteten Text ergeben - sonst stimmt die Offset-Rechnung nicht.
   if not OffsetOf(AView.Starts, AView.Lines, AEdit.Span.StartLine,
        AEdit.Span.StartCol, AOut.StartPos)
      or not OffsetOf(AView.Starts, AView.Lines, AEdit.Span.EndLine,
@@ -316,7 +323,7 @@ begin
     AOut.EndPos - AOut.StartPos));
   if Slice <> AEdit.Expected then
   begin
-    AError := 'Byte-Bereich weicht vom Scan ab - nicht geschrieben'
+    AError := 'Byte-Bereich weicht vom Stand beim Menueaufbau ab - nicht geschrieben'
       + DescribeMismatch(AEdit.Expected, Slice);
     Exit;
   end;

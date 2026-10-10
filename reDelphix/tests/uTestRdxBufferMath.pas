@@ -167,7 +167,7 @@ begin
      Edit(2, 6, 11, 'x - y', 'z')], Plan, Err),
     'der zweite Bereich passt nicht');
   Assert.AreEqual<Integer>(0, Length(Plan), 'auch der erste wird nicht geplant');
-  Assert.IsTrue(Pos('weicht vom Scan ab', Err) > 0, Err);
+  Assert.IsTrue(Pos('weicht vom Stand beim Menueaufbau ab', Err) > 0, Err);
 end;
 
 procedure TTestRdxBufferMath.Plan_Overlap_Rejected;

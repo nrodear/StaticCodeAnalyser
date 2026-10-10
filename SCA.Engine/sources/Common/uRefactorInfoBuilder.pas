@@ -4,16 +4,17 @@ unit uRefactorInfoBuilder;
 // (B1), Kontext-Flags (B5), Einfuegepunkt (B6) und Bereichs-Hash (B7).
 // Konzept_Todo_RefactorInfo 2026-10-01, Inkrement 2.
 //
-// WAS EIN DETEKTOR DAVON HAT
+// WER DAVON WAS HAT (Pull-Modell)
 //
-// Ein Detektor kennt den ANFANG seiner Fundstelle (TAstNode.Line/.Col),
-// aber nicht ihr Ende - der AST traegt keine Endposition, und die rechte
-// Seite einer Zuweisung liegt nur als abgeflachter String vor. Dieser
-// Builder liest die Quellzeilen ab dem Anfang und findet das Ende der
-// Anweisung. Vier der acht Refactoring-Informationen kosten den Detektor
-// damit einen einzigen Aufruf; nur die Teilbereiche und ihre Fakten
-// (B2-B4) bleiben seine eigene Arbeit - dafuer liefert CodeViewOf die
-// spaltentreue Code-Sicht.
+// Einziger Nutzer ist der Quellstellen-Dienst (uSourcePlaces); KEIN
+// Detektor importiert diese Unit (tools/places_dep_gate.py). Der Dienst
+// kennt den ANFANG einer Anweisung (TAstNode.Line/.Col), aber nicht ihr
+// Ende - der AST traegt keine Endposition, und die rechte Seite einer
+// Zuweisung liegt nur als abgeflachter String vor. Dieser Builder liest
+// die Quellzeilen ab dem Anfang und findet das Ende der Anweisung. Vier
+// der acht Refactoring-Informationen kosten damit einen einzigen Aufruf;
+// die Teilbereiche und ihre Fakten (B2-B4) zerlegt uRefactorConcat -
+// dafuer liefert CodeViewOf die spaltentreue Code-Sicht.
 //
 // DAS ENDE EINER ANWEISUNG - DIESELBE REGEL WIE DER PARSER
 //
@@ -52,8 +53,8 @@ unit uRefactorInfoBuilder;
 // Laesst sich das Ende nicht sauber bestimmen (kein Abschluss innerhalb
 // von MAX_STATEMENT_LINES, unbalancierte Klammer, Startposition zeigt
 // nicht auf Code, ein Mehrzeilenstring im Bereich), kommt nil zurueck.
-// Der Aufrufer meldet seinen Fund dann OHNE RefactorInfo - der Fund
-// selbst haengt nie am Builder. Mehrzeilenstring (Review reDelphiX
+// Der Dienst beschreibt die Stelle dann nicht (nil fuer den Konsumenten)
+// - kein Fund haengt je am Builder. Mehrzeilenstring (Review reDelphiX
 // 2026-10-07, Minor 5): die zeilenweise Code-Sicht las seinen Inhalt als
 // Code, das Anweisungsende lief in die Folgeanweisung oder endete an
 // einem ';' im SQL-Text.
@@ -166,7 +167,8 @@ implementation
 // noinspection-file BeginEndRequired, CyclomaticComplexity, DeepNesting, MultipleExit, UnusedPublicMember
 // Zeichenweiser Scanner: die fruehen Ausstiege und die Verzweigung je
 // Zeichenklasse sind hier die Sache selbst. CodeViewOf/SpanText/HashOfSpan
-// sind fuer Detektoren und fuer reDelphix ausserhalb dieses Repos da.
+// sind fuer den Quellstellen-Dienst und seine Konsumenten da (reDelphix),
+// nicht fuer Detektoren.
 
 uses
   System.SysUtils, System.Hash;

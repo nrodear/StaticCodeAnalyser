@@ -225,7 +225,7 @@ TFindingType      = (ftBug, ftCodeSmell, ftVulnerability,
 
 Beschreibt Stellen einer Quelldatei **auf Anfrage** — für Konsumenten, die Code umschreiben wollen (z. B. das Modul „Source Refactor" reDelphix). Der Dienst liest nur: kein Scan läuft, kein Fund, Feld oder Export wird berührt, und kein Detektor benutzt ihn. Eine Instanz je Datei.
 
-`uEngineApi` exportiert die Klassen- und Record-Typen weiter: `TSourcePlaces`, `TNodeRef`, `TSourceLineRange`, `TUsesSection`, `TNodeKind`, `TNodeKinds`, `TRefactorInfo`, `TRefactorSpan`. Konstanten und Enum-Werte exportiert es **nicht**: die Rollen (`ROLE_*`), Werttypen (`rv*`, `TRefactorValueType`) und Flags (`rf*`, `TRefactorFlags`) brauchen `uses uRefactorInfo`, die Vertragsversion `SOURCE_PLACES_VERSION` braucht `uses uSourcePlaces`. Beide Units liegen im Package.
+`uEngineApi` exportiert die Typen `TSourcePlaces`, `TNodeRef`, `TSourceLineRange`, `TUsesSection`, `TNodeKind`, `TNodeKinds`, `TRefactorInfo`, `TRefactorSpan` weiter; die Werte der weitergereichten Enums gehen qualifiziert über den Alias (`TNodeKind.nkAssign`, `TUsesSection.usImplementation`). **Nicht** weiter exportiert werden die Konstanten und die übrigen Enums: die Rollen (`ROLE_*`), Werttypen (`rv*`, `TRefactorValueType`) und Flags (`rf*`, `TRefactorFlags`) brauchen `uses uRefactorInfo`, die Vertragsversion `SOURCE_PLACES_VERSION` braucht `uses uSourcePlaces`. Beide Units liegen im Package.
 
 ```pascal
 Places := TSourcePlaces.Create;
@@ -273,7 +273,7 @@ end;
 | `UsesEntries(Section)` | `TArray<TRefactorSpan>` | Jeder Unit-Name der `uses`-Klauseln mit Bereich (`Resolved` = Name wie geschrieben). `usAny` (Vorgabe) umfasst auch die Klausel eines Programms oder einer Library. |
 | `IdentifiersIn(Span)` | `TArray<TRefactorSpan>` | Bezeichner in einem Bereich als `ident`-Teile; Schlüsselwörter werden nicht gefiltert. Strings und Kommentare sind ausgeblendet — auch wenn der Bereich mitten in einem beginnt, denn die Datei wird bis zum Bereich mitgelesen. Grenze: einen Delphi-12-Mehrzeilenstring (`'''`) vor dem Bereich erkennt das nicht. |
 | `CodeViewOf` / `TextOf` / `HashOf` | | Spaltentreue Code-Sicht, Rohtext und SHA-256 eines Bereichs, alle auf dem Text des letzten `Open`/`OpenSource`. In der Code-Sicht sind Strings mit `~` gefüllt (`TRefactorInfoBuilder.VIEW_FILL`), Kommentare und Compiler-Direktiven samt Begrenzern dagegen Leerzeichen. `HashOf` sieht keine spätere Änderung: um eine zu erkennen, den aktuellen Text neu öffnen und `HashOf(Info.Span)` mit `Info.SpanHash` vergleichen, oder direkt vor dem Schreiben `TextOf(Span)` mit dem Zielpuffer vergleichen (so macht es reDelphix). |
-| `ConditionalRanges` | `TArray<TSourceLineRange>` | `{$IFDEF}`-Bereiche der Datei. |
+| `ConditionalRanges` | `TArray<TSourceLineRange>` | Bedingte Bereiche der Datei in Quelltext-Reihenfolge: ein Bereich je Zweig (`{$IFDEF}`..`{$ELSE}`, `{$ELSE}`..`{$ENDIF}`), für jede bedingte Direktive (`$IF`, `$IFDEF`, `$IFNDEF`, `$IFOPT`). |
 | `SectionLine(Section)` | `Integer` | Zeile des Schlüsselworts `interface` / `implementation`; `0`, wenn der Abschnitt fehlt (Programm, Library), und für `usAny`. |
 | `LineText(Line)` | `string` | Text einer Zeile des geöffneten Texts; `''` außerhalb. |
 | `SpanHasComment(Span)` | `Boolean` | `True`, wenn im Bereich ein Kommentar oder eine Compiler-Direktive steht — für einen Konsumenten, der nur einen Teil einer Anweisung ersetzt (`rfHasComment` gilt für die ganze Anweisung). |

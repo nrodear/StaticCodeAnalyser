@@ -4,11 +4,14 @@ unit uIDEFindingBulb;
 // Arbeitsplan Stufe 2+3): an der CARET-Zeile, wenn ein Aktions-Anbieter
 // (uFindingActions, z. B. reDelphix) zu einem Fund dort eine HILFE anbietet,
 // die jetzt ausfuehrbar ist (Nico 2026-10-08: "nur wenn Editorhilfen
-// vorhanden sind"). Klick, Rechtsklick oder Menue-Taste oeffnen das
+// vorhanden sind"). Klick oder Rechtsklick oeffnen das
 // Aktionsmenue aus uFindingActionMenu in der Form moAvailableFixesOnly:
 // ohne "Stelle zeigen" (der Benutzer steht schon dort), ohne ausgegraute
 // Eintraege und Diagnosezeilen - Kontextmenue und Dock-Grid zeigen weiter
-// alles.
+// alles. Die Menue-Taste erreicht die Birne nicht (sie bekommt nie den
+// Fokus) und oeffnet das Editor-Kontextmenue; eine Tastenbedienung der
+// Birne (Alt+Enter) ist eine spaetere Stufe (Review nach Bereichen
+// 2026-10-10, Nit 46).
 //
 // Die Birne ist ein echtes Steuerelement (uEditorBulbButton) als KIND des
 // Code-Editors, im Gutter rechtsbuendig vor dem Code. Der Aufbau ist der

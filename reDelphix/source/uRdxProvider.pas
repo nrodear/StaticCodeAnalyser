@@ -25,6 +25,9 @@ unit uRdxProvider;
 //
 // WAS ANGEBOTEN WIRD
 //
+// Die Menuetexte sind englische msgids (CAP_* unten, uebersetzt ueber
+// i18n/*.po); hier stehen sie deutsch zur Erlaeuterung.
+//
 //   "Stelle zeigen"                    wenn sich die Anweisung des Funds
 //                                      beschreiben laesst (Anker der Regel);
 //                                      ausgegraut hinter Spalte 32767
@@ -43,7 +46,9 @@ unit uRdxProvider;
 //   "FreeAndNil(X) verwenden"          SCA085; X im Quelltext deklariert,
 //                                      System.SysUtils kommt notfalls mit
 //   "Assigned() statt Vergleich ..."   SCA126; alle Vergleiche der Anweisung
-//   "(TObject) entfernen"              SCA075 (nur Zeilen, ohne Parser)
+//   "(TObject) entfernen"              SCA075 (plant nur auf Zeilen, laeuft
+//                                      aber nach dem Oeffnen des Dienstes:
+//                                      scheitert der Parse, faellt es weg)
 //   "Unterdruecken ..."                je Fund in Pascal-Quelltext
 //                                      (Editorhilfen Stufe 1)
 //   "reDelphix: <Grund>"               ausgegraut, wenn nichts davon geht -
@@ -240,9 +245,6 @@ const
   CAP_ASSIGNED = 'Use Assigned() instead of comparing with nil';
   CAP_TOBJECT  = 'Remove (TObject) from the class declaration';
   DIAG_PREFIX  = 'reDelphix: ';
-  // Gleiche msgid wie in uRdxEditor (SelectSpan).
-  R_TOO_LONG   = 'Line too long for the editor selection (the editor '
-    + 'reaches at most column %d)';
   // Fuer das Protokoll (deutsch wie die uebrigen Zeilen).
   SOURCE_NAMES : array[TRdxTextSource] of string =
     ('Editor-Puffer', 'Platte', 'gesperrt');
@@ -454,7 +456,7 @@ begin
   // weiter rechts wird die Stelle nicht angeboten, sondern begruendet.
   if not SpanFitsEditor(ACtx.Lines, ACtx.Info.Span) then
   begin
-    Add(AList, _(CAP_SHOW), Format(_(R_TOO_LONG), [EDITOR_MAX_COLUMN]),
+    Add(AList, _(CAP_SHOW), Format(_(S_TOO_LONG), [EDITOR_MAX_COLUMN]),
       False, nil);
     AList[High(AList)].Kind := fakNavigate;
     Exit;

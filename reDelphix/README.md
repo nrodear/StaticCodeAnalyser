@@ -232,8 +232,8 @@ Bei einer Fehlermeldung zuerst dort nachsehen.
 ## Scope-Tabelle pflegen
 
 ```
-python tools\gen_unitscopes.py            # Studio 23.0 (Delphi 12)
-python tools\gen_unitscopes.py "C:\Program Files (x86)\Embarcadero\Studio\37.0"
+python reDelphix\tools\gen_unitscopes.py            # Studio 23.0 (Delphi 12)
+python reDelphix\tools\gen_unitscopes.py "C:\Program Files (x86)\Embarcadero\Studio\37.0"
 ```
 
 Fehlt `source` oder `lib\win32\release` der Installation oder findet das
@@ -322,7 +322,7 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap
+bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap
 ```
 
 Der Pruefstand uebersetzt die Core-Units des Quellstellen-Dienstes

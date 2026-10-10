@@ -192,8 +192,14 @@ procedure ReleaseLines(Lines: TStringList; OwnedByCache: Boolean);
 // wohlgeformtes UTF-8, sonst Default-Codepage) in SL - OHNE den Cache zu
 // beruehren. Oeffentlich seit dem Quellstellen-Dienst (uSourcePlaces,
 // 2026-10-03): der liest je Datei selbst, damit er ohne Scan-Kontext und
-// Engine-Lock aus einem residenten Host heraus laufen kann, und soll
-// dabei dieselben Zeilen sehen wie der Scan. False, wenn die Datei nicht
+// Engine-Lock aus einem residenten Host heraus laufen kann, und sieht
+// dabei dieselben Zeilen wie die Datei-Detektoren des Scans
+// (AcquireLines). NICHT wie dessen AST-Pfad: TParser2.ParseFile liest
+// eine UTF-8-Datei ohne BOM als ANSI (LoadFromFile ohne Encoding) - ein
+// Ziel mit Umlaut in einer Fundmeldung kann deshalb anders aussehen als
+// im Dienst (reDelphix: TRdxRecipes.TargetsComparable). Das anzugleichen
+// bewegt Funde und gehoert in eine eigene, per A/B gemessene Charge
+// (Review nach Bereichen 2026-10-10, Nit 7). False, wenn die Datei nicht
 // lesbar ist.
 function LoadFileSmart(const FileName: string; SL: TStringList;
   AEncInfo: PFileEncodingInfo = nil): Boolean;
