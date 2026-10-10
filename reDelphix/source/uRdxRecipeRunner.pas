@@ -360,6 +360,8 @@ uses
 
 const
   R_NO_FILE = 'keine Datei geoeffnet';
+  R_NIL_TYPE_UNKNOWN = 'Typ von %s unbekannt - bei einem Funktions- oder '
+    + 'Methodenzeiger ruft ''= nil'' ihn auf, Assigned() nicht';
 
 { TRdxObjectRing }
 
@@ -1352,12 +1354,23 @@ begin
     Map.Free;
   end;
   // Nur ein blosser Bezeichner hat einen deklarierten Typ; Ereignis- und
-  // Getter-Namen sperren auch am Ende eines Pfads.
+  // Getter-Namen sperren auch am Ende eines Pfads. Ein blosser Bezeichner
+  // OHNE beweisbaren Typ (geerbt aus einer anderen Unit, Vorfahr von
+  // ausserhalb) sperrt: als Funktions- oder Methodenzeiger ruft '= nil'
+  // ihn auf, Assigned() nicht - lieber keine Hilfe als eine falsche
+  // (Review reDelphiX nach Bereichen 2026-10-10, Minor 6).
   for i := 0 to High(Plan.Operands) do
   begin
     TypeLow := '';
     if TRdxRecipes.IsPlainIdent(Plan.Operands[i]) then
+    begin
       TypeLow := APlaces.DeclaredTypeOf(Site.Line, Plan.Operands[i]);
+      if TypeLow = '' then
+      begin
+        Result.Reason := Format(R_NIL_TYPE_UNKNOWN, [Plan.Operands[i]]);
+        Exit;
+      end;
+    end;
     Result.Reason := TRdxNilFix.NilOperandRisk(Plan.Operands[i], TypeLow);
     if Result.Reason <> '' then Exit;
     if Result.Hint <> '' then Result.Hint := Result.Hint + ', ';

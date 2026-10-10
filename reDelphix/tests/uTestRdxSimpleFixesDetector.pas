@@ -32,6 +32,9 @@ type
     [Test] procedure Sca126_RoundTrip;
     [Test] procedure Sca126_TwoStatementsOnOneLine_NoHelp;
     [Test] procedure Sca126_EventField_NoHelp;
+    // Review nach Bereichen 2026-10-10, Minor 6: ein Bezeichner ohne
+    // beweisbaren Typ (geerbt) kann ein Funktionszeiger sein.
+    [Test] procedure Sca126_UnknownType_NoHelp;
     [Test] procedure Sca126_CatalogExample;
   end;
 
@@ -438,6 +441,13 @@ begin
   AssertNoHelp(Format(UNIT_126, [Join([
     '  if FOnChange <> nil then',
     '    FOnChange(Self);'])]), fkNilComparison, 'Ereignis');
+end;
+
+procedure TTestRdxSimpleFixesDetector.Sca126_UnknownType_NoHelp;
+begin
+  AssertNoHelp(Format(UNIT_126, [Join([
+    '  if FFactory = nil then',
+    '    Exit(False);'])]), fkNilComparison, 'unbekannt');
 end;
 
 procedure TTestRdxSimpleFixesDetector.Sca126_CatalogExample;

@@ -234,6 +234,8 @@ const
   CAP_SQL      = 'Copy parameterized template to clipboard';
   CAP_USES_ALL = 'uses: qualify all %d entries';
   CAP_USES     = 'uses: qualify entries';
+  // fixMode einer Regel, ausdruecklich abgeschaltet (Minor 5).
+  FIX_NONE     = 'none';
   CAP_FREENIL  = 'Use FreeAndNil(%s)';
   CAP_ASSIGNED = 'Use Assigned() instead of comparing with nil';
   CAP_TOBJECT  = 'Remove (TObject) from the class declaration';
@@ -275,6 +277,13 @@ constructor TRdxSourceCache.Create;
 begin
   inherited Create;
   FPlaces := TSourcePlaces.Create;
+  // Dieselbe Lexer-Sicht wie die Funde: jeder IDE-Scan laeuft mit
+  // TScanRequest.DefaultIfdefDefines (Ein-Zweig, MSWINDOWS/WIN64/UNICODE).
+  // In der Doppelzweig-Vorgabe des Dienstes lieferte DeclaredTypeOf fuer
+  // '{$IFDEF UNICODE} Msg: string; {$ELSE} Msg: AnsiString; {$ENDIF}'
+  // nicht den Typ, mit dem der Fund entstand (Review reDelphiX nach
+  // Bereichen 2026-10-10, Minor 4).
+  FPlaces.SetIfdefDefines(TScanRequest.DefaultIfdefDefines);
 end;
 
 destructor TRdxSourceCache.Destroy;
@@ -525,7 +534,9 @@ begin
   // Menuetexte. Nichts ausserhalb einer uses-Klausel - sonst stuende
   // "uses: ..." an jedem Fund der Datei. Das Fenster kennt auch die
   // Programm-Klausel (.dpr/.lpr/library, Review Minor 18) und beginnt auf
-  // der Zeile des 'uses' (Minor 19).
+  // der Zeile des 'uses' (Minor 19). Ein ausdrueckliches fixMode 'none'
+  // der Regel schaltet auch den Umbau auf ihrem Signal ab (Minor 5).
+  if ACtx.FixMode = FIX_NONE then Exit;
   FileName := ACtx.FileName;
   Plan := TRdxRecipeRunner.QualifyUses(FSource.Places, FScopes, ACtx.Line,
     function(const AShortName: string): Boolean
@@ -617,7 +628,8 @@ var
   Act     : TRdxAction;
 begin
   if not TRdxFixRunner.Handles(ACtx.Finding.Kind)
-     or not IsPascalSource(ACtx.FileName) then Exit;
+     or not IsPascalSource(ACtx.FileName)
+     or (ACtx.FixMode = FIX_NONE) then Exit;
   O := TRdxFixRunner.FixFor(FSource.Places, ACtx.Lines, ACtx.Finding,
     FUsesNames);
   Caption := SimpleFixCaption(ACtx.Finding.Kind, O.Name);
@@ -658,7 +670,8 @@ begin
   // Lehnt RemoveMarker ab (Mehrarten- oder 'All'-Marker: vielleicht nur
   // unter dem aktuellen Profil wirkungslos), steht der Eintrag gesperrt
   // mit dem Grund da - die Birne zaehlt nur verfuegbare Hilfen.
-  if ACtx.Finding.Kind <> fkUnusedSuppression then Exit;
+  if (ACtx.Finding.Kind <> fkUnusedSuppression)
+     or (ACtx.FixMode = FIX_NONE) then Exit;
   if not TRdxSuppress.RemoveMarker(ACtx.Lines, ACtx.Line, E, Why) then
   begin
     Add(AList, _('Remove ineffective suppression marker'), Why, False, nil);
@@ -718,9 +731,14 @@ begin
 
     // Mit Gegenprobe gegen den Fund (Review Minor 20): traegt die
     // Fundzeile nicht mehr Ziel und '+'-Zahl des Funds, ist Info nil und
-    // Why nennt den Grund ("Zeile verschoben?").
-    ACtx.Info := TRdxRecipeRunner.Describe(FSource.Places,
-      TRdxRecipeRunner.QueryOf(ACtx.Finding, Anchor), ACtx.IsCall, ACtx.Why);
+    // Why nennt den Grund ("Zeile verschoben?"). Nur mit Anker der Regel:
+    // ohne ihn beschrieb der Laeufer 'assign-or-call' irgendeine
+    // Anweisung der Zeile - 'Stelle zeigen' markierte bei SCA126 auf
+    // 'if A <> nil then B := nil;' die Zuweisung (Review nach Bereichen
+    // 2026-10-10, Minor 16).
+    if Anchor <> '' then
+      ACtx.Info := TRdxRecipeRunner.Describe(FSource.Places,
+        TRdxRecipeRunner.QueryOf(ACtx.Finding, Anchor), ACtx.IsCall, ACtx.Why);
     for R in FTreeRecipes do
       R(AList, ACtx);
     Done := True;
@@ -806,6 +824,10 @@ begin
     Ctx.Line     := AFinding.LineInt;
     Ctx.KindName := uSCAConsts.KindName(AFinding.Kind);
     Ctx.Lines    := Lines;
+    // fixMode aus dem Katalog vor ALLEN Rezepten: ein ausdrueckliches
+    // 'none' sperrt auch die Text-Rezepte (Minor 5), und die brauchen den
+    // Baum nicht.
+    Ctx.FixMode  := LowerCase(TRuleCatalog.GetRuleCanonical(AFinding.Kind).FixMode);
     // Nur Pascal-Quelltext durch den Parser: ein Fund in .dfm/.dproj
     // braeuchte sonst Parse-Zeit im UI-Thread, bekaeme eine sinnlose
     // Diagnose und verdraengte die zuletzt geparste .pas aus dem Cache

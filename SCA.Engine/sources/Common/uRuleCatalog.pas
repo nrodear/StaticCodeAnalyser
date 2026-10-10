@@ -92,8 +92,13 @@ type
     //            'uses-item' ist RESERVIERT: keine Regel fuehrt ihn, kein
     //            Konsument wertet ihn aus. reDelphix unterscheidet nur
     //            'assign' und 'call', jeder andere Wert sucht beides.
-    //   FixMode: 'none' | 'assisted' | 'auto'; leer = nicht angegeben
-    //            (wie 'none')
+    //   FixMode: 'none' | 'assisted' | 'auto'; leer = nicht angegeben.
+    //            'assisted': ein Modul bietet Vorlage/Vorschau an, schreibt
+    //            nie; 'auto': es darf schreiben. Leer: die Rezepte auf der
+    //            Anweisung (Format()/SQL) bieten nichts an, zeilenbasierte
+    //            Hilfen eines Moduls entscheiden selbst. 'none' AUSDRUECKLICH
+    //            schaltet jede Schreibhilfe auf dem Signal dieser Regel ab
+    //            (Review reDelphiX nach Bereichen 2026-10-10, Minor 5).
     // Immer leer oder einer dieser Werte, klein geschrieben: der Lader
     // nimmt nur einen bekannten JSON-String, alles andere wird leer.
     // Leer kommt dann aus der einkompilierten Tabelle (uRuleCatalogData.inc,

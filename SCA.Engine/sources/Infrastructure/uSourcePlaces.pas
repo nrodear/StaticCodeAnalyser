@@ -32,8 +32,11 @@ unit uSourcePlaces;
 //     die Gluehbirne fragt per Timer, also auch WAEHREND eines Watch-
 //     oder Bulk-Scans (Review reDelphiX 2026-10-07, Minor 3). Der Parser
 //     bekommt stattdessen die EIGENE Sicht des Dienstes
-//     (TParser2.SetExplicitLexerView): fest die Doppelzweig-Sicht - der
-//     Ruhezustand im Plugin, unabhaengig von --ifdef-aware -, oder die
+//     (TParser2.SetExplicitLexerView): fest die Doppelzweig-Sicht - die
+//     Ruhelage der prozessweiten Variablen, NICHT die Sicht der IDE-
+//     Funde: deren Scans laufen mit TScanRequest.DefaultIfdefDefines;
+//     reDelphix setzt genau die (Review nach Bereichen 2026-10-10,
+//     Minor 4) -, oder die
 //     Defines aus SetIfdefDefines, und zwar GENAU diese: den dlFpc-Zusatz
 //     des Scans ergaenzt der Dienst nicht. Ein dlFpc-Lauf mit nicht
 //     leerer Define-Liste (dlFpc erzwingen auch .lpi/.lpk/.lpg-Projekte)
