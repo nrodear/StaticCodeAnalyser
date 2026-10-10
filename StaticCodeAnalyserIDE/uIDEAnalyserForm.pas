@@ -2859,6 +2859,7 @@ begin
     FGridActions[Idx].Execute(Sender);
   except
     on EStackExhausted do raise;
+    on EAbort do raise;   // ein stiller Abbruch ist keine Statusmeldung wert
     on E: Exception do
       StatusMode(Format(_('Finding action failed: %s'), [E.Message]));
   end;
@@ -5567,6 +5568,7 @@ begin
     Slot.Actions[Idx].Execute(Sender);
   except
     on EStackExhausted do raise;
+    on EAbort do raise;   // ein stiller Abbruch ist keine Warnung wert
     on E: Exception do
       Application.MessageBox(
         PChar(Format(_('Finding action failed: %s'), [E.Message])),

@@ -24,6 +24,9 @@ type
     [Test] procedure HeaderCaption_RuleAndTruncatedMessage;
     [Test] procedure ActionIndex_PointsIntoFlatList;
     [Test] procedure Registry_CollectsProviderErrors;
+    // Review reDelphiX nach Bereichen 2026-10-10, Minor 24: Abbruch und
+    // Stapelueberlauf eines Anbieters landen NICHT in Errors.
+    [Test] procedure Registry_PassesAbortAndStackOverflow;
     // Gluehbirne: nur verfuegbare Hilfen - kein Navigieren, nichts
     // Ausgegrautes, nichts ohne Execute.
     [Test] procedure AvailableFixesOnly_DropsNavigateDisabledAndNoExecute;
@@ -44,7 +47,8 @@ implementation
 
 uses
   System.SysUtils,
-  uMethodd12, uSCAConsts, uFindingActions, uFindingActionMenu;
+  uMethodd12, uSCAConsts, uFindingActions, uFindingActionMenu,
+  uCrashDiag;   // EStackExhausted
 
 type
   TStubProvider = class
@@ -52,6 +56,7 @@ type
     Captions : TArray<string>;
     Ran      : Integer;
     Throws   : Boolean;
+    Raises   : Integer;   // 1 = Abort, 2 = Stapel erschoepft
     function Provide(const AFinding: TLeakFinding): TArray<TFindingAction>;
     procedure DoExecute(Sender: TObject);
   end;
@@ -71,6 +76,10 @@ begin
   Inc(GProvideCalls);
   if Throws then
     raise Exception.Create('kaputt');
+  case Raises of
+    1: Abort;
+    2: raise EStackExhausted.Create('Stapel erschoepft (Stub)');
+  end;
   SetLength(Result, Length(Captions));
   for i := 0 to High(Captions) do
   begin
@@ -311,6 +320,40 @@ begin
     F.Free;
     Bad.Free;
     Good.Free;
+  end;
+end;
+
+procedure TTestFindingActionMenu.Registry_PassesAbortAndStackOverflow;
+var
+  Bad    : TStubProvider;
+  T      : Integer;
+  F      : TLeakFinding;
+  Caught : string;
+begin
+  Bad := TStubProvider.Create;
+  F := Finding('x');
+  T := TFindingActions.Register(Bad.Provide);
+  try
+    Bad.Raises := 1;
+    Caught := '';
+    try
+      BuildFindingMenuModel([F], []);
+    except
+      on EAbort do Caught := 'abort';
+    end;
+    Assert.AreEqual('abort', Caught, 'EAbort laeuft zum Host durch');
+    Bad.Raises := 2;
+    Caught := '';
+    try
+      BuildFindingMenuModel([F], []);
+    except
+      on EStackExhausted do Caught := 'stack';
+    end;
+    Assert.AreEqual('stack', Caught, 'ein erschoepfter Stapel laeuft durch');
+  finally
+    TFindingActions.Unregister(T);
+    F.Free;
+    Bad.Free;
   end;
 end;
 

@@ -233,6 +233,8 @@ try
   try
     Opened := Places.Open(FileName);    // False: Datei nicht lesbar
   except
+    on EStackExhausted do raise;        // uCrashDiag: nie verschlucken - nach einem Ueberlauf fehlt die Schutzseite
+    on EAbort do raise;                 // ein stiller Abbruch gehoert dem Host
     on E: Exception do
     begin
       Log(E.Message);                   // Parser-Fehler, auch der Watchdog
@@ -260,7 +262,7 @@ end;
 
 | Member | Liefert | Bedeutung |
 |--------|---------|-----------|
-| `Open(FileName)` / `Close` | `Boolean` | Liest die Datei selbst (kein Scan-Cache, kein Engine-Lock) und parst genau den dekodierten Text. `False`, wenn nicht lesbar. Ein Parser-Fehler (auch der Watchdog des Parsers) **wirft**; danach ist der Dienst geschlossen (`IsOpen = False`). Ein vorher geöffneter Text wird zuerst verworfen. |
+| `Open(FileName)` / `Close` | `Boolean` | Liest die Datei selbst (kein Scan-Cache, kein Engine-Lock) und parst genau den dekodierten Text. `False`, wenn nicht lesbar. Ein Parser-Fehler (auch der Watchdog des Parsers) **wirft**; beim Fangen `EStackExhausted` (`uCrashDiag`) und `EAbort` nie verschlucken; danach ist der Dienst geschlossen (`IsOpen = False`). Ein vorher geöffneter Text wird zuerst verworfen. |
 | `OpenSource(FileName, Source)` | `Boolean` | Wie `Open`, aber auf einem Text, den der Host übergibt (IDE: der Editor-Puffer mit ungespeicherten Änderungen). `FileName` ist nur der Name; die Datei wird nicht gelesen. `False` bei leerem Text; ein Parser-Fehler wirft wie bei `Open`. |
 | `SetIfdefDefines(Defines)` | | Lexer-Sicht des nächsten `Open`/`OpenSource`. Der Dienst parst immer in seiner eigenen Sicht, nie in der prozessweiten, die ein laufender Scan aus `TScanRequest.IfdefDefines` setzt. `nil` oder leer (Vorgabe) = beide Zweige jedes `{$IFDEF}`; sonst ein Zweig mit genau diesen Defines — ein Konsument, der die Sicht des Laufs kennt (`TScanRequest.IfdefDefines`), bekommt Knoten und Typen dann aus derselben Sicht wie die Funde. Ausnahme: bei einem `dlFpc`-Lauf mit nicht leerer Define-Liste (erzwungen auch für `.lpi`/`.lpk`/`.lpg`-Projekte) ergänzt der Scan `FPC` und `LCL` (`TAnalysisSession.ApplyIfdefView`), der Dienst nicht — für die Sicht der Funde gibt der Aufrufer die beiden selbst mit. Die Werte werden kopiert und bleiben über `Close` hinweg gesetzt. Grenzen der Doppelzweig-Sicht: `DeclaredTypeOf` liefert den Typ eines der Zweige (bei Parametern und lokalen Variablen den des letzten, bei Feldern und Unit-Globalen den des ersten), und `NodesAt` kann Knoten beider Zweige liefern. Defines aus Include-Dateien wertet der Dienst nicht aus. |
 | `IsOpen` / `FileName` / `LineCount` | `Boolean` / `string` / `Integer` | Zustand des geöffneten Texts. |

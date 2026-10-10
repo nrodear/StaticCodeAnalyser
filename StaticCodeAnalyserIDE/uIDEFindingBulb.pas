@@ -73,7 +73,8 @@ implementation
 
 // noinspection-file EmptyExcept, ExceptionTooGeneral
 // Im IDE-Prozess darf keine Ausnahme aus Hilfsfenster, Timer oder
-// Freigabe in den Editor entweichen.
+// Freigabe in den Editor entweichen - AUSSER einem erschoepften Stapel und
+// EAbort: die gehen weiter zu Application.HandleException (uCrashDiag).
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes,
@@ -267,6 +268,12 @@ begin
     if not FPosted then
       FPosted := PostMessage(FWnd, WM_SCA_BULB_UPDATE, 0, 0);
   except
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    // Schedule laeuft im Editor-Rueckruf: ein Fehler beim Vormerken kostet
+    // nur diese Aktualisierung, nie das Zeichnen des Editors.
+    on E: Exception do
+      BulbLog('Schedule ' + E.Message);
   end;
 end;
 
@@ -289,6 +296,12 @@ begin
       Exit;
     end;
   except
+    // Ein erschoepfter Stapel (tiefer Parse im Anbieter) und ein Abbruch
+    // gehen weiter zu Application.HandleException - lieber ein sichtbarer
+    // Fehler als eine IDE, die ohne Schutzseite weiterlaeuft (uCrashDiag).
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    // Sonst kostet ein Fehler nur diese Birnen-Runde.
     on E: Exception do
       BulbLog('WndProc ' + E.Message);
   end;
@@ -336,6 +349,11 @@ begin
        ((St.Key <> '') and not St.Checked) then
       Schedule(Ed);
   except
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    // Ein Fehler beim Nachfuehren kostet nur diesen Takt.
+    on E: Exception do
+      BulbLog('PollCaret ' + E.Message);
   end;
 end;
 
@@ -432,8 +450,13 @@ begin
   end;
   if not St.Checked and (NowMs - St.KeySince >= SETTLE_MS) then
   begin
-    St.HasFixes := HasAvailableFixes(AFile, ALine);
+    // ERST als gefragt merken, dann fragen: wirft ein Anbieter (etwa ein
+    // Stapelueberlauf im Parse), fragt PollCaret dieselbe Zeile sonst alle
+    // 250 ms erneut - ohne Schutzseite endet der zweite Ueberlauf hart.
     St.Checked  := True;
+    St.HasFixes := False;
+    FLineState.AddOrSetValue(AEditorWnd, St);
+    St.HasFixes := HasAvailableFixes(AFile, ALine);
   end;
   FLineState.AddOrSetValue(AEditorWnd, St);
   Result := St.HasFixes;
@@ -560,6 +583,9 @@ begin
     if not B.Visible then
       B.Visible := True;
   except
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    // Sonst kostet ein Fehler nur die Birne dieses Editors.
     on E: Exception do
       BulbLog('UpdateEditor ' + E.Message);
   end;
@@ -613,6 +639,9 @@ begin
         Schedule(Ed);
     end;
   except
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    // Sonst bleibt das Menue mit 'Keine Aktionen' stehen.
     on E: Exception do
       BulbLog('BulbBeforeMenu ' + E.Message);
   end;
@@ -639,6 +668,7 @@ begin
     Act.Execute(Sender);
   except
     on EStackExhausted do raise;
+    on EAbort do raise;   // ein stiller Abbruch ist keine Warnung wert
     on E: Exception do
       Application.MessageBox(
         PChar(Format(_('Finding action failed: %s'), [E.Message])),

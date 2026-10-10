@@ -24,6 +24,7 @@ unit uFindingActionMenu;
 // Anbieter beim Erfragen, fallen die Aktionen DIESES Funds weg (alle
 // Anbieter - TFindingActions.ActionsFor wirft als Ganzes), nie das
 // Menue; die Meldung landet in Errors, der Host protokolliert sie.
+// Ausgenommen: ein erschoepfter Stapel und EAbort laufen zum Host durch.
 
 interface
 
@@ -65,7 +66,8 @@ function BuildFindingMenuModelFrom(const AFindings: TArray<TLeakFinding>;
   AOptions: TFindingMenuOptions): TFindingMenuModel;
 
 // Erfragt die Aktionen je Fund bei der Registry (TFindingActions.ActionsFor)
-// und baut daraus das Modell; Anbieterfehler kommen nach Errors. Nur die
+// und baut daraus das Modell; Anbieterfehler kommen nach Errors (ausser
+// EStackExhausted und EAbort - die wirft die Funktion weiter). Nur die
 // ersten MAX_FINDINGS_PER_MENU Funde werden gefragt, der Rest zaehlt nach
 // Omitted.
 function BuildFindingMenuModel(const AFindings: TArray<TLeakFinding>;
@@ -233,9 +235,10 @@ begin
       Lists[i] := TFindingActions.ActionsFor(Asked[i]);
     except
       on EStackExhausted do raise;
+      on EAbort do raise;   // ein Abbruch erreicht den Host, nicht Errors
       // noinspection ExceptionTooGeneral
       // Ein werfender Anbieter kostet die Aktionen dieses Funds, nie das
-      // Menue - deshalb jede Ausnahme ausser dem Stack-Ueberlauf.
+      // Menue - deshalb jede Ausnahme ausser Stack-Ueberlauf und Abbruch.
       on E: Exception do
       begin
         Lists[i] := nil;

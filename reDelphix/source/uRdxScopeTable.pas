@@ -212,7 +212,11 @@ begin
     try
       SL.LoadFromFile(AFileName);
     except
-      Exit;
+      // Nicht lesbar oder falsch kodiert: der Aufrufer faellt auf die
+      // eingelinkte Ressource zurueck. Alles andere laeuft weiter.
+      on EFOpenError do Exit;
+      on EInOutError do Exit;
+      on EEncodingError do Exit;
     end;
     LoadFromStrings(SL);
     FSource := AFileName;
@@ -237,7 +241,7 @@ begin
     RS := TResourceStream.Create(HInstance, AResName, PChar(10));
     {$ENDIF}
   except
-    Exit;   // Ressource nicht vorhanden
+    on EResNotFound do Exit;   // Ressource nicht vorhanden
   end;
   try
     SL := TStringList.Create;

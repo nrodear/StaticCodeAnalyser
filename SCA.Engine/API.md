@@ -231,6 +231,8 @@ try
   try
     Opened := Places.Open(FileName);    // False: file not readable
   except
+    on EStackExhausted do raise;        // uCrashDiag: never swallow - no guard page after an overflow
+    on EAbort do raise;                 // a silent abort belongs to the host
     on E: Exception do
     begin
       Log(E.Message);                   // parser error, incl. the watchdog
@@ -258,7 +260,7 @@ end;
 
 | Member | Returns | Meaning |
 |--------|---------|---------|
-| `Open(FileName)` / `Close` | `Boolean` | Reads the file itself (no scan cache, no engine lock) and parses exactly the decoded text. `False` if unreadable. A parser error (incl. the parser watchdog) **raises**; the service is closed afterwards (`IsOpen = False`). Any previously opened text is discarded first. |
+| `Open(FileName)` / `Close` | `Boolean` | Reads the file itself (no scan cache, no engine lock) and parses exactly the decoded text. `False` if unreadable. A parser error (incl. the parser watchdog) **raises**; catch it without swallowing `EStackExhausted` (`uCrashDiag`) or `EAbort`; the service is closed afterwards (`IsOpen = False`). Any previously opened text is discarded first. |
 | `OpenSource(FileName, Source)` | `Boolean` | Like `Open`, but on a text the host passes in (IDE: the editor buffer with unsaved changes). `FileName` is only the name; the file is not read. `False` for an empty text; a parser error raises as with `Open`. |
 | `SetIfdefDefines(Defines)` | | Lexer view of the next `Open`/`OpenSource`. The service always parses in its own view, never in the process-wide view a running scan sets from `TScanRequest.IfdefDefines`. `nil` or empty (default) = both branches of every `{$IFDEF}`; otherwise one branch with exactly these defines — a consumer that knows the view of the run (`TScanRequest.IfdefDefines`) then gets nodes and types from the same view as the findings. Exception: for a `dlFpc` run with a non-empty define list (also forced for `.lpi`/`.lpk`/`.lpg` projects) the scan adds `FPC` and `LCL` (`TAnalysisSession.ApplyIfdefView`), the service does not — the caller adds the two itself to get the view of the findings. The values are copied and stay set across `Close`. Limits of the both-branch view: `DeclaredTypeOf` returns the type of one of the branches (the last for parameters and locals, the first for fields and globals), and `NodesAt` may return nodes of both branches. Defines from include files are not evaluated. |
 | `IsOpen` / `FileName` / `LineCount` | `Boolean` / `string` / `Integer` | State of the opened text. |

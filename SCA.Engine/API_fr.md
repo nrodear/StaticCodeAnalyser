@@ -236,6 +236,8 @@ try
   try
     Opened := Places.Open(FileName);    // False : fichier illisible
   except
+    on EStackExhausted do raise;        // uCrashDiag : ne jamais avaler - plus de page de garde apres un debordement
+    on EAbort do raise;                 // un abandon silencieux revient a l'hote
     on E: Exception do
     begin
       Log(E.Message);                   // erreur du parseur, watchdog compris
@@ -263,7 +265,7 @@ end;
 
 | Membre | Retourne | Signification |
 |--------|----------|---------------|
-| `Open(FileName)` / `Close` | `Boolean` | Lit lui-même le fichier (ni cache de scan, ni verrou moteur) et analyse exactement le texte décodé. `False` si illisible. Une erreur du parseur (watchdog du parseur compris) **lève une exception** ; le service est ensuite fermé (`IsOpen = False`). Un texte ouvert auparavant est d'abord abandonné. |
+| `Open(FileName)` / `Close` | `Boolean` | Lit lui-même le fichier (ni cache de scan, ni verrou moteur) et analyse exactement le texte décodé. `False` si illisible. Une erreur du parseur (watchdog du parseur compris) **lève une exception** ; en l'interceptant, ne jamais avaler `EStackExhausted` (`uCrashDiag`) ni `EAbort` ; le service est ensuite fermé (`IsOpen = False`). Un texte ouvert auparavant est d'abord abandonné. |
 | `OpenSource(FileName, Source)` | `Boolean` | Comme `Open`, mais sur un texte que l'hôte transmet (IDE : le tampon de l'éditeur avec ses modifications non enregistrées). `FileName` n'est que le nom ; le fichier n'est pas lu. `False` pour un texte vide ; une erreur du parseur lève une exception comme avec `Open`. |
 | `SetIfdefDefines(Defines)` | | Vue du lexer du prochain `Open`/`OpenSource`. Le service analyse toujours dans sa propre vue, jamais dans la vue globale au processus qu'un scan en cours définit à partir de `TScanRequest.IfdefDefines`. `nil` ou vide (par défaut) = les deux branches de chaque `{$IFDEF}` ; sinon une seule branche avec exactement ces defines — un consommateur qui connaît la vue de l'exécution (`TScanRequest.IfdefDefines`) obtient alors nœuds et types dans la même vue que les résultats. Exception : pour une exécution `dlFpc` avec une liste de defines non vide (imposée aussi pour les projets `.lpi`/`.lpk`/`.lpg`), le scan ajoute `FPC` et `LCL` (`TAnalysisSession.ApplyIfdefView`), le service non — pour obtenir la vue des résultats, l'appelant les ajoute lui-même. Les valeurs sont copiées et restent en place après `Close`. Limites de la vue à deux branches : `DeclaredTypeOf` renvoie le type de l'une des branches (la dernière pour les paramètres et variables locales, la première pour les champs et globaux d'unité), et `NodesAt` peut renvoyer des nœuds des deux branches. Les defines des fichiers inclus ne sont pas évalués. |
 | `IsOpen` / `FileName` / `LineCount` | `Boolean` / `string` / `Integer` | État du texte ouvert. |

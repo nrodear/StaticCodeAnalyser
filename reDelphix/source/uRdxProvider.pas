@@ -693,9 +693,14 @@ begin
     // weiter; EAbort ebenso (Projektregel).
     on EStackExhausted do raise;
     on EAbort do raise;
+    // noinspection ExceptionTooGeneral
+    // Jeder andere Fehler beim Oeffnen kostet nur die Baum-Rezepte dieses
+    // Funds (der Dienst schliesst sich dabei selbst, IsOpen = False); er
+    // steht als gesperrter Eintrag mit Klasse und Text im Menue.
     on E: Exception do
     begin
-      Add(AList, DIAG_PREFIX + 'Parser: ' + E.Message, '', False, nil);
+      Add(AList, DIAG_PREFIX + 'Parser: ' + E.ClassName + ': ' + E.Message,
+        '', False, nil);
       Exit;
     end;
   end;
