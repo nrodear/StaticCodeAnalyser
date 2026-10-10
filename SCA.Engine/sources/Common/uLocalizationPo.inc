@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2347 Zeilen, 78958 Bytes
-  CPoLines_de: array[0..2346] of string = (
+  // i18n\de.po - 2353 Zeilen, 79149 Bytes
+  CPoLines_de: array[0..2352] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2297,6 +2297,12 @@ const
     'msgid "Remove (TObject) from the class declaration"',
     'msgstr "(TObject) aus der Klassendeklaration entfernen"',
     '',
+    'msgid "Use the condition as the Assert message"',
+    'msgstr "Bedingung als Assert-Meldung verwenden"',
+    '',
+    'msgid "Remove the empty visibility section"',
+    'msgstr "Leeren Sichtbarkeitsabschnitt entfernen"',
+    '',
     'msgid "Show location"',
     'msgstr "Stelle zeigen"',
     '',
@@ -2636,8 +2642,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2343 Zeilen, 82757 Bytes
-  CPoLines_fr: array[0..2342] of string = (
+  // i18n\fr.po - 2349 Zeilen, 82953 Bytes
+  CPoLines_fr: array[0..2348] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4915,6 +4921,12 @@ const
     '',
     'msgid "Remove (TObject) from the class declaration"',
     'msgstr "Retirer (TObject) de la d'#$00E9'claration de classe"',
+    '',
+    'msgid "Use the condition as the Assert message"',
+    'msgstr "Utiliser la condition comme message d''Assert"',
+    '',
+    'msgid "Remove the empty visibility section"',
+    'msgstr "Retirer la section de visibilit'#$00E9' vide"',
     '',
     'msgid "Show location"',
     'msgstr "Afficher l''emplacement"',

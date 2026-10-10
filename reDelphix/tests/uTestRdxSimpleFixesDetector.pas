@@ -1,7 +1,8 @@
 unit uTestRdxSimpleFixesDetector;
 
 // Editorhilfen Stufe 2a gegen den ECHTEN Core (nur Delphi, reDelphix.Test):
-// Parser, die Detektoren SCA075/SCA085/SCA126, TSourcePlaces und
+// Parser, die Detektoren SCA075/SCA085/SCA126 (dazu SCA074/SCA087/SCA139
+// in der zweiten Fixture), TSourcePlaces und
 // TRdxFixRunner.FixFor - derselbe Einstieg wie im Anbieter. Je Fall meldet
 // der Detektor, die Hilfe plant aus dem Fund (Art, Zeile, Meldung), die
 // Ersetzungen werden angewandt - und derselbe Detektor meldet danach
@@ -40,12 +41,34 @@ type
     [Test] procedure Sca126_CatalogExample;
   end;
 
+  // Stufe 2, Rest (2026-10-10): SCA074, SCA087, SCA139 - eine eigene
+  // Fixture, damit keine Klasse ueber 20 Tests waechst (SCA138).
+  [TestFixture]
+  TTestRdxSimpleFixesDetector2 = class
+  public
+    // ---- SCA074 ----
+    [Test] procedure Sca074_RoundTrip;
+    [Test] procedure Sca074_OwnAssert_NoHelp;
+    [Test] procedure Sca074_InWith_NoHelp;
+    [Test] procedure Sca074_CatalogExample;
+    // ---- SCA087 ----
+    [Test] procedure Sca087_RoundTrip;
+    [Test] procedure Sca087_CatalogExample;
+    // ---- SCA139 ----
+    [Test] procedure Sca139_RoundTrip;
+    [Test] procedure Sca139_MissingSysUtils_AddsUses;
+    [Test] procedure Sca139_Property_NoHelp;
+    [Test] procedure Sca139_RecordWithFree_NoHelp;
+    [Test] procedure Sca139_CatalogExample;
+  end;
+
 implementation
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uParser2, uMethodd12, uSCAConsts, uRuleCatalog,
   uExplicitTObjectInheritance, uFreeAndNilHint, uNilComparison,
+  uAssertMessage, uEmptyVisibilitySection, uFreeWithoutNil,
   uEngineApi, uRdxBufferMath, uRdxRecipeRunner;
 
 type
@@ -97,6 +120,12 @@ begin
             TFreeAndNilHintDetector.AnalyzeUnit(Root, Path, Results);
           fkNilComparison:
             TNilComparisonDetector.AnalyzeUnit(Root, Path, Results);
+          fkAssertMessage:
+            TAssertMessageDetector.AnalyzeUnit(Root, Path, Results);
+          fkEmptyVisibilitySection:
+            TEmptyVisibilitySectionDetector.AnalyzeUnit(Root, Path, Results);
+          fkFreeWithoutNil:
+            TFreeWithoutNilDetector.AnalyzeUnit(Root, Path, Results);
         else
           Assert.Fail('keine Hilfe fuer diese Art');
         end;
@@ -470,7 +499,197 @@ begin
     FixAll(InRoutine(Snip(Meta.BadExample)), fkNilComparison));
 end;
 
+{ ---- SCA074 ---- }
+
+procedure TTestRdxSimpleFixesDetector2.Sca074_RoundTrip;
+begin
+  Assert.AreEqual(InRoutine(Join([
+      'Assert(Obj <> nil, ''Obj <> nil'');',
+      'Assert(Assigned(Obj), ''ok'');',
+      'Assert(Pos(''a'', ''b'') = 0, ''Pos(''''a'''', ''''b'''') = 0'');',
+      'if Obj = nil then Assert(False, ''False'');'])),
+    FixAll(InRoutine(Join([
+      'Assert(Obj <> nil);',
+      'Assert(Assigned(Obj), ''ok'');',
+      'Assert(Pos(''a'', ''b'') = 0);',
+      'if Obj = nil then Assert(False);'])), fkAssertMessage));
+end;
+
+procedure TTestRdxSimpleFixesDetector2.Sca074_OwnAssert_NoHelp;
+begin
+  // Eine eigene Routine Assert bindet vor System.Assert.
+  AssertNoHelp(Join(['unit t;', 'interface', 'implementation',
+    'procedure Assert(B: Boolean);', 'begin', 'end;',
+    'procedure P;', 'begin', '  Assert(True);', 'end;', 'end.']),
+    fkAssertMessage, 'eigene Routine');
+end;
+
+procedure TTestRdxSimpleFixesDetector2.Sca074_InWith_NoHelp;
+begin
+  AssertNoHelp(InRoutine(Join(['with Obj do', '  Assert(True);'])),
+    fkAssertMessage, 'with');
+end;
+
+procedure TTestRdxSimpleFixesDetector2.Sca074_CatalogExample;
+var
+  Meta : TRuleMeta;
+begin
+  // Das Katalog-'good' traegt eine Begruendung in Worten; die Hilfe kann
+  // nur die Bedingung selbst einsetzen - das Muster (Bedingung, Meldung)
+  // ist dasselbe, und der Detektor schweigt danach.
+  Meta := TRuleCatalog.GetRuleCanonical(fkAssertMessage);
+  Assert.AreEqual('Assert(Items.Count > 0);', Snip(Meta.BadExample));
+  Assert.AreEqual(InRoutine('Assert(Items.Count > 0, ''Items.Count > 0'');'),
+    FixAll(InRoutine(Snip(Meta.BadExample)), fkAssertMessage));
+  Assert.AreEqual<Integer>(0, Length(Detect(InRoutine(Snip(Meta.GoodExample)),
+    fkAssertMessage)), 'good meldet nichts');
+end;
+
+{ ---- SCA087 ---- }
+
+procedure TTestRdxSimpleFixesDetector2.Sca087_RoundTrip;
+begin
+  Assert.AreEqual(InInterface(Join([
+      'type',
+      '  TFoo = class',
+      '  private',
+      '    FX: Integer;',
+      '  public',
+      '    procedure P;',
+      '  end;',
+      '  TBar = class',
+      '    FY: Integer;',
+      '  end;'])),
+    FixAll(InInterface(Join([
+      'type',
+      '  TFoo = class',
+      '  public',
+      '  strict private',
+      '  private',
+      '    FX: Integer;',
+      '  protected',
+      '  public',
+      '    procedure P;',
+      '  end;',
+      '  TBar = class',
+      '    FY: Integer;',
+      '  published',
+      '  end;'])), fkEmptyVisibilitySection));
+end;
+
+procedure TTestRdxSimpleFixesDetector2.Sca087_CatalogExample;
+var
+  Meta : TRuleMeta;
+begin
+  Meta := TRuleCatalog.GetRuleCanonical(fkEmptyVisibilitySection);
+  Assert.IsTrue(Pos('public', Meta.BadExample) > 0, Meta.BadExample);
+  Assert.AreEqual(InInterface(Snip(Meta.GoodExample)),
+    FixAll(InInterface(Snip(Meta.BadExample)), fkEmptyVisibilitySection));
+end;
+
+{ ---- SCA139 ---- }
+
+const
+  // Ein Feld, eine Property und eine Methode (kein Destruktor), deren
+  // Rumpf die Faelle einsetzen; Changed folgt, sonst waere Free die letzte
+  // Anweisung (der Detektor schweigt dann).
+  UNIT_139 =
+    'unit t;'#13#10 +
+    'interface'#13#10 +
+    'uses System.Classes;'#13#10 +
+    'type'#13#10 +
+    '%s'#13#10 +
+    '  TFoo = class'#13#10 +
+    '  private'#13#10 +
+    '    FList: TList;'#13#10 +
+    '%s'#13#10 +
+    '  public'#13#10 +
+    '    property Items: TList read FList write FList;'#13#10 +
+    '    procedure Reset;'#13#10 +
+    '    procedure Changed;'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    '%s'#13#10 +
+    'procedure TFoo.Reset;'#13#10 +
+    'begin'#13#10 +
+    '%s'#13#10 +
+    '  Changed;'#13#10 +
+    'end;'#13#10 +
+    'procedure TFoo.Changed;'#13#10 +
+    'begin'#13#10 +
+    'end;'#13#10 +
+    'end.';
+
+procedure TTestRdxSimpleFixesDetector2.Sca139_RoundTrip;
+begin
+  Assert.AreEqual(
+    Format(UNIT_139, ['', '', 'uses System.SysUtils;', Join([
+      '  if Assigned(FList) then FreeAndNil(FList);',
+      '  FreeAndNil(FList);'])]),
+    FixAll(Format(UNIT_139, ['', '', 'uses System.SysUtils;', Join([
+      '  if Assigned(FList) then FList.Free;',
+      '  FList.Free;'])]), fkFreeWithoutNil));
+end;
+
+procedure TTestRdxSimpleFixesDetector2.Sca139_MissingSysUtils_AddsUses;
+var
+  After : string;
+begin
+  After := FixAll(Format(UNIT_139, ['', '', '', '  FList.Free;']), fkFreeWithoutNil);
+  Assert.IsTrue(Pos('FreeAndNil(FList);', After) > 0, After);
+  Assert.AreEqual<Integer>(1, CountOf('SysUtils', After),
+    'SysUtils genau einmal ergaenzt: ' + After);
+end;
+
+procedure TTestRdxSimpleFixesDetector2.Sca139_Property_NoHelp;
+begin
+  AssertNoHelp(Format(UNIT_139, ['', '', 'uses System.SysUtils;',
+    '  Items.Free;']), fkFreeWithoutNil, 'Property');
+end;
+
+procedure TTestRdxSimpleFixesDetector2.Sca139_RecordWithFree_NoHelp;
+begin
+  // 'FRec.Free' ruft die Methode des Records - FreeAndNil(FRec) waere
+  // falsch: Delphi ab 10.4 bricht ab (E2010), FPC und aeltere Delphi
+  // nehmen den Record still als untypisiertes var-Argument.
+  AssertNoHelp(Format(UNIT_139, [
+    '  TRec = record'#13#10'    procedure Free;'#13#10'  end;',
+    '    FRec: TRec;', 'uses System.SysUtils;',
+    '  FRec.Free;']), fkFreeWithoutNil, 'kein Objekt');
+end;
+
+procedure TTestRdxSimpleFixesDetector2.Sca139_CatalogExample;
+const
+  // L als Unit-Global: eine lokale Variable meldet der Detektor nicht
+  // (sie faellt mit der Routine aus dem Scope).
+  WRAP =
+    'unit t;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'uses System.Classes, System.SysUtils;'#13#10 +
+    'var'#13#10 +
+    '  L: TStringList;'#13#10 +
+    'procedure P;'#13#10 +
+    'begin'#13#10 +
+    '%s'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  Meta  : TRuleMeta;
+  After : string;
+begin
+  // Katalog 'good' laesst die Use-After-Free-Zeile weg und kommentiert
+  // anders - verglichen wird die Ersetzung, nicht der ganze Text.
+  Meta := TRuleCatalog.GetRuleCanonical(fkFreeWithoutNil);
+  Assert.IsTrue(Pos('L.Free;', Meta.BadExample) > 0, Meta.BadExample);
+  After := FixAll(Format(WRAP, [Snip(Meta.BadExample)]), fkFreeWithoutNil);
+  Assert.IsTrue(Pos('  FreeAndNil(L);', After) > 0, After);
+  Assert.IsTrue(Pos('L.Free', After) = 0, After);
+  Assert.IsTrue(Pos('FreeAndNil(L);', Meta.GoodExample) > 0, Meta.GoodExample);
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector);
+  TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector2);
 
 end.

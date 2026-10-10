@@ -339,6 +339,24 @@ type
     // Operand geht durch TRdxNilFix.NilOperandRisk.
     class function NilComparisonFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer): TRdxFixOutcome; static;
+
+    // SCA074: 'Assert(c)' -> 'Assert(c, ''c'')' an der Spalte aus der
+    // Meldung. Keine Hilfe, wenn die Unit selbst eine Routine Assert
+    // deklariert oder ein with den Namen an ein Member binden kann.
+    class function AssertMessageFix(APlaces: TSourcePlaces; ALines: TStrings;
+      ALine: Integer; const AMessage: string): TRdxFixOutcome; static;
+
+    // SCA087: die leere Sichtbarkeitszeile ALine loeschen (nur die Zeilen).
+    class function EmptySectionFix(ALines: TStrings; ALine: Integer;
+      const AMessage: string): TRdxFixOutcome; static;
+
+    // SCA139: 'X.Free' -> 'FreeAndNil(X)', X aus der Meldung. Dieselbe
+    // Variablen-Pruefung wie SCA085; dazu kein record/object/interface
+    // dieser Unit als Typ ('X.Free' waere dort eine eigene Methode). Fehlt
+    // SysUtils, kommt die uses-Einfuegung mit.
+    class function FreeWithoutNilFix(APlaces: TSourcePlaces; ALines: TStrings;
+      ALine: Integer; const AMessage: string;
+      const AUsesNames: TArray<string>): TRdxFixOutcome; static;
   end;
 
 implementation
@@ -364,6 +382,9 @@ const
     + 'Methodenzeiger ruft ''= nil'' ihn auf, Assigned() nicht';
   R_NIL_IN_WITH = 'with-Anweisung - ein Operand koennte ein Member des '
     + 'with-Ausdrucks sein';
+  // Der Unterschied, den der Benutzer kennen sollte (SCA085, SCA139):
+  // FreeAndNil setzt ERST nil, dann laeuft der Destruktor.
+  R_FREENIL_HINT = 'FreeAndNil setzt %s auf nil, bevor der Destruktor laeuft';
 
 { TRdxObjectRing }
 
@@ -1161,7 +1182,8 @@ end;
 class function TRdxFixRunner.Handles(AKind: TFindingKind): Boolean;
 begin
   Result := AKind in [fkExplicitTObjectInheritance, fkFreeAndNilHint,
-    fkNilComparison];
+    fkNilComparison, fkAssertMessage, fkEmptyVisibilitySection,
+    fkFreeWithoutNil];
 end;
 
 // X aus der SCA085-Meldung '`X.Free; X := nil;` - prefer ...'; '' ohne
@@ -1213,13 +1235,24 @@ begin
       end;
     fkNilComparison:
       Result := NilComparisonFix(APlaces, ALines, AFinding.LineInt);
+    fkAssertMessage:
+      Result := AssertMessageFix(APlaces, ALines, AFinding.LineInt,
+        AFinding.Message);
+    fkEmptyVisibilitySection:
+      Result := EmptySectionFix(ALines, AFinding.LineInt, AFinding.Message);
+    fkFreeWithoutNil:
+      Result := FreeWithoutNilFix(APlaces, ALines, AFinding.LineInt,
+        AFinding.Message, AUsesNames);
   else
     Result.Reason := 'keine einfache Hilfe fuer diese Regel';
   end;
 end;
 
-class function TRdxFixRunner.ExplicitTObjectFix(ALines: TStrings;
-  ALine: Integer; const AMessage: string): TRdxFixOutcome;
+// SCA075 und SCA087: die Planer arbeiten nur auf den Zeilen, ohne Parser.
+// Spalte bzw. Abschnitt stehen in der Meldung - die Spalte kennt den
+// Kommentar-Zustand der Zeilen davor, ein Neuscan der Zeile nicht.
+function LinesOnlyFix(AKind: TFindingKind; ALines: TStrings; ALine: Integer;
+  const AMessage: string): TRdxFixOutcome;
 var
   Map : TRdxCodeMap;
 begin
@@ -1232,15 +1265,23 @@ begin
   SetLength(Result.Edits, 1);
   Map := TRdxCodeMap.Create(ALines);
   try
-    // Die Spalte steht in der Meldung ('at column N') - sie kennt den
-    // Kommentar-Zustand der Zeilen davor, ein Neuscan der Zeile nicht.
-    Result.Enabled := TRdxSimpleFixes.ExplicitTObject(Map, ALine, AMessage,
-      Result.Edits[0], Result.Reason);
+    if AKind = fkEmptyVisibilitySection then
+      Result.Enabled := TRdxSimpleFixes.EmptySection(Map, ALine, AMessage,
+        Result.Edits[0], Result.Reason)
+    else
+      Result.Enabled := TRdxSimpleFixes.ExplicitTObject(Map, ALine, AMessage,
+        Result.Edits[0], Result.Reason);
   finally
     Map.Free;
   end;
   if not Result.Enabled then
     Result.Edits := nil;
+end;
+
+class function TRdxFixRunner.ExplicitTObjectFix(ALines: TStrings;
+  ALine: Integer; const AMessage: string): TRdxFixOutcome;
+begin
+  Result := LinesOnlyFix(fkExplicitTObjectInheritance, ALines, ALine, AMessage);
 end;
 
 // SCA085: ist AName an ALine sicher eine Variable? FreeAndNil braucht eine;
@@ -1267,12 +1308,36 @@ begin
       + 'Feld aus einer anderen Unit?)', [AName]);
 end;
 
+// FreeAndNil steht in SysUtils: fehlt die Unit in uses, haengt die
+// Einfuegung an AOutcome.Edits und an den Hinweis. False (Edits geleert,
+// Grund gesetzt), wenn die Einfuegung nicht planbar ist.
+function AppendSysUtils(APlaces: TSourcePlaces;
+  const AUsesNames: TArray<string>; var AOutcome: TRdxFixOutcome): Boolean;
+var
+  Plan : TRdxUsesPlan;
+begin
+  Result := True;
+  if TRdxRecipes.HasUnit(AUsesNames, 'SysUtils') then Exit;
+  Plan := TRdxRecipeRunner.PlanUses(APlaces, 'SysUtils', 'System.SysUtils');
+  if Plan.Needed and (Plan.Reason <> '') then
+  begin
+    AOutcome.Reason := 'System.SysUtils fehlt in uses: ' + Plan.Reason;
+    AOutcome.Edits := nil;
+    Exit(False);
+  end;
+  if Plan.Needed then
+  begin
+    SetLength(AOutcome.Edits, Length(AOutcome.Edits) + 1);
+    AOutcome.Edits[High(AOutcome.Edits)] := Plan.Edit;
+    AOutcome.Hint := AOutcome.Hint + ' + uses ' + Plan.Name;
+  end;
+end;
+
 class function TRdxFixRunner.FreeAndNilFix(APlaces: TSourcePlaces;
   ALines: TStrings; ALine: Integer;
   const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
-  Map  : TRdxCodeMap;
-  Plan : TRdxUsesPlan;
+  Map : TRdxCodeMap;
 begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
@@ -1294,27 +1359,103 @@ begin
     Result.Edits := nil;
     Exit;
   end;
-  // Der Unterschied, den der Benutzer kennen sollte: FreeAndNil setzt
-  // ERST nil, dann laeuft der Destruktor.
-  Result.Hint := Format('FreeAndNil setzt %s auf nil, bevor der Destruktor laeuft',
-    [Result.Name]);
-  if not TRdxRecipes.HasUnit(AUsesNames, 'SysUtils') then
+  Result.Hint := Format(R_FREENIL_HINT, [Result.Name]);
+  Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
+end;
+
+class function TRdxFixRunner.AssertMessageFix(APlaces: TSourcePlaces;
+  ALines: TStrings; ALine: Integer; const AMessage: string): TRdxFixOutcome;
+var
+  Map : TRdxCodeMap;
+begin
+  Result := Default(TRdxFixOutcome);
+  if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
   begin
-    Plan := TRdxRecipeRunner.PlanUses(APlaces, 'SysUtils', 'System.SysUtils');
-    if Plan.Needed and (Plan.Reason <> '') then
+    Result.Reason := R_NO_FILE;
+    Exit;
+  end;
+  SetLength(Result.Edits, 1);
+  Map := TRdxCodeMap.Create(ALines);
+  try
+    // Eine eigene Routine Assert (Methode oder global) bindet vor
+    // System.Assert - ihre Parameter kennt hier niemand.
+    if TRdxSimpleFixes.DeclaresRoutine(Map, 'Assert') then
+      Result.Reason := 'die Unit deklariert eine eigene Routine Assert'
+    else if TRdxSimpleFixes.WithBefore(Map, ALine)
+            or APlaces.InWithBlock(ALine) then
+      Result.Reason := 'with-Anweisung in der Routine - Assert koennte ein '
+        + 'Member sein'
+    else
+      Result.Enabled := TRdxSimpleFixes.AssertMessage(Map, ALine, AMessage,
+        Result.Edits[0], Result.Reason);
+  finally
+    Map.Free;
+  end;
+  if not Result.Enabled then
+    Result.Edits := nil;
+end;
+
+class function TRdxFixRunner.EmptySectionFix(ALines: TStrings; ALine: Integer;
+  const AMessage: string): TRdxFixOutcome;
+begin
+  Result := LinesOnlyFix(fkEmptyVisibilitySection, ALines, ALine, AMessage);
+end;
+
+// X aus der SCA139-Meldung 'X.Free without subsequent X := nil - ...';
+// '' ohne diese Form.
+function FreeReceiverOf(const AMessage: string): string;
+var
+  P : Integer;
+begin
+  Result := '';
+  P := Pos('.Free without', AMessage);
+  if P > 1 then
+    Result := Trim(Copy(AMessage, 1, P - 1));
+end;
+
+class function TRdxFixRunner.FreeWithoutNilFix(APlaces: TSourcePlaces;
+  ALines: TStrings; ALine: Integer; const AMessage: string;
+  const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Map : TRdxCodeMap;
+begin
+  Result := Default(TRdxFixOutcome);
+  if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
+  begin
+    Result.Reason := R_NO_FILE;
+    Exit;
+  end;
+  // X wie in der Meldung - auch fuer Menuetext und Grund, wenn der Planer
+  // ablehnt; die Ersetzung schreibt X so, wie es im Quelltext steht.
+  Result.Name := FreeReceiverOf(AMessage);
+  SetLength(Result.Edits, 1);
+  Map := TRdxCodeMap.Create(ALines);
+  try
+    if not TRdxSimpleFixes.FreeOnly(Map, ALine, Result.Name,
+         Result.Edits[0], Result.Reason) then
     begin
-      Result.Reason := 'System.SysUtils fehlt in uses: ' + Plan.Reason;
       Result.Edits := nil;
       Exit;
     end;
-    if Plan.Needed then
-    begin
-      SetLength(Result.Edits, Length(Result.Edits) + 1);
-      Result.Edits[High(Result.Edits)] := Plan.Edit;
-      Result.Hint := Result.Hint + ' + uses ' + Plan.Name;
-    end;
+    Result.Reason := VariableCheck(APlaces, Map, ALine, Result.Name);
+    // 'X.Free' auf einem record/object dieser Unit ist eine eigene Methode;
+    // FreeAndNil(X) wuerde den Wert als Objekt behandeln. SCA085 beweist
+    // das ueber 'X := nil', hier fehlt dieser Beweis.
+    if (Result.Reason = '') and TRdxSimpleFixes.DeclaresValueType(Map,
+         APlaces.DeclaredTypeOf(ALine, Result.Name)) then
+      Result.Reason := Format('%s ist kein Objekt (record, object oder '
+        + 'interface dieser Unit) - Free ist eine eigene Methode',
+        [Result.Name]);
+  finally
+    Map.Free;
   end;
-  Result.Enabled := True;
+  if Result.Reason <> '' then
+  begin
+    Result.Edits := nil;
+    Exit;
+  end;
+  Result.Hint := Format(R_FREENIL_HINT, [Result.Name]);
+  Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
 end;
 
 // Der Text, auf dem uNilComparison den Knoten zaehlt (Analyse

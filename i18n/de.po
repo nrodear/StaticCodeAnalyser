@@ -2280,6 +2280,12 @@ msgstr "Assigned() statt Vergleich mit nil verwenden"
 msgid "Remove (TObject) from the class declaration"
 msgstr "(TObject) aus der Klassendeklaration entfernen"
 
+msgid "Use the condition as the Assert message"
+msgstr "Bedingung als Assert-Meldung verwenden"
+
+msgid "Remove the empty visibility section"
+msgstr "Leeren Sichtbarkeitsabschnitt entfernen"
+
 msgid "Show location"
 msgstr "Stelle zeigen"
 

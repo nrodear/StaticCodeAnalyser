@@ -74,6 +74,47 @@ type
     // kennt.
     class function DeclaresInlineVar(AMap: TRdxCodeMap; ALine: Integer;
       const AName: string): Boolean; static;
+
+    // ---- Editorhilfen Stufe 2, Rest (Nico 2026-10-10: "baue weitere") ----
+
+    // SCA074: 'Assert(c)' an der Spalte aus der Meldung ('at column N') ->
+    // 'Assert(c, ''c'')' - die Bedingung als Meldung. Nur, wenn die Klammer
+    // auf derselben Zeile schliesst, kein Komma auf oberster Ebene und
+    // kein Kommentar darin steht und es nicht 'Obj.Assert' ist; ein
+    // Literal traegt hoechstens 255 Zeichen (E2056).
+    class function AssertMessage(AMap: TRdxCodeMap; ALine: Integer;
+      const AMessage: string; out AEdit: TRdxEdit;
+      out AReason: string): Boolean; static;
+    // True, wenn die Datei eine Routine AName deklariert ('procedure
+    // Assert' / 'function Assert', auch als Methode) - dann bindet der
+    // Name nicht an die RTL.
+    class function DeclaresRoutine(AMap: TRdxCodeMap;
+      const AName: string): Boolean; static;
+
+    // SCA087: die leere Sichtbarkeitszeile ALine loeschen. Nur, wenn sie
+    // genau den Abschnitt aus der Meldung traegt ('Empty `public`
+    // section', 'strict private' zweiteilig) und keinen Kommentar; nicht
+    // bei 'strict' allein (es gehoert zur naechsten Zeile) und nicht, wenn
+    // bis zum naechsten Code eine Direktive steht.
+    class function EmptySection(AMap: TRdxCodeMap; ALine: Integer;
+      const AMessage: string; out AEdit: TRdxEdit;
+      out AReason: string): Boolean; static;
+
+    // SCA139: 'X.Free' -> 'FreeAndNil(X)' auf Zeile ALine, X = AReceiver
+    // aus der Meldung (geschrieben wie im Quelltext). Genau ein Vorkommen
+    // im Code der Zeile, X ein blosser Bezeichner (kein Pfad davor), 'Free'
+    // ohne Klammern. Anders als SCA085 darf die Anweisung hinter
+    // then/else/do stehen: ersetzt wird nur der Ausdruck, die Bedingung
+    // bleibt. Variable und uses prueft der Aufrufer.
+    class function FreeOnly(AMap: TRdxCodeMap; ALine: Integer;
+      const AReceiver: string; out AEdit: TRdxEdit;
+      out AReason: string): Boolean; static;
+    // True, wenn die Datei ATypeName als record, object oder (disp)interface
+    // deklariert ('TFoo = packed record'): 'X.Free' ist dann eine eigene
+    // Methode, FreeAndNil(X) waere falsch. Ein Typ aus einer anderen Unit
+    // ist hier unbekannt (False).
+    class function DeclaresValueType(AMap: TRdxCodeMap;
+      const ATypeName: string): Boolean; static;
   end;
 
   // SCA126: X = nil -> not Assigned(X), X <> nil -> Assigned(X).
@@ -101,13 +142,20 @@ type
 implementation
 
 uses
-  System.StrUtils;   // PosEx, EndsText
+  System.StrUtils;   // PosEx, EndsText, ContainsText
 
 const
   MAX_REGION_LINES = 25;
   SPAN_075 = 'sca075';
   SPAN_085 = 'sca085';
   SPAN_126 = 'sca126';
+  SPAN_074 = 'sca074';
+  SPAN_087 = 'sca087';
+  SPAN_139 = 'sca139';
+  R_ASSERT_MOVED  = 'Assert( steht nicht mehr an der gemeldeten Stelle';
+  // Ein Pascal-String-Literal traegt hoechstens 255 Zeichen (E2056); die
+  // Quotes und verdoppelten Apostrophe zaehlen hier mit - vorsichtig.
+  MAX_ASSERT_LITERAL = 255;
   R_TOBJECT_MOVED = 'class(TObject) steht nicht mehr an der gemeldeten Stelle';
   R_FREE_MOVED    = 'X.Free; steht nicht mehr an der gemeldeten Stelle';
   R_NOT_NIL_LINE  = 'die naechste Zeile ist nicht "X := nil;"';
@@ -468,6 +516,386 @@ begin
       Exit(True);
     T := N;
   end;
+end;
+
+{ ---- SCA074, SCA087, SCA139 (Editorhilfen Stufe 2, Rest) ---- }
+
+class function TRdxSimpleFixes.DeclaresRoutine(AMap: TRdxCodeMap;
+  const AName: string): Boolean;
+var
+  T, N : TRdxToken;
+  Low  : string;
+begin
+  Result := False;
+  Low := LowerCase(AName);
+  T := NextToken(AMap, 1, 1);
+  while T.Low <> '' do
+  begin
+    if (T.Low = 'procedure') or (T.Low = 'function') then
+    begin
+      // Das letzte Segment zaehlt: 'procedure TFoo.Assert' auch.
+      N := After(AMap, T);
+      while (N.Low <> '') and (After(AMap, N).Low = '.') do
+        N := After(AMap, After(AMap, N));
+      if N.Low = Low then
+        Exit(True);
+    end;
+    T := After(AMap, T);
+  end;
+end;
+
+// Steht hinter ATok '= record' ('= packed record'), '= object' oder
+// '= (disp)interface'?
+function StartsValueType(AMap: TRdxCodeMap; const ATok: TRdxToken): Boolean;
+var
+  K : TRdxToken;
+begin
+  Result := False;
+  K := After(AMap, ATok);
+  if K.Low <> '=' then Exit;
+  K := After(AMap, K);
+  if K.Low = 'packed' then
+    K := After(AMap, K);
+  Result := (K.Low = 'record') or (K.Low = 'object') or (K.Low = 'interface')
+    or (K.Low = 'dispinterface');
+end;
+
+class function TRdxSimpleFixes.DeclaresValueType(AMap: TRdxCodeMap;
+  const ATypeName: string): Boolean;
+var
+  T   : TRdxToken;
+  Low : string;
+begin
+  Result := False;
+  Low := LowerCase(ATypeName);
+  if Low = '' then Exit;
+  T := NextToken(AMap, 1, 1);
+  while T.Low <> '' do
+  begin
+    if (T.Low = Low) and StartsValueType(AMap, T) then
+      Exit(True);
+    T := After(AMap, T);
+  end;
+end;
+
+// Kopf eines Assert-Aufrufs an (ALine, ACol): 'Assert' als Wort im Code,
+// kein 'Obj.' davor (nur 'System.'), dahinter '('. '' oder der Grund;
+// AOpenCol = Spalte der '('.
+function AssertHeadReason(AMap: TRdxCodeMap; ALine, ACol: Integer;
+  out AOpenCol: Integer): string;
+var
+  L    : string;
+  Prev : TRdxToken;
+begin
+  Result := '';
+  AOpenCol := 0;
+  if ACol < 1 then
+    Exit('Spalte fehlt in der Meldung');
+  L := AMap.Raw(ALine);
+  if not WordAt(L, ACol, 'Assert') or not AMap.IsCode(ALine, ACol)
+     or ((ACol > 1) and IsIdentChar(L[ACol - 1])) then
+    Exit(R_ASSERT_MOVED);
+  // 'Obj.Assert(x)' ist eine Methode - nur 'System.Assert' bleibt die RTL.
+  Prev := PrevToken(AMap, ALine, ACol);
+  if (Prev.Low = '.') and (Before(AMap, Prev).Low <> 'system') then
+    Exit('Assert ist hier eine Methode eines Objekts');
+  AOpenCol := SkipBlanks(L, ACol + 6);
+  if (AOpenCol > Length(L)) or (L[AOpenCol] <> '(')
+     or not AMap.IsCode(ALine, AOpenCol) then
+    Exit(R_ASSERT_MOVED);
+end;
+
+// Die ')' zur '(' an AOpenCol auf DERSELBEN Zeile, Tiefe nur ueber
+// Code-Zeichen - dieselbe Zaehlung wie uAssertMessage. '' oder der Grund
+// (Komma auf oberster Ebene: schon eine Meldung; keine ')': mehrzeilig).
+function AssertCloseReason(AMap: TRdxCodeMap; ALine, AOpenCol: Integer;
+  out ACloseCol: Integer): string;
+var
+  L     : string;
+  Depth : Integer;
+  j     : Integer;
+begin
+  Result := '';
+  ACloseCol := 0;
+  L := AMap.Raw(ALine);
+  Depth := 1;
+  for j := AOpenCol + 1 to Length(L) do
+  begin
+    if not AMap.IsCode(ALine, j) then
+      Continue;
+    case L[j] of
+      '(':
+        Inc(Depth);
+      ')':
+        begin
+          Dec(Depth);
+          if Depth = 0 then
+          begin
+            ACloseCol := j;
+            Exit;
+          end;
+        end;
+    else
+      // Ein Komma auf oberster Ebene trennt ein zweites Argument ab.
+      if (L[j] = ',') and (Depth = 1) then
+        Exit('Assert hat schon eine Meldung');
+    end;
+  end;
+  Result := 'Assert endet nicht auf dieser Zeile';
+end;
+
+class function TRdxSimpleFixes.AssertMessage(AMap: TRdxCodeMap;
+  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  out AReason: string): Boolean;
+var
+  L        : string;
+  Col      : Integer;
+  OpenCol  : Integer;
+  CloseCol : Integer;
+  Inner    : string;
+  Lit      : string;
+begin
+  Result := False;
+  AEdit := Default(TRdxEdit);
+  Col := ColumnFromMessage(AMessage);
+  AReason := AssertHeadReason(AMap, ALine, Col, OpenCol);
+  if AReason <> '' then Exit;
+  AReason := AssertCloseReason(AMap, ALine, OpenCol, CloseCol);
+  if AReason <> '' then Exit;
+  // Ein Kommentar ginge sonst als Text in die Meldung.
+  if AMap.HasComment(ALine, OpenCol, CloseCol) then
+  begin
+    AReason := 'Kommentar in der Bedingung';
+    Exit;
+  end;
+  L := AMap.Raw(ALine);
+  Inner := TrimRight(Copy(L, OpenCol + 1, CloseCol - OpenCol - 1));
+  if Trim(Inner) = '' then
+  begin
+    AReason := 'Assert ohne Bedingung';
+    Exit;
+  end;
+  Lit := '''' + StringReplace(Trim(Inner), '''', '''''', [rfReplaceAll]) + '''';
+  if Length(Lit) > MAX_ASSERT_LITERAL then
+  begin
+    AReason := 'Bedingung zu lang fuer ein String-Literal (255 Zeichen)';
+    Exit;
+  end;
+  AEdit.Span := TRefactorSpan.Make(SPAN_074, ALine, Col, ALine, CloseCol + 1);
+  AEdit.Expected := Copy(L, Col, CloseCol - Col + 1);
+  AEdit.NewText  := Copy(L, Col, OpenCol - Col + 1) + Inner + ', ' + Lit + ')';
+  Result := True;
+end;
+
+// Leerraum-Laeufe zu einem Leerzeichen, ohne Leerraum am Rand.
+function CollapseBlanks(const S: string): string;
+var
+  i, n  : Integer;
+  Blank : Boolean;
+begin
+  SetLength(Result, Length(S));
+  n := 0;
+  Blank := False;
+  for i := 1 to Length(S) do
+    if IsBlank(S[i]) then
+      Blank := True
+    else
+    begin
+      if Blank and (n > 0) then
+      begin
+        Inc(n);
+        Result[n] := ' ';
+      end;
+      Blank := False;
+      Inc(n);
+      Result[n] := S[i];
+    end;
+  SetLength(Result, n);
+end;
+
+// Beginnt an (ALine, ACol) eine Compiler-Direktive ('{$' oder '(*$')? Die
+// Code-Sicht fuehrt Direktiven als Kommentar ('k').
+function DirectiveAt(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
+var
+  L : string;
+begin
+  L := AMap.Raw(ALine);
+  Result := (AMap.ClassAt(ALine, ACol) = 'k')
+    and ((Copy(L, ACol, 2) = '{$') or (Copy(L, ACol, 3) = '(*$'));
+end;
+
+// Beginnt zwischen (AFromLine, 1) und dem Token ATo eine Direktive? Bis
+// Dateiende, wenn ATo leer ist.
+function DirectiveBefore(AMap: TRdxCodeMap; AFromLine: Integer;
+  const ATo: TRdxToken): Boolean;
+var
+  Li, Co, Last, Stop : Integer;
+begin
+  Result := False;
+  Last := AMap.LineCount;
+  if ATo.Low <> '' then
+    Last := ATo.Line;
+  for Li := AFromLine to Last do
+  begin
+    Stop := Length(AMap.Raw(Li));
+    if (ATo.Low <> '') and (Li = ATo.Line) then
+      Stop := ATo.Col - 1;
+    for Co := 1 to Stop do
+      if DirectiveAt(AMap, Li, Co) then
+        Exit(True);
+  end;
+end;
+
+class function TRdxSimpleFixes.EmptySection(AMap: TRdxCodeMap; ALine: Integer;
+  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+var
+  L    : string;
+  Name : string;
+  p, q : Integer;
+begin
+  Result := False;
+  AEdit := Default(TRdxEdit);
+  AReason := '';
+  // 'Empty `strict private` section ...' - der Abschnitt zwischen den
+  // Backticks (uEmptyVisibilitySection.SektionsName).
+  p := Pos('`', AMessage);
+  q := 0;
+  if p > 0 then
+    q := Pos('`', AMessage, p + 1);
+  if q = 0 then
+  begin
+    AReason := 'Abschnitt fehlt in der Meldung';
+    Exit;
+  end;
+  Name := LowerCase(Copy(AMessage, p + 1, q - p - 1));
+  // Die Zeile wird samt Zeilenende geloescht - dahinter steht in einer
+  // Klasse immer noch eine Zeile (mindestens 'end').
+  if (ALine < 1) or (ALine >= AMap.LineCount) then
+  begin
+    AReason := 'keine Zeile hinter dem Abschnitt';
+    Exit;
+  end;
+  L := AMap.Raw(ALine);
+  if AMap.StartsInside(ALine) or AMap.HasNonCode(ALine, 1, Length(L)) then
+  begin
+    AReason := 'Kommentar auf der Zeile - er ginge beim Loeschen verloren';
+    Exit;
+  end;
+  // 'strict' ohne 'private'/'protected' auf derselben Zeile: das Wort
+  // gehoert zum Abschnitt der naechsten Zeile - weg damit wuerde aus
+  // 'strict private' ein 'private'.
+  if Name = 'strict' then
+  begin
+    AReason := 'strict steht allein - es gehoert zur naechsten Zeile';
+    Exit;
+  end;
+  if LowerCase(CollapseBlanks(L)) <> Name then
+  begin
+    AReason := Format('Zeile %d traegt nicht nur "%s" - Zeile verschoben? '
+      + 'Datei neu pruefen', [ALine, Name]);
+    Exit;
+  end;
+  if DirectiveBefore(AMap, ALine + 1, NextToken(AMap, ALine + 1, 1)) then
+  begin
+    AReason := 'Compiler-Direktive bis zum naechsten Abschnitt - der leere '
+      + 'Abschnitt gilt evtl. nur in einem Zweig';
+    Exit;
+  end;
+  AEdit.Span := TRefactorSpan.Make(SPAN_087, ALine, 1, ALine + 1, 1);
+  AEdit.Expected := L + #10;
+  AEdit.NewText  := '';
+  Result := True;
+end;
+
+// Die Code-Vorkommen von 'X.Free' auf Zeile ALine (X = AReceiver als
+// ganzes Wort, Leerraum um den Punkt erlaubt): Anzahl; ACol/AFreeEnd vom
+// letzten (Spalte von X, Spalte hinter 'Free').
+function CountFreeCalls(AMap: TRdxCodeMap; ALine: Integer;
+  const AReceiver: string; out ACol, AFreeEnd: Integer): Integer;
+var
+  L    : string;
+  j, k : Integer;
+begin
+  Result := 0;
+  ACol := 0;
+  AFreeEnd := 0;
+  L := AMap.Raw(ALine);
+  for j := 1 to Length(L) do
+  begin
+    if not AMap.IsCode(ALine, j) or not WordAt(L, j, AReceiver)
+       or ((j > 1) and IsIdentChar(L[j - 1])) then
+      Continue;
+    k := SkipBlanks(L, j + Length(AReceiver));
+    if (k > Length(L)) or (L[k] <> '.') or not AMap.IsCode(ALine, k) then
+      Continue;
+    k := SkipBlanks(L, k + 1);
+    if WordAt(L, k, 'Free') and AMap.IsCode(ALine, k) then
+    begin
+      Inc(Result);
+      ACol := j;
+      AFreeEnd := k + 4;
+    end;
+  end;
+end;
+
+// Der Grund, wenn nicht genau EIN 'X.Free' auf der Zeile steht. Der
+// Detektor meldet auch 'X.Destroy' (als 'X.Free').
+function FreeCountReason(const ALineText, AReceiver: string;
+  AFound: Integer): string;
+begin
+  if AFound > 1 then
+    Result := Format('%s.Free steht mehrmals auf der Zeile', [AReceiver])
+  else if ContainsText(ALineText, AReceiver + '.Destroy') then
+    Result := Format('%s.Destroy statt %s.Free - FreeAndNil ersetzt nur Free',
+      [AReceiver, AReceiver])
+  else
+    Result := Format('%s.Free steht nicht mehr auf der Zeile - Zeile '
+      + 'verschoben? Datei neu pruefen', [AReceiver]);
+end;
+
+class function TRdxSimpleFixes.FreeOnly(AMap: TRdxCodeMap; ALine: Integer;
+  const AReceiver: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+var
+  L       : string;
+  k       : Integer;
+  Col     : Integer;
+  FreeEnd : Integer;
+begin
+  Result := False;
+  AEdit := Default(TRdxEdit);
+  AReason := '';
+  if AReceiver = '' then
+  begin
+    AReason := 'Empfaenger fehlt in der Meldung';
+    Exit;
+  end;
+  L := AMap.Raw(ALine);
+  k := CountFreeCalls(AMap, ALine, AReceiver, Col, FreeEnd);
+  if k <> 1 then
+  begin
+    AReason := FreeCountReason(L, AReceiver, k);
+    Exit;
+  end;
+  // Ein Pfad davor ('Obj.X.Free', 'Self.X.Free'): keine blosse Variable.
+  k := Col - 1;
+  while (k >= 1) and IsBlank(L[k]) do
+    Dec(k);
+  if (k >= 1) and (L[k] = '.') then
+  begin
+    AReason := Format('%s.Free haengt an einem Pfad - FreeAndNil braucht '
+      + 'eine Variable', [AReceiver]);
+    Exit;
+  end;
+  k := SkipBlanks(L, FreeEnd);
+  if (k <= Length(L)) and (L[k] = '(') then
+  begin
+    AReason := 'X.Free() mit Klammern';
+    Exit;
+  end;
+  AEdit.Span := TRefactorSpan.Make(SPAN_139, ALine, Col, ALine, FreeEnd);
+  AEdit.Expected := Copy(L, Col, FreeEnd - Col);
+  AEdit.NewText  := 'FreeAndNil(' + Copy(L, Col, Length(AReceiver)) + ')';
+  Result := True;
 end;
 
 { ---- SCA126: Zaehlen wie der Detektor ---- }

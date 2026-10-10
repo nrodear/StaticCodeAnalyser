@@ -3,8 +3,8 @@
 IDE-Package (Delphi 12, Win32), das an Funden des SCA-Plugins Aktionen
 anbietet: `Format()` aus einer Verkettung bilden, parametrisierte
 SQL-Vorlage, `uses`-Eintraege qualifizieren, die Editorhilfen
-`FreeAndNil(X)`, `Assigned()` und `(TObject)` entfernen, Unterdruecken und
-Stelle zeigen. Es liest die Stellen ueber den Quellstellen-Dienst
+`FreeAndNil(X)`, `Assigned()`, `(TObject)` entfernen, Assert-Meldung und
+leeren Sichtbarkeitsabschnitt entfernen, Unterdruecken und Stelle zeigen. Es liest die Stellen ueber den Quellstellen-Dienst
 `TSourcePlaces` der SCA-Engine und schreibt nur in den IDE-Editor - nie in
 eine Datei und nie, ohne vorher jeden Bereich im Puffer mit dem Text zu
 vergleichen, auf dem die Aktion beim Menueaufbau beschrieben wurde (siehe
@@ -23,7 +23,7 @@ source\uRdxProvider.pas           je Fund die Aktionen bauen (Anker/fixMode aus 
 source\uRdxRecipeRunner.pas       Rezept-Laeufer auf TSourcePlaces: Fund -> Beschreibung -> Ersetzung; ohne ToolsAPI, testbar
 source\uRdxRecipes.pas            reine Textlogik: Literal-Codec, Format() nach der Kompilat-Regel, SQL-Vorlage, uses-Schreibweise, Rahmenwerk
 source\uRdxScopeTable.pas         Kurzname -> qualifizierte Unit (Compiler-Reihenfolge der Scope-Liste)
-source\uRdxSimpleFixes.pas        Editorhilfen SCA075/SCA085/SCA126 (reine Textlogik)
+source\uRdxSimpleFixes.pas        Editorhilfen SCA074/SCA075/SCA085/SCA087/SCA126/SCA139 (reine Textlogik)
 source\uRdxSuppress.pas           Unterdrueck-Marker setzen und entfernen (reine Textlogik)
 source\uRdxCodeMap.pas            Code-Sicht der Datei (Kommentare, Strings, mehrzeilige Strings) und Token-Leser
 source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung aller Ersetzungen, Spaltengrenze, Textwahl
@@ -94,6 +94,9 @@ die Engine also vorher. DCUs landen wie bei den anderen Projekten in
 | FreeAndNil(X) verwenden | SCA085 | `X.Free;` + `X := nil;` -> `FreeAndNil(X);`. X muss in der Unit deklariert sein (keine Property, kein geerbtes Feld); gesperrt in einem `with`-Block. Fehlt `System.SysUtils`, kommt die uses-Einfuegung mit (unten) |
 | Assigned() statt Vergleich mit nil verwenden | SCA126 | schreibt ALLE nil-Vergleiche der einen Anweisung um, die auf der Fundzeile beginnt (`X = nil` -> `not Assigned(X)`). Zwei solche Anweisungen auf der Zeile heissen mehrdeutig; ein Operand vom Typ String, Variant, Menge, Array oder Prozedur/Ereignis sperrt, ebenso ein blosser Bezeichner ohne beweisbaren Typ (geerbt aus einer anderen Unit) |
 | (TObject) aus der Klassendeklaration entfernen | SCA075 | `class(TObject)` -> `class` an der Spalte aus der Meldung (nur Zeilen, ohne Parser) |
+| FreeAndNil(X) verwenden | SCA139 | `X.Free` -> `FreeAndNil(X)`, auch hinter `then`/`else`/`do` (ersetzt wird nur der Ausdruck). Dieselbe Variablen-Pruefung wie SCA085; X muss ein blosser Bezeichner sein (kein `Self.X`, kein Pfad), `Free` ohne Klammern und genau einmal auf der Zeile. Gesperrt, wenn der Typ von X in der Unit ein `record`, `object` oder `interface` ist (`Free` ist dort eine eigene Methode), und bei `X.Destroy`. Fehlt `System.SysUtils`, kommt die uses-Einfuegung mit |
+| Bedingung als Assert-Meldung verwenden | SCA074 | `Assert(c)` -> `Assert(c, 'c')` an der Spalte aus der Meldung; Apostrophe der Bedingung werden verdoppelt. Nur, wenn die Klammer auf derselben Zeile schliesst und kein Kommentar darin steht; nicht bei `Obj.Assert`, nicht, wenn die Unit selbst eine Routine `Assert` deklariert, nicht im `with`-Block. Ein Literal ueber 255 Zeichen (E2056) sperrt |
+| Leeren Sichtbarkeitsabschnitt entfernen | SCA087 | loescht die Zeile des leeren Abschnitts (`public`, `strict private` ...). Nur, wenn sie genau diesen Abschnitt traegt, ohne Kommentar; gesperrt bei `strict` allein auf der Zeile (es gehoert zur naechsten) und bei einer Compiler-Direktive bis zum naechsten Abschnitt (der Abschnitt waere vielleicht nur in einem Zweig leer) |
 | Hier / In dieser Datei unterdruecken | jeder Fund in Pascal-Quelltext | setzt `// noinspection <Art>` ueber die Fundzeile bzw. `// noinspection-file <Art>` hinter die Kopfanweisung (`fakSuppress`); ein vorhandener Marker bekommt die Art dazu, ausser er lautet `All`/`*` (dann eine eigene Zeile). Nicht angeboten, wenn die Fundzeile in einem Block-Kommentar oder mehrzeiligen String liegt. Einen wirkungslosen Marker (SCA165) entfernt "Wirkungslosen Unterdrueck-Marker entfernen" stattdessen - nur, wenn er genau EINE Art nennt; ein Mehrarten- oder `All`-Marker steht gesperrt mit Grund da, denn SCA165 kommt auch, wenn nur die Arten des aktiven Scan-Profils nichts unterdrueckt haben |
 
 **uses-Ergaenzung im Einzelnen** (`TRdxRecipeRunner.PlanUses`, fuer
@@ -258,6 +261,9 @@ Projekt scannen. Gluehbirne oder Editor-Kontextmenue auf der Fundzeile:
 | SCA075 ExplicitTObjectInheritance | `TFoo = class(TObject)` | (TObject) entfernen |
 | SCA085 FreeAndNilHint | `X.Free; X := nil;` | FreeAndNil(X) |
 | SCA126 NilComparison | `if X <> nil then` | Assigned(X) |
+| SCA074 AssertMessage | `Assert(X > 0);` | Bedingung als Assert-Meldung |
+| SCA087 EmptyVisibilitySection | `public` direkt vor `private` | leeren Abschnitt entfernen |
+| SCA139 FreeWithoutNil | `FList.Free;` (Feld, ohne `FList := nil`) | FreeAndNil(FList) |
 | SCA165 UnusedSuppression | wirkungsloser `// noinspection`-Marker | Marker entfernen - nur bei genau einer Art; Mehrarten- und `All`-Marker stehen gesperrt da (unter diesem Teilprofil wirken sie vielleicht nur scheinbar nicht) |
 | SCA142 UnsortedUses, SCA007 UnusedUses | Fund auf einer uses-Zeile | uses: Eintraege qualifizieren (Winapi.Windows, System.SysUtils ...) - nur im Kontextmenue, nicht in der Gluehbirne: es behebt den Fund nicht |
 | jede Regel ausser SCA165 | beliebig | Hier / in dieser Datei unterdruecken; Stelle zeigen (Kontextmenue) |
@@ -314,10 +320,12 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
   (`TRdxRecipeRunner.QualifyUses`): Eintraege der Zeile, alle,
   Sortierung, FPC-Weiche, Direktiven, eigene Unit.
 * `uTestRdxSimpleFixes` / `uTestRdxNilFix` - die Editorhilfen
-  SCA075/SCA085 bzw. SCA126 auf Text, ohne Parser.
+  SCA074/SCA075/SCA085/SCA087/SCA139 bzw. SCA126 auf Text, ohne Parser.
 * `uTestRdxSimpleFixesDetector` - dieselben Hilfen gegen den echten
   Detektor: nach der Hilfe meldet er nichts mehr; die Katalog-Beispiele
-  `bad` werden genau `good`.
+  `bad` werden genau `good` (SCA074 und SCA139: das `good` traegt eine
+  Begruendung in Worten bzw. laesst Zeilen weg - dort wird die Ersetzung
+  verglichen).
 
 Ohne Delphi (FPC 3.2.2):
 
@@ -391,4 +399,4 @@ Probe.
   Anweisung mit einem solchen Literal beschreibt der Core gar nicht, es
   gibt dort also keine Umformung.
 * In einem `with`-Block gilt kein Name als bewiesen (Kompilat-Regel oben),
-  und `FreeAndNil(X)` wird dort nicht angeboten.
+  und `FreeAndNil(X)` sowie die Assert-Meldung werden dort nicht angeboten.

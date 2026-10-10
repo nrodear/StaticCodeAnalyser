@@ -244,6 +244,8 @@ const
   CAP_FREENIL  = 'Use FreeAndNil(%s)';
   CAP_ASSIGNED = 'Use Assigned() instead of comparing with nil';
   CAP_TOBJECT  = 'Remove (TObject) from the class declaration';
+  CAP_ASSERT   = 'Use the condition as the Assert message';
+  CAP_EMPTYSEC = 'Remove the empty visibility section';
   DIAG_PREFIX  = 'reDelphix: ';
   // Fuer das Protokoll (deutsch wie die uebrigen Zeilen).
   SOURCE_NAMES : array[TRdxTextSource] of string =
@@ -602,8 +604,8 @@ begin
   end;
 end;
 
-// Menuetext einer einfachen Hilfe; AName ist X bei SCA085 ('' wenn der
-// Planer abgelehnt hat, bevor X feststand).
+// Menuetext einer einfachen Hilfe; AName ist X bei SCA085/SCA139 ('' wenn
+// der Planer abgelehnt hat, bevor X feststand).
 function SimpleFixCaption(AKind: TFindingKind; const AName: string): string;
 var
   N : string;
@@ -611,12 +613,16 @@ begin
   N := AName;
   if N = '' then N := 'X';
   case AKind of
-    fkFreeAndNilHint:
+    fkFreeAndNilHint, fkFreeWithoutNil:
       Result := Format(_(CAP_FREENIL), [N]);
     fkNilComparison:
       Result := _(CAP_ASSIGNED);
     fkExplicitTObjectInheritance:
       Result := _(CAP_TOBJECT);
+    fkAssertMessage:
+      Result := _(CAP_ASSERT);
+    fkEmptyVisibilitySection:
+      Result := _(CAP_EMPTYSEC);
   else
     Result := uSCAConsts.KindName(AKind);
   end;
