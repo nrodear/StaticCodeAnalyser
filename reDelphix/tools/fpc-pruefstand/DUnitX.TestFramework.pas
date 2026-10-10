@@ -1,6 +1,7 @@
 unit DUnitX.TestFramework;
 
-// Minimal-Ersatz fuer DUnitX, nur fuer den FPC-Pruefstand im Scratchpad.
+// Minimal-Ersatz fuer DUnitX, nur fuer den FPC-Pruefstand
+// (reDelphix/tools/fpc-pruefstand, build.sh).
 
 interface
 

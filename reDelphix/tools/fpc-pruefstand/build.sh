@@ -19,10 +19,17 @@ set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 RDX="$(cd "$HERE/../.." && pwd)"
 SCA="$(cd "${SCA_ROOT:-$RDX/..}" 2>/dev/null && pwd)"
-FPC="/c/lazarus/fpc/3.2.2/bin/i386-win32/fpc.exe"
+# FPC=<pfad> ueberschreibt den Compiler; fehlt er, ist das ein Umgebungs-
+# fehler (Exit 2), kein gescheiterter Bau (Review reDelphiX nach Bereichen
+# 2026-10-10, Nit 54).
+FPC="${FPC:-/c/lazarus/fpc/3.2.2/bin/i386-win32/fpc.exe}"
 OUT="$HERE/out"
 if [ $# -eq 0 ]; then
   echo "Aufruf: build.sh <testunit> [<testunit> ...]" >&2
+  exit 2
+fi
+if [ ! -x "$FPC" ]; then
+  echo "FPC nicht gefunden: $FPC (FPC=<pfad> setzen)" >&2
   exit 2
 fi
 if [ -z "$SCA" ] || [ ! -d "$SCA/SCA.Engine/sources" ]; then
@@ -110,6 +117,16 @@ done
     [ -f "$RDX/tests/$t.pas" ] && src="$RDX/tests/$t.pas"
     if [ ! -f "$src" ]; then
       echo "Testunit $t.pas weder in $RDX/tests noch in $SCA/StaticCodeAnalyserForm/tests" >&2
+      exit 2
+    fi
+    # Der Runner kennt genau EINE Fixture mit einfachen [Test]-Methoden:
+    # eine zweite Fixture oder [Setup]/[TearDown]/[TestCase] liefe hier
+    # still anders als unter DUnitX (Review reDelphiX nach Bereichen
+    # 2026-10-10, Nit 55).
+    fixtures=$(tr -d '\r' < "$src" | grep -cE '^[[:space:]]*\[TestFixture')
+    if [ "$fixtures" != "1" ] \
+       || tr -d '\r' < "$src" | grep -qE '\[(Setup|TearDown|SetupFixture|TearDownFixture)\]|\[TestCase'; then
+      echo "$t: $fixtures Fixture(s) oder [Setup]/[TearDown]/[TestCase] - der Pruefstand-Runner kann nur EINE Fixture mit einfachen [Test]-Methoden" >&2
       exit 2
     fi
     adapt "$src" "$HERE/$t.pas"

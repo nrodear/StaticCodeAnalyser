@@ -5,6 +5,10 @@ program measure;
 // (plus = -1: nicht gegenpruefen). Die Spalte kennt nur der AST - hier wird
 // ersatzweise jeder Bezeichner-Anfang der Zeile probiert und der erste
 // genommen, an dem die Zerlegung gelingt.
+//
+// ABGELOEST durch reDelphix/tools/probe/RdxCorpusProbe (echter Parser und
+// Laeufer); bleibt als Mess-Historie. Uebersetzbar nur nach einem
+// build.sh-Lauf (kopierte Units): fpc -Mdelphiunicode measure.pas.
 
 uses
   SysUtils, Classes, uRefactorInfo, uRefactorInfoBuilder, uRefactorConcat;
@@ -47,7 +51,15 @@ begin
       Lines.Clear;
       CurFile := FileName;
       if FileExists(FileName) then
-        try Lines.LoadFromFile(FileName); except Lines.Clear; end;
+        try
+          Lines.LoadFromFile(FileName);
+        except
+          // Nur Lesefehler zaehlen als 'keine Datei'; alles andere laeuft
+          // weiter (Review reDelphiX nach Bereichen 2026-10-10, Nit 56).
+          on EFOpenError do Lines.Clear;
+          on EReadError do Lines.Clear;
+          on EEncodingError do Lines.Clear;
+        end;
     end;
     if (LineNo < 1) or (LineNo > Lines.Count) then
     begin

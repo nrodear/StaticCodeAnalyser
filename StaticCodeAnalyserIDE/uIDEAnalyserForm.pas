@@ -21,9 +21,6 @@ uses
   uFindingCopyText,
   uQuickFix,
   uFindingActions,                         // Aktionen fremder Anbieter am Fund (Grid-Menue)
-  uFindingActionMenu,                      // das eine Menue-Modell zu den Aktionen (Stufe C)
-  uIDEFindingActionMenu,                   // Modell -> TMenuItems
-  uIDEFindingBulb,                         // Gluehbirne an der Caret-Zeile (Element EditorBulb)
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uIDEColors, uLocalization,
   uRecentPaths, uScanTargetDialog,
   uIDELineHighlighter, uIDEMessages, uIDEWatchMode, uIDEStatsTiles,
@@ -652,7 +649,12 @@ uses
   uHintTextLayout,              // FormatRelatedLines - geteilt mit dem Nur-Text-Hint
   uAppTheme,                    // ApplyTitleBarTheme - Titelzeile des Profil-Fensters
   uSuppression,                 // MarkerLineFor - ';' in .ini, '//' sonst (SCA201)
-  uProfileViewer;               // ShowProfileViewer - Hamburger-Item
+  uProfileViewer,               // ShowProfileViewer - Hamburger-Item
+  // Nur hier gebraucht (Review nach Bereichen 2026-10-10, Nit 42):
+  uFindingActionMenu,           // das eine Menue-Modell zu den Aktionen (Stufe C)
+  uIDEFindingActionMenu,        // Modell -> TMenuItems
+  uIDEFindingBulb,              // Gluehbirne an der Caret-Zeile (Element EditorBulb)
+  uPathNormalize;               // NormalizePathForKey - Pfade wie der Highlighter
 
 // noinspection-file BeginEndRequired, BooleanParam, ClassPerFile, ConsecutiveSection, EmptyExcept, ExceptOnException, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, NestedRoutine, NestedTry, PublicField, PublicMemberWithoutDoc, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedPublicMember, UnusedRoutine
 // Plugin-Form: catch-all an Action-Click-Handlern (Resize, ItemPaint etc.).
@@ -2268,7 +2270,7 @@ begin
     Findings.OwnsObjects := False;
     for i := 0 to Findings.Count - 1 do
       FAllFindings.Add(Findings[i]);
-    FFileGens.AddOrSetValue(LowerCase(FileName), NextFindingsGeneration);
+    FFileGens.AddOrSetValue(NormalizePathForKey(FileName), NextFindingsGeneration);
 
     // 3) Vorab gerechnete contextHashes DIESER Datei nachziehen
     // (2026-08-28). Sie stammen aus dem letzten Voll-Scan, also aus dem
@@ -4819,9 +4821,6 @@ begin
   SetLength(Result, Count);
 end;
 
-// Welle 1b (2026-07-20): Boolean-Result - False bei jedem Skip (busy,
-// Datei fehlt, kein Highlighter), damit Caller (Properties-Auto-Scan)
-// ihren Scan-Zeit-Cache NICHT stempeln und spaeter nachholen.
 // ---- AH10 (2026-10-05): Funde der Cursorzeile fuer das Editor-Kontextmenue --
 //
 // Die Marken des Highlighters tragen nur Texte, keine TLeakFinding. Fuer
@@ -4882,6 +4881,16 @@ var
   FileGen  : UInt64;
   F        : TLeakFinding;
   UseDock  : Boolean;
+  FileKey  : string;   // AFile wie der Highlighter ihn vergleicht
+
+  // Derselbe Pfad? '/' gegen '' und Gross/Klein wie NormalizePathForKey
+  // (Review nach Bereichen 2026-10-10, Nit 44) - die Laenge zuerst, das
+  // laesst die meisten Funde anderer Dateien ohne Kopie durch.
+  function SameFile(const AName: string): Boolean;
+  begin
+    Result := (Length(AName) = Length(AFile))
+      and (SameText(AName, AFile) or (NormalizePathForKey(AName) = FileKey));
+  end;
 
   function AlreadyFound(F: TLeakFinding): Boolean;
   // Derselbe Fund kann aus zwei Scans (Dock + Silent, Projekt + Datei)
@@ -4902,7 +4911,7 @@ var
   begin
     if not Assigned(AList) then Exit;
     for F in AList do
-      if Assigned(F) and SameText(F.FileName, AFile)
+      if Assigned(F) and SameFile(F.FileName)
          and (ALine >= F.LineInt) and (ALine <= F.SpanEnd)
          and not AlreadyFound(F) then
       begin
@@ -4914,6 +4923,7 @@ var
 begin
   Found := nil;
   Frame := nil;
+  FileKey := NormalizePathForKey(AFile);
   if Assigned(GDockableForm) then
     Frame := GDockableForm.Frame;
   DockHas := False;
@@ -4921,22 +4931,22 @@ begin
   if Assigned(Frame) and Assigned(Frame.FAllFindings) then
   begin
     for F in Frame.FAllFindings do
-      if Assigned(F) and SameText(F.FileName, AFile) then
+      if Assigned(F) and SameFile(F.FileName) then
       begin
         DockHas := True;
         Break;
       end;
     DockGen := Frame.FFindingsGen;
     if Assigned(Frame.FFileGens)
-       and Frame.FFileGens.TryGetValue(LowerCase(AFile), FileGen)
+       and Frame.FFileGens.TryGetValue(FileKey, FileGen)
        and (FileGen > DockGen) then
       DockGen := FileGen;
   end;
-  UseDock := DockHas and not (SameText(GEditorFindingsFile, AFile)
+  UseDock := DockHas and not (SameFile(GEditorFindingsFile)
     and (GEditorFindingsGen > DockGen));
   if UseDock then
     Collect(Frame.FAllFindings)
-  else if SameText(GEditorFindingsFile, AFile) then
+  else if SameFile(GEditorFindingsFile) then
     Collect(GEditorFindings);
   Result := Found;
 end;
@@ -4962,6 +4972,9 @@ begin
   Result := (AFile <> '') and (ALine >= 1);
 end;
 
+// Welle 1b (2026-07-20): Boolean-Result - False bei jedem Skip (busy,
+// Datei fehlt, kein Highlighter), damit Caller (Properties-Auto-Scan)
+// ihren Scan-Zeit-Cache NICHT stempeln und spaeter nachholen.
 function RunSilentAnalysisForFile(const AFileName: string;
   ACenterOnFirstFinding: Boolean = True): Boolean;
 // Silent-Mode-Entrypoint: analysiert AFileName + setzt Marker direkt am

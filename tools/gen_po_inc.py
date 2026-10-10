@@ -20,6 +20,7 @@ WARUM DIESES TOOL (statt {$R ...rc} / RCDATA):
 
 AUFRUF (Git-Bash oder PowerShell, aus dem Repo-Root):
   python tools/gen_po_inc.py
+  python tools/gen_po_inc.py --check   # nur pruefen (CI), Exit 1 bei Drift
 
 NACH JEDER AENDERUNG AN i18n\\*.po ERNEUT AUSFUEHREN.
 Danach in der IDE: Clean + Build (die IDE trackt .inc-Abhaengigkeiten nicht
@@ -108,7 +109,9 @@ def scan_duplicates(lines, lang):
     return len(dups)
 
 
-def main():
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    check = "--check" in argv
     files = sorted(glob.glob(os.path.join(PO_DIR, "*.po")))
     if not files:
         sys.stderr.write("FEHLER: keine .po in %s\n" % PO_DIR)
@@ -184,6 +187,24 @@ def main():
     a("")
 
     text = "\n".join(o) + "\n"
+    if check:
+        # --check (Review reDelphiX nach Bereichen 2026-10-10, Nit 13): nur
+        # vergleichen - eine vergessene Regenerierung nach einer .po-
+        # Aenderung liefert sonst still englische Menuetexte aus.
+        # Zeilenende-neutral: der Checkout kann je nach Plattform und
+        # Attribut CRLF oder LF tragen; verglichen wird der Inhalt.
+        want = text.encode("ascii")
+        try:
+            with open(OUT, "rb") as f:
+                have = f.read().replace(b"\r\n", b"\n")
+        except OSError:
+            have = b""
+        if have != want:
+            sys.stderr.write("DRIFT: %s passt nicht zu i18n/*.po - "
+                             "python tools/gen_po_inc.py ausfuehren\n" % OUT)
+            return 1
+        print("OK: %s aktuell" % OUT)
+        return 0
     with open(OUT, "w", encoding="ascii", newline="\r\n") as f:
         f.write(text)
 

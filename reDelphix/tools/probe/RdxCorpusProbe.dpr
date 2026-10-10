@@ -240,6 +240,11 @@ begin
           begin
             O := Default(TRdxFormatOutcome);
             O.Reason := 'Ausnahme: ' + DescribeException(E);
+            // Die faul gebauten Teile des Dienstes (Typen, Scope-Fakten)
+            // koennten halb stehen - die naechste Stelle oeffnet die Datei
+            // neu, wie der Anbieter mit FSource.Forget (Review reDelphiX
+            // nach Bereichen 2026-10-10, Nit 57).
+            CurFile := '';
           end;
         end;
       end;

@@ -98,8 +98,14 @@ begin
     end;
 {$ENDIF}
   except
+    // Wirft der Runner selbst (Fixture-Konstruktor, RTTI), darf der
+    // Prozess nicht mit 0 enden - ein Skriptlauf meldete sonst Erfolg
+    // (Review reDelphiX nach Bereichen 2026-10-10, Nit 53).
     on E: Exception do
+    begin
       System.Writeln(E.ClassName, ': ', E.Message);
+      System.ExitCode := EXIT_ERRORS;
+    end;
   end;
 {$ENDIF}
 

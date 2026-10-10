@@ -100,10 +100,11 @@ uses
   uRdxLog;
 
 const
-  SNoEditor = 'Datei ist nicht im Editor geoeffnet';
-  SNoView   = 'Editor-Ansicht nicht verfuegbar';
-  SNoBuffer = 'Editor-Puffer nicht lesbar';
-  SNoWriter = 'Editor-Puffer nicht beschreibbar';
+  SNoEditor   = 'Datei liess sich im Editor nicht oeffnen oder finden';
+  SNoView     = 'Editor-Ansicht nicht verfuegbar';
+  SNoBuffer   = 'Editor-Puffer nicht lesbar';
+  SNoWriter   = 'Editor-Puffer nicht beschreibbar';
+  SReadOnly   = 'Editor-Puffer ist schreibgeschuetzt - nicht geschrieben';
   // Ueber _() (Editorhilfen E6); die vier oben folgen mit dem E6-Rest.
   S_PAST_END = 'Range %d:%d to %d:%d lies behind the end of the editor '
     + 'buffer (%d lines) - rescan the file';
@@ -116,13 +117,17 @@ end;
 
 function TryGetSourceEditor(const AFile: string; AOpen: Boolean;
   out ASrc: IOTASourceEditor): Boolean;
-// Modul finden (oder oeffnen) -> erster IOTASourceEditor des Moduls.
-// Nicht ModuleFileEditors[0]: bei einem Form-Modul kann dort der
-// DFM-Editor stehen.
+// Modul finden (oder oeffnen) -> der IOTASourceEditor DIESER Datei. Nicht
+// einfach der erste: bei einem Form-Modul kann dort der DFM-Editor stehen
+// (als Text angezeigt ist er auch ein IOTASourceEditor) - ein Marker
+// landete sonst im Formular. Erst der volle Pfad, dann derselbe
+// Dateiname in anderer Schreibweise; sonst keiner (Review nach Bereichen
+// 2026-10-10, Nit 35).
 var
   ModSvc : IOTAModuleServices;
   ActSvc : IOTAActionServices;
   Module : IOTAModule;
+  Cand   : IOTASourceEditor;
   i      : Integer;
 begin
   Result := False;
@@ -138,8 +143,22 @@ begin
   end;
   if Module = nil then Exit;
   for i := 0 to Module.ModuleFileCount - 1 do
-    if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, ASrc) then
+    if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, Cand)
+       and SameFileName(Cand.FileName, AFile) then
+    begin
+      ASrc := Cand;
       Break;
+    end;
+  if ASrc = nil then
+    for i := 0 to Module.ModuleFileCount - 1 do
+      if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, Cand)
+         and SameText(ExtractFileName(Cand.FileName), ExtractFileName(AFile)) then
+      begin
+        RdxLog('Editor fuer %s ueber den Dateinamen gefunden (%s)',
+          [ExtractFileName(AFile), Cand.FileName]);
+        ASrc := Cand;
+        Break;
+      end;
   Result := ASrc <> nil;
 end;
 
@@ -276,19 +295,20 @@ begin
   AError := '';
   RdxLog('SelectSpan %s %d:%d-%d:%d', [ExtractFileName(AFile),
     ASpan.StartLine, ASpan.StartCol, ASpan.EndLine, ASpan.EndCol]);
-  if not ASpan.IsValid then
-  begin
-    AError := 'kein gueltiger Bereich';
-    Exit;
-  end;
-  if not TryGetSourceEditor(AFile, True, Src) then
-  begin
-    AError := SNoEditor;
-    Exit;
-  end;
   Lines := TStringList.Create;
   try
     try
+      // Auch diese Ausstiege laufen durch das finally (Log + Hinweis).
+      if not ASpan.IsValid then
+      begin
+        AError := 'kein gueltiger Bereich';
+        Exit;
+      end;
+      if not TryGetSourceEditor(AFile, True, Src) then
+      begin
+        AError := SNoEditor;
+        Exit;
+      end;
       Src.Show;
       if not TryGetView(Src, View, EdPos) then
       begin
@@ -321,6 +341,9 @@ begin
         Exit;
       end;
       Block.Reset;
+      // Eine vom Benutzer hinterlassene Spaltenblock-Art (Alt+Umschalt)
+      // machte aus einer mehrzeiligen Anweisung ein Rechteck (Nit 38).
+      Block.Style := btNonInclusive;
       P := DisplayPosOf(View, Lines, ASpan.StartLine, ASpan.StartCol);
       RdxLog('  Anfang Zeichen %d -> Anzeige %d', [ASpan.StartCol, P.Col]);
       if not EdPos.Move(P.Line, P.Col) then
@@ -344,12 +367,18 @@ begin
     except
       on EStackExhausted do raise;
       on EAbort do raise;
+      // Jeder andere Fehler der IDE geht als AError an den Aufrufer, der
+      // ihn als Meldung zeigt - dasselbe Format wie ReplaceSpans (Nit 39).
       on E: Exception do
-        AError := E.Message;
+        AError := E.ClassName + ': ' + E.Message;
     end;
   finally
     Lines.Free;
-    if AError <> '' then RdxLog('  SelectSpan FEHLER: ' + AError);
+    if AError <> '' then
+    begin
+      RdxLog('  SelectSpan FEHLER: ' + AError);
+      AError := WithLogHint(AError);
+    end;
   end;
 end;
 
@@ -357,6 +386,7 @@ class function TRdxEditor.ReplaceSpans(const AFile: string;
   const AEdits: TArray<TRdxEdit>; out AError: string): Boolean;
 var
   Src      : IOTASourceEditor;
+  Buffer   : IOTAEditBuffer;
   View     : IOTAEditView;
   EdPos    : IOTAEditPosition;
   Bytes    : TBytes;
@@ -375,14 +405,21 @@ begin
     RdxLog('  %d:%d-%d:%d, neu "%s"', [AEdits[i].Span.StartLine,
       AEdits[i].Span.StartCol, AEdits[i].Span.EndLine, AEdits[i].Span.EndCol,
       Visible(AEdits[i].NewText)]);
-  if not TryGetSourceEditor(AFile, True, Src) then
-  begin
-    AError := SNoEditor;
-    RdxLog('  FEHLER: ' + AError);
-    Exit;
-  end;
   try
     try
+      // Auch dieser Ausstieg laeuft durch das finally (Log + Hinweis, Nit 39).
+      if not TryGetSourceEditor(AFile, True, Src) then
+      begin
+        AError := SNoEditor;
+        Exit;
+      end;
+      // Schreibgeschuetzt (Bibliotheksquelle, gesperrte Datei): nichts
+      // schreiben, statt es dem Verhalten der IDE zu ueberlassen (Nit 40).
+      if Supports(Src, IOTAEditBuffer, Buffer) and Buffer.IsReadOnly then
+      begin
+        AError := SReadOnly;
+        Exit;
+      end;
       // 1) Puffer als Bytes; ALLE Bereiche pruefen, bevor einer
       //    geschrieben wird.
       if not ReadBufferBytes(Src, Bytes) then
@@ -427,6 +464,8 @@ begin
     except
       on EStackExhausted do raise;
       on EAbort do raise;
+      // Jeder andere Fehler der IDE geht als AError an den Aufrufer, der
+      // ihn als Meldung zeigt (Nit 39).
       on E: Exception do
         AError := E.ClassName + ': ' + E.Message;
     end;

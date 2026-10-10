@@ -26,6 +26,14 @@ jobs:
           chmod +x tools/i18n_audit.sh
           bash tools/i18n_audit.sh
 
+      # template.pot und die einkompilierte uLocalizationPo.inc muessen zu
+      # Quelltext bzw. i18n/*.po passen (Review reDelphiX nach Bereichen
+      # 2026-10-10, Nit 13).
+      - name: template.pot und uLocalizationPo.inc aktuell
+        run: |
+          python3 tools/i18n_extract.py --check
+          python3 tools/gen_po_inc.py --check
+
       - name: Show missing strings (on failure)
         if: failure()
         run: |
