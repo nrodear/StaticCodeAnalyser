@@ -2343,6 +2343,15 @@ msgstr "Exception auslösen"
 msgid "Use raise; to keep the original stack trace"
 msgstr "raise; verwenden (Original-Stack-Trace bleibt)"
 
+msgid "Insert a documentation skeleton"
+msgstr "Dokumentationsgerüst einfügen"
+
+msgid "Insert a new GUID"
+msgstr "Neue GUID einfügen"
+
+msgid "Add \"%s;\" to the declaration"
+msgstr "\"%s;\" an die Deklaration anfügen"
+
 msgid "(changes behavior)"
 msgstr "(ändert Verhalten)"
 

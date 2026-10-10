@@ -425,6 +425,7 @@ uses
   uRdxStructFixes,   // Planer SCA007/SCA168 (uses-Eintrag, case-else)
   uRdxLineFixes,     // Planer SCA082/SCA071/SCA088/SCA123 (eine Zeile)
   uRdxRaiseFixes,    // Planer SCA020/SCA120/SCA122 (Ausnahmen, leerer Rumpf)
+  uRdxDeclFixes,     // Planer SCA117/SCA197/SCA149 (Deklarationen, Charge H1)
   uUnusedUses,       // KnownIdents: SCA007-Fund am Puffer nachpruefen
   uSourcePlaces;     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
 
@@ -467,10 +468,18 @@ const
     + 'dahinter laeuft im Fehlerfall nicht mehr';
   R_RERAISE_HINT = 'dieselbe Exception - der Original-Stack-Trace bleibt '
     + 'erhalten';
+  R_DOC_HINT     = 'das Geruest ist leer - summary, param und returns '
+    + 'ausfuellen';
+  R_GUID_HINT    = 'eine neue GUID - nur fuer eigene Interfaces, nie fuer '
+    + 'COM-Importe';
+  R_OVERRIDE_HINT = 'der virtuelle Aufruf landet danach in dieser Methode';
+  R_REINTRODUCE_HINT = 'nur die Warnung W1010 entfaellt - die Methode '
+    + 'verdeckt die geerbten weiterhin';
   // Ueber LineFix (nur die Zeilen); SCA123 hat einen eigenen Weg.
   LINE_FIX_KINDS: TFindingKinds = [fkSuperfluousSemicolon,
     fkUnitLevelKeywordIndent, fkLegacyInitializationSection, fkCastAndFree,
-    fkEmptyMethod, fkMissingRaise, fkReRaiseException];
+    fkEmptyMethod, fkMissingRaise, fkReRaiseException,
+    fkPublicMemberWithoutDoc, fkInterfaceWithoutGuid, fkMissingOverride];
   R_PROC_TYPE    = '%s hat einen Prozedurtyp - "%s <> nil" ruft ihn auf, '
     + 'Assigned() nicht';
 
@@ -1370,8 +1379,27 @@ begin
   end;
 end;
 
+// Hinweis der Deklarations-Hilfen (Charge H1). SCA149 nach dem Rat der
+// Meldung (TRdxDeclFixes.DirectiveFor) - nur override, nie reintroduce als
+// zweiter Eintrag: Strg+Alt+F liesse das gekennzeichnete override aus und
+// deckte den Polymorphie-Fehler mit reintroduce still zu.
+function DeclHint(AKind: TFindingKind; const AMessage: string): string;
+begin
+  case AKind of
+    fkPublicMemberWithoutDoc:
+      Result := R_DOC_HINT;
+    fkInterfaceWithoutGuid:
+      Result := R_GUID_HINT;
+  else
+    if TRdxDeclFixes.DirectiveFor(AMessage) = DIRECTIVE_OVERRIDE then
+      Result := R_OVERRIDE_HINT
+    else
+      Result := R_REINTRODUCE_HINT;
+  end;
+end;
+
 // Der Hinweis einer Zeilen-Hilfe (LineFix).
-function LineHint(AKind: TFindingKind): string;
+function LineHint(AKind: TFindingKind; const AMessage: string): string;
 begin
   case AKind of
     fkSuperfluousSemicolon:
@@ -1384,8 +1412,28 @@ begin
       Result := R_EMPTY_HINT;
     fkMissingRaise:
       Result := R_MISSING_RAISE_HINT;
+    fkReRaiseException:
+      Result := R_RERAISE_HINT;
   else
-    Result := R_RERAISE_HINT;
+    Result := DeclHint(AKind, AMessage);
+  end;
+end;
+
+// Die Deklarations-Hilfen (uRdxDeclFixes): SCA117 Geruest, SCA197 neue
+// GUID, SCA149 Direktive.
+function DeclPlan(AKind: TFindingKind; AMap: TRdxCodeMap; ALine: Integer;
+  const AMessage: string; var AOutcome: TRdxFixOutcome): Boolean;
+begin
+  case AKind of
+    fkPublicMemberWithoutDoc:
+      Result := TRdxDeclFixes.DocSkeleton(AMap, ALine, AMessage,
+        AOutcome.Edits[0], AOutcome.Reason);
+    fkInterfaceWithoutGuid:
+      Result := TRdxDeclFixes.InterfaceGuid(AMap, ALine, AMessage,
+        AOutcome.Edits[0], AOutcome.Reason);
+  else
+    Result := TRdxDeclFixes.MethodDirective(AMap, ALine, AMessage,
+      AOutcome.Edits[0], AOutcome.Reason);
   end;
 end;
 
@@ -1411,14 +1459,16 @@ begin
     fkMissingRaise:
       Result := TRdxRaiseFixes.MissingRaise(AMap, ALine, AMessage,
         AOutcome.Edits[0], AOutcome.Reason);
+    fkReRaiseException:
+      Result := TRdxRaiseFixes.ReRaise(AMap, ALine, AMessage,
+        AOutcome.Edits[0], AOutcome.Reason);
   else
-    Result := TRdxRaiseFixes.ReRaise(AMap, ALine, AMessage, AOutcome.Edits[0],
-      AOutcome.Reason);
+    Result := DeclPlan(AKind, AMap, ALine, AMessage, AOutcome);
   end;
 end;
 
 // SCA075, SCA087 und die Zeilen-Hilfen SCA082/SCA071/SCA088, SCA020/SCA120/
-// SCA122 (LinePlan):
+// SCA122, SCA117/SCA197/SCA149 (LinePlan):
 // die Planer arbeiten nur auf den Zeilen, ohne Parser. Spalte bzw.
 // Abschnitt stehen in der Meldung - die Spalte kennt den Kommentar-Zustand
 // der Zeilen davor, ein Neuscan der Zeile nicht.
@@ -2033,17 +2083,22 @@ begin
     Result.Edits := nil;
 end;
 
-// SCA082, SCA071, SCA088 (TRdxLineFixes) und SCA020, SCA120, SCA122
-// (TRdxRaiseFixes): nur die Zeilen - LinesOnlyFix mit dem Hinweis der
-// Regel. SCA120 aendert das Verhalten (das ist der Fix) und ist nach E2
-// gekennzeichnet; die uebrigen sind bedeutungsgleich.
+// SCA082, SCA071, SCA088 (TRdxLineFixes), SCA020, SCA120, SCA122
+// (TRdxRaiseFixes) und SCA117, SCA197, SCA149 (TRdxDeclFixes): nur die
+// Zeilen - LinesOnlyFix mit dem Hinweis der Regel. SCA120 und SCA149 mit
+// override aendern das Verhalten (das ist der Fix) und sind nach E2
+// gekennzeichnet; die uebrigen sind bedeutungsgleich. Name traegt bei
+// SCA149 die Direktive (Menuetext).
 function LineFix(AKind: TFindingKind; ALines: TStrings; ALine: Integer;
   const AMessage: string): TRdxFixOutcome;
 begin
   Result := LinesOnlyFix(AKind, ALines, ALine, AMessage);
-  Result.ChangesBehavior := AKind = fkMissingRaise;
+  if AKind = fkMissingOverride then
+    Result.Name := TRdxDeclFixes.DirectiveFor(AMessage);
+  Result.ChangesBehavior := (AKind = fkMissingRaise)
+    or ((AKind = fkMissingOverride) and (Result.Name = DIRECTIVE_OVERRIDE));
   if Result.Enabled then
-    Result.Hint := LineHint(AKind);
+    Result.Hint := LineHint(AKind, AMessage);
 end;
 
 // SCA020, zweiter Eintrag: raise ENotImplemented im leeren Rumpf - aendert

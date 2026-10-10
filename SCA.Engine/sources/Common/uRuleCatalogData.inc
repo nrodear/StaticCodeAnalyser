@@ -1398,7 +1398,7 @@ const
         '  end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA118
     (
@@ -1853,7 +1853,7 @@ const
       GoodEx   : 'TDerived = class(TBase)' + #13#10 + '  procedure DoWork; override;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA150
     (
@@ -2464,7 +2464,7 @@ const
         '    procedure Write(const AText: string);' + #13#10 + '  end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA198
     (

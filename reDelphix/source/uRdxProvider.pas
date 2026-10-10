@@ -261,6 +261,9 @@ const
   CAP_EMPTY_RAISE   = 'Raise ENotImplemented in the empty body';
   CAP_MISSING_RAISE = 'Raise the exception';
   CAP_RERAISE       = 'Use raise; to keep the original stack trace';
+  CAP_DOC           = 'Insert a documentation skeleton';
+  CAP_GUID          = 'Insert a new GUID';
+  CAP_DIRECTIVE     = 'Add "%s;" to the declaration';
   // Entscheid E2: eine Hilfe, die das Verhalten aendern kann, sagt es.
   CAP_CHANGES    = '(changes behavior)';
   DIAG_PREFIX  = 'reDelphix: ';
@@ -621,6 +624,22 @@ begin
   end;
 end;
 
+// Menuetexte der Deklarations-Hilfen (SCA117, SCA197, SCA149) - ein
+// vierter Verteiler (SCA091). AName ist bei SCA149 die Direktive.
+function DeclFixCaption(AKind: TFindingKind; const AName: string): string;
+begin
+  case AKind of
+    fkPublicMemberWithoutDoc:
+      Result := _(CAP_DOC);
+    fkInterfaceWithoutGuid:
+      Result := _(CAP_GUID);
+    fkMissingOverride:
+      Result := Format(_(CAP_DIRECTIVE), [AName]);
+  else
+    Result := uSCAConsts.KindName(AKind);
+  end;
+end;
+
 // Menuetexte der Zeilen-Hilfen (SCA082, SCA071, SCA088, SCA123, SCA020,
 // SCA120, SCA122) - ein dritter Verteiler (SCA091). AName ist der Cast-Typ
 // bei SCA123, AVariant waehlt bei SCA020 den Eintrag.
@@ -646,7 +665,7 @@ begin
     fkReRaiseException:
       Result := _(CAP_RERAISE);
   else
-    Result := uSCAConsts.KindName(AKind);
+    Result := DeclFixCaption(AKind, AName);
   end;
 end;
 

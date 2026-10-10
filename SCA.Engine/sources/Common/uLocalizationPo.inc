@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2413 Zeilen, 80874 Bytes
-  CPoLines_de: array[0..2412] of string = (
+  // i18n\de.po - 2422 Zeilen, 81097 Bytes
+  CPoLines_de: array[0..2421] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2360,6 +2360,15 @@ const
     'msgid "Use raise; to keep the original stack trace"',
     'msgstr "raise; verwenden (Original-Stack-Trace bleibt)"',
     '',
+    'msgid "Insert a documentation skeleton"',
+    'msgstr "Dokumentationsger'#$00FC'st einf'#$00FC'gen"',
+    '',
+    'msgid "Insert a new GUID"',
+    'msgstr "Neue GUID einf'#$00FC'gen"',
+    '',
+    'msgid "Add \"%s;\" to the declaration"',
+    'msgstr "\"%s;\" an die Deklaration anf'#$00FC'gen"',
+    '',
     'msgid "(changes behavior)"',
     'msgstr "('#$00E4'ndert Verhalten)"',
     '',
@@ -2702,8 +2711,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2409 Zeilen, 84707 Bytes
-  CPoLines_fr: array[0..2408] of string = (
+  // i18n\fr.po - 2418 Zeilen, 84943 Bytes
+  CPoLines_fr: array[0..2417] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -5044,6 +5053,15 @@ const
     '',
     'msgid "Use raise; to keep the original stack trace"',
     'msgstr "Utiliser raise; (conserve la pile d''appels d''origine)"',
+    '',
+    'msgid "Insert a documentation skeleton"',
+    'msgstr "Ins'#$00E9'rer un squelette de documentation"',
+    '',
+    'msgid "Insert a new GUID"',
+    'msgstr "Ins'#$00E9'rer un nouveau GUID"',
+    '',
+    'msgid "Add \"%s;\" to the declaration"',
+    'msgstr "Ajouter '#$00AB' %s; '#$00BB' '#$00E0' la d'#$00E9'claration"',
     '',
     'msgid "(changes behavior)"',
     'msgstr "(modifie le comportement)"',

@@ -2378,6 +2378,7 @@
       "type": "Code Smell",
       "tags": ["documentation", "api-design"],
       "detectorUnit": "uPublicMemberWithoutDoc.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "type\n  TFoo = class\n  public\n    procedure Run;\n  end;",
         "good": "type\n  TFoo = class\n  public\n    /// <summary>Starts the worker.</summary>\n    procedure Run;\n  end;"
@@ -3016,6 +3017,7 @@
       "type": "Bug",
       "tags": ["polymorphism", "oop", "compiler-warning", "sonar50"],
       "detectorUnit": "uMissingOverride.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "TBase = class\n  procedure DoWork; virtual;\nend;\n\nTDerived = class(TBase)\n  procedure DoWork;          // <- shadows TBase.DoWork (W1010)\nend;",
         "good": "TDerived = class(TBase)\n  procedure DoWork; override;\nend;"
@@ -4021,6 +4023,7 @@
         "rtti"
       ],
       "detectorUnit": "uInterfaceGuid.pas",
+      "editorHelp": true,
       "examples": {
         "bad": "type\n  IReportWriter = interface\n    procedure Write(const AText: string);\n  end;\n\n// elsewhere - does not compile:\nif Supports(Obj, IReportWriter, W) then",
         "good": "type\n  IReportWriter = interface\n    ['{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}']\n    procedure Write(const AText: string);\n  end;"

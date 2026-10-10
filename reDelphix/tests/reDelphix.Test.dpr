@@ -24,6 +24,8 @@ program reDelphix.Test;
 //                        Zeile) auf Text, ohne Parser
 //   * uTestRdxRaiseFixes - Editorhilfen SCA020/SCA120/SCA122 (Ausnahmen,
 //                        leerer Rumpf) auf Text, ohne Parser
+//   * uTestRdxDeclFixes - Editorhilfen SCA117/SCA197/SCA149 (Deklarationen)
+//                        auf Text, ohne Parser
 //   * uTestRdxExprFixes - Editorhilfen SCA066/SCA072/SCA084 (uQuickFix-
 //                        Umzug) auf Text, ohne Parser
 //   * uTestRdxNilFix   - Editorhilfe SCA126 auf Text, ohne Parser
@@ -59,6 +61,7 @@ uses
   uRdxStructFixes in '..\source\uRdxStructFixes.pas',
   uRdxLineFixes in '..\source\uRdxLineFixes.pas',
   uRdxRaiseFixes in '..\source\uRdxRaiseFixes.pas',
+  uRdxDeclFixes in '..\source\uRdxDeclFixes.pas',
   uRdxRecipeRunner in '..\source\uRdxRecipeRunner.pas',
   uTestRdxRecipes in 'uTestRdxRecipes.pas',
   uTestRdxSca044 in 'uTestRdxSca044.pas',
@@ -71,6 +74,7 @@ uses
   uTestRdxBlockFixes in 'uTestRdxBlockFixes.pas',
   uTestRdxLineFixes in 'uTestRdxLineFixes.pas',
   uTestRdxRaiseFixes in 'uTestRdxRaiseFixes.pas',
+  uTestRdxDeclFixes in 'uTestRdxDeclFixes.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',
   uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas',
   uTestRdxCodeMap in 'uTestRdxCodeMap.pas',

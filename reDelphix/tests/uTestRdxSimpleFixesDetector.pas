@@ -4,7 +4,8 @@ unit uTestRdxSimpleFixesDetector;
 // Parser, die Detektoren SCA075/SCA085/SCA126 (dazu SCA074/SCA087/SCA139
 // in der zweiten, SCA066/SCA072/SCA084 in der dritten, SCA007/SCA168 in
 // der vierten, SCA101/SCA099 in der fuenften, SCA082/SCA071/SCA088/SCA123
-// in der sechsten, SCA020/SCA120/SCA122 in der siebten Fixture),
+// in der sechsten, SCA020/SCA120/SCA122 in der siebten, SCA117/SCA197/
+// SCA149 in der achten Fixture),
 // TSourcePlaces und
 // TRdxFixRunner.FixFor - derselbe Einstieg wie im Anbieter. Je Fall meldet
 // der Detektor, die Hilfe plant aus dem Fund (Art, Zeile, Meldung), die
@@ -162,6 +163,18 @@ type
     [Test] procedure Sca122_InnerTry_NoHelp;
   end;
 
+  // Deklarationen (uRdxDeclFixes): SCA117, SCA197, SCA149.
+  [TestFixture]
+  TTestRdxSimpleFixesDetector8 = class
+  public
+    [Test] procedure Sca117_RoundTrip;
+    [Test] procedure Sca117_CatalogExample;
+    [Test] procedure Sca197_RoundTrip_CatalogExample;
+    [Test] procedure Sca197_ComImport_NoHelp;
+    [Test] procedure Sca149_Override_CatalogExample;
+    [Test] procedure Sca149_Reintroduce_RoundTrip;
+  end;
+
 implementation
 
 uses
@@ -173,6 +186,7 @@ uses
   uUnusedUses, uDefaultCaseInCaseStatement, uBeginEndRequired, uIfElseBegin,
   uSuperfluousSemicolon, uUnitLevelKeywordIndent, uLegacyInitializationSection,
   uCastAndFree, uEmptyMethod, uMissingRaise, uReRaiseException, uRdxRaiseFixes,
+  uPublicMemberWithoutDoc, uInterfaceGuid, uMissingOverride, uRdxDeclFixes,
   uEngineApi, uRdxBufferMath, uRdxRecipeRunner;
 
 type
@@ -199,6 +213,22 @@ begin
   end;
 end;
 
+// Die Detektoren der Deklarations-Hilfen - ein vierter Verteiler (SCA091).
+procedure RunDeclDetector(AKind: TFindingKind; Root: TAstNode;
+  const Path: string; Results: TObjectList<TLeakFinding>);
+begin
+  case AKind of
+    fkPublicMemberWithoutDoc:
+      TPublicMemberWithoutDocDetector.AnalyzeUnit(Root, Path, Results);
+    fkInterfaceWithoutGuid:
+      TInterfaceGuidDetector.AnalyzeUnit(Root, Path, Results);
+    fkMissingOverride:
+      TMissingOverrideDetector.AnalyzeUnit(Root, Path, Results);
+  else
+    Assert.Fail('keine Hilfe fuer diese Art');
+  end;
+end;
+
 // Die Detektoren der Zeilen-Hilfen - ein dritter Verteiler (SCA091).
 procedure RunLineDetector(AKind: TFindingKind; Root: TAstNode;
   const Path: string; Results: TObjectList<TLeakFinding>);
@@ -219,7 +249,7 @@ begin
     fkReRaiseException:
       TReRaiseExceptionDetector.AnalyzeUnit(Root, Path, Results);
   else
-    Assert.Fail('keine Hilfe fuer diese Art');
+    RunDeclDetector(AKind, Root, Path, Results);
   end;
 end;
 
@@ -1627,6 +1657,117 @@ begin
     '      raise E;', '    end;', 'end;'])), fkReRaiseException, 'inneren try');
 end;
 
+{ ---- SCA117 / SCA197 / SCA149 ---- }
+
+procedure TTestRdxSimpleFixesDetector8.Sca117_RoundTrip;
+begin
+  // Je Member das Geruest - Parameter, Index-Parameter, returns nur bei
+  // Funktionen; danach schweigt der Detektor.
+  Assert.AreEqual(InInterface(Join(['type', '  TFoo = class', '  public',
+      '    /// <summary></summary>', '    /// <param name="A"></param>',
+      '    /// <param name="B"></param>',
+      '    procedure Run(A: Integer; const B: string);',
+      '    /// <summary></summary>', '    /// <returns></returns>',
+      '    function Count: Integer;',
+      '    /// <summary></summary>', '    /// <param name="I"></param>',
+      '    property Items[I: Integer]: string read GetItem;', '  end;'])),
+    FixAll(InInterface(Join(['type', '  TFoo = class', '  public',
+      '    procedure Run(A: Integer; const B: string);',
+      '    function Count: Integer;',
+      '    property Items[I: Integer]: string read GetItem;', '  end;'])),
+      fkPublicMemberWithoutDoc));
+end;
+
+procedure TTestRdxSimpleFixesDetector8.Sca117_CatalogExample;
+var
+  Meta : TRuleMeta;
+begin
+  // 'good' traegt einen Summary-Text - das Geruest bleibt leer.
+  Meta := TRuleCatalog.GetRuleCanonical(fkPublicMemberWithoutDoc);
+  Assert.AreEqual(InInterface(StringReplace(Snip(Meta.GoodExample),
+      'Starts the worker.', '', [])),
+    FixAll(InInterface(Snip(Meta.BadExample)), fkPublicMemberWithoutDoc));
+end;
+
+procedure TTestRdxSimpleFixesDetector8.Sca197_RoundTrip_CatalogExample;
+const
+  CATALOG_GUID = '{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}';
+var
+  Meta            : TRuleMeta;
+  Bad, Done, Guid : string;
+  P               : Integer;
+begin
+  // 'bad' traegt hinter dem Interface einen Aufruf - nur die Deklaration
+  // zaehlt. Die GUID ist neu: gelesen, als GUID geprueft und fuer den
+  // Vergleich gegen die des Katalogs getauscht.
+  Meta := TRuleCatalog.GetRuleCanonical(fkInterfaceWithoutGuid);
+  Bad := Snip(Meta.BadExample);
+  Bad := InInterface(Copy(Bad, 1, Pos('end;', Bad) + 3));
+  Done := FixAll(Bad, fkInterfaceWithoutGuid);
+  P := Pos('[''{', Done);
+  Assert.IsTrue(P > 0, Done);
+  Guid := Copy(Done, P + 2, Length(CATALOG_GUID));
+  Assert.AreEqual(Guid, GUIDToString(StringToGUID(Guid)), 'eine GUID');
+  Assert.AreNotEqual(CATALOG_GUID, Guid);
+  Assert.AreEqual(InInterface(Snip(Meta.GoodExample)),
+    StringReplace(Done, Guid, CATALOG_GUID, []));
+end;
+
+procedure TTestRdxSimpleFixesDetector8.Sca197_ComImport_NoHelp;
+begin
+  // Ein COM-Import braucht die echte IID - eine neue GUID waere falsch.
+  AssertNoHelp(InInterface(Join(['type', '  IComThing = interface(IUnknown)',
+    '    function Ping: HResult; stdcall;', '  end;'])),
+    fkInterfaceWithoutGuid, 'COM-Import');
+end;
+
+procedure TTestRdxSimpleFixesDetector8.Sca149_Override_CatalogExample;
+var
+  Meta : TRuleMeta;
+  Bad  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  // 'good' zeigt nur TDerived ohne Kommentar - verglichen wird die
+  // Ersetzung. override aendert, wohin der virtuelle Aufruf geht:
+  // gekennzeichnet nach E2.
+  Meta := TRuleCatalog.GetRuleCanonical(fkMissingOverride);
+  Assert.IsTrue(Pos('procedure DoWork; override;', Meta.GoodExample) > 0,
+    Meta.GoodExample);
+  Bad := InInterface('type'#13#10 + Snip(Meta.BadExample));
+  Seen := Detect(Bad, fkMissingOverride);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet');
+  O := PlanMain(Bad, fkMissingOverride, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual(DIRECTIVE_OVERRIDE, O.Name);
+  Assert.IsTrue(O.ChangesBehavior, 'gekennzeichnet (E2)');
+  Assert.AreEqual(StringReplace(Bad, 'procedure DoWork;   ',
+      'procedure DoWork; override;   ', []),
+    FixAll(Bad, fkMissingOverride));
+end;
+
+procedure TTestRdxSimpleFixesDetector8.Sca149_Reintroduce_RoundTrip;
+var
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  // Abweichende Signatur: override waere ein Compilerfehler - reintroduce,
+  // bedeutungsgleich (nur W1010 entfaellt), nicht gekennzeichnet.
+  Src := InInterface(Join(['type', '  TBase = class',
+    '    procedure DoWork; virtual;', '  end;', '  TDerived = class(TBase)',
+    '    procedure DoWork(A: Integer);', '  end;']));
+  Seen := Detect(Src, fkMissingOverride);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet');
+  O := PlanMain(Src, fkMissingOverride, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual(DIRECTIVE_REINTRODUCE, O.Name);
+  Assert.IsFalse(O.ChangesBehavior, 'bedeutungsgleich');
+  Assert.AreEqual(StringReplace(Src, 'DoWork(A: Integer);',
+      'DoWork(A: Integer); reintroduce;', []),
+    FixAll(Src, fkMissingOverride));
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector2);
@@ -1635,5 +1776,6 @@ initialization
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector5);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector6);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector7);
+  TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector8);
 
 end.

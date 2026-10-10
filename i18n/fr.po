@@ -2339,6 +2339,15 @@ msgstr "Lever l'exception"
 msgid "Use raise; to keep the original stack trace"
 msgstr "Utiliser raise; (conserve la pile d'appels d'origine)"
 
+msgid "Insert a documentation skeleton"
+msgstr "Insérer un squelette de documentation"
+
+msgid "Insert a new GUID"
+msgstr "Insérer un nouveau GUID"
+
+msgid "Add \"%s;\" to the declaration"
+msgstr "Ajouter « %s; » à la déclaration"
+
 msgid "(changes behavior)"
 msgstr "(modifie le comportement)"
 
