@@ -2327,6 +2327,18 @@ msgstr "Remplacer begin par initialization"
 msgid "Remove the cast to %s before Free"
 msgstr "Supprimer le transtypage en %s avant Free"
 
+msgid "Mark the empty body as intentional"
+msgstr "Marquer le corps vide comme intentionnel"
+
+msgid "Raise ENotImplemented in the empty body"
+msgstr "Lever ENotImplemented dans le corps vide"
+
+msgid "Raise the exception"
+msgstr "Lever l'exception"
+
+msgid "Use raise; to keep the original stack trace"
+msgstr "Utiliser raise; (conserve la pile d'appels d'origine)"
+
 msgid "(changes behavior)"
 msgstr "(modifie le comportement)"
 

@@ -27,6 +27,12 @@ const
   // Hinter diesen Token ist ein Wort ein Bezeichner ('&End', '@@End',
   // 'X.Then').
   IDENT_PREFIXES: array[0..2] of string = ('&', '@', '.');
+  // Token vor dem Anfang einer Anweisung (uRdxStructFixes: steht vor dem
+  // if etwas anderes, ist es ein bedingter Ausdruck; uRdxRaiseFixes:
+  // 'EFoo.Create(..)' als ganze Anweisung).
+  STATEMENT_PREV: array[0..11] of string = (';', 'begin', 'then', 'else',
+    'do', 'try', 'finally', 'except', 'repeat', ':', 'initialization',
+    'finalization');
 
 type
   // Zeichenklassen einer Datei, spaltentreu: 'c' Code, 's' String-Literal,
@@ -77,6 +83,9 @@ type
     function StartsInside(ALine: Integer): Boolean;
   end;
 
+  // Ein Schritt einer Token-Suche der Planer: weiter, gefunden, abbrechen.
+  TRdxStep = (rsGoOn, rsFound, rsStop);
+
   // Ein Code-Token: Bezeichner/Schluesselwort (klein in Low), Zahl, oder
   // ein Satzzeichen (':=', '<>', '<=', '>=', '..' als eines).
   TRdxToken = record
@@ -125,6 +134,9 @@ function InList(const ALow: string; const AList: array of string): Boolean;
 function IsKeywordAfter(const T, APrev: TRdxToken): Boolean;
 // ALow oeffnet einen Block mit eigenem 'end' (END_OPENERS).
 function IsEndOpener(const ALow: string): Boolean;
+// Eine Einrueckstufe: was ADeeperLine ueber AIndent hinaus einrueckt;
+// sonst ein Tab, wenn AIndent Tabs traegt, oder zwei Leerzeichen.
+function IndentStep(const AIndent, ADeeperLine: string): string;
 // 'at column N' aus einer Meldung; 0 = nicht vorhanden. Bis 2026-10-10 in
 // uRdxSimpleFixes, seit SCA101 auch fuer uRdxStructFixes.
 function ColumnFromMessage(const AMessage: string): Integer;
@@ -532,6 +544,19 @@ end;
 function IsEndOpener(const ALow: string): Boolean;
 begin
   Result := InList(ALow, END_OPENERS);
+end;
+
+function IndentStep(const AIndent, ADeeperLine: string): string;
+var
+  Deeper : string;
+begin
+  Deeper := Copy(ADeeperLine, 1, SkipBlanks(ADeeperLine, 1) - 1);
+  if (Length(Deeper) > Length(AIndent))
+     and (Copy(Deeper, 1, Length(AIndent)) = AIndent) then
+    Exit(Copy(Deeper, Length(AIndent) + 1, MaxInt));
+  Result := '  ';
+  if Pos(#9, AIndent) > 0 then
+    Result := #9;
 end;
 
 function ColumnFromMessage(const AMessage: string): Integer;

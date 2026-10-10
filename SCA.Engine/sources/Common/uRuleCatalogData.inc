@@ -246,7 +246,7 @@ const
         '  raise ENotImplemented.Create(''...'');' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA021
     (
@@ -1436,7 +1436,7 @@ const
         '    raise EArgumentOutOfRangeException.Create(''x negative'');' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA121
     (
@@ -1465,7 +1465,7 @@ const
         '    raise;            // preserves trace' + #13#10 + '  end;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA123
     (

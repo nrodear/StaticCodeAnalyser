@@ -257,6 +257,10 @@ const
   CAP_INDENT     = 'Move the keyword to column 1';
   CAP_INIT       = 'Replace begin with initialization';
   CAP_CAST       = 'Remove the cast to %s before Free';
+  CAP_EMPTY_INTENT  = 'Mark the empty body as intentional';
+  CAP_EMPTY_RAISE   = 'Raise ENotImplemented in the empty body';
+  CAP_MISSING_RAISE = 'Raise the exception';
+  CAP_RERAISE       = 'Use raise; to keep the original stack trace';
   // Entscheid E2: eine Hilfe, die das Verhalten aendern kann, sagt es.
   CAP_CHANGES    = '(changes behavior)';
   DIAG_PREFIX  = 'reDelphix: ';
@@ -617,9 +621,11 @@ begin
   end;
 end;
 
-// Menuetexte der Zeilen-Hilfen (SCA082, SCA071, SCA088, SCA123) - ein
-// dritter Verteiler (SCA091). AName ist der Cast-Typ bei SCA123.
-function LineFixCaption(AKind: TFindingKind; const AName: string): string;
+// Menuetexte der Zeilen-Hilfen (SCA082, SCA071, SCA088, SCA123, SCA020,
+// SCA120, SCA122) - ein dritter Verteiler (SCA091). AName ist der Cast-Typ
+// bei SCA123, AVariant waehlt bei SCA020 den Eintrag.
+function LineFixCaption(AKind: TFindingKind; AVariant: Integer;
+  const AName: string): string;
 begin
   case AKind of
     fkSuperfluousSemicolon:
@@ -630,6 +636,15 @@ begin
       Result := _(CAP_INIT);
     fkCastAndFree:
       Result := Format(_(CAP_CAST), [AName]);
+    fkEmptyMethod:
+      if AVariant = 1 then
+        Result := _(CAP_EMPTY_RAISE)
+      else
+        Result := _(CAP_EMPTY_INTENT);
+    fkMissingRaise:
+      Result := _(CAP_MISSING_RAISE);
+    fkReRaiseException:
+      Result := _(CAP_RERAISE);
   else
     Result := uSCAConsts.KindName(AKind);
   end;
@@ -659,7 +674,7 @@ begin
     fkBeginEndRequired, fkIfElseBegin:
       Result := _(CAP_BEGIN_END);
   else
-    Result := LineFixCaption(AKind, AName);
+    Result := LineFixCaption(AKind, AVariant, AName);
   end;
 end;
 

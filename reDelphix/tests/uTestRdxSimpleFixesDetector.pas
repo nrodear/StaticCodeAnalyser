@@ -4,7 +4,7 @@ unit uTestRdxSimpleFixesDetector;
 // Parser, die Detektoren SCA075/SCA085/SCA126 (dazu SCA074/SCA087/SCA139
 // in der zweiten, SCA066/SCA072/SCA084 in der dritten, SCA007/SCA168 in
 // der vierten, SCA101/SCA099 in der fuenften, SCA082/SCA071/SCA088/SCA123
-// in der sechsten Fixture),
+// in der sechsten, SCA020/SCA120/SCA122 in der siebten Fixture),
 // TSourcePlaces und
 // TRdxFixRunner.FixFor - derselbe Einstieg wie im Anbieter. Je Fall meldet
 // der Detektor, die Hilfe plant aus dem Fund (Art, Zeile, Meldung), die
@@ -150,6 +150,18 @@ type
     [Test] procedure Sca123_OtherType_NoHelp;
   end;
 
+  // Ausnahmen und leere Rumpfe (uRdxRaiseFixes): SCA020, SCA120, SCA122.
+  [TestFixture]
+  TTestRdxSimpleFixesDetector7 = class
+  public
+    [Test] procedure Sca020_RoundTrip;
+    [Test] procedure Sca020_Raise_AddsUses;
+    [Test] procedure Sca020_CatalogExample;
+    [Test] procedure Sca120_RoundTrip_CatalogExample;
+    [Test] procedure Sca122_RoundTrip_CatalogExample;
+    [Test] procedure Sca122_InnerTry_NoHelp;
+  end;
+
 implementation
 
 uses
@@ -160,7 +172,7 @@ uses
   uEmptyArgumentList, uRedundantBoolean, uAssignedAndAssignedNil,
   uUnusedUses, uDefaultCaseInCaseStatement, uBeginEndRequired, uIfElseBegin,
   uSuperfluousSemicolon, uUnitLevelKeywordIndent, uLegacyInitializationSection,
-  uCastAndFree,
+  uCastAndFree, uEmptyMethod, uMissingRaise, uReRaiseException, uRdxRaiseFixes,
   uEngineApi, uRdxBufferMath, uRdxRecipeRunner;
 
 type
@@ -200,6 +212,12 @@ begin
       TLegacyInitializationSectionDetector.AnalyzeUnit(Root, Path, Results);
     fkCastAndFree:
       TCastAndFreeDetector.AnalyzeUnit(Root, Path, Results);
+    fkEmptyMethod:
+      TEmptyMethodDetector.AnalyzeUnit(Root, Path, Results);
+    fkMissingRaise:
+      TMissingRaiseDetector.AnalyzeUnit(Root, Path, Results);
+    fkReRaiseException:
+      TReRaiseExceptionDetector.AnalyzeUnit(Root, Path, Results);
   else
     Assert.Fail('keine Hilfe fuer diese Art');
   end;
@@ -1487,6 +1505,128 @@ begin
     'unbekannt');
 end;
 
+{ ---- SCA020 / SCA120 / SCA122 ---- }
+
+// Die Hilfe (FixFor) fuer EINEN Fund als ganzes Ergebnis - mit
+// ChangesBehavior und Hinweis.
+function PlanMain(const ASource: string; AKind: TFindingKind;
+  const ASeen: TSeen): TRdxFixOutcome;
+var
+  SL      : TStringList;
+  Places  : TSourcePlaces;
+  Finding : TLeakFinding;
+begin
+  SL := TStringList.Create;
+  Places := TSourcePlaces.Create;
+  Finding := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, AKind);
+  try
+    SL.Text := ASource;
+    Assert.IsTrue(Places.OpenSource('t.pas', ASource), 'OpenSource');
+    Result := TRdxFixRunner.FixFor(Places, SL, Finding,
+      TRdxRecipeRunner.UsesNamesOf(Places));
+  finally
+    Finding.Free;
+    Places.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxSimpleFixesDetector7.Sca020_RoundTrip;
+begin
+  // Der Absichtskommentar: danach schweigt der Detektor.
+  Assert.AreEqual(InImplementation(Join(['procedure P;', 'begin',
+      '  ' + INTENT_LINE, 'end;'])),
+    FixAll(InImplementation(Join(['procedure P;', 'begin', 'end;'])),
+      fkEmptyMethod));
+end;
+
+procedure TTestRdxSimpleFixesDetector7.Sca020_Raise_AddsUses;
+var
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+  Done : string;
+begin
+  // Zweiter Eintrag: raise ENotImplemented, gekennzeichnet; SysUtils fehlt
+  // und kommt mit.
+  Src := InImplementation(Join(['procedure P;', 'begin', 'end;']));
+  Seen := Detect(Src, fkEmptyMethod);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet');
+  O := PlanAltFix(Src, fkEmptyMethod, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual<Integer>(1, O.Variant);
+  Assert.IsTrue(O.ChangesBehavior, 'gekennzeichnet (E2)');
+  Done := Apply(Src, O.Edits);
+  Assert.IsTrue(Pos('raise ENotImplemented.Create(''P'');', Done) > 0, Done);
+  Assert.IsTrue(Pos('SysUtils', Done) > 0, Done);
+  Assert.AreEqual<Integer>(0, Length(Detect(Done, fkEmptyMethod)),
+    'der Detektor schweigt');
+end;
+
+procedure TTestRdxSimpleFixesDetector7.Sca020_CatalogExample;
+var
+  Meta      : TRuleMeta;
+  Bad, Want : string;
+  Seen      : TArray<TSeen>;
+  O         : TRdxFixOutcome;
+begin
+  // 'good' traegt raise mit '...' als Text - die Hilfe setzt den Namen ein.
+  Meta := TRuleCatalog.GetRuleCanonical(fkEmptyMethod);
+  Bad := Join(['unit t;', 'interface', 'implementation', 'uses System.SysUtils;',
+    Snip(Meta.BadExample), 'end.']);
+  Want := Join(['unit t;', 'interface', 'implementation', 'uses System.SysUtils;',
+    StringReplace(Snip(Meta.GoodExample), 'Create('''')',
+      'Create(''DoStuff'')', []), 'end.']);
+  Seen := Detect(Bad, fkEmptyMethod);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet');
+  O := PlanAltFix(Bad, fkEmptyMethod, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual(Want, Apply(Bad, O.Edits));
+end;
+
+procedure TTestRdxSimpleFixesDetector7.Sca120_RoundTrip_CatalogExample;
+var
+  Meta : TRuleMeta;
+  Bad  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  // 'good' hat keinen Kommentar mehr - verglichen wird die Ersetzung.
+  Meta := TRuleCatalog.GetRuleCanonical(fkMissingRaise);
+  Assert.IsTrue(Pos('raise EArgumentOutOfRangeException.Create(',
+    Meta.GoodExample) > 0, Meta.GoodExample);
+  Bad := InImplementation(Snip(Meta.BadExample));
+  Assert.AreEqual(StringReplace(Bad, '    EArgumentOutOfRangeException.Create(',
+      '    raise EArgumentOutOfRangeException.Create(', []),
+    FixAll(Bad, fkMissingRaise));
+  // Aendert das Verhalten (das ist der Fix) - gekennzeichnet nach E2.
+  Seen := Detect(Bad, fkMissingRaise);
+  O := PlanMain(Bad, fkMissingRaise, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.ChangesBehavior, 'gekennzeichnet (E2)');
+end;
+
+procedure TTestRdxSimpleFixesDetector7.Sca122_RoundTrip_CatalogExample;
+var
+  Meta : TRuleMeta;
+  Bad  : string;
+begin
+  // 'good' traegt einen anderen Kommentar - verglichen wird die Ersetzung.
+  Meta := TRuleCatalog.GetRuleCanonical(fkReRaiseException);
+  Assert.IsTrue(Pos('raise;', Meta.GoodExample) > 0, Meta.GoodExample);
+  Bad := InRoutine(Snip(Meta.BadExample));
+  Assert.AreEqual(StringReplace(Bad, 'raise E;', 'raise;', []),
+    FixAll(Bad, fkReRaiseException));
+end;
+
+procedure TTestRdxSimpleFixesDetector7.Sca122_InnerTry_NoHelp;
+begin
+  // Im except eines inneren try waere 'raise;' die innere Exception.
+  AssertNoHelp(InRoutine(Join(['try', '  Obj.Free;', 'except',
+    '  on E: Exception do', '    try', '      Obj := nil;', '    except',
+    '      raise E;', '    end;', 'end;'])), fkReRaiseException, 'inneren try');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector2);
@@ -1494,5 +1634,6 @@ initialization
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector4);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector5);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector6);
+  TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector7);
 
 end.

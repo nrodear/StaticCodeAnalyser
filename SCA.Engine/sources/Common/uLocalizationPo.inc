@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2401 Zeilen, 80511 Bytes
-  CPoLines_de: array[0..2400] of string = (
+  // i18n\de.po - 2413 Zeilen, 80874 Bytes
+  CPoLines_de: array[0..2412] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2348,6 +2348,18 @@ const
     'msgid "Remove the cast to %s before Free"',
     'msgstr "Cast nach %s vor Free entfernen"',
     '',
+    'msgid "Mark the empty body as intentional"',
+    'msgstr "Leeren Rumpf als beabsichtigt kennzeichnen"',
+    '',
+    'msgid "Raise ENotImplemented in the empty body"',
+    'msgstr "ENotImplemented im leeren Rumpf ausl'#$00F6'sen"',
+    '',
+    'msgid "Raise the exception"',
+    'msgstr "Exception ausl'#$00F6'sen"',
+    '',
+    'msgid "Use raise; to keep the original stack trace"',
+    'msgstr "raise; verwenden (Original-Stack-Trace bleibt)"',
+    '',
     'msgid "(changes behavior)"',
     'msgstr "('#$00E4'ndert Verhalten)"',
     '',
@@ -2690,8 +2702,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2397 Zeilen, 84342 Bytes
-  CPoLines_fr: array[0..2396] of string = (
+  // i18n\fr.po - 2409 Zeilen, 84707 Bytes
+  CPoLines_fr: array[0..2408] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -5020,6 +5032,18 @@ const
     '',
     'msgid "Remove the cast to %s before Free"',
     'msgstr "Supprimer le transtypage en %s avant Free"',
+    '',
+    'msgid "Mark the empty body as intentional"',
+    'msgstr "Marquer le corps vide comme intentionnel"',
+    '',
+    'msgid "Raise ENotImplemented in the empty body"',
+    'msgstr "Lever ENotImplemented dans le corps vide"',
+    '',
+    'msgid "Raise the exception"',
+    'msgstr "Lever l''exception"',
+    '',
+    'msgid "Use raise; to keep the original stack trace"',
+    'msgstr "Utiliser raise; (conserve la pile d''appels d''origine)"',
     '',
     'msgid "(changes behavior)"',
     'msgstr "(modifie le comportement)"',

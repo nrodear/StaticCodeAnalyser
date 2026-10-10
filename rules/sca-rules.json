@@ -472,6 +472,7 @@
       "type": "Code Smell",
       "tags": ["maintainability"],
       "detectorUnit": "uEmptyMethod.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "procedure DoStuff;\nbegin\nend;",
         "good": "procedure DoStuff;\nbegin\n  raise ENotImplemented.Create('...');\nend;"
@@ -2434,6 +2435,7 @@
       "type": "Bug",
       "tags": ["exception", "error-handling", "sonardelphi"],
       "detectorUnit": "uMissingRaise.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "procedure Validate(x: Integer);\nbegin\n  if x < 0 then\n    EArgumentOutOfRangeException.Create('x negative');  // never raised!\nend;",
         "good": "procedure Validate(x: Integer);\nbegin\n  if x < 0 then\n    raise EArgumentOutOfRangeException.Create('x negative');\nend;"
@@ -2472,6 +2474,7 @@
       "type": "Bug",
       "tags": ["exception", "error-handling", "stack-trace", "sonardelphi"],
       "detectorUnit": "uReRaiseException.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "try\n  RiskyCall;\nexcept\n  on E: EDivByZero do\n  begin\n    Log(E.Message);\n    raise E;          // loses original trace\n  end;\nend;",
         "good": "try\n  RiskyCall;\nexcept\n  on E: EDivByZero do\n  begin\n    Log(E.Message);\n    raise;            // preserves trace\n  end;\nend;"

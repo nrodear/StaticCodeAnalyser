@@ -125,6 +125,7 @@
         <DCCReference Include="source\uRdxSimpleFixes.pas"/>
         <DCCReference Include="source\uRdxStructFixes.pas"/>
         <DCCReference Include="source\uRdxLineFixes.pas"/>
+        <DCCReference Include="source\uRdxRaiseFixes.pas"/>
         <DCCReference Include="source\uRdxRecipeRunner.pas"/>
         <DCCReference Include="source\uRdxLog.pas"/>
         <DCCReference Include="source\uRdxEditor.pas"/>

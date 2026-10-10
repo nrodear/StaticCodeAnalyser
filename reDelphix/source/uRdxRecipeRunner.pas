@@ -408,9 +408,9 @@ type
       ALine: Integer; const AMessage: string): TRdxFixOutcome; static;
 
 
-    // Ein zweiter Menueeintrag fuer denselben Fund, Variant = 1 - heute nur
-    // SCA168 (else mit raise; Nico 2026-10-10: beide Eintraege). Variant = 0:
-    // keiner.
+    // Ein zweiter Menueeintrag fuer denselben Fund, Variant = 1: SCA168
+    // (else mit raise; Nico 2026-10-10: beide Eintraege) und - genauso -
+    // SCA020 (raise ENotImplemented im leeren Rumpf). Variant = 0: keiner.
     class function AlternativeFixFor(APlaces: TSourcePlaces; ALines: TStrings;
       AFinding: TLeakFinding;
       const AUsesNames: TArray<string>): TRdxFixOutcome; static;
@@ -424,6 +424,7 @@ uses
   uRdxSimpleFixes,   // Planer der einfachen Hilfen (reine Textlogik)
   uRdxStructFixes,   // Planer SCA007/SCA168 (uses-Eintrag, case-else)
   uRdxLineFixes,     // Planer SCA082/SCA071/SCA088/SCA123 (eine Zeile)
+  uRdxRaiseFixes,    // Planer SCA020/SCA120/SCA122 (Ausnahmen, leerer Rumpf)
   uUnusedUses,       // KnownIdents: SCA007-Fund am Puffer nachpruefen
   uSourcePlaces;     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
 
@@ -458,8 +459,18 @@ const
   R_INIT_HINT   = 'gleiche Bedeutung - der Abschnitt kann danach ein '
     + 'finalization bekommen';
   R_CAST_HINT   = '%s ist schon als %s deklariert - der Cast aendert nichts';
+  R_EMPTY_HINT  = 'die Absicht steht im Rumpf - ein Grund dahinter hilft dem '
+    + 'naechsten Leser';
+  R_EMPTY_RAISE_HINT = 'ein Aufruf loest ENotImplemented aus statt nichts zu '
+    + 'tun';
+  R_MISSING_RAISE_HINT = 'die Exception wird jetzt ausgeloest - der Code '
+    + 'dahinter laeuft im Fehlerfall nicht mehr';
+  R_RERAISE_HINT = 'dieselbe Exception - der Original-Stack-Trace bleibt '
+    + 'erhalten';
+  // Ueber LineFix (nur die Zeilen); SCA123 hat einen eigenen Weg.
   LINE_FIX_KINDS: TFindingKinds = [fkSuperfluousSemicolon,
-    fkUnitLevelKeywordIndent, fkLegacyInitializationSection, fkCastAndFree];
+    fkUnitLevelKeywordIndent, fkLegacyInitializationSection, fkCastAndFree,
+    fkEmptyMethod, fkMissingRaise, fkReRaiseException];
   R_PROC_TYPE    = '%s hat einen Prozedurtyp - "%s <> nil" ruft ihn auf, '
     + 'Assigned() nicht';
 
@@ -1367,13 +1378,20 @@ begin
       Result := R_SEMI_HINT;
     fkUnitLevelKeywordIndent:
       Result := R_INDENT_HINT;
+    fkLegacyInitializationSection:
+      Result := R_INIT_HINT;
+    fkEmptyMethod:
+      Result := R_EMPTY_HINT;
+    fkMissingRaise:
+      Result := R_MISSING_RAISE_HINT;
   else
-    Result := R_INIT_HINT;
+    Result := R_RERAISE_HINT;
   end;
 end;
 
 // Der Planer einer Zeilen-Hilfe: die Ersetzung nach AOutcome.Edits[0],
-// sonst der Grund.
+// sonst der Grund. SCA020 hier mit dem Absichtskommentar (der raise-
+// Eintrag ist EmptyRaiseFix).
 function LinePlan(AKind: TFindingKind; AMap: TRdxCodeMap; ALine: Integer;
   const AMessage: string; var AOutcome: TRdxFixOutcome): Boolean;
 begin
@@ -1384,13 +1402,23 @@ begin
     fkUnitLevelKeywordIndent:
       Result := TRdxLineFixes.KeywordIndent(AMap, ALine, AMessage,
         AOutcome.Edits[0], AOutcome.Reason);
+    fkLegacyInitializationSection:
+      Result := TRdxLineFixes.LegacyInit(AMap, ALine, AOutcome.Edits[0],
+        AOutcome.Reason);
+    fkEmptyMethod:
+      Result := TRdxRaiseFixes.EmptyBody(AMap, ALine, '', AOutcome.Edits[0],
+        AOutcome.Reason);
+    fkMissingRaise:
+      Result := TRdxRaiseFixes.MissingRaise(AMap, ALine, AMessage,
+        AOutcome.Edits[0], AOutcome.Reason);
   else
-    Result := TRdxLineFixes.LegacyInit(AMap, ALine, AOutcome.Edits[0],
+    Result := TRdxRaiseFixes.ReRaise(AMap, ALine, AMessage, AOutcome.Edits[0],
       AOutcome.Reason);
   end;
 end;
 
-// SCA075, SCA087 und die Zeilen-Hilfen SCA082/SCA071/SCA088 (LinePlan):
+// SCA075, SCA087 und die Zeilen-Hilfen SCA082/SCA071/SCA088, SCA020/SCA120/
+// SCA122 (LinePlan):
 // die Planer arbeiten nur auf den Zeilen, ohne Parser. Spalte bzw.
 // Abschnitt stehen in der Meldung - die Spalte kennt den Kommentar-Zustand
 // der Zeilen davor, ein Neuscan der Zeile nicht.
@@ -2005,14 +2033,45 @@ begin
     Result.Edits := nil;
 end;
 
-// SCA082, SCA071 und SCA088 (TRdxLineFixes): nur die Zeilen,
-// bedeutungsgleich - LinesOnlyFix mit dem Hinweis der Regel.
+// SCA082, SCA071, SCA088 (TRdxLineFixes) und SCA020, SCA120, SCA122
+// (TRdxRaiseFixes): nur die Zeilen - LinesOnlyFix mit dem Hinweis der
+// Regel. SCA120 aendert das Verhalten (das ist der Fix) und ist nach E2
+// gekennzeichnet; die uebrigen sind bedeutungsgleich.
 function LineFix(AKind: TFindingKind; ALines: TStrings; ALine: Integer;
   const AMessage: string): TRdxFixOutcome;
 begin
   Result := LinesOnlyFix(AKind, ALines, ALine, AMessage);
+  Result.ChangesBehavior := AKind = fkMissingRaise;
   if Result.Enabled then
     Result.Hint := LineHint(AKind);
+end;
+
+// SCA020, zweiter Eintrag: raise ENotImplemented im leeren Rumpf - aendert
+// das Verhalten; SysUtils kommt bei Bedarf mit (FPC kennt ENotImplemented
+// ebenfalls).
+function EmptyRaiseFix(APlaces: TSourcePlaces; ALines: TStrings;
+  ALine: Integer; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Map : TRdxCodeMap;
+begin
+  Result := Default(TRdxFixOutcome);
+  Map := OpenMapFor(APlaces, ALines, Result);
+  if Map <> nil then
+  try
+    Result.Enabled := TRdxRaiseFixes.EmptyBody(Map, ALine,
+      RAISE_NOT_IMPLEMENTED, Result.Edits[0], Result.Reason);
+  finally
+    Map.Free;
+  end;
+  Result.Variant := 1;
+  Result.ChangesBehavior := True;
+  if not Result.Enabled then
+  begin
+    Result.Edits := nil;
+    Exit;
+  end;
+  Result.Hint := R_EMPTY_RAISE_HINT;
+  Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
 end;
 
 // Die Zeilen-Hilfen (uRdxLineFixes) - der dritte Verteiler (SCA091),
@@ -2034,8 +2093,11 @@ class function TRdxFixRunner.AlternativeFixFor(APlaces: TSourcePlaces;
   const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
   Result := Default(TRdxFixOutcome);
-  if Assigned(AFinding) and (AFinding.Kind = fkDefaultCaseInCaseStatement) then
-    Result := CaseRaiseFix(APlaces, ALines, AFinding.LineInt, AUsesNames);
+  if not Assigned(AFinding) then Exit;
+  if AFinding.Kind = fkDefaultCaseInCaseStatement then
+    Result := CaseRaiseFix(APlaces, ALines, AFinding.LineInt, AUsesNames)
+  else if AFinding.Kind = fkEmptyMethod then
+    Result := EmptyRaiseFix(APlaces, ALines, AFinding.LineInt, AUsesNames);
 end;
 
 // Der Text, auf dem uNilComparison den Knoten zaehlt (Analyse

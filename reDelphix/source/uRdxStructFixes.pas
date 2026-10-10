@@ -110,11 +110,6 @@ const
     'with', 'procedure', 'function', 'var', 'const');
   // In einer Anweisungsliste (else eines case/except) gesperrt.
   INLINE_DECLS: array[0..1] of string = ('var', 'const');
-  // Token vor dem Anfang einer Anweisung. Steht vor dem if (for, while ...)
-  // etwas anderes, ist es Teil eines Ausdrucks ('X := if A then B else C').
-  STATEMENT_PREV: array[0..11] of string = (';', 'begin', 'then', 'else',
-    'do', 'try', 'finally', 'except', 'repeat', ':', 'initialization',
-    'finalization');
   // Rueckwaerts ohne Besitzer bis zu diesem Wort (oder ';'): die Suche endet.
   OWNER_STOPS: array[0..9] of string = ('begin', 'end', 'then', 'else',
     'do', 'of', 'try', 'repeat', 'except', 'finally');
@@ -172,9 +167,6 @@ type
     // else die des Tokens, das seinen Besitzer entschied (then, of, except).
     CheckFrom : Integer;
   end;
-
-  // Ein Schritt einer Token-Suche: weiter, gefunden, abbrechen.
-  TRdxStep = (rsGoOn, rsFound, rsStop);
 
   // Wem ein else gehoert (ElseOwner).
   TRdxElseOwner = (eoUnknown, eoIf, eoList);
@@ -489,22 +481,6 @@ begin
     T := After(AMap, T);
   end;
   Result := 'kein end zum case gefunden';
-end;
-
-// Eine Einrueckstufe: was die Zeile des letzten Arms (AArmLine) ueber
-// AIndent hinaus einrueckt; sonst ein Tab, wenn AIndent Tabs traegt, oder
-// zwei Leerzeichen.
-function IndentStep(const AIndent, AArmLine: string): string;
-var
-  ArmIndent : string;
-begin
-  ArmIndent := Copy(AArmLine, 1, SkipBlanks(AArmLine, 1) - 1);
-  if (Length(ArmIndent) > Length(AIndent))
-     and (Copy(ArmIndent, 1, Length(AIndent)) = AIndent) then
-    Exit(Copy(ArmIndent, Length(AIndent) + 1, MaxInt));
-  Result := '  ';
-  if Pos(#9, AIndent) > 0 then
-    Result := #9;
 end;
 
 // Der Ersatz fuer das end: steht es am Zeilenanfang, das else in eigener

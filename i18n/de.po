@@ -2331,6 +2331,18 @@ msgstr "begin durch initialization ersetzen"
 msgid "Remove the cast to %s before Free"
 msgstr "Cast nach %s vor Free entfernen"
 
+msgid "Mark the empty body as intentional"
+msgstr "Leeren Rumpf als beabsichtigt kennzeichnen"
+
+msgid "Raise ENotImplemented in the empty body"
+msgstr "ENotImplemented im leeren Rumpf auslösen"
+
+msgid "Raise the exception"
+msgstr "Exception auslösen"
+
+msgid "Use raise; to keep the original stack trace"
+msgstr "raise; verwenden (Original-Stack-Trace bleibt)"
+
 msgid "(changes behavior)"
 msgstr "(ändert Verhalten)"
 
