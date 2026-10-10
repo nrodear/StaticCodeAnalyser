@@ -130,11 +130,17 @@ def build() -> str:
             # Normalfall, ohne diese Felder sieht ein Modul dort nie fixMode.
             ('Anchor',    r.get('anchor', '') or ''),
             ('FixMode',   r.get('fixMode', '') or ''),
+            # Beschluss 2026-10-10: Editorhilfe im IDE-Modul (HTML-QF-Badge).
+            # Nur ein JSON-Boolean true zaehlt - wie im Lader.
+            ('EditorHelp', r.get('editorHelp') is True),
         ]
         L.append('    // %s' % r.get('id', '?'))
         L.append('    (')
         for n, (fname, val) in enumerate(fields):
-            lit = wrap(pas_parts(val), ' ' * 8)
+            if isinstance(val, bool):
+                lit = 'True' if val else 'False'
+            else:
+                lit = wrap(pas_parts(val), ' ' * 8)
             sep = ';' if n < len(fields) - 1 else ''
             L.append('      %-9s: %s%s' % (fname, lit, sep))
         L.append('    )%s' % (',' if i < len(rules) - 1 else ''))
@@ -226,6 +232,10 @@ def validate_enums() -> list:
     with io.open(SRC, encoding='utf-8-sig') as f:
         rules = json.load(f)['rules']
     errs = []
+    for r in rules:
+        if 'editorHelp' in r and not isinstance(r['editorHelp'], bool):
+            errs.append('%s: editorHelp=%r ist kein Boolean'
+                        % (r.get('id', '?'), r['editorHelp']))
     for field in ('anchor', 'fixMode'):
         allowed = schema_enum(field)
         if allowed is None:

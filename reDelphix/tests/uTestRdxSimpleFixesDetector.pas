@@ -84,6 +84,9 @@ type
     [Test] procedure Sca084_ProcType_NoHelp;
     [Test] procedure Sca084_UnknownType_NoHelp;
     [Test] procedure Sca084_CatalogExample;
+    // Katalogfeld editorHelp (Beschluss 2026-10-10, HTML-QF-Badge) =
+    // die Regeln mit einer Hilfe dieses Moduls.
+    [Test] procedure Catalog_EditorHelpMatchesHelps;
   end;
 
 implementation
@@ -878,6 +881,23 @@ begin
   Assert.IsTrue(Pos('<> nil', Meta.BadExample) > 0, Meta.BadExample);
   Assert.AreEqual(InRoutine(Snip(Meta.GoodExample)),
     FixAll(InRoutine(Snip(Meta.BadExample)), fkAssignedAndAssignedNil));
+end;
+
+procedure TTestRdxSimpleFixesDetector3.Catalog_EditorHelpMatchesHelps;
+var
+  K    : TFindingKind;
+  Want : Boolean;
+begin
+  // Hilfen = TRdxFixRunner.Handles, dazu Format() (SCA044, eigenes Rezept)
+  // und 'Marker entfernen' (SCA165). Nicht: die SQL-Vorlage (SCA003, nur
+  // Zwischenablage) und uses-qualifizieren (ein Umbau, keine Hilfe).
+  for K := Low(TFindingKind) to High(TFindingKind) do
+  begin
+    Want := TRdxFixRunner.Handles(K)
+      or (K in [fkConcatToFormat, fkUnusedSuppression]);
+    Assert.AreEqual(Want, TRuleCatalog.GetRuleCanonical(K).EditorHelp,
+      'editorHelp in rules/sca-rules.json: ' + KindName(K));
+  end;
 end;
 
 initialization

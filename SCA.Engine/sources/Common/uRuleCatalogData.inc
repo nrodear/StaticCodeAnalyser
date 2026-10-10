@@ -23,7 +23,8 @@ const
       GoodEx   : 'list := TStringList.Create;' + #13#10 + 'try' + #13#10 + '  DoStuff(list);' + #13#10 +
         'finally' + #13#10 + '  list.Free;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA002
     (
@@ -33,7 +34,8 @@ const
       BadEx    : 'try DoStuff except end;';
       GoodEx   : 'try DoStuff except on E: Exception do LogError(E.Message); end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA003
     (
@@ -44,7 +46,8 @@ const
       GoodEx   : 'Query.SQL.Text := ''SELECT * FROM Users WHERE Name=:n'';' + #13#10 +
         'Query.ParamByName(''n'').AsString := UserName;';
       Anchor   : 'assign-or-call';
-      FixMode  : 'assisted'
+      FixMode  : 'assisted';
+      EditorHelp: False
     ),
     // SCA004
     (
@@ -54,7 +57,8 @@ const
       BadEx    : 'Password := ''admin123'';';
       GoodEx   : 'Password := GetEnvironmentVariable(''DB_PASSWORD'');';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA005
     (
@@ -64,7 +68,8 @@ const
       BadEx    : 'Format(''%s is %d'', [Name]);   // <-- Age missing';
       GoodEx   : 'Format(''%s is %d'', [Name, Age]);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA006
     (
@@ -74,7 +79,8 @@ const
       BadEx    : '(file is not valid UTF-8 or has lexer-breaking content)';
       GoodEx   : '(check encoding, fix syntax)';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA007
     (
@@ -87,7 +93,8 @@ const
         #13#10 + '  System.SysUtils, Vcl.Forms,' + #13#10 +
         '  MyUnusedHelper;   // registers its classes in its initialization section';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA008
     (
@@ -97,7 +104,8 @@ const
       BadEx    : 'obj := FindObject(id);' + #13#10 + 'obj.DoStuff;   // <-- AV if FindObject returns nil';
       GoodEx   : 'obj := FindObject(id);' + #13#10 + 'if Assigned(obj) then obj.DoStuff;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA009
     (
@@ -107,7 +115,8 @@ const
       BadEx    : 'obj := TFoo.Create;' + #13#10 + 'obj.DoStuff;' + #13#10 + 'obj.Free;';
       GoodEx   : 'obj := TFoo.Create;' + #13#10 + 'try obj.DoStuff finally obj.Free end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA010
     (
@@ -117,7 +126,8 @@ const
       BadEx    : 'result := total / count;';
       GoodEx   : 'if count <> 0 then result := total / count;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA011
     (
@@ -128,7 +138,8 @@ const
       GoodEx   : 'if Failed then' + #13#10 + 'begin' + #13#10 + '  WriteLn(''failed'');' + #13#10 + '  Exit;' +
         #13#10 + 'end;' + #13#10 + 'WriteLn(''reached'');';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA012
     (
@@ -138,7 +149,8 @@ const
       BadEx    : '(150-line procedure doing parsing + validation + persistence)';
       GoodEx   : '(extract into ParseInput, Validate, Persist helper methods)';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA013
     (
@@ -148,7 +160,8 @@ const
       BadEx    : 'procedure SaveOrder(id, customer, address, city, zip, country, total, tax, shipping: ...);';
       GoodEx   : 'procedure SaveOrder(const Order: TOrder);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA014
     (
@@ -158,7 +171,8 @@ const
       BadEx    : 'if RetryCount > 3 then ...';
       GoodEx   : 'const MAX_RETRIES = 3;' + #13#10 + 'if RetryCount > MAX_RETRIES then ...';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA015
     (
@@ -170,7 +184,8 @@ const
       GoodEx   : 'const MSG_FILE_NOT_FOUND = ''File not found'';' + #13#10 +
         'ShowMessage(MSG_FILE_NOT_FOUND);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA016
     (
@@ -180,7 +195,8 @@ const
       BadEx    : 'LogFile := ''C:\Logs\app.log'';';
       GoodEx   : 'LogFile := TPath.Combine(GetEnvironmentVariable(''LOGDIR''), ''app.log'');';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA017
     (
@@ -190,7 +206,8 @@ const
       BadEx    : 'WriteLn(''here #3'');';
       GoodEx   : 'Logger.Debug(''reached step 3'');';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA018
     (
@@ -202,7 +219,8 @@ const
       GoodEx   : 'if not a then Exit;' + #13#10 + 'if not b then Exit;' + #13#10 + 'if not c then Exit;' +
         #13#10 + 'if d then DoStuff;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA019
     (
@@ -215,7 +233,8 @@ const
         'Result := Parse(Input);' + #13#10 + #13#10 + '// Or, if it is not this change''s job:' +
         #13#10 + '// TODO(#4711): handle empty input - see issue 4711';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA020
     (
@@ -226,7 +245,8 @@ const
       GoodEx   : 'procedure DoStuff;' + #13#10 + 'begin' + #13#10 +
         '  raise ENotImplemented.Create(''...'');' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA021
     (
@@ -236,7 +256,8 @@ const
       BadEx    : '(20 lines of validation code copy-pasted across 3 methods)';
       GoodEx   : '(extract into a single ValidateXxx procedure)';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA022
     (
@@ -246,7 +267,8 @@ const
       BadEx    : '(method with 15+ if/case/for branches in one body)';
       GoodEx   : '(extract decision groups into named helper methods)';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA023
     (
@@ -256,7 +278,8 @@ const
       BadEx    : '(pattern from analyser-rules.yml matches)';
       GoodEx   : '(fix per the custom rule''s message)';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA024
     (
@@ -266,7 +289,8 @@ const
       BadEx    : 'object Button1: TButton' + #13#10 + '  Caption = ''Save''' + #13#10 + 'end';
       GoodEx   : 'object btnSave: TButton' + #13#10 + '  Caption = ''Save''' + #13#10 + 'end';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA025
     (
@@ -276,7 +300,8 @@ const
       BadEx    : 'object btnSave: TButton' + #13#10 + '  Caption = ''Speichern''' + #13#10 + 'end';
       GoodEx   : 'btnSave.Caption := _(''btn.save'');  // i18n at runtime';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA026
     (
@@ -287,7 +312,8 @@ const
         '  Params.Strings = (''Password=admin123'' ''User_Name=sa'')' + #13#10 + 'end';
       GoodEx   : 'FDConnection1.Params.Values[''Password''] := GetEnvironmentVariable(''DB_PWD'');';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA027
     (
@@ -298,7 +324,8 @@ const
         'DBEdit2.DataField = ''NAME''   // same DataSource';
       GoodEx   : 'DBEdit1.DataField = ''NAME''' + #13#10 + 'DBEdit2.DataField = ''FIRSTNAME''';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA028
     (
@@ -311,7 +338,8 @@ const
         #13#10 + '// and in the .pas, published:' + #13#10 +
         'procedure btnSaveClick(Sender: TObject);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA029
     (
@@ -323,7 +351,8 @@ const
       GoodEx   : 'object btnOld: TButton' + #13#10 + '  OnClick = btnOldClick' + #13#10 + 'end' + #13#10 +
         #13#10 + '// or delete the method - an unbound handler is never called';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA030
     (
@@ -335,7 +364,8 @@ const
         '  SaveDocument;' + #13#10 + 'end;' + #13#10 + #13#10 +
         '// or clear OnClick in the designer and delete the method';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA031
     (
@@ -346,7 +376,8 @@ const
       GoodEx   : 'TForm1 = class(TForm)' + #13#10 + '  edtName: TEdit;' + #13#10 +
         '  btnSave: TButton;   // the .dfm creates it - the field must exist' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA032
     (
@@ -357,7 +388,8 @@ const
       GoodEx   : 'QB.MasterSource = dsA   // A is the parent, B the detail' + #13#10 +
         '// QA has no MasterSource';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA033
     (
@@ -368,7 +400,8 @@ const
       GoodEx   : 'FDQuery1.SQL.Text := ''SELECT * FROM U WHERE Name=:n'';' + #13#10 +
         'FDQuery1.ParamByName(''n'').AsString := EdName.Text;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA034
     (
@@ -379,7 +412,8 @@ const
       GoodEx   : 'object edtEmail: TDBEdit' + #13#10 + '  DataSource = dsPerson' + #13#10 +
         '  DataField = ''Email''' + #13#10 + 'end';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA035
     (
@@ -391,7 +425,8 @@ const
         #13#10 + 'end' + #13#10 + #13#10 +
         '// or drop Required = True if the field really is optional';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA036
     (
@@ -401,7 +436,8 @@ const
       BadEx    : 'DBEdit1.DataField = ''IsActive''   // TBooleanField';
       GoodEx   : 'DBCheckBox1.DataField = ''IsActive''';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA037
     (
@@ -411,7 +447,8 @@ const
       BadEx    : 'EdA.TabOrder = 0' + #13#10 + 'EdB.TabOrder = 0   // same parent';
       GoodEx   : 'EdA.TabOrder = 0' + #13#10 + 'EdB.TabOrder = 1';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA038
     (
@@ -421,7 +458,8 @@ const
       BadEx    : 'object Query1: TQuery   // ForbiddenClasses=TQuery';
       GoodEx   : 'object FDQuery1: TFDQuery';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA039
     (
@@ -431,7 +469,8 @@ const
       BadEx    : 'object frmInvoice: TForm' + #13#10 + '  object FDQuery1: TFDQuery ...';
       GoodEx   : 'object dmInvoice: TDataModule' + #13#10 + '  object FDQuery1: TFDQuery ...';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA040
     (
@@ -441,7 +480,8 @@ const
       BadEx    : 'Form2.EdName.Text := ''x'';';
       GoodEx   : 'Form2.UserName := ''x'';   // property on Form2';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA041
     (
@@ -452,7 +492,8 @@ const
       GoodEx   : 'object frmEdit: TForm' + #13#10 + '  object pnlBody: TPanel' + #13#10 +
         '    object EdName: TEdit';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA042
     (
@@ -466,7 +507,8 @@ const
         'btnSave.OnClick   = btnSaveClick' + #13#10 + 'btnPrint.OnClick  = btnPrintClick' + #13#10 +
         'btnClose.OnClick  = btnCloseClick';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA043
     (
@@ -479,7 +521,8 @@ const
         '  Action = actSave   // the action carries the handler' + #13#10 + 'end' + #13#10 + #13#10 +
         '// or drop Action and keep OnClick - but not both';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA044
     (
@@ -489,7 +532,8 @@ const
       BadEx    : 'Msg := ''User '' + Name + '' has '' + IntToStr(N) + '' open tickets'';';
       GoodEx   : 'Msg := Format(''User %s has %d open tickets'', [Name, N]);';
       Anchor   : 'assign';
-      FixMode  : 'auto'
+      FixMode  : 'auto';
+      EditorHelp: True
     ),
     // SCA045
     (
@@ -500,7 +544,8 @@ const
         '  Name := SomeName;   // Customer.Name? or local Name?' + #13#10 + 'end;';
       GoodEx   : 'C := Customer;' + #13#10 + 'C.Name := SomeName;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA046
     (
@@ -510,7 +555,8 @@ const
       BadEx    : 'for i := 10 to 1 do DoStuff(i);';
       GoodEx   : 'for i := 10 downto 1 do DoStuff(i);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA047
     (
@@ -520,7 +566,8 @@ const
       BadEx    : 'FCount := FCount;';
       GoodEx   : 'FCount := ACount;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA048
     (
@@ -533,7 +580,8 @@ const
         'end;' + #13#10 + 'procedure TBase.AfterConstruction;' + #13#10 + 'begin' + #13#10 +
         '  Configure;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA049
     (
@@ -543,7 +591,8 @@ const
       BadEx    : 'Last := s[Length(s) - 1];';
       GoodEx   : 'if Length(s) >= 2 then Last := s[Length(s) - 1];';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA050
     (
@@ -557,7 +606,8 @@ const
         #13#10 + '  end;' + #13#10 +
         '// Same-unit access stays legal under Delphi-classic `private`.';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA051
     (
@@ -567,7 +617,8 @@ const
       BadEx    : 'public' + #13#10 + '  procedure HookForSubclasses; virtual;';
       GoodEx   : 'protected' + #13#10 + '  procedure HookForSubclasses; virtual;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA052
     (
@@ -580,7 +631,8 @@ const
         '// Or say why it stays - a public API is used from outside the scan:' + #13#10 +
         '//   procedure NeverCalled;   // part of the published plugin API';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA053
     (
@@ -591,7 +643,8 @@ const
         '  DoStuff;' + #13#10 + 'end;';
       GoodEx   : 'begin' + #13#10 + '  DoStuff;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA054
     (
@@ -601,7 +654,8 @@ const
       BadEx    : 'procedure Process(const Data: TData; Mode: Integer);  // Mode never referenced';
       GoodEx   : 'procedure Process(const Data: TData);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA055
     (
@@ -611,7 +665,8 @@ const
       BadEx    : 'if (a = a) then ...';
       GoodEx   : 'if (a = b) then ...';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA056
     (
@@ -621,7 +676,8 @@ const
       BadEx    : 'QDetail.MasterSource = dsMaster   // MasterFields = '''' (empty)';
       GoodEx   : 'QDetail.MasterSource = dsMaster   QDetail.MasterFields = ''OrderID''';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA057
     (
@@ -631,7 +687,8 @@ const
       BadEx    : '(TForm with 5+ TFDQuery/TFDConnection components)';
       GoodEx   : '(move all DB components to a TDataModule)';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA058
     (
@@ -641,7 +698,8 @@ const
       BadEx    : 'Q.SQL.Text := ''UPDATE Users SET Active=0'';';
       GoodEx   : 'Q.SQL.Text := ''UPDATE Users SET Active=0 WHERE Id=:id'';';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA059
     (
@@ -651,7 +709,8 @@ const
       BadEx    : 'S := Format(''%.2f'', [Price]);';
       GoodEx   : 'S := Format(''%.2f'', [Price], TFormatSettings.Invariant);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA060
     (
@@ -662,7 +721,8 @@ const
         '  ...' + #13#10 + '  MyExit:' + #13#10 + 'end;';
       GoodEx   : 'if Failed then Exit;' + #13#10 + '...';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA061
     (
@@ -672,7 +732,8 @@ const
       BadEx    : 'procedure Foo;' + #13#10 + 'begin' + #13#10 + '<TAB>DoStuff;' + #13#10 + 'end;';
       GoodEx   : 'procedure Foo;' + #13#10 + 'begin' + #13#10 + '  DoStuff;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA062
     (
@@ -683,7 +744,8 @@ const
       GoodEx   : 'result := SomeReallyLongFunction(' + #13#10 + '  ArgumentOne, ArgumentTwo,' + #13#10 +
         '  ArgumentThree, ArgumentFour, ArgumentFive);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA063
     (
@@ -693,7 +755,8 @@ const
       BadEx    : '  DoStuff;   <-- trailing spaces';
       GoodEx   : '  DoStuff;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA064
     (
@@ -703,7 +766,8 @@ const
       BadEx    : 'Procedure Foo;' + #13#10 + 'Begin' + #13#10 + '  If X then DoStuff;' + #13#10 + 'End;';
       GoodEx   : 'procedure Foo;' + #13#10 + 'begin' + #13#10 + '  if X then DoStuff;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA065
     (
@@ -713,7 +777,8 @@ const
       BadEx    : 'Dispose(P); // NOSONAR - we know about this';
       GoodEx   : '// noinspection - covered by integration test' + #13#10 + 'Dispose(P);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA066
     (
@@ -723,7 +788,8 @@ const
       BadEx    : 'MyProc();' + #13#10 + 'Result := MyFunc();';
       GoodEx   : 'MyProc;' + #13#10 + 'Result := MyFunc;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: True
     ),
     // SCA067
     (
@@ -735,7 +801,8 @@ const
       GoodEx   : 'function Cpuid: Cardinal;' + #13#10 + 'begin' + #13#10 + '  Result := GetCpuFeatures;' +
         #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA068
     (
@@ -745,7 +812,8 @@ const
       BadEx    : 'WriteLn(''A'', ''B'', );' + #13#10 + 'DoStuff(Param1, Param2,);';
       GoodEx   : 'WriteLn(''A'', ''B'');' + #13#10 + 'DoStuff(Param1, Param2);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA069
     (
@@ -755,7 +823,8 @@ const
       BadEx    : 'const TIMEOUT_MS = 1800000;' + #13#10 + 'const MAX_BYTES = 10485760;';
       GoodEx   : 'const TIMEOUT_MS = 1_800_000;' + #13#10 + 'const MAX_BYTES = 10_485_760;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA070
     (
@@ -765,7 +834,8 @@ const
       BadEx    : '// X := 42;' + #13#10 + '// if Active then Process;';
       GoodEx   : '// TODO: re-enable once issue #123 is fixed - see history';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA071
     (
@@ -775,7 +845,8 @@ const
       BadEx    : '  implementation' + #13#10 + #13#10 + '  procedure Foo; ...';
       GoodEx   : 'implementation' + #13#10 + #13#10 + 'procedure Foo; ...';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA072
     (
@@ -785,7 +856,8 @@ const
       BadEx    : 'if Active = True then ...' + #13#10 + 'if Disabled <> False then ...';
       GoodEx   : 'if Active then ...' + #13#10 + 'if Disabled then ...';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: True
     ),
     // SCA073
     (
@@ -795,7 +867,8 @@ const
       BadEx    : 'type IServiceMarker = interface end;';
       GoodEx   : 'type ServiceMarkerAttribute = class(TCustomAttribute) end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA074
     (
@@ -805,7 +878,8 @@ const
       BadEx    : 'Assert(Items.Count > 0);';
       GoodEx   : 'Assert(Items.Count > 0, ''caller must ensure non-empty Items'');';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: True
     ),
     // SCA075
     (
@@ -815,7 +889,8 @@ const
       BadEx    : 'type TFoo = class(TObject) ... end;';
       GoodEx   : 'type TFoo = class ... end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: True
     ),
     // SCA076
     (
@@ -825,7 +900,8 @@ const
       BadEx    : 'var A, B, C: Integer;' + #13#10 + 'field FX, FY: TPoint;';
       GoodEx   : 'var A: Integer;' + #13#10 + '    B: Integer;' + #13#10 + '    C: Integer;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA077
     (
@@ -835,7 +911,8 @@ const
       BadEx    : 'if Active then begin end;';
       GoodEx   : 'if Active then Activate;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA078
     (
@@ -845,7 +922,8 @@ const
       BadEx    : 'try Foo; except on E: Exception do Log(E.Message); end;';
       GoodEx   : 'try Foo; except on E: EDatabaseError do Log(E.Message); end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA079
     (
@@ -855,7 +933,8 @@ const
       BadEx    : 'const A = 1;' + #13#10 + 'const B = 2;';
       GoodEx   : 'const' + #13#10 + '  A = 1;' + #13#10 + '  B = 2;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA080
     (
@@ -866,7 +945,8 @@ const
         'end;';
       GoodEx   : 'procedure Foo;' + #13#10 + 'begin' + #13#10 + '  DoStuff;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA081
     (
@@ -877,7 +957,8 @@ const
       GoodEx   : '// uFoo.pas' + #13#10 + 'type TFoo = class ... end;' + #13#10 + '// uBar.pas' + #13#10 +
         'type TBar = class ... end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA082
     (
@@ -887,7 +968,8 @@ const
       BadEx    : 'DoStuff;;';
       GoodEx   : 'DoStuff;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA083
     (
@@ -899,7 +981,8 @@ const
       GoodEx   : 'Stream := TFileStream.Create(P);' + #13#10 + 'try' + #13#10 + '  ...' + #13#10 + 'finally' +
         #13#10 + '  Stream.Free;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA084
     (
@@ -909,7 +992,8 @@ const
       BadEx    : 'if Assigned(Obj) and (Obj <> nil) then ...';
       GoodEx   : 'if Assigned(Obj) then ...';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: True
     ),
     // SCA085
     (
@@ -919,7 +1003,8 @@ const
       BadEx    : 'Obj.Free;' + #13#10 + 'Obj := nil;';
       GoodEx   : 'FreeAndNil(Obj);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: True
     ),
     // SCA086
     (
@@ -929,7 +1014,8 @@ const
       BadEx    : 'procedure Foo(out S: string);';
       GoodEx   : 'procedure Foo(var S: string);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA087
     (
@@ -940,7 +1026,8 @@ const
         '    FX: Integer;' + #13#10 + '  end;';
       GoodEx   : 'type TFoo = class' + #13#10 + '  private' + #13#10 + '    FX: Integer;' + #13#10 + '  end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: True
     ),
     // SCA088
     (
@@ -951,7 +1038,8 @@ const
         'end.';
       GoodEx   : 'initialization' + #13#10 + '  RegisterClass(TFoo);' + #13#10 + 'end.';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA089
     (
@@ -964,7 +1052,8 @@ const
         '  public' + #13#10 + '    property Count: Integer read FCount write FCount;' + #13#10 +
         '  end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA090
     (
@@ -975,7 +1064,8 @@ const
         '    Cleanup;' + #13#10 + '  end;' + #13#10 + 'except' + #13#10 + '  Log;' + #13#10 + 'end;';
       GoodEx   : 'ProtectedDoStuff;  // helper wraps the inner try';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA091
     (
@@ -986,7 +1076,8 @@ const
         '  opF: ...; opG: ...; opH: ...; opI: ...; opJ: ...;' + #13#10 + 'end;';
       GoodEx   : 'FOperations[Op].Execute;  // dispatch table';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA092
     (
@@ -996,7 +1087,8 @@ const
       BadEx    : 'unit X;' + #13#10 + 'interface' + #13#10 + 'implementation' + #13#10 + 'end.';
       GoodEx   : '// delete the file';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA093
     (
@@ -1008,7 +1100,8 @@ const
       GoodEx   : 'procedure Foo;' + #13#10 + 'begin' + #13#10 + '  inherited;' + #13#10 + '  DoStuff;' +
         #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA094
     (
@@ -1018,7 +1111,8 @@ const
       BadEx    : 'if ((Active)) then ...' + #13#10 + 'Result := ((42));';
       GoodEx   : 'if Active then ...' + #13#10 + 'Result := 42;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA095
     (
@@ -1030,7 +1124,8 @@ const
       GoodEx   : 'type TFoo = class' + #13#10 + '  private' + #13#10 + '    FX, FY: Integer;' + #13#10 +
         '  public procedure A;' + #13#10 + '  end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA096
     (
@@ -1041,7 +1136,8 @@ const
       GoodEx   : 'constructor TFoo.Create;' + #13#10 + 'begin' + #13#10 + '  inherited;' + #13#10 +
         '  FX := 0;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA097
     (
@@ -1053,7 +1149,8 @@ const
       GoodEx   : 'destructor TFoo.Destroy;' + #13#10 + 'begin' + #13#10 + '  FreeAndNil(FBar);' + #13#10 +
         '  inherited;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA098
     (
@@ -1063,7 +1160,8 @@ const
       BadEx    : 'if Active then Result := True else Result := False;';
       GoodEx   : 'Result := Active;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA099
     (
@@ -1075,7 +1173,8 @@ const
       GoodEx   : 'if Active then' + #13#10 + 'begin' + #13#10 + '  DoA;' + #13#10 + '  DoB;' + #13#10 + 'end' +
         #13#10 + 'else' + #13#10 + 'begin' + #13#10 + '  DoC;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA100
     (
@@ -1085,7 +1184,8 @@ const
       BadEx    : 'type TIntPtr = ^Integer;';
       GoodEx   : 'type PInteger = ^Integer;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA101
     (
@@ -1095,7 +1195,8 @@ const
       BadEx    : 'if Active then DoStuff;';
       GoodEx   : 'if Active then' + #13#10 + 'begin' + #13#10 + '  DoStuff;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA102
     (
@@ -1107,7 +1208,8 @@ const
       GoodEx   : 'procedure Inner; begin DoX; end;' + #13#10 + 'procedure Outer;' + #13#10 + 'begin' + #13#10 +
         '  Inner;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA103
     (
@@ -1119,7 +1221,8 @@ const
       GoodEx   : 'type TFoo = class' + #13#10 + '  private' + #13#10 + '    FCounter: Integer;' + #13#10 +
         '  end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA104
     (
@@ -1129,7 +1232,8 @@ const
       BadEx    : 'type Counter = class' + #13#10 + '  ...' + #13#10 + '  end;';
       GoodEx   : 'type TCounter = class' + #13#10 + '  ...' + #13#10 + '  end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA105
     (
@@ -1139,7 +1243,8 @@ const
       BadEx    : 'type Service = interface [''{...}''] end;';
       GoodEx   : 'type IService = interface [''{...}''] end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA106
     (
@@ -1149,7 +1254,8 @@ const
       BadEx    : 'procedure doStuff;';
       GoodEx   : 'procedure DoStuff;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA107
     (
@@ -1163,7 +1269,8 @@ const
         '    procedure Helper;' + #13#10 + '  public' + #13#10 + '    procedure Run;' + #13#10 +
         '  end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA108
     (
@@ -1178,7 +1285,8 @@ const
         'FOnDone := procedure begin Form1.Log(''done'') end;' + #13#10 + 'OnTerminate := FOnDone;' +
         #13#10 + '// destructor stays Synchronize-free.';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA109
     (
@@ -1190,7 +1298,8 @@ const
       GoodEx   : 'FLock.Enter;' + #13#10 + 'try' + #13#10 + '  DoWork;' + #13#10 + 'finally' + #13#10 +
         '  FLock.Leave;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA110
     (
@@ -1202,7 +1311,8 @@ const
         '  for i := 0 to High(Names) do' + #13#10 + '    SB.Append(Names[i]).Append('', '');' +
         #13#10 + '  s := SB.ToString;' + #13#10 + 'finally SB.Free; end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA111
     (
@@ -1214,7 +1324,8 @@ const
       GoodEx   : 'var P := Q.ParamByName(''id'');' + #13#10 + 'for i := 0 to High(Ids) do begin' + #13#10 +
         '  P.AsInteger := Ids[i];' + #13#10 + '  Q.ExecSQL;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA112
     (
@@ -1227,7 +1338,8 @@ const
       GoodEx   : 'var Amt := Q.FieldByName(''Amount'');' + #13#10 + 'while not Q.Eof do begin' + #13#10 +
         '  Total := Total + Amt.AsCurrency;' + #13#10 + '  Q.Next;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA113
     (
@@ -1237,7 +1349,8 @@ const
       BadEx    : 'MyThread := TWorker.Create(True);' + #13#10 + 'MyThread.Resume;';
       GoodEx   : 'MyThread := TWorker.Create(True);' + #13#10 + 'MyThread.Start;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA114
     (
@@ -1247,7 +1360,8 @@ const
       BadEx    : '// inside an OnClick:' + #13#10 + 'FreeAndNil(FWorker);  // FWorker.Execute still running?';
       GoodEx   : 'FWorker.Terminate;' + #13#10 + 'FWorker.WaitFor;' + #13#10 + 'FreeAndNil(FWorker);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA115
     (
@@ -1257,7 +1371,8 @@ const
       BadEx    : 'Url := ''http://api.contoso-shop.de/v1/users'';';
       GoodEx   : 'Url := ''https://api.contoso-shop.de/v1/users'';';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA116
     (
@@ -1268,7 +1383,8 @@ const
       GoodEx   : 'Client.SecureProtocols := [TLSv1_2, TLSv1_3];' + #13#10 +
         'Client.OnVerifyPeer := VerifyPinnedFingerprint;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA117
     (
@@ -1281,7 +1397,8 @@ const
         '    /// <summary>Starts the worker.</summary>' + #13#10 + '    procedure Run;' + #13#10 +
         '  end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA118
     (
@@ -1291,7 +1408,8 @@ const
       BadEx    : 'type' + #13#10 + '  MyError = class(Exception);';
       GoodEx   : 'type' + #13#10 + '  EMyError = class(Exception);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA119
     (
@@ -1303,7 +1421,8 @@ const
       GoodEx   : 'procedure Foo;' + #13#10 + 'const' + #13#10 + '  MAX_RETRIES = 3;' + #13#10 +
         'begin ... end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA120
     (
@@ -1316,7 +1435,8 @@ const
       GoodEx   : 'procedure Validate(x: Integer);' + #13#10 + 'begin' + #13#10 + '  if x < 0 then' + #13#10 +
         '    raise EArgumentOutOfRangeException.Create(''x negative'');' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA121
     (
@@ -1329,7 +1449,8 @@ const
       GoodEx   : 'function GetCount(L: TList): Integer;' + #13#10 + 'begin' + #13#10 + '  Result := 0;' +
         #13#10 + '  if L <> nil then' + #13#10 + '    Result := L.Count;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA122
     (
@@ -1343,7 +1464,8 @@ const
         #13#10 + '  begin' + #13#10 + '    Log(E.Message);' + #13#10 +
         '    raise;            // preserves trace' + #13#10 + '  end;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA123
     (
@@ -1355,7 +1477,8 @@ const
       GoodEx   : 'procedure Cleanup(L: TObject);' + #13#10 + 'begin' + #13#10 +
         '  L.Free;                  // virtual Destroy resolves at runtime' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA124
     (
@@ -1370,7 +1493,8 @@ const
         '  list := TStringList.Create;' + #13#10 + '  ...' + #13#10 +
         '  list.Clear;             // or FreeAndNil + new TStringList.Create' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA125
     (
@@ -1382,7 +1506,8 @@ const
       GoodEx   : '// Remove the override entirely. The parent''s AfterConstruction will' + #13#10 +
         '// be invoked by the normal virtual dispatch.';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA126
     (
@@ -1394,7 +1519,8 @@ const
       GoodEx   : 'if not Assigned(Obj) then' + #13#10 + '  Exit;' + #13#10 + 'if Assigned(Obj) then' + #13#10 +
         '  Obj.DoStuff;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: True
     ),
     // SCA127
     (
@@ -1405,7 +1531,8 @@ const
       GoodEx   : 'if x < 0 then' + #13#10 +
         '  raise EArgumentOutOfRangeException.CreateFmt(''x = %d'', [x]);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA128
     (
@@ -1417,7 +1544,8 @@ const
       GoodEx   : 'var FS := TFormatSettings.Invariant;' + #13#10 + 'var d := StrToDate(UserInput, FS);' +
         #13#10 + 'WriteLn(DateToStr(Now, FS));';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA129
     (
@@ -1429,7 +1557,8 @@ const
       GoodEx   : 'var u: UnicodeString;' + #13#10 + 'u := ''Smiley: '' + #$1F600;' + #13#10 +
         'logStream.WriteString(UTF8Encode(u));   // explicit, full Unicode';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA130
     (
@@ -1441,7 +1570,8 @@ const
       GoodEx   : 'var p: PChar;' + #13#10 + 'p := PChar(string(''A''));    // explicit string wrap' + #13#10 +
         'ShowMessage(p);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA131
     (
@@ -1453,7 +1583,8 @@ const
       GoodEx   : 'if IsCacheHit then' + #13#10 + '  x := FetchFromCache' + #13#10 + 'else' + #13#10 +
         '  x := FetchFromDb;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA132
     (
@@ -1467,7 +1598,8 @@ const
         '  on E: EConvertError do' + #13#10 + '    Log(E.Message);' + #13#10 +
         '  on E: EFileNotFoundException do' + #13#10 + '    Log(E.Message);' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA133
     (
@@ -1480,7 +1612,8 @@ const
       GoodEx   : 'procedure Foo(x: Integer);' + #13#10 + 'begin' + #13#10 + '  if x < 0 then' + #13#10 +
         '    raise EArgumentException.CreateFmt(''x = %d (must be >= 0)'', [x]);' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA134
     (
@@ -1493,7 +1626,8 @@ const
         'finally' + #13#10 + '  FreeAndNil(L);     // any subsequent L.Method crashes loudly' +
         #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA135
     (
@@ -1506,7 +1640,8 @@ const
       GoodEx   : 'type' + #13#10 + '  TDerived = class(TBase)' + #13#10 + '    procedure DoWork; override;' +
         #13#10 + '  end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA136
     (
@@ -1522,7 +1657,8 @@ const
         '  except' + #13#10 + '    FreeAndNil(FOther);' + #13#10 + '    FreeAndNil(FList);' + #13#10 +
         '    raise;' + #13#10 + '  end;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA137
     (
@@ -1535,7 +1671,8 @@ const
       GoodEx   : 'BytesTotal := Int64(SectorCount) * SectorSize;' + #13#10 +
         '// Cast one operand; the other is auto-promoted; multiplication is 64-bit.';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA138
     (
@@ -1552,7 +1689,8 @@ const
         '  FToolbar: TToolbarSlots;' + #13#10 + '  FFilter:  TFilterController;' + #13#10 +
         '  FGrid:    TGridRenderer;' + #13#10 + '  procedure Setup;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA139
     (
@@ -1566,7 +1704,8 @@ const
         'finally' + #13#10 + '  FreeAndNil(L);      // L is nil; further use raises loudly' + #13#10 +
         'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: True
     ),
     // SCA140
     (
@@ -1584,7 +1723,8 @@ const
         #13#10 + '    Result := Cache.Get(Id)' + #13#10 + '  else' + #13#10 +
         '    Result := DbLoad(Id);' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA141
     (
@@ -1599,7 +1739,8 @@ const
         'TMainForm = class(TForm)' + #13#10 + '  FReport: TReportRunner;' + #13#10 +
         '  FData:   TDataController;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA142
     (
@@ -1611,7 +1752,8 @@ const
       GoodEx   : 'uses' + #13#10 + '  System.Classes,' + #13#10 + '  System.IOUtils,' + #13#10 +
         '  System.JSON,' + #13#10 + '  System.SysUtils;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA143
     (
@@ -1624,7 +1766,8 @@ const
         '// for the report subsystem. Thread-safe; single instance per app.' + #13#10 + #13#10 +
         'interface' + #13#10 + #13#10 + 'uses ...;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA144
     (
@@ -1636,7 +1779,8 @@ const
       GoodEx   : 'uses System.Math;' + #13#10 + '...' + #13#10 +
         'if SameValue(Ratio, 0.5, 1e-9) then DoStuff;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA145
     (
@@ -1651,7 +1795,8 @@ const
         '  except' + #13#10 + '    Log(''cleanup error'');' + #13#10 + '  end;' + #13#10 +
         '  inherited;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA146
     (
@@ -1666,7 +1811,8 @@ const
         'procedure SendInfoNotification(const Msg: string);' + #13#10 +
         'begin Notify(Msg, clBlack); end;' + #13#10 + '// Caller: SendErrorNotification(s);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA147
     (
@@ -1679,7 +1825,8 @@ const
       GoodEx   : 'TFoo = class' + #13#10 + 'public' + #13#10 + '  procedure DoStuff;' + #13#10 + 'end;' +
         #13#10 + '// or call HelperA from DoStuff to make the dependency explicit';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA148
     (
@@ -1692,7 +1839,8 @@ const
         '  Result := A + B;' + #13#10 + 'end;' + #13#10 +
         '// Caller: TMath.Add(1, 2)   // no instance needed';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA149
     (
@@ -1704,7 +1852,8 @@ const
         '  procedure DoWork;          // <- shadows TBase.DoWork (W1010)' + #13#10 + 'end;';
       GoodEx   : 'TDerived = class(TBase)' + #13#10 + '  procedure DoWork; override;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA150
     (
@@ -1716,7 +1865,8 @@ const
       GoodEx   : 'if Length(s) > 0 then DoStuff;    // non-empty check' + #13#10 +
         'if Length(s) = 0 then DoOther;    // empty check';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA151
     (
@@ -1729,7 +1879,8 @@ const
       GoodEx   : 'const DEFAULT_TIMEOUT = 30;' + #13#10 + #13#10 + 'function GetTimeout: Integer;' + #13#10 +
         'begin' + #13#10 + '  Result := DEFAULT_TIMEOUT;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA152
     (
@@ -1743,7 +1894,8 @@ const
         #13#10 + #13#10 + 'Form1.Caption := SAppCaption;' + #13#10 + 'Button1.Hint  := SBtnHint;' +
         #13#10 + 'ShowMessage(SSavedMsg);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA153
     (
@@ -1754,7 +1906,8 @@ const
       GoodEx   : 'FLocker.Lock;' + #13#10 + 'try' + #13#10 + '  DoStuff;' + #13#10 + 'finally' + #13#10 +
         '  FLocker.UnLock;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA154
     (
@@ -1767,7 +1920,8 @@ const
       GoodEx   : 'Move(Src^, P^, SizeOf(Byte) * Count);  // explicit element count' + #13#10 +
         'FillChar(V, SizeOf(V), 0);             // matches the variable''s size';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA155
     (
@@ -1777,7 +1931,8 @@ const
       BadEx    : 'with Form1, List1 do' + #13#10 + '  DoStuff;     // From Form1 or List1?';
       GoodEx   : 'Form1.DoStuff;' + #13#10 + 'List1.Sort;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA156
     (
@@ -1788,7 +1943,8 @@ const
       GoodEx   : 'GetMem(P, 1024);' + #13#10 + 'try' + #13#10 + '  DoStuff(P);' + #13#10 + 'finally' + #13#10 +
         '  FreeMem(P);' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA157
     (
@@ -1801,7 +1957,8 @@ const
       GoodEx   : 'SetLength(Dest, Source.Count);' + #13#10 + 'for i := 0 to Source.Count - 1 do' + #13#10 +
         '  Dest[i] := Source[i];';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA158
     (
@@ -1811,7 +1968,8 @@ const
       BadEx    : 'p := PChar(s) + 5;       // if s='''' then PChar(s)=nil -> AV at $00000005';
       GoodEx   : 'if s <> '''' then' + #13#10 + '  p := PChar(s) + 5;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA159
     (
@@ -1822,7 +1980,8 @@ const
       GoodEx   : 'try DoStuff; except' + #13#10 + '  on E: EDatabaseError do' + #13#10 + '  begin' + #13#10 +
         '    Logger.Error(E.Message);' + #13#10 + '    raise;' + #13#10 + '  end;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA160
     (
@@ -1832,7 +1991,8 @@ const
       BadEx    : 's := string(Buf);    // PByte cast assumes null-terminator';
       GoodEx   : 'SetString(s, PChar(Buf), Len);   // explicit length';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA161
     (
@@ -1842,7 +2002,8 @@ const
       BadEx    : 'Diff := Cardinal(P1) - Cardinal(P2);   // upper 32 bits lost on Win64';
       GoodEx   : 'Diff := PtrUInt(P1) - PtrUInt(P2);     // pointer-wide cast';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA162
     (
@@ -1852,7 +2013,8 @@ const
       BadEx    : 'algo := ''MD5'';' + #13#10 + 'Hash := THashMD5.GetHashString(Input);';
       GoodEx   : 'algo := ''SHA256'';' + #13#10 + 'Hash := THashSHA2.GetHashString(Input);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA163
     (
@@ -1863,7 +2025,8 @@ const
       GoodEx   : '// Validate UserInput against a strict whitelist, then:' + #13#10 +
         'ShellExecute(0, ''open'', ''cmd.exe'', PChar(''/c safe_command''), nil, SW_SHOW);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA164
     (
@@ -1875,7 +2038,8 @@ const
       GoodEx   : 'implementation' + #13#10 + '// remove InternalHelper, or call it from somewhere,' + #13#10 +
         '// or move it to interface if it should be exported';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA165
     (
@@ -1887,7 +2051,8 @@ const
       GoodEx   : '// (Marker entfernt - das Tool flaggt diese Zeile nicht mehr.)' + #13#10 +
         'WriteLn(''hello'');';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: True
     ),
     // SCA166
     (
@@ -1901,7 +2066,8 @@ const
         '  L := TStringList.Create;' + #13#10 + '  try' + #13#10 + '    L.Add(''x'');' + #13#10 +
         '  finally' + #13#10 + '    L.Free;' + #13#10 + '  end;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA167
     (
@@ -1914,7 +2080,8 @@ const
         '  Randomize;   // once, at startup' + #13#10 + '  for i := 1 to 5 do' + #13#10 +
         '    Players[i].Card := Random(52);' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA168
     (
@@ -1927,7 +2094,8 @@ const
         #13#10 + 'else' + #13#10 + '  raise EProgrammerError.Create(''Unhandled status'');' + #13#10 +
         'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA169
     (
@@ -1937,7 +2105,8 @@ const
       BadEx    : 'Assert(InitializeSubsystem);   // Release build skips Init entirely';
       GoodEx   : 'var Ok := InitializeSubsystem;' + #13#10 + 'Assert(Ok, ''subsystem init failed'');';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA170
     (
@@ -1947,7 +2116,8 @@ const
       BadEx    : 'function Hash(s: string): Integer;';
       GoodEx   : 'function Hash(const s: string): Integer;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA171
     (
@@ -1958,7 +2128,8 @@ const
       GoodEx   : '{$WARNINGS OFF}' + #13#10 + 'procedure Foo;' + #13#10 + 'begin' + #13#10 + 'end;' + #13#10 +
         '{$WARNINGS ON}';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA172
     (
@@ -1968,7 +2139,8 @@ const
       BadEx    : 'property Ready: Boolean;';
       GoodEx   : 'property IsReady: Boolean;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA173
     (
@@ -1980,7 +2152,8 @@ const
       GoodEx   : 'procedure SumRows;' + #13#10 + 'var s: Double; i: Integer;' + #13#10 + 'begin' + #13#10 +
         '  s := 0;' + #13#10 + '  for i := 0 to N do s := s + Rows[i];' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA174
     (
@@ -1992,7 +2165,8 @@ const
       GoodEx   : 'L := TObjectList<TFoo>.Create; // OwnsObjects=True default' + #13#10 +
         'L.Add(TFoo.Create);' + #13#10 + 'L.Free; // item freed';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA175
     (
@@ -2005,7 +2179,8 @@ const
         '  TThread.CreateAnonymousThread(procedure' + #13#10 +
         '  begin WriteLn(Captured); end).Start;' + #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA176
     (
@@ -2038,7 +2213,8 @@ const
         '      ShipItem(AOrder[I]);' + #13#10 + 'end;' + #13#10 +
         '// ShipItem = 4, ProcessOrder = 5 - beide klar unter 15';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA177
     (
@@ -2050,7 +2226,8 @@ const
       GoodEx   : 'T := TMyThread.Create(True);' + #13#10 + 'T.FreeOnTerminate := True;' + #13#10 + 'T.Start;' +
         #13#10 + 'T := nil;   // drop reference';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA178
     (
@@ -2061,7 +2238,8 @@ const
       GoodEx   : 'var SafePath := TPath.Combine(BaseDir, TPath.GetFileName(edPath.Text));' + #13#10 +
         'Stream := TFileStream.Create(SafePath, fmOpenRead);';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA179
     (
@@ -2071,7 +2249,8 @@ const
       BadEx    : '[Ignore]' + #13#10 + 'procedure SomeTest;';
       GoodEx   : '[Ignore(''TBD ticket #1234 - flaky on CI'')]' + #13#10 + 'procedure SomeTest;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA180
     (
@@ -2081,7 +2260,8 @@ const
       BadEx    : '[Test]' + #13#10 + '[Test]' + #13#10 + 'procedure Foo;';
       GoodEx   : '[Test]' + #13#10 + 'procedure Foo;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA181
     (
@@ -2091,7 +2271,8 @@ const
       BadEx    : '[Category]' + #13#10 + 'procedure Foo;';
       GoodEx   : '[Category(''Slow'')]' + #13#10 + 'procedure Foo;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA182
     (
@@ -2103,7 +2284,8 @@ const
       GoodEx   : '[TestFixture]' + #13#10 + 'TFooTests = class' + #13#10 + '  [Test] procedure DoesX;' +
         #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA183
     (
@@ -2113,7 +2295,8 @@ const
       BadEx    : '[Test]' + #13#10 + #13#10 + 'procedure Foo;';
       GoodEx   : '[Test]' + #13#10 + 'procedure Foo;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA184
     (
@@ -2125,7 +2308,8 @@ const
         '// published section:' + #13#10 + 'TForm1 = class(TForm)' + #13#10 + '  btnSave: TButton;' +
         #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA185
     (
@@ -2137,7 +2321,8 @@ const
       GoodEx   : '// same file saved as UTF-8 WITH BOM (EF BB BF), or build --codepage:65001' + #13#10 +
         'ShowMessage(''...non-ASCII...'');';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA186
     (
@@ -2147,7 +2332,8 @@ const
       BadEx    : '(UTF-8 BOM present, but bytes contain an overlong or surrogate sequence)';
       GoodEx   : '(re-encode the file as valid UTF-8)';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA187
     (
@@ -2157,7 +2343,8 @@ const
       BadEx    : '(file contains 0x00 bytes - e.g. BOM-less UTF-16)';
       GoodEx   : '(save the file as UTF-8 with BOM)';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA188
     (
@@ -2167,7 +2354,8 @@ const
       BadEx    : '// a comment containing U+202E can visually reorder the code that follows';
       GoodEx   : '// no bidirectional control characters anywhere in source';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA189
     (
@@ -2177,7 +2365,8 @@ const
       BadEx    : '// file saved as Windows-1252 (ANSI) with non-ASCII text, no BOM';
       GoodEx   : '// save the file as UTF-8 with BOM (EF BB BF)';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA190
     (
@@ -2187,7 +2376,8 @@ const
       BadEx    : '(file saved as UTF-16 LE / BE)';
       GoodEx   : '(save the file as UTF-8 with BOM)';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA191
     (
@@ -2197,7 +2387,8 @@ const
       BadEx    : '(file saved as UTF-32 LE / BE - will not compile, F2438)';
       GoodEx   : '(convert to UTF-8 with BOM)';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA192
     (
@@ -2207,7 +2398,8 @@ const
       BadEx    : '// an identifier or string with an embedded U+200B is not what it looks like';
       GoodEx   : '// no zero-width / invisible characters in source';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA193
     (
@@ -2217,7 +2409,8 @@ const
       BadEx    : 'var Login: string;  // one letter is a Cyrillic homoglyph (U+043E), not Latin ''o''';
       GoodEx   : 'var Login: string;  // all-ASCII identifier';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA194
     (
@@ -2227,7 +2420,8 @@ const
       BadEx    : 'MyProject.dproj references uMain, uData - but the folder also contains uOldHelper.pas (not referenced) -> flagged';
       GoodEx   : 'Remove uOldHelper.pas or move it out of the project folder - since the SCA194/SCA195 split this finding means the file is not referenced by any uses; a unit that IS used but unlisted is reported as SCA195 (add it to the project) instead';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA195
     (
@@ -2237,7 +2431,8 @@ const
       BadEx    : 'MyProject.dproj references uMain - uMain uses uHelper, but uHelper.pas is not in the .dproj -> flagged: add uHelper.pas to the project';
       GoodEx   : 'Every unit reachable via uses from project units is listed as a DCCReference in the .dproj';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA196
     (
@@ -2253,7 +2448,8 @@ const
         #13#10 + '  for i := 0 to L.Count - 1 do' + #13#10 + '    Result := Result + [L[i]];' +
         #13#10 + 'end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA197
     (
@@ -2267,7 +2463,8 @@ const
         '    [''{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}'']' + #13#10 +
         '    procedure Write(const AText: string);' + #13#10 + '  end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA198
     (
@@ -2287,7 +2484,8 @@ const
         '    [''{9B7E30C4-2D18-4A55-8F61-70E5C2A4193D}'']  // Ctrl+Shift+G' + #13#10 +
         '    procedure Write(const S: string);' + #13#10 + '  end;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA199
     (
@@ -2302,7 +2500,8 @@ const
         'Q.SQL.Add(''WHERE customer_id = :customer_id'');' + #13#10 +
         'Q.ParamByName(''customer_id'').AsInteger := Id;' + #13#10 + 'Q.Open;';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA200
     (
@@ -2312,7 +2511,8 @@ const
       BadEx    : 'Client.Host := ''10.20.30.40'';';
       GoodEx   : 'Client.Host := Settings.ReadString(''Server'', ''Host'', ''localhost'');';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     ),
     // SCA201
     (
@@ -2322,7 +2522,8 @@ const
       BadEx    : '[Database]' + #13#10 + 'Server=10.20.30.40';
       GoodEx   : '[Database]' + #13#10 + 'Server=db.example.internal';
       Anchor   : '';
-      FixMode  : ''
+      FixMode  : '';
+      EditorHelp: False
     )
   );
 

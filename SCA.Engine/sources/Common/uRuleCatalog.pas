@@ -107,6 +107,14 @@ type
     // mit fixMode 'none'.
     Anchor             : string;
     FixMode            : string;
+    // Hat ein IDE-Modul fuer die Funde dieser Regel eine Editorhilfe (eine
+    // Ersetzung im Editor: reDelphix-Gluehbirne, Ctrl+Alt+F)? Nur fuer
+    // Berichte (HTML: QF-Badge, Filter Quick-Wins) - ob die Hilfe an einem
+    // Fund greift, entscheidet das Modul. Fehlt das Feld in der Datei oder
+    // ist es kein Boolean: der einkompilierte Wert (wie anchor/fixMode).
+    // reDelphix.Test haelt es deckungsgleich mit den Hilfen des Moduls
+    // (Beschluss 2026-10-10; vorher fragte der Bericht uQuickFix).
+    EditorHelp         : Boolean;
   end;
 
   // Uebersetzbare Textfelder einer Regel - der Inhalt eines Sprach-Overlays
@@ -331,6 +339,8 @@ type
     // reDelphix dort bei JEDER Regel fixMode '' und bot nichts an.
     Anchor    : string;
     FixMode   : string;
+    // Beschluss 2026-10-10 (s. TRuleMeta.EditorHelp).
+    EditorHelp : Boolean;
   end;
 
 {$I uRuleCatalogData.inc}
@@ -368,6 +378,20 @@ begin
             (AIdx <= High(RULE_CATALOG_DATA)) and
             SameText(RULE_CATALOG_DATA[AIdx].RuleID,
                      Format('SCA%.3d', [AIdx + 1]));
+end;
+
+function EditorHelpVon(AObj: TJSONObject; K: TFindingKind): Boolean;
+// editorHelp einer Regel: nur ein JSON-Boolean zaehlt; fehlt er oder ist
+// er etwas anderes, der einkompilierte Wert - dieselbe Regel wie fuer
+// anchor/fixMode (Minor 40).
+var
+  V   : TJSONValue;
+  Idx : Integer;
+begin
+  V := AObj.FindValue('editorHelp');
+  if V is TJSONBool then
+    Exit(TJSONBool(V).AsBoolean);
+  Result := FallbackZeileVon(K, Idx) and RULE_CATALOG_DATA[Idx].EditorHelp;
 end;
 
 function BekannterWert(AObj: TJSONObject; const AName, ARuleID: string;
@@ -746,6 +770,7 @@ begin
         if Meta.FixMode = '' then
           Meta.FixMode := RULE_CATALOG_DATA[Idx].FixMode;
       end;
+      Meta.EditorHelp := EditorHelpVon(RObj, K);
 
       // SonarQube MQR-Felder (cleanCodeAttribute + impacts). Optional in der
       // JSON - Rules ohne diese Felder bekommen leere Werte. Test
@@ -858,6 +883,7 @@ begin
     Result.GoodExample      := RULE_CATALOG_DATA[Idx].GoodEx;
     Result.Anchor           := RULE_CATALOG_DATA[Idx].Anchor;
     Result.FixMode          := RULE_CATALOG_DATA[Idx].FixMode;
+    Result.EditorHelp       := RULE_CATALOG_DATA[Idx].EditorHelp;
   end;
 end;
 

@@ -142,6 +142,10 @@
           "enum": ["none", "assisted", "auto"],
           "description": "Source-place service: whether a rewriting module may write on this rule's signal. Optional; absent = the tool's compiled-in value for this rule (uRuleCatalogData.inc), 'none' if it has none - so an older catalog file without this field does not switch rewriting off. A non-string or unknown value is ignored the same way. Write 'none' explicitly to switch rewriting off: then a module offers no rewriting help on this rule's signal at all (reDelphix: no Format()/SQL recipe, no line helper, no 'remove marker', no uses qualification). 'assisted' = a module may offer a template or preview but never writes into the source; 'auto' = it may write. Absent with no compiled-in value: the statement recipes (Format()/SQL) offer nothing, line-based helpers of a module decide for themselves."
         },
+        "editorHelp": {
+          "type": "boolean",
+          "description": "Whether an IDE module offers an editor help for this rule's findings - a fix written in place (reDelphix: light bulb, Ctrl+Alt+F). Optional; absent = the tool's compiled-in value (uRuleCatalogData.inc), false if it has none; a non-boolean value is ignored the same way. Informational for reports (HTML 'QF' badge, 'Quick-Wins' filter): whether the help applies to a given finding is decided by the module."
+        },
         "detectorUnit": {
           "type": "string",
           "pattern": "^([uU]\\w+\\.pas|\\(\\w+\\))$",

@@ -945,6 +945,7 @@
       "detectorUnit": "uConcatToFormat.pas",
       "anchor": "assign",
       "fixMode": "auto",
+      "editorHelp": true,
       "examples": {
         "bad":  "Msg := 'User ' + Name + ' has ' + IntToStr(N) + ' open tickets';",
         "good": "Msg := Format('User %s has %d open tickets', [Name, N]);"
@@ -1367,6 +1368,7 @@
       "type": "Code Smell",
       "tags": ["style", "convention"],
       "detectorUnit": "uEmptyArgumentList.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "MyProc();\nResult := MyFunc();",
         "good": "MyProc;\nResult := MyFunc;"
@@ -1481,6 +1483,7 @@
       "type": "Code Smell",
       "tags": ["style", "bug-risk"],
       "detectorUnit": "uRedundantBoolean.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "if Active = True then ...\nif Disabled <> False then ...",
         "good": "if Active then ...\nif Disabled then ..."
@@ -1526,6 +1529,7 @@
       "type": "Code Smell",
       "tags": ["debuggability", "errors"],
       "detectorUnit": "uAssertMessage.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "Assert(Items.Count > 0);",
         "good": "Assert(Items.Count > 0, 'caller must ensure non-empty Items');"
@@ -1545,6 +1549,7 @@
       "type": "Code Smell",
       "tags": ["style", "redundancy"],
       "detectorUnit": "uExplicitTObjectInheritance.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "type TFoo = class(TObject) ... end;",
         "good": "type TFoo = class ... end;"
@@ -1728,6 +1733,7 @@
       "type": "Code Smell",
       "tags": ["redundancy", "style"],
       "detectorUnit": "uAssignedAndAssignedNil.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "if Assigned(Obj) and (Obj <> nil) then ...",
         "good": "if Assigned(Obj) then ..."
@@ -1747,6 +1753,7 @@
       "type": "Code Smell",
       "tags": ["idiom", "safety"],
       "detectorUnit": "uFreeAndNilHint.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "Obj.Free;\nObj := nil;",
         "good": "FreeAndNil(Obj);"
@@ -1785,6 +1792,7 @@
       "type": "Code Smell",
       "tags": ["dead-code", "refactor"],
       "detectorUnit": "uEmptyVisibilitySection.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "type TFoo = class\n  public\n  private\n    FX: Integer;\n  end;",
         "good": "type TFoo = class\n  private\n    FX: Integer;\n  end;"
@@ -2534,6 +2542,7 @@
       "type": "Code Smell",
       "tags": ["convention", "nil", "sonardelphi"],
       "detectorUnit": "uNilComparison.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "if Obj = nil then\n  Exit;\nif Obj <> nil then\n  Obj.DoStuff;",
         "good": "if not Assigned(Obj) then\n  Exit;\nif Assigned(Obj) then\n  Obj.DoStuff;"
@@ -2781,6 +2790,7 @@
       "type": "Code Smell",
       "tags": ["memory", "lifecycle", "sonar50"],
       "detectorUnit": "uFreeWithoutNil.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "L := TStringList.Create;\ntry\n  L.Add('x');\nfinally\n  L.Free;             // <- L still points at freed memory\nend;\nWriteLn(L.Count);     // Use-After-Free",
         "good": "L := TStringList.Create;\ntry\n  L.Add('x');\nfinally\n  FreeAndNil(L);      // L is nil; further use raises loudly\nend;"
@@ -3315,6 +3325,7 @@
       "type": "Code Smell",
       "tags": ["suppression", "maintainability", "hygiene"],
       "detectorUnit": "uSuppression.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "// noinspection MemoryLeak\nWriteLn('hello');   // no leak here - suppression never fires",
         "good": "// (Marker entfernt - das Tool flaggt diese Zeile nicht mehr.)\nWriteLn('hello');"
