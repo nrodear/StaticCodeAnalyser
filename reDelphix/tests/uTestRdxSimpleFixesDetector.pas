@@ -112,6 +112,10 @@ type
     [Test] procedure Sca168_Raise_AddsUses;
     [Test] procedure Sca168_FpcFile_NoRaise;
     [Test] procedure Sca168_CatalogExample;
+    // Gegen-Review 2026-10-10.
+    [Test] procedure Sca168_LastArmIf_RoundTrip;
+    [Test] procedure Sca007_StaleFinding_NoHelp;
+    [Test] procedure Alternative_OtherKinds_None;
   end;
 
 implementation
@@ -1133,9 +1137,11 @@ end;
 
 procedure TTestRdxSimpleFixesDetector4.Sca168_FpcFile_NoRaise;
 var
-  Src  : string;
-  Seen : TArray<TSeen>;
-  O    : TRdxFixOutcome;
+  Src    : string;
+  Seen   : TArray<TSeen>;
+  O      : TRdxFixOutcome;
+  Edits  : TArray<TRdxEdit>;
+  Reason : string;
 begin
   Src := Join(['unit t;', '{$mode delphi}', 'interface', 'implementation',
     'procedure P(X: Integer);', 'begin', '  case X of', '    1: Exit;', '  end;',
@@ -1146,6 +1152,9 @@ begin
   Assert.AreEqual<Integer>(1, O.Variant, 'der Eintrag steht da - gesperrt');
   Assert.IsFalse(O.Enabled);
   Assert.IsTrue(Pos('EProgrammerError', O.Reason) > 0, O.Reason);
+  // Das leere else bleibt auch in FPC-Dateien verfuegbar.
+  Assert.IsTrue(PlanFix(Src, fkDefaultCaseInCaseStatement, Seen[0], Edits,
+    Reason), Reason);
 end;
 
 procedure TTestRdxSimpleFixesDetector4.Sca168_CatalogExample;
@@ -1165,10 +1174,50 @@ begin
   Assert.AreEqual(StringReplace(Bad, #13#10'  end;', #13#10'  else'#13#10'  end;',
     []), FixAll(Bad, fkDefaultCaseInCaseStatement));
   Seen := Detect(Bad, fkDefaultCaseInCaseStatement);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet');
   O := PlanAltFix(Bad, fkDefaultCaseInCaseStatement, Seen[0]);
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.AreEqual<Integer>(0, Length(Detect(Apply(Bad, O.Edits),
     fkDefaultCaseInCaseStatement)), 'der Detektor schweigt');
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca168_LastArmIf_RoundTrip;
+begin
+  // Ohne ';' hinter dem letzten Arm bande das else an das if - die Hilfe
+  // setzt es mit, danach schweigt der Detektor.
+  Assert.AreEqual(InRoutine(Join(['case Obj.Tag of',
+      '  1: if Obj = nil then Exit;', 'else', 'end;'])),
+    FixAll(InRoutine(Join(['case Obj.Tag of', '  1: if Obj = nil then Exit',
+      'end;'])), fkDefaultCaseInCaseStatement));
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_StaleFinding_NoHelp;
+var
+  Src    : string;
+  Seen   : TSeen;
+  Edits  : TArray<TRdxEdit>;
+  Reason : string;
+begin
+  // Der Fund stammt aus einem aelteren Scan; inzwischen steht TStringList
+  // im Text - die Unit wird gebraucht.
+  Src := Join(['unit t;', 'interface', 'implementation',
+    'uses System.Classes, System.SysUtils;', 'procedure P;', 'begin',
+    '  TStringList.Create.Free;', 'end;', 'end.']);
+  Seen.Line := 4;
+  Seen.Msg := 'System.Classes';
+  Assert.IsFalse(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason));
+  Assert.IsTrue(Pos('benutzt', Reason) > 0, Reason);
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Alternative_OtherKinds_None;
+var
+  Seen : TSeen;
+begin
+  Seen.Line := 4;
+  Seen.Msg := 'System.Classes';
+  Assert.AreEqual<Integer>(0, PlanAltFix(Format(UNIT_007,
+    ['uses System.Classes;']), fkUnusedUses, Seen).Variant,
+    'nur SCA168 hat einen zweiten Eintrag');
 end;
 
 initialization

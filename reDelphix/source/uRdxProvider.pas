@@ -677,13 +677,15 @@ procedure TRdxProvider.AddSimpleFix(var AList: TArray<TFindingAction>;
   begin
     Caption := SimpleFixCaption(ACtx.Finding.Kind, AOutcome);
     if not AOutcome.Enabled then
+      Add(AList, Caption, AOutcome.Reason, False, nil)
+    else
     begin
-      Add(AList, Caption, AOutcome.Reason, False, nil);
-      Exit;
+      Act := NewAction(akReplace, ACtx.FileName);
+      Act.FEdits := AOutcome.Edits;
+      Add(AList, Caption, AOutcome.Hint, True, Act);
     end;
-    Act := NewAction(akReplace, ACtx.FileName);
-    Act.FEdits := AOutcome.Edits;
-    Add(AList, Caption, AOutcome.Hint, True, Act);
+    // E2: Ctrl+Alt+F fuehrt eine solche Hilfe nicht ungesehen aus.
+    AList[High(AList)].ChangesBehavior := AOutcome.ChangesBehavior;
   end;
 
 var

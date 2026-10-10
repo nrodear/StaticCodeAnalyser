@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2383 Zeilen, 80009 Bytes
-  CPoLines_de: array[0..2382] of string = (
+  // i18n\de.po - 2386 Zeilen, 80104 Bytes
+  CPoLines_de: array[0..2385] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1332,6 +1332,9 @@ const
     '',
     'msgid "Quick-Fix not available: %s"',
     'msgstr "Quick-Fix nicht verf'#$00FC'gbar: %s"',
+    '',
+    'msgid "only from the menu or the light bulb"',
+    'msgstr "nur '#$00FC'ber das Men'#$00FC' oder die Gl'#$00FC'hbirne"',
     '',
     'msgid "Quick-Fix: the reDelphix package is not loaded"',
     'msgstr "Quick-Fix: das Package reDelphix ist nicht geladen"',
@@ -2672,8 +2675,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2379 Zeilen, 83830 Bytes
-  CPoLines_fr: array[0..2378] of string = (
+  // i18n\fr.po - 2382 Zeilen, 83921 Bytes
+  CPoLines_fr: array[0..2381] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -3999,6 +4002,9 @@ const
     '',
     'msgid "Quick-Fix not available: %s"',
     'msgstr "Quick-Fix indisponible : %s"',
+    '',
+    'msgid "only from the menu or the light bulb"',
+    'msgstr "uniquement via le menu ou l''ampoule"',
     '',
     'msgid "Quick-Fix: the reDelphix package is not loaded"',
     'msgstr "Quick-Fix : le package reDelphix n''est pas charg'#$00E9'"',

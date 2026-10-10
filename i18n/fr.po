@@ -1324,6 +1324,9 @@ msgstr "Quick-Fix appliqué : %s"
 msgid "Quick-Fix not available: %s"
 msgstr "Quick-Fix indisponible : %s"
 
+msgid "only from the menu or the light bulb"
+msgstr "uniquement via le menu ou l'ampoule"
+
 msgid "Quick-Fix: the reDelphix package is not loaded"
 msgstr "Quick-Fix : le package reDelphix n'est pas chargé"
 

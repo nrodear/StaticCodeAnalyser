@@ -92,6 +92,11 @@ type
     Enabled : Boolean;
     Execute : TNotifyEvent;  // nil bei Enabled = False erlaubt
     Kind    : TFindingActionKind;
+    // Die Aktion kann das Verhalten des Programms aendern (Konzept
+    // Editorhilfen, Entscheid E2) - der Menuetext sagt es. Ein Tastendruck,
+    // der die erste Hilfe ungesehen ausfuehrt (Ctrl+Alt+F im Plugin),
+    // laesst sie aus. Vorgabe False (Default(TFindingAction)).
+    ChangesBehavior : Boolean;
   end;
 
   // Liefert die Aktionen eines Anbieters zu einem Fund; leer, wenn der

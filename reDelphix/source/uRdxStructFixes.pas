@@ -9,7 +9,9 @@ unit uRdxStructFixes;
 //          - leer oder mit raise (Nico 2026-10-10: beide als Eintraege).
 //
 // GRUNDSATZ wie in uRdxSimpleFixes: lieber keine Hilfe als eine falsche.
-// Geloescht wird nichts, was einen Kommentar oder eine Direktive traegt.
+// Geloescht wird nichts, was einen Kommentar oder eine Direktive traegt -
+// ausser dem '//'-Kommentar hinter einem Eintrag, der allein auf seiner
+// Zeile steht (er gehoert zum Eintrag).
 
 interface
 
@@ -35,9 +37,12 @@ type
   public
     // SCA007: den Eintrag AIndex der Klausel loeschen. Vor dem letzten
     // Eintrag: bis zum Anfang des naechsten (Name, 'in'-Pfad, Komma,
-    // Leerraum); der letzte: ab dem Komma davor bis vor das ';'; der
+    // Leerraum) - steht er allein auf seiner Zeile, die ganze Zeile samt
+    // '//'-Kommentar; der letzte: ab dem Komma davor bis vor das ';'; der
     // einzige: die ganze Klausel ab 'uses' bis hinter ';' - ganze Zeilen,
-    // wenn sie allein stehen. Kein Kommentar und keine Direktive im Bereich.
+    // wenn sie allein stehen. Kein Kommentar und keine Direktive im
+    // Bereich, und darin steht genau dieser Eintrag mit einem Trenner (ein
+    // Eintrag, den UsesEntries ausliess, ginge sonst mit).
     class function RemoveUsesEntry(AMap: TRdxCodeMap;
       const AClause: TRdxUsesClause; AIndex: Integer; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
@@ -45,13 +50,15 @@ type
     // SCA168: ein else vor das end des case-Statements auf Zeile ALine
     // (genau ein 'case' im Code der Zeile). AStatement = '': leer ('else'
     // vor 'end', bedeutungsgleich); sonst diese Anweisung im else-Zweig
-    // (RAISE_UNHANDLED). Das end
-    // findet ein Token-Lauf (begin/case/try/asm/record zaehlen hoch, end
-    // herunter). Keine Hilfe bei einer Direktive zwischen case und end (ein
-    // Zweig koennte die Bilanz verschieben) und wenn schon ein else hinter
-    // einem ';' steht.
+    // (RAISE_UNHANDLED), eingerueckt wie die Arme. Das end findet ein
+    // Token-Lauf (begin/case/try/asm/record zaehlen hoch, end herunter;
+    // '&End' und '@@End' nicht). Endet der letzte Arm nicht auf ';', kommt
+    // als zweite Ersetzung ein ';' dahinter - sonst bande das else an ein
+    // offenes if ('1: if B then DoA' + 'else'). Keine Hilfe bei einer
+    // Direktive zwischen case und end, bei einem else oder (FPC) otherwise
+    // hinter ';' und bei einem case ohne Zweige.
     class function CaseElse(AMap: TRdxCodeMap; ALine: Integer;
-      const AStatement: string; out AEdit: TRdxEdit;
+      const AStatement: string; out AEdits: TArray<TRdxEdit>;
       out AReason: string): Boolean; static;
   end;
 
@@ -63,6 +70,16 @@ const
   // Token, die ein eigenes 'end' brauchen (Bilanz in MatchingEnd).
   END_OPENERS: array[0..4] of string = ('begin', 'case', 'try', 'asm',
     'record');
+
+type
+  // Code-Token eines Bereichs nach Art (CountRangeTokens).
+  TRangeTokens = record
+    Words  : Integer;   // ohne 'in' und 'uses'
+    Dots   : Integer;
+    Commas : Integer;
+    Semis  : Integer;
+    Others : Integer;
+  end;
 
 function IsEndOpener(const ALow: string): Boolean;
 var
@@ -180,11 +197,78 @@ begin
   ASpan := TRefactorSpan.Make(SPAN_007, Prev.Line, Prev.Col, ASep.Line, ASep.Col);
 end;
 
+// Steht der Eintrag allein auf seiner Zeile - davor nur Leerraum, dahinter
+// sein ',' und hoechstens ein '//'-Kommentar (Stil 'System.Classes,
+// // Grund')?
+function OwnLine(AMap: TRdxCodeMap; const AEntry: TRefactorSpan;
+  const ASep: TRdxToken): Boolean;
+var
+  L    : string;
+  Rest : Integer;
+begin
+  L := AMap.Raw(AEntry.StartLine);
+  Rest := SkipBlanks(L, ASep.EndCol);
+  Result := (SkipBlanks(L, 1) = AEntry.StartCol) and (ASep.Low = ',')
+    and (ASep.Line = AEntry.StartLine) and (AEntry.StartLine < AMap.LineCount)
+    and ((Rest > Length(L)) or (Rest = AMap.LineCommentCol(AEntry.StartLine)));
+end;
+
+// Die Code-Token im Bereich nach Art gezaehlt (Strings und Kommentare
+// sieht der Token-Leser nicht).
+function CountRangeTokens(AMap: TRdxCodeMap;
+  const ASpan: TRefactorSpan): TRangeTokens;
+var
+  T : TRdxToken;
+begin
+  Result := Default(TRangeTokens);
+  T := NextToken(AMap, ASpan.StartLine, ASpan.StartCol);
+  while (T.Low <> '') and ((T.Line < ASpan.EndLine)
+     or ((T.Line = ASpan.EndLine) and (T.Col < ASpan.EndCol))) do
+  begin
+    if T.Low = '.' then
+      Inc(Result.Dots)
+    else if T.Low = ',' then
+      Inc(Result.Commas)
+    else if T.Low = ';' then
+      Inc(Result.Semis)
+    else if not T.IsWord then
+      Inc(Result.Others)
+    else if (T.Low <> 'in') and (T.Low <> 'uses') then
+      Inc(Result.Words);
+    T := After(AMap, T);
+  end;
+end;
+
+// Darf ASpan geloescht werden? Kein Kommentar und keine Direktive in
+// ACheck, und in ASpan steht genau der Eintrag AName (seine Namensteile)
+// mit einem Trenner. '' oder der Grund.
+function RangeReason(AMap: TRdxCodeMap; const ASpan, ACheck: TRefactorSpan;
+  const AName: string): string;
+var
+  C        : TRangeTokens;
+  Parts, i : Integer;
+begin
+  Result := '';
+  if CommentInRange(AMap, ACheck) then
+    Exit('Kommentar oder Direktive im zu loeschenden Bereich');
+  Parts := 1;
+  for i := 1 to Length(AName) do
+    if AName[i] = '.' then
+      Inc(Parts);
+  C := CountRangeTokens(AMap, ASpan);
+  if (C.Words <> Parts) or (C.Dots <> Parts - 1) or (C.Others <> 0)
+     or (C.Commas + C.Semis <> 1) then
+    Result := 'im Bereich steht mehr als dieser Eintrag - ginge ein '
+      + 'weiterer mit? Datei neu pruefen';
+end;
+
 class function TRdxStructFixes.RemoveUsesEntry(AMap: TRdxCodeMap;
   const AClause: TRdxUsesClause; AIndex: Integer; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
-  Span : TRefactorSpan;
+  E           : TRefactorSpan;
+  Sep         : TRdxToken;
+  Span, Check : TRefactorSpan;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -193,10 +277,18 @@ begin
     AReason := 'kein solcher uses-Eintrag';
     Exit;
   end;
-  AReason := EntrySpan(AMap, AClause, AIndex,
-    SeparatorAfter(AMap, AClause.Entries[AIndex]), Span);
-  if (AReason = '') and CommentInRange(AMap, Span) then
-    AReason := 'Kommentar oder Direktive im zu loeschenden Bereich';
+  E := AClause.Entries[AIndex];
+  Sep := SeparatorAfter(AMap, E);
+  AReason := EntrySpan(AMap, AClause, AIndex, Sep, Span);
+  if AReason <> '' then Exit;
+  Check := Span;
+  if (AIndex < High(AClause.Entries)) and OwnLine(AMap, E, Sep) then
+  begin
+    Span := TRefactorSpan.Make(SPAN_007, E.StartLine, 1, E.StartLine + 1, 1);
+    Check := TRefactorSpan.Make(SPAN_007, E.StartLine, 1, E.StartLine,
+      Sep.EndCol);
+  end;
+  AReason := RangeReason(AMap, Span, Check, E.Resolved);
   if AReason <> '' then Exit;
   AEdit.Span := Span;
   AEdit.Expected := RangeText(AMap, Span);
@@ -234,48 +326,86 @@ begin
       [ALine, n]);
 end;
 
-// Das end zum case ACase: die Token-Bilanz (s. CaseElse). Ein else auf
-// oberster Ebene hinter ';' gehoert dem case selbst - dann hat es schon
-// einen Zweig (ein if-else in einem Arm steht nie hinter ';'). '' oder
-// der Grund.
+// Auf oberster Ebene des case hinter ';': ein else ist schon sein Zweig (ein
+// if-else in einem Arm steht nie hinter ';'), 'otherwise' der FPC-Zweig.
+// '' oder der Grund.
+function TopLevelReason(const T, APrev: TRdxToken): string;
+begin
+  Result := '';
+  if APrev.Low <> ';' then Exit;
+  if T.Low = 'else' then
+    Result := 'das case hat schon einen else-Zweig'
+  else if T.Low = 'otherwise' then
+    Result := 'das case hat einen otherwise-Zweig (FPC)';
+end;
+
+// Ein Schritt der Bilanz: ADepth fortschreiben; '' oder der Grund zum
+// Abbruch. '&End' und '@@End' (asm-Label) sind Bezeichner, keine
+// Schluesselwoerter.
+function BalanceStep(const T, APrev: TRdxToken; var ADepth: Integer): string;
+begin
+  Result := '';
+  if (APrev.Low = '&') or (APrev.Low = '@') then Exit;
+  if IsEndOpener(T.Low) then
+    Inc(ADepth)
+  else if T.Low = 'end' then
+    Dec(ADepth)
+  else if ADepth = 1 then
+    Result := TopLevelReason(T, APrev);
+end;
+
+// Das end zum case ACase und das Token davor (ALast). '' oder der Grund.
 function MatchingEnd(AMap: TRdxCodeMap; const ACase: TRdxToken;
-  out AEnd: TRdxToken): string;
+  out AEnd, ALast: TRdxToken): string;
 var
   T, Prev : TRdxToken;
   Depth   : Integer;
 begin
+  Result := '';
   AEnd := Default(TRdxToken);
+  ALast := Default(TRdxToken);
   Depth := 1;
   Prev := ACase;
   T := After(AMap, ACase);
   while T.Low <> '' do
   begin
-    if IsEndOpener(T.Low) then
-      Inc(Depth)
-    else if T.Low = 'end' then
+    Result := BalanceStep(T, Prev, Depth);
+    if Result <> '' then Exit;
+    if Depth = 0 then
     begin
-      Dec(Depth);
-      if Depth = 0 then
-      begin
-        AEnd := T;
-        Exit('');
-      end;
-    end
-    else if (Depth = 1) and (T.Low = 'else') and (Prev.Low = ';') then
-      Exit('das case hat schon einen else-Zweig');
+      AEnd := T;
+      ALast := Prev;
+      Exit;
+    end;
     Prev := T;
     T := After(AMap, T);
   end;
   Result := 'kein end zum case gefunden';
 end;
 
-// Der Ersatz fuer das end: steht es am Zeilenanfang, das else in eigener
-// Zeile mit derselben Einrueckung (AStatement eine Stufe tiefer, Tab wenn
-// die Einrueckung Tabs traegt), sonst inline vor dem end.
-function ElseText(const ALine: string; const AEnd: TRdxToken;
-  const AStatement: string): string;
+// Eine Einrueckstufe: was die Zeile des letzten Arms (AArmLine) ueber
+// AIndent hinaus einrueckt; sonst ein Tab, wenn AIndent Tabs traegt, oder
+// zwei Leerzeichen.
+function IndentStep(const AIndent, AArmLine: string): string;
 var
-  Indent, EndText, Step : string;
+  ArmIndent : string;
+begin
+  ArmIndent := Copy(AArmLine, 1, SkipBlanks(AArmLine, 1) - 1);
+  if (Length(ArmIndent) > Length(AIndent))
+     and (Copy(ArmIndent, 1, Length(AIndent)) = AIndent) then
+    Exit(Copy(ArmIndent, Length(AIndent) + 1, MaxInt));
+  Result := '  ';
+  if Pos(#9, AIndent) > 0 then
+    Result := #9;
+end;
+
+// Der Ersatz fuer das end: steht es am Zeilenanfang, das else in eigener
+// Zeile mit derselben Einrueckung (AStatement eine Stufe tiefer), sonst
+// inline vor dem end.
+function ElseText(const ALine: string; const AEnd: TRdxToken;
+  const AStatement, AArmLine: string): string;
+var
+  Indent, EndText : string;
 begin
   EndText := Copy(ALine, AEnd.Col, AEnd.Len);
   if SkipBlanks(ALine, 1) <> AEnd.Col then
@@ -286,36 +416,88 @@ begin
     Exit(Result + EndText);
   end;
   Indent := Copy(ALine, 1, AEnd.Col - 1);
-  Step := '  ';
-  if Pos(#9, Indent) > 0 then
-    Step := #9;
   Result := 'else' + #10;
   if AStatement <> '' then
-    Result := Result + Indent + Step + AStatement + #10;
+    Result := Result + Indent + IndentStep(Indent, AArmLine) + AStatement + #10;
   Result := Result + Indent + EndText;
 end;
 
-class function TRdxStructFixes.CaseElse(AMap: TRdxCodeMap; ALine: Integer;
-  const AStatement: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+// Das letzte Zeichen aus Code oder String vor ATok (Kommentare und
+// Leerraum uebersprungen) - dort endet der letzte Arm. Der Token-Leser
+// genuegt nicht: er sieht Strings nicht ('1: S := ''x''' endet auf dem
+// Quote, nicht auf ':='). False am Dateianfang.
+function LastCharBefore(AMap: TRdxCodeMap; const ATok: TRdxToken;
+  out ALine, ACol: Integer): Boolean;
 var
-  CaseTok, EndTok : TRdxToken;
-  L               : string;
+  Li, Co : Integer;
+  L      : string;
 begin
   Result := False;
-  AEdit := Default(TRdxEdit);
+  ALine := 0;
+  ACol := 0;
+  for Li := ATok.Line downto 1 do
+  begin
+    L := AMap.Raw(Li);
+    Co := Length(L);
+    if Li = ATok.Line then
+      Co := ATok.Col - 1;
+    while (Co >= 1) and ((AMap.ClassAt(Li, Co) = 'k') or IsBlank(L[Co])) do
+      Dec(Co);
+    if Co >= 1 then
+    begin
+      ALine := Li;
+      ACol := Co;
+      Exit(True);
+    end;
+  end;
+end;
+
+// Endet der letzte Arm vor AEnd nicht auf ';' (im Code), ein ';' hinter
+// sein letztes Zeichen - als eigene Ersetzung (das Zeichen wird mit ';'
+// dahinter neu geschrieben, ein leerer Erwartungstext ist nicht erlaubt).
+procedure AppendSemicolon(AMap: TRdxCodeMap; const AEnd: TRdxToken;
+  var AEdits: TArray<TRdxEdit>);
+var
+  Li, Co : Integer;
+  E      : TRdxEdit;
+begin
+  if not LastCharBefore(AMap, AEnd, Li, Co) then Exit;
+  E := Default(TRdxEdit);
+  E.Expected := Copy(AMap.Raw(Li), Co, 1);
+  if (E.Expected = ';') and AMap.IsCode(Li, Co) then Exit;
+  E.Span := TRefactorSpan.Make(SPAN_168, Li, Co, Li, Co + 1);
+  E.NewText := E.Expected + ';';
+  SetLength(AEdits, Length(AEdits) + 1);
+  AEdits[High(AEdits)] := E;
+end;
+
+class function TRdxStructFixes.CaseElse(AMap: TRdxCodeMap; ALine: Integer;
+  const AStatement: string; out AEdits: TArray<TRdxEdit>;
+  out AReason: string): Boolean;
+var
+  CaseTok, EndTok, LastTok : TRdxToken;
+  L                        : string;
+begin
+  Result := False;
+  AEdits := nil;
   EndTok := Default(TRdxToken);
+  LastTok := Default(TRdxToken);
   AReason := CaseTokenOn(AMap, ALine, CaseTok);
   if AReason = '' then
-    AReason := MatchingEnd(AMap, CaseTok, EndTok);
+    AReason := MatchingEnd(AMap, CaseTok, EndTok, LastTok);
+  if (AReason = '') and (LastTok.Low = 'of') then
+    AReason := 'das case hat keine Zweige';
   if (AReason = '') and DirectiveBefore(AMap, CaseTok.Line, EndTok) then
     AReason := 'Compiler-Direktive im case - ein Zweig koennte die '
       + 'end-Bilanz verschieben';
   if AReason <> '' then Exit;
   L := AMap.Raw(EndTok.Line);
-  AEdit.Span := TRefactorSpan.Make(SPAN_168, EndTok.Line, EndTok.Col,
+  SetLength(AEdits, 1);
+  AEdits[0].Span := TRefactorSpan.Make(SPAN_168, EndTok.Line, EndTok.Col,
     EndTok.Line, EndTok.EndCol);
-  AEdit.Expected := Copy(L, EndTok.Col, EndTok.Len);
-  AEdit.NewText := ElseText(L, EndTok, AStatement);
+  AEdits[0].Expected := Copy(L, EndTok.Col, EndTok.Len);
+  AEdits[0].NewText := ElseText(L, EndTok, AStatement, AMap.Raw(LastTok.Line));
+  AppendSemicolon(AMap, EndTok, AEdits);
   Result := True;
 end;
 

@@ -411,9 +411,11 @@ type
 implementation
 
 uses
+  System.StrUtils,   // IndexText (UnitStillUsed)
   uRdxCodeMap,       // TRdxCodeMap: Code-Sicht der Datei fuer die Planer
   uRdxSimpleFixes,   // Planer der einfachen Hilfen (reine Textlogik)
   uRdxStructFixes,   // Planer SCA007/SCA168 (uses-Eintrag, case-else)
+  uUnusedUses,       // KnownIdents: SCA007-Fund am Puffer nachpruefen
   uSourcePlaces;     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
 
 // Dieser Laeufer ist gegen Version 1 des Quellstellen-Vertrags geschrieben
@@ -1691,6 +1693,33 @@ begin
   Result.Enabled := True;
 end;
 
+// SCA007: wird die Unit im AKTUELLEN Text doch benutzt? Der Fund kann
+// aus einem aelteren Scan stammen (Gegen-Review 2026-10-10). Dieselben
+// Spuren wie uUnusedUses: ein qualifizierter Bezug ('Classes.TList') und
+// einer der bekannten Bezeichner der Unit als Code-Wort (KnownIdents, mit
+// demselben Kurznamen-Rueckfall fuer RTL-Namespaces).
+function UnitStillUsed(AMap: TRdxCodeMap; const AUnit: string): Boolean;
+var
+  Low, Short : string;
+  Idents     : TArray<string>;
+  T, N       : TRdxToken;
+begin
+  Result := False;
+  Low := LowerCase(AUnit);
+  Short := Copy(Low, LastDelimiter('.', Low) + 1, MaxInt);
+  Idents := TUnusedUsesDetector.KnownIdents(Low);
+  if (Length(Idents) = 0) and TUnusedUsesDetector.IstRtlNamespace(Low) then
+    Idents := TUnusedUsesDetector.KnownIdents(Short);
+  T := NextToken(AMap, 1, 1);
+  while T.Low <> '' do
+  begin
+    N := After(AMap, T);
+    if ((T.Low = Short) and (N.Low = '.')) or IndexText(T.Low, Idents) >= 0 then
+      Exit(True);
+    T := N;
+  end;
+end;
+
 // SCA007: die Klausel und der Eintrag zum Unit-Namen AUnit auf ALine.
 // '' oder der Grund.
 function FindUsesEntry(APlaces: TSourcePlaces; ALine: Integer;
@@ -1731,6 +1760,7 @@ begin
   Result := Default(TRdxFixOutcome);
   Result.Name := Trim(AUnit);
   Result.ChangesBehavior := True;
+  Index := -1;
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
     Result.Reason := R_NO_FILE
   else if TRdxRecipeRunner.UsesDirectiveLine(APlaces) > 0 then
@@ -1742,8 +1772,12 @@ begin
   SetLength(Result.Edits, 1);
   Map := TRdxCodeMap.Create(ALines);
   try
-    Result.Enabled := TRdxStructFixes.RemoveUsesEntry(Map, Clause, Index,
-      Result.Edits[0], Result.Reason);
+    if UnitStillUsed(Map, Result.Name) then
+      Result.Reason := Format('%s wird im Text benutzt - der Fund ist aelter '
+        + 'als der Text; Datei neu pruefen', [Result.Name])
+    else
+      Result.Enabled := TRdxStructFixes.RemoveUsesEntry(Map, Clause, Index,
+        Result.Edits[0], Result.Reason);
   finally
     Map.Free;
   end;
@@ -1752,8 +1786,11 @@ begin
     Result.Edits := nil;
     Exit;
   end;
-  Result.Hint := Format('hat %s einen initialization-Abschnitt (Registrierung, '
-    + 'Seiteneffekt), laeuft er nicht mehr', [Result.Name]);
+  // Der Detektor ist heuristisch (Bezeichnerliste je Unit): ein Typ, den
+  // er nicht kennt (TDataModule, TStream ...), macht den Fund falsch.
+  Result.Hint := Format('heuristischer Fund - danach kompilieren; hat %s einen '
+    + 'initialization-Abschnitt (Registrierung), laeuft er nicht mehr',
+    [Result.Name]);
 end;
 
 // Eingang eines Laeufers mit Quellstellen-Dienst: ohne offene Datei nil
@@ -1783,7 +1820,7 @@ begin
   if Map = nil then Exit;
   try
     Result.Enabled := TRdxStructFixes.CaseElse(Map, ALine, AStatement,
-      Result.Edits[0], Result.Reason);
+      Result.Edits, Result.Reason);
   finally
     Map.Free;
   end;

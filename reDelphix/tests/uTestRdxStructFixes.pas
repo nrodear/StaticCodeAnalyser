@@ -31,6 +31,11 @@ type
     [Test] procedure Sca168_RaiseElse;
     [Test] procedure Sca168_NestedAndInline;
     [Test] procedure Sca168_Refusals;
+    // Gegen-Review 2026-10-10: letzter Arm ohne ';' (sonst bindet das else
+    // an ein if), Einrueckung nach den Armen, '&End'.
+    [Test] procedure Sca168_LastArmWithoutSemicolon;
+    [Test] procedure Sca168_IndentAndEscapedEnd;
+    [Test] procedure Sca007_OwnLineAndSkippedEntry;
   end;
 
 implementation
@@ -41,15 +46,17 @@ uses
 
 // ---- Helfer ----
 
-function Apply(const ASource: string; const AEdit: TRdxEdit): string;
+function Apply(const ASource: string; const AEdits: array of TRdxEdit): string;
 var
   Bytes : TBytes;
   Edits : TArray<TRdxEdit>;
   Plan  : TArray<TRdxByteEdit>;
   Err   : string;
+  i     : Integer;
 begin
-  SetLength(Edits, 1);
-  Edits[0] := AEdit;
+  SetLength(Edits, Length(AEdits));
+  for i := 0 to High(AEdits) do
+    Edits[i] := AEdits[i];
   Bytes := TEncoding.UTF8.GetBytes(ASource);
   Assert.IsTrue(PlanByteEdits(Bytes, Edits, Plan, Err), Err);
   Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
@@ -107,7 +114,7 @@ begin
     SL.Text := ASource;
     Map := TRdxCodeMap.Create(SL);
     if TRdxStructFixes.RemoveUsesEntry(Map, AClause, AIndex, E, AReason) then
-      Result := Apply(ASource, E);
+      Result := Apply(ASource, [E]);
   finally
     Map.Free;
     SL.Free;
@@ -119,9 +126,9 @@ end;
 function FixCase(const ASource: string; ALine: Integer;
   const AStatement: string; out AReason: string): string;
 var
-  SL  : TStringList;
-  Map : TRdxCodeMap;
-  E   : TRdxEdit;
+  SL    : TStringList;
+  Map   : TRdxCodeMap;
+  Edits : TArray<TRdxEdit>;
 begin
   Result := '';
   SL := TStringList.Create;
@@ -129,8 +136,8 @@ begin
   try
     SL.Text := ASource;
     Map := TRdxCodeMap.Create(SL);
-    if TRdxStructFixes.CaseElse(Map, ALine, AStatement, E, AReason) then
-      Result := Apply(ASource, E);
+    if TRdxStructFixes.CaseElse(Map, ALine, AStatement, Edits, AReason) then
+      Result := Apply(ASource, Edits);
   finally
     Map.Free;
     SL.Free;
@@ -306,6 +313,69 @@ begin
   Assert.AreEqual('', FixCase(Join(['  case X of', '    1: A;']), 1, '', R),
     'kein end');
   Assert.IsTrue(Pos('kein end', R) > 0, R);
+  Assert.AreEqual('', FixCase(InProc(['  case X of', '    1: A;', '  otherwise',
+    '    B;', '  end;']), 5, '', R), 'FPC otherwise');
+  Assert.IsTrue(Pos('otherwise', R) > 0, R);
+  Assert.AreEqual('', FixCase(InProc(['  case X of', '  end;']), 5, '', R),
+    'ohne Zweige');
+  Assert.IsTrue(Pos('keine Zweige', R) > 0, R);
+end;
+
+procedure TTestRdxStructFixes.Sca168_LastArmWithoutSemicolon;
+var
+  R : string;
+begin
+  // Ohne das ';' bande das else an das if des Arms.
+  Assert.AreEqual(InProc(['  case X of', '    1: if B then DoA;', '  else',
+      '  end;']),
+    FixCase(InProc(['  case X of', '    1: if B then DoA', '  end;']), 5, '', R), R);
+  Assert.AreEqual(InProc(['  case X of', '    1: if B then DoA;', '  else',
+      '    ' + RAISE_UNHANDLED, '  end;']),
+    FixCase(InProc(['  case X of', '    1: if B then DoA', '  end;']), 5,
+      RAISE_UNHANDLED, R), R);
+  // Der Arm endet auf einem String - das ';' kommt hinter das Quote.
+  Assert.AreEqual(InProc(['  case X of', '    1: S := ''x'';', '  else', '  end;']),
+    FixCase(InProc(['  case X of', '    1: S := ''x''', '  end;']), 5, '', R), R);
+  // Ein Kommentar dahinter bleibt hinter dem ';'.
+  Assert.AreEqual(InProc(['  case X of', '    1: DoA; // weg', '  else', '  end;']),
+    FixCase(InProc(['  case X of', '    1: DoA // weg', '  end;']), 5, '', R), R);
+  // Inline: das ';' vor das else.
+  Assert.AreEqual(InProc(['  case X of 1: if B then A; else end;']),
+    FixCase(InProc(['  case X of 1: if B then A end;']), 5, '', R), R);
+end;
+
+procedure TTestRdxStructFixes.Sca168_IndentAndEscapedEnd;
+var
+  R : string;
+begin
+  // Vier Leerzeichen je Stufe: die raise-Zeile folgt den Armen.
+  Assert.AreEqual(InProc(['    case X of', '        1: A;', '    else',
+      '        ' + RAISE_UNHANDLED, '    end;']),
+    FixCase(InProc(['    case X of', '        1: A;', '    end;']), 5,
+      RAISE_UNHANDLED, R), R);
+  // '&End' ist ein Bezeichner, kein end.
+  Assert.AreEqual(InProc(['  case X of', '    1: &End := 1;', '  else', '  end;']),
+    FixCase(InProc(['  case X of', '    1: &End := 1;', '  end;']), 5, '', R), R);
+end;
+
+procedure TTestRdxStructFixes.Sca007_OwnLineAndSkippedEntry;
+var
+  R, Src : string;
+  C      : TRdxUsesClause;
+begin
+  // Allein auf seiner Zeile: die ganze Zeile samt '//'-Kommentar.
+  Src := Join(['unit u;', 'interface', 'uses', '  System.SysUtils,',
+    '  System.Classes,   // TStringList', '  System.Math;', 'implementation',
+    'end.']);
+  C := Clause(3, [Entry(4, 3, 'System.SysUtils'), Entry(5, 3, 'System.Classes'),
+    Entry(6, 3, 'System.Math')]);
+  Assert.AreEqual(Join(['unit u;', 'interface', 'uses', '  System.SysUtils,',
+    '  System.Math;', 'implementation', 'end.']), FixUses(Src, C, 1, R), R);
+  // Ein Eintrag, den UsesEntries ausliess (hier X), ginge mit - Sperre.
+  Src := Join(['unit u;', 'interface', 'uses A, X, C;', 'implementation', 'end.']);
+  Assert.AreEqual('', FixUses(Src, Clause(3, [Entry(3, 6, 'A'), Entry(3, 12, 'C')]),
+    0, R));
+  Assert.IsTrue(Pos('mehr als dieser Eintrag', R) > 0, R);
 end;
 
 initialization

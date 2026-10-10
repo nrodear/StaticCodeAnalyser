@@ -2967,6 +2967,24 @@ begin
   end;
 end;
 
+// Darf eine Taste A ungesehen ausfuehren? Verfuegbar und nicht als
+// verhaltensaendernd gekennzeichnet (Entscheid E2).
+function RunsBlind(const A: TFindingAction): Boolean;
+begin
+  Result := A.Enabled and Assigned(A.Execute) and not A.ChangesBehavior;
+end;
+
+// Warum die Taste die Aktion A auslaesst: gesperrt (ihr Grund) oder eine
+// Hilfe, die das Verhalten aendern kann (Entscheid E2) - die gibt es nur
+// gesehen, im Menue oder in der Gluehbirne.
+function SkippedActionText(const A: TFindingAction): string;
+begin
+  if A.Enabled and A.ChangesBehavior then
+    Result := A.Caption + ' - ' + _('only from the menu or the light bulb')
+  else
+    Result := A.Caption + ' - ' + A.Hint;
+end;
+
 procedure TAnalyserFrame.RunFirstAction(RowIdx: Integer;
   AKind: TFindingActionKind; const ADoneFmt, AMissingFmt: string);
 var
@@ -2984,10 +3002,10 @@ begin
   for A in Model.Actions do
   begin
     if A.Kind <> AKind then Continue;
-    if not A.Enabled or not Assigned(A.Execute) then
+    if not RunsBlind(A) then
     begin
       if Why = F.RuleID then
-        Why := A.Caption + ' - ' + A.Hint;
+        Why := SkippedActionText(A);
       Continue;
     end;
     if ExecuteAction(A, Self) then
