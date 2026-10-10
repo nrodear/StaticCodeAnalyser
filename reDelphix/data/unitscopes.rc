@@ -1,0 +1,12 @@
+// reDelphix - Scope-Tabelle als RCDATA in die BPL (Fallback, wenn keine
+// unitscopes.txt neben der BPL liegt; uRdxScopeTable.LoadDefault).
+//
+// Build-Integration:
+//   * <RcCompile Include="data\unitscopes.rc"/> in reDelphix.d12.dproj
+//   * {$R 'unitscopes.res'} in reDelphix.d12.dpk - BRCC32 legt das
+//     Output neben die dpk, nicht neben diese .rc.
+// Der Dateiname hier ist relativ zu dieser .rc.
+
+LANGUAGE 0, 0
+
+UNITSCOPES RCDATA "unitscopes.txt"

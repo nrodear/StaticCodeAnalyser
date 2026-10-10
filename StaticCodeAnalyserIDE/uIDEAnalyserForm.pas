@@ -20,6 +20,10 @@ uses
   uFixHint, uIgnoreList, uRepoSettings, uRuleCatalog, uClaudePrompt,
   uFindingCopyText,
   uQuickFix,
+  uFindingActions,                         // Aktionen fremder Anbieter am Fund (Grid-Menue)
+  uFindingActionMenu,                      // das eine Menue-Modell zu den Aktionen (Stufe C)
+  uIDEFindingActionMenu,                   // Modell -> TMenuItems
+  uIDEFindingBulb,                         // Gluehbirne an der Caret-Zeile (Element EditorBulb)
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uIDEColors, uLocalization,
   uRecentPaths, uScanTargetDialog,
   uIDELineHighlighter, uIDEMessages, uIDEWatchMode, uIDEStatsTiles,
@@ -75,6 +79,10 @@ type
     // Grid-Kontextmenue mit der expliziten Kopier-Geste ("Copy AI
     // prompt"). Owner = Frame, kein manuelles Free noetig.
     FGridMenu       : TPopupMenu;
+    // Aktionen fremder Anbieter zum aktuell angeklickten Fund (uFindingActions,
+    // Konzept Quellstellen Abschnitt 15 H1). Je Popup frisch erfragt; der
+    // Index im Array steht im Tag des Menuepunkts (GRID_ACTION_TAG + Index).
+    FGridActions    : TArray<TFindingAction>;
     FCurrentBaseDir : string;
     FFilterCombo       : TComboBox;
     // Fuzzy-Suche der Filter-Combo; gehoert dem Frame (Owner=Self).
@@ -472,6 +480,10 @@ type
     procedure GridMenuCopyPromptClick(Sender: TObject);
     procedure GridMenuCopyJiraClick(Sender: TObject);
     procedure GridMenuPopup(Sender: TObject);
+    // Klick auf einen dynamischen Eintrag aus uFindingActions: fuehrt
+    // Execute des Anbieters aus; Fehler des Anbieters landen in der
+    // Status-Bar, nicht in der IDE.
+    procedure GridMenuActionClick(Sender: TObject);
     // Wendet einen Quick-Fix DIREKT im IDE-Editor an (TIDEEditor.
     // ApplyLineReplacement). Trigger: F4 auf der Grid-Zeile. No-op
     // wenn der Befund-Kind keinen Quick-Fix-Provider hat oder der
@@ -2784,19 +2796,71 @@ begin
   end;
 end;
 
+const
+  // Tag der dynamischen Grid-Menuepunkte aus uFindingActions: der Trenner
+  // traegt GRID_ACTION_TAG - 1, die Aktionen GRID_ACTION_TAG + Index. Die
+  // festen Eintraege (Copy AI prompt / Copy Jira issue) haben Tag 0.
+  GRID_ACTION_TAG = 7000;
+
 procedure TAnalyserFrame.GridMenuPopup(Sender: TObject);
 // Ohne gueltige Befund-Zeile ist die Kopier-Geste sinnlos - Eintraege
 // deaktivieren (Muster wie das EXE-Grid-Menue in GridMenuPopup).
+//
+// Danach die Aktionen FREMDER Anbieter (uFindingActions, Konzept
+// Quellstellen Abschnitt 15 H1): je Popup frisch erfragt, hinter einem
+// Trenner angehaengt, beim naechsten Popup wieder abgeraeumt. Ein
+// deaktivierter Eintrag traegt seinen Grund in der Beschriftung - der
+// Benutzer soll sehen, WARUM sich eine Stelle nicht umformen laesst.
+// Ein Anbieter, der beim Erfragen wirft, nimmt nur seine Eintraege mit,
+// nicht das Menue.
 var
   HasRow : Boolean;
   i      : Integer;
+  F      : TLeakFinding;
+  Model  : TFindingMenuModel;
 begin
   HasRow := Assigned(FDisplayedFindings)
         and (FResultGrid.Row >= 1)
         and (FResultGrid.Row <= FDisplayedFindings.Count);
+  for i := FGridMenu.Items.Count - 1 downto 0 do
+    if FGridMenu.Items[i].Tag >= GRID_ACTION_TAG - 1 then
+      FGridMenu.Items[i].Free;
   for i := 0 to FGridMenu.Items.Count - 1 do
   begin
     FGridMenu.Items[i].Enabled := HasRow;
+  end;
+  FGridActions := nil;
+  if not HasRow then Exit;
+  F := FDisplayedFindings[FResultGrid.Row - 1];
+  if not Assigned(F) then Exit;
+
+  // Stufe C (Konzept Editor-Gluehbirne 2026-10-06): dasselbe Modell wie
+  // das Editor-Kontextmenue, hier ohne Kopfzeile (ein Fund je Popup).
+  Model := BuildFindingMenuModel(TArray<TLeakFinding>.Create(F),
+    [moLeadingSeparator]);
+  for i := 0 to High(Model.Errors) do
+    StatusMode(Format(_('Finding actions: provider failed - %s'),
+      [Model.Errors[i]]));
+  FGridActions := Model.Actions;
+  if Model.IsEmpty then Exit;
+  FillPopupFromModel(FGridMenu, Model, GridMenuActionClick, GRID_ACTION_TAG,
+    FGridMenu, nil);
+end;
+
+procedure TAnalyserFrame.GridMenuActionClick(Sender: TObject);
+var
+  Idx : Integer;
+begin
+  if not (Sender is TMenuItem) then Exit;
+  Idx := TMenuItem(Sender).Tag - GRID_ACTION_TAG;
+  if (Idx < 0) or (Idx > High(FGridActions)) then Exit;
+  if not Assigned(FGridActions[Idx].Execute) then Exit;
+  try
+    FGridActions[Idx].Execute(Sender);
+  except
+    on EStackExhausted do raise;
+    on E: Exception do
+      StatusMode(Format(_('Finding action failed: %s'), [E.Message]));
   end;
 end;
 
@@ -4733,6 +4797,103 @@ end;
 // Welle 1b (2026-07-20): Boolean-Result - False bei jedem Skip (busy,
 // Datei fehlt, kein Highlighter), damit Caller (Properties-Auto-Scan)
 // ihren Scan-Zeit-Cache NICHT stempeln und spaeter nachholen.
+// ---- AH10 (2026-10-05): Funde der Cursorzeile fuer das Editor-Kontextmenue --
+//
+// Die Marken des Highlighters tragen nur Texte, keine TLeakFinding. Fuer
+// die Aktionen fremder Anbieter (uFindingActions) braucht das Editor-
+// Kontextmenue aber den Fund selbst (Datei, Zeile, Regel). Zwei Quellen:
+//   1. das Dock-Fenster, falls offen (FAllFindings des Frames);
+//   2. Kopien der Funde des letzten Silent-Laufs (KeepEditorFindings) -
+//      der Silent-Lauf gibt seine Liste nach dem Markieren frei.
+// Die Kopien tragen nur die Felder, die ein Anbieter liest.
+
+var
+  GEditorFindings     : TObjectList<TLeakFinding> = nil;
+  GEditorFindingsFile : string = '';
+
+procedure KeepEditorFindings(const AFileName: string;
+  AFindings: TObjectList<TLeakFinding>);
+var
+  F, C : TLeakFinding;
+begin
+  if GEditorFindings = nil then
+    GEditorFindings := TObjectList<TLeakFinding>.Create(True);
+  GEditorFindings.Clear;
+  GEditorFindingsFile := AFileName;
+  if not Assigned(AFindings) then Exit;
+  for F in AFindings do
+  begin
+    if not Assigned(F) then Continue;
+    C := TLeakFinding.Create;
+    C.FileName   := F.FileName;
+    C.MethodName := F.MethodName;
+    C.LineNumber := F.LineNumber;
+    C.EndLine    := F.EndLine;
+    C.MissingVar := F.MissingVar;
+    C.Severity   := F.Severity;
+    C.Kind       := F.Kind;
+    C.Confidence := F.Confidence;
+    C.RuleID     := F.RuleID;
+    GEditorFindings.Add(C);
+  end;
+end;
+
+function FindingsAtEditorLine(const AFile: string;
+  ALine: Integer): TArray<TLeakFinding>;
+// Funde, deren Bereich (Ankerzeile bis SpanEnd) die Zeile einschliesst.
+// Erst das Dock-Fenster, sonst die Kopien des Silent-Laufs.
+var
+  Found : TArray<TLeakFinding>;
+
+  function AlreadyFound(F: TLeakFinding): Boolean;
+  // Derselbe Fund kann aus zwei Scans (Dock + Silent, Projekt + Datei)
+  // in der Liste stehen - im Menue soll er einmal erscheinen.
+  var
+    k : Integer;
+  begin
+    Result := False;
+    for k := 0 to High(Found) do
+      if (Found[k].Kind = F.Kind) and (Found[k].LineInt = F.LineInt)
+         and (Found[k].MissingVar = F.MissingVar) then
+        Exit(True);
+  end;
+
+  procedure Collect(AList: TList<TLeakFinding>);
+  var
+    F : TLeakFinding;
+  begin
+    if not Assigned(AList) then Exit;
+    for F in AList do
+      if Assigned(F) and SameText(F.FileName, AFile)
+         and (ALine >= F.LineInt) and (ALine <= F.SpanEnd)
+         and not AlreadyFound(F) then
+      begin
+        SetLength(Found, Length(Found) + 1);
+        Found[High(Found)] := F;
+      end;
+  end;
+
+begin
+  Found := nil;
+  if Assigned(GDockableForm) and Assigned(GDockableForm.Frame) then
+    Collect(GDockableForm.Frame.FAllFindings);
+  if (Length(Found) = 0) and SameText(GEditorFindingsFile, AFile) then
+    Collect(GEditorFindings);
+  Result := Found;
+end;
+
+function CurrentEditorCaretLine: Integer;
+var
+  EditorSvc : IOTAEditorServices;
+  View      : IOTAEditView;
+begin
+  Result := 0;
+  if not Supports(BorlandIDEServices, IOTAEditorServices, EditorSvc) then Exit;
+  View := EditorSvc.TopView;
+  if Assigned(View) then
+    Result := View.CursorPos.Line;
+end;
+
 function RunSilentAnalysisForFile(const AFileName: string;
   ACenterOnFirstFinding: Boolean = True): Boolean;
 // Silent-Mode-Entrypoint: analysiert AFileName + setzt Marker direkt am
@@ -4883,6 +5044,9 @@ begin
     // weggefegt - User sah seine Befunde in Datei A nach einem Wechsel
     // zu B beim Zurueckkehren nicht mehr.
     GHighlighter.ReplaceMarksForFile(AFileName, Entries);
+    // AH10: Kopien fuer das Editor-Kontextmenue - die Liste selbst wird
+    // unten freigegeben.
+    KeepEditorFindings(AFileName, Findings);
 
     // Properties-Panel (und andere Subscriber) ueber die Silent-Findings
     // informieren. Borrowed-Refs - Subscriber klonen selbst wenn sie
@@ -4960,6 +5124,9 @@ end;
 //      b) Original-OnPopup rufen -> IDE rebuilt komplett
 //      c) Frisches Item am ENDE des Popups einhaengen
 //   5) Beim Unload: Original-OnPopup wiederherstellen, Items freigeben
+//   6) Gibt die IDE ein gehooktes Popup frei, meldet das ein Waechter
+//      (TPopupFreeWatcher, FreeNotification) und der Slot verschwindet,
+//      ohne die schon mitgestorbenen Items noch einmal anzufassen
 //
 // Wichtig laut Recherche:
 //   * Item AM ENDE des Popups einhaengen (sonst Action-Manager-Konflikt)
@@ -4967,6 +5134,8 @@ end;
 //   * OnPopup-Chain, nicht Overwrite (sonst broken bei mehreren Plugins)
 
 type
+  TEditorContextMenuHook = class;   // vorwaerts: der Waechter meldet an ihn
+
   TPopupHookSlot = class
   public
     Popup       : TPopupMenu;
@@ -4979,19 +5148,54 @@ type
     // Item-Zahl als beim Hooken und liefert dann den falschen oder gar
     // keinen Popup.
     Form        : TCustomForm;
+    // AH10 (2026-10-05): Aktionen fremder Anbieter (uFindingActions,
+    // z. B. reDelphix) zu den Funden der CURSORZEILE - dieselbe
+    // Lebensdauer wie OurItem: je Popup-Show frisch erzeugt, beim
+    // naechsten Show oder beim Abbau entfernt. Der Index im Tag des
+    // Menuepunkts zeigt in Actions.
+    ActionItems : TList<TMenuItem>;
+    Actions     : TArray<TFindingAction>;
     constructor Create(APopup: TPopupMenu; AOrig: TNotifyEvent;
       AForm: TCustomForm);
+    destructor Destroy; override;
+    procedure ClearActionItems;
+    procedure ForgetItems;
+  end;
+
+  // Waechter fuer die gehookten IDE-Popups (Minor 6, Audit reDelphiX
+  // 2026-10-07). Der Hook selbst ist kein TComponent, kann also keine
+  // FreeNotification empfangen; diese Komponente (Owner=nil) tut es fuer
+  // ihn. Jedes gehookte Popup meldet seine Freigabe hierher, der Hook
+  // entfernt dann den Slot, solange das Popup noch ein gueltiges Objekt
+  // ist. Damit haelt FSlots nie einen Schluessel auf ein freigegebenes
+  // Popup (TObjectDictionary hasht Klassen-Schluessel ueber das virtuelle
+  // GetHashCode) und kein Slot fasst Items eines zerlegten Popups an.
+  TPopupFreeWatcher = class(TComponent)
+  private
+    FHook : TEditorContextMenuHook;
+  protected
+    procedure Notification(AComponent: TComponent;
+      Operation: TOperation); override;
+  public
+    constructor CreateFor(AHook: TEditorContextMenuHook);
   end;
 
   TEditorContextMenuHook = class(TNotifierObject, INTAEditServicesNotifier)
   private
     // Pro gehooktem Popup ein Slot mit Original-Handler + aktuellem Item.
     // doOwnsValues: bei Remove/Clear/Destroy werden Slot-Objekte freigegeben.
-    FSlots : TObjectDictionary<TPopupMenu, TPopupHookSlot>;
+    FSlots   : TObjectDictionary<TPopupMenu, TPopupHookSlot>;
+    // Meldet die Freigabe gehookter Popups (PopupFreed). Gehoert dem Hook.
+    FWatcher : TPopupFreeWatcher;
     procedure HookEditorForm(AForm: TCustomForm);
+    procedure PopupFreed(APopup: TPopupMenu);
     function  FindEditorPopup(AForm: TCustomForm): TPopupMenu;
     procedure OnPopupHandler(Sender: TObject);
     procedure ItemClick(Sender: TObject);
+    // AH10: Eintraege der Anbieter zu den Funden der Cursorzeile anhaengen
+    // bzw. einen davon ausfuehren.
+    procedure AddActionItems(APopup: TPopupMenu; ASlot: TPopupHookSlot);
+    procedure ActionItemClick(Sender: TObject);
   protected
     // INTAEditServicesNotifier
     procedure WindowShow(const EditWindow: INTAEditWindow;
@@ -5031,6 +5235,81 @@ begin
   OrigOnPopup := AOrig;
   OurItem     := nil;
   Form        := AForm;
+  ActionItems := TList<TMenuItem>.Create;
+end;
+
+destructor TPopupHookSlot.Destroy;
+begin
+  ClearActionItems;
+  ActionItems.Free;
+  inherited;
+end;
+
+procedure TPopupHookSlot.ClearActionItems;
+// Wie der Abbau von OurItem: aus dem Popup loesen, freigeben, vergessen.
+// Nur rufen, solange das Popup lebt (OnPopupHandler: es ist der Sender;
+// Alt-Slot in HookEditorForm und Hook-Abbau: ein freigegebenes Popup
+// haette PopupFreed schon aus FSlots genommen). Fuer den Abbau beim
+// Schliessen des Editorfensters gilt ForgetItems.
+var
+  i : Integer;
+begin
+  for i := 0 to ActionItems.Count - 1 do
+  try
+    if Assigned(Popup) and (Popup.Items.IndexOf(ActionItems[i]) >= 0) then
+      Popup.Items.Remove(ActionItems[i]);
+    ActionItems[i].Free;
+  except
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    // noinspection ExceptionTooGeneral
+    // Ein einzelner Menuepunkt, der sich nicht abbauen laesst, darf die
+    // uebrigen nicht aufhalten und das Popup der IDE nicht stoeren - der
+    // Fehler geht in den Diagnose-Kanal des Plugins (DebugView).
+    on E: Exception do
+    begin
+      // noinspection DebugOutput
+      OutputDebugString(PChar('SCA: ClearActionItems - ' + E.ClassName
+        + ': ' + E.Message));
+    end;
+  end;
+  ActionItems.Clear;
+  Actions := nil;
+end;
+
+procedure TPopupHookSlot.ForgetItems;
+// Abbau OHNE Free (Minor 6, Audit reDelphiX 2026-10-07): die Items haben
+// Owner=nil und haengen im IDE-Popup; das Popup gibt sie beim eigenen
+// Abbau selbst frei (TMenu.Destroy -> FItems.Free -> TMenuItem.Destroy:
+// 'while Count > 0 do Items[0].Free'). Ist es schon zerlegt, waere ein
+// Free hier ein Double-Free und Popup.Items ein Zugriff auf freigegebenen
+// Speicher; lebt es noch, faellt alles mit ihm. Also nur vergessen - wie
+// OurItem, das auch bisher beim Schliessen nicht angefasst wurde.
+begin
+  ActionItems.Clear;
+  Actions := nil;
+  OurItem := nil;
+  Popup   := nil;
+end;
+
+{ TPopupFreeWatcher }
+
+constructor TPopupFreeWatcher.CreateFor(AHook: TEditorContextMenuHook);
+begin
+  inherited Create(nil);
+  FHook := AHook;
+end;
+
+procedure TPopupFreeWatcher.Notification(AComponent: TComponent;
+  Operation: TOperation);
+begin
+  // inherited ZUERST und immer: es loest die Gegenrichtung
+  // (RemoveFreeNotification). Ohne das kaeme die Schleife in
+  // TComponent.RemoveFreeNotifications des Popups nie zum Ende.
+  inherited Notification(AComponent, Operation);
+  if (Operation = opRemove) and (AComponent is TPopupMenu) and
+     Assigned(FHook) then
+    FHook.PopupFreed(TPopupMenu(AComponent));
 end;
 
 { TEditorContextMenuHook }
@@ -5038,16 +5317,21 @@ end;
 constructor TEditorContextMenuHook.Create;
 begin
   inherited;
-  FSlots := TObjectDictionary<TPopupMenu, TPopupHookSlot>.Create([doOwnsValues]);
+  FSlots   := TObjectDictionary<TPopupMenu, TPopupHookSlot>.Create([doOwnsValues]);
+  FWatcher := TPopupFreeWatcher.CreateFor(Self);
 end;
 
 destructor TEditorContextMenuHook.Destroy;
 var
   Slot : TPopupHookSlot;
 begin
+  // Waechter zuerst: TComponent.Destroy meldet ihn bei allen noch lebenden
+  // Popups ab, danach kommt kein PopupFreed mehr in den Abbau hinein.
+  FreeAndNil(FWatcher);
   // Hooks loesen: pro Slot Original-OnPopup wiederherstellen (nur wenn unser
-  // Handler noch dranhaengt) und unser Item freigeben. Try/except defensive
-  // weil das Popup zwischenzeitlich vom IDE freigegeben sein koennte.
+  // Handler noch dranhaengt) und unser Item freigeben. Jedes Popup in
+  // FSlots lebt noch (ein freigegebenes hat PopupFreed schon entfernt);
+  // das try/except bleibt als zweite Linie.
   if Assigned(FSlots) then
   begin
     for Slot in FSlots.Values do
@@ -5114,6 +5398,10 @@ var
 begin
   Popup := FindEditorPopup(AForm);
   if not Assigned(Popup) then Exit;
+  // Ein Popup im Abbau (die Form wird gerade zerstoert) nicht mehr hooken:
+  // der Slot waere sofort tot, und TComponent.FreeNotification verbietet
+  // die Anmeldung an einer sterbenden Komponente (Assert).
+  if csDestroying in Popup.ComponentState then Exit;
   if FSlots.ContainsKey(Popup) then Exit;   // exakt dieser Hook sitzt schon
 
   // Alten Slot derselben Form abloesen, bevor ein zweiter entsteht.
@@ -5142,7 +5430,25 @@ begin
 
   Slot := TPopupHookSlot.Create(Popup, Popup.OnPopup, AForm);
   FSlots.Add(Popup, Slot);
+  // Freigabe des Popups melden lassen (PopupFreed). Mehrfaches Anmelden
+  // ist harmlos (TComponent.FreeNotification prueft IndexOf).
+  Popup.FreeNotification(FWatcher);
   Popup.OnPopup := OnPopupHandler;
+end;
+
+procedure TEditorContextMenuHook.PopupFreed(APopup: TPopupMenu);
+// Die IDE gibt ein gehooktes Popup frei (Editorfenster zu, IDE-Ende).
+// Gerufen aus TComponent.Destroy des Popups: das Objekt ist noch gueltig
+// (der Schluesselzugriff in FSlots ruft APopup.GetHashCode), seine Items
+// - und mit ihnen unsere Owner=nil-Kinder - hat TMenu.Destroy aber schon
+// freigegeben. Der Slot darf sie also nur noch vergessen.
+var
+  Slot : TPopupHookSlot;
+begin
+  if not Assigned(FSlots) then Exit;
+  if not FSlots.TryGetValue(APopup, Slot) then Exit;
+  Slot.ForgetItems;
+  FSlots.Remove(APopup);   // doOwnsValues -> Slot wird gefreut (ohne Items)
 end;
 
 procedure TEditorContextMenuHook.OnPopupHandler(Sender: TObject);
@@ -5180,6 +5486,7 @@ begin
     end;
     Slot.OurItem := nil;
   end;
+  Slot.ClearActionItems;
 
   // (2) IDE-Rebuild via Original-Handler
   if Assigned(Slot.OrigOnPopup) then
@@ -5188,14 +5495,83 @@ begin
   // (3) Frischen SCA-Item ans Ende - nur wenn Silent-Mode aktiviert ist.
   // User-Setting (Tools > Options) wird bei jedem Popup-Show frisch
   // ausgewertet, damit Aenderungen sofort wirken.
-  if not IsSilentEnabled then Exit;
+  if IsSilentEnabled then
+  begin
+    NewItem := TMenuItem.Create(nil);
+    NewItem.Caption  := _('Analyse current file (silent)');
+    NewItem.Hint     := _('Static Code Analyser: analyse this file, no dock opens');
+    NewItem.OnClick  := ItemClick;
+    Popup.Items.Add(NewItem);
+    Slot.OurItem := NewItem;
+  end;
 
-  NewItem := TMenuItem.Create(nil);
-  NewItem.Caption  := _('Analyse current file (silent)');
-  NewItem.Hint     := _('Static Code Analyser: analyse this file, no dock opens');
-  NewItem.OnClick  := ItemClick;
-  Popup.Items.Add(NewItem);
-  Slot.OurItem := NewItem;
+  // (4) AH10: Aktionen fremder Anbieter zu den Funden der Cursorzeile -
+  // unabhaengig vom Silent-Schalter, abhaengig davon, ob ein Anbieter
+  // angemeldet ist und auf der Zeile ein Fund liegt.
+  AddActionItems(Popup, Slot);
+end;
+
+procedure TEditorContextMenuHook.AddActionItems(APopup: TPopupMenu;
+  ASlot: TPopupHookSlot);
+// Haengt hinter einem Trenner je Fund der Cursorzeile die Eintraege an,
+// die die angemeldeten Anbieter liefern: eine deaktivierte Kopfzeile
+// 'SCAnnn  Meldung' je Fund, darunter die Aktionen 'Caption  (Hint)',
+// deaktiviert mit Grund, Index in Slot.Actions im Tag. Items mit
+// Owner=nil + nur OnClick, wie der Silent-Eintrag. Seit Stufe C
+// (Konzept Editor-Gluehbirne 2026-10-06) kommt die Form aus
+// uFindingActionMenu - dieselbe wie im Dock-Grid und spaeter an der
+// Gluehbirne.
+var
+  FilePath : string;
+  Line     : Integer;
+  Found    : TArray<TLeakFinding>;
+  Model    : TFindingMenuModel;
+  i        : Integer;
+begin
+  if TFindingActions.ProviderCount = 0 then Exit;
+  if TIDEEditor.TryGetCurrentPasFile(FilePath) <> cfrOK then Exit;
+  Line := CurrentEditorCaretLine;
+  if Line < 1 then Exit;
+  Found := FindingsAtEditorLine(FilePath, Line);
+  if Length(Found) = 0 then Exit;
+
+  Model := BuildFindingMenuModel(Found, [moLeadingSeparator, moHeaders]);
+  for i := 0 to High(Model.Errors) do
+    OutputDebugString(PChar('SCA: finding action provider failed - '
+      + Model.Errors[i]));
+  if Model.IsEmpty then Exit;
+  ASlot.Actions := Model.Actions;
+  FillPopupFromModel(APopup, Model, ActionItemClick, 0, nil,
+    ASlot.ActionItems);
+end;
+
+procedure TEditorContextMenuHook.ActionItemClick(Sender: TObject);
+// Der Slot wird ueber das Popup des Menuepunkts gefunden; Fehler des
+// Anbieters landen in einer Meldung - der Editor hat keine Statuszeile
+// des Plugins.
+var
+  Item : TMenuItem;
+  Menu : TMenu;
+  Slot : TPopupHookSlot;
+  Idx  : Integer;
+begin
+  if not (Sender is TMenuItem) then Exit;
+  Item := TMenuItem(Sender);
+  Menu := Item.GetParentMenu;
+  if not (Menu is TPopupMenu) then Exit;
+  if not FSlots.TryGetValue(TPopupMenu(Menu), Slot) then Exit;
+  Idx := Item.Tag;
+  if (Idx < 0) or (Idx > High(Slot.Actions)) then Exit;
+  if not Assigned(Slot.Actions[Idx].Execute) then Exit;
+  try
+    Slot.Actions[Idx].Execute(Sender);
+  except
+    on EStackExhausted do raise;
+    on E: Exception do
+      Application.MessageBox(
+        PChar(Format(_('Finding action failed: %s'), [E.Message])),
+        'Static Code Analyser', MB_OK or MB_ICONWARNING);
+  end;
 end;
 
 procedure TEditorContextMenuHook.ItemClick(Sender: TObject);
@@ -5241,6 +5617,7 @@ procedure TEditorContextMenuHook.WindowNotification(
   const EditWindow: INTAEditWindow; Operation: TOperation);
 var
   Popup : TPopupMenu;
+  Weg   : TPopupHookSlot;
 begin
   // Editor-Window wird zerstoert -> Slot-Eintrag entfernen damit Destroy
   // nicht auf einen freigegebenen Popup zugreift.
@@ -5258,6 +5635,11 @@ begin
   // die Einfuegeseite konnte durch die kippende Popup-Heuristik mehrere
   // Slots je Form anlegen. Erst sammeln, dann entfernen - Remove waehrend
   // der Values-Iteration invalidiert den Enumerator.
+  // Die Items des Slots werden dabei nur VERGESSEN, nicht freigegeben
+  // (ForgetItems, Minor 6 Audit reDelphiX 2026-10-07): ob die IDE das
+  // Popup vor oder nach diesem Ereignis zerlegt, ist nicht belegt; die
+  // Kinder gibt das Popup in beiden Faellen selbst frei. Ein schon
+  // freigegebenes Popup hat PopupFreed ohnehin vorher aus FSlots genommen.
   if (Operation = opRemove) and Assigned(EditWindow) then
   begin
     var Opfer := TList<TPopupMenu>.Create;
@@ -5266,7 +5648,11 @@ begin
         if Slot.Form = EditWindow.Form then
           Opfer.Add(Slot.Popup);
       for Popup in Opfer do
-        FSlots.Remove(Popup);   // doOwnsValues -> Slot wird gefreut
+      begin
+        if FSlots.TryGetValue(Popup, Weg) then
+          Weg.ForgetItems;
+        FSlots.Remove(Popup);   // doOwnsValues -> Slot wird gefreut (ohne Items)
+      end;
     finally
       Opfer.Free;
     end;
@@ -5544,6 +5930,14 @@ begin
   end;
 end;
 
+// Element EditorBulb: die Gluehbirne bekommt die Fund-Suche des
+// Kontextmenues hereingereicht - so kennt uIDEFindingBulb weder das
+// Dock-Fenster noch die Kopien des Silent-Laufs.
+procedure RegisterEditorBulb;
+begin
+  RegisterFindingBulb(FindingsAtEditorLine);
+end;
+
 procedure AddUiElements(ARegistry: TUiElementRegistry);
 // Vertrag steht an der Deklaration. Die SortKeys bilden die am 2026-08-10
 // gemessene Reihenfolge ab (Messung 0.5, Protokollzeilen REG 1-7);
@@ -5558,6 +5952,7 @@ const
   SK_SHARED_HOOKS   = 10;
   SK_DOCK_FORM      = 20;
   SK_LINE_HIGHLIGHT = 30;
+  SK_EDITOR_BULB    = 35;
   SK_ANNOTATION     = 40;
   SK_WATCH_MODE     = 50;
   SK_WARMUP         = 60;
@@ -5588,6 +5983,12 @@ begin
   // angehaengt; AV-sicher dank ref-counting (siehe uIDELineHighlighter).
   AddEl('LineHighlighter', SK_LINE_HIGHLIGHT,
     RegisterLineHighlighter, UnregisterLineHighlighter);
+  // Gluehbirne an der Caret-Zeile (Konzept GluehbirneAnzeige, Weg C): NACH
+  // dem LineHighlighter, denn dessen Editor-Notifier liefert die Ereignisse
+  // (kein eigener OTA-Slot); rueckwaerts abgebaut also VOR ihm. Die Funde
+  // kommen aus derselben Quelle wie beim Editor-Kontextmenue.
+  AddEl('EditorBulb', SK_EDITOR_BULB,
+    RegisterEditorBulb, UnregisterFindingBulb);
   AddEl('AnnotationOverlay', SK_ANNOTATION,
     RegisterAnnotationOverlay, UnregisterAnnotationOverlay);
   // Watch-Mode: Manager-Singleton anlegen. KEINE ToolsAPI-Calls hier -
@@ -5642,5 +6043,13 @@ end;
 // Worker-Join als Barriere davor. Die Stuecke sind dieselben Prozeduren
 // wie zuvor - sie haengen als Unregister-Seite der Adapter im
 // Verzeichnis; nur der Taktgeber ist weg.
+
+// Ein finalization-Abschnitt ist nur hinter einem initialization-Abschnitt
+// erlaubt (E2029 beim Bau vom 2026-10-05) - deshalb der leere davor.
+initialization
+
+finalization
+  // AH10: Kopien der Silent-Funde fuer das Editor-Kontextmenue.
+  FreeAndNil(GEditorFindings);
 
 end.

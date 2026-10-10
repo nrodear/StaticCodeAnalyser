@@ -104,10 +104,15 @@
         <DCCReference Include="..\SCA.Engine\sources\Common\uCompatSet.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uCrashDiag.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uDetectorUtils.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uFindingActions.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uFindingActionMenu.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uJsonFormat.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uLocalization.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uMethodd12.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uQuickFix.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uRefactorConcat.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uRefactorInfo.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uRefactorInfoBuilder.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uRegExMatches.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uRuleCatalog.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uSCAConsts.pas"/>
@@ -321,6 +326,7 @@
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uPathOverrides.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uRepoSettings.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uSonarConfig.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uSourcePlaces.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uStaticAnalyzer2.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uParallelScan.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uProjectFiles.pas"/>
@@ -351,6 +357,8 @@
         <DCCReference Include="..\SCA.SharedUI\sources\uAnalyserPalette.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uAnalyserTheme.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uAppTheme.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uEditorBulbButton.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uEditorBulbGeometry.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uFindingGridRenderer.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uFindingsPropertiesFrame.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uFindingFilter.pas"/>
@@ -370,6 +378,8 @@
         <DCCReference Include="..\SCA.SharedUI\sources\uScanTargetDialog.pas"/>
         <DCCReference Include="uIDEExpert.pas"/>
         <DCCReference Include="uIDEAnalyserForm.pas"/>
+        <DCCReference Include="uIDEFindingActionMenu.pas"/>
+        <DCCReference Include="uIDEFindingBulb.pas"/>
         <DCCReference Include="uIDEFindingsPropertiesForm.pas"/>
         <DCCReference Include="uIDELineHighlighter.pas"/>
         <DCCReference Include="uIDEAnnotationOverlay.pas"/>

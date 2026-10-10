@@ -132,6 +132,16 @@
           "type": "string",
           "description": "INI section/key that tunes this rule (e.g. '[Detectors] CyclomaticMax')."
         },
+        "anchor": {
+          "type": "string",
+          "enum": ["statement", "assign", "call", "assign-or-call", "uses-item"],
+          "description": "Source-place service (TSourcePlaces): what the findings of this rule anchor on. Optional; absent = the tool's compiled-in value for this rule (uRuleCatalogData.inc), 'statement' if it has none. A non-string or unknown value is ignored the same way. 'uses-item' is reserved: no rule carries it and no consumer evaluates it yet. reDelphix distinguishes only 'assign' and 'call'; every other value searches assignments and calls."
+        },
+        "fixMode": {
+          "type": "string",
+          "enum": ["none", "assisted", "auto"],
+          "description": "Source-place service: whether a rewriting module may write on this rule's signal. Optional; absent = the tool's compiled-in value for this rule (uRuleCatalogData.inc), 'none' if it has none - so an older catalog file without this field does not switch rewriting off. A non-string or unknown value is ignored the same way. Write 'none' explicitly to switch rewriting off."
+        },
         "detectorUnit": {
           "type": "string",
           "pattern": "^([uU]\\w+\\.pas|\\(\\w+\\))$",

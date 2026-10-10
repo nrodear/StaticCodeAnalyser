@@ -34,6 +34,25 @@ StaticCodeAnalyserForm/tests/TestProject.res
 StaticCodeAnalyserIDE/StaticCodeAnalyser.IDE.d12.res
 StaticCodeAnalyserIDE/StaticCodeAnalyser.Plugin.d12.res
 SCA.LSP/SCA.LSP.res
+# reDelphix (2026-10-05): Projekt-.res und die aus data/unitscopes.rc
+# compilierte Scope-Tabelle (BRCC32 legt sie neben die dpk).
+reDelphix/reDelphix.d12.res
+reDelphix/unitscopes.res
+reDelphix/tests/reDelphix.Test.res
+reDelphix/tools/probe/RdxCorpusProbe.res
+# FPC-Pruefstand: out/ und die je Lauf aus dem Repo kopierten Units
+# (build.sh erzeugt sie neu; die Stubs daneben sind Quelle und bleiben).
+reDelphix/tools/fpc-pruefstand/out/
+reDelphix/tools/fpc-pruefstand/runner.pas
+reDelphix/tools/fpc-pruefstand/uDetectorUtils.pas
+reDelphix/tools/fpc-pruefstand/uRefactorInfo.pas
+reDelphix/tools/fpc-pruefstand/uRefactorInfoBuilder.pas
+reDelphix/tools/fpc-pruefstand/uRefactorConcat.pas
+reDelphix/tools/fpc-pruefstand/uFindingActions.pas
+reDelphix/tools/fpc-pruefstand/uSourcePlaces.pas
+reDelphix/tools/fpc-pruefstand/uRdxRecipes.pas
+reDelphix/tools/fpc-pruefstand/uRdxScopeTable.pas
+reDelphix/tools/fpc-pruefstand/uTest*.pas
 
 # ---- Build-Output-Verzeichnisse ----
 # Delphi schreibt kompilierte Artefakte (DCU/BPL/EXE/DLL) typisch
@@ -240,3 +259,5 @@ __pycache__/
 
 # Lokales Dokumenten-Archiv (Root-Aufraeumung 2026-09-06)
 _archiv/
+# Prototypen (HTML-Mockups zu Konzepten) sind lokal wie Konzept_/Todo_
+Prototypen_*/

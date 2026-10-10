@@ -1,0 +1,1586 @@
+unit uTestRdxSca044;
+
+// Ende-zu-Ende-Tests fuer das Rezept 5.1 (Verkettung -> Format) gegen den
+// ECHTEN Core: Parser, Detektor SCA044, TSourcePlaces, Rezept-Laeufer.
+// Jeder Test schreibt eine Temp-Datei, laesst den Detektor laufen und
+// fragt den Laeufer - derselbe Weg wie im IDE-Package, nur ohne ToolsAPI.
+//
+// Die Varianten folgen der Heuristik von uConcatToFormat:
+//   1. mindestens drei '+' auf oberster Klammertiefe (MIN_NON_LITERAL_PLUS)
+//   2. mindestens ein Literal UND ein Nicht-Literal in der Kette
+//   3. ein SQL-Ziel (.SQL.Text, .CommandText) gehoert SCA003
+//   4. kein Fund, wenn im Ausdruck schon Format( steht
+// und den Term-Arten, die Zerleger und Typaufloesung kennen: Literal,
+// Steuerzeichen, bekannter RTL-Aufruf, .ToString, Bezeichner mit
+// deklariertem Typ (Parameter, lokale Variable, Feld, Char), Integer,
+// unbekannter Ausdruck - dazu Kommentar, $IFDEF, SQL-Text, mehrdeutige
+// Zeile und die Idempotenz nach dem Umschreiben. Fehlt System.SysUtils
+// (Format lebt dort), wird die uses-Klausel ergaenzt (AH19, 2026-10-06).
+//
+// Review reDelphiX 2026-10-07 (Welle 2): der SCA003-Weg des Anbieters
+// (Anker 'assign-or-call', Aufruf-Knoten, SQL-Vorlage), die Gegenprobe
+// gegen den Fund (Ziel und '+'-Zahl aus der echten SCA044-Meldung), der
+// with-Block, die uses-Faelle (Klausel im $IFDEF-Zweig, '(*$', 'in'-Pfad
+// und Formular-Kommentar hinter dem letzten Eintrag - mit SCA142 auf dem
+// Ergebnis -, FPC-Weiche, Programm ohne uses) und das uses-Fenster des
+// Anbieters (LineInUsesClause).
+
+interface
+
+uses
+  DUnitX.TestFramework;
+
+type
+  [TestFixture]
+  TTestRdxSca044 = class
+  public
+    // ---- Detektor-Heuristik ----
+    [Test] procedure Detector_ThreePlus_Mixed_Finds;
+    [Test] procedure Detector_TwoPlus_NoFinding;
+    [Test] procedure Detector_OnlyLiterals_NoFinding;
+    [Test] procedure Detector_SqlTarget_NoFinding;
+    [Test] procedure Detector_AlreadyFormat_NoFinding;
+    [Test] procedure Detector_PlusInsideParens_NotCounted;
+
+    // ---- Rezept: aktiv ----
+    [Test] procedure Rewrite_StringLocalsAndCalls_Enabled;
+    [Test] procedure Rewrite_ParamsAndField_Enabled;
+    [Test] procedure Rewrite_ToStringOperand_Enabled;
+    [Test] procedure Rewrite_CharOperand_Enabled;
+    [Test] procedure Rewrite_MultiLineChain_Enabled;
+    [Test] procedure Rewrite_ControlCharsAndQuotes_Encoded;
+    [Test] procedure Rewrite_PercentInLiteral_Escaped;
+    [Test] procedure Rewrite_ThenBranchWithoutSemicolon_Enabled;
+    [Test] procedure Rewrite_InsideIfdef_Enabled;
+
+    // ---- Rezept: ausgegraut mit Grund ----
+    [Test] procedure Rewrite_IntegerOperand_Disabled;
+    [Test] procedure Rewrite_NoLiteral_Disabled;
+    [Test] procedure Rewrite_AlreadyFormat_Disabled;
+    [Test] procedure Rewrite_CommentInChain_Disabled;
+    [Test] procedure Rewrite_DirectiveInSpan_Disabled;
+    [Test] procedure Rewrite_SqlText_Disabled;
+    [Test] procedure Rewrite_TwoAssignsOnLine_Disabled;
+
+    // ---- Kompilat-Regel (AH20, Realworld-Stichprobe 2026-10-06) ----
+    // Ein Operand unbekannten Typs gilt, wenn seine Form ein Operand ist
+    // und keine Variant-Anzeichen traegt; AnsiString-Ketten, Variants,
+    // Zahlen bleiben gesperrt. IntToStr(x)/x.ToString werden %d/%u.
+    // 'X := X + ...' wird 'X := X + Format(...)'.
+    [Test] procedure Compiled_MemberOperand_Enabled;
+    [Test] procedure Compiled_UnknownCallAndKnownRtlCall;
+    [Test] procedure Compiled_KnownConst_Proven;
+    [Test] procedure Compiled_VariantLocal_Disabled;
+    [Test] procedure Compiled_ValueMember_Disabled;
+    [Test] procedure Compiled_AnsiTarget_Disabled;
+    [Test] procedure Compiled_AnsiOperand_Disabled;
+    [Test] procedure Numeric_CardinalArg_UsesU;
+    [Test] procedure SelfAppend_FormatOverRest;
+    [Test] procedure SelfAppend_OnlyLiterals_Disabled;
+    // AH22 (Verifikations-Workflow nach AH21): Ansi-Operand bei
+    // Unicode-Ziel, Variant-Quellen ohne Tell, Klammergruppe, Literal-
+    // Quelltext, Leerraum in Literalen, Kommentar vor der Kette,
+    // indiziertes Ziel, Direktive in der uses-Klausel.
+    [Test] procedure Compiled_AnsiOperand_UnicodeTarget_Enabled;
+    [Test] procedure Compiled_VariantMember_Disabled;
+    [Test] procedure Compiled_StringIndexed_Disabled;
+    [Test] procedure Compiled_ParenCast_Enabled;
+    [Test] procedure Rewrite_HexCharLiteral_Preserved;
+    [Test] procedure Rewrite_LiteralWhitespace_Preserved;
+    [Test] procedure Rewrite_CommentBeforeChain_Enabled;
+    [Test] procedure Rewrite_IndexedTarget_Enabled;
+    [Test] procedure Uses_Missing_DirectiveInClause_Disabled;
+    // Review Major 7: die Sperre fuer Aktionen ueber ALLE Eintraege
+    // (uses qualifizieren) - FPC-Zweig in der interface-Klausel.
+    [Test] procedure UsesDirectiveLine_FindsBranch;
+
+    // ---- Idempotenz ----
+    [Test] procedure Rewrite_AppliedOnce_NoSecondFinding;
+
+    // ---- uses System.SysUtils (AH19) ----
+    // Format() lebt in System.SysUtils. Fehlt die Unit, wird sie als
+    // zweite Ersetzung in die uses-Klausel eingefuegt - nicht ausgegraut.
+    [Test] procedure Uses_SysUtilsPresent_NoEdit;
+    [Test] procedure Uses_Missing_SortedInsert_Qualified;
+    [Test] procedure Uses_Missing_UnqualifiedStyle;
+    [Test] procedure Uses_Missing_UnsortedList_Front;
+    [Test] procedure Uses_Missing_ImplementationClausePreferred;
+    [Test] procedure Uses_Missing_MultiLineClause_Append;
+    [Test] procedure Uses_Missing_NoClause_CreatedAfterImplementation;
+    [Test] procedure Uses_Missing_InPathAfterLast_AppendsAfterPath;
+    [Test] procedure Uses_Missing_AppliedOnce_SecondChainNeedsNothing;
+
+    // ---- Review reDelphiX 2026-10-07, Welle 2 ----
+    // Major 5: Aufruf-Anker und SQL-Vorlage (SCA003, fixMode 'assisted').
+    [Test] procedure Sql_CallAnchor_AddTemplate;
+    [Test] procedure Sql_AssignAnchor_TextTemplate;
+    [Test] procedure Sql_TwoCallsOnLine_Ambiguous;
+    [Test] procedure Sql_NestedCallInArgument_NotAmbiguous;
+    [Test] procedure Sql_TabIndent_KeepsTabs;
+    [Test] procedure Anchor_Call_OnAssignLine_NoStatement;
+    [Test] procedure HeadOf_StripsArguments;
+    // Minor 20: Gegenprobe gegen den Fund (Puffer juenger als Fundliste).
+    [Test] procedure Describe_RealSca044Finding_Matches;
+    [Test] procedure Describe_LineShifted_TargetMismatch;
+    [Test] procedure Describe_PlusCountChanged_Mismatch;
+    [Test] procedure Describe_Sca003Finding_CallTarget;
+    // Minor 16 / strittiger Minor 4: '{$' im Literal ist keine Direktive.
+    [Test] procedure Rewrite_DirectiveTextInLiteral_Enabled;
+    // strittige Minor 1 und 3: im with-Block ist kein Name bewiesen.
+    [Test] procedure Rewrite_WithBlock_NotProven;
+    // Minor 17, strittiger Nit 5, Minor 42, Minor 35, Nit 26: uses.
+    [Test] procedure Uses_Missing_ClauseInsideIfdef_Disabled;
+    [Test] procedure Uses_Missing_ParenStarDirectiveInClause_Disabled;
+    [Test] procedure Uses_Missing_LineCommentAfterLast_InsertsBeforeLast;
+    [Test] procedure Uses_Missing_FormCommentAfterLast_AppendsAfterComment;
+    [Test] procedure Uses_Missing_FpcAwareUnit_ShortName;
+    [Test] procedure Uses_Missing_DottedNonRtlNames_ShortName;
+    [Test] procedure Uses_Missing_ProgramWithoutUses_Disabled;
+    // Minor 18/19: das uses-Fenster des Anbieters.
+    [Test] procedure LineInUsesClause_UnitClauses;
+    [Test] procedure LineInUsesClause_Program;
+
+    // ---- Review reDelphiX 2026-10-07, Engine (Minor 4 / Minor 11) ----
+    // Minor 4: Kommentare sind in der Code-Sicht Leerraum - ein Block-
+    // Kommentar vor dem ersten Term gehoert nicht zum Term.
+    [Test] procedure Rewrite_BlockCommentBeforeChain_Enabled;
+    // Minor 11: 'string[N]' ist ShortString, nicht string.
+    [Test] procedure Rewrite_ShortStringTarget_Disabled;
+  end;
+
+implementation
+
+uses
+  System.SysUtils, System.Classes, System.Generics.Collections,
+  uAstNode, uParser2, uMethodd12, uSCAConsts, uConcatToFormat,
+  uUnsortedUses,   // SCA142 auf dem Ergebnis einer uses-Ergaenzung
+  uEngineApi, uRefactorInfo, uRdxRecipes, uRdxRecipeRunner;
+
+const
+  // Eine Unit mit allem, was die Varianten brauchen: Feld, Parameter
+  // (auch const), lokale Strings, ein Integer, ein Char, ein Objekt.
+  HEAD =
+    'unit t;'#13#10 +
+    'interface'#13#10 +
+    'uses System.SysUtils;'#13#10 +
+    'type TFoo = class'#13#10 +
+    '  FName: string;'#13#10 +
+    '  procedure Run(Id: Integer; const Tag: string);'#13#10 +
+    'end;'#13#10 +
+    'implementation'#13#10 +
+    'procedure TFoo.Run(Id: Integer; const Tag: string);'#13#10 +
+    'var Marker, Text: string; n: Integer; c: Char; Obj: TObject;'#13#10 +
+    'var Cnt: Cardinal; V: Variant; A: AnsiString; Arr: array[0..3] of string;'#13#10 +
+    'begin'#13#10;
+  FOOT =
+    #13#10'end;'#13#10 +
+    'end.';
+
+function UnitWith(const ABody: string): string;
+begin
+  Result := HEAD + ABody + FOOT;
+end;
+
+// Schreibt ASource in eine Temp-Datei und liefert deren Pfad.
+function WriteTemp(const ASource: string): string;
+var
+  SL : TStringList;
+begin
+  Result := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
+    + 'rdx_sca044_' + FormatDateTime('hhnnsszzz', Now)
+    + IntToStr(Random(1000000)) + '.pas';
+  SL := TStringList.Create;
+  try
+    SL.Text := ASource;
+    SL.SaveToFile(Result);
+  finally
+    SL.Free;
+  end;
+end;
+
+// Zeile (1-basiert) der ersten Quellzeile, die AMarker enthaelt.
+function LineOf(const ASource, AMarker: string): Integer;
+var
+  SL : TStringList;
+  i  : Integer;
+begin
+  Result := 0;
+  SL := TStringList.Create;
+  try
+    SL.Text := ASource;
+    for i := 0 to SL.Count - 1 do
+      if Pos(AMarker, SL[i]) > 0 then
+        Exit(i + 1);
+  finally
+    SL.Free;
+  end;
+end;
+
+// Funde der Art AKind in der Datei - die echten Detektoren SCA044
+// (ConcatToFormat) und SCA142 (UnsortedUses) auf dem echten AST. AFirst
+// ist die Meldung des ersten solchen Funds ('' ohne Fund).
+function FindingsOf(const ASource: string; AKind: TFindingKind;
+  out AFirst: string): Integer;
+var
+  Path    : string;
+  Parser  : TParser2;
+  Root    : TAstNode;
+  Results : TObjectList<TLeakFinding>;
+  F       : TLeakFinding;
+begin
+  Result := 0;
+  AFirst := '';
+  Path := WriteTemp(ASource);
+  Results := TObjectList<TLeakFinding>.Create(True);
+  try
+    Parser := TParser2.Create;
+    try
+      Root := Parser.ParseFile(Path);
+      try
+        TConcatToFormatDetector.AnalyzeUnit(Root, Path, Results);
+        TUnsortedUsesDetector.AnalyzeUnit(Root, Path, Results);
+      finally
+        Root.Free;
+      end;
+    finally
+      Parser.Free;
+    end;
+    for F in Results do
+      if F.Kind = AKind then
+      begin
+        if Result = 0 then AFirst := F.MissingVar;
+        Inc(Result);
+      end;
+  finally
+    Results.Free;
+    DeleteFile(Path);
+  end;
+end;
+
+// Funde des Detektors SCA044 in der Datei.
+function DetectorFindings(const ASource: string): Integer;
+var
+  First : string;
+begin
+  Result := FindingsOf(ASource, fkConcatToFormat, First);
+end;
+
+// Funde von SCA142 (UnsortedUses) - eine uses-Ergaenzung darf keinen
+// neuen erzeugen.
+function UnsortedUsesFindings(const ASource: string): Integer;
+var
+  First : string;
+begin
+  Result := FindingsOf(ASource, fkUnsortedUses, First);
+end;
+
+// Oeffnet ASource als Temp-Datei APath. Ist die Datei nicht lesbar, bleibt
+// IsOpen False - der Aufrufer prueft. Freigeben mit CloseTemp.
+function OpenTemp(const ASource: string; out APath: string): TSourcePlaces;
+begin
+  APath  := WriteTemp(ASource);
+  Result := TSourcePlaces.Create;
+  try
+    if not Result.Open(APath) then Exit;
+  except
+    // Parser-Fehler (Watchdog): Objekt und Datei nicht liegen lassen; die
+    // Exception laeuft unveraendert weiter und laesst den Test scheitern.
+    Result.Free;
+    DeleteFile(APath);
+    raise;
+  end;
+end;
+
+procedure CloseTemp(APlaces: TSourcePlaces; const APath: string);
+begin
+  APlaces.Free;
+  DeleteFile(APath);
+end;
+
+// Der volle Weg des Moduls: Datei oeffnen, die Fundzeile (Zeile mit
+// AMarker) ueber den Anker 'assign' beschreiben, Rezept ausfuehren.
+function RunRecipe(const ASource, AMarker: string;
+  out AOutcome: TRdxFormatOutcome): Boolean;
+var
+  Path   : string;
+  Places : TSourcePlaces;
+  Info   : TRefactorInfo;
+  IsCall : Boolean;
+  Why    : string;
+begin
+  Result   := False;
+  AOutcome := Default(TRdxFormatOutcome);
+  Places := OpenTemp(ASource, Path);
+  try
+    if not Places.IsOpen then Exit;
+    Info := TRdxRecipeRunner.DescribeAnchor(Places, LineOf(ASource, AMarker),
+      'assign', IsCall, Why);
+    try
+      AOutcome := TRdxRecipeRunner.FormatRewrite(Places, Info, Why,
+        TRdxRecipeRunner.UsesNamesOf(Places));
+      Result := AOutcome.Enabled;
+    finally
+      Info.Free;
+    end;
+  finally
+    CloseTemp(Places, Path);
+  end;
+end;
+
+type
+  // Was der Anbieter fuer einen SCA003-Fund saehe (fixMode 'assisted'):
+  // Beschreibung (DescribeAnchor), dann die SQL-Vorlage.
+  TSqlRun = record
+    Described : Boolean;   // DescribeAnchor lieferte eine Beschreibung
+    IsCall    : Boolean;
+    Why       : string;    // Grund von DescribeAnchor
+    Built     : Boolean;   // SqlTemplate lieferte eine Vorlage
+    Template  : string;
+    Hint      : string;
+    Reason    : string;    // Grund von SqlTemplate
+  end;
+
+// Die Zeile mit AMarker ueber den Anker AAnchor beschreiben (der Katalog
+// fuehrt SCA003 mit 'assign-or-call'), dann TRdxRecipeRunner.SqlTemplate.
+function RunSql(const ASource, AMarker, AAnchor: string): TSqlRun;
+var
+  Path   : string;
+  Places : TSourcePlaces;
+  Info   : TRefactorInfo;
+begin
+  Result := Default(TSqlRun);
+  Places := OpenTemp(ASource, Path);
+  try
+    Assert.IsTrue(Places.IsOpen, 'Temp-Datei nicht lesbar');
+    Info := TRdxRecipeRunner.DescribeAnchor(Places, LineOf(ASource, AMarker),
+      AAnchor, Result.IsCall, Result.Why);
+    try
+      Result.Described := Assigned(Info);
+      if Result.Described then
+        Result.Built := TRdxRecipeRunner.SqlTemplate(Places, Info,
+          Result.IsCall, Result.Template, Result.Hint, Result.Reason);
+    finally
+      Info.Free;
+    end;
+  finally
+    CloseTemp(Places, Path);
+  end;
+end;
+
+// Beschreibt die Zeile mit AMarker so, wie der Anbieter es fuer einen Fund
+// tut (QueryOf + Describe): ein Fund der Art AKind mit der Meldung AMessage
+// auf dieser Zeile; Anker wie im Katalog (SCA003 'assign-or-call', sonst
+// 'assign'). True, wenn eine Beschreibung kam; AWhy ist der Grund.
+function DescribeForFinding(const ASource: string; AKind: TFindingKind;
+  const AMessage, AMarker: string; out AWhy: string): Boolean;
+var
+  Path   : string;
+  Places : TSourcePlaces;
+  F      : TLeakFinding;
+  Info   : TRefactorInfo;
+  IsCall : Boolean;
+  Anchor : string;
+begin
+  Anchor := 'assign';
+  if AKind = fkSQLInjection then Anchor := 'assign-or-call';
+  F := nil;
+  Places := OpenTemp(ASource, Path);
+  try
+    Assert.IsTrue(Places.IsOpen, 'Temp-Datei nicht lesbar');
+    F := TLeakFinding.New(Path, 'Run', LineOf(ASource, AMarker), AMessage, AKind);
+    Info := TRdxRecipeRunner.Describe(Places,
+      TRdxRecipeRunner.QueryOf(F, Anchor), IsCall, AWhy);
+    Result := Assigned(Info);
+    Info.Free;
+  finally
+    F.Free;
+    CloseTemp(Places, Path);
+  end;
+end;
+
+const
+  // Eine Kette aus lokaler Variable, Parameter und Feld - fix-sicher.
+  CHAIN = '  Text := Marker + ''a'' + Tag + ''b'' + FName;';
+
+// Die Unit mit einer anderen (oder keiner) uses-Zeile im interface.
+function WithUses(const ABody, AUsesLine: string): string;
+begin
+  Result := StringReplace(UnitWith(ABody), 'uses System.SysUtils;', AUsesLine, []);
+end;
+
+function EditOf(const AOutcome: TRdxFormatOutcome): TRdxEdit;
+begin
+  Result.Span     := AOutcome.Span;
+  Result.Expected := AOutcome.Expected;
+  Result.NewText  := AOutcome.NewText;
+end;
+
+// Wendet eine Ersetzung so an, wie es der Editor taete: der Bereich
+// (1-basiert, EndCol exklusiv) wird durch den neuen Text ersetzt, #10 im
+// neuen Text wird zum Zeilenumbruch der Quelle. Prueft vorher, dass der
+// Bereich den erwarteten Text traegt.
+function ApplyEdit(const ASource: string; const AEdit: TRdxEdit): string;
+var
+  SL     : TStringList;
+  i      : Integer;
+  Joined : string;
+  Prefix : string;
+  Suffix : string;
+  Old    : string;
+begin
+  SL := TStringList.Create;
+  try
+    SL.Text := ASource;
+    Joined := '';
+    for i := AEdit.Span.StartLine to AEdit.Span.EndLine do
+    begin
+      if i > AEdit.Span.StartLine then Joined := Joined + #10;
+      Joined := Joined + SL[i - 1];
+    end;
+    Prefix := Copy(SL[AEdit.Span.StartLine - 1], 1, AEdit.Span.StartCol - 1);
+    Suffix := Copy(SL[AEdit.Span.EndLine - 1], AEdit.Span.EndCol, MaxInt);
+    Old := Copy(Joined, Length(Prefix) + 1,
+      Length(Joined) - Length(Prefix) - Length(Suffix));
+    Assert.AreEqual(AEdit.Expected, Old, 'der Bereich traegt den erwarteten Text');
+    for i := AEdit.Span.EndLine downto AEdit.Span.StartLine do
+      SL.Delete(i - 1);
+    SL.Insert(AEdit.Span.StartLine - 1, Prefix
+      + StringReplace(AEdit.NewText, #10, #13#10, [rfReplaceAll]) + Suffix);
+    Result := SL.Text;
+  finally
+    SL.Free;
+  end;
+end;
+
+// Alle Ersetzungen des Ergebnisses, von unten nach oben wie der Anbieter:
+// erst die Kette, dann die uses-Klausel darueber.
+function ApplyOutcome(const ASource: string;
+  const AOutcome: TRdxFormatOutcome): string;
+begin
+  Result := ApplyEdit(ASource, EditOf(AOutcome));
+  if AOutcome.NeedsUses then
+    Result := ApplyEdit(Result, AOutcome.UsesEdit);
+end;
+
+{ ---- Detektor-Heuristik ---- }
+
+procedure TTestRdxSca044.Detector_ThreePlus_Mixed_Finds;
+begin
+  Assert.AreEqual<Integer>(1, DetectorFindings(UnitWith(
+    '  Text := Marker + ''id:'' + IntToStr(Id) + '' Milli: '' + IntToStr(n);')));
+end;
+
+procedure TTestRdxSca044.Detector_TwoPlus_NoFinding;
+begin
+  // Drei Terme sind Idiom-Code - unter der Schwelle MIN_NON_LITERAL_PLUS.
+  Assert.AreEqual<Integer>(0, DetectorFindings(UnitWith(
+    '  Text := ''a'' + Marker + ''b'';')));
+end;
+
+procedure TTestRdxSca044.Detector_OnlyLiterals_NoFinding;
+begin
+  // Reine Literal-Verkettung (mehrzeiliger Text) ist kein Format-Kandidat.
+  Assert.AreEqual<Integer>(0, DetectorFindings(UnitWith(
+    '  Text := ''a'' + ''b'' + ''c'' + ''d'';')));
+end;
+
+procedure TTestRdxSca044.Detector_SqlTarget_NoFinding;
+begin
+  // SQL-Ziel: uSQLInjection ist zustaendig, kein Doppelbefund.
+  Assert.AreEqual<Integer>(0, DetectorFindings(UnitWith(
+    '  Query.SQL.Text := ''SELECT '' + Marker + '' FROM '' + Tag;')));
+end;
+
+procedure TTestRdxSca044.Detector_AlreadyFormat_NoFinding;
+begin
+  Assert.AreEqual<Integer>(0, DetectorFindings(UnitWith(
+    '  Text := ''a'' + Format(''%d'', [n]) + ''b'' + Marker + ''c'';')));
+end;
+
+procedure TTestRdxSca044.Detector_PlusInsideParens_NotCounted;
+begin
+  // Das arithmetische '+' in der Klammer zaehlt nicht zur Kette.
+  Assert.AreEqual<Integer>(0, DetectorFindings(UnitWith(
+    '  Text := ''a'' + IntToStr(n + Id + 1) + ''b'';')));
+end;
+
+{ ---- Rezept: aktiv ---- }
+
+procedure TTestRdxSca044.Rewrite_StringLocalsAndCalls_Enabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := Marker + ''id:'' + IntToStr(Id) + '' Milli: '' + IntToStr(n);'),
+    'Text := Marker', O), O.Reason);
+  // IntToStr(Id) mit Id: Integer wird %d mit Id - so schriebe man es.
+  Assert.AreEqual('Format(''%sid:%d Milli: %d'', [Marker, Id, n])', O.NewText);
+  Assert.AreEqual<Integer>(2, O.Numeric);
+  Assert.AreEqual<Integer>(3, O.Proven);
+  Assert.AreEqual<Integer>(0, Length(O.ByCompiler));
+  Assert.AreEqual('Marker + ''id:'' + IntToStr(Id) + '' Milli: '' + IntToStr(n)',
+    O.Expected, 'ersetzt wird vom ersten bis zum letzten Term');
+  Assert.IsTrue(O.Span.IsSingleLine);
+  Assert.IsTrue(Pos('5 Terme', O.Hint) > 0, O.Hint);
+end;
+
+procedure TTestRdxSca044.Rewrite_ParamsAndField_Enabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := Tag + '' / '' + FName + '' / '' + Marker;'),
+    'Text := Tag', O), O.Reason);
+  Assert.AreEqual('Format(''%s / %s / %s'', [Tag, FName, Marker])', O.NewText);
+end;
+
+procedure TTestRdxSca044.Rewrite_ToStringOperand_Enabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''id='' + Id.ToString + '', n='' + n.ToString;'),
+    'Text := ''id=''', O), O.Reason);
+  // .ToString bleibt %s: ein eigener Integer-Helper koennte anders
+  // formatieren als IntToStr (AH22). Nur IntToStr(x) wird %d.
+  Assert.AreEqual('Format(''id=%s, n=%s'', [Id.ToString, n.ToString])', O.NewText);
+end;
+
+procedure TTestRdxSca044.Rewrite_CharOperand_Enabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Format nimmt ein Char fuer %s - der deklarierte Typ genuegt. Der Char
+  // geht als string(c) hinein: bei vtWideChar haengt FormatBuf ueber
+  // StrLen an, ein #0 ginge verloren (Review 2026-10-07, Minor 10).
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''x'' + c + ''y'' + Marker;'),
+    'Text := ''x''', O), O.Reason);
+  Assert.AreEqual('Format(''x%sy%s'', [string(c), Marker])', O.NewText);
+end;
+
+procedure TTestRdxSca044.Rewrite_MultiLineChain_Enabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Ein Zeilenumbruch hat keine Bedeutung; der Ersatz ist einzeilig.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := Marker + '' a '''#13#10 +
+    '    + IntToStr(Id) + '' b '''#13#10 +
+    '    + Tag;'),
+    'Text := Marker', O), O.Reason);
+  Assert.AreEqual('Format(''%s a %d b %s'', [Marker, Id, Tag])', O.NewText);
+  Assert.IsFalse(O.Span.IsSingleLine);
+  Assert.AreEqual<Integer>(O.Span.StartLine + 2, O.Span.EndLine);
+  Assert.IsTrue(Pos(#10, O.Expected) > 0, 'Expected traegt die Umbrueche');
+end;
+
+procedure TTestRdxSca044.Rewrite_ControlCharsAndQuotes_Encoded;
+var
+  O : TRdxFormatOutcome;
+begin
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''it''''s '' + Marker + #13#10 + ''b'' + Tag;'),
+    'Text := ''it', O), O.Reason);
+  Assert.AreEqual('Format(''it''''s %s''#13#10''b%s'', [Marker, Tag])', O.NewText);
+end;
+
+procedure TTestRdxSca044.Rewrite_PercentInLiteral_Escaped;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Ein '%' im Literal wuerde Format zur Laufzeit stolpern lassen.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''Rabatt 5% '' + Marker + '' fuer '' + Tag;'),
+    'Text := ''Rabatt', O), O.Reason);
+  Assert.AreEqual('Format(''Rabatt 5%% %s fuer %s'', [Marker, Tag])', O.NewText);
+end;
+
+procedure TTestRdxSca044.Rewrite_ThenBranchWithoutSemicolon_Enabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  if n > 0 then'#13#10 +
+    '    Text := ''a'' + Marker + ''b'' + Tag'#13#10 +
+    '  else'#13#10 +
+    '    Text := '''';'),
+    'Text := ''a''', O), O.Reason);
+  Assert.AreEqual('''a'' + Marker + ''b'' + Tag', O.Expected,
+    'der Bereich endet vor dem else, ohne Semikolon');
+  Assert.AreEqual('Format(''a%sb%s'', [Marker, Tag])', O.NewText);
+end;
+
+{ ---- Rezept: ausgegraut mit Grund ---- }
+
+procedure TTestRdxSca044.Rewrite_IntegerOperand_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := ''a'' + n + ''b'' + Marker;'), 'Text := ''a''', O));
+  Assert.IsTrue(Pos('kein String', O.Reason) > 0, O.Reason);
+  Assert.IsTrue(Pos('integer', O.Reason) > 0, 'der deklarierte Typ steht im Grund: ' + O.Reason);
+end;
+
+procedure TTestRdxSca044.Rewrite_NoLiteral_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Ohne Literal gaebe es nur '%s%s%s%s' - der Detektor meldet so etwas
+  // nicht, und das Rezept formt es auch auf Zuruf nicht um.
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := Marker + Tag + FName + Marker;'), 'Text := Marker', O));
+  Assert.IsTrue(Pos('kein Literal', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.Rewrite_AlreadyFormat_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Steht schon ein Format() in der Kette, wird nicht noch eines darum
+  // gebaut (der Detektor laesst solche Ketten aus; ein zweiter Lauf
+  // ueber eine umgeformte Zeile darf nichts mehr finden).
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := ''a'' + Format(''%d'', [n]) + ''b'' + Marker;'), 'Text := ''a''', O));
+  Assert.IsTrue(Pos('schon Format', O.Reason) > 0, O.Reason);
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := Format(''%s-%s'', [Marker, Tag]);'), 'Text := Format', O));
+  Assert.IsTrue(Pos('keine Zuweisung mit Kette', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.Rewrite_CommentInChain_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := ''a'' + {alt} Marker + ''b'' + Tag;'), 'Text := ''a''', O));
+  Assert.IsTrue(Pos('Kommentar', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.Rewrite_InsideIfdef_Enabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Die Anweisung LIEGT in einem bedingten Bereich (IFNDEF eines nie
+  // definierten Symbols, Zweig aktiv), der Bereich selbst traegt keine
+  // Direktive: ersetzt wird sein exakter Text. Bis AH19 gesperrt.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  {$IFNDEF RDX_NEVER_DEFINED}'#13#10 +
+    '  Text := ''a'' + Marker + ''b'' + Tag;'#13#10 +
+    '  {$ENDIF}'), 'Text := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%sb%s'', [Marker, Tag])', O.NewText);
+end;
+
+procedure TTestRdxSca044.Rewrite_DirectiveInSpan_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Eine Direktive IM Bereich: sie ginge beim Ersetzen verloren. Die
+  // Beschreibung gelingt: Direktiven sind (wie Kommentare) seit Minor 4 in
+  // der Code-Sicht Leerraum, der dritte Term ist also 'Tag {$ELSE} FName'.
+  // Der Knotentext des Parsers (TypeRef in der Doppelzweig-Sicht:
+  // 'a' + Marker + Tag FName + 'b') und die Sicht zaehlen beide 3 x '+',
+  // die Gegenprobe in DescribeNode laesst durch. FormatRewrite sperrt
+  // dann ueber SpanHasComment, das die Direktive als Kommentar zaehlt -
+  // der Grund heisst deshalb 'Kommentar im Bereich' (Review 2026-10-07,
+  // strittiger Minor 4; die eigene Direktiven-Pruefung auf dem Rohtext
+  // ist mit Minor 16 entfallen). Zaehlte die Sicht ein '+' mehr oder
+  // weniger, kaeme keine Kette, und der Grund hiesse nicht 'Kommentar'.
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := ''a'' + Marker + {$IFNDEF RDX_NEVER_DEFINED} Tag {$ELSE} FName {$ENDIF} + ''b'';'),
+    'Text := ''a''', O));
+  Assert.IsTrue(Pos('Kommentar', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.Rewrite_SqlText_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Lokale Variable als SQL-Puffer: SCA044 meldet, SCA003 auch - die
+  // Umformung bleibt gesperrt (Vertrag im Kopf von uRefactorConcat).
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := ''SELECT * FROM t WHERE id='' + IntToStr(Id) + '' AND n='' + QuotedStr(Tag);'),
+    'Text := ''SELECT', O));
+  Assert.IsTrue(Pos('SCA003', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.Rewrite_TwoAssignsOnLine_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Marker := ''x''; Text := ''a'' + Marker + ''b'' + Tag;'),
+    'Text := ''a''', O));
+  Assert.IsTrue(Pos('mehrdeutig', O.Reason) > 0, O.Reason);
+end;
+
+{ ---- Idempotenz ---- }
+
+procedure TTestRdxSca044.Rewrite_AppliedOnce_NoSecondFinding;
+var
+  Src   : string;
+  O, O2 : TRdxFormatOutcome;
+  After : string;
+begin
+  Src := UnitWith(
+    '  Text := Marker + ''id:'' + IntToStr(Id) + '' Milli: '' + IntToStr(n);');
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  // Die Ersetzung so anwenden, wie es der Editor taete: Bereichstext
+  // durch den neuen Text.
+  After := StringReplace(Src, O.Expected, O.NewText, []);
+  Assert.IsTrue(Pos('Format(', After) > 0);
+  Assert.AreEqual<Integer>(0, DetectorFindings(After),
+    'nach dem Umschreiben meldet SCA044 nichts mehr');
+  Assert.IsFalse(RunRecipe(After, 'Text := Format', O2),
+    'ein zweiter Lauf hat nichts mehr umzuformen');
+end;
+
+{ ---- uses System.SysUtils (AH19) ---- }
+
+procedure TTestRdxSca044.Uses_SysUtilsPresent_NoEdit;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Qualifiziert ...
+  Assert.IsTrue(RunRecipe(UnitWith(CHAIN), 'Text := Marker', O), O.Reason);
+  Assert.IsFalse(O.NeedsUses, 'System.SysUtils steht in der uses-Klausel');
+  Assert.AreEqual('', O.UsesName);
+  Assert.IsTrue(Pos('uses', O.Hint) = 0, O.Hint);
+  // ... und unqualifiziert zaehlt gleichermassen.
+  Assert.IsTrue(RunRecipe(WithUses(CHAIN, 'uses SysUtils;'), 'Text := Marker', O),
+    O.Reason);
+  Assert.IsFalse(O.NeedsUses, 'SysUtils ohne Praefix genuegt');
+end;
+
+procedure TTestRdxSca044.Uses_Missing_SortedInsert_Qualified;
+var
+  Src, After : string;
+  O          : TRdxFormatOutcome;
+begin
+  Src := WithUses(CHAIN, 'uses System.Classes, Vcl.Forms;');
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  Assert.IsTrue(O.NeedsUses, 'System.SysUtils fehlt');
+  Assert.AreEqual('System.SysUtils', O.UsesName, 'die Datei schreibt qualifiziert');
+  Assert.AreEqual('Vcl.Forms', O.UsesEdit.Expected,
+    'eingefuegt wird vor dem ersten groesseren Eintrag - die Liste bleibt sortiert (SCA142)');
+  Assert.AreEqual('System.SysUtils, Vcl.Forms', O.UsesEdit.NewText);
+  Assert.AreEqual<Integer>(LineOf(Src, 'uses System.Classes'), O.UsesEdit.Span.StartLine);
+  Assert.IsTrue(O.UsesEdit.Span.StartLine < O.Span.StartLine,
+    'die uses-Ersetzung liegt oberhalb der Kette');
+  Assert.IsTrue(Pos('+ uses System.SysUtils', O.Hint) > 0, O.Hint);
+
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('uses System.Classes, System.SysUtils, Vcl.Forms;', After) > 0, After);
+  Assert.IsTrue(Pos('Text := Format(''%sa%sb%s'', [Marker, Tag, FName]);', After) > 0, After);
+  Assert.AreEqual<Integer>(0, DetectorFindings(After));
+end;
+
+procedure TTestRdxSca044.Uses_Missing_UnqualifiedStyle;
+var
+  Src, After : string;
+  O          : TRdxFormatOutcome;
+begin
+  // Eine Datei, die 'Classes, Windows' schreibt, bekommt 'SysUtils'.
+  Src := WithUses(CHAIN, 'uses Classes, Windows;');
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  Assert.IsTrue(O.NeedsUses);
+  Assert.AreEqual('SysUtils', O.UsesName);
+  Assert.AreEqual('Windows', O.UsesEdit.Expected);
+  Assert.AreEqual('SysUtils, Windows', O.UsesEdit.NewText);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('uses Classes, SysUtils, Windows;', After) > 0, After);
+end;
+
+procedure TTestRdxSca044.Uses_Missing_UnsortedList_Front;
+var
+  Src, After : string;
+  O          : TRdxFormatOutcome;
+begin
+  // Unsortierte Liste: der Neue kommt vorn - dort faellt er auf und
+  // erzeugt keinen neuen SCA142-Fund, denn der steht dort schon.
+  Src := WithUses(CHAIN, 'uses Windows, Classes;');
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  Assert.IsTrue(O.NeedsUses);
+  Assert.AreEqual('Windows', O.UsesEdit.Expected);
+  Assert.AreEqual('SysUtils, Windows', O.UsesEdit.NewText);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('uses SysUtils, Windows, Classes;', After) > 0, After);
+end;
+
+procedure TTestRdxSca044.Uses_Missing_ImplementationClausePreferred;
+var
+  Src, After : string;
+  O          : TRdxFormatOutcome;
+begin
+  // Gibt es eine uses-Klausel im implementation-Abschnitt, gehoert die
+  // Unit dorthin - die Schnittstelle bleibt schlank.
+  Src := StringReplace(WithUses(CHAIN, 'uses System.Classes;'),
+    'implementation'#13#10, 'implementation'#13#10'uses System.Math;'#13#10, []);
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  Assert.IsTrue(O.NeedsUses);
+  Assert.AreEqual('System.Math', O.UsesEdit.Expected);
+  Assert.AreEqual('System.Math, System.SysUtils', O.UsesEdit.NewText);
+  Assert.AreEqual<Integer>(LineOf(Src, 'uses System.Math'), O.UsesEdit.Span.StartLine);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('uses System.Math, System.SysUtils;', After) > 0, After);
+  Assert.IsTrue(Pos('uses System.Classes;', After) > 0, 'die interface-Klausel bleibt');
+  Assert.AreEqual<Integer>(0, DetectorFindings(After));
+end;
+
+procedure TTestRdxSca044.Uses_Missing_MultiLineClause_Append;
+var
+  Src, After : string;
+  O          : TRdxFormatOutcome;
+begin
+  // Mehrzeilige Klausel, der Neue ist groesser als alle: angehaengt an
+  // den letzten Eintrag, dessen Zeile direkt mit ';' schliesst.
+  Src := WithUses(CHAIN, 'uses'#13#10'  System.Classes,'#13#10'  System.Math;');
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  Assert.IsTrue(O.NeedsUses);
+  Assert.AreEqual('System.Math', O.UsesEdit.Expected);
+  Assert.AreEqual('System.Math, System.SysUtils', O.UsesEdit.NewText);
+  Assert.AreEqual<Integer>(LineOf(Src, '  System.Math;'), O.UsesEdit.Span.StartLine);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('  System.Classes,'#13#10'  System.Math, System.SysUtils;', After) > 0, After);
+end;
+
+procedure TTestRdxSca044.Uses_Missing_NoClause_CreatedAfterImplementation;
+var
+  Src, After : string;
+  O          : TRdxFormatOutcome;
+begin
+  // Keine uses-Klausel: hinter 'implementation' wird eine angelegt.
+  Src := WithUses(CHAIN, '');
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  Assert.IsTrue(O.NeedsUses);
+  Assert.AreEqual('System.SysUtils', O.UsesName, 'ohne Vorbild qualifiziert');
+  Assert.AreEqual('implementation', O.UsesEdit.Expected);
+  Assert.AreEqual('implementation'#10#10'uses'#10'  System.SysUtils;', O.UsesEdit.NewText);
+  Assert.AreEqual<Integer>(LineOf(Src, 'implementation'), O.UsesEdit.Span.StartLine);
+  Assert.AreEqual<Integer>(1, O.UsesEdit.Span.StartCol);
+  Assert.AreEqual<Integer>(Length('implementation') + 1, O.UsesEdit.Span.EndCol);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('implementation'#13#10#13#10'uses'#13#10'  System.SysUtils;'#13#10
+    + 'procedure TFoo.Run', After) > 0, After);
+  Assert.AreEqual<Integer>(0, DetectorFindings(After));
+end;
+
+procedure TTestRdxSca044.Uses_Missing_InPathAfterLast_AppendsAfterPath;
+var
+  Src, After : string;
+  O          : TRdxFormatOutcome;
+begin
+  // Der Neue ist anzuhaengen (groesser als alle), hinter dem letzten
+  // Eintrag steht ein 'in'-Pfad (Projektdatei), dann das ';': der Pfad
+  // kommt mit in den Bereich, angehaengt wird dahinter - die Liste bleibt
+  // sortiert, SCA142 meldet nichts (Review 2026-10-07, Minor 42; bis
+  // dahin landete der Neue VOR 'Forms' und die Liste war unsortiert).
+  Src := WithUses(CHAIN, 'uses Classes, Forms in ''Forms.pas'';');
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  Assert.IsTrue(O.NeedsUses);
+  Assert.AreEqual('Forms in ''Forms.pas''', O.UsesEdit.Expected);
+  Assert.AreEqual('Forms in ''Forms.pas'', SysUtils', O.UsesEdit.NewText);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('uses Classes, Forms in ''Forms.pas'', SysUtils;', After) > 0, After);
+  Assert.AreEqual<Integer>(0, UnsortedUsesFindings(After), 'kein neuer SCA142-Fund');
+
+  // Liegt die sortierte Stelle VOR einem 'in'-Eintrag, wird dort
+  // eingefuegt - die Liste bleibt sortiert (am 2026-10-06 falsch
+  // erwartet: 'System.SysUtils' sortiert vor 'uFoo', nicht dahinter).
+  Src := WithUses(CHAIN, 'uses System.Classes, uFoo in ''uFoo.pas'', Vcl.Forms in ''Vcl.Forms.pas'';');
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  Assert.AreEqual('uFoo', O.UsesEdit.Expected);
+  Assert.AreEqual('System.SysUtils, uFoo', O.UsesEdit.NewText);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('uses System.Classes, System.SysUtils, uFoo in ''uFoo.pas'', Vcl.Forms in ''Vcl.Forms.pas'';',
+    After) > 0, After);
+  Assert.AreEqual<Integer>(0, UnsortedUsesFindings(After), 'kein neuer SCA142-Fund');
+end;
+
+procedure TTestRdxSca044.Uses_Missing_AppliedOnce_SecondChainNeedsNothing;
+var
+  Src, After : string;
+  O, O2      : TRdxFormatOutcome;
+begin
+  // Zwei Ketten, SysUtils fehlt. Nach der ersten Umformung (mit uses)
+  // braucht die zweite keine uses-Ersetzung mehr.
+  Src := WithUses(CHAIN + #13#10 +
+    '  Text := Tag + ''c'' + Marker + ''d'' + FName;', 'uses System.Classes;');
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  Assert.IsTrue(O.NeedsUses);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('uses System.Classes, System.SysUtils;', After) > 0, After);
+  Assert.AreEqual<Integer>(1, DetectorFindings(After), 'die zweite Kette steht noch');
+  Assert.IsTrue(RunRecipe(After, 'Text := Tag', O2), O2.Reason);
+  Assert.IsFalse(O2.NeedsUses, 'System.SysUtils ist jetzt da');
+  Assert.AreEqual('Format(''%sc%sd%s'', [Tag, Marker, FName])', O2.NewText);
+end;
+
+{ ---- Kompilat-Regel (AH20) ---- }
+
+procedure TTestRdxSca044.Compiled_MemberOperand_Enabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Obj.ClassName hat in dieser Datei keinen deklarierten Typ - aber die
+  // Kette uebersetzt nur, wenn der Operand String-vertraeglich ist.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''a'' + Obj.ClassName + ''b'' + Marker;'), 'Text := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%sb%s'', [Obj.ClassName, Marker])', O.NewText);
+  Assert.AreEqual<Integer>(1, Length(O.ByCompiler));
+  Assert.AreEqual('Obj.ClassName', O.ByCompiler[0]);
+  Assert.AreEqual<Integer>(1, O.Proven, 'Marker ist deklariert');
+  Assert.IsTrue(Pos('1 laut Kompilat (Obj.ClassName)', O.Hint) > 0, O.Hint);
+end;
+
+procedure TTestRdxSca044.Compiled_UnknownCallAndKnownRtlCall;
+var
+  O : TRdxFormatOutcome;
+begin
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''a'' + ExtractFileName(Tag) + ''b'' + Foo(Marker);'),
+    'Text := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%sb%s'', [ExtractFileName(Tag), Foo(Marker)])', O.NewText);
+  Assert.AreEqual<Integer>(1, O.Proven, 'ExtractFileName ist RTL');
+  Assert.AreEqual<Integer>(1, Length(O.ByCompiler));
+  Assert.AreEqual('Foo(Marker)', O.ByCompiler[0]);
+end;
+
+procedure TTestRdxSca044.Compiled_KnownConst_Proven;
+var
+  O : TRdxFormatOutcome;
+begin
+  // sLineBreak war am Korpus der haeufigste unaufgeloeste Bezeichner.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''a'' + Marker + sLineBreak + Tag;'), 'Text := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%s%s%s'', [Marker, sLineBreak, Tag])', O.NewText);
+  Assert.AreEqual<Integer>(0, Length(O.ByCompiler));
+  Assert.IsTrue(Pos('alle bewiesen', O.Hint) > 0, O.Hint);
+end;
+
+procedure TTestRdxSca044.Compiled_VariantLocal_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Hinter einem Variant duerfte auch eine Zahl stehen - %s scheitert dann.
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := ''a'' + V + ''b'' + Marker;'), 'Text := ''a''', O));
+  Assert.IsTrue(Pos('Variant', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.Compiled_ValueMember_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := ''a'' + Obj.FieldByName(''x'').Value + ''b'' + Marker;'),
+    'Text := ''a''', O));
+  Assert.IsTrue(Pos('Variant', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.Compiled_AnsiTarget_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Format liefert UnicodeString; die Zuweisung an AnsiString konvertiert.
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  A := ''a'' + Tag + ''b'' + Marker;'), 'A := ''a''', O));
+  Assert.IsTrue(Pos('UnicodeString', O.Reason) > 0, O.Reason);
+  Assert.IsTrue(Pos('Ziel', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.Compiled_AnsiOperand_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Ziel unbekannten Typs (Member): der AnsiString-Operand sperrt.
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Obj.Caption := ''a'' + A + ''b'' + Marker;'), 'Obj.Caption := ''a''', O));
+  Assert.IsTrue(Pos('ansistring', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.Compiled_AnsiOperand_UnicodeTarget_Enabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Ziel 'Text: string': Format wandelt A genauso wie die Zuweisung.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''a'' + A + ''b'' + Marker;'), 'Text := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%sb%s'', [A, Marker])', O.NewText);
+  Assert.AreEqual<Integer>(2, O.Proven);
+end;
+
+procedure TTestRdxSca044.Compiled_VariantMember_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // V.Name mit V: Variant - spaet gebunden, der Wert ist Variant.
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := ''a'' + V.Name + ''b'' + Marker;'), 'Text := ''a''', O));
+  Assert.IsTrue(Pos('Variant', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.Compiled_StringIndexed_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // DS['Name'] = TDataSet.FieldValues (Variant): Null im Original wirft
+  // oder loescht die Kette, Format gaebe still den Rest aus.
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := ''Kunde '' + Obj[''Name''] + '' in '' + Obj[''Ort''];'), 'Text := ''Kunde', O));
+  Assert.IsTrue(Pos('Variant', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.Compiled_ParenCast_Enabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Fuehrende Klammergruppe mit Member-Zugriff ist ein Operand.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''a'' + (Obj as TComponent).Name + ''b'' + Marker;'), 'Text := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%sb%s'', [(Obj as TComponent).Name, Marker])', O.NewText);
+  Assert.AreEqual<Integer>(1, Length(O.ByCompiler));
+end;
+
+procedure TTestRdxSca044.Rewrite_HexCharLiteral_Preserved;
+var
+  O : TRdxFormatOutcome;
+begin
+  // #$2103 bleibt als Code im Formatstring - kein rohes Zeichen, das in
+  // einer ANSI-Datei verloren ginge.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''T: '' + Marker + #$2103 + Tag;'), 'Text := ''T:', O), O.Reason);
+  Assert.AreEqual('Format(''T: %s''#$2103''%s'', [Marker, Tag])', O.NewText);
+end;
+
+procedure TTestRdxSca044.Rewrite_LiteralWhitespace_Preserved;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Zwei Leerzeichen im Literal eines Operanden bleiben zwei.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''a'' + StringReplace(Tag, ''  '', '' '', [rfReplaceAll]) + ''b'' + Marker;'),
+    'Text := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%sb%s'', [StringReplace(Tag, ''  '', '' '', [rfReplaceAll]), Marker])',
+    O.NewText);
+end;
+
+procedure TTestRdxSca044.Rewrite_CommentBeforeChain_Enabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Ein Kommentar zwischen ':=' und dem ersten Term liegt ausserhalb des
+  // ersetzten Bereichs und bleibt stehen.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := // Hinweis'#13#10 +
+    '    ''a'' + Marker + ''b'' + Tag;'), 'Text := //', O), O.Reason);
+  Assert.AreEqual('''a'' + Marker + ''b'' + Tag', O.Expected);
+  Assert.AreEqual('Format(''a%sb%s'', [Marker, Tag])', O.NewText);
+end;
+
+procedure TTestRdxSca044.Rewrite_IndexedTarget_Enabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Der AST-Knoten traegt das Ziel als 'Arr[]' - die Gegenprobe gegen den
+  // Quelltext muss den Index ausblenden (53 Korpusstellen).
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Arr[1] := ''a'' + Marker + ''b'' + Tag;'), 'Arr[1] := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%sb%s'', [Marker, Tag])', O.NewText);
+end;
+
+procedure TTestRdxSca044.Uses_Missing_DirectiveInClause_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // 'uses Classes {$IFNDEF X}, Windows{$ENDIF};' - jede Einfuegestelle
+  // neben einem Eintrag kann in einem Zweig liegen: von Hand.
+  Assert.IsFalse(RunRecipe(WithUses(CHAIN,
+    'uses Classes {$IFNDEF RDX_NEVER_DEFINED}, Windows{$ENDIF};'), 'Text := Marker', O));
+  Assert.IsTrue(Pos('Direktiven', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.UsesDirectiveLine_FindsBranch;
+const
+  FPC_USES = 'uses {$IFDEF FPC}LCLIntf,{$ELSE}Windows,{$ENDIF} Classes, SysUtils;';
+var
+  Src, Path : string;
+  Places    : TSourcePlaces;
+begin
+  Src  := WithUses(CHAIN, FPC_USES);
+  Path := WriteTemp(Src);
+  Places := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(Places.Open(Path));
+    Assert.AreEqual<Integer>(LineOf(Src, '{$IFDEF FPC}'),
+      TRdxRecipeRunner.UsesDirectiveLine(Places));
+  finally
+    Places.Free;
+    DeleteFile(Path);
+  end;
+  Src  := UnitWith(CHAIN);
+  Path := WriteTemp(Src);
+  Places := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(Places.Open(Path));
+    Assert.AreEqual<Integer>(0, TRdxRecipeRunner.UsesDirectiveLine(Places),
+      'ohne Direktive keine Sperre');
+  finally
+    Places.Free;
+    DeleteFile(Path);
+  end;
+end;
+
+procedure TTestRdxSca044.Numeric_CardinalArg_UsesU;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Cardinal kommt als vtInteger an: %d wuerde ab 2^31 negativ.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''a'' + IntToStr(Cnt) + ''b'' + Marker;'), 'Text := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%ub%s'', [Cnt, Marker])', O.NewText);
+  Assert.AreEqual<Integer>(1, O.Numeric);
+  Assert.IsTrue(Pos('1 numerisch', O.Hint) > 0, O.Hint);
+end;
+
+procedure TTestRdxSca044.SelfAppend_FormatOverRest;
+var
+  Src, After : string;
+  O          : TRdxFormatOutcome;
+begin
+  // Ein Drittel der Korpus-Stellen: 'X := X + ...'. Format nur ueber den
+  // Rest, X bleibt vorn stehen.
+  Src := UnitWith('  Text := Text + ''a'' + Tag + ''b'' + Marker;');
+  Assert.IsTrue(RunRecipe(Src, 'Text := Text', O), O.Reason);
+  Assert.IsTrue(O.SelfAppend);
+  Assert.AreEqual('''a'' + Tag + ''b'' + Marker', O.Expected,
+    'ersetzt wird erst hinter ''Text +''');
+  Assert.AreEqual('Format(''a%sb%s'', [Tag, Marker])', O.NewText);
+  Assert.IsTrue(Pos('hinter Text', O.Hint) > 0, O.Hint);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('Text := Text + Format(''a%sb%s'', [Tag, Marker]);', After) > 0, After);
+  Assert.AreEqual<Integer>(0, DetectorFindings(After));
+end;
+
+procedure TTestRdxSca044.SelfAppend_OnlyLiterals_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Hinter 'Text +' nur Literale: Format haette kein Argument.
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := Text + ''a'' + #13#10 + ''b'' + ''c'';'), 'Text := Text', O));
+  Assert.IsTrue(Pos('nur Literale', O.Reason) > 0, O.Reason);
+end;
+
+{ ---- Review reDelphiX 2026-10-07, Welle 2 ---- }
+
+const
+  // Eine SQL-Zeile mit einem Parameter, als Aufruf (SCA003, nkCall).
+  SQL_ADD = 'Obj.SQL.Add(''SELECT * FROM t WHERE a = '' + Marker);';
+  // Meldung von SCA003 fuer diesen Aufruf (uSQLInjection.Report: Ziel bis
+  // zur Klammer + '()', zwei Leerzeichen, Schaetzung).
+  SQL_ADD_MSG = 'Obj.SQL.Add()  [Fix 1/5 [*    ] (Trivial)]';
+
+procedure TTestRdxSca044.Sql_CallAnchor_AddTemplate;
+var
+  R : TSqlRun;
+begin
+  // Der Weg des Anbieters fuer SCA003 (Anker 'assign-or-call' aus dem
+  // Katalog): der Knoten ist ein Aufruf, CallOf bekommt den Kopf ohne
+  // Argumente (HeadOf), die Vorlage parametrisiert das eine Argument.
+  R := RunSql(UnitWith('  ' + SQL_ADD), 'Obj.SQL.Add', 'assign-or-call');
+  Assert.IsTrue(R.Described, R.Why);
+  Assert.IsTrue(R.IsCall, 'Aufruf-Knoten');
+  Assert.IsTrue(R.Built, R.Reason);
+  Assert.AreEqual(
+    '  Obj.SQL.Add(''SELECT * FROM t WHERE a = :p1'');' + sLineBreak +
+    '  Obj.ParamByName(''p1'').Value := Marker;', R.Template);
+  Assert.AreEqual('1 Parameter, nichts wird geschrieben', R.Hint);
+end;
+
+procedure TTestRdxSca044.Sql_AssignAnchor_TextTemplate;
+var
+  R : TSqlRun;
+begin
+  R := RunSql(UnitWith(
+    '  Obj.SQL.Text := ''SELECT '' + Marker + '' FROM '' + Tag;'),
+    'Obj.SQL.Text', 'assign-or-call');
+  Assert.IsTrue(R.Described, R.Why);
+  Assert.IsFalse(R.IsCall, 'Zuweisung');
+  Assert.IsTrue(R.Built, R.Reason);
+  Assert.AreEqual(
+    '  Obj.SQL.Text := ''SELECT :p1 FROM :p2'';' + sLineBreak +
+    '  Obj.ParamByName(''p1'').Value := Marker;' + sLineBreak +
+    '  Obj.ParamByName(''p2'').Value := Tag;', R.Template);
+  Assert.AreEqual('2 Parameter, nichts wird geschrieben', R.Hint);
+end;
+
+procedure TTestRdxSca044.Sql_TwoCallsOnLine_Ambiguous;
+var
+  R : TSqlRun;
+begin
+  R := RunSql(UnitWith(
+    '  Obj.SQL.Add(''a'' + Marker); Obj.SQL.Add(''b'' + Tag);'),
+    'Obj.SQL.Add(''a''', 'assign-or-call');
+  Assert.IsFalse(R.Described);
+  Assert.IsTrue(Pos('mehrdeutig (2 Anweisungen)', R.Why) > 0, R.Why);
+end;
+
+procedure TTestRdxSca044.Sql_NestedCallInArgument_NotAmbiguous;
+var
+  R : TSqlRun;
+begin
+  // Ein Aufruf IM Argument ist kein eigener Knoten (uParser2 legt die
+  // Argumente als Text ab) - die Zeile bleibt eindeutig.
+  R := RunSql(UnitWith('  Obj.SQL.Add(''x'' + IntToStr(Id));'),
+    'Obj.SQL.Add', 'assign-or-call');
+  Assert.IsTrue(R.Described, R.Why);
+  Assert.IsTrue(R.IsCall);
+  Assert.IsTrue(R.Built, R.Reason);
+  Assert.IsTrue(Pos('Obj.ParamByName(''p1'').Value := IntToStr(Id);', R.Template) > 0,
+    R.Template);
+end;
+
+procedure TTestRdxSca044.Sql_TabIndent_KeepsTabs;
+var
+  R : TSqlRun;
+begin
+  // Minor 31: zwei Tabs vor der Anweisung - zwei Tabs vor jeder Zeile der
+  // Vorlage (InsertIndent zaehlt Zeichen, der Laeufer reicht den Text).
+  R := RunSql(UnitWith(#9#9 + SQL_ADD), 'Obj.SQL.Add', 'assign-or-call');
+  Assert.IsTrue(R.Built, R.Why + R.Reason);
+  Assert.AreEqual(
+    #9#9'Obj.SQL.Add(''SELECT * FROM t WHERE a = :p1'');' + sLineBreak +
+    #9#9'Obj.ParamByName(''p1'').Value := Marker;', R.Template);
+end;
+
+procedure TTestRdxSca044.Anchor_Call_OnAssignLine_NoStatement;
+var
+  R : TSqlRun;
+begin
+  R := RunSql(UnitWith('  Text := ''a'' + Marker;'), 'Text :=', 'call');
+  Assert.IsFalse(R.Described);
+  Assert.IsTrue(Pos('keine Anweisung auf Zeile', R.Why) > 0, R.Why);
+end;
+
+procedure TTestRdxSca044.HeadOf_StripsArguments;
+begin
+  Assert.AreEqual('Obj.SQL.Add', TRdxRecipeRunner.HeadOf('Obj.SQL.Add(''x'' + y)'));
+  Assert.AreEqual('Bar', TRdxRecipeRunner.HeadOf(' Bar '));
+  Assert.AreEqual('Foo', TRdxRecipeRunner.HeadOf('Foo (a)'));
+end;
+
+procedure TTestRdxSca044.Describe_RealSca044Finding_Matches;
+var
+  Src, Msg, Why, T : string;
+  Plus             : Integer;
+begin
+  // Die Meldung des ECHTEN Detektors: Ziel und '+'-Zahl lassen sich lesen
+  // und passen zum Knoten der Zeile - die Gegenprobe laesst durch.
+  Src := UnitWith(CHAIN);
+  Assert.AreEqual<Integer>(1, FindingsOf(Src, fkConcatToFormat, Msg));
+  Assert.IsTrue(TRdxRecipes.ConcatFindingTarget(Msg, T, Plus), Msg);
+  Assert.AreEqual('Text', T);
+  Assert.AreEqual<Integer>(4, Plus);
+  Assert.IsTrue(DescribeForFinding(Src, fkConcatToFormat, Msg,
+    'Text := Marker', Why), Why);
+  Assert.AreEqual('', Why);
+end;
+
+procedure TTestRdxSca044.Describe_LineShifted_TargetMismatch;
+var
+  Src, Shifted, Msg, Why : string;
+  O                      : TRdxFormatOutcome;
+begin
+  // Fundliste vom Scan, danach eine Zeile oberhalb eingefuegt: auf der
+  // Fundzeile steht jetzt eine ANDERE Kette. Ohne Gegenprobe formte das
+  // Rezept sie unter der Kopfzeile des alten Funds um (Minor 20).
+  Src := UnitWith(CHAIN);
+  Assert.AreEqual<Integer>(1, FindingsOf(Src, fkConcatToFormat, Msg));
+  Shifted := UnitWith('  Marker := Tag + ''x'' + FName + ''y'' + Tag;'#13#10 + CHAIN);
+  Assert.AreEqual<Integer>(LineOf(Src, 'Text := Marker'),
+    LineOf(Shifted, 'Marker := Tag'), 'die Fundzeile traegt jetzt Marker := ...');
+  Assert.IsFalse(DescribeForFinding(Shifted, fkConcatToFormat, Msg,
+    'Marker := Tag', Why));
+  Assert.IsTrue(Pos('verschoben', Why) > 0, Why);
+  Assert.IsTrue(Pos('Marker', Why) > 0, Why);
+  // FormatRewrite reicht den Grund durch - der Eintrag bleibt ausgegraut.
+  O := TRdxRecipeRunner.FormatRewrite(nil, nil, Why, nil);
+  Assert.IsFalse(O.Enabled);
+  Assert.AreEqual(Why, O.Reason);
+end;
+
+procedure TTestRdxSca044.Describe_PlusCountChanged_Mismatch;
+var
+  Src, Msg, Why : string;
+begin
+  // Dasselbe Ziel, aber die Kette wurde seit dem Scan gekuerzt.
+  Src := UnitWith(CHAIN);
+  Assert.AreEqual<Integer>(1, FindingsOf(Src, fkConcatToFormat, Msg));
+  Assert.IsFalse(DescribeForFinding(UnitWith('  Text := Marker + ''a'' + Tag;'),
+    fkConcatToFormat, Msg, 'Text := Marker', Why));
+  Assert.IsTrue(Pos('veraendert', Why) > 0, Why);
+end;
+
+procedure TTestRdxSca044.Describe_Sca003Finding_CallTarget;
+var
+  Src, Why : string;
+begin
+  // SCA003 meldet einen Aufruf als 'Kopf()' - der Knoten traegt 'Kopf(..)'.
+  Src := UnitWith('  ' + SQL_ADD);
+  Assert.IsTrue(DescribeForFinding(Src, fkSQLInjection, SQL_ADD_MSG,
+    'Obj.SQL.Add', Why), Why);
+  Assert.IsFalse(DescribeForFinding(Src, fkSQLInjection,
+    'Obj.SQL.Text  [Fix 1/5 [*    ] (Trivial)]', 'Obj.SQL.Add', Why));
+  Assert.IsTrue(Pos('verschoben', Why) > 0, Why);
+end;
+
+procedure TTestRdxSca044.Rewrite_DirectiveTextInLiteral_Enabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // '{$Y}' steht IN einem String-Literal - keine Direktive. Bis Minor 16
+  // sperrte eine Suche nach '{$' im Rohtext genau diesen Fall.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''a'' + Marker + ''{$Y}'' + Tag;'), 'Text := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%s{$Y}%s'', [Marker, Tag])', O.NewText);
+end;
+
+procedure TTestRdxSca044.Rewrite_WithBlock_NotProven;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Im with-Block kann ein Name an ein Member des with-Ausdrucks binden:
+  // der deklarierte Typ beweist nichts, die Operanden gelten nur laut
+  // Kompilat (strittiger Minor 1). Ohne with: Rewrite_ParamsAndField_Enabled.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  with Obj do'#13#10 +
+    '    Text := ''a'' + Marker + ''b'' + Tag;'), 'Text := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%sb%s'', [Marker, Tag])', O.NewText);
+  Assert.AreEqual<Integer>(0, O.Proven);
+  Assert.AreEqual<Integer>(2, Length(O.ByCompiler));
+  Assert.IsTrue(Pos('alle bewiesen', O.Hint) = 0, O.Hint);
+  // IntToStr(n) wird dort nicht %d mit n: n kann ein Member anderen Typs
+  // sein, und der Core nimmt die RTL-Annahme fuer IntToStr zurueck
+  // (strittiger Minor 3) - der Aufruf bleibt stehen.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  with Obj do'#13#10 +
+    '    Text := ''a'' + IntToStr(n) + ''b'' + Tag;'), 'Text := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%sb%s'', [IntToStr(n), Tag])', O.NewText);
+  Assert.AreEqual<Integer>(0, O.Numeric);
+end;
+
+procedure TTestRdxSca044.Uses_Missing_ClauseInsideIfdef_Disabled;
+var
+  Src, Path : string;
+  Places    : TSourcePlaces;
+  O         : TRdxFormatOutcome;
+begin
+  // Die ganze Klausel liegt in einem bedingten Zweig: zwischen ihren
+  // Eintraegen steht keine Direktive, eine Einfuegung landete trotzdem nur
+  // im MSWINDOWS-Zweig (Minor 17).
+  Src := StringReplace(WithUses(CHAIN, ''), 'implementation'#13#10,
+    'implementation'#13#10'{$IFDEF MSWINDOWS}'#13#10'uses Winapi.Windows;'#13#10
+    + '{$ENDIF}'#13#10, []);
+  Assert.IsFalse(RunRecipe(Src, 'Text := Marker', O));
+  Assert.IsTrue(Pos(Format('Direktiven (Zeile %d)',
+    [LineOf(Src, '{$IFDEF MSWINDOWS}')]), O.Reason) > 0, O.Reason);
+  Places := OpenTemp(Src, Path);
+  try
+    Assert.AreEqual<Integer>(LineOf(Src, '{$IFDEF MSWINDOWS}'),
+      TRdxRecipeRunner.UsesDirectiveLine(Places), 'auch die Qualifizierung sperrt');
+  finally
+    CloseTemp(Places, Path);
+  end;
+  // Gegenprobe: ein Zweig, der VOR der Klausel endet, sperrt nicht.
+  Src := StringReplace(WithUses(CHAIN, ''), 'implementation'#13#10,
+    'implementation'#13#10'{$IFDEF RDX_NEVER_DEFINED}'#13#10'{$ENDIF}'#13#10
+    + 'uses Winapi.Windows;'#13#10, []);
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  Assert.AreEqual('System.SysUtils, Winapi.Windows', O.UsesEdit.NewText);
+end;
+
+procedure TTestRdxSca044.Uses_Missing_ParenStarDirectiveInClause_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // '(*$..*)' ist eine Direktive wie '{$..}' (strittiger Nit 5).
+  Assert.IsFalse(RunRecipe(WithUses(CHAIN,
+    'uses Classes (*$IFDEF FPC*), LCLIntf (*$ENDIF*);'), 'Text := Marker', O));
+  Assert.IsTrue(Pos('Direktiven', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.Uses_Missing_LineCommentAfterLast_InsertsBeforeLast;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Hinter dem letzten Eintrag ein '//'-Kommentar, das ';' auf der
+  // Folgezeile: angehaengt wuerde in den Kommentar - also VOR dem letzten
+  // eingefuegt. Gueltig, die Sortierung bricht hier (bekannte Ausnahme,
+  // strittiger Nit 5).
+  Assert.IsTrue(RunRecipe(WithUses(CHAIN,
+    'uses Classes, Forms // Formulare'#13#10'  ;'), 'Text := Marker', O), O.Reason);
+  Assert.AreEqual('Forms', O.UsesEdit.Expected);
+  Assert.AreEqual('SysUtils, Forms', O.UsesEdit.NewText);
+end;
+
+procedure TTestRdxSca044.Uses_Missing_FormCommentAfterLast_AppendsAfterComment;
+var
+  Src, After : string;
+  O          : TRdxFormatOutcome;
+begin
+  // Die .dpr-Form: Pfad und Formular-Kommentar hinter dem letzten Eintrag.
+  // Beide kommen in den Bereich, angehaengt wird dahinter (Minor 42).
+  Src := WithUses(CHAIN, 'uses Classes, Forms in ''Forms.pas'' {MainForm};');
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  Assert.AreEqual('Forms in ''Forms.pas'' {MainForm}', O.UsesEdit.Expected);
+  Assert.AreEqual('Forms in ''Forms.pas'' {MainForm}, SysUtils', O.UsesEdit.NewText);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('uses Classes, Forms in ''Forms.pas'' {MainForm}, SysUtils;', After) > 0,
+    After);
+  Assert.AreEqual<Integer>(0, UnsortedUsesFindings(After), 'kein neuer SCA142-Fund');
+end;
+
+procedure TTestRdxSca044.Uses_Missing_FpcAwareUnit_ShortName;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Eine Unit mit FPC-Weiche und ohne uses-Klausel: FPC 3.2 kennt keine
+  // Unit-Scopes - die neue Klausel nennt 'SysUtils' (Minor 35). Ohne die
+  // Weiche: Uses_Missing_NoClause_CreatedAfterImplementation.
+  Assert.IsTrue(RunRecipe('{$IFDEF FPC}{$mode delphi}{$ENDIF}'#13#10
+    + WithUses(CHAIN, ''), 'Text := Marker', O), O.Reason);
+  Assert.AreEqual('SysUtils', O.UsesName);
+  Assert.AreEqual('implementation'#10#10'uses'#10'  SysUtils;', O.UsesEdit.NewText);
+end;
+
+procedure TTestRdxSca044.Uses_Missing_DottedNonRtlNames_ShortName;
+var
+  O : TRdxFormatOutcome;
+begin
+  // 'Generics.Collections' traegt einen Punkt, ist aber kein Delphi-Scope:
+  // die Datei schreibt Kurznamen (Minor 35).
+  Assert.IsTrue(RunRecipe(WithUses(CHAIN, 'uses Classes, Generics.Collections;'),
+    'Text := Marker', O), O.Reason);
+  Assert.AreEqual('SysUtils', O.UsesName);
+  Assert.AreEqual('Generics.Collections', O.UsesEdit.Expected);
+  Assert.AreEqual('Generics.Collections, SysUtils', O.UsesEdit.NewText);
+end;
+
+procedure TTestRdxSca044.Uses_Missing_ProgramWithoutUses_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Ein Programm ohne uses-Klausel hat weder interface noch implementation:
+  // es wird keine Klausel angelegt, der Eintrag bleibt ausgegraut (Nit 26).
+  Assert.IsFalse(RunRecipe(
+    'program P;'#13#10 +
+    'procedure Run;'#13#10 +
+    'var Text, Marker: string;'#13#10 +
+    'begin'#13#10 +
+    '  Text := ''a'' + Marker + ''b'' + Marker;'#13#10 +
+    'end;'#13#10 +
+    'begin'#13#10 +
+    '  Run;'#13#10 +
+    'end.', 'Text := ''a''', O));
+  Assert.IsTrue(Pos('keine uses-Klausel und kein interface/implementation',
+    O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.LineInUsesClause_UnitClauses;
+var
+  Src, Path : string;
+  Places    : TSourcePlaces;
+  ImplUses  : Integer;
+begin
+  // interface: 'uses' und Eintraege auf EINER Zeile - die Zeile davor
+  // ('interface') gehoert nicht dazu (Minor 19). implementation: 'uses'
+  // allein, ein Kommentar vor dem ersten Eintrag - das Fenster beginnt
+  // trotzdem am 'uses'.
+  Src := StringReplace(WithUses(CHAIN, 'uses System.Classes, Vcl.Forms;'),
+    'implementation'#13#10, 'implementation'#13#10'uses'#13#10'  // RTL'#13#10
+    + '  System.Math;'#13#10, []);
+  ImplUses := LineOf(Src, '  // RTL') - 1;
+  Places := OpenTemp(Src, Path);
+  try
+    Assert.IsFalse(TRdxRecipeRunner.LineInUsesClause(Places, LineOf(Src, 'interface')));
+    Assert.IsTrue(TRdxRecipeRunner.LineInUsesClause(Places, LineOf(Src, 'uses System.Classes')));
+    Assert.IsFalse(TRdxRecipeRunner.LineInUsesClause(Places, LineOf(Src, 'type TFoo')));
+    Assert.IsFalse(TRdxRecipeRunner.LineInUsesClause(Places, ImplUses - 1), 'implementation');
+    Assert.IsTrue(TRdxRecipeRunner.LineInUsesClause(Places, ImplUses), 'uses allein');
+    Assert.IsTrue(TRdxRecipeRunner.LineInUsesClause(Places, ImplUses + 1), 'Kommentar');
+    Assert.IsTrue(TRdxRecipeRunner.LineInUsesClause(Places, LineOf(Src, '  System.Math;')));
+    Assert.IsFalse(TRdxRecipeRunner.LineInUsesClause(Places, LineOf(Src, 'procedure TFoo.Run')));
+  finally
+    CloseTemp(Places, Path);
+  end;
+end;
+
+procedure TTestRdxSca044.LineInUsesClause_Program;
+var
+  Src, Path : string;
+  Places    : TSourcePlaces;
+begin
+  // Ein Programm hat seine Klausel am Wurzelknoten - bis Minor 18 bekamen
+  // .dpr/.lpr/library nie uses-Aktionen.
+  Src := 'program P;'#13#10'uses'#13#10'  Forms,'#13#10'  uMain in ''uMain.pas'';'#13#10
+    + 'begin'#13#10'end.';
+  Places := OpenTemp(Src, Path);
+  try
+    Assert.IsFalse(TRdxRecipeRunner.LineInUsesClause(Places, 1), 'program');
+    Assert.IsTrue(TRdxRecipeRunner.LineInUsesClause(Places, 2), 'uses');
+    Assert.IsTrue(TRdxRecipeRunner.LineInUsesClause(Places, 3), 'Forms');
+    Assert.IsTrue(TRdxRecipeRunner.LineInUsesClause(Places, 4), 'uMain');
+    Assert.IsFalse(TRdxRecipeRunner.LineInUsesClause(Places, 5), 'begin');
+  finally
+    CloseTemp(Places, Path);
+  end;
+end;
+
+{ ---- Review reDelphiX 2026-10-07, Engine (Minor 4 / Minor 11) ---- }
+
+procedure TTestRdxSca044.Rewrite_BlockCommentBeforeChain_Enabled;
+var
+  Src, After : string;
+  O          : TRdxFormatOutcome;
+begin
+  // Seit Minor 4 sind Kommentare in der Code-Sicht Leerraum, nicht mehr
+  // Fuellung: der erste Term beginnt am Apostroph, nicht am '{'. Der
+  // Kommentar liegt damit ausserhalb des ersetzten Bereichs, sperrt nicht
+  // ('Kommentar im Bereich') und bleibt nach der Ersetzung stehen. Das
+  // '//'-Gegenstueck: Rewrite_CommentBeforeChain_Enabled.
+  Src := UnitWith('  Text := {x} ''a'' + Marker + ''b'' + Tag;');
+  Assert.IsTrue(RunRecipe(Src, 'Text := {x}', O), O.Reason);
+  Assert.AreEqual('''a'' + Marker + ''b'' + Tag', O.Expected,
+    'der Bereich beginnt hinter dem Kommentar');
+  Assert.AreEqual('Format(''a%sb%s'', [Marker, Tag])', O.NewText);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('  Text := {x} Format(''a%sb%s'', [Marker, Tag]);', After) > 0,
+    After);
+end;
+
+procedure TTestRdxSca044.Rewrite_ShortStringTarget_Disabled;
+var
+  Src : string;
+  O   : TRdxFormatOutcome;
+begin
+  // Seit Minor 11 meldet der Dienst 'string[N]' als 'shortstring' (vorher
+  // 'string'). Format liefert UnicodeString, die Zuweisung an Buf wandelte
+  // und kuerzte - gesperrt wie ein AnsiString-Ziel
+  // (Compiled_AnsiTarget_Disabled). Gaelte Buf als 'string', liesse der
+  // UTF8String-Operand U die Umformung zu
+  // (Compiled_AnsiOperand_UnicodeTarget_Enabled) - der Test faellt also
+  // genau dann, wenn die ShortString-Erkennung fehlt.
+  Src := StringReplace(UnitWith('  Buf := ''x'' + U + ''y'' + Marker;'),
+    'begin'#13#10, 'var Buf: string[32]; U: UTF8String;'#13#10'begin'#13#10, []);
+  Assert.IsFalse(RunRecipe(Src, 'Buf := ''x''', O));
+  Assert.IsTrue(Pos('shortstring', O.Reason) > 0, O.Reason);
+  Assert.IsTrue(Pos('Ziel', O.Reason) > 0, O.Reason);
+end;
+
+initialization
+  Randomize;
+  TDUnitX.RegisterTestFixture(TTestRdxSca044);
+
+end.

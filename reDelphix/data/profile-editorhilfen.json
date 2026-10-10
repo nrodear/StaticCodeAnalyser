@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "profiles": {
+    "editorhilfen": [
+      "ConcatToFormat",
+      "SQLInjection",
+      "ExplicitTObjectInheritance",
+      "FreeAndNilHint",
+      "NilComparison",
+      "UnusedSuppression",
+      "UnsortedUses",
+      "UnusedUses",
+      "FileReadError"
+    ]
+  }
+}

@@ -221,6 +221,72 @@ TFindingType      = (ftBug, ftCodeSmell, ftVulnerability,
                      ftSecurityHotspot, ftCodeDuplication, ftFileError);
 ```
 
+### 3.8 Quellstellen: `TSourcePlaces` (`uSourcePlaces`)
+
+Beschreibt Stellen einer Quelldatei **auf Anfrage** — für Konsumenten, die Code umschreiben wollen (z. B. das Modul „Source Refactor" reDelphix). Der Dienst liest nur: kein Scan läuft, kein Fund, Feld oder Export wird berührt, und kein Detektor benutzt ihn. Eine Instanz je Datei.
+
+`uEngineApi` exportiert die Klassen- und Record-Typen weiter: `TSourcePlaces`, `TNodeRef`, `TSourceLineRange`, `TUsesSection`, `TNodeKind`, `TNodeKinds`, `TRefactorInfo`, `TRefactorSpan`. Konstanten und Enum-Werte exportiert es **nicht**: die Rollen (`ROLE_*`), Werttypen (`rv*`, `TRefactorValueType`) und Flags (`rf*`, `TRefactorFlags`) brauchen `uses uRefactorInfo`, die Vertragsversion `SOURCE_PLACES_VERSION` braucht `uses uSourcePlaces`. Beide Units liegen im Package.
+
+```pascal
+Places := TSourcePlaces.Create;
+try
+  try
+    Opened := Places.Open(FileName);    // False: Datei nicht lesbar
+  except
+    on E: Exception do
+    begin
+      Log(E.Message);                   // Parser-Fehler, auch der Watchdog
+      Opened := False;                  // nichts ist geöffnet (IsOpen = False)
+    end;
+  end;
+  if Opened then
+  begin
+    Nodes := Places.NodesAt(Line, [TNodeKind.nkAssign]);   // Fundzeile -> AST-Knoten
+    if Length(Nodes) = 1 then
+    begin
+      Info := Places.ChainOf(Nodes[0].Line, Nodes[0].Col, Nodes[0].Name);
+      try
+        if Assigned(Info) and Info.FixSafe then
+          ...                                              // Umformung bauen
+      finally
+        Info.Free;
+      end;
+    end;
+  end;
+finally
+  Places.Free;
+end;
+```
+
+| Member | Liefert | Bedeutung |
+|--------|---------|-----------|
+| `Open(FileName)` / `Close` | `Boolean` | Liest die Datei selbst (kein Scan-Cache, kein Engine-Lock) und parst genau den dekodierten Text. `False`, wenn nicht lesbar. Ein Parser-Fehler (auch der Watchdog des Parsers) **wirft**; danach ist der Dienst geschlossen (`IsOpen = False`). Ein vorher geöffneter Text wird zuerst verworfen. |
+| `OpenSource(FileName, Source)` | `Boolean` | Wie `Open`, aber auf einem Text, den der Host übergibt (IDE: der Editor-Puffer mit ungespeicherten Änderungen). `FileName` ist nur der Name; die Datei wird nicht gelesen. `False` bei leerem Text; ein Parser-Fehler wirft wie bei `Open`. |
+| `SetIfdefDefines(Defines)` | | Lexer-Sicht des nächsten `Open`/`OpenSource`. Der Dienst parst immer in seiner eigenen Sicht, nie in der prozessweiten, die ein laufender Scan aus `TScanRequest.IfdefDefines` setzt. `nil` oder leer (Vorgabe) = beide Zweige jedes `{$IFDEF}`; sonst ein Zweig mit genau diesen Defines — ein Konsument, der die Sicht des Laufs kennt (`TScanRequest.IfdefDefines`), bekommt Knoten und Typen dann aus derselben Sicht wie die Funde. Ausnahme: bei einem `dlFpc`-Lauf mit nicht leerer Define-Liste (erzwungen auch für `.lpi`/`.lpk`/`.lpg`-Projekte) ergänzt der Scan `FPC` und `LCL` (`TAnalysisSession.ApplyIfdefView`), der Dienst nicht — für die Sicht der Funde gibt der Aufrufer die beiden selbst mit. Die Werte werden kopiert und bleiben über `Close` hinweg gesetzt. Grenzen der Doppelzweig-Sicht: `DeclaredTypeOf` liefert den Typ eines der Zweige (bei Parametern und lokalen Variablen den des letzten, bei Feldern und Unit-Globalen den des ersten), und `NodesAt` kann Knoten beider Zweige liefern. Defines aus Include-Dateien wertet der Dienst nicht aus. |
+| `IsOpen` / `FileName` / `LineCount` | `Boolean` / `string` / `Integer` | Zustand des geöffneten Texts. |
+| `StatementAt(Line, Col)` | `TRefactorInfo` | Die dort beginnende Anweisung: Bereich mit Spalten, Flags, Einfügepunkt, Hash. `nil`, wenn ihr Ende nicht bestimmbar ist, auch wenn ein Delphi-12-Mehrzeilenstring (`'''`) darin steht. |
+| `ChainOf(Line, Col, ExpectedTarget = '', ExpectedPlus = ANY_PLUS_COUNT)` | `TRefactorInfo` | Zuweisung mit `+`-Kette: Ziel, Literale, Operanden, `FixSafe`. Zwei Gegenproben, jede liefert bei Abweichung `nil`: das Ziel gegen `ExpectedTarget` (`TNodeRef.Name`; `''` = keine Prüfung) und die Zahl der `+` auf oberster Ebene gegen `ExpectedPlus`, vom Konsumenten unabhängig gezählt (etwa aus `TNodeRef.TypeRef`, so wie SCA044 zählt). Jeder negative Wert (`TSourcePlaces.ANY_PLUS_COUNT`) heißt: keine Prüfung. |
+| `CallOf(Line, Col, ExpectedHead)` | `TRefactorInfo` | Aufruf-Anweisung: Kopf plus Kette des einen Arguments, sonst je Argument ein `argument`-Teil. `ExpectedHead` ist der Kopf vor der ersten `(` (`''` = keine Prüfung). |
+| `NodesAt(Line, Kinds)` | `TArray<TNodeRef>` | AST-Knoten der Arten, die auf der Zeile beginnen, nach Spalte sortiert. Zwei Treffer heißen: mehrdeutig. |
+| `UsesEntries(Section)` | `TArray<TRefactorSpan>` | Jeder Unit-Name der `uses`-Klauseln mit Bereich (`Resolved` = Name wie geschrieben). `usAny` (Vorgabe) umfasst auch die Klausel eines Programms oder einer Library. |
+| `IdentifiersIn(Span)` | `TArray<TRefactorSpan>` | Bezeichner in einem Bereich als `ident`-Teile; Schlüsselwörter werden nicht gefiltert. Strings und Kommentare sind ausgeblendet — auch wenn der Bereich mitten in einem beginnt, denn die Datei wird bis zum Bereich mitgelesen. Grenze: einen Delphi-12-Mehrzeilenstring (`'''`) vor dem Bereich erkennt das nicht. |
+| `CodeViewOf` / `TextOf` / `HashOf` | | Spaltentreue Code-Sicht, Rohtext und SHA-256 eines Bereichs, alle auf dem Text des letzten `Open`/`OpenSource`. In der Code-Sicht sind Strings mit `~` gefüllt (`TRefactorInfoBuilder.VIEW_FILL`), Kommentare und Compiler-Direktiven samt Begrenzern dagegen Leerzeichen. `HashOf` sieht keine spätere Änderung: um eine zu erkennen, den aktuellen Text neu öffnen und `HashOf(Info.Span)` mit `Info.SpanHash` vergleichen, oder direkt vor dem Schreiben `TextOf(Span)` mit dem Zielpuffer vergleichen (so macht es reDelphix). |
+| `ConditionalRanges` | `TArray<TSourceLineRange>` | `{$IFDEF}`-Bereiche der Datei. |
+| `SectionLine(Section)` | `Integer` | Zeile des Schlüsselworts `interface` / `implementation`; `0`, wenn der Abschnitt fehlt (Programm, Library), und für `usAny`. |
+| `LineText(Line)` | `string` | Text einer Zeile des geöffneten Texts; `''` außerhalb. |
+| `SpanHasComment(Span)` | `Boolean` | `True`, wenn im Bereich ein Kommentar oder eine Compiler-Direktive steht — für einen Konsumenten, der nur einen Teil einer Anweisung ersetzt (`rfHasComment` gilt für die ganze Anweisung). |
+| `DeclaredTypeOf(Line, Name)` | `string` | Deklarierter Typ (nackt, klein geschrieben) eines Bezeichners: Parameter oder lokale Variable der umschließenden Routine, sonst Feld oder Unit-Global; `''`, wenn unbekannt. `string[N]` ergibt `'shortstring'`, nicht `'string'` (der Typ-Resolver der Detektoren bleibt bei `'string'`). `Line` ist die **Ankerzeile** einer Anweisung (Zeile eines AST-Knotens), keine Fortsetzungszeile. Kennt keine `with`-Blöcke: liefert die gefundene Deklaration auch dort, wo der Compiler den Namen an ein Member des `with`-Ausdrucks bindet. |
+| `InWithBlock(Line)` | `Boolean` | `True`, wenn die Zeile im Rumpf einer `with`-Anweisung liegt (zeilengenau, von der `with`-Zeile bis zur letzten Knoten-Zeile ihrer Anweisung). Das fragen, bevor man aus `DeclaredTypeOf` etwas beweist. |
+| `CollectNodesAt` / `CollectUsesEntries` / `CollectIdentifiers` | | Klassenfunktionen: dasselbe auf einem Baum, einer Zeilenliste oder einer Code-Sicht, die der Aufrufer schon hat — für Tests und Konsumenten mit eigenem AST. |
+
+**`TNodeRef`** kopiert die Knotenfelder, die ein Konsument braucht: `Kind`, `Line`, `Col`, `Name` (Ziel bzw. Kopf, wie der Parser ihn zusammengefügt hat) und `TypeRef` (rechte Seite bzw. Typbezug, abgeflacht). Der Baum selbst gehört dem Dienst und lebt nur bis zum nächsten `Open`/`Close`.
+
+**Was `ChainOf` und `CallOf` beweisen.** Ein Operand, der ein bloßer Bezeichner ist, bekommt seinen deklarierten Typ (`rvString`/`rvNonString`, `Resolved` = Typname), und `FixSafe` wird neu abgeleitet. Unbekannt bleibt unbekannt: `rvUnknown` und `FixSafe = False` sind der Normalfall. Keinen `rvString`-Beweis gibt es in einem `with`-Block (`InWithBlock`; `Resolved` nennt weiter die gefundene Deklaration) und keinen für einen bekannten RTL-Aufruf oder einen `.ToString`-Term, dessen Namen eine Funktion der Unit selbst mit einem Nicht-String-Ergebnis deklariert — sie verdeckt die RTL-Routine (z. B. ein unit-lokales `function Trim(..): Variant`). Mit `SysUtils.`/`StrUtils.` qualifizierte Aufrufe behalten ihren Beweis. Eine Funktion in einer verschachtelten Routine sieht der Dienst nicht (der Parser verwirft verschachtelte Routinen).
+
+Koordinaten sind 1-basiert; `EndCol` zeigt **hinter** das letzte Zeichen. Jedes Primitiv außer `Open`/`OpenSource` ist total (`nil`, leer, `0` oder `False` statt Exception, auch wenn nichts geöffnet ist). `SOURCE_PLACES_VERSION` (= 1) ist die Vertragsversion — eine **Übersetzungszeit**-Konstante: ein Konsument prüft sie mit `{$IF SOURCE_PLACES_VERSION <> 1}{$MESSAGE ERROR '...'}{$IFEND}` (reDelphix tut das in `uRdxRecipeRunner`) und baut dann gegen einen geänderten Vertrag nicht mehr. Eine zur Laufzeit getauschte BPL erkennt sie nicht; das leistet die Paketbindung (DCP/`requires`). Die Version steigt bei einer Änderung an der Signatur eines bestehenden Primitivs, an Rollen, an Koordinaten oder an einer Ableitung von `FixSafe`/`ValueType`/`Resolved`, die etwas neu als bewiesen meldet; sie bleibt bei neuen Primitiven, neuen Parametern mit Vorgabewert und Ableitungen, die nur strenger werden.
+
+Je Regel kann `rules/sca-rules.json` `anchor` (worauf die Funde ankern: `statement`, `assign`, `call`, `assign-or-call`; `uses-item` ist reserviert) und `fixMode` (`none` / `assisted` / `auto`) tragen; gelesen über `TRuleCatalog` (`TRuleMeta.Anchor`, `TRuleMeta.FixMode`). Ein fehlender oder unbekannter Wert fällt auf den einkompilierten Katalog zurück; abgeschaltet wird eine Regel mit `"fixMode": "none"`.
+
 ---
 
 ## 4. Lebenszyklus / Threading
@@ -242,8 +308,9 @@ Ein Fremd-Consumer braucht **nur das Package**, keine Engine-Quelltexte:
 - **Kein** Engine-Source-Verzeichnis im `DCC_UnitSearchPath`.
 - Zur Laufzeit muss `SCA.Engine290.bpl` auffindbar sein (globales BPL-Verzeichnis
   oder neben der `.exe`).
-- `uses uEngineApi;` (+ bei Detailzugriff `uMethodd12`, `uSCAConsts`) — alles aus
-  dem Package.
+- `uses uEngineApi;` (+ bei Detailzugriff `uMethodd12`, `uSCAConsts`;
+  `uRefactorInfo`, `uSourcePlaces` für die Konstanten des Quellstellen-Dienstes,
+  s. 3.8) — alles aus dem Package.
 
 Vollständiges Beispiel inkl. `.dpr`/`.dproj`: **`SCA.CLI.Demo`**.
 

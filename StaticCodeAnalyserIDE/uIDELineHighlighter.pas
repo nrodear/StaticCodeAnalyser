@@ -641,6 +641,7 @@ uses
   uAnalyserPalette,     // ACCENT_ERROR als zentrale Stripe-Default-Farbe
   uAnalyserTheme,       // IsLightColor, EnsureHintContrast, Farb-Cache
   uHintTextLayout,      // Kurzform + Kuerzung des Nur-Text-Hints (testbar)
+  uIDEFindingBulb,      // Gluehbirne an der Caret-Zeile: Editor vormerken
   uIDETheme,            // Subscribe - Marken beim Theme-Wechsel neu faerben
   uPathNormalize,       // SPOT fuer Pfad-Normalisierung (Cache-Keys)
   uRepoSettings;        // OverlayPosition aus [UI]
@@ -2704,17 +2705,23 @@ begin
 end;
 
 // No-ops fuer nicht subskribierte Events
-procedure TFindingEditorEvents.EditorResized(const Editor: TWinControl); begin end;
+procedure TFindingEditorEvents.EditorResized(const Editor: TWinControl);
+begin
+  FindingBulbEditorChanged(Editor);   // Gluehbirne: nur vormerken
+end;
+
 procedure TFindingEditorEvents.EditorElided(const Editor: TWinControl;
   const LogicalLineNum: Integer);
 begin
   ForgetSnapshotsAround(LogicalLineNum);
+  FindingBulbEditorChanged(Editor);   // Gluehbirne: nur vormerken
 end;
 
 procedure TFindingEditorEvents.EditorUnElided(const Editor: TWinControl;
   const LogicalLineNum: Integer);
 begin
   ForgetSnapshotsAround(LogicalLineNum);
+  FindingBulbEditorChanged(Editor);   // Gluehbirne: nur vormerken
 end;
 
 procedure TFindingEditorEvents.ForgetSnapshotsAround(ALine: Integer);
@@ -2853,6 +2860,9 @@ procedure TFindingEditorEvents.EditorScrolled(const Editor: TWinControl;
 begin
   // Beim Scroll wandern alle markierten Zeilen — gespeicherte Rects sind
   // sofort veraltet. Cache leeren, Overlay verbergen.
+  // Die Gluehbirne zuerst und fuer JEDEN Editor (nicht nur FSavedEditor):
+  // sie merkt nur vor und wandert danach aus ihrem Hilfsfenster mit.
+  FindingBulbEditorChanged(Editor);
   if Editor <> FSavedEditor then Exit;
   FRenderedRects.Clear;
   FRenderedTextEnds.Clear;
@@ -3439,6 +3449,9 @@ var
   Mark : TFindingMark;
   ToRemove : TList<Integer>;
 begin
+  // Gluehbirne: fuer JEDEN Editor vormerken, bewegt wird ausserhalb des
+  // Zeichenpfads (uIDEFindingBulb).
+  FindingBulbEditorChanged(Editor);
   if Editor <> FSavedEditor then Exit;
 
   SweepEditedLines;

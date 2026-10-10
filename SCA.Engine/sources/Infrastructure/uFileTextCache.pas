@@ -188,6 +188,16 @@ function AcquireLines(const FileName: string;
 
 procedure ReleaseLines(Lines: TStringList; OwnedByCache: Boolean);
 
+// Laedt eine Datei mit der Encoding-Erkennung des Caches (BOM, dann
+// wohlgeformtes UTF-8, sonst Default-Codepage) in SL - OHNE den Cache zu
+// beruehren. Oeffentlich seit dem Quellstellen-Dienst (uSourcePlaces,
+// 2026-10-03): der liest je Datei selbst, damit er ohne Scan-Kontext und
+// Engine-Lock aus einem residenten Host heraus laufen kann, und soll
+// dabei dieselben Zeilen sehen wie der Scan. False, wenn die Datei nicht
+// lesbar ist.
+function LoadFileSmart(const FileName: string; SL: TStringList;
+  AEncInfo: PFileEncodingInfo = nil): Boolean;
+
 /// <summary>Leert den prozessweiten Text-Cache (G2-5-Hook, Engine-Seite).
 /// Der Aufrufer ist der CONSUMER, nicht die Engine - nur er weiss, wann
 /// die letzte Nacharbeit (Suppression-Marker, ContextHash fuer Baseline/
@@ -272,7 +282,7 @@ begin
 end;
 
 function LoadFileSmart(const FileName: string; SL: TStringList;
-  AEncInfo: PFileEncodingInfo = nil): Boolean;
+  AEncInfo: PFileEncodingInfo): Boolean;
 // Encoding-Erkennung in drei Stufen:
 //   1. BOM vorhanden? → Encoding aus BOM (UTF-8/UTF-16 LE/UTF-16 BE).
 //   2. Kein BOM, aber alle Bytes wohlgeformt UTF-8? → UTF-8.

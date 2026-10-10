@@ -2242,3 +2242,96 @@ msgstr "Dialecte réglé sur %s - prend effet à la prochaine analyse."
 
 msgid "analyser.ini is not writable - dialect unchanged."
 msgstr "analyser.ini n'est pas accessible en écriture - dialecte inchangé."
+
+msgid "Finding actions: provider failed - %s"
+msgstr "Actions du résultat : le fournisseur a échoué - %s"
+
+msgid "Finding action failed: %s"
+msgstr "L'action a échoué : %s"
+
+msgid "Static Code Analyser: actions for this line"
+msgstr "Static Code Analyser : actions pour cette ligne"
+
+msgid "No actions for this line"
+msgstr "Aucune action pour cette ligne"
+
+msgid "%d more findings on this line are not listed"
+msgstr "%d autres résultats sur cette ligne ne sont pas listés"
+
+msgid "Suppress here (// noinspection %s)"
+msgstr "Masquer ici (// noinspection %s)"
+
+msgid "Suppress in this file (// noinspection-file %s)"
+msgstr "Masquer dans ce fichier (// noinspection-file %s)"
+
+msgid "Remove ineffective suppression marker"
+msgstr "Retirer le marqueur de suppression sans effet"
+msgid "Use FreeAndNil(%s)"
+msgstr "Utiliser FreeAndNil(%s)"
+
+msgid "Use Assigned() instead of comparing with nil"
+msgstr "Utiliser Assigned() au lieu de comparer avec nil"
+
+msgid "Remove (TObject) from the class declaration"
+msgstr "Retirer (TObject) de la déclaration de classe"
+
+
+msgid "Show location"
+msgstr "Afficher l'emplacement"
+
+msgid "Build Format() from concatenation"
+msgstr "Construire Format() à partir de la concaténation"
+
+msgid "Copy parameterized template to clipboard"
+msgstr "Copier le modèle paramétré dans le presse-papiers"
+
+msgid "uses: qualify all %d entries"
+msgstr "uses : qualifier les %d entrées"
+
+msgid "uses: qualify entries"
+msgstr "uses : qualifier les entrées"
+
+msgid "Line %d:%d to %d:%d"
+msgstr "Ligne %d:%d à %d:%d"
+
+msgid "Scope table not loaded (unitscopes.txt)"
+msgstr "Table des portées non chargée (unitscopes.txt)"
+
+msgid "uses clause contains compiler directives (line %d)"
+msgstr "la clause uses contient des directives de compilation (ligne %d)"
+
+msgid "own unit %s in the project"
+msgstr "unité %s propre au projet"
+
+msgid "uses: qualify %s"
+msgstr "uses : qualifier %s"
+
+msgid "file not readable"
+msgstr "fichier illisible"
+
+msgid "%s: no fixMode in the rule catalog"
+msgstr "%s : pas de fixMode dans le catalogue des règles"
+
+msgid "nothing to offer"
+msgstr "rien à proposer"
+
+msgid "finding without file name"
+msgstr "résultat sans nom de fichier"
+
+msgid "file not found: %s"
+msgstr "fichier introuvable : %s"
+
+msgid "finding without line"
+msgstr "résultat sans ligne"
+
+msgid "editor buffer empty or not readable"
+msgstr "tampon de l'éditeur vide ou illisible"
+
+msgid "Line too long for the editor selection (the editor reaches at most column %d)"
+msgstr "Ligne trop longue pour la sélection de l'éditeur (l'éditeur atteint au plus la colonne %d)"
+
+msgid "Range %d:%d to %d:%d lies behind the end of the editor buffer (%d lines) - rescan the file"
+msgstr "La plage %d:%d à %d:%d se trouve après la fin du tampon de l'éditeur (%d lignes) - réanalysez le fichier"
+
+msgid "Cannot move the editor cursor to line %d, column %d"
+msgstr "Impossible de placer le curseur de l'éditeur à la ligne %d, colonne %d"

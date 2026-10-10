@@ -96,6 +96,8 @@
         <DCCReference Include="sources\uAnalyserPalette.pas"/>
         <DCCReference Include="sources\uAnalyserTheme.pas"/>
         <DCCReference Include="sources\uAppTheme.pas"/>
+        <DCCReference Include="sources\uEditorBulbButton.pas"/>
+        <DCCReference Include="sources\uEditorBulbGeometry.pas"/>
         <DCCReference Include="sources\uFindingGridRenderer.pas"/>
         <DCCReference Include="sources\uFindingsPropertiesFrame.pas"/>
         <DCCReference Include="sources\uFindingFilter.pas"/>

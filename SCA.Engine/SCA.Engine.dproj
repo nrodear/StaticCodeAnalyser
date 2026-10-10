@@ -112,10 +112,15 @@
         <DCCReference Include="sources\Common\uCompatSet.pas"/>
         <DCCReference Include="sources\Common\uCrashDiag.pas"/>
         <DCCReference Include="sources\Common\uDetectorUtils.pas"/>
+        <DCCReference Include="sources\Common\uFindingActions.pas"/>
+        <DCCReference Include="sources\Common\uFindingActionMenu.pas"/>
         <DCCReference Include="sources\Common\uJsonFormat.pas"/>
         <DCCReference Include="sources\Common\uLocalization.pas"/>
         <DCCReference Include="sources\Common\uMethodd12.pas"/>
         <DCCReference Include="sources\Common\uQuickFix.pas"/>
+        <DCCReference Include="sources\Common\uRefactorConcat.pas"/>
+        <DCCReference Include="sources\Common\uRefactorInfo.pas"/>
+        <DCCReference Include="sources\Common\uRefactorInfoBuilder.pas"/>
         <DCCReference Include="sources\Common\uRegExMatches.pas"/>
         <DCCReference Include="sources\Common\uRuleCatalog.pas"/>
         <DCCReference Include="sources\Common\uSCAConsts.pas"/>
@@ -333,6 +338,7 @@
         <DCCReference Include="sources\Infrastructure\uProjectFiles.pas"/>
         <DCCReference Include="sources\Infrastructure\uRepoSettings.pas"/>
         <DCCReference Include="sources\Infrastructure\uSonarConfig.pas"/>
+        <DCCReference Include="sources\Infrastructure\uSourcePlaces.pas"/>
         <DCCReference Include="sources\Infrastructure\uStaticAnalyzer2.pas"/>
         <DCCReference Include="sources\Infrastructure\uStaticFiles.pas"/>
         <DCCReference Include="sources\Infrastructure\uSuppression.pas"/>

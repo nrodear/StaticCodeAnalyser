@@ -73,6 +73,8 @@ requires
 contains
   uIDEExpert in 'uIDEExpert.pas',
   uIDEAnalyserForm in 'uIDEAnalyserForm.pas',
+  uIDEFindingActionMenu in 'uIDEFindingActionMenu.pas',
+  uIDEFindingBulb in 'uIDEFindingBulb.pas',
   uIDEFindingsPropertiesForm in 'uIDEFindingsPropertiesForm.pas',
   uIDELineHighlighter in 'uIDELineHighlighter.pas',
   uIDEAnnotationOverlay in 'uIDEAnnotationOverlay.pas',
