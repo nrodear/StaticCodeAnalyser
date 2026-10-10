@@ -20,6 +20,13 @@ uses
 
 const
   MIN_MULTI_QUOTES = 3;   // ''' oeffnet einen mehrzeiligen String (Delphi 12)
+  // Token, die ein eigenes 'end' brauchen - die end-Bilanzen der Planer
+  // (uRdxStructFixes, uRdxLineFixes; bis 2026-10-10 je eine Kopie).
+  END_OPENERS: array[0..4] of string = ('begin', 'case', 'try', 'asm',
+    'record');
+  // Hinter diesen Token ist ein Wort ein Bezeichner ('&End', '@@End',
+  // 'X.Then').
+  IDENT_PREFIXES: array[0..2] of string = ('&', '@', '.');
 
 type
   // Zeichenklassen einer Datei, spaltentreu: 'c' Code, 's' String-Literal,
@@ -114,6 +121,10 @@ function DirectiveBefore(AMap: TRdxCodeMap; AFromLine: Integer;
 
 // ALow ist eines der Woerter in AList (gleich geschrieben).
 function InList(const ALow: string; const AList: array of string): Boolean;
+// Ein Wort als Schluesselwort - nicht hinter '&', '@' oder '.' (APrev).
+function IsKeywordAfter(const T, APrev: TRdxToken): Boolean;
+// ALow oeffnet einen Block mit eigenem 'end' (END_OPENERS).
+function IsEndOpener(const ALow: string): Boolean;
 // 'at column N' aus einer Meldung; 0 = nicht vorhanden. Bis 2026-10-10 in
 // uRdxSimpleFixes, seit SCA101 auch fuer uRdxStructFixes.
 function ColumnFromMessage(const AMessage: string): Integer;
@@ -511,6 +522,16 @@ begin
   for S in AList do
     if ALow = S then
       Exit(True);
+end;
+
+function IsKeywordAfter(const T, APrev: TRdxToken): Boolean;
+begin
+  Result := T.IsWord and not InList(APrev.Low, IDENT_PREFIXES);
+end;
+
+function IsEndOpener(const ALow: string): Boolean;
+begin
+  Result := InList(ALow, END_OPENERS);
 end;
 
 function ColumnFromMessage(const AMessage: string): Integer;

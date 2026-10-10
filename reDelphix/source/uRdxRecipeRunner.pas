@@ -407,11 +407,6 @@ type
     class function BlockFix(AKind: TFindingKind; ALines: TStrings;
       ALine: Integer; const AMessage: string): TRdxFixOutcome; static;
 
-    // SCA082, SCA071, SCA088 und SCA123 (TRdxLineFixes): nur die Zeilen,
-    // bedeutungsgleich. SCA123 ausserdem nicht, wenn die Unit eine eigene
-    // Methode Free deklariert (der Cast koennte sie waehlen).
-    class function LineFix(AKind: TFindingKind; ALines: TStrings;
-      ALine: Integer; const AMessage: string): TRdxFixOutcome; static;
 
     // Ein zweiter Menueeintrag fuer denselben Fund, Variant = 1 - heute nur
     // SCA168 (else mit raise; Nico 2026-10-10: beide Eintraege). Variant = 0:
@@ -462,8 +457,7 @@ const
   R_INDENT_HINT = 'nur Leerraum';
   R_INIT_HINT   = 'gleiche Bedeutung - der Abschnitt kann danach ein '
     + 'finalization bekommen';
-  R_CAST_HINT   = 'Free ruft Destroy virtuell auf - der Cast aendert daran '
-    + 'nichts';
+  R_CAST_HINT   = '%s ist schon als %s deklariert - der Cast aendert nichts';
   LINE_FIX_KINDS: TFindingKinds = [fkSuperfluousSemicolon,
     fkUnitLevelKeywordIndent, fkLegacyInitializationSection, fkCastAndFree];
   R_PROC_TYPE    = '%s hat einen Prozedurtyp - "%s <> nil" ruft ihn auf, '
@@ -1271,16 +1265,10 @@ begin
     fkBeginEndRequired, fkIfElseBegin] + LINE_FIX_KINDS;
 end;
 
-// Die Zeilen-Hilfen (uRdxLineFixes) - ein dritter Verteiler (SCA091).
-function LineFixFor(ALines: TStrings; AFinding: TLeakFinding): TRdxFixOutcome;
-begin
-  Result := Default(TRdxFixOutcome);
-  if AFinding.Kind in LINE_FIX_KINDS then
-    Result := TRdxFixRunner.LineFix(AFinding.Kind, ALines, AFinding.LineInt,
-      AFinding.Message)
-  else
-    Result.Reason := 'keine einfache Hilfe fuer diese Regel';
-end;
+// Die Zeilen-Hilfen (uRdxLineFixes) - ein dritter Verteiler (SCA091); er
+// steht weiter unten bei seinen Planern.
+function LineFixFor(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding): TRdxFixOutcome; forward;
 
 // X aus der SCA085-Meldung '`X.Free; X := nil;` - prefer ...'; '' ohne
 // diese Form.
@@ -1319,7 +1307,7 @@ begin
       Result := TRdxFixRunner.BlockFix(AFinding.Kind, ALines, AFinding.LineInt,
         AFinding.Message);
   else
-    Result := LineFixFor(ALines, AFinding);
+    Result := LineFixFor(APlaces, ALines, AFinding);
   end;
 end;
 
@@ -1371,9 +1359,41 @@ begin
   end;
 end;
 
-// SCA075 und SCA087: die Planer arbeiten nur auf den Zeilen, ohne Parser.
-// Spalte bzw. Abschnitt stehen in der Meldung - die Spalte kennt
-// den Kommentar-Zustand der Zeilen davor, ein Neuscan der Zeile nicht.
+// Der Hinweis einer Zeilen-Hilfe (LineFix).
+function LineHint(AKind: TFindingKind): string;
+begin
+  case AKind of
+    fkSuperfluousSemicolon:
+      Result := R_SEMI_HINT;
+    fkUnitLevelKeywordIndent:
+      Result := R_INDENT_HINT;
+  else
+    Result := R_INIT_HINT;
+  end;
+end;
+
+// Der Planer einer Zeilen-Hilfe: die Ersetzung nach AOutcome.Edits[0],
+// sonst der Grund.
+function LinePlan(AKind: TFindingKind; AMap: TRdxCodeMap; ALine: Integer;
+  const AMessage: string; var AOutcome: TRdxFixOutcome): Boolean;
+begin
+  case AKind of
+    fkSuperfluousSemicolon:
+      Result := TRdxLineFixes.DoubleSemicolon(AMap, ALine, AMessage,
+        AOutcome.Edits[0], AOutcome.Reason);
+    fkUnitLevelKeywordIndent:
+      Result := TRdxLineFixes.KeywordIndent(AMap, ALine, AMessage,
+        AOutcome.Edits[0], AOutcome.Reason);
+  else
+    Result := TRdxLineFixes.LegacyInit(AMap, ALine, AOutcome.Edits[0],
+      AOutcome.Reason);
+  end;
+end;
+
+// SCA075, SCA087 und die Zeilen-Hilfen SCA082/SCA071/SCA088 (LinePlan):
+// die Planer arbeiten nur auf den Zeilen, ohne Parser. Spalte bzw.
+// Abschnitt stehen in der Meldung - die Spalte kennt den Kommentar-Zustand
+// der Zeilen davor, ein Neuscan der Zeile nicht.
 function LinesOnlyFix(AKind: TFindingKind; ALines: TStrings; ALine: Integer;
   const AMessage: string): TRdxFixOutcome;
 var
@@ -1392,9 +1412,11 @@ begin
       fkEmptyVisibilitySection:
         Result.Enabled := TRdxSimpleFixes.EmptySection(Map, ALine, AMessage,
           Result.Edits[0], Result.Reason);
+      fkExplicitTObjectInheritance:
+        Result.Enabled := TRdxSimpleFixes.ExplicitTObject(Map, ALine, AMessage,
+          Result.Edits[0], Result.Reason);
     else
-      Result.Enabled := TRdxSimpleFixes.ExplicitTObject(Map, ALine, AMessage,
-        Result.Edits[0], Result.Reason);
+      Result.Enabled := LinePlan(AKind, Map, ALine, AMessage, Result);
     end;
   finally
     Map.Free;
@@ -1929,73 +1951,82 @@ begin
     Result.Edits := nil;
 end;
 
-// Der Hinweis einer Zeilen-Hilfe (LineFix).
-function LineHint(AKind: TFindingKind): string;
+// SCA123: ist der Operand AOperand ein blosser Bezeichner, ausserhalb eines
+// with-Blocks und als genau ATarget deklariert? '' oder der Grund.
+function CastTypeReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  ALine: Integer; const AOperand, ATarget: string): string;
+var
+  Declared : string;
 begin
-  case AKind of
-    fkSuperfluousSemicolon:
-      Result := R_SEMI_HINT;
-    fkUnitLevelKeywordIndent:
-      Result := R_INDENT_HINT;
-    fkLegacyInitializationSection:
-      Result := R_INIT_HINT;
-  else
-    Result := R_CAST_HINT;
-  end;
+  Result := '';
+  if Pos('.', AOperand) > 0 then
+    Exit(Format('%s ist kein blosser Bezeichner - sein Typ ist nicht '
+      + 'pruefbar', [AOperand]));
+  if TRdxSimpleFixes.WithBefore(AMap, ALine) or APlaces.InWithBlock(ALine) then
+    Exit(Format(R_WITH_MEMBER, [AOperand]));
+  Declared := APlaces.DeclaredTypeOf(ALine, AOperand);
+  if Declared = '' then
+    Result := Format('Typ von %s unbekannt - nur ein Cast auf den eigenen Typ '
+      + 'ist beweisbar ohne Wirkung', [AOperand])
+  else if not SameText(Declared, ATarget) then
+    Result := Format('%s ist als %s deklariert, nicht als %s - ein anderer Typ '
+      + 'kann Free verdecken, oder der Cast ist zum Uebersetzen noetig',
+      [AOperand, Declared, ATarget]);
 end;
 
-// Der Planer einer Zeilen-Hilfe: die Ersetzung nach AOutcome.Edits[0],
-// sonst der Grund; SCA123 mit der Pruefung auf eine eigene Methode Free
-// (wie SCA139).
-function LinePlan(AKind: TFindingKind; AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; var AOutcome: TRdxFixOutcome): Boolean;
-begin
-  case AKind of
-    fkSuperfluousSemicolon:
-      Result := TRdxLineFixes.DoubleSemicolon(AMap, ALine, AMessage,
-        AOutcome.Edits[0], AOutcome.Reason);
-    fkUnitLevelKeywordIndent:
-      Result := TRdxLineFixes.KeywordIndent(AMap, ALine, AMessage,
-        AOutcome.Edits[0], AOutcome.Reason);
-    fkLegacyInitializationSection:
-      Result := TRdxLineFixes.LegacyInit(AMap, ALine, AOutcome.Edits[0],
-        AOutcome.Reason);
-  else
-    Result := TRdxLineFixes.CastFree(AMap, ALine, AMessage,
-      AOutcome.Edits[0], AOutcome.Reason);
-    if Result and TRdxSimpleFixes.DeclaresRoutine(AMap, 'Free') then
-    begin
-      AOutcome.Reason := 'die Unit deklariert eine eigene Methode Free - der '
-        + 'Cast koennte sie waehlen';
-      Result := False;
-    end;
-  end;
-end;
-
-class function TRdxFixRunner.LineFix(AKind: TFindingKind; ALines: TStrings;
+// SCA123: 'TFoo(X).Free' -> 'X.Free' (TRdxLineFixes.CastFree) - nur, wenn
+// X ein blosser Bezeichner ist, ausserhalb eines with-Blocks, und als
+// genau TFoo deklariert (DeclaredTypeOf). Nur dann binden beide dasselbe
+// Free: ein anderer Typ kann Free verdecken (dwsUtils:
+// TRefCountedObject.Free zaehlt nur herunter), und ein Pointer-Operand
+// braucht den Cast zum Uebersetzen (Gegen-Review Zeilen-Hilfen).
+function CastFreeFix(APlaces: TSourcePlaces; ALines: TStrings;
   ALine: Integer; const AMessage: string): TRdxFixOutcome;
 var
   Map : TRdxCodeMap;
 begin
   Result := Default(TRdxFixOutcome);
-  if not Assigned(ALines) then
-  begin
-    Result.Reason := R_NO_FILE;
-    Exit;
-  end;
-  if AKind = fkCastAndFree then
-    Result.Name := TRdxLineFixes.CastTargetOf(AMessage);
-  SetLength(Result.Edits, 1);
-  Map := TRdxCodeMap.Create(ALines);
+  Result.Name := TRdxLineFixes.CastTargetOf(AMessage);
+  Map := OpenMapFor(APlaces, ALines, Result);
+  if Map = nil then Exit;
   try
-    Result.Enabled := LinePlan(AKind, Map, ALine, AMessage, Result);
+    Result.Enabled := TRdxLineFixes.CastFree(Map, ALine, AMessage,
+      Result.Edits[0], Result.Reason);
+    if Result.Enabled then
+      Result.Reason := CastTypeReason(APlaces, Map, ALine,
+        Result.Edits[0].NewText, Result.Name);
   finally
     Map.Free;
   end;
+  Result.Enabled := Result.Enabled and (Result.Reason = '');
   if Result.Enabled then
-    Result.Hint := LineHint(AKind)
+    Result.Hint := Format(R_CAST_HINT, [Result.Edits[0].NewText, Result.Name])
   else
     Result.Edits := nil;
+end;
+
+// SCA082, SCA071 und SCA088 (TRdxLineFixes): nur die Zeilen,
+// bedeutungsgleich - LinesOnlyFix mit dem Hinweis der Regel.
+function LineFix(AKind: TFindingKind; ALines: TStrings; ALine: Integer;
+  const AMessage: string): TRdxFixOutcome;
+begin
+  Result := LinesOnlyFix(AKind, ALines, ALine, AMessage);
+  if Result.Enabled then
+    Result.Hint := LineHint(AKind);
+end;
+
+// Die Zeilen-Hilfen (uRdxLineFixes) - der dritte Verteiler (SCA091),
+// oben vorwaerts deklariert.
+function LineFixFor(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding): TRdxFixOutcome;
+begin
+  Result := Default(TRdxFixOutcome);
+  if AFinding.Kind = fkCastAndFree then
+    Result := CastFreeFix(APlaces, ALines, AFinding.LineInt, AFinding.Message)
+  else if AFinding.Kind in LINE_FIX_KINDS then
+    Result := LineFix(AFinding.Kind, ALines, AFinding.LineInt, AFinding.Message)
+  else
+    Result.Reason := 'keine einfache Hilfe fuer diese Regel';
 end;
 
 class function TRdxFixRunner.AlternativeFixFor(APlaces: TSourcePlaces;

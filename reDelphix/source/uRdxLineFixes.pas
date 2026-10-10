@@ -31,7 +31,8 @@ type
     // SCA071: das Schluesselwort aus der Meldung ('"interface" ...
     // currently at column N') steht an Spalte N, davor nur Leerraum - er
     // wird geloescht. Nicht, wenn die Zeile in einem Kommentar oder
-    // mehrzeiligen String beginnt.
+    // mehrzeiligen String beginnt, und nicht beim interface eines Typs
+    // ('IFoo =' auf der Zeile davor - das meldet der Detektor auch).
     class function KeywordIndent(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
@@ -47,11 +48,12 @@ type
     // SCA123: der Cast T aus der Meldung ('Type-cast T(...) before ...').
     class function CastTargetOf(const AMessage: string): string; static;
 
-    // SCA123: genau ein 'T(X).Free' auf ALine -> 'X.Free'. X ein
-    // Bezeichnerpfad (A, A.B, Self.F) ohne Kommentar; T kein Interface
-    // ('IFoo(X).Free' riefe eine Interface-Methode Free). Nur Free -
-    // Destroy bietet die Hilfe nicht an. Ob die Unit eine eigene Methode
-    // Free deklariert (dann waehlte der Cast sie), prueft der Aufrufer.
+    // SCA123: genau ein 'T(X).Free' auf ALine -> 'X.Free' (NewText = X).
+    // X ein Bezeichnerpfad (A, A.B, Self.F) ohne Kommentar; T kein
+    // Interface ('IFoo(X).Free' riefe eine Interface-Methode Free). Nur
+    // Free - Destroy bietet die Hilfe nicht an. Dass X schon den Typ T hat
+    // (sonst kann T oder der Typ von X Free verdecken, oder der Cast ist
+    // zum Uebersetzen noetig), prueft der Aufrufer.
     class function CastFree(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
@@ -71,18 +73,11 @@ const
     + '- Zeile verschoben? Datei neu pruefen';
   KEY_CURRENTLY  = 'currently at column ';
   KEY_CAST       = 'Type-cast ';
-  END_OPENERS: array[0..4] of string = ('begin', 'case', 'try', 'asm',
-    'record');
-  // Hinter diesen Token ist ein Wort ein Bezeichner ('&Begin', 'X.Free').
-  IDENT_PREFIXES: array[0..2] of string = ('&', '@', '.');
   // Woerter, die als Operand eines Casts keine Variable sind.
   NOT_OPERANDS: array[0..1] of string = ('nil', 'inherited');
-
-// Ein Wort als Schluesselwort - nicht hinter '&', '@' oder '.'.
-function IsKeywordAfter(const T, APrev: TRdxToken): Boolean;
-begin
-  Result := T.IsWord and not InList(APrev.Low, IDENT_PREFIXES);
-end;
+  // Davor steht 'interface' als Typ ('IFoo =' / 'packed'), nicht als
+  // Abschnitt (Gegen-Review Zeilen-Hilfen, Minor 4).
+  TYPE_KEYWORD_PREV: array[0..1] of string = ('=', 'packed');
 
 { ---- SCA082 ---- }
 
@@ -161,7 +156,10 @@ begin
     AReason := 'die Zeile beginnt in einem Kommentar oder String'
   else if (SkipBlanks(L, 1) <> Col) or not AMap.IsCode(ALine, Col)
      or not SameText(TokenAt(AMap, ALine, Col).Low, Word) then
-    AReason := R_KW_MOVED;
+    AReason := R_KW_MOVED
+  else if InList(PrevToken(AMap, ALine, Col).Low, TYPE_KEYWORD_PREV) then
+    AReason := Format('%s gehoert zu einer Typ-Deklaration - kein '
+      + 'Unit-Abschnitt', [Word]);
   if AReason <> '' then Exit;
   AEdit.Span := TRefactorSpan.Make(SPAN_071, ALine, 1, ALine, Col);
   AEdit.Expected := Copy(L, 1, Col - 1);
@@ -224,7 +222,7 @@ begin
   T := After(AMap, ABegin);
   while (T.Low <> '') and (Depth > 0) do
   begin
-    if IsKeywordAfter(T, Prev) and InList(T.Low, END_OPENERS) then
+    if IsKeywordAfter(T, Prev) and IsEndOpener(T.Low) then
       Inc(Depth)
     else if IsKeywordAfter(T, Prev) and (T.Low = 'end') then
       Dec(Depth);
@@ -289,15 +287,16 @@ begin
     Result := Copy(AMessage, P, Q - P);
 end;
 
-// Ein Cast-Fund auf der Zeile: Typname, '(' und ')' (gleiche Zeile) und das
-// Wort hinter '.)' (free oder destroy).
+// Ein Cast-Fund auf der Zeile: Typname, '(' und ')' (gleiche Zeile).
 type
   TRdxCastSite = record
     Target : TRdxToken;
     Open   : TRdxToken;
     Close  : TRdxToken;
-    Method : string;
   end;
+
+  // Was an einem Token steht (CastAt).
+  TRdxCastKind = (ckNone, ckFree, ckDestroy, ckOpenLine);
 
 // Ab dem '(' AOpen die schliessende ')' auf derselben Zeile. False ohne.
 function CloseParen(AMap: TRdxCodeMap; const AOpen: TRdxToken;
@@ -325,45 +324,56 @@ begin
   end;
 end;
 
-// Steht an T der Cast 'ATarget(...)' mit '.Free' oder '.Destroy'
-// dahinter? Dann ASite.
+// Steht an T der Cast 'ATarget(...)'? ckFree/ckDestroy mit '.Free' bzw.
+// '.Destroy' dahinter (dann ASite), ckOpenLine, wenn die ')' nicht mehr
+// auf der Zeile steht.
 function CastAt(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
-  const ATarget: string; out ASite: TRdxCastSite): Boolean;
+  const ATarget: string; out ASite: TRdxCastSite): TRdxCastKind;
 var
   Dot, M : TRdxToken;
 begin
-  Result := False;
+  Result := ckNone;
   ASite := Default(TRdxCastSite);
   if not SameText(T.Low, ATarget) or InList(APrev.Low, IDENT_PREFIXES) then
     Exit;
   ASite.Target := T;
   ASite.Open := After(AMap, T);
-  if (ASite.Open.Low <> '(') or not CloseParen(AMap, ASite.Open, ASite.Close) then
+  if ASite.Open.Low <> '(' then
     Exit;
+  if not CloseParen(AMap, ASite.Open, ASite.Close) then
+    Exit(ckOpenLine);
   Dot := After(AMap, ASite.Close);
   M := After(AMap, Dot);
-  if (Dot.Low <> '.') or ((M.Low <> 'free') and (M.Low <> 'destroy')) then
+  if Dot.Low <> '.' then
     Exit;
-  ASite.Method := M.Low;
-  Result := True;
+  if M.Low = 'free' then
+    Result := ckFree
+  else if M.Low = 'destroy' then
+    Result := ckDestroy;
 end;
 
-// Der eine Cast auf ALine. '' oder der Grund.
+// Der eine Cast vor '.Free' auf ALine (Casts vor Destroy zaehlen nicht
+// mit). '' oder der Grund.
 function CastOn(AMap: TRdxCodeMap; ALine: Integer; const ATarget: string;
   out ASite: TRdxCastSite): string;
 var
   T, Prev : TRdxToken;
   S       : TRdxCastSite;
+  Kind    : TRdxCastKind;
+  Seen    : set of TRdxCastKind;
   n       : Integer;
 begin
   Result := '';
   ASite := Default(TRdxCastSite);
   n := 0;
+  Seen := [];
   Prev := PrevToken(AMap, ALine, 1);
   T := NextToken(AMap, ALine, 1);
   while (T.Low <> '') and (T.Line = ALine) do
   begin
-    if CastAt(AMap, T, Prev, ATarget, S) then
+    Kind := CastAt(AMap, T, Prev, ATarget, S);
+    Include(Seen, Kind);
+    if Kind = ckFree then
     begin
       Inc(n);
       ASite := S;
@@ -371,12 +381,18 @@ begin
     Prev := T;
     T := After(AMap, T);
   end;
-  if n = 0 then
+  if n > 1 then
+    Result := Format('Zeile %d traegt %d Casts %s(...).Free - mehrdeutig',
+      [ALine, n, ATarget])
+  else if n = 1 then
+    Exit
+  else if ckDestroy in Seen then
+    Result := 'nur fuer Free - Destroy bleibt, wie es ist'
+  else if ckOpenLine in Seen then
+    Result := Format('der Cast %s(...) geht ueber mehrere Zeilen', [ATarget])
+  else
     Result := Format('kein %s(...).Free auf der gemeldeten Zeile - Zeile '
-      + 'verschoben? Datei neu pruefen', [ATarget])
-  else if n > 1 then
-    Result := Format('Zeile %d traegt %d Casts %s(...) vor Free/Destroy - '
-      + 'mehrdeutig', [ALine, n, ATarget]);
+      + 'verschoben? Datei neu pruefen', [ATarget]);
 end;
 
 // Ist der Operand zwischen den Klammern ein Bezeichnerpfad (A, A.B,
@@ -430,9 +446,7 @@ begin
     AReason := Format('%s ist ein Interface - %s(X).Free riefe dessen '
       + 'Methode Free, X.Free die von TObject', [Target, Target])
   else
-    AReason := CastOn(AMap, ALine, LowerCase(Target), Site);
-  if (AReason = '') and (Site.Method <> 'free') then
-    AReason := 'nur fuer Free - Destroy bleibt, wie es ist';
+    AReason := CastOn(AMap, ALine, Target, Site);
   if AReason = '' then
     AReason := OperandReason(AMap, Site);
   if AReason <> '' then Exit;

@@ -96,9 +96,6 @@ implementation
 const
   SPAN_007 = 'sca007';
   SPAN_168 = 'sca168';
-  // Token, die ein eigenes 'end' brauchen (Bilanz in MatchingEnd).
-  END_OPENERS: array[0..4] of string = ('begin', 'case', 'try', 'asm',
-    'record');
   SPAN_101 = 'sca101';
   BRANCH_KEYWORDS: array[0..2] of string = ('then', 'else', 'do');
   // Vor diesen Token endet eine Anweisung ohne ';'.
@@ -147,9 +144,6 @@ const
   // Vor 'on' eines Handlers steht ';' oder except - sonst ist On ein
   // Bezeichner ('while not On do').
   HANDLER_PREV: array[0..1] of string = (';', 'except');
-  // Hinter diesen Token ist ein Wort ein Bezeichner ('&End', '@@End',
-  // 'X.Then').
-  IDENT_PREFIXES: array[0..2] of string = ('&', '@', '.');
   R_BRANCH_MOVED = 'kein then/else/do an der gemeldeten Stelle - Zeile '
     + 'verschoben? Datei neu pruefen';
   R_NO_ELSE_OWNER = 'kein if, case oder except zum else gefunden';
@@ -204,11 +198,6 @@ type
     function TakeList(const T: TRdxToken): Boolean;
     function Fail(const AReason: string): Boolean;
   end;
-
-function IsEndOpener(const ALow: string): Boolean;
-begin
-  Result := InList(ALow, END_OPENERS);
-end;
 
 // Der Text des Bereichs, Zeilen mit #10 verbunden - so, wie
 // TRdxEdit.Expected ihn erwartet.
@@ -459,12 +448,12 @@ begin
 end;
 
 // Ein Schritt der Bilanz: ADepth fortschreiben; '' oder der Grund zum
-// Abbruch. '&End' und '@@End' (asm-Label) sind Bezeichner, keine
-// Schluesselwoerter.
+// Abbruch. '&End', '@@End' (asm-Label) und 'X.End' sind Bezeichner, keine
+// Schluesselwoerter (IDENT_PREFIXES, wie in den uebrigen Bilanzen).
 function BalanceStep(const T, APrev: TRdxToken; var ADepth: Integer): string;
 begin
   Result := '';
-  if (APrev.Low = '&') or (APrev.Low = '@') then Exit;
+  if InList(APrev.Low, IDENT_PREFIXES) then Exit;
   if IsEndOpener(T.Low) then
     Inc(ADepth)
   else if T.Low = 'end' then
@@ -677,12 +666,6 @@ begin
     AReason := Format('Zeile %d traegt %d-mal "end else" - mehrdeutig',
       [ALine, Count]);
   Result := AReason = '';
-end;
-
-// Ein Wort als Schluesselwort - nicht hinter '&', '@' oder '.'.
-function IsKeywordAfter(const T, APrev: TRdxToken): Boolean;
-begin
-  Result := T.IsWord and not InList(APrev.Low, IDENT_PREFIXES);
 end;
 
 // Klammertiefe rueckwaerts: ')' und ']' hoch, '(' und '[' herunter. True,

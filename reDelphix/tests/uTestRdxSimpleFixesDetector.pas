@@ -144,8 +144,10 @@ type
     [Test] procedure Sca071_CatalogExample;
     [Test] procedure Sca088_RoundTrip_CatalogExample;
     [Test] procedure Sca123_RoundTrip;
-    [Test] procedure Sca123_CatalogExample;
-    [Test] procedure Sca123_OwnFree_NoHelp;
+    [Test] procedure Sca123_CatalogExample_NoHelp;
+    // Gegen-Review Zeilen-Hilfen: ein anderer Typ (verdecktes Free,
+    // Pointer) und ein unbekannter Typ.
+    [Test] procedure Sca123_OtherType_NoHelp;
   end;
 
 implementation
@@ -1445,32 +1447,44 @@ begin
   Assert.IsTrue(Pos(Snip(Meta.GoodExample), Done) > 0, Done);
 end;
 
+// Eine Routine mit der Variablen L vom Typ ADecl und der Anweisung AStmt.
+function WithLocal(const ADecl, AStmt: string): string;
+begin
+  Result := InImplementation(Join(['uses System.Classes;', 'procedure P;',
+    'var', '  L: ' + ADecl + ';', 'begin', '  ' + AStmt, 'end;']));
+end;
+
 procedure TTestRdxSimpleFixesDetector6.Sca123_RoundTrip;
 begin
-  Assert.AreEqual(InRoutine('Obj.Free;'),
-    FixAll(InRoutine('TStringList(Obj).Free;'), fkCastAndFree));
+  // Nur der Cast auf den eigenen Typ ist beweisbar ohne Wirkung.
+  Assert.AreEqual(WithLocal('TStringList', 'L.Free;'),
+    FixAll(WithLocal('TStringList', 'TStringList(L).Free;'), fkCastAndFree));
 end;
 
-procedure TTestRdxSimpleFixesDetector6.Sca123_CatalogExample;
+procedure TTestRdxSimpleFixesDetector6.Sca123_CatalogExample_NoHelp;
 var
-  Meta      : TRuleMeta;
-  Bad, Done : string;
+  Meta : TRuleMeta;
 begin
-  // 'good' traegt einen anderen Kommentar - verglichen wird die Ersetzung.
+  // Das Katalog-Beispiel castet ein TObject auf TStringList - ob
+  // TStringList Free verdeckt, weiss die Hilfe nicht (dafuer braeuchte sie
+  // den Typindex); sie bietet nichts an.
   Meta := TRuleCatalog.GetRuleCanonical(fkCastAndFree);
-  Assert.IsTrue(Pos('L.Free;', Meta.GoodExample) > 0, Meta.GoodExample);
-  Bad := InImplementation(Snip(Meta.BadExample));
-  Done := FixAll(Bad, fkCastAndFree);
-  Assert.AreEqual(StringReplace(Bad, 'TStringList(L).Free;', 'L.Free;', []), Done);
+  AssertNoHelp(InImplementation(Snip(Meta.BadExample)), fkCastAndFree,
+    'nicht als');
 end;
 
-procedure TTestRdxSimpleFixesDetector6.Sca123_OwnFree_NoHelp;
+procedure TTestRdxSimpleFixesDetector6.Sca123_OtherType_NoHelp;
 begin
-  // Eine eigene Methode Free in der Unit: der Cast koennte sie waehlen.
-  AssertNoHelp(Join(['unit t;', 'interface', 'type', '  TFoo = class',
-    '    procedure Free;', '  end;', 'implementation',
-    'procedure TFoo.Free; begin end;', 'procedure P(X: TObject);', 'begin',
-    '  TFoo(X).Free;', 'end;', 'end.']), fkCastAndFree, 'eigene Methode Free');
+  // dwsUtils: TRefCountedObject.Free zaehlt nur herunter - 'L.Free' auf
+  // einem TObject zerstoerte das Objekt.
+  AssertNoHelp(WithLocal('TObject', 'TRefCountedObject(L).Free;'), fkCastAndFree,
+    'nicht als');
+  // Pointer: ohne den Cast uebersetzt 'L.Free' nicht.
+  AssertNoHelp(WithLocal('Pointer', 'TObject(L).Free;'), fkCastAndFree,
+    'nicht als');
+  // Ein Feld aus einer anderen Unit: Typ unbekannt.
+  AssertNoHelp(InRoutine('TStringList(FOther).Free;'), fkCastAndFree,
+    'unbekannt');
 end;
 
 initialization

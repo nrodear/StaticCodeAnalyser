@@ -8,7 +8,8 @@ unit uTestRdxLineFixes;
 //   SCA088 begin des Unit-Rumpfs -> initialization (Schreibweise, program,
 //          Routinen-begin, Direktive),
 //   SCA123 'TFoo(X).Free' -> 'X.Free' (Pfad, Interface, Destroy, Aufruf
-//          als Operand, zwei Casts).
+//          als Operand, zwei Casts) - die Typpruefung (X ist schon TFoo)
+//          macht der Laeufer, s. Fixture 6.
 // Die Gegenprobe mit dem echten Detektor steht in
 // uTestRdxSimpleFixesDetector (Fixture 6, nur Delphi).
 
@@ -161,6 +162,12 @@ begin
   Assert.IsTrue(Pos('";;"', R) > 0, R);
   Assert.AreEqual('', Fix(lkSemi, InUnit(['  DoStuff;;']), 6, 'ohne Spalte', R));
   Assert.IsTrue(Pos('Spalte', R) > 0, R);
+  // ';;' in einem Kommentar bzw. mehrzeiligen String.
+  Assert.AreEqual('', Fix(lkSemi, InUnit(['  DoStuff; // ;;']), 6, SemiMsg(16), R));
+  Assert.IsTrue(Pos('";;"', R) > 0, R);
+  Assert.AreEqual('', Fix(lkSemi, InUnit(['  S := ''''''', '  ;;', '  '''''';']), 7,
+    SemiMsg(3), R));
+  Assert.IsTrue(Pos('";;"', R) > 0, R);
 end;
 
 // ---- SCA071 ----
@@ -172,10 +179,11 @@ begin
   Assert.AreEqual(Join(['unit u;', 'interface', 'implementation', 'end.']),
     Fix(lkIndent, Join(['unit u;', 'interface', '  implementation', 'end.']), 3,
       IndentMsg('implementation', 3), R), R);
-  // Tabs und ein Kommentar dahinter.
-  Assert.AreEqual(Join(['unit u;', 'interface', 'uses SysUtils; // x',
+  // Tabs und ein Kommentar dahinter (uses meldet der Detektor nur allein
+  // auf der Zeile).
+  Assert.AreEqual(Join(['unit u;', 'interface', 'uses // x', '  SysUtils;',
       'implementation', 'end.']),
-    Fix(lkIndent, Join(['unit u;', 'interface', #9#9'uses SysUtils; // x',
+    Fix(lkIndent, Join(['unit u;', 'interface', #9#9'uses // x', '  SysUtils;',
       'implementation', 'end.']), 3, IndentMsg('uses', 3), R), R);
 end;
 
@@ -196,6 +204,16 @@ begin
   Assert.AreEqual('', Fix(lkIndent, Join(['unit u;', 'interface', '  uses X;',
     'implementation', 'end.']), 3, IndentMsg('implementation', 3), R));
   Assert.IsTrue(Pos('nicht an der gemeldeten Stelle', R) > 0, R);
+  // Die Zeile liegt in einem mehrzeiligen String.
+  Assert.AreEqual('', Fix(lkIndent, Join(['unit u;', 'interface', 'const',
+    '  S = ''''''', '  implementation', '  '''''';', 'implementation', 'end.']), 5,
+    IndentMsg('implementation', 3), R));
+  Assert.IsTrue(Pos('String', R) > 0, R);
+  // Das interface eines Typs (meldet der Detektor auch).
+  Assert.AreEqual('', Fix(lkIndent, Join(['unit u;', 'interface', 'type',
+    '  IFoo =', '    interface', '  end;', 'implementation', 'end.']), 5,
+    IndentMsg('interface', 5), R));
+  Assert.IsTrue(Pos('Typ-Deklaration', R) > 0, R);
 end;
 
 // ---- SCA088 ----
@@ -239,6 +257,13 @@ begin
   Assert.AreEqual('', Fix(lkInit, Join(['unit u;', 'interface', 'implementation',
     'end.']), 3, '', R));
   Assert.IsTrue(Pos('kein begin', R) > 0, R);
+  // Zwei begin auf der Zeile; begin nur im Kommentar.
+  Assert.AreEqual('', Fix(lkInit, Join(['unit u;', 'interface', 'implementation',
+    'begin begin end;', 'end.']), 4, '', R));
+  Assert.IsTrue(Pos('mehrdeutig', R) > 0, R);
+  Assert.AreEqual('', Fix(lkInit, Join(['unit u;', 'interface', 'implementation',
+    '// begin', 'end.']), 4, '', R));
+  Assert.IsTrue(Pos('kein begin', R) > 0, R);
 end;
 
 // ---- SCA123 ----
@@ -253,6 +278,12 @@ begin
   Assert.AreEqual(InUnit(['  if A then Self.FList.Free; // weg']),
     Fix(lkCast, InUnit(['  if A then TObjectList( Self.FList ).Free; // weg']), 6,
       CastMsg('TObjectList'), R), R);
+  // Gross/klein des Typs wie im Code; ein Cast vor Destroy zaehlt nicht mit.
+  Assert.AreEqual(InUnit(['  L.Free;']),
+    Fix(lkCast, InUnit(['  tstringlist(L).Free;']), 6, CastMsg('TStringList'), R), R);
+  Assert.AreEqual(InUnit(['  TFoo(A).Destroy; B.Free;']),
+    Fix(lkCast, InUnit(['  TFoo(A).Destroy; TFoo(B).Free;']), 6, CastMsg('TFoo'),
+      R), R);
 end;
 
 procedure TTestRdxLineFixes.Sca123_Refusals;
@@ -285,6 +316,13 @@ begin
   Assert.IsTrue(Pos('Kommentar', R) > 0, R);
   Assert.AreEqual('', Fix(lkCast, InUnit(['  A.Free;']), 6, CastMsg('TFoo'), R));
   Assert.IsTrue(Pos('verschoben', R) > 0, R);
+  // Der Cast geht ueber zwei Zeilen; die Meldung nennt den Typ wie im Code.
+  Assert.AreEqual('', Fix(lkCast, InUnit(['  TFoo(A', '    ).Free;']), 6,
+    CastMsg('TFoo'), R));
+  Assert.IsTrue(Pos('mehrere Zeilen', R) > 0, R);
+  Assert.AreEqual('', Fix(lkCast, InUnit(['  TFoo(A).Free; TFoo(B).Free;']), 6,
+    CastMsg('TFoo'), R));
+  Assert.IsTrue(Pos('TFoo(...)', R) > 0, R);
 end;
 
 initialization
