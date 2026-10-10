@@ -2023,6 +2023,7 @@
       "type": "Code Smell",
       "tags": ["style", "consistency"],
       "detectorUnit": "uIfElseBegin.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "if Active then\nbegin\n  DoA;\n  DoB;\nend\nelse\n  DoC;",
         "good": "if Active then\nbegin\n  DoA;\n  DoB;\nend\nelse\nbegin\n  DoC;\nend;"
@@ -2061,6 +2062,7 @@
       "type": "Code Smell",
       "tags": ["style", "bug-risk"],
       "detectorUnit": "uBeginEndRequired.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "if Active then DoStuff;",
         "good": "if Active then\nbegin\n  DoStuff;\nend;"

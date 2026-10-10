@@ -400,6 +400,13 @@ type
     class function CaseRaiseFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer; const AUsesNames: TArray<string>): TRdxFixOutcome; static;
 
+    // SCA101 und SCA099: die Anweisung hinter then/else/do in begin..end
+    // (TRdxStructFixes.WrapInBlock) - bedeutungsgleich, nur die Zeilen.
+    // SCA101: das Schluesselwort an der Spalte aus der Meldung; SCA099:
+    // das else hinter dem 'end else' auf ALine.
+    class function BlockFix(AKind: TFindingKind; ALines: TStrings;
+      ALine: Integer; const AMessage: string): TRdxFixOutcome; static;
+
     // Ein zweiter Menueeintrag fuer denselben Fund, Variant = 1 - heute nur
     // SCA168 (else mit raise; Nico 2026-10-10: beide Eintraege). Variant = 0:
     // keiner.
@@ -441,6 +448,8 @@ const
   R_NO_HELP      = 'keine Hilfe an dieser Stelle';
   R_CASE_ELSE_HINT  = 'alle anderen Werte: nichts tun (wie bisher)';
   R_CASE_RAISE_HINT = 'unbehandelte Werte loesen EProgrammerError aus';
+  R_BLOCK_HINT      = 'gleiche Bedeutung - nur die Form; eine weitere '
+    + 'Anweisung gehoert danach sichtbar in den Zweig';
   R_PROC_TYPE    = '%s hat einen Prozedurtyp - "%s <> nil" ruft ihn auf, '
     + 'Assigned() nicht';
 
@@ -1242,7 +1251,8 @@ begin
   Result := AKind in [fkExplicitTObjectInheritance, fkFreeAndNilHint,
     fkNilComparison, fkAssertMessage, fkEmptyVisibilitySection,
     fkFreeWithoutNil, fkEmptyArgumentList, fkRedundantBoolean,
-    fkAssignedAndAssignedNil, fkUnusedUses, fkDefaultCaseInCaseStatement];
+    fkAssignedAndAssignedNil, fkUnusedUses, fkDefaultCaseInCaseStatement,
+    fkBeginEndRequired, fkIfElseBegin];
 end;
 
 // X aus der SCA085-Meldung '`X.Free; X := nil;` - prefer ...'; '' ohne
@@ -1260,8 +1270,8 @@ begin
 end;
 
 // Die Hilfen aus dem uQuickFix-Umzug und der Stufe 3 (SCA066, SCA072,
-// SCA084, SCA007, SCA168) - ein zweiter Verteiler, damit FixFor
-// ueberschaubar bleibt (SCA091).
+// SCA084, SCA007, SCA168, SCA101, SCA099) - ein zweiter Verteiler, damit
+// FixFor ueberschaubar bleibt (SCA091).
 function LaterFixFor(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding): TRdxFixOutcome;
 begin
@@ -1278,6 +1288,9 @@ begin
         AFinding.Message);
     fkDefaultCaseInCaseStatement:
       Result := TRdxFixRunner.CaseElseFix(APlaces, ALines, AFinding.LineInt);
+    fkBeginEndRequired, fkIfElseBegin:
+      Result := TRdxFixRunner.BlockFix(AFinding.Kind, ALines, AFinding.LineInt,
+        AFinding.Message);
   else
     Result.Reason := 'keine einfache Hilfe fuer diese Regel';
   end;
@@ -1855,6 +1868,38 @@ begin
   if not Result.Enabled then Exit;
   Result.Hint := R_CASE_RAISE_HINT;
   Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
+end;
+
+class function TRdxFixRunner.BlockFix(AKind: TFindingKind; ALines: TStrings;
+  ALine: Integer; const AMessage: string): TRdxFixOutcome;
+var
+  Map : TRdxCodeMap;
+  Kw  : TRdxToken;
+begin
+  Result := Default(TRdxFixOutcome);
+  if not Assigned(ALines) then
+  begin
+    Result.Reason := R_NO_FILE;
+    Exit;
+  end;
+  Map := TRdxCodeMap.Create(ALines);
+  try
+    if AKind = fkIfElseBegin then
+      Result.Enabled := TRdxStructFixes.ElseAfterEndOn(Map, ALine, Kw,
+        Result.Reason)
+    else
+      Result.Enabled := TRdxStructFixes.BranchKeywordAt(Map, ALine,
+        ColumnFromMessage(AMessage), Kw, Result.Reason);
+    if Result.Enabled then
+      Result.Enabled := TRdxStructFixes.WrapInBlock(Map, Kw, Result.Edits,
+        Result.Reason);
+  finally
+    Map.Free;
+  end;
+  if Result.Enabled then
+    Result.Hint := R_BLOCK_HINT
+  else
+    Result.Edits := nil;
 end;
 
 class function TRdxFixRunner.AlternativeFixFor(APlaces: TSourcePlaces;

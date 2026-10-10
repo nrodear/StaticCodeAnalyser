@@ -2316,6 +2316,9 @@ msgstr "Leeren else-Zweig ergänzen"
 msgid "Add an else branch that raises an exception"
 msgstr "else-Zweig mit Exception ergänzen"
 
+msgid "Put the branch in begin..end"
+msgstr "Zweig in begin..end setzen"
+
 msgid "(changes behavior)"
 msgstr "(ändert Verhalten)"
 

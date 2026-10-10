@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2386 Zeilen, 80104 Bytes
-  CPoLines_de: array[0..2385] of string = (
+  // i18n\de.po - 2389 Zeilen, 80178 Bytes
+  CPoLines_de: array[0..2388] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2333,6 +2333,9 @@ const
     'msgid "Add an else branch that raises an exception"',
     'msgstr "else-Zweig mit Exception erg'#$00E4'nzen"',
     '',
+    'msgid "Put the branch in begin..end"',
+    'msgstr "Zweig in begin..end setzen"',
+    '',
     'msgid "(changes behavior)"',
     'msgstr "('#$00E4'ndert Verhalten)"',
     '',
@@ -2675,8 +2678,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2382 Zeilen, 83921 Bytes
-  CPoLines_fr: array[0..2381] of string = (
+  // i18n\fr.po - 2385 Zeilen, 84002 Bytes
+  CPoLines_fr: array[0..2384] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4990,6 +4993,9 @@ const
     '',
     'msgid "Add an else branch that raises an exception"',
     'msgstr "Ajouter une branche else qui l'#$00E8've une exception"',
+    '',
+    'msgid "Put the branch in begin..end"',
+    'msgstr "Mettre la branche dans begin..end"',
     '',
     'msgid "(changes behavior)"',
     'msgstr "(modifie le comportement)"',

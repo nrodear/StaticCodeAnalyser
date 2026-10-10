@@ -332,24 +332,6 @@ end;
 
 { ---- SCA075 ---- }
 
-// 'at column N' aus der Meldung; 0 = nicht vorhanden.
-function ColumnFromMessage(const AMessage: string): Integer;
-const
-  KEY = 'at column ';
-var
-  p, i : Integer;
-begin
-  Result := 0;
-  p := Pos(KEY, AMessage);
-  if p = 0 then Exit;
-  i := p + Length(KEY);
-  while (i <= Length(AMessage)) and CharInSet(AMessage[i], ['0'..'9']) do
-  begin
-    Result := Result * 10 + Ord(AMessage[i]) - Ord('0');
-    Inc(i);
-  end;
-end;
-
 // Dieselbe Grammatik wie der Detektor (uExplicitTObjectInheritance): ab
 // ACol 'class', Leerraum, '(', Leerraum, 'TObject', Leerraum, ')'.
 // ACloseCol = Spalte der ')'.
@@ -606,16 +588,6 @@ begin
        and IsRoutineStart(TokenAt(AMap, Li, 1).Low) then
       Exit(Li);
   Result := 1;
-end;
-
-function InList(const ALow: string; const AList: array of string): Boolean;
-var
-  S : string;
-begin
-  Result := False;
-  for S in AList do
-    if ALow = S then
-      Exit(True);
 end;
 
 // 'OnChange', 'FOnChange' (Ereignis) bzw. 'GetItem' (Getter): ein

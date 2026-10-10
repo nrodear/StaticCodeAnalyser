@@ -252,6 +252,7 @@ const
   CAP_UNUSEDUSES = 'Remove unit %s from uses';
   CAP_CASE_ELSE  = 'Add an empty else branch';
   CAP_CASE_RAISE = 'Add an else branch that raises an exception';
+  CAP_BEGIN_END  = 'Put the branch in begin..end';
   // Entscheid E2: eine Hilfe, die das Verhalten aendern kann, sagt es.
   CAP_CHANGES    = '(changes behavior)';
   DIAG_PREFIX  = 'reDelphix: ';
@@ -613,7 +614,8 @@ begin
 end;
 
 // Menuetexte der Hilfen aus dem uQuickFix-Umzug und der Stufe 3 (SCA066,
-// SCA072, SCA084, SCA007, SCA168) - ein zweiter Verteiler (SCA091).
+// SCA072, SCA084, SCA007, SCA168, SCA101, SCA099) - ein zweiter Verteiler
+// (SCA091).
 // AVariant waehlt den Eintrag, AName ist die Unit bei SCA007.
 function LaterFixCaption(AKind: TFindingKind; AVariant: Integer;
   const AName: string): string;
@@ -632,6 +634,8 @@ begin
         Result := _(CAP_CASE_RAISE)
       else
         Result := _(CAP_CASE_ELSE);
+    fkBeginEndRequired, fkIfElseBegin:
+      Result := _(CAP_BEGIN_END);
   else
     Result := uSCAConsts.KindName(AKind);
   end;

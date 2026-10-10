@@ -2312,6 +2312,9 @@ msgstr "Ajouter une branche else vide"
 msgid "Add an else branch that raises an exception"
 msgstr "Ajouter une branche else qui lève une exception"
 
+msgid "Put the branch in begin..end"
+msgstr "Mettre la branche dans begin..end"
+
 msgid "(changes behavior)"
 msgstr "(modifie le comportement)"
 

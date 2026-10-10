@@ -2,7 +2,8 @@ unit uTestRdxSimpleFixesDetector;
 
 // Editorhilfen Stufe 2a gegen den ECHTEN Core (nur Delphi, reDelphix.Test):
 // Parser, die Detektoren SCA075/SCA085/SCA126 (dazu SCA074/SCA087/SCA139
-// in der zweiten, SCA066/SCA072/SCA084 in der dritten Fixture),
+// in der zweiten, SCA066/SCA072/SCA084 in der dritten, SCA007/SCA168 in
+// der vierten, SCA101/SCA099 in der fuenften Fixture),
 // TSourcePlaces und
 // TRdxFixRunner.FixFor - derselbe Einstieg wie im Anbieter. Je Fall meldet
 // der Detektor, die Hilfe plant aus dem Fund (Art, Zeile, Meldung), die
@@ -118,6 +119,19 @@ type
     [Test] procedure Alternative_OtherKinds_None;
   end;
 
+  // Stufe 3: SCA101 und SCA099, Zweig als Block (Entscheid E7).
+  [TestFixture]
+  TTestRdxSimpleFixesDetector5 = class
+  public
+    [Test] procedure Sca101_RoundTrip;
+    [Test] procedure Sca101_CatalogExample;
+    [Test] procedure Sca101_CaseElse_RoundTrip;
+    [Test] procedure Sca101_StaleFinding_NoHelp;
+    [Test] procedure Sca101_SameMeaning;
+    [Test] procedure Sca099_RoundTrip_SilencesSca101;
+    [Test] procedure Sca099_CatalogExample;
+  end;
+
 implementation
 
 uses
@@ -126,7 +140,7 @@ uses
   uExplicitTObjectInheritance, uFreeAndNilHint, uNilComparison,
   uAssertMessage, uEmptyVisibilitySection, uFreeWithoutNil,
   uEmptyArgumentList, uRedundantBoolean, uAssignedAndAssignedNil,
-  uUnusedUses, uDefaultCaseInCaseStatement,
+  uUnusedUses, uDefaultCaseInCaseStatement, uBeginEndRequired, uIfElseBegin,
   uEngineApi, uRdxBufferMath, uRdxRecipeRunner;
 
 type
@@ -169,6 +183,10 @@ begin
       TUnusedUsesDetector.AnalyzeUnit(Root, Path, Results);
     fkDefaultCaseInCaseStatement:
       TDefaultCaseInCaseStatementDetector.AnalyzeUnit(Root, Path, Results);
+    fkBeginEndRequired:
+      TBeginEndRequiredDetector.AnalyzeUnit(Root, Path, Results);
+    fkIfElseBegin:
+      TIfElseBeginDetector.AnalyzeUnit(Root, Path, Results);
   else
     Assert.Fail('keine Hilfe fuer diese Art');
   end;
@@ -1220,10 +1238,108 @@ begin
     'nur SCA168 hat einen zweiten Eintrag');
 end;
 
+{ ---- SCA101 / SCA099 ---- }
+
+procedure TTestRdxSimpleFixesDetector5.Sca101_RoundTrip;
+begin
+  // then und else auf eigenen Zeilen, do inline - Fund fuer Fund, bis der
+  // Detektor schweigt.
+  Assert.AreEqual(InRoutine(Join(['if Obj <> nil then', 'begin', '  Obj.Free;',
+      'end', 'else', 'begin', '  Obj := nil;', 'end;', 'while Obj <> nil do',
+      'begin', '  Obj := nil;', 'end;'])),
+    FixAll(InRoutine(Join(['if Obj <> nil then', '  Obj.Free', 'else',
+      '  Obj := nil;', 'while Obj <> nil do Obj := nil;'])), fkBeginEndRequired));
+end;
+
+procedure TTestRdxSimpleFixesDetector5.Sca101_CatalogExample;
+var
+  Meta : TRuleMeta;
+begin
+  Meta := TRuleCatalog.GetRuleCanonical(fkBeginEndRequired);
+  Assert.AreEqual(InRoutine(Snip(Meta.GoodExample)),
+    FixAll(InRoutine(Snip(Meta.BadExample)), fkBeginEndRequired));
+end;
+
+procedure TTestRdxSimpleFixesDetector5.Sca101_CaseElse_RoundTrip;
+begin
+  // Das else des case traegt eine Anweisungsliste: sie kommt ganz in den
+  // Block, nicht nur ihre erste Anweisung.
+  Assert.AreEqual(InRoutine(Join(['case Ord(Obj = nil) of', '  0: Obj := nil;',
+      'else', 'begin', '  Obj.Free;', '  Obj := nil;', 'end;', 'end;'])),
+    FixAll(InRoutine(Join(['case Ord(Obj = nil) of', '  0: Obj := nil;', 'else',
+      '  Obj.Free;', '  Obj := nil;', 'end;'])), fkBeginEndRequired));
+end;
+
+procedure TTestRdxSimpleFixesDetector5.Sca101_StaleFinding_NoHelp;
+var
+  Seen   : TArray<TSeen>;
+  Edits  : TArray<TRdxEdit>;
+  Reason : string;
+begin
+  // Der Fund stammt aus einem aelteren Scan; inzwischen steht der Zweig in
+  // begin..end.
+  Seen := Detect(InRoutine('if Obj <> nil then Obj.Free;'), fkBeginEndRequired);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet');
+  Assert.IsFalse(PlanFix(InRoutine('if Obj <> nil then begin Obj.Free; end;'),
+    fkBeginEndRequired, Seen[0], Edits, Reason));
+  Assert.IsTrue(Pos('schon in begin..end', Reason) > 0, Reason);
+end;
+
+procedure TTestRdxSimpleFixesDetector5.Sca101_SameMeaning;
+var
+  Src  : string;
+  Seen : TArray<TSeen>;
+  SL   : TStringList;
+  O    : TRdxFixOutcome;
+begin
+  // Bedeutungsgleich: kein '(changes behavior)', Strg+Alt+F darf sie
+  // ausfuehren; der Hinweis sagt es.
+  Src := InRoutine('if Obj <> nil then Obj.Free;');
+  Seen := Detect(Src, fkBeginEndRequired);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet');
+  SL := TStringList.Create;
+  try
+    SL.Text := Src;
+    O := TRdxFixRunner.BlockFix(fkBeginEndRequired, SL, Seen[0].Line,
+      Seen[0].Msg);
+  finally
+    SL.Free;
+  end;
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsFalse(O.ChangesBehavior);
+  Assert.IsTrue(Pos('gleiche Bedeutung', O.Hint) > 0, O.Hint);
+end;
+
+procedure TTestRdxSimpleFixesDetector5.Sca099_RoundTrip_SilencesSca101;
+var
+  Src, Want : string;
+begin
+  // 'end else X;' melden beide Regeln; beide Hilfen schreiben dasselbe, und
+  // danach schweigen beide Detektoren.
+  Src := InRoutine(Join(['if Obj = nil then', 'begin', '  Obj := nil;',
+    'end else Obj.Free;']));
+  Want := InRoutine(Join(['if Obj = nil then', 'begin', '  Obj := nil;',
+    'end else', 'begin', '  Obj.Free;', 'end;']));
+  Assert.AreEqual(Want, FixAll(Src, fkIfElseBegin));
+  Assert.AreEqual(Want, FixAll(Src, fkBeginEndRequired));
+  Assert.AreEqual<Integer>(0, Length(Detect(Want, fkBeginEndRequired)),
+    'SCA101 schweigt nach der SCA099-Hilfe');
+end;
+
+procedure TTestRdxSimpleFixesDetector5.Sca099_CatalogExample;
+var
+  Meta : TRuleMeta;
+begin
+  Meta := TRuleCatalog.GetRuleCanonical(fkIfElseBegin);
+  Assert.AreEqual(InRoutine(Snip(Meta.GoodExample)),
+    FixAll(InRoutine(Snip(Meta.BadExample)), fkIfElseBegin));
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector2);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector3);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector4);
+  TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector5);
 
 end.

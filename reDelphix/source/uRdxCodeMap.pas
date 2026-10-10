@@ -111,6 +111,12 @@ function DirectiveAt(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
 function DirectiveBefore(AMap: TRdxCodeMap; AFromLine: Integer;
   const ATo: TRdxToken): Boolean;
 
+// ALow ist eines der Woerter in AList (gleich geschrieben).
+function InList(const ALow: string; const AList: array of string): Boolean;
+// 'at column N' aus einer Meldung; 0 = nicht vorhanden. Bis 2026-10-10 in
+// uRdxSimpleFixes, seit SCA101 auch fuer uRdxStructFixes.
+function ColumnFromMessage(const AMessage: string): Integer;
+
 implementation
 
 // Zeichen > #127 wie der Core (uRefactorInfoBuilder) und uRdxRecipes:
@@ -490,6 +496,33 @@ begin
     for Co := 1 to Stop do
       if DirectiveAt(AMap, Li, Co) then
         Exit(True);
+  end;
+end;
+
+function InList(const ALow: string; const AList: array of string): Boolean;
+var
+  S : string;
+begin
+  Result := False;
+  for S in AList do
+    if ALow = S then
+      Exit(True);
+end;
+
+function ColumnFromMessage(const AMessage: string): Integer;
+const
+  KEY = 'at column ';
+var
+  p, i : Integer;
+begin
+  Result := 0;
+  p := Pos(KEY, AMessage);
+  if p = 0 then Exit;
+  i := p + Length(KEY);
+  while (i <= Length(AMessage)) and CharInSet(AMessage[i], ['0'..'9']) do
+  begin
+    Result := Result * 10 + Ord(AMessage[i]) - Ord('0');
+    Inc(i);
   end;
 end;
 

@@ -7,6 +7,8 @@ unit uRdxStructFixes;
 //   SCA007 UnusedUses: einen Eintrag aus der uses-Klausel loeschen.
 //   SCA168 DefaultCaseInCaseStatement: vor das end des case ein else setzen
 //          - leer oder mit raise (Nico 2026-10-10: beide als Eintraege).
+//   SCA101 BeginEndRequired, SCA099 IfElseBegin: die Anweisung hinter
+//          then/else/do in begin..end setzen (Entscheid E7).
 //
 // GRUNDSATZ wie in uRdxSimpleFixes: lieber keine Hilfe als eine falsche.
 // Geloescht wird nichts, was einen Kommentar oder eine Direktive traegt -
@@ -60,6 +62,33 @@ type
     class function CaseElse(AMap: TRdxCodeMap; ALine: Integer;
       const AStatement: string; out AEdits: TArray<TRdxEdit>;
       out AReason: string): Boolean; static;
+
+    // SCA101: das then, else oder do, das an (ALine, ACol) beginnt - die
+    // Spalte aus der Meldung.
+    class function BranchKeywordAt(AMap: TRdxCodeMap; ALine, ACol: Integer;
+      out AKeyword: TRdxToken; out AReason: string): Boolean; static;
+
+    // SCA099: das else hinter dem einen 'end else' auf ALine (das else darf
+    // auf einer Folgezeile stehen).
+    class function ElseAfterEndOn(AMap: TRdxCodeMap; ALine: Integer;
+      out AKeyword: TRdxToken; out AReason: string): Boolean; static;
+
+    // SCA101 und SCA099: die Anweisung hinter AKeyword (then, else, do) in
+    // begin..end setzen - bedeutungsgleich. Sie endet mit ';' (das bleibt
+    // in ihr, das end bekommt eines) oder vor else/end/until/except/finally
+    // (sie bekommt ein ';', das end keines). Hinter dem else eines case
+    // oder except steht eine Anweisungsliste: dann alles bis vor dessen end.
+    // Form: endet die Zeile des Schluesselworts mit ihm und die letzte Zeile
+    // der Anweisung mit ihr, kommen begin und end in eigene Zeilen
+    // (eingerueckt wie die Zeile des if/for/while/with/on bzw. des else);
+    // steht die Anweisung ganz auf der Zeile des Schluesselworts, kommt sie
+    // eine Stufe tiefer in eine eigene Zeile; sonst inline. Keine Hilfe bei
+    // einem bedingten Ausdruck (Delphi 13: 'X := if A then B else C'), bei
+    // Struktur, anonymer Methode oder Inline-Deklaration in der Anweisung,
+    // bei einer Direktive im Bereich, bei schon vorhandenem begin und bei
+    // einer leeren Anweisung.
+    class function WrapInBlock(AMap: TRdxCodeMap; const AKeyword: TRdxToken;
+      out AEdits: TArray<TRdxEdit>; out AReason: string): Boolean; static;
   end;
 
 implementation
@@ -70,6 +99,45 @@ const
   // Token, die ein eigenes 'end' brauchen (Bilanz in MatchingEnd).
   END_OPENERS: array[0..4] of string = ('begin', 'case', 'try', 'asm',
     'record');
+  SPAN_101 = 'sca101';
+  BRANCH_KEYWORDS: array[0..2] of string = ('then', 'else', 'do');
+  // Vor diesen Token endet eine Anweisung ohne ';'.
+  BRANCH_STOPPERS: array[0..4] of string = ('else', 'end', 'until',
+    'except', 'finally');
+  // In der einfachen Anweisung hinter then/else/do gesperrt: eine Struktur
+  // (ihr Ende sucht die Hilfe nicht), ein bedingter Ausdruck (Delphi 13),
+  // eine anonyme Methode (ihr Rumpf traegt ';') und eine Inline-
+  // Deklaration (begin..end engte ihren Gueltigkeitsbereich ein).
+  NOT_IN_BRANCH: array[0..16] of string = ('if', 'then', 'do', 'of',
+    'begin', 'case', 'try', 'asm', 'record', 'repeat', 'while', 'for',
+    'with', 'procedure', 'function', 'var', 'const');
+  // In einer Anweisungsliste (else eines case/except) gesperrt.
+  INLINE_DECLS: array[0..1] of string = ('var', 'const');
+  // Token vor dem Anfang einer Anweisung. Steht vor dem if (for, while ...)
+  // etwas anderes, ist es Teil eines Ausdrucks ('X := if A then B else C').
+  STATEMENT_PREV: array[0..11] of string = (';', 'begin', 'then', 'else',
+    'do', 'try', 'finally', 'except', 'repeat', ':', 'initialization',
+    'finalization');
+  // Rueckwaerts ohne Besitzer bis zu diesem Wort (oder ';'): die Suche endet.
+  OWNER_STOPS: array[0..9] of string = ('begin', 'end', 'then', 'else',
+    'do', 'of', 'try', 'repeat', 'except', 'finally');
+  IF_OWNERS: array[0..0] of string = ('if');
+  DO_OWNERS: array[0..3] of string = ('for', 'while', 'with', 'on');
+  // Ein else hinter ';' oder diesen Woertern (oberste Ebene) gehoert zu
+  // case/except.
+  LIST_ELSE_OWNERS: array[0..2] of string = ('of', 'case', 'except');
+  // Obergrenze fuer then/else-Spruenge rueckwaerts (StartsStatement) - eine
+  // else-if-Kette ist so lang wie ihre Zweige.
+  MAX_HOPS = 10000;
+  // Hier endet die Suche nach dem Besitzer eines else ohne Fund.
+  ELSE_STOPS: array[0..6] of string = ('begin', 'try', 'asm', 'record',
+    'repeat', 'until', 'finally');
+  // Hinter diesen Token ist ein Wort ein Bezeichner ('&End', '@@End',
+  // 'X.Then').
+  IDENT_PREFIXES: array[0..2] of string = ('&', '@', '.');
+  R_BRANCH_MOVED = 'kein then/else/do an der gemeldeten Stelle - Zeile '
+    + 'verschoben? Datei neu pruefen';
+  R_NO_ELSE_OWNER = 'kein if, case oder except zum else gefunden';
 
 type
   // Code-Token eines Bereichs nach Art (CountRangeTokens).
@@ -81,14 +149,42 @@ type
     Others : Integer;
   end;
 
+  // Die Anweisung hinter then/else/do (WrapInBlock).
+  TRdxBranch = record
+    Keyword  : TRdxToken;
+    First    : TRdxToken;   // ihr erstes Token
+    Stop     : TRdxToken;   // ohne ';': das Token dahinter (else, end ...)
+    LastLine : Integer;     // ihr letztes Zeichen aus Code oder String -
+    LastCol  : Integer;     //   bei HasSemi das ';'
+    HasSemi  : Boolean;
+    IsList   : Boolean;     // else eines case/except: Liste bis vor das end
+    Indent   : string;      // fuer begin und end
+  end;
+
+  // Ein Schritt einer Token-Suche: weiter, gefunden, abbrechen.
+  TRdxStep = (rsGoOn, rsFound, rsStop);
+
+  // Wem ein else gehoert (ElseOwner).
+  TRdxElseOwner = (eoUnknown, eoIf, eoList);
+
+  // Die Rueckwaerts-Suche nach dem Besitzer eines else: offene Bloecke
+  // (end ohne Anfang) und else ohne then; das Ergebnis in Owner, ThenTok
+  // (eoIf) oder Reason. Die Schritte liefern True, wenn die Suche endet.
+  TRdxElseScan = record
+    Block   : Integer;
+    Pending : Integer;
+    Owner   : TRdxElseOwner;
+    ThenTok : TRdxToken;
+    Reason  : string;
+    function StepWord(const T: TRdxToken): Boolean;     // ein Schluesselwort
+    function StepSymbol(const T: TRdxToken): Boolean;   // ein Satzzeichen
+    function TakeThen(const T: TRdxToken): Boolean;
+    function TakeList: Boolean;
+  end;
+
 function IsEndOpener(const ALow: string): Boolean;
-var
-  S : string;
 begin
-  Result := False;
-  for S in END_OPENERS do
-    if ALow = S then
-      Exit(True);
+  Result := InList(ALow, END_OPENERS);
 end;
 
 // Der Text des Bereichs, Zeilen mit #10 verbunden - so, wie
@@ -498,6 +594,624 @@ begin
   AEdits[0].Expected := Copy(L, EndTok.Col, EndTok.Len);
   AEdits[0].NewText := ElseText(L, EndTok, AStatement, AMap.Raw(LastTok.Line));
   AppendSemicolon(AMap, EndTok, AEdits);
+  Result := True;
+end;
+
+{ ---- SCA101 / SCA099 ---- }
+
+class function TRdxStructFixes.BranchKeywordAt(AMap: TRdxCodeMap; ALine,
+  ACol: Integer; out AKeyword: TRdxToken; out AReason: string): Boolean;
+var
+  L : string;
+begin
+  AKeyword := Default(TRdxToken);
+  AReason := '';
+  L := AMap.Raw(ALine);
+  if ACol <= 0 then
+    AReason := 'Spalte fehlt in der Meldung'
+  else if not AMap.IsCode(ALine, ACol) or not IsIdentStart(L[ACol])
+     or ((ACol > 1) and IsIdentChar(L[ACol - 1])) then
+    AReason := R_BRANCH_MOVED
+  else
+  begin
+    AKeyword := TokenAt(AMap, ALine, ACol);
+    if not InList(AKeyword.Low, BRANCH_KEYWORDS) then
+      AReason := R_BRANCH_MOVED;
+  end;
+  Result := AReason = '';
+end;
+
+class function TRdxStructFixes.ElseAfterEndOn(AMap: TRdxCodeMap;
+  ALine: Integer; out AKeyword: TRdxToken; out AReason: string): Boolean;
+var
+  T, Prev, N : TRdxToken;
+  Count      : Integer;
+begin
+  AKeyword := Default(TRdxToken);
+  AReason := '';
+  Count := 0;
+  Prev := PrevToken(AMap, ALine, 1);
+  T := NextToken(AMap, ALine, 1);
+  while (T.Low <> '') and (T.Line = ALine) do
+  begin
+    N := After(AMap, T);
+    if (T.Low = 'end') and (N.Low = 'else')
+       and not InList(Prev.Low, IDENT_PREFIXES) then
+    begin
+      Inc(Count);
+      AKeyword := N;
+    end;
+    Prev := T;
+    T := N;
+  end;
+  if Count = 0 then
+    AReason := 'kein "end else" auf der gemeldeten Zeile - Zeile verschoben? '
+      + 'Datei neu pruefen'
+  else if Count > 1 then
+    AReason := Format('Zeile %d traegt %d-mal "end else" - mehrdeutig',
+      [ALine, Count]);
+  Result := AReason = '';
+end;
+
+// Ein Wort als Schluesselwort - nicht hinter '&', '@' oder '.'.
+function IsKeywordAfter(const T, APrev: TRdxToken): Boolean;
+begin
+  Result := T.IsWord and not InList(APrev.Low, IDENT_PREFIXES);
+end;
+
+// Klammertiefe rueckwaerts: ')' und ']' hoch, '(' und '[' herunter. True,
+// wenn T eine Klammer war.
+function ParenBack(const T: TRdxToken; var AParen: Integer): Boolean;
+begin
+  Result := True;
+  if (T.Low = ')') or (T.Low = ']') then
+    Inc(AParen)
+  else if (T.Low = '(') or (T.Low = '[') then
+    Dec(AParen)
+  else
+    Result := False;
+end;
+
+// FindOwner, ein Token ausserhalb von Klammern: ';' oder ein Wort aus
+// OWNER_STOPS beendet die Suche, ein Wort aus AOwners ist der Besitzer.
+function OwnerStep(const T, APrev: TRdxToken;
+  const AOwners: array of string): TRdxStep;
+begin
+  Result := rsGoOn;
+  if T.Low = ';' then
+    Result := rsStop
+  else if not IsKeywordAfter(T, APrev) then
+    Exit
+  else if InList(T.Low, AOwners) then
+    Result := rsFound
+  else if InList(T.Low, OWNER_STOPS) then
+    Result := rsStop;
+end;
+
+// Rueckwaerts ab AKeyword ausserhalb von Klammern das erste Wort aus
+// AOwners (if zu then; for/while/with/on zu do). '' oder der Grund.
+function FindOwner(AMap: TRdxCodeMap; const AKeyword: TRdxToken;
+  const AOwners: array of string; out AOwner: TRdxToken): string;
+var
+  T, P  : TRdxToken;
+  Paren : Integer;
+  Step  : TRdxStep;
+begin
+  AOwner := Default(TRdxToken);
+  Paren := 0;
+  T := Before(AMap, AKeyword);
+  while (T.Low <> '') and (Paren >= 0) do
+  begin
+    P := Before(AMap, T);
+    // Klammern und was in ihnen steht, zaehlen nicht.
+    Step := rsGoOn;
+    if not ParenBack(T, Paren) and (Paren = 0) then
+      Step := OwnerStep(T, P, AOwners);
+    if Step = rsFound then
+    begin
+      AOwner := T;
+      Exit('');
+    end;
+    if Step = rsStop then
+      Break;
+    T := P;
+  end;
+  if Paren < 0 then
+    Exit(Format('das %s steht in Klammern', [AKeyword.Low]));
+  Result := Format('keinen Anfang der Anweisung zum %s gefunden',
+    [AKeyword.Low]);
+end;
+
+{ TRdxElseScan }
+
+function TRdxElseScan.TakeThen(const T: TRdxToken): Boolean;
+begin
+  Result := Pending = 0;
+  if not Result then
+    Dec(Pending)
+  else
+  begin
+    Owner := eoIf;
+    ThenTok := T;
+  end;
+end;
+
+function TRdxElseScan.TakeList: Boolean;
+begin
+  Owner := eoList;
+  if Pending > 0 then
+    Reason := 'das else passt zu keinem if';
+  Result := True;
+end;
+
+function TRdxElseScan.StepWord(const T: TRdxToken): Boolean;
+begin
+  Result := False;
+  if T.Low = 'end' then
+    Inc(Block)
+  else if IsEndOpener(T.Low) and (Block > 0) then
+    Dec(Block)
+  else if Block > 0 then
+    Exit
+  else if T.Low = 'else' then
+    Inc(Pending)
+  else if T.Low = 'then' then
+    Result := TakeThen(T)
+  else if InList(T.Low, LIST_ELSE_OWNERS) then
+    Result := TakeList
+  else if InList(T.Low, ELSE_STOPS) then
+  begin
+    Reason := R_NO_ELSE_OWNER;
+    Result := True;
+  end;
+end;
+
+function TRdxElseScan.StepSymbol(const T: TRdxToken): Boolean;
+begin
+  Result := False;
+  if (Block = 0) and (T.Low = ';') then
+    Result := TakeList;
+end;
+
+// Wem gehoert das else? Rueckwaerts ausserhalb von Klammern und Bloecken:
+// das erste then ohne eigenes else -> eoIf (ThenTok); ';', of, case oder
+// except davor -> eoList (else eines case oder except: dahinter steht eine
+// Anweisungsliste bis zum end). Sonst Reason.
+function ElseOwner(AMap: TRdxCodeMap; const AElse: TRdxToken): TRdxElseScan;
+var
+  T, P  : TRdxToken;
+  Paren : Integer;
+  Done  : Boolean;
+begin
+  Result := Default(TRdxElseScan);
+  Paren := 0;
+  T := Before(AMap, AElse);
+  while (T.Low <> '') and (Paren >= 0) do
+  begin
+    P := Before(AMap, T);
+    if ParenBack(T, Paren) or (Paren > 0) then
+      Done := False
+    else if IsKeywordAfter(T, P) then
+      Done := Result.StepWord(T)
+    else
+      Done := Result.StepSymbol(T);
+    if Done then Exit;
+    T := P;
+  end;
+  Result.Owner := eoUnknown;
+  if Paren < 0 then
+    Result.Reason := 'das else steht in Klammern'
+  else
+    Result.Reason := R_NO_ELSE_OWNER;
+end;
+
+// Ein Sprung von StartsStatement - AThenOrElse ist then oder else: rsGoOn
+// mit dem if davor (AIf), dessen Anfang weiter zu pruefen ist; rsFound,
+// wenn das else zu case/except gehoert (eine Anweisungsliste); rsStop ohne
+// Besitzer.
+function HopToIf(AMap: TRdxCodeMap; const AThenOrElse: TRdxToken;
+  out AIf: TRdxToken): TRdxStep;
+var
+  ThenTok : TRdxToken;
+  Scan    : TRdxElseScan;
+begin
+  AIf := Default(TRdxToken);
+  ThenTok := AThenOrElse;
+  if AThenOrElse.Low = 'else' then
+  begin
+    Scan := ElseOwner(AMap, AThenOrElse);
+    if Scan.Reason <> '' then Exit(rsStop);
+    if Scan.Owner = eoList then Exit(rsFound);
+    ThenTok := Scan.ThenTok;
+  end;
+  Result := rsGoOn;
+  if FindOwner(AMap, ThenTok, IF_OWNERS, AIf) <> '' then
+    Result := rsStop;
+end;
+
+// Beginnt AOwner (if, for, while, with, on) eine Anweisung? Davor steht
+// ein Token aus STATEMENT_PREV; ist es then oder else, muss auch das if
+// davor eine beginnen - sonst ist es ein verschachtelter bedingter
+// Ausdruck ('X := if A then if B then C else D else E').
+function StartsStatement(AMap: TRdxCodeMap; const AOwner: TRdxToken): Boolean;
+var
+  P, IfTok : TRdxToken;
+  Hop      : Integer;
+  Step     : TRdxStep;
+begin
+  Result := False;
+  P := Before(AMap, AOwner);
+  for Hop := 1 to MAX_HOPS do
+  begin
+    if not InList(P.Low, STATEMENT_PREV) then Exit;
+    if (P.Low <> 'then') and (P.Low <> 'else') then Exit(True);
+    Step := HopToIf(AMap, P, IfTok);
+    if Step <> rsGoOn then Exit(Step = rsFound);
+    P := Before(AMap, IfTok);
+  end;
+end;
+
+// Der Besitzer muss eine Anweisung beginnen (StartsStatement).
+function StatementOwner(AMap: TRdxCodeMap; const AKeyword: TRdxToken;
+  const AOwners: array of string; out AOwner: TRdxToken): string;
+begin
+  Result := FindOwner(AMap, AKeyword, AOwners, AOwner);
+  if (Result = '') and not StartsStatement(AMap, AOwner) then
+    Result := Format('das %s steht in einem Ausdruck (bedingter Ausdruck, '
+      + 'Delphi 13) - kein Zweig einer Anweisung', [AOwner.Low]);
+end;
+
+// Besitzer und Einrueckung der Anweisung hinter ABranch.Keyword: then ->
+// if, do -> for/while/with/on (eingerueckt wie deren Zeile); else -> if-else
+// oder Liste (eingerueckt wie die else-Zeile). '' oder der Grund.
+function BranchOwner(AMap: TRdxCodeMap; var ABranch: TRdxBranch): string;
+var
+  Kw, Owner : TRdxToken;
+  Scan      : TRdxElseScan;
+  L         : string;
+begin
+  Kw := ABranch.Keyword;
+  if Kw.Low = 'then' then
+    Result := StatementOwner(AMap, Kw, IF_OWNERS, Owner)
+  else if Kw.Low = 'do' then
+    Result := StatementOwner(AMap, Kw, DO_OWNERS, Owner)
+  else
+  begin
+    Scan := ElseOwner(AMap, Kw);
+    Result := Scan.Reason;
+    ABranch.IsList := Scan.Owner = eoList;
+    if (Result = '') and (Scan.Owner = eoIf) then
+      Result := StatementOwner(AMap, Scan.ThenTok, IF_OWNERS, Owner);
+    Owner := Kw;
+  end;
+  L := AMap.Raw(Owner.Line);
+  ABranch.Indent := Copy(L, 1, SkipBlanks(L, 1) - 1);
+end;
+
+// StatementEnd, ein Token: Klammertiefe fortschreiben; rsFound an einem
+// ';' oder Stopper ausserhalb von Klammern, rsStop mit AReason an einem
+// gesperrten Wort.
+function StatementStep(const T, APrev: TRdxToken; var AParen: Integer;
+  out AReason: string): TRdxStep;
+var
+  Word : Boolean;
+begin
+  Result := rsGoOn;
+  AReason := '';
+  Word := IsKeywordAfter(T, APrev);
+  if (T.Low = '(') or (T.Low = '[') then
+    Inc(AParen)
+  else if (T.Low = ')') or (T.Low = ']') then
+    Dec(AParen)
+  else if (AParen = 0)
+     and ((T.Low = ';') or (Word and InList(T.Low, BRANCH_STOPPERS))) then
+    Result := rsFound
+  else if Word and (InList(T.Low, NOT_IN_BRANCH)
+     or InList(T.Low, BRANCH_STOPPERS)) then
+  begin
+    AReason := Format('"%s" in der Anweisung - Struktur, bedingter '
+      + 'Ausdruck, anonyme Methode oder Inline-Deklaration', [T.Low]);
+    Result := rsStop;
+  end;
+end;
+
+// Das Ende der einfachen Anweisung ab ABranch.First, ausserhalb von
+// Klammern: ein ';' (HasSemi, LastLine/LastCol) oder ein Stopper (Stop).
+// '' oder der Grund.
+function StatementEnd(AMap: TRdxCodeMap; var ABranch: TRdxBranch): string;
+var
+  T, Prev : TRdxToken;
+  Paren   : Integer;
+  Step    : TRdxStep;
+begin
+  Paren := 0;
+  Prev := ABranch.Keyword;
+  T := ABranch.First;
+  while (T.Low <> '') and (Paren >= 0) do
+  begin
+    Step := StatementStep(T, Prev, Paren, Result);
+    if Step = rsStop then Exit;
+    if Step = rsFound then
+    begin
+      ABranch.HasSemi := T.Low = ';';
+      ABranch.Stop := T;
+      ABranch.LastLine := T.Line;
+      ABranch.LastCol := T.Col;
+      Exit;
+    end;
+    Prev := T;
+    T := After(AMap, T);
+  end;
+  Result := 'Ende der Anweisung nicht gefunden';
+end;
+
+// Das Ende der Anweisungsliste hinter dem else eines case oder except: das
+// end, das den case bzw. try schliesst (Bilanz wie MatchingEnd). Endet die
+// Liste auf ';', HasSemi. '' oder der Grund.
+function ListEnd(AMap: TRdxCodeMap; var ABranch: TRdxBranch): string;
+var
+  T, Prev : TRdxToken;
+  Depth   : Integer;
+begin
+  Depth := 0;
+  Prev := ABranch.Keyword;
+  T := ABranch.First;
+  while T.Low <> '' do
+  begin
+    if IsKeywordAfter(T, Prev) and InList(T.Low, INLINE_DECLS) then
+      Exit(Format('Inline-Deklaration (%s) im else-Zweig - begin..end engte '
+        + 'ihren Gueltigkeitsbereich ein', [T.Low]));
+    if IsKeywordAfter(T, Prev) and IsEndOpener(T.Low) then
+      Inc(Depth)
+    else if IsKeywordAfter(T, Prev) and (T.Low = 'end') then
+    begin
+      if Depth = 0 then
+      begin
+        ABranch.Stop := T;
+        ABranch.HasSemi := Prev.Low = ';';
+        ABranch.LastLine := Prev.Line;
+        ABranch.LastCol := Prev.Col;
+        Exit('');
+      end;
+      Dec(Depth);
+    end;
+    Prev := T;
+    T := After(AMap, T);
+  end;
+  Result := 'kein end zum else-Zweig gefunden';
+end;
+
+// Das erste Zeichen aus Code oder String hinter ATok (Kommentare und
+// Leerraum uebersprungen) - Gegenstueck zu LastCharBefore.
+function FirstCharAfter(AMap: TRdxCodeMap; const ATok: TRdxToken;
+  out ALine, ACol: Integer): Boolean;
+var
+  Li, Co : Integer;
+  L      : string;
+begin
+  Result := False;
+  ALine := 0;
+  ACol := 0;
+  for Li := ATok.Line to AMap.LineCount do
+  begin
+    L := AMap.Raw(Li);
+    Co := 1;
+    if Li = ATok.Line then
+      Co := ATok.EndCol;
+    while (Co <= Length(L)) and ((AMap.ClassAt(Li, Co) = 'k') or IsBlank(L[Co])) do
+      Inc(Co);
+    if Co <= Length(L) then
+    begin
+      ALine := Li;
+      ACol := Co;
+      Exit(True);
+    end;
+  end;
+end;
+
+// Erstes Token und Ende der Anweisung (bzw. Liste). '' oder der Grund.
+function BranchEnd(AMap: TRdxCodeMap; var ABranch: TRdxBranch): string;
+var
+  F      : TRdxToken;
+  Li, Co : Integer;
+begin
+  F := After(AMap, ABranch.Keyword);
+  ABranch.First := F;
+  if F.Low = '' then
+    Exit('Dateiende hinter dem ' + ABranch.Keyword.Low);
+  if F.Low = 'begin' then
+    Exit('die Anweisung steht schon in begin..end - Fund veraltet? Datei neu '
+      + 'pruefen');
+  if (F.Low = ';') or InList(F.Low, BRANCH_STOPPERS) then
+    Exit('leere Anweisung hinter dem ' + ABranch.Keyword.Low);
+  // Der Token-Leser sieht keine Strings: begaenne die Anweisung mit einem,
+  // waere F nicht ihr Anfang.
+  if not FirstCharAfter(AMap, ABranch.Keyword, Li, Co)
+     or (Li <> F.Line) or (Co <> F.Col) then
+    Exit('die Anweisung beginnt mit einem String');
+  if ABranch.IsList then
+    Result := ListEnd(AMap, ABranch)
+  else
+    Result := StatementEnd(AMap, ABranch);
+  if (Result = '') and not ABranch.HasSemi
+     and not LastCharBefore(AMap, ABranch.Stop, ABranch.LastLine,
+       ABranch.LastCol) then
+    Result := 'Ende der Anweisung nicht gefunden';
+end;
+
+// Eine Direktive ab AKeyword bis zum Ende der Zeile ALastLine? Sie stuende
+// danach womoeglich auf der anderen Seite von begin oder end.
+function DirectiveFrom(AMap: TRdxCodeMap; const AKeyword: TRdxToken;
+  ALastLine: Integer): Boolean;
+var
+  Li, Co : Integer;
+begin
+  Result := False;
+  for Li := AKeyword.Line to ALastLine do
+    for Co := 1 to Length(AMap.Raw(Li)) do
+      if ((Li > AKeyword.Line) or (Co >= AKeyword.Col))
+         and DirectiveAt(AMap, Li, Co) then
+        Exit(True);
+end;
+
+// Hinter (ALine, ACol) auf der Zeile nur Leerraum oder Kommentar?
+function TailIsComment(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
+var
+  L  : string;
+  Co : Integer;
+begin
+  Result := True;
+  L := AMap.Raw(ALine);
+  for Co := ACol + 1 to Length(L) do
+    if (AMap.ClassAt(ALine, Co) <> 'k') and not IsBlank(L[Co]) then
+      Exit(False);
+end;
+
+// Darf hinter Zeile ALine eine Zeile hinein? Hinter ACol nur Leerraum oder
+// Kommentar, und die Folgezeile beginnt nicht in einem Kommentar oder
+// mehrzeiligen String (die neue Zeile laege darin).
+function CanAppendLine(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
+begin
+  Result := TailIsComment(AMap, ALine, ACol)
+    and not AMap.StartsInside(ALine + 1);
+end;
+
+// begin und end als eigene Zeilen: hinter die Zeile des Schluesselworts
+// und hinter die letzte Zeile der Anweisung (deren Rest bleibt bei ihr).
+function OwnLinesEdit(AMap: TRdxCodeMap; const B: TRdxBranch;
+  const ASemi, AEnd: string): TRdxEdit;
+var
+  Last : string;
+begin
+  Result := Default(TRdxEdit);
+  Last := AMap.Raw(B.LastLine);
+  Result.Span := TRefactorSpan.Make(SPAN_101, B.Keyword.Line, B.Keyword.Col,
+    B.LastLine, Length(Last) + 1);
+  Result.Expected := RangeText(AMap, Result.Span);
+  Result.NewText := Copy(AMap.Raw(B.Keyword.Line), B.Keyword.Col, MaxInt)
+    + #10 + B.Indent + 'begin' + #10
+    + RangeText(AMap, TRefactorSpan.Make(SPAN_101, B.Keyword.Line + 1, 1,
+        B.LastLine, B.LastCol + 1))
+    + ASemi + Copy(Last, B.LastCol + 1, MaxInt) + #10 + B.Indent + AEnd;
+end;
+
+// Folgt der Anweisung (ohne ';') ein else auf ihrer letzten Zeile?
+function ElseOnLastLine(const B: TRdxBranch): Boolean;
+begin
+  Result := not B.HasSemi and (B.Stop.Low = 'else')
+    and (B.Stop.Line = B.LastLine);
+end;
+
+// Alles auf der Zeile des Schluesselworts: dahinter begin, die Anweisung
+// eine Stufe tiefer und end in eigenen Zeilen - ein else, das auf der
+// Zeile folgte, beginnt eine weitere.
+function SplitLineEdit(AMap: TRdxCodeMap; const B: TRdxBranch;
+  const ASemi, AEnd: string): TRdxEdit;
+var
+  L, Body, Gap, Tail : string;
+  EndCol             : Integer;
+begin
+  Result := Default(TRdxEdit);
+  L := AMap.Raw(B.Keyword.Line);
+  Body := Trim(Copy(L, B.Keyword.EndCol, B.LastCol + 1 - B.Keyword.EndCol))
+    + ASemi;
+  EndCol := B.LastCol + 1;
+  Tail := '';
+  if ElseOnLastLine(B) then
+  begin
+    Gap := Trim(Copy(L, B.LastCol + 1, B.Stop.Col - B.LastCol - 1));
+    if Gap <> '' then
+      Body := Body + ' ' + Gap;
+    EndCol := B.Stop.Col;
+    Tail := #10 + B.Indent;
+  end;
+  Result.Span := TRefactorSpan.Make(SPAN_101, B.Keyword.Line, B.Keyword.Col,
+    B.Keyword.Line, EndCol);
+  Result.Expected := Copy(L, B.Keyword.Col, EndCol - B.Keyword.Col);
+  Result.NewText := Copy(L, B.Keyword.Col, B.Keyword.Len) + #10 + B.Indent
+    + 'begin' + #10 + B.Indent + IndentStep(B.Indent, '') + Body + #10
+    + B.Indent + AEnd + Tail;
+end;
+
+// Inline: 'begin ' vor die Anweisung, ' end' hinter sie - eine Ersetzung
+// auf einer Zeile, sonst zwei.
+function InlineEdits(AMap: TRdxCodeMap; const B: TRdxBranch;
+  const ASemi, AEnd: string): TArray<TRdxEdit>;
+var
+  Close : string;
+begin
+  Close := ASemi + ' ' + AEnd;
+  if B.First.Line = B.LastLine then
+  begin
+    SetLength(Result, 1);
+    Result[0].Span := TRefactorSpan.Make(SPAN_101, B.First.Line, B.First.Col,
+      B.LastLine, B.LastCol + 1);
+    Result[0].Expected := Copy(AMap.Raw(B.LastLine), B.First.Col,
+      B.LastCol + 1 - B.First.Col);
+    Result[0].NewText := 'begin ' + Result[0].Expected + Close;
+    Exit;
+  end;
+  SetLength(Result, 2);
+  Result[0].Span := TRefactorSpan.Make(SPAN_101, B.First.Line, B.First.Col,
+    B.First.Line, B.First.EndCol);
+  Result[0].Expected := Copy(AMap.Raw(B.First.Line), B.First.Col, B.First.Len);
+  Result[0].NewText := 'begin ' + Result[0].Expected;
+  Result[1].Span := TRefactorSpan.Make(SPAN_101, B.LastLine, B.LastCol,
+    B.LastLine, B.LastCol + 1);
+  Result[1].Expected := Copy(AMap.Raw(B.LastLine), B.LastCol, 1);
+  Result[1].NewText := Result[1].Expected + Close;
+end;
+
+// Die Form waehlen (s. WrapInBlock): eigene Zeilen, Zeile aufteilen oder
+// inline.
+function BlockEdits(AMap: TRdxCodeMap; const B: TRdxBranch): TArray<TRdxEdit>;
+var
+  Semi, EndText : string;
+begin
+  Semi := ';';
+  EndText := 'end';
+  if B.HasSemi then
+  begin
+    Semi := '';
+    EndText := 'end;';
+  end;
+  if CanAppendLine(AMap, B.Keyword.Line, B.Keyword.EndCol - 1)
+     and CanAppendLine(AMap, B.LastLine, B.LastCol) then
+  begin
+    SetLength(Result, 1);
+    Result[0] := OwnLinesEdit(AMap, B, Semi, EndText);
+  end
+  else if (B.First.Line = B.Keyword.Line) and (B.LastLine = B.Keyword.Line)
+     and (ElseOnLastLine(B) or TailIsComment(AMap, B.LastLine, B.LastCol)) then
+  begin
+    SetLength(Result, 1);
+    Result[0] := SplitLineEdit(AMap, B, Semi, EndText);
+  end
+  else
+    Result := InlineEdits(AMap, B, Semi, EndText);
+end;
+
+class function TRdxStructFixes.WrapInBlock(AMap: TRdxCodeMap;
+  const AKeyword: TRdxToken; out AEdits: TArray<TRdxEdit>;
+  out AReason: string): Boolean;
+var
+  B : TRdxBranch;
+begin
+  Result := False;
+  AEdits := nil;
+  B := Default(TRdxBranch);
+  B.Keyword := AKeyword;
+  if not InList(AKeyword.Low, BRANCH_KEYWORDS) then
+    AReason := R_BRANCH_MOVED
+  else
+    AReason := BranchOwner(AMap, B);
+  if AReason = '' then
+    AReason := BranchEnd(AMap, B);
+  if (AReason = '') and DirectiveFrom(AMap, AKeyword, B.LastLine) then
+    AReason := 'Compiler-Direktive im Bereich - begin oder end stuende auf '
+      + 'der anderen Seite';
+  if AReason <> '' then Exit;
+  AEdits := BlockEdits(AMap, B);
   Result := True;
 end;
 
