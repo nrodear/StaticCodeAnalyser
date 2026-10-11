@@ -1,7 +1,7 @@
 {
   "version": 1,
   "profiles": {
-    "editorhilfen": [
+    "code-aktionen": [
       "ConcatToFormat",
       "SQLInjection",
       "ExplicitTObjectInheritance",
