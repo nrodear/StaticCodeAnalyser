@@ -31,6 +31,10 @@
     "platform": "Win32",
     "projectVersion": "20.1"
   },
+  "VarNameProject/package/VarNameProject.d12.dproj": {
+    "platform": "Win32",
+    "projectVersion": "20.1"
+  },
   "reDelphix/reDelphix.d12.dproj": {
     "platform": "Win32",
     "projectVersion": "20.1"
