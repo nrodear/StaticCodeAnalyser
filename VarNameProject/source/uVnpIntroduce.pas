@@ -10,18 +10,14 @@ unit uVnpIntroduce;
 //      Deklaration steht in den Offsets vorn); Tippen aendert alle Stellen
 //      mit. Der Caret wird danach NICHT mehr bewegt - das koennte die
 //      Vorauswahl der IDE aufheben (Messpunkt M11).
-// Die Varianten unterscheiden NUR Schritt 3 - sie sind die Messung:
-//   vvOwnAbs/Rel        Punkte aus eigenen Klassen, Offsets absolut (Zeile
-//                       der Datei) bzw. relativ zur ersten Zeile des Blocks
-//                       (0-basiert). (Die Variante "Punkte per
-//                       IOTACodeTemplateServices.CreateClass" ist entfallen:
-//                       die Sonde M21 ergab nil - die Fabrik baut nur
-//                       Template-Objekte.)
-//   vvIdeSyncEdit       SyncEditBlock(nil): die IDE sucht selbst (wie
-//                       Strg+Umschalt+J); der Notifier protokolliert die
-//                       Offsets, die SIE anlegt - die Referenz fuer Abs/Rel.
+// Die Varianten unterscheiden NUR Schritt 3 - sie sind die Messung (siehe
+// TVnpVariant): eigene Punkt-Klassen mit absoluten Offsets (Lauf 1:
+// funktioniert; "Punkte per IOTACodeTemplateServices.CreateClass" ist
+// entfallen - Sonde M21 ergab nil, relative Offsets sind nicht noetig),
+// je mit/ohne gehaltene Punkte und Notifier; dazu SyncEditBlock(nil) als
+// Referenz (die IDE sucht selbst, wie Strg+Umschalt+J).
 // TOTACharPos: CharIndex 0-basiert in ZEICHEN der Zeile (Tab = 1), Line
-// 1-basiert - gemessen 2026-10-11 (Sonde M10, 'Grueße EUR': CharIndex 20
+// 1-basiert - gemessen 2026-10-11 (Sonde M10, 'Gruesse EUR': CharIndex 20
 // bei 20 Zeichen = 24 Bytes). ACHTUNG: CharPosToPos addiert CharIndex als
 // BYTES zum Zeilenanfang - auf Zeilen mit Nicht-ASCII davor stimmt es also
 // nicht; Pufferpositionen rechnet dieses Projekt selbst (Reader-Bytes).
@@ -29,13 +25,19 @@ unit uVnpIntroduce;
 interface
 
 type
-  TVnpVariant = (vvOwnAbs, vvOwnRel, vvIdeSyncEdit);
+  // Lauf 1 (2026-10-11): B1 mit absoluten Offsets startet die Sitzung,
+  // Strg+Z danach stuerzt in TSyncEditManager.SendSyncEvent ab. Die
+  // Varianten trennen die zwei Verdaechtigen: Punkte freigegeben (nur
+  // lokal gehalten) und Notifier bei Exit abgemeldet (jetzt nie mehr).
+  TVnpVariant = (vvKeepBoth, vvKeepPointsOnly, vvNotifierOnly,
+    vvIdeSyncEdit);
 
 const
   VARIANT_CAPTIONS : array[TVnpVariant] of string = (
-    'B1 eigene Punkt-Klassen, Offsets absolut',
-    'B2 eigene Punkt-Klassen, Offsets relativ zum Block',
-    'C  SyncEditBlock(nil) - IDE-Sync-Edit als Referenz');
+    'B1a eigene Punkte gehalten + Notifier (Kandidat)',
+    'B1b eigene Punkte gehalten, ohne Notifier',
+    'B1d Notifier, Punkte NICHT gehalten',
+    'C  SyncEditBlock(nil) - IDE-Sync-Edit + Notifier');
 
 // Der ganze Ablauf an der Caret-Position der obersten Editoransicht.
 procedure RunIntroduce(AVariant: TVnpVariant);
@@ -105,7 +107,7 @@ end;
 
 // Caret als Zeile und 1-basierte Zeichenspalte: CharIndex zaehlt Zeichen
 // (Sonde M10), die Spalte ist CharIndex + 1. NICHT ueber CharPosToPos -
-// das liest CharIndex als Bytes und lag hinter 'Grueße EUR' 4 Spalten
+// das liest CharIndex als Bytes und lag hinter 'Gruesse EUR' 4 Spalten
 // daneben (Protokoll 2026-10-11).
 procedure CaretOf(const AEd: TVnpEditor; out ARow, ACol: Integer);
 var
@@ -175,21 +177,20 @@ begin
     ATarget.Plan.NewUseLine]);
 end;
 
-// Die Fundstellen des Namens: Deklaration + Verwendungen, CharIndex in
-// Zeichen (wie ConvertPos). ABase wird von der Zeile abgezogen: 0 =
-// absolut, DeclRow = relativ zum Block (0-basiert).
-function OffsetsOf(const ATarget: TVnpTarget;
-  ABase: Integer): TArray<TOTACharPos>;
+// Die Fundstellen des Namens: Deklaration + Verwendungen. Line absolut
+// (Zeile der Datei), CharIndex in Zeichen wie ConvertPos - beides in Lauf 1
+// bestaetigt (B1: Offsets (23,6) (24,42), Sitzung im Template-Modus).
+function OffsetsOf(const ATarget: TVnpTarget): TArray<TOTACharPos>;
 var
   P   : TOTACharPos;
   Col : Integer;
 begin
-  P.Line := ATarget.DeclRow - ABase;
+  P.Line := ATarget.DeclRow;
   P.CharIndex := ATarget.Plan.NameCol - 1;
   Result := [P];
   for Col in ATarget.Plan.NewCols do
   begin
-    P.Line := ATarget.UseRow - ABase;
+    P.Line := ATarget.UseRow;
     P.CharIndex := Col - 1;
     Result := Result + [P];
   end;
@@ -233,22 +234,32 @@ end;
 // Schritt 3 je Variante.
 procedure StartSync(AVariant: TVnpVariant; const ABlock: IOTAEditBlock;
   const ATarget: TVnpTarget);
+const
+  WITH_NOTIFIER = [vvKeepBoth, vvNotifierOnly, vvIdeSyncEdit];
+  KEEP_POINTS   = [vvKeepBoth, vvKeepPointsOnly];
 var
   Points : IOTASyncEditPoints;
   Err    : string;
-  Base   : Integer;
 begin
-  WatchBlock(ABlock);
+  if AVariant in WITH_NOTIFIER then
+    WatchBlock(ABlock)
+  else
+    VnpLog('  ohne Notifier');
   if AVariant = vvIdeSyncEdit then
   begin
     ABlock.SyncEditBlock(nil);
     Exit;
   end;
-  Base := 0;
-  if AVariant = vvOwnRel then
-    Base := ATarget.DeclRow;
-  if MakePoints(ATarget.Name, OffsetsOf(ATarget, Base), Points, Err) then
-    ABlock.SyncEditBlock(Points);
+  if not MakePoints(ATarget.Name, OffsetsOf(ATarget), Points, Err) then
+    Exit;
+  if AVariant in KEEP_POINTS then
+  begin
+    KeepAlive(Points);
+    VnpLog('  Punkte gehalten bis zum Entladen');
+  end
+  else
+    VnpLog('  Punkte NICHT gehalten (nur lokale Referenz)');
+  ABlock.SyncEditBlock(Points);
 end;
 
 // Nach dem Start nur protokollieren: wo die IDE den Caret hingesetzt hat
@@ -265,8 +276,8 @@ begin
     + 'Caret %d:%d, Name in der Deklaration bei %d:%d', [Ord(ABlock.SyncMode),
     Caret.Line, Caret.Col, ATarget.DeclRow, DisplayCol(AEd.View,
     ATarget.DeclRow, ATarget.Plan.NameCol)]);
-  VnpLog('  (folgen keine "Ereignis"-Zeilen, feuert der Notifier in dieser '
-    + 'Variante nicht)');
+  VnpLog('  (Ereignis-Zeilen kommen spaeter: beim Verlassen der Sitzung und '
+    + 'ggf. bei Strg+Z)');
 end;
 
 function OpenEditor(out AEd: TVnpEditor): Boolean;

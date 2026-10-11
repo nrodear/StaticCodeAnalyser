@@ -58,22 +58,30 @@ Offsets stehen - das misst dieses Projekt.
 3. `demo/VarNameDemo.pas` im Editor oeffnen.
 4. Caret auf eine Zahl setzen (siehe Faelle in der Datei).
 5. Tools > VarNameProject > eine Variante waehlen; danach wiederholt
-   **Strg+Alt+Umschalt+M** die zuletzt gewaehlte (Start: B1).
+   **Strg+Alt+Umschalt+M** die zuletzt gewaehlte (Start: B1a).
 6. Neuen Namen tippen, mit Enter/Tab/Esc bzw. Klick daneben beenden.
 7. Mit Strg+Z zuruecksetzen (zaehlen, wie oft - M7), naechste Variante.
+   Stuerzt Strg+Z ab: Variante notieren, IDE neu starten (sie kann danach
+   instabil sein), weiter mit der naechsten.
 8. Tools > VarNameProject > "Protokolldatei im Editor oeffnen" und den
    Inhalt zurueckmelden.
 
 ## Varianten (nur Schritt 3 unterscheidet sich)
 
-| Variante | Punkte | Offsets |
-|---|---|---|
-| B1 | eigene Klassen `TVnpSyncPoint/TVnpSyncPoints` | absolut: Zeile der Datei, CharIndex 0-basiert in Zeichen |
-| B2 | wie B1 | relativ: Zeile ab Blockanfang 0-basiert |
-| C | `SyncEditBlock(nil)` - die IDE sucht selbst (wie Strg+Umschalt+J) | die IDE legt sie an - der Notifier protokolliert sie: **die Referenz**, in welchem System die IDE rechnet |
+Alle mit eigenen Punkt-Klassen und absoluten Offsets (Lauf 1 bestaetigt).
+Lauf 1 stuerzte bei Strg+Z nach der Sitzung ab (TSyncEditManager.
+SendSyncEvent); damals waren die Punkte nur lokal gehalten und der Notifier
+wurde bei Exit abgemeldet. Die Varianten trennen die beiden Verdaechtigen:
 
-Die Varianten A1/A2 (Punkte per `IOTACodeTemplateServices.CreateClass`)
-sind entfallen - siehe Ergebnis M21.
+| Variante | Punkte | Notifier | erwartet |
+|---|---|---|---|
+| B1a | gehalten bis zum Entladen | angemeldet, bleibt | Kandidat: Strg+Z ohne Absturz |
+| B1b | gehalten | keiner | stuerzt sie nicht ab, ist der Notifier unbeteiligt |
+| B1d | NICHT gehalten | angemeldet, bleibt | stuerzt sie ab, war die Lebensdauer der Punkte schuld |
+| C | die IDE legt sie an (`SyncEditBlock(nil)`, wie Strg+Umschalt+J) | angemeldet, bleibt | Referenz: Undo mit IDE-eigenen Punkten |
+
+Entfallen: A1/A2 (Punkte per `IOTACodeTemplateServices.CreateClass` -
+Ergebnis M21) und B2 (relative Offsets - absolute funktionieren).
 
 ## Ergebnisse
 
@@ -92,6 +100,14 @@ sind entfallen - siehe Ergebnis M21.
   `IOTASyncEditPoint` und `IOTASyncEditPoint100` **nil**; fuer
   `IOTACodeTemplate`, `IOTACodeTemplatePoint` und `IOTACodeTemplateObject`
   je ein Objekt (die Fabrik baut das Template-Objektmodell).
+- **Lauf 1 (2026-10-11, B1, Fall 6):** eigene Punkt-Klassen mit absoluten
+  Offsets in Zeichen ((23,6) (24,42)) starten die Sitzung im
+  Template-Modus (SyncMode 2); die IDE setzt den Caret selbst auf den
+  ersten Offset (Name in der Deklaration, 23:7); der Notifier meldet Enter
+  und Exit. **Strg+Z danach stuerzt ab** (`TSyncEditUndoRedo.Execute` ->
+  `TSyncButton.SetDown` -> `TSyncEditPainter.SyncEditEvent` ->
+  `TSyncEditManager.SendSyncEvent`): Undo belebt die Sitzung wieder und
+  ruft dabei etwas auf, das es nicht mehr gibt - siehe Varianten.
 
 ## Was zurueckmelden (Messpunkte)
 

@@ -63,7 +63,7 @@ type
     function GetCount: Integer;
   end;
 
-  // Protokolliert die Sitzung; bei sepExit meldet er sich selbst ab.
+  // Protokolliert die Sitzung (meldet sich NICHT selbst ab).
   TVnpSyncNotifier = class(TInterfacedObject, IOTASyncEditNotifier)
   public
     procedure OnPoint(const APoint: IOTASyncEditPoint;
@@ -82,10 +82,15 @@ function MakePoints(const AName: string; const AOffsets: TArray<TOTACharPos>;
 // Punkt, fuers Protokoll. Offsets als (Line,CharIndex) wie TOTACharPos.
 function DescribePoints(const APoints: IOTASyncEditPoints): string;
 
-// Notifier an ABlock haengen (ein vorheriger wird vorher abgemeldet).
+// Einen Notifier an ABlock haengen. Er bleibt bis zum Entladen des Pakets
+// angemeldet und am Leben: Strg+Z belebt eine beendete Sitzung wieder und
+// ruft die Notifier erneut.
 procedure WatchBlock(const ABlock: IOTAEditBlock);
-// Den Notifier abmelden (beim Entladen des Pakets).
-procedure UnwatchBlock;
+// AObject bis zum Entladen des Pakets am Leben halten (die Punkte einer
+// Sitzung - ob die IDE sie selbst referenziert, ist eine Messfrage).
+procedure KeepAlive(const AObject: IInterface);
+// Alle Notifier abmelden, alles Gehaltene freigeben (finalization).
+procedure ReleaseAll;
 
 implementation
 
@@ -95,15 +100,24 @@ implementation
 // noinspection-file PublicMemberWithoutDoc, HardcodedString
 
 uses
-  System.Classes, uVnpLog;
+  uVnpLog;
 
 const
   EVENT_NAMES : array[TOTASyncEditPointEventType] of string =
     ('Enter', 'Leave', 'Exit');
 
+type
+  // Ein angemeldeter Notifier: Block, Index fuer RemoveNotifier und die
+  // eigene Referenz, die ihn am Leben haelt.
+  TVnpWatch = record
+    Block    : IOTAEditBlock;
+    Index    : Integer;
+    Notifier : IOTASyncEditNotifier;
+  end;
+
 var
-  GBlock         : IOTAEditBlock = nil;
-  GNotifierIndex : Integer = -1;
+  GWatches : TList<TVnpWatch> = nil;
+  GKept    : TList<IInterface> = nil;
 
 { TVnpSyncPoint }
 
@@ -279,41 +293,55 @@ end;
 procedure TVnpSyncNotifier.OnSyncEdit(const APoints: IOTASyncEditPoints;
   EventType: TOTASyncEditPointEventType);
 begin
+  // KEIN Abmelden bei Exit mehr: Strg+Z belebt die Sitzung wieder und
+  // ruft die Notifier erneut (Absturz in TSyncEditManager.SendSyncEvent,
+  // Nicos Lauf 2026-10-11, nachdem der Notifier bei Exit abgemeldet und
+  // freigegeben war).
   VnpLog('  Ereignis Sitzung %s: %s', [EVENT_NAMES[EventType],
     DescribePoints(APoints)]);
-  // Abmelden NICHT im Rueckruf selbst - die IDE iteriert gerade ihre
-  // Notifier-Liste.
-  if EventType = sepExit then
-    TThread.ForceQueue(nil,
-      procedure
-      begin
-        UnwatchBlock;
-      end);
-end;
-
-procedure UnwatchBlock;
-begin
-  try
-    if (GBlock <> nil) and (GNotifierIndex >= 0) then
-      GBlock.RemoveNotifier(GNotifierIndex);
-  except
-    // Der Editor kann inzwischen zu sein - beim Entladen darf nichts
-    // durchschlagen.
-    // noinspection ExceptionTooGeneral
-    on E: Exception do
-      VnpLog('  RemoveNotifier: %s: %s', [E.ClassName, E.Message]);
-  end;
-  GBlock := nil;
-  GNotifierIndex := -1;
 end;
 
 procedure WatchBlock(const ABlock: IOTAEditBlock);
+var
+  W : TVnpWatch;
 begin
-  UnwatchBlock;
   if ABlock = nil then Exit;
-  GBlock := ABlock;
-  GNotifierIndex := ABlock.AddNotifier(TVnpSyncNotifier.Create);
-  VnpLog('  Notifier angemeldet (Index %d)', [GNotifierIndex]);
+  if GWatches = nil then
+    GWatches := TList<TVnpWatch>.Create;
+  W.Block := ABlock;
+  W.Notifier := TVnpSyncNotifier.Create;
+  W.Index := ABlock.AddNotifier(W.Notifier);
+  GWatches.Add(W);
+  VnpLog('  Notifier angemeldet (Index %d, bleibt bis zum Entladen)',
+    [W.Index]);
+end;
+
+procedure KeepAlive(const AObject: IInterface);
+begin
+  if GKept = nil then
+    GKept := TList<IInterface>.Create;
+  GKept.Add(AObject);
+end;
+
+procedure ReleaseAll;
+var
+  i : Integer;
+begin
+  // Rueckwaerts: entfernt die IDE beim Abmelden einen Listeneintrag,
+  // bleiben die Indizes davor gueltig.
+  if GWatches <> nil then
+    for i := GWatches.Count - 1 downto 0 do
+      try
+        GWatches[i].Block.RemoveNotifier(GWatches[i].Index);
+      except
+        // Der Editor kann inzwischen zu sein - beim Entladen darf nichts
+        // durchschlagen.
+        // noinspection ExceptionTooGeneral
+        on E: Exception do
+          VnpLog('  RemoveNotifier: %s: %s', [E.ClassName, E.Message]);
+      end;
+  FreeAndNil(GWatches);
+  FreeAndNil(GKept);
 end;
 
 { Punkte erzeugen }
@@ -352,6 +380,6 @@ end;
 initialization
 
 finalization
-  UnwatchBlock;
+  ReleaseAll;
 
 end.
