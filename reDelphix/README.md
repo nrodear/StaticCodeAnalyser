@@ -29,13 +29,15 @@ source\uRdxStructFixes.pas        Quick-Fixes SCA007 (uses-Eintrag), SCA168 (cas
 source\uRdxLineFixes.pas          Quick-Fixes an einer Zeile SCA082/SCA071/SCA088/SCA123, reine Textlogik
 source\uRdxRaiseFixes.pas         Quick-Fixes an Ausnahmen und leeren Rumpfen SCA020/SCA120/SCA122, reine Textlogik
 source\uRdxDeclFixes.pas          Quick-Fixes an Deklarationen SCA117/SCA197/SCA149, reine Textlogik
+source\uRdxIntroPlan.pas          Code-Aktion "Lokale Variable einfuehren" (ohne Fund): Literal am Caret, Deklaration, Spalten, Ablehnungen (reine Textlogik)
+source\uRdxIntroEdits.pas         dieselbe Aktion: Puffertext, Ziel am Caret, Ersetzungen des Writers, Ende des Sync-Blocks (reine Textlogik; IDE-Teil folgt)
 source\uRdxSuppress.pas           Unterdrueck-Marker setzen und entfernen (reine Textlogik)
 source\uRdxCodeMap.pas            Code-Sicht der Datei (Kommentare, Strings, mehrzeilige Strings) und Token-Leser
 source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung aller Ersetzungen, Spaltengrenze, Textwahl
 source\uRdxEditor.pas             ToolsAPI: Puffer lesen, Bereich markieren, Bereiche ersetzen (ein Undo-Schritt), Projekt-Units
 source\uRdxLog.pas                Protokoll %TEMP%\reDelphix.log + DebugView
 data\unitscopes.txt               die Scope-Tabelle (erzeugt), als RCDATA eingelinkt (data\unitscopes.rc)
-tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 10 Testunits (siehe "Pruefen")
+tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 20 Testunits (siehe "Pruefen")
 tools\gen_unitscopes.py           erzeugt data\unitscopes.txt aus der Delphi-Installation
 tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik unter FPC 3.2.2 und fuehrt Tests aus
 tools\probe\RdxCorpusProbe.dpr    Korpus-Probe: Rezept 5.1 ueber eine Liste von Fundstellen, CSV
@@ -311,6 +313,34 @@ SCA007 laeuft nur mit eingeschaltetem uses-Check (Optionen bzw.
 Ablauf je Aktion protokolliert `%TEMP%\reDelphix.log` (`Provide ...`,
 `neu geparst` / `wiederverwendet`).
 
+## Lokale Variable einfuehren (Refactoring ohne Fund, in Arbeit)
+
+Code-Aktion ohne Fund: aus dem Zahl-Literal unter dem Caret wird
+`var MagicNr01 := <Literal>;` direkt ueber der Anweisung, alle gleichen
+Literale der Zeile werden durch den Namen ersetzt, der Name steht danach
+im Sync Edit zum Umbenennen (Variante C1h; ein Zweig ohne `begin` bekommt
+`begin..end`).
+
+* **Stand (Charge I-1, 2026-10-11):** nur Logik und Tests.
+  `uRdxIntroPlan` und `uRdxIntroEdits` sind 1:1 aus dem Labor
+  `VarNameProject` uebernommen (Stand 41bccb23, Entscheid E24: erst der im
+  UI-Test gemessene Stand), nur umbenannt (`TVnp*` -> `TRdxIntro*`,
+  `ApplyByteEdits` -> `ApplyIntroEdits`, weil `uRdxBufferMath` schon eine
+  `ApplyByteEdits` hat). Die Tests `uTestRdxIntro*` stehen in
+  reDelphix.Test und laufen im FPC-Pruefstand. Das Package bietet die
+  Aktion noch nicht an.
+* **Die IDE-Aktion folgt** nach dem Prototyp fuer Enter und Esc im Labor
+  (E25: Esc zerstoert im Sync Edit der IDE Text, auch ohne unseren Code -
+  UI-Test 2026-10-11).
+* **Variante D1** (Live Template) bleibt im Labor, ebenso ihre Tests
+  (`uTestVnpTemplate`).
+* **Grenzen:** siehe `VarNameProject\README.md`, Abschnitt "Grenzen" (ein
+  Zeilen-Leser ohne Parser - was er nicht sicher abgrenzt, lehnt er ab).
+  Die Deklaration ist noch die untypisierte Inline-var; die typisierte
+  Variable ist entschieden (E26) und folgt in Charge I-2b. Eigener
+  Zeilenleser und Schreibweg bleiben bis zur Zusammenlegung mit
+  `uRdxCodeMap`/`uRdxBufferMath` stehen.
+
 ## Pruefen
 
 **`tests\reDelphix.Test.dproj`** (DUnitX, Konsole/TestInsight, in der
@@ -368,18 +398,28 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
   `bad` werden genau `good` (SCA074 und SCA139: das `good` traegt eine
   Begruendung in Worten bzw. laesst Zeilen weg - dort wird die Ersetzung
   verglichen).
+* `uTestRdxIntroPlan` / `uTestRdxIntroRefuse` / `uTestRdxIntroGuards` /
+  `uTestRdxIntroEdits` - "Lokale Variable einfuehren" (Abschnitt oben): das
+  Literal am Caret, Deklaration und Spalten, Zweig ohne `begin`, alle
+  Ablehnungen und Schutzregeln, Ende des Sync-Blocks und die Ersetzungen
+  des Writers Ende zu Ende auf UTF-8-Pufferbytes (CRLF, LF, BOM,
+  Mehrbyte-Zeichen) - 53 Tests, reine Textlogik.
 
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes
+bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits
 ```
+
+Erwartet (Stand 2026-10-11): `PASSED 235  FAILED 0` - 16 Testunits, davon 53 Tests
+fuer "Lokale Variable einfuehren".
 
 Der Pruefstand uebersetzt die Core-Units des Quellstellen-Dienstes
 (`uRefactor*`, `uSourcePlaces`, `uFindingActions`, `ScanCodeLine` aus
 `uDetectorUtils`) mit Stubs fuer Parser und Resolver sowie die Textlogik
 des Moduls (`uRdxRecipes`, `uRdxScopeTable`, `uRdxBufferMath`,
-`uRdxSuppress`, `uRdxSimpleFixes`, `uRdxStructFixes`, `uRdxLineFixes`, `uRdxRaiseFixes`, `uRdxDeclFixes`, `uRdxCodeMap`). Testunits kommen aus `reDelphix\tests`,
+`uRdxSuppress`, `uRdxSimpleFixes`, `uRdxStructFixes`, `uRdxLineFixes`, `uRdxRaiseFixes`, `uRdxDeclFixes`, `uRdxCodeMap`,
+`uRdxIntroPlan`, `uRdxIntroEdits`). Testunits kommen aus `reDelphix\tests`,
 sonst aus `StaticCodeAnalyserForm\tests` (Core-Tests wie
 `uTestSourcePlaces`, `uTestRefactorConcat`).
 

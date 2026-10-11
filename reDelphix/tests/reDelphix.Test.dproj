@@ -100,6 +100,8 @@
         <DCCReference Include="..\source\uRdxRaiseFixes.pas"/>
         <DCCReference Include="..\source\uRdxDeclFixes.pas"/>
         <DCCReference Include="..\source\uRdxRecipeRunner.pas"/>
+        <DCCReference Include="..\source\uRdxIntroPlan.pas"/>
+        <DCCReference Include="..\source\uRdxIntroEdits.pas"/>
         <DCCReference Include="uTestRdxRecipes.pas"/>
         <DCCReference Include="uTestRdxSca044.pas"/>
         <DCCReference Include="uTestRdxActionRing.pas"/>
@@ -116,6 +118,10 @@
         <DCCReference Include="uTestRdxSimpleFixesDetector.pas"/>
         <DCCReference Include="uTestRdxCodeMap.pas"/>
         <DCCReference Include="uTestRdxQualifyUses.pas"/>
+        <DCCReference Include="uTestRdxIntroPlan.pas"/>
+        <DCCReference Include="uTestRdxIntroRefuse.pas"/>
+        <DCCReference Include="uTestRdxIntroGuards.pas"/>
+        <DCCReference Include="uTestRdxIntroEdits.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

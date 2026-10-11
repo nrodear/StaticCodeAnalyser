@@ -31,6 +31,16 @@ program reDelphix.Test;
 //   * uTestRdxNilFix   - Editorhilfe SCA126 auf Text, ohne Parser
 //   * uTestRdxSimpleFixesDetector - dieselben Hilfen gegen den echten
 //                        Detektor, Katalog-Beispiele bad -> good
+//   * uTestRdxCodeMap  - Code-Sicht (uRdxCodeMap) gegen ScanCodeLine des
+//                        Cores (Drift-Waechter), StartsInside
+//   * uTestRdxQualifyUses - Planung von "uses: X -> Scope.X" (QualifyUses)
+//   * uTestRdxIntroPlan - Code-Aktion "Lokale Variable einfuehren": das
+//                        Literal am Caret, Deklaration, Spalten (Textlogik)
+//   * uTestRdxIntroRefuse - dieselbe Aktion: Zweig ohne begin, Ablehnungen
+//   * uTestRdxIntroGuards - dieselbe Aktion: Schutzregeln aus dem Korpus-A/B,
+//                        Zusammenhang ueber Zeilen, Ende des Sync-Blocks
+//   * uTestRdxIntroEdits - dieselbe Aktion: Ersetzungen des Writers (C1h)
+//                        Ende zu Ende auf UTF-8-Pufferbytes
 //
 // Engine-Units kommen ueber den Suchpfad aus ..\..\SCA.Engine\sources
 // (wie StaticCodeAnalyserForm\tests\TestProject), die Modul-Units aus
@@ -63,6 +73,8 @@ uses
   uRdxRaiseFixes in '..\source\uRdxRaiseFixes.pas',
   uRdxDeclFixes in '..\source\uRdxDeclFixes.pas',
   uRdxRecipeRunner in '..\source\uRdxRecipeRunner.pas',
+  uRdxIntroPlan in '..\source\uRdxIntroPlan.pas',
+  uRdxIntroEdits in '..\source\uRdxIntroEdits.pas',
   uTestRdxRecipes in 'uTestRdxRecipes.pas',
   uTestRdxSca044 in 'uTestRdxSca044.pas',
   uTestRdxActionRing in 'uTestRdxActionRing.pas',
@@ -78,7 +90,11 @@ uses
   uTestRdxNilFix in 'uTestRdxNilFix.pas',
   uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas',
   uTestRdxCodeMap in 'uTestRdxCodeMap.pas',
-  uTestRdxQualifyUses in 'uTestRdxQualifyUses.pas';
+  uTestRdxQualifyUses in 'uTestRdxQualifyUses.pas',
+  uTestRdxIntroPlan in 'uTestRdxIntroPlan.pas',
+  uTestRdxIntroRefuse in 'uTestRdxIntroRefuse.pas',
+  uTestRdxIntroGuards in 'uTestRdxIntroGuards.pas',
+  uTestRdxIntroEdits in 'uTestRdxIntroEdits.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}
