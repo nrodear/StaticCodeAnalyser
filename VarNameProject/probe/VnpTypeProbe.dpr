@@ -91,6 +91,10 @@ program VnpTypeProbe;
 {$DEFINE PROBE_P2_FOLD_SHL31}        // R := 1 shl 31 (Vorzeichenbit: 64 oder 32 Bit?)
 {$DEFINE PROBE_P2_FOLD_SHR_NEG}      // R := (-8) shr 1 (64, 32 oder 8 Bit?)
 {$DEFINE PROBE_P2_SHL_VAR}           // M shl 40 und 1 shl M mit Variable
+// BEFUND D12 Win32 (zweiter Bau): 'var M := 1; R := M shl 40' -> E1012
+// "Konstantenausdruck verletzt untere Grenzen", mit 'M: Integer' nicht -
+// die untypisierte Form gibt M einen anderen Typ als Integer (P1.1).
+{.$DEFINE PROBE_P2_SHL_UNTYPED}      // P2.10: var M := 1; R := M shl 40  E1012
 // P4: Ueberladungen.
 {.$DEFINE PROBE_P4_BIGLIT_FOLD}      // Ov(100000 * 100000) - E2099 wie PROBE_P2_FOLD_MUL
 {$DEFINE PROBE_P4_BIGLIT_DEC}        // Ov(3000000000)
@@ -216,6 +220,7 @@ const
 {$IFNDEF PROBE_P2_FOLD_SHL31}       + ' PROBE_P2_FOLD_SHL31' {$ENDIF}
 {$IFNDEF PROBE_P2_FOLD_SHR_NEG}     + ' PROBE_P2_FOLD_SHR_NEG' {$ENDIF}
 {$IFNDEF PROBE_P2_SHL_VAR}          + ' PROBE_P2_SHL_VAR' {$ENDIF}
+{$IFNDEF PROBE_P2_SHL_UNTYPED}      + ' PROBE_P2_SHL_UNTYPED' {$ENDIF}
 {$IFNDEF PROBE_P4_BIGLIT_FOLD}      + ' PROBE_P4_BIGLIT_FOLD' {$ENDIF}
 {$IFNDEF PROBE_P4_BIGLIT_DEC}       + ' PROBE_P4_BIGLIT_DEC' {$ENDIF}
 {$IFNDEF PROBE_P4_UNTYPED}          + ' PROBE_P4_UNTYPED' {$ENDIF}
@@ -658,6 +663,7 @@ end;
 
 {$IFDEF PROBE_P2_SHL_VAR}
 // Caret auf der 1.
+{$IFDEF PROBE_P2_SHL_UNTYPED}
 procedure P2ShlLeftUntyped;
 var
   R : Int64;
@@ -667,6 +673,7 @@ begin
   Put('P2.10', 'var MagicNr01 := 1; R := MagicNr01 shl 40', IntToStr(R),
     'Entwurf: heute Integer -> 256 (40 and 31 = 8)');
 end;
+{$ENDIF}
 
 procedure P2ShlLeftInteger;
 var
@@ -1921,7 +1928,9 @@ begin
   P2ShlFold;
 {$ENDIF}
 {$IFDEF PROBE_P2_SHL_VAR}
+{$IFDEF PROBE_P2_SHL_UNTYPED}
   P2ShlLeftUntyped;
+{$ENDIF}
   P2ShlLeftInteger;
   P2ShlLeftInt64;
   P2ShlRightInteger;
