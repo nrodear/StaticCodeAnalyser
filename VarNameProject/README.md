@@ -146,6 +146,18 @@ das nur `MagicNr01`.
   entladenen Code, mit Abmelden entstehen nil-Eintraege. Die Sitzung wird
   per "Sonde: Sitzung jetzt" abgefragt. Ob B1 (eigene Punkte) ohne
   Notifier stabil ist, ist wieder offen.
+- **Lauf 5 (2026-10-11, C1, IDE vorher KOMPLETT neu gestartet):** fuenf
+  Starts (Fall 1 mit zwei Ersetzungen, Fall 4 Bruchzahl, Fall 5 Tab/Hex)
+  ohne jeden Fehler: SyncMode 1 (normaler Sync Edit), Caret auf dem Namen
+  in der Deklaration, Puffer wie geplant; Strg+Z stellte Fall 1 und Fall 5
+  wieder her. Damit bestaetigt: die Abstuerze kamen von den nil-Eintraegen
+  frueherer Paketversionen (Nico: die IDE war vor Lauf 4/5 NICHT neu
+  gestartet). Fall 3 (999 hinter 'then') wurde wie vorgesehen abgelehnt.
+  Neu gesehen: C1 auf einem Literal, das schon allein der Wert einer
+  Deklaration ist ('var MagicNr01 := 42;'), baute eine zweite Variable
+  davor ('var MagicNr05 := 42;' / 'var MagicNr01 := MagicNr05;') - jetzt
+  abgelehnt ("hat bereits einen Namen"). Die Nummer zaehlt hoch, solange
+  aeltere MagicNrNN in der Datei stehen.
 - **Pruefen, welches Paket laeuft:** im Menue Tools > VarNameProject
   muessen "C1 ...", "B1 eigene Punkte (Bytes), ohne Notifier" und "Sonde:
   Sitzung jetzt" stehen. Steht dort noch C2 oder B1a, ist ein altes Paket

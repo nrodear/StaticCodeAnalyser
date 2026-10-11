@@ -324,6 +324,29 @@ begin
   Result := InList(Copy(S, i + 1, MaxInt), STATEMENT_OPENERS);
 end;
 
+// Steht das Literal schon ALLEIN als Wert einer Deklaration ('var X :=
+// 42;', 'const X = 42;', auch mit Typangabe)? Dann hat es bereits einen
+// Namen - Lauf 5 (2026-10-11) baute sonst 'var MagicNr05 := 42;' vor
+// 'var MagicNr01 := MagicNr05;'. 'var B := X = 42;' bleibt erlaubt (dort
+// ist das Literal nur ein Teil des Werts).
+function AlreadyNamed(const ALine, ALiteral: string): Boolean;
+var
+  S, W : string;
+  P    : Integer;
+begin
+  Result := False;
+  W := LowerCase(FirstWord(ALine));
+  if (W <> 'var') and (W <> 'const') then
+    Exit;
+  S := LowerCase(StringReplace(StringReplace(Trim(CodePart(ALine)), ' ', '',
+    [rfReplaceAll]), #9, '', [rfReplaceAll]));
+  if W = 'var' then
+    P := Pos(':=', S) + 2
+  else
+    P := Pos('=', S) + 1;
+  Result := (P > 2) and (Copy(S, P, MaxInt) = LowerCase(ALiteral) + ';');
+end;
+
 function PlanIntroduce(const ALine, APrevCode: string; ACaretCol: Integer;
   const AName: string): TVnpPlan;
 var
@@ -339,6 +362,12 @@ begin
   if Result.Literal = '' then
   begin
     Result.Reason := 'kein Zahl-Literal am Caret';
+    Exit;
+  end;
+  if AlreadyNamed(ALine, Result.Literal) then
+  begin
+    Result.Reason := 'das Literal ist schon allein der Wert einer '
+      + 'Deklaration - es hat bereits einen Namen';
     Exit;
   end;
   if InList(FirstWord(ALine), NOT_A_START) then
