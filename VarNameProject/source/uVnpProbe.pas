@@ -15,13 +15,19 @@ unit uVnpProbe;
 
 interface
 
+uses
+  ToolsAPI;
+
 procedure ProbeCaret;
 procedure ProbeCreateClass;
+// Zeile ARow frisch aus dem Puffer (UTF-8 gelesen) - fuer den Abgleich
+// "was steht wirklich da" nach dem Schreiben und nach dem Sitzungsstart.
+function ReadRow(const AView: IOTAEditView; ARow: Integer): string;
 
 implementation
 
 uses
-  System.SysUtils, ToolsAPI, CodeTemplateAPI, uVnpPlan, uVnpLog;
+  System.SysUtils, CodeTemplateAPI, uVnpPlan, uVnpLog;
 
 // Die Zeile ab der Pufferposition AStart (bis vor CR/LF), UTF-8 gelesen.
 function ReadLineAt(const ABuffer: IOTAEditBuffer; AStart: Integer): string;
@@ -40,6 +46,17 @@ begin
   while (n < Got) and not (Bytes[n] in [10, 13]) do
     Inc(n);
   Result := TEncoding.UTF8.GetString(Bytes, 0, n);
+end;
+
+function ReadRow(const AView: IOTAEditView; ARow: Integer): string;
+var
+  LineStart : TOTACharPos;
+begin
+  // CharIndex 0 ist in Bytes und Zeichen dasselbe - CharPosToPos liefert
+  // den Zeilenanfang hier richtig.
+  LineStart.CharIndex := 0;
+  LineStart.Line := ARow;
+  Result := ReadLineAt(AView.Buffer, AView.CharPosToPos(LineStart));
 end;
 
 procedure ProbeCaret;

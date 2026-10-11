@@ -46,7 +46,8 @@ procedure RunIntroduce(AVariant: TVnpVariant);
 implementation
 
 uses
-  System.SysUtils, System.Classes, ToolsAPI, uVnpPlan, uVnpLog, uVnpSync;
+  System.SysUtils, System.Classes, ToolsAPI, uVnpPlan, uVnpLog, uVnpSync,
+  uVnpProbe;
 
 const
   NAME_BASE = 'MagicNr';
@@ -179,20 +180,24 @@ begin
 end;
 
 // Die Fundstellen des Namens: Deklaration + Verwendungen. Line absolut
-// (Zeile der Datei), CharIndex in Zeichen wie ConvertPos - beides in Lauf 1
-// bestaetigt (B1: Offsets (23,6) (24,42), Sitzung im Template-Modus).
+// (Zeile der Datei, Lauf 1). CharIndex in UTF-8-BYTES der Zeile - anders als
+// ConvertPos (Zeichen): Lauf 3 (Fall 6) zeigte, dass die IDE im
+// Template-Modus den Punkttext an jede Fundstelle schreibt und CharIndex 42
+// dabei als Byte 42 (= Zeichen 39, das 't' von 'Count') las - aus
+// 'Count * MagicNr01' wurde 'CounMagicNr01Nr01'.
 function OffsetsOf(const ATarget: TVnpTarget): TArray<TOTACharPos>;
 var
   P   : TOTACharPos;
   Col : Integer;
 begin
   P.Line := ATarget.DeclRow;
-  P.CharIndex := ATarget.Plan.NameCol - 1;
+  P.CharIndex := Utf8Len(Copy(ATarget.Plan.DeclText, 1,
+    ATarget.Plan.NameCol - 1));
   Result := [P];
   for Col in ATarget.Plan.NewCols do
   begin
     P.Line := ATarget.UseRow;
-    P.CharIndex := Col - 1;
+    P.CharIndex := Utf8Len(Copy(ATarget.Plan.NewUseLine, 1, Col - 1));
     Result := Result + [P];
   end;
 end;
@@ -279,6 +284,24 @@ end;
 
 // Nach dem Start nur protokollieren: wo die IDE den Caret hingesetzt hat
 // und wo der Name steht (ReSharper: der Caret steht im umrandeten Namen).
+// Was steht WIRKLICH im Puffer (Zeilen frisch gelesen) und ist der Puffer
+// als geaendert markiert? Lauf 3: der Editor zeigte noch den alten Text,
+// die Datei war nicht als geaendert markiert, der Puffer aber zerstoert.
+procedure LogBufferState(const AEd: TVnpEditor; const ATarget: TVnpTarget;
+  const AWhen: string);
+var
+  Use : string;
+begin
+  Use := ReadRow(AEd.View, ATarget.UseRow);
+  VnpLog('%s: Puffer geaendert=%s', [AWhen,
+    BoolToStr(AEd.Buffer.Modified, True)]);
+  VnpLog('  Zeile %d: "%s"', [ATarget.DeclRow,
+    ReadRow(AEd.View, ATarget.DeclRow)]);
+  VnpLog('  Zeile %d: "%s"', [ATarget.UseRow, Use]);
+  if Use <> ATarget.Plan.NewUseLine then
+    VnpLog('  ABWEICHUNG - geplant war: "%s"', [ATarget.Plan.NewUseLine]);
+end;
+
 procedure AfterSync(const AEd: TVnpEditor; const ABlock: IOTAEditBlock;
   const ATarget: TVnpTarget);
 var
@@ -291,6 +314,7 @@ begin
     + 'Caret %d:%d, Name in der Deklaration bei %d:%d', [Ord(ABlock.SyncMode),
     Caret.Line, Caret.Col, ATarget.DeclRow, DisplayCol(AEd.View,
     ATarget.DeclRow, ATarget.Plan.NameCol)]);
+  LogBufferState(AEd, ATarget, 'Nach dem Sitzungsstart');
   VnpLog('  (Ereignis-Zeilen kommen spaeter: beim Verlassen der Sitzung und '
     + 'ggf. bei Strg+Z)');
 end;
@@ -357,6 +381,7 @@ begin
     try
       if Prepare(Ed, Target) then
       begin
+        LogBufferState(Ed, Target, 'Nach dem Schreiben');
         Block := SelectFor(AVariant, Ed, Target);
         StartSync(AVariant, Block, Target);
         AfterSync(Ed, Block, Target);

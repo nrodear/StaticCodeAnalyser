@@ -117,6 +117,22 @@ das nur `MagicNr01`.
   Absturzstellen trotz gehaltener Objekte: die IDE behandelt fremde
   `IOTASyncEditPoint`-Objekte vermutlich intern wie ihre eigenen ->
   eigene Punkt-Klassen sind eine Sackgasse; Kandidat jetzt C1.
+- **Lauf 3 (2026-10-11, Fall 6, vermutlich noch B1a aus dem alten Paket):**
+  direkt nach dem Start, vor jeder Eingabe, stand im Puffer
+  `IntToStr(CounMagicNr01Nr01)` statt `IntToStr(Count * MagicNr01)` - der
+  Editor zeigte noch den alten Text, die Datei war nicht als geaendert
+  markiert. Unser Schreiben war richtig; im Template-Modus schreibt die IDE
+  den Punkttext an jede Fundstelle und las CharIndex 42 dabei als **Byte**
+  42 (= Zeichen 39, das 't'). Die ToolsAPI ist also uneinheitlich:
+  `ConvertPos` zaehlt Zeichen, die Offsets der Sync-Punkte (wie
+  `CharPosToPos`) UTF-8-Bytes. B1a rechnet die Offsets jetzt in Bytes; das
+  Protokoll liest nach dem Schreiben und nach dem Sitzungsstart die Zeilen
+  frisch aus dem Puffer, meldet den Geaendert-Zustand und jede Abweichung
+  vom Plan.
+- **Pruefen, welches Paket laeuft:** im Menue Tools > VarNameProject
+  muessen C1, C2 und B1a stehen und "Letzte Variante wiederholen (Start:
+  C1)". Stehen dort B1a/B1b/B1d, ist noch das alte Paket geladen - neu
+  bauen und neu installieren (bzw. IDE neu starten).
 
 ## Was zurueckmelden (Messpunkte)
 
