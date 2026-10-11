@@ -315,6 +315,38 @@ Testplan oben.
   ohne IOTASyncEditNotifier (H1) - Kandidat ein Timer, der SyncMode und
   Caret abfragt; Enter/Esc von "Caret woanders" unterscheidet die
   Caret-Position beim Ende (D1: Enter setzt den Caret auf `|end|`).
+- **Umzug nach reDelphix** (Nico: "bei gruen [Testplan] das Projekt und
+  die DUnitX-Tests in das reDelphix-Projekt bringen"): eigener Einstieg in
+  reDelphix (Wizard, Menue, Taste), erst 1:1, Zusammenfuehren mit
+  `uRdxCodeMap`/`WrapInBlock`/`ReplaceSpans` danach mit Korpus-A/B; Enter
+  und Dialog entstehen zuerst hier im Labor.
+- **Typisierte Variable (E26)**: die Deklaration wird `var MagicNr01:
+  <Typ> := 42;`, damit die Variable zur Laufzeit rechnet wie der Compiler
+  das Literal. Die Typregel klaert zuerst die Kompilierprobe unten.
+
+## Kompilierprobe E26 (`probe/VnpTypeProbe.dpr`)
+
+Konsolenprogramm ohne `.dproj` (wie `tools/ResultProbe`): die `.dpr` in der
+IDE oeffnen, Win32 bauen, ausfuehren; wenn moeglich Win64 ebenso. Es misst,
+was die Typregel entscheidet - mit genau dem Code, den die Code-Aktion
+schreiben wuerde:
+
+| Teil | Frage |
+|---|---|
+| P1 | Welchen Typ bekommt die heutige Form `var M := <Literal>` (42, 2147483648, `$FFFFFFFF`, `$FFFFFFFFFFFFFFFF`, 3.5, `1_000_000` ...)? |
+| P2 | Gefaltetes Original (`100000 * 100000`, `1 shl 40`, `$FFFFFFFF + 1`, `1 shl 31`, `(-8) shr 1`) gegen Integer-, Int64- und Cardinal-Variable; Literal neben einer Laufzeit-Variablen (`N * 100000`) |
+| P3 | Bitmuster von `0.1` und `0.1 * 3` ueber Extended-, Double- und untypisierte Variable |
+| P4 | Ueberladungswahl: Literal gegen Variable (Integer/Int64, ShortInt, Byte, Single/Double[/Extended]) |
+| P5 | Kompiliert eine Int64-, UInt64- oder Cardinal-Variable dort, wo Integer erwartet wird (SetLength, Copy, for, Inc, case, in ...)? |
+
+Jeder Messpunkt mit Kompilierrisiko steht hinter einem eigenen
+`{$DEFINE PROBE_...}` (Standard: alle an). Bricht der Bau ab, die
+betroffenen Schalter in EINER Runde abschalten (`{.$DEFINE`) und die
+Fehlertexte melden - der Fehler ist selbst ein Ergebnis. Die
+Compiler-Meldungen (vor allem Warnungen in P2/P5) mitkopieren; das
+Protokoll steht in `%TEMP%\VarNameProject_TypeProbe.txt` (nach jedem Lauf
+in `..._Win32.txt` bzw. `..._Win64.txt` umbenennen). Die `.dproj` und `.res`,
+die die IDE anlegt, sind ignoriert.
 
 ## Was zurueckmelden (Messpunkte)
 
