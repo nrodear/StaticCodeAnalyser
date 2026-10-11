@@ -29,6 +29,7 @@ const
   TAG_CLEAR   = 103;
   TAG_PROBE_CARET = 104;
   TAG_PROBE_CLASS = 105;
+  TAG_PROBE_SESSION = 106;
 
 type
   TVnpMenuHandler = class
@@ -69,6 +70,8 @@ begin
       ProbeCaret;
     TAG_PROBE_CLASS:
       ProbeCreateClass;
+    TAG_PROBE_SESSION:
+      ProbeSession;
   else
     FLast := TVnpVariant(Tag);
     RunIntroduce(FLast);
@@ -141,6 +144,9 @@ begin
   AddSeparator;
   AddItem(NTA, 'Sonde: CharIndex am Caret (M10)', TAG_PROBE_CARET, 0);
   AddItem(NTA, 'Sonde: CreateClass (M21)', TAG_PROBE_CLASS, 0);
+  // Per Tastenkuerzel, damit kein Menueklick die Sitzung beendet.
+  AddItem(NTA, 'Sonde: Sitzung jetzt', TAG_PROBE_SESSION,
+    ShortCut(Ord('P'), [ssCtrl, ssAlt, ssShift]));
   AddSeparator;
   AddItem(NTA, 'Protokoll in der Meldungsansicht', TAG_SHOWLOG, 0);
   AddItem(NTA, 'Protokolldatei im Editor oeffnen', TAG_OPENLOG, 0);

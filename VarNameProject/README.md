@@ -51,35 +51,39 @@ Offsets stehen - das misst dieses Projekt.
 
 ## Bedienung
 
-1. `package/VarNameProject.d12.dproj` oeffnen, bauen, installieren.
-2. ZUERST die Sonden: `demo/VarNameDemoUmlaut.pas` oeffnen, Caret direkt
-   hinter das Euro-Zeichen, Tools > VarNameProject > "Sonde: CharIndex am
-   Caret"; danach "Sonde: CreateClass".
+1. `package/VarNameProject.d12.dproj` oeffnen, bauen, installieren -
+   danach die **IDE komplett neu starten** (Lauf 4: die nil-Eintraege
+   frueherer Notifier haengen an den offenen Editoransichten und ueberleben
+   das Neuinstallieren).
+2. Die Sonden (M10/M21) sind erledigt - siehe Ergebnisse.
 3. `demo/VarNameDemo.pas` im Editor oeffnen.
 4. Caret auf eine Zahl setzen (siehe Faelle in der Datei).
 5. Tools > VarNameProject > eine Variante waehlen; danach wiederholt
    **Strg+Alt+Umschalt+M** die zuletzt gewaehlte (Start: C1).
-6. Neuen Namen tippen, mit Enter beenden.
-7. In ein anderes Fenster klicken (z. B. die Meldungsansicht) und zurueck
-   (Fokuswechsel - Lauf 2 stuerzte dabei ab).
-8. Mit Strg+Z bis zum Ausgangszustand zuruecksetzen (zaehlen - M7). Erst
-   danach steht wieder eine Zahl unter dem Caret fuer die naechste
-   Variante. Stuerzt etwas ab: Variante notieren, IDE neu starten.
-9. Tools > VarNameProject > "Protokolldatei im Editor oeffnen" und den
-   Inhalt zurueckmelden.
+6. **Strg+Alt+Umschalt+P** ("Sonde: Sitzung jetzt") - SyncMode, Caret und
+   die beiden Zeilen frisch aus dem Puffer. Nach jedem der folgenden
+   Schritte noch einmal.
+7. Neuen Namen tippen, Strg+Alt+Umschalt+P, mit Enter beenden,
+   Strg+Alt+Umschalt+P.
+8. In ein anderes Fenster klicken und zurueck (Fokuswechsel).
+9. Mit Strg+Z bis zum Ausgangszustand zuruecksetzen (zaehlen - M7),
+   Strg+Alt+Umschalt+P. Stuerzt etwas ab: Variante und Schritt notieren,
+   IDE neu starten.
+10. Tools > VarNameProject > "Protokolldatei im Editor oeffnen" und den
+    Inhalt zurueckmelden.
 
 ## Varianten (nur Schritt 3 unterscheidet sich)
 
-| Variante | Sync-Punkte | Block | Notifier |
-|---|---|---|---|
-| C1 (Kandidat) | die IDE sucht selbst: `SyncEditBlock(nil)` = Strg+Umschalt+J | vom Namen in der Deklaration bis hinter seine letzte Verwendung | keiner - keine eigenen Objekte in der IDE |
-| C2 | wie C1 | wie C1 | angemeldet, bleibt bis zum Entladen (protokolliert die Punkte der IDE) |
-| B1a | eigene Klassen, absolute Offsets, gehalten | ganze Zeilen | angemeldet, bleibt |
+Kein Notifier mehr, in keiner Variante (Lauf 4 - siehe Ergebnisse).
+
+| Variante | Sync-Punkte | Block |
+|---|---|---|
+| C1 | die IDE sucht selbst: `SyncEditBlock(nil)` = Strg+Umschalt+J | vom Namen in der Deklaration bis hinter seine letzte Verwendung |
+| B1 | eigene Klassen, absolute Offsets, CharIndex in UTF-8-Bytes (Lauf 3), gehalten | ganze Zeilen |
 
 Entfallen: A1/A2 (Punkte per `IOTACodeTemplateServices.CreateClass` -
-Ergebnis M21), B2 (relative Offsets - absolute funktionieren), B1b/B1d
-(Lauf 2: auch mit gehaltenen Punkten und Notifier stuerzt B1a ab - die
-Lebensdauer ist es nicht).
+Ergebnis M21), B2 (relative Offsets - absolute funktionieren), alle
+Notifier-Varianten (Lauf 4).
 
 C1 koppelt JEDEN Bezeichner, der im Block mehrfach vorkommt - deshalb der
 knappe Block. In Fall 1 (`Result := Value * MagicNr01 + MagicNr01;`) ist
@@ -129,10 +133,23 @@ das nur `MagicNr01`.
   Protokoll liest nach dem Schreiben und nach dem Sitzungsstart die Zeilen
   frisch aus dem Puffer, meldet den Geaendert-Zustand und jede Abweichung
   vom Plan.
+- **Lauf 4 (2026-10-11, C1 - ohne eigene Objekte):** Absturz schon beim
+  Start: `TInterfaceList.Get` -> `TSyncEditManager.SendSyncEvent` ->
+  Zugriffsverletzung beim Lesen von Adresse 0. Die IDE geht ihre
+  Notifier-Liste durch und trifft einen **nil-Eintrag**: `IOTAEditBlock.
+  RemoveNotifier` setzt den Eintrag auf nil (Indizes bleiben stabil),
+  `SendSyncEvent` prueft nicht darauf. Die Liste haengt am Editorblock der
+  Ansicht und ueberlebt das Neuinstallieren des Pakets - das alte Paket
+  hatte seine Notifier beim Entladen abgemeldet. Erklaert auch Lauf 1
+  (Abmelden bei Exit -> Strg+Z stuerzt) und vermutlich Lauf 2. Folge:
+  **keine IOTASyncEditNotifier** - ohne Abmelden blieben Verweise auf
+  entladenen Code, mit Abmelden entstehen nil-Eintraege. Die Sitzung wird
+  per "Sonde: Sitzung jetzt" abgefragt. Ob B1 (eigene Punkte) ohne
+  Notifier stabil ist, ist wieder offen.
 - **Pruefen, welches Paket laeuft:** im Menue Tools > VarNameProject
-  muessen C1, C2 und B1a stehen und "Letzte Variante wiederholen (Start:
-  C1)". Stehen dort B1a/B1b/B1d, ist noch das alte Paket geladen - neu
-  bauen und neu installieren (bzw. IDE neu starten).
+  muessen "C1 ...", "B1 eigene Punkte (Bytes), ohne Notifier" und "Sonde:
+  Sitzung jetzt" stehen. Steht dort noch C2 oder B1a, ist ein altes Paket
+  geladen - neu bauen, neu installieren, IDE neu starten.
 
 ## Was zurueckmelden (Messpunkte)
 

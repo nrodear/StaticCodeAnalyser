@@ -25,23 +25,29 @@ unit uVnpIntroduce;
 interface
 
 type
-  // Laeufe 1+2 (2026-10-11): eigene Punkt-Klassen starten die Sitzung,
-  // stuerzen aber spaeter ab - Lauf 1 bei Strg+Z (SendSyncEvent), Lauf 2
-  // beim Fokuswechsel (KBDClearPrimFocus), obwohl Punkte und Notifier
-  // gehalten waren: die IDE behandelt fremde Punkt-Objekte vermutlich als
-  // ihre eigenen. Kandidat ist jetzt die IDE-eigene Sync-Edit-Suche
-  // (SyncEditBlock(nil) = Strg+Umschalt+J) ueber einem Block, der genau
-  // vom Namen bis zu seiner letzten Verwendung reicht.
-  TVnpVariant = (vvIdeOnly, vvIdeNotifier, vvOwnPoints);
+  // Laeufe 1-4 (2026-10-11): jeder Absturz ging ueber einen nil-Eintrag
+  // in der Notifier-Liste des Editorblocks (RemoveNotifier setzt nil,
+  // SendSyncEvent prueft nicht) - siehe uVnpSync. Ohne Notifier treten
+  // beide Wege noch einmal an (IDE NEU STARTEN, die nil-Eintraege haengen
+  // an den offenen Ansichten):
+  //   C1  die IDE-eigene Sync-Edit-Suche (SyncEditBlock(nil) =
+  //       Strg+Umschalt+J) ueber einem Block vom Namen bis zu seiner
+  //       letzten Verwendung - keine eigenen Objekte.
+  //   B1  eigene Punkt-Klassen, Offsets absolut, CharIndex in Bytes.
+  TVnpVariant = (vvIdeOnly, vvOwnPoints);
 
 const
   VARIANT_CAPTIONS : array[TVnpVariant] of string = (
-    'C1 IDE-Sync-Edit ueber Name..letzte Verwendung (Kandidat)',
-    'C2 wie C1, mit Notifier (Protokoll der IDE-Punkte)',
-    'B1a eigene Punkte (Vergleich - stuerzt spaeter ab)');
+    'C1 IDE-Sync-Edit ueber Name..letzte Verwendung',
+    'B1 eigene Punkte (Bytes), ohne Notifier');
 
 // Der ganze Ablauf an der Caret-Position der obersten Editoransicht.
 procedure RunIntroduce(AVariant: TVnpVariant);
+
+// Sonde ohne Notifier: SyncMode, Caret, Geaendert-Zustand und die beiden
+// Zeilen des letzten Laufs, frisch aus dem Puffer - beliebig oft
+// aufrufbar (nach dem Tippen, nach Enter, nach Strg+Z).
+procedure ProbeSession;
 
 implementation
 
@@ -70,6 +76,10 @@ type
     Name    : string;
     Plan    : TVnpPlan;
   end;
+
+var
+  // Das Ziel des letzten erfolgreichen Schreibens - fuer ProbeSession.
+  GLast : TVnpTarget;
 
 // Puffer als UTF-8-Bytes (Reader in Bloecken) und die Zeilenanfaenge.
 procedure ReadEditor(var AEd: TVnpEditor);
@@ -261,24 +271,15 @@ var
   Points : IOTASyncEditPoints;
   Err    : string;
 begin
-  case AVariant of
-    vvIdeOnly:
-      begin
-        VnpLog('  ohne Notifier, ohne eigene Objekte');
-        ABlock.SyncEditBlock(nil);
-      end;
-    vvIdeNotifier:
-      begin
-        WatchBlock(ABlock);
-        ABlock.SyncEditBlock(nil);
-      end;
-  else
-    WatchBlock(ABlock);
-    if MakePoints(ATarget.Name, OffsetsOf(ATarget), Points, Err) then
-    begin
-      KeepAlive(Points);
-      ABlock.SyncEditBlock(Points);
-    end;
+  if AVariant = vvIdeOnly then
+  begin
+    VnpLog('  ohne eigene Objekte');
+    ABlock.SyncEditBlock(nil);
+  end
+  else if MakePoints(ATarget.Name, OffsetsOf(ATarget), Points, Err) then
+  begin
+    KeepAlive(Points);
+    ABlock.SyncEditBlock(Points);
   end;
 end;
 
@@ -381,6 +382,7 @@ begin
     try
       if Prepare(Ed, Target) then
       begin
+        GLast := Target;
         LogBufferState(Ed, Target, 'Nach dem Schreiben');
         Block := SelectFor(AVariant, Ed, Target);
         StartSync(AVariant, Block, Target);
@@ -403,6 +405,30 @@ begin
   finally
     Ed.Lines.Free;
   end;
+end;
+
+procedure ProbeSession;
+var
+  Ed    : TVnpEditor;
+  Caret : TOTAEditPos;
+begin
+  VnpLog('=== Sonde Sitzung jetzt ===');
+  if not OpenEditor(Ed) then
+  begin
+    VnpLog('Abbruch: keine Editoransicht');
+    Exit;
+  end;
+  Caret := Ed.View.CursorPos;
+  VnpLog('SyncMode %d (0 keine, 1 normal, 2 Templates), Caret %d:%d',
+    [Ord(Ed.View.Block.SyncMode), Caret.Line, Caret.Col]);
+  if GLast.DeclRow < 1 then
+  begin
+    // SCA162-Fehlalarm: "des" im deutschen Text als Krypto-Algorithmus DES.
+    // noinspection InsecureCryptoAlgorithm
+    VnpLog('(noch kein Lauf in dieser Sitzung des Pakets)');
+    Exit;
+  end;
+  LogBufferState(Ed, GLast, 'Jetzt');
 end;
 
 end.

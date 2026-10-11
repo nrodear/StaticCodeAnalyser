@@ -6,11 +6,16 @@ unit uVnpSync;
 // alle mit - derselbe Mechanismus wie Sync Edit (Strg+Umschalt+J) und die
 // Live Templates. Die Punkte sind eigene Klassen (TVnpSyncPoint/
 // TVnpSyncPoints): IOTACodeTemplateServices.CreateClass liefert fuer die
-// Sync-Punkt-Interfaces nil (Sonde M21, 2026-10-11) - ob die IDE fremde
-// Umsetzungen annimmt, ist die naechste Messung.
-// TVnpSyncNotifier schreibt jedes Ereignis der Sitzung ins Protokoll,
-// samt der Offsets - bei SyncEditBlock(nil) sind das die Punkte, die die
-// IDE SELBST anlegt: daraus liest man das Koordinatensystem ab.
+// Sync-Punkt-Interfaces nil (Sonde M21, 2026-10-11).
+//
+// KEIN IOTASyncEditNotifier (Lauf 4, 2026-10-11): IOTAEditBlock.
+// RemoveNotifier laesst einen nil-Eintrag in der Notifier-Liste des Blocks
+// stehen, und TSyncEditManager.SendSyncEvent prueft nicht auf nil -
+// Zugriffsverletzung beim Lesen von Adresse 0, beim naechsten Sync-Ereignis
+// in DIESER Ansicht (Strg+Z, Sitzungsstart, Neuzeichnen), auch nach dem
+// Neuinstallieren des Pakets. Ohne Abmelden blieben Verweise auf Code, den
+// das Entladen des Pakets entfernt. Die Sitzung wird stattdessen per
+// Sonde abgefragt (Block.SyncMode, uVnpProbe).
 
 interface
 
@@ -63,16 +68,6 @@ type
     function GetCount: Integer;
   end;
 
-  // Protokolliert die Sitzung (meldet sich NICHT selbst ab).
-  TVnpSyncNotifier = class(TInterfacedObject, IOTASyncEditNotifier)
-  public
-    procedure OnPoint(const APoint: IOTASyncEditPoint;
-      const APoints: IOTASyncEditPoints;
-      EventType: TOTASyncEditPointEventType);
-    procedure OnSyncEdit(const APoints: IOTASyncEditPoints;
-      EventType: TOTASyncEditPointEventType);
-  end;
-
 // Ein editierbarer Punkt AName mit den Fundstellen AOffsets in einer neuen
 // Liste (eigene Klassen). False mit AError, wenn das Fuellen scheitert.
 function MakePoints(const AName: string; const AOffsets: TArray<TOTACharPos>;
@@ -82,14 +77,11 @@ function MakePoints(const AName: string; const AOffsets: TArray<TOTACharPos>;
 // Punkt, fuers Protokoll. Offsets als (Line,CharIndex) wie TOTACharPos.
 function DescribePoints(const APoints: IOTASyncEditPoints): string;
 
-// Einen Notifier an ABlock haengen. Er bleibt bis zum Entladen des Pakets
-// angemeldet und am Leben: Strg+Z belebt eine beendete Sitzung wieder und
-// ruft die Notifier erneut.
-procedure WatchBlock(const ABlock: IOTAEditBlock);
 // AObject bis zum Entladen des Pakets am Leben halten (die Punkte einer
-// Sitzung - ob die IDE sie selbst referenziert, ist eine Messfrage).
+// Sitzung - ob die IDE sie selbst referenziert, ist offen). Vor dem
+// Entladen des Pakets keine Sitzung offen lassen.
 procedure KeepAlive(const AObject: IInterface);
-// Alle Notifier abmelden, alles Gehaltene freigeben (finalization).
+// Alles Gehaltene freigeben (finalization).
 procedure ReleaseAll;
 
 implementation
@@ -102,22 +94,8 @@ implementation
 uses
   uVnpLog;
 
-const
-  EVENT_NAMES : array[TOTASyncEditPointEventType] of string =
-    ('Enter', 'Leave', 'Exit');
-
-type
-  // Ein angemeldeter Notifier: Block, Index fuer RemoveNotifier und die
-  // eigene Referenz, die ihn am Leben haelt.
-  TVnpWatch = record
-    Block    : IOTAEditBlock;
-    Index    : Integer;
-    Notifier : IOTASyncEditNotifier;
-  end;
-
 var
-  GWatches : TList<TVnpWatch> = nil;
-  GKept    : TList<IInterface> = nil;
+  GKept : TList<IInterface> = nil;
 
 { TVnpSyncPoint }
 
@@ -272,50 +250,6 @@ begin
   end;
 end;
 
-{ TVnpSyncNotifier }
-
-procedure TVnpSyncNotifier.OnPoint(const APoint: IOTASyncEditPoint;
-  const APoints: IOTASyncEditPoints; EventType: TOTASyncEditPointEventType);
-var
-  Name, Text : string;
-begin
-  Name := '?';
-  Text := '?';
-  if APoint <> nil then
-  begin
-    Name := APoint.Name;
-    Text := APoint.Text;
-  end;
-  VnpLog('  Ereignis Punkt %s: Name="%s" Text="%s"',
-    [EVENT_NAMES[EventType], Name, Text]);
-end;
-
-procedure TVnpSyncNotifier.OnSyncEdit(const APoints: IOTASyncEditPoints;
-  EventType: TOTASyncEditPointEventType);
-begin
-  // KEIN Abmelden bei Exit mehr: Strg+Z belebt die Sitzung wieder und
-  // ruft die Notifier erneut (Absturz in TSyncEditManager.SendSyncEvent,
-  // Nicos Lauf 2026-10-11, nachdem der Notifier bei Exit abgemeldet und
-  // freigegeben war).
-  VnpLog('  Ereignis Sitzung %s: %s', [EVENT_NAMES[EventType],
-    DescribePoints(APoints)]);
-end;
-
-procedure WatchBlock(const ABlock: IOTAEditBlock);
-var
-  W : TVnpWatch;
-begin
-  if ABlock = nil then Exit;
-  if GWatches = nil then
-    GWatches := TList<TVnpWatch>.Create;
-  W.Block := ABlock;
-  W.Notifier := TVnpSyncNotifier.Create;
-  W.Index := ABlock.AddNotifier(W.Notifier);
-  GWatches.Add(W);
-  VnpLog('  Notifier angemeldet (Index %d, bleibt bis zum Entladen)',
-    [W.Index]);
-end;
-
 procedure KeepAlive(const AObject: IInterface);
 begin
   if GKept = nil then
@@ -324,23 +258,7 @@ begin
 end;
 
 procedure ReleaseAll;
-var
-  i : Integer;
 begin
-  // Rueckwaerts: entfernt die IDE beim Abmelden einen Listeneintrag,
-  // bleiben die Indizes davor gueltig.
-  if GWatches <> nil then
-    for i := GWatches.Count - 1 downto 0 do
-      try
-        GWatches[i].Block.RemoveNotifier(GWatches[i].Index);
-      except
-        // Der Editor kann inzwischen zu sein - beim Entladen darf nichts
-        // durchschlagen.
-        // noinspection ExceptionTooGeneral
-        on E: Exception do
-          VnpLog('  RemoveNotifier: %s: %s', [E.ClassName, E.Message]);
-      end;
-  FreeAndNil(GWatches);
   FreeAndNil(GKept);
 end;
 
