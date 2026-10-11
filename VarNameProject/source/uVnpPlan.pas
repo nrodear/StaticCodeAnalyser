@@ -28,12 +28,20 @@ type
     OldCols    : TArray<Integer>;  // Spalten der Literale vor dem Schreiben
     NewCols    : TArray<Integer>;  // dieselben Stellen nach dem Ersetzen
     NewUseLine : string;           // die Zeile nach dem Ersetzen
+    // Die Zeile ist die einzige Anweisung eines Zweigs (die Zeile darueber
+    // endet mit then/do/else): sie kommt mit der Deklaration in einen
+    // neuen begin..end-Block (Nico 2026-10-11, Fall 3). 'begin' steht
+    // direkt unter der Zweigzeile, 'end;' unter der Anweisung, beide mit
+    // der Einrueckung der Zweigzeile.
+    Wrap        : Boolean;
+    BlockIndent : string;
   end;
 
 // Plan fuer die Zeile ALine mit dem Caret in Spalte ACaretCol (vor dem
 // Zeichen ACaretCol; direkt hinter dem Literal zaehlt auch). APrevCode ist
-// die naechste nicht leere Zeile darueber: die Deklaration kommt VOR die
-// Zeile, also muss dort eine Anweisung zu Ende sein.
+// die naechste Zeile mit Code darueber: die Deklaration kommt VOR die
+// Zeile, also muss dort eine Anweisung zu Ende sein - oder ein Zweig
+// (then/do/else), dann mit begin..end (Wrap).
 function PlanIntroduce(const ALine, APrevCode: string; ACaretCol: Integer;
   const AName: string): TVnpPlan;
 
@@ -70,6 +78,8 @@ const
   // Deklaration.
   NOT_A_START: array[0..8] of string = ('end', 'else', 'until', 'except',
     'finally', 'then', 'do', 'of', 'begin');
+  // Hinter diesen Woertern steht genau EINE Anweisung (Zweig ohne begin).
+  BRANCH_ENDS: array[0..2] of string = ('then', 'do', 'else');
 
 function InList(const AWord: string; const AList: array of string): Boolean;
 var
@@ -306,22 +316,55 @@ begin
   SetLength(Result, n);
 end;
 
-// Endet die Zeile darueber eine Anweisung? ';' am Ende oder ein Wort aus
-// STATEMENT_OPENERS (ein '//'-Kommentar dahinter wird abgeschnitten).
-function PrevEndsStatement(const APrevCode: string): Boolean;
+// Das letzte Wort im Code-Anteil von ALine ('' wenn er nicht auf ein Wort
+// endet).
+function LastWord(const ALine: string): string;
 var
   S : string;
   i : Integer;
 begin
-  S := Trim(CodePart(APrevCode));
-  if S = '' then
-    Exit(False);
-  if S[Length(S)] = ';' then
-    Exit(True);
+  S := Trim(CodePart(ALine));
   i := Length(S);
   while (i > 0) and IsIdentChar(S[i]) do
     Dec(i);
-  Result := InList(Copy(S, i + 1, MaxInt), STATEMENT_OPENERS);
+  Result := Copy(S, i + 1, MaxInt);
+end;
+
+// Endet der Code-Anteil von ALine mit ';'?
+function EndsWithSemicolon(const ALine: string): Boolean;
+var
+  S : string;
+begin
+  S := Trim(CodePart(ALine));
+  Result := (S <> '') and (S[Length(S)] = ';');
+end;
+
+// Endet die Zeile darueber eine Anweisung? ';' am Ende oder ein Wort aus
+// STATEMENT_OPENERS (ein '//'-Kommentar dahinter wird abgeschnitten).
+function PrevEndsStatement(const APrevCode: string): Boolean;
+begin
+  Result := EndsWithSemicolon(APrevCode)
+    or InList(LastWord(APrevCode), STATEMENT_OPENERS);
+end;
+
+// Ist die Zeile ein case-Zweig, eine Sprungmarke oder ein on-Handler ('1: X
+// := 5;', 'Fertig: ...', 'on E: Exception do ...')? Der erste ':' im Code
+// (nicht in Strings/Kommentaren) gehoert dann nicht zu ':='. Dort darf
+// keine Deklaration davor - zwischen case-Zweigen bzw. on-Handlern ist sie
+// ungueltig. var/const-Zeilen ('var X: Integer := 5;') zaehlen nicht.
+function IsLabeled(const ALine: string): Boolean;
+var
+  Classes, W : string;
+  i          : Integer;
+begin
+  Result := False;
+  W := LowerCase(FirstWord(ALine));
+  if (W = 'var') or (W = 'const') then
+    Exit;
+  Classes := ClassesOf(ALine);
+  for i := 1 to Length(ALine) do
+    if (Classes[i] = 'c') and (ALine[i] = ':') then
+      Exit(CharAt(ALine, i + 1) <> '=');
 end;
 
 // Steht das Literal schon ALLEIN als Wert einer Deklaration ('var X :=
@@ -347,6 +390,34 @@ begin
   Result := (P > 2) and (Copy(S, P, MaxInt) = LowerCase(ALiteral) + ';');
 end;
 
+// Darf vor ALine eine Deklaration (APlan.Literal steht schon)? '' oder der
+// Grund. Setzt APlan.Wrap, wenn ALine die einzige Anweisung eines Zweigs
+// ist - dann nur, wenn sie auf dieser Zeile mit ';' endet (mehrzeilige
+// Anweisungen und solche vor 'else' kann der Text-Leser nicht abgrenzen).
+function PlanReason(const ALine, APrevCode: string;
+  var APlan: TVnpPlan): string;
+begin
+  Result := '';
+  if AlreadyNamed(ALine, APlan.Literal) then
+    Exit('das Literal ist schon allein der Wert einer Deklaration - es hat '
+      + 'bereits einen Namen');
+  if InList(FirstWord(ALine), NOT_A_START) then
+    Exit(Format('die Zeile beginnt mit "%s" - davor darf keine Deklaration',
+      [FirstWord(ALine)]));
+  if IsLabeled(ALine) then
+    Exit('die Zeile ist ein case-Zweig, eine Sprungmarke oder ein '
+      + 'on-Handler - davor darf keine Deklaration');
+  if PrevEndsStatement(APrevCode) then
+    Exit;
+  APlan.Wrap := InList(LastWord(APrevCode), BRANCH_ENDS);
+  if not APlan.Wrap then
+    Exit('die Zeile darueber endet weder eine Anweisung noch mit then/do/'
+      + 'else - unklar, wohin die Deklaration gehoert');
+  if not EndsWithSemicolon(ALine) then
+    Exit('die Anweisung im Zweig endet nicht auf dieser Zeile mit ";" '
+      + '(mehrzeilig oder vor else) - nicht unterstuetzt');
+end;
+
 function PlanIntroduce(const ALine, APrevCode: string; ACaretCol: Integer;
   const AName: string): TVnpPlan;
 var
@@ -364,24 +435,15 @@ begin
     Result.Reason := 'kein Zahl-Literal am Caret';
     Exit;
   end;
-  if AlreadyNamed(ALine, Result.Literal) then
+  Result.Reason := PlanReason(ALine, APrevCode, Result);
+  if Result.Reason <> '' then
   begin
-    Result.Reason := 'das Literal ist schon allein der Wert einer '
-      + 'Deklaration - es hat bereits einen Namen';
+    Result.Wrap := False;
     Exit;
   end;
-  if InList(FirstWord(ALine), NOT_A_START) then
-  begin
-    Result.Reason := Format('die Zeile beginnt mit "%s" - davor darf keine '
-      + 'Deklaration', [FirstWord(ALine)]);
-    Exit;
-  end;
-  if not PrevEndsStatement(APrevCode) then
-  begin
-    Result.Reason := 'die Zeile darueber endet keine Anweisung (then/do/'
-      + 'else ohne begin?) - die Deklaration wuerde zum Zweig';
-    Exit;
-  end;
+  if Result.Wrap then
+    Result.BlockIndent := Copy(APrevCode, 1,
+      Length(APrevCode) - Length(TrimLeft(APrevCode)));
   Result.Indent := Copy(ALine, 1, Length(ALine) - Length(TrimLeft(ALine)));
   Result.DeclText := Result.Indent + 'var ' + AName + ' := ' + Result.Literal
     + ';';

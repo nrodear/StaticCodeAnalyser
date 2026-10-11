@@ -71,10 +71,12 @@ type
 
   // Wo der Name nach dem Schreiben steht.
   TVnpTarget = record
-    DeclRow : Integer;
-    UseRow  : Integer;
-    Name    : string;
-    Plan    : TVnpPlan;
+    SourceRow : Integer;   // Zeile der Anweisung VOR dem Schreiben
+    PrevRow   : Integer;   // Zeile mit Code darueber (0 = keine)
+    DeclRow   : Integer;   // Zeile der Deklaration NACH dem Schreiben
+    UseRow    : Integer;   // Zeile der Anweisung NACH dem Schreiben
+    Name      : string;
+    Plan      : TVnpPlan;
   end;
 
 var
@@ -137,16 +139,24 @@ begin
     CharPos.CharIndex, ACol]);
 end;
 
-// Die naechste Zeile ueber ARow mit Code ('' am Dateianfang); leere und
-// reine Kommentarzeilen zaehlen nicht.
-function PrevCode(const AEd: TVnpEditor; ARow: Integer): string;
+// Die Zeile ARow (1-basiert) oder '' fuer 0.
+function LineOrEmpty(const AEd: TVnpEditor; ARow: Integer): string;
+begin
+  Result := '';
+  if (ARow >= 1) and (ARow <= AEd.Lines.Count) then
+    Result := AEd.Lines[ARow - 1];
+end;
+
+// Die Nummer der naechsten Zeile ueber ARow mit Code (0 am Dateianfang);
+// leere und reine Kommentarzeilen zaehlen nicht.
+function PrevCodeRow(const AEd: TVnpEditor; ARow: Integer): Integer;
 var
   i : Integer;
 begin
-  Result := '';
+  Result := 0;
   for i := ARow - 2 downto 0 do
     if Trim(CodePart(AEd.Lines[i])) <> '' then
-      Exit(AEd.Lines[i]);
+      Exit(i + 1);
 end;
 
 // Byte-Offset der Zeichenspalte ACol in Zeile ARow (1-basiert).
@@ -158,35 +168,54 @@ end;
 
 // Schritt 2: Deklaration ueber die Zeile, Literale ersetzen - ein Writer,
 // ein Undo-Schritt, Positionen aufsteigend.
+// Bei Plan.Wrap kommen 'begin' (Anfang der Zeile nach der Zweigzeile -
+// Kommentare dazwischen landen im Block) und 'end;' (Anfang der Zeile nach
+// der Anweisung) mit in denselben Writer: weiter EIN Strg+Z.
 procedure WriteEdits(const AEd: TVnpEditor; const ATarget: TVnpTarget);
 var
   Writer : IOTAEditWriter;
   Col, B : Integer;
   Lit    : Integer;
   Probe  : TOTACharPos;
+  Block  : string;
 begin
   Probe.CharIndex := 0;
-  Probe.Line := ATarget.DeclRow;
+  Probe.Line := ATarget.SourceRow;
   VnpLog('Zeilenanfang: eigene Rechnung %d, IDE CharPosToPos %d',
-    [AEd.Starts[ATarget.DeclRow - 1], AEd.View.CharPosToPos(Probe)]);
+    [AEd.Starts[ATarget.SourceRow - 1], AEd.View.CharPosToPos(Probe)]);
   Lit := Utf8Len(ATarget.Plan.Literal);
   Writer := AEd.Buffer.CreateUndoableWriter;
   try
-    Writer.CopyTo(AEd.Starts[ATarget.DeclRow - 1]);
+    if ATarget.Plan.Wrap then
+    begin
+      Writer.CopyTo(AEd.Starts[ATarget.PrevRow]);
+      Writer.Insert(PAnsiChar(UTF8Encode(ATarget.Plan.BlockIndent + 'begin'
+        + AEd.Eol)));
+    end;
+    Writer.CopyTo(AEd.Starts[ATarget.SourceRow - 1]);
     Writer.Insert(PAnsiChar(UTF8Encode(ATarget.Plan.DeclText + AEd.Eol)));
     for Col in ATarget.Plan.OldCols do
     begin
-      B := ByteOf(AEd, ATarget.DeclRow, Col);
+      B := ByteOf(AEd, ATarget.SourceRow, Col);
       Writer.CopyTo(B);
       Writer.DeleteTo(B + Lit);
       Writer.Insert(PAnsiChar(UTF8Encode(ATarget.Name)));
     end;
+    if ATarget.Plan.Wrap then
+    begin
+      Writer.CopyTo(AEd.Starts[ATarget.SourceRow]);
+      Writer.Insert(PAnsiChar(UTF8Encode(ATarget.Plan.BlockIndent + 'end;'
+        + AEd.Eol)));
+    end;
   finally
     Writer := nil;   // erst die Freigabe schreibt in den Puffer
   end;
-  VnpLog('Geschrieben: "%s" + %d Ersetzung(en) in "%s"',
+  Block := '';
+  if ATarget.Plan.Wrap then
+    Block := ' - in begin..end (Zweig ohne begin)';
+  VnpLog('Geschrieben: "%s" + %d Ersetzung(en) in "%s"%s',
     [ATarget.Plan.DeclText, Length(ATarget.Plan.OldCols),
-    ATarget.Plan.NewUseLine]);
+    ATarget.Plan.NewUseLine, Block]);
 end;
 
 // Die Fundstellen des Namens: Deklaration + Verwendungen. Line absolut
@@ -351,15 +380,22 @@ begin
     Exit;
   end;
   ATarget.Name := NextFreeName(AEd.Text, NAME_BASE);
-  ATarget.Plan := PlanIntroduce(AEd.Lines[Row - 1], PrevCode(AEd, Row), Col,
-    ATarget.Name);
-  if not ATarget.Plan.Ok then
+  ATarget.SourceRow := Row;
+  ATarget.PrevRow := PrevCodeRow(AEd, Row);
+  ATarget.Plan := PlanIntroduce(AEd.Lines[Row - 1],
+    LineOrEmpty(AEd, ATarget.PrevRow), Col, ATarget.Name);
+  if ATarget.Plan.Ok and ATarget.Plan.Wrap
+     and (Row >= Length(AEd.Starts)) then
+    ATarget.Plan.Reason := 'die Anweisung ist die letzte Zeile ohne '
+      + 'Zeilenende - kein Platz fuer end;';
+  if not ATarget.Plan.Ok or (ATarget.Plan.Reason <> '') then
   begin
     VnpLog('Abbruch: %s', [ATarget.Plan.Reason]);
     Exit;
   end;
-  ATarget.DeclRow := Row;
-  ATarget.UseRow := Row + 1;
+  // Mit Block steht 'begin' ueber der Deklaration: beide eine Zeile tiefer.
+  ATarget.DeclRow := Row + Ord(ATarget.Plan.Wrap);
+  ATarget.UseRow := ATarget.DeclRow + 1;
   WriteEdits(AEd, ATarget);
   Result := True;
 end;

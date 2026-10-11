@@ -179,7 +179,10 @@ das nur `MagicNr01`.
 - **M7** Undo: nimmt EIN Strg+Z Einfuehren und Umbenennen zurueck, oder
   braucht es zwei?
 - **M8** Fall 5 (Tab-Einrueckung): stimmen die Spalten?
-- **M9** Fall 3 muss abgelehnt werden (Protokoll "Abbruch: ...").
+- **M9** Fall 3 (999 hinter `then`): seit 2026-10-11 (Nicos Entscheid)
+  kein Abbruch mehr - der Zweig wird zum Block: `begin` unter die
+  then-Zeile, darin die Deklaration und die Anweisung, `end;` darunter
+  (ein Strg+Z). Der Kommentar in der Demo sagt noch "ABGELEHNT".
 - **M10** Sonde Caret: welche der drei "Vor dem Caret"-Zeilen endet genau
   am Caret - zaehlt `CharIndex` Bytes oder Zeichen? Danach Fall 6: umranden
   die Varianten die richtigen Stellen hinter dem Euro-Zeichen?
@@ -203,7 +206,15 @@ das nur `MagicNr01`.
 - Nur Zahl-Literale; nur gleiche Literale DERSELBEN Zeile werden ersetzt.
 - Die Deklaration kommt als Inline-`var` (Delphi 10.3+) direkt ueber die
   Zeile; die Zeile darueber muss eine Anweisung beenden (`;`, `begin`,
-  `try` ...), sonst Abbruch (die Deklaration wuerde sonst zum then-Zweig).
+  `try` ...). Endet sie mit `then`/`do`/`else` (Zweig ohne begin), kommt
+  ein `begin..end` um Deklaration und Anweisung - nur wenn die Anweisung
+  auf ihrer Zeile mit `;` endet (mehrzeilige Anweisungen und solche vor
+  `else` grenzt der Text-Leser nicht ab -> Abbruch). In reDelphix soll
+  dafuer der vorhandene Block-Planer (SCA101, WrapInBlock) einspringen.
+- Nie vor einem case-Zweig, einer Sprungmarke oder einem on-Handler
+  (`1: ...`, `Fertig: ...`, `on E: X do ...`) - dort ist eine Deklaration
+  dazwischen ungueltig.
+- Nie, wenn das Literal schon allein der Wert einer Deklaration ist.
 - Typ: `var X := 3.5` wird Extended, `$FFFFFFFF` Cardinal/Int64 - fuer den
   Test egal, fuer die echte Hilfe in reDelphix nicht.
 - Kommentare ueber Zeilen vor der Caret-Zeile sieht der Leser nicht.
