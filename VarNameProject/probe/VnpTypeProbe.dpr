@@ -79,16 +79,20 @@ program VnpTypeProbe;
 {$DEFINE PROBE_P1_UINT64_TYPED_HEX}  // var M: UInt64 := $FFFFFFFFFFFFFFFF
 {$DEFINE PROBE_P1_UINT64_TYPED_DEC}  // var M: UInt64 := 18446744073709551615
 // P2: die Originale (gefaltet). E2099/E1012 hier hiesse: keine 64-Bit-Faltung.
-{$DEFINE PROBE_P2_FOLD_MUL}          // R := 100000 * 100000
-{$DEFINE PROBE_P2_FOLD_DIV}          // I := 100000 * 100000 div 100000
-{$DEFINE PROBE_P2_FOLD_SHL}          // R := 1 shl 40
-{$DEFINE PROBE_P2_FOLD_HEX}          // R := $FFFFFFFF + 1
-{$DEFINE PROBE_P2_FOLD_MAXINT}       // R := 2147483647 + 1
+// BEFUND D12 Win32 (Nico 2026-10-11, erster Bau): MUL, DIV, HEX, MAXINT und
+// P4 BIGLIT_FOLD -> E2099 "Ueberlauf bei Konvertierung oder arithmetischer
+// Operation". Der Compiler faltet Integer-Konstanten in 32 Bit; ein
+// Ueberlauf ist ein Baufehler, kein stilles 64-Bit-Ergebnis. Deshalb aus.
+{.$DEFINE PROBE_P2_FOLD_MUL}         // R := 100000 * 100000            E2099
+{.$DEFINE PROBE_P2_FOLD_DIV}         // I := 100000 * 100000 div 100000 E2099
+{$DEFINE PROBE_P2_FOLD_SHL}          // R := 1 shl 40 (kompiliert)
+{.$DEFINE PROBE_P2_FOLD_HEX}         // R := $FFFFFFFF + 1              E2099
+{.$DEFINE PROBE_P2_FOLD_MAXINT}      // R := 2147483647 + 1             E2099
 {$DEFINE PROBE_P2_FOLD_SHL31}        // R := 1 shl 31 (Vorzeichenbit: 64 oder 32 Bit?)
 {$DEFINE PROBE_P2_FOLD_SHR_NEG}      // R := (-8) shr 1 (64, 32 oder 8 Bit?)
 {$DEFINE PROBE_P2_SHL_VAR}           // M shl 40 und 1 shl M mit Variable
 // P4: Ueberladungen.
-{$DEFINE PROBE_P4_BIGLIT_FOLD}       // Ov(100000 * 100000) - faellt mit PROBE_P2_FOLD_MUL
+{.$DEFINE PROBE_P4_BIGLIT_FOLD}      // Ov(100000 * 100000) - E2099 wie PROBE_P2_FOLD_MUL
 {$DEFINE PROBE_P4_BIGLIT_DEC}        // Ov(3000000000)
 {$DEFINE PROBE_P4_UNTYPED}           // Aufrufe mit untypisierter Variable
 {$DEFINE PROBE_P4_SHORTINT_LIT}      // (ShortInt, Integer, Int64) mit 42: E2251?
