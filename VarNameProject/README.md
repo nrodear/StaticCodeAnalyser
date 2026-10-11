@@ -299,6 +299,38 @@ Testplan oben.
   und "Sonde: Sitzung jetzt (nur Protokolldatei)". Steht dort noch C1 oder
   B1, ist ein altes Paket geladen - neu bauen, neu installieren, IDE neu
   starten.
+- **UI-Test 2026-10-11 abends (Testplan oben, Protokoll + Nicos Angaben):**
+  - **IDE-Ende ohne Fehlermeldung (H7 behoben):** in jedem Prozess "Abbau
+    (Wizard-Destruktor)" mit allen Schritten, danach "finalization: schon
+    erledigt"; "die IDE hatte das Menue schon freigegeben" zeigt, dass die
+    FreeNotification greift. Einzige Spur: "Meldungsgruppe abmelden" laeuft
+    beim IDE-Ende in eine abgefangene Zugriffsverletzung (Lesen von
+    00000008) - die Meldungsansicht ist dann schon weg. Nur Labor;
+    reDelphix bekommt keine Meldungsgruppe.
+  - **H1 belegt (Test N1):** N1 an/ab am Block von VarNameDemoUmlaut.pas,
+    danach stuerzte das naechste `SyncEditBlock` in derselben Datei mit
+    "Lesen von Adresse 00000000" in coreide290 ab - genau der vorhergesagte
+    nil-Eintrag. `IOTASyncEditNotifier` bleibt verboten; ob die Liste je
+    Ansicht oder fuer den ganzen Prozess gilt, ist weiter offen.
+  - **Fall 6 startete keine Sitzung:** C1h schrieb richtig, aber nach
+    `SyncEditBlock` stand `SyncMode 0` und der Caret auf 25:48 statt 25:52
+    (sechs Versuche, drei Prozesse; ASCII-Faelle jedes Mal SyncMode 1).
+    Der String vor dem Literal (ue, ss, Euro-Zeichen) hat 4 Bytes mehr als
+    Zeichen: SyncEditBlock liest das
+    Blockende als UTF-8-Bytes, der Block endete mitten im zweiten
+    `MagicNr01`. Behoben: `uVnpEdits.SyncBlockEnd` setzt das Ende auf
+    solchen Zeilen an den Anfang der Folgezeile (Test
+    `Context_SyncBlockEnd`); erneut pruefen: Testplan Schritt 11.
+  - **Enter tut in der C1h-Sitzung nichts** (kein Umbruch, die Sitzung
+    laeuft weiter); Umbenennen aendert alle Stellen.
+  - **Esc macht den Text kaputt - auch im normalen Sync Edit ohne unseren
+    Code** (Schritt 5, Fall 1: Zeichen verschoben). Das ist Verhalten der
+    IDE; eine Sitzung der Code-Aktion darf Esc nie an das Sync Edit der IDE
+    durchlassen. Enter und Esc fangen deshalb erst der Labor-Prototyp
+    (Entscheid E25), dann das Produkt ab.
+  - **Strg+Z:** einmal - Einfuegen und Umbenennen sind ein Undo-Schritt.
+  - **D1 lief nicht** (keine D1-Zeile im Protokoll). Entscheid Nico: nur
+    C1h kommt nach reDelphix, D1 bleibt im Labor.
 
 ## Entscheide und naechste Iteration (Nico 2026-10-11)
 

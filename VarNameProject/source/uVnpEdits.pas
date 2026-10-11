@@ -78,6 +78,17 @@ function TargetAt(const AText: TVnpText; ARow, ACol: Integer;
 function IntroduceEdits(const AText: TVnpText;
   const ATarget: TVnpTarget): TVnpByteEdits;
 
+// C1h: wo der Sync-Block endet - Zeile und Zeichenspalte (exklusiv) im
+// Puffer NACH dem Schreiben. Normal direkt hinter der letzten Verwendung:
+// so koppelt die IDE moeglichst wenige andere Bezeichner. Steht davor in
+// der Zeile Nicht-ASCII, endet er am Anfang der Folgezeile, wo Zeichen und
+// Bytes gleich zaehlen: SyncEditBlock liest das Blockende als UTF-8-Bytes
+// (UI-Test 2026-10-11, Fall 6: Block bis 25:52 gemeldet, danach Caret
+// 25:48 und keine Sitzung - das zweite MagicNr01 lag nicht mehr ganz im
+// Block). Ohne Folgezeile rueckt die Spalte um die Mehrbytes weiter.
+procedure SyncBlockEnd(const AText: TVnpText; const ATarget: TVnpTarget;
+  out ARow, ACol: Integer);
+
 // D1: die Anweisung loeschen; Einrueckung und Zeilenende bleiben stehen.
 function StatementDeleteEdit(const AText: TVnpText;
   const ATarget: TVnpTarget): TVnpByteEdit;
@@ -296,6 +307,29 @@ begin
   if P.Wrap then
     Result := Result + [ByteEdit(AText.Starts[Row + 1], 0,
       P.BlockIndent + 'end;' + AText.Eol)];
+end;
+
+procedure SyncBlockEnd(const AText: TVnpText; const ATarget: TVnpTarget;
+  out ARow, ACol: Integer);
+var
+  Stop  : Integer;   // Spalte hinter der letzten Verwendung
+  Extra : Integer;   // Mehrbytes davor in der Zeile
+begin
+  Stop := ATarget.Plan.NewCols[High(ATarget.Plan.NewCols)]
+    + Length(ATarget.Name);
+  Extra := Utf8Len(Copy(ATarget.Plan.NewUseLine, 1, Stop - 1)) - (Stop - 1);
+  ARow := ATarget.UseRow;
+  ACol := Stop;
+  if Extra = 0 then
+    Exit;
+  // Nach der Anweisung kommt noch eine Zeile (bei Wrap 'end;').
+  if ATarget.Plan.Wrap or (ATarget.SourceRow < Length(AText.Lines)) then
+  begin
+    ARow := ATarget.UseRow + 1;
+    ACol := 1;
+  end
+  else
+    ACol := Stop + Extra;
 end;
 
 function StatementDeleteEdit(const AText: TVnpText;

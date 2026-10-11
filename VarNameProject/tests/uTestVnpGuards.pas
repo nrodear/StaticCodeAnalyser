@@ -35,6 +35,7 @@ type
     [Test] procedure Context_DirectiveBetweenBranchAndStatement;
     [Test] procedure Context_MultiLineString;
     [Test] procedure Context_MultiLineComment;
+    [Test] procedure Context_SyncBlockEnd;
   end;
 
 implementation
@@ -332,6 +333,54 @@ begin
   Assert.AreEqual<Integer>(2, G.PrevRow, 'hinter den Kommentaren, PrevRow');
   Assert.AreEqual('  W := MagicNr01;', G.Plan.NewUseLine,
     'hinter den Kommentaren, NewUseLine');
+end;
+
+// Das Ende des Sync-Blocks (C1h): auf reinen ASCII-Zeilen direkt hinter der
+// letzten Verwendung; steht davor Nicht-ASCII, am Anfang der Folgezeile -
+// SyncEditBlock liest das Blockende als UTF-8-Bytes und schnitt sonst das
+// letzte MagicNr01 an (UI-Test 2026-10-11, Fall 6: keine Sitzung). Ohne
+// Folgezeile rueckt die Spalte um die Mehrbytes weiter.
+procedure TTestVnpGuards.Context_SyncBlockEnd;
+var
+  T        : TVnpText;
+  G        : TVnpTarget;
+  Row, Col : Integer;
+begin
+  // Fall 1: die zweite 42 endet in Spalte 27, als MagicNr01 in Spalte 42.
+  T := TextOf(TEncoding.UTF8.GetBytes('function Twice(Value: Integer): '
+    + 'Integer;'#13#10'begin'#13#10'  Result := Value * 42 + 42;'#13#10
+    + 'end;'#13#10));
+  G := TargetAt(T, 3, 21, 'MagicNr');
+  Assert.IsTrue(G.Plan.Ok, 'Fall 1: ' + G.Plan.Reason);
+  SyncBlockEnd(T, G, Row, Col);
+  Assert.AreEqual<Integer>(4, Row, 'Fall 1, Zeile');
+  Assert.AreEqual<Integer>(42, Col, 'Fall 1, Spalte hinter der Verwendung');
+  // Fall 6: 'Gr', ue, ss, 'e ', Euro vor der 42 in Spalte 43 - 4 Mehrbytes.
+  T := TextOf(TEncoding.UTF8.GetBytes('begin'#13#10'  Result := ''Gr'
+    + #$00FC#$00DF'e '#$20AC' '' + IntToStr(Count * 42);'#13#10'end;'#13#10));
+  G := TargetAt(T, 2, 43, 'MagicNr');
+  Assert.IsTrue(G.Plan.Ok, 'Fall 6: ' + G.Plan.Reason);
+  SyncBlockEnd(T, G, Row, Col);
+  Assert.AreEqual<Integer>(4, Row, 'Fall 6, Folgezeile');
+  Assert.AreEqual<Integer>(1, Col, 'Fall 6, Spalte 1');
+  // Dieselbe Anweisung als letzte Zeile ohne Zeilenende: hinter MagicNr01
+  // (Spalte 52) plus 4 Mehrbytes.
+  T := TextOf(TEncoding.UTF8.GetBytes('begin'#13#10'  Result := ''Gr'
+    + #$00FC#$00DF'e '#$20AC' '' + IntToStr(Count * 42);'));
+  G := TargetAt(T, 2, 43, 'MagicNr');
+  Assert.IsTrue(G.Plan.Ok, 'letzte Zeile: ' + G.Plan.Reason);
+  SyncBlockEnd(T, G, Row, Col);
+  Assert.AreEqual<Integer>(3, Row, 'letzte Zeile, Zeile');
+  Assert.AreEqual<Integer>(56, Col, 'letzte Zeile, Spalte plus Mehrbytes');
+  // Zweig ohne begin mit ue vor der 42 (Spalte 26): danach folgt die
+  // Zeile mit dem neuen Blockende.
+  T := TextOf(TEncoding.UTF8.GetBytes('begin'#13#10'  if A then'#13#10
+    + '    S := ''x'#$00FC''' + IntToStr(42);'#13#10'end;'#13#10));
+  G := TargetAt(T, 3, 26, 'MagicNr');
+  Assert.IsTrue(G.Plan.Ok and G.Plan.Wrap, 'Wrap: ' + G.Plan.Reason);
+  SyncBlockEnd(T, G, Row, Col);
+  Assert.AreEqual<Integer>(6, Row, 'Wrap, Zeile von end;');
+  Assert.AreEqual<Integer>(1, Col, 'Wrap, Spalte 1');
 end;
 
 initialization

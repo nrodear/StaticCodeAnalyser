@@ -346,17 +346,20 @@ end;
 // Puffers, nicht zwingend dieser. nil mit Protokolleintrag, wenn ein Move
 // scheitert. Das Protokoll nennt die an Move uebergebenen Anzeige-Spalten
 // und, getrennt, was der Block selbst meldet: auf Tab-Zeilen sind das
-// Zeichen-Spalten (Lauf 6, Fall 5; CnPack warnt ebenso).
+// Zeichen-Spalten (Lauf 6, Fall 5; CnPack warnt ebenso). Das Ende kommt
+// aus uVnpEdits.SyncBlockEnd: auf Zeilen mit Nicht-ASCII vor dem Ende ist
+// es der Anfang der Folgezeile (UI-Test 2026-10-11, Fall 6).
 function SelectFromName(const AEd: TVnpEditor;
   const ATarget: TVnpTarget): IOTAEditBlock;
 var
   EdPos   : IOTAEditPosition;
   FromCol : Integer;
+  ToRow   : Integer;
   ToCol   : Integer;
 begin
   FromCol := DisplayCol(AEd.View, ATarget.DeclRow, ATarget.Plan.NameCol);
-  ToCol := DisplayCol(AEd.View, ATarget.UseRow,
-    ATarget.Plan.NewCols[High(ATarget.Plan.NewCols)] + Length(ATarget.Name));
+  SyncBlockEnd(AEd.T, ATarget, ToRow, ToCol);
+  ToCol := DisplayCol(AEd.View, ToRow, ToCol);
   Result := AEd.View.Block;
   EdPos := AEd.View.Position;
   Result.Reset;
@@ -368,18 +371,21 @@ begin
     Exit(nil);
   end;
   Result.BeginBlock;
-  if not EdPos.Move(ATarget.UseRow, ToCol) then
+  if not EdPos.Move(ToRow, ToCol) then
   begin
     Result.Reset;
     VnpLog('Abbruch: Move(%d, %d) hinter die letzte Verwendung gescheitert',
-      [ATarget.UseRow, ToCol]);
+      [ToRow, ToCol]);
     Exit(nil);
   end;
   Result.EndBlock;
   VnpLog('Block: Move %d:%d - %d:%d (Anzeige-Spalten), der Block meldet '
     + '%d:%d - %d:%d, SyncMode vorher %d', [ATarget.DeclRow, FromCol,
-    ATarget.UseRow, ToCol, Result.StartingRow, Result.StartingColumn,
+    ToRow, ToCol, Result.StartingRow, Result.StartingColumn,
     Result.EndingRow, Result.EndingColumn, Ord(Result.SyncMode)]);
+  if ToRow <> ATarget.UseRow then
+    VnpLog('  Blockende am Anfang der Folgezeile: Nicht-ASCII vor der letzten '
+      + 'Verwendung (SyncEditBlock liest das Ende als Bytes)');
 end;
 
 // Den Block nach einer Zugriffsverletzung leeren - sonst laeuft das
