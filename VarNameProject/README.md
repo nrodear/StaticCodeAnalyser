@@ -320,7 +320,8 @@ Testplan oben.
     Blockende als UTF-8-Bytes, der Block endete mitten im zweiten
     `MagicNr01`. Behoben: `uVnpEdits.SyncBlockEnd` setzt das Ende auf
     solchen Zeilen an den Anfang der Folgezeile (Test
-    `Context_SyncBlockEnd`); erneut pruefen: Testplan Schritt 11.
+    `Context_SyncBlockEnd`). Nachtest 23:28 (Nico, Schritt 11): Block 25:7 -
+    27:1, SyncMode 1, Rahmen um beide Stellen - gruen.
   - **Enter tut in der C1h-Sitzung nichts** (kein Umbruch, die Sitzung
     laeuft weiter); Umbenennen aendert alle Stellen.
   - **Esc macht den Text kaputt - auch im normalen Sync Edit ohne unseren
