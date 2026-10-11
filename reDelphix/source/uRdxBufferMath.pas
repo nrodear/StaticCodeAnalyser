@@ -65,7 +65,9 @@ function OffsetOf(AStarts: TList<Integer>; ALines: TStrings;
   ALine, ACol: Integer; out AOffset: Integer): Boolean;
 
 // UTF-8-Laenge der Zeichen vor Zeichen-Spalte ACol (1-basiert) von ALine -
-// so zaehlen die Byte-Offsets im Puffer und TOTACharPos.CharIndex.
+// so zaehlen die Byte-Offsets im Puffer (Reader/Writer). TOTACharPos.
+// CharIndex zaehlt dagegen ZEICHEN (gemessen 2026-10-11, uRdxEditor.
+// DisplayPosOf).
 function Utf8PrefixLength(const ALine: string; ACol: Integer): Integer;
 
 // True, wenn die Editor-Markierung Zeichen-Spalte ACol der Zeile ALine

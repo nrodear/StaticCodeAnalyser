@@ -227,11 +227,17 @@ end;
 
 function DisplayPosOf(const AView: IOTAEditView; ALines: TStrings;
   ALine, ACol: Integer): TOTAEditPos;
-// Zeichen-Spalte -> Anzeige-Spalte ueber die IDE selbst. TOTACharPos
-// zaehlt die UTF-8-Bytes der Zeile (so handhaben es GExperts & Co.);
-// fuer reinen ASCII-Code ist das die Zeichenzahl. Vorbedingung, von
-// SelectSpan mit SpanFitsEditor geprueft: ACol und der Byte-Praefix
-// passen in die SmallInt-Felder von TOTAEditPos/TOTACharPos (Nit 8).
+// Zeichen-Spalte -> Anzeige-Spalte ueber die IDE selbst. ConvertPos liest
+// TOTACharPos.CharIndex in ZEICHEN der Zeile (0-basiert, Tab = 1) - gemessen
+// 2026-10-11 mit VarNameProject (Sonde M10: hinter 'Gruesse EUR' mit
+// Umlauten und Euro-Zeichen CharIndex 20 = 20 Zeichen, nicht 24 Bytes;
+// die Rueckrechnung ergab dieselbe Anzeigespalte). Bis dahin stand hier
+// der UTF-8-Byte-Praefix (wie GExperts) - auf Zeilen mit Nicht-ASCII vor
+// ACol markierte SelectSpan dadurch zu weit rechts. Das Ersetzen selbst
+// (Pufferbytes ueber Reader/Writer) war davon nicht betroffen.
+// Vorbedingung, von SelectSpan mit SpanFitsEditor geprueft: ACol passt in
+// die SmallInt-Felder von TOTAEditPos/TOTACharPos (Nit 8; die Pruefung
+// ueber den Byte-Praefix ist strenger als noetig, also sicher).
 var
   CharPos : TOTACharPos;
 begin
@@ -239,7 +245,7 @@ begin
   Result.Col  := ACol;
   if (ALine < 1) or (ALine > ALines.Count) then Exit;
   CharPos.Line      := ALine;
-  CharPos.CharIndex := Utf8PrefixLength(ALines[ALine - 1], ACol);
+  CharPos.CharIndex := ACol - 1;
   AView.ConvertPos(False, Result, CharPos);
   Result.Line := ALine;
 end;
