@@ -58,7 +58,7 @@ Offsets stehen - das misst dieses Projekt.
 3. `demo/VarNameDemo.pas` im Editor oeffnen.
 4. Caret auf eine Zahl setzen (siehe Faelle in der Datei).
 5. Tools > VarNameProject > eine Variante waehlen; danach wiederholt
-   **Strg+Alt+Umschalt+M** die zuletzt gewaehlte (Start: A1).
+   **Strg+Alt+Umschalt+M** die zuletzt gewaehlte (Start: B1).
 6. Neuen Namen tippen, mit Enter/Tab/Esc bzw. Klick daneben beenden.
 7. Mit Strg+Z zuruecksetzen (zaehlen, wie oft - M7), naechste Variante.
 8. Tools > VarNameProject > "Protokolldatei im Editor oeffnen" und den
@@ -68,11 +68,30 @@ Offsets stehen - das misst dieses Projekt.
 
 | Variante | Punkte | Offsets |
 |---|---|---|
-| A1 | `IOTACodeTemplateServices.CreateClass(IOTASyncEditPoint[s])` | absolut: Zeile der Datei, CharIndex 0-basiert (UTF-8-Bytes) |
-| A2 | wie A1 | relativ: Zeile ab Blockanfang 0-basiert |
-| B1 | eigene Klassen `TVnpSyncPoint/TVnpSyncPoints` | absolut |
-| B2 | wie B1 | relativ |
+| B1 | eigene Klassen `TVnpSyncPoint/TVnpSyncPoints` | absolut: Zeile der Datei, CharIndex 0-basiert in Zeichen |
+| B2 | wie B1 | relativ: Zeile ab Blockanfang 0-basiert |
 | C | `SyncEditBlock(nil)` - die IDE sucht selbst (wie Strg+Umschalt+J) | die IDE legt sie an - der Notifier protokolliert sie: **die Referenz**, in welchem System die IDE rechnet |
+
+Die Varianten A1/A2 (Punkte per `IOTACodeTemplateServices.CreateClass`)
+sind entfallen - siehe Ergebnis M21.
+
+## Ergebnisse
+
+- **M10 (2026-10-11):** `TOTACharPos.CharIndex` aus `ConvertPos` zaehlt
+  **Zeichen**, nicht UTF-8-Bytes: hinter dem Euro-Zeichen in Fall 6 (20
+  Zeichen, 24 Bytes davor) meldet die IDE CharIndex 20, die Rueckrechnung ergibt dieselbe
+  Anzeigespalte. **`CharPosToPos` addiert CharIndex aber als Bytes** zum
+  Zeilenanfang (Differenz 20 statt 24) - auf Zeilen mit Nicht-ASCII vor der
+  Stelle ist es also falsch; Pufferpositionen selbst rechnen (Reader-Bytes).
+  Die erste Fassung bestimmte die Caret-Spalte ueber `CharPosToPos` und lag
+  dadurch hinter dem Euro-Zeichen 4 Spalten daneben ("kein Zahl-Literal am
+  Caret") - behoben. Dieselbe Byte-Annahme stand in reDelphix
+  (`uRdxEditor.DisplayPosOf`, Markieren per `SelectSpan`) - dort ebenfalls
+  korrigiert.
+- **M21 (2026-10-11):** `CreateClass` liefert fuer `IOTASyncEditPoints`,
+  `IOTASyncEditPoint` und `IOTASyncEditPoint100` **nil**; fuer
+  `IOTACodeTemplate`, `IOTACodeTemplatePoint` und `IOTACodeTemplateObject`
+  je ein Objekt (die Fabrik baut das Template-Objektmodell).
 
 ## Was zurueckmelden (Messpunkte)
 

@@ -11,31 +11,28 @@ unit uVnpIntroduce;
 //      mit. Der Caret wird danach NICHT mehr bewegt - das koennte die
 //      Vorauswahl der IDE aufheben (Messpunkt M11).
 // Die Varianten unterscheiden NUR Schritt 3 - sie sind die Messung:
-//   vvTemplatesAbs/Rel  Punkte aus IOTACodeTemplateServices.CreateClass,
-//                       Offsets absolut (Zeile der Datei) bzw. relativ zur
-//                       ersten Zeile des Blocks (0-basiert).
-//   vvOwnAbs/Rel        dieselben Punkte aus eigenen Klassen.
+//   vvOwnAbs/Rel        Punkte aus eigenen Klassen, Offsets absolut (Zeile
+//                       der Datei) bzw. relativ zur ersten Zeile des Blocks
+//                       (0-basiert). (Die Variante "Punkte per
+//                       IOTACodeTemplateServices.CreateClass" ist entfallen:
+//                       die Sonde M21 ergab nil - die Fabrik baut nur
+//                       Template-Objekte.)
 //   vvIdeSyncEdit       SyncEditBlock(nil): die IDE sucht selbst (wie
 //                       Strg+Umschalt+J); der Notifier protokolliert die
 //                       Offsets, die SIE anlegt - die Referenz fuer Abs/Rel.
-// TOTACharPos laut ToolsAPI: CharIndex 0-basiert, Line 1-basiert. Ob
-// CharIndex Bytes (UTF-8) oder Zeichen zaehlt, sagt die ToolsAPI NICHT
-// (Drittquellen widersprechen sich) - die Offsets der Punkte rechnen hier
-// in Bytes (Hypothese, bei ASCII gleich); die Sonde "Caret" (uVnpProbe)
-// und Demo-Fall 6 klaeren es. Die Caret-Spalte selbst kommt ueber
-// CharPosToPos (Pufferposition = Reader-/Writer-Bytes) und haengt nicht
-// an der Hypothese.
+// TOTACharPos: CharIndex 0-basiert in ZEICHEN der Zeile (Tab = 1), Line
+// 1-basiert - gemessen 2026-10-11 (Sonde M10, 'Grueße EUR': CharIndex 20
+// bei 20 Zeichen = 24 Bytes). ACHTUNG: CharPosToPos addiert CharIndex als
+// BYTES zum Zeilenanfang - auf Zeilen mit Nicht-ASCII davor stimmt es also
+// nicht; Pufferpositionen rechnet dieses Projekt selbst (Reader-Bytes).
 
 interface
 
 type
-  TVnpVariant = (vvTemplatesAbs, vvTemplatesRel, vvOwnAbs, vvOwnRel,
-    vvIdeSyncEdit);
+  TVnpVariant = (vvOwnAbs, vvOwnRel, vvIdeSyncEdit);
 
 const
   VARIANT_CAPTIONS : array[TVnpVariant] of string = (
-    'A1 Punkte per CreateClass, Offsets absolut',
-    'A2 Punkte per CreateClass, Offsets relativ zum Block',
     'B1 eigene Punkt-Klassen, Offsets absolut',
     'B2 eigene Punkt-Klassen, Offsets relativ zum Block',
     'C  SyncEditBlock(nil) - IDE-Sync-Edit als Referenz');
@@ -106,32 +103,24 @@ begin
   AEd.Lines.Text := AEd.Text;
 end;
 
-// Caret als Zeile und 1-basierte Zeichenspalte.
-// Die Spalte kommt ueber die Pufferposition (CharPosToPos) minus den
-// Zeilenanfang - beides Bytes im Raum von Reader und Writer.
+// Caret als Zeile und 1-basierte Zeichenspalte: CharIndex zaehlt Zeichen
+// (Sonde M10), die Spalte ist CharIndex + 1. NICHT ueber CharPosToPos -
+// das liest CharIndex als Bytes und lag hinter 'Grueße EUR' 4 Spalten
+// daneben (Protokoll 2026-10-11).
 procedure CaretOf(const AEd: TVnpEditor; out ARow, ACol: Integer);
 var
   EdPos   : TOTAEditPos;
   CharPos : TOTACharPos;
-  Linear  : Integer;
-  Start   : Integer;
 begin
   EdPos := AEd.View.CursorPos;
   CharPos.CharIndex := 0;
   CharPos.Line := EdPos.Line;
   AEd.View.ConvertPos(True, EdPos, CharPos);
-  Linear := AEd.View.CharPosToPos(CharPos);
   ARow := CharPos.Line;
-  ACol := 1;
-  Start := -1;
-  if (ARow >= 1) and (ARow <= AEd.Lines.Count) then
-  begin
-    Start := AEd.Starts[ARow - 1];
-    ACol := CharColOfByte(AEd.Lines[ARow - 1], Linear - Start);
-  end;
+  ACol := CharPos.CharIndex + 1;
   VnpLog('Caret: Anzeige %d:%d -> CharPos (Zeile %d, CharIndex %d) -> '
-    + 'Puffer %d (Zeilenanfang %d) -> Zeichenspalte %d', [EdPos.Line,
-    EdPos.Col, CharPos.Line, CharPos.CharIndex, Linear, Start, ACol]);
+    + 'Zeichenspalte %d', [EdPos.Line, EdPos.Col, CharPos.Line,
+    CharPos.CharIndex, ACol]);
 end;
 
 // Die naechste Zeile ueber ARow mit Code ('' am Dateianfang); leere und
@@ -186,8 +175,9 @@ begin
     ATarget.Plan.NewUseLine]);
 end;
 
-// Die Fundstellen des Namens: Deklaration + Verwendungen. ABase wird von
-// der Zeile abgezogen: 0 = absolut, DeclRow = relativ zum Block (0-basiert).
+// Die Fundstellen des Namens: Deklaration + Verwendungen, CharIndex in
+// Zeichen (wie ConvertPos). ABase wird von der Zeile abgezogen: 0 =
+// absolut, DeclRow = relativ zum Block (0-basiert).
 function OffsetsOf(const ATarget: TVnpTarget;
   ABase: Integer): TArray<TOTACharPos>;
 var
@@ -195,25 +185,25 @@ var
   Col : Integer;
 begin
   P.Line := ATarget.DeclRow - ABase;
-  P.CharIndex := Utf8Len(ATarget.Plan.Indent) + Length('var ');
+  P.CharIndex := ATarget.Plan.NameCol - 1;
   Result := [P];
   for Col in ATarget.Plan.NewCols do
   begin
     P.Line := ATarget.UseRow - ABase;
-    P.CharIndex := Utf8Len(Copy(ATarget.Plan.NewUseLine, 1, Col - 1));
+    P.CharIndex := Col - 1;
     Result := Result + [P];
   end;
 end;
 
-// Anzeige-Spalte zur Zeichenspalte ACol der neuen Zeile ALine (Tabs!).
-function DisplayCol(const AView: IOTAEditView; ARow: Integer;
-  const ALine: string; ACol: Integer): Integer;
+// Anzeige-Spalte zur Zeichenspalte ACol in Zeile ARow (Tabs rechnet die
+// IDE um; CharIndex in Zeichen).
+function DisplayCol(const AView: IOTAEditView; ARow, ACol: Integer): Integer;
 var
   EdPos   : TOTAEditPos;
   CharPos : TOTACharPos;
 begin
   CharPos.Line := ARow;
-  CharPos.CharIndex := Utf8Len(Copy(ALine, 1, ACol - 1));
+  CharPos.CharIndex := ACol - 1;
   EdPos.Line := ARow;
   EdPos.Col := ACol;
   AView.ConvertPos(False, EdPos, CharPos);
@@ -233,7 +223,7 @@ begin
   EdPos.Move(ATarget.DeclRow, 1);
   Result.BeginBlock;
   EdPos.Move(ATarget.UseRow, DisplayCol(AEd.View, ATarget.UseRow,
-    ATarget.Plan.NewUseLine, Length(ATarget.Plan.NewUseLine) + 1));
+    Length(ATarget.Plan.NewUseLine) + 1));
   Result.EndBlock;
   VnpLog('Block: %d:%d - %d:%d, SyncMode vorher %d', [Result.StartingRow,
     Result.StartingColumn, Result.EndingRow, Result.EndingColumn,
@@ -243,9 +233,6 @@ end;
 // Schritt 3 je Variante.
 procedure StartSync(AVariant: TVnpVariant; const ABlock: IOTAEditBlock;
   const ATarget: TVnpTarget);
-const
-  SOURCES : array[TVnpVariant] of TVnpPointSource = (psCodeTemplates,
-    psCodeTemplates, psOwn, psOwn, psOwn);
 var
   Points : IOTASyncEditPoints;
   Err    : string;
@@ -258,10 +245,9 @@ begin
     Exit;
   end;
   Base := 0;
-  if AVariant in [vvTemplatesRel, vvOwnRel] then
+  if AVariant = vvOwnRel then
     Base := ATarget.DeclRow;
-  if MakePoints(SOURCES[AVariant], ATarget.Name, OffsetsOf(ATarget, Base),
-       Points, Err) then
+  if MakePoints(ATarget.Name, OffsetsOf(ATarget, Base), Points, Err) then
     ABlock.SyncEditBlock(Points);
 end;
 
@@ -278,7 +264,7 @@ begin
   VnpLog('Nach SyncEditBlock: SyncMode %d (0 keine, 1 normal, 2 Templates), '
     + 'Caret %d:%d, Name in der Deklaration bei %d:%d', [Ord(ABlock.SyncMode),
     Caret.Line, Caret.Col, ATarget.DeclRow, DisplayCol(AEd.View,
-    ATarget.DeclRow, ATarget.Plan.DeclText, ATarget.Plan.NameCol)]);
+    ATarget.DeclRow, ATarget.Plan.NameCol)]);
   VnpLog('  (folgen keine "Ereignis"-Zeilen, feuert der Notifier in dieser '
     + 'Variante nicht)');
 end;

@@ -4,12 +4,10 @@ unit uVnpSync;
 // SyncEditBlock). Ein Punkt hat einen Namen, einen Text und mehrere
 // Fundstellen (Offsets); die IDE umrandet sie und aendert beim Tippen
 // alle mit - derselbe Mechanismus wie Sync Edit (Strg+Umschalt+J) und die
-// Live Templates. Woher die Punkte kommen, ist eine Messfrage:
-//   psCodeTemplates  IOTACodeTemplateServices.CreateClass(GUID) - die
-//                    Fabrik der IDE (CodeTemplateAPI), falls sie diese
-//                    GUIDs kennt.
-//   psOwn            eigene Klassen (TVnpSyncPoint/TVnpSyncPoints) - falls
-//                    die IDE fremde Umsetzungen annimmt.
+// Live Templates. Die Punkte sind eigene Klassen (TVnpSyncPoint/
+// TVnpSyncPoints): IOTACodeTemplateServices.CreateClass liefert fuer die
+// Sync-Punkt-Interfaces nil (Sonde M21, 2026-10-11) - ob die IDE fremde
+// Umsetzungen annimmt, ist die naechste Messung.
 // TVnpSyncNotifier schreibt jedes Ereignis der Sitzung ins Protokoll,
 // samt der Offsets - bei SyncEditBlock(nil) sind das die Punkte, die die
 // IDE SELBST anlegt: daraus liest man das Koordinatensystem ab.
@@ -20,9 +18,7 @@ uses
   System.SysUtils, System.Generics.Collections, ToolsAPI;
 
 type
-  TVnpPointSource = (psCodeTemplates, psOwn);
-
-  // Ein Sync-Punkt, eigene Umsetzung (psOwn).
+  // Ein Sync-Punkt, eigene Umsetzung.
   TVnpSyncPoint = class(TInterfacedObject, IOTASyncEditPoint100,
     IOTASyncEditPoint)
   private
@@ -54,7 +50,7 @@ type
     procedure SetMultiLine(Value: Boolean);
   end;
 
-  // Die Liste der Punkte, eigene Umsetzung (psOwn).
+  // Die Liste der Punkte, eigene Umsetzung.
   TVnpSyncPoints = class(TInterfacedObject, IOTASyncEditPoints)
   private
     FPoints : TList<IOTASyncEditPoint>;
@@ -78,10 +74,9 @@ type
   end;
 
 // Ein editierbarer Punkt AName mit den Fundstellen AOffsets in einer neuen
-// Liste. False mit AError, wenn die Quelle ihn nicht liefern kann.
-function MakePoints(ASource: TVnpPointSource; const AName: string;
-  const AOffsets: TArray<TOTACharPos>; out APoints: IOTASyncEditPoints;
-  out AError: string): Boolean;
+// Liste (eigene Klassen). False mit AError, wenn das Fuellen scheitert.
+function MakePoints(const AName: string; const AOffsets: TArray<TOTACharPos>;
+  out APoints: IOTASyncEditPoints; out AError: string): Boolean;
 
 // 'Name="X" Text="X" editierbar mehrzeilig=nein Offsets=[(5,6), ...]' je
 // Punkt, fuers Protokoll. Offsets als (Line,CharIndex) wie TOTACharPos.
@@ -100,13 +95,11 @@ implementation
 // noinspection-file PublicMemberWithoutDoc, HardcodedString
 
 uses
-  System.Classes, CodeTemplateAPI, uVnpLog;
+  System.Classes, uVnpLog;
 
 const
   EVENT_NAMES : array[TOTASyncEditPointEventType] of string =
     ('Enter', 'Leave', 'Exit');
-  SOURCE_NAMES : array[TVnpPointSource] of string =
-    ('CreateClass', 'eigene Klassen');
 
 var
   GBlock         : IOTAEditBlock = nil;
@@ -325,55 +318,16 @@ end;
 
 { Punkte erzeugen }
 
-function NewPoints(ASource: TVnpPointSource; out APoints: IOTASyncEditPoints;
-  out APoint: IOTASyncEditPoint; out AError: string): Boolean;
-var
-  Svc : IOTACodeTemplateServices;
-begin
-  Result := False;
-  APoints := nil;
-  APoint := nil;
-  AError := '';
-  if ASource = psOwn then
-  begin
-    APoints := TVnpSyncPoints.Create;
-    APoint := TVnpSyncPoint.Create;
-    Exit(True);
-  end;
-  if not Supports(BorlandIDEServices, IOTACodeTemplateServices, Svc) then
-  begin
-    AError := 'BorlandIDEServices kennt IOTACodeTemplateServices nicht';
-    Exit;
-  end;
-  try
-    if not Supports(Svc.CreateClass(IOTASyncEditPoints), IOTASyncEditPoints,
-      APoints) then
-      AError := 'CreateClass(IOTASyncEditPoints) lieferte nichts Passendes'
-    else if not Supports(Svc.CreateClass(IOTASyncEditPoint),
-      IOTASyncEditPoint, APoint) then
-      AError := 'CreateClass(IOTASyncEditPoint) lieferte nichts Passendes';
-  except
-    // Messung: welche Ausnahme CreateClass wirft, gehoert ins Protokoll.
-    // noinspection ExceptionTooGeneral
-    on E: Exception do
-      AError := 'CreateClass: ' + E.ClassName + ': ' + E.Message;
-  end;
-  Result := AError = '';
-end;
-
-function MakePoints(ASource: TVnpPointSource; const AName: string;
-  const AOffsets: TArray<TOTACharPos>; out APoints: IOTASyncEditPoints;
-  out AError: string): Boolean;
+function MakePoints(const AName: string; const AOffsets: TArray<TOTACharPos>;
+  out APoints: IOTASyncEditPoints; out AError: string): Boolean;
 var
   P   : IOTASyncEditPoint;
   Off : TOTACharPos;
 begin
-  Result := NewPoints(ASource, APoints, P, AError);
-  if not Result then
-  begin
-    VnpLog('  Punkte (%s): FEHLER %s', [SOURCE_NAMES[ASource], AError]);
-    Exit;
-  end;
+  Result := True;
+  AError := '';
+  APoints := TVnpSyncPoints.Create;
+  P := TVnpSyncPoint.Create;
   try
     P.Name := AName;
     P.Text := AName;
@@ -388,11 +342,11 @@ begin
     on E: Exception do
     begin
       AError := 'Punkt fuellen: ' + E.ClassName + ': ' + E.Message;
-      VnpLog('  Punkte (%s): FEHLER %s', [SOURCE_NAMES[ASource], AError]);
+      VnpLog('  Punkte: FEHLER %s', [AError]);
       Exit(False);
     end;
   end;
-  VnpLog('  Punkte (%s): %s', [SOURCE_NAMES[ASource], DescribePoints(APoints)]);
+  VnpLog('  Punkte: %s', [DescribePoints(APoints)]);
 end;
 
 initialization

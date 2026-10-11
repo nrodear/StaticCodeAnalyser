@@ -133,7 +133,7 @@ begin
   GRoot.Name := MENU_NAME;
   GRoot.Caption := 'VarNameProject';
   Tools.Add(GRoot);
-  AddItem(NTA, 'Letzte Variante wiederholen (Start: A1)', TAG_REPEAT,
+  AddItem(NTA, 'Letzte Variante wiederholen (Start: B1)', TAG_REPEAT,
     ShortCut(Ord('M'), [ssCtrl, ssAlt, ssShift]));
   AddSeparator;
   for V := Low(TVnpVariant) to High(TVnpVariant) do
