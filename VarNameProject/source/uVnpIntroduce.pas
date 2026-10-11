@@ -25,19 +25,20 @@ unit uVnpIntroduce;
 interface
 
 type
-  // Lauf 1 (2026-10-11): B1 mit absoluten Offsets startet die Sitzung,
-  // Strg+Z danach stuerzt in TSyncEditManager.SendSyncEvent ab. Die
-  // Varianten trennen die zwei Verdaechtigen: Punkte freigegeben (nur
-  // lokal gehalten) und Notifier bei Exit abgemeldet (jetzt nie mehr).
-  TVnpVariant = (vvKeepBoth, vvKeepPointsOnly, vvNotifierOnly,
-    vvIdeSyncEdit);
+  // Laeufe 1+2 (2026-10-11): eigene Punkt-Klassen starten die Sitzung,
+  // stuerzen aber spaeter ab - Lauf 1 bei Strg+Z (SendSyncEvent), Lauf 2
+  // beim Fokuswechsel (KBDClearPrimFocus), obwohl Punkte und Notifier
+  // gehalten waren: die IDE behandelt fremde Punkt-Objekte vermutlich als
+  // ihre eigenen. Kandidat ist jetzt die IDE-eigene Sync-Edit-Suche
+  // (SyncEditBlock(nil) = Strg+Umschalt+J) ueber einem Block, der genau
+  // vom Namen bis zu seiner letzten Verwendung reicht.
+  TVnpVariant = (vvIdeOnly, vvIdeNotifier, vvOwnPoints);
 
 const
   VARIANT_CAPTIONS : array[TVnpVariant] of string = (
-    'B1a eigene Punkte gehalten + Notifier (Kandidat)',
-    'B1b eigene Punkte gehalten, ohne Notifier',
-    'B1d Notifier, Punkte NICHT gehalten',
-    'C  SyncEditBlock(nil) - IDE-Sync-Edit + Notifier');
+    'C1 IDE-Sync-Edit ueber Name..letzte Verwendung (Kandidat)',
+    'C2 wie C1, mit Notifier (Protokoll der IDE-Punkte)',
+    'B1a eigene Punkte (Vergleich - stuerzt spaeter ab)');
 
 // Der ganze Ablauf an der Caret-Position der obersten Editoransicht.
 procedure RunIntroduce(AVariant: TVnpVariant);
@@ -211,9 +212,10 @@ begin
   Result := EdPos.Col;
 end;
 
-// Block ueber Deklarations- und Verwendungszeile (ganze Zeilen).
-function SelectLines(const AEd: TVnpEditor;
-  const ATarget: TVnpTarget): IOTAEditBlock;
+// Den Block von Zeichenspalte AFromCol in ADeclRow bis vor AToCol in
+// AUseRow markieren (btNonInclusive, Spalten in Zeichen).
+function SelectRange(const AEd: TVnpEditor; const ATarget: TVnpTarget;
+  AFromCol, AToCol: Integer): IOTAEditBlock;
 var
   EdPos : IOTAEditPosition;
 begin
@@ -221,45 +223,58 @@ begin
   EdPos := AEd.Buffer.EditPosition;
   Result.Reset;
   Result.Style := btNonInclusive;
-  EdPos.Move(ATarget.DeclRow, 1);
+  EdPos.Move(ATarget.DeclRow, DisplayCol(AEd.View, ATarget.DeclRow, AFromCol));
   Result.BeginBlock;
-  EdPos.Move(ATarget.UseRow, DisplayCol(AEd.View, ATarget.UseRow,
-    Length(ATarget.Plan.NewUseLine) + 1));
+  EdPos.Move(ATarget.UseRow, DisplayCol(AEd.View, ATarget.UseRow, AToCol));
   Result.EndBlock;
   VnpLog('Block: %d:%d - %d:%d, SyncMode vorher %d', [Result.StartingRow,
     Result.StartingColumn, Result.EndingRow, Result.EndingColumn,
     Ord(Result.SyncMode)]);
 end;
 
+// Der Block je Variante: fuer die eigenen Punkte die ganzen Zeilen; fuer
+// die IDE-eigene Suche (SyncEditBlock(nil)) nur vom Namen in der
+// Deklaration bis hinter seine letzte Verwendung - so kommen moeglichst
+// wenige andere Bezeichner in den Block (die IDE koppelt jeden, der darin
+// mehrfach vorkommt).
+function SelectFor(AVariant: TVnpVariant; const AEd: TVnpEditor;
+  const ATarget: TVnpTarget): IOTAEditBlock;
+var
+  LastCol : Integer;
+begin
+  if AVariant = vvOwnPoints then
+    Exit(SelectRange(AEd, ATarget, 1, Length(ATarget.Plan.NewUseLine) + 1));
+  LastCol := ATarget.Plan.NewCols[High(ATarget.Plan.NewCols)];
+  Result := SelectRange(AEd, ATarget, ATarget.Plan.NameCol,
+    LastCol + Length(ATarget.Name));
+end;
+
 // Schritt 3 je Variante.
 procedure StartSync(AVariant: TVnpVariant; const ABlock: IOTAEditBlock;
   const ATarget: TVnpTarget);
-const
-  WITH_NOTIFIER = [vvKeepBoth, vvNotifierOnly, vvIdeSyncEdit];
-  KEEP_POINTS   = [vvKeepBoth, vvKeepPointsOnly];
 var
   Points : IOTASyncEditPoints;
   Err    : string;
 begin
-  if AVariant in WITH_NOTIFIER then
-    WatchBlock(ABlock)
+  case AVariant of
+    vvIdeOnly:
+      begin
+        VnpLog('  ohne Notifier, ohne eigene Objekte');
+        ABlock.SyncEditBlock(nil);
+      end;
+    vvIdeNotifier:
+      begin
+        WatchBlock(ABlock);
+        ABlock.SyncEditBlock(nil);
+      end;
   else
-    VnpLog('  ohne Notifier');
-  if AVariant = vvIdeSyncEdit then
-  begin
-    ABlock.SyncEditBlock(nil);
-    Exit;
+    WatchBlock(ABlock);
+    if MakePoints(ATarget.Name, OffsetsOf(ATarget), Points, Err) then
+    begin
+      KeepAlive(Points);
+      ABlock.SyncEditBlock(Points);
+    end;
   end;
-  if not MakePoints(ATarget.Name, OffsetsOf(ATarget), Points, Err) then
-    Exit;
-  if AVariant in KEEP_POINTS then
-  begin
-    KeepAlive(Points);
-    VnpLog('  Punkte gehalten bis zum Entladen');
-  end
-  else
-    VnpLog('  Punkte NICHT gehalten (nur lokale Referenz)');
-  ABlock.SyncEditBlock(Points);
 end;
 
 // Nach dem Start nur protokollieren: wo die IDE den Caret hingesetzt hat
@@ -342,7 +357,7 @@ begin
     try
       if Prepare(Ed, Target) then
       begin
-        Block := SelectLines(Ed, Target);
+        Block := SelectFor(AVariant, Ed, Target);
         StartSync(AVariant, Block, Target);
         AfterSync(Ed, Block, Target);
       end

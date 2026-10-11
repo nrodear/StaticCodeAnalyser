@@ -58,30 +58,32 @@ Offsets stehen - das misst dieses Projekt.
 3. `demo/VarNameDemo.pas` im Editor oeffnen.
 4. Caret auf eine Zahl setzen (siehe Faelle in der Datei).
 5. Tools > VarNameProject > eine Variante waehlen; danach wiederholt
-   **Strg+Alt+Umschalt+M** die zuletzt gewaehlte (Start: B1a).
-6. Neuen Namen tippen, mit Enter/Tab/Esc bzw. Klick daneben beenden.
-7. Mit Strg+Z zuruecksetzen (zaehlen, wie oft - M7), naechste Variante.
-   Stuerzt Strg+Z ab: Variante notieren, IDE neu starten (sie kann danach
-   instabil sein), weiter mit der naechsten.
-8. Tools > VarNameProject > "Protokolldatei im Editor oeffnen" und den
+   **Strg+Alt+Umschalt+M** die zuletzt gewaehlte (Start: C1).
+6. Neuen Namen tippen, mit Enter beenden.
+7. In ein anderes Fenster klicken (z. B. die Meldungsansicht) und zurueck
+   (Fokuswechsel - Lauf 2 stuerzte dabei ab).
+8. Mit Strg+Z bis zum Ausgangszustand zuruecksetzen (zaehlen - M7). Erst
+   danach steht wieder eine Zahl unter dem Caret fuer die naechste
+   Variante. Stuerzt etwas ab: Variante notieren, IDE neu starten.
+9. Tools > VarNameProject > "Protokolldatei im Editor oeffnen" und den
    Inhalt zurueckmelden.
 
 ## Varianten (nur Schritt 3 unterscheidet sich)
 
-Alle mit eigenen Punkt-Klassen und absoluten Offsets (Lauf 1 bestaetigt).
-Lauf 1 stuerzte bei Strg+Z nach der Sitzung ab (TSyncEditManager.
-SendSyncEvent); damals waren die Punkte nur lokal gehalten und der Notifier
-wurde bei Exit abgemeldet. Die Varianten trennen die beiden Verdaechtigen:
-
-| Variante | Punkte | Notifier | erwartet |
+| Variante | Sync-Punkte | Block | Notifier |
 |---|---|---|---|
-| B1a | gehalten bis zum Entladen | angemeldet, bleibt | Kandidat: Strg+Z ohne Absturz |
-| B1b | gehalten | keiner | stuerzt sie nicht ab, ist der Notifier unbeteiligt |
-| B1d | NICHT gehalten | angemeldet, bleibt | stuerzt sie ab, war die Lebensdauer der Punkte schuld |
-| C | die IDE legt sie an (`SyncEditBlock(nil)`, wie Strg+Umschalt+J) | angemeldet, bleibt | Referenz: Undo mit IDE-eigenen Punkten |
+| C1 (Kandidat) | die IDE sucht selbst: `SyncEditBlock(nil)` = Strg+Umschalt+J | vom Namen in der Deklaration bis hinter seine letzte Verwendung | keiner - keine eigenen Objekte in der IDE |
+| C2 | wie C1 | wie C1 | angemeldet, bleibt bis zum Entladen (protokolliert die Punkte der IDE) |
+| B1a | eigene Klassen, absolute Offsets, gehalten | ganze Zeilen | angemeldet, bleibt |
 
 Entfallen: A1/A2 (Punkte per `IOTACodeTemplateServices.CreateClass` -
-Ergebnis M21) und B2 (relative Offsets - absolute funktionieren).
+Ergebnis M21), B2 (relative Offsets - absolute funktionieren), B1b/B1d
+(Lauf 2: auch mit gehaltenen Punkten und Notifier stuerzt B1a ab - die
+Lebensdauer ist es nicht).
+
+C1 koppelt JEDEN Bezeichner, der im Block mehrfach vorkommt - deshalb der
+knappe Block. In Fall 1 (`Result := Value * MagicNr01 + MagicNr01;`) ist
+das nur `MagicNr01`.
 
 ## Ergebnisse
 
@@ -108,6 +110,13 @@ Ergebnis M21) und B2 (relative Offsets - absolute funktionieren).
   `TSyncButton.SetDown` -> `TSyncEditPainter.SyncEditEvent` ->
   `TSyncEditManager.SendSyncEvent`): Undo belebt die Sitzung wieder und
   ruft dabei etwas auf, das es nicht mehr gibt - siehe Varianten.
+- **Lauf 2 (2026-10-11, B1a: Punkte und Notifier gehalten):** Sitzung wie
+  in Lauf 1. Absturz diesmal beim **Fokuswechsel** (Klick in eine
+  Baumansicht -> `EditorControl.WMKillFocus` ->
+  `KbClient.TIDEKBDChildAPI.KBDClearPrimFocus`). Zwei verschiedene
+  Absturzstellen trotz gehaltener Objekte: die IDE behandelt fremde
+  `IOTASyncEditPoint`-Objekte vermutlich intern wie ihre eigenen ->
+  eigene Punkt-Klassen sind eine Sackgasse; Kandidat jetzt C1.
 
 ## Was zurueckmelden (Messpunkte)
 
