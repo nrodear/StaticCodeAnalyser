@@ -85,6 +85,7 @@
         <DCCReference Include="vcl.dcp"/>
         <DCCReference Include="designide.dcp"/>
         <DCCReference Include="..\source\uVnpPlan.pas"/>
+        <DCCReference Include="..\source\uVnpEdits.pas"/>
         <DCCReference Include="..\source\uVnpLog.pas"/>
         <DCCReference Include="..\source\uVnpSync.pas"/>
         <DCCReference Include="..\source\uVnpIntroduce.pas"/>

@@ -1,303 +1,220 @@
 unit uVnpSync;
 
-// VarNameProject - die Sync-Edit-Punkte der IDE (ToolsAPI: IOTAEditBlock.
-// SyncEditBlock). Ein Punkt hat einen Namen, einen Text und mehrere
-// Fundstellen (Offsets); die IDE umrandet sie und aendert beim Tippen
-// alle mit - derselbe Mechanismus wie Sync Edit (Strg+Umschalt+J) und die
-// Live Templates. Die Punkte sind eigene Klassen (TVnpSyncPoint/
-// TVnpSyncPoints): IOTACodeTemplateServices.CreateClass liefert fuer die
-// Sync-Punkt-Interfaces nil (Sonde M21, 2026-10-11).
+// VarNameProject - was rund um die Sync-Edit-Sitzungen der IDE gebraucht
+// wird, ohne der Ablauf selbst zu sein (der steht in uVnpIntroduce): der
+// Prozess-Merker nach einer Zugriffsverletzung und die Sonde N1.
 //
-// KEIN IOTASyncEditNotifier (Lauf 4, 2026-10-11): IOTAEditBlock.
-// RemoveNotifier laesst einen nil-Eintrag in der Notifier-Liste des Blocks
-// stehen, und TSyncEditManager.SendSyncEvent prueft nicht auf nil -
-// Zugriffsverletzung beim Lesen von Adresse 0, beim naechsten Sync-Ereignis
-// in DIESER Ansicht (Strg+Z, Sitzungsstart, Neuzeichnen), auch nach dem
-// Neuinstallieren des Pakets. Ohne Abmelden blieben Verweise auf Code, den
-// das Entladen des Pakets entfernt. Die Sitzung wird stattdessen per
-// Sonde abgefragt (Block.SyncMode, uVnpProbe).
+// Was die Laeufe 1-6 (2026-10-11) ueber die Sync-API gezeigt haben:
+//   * IOTACodeTemplateServices.CreateClass liefert fuer die Sync-Punkt-
+//     Interfaces nil (Sonde M21). Eigene Punkt-Klassen starten zwar eine
+//     Sitzung (SyncMode 2), aber die IDE liest ihre Offsets als UTF-8-BYTES
+//     (Lauf 3: aus 'Count * MagicNr01' wurde 'CounMagicNr01Nr01'), und die
+//     Objekte bleiben in Sitzung und Undo-Liste der IDE. Variante B1 ist
+//     deshalb entfallen; den Template-Modus erreicht D1 mit IDE-eigenen
+//     Objekten.
+//   * Die Laeufe 1, 4 und 5 stuerzten in TSyncEditManager.SendSyncEvent
+//     (Lesen von Adresse 0 direkt nach TInterfaceList.Get). Wahrscheinlichste
+//     Erklaerung, NICHT bewiesen (H1): IOTAEditBlock.RemoveNotifier laesst
+//     einen nil-Eintrag in der Notifier-Liste stehen, und SendSyncEvent
+//     prueft nicht darauf - die Pakete e75bfeba..294336a3 meldeten Notifier
+//     an und ab. Im frischen Prozess ohne Notifier lief C1 sechsmal stabil
+//     (Lauf 6). Dieses Projekt meldet deshalb KEINEN IOTASyncEditNotifier
+//     an - ausser der Sonde N1, die genau H1 prueft.
 
 interface
 
-uses
-  System.SysUtils, System.Generics.Collections, ToolsAPI;
+// '' oder der Grund, warum dieser IDE-Prozess keine Sitzung mehr starten
+// soll: gesetzt nach einer Zugriffsverletzung in einem Lauf. Der Merker ist
+// eine Umgebungsvariable des Prozesses (VNP_SYNC_POISONED): er uebersteht
+// das Neuinstallieren des Pakets und verschwindet mit dem Prozess - wie ein
+// vergifteter Eintrag in der Notifier-Liste.
+function VnpPoisonReason: string;
+procedure VnpSetPoison(const AWhy: string);
 
-type
-  // Ein Sync-Punkt, eigene Umsetzung.
-  TVnpSyncPoint = class(TInterfacedObject, IOTASyncEditPoint100,
-    IOTASyncEditPoint)
-  private
-    FOffsets   : TList<TOTACharPos>;
-    FEditable  : Boolean;
-    FMultiLine : Boolean;
-    FHint      : string;
-    FName      : string;
-    FText      : string;
-  public
-    constructor Create;
-    destructor Destroy; override;
-    { IOTASyncEditPoint100 }
-    procedure AddOffset(Offset: TOTACharPos);
-    procedure RemoveOffset(Index: Integer);
-    function GetCount: Integer;
-    function GetEditable: Boolean;
-    function GetHint: string;
-    function GetName: string;
-    function GetOffset(Index: Integer): TOTACharPos;
-    function GetText: string;
-    procedure SetEditable(Value: Boolean);
-    procedure SetHint(const Value: string);
-    procedure SetName(const Value: string);
-    procedure SetOffset(Index: Integer; Value: TOTACharPos);
-    procedure SetText(Value: string);
-    { IOTASyncEditPoint }
-    function GetMultiLine: Boolean;
-    procedure SetMultiLine(Value: Boolean);
-  end;
-
-  // Die Liste der Punkte, eigene Umsetzung.
-  TVnpSyncPoints = class(TInterfacedObject, IOTASyncEditPoints)
-  private
-    FPoints : TList<IOTASyncEditPoint>;
-  public
-    constructor Create;
-    destructor Destroy; override;
-    function AddPoint(const APoint: IOTASyncEditPoint): Integer;
-    procedure RemovePoint(const APoint: IOTASyncEditPoint);
-    function GetPoints(Index: Integer): IOTASyncEditPoint;
-    function GetCount: Integer;
-  end;
-
-// Ein editierbarer Punkt AName mit den Fundstellen AOffsets in einer neuen
-// Liste (eigene Klassen). False mit AError, wenn das Fuellen scheitert.
-function MakePoints(const AName: string; const AOffsets: TArray<TOTACharPos>;
-  out APoints: IOTASyncEditPoints; out AError: string): Boolean;
-
-// 'Name="X" Text="X" editierbar mehrzeilig=nein Offsets=[(5,6), ...]' je
-// Punkt, fuers Protokoll. Offsets als (Line,CharIndex) wie TOTACharPos.
-function DescribePoints(const APoints: IOTASyncEditPoints): string;
-
-// AObject bis zum Entladen des Pakets am Leben halten (die Punkte einer
-// Sitzung - ob die IDE sie selbst referenziert, ist offen). Vor dem
-// Entladen des Pakets keine Sitzung offen lassen.
-procedure KeepAlive(const AObject: IInterface);
-// Alles Gehaltene freigeben (finalization).
-procedure ReleaseAll;
+// Sonde N1 (Gutachten 2026-10-11, Abschnitt 1), prueft H1: N1On meldet am
+// Block der obersten Ansicht einen Notifier an, der jedes Ereignis NUR in
+// die Datei schreibt; N1Off meldet ihn wieder ab. Stimmt H1, steht danach
+// ein nil-Eintrag in der Liste, und die naechste Sync-Edit-Sitzung stuerzt
+// ab - schon in einer anderen Datei: die Liste gilt fuer den ganzen
+// Prozess; nur in derselben: je Ansicht; nirgends: H1 widerlegt.
+// ZERSTOERT DEN PROZESS, wenn H1 stimmt - nur als letzter Test, danach die
+// IDE beenden.
+procedure N1On;
+procedure N1Off;
+// Abbau: einen noch angemeldeten N1-Notifier abmelden; idempotent, nur
+// Datei-Protokoll.
+procedure N1Release;
 
 implementation
 
-// Die public-Methoden der Punkt-Klassen setzen nur die ToolsAPI-Interfaces
-// um (dort beschrieben); die Texte sind deutsch, das Testprojekt hat keine
-// Uebersetzung.
-// noinspection-file PublicMemberWithoutDoc, HardcodedString
-
 uses
-  uVnpLog;
+  Winapi.Windows, System.SysUtils, ToolsAPI, uVnpLog;
 
-var
-  GKept : TList<IInterface> = nil;
+const
+  ENV_POISON = 'VNP_SYNC_POISONED';
 
-{ TVnpSyncPoint }
-
-constructor TVnpSyncPoint.Create;
-begin
-  inherited Create;
-  FOffsets := TList<TOTACharPos>.Create;
-end;
-
-destructor TVnpSyncPoint.Destroy;
-begin
-  FOffsets.Free;
-  inherited Destroy;
-end;
-
-procedure TVnpSyncPoint.AddOffset(Offset: TOTACharPos);
-begin
-  FOffsets.Add(Offset);
-end;
-
-procedure TVnpSyncPoint.RemoveOffset(Index: Integer);
-begin
-  FOffsets.Delete(Index);
-end;
-
-function TVnpSyncPoint.GetCount: Integer;
-begin
-  Result := FOffsets.Count;
-end;
-
-function TVnpSyncPoint.GetEditable: Boolean;
-begin
-  Result := FEditable;
-end;
-
-function TVnpSyncPoint.GetHint: string;
-begin
-  Result := FHint;
-end;
-
-function TVnpSyncPoint.GetName: string;
-begin
-  Result := FName;
-end;
-
-function TVnpSyncPoint.GetOffset(Index: Integer): TOTACharPos;
-begin
-  Result := FOffsets[Index];
-end;
-
-function TVnpSyncPoint.GetText: string;
-begin
-  Result := FText;
-end;
-
-procedure TVnpSyncPoint.SetEditable(Value: Boolean);
-begin
-  FEditable := Value;
-end;
-
-procedure TVnpSyncPoint.SetHint(const Value: string);
-begin
-  FHint := Value;
-end;
-
-procedure TVnpSyncPoint.SetName(const Value: string);
-begin
-  FName := Value;
-end;
-
-procedure TVnpSyncPoint.SetOffset(Index: Integer; Value: TOTACharPos);
-begin
-  FOffsets[Index] := Value;
-end;
-
-procedure TVnpSyncPoint.SetText(Value: string);
-begin
-  FText := Value;
-end;
-
-function TVnpSyncPoint.GetMultiLine: Boolean;
-begin
-  Result := FMultiLine;
-end;
-
-procedure TVnpSyncPoint.SetMultiLine(Value: Boolean);
-begin
-  FMultiLine := Value;
-end;
-
-{ TVnpSyncPoints }
-
-constructor TVnpSyncPoints.Create;
-begin
-  inherited Create;
-  FPoints := TList<IOTASyncEditPoint>.Create;
-end;
-
-destructor TVnpSyncPoints.Destroy;
-begin
-  FPoints.Free;
-  inherited Destroy;
-end;
-
-function TVnpSyncPoints.AddPoint(const APoint: IOTASyncEditPoint): Integer;
-begin
-  Result := FPoints.Add(APoint);
-end;
-
-procedure TVnpSyncPoints.RemovePoint(const APoint: IOTASyncEditPoint);
-begin
-  FPoints.Remove(APoint);
-end;
-
-function TVnpSyncPoints.GetPoints(Index: Integer): IOTASyncEditPoint;
-begin
-  Result := FPoints[Index];
-end;
-
-function TVnpSyncPoints.GetCount: Integer;
-begin
-  Result := FPoints.Count;
-end;
-
-{ Protokoll }
-
-function DescribePoints(const APoints: IOTASyncEditPoints): string;
-var
-  i, k : Integer;
-  P    : IOTASyncEditPoint;
-  SB   : TStringBuilder;
-begin
-  if APoints = nil then
-    Exit('(keine Punkte)');
-  SB := TStringBuilder.Create;
-  try
-    SB.Append(Format('%d Punkt(e)', [APoints.Count]));
-    for i := 0 to APoints.Count - 1 do
-    begin
-      P := APoints[i];
-      SB.Append(Format('; Name="%s" Text="%s" editierbar=%s mehrzeilig=%s '
-        + 'Offsets=[', [P.Name, P.Text, BoolToStr(P.Editable, True),
-        BoolToStr(P.MultiLine, True)]));
-      for k := 0 to P.Count - 1 do
-        SB.Append(Format(' (%d,%d)', [P.Offset[k].Line,
-          P.Offset[k].CharIndex]));
-      SB.Append(' ]');
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
+type
+  // Der Notifier der Sonde N1: schreibt nur die Datei, nie die
+  // Meldungsansicht, und fasst die uebergebenen Objekte nicht an.
+  TVnpN1Notifier = class(TInterfacedObject, IOTASyncEditNotifier)
+  private
+    procedure OnPoint(const APoint: IOTASyncEditPoint;
+      const APoints: IOTASyncEditPoints;
+      EventType: TOTASyncEditPointEventType);
+    procedure OnSyncEdit(const APoints: IOTASyncEditPoints;
+      EventType: TOTASyncEditPointEventType);
   end;
-end;
 
-procedure KeepAlive(const AObject: IInterface);
-begin
-  if GKept = nil then
-    GKept := TList<IInterface>.Create;
-  GKept.Add(AObject);
-end;
-
-procedure ReleaseAll;
-begin
-  FreeAndNil(GKept);
-end;
-
-{ Punkte erzeugen }
-
-function MakePoints(const AName: string; const AOffsets: TArray<TOTACharPos>;
-  out APoints: IOTASyncEditPoints; out AError: string): Boolean;
 var
-  P   : IOTASyncEditPoint;
-  Off : TOTACharPos;
+  // Wo N1 haengt: Block der Ansicht, Index fuer RemoveNotifier, Datei.
+  GN1Block : IOTAEditBlock = nil;
+  GN1Index : Integer = -1;
+  GN1File  : string = '';
+
+function VnpPoisonReason: string;
 begin
-  Result := True;
-  AError := '';
-  APoints := TVnpSyncPoints.Create;
-  P := TVnpSyncPoint.Create;
+  Result := System.SysUtils.GetEnvironmentVariable(ENV_POISON);
+end;
+
+procedure VnpSetPoison(const AWhy: string);
+begin
+  Winapi.Windows.SetEnvironmentVariable(PChar(ENV_POISON),
+    PChar(Format('%s (PID %d, %s)', [AWhy, GetCurrentProcessId,
+    FormatDateTime('hh:nn:ss', Now, TFormatSettings.Invariant)])));
+end;
+
+{ TVnpN1Notifier }
+
+// Name des Ereignisses; die Zahl steht immer dabei, falls die IDE einen
+// Wert ausserhalb der Aufzaehlung liefert.
+function EventName(AEvent: TOTASyncEditPointEventType): string;
+begin
+  case AEvent of
+    sepEnter: Result := 'Enter';
+    sepLeave: Result := 'Leave';
+    sepExit:  Result := 'Exit';
+  else
+    Result := '?';
+  end;
+  Result := Format('%s (%d)', [Result, Ord(AEvent)]);
+end;
+
+procedure TVnpN1Notifier.OnPoint(const APoint: IOTASyncEditPoint;
+  const APoints: IOTASyncEditPoints; EventType: TOTASyncEditPointEventType);
+begin
+  VnpLogFileOnly('N1-Ereignis OnPoint %s, Punkt uebergeben: %s',
+    [EventName(EventType), BoolToStr(APoint <> nil, True)]);
+end;
+
+procedure TVnpN1Notifier.OnSyncEdit(const APoints: IOTASyncEditPoints;
+  EventType: TOTASyncEditPointEventType);
+begin
+  VnpLogFileOnly('N1-Ereignis OnSyncEdit %s, Punkte uebergeben: %s',
+    [EventName(EventType), BoolToStr(APoints <> nil, True)]);
+end;
+
+{ N1 }
+
+// Die oberste Editoransicht oder nil.
+function TopView: IOTAEditView;
+var
+  Svc : IOTAEditorServices;
+begin
+  Result := nil;
+  if Supports(BorlandIDEServices, IOTAEditorServices, Svc) then
+    Result := Svc.TopView;
+  if (Result <> nil) and (Result.Buffer = nil) then
+    Result := nil;
+end;
+
+procedure N1On;
+var
+  View : IOTAEditView;
+  N    : IOTASyncEditNotifier;
+begin
+  VnpLog('=== N1 an: Dummy-Notifier (Test fuer H1, nur als letzter Test) ===');
+  if GN1Block <> nil then
+  begin
+    VnpLog('Abbruch: N1 haengt schon (Index %d an %s)', [GN1Index, GN1File]);
+    Exit;
+  end;
+  if VnpPoisonReason <> '' then
+  begin
+    VnpLog('Abbruch: dieser Prozess hatte schon eine Zugriffsverletzung '
+      + '(%s) - N1 nur in einer frisch gestarteten IDE', [VnpPoisonReason]);
+    Exit;
+  end;
+  View := TopView;
+  if View = nil then
+  begin
+    VnpLog('Abbruch: keine Editoransicht');
+    Exit;
+  end;
+  if View.Block.SyncMode <> smNone then
+  begin
+    VnpLog('Abbruch: Sync-Sitzung laeuft - erst mit Esc beenden');
+    Exit;
+  end;
+  // Erst in eine Interface-Variable: ein frisch erzeugtes Objekt direkt
+  // als const-Parameter haette waehrend des Aufrufs Referenzzaehler 0.
+  N := TVnpN1Notifier.Create;
+  GN1Block := View.Block;
+  GN1File := View.Buffer.FileName;
+  GN1Index := GN1Block.AddNotifier(N);
+  VnpLog('N1 angemeldet: Index %d am Block von %s', [GN1Index, GN1File]);
+  VnpLog('Weiter: Zeilen markieren, Strg+Umschalt+J, Esc - die Ereignisse '
+    + 'stehen nur in der Protokolldatei; danach "N1 ab"');
+end;
+
+procedure N1Off;
+var
+  View : IOTAEditView;
+begin
+  VnpLog('=== N1 ab ===');
+  if GN1Block = nil then
+  begin
+    VnpLog('Abbruch: N1 ist nicht angemeldet');
+    Exit;
+  end;
+  View := TopView;
+  if (View = nil) or not SameFileName(View.Buffer.FileName, GN1File) then
+  begin
+    VnpLog('Abbruch: erst wieder %s nach vorn holen - N1 haengt an deren '
+      + 'Block', [GN1File]);
+    Exit;
+  end;
+  GN1Block.RemoveNotifier(GN1Index);
+  VnpLog('N1 abgemeldet (Index %d). Stimmt H1, steht dort jetzt ein '
+    + 'nil-Eintrag.', [GN1Index]);
+  VnpLog('Weiter: in VarNameDemoUmlaut.pas die Funktion Greeting markieren, '
+    + '2 s warten, Strg+Umschalt+J. Ohne Absturz danach in %s die Zeilen '
+    + '17-21 markieren, Strg+Umschalt+J.', [ExtractFileName(GN1File)]);
+  GN1Block := nil;
+  GN1Index := -1;
+  GN1File := '';
+end;
+
+procedure N1Release;
+begin
+  if GN1Block = nil then
+    Exit;
+  VnpLogFileOnly('  N1 haengt noch (Index %d an %s) - abmelden',
+    [GN1Index, GN1File]);
   try
-    P.Name := AName;
-    P.Text := AName;
-    P.Hint := 'Neuen Namen tippen - alle Stellen aendern sich mit';
-    P.Editable := True;
-    P.MultiLine := False;
-    for Off in AOffsets do
-      P.AddOffset(Off);
-    APoints.AddPoint(P);
+    GN1Block.RemoveNotifier(GN1Index);
+    GN1Block := nil;
   except
-    // Messung wie oben: eine IDE-Umsetzung kann Setter ablehnen.
+    // Den Block kann es beim Schliessen der IDE nicht mehr geben: dann die
+    // Referenz OHNE _Release fallen lassen.
+    // noinspection ExceptionTooGeneral
     on E: Exception do
     begin
-      AError := 'Punkt fuellen: ' + E.ClassName + ': ' + E.Message;
-      VnpLog('  Punkte: FEHLER %s', [AError]);
-      Exit(False);
+      Pointer(GN1Block) := nil;
+      VnpLogFileOnly('  N1 abmelden: %s: %s', [E.ClassName, E.Message]);
     end;
   end;
-  VnpLog('  Punkte: %s', [DescribePoints(APoints)]);
+  GN1Index := -1;
+  GN1File := '';
 end;
-
-initialization
-
-finalization
-  ReleaseAll;
 
 end.

@@ -47,6 +47,7 @@ requires
 
 contains
   uVnpPlan in '..\source\uVnpPlan.pas',
+  uVnpEdits in '..\source\uVnpEdits.pas',
   uVnpLog in '..\source\uVnpLog.pas',
   uVnpSync in '..\source\uVnpSync.pas',
   uVnpIntroduce in '..\source\uVnpIntroduce.pas',
