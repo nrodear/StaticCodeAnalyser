@@ -277,8 +277,8 @@ Zustand führen lassen.
 
 GUI oder IDE-Plugin: laufen lassen, mit den Kacheln filtern, Fund
 anklicken, Vorher/Nachher-Hilfe lesen. `Strg+Alt+S` setzt einen
-Suppression-Marker; im IDE-Plugin wendet `Strg+Alt+F` die Editorhilfe an
-(Package reDelphix, dieselbe wie die Glühbirne). Funde öffnen
+Suppression-Marker; im IDE-Plugin wendet `Strg+Alt+F` den Quick-Fix an
+(Package reDelphix, derselbe wie in der Glühbirne). Funde öffnen
 im Editor der Wahl über `[Editor]` in der `analyser.ini` (VS Code,
 Notepad++, Sublime, …) — dieser Weg springt auf die genaue Zeile. Die
 Delphi-IDE öffnet nur die Datei; einen Zeilen-Schalter bietet sie von

@@ -1,7 +1,7 @@
 unit uTestVnpGuards;
 
-// DUnitX-Tests fuer die Schutzregeln der Editorhilfe "Zahl-Literal als
-// Variable einfuehren" (uVnpPlan, uVnpEdits.TargetAt), die der Korpus-A/B
+// DUnitX-Tests fuer die Schutzregeln der Code-Aktion "Lokale Variable
+// einfuehren" (uVnpPlan, uVnpEdits.TargetAt), die der Korpus-A/B
 // vom 2026-10-11 verlangt hat: der alte und der neue Plan ueber 8 Mio.
 // Zeilen von D:\git-sca-realworld, dazu ein Gegenpruefer mit eigenen
 // Zeilen. Jeder Fall hier ist eine Stelle, an der die Hilfe sonst Code

@@ -1,7 +1,7 @@
 unit uVnpIntroduce;
 
-// VarNameProject - "Zahl-Literal als Variable einfuehren", Ablauf wie bei
-// ReSharper "Introduce Variable" (Nico 2026-10-11, E17):
+// VarNameProject - Code-Aktion "Lokale Variable einfuehren" (eine Zahl
+// wird zur Variable), Ablauf wie bei ReSharper "Introduce Variable" (Nico 2026-10-11, E17):
 //   1. Caret auf einem Zahl-Literal, z. B. 'Result := Value * 42 + 42;'.
 //   2. Darueber entsteht 'var MagicNr01 := 42;', die gleichen Literale der
 //      Zeile werden zu MagicNr01.
@@ -37,8 +37,8 @@ type
 
 const
   VARIANT_CAPTIONS : array[TVnpVariant] of string = (
-    'C1h IDE-Sync-Edit ueber Name..letzte Verwendung',
-    'D1 Live Template (nur der Name gekoppelt)');
+    'Lokale Variable einfuehren - C1h (IDE-Sync-Edit)',
+    'Lokale Variable einfuehren - D1 (Live Template)');
 
 // Der ganze Ablauf an der Caret-Position der obersten Editoransicht.
 procedure RunIntroduce(AVariant: TVnpVariant);

@@ -1,8 +1,10 @@
-# VarNameProject - Testprojekt Namenseingabe
+# VarNameProject - Testprojekt "Lokale Variable einfuehren"
 
 Zweck: klaeren, wie reDelphix einen NEUEN Namen erfragt, ohne Dialog -
 so wie ReSharper "Introduce Variable" (Nico 2026-10-11, Entscheid E17 im
-Konzept "Editorhilfen ohne Fund"):
+Konzept "Editorhilfen ohne Fund" - seit 2026-10-11 heissen sie Code-Aktionen,
+zu einem Fund Quick-Fix, ohne Fund Refactoring; diese hier heisst "Lokale
+Variable einfuehren"):
 
 1. Der Code entsteht mit einem vorlaeufigen Namen, z. B. `MagicNr01`.
 2. Es geht inline weiter - kein Fenster.
@@ -256,8 +258,10 @@ Testplan oben.
   `IOTAEditBlock.RemoveNotifier` laesst einen nil-Eintrag in der
   Notifier-Liste stehen (die API ist indexstabil), und `SendSyncEvent`
   prueft nicht darauf. Passt auch zu Lauf 1 (Abmelden bei Exit, dann
-  Strg+Z). Ob die Liste je Ansicht oder fuer den ganzen Prozess gilt, ist
-  unbelegt - das klaert Test N1. Folge: **kein IOTASyncEditNotifier**
+  Strg+Z). Nico: zwischen Lauf 3 und Lauf 4 war die Demo-Datei
+  geschlossen - die Ansicht war also neu und stuerzte trotzdem; das
+  spricht dafuer, dass die Liste fuer den ganzen Prozess gilt, nicht je
+  Ansicht. Belegen soll es Test N1. Folge: **kein IOTASyncEditNotifier**
   (ausser der Sonde N1); die Sitzung wird per Sonde abgefragt.
 - **Lauf 5 (2026-10-11 11:26, C1, Fall 6, derselbe Prozess wie Lauf 4,
   weiter ohne Neustart):** wieder die AV in `SendSyncEvent` - passt zu H1,
@@ -267,9 +271,11 @@ Testplan oben.
   ohne jeden Fehler: SyncMode 1 (normaler Sync Edit), Caret auf dem Namen
   in der Deklaration, Puffer wie geplant; das Umbenennen koppelte alle
   Stellen (`__history`: `var mytest := 42; Result := Value * mytest +
-  mytest;`). Wie Fall 1 danach zurueckkam (Strg+Z? wie oft?), ist nicht
-  gemeldet. Lauf 6 belegt nur: **im frischen Prozess ohne Notifier und ohne
-  B1 laeuft C1 stabil** - die Ursache der AVs ist damit nicht bewiesen.
+  mytest;`). Nico: EIN Strg+Z nahm Einfuehren und Umbenennen zusammen
+  zurueck (M7/M22). In diesem Prozess lief auch B1 (Nico) - Lauf 6 belegt
+  also nur: **im frischen Prozess ohne Notifier laeuft C1 stabil**; die
+  Ursache der AVs ist damit nicht bewiesen, und die AV beim Schliessen
+  kann auch von B1-Altlasten kommen (H6) statt von H7.
   Fall 3 (999 hinter `then`) wurde damals noch abgelehnt (seither
   begin..end, M9). Neu gesehen: C1 auf einem Literal, das schon allein der
   Wert einer Deklaration ist (`var MagicNr01 := 42;`), baute eine zweite
@@ -277,7 +283,8 @@ Testplan oben.
   zaehlt hoch, solange aeltere MagicNrNN in der Datei stehen.
 - **Beim Schliessen der IDE (H7):** jeder Prozess, in dem VarNameProject
   lief, endete mit einer Zugriffsverletzung in rtl290 (`+0x13211c`,
-  Ereignisprotokoll) - auch der saubere Prozess aus Lauf 6. Vermutung: die
+  Ereignisprotokoll) - auch der Prozess aus Lauf 6 (dort lief aber auch
+  B1). Vermutung: die
   finalization gab Menue und Aktionen frei, die MainMenu und ActionList der
   IDE schon freigegeben hatten (eine ActionList gibt ihre Aktionen selbst
   frei; SCA und GExperts bauen deshalb frueher ab). Jetzt: Abbau im
@@ -292,6 +299,22 @@ Testplan oben.
   und "Sonde: Sitzung jetzt (nur Protokolldatei)". Steht dort noch C1 oder
   B1, ist ein altes Paket geladen - neu bauen, neu installieren, IDE neu
   starten.
+
+## Entscheide und naechste Iteration (Nico 2026-10-11)
+
+- Name: der Oberbegriff fuer "Editorhilfe" ist **Code-Aktion** - zu einem
+  Fund ein **Quick-Fix**, ohne Fund ein **Refactoring**; diese Funktion
+  heisst **"Lokale Variable einfuehren"**.
+- **Enter beendet die Namenseingabe** (wie ReSharper). Bricht C1h dabei
+  die Zeile um (Testplan Schritt 8), wird D1 Pflicht.
+- **Dialog "behalten oder verwerfen"**: endet die Eingabe ohne Enter -
+  Caret woanders, Klick, Fokuswechsel -, fragt ein Dialog, ob die Variable
+  mit dem aktuellen Namen bleibt oder die ganze Einfuehrung zurueckgeht
+  (Literale wieder da). **Esc** beendet ohne Dialog mit dem aktuellen
+  Namen. Offen fuer den Bau: wie das Projekt das Ende der Sitzung erfaehrt
+  ohne IOTASyncEditNotifier (H1) - Kandidat ein Timer, der SyncMode und
+  Caret abfragt; Enter/Esc von "Caret woanders" unterscheidet die
+  Caret-Position beim Ende (D1: Enter setzt den Caret auf `|end|`).
 
 ## Was zurueckmelden (Messpunkte)
 

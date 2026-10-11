@@ -1,6 +1,6 @@
 unit uTestVnpRefuse;
 
-// DUnitX-Tests fuer uVnpPlan (VarNameProject, Editorhilfe "Zahl-Literal als
+// DUnitX-Tests fuer uVnpPlan (VarNameProject, Code-Aktion "Lokale
 // Variable einfuehren"): der Zweig ohne begin (begin..end, Einrueckung) und
 // alle Ablehnungen - case-Zweig, Sprungmarke, on-Handler, Zeilenanfang,
 // schon benannt, Konstanten-Kontexte, Deklarationszeilen, die Zeile

@@ -144,7 +144,7 @@
         },
         "editorHelp": {
           "type": "boolean",
-          "description": "Whether an IDE module offers an editor help for this rule's findings - a fix written in place (reDelphix: light bulb, Ctrl+Alt+F). Optional; absent = the tool's compiled-in value (uRuleCatalogData.inc), false if it has none; a non-boolean value is ignored the same way. Informational for reports (HTML 'QF' badge, 'Quick-Wins' filter): whether the help applies to a given finding is decided by the module."
+          "description": "Whether an IDE module offers a quick fix for this rule's findings - a code action that writes the fix in place (reDelphix: light bulb, Ctrl+Alt+F). Optional; absent = the tool's compiled-in value (uRuleCatalogData.inc), false if it has none; a non-boolean value is ignored the same way. Informational for reports (HTML 'QF' badge, 'Quick-Wins' filter): whether the quick fix applies to a given finding is decided by the module."
         },
         "detectorUnit": {
           "type": "string",

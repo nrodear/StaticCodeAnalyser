@@ -2,7 +2,7 @@
 
 IDE-Package (Delphi 12, Win32), das an Funden des SCA-Plugins Aktionen
 anbietet: `Format()` aus einer Verkettung bilden, parametrisierte
-SQL-Vorlage, `uses`-Eintraege qualifizieren, die Editorhilfen
+SQL-Vorlage, `uses`-Eintraege qualifizieren, die Quick-Fixes
 `FreeAndNil(X)`, `Assigned()`, `(TObject)` entfernen, Assert-Meldung,
 leeren Sichtbarkeitsabschnitt, leere Klammern und ueberfluessige Vergleiche
 mit True/False bzw. nil entfernen, Unterdruecken und Stelle zeigen. Es liest die Stellen ueber den Quellstellen-Dienst
@@ -12,7 +12,7 @@ vergleichen, auf dem die Aktion beim Menueaufbau beschrieben wurde (siehe
 "Welcher Text gilt").
 
 Konzept: `Konzept_SourceRefactor_Quellstellen_2026-10-02.md`, Abschnitt 15
-(in `reDelphix\`), Editorhilfen: `Konzept_Editorhilfen_2026-10-08.md`
+(in `reDelphix\`), Code-Aktionen (frueher "Editorhilfen"): `Konzept_Editorhilfen_2026-10-08.md`
 (Repo-Wurzel) - beide lokal, gitignored.
 
 ## Aufbau
@@ -24,11 +24,11 @@ source\uRdxProvider.pas           je Fund die Aktionen bauen (Anker/fixMode aus 
 source\uRdxRecipeRunner.pas       Rezept-Laeufer auf TSourcePlaces: Fund -> Beschreibung -> Ersetzung; ohne ToolsAPI, testbar
 source\uRdxRecipes.pas            reine Textlogik: Literal-Codec, Format() nach der Kompilat-Regel, SQL-Vorlage, uses-Schreibweise, Rahmenwerk
 source\uRdxScopeTable.pas         Kurzname -> qualifizierte Unit (Compiler-Reihenfolge der Scope-Liste)
-source\uRdxSimpleFixes.pas        Editorhilfen SCA066/SCA072/SCA074/SCA075/SCA084/SCA085/SCA087/SCA126/SCA139 (reine Textlogik)
-source\uRdxStructFixes.pas        Editorhilfen SCA007 (uses-Eintrag), SCA168 (case-else), SCA101/SCA099 (begin..end), reine Textlogik
-source\uRdxLineFixes.pas          Editorhilfen an einer Zeile SCA082/SCA071/SCA088/SCA123, reine Textlogik
-source\uRdxRaiseFixes.pas         Editorhilfen an Ausnahmen und leeren Rumpfen SCA020/SCA120/SCA122, reine Textlogik
-source\uRdxDeclFixes.pas          Editorhilfen an Deklarationen SCA117/SCA197/SCA149, reine Textlogik
+source\uRdxSimpleFixes.pas        Quick-Fixes SCA066/SCA072/SCA074/SCA075/SCA084/SCA085/SCA087/SCA126/SCA139 (reine Textlogik)
+source\uRdxStructFixes.pas        Quick-Fixes SCA007 (uses-Eintrag), SCA168 (case-else), SCA101/SCA099 (begin..end), reine Textlogik
+source\uRdxLineFixes.pas          Quick-Fixes an einer Zeile SCA082/SCA071/SCA088/SCA123, reine Textlogik
+source\uRdxRaiseFixes.pas         Quick-Fixes an Ausnahmen und leeren Rumpfen SCA020/SCA120/SCA122, reine Textlogik
+source\uRdxDeclFixes.pas          Quick-Fixes an Deklarationen SCA117/SCA197/SCA149, reine Textlogik
 source\uRdxSuppress.pas           Unterdrueck-Marker setzen und entfernen (reine Textlogik)
 source\uRdxCodeMap.pas            Code-Sicht der Datei (Kommentare, Strings, mehrzeilige Strings) und Token-Leser
 source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung aller Ersetzungen, Spaltengrenze, Textwahl
@@ -266,13 +266,13 @@ sonst ersetzt es sie in einem Zug. Danach `reDelphix.d12` bereinigen und
 neu erzeugen (siehe "Bauen und installieren"). Eine `unitscopes.txt` neben
 der BPL hat Vorrang vor der eingelinkten Ressource.
 
-## Editorhilfen in der IDE ausprobieren
+## Code-Aktionen in der IDE ausprobieren
 
-Profil **`editorhilfen`** in `data\profile-editorhilfen.json`: nur die
+Profil **`code-aktionen`** in `data\profile-code-aktionen.json`: nur die
 Regeln, zu denen reDelphix eine Hilfe anbietet, plus `FileReadError`
 (Lesefehler bleiben sichtbar). Einspielen: Analyser-Fenster ->
 Profile -> **Import...** -> die Datei waehlen -> bestaetigen; danach im
-Analyser das Profil `editorhilfen` waehlen und die Datei bzw. das
+Analyser das Profil `code-aktionen` waehlen und die Datei bzw. das
 Projekt scannen. Gluehbirne oder Editor-Kontextmenue auf der Fundzeile:
 
 | Regel | Fund | Erwartete Hilfe |
@@ -359,7 +359,7 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
   Sortierung, FPC-Weiche, Direktiven, eigene Unit.
 * `uTestRdxSimpleFixes` / `uTestRdxNilFix` / `uTestRdxExprFixes` /
   `uTestRdxStructFixes` / `uTestRdxBlockFixes` / `uTestRdxLineFixes` /
-  `uTestRdxRaiseFixes` / `uTestRdxDeclFixes` - die Editorhilfen
+  `uTestRdxRaiseFixes` / `uTestRdxDeclFixes` - die Quick-Fixes
   SCA074/SCA075/SCA085/SCA087/SCA139, SCA126, SCA066/SCA072/SCA084,
   SCA007/SCA168, SCA101/SCA099, SCA082/SCA071/SCA088/SCA123,
   SCA020/SCA120/SCA122 bzw. SCA117/SCA197/SCA149 auf Text, ohne Parser.

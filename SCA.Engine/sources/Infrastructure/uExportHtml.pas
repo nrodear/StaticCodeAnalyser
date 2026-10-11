@@ -936,7 +936,7 @@ begin
     SB.AppendLine('    .top-detectors li:hover { color: #06c; text-decoration: underline; }');
     SB.AppendLine('    .top-detectors .td-name { font-family: Consolas, "Courier New", monospace; }');
     SB.AppendLine('    .top-detectors .td-count { color: #666; font-variant-numeric: tabular-nums; }');
-    SB.AppendLine('    /* QF-Badge: markiert Detektoren mit Editorhilfe (Katalogfeld editorHelp). */');
+    SB.AppendLine('    /* QF-Badge: markiert Detektoren mit Quick-Fix (Code-Aktion zum Fund, Katalogfeld editorHelp). */');
     SB.AppendLine('    /* Tech-Lead-Hint: das sind die "low-hanging fruit" beim Refactoring-Sprint. */');
     SB.AppendLine('    .top-detectors .td-qf { color: #1a5da6; font-size: 10px; margin-left: 6px;');
     SB.AppendLine('       border: 1px solid #c4dbf2; border-radius: 4px; padding: 0 4px;');
@@ -1658,7 +1658,7 @@ begin
         SB.Append(IntToStr(KindPairs[i].Value));
         SB.Append('</span>');
         if HasQf then
-          SB.Append(' <span class="td-qf" title="Editorhilfe verfuegbar (Gluehbirne / Ctrl+Alt+F im IDE-Plugin mit reDelphix)">QF</span>');
+          SB.Append(' <span class="td-qf" title="Quick-Fix verfuegbar (Gluehbirne / Ctrl+Alt+F im IDE-Plugin mit reDelphix)">QF</span>');
         SB.AppendLine('</li>');
       end;
       SB.AppendLine('    </ol>');
@@ -1798,7 +1798,7 @@ begin
     // Tech-Lead-Workflow: "was kann das Team per Gluehbirne / Ctrl+Alt+F im
     // IDE-Plugin beheben?". Die Regeln liefert das Katalogfeld editorHelp
     // (HelpKinds); konkretes Matching passiert im JS gegen ALL_KINDS[*].qf.
-    SB.AppendLine('      <option value="qf">Quick-Wins (Editorhilfe verfuegbar)</option>');
+    SB.AppendLine('      <option value="qf">Quick-Wins (Quick-Fix verfuegbar)</option>');
     SB.AppendLine('      <option value="sec">Security (CWE / OWASP)</option>');
     // Profile-Optionen aus rules/sca-rules.json (TRuleCatalog.ProfileNames).
     // Werte: "profile:<Name>", damit der JS-Filter Profile von "all"/"top10"
@@ -2850,7 +2850,7 @@ begin
     SB.AppendLine('      closeDrawer();');
     SB.AppendLine('    }');
     SB.AppendLine('');
-    SB.AppendLine('    // QF_KINDS: Lookup-Set aller Kinds mit Editorhilfe.');
+    SB.AppendLine('    // QF_KINDS: Lookup-Set aller Kinds mit Quick-Fix.');
     SB.AppendLine('    // Wird einmalig aus ALL_KINDS aufgebaut, vom QF-Filter und vom');
     SB.AppendLine('    // Sprint-Snapshot benutzt.');
     SB.AppendLine('    var QF_KINDS = {};');
@@ -2983,7 +2983,7 @@ begin
     SB.AppendLine('      var html = '''';');
     SB.AppendLine('      topN.forEach(function(k) {');
     SB.AppendLine('        var qfHtml = (k.qf === 1)');
-    SB.AppendLine('          ? '' <span class="td-qf" title="Editorhilfe verfuegbar (Gluehbirne / Ctrl+Alt+F im IDE-Plugin mit reDelphix)">QF</span>''');
+    SB.AppendLine('          ? '' <span class="td-qf" title="Quick-Fix verfuegbar (Gluehbirne / Ctrl+Alt+F im IDE-Plugin mit reDelphix)">QF</span>''');
     SB.AppendLine('          : '''';');
     SB.AppendLine('        html += ''<li data-kind="'' + k.n + ''">'' +');
     SB.AppendLine('                ''<span class="td-name">'' + k.n + ''</span> '' +');
@@ -3281,7 +3281,7 @@ begin
     SB.AppendLine('      aggList.sort(function(a, b) { return b.c - a.c; });');
     SB.AppendLine('      var qfAgg = aggList.filter(function(k){ return QF_KINDS[k.n] === 1; });');
     SB.AppendLine('      if (qfAgg.length) {');
-    SB.AppendLine('        md += ''\n### Quick-Wins (Editorhilfe: Gluehbirne / Ctrl+Alt+F im IDE-Plugin)\n\n'';');
+    SB.AppendLine('        md += ''\n### Quick-Wins (Quick-Fix: Gluehbirne / Ctrl+Alt+F im IDE-Plugin)\n\n'';');
     SB.AppendLine('        qfAgg.slice(0, 10).forEach(function(k) {');
     SB.AppendLine('          md += ''- [ ] '' + k.n + '' ('' + k.c + '' Vorkommen)\n'';');
     SB.AppendLine('        });');

@@ -3,8 +3,8 @@ program VarNameProject.Test;
 // DUnitX-Testprojekt von VarNameProject (Nico 2026-10-11: "erstelle auch
 // tests um die editorhelper zu testen").
 //
-// Prueft den ToolsAPI-freien Teil der Editorhilfe "Zahl-Literal als
-// Variable einfuehren" auf Text - dieselben Units, die das IDE-Paket
+// Prueft den ToolsAPI-freien Teil der Code-Aktion "Lokale Variable
+// einfuehren" auf Text - dieselben Units, die das IDE-Paket
 // benutzt:
 //   * uTestVnpPlan  - uVnpPlan: Literal am Caret, gleiche Literale der
 //                     Zeile, Deklarationszeile, Spalten, Kommentare,

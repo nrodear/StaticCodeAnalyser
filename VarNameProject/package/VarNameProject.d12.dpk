@@ -1,7 +1,8 @@
 package VarNameProject.d12;
 
 // ---------------------------------------------------------------------
-// VarNameProject - Testprojekt fuer die Namenseingabe der Editorhilfen
+// VarNameProject - Testprojekt fuer die Code-Aktion "Lokale Variable
+// einfuehren" (frueher "Editorhilfen")
 // (Konzept_Editorhilfen_OhneFund_2026-10-11, Entscheid E17; Nico
 // 2026-10-11: "dafuer machen wir ein eigenes Projekt zum Testen der
 // Eingabe"). Der Code entsteht mit einem vorlaeufigen Namen (MagicNr01),
