@@ -1390,11 +1390,13 @@ begin
       Result := R_DOC_HINT;
     fkInterfaceWithoutGuid:
       Result := R_GUID_HINT;
+    fkMissingOverride:
+      if TRdxDeclFixes.DirectiveFor(AMessage) = DIRECTIVE_OVERRIDE then
+        Result := R_OVERRIDE_HINT
+      else
+        Result := R_REINTRODUCE_HINT;
   else
-    if TRdxDeclFixes.DirectiveFor(AMessage) = DIRECTIVE_OVERRIDE then
-      Result := R_OVERRIDE_HINT
-    else
-      Result := R_REINTRODUCE_HINT;
+    Result := '';
   end;
 end;
 
@@ -1431,9 +1433,12 @@ begin
     fkInterfaceWithoutGuid:
       Result := TRdxDeclFixes.InterfaceGuid(AMap, ALine, AMessage,
         AOutcome.Edits[0], AOutcome.Reason);
+    fkMissingOverride:
+      Result := TRdxDeclFixes.MethodDirective(AMap, ALine, AMessage,
+        AOutcome.Edits[0], AOutcome.Reason);
   else
-    Result := TRdxDeclFixes.MethodDirective(AMap, ALine, AMessage,
-      AOutcome.Edits[0], AOutcome.Reason);
+    AOutcome.Reason := 'keine Zeilen-Hilfe fuer diese Regel';
+    Result := False;
   end;
 end;
 

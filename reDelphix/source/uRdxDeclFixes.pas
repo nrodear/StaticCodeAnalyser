@@ -33,11 +33,14 @@ const
 type
   // Ein Routinen- oder Property-Kopf (ReadSignature).
   TRdxSignature = record
+    IsClassMethod : Boolean;       // 'class' vor dem Kopfwort
     Keyword    : TRdxToken;        // procedure, function, ..., property
     Name       : string;
     TypeParams : TArray<string>;   // <T, U>
     Params     : TArray<string>;   // Namen in Reihenfolge (auch Index-Parameter)
-    HasResult  : Boolean;          // function (bzw. Property mit Typ)
+    ParamShape : string;           // die Liste als Token-Folge, '_' je Name
+    ResultShape : string;          // Token zwischen Liste und ';' (': T')
+    HasResult  : Boolean;          // function oder operator mit ':'
     HeaderEnd  : TRdxToken;        // das ';' hinter dem Kopf (Routinen)
   end;
 
@@ -52,8 +55,9 @@ type
     // SCA117: das Geruest ueber die Zeile ALine, eingerueckt wie sie. Der
     // Name muss der aus der Meldung ('Public member X has no ...') sein.
     // Keine Hilfe, wenn die Zeile davor in einem Kommentar ueber Zeilen
-    // endet (die Schlusszeile haelt der Detektor fuer Code - Doku steht
-    // dann schon da), bei einer Direktive im Kopf.
+    // endet oder ueber Attributzeilen ein Kommentar steht (beides sieht der
+    // Detektor nicht - Doku steht dann schon da), bei einer Direktive im
+    // Kopf.
     class function DocSkeleton(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
@@ -61,9 +65,11 @@ type
     // SCA197: hinter den Kopf 'IFoo = interface(IBar)' auf ALine die Zeile
     // ['{...}'] mit einer frisch erzeugten GUID (CreateGUID). Keine Hilfe
     // bei generischen Interfaces (eine GUID gaelte fuer alle
-    // Auspraegungen), bei stdcall/safecall/dispid im Rumpf (COM-Import:
-    // die echte IID gehoert hinein, eine neue verschoebe den Fehler in die
-    // Laufzeit), bei {$INTERFACES CORBA} in der Datei.
+    // Auspraegungen), bei stdcall/safecall/winapi/dispid im Rumpf (COM-
+    // Import: die echte IID gehoert hinein, eine neue verschoebe den Fehler
+    // in die Laufzeit), bei {$INTERFACES CORBA} oder {$CALLING STDCALL} in
+    // der Datei, bei einer Direktive vom Kopf bis zum ersten Member (Kopf
+    // unter {$IFDEF} doppelt: die GUID kaeme nur in einen Zweig).
     class function InterfaceGuid(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
@@ -72,14 +78,19 @@ type
     // ';' des Kopfs auf ALine (vor vorhandene Direktiven - 'reintroduce'
     // muss vor 'overload' stehen). Keine Hilfe, wenn schon override/
     // reintroduce dasteht; 'override' nicht neben virtual/dynamic/static/
-    // message.
+    // message/inline und nur, wenn im Rumpf der Elternklasse (der Detektor
+    // sucht sie in derselben Unit) eine Methode gleichen Namens dieselbe
+    // Form hat - class, Parameter ohne Namen, Rueckgabe, Aufrufkonvention
+    // (der Detektor vergleicht nur Typen). 'reintroduce' nicht bei
+    // generischem Vorfahren (TBase<Integer>: der Detektor haelt T und
+    // Integer fuer verschieden, override waere dort der Fix).
     class function MethodDirective(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // SCA149: der Rat aus der Meldung - 'override' bei 'missing
-    // `override`' (gleiche Signatur), sonst 'reintroduce' ('signatures
-    // differ': override uebersetzte nicht).
+    // `override`' (gleiche Signatur), 'reintroduce' bei 'hides all
+    // inherited' (override uebersetzte nicht), sonst '' (Meldung unbekannt).
     class function DirectiveFor(const AMessage: string): string; static;
   end;
 
@@ -93,17 +104,26 @@ const
     'constructor', 'destructor', 'operator', 'property');
   PARAM_MODIFIERS: array[0..3] of string = ('const', 'var', 'out', 'constref');
   // Direktiven hinter dem Kopf einer Methode (SCA149).
-  METHOD_DIRECTIVES: array[0..18] of string = ('virtual', 'dynamic',
+  METHOD_DIRECTIVES: array[0..22] of string = ('virtual', 'dynamic',
     'abstract', 'overload', 'override', 'reintroduce', 'stdcall', 'cdecl',
     'register', 'pascal', 'safecall', 'inline', 'static', 'message',
-    'deprecated', 'platform', 'experimental', 'final', 'winapi');
+    'deprecated', 'platform', 'experimental', 'final', 'winapi', 'assembler',
+    'library', 'varargs', 'noreturn');
   // Neben diesen Direktiven ist 'override' falsch bzw. nicht gemeint.
-  NOT_WITH_OVERRIDE: array[0..3] of string = ('virtual', 'dynamic',
-    'static', 'message');
+  NOT_WITH_OVERRIDE: array[0..4] of string = ('virtual', 'dynamic',
+    'static', 'message', 'inline');
+  // Aufrufkonventionen (Form der Methode, SCA149); ohne Angabe 'register'.
+  CALL_CONVS: array[0..5] of string = ('register', 'pascal', 'cdecl',
+    'stdcall', 'safecall', 'winapi');
   // Im Rumpf eines Interfaces: ein COM-Import (SCA197).
-  COM_MARKERS: array[0..2] of string = ('stdcall', 'safecall', 'dispid');
+  COM_MARKERS: array[0..3] of string = ('stdcall', 'safecall', 'winapi',
+    'dispid');
+  // Womit der Rumpf eines Interfaces beginnt (SCA197).
+  INTERFACE_BODY: array[0..3] of string = ('procedure', 'function',
+    'property', 'end');
   KEY_MEMBER   = 'Public member ';
   KEY_SHADOWS  = 'missing `override`';
+  KEY_HIDES    = 'hides all inherited';
   R_DECL_MOVED = 'keine passende Deklaration auf der gemeldeten Zeile - '
     + 'Zeile verschoben? Datei neu pruefen';
   R_DIRECTIVE_IN_HEAD = 'Compiler-Direktive im Kopf';
@@ -206,27 +226,62 @@ end;
 // Parameternamen in '(...)' bzw. '[...]' ab AOpen: je Gruppe (getrennt
 // durch ';' auf Tiefe 1) die Woerter vor dem ':' - ohne const/var/out/
 // constref und ohne Attribute '[ref]'. Ohne ':' (untypisiert) alle Woerter.
+// AShape: die ganze Liste als Token-Folge, '_' statt jedes Namens (die
+// Form ohne Namen - SCA149 vergleicht sie mit der Basis).
 function ParamNamesOf(AMap: TRdxCodeMap; const AOpen: TRdxToken;
-  const AClose: string): TArray<string>;
+  const AClose: string; out AShape: string): TArray<string>;
 var
   T    : TRdxToken;
   Scan : TRdxParamScan;
+  SB   : TStringBuilder;
 begin
   Result := nil;
   Scan := Default(TRdxParamScan);
   Scan.InParens := AOpen.Low = '(';
-  T := AOpen;
-  while T.Low <> '' do
-  begin
-    if T.Low = AOpen.Low then
-      Inc(Scan.Depth)
-    else if T.Low = AClose then
-      Dec(Scan.Depth);
-    if Scan.Depth = 0 then
-      Exit;
-    if ParamNameStep(Scan, T) then
-      Result := Result + [Copy(AMap.Raw(T.Line), T.Col, T.Len)];
-    T := After(AMap, T);
+  SB := TStringBuilder.Create;
+  try
+    T := AOpen;
+    while T.Low <> '' do
+    begin
+      if T.Low = AOpen.Low then
+        Inc(Scan.Depth)
+      else if T.Low = AClose then
+        Dec(Scan.Depth);
+      if ParamNameStep(Scan, T) then
+      begin
+        Result := Result + [Copy(AMap.Raw(T.Line), T.Col, T.Len)];
+        SB.Append('_ ');
+      end
+      else
+        SB.Append(T.Low + ' ');
+      if Scan.Depth = 0 then
+        Break;
+      T := After(AMap, T);
+    end;
+    AShape := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+// Die Token von AFrom bis vor ATo, klein und mit ' ' verbunden.
+function TokensBetween(AMap: TRdxCodeMap; const AFrom, ATo: TRdxToken): string;
+var
+  T  : TRdxToken;
+  SB : TStringBuilder;
+begin
+  SB := TStringBuilder.Create;
+  try
+    T := AFrom;
+    while (T.Low <> '') and ((T.Line < ATo.Line)
+       or ((T.Line = ATo.Line) and (T.Col < ATo.Col))) do
+    begin
+      SB.Append(T.Low + ' ');
+      T := After(AMap, T);
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
   end;
 end;
 
@@ -241,13 +296,14 @@ end;
 class function TRdxDeclFixes.ReadSignature(AMap: TRdxCodeMap; ALine: Integer;
   out ASig: TRdxSignature; out AReason: string): Boolean;
 var
-  T, NameTok : TRdxToken;
+  T, NameTok, Rest : TRdxToken;
 begin
   Result := False;
   ASig := Default(TRdxSignature);
   AReason := R_DECL_MOVED;
   T := NextToken(AMap, ALine, 1);
-  if T.Low = 'class' then
+  ASig.IsClassMethod := T.Low = 'class';
+  if ASig.IsClassMethod then
     T := After(AMap, T);
   if (T.Line <> ALine) or not InList(T.Low, HEADER_WORDS) then Exit;
   ASig.Keyword := T;
@@ -261,17 +317,18 @@ begin
   end;
   if (T.Low = '(') and (ASig.Keyword.Low <> 'property') then
   begin
-    ASig.Params := ParamNamesOf(AMap, T, ')');
+    ASig.Params := ParamNamesOf(AMap, T, ')', ASig.ParamShape);
     T := AfterGroup(AMap, T, ')');
   end
   else if (T.Low = '[') and (ASig.Keyword.Low = 'property') then
   begin
-    ASig.Params := ParamNamesOf(AMap, T, ']');
+    ASig.Params := ParamNamesOf(AMap, T, ']', ASig.ParamShape);
     T := AfterGroup(AMap, T, ']');
   end;
   ASig.HasResult := (T.Low = ':')
     and InList(ASig.Keyword.Low, ['function', 'operator']);
   // Das ';' hinter dem Kopf (Rueckgabetyp auf Tiefe 0 dazwischen).
+  Rest := T;
   while (T.Low <> '') and (T.Low <> ';') do
   begin
     if InList(T.Low, ['(', '[', '<']) then
@@ -285,6 +342,7 @@ begin
     Exit;
   end;
   ASig.HeaderEnd := T;
+  ASig.ResultShape := TokensBetween(AMap, Rest, T);
   AReason := '';
   Result := True;
 end;
@@ -299,25 +357,6 @@ begin
     for Co := 1 to Length(AMap.Raw(Li)) do
       if DirectiveAt(AMap, Li, Co) then
         Exit(True);
-end;
-
-// Eine Direktive ab Zeile ALine bis vor das Token AEnd? Dahinter zaehlt
-// nicht ('...; {$IFDEF X} override; {$ENDIF}' laesst den Kopf gleich).
-function DirectiveBefore(AMap: TRdxCodeMap; ALine: Integer;
-  const AEnd: TRdxToken): Boolean;
-var
-  Li, Co, Last : Integer;
-begin
-  Result := False;
-  for Li := ALine to AEnd.Line do
-  begin
-    Last := Length(AMap.Raw(Li));
-    if Li = AEnd.Line then
-      Last := AEnd.Col - 1;
-    for Co := 1 to Last do
-      if DirectiveAt(AMap, Li, Co) then
-        Exit(True);
-  end;
 end;
 
 { ---- SCA117 ---- }
@@ -338,8 +377,8 @@ begin
 end;
 
 // Endet die naechste nicht leere Zeile ueber ALine in einem Kommentar, der
-// weiter oben begann? Dann steht dort schon Doku (der Detektor haelt die
-// Schlusszeile eines mehrzeiligen Kommentars fuer Code).
+// weiter oben begann? Der Detektor haelt die Schlusszeile eines
+// mehrzeiligen Kommentars fuer Code - vermutlich steht dort schon Doku.
 function CommentEndsAbove(AMap: TRdxCodeMap; ALine: Integer): Boolean;
 var
   Li : Integer;
@@ -348,6 +387,65 @@ begin
   while (Li >= 1) and (Trim(AMap.Raw(Li)) = '') do
     Dec(Li);
   Result := (Li >= 1) and AMap.StartsInside(Li);
+end;
+
+// Beginnt die Zeile ALine mit einem XMLDoc-Kommentar '///'?
+function XmlDocLine(AMap: TRdxCodeMap; ALine: Integer): Boolean;
+var
+  L   : string;
+  Col : Integer;
+begin
+  L := AMap.Raw(ALine);
+  Col := SkipBlanks(L, 1);
+  Result := (AMap.LineCommentCol(ALine) = Col) and (Copy(L, Col, 3) = '///');
+end;
+
+// Steht ueber Attributzeilen ('[MVCPath(..)]' allein auf der Zeile) schon
+// XMLDoc? Der Detektor bricht an der Attributzeile ab und meldet die
+// Deklaration trotzdem (delphimvcframework) - ein Geruest gaebe einen
+// zweiten summary-Block. Andere Kommentare darueber sind meist
+// Abschnittsueberschriften ('// ==== Tests ===='); dort hilft das Geruest.
+function DocAboveAttributes(AMap: TRdxCodeMap; ALine: Integer): Boolean;
+var
+  Li    : Integer;
+  T     : string;
+  Attrs : Boolean;
+begin
+  Attrs := False;
+  Li := ALine - 1;
+  while Li >= 1 do
+  begin
+    T := Trim(AMap.Raw(Li));
+    if (T <> '') and ((T[1] <> '[') or AMap.StartsInside(Li)) then
+      Break;
+    Attrs := Attrs or (T <> '');
+    Dec(Li);
+  end;
+  Result := Attrs and (Li >= 1) and XmlDocLine(AMap, Li);
+end;
+
+// Darf ueber ALine ein Geruest? '' oder der Grund; ASig ist der Kopf.
+function DocReason(AMap: TRdxCodeMap; ALine: Integer; const AMessage: string;
+  out ASig: TRdxSignature): string;
+var
+  R : string;
+begin
+  ASig := Default(TRdxSignature);
+  if AMap.StartsInside(ALine) then
+    Exit('die Zeile beginnt in einem Kommentar oder String');
+  if not TRdxDeclFixes.ReadSignature(AMap, ALine, ASig, R) then
+    Exit(R);
+  if not SameText(ASig.Name, MemberNameOf(AMessage)) then
+    Exit(R_DECL_MOVED);
+  if CommentEndsAbove(AMap, ALine) then
+    Exit('darueber endet ein Kommentar ueber Zeilen - der Detektor sieht '
+      + 'dessen Schlusszeile als Code; Doku von Hand pruefen');
+  if DocAboveAttributes(AMap, ALine) then
+    Exit('ueber den Attributen steht schon XMLDoc (///) - der Detektor '
+      + 'bricht an der Attributzeile ab und sieht sie nicht');
+  if DirectiveBefore(AMap, ALine, ASig.HeaderEnd) then
+    Exit(R_DIRECTIVE_IN_HEAD);
+  Result := '';
 end;
 
 // Das Geruest als Text: je Zeile AIndent, die Zeile und #10.
@@ -380,16 +478,7 @@ var
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  if AMap.StartsInside(ALine) then
-    AReason := 'die Zeile beginnt in einem Kommentar oder String'
-  else if ReadSignature(AMap, ALine, Sig, AReason)
-     and not SameText(Sig.Name, MemberNameOf(AMessage)) then
-    AReason := R_DECL_MOVED;
-  if (AReason = '') and CommentEndsAbove(AMap, ALine) then
-    AReason := 'darueber endet ein Kommentar ueber Zeilen - die Doku steht '
-      + 'schon da (der Detektor sieht deren Schlusszeile als Code)';
-  if (AReason = '') and DirectiveBefore(AMap, ALine, Sig.HeaderEnd) then
-    AReason := R_DIRECTIVE_IN_HEAD;
+  AReason := DocReason(AMap, ALine, AMessage, Sig);
   if AReason <> '' then Exit;
   L := AMap.Raw(ALine);
   First := NextToken(AMap, ALine, 1);
@@ -455,8 +544,11 @@ begin
   if ANext.Low = ';' then
     Result := 'Vorwaertsdeklaration - sie traegt keine GUID'
   else if ANext.Low = '[' then
-    Result := 'das Interface hat schon eine GUID - Fund veraltet? Datei neu '
-      + 'pruefen';
+    Result := 'hinter dem Kopf steht schon ''['' (GUID oder Attribut) - Fund '
+      + 'veraltet? Datei neu pruefen'
+  else if not InList(ANext.Low, INTERFACE_BODY) then
+    Result := 'hinter dem Kopf beginnt kein Interface-Rumpf (Kopf unter '
+      + '{$IFDEF} doppelt?)';
 end;
 
 // Steht im Rumpf (bis zum ersten 'end') ein COM-Merkmal?
@@ -474,19 +566,51 @@ begin
   end;
 end;
 
-// {$INTERFACES CORBA} irgendwo in der Datei?
-function CorbaInterfaces(AMap: TRdxCodeMap): Boolean;
+// Der Text einer Direktive ab ihrem '$' bis vor '}' bzw. '*)'.
+function DirectiveBody(const AFromDollar: string): string;
 var
-  Li, P : Integer;
+  P : Integer;
+begin
+  Result := AFromDollar;
+  P := Pos('}', Result);
+  if P > 0 then
+    Result := Copy(Result, 1, P - 1);
+  P := Pos('*)', Result);
+  if P > 0 then
+    Result := Copy(Result, 1, P - 1);
+end;
+
+// Steht in der Datei die Direktive '{$AName ..AValue..}' (auch '(*$')?
+// AName und AValue gross geschrieben.
+function FileDirective(AMap: TRdxCodeMap; const AName, AValue: string): Boolean;
+var
+  Li, P, Start : Integer;
+  U            : string;
 begin
   Result := False;
   for Li := 1 to AMap.LineCount do
   begin
-    P := Pos('{$INTERFACES', UpperCase(AMap.Raw(Li)));
-    if (P > 0) and DirectiveAt(AMap, Li, P)
-       and (Pos('CORBA', UpperCase(AMap.Raw(Li))) > P) then
+    U := UpperCase(AMap.Raw(Li));
+    P := Pos('$' + AName, U);
+    if P < 2 then Continue;
+    Start := P - 1;
+    if (Start > 1) and (U[Start] = '*') then
+      Dec(Start);
+    if DirectiveAt(AMap, Li, Start)
+       and (Pos(AValue, DirectiveBody(Copy(U, P, MaxInt))) > 0) then
       Exit(True);
   end;
+end;
+
+// Was in der Datei eine neue GUID verbietet: '' oder der Grund.
+function FileReason(AMap: TRdxCodeMap): string;
+begin
+  Result := '';
+  if FileDirective(AMap, 'INTERFACES', 'CORBA') then
+    Result := '{$INTERFACES CORBA} in der Datei'
+  else if FileDirective(AMap, 'CALLING', 'STDCALL') then
+    Result := '{$CALLING STDCALL} in der Datei - ein COM-Import ist nicht '
+      + 'auszuschliessen';
 end;
 
 class function TRdxDeclFixes.InterfaceGuid(AMap: TRdxCodeMap; ALine: Integer;
@@ -502,12 +626,12 @@ begin
   if AReason = '' then
     AReason := HeaderTail(AMap, Kw, Last, Next);
   if (AReason = '') and LooksLikeComImport(AMap, Next) then
-    AReason := 'stdcall/safecall/dispid im Rumpf - ein COM-Import braucht die '
-      + 'echte IID, keine neue GUID';
-  if (AReason = '') and CorbaInterfaces(AMap) then
-    AReason := '{$INTERFACES CORBA} in der Datei';
-  if (AReason = '') and DirectiveInLines(AMap, ALine, Last.Line) then
-    AReason := R_DIRECTIVE_IN_HEAD;
+    AReason := 'stdcall/safecall/winapi/dispid im Rumpf - ein COM-Import '
+      + 'braucht die echte IID, keine neue GUID';
+  if AReason = '' then
+    AReason := FileReason(AMap);
+  if (AReason = '') and DirectiveBefore(AMap, ALine, Next) then
+    AReason := 'Compiler-Direktive vom Kopf bis zum ersten Member';
   if (AReason = '') and (CreateGUID(NewId) <> 0) then
     AReason := 'CreateGUID hat keine GUID geliefert';
   if AReason <> '' then Exit;
@@ -538,10 +662,38 @@ end;
 
 class function TRdxDeclFixes.DirectiveFor(const AMessage: string): string;
 begin
+  Result := '';
   if Pos(KEY_SHADOWS, AMessage) > 0 then
     Result := DIRECTIVE_OVERRIDE
-  else
+  else if Pos(KEY_HIDES, AMessage) > 0 then
     Result := DIRECTIVE_REINTRODUCE;
+end;
+
+// Das Wort hinter AKey in AMessage (bis zum naechsten ' '); '' ohne AKey.
+function WordAfter(const AMessage, AKey: string): string;
+var
+  P, Q : Integer;
+begin
+  Result := '';
+  P := Pos(AKey, AMessage);
+  if P = 0 then Exit;
+  Inc(P, Length(AKey));
+  Q := Pos(' ', AMessage + ' ', P);
+  Result := Copy(AMessage, P, Q - P);
+end;
+
+// Die Klasse aus 'TOuter.TBase<T>.DoWork': 'TBase' (letztes Segment vor
+// dem Methodennamen, ohne Typparameter).
+function ClassPartOf(const AQualified: string): string;
+var
+  P : Integer;
+begin
+  Result := Copy(AQualified, 1, LastDelimiter('.', AQualified) - 1);
+  P := LastDelimiter('.', Result);
+  Result := Copy(Result, P + 1, MaxInt);
+  P := Pos('<', Result);
+  if P > 0 then
+    Result := Copy(Result, 1, P - 1);
 end;
 
 // Den Methodennamen aus 'Method TDerived.DoWork shadows ...' bzw.
@@ -592,9 +744,191 @@ begin
       Exit(Format('die Deklaration traegt schon %s - Fund veraltet? Datei neu '
         + 'pruefen', [D]));
     if (ADirective = DIRECTIVE_OVERRIDE) and InList(D, NOT_WITH_OVERRIDE) then
-      Exit(Format('%s neben override - die Methode fuehrt bewusst einen '
-        + 'eigenen Eintrag ein', [D]));
+      Exit(Format('die Deklaration traegt %s - das passt nicht zu override '
+        + '(virtual/dynamic fuehren einen eigenen Eintrag ein)', [D]));
   end;
+end;
+
+// 'AName [<..>] = class' ab T, kein Vorwaerts- ('class;') und kein
+// Metaklassen-Typ ('class of'): AClass ist dann das Token 'class'.
+function ClassHeadAt(AMap: TRdxCodeMap; const T: TRdxToken; const AName: string;
+  out AClass: TRdxToken): Boolean;
+var
+  N : TRdxToken;
+begin
+  Result := False;
+  AClass := Default(TRdxToken);
+  if not (T.IsWord and SameText(T.Low, AName)) then Exit;
+  N := After(AMap, T);
+  if N.Low = '<' then
+    N := AfterGroup(AMap, N, '>');
+  if N.Low <> '=' then Exit;
+  AClass := After(AMap, N);
+  N := After(AMap, AClass);
+  Result := (AClass.Low = 'class') and not InList(N.Low, [';', 'of']);
+end;
+
+// Der naechste Klassenkopf 'AName = class' ab Zeile ALine rueckwaerts.
+function ClassHeaderBefore(AMap: TRdxCodeMap; ALine: Integer;
+  const AName: string; out AClass: TRdxToken): Boolean;
+var
+  Li : Integer;
+  T  : TRdxToken;
+begin
+  Result := False;
+  for Li := ALine downto 1 do
+  begin
+    T := NextToken(AMap, Li, 1);
+    while (T.Low <> '') and (T.Line = Li) do
+    begin
+      if ClassHeadAt(AMap, T, AName, AClass) then
+        Exit(True);
+      T := After(AMap, T);
+    end;
+  end;
+end;
+
+// Ist ein Vorfahr in der Klassenangabe hinter AClass generisch
+// ('class(TBase<Integer>)')?
+function GenericAncestor(AMap: TRdxCodeMap; const AClass: TRdxToken): Boolean;
+var
+  T : TRdxToken;
+begin
+  Result := False;
+  T := After(AMap, AClass);
+  while InList(T.Low, ['abstract', 'sealed']) do
+    T := After(AMap, T);
+  if T.Low <> '(' then Exit;
+  while (T.Low <> '') and (T.Low <> ')') do
+  begin
+    if T.Low = '<' then
+      Exit(True);
+    T := After(AMap, T);
+  end;
+end;
+
+// Tiefe im Klassenrumpf: 'end' schliesst, 'record' und geschachtelte
+// Typen ('= class', '= interface' ...) oeffnen ('case' im Record hat kein
+// eigenes end).
+function BodyDepthStep(AMap: TRdxCodeMap; const T, APrev: TRdxToken): Integer;
+begin
+  Result := 0;
+  if not IsKeywordAfter(T, APrev) then Exit;
+  if T.Low = 'end' then
+    Result := -1
+  else if T.Low = 'record' then
+    Result := 1
+  else if (APrev.Low = '=')
+     and InList(T.Low, ['class', 'object', 'interface', 'dispinterface'])
+     and not InList(After(AMap, T).Low, [';', 'of']) then
+    Result := 1;
+end;
+
+// Die Aufrufkonvention unter den Direktiven; ohne Angabe 'register'.
+function CallConvOf(const AHave: TArray<string>): string;
+var
+  D : string;
+begin
+  Result := 'register';
+  for D in AHave do
+    if InList(D, CALL_CONVS) then
+      Result := D;
+  if Result = 'winapi' then
+    Result := 'stdcall';
+end;
+
+// Die Form eines Kopfs ohne Parameternamen: class, Kopfwort, Liste,
+// Rueckgabe, Aufrufkonvention.
+function ShapeOf(AMap: TRdxCodeMap; const ASig: TRdxSignature): string;
+begin
+  Result := ASig.Keyword.Low + ' ' + ASig.ParamShape + ASig.ResultShape
+    + CallConvOf(DirectivesAfter(AMap, ASig.HeaderEnd));
+  if ASig.IsClassMethod then
+    Result := 'class ' + Result;
+end;
+
+// Die Formen aller Methoden AName im Rumpf der Klasse ab AClass (nur Tiefe
+// 1, Kopf am Zeilenanfang).
+function MemberShapes(AMap: TRdxCodeMap; const AClass: TRdxToken;
+  const AName: string): TArray<string>;
+var
+  T, Prev : TRdxToken;
+  Depth   : Integer;
+  Sig     : TRdxSignature;
+  R       : string;
+begin
+  Result := nil;
+  Depth := 1;
+  Prev := AClass;
+  T := After(AMap, AClass);
+  while (T.Low <> '') and (Depth > 0) do
+  begin
+    Inc(Depth, BodyDepthStep(AMap, T, Prev));
+    if (Depth = 1) and (T.Col = SkipBlanks(AMap.Raw(T.Line), 1))
+       and TRdxDeclFixes.ReadSignature(AMap, T.Line, Sig, R)
+       and SameText(Sig.Name, AName) then
+      Result := Result + [ShapeOf(AMap, Sig)];
+    Prev := T;
+    T := After(AMap, T);
+  end;
+end;
+
+// override: im Rumpf der Elternklasse (Meldung: 'shadows virtual
+// TBase.X') eine Methode X derselben Form? '' oder der Grund.
+function OverrideReason(AMap: TRdxCodeMap; const AMessage: string;
+  const ASig: TRdxSignature): string;
+var
+  Base : string;
+  Cls  : TRdxToken;
+  S    : string;
+begin
+  Base := ClassPartOf(WordAfter(AMessage, 'virtual '));
+  if (Base = '') or not ClassHeaderBefore(AMap, ASig.Keyword.Line, Base, Cls) then
+    Exit(Format('Elternklasse %s nicht im Text gefunden - override nicht '
+      + 'pruefbar', [Base]));
+  for S in MemberShapes(AMap, Cls, ASig.Name) do
+    if S = ShapeOf(AMap, ASig) then
+      Exit('');
+  Result := Format('%s.%s hat eine andere Form (class, Parameter-Modifier, '
+    + 'Typen, Rueckgabe oder Aufrufkonvention) - override uebersetzte nicht',
+    [Base, ASig.Name]);
+end;
+
+// reintroduce: nicht bei generischem Vorfahren der eigenen Klasse
+// (Meldung: 'Method TDerived.X ...'). '' oder der Grund.
+function ReintroduceReason(AMap: TRdxCodeMap; const AMessage: string;
+  const ASig: TRdxSignature): string;
+var
+  Own : string;
+  Cls : TRdxToken;
+begin
+  Result := '';
+  Own := ClassPartOf(WordAfter(AMessage, 'Method '));
+  if (Own = '') or not ClassHeaderBefore(AMap, ASig.Keyword.Line, Own, Cls) then
+    Result := Format('Klassenkopf %s nicht im Text gefunden', [Own])
+  else if GenericAncestor(AMap, Cls) then
+    Result := 'generischer Vorfahr - der Detektor vergleicht T mit dem '
+      + 'eingesetzten Typ; override waere vielleicht der Fix, von Hand pruefen';
+end;
+
+// Der Kopf auf ALine fuer ADirective: '' oder der Grund; ASig ist der Kopf.
+function HeadReason(AMap: TRdxCodeMap; ALine: Integer;
+  const AMessage, ADirective: string; out ASig: TRdxSignature): string;
+var
+  R : string;
+begin
+  ASig := Default(TRdxSignature);
+  if ADirective = '' then
+    Exit('Meldung unbekannt - weder "missing override" noch "hides all '
+      + 'inherited"');
+  if not TRdxDeclFixes.ReadSignature(AMap, ALine, ASig, R) then
+    Exit(R);
+  if not SameText(ASig.Name, MethodNameOf(AMessage))
+     or (ASig.Keyword.Low = 'property') then
+    Exit(R_DECL_MOVED);
+  Result := DirectiveReason(DirectivesAfter(AMap, ASig.HeaderEnd), ADirective);
+  if (Result = '') and DirectiveInLines(AMap, ALine, ASig.HeaderEnd.Line) then
+    Result := R_DIRECTIVE_IN_HEAD;
 end;
 
 class function TRdxDeclFixes.MethodDirective(AMap: TRdxCodeMap; ALine: Integer;
@@ -607,14 +941,11 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   Directive := DirectiveFor(AMessage);
-  if ReadSignature(AMap, ALine, Sig, AReason)
-     and (not SameText(Sig.Name, MethodNameOf(AMessage))
-          or (Sig.Keyword.Low = 'property')) then
-    AReason := R_DECL_MOVED;
-  if AReason = '' then
-    AReason := DirectiveReason(DirectivesAfter(AMap, Sig.HeaderEnd), Directive);
-  if (AReason = '') and DirectiveInLines(AMap, ALine, Sig.HeaderEnd.Line) then
-    AReason := R_DIRECTIVE_IN_HEAD;
+  AReason := HeadReason(AMap, ALine, AMessage, Directive, Sig);
+  if (AReason = '') and (Directive = DIRECTIVE_OVERRIDE) then
+    AReason := OverrideReason(AMap, AMessage, Sig)
+  else if AReason = '' then
+    AReason := ReintroduceReason(AMap, AMessage, Sig);
   if AReason <> '' then Exit;
   E := Sig.HeaderEnd;
   AEdit.Span := TRefactorSpan.Make(SPAN_149, E.Line, E.Col, E.Line, E.EndCol);

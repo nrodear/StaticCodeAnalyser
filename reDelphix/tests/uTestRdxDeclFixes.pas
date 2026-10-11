@@ -2,14 +2,17 @@ unit uTestRdxDeclFixes;
 
 // Editorhilfen an Deklarationen (uRdxDeclFixes) auf Text - ohne Parser,
 // ohne Detektor (laeuft in reDelphix.Test UND im FPC-Pruefstand):
-//   Signatur-Leser (Gruppen, Defaults, untypisiert, Generika, Property-
-//          Index, Kopf ueber Zeilen),
+//   Signatur-Leser (Gruppen, Defaults, untypisiert, Generika mit
+//          Einschraenkungen, Property-Index, Kopf ueber Zeilen, '&Type'),
 //   SCA117 Doku-Geruest (param/typeparam/returns, Attribut darueber;
-//          Name veraltet, Kommentar ueber Zeilen darueber, Direktive),
+//          Name veraltet, Kommentar ueber Zeilen darueber, XMLDoc ueber
+//          den Attributen, Direktive im bzw. hinter dem Kopf),
 //   SCA197 GUID (eigene Zeile, inline, Vorfahr, Kommentar dahinter;
-//          generisch, Vorwaerts, schon GUID, COM, CORBA),
-//   SCA149 override/reintroduce (vor vorhandene Direktiven; schon da,
-//          neben virtual).
+//          generisch, Vorwaerts, '[' schon da, COM/winapi, CORBA,
+//          CALLING, Kopf unter {$IFDEF} doppelt),
+//   SCA149 override/reintroduce (Form gegen die Basis, vor vorhandene
+//          Direktiven; schon da, neben virtual/inline, andere Form, Basis
+//          fehlt, generischer Vorfahr, unbekannte Meldung).
 // Die Gegenprobe mit dem echten Detektor steht in
 // uTestRdxSimpleFixesDetector (Fixture 8, nur Delphi).
 
@@ -198,6 +201,20 @@ begin
     + Join(['  end;', 'implementation', 'end.']);
 end;
 
+const
+  DERIVED = '  TDerived = class(TBase)';
+
+// TBase mit den Membern ABase, darunter die Klasse ADerivedHead mit
+// ADerived - deren erste Zeile ist Zeile 9 + Length(ABase).
+function Hierarchy(const ABase: array of string; const ADerivedHead: string;
+  const ADerived: array of string): string;
+begin
+  Result := Join(['unit u;', 'interface', 'type', '  TBase = class', '  public'])
+    + #13#10 + Join(ABase) + #13#10
+    + Join(['  end;', ADerivedHead, '  public']) + #13#10 + Join(ADerived)
+    + #13#10 + Join(['  end;', 'implementation', 'end.']);
+end;
+
 // ---- Signatur-Leser ----
 
 procedure TTestRdxDeclFixes.Signature_Reader;
@@ -214,8 +231,8 @@ begin
     + 'class; U>(', '      const AItem: T): TList<U>;']), 6));
   // Einschraenkungen durch ',' (Korpus: delphimvcframework BodyAs<T: class,
   // constructor>) sind keine Typparameter; ',' ohne ':' trennt Parameter.
-  Assert.AreEqual('As|T,U,V||R', SigText(InClass(['    function As<T, U: class, '
-    + 'constructor; V>: T;']), 6));
+  Assert.AreEqual('Pick|T,U,V||R', SigText(InClass(['    function Pick<T, U: '
+    + 'class, constructor; V>: T;']), 6));
   // Escapte Bezeichner: der Name ohne '&'.
   Assert.AreEqual('Log||Type,E|', SigText(InClass(['    procedure Log(const '
     + '&Type: Integer; E: TObject);']), 6));
@@ -297,6 +314,22 @@ begin
   Assert.AreEqual('', Fix(dkDoc, InClass(['    FCount: Integer;']), 6,
     DocMsg('FCount'), R));
   Assert.IsTrue(Pos('verschoben', R) > 0, R);
+  // XMLDoc ueber den Attributen (auch mit Leerzeile dazwischen) sieht der
+  // Detektor nicht - kein zweiter summary-Block.
+  Assert.AreEqual('', Fix(dkDoc, InClass(['    /// <summary>Lauf</summary>',
+    '    [Weak]', '', '    [Volatile]', '    procedure Run;']), 10,
+    DocMsg('Run'), R));
+  Assert.IsTrue(Pos('Attribut', R) > 0, R);
+  // Eine Abschnittsueberschrift bzw. Direktive ueber dem Attribut ist keine
+  // Doku des Members - das Geruest kommt.
+  Assert.AreEqual(InClass(['    // ==== Tests ====', '    [Test]',
+      '    /// <summary></summary>', '    procedure Run;']),
+    Fix(dkDoc, InClass(['    // ==== Tests ====', '    [Test]',
+      '    procedure Run;']), 8, DocMsg('Run'), R), R);
+  Assert.AreEqual(InClass(['    {$IFDEF X}', '    [Weak]',
+      '    /// <summary></summary>', '    procedure Run;', '    {$ENDIF}']),
+    Fix(dkDoc, InClass(['    {$IFDEF X}', '    [Weak]', '    procedure Run;',
+      '    {$ENDIF}']), 8, DocMsg('Run'), R), R);
 end;
 
 // ---- SCA197 ----
@@ -334,14 +367,40 @@ begin
   Assert.IsTrue(Pos('Vorwaerts', R) > 0, R);
   Assert.AreEqual('', Fix(dkGuid, Join(['type', '  IFoo = interface',
     '    [''' + GUID_1 + ''']', '  end;']), 2, GuidMsg('IFoo'), R));
-  Assert.IsTrue(Pos('schon eine GUID', R) > 0, R);
-  // COM-Import: safecall im Rumpf.
+  Assert.IsTrue(Pos('GUID oder Attribut', R) > 0, R);
+  // COM-Import: safecall bzw. winapi im Rumpf.
   Assert.AreEqual('', Fix(dkGuid, Join(['type', '  IFoo = interface(IDispatch)',
     '    function Get: Integer; safecall;', '  end;']), 2, GuidMsg('IFoo'), R));
   Assert.IsTrue(Pos('COM', R) > 0, R);
+  Assert.AreEqual('', Fix(dkGuid, Join(['type', '  IFoo = interface',
+    '    function Get: Integer; winapi;', '  end;']), 2, GuidMsg('IFoo'), R));
+  Assert.IsTrue(Pos('COM', R) > 0, R);
+  // Datei-Direktiven, auch in der Form '(*$..*)'; CORBA nur IN der
+  // Direktive (nicht im Kommentar dahinter).
   Assert.AreEqual('', Fix(dkGuid, Join(['{$INTERFACES CORBA}', 'type',
     '  IFoo = interface', '    procedure Run;', '  end;']), 3, GuidMsg('IFoo'), R));
   Assert.IsTrue(Pos('CORBA', R) > 0, R);
+  Assert.AreEqual('', Fix(dkGuid, Join(['(*$INTERFACES CORBA*)', 'type',
+    '  IFoo = interface', '    procedure Run;', '  end;']), 3, GuidMsg('IFoo'), R));
+  Assert.IsTrue(Pos('CORBA', R) > 0, R);
+  Assert.AreEqual('', Fix(dkGuid, Join(['{$CALLING STDCALL}', 'type',
+    '  IFoo = interface', '    procedure Run;', '  end;']), 3, GuidMsg('IFoo'), R));
+  Assert.IsTrue(Pos('CALLING', R) > 0, R);
+  Assert.AreEqual(Join(['{$INTERFACES COM} // nicht CORBA', 'type',
+      '  IFoo = interface', '    [''' + GUID_1 + ''']', '    procedure Run;',
+      '  end;']),
+    Fix(dkGuid, Join(['{$INTERFACES COM} // nicht CORBA', 'type',
+      '  IFoo = interface', '    procedure Run;', '  end;']), 3, GuidMsg('IFoo'),
+      R), R);
+  // Kopf unter {$IFDEF} doppelt: die GUID kaeme nur in einen Zweig.
+  Assert.AreEqual('', Fix(dkGuid, Join(['type', '  {$IFDEF A}',
+    '  IFoo = interface(IBar)', '  {$ELSE}', '  IFoo = interface(IBaz)',
+    '  {$ENDIF}', '    procedure Run;', '  end;']), 3, GuidMsg('IFoo'), R));
+  Assert.IsTrue(Pos('kein Interface-Rumpf', R) > 0, R);
+  Assert.AreEqual('', Fix(dkGuid, Join(['type', '  {$IFDEF A}',
+    '  IFoo = interface(IBar)', '  {$ELSE}', '  IFoo = interface(IBaz)',
+    '  {$ENDIF}', '    procedure Run;', '  end;']), 5, GuidMsg('IFoo'), R));
+  Assert.IsTrue(Pos('Direktive', R) > 0, R);
 end;
 
 // ---- SCA149 ----
@@ -350,38 +409,93 @@ procedure TTestRdxDeclFixes.Sca149_Directive;
 var
   R : string;
 begin
-  // Die Meldung waehlt: 'shadows' -> override, 'hides' -> reintroduce.
-  Assert.AreEqual(InClass(['    procedure DoWork; override;']),
-    Fix(dkDirective, InClass(['    procedure DoWork;']), 6, ShadowMsg('DoWork'),
-      R), R);
-  // reintroduce vor vorhandene Direktiven (vor overload ist Pflicht), auch
-  // neben virtual (eine neue virtuelle Methode gleichen Namens).
-  Assert.AreEqual(InClass(['    procedure DoWork(A: Integer); reintroduce; '
-      + 'overload; // x']),
-    Fix(dkDirective, InClass(['    procedure DoWork(A: Integer); overload; '
-      + '// x']), 6, HidesMsg('DoWork'), R), R);
-  Assert.AreEqual(InClass(['    procedure DoWork(A: Integer); reintroduce; '
-      + 'virtual;']),
-    Fix(dkDirective, InClass(['    procedure DoWork(A: Integer); virtual;']), 6,
+  // Die Meldung waehlt: 'shadows' -> override, wenn die Basis dieselbe Form
+  // hat (Parameternamen duerfen abweichen, Defaults nicht).
+  Assert.AreEqual(Hierarchy(['    procedure DoWork(const A: string; '
+      + 'B: Integer = 0); virtual;'], DERIVED, ['    procedure DoWork(const X: '
+      + 'string; Y: Integer = 0); override;']),
+    Fix(dkDirective, Hierarchy(['    procedure DoWork(const A: string; '
+      + 'B: Integer = 0); virtual;'], DERIVED, ['    procedure DoWork(const X: '
+      + 'string; Y: Integer = 0);']), 10, ShadowMsg('DoWork'), R), R);
+  // class-Methode; die Basis ueberlaedt (eine Form passt), ein Record im
+  // Rumpf der Basis stoert die Tiefe nicht.
+  Assert.AreEqual(Hierarchy(['    type TPair = record A, B: Integer; end;',
+      '    class function DoWork: TObject; overload; virtual;',
+      '    class function DoWork(A: Integer): TObject; overload; virtual;'],
+      DERIVED, ['    class function DoWork: TObject; override;']),
+    Fix(dkDirective, Hierarchy(['    type TPair = record A, B: Integer; end;',
+      '    class function DoWork: TObject; overload; virtual;',
+      '    class function DoWork(A: Integer): TObject; overload; virtual;'],
+      DERIVED, ['    class function DoWork: TObject;']), 12,
+      ShadowMsg('DoWork'), R), R);
+  // 'hides' -> reintroduce vor vorhandene Direktiven (vor overload ist
+  // Pflicht), auch neben virtual (eine neue virtuelle Methode).
+  Assert.AreEqual(Hierarchy(['    procedure DoWork; virtual;'], DERIVED,
+      ['    procedure DoWork(A: Integer); reintroduce; overload; // x']),
+    Fix(dkDirective, Hierarchy(['    procedure DoWork; virtual;'], DERIVED,
+      ['    procedure DoWork(A: Integer); overload; // x']), 10,
       HidesMsg('DoWork'), R), R);
+  Assert.AreEqual(Hierarchy(['    procedure DoWork; virtual;'], DERIVED,
+      ['    procedure DoWork(A: Integer); reintroduce; virtual;']),
+    Fix(dkDirective, Hierarchy(['    procedure DoWork; virtual;'], DERIVED,
+      ['    procedure DoWork(A: Integer); virtual;']), 10, HidesMsg('DoWork'),
+      R), R);
   Assert.AreEqual(DIRECTIVE_OVERRIDE, TRdxDeclFixes.DirectiveFor(ShadowMsg('X')));
   Assert.AreEqual(DIRECTIVE_REINTRODUCE,
     TRdxDeclFixes.DirectiveFor(HidesMsg('X')));
+  Assert.AreEqual('', TRdxDeclFixes.DirectiveFor('Method TDerived.X is odd'));
 end;
 
 procedure TTestRdxDeclFixes.Sca149_Refusals;
 var
   R : string;
 begin
-  Assert.AreEqual('', Fix(dkDirective, InClass(['    procedure DoWork; override;']),
-    6, ShadowMsg('DoWork'), R));
-  Assert.IsTrue(Pos('schon override', R) > 0, R);
-  Assert.AreEqual('', Fix(dkDirective, InClass(['    procedure DoWork; virtual;']),
-    6, ShadowMsg('DoWork'), R));
-  Assert.IsTrue(Pos('virtual', R) > 0, R);
-  Assert.AreEqual('', Fix(dkDirective, InClass(['    procedure Other;']), 6,
+  Assert.AreEqual('', Fix(dkDirective, Hierarchy(['    procedure DoWork; '
+    + 'virtual;'], DERIVED, ['    procedure DoWork; override;']), 10,
     ShadowMsg('DoWork'), R));
+  Assert.IsTrue(Pos('schon override', R) > 0, R);
+  Assert.AreEqual('', Fix(dkDirective, Hierarchy(['    procedure DoWork; '
+    + 'virtual;'], DERIVED, ['    procedure DoWork; virtual;']), 10,
+    ShadowMsg('DoWork'), R));
+  Assert.IsTrue(Pos('virtual', R) > 0, R);
+  // inline und override schliessen sich aus.
+  Assert.AreEqual('', Fix(dkDirective, Hierarchy(['    function Get: Integer; '
+    + 'virtual;'], DERIVED, ['    function Get: Integer; inline;']), 10,
+    ShadowMsg('Get'), R));
+  Assert.IsTrue(Pos('inline', R) > 0, R);
+  Assert.AreEqual('', Fix(dkDirective, Hierarchy(['    procedure DoWork; '
+    + 'virtual;'], DERIVED, ['    procedure Other;']), 10, ShadowMsg('DoWork'),
+    R));
   Assert.IsTrue(Pos('verschoben', R) > 0, R);
+  // Der Detektor vergleicht nur Typen: Modifier, class und Aufrufkonvention
+  // pruefen erst wir - sonst uebersetzte override nicht.
+  Assert.AreEqual('', Fix(dkDirective, Hierarchy(['    procedure DoWork(A: '
+    + 'string); virtual;'], DERIVED, ['    procedure DoWork(const A: string);']),
+    10, ShadowMsg('DoWork'), R));
+  Assert.IsTrue(Pos('andere Form', R) > 0, R);
+  Assert.AreEqual('', Fix(dkDirective, Hierarchy(['    class procedure DoWork; '
+    + 'virtual;'], DERIVED, ['    procedure DoWork;']), 10, ShadowMsg('DoWork'),
+    R));
+  Assert.IsTrue(Pos('andere Form', R) > 0, R);
+  Assert.AreEqual('', Fix(dkDirective, Hierarchy(['    procedure DoWork; '
+    + 'virtual;'], DERIVED, ['    procedure DoWork; stdcall;']), 10,
+    ShadowMsg('DoWork'), R));
+  Assert.IsTrue(Pos('andere Form', R) > 0, R);
+  // Ohne Basis im Text kein override.
+  Assert.AreEqual('', Fix(dkDirective, InClass(['    procedure DoWork;']), 6,
+    ShadowMsg('DoWork'), R));
+  Assert.IsTrue(Pos('nicht im Text', R) > 0, R);
+  // Generischer Vorfahr: T gegen Integer haelt der Detektor fuer
+  // verschieden - reintroduce deckte dort den Fehler zu.
+  Assert.AreEqual('', Fix(dkDirective, Hierarchy(['    procedure DoWork(A: '
+    + 'Integer); virtual;'], '  TDerived = class(TBase<Integer>)',
+    ['    procedure DoWork(A: Integer);']), 10, HidesMsg('DoWork'), R));
+  Assert.IsTrue(Pos('generisch', R) > 0, R);
+  // Unbekannte Meldung.
+  Assert.AreEqual('', Fix(dkDirective, Hierarchy(['    procedure DoWork; '
+    + 'virtual;'], DERIVED, ['    procedure DoWork;']), 10,
+    'Method TDerived.DoWork is odd', R));
+  Assert.IsTrue(Pos('unbekannt', R) > 0, R);
 end;
 
 initialization
