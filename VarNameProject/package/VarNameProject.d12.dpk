@@ -50,6 +50,7 @@ contains
   uVnpLog in '..\source\uVnpLog.pas',
   uVnpSync in '..\source\uVnpSync.pas',
   uVnpIntroduce in '..\source\uVnpIntroduce.pas',
+  uVnpProbe in '..\source\uVnpProbe.pas',
   uVnpRegister in '..\source\uVnpRegister.pas';
 
 end.

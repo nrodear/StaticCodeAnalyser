@@ -6,8 +6,10 @@ unit uVnpIntroduce;
 //   2. Darueber entsteht 'var MagicNr01 := 42;', die gleichen Literale der
 //      Zeile werden zu MagicNr01 - ein Schreibvorgang, EIN Strg+Z.
 //   3. Die Stellen von MagicNr01 werden als Sync-Edit-Punkt angemeldet: die
-//      IDE umrandet sie, der Caret steht auf dem Namen in der Deklaration,
-//      Tippen aendert alle Stellen mit.
+//      IDE umrandet sie und setzt den Caret selbst auf die erste Stelle (die
+//      Deklaration steht in den Offsets vorn); Tippen aendert alle Stellen
+//      mit. Der Caret wird danach NICHT mehr bewegt - das koennte die
+//      Vorauswahl der IDE aufheben (Messpunkt M11).
 // Die Varianten unterscheiden NUR Schritt 3 - sie sind die Messung:
 //   vvTemplatesAbs/Rel  Punkte aus IOTACodeTemplateServices.CreateClass,
 //                       Offsets absolut (Zeile der Datei) bzw. relativ zur
@@ -16,8 +18,13 @@ unit uVnpIntroduce;
 //   vvIdeSyncEdit       SyncEditBlock(nil): die IDE sucht selbst (wie
 //                       Strg+Umschalt+J); der Notifier protokolliert die
 //                       Offsets, die SIE anlegt - die Referenz fuer Abs/Rel.
-// TOTACharPos laut ToolsAPI: CharIndex 0-basiert (UTF-8-Bytes der Zeile),
-// Line 1-basiert.
+// TOTACharPos laut ToolsAPI: CharIndex 0-basiert, Line 1-basiert. Ob
+// CharIndex Bytes (UTF-8) oder Zeichen zaehlt, sagt die ToolsAPI NICHT
+// (Drittquellen widersprechen sich) - die Offsets der Punkte rechnen hier
+// in Bytes (Hypothese, bei ASCII gleich); die Sonde "Caret" (uVnpProbe)
+// und Demo-Fall 6 klaeren es. Die Caret-Spalte selbst kommt ueber
+// CharPosToPos (Pufferposition = Reader-/Writer-Bytes) und haengt nicht
+// an der Hypothese.
 
 interface
 
@@ -100,22 +107,31 @@ begin
 end;
 
 // Caret als Zeile und 1-basierte Zeichenspalte.
+// Die Spalte kommt ueber die Pufferposition (CharPosToPos) minus den
+// Zeilenanfang - beides Bytes im Raum von Reader und Writer.
 procedure CaretOf(const AEd: TVnpEditor; out ARow, ACol: Integer);
 var
   EdPos   : TOTAEditPos;
   CharPos : TOTACharPos;
+  Linear  : Integer;
+  Start   : Integer;
 begin
   EdPos := AEd.View.CursorPos;
   CharPos.CharIndex := 0;
   CharPos.Line := EdPos.Line;
   AEd.View.ConvertPos(True, EdPos, CharPos);
-  ARow := EdPos.Line;
+  Linear := AEd.View.CharPosToPos(CharPos);
+  ARow := CharPos.Line;
   ACol := 1;
+  Start := -1;
   if (ARow >= 1) and (ARow <= AEd.Lines.Count) then
-    ACol := CharColOfByte(AEd.Lines[ARow - 1], CharPos.CharIndex);
+  begin
+    Start := AEd.Starts[ARow - 1];
+    ACol := CharColOfByte(AEd.Lines[ARow - 1], Linear - Start);
+  end;
   VnpLog('Caret: Anzeige %d:%d -> CharPos (Zeile %d, CharIndex %d) -> '
-    + 'Zeichenspalte %d', [EdPos.Line, EdPos.Col, CharPos.Line,
-    CharPos.CharIndex, ACol]);
+    + 'Puffer %d (Zeilenanfang %d) -> Zeichenspalte %d', [EdPos.Line,
+    EdPos.Col, CharPos.Line, CharPos.CharIndex, Linear, Start, ACol]);
 end;
 
 // Die naechste Zeile ueber ARow mit Code ('' am Dateianfang); leere und
@@ -249,24 +265,22 @@ begin
     ABlock.SyncEditBlock(Points);
 end;
 
-// Nach dem Start: Zustand protokollieren, Caret auf den Namen der
-// Deklaration (ReSharper: der Caret steht im umrandeten Namen).
+// Nach dem Start nur protokollieren: wo die IDE den Caret hingesetzt hat
+// und wo der Name steht (ReSharper: der Caret steht im umrandeten Namen).
 procedure AfterSync(const AEd: TVnpEditor; const ABlock: IOTAEditBlock;
   const ATarget: TVnpTarget);
 var
-  Before : TOTAEditPos;
-  Col    : Integer;
+  Caret : TOTAEditPos;
 begin
-  Before := AEd.View.CursorPos;
-  VnpLog('Nach SyncEditBlock: SyncMode %d (0 keine, 1 normal, 2 Templates), '
-    + 'Caret %d:%d', [Ord(ABlock.SyncMode), Before.Line, Before.Col]);
-  Col := DisplayCol(AEd.View, ATarget.DeclRow, ATarget.Plan.DeclText,
-    ATarget.Plan.NameCol);
-  AEd.Buffer.EditPosition.Move(ATarget.DeclRow, Col);
+  Caret := AEd.View.CursorPos;
   AEd.View.MoveViewToCursor;
   AEd.View.Paint;
-  VnpLog('Caret auf den Namen gesetzt (%d:%d): SyncMode jetzt %d',
-    [ATarget.DeclRow, Col, Ord(ABlock.SyncMode)]);
+  VnpLog('Nach SyncEditBlock: SyncMode %d (0 keine, 1 normal, 2 Templates), '
+    + 'Caret %d:%d, Name in der Deklaration bei %d:%d', [Ord(ABlock.SyncMode),
+    Caret.Line, Caret.Col, ATarget.DeclRow, DisplayCol(AEd.View,
+    ATarget.DeclRow, ATarget.Plan.DeclText, ATarget.Plan.NameCol)]);
+  VnpLog('  (folgen keine "Ereignis"-Zeilen, feuert der Notifier in dieser '
+    + 'Variante nicht)');
 end;
 
 function OpenEditor(out AEd: TVnpEditor): Boolean;

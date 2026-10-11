@@ -18,7 +18,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes, Vcl.Menus, Vcl.ActnList, ToolsAPI,
-  uVnpIntroduce, uVnpLog;
+  uVnpIntroduce, uVnpProbe, uVnpLog;
 
 const
   MENU_NAME   = 'VarNameProjectMenu';
@@ -27,6 +27,8 @@ const
   TAG_SHOWLOG = 101;
   TAG_OPENLOG = 102;
   TAG_CLEAR   = 103;
+  TAG_PROBE_CARET = 104;
+  TAG_PROBE_CLASS = 105;
 
 type
   TVnpMenuHandler = class
@@ -63,6 +65,10 @@ begin
       OpenLogInEditor;
     TAG_CLEAR:
       VnpClearLog;
+    TAG_PROBE_CARET:
+      ProbeCaret;
+    TAG_PROBE_CLASS:
+      ProbeCreateClass;
   else
     FLast := TVnpVariant(Tag);
     RunIntroduce(FLast);
@@ -132,6 +138,9 @@ begin
   AddSeparator;
   for V := Low(TVnpVariant) to High(TVnpVariant) do
     AddItem(NTA, VARIANT_CAPTIONS[V], Ord(V), 0);
+  AddSeparator;
+  AddItem(NTA, 'Sonde: CharIndex am Caret (M10)', TAG_PROBE_CARET, 0);
+  AddItem(NTA, 'Sonde: CreateClass (M21)', TAG_PROBE_CLASS, 0);
   AddSeparator;
   AddItem(NTA, 'Protokoll in der Meldungsansicht', TAG_SHOWLOG, 0);
   AddItem(NTA, 'Protokolldatei im Editor oeffnen', TAG_OPENLOG, 0);

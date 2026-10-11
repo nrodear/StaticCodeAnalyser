@@ -26,19 +26,42 @@ Offsets stehen - das misst dieses Projekt.
 | `source/uVnpIntroduce.pas` | Ablauf in der IDE: lesen, planen, schreiben (EIN Undo-Schritt), Block markieren, Sync-Sitzung starten, Caret auf den Namen |
 | `source/uVnpSync.pas` | Sync-Punkte: per `IOTACodeTemplateServices.CreateClass` (Variante A) oder eigene Klassen (Variante B); Notifier protokolliert jede Sitzung samt Offsets |
 | `source/uVnpLog.pas` | Protokoll: Meldungsansicht (Gruppe "VarNameProject") und `%TEMP%\VarNameProject.log` |
+| `source/uVnpProbe.pas` | Sonden ohne Sync-Sitzung: Einheit von `CharIndex` (M10), was `CreateClass` liefert (M21) |
 | `source/uVnpRegister.pas` | Menue Tools > VarNameProject |
-| `demo/VarNameDemo.pas` | Uebungsdatei mit fuenf Faellen |
+| `demo/VarNameDemo.pas` | Uebungsdatei mit fuenf Faellen (ASCII) |
+| `demo/VarNameDemoUmlaut.pas` | Fall 6: Umlaute und Euro-Zeichen VOR dem Literal - absichtlich UTF-8 mit BOM (misst Bytes gegen Zeichen) |
+
+## Vorbild ReSharper (Recherche 2026-10-11, Kurzfassung)
+
+- Introduce Variable (Strg+R,V): bei mehreren Vorkommen erst die Wahl
+  "nur dieses / alle"; die Variable entsteht sofort vor der ersten
+  nutzenden Anweisung; danach eine "Hotspot-Sitzung" fuer Typ und Name mit
+  Vorschlagsliste. Rahmen: rot = aktive Stelle, schwarz = gekoppelte
+  Stellen (aendern sich mit). Tab/Enter uebernimmt und springt weiter,
+  Umschalt+Tab zurueck, Esc beendet mit den Vorgabewerten.
+- Delphi hat dasselbe eingebaut: **Sync Edit** (Strg+Umschalt+J) - erste
+  Stelle hervorgehoben, die anderen umrandet, Caret auf der ersten Stelle,
+  Tippen ERSETZT den Namen, Tab springt, Esc beendet. Live Templates mit
+  editierbaren Punkten laufen ueber denselben Modus. Die ToolsAPI dazu ist
+  undokumentiert (DocWiki: "no additional information"), im Netz gibt es
+  kein Beispiel mit eigenen Punkten - darum dieses Projekt.
+- Delphi 13 hat die eingebauten Refactorings und das Template-Skripting
+  entfernt (Nutzerberichte, Refactoring-DLLs fehlen in 37.0\bin); die
+  Sync-Edit-API und die Template-Dateien sind in 12 und 13 gleich.
 
 ## Bedienung
 
 1. `package/VarNameProject.d12.dproj` oeffnen, bauen, installieren.
-2. `demo/VarNameDemo.pas` im Editor oeffnen.
-3. Caret auf eine Zahl setzen (siehe Faelle in der Datei).
-4. Tools > VarNameProject > eine Variante waehlen; danach wiederholt
+2. ZUERST die Sonden: `demo/VarNameDemoUmlaut.pas` oeffnen, Caret direkt
+   hinter das Euro-Zeichen, Tools > VarNameProject > "Sonde: CharIndex am
+   Caret"; danach "Sonde: CreateClass".
+3. `demo/VarNameDemo.pas` im Editor oeffnen.
+4. Caret auf eine Zahl setzen (siehe Faelle in der Datei).
+5. Tools > VarNameProject > eine Variante waehlen; danach wiederholt
    **Strg+Alt+Umschalt+M** die zuletzt gewaehlte (Start: A1).
-5. Neuen Namen tippen, mit Enter/Tab/Esc bzw. Klick daneben beenden.
-6. Mit Strg+Z zuruecksetzen, naechste Variante probieren.
-7. Tools > VarNameProject > "Protokolldatei im Editor oeffnen" und den
+6. Neuen Namen tippen, mit Enter/Tab/Esc bzw. Klick daneben beenden.
+7. Mit Strg+Z zuruecksetzen (zaehlen, wie oft - M7), naechste Variante.
+8. Tools > VarNameProject > "Protokolldatei im Editor oeffnen" und den
    Inhalt zurueckmelden.
 
 ## Varianten (nur Schritt 3 unterscheidet sich)
@@ -68,6 +91,23 @@ Offsets stehen - das misst dieses Projekt.
   braucht es zwei?
 - **M8** Fall 5 (Tab-Einrueckung): stimmen die Spalten?
 - **M9** Fall 3 muss abgelehnt werden (Protokoll "Abbruch: ...").
+- **M10** Sonde Caret: welche der drei "Vor dem Caret"-Zeilen endet genau
+  am Caret - zaehlt `CharIndex` Bytes oder Zeichen? Danach Fall 6: umranden
+  die Varianten die richtigen Stellen hinter dem Euro-Zeichen?
+- **M11** Ist der Name nach dem Start vorausgewaehlt? (Das Projekt setzt
+  den Caret danach bewusst NICHT mehr - das koennte die Vorauswahl
+  aufheben.)
+- **M12/M13** Tab und Enter bei nur EINEM Punkt: springt Tab ins Leere,
+  beendet Enter die Sitzung oder bricht es die Zeile um?
+- **M14** Notifier: kommen "Ereignis"-Zeilen (Enter/Leave/Exit), steht der
+  neue Name im Exit-Ereignis?
+- **M17** Code-Insight-Popup waehrend des Tippens: nimmt Enter dann den
+  Vorschlag statt die Sitzung zu beenden?
+- **M18** Ein Offset ausserhalb des markierten Blocks - ignoriert oder
+  Fehler? (bei Bedarf nachreichen)
+- **M20** Startet die Sitzung auf dem ERSTEN Offset (Deklaration)?
+- **M21** Sonde CreateClass: welche Interfaces kommen zurueck?
+- **M22** Undo-Zaehlung: ein oder zwei Strg+Z fuer Einfuehren + Umbenennen?
 
 ## Grenzen (bewusst - es ist ein Testprojekt)
 

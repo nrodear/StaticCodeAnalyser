@@ -88,6 +88,7 @@
         <DCCReference Include="..\source\uVnpLog.pas"/>
         <DCCReference Include="..\source\uVnpSync.pas"/>
         <DCCReference Include="..\source\uVnpIntroduce.pas"/>
+        <DCCReference Include="..\source\uVnpProbe.pas"/>
         <DCCReference Include="..\source\uVnpRegister.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
