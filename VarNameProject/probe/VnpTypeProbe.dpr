@@ -91,10 +91,14 @@ program VnpTypeProbe;
 {$DEFINE PROBE_P2_FOLD_SHL31}        // R := 1 shl 31 (Vorzeichenbit: 64 oder 32 Bit?)
 {$DEFINE PROBE_P2_FOLD_SHR_NEG}      // R := (-8) shr 1 (64, 32 oder 8 Bit?)
 {$DEFINE PROBE_P2_SHL_VAR}           // M shl 40 und 1 shl M mit Variable
-// BEFUND D12 Win32 (zweiter Bau): 'var M := 1; R := M shl 40' -> E1012
-// "Konstantenausdruck verletzt untere Grenzen", mit 'M: Integer' nicht -
-// die untypisierte Form gibt M einen anderen Typ als Integer (P1.1).
-{.$DEFINE PROBE_P2_SHL_UNTYPED}      // P2.10: var M := 1; R := M shl 40  E1012
+// BEFUND D12 Win32 (zweiter und dritter Bau): 'R := M shl 40' -> E1012
+// "Konstantenausdruck verletzt untere Grenzen", untypisiert (P2.10) UND mit
+// 'M: Integer' (P2.11): eine konstante Schiebeweite ab 32 bei einem
+// 32-Bit-Operanden ist ein Baufehler. dcc32 meldet diese Fehlerart nur
+// EINZELN je Bau (P2.11 kam erst, als P2.10 aus war). Das Original
+// '1 shl 40' (P2.9) kompiliert.
+{.$DEFINE PROBE_P2_SHL_UNTYPED}      // P2.10: var M := 1; R := M shl 40           E1012
+{.$DEFINE PROBE_P2_SHL_INTEGER}      // P2.11: var M: Integer := 1; R := M shl 40  E1012
 // P4: Ueberladungen.
 {.$DEFINE PROBE_P4_BIGLIT_FOLD}      // Ov(100000 * 100000) - E2099 wie PROBE_P2_FOLD_MUL
 {$DEFINE PROBE_P4_BIGLIT_DEC}        // Ov(3000000000)
@@ -221,6 +225,7 @@ const
 {$IFNDEF PROBE_P2_FOLD_SHR_NEG}     + ' PROBE_P2_FOLD_SHR_NEG' {$ENDIF}
 {$IFNDEF PROBE_P2_SHL_VAR}          + ' PROBE_P2_SHL_VAR' {$ENDIF}
 {$IFNDEF PROBE_P2_SHL_UNTYPED}      + ' PROBE_P2_SHL_UNTYPED' {$ENDIF}
+{$IFNDEF PROBE_P2_SHL_INTEGER}      + ' PROBE_P2_SHL_INTEGER' {$ENDIF}
 {$IFNDEF PROBE_P4_BIGLIT_FOLD}      + ' PROBE_P4_BIGLIT_FOLD' {$ENDIF}
 {$IFNDEF PROBE_P4_BIGLIT_DEC}       + ' PROBE_P4_BIGLIT_DEC' {$ENDIF}
 {$IFNDEF PROBE_P4_UNTYPED}          + ' PROBE_P4_UNTYPED' {$ENDIF}
@@ -675,6 +680,7 @@ begin
 end;
 {$ENDIF}
 
+{$IFDEF PROBE_P2_SHL_INTEGER}
 procedure P2ShlLeftInteger;
 var
   R : Int64;
@@ -684,6 +690,7 @@ begin
   Put('P2.11', 'var MagicNr01: Integer := 1; R := MagicNr01 shl 40', IntToStr(R),
     'Entwurf: Integer -> 256 (40 and 31 = 8)');
 end;
+{$ENDIF}
 
 procedure P2ShlLeftInt64;
 var
@@ -1931,7 +1938,9 @@ begin
 {$IFDEF PROBE_P2_SHL_UNTYPED}
   P2ShlLeftUntyped;
 {$ENDIF}
+{$IFDEF PROBE_P2_SHL_INTEGER}
   P2ShlLeftInteger;
+{$ENDIF}
   P2ShlLeftInt64;
   P2ShlRightInteger;
   P2ShlRightInt64;
