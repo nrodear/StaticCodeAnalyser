@@ -115,6 +115,7 @@ contains
   uFindingsPropertiesFrame in 'sources\uFindingsPropertiesFrame.pas',
   uFuzzyComboSearch in 'sources\uFuzzyComboSearch.pas',
   uHintTextLayout in 'sources\uHintTextLayout.pas',
+  uHitCacheRepair in 'sources\uHitCacheRepair.pas',
   uIDEColors in 'sources\uIDEColors.pas',
   uIDEHelpPanel in 'sources\uIDEHelpPanel.pas',
   uIDEStatsTiles in 'sources\uIDEStatsTiles.pas',

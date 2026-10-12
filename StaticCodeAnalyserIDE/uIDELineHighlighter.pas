@@ -63,7 +63,8 @@ uses
   Vcl.Controls, Vcl.Graphics, Vcl.ExtCtrls,
   ToolsAPI, ToolsAPI.Editor,
   uMethodd12, uAnalyserTypes, uLocalization,
-  uIDEAnnotationOverlay;
+  uIDEAnnotationOverlay,
+  uHitCacheRepair;      // F1: Trefferspeicher nur einmal je Sichtzustand nachfuellen
 
 type
   TFindingHighlighter = class;  // forward
@@ -253,10 +254,13 @@ type
     // sonst zeigt das Hover-Overlay den Befund der vorigen Datei auf einer
     // unrelated Zeile der neuen Datei.
     FLastPaintedFile : string;
-    // Throttle fuer den HitMiss-Refresh (siehe EditorMouseMove). Verhindert
-    // dass jeder MouseMove ein InvalidateAllLines triggert wenn die Maus
-    // im Editor aber NICHT auf einer markierten Zeile ist.
-    FLastInvalidateTick : DWORD;
+    // Nachfuellen des Trefferspeichers nach einem Fehltreffer (siehe
+    // EditorMouseMove). Ersetzt FLastInvalidateTick: die 500-ms-Drossel
+    // allein liess JEDEN Fehltreffer einen Voll-Repaint ausloesen, und
+    // jeder Voll-Repaint startet die Blinkphase des Carets neu
+    // (Caret-Untersuchung 2026-10-12, H1/F1). Jetzt hoechstens einmal je
+    // Sichtzustand - Vertrag und Begruendung in uHitCacheRepair.
+    FHitRepair : THitCacheRepair;
     // Buendelt den Re-Invalidate nach dem Scrollen. Eine Mausrad-Raste
     // liefert mehrere Scroll-Ereignisse; ohne Buendelung kostet jedes
     // davon einen zusaetzlichen Voll-Repaint. Siehe EditorScrolled.
@@ -287,6 +291,23 @@ type
     // weil das Overlay beim Mouse-Leave der Codezeile sofort verschwindet,
     // BEVOR die Maus den Overlay-Bereich erreicht.
     function IsCursorOverOverlay: Boolean;
+    // Sichtzustand des Editors fuer uHitCacheRepair: TopRow und LeftColumn
+    // aus der IOTAEditView. Nur aus EditorMouseMove (nach der Drossel) und
+    // EndPaint (nach einer Anforderung) gerufen, nie je Zeile.
+    function HitCacheKeyOf(const Editor: TWinControl): THitCacheViewKey;
+    // Fehltreffer der Maus: True heisst "jetzt EINEN Voll-Repaint".
+    function WantsHitCacheRepair(const Editor: TWinControl): Boolean;
+    // True, wenn InvalidateTopEditor den Editor des Trefferspeichers
+    // erreicht (FSavedEditor ist der oberste Editor oder noch keiner).
+    function RepaintReachesSavedEditor: Boolean;
+    // Groesse oder Faltung des Editors haben sich geaendert: der
+    // Trefferspeicher kann veraltet sein, obwohl TopRow gleich blieb.
+    procedure NoteEditorViewChanged(const Editor: TWinControl);
+    // PaintLine einer markierten Zeile: andere Zeichenmasse im selben
+    // Editor (Strg+Mausrad-Zoom, neue Schrift) machen die gecachten
+    // Rechtecke ungueltig, obwohl TopRow und LeftColumn gleich bleiben.
+    procedure NoteCharMetrics(const Editor: TWinControl;
+      ACharHeight, ACharWidth: Integer);
   protected
     // INTACodeEditorEvents — nur BeginPaint/EndPaint/PaintLine relevant.
     procedure EditorScrolled(const Editor: TWinControl; const Direction: TCodeEditorScrollDirection);
@@ -336,6 +357,14 @@ type
     constructor Create;
     destructor Destroy; override;
     procedure ResetState;  // Zustand leeren wenn Selektion aufgehoben wird
+    // PUBLIC fuer TFindingHighlighter.InvalidateAllLines: ein Voll-Repaint
+    // ist angefordert. Erreicht er FSavedEditor, fuellt er den
+    // Trefferspeicher wie eine Reparatur - der naechste EndPaint bestaetigt
+    // ihn, ein Fehltreffer danach malt nicht noch einmal (uHitCacheRepair).
+    procedure NoteFullRepaintRequested;
+    // PUBLIC fuer TFindingHighlighter.OnLineMoved: Marken sind gewandert,
+    // die gecachten Rechtecke koennen an falschen Zeilen haengen.
+    procedure NoteMarksMoved;
   end;
 
   // Marker einer einzelnen Datei: Line -> Mark-Daten.
@@ -448,7 +477,9 @@ type
     // Zeilen via InvalidateTopEditor (EIN Call fuer den ganzen sichtbaren
     // Editor statt einem pro Marker, siehe Perf-Kommentar in der
     // Implementation). Wird in EditorScrolled gerufen damit FRenderedRects
-    // nach dem Scroll wieder vollstaendig ist.
+    // nach dem Scroll wieder vollstaendig ist. Meldet den Aufruf als
+    // Reparatur des Trefferspeichers, sofern er FSavedEditor erreicht
+    // (NoteFullRepaintRequested, F1).
     procedure InvalidateAllLines;
     // PUBLIC fuer TLineTrackerNotifier — wird gerufen wenn die IDE einen
     // unserer Tracker.AddLine-Eintraege als geshifted meldet. ANewLine=-1
@@ -1578,6 +1609,12 @@ begin
     // Eintrag - akzeptabel, naechster Scan-Run merged die echten Befunde.
     Bucket.AddOrSetValue(ANewLine, Mark);
   end;
+  // F1: die gecachten Rechtecke haengen jetzt womoeglich an der alten
+  // Zeilennummer, Sichtzustand und TopRow sind aber gleich - ohne das
+  // Hochzaehlen der Generation duerfte der naechste Fehltreffer den
+  // Trefferspeicher nicht mehr nachfuellen.
+  if Assigned(FEditorEventsObj) then
+    FEditorEventsObj.NoteMarksMoved;
   // Repaint anstossen - aktive Datei zeigt jetzt die korrigierten Stripes.
   try
     if Supports(BorlandIDEServices, INTACodeEditorServices, Svc) then
@@ -1608,6 +1645,15 @@ begin
   try
     if not Supports(BorlandIDEServices, INTACodeEditorServices, Svc) then Exit;
     Svc.InvalidateTopEditor;
+    // F1 (Gegenpruefung 2.8, Ergaenzung 2): JEDER Voll-Repaint fuellt den
+    // Trefferspeicher - Scroll-Settle, neue oder abgeraeumte Marken,
+    // Umfaerben -, sofern er FSavedEditor erreicht (das prueft
+    // NoteFullRepaintRequested). Ungemeldet folgte nach jedem Scroll beim
+    // ersten Fehltreffer der Maus noch ein ueberfluessiger Voll-Repaint und
+    // damit ein Neustart der Caret-Blinkphase. Gemeldet wird erst nach dem
+    // Aufruf: wirft er, kommt auch kein Repaint.
+    if Assigned(FEditorEventsObj) then
+      FEditorEventsObj.NoteFullRepaintRequested;
   except
   end;
 end;
@@ -2548,6 +2594,9 @@ begin
   FScrollSettle.Enabled  := False;
   FScrollSettle.OnTimer  := DoScrollSettled;
   FHoveredLine := -1;
+  // Das Feld ist schon genullt; Reset macht den Ausgangszustand nur
+  // ausdruecklich (noch nichts bestaetigt, keine Drossel).
+  FHitRepair.Reset;
 end;
 
 destructor TFindingEditorEvents.Destroy;
@@ -2585,6 +2634,131 @@ begin
     FStaleLines.Clear;
   if Assigned(FHoverWatch) then
     FHoverWatch.Enabled := False;
+  // F1: der Trefferspeicher ist leer, der Sichtzustand bleibt - der erste
+  // Fehltreffer nach dem Neubefuellen darf einmal reparieren. Bewusst NICHT
+  // FHitRepair.Reset: RemoveMarks ruft erst InvalidateAllLines und dann
+  // hierher. Reset vergaesse diese Anforderung, der folgende EndPaint
+  // bestaetigte nichts, und es folgte ein zweiter, ueberfluessiger
+  // Voll-Repaint.
+  FHitRepair.BumpGeneration;
+end;
+
+procedure TFindingEditorEvents.NoteFullRepaintRequested;
+// Nur ein Repaint, der FSavedEditor erreicht, fuellt dessen Speicher. Ging
+// er an einen anderen Editor, bestaetigte sonst der naechste PARTIELLE
+// Paint von FSavedEditor die Anforderung - und der Speicher bliebe auch
+// dann unvollstaendig, wenn FSavedEditor spaeter oben liegt.
+begin
+  if RepaintReachesSavedEditor then
+    FHitRepair.NoteInvalidateAll(GetTickCount64);
+end;
+
+function TFindingEditorEvents.RepaintReachesSavedEditor: Boolean;
+// Vertrag an der Deklaration. InvalidateTopEditor malt nur den OBERSTEN
+// Editor (geteilte Ansicht, zweites Editorfenster: nicht FSavedEditor).
+// Reiner Zeigervergleich - FSavedEditor wird nicht dereferenziert (Welle
+// 1). Dass TopEditor dasselbe Objekt liefert wie die Editor-Ereignisse,
+// setzt auch die Gluehbirne voraus (uIDEFindingBulb: TopEditor und
+// Ereignis-Editor teilen sich eine Tabelle je HWND).
+// Ohne FSavedEditor (nach ResetState) zaehlt jeder Repaint: wer danach
+// markierte Zeilen malt, wird FSavedEditor - in aller Regel der oberste.
+var
+  Svc : INTACodeEditorServices;
+begin
+  if FSavedEditor = nil then Exit(True);
+  Result := False;
+  try
+    if Supports(BorlandIDEServices, INTACodeEditorServices, Svc) then
+      Result := Svc.TopEditor = FSavedEditor;
+  except
+    // OTA-Beruehrung im Maus- und Zeichenpfad: still, wie ueberall in
+    // dieser Unit (s. file-weiten EmptyExcept-Vermerk).
+  end;
+end;
+
+procedure TFindingEditorEvents.NoteMarksMoved;
+begin
+  FHitRepair.BumpGeneration;
+end;
+
+procedure TFindingEditorEvents.NoteEditorViewChanged(
+  const Editor: TWinControl);
+// Nur der Editor, aus dem der Trefferspeicher stammt. Reiner
+// Zeigervergleich - FSavedEditor wird nicht dereferenziert.
+begin
+  if Editor = FSavedEditor then
+    FHitRepair.BumpGeneration;
+end;
+
+procedure TFindingEditorEvents.NoteCharMetrics(const Editor: TWinControl;
+  ACharHeight, ACharWidth: Integer);
+// Vertrag an der Deklaration. Nur fuer denselben Editor: ein anderer
+// aendert den Schluessel ohnehin (HWND), und zwei Editoren mit
+// verschiedener Schrift duerfen die Generation nicht im Wechsel
+// hochtreiben. Zeigervergleich, keine Dereferenzierung.
+begin
+  if (Editor = FSavedEditor)
+     and ((ACharHeight <> FSavedCharHeight)
+          or (ACharWidth <> FSavedCharWidth)) then
+    FHitRepair.BumpGeneration;
+end;
+
+function TFindingEditorEvents.HitCacheKeyOf(
+  const Editor: TWinControl): THitCacheViewKey;
+// Vertrag an der Deklaration. Gerufen wird nur mit Editor = FSavedEditor
+// (EditorMouseMove und EndPaint pruefen das vorher), deshalb stehen
+// FSavedEditorWnd und FLastPaintedFile fuer denselben Editor.
+//
+// KEIN INTACodeEditorState.Refresh: TopRow und LeftColumn liefert die
+// IOTAEditView direkt, und ob ein Refresh malen laesst, ist ungeklaert
+// (Synthese H6) - ausgerechnet das waere hier der Fehler.
+//
+// Ohne View bleibt der Schluessel bei -1/-1 gueltig; Scrollen erkennt F1
+// dann nur noch ueber die Generation (EditorScrolled).
+var
+  Svc   : INTACodeEditorServices;
+  View  : IOTAEditView;
+  Top   : Integer;
+  Left  : Integer;
+begin
+  Top  := -1;
+  Left := -1;
+  try
+    if Supports(BorlandIDEServices, INTACodeEditorServices, Svc) then
+    begin
+      View := Svc.GetViewForEditor(Editor);
+      if Assigned(View) then
+      begin
+        Top  := View.TopRow;
+        Left := View.LeftColumn;
+      end;
+    end;
+  except
+    // OTA-Beruehrung im Maus- und Zeichenpfad: still, wie ueberall in
+    // dieser Unit (s. file-weiten EmptyExcept-Vermerk).
+  end;
+  Result := FHitRepair.MakeKey(NativeUInt(FSavedEditorWnd),
+    FLastPaintedFile, Top, Left);
+end;
+
+function TFindingEditorEvents.WantsHitCacheRepair(
+  const Editor: TWinControl): Boolean;
+var
+  NowMs : UInt64;
+begin
+  NowMs := GetTickCount64;
+  // Erst die Drossel, dann die ToolsAPI: der Sichtzustand wird hoechstens
+  // zweimal je Sekunde erfragt, nicht bei jeder Mausnachricht.
+  if FHitRepair.IsThrottled(NowMs) then Exit(False);
+  // Liegt ein anderer Editor oben, malte InvalidateTopEditor DEN neu - mit
+  // Caret, aber ohne Nutzen fuer diesen Speicher. Der alte Code tat genau
+  // das alle 500 ms (H1 in der geteilten Ansicht).
+  if not RepaintReachesSavedEditor then
+  begin
+    FHitRepair.NoteRepairUnreachable(NowMs);
+    Exit(False);
+  end;
+  Result := FHitRepair.ShouldRepair(HitCacheKeyOf(Editor), NowMs);
 end;
 
 function TFindingEditorEvents.IsCursorOverOverlay: Boolean;
@@ -2708,6 +2882,7 @@ end;
 procedure TFindingEditorEvents.EditorResized(const Editor: TWinControl);
 begin
   FindingBulbEditorChanged(Editor);   // Gluehbirne: nur vormerken
+  NoteEditorViewChanged(Editor);      // F1: Rechtecke ggf. veraltet
 end;
 
 procedure TFindingEditorEvents.EditorElided(const Editor: TWinControl;
@@ -2715,6 +2890,7 @@ procedure TFindingEditorEvents.EditorElided(const Editor: TWinControl;
 begin
   ForgetSnapshotsAround(LogicalLineNum);
   FindingBulbEditorChanged(Editor);   // Gluehbirne: nur vormerken
+  NoteEditorViewChanged(Editor);      // F1: Zeilen darunter verschoben
 end;
 
 procedure TFindingEditorEvents.EditorUnElided(const Editor: TWinControl;
@@ -2722,6 +2898,7 @@ procedure TFindingEditorEvents.EditorUnElided(const Editor: TWinControl;
 begin
   ForgetSnapshotsAround(LogicalLineNum);
   FindingBulbEditorChanged(Editor);   // Gluehbirne: nur vormerken
+  NoteEditorViewChanged(Editor);      // F1: Zeilen darunter verschoben
 end;
 
 procedure TFindingEditorEvents.ForgetSnapshotsAround(ALine: Integer);
@@ -2864,6 +3041,9 @@ begin
   // sie merkt nur vor und wandert danach aus ihrem Hilfsfenster mit.
   FindingBulbEditorChanged(Editor);
   if Editor <> FSavedEditor then Exit;
+  // F1: der Speicher wird gleich geleert - der Sichtzustand gilt als neu,
+  // auch wenn TopRow danach wieder gleich ist (hin und zurueck gescrollt).
+  FHitRepair.BumpGeneration;
   FRenderedRects.Clear;
   FRenderedTextEnds.Clear;
   // AUCH die Hint-Rechtecke (Review-Blocker 2026-08-13): sie zeigen nach
@@ -2945,6 +3125,10 @@ begin
     FRenderedTextEnds.Clear;
     FRenderedHintRects.Clear;
     FHoverWatch.Enabled := False;
+    // F1: jedes Leeren des Speichers zaehlt die Generation hoch - sonst
+    // passte der Schluessel nach dem naechsten partiellen Paint wieder auf
+    // den bestaetigten, und der Speicher bliebe unvollstaendig.
+    FHitRepair.BumpGeneration;
     Exit;
   end;
 
@@ -2965,13 +3149,20 @@ begin
     // Marker fehlen (passiert nach Wheel-Scroll bei dem EditorScrolled
     // nicht zuverlaessig feuert). Re-Invalidate forciert PaintLine, damit
     // FRenderedRects beim naechsten MouseMove vollstaendig ist.
-    // Throttling: max alle 500ms, sonst Repaint-Loop.
+    //
+    // F1 (Caret-Untersuchung 2026-10-12): hier stand nur eine Drossel
+    // ("max alle 500ms"). Jeder Fehltreffer - auch ueber Fortsetzungszeilen
+    // eines Bereichsfunds, im Gutter oder bei einem von Windows
+    // synthetisierten WM_MOUSEMOVE - malte damit alle 500 ms den ganzen
+    // Editor neu, und jeder dieser Paints startete die Blinkphase des
+    // Carets neu: er blinkte unregelmaessig, und das Blink-Ende nach ~5 s
+    // kam nie. Jetzt repariert der Fehltreffer nur, wenn sich der
+    // Sichtzustand seit dem letzten bestaetigten Voll-Repaint geaendert hat
+    // (uHitCacheRepair) - ein zweiter im selben Zustand kann dem Speicher
+    // nichts hinzufuegen. Die Drossel bleibt als Obergrenze.
     if Assigned(GHighlighter) and GHighlighter.HasMarks
-       and (GetTickCount - FLastInvalidateTick > 500) then
-    begin
-      FLastInvalidateTick := GetTickCount;
+       and WantsHitCacheRepair(Editor) then
       GHighlighter.InvalidateAllLines;
-    end;
     Exit;
   end;
 
@@ -3123,6 +3314,12 @@ begin
     FRenderedRects.Clear;
     FRenderedTextEnds.Clear;
     FRenderedHintRects.Clear;
+    // F1 (Gegenpruefung 2.8, Ergaenzung 1): der Speicher ist leer, der
+    // Sichtzustand aber unveraendert. War dieser Paint nur partiell, muss
+    // der naechste Fehltreffer noch EINMAL reparieren duerfen. Laeuft er im
+    // Auftrag einer Reparatur, bestaetigt EndPaint gleich den neuen Stand
+    // mit - eine Repaint-Schleife entsteht daraus nicht.
+    FHitRepair.BumpGeneration;
   end;
 end;
 
@@ -3279,6 +3476,8 @@ procedure TFindingEditorEvents.PaintLine(const Rect: TRect;
 var
   CodeRect  : TRect;
   Line      : Integer;
+  CharH     : Integer;
+  CharW     : Integer;
 begin
   if not Assigned(GHighlighter) then Exit;
   if not Assigned(Context) or not Assigned(Context.EditControl) then Exit;
@@ -3308,6 +3507,13 @@ begin
       GAnnotationOverlay.HideOverlay;
     if Assigned(FHoverWatch) then
       FHoverWatch.Enabled := False;
+    // F1 (Review F1 2026-10-12): der Speicher ist leer. Kehrt dieselbe
+    // Datei zurueck (zweiter Editor malt C, dann wieder A), waere der
+    // Schluessel ohne Hochzaehlen wieder der bestaetigte - und ein
+    // partieller Paint von A liesse Hover und Klick auf den uebrigen
+    // markierten Zeilen tot. Laeuft der Wechsel im angeforderten Repaint,
+    // bestaetigt EndPaint den neuen Stand gleich mit.
+    FHitRepair.BumpGeneration;
   end;
 
   Line := Context.LogicalLineNum;
@@ -3319,12 +3525,16 @@ begin
   // ueber FLineTrackers - ein vorhandener Slot wird nicht neu gebaut.
   GHighlighter.EnsureLineTracker(Context.FileName);
 
+  // CharHeight fuer DPI-bewusstes Overlay-Sizing in EditorMouseMove verwenden.
+  CharH := Context.EditorState.CharHeight;
+  CharW := Context.EditorState.CharWidth;
+  // F1: VOR dem Ueberschreiben von FSavedEditor und den Massen vergleichen.
+  NoteCharMetrics(Context.EditControl, CharH, CharW);
   FSavedEditor     := Context.EditControl;
   FSavedEditorWnd  := Context.EditControl.Handle;  // im Paint sicher allokiert
   CodeRect         := Context.LineState.CodeRect;
-  // CharHeight fuer DPI-bewusstes Overlay-Sizing in EditorMouseMove verwenden.
-  FSavedCharHeight := Context.EditorState.CharHeight;
-  FSavedCharWidth  := Context.EditorState.CharWidth;
+  FSavedCharHeight := CharH;
+  FSavedCharWidth  := CharW;
   // Rect cachen damit EditorMouseMove pro Zeile den Hit-Test machen kann.
   FRenderedRects.AddOrSetValue(Line, CodeRect);
   // VisibleTextRect.Right = X-Pixel wo der sichtbare Code-Text endet.
@@ -3453,6 +3663,15 @@ begin
   // Zeichenpfads (uIDEFindingBulb).
   FindingBulbEditorChanged(Editor);
   if Editor <> FSavedEditor then Exit;
+
+  // F1: ein angeforderter Voll-Repaint ist gelaufen - der Trefferspeicher
+  // gilt fuer den Sichtzustand von JETZT, nicht fuer den der Anforderung
+  // (ein ForceFullRepaint dazwischen hat die Generation schon erhoeht).
+  // Die View wird nur nach einer Anforderung gefragt, nicht je Paint.
+  // VOR SweepEditedLines: das kann ueber RemoveMarks ResetState rufen,
+  // danach waeren FSavedEditor und FLastPaintedFile leer.
+  if FHitRepair.HasPendingRequest then
+    FHitRepair.NotePaintCompleted(HitCacheKeyOf(Editor));
 
   SweepEditedLines;
 
