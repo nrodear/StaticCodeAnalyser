@@ -130,11 +130,17 @@ def build() -> str:
             # Normalfall, ohne diese Felder sieht ein Modul dort nie fixMode.
             ('Anchor',    r.get('anchor', '') or ''),
             ('FixMode',   r.get('fixMode', '') or ''),
+            # Beschluss 2026-10-10: Editorhilfe im IDE-Modul (HTML-QF-Badge).
+            # Nur ein JSON-Boolean true zaehlt - wie im Lader.
+            ('EditorHelp', r.get('editorHelp') is True),
         ]
         L.append('    // %s' % r.get('id', '?'))
         L.append('    (')
         for n, (fname, val) in enumerate(fields):
-            lit = wrap(pas_parts(val), ' ' * 8)
+            if isinstance(val, bool):
+                lit = 'True' if val else 'False'
+            else:
+                lit = wrap(pas_parts(val), ' ' * 8)
             sep = ';' if n < len(fields) - 1 else ''
             L.append('      %-9s: %s%s' % (fname, lit, sep))
         L.append('    )%s' % (',' if i < len(rules) - 1 else ''))
@@ -198,9 +204,61 @@ def build_overlay() -> str:
     return '\n'.join(L) + '\n'
 
 
+SCHEMA = os.path.join(ROOT, 'rules', 'sca-rules.schema.json')
+
+
+def schema_enum(name: str):
+    """Die enum-Werte der Eigenschaft name aus dem Schema (erster Treffer
+    beim Gang durch das Schema), None ohne enum."""
+    with io.open(SCHEMA, encoding='utf-8-sig') as f:
+        stack = [json.load(f)]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            v = node.get(name)
+            if isinstance(v, dict) and isinstance(v.get('enum'), list):
+                return set(v['enum'])
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
+    return None
+
+
+def validate_enums() -> list:
+    """anchor/fixMode jeder Regel gegen das Schema-enum (Review reDelphiX
+    nach Bereichen 2026-10-10, Nit 12): der Generator kopiert die Werte in
+    den einkompilierten Fallback, und den liest der Lader UNGEPRUEFT - ein
+    'atuo' oder 'Auto' kaeme sonst bis TRuleMeta.FixMode durch."""
+    with io.open(SRC, encoding='utf-8-sig') as f:
+        rules = json.load(f)['rules']
+    errs = []
+    for r in rules:
+        if 'editorHelp' in r and not isinstance(r['editorHelp'], bool):
+            errs.append('%s: editorHelp=%r ist kein Boolean'
+                        % (r.get('id', '?'), r['editorHelp']))
+    for field in ('anchor', 'fixMode'):
+        allowed = schema_enum(field)
+        if allowed is None:
+            errs.append('Schema ohne enum fuer %s' % field)
+            continue
+        for r in rules:
+            if field not in r:
+                continue
+            v = r[field]
+            if not isinstance(v, str) or v not in allowed:
+                errs.append('%s: %s=%r ist nicht im Schema-enum %s'
+                            % (r.get('id', '?'), field, v, sorted(allowed)))
+    return errs
+
+
 def main() -> int:
     check = '--check' in sys.argv
     rc = 0
+    errs = validate_enums()
+    if errs:
+        for e in errs:
+            print('FEHLER: ' + e)
+        return 2
     for dst, text in ((DST, build()), (DST_OV, build_overlay())):
         old = ''
         if os.path.exists(dst):

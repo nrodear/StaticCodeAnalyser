@@ -55,6 +55,13 @@ unit uFindingActions;
 //     aber unter den Hilfen, wenn es zu dem Fund eine gibt (Nico
 //     2026-10-08, Editorhilfen E1). Kontextmenue und Dock-Grid zeigen es
 //     immer. Ein Menue setzt die Unterdrueck-Eintraege mit einem Trenner ab.
+//   * fakRefactor ist ein Umbau an der STELLE, der den Fund nicht behebt
+//     (reDelphix: uses-Eintraege qualifizieren auf einer Fundzeile). Die
+//     Gluehbirne zeigt ihn nie; Kontextmenue und Dock-Grid zeigen ihn,
+//     und zwar je Menue nur einmal: gleichlautende fakRefactor-Eintraege
+//     (gleiche Caption) mehrerer Funde derselben Zeile erscheinen beim
+//     ersten Fund (Review reDelphiX nach Bereichen 2026-10-10, Minor 13
+//     und 14).
 //   * Ein Host fragt fuer EIN Menue hoechstens MAX_FINDINGS_PER_MENU Funde
 //     ab (uFindingActionMenu.BuildFindingMenuModel; der Rest erscheint als
 //     Hinweiszeile). Ein Anbieter, der seine Aktionsobjekte haelt, muss die
@@ -77,7 +84,7 @@ const
 type
   // Was eine Aktion ist (siehe VERTRAG oben). fakFix MUSS Ordnungszahl 0
   // bleiben; neue Arten nur hinten anhaengen.
-  TFindingActionKind = (fakFix, fakNavigate, fakSuppress);
+  TFindingActionKind = (fakFix, fakNavigate, fakSuppress, fakRefactor);
 
   TFindingAction = record
     Caption : string;        // Menuetext, bereits lokalisiert
@@ -85,6 +92,11 @@ type
     Enabled : Boolean;
     Execute : TNotifyEvent;  // nil bei Enabled = False erlaubt
     Kind    : TFindingActionKind;
+    // Die Aktion kann das Verhalten des Programms aendern (Konzept
+    // Editorhilfen, Entscheid E2) - der Menuetext sagt es. Ein Tastendruck,
+    // der die erste Hilfe ungesehen ausfuehrt (Ctrl+Alt+F im Plugin),
+    // laesst sie aus. Vorgabe False (Default(TFindingAction)).
+    ChangesBehavior : Boolean;
   end;
 
   // Liefert die Aktionen eines Anbieters zu einem Fund; leer, wenn der

@@ -48,10 +48,12 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uMethodd12, uSCAConsts, uIgnoreList,
   // Quellstellen-Dienst fuer Fremd-Konsumenten (Modul "Source Refactor"):
-  // die Aliase unten reichen nur die Klassen- und Record-Typen weiter.
-  // Konstanten und Aufzaehlungswerte braucht der Konsument zusaetzlich
-  // per eigenem uses: ROLE_*, rv*/TRefactorValueType und rf*/TRefactorFlags
-  // aus uRefactorInfo, SOURCE_PLACES_VERSION aus uSourcePlaces.
+  // die Aliase unten reichen Typen weiter - Klassen, Records, die Enums
+  // TNodeKind und TUsesSection und das Set TNodeKinds; deren Werte gehen
+  // qualifiziert ueber den Alias (TNodeKind.nkAssign). Per eigenem uses
+  // braucht der Konsument: ROLE_*, rv*/TRefactorValueType und
+  // rf*/TRefactorFlags aus uRefactorInfo, SOURCE_PLACES_VERSION aus
+  // uSourcePlaces.
   uAstNode, uAstSpans, uRefactorInfo, uSourcePlaces;
 
 type

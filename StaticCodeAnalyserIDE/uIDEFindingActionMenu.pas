@@ -2,9 +2,9 @@ unit uIDEFindingActionMenu;
 
 // VCL-Haelfte des Menue-Erzeugers (Konzept Editor-Gluehbirne 2026-10-06,
 // Stufe C): ein TFindingMenuModel (uFindingActionMenu, Engine, getestet)
-// wird zu TMenuItems in einem TPopupMenu. Beide heutigen Einstiege -
-// das Editor-Kontextmenue und das Dock-Grid - rufen genau dies; die
-// Gluehbirne und Alt+Enter kommen spaeter dazu, ohne eine zweite
+// wird zu TMenuItems in einem TPopupMenu. Alle drei Einstiege - das
+// Editor-Kontextmenue, das Dock-Grid und die Gluehbirne (uIDEFindingBulb)
+// - rufen genau dies; Alt+Enter kommt spaeter dazu, ohne eine zweite
 // Fassung der Liste.
 //
 // Tags: Trenner und Kopfzeilen tragen ATagBase - 1, Aktionen

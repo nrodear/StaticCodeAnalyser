@@ -24,6 +24,9 @@ type
     [Test] procedure HeaderCaption_RuleAndTruncatedMessage;
     [Test] procedure ActionIndex_PointsIntoFlatList;
     [Test] procedure Registry_CollectsProviderErrors;
+    // Review reDelphiX nach Bereichen 2026-10-10, Minor 24: Abbruch und
+    // Stapelueberlauf eines Anbieters landen NICHT in Errors.
+    [Test] procedure Registry_PassesAbortAndStackOverflow;
     // Gluehbirne: nur verfuegbare Hilfen - kein Navigieren, nichts
     // Ausgegrautes, nichts ohne Execute.
     [Test] procedure AvailableFixesOnly_DropsNavigateDisabledAndNoExecute;
@@ -38,13 +41,18 @@ type
     // in jeder Form mit einem Trenner abgesetzt.
     [Test] procedure AvailableFixesOnly_SuppressOnlyNextToAFix;
     [Test] procedure Suppress_SeparatedFromOtherActions;
+    // Review reDelphiX nach Bereichen 2026-10-10, Minor 13/14: ein Umbau an
+    // der Stelle (fakRefactor) steht je Menue nur einmal und nie in der
+    // Gluehbirne.
+    [Test] procedure Refactor_OncePerMenu_NeverInBulb;
   end;
 
 implementation
 
 uses
   System.SysUtils,
-  uMethodd12, uSCAConsts, uFindingActions, uFindingActionMenu;
+  uMethodd12, uSCAConsts, uFindingActions, uFindingActionMenu,
+  uCrashDiag;   // EStackExhausted
 
 type
   TStubProvider = class
@@ -52,6 +60,7 @@ type
     Captions : TArray<string>;
     Ran      : Integer;
     Throws   : Boolean;
+    Raises   : Integer;   // 1 = Abort, 2 = Stapel erschoepft
     function Provide(const AFinding: TLeakFinding): TArray<TFindingAction>;
     procedure DoExecute(Sender: TObject);
   end;
@@ -71,6 +80,10 @@ begin
   Inc(GProvideCalls);
   if Throws then
     raise Exception.Create('kaputt');
+  case Raises of
+    1: Abort;
+    2: raise EStackExhausted.Create('Stapel erschoepft (Stub)');
+  end;
   SetLength(Result, Length(Captions));
   for i := 0 to High(Captions) do
   begin
@@ -311,6 +324,82 @@ begin
     F.Free;
     Bad.Free;
     Good.Free;
+  end;
+end;
+
+procedure TTestFindingActionMenu.Registry_PassesAbortAndStackOverflow;
+var
+  Bad    : TStubProvider;
+  T      : Integer;
+  F      : TLeakFinding;
+  Caught : string;
+begin
+  Bad := TStubProvider.Create;
+  F := Finding('x');
+  T := TFindingActions.Register(Bad.Provide);
+  try
+    Bad.Raises := 1;
+    Caught := '';
+    try
+      BuildFindingMenuModel([F], []);
+    except
+      on EAbort do Caught := 'abort';
+    end;
+    Assert.AreEqual('abort', Caught, 'EAbort laeuft zum Host durch');
+    Bad.Raises := 2;
+    Caught := '';
+    try
+      BuildFindingMenuModel([F], []);
+    except
+      on EStackExhausted do Caught := 'stack';
+    end;
+    Assert.AreEqual('stack', Caught, 'ein erschoepfter Stapel laeuft durch');
+  finally
+    TFindingActions.Unregister(T);
+    F.Free;
+    Bad.Free;
+  end;
+end;
+
+procedure TTestFindingActionMenu.Refactor_OncePerMenu_NeverInBulb;
+var
+  F1, F2, F3 : TLeakFinding;
+  Lists      : TArray<TArray<TFindingAction>>;
+  M          : TFindingMenuModel;
+  R1, R2     : TFindingAction;
+  i, Count   : Integer;
+begin
+  F1 := Finding('Unused A'); F2 := Finding('Unused B'); F3 := Finding('Unused C');
+  try
+    R1 := Act('uses: Windows -> Winapi.Windows', '', True, True);
+    R1.Kind := fakRefactor;
+    R2 := Act('uses: qualify all 2 entries', 'Winapi.Windows, System.Classes',
+      True, True);
+    R2.Kind := fakRefactor;
+    SetLength(Lists, 3);
+    Lists[0] := [Act('Fix A', '', True, True), R1, R2];
+    Lists[1] := [R1, R2];                          // nur dieselben Umbauten
+    Lists[2] := [Act('Fix C', '', True, True), R1];
+    M := BuildFindingMenuModelFrom([F1, F2, F3], Lists, [moHeaders]);
+    Count := 0;
+    for i := 0 to High(M.Actions) do
+      if M.Actions[i].Caption = R1.Caption then
+        Inc(Count);
+    Assert.AreEqual<Integer>(1, Count, 'derselbe Umbau nur einmal');
+    Assert.AreEqual<Integer>(4, M.ActionCount, 'Fix A, R1, R2, Fix C');
+    Count := 0;
+    for i := 0 to High(M.Entries) do
+      if M.Entries[i].Kind = mkHeader then
+        Inc(Count);
+    Assert.AreEqual<Integer>(2, Count,
+      'der Fund, dem nur doppelte Umbauten blieben, faellt samt Kopf weg');
+    // Gluehbirne: nur Hilfen, kein Umbau.
+    M := BuildFindingMenuModelFrom([F1, F2, F3], Lists, [moAvailableFixesOnly]);
+    for i := 0 to High(M.Actions) do
+      Assert.IsTrue(M.Actions[i].Kind = fakFix, M.Actions[i].Caption);
+    Assert.AreEqual<Integer>(2, M.ActionCount, 'Fix A und Fix C');
+  finally
+    F1.Free; F2.Free; F3.Free;
   end;
 end;
 

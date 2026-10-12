@@ -212,7 +212,11 @@ begin
     try
       SL.LoadFromFile(AFileName);
     except
-      Exit;
+      // Nicht lesbar oder falsch kodiert: der Aufrufer faellt auf die
+      // eingelinkte Ressource zurueck. Alles andere laeuft weiter.
+      on EFOpenError do Exit;
+      on EInOutError do Exit;
+      on EEncodingError do Exit;
     end;
     LoadFromStrings(SL);
     FSource := AFileName;
@@ -237,7 +241,7 @@ begin
     RS := TResourceStream.Create(HInstance, AResName, PChar(10));
     {$ENDIF}
   except
-    Exit;   // Ressource nicht vorhanden
+    on EResNotFound do Exit;   // Ressource nicht vorhanden
   end;
   try
     SL := TStringList.Create;
@@ -334,6 +338,15 @@ begin
       end;
   else
     begin
+      // Ein EINZIGER Kandidat ist nicht mehrdeutig: eine Datei, die mit
+      // dem Kurznamen uebersetzt, hat nur diese Wahl (ComCtrls ->
+      // Vcl.ComCtrls). Geraten wird nur bei mehreren (Review nach
+      // Bereichen 2026-10-10, Nit 16; so stand es schon im Kopf).
+      if Length(Cands) = 1 then
+      begin
+        AQualified := Cands[0];
+        Exit(True);
+      end;
       AReason := 'Rahmenwerk (VCL/FMX) der Datei nicht erkennbar: '
         + JoinNames(Cands);
       Exit;

@@ -1260,7 +1260,7 @@ end;
 //   * TRuleCatalog/uLexer-Keywords/gDetectors/Prefilter-Index/uLocalization
 //                              -> beim Unit-/Config-Load gebaut, waehrend
 //                                 des Scans read-only -> kein Schutz noetig.
-//   * uFixHint/uQuickFix/uSuppressionTelemetry/uBaseline/uPathOverrides/
+//   * uFixHint/uSuppressionTelemetry/uBaseline/uPathOverrides/
 //     uConfidenceFilter        -> laufen ausschliesslich in der seriellen
 //                                 Post-Scan-Phase -> unveraendert.
 

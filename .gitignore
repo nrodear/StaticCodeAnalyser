@@ -40,19 +40,14 @@ reDelphix/reDelphix.d12.res
 reDelphix/unitscopes.res
 reDelphix/tests/reDelphix.Test.res
 reDelphix/tools/probe/RdxCorpusProbe.res
-# FPC-Pruefstand: out/ und die je Lauf aus dem Repo kopierten Units
-# (build.sh erzeugt sie neu; die Stubs daneben sind Quelle und bleiben).
-reDelphix/tools/fpc-pruefstand/out/
-reDelphix/tools/fpc-pruefstand/runner.pas
-reDelphix/tools/fpc-pruefstand/uDetectorUtils.pas
-reDelphix/tools/fpc-pruefstand/uRefactorInfo.pas
-reDelphix/tools/fpc-pruefstand/uRefactorInfoBuilder.pas
-reDelphix/tools/fpc-pruefstand/uRefactorConcat.pas
-reDelphix/tools/fpc-pruefstand/uFindingActions.pas
-reDelphix/tools/fpc-pruefstand/uSourcePlaces.pas
-reDelphix/tools/fpc-pruefstand/uRdxRecipes.pas
-reDelphix/tools/fpc-pruefstand/uRdxScopeTable.pas
-reDelphix/tools/fpc-pruefstand/uTest*.pas
+# VarNameProject-Kompilierprobe E26: die IDE legt Projekt und .res beim
+# Oeffnen der .dpr selbst an (wie bei tools/ResultProbe) - nicht einchecken.
+VarNameProject/probe/VnpTypeProbe.dproj
+VarNameProject/probe/VnpTypeProbe.res
+# FPC-Pruefstand: out/ und die je Lauf kopierten Units haelt die lokale
+# reDelphix/tools/fpc-pruefstand/.gitignore heraus - EINE Liste, gleich
+# den Mustern, die build.sh vor jedem Lauf loescht (Review reDelphiX nach
+# Bereichen 2026-10-10, Nit 51).
 
 # ---- Build-Output-Verzeichnisse ----
 # Delphi schreibt kompilierte Artefakte (DCU/BPL/EXE/DLL) typisch

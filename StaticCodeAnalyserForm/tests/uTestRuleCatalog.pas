@@ -1162,6 +1162,11 @@ begin
     'SCA003 meldet Zuweisungen und Aufrufe');
   Assert.AreEqual('assisted', Meta.FixMode,
     'SCA003 ist ein Review-Zeiger - nur assistiert, nie automatisch');
+  // Editorhilfe (Beschluss 2026-10-10): SCA044 schreibt (Format()), SCA003
+  // legt nur eine Vorlage in die Zwischenablage - keine Editorhilfe.
+  Assert.IsTrue(TRuleCatalog.GetRuleCanonical(fkConcatToFormat).EditorHelp,
+    'SCA044 hat eine Editorhilfe');
+  Assert.IsFalse(Meta.EditorHelp, 'SCA003 hat keine Editorhilfe');
 end;
 
 procedure TTestRuleCatalog.FallbackCarriesAnchorAndFixMode;
@@ -1187,6 +1192,7 @@ var
   K          : TFindingKind;
   JsonAnchor : array[TFindingKind] of string;
   JsonFix    : array[TFindingKind] of string;
+  JsonHelp   : array[TFindingKind] of Boolean;
   Abweichend : string;
 
   // Je abweichendem Kind ein Eintrag ' SCAnnn (anchor/fixMode statt
@@ -1202,9 +1208,11 @@ var
       for Kind := Low(TFindingKind) to High(TFindingKind) do
       begin
         Fb := TRuleCatalog.GetRuleCanonical(Kind);
-        if (Fb.Anchor <> JsonAnchor[Kind]) or (Fb.FixMode <> JsonFix[Kind]) then
-          SB.Append(Format(' %s (%s/%s statt %s/%s)',
-            [Fb.ID, Fb.Anchor, Fb.FixMode, JsonAnchor[Kind], JsonFix[Kind]]));
+        if (Fb.Anchor <> JsonAnchor[Kind]) or (Fb.FixMode <> JsonFix[Kind])
+           or (Fb.EditorHelp <> JsonHelp[Kind]) then
+          SB.Append(Format(' %s (%s/%s/%s statt %s/%s/%s)',
+            [Fb.ID, Fb.Anchor, Fb.FixMode, BoolToStr(Fb.EditorHelp, True),
+             JsonAnchor[Kind], JsonFix[Kind], BoolToStr(JsonHelp[Kind], True)]));
       end;
       Result := SB.ToString;
     finally
@@ -1222,6 +1230,7 @@ begin
     Meta := TRuleCatalog.GetRuleCanonical(K);
     JsonAnchor[K] := Meta.Anchor;
     JsonFix[K]    := Meta.FixMode;
+    JsonHelp[K]   := Meta.EditorHelp;
   end;
 
   OldPath := TRuleCatalog.JsonFilePath;
@@ -1245,7 +1254,7 @@ begin
     // Und ueber ALLE Kinds: Fallback = geladene JSON.
     Abweichend := FallbackAbweichungen;
     Assert.AreEqual('', Abweichend,
-      'anchor/fixMode im Fallback abweichend - uRuleCatalogData.inc regenerieren:' +
+      'anchor/fixMode/editorHelp im Fallback abweichend - uRuleCatalogData.inc regenerieren:' +
       Abweichend);
   finally
     TRuleCatalog.JsonFilePath := OldPath;
@@ -1328,7 +1337,8 @@ begin
     '{"rules":[' +
     '{"id":"SCA003","kind":"SQLInjection","name":"n3"},' +
     '{"id":"SCA044","kind":"ConcatToFormat","name":"n44",' +
-    '"anchor":"CALL","fixMode":"none"}]}');
+    '"anchor":"CALL","fixMode":"none","editorHelp":false},' +
+    '{"id":"SCA139","kind":"FreeWithoutNil","name":"n139","editorHelp":"ja"}]}');
   try
     TRuleCatalog.JsonFilePath := Datei;
     TRuleCatalog.Reload;
@@ -1346,6 +1356,12 @@ begin
       'SCA044: ausdruecklicher anchor gilt, klein geschrieben');
     Assert.AreEqual('none', Meta.FixMode,
       'SCA044: ausdrueckliches none schaltet ab - kein Rueckfall auf auto');
+    // editorHelp: ausdrueckliches false gilt; kein Boolean -> Tabellenwert.
+    Assert.IsFalse(Meta.EditorHelp, 'SCA044: ausdrueckliches editorHelp false gilt');
+    Assert.IsTrue(TRuleCatalog.GetRuleCanonical(fkFreeWithoutNil).EditorHelp,
+      'SCA139: editorHelp "ja" ist kein Boolean -> Tabellenwert true');
+    Assert.IsFalse(TRuleCatalog.GetRuleCanonical(fkSQLInjection).EditorHelp,
+      'SCA003 ohne editorHelp in der Datei -> Tabellenwert false');
   finally
     TRuleCatalog.JsonFilePath := AltPfad;
     if TFile.Exists(Datei) then TFile.Delete(Datei);

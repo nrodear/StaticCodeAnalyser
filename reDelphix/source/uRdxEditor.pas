@@ -23,8 +23,9 @@ unit uRdxEditor;
 // NICHTS WIRD BLIND GESCHRIEBEN
 //
 // Vor dem Schreiben wird JEDER Bereich einer Aktion zweimal gegen den
-// Scan-Text geprueft: als Zeilen (SpanText, wie der Dienst ihn gebildet
-// hat) und als Bytes (der Ausschnitt, der tatsaechlich geloescht wird) -
+// Text beim Menueaufbau geprueft (den der Anbieter beschrieben hat - nicht
+// den Scan): als Zeilen (SpanText, wie der Dienst ihn gebildet hat) und
+// als Bytes (der Ausschnitt, der tatsaechlich geloescht wird) -
 // uRdxBufferMath.PlanByteEdits, getestet. Weicht einer ab, wird KEINER
 // geschrieben. Dann laufen alle Ersetzungen durch EINEN
 // CreateUndoableWriter: eine Aktion = ein Strg+Z (Review reDelphiX
@@ -46,6 +47,14 @@ interface
 uses
   uRefactorInfo, uRdxBufferMath;
 
+const
+  // msgid zu EDITOR_MAX_COLUMN (Format-Argument: die Spalte), EINMAL fuer
+  // Editor und Anbieter (Review nach Bereichen 2026-10-10, Nit 34). Hier
+  // und nicht in uRdxBufferMath: tools/i18n_extract.py loest nur
+  // Konstanten derselben Unit auf, und hier steht ein _(S_TOO_LONG).
+  S_TOO_LONG = 'Line too long for the editor selection (the editor '
+    + 'reaches at most column %d)';
+
 type
   TRdxEditor = class
   public
@@ -62,9 +71,14 @@ type
     class function ReplaceSpans(const AFile: string;
       const AEdits: TArray<TRdxEdit>; out AError: string): Boolean; static;
 
-    // True, wenn eine Unit namens AShortName zum aktiven Projekt gehoert
-    // oder als AShortName.pas neben ANearFile liegt - dann darf ein
-    // uses-Eintrag dieses Namens NICHT auf eine RTL-Unit expandiert werden.
+    // True, wenn eine Unit namens AShortName zum Projekt gehoeren kann -
+    // dann darf ein uses-Eintrag dieses Namens NICHT auf eine RTL-Unit
+    // expandiert werden: AShortName.pas/.pp neben ANearFile, ein Modul
+    // irgendeines Projekts der Gruppe (nicht nur des aktiven), oder
+    // AShortName.pas/.pp in einem Verzeichnis des Unit-Suchpfads eines
+    // dieser Projekte (aktive Konfiguration; Eintraege mit Makros wie
+    // $(BDS) bleiben aussen vor - dort liegt die Bibliothek, nicht das
+    // Projekt). Review reDelphiX nach Bereichen 2026-10-10, Minor 18.
     class function ProjectHasUnit(const AShortName,
       ANearFile: string): Boolean; static;
 
@@ -94,15 +108,14 @@ uses
   uRdxLog;
 
 const
-  SNoEditor = 'Datei ist nicht im Editor geoeffnet';
-  SNoView   = 'Editor-Ansicht nicht verfuegbar';
-  SNoBuffer = 'Editor-Puffer nicht lesbar';
-  SNoWriter = 'Editor-Puffer nicht beschreibbar';
+  SNoEditor   = 'Datei liess sich im Editor nicht oeffnen oder finden';
+  SNoView     = 'Editor-Ansicht nicht verfuegbar';
+  SNoBuffer   = 'Editor-Puffer nicht lesbar';
+  SNoWriter   = 'Editor-Puffer nicht beschreibbar';
+  SReadOnly   = 'Editor-Puffer ist schreibgeschuetzt - nicht geschrieben';
   // Ueber _() (Editorhilfen E6); die vier oben folgen mit dem E6-Rest.
   S_PAST_END = 'Range %d:%d to %d:%d lies behind the end of the editor '
     + 'buffer (%d lines) - rescan the file';
-  S_TOO_LONG = 'Line too long for the editor selection (the editor '
-    + 'reaches at most column %d)';
   S_NO_MOVE  = 'Cannot move the editor cursor to line %d, column %d';
 
 function WithLogHint(const AMsg: string): string;
@@ -112,13 +125,17 @@ end;
 
 function TryGetSourceEditor(const AFile: string; AOpen: Boolean;
   out ASrc: IOTASourceEditor): Boolean;
-// Modul finden (oder oeffnen) -> erster IOTASourceEditor des Moduls.
-// Nicht ModuleFileEditors[0]: bei einem Form-Modul kann dort der
-// DFM-Editor stehen.
+// Modul finden (oder oeffnen) -> der IOTASourceEditor DIESER Datei. Nicht
+// einfach der erste: bei einem Form-Modul kann dort der DFM-Editor stehen
+// (als Text angezeigt ist er auch ein IOTASourceEditor) - ein Marker
+// landete sonst im Formular. Erst der volle Pfad, dann derselbe
+// Dateiname in anderer Schreibweise; sonst keiner (Review nach Bereichen
+// 2026-10-10, Nit 35).
 var
   ModSvc : IOTAModuleServices;
   ActSvc : IOTAActionServices;
   Module : IOTAModule;
+  Cand   : IOTASourceEditor;
   i      : Integer;
 begin
   Result := False;
@@ -134,8 +151,22 @@ begin
   end;
   if Module = nil then Exit;
   for i := 0 to Module.ModuleFileCount - 1 do
-    if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, ASrc) then
+    if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, Cand)
+       and SameFileName(Cand.FileName, AFile) then
+    begin
+      ASrc := Cand;
       Break;
+    end;
+  if ASrc = nil then
+    for i := 0 to Module.ModuleFileCount - 1 do
+      if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, Cand)
+         and SameText(ExtractFileName(Cand.FileName), ExtractFileName(AFile)) then
+      begin
+        RdxLog('Editor fuer %s ueber den Dateinamen gefunden (%s)',
+          [ExtractFileName(AFile), Cand.FileName]);
+        ASrc := Cand;
+        Break;
+      end;
   Result := ASrc <> nil;
 end;
 
@@ -196,11 +227,17 @@ end;
 
 function DisplayPosOf(const AView: IOTAEditView; ALines: TStrings;
   ALine, ACol: Integer): TOTAEditPos;
-// Zeichen-Spalte -> Anzeige-Spalte ueber die IDE selbst. TOTACharPos
-// zaehlt die UTF-8-Bytes der Zeile (so handhaben es GExperts & Co.);
-// fuer reinen ASCII-Code ist das die Zeichenzahl. Vorbedingung, von
-// SelectSpan mit SpanFitsEditor geprueft: ACol und der Byte-Praefix
-// passen in die SmallInt-Felder von TOTAEditPos/TOTACharPos (Nit 8).
+// Zeichen-Spalte -> Anzeige-Spalte ueber die IDE selbst. ConvertPos liest
+// TOTACharPos.CharIndex in ZEICHEN der Zeile (0-basiert, Tab = 1) - gemessen
+// 2026-10-11 mit VarNameProject (Sonde M10: hinter 'Gruesse EUR' mit
+// Umlauten und Euro-Zeichen CharIndex 20 = 20 Zeichen, nicht 24 Bytes;
+// die Rueckrechnung ergab dieselbe Anzeigespalte). Bis dahin stand hier
+// der UTF-8-Byte-Praefix (wie GExperts) - auf Zeilen mit Nicht-ASCII vor
+// ACol markierte SelectSpan dadurch zu weit rechts. Das Ersetzen selbst
+// (Pufferbytes ueber Reader/Writer) war davon nicht betroffen.
+// Vorbedingung, von SelectSpan mit SpanFitsEditor geprueft: ACol passt in
+// die SmallInt-Felder von TOTAEditPos/TOTACharPos (Nit 8; die Pruefung
+// ueber den Byte-Praefix ist strenger als noetig, also sicher).
 var
   CharPos : TOTACharPos;
 begin
@@ -208,7 +245,7 @@ begin
   Result.Col  := ACol;
   if (ALine < 1) or (ALine > ALines.Count) then Exit;
   CharPos.Line      := ALine;
-  CharPos.CharIndex := Utf8PrefixLength(ALines[ALine - 1], ACol);
+  CharPos.CharIndex := ACol - 1;
   AView.ConvertPos(False, Result, CharPos);
   Result.Line := ALine;
 end;
@@ -272,19 +309,20 @@ begin
   AError := '';
   RdxLog('SelectSpan %s %d:%d-%d:%d', [ExtractFileName(AFile),
     ASpan.StartLine, ASpan.StartCol, ASpan.EndLine, ASpan.EndCol]);
-  if not ASpan.IsValid then
-  begin
-    AError := 'kein gueltiger Bereich';
-    Exit;
-  end;
-  if not TryGetSourceEditor(AFile, True, Src) then
-  begin
-    AError := SNoEditor;
-    Exit;
-  end;
   Lines := TStringList.Create;
   try
     try
+      // Auch diese Ausstiege laufen durch das finally (Log + Hinweis).
+      if not ASpan.IsValid then
+      begin
+        AError := 'kein gueltiger Bereich';
+        Exit;
+      end;
+      if not TryGetSourceEditor(AFile, True, Src) then
+      begin
+        AError := SNoEditor;
+        Exit;
+      end;
       Src.Show;
       if not TryGetView(Src, View, EdPos) then
       begin
@@ -317,6 +355,9 @@ begin
         Exit;
       end;
       Block.Reset;
+      // Eine vom Benutzer hinterlassene Spaltenblock-Art (Alt+Umschalt)
+      // machte aus einer mehrzeiligen Anweisung ein Rechteck (Nit 38).
+      Block.Style := btNonInclusive;
       P := DisplayPosOf(View, Lines, ASpan.StartLine, ASpan.StartCol);
       RdxLog('  Anfang Zeichen %d -> Anzeige %d', [ASpan.StartCol, P.Col]);
       if not EdPos.Move(P.Line, P.Col) then
@@ -340,12 +381,18 @@ begin
     except
       on EStackExhausted do raise;
       on EAbort do raise;
+      // Jeder andere Fehler der IDE geht als AError an den Aufrufer, der
+      // ihn als Meldung zeigt - dasselbe Format wie ReplaceSpans (Nit 39).
       on E: Exception do
-        AError := E.Message;
+        AError := E.ClassName + ': ' + E.Message;
     end;
   finally
     Lines.Free;
-    if AError <> '' then RdxLog('  SelectSpan FEHLER: ' + AError);
+    if AError <> '' then
+    begin
+      RdxLog('  SelectSpan FEHLER: ' + AError);
+      AError := WithLogHint(AError);
+    end;
   end;
 end;
 
@@ -353,6 +400,7 @@ class function TRdxEditor.ReplaceSpans(const AFile: string;
   const AEdits: TArray<TRdxEdit>; out AError: string): Boolean;
 var
   Src      : IOTASourceEditor;
+  Buffer   : IOTAEditBuffer;
   View     : IOTAEditView;
   EdPos    : IOTAEditPosition;
   Bytes    : TBytes;
@@ -371,14 +419,21 @@ begin
     RdxLog('  %d:%d-%d:%d, neu "%s"', [AEdits[i].Span.StartLine,
       AEdits[i].Span.StartCol, AEdits[i].Span.EndLine, AEdits[i].Span.EndCol,
       Visible(AEdits[i].NewText)]);
-  if not TryGetSourceEditor(AFile, True, Src) then
-  begin
-    AError := SNoEditor;
-    RdxLog('  FEHLER: ' + AError);
-    Exit;
-  end;
   try
     try
+      // Auch dieser Ausstieg laeuft durch das finally (Log + Hinweis, Nit 39).
+      if not TryGetSourceEditor(AFile, True, Src) then
+      begin
+        AError := SNoEditor;
+        Exit;
+      end;
+      // Schreibgeschuetzt (Bibliotheksquelle, gesperrte Datei): nichts
+      // schreiben, statt es dem Verhalten der IDE zu ueberlassen (Nit 40).
+      if Supports(Src, IOTAEditBuffer, Buffer) and Buffer.IsReadOnly then
+      begin
+        AError := SReadOnly;
+        Exit;
+      end;
       // 1) Puffer als Bytes; ALLE Bereiche pruefen, bevor einer
       //    geschrieben wird.
       if not ReadBufferBytes(Src, Bytes) then
@@ -423,6 +478,8 @@ begin
     except
       on EStackExhausted do raise;
       on EAbort do raise;
+      // Jeder andere Fehler der IDE geht als AError an den Aufrufer, der
+      // ihn als Meldung zeigt (Nit 39).
       on E: Exception do
         AError := E.ClassName + ': ' + E.Message;
     end;
@@ -435,31 +492,77 @@ begin
   end;
 end;
 
-class function TRdxEditor.ProjectHasUnit(const AShortName,
-  ANearFile: string): Boolean;
+// Liegt AShortName.pas oder .pp im Verzeichnis ADir?
+function UnitFileIn(const ADir, AShortName: string): Boolean;
 var
-  ModSvc : IOTAModuleServices;
-  Proj   : IOTAProject;
-  Info   : IOTAModuleInfo;
-  i      : Integer;
+  D : string;
+begin
+  D := IncludeTrailingPathDelimiter(ADir);
+  Result := FileExists(D + AShortName + '.pas')
+    or FileExists(D + AShortName + '.pp');
+end;
+
+// Modul des Projekts oder Datei im Unit-Suchpfad seiner aktiven
+// Konfiguration (s. ProjectHasUnit).
+function ProjectKnowsUnit(AProj: IOTAProject; const AShortName: string): Boolean;
+var
+  Info  : IOTAModuleInfo;
+  Cfgs  : IOTAProjectOptionsConfigurations;
+  Cfg   : IOTABuildConfiguration;
+  Base  : string;
+  Dirs  : TArray<string>;
+  Dir   : string;
+  i     : Integer;
 begin
   Result := False;
-  if AShortName = '' then Exit;
-  // 1) Datei gleichen Namens neben der bearbeiteten Datei
-  if (ANearFile <> '')
-     and FileExists(ExtractFilePath(ANearFile) + AShortName + '.pas') then
-    Exit(True);
-  // 2) Units des aktiven Projekts
-  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
-  Proj := ModSvc.GetActiveProject;
-  if Proj = nil then Exit;
-  for i := 0 to Proj.GetModuleCount - 1 do
+  if AProj = nil then Exit;
+  for i := 0 to AProj.GetModuleCount - 1 do
   begin
-    Info := Proj.GetModule(i);
+    Info := AProj.GetModule(i);
     if Info = nil then Continue;
     if SameText(ChangeFileExt(ExtractFileName(Info.FileName), ''), AShortName) then
       Exit(True);
   end;
+  if not Supports(AProj.ProjectOptions, IOTAProjectOptionsConfigurations, Cfgs) then
+    Exit;
+  Cfg := Cfgs.ActiveConfiguration;
+  if Cfg = nil then Exit;
+  Base := ExtractFilePath(AProj.FileName);
+  Dirs := Cfg.GetValue('DCC_UnitSearchPath', True).Split([';']);
+  for i := 0 to High(Dirs) do
+  begin
+    Dir := Trim(Dirs[i]);
+    if (Dir = '') or (Pos('$(', Dir) > 0) then Continue;
+    // Relativ zum Projektverzeichnis, ausser mit Laufwerk oder UNC.
+    if not ((Length(Dir) >= 2)
+            and ((Dir[2] = ':') or ((Dir[1] = '\') and (Dir[2] = '\')))) then
+      Dir := Base + Dir;
+    if UnitFileIn(ExpandFileName(Dir), AShortName) then
+      Exit(True);
+  end;
+end;
+
+class function TRdxEditor.ProjectHasUnit(const AShortName,
+  ANearFile: string): Boolean;
+var
+  ModSvc : IOTAModuleServices;
+  Group  : IOTAProjectGroup;
+  j      : Integer;
+begin
+  Result := False;
+  if AShortName = '' then Exit;
+  // 1) Datei gleichen Namens neben der bearbeiteten Datei
+  if (ANearFile <> '') and UnitFileIn(ExtractFilePath(ANearFile), AShortName) then
+    Exit(True);
+  // 2) Module und Suchpfade aller Projekte der Gruppe - die bearbeitete
+  //    Datei kann zu einem anderen als dem aktiven gehoeren.
+  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
+  Group := ModSvc.MainProjectGroup;
+  if Group = nil then
+    Exit(ProjectKnowsUnit(ModSvc.GetActiveProject, AShortName));
+  for j := 0 to Group.ProjectCount - 1 do
+    if ProjectKnowsUnit(Group.Projects[j], AShortName) then
+      Exit(True);
 end;
 
 end.

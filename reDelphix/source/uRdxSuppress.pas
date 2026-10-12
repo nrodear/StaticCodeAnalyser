@@ -4,16 +4,24 @@ unit uRdxSuppress;
 // OHNE ToolsAPI: aus den Zeilen der Datei wird eine gepruefte Ersetzung
 // (TRdxEdit), die uRdxEditor.ReplaceSpans schreibt.
 //
-// MARKER-REGELN (uSuppression im Core, dort die einzige Wahrheit)
-//   * '// noinspection A, B' gilt fuer die NAECHSTE nicht-leere Zeile, die
-//     nicht mit '//' beginnt; gestapelte Marker werden vereinigt.
-//   * '// noinspection-file A' gilt fuer die ganze Datei, egal wo er steht.
+// MARKER-REGELN (uSuppression im Core, dort die einzige Wahrheit; der Core
+// legt seine Grammatik nicht offen, darum steht sie hier nachgebaut)
+//   * '// noinspection A, B' gilt fuer ZWEI Ziele: die naechste nicht-leere
+//     Zeile (auch eine Kommentarzeile, etwa ein TODO) und die naechste
+//     Code-Zeile. Gestapelte Marker werden vereinigt.
+//   * '// noinspection-file A' gilt fuer die ganze Datei, egal wo er steht;
+//     mehrere Datei-Marker werden ebenfalls vereinigt.
 //   * Arten werden an Komma, Semikolon, Leerzeichen und Tab getrennt;
 //     unbekannte Woerter (ein Grund in Klammern) stoeren nicht.
+//   * 'All' bzw. '*' wirkt NUR als ganze Artenliste ('// noinspection All');
+//     'X, All' ist die Art X und ein unbekanntes Wort. Ein solcher Marker
+//     wird darum nie erweitert, sondern bekommt einen eigenen daneben.
 //
 // Jede Ersetzung ist gegen den Text der Zeile verankert (Expected = die
 // ganze Zeile bzw. der entfernte Teil): geaenderte Zeilen werden nie blind
 // ueberschrieben, eine Einfuegung ist "Zeile ersetzen durch Marker + Zeile".
+// Wo eingefuegt bzw. erweitert wird, entscheidet die Code-Sicht
+// (uRdxCodeMap): nie in einem Block-Kommentar oder mehrzeiligen String.
 
 interface
 
@@ -25,22 +33,29 @@ type
   TRdxSuppress = class
   public
     // G1: '// noinspection <AKindName>' fuer die Fundzeile ALine. Ist die
-    // Zeile direkt darueber schon ein reiner Zeilen-Marker, kommt die Art
-    // dort hinzu; sonst eine neue Zeile mit der Einrueckung der Fundzeile.
-    // False + AReason, wenn es nichts zu tun gibt oder nicht geht.
+    // Zeile direkt darueber schon ein reiner Zeilen-Marker (nicht 'All'),
+    // kommt die Art dort hinzu; sonst eine neue Zeile mit der Einrueckung
+    // der Fundzeile. False + AReason, wenn es nichts zu tun gibt oder nicht
+    // geht - auch, wenn die Fundzeile in einem Block-Kommentar oder
+    // mehrzeiligen String liegt (dort wirkte der Marker nicht bzw. wuerde
+    // Teil des Strings).
     class function LineMarker(ALines: TStrings; ALine: Integer;
       const AKindName: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // G2: '// noinspection-file <AKindName>'. Gibt es schon einen
-    // Datei-Marker, kommt die Art dort hinzu; sonst eine neue Zeile hinter
-    // der 'unit'/'program'/'library'/'package'-Zeile.
+    // Datei-Marker (nicht 'All'), kommt die Art dort hinzu; sonst eine neue
+    // Zeile hinter der Kopfanweisung 'unit'/'program'/'library'/'package'
+    // (das erste Code-Token der Datei, bis zu ihrem ';').
     class function FileMarker(ALines: TStrings; const AKindName: string;
       out AEdit: TRdxEdit; out AReason: string): Boolean; static;
 
     // SCA165: den wirkungslosen Marker in Zeile AMarkerLine entfernen -
     // eine reine Kommentarzeile ganz, einen Kommentar hinter Code nur
-    // samt Leerraum davor.
+    // samt Leerraum davor. NUR, wenn der Marker genau EINE Art nennt: der
+    // Core meldet einen Marker schon dann, wenn nur seine Arten im
+    // aktiven Scan-Profil nichts unterdrueckt haben - die uebrigen Arten
+    // (oder 'All') koennen unter dem vollen Profil noch wirken.
     class function RemoveMarker(ALines: TStrings; AMarkerLine: Integer;
       out AEdit: TRdxEdit; out AReason: string): Boolean; static;
 
@@ -53,13 +68,21 @@ type
 implementation
 
 uses
-  uRdxSimpleFixes;   // TRdxCodeMap: Code-Sicht mit Block-Kommentaren
+  uRdxCodeMap;   // TRdxCodeMap, NextToken: Code-Sicht mit Block-Kommentaren
 
 const
   TAG          = 'noinspection';
   TAG_FILEWIDE = 'noinspection-file';
   SEPARATORS   = [',', ';', ' ', #9];
   SPAN_ROLE    = 'suppress';
+
+  R_IN_COMMENT = 'Fundzeile liegt in einem Block-Kommentar oder mehrzeiligen '
+    + 'String - ein Marker wirkte dort nicht bzw. wuerde Teil des Strings';
+  R_WILDCARD   = 'Marker gilt fuer alle Arten (All) - wirkungslos vielleicht '
+    + 'nur unter dem aktuellen Scan-Profil, bitte von Hand pruefen';
+  R_MULTI_KIND = 'Marker nennt mehrere Arten - wirkungslos vielleicht nur '
+    + 'unter dem aktuellen Scan-Profil, bitte von Hand pruefen';
+  R_NO_KIND    = 'Marker nennt keine erkennbare Art';
 
 // Text hinter '//' einer reinen Kommentarzeile, sonst ''.
 function CommentBody(const AText: string): string;
@@ -82,6 +105,67 @@ class function TRdxSuppress.IsLineMarker(const AText: string): Boolean;
 begin
   Result := SameText(Copy(CommentBody(AText), 1, Length(TAG)), TAG)
     and not IsFileMarker(AText);
+end;
+
+// Artenliste eines Kommentartexts (Text hinter '//'): alles hinter
+// 'noinspection[-file]' und einem optionalen ':', getrimmt. '' ohne Tag.
+function KindList(const ACommentText: string): string;
+var
+  T : string;
+begin
+  Result := '';
+  T := TrimLeft(ACommentText);
+  if SameText(Copy(T, 1, Length(TAG_FILEWIDE)), TAG_FILEWIDE) then
+    T := Copy(T, Length(TAG_FILEWIDE) + 1, MaxInt)
+  else if SameText(Copy(T, 1, Length(TAG)), TAG) then
+    T := Copy(T, Length(TAG) + 1, MaxInt)
+  else
+    Exit;
+  if Copy(T, 1, 1) = ':' then
+    T := Copy(T, 2, MaxInt);
+  Result := Trim(T);
+end;
+
+// 'All' bzw. '*' als GANZE Artenliste - wie TSuppression.ParseCommentText.
+function IsWildcard(const ACommentText: string): Boolean;
+var
+  K : string;
+begin
+  K := KindList(ACommentText);
+  Result := SameText(K, 'all') or (K = '*');
+end;
+
+// Zahl der Arten, die der Marker nennt: die fuehrenden Woerter der Liste,
+// die reine Bezeichner sind. Das erste andere Wort ('(Grund', '-', 'bis
+// Q3:') beendet die Liste - so zaehlt '// noinspection X (Grund)' eine Art.
+// Ein Grund ohne Klammern ('X wegen Altlast') zaehlt mit; das ist die
+// vorsichtige Seite, der Aufrufer lehnt dann ab.
+function KindCount(const ACommentText: string): Integer;
+var
+  List  : string;
+  Word_ : string;
+  i, k  : Integer;
+  Ident : Boolean;
+begin
+  Result := 0;
+  List := KindList(ACommentText);
+  Word_ := '';
+  for i := 1 to Length(List) + 1 do
+    if (i > Length(List)) or CharInSet(List[i], SEPARATORS) then
+    begin
+      if Word_ <> '' then
+      begin
+        Ident := IsIdentStart(Word_[1]);
+        for k := 2 to Length(Word_) do
+          if not IsIdentChar(Word_[k]) then
+            Ident := False;
+        if not Ident then Exit;
+        Inc(Result);
+      end;
+      Word_ := '';
+    end
+    else
+      Word_ := Word_ + List[i];
 end;
 
 // Steht AKindName schon in der Artenliste des Markers?
@@ -127,6 +211,25 @@ begin
   Result := Copy(AText, 1, i - 1);
 end;
 
+// Ist ALine eine reine Kommentarzeile, deren '//' wirklich ein Kommentar
+// ist - nicht Text in einem Block-Kommentar oder mehrzeiligen String?
+function IsPureCommentLine(AMap: TRdxCodeMap; ALine: Integer): Boolean;
+var
+  Col : Integer;
+begin
+  Col := AMap.LineCommentCol(ALine);
+  Result := not AMap.StartsInside(ALine) and (Col > 0)
+    and (Col = SkipBlanks(AMap.Raw(ALine), 1));
+end;
+
+// Ein Marker, den man um eine Art erweitern darf: echte Kommentarzeile,
+// nicht 'All'.
+function IsExtensibleMarker(AMap: TRdxCodeMap; ALine: Integer): Boolean;
+begin
+  Result := IsPureCommentLine(AMap, ALine)
+    and not IsWildcard(CommentBody(AMap.Raw(ALine)));
+end;
+
 // Die ganze Zeile ALine als verankerter Bereich.
 function WholeLine(ALines: TStrings; ALine: Integer; const ANewText: string): TRdxEdit;
 begin
@@ -139,6 +242,7 @@ end;
 class function TRdxSuppress.LineMarker(ALines: TStrings; ALine: Integer;
   const AKindName: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
+  Map  : TRdxCodeMap;
   Code : string;
   Prev : string;
 begin
@@ -157,11 +261,20 @@ begin
     AReason := 'Fundzeile ist leer';
     Exit;
   end;
-  if ALine > 1 then
-  begin
-    Prev := ALines[ALine - 2];
-    if IsLineMarker(Prev) then
+  Map := TRdxCodeMap.Create(ALines);
+  try
+    // Zeilen-Detektoren (TodoComment, TooLongLine) melden auch Zeilen IN
+    // einem '{ ... }' oder ''' ... '''. Eine Zeile davor laege ebenfalls
+    // darin: im Kommentar ohne Wirkung, im String als neuer Inhalt.
+    if Map.StartsInside(ALine) then
     begin
+      AReason := R_IN_COMMENT;
+      Exit;
+    end;
+    if (ALine > 1) and TRdxSuppress.IsLineMarker(ALines[ALine - 2])
+       and IsExtensibleMarker(Map, ALine - 1) then
+    begin
+      Prev := ALines[ALine - 2];
       if KindListed(Prev, AKindName) then
       begin
         AReason := 'Marker steht schon da';
@@ -170,7 +283,11 @@ begin
       AEdit := WholeLine(ALines, ALine - 1, WithKind(Prev, TAG, AKindName));
       Exit(True);
     end;
+  finally
+    Map.Free;
   end;
+  // Eigene Zeile direkt ueber der Fundzeile; ueber einem 'All'-Marker
+  // darueber ist das ein gestapelter Marker, den der Core vereinigt.
   AEdit := WholeLine(ALines, ALine,
     LeadingWhitespace(Code) + '// ' + TAG + ' ' + AKindName + #10 + Code);
   Result := True;
@@ -179,9 +296,10 @@ end;
 class function TRdxSuppress.FileMarker(ALines: TStrings;
   const AKindName: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
+  Map  : TRdxCodeMap;
   i    : Integer;
-  Head : string;
-  T    : string;
+  Tok  : TRdxToken;
+  Head : Integer;
 begin
   Result := False;
   AEdit  := Default(TRdxEdit);
@@ -191,32 +309,53 @@ begin
     AReason := 'keine Datei';
     Exit;
   end;
-  // Ein vorhandener Datei-Marker bekommt die Art dazu.
-  for i := 0 to ALines.Count - 1 do
-    if IsFileMarker(ALines[i]) then
-    begin
-      if KindListed(ALines[i], AKindName) then
+  Map := TRdxCodeMap.Create(ALines);
+  try
+    // Ein vorhandener Datei-Marker bekommt die Art dazu - nur ein echter
+    // (kein Text in einem Kommentar) und keiner mit 'All'.
+    for i := 1 to ALines.Count do
+      if TRdxSuppress.IsFileMarker(ALines[i - 1])
+         and IsExtensibleMarker(Map, i) then
       begin
-        AReason := 'Marker steht schon da';
-        Exit;
+        if KindListed(ALines[i - 1], AKindName) then
+        begin
+          AReason := 'Marker steht schon da';
+          Exit;
+        end;
+        AEdit := WholeLine(ALines, i, WithKind(ALines[i - 1], TAG_FILEWIDE, AKindName));
+        Exit(True);
       end;
-      AEdit := WholeLine(ALines, i + 1, WithKind(ALines[i], TAG_FILEWIDE, AKindName));
-      Exit(True);
-    end;
-  // Sonst hinter die Kopfzeile der Unit.
-  for i := 0 to ALines.Count - 1 do
-  begin
-    T := LowerCase(TrimLeft(ALines[i]));
-    if (Pos('unit ', T) = 1) or (Pos('program ', T) = 1)
-       or (Pos('library ', T) = 1) or (Pos('package ', T) = 1) then
+    // Sonst hinter die Kopfanweisung: das erste Code-Token der Datei - ein
+    // 'Unit Name: X' oder 'Library General Public License' im Lizenzkopf
+    // davor ist Kommentar und zaehlt nicht.
+    Tok := NextToken(Map, 1, 1);
+    if (Tok.Low <> 'unit') and (Tok.Low <> 'program')
+       and (Tok.Low <> 'library') and (Tok.Low <> 'package') then
     begin
-      Head := ALines[i];
-      AEdit := WholeLine(ALines, i + 1,
-        Head + #10 + '// ' + TAG_FILEWIDE + ' ' + AKindName);
-      Exit(True);
+      AReason := 'keine unit-Zeile gefunden';
+      Exit;
     end;
+    repeat
+      Tok := After(Map, Tok);
+    until (Tok.Low = ';') or (Tok.Low = '');
+    if Tok.Low = '' then
+    begin
+      AReason := 'keine unit-Zeile gefunden';
+      Exit;
+    end;
+    Head := Tok.Line;
+    // Beginnt hinter dem ';' ein Block-Kommentar, laege die neue Zeile darin.
+    if Map.StartsInside(Head + 1) then
+    begin
+      AReason := 'hinter der unit-Zeile beginnt ein Block-Kommentar';
+      Exit;
+    end;
+  finally
+    Map.Free;
   end;
-  AReason := 'keine unit-Zeile gefunden';
+  AEdit := WholeLine(ALines, Head,
+    ALines[Head - 1] + #10 + '// ' + TAG_FILEWIDE + ' ' + AKindName);
+  Result := True;
 end;
 
 // Spalte des '//', das die Zeile ALine kommentiert; 0 = keins. Ueber die
@@ -243,6 +382,7 @@ var
   Col   : Integer;
   Start : Integer;
   Prev  : string;
+  Kinds : string;
 begin
   Result := False;
   AEdit  := Default(TRdxEdit);
@@ -257,6 +397,22 @@ begin
   if (Col = 0) or (Pos(TAG, LowerCase(Copy(Text, Col, MaxInt))) = 0) then
   begin
     AReason := 'kein Marker in der Zeile';
+    Exit;
+  end;
+  // Nur ein Marker mit genau einer Art ist sicher wirkungslos: SCA165
+  // kommt auch, wenn nur die im Scan-Profil aktiven Arten eines
+  // Mehrarten-Markers nichts unterdrueckt haben.
+  Kinds := Copy(Text, Col + 2, MaxInt);
+  if IsWildcard(Kinds) then
+  begin
+    AReason := R_WILDCARD;
+    Exit;
+  end;
+  case KindCount(Kinds) of
+    0: begin AReason := R_NO_KIND; Exit; end;
+    1: ;
+  else
+    AReason := R_MULTI_KIND;
     Exit;
   end;
   if Trim(Copy(Text, 1, Col - 1)) = '' then

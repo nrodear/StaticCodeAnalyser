@@ -31,11 +31,12 @@ uses
 
 // Reserve fuer Abfragen zwischen Menueaufbau und Klick (Gluehbirne, zweites
 // Menue): Vertrag zur Uebersetzungszeit. Ein Assert auf zwei Konstanten
-// ergab W1022 ("Vergleich ergibt immer True") und haette eine Verletzung
-// erst im Testlauf gemeldet.
-{$IF RDX_ACTION_BATCHES < 4 * MAX_FINDINGS_PER_MENU}
-  {$MESSAGE ERROR 'RDX_ACTION_BATCHES braucht mindestens 4 * MAX_FINDINGS_PER_MENU Chargen'}
-{$IFEND}
+// ergab W1022 ("Vergleich ergibt immer True"), ein {$IF} W1021 ("ergibt
+// immer False", Bau 2026-10-10). Der Teilbereich hat eine negative
+// Obergrenze, sobald RDX_ACTION_BATCHES < 4 * MAX_FINDINGS_PER_MENU - dann
+// bricht der Bau mit E2011 ab; sonst bleibt er still.
+type
+  TRingReserveCheck = 0..RDX_ACTION_BATCHES - 4 * MAX_FINDINGS_PER_MENU;
 
 var
   GFreed : Integer = 0;

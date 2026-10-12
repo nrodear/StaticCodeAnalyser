@@ -18,12 +18,16 @@ unit uFindingActionMenu;
 // solche Aktion faellt samt Kopfzeile weg. Unterdrueck-Aktionen
 // (fakSuppress) bleiben dort NUR, wenn der Fund eine solche Hilfe hat
 // (Editorhilfen E1). In jeder Form steht vor dem ersten Unterdrueck-
-// Eintrag eines Funds ein Trenner. BuildFindingMenuModel fragt
+// Eintrag eines Funds ein Trenner. Ein Umbau an der Stelle (fakRefactor)
+// steht je Modell nur einmal: ein gleichlautender eines spaeteren Funds
+// faellt weg; bleibt einem Fund dadurch nichts, faellt er samt Kopf weg.
+// BuildFindingMenuModel fragt
 // hoechstens MAX_FINDINGS_PER_MENU Funde ab (Vertrag in uFindingActions);
 // wie viele es nicht fragte, steht in Omitted. Wirft ein
 // Anbieter beim Erfragen, fallen die Aktionen DIESES Funds weg (alle
 // Anbieter - TFindingActions.ActionsFor wirft als Ganzes), nie das
 // Menue; die Meldung landet in Errors, der Host protokolliert sie.
+// Ausgenommen: ein erschoepfter Stapel und EAbort laufen zum Host durch.
 
 interface
 
@@ -65,7 +69,8 @@ function BuildFindingMenuModelFrom(const AFindings: TArray<TLeakFinding>;
   AOptions: TFindingMenuOptions): TFindingMenuModel;
 
 // Erfragt die Aktionen je Fund bei der Registry (TFindingActions.ActionsFor)
-// und baut daraus das Modell; Anbieterfehler kommen nach Errors. Nur die
+// und baut daraus das Modell; Anbieterfehler kommen nach Errors (ausser
+// EStackExhausted und EAbort - die wirft die Funktion weiter). Nur die
 // ersten MAX_FINDINGS_PER_MENU Funde werden gefragt, der Rest zaehlt nach
 // Omitted.
 function BuildFindingMenuModel(const AFindings: TArray<TLeakFinding>;
@@ -183,6 +188,37 @@ begin
   end;
 end;
 
+// Umbauten (fakRefactor), deren Caption schon in ASeen steht, fallen weg;
+// die uebrigen kommen nach ASeen.
+function DropSeenRefactors(const AActions: TArray<TFindingAction>;
+  var ASeen: TArray<string>): TArray<TFindingAction>;
+var
+  k, n, s : Integer;
+  Seen    : Boolean;
+begin
+  SetLength(Result, Length(AActions));
+  n := 0;
+  for k := 0 to High(AActions) do
+  begin
+    if AActions[k].Kind = fakRefactor then
+    begin
+      Seen := False;
+      for s := 0 to High(ASeen) do
+        if ASeen[s] = AActions[k].Caption then
+        begin
+          Seen := True;
+          Break;
+        end;
+      if Seen then Continue;
+      SetLength(ASeen, Length(ASeen) + 1);
+      ASeen[High(ASeen)] := AActions[k].Caption;
+    end;
+    Result[n] := AActions[k];
+    Inc(n);
+  end;
+  SetLength(Result, n);
+end;
+
 function BuildFindingMenuModelFrom(const AFindings: TArray<TLeakFinding>;
   const AActions: TArray<TArray<TFindingAction>>;
   AOptions: TFindingMenuOptions): TFindingMenuModel;
@@ -191,14 +227,16 @@ var
   Count   : Integer;
   Acts    : TArray<TFindingAction>;
   SepDone : Boolean;
+  Seen    : TArray<string>;   // Captions der schon gezeigten Umbauten
 begin
   Result  := Default(TFindingMenuModel);
   Count   := Length(AFindings);
   if Length(AActions) < Count then Count := Length(AActions);
   SepDone := False;
+  Seen    := nil;
   for i := 0 to Count - 1 do
   begin
-    Acts := FilterActions(AActions[i], AOptions);
+    Acts := DropSeenRefactors(FilterActions(AActions[i], AOptions), Seen);
     if Length(Acts) = 0 then Continue;
     if (moLeadingSeparator in AOptions) and not SepDone then
     begin
@@ -233,9 +271,10 @@ begin
       Lists[i] := TFindingActions.ActionsFor(Asked[i]);
     except
       on EStackExhausted do raise;
+      on EAbort do raise;   // ein Abbruch erreicht den Host, nicht Errors
       // noinspection ExceptionTooGeneral
       // Ein werfender Anbieter kostet die Aktionen dieses Funds, nie das
-      // Menue - deshalb jede Ausnahme ausser dem Stack-Ueberlauf.
+      // Menue - deshalb jede Ausnahme ausser Stack-Ueberlauf und Abbruch.
       on E: Exception do
       begin
         Lists[i] := nil;

@@ -1,0 +1,58 @@
+package VarNameProject.d12;
+
+// ---------------------------------------------------------------------
+// VarNameProject - Testprojekt fuer die Code-Aktion "Lokale Variable
+// einfuehren" (frueher "Editorhilfen")
+// (Konzept_Editorhilfen_OhneFund_2026-10-11, Entscheid E17; Nico
+// 2026-10-11: "dafuer machen wir ein eigenes Projekt zum Testen der
+// Eingabe"). Der Code entsteht mit einem vorlaeufigen Namen (MagicNr01),
+// der Name wird umrandet, der Caret steht darauf, Tippen aendert alle
+// Stellen mit - wie ReSharper "Introduce Variable".
+//
+// Eigenstaendig: haengt weder an SCA.Engine noch an reDelphix. Zum Testen
+// in der IDE installieren (Komponente > Pakete installieren bzw.
+// Rechtsklick > Installieren), Bedienung in ..\README.md.
+// ---------------------------------------------------------------------
+{$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
+{$ALIGN 8}
+{$ASSERTIONS ON}
+{$BOOLEVAL OFF}
+{$DEBUGINFO OFF}
+{$EXTENDEDSYNTAX ON}
+{$IMPORTEDDATA ON}
+{$IOCHECKS ON}
+{$LOCALSYMBOLS ON}
+{$LONGSTRINGS ON}
+{$OPENSTRINGS ON}
+{$OPTIMIZATION OFF}
+{$OVERFLOWCHECKS ON}
+{$RANGECHECKS ON}
+{$REFERENCEINFO ON}
+{$SAFEDIVIDE OFF}
+{$STACKFRAMES ON}
+{$TYPEDADDRESS OFF}
+{$VARSTRINGCHECKS ON}
+{$WRITEABLECONST OFF}
+{$MINENUMSIZE 1}
+{$IMAGEBASE $400000}
+{$DEFINE DEBUG}
+{$ENDIF IMPLICITBUILDING}
+{$DESCRIPTION 'VarNameProject - Testprojekt Namenseingabe (Sync Edit)'}
+{$DESIGNONLY}
+{$IMPLICITBUILD ON}
+
+requires
+  rtl,
+  vcl,
+  designide;
+
+contains
+  uVnpPlan in '..\source\uVnpPlan.pas',
+  uVnpEdits in '..\source\uVnpEdits.pas',
+  uVnpLog in '..\source\uVnpLog.pas',
+  uVnpSync in '..\source\uVnpSync.pas',
+  uVnpIntroduce in '..\source\uVnpIntroduce.pas',
+  uVnpProbe in '..\source\uVnpProbe.pas',
+  uVnpRegister in '..\source\uVnpRegister.pas';
+
+end.

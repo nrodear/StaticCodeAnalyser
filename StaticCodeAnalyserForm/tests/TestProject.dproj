@@ -208,7 +208,6 @@
         <DCCReference Include="uTestVisibilityCheck.pas"/>
         <DCCReference Include="uTestSynchronizeInDestructor.pas"/>
         <DCCReference Include="uTestLockWithoutTryFinally.pas"/>
-        <DCCReference Include="uTestQuickFix.pas"/>
         <DCCReference Include="uTestRefactorInfo.pas"/>
         <DCCReference Include="uTestRefactorInfoBuilder.pas"/>
         <DCCReference Include="uTestRefactorConcat.pas"/>

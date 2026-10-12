@@ -8,7 +8,7 @@ unit uEditorBulbButton;
 // zum Fenster, der Editor darunter bleibt sichtbar - in hellem wie dunklem
 // Thema, ohne dass die Birne die Gutter-Farbe kennen muss.
 //
-// Klick (links) und Kontextmenue (rechts / Menue-Taste) oeffnen
+// Klick (links) und Rechtsklick (WM_CONTEXTMENU auf der Birne) oeffnen
 // DropdownMenu unter der Birne. Das Menue oeffnet aus dem EIGENEN Klick,
 // nie aus einem Editor-Rueckruf: so geht die IDE mit ihrem SyncEdit-Knopf
 // und CnPack mit seinem Schwebeknopf vor. WM_CONTEXTMENU wird hier
@@ -56,7 +56,8 @@ type
     constructor Create(AOwner: TComponent); override;
     // Oeffnet DropdownMenu unter der Birne (ruft vorher OnBeforeMenu).
     procedure ShowMenu;
-    // Menue, das Klick, Rechtsklick und Menue-Taste unter der Birne oeffnen.
+    // Menue, das Klick und Rechtsklick unter der Birne oeffnen (die
+    // Menue-Taste geht an das fokussierte Fenster, den Editor).
     property DropdownMenu: TPopupMenu read FDropdownMenu write SetDropdownMenu;
     // Fuellfarbe des Glaskolbens (beim Ueberfahren heller).
     property BulbColor: TColor read FBulbColor write SetBulbColor;

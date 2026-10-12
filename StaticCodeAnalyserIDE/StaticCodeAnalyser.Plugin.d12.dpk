@@ -104,7 +104,6 @@ contains
   uJsonFormat in '..\SCA.Engine\sources\Common\uJsonFormat.pas',
   uLocalization in '..\SCA.Engine\sources\Common\uLocalization.pas',
   uMethodd12 in '..\SCA.Engine\sources\Common\uMethodd12.pas',
-  uQuickFix in '..\SCA.Engine\sources\Common\uQuickFix.pas',
   uRefactorConcat in '..\SCA.Engine\sources\Common\uRefactorConcat.pas',
   uRefactorInfo in '..\SCA.Engine\sources\Common\uRefactorInfo.pas',
   uRefactorInfoBuilder in '..\SCA.Engine\sources\Common\uRefactorInfoBuilder.pas',

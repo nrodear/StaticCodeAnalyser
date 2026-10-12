@@ -32,8 +32,11 @@ unit uSourcePlaces;
 //     die Gluehbirne fragt per Timer, also auch WAEHREND eines Watch-
 //     oder Bulk-Scans (Review reDelphiX 2026-10-07, Minor 3). Der Parser
 //     bekommt stattdessen die EIGENE Sicht des Dienstes
-//     (TParser2.SetExplicitLexerView): fest die Doppelzweig-Sicht - der
-//     Ruhezustand im Plugin, unabhaengig von --ifdef-aware -, oder die
+//     (TParser2.SetExplicitLexerView): fest die Doppelzweig-Sicht - die
+//     Ruhelage der prozessweiten Variablen, NICHT die Sicht der IDE-
+//     Funde: deren Scans laufen mit TScanRequest.DefaultIfdefDefines;
+//     reDelphix setzt genau die (Review nach Bereichen 2026-10-10,
+//     Minor 4) -, oder die
 //     Defines aus SetIfdefDefines, und zwar GENAU diese: den dlFpc-Zusatz
 //     des Scans ergaenzt der Dienst nicht. Ein dlFpc-Lauf mit nicht
 //     leerer Define-Liste (dlFpc erzwingen auch .lpi/.lpk/.lpg-Projekte)
@@ -90,6 +93,7 @@ unit uSourcePlaces;
 //                 Name an ein Member des with-Ausdrucks binden. ChainOf/
 //                 CallOf beweisen dort nichts (s. InWithBlock).
 //   InWithBlock   liegt eine Zeile im Rumpf einer with-Anweisung?
+//   DeclaresNonStringFunc  verdeckt eine Funktion der Unit einen RTL-Namen?
 //   CodeViewOf / TextOf / HashOf   Sicht, Text und Hash eines Bereichs
 //                 (in der Sicht sind Strings VIEW_FILL, Kommentare und
 //                 Direktiven Leerraum - Review reDelphiX 2026-10-07,
@@ -137,6 +141,11 @@ const
   // Vorgabewert und bei einer Ableitung, die nur STRENGER wird (mehr
   // rvUnknown, seltener FixSafe) - darauf kann sich jeder Konsument der
   // alten Version weiter verlassen.
+  // AUCH DAZU gehoert die Form des abgeflachten Parser-Texts in
+  // TNodeRef.Name/TypeRef: reDelphix zaehlt darin die '+' (Gegenprobe zu
+  // ChainOf) und nimmt den Kopf eines Aufrufs (TRdxRecipeRunner.HeadOf).
+  // Ein Parser-Fix, der diese Form aendert, braucht eine neue Version
+  // oder einen Test im Modul (Review nach Bereichen 2026-10-10, Nit 5).
   SOURCE_PLACES_VERSION = 1;
 
 type
@@ -179,9 +188,10 @@ type
     FIfdefDefines    : TArray<string>;
     function Types: TTypeResolver;
     procedure BuildScopeFacts;
-    // True, wenn die Unit eine Funktion dieses Namens (klein) ohne
-    // String-Ergebnis deklariert - sie verdeckt die gleichnamige RTL.
-    function DeclaresNonStringFunc(const ANameLow: string): Boolean;
+    // Helper-Typen ('class/record helper for X') dem strengen Resolver als
+    // unbekannt melden: der Parser verwirft den Zieltyp, die Member von X
+    // kaemen sonst nicht vor den Unit-Globalen (Gegen-Review 2026-10-10).
+    procedure ForgetHelperTypes(AResolver: TTypeResolver);
     // Operanden, die blosse Bezeichner sind, ueber den deklarierten Typ
     // klassifizieren und FixSafe neu ableiten (s. Kopf, DeclaredTypeOf).
     procedure ResolveOperandTypes(AInfo: TRefactorInfo);
@@ -288,8 +298,10 @@ type
     function TextOf(const ASpan: TRefactorSpan): string;
     function HashOf(const ASpan: TRefactorSpan): string;
 
-    // P7 - {$IFDEF}-Bereiche der Datei (Zeile der oeffnenden bis Zeile der
-    // schliessenden Direktive), in Quelltext-Reihenfolge.
+    // P7 - bedingte Bereiche der Datei in Quelltext-Reihenfolge: EIN
+    // Bereich je Zweig ({$IFDEF}..{$ELSE}, {$ELSE}..{$ENDIF}), fuer jede
+    // bedingte Direktive ($IF, $IFDEF, $IFNDEF, $IFOPT) - wie der Lexer
+    // sie ablegt (Review nach Bereichen 2026-10-10, Nit 6).
     function ConditionalRanges: TArray<TSourceLineRange>;
 
     // P10 - Zeile des Abschnitts-Schluesselworts ('interface' bzw.
@@ -309,9 +321,15 @@ type
     function SpanHasComment(const ASpan: TRefactorSpan): Boolean;
 
     // P9 - deklarierter Typ (nackter, klein geschriebener Typname) des
-    // Bezeichners AName an Zeile ALine: Parameter oder lokale Variable der
-    // umschliessenden Routine, sonst Klassenfeld/Unit-Global; '' wenn
-    // unbekannt. Ohne Datei ''. 'string[N]' liefert 'shortstring'.
+    // Bezeichners AName an Zeile ALine: Parameter, lokale Variable oder
+    // lokale typisierte Konstante der umschliessenden Routine, sonst Feld
+    // der Klasse aus dem Methodennamen (und ihrer Vorfahren in dieser
+    // Unit), sonst Unit-Global; '' wenn unbekannt oder nicht bewiesen:
+    // ein Vorfahr von ausserhalb der Unit (er kann jeden Namen
+    // verdecken), eine Property/Methode gleichen Namens, verschiedene
+    // Typen fuer denselben Namen ({$IFDEF}-Zweige) und Zeilen in einer
+    // verschachtelten Routine. Ohne Datei ''. 'string[N]' liefert
+    // 'shortstring'.
     // ALine ist die ANKERZEILE einer Anweisung (Zeile eines AST-Knotens):
     // der Resolver begrenzt Routinen ueber die letzte Knoten-Zeile, eine
     // Fortsetzungszeile der letzten Anweisung liegt ausserhalb jeder
@@ -332,6 +350,15 @@ type
     // CallOf stufen dort nichts hoch (Review reDelphiX 2026-10-07,
     // strittiger Minor 1). Ohne Datei False.
     function InWithBlock(ALine: Integer): Boolean;
+
+    // P13 - True, wenn die Unit eine Funktion dieses Namens (klein, ohne
+    // Qualifizierer) ohne String-Ergebnis deklariert: sie verdeckt die
+    // gleichnamige RTL-Funktion ('function ParamStr(I: Integer): Variant'
+    // bindet vor System.ParamStr). Fuer Konsumenten mit eigenen
+    // Namensregeln (Review reDelphiX nach Bereichen 2026-10-10, Minor 2);
+    // ChainOf/CallOf wenden es auf ihre eigenen Namen schon an. Funktionen
+    // in verschachtelten Routinen sieht es nicht. Ohne Datei False.
+    function DeclaresNonStringFunc(const ANameLow: string): Boolean;
   end;
 
 implementation
@@ -565,6 +592,18 @@ begin
     or (ATypeLow = 'widechar') or (ATypeLow = 'ansichar');
 end;
 
+// Nimmt Format einen Operanden dieses Typs fuer %s auch VERLUSTFREI an?
+// Nein fuer Char-Typen (ein #0 beendet den Text; AnsiChar ab #$80 geht als
+// Ordinalwert durch), ShortString und PAnsiChar (Review reDelphiX
+// 2026-10-07, Blocker 1 und Minor 10; nach Bereichen 2026-10-10, Minor 1).
+// Sie bleiben rvString mit Resolved, machen FixSafe aber nicht.
+function IsLosslessForFormat(const ATypeLow: string): Boolean;
+begin
+  Result := not ((ATypeLow = 'char') or (ATypeLow = 'widechar')
+    or (ATypeLow = 'ansichar') or (ATypeLow = 'shortstring')
+    or (ATypeLow = 'pansichar'));
+end;
+
 function NonStringFuncName(AMethod: TAstNode): string;
 // Name (klein, letztes Segment) einer FUNKTION, deren Ergebnis kein
 // String ist; '' fuer Prozeduren, Konstruktoren, String-Funktionen und
@@ -700,9 +739,47 @@ function TSourcePlaces.Types: TTypeResolver;
 begin
   // ShortString-genau (Review reDelphiX 2026-10-07, Minor 11): 'string[N]'
   // kommt als 'shortstring' zurueck. Die Detektoren behalten 'string'.
+  // Streng (Review reDelphiX nach Bereichen 2026-10-10, Minor 3): eine
+  // Antwort ist ein Beweis - Felder nur der eigenen Klasse, keine
+  // fremden lokalen Konstanten, Mehrdeutiges und verschachtelte Routinen
+  // ''. Die Detektoren behalten die grobe Fallback-Ebene.
   if (FTypes = nil) and Assigned(FRoot) then
-    FTypes := TTypeResolver.Create(FRoot, True);
+  begin
+    FTypes := TTypeResolver.Create(FRoot, True, True);
+    ForgetHelperTypes(FTypes);
+  end;
   Result := FTypes;
+end;
+
+procedure TSourcePlaces.ForgetHelperTypes(AResolver: TTypeResolver);
+// Die Zeile eines nkClass/nkRecord-Knotens ist die des 'class'/'record'
+// hinter dem '='; 'helper' und 'for' stehen dort mit. Ein Kommentar mit
+// diesen Woertern macht die Klasse nur vorsichtiger, nie falsch.
+var
+  Stack : TArray<TAstNode>;
+  Top   : Integer;
+  N     : TAstNode;
+  S     : string;
+begin
+  if not Assigned(AResolver) or not Assigned(FRoot) or not Assigned(FLines) then
+    Exit;
+  SetLength(Stack, 64);
+  Stack[0] := FRoot;
+  Top := 1;
+  while Top > 0 do
+  begin
+    Dec(Top);
+    N := Stack[Top];
+    if (N.Kind in [nkClass, nkRecord]) and (N.Line >= 1)
+       and (N.Line <= FLines.Count) then
+    begin
+      S := ' ' + LowerCase(StringReplace(FLines[N.Line - 1], #9, ' ',
+        [rfReplaceAll])) + ' ';
+      if (Pos(' helper ', S) > 0) and (Pos(' for ', S) > 0) then
+        AResolver.ForgetClass(N.Name);
+    end;
+    PushChildrenReversed(N, Stack, Top);
+  end;
 end;
 
 procedure TSourcePlaces.BuildScopeFacts;
@@ -783,7 +860,9 @@ procedure TSourcePlaces.ResolveOperandTypes(AInfo: TRefactorInfo);
 // sind, ihren deklarierten Typ: String-Typen und Char -> rvString (Format
 // nimmt beide fuer %s), Zahlen/Boolean/Datum -> rvNonString, sonst bleibt
 // rvUnknown. Danach FixSafe nach derselben Regel wie ClassifyParts neu
-// ableiten: jeder Term rvString, kein Kommentar, kein $IFDEF - ein Term
+// ableiten: jeder Term rvString und verlustfrei (kein Char-, ShortString-
+// oder PAnsiChar-Operand, IsLosslessForFormat), kein Kommentar, kein
+// $IFDEF - ein Term
 // mit Operator auf oberster Ebene ist kein Bezeichner und bleibt
 // rvUnknown, also bleibt FixSafe dort False.
 // Ein bekannter Aufruf des Zerlegers wird nie auf rvNonString gesetzt.
@@ -811,7 +890,8 @@ begin
   AllOk := Length(AInfo.Parts) > 1;
   for i := 0 to High(AInfo.Parts) do
     if (AInfo.Parts[i].Role <> ROLE_TARGET)
-       and (AInfo.Parts[i].ValueType <> rvString) then
+       and ((AInfo.Parts[i].ValueType <> rvString)
+            or not IsLosslessForFormat(AInfo.Parts[i].Resolved)) then
     begin
       AllOk := False;
       Break;

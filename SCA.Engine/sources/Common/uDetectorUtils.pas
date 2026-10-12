@@ -300,7 +300,7 @@ type
     // rw29 kostete die Umstellung als Vorgabe 506 SCA102-Funde, darunter
     // nachweislich echte (Alcinoe.FMX.Dialogs.pas verlor alle neun,
     // obwohl die geschachtelte Routine dort steht). Wer Spalten braucht,
-    // fordert sie an - s. uQuickFix.CodeOnly.
+    // fordert sie an - s. TRefactorInfoBuilder (spaltentreue Code-Sicht).
     class function ScanCodeLine(const Line: string; var State: TCommentScanState;
       out LineCommentCol: Integer; FillCh: Char = '~';
       AKeepColumns: Boolean = False): string; static;

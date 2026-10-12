@@ -154,7 +154,8 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uParser2, uMethodd12, uSCAConsts, uConcatToFormat,
   uUnsortedUses,   // SCA142 auf dem Ergebnis einer uses-Ergaenzung
-  uEngineApi, uRefactorInfo, uRdxRecipes, uRdxRecipeRunner;
+  uEngineApi, uRefactorInfo, uRdxRecipes, uRdxRecipeRunner,
+  uRdxBufferMath;   // PlanByteEdits/ApplyByteEdits - der Weg des Editors
 
 const
   // Eine Unit mit allem, was die Varianten brauchen: Feld, Parameter
@@ -415,51 +416,32 @@ begin
   Result.NewText  := AOutcome.NewText;
 end;
 
-// Wendet eine Ersetzung so an, wie es der Editor taete: der Bereich
-// (1-basiert, EndCol exklusiv) wird durch den neuen Text ersetzt, #10 im
-// neuen Text wird zum Zeilenumbruch der Quelle. Prueft vorher, dass der
-// Bereich den erwarteten Text traegt.
-function ApplyEdit(const ASource: string; const AEdit: TRdxEdit): string;
+// Wendet die Ersetzungen so an wie der Editor (uRdxEditor.ReplaceSpans):
+// EIN Plan ueber denselben Puffer - PlanByteEdits prueft jeden erwarteten
+// Text, sortiert, lehnt Ueberlappungen ab und setzt #10 im neuen Text auf
+// das Zeilenende des Puffers -, dann ApplyByteEdits. Bis 2026-10-10 eine
+// eigene TStringList-Nachbildung, Kette und uses nacheinander (Review
+// reDelphiX nach Bereichen, Minor 25).
+function ApplyEdits(const ASource: string; const AEdits: TArray<TRdxEdit>): string;
 var
-  SL     : TStringList;
-  i      : Integer;
-  Joined : string;
-  Prefix : string;
-  Suffix : string;
-  Old    : string;
+  Bytes : TBytes;
+  Plan  : TArray<TRdxByteEdit>;
+  Err   : string;
 begin
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    Joined := '';
-    for i := AEdit.Span.StartLine to AEdit.Span.EndLine do
-    begin
-      if i > AEdit.Span.StartLine then Joined := Joined + #10;
-      Joined := Joined + SL[i - 1];
-    end;
-    Prefix := Copy(SL[AEdit.Span.StartLine - 1], 1, AEdit.Span.StartCol - 1);
-    Suffix := Copy(SL[AEdit.Span.EndLine - 1], AEdit.Span.EndCol, MaxInt);
-    Old := Copy(Joined, Length(Prefix) + 1,
-      Length(Joined) - Length(Prefix) - Length(Suffix));
-    Assert.AreEqual(AEdit.Expected, Old, 'der Bereich traegt den erwarteten Text');
-    for i := AEdit.Span.EndLine downto AEdit.Span.StartLine do
-      SL.Delete(i - 1);
-    SL.Insert(AEdit.Span.StartLine - 1, Prefix
-      + StringReplace(AEdit.NewText, #10, #13#10, [rfReplaceAll]) + Suffix);
-    Result := SL.Text;
-  finally
-    SL.Free;
-  end;
+  Bytes := TEncoding.UTF8.GetBytes(ASource);
+  Assert.IsTrue(PlanByteEdits(Bytes, AEdits, Plan, Err), Err);
+  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
 end;
 
-// Alle Ersetzungen des Ergebnisses, von unten nach oben wie der Anbieter:
-// erst die Kette, dann die uses-Klausel darueber.
+// Alle Ersetzungen des Ergebnisses in EINER Aktion, wie der Anbieter sie
+// uebergibt: die Kette und gegebenenfalls die uses-Ergaenzung.
 function ApplyOutcome(const ASource: string;
   const AOutcome: TRdxFormatOutcome): string;
 begin
-  Result := ApplyEdit(ASource, EditOf(AOutcome));
   if AOutcome.NeedsUses then
-    Result := ApplyEdit(Result, AOutcome.UsesEdit);
+    Result := ApplyEdits(ASource, [EditOf(AOutcome), AOutcome.UsesEdit])
+  else
+    Result := ApplyEdits(ASource, [EditOf(AOutcome)]);
 end;
 
 { ---- Detektor-Heuristik ---- }
@@ -726,9 +708,8 @@ begin
   Src := UnitWith(
     '  Text := Marker + ''id:'' + IntToStr(Id) + '' Milli: '' + IntToStr(n);');
   Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
-  // Die Ersetzung so anwenden, wie es der Editor taete: Bereichstext
-  // durch den neuen Text.
-  After := StringReplace(Src, O.Expected, O.NewText, []);
+  // Die Ersetzung so anwenden, wie es der Editor taete (ApplyOutcome).
+  After := ApplyOutcome(Src, O);
   Assert.IsTrue(Pos('Format(', After) > 0);
   Assert.AreEqual<Integer>(0, DetectorFindings(After),
     'nach dem Umschreiben meldet SCA044 nichts mehr');

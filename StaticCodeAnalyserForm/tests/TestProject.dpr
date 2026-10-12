@@ -127,7 +127,6 @@ uses
   uTestVisibilityCheck in 'uTestVisibilityCheck.pas',
   uTestSynchronizeInDestructor in 'uTestSynchronizeInDestructor.pas',
   uTestLockWithoutTryFinally in 'uTestLockWithoutTryFinally.pas',
-  uTestQuickFix in 'uTestQuickFix.pas',
   uTestRefactorInfo in 'uTestRefactorInfo.pas',
   uTestRefactorInfoBuilder in 'uTestRefactorInfoBuilder.pas',
   uTestRefactorConcat in 'uTestRefactorConcat.pas',
@@ -330,8 +329,14 @@ begin
     end;
 {$ENDIF}
   except
+    // Wirft der Runner selbst (Fixture-Konstruktor, RTTI), darf der
+    // Prozess nicht mit 0 enden - ein Skriptlauf meldete sonst Erfolg
+    // (Review reDelphiX nach Bereichen 2026-10-10, Nit 53).
     on E: Exception do
+    begin
       System.Writeln(E.ClassName, ': ', E.Message);
+      System.ExitCode := EXIT_ERRORS;
+    end;
   end;
 {$ENDIF}
 

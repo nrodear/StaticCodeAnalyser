@@ -291,8 +291,9 @@ l'état.
 
 Utilisez la GUI ou le plugin IDE : lancer l'analyse, filtrer avec les
 tuiles de statistiques, cliquer sur un résultat, lire l'aide
-avant/après. `Ctrl+Alt+S` insère un marqueur de suppression,
-`Ctrl+Alt+F` applique un Quick-Fix. Les résultats s'ouvrent dans
+avant/après. `Ctrl+Alt+S` insère un marqueur de suppression ; dans le
+plugin IDE, `Ctrl+Alt+F` applique l'aide d'édition (package reDelphix, la
+même que l'ampoule). Les résultats s'ouvrent dans
 l'éditeur de votre choix via `[Editor]` dans `analyser.ini` (VS Code,
 Notepad++, Sublime, …) — cette voie saute à la ligne exacte. L'IDE
 Delphi n'ouvre que le fichier ; il n'offre pas d'option de ligne depuis

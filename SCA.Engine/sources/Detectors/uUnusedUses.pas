@@ -92,16 +92,12 @@ type
     // halbe Suchtext weg. Public und static, damit der Vertrag direkt
     // testbar ist.
     class procedure BlankeUsesKlauseln(var Text: string); static;
-  private
-    // Baut zwei Corpus-Varianten:
-    //   RawText  – lowercase, Punkte erhalten (fuer H1: 'sysutils.')
-    //   WordText – lowercase, alle Nicht-Bezeichner durch Leerzeichen (fuer H2: ' tlist ')
-    class procedure CollectText(Node: TAstNode;
-      RawSB, WordSB: TStringBuilder); static;
 
-    // Letzter Namensbestandteil: 'System.Classes' -> 'classes'
-    class function ShortName(const QualName: string): string; static;
-
+    // Public seit 2026-10-10: die SCA007-Editorhilfe (reDelphix) prueft
+    // einen Fund vor der Loeschung am AKTUELLEN Editor-Puffer nach - mit
+    // denselben Spuren wie H1/H2 hier (der Fund kann aelter sein als der
+    // Text).
+    //
     // True, wenn der (lowercase) Unit-Name dotless ist ODER sein erstes
     // Segment ein Embarcadero-Unit-Scope-Namespace ist (System, Vcl,
     // FMX, ...). Gate fuer den Kurznamen-Fallback von KnownIdents:
@@ -114,11 +110,20 @@ type
     // exakt 374 solcher Funde (mORMot 277, Alcinoe 88, ...).
     class function IstRtlNamespace(const UnitLow: string): Boolean; static;
 
+    // Bekannte oeffentliche Bezeichner einer Unit (fuer H2), lowercase
+    class function KnownIdents(const UnitLow: string): TArray<string>; static;
+  private
+    // Baut zwei Corpus-Varianten:
+    //   RawText  – lowercase, Punkte erhalten (fuer H1: 'sysutils.')
+    //   WordText – lowercase, alle Nicht-Bezeichner durch Leerzeichen (fuer H2: ' tlist ')
+    class procedure CollectText(Node: TAstNode;
+      RawSB, WordSB: TStringBuilder); static;
+
+    // Letzter Namensbestandteil: 'System.Classes' -> 'classes'
+    class function ShortName(const QualName: string): string; static;
+
     // Units die nie gemeldet werden sollen
     class function IsAlwaysNeeded(const UnitLow: string): Boolean; static;
-
-    // Bekannte oeffentliche Bezeichner einer Unit (fuer H2)
-    class function KnownIdents(const UnitLow: string): TArray<string>; static;
   end;
 
 implementation

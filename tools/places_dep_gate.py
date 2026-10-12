@@ -215,12 +215,21 @@ SELFTEST_FIXTURES = {
     # Dienst-Unit importiert einen Detektor.
     'Common/uRefactorInfo.pas':
         "unit uRefactorInfo;\ninterface\nuses uFxLiteral;\nimplementation\nend.\n",
+    # Regel 1: eine andere Infrastruktur-Unit darf den Dienst nicht kennen
+    # (Review reDelphiX nach Bereichen 2026-10-10, Minor 26).
+    'Infrastructure/uFxInfraBad.pas':
+        "unit uFxInfraBad;\ninterface\nimplementation\nuses uSourcePlaces;\nend.\n",
+    # Regel 3: der Scan selbst darf auch uEngineApi nicht importieren.
+    'Infrastructure/uStaticAnalyzer2.pas':
+        "unit uStaticAnalyzer2;\ninterface\nimplementation\nuses uEngineApi;\nend.\n",
 }
 SELFTEST_EXPECTED = {
     'uFxLiteral.pas': ['usourceplaces'],
     'uFxInclude.pas': ['urefactorinfo'],
     'uFxApi.pas': ['uengineapi'],
     'uRefactorInfo.pas': ['ufxliteral'],
+    'uFxInfraBad.pas': ['usourceplaces'],
+    'uStaticAnalyzer2.pas': ['uengineapi'],
 }
 
 

@@ -57,6 +57,12 @@ type
     // sperrt, sperrt weiter (Review reDelphiX 2026-10-07, strittiger
     // Minor 1).
     InWith : Boolean;
+    // Eine Funktion der Unit mit dem Namen des Terms ('ParamStr' aus
+    // 'ParamStr(1)') hat kein String-Ergebnis und verdeckt die RTL
+    // (TSourcePlaces.DeclaresNonStringFunc, vom Aufrufer gesetzt).
+    // Namensregeln beweisen dann nichts - wie im with-Block (Review
+    // reDelphiX nach Bereichen 2026-10-10, Minor 2).
+    Shadowed : Boolean;
   end;
   TRdxParts = TArray<TRdxPart>;
 
@@ -210,6 +216,11 @@ type
     class function IsNonUnicodeStringType(const ATypeLow: string): Boolean;
       static;
     class function IsPlainIdent(const AText: string): Boolean; static;
+    // Name, unter dem eine Funktion der Unit den Term verdecken koennte:
+    // Kopf eines Aufrufs ('paramstr' aus 'ParamStr(1)') oder ein blosser
+    // Bezeichner ('slinebreak'), klein; '' bei qualifizierten oder
+    // zusammengesetzten Termen ('SysUtils.Trim(x)', 'TPath.GetTempPath').
+    class function ShadowNameOf(const AText: string): string; static;
     class function JudgeOperand(const APart: TRdxPart): TRdxOperandVerdict;
       static;
     // '%d' fuer vorzeichenbehaftete Ganzzahlen und Byte/Word, '%u' fuer
@@ -261,6 +272,11 @@ type
     // die Vergleichsformen (TargetKey): bei einem Aufruf zaehlen die
     // Argumente nicht.
     class function TargetsComparable(const A, B: string): Boolean; static;
+    // Nur die Zeichen #0..#127 von S - die Ersatzprobe, wenn ein Ziel
+    // Nicht-ASCII traegt: der Scan liest UTF-8 ohne BOM als ANSI, der
+    // ASCII-Anteil stimmt in beiden Lesarten ueberein (Review nach
+    // Bereichen 2026-10-10, Nit 25/26).
+    class function AsciiOnly(const S: string): string; static;
 
     // Das Query-Objekt eines SQL-Ziels: 'Query.SQL.Text' -> 'Query',
     // 'FDQuery1.SQL.Add' -> 'FDQuery1', 'Cmd.CommandText' -> 'Cmd',
@@ -411,6 +427,7 @@ begin
   Result.ArgResolved  := AArgResolved;
   Result.HeadResolved := '';
   Result.InWith       := False;
+  Result.Shadowed     := False;
 end;
 
 class function TRdxRecipes.DecodeLiteral(const ASource: string;
@@ -1079,14 +1096,27 @@ begin
   if APart.Role = ROLE_LITERAL then Exit(ovString);
   if DeclaredVerdictOf(APart, Result) then Exit;
   if IsKnownAnsiStringFunc(Text) then Exit(ovAnsi);
-  // Namensregeln nur ausserhalb eines with-Blocks (s. TRdxPart.InWith).
-  if not APart.InWith
+  // Namensregeln nur ausserhalb eines with-Blocks (s. TRdxPart.InWith)
+  // und nur, wenn keine Funktion der Unit den Namen verdeckt (Shadowed).
+  if not APart.InWith and not APart.Shadowed
      and (IsKnownStringConst(Text) or IsKnownStringFunc(Text)) then
     Exit(ovString);
   if HasVariantTell(Text) then Exit(ovVariantRisk);
   if CallHeadVerdictOf(CallHeadOf(Text), Result) then Exit;
   if not IsOperandShape(Text) then Exit(ovNoOperand);
   Result := ovByCompiler;
+end;
+
+class function TRdxRecipes.ShadowNameOf(const AText: string): string;
+var
+  T : string;
+begin
+  T := Trim(AText);
+  if IsPlainIdent(T) then
+    Exit(LowerCase(T));
+  Result := CallHeadOf(T);
+  if not IsPlainIdent(Result) then
+    Result := '';
 end;
 
 class function TRdxRecipes.IntegerSpec(const ATypeLow: string): string;
@@ -1400,6 +1430,16 @@ begin
   for C in S do
     if C > #127 then
       Exit(False);
+end;
+
+class function TRdxRecipes.AsciiOnly(const S: string): string;
+var
+  C : Char;
+begin
+  Result := '';
+  for C in S do
+    if C <= #127 then
+      Result := Result + C;
 end;
 
 class function TRdxRecipes.TargetsComparable(const A, B: string): Boolean;

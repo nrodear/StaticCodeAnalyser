@@ -2,16 +2,17 @@
 
 IDE-Package (Delphi 12, Win32), das an Funden des SCA-Plugins Aktionen
 anbietet: `Format()` aus einer Verkettung bilden, parametrisierte
-SQL-Vorlage, `uses`-Eintraege qualifizieren, die Editorhilfen
-`FreeAndNil(X)`, `Assigned()` und `(TObject)` entfernen, Unterdruecken und
-Stelle zeigen. Es liest die Stellen ueber den Quellstellen-Dienst
+SQL-Vorlage, `uses`-Eintraege qualifizieren, die Quick-Fixes
+`FreeAndNil(X)`, `Assigned()`, `(TObject)` entfernen, Assert-Meldung,
+leeren Sichtbarkeitsabschnitt, leere Klammern und ueberfluessige Vergleiche
+mit True/False bzw. nil entfernen, Unterdruecken und Stelle zeigen. Es liest die Stellen ueber den Quellstellen-Dienst
 `TSourcePlaces` der SCA-Engine und schreibt nur in den IDE-Editor - nie in
 eine Datei und nie, ohne vorher jeden Bereich im Puffer mit dem Text zu
 vergleichen, auf dem die Aktion beim Menueaufbau beschrieben wurde (siehe
 "Welcher Text gilt").
 
 Konzept: `Konzept_SourceRefactor_Quellstellen_2026-10-02.md`, Abschnitt 15
-(in `reDelphix\`), Editorhilfen: `Konzept_Editorhilfen_2026-10-08.md`
+(in `reDelphix\`), Code-Aktionen (frueher "Editorhilfen"): `Konzept_Editorhilfen_2026-10-08.md`
 (Repo-Wurzel) - beide lokal, gitignored.
 
 ## Aufbau
@@ -23,13 +24,20 @@ source\uRdxProvider.pas           je Fund die Aktionen bauen (Anker/fixMode aus 
 source\uRdxRecipeRunner.pas       Rezept-Laeufer auf TSourcePlaces: Fund -> Beschreibung -> Ersetzung; ohne ToolsAPI, testbar
 source\uRdxRecipes.pas            reine Textlogik: Literal-Codec, Format() nach der Kompilat-Regel, SQL-Vorlage, uses-Schreibweise, Rahmenwerk
 source\uRdxScopeTable.pas         Kurzname -> qualifizierte Unit (Compiler-Reihenfolge der Scope-Liste)
-source\uRdxSimpleFixes.pas        Editorhilfen SCA075/SCA085/SCA126 (reine Textlogik)
+source\uRdxSimpleFixes.pas        Quick-Fixes SCA066/SCA072/SCA074/SCA075/SCA084/SCA085/SCA087/SCA126/SCA139 (reine Textlogik)
+source\uRdxStructFixes.pas        Quick-Fixes SCA007 (uses-Eintrag), SCA168 (case-else), SCA101/SCA099 (begin..end), reine Textlogik
+source\uRdxLineFixes.pas          Quick-Fixes an einer Zeile SCA082/SCA071/SCA088/SCA123, reine Textlogik
+source\uRdxRaiseFixes.pas         Quick-Fixes an Ausnahmen und leeren Rumpfen SCA020/SCA120/SCA122, reine Textlogik
+source\uRdxDeclFixes.pas          Quick-Fixes an Deklarationen SCA117/SCA197/SCA149, reine Textlogik
+source\uRdxIntroPlan.pas          Code-Aktion "Lokale Variable einfuehren" (ohne Fund): Literal am Caret, Deklaration, Spalten, Ablehnungen (reine Textlogik)
+source\uRdxIntroEdits.pas         dieselbe Aktion: Puffertext, Ziel am Caret, Ersetzungen des Writers, Ende des Sync-Blocks (reine Textlogik; IDE-Teil folgt)
 source\uRdxSuppress.pas           Unterdrueck-Marker setzen und entfernen (reine Textlogik)
+source\uRdxCodeMap.pas            Code-Sicht der Datei (Kommentare, Strings, mehrzeilige Strings) und Token-Leser
 source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung aller Ersetzungen, Spaltengrenze, Textwahl
 source\uRdxEditor.pas             ToolsAPI: Puffer lesen, Bereich markieren, Bereiche ersetzen (ein Undo-Schritt), Projekt-Units
 source\uRdxLog.pas                Protokoll %TEMP%\reDelphix.log + DebugView
 data\unitscopes.txt               die Scope-Tabelle (erzeugt), als RCDATA eingelinkt (data\unitscopes.rc)
-tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 8 Testunits (siehe "Pruefen")
+tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 20 Testunits (siehe "Pruefen")
 tools\gen_unitscopes.py           erzeugt data\unitscopes.txt aus der Delphi-Installation
 tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik unter FPC 3.2.2 und fuehrt Tests aus
 tools\probe\RdxCorpusProbe.dpr    Korpus-Probe: Rezept 5.1 ueber eine Liste von Fundstellen, CSV
@@ -89,11 +97,30 @@ die Engine also vorher. DCUs landen wie bei den anderen Projekten in
 | Stelle zeigen | alle mit beschreibbarer Anweisung (Anker der Regel) | markiert den exakten Bereich im Editor. Nur Kontextmenue und Dock-Grid (`fakNavigate`), nicht die Gluehbirne. Ausgegraut, wenn der Bereich hinter Spalte 32767 bzw. hinter 32766 Bytes seiner Zeile liegt (die Editor-Markierung rechnet in SmallInt); liegt er beim Klick hinter dem Pufferende, meldet die Aktion das und markiert nichts |
 | Format() aus Verkettung bilden | SCA044 (`fixMode: auto`) | ersetzt die Terme durch `Format('...%s...', [..])` nach der Kompilat-Regel (unten). `IntToStr(n)` mit bekanntem Ganzzahltyp wird `%d`/`%u` mit `n`; `n.ToString` bleibt `%s`. Ein Char-Operand bekannten Typs geht als `string(c)` hinein, damit ein `#0` erhalten bleibt. `X := X + ...` wird `X := X + Format(...)`. Gesperrt bei SQL-Literalen, Kommentar oder Direktive im ersetzten Bereich, Variant-Anzeichen, Zahl-Operanden, Nicht-Unicode-Strings. Fehlt `System.SysUtils` (dort lebt `Format`), wird es als zweite Ersetzung in die uses-Klausel eingefuegt (unten) - der Menuetext sagt `+ uses System.SysUtils` bzw. `+ uses SysUtils` |
 | Parametrisierte Vorlage in die Zwischenablage | SCA003 (`fixMode: assisted`) | baut `:p1..:pn` und `ParamByName`-Zeilen, eingerueckt wie die Anweisung (Tabs bleiben Tabs). Ist das Ziel kein Query-Objekt (kein Glied `.SQL` oder `.CommandText`, etwa ein String-Puffer `S`), stehen die `ParamByName`-Zeilen als Kommentar mit dem Platzhalter `<Query>` da. Schreibt NIE in den Editor |
-| uses: X -> Scope.X | Fund in einer uses-Klausel, auch der Programm-Klausel einer .dpr/.lpr | qualifiziert den Eintrag, dazu "uses: alle n Eintraege qualifizieren". Mehrdeutiges (Forms: VCL/FMX) nur bei erkennbarem Rahmenwerk, nie bei gleichnamiger Projekt-Unit und nie, wenn die Reihenfolge System/Vcl der Projekt-Scopes entscheiden wuerde. Gesperrt, wenn eine uses-Klausel Compiler-Direktiven traegt oder in einem `$IFDEF`-Zweig liegt |
+| uses: X -> Scope.X | Fund in einer uses-Klausel, auch der Programm-Klausel einer .dpr/.lpr | qualifiziert den Eintrag, dazu "uses: alle n Eintraege qualifizieren". Mehrdeutiges (Forms: VCL/FMX) nur bei erkennbarem Rahmenwerk, nie bei gleichnamiger Projekt-Unit und nie, wenn die Reihenfolge System/Vcl der Projekt-Scopes entscheiden wuerde. Gesperrt, wenn eine uses-Klausel Compiler-Direktiven traegt oder in einem `$IFDEF`-Zweig liegt, und in einer Datei mit FPC-Weiche oder FPC-Modus (FPC 3.2 kennt keine Unit-Scopes). Macht der Eintrag (bzw. "alle") eine sortierte Klausel unsortiert, steht er gesperrt da (sonst kaeme ein neuer SCA142-Fund). Ein Umbau, keine Hilfe zum Fund (`fakRefactor`): nur Kontextmenue und Dock-Grid, nie die Gluehbirne, und je Menue nur einmal, auch wenn mehrere Funde auf der Zeile stehen |
 | FreeAndNil(X) verwenden | SCA085 | `X.Free;` + `X := nil;` -> `FreeAndNil(X);`. X muss in der Unit deklariert sein (keine Property, kein geerbtes Feld); gesperrt in einem `with`-Block. Fehlt `System.SysUtils`, kommt die uses-Einfuegung mit (unten) |
-| Assigned() statt Vergleich mit nil verwenden | SCA126 | schreibt ALLE nil-Vergleiche der einen Anweisung um, die auf der Fundzeile beginnt (`X = nil` -> `not Assigned(X)`). Zwei solche Anweisungen auf der Zeile heissen mehrdeutig; ein Operand vom Typ String, Variant, Menge, Array oder Prozedur/Ereignis sperrt |
+| Assigned() statt Vergleich mit nil verwenden | SCA126 | schreibt ALLE nil-Vergleiche der einen Anweisung um, die auf der Fundzeile beginnt (`X = nil` -> `not Assigned(X)`). Zwei solche Anweisungen auf der Zeile heissen mehrdeutig; ein Operand vom Typ String, Variant, Menge, Array oder Prozedur/Ereignis sperrt, ebenso ein blosser Bezeichner ohne beweisbaren Typ (geerbt aus einer anderen Unit) |
 | (TObject) aus der Klassendeklaration entfernen | SCA075 | `class(TObject)` -> `class` an der Spalte aus der Meldung (nur Zeilen, ohne Parser) |
-| Hier / In dieser Datei unterdruecken | jeder Fund in Pascal-Quelltext | setzt `// noinspection <Art>` ueber die Fundzeile bzw. `// noinspection-file <Art>` (`fakSuppress`). Einen wirkungslosen Marker (SCA165) entfernt "Wirkungslosen Unterdrueck-Marker entfernen" stattdessen |
+| FreeAndNil(X) verwenden | SCA139 | `X.Free` -> `FreeAndNil(X)`, auch hinter `then`/`else`/`do` (ersetzt wird nur der Ausdruck). Dieselbe Variablen-Pruefung wie SCA085; X muss ein blosser Bezeichner sein (kein `Self.X`, kein Pfad), `Free` ohne Klammern und genau einmal auf der Zeile. Gesperrt, wenn der Typ von X in der Unit ein `record`, `object` oder `interface` ist (`Free` ist dort eine eigene Methode), und bei `X.Destroy`. Fehlt `System.SysUtils`, kommt die uses-Einfuegung mit |
+| Bedingung als Assert-Meldung verwenden | SCA074 | `Assert(c)` -> `Assert(c, 'c')` an der Spalte aus der Meldung; Apostrophe der Bedingung werden verdoppelt. Nur, wenn die Klammer auf derselben Zeile schliesst und kein Kommentar darin steht; nicht bei `Obj.Assert`, nicht, wenn die Unit selbst eine Routine `Assert` deklariert, nicht im `with`-Block. Ein Literal ueber 255 Zeichen (E2056) sperrt |
+| Unit X aus uses entfernen (aendert Verhalten) | SCA007 | loescht den Eintrag der Meldung aus seiner uses-Klausel: vor dem letzten Eintrag samt Komma bis zum naechsten - steht er allein auf seiner Zeile, die ganze Zeile samt `//`-Kommentar -, den letzten ab dem Komma davor, den einzigen mit der ganzen Klausel (ganze Zeilen, wenn sie allein steht); ein `in`-Pfad geht mit. Vorher wird der Fund am aktuellen Puffer nachgeprueft (dieselben Spuren wie der Detektor: `Unit.`-Bezug, bekannte Bezeichner) - ein Fund aus einem aelteren Scan bietet nichts an. Gesperrt bei einem Kommentar im geloeschten Bereich (auch `{Form1}` hinter einer Formular-Unit), bei Direktiven in einer uses-Klausel und wenn im Bereich mehr steht als dieser Eintrag. Gekennzeichnet nach Entscheid E2: der Fund ist heuristisch (danach kompilieren - ein Typ, den der Detektor nicht kennt, etwa `TDataModule`, macht ihn falsch), und ein `initialization`-Abschnitt der Unit laeuft danach nicht mehr. Strg+Alt+F fuehrt gekennzeichnete Hilfen nicht aus |
+| Leeren else-Zweig ergaenzen / else-Zweig mit Exception ergaenzen (aendert Verhalten) | SCA168 | zwei Eintraege (Nico 2026-10-10): ein leeres `else` vor das `end` des case (bedeutungsgleich) bzw. `else raise EProgrammerError.Create('Unhandled case');` (+ `System.SysUtils` bei Bedarf). Das `end` findet eine Token-Bilanz (begin/case/try/asm/record; `&End` und `@@End` zaehlen nicht); steht es allein auf der Zeile, kommt das `else` in eine eigene Zeile mit derselben Einrueckung, die raise-Zeile eingerueckt wie die Arme. Endet der letzte Arm nicht auf `;`, setzt die Hilfe es mit - sonst bande das `else` an ein `if` im Arm (`1: if B then DoA`). Gesperrt bei einer Direktive zwischen `case` und `end`, wenn schon ein `else` oder (FPC) `otherwise` hinter `;` steht, bei einem case ohne Zweige, bei zwei `case` auf der Zeile; die raise-Variante nicht in Dateien mit FPC-Weiche oder FPC-Modus (FPC kennt EProgrammerError nicht) |
+| Ueberzaehliges Semikolon entfernen | SCA082 | `; ;` an der Spalte aus der Meldung -> `;` (das zweite war eine leere Anweisung). Nur, wenn dort beide `;` Code sind (kein String) |
+| Schluesselwort an Spalte 1 setzen | SCA071 | loescht die Einrueckung vor dem Unit-Schluesselwort aus der Meldung. Nicht, wenn davor mehr als Leerraum steht (ein Kommentar ginge verloren), die Zeile in einem Kommentar bzw. mehrzeiligen String beginnt oder das `interface` zu einem Typ gehoert (`IFoo =` davor - das meldet der Detektor auch) |
+| begin durch initialization ersetzen | SCA088 | das `begin` des Unit-Rumpfs (`begin .. end.`) wird `initialization`, Schreibweise wie das `begin`. Nur in einer Unit (in `program`/`library` ist es der Rumpf), nur wenn das `end` zu genau diesem `begin` (Token-Bilanz) vor dem Punkt steht, nicht bei einer Direktive auf der Zeile |
+| Cast nach T vor Free entfernen | SCA123 | `TFoo(X).Free` -> `X.Free` - nur, wenn X ein blosser Bezeichner ist, ausserhalb eines `with`-Blocks, und schon als genau `TFoo` deklariert (`DeclaredTypeOf`): nur dann binden beide dasselbe `Free`. Ein anderer Typ kann `Free` verdecken (`TRefCountedObject.Free` in dwsUtils zaehlt nur herunter - aus `TRefCountedObject(Obj).Free` mit `Obj: TObject` wuerde eine Zerstoerung), ein Pointer-Operand braucht den Cast zum Uebersetzen (Gegen-Review 2026-10-10: von 58 sonst angebotenen Korpusfaellen uebersetzten 36 nicht). Das Katalog-Beispiel (`L: TObject`) bekommt deshalb keine Hilfe. Nur fuer Free, kein Interface-Cast |
+| Leeren Rumpf als beabsichtigt kennzeichnen / ENotImplemented im leeren Rumpf ausloesen (aendert Verhalten) | SCA020 | zwei Eintraege wie bei SCA168: `// intentionally empty` in eine eigene Zeile zwischen `begin` und `end` (eine Stufe tiefer; stehen beide auf einer Zeile, `{ intentionally empty }` inline) - der Detektor wertet einen solchen Kommentar als Absicht, bedeutungsgleich - bzw. `raise ENotImplemented.Create('<Name>');` mit dem Namen aus dem Methodenkopf (+ `System.SysUtils` bei Bedarf; FPC kennt die Klasse ebenfalls). Gesperrt bei zwei Routinenkoepfen auf der Zeile (der Fund koennte jeden meinen), bei einer lokalen Routine zwischen Kopf und Rumpf, bei `asm`, wenn hinter dem `begin` noch Code steht, wenn der Rumpf nicht leer ist (Code unter einer inaktiven Direktive oder ein asm-Block - der Detektor sieht nur den aktiven Zweig; im Korpus 288 von 3.945 Funden) und bei einem Kommentar im Rumpf (er ist keine Absicht, sonst schwiege der Detektor - meist auskommentierter Code, den der Absichtskommentar fuer SCA070 verdeckte; 726 Funde); die raise-Variante nicht in constructor/destructor und nur mit dem Namen auf der Kopfzeile |
+| Exception ausloesen (aendert Verhalten) | SCA120 | `raise ` vor `EFoo.Create(..)` (auch `CreateFmt`, Argumente ueber Zeilen) - nur als ganze Anweisung: davor ein Anweisungsanfang (im then-Zweig nur, wenn auch das `if` eine Anweisung beginnt - nicht im bedingten Ausdruck von Delphi 13), hinter der `)` ihr Ende (kein `X := EFoo.Create`, kein `EFoo.Create(..).Free`); nur die Create-Varianten des Detektors (`Create`, `CreateFmt`, `CreateRes`, `CreateHelp` ...). Gekennzeichnet nach E2: der Code dahinter laeuft im Fehlerfall nicht mehr - das ist der Fix |
+| raise; verwenden (Original-Stack-Trace bleibt) | SCA122 | `raise E;` -> `raise;` - nur, wenn rueckwaerts der eigene Handler `on E: T do` kommt, bevor ein `except`/`finally` (im except eines inneren try wuerfe `raise;` die innere Exception), der Handler einer anderen Variablen, eine anonyme Methode oder ein `with` (der Name koennte ein Member sein); ganze Bloecke davor zaehlen nicht |
+| Dokumentationsgeruest einfuegen | SCA117 | setzt ueber die Deklaration `/// <summary></summary>`, je Typparameter `/// <typeparam name="T"></typeparam>`, je Parameter (bei einer Property: je Index-Parameter) `/// <param name="X"></param>` und bei einer Funktion `/// <returns></returns>` - eingerueckt wie die Deklaration, die Platzhalter leer (ein `TODO` riefe SCA019). Die Namen kommen aus dem Kopf, auch ueber Zeilen; `const`/`var`/`out`/`constref` und Attribute zaehlen nicht mit. Bedeutungsgleich. Gesperrt, wenn die Zeile in einem Kommentar beginnt, der Name nicht mehr zur Meldung passt, darueber ein Kommentar ueber Zeilen endet (der Detektor haelt dessen Schlusszeile fuer Code), ueber Attributzeilen schon XMLDoc (`///`) steht (der Detektor bricht an der Attributzeile ab und meldet trotz Doku - delphimvcframework; sonst entstuende ein zweiter summary-Block; andere Kommentare dort sind meist Abschnittsueberschriften, dann kommt das Geruest) oder eine Direktive im Kopf bis zu dessen `;` steht (dahinter zaehlt nicht). Ohne Attribut-Doku kommt das Geruest unter die Attribute, direkt ueber die Deklaration (dort sucht der Detektor) |
+| Neue GUID einfuegen | SCA197 | eine frisch erzeugte GUID `['{...}']` in eine eigene Zeile hinter den Interface-Kopf (eingerueckt wie die Member; steht der Rumpf auf derselben Zeile, inline). Bedeutungsgleich. Gesperrt bei generischen Interfaces (eine GUID gaelte fuer alle Auspraegungen), Vorwaertsdeklarationen, `[` hinter dem Kopf (GUID oder Attribut), COM-Merkmalen im Rumpf (`stdcall`/`safecall`/`winapi`/`dispid` - ein COM-Import braucht die echte IID), `{$INTERFACES CORBA}` bzw. `{$CALLING STDCALL}` in der Datei (auch als `(*$..*)`, nur innerhalb der Direktive), wenn hinter dem Kopf kein Rumpf beginnt (`procedure`/`function`/`property`/`end`) und bei einer Direktive vom Kopf bis zum ersten Member - beides fangt Koepfe, die unter `{$IFDEF}` doppelt stehen (die GUID kaeme sonst nur in einen Zweig) |
+| "override;" bzw. "reintroduce;" an die Deklaration anfuegen | SCA149 | nach dem Rat der Meldung: bei gleicher Signatur `override` (gekennzeichnet nach E2 - der virtuelle Aufruf landet danach in dieser Methode; das ist der Fix), bei abweichender `reintroduce` (bedeutungsgleich, nur W1010 entfaellt). Nie beide als Eintraege: Strg+Alt+F liesse das gekennzeichnete `override` aus und deckte den Polymorphie-Fehler mit `reintroduce` still zu. Die Direktive kommt direkt hinter das `;` des Kopfs (vor vorhandene Direktiven). `override` nur, wenn im Rumpf der Elternklasse (der Detektor sucht sie in derselben Unit) eine Methode gleichen Namens dieselbe Form hat: `class`, Parameter-Modifier, Typen und Defaults (Namen duerfen abweichen), Rueckgabe, Aufrufkonvention - der Detektor vergleicht nur die Typen, `const A` gegen `A` oder `class procedure` gegen `procedure` uebersetzten mit `override` nicht. `reintroduce` nicht bei generischem Vorfahren (`class(TBase<Integer>)`: der Detektor haelt `T` und `Integer` fuer verschieden, `override` waere dort der Fix; Typ-Aliase wie `Integer`/`Longint` erkennt er ebenso nicht - Restrisiko). Gesperrt ausserdem, wenn `override`/`reintroduce` schon dasteht, bei `override` neben `virtual`/`dynamic`/`static`/`message`/`inline`, wenn der Name nicht mehr passt, bei einer Property, bei einer Direktive im Kopf und bei unbekanntem Meldungstext |
+| Zweig in begin..end setzen | SCA101, SCA099 | setzt die Anweisung hinter `then`/`else`/`do` in `begin..end` (Entscheid E7, bedeutungsgleich). SCA101: das Schluesselwort an der Spalte aus der Meldung; SCA099: das `else` hinter dem einen `end else` der Fundzeile, das der Detektor meldet (`end else if`/`end else begin` zaehlen nicht mit). Die Anweisung endet mit `;` (das `end` bekommt dann eines) oder vor `else`/`end`/`until`/`except`/`finally` (sie bekommt ein `;`, das `end` keines). Hinter dem `else` eines `case` oder `except` steht eine Anweisungsliste - dann kommt alles bis vor dessen `end` in den Block, nicht nur die erste Anweisung. Wem ein `else` gehoert, entscheidet eine Rueckwaerts-Suche wie der Compiler (dangling else: das naechste `then` ohne eigenes `else`; Bloecke und `repeat..until` werden uebersprungen); ein `;` auf oberster Ebene schliesst ein if-else aus, entscheidend ist erst das `of` bzw. `except` davor. Form: endet die Zeile des Schluesselworts mit ihm und die letzte Zeile der Anweisung mit ihr, kommen `begin` und `end` in eigene Zeilen (eingerueckt wie die Zeile des `if`/`for`/`while`/`with`/`on` bzw. des `else`; Kommentarzeilen dazwischen kommen mit in den Block); steht die Anweisung ganz auf der Zeile des Schluesselworts, kommt sie eine Stufe tiefer in eine eigene Zeile (ein folgendes `else` in die naechste); sonst inline (`begin X; end`). Gesperrt bei einem bedingten Ausdruck (Delphi 13: `X := if A then B else C`, auch verschachtelt oder als `Write`-Breite hinter `:`), wenn hinter einem `;` vor dem `else` eine Deklaration steht (`var`, `procedure` ... - der Kopf einer anonymen Methode; wem das `else` gehoert, waere unklar), bei `record` vor dem `else`, wenn in der Anweisung eine Struktur, eine anonyme Methode oder eine Inline-Deklaration steht (`var`/`const` auch in der Liste eines case-else: `begin..end` engte ihren Gueltigkeitsbereich ein), bei einer Direktive in den Zeilen vom entscheidenden Token (beim `else` das `then` bzw. `of`/`except`, sonst das Schluesselwort) bis zum Ende der Anweisung (`{$` in einem `//`-Kommentar zaehlt nicht), bei schon vorhandenem `begin` und bei leerer Anweisung |
+| Leere Klammern entfernen | SCA066 | `Foo()` -> `Foo` an der Spalte aus der Meldung, auch in Deklarationen (`procedure Foo();`). Nur, wo Delphi den Namen ohne Klammern genauso aufruft: als ganze Anweisung (`Obj.Foo();`), als ganze Bedingung von `if`/`while`/`until` oder als ganze rechte Seite einer Zuweisung an eine einfache Variable, deren Typ bekannt und nicht prozedural ist (sonst liest Delphi den Namen als Zeiger). Gesperrt als Argument oder Teil eines Ausdrucks (etwa bei einer Ueberladung mit `TFunc`), bei `Arr[0]()` und `F()()`, wenn der Name eine Variable (Prozedurvariable) ist oder wie ein Ereignis heisst (`OnIdle()`), in der eigenen Funktion, im `with`-Block und in Dateien mit FPC-Weiche oder FPC-Modus. Nachfolger des alten Strg+Alt+F (uQuickFix) |
+| Ueberfluessigen Vergleich mit True/False entfernen | SCA072 | `X = True` / `X <> False` -> `X`, `X = False` / `X <> True` -> `not X`. Nur fuer einen blossen Bezeichner (kein Pfad, auch nicht `Self.X`), der in der Unit als `Boolean` deklariert ist (bei Variant und LongBool ist `= True` nicht dasselbe); links davon muss ein Ausdruck beginnen und rechts von True/False einer enden - `X = True and Y` heisst `X = (True and Y)`. Gesperrt im `with`-Block. Nachfolger von uQuickFix, der auch Pfade ohne Typpruefung umschrieb |
+| Ueberfluessigen Vergleich mit nil entfernen | SCA084 | `Assigned(X) and (X <> nil)` bzw. `(X <> nil) and Assigned(X)` -> `Assigned(X)`, alles auf einer Zeile und der Vergleich geklammert. X muss als Klasse, Interface oder Zeiger bewiesen sein (`TObject`, `Pointer`, `IInterface` oder in der Unit so deklariert, auch ueber Alias) - bei einem Funktionstyp ruft `X <> nil` ihn auf, `Assigned(X)` nicht. Gesperrt bei `not` davor (es bindet nur an den ersten Teil), bei einer Aufruf- oder Cast-Klammer (`Boolean(X <> nil) and ...`), bei einer eigenen Routine `Assigned` und im `with`-Block. Nachfolger von uQuickFix |
+| Leeren Sichtbarkeitsabschnitt entfernen | SCA087 | loescht die Zeile des leeren Abschnitts (`public`, `strict private` ...). Nur, wenn sie genau diesen Abschnitt traegt, ohne Kommentar; gesperrt bei `strict` allein auf der Zeile (es gehoert zur naechsten) und bei einer Compiler-Direktive bis zum naechsten Abschnitt (der Abschnitt waere vielleicht nur in einem Zweig leer) |
+| Hier / In dieser Datei unterdruecken | jeder Fund in Pascal-Quelltext | setzt `// noinspection <Art>` ueber die Fundzeile bzw. `// noinspection-file <Art>` hinter die Kopfanweisung (`fakSuppress`); ein vorhandener Marker bekommt die Art dazu, ausser er lautet `All`/`*` (dann eine eigene Zeile). Nicht angeboten, wenn die Fundzeile in einem Block-Kommentar oder mehrzeiligen String liegt. Einen wirkungslosen Marker (SCA165) entfernt "Wirkungslosen Unterdrueck-Marker entfernen" stattdessen - nur, wenn er genau EINE Art nennt; ein Mehrarten- oder `All`-Marker steht gesperrt mit Grund da, denn SCA165 kommt auch, wenn nur die Arten des aktiven Scan-Profils nichts unterdrueckt haben |
 
 **uses-Ergaenzung im Einzelnen** (`TRdxRecipeRunner.PlanUses`, fuer
 `Format()` und `FreeAndNil(X)`):
@@ -231,8 +258,8 @@ Bei einer Fehlermeldung zuerst dort nachsehen.
 ## Scope-Tabelle pflegen
 
 ```
-python tools\gen_unitscopes.py            # Studio 23.0 (Delphi 12)
-python tools\gen_unitscopes.py "C:\Program Files (x86)\Embarcadero\Studio\37.0"
+python reDelphix\tools\gen_unitscopes.py            # Studio 23.0 (Delphi 12)
+python reDelphix\tools\gen_unitscopes.py "C:\Program Files (x86)\Embarcadero\Studio\37.0"
 ```
 
 Fehlt `source` oder `lib\win32\release` der Installation oder findet das
@@ -241,13 +268,13 @@ sonst ersetzt es sie in einem Zug. Danach `reDelphix.d12` bereinigen und
 neu erzeugen (siehe "Bauen und installieren"). Eine `unitscopes.txt` neben
 der BPL hat Vorrang vor der eingelinkten Ressource.
 
-## Editorhilfen in der IDE ausprobieren
+## Code-Aktionen in der IDE ausprobieren
 
-Profil **`editorhilfen`** in `data\profile-editorhilfen.json`: nur die
+Profil **`code-aktionen`** in `data\profile-code-aktionen.json`: nur die
 Regeln, zu denen reDelphix eine Hilfe anbietet, plus `FileReadError`
 (Lesefehler bleiben sichtbar). Einspielen: Analyser-Fenster ->
 Profile -> **Import...** -> die Datei waehlen -> bestaetigen; danach im
-Analyser das Profil `editorhilfen` waehlen und die Datei bzw. das
+Analyser das Profil `code-aktionen` waehlen und die Datei bzw. das
 Projekt scannen. Gluehbirne oder Editor-Kontextmenue auf der Fundzeile:
 
 | Regel | Fund | Erwartete Hilfe |
@@ -257,14 +284,62 @@ Projekt scannen. Gluehbirne oder Editor-Kontextmenue auf der Fundzeile:
 | SCA075 ExplicitTObjectInheritance | `TFoo = class(TObject)` | (TObject) entfernen |
 | SCA085 FreeAndNilHint | `X.Free; X := nil;` | FreeAndNil(X) |
 | SCA126 NilComparison | `if X <> nil then` | Assigned(X) |
-| SCA165 UnusedSuppression | wirkungsloser `// noinspection`-Marker | Marker entfernen |
-| SCA142 UnsortedUses, SCA007 UnusedUses | Fund auf einer uses-Zeile | uses: Eintraege qualifizieren (Winapi.Windows, System.SysUtils ...) |
+| SCA074 AssertMessage | `Assert(X > 0);` | Bedingung als Assert-Meldung |
+| SCA087 EmptyVisibilitySection | `public` direkt vor `private` | leeren Abschnitt entfernen |
+| SCA139 FreeWithoutNil | `FList.Free;` (Feld, ohne `FList := nil`) | FreeAndNil(FList) |
+| SCA066 EmptyArgumentList | `DoStuff();` | leere Klammern entfernen |
+| SCA007 UnusedUses | ungenutzte Unit in uses | Unit aus uses entfernen (gekennzeichnet) - daneben "uses qualifizieren" im Kontextmenue |
+| SCA168 DefaultCaseInCaseStatement | `case` ohne `else` | leerer else-Zweig bzw. else mit Exception (gekennzeichnet) |
+| SCA101 BeginEndRequired | `if Active then DoStuff;` | Zweig in begin..end setzen |
+| SCA099 IfElseBegin | `end else DoC;` | Zweig in begin..end setzen |
+| SCA082 SuperfluousSemicolon | `DoStuff;;` | ueberzaehliges Semikolon entfernen |
+| SCA071 UnitLevelKeywordIndent | `  implementation` | Schluesselwort an Spalte 1 setzen |
+| SCA088 LegacyInitializationSection | `begin ... end.` am Ende einer Unit | begin durch initialization ersetzen |
+| SCA123 CastAndFree | `TStringList(L).Free;` mit `L: TStringList` | Cast vor Free entfernen |
+| SCA020 EmptyMethod | `procedure P; begin end;` | Rumpf als beabsichtigt kennzeichnen bzw. ENotImplemented ausloesen (gekennzeichnet) |
+| SCA120 MissingRaise | `EFoo.Create('x');` | Exception ausloesen (gekennzeichnet) |
+| SCA122 ReRaiseException | `on E: EFoo do ... raise E;` | `raise;` verwenden |
+| SCA117 PublicMemberWithoutDoc | `procedure Run(A: Integer);` im public-Teil | Dokumentationsgeruest einfuegen |
+| SCA197 InterfaceWithoutGuid | `IFoo = interface` ohne GUID | Neue GUID einfuegen |
+| SCA149 MissingOverride | `procedure DoWork;` verdeckt `TBase.DoWork; virtual;` | `override;` anfuegen (gekennzeichnet) bzw. `reintroduce;` |
+| SCA072 RedundantBoolean | `if Active = True then` (Active: Boolean) | Vergleich mit True/False entfernen |
+| SCA084 AssignedAndAssignedNil | `if Assigned(Obj) and (Obj <> nil) then` | Vergleich mit nil entfernen |
+| SCA165 UnusedSuppression | wirkungsloser `// noinspection`-Marker | Marker entfernen - nur bei genau einer Art; Mehrarten- und `All`-Marker stehen gesperrt da (unter diesem Teilprofil wirken sie vielleicht nur scheinbar nicht) |
+| SCA142 UnsortedUses, SCA007 UnusedUses | Fund auf einer uses-Zeile | uses: Eintraege qualifizieren (Winapi.Windows, System.SysUtils ...) - nur im Kontextmenue, nicht in der Gluehbirne: es behebt den Fund nicht |
 | jede Regel ausser SCA165 | beliebig | Hier / in dieser Datei unterdruecken; Stelle zeigen (Kontextmenue) |
 
 SCA007 laeuft nur mit eingeschaltetem uses-Check (Optionen bzw.
 `[Detectors] UsesCheck=1`); SCA142 reicht fuer die uses-Hilfe. Den
 Ablauf je Aktion protokolliert `%TEMP%\reDelphix.log` (`Provide ...`,
 `neu geparst` / `wiederverwendet`).
+
+## Lokale Variable einfuehren (Refactoring ohne Fund, in Arbeit)
+
+Code-Aktion ohne Fund: aus dem Zahl-Literal unter dem Caret wird
+`var MagicNr01 := <Literal>;` direkt ueber der Anweisung, alle gleichen
+Literale der Zeile werden durch den Namen ersetzt, der Name steht danach
+im Sync Edit zum Umbenennen (Variante C1h; ein Zweig ohne `begin` bekommt
+`begin..end`).
+
+* **Stand (Charge I-1, 2026-10-11):** nur Logik und Tests.
+  `uRdxIntroPlan` und `uRdxIntroEdits` sind 1:1 aus dem Labor
+  `VarNameProject` uebernommen (Stand 41bccb23, Entscheid E24: erst der im
+  UI-Test gemessene Stand), nur umbenannt (`TVnp*` -> `TRdxIntro*`,
+  `ApplyByteEdits` -> `ApplyIntroEdits`, weil `uRdxBufferMath` schon eine
+  `ApplyByteEdits` hat). Die Tests `uTestRdxIntro*` stehen in
+  reDelphix.Test und laufen im FPC-Pruefstand. Das Package bietet die
+  Aktion noch nicht an.
+* **Die IDE-Aktion folgt** nach dem Prototyp fuer Enter und Esc im Labor
+  (E25: Esc zerstoert im Sync Edit der IDE Text, auch ohne unseren Code -
+  UI-Test 2026-10-11).
+* **Variante D1** (Live Template) bleibt im Labor, ebenso ihre Tests
+  (`uTestVnpTemplate`).
+* **Grenzen:** siehe `VarNameProject\README.md`, Abschnitt "Grenzen" (ein
+  Zeilen-Leser ohne Parser - was er nicht sicher abgrenzt, lehnt er ab).
+  Die Deklaration ist noch die untypisierte Inline-var; die typisierte
+  Variable ist entschieden (E26) und folgt in Charge I-2b. Eigener
+  Zeilenleser und Schreibweg bleiben bis zur Zusammenlegung mit
+  `uRdxCodeMap`/`uRdxBufferMath` stehen.
 
 ## Pruefen
 
@@ -305,24 +380,46 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
   Tabulator, Umlaut, Surrogatpaar und kombinierendem Zeichen (CRLF, LF,
   CR), Pruefung aller Ersetzungen einer Aktion, Spaltengrenze 32767,
   Textwahl Puffer/Platte/gesperrt.
-* `uTestRdxSuppress` - Unterdrueck-Marker setzen und entfernen.
-* `uTestRdxSimpleFixes` / `uTestRdxNilFix` - die Editorhilfen
-  SCA075/SCA085 bzw. SCA126 auf Text, ohne Parser.
+* `uTestRdxSuppress` - Unterdrueck-Marker setzen und entfernen, auch in
+  Block-Kommentar, mehrzeiligem String, Lizenzkopf und mit `All`.
+* `uTestRdxCodeMap` - die Code-Sicht gegen `TDetectorUtils.ScanCodeLine`
+  des Cores (Drift-Waechter) und der Zustand am Zeilenanfang.
+* `uTestRdxQualifyUses` - die Planung von "uses: X -> Scope.X"
+  (`TRdxRecipeRunner.QualifyUses`): Eintraege der Zeile, alle,
+  Sortierung, FPC-Weiche, Direktiven, eigene Unit.
+* `uTestRdxSimpleFixes` / `uTestRdxNilFix` / `uTestRdxExprFixes` /
+  `uTestRdxStructFixes` / `uTestRdxBlockFixes` / `uTestRdxLineFixes` /
+  `uTestRdxRaiseFixes` / `uTestRdxDeclFixes` - die Quick-Fixes
+  SCA074/SCA075/SCA085/SCA087/SCA139, SCA126, SCA066/SCA072/SCA084,
+  SCA007/SCA168, SCA101/SCA099, SCA082/SCA071/SCA088/SCA123,
+  SCA020/SCA120/SCA122 bzw. SCA117/SCA197/SCA149 auf Text, ohne Parser.
 * `uTestRdxSimpleFixesDetector` - dieselben Hilfen gegen den echten
   Detektor: nach der Hilfe meldet er nichts mehr; die Katalog-Beispiele
-  `bad` werden genau `good`.
+  `bad` werden genau `good` (SCA074 und SCA139: das `good` traegt eine
+  Begruendung in Worten bzw. laesst Zeilen weg - dort wird die Ersetzung
+  verglichen).
+* `uTestRdxIntroPlan` / `uTestRdxIntroRefuse` / `uTestRdxIntroGuards` /
+  `uTestRdxIntroEdits` - "Lokale Variable einfuehren" (Abschnitt oben): das
+  Literal am Caret, Deklaration und Spalten, Zweig ohne `begin`, alle
+  Ablehnungen und Schutzregeln, Ende des Sync-Blocks und die Ersetzungen
+  des Writers Ende zu Ende auf UTF-8-Pufferbytes (CRLF, LF, BOM,
+  Mehrbyte-Zeichen) - 53 Tests, reine Textlogik.
 
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix
+bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits
 ```
+
+Erwartet (Stand 2026-10-11): `PASSED 235  FAILED 0` - 16 Testunits, davon 53 Tests
+fuer "Lokale Variable einfuehren".
 
 Der Pruefstand uebersetzt die Core-Units des Quellstellen-Dienstes
 (`uRefactor*`, `uSourcePlaces`, `uFindingActions`, `ScanCodeLine` aus
 `uDetectorUtils`) mit Stubs fuer Parser und Resolver sowie die Textlogik
 des Moduls (`uRdxRecipes`, `uRdxScopeTable`, `uRdxBufferMath`,
-`uRdxSuppress`, `uRdxSimpleFixes`). Testunits kommen aus `reDelphix\tests`,
+`uRdxSuppress`, `uRdxSimpleFixes`, `uRdxStructFixes`, `uRdxLineFixes`, `uRdxRaiseFixes`, `uRdxDeclFixes`, `uRdxCodeMap`,
+`uRdxIntroPlan`, `uRdxIntroEdits`). Testunits kommen aus `reDelphix\tests`,
 sonst aus `StaticCodeAnalyserForm\tests` (Core-Tests wie
 `uTestSourcePlaces`, `uTestRefactorConcat`).
 
@@ -384,4 +481,4 @@ Probe.
   Anweisung mit einem solchen Literal beschreibt der Core gar nicht, es
   gibt dort also keine Umformung.
 * In einem `with`-Block gilt kein Name als bewiesen (Kompilat-Regel oben),
-  und `FreeAndNil(X)` wird dort nicht angeboten.
+  und `FreeAndNil(X)` sowie die Assert-Meldung werden dort nicht angeboten.

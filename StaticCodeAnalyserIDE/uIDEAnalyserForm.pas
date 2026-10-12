@@ -19,11 +19,7 @@ uses
   uBaseline,
   uFixHint, uIgnoreList, uRepoSettings, uRuleCatalog, uClaudePrompt,
   uFindingCopyText,
-  uQuickFix,
   uFindingActions,                         // Aktionen fremder Anbieter am Fund (Grid-Menue)
-  uFindingActionMenu,                      // das eine Menue-Modell zu den Aktionen (Stufe C)
-  uIDEFindingActionMenu,                   // Modell -> TMenuItems
-  uIDEFindingBulb,                         // Gluehbirne an der Caret-Zeile (Element EditorBulb)
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uIDEColors, uLocalization,
   uRecentPaths, uScanTargetDialog,
   uIDELineHighlighter, uIDEMessages, uIDEWatchMode, uIDEStatsTiles,
@@ -52,6 +48,11 @@ type
     // delegiert die Status-Pushes via StatusFindings/Progress/Mode.
     FStatusBar      : TAnalyserStatusBar;
     FAllFindings    : TObjectList<TLeakFinding>;
+    // Stand von FAllFindings fuer FindingsAtEditorLine (Review reDelphiX
+    // nach Bereichen 2026-10-10, Minor 19): Generation des letzten
+    // Voll-Befuellens bzw. je Datei (klein) des letzten Watch-Laufs.
+    FFindingsGen    : UInt64;
+    FFileGens       : TDictionary<string, UInt64>;
     // Snapshot der initial-populierten Combo-Items (FormCreate). Wird
     // in RebuildFilterCombos genutzt um nach jedem Scan auf Eintraege
     // mit > 0 Treffern zu reduzieren - und beim naechsten Scan wieder
@@ -126,8 +127,9 @@ type
     // GridSelectCell SOFORT - also bei jedem Auswahlwechsel, bei gehaltener
     // Pfeiltaste rund 30x je Sekunde. Sie ist der teuerste Posten des
     // Auswahl-Pfades: systemweiter Clipboard-Write plus, wenn es fuer die
-    // Regel einen Quick-Fix-Provider gibt, ein LoadFromFile der KOMPLETTEN
-    // Quelldatei. Nur die Ruhe-Zeile gehoert in die Zwischenablage.
+    // Regel einen Quick-Fix-Provider gab (uQuickFix, bis 2026-10-10), ein
+    // LoadFromFile der KOMPLETTEN Quelldatei. Nur die Ruhe-Zeile gehoert in
+    // die Zwischenablage.
     FClipCopyTimer          : TTimer;
 
     FPanelStats        : TPanel;
@@ -469,9 +471,9 @@ type
     procedure CopyFindingToClipboard(F: TLeakFinding);
     // Explizite Kopier-Geste (Grid-Kontextmenue "Copy AI prompt"): kopiert
     // IMMER, unabhaengig vom ini-Modus - wie das EXE-Pendant
-    // GridMenuCopyClick. INHALT hier: Claude-Prompt samt vorangestelltem
-    // Quick-Fix-Block; die EXE kopiert den Prompt OHNE diesen Block
-    // (bewusste Alt-Divergenz, s. Review 2026-08-12).
+    // GridMenuCopyClick, mit demselben INHALT: der Claude-Prompt. Der
+    // Quick-Fix-Block, den das Plugin bis 2026-10-10 voranstellte (aus
+    // uQuickFix), entfiel mit uQuickFix (Nico 2026-10-10).
     procedure CopyClaudePromptToClipboard(F: TLeakFinding);
     // Zwilling fuer das Jira-Mini-Issue. Geteilt von der KLICK-Kopie
     // ([UI] ClipboardOnClick=2) und dem Grid-Menue 'Copy Jira issue' -
@@ -481,19 +483,28 @@ type
     procedure GridMenuCopyJiraClick(Sender: TObject);
     procedure GridMenuPopup(Sender: TObject);
     // Klick auf einen dynamischen Eintrag aus uFindingActions: fuehrt
-    // Execute des Anbieters aus; Fehler des Anbieters landen in der
-    // Status-Bar, nicht in der IDE.
+    // Execute des Anbieters aus (RunFindingAction).
     procedure GridMenuActionClick(Sender: TObject);
-    // Wendet einen Quick-Fix DIREKT im IDE-Editor an (TIDEEditor.
-    // ApplyLineReplacement). Trigger: F4 auf der Grid-Zeile. No-op
-    // wenn der Befund-Kind keinen Quick-Fix-Provider hat oder der
-    // Provider auf der Original-Zeile kein Pattern matched. Status-
-    // bar zeigt Ergebnis (success/failure/unsupported).
+    // Fuehrt A aus; Fehler des Anbieters landen in der Status-Bar, nicht in
+    // der IDE (Grid-Menue, Ctrl+Alt+F/S). True, wenn Execute ohne Ausnahme
+    // lief.
+    function RunFindingAction(const A: TFindingAction; Sender: TObject): Boolean;
+    // Fuehrt fuer den Fund der Grid-Zeile die erste verfuegbare Aktion der
+    // Art AKind aus der Anbieter-Registry aus (dasselbe Modell wie
+    // Gluehbirne und Grid-Menue) und meldet in der Status-Bar: ADoneFmt
+    // mit ihrer Caption; sonst AMissingFmt mit Caption und Grund der
+    // ersten gesperrten dieser Art bzw. mit der Regel, wenn es keine gibt.
+    procedure RunFirstAction(RowIdx: Integer; AKind: TFindingActionKind;
+      const ADoneFmt, AMissingFmt: string);
+    // Ctrl+Alt+F: die erste verfuegbare Hilfe (fakFix) der Registry - mit
+    // reDelphix dieselbe wie in der Gluehbirne (Pufferabgleich, ein
+    // Undo-Schritt). Status-Bar zeigt Ergebnis oder Grund.
     procedure ApplyQuickFixForRow(RowIdx: Integer);
 
-    // Fuegt `// noinspection <RuleName>` direkt ueber der Befund-Zeile
-    // im IDE-Editor ein. Trigger: Ctrl+Alt+S auf der Grid-Zeile.
-    // Beim naechsten Analyse-Lauf filtert uSuppression den Befund.
+    // Ctrl+Alt+S: der erste Unterdrueck-Eintrag der Registry (reDelphix:
+    // Marker ueber der Zeile, ein vorhandener Marker bekommt die Art dazu).
+    // Ohne Anbieter der alte Weg: eine neue Zeile `// noinspection
+    // <RuleName>` ueber dem Befund.
     procedure ApplySuppressForRow(RowIdx: Integer);
     procedure UpdateHelp(Row: Integer);
     // Sammelt alle Befunde aus FDisplayedFindings die zur gleichen Datei
@@ -647,7 +658,12 @@ uses
   uHintTextLayout,              // FormatRelatedLines - geteilt mit dem Nur-Text-Hint
   uAppTheme,                    // ApplyTitleBarTheme - Titelzeile des Profil-Fensters
   uSuppression,                 // MarkerLineFor - ';' in .ini, '//' sonst (SCA201)
-  uProfileViewer;               // ShowProfileViewer - Hamburger-Item
+  uProfileViewer,               // ShowProfileViewer - Hamburger-Item
+  // Nur hier gebraucht (Review nach Bereichen 2026-10-10, Nit 42):
+  uFindingActionMenu,           // das eine Menue-Modell zu den Aktionen (Stufe C)
+  uIDEFindingActionMenu,        // Modell -> TMenuItems
+  uIDEFindingBulb,              // Gluehbirne an der Caret-Zeile (Element EditorBulb)
+  uPathNormalize;               // NormalizePathForKey - Pfade wie der Highlighter
 
 // noinspection-file BeginEndRequired, BooleanParam, ClassPerFile, ConsecutiveSection, EmptyExcept, ExceptOnException, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, NestedRoutine, NestedTry, PublicField, PublicMemberWithoutDoc, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedPublicMember, UnusedRoutine
 // Plugin-Form: catch-all an Action-Click-Handlern (Resize, ItemPaint etc.).
@@ -660,6 +676,18 @@ type
   // Access-Class zum Setzen protected-deklarierter Properties (TControl.OnClick).
   // Lokal in der Unit gehalten - kein public API. Standard-VCL-Pattern.
   TControlAccess = class(TControl);
+
+var
+  // Zaehler fuer den Stand der Fundquellen des Editors (Dock-Befuellung,
+  // Watch-Lauf, Silent-Kopien): FindingsAtEditorLine nimmt je Datei die
+  // juengere (Review reDelphiX nach Bereichen 2026-10-10, Minor 19).
+  GFindingsGeneration : UInt64 = 0;
+
+function NextFindingsGeneration: UInt64;
+begin
+  Inc(GFindingsGeneration);
+  Result := GFindingsGeneration;
+end;
 
 function ResolveBaselinePath(const AConfigured, ABaseDir: string): string;
 // Absoluter Pfad bleibt unveraendert; ein relativer wird gegen das Projekt-
@@ -1004,6 +1032,7 @@ begin
   // Mindestbreite ebenfalls respektiert.
   Constraints.MinWidth    := ScaleW(FLOAT_MIN_WIDTH);
   FAllFindings       := TObjectList<TLeakFinding>.Create(True);
+  FFileGens          := TDictionary<string, UInt64>.Create;
   FDisplayedFindings := TList<TLeakFinding>.Create;
   FBaselineSet       := TBaselineSet.Create;
   // Ignore-Liste laden / Default-Datei anlegen falls nicht vorhanden
@@ -1325,6 +1354,7 @@ begin
   FreeAndNil(FAnalyseProgress);
 
   FreeAndNil(FAllFindings);
+  FreeAndNil(FFileGens);
   FreeAndNil(FDisplayedFindings);
   FreeAndNil(FBaselineSet);
   FreeAndNil(FIgnoreList);
@@ -2106,20 +2136,19 @@ procedure TAnalyserFrame.GridKeyDown(Sender: TObject; var Key: Word;
 begin
   if (Key = Ord('F')) and (ssCtrl in Shift) and (ssAlt in Shift) then
   begin
-    // Ctrl+Alt+F = Apply Quick-Fix: ersetzt die Zeile direkt im IDE-Editor
-    // (TIDEEditor.ApplyLineReplacement). Konflikt-frei mit RAD-Studio-
-    // Defaults (F4 ist "Run to Cursor", Ctrl+. konfliktet mit Code-
-    // Completion; Ctrl+Alt+F ist die IntelliJ-Quick-Fix-Konvention).
-    // No-op wenn kein Provider registriert oder Pattern auf der Zeile
-    // nicht matched - Status-Bar zeigt jeweils den Grund.
+    // Ctrl+Alt+F = Hilfe anwenden: die erste verfuegbare Hilfe der
+    // Anbieter-Registry (ApplyQuickFixForRow). Konflikt-frei mit RAD-
+    // Studio-Defaults (F4 ist "Run to Cursor", Ctrl+. konfliktet mit
+    // Code-Completion; Ctrl+Alt+F ist die IntelliJ-Quick-Fix-Konvention).
+    // Status-Bar zeigt das Ergebnis oder den Grund.
     ApplyQuickFixForRow(FResultGrid.Row);
     Key := 0;
   end
   else if (Key = Ord('S')) and (ssCtrl in Shift) and (ssAlt in Shift) then
   begin
-    // Ctrl+Alt+S = Insert Suppression: fuegt `// noinspection <RuleName>`
-    // ueber die Befund-Zeile im IDE-Editor ein. Naechster Analyse-Lauf
-    // filtert den Befund weg. Ctrl+Z reverts den Insert.
+    // Ctrl+Alt+S = Unterdruecken: `// noinspection <RuleName>` ueber der
+    // Befund-Zeile (ApplySuppressForRow). Naechster Analyse-Lauf filtert
+    // den Befund weg, Ctrl+Z nimmt den Marker zurueck.
     ApplySuppressForRow(FResultGrid.Row);
     Key := 0;
   end
@@ -2249,6 +2278,7 @@ begin
     Findings.OwnsObjects := False;
     for i := 0 to Findings.Count - 1 do
       FAllFindings.Add(Findings[i]);
+    FFileGens.AddOrSetValue(NormalizePathForKey(FileName), NextFindingsGeneration);
 
     // 3) Vorab gerechnete contextHashes DIESER Datei nachziehen
     // (2026-08-28). Sie stammen aus dem letzten Voll-Scan, also aus dem
@@ -2474,6 +2504,8 @@ begin
   FAllFindings.Clear;
   for i := 0 to findings.Count - 1 do
     FAllFindings.Add(findings[i]);
+  FFindingsGen := NextFindingsGeneration;
+  FFileGens.Clear;
   UpdateStats;
   // Baseline-Set fuer den "nur neue Funde"-Filter frisch laden (basiert auf
   // FRepoSettings, das PrepareAnalysis/SetupForRun vor dem Scan neu geladen
@@ -2718,8 +2750,8 @@ begin
   // Zwischenablage-Kopie ENTPRELLT (2026-08-03). Sie stand frueher hier und
   // lief bei jedem Auswahlwechsel sofort - bei gehaltener Pfeiltaste rund
   // 30x je Sekunde, jedes Mal ein systemweiter Clipboard-Write und, sobald
-  // es fuer die Regel einen Quick-Fix-Provider gibt, ein LoadFromFile der
-  // KOMPLETTEN Quelldatei.
+  // es fuer die Regel einen Quick-Fix-Provider gab (bis 2026-10-10), ein
+  // LoadFromFile der KOMPLETTEN Quelldatei.
   //
   // Damit faellt auch das Application.ProcessMessages weg, das hier stand:
   // es diente einzig dazu, das Help-Panel vor dem blockierenden
@@ -2763,13 +2795,8 @@ procedure TAnalyserFrame.CopyFindingToClipboard(F: TLeakFinding);
 // entscheidet [UI] ClipboardOnClick (Nutzerentscheid 2026-08-12):
 //   fcmNone (Default) - nichts: kein Write, keine Statusmeldung, kein
 //                       Datei-Load; die Zwischenablage gehoert dem Nutzer.
-//   fcmJiraMini       - Mini-Issue aus uFindingCopyText; der Quick-Fix-
-//                       Block bleibt bewusst weg (der Fix-hint-Fakt deckt
-//                       das ab und spart den LoadFromFile der kompletten
-//                       Quelldatei).
-//   fcmClaudePrompt   - das bisherige Verhalten (Claude-Prompt samt
-//                       Quick-Fix-Block), extrahiert nach
-//                       CopyClaudePromptToClipboard.
+//   fcmJiraMini       - Mini-Issue aus uFindingCopyText.
+//   fcmClaudePrompt   - der Claude-Prompt (CopyClaudePromptToClipboard).
 var
   Mode : TFindingCopyMode;
 begin
@@ -2854,11 +2881,20 @@ begin
   if not (Sender is TMenuItem) then Exit;
   Idx := TMenuItem(Sender).Tag - GRID_ACTION_TAG;
   if (Idx < 0) or (Idx > High(FGridActions)) then Exit;
-  if not Assigned(FGridActions[Idx].Execute) then Exit;
+  RunFindingAction(FGridActions[Idx], Sender);
+end;
+
+function TAnalyserFrame.RunFindingAction(const A: TFindingAction;
+  Sender: TObject): Boolean;
+begin
+  Result := False;
+  if not Assigned(A.Execute) then Exit;
   try
-    FGridActions[Idx].Execute(Sender);
+    A.Execute(Sender);
+    Result := True;
   except
     on EStackExhausted do raise;
+    on EAbort do raise;   // ein stiller Abbruch ist keine Statusmeldung wert
     on E: Exception do
       StatusMode(Format(_('Finding action failed: %s'), [E.Message]));
   end;
@@ -2867,8 +2903,7 @@ end;
 procedure TAnalyserFrame.GridMenuCopyPromptClick(Sender: TObject);
 // Explizite Absicht - kopiert wie die EXE IMMER, unabhaengig von
 // [UI] ClipboardOnClick (die Option regelt nur die automatische Kopie
-// beim Zeilen-Klick). Inhalt im Plugin samt Quick-Fix-Block; die EXE
-// kopiert den nackten Prompt (Alt-Divergenz).
+// beim Zeilen-Klick). Inhalt wie in der EXE: der Prompt.
 var
   idx : Integer;
 begin
@@ -2889,11 +2924,9 @@ begin
 end;
 
 procedure TAnalyserFrame.CopyJiraIssueToClipboard(F: TLeakFinding);
-// KEIN Quick-Fix-Block - dieselbe Begruendung wie im Klick-Pfad: der
-// Fix-hint-Fakt deckt das ab und spart den LoadFromFile der kompletten
-// Quelldatei. Der Textbau steht bewusst VOR dem try (wie im Claude-
-// Zwilling): der stille except gehoert dem Clipboard-Write, ein
-// Fehler beim Bauen soll nicht lautlos verschwinden.
+// Der Textbau steht bewusst VOR dem try (wie im Claude-Zwilling): der
+// stille except gehoert dem Clipboard-Write, ein Fehler beim Bauen soll
+// nicht lautlos verschwinden.
 var
   Text : string;
 begin
@@ -2913,156 +2946,104 @@ begin
 end;
 
 procedure TAnalyserFrame.CopyClaudePromptToClipboard(F: TLeakFinding);
-// Bei Findings mit Quick-Fix-Provider wird ein "Quick-Fix"-Markdown-
-// Block vorangestellt: Original-Zeile + Fixed-Zeile direkt zum Pasten.
-// Der Claude-Prompt-Block folgt darunter wie bisher.
+// Bis 2026-10-10 stand bei vier Regeln ein "## Quick-Fix"-Block mit
+// Vorher/Nachher (uQuickFix) vor dem Prompt. Er entfiel mit uQuickFix
+// (Nico 2026-10-10): die Hilfe selbst ist Gluehbirne bzw. Ctrl+Alt+F.
+// Der Textbau steht VOR dem try - der stille except gehoert dem
+// Clipboard-Write.
 var
-  prompt    : string;
-  LineNo    : Integer;
-  OrigLine  : string;
-  Fix       : TQuickFixResult;
-  SrcLines  : TStringList;
-  QuickFixHdr : string;
+  prompt : string;
 begin
   if not Assigned(F) then Exit;
-
   prompt := BuildClaudePrompt(F);
-  QuickFixHdr := '';
-
-  // Wenn ein Quick-Fix-Provider fuer dieses Kind registriert ist,
-  // versuche die Original-Zeile zu lesen und einen Fix vorzuschlagen.
-  if TQuickFix.HasProviderFor(F.Kind) then
-  begin
-    LineNo := StrToIntDef(F.LineNumber, 0);
-    if (LineNo > 0) and (F.FileName <> '') and FileExists(F.FileName) then
-    begin
-      SrcLines := TStringList.Create;
-      try
-        try
-          SrcLines.LoadFromFile(F.FileName, TEncoding.UTF8);
-        except
-          try SrcLines.LoadFromFile(F.FileName); except SrcLines.Clear; end;
-        end;
-        if (LineNo <= SrcLines.Count) then
-        begin
-          OrigLine := SrcLines[LineNo - 1];
-          Fix := TQuickFix.ProposeFix(F, OrigLine);
-          if Fix.Applied then
-          begin
-            // Beschriftungen ueber _() wie der restliche Prompt (uClaudePrompt
-            // laeuft komplett ueber die .po) - vorher stand hier hartes
-            // Deutsch und ein EN-Nutzer bekam einen gemischt-sprachigen
-            // Prompt (Review 2026-08-12). '## Quick-Fix' ist sprachneutral.
-            QuickFixHdr :=
-              '## Quick-Fix' + sLineBreak +
-              Fix.Description + sLineBreak + sLineBreak +
-              Format(_('**Before (line %s):**'), [F.LineNumber]) + sLineBreak +
-              '```pascal' + sLineBreak + Fix.Original + sLineBreak + '```' + sLineBreak + sLineBreak +
-              _('**After (paste directly):**') + sLineBreak +
-              '```pascal' + sLineBreak + Fix.Fixed + sLineBreak + '```' + sLineBreak + sLineBreak +
-              '---' + sLineBreak + sLineBreak;
-          end;
-        end;
-      finally
-        SrcLines.Free;
-      end;
-    end;
-  end;
-
   try
-    Clipboard.AsText := QuickFixHdr + prompt;
+    Clipboard.AsText := prompt;
     if Assigned(FStatusBar) then
-    begin
-      if QuickFixHdr <> '' then
-        StatusMode(Format(
-          _('Quick-Fix + AI prompt copied to clipboard: %s, line %s (%s)'),
-          [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]))
-      else
-        StatusMode(Format(
-          _('AI prompt copied to clipboard: %s, line %s (%s)'),
-          [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]));
-    end;
+      StatusMode(Format(
+        _('AI prompt copied to clipboard: %s, line %s (%s)'),
+        [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]));
   except
     // Clipboard kann unter bestimmten IDE-Modi blockiert sein - silent skip
   end;
 end;
 
-procedure TAnalyserFrame.ApplyQuickFixForRow(RowIdx: Integer);
-// Pipeline:
-//   1. Finding fuer Grid-Zeile holen
-//   2. Source-Zeile aus der Datei lesen (UTF-8 mit ANSI-Fallback)
-//   3. TQuickFix.ProposeFix
-//   4. TIDEEditor.ApplyLineReplacement
-// Bei jedem Schritt: Status-Bar-Hint, kein Crash bei Fehler.
-var
-  F          : TLeakFinding;
-  LineNo     : Integer;
-  SrcLines   : TStringList;
-  Fix        : TQuickFixResult;
-  OK         : Boolean;
+// Darf eine Taste A ungesehen ausfuehren? Verfuegbar und nicht als
+// verhaltensaendernd gekennzeichnet (Entscheid E2).
+function RunsBlind(const A: TFindingAction): Boolean;
 begin
-  if not Assigned(FDisplayedFindings) then Exit;
-  if (RowIdx <= 0) or (RowIdx > FDisplayedFindings.Count) then Exit;
+  Result := A.Enabled and Assigned(A.Execute) and not A.ChangesBehavior;
+end;
 
+// Warum die Taste die Aktion A auslaesst: gesperrt (ihr Grund) oder eine
+// Hilfe, die das Verhalten aendern kann (Entscheid E2) - die gibt es nur
+// gesehen, im Menue oder in der Gluehbirne.
+function SkippedActionText(const A: TFindingAction): string;
+begin
+  if A.Enabled and A.ChangesBehavior then
+    Result := A.Caption + ' - ' + _('only from the menu or the light bulb')
+  else
+    Result := A.Caption + ' - ' + A.Hint;
+end;
+
+procedure TAnalyserFrame.RunFirstAction(RowIdx: Integer;
+  AKind: TFindingActionKind; const ADoneFmt, AMissingFmt: string);
+var
+  F     : TLeakFinding;
+  Model : TFindingMenuModel;
+  A     : TFindingAction;
+  Why   : string;
+begin
+  if not Assigned(FDisplayedFindings) or (RowIdx <= 0)
+     or (RowIdx > FDisplayedFindings.Count) then Exit;
   F := FDisplayedFindings[RowIdx - 1];
   if not Assigned(F) then Exit;
-
-  if not TQuickFix.HasProviderFor(F.Kind) then
+  Why := F.RuleID;
+  Model := BuildFindingMenuModel(TArray<TLeakFinding>.Create(F), []);
+  for A in Model.Actions do
   begin
-    StatusMode(Format(
-      _('Quick-Fix: no provider for ''%s'' - manual fix required'),
-      [F.RuleID]));
-    Exit;
-  end;
-
-  LineNo := StrToIntDef(F.LineNumber, 0);
-  if (LineNo <= 0) or (F.FileName = '') or not FileExists(F.FileName) then
-  begin
-    StatusMode(_('Quick-Fix: cannot locate source line'));
-    Exit;
-  end;
-
-  SrcLines := TStringList.Create;
-  try
-    try
-      SrcLines.LoadFromFile(F.FileName, TEncoding.UTF8);
-    except
-      try SrcLines.LoadFromFile(F.FileName); except SrcLines.Clear; end;
-    end;
-    if LineNo > SrcLines.Count then
+    if A.Kind <> AKind then Continue;
+    if not RunsBlind(A) then
     begin
-      StatusMode(_('Quick-Fix: line out of range'));
-      Exit;
+      if Why = F.RuleID then
+        Why := SkippedActionText(A);
+      Continue;
     end;
-    Fix := TQuickFix.ProposeFix(F, SrcLines[LineNo - 1]);
-  finally
-    SrcLines.Free;
-  end;
-
-  if not Fix.Applied then
-  begin
-    StatusMode(Format(
-      _('Quick-Fix: pattern not matched on line %d - manual fix required'),
-      [LineNo]));
+    if RunFindingAction(A, Self) then
+      StatusMode(Format(ADoneFmt, [A.Caption]));
     Exit;
   end;
+  StatusMode(Format(AMissingFmt, [Why]));
+end;
 
-  OK := TIDEEditor.ApplyLineReplacement(F.FileName, LineNo, Fix.Fixed);
-  if OK then
-    StatusMode(Format(_('Quick-Fix applied: %s'), [Fix.Description]))
+procedure TAnalyserFrame.ApplyQuickFixForRow(RowIdx: Integer);
+// Bis 2026-10-10 lief hier uQuickFix: Zeile von der Platte lesen, in den
+// Puffer schreiben ohne Abgleich (bei ungespeicherten Aenderungen darueber
+// die falsche Zeile), nur vier Regeln. Jetzt die Registry (Beschluss
+// 2026-10-09: alles auf reDelphix).
+begin
+  if TFindingActions.ProviderCount = 0 then
+    StatusMode(_('Quick-Fix: the reDelphix package is not loaded'))
   else
-    StatusMode(_('Quick-Fix: editor write failed (file not in IDE?)'));
+    RunFirstAction(RowIdx, fakFix, _('Quick-Fix applied: %s'),
+      _('Quick-Fix not available: %s'));
 end;
 
 procedure TAnalyserFrame.ApplySuppressForRow(RowIdx: Integer);
-// Holt das Finding fuer die Grid-Zeile + ruft TIDEEditor.InsertLineAbove
-// mit `// noinspection <KindName>`. Schreibt das Result in die Status-Bar.
+// Mit Anbieter (reDelphix) dessen Unterdrueck-Eintrag - derselbe wie im
+// Menue; ohne Anbieter TIDEEditor.InsertLineAbove mit `// noinspection
+// <KindName>`. Schreibt das Ergebnis in die Status-Bar.
 var
   F      : TLeakFinding;
   LineNo : Integer;
   OK     : Boolean;
   Marker : string;
 begin
+  if TFindingActions.ProviderCount > 0 then
+  begin
+    RunFirstAction(RowIdx, fakSuppress, _('Suppress inserted: %s'),
+      _('Suppress not available: %s'));
+    Exit;
+  end;
   if not Assigned(FDisplayedFindings) then Exit;
   if (RowIdx <= 0) or (RowIdx > FDisplayedFindings.Count) then Exit;
   F := FDisplayedFindings[RowIdx - 1];
@@ -3330,6 +3311,8 @@ procedure TAnalyserFrame.ClearAllFindings;
 // gilt, weil sie an Menuepunkten haengen.
 begin
   if Assigned(FAllFindings) then FAllFindings.Clear;
+  FFindingsGen := NextFindingsGeneration;
+  if Assigned(FFileGens) then FFileGens.Clear;
   if Assigned(FDisplayedFindings) then FDisplayedFindings.Clear;
   // Der vorab gerechnete contextHash-Speicher gehoert zu den Funden, die
   // hier gerade weggeworfen werden - ohne Funde hat er keinen Frager mehr.
@@ -4794,9 +4777,6 @@ begin
   SetLength(Result, Count);
 end;
 
-// Welle 1b (2026-07-20): Boolean-Result - False bei jedem Skip (busy,
-// Datei fehlt, kein Highlighter), damit Caller (Properties-Auto-Scan)
-// ihren Scan-Zeit-Cache NICHT stempeln und spaeter nachholen.
 // ---- AH10 (2026-10-05): Funde der Cursorzeile fuer das Editor-Kontextmenue --
 //
 // Die Marken des Highlighters tragen nur Texte, keine TLeakFinding. Fuer
@@ -4810,6 +4790,7 @@ end;
 var
   GEditorFindings     : TObjectList<TLeakFinding> = nil;
   GEditorFindingsFile : string = '';
+  GEditorFindingsGen  : UInt64 = 0;   // Generation der Silent-Kopien
 
 procedure KeepEditorFindings(const AFileName: string;
   AFindings: TObjectList<TLeakFinding>);
@@ -4820,6 +4801,7 @@ begin
     GEditorFindings := TObjectList<TLeakFinding>.Create(True);
   GEditorFindings.Clear;
   GEditorFindingsFile := AFileName;
+  GEditorFindingsGen  := NextFindingsGeneration;
   if not Assigned(AFindings) then Exit;
   for F in AFindings do
   begin
@@ -4841,9 +4823,30 @@ end;
 function FindingsAtEditorLine(const AFile: string;
   ALine: Integer): TArray<TLeakFinding>;
 // Funde, deren Bereich (Ankerzeile bis SpanEnd) die Zeile einschliesst.
-// Erst das Dock-Fenster, sonst die Kopien des Silent-Laufs.
+// Je Datei aus EINER Quelle, der juengeren (Review reDelphiX nach
+// Bereichen 2026-10-10, Minor 19): das Dock, wenn es Funde dieser Datei
+// haelt und nicht aelter ist als der letzte Silent-Lauf auf ihr, sonst die
+// Kopien des Silent-Laufs. Zeilenweise gemischt zeigten Birne und
+// Kontextmenue nach einem Silent- oder Auto-Scan alte Dock-Zeilen neben
+// neuen Marken.
 var
-  Found : TArray<TLeakFinding>;
+  Found    : TArray<TLeakFinding>;
+  Frame    : TAnalyserFrame;
+  DockHas  : Boolean;
+  DockGen  : UInt64;
+  FileGen  : UInt64;
+  F        : TLeakFinding;
+  UseDock  : Boolean;
+  FileKey  : string;   // AFile wie der Highlighter ihn vergleicht
+
+  // Derselbe Pfad? '/' gegen '' und Gross/Klein wie NormalizePathForKey
+  // (Review nach Bereichen 2026-10-10, Nit 44) - die Laenge zuerst, das
+  // laesst die meisten Funde anderer Dateien ohne Kopie durch.
+  function SameFile(const AName: string): Boolean;
+  begin
+    Result := (Length(AName) = Length(AFile))
+      and (SameText(AName, AFile) or (NormalizePathForKey(AName) = FileKey));
+  end;
 
   function AlreadyFound(F: TLeakFinding): Boolean;
   // Derselbe Fund kann aus zwei Scans (Dock + Silent, Projekt + Datei)
@@ -4864,7 +4867,7 @@ var
   begin
     if not Assigned(AList) then Exit;
     for F in AList do
-      if Assigned(F) and SameText(F.FileName, AFile)
+      if Assigned(F) and SameFile(F.FileName)
          and (ALine >= F.LineInt) and (ALine <= F.SpanEnd)
          and not AlreadyFound(F) then
       begin
@@ -4875,25 +4878,59 @@ var
 
 begin
   Found := nil;
-  if Assigned(GDockableForm) and Assigned(GDockableForm.Frame) then
-    Collect(GDockableForm.Frame.FAllFindings);
-  if (Length(Found) = 0) and SameText(GEditorFindingsFile, AFile) then
+  Frame := nil;
+  FileKey := NormalizePathForKey(AFile);
+  if Assigned(GDockableForm) then
+    Frame := GDockableForm.Frame;
+  DockHas := False;
+  DockGen := 0;
+  if Assigned(Frame) and Assigned(Frame.FAllFindings) then
+  begin
+    for F in Frame.FAllFindings do
+      if Assigned(F) and SameFile(F.FileName) then
+      begin
+        DockHas := True;
+        Break;
+      end;
+    DockGen := Frame.FFindingsGen;
+    if Assigned(Frame.FFileGens)
+       and Frame.FFileGens.TryGetValue(FileKey, FileGen)
+       and (FileGen > DockGen) then
+      DockGen := FileGen;
+  end;
+  UseDock := DockHas and not (SameFile(GEditorFindingsFile)
+    and (GEditorFindingsGen > DockGen));
+  if UseDock then
+    Collect(Frame.FAllFindings)
+  else if SameFile(GEditorFindingsFile) then
     Collect(GEditorFindings);
   Result := Found;
 end;
 
-function CurrentEditorCaretLine: Integer;
+function CurrentEditorFileAndLine(out AFile: string;
+  out ALine: Integer): Boolean;
+// Datei und Cursorzeile aus DERSELBEN View (TopView), wie die Gluehbirne
+// (Review reDelphiX nach Bereichen 2026-10-10, Minor 20): auch .dpr/.dpk/
+// .inc; in der Textansicht eines Formulars die .dfm selbst - keine
+// Umleitung auf die .pas, deren Zeilen dort nicht stehen.
 var
   EditorSvc : IOTAEditorServices;
   View      : IOTAEditView;
 begin
-  Result := 0;
+  AFile  := '';
+  ALine  := 0;
+  Result := False;
   if not Supports(BorlandIDEServices, IOTAEditorServices, EditorSvc) then Exit;
   View := EditorSvc.TopView;
-  if Assigned(View) then
-    Result := View.CursorPos.Line;
+  if not Assigned(View) or not Assigned(View.Buffer) then Exit;
+  AFile := View.Buffer.FileName;
+  ALine := View.CursorPos.Line;
+  Result := (AFile <> '') and (ALine >= 1);
 end;
 
+// Welle 1b (2026-07-20): Boolean-Result - False bei jedem Skip (busy,
+// Datei fehlt, kein Highlighter), damit Caller (Properties-Auto-Scan)
+// ihren Scan-Zeit-Cache NICHT stempeln und spaeter nachholen.
 function RunSilentAnalysisForFile(const AFileName: string;
   ACenterOnFirstFinding: Boolean = True): Boolean;
 // Silent-Mode-Entrypoint: analysiert AFileName + setzt Marker direkt am
@@ -5529,9 +5566,7 @@ var
   i        : Integer;
 begin
   if TFindingActions.ProviderCount = 0 then Exit;
-  if TIDEEditor.TryGetCurrentPasFile(FilePath) <> cfrOK then Exit;
-  Line := CurrentEditorCaretLine;
-  if Line < 1 then Exit;
+  if not CurrentEditorFileAndLine(FilePath, Line) then Exit;
   Found := FindingsAtEditorLine(FilePath, Line);
   if Length(Found) = 0 then Exit;
 
@@ -5567,6 +5602,7 @@ begin
     Slot.Actions[Idx].Execute(Sender);
   except
     on EStackExhausted do raise;
+    on EAbort do raise;   // ein stiller Abbruch ist keine Warnung wert
     on E: Exception do
       Application.MessageBox(
         PChar(Format(_('Finding action failed: %s'), [E.Message])),

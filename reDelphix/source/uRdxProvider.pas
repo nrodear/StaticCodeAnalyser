@@ -25,6 +25,9 @@ unit uRdxProvider;
 //
 // WAS ANGEBOTEN WIRD
 //
+// Die Menuetexte sind englische msgids (CAP_* unten, uebersetzt ueber
+// i18n/*.po); hier stehen sie deutsch zur Erlaeuterung.
+//
 //   "Stelle zeigen"                    wenn sich die Anweisung des Funds
 //                                      beschreiben laesst (Anker der Regel);
 //                                      ausgegraut hinter Spalte 32767
@@ -43,7 +46,9 @@ unit uRdxProvider;
 //   "FreeAndNil(X) verwenden"          SCA085; X im Quelltext deklariert,
 //                                      System.SysUtils kommt notfalls mit
 //   "Assigned() statt Vergleich ..."   SCA126; alle Vergleiche der Anweisung
-//   "(TObject) entfernen"              SCA075 (nur Zeilen, ohne Parser)
+//   "(TObject) entfernen"              SCA075 (plant nur auf Zeilen, laeuft
+//                                      aber nach dem Oeffnen des Dienstes:
+//                                      scheitert der Parse, faellt es weg)
 //   "Unterdruecken ..."                je Fund in Pascal-Quelltext
 //                                      (Editorhilfen Stufe 1)
 //   "reDelphix: <Grund>"               ausgegraut, wenn nichts davon geht -
@@ -161,6 +166,11 @@ type
     procedure AddReplace(var AList: TArray<TFindingAction>;
       const ACaption, AFileName: string; const AEdit: TRdxEdit;
       AKind: TFindingActionKind);
+    // Ein Umbau an der Stelle, kein Fix des Funds (fakRefactor): nie in
+    // der Gluehbirne, im Menue je Zeile nur einmal (Review nach Bereichen
+    // 2026-10-10, Minor 13/14). AAction = nil: gesperrt mit Grund AHint.
+    procedure AddRefactor(var AList: TArray<TFindingAction>;
+      const ACaption, AHint: string; AAction: TRdxAction);
     // Baum-Rezepte
     procedure AddShowSpan(var AList: TArray<TFindingAction>;
       const ACtx: TRdxRecipeContext);
@@ -170,8 +180,8 @@ type
       const ACtx: TRdxRecipeContext);
     procedure AddUsesActions(var AList: TArray<TFindingAction>;
       const ACtx: TRdxRecipeContext);
-    // Editorhilfen Stufe 2a: die einfachen Hilfen (SCA075, SCA085, SCA126)
-    // ueber TRdxFixRunner - eine weitere Regel braucht hier kein Rezept.
+    // Die einfachen Editorhilfen ueber TRdxFixRunner (welche Regeln:
+    // TRdxFixRunner.Handles) - eine weitere Regel braucht hier kein Rezept.
     procedure AddSimpleFix(var AList: TArray<TFindingAction>;
       const ACtx: TRdxRecipeContext);
     // Text-Rezepte (Editorhilfen Stufe 1)
@@ -229,13 +239,34 @@ const
   CAP_SQL      = 'Copy parameterized template to clipboard';
   CAP_USES_ALL = 'uses: qualify all %d entries';
   CAP_USES     = 'uses: qualify entries';
+  // fixMode einer Regel, ausdruecklich abgeschaltet (Minor 5).
+  FIX_NONE     = 'none';
   CAP_FREENIL  = 'Use FreeAndNil(%s)';
   CAP_ASSIGNED = 'Use Assigned() instead of comparing with nil';
   CAP_TOBJECT  = 'Remove (TObject) from the class declaration';
+  CAP_ASSERT   = 'Use the condition as the Assert message';
+  CAP_EMPTYSEC = 'Remove the empty visibility section';
+  CAP_NOARGS   = 'Remove the empty parentheses';
+  CAP_REDBOOL  = 'Remove the redundant comparison with True/False';
+  CAP_NILCHECK = 'Remove the redundant comparison with nil';
+  CAP_UNUSEDUSES = 'Remove unit %s from uses';
+  CAP_CASE_ELSE  = 'Add an empty else branch';
+  CAP_CASE_RAISE = 'Add an else branch that raises an exception';
+  CAP_BEGIN_END  = 'Put the branch in begin..end';
+  CAP_SEMI       = 'Remove the extra semicolon';
+  CAP_INDENT     = 'Move the keyword to column 1';
+  CAP_INIT       = 'Replace begin with initialization';
+  CAP_CAST       = 'Remove the cast to %s before Free';
+  CAP_EMPTY_INTENT  = 'Mark the empty body as intentional';
+  CAP_EMPTY_RAISE   = 'Raise ENotImplemented in the empty body';
+  CAP_MISSING_RAISE = 'Raise the exception';
+  CAP_RERAISE       = 'Use raise; to keep the original stack trace';
+  CAP_DOC           = 'Insert a documentation skeleton';
+  CAP_GUID          = 'Insert a new GUID';
+  CAP_DIRECTIVE     = 'Add "%s;" to the declaration';
+  // Entscheid E2: eine Hilfe, die das Verhalten aendern kann, sagt es.
+  CAP_CHANGES    = '(changes behavior)';
   DIAG_PREFIX  = 'reDelphix: ';
-  // Gleiche msgid wie in uRdxEditor (SelectSpan).
-  R_TOO_LONG   = 'Line too long for the editor selection (the editor '
-    + 'reaches at most column %d)';
   // Fuer das Protokoll (deutsch wie die uebrigen Zeilen).
   SOURCE_NAMES : array[TRdxTextSource] of string =
     ('Editor-Puffer', 'Platte', 'gesperrt');
@@ -270,6 +301,13 @@ constructor TRdxSourceCache.Create;
 begin
   inherited Create;
   FPlaces := TSourcePlaces.Create;
+  // Dieselbe Lexer-Sicht wie die Funde: jeder IDE-Scan laeuft mit
+  // TScanRequest.DefaultIfdefDefines (Ein-Zweig, MSWINDOWS/WIN64/UNICODE).
+  // In der Doppelzweig-Vorgabe des Dienstes lieferte DeclaredTypeOf fuer
+  // '{$IFDEF UNICODE} Msg: string; {$ELSE} Msg: AnsiString; {$ENDIF}'
+  // nicht den Typ, mit dem der Fund entstand (Review reDelphiX nach
+  // Bereichen 2026-10-10, Minor 4).
+  FPlaces.SetIfdefDefines(TScanRequest.DefaultIfdefDefines);
 end;
 
 destructor TRdxSourceCache.Destroy;
@@ -413,6 +451,13 @@ begin
   AList[High(AList)].Kind := AKind;
 end;
 
+procedure TRdxProvider.AddRefactor(var AList: TArray<TFindingAction>;
+  const ACaption, AHint: string; AAction: TRdxAction);
+begin
+  Add(AList, ACaption, AHint, Assigned(AAction), AAction);
+  AList[High(AList)].Kind := fakRefactor;
+end;
+
 // Nur Pascal-Quelltext traegt '//'-Marker (DFM-Funde nicht).
 function IsPascalSource(const AFileName: string): Boolean;
 var
@@ -433,7 +478,7 @@ begin
   // weiter rechts wird die Stelle nicht angeboten, sondern begruendet.
   if not SpanFitsEditor(ACtx.Lines, ACtx.Info.Span) then
   begin
-    Add(AList, _(CAP_SHOW), Format(_(R_TOO_LONG), [EDITOR_MAX_COLUMN]),
+    Add(AList, _(CAP_SHOW), Format(_(S_TOO_LONG), [EDITOR_MAX_COLUMN]),
       False, nil);
     AList[High(AList)].Kind := fakNavigate;
     Exit;
@@ -503,132 +548,219 @@ end;
 procedure TRdxProvider.AddUsesActions(var AList: TArray<TFindingAction>;
   const ACtx: TRdxRecipeContext);
 var
-  Entries : TArray<TRefactorSpan>;
-  i       : Integer;
-  Fw      : TRdxFramework;
-  Short   : string;
-  Q       : string;
-  Reason  : string;
-  OK      : Boolean;
-  Act     : TRdxAction;
-  All     : TArray<TRdxEdit>;
-  E       : TRdxEdit;
-  Preview : string;
-  DirLine : Integer;
+  Plan     : TRdxQualifyPlan;
+  Item     : TRdxQualifyItem;
+  Act      : TRdxAction;
+  Reason   : string;
+  FileName : string;
 begin
-  // Nur wenn der Fund in einer uses-Klausel liegt (Zeile des 'uses' bis
-  // letzter Eintrag) - sonst stuende "uses: ..." an jedem Fund der Datei.
-  // Das Fenster kennt auch die Programm-Klausel (.dpr/.lpr/library,
-  // Review Minor 18) und beginnt auf der Zeile des 'uses', nicht eine
-  // davor (Minor 19).
-  if not TRdxRecipeRunner.LineInUsesClause(FSource.Places, ACtx.Line) then Exit;
-
-  if FScopes.Count = 0 then
-  begin
-    Add(AList, _(CAP_USES),
-      _('Scope table not loaded (unitscopes.txt)'), False, nil);
-    Exit;
-  end;
-  // Direktiven in einer Klausel: ein Eintrag kann in einem Zweig fuer ein
-  // anderes Ziel stehen ('{$IFDEF FPC}LCLIntf,{$ELSE}Windows,{$ENDIF}') -
-  // qualifiziert uebersetzte FPC ihn nicht mehr (Review Major 7; dieselbe
-  // Sperre wie PlanUses).
-  DirLine := TRdxRecipeRunner.UsesDirectiveLine(FSource.Places);
-  if DirLine > 0 then
-  begin
-    Add(AList, _(CAP_USES),
-      Format(_('uses clause contains compiler directives (line %d)'), [DirLine]),
-      False, nil);
-    Exit;
-  end;
-
-  Entries := FSource.Places.UsesEntries(TUsesSection.usAny);
-  Fw := TRdxRecipes.DetectFramework(FUsesNames);
-  All := nil;
-  Preview := '';
-  for i := 0 to High(Entries) do
-  begin
-    Short := Entries[i].Resolved;
-    if (Short = '') or (Pos('.', Short) > 0) then Continue;
-    OK := FScopes.Resolve(Short, Fw, Q, Reason);
-    if OK and TRdxEditor.ProjectHasUnit(Short, ACtx.FileName) then
+  // Die Planung liegt im Laeufer (testbar, ohne ToolsAPI); hier nur die
+  // Menuetexte. Nichts ausserhalb einer uses-Klausel - sonst stuende
+  // "uses: ..." an jedem Fund der Datei. Das Fenster kennt auch die
+  // Programm-Klausel (.dpr/.lpr/library, Review Minor 18) und beginnt auf
+  // der Zeile des 'uses' (Minor 19). Ein ausdrueckliches fixMode 'none'
+  // der Regel schaltet auch den Umbau auf ihrem Signal ab (Minor 5).
+  if ACtx.FixMode = FIX_NONE then Exit;
+  FileName := ACtx.FileName;
+  Plan := TRdxRecipeRunner.QualifyUses(FSource.Places, FScopes, ACtx.Line,
+    function(const AShortName: string): Boolean
     begin
-      OK := False;
-      Reason := Format(_('own unit %s in the project'), [Short]);
-    end;
-    if OK then
-    begin
-      E.Span     := Entries[i];
-      E.Expected := Short;
-      E.NewText  := Q;
-      SetLength(All, Length(All) + 1);
-      All[High(All)] := E;
-      if Length(All) <= 3 then
+      Result := TRdxEditor.ProjectHasUnit(AShortName, FileName);
+    end);
+  if not Plan.InClause then Exit;
+  case Plan.Block of
+    qbNoTable:
       begin
-        if Preview <> '' then Preview := Preview + ', ';
-        Preview := Preview + Q;
+        AddRefactor(AList, _(CAP_USES), _('Scope table not loaded (unitscopes.txt)'), nil);
+        Exit;
       end;
-    end;
-    if Entries[i].StartLine <> ACtx.Line then Continue;
-    if OK then
+    qbDirectives:
+      begin
+        AddRefactor(AList, _(CAP_USES), Format(
+          _('uses clause contains compiler directives (line %d)'),
+          [Plan.BlockLine]), nil);
+        Exit;
+      end;
+    qbFpcSwitch:
+      begin
+        AddRefactor(AList, _(CAP_USES),
+          _('file with an FPC switch or FPC mode - FPC 3.2 knows no unit scopes'),
+          nil);
+        Exit;
+      end;
+  end;
+  for Item in Plan.Items do
+  begin
+    if Item.Why = qwOk then
     begin
       Act := NewAction(akReplace, ACtx.FileName);
       SetLength(Act.FEdits, 1);
-      Act.FEdits[0] := E;
-      Add(AList, 'uses: ' + Short + ' -> ' + Q, '', True, Act);
-    end
+      Act.FEdits[0] := Item.Edit;
+      AddRefactor(AList, 'uses: ' + Item.Short + ' -> ' + Item.Qualified, '', Act);
+      Continue;
+    end;
+    case Item.Why of
+      qwOwnUnit:
+        Reason := Format(_('own unit %s in the project'), [Item.Short]);
+      qwUnsorts:
+        Reason := _('the clause would no longer be sorted (new SCA142)');
     else
-      Add(AList, Format(_('uses: qualify %s'), [Short]), Reason, False, nil);
+      Reason := Item.ScopeReason;
+    end;
+    AddRefactor(AList, Format(_('uses: qualify %s'), [Item.Short]), Reason, nil);
   end;
-  if Length(All) >= 2 then
+  if Length(Plan.All) >= 2 then
   begin
-    Act := NewAction(akReplace, ACtx.FileName);
-    Act.FEdits := All;
-    if Length(All) > 3 then Preview := Preview + ', ...';
-    Add(AList, Format(_(CAP_USES_ALL), [Length(All)]), Preview, True, Act);
+    if Plan.AllUnsorts then
+      AddRefactor(AList, Format(_(CAP_USES_ALL), [Length(Plan.All)]),
+        _('the clause would no longer be sorted (new SCA142)'), nil)
+    else
+    begin
+      Act := NewAction(akReplace, ACtx.FileName);
+      Act.FEdits := Plan.All;
+      AddRefactor(AList, Format(_(CAP_USES_ALL), [Length(Plan.All)]),
+        Plan.AllPreview, Act);
+    end;
   end;
 end;
 
-// Menuetext einer einfachen Hilfe; AName ist X bei SCA085 ('' wenn der
-// Planer abgelehnt hat, bevor X feststand).
-function SimpleFixCaption(AKind: TFindingKind; const AName: string): string;
-var
-  N : string;
+// Menuetexte der Deklarations-Hilfen (SCA117, SCA197, SCA149) - ein
+// vierter Verteiler (SCA091). AName ist bei SCA149 die Direktive.
+function DeclFixCaption(AKind: TFindingKind; const AName: string): string;
 begin
-  N := AName;
-  if N = '' then N := 'X';
   case AKind of
-    fkFreeAndNilHint:
-      Result := Format(_(CAP_FREENIL), [N]);
-    fkNilComparison:
-      Result := _(CAP_ASSIGNED);
-    fkExplicitTObjectInheritance:
-      Result := _(CAP_TOBJECT);
+    fkPublicMemberWithoutDoc:
+      Result := _(CAP_DOC);
+    fkInterfaceWithoutGuid:
+      Result := _(CAP_GUID);
+    fkMissingOverride:
+      Result := Format(_(CAP_DIRECTIVE), [AName]);
   else
     Result := uSCAConsts.KindName(AKind);
   end;
 end;
 
+// Menuetexte der Zeilen-Hilfen (SCA082, SCA071, SCA088, SCA123, SCA020,
+// SCA120, SCA122) - ein dritter Verteiler (SCA091). AName ist der Cast-Typ
+// bei SCA123, AVariant waehlt bei SCA020 den Eintrag.
+function LineFixCaption(AKind: TFindingKind; AVariant: Integer;
+  const AName: string): string;
+begin
+  case AKind of
+    fkSuperfluousSemicolon:
+      Result := _(CAP_SEMI);
+    fkUnitLevelKeywordIndent:
+      Result := _(CAP_INDENT);
+    fkLegacyInitializationSection:
+      Result := _(CAP_INIT);
+    fkCastAndFree:
+      Result := Format(_(CAP_CAST), [AName]);
+    fkEmptyMethod:
+      if AVariant = 1 then
+        Result := _(CAP_EMPTY_RAISE)
+      else
+        Result := _(CAP_EMPTY_INTENT);
+    fkMissingRaise:
+      Result := _(CAP_MISSING_RAISE);
+    fkReRaiseException:
+      Result := _(CAP_RERAISE);
+  else
+    Result := DeclFixCaption(AKind, AName);
+  end;
+end;
+
+// Menuetexte der Hilfen aus dem uQuickFix-Umzug und der Stufe 3 (SCA066,
+// SCA072, SCA084, SCA007, SCA168, SCA101, SCA099) - ein zweiter Verteiler
+// (SCA091).
+// AVariant waehlt den Eintrag, AName ist die Unit bei SCA007.
+function LaterFixCaption(AKind: TFindingKind; AVariant: Integer;
+  const AName: string): string;
+begin
+  case AKind of
+    fkEmptyArgumentList:
+      Result := _(CAP_NOARGS);
+    fkRedundantBoolean:
+      Result := _(CAP_REDBOOL);
+    fkAssignedAndAssignedNil:
+      Result := _(CAP_NILCHECK);
+    fkUnusedUses:
+      Result := Format(_(CAP_UNUSEDUSES), [AName]);
+    fkDefaultCaseInCaseStatement:
+      if AVariant = 1 then
+        Result := _(CAP_CASE_RAISE)
+      else
+        Result := _(CAP_CASE_ELSE);
+    fkBeginEndRequired, fkIfElseBegin:
+      Result := _(CAP_BEGIN_END);
+  else
+    Result := LineFixCaption(AKind, AVariant, AName);
+  end;
+end;
+
+// Menuetext einer einfachen Hilfe; AOutcome.Name ist X bei SCA085/SCA139
+// und die Unit bei SCA007 ('' wenn der Planer abgelehnt hat, bevor X
+// feststand), Variant waehlt den Eintrag, ChangesBehavior haengt die
+// Kennzeichnung an (E2).
+function SimpleFixCaption(AKind: TFindingKind;
+  const AOutcome: TRdxFixOutcome): string;
+var
+  N : string;
+begin
+  N := AOutcome.Name;
+  if N = '' then N := 'X';
+  case AKind of
+    fkFreeAndNilHint, fkFreeWithoutNil:
+      Result := Format(_(CAP_FREENIL), [N]);
+    fkNilComparison:
+      Result := _(CAP_ASSIGNED);
+    fkExplicitTObjectInheritance:
+      Result := _(CAP_TOBJECT);
+    fkAssertMessage:
+      Result := _(CAP_ASSERT);
+    fkEmptyVisibilitySection:
+      Result := _(CAP_EMPTYSEC);
+  else
+    Result := LaterFixCaption(AKind, AOutcome.Variant, N);
+  end;
+  if AOutcome.ChangesBehavior then
+    Result := Result + ' ' + _(CAP_CHANGES);
+end;
+
 procedure TRdxProvider.AddSimpleFix(var AList: TArray<TFindingAction>;
   const ACtx: TRdxRecipeContext);
+
+  // Ein Eintrag zu AOutcome: mit seinen Ersetzungen oder gesperrt mit Grund.
+  procedure AddOutcome(const AOutcome: TRdxFixOutcome);
+  var
+    Caption : string;
+    Act     : TRdxAction;
+  begin
+    Caption := SimpleFixCaption(ACtx.Finding.Kind, AOutcome);
+    if not AOutcome.Enabled then
+      Add(AList, Caption, AOutcome.Reason, False, nil)
+    else
+    begin
+      Act := NewAction(akReplace, ACtx.FileName);
+      Act.FEdits := AOutcome.Edits;
+      Add(AList, Caption, AOutcome.Hint, True, Act);
+    end;
+    // E2: Ctrl+Alt+F fuehrt eine solche Hilfe nicht ungesehen aus.
+    AList[High(AList)].ChangesBehavior := AOutcome.ChangesBehavior;
+  end;
+
 var
-  O       : TRdxFixOutcome;
-  Caption : string;
-  Act     : TRdxAction;
+  Alt : TRdxFixOutcome;
 begin
   if not TRdxFixRunner.Handles(ACtx.Finding.Kind)
-     or not IsPascalSource(ACtx.FileName) then Exit;
-  O := TRdxFixRunner.FixFor(FSource.Places, ACtx.Lines, ACtx.Finding,
-    FUsesNames);
-  Caption := SimpleFixCaption(ACtx.Finding.Kind, O.Name);
-  if not O.Enabled then
-  begin
-    Add(AList, Caption, O.Reason, False, nil);
-    Exit;
-  end;
-  Act := NewAction(akReplace, ACtx.FileName);
-  Act.FEdits := O.Edits;
-  Add(AList, Caption, O.Hint, True, Act);
+     or not IsPascalSource(ACtx.FileName)
+     or (ACtx.FixMode = FIX_NONE) then Exit;
+  AddOutcome(TRdxFixRunner.FixFor(FSource.Places, ACtx.Lines, ACtx.Finding,
+    FUsesNames));
+  // Zweiter Eintrag derselben Regel (SCA168, SCA020: jeweils mit raise).
+  Alt := TRdxFixRunner.AlternativeFixFor(FSource.Places, ACtx.Lines,
+    ACtx.Finding, FUsesNames);
+  if Alt.Variant > 0 then
+    AddOutcome(Alt);
 end;
 
 procedure TRdxProvider.AddSuppress(var AList: TArray<TFindingAction>;
@@ -655,9 +787,16 @@ var
   Why : string;
 begin
   // SCA165: eine echte Hilfe (fakFix) - der Marker unterdrueckt nichts.
-  if ACtx.Finding.Kind <> fkUnusedSuppression then Exit;
+  // Lehnt RemoveMarker ab (Mehrarten- oder 'All'-Marker: vielleicht nur
+  // unter dem aktuellen Profil wirkungslos), steht der Eintrag gesperrt
+  // mit dem Grund da - die Birne zaehlt nur verfuegbare Hilfen.
+  if (ACtx.Finding.Kind <> fkUnusedSuppression)
+     or (ACtx.FixMode = FIX_NONE) then Exit;
   if not TRdxSuppress.RemoveMarker(ACtx.Lines, ACtx.Line, E, Why) then
+  begin
+    Add(AList, _('Remove ineffective suppression marker'), Why, False, nil);
     Exit;
+  end;
   AddReplace(AList, _('Remove ineffective suppression marker'),
     ACtx.FileName, E, fakFix);
 end;
@@ -687,9 +826,14 @@ begin
     // weiter; EAbort ebenso (Projektregel).
     on EStackExhausted do raise;
     on EAbort do raise;
+    // noinspection ExceptionTooGeneral
+    // Jeder andere Fehler beim Oeffnen kostet nur die Baum-Rezepte dieses
+    // Funds (der Dienst schliesst sich dabei selbst, IsOpen = False); er
+    // steht als gesperrter Eintrag mit Klasse und Text im Menue.
     on E: Exception do
     begin
-      Add(AList, DIAG_PREFIX + 'Parser: ' + E.Message, '', False, nil);
+      Add(AList, DIAG_PREFIX + 'Parser: ' + E.ClassName + ': ' + E.Message,
+        '', False, nil);
       Exit;
     end;
   end;
@@ -707,9 +851,14 @@ begin
 
     // Mit Gegenprobe gegen den Fund (Review Minor 20): traegt die
     // Fundzeile nicht mehr Ziel und '+'-Zahl des Funds, ist Info nil und
-    // Why nennt den Grund ("Zeile verschoben?").
-    ACtx.Info := TRdxRecipeRunner.Describe(FSource.Places,
-      TRdxRecipeRunner.QueryOf(ACtx.Finding, Anchor), ACtx.IsCall, ACtx.Why);
+    // Why nennt den Grund ("Zeile verschoben?"). Nur mit Anker der Regel:
+    // ohne ihn beschrieb der Laeufer 'assign-or-call' irgendeine
+    // Anweisung der Zeile - 'Stelle zeigen' markierte bei SCA126 auf
+    // 'if A <> nil then B := nil;' die Zuweisung (Review nach Bereichen
+    // 2026-10-10, Minor 16).
+    if Anchor <> '' then
+      ACtx.Info := TRdxRecipeRunner.Describe(FSource.Places,
+        TRdxRecipeRunner.QueryOf(ACtx.Finding, Anchor), ACtx.IsCall, ACtx.Why);
     for R in FTreeRecipes do
       R(AList, ACtx);
     Done := True;
@@ -795,7 +944,18 @@ begin
     Ctx.Line     := AFinding.LineInt;
     Ctx.KindName := uSCAConsts.KindName(AFinding.Kind);
     Ctx.Lines    := Lines;
-    AddTreeActions(Result, Ctx, Source, Text);
+    // fixMode aus dem Katalog vor ALLEN Rezepten: ein ausdrueckliches
+    // 'none' sperrt auch die Text-Rezepte (Minor 5), und die brauchen den
+    // Baum nicht.
+    Ctx.FixMode  := LowerCase(TRuleCatalog.GetRuleCanonical(AFinding.Kind).FixMode);
+    // Nur Pascal-Quelltext durch den Parser: ein Fund in .dfm/.dproj
+    // braeuchte sonst Parse-Zeit im UI-Thread, bekaeme eine sinnlose
+    // Diagnose und verdraengte die zuletzt geparste .pas aus dem Cache
+    // (Review nach Bereichen 2026-10-10, Minor 15).
+    if IsPascalSource(AFinding.FileName) then
+      AddTreeActions(Result, Ctx, Source, Text)
+    else
+      Ctx.Why := _('nothing to offer');
     for R in FTextRecipes do
       R(Result, Ctx);
     AddDiagnosis(Result, Ctx);

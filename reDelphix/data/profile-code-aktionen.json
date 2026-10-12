@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "profiles": {
+    "code-aktionen": [
+      "ConcatToFormat",
+      "SQLInjection",
+      "ExplicitTObjectInheritance",
+      "FreeAndNilHint",
+      "NilComparison",
+      "AssertMessage",
+      "EmptyVisibilitySection",
+      "FreeWithoutNil",
+      "EmptyArgumentList",
+      "RedundantBoolean",
+      "AssignedAndAssignedNil",
+      "DefaultCaseInCaseStatement",
+      "BeginEndRequired",
+      "IfElseBegin",
+      "SuperfluousSemicolon",
+      "UnitLevelKeywordIndent",
+      "LegacyInitializationSection",
+      "CastAndFree",
+      "EmptyMethod",
+      "MissingRaise",
+      "ReRaiseException",
+      "PublicMemberWithoutDoc",
+      "InterfaceWithoutGuid",
+      "MissingOverride",
+      "UnusedSuppression",
+      "UnsortedUses",
+      "UnusedUses",
+      "FileReadError"
+    ]
+  }
+}

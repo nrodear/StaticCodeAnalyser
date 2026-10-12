@@ -32,9 +32,12 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  // StrUtils INTERFACE-seitig: EmitUriBaseId ist inline und ruft die
-  // Inline-Funktion StartsStr - aus der implementation-uses heraus
-  // verweigert dcc32 die Expansion (H2445, Bau 2026-10-04).
+  // StrUtils INTERFACE-seitig wegen eines H2445 im Bau 2026-10-04. Die
+  // Begruendung 'EmitUriBaseId ist inline' stimmt NICHT (eine gewoehnliche
+  // Prozedur; die Unit deklariert nichts inline) - die Quelle des Hinweises
+  // ist offen. Vor dem Zurueckschieben in die implementation-uses im
+  // Bau-Log pruefen, ob H2445 dann wiederkommt (Review nach Bereichen
+  // 2026-10-10, Nit 9).
   System.StrUtils,
   uMethodd12;
 

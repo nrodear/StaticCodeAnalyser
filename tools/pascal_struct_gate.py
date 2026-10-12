@@ -240,6 +240,13 @@ def check_var_type_matches_create(path, lines, out):
             declared = (decls.get(var) or '').strip()
             if not declared or declared == typ:
                 continue
+            # Interface-Variable ('P: IFoo := TFoo.Create'): gueltig, wenn
+            # TFoo IFoo implementiert - der Vorfahren-Index kennt nur
+            # Klassen, die Interface-Liste nicht. Unbeweisbar -> schweigen
+            # (VarNameProject 2026-10-11: TVnpSyncPoint implementiert
+            # IOTASyncEditPoint, das Gate meldete E2010).
+            if re.match(r'I[A-Z]', declared):
+                continue
             if ist_nachfahre(typ, declared) is not False:
                 continue          # abgeleitet oder unbekannt -> schweigen
             out.append((path, head + 1,

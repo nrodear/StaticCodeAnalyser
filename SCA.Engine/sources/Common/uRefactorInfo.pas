@@ -40,8 +40,9 @@ unit uRefactorInfo;
 interface
 
 const
-  // Rollen der Bereiche. Freier Text, damit ein Detektor eine eigene Rolle
-  // vergeben kann, ohne dass diese Unit sie kennen muss - die gaengigen
+  // Rollen der Bereiche. Freier Text, damit ein Erzeuger (der Dienst, ein
+  // Modul) eine eigene Rolle vergeben kann, ohne dass diese Unit sie
+  // kennen muss - die gaengigen
   // stehen hier, damit Erzeuger und Leser dieselbe Schreibweise benutzen.
   ROLE_STATEMENT = 'statement';  // die ganze Anweisung inkl. ';'
   ROLE_TARGET    = 'target';     // linke Seite einer Zuweisung
@@ -91,7 +92,8 @@ type
     Span         : TRefactorSpan;
     // Benannte Teilbereiche samt Fakten (B2 + B3), in Quelltext-Reihenfolge.
     Parts        : TArray<TRefactorSpan>;
-    // Der Detektor sichert zu, dass DIESER Fund umschreibbar ist (B4).
+    // Der Dienst leitet ab, dass DIESE Stelle verlustfrei umschreibbar
+    // ist (B4; uRefactorConcat, uSourcePlaces.ResolveOperandTypes).
     // Default False - wird nur gesetzt, wenn es bewiesen ist.
     FixSafe      : Boolean;
     // Kontext-Flags (B5).

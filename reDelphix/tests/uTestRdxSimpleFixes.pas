@@ -1,7 +1,8 @@
 unit uTestRdxSimpleFixes;
 
-// Editorhilfen Stufe 2a: die Planer SCA075/SCA085 aus uRdxSimpleFixes auf
-// Text - ohne Parser, ohne Detektor (laeuft in reDelphix.Test UND im
+// Editorhilfen Stufe 2a: die Planer SCA075/SCA085 (dazu Stufe 2, Rest:
+// SCA074/SCA087/SCA139) aus uRdxSimpleFixes auf Text - ohne Parser, ohne
+// Detektor (laeuft in reDelphix.Test UND im
 // FPC-Pruefstand). Jeder Fall prueft den Text NACH der Ersetzung
 // (PlanByteEdits + ApplyByteEdits, CRLF wie im Editor) bzw. die Ablehnung.
 // Die Faelle stammen aus dem Analyse-Workflow editorhilfen-2a-analyse
@@ -31,13 +32,22 @@ type
     [Test] procedure Sca085_Refusals;
     [Test] procedure Sca085_DirectiveBeforeFree_Refused;
     [Test] procedure Sca085_VariableContext;
+    // ---- Stufe 2, Rest: SCA074, SCA087, SCA139 ----
+    [Test] procedure Sca074_Variants;
+    [Test] procedure Sca074_Refusals;
+    [Test] procedure Sca074_DeclaresRoutine;
+    [Test] procedure Sca087_Variants;
+    [Test] procedure Sca087_Refusals;
+    [Test] procedure Sca139_Variants;
+    [Test] procedure Sca139_Refusals;
+    [Test] procedure Sca139_DeclaresValueType;
   end;
 
 implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxSimpleFixes;
+  uRdxBufferMath, uRdxCodeMap, uRdxSimpleFixes;
 
 // ---- Helfer ----
 
@@ -118,6 +128,73 @@ begin
   end;
 end;
 
+function Fix074(const ASource: string; ALine, ACol: Integer;
+  out AReason: string): string;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  E   : TRdxEdit;
+begin
+  Result := '';
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    if TRdxSimpleFixes.AssertMessage(Map, ALine,
+         Format('Assert at column %d has no message - add a "why" string '
+           + 'for easier diagnosis.', [ACol]), E, AReason) then
+      Result := Apply(ASource, [E]);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+// SCA087 mit der Meldung des Detektors fuer den Abschnitt ASection.
+function Fix087(const ASource: string; ALine: Integer; const ASection: string;
+  out AReason: string): string;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  E   : TRdxEdit;
+begin
+  Result := '';
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    if TRdxSimpleFixes.EmptySection(Map, ALine,
+         Format('Empty `%s` section - delete the section header or add '
+           + 'its members.', [ASection]), E, AReason) then
+      Result := Apply(ASource, [E]);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+function Fix139(const ASource: string; ALine: Integer; const AReceiver: string;
+  out AReason: string): string;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  E   : TRdxEdit;
+begin
+  Result := '';
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    if TRdxSimpleFixes.FreeOnly(Map, ALine, AReceiver, E, AReason) then
+      Result := Apply(ASource, [E]);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
 
 // Eine Zeile in einer kleinen Unit (Zeile 4).
 function InUnit(const ALine: string): string;
@@ -371,6 +448,270 @@ begin
     'nil-Zeile ist die letzte');
   Assert.AreEqual('', Fix085(FreeNil('  DoSomething;', '  X := nil;'), 4, R),
     'kein Free');
+end;
+
+// ---- SCA074 ----
+
+procedure TTestRdxSimpleFixes.Sca074_Variants;
+const
+  Q = #39;
+  CASES: array[0..6, 0..1] of string = (
+    ('  Assert(X > 0);', '  Assert(X > 0, ''X > 0'');'),
+    ('  Assert (X > 0);', '  Assert (X > 0, ''X > 0'');'),
+    ('  Assert( F(A, B) );', '  Assert( F(A, B), ''F(A, B)'');'),
+    ('  System.Assert(Ok);', '  System.Assert(Ok, ''Ok'');'),
+    ('  if A then Assert(B) else Assert(C);',
+     '  if A then Assert(B, ''B'') else Assert(C);'),
+    ('  Assert(X > 0); // Pruefung', '  Assert(X > 0, ''X > 0''); // Pruefung'),
+    ('  ASSERT(x);', '  ASSERT(x, ''x'');'));
+var
+  i    : Integer;
+  R    : string;
+  Cond : string;
+begin
+  for i := 0 to High(CASES) do
+    Assert.AreEqual(InUnit(CASES[i, 1]),
+      Fix074(InUnit(CASES[i, 0]), 4, Pos('ssert', LowerCase(CASES[i, 0])) - 1, R),
+      Format('Fall %d: %s', [i, R]));
+  // Apostrophe der Bedingung verdoppelt: S <> '' -> 'S <> '''''
+  Assert.AreEqual(InUnit('  Assert(S <> ' + Q + Q + ', ' + Q + 'S <> '
+      + Q + Q + Q + Q + Q + ');'),
+    Fix074(InUnit('  Assert(S <> ' + Q + Q + ');'), 4, 3, R), R);
+  // Grenze: 253 Zeichen Bedingung + zwei Quotes = 255 geht noch.
+  Cond := StringOfChar('X', 253);
+  Assert.AreEqual(InUnit('  Assert(' + Cond + ', ' + Q + Cond + Q + ');'),
+    Fix074(InUnit('  Assert(' + Cond + ');'), 4, 3, R), R);
+end;
+
+procedure TTestRdxSimpleFixes.Sca074_Refusals;
+const
+  // Zeile, Spalte, Teil des Grundes
+  CASES: array[0..11, 0..2] of string = (
+    ('  Assert(X > 0, ''warum'');', '3', 'Meldung'),
+    ('  Assert(X > 0 { warum });', '3', 'Kommentar'),
+    ('  Obj.Assert(X);', '7', 'qualifiziert'),
+    // Gegen-Review 2026-10-10: ein Vorfahr bzw. die Deklaration selbst.
+    ('  inherited Assert(Ok);', '13', 'inherited'),
+    ('procedure Assert(B: Boolean);', '11', 'procedure'),
+    ('  Assert(X);', '4', 'nicht mehr'),
+    ('  Assert(X);', '0', 'Spalte'),
+    ('  S := ''Assert(X)'';', '9', 'nicht mehr'),
+    ('  Assert();', '3', 'ohne Bedingung'),
+    ('  MyAssert(X);', '5', 'nicht mehr'),
+    ('  Assert{x}(X);', '3', 'nicht mehr'),
+    ('  Assert X;', '3', 'nicht mehr'));
+var
+  i : Integer;
+  R : string;
+begin
+  for i := 0 to High(CASES) do
+  begin
+    Assert.AreEqual('', Fix074(InUnit(CASES[i, 0]), 4, StrToInt(CASES[i, 1]), R),
+      CASES[i, 0]);
+    Assert.IsTrue(Pos(CASES[i, 2], R) > 0, CASES[i, 0] + ': ' + R);
+  end;
+  // Die Klammer schliesst erst in der Folgezeile.
+  Assert.AreEqual('', Fix074(Join(['unit u;', 'implementation', 'procedure P;',
+    '  Assert(X >', '    0);', 'end.']), 4, 3, R));
+  Assert.IsTrue(Pos('endet nicht', R) > 0, R);
+  // 254 Zeichen + zwei Quotes = 256: kein Pascal-Literal mehr.
+  Assert.AreEqual('', Fix074(InUnit('  Assert(' + StringOfChar('X', 254) + ');'),
+    4, 3, R));
+  Assert.IsTrue(Pos('zu lang', R) > 0, R);
+end;
+
+procedure TTestRdxSimpleFixes.Sca074_DeclaresRoutine;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Join([
+      'unit u;',
+      'interface',
+      'type',
+      '  TFoo = class',
+      '    procedure Check;',
+      '    function Value: Integer;',
+      '  end;',
+      'implementation',
+      '// procedure Gone;',
+      'procedure TFoo.Assert(B: Boolean);',
+      'begin',
+      'end;',
+      'end.']);
+    Map := TRdxCodeMap.Create(SL);
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Assert'),
+      'qualifiziert: letztes Segment');
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Check'));
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'VALUE'), 'ohne Gross/Klein');
+    Assert.IsFalse(TRdxSimpleFixes.DeclaresRoutine(Map, 'Gone'), 'nur im Kommentar');
+    Assert.IsFalse(TRdxSimpleFixes.DeclaresRoutine(Map, 'TFoo'), 'nur Qualifizierer');
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+// ---- SCA087 ----
+
+// Abschnitte einer Klasse ab Zeile 5 (mindestens eine Zeile).
+function InClass(const ALines: array of string): string;
+begin
+  Result := Join(['unit u;', 'interface', 'type', '  TFoo = class']) + #13#10
+    + Join(ALines) + #13#10 + Join(['  end;', 'implementation', 'end.']);
+end;
+
+procedure TTestRdxSimpleFixes.Sca087_Variants;
+var
+  R : string;
+begin
+  Assert.AreEqual(InClass(['  private', '    FX: Integer;']),
+    Fix087(InClass(['  public', '  private', '    FX: Integer;']), 5, 'public', R), R);
+  Assert.AreEqual(InClass(['  public', '    procedure P;']),
+    Fix087(InClass(['  strict private', '  public', '    procedure P;']), 5,
+      'strict private', R), R);
+  Assert.AreEqual(InClass(['  private', '    FX: Integer;']),
+    Fix087(InClass(['  PUBLIC', '  private', '    FX: Integer;']), 5, 'public', R),
+    'Gross/Klein: ' + R);
+  Assert.AreEqual(InClass(['  public', '    FX: Integer;']),
+    Fix087(InClass([#9'strict'#9'protected', '  public', '    FX: Integer;']), 5,
+      'strict protected', R), 'Tabs: ' + R);
+  // Ein Kommentar ZWISCHEN den Abschnitten bleibt stehen.
+  Assert.AreEqual(InClass(['  // spaeter', '  private', '    FX: Integer;']),
+    Fix087(InClass(['  public', '  // spaeter', '  private', '    FX: Integer;']), 5,
+      'public', R), R);
+  // Am Ende der Klasse.
+  Assert.AreEqual(InClass(['    FX: Integer;']),
+    Fix087(InClass(['    FX: Integer;', '  published']), 6, 'published', R), R);
+end;
+
+procedure TTestRdxSimpleFixes.Sca087_Refusals;
+var
+  R : string;
+begin
+  // 'strict' allein: es gehoert zu 'private' in der naechsten Zeile.
+  Assert.AreEqual('', Fix087(InClass(['  strict', '  private', '    FX: Integer;']),
+    5, 'strict', R));
+  Assert.IsTrue(Pos('allein', R) > 0, R);
+  Assert.AreEqual('', Fix087(InClass(['  public // leer', '  private']), 5, 'public', R));
+  Assert.IsTrue(Pos('Kommentar', R) > 0, R);
+  // Detektor-FP: das erste Wort zaehlt, das Feld dahinter nicht.
+  Assert.AreEqual('', Fix087(InClass(['  public FX: Integer;', '  private']), 5,
+    'public', R));
+  Assert.IsTrue(Pos('nicht nur', R) > 0, R);
+  Assert.AreEqual('', Fix087(InClass(['  public', '  private']), 5, 'private', R),
+    'anderer Abschnitt');
+  Assert.IsTrue(Pos('nicht nur', R) > 0, R);
+  // Ohne X ist 'public' der Abschnitt von FX.
+  Assert.AreEqual('', Fix087(InClass(['  public', '{$IFDEF X}', '  private',
+    '{$ENDIF}', '    FX: Integer;']), 5, 'public', R));
+  Assert.IsTrue(Pos('Direktive', R) > 0, R);
+  Assert.AreEqual('', Fix087(InClass(['  {', '  public', '  }', '  private']), 6,
+    'public', R), 'im Block-Kommentar');
+  Assert.IsTrue(Pos('Kommentar', R) > 0, R);
+  // Gegen-Review 2026-10-10: Member-Zeilen mit '&' oder Umlaut am Anfang
+  // sieht der Detektor nicht - der Abschnitt ist trotzdem nicht leer.
+  Assert.AreEqual('', Fix087(InClass(['  strict private', '    FText: string;',
+    '  public', '    &Type: Integer;']), 7, 'public', R), '&-Bezeichner');
+  Assert.IsTrue(Pos('nicht leer', R) > 0, R);
+  Assert.AreEqual('', Fix087(InClass(['  public',
+    '    ' + #$00C4 + 'nderung: Integer;']), 5, 'public', R), 'Umlaut');
+  Assert.IsTrue(Pos('nicht leer', R) > 0, R);
+  // 'strict' allein auf der Zeile davor gehoert zu diesem Abschnitt.
+  Assert.AreEqual('', Fix087(InClass(['  strict', '  private', '  protected',
+    '    FX: Integer;']), 6, 'private', R));
+  Assert.IsTrue(Pos('strict', R) > 0, R);
+  Assert.AreEqual('', Fix087(Join(['  public']), 1, 'public', R), 'letzte Zeile');
+  Assert.IsTrue(R <> '');
+end;
+
+// ---- SCA139 ----
+
+procedure TTestRdxSimpleFixes.Sca139_Variants;
+const
+  CASES: array[0..6, 0..1] of string = (
+    ('    FList.Free;', '    FreeAndNil(FList);'),
+    ('  if Assigned(FList) then FList.Free;',
+     '  if Assigned(FList) then FreeAndNil(FList);'),
+    ('  else FList.Free', '  else FreeAndNil(FList)'),
+    ('  FList . Free ;', '  FreeAndNil(FList) ;'),
+    ('  FList.Free; // weg', '  FreeAndNil(FList); // weg'),
+    ('  { FList.Free; } FList.Free;', '  { FList.Free; } FreeAndNil(FList);'),
+    ('  flist.FREE;', '  FreeAndNil(flist);'));  // geschrieben wie im Quelltext
+var
+  i : Integer;
+  R : string;
+begin
+  for i := 0 to High(CASES) do
+    Assert.AreEqual(InUnit(CASES[i, 1]),
+      Fix139(InUnit(CASES[i, 0]), 4, 'FList', R),
+      Format('Fall %d: %s', [i, R]));
+end;
+
+procedure TTestRdxSimpleFixes.Sca139_Refusals;
+const
+  CASES: array[0..9, 0..1] of string = (
+    ('  Self.FList.Free;', 'Pfad'),
+    ('  Owner.FList.Free;', 'Pfad'),
+    ('  FList.Free();', 'Klammern'),
+    ('  FList.Free; FList.Free;', 'mehrmals'),
+    ('  FList.Destroy;', 'Destroy'),
+    ('  FOther.Free;', 'nicht mehr'),
+    ('  FListX.Free;', 'nicht mehr'),
+    ('  XFList.Free;', 'nicht mehr'),
+    ('  S := ''FList.Free'';', 'nicht mehr'),
+    ('  FList.FreeInstance;', 'nicht mehr'));
+var
+  i : Integer;
+  R : string;
+begin
+  for i := 0 to High(CASES) do
+  begin
+    Assert.AreEqual('', Fix139(InUnit(CASES[i, 0]), 4, 'FList', R), CASES[i, 0]);
+    Assert.IsTrue(Pos(CASES[i, 1], R) > 0, CASES[i, 0] + ': ' + R);
+  end;
+  Assert.AreEqual('', Fix139(InUnit('  FList.Free;'), 4, '', R), 'ohne Empfaenger');
+  Assert.IsTrue(Pos('fehlt', R) > 0, R);
+end;
+
+procedure TTestRdxSimpleFixes.Sca139_DeclaresValueType;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Join([
+      'unit u;',
+      'type',
+      '  TRec = record',
+      '    procedure Free;',
+      '  end;',
+      '  TPacked = packed record end;',
+      '  IFoo = interface end;',
+      '  TOld = object end;',
+      '  TFoo = class end;',
+      '  // TGone = record',
+      'implementation',
+      'end.']);
+    Map := TRdxCodeMap.Create(SL);
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresValueType(Map, 'trec'));
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresValueType(Map, 'TPacked'), 'packed');
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresValueType(Map, 'ifoo'));
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresValueType(Map, 'told'));
+    Assert.IsFalse(TRdxSimpleFixes.DeclaresValueType(Map, 'tfoo'), 'Klasse');
+    Assert.IsFalse(TRdxSimpleFixes.DeclaresValueType(Map, 'tgone'), 'nur im Kommentar');
+    Assert.IsFalse(TRdxSimpleFixes.DeclaresValueType(Map, 'tstringlist'),
+      'aus einer anderen Unit: unbekannt');
+    Assert.IsFalse(TRdxSimpleFixes.DeclaresValueType(Map, ''), 'kein Typ');
+  finally
+    Map.Free;
+    SL.Free;
+  end;
 end;
 
 initialization

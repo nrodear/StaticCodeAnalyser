@@ -203,12 +203,12 @@ type
     // aktuellen Zeile + absoluter Pfad (DirOfProjectPath-Rebase) + Zeile.
     function  TryResolveSelectedFinding(var AFinding: TLeakFinding;
       var AAbsPath, ARelPath: string; var ALineNo: Integer): Boolean;
-    // Ctrl+Alt+S / Ctrl+Alt+F - die Tasten des IDE-Plugins. Das Plugin
-    // schreibt in den IDE-Editor (Strg+Z nimmt zurueck); die EXE
-    // schreibt in die DATEI, deshalb laufen beide Wege ueber
-    // uSourceLineEdit mit Byte-Treue-Probe.
+    // Ctrl+Alt+S - die Taste des IDE-Plugins. Das Plugin schreibt in den
+    // IDE-Editor (Strg+Z nimmt zurueck); die EXE schreibt in die DATEI,
+    // deshalb ueber uSourceLineEdit mit Byte-Treue-Probe. Ctrl+Alt+F
+    // (Hilfen) gibt es nur im Plugin - die EXE bleibt Triage-Werkzeug
+    // (Nico 2026-10-10, mit dem Ende von uQuickFix).
     procedure SuppressSelectedFinding;
-    procedure QuickFixSelectedFinding;
     // Kachel-Klicks wie im Plugin: Severity-/Typ-Kacheln filtern das
     // Grid, die Quality-Kachel setzt alle Filter zurueck.
     // Drei Status-Kanaele wie im Plugin (uIDEStatusBar-Schema):
@@ -393,9 +393,8 @@ uses
   System.IniFiles,                // TIniFile (PersistDfmTarget - kommentarschonend)
   // uBaseline ist in interface uses (TBaselineSet-Feld) - hier nicht mehr
   // listen, sonst E2004 Bezeichner redeklariert.
-  uSourceLineEdit,                // Suppress/Quick-Fix schreiben in die Datei
+  uSourceLineEdit,                // Suppress schreibt in die Datei
   uSuppression,                   // MarkerLineFor - ';' in .ini, '//' sonst (SCA201)
-  uQuickFix,                      // TQuickFix.ProposeFix (Ctrl+Alt+F)
   uAppTheme,                      // Hell/Dunkel der Standalone-EXE
   uStaticFiles, uRuleCatalog,
   uExport,                        // TExporter.ExportCsv (kanonischer CSV-Schreiber)
@@ -2197,11 +2196,6 @@ begin
   begin
     Key := 0;
     SuppressSelectedFinding;
-  end
-  else if (Key = Ord('F')) and (Shift = [ssCtrl, ssAlt]) then
-  begin
-    Key := 0;
-    QuickFixSelectedFinding;
   end;
 end;
 
@@ -2230,8 +2224,8 @@ begin
   // waehlen (die Fundliste bleibt stehen!), Ctrl+Alt+S - und der
   // noinspection-Marker landete in der Datei von Checkout B, an der
   // Zeilennummer von A. FileExists bestand, beide Checkouts haben
-  // dieselbe Struktur (G7-2). Suppress und QuickFix SCHREIBEN - die
-  // duerfen nur die gescannte Datei treffen.
+  // dieselbe Struktur (G7-2). Suppress SCHREIBT - das darf nur die
+  // gescannte Datei treffen.
   if TPath.IsPathRooted(AFinding.FileName) then
     AAbsPath := AFinding.FileName
   else
@@ -2300,53 +2294,6 @@ begin
   else
     StatusBar1.Panels[2].Text :=
       Format(_('Suppress: could not write file: %s'), [Err]);
-end;
-
-procedure TForm2.QuickFixSelectedFinding;
-// Ctrl+Alt+F, wie im Plugin: Zeile lesen, TQuickFix.ProposeFix, Zeile
-// ersetzen. Statusmeldungen wortgleich zum Plugin - nur der
-// Schreibfehler nennt hier die Datei statt des IDE-Editors.
-var
-  f        : TLeakFinding;
-  absPath  : string;
-  relPath  : string;
-  lineNo   : Integer;
-  OrigLine : string;
-  Err      : string;
-  Fix      : TQuickFixResult;
-begin
-  if not TryResolveSelectedFinding(f, absPath, relPath, lineNo) then Exit;
-  if not TQuickFix.HasProviderFor(f.Kind) then
-  begin
-    StatusBar1.Panels[2].Text := Format(
-      _('Quick-Fix: no provider for ''%s'' - manual fix required'),
-      [f.RuleID]);
-    Exit;
-  end;
-  if lineNo <= 0 then
-  begin
-    StatusBar1.Panels[2].Text := _('Quick-Fix: cannot locate source line');
-    Exit;
-  end;
-  if not TSourceLineEdit.ReadLine(absPath, lineNo, OrigLine, Err) then
-  begin
-    StatusBar1.Panels[2].Text := _('Quick-Fix: line out of range');
-    Exit;
-  end;
-  Fix := TQuickFix.ProposeFix(f, OrigLine);
-  if not Fix.Applied then
-  begin
-    StatusBar1.Panels[2].Text := Format(
-      _('Quick-Fix: pattern not matched on line %d - manual fix required'),
-      [lineNo]);
-    Exit;
-  end;
-  if TSourceLineEdit.ReplaceLine(absPath, lineNo, Fix.Fixed, Err) then
-    StatusBar1.Panels[2].Text :=
-      Format(_('Quick-Fix applied: %s'), [Fix.Description])
-  else
-    StatusBar1.Panels[2].Text :=
-      Format(_('Quick-Fix: could not write file: %s'), [Err]);
 end;
 
 procedure TForm2.ResultGridClick(Sender: TObject);
@@ -3207,8 +3154,8 @@ begin
   MI.Caption := '-';
   FGridMenu.Items.Add(MI);
 
-  // Quick-Fix steht bewusst NICHT im Menue (User-Entscheid 2026-08-08) -
-  // die Aktion bleibt als Ctrl+Alt+F erreichbar (Plugin-Paritaet).
+  // Hilfen (Ctrl+Alt+F) gibt es nur im IDE-Plugin (Nico 2026-10-10) -
+  // hier nur das Unterdruecken.
   MI := TMenuItem.Create(FGridMenu);
   MI.Caption := _('Insert suppression marker') + #9'Ctrl+Alt+S';
   MI.OnClick := GridMenuSuppressClick;

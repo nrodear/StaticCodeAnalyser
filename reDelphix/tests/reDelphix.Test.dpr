@@ -14,11 +14,33 @@ program reDelphix.Test;
 //   * uTestRdxBufferMath - Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung
 //                        aller Ersetzungen, Spaltengrenze, Textwahl
 //   * uTestRdxSuppress - Unterdrueck-Marker setzen und entfernen
-//   * uTestRdxSimpleFixes - Editorhilfen SCA075/SCA085 auf Text, ohne
-//                        Parser
+//   * uTestRdxSimpleFixes - Editorhilfen SCA074/SCA075/SCA085/SCA087/
+//                        SCA139 auf Text, ohne Parser
+//   * uTestRdxStructFixes - Editorhilfen SCA007/SCA168 (uses-Eintrag,
+//                        case-else) auf Text, ohne Parser
+//   * uTestRdxBlockFixes - Editorhilfe SCA101/SCA099 (begin..end) auf
+//                        Text, ohne Parser
+//   * uTestRdxLineFixes - Editorhilfen SCA082/SCA071/SCA088/SCA123 (eine
+//                        Zeile) auf Text, ohne Parser
+//   * uTestRdxRaiseFixes - Editorhilfen SCA020/SCA120/SCA122 (Ausnahmen,
+//                        leerer Rumpf) auf Text, ohne Parser
+//   * uTestRdxDeclFixes - Editorhilfen SCA117/SCA197/SCA149 (Deklarationen)
+//                        auf Text, ohne Parser
+//   * uTestRdxExprFixes - Editorhilfen SCA066/SCA072/SCA084 (uQuickFix-
+//                        Umzug) auf Text, ohne Parser
 //   * uTestRdxNilFix   - Editorhilfe SCA126 auf Text, ohne Parser
 //   * uTestRdxSimpleFixesDetector - dieselben Hilfen gegen den echten
 //                        Detektor, Katalog-Beispiele bad -> good
+//   * uTestRdxCodeMap  - Code-Sicht (uRdxCodeMap) gegen ScanCodeLine des
+//                        Cores (Drift-Waechter), StartsInside
+//   * uTestRdxQualifyUses - Planung von "uses: X -> Scope.X" (QualifyUses)
+//   * uTestRdxIntroPlan - Code-Aktion "Lokale Variable einfuehren": das
+//                        Literal am Caret, Deklaration, Spalten (Textlogik)
+//   * uTestRdxIntroRefuse - dieselbe Aktion: Zweig ohne begin, Ablehnungen
+//   * uTestRdxIntroGuards - dieselbe Aktion: Schutzregeln aus dem Korpus-A/B,
+//                        Zusammenhang ueber Zeilen, Ende des Sync-Blocks
+//   * uTestRdxIntroEdits - dieselbe Aktion: Ersetzungen des Writers (C1h)
+//                        Ende zu Ende auf UTF-8-Pufferbytes
 //
 // Engine-Units kommen ueber den Suchpfad aus ..\..\SCA.Engine\sources
 // (wie StaticCodeAnalyserForm\tests\TestProject), die Modul-Units aus
@@ -43,17 +65,36 @@ uses
   uRdxRecipes in '..\source\uRdxRecipes.pas',
   uRdxScopeTable in '..\source\uRdxScopeTable.pas',
   uRdxBufferMath in '..\source\uRdxBufferMath.pas',
+  uRdxCodeMap in '..\source\uRdxCodeMap.pas',
   uRdxSuppress in '..\source\uRdxSuppress.pas',
   uRdxSimpleFixes in '..\source\uRdxSimpleFixes.pas',
+  uRdxStructFixes in '..\source\uRdxStructFixes.pas',
+  uRdxLineFixes in '..\source\uRdxLineFixes.pas',
+  uRdxRaiseFixes in '..\source\uRdxRaiseFixes.pas',
+  uRdxDeclFixes in '..\source\uRdxDeclFixes.pas',
   uRdxRecipeRunner in '..\source\uRdxRecipeRunner.pas',
+  uRdxIntroPlan in '..\source\uRdxIntroPlan.pas',
+  uRdxIntroEdits in '..\source\uRdxIntroEdits.pas',
   uTestRdxRecipes in 'uTestRdxRecipes.pas',
   uTestRdxSca044 in 'uTestRdxSca044.pas',
   uTestRdxActionRing in 'uTestRdxActionRing.pas',
   uTestRdxBufferMath in 'uTestRdxBufferMath.pas',
   uTestRdxSuppress in 'uTestRdxSuppress.pas',
   uTestRdxSimpleFixes in 'uTestRdxSimpleFixes.pas',
+  uTestRdxExprFixes in 'uTestRdxExprFixes.pas',
+  uTestRdxStructFixes in 'uTestRdxStructFixes.pas',
+  uTestRdxBlockFixes in 'uTestRdxBlockFixes.pas',
+  uTestRdxLineFixes in 'uTestRdxLineFixes.pas',
+  uTestRdxRaiseFixes in 'uTestRdxRaiseFixes.pas',
+  uTestRdxDeclFixes in 'uTestRdxDeclFixes.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',
-  uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas';
+  uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas',
+  uTestRdxCodeMap in 'uTestRdxCodeMap.pas',
+  uTestRdxQualifyUses in 'uTestRdxQualifyUses.pas',
+  uTestRdxIntroPlan in 'uTestRdxIntroPlan.pas',
+  uTestRdxIntroRefuse in 'uTestRdxIntroRefuse.pas',
+  uTestRdxIntroGuards in 'uTestRdxIntroGuards.pas',
+  uTestRdxIntroEdits in 'uTestRdxIntroEdits.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}
@@ -95,8 +136,14 @@ begin
     end;
 {$ENDIF}
   except
+    // Wirft der Runner selbst (Fixture-Konstruktor, RTTI), darf der
+    // Prozess nicht mit 0 enden - ein Skriptlauf meldete sonst Erfolg
+    // (Review reDelphiX nach Bereichen 2026-10-10, Nit 53).
     on E: Exception do
+    begin
       System.Writeln(E.ClassName, ': ', E.Message);
+      System.ExitCode := EXIT_ERRORS;
+    end;
   end;
 {$ENDIF}
 

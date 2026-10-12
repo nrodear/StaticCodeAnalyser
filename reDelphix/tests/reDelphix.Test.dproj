@@ -92,17 +92,36 @@
         <DCCReference Include="..\source\uRdxRecipes.pas"/>
         <DCCReference Include="..\source\uRdxScopeTable.pas"/>
         <DCCReference Include="..\source\uRdxBufferMath.pas"/>
+        <DCCReference Include="..\source\uRdxCodeMap.pas"/>
         <DCCReference Include="..\source\uRdxSuppress.pas"/>
         <DCCReference Include="..\source\uRdxSimpleFixes.pas"/>
+        <DCCReference Include="..\source\uRdxStructFixes.pas"/>
+        <DCCReference Include="..\source\uRdxLineFixes.pas"/>
+        <DCCReference Include="..\source\uRdxRaiseFixes.pas"/>
+        <DCCReference Include="..\source\uRdxDeclFixes.pas"/>
         <DCCReference Include="..\source\uRdxRecipeRunner.pas"/>
+        <DCCReference Include="..\source\uRdxIntroPlan.pas"/>
+        <DCCReference Include="..\source\uRdxIntroEdits.pas"/>
         <DCCReference Include="uTestRdxRecipes.pas"/>
         <DCCReference Include="uTestRdxSca044.pas"/>
         <DCCReference Include="uTestRdxActionRing.pas"/>
         <DCCReference Include="uTestRdxBufferMath.pas"/>
         <DCCReference Include="uTestRdxSuppress.pas"/>
         <DCCReference Include="uTestRdxSimpleFixes.pas"/>
+        <DCCReference Include="uTestRdxExprFixes.pas"/>
+        <DCCReference Include="uTestRdxStructFixes.pas"/>
+        <DCCReference Include="uTestRdxBlockFixes.pas"/>
+        <DCCReference Include="uTestRdxLineFixes.pas"/>
+        <DCCReference Include="uTestRdxRaiseFixes.pas"/>
+        <DCCReference Include="uTestRdxDeclFixes.pas"/>
         <DCCReference Include="uTestRdxNilFix.pas"/>
         <DCCReference Include="uTestRdxSimpleFixesDetector.pas"/>
+        <DCCReference Include="uTestRdxCodeMap.pas"/>
+        <DCCReference Include="uTestRdxQualifyUses.pas"/>
+        <DCCReference Include="uTestRdxIntroPlan.pas"/>
+        <DCCReference Include="uTestRdxIntroRefuse.pas"/>
+        <DCCReference Include="uTestRdxIntroGuards.pas"/>
+        <DCCReference Include="uTestRdxIntroEdits.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

@@ -1321,6 +1321,18 @@ msgstr "Quick-Fix + prompt IA copiés dans le presse-papiers : %s, ligne %s (%s)
 msgid "Quick-Fix applied: %s"
 msgstr "Quick-Fix appliqué : %s"
 
+msgid "Quick-Fix not available: %s"
+msgstr "Quick-Fix indisponible : %s"
+
+msgid "only from the menu or the light bulb"
+msgstr "uniquement via le menu ou l'ampoule"
+
+msgid "Quick-Fix: the reDelphix package is not loaded"
+msgstr "Quick-Fix : le package reDelphix n'est pas chargé"
+
+msgid "Suppress not available: %s"
+msgstr "Suppression indisponible : %s"
+
 msgid "Quick-Fix: cannot locate source line"
 msgstr "Quick-Fix : ligne source introuvable"
 
@@ -2266,6 +2278,7 @@ msgstr "Masquer dans ce fichier (// noinspection-file %s)"
 
 msgid "Remove ineffective suppression marker"
 msgstr "Retirer le marqueur de suppression sans effet"
+
 msgid "Use FreeAndNil(%s)"
 msgstr "Utiliser FreeAndNil(%s)"
 
@@ -2275,6 +2288,68 @@ msgstr "Utiliser Assigned() au lieu de comparer avec nil"
 msgid "Remove (TObject) from the class declaration"
 msgstr "Retirer (TObject) de la déclaration de classe"
 
+msgid "Use the condition as the Assert message"
+msgstr "Utiliser la condition comme message d'Assert"
+
+msgid "Remove the empty visibility section"
+msgstr "Retirer la section de visibilité vide"
+
+msgid "Remove the empty parentheses"
+msgstr "Retirer les parenthèses vides"
+
+msgid "Remove the redundant comparison with True/False"
+msgstr "Retirer la comparaison superflue avec True/False"
+
+msgid "Remove the redundant comparison with nil"
+msgstr "Retirer la comparaison superflue avec nil"
+
+msgid "Remove unit %s from uses"
+msgstr "Retirer l'unité %s de uses"
+
+msgid "Add an empty else branch"
+msgstr "Ajouter une branche else vide"
+
+msgid "Add an else branch that raises an exception"
+msgstr "Ajouter une branche else qui lève une exception"
+
+msgid "Put the branch in begin..end"
+msgstr "Mettre la branche dans begin..end"
+
+msgid "Remove the extra semicolon"
+msgstr "Supprimer le point-virgule en trop"
+
+msgid "Move the keyword to column 1"
+msgstr "Placer le mot-clé en colonne 1"
+
+msgid "Replace begin with initialization"
+msgstr "Remplacer begin par initialization"
+
+msgid "Remove the cast to %s before Free"
+msgstr "Supprimer le transtypage en %s avant Free"
+
+msgid "Mark the empty body as intentional"
+msgstr "Marquer le corps vide comme intentionnel"
+
+msgid "Raise ENotImplemented in the empty body"
+msgstr "Lever ENotImplemented dans le corps vide"
+
+msgid "Raise the exception"
+msgstr "Lever l'exception"
+
+msgid "Use raise; to keep the original stack trace"
+msgstr "Utiliser raise; (conserve la pile d'appels d'origine)"
+
+msgid "Insert a documentation skeleton"
+msgstr "Insérer un squelette de documentation"
+
+msgid "Insert a new GUID"
+msgstr "Insérer un nouveau GUID"
+
+msgid "Add \"%s;\" to the declaration"
+msgstr "Ajouter « %s; » à la déclaration"
+
+msgid "(changes behavior)"
+msgstr "(modifie le comportement)"
 
 msgid "Show location"
 msgstr "Afficher l'emplacement"
@@ -2302,6 +2377,12 @@ msgstr "la clause uses contient des directives de compilation (ligne %d)"
 
 msgid "own unit %s in the project"
 msgstr "unité %s propre au projet"
+
+msgid "file with an FPC switch or FPC mode - FPC 3.2 knows no unit scopes"
+msgstr "fichier avec aiguillage ou mode FPC - FPC 3.2 ne connaît pas les portées d'unité"
+
+msgid "the clause would no longer be sorted (new SCA142)"
+msgstr "la clause ne serait plus triée (nouveau SCA142)"
 
 msgid "uses: qualify %s"
 msgstr "uses : qualifier %s"
