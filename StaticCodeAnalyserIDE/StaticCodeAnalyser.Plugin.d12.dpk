@@ -358,6 +358,7 @@ contains
   uFindingFilter in '..\SCA.SharedUI\sources\uFindingFilter.pas',
   uFuzzyComboSearch in '..\SCA.SharedUI\sources\uFuzzyComboSearch.pas',
   uHintTextLayout in '..\SCA.SharedUI\sources\uHintTextLayout.pas',
+  uHitCacheRepair in '..\SCA.SharedUI\sources\uHitCacheRepair.pas',
   uIDEStatsTiles in '..\SCA.SharedUI\sources\uIDEStatsTiles.pas',
   uProfileViewer in '..\SCA.SharedUI\sources\uProfileViewer.pas',
   uRuleListBox in '..\SCA.SharedUI\sources\uRuleListBox.pas',

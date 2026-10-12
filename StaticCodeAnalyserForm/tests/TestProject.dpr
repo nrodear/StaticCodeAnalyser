@@ -268,6 +268,7 @@ uses
   uTestClaudePrompt in 'uTestClaudePrompt.pas',
   uTestFindingCopyText in 'uTestFindingCopyText.pas',
   uTestHintTextLayout in 'uTestHintTextLayout.pas',
+  uTestHitCacheRepair in 'uTestHitCacheRepair.pas',
   uTestIniComments in 'uTestIniComments.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
