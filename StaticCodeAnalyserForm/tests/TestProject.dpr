@@ -34,6 +34,7 @@ uses
   uTestBaselineMetricFingerprint in 'uTestBaselineMetricFingerprint.pas',
   uTestBaselineJson in 'uTestBaselineJson.pas',
   uTestSourceLineEdit in 'uTestSourceLineEdit.pas',
+  uTestFileTextCache in 'uTestFileTextCache.pas',
   uTestEditorCommand in 'uTestEditorCommand.pas',
   uTestDfmLexer in 'uTestDfmLexer.pas',
   uTestDfmParser in 'uTestDfmParser.pas',

@@ -324,7 +324,10 @@ begin
   try
     Code := TDetectorUtils.StripStringsAndComments(Lines, LineFor);
   finally
-    if not Cached then Lines.Free;
+    // ReleaseLines statt 'if not Cached then Free': seit dem Nutzerzaehler
+    // des Text-Caches (2026-10-14) ist die Rueckgabe geliehener Zeilen
+    // Pflicht, sonst bleibt der Eintrag bis zum Prozessende stehen.
+    ReleaseLines(Lines, Cached);
   end;
   ARegime := HatRegimeMarker(LowerCase(Code));
   InResBlock := False;

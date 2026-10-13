@@ -319,6 +319,7 @@
         <DCCReference Include="sources\Infrastructure\uDfmRepoIndex.pas"/>
         <DCCReference Include="sources\Infrastructure\uEditorCommand.pas"/>
         <DCCReference Include="sources\Infrastructure\uEngineApi.pas"/>
+        <DCCReference Include="sources\Infrastructure\uEngineLock.pas"/>
         <DCCReference Include="sources\Infrastructure\uEvidenceTiering.pas"/>
         <DCCReference Include="sources\Infrastructure\uExport.pas"/>
         <DCCReference Include="sources\Infrastructure\uExportHtml.pas"/>

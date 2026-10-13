@@ -301,6 +301,7 @@ contains
   uDfmRepoIndex in 'sources\Infrastructure\uDfmRepoIndex.pas',
   uEditorCommand in 'sources\Infrastructure\uEditorCommand.pas',
   uEngineApi in 'sources\Infrastructure\uEngineApi.pas',
+  uEngineLock in 'sources\Infrastructure\uEngineLock.pas',
   uEvidenceTiering in 'sources\Infrastructure\uEvidenceTiering.pas',
   uExport in 'sources\Infrastructure\uExport.pas',
   uExportHtml in 'sources\Infrastructure\uExportHtml.pas',

@@ -142,6 +142,19 @@ type
     [Test] procedure ImpactsAsStringsDoesNotRaise;
   end;
 
+  // Review Bereich C Engine-Kern (Blocker 2, Major 7, Minor; 2026-10-14):
+  // Reload laeuft unter dem Katalog-Monitor, fixMode 'none' schaltet
+  // editorHelp ab, profiles.json wird atomar geschrieben. Eigene Fixture,
+  // weil TTestRuleCatalog mit 38 Tests ueber der Grenze je Fixture liegt.
+  [TestFixture]
+  TTestRuleCatalogGuard = class
+  public
+    [Test] procedure Reload_WhileWorkersRead_EveryAnswerConsistent;
+    [Test] procedure FixModeNone_TurnsEditorHelpOff;
+    [Test] procedure SaveUserProfile_WritesAtomically_NoTempFileLeft;
+  end;
+
+
 implementation
 
 uses
@@ -1366,6 +1379,132 @@ begin
     TRuleCatalog.JsonFilePath := AltPfad;
     if TFile.Exists(Datei) then TFile.Delete(Datei);
     TRuleCatalog.Reload;   // echten Katalog wiederherstellen
+  end;
+end;
+
+{ TTestRuleCatalogGuard }
+
+procedure TTestRuleCatalogGuard.Reload_WhileWorkersRead_EveryAnswerConsistent;
+// Vier Leser fragen den Katalog in Schleifen, waehrend der Testthread ihn
+// wiederholt neu laedt (das Profil-Fenster 'Neu laden' waehrend eines
+// Massenscans). Jede Antwort muss vollstaendig sein: ID gesetzt, Kind
+// passend, 'default'-Profil nie leer, lokalisierter Name nie leer. Vor
+// dem Monitor las ein Worker in ein halb geleertes Dictionary. Gezaehlt
+// statt assertiert: DUnitX-Assertions gehoeren auf den Testthread.
+var
+  Threads : array[0..3] of TThread;
+  Fehler  : Integer;
+  i, j    : Integer;
+begin
+  Fehler := 0;
+  for i := Low(Threads) to High(Threads) do
+  begin
+    Threads[i] := TThread.CreateAnonymousThread(
+      procedure
+      var
+        K     : TFindingKind;
+        Meta  : TRuleMeta;
+        Runde : Integer;
+      begin
+        for Runde := 1 to 40 do
+          for K := Low(TFindingKind) to High(TFindingKind) do
+          begin
+            Meta := TRuleCatalog.GetRuleCanonical(K);
+            if (Meta.ID = '') or (Meta.Kind <> K) then
+              AtomicIncrement(Fehler);
+            if TRuleCatalog.GetProfile(PROF_DEFAULT) = [] then
+              AtomicIncrement(Fehler);
+            if TRuleCatalog.GetRule(K, 'de').Name = '' then
+              AtomicIncrement(Fehler);
+          end;
+      end);
+    Threads[i].FreeOnTerminate := False;
+  end;
+  try
+    for i := Low(Threads) to High(Threads) do
+      Threads[i].Start;
+    for j := 1 to 25 do
+      TRuleCatalog.Reload;
+    for i := Low(Threads) to High(Threads) do
+      Threads[i].WaitFor;
+  finally
+    for i := Low(Threads) to High(Threads) do
+      Threads[i].Free;
+  end;
+  Assert.AreEqual<Integer>(0, Fehler,
+    'unvollstaendige Katalog-Antworten waehrend Reload');
+end;
+
+procedure TTestRuleCatalogGuard.FixModeNone_TurnsEditorHelpOff;
+// fixMode 'none' schaltet jede Schreibhilfe ab - dann darf der Bericht
+// auch kein Quick-Win-Badge zeigen, egal was editorHelp in der Datei
+// sagt. Gegenprobe: 'auto' laesst den Tabellenwert (SCA044: true) stehen.
+var
+  AltPfad : string;
+  Datei   : string;
+  Meta    : TRuleMeta;
+begin
+  AltPfad := TRuleCatalog.JsonFilePath;
+  Datei := SchreibeTempJson(
+    '{"rules":[' +
+    '{"id":"SCA139","kind":"FreeWithoutNil","name":"n139",' +
+    '"fixMode":"none","editorHelp":true},' +
+    '{"id":"SCA044","kind":"ConcatToFormat","name":"n44","fixMode":"auto"}]}');
+  try
+    TRuleCatalog.JsonFilePath := Datei;
+    TRuleCatalog.Reload;
+    Meta := TRuleCatalog.GetRuleCanonical(fkFreeWithoutNil);
+    Assert.AreEqual('none', Meta.FixMode);
+    Assert.IsFalse(Meta.EditorHelp,
+      'fixMode none gewinnt gegen editorHelp true');
+    Meta := TRuleCatalog.GetRuleCanonical(fkConcatToFormat);
+    Assert.AreEqual('auto', Meta.FixMode);
+    Assert.IsTrue(Meta.EditorHelp,
+      'SCA044 ohne editorHelp in der Datei -> Tabellenwert true');
+  finally
+    TRuleCatalog.JsonFilePath := AltPfad;
+    if TFile.Exists(Datei) then TFile.Delete(Datei);
+    TRuleCatalog.Reload;   // echten Katalog wiederherstellen
+  end;
+end;
+
+procedure TTestRuleCatalogGuard.SaveUserProfile_WritesAtomically_NoTempFileLeft;
+// WriteUserProfiles schreibt eine Nachbardatei und benennt sie um: nach
+// dem Speichern steht die Zieldatei, die Nachbardatei ist weg, und ein
+// zweites Speichern ersetzt die bestehende Datei.
+var
+  AltPfad : string;
+  TmpPfad : string;
+  Err     : string;
+  Ziel    : TDictionary<string, TFindingKinds>;
+begin
+  AltPfad := TRuleCatalog.UserProfilesPath;
+  TmpPfad := TPath.Combine(TPath.GetTempPath, 'sca_test_profiles_atomic_' +
+    TGuid.NewGuid.ToString.Replace('{', '').Replace('}', '') + '.json');
+  TRuleCatalog.UserProfilesPath := TmpPfad;
+  try
+    Assert.IsTrue(TRuleCatalog.SaveUserProfile('atomic-probe',
+      [fkMemoryLeak], Err), 'Anlegen: ' + Err);
+    Assert.IsTrue(TFile.Exists(TmpPfad), 'Zieldatei steht');
+    Assert.IsFalse(TFile.Exists(TmpPfad + '.tmp'),
+      'die Nachbardatei ist umbenannt, nicht liegengeblieben');
+    Ziel := TDictionary<string, TFindingKinds>.Create;
+    try
+      Assert.IsTrue(TRuleCatalog.ReadProfilesFile(TmpPfad, Ziel, Err),
+        'lesbar: ' + Err);
+      Assert.IsTrue(Ziel.ContainsKey('atomic-probe'));
+    finally
+      Ziel.Free;
+    end;
+    Assert.IsTrue(TRuleCatalog.SaveUserProfile('atomic-probe',
+      [fkSQLInjection], Err), 'Aendern: ' + Err);
+    Assert.IsFalse(TFile.Exists(TmpPfad + '.tmp'));
+    Assert.IsTrue(fkSQLInjection in TRuleCatalog.GetProfile('atomic-probe'));
+  finally
+    TRuleCatalog.DeleteUserProfile('atomic-probe', Err);
+    TRuleCatalog.UserProfilesPath := AltPfad;
+    if TFile.Exists(TmpPfad) then TFile.Delete(TmpPfad);
+    if TFile.Exists(TmpPfad + '.tmp') then TFile.Delete(TmpPfad + '.tmp');
   end;
 end;
 

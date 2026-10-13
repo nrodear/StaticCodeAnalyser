@@ -4,7 +4,7 @@
 // uReversedForRange, uLengthUnderflow, uTautologicalExpr, uDuplicateBlock,
 // uCustomRuleDetector).
 //
-// Hintergrund (tools/perf_analyse.md Hot-Spot 🅑):
+// Hintergrund (tools/perf_analyse.md Hot-Spot B):
 // Diese 7 Detektoren rufen jeweils Lines.LoadFromFile auf - pro .pas-Datei
 // 7+ separate Disk-IO-Operationen + Encoding-Erkennung + TStringList-
 // Allokationen. Mit diesem Cache wird pro Datei einmal eingelesen und
@@ -13,7 +13,8 @@
 // Ownership-Modell:
 //   AcquireLines(FileName, out OwnedByCache) liefert eine TStringList.
 //     * Wenn OwnedByCache=True (Cache-Pfad): nicht freigeben - der Cache
-//       managed das Leben.
+//       managed das Leben. Die Zeilen sind GELIEHEN: der Aufrufer gibt
+//       sie mit ReleaseLines zurueck, und zwar genau einmal.
 //     * Wenn OwnedByCache=False (Fallback): Caller MUSS Lines.Free
 //       aufrufen wenn fertig.
 //
@@ -21,6 +22,18 @@
 //   genau das richtige - so kann der Caller einheitlich
 //     Lines := AcquireLines(FileName, Cached); try ... finally
 //       ReleaseLines(Lines, Cached); end;
+//
+// Nutzerzaehler je Eintrag (Review Bereich C Engine-Kern, Blocker 1,
+// 2026-10-14): jeder Eintrag zaehlt, wie viele Leser seine Zeilen gerade
+// halten (GetLines/AcquireLines bis ReleaseLines). Clear, RemoveFile und
+// das Entfernen eines veralteten Eintrags haengen einen GEHALTENEN
+// Eintrag nur aus dem Woerterbuch aus; frei wird er erst, wenn der
+// letzte Leser ihn zurueckgibt. Anlass: der IDE-Massenscan leert den
+// Cache je Datei, waehrend "Write baseline" auf einem anderen Thread
+// ueber ContextHashFor (uFindingFingerprint) gerade Zeilen desselben
+// Caches liest - vorher ein Use-after-free (AV oder falscher
+// contextHash). Ein Leser, der ReleaseLines vergisst, kostet seit dem
+// Zaehler einen Eintrag bis zum Prozessende, nie einen Absturz.
 //
 // Lifecycle (aktualisiert 2026-07-04, Audit Global-State):
 //   gFileTextCache ist EINE prozessweit stabile Instanz: beim ersten
@@ -63,7 +76,16 @@ type
   end;
   PFileEncodingInfo = ^TFileEncodingInfo;
 
+  TFileTextCache = class;
+
   TFileTextCacheEntry = class
+  private
+    // Nutzerzaehler (s. Unit-Kopf). Alle drei Felder werden NUR unter
+    // FOwner.FLock gelesen und geschrieben - auch von ReleaseLines, das
+    // ueber den Rueckverweis der Zeilen (TCacheOwnedLines) hierher findet.
+    FOwner    : TFileTextCache;
+    FUsers    : Integer;    // Leser, die Lines gerade halten
+    FDetached : Boolean;    // aus FCache ausgehaengt; frei, sobald FUsers = 0
   public
     Lines : TStringList;
     MTime : TDateTime;
@@ -84,9 +106,20 @@ type
     destructor Destroy; override;
   end;
 
+  // Die Zeilen eines Cache-Eintrags: eine TStringList mit Rueckverweis auf
+  // ihren Eintrag. So kann ReleaseLines den Nutzerzaehler zurueckgeben,
+  // ohne dass die ~100 Aufrufer ein Cache-Handle mitfuehren muessten -
+  // ihr Muster (Acquire, try, finally ReleaseLines) bleibt unveraendert.
+  TCacheOwnedLines = class(TStringList)
+  private
+    FEntry : TFileTextCacheEntry;
+  end;
+
   TFileTextCache = class
   private
-    FCache : TObjectDictionary<string, TFileTextCacheEntry>;
+    // Kein doOwnsValues: das Leben eines Eintrags entscheidet DropEntry
+    // (sofort frei oder bis zum letzten ReleaseLines ausgehaengt).
+    FCache : TDictionary<string, TFileTextCacheEntry>;
     // Perf (2026-07-05): P2-filetextcache-stat - Generation-Zaehler.
     // Clear bumpt ihn; Eintraege merken sich die Generation ihres letzten
     // Stat-Checks. Innerhalb einer Generation (= innerhalb eines Scan-
@@ -106,22 +139,33 @@ type
     // im Parallel-Modus greifen mehrere Worker-Threads gleichzeitig auf den
     // (weiterhin prozessweiten) Cache zu. Der Datei-Load laeuft ausserhalb
     // des Locks (paralleles I/O); seriell ist der Lock unkontent und damit
-    // verhaltens- und praktisch kostenneutral.
+    // verhaltens- und praktisch kostenneutral. Seit 2026-10-14 schuetzt er
+    // auch die Nutzerzaehler der Eintraege.
     FLock     : TCriticalSection;
     function Key(const FileName: string): string;
+    // Eintrag mit Nutzerzaehler + 1 (nil bei Lesefehler) - der Kern von
+    // GetLines und TryGetEncodingInfo. Jeder Treffer braucht ein ReleaseEntry.
+    function AcquireEntry(const FileName: string;
+      AForceStat: Boolean): TFileTextCacheEntry;
+    procedure ReleaseEntry(Entry: TFileTextCacheEntry);
+    // Unter FLock: Eintrag sofort freigeben oder - wenn ihn noch jemand
+    // haelt - aushaengen, damit das letzte ReleaseEntry ihn freigibt.
+    procedure DropEntry(Entry: TFileTextCacheEntry);
   public
     constructor Create;
     destructor Destroy; override;
 
     // Liefert TStringList fuer FileName. Cache besitzt die Liste -
-    // NICHT freigeben. Nil bei Read-Fehler.
+    // NICHT freigeben, sondern mit ReleaseLines(Lines, True) zurueckgeben
+    // (genau einmal; der Eintrag lebt bis dahin, auch ueber Clear/
+    // RemoveFile hinweg). Nil bei Read-Fehler.
     // Staleness-Modell (Perf 2026-07-05, P2-filetextcache-stat):
     //   * Innerhalb einer Generation (zwischen zwei Clear-Aufrufen) ist der
     //     Cache ein Snapshot - KEIN Disk-Stat pro Hit. Ein Scan ist per
     //     Definition ein Snapshot des Datei-Standes.
     //   * Cross-Scan bleibt das Verhalten identisch: der Scan-Start
     //     (uStaticAnalyzer2.ParseLeaks) ruft Clear -> Generation-Bump +
-    //     alle Eintraege werden zerstoert -> naechster Zugriff laedt frisch.
+    //     alle Eintraege werden ausgehaengt -> naechster Zugriff laedt frisch.
     //     Edit-Loops im IDE-Plugin sind damit abgedeckt (jeder Lauf geht
     //     durch ParseLeaks). Konsumenten OHNE dazwischenliegendes Clear,
     //     die Ueberschreibungen sehen muessen (Fingerprint/Baseline-Drift,
@@ -132,26 +176,35 @@ type
     //     der aktuellen Generation - fuer Konsumenten, die Datei-
     //     Ueberschreibungen ohne zwischenzeitliches Clear sehen MUESSEN
     //     (Fingerprint-/Baseline-Drift-Pfad, s. GetLines-Implementierung).
+    //     Ein Leser, der die ALTEN Zeilen noch haelt, behaelt sie - der
+    //     veraltete Eintrag wird nur ausgehaengt.
     function GetLines(const FileName: string;
       AForceStat: Boolean = False): TStringList;
 
     // Perf P2 (Konzept_Performance25, 2026-07-19): Encoding-Verdikt des
     // Cache-Eintrags. Laedt die Datei bei Bedarf (GetLines-Semantik inkl.
-    // Snapshot-/Stat-Modell); False nur bei Read-Fehler.
+    // Snapshot-/Stat-Modell); False nur bei Read-Fehler. Haelt keinen
+    // Eintrag: das Verdikt wird kopiert.
     function TryGetEncodingInfo(const FileName: string;
       out Info: TFileEncodingInfo): Boolean;
 
+    // Haengt ALLE Eintraege aus und bumpt die Generation. Eintraege, die
+    // gerade ein Leser haelt, werden erst mit dessen ReleaseLines frei;
+    // EntryCount ist danach trotzdem 0.
     procedure Clear;
-    /// <summary>Zahl der Eintraege, FLock-geschuetzt. Nur Diagnose/Test
-    /// (TransientCacheCount) - Ablauflogik darf darauf nichts bauen, der
-    /// Wert ist im Parallel-Modus sofort stale.</summary>
+    /// <summary>Zahl der eingehaengten Eintraege, FLock-geschuetzt. Nur
+    /// Diagnose/Test (TransientCacheCount) - Ablauflogik darf darauf
+    /// nichts bauen, der Wert ist im Parallel-Modus sofort stale.
+    /// Ausgehaengte, noch gehaltene Eintraege zaehlen nicht mit.</summary>
     function EntryCount: Integer;
 
     // Perf Stufe 2 (2026-07-25): entfernt NUR den Eintrag dieser Datei -
     // das per-File-Pendant zum seriellen Clear fuer den Parallel-Modus.
-    // Ein globales Clear wuerde dort die Eintraege ANDERER Worker zerstoeren
-    // (deren gerade benutzte Lines-Instanzen waeren use-after-free).
-    // Kein Generation-Bump: die uebrigen Eintraege bleiben Snapshot-gueltig.
+    // Ein globales Clear nahm dort frueher den Eintraegen ANDERER Worker
+    // den Boden weg; seit dem Nutzerzaehler bleibt RemoveFile die
+    // sparsamere Wahl (die uebrigen Eintraege bleiben warm), noetig fuer
+    // die Speichersicherheit ist es nicht mehr. Kein Generation-Bump: die
+    // uebrigen Eintraege bleiben Snapshot-gueltig.
     procedure RemoveFile(const FileName: string);
   end;
 
@@ -186,6 +239,11 @@ function AcquireLines(const FileName: string;
   out OwnedByCache: Boolean; ACache: TFileTextCache = nil;
   AForceStat: Boolean = False): TStringList;
 
+// Gibt die Zeilen aus AcquireLines zurueck: OwnedByCache=False -> Free;
+// OwnedByCache=True -> Nutzerzaehler des Cache-Eintrags um eins senken
+// (der Eintrag wird frei, wenn er ausgehaengt ist und niemand ihn mehr
+// haelt). nil ist erlaubt, ein zweiter Aufruf fuer dieselben Zeilen
+// wird abgefangen (der Zaehler faellt nie unter 0).
 procedure ReleaseLines(Lines: TStringList; OwnedByCache: Boolean);
 
 // Laedt eine Datei mit der Encoding-Erkennung des Caches (BOM, dann
@@ -208,7 +266,10 @@ function LoadFileSmart(const FileName: string; SL: TStringList;
 /// Der Aufrufer ist der CONSUMER, nicht die Engine - nur er weiss, wann
 /// die letzte Nacharbeit (Suppression-Marker, ContextHash fuer Baseline/
 /// SARIF) durch ist. Zu frueh gerufen kostet es nur Warmstart (der Cache
-/// fuellt sich lazy nach), nie Korrektheit.</summary>
+/// fuellt sich lazy nach), nie Korrektheit: Zeilen, die ein Leser gerade
+/// haelt, bleiben bis zu seinem ReleaseLines gueltig (Nutzerzaehler, s.
+/// Unit-Kopf) - vor 2026-10-14 galt dieser Satz nur fuer die Waerme, ein
+/// Leser auf einem anderen Thread las danach freigegebenen Speicher.</summary>
 /// <remarks>Anlass ist die Messreihe vom 2026-08-25: nach EINEM
 /// default-Scan des Referenzkorpus im 32-Bit-BDS blieben ~1,3 GB stehen,
 /// davon ~0,5 GB dieser Cache - designgemaess bis zum naechsten Scan.
@@ -253,110 +314,10 @@ implementation
 uses
   Winapi.Windows, System.Math, System.IOUtils;
 
-function IsValidUtf8(const Bytes: TBytes): Boolean;
-// Pruft ob die komplette Byte-Sequenz wohlgeformtes UTF-8 ist
-// (RFC 3629, ohne ueberlange Encodings strikt zu pruefen — fuer
-// Encoding-Wahl ausreichend). ASCII-only ist trivial gueltig.
-var
-  i, Cont, Len : Integer;
-  B            : Byte;
-begin
-  Len := Length(Bytes);
-  i := 0;
-  while i < Len do
-  begin
-    B := Bytes[i];
-    if B < $80 then
-      Cont := 0                          // ASCII
-    else if (B and $E0) = $C0 then
-      Cont := 1                          // 110xxxxx + 1
-    else if (B and $F0) = $E0 then
-      Cont := 2                          // 1110xxxx + 2
-    else if (B and $F8) = $F0 then
-      Cont := 3                          // 11110xxx + 3
-    else
-      Exit(False);                       // ungueltiges Lead-Byte
-    Inc(i);
-    while (Cont > 0) and (i < Len) do
-    begin
-      if (Bytes[i] and $C0) <> $80 then Exit(False);  // kein Continuation
-      Inc(i); Dec(Cont);
-    end;
-    if Cont > 0 then Exit(False);        // unvollstaendige Sequenz am EOF
-  end;
-  Result := True;
-end;
-
-function LoadFileSmart(const FileName: string; SL: TStringList;
-  AEncInfo: PFileEncodingInfo): Boolean;
-// Encoding-Erkennung in drei Stufen:
-//   1. BOM vorhanden? → Encoding aus BOM (UTF-8/UTF-16 LE/UTF-16 BE).
-//   2. Kein BOM, aber alle Bytes wohlgeformt UTF-8? → UTF-8.
-//   3. Sonst → TEncoding.Default (Windows-1252/Active-CP).
-//
-// AEncInfo <> nil (Perf P2): zusaetzlich das Byte-Level-Encoding-Verdikt
-// aus den ohnehin gelesenen Rohbytes berechnen (identische Funktion wie
-// AnalyzeFileEncoding, identische Bytes -> identisches Verdikt) - der
-// Cache-Entry traegt es dann fuer den SourceEncoding-Detektor.
-//
-// Fixt Mojibake bei ANSI-Dateien mit Umlauten in den ersten Zeilen
-// (Unit-Header, Copyright-Kommentare) - Delphi's LoadFromFile(F, UTF-8)
-// ist lenient und ersetzt invalide Bytes still durch U+FFFD, sodass
-// der Aufrufer den Fehler nicht sieht. Wir detecten explizit + waehlen
-// die richtige Encoding bevor wir dekodieren.
-var
-  Bytes  : TBytes;
-  Enc    : TEncoding;
-  BomLen : Integer;
-  Head   : TBytes;
-begin
-  Result := False;
-  if not FileExists(FileName) then Exit;
-  try
-    Bytes := TFile.ReadAllBytes(FileName);
-  except
-    Exit;
-  end;
-
-  // Stufe 1: BOM-Sniff auf den ersten max. 4 Bytes.
-  SetLength(Head, Min(Length(Bytes), 4));
-  if Length(Head) > 0 then
-    Move(Bytes[0], Head[0], Length(Head));
-  Enc := nil;
-  BomLen := TEncoding.GetBufferEncoding(Head, Enc, nil);
-  // GetBufferEncoding setzt Enc nur bei BOM-Treffer. Ohne BOM bleibt
-  // Enc=nil (weil wir ADefaultEncoding=nil uebergeben haben).
-
-  if Enc = nil then
-  begin
-    // Stufe 2/3: kein BOM. UTF-8-strikt oder ANSI.
-    if IsValidUtf8(Bytes) then
-      Enc := TEncoding.UTF8
-    else
-      Enc := TEncoding.Default;
-    BomLen := 0;
-  end;
-
-  try
-    // BOM-Bytes ueberspringen (wenn BOM erkannt war). GetString auf den
-    // Rest. SL.Text setzt automatisch Lines auf.
-    SL.Text := Enc.GetString(Bytes, BomLen, Length(Bytes) - BomLen);
-    if AEncInfo <> nil then
-    begin
-      AEncInfo^ := ComputeFileEncodingInfo(Bytes);
-      AEncInfo^.Readable := True;
-    end;
-    Result := True;
-  except
-    // ANSI/Default kann nie werfen (jeder Byte-Wert ist gueltig in CP1252).
-    // UTF-8 ist nach IsValidUtf8 geprueft. Hier nur als Belt-and-Suspenders.
-  end;
-end;
-
 // ---------------------------------------------------------------------------
 // Encoding-Analyse fuer den Datei-Encoding-Detektor (Konzept_FileEncodingDetector).
-// STRIKT (RFC 3629) - anders als das lenient IsValidUtf8 oben, das ueberlange
-// Formen/Surrogate/>U+10FFFF durchlaesst.
+// STRIKT (RFC 3629). Dieselbe Pruefung entscheidet seit 2026-10-14 auch die
+// Encoding-WAHL in LoadFileSmart (s. IsValidUtf8).
 // ---------------------------------------------------------------------------
 
 function StrictUtf8SeqLen(const Bytes: TBytes; Idx, Len: Integer): Integer;
@@ -397,6 +358,115 @@ begin
   for j := 2 to need do
     if (Bytes[Idx + j] and $C0) <> $80 then Exit(0);
   Result := need + 1;
+end;
+
+function IsValidUtf8(const Bytes: TBytes): Boolean;
+// Prueft, ob die komplette Byte-Sequenz STRIKT wohlgeformtes UTF-8 ist
+// (RFC 3629: keine ueberlangen Formen, keine Surrogate, nichts ueber
+// U+10FFFF). ASCII-only ist trivial gueltig.
+//
+// Bis 2026-10-14 war die Pruefung lax (Lead-/Continuation-Muster ohne
+// Wertebereiche). TEncoding.UTF8 ist aber strikt und WIRFT bei einer
+// Sequenz wie C0 80 - die Datei galt dann als unlesbar und war fuer alle
+// Datei-Detektoren still unsichtbar (Review Bereich C, Major 15). Jetzt
+// entscheidet dieselbe Pruefung wie im Encoding-Detektor: was sie
+// ablehnt, liest LoadFileSmart als Default-Codepage.
+var
+  i, Len, SeqLen : Integer;
+begin
+  Len := Length(Bytes);
+  i := 0;
+  while i < Len do
+  begin
+    if Bytes[i] < $80 then
+    begin
+      Inc(i);
+      Continue;
+    end;
+    SeqLen := StrictUtf8SeqLen(Bytes, i, Len);
+    if SeqLen = 0 then Exit(False);
+    Inc(i, SeqLen);
+  end;
+  Result := True;
+end;
+
+function LoadFileSmart(const FileName: string; SL: TStringList;
+  AEncInfo: PFileEncodingInfo): Boolean;
+// Encoding-Erkennung in drei Stufen:
+//   1. BOM vorhanden? -> Encoding aus BOM (UTF-8/UTF-16 LE/UTF-16 BE).
+//   2. Kein BOM, aber alle Bytes wohlgeformt UTF-8? -> UTF-8.
+//   3. Sonst -> TEncoding.Default (Windows-1252/Active-CP).
+//
+// AEncInfo <> nil (Perf P2): zusaetzlich das Byte-Level-Encoding-Verdikt
+// aus den ohnehin gelesenen Rohbytes berechnen (identische Funktion wie
+// AnalyzeFileEncoding, identische Bytes -> identisches Verdikt) - der
+// Cache-Entry traegt es dann fuer den SourceEncoding-Detektor.
+//
+// Fixt Mojibake bei ANSI-Dateien mit Umlauten in den ersten Zeilen
+// (Unit-Header, Copyright-Kommentare) - Delphi's LoadFromFile(F, UTF-8)
+// ist lenient und ersetzt invalide Bytes still durch U+FFFD, sodass
+// der Aufrufer den Fehler nicht sieht. Wir detecten explizit + waehlen
+// die richtige Encoding bevor wir dekodieren.
+//
+// Nie blind (Review Bereich C, Major 15): wirft die gewaehlte Dekodierung
+// trotzdem (UTF-8-BOM, dahinter ein ungueltiges Byte - TEncoding.UTF8
+// ist strikt), werden die Bytes hinter der BOM als Default-Codepage
+// gelesen. Eine Datei mit einem kaputten Byte verliert so ein Zeichen,
+// nicht alle Funde.
+var
+  Bytes  : TBytes;
+  Enc    : TEncoding;
+  BomLen : Integer;
+  Head   : TBytes;
+begin
+  Result := False;
+  if not FileExists(FileName) then Exit;
+  try
+    Bytes := TFile.ReadAllBytes(FileName);
+  except
+    Exit;
+  end;
+
+  // Stufe 1: BOM-Sniff auf den ersten max. 4 Bytes.
+  SetLength(Head, Min(Length(Bytes), 4));
+  if Length(Head) > 0 then
+    Move(Bytes[0], Head[0], Length(Head));
+  Enc := nil;
+  BomLen := TEncoding.GetBufferEncoding(Head, Enc, nil);
+  // GetBufferEncoding setzt Enc nur bei BOM-Treffer. Ohne BOM bleibt
+  // Enc=nil (weil wir ADefaultEncoding=nil uebergeben haben).
+
+  if Enc = nil then
+  begin
+    // Stufe 2/3: kein BOM. UTF-8-strikt oder ANSI.
+    if IsValidUtf8(Bytes) then
+      Enc := TEncoding.UTF8
+    else
+      Enc := TEncoding.Default;
+    BomLen := 0;
+  end;
+
+  try
+    // BOM-Bytes ueberspringen (wenn BOM erkannt war). GetString auf den
+    // Rest. SL.Text setzt automatisch Lines auf.
+    try
+      SL.Text := Enc.GetString(Bytes, BomLen, Length(Bytes) - BomLen);
+    except
+      on EEncodingError do
+        // Default kann nie werfen (jeder Byte-Wert ist in der Codepage
+        // gueltig); hier landet nur eine BOM-Datei mit kaputtem Inhalt.
+        SL.Text := TEncoding.Default.GetString(Bytes, BomLen,
+          Length(Bytes) - BomLen);
+    end;
+    if AEncInfo <> nil then
+    begin
+      AEncInfo^ := ComputeFileEncodingInfo(Bytes);
+      AEncInfo^.Readable := True;
+    end;
+    Result := True;
+  except
+    // Belt-and-Suspenders fuer alles ausser der Dekodierung (Speicher).
+  end;
 end;
 
 function IsBidiOverrideSeq(const Bytes: TBytes; Idx, SeqLen: Integer): Boolean;
@@ -512,6 +582,8 @@ end;
 
 constructor TFileTextCacheEntry.Create(ALines: TStringList; AMTime: TDateTime;
   ASize: Int64; AStatGeneration: Integer; const AEncInfo: TFileEncodingInfo);
+// FOwner und der Rueckverweis der Zeilen werden vom Cache gesetzt
+// (AcquireEntry) - der Eintrag kennt seinen Cache erst, wenn er drin ist.
 begin
   inherited Create;
   Lines := ALines;
@@ -532,12 +604,20 @@ end;
 constructor TFileTextCache.Create;
 begin
   inherited;
-  FCache := TObjectDictionary<string, TFileTextCacheEntry>.Create([doOwnsValues]);
+  FCache := TDictionary<string, TFileTextCacheEntry>.Create;
   FLock  := TCriticalSection.Create;   // Perf Stufe 2 (2026-07-25)
 end;
 
 destructor TFileTextCache.Destroy;
+var
+  Entry : TFileTextCacheEntry;
 begin
+  // Prozess- bzw. Cache-Ende: alle eingehaengten Eintraege freigeben, auch
+  // gehaltene - ein Leser, der den CACHE ueberlebt, war schon immer ein
+  // Fehler des Aufrufers (gFileTextCache stirbt erst in finalization).
+  if Assigned(FCache) then
+    for Entry in FCache.Values do
+      Entry.Free;
   FCache.Free;
   FLock.Free;
   inherited;
@@ -593,11 +673,50 @@ begin
   end;
 end;
 
-function TFileTextCache.GetLines(const FileName: string;
-  AForceStat: Boolean): TStringList;
+function LadeCacheZeilen(const FileName: string;
+  out AEncInfo: TFileEncodingInfo): TCacheOwnedLines;
+// Zeilen fuer einen neuen Eintrag; nil bei Lesefehler (LoadFileSmart
+// faengt jeden selbst). Eigene Funktion: der Aufrufer uebernimmt das
+// Ergebnis in den Eintrag, eine try/finally-Klammer passt dort nicht.
+begin
+  Result := TCacheOwnedLines.Create;
+  if not LoadFileSmart(FileName, Result, @AEncInfo) then
+    FreeAndNil(Result);
+end;
+
+procedure TFileTextCache.DropEntry(Entry: TFileTextCacheEntry);
+// Unter FLock. Haelt noch jemand die Zeilen, bleibt der Eintrag am Leben
+// und ReleaseEntry des letzten Lesers gibt ihn frei; sonst sofort weg.
+// Nie zweimal fuer denselben Eintrag: der Aufrufer nimmt ihn zugleich
+// aus FCache.
+begin
+  if Entry.FUsers > 0 then
+    Entry.FDetached := True
+  else
+    Entry.Free;
+end;
+
+procedure TFileTextCache.ReleaseEntry(Entry: TFileTextCacheEntry);
+begin
+  if Entry = nil then Exit;
+  FLock.Enter;
+  try
+    // Nie unter 0: ein doppeltes ReleaseLines desselben Aufrufers darf
+    // einem anderen Leser den Eintrag nicht unter den Fuessen wegziehen.
+    if Entry.FUsers > 0 then
+      Dec(Entry.FUsers);
+    if (Entry.FUsers = 0) and Entry.FDetached then
+      Entry.Free;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TFileTextCache.AcquireEntry(const FileName: string;
+  AForceStat: Boolean): TFileTextCacheEntry;
 var
   K         : string;
-  SL        : TStringList;
+  SL        : TCacheOwnedLines;
   Entry     : TFileTextCacheEntry;
   CurrMTime : TDateTime;
   CurrSize  : Int64;
@@ -625,7 +744,10 @@ begin
       // auf dem aktuellen Datei-Inhalt; Regressionstest
       // Baseline_MatchesViaContextHashAfterLineDrift).
       if (Entry.StatGeneration = FGeneration) and not AForceStat then
-        Exit(Entry.Lines);
+      begin
+        Inc(Entry.FUsers);
+        Exit(Entry);
+      end;
 
       SafeGetFileStat(FileName, CurrMTime, CurrSize);
       // Cache-Hit nur wenn mtime UND Size identisch sind. Bei sub-Sekunden-
@@ -636,10 +758,13 @@ begin
          and (CurrSize = Entry.Size) then
       begin
         Entry.StatGeneration := FGeneration;  // Stat fuer diese Generation erledigt
-        Exit(Entry.Lines);
+        Inc(Entry.FUsers);
+        Exit(Entry);
       end;
-      // Stale - aus Cache raus, danach neu laden.
+      // Stale - aushaengen (ein Leser der alten Zeilen behaelt sie),
+      // danach neu laden.
       FCache.Remove(K);
+      DropEntry(Entry);
     end;
   finally
     FLock.Leave;
@@ -647,22 +772,15 @@ begin
 
   if not FileExists(FileName) then Exit;
 
-  SL := TStringList.Create;
-  try
-    // Perf P2: Encoding-Verdikt aus den Load-Rohbytes mitnehmen. Bewusster
-    // Trade-off: Post-Scan-Reloads (Suppression/ContextHash fuellen den
-    // Cache nach dem per-File-Clear lazy nach) zahlen den Walk mit, obwohl
-    // dort niemand das Verdikt liest - er ist aber nur EIN zusaetzlicher
-    // RAM-Pass neben ReadAllBytes+IsValidUtf8+Decode, waehrend der Detektor-
-    // Pfad einen KOMPLETTEN Zweit-Read pro Quelldatei spart. Falls die
-    // Timings-Messung das je kippt: Phase-Flag am Cache (Walk nur waehrend
-    // der Detektor-Phase) statt hier zu raten.
-    if not LoadFileSmart(FileName, SL, @EncInfo) then
-      FreeAndNil(SL);
-  except
-    FreeAndNil(SL);
-  end;
-
+  // Perf P2: Encoding-Verdikt aus den Load-Rohbytes mitnehmen. Bewusster
+  // Trade-off: Post-Scan-Reloads (Suppression/ContextHash fuellen den
+  // Cache nach dem per-File-Clear lazy nach) zahlen den Walk mit, obwohl
+  // dort niemand das Verdikt liest - er ist aber nur EIN zusaetzlicher
+  // RAM-Pass neben ReadAllBytes+IsValidUtf8+Decode, waehrend der Detektor-
+  // Pfad einen KOMPLETTEN Zweit-Read pro Quelldatei spart. Falls die
+  // Timings-Messung das je kippt: Phase-Flag am Cache (Walk nur waehrend
+  // der Detektor-Phase) statt hier zu raten.
+  SL := LadeCacheZeilen(FileName, EncInfo);
   if SL = nil then Exit;
   SafeGetFileStat(FileName, CurrMTime, CurrSize);
   FLock.Enter;
@@ -673,36 +791,48 @@ begin
     if FCache.TryGetValue(K, Entry) then
     begin
       SL.Free;
-      Exit(Entry.Lines);
+      Inc(Entry.FUsers);
+      Exit(Entry);
     end;
     // Perf (2026-07-05): P2-filetextcache-stat - der frische Eintrag traegt die
     // aktuelle Generation: der Stat ist hiermit fuer diese Generation erledigt.
-    FCache.Add(K,
-      TFileTextCacheEntry.Create(SL, CurrMTime, CurrSize, FGeneration, EncInfo));
+    Entry := TFileTextCacheEntry.Create(SL, CurrMTime, CurrSize,
+      FGeneration, EncInfo);
+    Entry.FOwner := Self;
+    SL.FEntry := Entry;
+    Entry.FUsers := 1;
+    FCache.Add(K, Entry);
+    Result := Entry;
   finally
     FLock.Leave;
   end;
-  Result := SL;
+end;
+
+function TFileTextCache.GetLines(const FileName: string;
+  AForceStat: Boolean): TStringList;
+var
+  Entry : TFileTextCacheEntry;
+begin
+  Entry := AcquireEntry(FileName, AForceStat);
+  if Entry = nil then
+    Result := nil
+  else
+    Result := Entry.Lines;
 end;
 
 function TFileTextCache.TryGetEncodingInfo(const FileName: string;
   out Info: TFileEncodingInfo): Boolean;
-// Perf P2: GetLines validiert/laedt den Eintrag (zentrale Snapshot-/Stat-
-// Logik, kein zweiter Staleness-Pfad hier); danach ist der Entry-Lookup
-// ein garantierter Hit.
+// Perf P2: AcquireEntry validiert/laedt den Eintrag (zentrale Snapshot-/
+// Stat-Logik, kein zweiter Staleness-Pfad hier). Das Verdikt ist nach dem
+// Laden unveraenderlich - Kopie ohne Lock, dann den Eintrag zurueckgeben.
 var
   Entry : TFileTextCacheEntry;
 begin
   Result := False;
-  if GetLines(FileName) = nil then Exit;
-  // Perf Stufe 2 (2026-07-25): Zweit-Lookup unter FLock (s. GetLines).
-  FLock.Enter;
-  try
-    if not FCache.TryGetValue(Key(FileName), Entry) then Exit;
-    Info := Entry.EncInfo;
-  finally
-    FLock.Leave;
-  end;
+  Entry := AcquireEntry(FileName, False);
+  if Entry = nil then Exit;
+  Info := Entry.EncInfo;
+  ReleaseEntry(Entry);
   Result := True;
 end;
 
@@ -717,15 +847,19 @@ begin
 end;
 
 procedure TFileTextCache.Clear;
+var
+  Entry : TFileTextCacheEntry;
 begin
   // Perf (2026-07-05): P2-filetextcache-stat - Generation-Bump: alle danach
   // (theoretisch) noch gesehenen Alt-Eintraege muessten neu ge-stat-et
-  // werden. Praktisch zerstoert FCache.Clear ohnehin alle Eintraege; der
-  // Bump haelt die Invariante "Eintrag mit fremder Generation => Stat"
-  // auch fuer kuenftige partielle Invalidierungen (Remove o.ae.) korrekt.
+  // werden. Praktisch haengt Clear ohnehin alle Eintraege aus; der Bump
+  // haelt die Invariante "Eintrag mit fremder Generation => Stat" auch
+  // fuer kuenftige partielle Invalidierungen (Remove o.ae.) korrekt.
   FLock.Enter;   // Perf Stufe 2 (2026-07-25)
   try
     Inc(FGeneration);
+    for Entry in FCache.Values do
+      DropEntry(Entry);
     FCache.Clear;
   finally
     FLock.Leave;
@@ -735,10 +869,18 @@ end;
 procedure TFileTextCache.RemoveFile(const FileName: string);
 // Perf Stufe 2 (2026-07-25): per-File-Entlastung im Parallel-Modus -
 // Doku am Interface-Prototyp.
+var
+  K     : string;
+  Entry : TFileTextCacheEntry;
 begin
   FLock.Enter;
   try
-    FCache.Remove(Key(FileName));
+    K := Key(FileName);
+    if FCache.TryGetValue(K, Entry) then
+    begin
+      FCache.Remove(K);
+      DropEntry(Entry);
+    end;
   finally
     FLock.Leave;
   end;
@@ -782,7 +924,7 @@ begin
   // Clear ist FLock-geschuetzt und bumpt die Generation - exakt derselbe
   // Weg wie am Scan-Start. Ein parallel laufender Scan verliert dadurch
   // schlimmstenfalls Cache-Waerme, nie Daten (die Eintraege werden lazy
-  // nachgeladen).
+  // nachgeladen, gehaltene Zeilen bleiben bis zum ReleaseLines gueltig).
   if Assigned(gFileTextCache) then
     gFileTextCache.Clear;
 end;
@@ -809,9 +951,22 @@ begin
 end;
 
 procedure ReleaseLines(Lines: TStringList; OwnedByCache: Boolean);
+var
+  Entry : TFileTextCacheEntry;
 begin
-  if (Lines <> nil) and not OwnedByCache then
+  if Lines = nil then Exit;
+  if not OwnedByCache then
+  begin
     Lines.Free;
+    Exit;
+  end;
+  // Geliehene Zeilen: ueber den Rueckverweis den Zaehler des Eintrags
+  // senken. Eine fremde TStringList mit OwnedByCache=True (Aufrufer-
+  // Fehler) wird still ignoriert - wie vor dem Zaehler.
+  if not (Lines is TCacheOwnedLines) then Exit;
+  Entry := TCacheOwnedLines(Lines).FEntry;
+  if (Entry <> nil) and (Entry.FOwner <> nil) then
+    Entry.FOwner.ReleaseEntry(Entry);
 end;
 
 function TryLoadLinesWithFallback(const FileName: string;
