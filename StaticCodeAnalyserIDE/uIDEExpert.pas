@@ -318,9 +318,13 @@ procedure TeardownUiElements;
 //     Layer) - sein EditServices-Notifier ist weg, bevor der Frame
 //     stirbt, wie es der alte Wizard-Destruktor-Kommentar verlangte.
 //   * Der Editor-Layer faellt jetzt VOR dem DockForm (Umkehrung),
-//     WatchMode -> Overlay -> Highlighter. Nach der Barriere ist der
-//     Hintergrund still; die Unregister-Prozeduren sind einzeln
-//     idempotent und gegeneinander per Assigned-Waechter abgesichert.
+//     WatchMode -> Overlay -> Gluehbirne (EditorBulb, seit 2026-10-08) ->
+//     Highlighter. Die Birne faellt VOR dem Highlighter, weil dessen
+//     Editor-Notifier ihre Ereignisse liefert; ihre finalization in
+//     uIDEFindingBulb ist nur das Netz, falls dieser Abbau nie lief.
+//     Nach der Barriere ist der Hintergrund still; die Unregister-
+//     Prozeduren sind einzeln idempotent und gegeneinander per
+//     Assigned-Waechter abgesichert.
 begin
   if not Assigned(GUiRegistry) then Exit;
   JoinAllBulkWorkers;

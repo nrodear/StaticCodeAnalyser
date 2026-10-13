@@ -48,8 +48,14 @@ unit uFindingActions;
 //     fakNavigate fuehrt nur hin (Stelle zeigen). Die Gluehbirne im Editor
 //     zeigt nur verfuegbare fakFix - der Benutzer steht dort schon an der
 //     Stelle (Nico 2026-10-08); Kontextmenue und Dock-Grid zeigen alles.
-//     Der Wert 0 ist fakFix: ein Anbieter, der Kind nicht setzt, bleibt
-//     bei SetLength/Default(TFindingAction) eine Hilfe.
+//     Der Wert 0 ist fakUnset, die SICHERE Vorgabe (Review 2026-10-14):
+//     ein Anbieter, der Kind nicht setzt (SetLength, Default), bekommt
+//     eine Aktion, die Kontextmenue und Dock-Grid wie angegeben zeigen,
+//     die aber nie in der Gluehbirne steht und die keine Taste
+//     (Ctrl+Alt+F, Ctrl+Alt+S) ungesehen ausfuehrt. Bis dahin war 0 =
+//     fakFix: eine vergessene Zuweisung machte aus jeder Aktion eine
+//     Hilfe, die Ctrl+Alt+F blind ausfuehrte. Wer eine Hilfe meint, setzt
+//     fakFix ausdruecklich (reDelphix tut das in TRdxProvider.Add).
 //   * fakSuppress unterdrueckt den Fund (`// noinspection`-Marker). Das
 //     ist KEINE Hilfe: die Gluehbirne erscheint deswegen nicht, zeigt es
 //     aber unter den Hilfen, wenn es zu dem Fund eine gibt (Nico
@@ -82,9 +88,11 @@ const
   MAX_FINDINGS_PER_MENU = 16;
 
 type
-  // Was eine Aktion ist (siehe VERTRAG oben). fakFix MUSS Ordnungszahl 0
-  // bleiben; neue Arten nur hinten anhaengen.
-  TFindingActionKind = (fakFix, fakNavigate, fakSuppress, fakRefactor);
+  // Was eine Aktion ist (siehe VERTRAG oben). fakUnset MUSS Ordnungszahl 0
+  // bleiben - es ist der Wert, den Default(TFindingAction) und SetLength
+  // liefern; neue Arten nur hinten anhaengen.
+  TFindingActionKind = (fakUnset, fakFix, fakNavigate, fakSuppress,
+    fakRefactor);
 
   TFindingAction = record
     Caption : string;        // Menuetext, bereits lokalisiert
@@ -95,7 +103,13 @@ type
     // Die Aktion kann das Verhalten des Programms aendern (Konzept
     // Editorhilfen, Entscheid E2) - der Menuetext sagt es. Ein Tastendruck,
     // der die erste Hilfe ungesehen ausfuehrt (Ctrl+Alt+F im Plugin),
-    // laesst sie aus. Vorgabe False (Default(TFindingAction)).
+    // laesst sie aus. Vorgabe False (Default(TFindingAction)) - das ist
+    // bewusst so belassen (Review 2026-10-14): die Sperre gegen eine
+    // VERGESSENE Kennzeichnung sitzt in Kind (fakUnset laeuft nie per
+    // Taste); wer eine Aktion ausdruecklich als fakFix meldet, hat ueber
+    // ChangesBehavior entschieden. Ein Boolean kennt keinen dritten Wert
+    // "nicht gesetzt", und eine Umkehr (SafeForKey) haette jeden
+    // Anbieter angefasst.
     ChangesBehavior : Boolean;
   end;
 

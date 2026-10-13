@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2422 Zeilen, 81097 Bytes
-  CPoLines_de: array[0..2421] of string = (
+  // i18n\de.po - 2425 Zeilen, 81192 Bytes
+  CPoLines_de: array[0..2424] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1927,6 +1927,9 @@ const
     'msgid "Suppress: could not write file: %s"',
     'msgstr "Suppress: Datei nicht schreibbar: %s"',
     '',
+    'msgid "Suppress: cannot place the marker: %s"',
+    'msgstr "Suppress: Marker nicht platzierbar: %s"',
+    '',
     'msgid "Quick-Fix: could not write file: %s"',
     'msgstr "Quick-Fix: Datei nicht schreibbar: %s"',
     '',
@@ -2711,8 +2714,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2418 Zeilen, 84943 Bytes
-  CPoLines_fr: array[0..2417] of string = (
+  // i18n\fr.po - 2421 Zeilen, 85045 Bytes
+  CPoLines_fr: array[0..2420] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4636,6 +4639,9 @@ const
     '',
     'msgid "Suppress: could not write file: %s"',
     'msgstr "Suppress : fichier non modifiable : %s"',
+    '',
+    'msgid "Suppress: cannot place the marker: %s"',
+    'msgstr "Suppress : marqueur impossible '#$00E0' placer : %s"',
     '',
     'msgid "Quick-Fix: could not write file: %s"',
     'msgstr "Quick-Fix : fichier non modifiable : %s"',

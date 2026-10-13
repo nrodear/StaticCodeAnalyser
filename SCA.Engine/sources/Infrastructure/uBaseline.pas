@@ -224,6 +224,19 @@ type
     // bekannt). Den .sca-Ordner legt der Schreiber bei Bedarf an.
     class function DefaultBaselineTarget(const AProjectOrGroupFile,
       AScanRoot: string): string; static;
+
+    // [Baseline] File= aus der INI zu einem Pfad: leer (auch nur
+    // Leerraum) bleibt leer, ein absoluter Pfad (Laufwerk, UNC, fuehrender
+    // Trenner) bleibt, ein relativer wird gegen AProjectDir aufgeloest -
+    // das Verzeichnis des Projekts bzw. die Scan-Wurzel des Aufrufers;
+    // ohne AProjectDir bleibt er relativ (zum Arbeitsverzeichnis des
+    // Prozesses). Bis 2026-10-14 loeste das jeder Wirt selbst, mit drei
+    // Bedeutungen (Dock: Scan-Verzeichnis, Silent-Lauf: Ordner der
+    // Datei, CLI: roh; Review Bestand). Die Existenz prueft der Aufrufer -
+    // ein konfigurierter, aber fehlender Pfad ist ein Fehler, kein Anlass
+    // zum .sca-Raten.
+    class function ResolveConfigured(const AConfigured,
+      AProjectDir: string): string; static;
   end;
 
   // Non-destruktiver Baseline-Filter fuer Live-Consumer (IDE-Editor, EXE):
@@ -340,6 +353,18 @@ type
     function IsEmpty: Boolean;
     // True wenn F bereits in der Baseline steht (= KEIN neuer Fund).
     function Contains(const F: TLeakFinding): Boolean;
+    // Zaehlbasis "nur neue Funde" fuer die Filter-Combos von EXE und
+    // Plugin (Konsistenz-Vertrag mit dem Grid, Review-Blocker 2026-08-12):
+    // ASource selbst, solange das Set leer ist (fail-open - eine fehlende
+    // oder kaputte Baseline blendet nichts aus), sonst eine NEUE Liste der
+    // Funde, die NICHT in der Baseline stehen. Die gehoert dem Aufrufer
+    // (AOwned; Result zeigt dann darauf; nil.Free ist ein No-op). Wirft
+    // die Befuellung (praktisch nur OOM), ist AOwned nil - der Aufrufer
+    // klammert erst NACH dem Aufruf in try/finally. Bis 2026-10-14 stand
+    // dieser Rumpf byte-gleich in uMainForm und uIDEAnalyserForm
+    // (Review Bestand).
+    function NewOnly(ASource: TList<TLeakFinding>;
+      out AOwned: TList<TLeakFinding>): TList<TLeakFinding>;
 
     // SCAN-NACHLAUF, vor TAnalysisSession.ReleaseTransientCaches
     // aufzurufen: rechnet den contextHash jedes Fundes EINMAL, solange die
@@ -1394,6 +1419,27 @@ begin
   Result := (FFingerprints.Count = 0) and (FContextHashes.Count = 0);
 end;
 
+function TBaselineSet.NewOnly(ASource: TList<TLeakFinding>;
+  out AOwned: TList<TLeakFinding>): TList<TLeakFinding>;
+// Vertrag an der Deklaration.
+var
+  i : Integer;
+begin
+  AOwned := nil;
+  Result := ASource;
+  if (ASource = nil) or IsEmpty then Exit;
+  AOwned := TList<TLeakFinding>.Create;
+  try
+    for i := 0 to ASource.Count - 1 do
+      if not Contains(ASource[i]) then
+        AOwned.Add(ASource[i]);
+  except
+    FreeAndNil(AOwned);
+    raise;
+  end;
+  Result := AOwned;
+end;
+
 function TBaselineSet.Contains(const F: TLeakFinding): Boolean;
 var
   Ctx : string;
@@ -1655,6 +1701,26 @@ begin
   else if AScanRoot <> '' then
     Result := IncludeTrailingPathDelimiter(ExpandFileName(AScanRoot)) +
       SCA_DIR + PathDelim + 'sca' + BASELINE_EXT;
+end;
+
+// Absolut = Laufwerk (C:...), UNC (\\server) oder fuehrender Trenner
+// (\abs, /abs). Pruefung von Hand wie bisher in beiden Wirten - kein
+// System.IOUtils in dieser Unit (TPath.IsPathRooted stuft '\abs' gleich ein,
+// der Hand-Check ist aber das belegte Verhalten der INI-Leser).
+function IsAbsolutePathText(const APath: string): Boolean;
+begin
+  Result := ((Length(APath) >= 2) and (APath[2] = ':'))
+    or ((Length(APath) >= 2) and (APath[1] = '\') and (APath[2] = '\'))
+    or ((Length(APath) >= 1) and ((APath[1] = '\') or (APath[1] = '/')));
+end;
+
+class function TBaseline.ResolveConfigured(const AConfigured,
+  AProjectDir: string): string;
+begin
+  Result := Trim(AConfigured);
+  if (Result = '') or IsAbsolutePathText(Result) then Exit;
+  if AProjectDir <> '' then
+    Result := IncludeTrailingPathDelimiter(AProjectDir) + Result;
 end;
 
 end.

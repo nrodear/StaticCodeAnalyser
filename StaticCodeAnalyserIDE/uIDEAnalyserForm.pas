@@ -489,13 +489,19 @@ type
     // der IDE (Grid-Menue, Ctrl+Alt+F/S). True, wenn Execute ohne Ausnahme
     // lief.
     function RunFindingAction(const A: TFindingAction; Sender: TObject): Boolean;
-    // Fuehrt fuer den Fund der Grid-Zeile die erste verfuegbare Aktion der
-    // Art AKind aus der Anbieter-Registry aus (dasselbe Modell wie
-    // Gluehbirne und Grid-Menue) und meldet in der Status-Bar: ADoneFmt
+    // Fuehrt fuer den Fund der Grid-Zeile die erste Aktion der Art AKind
+    // aus der Anbieter-Registry aus, die eine Taste ungesehen ausfuehren
+    // darf (TFindingMenuModel.FirstRunnable - dasselbe Modell wie
+    // Gluehbirne und Grid-Menue), und meldet in der Status-Bar: ADoneFmt
     // mit ihrer Caption; sonst AMissingFmt mit Caption und Grund der
-    // ersten gesperrten dieser Art bzw. mit der Regel, wenn es keine gibt.
-    procedure RunFirstAction(RowIdx: Integer; AKind: TFindingActionKind;
-      const ADoneFmt, AMissingFmt: string);
+    // ersten ausgelassenen dieser Art. Liefert True, wenn das Modell
+    // ueberhaupt eine Aktion dieser Art hatte (ausgefuehrt oder mit Grund
+    // ausgelassen) - False heisst: kein Anbieter bietet diese Art fuer den
+    // Fund an, der Aufrufer darf seinen eigenen Weg gehen (Ctrl+Alt+S bei
+    // Config-/DFM-Funden, Review 2026-10-14 MAJOR 1). Fehler werfender
+    // Anbieter (Model.Errors) stehen in der Status-Bar.
+    function RunFirstAction(RowIdx: Integer; AKind: TFindingActionKind;
+      const ADoneFmt, AMissingFmt: string): Boolean;
     // Ctrl+Alt+F: die erste verfuegbare Hilfe (fakFix) der Registry - mit
     // reDelphix dieselbe wie in der Gluehbirne (Pufferabgleich, ein
     // Undo-Schritt). Status-Bar zeigt Ergebnis oder Grund.
@@ -503,8 +509,11 @@ type
 
     // Ctrl+Alt+S: der erste Unterdrueck-Eintrag der Registry (reDelphix:
     // Marker ueber der Zeile, ein vorhandener Marker bekommt die Art dazu).
-    // Ohne Anbieter der alte Weg: eine neue Zeile `// noinspection
-    // <RuleName>` ueber dem Befund.
+    // Bietet kein Anbieter einen fuer diesen Fund an (kein Anbieter geladen;
+    // Config-/DFM-Funde - reDelphix kennt nur Pascal-Quelltext), schreibt
+    // das Plugin selbst: die Marker-Zeile an das Ziel aus
+    // TSuppression.MarkerTargetFor (bei .dfm in die .pas) ueber
+    // TIDEEditor.InsertLineAbove.
     procedure ApplySuppressForRow(RowIdx: Integer);
     procedure UpdateHelp(Row: Integer);
     // Sammelt alle Befunde aus FDisplayedFindings die zur gleichen Datei
@@ -657,12 +666,13 @@ uses
   uCrashDiag,                   // EStackExhausted - nie verschlucken
   uHintTextLayout,              // FormatRelatedLines - geteilt mit dem Nur-Text-Hint
   uAppTheme,                    // ApplyTitleBarTheme - Titelzeile des Profil-Fensters
-  uSuppression,                 // MarkerLineFor - ';' in .ini, '//' sonst (SCA201)
+  uSuppression,                 // MarkerTargetFor - Marker-Host und -Zeile (bei .dfm die .pas)
   uProfileViewer,               // ShowProfileViewer - Hamburger-Item
   // Nur hier gebraucht (Review nach Bereichen 2026-10-10, Nit 42):
-  uFindingActionMenu,           // das eine Menue-Modell zu den Aktionen (Stufe C)
+  uFindingActionMenu,           // das eine Menue-Modell zu den Aktionen (Stufe C), FirstRunnable
   uIDEFindingActionMenu,        // Modell -> TMenuItems
   uIDEFindingBulb,              // Gluehbirne an der Caret-Zeile (Element EditorBulb)
+  uFindingSourcePick,           // PickFindingSource - Dock oder Silent-Kopien je Datei
   uPathNormalize;               // NormalizePathForKey - Pfade wie der Highlighter
 
 // noinspection-file BeginEndRequired, BooleanParam, ClassPerFile, ConsecutiveSection, EmptyExcept, ExceptOnException, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, NestedRoutine, NestedTry, PublicField, PublicMemberWithoutDoc, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedPublicMember, UnusedRoutine
@@ -689,22 +699,8 @@ begin
   Result := GFindingsGeneration;
 end;
 
-function ResolveBaselinePath(const AConfigured, ABaseDir: string): string;
-// Absoluter Pfad bleibt unveraendert; ein relativer wird gegen das Projekt-
-// Verzeichnis (ABaseDir) aufgeloest. Kein System.IOUtils - rooted-Check von
-// Hand (Laufwerk C:\, UNC \\server, oder fuehrender Slash), damit diese
-// God-Unit sich keine TPath/TFile-Namensraeume einfaengt.
-begin
-  Result := Trim(AConfigured);
-  if Result = '' then Exit;
-  if (Length(Result) >= 2) and (Result[2] = ':') then Exit;               // C:\...
-  if (Length(Result) >= 2) and (Result[1] = '\') and (Result[2] = '\')    // \\server
-    then Exit;
-  if (Length(Result) >= 1) and ((Result[1] = '\') or (Result[1] = '/'))   // \abs /abs
-    then Exit;
-  if ABaseDir <> '' then
-    Result := IncludeTrailingPathDelimiter(ABaseDir) + Result;
-end;
+// ([Baseline] File= loest seit 2026-10-14 TBaseline.ResolveConfigured auf -
+// eine Regel fuer Dock, Silent-Lauf, EXE und CLI statt vier Kopien.)
 
 function ActiveIdeProjOrGroupFile: string;
 // Aktives Projekt (bevorzugt) bzw. aktive Gruppe der IDE via ToolsAPI -
@@ -2413,25 +2409,14 @@ end;
 
 function TAnalyserFrame.BuildCountSource(
   out AOwned: TList<TLeakFinding>): TList<TLeakFinding>;
-var
-  i : Integer;
+// Der Rumpf (Filtern, Ausnahme-Festigkeit) liegt seit 2026-10-14 in
+// TBaselineSet.NewOnly - byte-gleich mit der EXE, einmal getestet. Hier
+// nur noch die Wirts-Frage, ob der Filter ueberhaupt an ist.
 begin
   AOwned := nil;
   Result := FAllFindings;
   if not BaselineFilterActive then Exit;
-  // Ausnahme-fest: wirft die Befuellung (praktisch nur OOM), gibt es
-  // KEINE halbfertige Liste im out-Parameter - der Aufrufer klammert
-  // erst NACH dem Aufruf in try/finally (Chargen-Review 06.09.).
-  AOwned := TList<TLeakFinding>.Create;
-  try
-    for i := 0 to FAllFindings.Count - 1 do
-      if not FBaselineSet.Contains(FAllFindings[i]) then
-        AOwned.Add(FAllFindings[i]);
-  except
-    FreeAndNil(AOwned);
-    raise;
-  end;
-  Result := AOwned;
+  Result := FBaselineSet.NewOnly(FAllFindings, AOwned);
 end;
 
 procedure TAnalyserFrame.RebuildSeverityComboForView;
@@ -2967,52 +2952,53 @@ begin
   end;
 end;
 
-// Darf eine Taste A ungesehen ausfuehren? Verfuegbar und nicht als
-// verhaltensaendernd gekennzeichnet (Entscheid E2).
-function RunsBlind(const A: TFindingAction): Boolean;
+// Warum die Taste die Aktion A auslaesst (Verdikt aus FirstRunnable):
+// gesperrt (ihr Grund steht im Hint) oder eine Hilfe, die das Verhalten
+// aendern kann (Entscheid E2) - die gibt es nur gesehen, im Menue oder in
+// der Gluehbirne.
+function SkippedActionText(const A: TFindingAction;
+  AVerdict: TFindingKeyVerdict): string;
 begin
-  Result := A.Enabled and Assigned(A.Execute) and not A.ChangesBehavior;
-end;
-
-// Warum die Taste die Aktion A auslaesst: gesperrt (ihr Grund) oder eine
-// Hilfe, die das Verhalten aendern kann (Entscheid E2) - die gibt es nur
-// gesehen, im Menue oder in der Gluehbirne.
-function SkippedActionText(const A: TFindingAction): string;
-begin
-  if A.Enabled and A.ChangesBehavior then
+  if AVerdict = kvChangesBehavior then
     Result := A.Caption + ' - ' + _('only from the menu or the light bulb')
   else
     Result := A.Caption + ' - ' + A.Hint;
 end;
 
-procedure TAnalyserFrame.RunFirstAction(RowIdx: Integer;
-  AKind: TFindingActionKind; const ADoneFmt, AMissingFmt: string);
+function TAnalyserFrame.RunFirstAction(RowIdx: Integer;
+  AKind: TFindingActionKind; const ADoneFmt, AMissingFmt: string): Boolean;
+// Die Auswahl (erste ausfuehrbare ihrer Art, sonst der erste Grund) trifft
+// TFindingMenuModel.FirstRunnable - getestet in uTestFindingKeyPolicy;
+// hier nur Fund holen, Modell bauen, melden.
 var
-  F     : TLeakFinding;
-  Model : TFindingMenuModel;
-  A     : TFindingAction;
-  Why   : string;
+  F      : TLeakFinding;
+  Model  : TFindingMenuModel;
+  Choice : TFindingKeyChoice;
+  i      : Integer;
 begin
+  Result := False;
   if not Assigned(FDisplayedFindings) or (RowIdx <= 0)
      or (RowIdx > FDisplayedFindings.Count) then Exit;
   F := FDisplayedFindings[RowIdx - 1];
   if not Assigned(F) then Exit;
-  Why := F.RuleID;
   Model := BuildFindingMenuModel(TArray<TLeakFinding>.Create(F), []);
-  for A in Model.Actions do
-  begin
-    if A.Kind <> AKind then Continue;
-    if not RunsBlind(A) then
-    begin
-      if Why = F.RuleID then
-        Why := SkippedActionText(A);
-      Continue;
-    end;
-    if RunFindingAction(A, Self) then
-      StatusMode(Format(ADoneFmt, [A.Caption]));
-    Exit;
+  // Ein werfender Anbieter blieb bis 2026-10-14 unsichtbar - die Taste
+  // meldete dann nur "nicht verfuegbar: SCAnnn".
+  for i := 0 to High(Model.Errors) do
+    StatusMode(Format(_('Finding actions: provider failed - %s'),
+      [Model.Errors[i]]));
+  Choice := Model.FirstRunnable(AKind);
+  case Choice.Verdict of
+    kvRun:
+      if RunFindingAction(Model.Actions[Choice.Index], Self) then
+        StatusMode(Format(ADoneFmt, [Model.Actions[Choice.Index].Caption]));
+    kvDisabled, kvChangesBehavior:
+      StatusMode(Format(AMissingFmt,
+        [SkippedActionText(Model.Actions[Choice.Index], Choice.Verdict)]));
+  else
+    Exit;   // kvNone: keine Aktion dieser Art - der Aufrufer entscheidet
   end;
-  StatusMode(Format(AMissingFmt, [Why]));
+  Result := True;
 end;
 
 procedure TAnalyserFrame.ApplyQuickFixForRow(RowIdx: Integer);
@@ -3020,46 +3006,63 @@ procedure TAnalyserFrame.ApplyQuickFixForRow(RowIdx: Integer);
 // Puffer schreiben ohne Abgleich (bei ungespeicherten Aenderungen darueber
 // die falsche Zeile), nur vier Regeln. Jetzt die Registry (Beschluss
 // 2026-10-09: alles auf reDelphix).
+var
+  F : TLeakFinding;
 begin
   if TFindingActions.ProviderCount = 0 then
     StatusMode(_('Quick-Fix: the reDelphix package is not loaded'))
-  else
-    RunFirstAction(RowIdx, fakFix, _('Quick-Fix applied: %s'),
-      _('Quick-Fix not available: %s'));
+  else if not RunFirstAction(RowIdx, fakFix, _('Quick-Fix applied: %s'),
+      _('Quick-Fix not available: %s')) then
+  begin
+    // Kein Anbieter hat eine Hilfe fuer diesen Fund: die Regel nennen,
+    // wie bisher.
+    if Assigned(FDisplayedFindings) and (RowIdx > 0)
+       and (RowIdx <= FDisplayedFindings.Count) then
+    begin
+      F := FDisplayedFindings[RowIdx - 1];
+      if Assigned(F) then
+        StatusMode(Format(_('Quick-Fix not available: %s'), [F.RuleID]));
+    end;
+  end;
 end;
 
 procedure TAnalyserFrame.ApplySuppressForRow(RowIdx: Integer);
 // Mit Anbieter (reDelphix) dessen Unterdrueck-Eintrag - derselbe wie im
-// Menue; ohne Anbieter TIDEEditor.InsertLineAbove mit `// noinspection
-// <KindName>`. Schreibt das Ergebnis in die Status-Bar.
+// Menue. Bietet keiner einen an (keiner geladen; Config- und DFM-Funde:
+// reDelphix kennt nur Pascal-Quelltext, bis 2026-10-14 war Ctrl+Alt+S
+// dafuer tot, sobald reDelphix geladen war - Review MAJOR 1), schreibt
+// das Plugin die Marker-Zeile selbst: `// noinspection <KindName>` bzw.
+// `; noinspection` in einer Konfigurationsdatei, bei einem .dfm-Fund in
+// die .pas - Host und Zeile aus TSuppression.MarkerTargetFor, das ablehnt,
+// wenn der Marker dort nicht wirken kann. Schreibt das Ergebnis in die
+// Status-Bar.
 var
   F      : TLeakFinding;
-  LineNo : Integer;
-  OK     : Boolean;
-  Marker : string;
+  Target : TMarkerTarget;
+  Why    : string;
 begin
-  if TFindingActions.ProviderCount > 0 then
-  begin
-    RunFirstAction(RowIdx, fakSuppress, _('Suppress inserted: %s'),
-      _('Suppress not available: %s'));
-    Exit;
-  end;
+  if (TFindingActions.ProviderCount > 0)
+     and RunFirstAction(RowIdx, fakSuppress, _('Suppress inserted: %s'),
+       _('Suppress not available: %s')) then Exit;
   if not Assigned(FDisplayedFindings) then Exit;
   if (RowIdx <= 0) or (RowIdx > FDisplayedFindings.Count) then Exit;
   F := FDisplayedFindings[RowIdx - 1];
   if not Assigned(F) then Exit;
 
-  LineNo := StrToIntDef(F.LineNumber, 0);
-  if (LineNo <= 0) or (F.FileName = '') then
+  if (StrToIntDef(F.LineNumber, 0) <= 0) or (F.FileName = '') then
   begin
     StatusMode(_('Suppress: cannot locate source line'));
     Exit;
   end;
-
-  Marker := TSuppression.MarkerLineFor(F.FileName, F.Kind);
-  OK := TIDEEditor.InsertLineAbove(F.FileName, LineNo, Marker);
-  if OK then
-    StatusMode(Format(_('Suppress inserted: %s'), [Marker]))
+  if not TSuppression.MarkerTargetFor(F.FileName, F.LineInt, F.Kind, Target,
+       Why) then
+  begin
+    StatusMode(Format(_('Suppress: cannot place the marker: %s'), [Why]));
+    Exit;
+  end;
+  if TIDEEditor.InsertLineAbove(Target.HostFile, Target.Line,
+       Target.MarkerLine) then
+    StatusMode(Format(_('Suppress inserted: %s'), [Target.MarkerLine]))
   else
     StatusMode(_('Suppress: editor write failed (file not in IDE?)'));
 end;
@@ -3739,10 +3742,9 @@ var
   Path : string;
 begin
   Result := '';
-  Path := Trim(AConfiguredFile);
+  Path := TBaseline.ResolveConfigured(AConfiguredFile, FCurrentBaseDir);
   if Path <> '' then
   begin
-    Path := ResolveBaselinePath(Path, FCurrentBaseDir);
     if Assigned(AProbed) then AProbed.Add(Path);
     if FileExists(Path) then Exit(Path);
     Exit;                    // explizit konfiguriert, aber fehlt -> kein .sca-Raten
@@ -4783,63 +4785,117 @@ end;
 // die Aktionen fremder Anbieter (uFindingActions) braucht das Editor-
 // Kontextmenue aber den Fund selbst (Datei, Zeile, Regel). Zwei Quellen:
 //   1. das Dock-Fenster, falls offen (FAllFindings des Frames);
-//   2. Kopien der Funde des letzten Silent-Laufs (KeepEditorFindings) -
+//   2. Kopien der Funde der letzten Silent-Laeufe (KeepEditorFindings) -
 //      der Silent-Lauf gibt seine Liste nach dem Markieren frei.
-// Die Kopien tragen nur die Felder, die ein Anbieter liest.
+// Die Kopien tragen nur die Felder, die ein Anbieter liest. Sie liegen JE
+// DATEI vor (Review 2026-10-14, MAJOR 3): mit nur einem Platz nahmen Birne
+// und Kontextmenue nach einem Tab-Wechsel A->B->A fuer A wieder die alten
+// Dock-Zeilen, waehrend die Marken den neuen Stand zeigten. Hoechstens
+// MAX_EDITOR_FINDING_FILES Dateien - die aelteste Generation faellt weg
+// (der naechste Tab-Wechsel auf sie scannt ohnehin neu).
+
+type
+  TEditorFindingsCopy = class
+  public
+    Gen   : UInt64;                       // Generation des Silent-Laufs
+    Items : TObjectList<TLeakFinding>;    // die Kopien (Eigentum)
+    constructor Create;
+    destructor Destroy; override;
+  end;
+
+const
+  MAX_EDITOR_FINDING_FILES = 8;
 
 var
-  GEditorFindings     : TObjectList<TLeakFinding> = nil;
-  GEditorFindingsFile : string = '';
-  GEditorFindingsGen  : UInt64 = 0;   // Generation der Silent-Kopien
+  // Schluessel: NormalizePathForKey der Datei (wie der Highlighter).
+  GEditorFindings : TObjectDictionary<string, TEditorFindingsCopy> = nil;
+
+constructor TEditorFindingsCopy.Create;
+begin
+  inherited Create;
+  Items := TObjectList<TLeakFinding>.Create(True);
+end;
+
+destructor TEditorFindingsCopy.Destroy;
+begin
+  FreeAndNil(Items);
+  inherited;
+end;
+
+// Die aelteste Kopie weicht, wenn eine NEUE Datei dazukommt und der Platz
+// voll ist.
+procedure DropOldestEditorFindings;
+var
+  Pair   : TPair<string, TEditorFindingsCopy>;
+  Oldest : string;
+  Gen    : UInt64;
+begin
+  Oldest := '';
+  Gen    := High(UInt64);
+  for Pair in GEditorFindings do
+    if Pair.Value.Gen < Gen then
+    begin
+      Gen    := Pair.Value.Gen;
+      Oldest := Pair.Key;
+    end;
+  if Oldest <> '' then
+    GEditorFindings.Remove(Oldest);
+end;
 
 procedure KeepEditorFindings(const AFileName: string;
   AFindings: TObjectList<TLeakFinding>);
 var
   F, C : TLeakFinding;
+  Key  : string;
+  Kept : TEditorFindingsCopy;
 begin
   if GEditorFindings = nil then
-    GEditorFindings := TObjectList<TLeakFinding>.Create(True);
-  GEditorFindings.Clear;
-  GEditorFindingsFile := AFileName;
-  GEditorFindingsGen  := NextFindingsGeneration;
-  if not Assigned(AFindings) then Exit;
-  for F in AFindings do
-  begin
-    if not Assigned(F) then Continue;
-    C := TLeakFinding.Create;
-    C.FileName   := F.FileName;
-    C.MethodName := F.MethodName;
-    C.LineNumber := F.LineNumber;
-    C.EndLine    := F.EndLine;
-    C.MissingVar := F.MissingVar;
-    C.Severity   := F.Severity;
-    C.Kind       := F.Kind;
-    C.Confidence := F.Confidence;
-    C.RuleID     := F.RuleID;
-    GEditorFindings.Add(C);
-  end;
+    GEditorFindings := TObjectDictionary<string, TEditorFindingsCopy>.Create(
+      [doOwnsValues]);
+  Key := NormalizePathForKey(AFileName);
+  if not GEditorFindings.ContainsKey(Key)
+     and (GEditorFindings.Count >= MAX_EDITOR_FINDING_FILES) then
+    DropOldestEditorFindings;
+  Kept := TEditorFindingsCopy.Create;
+  Kept.Gen := NextFindingsGeneration;
+  if Assigned(AFindings) then
+    for F in AFindings do
+    begin
+      if not Assigned(F) then Continue;
+      C := TLeakFinding.Create;
+      C.FileName   := F.FileName;
+      C.MethodName := F.MethodName;
+      C.LineNumber := F.LineNumber;
+      C.EndLine    := F.EndLine;
+      C.MissingVar := F.MissingVar;
+      C.Severity   := F.Severity;
+      C.Kind       := F.Kind;
+      C.Confidence := F.Confidence;
+      C.RuleID     := F.RuleID;
+      Kept.Items.Add(C);
+    end;
+  GEditorFindings.AddOrSetValue(Key, Kept);
 end;
 
 function FindingsAtEditorLine(const AFile: string;
   ALine: Integer): TArray<TLeakFinding>;
-// Funde, deren Bereich (Ankerzeile bis SpanEnd) die Zeile einschliesst.
-// Je Datei aus EINER Quelle, der juengeren (Review reDelphiX nach
-// Bereichen 2026-10-10, Minor 19): das Dock, wenn es Funde dieser Datei
-// haelt und nicht aelter ist als der letzte Silent-Lauf auf ihr, sonst die
-// Kopien des Silent-Laufs. Zeilenweise gemischt zeigten Birne und
-// Kontextmenue nach einem Silent- oder Auto-Scan alte Dock-Zeilen neben
-// neuen Marken.
+// Funde, deren Bereich (Ankerzeile bis SpanEnd, gedeckelt auf
+// MAX_SPAN_LINES wie beim Highlighter) die Zeile einschliesst. Je Datei
+// aus EINER Quelle, der juengeren - die Regel ist PickFindingSource
+// (uFindingSourcePick, getestet; Review reDelphiX nach Bereichen
+// 2026-10-10, Minor 19): das Dock, wenn es Funde dieser Datei haelt und
+// nicht aelter ist als der letzte Silent-Lauf auf ihr, sonst die Kopien
+// dieses Laufs.
 var
   Found    : TArray<TLeakFinding>;
   Frame    : TAnalyserFrame;
-  DockHas  : Boolean;
-  DockGen  : UInt64;
+  State    : TFindingSourceState;
   FileGen  : UInt64;
   F        : TLeakFinding;
-  UseDock  : Boolean;
   FileKey  : string;   // AFile wie der Highlighter ihn vergleicht
+  Silent   : TEditorFindingsCopy;
 
-  // Derselbe Pfad? '/' gegen '' und Gross/Klein wie NormalizePathForKey
+  // Derselbe Pfad? '/' gegen '\' und Gross/Klein wie NormalizePathForKey
   // (Review nach Bereichen 2026-10-10, Nit 44) - die Laenge zuerst, das
   // laesst die meisten Funde anderer Dateien ohne Kopie durch.
   function SameFile(const AName: string): Boolean;
@@ -4849,31 +4905,39 @@ var
   end;
 
   function AlreadyFound(F: TLeakFinding): Boolean;
-  // Derselbe Fund kann aus zwei Scans (Dock + Silent, Projekt + Datei)
-  // in der Liste stehen - im Menue soll er einmal erscheinen.
+  // Derselbe Fund kann aus zwei Scans (Projekt + Datei) in der Liste
+  // stehen - im Menue soll er einmal erscheinen. Identitaet wie die
+  // Gluehbirne sie fuer ihren Fingerabdruck nimmt (FindingIdentityKey).
   var
-    k : Integer;
+    k   : Integer;
+    Key : string;
   begin
     Result := False;
+    Key := FindingIdentityKey(F);
     for k := 0 to High(Found) do
-      if (Found[k].Kind = F.Kind) and (Found[k].LineInt = F.LineInt)
-         and (Found[k].MissingVar = F.MissingVar) then
+      if FindingIdentityKey(Found[k]) = Key then
         Exit(True);
   end;
 
   procedure Collect(AList: TList<TLeakFinding>);
   var
-    F : TLeakFinding;
+    F       : TLeakFinding;
+    SpanEnd : Integer;
   begin
     if not Assigned(AList) then Exit;
     for F in AList do
-      if Assigned(F) and SameFile(F.FileName)
-         and (ALine >= F.LineInt) and (ALine <= F.SpanEnd)
+    begin
+      if not Assigned(F) or not SameFile(F.FileName) then Continue;
+      SpanEnd := F.SpanEnd;
+      if SpanEnd > F.LineInt + MAX_SPAN_LINES then
+        SpanEnd := F.LineInt + MAX_SPAN_LINES;
+      if (ALine >= F.LineInt) and (ALine <= SpanEnd)
          and not AlreadyFound(F) then
       begin
         SetLength(Found, Length(Found) + 1);
         Found[High(Found)] := F;
       end;
+    end;
   end;
 
 begin
@@ -4882,50 +4946,45 @@ begin
   FileKey := NormalizePathForKey(AFile);
   if Assigned(GDockableForm) then
     Frame := GDockableForm.Frame;
-  DockHas := False;
-  DockGen := 0;
+  State := Default(TFindingSourceState);
   if Assigned(Frame) and Assigned(Frame.FAllFindings) then
   begin
     for F in Frame.FAllFindings do
       if Assigned(F) and SameFile(F.FileName) then
       begin
-        DockHas := True;
+        State.DockHasFile := True;
         Break;
       end;
-    DockGen := Frame.FFindingsGen;
-    if Assigned(Frame.FFileGens)
-       and Frame.FFileGens.TryGetValue(FileKey, FileGen)
-       and (FileGen > DockGen) then
-      DockGen := FileGen;
+    FileGen := 0;
+    if Assigned(Frame.FFileGens) then
+      Frame.FFileGens.TryGetValue(FileKey, FileGen);
+    State.DockGen := DockGenerationFor(Frame.FFindingsGen, FileGen);
   end;
-  UseDock := DockHas and not (SameFile(GEditorFindingsFile)
-    and (GEditorFindingsGen > DockGen));
-  if UseDock then
-    Collect(Frame.FAllFindings)
-  else if SameFile(GEditorFindingsFile) then
-    Collect(GEditorFindings);
+  Silent := nil;
+  if Assigned(GEditorFindings) and GEditorFindings.TryGetValue(FileKey, Silent) then
+  begin
+    State.SilentHasFile := True;
+    State.SilentGen     := Silent.Gen;
+  end;
+  case PickFindingSource(State) of
+    fsDock:   Collect(Frame.FAllFindings);
+    fsSilent: Collect(Silent.Items);
+  else
+    ;   // fsNone: keine Quelle fuer diese Datei - keine Funde
+  end;
   Result := Found;
 end;
 
-function CurrentEditorFileAndLine(out AFile: string;
-  out ALine: Integer): Boolean;
-// Datei und Cursorzeile aus DERSELBEN View (TopView), wie die Gluehbirne
-// (Review reDelphiX nach Bereichen 2026-10-10, Minor 20): auch .dpr/.dpk/
-// .inc; in der Textansicht eines Formulars die .dfm selbst - keine
-// Umleitung auf die .pas, deren Zeilen dort nicht stehen.
-var
-  EditorSvc : IOTAEditorServices;
-  View      : IOTAEditView;
+// Verzeichnis, gegen das [Baseline] File= im Silent-Lauf aufgeloest wird:
+// das des aktiven Projekts (wie das Dock gegen seine Scan-Wurzel - EINE
+// Regel, TBaseline.ResolveConfigured); ohne Projekt der Ordner der Datei,
+// wie im Silent-Lauf bis 2026-10-14 immer.
+function SilentBaselineBaseDir(const AFileName: string): string;
 begin
-  AFile  := '';
-  ALine  := 0;
-  Result := False;
-  if not Supports(BorlandIDEServices, IOTAEditorServices, EditorSvc) then Exit;
-  View := EditorSvc.TopView;
-  if not Assigned(View) or not Assigned(View.Buffer) then Exit;
-  AFile := View.Buffer.FileName;
-  ALine := View.CursorPos.Line;
-  Result := (AFile <> '') and (ALine >= 1);
+  Result := ExcludeTrailingPathDelimiter(
+    ExtractFilePath(ActiveIdeProjOrGroupFile));
+  if Result = '' then
+    Result := ExcludeTrailingPathDelimiter(ExtractFilePath(AFileName));
 end;
 
 // Welle 1b (2026-07-20): Boolean-Result - False bei jedem Skip (busy,
@@ -5038,10 +5097,9 @@ begin
     // IDE-Projekts (Inkrement 4).
     if Settings.BaselineOnlyNew then
     begin
-      var BlPath := Trim(Settings.BaselineFile);
-      if BlPath <> '' then
-        BlPath := ResolveBaselinePath(BlPath, ExtractFilePath(AFileName))
-      else
+      var BlPath := TBaseline.ResolveConfigured(Settings.BaselineFile,
+        SilentBaselineBaseDir(AFileName));
+      if BlPath = '' then
         BlPath := TBaseline.ResolveBaselinePath(ActiveIdeProjOrGroupFile,
           '', nil);
       if BlPath <> '' then
@@ -5255,6 +5313,15 @@ type
   public
     constructor Create;
     destructor Destroy; override;
+    // Loest alle Hooks (Original-OnPopup zurueck, eigene Items weg,
+    // Waechter ab) - AUSDRUECKLICH aus UnregisterEditorContextMenuHook
+    // gerufen, nicht erst aus Destroy (Review 2026-10-14, Verdacht 11):
+    // vorher hing der Abbau daran, dass das Nullen von GCtxMenuHookIfc den
+    // Refcount auf 0 bringt; haelt die IDE (oder ein Notifier-Aufruf auf
+    // dem Stapel) noch eine Referenz, blieben die Hooks bis zu einem
+    // spaeteren, unkontrollierten Destroy stehen. Idempotent; danach
+    // hookt die Instanz nie wieder.
+    procedure DetachAll;
   end;
 
 var
@@ -5359,6 +5426,13 @@ begin
 end;
 
 destructor TEditorContextMenuHook.Destroy;
+begin
+  DetachAll;
+  FreeAndNil(FSlots);
+  inherited;
+end;
+
+procedure TEditorContextMenuHook.DetachAll;
 var
   Slot : TPopupHookSlot;
 begin
@@ -5391,9 +5465,8 @@ begin
       end;
     except
     end;
-    FreeAndNil(FSlots);
+    FSlots.Clear;   // doOwnsValues -> Slots werden gefreut
   end;
-  inherited;
 end;
 
 function TEditorContextMenuHook.FindEditorPopup(AForm: TCustomForm): TPopupMenu;
@@ -5433,6 +5506,10 @@ var
   Slot  : TPopupHookSlot;
   Alt   : TPopupHookSlot;
 begin
+  // Nach DetachAll (Abbau laeuft, Waechter weg) nie wieder hooken - ein
+  // Notifier-Aufruf kann noch eintreffen, solange die IDE die Referenz
+  // haelt.
+  if not Assigned(FWatcher) then Exit;
   Popup := FindEditorPopup(AForm);
   if not Assigned(Popup) then Exit;
   // Ein Popup im Abbau (die Form wird gerade zerstoert) nicht mehr hooken:
@@ -5566,7 +5643,9 @@ var
   i        : Integer;
 begin
   if TFindingActions.ProviderCount = 0 then Exit;
-  if not CurrentEditorFileAndLine(FilePath, Line) then Exit;
+  // Datei und Zeile der obersten Ansicht - dieselbe Funktion wie die
+  // Gluehbirne fuer ihren Editor (Review 2026-10-14, Punkt 10).
+  if not TIDEEditor.TopViewFileAndLine(FilePath, Line) then Exit;
   Found := FindingsAtEditorLine(FilePath, Line);
   if Length(Found) = 0 then Exit;
 
@@ -5734,7 +5813,11 @@ begin
     end;
     GCtxMenuHookIdx := -1;
   end;
-  GCtxMenuHookIfc := nil;  // Refcount sinkt -> Destroy faehrt Slot-Cleanup
+  // Hooks ausdruecklich loesen, solange die Instanz sicher lebt - nicht
+  // erst im Destroy, dessen Zeitpunkt am Refcount der IDE haengt.
+  if Assigned(GCtxMenuHook) then
+    GCtxMenuHook.DetachAll;
+  GCtxMenuHookIfc := nil;  // Refcount sinkt -> Destroy (Slots sind schon leer)
   GCtxMenuHook    := nil;
 end;
 
@@ -6085,7 +6168,8 @@ end;
 initialization
 
 finalization
-  // AH10: Kopien der Silent-Funde fuer das Editor-Kontextmenue.
+  // AH10: Kopien der Silent-Funde fuer das Editor-Kontextmenue (je Datei,
+  // kein IDE-Objekt - darf hier fallen).
   FreeAndNil(GEditorFindings);
 
 end.

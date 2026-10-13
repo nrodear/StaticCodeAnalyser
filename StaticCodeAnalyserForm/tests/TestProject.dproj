@@ -216,6 +216,10 @@
         <DCCReference Include="uTestFindingActions.pas"/>
         <DCCReference Include="uTestFindingActionMenu.pas"/>
         <DCCReference Include="uTestEditorBulbGeometry.pas"/>
+        <DCCReference Include="uTestFindingKeyPolicy.pas"/>
+        <DCCReference Include="uTestBulbDecision.pas"/>
+        <DCCReference Include="uTestFindingSourcePick.pas"/>
+        <DCCReference Include="uTestMarkerTarget.pas"/>
         <DCCReference Include="uTestPerfHotspots.pas"/>
         <DCCReference Include="uTestConcurrencyExt.pas"/>
         <DCCReference Include="uTestEngineApi.pas"/>

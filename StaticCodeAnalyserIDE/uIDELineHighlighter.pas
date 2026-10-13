@@ -261,6 +261,11 @@ type
     // (Caret-Untersuchung 2026-10-12, H1/F1). Jetzt hoechstens einmal je
     // Sichtzustand - Vertrag und Begruendung in uHitCacheRepair.
     FHitRepair : THitCacheRepair;
+    // Kopie von FHitRepair vor dem letzten NoteFullRepaintRequested, fuer
+    // RetractFullRepaintRequest (M-F1b): der Record ist klein, die Kopie
+    // exakt - ein "Pending := False" verloere eine aeltere Anforderung.
+    FHitRepairBeforeRequest : THitCacheRepair;
+    FRequestNoted           : Boolean;
     // Buendelt den Re-Invalidate nach dem Scrollen. Eine Mausrad-Raste
     // liefert mehrere Scroll-Ereignisse; ohne Buendelung kostet jedes
     // davon einen zusaetzlichen Voll-Repaint. Siehe EditorScrolled.
@@ -297,6 +302,9 @@ type
     function HitCacheKeyOf(const Editor: TWinControl): THitCacheViewKey;
     // Fehltreffer der Maus: True heisst "jetzt EINEN Voll-Repaint".
     function WantsHitCacheRepair(const Editor: TWinControl): Boolean;
+    // Leerer Trefferspeicher bei vorhandenen Marken: Reparatur wie beim
+    // Fehltreffer (M-F1a).
+    procedure RepairEmptyHitCache(const Editor: TWinControl);
     // True, wenn InvalidateTopEditor den Editor des Trefferspeichers
     // erreicht (FSavedEditor ist der oberste Editor oder noch keiner).
     function RepaintReachesSavedEditor: Boolean;
@@ -361,7 +369,14 @@ type
     // ist angefordert. Erreicht er FSavedEditor, fuellt er den
     // Trefferspeicher wie eine Reparatur - der naechste EndPaint bestaetigt
     // ihn, ein Fehltreffer danach malt nicht noch einmal (uHitCacheRepair).
+    // VOR dem InvalidateTopEditor zu rufen (M-F1b, Review 2026-10-14):
+    // malt die IDE synchron, laeuft EndPaint sonst vor dem Vormerken und
+    // bestaetigt nichts. Wirft der Aufruf danach, nimmt
+    // RetractFullRepaintRequest das Vormerken zurueck.
     procedure NoteFullRepaintRequested;
+    // Stellt den Stand vor dem letzten NoteFullRepaintRequested wieder her
+    // (kein Repaint gekommen - die Anforderung darf nicht stehen bleiben).
+    procedure RetractFullRepaintRequest;
     // PUBLIC fuer TFindingHighlighter.OnLineMoved: Marken sind gewandert,
     // die gecachten Rechtecke koennen an falschen Zeilen haengen.
     procedure NoteMarksMoved;
@@ -660,6 +675,17 @@ procedure RefreshTextOnlyHintCache(AValue: Boolean); overload;
 procedure RefreshShowOnHoverCache; overload;
 procedure RefreshShowOnHoverCache(AValue: Boolean); overload;
 
+const
+  // Obergrenze fuer die Zeilen, die EIN Befund markieren darf. Reine
+  // Schadensbegrenzung gegen ein fehlerhaftes EndLine, kein fachliches
+  // Limit. Der Wert ist bewusst weit ueber allem angesetzt, was eine
+  // Bereichsmarkierung noch sinnvoll macht - wer 500 Zeilen hervorhebt,
+  // hebt nichts mehr hervor. Greift die Grenze, ist das ein Datenfehler
+  // und keine Darstellungsfrage. Oeffentlich seit 2026-10-14: dieselbe
+  // Schranke deckelt in uIDEAnalyserForm.FindingsAtEditorLine, wie weit
+  // ein Fund fuer Kontextmenue und Gluehbirne reicht.
+  MAX_SPAN_LINES   = 500;
+
 implementation
 
 // noinspection-file BeginEndRequired, CanBeClassMethod, CanBeUnitPrivate, ClassPerFile, ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, DeepNesting, EmptyExcept, EmptyMethod, GodClass, GroupedDeclaration, LargeClass, LongMethod, LongParamList, MagicNumber, MultipleExit, NestedRoutine, NestedTry, PublicMemberWithoutDoc, RedundantJump, TooLongLine, UnsortedUses, UnusedParameter, UnusedPublicMember
@@ -684,13 +710,7 @@ const
   // Editor) und Level 2 (Panel) sollen dieselbe Kante haben, sonst
   // wirkt das Aufklappen wie ein Sprung.
   MAX_HINT_CHARS  = 100;
-  // Obergrenze fuer die Zeilen, die EIN Befund markieren darf. Reine
-  // Schadensbegrenzung gegen ein fehlerhaftes EndLine, kein fachliches
-  // Limit. Der Wert ist bewusst weit ueber allem angesetzt, was eine
-  // Bereichsmarkierung noch sinnvoll macht - wer 500 Zeilen hervorhebt,
-  // hebt nichts mehr hervor. Greift die Grenze, ist das ein Datenfehler
-  // und keine Darstellungsfrage.
-  MAX_SPAN_LINES   = 500;
+  // (MAX_SPAN_LINES steht seit 2026-10-14 in der Schnittstelle.)
   // Klammer-Enden eines Mehrzeilen-Befundes: Laenge und Dicke der
   // Querbalken auf der ersten und letzten Zeile. Fest in Pixeln, wie
   // STRIPE_WIDTH_PX - die Markierung soll bei jeder Schriftgroesse gleich
@@ -1644,17 +1664,28 @@ begin
   if FMarksByFile.Count = 0 then Exit;
   try
     if not Supports(BorlandIDEServices, INTACodeEditorServices, Svc) then Exit;
-    Svc.InvalidateTopEditor;
     // F1 (Gegenpruefung 2.8, Ergaenzung 2): JEDER Voll-Repaint fuellt den
     // Trefferspeicher - Scroll-Settle, neue oder abgeraeumte Marken,
     // Umfaerben -, sofern er FSavedEditor erreicht (das prueft
     // NoteFullRepaintRequested). Ungemeldet folgte nach jedem Scroll beim
     // ersten Fehltreffer der Maus noch ein ueberfluessiger Voll-Repaint und
-    // damit ein Neustart der Caret-Blinkphase. Gemeldet wird erst nach dem
-    // Aufruf: wirft er, kommt auch kein Repaint.
+    // damit ein Neustart der Caret-Blinkphase.
+    // Gemeldet wird VOR dem Aufruf (M-F1b, Review 2026-10-14): malt die
+    // IDE synchron, laeuft EndPaint noch innerhalb von InvalidateTopEditor
+    // und faende die Anforderung sonst nicht vor. Wirft der Aufruf, kommt
+    // kein Repaint - dann wird das Vormerken zurueckgenommen.
     if Assigned(FEditorEventsObj) then
       FEditorEventsObj.NoteFullRepaintRequested;
+    try
+      Svc.InvalidateTopEditor;
+    except
+      if Assigned(FEditorEventsObj) then
+        FEditorEventsObj.RetractFullRepaintRequest;
+      raise;
+    end;
   except
+    // OTA-Beruehrung im Maus- und Zeichenpfad: still, wie ueberall in
+    // dieser Unit (s. file-weiten EmptyExcept-Vermerk).
   end;
 end;
 
@@ -2648,9 +2679,21 @@ procedure TFindingEditorEvents.NoteFullRepaintRequested;
 // er an einen anderen Editor, bestaetigte sonst der naechste PARTIELLE
 // Paint von FSavedEditor die Anforderung - und der Speicher bliebe auch
 // dann unvollstaendig, wenn FSavedEditor spaeter oben liegt.
+// Der Stand davor wird als Kopie gemerkt (THitCacheRepair ist ein
+// Record): so nimmt RetractFullRepaintRequest exakt diesen Aufruf zurueck,
+// ohne eine aeltere, noch offene Anforderung zu verlieren.
 begin
+  FHitRepairBeforeRequest := FHitRepair;
+  FRequestNoted := True;
   if RepaintReachesSavedEditor then
     FHitRepair.NoteInvalidateAll(GetTickCount64);
+end;
+
+procedure TFindingEditorEvents.RetractFullRepaintRequest;
+begin
+  if not FRequestNoted then Exit;
+  FHitRepair    := FHitRepairBeforeRequest;
+  FRequestNoted := False;
 end;
 
 function TFindingEditorEvents.RepaintReachesSavedEditor: Boolean;
@@ -2710,8 +2753,12 @@ function TFindingEditorEvents.HitCacheKeyOf(
 // FSavedEditorWnd und FLastPaintedFile fuer denselben Editor.
 //
 // KEIN INTACodeEditorState.Refresh: TopRow und LeftColumn liefert die
-// IOTAEditView direkt, und ob ein Refresh malen laesst, ist ungeklaert
-// (Synthese H6) - ausgerechnet das waere hier der Fehler.
+// IOTAEditView direkt. Ob ein Refresh malen laesst (Synthese H6), ist seit
+// der Gluehbirne belegt: NEIN - uIDEFindingBulb.FindCaretRect ruft
+// Refresh nach jedem EndPaint ohne Schleife, und die IDE zeigt dabei
+// keinen Dauer-Repaint (gemessen 2026-10-08). Hier bleibt die View
+// trotzdem die Quelle: sie reicht, und ein Zustandsobjekt je Mausnachricht
+// waere Aufwand ohne Nutzen.
 //
 // Ohne View bleibt der Schluessel bei -1/-1 gueltig; Scrollen erkennt F1
 // dann nur noch ueber die Generation (EditorScrolled).
@@ -2878,7 +2925,9 @@ begin
   Result := [];
 end;
 
-// No-ops fuer nicht subskribierte Events
+// Ereignisse ohne eigene Markierungsarbeit (bis 2026-10 No-ops): sie
+// melden nur der Gluehbirne den Editor und F1 den veraenderten
+// Sichtzustand.
 procedure TFindingEditorEvents.EditorResized(const Editor: TWinControl);
 begin
   FindingBulbEditorChanged(Editor);   // Gluehbirne: nur vormerken
@@ -3095,6 +3144,21 @@ begin
     GHighlighter.InvalidateAllLines;
 end;
 
+procedure TFindingEditorEvents.RepairEmptyHitCache(const Editor: TWinControl);
+// M-F1a (Review 2026-10-14): ein leerer Trefferspeicher heisst nicht
+// "nichts zu tun". Nach Force/Dateiwechsel mit nur partiellem Paint ohne
+// markierte Zeile blieb er leer, und der Count-Ausstieg in EditorMouseMove
+// lag VOR dem Reparaturpfad - bis zum naechsten Sichtwechsel kein Hover,
+// kein Klick. Fuer den Editor des Speichers mit vorhandenen Marken laeuft
+// deshalb dieselbe Reparatur wie beim Fehltreffer (gedrosselt, einmal je
+// Sichtzustand). Zeigervergleich - FSavedEditor wird nicht dereferenziert
+// (Welle 1).
+begin
+  if (Editor = FSavedEditor) and Assigned(GHighlighter)
+     and GHighlighter.HasMarks and WantsHitCacheRepair(Editor) then
+    GHighlighter.InvalidateAllLines;
+end;
+
 procedure TFindingEditorEvents.EditorMouseMove(const Editor: TWinControl;
   Shift: TShiftState; X, Y: Integer);
 var
@@ -3106,7 +3170,11 @@ begin
   // der nur ein nie gezeigtes Fenster verstecken kann (Review 2026-08-13).
   if GTextOnlyHint then Exit;
   if not Assigned(GAnnotationOverlay) or not Assigned(GHighlighter) then Exit;
-  if FRenderedRects.Count = 0 then Exit;       // Aktuell nichts gerendert
+  if FRenderedRects.Count = 0 then
+  begin
+    RepairEmptyHitCache(Editor);               // M-F1a, s. dort
+    Exit;
+  end;
   if Editor <> FSavedEditor then               // Maus in anderem Editor
   begin
     GAnnotationOverlay.HideOverlay;

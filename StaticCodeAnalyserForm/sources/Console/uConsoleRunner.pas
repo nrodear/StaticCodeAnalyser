@@ -1400,6 +1400,20 @@ begin
   end;
 end;
 
+function BaselineConfigDir(const Args: TCliArgs;
+  const AProjOrGroup: string): string;
+// Verzeichnis, gegen das [Baseline] File= aufgeloest wird: das des
+// Projekts bzw. der Gruppe, sonst die Scan-Wurzel - dieselbe Regel wie EXE
+// und Plugin (TBaseline.ResolveConfigured). Bis 2026-10-14 ging der Wert
+// roh durch, also relativ zum Arbeitsverzeichnis des Aufrufers. Leer
+// (Datei-Modus ohne Projekt): der Pfad bleibt relativ wie bisher.
+begin
+  if AProjOrGroup <> '' then
+    Result := ExtractFileDir(AProjOrGroup)
+  else
+    Result := Args.Path;
+end;
+
 function AutoBasisPfad(const Args: TCliArgs): string;
 // Der Pfad, an dem die Auto-Aufloesung ansetzt - je nach Modus.
 begin
@@ -1441,62 +1455,62 @@ begin
   // Teillauf bekommt keine - sonst gaebe es jeden Fund zweimal.
   Configs := TStringList.Create;
   try
-  // Obermengen-Endungen: unter dlFpc sammelt IsUnitLikeFile
-  // .pas UND .pp/.lpr - die Partition entscheidet je Datei.
-  TStaticFiles.ScanDialect := dlFpc;
-  try
-    AlleDateien := TStaticFiles.TryGetAllPasFiles(Args.Path, EnumErr, nil,
-      nil, Configs);
-  finally
-    TStaticFiles.ScanDialect := AltDialekt;
-  end;
-  if (EnumErr <> '') or (AlleDateien = nil) or (AlleDateien.Count = 0) then
-  begin
-    FreeAndNil(AlleDateien);
-    if EnumErr <> '' then
-      WriteLn(ErrOutput,
-        'Hinweis: --dialect=auto ohne Datei-Partition (' +
-        EnumErr + ') - Wurzelverdikt gilt fuer den ganzen Baum.');
-    Exit;
-  end;
-
-  DirCache   := TDictionary<string, TSourceDialect>.Create;
-  PartDelphi := TStringList.Create;
-  PartFpc    := TStringList.Create;
-  try
-    for Datei in AlleDateien do
-      if AutoDialektFuerDatei(Datei, Args.Path,
-           Req.Dialect, DirCache) = dlFpc then
-        PartFpc.Add(Datei)
-      else
-        PartDelphi.Add(Datei);
-    if (PartDelphi.Count > 0) and (PartFpc.Count > 0) then
-    begin
-      WriteLn(ErrOutput, Format(
-        'Hinweis: --dialect=auto V2 - Mischbaum: %d Dateien ' +
-        'delphi, %d fpc (Doppellauf).',
-        [PartDelphi.Count, PartFpc.Count]));
-      PartDelphi.AddStrings(Configs);
-      AlleDateien.AddStrings(Configs);
-      Req.Scope     := ssFileList;
-      Req.Files     := PartDelphi.ToStringArray;
-      Req.Dialect   := dlDelphi;
-      Req.IndexRoot := Args.IndexRoot;
-      ZweiteFiles   := PartFpc.ToStringArray;
-    end
-    else
-    begin
-      // Einheitlicher Baum: EIN ssRecursive-Lauf mit dem per-Datei
-      // bestaetigten Verdikt (praeziser als V1, gleiche Mechanik).
-      if PartFpc.Count > 0 then Req.Dialect := dlFpc
-      else                      Req.Dialect := dlDelphi;
-      FreeAndNil(AlleDateien);
+    // Obermengen-Endungen: unter dlFpc sammelt IsUnitLikeFile
+    // .pas UND .pp/.lpr - die Partition entscheidet je Datei.
+    TStaticFiles.ScanDialect := dlFpc;
+    try
+      AlleDateien := TStaticFiles.TryGetAllPasFiles(Args.Path, EnumErr, nil,
+        nil, Configs);
+    finally
+      TStaticFiles.ScanDialect := AltDialekt;
     end;
-  finally
-    PartDelphi.Free;
-    PartFpc.Free;
-    DirCache.Free;
-  end;
+    if (EnumErr <> '') or (AlleDateien = nil) or (AlleDateien.Count = 0) then
+    begin
+      FreeAndNil(AlleDateien);
+      if EnumErr <> '' then
+        WriteLn(ErrOutput,
+          'Hinweis: --dialect=auto ohne Datei-Partition (' +
+          EnumErr + ') - Wurzelverdikt gilt fuer den ganzen Baum.');
+      Exit;
+    end;
+
+    DirCache   := TDictionary<string, TSourceDialect>.Create;
+    PartDelphi := TStringList.Create;
+    PartFpc    := TStringList.Create;
+    try
+      for Datei in AlleDateien do
+        if AutoDialektFuerDatei(Datei, Args.Path,
+             Req.Dialect, DirCache) = dlFpc then
+          PartFpc.Add(Datei)
+        else
+          PartDelphi.Add(Datei);
+      if (PartDelphi.Count > 0) and (PartFpc.Count > 0) then
+      begin
+        WriteLn(ErrOutput, Format(
+          'Hinweis: --dialect=auto V2 - Mischbaum: %d Dateien ' +
+          'delphi, %d fpc (Doppellauf).',
+          [PartDelphi.Count, PartFpc.Count]));
+        PartDelphi.AddStrings(Configs);
+        AlleDateien.AddStrings(Configs);
+        Req.Scope     := ssFileList;
+        Req.Files     := PartDelphi.ToStringArray;
+        Req.Dialect   := dlDelphi;
+        Req.IndexRoot := Args.IndexRoot;
+        ZweiteFiles   := PartFpc.ToStringArray;
+      end
+      else
+      begin
+        // Einheitlicher Baum: EIN ssRecursive-Lauf mit dem per-Datei
+        // bestaetigten Verdikt (praeziser als V1, gleiche Mechanik).
+        if PartFpc.Count > 0 then Req.Dialect := dlFpc
+        else                      Req.Dialect := dlDelphi;
+        FreeAndNil(AlleDateien);
+      end;
+    finally
+      PartDelphi.Free;
+      PartFpc.Free;
+      DirCache.Free;
+    end;
   finally
     Configs.Free;
   end;
@@ -1857,7 +1871,8 @@ begin
       var Probed := TStringList.Create;
       try
         if EffBaseline = '' then
-          EffBaseline := Settings.BaselineFile;
+          EffBaseline := TBaseline.ResolveConfigured(Settings.BaselineFile,
+            BaselineConfigDir(Args, BlProjOrGroup));
         if EffBaseline = '' then
           EffBaseline := TBaseline.ResolveBaselinePath(
             BlProjOrGroup, Args.Path, Probed)

@@ -91,6 +91,7 @@ begin
     Result[i].Hint    := '';
     Result[i].Enabled := True;
     Result[i].Execute := DoExecute;
+    Result[i].Kind    := fakFix;   // Vorgabe waere fakUnset (nie Hilfe)
   end;
 end;
 
@@ -102,7 +103,10 @@ end;
 function Act(const ACaption, AHint: string; AEnabled: Boolean;
   AWithExecute: Boolean): TFindingAction;
 begin
-  Result := Default(TFindingAction);   // Kind = fakFix
+  Result := Default(TFindingAction);
+  // Seit 2026-10-14 ist die Vorgabe fakUnset (nie Hilfe); die Hilfe wird
+  // hier ausdruecklich gesetzt, wie ein Anbieter es tun muss.
+  Result.Kind    := fakFix;
   Result.Caption := ACaption;
   Result.Hint    := AHint;
   Result.Enabled := AEnabled;
