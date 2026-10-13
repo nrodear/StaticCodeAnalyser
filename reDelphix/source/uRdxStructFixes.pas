@@ -96,7 +96,30 @@ type
     // Klammern stehen ('Write(X: ...)'). Geteilt mit SCA120 (uRdxRaiseFixes).
     class function StartsStatementAt(AMap: TRdxCodeMap;
       const ATok: TRdxToken): Boolean; static;
+
+    // Gehoert das else AElse zu einem if? Dieselbe Rueckwaerts-Suche wie
+    // WrapInBlock (dangling else, Bloecke uebersprungen). False mit Grund,
+    // wenn es zu case/except gehoert (dahinter steht eine Anweisungsliste)
+    // oder der Besitzer unklar ist. Geteilt mit SCA080 (uRdxFlowFixes:
+    // 'else Exit;').
+    class function ElseBelongsToIf(AMap: TRdxCodeMap; const AElse: TRdxToken;
+      out AReason: string): Boolean; static;
   end;
+
+// Helfer der Anweisungs-Planer, seit Charge H2 auch fuer uRdxFlowFixes.
+// Der Text des Bereichs, Zeilen mit #10 verbunden - so, wie
+// TRdxEdit.Expected ihn erwartet.
+function RangeText(AMap: TRdxCodeMap; const ASpan: TRefactorSpan): string;
+// Kommentar oder Direktive im Bereich?
+function CommentInRange(AMap: TRdxCodeMap; const ASpan: TRefactorSpan): Boolean;
+// Das letzte Zeichen aus Code oder String vor ATok (Kommentare und
+// Leerraum uebersprungen). False am Dateianfang.
+function LastCharBefore(AMap: TRdxCodeMap; const ATok: TRdxToken;
+  out ALine, ACol: Integer): Boolean;
+// Das erste Zeichen aus Code oder String hinter ATok - Gegenstueck zu
+// LastCharBefore. False am Dateiende.
+function FirstCharAfter(AMap: TRdxCodeMap; const ATok: TRdxToken;
+  out ALine, ACol: Integer): Boolean;
 
 implementation
 
@@ -1293,6 +1316,19 @@ class function TRdxStructFixes.StartsStatementAt(AMap: TRdxCodeMap;
   const ATok: TRdxToken): Boolean;
 begin
   Result := StartsStatement(AMap, ATok);
+end;
+
+class function TRdxStructFixes.ElseBelongsToIf(AMap: TRdxCodeMap;
+  const AElse: TRdxToken; out AReason: string): Boolean;
+var
+  Scan : TRdxElseScan;
+begin
+  Scan := ElseOwner(AMap, AElse);
+  AReason := Scan.Reason;
+  if (AReason = '') and (Scan.Owner <> eoIf) then
+    AReason := 'das else gehoert zu einem case bzw. except - dahinter steht '
+      + 'eine Anweisungsliste';
+  Result := AReason = '';
 end;
 
 end.

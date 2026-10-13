@@ -567,7 +567,7 @@ const
       GoodEx   : 'FCount := ACount;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA048
     (
@@ -946,7 +946,7 @@ const
       GoodEx   : 'procedure Foo;' + #13#10 + 'begin' + #13#10 + '  DoStuff;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA081
     (
@@ -1161,7 +1161,7 @@ const
       GoodEx   : 'Result := Active;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA099
     (

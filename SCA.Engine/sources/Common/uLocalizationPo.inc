@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2407 Zeilen, 80846 Bytes
-  CPoLines_de: array[0..2406] of string = (
+  // i18n\de.po - 2416 Zeilen, 81087 Bytes
+  CPoLines_de: array[0..2415] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2354,6 +2354,15 @@ const
     'msgid "Add \"%s;\" to the declaration"',
     'msgstr "\"%s;\" an die Deklaration anf'#$00FC'gen"',
     '',
+    'msgid "Assign the condition to %s directly"',
+    'msgstr "Bedingung direkt an %s zuweisen"',
+    '',
+    'msgid "Remove the redundant %s"',
+    'msgstr "'#$00DC'berfl'#$00FC'ssiges %s entfernen"',
+    '',
+    'msgid "Remove the self-assignment of %s"',
+    'msgstr "Selbstzuweisung von %s entfernen"',
+    '',
     'msgid "(changes behavior)"',
     'msgstr "('#$00E4'ndert Verhalten)"',
     '',
@@ -2696,8 +2705,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2403 Zeilen, 84674 Bytes
-  CPoLines_fr: array[0..2402] of string = (
+  // i18n\fr.po - 2412 Zeilen, 84921 Bytes
+  CPoLines_fr: array[0..2411] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -5032,6 +5041,15 @@ const
     '',
     'msgid "Add \"%s;\" to the declaration"',
     'msgstr "Ajouter '#$00AB' %s; '#$00BB' '#$00E0' la d'#$00E9'claration"',
+    '',
+    'msgid "Assign the condition to %s directly"',
+    'msgstr "Affecter directement la condition '#$00E0' %s"',
+    '',
+    'msgid "Remove the redundant %s"',
+    'msgstr "Supprimer le %s superflu"',
+    '',
+    'msgid "Remove the self-assignment of %s"',
+    'msgstr "Supprimer l''auto-affectation de %s"',
     '',
     'msgid "(changes behavior)"',
     'msgstr "(modifie le comportement)"',
