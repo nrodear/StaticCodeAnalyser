@@ -426,6 +426,7 @@ uses
   uRdxLineFixes,     // Planer SCA082/SCA071/SCA088/SCA123 (eine Zeile)
   uRdxRaiseFixes,    // Planer SCA020/SCA120/SCA122 (Ausnahmen, leerer Rumpf)
   uRdxDeclFixes,     // Planer SCA117/SCA197/SCA149 (Deklarationen, Charge H1)
+  uRdxFlowFixes,     // Planer SCA098/SCA080/SCA047 (ganze Anweisung, Charge H2)
   uUnusedUses,       // KnownIdents: SCA007-Fund am Puffer nachpruefen
   uSourcePlaces;     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
 
@@ -480,6 +481,14 @@ const
     fkUnitLevelKeywordIndent, fkLegacyInitializationSection, fkCastAndFree,
     fkEmptyMethod, fkMissingRaise, fkReRaiseException,
     fkPublicMemberWithoutDoc, fkInterfaceWithoutGuid, fkMissingOverride];
+  // Ueber FlowFix (uRdxFlowFixes, Charge H2): ganze Anweisungen.
+  FLOW_FIX_KINDS: TFindingKinds = [fkRedundantConditional, fkRedundantJump,
+    fkSelfAssignment];
+  // Hinweise der Anweisungs-Hilfen (FlowFix).
+  R_COND_HINT = 'gleiche Bedeutung - eine Zuweisung statt zweier Zweige';
+  R_JUMP_HINT = 'gleiche Bedeutung - der Ablauf verlaesst den Block ohnehin';
+  R_SELF_HINT = 'die Zuweisung bewirkt nichts - war ein anderer Wert gemeint '
+    + '(Tippfehler), fehlt er weiterhin';
   R_PROC_TYPE    = '%s hat einen Prozedurtyp - "%s <> nil" ruft ihn auf, '
     + 'Assigned() nicht';
 
@@ -1282,7 +1291,7 @@ begin
     fkNilComparison, fkAssertMessage, fkEmptyVisibilitySection,
     fkFreeWithoutNil, fkEmptyArgumentList, fkRedundantBoolean,
     fkAssignedAndAssignedNil, fkUnusedUses, fkDefaultCaseInCaseStatement,
-    fkBeginEndRequired, fkIfElseBegin] + LINE_FIX_KINDS;
+    fkBeginEndRequired, fkIfElseBegin] + LINE_FIX_KINDS + FLOW_FIX_KINDS;
 end;
 
 // Die Zeilen-Hilfen (uRdxLineFixes) - ein dritter Verteiler (SCA091); er
@@ -2134,8 +2143,147 @@ begin
   Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
 end;
 
+// SCA098: X muss als Boolean BEWIESEN sein - bei Variant bekaeme X den
+// Wert der Bedingung statt True/False (wie SCA072: Variant/LongBool sind
+// nicht dasselbe). In der Gegenrichtung muss auch C Boolean sein: der Form
+// nach (Vergleiche, and/or/xor/not daraus, TRdxFlowPlan.CondBoolean) und
+// jeder blosse Bezeichner darin als Boolean deklariert - bei einem Variant
+// waere 'not' bitweise ('not 1' ist wieder wahr). Im with-Block kann ein
+// Name ein Member sein. '' oder der Grund.
+function CondAssignReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  ALine: Integer; const APlan: TRdxFlowPlan): string;
+var
+  TypeLow, Ident : string;
+begin
+  Result := '';
+  if TRdxSimpleFixes.WithBefore(AMap, ALine) or APlaces.InWithBlock(ALine) then
+    Exit(Format(R_WITH_MEMBER, [APlan.Target]));
+  TypeLow := APlaces.DeclaredTypeOf(ALine, APlan.Target);
+  if TypeLow <> 'boolean' then
+  begin
+    if TypeLow = '' then
+      TypeLow := 'unbekannt';
+    Exit(Format('%s ist hier nicht als Boolean bewiesen (Typ: %s) - bei '
+      + 'Variant bekaeme %s den Wert der Bedingung statt True/False',
+      [APlan.Target, TypeLow, APlan.Target]));
+  end;
+  if not APlan.Negated then Exit;
+  if not APlan.CondBoolean then
+    Exit('die Bedingung ist nicht als Boolean bewiesen (ein Aufruf, ein Pfad '
+      + 'oder Arithmetik als Operand) - bei einem Variant waere "not" bitweise');
+  for Ident in APlan.CondIdents do
+    if APlaces.DeclaredTypeOf(ALine, Ident) <> 'boolean' then
+      Exit(Format('%s in der Bedingung ist hier nicht als Boolean bewiesen - '
+        + 'bei einem Variant waere "not" bitweise', [Ident]));
+end;
+
+// SCA047: ist das Ziel ein Speicherplatz? Der Detektor hat es aufgeloest;
+// hier am aktuellen Text: kein with-Block (der Name koennte ein Member mit
+// Setter sein), kein Pfadteil als Property der Unit deklariert, die Wurzel
+// ('Pt' in 'Pt.Y', ohne 'Self.') als Variable bekannt (DeclaredTypeOf oder
+// Inline-Variable). '' oder der Grund.
+function SelfAssignReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  ALine: Integer; const ATarget: string): string;
+var
+  Parts : TArray<string>;
+  Root  : string;
+  i     : Integer;
+begin
+  Result := '';
+  if TRdxSimpleFixes.WithBefore(AMap, ALine) or APlaces.InWithBlock(ALine) then
+    Exit(Format(R_WITH_MEMBER, [ATarget]));
+  Parts := StringReplace(ATarget, '^', '', [rfReplaceAll]).Split(['.']);
+  if Length(Parts) = 0 then
+    Exit('Ziel fehlt');
+  for i := 0 to High(Parts) do
+    if TRdxSimpleFixes.DeclaresProperty(AMap, Trim(Parts[i])) then
+      Exit(Format('%s ist in dieser Unit als Property deklariert - die '
+        + 'Zuweisung ruft vielleicht einen Setter', [Trim(Parts[i])]));
+  Root := Trim(Parts[0]);
+  if SameText(Root, 'Self') and (Length(Parts) > 1) then
+    Root := Trim(Parts[1]);
+  if (APlaces.DeclaredTypeOf(ALine, Root) = '')
+     and not TRdxSimpleFixes.DeclaresInlineVar(AMap, ALine, Root) then
+    Result := Format('%s ist hier nicht als Variable bekannt (Property oder '
+      + 'Feld aus einer anderen Unit?)', [Root]);
+end;
+
+// Der Planer der Anweisungs-Hilfe zum Fund (uRdxFlowFixes).
+function FlowPlan(AFinding: TLeakFinding; AMap: TRdxCodeMap;
+  out APlan: TRdxFlowPlan; out AReason: string): Boolean;
+begin
+  case AFinding.Kind of
+    fkRedundantConditional:
+      Result := TRdxFlowFixes.RedundantConditional(AMap, AFinding.LineInt,
+        AFinding.Message, APlan, AReason);
+    fkRedundantJump:
+      Result := TRdxFlowFixes.RedundantJump(AMap, AFinding.LineInt,
+        AFinding.Message, APlan, AReason);
+  else
+    Result := TRdxFlowFixes.SelfAssignment(AMap, AFinding.LineInt,
+      AFinding.Message, APlan, AReason);
+  end;
+end;
+
+// Was der Planer nicht weiss: die Typen (SCA098, SCA047) und with-Bloecke.
+function FlowTypeReason(AKind: TFindingKind; APlaces: TSourcePlaces;
+  AMap: TRdxCodeMap; ALine: Integer; const APlan: TRdxFlowPlan): string;
+begin
+  case AKind of
+    fkRedundantConditional:
+      Result := CondAssignReason(APlaces, AMap, ALine, APlan);
+    fkSelfAssignment:
+      Result := SelfAssignReason(APlaces, AMap, ALine, APlan.Target);
+  else
+    Result := '';
+  end;
+end;
+
+function FlowHint(AKind: TFindingKind): string;
+begin
+  case AKind of
+    fkRedundantConditional:
+      Result := R_COND_HINT;
+    fkRedundantJump:
+      Result := R_JUMP_HINT;
+  else
+    Result := R_SELF_HINT;
+  end;
+end;
+
+// SCA098, SCA080, SCA047 (Charge H2): der Planer auf den Zeilen, danach die
+// Pruefung mit dem Quellstellen-Dienst. Alle drei bedeutungsgleich; Name
+// ist das Ziel bzw. Exit/Continue (Menuetext).
+function FlowFix(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding): TRdxFixOutcome;
+var
+  Map  : TRdxCodeMap;
+  Plan : TRdxFlowPlan;
+begin
+  Result := Default(TRdxFixOutcome);
+  Map := OpenMapFor(APlaces, ALines, Result);
+  if Map = nil then Exit;
+  try
+    Result.Enabled := FlowPlan(AFinding, Map, Plan, Result.Reason);
+    Result.Name := Plan.Target;
+    if Result.Enabled then
+      Result.Reason := FlowTypeReason(AFinding.Kind, APlaces, Map,
+        AFinding.LineInt, Plan);
+  finally
+    Map.Free;
+  end;
+  Result.Enabled := Result.Enabled and (Result.Reason = '');
+  if not Result.Enabled then
+  begin
+    Result.Edits := nil;
+    Exit;
+  end;
+  Result.Edits[0] := Plan.Edit;
+  Result.Hint := FlowHint(AFinding.Kind);
+end;
+
 // Die Zeilen-Hilfen (uRdxLineFixes) - der dritte Verteiler (SCA091),
-// oben vorwaerts deklariert.
+// oben vorwaerts deklariert. Dazu die Anweisungs-Hilfen (FlowFix).
 function LineFixFor(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding): TRdxFixOutcome;
 begin
@@ -2144,6 +2292,8 @@ begin
     Result := CastFreeFix(APlaces, ALines, AFinding.LineInt, AFinding.Message)
   else if AFinding.Kind in LINE_FIX_KINDS then
     Result := LineFix(AFinding.Kind, ALines, AFinding.LineInt, AFinding.Message)
+  else if AFinding.Kind in FLOW_FIX_KINDS then
+    Result := FlowFix(APlaces, ALines, AFinding)
   else
     Result.Reason := 'keine einfache Hilfe fuer diese Regel';
 end;

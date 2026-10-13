@@ -65,6 +65,7 @@ contains
   uRdxLineFixes in 'source\uRdxLineFixes.pas',
   uRdxRaiseFixes in 'source\uRdxRaiseFixes.pas',
   uRdxDeclFixes in 'source\uRdxDeclFixes.pas',
+  uRdxFlowFixes in 'source\uRdxFlowFixes.pas',
   uRdxRecipeRunner in 'source\uRdxRecipeRunner.pas',
   uRdxLog in 'source\uRdxLog.pas',
   uRdxEditor in 'source\uRdxEditor.pas',

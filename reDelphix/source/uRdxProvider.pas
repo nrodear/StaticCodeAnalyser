@@ -264,6 +264,9 @@ const
   CAP_DOC           = 'Insert a documentation skeleton';
   CAP_GUID          = 'Insert a new GUID';
   CAP_DIRECTIVE     = 'Add "%s;" to the declaration';
+  CAP_COND_ASSIGN   = 'Assign the condition to %s directly';
+  CAP_JUMP          = 'Remove the redundant %s';
+  CAP_SELF_ASSIGN   = 'Remove the self-assignment of %s';
   // Entscheid E2: eine Hilfe, die das Verhalten aendern kann, sagt es.
   CAP_CHANGES    = '(changes behavior)';
   DIAG_PREFIX  = 'reDelphix: ';
@@ -426,6 +429,11 @@ procedure TRdxProvider.Add(var AList: TArray<TFindingAction>;
 var
   A : TFindingAction;
 begin
+  // Ein lokaler Record ist nicht initialisiert: ChangesBehavior (E2, die
+  // Taste fuehrt eine so gekennzeichnete Hilfe nicht ungesehen aus) stuende
+  // sonst auf Zufall (Review Welle 1, Bereich D). Default setzt alle Felder,
+  // auch Kind auf fakUnset - darum unten AUSDRUECKLICH fakFix.
+  A := Default(TFindingAction);
   A.Caption := ACaption;
   A.Hint    := AHint;
   A.Enabled := AEnabled and Assigned(AAction);
@@ -624,6 +632,22 @@ begin
   end;
 end;
 
+// Menuetexte der Anweisungs-Hilfen (SCA098, SCA080, SCA047, Charge H2) -
+// ein fuenfter Verteiler (SCA091). AName ist das Ziel bzw. Exit/Continue.
+function FlowFixCaption(AKind: TFindingKind; const AName: string): string;
+begin
+  case AKind of
+    fkRedundantConditional:
+      Result := Format(_(CAP_COND_ASSIGN), [AName]);
+    fkRedundantJump:
+      Result := Format(_(CAP_JUMP), [AName]);
+    fkSelfAssignment:
+      Result := Format(_(CAP_SELF_ASSIGN), [AName]);
+  else
+    Result := uSCAConsts.KindName(AKind);
+  end;
+end;
+
 // Menuetexte der Deklarations-Hilfen (SCA117, SCA197, SCA149) - ein
 // vierter Verteiler (SCA091). AName ist bei SCA149 die Direktive.
 function DeclFixCaption(AKind: TFindingKind; const AName: string): string;
@@ -636,7 +660,7 @@ begin
     fkMissingOverride:
       Result := Format(_(CAP_DIRECTIVE), [AName]);
   else
-    Result := uSCAConsts.KindName(AKind);
+    Result := FlowFixCaption(AKind, AName);
   end;
 end;
 

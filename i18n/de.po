@@ -2337,6 +2337,15 @@ msgstr "Neue GUID einfügen"
 msgid "Add \"%s;\" to the declaration"
 msgstr "\"%s;\" an die Deklaration anfügen"
 
+msgid "Assign the condition to %s directly"
+msgstr "Bedingung direkt an %s zuweisen"
+
+msgid "Remove the redundant %s"
+msgstr "Überflüssiges %s entfernen"
+
+msgid "Remove the self-assignment of %s"
+msgstr "Selbstzuweisung von %s entfernen"
+
 msgid "(changes behavior)"
 msgstr "(ändert Verhalten)"
 

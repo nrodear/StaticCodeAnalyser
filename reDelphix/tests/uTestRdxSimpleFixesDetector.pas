@@ -5,7 +5,7 @@ unit uTestRdxSimpleFixesDetector;
 // in der zweiten, SCA066/SCA072/SCA084 in der dritten, SCA007/SCA168 in
 // der vierten, SCA101/SCA099 in der fuenften, SCA082/SCA071/SCA088/SCA123
 // in der sechsten, SCA020/SCA120/SCA122 in der siebten, SCA117/SCA197/
-// SCA149 in der achten Fixture),
+// SCA149 in der achten, SCA098/SCA080/SCA047 in der neunten Fixture),
 // TSourcePlaces und
 // TRdxFixRunner.FixFor - derselbe Einstieg wie im Anbieter. Je Fall meldet
 // der Detektor, die Hilfe plant aus dem Fund (Art, Zeile, Meldung), die
@@ -179,6 +179,22 @@ type
     [Test] procedure Sca149_Reintroduce_RoundTrip;
   end;
 
+  // Ganze Anweisungen (uRdxFlowFixes, Charge H2): SCA098, SCA080, SCA047 -
+  // dazu die Pruefungen des Laeufers (Boolean bewiesen, Variable, with).
+  [TestFixture]
+  TTestRdxSimpleFixesDetector9 = class
+  public
+    [Test] procedure Sca098_RoundTrip;
+    [Test] procedure Sca098_CatalogExample;
+    [Test] procedure Sca098_NotProvenBoolean_NoHelp;
+    [Test] procedure Sca098_InWith_NoHelp;
+    [Test] procedure Sca080_RoundTrip_CatalogExample;
+    [Test] procedure Sca080_ThenExit_NoHelp;
+    [Test] procedure Sca047_RoundTrip;
+    [Test] procedure Sca047_CatalogExample;
+    [Test] procedure Sca047_ResultAndWith_NoHelp;
+  end;
+
 implementation
 
 uses
@@ -191,6 +207,7 @@ uses
   uSuperfluousSemicolon, uUnitLevelKeywordIndent, uLegacyInitializationSection,
   uCastAndFree, uEmptyMethod, uMissingRaise, uReRaiseException, uRdxRaiseFixes,
   uPublicMemberWithoutDoc, uInterfaceGuid, uMissingOverride, uRdxDeclFixes,
+  uRedundantConditional, uRedundantJump, uSelfAssignment,
   uEngineApi, uRdxBufferMath, uRdxRecipeRunner;
 
 type
@@ -217,6 +234,22 @@ begin
   end;
 end;
 
+// Die Detektoren der Anweisungs-Hilfen - ein fuenfter Verteiler (SCA091).
+procedure RunFlowDetector(AKind: TFindingKind; Root: TAstNode;
+  const Path: string; Results: TObjectList<TLeakFinding>);
+begin
+  case AKind of
+    fkRedundantConditional:
+      TRedundantConditionalDetector.AnalyzeUnit(Root, Path, Results);
+    fkRedundantJump:
+      TRedundantJumpDetector.AnalyzeUnit(Root, Path, Results);
+    fkSelfAssignment:
+      TSelfAssignmentDetector.AnalyzeUnit(Root, Path, Results);
+  else
+    Assert.Fail('keine Hilfe fuer diese Art');
+  end;
+end;
+
 // Die Detektoren der Deklarations-Hilfen - ein vierter Verteiler (SCA091).
 procedure RunDeclDetector(AKind: TFindingKind; Root: TAstNode;
   const Path: string; Results: TObjectList<TLeakFinding>);
@@ -229,7 +262,7 @@ begin
     fkMissingOverride:
       TMissingOverrideDetector.AnalyzeUnit(Root, Path, Results);
   else
-    Assert.Fail('keine Hilfe fuer diese Art');
+    RunFlowDetector(AKind, Root, Path, Results);
   end;
 end;
 
@@ -1825,6 +1858,127 @@ begin
     FixAll(Src, fkMissingOverride));
 end;
 
+{ ---- SCA098 / SCA080 / SCA047 ---- }
+
+procedure TTestRdxSimpleFixesDetector9.Sca098_RoundTrip;
+begin
+  // Vorwaerts ueber Zeilen, Gegenrichtung mit Vergleich und mit einem
+  // Boolean-Bezeichner; Result ist Boolean (Funktion), Done eine lokale
+  // Boolean-Variable. Danach schweigt der Detektor.
+  Assert.AreEqual(InImplementation(Join(['function F(A, B: Integer): Boolean;',
+      'var', '  Done: Boolean;', 'begin', '  Result := A > B;',
+      '  Done := not (A = B);', '  Result := not Done;', 'end;'])),
+    FixAll(InImplementation(Join(['function F(A, B: Integer): Boolean;', 'var',
+      '  Done: Boolean;', 'begin', '  if A > B then', '    Result := True',
+      '  else', '    Result := False;',
+      '  if A = B then Done := False else Done := True;',
+      '  if Done then Result := False else Result := True;', 'end;'])),
+      fkRedundantConditional));
+end;
+
+procedure TTestRdxSimpleFixesDetector9.Sca098_CatalogExample;
+var
+  Meta : TRuleMeta;
+begin
+  Meta := TRuleCatalog.GetRuleCanonical(fkRedundantConditional);
+  Assert.AreEqual(InImplementation(Join(['function F(Active: Boolean): Boolean;',
+      'begin', '  ' + Snip(Meta.GoodExample), 'end;'])),
+    FixAll(InImplementation(Join(['function F(Active: Boolean): Boolean;',
+      'begin', '  ' + Snip(Meta.BadExample), 'end;'])), fkRedundantConditional));
+end;
+
+procedure TTestRdxSimpleFixesDetector9.Sca098_NotProvenBoolean_NoHelp;
+begin
+  // Ein Variant bekaeme den Wert der Bedingung statt True/False.
+  AssertNoHelp(InImplementation(Join(['function F(A: Integer): Boolean;', 'var',
+    '  V: Variant;', 'begin', '  if A > 0 then V := True else V := False;',
+    '  Result := V;', 'end;'])), fkRedundantConditional,
+    'nicht als Boolean bewiesen');
+  // Gegenrichtung mit einem Aufruf als C: sein Typ ist nicht bewiesen
+  // (bei einem Variant waere 'not' bitweise).
+  AssertNoHelp(InImplementation(Join(['function IsOk(A: Integer): Boolean;',
+    'begin', '  Result := A > 0;', 'end;', 'procedure P(A: Integer);', 'var',
+    '  Done: Boolean;', 'begin',
+    '  if IsOk(A) then Done := False else Done := True;', 'end;'])),
+    fkRedundantConditional, 'Bedingung ist nicht als Boolean bewiesen');
+end;
+
+procedure TTestRdxSimpleFixesDetector9.Sca098_InWith_NoHelp;
+begin
+  // Im with-Block koennte Done ein Member des with-Ausdrucks sein.
+  AssertNoHelp(InImplementation(Join(['procedure P(A: Boolean);', 'var',
+    '  Obj: TObject;', '  Done: Boolean;', 'begin', '  with Obj do', '  begin',
+    '    if A then Done := True else Done := False;', '  end;', 'end;'])),
+    fkRedundantConditional, 'with');
+end;
+
+procedure TTestRdxSimpleFixesDetector9.Sca080_RoundTrip_CatalogExample;
+var
+  Meta : TRuleMeta;
+begin
+  Meta := TRuleCatalog.GetRuleCanonical(fkRedundantJump);
+  Assert.AreEqual(InImplementation(Snip(Meta.GoodExample)),
+    FixAll(InImplementation(Snip(Meta.BadExample)), fkRedundantJump));
+  // Continue hinter dem else eines if: 'else Continue' faellt weg.
+  Assert.AreEqual(InImplementation(Join(['procedure Q(A: Boolean);', 'var',
+      '  I: Integer;', 'begin', '  for I := 0 to 9 do', '  begin',
+      '    if A then', '      Beep;', '  end;', 'end;'])),
+    FixAll(InImplementation(Join(['procedure Q(A: Boolean);', 'var',
+      '  I: Integer;', 'begin', '  for I := 0 to 9 do', '  begin',
+      '    if A then', '      Beep', '    else', '      Continue;', '  end;',
+      'end;'])), fkRedundantJump));
+end;
+
+procedure TTestRdxSimpleFixesDetector9.Sca080_ThenExit_NoHelp;
+begin
+  // 'if A then Exit;' am Ende: es bliebe 'if A then' stehen.
+  AssertNoHelp(InImplementation(Join(['procedure P(A: Boolean);', 'begin',
+    '  Beep;', '  if A then Exit;', 'end;'])), fkRedundantJump, 'hinter then');
+end;
+
+procedure TTestRdxSimpleFixesDetector9.Sca047_RoundTrip;
+const
+  HEAD = 'type'#13#10'  TFoo = class'#13#10'    FCount: Integer;'#13#10
+    + '    procedure Run(ACount: Integer);'#13#10'  end;'#13#10
+    + 'procedure TFoo.Run(ACount: Integer);'#13#10'var'#13#10
+    + '  Temp: string;'#13#10'begin'#13#10'  Temp := ''x'';'#13#10;
+begin
+  // Lokale Variable, Feld der Unit, Parameter - jede Zeile faellt weg.
+  Assert.AreEqual(InImplementation(HEAD + Join(['  Beep;', 'end;'])),
+    FixAll(InImplementation(HEAD + Join(['  Temp := Temp;', '  FCount := FCount;',
+      '  ACount := ACount;', '  Beep;', 'end;'])), fkSelfAssignment));
+end;
+
+procedure TTestRdxSimpleFixesDetector9.Sca047_CatalogExample;
+const
+  HEAD = 'type'#13#10'  TFoo = class'#13#10'    FCount: Integer;'#13#10
+    + '    procedure SetCount(ACount: Integer);'#13#10'  end;'#13#10
+    + 'procedure TFoo.SetCount(ACount: Integer);'#13#10'begin'#13#10
+    + '  Beep;'#13#10;
+var
+  Meta : TRuleMeta;
+begin
+  // 'good' zeigt den gemeinten Wert (Tippfehler ACount) - die Hilfe kann
+  // ihn nicht raten und loescht die wirkungslose Zuweisung.
+  Meta := TRuleCatalog.GetRuleCanonical(fkSelfAssignment);
+  Assert.AreEqual('FCount := ACount;', Snip(Meta.GoodExample));
+  Assert.AreEqual(InImplementation(HEAD + 'end;'),
+    FixAll(InImplementation(HEAD + '  ' + Snip(Meta.BadExample) + #13#10
+      + 'end;'), fkSelfAssignment));
+end;
+
+procedure TTestRdxSimpleFixesDetector9.Sca047_ResultAndWith_NoHelp;
+begin
+  // Result := Result stillt vielleicht eine Compiler-Meldung.
+  AssertNoHelp(InImplementation(Join(['function F: Integer;', 'begin',
+    '  Result := 1;', '  Result := Result;', 'end;'])), fkSelfAssignment,
+    'Result');
+  // Im with-Block koennte X ein Member mit Setter sein.
+  AssertNoHelp(InImplementation(Join(['procedure P;', 'var', '  Obj: TObject;',
+    '  X: Integer;', 'begin', '  X := 1;', '  with Obj do', '  begin',
+    '    Beep;', '    X := X;', '  end;', 'end;'])), fkSelfAssignment, 'with');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector2);
@@ -1834,5 +1988,6 @@ initialization
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector6);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector7);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector8);
+  TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector9);
 
 end.
