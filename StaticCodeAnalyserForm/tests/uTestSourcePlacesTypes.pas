@@ -71,6 +71,10 @@ type
     // Mehrdeutiges und verschachtelte Routinen bleiben ''. Gegenprobe:
     // der Resolver der Detektoren bleibt bei seiner Fallback-Ebene.
     [Test] procedure DeclaredTypeOf_StrictScopes;
+    // Review Bereich C Engine-Kern, Major 3 (2026-10-14): eine Inline-
+    // Variable gilt nur in ihrem Block - davor und danach ist Count das
+    // Feld (Cardinal), ein %u bleibt richtig.
+    [Test] procedure DeclaredTypeOf_InlineVarOnlyInsideItsBlock;
   end;
 
 implementation
@@ -763,6 +767,66 @@ begin
     end;
   finally
     Parser.Free;
+  end;
+end;
+
+procedure TTestSourcePlacesViews.DeclaredTypeOf_InlineVarOnlyInsideItsBlock;
+// 'for var Count: Integer' und 'var Count: Int64' im if-Block verdecken
+// das Feld Count: Cardinal nur in ihrer Blockspanne. Vorher trug der
+// strenge Modus jede Inline-Variable als Name der ganzen Routine ein:
+// DeclaredTypeOf lieferte vor der Schleife 'integer' statt 'cardinal' -
+// reDelphix haette %d statt %u gesetzt.
+const
+  SRC =
+    'unit m; interface'#13#10 +
+    'type'#13#10 +
+    '  TBuffer = class'#13#10 +
+    '  public'#13#10 +
+    '    Count: Cardinal;'#13#10 +
+    '    procedure Describe;'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'procedure TBuffer.Describe;'#13#10 +
+    'var S: string;'#13#10 +
+    'begin'#13#10 +
+    '  S := IntToStr(Count);'#13#10 +
+    '  for var Count: Integer := 0 to 3 do'#13#10 +
+    '    S := IntToStr(Count) + ''f'';'#13#10 +
+    '  S := IntToStr(Count) + ''x'';'#13#10 +
+    '  if S <> '''' then'#13#10 +
+    '  begin'#13#10 +
+    '    var Count: Int64 := 1;'#13#10 +
+    '    S := IntToStr(Count) + ''i'';'#13#10 +
+    '  end;'#13#10 +
+    '  S := S + IntToStr(Count);'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  P : TSourcePlaces;
+  LVor, LFor, LNach, LIf, LEnde : Integer;
+begin
+  LVor  := LineOf(SRC, 'IntToStr(Count);');
+  LFor  := LineOf(SRC, '+ ''f''');
+  LNach := LineOf(SRC, '+ ''x''');
+  LIf   := LineOf(SRC, '+ ''i''');
+  LEnde := LineOf(SRC, 'S + IntToStr(Count)');
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.OpenSource('m.pas', SRC));
+    Assert.AreEqual('cardinal', P.DeclaredTypeOf(LVor, 'Count'),
+      'vor der Schleife: das Feld');
+    Assert.AreEqual('integer', P.DeclaredTypeOf(LFor, 'Count'),
+      'im Rumpf der Schleife: die Inline-Schleifenvariable');
+    Assert.AreEqual('cardinal', P.DeclaredTypeOf(LNach, 'Count'),
+      'hinter der Schleife: wieder das Feld');
+    Assert.AreEqual('int64', P.DeclaredTypeOf(LIf, 'Count'),
+      'im if-Block: die dort deklarierte Inline-Variable');
+    Assert.AreEqual('cardinal', P.DeclaredTypeOf(LEnde, 'Count'),
+      'nach dem if-Block: das Feld');
+    Assert.AreEqual('string', P.DeclaredTypeOf(LFor, 'S'),
+      'die lokale Variable der Routine gilt ueberall');
+  finally
+    P.Free;
   end;
 end;
 
