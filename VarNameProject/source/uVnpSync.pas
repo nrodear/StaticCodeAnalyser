@@ -152,7 +152,10 @@ begin
   end;
   if View.Block.SyncMode <> smNone then
   begin
-    VnpLog('Abbruch: Sync-Sitzung laeuft - erst mit Esc beenden');
+    // Nicht "mit Esc beenden": Esc zerstoert im Sync Edit der IDE Text
+    // (UI-Test 2026-10-11); die Sitzung endet mit dem Knopf im Rand.
+    VnpLog('Abbruch: Sync-Sitzung laeuft - erst beenden (Knopf im Rand; '
+      + 'nicht Esc, das zerstoert Text)');
     Exit;
   end;
   // Erst in eine Interface-Variable: ein frisch erzeugtes Objekt direkt
@@ -162,7 +165,8 @@ begin
   GN1File := View.Buffer.FileName;
   GN1Index := GN1Block.AddNotifier(N);
   VnpLog('N1 angemeldet: Index %d am Block von %s', [GN1Index, GN1File]);
-  VnpLog('Weiter: Zeilen markieren, Strg+Umschalt+J, Esc - die Ereignisse '
+  VnpLog('Weiter: Zeilen markieren, Strg+Umschalt+J, die Sitzung mit dem '
+    + 'Knopf im Rand beenden (nicht Esc: zerstoert Text) - die Ereignisse '
     + 'stehen nur in der Protokolldatei; danach "N1 ab"');
 end;
 

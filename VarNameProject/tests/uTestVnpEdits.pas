@@ -199,7 +199,7 @@ begin
     'function Scale(Value: Integer): Integer;',
     'begin',
     '  // Fall 1: zwei gleiche Literale auf der Zeile - Caret auf eine 42.',
-    '  var MagicNr01 := 42;',
+    '  const MagicNr01 = 42;',
     '  Result := Value * MagicNr01 + MagicNr01;',
     'end;',
     ''];
@@ -229,7 +229,7 @@ begin
     'begin',
     '  Result := Value;',
     '  // Fall 2: Caret auf 1000 in der if-Zeile -> angeboten.',
-    '  var MagicNr01 := 1000;',
+    '  const MagicNr01 = 1000;',
     '  if Result > MagicNr01 then',
     '    // Fall 3: Caret auf 999 -> ABGELEHNT (die Zeile darueber endet mit',
     '    // then; die Deklaration wuerde zum Zweig).',
@@ -252,7 +252,7 @@ begin
     '  begin',
     '    // Fall 3: Caret auf 999 -> ABGELEHNT (die Zeile darueber endet mit',
     '    // then; die Deklaration wuerde zum Zweig).',
-    '    var MagicNr01 := 999;',
+    '    const MagicNr01 = 999;',
     '    Result := MagicNr01;',
     '  end;',
     'end;',
@@ -277,7 +277,7 @@ begin
     'function Area(Width, Height: Double): Double;',
     'begin',
     '  // Fall 4: Bruchzahl.',
-    '  var MagicNr01 := 0.5;',
+    '  const MagicNr01 = 0.5;',
     '  Result := Width * Height * MagicNr01;',
     'end;',
     ''];
@@ -301,7 +301,7 @@ begin
     'function Mask(Value: Cardinal): Cardinal;',
     'begin',
     #9'// Fall 5: Tab-Einrueckung und Hex-Literal - prueft die Spalten.',
-    #9'var MagicNr01 := $FF00;',
+    #9'const MagicNr01 = $FF00;',
     #9'Result := Value and MagicNr01;',
     'end;',
     ''];
@@ -370,7 +370,7 @@ begin
     '',
     'function Greeting(Count: Integer): string;',
     'begin',
-    '  var MagicNr01 := 42;',
+    '  const MagicNr01 = 42;',
     '  Result := ''Gr'#$00FC#$00DF'e '#$20AC' '' + IntToStr(Count * MagicNr01);',
     'end;',
     '',
@@ -378,7 +378,8 @@ begin
     ''];
 end;
 
-// Zwei Routinen; MagicNr01 steht schon in der ersten.
+// Zwei Routinen; MagicNr01 steht schon in der ersten (als Inline-var des
+// Anwenders - der Name zaehlt, nicht die Form).
 function TakenNameSource: TArray<string>;
 begin
   Result := [
@@ -404,7 +405,7 @@ begin
     '',
     'function B(Value: Integer): Integer;',
     'begin',
-    '  var MagicNr02 := 7;',
+    '  const MagicNr02 = 7;',
     '  Result := Value * MagicNr02;',
     'end;',
     ''];
@@ -435,7 +436,7 @@ begin
     #9#9'X := 1',
     #9'else',
     #9'begin',
-    #9#9'var MagicNr01 := 60;',
+    #9#9'const MagicNr01 = 60;',
     #9#9'X := 2 * MagicNr01;',
     #9'end;',
     'end;',
@@ -463,7 +464,7 @@ begin
     'begin',
     '  (* Zweig *) if Flag then',
     '  begin',
-    '    var MagicNr01 := 60;',
+    '    const MagicNr01 = 60;',
     '    X := MagicNr01;',
     '  end;',
     'end;',
@@ -493,7 +494,9 @@ begin
 end;
 
 // TextOf, nur LF und kein Zeilenende am Pufferende: die letzte Zeile hat
-// Text, Eol = #10. Leerer Puffer: genau eine leere Zeile ab Byte 0.
+// Text und kein eigenes Ende (Ends ''), Eol = #10 (das erste Zeilenende).
+// Leerer Puffer: genau eine leere Zeile ab Byte 0, ohne Zeilenende - Eol
+// ist dann CR LF (TVnpText: das Zeilenende der IDE unter Windows).
 procedure TTestVnpEdits.TextOfLfNoFinalEolAndEmpty;
 var
   T : TVnpText;
@@ -507,23 +510,33 @@ begin
   Assert.AreEqual<Integer>(8, T.Starts[1], 'Start Zeile 2');
   Assert.AreEqual<Integer>(9, T.Starts[2], 'Start Zeile 3');
   Assert.AreEqual(LF, T.Eol, 'Eol ohne CR LF');
+  Assert.AreEqual<Integer>(3, Length(T.Ends), 'Zahl der Zeilenenden');
+  Assert.AreEqual(LF, T.Ends[0], 'Ende Zeile 1');
+  Assert.AreEqual(LF, T.Ends[1], 'Ende Zeile 2');
+  Assert.AreEqual('', T.Ends[2], 'Ende Zeile 3: keines');
+  Assert.AreEqual(LF, RowEol(T, 3), 'RowEol Zeile 3: Rueckfall Eol');
   T := TextOf(nil);
   Assert.AreEqual<Integer>(1, Length(T.Lines), 'leer: Zahl der Zeilen');
   Assert.AreEqual('', T.Lines[0], 'leer: Zeile 1');
   Assert.AreEqual<Integer>(1, Length(T.Starts),
     'leer: Zahl der Zeilenanfaenge');
   Assert.AreEqual<Integer>(0, T.Starts[0], 'leer: Start Zeile 1');
-  Assert.AreEqual(LF, T.Eol, 'leer: Eol');
+  Assert.AreEqual(CRLF, T.Eol, 'leer: Eol CR LF (kein Zeilenende im Puffer)');
+  Assert.AreEqual('', T.Ends[0], 'leer: kein Zeilenende');
+  Assert.AreEqual(CRLF, RowEol(T, 1), 'leer: RowEol Rueckfall');
   Assert.AreEqual('', T.Text, 'leer: Text');
 end;
 
 // TextOf gemischt: LF beendet die Zeile, nur EIN CR DIREKT davor gehoert
 // zum Zeilenende (ein einzelnes CR bleibt in der Zeile, von CR CR LF das
-// erste). Eol = #13#10, sobald irgendwo CR LF vorkommt - auch erst hinter
-// einem LF; nur einzelne CR ergeben #10. Ein CR am Pufferende ohne LF ist
-// kein Zeilenende; ob es in der Zeile bleibt, ist offen (Interface: nur
-// ein CR vor LF gehoert zum Zeilenende; Kommentar in TextOf: "am
-// Pufferende, ohne CR davor") - bis Nico entscheidet, gilt beides.
+// erste). Jede Zeile traegt ihr eigenes Ende (Ends/RowEol); Eol ist das
+// Ende der ERSTEN Zeile, die eines hat - nicht mehr "CR LF, sobald eines
+// vorkommt" (Entscheid 2026-10-13 zu Minor 5: eingefuegte Zeilen folgen
+// ihrer Nachbarzeile, Eol ist nur noch Rueckfall, wie
+// uRdxBufferMath.BufferEol). Nur einzelne CR: kein Zeilenende, Eol CR LF.
+// Ein CR am Pufferende ohne LF gehoert laut Interface zum Zeilenende der
+// letzten Zeile (sie endet mit 'x'); Ends traegt dafuer '', RowEol den
+// Rueckfall.
 procedure TTestVnpEdits.TextOfMixedCrLfWins;
 var
   T : TVnpText;
@@ -536,34 +549,44 @@ begin
   Assert.AreEqual<Integer>(3, T.Starts[1], 'Start Zeile 2');
   Assert.AreEqual<Integer>(5, T.Starts[2], 'Start Zeile 3');
   Assert.AreEqual<Integer>(9, T.Starts[3], 'Start Zeile 4');
-  Assert.AreEqual(CRLF, T.Eol, 'CR LF zuerst');
+  Assert.AreEqual(CRLF, T.Eol, 'CR LF zuerst: Eol CR LF');
+  Assert.AreEqual(CRLF, RowEol(T, 1), 'Zeile 1 endet mit CR LF');
+  Assert.AreEqual(LF, RowEol(T, 2), 'Zeile 2 endet mit LF');
+  Assert.AreEqual(LF, RowEol(T, 3), 'Zeile 3: das einzelne CR zaehlt nicht');
+  Assert.AreEqual('', T.Ends[3], 'Zeile 4 ohne Ende');
+  Assert.AreEqual(CRLF, RowEol(T, 4), 'Zeile 4: Rueckfall Eol');
   T := TextOf(Utf8BytesOf('x'#10'y'#13#10'z'));
   Assert.AreEqual(JoinLines(['x', 'y', 'z'], '|'), JoinLines(T.Lines, '|'),
     'LF zuerst: Zeilen');
   Assert.AreEqual<Integer>(2, T.Starts[1], 'LF zuerst: Start Zeile 2');
   Assert.AreEqual<Integer>(5, T.Starts[2], 'LF zuerst: Start Zeile 3');
-  Assert.AreEqual(CRLF, T.Eol, 'LF zuerst, CR LF danach: CR LF gewinnt');
+  Assert.AreEqual(LF, T.Eol, 'LF zuerst, CR LF danach: das erste gilt');
+  Assert.AreEqual(CRLF, RowEol(T, 2), 'LF zuerst: Zeile 2 behaelt CR LF');
+  Assert.AreEqual(LF, RowEol(T, 3), 'LF zuerst: Zeile 3 Rueckfall LF');
   T := TextOf(Utf8BytesOf('a'#13'b'));
   Assert.AreEqual<Integer>(1, Length(T.Lines), 'nur CR: eine Zeile');
   Assert.AreEqual('a'#13'b', T.Lines[0], 'nur CR: das CR bleibt in der Zeile');
-  Assert.AreEqual(LF, T.Eol, 'nur CR: Eol #10');
+  Assert.AreEqual(CRLF, T.Eol, 'nur CR: kein Zeilenende, Eol CR LF');
   T := TextOf(Utf8BytesOf('x'#13#13#10'y'));
   Assert.AreEqual(JoinLines(['x'#13, 'y'], '|'), JoinLines(T.Lines, '|'),
     'CR CR LF: nur das CR direkt vor LF gehoert zum Zeilenende');
   Assert.AreEqual<Integer>(4, T.Starts[1], 'CR CR LF: Start Zeile 2');
   Assert.AreEqual(CRLF, T.Eol, 'CR CR LF: Eol');
+  Assert.AreEqual(CRLF, RowEol(T, 1), 'CR CR LF: Zeile 1 endet mit CR LF');
   T := TextOf(Utf8BytesOf('x'#13));
   Assert.AreEqual<Integer>(1, Length(T.Lines), 'CR am Ende: eine Zeile');
   Assert.AreEqual('x', T.Lines[0],
     'CR am Ende: als letztes Byte gehoert es zum Zeilenende (TVnpText)');
-  Assert.AreEqual(LF, T.Eol, 'CR am Ende: Eol #10');
+  Assert.AreEqual('', T.Ends[0], 'CR am Ende: Ends traegt kein LF-Ende');
+  Assert.AreEqual(CRLF, T.Eol, 'CR am Ende: Eol CR LF (Rueckfall)');
+  Assert.AreEqual(CRLF, RowEol(T, 1), 'CR am Ende: RowEol Rueckfall');
 end;
 
 // TextOf mit UTF-8-BOM und Mehrbyte-Zeichen: Starts zaehlen Bytes ab
-// Pufferanfang, die drei BOM-Bytes mit; die Zeilen sind Zeichen. Ob der
-// BOM zur ersten Zeile gehoert (Start 0, #$FEFF in der Zeile) oder vor ihr
-// steht (Start 3), legt das Interface nicht fest - geprueft ist, dass
-// Start und Zeile zusammenpassen.
+// Pufferanfang, die drei BOM-Bytes mit; die Zeilen sind Zeichen. Der BOM
+// bleibt Teil der ersten Zeile (U+FEFF, Start 0) - so legt es das
+// Interface von TVnpText fest, und so liest TEncoding.UTF8.GetString die
+// Bytes (Delphi wie FPC; die fruehere Fassung liess beide Lesarten zu).
 procedure TTestVnpEdits.TextOfBomStartsInBytes;
 var
   T : TVnpText;
@@ -572,10 +595,9 @@ begin
     + #13#10'end.'));
   Assert.AreEqual<Integer>(3, Length(T.Lines), 'Zahl der Zeilen');
   Assert.AreEqual<Integer>(3, Length(T.Starts), 'Zahl der Zeilenanfaenge');
-  Assert.IsTrue(((T.Starts[0] = 0) and (T.Lines[0] = #$FEFF'unit U;'))
-    or ((T.Starts[0] = 3) and (T.Lines[0] = 'unit U;')),
-    Format('Zeile 1 ab Byte %d: das BOM-Zeichen steht genau dann in der '
-    + 'Zeile, wenn sie bei Byte 0 beginnt', [T.Starts[0]]));
+  Assert.AreEqual<Integer>(0, T.Starts[0], 'Zeile 1 beginnt bei Byte 0');
+  Assert.AreEqual(#$FEFF'unit U;', T.Lines[0],
+    'Zeile 1 traegt das BOM-Zeichen U+FEFF');
   Assert.AreEqual('// Gr'#$00FC#$00DF'e '#$20AC, T.Lines[1], 'Zeile 2');
   Assert.AreEqual('end.', T.Lines[2], 'Zeile 3');
   // 3 BOM-Bytes + 'unit U;' (7) + CR LF
@@ -647,7 +669,7 @@ begin
   Target := TargetAt(T, 3, 8, NAME_BASE);
   Assert.IsFalse(Target.Plan.Ok, 'Zeile 3 hinter dem Ende');
   Assert.IsTrue(Target.Plan.Reason <> '', 'Zeile 3: Grund fehlt');
-  Exp := ['begin', '  var MagicNr01 := 42;', '  X := MagicNr01;'];
+  Exp := ['begin', '  const MagicNr01 = 42;', '  X := MagicNr01;'];
   Assert.AreEqual(JoinLines(Exp, CRLF), RunC1h(JoinLines(['begin',
     '  X := 42;'], CRLF), 2, 8, Target),
     'ohne Block: letzte Zeile ohne Zeilenende');
@@ -662,7 +684,7 @@ begin
     'begin',
     '  if X > 1 then',
     '  begin',
-    '    var MagicNr01 := 999;',
+    '    const MagicNr01 = 999;',
     '    Y := MagicNr01;',
     '  end;',
     ''];
@@ -696,7 +718,7 @@ begin
   Assert.AreEqual(JoinLines(ScaleExpected, CRLF),
     RunC1h(JoinLines(ScaleSource, CRLF), 4, 21, Target), 'CR LF: Text danach');
   CheckSelection(ScaleExpected, Target, 4, 5, 2);
-  Assert.AreEqual<Integer>(7, Target.Plan.NameCol, 'NameCol');
+  Assert.AreEqual<Integer>(9, Target.Plan.NameCol, 'NameCol');
   Assert.AreEqual<Integer>(21, Target.Plan.NewCols[0], 'NewCols[0]');
   Assert.AreEqual<Integer>(33, Target.Plan.NewCols[1],
     'NewCols[1]: um 7 Zeichen (9 - 2) verschoben');
@@ -745,7 +767,7 @@ begin
   Assert.AreEqual(JoinLines(ElseBranchExpected, LF),
     RunC1h(JoinLines(ElseBranchSource, LF), 6, 13, Target), 'Text danach');
   CheckSelection(ElseBranchExpected, Target, 7, 8, 1);
-  Assert.AreEqual<Integer>(7, Target.Plan.NameCol, 'NameCol: Tab = 1 Spalte');
+  Assert.AreEqual<Integer>(9, Target.Plan.NameCol, 'NameCol: Tab = 1 Spalte');
 end;
 
 // Fall 4 (CR LF): Bruchzahl 0.5 als EIN Literal (Caret auf der 5).
@@ -768,7 +790,7 @@ begin
   Assert.AreEqual(JoinLines(MaskExpected, CRLF),
     RunC1h(JoinLines(MaskSource, CRLF), 4, 22, Target), 'Text danach');
   CheckSelection(MaskExpected, Target, 4, 5, 1);
-  Assert.AreEqual<Integer>(6, Target.Plan.NameCol, 'NameCol: Tab = 1 Spalte');
+  Assert.AreEqual<Integer>(8, Target.Plan.NameCol, 'NameCol: Tab = 1 Spalte');
   Assert.AreEqual<Integer>(22, Target.Plan.NewCols[0], 'NewCols[0]');
 end;
 
@@ -792,14 +814,14 @@ begin
   Exp := [
     'function Greeting(Count: Integer): string;',
     'begin',
-    '  var MagicNr01 := 42;',
+    '  const MagicNr01 = 42;',
     '  Result := ''Gr'#$00FC#$00DF'e '#$20AC' '' + IntToStr(Count * MagicNr01);',
     'end;',
     ''];
   B := Utf8BytesOf(JoinLines(Src, CRLF));
   Edits := EditsAt(B, 3, 43, Target);
   Assert.AreEqual<Integer>(2, Length(Edits), 'Zahl der Ersetzungen');
-  CheckEdit(Edits[0], 51, 0, '  var MagicNr01 := 42;'#13#10,
+  CheckEdit(Edits[0], 51, 0, '  const MagicNr01 = 42;'#13#10,
     'Deklaration mit dem Zeilenende vom Puffer (CR LF)');
   CheckEdit(Edits[1], 97, 2, 'MagicNr01',
     'Literal: Offset in Bytes, nicht in Zeichen');
@@ -851,14 +873,14 @@ begin
   Exp := [
     'procedure R(var S: string);',
     'begin',
-    '  var MagicNr01 := 42;',
+    '  const MagicNr01 = 42;',
     '  S := IntToStr(MagicNr01) + '''#$00FC#$20AC''' + IntToStr(MagicNr01);',
     'end;',
     ''];
   B := Utf8BytesOf(JoinLines(Src, CRLF));
   Edits := EditsAt(B, 3, 17, Target);
   Assert.AreEqual<Integer>(3, Length(Edits), 'Zahl der Ersetzungen');
-  CheckEdit(Edits[0], 36, 0, '  var MagicNr01 := 42;'#13#10, 'Deklaration');
+  CheckEdit(Edits[0], 36, 0, '  const MagicNr01 = 42;'#13#10, 'Deklaration');
   // erste 42 in Spalte 17: 16 ASCII-Zeichen davor = 16 Bytes
   CheckEdit(Edits[1], 52, 2, 'MagicNr01', 'erste 42');
   // zweite 42 in Spalte 39: 38 Zeichen davor, ue 2 und Euro 3 Bytes = 41
@@ -889,7 +911,7 @@ begin
   Exp := [
     'procedure Q(var S: string);',
     'begin',
-    '  var MagicNr01 := 42;',
+    '  const MagicNr01 = 42;',
     '  S := ''Gr'#$00F6#$00DF'e 42 '#$20AC#$D83D#$DE00''' + IntToStr(MagicNr01) + '
       + '''(* 42 *)''; { 42 } // 42',
     'end;',
@@ -926,7 +948,7 @@ begin
   Exp := [
     'function F(Ma'#$00DF'2: Integer): Integer;',
     'begin',
-    '  var MagicNr01 := 2;',
+    '  const MagicNr01 = 2;',
     '  Result := Ma'#$00DF'2 * MagicNr01;',
     'end;',
     ''];
@@ -935,7 +957,7 @@ begin
   Assert.AreEqual(JoinLines(Exp, CRLF), Utf8TextOf(ApplyByteEdits(B, Edits)),
     'Text danach: die 2 im Bezeichner bleibt');
   Assert.AreEqual<Integer>(2, Length(Edits), 'Zahl der Ersetzungen');
-  CheckEdit(Edits[0], 45, 0, '  var MagicNr01 := 2;'#13#10, 'Deklaration');
+  CheckEdit(Edits[0], 45, 0, '  const MagicNr01 = 2;'#13#10, 'Deklaration');
   CheckEdit(Edits[1], 65, 1, 'MagicNr01', 'Literal');
   CheckSelection(Exp, Target, 3, 4, 1);
   Assert.AreEqual<Integer>(20, Target.Plan.NewCols[0], 'NewCols[0]');

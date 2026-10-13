@@ -116,7 +116,14 @@ begin
   try
     Obj := ASvc.CreateClass(AIID);
   except
-    // Messung: jede Ausnahme gehoert ins Protokoll.
+    // Eine Zugriffsverletzung geht an den Menue-Handler (uVnpRegister):
+    // der setzt den Prozess-Merker und schreibt nur die Datei - dieselbe
+    // Regel wie LogTemplate/InsertTemplate in uVnpIntroduce. Hier gefangen,
+    // liefe der naechste Messpunkt im halb kaputten Prozess weiter
+    // (Pruefer 2026-10-13, Minor 7).
+    on EExternal do
+      raise;
+    // Messung: jede andere Ausnahme gehoert ins Protokoll.
     on E: Exception do
     begin
       VnpLog('  %s: Ausnahme %s: %s', [AName, E.ClassName, E.Message]);

@@ -94,7 +94,8 @@ uses
   uTestRdxIntroPlan in 'uTestRdxIntroPlan.pas',
   uTestRdxIntroRefuse in 'uTestRdxIntroRefuse.pas',
   uTestRdxIntroGuards in 'uTestRdxIntroGuards.pas',
-  uTestRdxIntroEdits in 'uTestRdxIntroEdits.pas';
+  uTestRdxIntroEdits in 'uTestRdxIntroEdits.pas',
+  uTestRdxIntroContext in 'uTestRdxIntroContext.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

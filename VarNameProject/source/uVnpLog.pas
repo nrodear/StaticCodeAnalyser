@@ -46,7 +46,8 @@ procedure VnpReleaseGroup;
 implementation
 
 uses
-  Winapi.Windows, System.SysUtils, System.Classes, System.IOUtils, ToolsAPI;
+  Winapi.Windows, System.SysUtils, System.Classes, System.IOUtils, Vcl.Forms,
+  ToolsAPI;
 
 const
   GROUP_NAME = 'VarNameProject';
@@ -226,10 +227,24 @@ begin
   GClosed := True;
   if GPending <> nil then
     GPending.Clear;
+  // Beim Ende der IDE ist die Meldungsansicht schon abgebaut:
+  // RemoveMessageGroup lief dort in eine abgefangene Zugriffsverletzung
+  // (Lesen von 00000008, UI-Test 2026-10-11). Die Gruppe verschwindet mit
+  // dem Prozess - also nicht abmelden. VERDACHT (Pruefer 2026-10-13, Minor
+  // 8): ob Application.Terminated im Wizard-Destruktor schon gesetzt ist,
+  // zeigt das Protokoll ("IDE-Ende" statt "abmelden: EAccessViolation").
+  // Beim Deinstallieren des Pakets im laufenden Prozess ist es False, und
+  // die Gruppe wird wie bisher abgemeldet.
+  if Application.Terminated then
+  begin
+    AppendToFile('Meldungsgruppe: IDE-Ende (Application.Terminated) - nicht '
+      + 'abgemeldet, die Ansicht ist schon weg');
+    Exit;
+  end;
   try
     RemoveGroup;
   except
-    // Beim Schliessen der IDE kann die Meldungsansicht schon weg sein.
+    // Netz: die Meldungsansicht kann auch sonst schon weg sein.
     // noinspection ExceptionTooGeneral
     on E: Exception do
       AppendToFile('Meldungsgruppe abmelden: ' + E.ClassName + ': '

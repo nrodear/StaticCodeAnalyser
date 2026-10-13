@@ -1,22 +1,28 @@
 unit uVnpIntroduce;
 
-// VarNameProject - Code-Aktion "Lokale Variable einfuehren" (eine Zahl
-// wird zur Variable), Ablauf wie bei ReSharper "Introduce Variable" (Nico 2026-10-11, E17):
+// VarNameProject - Code-Aktion "Lokale Konstante einfuehren" (bis E26
+// "Lokale Variable einfuehren": eine Zahl wird zur Inline-Konstante, Nico
+// 2026-10-13 - sie behaelt Faltung, Ueberladungswahl und die
+// vorzeichenlose Rechnung des Literals, siehe uVnpPlan), Ablauf wie bei
+// ReSharper "Introduce Variable" (Nico 2026-10-11, E17):
 //   1. Caret auf einem Zahl-Literal, z. B. 'Result := Value * 42 + 42;'.
-//   2. Darueber entsteht 'var MagicNr01 := 42;', die gleichen Literale der
-//      Zeile werden zu MagicNr01.
+//   2. Darueber entsteht 'const MagicNr01 = 42;', die gleichen Literale
+//      der Zeile werden zu MagicNr01.
 //   3. Die Stellen von MagicNr01 werden gekoppelt: die IDE umrandet sie,
 //      der Caret steht auf dem Namen, Tippen aendert alle Stellen mit.
 // Zwei Wege (Gutachten 2026-10-11), beide nur mit IDE-eigenen Objekten:
 //   C1h  wir schreiben (EIN Writer, EIN Strg+Z), markieren den Block vom
 //        Namen bis hinter seine letzte Verwendung und starten das IDE-
 //        eigene Sync Edit (SyncEditBlock(nil) = Strg+Umschalt+J). Koppelt
-//        JEDEN Bezeichner, der im Block mehrfach vorkommt; Ende laut Hilfe
-//        mit Esc oder dem Knopf im Rand.
+//        JEDEN Bezeichner, der im Block mehrfach vorkommt; Ende mit dem
+//        Knopf im Rand - NICHT mit Esc: Esc zerstoert im Sync Edit der IDE
+//        Text, auch ohne unseren Code (UI-Test 2026-10-11, E25); Enter
+//        tut dort nichts.
 //   D1   ein Live Template zur Laufzeit: wir loeschen die Anweisung, die
 //        IDE fuegt Deklaration und Anweisung als Template ein und startet
-//        die Template-Sitzung. Nur der Name ist ein Punkt; Esc, Enter oder
-//        Tab am letzten Punkt beenden (Hilfe "Live Templates").
+//        die Template-Sitzung. Nur der Name ist ein Punkt; laut Hilfe
+//        "Live Templates" beenden Enter oder Tab am letzten Punkt (Esc
+//        dort ungeprueft - im Sync Edit zerstoert es Text).
 // Vor jedem Lauf (Schritt 0): kein vergifteter Prozess (uVnpSync), keine
 // laufende Sitzung, der Editor hat den Fokus.
 //
@@ -37,8 +43,8 @@ type
 
 const
   VARIANT_CAPTIONS : array[TVnpVariant] of string = (
-    'Lokale Variable einfuehren - C1h (IDE-Sync-Edit)',
-    'Lokale Variable einfuehren - D1 (Live Template)');
+    'Lokale Konstante einfuehren - C1h (IDE-Sync-Edit)',
+    'Lokale Konstante einfuehren - D1 (Live Template)');
 
 // Der ganze Ablauf an der Caret-Position der obersten Editoransicht.
 procedure RunIntroduce(AVariant: TVnpVariant);
@@ -241,9 +247,11 @@ begin
   else
   begin
     Mode := AView.Block.SyncMode;
+    // Nicht "mit Esc beenden": Esc zerstoert im Sync Edit der IDE Text
+    // (UI-Test 2026-10-11); die Sitzung endet mit dem Knopf im Rand.
     if Mode <> smNone then
-      Why := Format('Sync-Sitzung laeuft (SyncMode %d) - erst mit Esc '
-        + 'beenden', [Ord(Mode)]);
+      Why := Format('Sync-Sitzung laeuft (SyncMode %d) - erst beenden '
+        + '(Knopf im Rand; nicht Esc, das zerstoert Text)', [Ord(Mode)]);
   end;
   Result := Why <> '';
   if Result then

@@ -1,0 +1,397 @@
+unit uTestRdxIntroContext;
+
+// reDelphix - Tests fuer den Zusammenhang ueber mehrere Zeilen in
+// uRdxIntroEdits.TargetAt (Code-Aktion "Lokale Konstante einfuehren",
+// Refactoring ohne Fund; Pruefer 2026-10-13, Bericht F mit FPC-Harness aus 24
+// Gegenbeispielen): mehrzeilige Strings mit mehr als drei Quotes, die
+// Kommentargrenzen eines begin..end, asm-Block und initialization-
+// Abschnitt, Direktiven zwischen der Zeile darueber und der Anweisung auch
+// ohne Block, die Zeile darueber ab ihrem Kommentar-Zustand, '*)' in
+// Spalte 1, der else-Arm eines Bedingungsausdrucks (Delphi 13), die
+// FPC-Weiche, Zeilenenden je Zeile und die Vorbedingung von
+// IntroduceEdits. Jeder Fall hier ist eine Stelle, an der die Hilfe sonst
+// Code erzeugt haette, der nicht uebersetzt - oder still anders laeuft
+// (Deklaration IM String, 'end;' im Kommentar, Zeile im asm-Block).
+//
+// Vertrag wie in uTestRdxIntroGuards: Interface-Kommentare von
+// uRdxIntroPlan und uRdxIntroEdits, README Grenzen (das des Labors,
+// VarNameProject\README.md); Erwartungen von Hand, Spalten 1-basierte
+// Zeichenspalten der Zeile. Puffer mit CR LF, wo nichts anderes steht.
+// Quelltext nur ASCII.
+//
+// 1:1 aus dem Labor VarNameProject (uTestVnpContext, Stand 2026-10-14 nach dem
+// Review F/B vom 2026-10-13, Entscheid E24: erst der im Labor gemessene
+// Stand, die Zusammenlegung mit uRdxCodeMap/uRdxBufferMath folgt
+// spaeter).
+
+interface
+
+uses
+  DUnitX.TestFramework;
+
+type
+  [TestFixture]
+  TTestRdxIntroContext = class
+  public
+    // Vor dem Plan: wo gar kein Code ist
+    [Test] procedure MultiLineString_FiveQuotes;
+    [Test] procedure AsmBlock;
+    [Test] procedure InitializationSection;
+    [Test] procedure FpcAwareUnit;
+    // Die Zeile darueber und die Zeilen dazwischen
+    [Test] procedure DirectiveAbovePlainStatement;
+    [Test] procedure PrevLineStartsInComment;
+    [Test] procedure StarParenAtColumnOneAbove;
+    // Grenzen des Blocks bei einem Zweig ohne begin
+    [Test] procedure Wrap_OpenCommentAtStatementEnd;
+    [Test] procedure Wrap_OpenCommentAtBranchEnd;
+    [Test] procedure Wrap_ElseOfIfExpression;
+    // Zeilenenden und Vorbedingung
+    [Test] procedure RowEol_MixedEndings;
+    [Test] procedure IntroduceEdits_RefusedPlanIsEmpty;
+  end;
+
+implementation
+
+uses
+  System.SysUtils, uRdxIntroPlan, uRdxIntroEdits;
+
+const
+  NAME_BASE = 'MagicNr';
+
+// Die Zeilen ab AFrom mit AEol verbunden - rekursiv statt Verkettung in
+// einer Schleife (SCA110); es sind nur wenige Zeilen.
+function JoinFrom(const ALines: array of string; AFrom: Integer;
+  const AEol: string): string;
+begin
+  if AFrom = High(ALines) then
+    Result := ALines[AFrom]
+  else
+    Result := ALines[AFrom] + AEol + JoinFrom(ALines, AFrom + 1, AEol);
+end;
+
+// Die Zeilen mit CR LF verbunden, mit Zeilenende am Pufferende.
+function Buf(const ALines: array of string): string;
+begin
+  Result := '';
+  if Length(ALines) > 0 then
+    Result := JoinFrom(ALines, 0, #13#10) + #13#10;
+end;
+
+// Der Text zum Puffer ABuffer (UTF-8).
+function TextIn(const ABuffer: string): TRdxIntroText;
+begin
+  Result := TextOf(TEncoding.UTF8.GetBytes(ABuffer));
+end;
+
+// Das Ziel fuer den Caret in Zeile ARow, Spalte ACol des Puffers.
+function TargetIn(const ABuffer: string; ARow, ACol: Integer): TRdxIntroTarget;
+begin
+  Result := TargetAt(TextIn(ABuffer), ARow, ACol, NAME_BASE);
+end;
+
+// C1h ohne IDE: der Text nach den Ersetzungen (ApplyIntroEdits stellt den
+// IOTAEditWriter nach).
+function RunC1h(const ABuffer: string; ARow, ACol: Integer): string;
+var
+  T : TRdxIntroText;
+  G : TRdxIntroTarget;
+  B : TBytes;
+begin
+  B := TEncoding.UTF8.GetBytes(ABuffer);
+  T := TextOf(B);
+  G := TargetAt(T, ARow, ACol, NAME_BASE);
+  Assert.IsTrue(G.Plan.Ok, 'Plan abgelehnt: ' + G.Plan.Reason);
+  Result := TEncoding.UTF8.GetString(ApplyIntroEdits(B, IntroduceEdits(T, G)));
+end;
+
+// Das Ziel wird abgelehnt, und der Grund nennt AKeyword.
+procedure AssertRefusedWith(const G: TRdxIntroTarget; const AKeyword, AMsg: string);
+begin
+  Assert.IsFalse(G.Plan.Ok, AMsg + ' - Plan "' + G.Plan.NewUseLine + '"');
+  Assert.IsTrue(Pos(AKeyword, G.Plan.Reason) > 0,
+    AMsg + ', Grund: ' + G.Plan.Reason);
+end;
+
+// Das Ziel wird angenommen, mit Block (AWrap) und der Zeile darueber.
+procedure AssertAccepted(const G: TRdxIntroTarget; AWrap: Boolean;
+  APrevRow: Integer; const AMsg: string);
+begin
+  Assert.IsTrue(G.Plan.Ok, AMsg + ': ' + G.Plan.Reason);
+  Assert.IsTrue(G.Plan.Wrap = AWrap, AMsg + ', Wrap');
+  Assert.AreEqual<Integer>(APrevRow, G.PrevRow, AMsg + ', PrevRow');
+end;
+
+// N Quotes.
+function Q(N: Integer): string;
+begin
+  Result := StringOfChar('''', N);
+end;
+
+{ TTestRdxIntroContext }
+
+// Ein mehrzeiliger String mit fuenf Quotes (Delphi 12): eine Inhaltszeile,
+// die mit drei Quotes beginnt, schliesst ihn NICHT - nur genau fuenf am
+// Zeilenanfang (Pruefer 2026-10-13, Blocker 2, Harness 23: 'SELECT 42'
+// galt als Code, die Deklaration landete im String und kompilierte). Auch
+// umgekehrt: bei einem Drei-Quote-String schliesst eine Zeile mit fuenf
+// Quotes nicht. Hinter dem Ende geht es wieder.
+procedure TTestRdxIntroContext.MultiLineString_FiveQuotes;
+var
+  B : string;
+begin
+  B := Buf(['procedure P;', 'begin', '  S := ' + Q(5), '    ' + Q(3)
+    + ' quoted;', '    SELECT 42', '    ' + Q(5) + ';', '  X := 42;', 'end;']);
+  // Zeile 5, die 42 in Spalte 12.
+  AssertRefusedWith(TargetIn(B, 5, 12), 'mehrzeiligen String',
+    'Inhaltszeile hinter ''''''');
+  AssertRefusedWith(TargetIn(B, 4, 5), 'mehrzeiligen String',
+    'Zeile mit drei Quotes im Fuenf-Quote-String');
+  // Zeile 7, die 42 in Spalte 8: der String ist zu.
+  AssertAccepted(TargetIn(B, 7, 8), False, 6, 'hinter dem String');
+  Assert.AreEqual('  X := MagicNr01;', TargetIn(B, 7, 8).Plan.NewUseLine,
+    'hinter dem String, NewUseLine');
+  B := Buf(['begin', '  S := ' + Q(3), '    ' + Q(5) + ' x', '    SELECT 42',
+    '    ' + Q(3) + ';', 'end;']);
+  AssertRefusedWith(TargetIn(B, 4, 12), 'mehrzeiligen String',
+    'Zeile mit fuenf Quotes im Drei-Quote-String');
+end;
+
+// In einem asm-Block ist ';' nur ein Trenner und 'mov eax, 1' keine
+// Anweisung - die Zeile darueber "endet" mit ';', der Zeilen-Leser nahm
+// sie an (Pruefer 2026-10-13, Harness 4). Hinter dem 'end' des Blocks und
+// nach einem einzeiligen 'asm ... end;' ist wieder Pascal-Code.
+procedure TTestRdxIntroContext.AsmBlock;
+var
+  B : string;
+begin
+  B := Buf(['procedure P;', 'asm', '  mov eax, 1;', '  mov edx, 5', 'end;',
+    '', 'procedure Q;', 'begin', '  X := 42;', 'end;']);
+  // Zeile 4, die 5 in Spalte 12; Zeile 3, die 1 in Spalte 12.
+  AssertRefusedWith(TargetIn(B, 4, 12), 'asm-Block', 'zweite asm-Zeile');
+  AssertRefusedWith(TargetIn(B, 3, 12), 'asm-Block', 'erste asm-Zeile');
+  // Zeile 9, die 42 in Spalte 8.
+  AssertAccepted(TargetIn(B, 9, 8), False, 8, 'hinter dem asm-Block');
+  B := Buf(['begin', '  asm int 3; end;', '  X := 42;', 'end;']);
+  AssertAccepted(TargetIn(B, 3, 8), False, 2, 'hinter einzeiligem asm');
+end;
+
+// Im initialization- und finalization-Abschnitt ist nicht gemessen, ob
+// eine Inline-Deklaration gilt - auch hinter der ersten Anweisung des
+// Abschnitts (Pruefer 2026-10-13, Harness 11: die Zeile darueber 'Foo;'
+// endet eine Anweisung). Das Wort in einem String oeffnet keinen
+// Abschnitt.
+procedure TTestRdxIntroContext.InitializationSection;
+var
+  B : string;
+begin
+  B := Buf(['initialization', '  Foo;', '  Bar(42);', 'end.']);
+  // Zeile 3, die 42 in Spalte 7.
+  AssertRefusedWith(TargetIn(B, 3, 7), 'initialization',
+    'zweite Anweisung in initialization');
+  B := Buf(['initialization', '  Foo;', 'finalization', '  Bar(42);', 'end.']);
+  AssertRefusedWith(TargetIn(B, 4, 7), 'initialization',
+    'Anweisung in finalization');
+  B := Buf(['begin', '  S := ''initialization'';', '  X := 42;', 'end;']);
+  AssertAccepted(TargetIn(B, 3, 8), False, 2, 'Wort im String');
+end;
+
+// Eine Datei mit FPC-Weiche oder FPC-Modus (uRdxIntroPlan.LineLooksFpcAware,
+// irgendwo in der Datei): eine Inline-Konstante gibt es in FPC 3.2 nicht,
+// die Aktion braeche den FPC-Bau (Bericht B, Befund 1c). Andere
+// Direktiven stoeren nicht.
+procedure TTestRdxIntroContext.FpcAwareUnit;
+var
+  B : string;
+begin
+  B := Buf(['unit U;', '{$IFDEF FPC}{$MODE delphi}{$ENDIF}', 'interface',
+    'implementation', 'procedure P;', 'begin', '  X := 42;', 'end;', 'end.']);
+  // Zeile 7, die 42 in Spalte 8.
+  AssertRefusedWith(TargetIn(B, 7, 8), 'FPC', 'IFDEF FPC am Dateikopf');
+  B := Buf(['procedure P;', 'begin', '  X := 42;', 'end;', '',
+    'initialization', '{$if defined(fpc)}', 'end.']);
+  AssertRefusedWith(TargetIn(B, 3, 8), 'FPC', 'if defined(fpc) weiter unten');
+  B := Buf(['{$IFDEF DEBUG}', 'procedure P;', 'begin', '  X := 42;', 'end;',
+    '{$ENDIF}']);
+  AssertAccepted(TargetIn(B, 4, 8), False, 3, 'IFDEF DEBUG');
+end;
+
+// Eine Direktive zwischen der Zeile darueber und der Anweisung sperrt JEDEN
+// Plan, nicht nur den mit Block: '{$IFDEF A} if B then {$ELSE} Foo;
+// {$ENDIF}' ueber 'Y := 42;' - ohne A endet 'Foo;' die Anweisung, mit A
+// stuende die Deklaration hinter 'then' (Pruefer 2026-10-13, Major 4,
+// Harness 7). Eine Direktive OBERHALB der Zeile darueber stoert nicht.
+procedure TTestRdxIntroContext.DirectiveAbovePlainStatement;
+var
+  B : string;
+begin
+  B := Buf(['procedure P;', 'begin', '{$IFDEF A}', '  if B then', '{$ELSE}',
+    '  Foo;', '{$ENDIF}', '  Y := 42;', 'end;']);
+  // Zeile 8, die 42 in Spalte 8.
+  AssertRefusedWith(TargetIn(B, 8, 8), 'Direktive',
+    'ENDIF zwischen Foo; und der Anweisung');
+  B := Buf(['begin', '{$IFDEF A}', '  Foo;', '  Y := 42;', '{$ENDIF}',
+    'end;']);
+  AssertAccepted(TargetIn(B, 4, 8), False, 3, 'Direktive oberhalb');
+end;
+
+// Die Zeile darueber zaehlt ab ihrem Kommentar-Zustand: '  Foo; // } if A
+// then' hinter '{ Beispiel:' ist der Zweig ' if A then' (das 'Foo; //'
+// liegt im Kommentar) - vorher las TargetAt sie ab Code, sah 'Foo;' und
+// setzte die Deklaration hinter das then (Pruefer 2026-10-13, Minor 1,
+// Harness 9). Der Block bekommt die Einrueckung der rohen Zeile.
+procedure TTestRdxIntroContext.PrevLineStartsInComment;
+var
+  B : string;
+begin
+  B := Buf(['procedure P;', 'begin', '  { Beispiel:', '  Foo; // } if A then',
+    '    X := 42;', 'end;']);
+  // Zeile 5, die 42 in Spalte 10.
+  AssertAccepted(TargetIn(B, 5, 10), True, 4, 'Zweig hinter Kommentar');
+  Assert.AreEqual(Buf(['procedure P;', 'begin', '  { Beispiel:',
+    '  Foo; // } if A then', '  begin', '    const MagicNr01 = 42;',
+    '    X := MagicNr01;', '  end;', 'end;']), RunC1h(B, 5, 10),
+    'Zweig hinter Kommentar: Text danach');
+  // Umgekehrt: hinter dem Kommentar endet eine Anweisung.
+  B := Buf(['begin', '  { x', '  if A then } Foo;', '  X := 42;', 'end;']);
+  AssertAccepted(TargetIn(B, 4, 8), False, 3, 'Anweisung hinter Kommentar');
+end;
+
+// Ein '*)' in Spalte 1 ist das Ende des Kommentars, kein Code: die Zeile
+// zaehlt nicht als Zeile darueber (Pruefer 2026-10-13, Minor 2: das ')'
+// galt als Code, und der Plan lehnte ab - "unklar"). Steht hinter dem
+// '*)' Code, ist genau der die Zeile darueber.
+procedure TTestRdxIntroContext.StarParenAtColumnOneAbove;
+var
+  B : string;
+begin
+  B := Buf(['begin', '  X := 1;', '  (* alt', '*)', '  Y := 42;', 'end;']);
+  // Zeile 5, die 42 in Spalte 8.
+  AssertAccepted(TargetIn(B, 5, 8), False, 2, '*) allein');
+  Assert.AreEqual('  Y := MagicNr01;', TargetIn(B, 5, 8).Plan.NewUseLine,
+    '*) allein, NewUseLine');
+  B := Buf(['begin', '  (* alt', '*) X := 1;', '  Y := 42;', 'end;']);
+  AssertAccepted(TargetIn(B, 4, 8), False, 3, '*) mit Code dahinter');
+  B := Buf(['begin', '  (* alt', '*) if A then', '    Y := 42;', 'end;']);
+  AssertAccepted(TargetIn(B, 4, 10), True, 3, '*) mit Zweig dahinter');
+end;
+
+// Endet die Anweisungszeile in einem offenen { }- oder (* *)-Kommentar,
+// landete 'end;' im Kommentar - und Code hinter dem Kommentarende ('}
+// Y := 1;') rutschte in den Block (Pruefer 2026-10-13, Major 3, Harness
+// 5/20/24). Ein Kommentar, der auf der Zeile schliesst, stoert nicht.
+procedure TTestRdxIntroContext.Wrap_OpenCommentAtStatementEnd;
+var
+  B : string;
+begin
+  B := Buf(['procedure P;', 'begin', '  if A then', '    X := 42; { Kommentar',
+    '    geht weiter }', '  Y := 1;', 'end;']);
+  // Zeile 4, die 42 in Spalte 10.
+  AssertRefusedWith(TargetIn(B, 4, 10), 'offenen Kommentar',
+    '{ offen hinter der Anweisung');
+  B := Buf(['procedure P;', 'begin', '  while A do',
+    '    X := 42; (* Kommentar', '    weiter *)', 'end;']);
+  AssertRefusedWith(TargetIn(B, 4, 10), 'offenen Kommentar',
+    '(* offen hinter der Anweisung');
+  B := Buf(['procedure P;', 'begin', '  if A then', '    X := 42; { c',
+    '    } Y := 1;', '  Z := 2;', 'end;']);
+  AssertRefusedWith(TargetIn(B, 4, 10), 'offenen Kommentar',
+    'Kommentar mit Code hinter dem Ende');
+  B := Buf(['procedure P;', 'begin', '  if A then', '    X := 42; { c }',
+    '  Y := 1;', 'end;']);
+  AssertAccepted(TargetIn(B, 4, 10), True, 3, 'Kommentar schliesst');
+end;
+
+// Endet die Zweigzeile in einem offenen Kommentar, landete 'begin' am
+// Anfang der naechsten Zeile IM Kommentar (Pruefer 2026-10-13, Major 3,
+// Harness 6). Ein Kommentar, der auf der Zweigzeile schliesst, stoert
+// nicht - auch nicht ein ganzer Kommentar zwischen Zweig und Anweisung.
+procedure TTestRdxIntroContext.Wrap_OpenCommentAtBranchEnd;
+var
+  B : string;
+begin
+  B := Buf(['procedure P;', 'begin', '  if A then { Kommentar',
+    '    geht weiter }', '    X := 42;', '  Y := 1;', 'end;']);
+  // Zeile 5, die 42 in Spalte 10.
+  AssertRefusedWith(TargetIn(B, 5, 10), 'Zweigzeile',
+    '{ offen hinter dem then');
+  B := Buf(['procedure P;', 'begin', '  if A then { kurz }', '    X := 42;',
+    'end;']);
+  AssertAccepted(TargetIn(B, 4, 10), True, 3, 'Kommentar schliesst');
+  B := Buf(['procedure P;', 'begin', '  if A then', '  { ganz',
+    '    dazwischen }', '    X := 42;', 'end;']);
+  AssertAccepted(TargetIn(B, 6, 10), True, 3, 'Kommentar dazwischen');
+  Assert.AreEqual(Buf(['procedure P;', 'begin', '  if A then', '  begin',
+    '  { ganz', '    dazwischen }', '    const MagicNr01 = 42;',
+    '    X := MagicNr01;', '  end;', 'end;']), RunC1h(B, 6, 10),
+    'Kommentar dazwischen: Text danach');
+end;
+
+// Das 'else' auf eigener Zeile gehoert zu einem Bedingungsausdruck (Delphi
+// 13), wenn die Code-Zeile davor ein 'if' hinter ':=' traegt - ein
+// begin..end um den else-Arm waere kein Code (Pruefer 2026-10-13, Minor 3,
+// Harness 8). Das 'else' einer if-ANWEISUNG bleibt ein Zweig.
+procedure TTestRdxIntroContext.Wrap_ElseOfIfExpression;
+var
+  B : string;
+begin
+  B := Buf(['procedure P;', 'begin', '  X := if C then A', '  else',
+    '    Foo(42);', 'end;']);
+  // Zeile 5, die 42 in Spalte 9.
+  AssertRefusedWith(TargetIn(B, 5, 9), 'Bedingungsausdruck',
+    'else-Arm des Ausdrucks');
+  B := Buf(['procedure P;', 'begin', '  if C then A', '  else', '    Foo(42);',
+    'end;']);
+  AssertAccepted(TargetIn(B, 5, 9), True, 4, 'else der Anweisung');
+  B := Buf(['procedure P;', 'begin', '  if C then', '    A', '  else',
+    '    Foo(42);', 'end;']);
+  AssertAccepted(TargetIn(B, 6, 9), True, 5,
+    'else der Anweisung, Arm darueber');
+end;
+
+// Eingefuegte Zeilen bekommen das Zeilenende der Zeile, vor die sie
+// kommen (RowEol): in einer CR-LF-Datei folgt die Deklaration einer
+// LF-Anweisungszeile mit LF, 'begin' der Zweigzeile und 'end;' der
+// Anweisung; eine LF-Datei mit EINER CR-LF-Zeile bleibt LF (vorher: CR LF,
+// sobald eines vorkommt - Pruefer 2026-10-13, Minor 5).
+procedure TTestRdxIntroContext.RowEol_MixedEndings;
+begin
+  Assert.AreEqual('begin'#13#10'  const MagicNr01 = 42;'#10'  X := MagicNr01;'
+    + #10'end;'#13#10, RunC1h('begin'#13#10'  X := 42;'#10'end;'#13#10, 2, 8),
+    'LF-Anweisung in CR-LF-Datei');
+  Assert.AreEqual('begin'#13#10'  if A then'#10'  begin'#10
+    + '    const MagicNr01 = 42;'#13#10'    X := MagicNr01;'#13#10'  end;'#13#10
+    + 'end;'#10, RunC1h('begin'#13#10'  if A then'#10'    X := 42;'#13#10
+    + 'end;'#10, 3, 10), 'Block: begin wie die Zweigzeile, end; wie die '
+    + 'Anweisung');
+  Assert.AreEqual('begin'#10'  Foo;'#13#10'  const MagicNr01 = 42;'#10
+    + '  X := MagicNr01;'#10'end;'#10, RunC1h('begin'#10'  Foo;'#13#10
+    + '  X := 42;'#10'end;'#10, 3, 8), 'LF-Datei mit einer CR-LF-Zeile');
+  // Letzte Zeile ohne Zeilenende: Rueckfall auf das erste Zeilenende der
+  // Datei (LF).
+  Assert.AreEqual('begin'#10'  const MagicNr01 = 42;'#10'  X := MagicNr01;',
+    RunC1h('begin'#10'  X := 42;', 2, 8), 'letzte Zeile ohne Ende, LF-Datei');
+end;
+
+// IntroduceEdits verlangt Plan.Ok: fuer ein abgelehntes Ziel - auch eines
+// ohne Zeilen (Default, SourceRow 0) - gibt es keine Ersetzungen statt
+// eines Bereichsfehlers (Bericht B, Minor "IntroduceEdits ohne
+// Vorbedingung").
+procedure TTestRdxIntroContext.IntroduceEdits_RefusedPlanIsEmpty;
+var
+  T : TRdxIntroText;
+  G : TRdxIntroTarget;
+begin
+  T := TextIn(Buf(['begin', '  X := Y;', 'end;']));
+  G := TargetAt(T, 2, 8, NAME_BASE);
+  Assert.IsFalse(G.Plan.Ok, 'Vorbedingung: kein Literal am Caret');
+  Assert.AreEqual<Integer>(0, Length(IntroduceEdits(T, G)),
+    'abgelehntes Ziel: keine Ersetzungen');
+  G := Default(TRdxIntroTarget);
+  Assert.AreEqual<Integer>(0, Length(IntroduceEdits(T, G)),
+    'leeres Ziel (SourceRow 0): keine Ersetzungen');
+end;
+
+initialization
+  TDUnitX.RegisterTestFixture(TTestRdxIntroContext);
+end.
