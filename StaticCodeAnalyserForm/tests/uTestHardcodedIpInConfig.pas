@@ -140,7 +140,9 @@ begin
   Res := TObjectList<TLeakFinding>.Create(True);
   try
     L.Text := INI_HEAD + INI_SERVER;
-    THardcodedIpInConfigDetector.AnalyzeFile(TPath.Combine(FDir, 'App.ini'), L, Res);
+    // FDir als Anker: das Testpfad-Gate sieht nur den Teil darunter, nicht
+    // ein TEMP unter '...\test\...' (Review 2026-10-13).
+    THardcodedIpInConfigDetector.AnalyzeFile(TPath.Combine(FDir, 'App.ini'), L, Res, FDir);
     Assert.AreEqual<Integer>(1, Res.Count);
     Assert.AreEqual<Integer>(Ord(fkHardcodedIpInConfig), Ord(Res[0].Kind));
     Assert.AreEqual('2', Res[0].LineNumber);
@@ -168,7 +170,7 @@ begin
       'FileVersion=1.2.3.4'#13#10 +
       'Host=127.0.0.1'#13#10 +
       'Doc=192.0.2.10';
-    THardcodedIpInConfigDetector.AnalyzeFile(TPath.Combine(FDir, 'App.ini'), L, Res);
+    THardcodedIpInConfigDetector.AnalyzeFile(TPath.Combine(FDir, 'App.ini'), L, Res, FDir);
     Assert.AreEqual<Integer>(0, Res.Count);
   finally
     Res.Free;
@@ -185,8 +187,10 @@ begin
   Res := TObjectList<TLeakFinding>.Create(True);
   try
     L.Text := INI_HEAD + INI_SERVER;
+    // Mit FDir als Anker zaehlt genau 'tests\' unterhalb - und das Gate
+    // muss daran schweigen (Gegenprobe zu Detector_ValueReported).
     THardcodedIpInConfigDetector.AnalyzeFile(
-      TPath.Combine(FDir, 'tests\App.ini'), L, Res);
+      TPath.Combine(FDir, 'tests\App.ini'), L, Res, FDir);
     Assert.AreEqual<Integer>(0, Res.Count);
   finally
     Res.Free;

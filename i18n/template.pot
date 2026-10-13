@@ -49,11 +49,11 @@ msgstr ""
 msgid "\"%s\" already exists. Overwrite it?"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1601
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1739
 msgid "\"%s\" is a built-in profile and cannot be changed."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1651
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1779
 msgid "\"%s\" is a built-in profile."
 msgstr ""
 
@@ -118,7 +118,7 @@ msgstr ""
 msgid "%s contains no profiles."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1432
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1543
 msgid "%s is not a valid JSON object."
 msgstr ""
 
@@ -158,7 +158,7 @@ msgstr ""
 msgid "// NOSONAR suppression marker found - audit it"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:347
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:397
 msgid "1-2 sentences why the rule fires on THIS specific code (not the generic explanation above)."
 msgstr ""
 
@@ -166,7 +166,7 @@ msgstr ""
 msgid "8-bit string cast silently drops non-codepage characters"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1616
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1730
 #: SCA.SharedUI/sources/uProfileViewer.pas:679
 msgid "A profile without rules would find nothing."
 msgstr ""
@@ -263,7 +263,7 @@ msgstr ""
 msgid "All severities"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1611
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1725
 msgid "Allowed characters: letters, digits, hyphen, underscore and dot."
 msgstr ""
 
@@ -329,7 +329,7 @@ msgstr ""
 msgid "Annotation overlay position:"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:326
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:374
 msgid "Anti-pattern"
 msgstr ""
 
@@ -508,7 +508,7 @@ msgstr ""
 msgid "Cannot move the editor cursor to line %d, column %d"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1424
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1535
 msgid "Cannot read %s: %s"
 msgstr ""
 
@@ -516,7 +516,7 @@ msgstr ""
 msgid "Cardinal/Integer subtraction on pointers truncates upper 32 bits on Win64"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:346
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:396
 msgid "Cause"
 msgstr ""
 
@@ -620,7 +620,7 @@ msgstr ""
 msgid "Close"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:312
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:359
 msgid "Code (>>> marks the line that triggered the rule)"
 msgstr ""
 
@@ -650,7 +650,7 @@ msgstr ""
 msgid "Code reaches into another form's published fields - tight coupling"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:275
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:320
 msgid "Code review request - Delphi static analysis finding"
 msgstr ""
 
@@ -861,7 +861,7 @@ msgstr ""
 msgid "Destructor does not call inherited - resource leak"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:299
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:344
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:338
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2656
 msgid "Detail"
@@ -1034,7 +1034,7 @@ msgstr ""
 msgid "Export findings: HTML / JSON / CSV / Jira / Clipboard / Sonar"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:290
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:335
 msgid "Field"
 msgstr ""
 
@@ -1042,7 +1042,7 @@ msgstr ""
 msgid "FieldByName in loop - cache the TField reference outside"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:292
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:337
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:265
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2653
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1610
@@ -1079,7 +1079,7 @@ msgstr ""
 msgid "File not found: "
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1407
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1518
 msgid "File not found: %s"
 msgstr ""
 
@@ -1092,7 +1092,7 @@ msgstr ""
 msgid "Filter: %s%s"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:288
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:333
 msgid "Finding"
 msgstr ""
 
@@ -1116,7 +1116,7 @@ msgstr ""
 msgid "Findings of type Bug (wrong behaviour, crash, wrong result)."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:348
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:398
 msgid "Fix"
 msgstr ""
 
@@ -1253,8 +1253,12 @@ msgstr ""
 msgid "IDE editor service not available."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:356
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:417
 msgid "If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on its own line directly above the affected line."
+msgstr ""
+
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:414
+msgid "If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on its own line in the unit `%s` (a form file takes no comment marker; the file-wide marker in its unit covers the form)."
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:3533
@@ -1411,7 +1415,7 @@ msgstr ""
 msgid "Likely bugs / risky patterns. Review before merge."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:293
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:338
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:338
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:419
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:458
@@ -1490,7 +1494,7 @@ msgstr ""
 msgid "Message"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:295
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:340
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:268
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:338
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:457
@@ -1757,7 +1761,7 @@ msgstr ""
 msgid "Please provide a valid project path."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:344
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:394
 msgid "Please respond with three sections"
 msgstr ""
 
@@ -1919,7 +1923,7 @@ msgstr ""
 msgid "Real bugs / security holes (severity Error). Fix immediately."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:334
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:383
 msgid "Recommended fix"
 msgstr ""
 
@@ -1927,7 +1931,7 @@ msgstr ""
 msgid "Refactor needed - many critical findings"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:322
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:370
 msgid "Reference pattern (generic example for this rule, NOT the user's code)"
 msgstr ""
 
@@ -2002,7 +2006,7 @@ msgstr ""
 msgid "Result of managed type is read before it is assigned"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:298
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:343
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:262
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:338
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:460
@@ -2012,7 +2016,7 @@ msgstr ""
 msgid "Rule"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:304
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:349
 msgid "Rule description"
 msgstr ""
 
@@ -2190,7 +2194,7 @@ msgstr ""
 msgid "Settings: %s - changes take effect on the next analysis run."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:296
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:341
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:338
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:461
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:970
@@ -2395,11 +2399,11 @@ msgstr ""
 msgid "Text (one-line hint, no window)"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1596
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1716
 msgid "The profile name must not be empty."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1656
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1784
 msgid "There is no profile \"%s\"."
 msgstr ""
 
@@ -2431,7 +2435,7 @@ msgstr ""
 msgid "Two visibility sections with the same keyword - merge them"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:297
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:342
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:459
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:968
 #: SCA.SharedUI/sources/uRuleListBox.pas:217
@@ -2524,7 +2528,7 @@ msgstr ""
 msgid "UsesCheck - report unused entries in uses clause (may produce false positives)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:290
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:335
 msgid "Value"
 msgstr ""
 
@@ -2532,7 +2536,7 @@ msgstr ""
 msgid "Variable used after Free / FreeAndNil - dangling pointer, AV likely"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:350
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:400
 msgid "Verify"
 msgstr ""
 
@@ -2639,7 +2643,7 @@ msgstr ""
 msgid "X.Free; X := nil; -> use FreeAndNil(X)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:277
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:322
 msgid "You are a senior Delphi developer reviewing the output of a static code analyser. Target version: Delphi 12 Athens (RTL/VCL). Suggest minimal, idiomatic fixes - no sweeping refactors, no style overhauls, no new dependencies unless strictly required."
 msgstr ""
 
@@ -2761,7 +2765,7 @@ msgstr ""
 msgid "the clause would no longer be sorted (new SCA142)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:349
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:399
 msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
 msgstr ""
 
@@ -2788,7 +2792,7 @@ msgstr ""
 msgid "uses: qualify entries"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:351
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:401
 msgid "what to test or check after the fix to confirm the issue is gone (and no regressions)."
 msgstr ""
 

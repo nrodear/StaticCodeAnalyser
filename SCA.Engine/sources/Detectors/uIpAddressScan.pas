@@ -3,7 +3,9 @@ unit uIpAddressScan;
 // SCA200 HardcodedIpAddress / SCA201 HardcodedIpInConfig - der reine Teil:
 // Grammatik, Klassifikation, Kandidatensuche und Kontext-Gates. Kein AST,
 // keine Datei, keine Engine-Globals - derselbe Code laeuft im FPC-
-// Pruefstand (Muster uParamNameScan, SCA199).
+// Pruefstand (Muster uParamNameScan, SCA199). Die Logik-Faelle stehen
+// versioniert in uTestIpAddressScanGrammar/-Classes/-Pascal/-Ini
+// (DUnitX; vorher nur im Scratchpad des Pruefstands, Review 2026-10-13).
 //
 // GRAMMATIK (strikt, Konzept_HardcodedIp_2026-10-09 Abschnitt 4.1)
 //   IPv4  vier Dezimal-Oktette 0..255 ohne fuehrende Nullen (RFC 3986
@@ -21,11 +23,15 @@ unit uIpAddressScan;
 // Gemeldet werden nur privat, CGNAT und oeffentlich; Loopback,
 // unspezifiziert, Broadcast, Netzmaske, Link-Local, Dokumentation,
 // IETF-Protokollbloecke, Benchmark, Multicast und Reserviert nicht.
+// IPv6 ist oeffentlich nur im Global-Unicast-Block 2000::/3 (RFC 4291
+// 2.4); alles andere ohne eigenen Block ist unzugewiesen und zaehlt als
+// reserviert (Review 2026-10-13 - vorher war jede Restadresse "public").
 //
 // GATES (aus der Korpusmessung, Konzept 4.3) arbeiten auf WORTTEILEN
 // (CamelCase/Unterstrich getrennt), nicht auf Teilstrings: 'VERS' in
 // 'SERVERS' oder 'dll' in einem URL-Pfad unterdrueckten in der Messung
-// echte Funde.
+// echte Funde. 'IPv4'/'IPv6' in jeder Schreibweise ist das Host-Wort
+// 'ip' (die Camel-Regel zerlegte es in 'i' und 'pv').
 
 interface
 
@@ -229,35 +235,21 @@ end;
 
 { ---- Wachsende Arrays (Verdopplung statt SetLength je Element) ---- }
 
-procedure AddHit(var A: TArray<TIpHit>; var N: Integer; const H: TIpHit);
-begin
-  if N = Length(A) then
-    SetLength(A, 2 * N + 4);
-  A[N] := H;
-  Inc(N);
-end;
+type
+  // Eine generische Klassenmethode statt einer Prozedur je Elementtyp
+  // (Review 2026-10-13: fuenf gleiche Rumpfe fuer TIpHit, string,
+  // TCodeIpHit, TIniIpHit und TLiteral). FPC 3.2.2 uebersetzt sie im
+  // Pruefstand (Probe gen2.pas). Record, kein class: die Unit fuehrt
+  // sonst zwei Klassen.
+  TGrow = record
+    class procedure Add<T>(var A: TArray<T>; var N: Integer; const V: T); static;
+  end;
 
-procedure AddStr(var A: TArray<string>; var N: Integer; const S: string);
+class procedure TGrow.Add<T>(var A: TArray<T>; var N: Integer; const V: T);
 begin
   if N = Length(A) then
     SetLength(A, 2 * N + 4);
-  A[N] := S;
-  Inc(N);
-end;
-
-procedure AddCodeHit(var A: TArray<TCodeIpHit>; var N: Integer; const H: TCodeIpHit);
-begin
-  if N = Length(A) then
-    SetLength(A, 2 * N + 4);
-  A[N] := H;
-  Inc(N);
-end;
-
-procedure AddIniHit(var A: TArray<TIniIpHit>; var N: Integer; const H: TIniIpHit);
-begin
-  if N = Length(A) then
-    SetLength(A, 2 * N + 4);
-  A[N] := H;
+  A[N] := V;
   Inc(N);
 end;
 
@@ -328,7 +320,7 @@ begin
   for i := 1 to Length(S) + 1 do
     if (i > Length(S)) or (S[i] = ':') then
     begin
-      AddStr(Result, N, Copy(S, Start, i - Start));
+      TGrow.Add<string>(Result, N, Copy(S, Start, i - Start));
       Start := i + 1;
     end;
   SetLength(Result, N);
@@ -480,8 +472,10 @@ const
 
   // IANA IPv6 Special-Purpose Address Registry (RFC 6890); ::/96, ::ffff:0:0/96
   // und 64:ff9b::/96 behandelt ClassifyLow96 vorher. Erster Treffer gewinnt
-  // (2001:db8::/32 vor 2001::/23).
-  V6_BLOCKS: array[0..9] of TV6Block = (
+  // (2001:db8::/32 vor 2001::/23). Was keinen Block trifft, ist nur in
+  // 2000::/3 oeffentlich (GLOBAL_UNICAST_*), sonst reserviert - ein
+  // eigener Block fuer ::/8 ist damit ueberfluessig.
+  V6_BLOCKS: array[0..8] of TV6Block = (
     (V0: $2001; V1: $0DB8; V2: 0; V3: 0; M0: $FFFF; M1: $FFFF; M2: 0; M3: 0; Cls: ipcDocumentation),
     (V0: $3FFF; V1: $0000; V2: 0; V3: 0; M0: $FFFF; M1: $F000; M2: 0; M3: 0; Cls: ipcDocumentation),
     (V0: $2001; V1: $0000; V2: 0; V3: 0; M0: $FFFF; M1: $FE00; M2: 0; M3: 0; Cls: ipcProtocol),
@@ -490,8 +484,11 @@ const
     (V0: $FE80; V1: $0000; V2: 0; V3: 0; M0: $FFC0; M1: 0; M2: 0; M3: 0; Cls: ipcLinkLocal),
     (V0: $FC00; V1: $0000; V2: 0; V3: 0; M0: $FE00; M1: 0; M2: 0; M3: 0; Cls: ipcPrivate),
     (V0: $FEC0; V1: $0000; V2: 0; V3: 0; M0: $FFC0; M1: 0; M2: 0; M3: 0; Cls: ipcPrivate),
-    (V0: $FF00; V1: $0000; V2: 0; V3: 0; M0: $FF00; M1: 0; M2: 0; M3: 0; Cls: ipcMulticast),
-    (V0: $0000; V1: $0000; V2: 0; V3: 0; M0: $FF00; M1: 0; M2: 0; M3: 0; Cls: ipcReserved));
+    (V0: $FF00; V1: $0000; V2: 0; V3: 0; M0: $FF00; M1: 0; M2: 0; M3: 0; Cls: ipcMulticast));
+
+  // Global Unicast 2000::/3 (RFC 4291 2.4): die drei hoechsten Bits 001.
+  GLOBAL_UNICAST_MASK  = $E000;
+  GLOBAL_UNICAST_VALUE = $2000;
 
   CLASS_LABELS: array[TIpClass] of string = ('private, RFC 1918',
     'shared, RFC 6598', 'public', 'loopback', 'unspecified', 'broadcast',
@@ -578,7 +575,12 @@ begin
   for B in V6_BLOCKS do
     if InV6Block(W, B) then
       Exit(B.Cls);
-  Result := ipcPublic;
+  // Oeffentlich nur im Global-Unicast-Block; '4000::1' oder '8000::1'
+  // sind unzugewiesen - lieber nicht melden als falsch (Review 2026-10-13).
+  if (W[0] and GLOBAL_UNICAST_MASK) = GLOBAL_UNICAST_VALUE then
+    Result := ipcPublic
+  else
+    Result := ipcReserved;
 end;
 
 class function TIpAddressScan.IsReportable(C: TIpClass): Boolean;
@@ -773,7 +775,7 @@ begin
     while (j <= Length(S)) and IsV6RunChar(S[j]) do
       Inc(j);
     if TryV6Run(S, i, j, H) then
-      AddHit(AHits, N, H);
+      TGrow.Add<TIpHit>(AHits, N, H);
     i := j;
   end;
 end;
@@ -793,7 +795,7 @@ begin
     if IsDigit(S[i]) and not IsWordChar(Prev) and (Prev <> '.')
        and not InsideAny(AHits, N6, i) and TryV4At(S, i, H, E) then
     begin
-      AddHit(AHits, N, H);
+      TGrow.Add<TIpHit>(AHits, N, H);
       i := E;
     end
     else
@@ -842,6 +844,16 @@ begin
      (IsUpper(CharAt(S, I - 1)) and IsLower(CharAt(S, I + 1))));
 end;
 
+// Beginnt an S[I] 'IPv4' oder 'IPv6' in beliebiger Schreibweise? Die
+// Camel-Regel macht aus 'IPv4' die Teile 'i' und 'pv', aus 'ipv4' bleibt
+// 'ipv' - beides kein Host-Wort, und 'LocalIPv4 := ''8.8.8.8''' verlor
+// die Kleinzahl-Rettung (Review 2026-10-13). Die Ziffer beendet das Wort.
+function IsIpvToken(const S: string; I: Integer): Boolean;
+begin
+  Result := (LowerCase(Copy(S, I, 3)) = 'ipv')
+    and CharInSet(CharAt(S, I + 3), ['4', '6']);
+end;
+
 class function TIpAddressScan.WordParts(const AText: string): TArray<string>;
 var
   i, Start, N : Integer;
@@ -849,23 +861,33 @@ begin
   Result := nil;
   N := 0;
   Start := 0;
-  for i := 1 to Length(AText) + 1 do
+  i := 1;
+  // Bis Length + 1: CharAt liefert dort #0, das schliesst das letzte Wort.
+  while i <= Length(AText) + 1 do
   begin
-    if (i <= Length(AText)) and IsLetter(AText[i]) then
+    if not IsLetter(CharAt(AText, i)) then
     begin
-      if Start = 0 then
-        Start := i
-      else if IsCamelBreak(AText, i) then
-      begin
-        AddStr(Result, N, LowerCase(Copy(AText, Start, i - Start)));
-        Start := i;
-      end;
-    end
-    else if Start > 0 then
-    begin
-      AddStr(Result, N, LowerCase(Copy(AText, Start, i - Start)));
+      if Start > 0 then
+        TGrow.Add<string>(Result, N, LowerCase(Copy(AText, Start, i - Start)));
       Start := 0;
-    end;
+    end
+    else if (Start > 0) and IsCamelBreak(AText, i) then
+    begin
+      TGrow.Add<string>(Result, N, LowerCase(Copy(AText, Start, i - Start)));
+      Start := i;
+    end
+    else if Start = 0 then
+      Start := i;
+    // Am Wortanfang (auch nach einem Camel-Bruch) 'IPv4'/'IPv6' als ein
+    // Wort 'ip' - weiter bei der Ziffer, die es abschliesst.
+    if (Start = i) and IsIpvToken(AText, i) then
+    begin
+      TGrow.Add<string>(Result, N, 'ip');
+      Start := 0;
+      Inc(i, 3);
+    end
+    else
+      Inc(i);
   end;
   SetLength(Result, N);
 end;
@@ -978,8 +1000,46 @@ type
     Words       : TArray<string>;  // Pascal: Code der Zeile ohne Literale; INI: Schluessel
     HostWords   : TArray<string>;  // dazu nur fuer die Kleinzahl-Rettung (INI: Sektion)
     VersionHead : Boolean;         // ein Bezeichner endet auf ein Versionswort
+    TextKey     : Boolean;         // INI: Fliesstext-Schluessel ohne Host-Wort
     Fractions   : Integer;         // weitere Dezimalbrueche im Text
   end;
+
+function JoinParts(const A, B: TArray<string>): TArray<string>;
+var
+  i : Integer;
+begin
+  Result := nil;
+  SetLength(Result, Length(A) + Length(B));
+  for i := 0 to High(A) do
+    Result[i] := A[i];
+  for i := 0 to High(B) do
+    Result[Length(A) + i] := B[i];
+end;
+
+// Kontext einer Pascal-Zeile: ACode ist die Zeile mit Leerzeichen statt
+// Literalen.
+function PascalContext(const ACode: string): TGateContext;
+begin
+  Result.Words := TIpAddressScan.WordParts(ACode);
+  Result.HostWords := Result.Words;
+  Result.VersionHead := HasVersionHead(ACode);
+  Result.TextKey := False;
+  Result.Fractions := 0;
+end;
+
+// Kontext einer INI-Zeile. Die Sektion rettet nur die Kleinzahl ('[DNS]
+// Primary=8.8.8.8'); als Versionskontext zaehlt sie nicht ('[Server]
+// Version=...'). Ein Fliesstext-Schluessel ('description=Returns 10.1.2.3
+// ...') verwirft - ausser er nennt einen Host ('HelpServer=...'); URL und
+// Port prueft Judge je Adresse.
+function IniContext(const AKey, ASection: string): TGateContext;
+begin
+  Result.Words := TIpAddressScan.WordParts(AKey);
+  Result.HostWords := JoinParts(Result.Words, TIpAddressScan.WordParts(ASection));
+  Result.VersionHead := HasVersionHead(AKey);
+  Result.TextKey := AnyInList(Result.Words, TEXT_WORDS) and not AnyHostWord(Result.Words);
+  Result.Fractions := 0;
+end;
 
 // Versionsangabe: ein Versionswort direkt vor der Zahl; ein Bezeichner mit
 // Versionswort als Kopf ('ServerVersion' - auch neben Host-Woertern); sonst
@@ -1049,7 +1109,7 @@ end;
 
 // Die Gates in fester Reihenfolge ('' = melden, sonst der Grund). URL, UNC
 // und Port machen die Adresse zum Host - dann greifen weder Versions-,
-// Form- noch Zahlenkolonnen-Gate.
+// Form-, Zahlenkolonnen- noch Fliesstext-Gate.
 function Judge(const AHit: TIpHit; const AText: string;
   const ACtx: TGateContext): string;
 var
@@ -1069,6 +1129,58 @@ begin
   Result := JudgeForm(AHit, ACtx.HostWords);
   if (Result = '') and (ACtx.Fractions >= 2) then
     Result := R_SOUP;
+  if (Result = '') and ACtx.TextKey then
+    Result := R_TEXTKEY;
+end;
+
+type
+  // Ein beurteilter Treffer einer Zeile; Source nummeriert die Quelle in
+  // der Zeile (Pascal: das Literal, INI: 0).
+  TJudgedHit = record
+    Hit    : TIpHit;
+    Reason : string;
+    Source : Integer;
+  end;
+
+// Je Zeile und Adresse ein Eintrag; ein gemeldeter Treffer ersetzt einen
+// frueheren verworfenen ('srv-10.0.0.5,10.0.0.5'). Eine Routine fuer
+// Pascal und INI (vorher MergeCodeHit/MergeIniHit, Review 2026-10-13).
+procedure MergeJudged(var A: TArray<TJudgedHit>; var N: Integer;
+  const J: TJudgedHit);
+var
+  i : Integer;
+begin
+  for i := 0 to N - 1 do
+    if A[i].Hit.Text = J.Hit.Text then
+    begin
+      if (A[i].Reason <> '') and (J.Reason = '') then
+        A[i] := J;
+      Exit;
+    end;
+  TGrow.Add<TJudgedHit>(A, N, J);
+end;
+
+// Alle Adressen in AText beurteilt in die Zeilenliste gemischt; die
+// Zahlenkolonne (Fractions) gilt je Text.
+procedure JudgeInto(const AText: string; const ACtx: TGateContext;
+  ASource: Integer; var A: TArray<TJudgedHit>; var N: Integer);
+var
+  Hits : TArray<TIpHit>;
+  Ctx  : TGateContext;
+  H    : TIpHit;
+  J    : TJudgedHit;
+begin
+  Hits := TIpAddressScan.FindAll(AText);
+  if Hits = nil then Exit;
+  Ctx := ACtx;
+  Ctx.Fractions := CountOtherFractions(AText, Hits);
+  J.Source := ASource;
+  for H in Hits do
+  begin
+    J.Hit := H;
+    J.Reason := Judge(H, AText, Ctx);
+    MergeJudged(A, N, J);
+  end;
 end;
 
 { ---- Pascal-Literale ---- }
@@ -1093,23 +1205,6 @@ begin
     else
       Inc(k);
   end;
-end;
-
-// Je Zeile und Adresse ein Eintrag (ab AFrom); ein gemeldeter Treffer
-// ersetzt einen frueheren verworfenen ('srv-10.0.0.5,10.0.0.5').
-procedure MergeCodeHit(var A: TArray<TCodeIpHit>; var N: Integer; AFrom: Integer;
-  const H: TCodeIpHit);
-var
-  i : Integer;
-begin
-  for i := AFrom to N - 1 do
-    if A[i].Hit.Text = H.Hit.Text then
-    begin
-      if (A[i].Reason <> '') and (H.Reason = '') then
-        A[i] := H;
-      Exit;
-    end;
-  AddCodeHit(A, N, H);
 end;
 
 type
@@ -1148,9 +1243,7 @@ begin
     if E = 0 then Break;                       // offen bis Zeilenende
     L.Quote := j;
     L.Body := StringReplace(Copy(S, j + 1, E - j - 1), '''''', '''', [rfReplaceAll]);
-    if N = Length(Result) then SetLength(Result, 2 * N + 4);
-    Result[N] := L;
-    Inc(N);
+    TGrow.Add<TLiteral>(Result, N, L);
     for k := j to E do
       ACode[k - ALineStart + 1] := ' ';
     j := E + 1;
@@ -1158,54 +1251,39 @@ begin
   SetLength(Result, N);
 end;
 
-// Adressen eines Literals in die Trefferliste der Zeile (ab ALineFirst).
-procedure AddLiteralHits(var A: TArray<TCodeIpHit>; var N: Integer;
-  ALineFirst: Integer; const L: TLiteral; const ALineCtx: TGateContext);
-var
-  Hits : TArray<TIpHit>;
-  Ctx  : TGateContext;
-  H    : TIpHit;
-  CH   : TCodeIpHit;
-begin
-  Hits := TIpAddressScan.FindAll(L.Body);
-  if Hits = nil then Exit;
-  Ctx := ALineCtx;
-  Ctx.Fractions := CountOtherFractions(L.Body, Hits);
-  for H in Hits do
-  begin
-    CH.Pos := L.Quote;
-    CH.Hit := H;
-    CH.Reason := Judge(H, L.Body, Ctx);
-    MergeCodeHit(A, N, ALineFirst, CH);
-  end;
-end;
-
 class function TIpAddressScan.ScanPascalCode(const ACode: string): TArray<TCodeIpHit>;
 var
-  LineStart, LineEnd, N, LineFirst : Integer;
+  LineStart, LineEnd, N, NJ, k : Integer;
   Lits   : TArray<TLiteral>;
   Code   : string;
   Ctx    : TGateContext;
-  L      : TLiteral;
+  Line   : TArray<TJudgedHit>;   // Treffer der aktuellen Zeile, wiederverwendet
+  CH     : TCodeIpHit;
 begin
   Result := nil;
   N := 0;
+  Line := nil;
   LineStart := 1;
   while LineStart <= Length(ACode) do
   begin
     LineEnd := LineStart;
     while (LineEnd <= Length(ACode)) and (ACode[LineEnd] <> #10) do
       Inc(LineEnd);
-    LineFirst := N;
     Lits := LiteralsOfLine(ACode, LineStart, LineEnd, Code);
     if Length(Lits) > 0 then
     begin
-      Ctx.Words := WordParts(Code);
-      Ctx.HostWords := Ctx.Words;
-      Ctx.VersionHead := HasVersionHead(Code);
+      Ctx := PascalContext(Code);
+      NJ := 0;
+      for k := 0 to High(Lits) do
+        JudgeInto(Lits[k].Body, Ctx, k, Line, NJ);
+      for k := 0 to NJ - 1 do
+      begin
+        CH.Pos := Lits[Line[k].Source].Quote;
+        CH.Hit := Line[k].Hit;
+        CH.Reason := Line[k].Reason;
+        TGrow.Add<TCodeIpHit>(Result, N, CH);
+      end;
     end;
-    for L in Lits do
-      AddLiteralHits(Result, N, LineFirst, L, Ctx);
     LineStart := LineEnd + 1;
   end;
   SetLength(Result, N);
@@ -1251,79 +1329,31 @@ begin
   Result := True;
 end;
 
-// Wie MergeCodeHit, fuer INI-Zeilen.
-procedure MergeIniHit(var A: TArray<TIniIpHit>; var N: Integer; AFrom: Integer;
-  const H: TIniIpHit);
-var
-  i : Integer;
-begin
-  for i := AFrom to N - 1 do
-    if A[i].Hit.Text = H.Hit.Text then
-    begin
-      if (A[i].Reason <> '') and (H.Reason = '') then
-        A[i] := H;
-      Exit;
-    end;
-  AddIniHit(A, N, H);
-end;
-
-function JoinParts(const A, B: TArray<string>): TArray<string>;
-var
-  i : Integer;
-begin
-  Result := nil;
-  SetLength(Result, Length(A) + Length(B));
-  for i := 0 to High(A) do
-    Result[i] := A[i];
-  for i := 0 to High(B) do
-    Result[Length(A) + i] := B[i];
-end;
-
-// Eine INI-Adresse: die Gates, danach Fliesstext-Schluessel - ausser die
-// Adresse ist ein Host (URL, Port, Host-Wort im Schluessel: 'HelpUrl=
-// http://...:8080', 'HelpServer=...').
-function IniReason(const AHit: TIpHit; const AValue: string;
-  const ACtx: TGateContext): string;
-begin
-  Result := Judge(AHit, AValue, ACtx);
-  if (Result = '') and AnyInList(ACtx.Words, TEXT_WORDS) and not AHit.InUrl
-     and not AHit.HasPort and not AnyHostWord(ACtx.Words) then
-    Result := R_TEXTKEY;
-end;
-
 class function TIpAddressScan.ScanIniLines(ALines: TStrings): TArray<TIniIpHit>;
 var
-  i, N, LineFirst : Integer;
+  i, N, NJ, k : Integer;
   Section, Key, Value : string;
-  Ctx      : TGateContext;
-  Hits     : TArray<TIpHit>;
-  H        : TIpHit;
+  Line     : TArray<TJudgedHit>;   // Treffer der aktuellen Zeile, wiederverwendet
   IH       : TIniIpHit;
 begin
   Result := nil;
   N := 0;
+  Line := nil;
   Section := '';
   if ALines = nil then Exit;
   for i := 0 to ALines.Count - 1 do
   begin
     if not SplitIniLine(ALines[i], Section, Key, Value) then Continue;
-    Hits := FindAll(Value);
-    if Hits = nil then Continue;
-    Ctx.Words := WordParts(Key);
-    // Die Sektion rettet nur die Kleinzahl ('[DNS] Primary=8.8.8.8'); als
-    // Versionskontext zaehlt sie nicht ('[Server] Version=...').
-    Ctx.HostWords := JoinParts(Ctx.Words, WordParts(Section));
-    Ctx.VersionHead := HasVersionHead(Key);
-    Ctx.Fractions := CountOtherFractions(Value, Hits);
-    LineFirst := N;
-    for H in Hits do
+    NJ := 0;
+    JudgeInto(Value, IniContext(Key, Section), 0, Line, NJ);
+    for k := 0 to NJ - 1 do
     begin
       IH.Line := i + 1;
       IH.Section := Section;
       IH.Key := Key;
-      IH.Hit := H;
-      IH.Reason := IniReason(H, Value, Ctx);
-      MergeIniHit(Result, N, LineFirst, IH);
+      IH.Hit := Line[k].Hit;
+      IH.Reason := Line[k].Reason;
+      TGrow.Add<TIniIpHit>(Result, N, IH);
     end;
   end;
   SetLength(Result, N);

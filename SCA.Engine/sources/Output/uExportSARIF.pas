@@ -32,13 +32,6 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  // StrUtils INTERFACE-seitig wegen eines H2445 im Bau 2026-10-04. Die
-  // Begruendung 'EmitUriBaseId ist inline' stimmt NICHT (eine gewoehnliche
-  // Prozedur; die Unit deklariert nichts inline) - die Quelle des Hinweises
-  // ist offen. Vor dem Zurueckschieben in die implementation-uses im
-  // Bau-Log pruefen, ob H2445 dann wiederkommt (Review nach Bereichen
-  // 2026-10-10, Nit 9).
-  System.StrUtils,
   uMethodd12;
 
 type
@@ -87,6 +80,16 @@ implementation
 
 uses
   System.Classes, System.IOUtils, System.Hash,
+  // StrUtils (StartsStr, IfThen) gehoert hierher. Es stand vom 2026-10-04
+  // (AH7) bis 2026-10-13 INTERFACE-seitig: AD6 (2026-09-29) hatte
+  // EmitUriBaseId inline deklariert, und dcc32 meldete H2445 ("Inline-
+  // Funktion nicht expandiert, Unit nicht in der uses-Liste"). Die SCA201-
+  // Charge (aaecac77, 2026-10-09) nahm das inline wieder weg; der
+  // Kommentar vom 2026-10-10 hielt die H2445-Begruendung danach
+  // irrtuemlich fuer falsch - er sah die Prozedur nur ohne inline. Der
+  // Grund ist weg, die Unit wieder dort, wo ihre Aufrufer sind (Review
+  // 2026-10-13).
+  System.StrUtils,
   uSCAConsts, uRuleCatalog, uFindingFingerprint,
   uReportFileWriter;   // atomarer Stream (C-Charge 2026-09-19)
 
@@ -673,8 +676,10 @@ begin
       // dierte docs/rules.md (per-file SCA001.md generiert tools/gen-rules-
       // docs.py wenn Python verfuegbar; bis dahin Anker-Links).
       //
-      // DERSELBE LEER-GUARD wie bei informationUri oben (Z. 534), und
-      // aus demselben Grund: ToolUri kommt aus dem Katalog, und
+      // DERSELBE LEER-GUARD wie bei tool.driver.informationUri am Anfang
+      // von EmitSarifDocument (Zeilennummern wandern - der Anker ist der
+      // Schluesselname), und aus demselben Grund: ToolUri kommt aus dem
+      // Katalog, und
       // informationUri ist dort nach rules/sca-rules.schema.json
       // OPTIONAL - Pflicht sind nur name und version. Fehlt der
       // Schluessel, entstand hier die relative Referenz

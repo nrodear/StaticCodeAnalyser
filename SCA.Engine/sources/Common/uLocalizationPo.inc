@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2404 Zeilen, 80365 Bytes
-  CPoLines_de: array[0..2403] of string = (
+  // i18n\de.po - 2407 Zeilen, 80846 Bytes
+  CPoLines_de: array[0..2406] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1227,6 +1227,9 @@ const
     '',
     'msgid "If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on its own line directly above the affected line."',
     'msgstr "Falls False Positive: sag das und erkl'#$00E4're warum - schlage dann einen `%s` Suppression-Marker in einer eigenen Zeile direkt '#$00FC'ber der betroffenen Zeile vor."',
+    '',
+    'msgid "If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on its own line in the unit `%s` (a form file takes no comment marker; the file-wide marker in its unit covers the form)."',
+    'msgstr "Falls False Positive: sag das und erkl'#$00E4're warum - schlage dann einen `%s` Suppression-Marker in einer eigenen Zeile in der Unit `%s` vor (eine Formdatei kennt keinen Kommentar-Marker; der dateiweite Marker in ihrer Unit deckt die Form ab)."',
     '',
     'msgid "Ignore list..."',
     'msgstr "Ignore-Liste..."',
@@ -2693,8 +2696,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2400 Zeilen, 84157 Bytes
-  CPoLines_fr: array[0..2399] of string = (
+  // i18n\fr.po - 2403 Zeilen, 84674 Bytes
+  CPoLines_fr: array[0..2402] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -3915,6 +3918,9 @@ const
     '',
     'msgid "If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on its own line directly above the affected line."',
     'msgstr "Si le r'#$00E9'sultat est un faux positif, dites-le et expliquez pourquoi - proposez ensuite un marqueur de suppression `%s` sur une ligne '#$00E0' part, juste au-dessus de la ligne concern'#$00E9'e."',
+    '',
+    'msgid "If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on its own line in the unit `%s` (a form file takes no comment marker; the file-wide marker in its unit covers the form)."',
+    'msgstr "Si le r'#$00E9'sultat est un faux positif, dites-le et expliquez pourquoi - proposez ensuite un marqueur de suppression `%s` sur une ligne '#$00E0' part dans l''unit'#$00E9' `%s` (un fichier de fiche n''accepte pas de marqueur en commentaire ; le marqueur global dans son unit'#$00E9' couvre la fiche)."',
     '',
     'msgid "Ignore list..."',
     'msgstr "Liste d''exclusions..."',

@@ -1211,6 +1211,9 @@ msgstr "IDE-Editor-Service nicht verfügbar."
 msgid "If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on its own line directly above the affected line."
 msgstr "Falls False Positive: sag das und erkläre warum - schlage dann einen `%s` Suppression-Marker in einer eigenen Zeile direkt über der betroffenen Zeile vor."
 
+msgid "If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on its own line in the unit `%s` (a form file takes no comment marker; the file-wide marker in its unit covers the form)."
+msgstr "Falls False Positive: sag das und erkläre warum - schlage dann einen `%s` Suppression-Marker in einer eigenen Zeile in der Unit `%s` vor (eine Formdatei kennt keinen Kommentar-Marker; der dateiweite Marker in ihrer Unit deckt die Form ab)."
+
 msgid "Ignore list..."
 msgstr "Ignore-Liste..."
 
