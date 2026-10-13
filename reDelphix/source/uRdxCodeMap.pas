@@ -16,7 +16,7 @@ unit uRdxCodeMap;
 interface
 
 uses
-  System.SysUtils, System.Classes;
+  System.Classes;   // TStrings
 
 const
   MIN_MULTI_QUOTES = 3;   // ''' oeffnet einen mehrzeiligen String (Delphi 12)
@@ -39,6 +39,13 @@ type
   // 'k' Kommentar oder Direktive ({...}, (*...*), //...). Block-Kommentare
   // und mehrzeilige Strings werden ueber Zeilen verfolgt, einfache Strings
   // enden mit der Zeile.
+  // LEBENSDAUER (Review Quick-Fix-Units 2026-10-14): die Map LEIHT ALines -
+  // die Klassen entstehen einmal in Create (Schnappschuss), Raw() und
+  // LineCount lesen dagegen live aus ALines. ALines muss darum laenger
+  // leben als die Map und darf waehrend ihrer Lebensdauer nicht veraendert
+  // werden; sonst passen Klassen und Text nicht mehr zusammen, und die
+  // Planer lesen Code, wo ein Kommentar steht. Die Aufrufer (uRdxProvider,
+  // uRdxRecipeRunner, die Tests) bauen die Map je Lauf neu.
   TRdxCodeMap = class
   private
     FLines   : TStrings;
@@ -61,10 +68,12 @@ type
     // Zeilenanfang in einem mehrzeiligen String.
     function StepMultiLine: Integer;
   public
+    // Liest ALines einmal und klassifiziert jedes Zeichen; ALines bleibt im
+    // Besitz des Aufrufers (s. LEBENSDAUER oben).
     constructor Create(ALines: TStrings);
-    // Zahl der Zeilen der Datei.
+    // Zahl der Zeilen der Datei (live aus ALines).
     function LineCount: Integer;
-    // Rohzeile ALine (1-basiert), '' ausserhalb.
+    // Rohzeile ALine (1-basiert, live aus ALines), '' ausserhalb.
     function Raw(ALine: Integer): string;
     // Klasse des Zeichens (ALine, ACol); ' ' ausserhalb der Zeile.
     function ClassAt(ALine, ACol: Integer): Char;
@@ -87,18 +96,30 @@ type
   TRdxStep = (rsGoOn, rsFound, rsStop);
 
   // Ein Code-Token: Bezeichner/Schluesselwort (klein in Low), Zahl, oder
-  // ein Satzzeichen (':=', '<>', '<=', '>=', '..' als eines).
+  // ein Satzzeichen (':=', '<>', '<=', '>=', '..' als eines). Low = '' ist
+  // "kein Token" (Dateiende, nicht gefunden; Default(TRdxToken)).
   TRdxToken = record
     Line : Integer;
     Col  : Integer;   // erstes Zeichen
     Len  : Integer;
     Low  : string;    // klein geschrieben
+    // True fuer einen Bezeichner oder ein Schluesselwort (Low beginnt mit
+    // einem Bezeichner-Anfangszeichen) - nicht fuer Zahl, Satzzeichen oder
+    // "kein Token". Ob das Wort ein Schluesselwort ist, sagt erst der
+    // Kontext (IsKeywordAfter, die KEYWORDS der Planer).
     function IsWord: Boolean;
     function EndCol: Integer;   // hinter dem letzten Zeichen
   end;
 
+// Bezeichner-Zeichen wie im Core (TRefactorInfoBuilder): Buchstabe, '_'
+// oder ein Zeichen ueber #127 (Umlaute sind in Delphi-Bezeichnern erlaubt)
+// beginnt einen Bezeichner, dazu Ziffern darin. Zahlen beginnen NICHT mit
+// IsIdentStart - so trennt TokenAt Zahl und Wort.
 function IsIdentStart(C: Char): Boolean;
 function IsIdentChar(C: Char): Boolean;
+// Leerzeichen oder Tab - der Leerraum, den die Planer ueberspringen
+// (andere Steuerzeichen stehen in einer Zeile nicht, Zeilenenden kennt die
+// Map nicht).
 function IsBlank(C: Char): Boolean;
 // Erste Spalte ab AFrom, die kein Leerzeichen/Tab ist (Length + 1 am Ende).
 function SkipBlanks(const S: string; AFrom: Integer): Integer;
@@ -142,6 +163,9 @@ function IndentStep(const AIndent, ADeeperLine: string): string;
 function ColumnFromMessage(const AMessage: string): Integer;
 
 implementation
+
+uses
+  System.SysUtils;   // CharInSet, LowerCase
 
 // Zeichen > #127 wie der Core (uRefactorInfoBuilder) und uRdxRecipes:
 // Bezeichner mit Umlaut sind in Delphi erlaubt - sonst lehnten die Planer

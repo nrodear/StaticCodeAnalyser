@@ -27,6 +27,10 @@ type
     [Test] procedure Sca126_NotBeforeSelectorStays;
     [Test] procedure Sca126_NestedComparisons_Refused;
     [Test] procedure Sca126_OddQuoteNodeText;
+    // Review Quick-Fix-Units 2026-10-14 (Blocker): Prozedurtyp derselben
+    // Unit, Pfad-Operanden nur mit bewiesenem Feld.
+    [Test] procedure Sca126_ProcTypeOfOwnUnit;
+    [Test] procedure Sca126_PathOperands;
   end;
 
 implementation
@@ -269,7 +273,9 @@ end;
 
 procedure TTestRdxNilFix.Sca126_OperandRisk;
 begin
-  // kein Einwand: Objekte, Felder, Pfade, Typecasts, unbekannter Typ
+  // NilOperandRisk prueft NUR Namen: kein Einwand bei Objekten, Feldern,
+  // Pfaden, Typecasts und unbekanntem Typ. Ob ein Pfad oder ein Typ ohne
+  // Beweis durchgeht, entscheidet NilOperandReason (Sca126_PathOperands).
   Assert.AreEqual('', TRdxNilFix.NilOperandRisk('FList', 'tlist'));
   Assert.AreEqual('', TRdxNilFix.NilOperandRisk('Obj', ''));
   Assert.AreEqual('', TRdxNilFix.NilOperandRisk('Self.FOwner', ''));
@@ -280,6 +286,9 @@ begin
   // Klassen mit Endungen, die nach Prozedurtyp klingen koennten
   Assert.AreEqual('', TRdxNilFix.NilOperandRisk('FIOHandler', 'tidiohandler'));
   Assert.AreEqual('', TRdxNilFix.NilOperandRisk('LMethod', 'trttimethod'));
+  // System.SyncObjs: TEvent und TSimpleEvent sind Klassen, keine Ereignisse
+  Assert.AreEqual('', TRdxNilFix.NilOperandRisk('FDone', 'tevent'));
+  Assert.AreEqual('', TRdxNilFix.NilOperandRisk('FDone', 'tsimpleevent'));
   // 'Online', 'Getaway': kein Grossbuchstabe hinter dem Praefix
   Assert.AreEqual('', TRdxNilFix.NilOperandRisk('FOnline', ''));
   Assert.AreEqual('', TRdxNilFix.NilOperandRisk('Getaway', ''));
@@ -299,6 +308,142 @@ begin
   Assert.AreNotEqual('', TRdxNilFix.NilOperandRisk('V', 'variant'));
   Assert.AreNotEqual('', TRdxNilFix.NilOperandRisk('A', 'array'));
   Assert.AreNotEqual('', TRdxNilFix.NilOperandRisk('F', 'tmycallback'));
+end;
+
+// Die Pruefung mit Blick in die Datei ASource (NilOperandReason).
+function ReasonIn(const ASource, AOperand, ATypeLow: string): string;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Result := TRdxNilFix.NilOperandReason(Map, AOperand, ATypeLow);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+// FieldTypeOf auf der Datei ASource.
+function FieldTypeIn(const ASource, AName: string): string;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Result := TRdxSimpleFixes.FieldTypeOf(Map, AName);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+// Eine Unit mit Feldern verschiedener Art (Zeile 4 ff.).
+function FieldUnit: string;
+begin
+  Result := Join(['unit u;', 'interface', 'type',
+    '  TObjFactory = function: TObject;',
+    '  TLookup = TObjFactory;',
+    '  TNode = class(TObject)',
+    '    Next: TNode;',
+    '    FMaker: TObjFactory;',
+    '    [Weak] FOwner: TObject;',
+    '    FA, FB: TList;',
+    '    procedure Run(First: Integer);',
+    '    property Count: Integer read FCount;',
+    '  end;',
+    '  TRec = record',
+    '    Data: Pointer;',
+    '    Name: string;',
+    '  end;',
+    'implementation',
+    'procedure P;',
+    'var',
+    '  First: Boolean;',
+    '  Last: TObject;',
+    'begin',
+    'end;',
+    'end.']);
+end;
+
+procedure TTestRdxNilFix.Sca126_ProcTypeOfOwnUnit;
+var
+  R : string;
+begin
+  // 'TObjFactory = function: TObject' derselben Unit: '= nil' riefe die
+  // Funktion auf, Assigned() nicht - der Typname allein verraet es nicht.
+  R := ReasonIn(FieldUnit, 'FMaker', 'tobjfactory');
+  Assert.IsTrue(Pos('Prozedurtyp', R) > 0, R);
+  Assert.IsTrue(Pos('tobjfactory', R) > 0, R);
+  // Auch ueber einen Alias.
+  Assert.IsTrue(Pos('Prozedurtyp', ReasonIn(FieldUnit, 'F', 'tlookup')) > 0,
+    'Alias');
+  // Eine Klasse derselben Unit und ein Typ einer anderen Unit gehen.
+  Assert.AreEqual('', ReasonIn(FieldUnit, 'N', 'tnode'));
+  Assert.AreEqual('', ReasonIn(FieldUnit, 'L', 'tlist'));
+  // Die Namensregeln von NilOperandRisk gelten weiter.
+  Assert.AreNotEqual('', ReasonIn(FieldUnit, 'FOnChange', 'tnotifyevent'));
+  Assert.AreNotEqual('', ReasonIn(FieldUnit, 'S', 'string'));
+end;
+
+procedure TTestRdxNilFix.Sca126_PathOperands;
+var
+  R : string;
+begin
+  // Ein Pfad, der auf ')', ']' oder '^' endet, vergleicht ein Ergebnis.
+  Assert.AreEqual('', ReasonIn(FieldUnit, 'FItems[I]', ''));
+  Assert.AreEqual('', ReasonIn(FieldUnit, 'TFoo(Sender)', ''));
+  Assert.AreEqual('', ReasonIn(FieldUnit, 'P^', ''));
+  // Das letzte Glied als Feld bewiesen: Klasse (auch Feldgruppe und mit
+  // Attribut) oder Record.
+  Assert.AreEqual('', ReasonIn(FieldUnit, 'P.Next', ''));
+  Assert.AreEqual('', ReasonIn(FieldUnit, 'Self.FOwner', ''));
+  Assert.AreEqual('', ReasonIn(FieldUnit, 'Obj.FB', ''));
+  Assert.AreEqual('', ReasonIn(FieldUnit, 'R.Data', ''));
+  // Nicht bewiesen: eine Methode ohne Argumente wuerde von '= nil'
+  // aufgerufen, Assigned() pruefte nur den Methodenzeiger.
+  R := ReasonIn(FieldUnit, 'List.First', '');
+  Assert.IsTrue(Pos('nicht als Feld bewiesen', R) > 0, R);
+  Assert.IsTrue(Pos('First', R) > 0, 'das Glied steht im Grund: ' + R);
+  Assert.AreNotEqual('', ReasonIn(FieldUnit, 'Obj.ClassParent', ''),
+    'Methode aus TObject');
+  Assert.AreNotEqual('', ReasonIn(FieldUnit, 'Obj.Count', ''), 'Property');
+  Assert.AreNotEqual('', ReasonIn(FieldUnit, 'Obj.Last', ''),
+    'lokale Variable ist kein Feld');
+  // Ein bewiesenes Feld geht durch dieselben Typpruefungen.
+  Assert.IsTrue(Pos('Prozedurtyp', ReasonIn(FieldUnit, 'Obj.FMaker', '')) > 0,
+    'Feld mit Prozedurtyp');
+  Assert.AreNotEqual('', ReasonIn(FieldUnit, 'R.Name', ''), 'string-Feld');
+  // Ein blosser Bezeichner ohne Typ ist nicht bewiesen.
+  R := ReasonIn(FieldUnit, 'Obj', '');
+  Assert.IsTrue(Pos('nicht bewiesen', R) > 0, R);
+  // FieldTypeOf selbst: Typwort, qualifiziert, mehrdeutig.
+  Assert.AreEqual('tnode', FieldTypeIn(FieldUnit, 'Next'));
+  Assert.AreEqual('tobject', FieldTypeIn(FieldUnit, 'FOwner'));
+  Assert.AreEqual('tlist', FieldTypeIn(FieldUnit, 'FA'));
+  Assert.AreEqual('', FieldTypeIn(FieldUnit, 'First'), 'Parameter und lokal');
+  Assert.AreEqual('', FieldTypeIn(FieldUnit, 'Count'), 'Property');
+  Assert.AreEqual('tobject', FieldTypeIn(Join(['unit u;', 'interface', 'type',
+    '  TA = class FX: System.TObject; end;', '  TB = class FX: TObject; end;',
+    'implementation', 'end.']), 'FX'), 'qualifiziert, zweimal gleich');
+  Assert.AreEqual('', FieldTypeIn(Join(['unit u;', 'interface', 'type',
+    '  TA = class FX: TObject; end;', '  TB = class FX: TProc; end;',
+    'implementation', 'end.']), 'FX'), 'mehrdeutig');
+  Assert.AreEqual('^', FieldTypeIn(Join(['unit u;', 'interface', 'type',
+    '  TA = record FX: ^Integer; end;', 'implementation', 'end.']), 'FX'),
+    'Zeigertyp');
+  Assert.AreEqual('', FieldTypeIn(Join(['unit u;', 'interface', 'type',
+    '  TA = class;', '  TB<T: record> = class', '    procedure Q(FX: T);',
+    '  end;', 'implementation', 'end.']), 'FX'),
+    'Vorwaertsdeklaration und Einschraenkung oeffnen keinen Rumpf');
 end;
 
 initialization

@@ -16,8 +16,7 @@ unit uRdxDeclFixes;
 interface
 
 uses
-  System.SysUtils,
-  uRefactorInfo, uRdxBufferMath, uRdxCodeMap;
+  uRdxBufferMath, uRdxCodeMap;
 
 const
   // SCA117: die Zeilen des Geruests (Platzhalter leer - der Nutzer fuellt
@@ -57,7 +56,8 @@ type
     // Keine Hilfe, wenn die Zeile davor in einem Kommentar ueber Zeilen
     // endet oder ueber Attributzeilen ein Kommentar steht (beides sieht der
     // Detektor nicht - Doku steht dann schon da), bei einer Direktive im
-    // Kopf.
+    // Kopf und bei einem Kommentar VOR dem Kopf auf seiner Zeile (er
+    // stuende sonst in jeder Geruestzeile).
     class function DocSkeleton(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
@@ -74,9 +74,12 @@ type
       const AMessage: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
-    // SCA149: die Direktive nach DirectiveFor(AMessage) direkt hinter das
-    // ';' des Kopfs auf ALine (vor vorhandene Direktiven - 'reintroduce'
-    // muss vor 'overload' stehen). Keine Hilfe, wenn schon override/
+    // SCA149: die Direktive nach DirectiveFor(AMessage) hinter das ';' des
+    // Kopfs auf ALine - in der Reihenfolge der Sprachreferenz
+    // (reintroduce; overload; virtual/dynamic/override; abstract/final;
+    // Aufrufkonvention; deprecated ...): 'reintroduce' direkt hinter den
+    // Kopf, 'override' hinter ein vorhandenes 'overload', sonst ebenfalls
+    // direkt hinter den Kopf. Keine Hilfe, wenn schon override/
     // reintroduce dasteht; 'override' nicht neben virtual/dynamic/static/
     // message/inline und nur, wenn im Rumpf der Elternklasse (der Detektor
     // sucht sie in derselben Unit) eine Methode gleichen Namens dieselbe
@@ -95,6 +98,10 @@ type
   end;
 
 implementation
+
+uses
+  System.SysUtils,
+  uRefactorInfo;   // TRefactorSpan.Make
 
 const
   SPAN_117 = 'sca117';
@@ -472,9 +479,10 @@ end;
 class function TRdxDeclFixes.DocSkeleton(AMap: TRdxCodeMap; ALine: Integer;
   const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
-  Sig   : TRdxSignature;
-  L     : string;
-  First : TRdxToken;
+  Sig    : TRdxSignature;
+  L      : string;
+  First  : TRdxToken;
+  Indent : string;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -482,10 +490,19 @@ begin
   if AReason <> '' then Exit;
   L := AMap.Raw(ALine);
   First := NextToken(AMap, ALine, 1);
+  // Die Einrueckung ist der Leerraum vor dem Kopf - nicht alles bis zum
+  // ersten Token: ein Kommentar davor ('{ alt } procedure Run;') kaeme
+  // sonst in jede Geruestzeile (Review Quick-Fix-Units 2026-10-14).
+  Indent := Copy(L, 1, SkipBlanks(L, 1) - 1);
+  if Length(Indent) + 1 <> First.Col then
+  begin
+    AReason := 'vor dem Kopf steht auf seiner Zeile ein Kommentar - das '
+      + 'Geruest gehoert darueber, von Hand setzen';
+    Exit;
+  end;
   AEdit.Span := TRefactorSpan.Make(SPAN_117, ALine, 1, ALine, First.EndCol);
   AEdit.Expected := Copy(L, 1, First.EndCol - 1);
-  AEdit.NewText := SkeletonText(Sig, Copy(L, 1, First.Col - 1))
-    + AEdit.Expected;
+  AEdit.NewText := SkeletonText(Sig, Indent) + AEdit.Expected;
   Result := True;
 end;
 
@@ -712,10 +729,18 @@ begin
   Result := Copy(Result, P + 1, MaxInt);
 end;
 
-// Die Direktiven hinter AEnd ('virtual; overload; ...'), klein. Liest,
-// solange auf ein Direktivenwort (mit Argument bei message/deprecated)
-// ein ';' folgt.
-function DirectivesAfter(AMap: TRdxCodeMap; const AEnd: TRdxToken): TArray<string>;
+// Das naechste ';' ab ATok einschliesslich; Low = '' am Dateiende.
+function SemicolonFrom(AMap: TRdxCodeMap; const ATok: TRdxToken): TRdxToken;
+begin
+  Result := ATok;
+  while (Result.Low <> '') and (Result.Low <> ';') do
+    Result := After(AMap, Result);
+end;
+
+// Die Direktiven-Woerter hinter AEnd ('virtual; overload; ...') als Token.
+// Liest, solange auf ein Direktivenwort (mit Argument bei message/
+// deprecated) ein ';' folgt.
+function DirectiveTokens(AMap: TRdxCodeMap; const AEnd: TRdxToken): TArray<TRdxToken>;
 var
   T : TRdxToken;
 begin
@@ -723,12 +748,41 @@ begin
   T := After(AMap, AEnd);
   while InList(T.Low, METHOD_DIRECTIVES) do
   begin
-    Result := Result + [T.Low];
-    while (T.Low <> '') and (T.Low <> ';') do
-      T := After(AMap, T);
+    Result := Result + [T];
+    T := SemicolonFrom(AMap, T);
     if T.Low = '' then Exit;
     T := After(AMap, T);
   end;
+end;
+
+// Die Direktiven hinter AEnd, klein (DirectiveTokens).
+function DirectivesAfter(AMap: TRdxCodeMap; const AEnd: TRdxToken): TArray<string>;
+var
+  T : TRdxToken;
+begin
+  Result := nil;
+  for T in DirectiveTokens(AMap, AEnd) do
+    Result := Result + [T.Low];
+end;
+
+// Das ';', hinter das ADirective kommt. Reihenfolge laut Sprachreferenz
+// (Methods: reintroduce; overload; virtual/dynamic/override; abstract/
+// final; Aufrufkonvention; deprecated/platform ...): 'reintroduce' direkt
+// hinter den Kopf AEnd (vor ein overload); 'override' hinter das ';' eines
+// vorhandenen 'overload' (sonst ebenfalls hinter den Kopf) - so bleibt es
+// vor abstract/final, der Aufrufkonvention und den Warn-Direktiven, die
+// die Reihenfolge weiter hinten fuehrt (Review Quick-Fix-Units 2026-10-14:
+// '; override; overload;' war die Form gegen die Referenz).
+function DirectiveAnchor(AMap: TRdxCodeMap; const AEnd: TRdxToken;
+  const ADirective: string): TRdxToken;
+var
+  T : TRdxToken;
+begin
+  Result := AEnd;
+  if ADirective <> DIRECTIVE_OVERRIDE then Exit;
+  for T in DirectiveTokens(AMap, AEnd) do
+    if T.Low = 'overload' then
+      Result := SemicolonFrom(AMap, T);
 end;
 
 // Darf ADirective zu den vorhandenen? '' oder der Grund.
@@ -947,7 +1001,7 @@ begin
   else if AReason = '' then
     AReason := ReintroduceReason(AMap, AMessage, Sig);
   if AReason <> '' then Exit;
-  E := Sig.HeaderEnd;
+  E := DirectiveAnchor(AMap, Sig.HeaderEnd, Directive);
   AEdit.Span := TRefactorSpan.Make(SPAN_149, E.Line, E.Col, E.Line, E.EndCol);
   AEdit.Expected := ';';
   AEdit.NewText := '; ' + Directive + ';';

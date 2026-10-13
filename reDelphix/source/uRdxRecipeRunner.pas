@@ -2211,14 +2211,61 @@ begin
       [ALine, Hits]);
 end;
 
+// SCA126, je Operand des Plans: nur ein blosser Bezeichner hat einen
+// deklarierten Typ (DeclaredTypeOf) - OHNE beweisbaren Typ (geerbt aus
+// einer anderen Unit, Vorfahr von ausserhalb) sperrt er: als Funktions-
+// oder Methodenzeiger ruft '= nil' ihn auf, Assigned() nicht - lieber
+// keine Hilfe als eine falsche (Review reDelphiX nach Bereichen 2026-10-10,
+// Minor 6). Alles Weitere - Ereignis-/Getter-Namen, riskante Typnamen,
+// Prozedurtypen DIESER Unit und Pfade ohne bewiesenes Feld - prueft
+// TRdxNilFix.NilOperandReason auf der Code-Sicht (Review Quick-Fix-Units
+// 2026-10-14, Blocker SCA126). '' oder der Grund.
+function NilOperandsReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  ALine: Integer; const APlan: TRdxNilPlan): string;
+var
+  TypeLow : string;
+  i       : Integer;
+begin
+  Result := '';
+  for i := 0 to High(APlan.Operands) do
+  begin
+    TypeLow := '';
+    if TRdxRecipes.IsPlainIdent(APlan.Operands[i]) then
+    begin
+      TypeLow := APlaces.DeclaredTypeOf(ALine, APlan.Operands[i]);
+      if TypeLow = '' then
+        Exit(Format(R_NIL_TYPE_UNKNOWN, [APlan.Operands[i]]));
+    end;
+    Result := TRdxNilFix.NilOperandReason(AMap, APlan.Operands[i], TypeLow);
+    if Result <> '' then Exit;
+  end;
+end;
+
+// Der Hint der SCA126-Hilfe: die neuen Ausdruecke, mit ', ' verbunden.
+function NilHintOf(const APlan: TRdxNilPlan): string;
+var
+  SB : TStringBuilder;
+  i  : Integer;
+begin
+  SB := TStringBuilder.Create;
+  try
+    for i := 0 to High(APlan.Edits) do
+    begin
+      if i > 0 then SB.Append(', ');
+      SB.Append(APlan.Edits[i].NewText);
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
 class function TRdxFixRunner.NilComparisonFix(APlaces: TSourcePlaces;
   ALines: TStrings; ALine: Integer): TRdxFixOutcome;
 var
-  Site    : TRdxNilSite;
-  Map     : TRdxCodeMap;
-  Plan    : TRdxNilPlan;
-  TypeLow : string;
-  i       : Integer;
+  Site : TRdxNilSite;
+  Map  : TRdxCodeMap;
+  Plan : TRdxNilPlan;
 begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
@@ -2245,32 +2292,12 @@ begin
       Result.Reason := Plan.Reason;
       Exit;
     end;
+    Result.Reason := NilOperandsReason(APlaces, Map, Site.Line, Plan);
   finally
     Map.Free;
   end;
-  // Nur ein blosser Bezeichner hat einen deklarierten Typ; Ereignis- und
-  // Getter-Namen sperren auch am Ende eines Pfads. Ein blosser Bezeichner
-  // OHNE beweisbaren Typ (geerbt aus einer anderen Unit, Vorfahr von
-  // ausserhalb) sperrt: als Funktions- oder Methodenzeiger ruft '= nil'
-  // ihn auf, Assigned() nicht - lieber keine Hilfe als eine falsche
-  // (Review reDelphiX nach Bereichen 2026-10-10, Minor 6).
-  for i := 0 to High(Plan.Operands) do
-  begin
-    TypeLow := '';
-    if TRdxRecipes.IsPlainIdent(Plan.Operands[i]) then
-    begin
-      TypeLow := APlaces.DeclaredTypeOf(Site.Line, Plan.Operands[i]);
-      if TypeLow = '' then
-      begin
-        Result.Reason := Format(R_NIL_TYPE_UNKNOWN, [Plan.Operands[i]]);
-        Exit;
-      end;
-    end;
-    Result.Reason := TRdxNilFix.NilOperandRisk(Plan.Operands[i], TypeLow);
-    if Result.Reason <> '' then Exit;
-    if Result.Hint <> '' then Result.Hint := Result.Hint + ', ';
-    Result.Hint := Result.Hint + Plan.Edits[i].NewText;
-  end;
+  if Result.Reason <> '' then Exit;
+  Result.Hint    := NilHintOf(Plan);
   Result.Edits   := Plan.Edits;
   Result.Enabled := True;
 end;

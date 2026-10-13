@@ -304,6 +304,14 @@ begin
   Assert.AreEqual('', FixCase(InProc(['  case X of', '    1: A;', '  else',
     '    B;', '  end;']), 5, '', R), 'schon ein else');
   Assert.IsTrue(Pos('else-Zweig', R) > 0, R);
+  // Das else des case auch OHNE ';' vor ihm (Review Quick-Fix-Units
+  // 2026-10-14): es gehoert zum case, nicht zu einem if.
+  Assert.AreEqual('', FixCase(InProc(['  case K of 1: Foo else Bar end;']), 5,
+    '', R), 'else ohne ; davor');
+  Assert.IsTrue(Pos('else-Zweig', R) > 0, R);
+  Assert.AreEqual('', FixCase(InProc(['  case K of', '    1: begin Foo end',
+    '  else', '    Bar;', '  end;']), 5, '', R), 'else hinter end ohne ;');
+  Assert.IsTrue(Pos('else-Zweig', R) > 0, R);
   Assert.AreEqual('', FixCase(InProc(['  case X of', '{$IFDEF Y}', '    1: A;',
     '{$ENDIF}', '  end;']), 5, '', R), 'Direktive');
   Assert.IsTrue(Pos('Direktive', R) > 0, R);
@@ -344,6 +352,10 @@ begin
   // Inline: das ';' vor das else.
   Assert.AreEqual(InProc(['  case X of 1: if B then A; else end;']),
     FixCase(InProc(['  case X of 1: if B then A end;']), 5, '', R), R);
+  // Ein if-else im letzten Arm ohne ';': das else gehoert dem if, das
+  // case bekommt seines.
+  Assert.AreEqual(InProc(['  case X of 1: if B then A else C; else end;']),
+    FixCase(InProc(['  case X of 1: if B then A else C end;']), 5, '', R), R);
 end;
 
 procedure TTestRdxStructFixes.Sca168_IndentAndEscapedEnd;

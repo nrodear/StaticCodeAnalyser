@@ -236,14 +236,19 @@ procedure TTestRdxBufferMath.EditorColumn_MultiByteLimit;
 var
   L : string;
 begin
-  // Umlaut: 2 UTF-8-Bytes je Zeichen - die Byte-Grenze kommt bei der
-  // halben Zeichen-Spalte.
+  // Umlaut: 2 UTF-8-Bytes je Zeichen. In die SmallInt-Felder schreibt
+  // uRdxEditor seit ff8d7f2f die ZEICHEN-Spalte (CharIndex), die hier bis
+  // 20000 passte; die Byte-Schranke von EditorColumnFits ist strenger als
+  // noetig und bewusst beibehalten (Doku dort) - dieser Test pinnt sie als
+  // Entscheid, nicht als Notwendigkeit.
   L := StringOfChar(#$00E4, 20000);
   Assert.AreEqual<Integer>(32766, Utf8PrefixLength(L, 16384));
   Assert.AreEqual<Integer>(0, Utf8PrefixLength(L, 1), 'kein Praefix');
   Assert.IsTrue(EditorColumnFits(L, 16384), '16383 Zeichen = 32766 Bytes');
-  Assert.IsFalse(EditorColumnFits(L, 16385), '16384 Zeichen = 32768 Bytes');
-  Assert.IsFalse(EditorColumnFits(L, 20000), 'Spalte passt, Bytes nicht');
+  Assert.IsFalse(EditorColumnFits(L, 16385),
+    '16384 Zeichen = 32768 Bytes - Byte-Schranke (Entscheid, s. oben)');
+  Assert.IsFalse(EditorColumnFits(L, 20000),
+    'Zeichen-Spalte passte, Byte-Schranke greift (Entscheid, s. oben)');
 end;
 
 procedure TTestRdxBufferMath.SpanFitsEditor_BothEnds;

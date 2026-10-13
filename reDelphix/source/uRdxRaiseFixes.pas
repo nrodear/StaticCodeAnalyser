@@ -16,8 +16,7 @@ unit uRdxRaiseFixes;
 interface
 
 uses
-  System.SysUtils,
-  uRefactorInfo, uRdxBufferMath, uRdxCodeMap;
+  uRdxBufferMath, uRdxCodeMap;
 
 const
   // SCA020 (b): %s ist der Name der Methode wie im Kopf.
@@ -62,6 +61,8 @@ type
 implementation
 
 uses
+  System.SysUtils,
+  uRefactorInfo,     // TRefactorSpan.Make
   uRdxStructFixes;   // StartsStatementAt (SCA120: kein bedingter Ausdruck)
 
 const
