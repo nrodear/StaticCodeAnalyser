@@ -120,6 +120,7 @@
         <DCCReference Include="uTestFileTextCache.pas"/>
         <DCCReference Include="uTestParserReviewC.pas"/>
         <DCCReference Include="uTestDetectorUtilsText.pas"/>
+        <DCCReference Include="uTestConfigPass.pas"/>
         <DCCReference Include="uTestEditorCommand.pas"/>
         <DCCReference Include="uTestDfmLexer.pas"/>
         <DCCReference Include="uTestDfmParser.pas"/>

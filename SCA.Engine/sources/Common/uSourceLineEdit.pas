@@ -37,8 +37,9 @@ uses
   System.Generics.Collections;   // TList<TSrcLine> (SplitKeepEol)
 
 const
-  // 3x gebraucht (Insert/Replace/Read) - und der Wortlaut soll ohnehin
-  // identisch sein.
+  // Heute nur noch von InsertLineAbove gebraucht - ReplaceLine/ReadLine
+  // entfielen am 2026-10-10 mit uQuickFix. Bleibt Konstante, damit ein
+  // Rueckkehrer denselben Wortlaut nimmt (Review Bereich C, Minor).
   SLineOutOfRange = 'line %d out of range (file has %d lines)';
 
 type

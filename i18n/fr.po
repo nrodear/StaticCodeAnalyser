@@ -1315,9 +1315,6 @@ msgstr "Le chemin du projet est vide."
 msgid "Quality"
 msgstr "Qualité"
 
-msgid "Quick-Fix + AI prompt copied to clipboard: %s, line %s (%s)"
-msgstr "Quick-Fix + prompt IA copiés dans le presse-papiers : %s, ligne %s (%s)"
-
 msgid "Quick-Fix applied: %s"
 msgstr "Quick-Fix appliqué : %s"
 
@@ -1332,18 +1329,6 @@ msgstr "Quick-Fix : le package reDelphix n'est pas chargé"
 
 msgid "Suppress not available: %s"
 msgstr "Suppression indisponible : %s"
-
-msgid "Quick-Fix: cannot locate source line"
-msgstr "Quick-Fix : ligne source introuvable"
-
-msgid "Quick-Fix: editor write failed (file not in IDE?)"
-msgstr "Quick-Fix : échec de l'écriture dans l'éditeur (fichier non ouvert dans l'IDE ?)"
-
-msgid "Quick-Fix: line out of range"
-msgstr "Quick-Fix : numéro de ligne hors du fichier"
-
-msgid "Quick-Fix: pattern not matched on line %d - manual fix required"
-msgstr "Quick-Fix : motif non reconnu à la ligne %d - correction manuelle nécessaire"
 
 msgid "Real bugs / security holes (severity Error). Fix immediately."
 msgstr "Vrais bugs / failles de sécurité (sévérité Error). À corriger immédiatement."
@@ -1582,9 +1567,6 @@ msgstr "Fichier introuvable :"
 
 msgid "More actions (Settings, Ignore list, Branch-Changes)"
 msgstr "Autres actions (paramètres, liste d'exclusions, modifications de branche)"
-
-msgid "Quick-Fix: no provider for '%s' - manual fix required"
-msgstr "Quick-Fix : aucun fournisseur pour '%s' - correction manuelle nécessaire"
 
 msgid "Done. %d findings. Click a row -> AI prompt on clipboard."
 msgstr "Terminé. %d résultats. Cliquez sur une ligne -> prompt IA dans le presse-papiers."
@@ -1921,9 +1903,6 @@ msgstr "Format Sonar Generic Issue (*.json)|*.json"
 
 msgid "Suppress: could not write file: %s"
 msgstr "Suppress : fichier non modifiable : %s"
-
-msgid "Quick-Fix: could not write file: %s"
-msgstr "Quick-Fix : fichier non modifiable : %s"
 
 # --- 2026-08-07: Kacheln, Statusleiste, Export (EXE) ---
 

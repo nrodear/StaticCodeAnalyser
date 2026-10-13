@@ -231,9 +231,15 @@ type
     // kopiert, wirken ab dem naechsten Open/OpenSource und bleiben ueber
     // Close hinweg stehen.
     procedure SetIfdefDefines(const ADefines: TArray<string>);
+    // Verwirft Baum, Zeilen und Typaufloesung; FileName wird leer. Die
+    // IFDEF-Sicht bleibt stehen (s. SetIfdefDefines). Danach liefert
+    // jede Abfrage nil/''/0 - kein Fehler.
     procedure Close;
+    // True zwischen einem erfolgreichen Open/OpenSource und Close.
     function IsOpen: Boolean;
     property FileName: string read FFileName;
+    // Zeilen der geoeffneten Datei (0 ohne Open) - die obere Grenze
+    // fuer jedes Zeilenargument dieser Schnittstelle.
     function LineCount: Integer;
 
     // P1 - Anweisung, die an (ALine, ACol) beginnt. nil, wenn ihr Ende

@@ -66,7 +66,10 @@ def pas_parts(s: str) -> list:
             buf.append(Q + Q)          # verdoppeln
         elif ord(ch) < 32 or ord(ch) > 126:
             flush()
-            parts.append('#$%02X' % ord(ch))
+            # Vierstellig (#$00E9): zweistellig (#$E9) ist ein AnsiChar der
+            # aktiven Codepage, der Wert haengt dann an der Build-Maschine
+            # (Review Bereich C, Minor).
+            parts.append('#$%04X' % ord(ch))
         else:
             buf.append(ch)
     flush()

@@ -37,6 +37,7 @@ uses
   uTestFileTextCache in 'uTestFileTextCache.pas',
   uTestParserReviewC in 'uTestParserReviewC.pas',
   uTestDetectorUtilsText in 'uTestDetectorUtilsText.pas',
+  uTestConfigPass in 'uTestConfigPass.pas',
   uTestEditorCommand in 'uTestEditorCommand.pas',
   uTestDfmLexer in 'uTestDfmLexer.pas',
   uTestDfmParser in 'uTestDfmParser.pas',

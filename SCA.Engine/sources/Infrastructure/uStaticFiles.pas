@@ -321,7 +321,7 @@ end;
 
 class function TStaticFiles.GetAllPasFilesRecursive(const Path: string)
   : TStringList;
-// Alte API – wirft keine Exception mehr, gibt aber leere Liste bei Fehler zurueck.
+// Alte API - wirft keine Exception mehr, gibt aber leere Liste bei Fehler zurueck.
 var
   TickCounter: Integer;
 begin
@@ -592,15 +592,22 @@ var
   TickCounter : Integer;
 begin
   Result := TStringList.Create;
-  if (Path = '') or not DirectoryExists(Path) then Exit;
-  // ScanRec faengt Fehler je Eintrag selbst (ohne Errors-Liste: still);
-  // ohne Tick-Callback gibt es auch kein EAbort.
-  Units := TStringList.Create;
-  TickCounter := 0;
   try
-    TStaticFiles.ScanRec(Path, Units, 0, nil, nil, AIgnore, TickCounter, nil, Result);
-  finally
-    Units.Free;
+    if (Path = '') or not DirectoryExists(Path) then Exit;
+    // ScanRec faengt Fehler je Eintrag selbst (ohne Errors-Liste: still);
+    // ohne Tick-Callback gibt es auch kein EAbort. Die Klammer um alles:
+    // wirft ScanRec doch (Speicher), geht das Ergebnis mit, statt zu
+    // lecken (Review Bereich C, Minor).
+    Units := TStringList.Create;
+    TickCounter := 0;
+    try
+      TStaticFiles.ScanRec(Path, Units, 0, nil, nil, AIgnore, TickCounter, nil, Result);
+    finally
+      Units.Free;
+    end;
+  except
+    Result.Free;
+    raise;
   end;
 end;
 
