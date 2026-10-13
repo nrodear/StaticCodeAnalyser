@@ -8,11 +8,16 @@ unit uParamNameMismatch;
 // der Bereich von der Kopfzeile bis vor die naechste Methode, hoechstens
 // bis initialization/finalization/'end.' - so bleiben auch mehrzeilige
 // letzte Anweisungen ganz drin, die der AST nur mit ihrer Startzeile
-// fuehrt. Geschachtelte Routinen werden ausgeblendet - von ihrer ersten
-// Zeile bis vor das 'begin' der aeusseren, damit auch Fortsetzungszeilen
-// ihrer letzten Anweisung und ihr 'end;' wegfallen. Ihr Text geht als
-// AHidden an den Scanner: erwaehnt er eine Query der aeusseren Routine,
-// wird diese nicht beurteilt (die innere kann binden oder SQL anhaengen).
+// fuehrt. Geschachtelte Routinen werden ausgeblendet - jede von ihrer
+// ersten Zeile bis vor den naechsten Deklarationsabschnitt der aeusseren
+// (var/const/type/label), die naechste geschachtelte oder das 'begin' der
+// aeusseren, damit auch Fortsetzungszeilen ihrer letzten Anweisung und ihr
+// 'end;' wegfallen. Ihr Text geht als AHidden an den Scanner: erwaehnt er
+// eine Query der aeusseren Routine, wird diese nicht beurteilt (die innere
+// kann binden oder SQL anhaengen). Der var-Abschnitt HINTER einer
+// geschachtelten Routine bleibt sichtbar: bis 2026-10-14 wurde pauschal
+// bis vor das 'begin' ausgeblendet, jede dort deklarierte Query galt damit
+// als "erwaehnt" und wurde nie beurteilt.
 //
 // Anlass (2026-10-07, Nico): eine TOracleQuery, deren ParamByName-Namen
 // nicht zu den Platzhaltern im SQL.Add passten. Der Compiler sieht so
@@ -36,7 +41,7 @@ implementation
 // noinspection-file BeginEndRequired, IfElseBegin, TooLongLine
 
 uses
-  uFileTextCache, uAstSpans, uParamNameScan;
+  System.Math, uFileTextCache, uAstSpans, uParamNameScan;
 
 type
   TRange = record
@@ -44,12 +49,6 @@ type
     First  : Integer;   // 1-basiert
     Last   : Integer;
   end;
-
-const
-  // Ohne einen dieser Zugriffe kann die Regel in einer Routine nichts
-  // melden (klein, Teilstring der kleingeschriebenen Zeile).
-  ACCESS_WORDS: array[0..4] of string = (
-    'parambyname', 'setvariable', 'declarevariable', 'findparam', 'paramvalues');
 
 function IsUnitTail(const ALine: string): Boolean;
 var
@@ -116,6 +115,8 @@ begin
   ARanges[High(ARanges)].Last := Tail;
 end;
 
+// Vorfilter je Routine (Teilstring der kleingeschriebenen Zeile) - dieselbe
+// Liste wie der Engine-Vorfilter je Datei (PARAM_ACCESS_WORDS).
 function HasParamAccess(ALines: TStrings; const ARange: TRange): Boolean;
 var
   j : Integer;
@@ -124,32 +125,74 @@ begin
   for j := ARange.First to ARange.Last do
   begin
     Low := LowerCase(ALines[j - 1]);
-    for W in ACCESS_WORDS do
+    for W in PARAM_ACCESS_WORDS do
       if Pos(W, Low) > 0 then Exit(True);
   end;
   Result := False;
 end;
 
-// Zeilen [AFrom..ATo] der geschachtelten Routinen: von der ersten bis vor
-// das 'begin' der aeusseren Routine. AFrom > ATo, wenn es keine gibt.
-procedure NestedBlock(const ARange: TRange; out AFrom, ATo: Integer);
+// Beginnt in ALine ein Deklarationsabschnitt der aeusseren Routine? Nur das
+// Wort am Zeilenanfang zaehlt - hinter dem 'end;' einer geschachtelten
+// Routine stehen sonst nur Fortsetzungszeilen ihrer letzten Anweisung,
+// Leerzeilen und Kommentare, und keine davon beginnt mit var/const/type/
+// label als eigenem Wort.
+function IsDeclSectionStart(const ALine: string): Boolean;
+const
+  WORDS: array[0..3] of string = ('var', 'const', 'type', 'label');
+var
+  T, W : string;
+begin
+  T := LowerCase(Trim(ALine));
+  for W in WORDS do
+    if (Copy(T, 1, Length(W)) = W) and
+       ((Length(T) = Length(W)) or
+        not CharInSet(T[Length(W) + 1], ['a'..'z', '0'..'9', '_'])) then
+      Exit(True);
+  Result := False;
+end;
+
+// Erste Zeile HINTER der geschachtelten Routine AIdx: hinter ihrem AST-Ende
+// (das nur die Startzeile der letzten Anweisung kennt) bis zum ersten
+// Deklarationsabschnitt der aeusseren, zum Beginn der naechsten
+// geschachtelten oder bis ALimit (das 'begin' der aeusseren).
+function NestedStop(ALines: TStrings; const AStarts, AEnds: TArray<Integer>;
+  AIdx, ALimit: Integer): Integer;
+var
+  m, Stop : Integer;
+begin
+  Stop := ALimit;
+  for m := 0 to High(AStarts) do
+    if (AStarts[m] > AStarts[AIdx]) and (AStarts[m] < Stop) then
+      Stop := AStarts[m];
+  Result := AEnds[AIdx] + 1;
+  while (Result < Stop) and not IsDeclSectionStart(ALines[Result - 1]) do
+    Inc(Result);
+end;
+
+// Welche Zeilen [First..Last] der Routine zu geschachtelten Routinen
+// gehoeren (Index = Zeile - First). Ohne Rumpf hinter den geschachtelten
+// (AST-Sonderfall) zaehlt nur ihre AST-Spanne.
+function HiddenLines(ALines: TStrings; const ARange: TRange): TArray<Boolean>;
 var
   Starts, Ends : TArray<Integer>;
   Body : TAstNode;
-  k : Integer;
+  k, j, Limit, Stop : Integer;
 begin
-  AFrom := MaxInt;
-  ATo := -1;
+  SetLength(Result, ARange.Last - ARange.First + 1);
   TAstSpans.CollectNestedSpans(ARange.Method, Starts, Ends);
   if Length(Starts) = 0 then Exit;
-  for k := 0 to High(Starts) do
-    if Starts[k] < AFrom then AFrom := Starts[k];
   Body := TAstSpans.FindBodyBlock(ARange.Method);
-  if Assigned(Body) and (Body.Line > AFrom) then
-    ATo := Body.Line - 1
-  else
-    for k := 0 to High(Ends) do
-      if Ends[k] > ATo then ATo := Ends[k];
+  Limit := 0;
+  if Assigned(Body) then Limit := Body.Line;
+  for k := 0 to High(Starts) do
+  begin
+    if Limit > Starts[k] then
+      Stop := NestedStop(ALines, Starts, Ends, k, Limit)
+    else
+      Stop := Ends[k] + 1;
+    for j := Max(Starts[k], ARange.First) to Min(Stop - 1, ARange.Last) do
+      Result[j - ARange.First] := True;
+  end;
 end;
 
 // Quelltext der Routine; die Zeilen geschachtelter Routinen bleiben leer,
@@ -158,15 +201,16 @@ function RoutineText(ALines: TStrings; const ARange: TRange;
   out AHidden: string): string;
 var
   Sb, Hidden : TStringBuilder;
-  j, NFrom, NTo : Integer;
+  Flags : TArray<Boolean>;
+  j : Integer;
 begin
-  NestedBlock(ARange, NFrom, NTo);
+  Flags := HiddenLines(ALines, ARange);
   Sb := TStringBuilder.Create;
   Hidden := TStringBuilder.Create;
   try
     for j := ARange.First to ARange.Last do
     begin
-      if (j >= NFrom) and (j <= NTo) then
+      if Flags[j - ARange.First] then
         Hidden.Append(ALines[j - 1]).Append(string(#10))
       else
         Sb.Append(ALines[j - 1]);
