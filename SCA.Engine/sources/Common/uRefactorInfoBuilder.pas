@@ -368,8 +368,9 @@ var
   Stripped : string;
   Dummy    : Integer;
 begin
-  // Keine Vorab-Zuweisung an Result: jeder Weg endet in Exit(True) oder
-  // in der Zuweisung hinter der Schleife (dcc32 H2077 beim Bau 2026-10-04).
+  // Kein Vorab-Result (dcc32 H2077, Bau 2026-10-04). SpanFits wie bei den
+  // anderen Bereichs-Lesern: hinter dem Dateiende las das ALines[-1].
+  if not SpanFits(ALines, ASpan) then Exit(False);
   State := Default(TCommentScanState);
   for Li := ASpan.StartLine to ASpan.EndLine do
   begin

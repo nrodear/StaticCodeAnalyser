@@ -247,6 +247,12 @@ type
     // gibt dann nichts frei.
     function ReleaseFindings: TObjectList<TLeakFinding>;
 
+    // Zaehler ueber die GEHALTENE Liste, bei jedem Aufruf frisch gezaehlt
+    // (kein Zwischenstand): FindingCount = alle Funde einschliesslich
+    // fkFileReadError; Error/Warning/HintCount = Funde mit genau dieser
+    // Severity, wie sie nach den Post-Filtern des Scans (Evidenz-Politik,
+    // Severity-Schwelle) im Fund steht - nicht die Katalog-Vorgabe. Nach
+    // ReleaseFindings liefern alle vier 0.
     function FindingCount: Integer;
     function ErrorCount  : Integer;
     function WarningCount: Integer;
@@ -277,6 +283,10 @@ type
     // rekursiv: ein Halter, der danach Run aufruft, re-entert dessen
     // internes Enter problemlos. NIE ueber Synchronize/ProcessMessages
     // hinweg halten (Deadlock-Gefahr mit blockierten UI-Thread-Wartenden).
+    // Der Lock selbst lebt seit 2026-10-14 in der Blatt-Unit uEngineLock
+    // (Review Bereich C, Major 11) - diese drei Methoden reichen nur
+    // durch, damit die Fremd-Konsumenten (IDE-Plugin) ihre Aufrufform
+    // behalten.
     class procedure AcquireEngineLock; static;
     class procedure ReleaseEngineLock; static;
     // Nicht-blockierende Probe (Welle 1, 2026-07-20): fuer UI-Thread-
@@ -307,7 +317,8 @@ implementation
 
 uses
   Winapi.Windows,   // OutputDebugString (ProjectScope-Warnungen)
-  System.IOUtils, System.SyncObjs,
+  System.IOUtils,
+  uEngineLock,      // prozessweiter Engine-Lock (Blatt-Unit, Review C Major 11)
   uFileTextCache,   // ReleaseTransientCaches (G2-5-Hook)
   uStaticAnalyzer2, uRuleCatalog, uLexer, uCustomRuleDetector, uVcsChanges,
   uRepoSettings, uBaseline, uExportSARIF, uExportSonarGeneric, uExportHtml,
@@ -317,17 +328,9 @@ uses
   uStaticFiles,     // TStaticFiles.ScanDialect - Dialekt-View-State (Lazarus A2)
   uNotIncludedInProject;   // SCA194 - verwaiste .pas/.dfm im Projektordner
 
-var
-  // Serialisiert ALLE Engine-Scans prozessweit. Der Engine-State ist global
-  // und nicht thread-safe: LeakyClasses/DiscoveredClasses/Config-Vars werden
-  // waehrend des Scans mutiert (uStaticAnalyzer2). Ohne Serialisierung racet
-  // ein Background-Consumer (IDE-Watch-Worker) mit UI-Thread-Scans -> TString-
-  // List-Mutation waehrend Fremd-Iteration -> AV / korrupte Findings.
-  // Rekursiv (TCriticalSection ist reentrant), damit ein Consumer, der den
-  // Lock um SetupForRun+Run als Einheit haelt, mit Run's internem Enter nicht
-  // deadlockt. Single-Threaded (CLI/Form): unkontent -> null Verhaltens-
-  // aenderung, A/B byte-identisch.
-  GEngineLock: TCriticalSection = nil;
+// Der Engine-Lock (frueher die Variable GEngineLock hier) liegt seit
+// 2026-10-14 in uEngineLock - Vertrag und Begruendung dort. Hier bleibt nur
+// die Durchreiche ueber TAnalysisSession.
 
 function WriteTempSource(const ASrc: string): string;
 // Schreibt ASrc in eine eindeutige Temp-.pas. GUID-Name (kollisionsfrei bei
@@ -356,9 +359,13 @@ begin
   ScanFiles := TStringList.Create;
   try
     ScanFiles.AddStrings(AFiles);
-    if (AFiles.Count > 0) and
-       ((uSCAConsts.DetectorEnabledKinds = []) or
-        (fkHardcodedIpInConfig in uSCAConsts.DetectorEnabledKinds)) then
+    // EIN Gate fuer SCA201 (Review Bereich C, Minor): Profil UND
+    // Mindestschwere entscheidet TStaticAnalyzer2.ConfigPassActive - die
+    // Vorfassung prueften hier nur das Profil und sammelte .ini-Dateien
+    // ein, die der Konfigurations-Durchlauf dann wegen der Schwere ohnehin
+    // verwarf. Fundneutral: die Konfigurationsdateien gehen nur in
+    // ScanFiles, SCA194/SCA195 sehen weiterhin AFiles.
+    if (AFiles.Count > 0) and TStaticAnalyzer2.ConfigPassActive then
     begin
       Configs := TConfigFiles.Collect(ABaseDir, AReq.IgnoreList);
       try
@@ -484,7 +491,7 @@ function TScanResult.HintCount   : Integer; begin Result := CountSeverity(lsHint
 
 procedure TAnalysisSession.ApplyIfdefView(const Req: TScanRequest);
 // Spiegelt Req.IfdefDefines in den globalen Lexer-State. Laeuft in Run
-// VOR der SkipConfig-Weiche (unter GEngineLock) - die Scan-SICHT ist
+// VOR der SkipConfig-Weiche (unter dem Engine-Lock) - die Scan-SICHT ist
 // Request-Eigenschaft, keine Detektor-Config: auch ein Consumer, der
 // seine Schwellen selbst vorbereitet (SkipConfig=True), bekommt exakt
 // die Sicht seines Requests, nicht den Zufallszustand des Vorlaufs.
@@ -564,7 +571,7 @@ begin
   //        nur fuer frische Prozesse, jetzt fuer jeden Run.
   //    Form/IDE laufen mit Req.SkipConfig=True an ApplyConfig komplett
   //    vorbei - deren SetupForRun-/ApplyDetectorConfig-Zustand (Register-
-  //    ToLeakyClasses etc.) bleibt unangetastet. Laeuft unter GEngineLock
+  //    ToLeakyClasses etc.) bleibt unangetastet. Laeuft unter dem Engine-Lock
   //    (Run klammert ApplyConfig).
   uSCAConsts.ResetEngineConfigDefaults;
 
@@ -578,6 +585,9 @@ begin
     // NICHT die ''=alle-Semantik des Direkt-Modus).
     Settings := TRepoSettings.Create;
     try
+      // Leer mit Absicht (Lade-Robustheitsgrenze): eine defekte oder halb
+      // geschriebene analyser.ini darf den Lauf nicht stoppen - der Scan
+      // faehrt dann mit den Engine-Vorgaben, genau wie die CLI es immer tat.
       try Settings.Load; except end;
       if Req.Profile         <> '' then Settings.Profile     := Req.Profile;
       if Req.MinSeverityName <> '' then Settings.MinSeverity := Req.MinSeverityName;
@@ -738,7 +748,7 @@ var
   EffIndexRoot : string;
 begin
   // Prozessweite Scan-Serialisierung gegen den nicht-thread-safen globalen
-  // Engine-State (s. GEngineLock). Deckt ApplyConfig + Scan + Baseline ab.
+  // Engine-State (s. uEngineLock). Deckt ApplyConfig + Scan + Baseline ab.
   // Rekursiv -> ein Consumer, der den Lock bereits um SetupForRun+Run haelt,
   // re-entert hier problemlos. NIE ueber Synchronize/ProcessMessages hinweg
   // halten (Deadlock) - der Watch-Worker released daher vor Synchronize.
@@ -756,7 +766,7 @@ begin
   var AlterInclDefines := False;
   var AlteIfdefDefines: TArray<string> := nil;
   var AlterDialekt := dlDelphi;
-  GEngineLock.Enter;
+  uEngineLock.AcquireEngineLock;
   try
   AlterIfdefSkip   := gLexerIfdefSkipEnabled;
   AlterInclDefines := gLexerIncludeDefinesEnabled;
@@ -911,6 +921,8 @@ begin
         if Req.ApplyRepoIni then
         begin
           VcsSettings := TRepoSettings.Create;
+          // Leer mit Absicht: ohne lesbare INI laeuft die VCS-Ermittlung mit
+          // ihren Vorgaben (nil-Verhalten der Overloads) weiter.
           try VcsSettings.Load; except end;
         end;
         try
@@ -947,6 +959,8 @@ begin
         try
           Findings := TStaticAnalyzer2.AnalyzeLeaks(Fn, Req.UsesCheck);
         finally
+          // Leer mit Absicht: eine liegengebliebene Temp-Datei ist kein
+          // Grund, die fertigen Funde des In-Memory-Scans zu verwerfen.
           try TFile.Delete(Fn); except end;
         end;
         // Findings tragen den Temp-Pfad; auf den logischen Namen (Req.Path)
@@ -992,19 +1006,18 @@ begin
     TStaticFiles.ScanDialect    := AlterDialekt;
     for var AltDef in AlteIfdefDefines do
       LexerIfdefAddDefine(AltDef);
-    GEngineLock.Leave;
+    uEngineLock.ReleaseEngineLock;
   end;
 end;
 
 class procedure TAnalysisSession.ReleaseTransientCaches;
 begin
-  // NUR unter dem Engine-Lock: Clear zerstoert die TStringLists des
-  // Caches (doOwnsValues), und ein parallel LAUFENDER Scan haelt rohe
-  // Zeiger darauf (AcquireLines mit OwnedByCache=True) - ein Clear
-  // mittendrin waere Use-after-free, exakt die Gefahr, vor der der
-  // RemoveFile-Kommentar in uFileTextCache warnt (Gegenpruefung V2).
-  // Run haelt den Lock ueber den GANZEN Scan, also kann das Clear unter
-  // dem Lock nie einen laufenden Scan treffen.
+  // Unter dem Engine-Lock, damit der Hook einem LAUFENDEN Scan nicht die
+  // Cache-Waerme stiehlt. Um Speichersicherheit geht es seit 2026-10-14
+  // nicht mehr: Clear gibt einen Eintrag nur frei, wenn ihn niemand mehr
+  // haelt (Nutzerzaehler je Eintrag, s. TFileTextCache.Clear) - ein
+  // Leser mit geliehenen Zeilen (AcquireLines, OwnedByCache=True) behaelt
+  // sie bis zu seinem ReleaseLines, auch ueber ein fremdes Clear hinweg.
   //
   // TRY statt blockierendem Acquire: die Aufrufstellen liegen teils auf
   // dem UI-Thread ("Reset all findings" waehrend ein Worker scannt!).
@@ -1021,17 +1034,17 @@ end;
 
 class procedure TAnalysisSession.AcquireEngineLock;
 begin
-  GEngineLock.Enter;
+  uEngineLock.AcquireEngineLock;
 end;
 
 class procedure TAnalysisSession.ReleaseEngineLock;
 begin
-  GEngineLock.Leave;
+  uEngineLock.ReleaseEngineLock;
 end;
 
 class function TAnalysisSession.TryAcquireEngineLock: Boolean;
 begin
-  Result := GEngineLock.TryEnter;
+  Result := uEngineLock.TryAcquireEngineLock;
 end;
 
 { Convenience }
@@ -1104,11 +1117,5 @@ begin
     Inc(Result);
   end;
 end;
-
-initialization
-  GEngineLock := TCriticalSection.Create;
-
-finalization
-  FreeAndNil(GEngineLock);
 
 end.

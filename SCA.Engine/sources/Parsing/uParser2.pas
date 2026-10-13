@@ -1,8 +1,8 @@
 ﻿unit uParser2;
 
-// Rekursiver Abstiegs-Parser für Delphi-Quelltexte.
+// Rekursiver Abstiegs-Parser fuer Delphi-Quelltexte.
 // Erzeugt einen TAstNode-Baum (uAstNode) aus einem Token-Stream (uLexer).
-// Unbekannte Konstrukte werden übersprungen – kein unkontrollierter Absturz.
+// Unbekannte Konstrukte werden uebersprungen - kein unkontrollierter Absturz.
 
 interface
 
@@ -11,10 +11,13 @@ uses
   uAstNode, uLexer;
 
 type
+  // Stop-Menge der Sammel-Schleifen (CollectTypeNameUntil).
+  TTokenKinds = set of TTokenKind;
+
   TParser2 = class
   public
     constructor Create;
-    // Lädt Datei, parst und gibt Root-Node (nkUnit) zurück.
+    // Laedt Datei, parst und gibt Root-Node (nkUnit) zurueck.
     function ParseFile(const FileName: string): TAstNode;
     // Parst einen String direkt.
     function ParseSource(const Source: string): TAstNode;
@@ -199,6 +202,25 @@ type
     procedure ParseInlineConstStmt(Parent: TAstNode);
     procedure ParseCallOrAssign(Parent: TAstNode);
     function  ParsePrimary: string;
+    // ---- Gemeinsame Sammel-Schleifen (Review Bereich C, Major 14:
+    //      drei 3er-Duplikate zusammengefuehrt, token-identisch) ----
+    // Typname einer Inline-Deklaration: Token mit Leerzeichen getrennt
+    // bis zum ersten Token aus AStop (bleibt liegen).
+    function CollectTypeNameUntil(const AStop: TTokenKinds): string;
+    // Anonymer 'record ... end'-Typ balanciert konsumieren (verschachtelte
+    // record zaehlen mit), die Token ohne Trenner an AText haengen - wie
+    // der Feld-/Var-Typ-Walk; wer den Text nicht braucht, verwirft ihn.
+    procedure ConsumeRecordTypeInto(var AText: string);
+    // Initializer einer Inline-var/-const ab dem aktuellen Token bis zum
+    // Anweisungsende; Klammern/begin/case/try/asm erhoehen die Tiefe,
+    // damit ';' in Record-/Array-Konstanten oder anonymen Methoden den
+    // Scan nicht beenden. String-Literale in Quellform (QuoteStrLit).
+    function ScanInlineInitializer: string;
+    // Notbremse des Argument-Scanners in ParsePrimary: False, wenn der
+    // Scan enden muss - Dateiende, ein 'end' ohne offenen Block in den
+    // Argumenten oder ein Sektions-Schluesselwort; zaehlt begin/case/try/
+    // asm und ihr 'end' in ABlockTiefe mit.
+    function ArgScanLaeuft(var ABlockTiefe: Integer): Boolean;
   end;
 
 implementation
@@ -312,6 +334,47 @@ begin
   FElseTakerOpen := False;     // dito
 end;
 
+// Rueckfall der Kodierungskette (Review Bereich C, Major 14): eine Datei
+// mit UTF-8-BOM und einem ungueltigen Byte dahinter bringt LoadFromFile
+// (BOM-Erkennung) und den UTF-8-Versuch zum Werfen - TEncoding.UTF8 ist
+// strikt. Die alte Kette las sie danach als UTF-16 (jedes Bytepaar ein
+// Zeichen: leerer Baum, kein Fund, kein Fehler) und erzeugte dabei mit
+// GetEncoding(1252) je Aufruf eine Instanz, die niemand freigab. Jetzt:
+// Bytes hinter der BOM als Default-Codepage, ein kaputtes Zeichen statt
+// einer unsichtbaren Datei. False nur, wenn die Datei nicht lesbar ist.
+const
+  UTF8_BOM_LEN = 3;   // EF BB BF
+
+function LadeAnsiOhneBom(const FileName: string; SL: TStringList): Boolean;
+var
+  FS    : TFileStream;
+  Bytes : TBytes;
+  Off   : Integer;
+begin
+  Result := False;
+  try
+    // TFileStream statt TFile.ReadAllBytes: die Unit hat keine
+    // implementation-uses, und System.IOUtils nur hierfuer zu ziehen
+    // lohnt nicht.
+    FS := TFileStream.Create(FileName, fmOpenRead or fmShareDenyWrite);
+    try
+      SetLength(Bytes, FS.Size);
+      if FS.Size > 0 then
+        FS.ReadBuffer(Bytes[0], FS.Size);
+    finally
+      FS.Free;
+    end;
+  except
+    Exit;
+  end;
+  Off := 0;
+  if (Length(Bytes) >= UTF8_BOM_LEN) and (Bytes[0] = $EF)
+     and (Bytes[1] = $BB) and (Bytes[2] = $BF) then
+    Off := UTF8_BOM_LEN;
+  SL.Text := TEncoding.Default.GetString(Bytes, Off, Length(Bytes) - Off);
+  Result := True;
+end;
+
 function TParser2.ParseFile(const FileName: string): TAstNode;
 var
   SL: TStringList;
@@ -323,13 +386,8 @@ begin
     except
       try SL.LoadFromFile(FileName, TEncoding.UTF8);
       except
-        try SL.LoadFromFile(FileName, TEncoding.Unicode);
-        except
-          try SL.LoadFromFile(FileName, TEncoding.GetEncoding(1252));
-          except
-            raise Exception.CreateFmt('Datei nicht lesbar: %s', [FileName]);
-          end;
-        end;
+        if not LadeAnsiOhneBom(FileName, SL) then
+          raise Exception.CreateFmt('Datei nicht lesbar: %s', [FileName]);
       end;
     end;
     Result := ParseNamedSource(SL.Text, FileName);
@@ -1143,7 +1201,7 @@ begin
           Next;
           if Tok.Kind in [tkKwOf, tkSemicolon] then
           begin
-            // Vorwärtsdeklaration: TFoo = class; oder class of T
+            // Vorwaertsdeklaration: TFoo = class; oder class of T
             SkipToSemicolon;
             Eat(tkSemicolon);
           end
@@ -1189,7 +1247,7 @@ begin
       begin
         // Typaliase: Inhalt (Bezeichner) in TypeRef speichern damit
         // CollectText referenzierte Typen als Verwendungsnachweis zaehlt.
-        // Beispiel: TMyEvent = TNotifyEvent  →  TypeRef = 'TNotifyEvent'
+        // Beispiel: TMyEvent = TNotifyEvent  ->  TypeRef = 'TNotifyEvent'
         //
         // Procedural-Type-Aliase wie
         //   TFTPStatus = procedure(Sender: TObject; Response: Boolean;
@@ -1748,6 +1806,14 @@ begin
           if (T.Kind <> tkIdent) and
              (Tok.Kind <> tkColon) and (Tok.Kind <> tkComma) then
             Continue;   // Keyword ohne Deklarationsform: wie frueher (1 Token)
+          // 'strict private'/'strict protected': 'strict' ist fuer den
+          // Lexer ein Bezeichner und lief in den Feld-Pfad - je Sektion ein
+          // typloses Phantom-nkField 'strict' (817 Stellen im Korpus,
+          // zaehlt in SCA138; Review Bereich C, Major 14). Das Sichtbarkeits-
+          // Keyword dahinter nimmt der naechste Durchlauf wie gewohnt.
+          if SameText(FName, 'strict') and
+             (Tok.Kind in [tkKwPrivate, tkKwProtected]) then
+            Continue;
           SkipGenericParams;          // TInner<T> = class ...
           if Eat(tkEq) then
           begin
@@ -1824,18 +1890,7 @@ begin
               // SCA135 FPs). Mini-Parser bis matching `end`.
               if Tok.Kind = tkKwRecord then
               begin
-                FType := FType + Tok.Value;
-                Next;
-                var Depth := 1;
-                while (Depth > 0) and (Tok.Kind <> tkEof) do
-                begin
-                  case Tok.Kind of
-                    tkKwRecord: Inc(Depth);
-                    tkKwEnd:    Dec(Depth);
-                  end;
-                  FType := FType + Tok.Value;
-                  Next;
-                end;
+                ConsumeRecordTypeInto(FType);
                 Continue;
               end;
               if Tok.Kind = tkLParen then Inc(FeldParenTiefe)
@@ -2022,7 +2077,7 @@ begin
     Eat(tkRParen);
   end;
 
-  // Rückgabetyp
+  // Rueckgabetyp
   if Eat(tkColon) then
   begin
     var RetType := '';
@@ -2040,7 +2095,7 @@ begin
   ParseMethodDirectives(MNode);
 end;
 
-{ ---- Methoden-Direktiven überspringen ---- }
+{ ---- Methoden-Direktiven ueberspringen ---- }
 
 procedure TParser2.ParseMethodDirectives(MNode: TAstNode);
 // Konsumiert alle Method-Direktiven (virtual, abstract, override, ...,
@@ -2125,7 +2180,7 @@ begin
   // Methode, optional mit weiteren var/const/type-Sektionen dazwischen. Sie
   // werden hier rekursiv geparst, damit die Lexer-Position korrekt bis hinter
   // ihre Rumpf-`end;` laeuft und der ECHTE Outer-Body (mit `Result :=` /
-  // Var-Writes) danach normal geparst wird. Frueher fraß ParseLocalVarSection
+  // Var-Writes) danach normal geparst wird. Frueher frass ParseLocalVarSection
   // die nested routine als Pseudo-Local-Var und der Outer-Body ging verloren ->
   // SCA121/SCA166-False-Positives auf der aeusseren Methode.
   //
@@ -2192,7 +2247,7 @@ begin
   end;
 end;
 
-{ ---- Lokale Var/Const-Blöcke ---- }
+{ ---- Lokale Var/Const-Bloecke ---- }
 
 procedure TParser2.ParseLocalVarSection(Parent: TAstNode);
 var
@@ -2257,16 +2312,8 @@ begin
             // waeren als lokale Typen ohnehin illegal, und `class` kommt
             // in record-Bodies als Modifier (`class function`) vor -
             // Depth-Zaehlung darauf wuerde ueberzaehlen.
-            Next; // 'record'
-            var Depth := 1;
-            while (Depth > 0) and (Tok.Kind <> tkEof) do
-            begin
-              case Tok.Kind of
-                tkKwRecord: Inc(Depth);
-                tkKwEnd:    Dec(Depth);
-              end;
-              Next;
-            end;
+            var Weg := '';
+            ConsumeRecordTypeInto(Weg);   // Text nicht gebraucht
             PrevKind := tkKwEnd;
             Continue;
           end;
@@ -2399,18 +2446,7 @@ begin
             // Mini-Parser bis matching `end` (nested `record` zaehlt mit).
             if Tok.Kind = tkKwRecord then
             begin
-              TypeName := TypeName + Tok.Value;
-              Next;
-              var Depth := 1;
-              while (Depth > 0) and (Tok.Kind <> tkEof) do
-              begin
-                case Tok.Kind of
-                  tkKwRecord: Inc(Depth);
-                  tkKwEnd:    Dec(Depth);
-                end;
-                TypeName := TypeName + Tok.Value;
-                Next;
-              end;
+              ConsumeRecordTypeInto(TypeName);
               Continue;
             end;
             TypeName := TypeName + Tok.Value;
@@ -2490,7 +2526,7 @@ begin
       case T.Kind of
         tkKwEnd                            : begin Next; Eat(tkSemicolon); Exit; end;
         tkKwElse, tkKwExcept, tkKwFinally,
-        tkKwUntil, tkEof                   : Exit; // Blockgrenze – nicht konsumieren
+        tkKwUntil, tkEof                   : Exit; // Blockgrenze - nicht konsumieren
       else
         ParseStatement(Block);
       end;
@@ -2712,7 +2748,7 @@ begin
       begin
         var WithT := Next; // 'with' konsumieren
         // Ausdruck vor 'do' erfassen, damit Bezeichner im Corpus erscheinen.
-        // Beispiel: with DataModule1.Query1 do  →  Node.Name = 'DataModule1 Query1'
+        // Beispiel: with DataModule1.Query1 do  ->  Node.Name = 'DataModule1 Query1'
         var WithExpr := '';
         while not (Tok.Kind in [tkKwDo, tkKwBegin, tkKwEnd, tkEof]) do
         begin
@@ -2795,7 +2831,7 @@ begin
       end;
 
     tkKwEnd, tkKwElse, tkKwExcept, tkKwFinally,
-    tkKwUntil, tkEof: ; // Blockgrenzen – nichts tun
+    tkKwUntil, tkEof: ; // Blockgrenzen - nichts tun
 
   else
     // Track B1 (Konzept_StrukturellePhase 2026-07-12): 'write'/'read' sind
@@ -2833,17 +2869,23 @@ begin
 
   // Bedingungstext zwischen 'if' und 'then' erfassen
   // (fuer Guards bei NilDeref / DivByZero noetig).
+  // Seit 2026-10-14 wie ParseWhileStmt/ParseCaseStmt (Review Bereich C,
+  // Major 14): JoinTokInto statt Leerzeichen nach JEDEM Token - 'Obj.Member'
+  // blieb sonst 'Obj . Member', und uSymbolReferenceIndex sah den Member-
+  // Zugriff nicht (FP VisibilityCheck -> E2361 beim Umbau). QuoteStrLit
+  // verdoppelt eingebettete Apostrophe wieder: ein nacktes ' im Literal
+  // oeffnete fuer die Literal-Blanker der Detektoren einen falschen
+  // String (FP MagicNumber, FN NilComparison).
   CondText := '';
   while not (Tok.Kind in [tkKwThen, tkKwEnd, tkEof]) do
   begin
     if Tok.Kind = tkStrLit then
-      CondText := CondText + '''' + Tok.Value + ''''
+      JoinTokInto(CondText, QuoteStrLit(Tok.Value))
     else
-      CondText := CondText + Tok.Value;
-    CondText := CondText + ' ';
+      JoinTokInto(CondText, Tok.Value);
     Next;
   end;
-  IfNode.TypeRef := Trim(CondText);
+  IfNode.TypeRef := CondText;
 
   Eat(tkKwThen);
 
@@ -3107,12 +3149,7 @@ begin
       var VarTok  := Next;
       var VarType := '';
       if Eat(tkColon) then
-        while not (Tok.Kind in [tkKwIn, tkAssign, tkKwDo, tkEof]) do
-        begin
-          if VarType <> '' then VarType := VarType + ' ';
-          VarType := VarType + Tok.Value;
-          Next;
-        end;
+        VarType := CollectTypeNameUntil([tkKwIn, tkAssign, tkKwDo, tkEof]);
       ForNode.Add(nkLocalVar, VarTok.Value,
         VarTok.Line, VarTok.Col).TypeRef := VarType;
     end;
@@ -3121,10 +3158,16 @@ begin
   // Header-Tokens (Loop-Variable + Range) in TypeRef joinen analog zu
   // ParseWhileStmt - sonst sehen Detektoren wie uUnusedLocal die Loop-
   // Variable nicht und melden 'for k := ...' als unused-k.
-  Header := ForNode.TypeRef;                           // ggf. von Inline-var
+  // Leerzeichen zwischen den Token BLEIBEN (uNilDeref prueft den Kopf auf
+  // 'x := ' / 'x in '), nur um einen Punkt kommt keines mehr: 'List.Count'
+  // stand als 'List . Count' im Kopf, und uSymbolReferenceIndex sah den
+  // Member-Zugriff nicht (Review Bereich C, Major 14).
+  Header := '';
   while not (Tok.Kind in [tkKwDo, tkEof]) do
   begin
-    if Header <> '' then Header := Header + ' ';
+    if (Header <> '') and (Tok.Kind <> tkDot) and
+       (Header[Length(Header)] <> '.') then
+      Header := Header + ' ';
     Header := Header + Tok.Value;
     Next;
   end;
@@ -3227,7 +3270,7 @@ begin
   //   * finally-Liste -> AUS (dito)
   SavedTaker := FElseTakerOpen;
 
-  // Try-Rumpf in temporären Block lesen
+  // Try-Rumpf in temporaeren Block lesen
   TmpBlk := TAstNode.Create(nkBlock, '__try_body__', T.Line, T.Col);
   try
     FElseTakerOpen := False;
@@ -3250,7 +3293,7 @@ begin
       TryNode := Parent.Add(nkTryExcept, 'try', T.Line, T.Col);
       TryNode.AdoptChildrenFrom(TmpBlk);
 
-      var ExTok  := Next; // 'except' – Zeile des except-Schlüsselworts
+      var ExTok  := Next; // 'except' - Zeile des except-Schluesselworts
       var ExNode := TryNode.Add(nkExceptBlock, 'except', ExTok.Line, ExTok.Col);
 
       // Zweiter der beiden Taker-Rahmen: das 'if Tok.Kind = tkKwElse'
@@ -3316,7 +3359,7 @@ begin
       TryNode := Parent.Add(nkTryFinally, 'try', T.Line, T.Col);
       TryNode.AdoptChildrenFrom(TmpBlk);
 
-      var FinTok  := Next; // 'finally' – Zeile des finally-Schlüsselworts
+      var FinTok  := Next; // 'finally' - Zeile des finally-Schluesselworts
       var FinNode := TryNode.Add(nkFinallyBlock, 'finally', FinTok.Line, FinTok.Col);
       // finally-Liste: kein else-Konsument dahinter - Taker-Rahmen AUS.
       // (Steht formal schon von der try-Rumpf-Zuweisung auf False; hier
@@ -3391,6 +3434,88 @@ begin
   Eat(tkSemicolon);
 end;
 
+{ ---- Gemeinsame Sammel-Schleifen (Review Bereich C, Major 14) ---- }
+
+function TParser2.CollectTypeNameUntil(const AStop: TTokenKinds): string;
+begin
+  Result := '';
+  while not (Tok.Kind in AStop) do
+  begin
+    if Result <> '' then Result := Result + ' ';
+    Result := Result + Tok.Value;
+    Next;
+  end;
+end;
+
+procedure TParser2.ConsumeRecordTypeInto(var AText: string);
+// Erwartet Tok = 'record'. Nur tkKwRecord zaehlt als Oeffner: 'class'
+// kommt in record-Bodies als Modifier ('class function') vor, eine
+// Zaehlung darauf wuerde ueberzaehlen.
+var
+  Depth : Integer;
+begin
+  AText := AText + Tok.Value;
+  Next; // 'record'
+  Depth := 1;
+  while (Depth > 0) and (Tok.Kind <> tkEof) do
+  begin
+    case Tok.Kind of
+      tkKwRecord: Inc(Depth);
+      tkKwEnd:    Dec(Depth);
+    end;
+    AText := AText + Tok.Value;
+    Next;
+  end;
+end;
+
+function TParser2.ArgScanLaeuft(var ABlockTiefe: Integer): Boolean;
+begin
+  Result := False;
+  if FLex.AtEnd then Exit;
+  case Tok.Kind of
+    tkKwImplementation, tkKwInitialization, tkKwFinalization:
+      Exit;
+    tkKwBegin, tkKwCase, tkKwTry, tkKwAsm:
+      Inc(ABlockTiefe);
+    tkKwEnd:
+      if ABlockTiefe = 0 then Exit else Dec(ABlockTiefe);
+  else
+    ;   // jedes andere Token gehoert zu den Argumenten
+  end;
+  Result := True;
+end;
+
+function TParser2.ScanInlineInitializer: string;
+var
+  NestDepth : Integer;
+begin
+  Result := '';
+  NestDepth := 0;
+  while not FLex.AtEnd do
+  begin
+    case Tok.Kind of
+      // [8] (Core-Audit 2026-07-17): case/try/asm oeffnen einen mit 'end'
+      // schliessenden Block und muessen wie 'begin' die Tiefe erhoehen -
+      // sonst zieht ihr 'end' NestDepth unter die Block-Ebene und der
+      // Initializer-Scan bricht bei anonymer Methode mit case/try-Body
+      // vorzeitig ab (RHS-Truncation -> Folge-Tokens werden fehl-geparst).
+      tkLParen, tkLBracket, tkKwBegin,
+      tkKwCase, tkKwTry, tkKwAsm      : Inc(NestDepth);
+      tkRParen, tkRBracket            : if NestDepth > 0 then Dec(NestDepth);
+      tkKwEnd:
+        if NestDepth > 0 then Dec(NestDepth) else Break;
+      tkSemicolon, tkKwElse, tkKwUntil,
+      tkKwExcept, tkKwFinally, tkEof:
+        if NestDepth = 0 then Break;
+    end;
+    if Tok.Kind = tkStrLit then
+      JoinTokInto(Result, QuoteStrLit(Tok.Value))
+    else
+      JoinTokInto(Result, Tok.Value);
+    Next;
+  end;
+end;
+
 { ---- Inline-Var-Anweisung (Delphi 10.3+: 'var x[: T] [:= init];' im Rumpf) ---- }
 
 procedure TParser2.ParseInlineVarStmt(Parent: TAstNode);
@@ -3418,14 +3543,9 @@ begin
     // Optional ': Typname' - bis Init / Statement-Ende lesen
     TypeName := '';
     if Eat(tkColon) then
-      while not (Tok.Kind in [tkAssign, tkSemicolon, tkKwEnd,
-                              tkKwElse, tkKwUntil, tkKwExcept,
-                              tkKwFinally, tkEof]) do
-      begin
-        if TypeName <> '' then TypeName := TypeName + ' ';
-        TypeName := TypeName + Tok.Value;
-        Next;
-      end;
+      TypeName := CollectTypeNameUntil([tkAssign, tkSemicolon, tkKwEnd,
+                                        tkKwElse, tkKwUntil, tkKwExcept,
+                                        tkKwFinally, tkEof]);
 
     // nkLocalVar pro Bezeichner anlegen (gleiche Position wie 'var').
     for N in Names do
@@ -3434,32 +3554,7 @@ begin
     // Optionaler Initializer
     if Eat(tkAssign) then
     begin
-      var FullRHS   := '';
-      var NestDepth := 0;
-      while not FLex.AtEnd do
-      begin
-        case Tok.Kind of
-          // [8] (Core-Audit 2026-07-17): case/try/asm oeffnen einen mit 'end'
-          // schliessenden Block und muessen wie 'begin' die Tiefe erhoehen -
-          // sonst zieht ihr 'end' NestDepth unter die Block-Ebene und der
-          // Initializer-Scan bricht bei anonymer Methode mit case/try-Body
-          // vorzeitig ab (RHS-Truncation -> Folge-Tokens werden fehl-geparst).
-          tkLParen, tkLBracket, tkKwBegin,
-          tkKwCase, tkKwTry, tkKwAsm      : Inc(NestDepth);
-          tkRParen, tkRBracket            : if NestDepth > 0 then Dec(NestDepth);
-          tkKwEnd:
-            if NestDepth > 0 then Dec(NestDepth) else Break;
-          tkSemicolon, tkKwElse, tkKwUntil,
-          tkKwExcept, tkKwFinally, tkEof:
-            if NestDepth = 0 then Break;
-        end;
-        if Tok.Kind = tkStrLit then
-          JoinTokInto(FullRHS, QuoteStrLit(Tok.Value))
-        else
-          JoinTokInto(FullRHS, Tok.Value);
-        Next;
-      end;
-
+      var FullRHS := ScanInlineInitializer;
       if Names.Count > 0 then
       begin
         var ANode := Parent.Add(nkAssign, Names[0], T.Line, T.Col);
@@ -3516,41 +3611,18 @@ begin
     // das '=' in TypeRef, exakt wie im Sektionspfad.
     TypeName := '';
     if Eat(tkColon) then
-      while not (Tok.Kind in [tkEq, tkSemicolon, tkKwEnd,
-                              tkKwElse, tkKwUntil, tkKwExcept,
-                              tkKwFinally, tkEof]) do
-      begin
-        if TypeName <> '' then TypeName := TypeName + ' ';
-        TypeName := TypeName + Tok.Value;
-        Next;
-      end;
+      TypeName := CollectTypeNameUntil([tkEq, tkSemicolon, tkKwEnd,
+                                        tkKwElse, tkKwUntil, tkKwExcept,
+                                        tkKwFinally, tkEof]);
 
-    // Pflicht-Initializer nach '='. Gleicher Depth-Scanner wie in
-    // ParseInlineVarStmt: Klammern/begin/case/try/asm erhoehen die Tiefe, damit
-    // ein ';' innerhalb von Record-/Array-Konstanten oder anonymen Methoden den
-    // Scan nicht vorzeitig beendet (genau die fruehere Desync-Quelle).
+    // Pflicht-Initializer nach '='. Derselbe Depth-Scanner wie in
+    // ParseInlineVarStmt (ScanInlineInitializer): Klammern/begin/case/try/
+    // asm erhoehen die Tiefe, damit ein ';' innerhalb von Record-/Array-
+    // Konstanten oder anonymen Methoden den Scan nicht vorzeitig beendet
+    // (genau die fruehere Desync-Quelle).
     if Eat(tkEq) then
     begin
-      var FullRHS   := '';
-      var NestDepth := 0;
-      while not FLex.AtEnd do
-      begin
-        case Tok.Kind of
-          tkLParen, tkLBracket, tkKwBegin,
-          tkKwCase, tkKwTry, tkKwAsm      : Inc(NestDepth);
-          tkRParen, tkRBracket            : if NestDepth > 0 then Dec(NestDepth);
-          tkKwEnd:
-            if NestDepth > 0 then Dec(NestDepth) else Break;
-          tkSemicolon, tkKwElse, tkKwUntil,
-          tkKwExcept, tkKwFinally, tkEof:
-            if NestDepth = 0 then Break;
-        end;
-        if Tok.Kind = tkStrLit then
-          JoinTokInto(FullRHS, QuoteStrLit(Tok.Value))
-        else
-          JoinTokInto(FullRHS, Tok.Value);
-        Next;
-      end;
+      var FullRHS := ScanInlineInitializer;
 
       // Sektions-Form wie ParseVarLikeSection: EIN nkConstSection-Knoten,
       // darunter je Bezeichner ein nkField mit Typ=Wert (Typ darf leer sein,
@@ -3621,8 +3693,8 @@ begin
   if Tok.Kind = tkAssign then
   begin
     Next; // ':=' konsumieren
-    // Gesamten RHS-Ausdruck bis zum nächsten ';' / 'end' erfassen.
-    // Wichtig: '+'-Verkettungen, Klammern und Zeichenketten vollständig mitladen.
+    // Gesamten RHS-Ausdruck bis zum naechsten ';' / 'end' erfassen.
+    // Wichtig: '+'-Verkettungen, Klammern und Zeichenketten vollstaendig mitladen.
     var FullRHS := '';
     var NestDepth := 0;
     while not FLex.AtEnd do
@@ -3663,7 +3735,7 @@ begin
   Eat(tkSemicolon);
 end;
 
-{ ---- Primärausdruck (vereinfacht) ---- }
+{ ---- Primaerausdruck (vereinfacht) ---- }
 
 function TParser2.ParsePrimary: string;
 var
@@ -3782,7 +3854,17 @@ begin
           // (uDivByZero/uSQLInjection) verloren dadurch den Treffer. JoinTokInto
           // setzt nur zwischen zwei Ident-Zeichen ein Space - Klammern/Operatoren
           // bleiben unveraendert, also identisch fuer die '('/')'-Tokens.
-          while not FLex.AtEnd do
+          // Notbremse (Review Bereich C, Major 14): eine Klammer, die nie
+          // schliesst, liess den Scanner bis zum Dateiende laufen - der
+          // Rest der Unit wurde ein einziger nkCall-Name, jeder Fund
+          // dahinter war weg. Ein 'end' ohne offenes begin/case/try/asm
+          // in den Argumenten (BlockTiefe 0) und jedes Sektions-
+          // Schluesselwort kommen in einer gueltigen Argumentliste nicht
+          // vor; dort endet der Scan, das Token bleibt fuer den Aufrufer
+          // liegen. Anonyme Methoden (begin..end, auch mit case/try) und
+          // ';' in deren Parameterlisten bleiben wie bisher erlaubt.
+          var BlockTiefe := 0;
+          while ArgScanLaeuft(BlockTiefe) do
           begin
             var ArgTok := Tok;
             if ArgTok.Kind = tkLParen then

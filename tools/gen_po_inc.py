@@ -62,7 +62,14 @@ def pascal_literal(line):
             if buf:
                 parts.append("'" + "".join(buf) + "'")
                 buf = []
-            parts.append("#$%04X" % o)
+            if o > 0xFFFF:
+                # Delphi-Strings sind UTF-16: ein Zeichen jenseits der BMP
+                # (Emoji in einer Meldung) als Surrogatpaar, nicht als
+                # #$1F4C4 (Review Bereich C, Minor).
+                o -= 0x10000
+                parts.append("#$%04X#$%04X" % (0xD800 + (o >> 10), 0xDC00 + (o & 0x3FF)))
+            else:
+                parts.append("#$%04X" % o)
     if buf:
         parts.append("'" + "".join(buf) + "'")
     return "".join(parts)

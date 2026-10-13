@@ -38,8 +38,6 @@ const
   DEF_BASELINE_PATH_FINGERPRINT = False;
 
 var
-  Flags: Byte;
-
   // LeakyClasses ist die Laufzeit-Liste aller Klassen, die der MemoryLeak-
   // Detektor (TLeakDetector2) trackt. Vorher als statisches Array - jetzt
   // dynamische TStringList, damit:
@@ -220,7 +218,7 @@ type
     fkEmptyExcept,      // Leerer except-Block (verschluckt Exceptions)
     fkSQLInjection,     // SQL-String per '+' konkateniert (Injection-Risiko)
     fkHardcodedSecret,  // Passwort/Token als Stringliteral im Code
-    fkFormatMismatch,   // Format()-Platzhalter ≠ Argument-Anzahl
+    fkFormatMismatch,   // Format()-Platzhalter <> Argument-Anzahl
     fkFileReadError,    // Datei konnte nicht gelesen / geparst werden
     fkUnusedUses,       // Uses-Eintrag moeglicherweise ungenutzt
     fkNilDeref,         // Zugriff auf Variable die nil sein kann
@@ -650,7 +648,7 @@ type
                                  // (Suppression nicht mehr noetig) ODER
                                  // Suppression-Target war falsch gesetzt.
                                  // Emittiert vom uSuppression-Post-Filter.
-    fkUninitVar,                 // SCA016 - lokale Variable die auf einem
+    fkUninitVar,                 // SCA166 - lokale Variable die auf einem
                                  // Pfad gelesen wird bevor sie auf demselben
                                  // Pfad geschrieben wurde. Konservatives
                                  // single-method-Scope-Modell (FixInsight-
@@ -832,10 +830,6 @@ type
     Name            : string;       // 'MemoryLeak' (canonical token)
     FindingType     : TFindingType; // Sonar-Kategorie
     DefaultSeverity : TLeakSeverity;// Standard-Severity beim Emit
-  end;
-
-  TConsts = record
-    class function GetLeakyClasses: TStringList; static;
   end;
 
 const
@@ -1205,7 +1199,6 @@ var
 //   * DiscoveredClasses/DiscoveredStaticClasses - Output-SAMMLER des Laufs,
 //     keine Konfiguration; Consumer leeren sie pro Run selbst (SetupForRun
 //     Schritt 7 / ApplyDetectorConfig).
-//   * Flags (Byte) - Parser-Zustands-Bitmaske (TSectionFlag), kein Config.
 //
 // Wird im initialization-Block gerufen (Startzustand = beweisbar derselbe
 // wie vor dem Refactoring) und von uEngineApi.TAnalysisSession.ApplyConfig
@@ -1213,20 +1206,10 @@ var
 // Scan 2 im Direkt-Modus still die INI-Schwellen von Scan 1 erbt).
 procedure ResetEngineConfigDefaults;
 
-type
-  TSectionFlag = record
-  const
-    FLAG_NONE = $00;     // 00000000
-    FLAG_Unit = $01;     // 00000001
-    FLAG_interface = $02;// 00000010
-    FLAG_uses = $04;     // 00000100
-    FLAG_type = $08;     // 00001000
-    FLAG_method = $10;   // 00010000
-    FLAG_var = $20;      // 00100000
-    FLAG_ignore = $40;   // 01000000     !!!!!!!!!!!!!
-    FLAG_implementation = $80; // 10000000
-    FLAG_ALL = $FF; // 11111111 (Alle Bits gesetzt)
-  end;
+// Die Parser-Bitmaske TSectionFlag samt dem Global Flags: Byte und der
+// Kopier-Funktion TConsts.GetLeakyClasses sind am 2026-10-14 entfallen -
+// keine Konsumenten im Repo (Review Bereich C, Minor; die Nennungen in
+// uTestLeakDetector sind Fixture-TEXT, kein Aufruf).
 
 implementation
 
@@ -1608,18 +1591,6 @@ begin
   end;
 end;
 
-{ TConsts }
-
-// Liefert eine KOPIE der aktuellen Liste (Aufrufer freigibt).
-// Vorher: kopierte das fixe Array; jetzt: kopiert die Live-StringList.
-class function TConsts.GetLeakyClasses: TStringList;
-begin
-  Result := TStringList.Create;
-  Result.CaseSensitive := False;
-  if Assigned(LeakyClasses) then
-    Result.AddStrings(LeakyClasses);
-end;
-
 procedure CreateEngineConfigLists;
 // Erzeugt die Listen-OBJEKTE einmal pro Prozess (initialization) und setzt
 // ihre Objekt-Eigenschaften (CaseSensitive/Sorted/Duplicates). Die inhalt-
@@ -1692,7 +1663,7 @@ const
     'TStreamReader', 'TStreamWriter', 'TZipFile',
     // mORMot2 - die Klassen tauchen in jedem mORMot-Projekt auf und
     // sind owner-managed (keine ARC, kein Auto-Free). Liste basiert auf
-    // Real-World-Review aus mORMot2-Crosscheck (TODO 🅲).
+    // Real-World-Review aus mORMot2-Crosscheck (TODO C).
     'TJsonWriter', 'TTextWriter', 'TBufferWriter',
     'TRawUtf8List', 'TSynList', 'TSynObjectList',
     'TSqlDBStatement', 'TSqlDBConnection', 'TSqlDBStatementCached',

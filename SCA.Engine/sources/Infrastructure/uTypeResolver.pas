@@ -34,11 +34,21 @@ type
   TTypeResolver = class
   private
     type
+      // Inline-Variable (Delphi 10.3+: 'var x: T' im Rumpf, 'for var i')
+      // mit der Zeilenspanne des Blocks, in dem sie gilt - nur im
+      // strengen Modus gefuehrt (Review Bereich C Engine-Kern, Major 3).
+      TInlineVar = record
+        Id        : string;    // klein
+        TypeLow   : string;
+        LineStart : Integer;   // Deklarationszeile
+        LineEnd   : Integer;   // letzte Zeile des umschliessenden Blocks
+      end;
       TMethodScope = class
         LineStart : Integer;
         LineEnd   : Integer;
         Idents    : TDictionary<string, string>; // identLow -> bareTypeLow
         // Nur im strengen Modus (s. Konstruktor):
+        Inline     : TArray<TInlineVar>; // Inline-Variablen mit Blockspanne
         ClassKey   : string;            // Klasse aus 'TFoo.Bar' (klein), '' = keine
         // Methode eines verschachtelten Typs ('TOuter.TInner.Go'): die
         // Member der aeusseren Klasse kennt die Kette nicht - jenseits der
@@ -76,6 +86,10 @@ type
     procedure BuildStrict(UnitNode: TAstNode);
     procedure AddStrictClass(C: TAstNode);
     procedure AddStrictMethod(M: TAstNode);
+    // Ein Knoten des Routinenrumpfs (strenger Modus): Parameter, lokale
+    // Variable (Sektion oder inline), Inline-/typisierte Konstante.
+    // False = die Kinder nicht betreten (Typ-Sektionen, Inline-Konstanten).
+    function StrictBodyNode(Sc: TMethodScope; N, APar: TAstNode): Boolean;
     function ResolveStrict(const IdentLow: string; Line: Integer): string;
   public
     // AShortStringAware (Review reDelphiX 2026-10-07, Minor 11): True
@@ -92,6 +106,11 @@ type
     // Code ableitet (%d/%u). Streng heisst:
     //   * Routine: Parameter, lokale Variablen und lokale typisierte
     //     Konstanten - aber nicht die Felder lokaler Record-Typen;
+    //   * eine Inline-Variable ('var x: T' im Rumpf, 'for var i: T')
+    //     gilt nur von ihrer Deklaration bis zum Ende ihres Blocks und
+    //     verdeckt dort Routine, Klasse und Unit; davor und danach zaehlt
+    //     sie nicht. Zwei Inline-Variablen gleichen Namens mit gleicher
+    //     Spanne und verschiedenem Typ ({$IFDEF}) liefern '';
     //   * Felder, Properties und Methoden nur der Klasse aus dem
     //     qualifizierten Methodennamen ('TFoo.Bar'), dann ihre in dieser
     //     Unit deklarierten Vorfahren; ein Vorfahr von ausserhalb (TForm)
@@ -533,13 +552,104 @@ begin
       AddMember(Ch);
 end;
 
+// Inline-Variable mit der Spanne ihres Blocks APar eintragen: ab der
+// Deklarationszeile bis zur letzten Knotenzeile des Blocks ('for var i'
+// haengt am nkForStmt, 'var x' am umschliessenden nkBlock/Zweig).
+procedure AddInlineVar(Sc: TTypeResolver.TMethodScope; N, APar: TAstNode;
+  const AId, AType: string);
+var
+  V : TTypeResolver.TInlineVar;
+begin
+  if AId = '' then Exit;
+  V.Id        := AId;
+  V.TypeLow   := AType;
+  V.LineStart := N.Line;
+  V.LineEnd   := TAstSpans.SubtreeMaxLine(APar);
+  if V.LineEnd < V.LineStart then V.LineEnd := V.LineStart;
+  Sc.Inline := Sc.Inline + [V];
+end;
+
+// Typ der Inline-Variablen IdentLow an Line: die engste Spanne gewinnt;
+// zwei gleich enge Spannen mit verschiedenem Typ sind mehrdeutig (AType
+// ''). False: keine Inline-Variable dieses Namens deckt die Zeile.
+function TryInlineTypeAt(Sc: TTypeResolver.TMethodScope;
+  const IdentLow: string; Line: Integer; out AType: string): Boolean;
+var
+  i, BestSpan, Span : Integer;
+begin
+  AType  := '';
+  Result := False;
+  BestSpan := MaxInt;
+  for i := 0 to High(Sc.Inline) do
+  begin
+    if Sc.Inline[i].Id <> IdentLow then Continue;
+    if (Line < Sc.Inline[i].LineStart) or (Line > Sc.Inline[i].LineEnd) then
+      Continue;
+    Span := Sc.Inline[i].LineEnd - Sc.Inline[i].LineStart;
+    if (not Result) or (Span < BestSpan) then
+    begin
+      Result   := True;
+      BestSpan := Span;
+      AType    := Sc.Inline[i].TypeLow;
+    end
+    else if (Span = BestSpan) and (AType <> Sc.Inline[i].TypeLow) then
+      AType := '';
+  end;
+end;
+
+// Name der Routine an Line: erst die Inline-Variablen (Blockspanne), dann
+// Parameter, Sektions-Variablen und Result. True = die Routine kennt den
+// Namen; AType '' heisst dann mehrdeutig.
+function TryRoutineTypeAt(Sc: TTypeResolver.TMethodScope;
+  const IdentLow: string; Line: Integer; out AType: string): Boolean;
+begin
+  Result := TryInlineTypeAt(Sc, IdentLow, Line, AType);
+  if Result then Exit;
+  Result := Sc.Idents.TryGetValue(IdentLow, AType);
+  if Result and (AType = STRICT_AMBIGUOUS) then
+    AType := '';
+end;
+
+function TTypeResolver.StrictBodyNode(Sc: TMethodScope;
+  N, APar: TAstNode): Boolean;
+var
+  i : Integer;
+begin
+  Result := True;
+  case N.Kind of
+    nkTypeSection, nkClass, nkRecord, nkTypeAlias, nkEnumType, nkMethod:
+      Result := False;
+    nkParam:
+      AddStrictIdent(Sc.Idents, BareIdentLow(N.Name), BareTypeOf(N.TypeRef));
+    nkLocalVar:
+      if APar.Kind = nkMethod then
+        AddStrictIdent(Sc.Idents, LowerCase(Trim(N.Name)), BareTypeOf(N.TypeRef))
+      else
+        AddInlineVar(Sc, N, APar, LowerCase(Trim(N.Name)), BareTypeOf(N.TypeRef));
+    nkConstSection:
+      if APar.Kind <> nkMethod then
+      begin
+        for i := 0 to N.Children.Count - 1 do
+          if N.Children[i].Kind = nkField then
+            AddInlineVar(Sc, N.Children[i], APar,
+              LowerCase(Trim(N.Children[i].Name)),
+              BareTypeOf(N.Children[i].TypeRef));
+        Result := False;
+      end;
+    nkField:
+      AddStrictIdent(Sc.Idents, LowerCase(Trim(N.Name)), BareTypeOf(N.TypeRef));
+  end;
+end;
+
 procedure TTypeResolver.AddStrictMethod(M: TAstNode);
 var
-  Sc     : TMethodScope;
-  Stack  : TList<TAstNode>;
-  N, Ch  : TAstNode;
-  i      : Integer;
-  RetLow : string;
+  Sc      : TMethodScope;
+  Stack   : TList<TAstNode>;
+  Parents : TList<TAstNode>;   // Elternknoten je Stack-Eintrag
+  N, Ch   : TAstNode;
+  Par     : TAstNode;
+  i       : Integer;
+  RetLow  : string;
 begin
   Sc := TMethodScope.Create;
   FScopes.Add(Sc);
@@ -550,33 +660,38 @@ begin
   Sc.NestedType := Length(M.Name) - Length(StringReplace(M.Name, '.', '',
     [rfReplaceAll])) >= 2;
   TAstSpans.CollectNestedSpans(M, Sc.NestStarts, Sc.NestEnds);
-  // Parameter, lokale Variablen (auch inline) und lokale typisierte
-  // Konstanten (nkField in der const-Sektion der Routine). Lokale
-  // Typ-Sektionen nicht betreten: Felder eines lokalen Records oder die
-  // Parameter eines lokalen Prozedurtyps sind keine Namen der Routine.
+  // Parameter, lokale Variablen und lokale typisierte Konstanten (nkField
+  // in der const-Sektion der Routine). Lokale Typ-Sektionen nicht
+  // betreten: Felder eines lokalen Records oder die Parameter eines
+  // lokalen Prozedurtyps sind keine Namen der Routine. Der Elternknoten
+  // entscheidet, was INLINE ist: ein nkLocalVar direkt unter nkMethod
+  // stammt aus der var-Sektion, jedes andere aus dem Rumpf ('for var',
+  // 'var x' im Block) und gilt nur in seiner Blockspanne; eine
+  // nkConstSection unter einem Block ist eine Inline-Konstante.
   Stack := TList<TAstNode>.Create;
+  Parents := TList<TAstNode>.Create;
   try
     for i := M.Children.Count - 1 downto 0 do
+    begin
       Stack.Add(M.Children[i]);
+      Parents.Add(M);
+    end;
     while Stack.Count > 0 do
     begin
-      N := Stack[Stack.Count - 1];
+      N   := Stack[Stack.Count - 1];
+      Par := Parents[Parents.Count - 1];
       Stack.Delete(Stack.Count - 1);
-      case N.Kind of
-        nkTypeSection, nkClass, nkRecord, nkTypeAlias, nkEnumType, nkMethod:
-          Continue;
-        nkParam:
-          AddStrictIdent(Sc.Idents, BareIdentLow(N.Name), BareTypeOf(N.TypeRef));
-        nkLocalVar, nkField:
-          AddStrictIdent(Sc.Idents, LowerCase(Trim(N.Name)), BareTypeOf(N.TypeRef));
-      end;
+      Parents.Delete(Parents.Count - 1);
+      if not StrictBodyNode(Sc, N, Par) then Continue;
       for i := N.Children.Count - 1 downto 0 do
       begin
         Ch := N.Children[i];
         Stack.Add(Ch);
+        Parents.Add(N);
       end;
     end;
   finally
+    Parents.Free;
     Stack.Free;
   end;
   RetLow := ExtractReturnTypeLow(M.TypeRef);
@@ -646,10 +761,12 @@ begin
     for i := 0 to High(Best.NestStarts) do
       if (Line >= Best.NestStarts[i]) and (Line <= Best.NestEnds[i]) then
         Exit;
-    if Best.Idents.TryGetValue(IdentLow, T) then
+    // Namen der Routine: eine Inline-Variable, deren Block die Zeile
+    // deckt, verdeckt alles Weitere - ausserhalb ihrer Spanne existiert
+    // sie nicht; sonst Parameter/Sektion/Result.
+    if TryRoutineTypeAt(Best, IdentLow, Line, T) then
     begin
-      if T <> STRICT_AMBIGUOUS then
-        Result := T;
+      Result := T;
       Exit;
     end;
     if Best.NestedType then

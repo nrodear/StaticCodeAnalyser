@@ -30,12 +30,9 @@ entfernt, per {$I datei} eingebundene Dateien mitgelesen):
      uStaticAnalyzer2 (den Scan).
 
 GRENZE: geprueft wird SICHTBARKEIT (direkte uses-Eintraege), nicht das
-Linken. Bekannte Link-Kante: uRepoSettings (Infrastructure) importiert
-uEngineApi im implementation-uses, ohne etwas davon weiterzureichen. Damit
-wird der Dienst in jeden Scan-Pfad mitgelinkt (Detektor -> uRepoSettings
--> uEngineApi -> uSourcePlaces), sichtbar wird er dem Detektor dadurch
-nicht: Delphi reicht uses nicht weiter, und die Dienst-Units haben weder
-initialization noch finalization.
+Linken. Die frueher hier gefuehrte Link-Kante uRepoSettings -> uEngineApi
+(nur fuer den Engine-Lock) ist seit 2026-10-14 weg: der Lock liegt in der
+Blatt-Unit uEngineLock, uRepoSettings importiert uEngineApi nicht mehr.
 
 EXIT-CODE
   0  Richtung eingehalten (bzw. Selbsttest gruen)
