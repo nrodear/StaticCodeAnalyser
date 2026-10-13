@@ -28,9 +28,13 @@ type
     [Test] procedure Guard_CaseLabelsBehindForAndOnHandler;
     [Test] procedure Guard_ValueStartAndListComma;
     [Test] procedure Guard_LeadingCommentKeywords;
+    [Test] procedure Guard_HeadContinuationLines;
+    [Test] procedure Guard_SecondDeclarationOnLine;
+    [Test] procedure PrevLine_InitializationFinalization;
     // Zweig ohne begin: was genau EINE Anweisung ist
     [Test] procedure Wrap_ElseBindsToOwnIf;
     [Test] procedure Wrap_OpenBlockOrForeignCloser;
+    [Test] procedure Wrap_IfExpressionOnPrevLine;
     // Zusammenhang ueber mehrere Zeilen (uVnpEdits.TargetAt)
     [Test] procedure Context_DirectiveBetweenBranchAndStatement;
     [Test] procedure Context_MultiLineString;
@@ -213,6 +217,88 @@ begin
   AssertRefusedWith(P, '"end"', 'end hinter Kommentar');
 end;
 
+// Fortsetzungen eines Routinen-Kopfs oder einer Eigenschaft auf einer
+// Folgezeile ('message WM_USER + 5;', 'dispid 5;', 'external ''x.dll''
+// index 5;', 'stdcall; external ...'): die Zeile darueber endet mit ';',
+// die Zahl ist aber Teil der Deklaration (Pruefer 2026-10-13, Harness
+// 1-3). Dieselben Woerter als Anweisung ('Index := 5;', 'Message(42);',
+// 'Index[1] := 42;', 'Name.Add(42);') bleiben erlaubt.
+procedure TTestVnpGuards.Guard_HeadContinuationLines;
+var
+  P : TVnpPlan;
+begin
+  // Die 5 in Spalte 25.
+  P := PlanIntroduce('      message WM_USER + 5;',
+    '    procedure WMFoo(var Msg: TMessage);', 25, 'N01');
+  AssertRefusedWith(P, '"message"', 'message auf der Folgezeile');
+  // Die 5 in Spalte 14.
+  P := PlanIntroduce('      dispid 5;', '    procedure Bar;', 14, 'N01');
+  AssertRefusedWith(P, '"dispid"', 'dispid auf der Folgezeile');
+  // Die 5 in Spalte 26.
+  P := PlanIntroduce('  external ''x.dll'' index 5;',
+    'function Foo: Integer; stdcall;', 26, 'N01');
+  AssertRefusedWith(P, '"external"', 'external index auf der Folgezeile');
+  // Die 5 in Spalte 35.
+  P := PlanIntroduce('  stdcall; external ''x.dll'' index 5;',
+    'function Foo: Integer;', 35, 'N01');
+  AssertRefusedWith(P, '"stdcall"', 'stdcall; external auf der Folgezeile');
+  // Anweisungen: die 5 in Spalte 12, die 42 in Spalte 11, 15 und 12.
+  P := PlanIntroduce('  Index := 5;', 'begin', 12, 'N01');
+  Assert.IsTrue(P.Ok, 'Index := 5: ' + P.Reason);
+  Assert.AreEqual('  Index := N01;', P.NewUseLine, 'Index := 5, NewUseLine');
+  P := PlanIntroduce('  Message(42);', 'begin', 11, 'N01');
+  Assert.IsTrue(P.Ok, 'Message(42): ' + P.Reason);
+  P := PlanIntroduce('  Index[1] := 42;', 'begin', 15, 'N01');
+  Assert.IsTrue(P.Ok, 'Index[1] := 42: ' + P.Reason);
+  Assert.AreEqual('  Index[1] := N01;', P.NewUseLine,
+    'Index[1] := 42, NewUseLine');
+  P := PlanIntroduce('  Name.Add(42);', 'begin', 12, 'N01');
+  Assert.IsTrue(P.Ok, 'Name.Add(42): ' + P.Reason);
+end;
+
+// Eine Deklaration HINTER einer Anweisung auf derselben Zeile: jedes 'var'
+// und 'const' auf oberster Ebene zaehlt, nicht nur das erste Wort
+// (Pruefer 2026-10-13, Harness 21/22) - das Literal im Typ der zweiten
+// Inline-var und der Wert einer zweiten Inline-const bleiben. Ein Literal
+// VOR dem const und der Wert einer zweiten Inline-var ohne Typ gehen.
+procedure TTestVnpGuards.Guard_SecondDeclarationOnLine;
+var
+  P : TVnpPlan;
+begin
+  // Die 9 in Spalte 24.
+  P := PlanIntroduce('  Foo; var A: array[0..9] of Byte;', 'begin', 24, 'N01');
+  AssertRefusedWith(P, 'Typ', 'zweite Inline-var, Literal im Typ');
+  // Die 5 in Spalte 18.
+  P := PlanIntroduce('  Foo; const C = 5;', 'begin', 18, 'N01');
+  AssertRefusedWith(P, 'Konstante', 'zweite Inline-const');
+  // Die 5 in Spalte 7 - vor dem const.
+  P := PlanIntroduce('  Foo(5); const C = 7;', 'begin', 7, 'N01');
+  Assert.IsTrue(P.Ok, 'Literal vor dem const: ' + P.Reason);
+  Assert.AreEqual('  Foo(N01); const C = 7;', P.NewUseLine,
+    'Literal vor dem const, NewUseLine');
+  // Die 42 in Spalte 17.
+  P := PlanIntroduce('  Foo; var B := 42 + X;', 'begin', 17, 'N01');
+  Assert.IsTrue(P.Ok, 'zweite Inline-var ohne Typ: ' + P.Reason);
+  Assert.AreEqual('  Foo; var B := N01 + X;', P.NewUseLine,
+    'zweite Inline-var ohne Typ, NewUseLine');
+end;
+
+// Die Zeile darueber beginnt den initialization-/finalization-Abschnitt:
+// ob dort eine Inline-Deklaration gilt, ist nicht gemessen - Abbruch mit
+// einem Grund, der den Abschnitt nennt (statt des allgemeinen "unklar").
+procedure TTestVnpGuards.PrevLine_InitializationFinalization;
+var
+  P : TVnpPlan;
+begin
+  // Die 42 in Spalte 7.
+  P := PlanIntroduce('  Bar(42);', 'initialization', 7, 'N01');
+  AssertRefusedWith(P, 'initialization', 'hinter initialization');
+  P := PlanIntroduce('  Bar(42);', 'finalization // Abbau', 7, 'N01');
+  AssertRefusedWith(P, 'initialization', 'hinter finalization');
+  P := PlanIntroduce('  Bar(42);', 'INITIALIZATION', 7, 'N01');
+  AssertRefusedWith(P, 'initialization', 'gross geschrieben');
+end;
+
 // Ein else bindet an das naechste if davor - steht das auf derselben Zeile,
 // ist die Zeile EINE Anweisung, und begin..end um sie aendert nichts. Ein
 // begin..end, das auf der Zeile schliesst, enthaelt ';' - auch das ist eine
@@ -266,6 +352,44 @@ begin
   AssertRefusedWith(P, 'Anweisung des Zweigs', 'until von aussen');
   P := PlanIntroduce('    X := 42 finally Free end;', '  if A then', 10, 'N01');
   AssertRefusedWith(P, 'Anweisung des Zweigs', 'finally von aussen');
+end;
+
+// Endet die Zeile darueber mit dem then/else eines Bedingungsausdrucks
+// (Delphi 13: 'X := if C then Bar else', 'Foo(if C then'), ist die Zeile
+// ein Arm des Ausdrucks - ein begin..end darum ist kein Code (Pruefer
+// 2026-10-13, Harness 8; den Fall mit 'else' auf eigener Zeile prueft
+// uTestVnpContext). Das if einer ANWEISUNG ('if C then Bar else', 'end
+// else if X then', '1: if A then') bleibt ein Zweig; die Zeile darueber
+// zaehlt ab ihrem Kommentar-Zustand (APrevState).
+procedure TTestVnpGuards.Wrap_IfExpressionOnPrevLine;
+var
+  P : TVnpPlan;
+begin
+  // Die 42 in Spalte 9.
+  P := PlanIntroduce('    Foo(42);', '  X := if C then Bar else', 9, 'N01');
+  AssertRefusedWith(P, 'Bedingungsausdruck', 'X := if ... else');
+  P := PlanIntroduce('    Foo(42);', '  Y := Foo(if C then', 9, 'N01');
+  AssertRefusedWith(P, 'Bedingungsausdruck', 'Foo(if ... then');
+  P := PlanIntroduce('    Foo(42);', '  if C then Bar else', 9, 'N01');
+  Assert.IsTrue(P.Ok, 'if-Anweisung mit else: ' + P.Reason);
+  Assert.IsTrue(P.Wrap, 'if-Anweisung mit else, Wrap');
+  P := PlanIntroduce('    Foo(42);', '  end else if X then', 9, 'N01');
+  Assert.IsTrue(P.Ok, 'end else if: ' + P.Reason);
+  Assert.IsTrue(P.Wrap, 'end else if, Wrap');
+  P := PlanIntroduce('      Foo(42);', '    1: if A then', 11, 'N01');
+  Assert.IsTrue(P.Ok, 'case-Zweig mit if: ' + P.Reason);
+  Assert.IsTrue(P.Wrap, 'case-Zweig mit if, Wrap');
+  // Die Zeile darueber beginnt im { }-Kommentar: ihr Code ist ' if A
+  // then' hinter dem '}' - ein Zweig, obwohl die Zeile mit ';' aussieht,
+  // als endete sie eine Anweisung.
+  P := PlanIntroduce('    X := 42;', '  Foo; // } if A then', 10, 'N01', 'b');
+  Assert.IsTrue(P.Ok, 'Zeile darueber ab Kommentar-Zustand: ' + P.Reason);
+  Assert.IsTrue(P.Wrap, 'Zeile darueber ab Kommentar-Zustand, Wrap');
+  Assert.AreEqual('  ', P.BlockIndent,
+    'Zeile darueber ab Kommentar-Zustand, BlockIndent der rohen Zeile');
+  P := PlanIntroduce('    X := 42;', '  Foo; // } if A then', 10, 'N01');
+  Assert.IsTrue(P.Ok, 'dieselbe Zeile ab Code: ' + P.Reason);
+  Assert.IsFalse(P.Wrap, 'dieselbe Zeile ab Code: Foo; endet die Anweisung');
 end;
 
 // Steht zwischen Zweigzeile und Anweisung eine Direktive, landeten begin

@@ -19,6 +19,10 @@ program VarNameProject.Test;
 //                     Ende zu Ende - der Text, der danach im Puffer steht
 //                     (Demo-Faelle 1-6, CR LF und LF, Umlaute vor dem
 //                     Literal)
+//   * uTestVnpContext - uVnpEdits.TargetAt ueber mehrere Zeilen: mehrzeilige
+//                     Strings mit mehr als drei Quotes, Kommentargrenzen
+//                     eines begin..end, asm/initialization, Direktiven,
+//                     Bedingungsausdruck, FPC-Weiche, Zeilenenden je Zeile
 //   * uTestVnpTemplate - D1: Template-Code, Template-Datei, eigenes
 //                     Template erkennen, Anweisung loeschen und
 //                     zurueckschreiben, Modell der Template-Expansion
@@ -50,6 +54,7 @@ uses
   uTestVnpRefuse in 'uTestVnpRefuse.pas',
   uTestVnpGuards in 'uTestVnpGuards.pas',
   uTestVnpEdits in 'uTestVnpEdits.pas',
+  uTestVnpContext in 'uTestVnpContext.pas',
   uTestVnpTemplate in 'uTestVnpTemplate.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }

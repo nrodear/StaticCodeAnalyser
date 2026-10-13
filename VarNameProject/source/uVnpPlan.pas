@@ -2,15 +2,24 @@ unit uVnpPlan;
 
 // VarNameProject - die reine Textlogik, OHNE ToolsAPI (laeuft auch unter
 // FPC): das Zahl-Literal unter dem Caret finden, alle gleichen Literale
-// derselben Zeile, die Deklarationszeile 'var <Name> := <Literal>;' und
+// derselben Zeile, die Deklarationszeile 'const <Name> = <Literal>;' und
 // die Spalten nach dem Schreiben. Das Testprojekt prueft die Eingabe des
 // Namens (Nico 2026-10-11, E17: wie ReSharper - der Code entsteht mit
 // einem vorlaeufigen Namen, der Name wird umrandet, der Caret steht
 // darauf, Tippen aendert alle Stellen mit). Diese Unit liefert nur WAS
 // geschrieben wird und WO der Name danach steht.
 //
+// Die Deklaration ist eine Inline-KONSTANTE, keine Variable (Nico
+// 2026-10-13, E26): eine Konstante behaelt Faltung, Ueberladungswahl und
+// die vorzeichenlose Rechnung des Literals. Die Kompilierprobe
+// probe\VnpTypeProbe.dpr (Win32, D12) zeigte fuer 'var X := 1': 'C - X'
+// mit C: Cardinal ergab -1 statt 4294967295 (P2.33/34), und Integer-
+// statt ShortInt-/Byte-Ueberladungen wurden gewaehlt (P4.9-16). Eine
+// Inline-Konstante gibt es in FPC 3.2 nicht - Dateien mit FPC-Weiche
+// lehnt uVnpEdits.TargetAt ab (LineLooksFpcAware).
+//
 // Spalten sind 1-basierte Zeichenspalten der Zeile (UTF-16), Bytes
-// werden erst in uVnpIntroduce gerechnet (Utf8Len).
+// werden erst in uVnpEdits gerechnet (Utf8Len).
 
 interface
 
@@ -23,7 +32,7 @@ type
     Reason     : string;           // warum nicht (Ok = False)
     Literal    : string;           // '42', '$FF', '3.5'
     Indent     : string;           // Einrueckung der Zeile
-    DeclText   : string;           // Indent + 'var Name := Literal;'
+    DeclText   : string;           // Indent + 'const Name = Literal;'
     NameCol    : Integer;          // Spalte des Namens in DeclText
     OldCols    : TArray<Integer>;  // Spalten der Literale vor dem Schreiben
     NewCols    : TArray<Integer>;  // dieselben Stellen nach dem Ersetzen
@@ -41,9 +50,13 @@ type
 // Zeichen ACaretCol; direkt hinter dem Literal zaehlt auch). APrevCode ist
 // die naechste Zeile mit Code darueber: die Deklaration kommt VOR die
 // Zeile, also muss dort eine Anweisung zu Ende sein - oder ein Zweig
-// (then/do/else), dann mit begin..end (Wrap).
+// (then/do/else), dann mit begin..end (Wrap). APrevState ist der
+// Kommentar-Zustand am Anfang von APrevCode ('c' Code, 'b' in { }, 'p' in
+// (* *)): beginnt die Zeile darueber in einem Kommentar, zaehlt nur ihr
+// Code hinter dessen Ende ('Foo; // } if A then' hinter '{ Bsp:' ist ein
+// Zweig, kein ';'); TargetAt liefert den Zustand aus StartStates.
 function PlanIntroduce(const ALine, APrevCode: string; ACaretCol: Integer;
-  const AName: string): TVnpPlan;
+  const AName: string; APrevState: Char = 'c'): TVnpPlan;
 
 // Der Code-Anteil der Zeile: Strings bleiben, Kommentare fallen weg (von
 // einer Kommentarzeile bleibt nur ihre Einrueckung). Kommentare ueber
@@ -58,8 +71,36 @@ function CodePartFrom(const ALine: string; AState: Char): string;
 // 'p', wenn ein { }- bzw. (* *)-Kommentar offen bleibt, sonst 'c'.
 function CommentStateAfter(const ALine: string; AState: Char): Char;
 
+// Das letzte Wort im Code-Anteil von ALine ('' wenn er nicht auf ein Wort
+// endet) - so wie es dasteht, Gross/Klein wie in der Zeile.
+function LastWord(const ALine: string): string;
+
+// Der Abschnitts-Zustand nach dem Code ACode (ohne Kommentare), der im
+// Zustand AState beginnt: 'a' in einem asm-Block ('asm' .. 'end' - dort
+// ist ';' nur ein Trenner und 'mov eax, 1' keine Anweisung), 'i' im
+// initialization-/finalization-Abschnitt (bis zum Dateiende), sonst 'c'.
+// TargetAt faltet damit die Zeilen ueber dem Caret.
+function SectionStateAfter(const ACode: string; AState: Char): Char;
+
+// Beginnt im Code ACode ein 'if' einen AUSDRUCK statt einer Anweisung
+// (Delphi 13: 'X := if C then A', 'Foo(if C then 1 else 2)') - ein 'if',
+// das nicht am Anfang steht und nicht hinter then/else/do/of, ';', ':'
+// oder einem Block-Oeffner? Ein begin..end um einen Arm eines solchen
+// Ausdrucks waere kein Code (Pruefer 2026-10-13, Harness 8).
+function ContinuesIfExpression(const ACode: string): Boolean;
+
+// Traegt die Zeile eine FPC-Weiche oder einen FPC-Modus ('{$IFDEF FPC}',
+// '{$IFNDEF FPC}', '{$IF DEFINED(FPC)}', '{$MODE ...}', auch als
+// '(*$..*)')? Dieselben Spuren wie reDelphix (TRdxRecipes.
+// LineLooksFpcAware): eine Inline-Konstante gibt es in FPC 3.2 nicht, in
+// so einer Datei lehnt TargetAt ab. Ein Treffer in einem Kommentar macht
+// nur vorsichtig, nie falsch.
+function LineLooksFpcAware(const ALine: string): Boolean;
+
 // ABase + '01', '02', ... - der erste Name, der in AText nicht als ganzes
-// Wort vorkommt (Gross/Klein egal).
+// Wort vorkommt (Gross/Klein egal); hinter '99' geht es dreistellig
+// weiter ('100'), ein fester Rueckfall ohne Pruefung gegen den Text
+// koennte kollidieren (Pruefer 2026-10-13, Minor 4).
 function NextFreeName(const AText, ABase: string): string;
 
 // Zahl der UTF-8-Bytes von S.
@@ -121,6 +162,34 @@ const
     'constructor', 'destructor', 'operator', 'property', 'class', 'type',
     'label', 'goto', 'exports', 'resourcestring', 'threadvar', 'uses',
     'asm');
+  // Mit diesen Woertern geht ein Routinen-Kopf oder eine Eigenschaft auf
+  // einer FOLGEZEILE weiter ('message WM_USER + 5;', 'dispid 5;',
+  // 'external ''x.dll'' index 5;', 'stdcall; external ...') - die Zeile
+  // darueber endet mit ';', der Zeilen-Leser hielte sie sonst fuer eine
+  // Anweisung (Pruefer 2026-10-13, Harness 1-3). Sie sind keine
+  // reservierten Woerter: als Anweisung ('Index := 5', 'Name.X(42)',
+  // 'Message(42)', 'Index[1] := 42') folgt ':=', '.', '(' oder '['.
+  HEAD_DIRECTIVES: array[0..26] of string = ('message', 'dispid',
+    'external', 'index', 'name', 'stdcall', 'cdecl', 'safecall', 'pascal',
+    'register', 'winapi', 'overload', 'override', 'virtual', 'dynamic',
+    'abstract', 'reintroduce', 'inline', 'static', 'forward', 'deprecated',
+    'platform', 'experimental', 'library', 'varargs', 'delayed', 'final');
+  // Dahinter ist ein 'message', 'index' usw. eine Anweisung, keine
+  // Fortsetzung eines Kopfs.
+  STATEMENT_AFTER_WORD: array[0..4] of string = (':=', '.', '(', '[', '^');
+  // Hinter diesen Woertern beginnt ein 'if' eine ANWEISUNG; jedes andere
+  // Token davor ('X := if ...', 'Foo(if ...', '1 + if ...') macht es zum
+  // Bedingungsausdruck (Delphi 13).
+  IF_STATEMENT_AFTER: array[0..10] of string = ('then', 'else', 'do', 'of',
+    ';', ':', 'begin', 'try', 'finally', 'except', 'repeat');
+  // Hinter diesen Woertern als letztem Wort der Zeile darueber beginnt ein
+  // Unit-Abschnitt, in dem eine Inline-Deklaration nicht gemessen ist.
+  SECTION_STARTS: array[0..1] of string = ('initialization',
+    'finalization');
+  // Spuren einer FPC-Weiche, ohne Leerraum und klein geschrieben (wie
+  // TRdxRecipes.FPC_TELLS in reDelphix).
+  FPC_TELLS: array[0..4] of string = ('{$mode', '(*$mode', '$ifdeffpc',
+    '$ifndeffpc', 'defined(fpc');
   // Bloecke einer Zeile: diese Woerter oeffnen ...
   BLOCK_OPENERS: array[0..4] of string = ('begin', 'try', 'case', 'repeat',
     'asm');
@@ -189,7 +258,10 @@ end;
 // 'e' Quote im String (Ende oder ''), 'b' {}, 'o' und 'q' die Zeichen '('
 // und '*' eines (*-Kommentars, 'p' sein Inneres, 'l' //, 'x' Ende eines
 // Kommentars. Das '*' des Oeffners schliesst nie: '(*)' oeffnet nur
-// (Pruefstand 2026-10-11 - bisher schloss es sofort wieder).
+// (Pruefstand 2026-10-11 - bisher schloss es sofort wieder). Ein '*)'
+// schliesst erst am ')' - und nur mit einem '*' DAVOR: 'Copy(ALine, 0, 2)'
+// liest ab Zeichen 1, ein '*)' in Spalte 1 schloss so schon am '*', und
+// das ')' galt als Code (Pruefer 2026-10-13, Minor 2).
 function StepState(const ALine: string; i: Integer; AState: Char): Char;
 begin
   Result := AState;
@@ -207,7 +279,7 @@ begin
     'q':
       Result := 'p';
     'p':
-      if Copy(ALine, i - 1, 2) = '*)' then
+      if (i > 1) and (ALine[i] = ')') and (ALine[i - 1] = '*') then
         Result := 'x';
   else
     ;   // 'l' bleibt bis zum Zeilenende
@@ -560,8 +632,6 @@ begin
   Result := MaxInt;
 end;
 
-// Das letzte Wort im Code-Anteil von ALine ('' wenn er nicht auf ein Wort
-// endet).
 function LastWord(const ALine: string): string;
 var
   S : string;
@@ -621,8 +691,9 @@ end;
 // Steht das Literal schon ALLEIN als Wert einer Deklaration ('var X :=
 // 42;', 'const X = 42;', auch mit Typangabe)? Dann hat es bereits einen
 // Namen - Lauf 5 (2026-10-11) baute sonst 'var MagicNr05 := 42;' vor
-// 'var MagicNr01 := MagicNr05;'. 'var B := X = 42;' bleibt erlaubt (dort
-// ist das Literal nur ein Teil des Werts).
+// 'var MagicNr01 := MagicNr05;'; seit E26 schreibt die Aktion selbst
+// 'const X = 42;', beide Formen zaehlen. 'var B := X = 42;' bleibt
+// erlaubt (dort ist das Literal nur ein Teil des Werts).
 function AlreadyNamed(const ALine, ALiteral: string): Boolean;
 var
   S, W : string;
@@ -713,31 +784,66 @@ begin
   Result := Result and (Block = 0);
 end;
 
-// Steht eines der Literale (Spalten ACols) in einer var-Deklaration
+// Steht eines der Literale (Spalten ACols) hinter dem 'var' bei AVar
 // zwischen Typ-':' und ':=' - im Typ ('var A: array[0..9] of Byte;', auch
 // 'for var I: 0..9 := ...'), als Vorgabewert eines globalen 'var X:
-// Integer = 5;' oder als dispid einer Parameter-Fortsetzung? Dort sind nur
-// Konstanten erlaubt. Eine Inline-var ohne Typ hat keinen solchen Teil.
-// '' oder der Grund.
-function TypePartReason(const ATokens: TArray<TVnpToken>;
-  const ACols: TArray<Integer>): string;
+// Integer = 5;' oder als dispid einer Parameter-Fortsetzung? Dort aendert
+// die Aktion nichts (ob eine Inline-Konstante in einem Typ gilt, ist
+// nicht gemessen). Eine Inline-var ohne Typ hat keinen solchen Teil.
+function LiteralInTypePart(const ATokens: TArray<TVnpToken>;
+  const ACols: TArray<Integer>; AVar: Integer): Boolean;
 var
-  k, Colon, TypeEnd, Col : Integer;
+  Colon, TypeEnd, Col : Integer;
 begin
-  Result := '';
-  k := 0;
-  if (Length(ATokens) > 0) and (ATokens[0].Text = 'for') then
-    k := 1;
-  if (Length(ATokens) <= k) or (ATokens[k].Text <> 'var') then
-    Exit;
-  Colon := TypeColonAfter(ATokens, k);
+  Result := False;
+  Colon := TypeColonAfter(ATokens, AVar);
   if Colon < 0 then
     Exit;
   TypeEnd := TypeEndCol(ATokens, Colon);
   for Col in ACols do
     if (Col > ATokens[Colon].Pos) and (Col < TypeEnd) then
+      Exit(True);
+end;
+
+// Steht eines der Literale (Spalten ACols) hinter einem 'const' bei
+// AConst ('Foo; const C = 5;')? Die Zeile deklariert dort eine Konstante -
+// ihr Wert bleibt, wie er ist.
+function LiteralAfterConst(const ATokens: TArray<TVnpToken>;
+  const ACols: TArray<Integer>; AConst: Integer): Boolean;
+var
+  Col : Integer;
+begin
+  Result := False;
+  for Col in ACols do
+    if Col > ATokens[AConst].Pos then
+      Exit(True);
+end;
+
+// Deklarationen auf der Zeile, auch hinter einer Anweisung: JEDES 'var'
+// und 'const' auf oberster Ebene (ausserhalb von Klammern) zaehlt, nicht
+// nur das erste Wort - 'Foo; var A: array[0..9] of Byte;' und 'Foo; const
+// C = 5;' bekamen sonst eine Deklaration (Pruefer 2026-10-13, Harness
+// 21/22). Ein 'const' als erstes Wort lehnt LineReason schon ab. '' oder
+// der Grund.
+function InlineDeclReason(const ATokens: TArray<TVnpToken>;
+  const ACols: TArray<Integer>): string;
+var
+  k, Depth : Integer;
+begin
+  Result := '';
+  Depth := 0;
+  for k := 0 to High(ATokens) do
+  begin
+    Inc(Depth, ParenStep(ATokens[k].Text));
+    if Depth <> 0 then
+      Continue;
+    if (ATokens[k].Text = 'var') and LiteralInTypePart(ATokens, ACols, k) then
       Exit('das Literal steht in der Deklaration vor ":=" (Typ, '
-        + 'Vorgabewert oder dispid) - dort sind nur Konstanten erlaubt');
+        + 'Vorgabewert oder dispid) - dort aendert die Aktion nichts');
+    if (ATokens[k].Text = 'const') and LiteralAfterConst(ATokens, ACols, k) then
+      Exit('die Zeile deklariert hinter der Anweisung eine Konstante '
+        + '("const ...") - ihr Wert bleibt, wie er ist');
+  end;
 end;
 
 // Index hinter der zu '<' bei AFrom passenden '>' (generischer Name).
@@ -801,6 +907,16 @@ begin
     and (Depth = 0);
 end;
 
+// Beginnt der Code mit einer Kopf-Fortsetzung (HEAD_DIRECTIVES), hinter
+// der keine Anweisung steht ('message WM_USER + 5;', 'stdcall; external
+// ...')? 'Index := 5;' oder 'Message(42);' ist eine Anweisung.
+function StartsHeadDirective(const ATokens: TArray<TVnpToken>): Boolean;
+begin
+  Result := (Length(ATokens) > 0) and InList(ATokens[0].Text, HEAD_DIRECTIVES)
+    and ((Length(ATokens) = 1)
+         or not InList(ATokens[1].Text, STATEMENT_AFTER_WORD));
+end;
+
 // Die Pruefungen, die nur die Zeile selbst brauchen: '' oder der Grund.
 // Die Woerter am Zeilenanfang zaehlen hinter Kommentaren und Direktiven.
 function LineReason(const ALine, ALiteral: string;
@@ -813,17 +929,21 @@ begin
     Result := 'das Literal ist schon allein der Wert einer Deklaration - '
       + 'es hat bereits einen Namen'
   else if W = 'const' then
-    Result := 'die Zeile deklariert eine Konstante - ihr Wert muss konstant '
-      + 'bleiben, eine Variable ist dort nicht erlaubt'
+    Result := 'die Zeile deklariert eine Konstante - ihr Wert bleibt, wie '
+      + 'er ist (Konstanten-Deklarationen aendert die Aktion nicht)'
   else if InList(W, DECL_STARTS) then
     Result := Format('die Zeile beginnt mit "%s" - eine Deklaration, '
-      + 'Sprungmarke oder asm-Zeile; dort ist keine Variable erlaubt', [W])
+      + 'Sprungmarke oder asm-Zeile; dort ist keine Deklaration erlaubt', [W])
+  else if StartsHeadDirective(ATokens) then
+    Result := Format('die Zeile beginnt mit "%s" - die Fortsetzung eines '
+      + 'Routinen-Kopfs oder einer Eigenschaft (message, dispid, external '
+      + '...); dort ist keine Deklaration erlaubt', [W])
   else if (Length(ATokens) > 0) and (ATokens[0].Text = '[') then
     Result := 'die Zeile ist ein Attribut ("[...]") - dort sind nur '
       + 'Konstanten erlaubt'
   else if IsDeclarationLine(ATokens) then
     Result := 'die Zeile ist eine Deklaration "Name = ..." (const- oder '
-      + 'type-Abschnitt) - dort ist keine Variable erlaubt'
+      + 'type-Abschnitt) - dort ist keine Inline-Deklaration erlaubt'
   else if InList(W, NOT_A_START) then
     Result := Format('die Zeile beginnt mit "%s" - davor darf keine '
       + 'Deklaration', [W])
@@ -840,36 +960,59 @@ begin
     Result := '';
 end;
 
-// Darf vor ALine eine Deklaration (APlan.Literal steht schon)? '' oder der
-// Grund (LineReason fuer die Zeile selbst). Setzt APlan.Wrap, wenn ALine
-// die einzige Anweisung eines Zweigs ist - dann nur, wenn sie auf dieser
-// Zeile mit ';' endet und genau diese eine Anweisung enthaelt
+// Ein Zweig (die Zeile darueber endet mit then/do/else): darf ALine mit
+// begin..end umschlossen werden? '' oder der Grund. Nur, wenn ALine auf
+// dieser Zeile mit ';' endet und genau diese eine Anweisung enthaelt
 // (SingleStatement; mehrzeilige Anweisungen kann der Text-Leser nicht
-// abgrenzen).
-function PlanReason(const ALine, APrevCode: string;
-  var APlan: TVnpPlan): string;
-var
-  T : TArray<TVnpToken>;
+// abgrenzen) und das then/else nicht zu einem Bedingungsausdruck gehoert
+// ('X := if C then A else' darueber).
+function WrapReason(const ALine, APrevCode: string;
+  const ATokens: TArray<TVnpToken>): string;
 begin
-  T := TokensOf(ALine);
-  Result := LineReason(ALine, APlan.Literal, T);
-  if (Result <> '') or PrevEndsStatement(APrevCode) then
-    Exit;
-  APlan.Wrap := InList(LastWord(APrevCode), BRANCH_ENDS);
-  if not APlan.Wrap then
-    Exit('die Zeile darueber endet weder eine Anweisung noch mit then/do/'
-      + 'else - unklar, wohin die Deklaration gehoert');
+  if ContinuesIfExpression(APrevCode) then
+    Exit('die Zeile darueber gehoert zu einem Bedingungsausdruck (Delphi '
+      + '13: "X := if C then ...") - ein begin..end mitten im Ausdruck ist '
+      + 'kein Code');
   if not EndsWithSemicolon(ALine) then
     Exit('die Anweisung im Zweig endet nicht auf dieser Zeile mit ";" '
       + '(mehrzeilig oder vor else) - nicht unterstuetzt');
-  if not SingleStatement(T) then
+  if not SingleStatement(ATokens) then
     Exit('auf der Zeile steht mehr als die eine Anweisung des Zweigs (ein '
       + 'zweites ";", ein else ohne eigenes if, ein offener Block) - '
       + 'begin..end um die Zeile aenderte, was im Zweig laeuft');
+  Result := '';
+end;
+
+// Darf vor ALine eine Deklaration (APlan.Literal steht schon)? '' oder der
+// Grund (LineReason fuer die Zeile selbst). Von der Zeile darueber zaehlt
+// nur ihr Code ab dem Zustand APrevState. Setzt APlan.Wrap, wenn ALine
+// die einzige Anweisung eines Zweigs ist (WrapReason).
+function PlanReason(const ALine, APrevCode: string; APrevState: Char;
+  var APlan: TVnpPlan): string;
+var
+  T    : TArray<TVnpToken>;
+  Prev : string;
+begin
+  T := TokensOf(ALine);
+  Result := LineReason(ALine, APlan.Literal, T);
+  if Result <> '' then
+    Exit;
+  Prev := CodePartFrom(APrevCode, APrevState);
+  if PrevEndsStatement(Prev) then
+    Exit;
+  if InList(LastWord(Prev), SECTION_STARTS) then
+    Exit('die Zeile darueber beginnt den initialization-/finalization-'
+      + 'Abschnitt - ob dort eine Inline-Deklaration gilt, ist nicht '
+      + 'gemessen');
+  APlan.Wrap := InList(LastWord(Prev), BRANCH_ENDS);
+  if not APlan.Wrap then
+    Exit('die Zeile darueber endet weder eine Anweisung noch mit then/do/'
+      + 'else - unklar, wohin die Deklaration gehoert');
+  Result := WrapReason(ALine, Prev, T);
 end;
 
 function PlanIntroduce(const ALine, APrevCode: string; ACaretCol: Integer;
-  const AName: string): TVnpPlan;
+  const AName: string; APrevState: Char): TVnpPlan;
 var
   Nums  : TArray<TVnpRange>;
   N     : TVnpRange;
@@ -885,7 +1028,7 @@ begin
     Result.Reason := 'kein Zahl-Literal am Caret';
     Exit;
   end;
-  Result.Reason := PlanReason(ALine, APrevCode, Result);
+  Result.Reason := PlanReason(ALine, APrevCode, APrevState, Result);
   if Result.Reason <> '' then
   begin
     Result.Wrap := False;
@@ -895,9 +1038,10 @@ begin
     Result.BlockIndent := Copy(APrevCode, 1,
       Length(APrevCode) - Length(TrimLeft(APrevCode)));
   Result.Indent := Copy(ALine, 1, Length(ALine) - Length(TrimLeft(ALine)));
-  Result.DeclText := Result.Indent + 'var ' + AName + ' := ' + Result.Literal
+  // E26: Inline-Konstante; der Name steht hinter 'const ' (6 Zeichen).
+  Result.DeclText := Result.Indent + 'const ' + AName + ' = ' + Result.Literal
     + ';';
-  Result.NameCol := Length(Result.Indent) + 5;
+  Result.NameCol := Length(Result.Indent) + 7;
   // Alle gleichen Literale der Zeile, von links; jede Ersetzung schiebt die
   // folgenden um die Laengendifferenz.
   Result.NewUseLine := ALine;
@@ -911,7 +1055,7 @@ begin
       Insert(AName, Result.NewUseLine, N.First + Shift);
       Inc(Shift, Length(AName) - Length(Result.Literal));
     end;
-  Result.Reason := TypePartReason(TokensOf(ALine), Result.OldCols);
+  Result.Reason := InlineDeclReason(TokensOf(ALine), Result.OldCols);
   if Result.Reason <> '' then
   begin
     Result.Wrap := False;
@@ -920,17 +1064,61 @@ begin
   Result.Ok := True;
 end;
 
+function SectionStateAfter(const ACode: string; AState: Char): Char;
+var
+  T : TVnpToken;
+begin
+  Result := AState;
+  for T in TokensOf(ACode) do
+    case Result of
+      'a':
+        // Im asm-Block ist 'end' das einzige Pascal-Wort.
+        if T.Text = 'end' then
+          Result := 'c';
+      'i':
+        ;   // bis zum Dateiende
+    else
+      if T.Text = 'asm' then
+        Result := 'a'
+      else if InList(T.Text, SECTION_STARTS) then
+        Result := 'i';
+    end;
+end;
+
+function ContinuesIfExpression(const ACode: string): Boolean;
+var
+  T : TArray<TVnpToken>;
+  k : Integer;
+begin
+  T := TokensOf(ACode);
+  for k := 1 to High(T) do
+    if (T[k].Text = 'if') and not InList(T[k - 1].Text, IF_STATEMENT_AFTER) then
+      Exit(True);
+  Result := False;
+end;
+
+function LineLooksFpcAware(const ALine: string): Boolean;
+var
+  S    : string;
+  Tell : string;
+begin
+  S := LowerCase(StringReplace(StringReplace(ALine, ' ', '', [rfReplaceAll]),
+    #9, '', [rfReplaceAll]));
+  for Tell in FPC_TELLS do
+    if Pos(Tell, S) > 0 then
+      Exit(True);
+  Result := False;
+end;
+
 function NextFreeName(const AText, ABase: string): string;
 var
   i : Integer;
 begin
-  for i := 1 to 99 do
-  begin
+  i := 0;
+  repeat
+    Inc(i);
     Result := ABase + Format('%.2d', [i]);
-    if not ContainsWord(AText, Result) then
-      Exit;
-  end;
-  Result := ABase + 'X';
+  until not ContainsWord(AText, Result);
 end;
 
 function Utf8Len(const S: string): Integer;

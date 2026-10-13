@@ -315,20 +315,39 @@ Ablauf je Aktion protokolliert `%TEMP%\reDelphix.log` (`Provide ...`,
 
 ## Lokale Variable einfuehren (Refactoring ohne Fund, in Arbeit)
 
-Code-Aktion ohne Fund: aus dem Zahl-Literal unter dem Caret wird
-`var MagicNr01 := <Literal>;` direkt ueber der Anweisung, alle gleichen
+Code-Aktion ohne Fund - seit Entscheid E26 (Nico 2026-10-13) heisst sie
+**"Lokale Konstante einfuehren"**: aus dem Zahl-Literal unter dem Caret wird
+`const MagicNr01 = <Literal>;` direkt ueber der Anweisung, alle gleichen
 Literale der Zeile werden durch den Namen ersetzt, der Name steht danach
 im Sync Edit zum Umbenennen (Variante C1h; ein Zweig ohne `begin` bekommt
-`begin..end`).
+`begin..end`). Eine Inline-Konstante statt der Variablen, weil keine
+Typregel das Literal trifft (Kompilierprobe des Labors, Win32 D12:
+`var MagicNr01 := 1` rechnete `C - MagicNr01` mit `C: Cardinal` als -1
+statt 4294967295, waehlte Integer- statt ShortInt-/Byte-Ueberladungen);
+die Konstante behaelt Faltung, Ueberladungswahl und die vorzeichenlose
+Rechnung des Literals.
 
-* **Stand (Charge I-1, 2026-10-11):** nur Logik und Tests.
+* **Stand (Bereich C, 2026-10-14, UNGEBAUT):** nur Logik und Tests.
   `uRdxIntroPlan` und `uRdxIntroEdits` sind 1:1 aus dem Labor
-  `VarNameProject` uebernommen (Stand 41bccb23, Entscheid E24: erst der im
-  UI-Test gemessene Stand), nur umbenannt (`TVnp*` -> `TRdxIntro*`,
+  `VarNameProject` uebernommen (Entscheid E24: erst der im Labor
+  gemessene Stand), nur umbenannt (`TVnp*` -> `TRdxIntro*`,
   `ApplyByteEdits` -> `ApplyIntroEdits`, weil `uRdxBufferMath` schon eine
-  `ApplyByteEdits` hat). Die Tests `uTestRdxIntro*` stehen in
-  reDelphix.Test und laufen im FPC-Pruefstand. Das Package bietet die
-  Aktion noch nicht an.
+  `ApplyByteEdits` hat). Stand 2026-10-14 nach dem Review F/B vom
+  2026-10-13: Inline-const (E26), mehrzeilige Strings mit mehr als drei
+  Quotes, Kommentargrenzen eines `begin..end`, Kopf-Fortsetzungen
+  (`message`/`dispid`/`external` auf der Folgezeile), zweite `var`/`const`
+  hinter einer Anweisung, asm-Block, initialization-Abschnitt, Direktive
+  zwischen Zeile darueber und Anweisung fuer jeden Plan, die Zeile
+  darueber ab ihrem Kommentar-Zustand, `*)` in Spalte 1, else-Arm eines
+  Bedingungsausdrucks (Delphi 13), FPC-Weiche (FPC 3.2 kennt keine
+  Inline-Konstante), Zeilenende je Zeile (`RowEol`, wie
+  `uRdxBufferMath.BufferEol`), Vorbedingung `Plan.Ok` von `IntroduceEdits`,
+  Namen jenseits von `MagicNr99`. Die Tests `uTestRdxIntro*` (jetzt fuenf
+  Units, 72 Tests: Plan 15, Refuse 9, Guards 16, Edits 20, Context 12)
+  stehen in reDelphix.Test und laufen im FPC-Pruefstand - `uTestRdxIntroContext`
+  ist neu und gehoert hinter `uTestRdxIntroEdits` an das Kommando unter
+  "Pruefen" (dort noch nicht nachgetragen; Erwartung mit ihr: `PASSED 254`).
+  Das Package bietet die Aktion noch nicht an.
 * **Die IDE-Aktion folgt** nach dem Prototyp fuer Enter und Esc im Labor
   (E25: Esc zerstoert im Sync Edit der IDE Text, auch ohne unseren Code -
   UI-Test 2026-10-11).
@@ -336,10 +355,11 @@ im Sync Edit zum Umbenennen (Variante C1h; ein Zweig ohne `begin` bekommt
   (`uTestVnpTemplate`).
 * **Grenzen:** siehe `VarNameProject\README.md`, Abschnitt "Grenzen" (ein
   Zeilen-Leser ohne Parser - was er nicht sicher abgrenzt, lehnt er ab).
-  Die Deklaration ist noch die untypisierte Inline-var; die typisierte
-  Variable ist entschieden (E26) und folgt in Charge I-2b. Eigener
-  Zeilenleser und Schreibweg bleiben bis zur Zusammenlegung mit
-  `uRdxCodeMap`/`uRdxBufferMath` stehen.
+  Eigener Zeilenleser und Schreibweg bleiben bis zur Zusammenlegung mit
+  `uRdxCodeMap`/`uRdxBufferMath` stehen (Bericht B, Befund 2: drei
+  Kommentar-/String-Leser; ein einzelnes CR ist in `uRdxBufferMath` ein
+  Zeilenende, in `uRdxIntroEdits` nicht - im Kopf von `uRdxIntroEdits`
+  festgehalten).
 
 ## Pruefen
 

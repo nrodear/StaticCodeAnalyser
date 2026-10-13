@@ -31,6 +31,16 @@ program VnpTypeProbe;
 //   P5  Kompiliert eine Int64-, UInt64- oder Cardinal-Variable dort, wo
 //       Integer erwartet wird (SetLength, Copy, for, Inc, case, in, ...),
 //       und welchen Typ erbt eine Inline- oder for-Variable davon?
+//   P6  ENTSCHEID E26 (Nico 2026-10-13, nach dem Win32-Lauf von P1-P5):
+//       die Aktion schreibt eine Inline-KONSTANTE 'const MagicNr01 = 42;'
+//       statt einer Variablen. P6 wiederholt die Faelle von P2, P3 und P4
+//       mit genau dieser Form; der Sollwert ist jedes Mal der des
+//       gefalteten Originals (P2.9 = 256, P2.33 = 4294967295, P4.9 =
+//       ShortInt ...). Wo das Original den Bau abbricht (E2099 in P2.1/6/
+//       15/20, P4.3), ist derselbe Fehler die Erwartung - der Schalter
+//       steht trotzdem an, damit ein Bau zeigt, ob die Konstante genauso
+//       faltet; bricht er dort ab, ist das der Beleg, Schalter aus und
+//       weiter. Kompiliert so ein Fall, meldet die Zeile 'ABWEICHUNG'.
 //
 // Ausgabe: je Messpunkt eine Zeile
 //   P<n>.<k> | <Frage> | <beobachtet> | <was der Entwurf vorhersagt>
@@ -132,6 +142,24 @@ program VnpTypeProbe;
 {$DEFINE PROBE_P5_IN}                // if I + M in [1..5]
 {$DEFINE PROBE_P5_FORVAR_START}      // for var J := I - M downto 0 (J: Int64?)
 {$DEFINE PROBE_P5_INLINE_PROPAGATE}  // var Last := I - M (Last: Int64?)
+// P6: Inline-Konstante (E26) - je Kompilierrisiko ein Schalter, alle an.
+// Erwartung bei FOLD_MUL/FOLD_DIV/FOLD_HEX/FOLD_MAXINT/FOLD_MAXINT_RIGHT/
+// BIGLIT_FOLD: E2099 wie das Original; bei SHL_LEFT: 256 (E1012 waere der
+// Befund "die Konstante rechnet wie eine Variable").
+{$DEFINE PROBE_P6_FOLD_MUL}          // const M = 100000; R := M * M            Soll E2099 (P2.1)
+{$DEFINE PROBE_P6_FOLD_DIV}          // const M = 100000; I := M * M div M      Soll E2099 (P2.6)
+{$DEFINE PROBE_P6_SHL_LEFT}          // const M = 1; R := M shl 40              Soll 256 (P2.9)
+{$DEFINE PROBE_P6_SHL_RIGHT}         // const M = 40; R := 1 shl M              Soll 256 (P2.9)
+{$DEFINE PROBE_P6_FOLD_HEX}          // const M = $FFFFFFFF; R := M + 1         Soll E2099 (P2.15)
+{$DEFINE PROBE_P6_FOLD_MAXINT}       // const M = 2147483647; R := M + 1        Soll E2099 (P2.20)
+{$DEFINE PROBE_P6_FOLD_MAXINT_RIGHT} // const M = 1; R := 2147483647 + M        Soll E2099 (P2.20)
+{$DEFINE PROBE_P6_BIGLIT_FOLD}       // const M = 100000; Ov(M * M)             Soll E2099 (P4.3)
+{$DEFINE PROBE_P6_BIGLIT_DEC}        // const M = 3000000000; Ov(M)             Soll Int64 (P4.4)
+{$DEFINE PROBE_P6_SHORTINT}          // (ShortInt, Integer, Int64) mit const 42 Soll ShortInt (P4.9)
+{$DEFINE PROBE_P6_BYTE}              // (Byte, Integer) mit const 42 und 200    Soll Byte (P4.14/15)
+{$DEFINE PROBE_P6_FLOAT}             // (Single, Double[, Extended]) mit const  Soll Extended (P4.18/19)
+{$DEFINE PROBE_P6_SD_INEXACT}        // (Single, Double) mit const 0.1          Soll Double (P4.23)
+{$DEFINE PROBE_P6_SD_EXACT}          // (Single, Double) mit const 3.5          Soll Double (P4.24)
 
 // Abgeleitet, NICHT von Hand schalten: auf Win64 ist Extended ein Alias fuer
 // Double, eine dritte Ueberladung waere dort E2252 (gleiche Parameter).
@@ -256,6 +284,20 @@ const
 {$IFNDEF PROBE_P5_IN}               + ' PROBE_P5_IN' {$ENDIF}
 {$IFNDEF PROBE_P5_FORVAR_START}     + ' PROBE_P5_FORVAR_START' {$ENDIF}
 {$IFNDEF PROBE_P5_INLINE_PROPAGATE} + ' PROBE_P5_INLINE_PROPAGATE' {$ENDIF}
+{$IFNDEF PROBE_P6_FOLD_MUL}         + ' PROBE_P6_FOLD_MUL' {$ENDIF}
+{$IFNDEF PROBE_P6_FOLD_DIV}         + ' PROBE_P6_FOLD_DIV' {$ENDIF}
+{$IFNDEF PROBE_P6_SHL_LEFT}         + ' PROBE_P6_SHL_LEFT' {$ENDIF}
+{$IFNDEF PROBE_P6_SHL_RIGHT}        + ' PROBE_P6_SHL_RIGHT' {$ENDIF}
+{$IFNDEF PROBE_P6_FOLD_HEX}         + ' PROBE_P6_FOLD_HEX' {$ENDIF}
+{$IFNDEF PROBE_P6_FOLD_MAXINT}      + ' PROBE_P6_FOLD_MAXINT' {$ENDIF}
+{$IFNDEF PROBE_P6_FOLD_MAXINT_RIGHT} + ' PROBE_P6_FOLD_MAXINT_RIGHT' {$ENDIF}
+{$IFNDEF PROBE_P6_BIGLIT_FOLD}      + ' PROBE_P6_BIGLIT_FOLD' {$ENDIF}
+{$IFNDEF PROBE_P6_BIGLIT_DEC}       + ' PROBE_P6_BIGLIT_DEC' {$ENDIF}
+{$IFNDEF PROBE_P6_SHORTINT}         + ' PROBE_P6_SHORTINT' {$ENDIF}
+{$IFNDEF PROBE_P6_BYTE}             + ' PROBE_P6_BYTE' {$ENDIF}
+{$IFNDEF PROBE_P6_FLOAT}            + ' PROBE_P6_FLOAT' {$ENDIF}
+{$IFNDEF PROBE_P6_SD_INEXACT}       + ' PROBE_P6_SD_INEXACT' {$ENDIF}
+{$IFNDEF PROBE_P6_SD_EXACT}         + ' PROBE_P6_SD_EXACT' {$ENDIF}
     ;
 
 type
@@ -1884,6 +1926,329 @@ begin
 end;
 {$ENDIF}
 
+// ---- P6: Inline-Konstante (E26) gegen das gefaltete Original ---------------
+// Jede Routine schreibt GENAU die Zeile der Code-Aktion seit E26
+// ('const MagicNr01 = <Literal>;') direkt vor die Anweisung. Die letzte
+// Spalte nennt den Sollwert: das Ergebnis des gefalteten Originals aus P2,
+// P3 bzw. P4 (Win32-Lauf 2026-10-13); 'gleich'/'VERSCHIEDEN' bzw. ein
+// anderer Wert ist der Befund.
+
+// Soll aus AObserved gegen ASoll: dieselbe Zeile wie Put, mit Urteil.
+procedure PutSoll(const AId, AQuestion, AObserved, ASoll: string);
+var
+  Urteil : string;
+begin
+  if AObserved = ASoll then
+    Urteil := 'gleich'
+  else
+    Urteil := 'ABWEICHUNG';
+  Put(AId, AQuestion, AObserved, 'Soll (Original): ' + ASoll + ' -> ' + Urteil);
+end;
+
+{$IFDEF PROBE_P6_FOLD_MUL}
+procedure P6MulFold;
+var
+  R : Int64;
+begin
+  const MagicNr01 = 100000;
+  R := MagicNr01 * MagicNr01;
+  Put('P6.1', 'const MagicNr01 = 100000; R := MagicNr01 * MagicNr01', IntToStr(R),
+    'Soll (Original P2.1): E2099 - kompiliert, also ABWEICHUNG');
+end;
+{$ENDIF}
+
+{$IFDEF PROBE_P6_FOLD_DIV}
+procedure P6DivFold;
+var
+  I : Integer;
+begin
+  const MagicNr01 = 100000;
+  I := MagicNr01 * MagicNr01 div MagicNr01;
+  Put('P6.2', 'const MagicNr01 = 100000; I := MagicNr01 * MagicNr01 div MagicNr01',
+    IntToStr(I), 'Soll (Original P2.6): E2099 - kompiliert, also ABWEICHUNG');
+end;
+{$ENDIF}
+
+{$IFDEF PROBE_P6_SHL_LEFT}
+// Caret auf der 1 (P2.9: das Original faltet in 32 Bit, 40 and 31 = 8).
+procedure P6ShlLeft;
+var
+  R : Int64;
+begin
+  const MagicNr01 = 1;
+  R := MagicNr01 shl 40;
+  PutSoll('P6.3', 'const MagicNr01 = 1; R := MagicNr01 shl 40', IntToStr(R),
+    '256');
+end;
+{$ENDIF}
+
+{$IFDEF PROBE_P6_SHL_RIGHT}
+// Caret auf der 40.
+procedure P6ShlRight;
+var
+  R : Int64;
+begin
+  const MagicNr01 = 40;
+  R := 1 shl MagicNr01;
+  PutSoll('P6.4', 'const MagicNr01 = 40; R := 1 shl MagicNr01', IntToStr(R),
+    '256');
+end;
+{$ENDIF}
+
+{$IFDEF PROBE_P6_FOLD_HEX}
+procedure P6HexFold;
+var
+  R : Int64;
+begin
+  const MagicNr01 = $FFFFFFFF;
+  R := MagicNr01 + 1;
+  Put('P6.5', 'const MagicNr01 = $FFFFFFFF; R := MagicNr01 + 1', IntToStr(R),
+    'Soll (Original P2.15): E2099 - kompiliert, also ABWEICHUNG');
+end;
+{$ENDIF}
+
+{$IFDEF PROBE_P6_FOLD_MAXINT}
+procedure P6MaxIntFold;
+var
+  R : Int64;
+begin
+  const MagicNr01 = 2147483647;
+  R := MagicNr01 + 1;
+  Put('P6.6', 'const MagicNr01 = 2147483647; R := MagicNr01 + 1', IntToStr(R),
+    'Soll (Original P2.20): E2099 - kompiliert, also ABWEICHUNG');
+end;
+{$ENDIF}
+
+{$IFDEF PROBE_P6_FOLD_MAXINT_RIGHT}
+// Caret auf der 1: 2147483647 bleibt Literal.
+procedure P6OneFold;
+var
+  R : Int64;
+begin
+  const MagicNr01 = 1;
+  R := 2147483647 + MagicNr01;
+  Put('P6.7', 'const MagicNr01 = 1; R := 2147483647 + MagicNr01', IntToStr(R),
+    'Soll (Original P2.20): E2099 - kompiliert, also ABWEICHUNG');
+end;
+{$ENDIF}
+
+// Literal neben einer LAUFZEIT-Variablen: die Konstante muss rechnen wie das
+// Literal in P2.27/28 (Integer) und P2.33 (Cardinal - der Fall, der E26
+// ausgeloest hat: 'var MagicNr01 := 1' ergab dort -1).
+procedure P6RunMul;
+var
+  N : Integer;
+  R : Int64;
+begin
+  N := 100000;
+  const MagicNr01 = 100000;
+  R := N * MagicNr01;
+  PutSoll('P6.8', 'N: Integer = 100000; const MagicNr01 = 100000; R := N * MagicNr01',
+    IntToStr(R), '1410065408');
+end;
+
+{$Q+}
+procedure P6RunMulChecked;
+var
+  N   : Integer;
+  R   : Int64;
+  Obs : string;
+begin
+  N := 100000;
+  const MagicNr01 = 100000;
+  try
+    R := N * MagicNr01;
+    Obs := IntToStr(R);
+  except
+    on E: Exception do // Absicht: die Ausnahmeklasse ist der Messwert
+      Obs := 'Ausnahme ' + E.ClassName;
+  end;
+  PutSoll('P6.9', 'wie P6.8, mit Ueberlaufpruefung Q+', Obs,
+    'Ausnahme EIntOverflow');
+end;
+{$Q-}
+
+procedure P6RunCard;
+var
+  C : Cardinal;
+  R : Int64;
+begin
+  C := 0;
+  const MagicNr01 = 1;
+  R := C - MagicNr01;
+  PutSoll('P6.10', 'C: Cardinal = 0; const MagicNr01 = 1; R := C - MagicNr01',
+    IntToStr(R), '4294967295');
+end;
+
+// Faltung ueber das Vorzeichenbit (P2.37, P2.40).
+procedure P6Shl31;
+var
+  R : Int64;
+begin
+  const MagicNr01 = 1;
+  R := MagicNr01 shl 31;
+  PutSoll('P6.11', 'const MagicNr01 = 1; R := MagicNr01 shl 31', IntToStr(R),
+    '-2147483648');
+end;
+
+procedure P6ShrNeg;
+var
+  R : Int64;
+begin
+  const MagicNr01 = 8;
+  R := (-MagicNr01) shr 1;
+  PutSoll('P6.12', 'const MagicNr01 = 8; R := (-MagicNr01) shr 1', IntToStr(R),
+    '2147483644');
+end;
+
+// Gleitkomma (P3): Bitmuster der Konstante gegen das Literal.
+procedure P6FloatDirect;
+var
+  OrigS, Sgl : Single;
+  OrigD, Dbl : Double;
+  OrigE, Ext : Extended;
+begin
+  OrigS := 0.1;
+  OrigD := 0.1;
+  OrigE := 0.1;
+  const MagicNr01 = 0.1;
+  Sgl := MagicNr01;
+  Dbl := MagicNr01;
+  Ext := MagicNr01;
+  Put('P6.13', 'const MagicNr01 = 0.1; Sgl := MagicNr01 (Single)',
+    BytesVersus(OrigS, Sgl, SizeOf(Sgl)), 'Soll (Original P3.1): gleich');
+  Put('P6.14', 'const MagicNr01 = 0.1; Dbl := MagicNr01 (Double)',
+    BytesVersus(OrigD, Dbl, SizeOf(Dbl)), 'Soll (Original P3.2): gleich');
+  Put('P6.15', 'const MagicNr01 = 0.1; Ext := MagicNr01 (Extended)',
+    BytesVersus(OrigE, Ext, SizeOf(Ext)), 'Soll (Original P3.3): gleich');
+end;
+
+// Caret auf 0.1 in '0.1 * 3' (P3.13) bzw. auf der 3.
+procedure P6FloatMul;
+var
+  OrigD, Dbl : Double;
+  OrigE, Ext : Extended;
+begin
+  OrigD := 0.1 * 3;
+  OrigE := 0.1 * 3;
+  const MagicNr01 = 0.1;
+  Dbl := MagicNr01 * 3;
+  Ext := MagicNr01 * 3;
+  Put('P6.16', 'const MagicNr01 = 0.1; Dbl := MagicNr01 * 3 (Double)',
+    BytesVersus(OrigD, Dbl, SizeOf(Dbl)), 'Soll (Original P3.13): gleich');
+  Put('P6.17', 'const MagicNr01 = 0.1; Ext := MagicNr01 * 3 (Extended)',
+    BytesVersus(OrigE, Ext, SizeOf(Ext)), 'Soll (Original 0.1 * 3): gleich');
+end;
+
+procedure P6FloatMulRight;
+var
+  Orig, Dbl : Double;
+begin
+  Orig := 0.1 * 3;
+  const MagicNr01 = 3;
+  Dbl := 0.1 * MagicNr01;
+  Put('P6.18', 'const MagicNr01 = 3; Dbl := 0.1 * MagicNr01 (Double)',
+    BytesVersus(Orig, Dbl, SizeOf(Dbl)), 'Soll (Original P3.13): gleich');
+end;
+
+procedure P6FloatRun;
+var
+  X, Orig, Dbl : Double;
+begin
+  X := 3;
+  Orig := X * 0.1;
+  const MagicNr01 = 0.1;
+  Dbl := X * MagicNr01;
+  Put('P6.19', 'X: Double = 3; const MagicNr01 = 0.1; Dbl := X * MagicNr01',
+    BytesVersus(Orig, Dbl, SizeOf(Dbl)), 'Soll (Original P3.21): gleich');
+end;
+
+// Ueberladungswahl (P4): die Konstante muss dieselbe Ueberladung waehlen
+// wie das Literal - P4.9/14 (ShortInt/Byte) sind die Grenze, an der die
+// Variable (P4.12/16: Integer) abwich.
+procedure P6OvIntInt64;
+begin
+  const MagicNr01 = 42;
+  PutSoll('P6.20', 'const MagicNr01 = 42; OvIntInt64(MagicNr01)',
+    OvIntInt64(MagicNr01), 'Integer');
+  PutSoll('P6.21', 'const MagicNr01 = 42; OvIntInt64(MagicNr01 * 2)',
+    OvIntInt64(MagicNr01 * 2), 'Integer');
+end;
+
+{$IFDEF PROBE_P6_BIGLIT_FOLD}
+procedure P6OvBigLitFold;
+begin
+  const MagicNr01 = 100000;
+  Put('P6.22', 'const MagicNr01 = 100000; OvIntInt64(MagicNr01 * MagicNr01)',
+    OvIntInt64(MagicNr01 * MagicNr01),
+    'Soll (Original P4.3): E2099 - kompiliert, also ABWEICHUNG');
+end;
+{$ENDIF}
+
+{$IFDEF PROBE_P6_BIGLIT_DEC}
+procedure P6OvBigLitDec;
+begin
+  const MagicNr01 = 3000000000;
+  PutSoll('P6.23', 'const MagicNr01 = 3000000000; OvIntInt64(MagicNr01)',
+    OvIntInt64(MagicNr01), 'Int64');
+end;
+{$ENDIF}
+
+{$IFDEF PROBE_P6_SHORTINT}
+procedure P6OvShort;
+begin
+  const MagicNr01 = 42;
+  PutSoll('P6.24', 'const MagicNr01 = 42; OvShort3(MagicNr01)',
+    OvShort3(MagicNr01), 'ShortInt');
+  PutSoll('P6.25', 'const MagicNr01 = 42; OvShort3(MagicNr01 * 2)',
+    OvShort3(MagicNr01 * 2), 'ShortInt');
+end;
+{$ENDIF}
+
+{$IFDEF PROBE_P6_BYTE}
+procedure P6OvByte;
+begin
+  const MagicNr01 = 42;
+  PutSoll('P6.26', 'const MagicNr01 = 42; OvByteInt(MagicNr01)',
+    OvByteInt(MagicNr01), 'Byte');
+  const MagicNr02 = 200;
+  PutSoll('P6.27', 'const MagicNr02 = 200; OvByteInt(MagicNr02)',
+    OvByteInt(MagicNr02), 'Byte');
+end;
+{$ENDIF}
+
+{$IFDEF PROBE_P6_FLOAT}
+{$IFDEF PROBE_EXT_ARG_CALL}
+procedure P6OvFloat;
+begin
+  const MagicNr01 = 3.5;
+  PutSoll('P6.28', 'const MagicNr01 = 3.5; OvFloat(MagicNr01)',
+    OvFloat(MagicNr01), 'Extended');
+  const MagicNr02 = 0.1;
+  PutSoll('P6.29', 'const MagicNr02 = 0.1; OvFloat(MagicNr02)',
+    OvFloat(MagicNr02), 'Extended');
+end;
+{$ENDIF}
+{$ENDIF}
+
+{$IFDEF PROBE_P6_SD_INEXACT}
+procedure P6OvSDInexact;
+begin
+  const MagicNr01 = 0.1;
+  PutSoll('P6.30', 'const MagicNr01 = 0.1; OvSD(MagicNr01)', OvSD(MagicNr01),
+    'Double');
+end;
+{$ENDIF}
+
+{$IFDEF PROBE_P6_SD_EXACT}
+procedure P6OvSDExact;
+begin
+  const MagicNr01 = 3.5;
+  PutSoll('P6.31', 'const MagicNr01 = 3.5; OvSD(MagicNr01)', OvSD(MagicNr01),
+    'Double');
+end;
+{$ENDIF}
+
 // ---- Ablauf -------------------------------------------------------------------
 
 procedure RunP1;
@@ -2120,6 +2485,64 @@ begin
 {$ENDIF}
 end;
 
+procedure RunP6;
+begin
+{$IFDEF PROBE_P6_FOLD_MUL}
+  P6MulFold;
+{$ENDIF}
+{$IFDEF PROBE_P6_FOLD_DIV}
+  P6DivFold;
+{$ENDIF}
+{$IFDEF PROBE_P6_SHL_LEFT}
+  P6ShlLeft;
+{$ENDIF}
+{$IFDEF PROBE_P6_SHL_RIGHT}
+  P6ShlRight;
+{$ENDIF}
+{$IFDEF PROBE_P6_FOLD_HEX}
+  P6HexFold;
+{$ENDIF}
+{$IFDEF PROBE_P6_FOLD_MAXINT}
+  P6MaxIntFold;
+{$ENDIF}
+{$IFDEF PROBE_P6_FOLD_MAXINT_RIGHT}
+  P6OneFold;
+{$ENDIF}
+  P6RunMul;
+  P6RunMulChecked;
+  P6RunCard;
+  P6Shl31;
+  P6ShrNeg;
+  P6FloatDirect;
+  P6FloatMul;
+  P6FloatMulRight;
+  P6FloatRun;
+  P6OvIntInt64;
+{$IFDEF PROBE_P6_BIGLIT_FOLD}
+  P6OvBigLitFold;
+{$ENDIF}
+{$IFDEF PROBE_P6_BIGLIT_DEC}
+  P6OvBigLitDec;
+{$ENDIF}
+{$IFDEF PROBE_P6_SHORTINT}
+  P6OvShort;
+{$ENDIF}
+{$IFDEF PROBE_P6_BYTE}
+  P6OvByte;
+{$ENDIF}
+{$IFDEF PROBE_P6_FLOAT}
+{$IFDEF PROBE_EXT_ARG_CALL}
+  P6OvFloat;
+{$ENDIF}
+{$ENDIF}
+{$IFDEF PROBE_P6_SD_INEXACT}
+  P6OvSDInexact;
+{$ENDIF}
+{$IFDEF PROBE_P6_SD_EXACT}
+  P6OvSDExact;
+{$ENDIF}
+end;
+
 begin
   OpenReport;
   try
@@ -2130,6 +2553,7 @@ begin
       RunP3;
       RunP4;
       RunP5;
+      RunP6;
       PutRaw('# Ende');
     except
       on E: Exception do
