@@ -37,7 +37,7 @@ source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung
 source\uRdxEditor.pas             ToolsAPI: Puffer lesen, Bereich markieren, Bereiche ersetzen (ein Undo-Schritt), Projekt-Units
 source\uRdxLog.pas                Protokoll %TEMP%\reDelphix.log + DebugView
 data\unitscopes.txt               die Scope-Tabelle (erzeugt), als RCDATA eingelinkt (data\unitscopes.rc)
-tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 20 Testunits (siehe "Pruefen")
+tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 21 Testunits (siehe "Pruefen")
 tools\gen_unitscopes.py           erzeugt data\unitscopes.txt aus der Delphi-Installation
 tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik unter FPC 3.2.2 und fuehrt Tests aus
 tools\probe\RdxCorpusProbe.dpr    Korpus-Probe: Rezept 5.1 ueber eine Liste von Fundstellen, CSV
@@ -344,9 +344,8 @@ Rechnung des Literals.
   `uRdxBufferMath.BufferEol`), Vorbedingung `Plan.Ok` von `IntroduceEdits`,
   Namen jenseits von `MagicNr99`. Die Tests `uTestRdxIntro*` (jetzt fuenf
   Units, 72 Tests: Plan 15, Refuse 9, Guards 16, Edits 20, Context 12)
-  stehen in reDelphix.Test und laufen im FPC-Pruefstand - `uTestRdxIntroContext`
-  ist neu und gehoert hinter `uTestRdxIntroEdits` an das Kommando unter
-  "Pruefen" (dort noch nicht nachgetragen; Erwartung mit ihr: `PASSED 254`).
+  stehen in reDelphix.Test und laufen im FPC-Pruefstand (Kommando unter
+  "Pruefen").
   Das Package bietet die Aktion noch nicht an.
 * **Die IDE-Aktion folgt** nach dem Prototyp fuer Enter und Esc im Labor
   (E25: Esc zerstoert im Sync Edit der IDE Text, auch ohne unseren Code -
@@ -423,15 +422,17 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
   Literal am Caret, Deklaration und Spalten, Zweig ohne `begin`, alle
   Ablehnungen und Schutzregeln, Ende des Sync-Blocks und die Ersetzungen
   des Writers Ende zu Ende auf UTF-8-Pufferbytes (CRLF, LF, BOM,
-  Mehrbyte-Zeichen) - 53 Tests, reine Textlogik.
+  Mehrbyte-Zeichen), Kontext ueber Zeilen (mehrzeilige Strings, asm,
+  initialization, FPC-Weiche, Direktiven, Kommentargrenzen) - 72 Tests, reine
+  Textlogik.
 
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits
+bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext
 ```
 
-Erwartet (Stand 2026-10-11): `PASSED 235  FAILED 0` - 16 Testunits, davon 53 Tests
+Erwartet (Stand 2026-10-14): `PASSED 256  FAILED 0` - 17 Testunits, davon 72 Tests
 fuer "Lokale Variable einfuehren".
 
 Der Pruefstand uebersetzt die Core-Units des Quellstellen-Dienstes

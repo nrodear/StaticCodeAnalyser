@@ -306,6 +306,7 @@ contains
   uAnalyzeContext in '..\SCA.Engine\sources\Infrastructure\uAnalyzeContext.pas',
   uDfmRepoIndex in '..\SCA.Engine\sources\Infrastructure\uDfmRepoIndex.pas',
   uEngineApi in '..\SCA.Engine\sources\Infrastructure\uEngineApi.pas',
+  uEngineLock in '..\SCA.Engine\sources\Infrastructure\uEngineLock.pas',
   uExport in '..\SCA.Engine\sources\Infrastructure\uExport.pas',
   uExportHtml in '..\SCA.Engine\sources\Infrastructure\uExportHtml.pas',
   uDetectorInfoExport in '..\SCA.Engine\sources\Infrastructure\uDetectorInfoExport.pas',
