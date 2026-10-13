@@ -267,7 +267,9 @@ Scan und Export kann Levels und Konfidenzen nicht aus zwei Welten
 mischen. Mit `EvidenceTiering=0` ist das SARIF byte-identisch zum
 Stand vor 0.9.18.
 
-Zwei Fallen: Das UTF-8-BOM kann Node-basierte Uploader stören, und ein
+Zwei Fallen: Ein SARIF aus **v0.9.14 oder älter** trägt ein UTF-8-BOM,
+das Node-basierte Uploader stört (die aktuelle Ausgabe ist BOM-frei,
+siehe *Encoding* oben), und ein
 **baseline-gefiltertes** SARIF arbeitet gegen den Alert-Lebenszyklus der
 Plattform (sie schließt alles, was der Filter entfernt hat). Für
 Code-Scanning den ungefilterten Report hochladen und die Plattform den

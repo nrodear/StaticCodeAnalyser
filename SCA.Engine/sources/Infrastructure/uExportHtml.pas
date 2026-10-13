@@ -2221,16 +2221,22 @@ begin
           // Echter Code-Auszug aus der Quelldatei mit hervorgehobener Zeile.
           // Header benutzt data-i18n=src-snippet-hdr mit data-file und data-line -
           // applyLanguage rendert den ganzen Header via T("src-snippet-hdr", file, line).
+          //
+          // data-line NORMALISIERT wie data-sort oben (StrToIntDef): der
+          // Auszug existiert nur, wenn LineNo > 0 ist, also traegt das
+          // Attribut die Zahl, die den Auszug bestimmt hat - nicht den
+          // Rohtext ('$2' parst als 2). Die Anzeige escapet wie jede
+          // Zelle (Review 2026-10-13; vorher beides roh).
           if Snippet <> '' then
           begin
             SB.Append('<div class="src-snippet-hdr" data-i18n="src-snippet-hdr" data-file="');
             SB.Append(HtmlEscape(FileShort));
             SB.Append('" data-line="');
-            SB.Append(F.LineNumber);
+            SB.Append(IntToStr(LineNo));
             SB.Append('">Quelle: ');
             SB.Append(HtmlEscape(FileShort));
             SB.Append(', Zeile ');
-            SB.Append(F.LineNumber);
+            SB.Append(HtmlEscape(F.LineNumber));
             SB.Append('</div>');
             SB.Append(Snippet);
           end;

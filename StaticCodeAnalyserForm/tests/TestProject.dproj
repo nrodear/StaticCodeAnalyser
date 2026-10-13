@@ -149,8 +149,14 @@
         <DCCReference Include="uTestHardcodedPath.pas"/>
         <DCCReference Include="uTestHardcodedIpAddress.pas"/>
         <DCCReference Include="uTestHardcodedIpInConfig.pas"/>
+        <DCCReference Include="uTestIpAddressScanKit.pas"/>
+        <DCCReference Include="uTestIpAddressScanGrammar.pas"/>
+        <DCCReference Include="uTestIpAddressScanClasses.pas"/>
+        <DCCReference Include="uTestIpAddressScanPascal.pas"/>
+        <DCCReference Include="uTestIpAddressScanIni.pas"/>
         <DCCReference Include="uTestFormatMismatch.pas"/>
         <DCCReference Include="uTestUnusedUses.pas"/>
+        <DCCReference Include="uTestUnusedUsesIdents.pas"/>
         <DCCReference Include="uTestEmptyExcept.pas"/>
         <DCCReference Include="uTestEmptyMethod.pas"/>
         <DCCReference Include="uTestDuplicate.pas"/>
@@ -177,6 +183,7 @@
         <DCCReference Include="uTestFindingFingerprint.pas"/>
         <DCCReference Include="uTestExportSonarGeneric.pas"/>
         <DCCReference Include="uTestExportHtml.pas"/>
+        <DCCReference Include="uTestExportHtmlRowAttrs.pas"/>
         <DCCReference Include="uTestSonarConfig.pas"/>
         <DCCReference Include="uTestSonarTokenStorage.pas"/>
         <DCCReference Include="..\sources\Console\uConsoleRunner.pas"/>
@@ -347,6 +354,7 @@
         <DCCReference Include="uTestUnicodeToAnsiCast.pas"/>
         <DCCReference Include="uTestUseAfterFree.pas"/>
         <DCCReference Include="uTestClaudePrompt.pas"/>
+        <DCCReference Include="uTestClaudePromptMarkers.pas"/>
         <DCCReference Include="uTestFindingCopyText.pas"/>
         <DCCReference Include="uTestHintTextLayout.pas"/>
         <DCCReference Include="uTestHitCacheRepair.pas"/>
