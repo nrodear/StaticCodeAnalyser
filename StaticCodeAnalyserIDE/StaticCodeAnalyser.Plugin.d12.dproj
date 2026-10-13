@@ -356,11 +356,13 @@
         <DCCReference Include="..\SCA.SharedUI\sources\uAnalyserPalette.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uAnalyserTheme.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uAppTheme.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uBulbDecision.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uEditorBulbButton.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uEditorBulbGeometry.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uFindingGridRenderer.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uFindingsPropertiesFrame.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uFindingFilter.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uFindingSourcePick.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uFuzzyComboSearch.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uHintTextLayout.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uHitCacheRepair.pas"/>

@@ -49,6 +49,15 @@ type
   TSuppressedKinds = uSCAConsts.TFindingKinds;
   TSuppressionMarker = uSCAConsts.TSuppressionMarker;
 
+  // Ziel eines Unterdrueck-Markers, den ein Werkzeug schreibt
+  // (TSuppression.MarkerTargetFor): die Datei, in die der Marker gehoert,
+  // die Zeile dort, VOR die er kommt (1-basiert), und sein Text.
+  TMarkerTarget = record
+    HostFile   : string;
+    Line       : Integer;
+    MarkerLine : string;
+  end;
+
   TSuppression = class
   public
     // Filtert unterdrueckte Befunde aus der Liste (in-place). Emittiert
@@ -85,12 +94,38 @@ type
 
     // Die Marker-Zeile, die ein Werkzeug ueber die Fundzeile schreibt
     // (IDE/EXE "Unterdruecken"): '// noinspection X', in einer
-    // Konfigurationsdatei '; noinspection X'.
+    // Konfigurationsdatei '; noinspection X'. Nur der TEXT - wohin er
+    // gehoert (bei einer Formulardatei: in die Schwester-Unit), sagt
+    // MarkerTargetFor; wer schreibt, nimmt das.
     class function MarkerLineFor(const AFileName: string;
       AKind: TFindingKind): string; static;
     // Dasselbe fuer eine Regelkarte ohne Datei (Workbench, Regel-Info): in
     // der Dateiart, in der die Regel meldet - SCA201 nur in .ini.
     class function MarkerTextFor(AKind: TFindingKind): string; static;
+    // Wohin ein Werkzeug (IDE/EXE "Unterdruecken") den Marker fuer den
+    // Fund in AFileName, Zeile ALine schreibt - konsistent dazu, wie
+    // ApplyToFindings Marker LIEST (Review 2026-10-14, MAJOR 2):
+    //   * Pascal- und Konfigurationsdatei: in die Datei selbst, vor ALine.
+    //   * Formulardatei (.dfm, unter dlFpc .lfm): Marker gehoeren in die
+    //     Schwester-Unit (ResolveMarkerHostFile) - eine '//'-Zeile in der
+    //     .dfm liesse das Formular nicht mehr laden (die EXE schrieb sie
+    //     bis 2026-10-14 ohne Undo). Beim Lesen haelt BuildMap die
+    //     FUNDZEILE der .dfm gegen die Zielzeilen der Marker in der .pas
+    //     (es gibt keine Zuordnung dfm->pas); der Marker muss also so in
+    //     die .pas, dass seine Zielzeile dort die Nummer ALine traegt: VOR
+    //     die Zeile ALine - 1, und die muss eine Code-Zeile sein (nicht
+    //     leer, kein Kommentar) - sonst zielte der Marker auf eine andere
+    //     Nummer, bliebe wirkungslos und SCA165 meldete ihn als unbenutzt.
+    //     Ist das nicht erfuellt (keine Schwester-Unit, Fund in Zeile 1,
+    //     Unit zu kurz oder nicht lesbar, leere Zeile oder Kommentar
+    //     davor), wird ABGELEHNT: False, AReason nennt den Grund (englisch,
+    //     wie TBaseline.IsBaselineFile), der Host schreibt dann nichts.
+    //     Gelesen wird die Unit von der Platte (uFileTextCache); ein
+    //     ungespeicherter Editorpuffer kann abweichen - dann korrigiert der
+    //     naechste Scan, und der Marker ist mit Strg+Z zurueckzunehmen.
+    class function MarkerTargetFor(const AFileName: string; ALine: Integer;
+      AKind: TFindingKind; out ATarget: TMarkerTarget;
+      out AReason: string): Boolean; static;
   private
     // Allokationsfreier case-insensitiver Substring-Check auf
     // 'noinspection' (ASCII-Folding reicht - der Tag selbst ist ASCII).
@@ -391,6 +426,70 @@ begin
     var PasFile := TStaticFiles.PairedUnitFile(FileName);
     if PasFile <> '' then Result := PasFile;
   end;
+end;
+
+class function TSuppression.MarkerTargetFor(const AFileName: string;
+  ALine: Integer; AKind: TFindingKind; out ATarget: TMarkerTarget;
+  out AReason: string): Boolean;
+// Vertrag an der Deklaration. Die Zeile ALine - 1 der Unit wird von der
+// Platte gelesen - ueber AcquireLines, damit ein warmer Text-Cache des
+// letzten Scans nicht ein zweites Mal liest.
+var
+  Lines  : TStringList;
+  Cached : Boolean;
+  Above  : string;
+begin
+  Result  := False;
+  AReason := '';
+  ATarget := Default(TMarkerTarget);
+  if ALine <= 0 then
+  begin
+    AReason := 'finding has no source line';
+    Exit;
+  end;
+  ATarget.HostFile   := ResolveMarkerHostFile(AFileName);
+  ATarget.MarkerLine := MarkerLineFor(ATarget.HostFile, AKind);
+  if not TStaticFiles.IsFormFileName(AFileName) then
+  begin
+    ATarget.Line := ALine;
+    Exit(True);
+  end;
+  // Formulardatei: der Marker geht in die Schwester-Unit (s. Deklaration).
+  if SameText(ATarget.HostFile, AFileName) then
+  begin
+    AReason := 'no unit file beside the form file';
+    Exit;
+  end;
+  if ALine < 2 then
+  begin
+    AReason := 'form line 1 cannot be targeted from the unit';
+    Exit;
+  end;
+  Lines := AcquireLines(ATarget.HostFile, Cached);
+  if Lines = nil then
+  begin
+    AReason := 'unit file not readable: ' + ATarget.HostFile;
+    Exit;
+  end;
+  try
+    if Lines.Count < ALine - 1 then
+    begin
+      AReason := Format('unit file has %d lines, the form finding is on ' +
+        'line %d', [Lines.Count, ALine]);
+      Exit;
+    end;
+    Above := TrimLeft(Lines[ALine - 2]);
+    if (Above = '') or IsCommentOnlyLine(Above, msPascal) then
+    begin
+      AReason := Format('line %d of the unit is empty or a comment - a ' +
+        'marker there would not target form line %d', [ALine - 1, ALine]);
+      Exit;
+    end;
+  finally
+    ReleaseLines(Lines, Cached);
+  end;
+  ATarget.Line := ALine - 1;
+  Result := True;
 end;
 
 class procedure TSuppression.NoteReadFailure(const AHostFile: string;

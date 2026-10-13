@@ -23,22 +23,24 @@ unit uIDEFindingBulb;
 //   * Nie im Zeichenpfad bewegen: der Editor-Notifier des Highlighters
 //     ruft FindingBulbEditorChanged aus EndPaint/EditorScrolled, das merkt
 //     den Editor nur vor und postet an ein eigenes Hilfsfenster. SetBounds
-//     und Visible laufen danach aus der Nachrichtenschleife. KEIN eigener
-//     OTA-Slot.
+//     und Visible laufen danach aus der Nachrichtenschleife - auch das
+//     Ausblenden einer Birne, deren Editor ein neues Fensterhandle bekam
+//     (RetireBulb merkt sie nur vor, ProcessPending blendet aus und gibt frei;
+//     Review 2026-10-14). KEIN eigener OTA-Slot.
 //   * Beim Scrollen wandert die Birne mit der Zeile; aus nur, wenn die
 //     Caret-Zeile nicht ganz sichtbar ist (Ausblenden waehrend des Scrollens
 //     blinkte im Prototyp).
-//   * Ob die Birne erscheint, entscheiden zwei Stufen (WantsBulb):
-//     1. billig - Fund auf der Zeile UND mindestens ein Anbieter; je Zeile
-//        hoechstens einmal je Sekunde neu, damit ein neuer Scan nachzieht;
-//     2. teuer - die Anbieter fragen, ob eine verfuegbare Hilfe dabei ist.
-//        reDelphix parst dafuer die ganze Datei. Deshalb erst, wenn der
-//        Caret SETTLE_MS auf der Zeile ruht (Durchpfeilen fragt nie), und
-//        je Schluessel Datei+Zeile+Zeilentext+Funde nur EINMAL. Tippen auf
-//        der Zeile aendert den Schluessel; bis zur neuen Antwort gilt die
-//        alte weiter (sonst blinkte die Birne bei jedem Tastendruck).
-//     Nach einer ausgefuehrten Aktion werden alle Antworten verworfen, und
-//     das Menue selbst fragt beim Oeffnen frisch und korrigiert die Antwort.
+//   * Ob die Birne erscheint, entscheidet TBulbDecision (uBulbDecision,
+//     SCA.SharedUI, mit Tests): zwei Stufen - billig die Funde der Zeile
+//     (hoechstens einmal je Sekunde neu), teuer die Anbieter, erst wenn der
+//     Caret BULB_SETTLE_MS ruht und je Schluessel Datei+Zeile+Zeilentext+
+//     Funde nur einmal. Diese Unit liefert der Entscheidung nur die Uhr,
+//     die Funde und die Antwort der Anbieter. Nach einer ausgefuehrten
+//     Aktion werden alle Entscheidungen verworfen, und das Menue selbst
+//     fragt beim Oeffnen frisch und korrigiert die Antwort.
+//   * Ohne angemeldeten Anbieter tut die Birne nichts: Schedule und
+//     UpdateEditor steigen vor jeder ToolsAPI-Beruehrung aus, der Takt
+//     blendet sichtbare Birnen einmal aus (Review 2026-10-14).
 //   * Editoren werden als HWND gemerkt; vor jeder Benutzung IsWindow und
 //     FindControl. FreeNotification meldet geschlossene Editorfenster.
 //   * Birnen ohne Owner und ohne Name; beim Abmelden alle freigeben, bevor
@@ -52,7 +54,10 @@ unit uIDEFindingBulb;
 //
 // Anmeldung als UI-Element 'EditorBulb' (SortKey 35, nach dem
 // LineHighlighter, dessen Notifier die Ereignisse liefert), Not-Aus
-// [UI] Element.EditorBulb=0.
+// [UI] Element.EditorBulb=0. Abgebaut wird ueber dieselbe Registry
+// (uIDEExpert.TeardownUiElements -> UnregisterFindingBulb), rueckwaerts
+// VOR dem LineHighlighter; die finalization unten ist nur das Netz fuer
+// den Fall, dass die Registry nie lief.
 
 interface
 
@@ -67,7 +72,16 @@ type
   TBulbFindingsAt = reference to function(const AFile: string;
     ALine: Integer): TArray<TLeakFinding>;
 
+// Baut die Birne auf (Anmelde-Seite des UI-Elements 'EditorBulb'): legt
+// den Manager mit Hilfsfenster und Caret-Takt an und merkt sich die
+// Fundquelle. Idempotent - ein zweiter Aufruf aendert nichts (auch nicht
+// die Quelle). Braucht keinen IDE-Dienst; die Ereignisse kommen vom
+// Editor-Notifier des LineHighlighters (FindingBulbEditorChanged).
 procedure RegisterFindingBulb(const AFindingsAt: TBulbFindingsAt);
+// Baut die Birne ab (Abbau-Seite des Elements, aus TeardownUiElements):
+// Takt und Hilfsfenster weg, alle Birnen freigegeben, solange das Paket
+// noch geladen ist. Idempotent; danach ist FindingBulbEditorChanged ein
+// No-op.
 procedure UnregisterFindingBulb;
 
 // Aus dem Editor-Notifier (EndPaint, EditorScrolled, EditorResized,
@@ -76,7 +90,7 @@ procedure FindingBulbEditorChanged(const AEditor: TWinControl);
 
 implementation
 
-// noinspection-file EmptyExcept, ExceptionTooGeneral
+// noinspection-file ExceptionTooGeneral
 // Im IDE-Prozess darf keine Ausnahme aus Hilfsfenster, Timer oder
 // Freigabe in den Editor entweichen - AUSSER einem erschoepften Stapel und
 // EAbort: die gehen weiter zu Application.HandleException (uCrashDiag).
@@ -87,33 +101,20 @@ uses
   ToolsAPI, ToolsAPI.Editor,
   uCrashDiag,             // EStackExhausted - nie verschlucken
   uFindingActions,        // ProviderCount, TFindingAction
-  uFindingActionMenu,     // das eine Menue-Modell (Stufe C)
+  uFindingActionMenu,     // das eine Menue-Modell (Stufe C), FindingIdentityKey
   uIDEFindingActionMenu,  // Modell -> TMenuItems
+  uIDEEditorIntegration,  // ViewFileAndLine - eine Fassung mit dem Kontextmenue
   uLocalization,
+  uBulbDecision,          // ob die Birne erscheint (getestet)
   uEditorBulbGeometry, uEditorBulbButton;
 
 const
   WM_SCA_BULB_UPDATE  = WM_APP + 212;
   TIMER_CARET         = 1;     // Caret-Zeile nachfuehren (Tastatur loest kein Paint aus)
   CARET_POLL_MS       = 250;
-  FINDINGS_RECHECK_MS = 1000;  // ein neuer Scan zieht die Birne spaetestens so nach
-  SETTLE_MS           = 400;   // so lange ruht der Caret, bevor die Anbieter gefragt werden
-  KEY_SEP             = #1;
-  MAX_VISIBLE_SCAN    = 600;   // Obergrenze fuer TopLine..BottomLine
+  SIG_SEP             = #1;    // Trenner im Fingerabdruck der Funde einer Zeile
 
 type
-  // Was die Birne zuletzt fuer einen Editor entschieden hat (WantsBulb).
-  TBulbLineState = record
-    FileName  : string;
-    Line      : Integer;
-    FindSig   : string;    // Fingerabdruck der Funde der Zeile; '' = keine oder kein Anbieter
-    FindStamp : UInt64;    // GetTickCount64, als FindSig bestimmt wurde
-    Key       : string;    // Datei, Zeile, Zeilentext, FindSig - wofuer HasFixes gilt
-    KeySince  : UInt64;    // seit wann der Caret auf Key ruht
-    Checked   : Boolean;   // die Anbieter wurden fuer Key gefragt
-    HasFixes  : Boolean;   // ... und boten eine verfuegbare Hilfe an
-  end;
-
   TFindingBulbManager = class(TComponent)
   private
     FFindingsAt : TBulbFindingsAt;
@@ -122,11 +123,12 @@ type
     FDestroying : Boolean;
     FEditors    : TDictionary<HWND, TWinControl>;
     FBulbs      : TDictionary<HWND, TSCABulbButton>;
-    FLineState  : TDictionary<HWND, TBulbLineState>;
+    FDecisions  : TDictionary<HWND, TBulbDecision>;
     FPending    : TList<HWND>;
-    // Birnen eines Editors, der ein neues Handle bekam (ForgetKey aus
-    // Schedule): ausgeblendet, freigegeben erst in ProcessPending - nicht im
-    // Paint-Rueckruf des Editors, aber solange das Paket geladen ist.
+    // Birnen eines Editors, der ein neues Handle bekam (RetireBulb aus
+    // Schedule): ausgeblendet und freigegeben erst in ProcessPending aus der
+    // Nachrichtenschleife - nicht im Paint-Rueckruf des Editors, aber
+    // solange das Paket geladen ist.
     FDoomed     : TList<TSCABulbButton>;
     FMenu       : TPopupMenu;
     FActions    : TArray<TFindingAction>;   // die des zuletzt geoeffneten Menues
@@ -137,10 +139,14 @@ type
     procedure UpdateEditor(AEditorWnd: HWND);
     procedure HideBulb(AEditorWnd: HWND);
     procedure HideAllBulbs;
-    // Alles zu AKey vergessen; ADisposeBulb: die Birne dazu ausblenden und
-    // zum Freigeben vormerken (FDoomed) - sonst stirbt sie mit dem Editor.
-    procedure ForgetKey(AKey: HWND; ADisposeBulb: Boolean);
-    procedure FreeDoomed;
+    // Alles zu AKey vergessen; die Birne dazu bleibt, wo sie ist (sie
+    // stirbt mit ihrem Editor).
+    procedure ForgetKey(AKey: HWND);
+    // Wie ForgetKey, aber die Birne dazu zum Ausblenden und Freigeben
+    // vormerken (FDoomed) - fuer einen Editor, der unter einem anderen
+    // Handle weiterlebt. Ausgeblendet und freigegeben wird in
+    // ProcessPending.
+    procedure RetireBulb(AKey: HWND);
     function EditorOf(AEditorWnd: HWND): TWinControl;
     function BulbFor(AEditorWnd: HWND; AEditor: TWinControl): TSCABulbButton;
     function CaretOf(AEditor: TWinControl; out AFile: string;
@@ -181,7 +187,7 @@ begin
   FFindingsAt := AFindingsAt;
   FEditors    := TDictionary<HWND, TWinControl>.Create;
   FBulbs      := TDictionary<HWND, TSCABulbButton>.Create;
-  FLineState  := TDictionary<HWND, TBulbLineState>.Create;
+  FDecisions  := TDictionary<HWND, TBulbDecision>.Create;
   FPending    := TList<HWND>.Create;
   FDoomed     := TList<TSCABulbButton>.Create;
   FMenu       := TPopupMenu.Create(nil);
@@ -203,12 +209,19 @@ begin
     FWnd := 0;
   end;
   // 2) Birnen frei, solange das Paket noch geladen ist - auch die
-  //    vorgemerkten eines umgezogenen Editors
+  //    vorgemerkten eines umgezogenen Editors. Jede einzeln geschuetzt:
+  //    wirft das Freigeben einer Birne (ihr Editorfenster ist im Abbau
+  //    der IDE schon halb zerlegt), muessen die uebrigen trotzdem frei
+  //    werden - ihre VMT liegt in diesem Paket.
   Bulbs := FBulbs.Values.ToArray + FDoomed.ToArray;
   for B in Bulbs do
   try
     B.Free;
   except
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    on E: Exception do
+      BulbLog('Destroy: bulb ' + E.Message);
   end;
   // Die Editoren meldet TComponent.Destroy (inherited) ueber FFreeNotifies
   // ab - genau die lebenden. Eine eigene Schleife ueber FEditors riefe
@@ -218,7 +231,7 @@ begin
   FreeAndNil(FMenu);
   FreeAndNil(FPending);
   FreeAndNil(FDoomed);
-  FreeAndNil(FLineState);
+  FreeAndNil(FDecisions);
   FreeAndNil(FBulbs);
   FreeAndNil(FEditors);
   FFindingsAt := nil;
@@ -252,65 +265,68 @@ begin
     if Ed.Value = AComponent then
       Keys := Keys + [Ed.Key];
   for Key in Keys do
-    ForgetKey(Key, False);
+    ForgetKey(Key);
 end;
 
-procedure TFindingBulbManager.ForgetKey(AKey: HWND; ADisposeBulb: Boolean);
-var
-  B : TSCABulbButton;
+procedure TFindingBulbManager.ForgetKey(AKey: HWND);
 begin
-  if FBulbs.TryGetValue(AKey, B) then
-  begin
-    FBulbs.Remove(AKey);
-    if ADisposeBulb then
-    begin
-      B.Visible := False;
-      FDoomed.Add(B);
-      if not FPosted then
-        FPosted := PostMessage(FWnd, WM_SCA_BULB_UPDATE, 0, 0);
-    end;
-  end;
+  FBulbs.Remove(AKey);
   FEditors.Remove(AKey);
-  FLineState.Remove(AKey);
+  FDecisions.Remove(AKey);
   FPending.Remove(AKey);
 end;
 
-procedure TFindingBulbManager.FreeDoomed;
+procedure TFindingBulbManager.RetireBulb(AKey: HWND);
 var
   B : TSCABulbButton;
 begin
-  while FDoomed.Count > 0 do
+  // Nur vormerken - Schedule ruft dies aus dem Paint-Rueckruf, und dort
+  // darf kein Visible gesetzt werden (REGELN im Kopf).
+  if FBulbs.TryGetValue(AKey, B) then
   begin
-    B := FDoomed[FDoomed.Count - 1];
-    FDoomed.Delete(FDoomed.Count - 1);
-    B.Free;
+    FDoomed.Add(B);
+    if not FPosted then
+      FPosted := PostMessage(FWnd, WM_SCA_BULB_UPDATE, 0, 0);
   end;
+  ForgetKey(AKey);
+end;
+
+// Handles in AEditors, deren Eintrag nicht mehr zu AEditor/AHandle passt:
+// ein neues Fensterhandle desselben Editors (Theme-Wechsel, An-/Abdocken)
+// oder ein wiederverwendetes Handle eines anderen Editors (Review reDelphiX
+// nach Bereichen 2026-10-10, Minor 21) - sonst bliebe eine verwaiste Birne
+// stehen.
+function StaleEditorKeys(AEditors: TDictionary<HWND, TWinControl>;
+  const AEditor: TWinControl; AHandle: HWND): TArray<HWND>;
+var
+  Ed : TPair<HWND, TWinControl>;
+begin
+  Result := nil;
+  for Ed in AEditors do
+    if ((Ed.Value = AEditor) and (Ed.Key <> AHandle))
+       or ((Ed.Key = AHandle) and (Ed.Value <> AEditor)) then
+      Result := Result + [Ed.Key];
 end;
 
 { ---- Ereignisse aus dem Editor: nur vormerken ---- }
 
 procedure TFindingBulbManager.Schedule(const AEditor: TWinControl);
 var
-  H     : HWND;
-  Ed    : TPair<HWND, TWinControl>;
-  Stale : TArray<HWND>;
-  Key   : HWND;
+  H   : HWND;
+  Key : HWND;
 begin
   if FDestroying or (FWnd = 0) or not Assigned(AEditor) then Exit;
+  // Ohne Anbieter gibt es keine Hilfe (Monolith: nie) - kein Vormerken,
+  // keine Runde je Paint (Review 2026-10-14). Sichtbare Birnen blendet
+  // der Takt aus.
+  if TFindingActions.ProviderCount = 0 then Exit;
   try
     if not AEditor.HandleAllocated then Exit;
     H := AEditor.Handle;
-    // Neues Fensterhandle desselben Editors (Theme-Wechsel, An-/Abdocken)
-    // oder ein wiederverwendetes Handle eines anderen: der alte Eintrag
-    // samt Birne zieht um bzw. raeumt (Review reDelphiX nach Bereichen
-    // 2026-10-10, Minor 21) - sonst bliebe eine verwaiste Birne stehen.
-    Stale := nil;
-    for Ed in FEditors do
-      if ((Ed.Value = AEditor) and (Ed.Key <> H))
-         or ((Ed.Key = H) and (Ed.Value <> AEditor)) then
-        Stale := Stale + [Ed.Key];
-    for Key in Stale do
-      ForgetKey(Key, True);
+    // Der alte Eintrag eines umgezogenen Editors samt Birne zieht um bzw.
+    // raeumt (StaleEditorKeys).
+    for Key in StaleEditorKeys(FEditors, AEditor, H) do
+      RetireBulb(Key);
     if not FEditors.ContainsKey(H) then
     begin
       FEditors.Add(H, AEditor);
@@ -365,9 +381,18 @@ procedure TFindingBulbManager.ProcessPending;
 var
   Items : TArray<HWND>;
   H     : HWND;
+  B     : TSCABulbButton;
 begin
   if FDestroying then Exit;
-  FreeDoomed;
+  // Vorgemerkte Birnen umgezogener Editoren: hier, aus der
+  // Nachrichtenschleife, ausblenden und freigeben.
+  while FDoomed.Count > 0 do
+  begin
+    B := FDoomed[FDoomed.Count - 1];
+    FDoomed.Delete(FDoomed.Count - 1);
+    B.Visible := False;
+    B.Free;
+  end;
   Items := FPending.ToArray;
   FPending.Clear;
   for H in Items do
@@ -376,14 +401,14 @@ end;
 
 // Tastatur bewegt den Caret ohne Paint-Ereignis, und ein neuer Scan
 // aendert die Funde ohne Caret-Bewegung: oberen Editor nachfuehren, wenn
-// die Zeile wechselte oder die letzte Entscheidung zu alt ist.
+// die Entscheidung es verlangt (TBulbDecision.NeedsRevisit).
 procedure TFindingBulbManager.PollCaret;
 var
   Svc      : INTACodeEditorServices;
   Ed       : TWinControl;
   FileName : string;
   Line     : Integer;
-  St       : TBulbLineState;
+  D        : TBulbDecision;
 begin
   if FDestroying then Exit;
   try
@@ -405,12 +430,9 @@ begin
       Schedule(Ed);   // die Birne einer verlassenen Zeile muss weg
       Exit;
     end;
-    // Neu bewerten: andere Zeile, alte Fund-Antwort, oder eine Anbieter-
-    // Frage wartet darauf, dass der Caret lange genug ruht.
-    if not FLineState.TryGetValue(Ed.Handle, St) or (St.Line <> Line) or
-       not SameText(St.FileName, FileName) or
-       (GetTickCount64 - St.FindStamp >= FINDINGS_RECHECK_MS) or
-       ((St.Key <> '') and not St.Checked) then
+    if not FDecisions.TryGetValue(Ed.Handle, D) then
+      D.Reset;
+    if D.NeedsRevisit(FileName, Line, GetTickCount64) then
       Schedule(Ed);
   except
     on EStackExhausted do raise;
@@ -433,23 +455,23 @@ end;
 
 function TFindingBulbManager.CaretOf(AEditor: TWinControl; out AFile: string;
   out ALine: Integer): Boolean;
+// Die Ansicht DIESES Editors (nicht TopView: die Birne haengt an jedem
+// Editor, auch in der geteilten Ansicht); Datei und Zeile daraus liest
+// dieselbe Funktion wie das Kontextmenue.
 var
-  Svc  : INTACodeEditorServices;
-  View : IOTAEditView;
+  Svc : INTACodeEditorServices;
 begin
-  AFile := '';
-  ALine := -1;
+  AFile  := '';
+  ALine  := -1;
   Result := False;
   if not Supports(BorlandIDEServices, INTACodeEditorServices, Svc) then Exit;
-  View := Svc.GetViewForEditor(AEditor);
-  if not Assigned(View) or not Assigned(View.Buffer) then Exit;
-  AFile := View.Buffer.FileName;
-  ALine := View.CursorPos.Line;
-  Result := (AFile <> '') and (ALine >= 1);
+  Result := TIDEEditor.ViewFileAndLine(Svc.GetViewForEditor(AEditor), AFile,
+    ALine);
 end;
 
 // Fingerabdruck der Funde einer Zeile: aendert ein neuer Scan sie, wird
-// die Anbieter-Antwort neu eingeholt.
+// die Anbieter-Antwort neu eingeholt. Je Fund die Identitaet, mit der auch
+// das Menue Doppelte erkennt (FindingIdentityKey).
 function FindingsSignature(const AFound: TArray<TLeakFinding>): string;
 var
   F  : TLeakFinding;
@@ -459,8 +481,7 @@ begin
   try
     for F in AFound do
       if Assigned(F) then
-        SB.Append(Ord(F.Kind)).Append(':').Append(F.LineInt).Append(':')
-          .Append(F.MissingVar).Append(KEY_SEP);
+        SB.Append(FindingIdentityKey(F)).Append(SIG_SEP);
     Result := SB.ToString;
   finally
     SB.Free;
@@ -469,67 +490,39 @@ end;
 
 function TFindingBulbManager.WantsBulb(AEditorWnd: HWND; const AFile: string;
   ALine: Integer; const ALineText: string): Boolean;
+// Treiber der Entscheidung (uBulbDecision): liefert Uhr, Funde und die
+// Antwort der Anbieter; die Regeln stehen dort.
 var
-  St       : TBulbLineState;
+  D        : TBulbDecision;
   NowMs    : UInt64;
   Found    : TArray<TLeakFinding>;
   FoundNow : Boolean;
-  Prefix   : string;
-  Key      : string;
 begin
   NowMs := GetTickCount64;
-  if not FLineState.TryGetValue(AEditorWnd, St) then
-    St := Default(TBulbLineState);
-
-  // Stufe 1, billig: Fund auf der Zeile und ein Anbieter da.
-  Found := nil;
+  if not FDecisions.TryGetValue(AEditorWnd, D) then
+    D.Reset;
+  Found    := nil;
   FoundNow := False;
-  if (St.Line <> ALine) or not SameText(St.FileName, AFile) or
-     (NowMs - St.FindStamp >= FINDINGS_RECHECK_MS) then
+  if D.WantsFindings(AFile, ALine, NowMs) then
   begin
     FoundNow := True;
-    if (TFindingActions.ProviderCount > 0) and Assigned(FFindingsAt) then
+    if Assigned(FFindingsAt) then
       Found := FFindingsAt(AFile, ALine);
-    St.FileName  := AFile;
-    St.Line      := ALine;
-    St.FindSig   := FindingsSignature(Found);
-    St.FindStamp := NowMs;
+    D.NoteFindings(AFile, ALine, FindingsSignature(Found), NowMs);
   end;
-  if St.FindSig = '' then
+  if D.WantsProviderCheck(ALineText, NowMs) then
   begin
-    St.Key := '';
-    FLineState.AddOrSetValue(AEditorWnd, St);
-    Exit(False);
-  end;
-
-  // Stufe 2, teuer: bietet ein Anbieter eine verfuegbare Hilfe an?
-  Prefix := AFile + KEY_SEP + IntToStr(ALine) + KEY_SEP;
-  Key    := Prefix + ALineText + KEY_SEP + St.FindSig;
-  if Key <> St.Key then
-  begin
-    // Dieselbe Zeile, nur Text oder Funde anders (Tippen): die alte
-    // Antwort gilt vorlaeufig weiter. Eine andere Zeile beginnt ohne Birne.
-    St.HasFixes := St.Checked and St.HasFixes and
-      (Copy(St.Key, 1, Length(Prefix)) = Prefix);
-    St.Key      := Key;
-    St.KeySince := NowMs;
-    St.Checked  := False;
-  end;
-  if not St.Checked and (NowMs - St.KeySince >= SETTLE_MS) then
-  begin
-    // ERST als gefragt merken, dann fragen: wirft ein Anbieter (etwa ein
-    // Stapelueberlauf im Parse), fragt PollCaret dieselbe Zeile sonst alle
-    // 250 ms erneut - ohne Schutzseite endet der zweite Ueberlauf hart.
-    St.Checked  := True;
-    St.HasFixes := False;
-    FLineState.AddOrSetValue(AEditorWnd, St);
+    // ERST als gefragt speichern, dann fragen: wirft ein Anbieter (etwa
+    // ein Stapelueberlauf im Parse), fragte PollCaret dieselbe Zeile sonst
+    // alle 250 ms erneut - ohne Schutzseite endet der zweite Ueberlauf hart.
+    FDecisions.AddOrSetValue(AEditorWnd, D);
     // Die Funde aus Stufe 1 dieser Runde, sonst frisch (Minor 22).
     if not FoundNow and Assigned(FFindingsAt) then
       Found := FFindingsAt(AFile, ALine);
-    St.HasFixes := HasAvailableFixes(Found);
+    D.NoteProviderAnswer(HasAvailableFixes(Found));
   end;
-  FLineState.AddOrSetValue(AEditorWnd, St);
-  Result := St.HasFixes;
+  FDecisions.AddOrSetValue(AEditorWnd, D);
+  Result := D.ShowsBulb;
 end;
 
 function TFindingBulbManager.HasAvailableFixes(
@@ -549,11 +542,22 @@ end;
 function TFindingBulbManager.FindCaretRect(AEditor: TWinControl;
   ACaretLine: Integer; out ALineRect: TRect; out ACodeLeft: Integer;
   out ALineText: string): Boolean;
+// Lage der Caret-Zeile direkt ueber IsLogicalLineVisible und
+// LogicalLineState - nicht mehr ueber bis zu 600 LineState-Abfragen von
+// TopLine bis BottomLine (Review 2026-10-14). False, wenn die Zeile nicht
+// sichtbar ist (gescrollt oder gefaltet).
+//
+// State.Refresh VOR dem Lesen - und das ist zugleich die Antwort auf H6
+// der Caret-Synthese ("laesst INTACodeEditorState.Refresh malen?"): diese
+// Routine laeuft nach JEDEM EndPaint des Editors (Notifier -> Schedule ->
+// Nachricht -> UpdateEditor) und ruft Refresh ohne Schleife; malte Refresh,
+// folgte ein EndPaint, und die Birne liefe in einen Dauer-Repaint - in der
+// IDE gemessen: kein Blinken beim Scrollen (Nico 2026-10-08). Refresh
+// malt also nicht. uIDELineHighlighter.HitCacheKeyOf vermerkt dasselbe.
 var
   Svc   : INTACodeEditorServices;
   State : INTACodeEditorState;
   LS    : INTACodeEditorLineState;
-  V, Last : Integer;
 begin
   Result := False;
   ALineRect := Rect(0, 0, 0, 0);
@@ -564,21 +568,14 @@ begin
   if not Assigned(State) then Exit;
   State.Refresh;
   ACodeLeft := State.CodeLeftEdge;
-  Last := State.BottomLine;
-  if Last - State.TopLine > MAX_VISIBLE_SCAN then
-    Last := State.TopLine + MAX_VISIBLE_SCAN;
-  for V := State.TopLine to Last do
-  begin
-    LS := State.LineState[V];
-    if Assigned(LS) and (LS.LogicalLineNum = ACaretLine) then
-    begin
-      ALineRect := LS.WholeRect;
-      if ALineRect.Bottom <= ALineRect.Top then
-        ALineRect.Bottom := ALineRect.Top + State.CharHeight;
-      ALineText := LS.Text;
-      Exit(True);
-    end;
-  end;
+  if not State.IsLogicalLineVisible(ACaretLine) then Exit;
+  LS := State.LogicalLineState[ACaretLine];
+  if not Assigned(LS) or (LS.LogicalLineNum <> ACaretLine) then Exit;
+  ALineRect := LS.WholeRect;
+  if ALineRect.Bottom <= ALineRect.Top then
+    ALineRect.Bottom := ALineRect.Top + State.CharHeight;
+  ALineText := LS.Text;
+  Result := True;
 end;
 
 function TFindingBulbManager.BulbFor(AEditorWnd: HWND;
@@ -623,19 +620,34 @@ var
   Inp      : TEditorBulbInput;
   R        : TRect;
   PPI      : Integer;
+  D        : TBulbDecision;
 begin
   Ed := EditorOf(AEditorWnd);
-  if not Assigned(Ed) then
+  // Ohne Anbieter keine ToolsAPI-Beruehrung (Review 2026-10-14).
+  if not Assigned(Ed) or (TFindingActions.ProviderCount = 0) then
   begin
     HideBulb(AEditorWnd);
     Exit;
   end;
   try
-    // Erst die Lage (unsichtbare Zeile: nie die Anbieter fragen), dann
-    // die Entscheidung.
-    if not CaretOf(Ed, FileName, Line) or
-       not FindCaretRect(Ed, Line, LineRect, CodeLeft, LineText) or
-       not WantsBulb(AEditorWnd, FileName, Line, LineText) then
+    if not CaretOf(Ed, FileName, Line) then
+    begin
+      HideBulb(AEditorWnd);
+      Exit;
+    end;
+    // Erst die Lage, dann die Entscheidung: eine unsichtbare Zeile fragt
+    // nie die Anbieter, stempelt aber den Stand - sonst plante der Takt
+    // alle 250 ms neu, bis die Zeile wieder sichtbar ist.
+    if not FindCaretRect(Ed, Line, LineRect, CodeLeft, LineText) then
+    begin
+      if not FDecisions.TryGetValue(AEditorWnd, D) then
+        D.Reset;
+      D.NoteLineHidden(FileName, Line, GetTickCount64);
+      FDecisions.AddOrSetValue(AEditorWnd, D);
+      HideBulb(AEditorWnd);
+      Exit;
+    end;
+    if not WantsBulb(AEditorWnd, FileName, Line, LineText) then
     begin
       HideBulb(AEditorWnd);
       Exit;
@@ -685,7 +697,7 @@ var
   Line      : Integer;
   Model     : TFindingMenuModel;
   Item      : TMenuItem;
-  St        : TBulbLineState;
+  D         : TBulbDecision;
   i         : Integer;
 begin
   FMenu.Items.Clear;
@@ -707,11 +719,10 @@ begin
         BulbLog('finding action provider failed - ' + Model.Errors[i]);
       FActions := Model.Actions;
       FillPopupFromModel(FMenu, Model, ActionClick, 0, FMenu, nil);
-      if FLineState.TryGetValue(EditorWnd, St) then
+      if FDecisions.TryGetValue(EditorWnd, D) then
       begin
-        St.Checked  := True;
-        St.HasFixes := not Model.IsEmpty;
-        FLineState.AddOrSetValue(EditorWnd, St);
+        D.NoteProviderAnswer(not Model.IsEmpty);
+        FDecisions.AddOrSetValue(EditorWnd, D);
       end;
       if Model.IsEmpty then
         Schedule(Ed);
@@ -753,8 +764,8 @@ begin
         'Static Code Analyser', MB_OK or MB_ICONWARNING);
   end;
   // Die Aktion hat den Text geaendert (auch ausserhalb der Zeile, etwa die
-  // uses-Klausel): keine gemerkte Antwort gilt mehr.
-  FLineState.Clear;
+  // uses-Klausel): keine gemerkte Entscheidung gilt mehr.
+  FDecisions.Clear;
 end;
 
 { ---- Anmeldung ---- }
@@ -781,7 +792,18 @@ end;
 initialization
 
 finalization
-  // Sicherheitsnetz: regulaer baut die UI-Registry die Birne ab.
-  FreeAndNil(GBulbManager);
+  // NUR Sicherheitsnetz: regulaer baut die UI-Registry die Birne ab
+  // (uIDEExpert.TeardownUiElements -> UnregisterFindingBulb, vor dem
+  // LineHighlighter). Hierher kommt ein lebender Manager nur, wenn die
+  // Registry nie lief (die IDE entlaedt das Paket ohne Wizard-Destruktor).
+  // Dann ist das Freigeben das kleinere Uebel gegenueber dem Leck: die
+  // Birnen sind Kinder lebender Editoren, und ihre VMT liegt in diesem
+  // Paket - stehen sie, zeichnet der naechste Paint in entladenen Code.
+  if Assigned(GBulbManager) then
+  begin
+    BulbLog('finalization: manager still alive - the UI registry did not '
+      + 'tear it down');
+    FreeAndNil(GBulbManager);
+  end;
 
 end.

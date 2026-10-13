@@ -1910,6 +1910,9 @@ msgstr "Sonar Generic Issue Format (*.json)|*.json"
 msgid "Suppress: could not write file: %s"
 msgstr "Suppress: Datei nicht schreibbar: %s"
 
+msgid "Suppress: cannot place the marker: %s"
+msgstr "Suppress: Marker nicht platzierbar: %s"
+
 msgid "Quick-Fix: could not write file: %s"
 msgstr "Quick-Fix: Datei nicht schreibbar: %s"
 
