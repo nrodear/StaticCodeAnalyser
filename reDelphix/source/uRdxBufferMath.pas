@@ -71,10 +71,17 @@ function OffsetOf(AStarts: TList<Integer>; ALines: TStrings;
 function Utf8PrefixLength(const ALine: string; ACol: Integer): Integer;
 
 // True, wenn die Editor-Markierung Zeichen-Spalte ACol der Zeile ALine
-// erreicht: ACol liegt in 1..EDITOR_MAX_COLUMN, und die Anzeigespalte des
-// Byte-Praefixes (Praefix + 1, ohne Tabulatoren) ebenfalls. Tabulatoren
-// rechnet erst die IDE um (ConvertPos); die Pruefung haelt die Werte, die
-// reDelphix selbst in die SmallInt-Felder schreibt, im Bereich.
+// erreicht. Was reDelphix in die SmallInt-Felder schreibt, ist seit
+// ff8d7f2f die ZEICHEN-Spalte (uRdxEditor.DisplayPosOf: TOTACharPos.
+// CharIndex = ACol - 1, die Anzeigespalte rechnet die IDE per ConvertPos
+// aus - auch Tabulatoren); gefordert ist also ACol in 1..EDITOR_MAX_COLUMN.
+// Dazu prueft die Funktion weiter, dass auch der UTF-8-Byte-Praefix der
+// Zeile unter EDITOR_MAX_COLUMN bleibt: strenger als noetig (nur Zeilen mit
+// mehr als 16383 Nicht-ASCII-Zeichen VOR der Spalte fallen heraus, die
+// gibt es praktisch nicht), aber sicher - und uRdxEditor beschreibt die
+// Vorbedingung von SelectSpan genau so. Bewusst beibehalten (Review
+// Quick-Fix-Units 2026-10-14); wer die Byte-Schranke streicht, zieht die
+// Doku in uRdxEditor.DisplayPosOf und EditorColumn_MultiByteLimit mit.
 function EditorColumnFits(const ALine: string; ACol: Integer): Boolean;
 
 // Beide Enden von ASpan nach EditorColumnFits. False auch, wenn ein Ende

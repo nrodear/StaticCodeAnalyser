@@ -43,6 +43,10 @@ type
     // Gegen-Review: im with-Block kann der Operand ein Member sein.
     [Test] procedure Sca126_InWith_NoHelp;
     [Test] procedure Sca126_CatalogExample;
+    // Review Quick-Fix-Units 2026-10-14 (Blocker): ein Funktionstyp
+    // derselben Unit und ein Pfad auf eine Methode ohne Argumente.
+    [Test] procedure Sca126_ProcTypeOfOwnUnit_NoHelp;
+    [Test] procedure Sca126_PathOperands;
   end;
 
   // Stufe 2, Rest (2026-10-10): SCA074, SCA087, SCA139 - eine eigene
@@ -724,6 +728,59 @@ begin
   Assert.IsTrue(Pos('nil', Meta.BadExample) > 0, Meta.BadExample);
   Assert.AreEqual(InRoutine(Snip(Meta.GoodExample)),
     FixAll(InRoutine(Snip(Meta.BadExample)), fkNilComparison));
+end;
+
+const
+  // Wie UNIT_126, dazu ein Funktionstyp der Unit und ein Feld davon.
+  UNIT_126_FACTORY =
+    'unit t;'#13#10 +
+    'interface'#13#10 +
+    'uses System.Classes;'#13#10 +
+    'type'#13#10 +
+    '  TObjFactory = function: TObject;'#13#10 +
+    '  TFoo = class'#13#10 +
+    '    FMaker: TObjFactory;'#13#10 +
+    '    FList: TList;'#13#10 +
+    '    function Check: Boolean;'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'function TFoo.Check: Boolean;'#13#10 +
+    'begin'#13#10 +
+    '%s'#13#10 +
+    'end;'#13#10 +
+    'end.';
+
+procedure TTestRdxSimpleFixesDetector.Sca126_ProcTypeOfOwnUnit_NoHelp;
+begin
+  // 'FMaker = nil' ruft die Funktion auf (Delphi), 'not Assigned(FMaker)'
+  // pruefte den Zeiger - der Typname TObjFactory verraet das nicht, erst
+  // seine Deklaration in der Unit.
+  AssertNoHelp(Format(UNIT_126_FACTORY, [Join([
+    '  if FMaker = nil then',
+    '    Exit(False);',
+    '  Result := True;'])]), fkNilComparison, 'Prozedurtyp');
+end;
+
+procedure TTestRdxSimpleFixesDetector.Sca126_PathOperands;
+begin
+  // 'FList.First' ist eine Methode ohne Argumente: nicht als Feld
+  // bewiesen, keine Hilfe.
+  AssertNoHelp(Format(UNIT_126_FACTORY, [Join([
+    '  if FList.First = nil then',
+    '    Exit(False);',
+    '  Result := True;'])]), fkNilComparison, 'nicht als Feld bewiesen');
+  // 'P.Next' endet auf ein Feld der Unit (TNode.Next: TNode) - die Hilfe
+  // kommt; 'FItems[I]' vergleicht ein Ergebnis (uTestRdxNilFix prueft die
+  // Operanden-Regel selbst).
+  Assert.AreEqual(
+    Format(UNIT_126, [Join([
+      '  while Assigned(P.Next) do',
+      '    P := P.Next;',
+      '  Result := True;'])]),
+    FixAll(Format(UNIT_126, [Join([
+      '  while P.Next <> nil do',
+      '    P := P.Next;',
+      '  Result := True;'])]), fkNilComparison));
 end;
 
 { ---- SCA074 ---- }

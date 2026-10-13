@@ -26,8 +26,8 @@ unit uRdxSuppress;
 interface
 
 uses
-  System.SysUtils, System.Classes,
-  uRefactorInfo, uRdxBufferMath;
+  System.Classes,   // TStrings
+  uRdxBufferMath;   // TRdxEdit
 
 type
   TRdxSuppress = class
@@ -68,7 +68,9 @@ type
 implementation
 
 uses
-  uRdxCodeMap;   // TRdxCodeMap, NextToken: Code-Sicht mit Block-Kommentaren
+  System.SysUtils,
+  uRefactorInfo,   // TRefactorSpan.Make
+  uRdxCodeMap;     // TRdxCodeMap, NextToken: Code-Sicht mit Block-Kommentaren
 
 const
   TAG          = 'noinspection';
@@ -168,25 +170,28 @@ begin
       Word_ := Word_ + List[i];
 end;
 
-// Steht AKindName schon in der Artenliste des Markers?
+// Steht AKindName schon in der Artenliste des Markers? Die Liste wie
+// KindList (hinter dem Tag und seinem ':' - sonst hielte '// noinspection:A'
+// das 'noinspection:A' fuer ein Wort und A fuer nicht genannt; Review
+// Quick-Fix-Units 2026-10-14), getrennt an SEPARATORS wie der Core.
 function KindListed(const AText, AKindName: string): Boolean;
 var
-  Body  : string;
+  List  : string;
   Word_ : string;
   i     : Integer;
 begin
   Result := False;
-  Body := CommentBody(AText);
+  List := KindList(CommentBody(AText));
   Word_ := '';
-  for i := 1 to Length(Body) + 1 do
-    if (i > Length(Body)) or CharInSet(Body[i], SEPARATORS) then
+  for i := 1 to Length(List) + 1 do
+    if (i > Length(List)) or CharInSet(List[i], SEPARATORS) then
     begin
       if SameText(Word_, AKindName) then
         Exit(True);
       Word_ := '';
     end
     else
-      Word_ := Word_ + Body[i];
+      Word_ := Word_ + List[i];
 end;
 
 // Marker-Zeile mit AKindName direkt hinter dem Tag (und einem ':').
@@ -293,12 +298,36 @@ begin
   Result := True;
 end;
 
+// Die Zeile des ';' der Kopfanweisung unit/program/library/package - das
+// erste Code-Token der Datei; ein 'Unit Name: X' oder 'Library General
+// Public License' im Lizenzkopf davor ist Kommentar und zaehlt nicht. ''
+// oder der Grund (auch, wenn hinter dem ';' ein Block-Kommentar beginnt:
+// die neue Zeile laege darin).
+function HeadLineReason(AMap: TRdxCodeMap; out AHead: Integer): string;
+var
+  Tok : TRdxToken;
+begin
+  Result := '';
+  AHead := 0;
+  Tok := NextToken(AMap, 1, 1);
+  if (Tok.Low <> 'unit') and (Tok.Low <> 'program')
+     and (Tok.Low <> 'library') and (Tok.Low <> 'package') then
+    Exit('keine unit-Zeile gefunden');
+  repeat
+    Tok := After(AMap, Tok);
+  until (Tok.Low = ';') or (Tok.Low = '');
+  if Tok.Low = '' then
+    Exit('keine unit-Zeile gefunden');
+  AHead := Tok.Line;
+  if AMap.StartsInside(AHead + 1) then
+    Result := 'hinter der unit-Zeile beginnt ein Block-Kommentar';
+end;
+
 class function TRdxSuppress.FileMarker(ALines: TStrings;
   const AKindName: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   Map  : TRdxCodeMap;
   i    : Integer;
-  Tok  : TRdxToken;
   Head : Integer;
 begin
   Result := False;
@@ -325,34 +354,12 @@ begin
         AEdit := WholeLine(ALines, i, WithKind(ALines[i - 1], TAG_FILEWIDE, AKindName));
         Exit(True);
       end;
-    // Sonst hinter die Kopfanweisung: das erste Code-Token der Datei - ein
-    // 'Unit Name: X' oder 'Library General Public License' im Lizenzkopf
-    // davor ist Kommentar und zaehlt nicht.
-    Tok := NextToken(Map, 1, 1);
-    if (Tok.Low <> 'unit') and (Tok.Low <> 'program')
-       and (Tok.Low <> 'library') and (Tok.Low <> 'package') then
-    begin
-      AReason := 'keine unit-Zeile gefunden';
-      Exit;
-    end;
-    repeat
-      Tok := After(Map, Tok);
-    until (Tok.Low = ';') or (Tok.Low = '');
-    if Tok.Low = '' then
-    begin
-      AReason := 'keine unit-Zeile gefunden';
-      Exit;
-    end;
-    Head := Tok.Line;
-    // Beginnt hinter dem ';' ein Block-Kommentar, laege die neue Zeile darin.
-    if Map.StartsInside(Head + 1) then
-    begin
-      AReason := 'hinter der unit-Zeile beginnt ein Block-Kommentar';
-      Exit;
-    end;
+    // Sonst hinter die Kopfanweisung.
+    AReason := HeadLineReason(Map, Head);
   finally
     Map.Free;
   end;
+  if AReason <> '' then Exit;
   AEdit := WholeLine(ALines, Head,
     ALines[Head - 1] + #10 + '// ' + TAG_FILEWIDE + ' ' + AKindName);
   Result := True;
@@ -375,14 +382,57 @@ begin
   end;
 end;
 
+// Nur ein Marker mit genau einer Art ist sicher wirkungslos: SCA165 kommt
+// auch, wenn nur die im Scan-Profil aktiven Arten eines Mehrarten-Markers
+// nichts unterdrueckt haben. AKinds = der Kommentartext hinter '//'. ''
+// oder der Grund.
+function KindsReason(const AKinds: string): string;
+begin
+  Result := '';
+  if IsWildcard(AKinds) then
+    Exit(R_WILDCARD);
+  case KindCount(AKinds) of
+    0: Result := R_NO_KIND;
+    1: ;
+  else
+    Result := R_MULTI_KIND;
+  end;
+end;
+
+// Eine reine Kommentarzeile AMarkerLine (Text AText) ganz entfernen, samt
+// Zeilenende. Letzte Zeile: das Zeilenende DAVOR mitnehmen - ein Bereich
+// darf nicht HINTER dem letzten Zeichen beginnen (SpanFits), darum am
+// letzten Zeichen der Vorzeile verankert, das stehen bleibt.
+function WholeLineRemoval(ALines: TStrings; AMarkerLine: Integer;
+  const AText: string): TRdxEdit;
+var
+  Prev : string;
+begin
+  Result := Default(TRdxEdit);
+  if AMarkerLine < ALines.Count then
+  begin
+    Result.Span := TRefactorSpan.Make(SPAN_ROLE, AMarkerLine, 1,
+      AMarkerLine + 1, 1);
+    Result.Expected := AText + #10;
+  end
+  else if (AMarkerLine > 1) and (ALines[AMarkerLine - 2] <> '') then
+  begin
+    Prev := ALines[AMarkerLine - 2];
+    Result.Span := TRefactorSpan.Make(SPAN_ROLE, AMarkerLine - 1,
+      Length(Prev), AMarkerLine, Length(AText) + 1);
+    Result.Expected := Prev[Length(Prev)] + #10 + AText;
+    Result.NewText  := Prev[Length(Prev)];
+  end
+  else
+    Result := WholeLine(ALines, AMarkerLine, '');
+end;
+
 class function TRdxSuppress.RemoveMarker(ALines: TStrings; AMarkerLine: Integer;
   out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   Text  : string;
   Col   : Integer;
   Start : Integer;
-  Prev  : string;
-  Kinds : string;
 begin
   Result := False;
   AEdit  := Default(TRdxEdit);
@@ -399,46 +449,12 @@ begin
     AReason := 'kein Marker in der Zeile';
     Exit;
   end;
-  // Nur ein Marker mit genau einer Art ist sicher wirkungslos: SCA165
-  // kommt auch, wenn nur die im Scan-Profil aktiven Arten eines
-  // Mehrarten-Markers nichts unterdrueckt haben.
-  Kinds := Copy(Text, Col + 2, MaxInt);
-  if IsWildcard(Kinds) then
-  begin
-    AReason := R_WILDCARD;
-    Exit;
-  end;
-  case KindCount(Kinds) of
-    0: begin AReason := R_NO_KIND; Exit; end;
-    1: ;
-  else
-    AReason := R_MULTI_KIND;
-    Exit;
-  end;
+  AReason := KindsReason(Copy(Text, Col + 2, MaxInt));
+  if AReason <> '' then Exit;
   if Trim(Copy(Text, 1, Col - 1)) = '' then
   begin
     // Reine Kommentarzeile: die ganze Zeile samt Zeilenende.
-    if AMarkerLine < ALines.Count then
-    begin
-      AEdit.Span := TRefactorSpan.Make(SPAN_ROLE, AMarkerLine, 1,
-        AMarkerLine + 1, 1);
-      AEdit.Expected := Text + #10;
-    end
-    else if (AMarkerLine > 1) and (ALines[AMarkerLine - 2] <> '') then
-    begin
-      // Letzte Zeile: das Zeilenende davor mitnehmen. Ein Bereich darf
-      // nicht HINTER dem letzten Zeichen beginnen (SpanFits) - darum am
-      // letzten Zeichen der Vorzeile verankert, das stehen bleibt.
-      Prev := ALines[AMarkerLine - 2];
-      AEdit.Span := TRefactorSpan.Make(SPAN_ROLE, AMarkerLine - 1,
-        Length(Prev), AMarkerLine, Length(Text) + 1);
-      AEdit.Expected := Prev[Length(Prev)] + #10 + Text;
-      AEdit.NewText  := Prev[Length(Prev)];
-      Exit(True);
-    end
-    else
-      AEdit := WholeLine(ALines, AMarkerLine, '');
-    AEdit.NewText := '';
+    AEdit := WholeLineRemoval(ALines, AMarkerLine, Text);
     Exit(True);
   end;
   // Kommentar hinter Code: nur der Kommentar samt Leerraum davor.

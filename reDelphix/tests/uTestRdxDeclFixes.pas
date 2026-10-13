@@ -314,6 +314,15 @@ begin
   Assert.AreEqual('', Fix(dkDoc, InClass(['    FCount: Integer;']), 6,
     DocMsg('FCount'), R));
   Assert.IsTrue(Pos('verschoben', R) > 0, R);
+  // Ein Kommentar VOR dem Kopf auf seiner Zeile kaeme sonst in jede
+  // Geruestzeile (Review Quick-Fix-Units 2026-10-14).
+  Assert.AreEqual('', Fix(dkDoc, InClass(['    { alt } procedure Run;']), 6,
+    DocMsg('Run'), R));
+  Assert.IsTrue(Pos('vor dem Kopf', R) > 0, R);
+  Assert.AreEqual(InClass(['    /// <summary></summary>',
+      '    procedure Run; { alt }']),
+    Fix(dkDoc, InClass(['    procedure Run; { alt }']), 6, DocMsg('Run'), R),
+    'hinter dem Kopf stoert er nicht: ' + R);
   // XMLDoc ueber den Attributen (auch mit Leerzeile dazwischen) sieht der
   // Detektor nicht - kein zweiter summary-Block.
   Assert.AreEqual('', Fix(dkDoc, InClass(['    /// <summary>Lauf</summary>',
@@ -444,6 +453,23 @@ begin
   Assert.AreEqual(DIRECTIVE_REINTRODUCE,
     TRdxDeclFixes.DirectiveFor(HidesMsg('X')));
   Assert.AreEqual('', TRdxDeclFixes.DirectiveFor('Method TDerived.X is odd'));
+  // 'override' neben 'overload': hinter das overload (Reihenfolge der
+  // Sprachreferenz: overload vor der Bindung; Review Quick-Fix-Units
+  // 2026-10-14), vor deprecated/stdcall dagegen direkt hinter den Kopf.
+  Assert.AreEqual(Hierarchy(['    procedure DoWork; overload; virtual;'],
+      DERIVED, ['    procedure DoWork; overload; override; // x']),
+    Fix(dkDirective, Hierarchy(['    procedure DoWork; overload; virtual;'],
+      DERIVED, ['    procedure DoWork; overload; // x']), 10,
+      ShadowMsg('DoWork'), R), R);
+  Assert.AreEqual(Hierarchy(['    procedure DoWork; virtual;'], DERIVED,
+      ['    procedure DoWork; override; deprecated;']),
+    Fix(dkDirective, Hierarchy(['    procedure DoWork; virtual;'], DERIVED,
+      ['    procedure DoWork; deprecated;']), 10, ShadowMsg('DoWork'), R), R);
+  Assert.AreEqual(Hierarchy(['    procedure DoWork; overload; stdcall; virtual;'],
+      DERIVED, ['    procedure DoWork; overload; override; stdcall;']),
+    Fix(dkDirective, Hierarchy(['    procedure DoWork; overload; stdcall; virtual;'],
+      DERIVED, ['    procedure DoWork; overload; stdcall;']), 10,
+      ShadowMsg('DoWork'), R), R);
 end;
 
 procedure TTestRdxDeclFixes.Sca149_Refusals;

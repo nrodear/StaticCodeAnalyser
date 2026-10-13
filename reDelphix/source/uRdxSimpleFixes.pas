@@ -19,12 +19,21 @@ unit uRdxSimpleFixes;
 // bewussten Unterschieden: die nil-Zeile wird mit entfernt (dort blieb sie
 // stehen), und die Stelle wird auf der Code-Sicht verankert (dort konnte
 // ein nicht verankerter Ausdruck 'X.Free;' in einem Kommentar umschreiben).
+//
+// ENTSCHEID SCA085/SCA139 (Review Quick-Fix-Units 2026-10-14): FreeAndNil(X)
+// setzt X auf nil, BEVOR der Destruktor laeuft - 'X.Free; X := nil;' erst
+// danach. Wirft der Destruktor, ist X danach nil statt haengend, und bei
+// SCA139 kommt ein nil-Schreibzugriff hinzu, den es vorher nicht gab. Das
+// ist KEIN ChangesBehavior-Fall: FreeAndNil ist genau die Form, die der
+// Detektor verlangt (sein 'good'-Beispiel), und der Unterschied ist ein
+// Gewinn (kein haengender Zeiger nach einer Exception im Destruktor). Der
+// Nutzer erfaehrt ihn trotzdem: der Hint der Hilfe (uRdxRecipeRunner,
+// R_FREENIL_HINT) nennt die Reihenfolge.
 
 interface
 
 uses
-  System.SysUtils, System.Classes,
-  uRefactorInfo, uRdxBufferMath, uRdxCodeMap;
+  uRdxBufferMath, uRdxCodeMap;
 
 type
   // Wie ein SCA126-Anker endet: Bedingung (if/while/case bis then/do/of)
@@ -77,6 +86,8 @@ type
     // SCA085: 'X.Free;' (Zeile ALine) + 'X := nil;' (naechste Zeile) ->
     // 'FreeAndNil(X);', die nil-Zeile entfaellt. AName = X wie im Puffer.
     // Typ und uses prueft der Aufrufer (braucht den Quellstellen-Dienst).
+    // FreeAndNil setzt nil VOR dem Destruktor (Entscheid im Kopf der Unit:
+    // gewollt, kein ChangesBehavior).
     class function FreeAndNilFix(AMap: TRdxCodeMap; ALine: Integer;
       out AEdits: TArray<TRdxEdit>; out AName: string;
       out AReason: string): Boolean; static;
@@ -125,18 +136,37 @@ type
     // im Code der Zeile, X ein blosser Bezeichner (kein Pfad davor), 'Free'
     // ohne Klammern. Anders als SCA085 darf die Anweisung hinter
     // then/else/do stehen: ersetzt wird nur der Ausdruck, die Bedingung
-    // bleibt. Variable und uses prueft der Aufrufer.
+    // bleibt. Variable und uses prueft der Aufrufer. FreeAndNil setzt nil
+    // VOR dem Destruktor und schreibt X neu (Entscheid im Kopf der Unit:
+    // gewollt, kein ChangesBehavior).
     class function FreeOnly(AMap: TRdxCodeMap; ALine: Integer;
       const AReceiver: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
-    // True, wenn die Datei ATypeName als record, object oder (disp)interface
-    // deklariert ('TFoo = packed record'): 'X.Free' ist dann eine eigene
-    // Methode, FreeAndNil(X) waere falsch. Ein Typ aus einer anderen Unit
-    // (auch ein Alias, ein Zeiger oder ein generischer Record 'TRec<T>')
-    // ist hier unbekannt (False) - in Delphi ab 10.4 faellt ein Record dort
-    // als Fehler E2010 auf (FreeAndNil nimmt const [ref] TObject).
+    // True, wenn die Datei ATypeName als record, object, interface oder
+    // dispinterface deklariert ('TFoo = packed record'): 'X.Free' ist dann
+    // eine eigene Methode (Record, object) bzw. ein Interface-Aufruf,
+    // FreeAndNil(X) waere falsch. VERTRAG WEITER ALS DER NAME: ein Interface
+    // ist kein Werttyp, zaehlt hier aber mit - gemeint ist "kein Klassentyp,
+    // auf dem FreeAndNil uebersetzt und das Richtige tut". Der Name bleibt,
+    // weil ihn uRdxRecipeRunner (SCA139) ruft; umbenennen in einer Charge,
+    // die den Laeufer anfasst. Ein Typ aus einer anderen Unit (auch ein
+    // Alias, ein Zeiger oder ein generischer Record 'TRec<T>') ist hier
+    // unbekannt (False) - in Delphi ab 10.4 faellt ein Record dort als
+    // Fehler E2010 auf (FreeAndNil nimmt const [ref] TObject).
     class function DeclaresValueType(AMap: TRdxCodeMap;
       const ATypeName: string): Boolean; static;
+    // Typ des Feldes AName, wenn die Datei es als Feld eines Klassen-,
+    // Record- oder Objektrumpfs deklariert ('FOwner: TObject;' auf
+    // Klammertiefe 0 - nicht Parameter, lokale Variable, Property, Methode
+    // oder Konstante): der Typname klein ('tobject'; 'System.TObject' ->
+    // 'tobject', 'TList<T>' -> 'tlist'), '^' fuer einen Zeigertyp, bei
+    // procedure/function/reference/array/set/string das Wort selbst. ''
+    // ohne Feld oder bei Feldern dieses Namens mit VERSCHIEDENEN Typen
+    // (mehrdeutig). Ein gleichnamiges Feld einer ANDEREN Klasse derselben
+    // Unit zaehlt mit - ohne Parser ist der Typ des Pfads davor unbekannt,
+    // der Name ist der Beweis (SCA126, Pfad-Operanden).
+    class function FieldTypeOf(AMap: TRdxCodeMap;
+      const AName: string): string; static;
     // Das erste Wort hinter 'ATypeName =' in der Datei ('record', 'class',
     // 'procedure', 'reference' ...; 'packed' uebersprungen), klein; '' wenn
     // die Datei den Typ nicht deklariert.
@@ -219,18 +249,38 @@ type
     class function CountNilComparisons(const AText: string): Integer; static;
 
     // Grund, warum 'Assigned(AOperand)' fuer diesen Operanden nicht sicher
-    // dasselbe ist wie der Vergleich mit nil; '' = kein Einwand. ATypeLow
-    // ist der deklarierte, nackte Typname (DeclaredTypeOf), '' wenn
-    // unbekannt. Gesperrt: Ereignis-/Getter-Namen (ein Methoden- oder
-    // Funktionszeiger: '= nil' ruft auf, Assigned() prueft den Zeiger),
-    // Prozedur-, String-, Variant-, Array- und Mengentypen.
+    // dasselbe ist wie der Vergleich mit nil - NUR NACH NAMEN; '' = kein
+    // Einwand. ATypeLow ist der deklarierte, nackte Typname
+    // (DeclaredTypeOf), '' wenn unbekannt. Gesperrt: Ereignis-/Getter-Namen
+    // (ein Methoden- oder Funktionszeiger: '= nil' ruft auf, Assigned()
+    // prueft den Zeiger), Prozedur-, String-, Variant-, Array- und
+    // Mengentypen nach ihrem Namen. Was die Datei dazu sagt (Prozedurtyp
+    // dieser Unit, Pfadende als Feld), prueft NilOperandReason.
     class function NilOperandRisk(const AOperand, ATypeLow: string): string; static;
+
+    // Die ganze Pruefung eines SCA126-Operanden, mit Blick in die Datei:
+    // NilOperandRisk, dazu (Review Quick-Fix-Units 2026-10-14)
+    //   * ein Prozedurtyp, den DIESE Unit deklariert ('TObjFactory =
+    //     function: TObject', auch ueber Alias; TRdxExprFixes.
+    //     ProceduralType) - '= nil' riefe die Funktion, Assigned() nicht;
+    //   * ein blosser Bezeichner OHNE Typ (ATypeLow = '') ist nicht
+    //     bewiesen - keine Hilfe;
+    //   * ein Pfad ('List.First', 'Obj.ClassParent') nur, wenn er auf ')',
+    //     ']' oder '^' endet (ein Ergebnis wird verglichen) oder sein
+    //     letztes Glied in der Datei als Feld bewiesen ist (FieldTypeOf,
+    //     dessen Typ geht durch dieselben Pruefungen). Sonst koennte das
+    //     Glied eine parameterlose Methode sein: '= nil' ruft sie auf,
+    //     Assigned() prueft den Methodenzeiger - die Logik kippte.
+    // '' = kein Einwand.
+    class function NilOperandReason(AMap: TRdxCodeMap;
+      const AOperand, ATypeLow: string): string; static;
   end;
 
 implementation
 
 uses
-  System.StrUtils;   // PosEx, EndsText, ContainsText
+  System.SysUtils, System.StrUtils,   // PosEx, EndsText, ContainsText
+  uRefactorInfo;
 
 const
   MAX_REGION_LINES = 25;
@@ -290,6 +340,12 @@ const
     'func', 'proc');
   PROC_TYPE_SUFFIXES: array[0..5] of string = ('event', 'proc', 'func',
     'callback', 'procedure', 'function');
+  // Klassen der RTL, deren Name auf eine Endung oben passt (System.SyncObjs:
+  // Synchronisationsobjekte, keine Ereignisse) - ohne die Ausnahme hiesse
+  // 'X = nil' bei einem TEvent "Prozedurtyp", ein falscher Grund (Review
+  // Quick-Fix-Units 2026-10-14).
+  NOT_PROC_TYPES: array[0..3] of string = ('tevent', 'tsimpleevent',
+    'tlightweightevent', 'tcountdownevent');
   // Arten, bei denen die Alias-Aufloesung stehen bleibt.
   TYPE_KIND_WORDS: array[0..9] of string = ('class', 'record', 'object',
     'interface', 'dispinterface', 'reference', 'set', 'array', 'string',
@@ -601,11 +657,13 @@ begin
     and CharInSet(AIdent[n + 1], ['A'..'Z']);
 end;
 
-// Nennt ATypeLow nach seinem Namen einen Prozedurtyp (PROC_TYPE_*)?
+// Nennt ATypeLow nach seinem Namen einen Prozedurtyp (PROC_TYPE_*)? Die
+// RTL-Klassen in NOT_PROC_TYPES nicht.
 function NamesProcType(const ATypeLow: string): Boolean;
 var
   T : string;
 begin
+  if InList(ATypeLow, NOT_PROC_TYPES) then Exit(False);
   Result := InList(ATypeLow, PROC_TYPE_NAMES);
   if not Result then
     for T in PROC_TYPE_SUFFIXES do
@@ -887,82 +945,90 @@ begin
     or (ALow = 'published') or (ALow = 'strict') or (ALow = 'end');
 end;
 
+// 'Empty `strict private` section ...' - der Abschnitt zwischen den
+// Backticks (uEmptyVisibilitySection.SektionsName), klein; '' ohne sie.
+function SectionNameOf(const AMessage: string): string;
+var
+  p, q : Integer;
+begin
+  Result := '';
+  p := Pos('`', AMessage);
+  q := 0;
+  if p > 0 then
+    q := Pos('`', AMessage, p + 1);
+  if q > 0 then
+    Result := LowerCase(Copy(AMessage, p + 1, q - p - 1));
+end;
+
+// Traegt die Zeile ALine (Text L) genau den Abschnitt AName - ohne
+// Kommentar, und 'strict' nicht von seinem Abschnitt getrennt? '' oder der
+// Grund.
+function SectionLineReason(AMap: TRdxCodeMap; ALine: Integer;
+  const AName, L: string): string;
+begin
+  if AMap.StartsInside(ALine) or AMap.HasNonCode(ALine, 1, Length(L)) then
+    Exit('Kommentar oder String auf der Zeile - er ginge beim Loeschen '
+      + 'verloren');
+  // 'strict' ohne 'private'/'protected' auf derselben Zeile: das Wort
+  // gehoert zum Abschnitt der naechsten Zeile - weg damit wuerde aus
+  // 'strict private' ein 'private'.
+  if AName = 'strict' then
+    Exit('strict steht allein - es gehoert zur naechsten Zeile');
+  // Umgekehrt: 'strict' allein auf der Zeile davor gehoert zu DIESEM
+  // Abschnitt - ohne ihn wuerde aus 'strict' + 'protected' ein 'strict
+  // protected'.
+  if PrevToken(AMap, ALine, 1).Low = 'strict' then
+    Exit('strict auf der Zeile davor gehoert zu diesem Abschnitt');
+  if LowerCase(CollapseBlanks(L)) <> AName then
+    Exit(Format('Zeile %d traegt nicht nur "%s" - Zeile verschoben? '
+      + 'Datei neu pruefen', [ALine, AName]));
+  Result := '';
+end;
+
+// Ist der Abschnitt hinter ALine leer? Nur, wenn als naechstes Code ein
+// Abschnitt oder 'end' folgt, ohne Direktive dazwischen. Der Detektor
+// sieht Zeilen nicht, die mit '&' oder einem Umlaut beginnen ('&Type:
+// ...', 'Aenderung: ...' mit Umlaut) - deren Abschnitt haelt er
+// faelschlich fuer leer (Gegen-Review 2026-10-10). '' oder der Grund.
+function SectionEmptyReason(AMap: TRdxCodeMap; ALine: Integer): string;
+var
+  Next : TRdxToken;
+begin
+  Next := NextToken(AMap, ALine + 1, 1);
+  if not IsSectionWord(Next.Low) then
+    Exit(Format('nach dem Abschnitt folgt "%s" - er ist nicht leer',
+      [Next.Low]));
+  if DirectiveBefore(AMap, ALine + 1, Next) then
+    Exit('Compiler-Direktive bis zum naechsten Abschnitt - der leere '
+      + 'Abschnitt gilt evtl. nur in einem Zweig');
+  Result := '';
+end;
+
 class function TRdxSimpleFixes.EmptySection(AMap: TRdxCodeMap; ALine: Integer;
   const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   L    : string;
   Name : string;
-  p, q : Integer;
-  Next : TRdxToken;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
-  // 'Empty `strict private` section ...' - der Abschnitt zwischen den
-  // Backticks (uEmptyVisibilitySection.SektionsName).
-  p := Pos('`', AMessage);
-  q := 0;
-  if p > 0 then
-    q := Pos('`', AMessage, p + 1);
-  if q = 0 then
-  begin
-    AReason := 'Abschnitt fehlt in der Meldung';
-    Exit;
-  end;
-  Name := LowerCase(Copy(AMessage, p + 1, q - p - 1));
+  L := '';
+  Name := SectionNameOf(AMessage);
+  if Name = '' then
+    AReason := 'Abschnitt fehlt in der Meldung'
   // Die Zeile wird samt Zeilenende geloescht - dahinter steht in einer
   // Klasse immer noch eine Zeile (mindestens 'end').
-  if (ALine < 1) or (ALine >= AMap.LineCount) then
+  else if (ALine < 1) or (ALine >= AMap.LineCount) then
+    AReason := 'keine Zeile hinter dem Abschnitt'
+  else
   begin
-    AReason := 'keine Zeile hinter dem Abschnitt';
-    Exit;
+    L := AMap.Raw(ALine);
+    AReason := SectionLineReason(AMap, ALine, Name, L);
+    if AReason = '' then
+      AReason := SectionEmptyReason(AMap, ALine);
   end;
-  L := AMap.Raw(ALine);
-  if AMap.StartsInside(ALine) or AMap.HasNonCode(ALine, 1, Length(L)) then
-  begin
-    AReason := 'Kommentar oder String auf der Zeile - er ginge beim Loeschen '
-      + 'verloren';
-    Exit;
-  end;
-  // 'strict' ohne 'private'/'protected' auf derselben Zeile: das Wort
-  // gehoert zum Abschnitt der naechsten Zeile - weg damit wuerde aus
-  // 'strict private' ein 'private'.
-  if Name = 'strict' then
-  begin
-    AReason := 'strict steht allein - es gehoert zur naechsten Zeile';
-    Exit;
-  end;
-  // Umgekehrt: 'strict' allein auf der Zeile davor gehoert zu DIESEM
-  // Abschnitt - ohne ihn wuerde aus 'strict' + 'protected' ein 'strict
-  // protected'.
-  if PrevToken(AMap, ALine, 1).Low = 'strict' then
-  begin
-    AReason := 'strict auf der Zeile davor gehoert zu diesem Abschnitt';
-    Exit;
-  end;
-  if LowerCase(CollapseBlanks(L)) <> Name then
-  begin
-    AReason := Format('Zeile %d traegt nicht nur "%s" - Zeile verschoben? '
-      + 'Datei neu pruefen', [ALine, Name]);
-    Exit;
-  end;
-  // Leer ist der Abschnitt nur, wenn als naechstes Code ein Abschnitt oder
-  // 'end' folgt. Der Detektor sieht Zeilen nicht, die mit '&' oder einem
-  // Umlaut beginnen ('&Type: ...', 'Aenderung: ...' mit Umlaut) - deren
-  // Abschnitt haelt er faelschlich fuer leer (Gegen-Review 2026-10-10).
-  Next := NextToken(AMap, ALine + 1, 1);
-  if not IsSectionWord(Next.Low) then
-  begin
-    AReason := Format('nach dem Abschnitt folgt "%s" - er ist nicht leer',
-      [Next.Low]);
-    Exit;
-  end;
-  if DirectiveBefore(AMap, ALine + 1, Next) then
-  begin
-    AReason := 'Compiler-Direktive bis zum naechsten Abschnitt - der leere '
-      + 'Abschnitt gilt evtl. nur in einem Zweig';
-    Exit;
-  end;
+  if AReason <> '' then Exit;
   AEdit.Span := TRefactorSpan.Make(SPAN_087, ALine, 1, ALine + 1, 1);
   AEdit.Expected := L + #10;
   AEdit.NewText  := '';
@@ -2113,6 +2179,180 @@ begin
   if ATypeLow = '' then Exit;
   if InList(ATypeLow, RISKY_TYPES) or NamesProcType(ATypeLow) then
     Result := Format(TYPE_RISK, [AOperand, ATypeLow]);
+end;
+
+{ ---- SCA126: Felder der Datei (FieldTypeOf) ---- }
+
+type
+  // Zustand der Feldsuche: offene Typruempfe, Klammern darin, der Typ des
+  // ersten Treffers und ob ein zweiter davon abweicht.
+  TFieldScan = record
+    Body  : Integer;
+    Paren : Integer;
+    Found : string;
+    Multi : Boolean;
+  end;
+
+const
+  // Vor dem Namen eines Feldes auf Klammertiefe 0 eines Typrumpfs: ';',
+  // ',' (Feldgruppe 'FA, FB: T'), ein Sichtbarkeitswort, 'var' (class var,
+  // var-Abschnitt der Klasse), das Rumpfwort selbst (erstes Feld), ')'
+  // hinter den Vorfahren, ']' hinter einem Attribut. NICHT function/
+  // procedure/property/const - deren Name traegt ebenfalls einen ':'.
+  FIELD_PREV: array[0..12] of string = (';', ',', 'private', 'protected',
+    'public', 'published', 'automated', 'var', 'class', 'record', 'object',
+    ')', ']');
+  TYPE_BODY_WORDS: array[0..3] of string = ('class', 'object', 'interface',
+    'dispinterface');
+
+// Oeffnet T einen Typrumpf mit eigenem 'end'? 'record' immer - ausser als
+// generische Einschraenkung ('<T: record>': dahinter '>', ',', ';' oder
+// ')'); class/object/interface/dispinterface nur hinter '=' oder 'packed'
+// und nicht als Vorwaertsdeklaration ('class;'), Metaklasse ('class of')
+// oder Kurzform ('class(TBar);'). Das 'interface' der Unit steht nie
+// hinter '='.
+function OpensTypeBody(AMap: TRdxCodeMap; const T, APrev: TRdxToken): Boolean;
+var
+  N : TRdxToken;
+begin
+  if InList(APrev.Low, IDENT_PREFIXES) then Exit(False);
+  if T.Low = 'record' then
+    Exit(not InList(After(AMap, T).Low, ['>', ',', ';', ')']));
+  if not InList(T.Low, TYPE_BODY_WORDS)
+     or not InList(APrev.Low, ['=', 'packed']) then
+    Exit(False);
+  N := After(AMap, T);
+  while InList(N.Low, ['abstract', 'sealed']) do
+    N := After(AMap, N);
+  if N.Low = '(' then
+  begin
+    N := MatchForward(AMap, N);
+    if N.Low = '' then Exit(False);
+    N := After(AMap, N);
+  end;
+  Result := not InList(N.Low, [';', 'of']);
+end;
+
+// Das ':' hinter dem Feldnamen AName - auch hinter den Nachbarn einer
+// Feldgruppe ('FA, FB: T' fuer FA); Low = '' ohne ':'.
+function GroupColon(AMap: TRdxCodeMap; const AName: TRdxToken): TRdxToken;
+begin
+  Result := After(AMap, AName);
+  while (Result.Low = ',') and After(AMap, Result).IsWord do
+    Result := After(AMap, After(AMap, Result));
+  if Result.Low <> ':' then
+    Result := Default(TRdxToken);
+end;
+
+// Der Typ hinter dem ':' AColon als Wort fuer die Typpruefungen (s.
+// FieldTypeOf): qualifiziert das letzte Glied, generisch der Name vor '<'.
+// Ein zweiter Treffer mit anderem Typ macht das Ergebnis mehrdeutig.
+procedure TakeFieldType(AMap: TRdxCodeMap; const AColon: TRdxToken;
+  var AScan: TFieldScan);
+var
+  K : TRdxToken;
+begin
+  K := After(AMap, AColon);
+  while (K.Low <> '') and (After(AMap, K).Low = '.') do
+    K := After(AMap, After(AMap, K));
+  if K.Low = '' then Exit;
+  if AScan.Found = '' then
+    AScan.Found := K.Low
+  else if AScan.Found <> K.Low then
+    AScan.Multi := True;
+end;
+
+// Ein Token der Feldsuche: Ruempfe und Klammern zaehlen; auf Klammertiefe 0
+// eines Rumpfs ist ein Wort ANameLow mit ':' dahinter (GroupColon) und
+// FIELD_PREV davor ein Feld. Ein 'begin' oder 'implementation' in einem
+// Rumpf gibt es nicht - dort ist die Bilanz verloren (etwa durch ein
+// ungezaehltes end), und die Suche faengt ausserhalb neu an, statt lokale
+// Variablen als Felder zu lesen.
+procedure FieldScanStep(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
+  const ANameLow: string; var AScan: TFieldScan);
+var
+  Word  : Boolean;
+  Colon : TRdxToken;
+begin
+  Word := not InList(APrev.Low, IDENT_PREFIXES);
+  if OpensTypeBody(AMap, T, APrev) then
+    Inc(AScan.Body)
+  else if Word and ((T.Low = 'begin') or (T.Low = 'implementation')) then
+    AScan.Body := 0
+  else if AScan.Body = 0 then
+    Exit
+  else if Word and (T.Low = 'end') then
+  begin
+    Dec(AScan.Body);
+    AScan.Paren := 0;
+  end
+  else if T.Low = '(' then
+    Inc(AScan.Paren)
+  else if T.Low = ')' then
+    Dec(AScan.Paren)
+  else if (AScan.Paren = 0) and (T.Low = ANameLow)
+     and InList(APrev.Low, FIELD_PREV) then
+  begin
+    Colon := GroupColon(AMap, T);
+    if Colon.Low = ':' then
+      TakeFieldType(AMap, Colon, AScan);
+  end;
+end;
+
+class function TRdxSimpleFixes.FieldTypeOf(AMap: TRdxCodeMap;
+  const AName: string): string;
+var
+  T, Prev : TRdxToken;
+  Scan    : TFieldScan;
+  Low     : string;
+begin
+  Result := '';
+  Low := LowerCase(AName);
+  if Low = '' then Exit;
+  Scan := Default(TFieldScan);
+  Prev := Default(TRdxToken);
+  T := NextToken(AMap, 1, 1);
+  while T.Low <> '' do
+  begin
+    FieldScanStep(AMap, T, Prev, Low, Scan);
+    Prev := T;
+    T := After(AMap, T);
+  end;
+  if not Scan.Multi then
+    Result := Scan.Found;
+end;
+
+class function TRdxNilFix.NilOperandReason(AMap: TRdxCodeMap;
+  const AOperand, ATypeLow: string): string;
+const
+  R_TYPE_UNKNOWN = 'Typ von %s nicht bewiesen - einen Funktions- oder '
+    + 'Methodenzeiger riefe "= nil" auf, Assigned() nicht';
+  R_PATH_END     = '%s endet auf %s - in dieser Unit nicht als Feld bewiesen: '
+    + 'eine Methode ohne Argumente riefe "= nil" auf, Assigned() pruefte nur '
+    + 'den Methodenzeiger';
+  R_PROC_IN_UNIT = '%s hat den Prozedurtyp %s (in dieser Unit deklariert) - '
+    + '"= nil" ruft ihn auf, Assigned() nicht';
+var
+  TypeLow : string;
+  Ident   : string;
+begin
+  Result := NilOperandRisk(AOperand, ATypeLow);
+  if Result <> '' then Exit;
+  TypeLow := ATypeLow;
+  if TypeLow = '' then
+  begin
+    Ident := TrailingIdent(AOperand);
+    if Ident = '' then Exit;   // ')', ']', '^': ein Ergebnis wird verglichen
+    if Ident = Trim(AOperand) then
+      Exit(Format(R_TYPE_UNKNOWN, [AOperand]));
+    TypeLow := TRdxSimpleFixes.FieldTypeOf(AMap, Ident);
+    if TypeLow = '' then
+      Exit(Format(R_PATH_END, [AOperand, Ident]));
+    Result := NilOperandRisk(AOperand, TypeLow);
+    if Result <> '' then Exit;
+  end;
+  if TRdxExprFixes.ProceduralType(AMap, TypeLow) then
+    Result := Format(R_PROC_IN_UNIT, [AOperand, TypeLow]);
 end;
 
 end.

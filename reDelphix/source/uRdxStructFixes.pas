@@ -18,8 +18,8 @@ unit uRdxStructFixes;
 interface
 
 uses
-  System.SysUtils,
-  uRefactorInfo, uRdxBufferMath, uRdxCodeMap;
+  uRefactorInfo,   // TRefactorSpan in TRdxUsesClause
+  uRdxBufferMath, uRdxCodeMap;
 
 const
   // Die raise-Variante von SCA168 (Katalog-Beispiel). EProgrammerError
@@ -99,6 +99,9 @@ type
   end;
 
 implementation
+
+uses
+  System.SysUtils;
 
 const
   SPAN_007 = 'sca007';
@@ -198,8 +201,18 @@ type
     function Fail(const AReason: string): Boolean;
   end;
 
+// Wem ein else gehoert (Rumpf unten bei TRdxElseScan) - vorab, weil die
+// end-Bilanz von SCA168 (TopLevelReason) es braucht.
+function ElseOwner(AMap: TRdxCodeMap; const AElse: TRdxToken): TRdxElseScan;
+  forward;
+
 // Der Text des Bereichs, Zeilen mit #10 verbunden - so, wie
-// TRdxEdit.Expected ihn erwartet.
+// TRdxEdit.Expected ihn erwartet. Bewusst nicht TRefactorInfoBuilder.
+// SpanText (Review Quick-Fix-Units 2026-10-14): das verlangt SpanFits, also
+// StartCol <= Laenge der ersten Zeile - der Rumpf hinter 'if A then' und
+// einer LEEREN Zeile (OwnLinesEdit, Bereich ab Spalte 1 der Leerzeile)
+// ergaebe dort '' statt des Textes, und die Hilfe schriebe falschen Code.
+// AMap.Raw toleriert die leere Zeile.
 function RangeText(AMap: TRdxCodeMap; const ASpan: TRefactorSpan): string;
 var
   SB : TStringBuilder;
@@ -433,23 +446,33 @@ begin
       [ALine, n]);
 end;
 
-// Auf oberster Ebene des case hinter ';': ein else ist schon sein Zweig (ein
-// if-else in einem Arm steht nie hinter ';'), 'otherwise' der FPC-Zweig.
-// '' oder der Grund.
-function TopLevelReason(const T, APrev: TRdxToken): string;
+// Auf oberster Ebene des case: ein else, das dem case gehoert (ElseOwner:
+// eoList - auch OHNE ';' davor, 'case K of 1: Foo else Bar end'; Review
+// Quick-Fix-Units 2026-10-14), ist schon sein Zweig; ein else zu einem if
+// in einem Arm (eoIf) nicht; ist der Besitzer unklar, keine Hilfe.
+// 'otherwise' hinter ';' ist der FPC-Zweig. '' oder der Grund.
+function TopLevelReason(AMap: TRdxCodeMap; const T, APrev: TRdxToken): string;
+var
+  Scan : TRdxElseScan;
 begin
   Result := '';
-  if APrev.Low <> ';' then Exit;
   if T.Low = 'else' then
-    Result := 'das case hat schon einen else-Zweig'
-  else if T.Low = 'otherwise' then
+  begin
+    Scan := ElseOwner(AMap, T);
+    if Scan.Owner = eoList then
+      Result := 'das case hat schon einen else-Zweig'
+    else if Scan.Owner = eoUnknown then
+      Result := 'else im case, Besitzer unklar: ' + Scan.Reason;
+  end
+  else if (T.Low = 'otherwise') and (APrev.Low = ';') then
     Result := 'das case hat einen otherwise-Zweig (FPC)';
 end;
 
 // Ein Schritt der Bilanz: ADepth fortschreiben; '' oder der Grund zum
 // Abbruch. '&End', '@@End' (asm-Label) und 'X.End' sind Bezeichner, keine
 // Schluesselwoerter (IDENT_PREFIXES, wie in den uebrigen Bilanzen).
-function BalanceStep(const T, APrev: TRdxToken; var ADepth: Integer): string;
+function BalanceStep(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
+  var ADepth: Integer): string;
 begin
   Result := '';
   if InList(APrev.Low, IDENT_PREFIXES) then Exit;
@@ -458,7 +481,7 @@ begin
   else if T.Low = 'end' then
     Dec(ADepth)
   else if ADepth = 1 then
-    Result := TopLevelReason(T, APrev);
+    Result := TopLevelReason(AMap, T, APrev);
 end;
 
 // Das end zum case ACase und das Token davor (ALast). '' oder der Grund.
@@ -476,7 +499,7 @@ begin
   T := After(AMap, ACase);
   while T.Low <> '' do
   begin
-    Result := BalanceStep(T, Prev, Depth);
+    Result := BalanceStep(AMap, T, Prev, Depth);
     if Result <> '' then Exit;
     if Depth = 0 then
     begin

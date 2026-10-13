@@ -130,6 +130,17 @@ begin
   finally
     L.Free;
   end;
+  // ':' direkt hinter dem Tag ohne Leerzeichen (Review Quick-Fix-Units
+  // 2026-10-14): die Art steht da - sonst kaeme '// noinspection: X,X'.
+  Src := StringReplace(BASE_SRC, CODE,
+    '  // noinspection:MemoryLeak'#13#10 + CODE, []);
+  L := LinesOf(Src);
+  try
+    Assert.IsFalse(TRdxSuppress.LineMarker(L, 7, KIND, E, R), 'Tag:Art');
+    Assert.IsTrue(Pos('schon da', R) > 0, R);
+  finally
+    L.Free;
+  end;
 end;
 
 procedure TTestRdxSuppress.LineMarker_EmptyLine_NothingToDo;
@@ -180,6 +191,19 @@ begin
       'noinspection-file MagicNumber, TooLongLine', []), Apply(Src, E));
     Assert.IsFalse(TRdxSuppress.FileMarker(L, 'toolongline', E, R),
       'steht schon da');
+  finally
+    L.Free;
+  end;
+  // Auch mit ':' direkt hinter dem Tag.
+  Src := StringReplace(BASE_SRC, 'implementation',
+    'implementation'#13#10'// noinspection-file:TooLongLine', []);
+  L := LinesOf(Src);
+  try
+    Assert.IsFalse(TRdxSuppress.FileMarker(L, 'TooLongLine', E, R),
+      'Tag:Art steht schon da');
+    Assert.IsTrue(TRdxSuppress.FileMarker(L, 'MagicNumber', E, R), R);
+    Assert.AreEqual(StringReplace(Src, 'noinspection-file:TooLongLine',
+      'noinspection-file: MagicNumber,TooLongLine', []), Apply(Src, E));
   finally
     L.Free;
   end;

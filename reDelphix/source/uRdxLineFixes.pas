@@ -15,8 +15,7 @@ unit uRdxLineFixes;
 interface
 
 uses
-  System.SysUtils,
-  uRefactorInfo, uRdxBufferMath, uRdxCodeMap;
+  uRdxBufferMath, uRdxCodeMap;
 
 type
   TRdxLineFixes = class
@@ -60,6 +59,10 @@ type
   end;
 
 implementation
+
+uses
+  System.SysUtils,
+  uRefactorInfo;   // TRefactorSpan.Make
 
 const
   SPAN_082 = 'sca082';
