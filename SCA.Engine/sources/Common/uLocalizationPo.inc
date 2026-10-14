@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2437 Zeilen, 81706 Bytes
-  CPoLines_de: array[0..2436] of string = (
+  // i18n\de.po - 2449 Zeilen, 82066 Bytes
+  CPoLines_de: array[0..2448] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2384,6 +2384,18 @@ const
     'msgid "Free the buffer %s in a try/finally block"',
     'msgstr "Puffer %s in einem try/finally-Block freigeben"',
     '',
+    'msgid "Call %s first in the constructor"',
+    'msgstr "%s als Erstes im Konstruktor aufrufen"',
+    '',
+    'msgid "Call inherited last in the destructor"',
+    'msgstr "inherited als Letztes im Destruktor aufrufen"',
+    '',
+    'msgid "Initialize Result with Default(%s)"',
+    'msgstr "Result mit Default(%s) initialisieren"',
+    '',
+    'msgid "Initialize Result first: %s"',
+    'msgstr "Result zuerst initialisieren: %s"',
+    '',
     'msgid "(changes behavior)"',
     'msgstr "('#$00E4'ndert Verhalten)"',
     '',
@@ -2726,8 +2738,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2433 Zeilen, 85558 Bytes
-  CPoLines_fr: array[0..2432] of string = (
+  // i18n\fr.po - 2445 Zeilen, 85924 Bytes
+  CPoLines_fr: array[0..2444] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -5092,6 +5104,18 @@ const
     '',
     'msgid "Free the buffer %s in a try/finally block"',
     'msgstr "Lib'#$00E9'rer le tampon %s dans un bloc try/finally"',
+    '',
+    'msgid "Call %s first in the constructor"',
+    'msgstr "Appeler %s en premier dans le constructeur"',
+    '',
+    'msgid "Call inherited last in the destructor"',
+    'msgstr "Appeler inherited en dernier dans le destructeur"',
+    '',
+    'msgid "Initialize Result with Default(%s)"',
+    'msgstr "Initialiser Result avec Default(%s)"',
+    '',
+    'msgid "Initialize Result first: %s"',
+    'msgstr "Initialiser Result d''abord : %s"',
     '',
     'msgid "(changes behavior)"',
     'msgstr "(modifie le comportement)"',

@@ -2367,6 +2367,18 @@ msgstr "Sperre %s in einem try/finally-Block freigeben"
 msgid "Free the buffer %s in a try/finally block"
 msgstr "Puffer %s in einem try/finally-Block freigeben"
 
+msgid "Call %s first in the constructor"
+msgstr "%s als Erstes im Konstruktor aufrufen"
+
+msgid "Call inherited last in the destructor"
+msgstr "inherited als Letztes im Destruktor aufrufen"
+
+msgid "Initialize Result with Default(%s)"
+msgstr "Result mit Default(%s) initialisieren"
+
+msgid "Initialize Result first: %s"
+msgstr "Result zuerst initialisieren: %s"
+
 msgid "(changes behavior)"
 msgstr "(ändert Verhalten)"
 
