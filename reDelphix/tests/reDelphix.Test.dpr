@@ -71,6 +71,7 @@ uses
   uRdxBufferMath in '..\source\uRdxBufferMath.pas',
   uRdxCodeMap in '..\source\uRdxCodeMap.pas',
   uRdxSuppress in '..\source\uRdxSuppress.pas',
+  uRdxRtlTypes in '..\source\uRdxRtlTypes.pas',
   uRdxSimpleFixes in '..\source\uRdxSimpleFixes.pas',
   uRdxStructFixes in '..\source\uRdxStructFixes.pas',
   uRdxLineFixes in '..\source\uRdxLineFixes.pas',

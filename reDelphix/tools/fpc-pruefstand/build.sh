@@ -44,7 +44,8 @@ rm -f "$OUT"/*.ppu "$OUT"/*.o "$OUT"/runner.exe
 # Kopien eines frueheren Laufs weg - genau die Muster der .gitignore; die
 # eingecheckten Stubs (uParser2, uAstNode, HashStub, DUnitX ...) bleiben.
 rm -f "$HERE"/uDetectorUtils.pas "$HERE"/uRefactor*.pas "$HERE"/uSourcePlaces.pas \
-      "$HERE"/uFindingActions.pas "$HERE"/uRdx*.pas "$HERE"/uTest*.pas "$HERE"/runner.pas
+      "$HERE"/uFindingActions.pas "$HERE"/uRdx*.pas "$HERE"/uRdx*.inc \
+      "$HERE"/uTest*.pas "$HERE"/runner.pas
 
 # Bricht ab, wenn eine Pflichtquelle fehlt.
 need() {
@@ -93,13 +94,18 @@ need "$SCA/SCA.Engine/sources/Infrastructure/uSourcePlaces.pas"
 adapt "$SCA/SCA.Engine/sources/Infrastructure/uSourcePlaces.pas" "$HERE/uSourcePlaces.pas"
 # Modul reDelphix: nur die ToolsAPI-freien Units (Rezepte, Scope-Tabelle).
 # Fehlt eine, scheitern nur die Tests, die sie brauchen - deshalb Warnung.
-for u in uRdxRecipes uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxSuppress uRdxSimpleFixes uRdxStructFixes uRdxLineFixes uRdxRaiseFixes uRdxDeclFixes uRdxFlowFixes uRdxIntroPlan uRdxIntroEdits; do
+# FPC sucht Units nur hier (cwd) - eine neue Unit muss in diese Liste.
+for u in uRdxRecipes uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxSuppress uRdxSimpleFixes uRdxStructFixes uRdxLineFixes uRdxRaiseFixes uRdxDeclFixes uRdxFlowFixes uRdxIntroPlan uRdxIntroEdits uRdxRtlTypes; do
   if [ -f "$RDX/source/$u.pas" ]; then
     adapt "$RDX/source/$u.pas" "$HERE/$u.pas"
   else
     echo "WARNUNG: $RDX/source/$u.pas fehlt - Testunits, die $u brauchen, scheitern beim Bau" >&2
   fi
 done
+# Die erzeugte Typliste (uRdxRtlTypes.inc, {$I} in uRdxRtlTypes) kommt als
+# Kopie mit - FPC sucht Include-Dateien neben der Unit, also hier.
+need "$RDX/source/uRdxRtlTypes.inc"
+tr -d '\r' < "$RDX/source/uRdxRtlTypes.inc" > "$HERE/uRdxRtlTypes.inc"
 
 # --- 3) Runner erzeugen ------------------------------------------------------
 # Laeuft in der aktuellen Shell (Gruppe, keine Subshell): ein exit hier

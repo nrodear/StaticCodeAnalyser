@@ -122,6 +122,7 @@
         <DCCReference Include="source\uRdxBufferMath.pas"/>
         <DCCReference Include="source\uRdxCodeMap.pas"/>
         <DCCReference Include="source\uRdxSuppress.pas"/>
+        <DCCReference Include="source\uRdxRtlTypes.pas"/>
         <DCCReference Include="source\uRdxSimpleFixes.pas"/>
         <DCCReference Include="source\uRdxStructFixes.pas"/>
         <DCCReference Include="source\uRdxLineFixes.pas"/>
