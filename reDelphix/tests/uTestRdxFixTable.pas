@@ -191,6 +191,25 @@ begin
   finally
     F.Free;
   end;
+  // SCA075 bekam mit der Tabelle ERSTMALS einen festen Hinweis - wie
+  // SCA074, SCA087 und SCA066 (bis Charge R8 leer; Gegen-Review R8,
+  // Major 1): woertlich gepinnt. Der Planer plant nur auf den Zeilen.
+  SL := TStringList.Create;
+  F := TLeakFinding.New('t.pas', '', 3, '`class(TObject)` at column 10 - drop '
+    + 'the parens (TObject is the implicit base class).',
+    fkExplicitTObjectInheritance);
+  try
+    SL.Text := Join(['unit u;', 'type', '  TFoo = class(TObject)', '  end;',
+      'implementation', 'end.']);
+    O := TRdxFixTable.FixFor(nil, SL, F, nil);
+    Assert.IsTrue(O.Enabled, O.Reason);
+    Assert.AreEqual('TObject ist ohnehin der Vorfahr - gleiche Bedeutung',
+      O.Hint);
+    Assert.IsFalse(O.ChangesBehavior);
+  finally
+    F.Free;
+    SL.Free;
+  end;
 end;
 
 initialization

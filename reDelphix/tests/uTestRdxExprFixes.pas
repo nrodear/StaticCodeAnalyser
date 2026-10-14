@@ -165,7 +165,7 @@ end;
 
 procedure TTestRdxExprFixes.Sca066_Variants;
 const
-  CASES: array[0..15, 0..2] of string = (
+  CASES: array[0..17, 0..2] of string = (
     ('  DoStuff();', '10', '  DoStuff;'),
     ('  Obj.Refresh();', '14', '  Obj.Refresh;'),
     ('  Self.Obj.Refresh ( ) ;', '20', '  Self.Obj.Refresh ;'),
@@ -181,7 +181,13 @@ const
     ('  begin Init()end;', '13', '  begin Init end;'),
     ('procedure Foo();', '14', 'procedure Foo;'),
     ('function TFoo.Bar(): Integer;', '18', 'function TFoo.Bar: Integer;'),
-    ('procedure Foo(); overload;', '14', 'procedure Foo; overload;'));
+    ('procedure Foo(); overload;', '14', 'procedure Foo; overload;'),
+    // initialization/finalization stehen seit Charge R8 in STATEMENT_PREV
+    // (uRdxCodeMap): die erste Anweisung des Abschnitts und die Zuweisung
+    // dort galten bis dahin als "Teil eines Ausdrucks" bzw. "keine
+    // einfache Variable" (Gegen-Review R8, Major 3).
+    ('initialization Foo();', '19', 'initialization Foo;'),
+    ('initialization B := Foo();', '24', 'initialization B := Foo;'));
 var
   i : Integer;
 begin
@@ -247,7 +253,7 @@ end;
 
 procedure TTestRdxExprFixes.Sca072_Variants;
 const
-  CASES: array[0..9, 0..3] of string = (
+  CASES: array[0..10, 0..3] of string = (
     ('  if IsActive = True then ;', '15', '  if IsActive then ;', 'IsActive'),
     ('  if IsActive <> False then ;', '15', '  if IsActive then ;', 'IsActive'),
     ('  if IsDone = False then Exit;', '13', '  if not IsDone then Exit;', 'IsDone'),
@@ -257,7 +263,12 @@ const
     ('  if (A = True) and B then', '9', '  if (A) and B then', 'A'),
     ('  if IsActive = True then WriteLn(''a = True'');', '15', '  if IsActive then WriteLn(''a = True'');', 'IsActive'),
     ('  if X=TRUE then', '7', '  if X then', 'X'),
-    ('  until Ready = True;', '15', '  until Ready;', 'Ready'));
+    ('  until Ready = True;', '15', '  until Ready;', 'Ready'),
+    // Im initialization-Abschnitt (Gegen-Review R8, Major 3): SCA072 liest
+    // das Token VOR dem Operanden (OPERAND_STARTS, hier ':='), nicht
+    // STATEMENT_PREV - die Zeile pinnt, dass der Abschnitt kein Hindernis
+    // ist.
+    ('initialization B := X = True;', '23', 'initialization B := X;', 'X'));
 var
   i : Integer;
   F : TFixResult;

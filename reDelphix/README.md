@@ -435,7 +435,9 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
   Charge R8): jede Zeile mit Planer, Hinweis (fest oder vom Planer) und
   Menuetext, zweiter Eintrag genau mit zweitem Menuetext, Arten eindeutig
   und gleich `Handles`; Menuetexte mit Name, Variante und Kennzeichnung;
-  Einstieg ohne Fund und ohne Zeile.
+  Einstieg ohne Fund und ohne Zeile; einer der vier Hinweise, die es erst
+  seit der Tabelle gibt (SCA075, SCA074, SCA087 und SCA066 hatten bis
+  Charge R8 keinen), woertlich (Charge R9).
 * `uTestRdxSimpleFixes` / `uTestRdxNilFix` / `uTestRdxExprFixes` /
   `uTestRdxStructFixes` / `uTestRdxBlockFixes` / `uTestRdxLineFixes` /
   `uTestRdxRaiseFixes` / `uTestRdxDeclFixes` / `uTestRdxFlowFixes` - die
@@ -465,10 +467,12 @@ Ohne Delphi (FPC 3.2.2):
 bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext
 ```
 
-Erwartet (Stand 2026-10-14, Charge R8): `PASSED 282  FAILED 0` - 18 Testunits,
+Erwartet (Stand 2026-10-14, Charge R9): `PASSED 283  FAILED 0` - 18 Testunits,
 davon 72 Tests fuer "Lokale Variable einfuehren", 12 fuer die Quick-Fixes der
-Charge H2 und 7 der Charge R8 (6 fuer die geteilten Laeufe in
-`uTestRdxCodeMap`, 1 fuer den Fremdtyp-Beweis von SCA126 in `uTestRdxNilFix`).
+Charge H2, 7 der Charge R8 (6 fuer die geteilten Laeufe in
+`uTestRdxCodeMap`, 1 fuer den Fremdtyp-Beweis von SCA126 in `uTestRdxNilFix`)
+und 1 der Charge R9 (SCA085: `{$` hinter `//` ist keine Direktive, in
+`uTestRdxSimpleFixes`).
 
 Der Pruefstand uebersetzt die Core-Units des Quellstellen-Dienstes
 (`uRefactor*`, `uSourcePlaces`, `uFindingActions`, `ScanCodeLine` aus

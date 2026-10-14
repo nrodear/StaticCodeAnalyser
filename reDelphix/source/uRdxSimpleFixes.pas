@@ -2333,7 +2333,14 @@ begin
   if TypeLow = '' then
   begin
     Ident := TrailingIdent(AOperand);
-    if Ident = '' then Exit;   // ')', ']', '^': ein Ergebnis wird verglichen
+    // ')', ']', '^': ein Ergebnis wird verglichen - BEWUSSTE LUECKE
+    // (Gegen-Review R8, Verdacht im Bestand): 'FItems[I] = nil' oder
+    // 'TFoo(Sender) = nil' umgehen den Typbeweis ganz, weil das Ergebnis
+    // keinen deklarierten Namen hat - ein Element eines Arrays von
+    // Funktionszeigern oder ein Cast auf einen Funktionstyp ginge durch.
+    // Nicht geschlossen: der Entscheid steht aus (Nico; Messung Charge
+    // R9). uTestRdxNilFix.Sca126_PathOperands pinnt den Bestand.
+    if Ident = '' then Exit;
     if Ident = Trim(AOperand) then
       Exit(Format(R_TYPE_UNKNOWN, [AOperand]));
     TypeLow := TRdxSimpleFixes.FieldTypeOf(AMap, Ident);
@@ -2344,7 +2351,9 @@ begin
   end;
   if TRdxExprFixes.ProceduralType(AMap, TypeLow) then
     Exit(Format(R_PROC_IN_UNIT, [AOperand, TypeLow]));
-  // Der POSITIVE Beweis wie bei SCA084 (AssignedNilReason): ein Typ aus
+  // Der POSITIVE Beweis wie bei SCA084 (AssignedNilReason in
+  // uRdxRecipeRunner, der OperandReason-Pfad von TRdxFixRunner.OperandFix -
+  // nicht in dieser Unit): ein Typ aus
   // einer anderen Unit mit unauffaelligem Namen ('uses uFactories; FMaker:
   // TObjFactory' mit 'function: TObject' dort) ging bis Charge R8 durch -
   // 'if FMaker = nil' wurde 'if not Assigned(FMaker)', ein anderer Sinn.

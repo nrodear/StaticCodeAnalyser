@@ -31,6 +31,8 @@ type
     [Test] procedure Sca085_CommentTrap_UsesCodeOccurrence;
     [Test] procedure Sca085_Refusals;
     [Test] procedure Sca085_DirectiveBeforeFree_Refused;
+    // Gegen-Review R8 (Major 2): '{$' hinter '//' ist keine Direktive.
+    [Test] procedure Sca085_LineCommentDirective_NotADirective;
     [Test] procedure Sca085_VariableContext;
     // ---- Stufe 2, Rest: SCA074, SCA087, SCA139 ----
     [Test] procedure Sca074_Variants;
@@ -354,6 +356,27 @@ begin
     '{$ENDIF}',
     '    X.Free;',
     '  X := nil;', 'end;', 'end.']), 8, R));
+  Assert.IsTrue(Pos('Direktive', R) > 0, R);
+end;
+
+procedure TTestRdxSimpleFixes.Sca085_LineCommentDirective_NotADirective;
+var
+  R : string;
+begin
+  // DirectiveBetween prueft seit Charge R8 DirectiveAt (uRdxCodeMap): ein
+  // '{$' hinter '//' ist keine Direktive. Bis dahin zaehlte jedes '{$' im
+  // Kommentar vor X.Free; mit - ein auskommentiertes IFDEF sperrte die
+  // Hilfe (Gegen-Review R8, Major 2).
+  Assert.AreEqual(Join(['unit u;', 'procedure P;', 'begin',
+      '  // {$IFDEF A}', '  FreeAndNil(X);', 'end;', 'end.']),
+    Fix085(Join(['unit u;', 'procedure P;', 'begin',
+      '  // {$IFDEF A}', '  X.Free;', '  X := nil;', 'end;', 'end.']), 5, R), R);
+  // Hinter X.Free; darf ein //-Kommentar stehen - auch mit '{$' darin.
+  Assert.AreEqual(FreeOnly('  FreeAndNil(X); // {$IFDEF A}'),
+    Fix085(FreeNil('  X.Free; // {$IFDEF A}', '  X := nil;'), 4, R), R);
+  // Gegenprobe: eine Blockdirektive davor bleibt gesperrt.
+  Assert.AreEqual('', Fix085(Join(['unit u;', 'procedure P;', 'begin',
+    '  {$IFDEF A}{$ENDIF}', '  X.Free;', '  X := nil;', 'end;', 'end.']), 5, R));
   Assert.IsTrue(Pos('Direktive', R) > 0, R);
 end;
 
