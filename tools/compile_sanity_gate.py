@@ -664,6 +664,56 @@ def pruefe_harness(pfad, kind2cls, helfer, befunde, warnungen):
 
 
 # --------------------------------------------------------------------------
+# 3c) Reservierte Woerter als Bezeichner (Bau 2026-10-14, E2029)
+# --------------------------------------------------------------------------
+# 'Inline' als Feldname in uTypeResolver: FPC-Pruefstand und alle Gates
+# gruen, dcc32 bricht ab ("'END' erwartet, aber 'INLINE' gefunden") -
+# 'inline' ist in Delphi ein reserviertes Wort (Turbo-Pascal-Erbe), kein
+# Direktiv. Geprueft werden Deklarationen (Name vor ':' oder ',') und
+# Member-Zugriffe ('.Name'); ein '&'-Praefix macht den Namen zulaessig und
+# zaehlt nicht. Kommentare und Literale sind vorher entfernt.
+RESERVIERT = set(('and array as asm begin case class const constructor '
+                  'destructor dispinterface div do downto else end except '
+                  'exports file finalization finally for function goto if '
+                  'implementation in inherited initialization inline '
+                  'interface is label library mod nil not object of or '
+                  'packed procedure program property raise record repeat '
+                  'resourcestring set shl shr string then threadvar to try '
+                  'type unit until uses var while with xor').split())
+
+
+def _nur_code(text):
+    """Blockkommentare (auch Direktiven), //-Kommentare und Literale raus."""
+    text = re.sub(r'\{.*?\}', ' ', text, flags=re.S)
+    text = re.sub(r'\(\*.*?\*\)', ' ', text, flags=re.S)
+    out = []
+    for ln in text.split('\n'):
+        ln = _codeteil(ln)
+        out.append(re.sub(r"'(?:[^']|'')*'", "''", ln))
+    return '\n'.join(out)
+
+
+def pruefe_reservierte_bezeichner(pfad, befunde):
+    """Reserviertes Wort als Feld-/Variablen-/Parametername oder Member."""
+    for nr, ln in enumerate(_nur_code(lies(pfad)).split('\n'), 1):
+        treffer = set()
+        # Nur 'Name :' (nicht 'Name ,'): Argument-Fortsetzungen wie 'nil,' und
+        # 'end,' (anonyme Methode) sind sonst Fehlalarme; 'function:'/'procedure:'
+        # ist eine anonyme Methode ohne Parameter, keine Deklaration.
+        for m in re.finditer(r'(?:^|[(;,])\s*([A-Za-z_][A-Za-z0-9_]*)\s*:(?!=)', ln):
+            if m.group(1).lower() in ('function', 'procedure'):
+                continue
+            if m.group(1).lower() in RESERVIERT:
+                treffer.add(m.group(1))
+        for m in re.finditer(r'\.([A-Za-z_][A-Za-z0-9_]*)\b', ln):
+            if m.group(1).lower() in RESERVIERT:
+                treffer.add(m.group(1))
+        for w in sorted(treffer):
+            befunde.append("%s:%d  reserviertes Wort als Bezeichner (E2029): '%s'"
+                           % (os.path.basename(pfad), nr, w))
+
+
+# --------------------------------------------------------------------------
 def dateien_bestimmen(argv):
     if argv and argv[0] == '--all':
         out = []
@@ -700,6 +750,7 @@ def main():
         pruefe_include_in_fixture(d, befunde)
         pruefe_uses_zuerst(d, befunde)
         pruefe_rtl_uses(d, befunde)
+        pruefe_reservierte_bezeichner(d, befunde)
         if os.sep + 'tests' + os.sep in d.replace('/', os.sep):
             pruefe_unbeendete_konstante(d, befunde)
             pruefe_fixture_klassen(d, befunde)
