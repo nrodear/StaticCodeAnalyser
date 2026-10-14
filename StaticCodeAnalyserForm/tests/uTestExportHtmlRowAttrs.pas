@@ -102,19 +102,21 @@ var
   Html : string;
 begin
   // SCA007 UnusedUses traegt editorHelp (Code-Aktion seit 2026-10-10),
-  // SCA001 MemoryLeak nicht - das QF-Badge haengt an genau diesem Bit.
+  // SCA010 DivByZero nicht - das QF-Badge haengt an genau diesem Bit. (Bis
+  // 2026-10-14 stand hier SCA001; seit Charge H4 hat es eine Hilfe fuer die
+  // Variante freed-outside-finally und damit editorHelp.)
   Assert.IsTrue(TRuleCatalog.GetRuleCanonical(fkUnusedUses).EditorHelp, 'Vorbedingung: SCA007 editorHelp');
-  Assert.IsFalse(TRuleCatalog.GetRuleCanonical(fkMemoryLeak).EditorHelp, 'Vorbedingung: SCA001 ohne');
+  Assert.IsFalse(TRuleCatalog.GetRuleCanonical(fkDivByZero).EditorHelp, 'Vorbedingung: SCA010 ohne');
   L := TObjectList<TLeakFinding>.Create(True);
   try
     L.Add(NewFinding(fkUnusedUses, 'src\uA.pas', '3'));
-    L.Add(NewFinding(fkMemoryLeak, 'src\uB.pas', '4'));
+    L.Add(NewFinding(fkDivByZero, 'src\uB.pas', '4'));
     Html := RenderFindings(L);
   finally
     L.Free;
   end;
   Assert.AreEqual('1', AttrAfter(Html, 'data-rule="UnusedUses"', 'data-qf'), 'SCA007: data-qf=1');
-  Assert.AreEqual('0', AttrAfter(Html, 'data-rule="MemoryLeak"', 'data-qf'), 'SCA001: data-qf=0');
+  Assert.AreEqual('0', AttrAfter(Html, 'data-rule="DivByZero"', 'data-qf'), 'SCA010: data-qf=0');
 end;
 
 procedure TTestExportHtmlRowAttrs.DataLine_SnippetHeader_NormalisedNumber;
