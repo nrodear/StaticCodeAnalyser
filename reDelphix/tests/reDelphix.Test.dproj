@@ -133,6 +133,7 @@
         <DCCReference Include="uTestRdxTryFixesDetector.pas"/>
         <DCCReference Include="uTestRdxResultFixes.pas"/>
         <DCCReference Include="uTestRdxInheritedFixes.pas"/>
+        <DCCReference Include="uTestRdxResultGuards.pas"/>
         <DCCReference Include="uTestRdxResultFixesDetector.pas"/>
         <DCCReference Include="uTestRdxNilFix.pas"/>
         <DCCReference Include="uTestRdxSimpleFixesDetector.pas"/>

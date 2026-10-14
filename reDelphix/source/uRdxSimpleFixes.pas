@@ -500,31 +500,10 @@ begin
   Result := True;
 end;
 
-// Eine Compiler-Direktive zwischen dem Token APrev und (ALine, ACol)?
-// Dieselbe Regel wie DirectiveAt (uRdxCodeMap): ein '{$' in einem
-// '//'-Kommentar ist keine - bis Charge R8 zaehlte es hier mit.
-function DirectiveBetween(AMap: TRdxCodeMap; const APrev: TRdxToken;
-  ALine, ACol: Integer): Boolean;
-var
-  Li, j, First, Last : Integer;
-begin
-  Result := False;
-  First := 1;
-  if APrev.Low <> '' then First := APrev.Line;
-  for Li := First to ALine do
-  begin
-    j := 1;
-    if (APrev.Low <> '') and (Li = APrev.Line) then j := APrev.EndCol;
-    Last := Length(AMap.Raw(Li));
-    if Li = ALine then Last := ACol - 1;
-    while j <= Last do
-    begin
-      if DirectiveAt(AMap, Li, j) then
-        Exit(True);
-      Inc(j);
-    end;
-  end;
-end;
+// DirectiveBetween (eine Compiler-Direktive zwischen dem Token APrev und
+// (ALine, ACol); dieselbe Regel wie DirectiveAt - ein '{$' in einem
+// '//'-Kommentar ist keine, bis Charge R8 zaehlte es hier mit) steht seit
+// Charge H5c in uRdxCodeMap - uRdxResultFixes hatte eine zweite Fassung.
 
 // Zeile ALine: erste Anweisung 'X.Free;' - wie
 // uFreeAndNilHint.ExtractFreeReceiver, aber auf der Code-Sicht -, dahinter

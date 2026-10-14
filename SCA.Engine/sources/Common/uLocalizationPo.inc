@@ -13,7 +13,7 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2449 Zeilen, 82066 Bytes
+  // i18n\de.po - 2449 Zeilen, 82048 Bytes
   CPoLines_de: array[0..2448] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -2390,8 +2390,8 @@ const
     'msgid "Call inherited last in the destructor"',
     'msgstr "inherited als Letztes im Destruktor aufrufen"',
     '',
-    'msgid "Initialize Result with Default(%s)"',
-    'msgstr "Result mit Default(%s) initialisieren"',
+    'msgid "Initialize Result with %s"',
+    'msgstr "Result mit %s initialisieren"',
     '',
     'msgid "Initialize Result first: %s"',
     'msgstr "Result zuerst initialisieren: %s"',
@@ -2738,7 +2738,7 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2445 Zeilen, 85924 Bytes
+  // i18n\fr.po - 2445 Zeilen, 85906 Bytes
   CPoLines_fr: array[0..2444] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -5111,8 +5111,8 @@ const
     'msgid "Call inherited last in the destructor"',
     'msgstr "Appeler inherited en dernier dans le destructeur"',
     '',
-    'msgid "Initialize Result with Default(%s)"',
-    'msgstr "Initialiser Result avec Default(%s)"',
+    'msgid "Initialize Result with %s"',
+    'msgstr "Initialiser Result avec %s"',
     '',
     'msgid "Initialize Result first: %s"',
     'msgstr "Initialiser Result d''abord : %s"',

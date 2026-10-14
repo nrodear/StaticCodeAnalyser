@@ -2,12 +2,16 @@ unit uTestRdxResultFixes;
 
 // Quick-Fixes "Ergebnis" (uRdxResultFixes, Charge H5) auf Text - ohne
 // Parser, ohne Detektor (laeuft in reDelphix.Test UND im FPC-Pruefstand):
-//   SCA121 'Result := Default(T);' - Form (Einrueckung wie die erste
+//   SCA121 'Result := <Wert>;' - Form (Einrueckung wie die erste
 //          Anweisung, sonst begin + Stufe, Tab; Einzeiler inline; Kommentar
 //          bzw. Direktive hinter begin), Typ aus der Deklaration, generisch,
 //          qualifiziert, Operator, lokale Routine; Sperren Skript-Unit,
 //          FPC-Modus/{$X-}, asm, Direktive zwischen Kopf und begin,
-//          specialize, mehrzeiliger Typ, veraltete Zeile;
+//          specialize, mehrzeiliger Typ, veraltete Zeile. Seit Charge H5c
+//          ein Literal fuer einfache Typen (False, 0, '''', nil) und
+//          Default(T) nur fuer Records, Typparameter und Unbekanntes - die
+//          Wertwahl, die Sperre alter Compiler und die Zuweisung im Rumpf
+//          pruefen uTestRdxResultGuards;
 //   SCA196 'Result := '''';' / 'Result := nil;' / 'VarClear(Result);' - die
 //          umschliessende Routine von der Lese-Zeile aus (auch mit lokaler
 //          Routine davor), Typbeweise (RTL-DynArray, 'array of' und
@@ -205,16 +209,16 @@ begin
   S := InUnit(['function F(A: Integer): Integer;', 'begin', '  if A > 0 then',
     '    Log(''x'');', 'end;']);
   Assert.AreEqual(InUnit(['function F(A: Integer): Integer;', 'begin',
-    '  Result := Default(Integer);', '  if A > 0 then', '    Log(''x'');',
+    '  Result := 0;', '  if A > 0 then', '    Log(''x'');',
     'end;']), Fix121(S, 'function F', 'F', R), R);
   P := PlanOf(TRdxResultFixes.ResultDefault, S, 4, Format(MSG_121, ['F']), R);
-  Assert.AreEqual('Integer', P.Name);
+  Assert.AreEqual('0', P.Name);
   Assert.AreEqual<Integer>(1, Length(P.Edits));
   // Ein Programm uebersetzt der Compiler ebenso.
   S := Join(['program p;', 'function F: string;', 'begin', 'end;', 'begin',
     'end.']);
   Assert.AreEqual(Join(['program p;', 'function F: string;', 'begin',
-    '  Result := Default(string);', 'end;', 'begin', 'end.']),
+    '  Result := '''';', 'end;', 'begin', 'end.']),
     Fix121(S, 'function F', 'F', R), R);
 end;
 
@@ -224,20 +228,20 @@ var
 begin
   // wie die erste Anweisung (vier Leerzeichen bzw. ein Tab) ...
   Assert.AreEqual(InUnit(['function F: Boolean;', 'begin',
-    '    Result := Default(Boolean);', '    Run;', 'end;']),
+    '    Result := False;', '    Run;', 'end;']),
     Fix121(InUnit(['function F: Boolean;', 'begin', '    Run;', 'end;']),
       'function F', 'F', R), R);
   Assert.AreEqual(InUnit(['function F: Boolean;', 'begin',
-    #9'Result := Default(Boolean);', #9'Run;', 'end;']),
+    #9'Result := False;', #9'Run;', 'end;']),
     Fix121(InUnit(['function F: Boolean;', 'begin', #9'Run;', 'end;']),
       'function F', 'F', R), R);
   // ... im leeren Rumpf begin + eine Stufe (Tab, wenn begin Tabs traegt).
   Assert.AreEqual(InUnit(['function F: Boolean;', 'begin',
-    '  Result := Default(Boolean);', 'end;']),
+    '  Result := False;', 'end;']),
     Fix121(InUnit(['function F: Boolean;', 'begin', 'end;']), 'function F',
       'F', R), R);
   Assert.AreEqual(InUnit(['function F: Boolean;', #9'begin',
-    #9#9'Result := Default(Boolean);', #9'end;']),
+    #9#9'Result := False;', #9'end;']),
     Fix121(InUnit(['function F: Boolean;', #9'begin', #9'end;']),
       'function F', 'F', R), R);
 end;
@@ -247,11 +251,10 @@ var
   R : string;
 begin
   // Code hinter begin auf seiner Zeile: inline, ohne die Zeilen umzubrechen.
-  Assert.AreEqual(InUnit(['function F: Integer; begin Result := '
-    + 'Default(Integer); end;']),
+  Assert.AreEqual(InUnit(['function F: Integer; begin Result := 0; end;']),
     Fix121(InUnit(['function F: Integer; begin end;']), 'function F', 'F', R), R);
-  Assert.AreEqual(InUnit(['function F: Integer;', 'begin Result := '
-    + 'Default(Integer); Run;', 'end;']),
+  Assert.AreEqual(InUnit(['function F: Integer;', 'begin Result := 0; Run;',
+    'end;']),
     Fix121(InUnit(['function F: Integer;', 'begin Run;', 'end;']),
       'function F', 'F', R), R);
 end;
@@ -262,17 +265,17 @@ var
 begin
   // Ein '//'-Kommentar hinter begin bleibt dort, die Zeile kommt darunter.
   Assert.AreEqual(InUnit(['function F: Integer;', 'begin // Start',
-    '  Result := Default(Integer);', '  Run;', 'end;']),
+    '  Result := 0;', '  Run;', 'end;']),
     Fix121(InUnit(['function F: Integer;', 'begin // Start', '  Run;', 'end;']),
       'function F', 'F', R), R);
   // Ein Kommentar ueber Zeilen bzw. eine Direktive hinter begin: inline
   // davor - eine neue Zeile laege im Kommentar bzw. im Zweig.
   Assert.AreEqual(InUnit(['function F: Integer;',
-    'begin Result := Default(Integer); { lang', '  weiter }', '  Run;', 'end;']),
+    'begin Result := 0; { lang', '  weiter }', '  Run;', 'end;']),
     Fix121(InUnit(['function F: Integer;', 'begin { lang', '  weiter }',
       '  Run;', 'end;']), 'function F', 'F', R), R);
   Assert.AreEqual(InUnit(['function F: Integer;',
-    'begin Result := Default(Integer); {$IFDEF X}', '  Run;', '{$ENDIF}',
+    'begin Result := 0; {$IFDEF X}', '  Run;', '{$ENDIF}',
     'end;']),
     Fix121(InUnit(['function F: Integer;', 'begin {$IFDEF X}', '  Run;',
       '{$ENDIF}', 'end;']), 'function F', 'F', R), R);
@@ -282,13 +285,14 @@ procedure TTestRdxResultFixes.Sca121_TypeFromDecl;
 var
   R, S : string;
 begin
-  // Implementierungskopf ohne Signatur: der Typ aus der Deklaration.
+  // Implementierungskopf ohne Signatur: der Typ aus der Deklaration
+  // (TStrings, eine Klasse der Delphi-Quellen: nil).
   S := Join(['unit u;', 'interface', 'type', '  TFoo = class',
     '    function Bar(A: Integer): TStrings;', '  end;', 'implementation',
     'function TFoo.Bar;', 'begin', 'end;', 'end.']);
   Assert.AreEqual(Join(['unit u;', 'interface', 'type', '  TFoo = class',
     '    function Bar(A: Integer): TStrings;', '  end;', 'implementation',
-    'function TFoo.Bar;', 'begin', '  Result := Default(TStrings);', 'end;',
+    'function TFoo.Bar;', 'begin', '  Result := nil;', 'end;',
     'end.']), Fix121(S, 'function TFoo.Bar', 'Bar', R), R);
   // Overload in der Deklaration: welcher Typ, ist offen.
   S := Join(['unit u;', 'interface', 'type', '  TFoo = class',
@@ -302,12 +306,14 @@ procedure TTestRdxResultFixes.Sca121_GenericQualifiedOperator;
 var
   R : string;
 begin
+  // Typparameter und Record: Default(T); eine generische Klasse der
+  // Delphi-Quellen (qualifiziert): nil.
   Assert.AreEqual(InUnit(['function TBox<T>.Get: T;', 'begin',
     '  Result := Default(T);', 'end;']),
     Fix121(InUnit(['function TBox<T>.Get: T;', 'begin', 'end;']),
       'function TBox', 'Get', R), R);
   Assert.AreEqual(InUnit(['function F: System.Generics.Collections.TList<Integer>;',
-    'begin', '  Result := Default(System.Generics.Collections.TList<Integer>);',
+    'begin', '  Result := nil;',
     'end;']),
     Fix121(InUnit(['function F: System.Generics.Collections.TList<Integer>;',
       'begin', 'end;']), 'function F', 'F', R), R);
@@ -325,7 +331,7 @@ begin
   // hinter dem begin der aeusseren Routine.
   Assert.AreEqual(InUnit(['function F: Integer;', '  procedure Inner;',
     '  begin', '    Log(''x'');', '  end;', 'var', '  I: Integer;', 'begin',
-    '  Result := Default(Integer);', '  Inner;', 'end;']),
+    '  Result := 0;', '  Inner;', 'end;']),
     Fix121(InUnit(['function F: Integer;', '  procedure Inner;', '  begin',
       '    Log(''x'');', '  end;', 'var', '  I: Integer;', 'begin', '  Inner;',
       'end;']), 'function F', 'F', R), R);

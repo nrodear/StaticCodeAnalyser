@@ -45,6 +45,10 @@ program reDelphix.Test;
 //                        initialisieren) auf Text, ohne Parser
 //   * uTestRdxInheritedFixes - Quick-Fixes SCA096/SCA097 (inherited in
 //                        Konstruktor/Destruktor) auf Text, ohne Parser
+//   * uTestRdxResultGuards - die Sperren und Werte aus dem Gegen-Review H5
+//                        (Charge H5c: Delegation, abstrakt/objfpc, Exit auf
+//                        jeder Tiefe, Vorfahrenliste, Literal statt
+//                        Default(T), Typ der Unit)
 //   * uTestRdxResultFixesDetector - die Hilfen der Charge H5 gegen die
 //                        echten Detektoren (Fund -> Hilfe -> Fund weg)
 //   * uTestRdxTryGates - die Sperren und Formen aus dem Gegen-Review H4
@@ -140,6 +144,7 @@ uses
   uTestRdxTryFixesDetector in 'uTestRdxTryFixesDetector.pas',
   uTestRdxResultFixes in 'uTestRdxResultFixes.pas',
   uTestRdxInheritedFixes in 'uTestRdxInheritedFixes.pas',
+  uTestRdxResultGuards in 'uTestRdxResultGuards.pas',
   uTestRdxResultFixesDetector in 'uTestRdxResultFixesDetector.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',
   uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas',

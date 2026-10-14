@@ -247,11 +247,13 @@ var
   Meta : TRuleMeta;
   Bad  : string;
 begin
-  // 'good' schreibt die Logik um - die Hilfe initialisiert nur.
+  // 'good' schreibt die Logik um - die Hilfe initialisiert nur, fuer
+  // Integer mit dem Literal 0 (Charge H5c: Default(T) nur, wo kein Literal
+  // passt).
   Meta := TRuleCatalog.GetRuleCanonical(fkRoutineResultUnassigned);
   Bad := CatalogText(Meta.BadExample);
   Assert.AreEqual(InPlainUnit(StringReplace(Bad, 'begin'#13#10,
-    'begin'#13#10'  Result := Default(Integer);'#13#10, [])),
+    'begin'#13#10'  Result := 0;'#13#10, [])),
     FixAll(InPlainUnit(Bad), fkRoutineResultUnassigned));
 end;
 
@@ -263,7 +265,7 @@ begin
     '  Log(A);', 'end;'])), fkRoutineResultUnassigned);
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.IsTrue(O.ChangesBehavior, 'aendert Verhalten');
-  Assert.AreEqual('Initialize Result with Default(Integer) (changes behavior)',
+  Assert.AreEqual('Initialize Result with 0 (changes behavior)',
     TRdxFixTable.CaptionFor(fkRoutineResultUnassigned, O));
 end;
 

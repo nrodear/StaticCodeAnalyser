@@ -2369,8 +2369,8 @@ msgstr "Appeler %s en premier dans le constructeur"
 msgid "Call inherited last in the destructor"
 msgstr "Appeler inherited en dernier dans le destructeur"
 
-msgid "Initialize Result with Default(%s)"
-msgstr "Initialiser Result avec Default(%s)"
+msgid "Initialize Result with %s"
+msgstr "Initialiser Result avec %s"
 
 msgid "Initialize Result first: %s"
 msgstr "Initialiser Result d'abord : %s"

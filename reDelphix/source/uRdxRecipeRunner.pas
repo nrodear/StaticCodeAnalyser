@@ -30,7 +30,7 @@ uses
   uRdxScopeTable,   // TRdxScopeTable (QualifyUses)
   uRdxBufferMath,   // TRdxEdit
   uRdxCodeMap,      // TRdxCodeMap: Bausteine der Tabelle uRdxFixTable (Charge R8)
-  uRdxFlowFixes;    // TRdxFlowPlan (FlowFix)
+  uRdxFlowFixes;    // TRdxFlowPlan (CondAssignReason)
 
 const
   // So viele Provide-Chargen haelt der Anbieter am Leben: ein Menue fragt
@@ -38,8 +38,8 @@ const
   // reichlich Reserve fuer Abfragen zwischen Aufbau und Klick (Gluehbirne
   // im Hintergrund). Review reDelphiX 2026-10-07, Blocker 2.
   RDX_ACTION_BATCHES = 8 * MAX_FINDINGS_PER_MENU;
-  // Grund ohne offene Datei (MapFix, uRdxFixTable.RoutineFix; bis Charge
-  // H3c stand er dort als R_NO_FILE_OPEN doppelt - Minor 6).
+  // Grund ohne offene Datei (MapFix, das Geruest uRdxFixTable.TRdxFixFrame;
+  // bis Charge H3c stand er dort als R_NO_FILE_OPEN doppelt - Minor 6).
   R_NO_FILE = 'keine Datei geoeffnet';
 
 type
@@ -413,13 +413,9 @@ type
   // oeffnet ihnen die Code-Sicht.
   TRdxMapPlanner = function(AMap: TRdxCodeMap; ALine: Integer;
     const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
-  // Die Planer der Anweisungs-Hilfen (uRdxFlowFixes) und die Typpruefung
-  // dazu (FlowFix).
-  TRdxFlowPlanner = function(AMap: TRdxCodeMap; ALine: Integer;
-    const AMessage: string; out APlan: TRdxFlowPlan;
-    out AReason: string): Boolean;
-  TRdxFlowReason = function(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
-    ALine: Integer; const APlan: TRdxFlowPlan): string;
+  // FlowFix (SCA098/SCA080/SCA047) mit TRdxFlowPlanner/TRdxFlowReason steht
+  // seit Charge H5c als Plan-Form im Geruest der Tabelle (uRdxFixTable,
+  // TRdxFixFrame; Gegen-Review H5, Major 2) - hier brauchte es niemand.
 
 // SCA075, SCA087 und die Zeilen-Hilfen SCA082/SCA071/SCA088, SCA020/SCA120/
 // SCA122, SCA117/SCA197/SCA149: APlan arbeitet nur auf den Zeilen, ohne
@@ -428,12 +424,6 @@ type
 // Ersetzung nach Edits[0], sonst der Grund.
 function MapFix(ALines: TStrings; ALine: Integer; const AMessage: string;
   APlan: TRdxMapPlanner): TRdxFixOutcome;
-// SCA098, SCA080, SCA047 (Charge H2): APlan auf den Zeilen, danach AReason
-// (nil = keine) mit dem Quellstellen-Dienst - Typen, with-Bloecke. Name ist
-// das Ziel bzw. Exit/Continue (Menuetext).
-function FlowFix(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; APlan: TRdxFlowPlanner;
-  AReason: TRdxFlowReason): TRdxFixOutcome;
 // SCA123: 'TFoo(X).Free' -> 'X.Free' - Bedingungen am Rumpf.
 function CastFreeFix(APlaces: TSourcePlaces; ALines: TStrings;
   ALine: Integer; const AMessage: string): TRdxFixOutcome;
@@ -2042,37 +2032,6 @@ begin
      and not TRdxSimpleFixes.DeclaresInlineVar(AMap, ALine, Root) then
     Result := Format('%s ist hier nicht als Variable bekannt (Property oder '
       + 'Feld aus einer anderen Unit?)', [Root]);
-end;
-
-// SCA098, SCA080, SCA047 (Charge H2): der Planer auf den Zeilen, danach die
-// Pruefung mit dem Quellstellen-Dienst. Alle drei bedeutungsgleich - den
-// Hinweis setzt die Tabelle.
-function FlowFix(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; APlan: TRdxFlowPlanner;
-  AReason: TRdxFlowReason): TRdxFixOutcome;
-var
-  Map  : TRdxCodeMap;
-  Plan : TRdxFlowPlan;
-begin
-  Result := Default(TRdxFixOutcome);
-  Map := OpenMapFor(APlaces, ALines, Result);
-  if Map = nil then Exit;
-  try
-    Result.Enabled := APlan(Map, AFinding.LineInt, AFinding.Message, Plan,
-      Result.Reason);
-    Result.Name := Plan.Target;
-    if Result.Enabled and Assigned(AReason) then
-      Result.Reason := AReason(APlaces, Map, AFinding.LineInt, Plan);
-  finally
-    Map.Free;
-  end;
-  Result.Enabled := Result.Enabled and (Result.Reason = '');
-  if not Result.Enabled then
-  begin
-    Result.Edits := nil;
-    Exit;
-  end;
-  Result.Edits[0] := Plan.Edit;
 end;
 
 // Der Text, auf dem uNilComparison den Knoten zaehlt (Analyse
