@@ -1826,7 +1826,7 @@ const
         #13#10 + '// or call HelperA from DoStuff to make the dependency explicit';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA148
     (
@@ -2039,7 +2039,7 @@ const
         '// or move it to interface if it should be exported';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA165
     (

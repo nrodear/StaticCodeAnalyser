@@ -34,6 +34,7 @@ source\uRdxLineFixes.pas          Quick-Fixes an einer Zeile SCA082/SCA071/SCA08
 source\uRdxRaiseFixes.pas         Quick-Fixes an Ausnahmen und leeren Rumpfen SCA020/SCA120/SCA122, reine Textlogik
 source\uRdxDeclFixes.pas          Quick-Fixes an Deklarationen SCA117/SCA197/SCA149, reine Textlogik
 source\uRdxFlowFixes.pas          Quick-Fixes an ganzen Anweisungen SCA098/SCA080/SCA047 (Charge H2), reine Textlogik
+source\uRdxRoutineFixes.pas       Quick-Fixes SCA164/SCA147 (ungenutzte Routine / private Methode loeschen, Charge H3b) und die Bausteine Routinengrenzen und Decl/Impl-Finder, reine Textlogik
 source\uRdxIntroPlan.pas          Code-Aktion "Lokale Variable einfuehren" (ohne Fund): Literal am Caret, Deklaration, Spalten, Ablehnungen (reine Textlogik)
 source\uRdxIntroEdits.pas         dieselbe Aktion: Puffertext, Ziel am Caret, Ersetzungen des Writers, Ende des Sync-Blocks (reine Textlogik; IDE-Teil folgt)
 source\uRdxSuppress.pas           Unterdrueck-Marker setzen und entfernen (reine Textlogik)
@@ -42,7 +43,7 @@ source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung
 source\uRdxEditor.pas             ToolsAPI: Puffer lesen, Bereich markieren, Bereiche ersetzen (ein Undo-Schritt), Projekt-Units
 source\uRdxLog.pas                Protokoll %TEMP%\reDelphix.log + DebugView
 data\unitscopes.txt               die Scope-Tabelle (erzeugt), als RCDATA eingelinkt (data\unitscopes.rc)
-tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 23 Testunits (siehe "Pruefen")
+tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 26 Testunits (siehe "Pruefen")
 tools\gen_unitscopes.py           erzeugt data\unitscopes.txt aus der Delphi-Installation
 tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik unter FPC 3.2.2 und fuehrt Tests aus
 tools\probe\RdxCorpusProbe.dpr    Korpus-Probe: Rezept 5.1 ueber eine Liste von Fundstellen, CSV
@@ -127,6 +128,8 @@ die Engine also vorher. DCUs landen wie bei den anderen Projekten in
 | Bedingung direkt an X zuweisen | SCA098 | `if C then X := True else X := False` -> `X := C`, Gegenrichtung (`then False else True`) -> `X := not C`. Klammern nur um ein zusammengesetztes C (`not (A > B)`; `not Ready` und schon geklammertes `not (A and B)` ohne weitere), Zeilenumbrueche in C bleiben, Ziel und Zuweisung wie im then-Zweig (`Result:=`). Bedeutungsgleich. Gegenprobe wie der Detektor: Ziel und beide Werte wie in der Meldung, kein `;` vor dem `else`, hinter dem zweiten Wert endet die Anweisung. X muss als `Boolean` deklariert sein (DeclaredTypeOf; bei Variant bekaeme X den Wert der Bedingung statt True/False). In der Gegenrichtung auch C: der Form nach Boolean - ein Vergleich auf oberster Ebene oder `and`/`or`/`xor`/`not` ueber solchen Teilen, `True`/`False` und blossen Bezeichnern - und jeder dieser Bezeichner als `Boolean` deklariert; bei einem Variant waere `not` bitweise (`not 1` ist wieder wahr), ein Aufruf als C bleibt in der Gegenrichtung deshalb aus. Gesperrt bei einem Kommentar oder einer Direktive in der Anweisung, `begin..end`-Zweigen, einem Ausdruck hinter dem zweiten Wert (`X := False or Y`), einem bedingten Ausdruck (Delphi 13), im `with`-Block und bei zwei solchen Anweisungen auf der Zeile (die Meldung nennt keine Spalte). Folgefund: stand das if hinter `end else`, meldet SCA099 danach `end else X := C` (Korpus 2 von 220) |
 | Ueberfluessiges Exit/Continue entfernen | SCA080 | loescht `Exit;` bzw. `Continue;` - allein auf der Zeile die ganze Zeile; hinter dem `else` eines `if` faellt `else Exit` weg (`if C then Foo else Exit;` -> `if C then Foo;`). Bedeutungsgleich. Gegenprobe wie uRedundantJump: dahinter nur die end-Kette bis zum Routinenende, `end.` oder `until`; Exit nicht im Rumpf einer Schleife. Gesperrt als einzige Anweisung hinter `then`/`do` (`if C then Exit;` - es bliebe `if C then` stehen, und C kann Seiteneffekte haben), eines case-Zweigs, des `else` von case/except und eines Blocks (`begin Exit; end`, `except Exit; end` - es bliebe ein leerer Block), bei mehreren Sprunganweisungen auf der Zeile, bei einem Kommentar auf der Zeile (er erklaert den Sprung) und bei einer eigenen Routine `Exit`/`Continue` in der Unit (`Exit;` riefe sie auf; eine geerbte Methode dieses Namens aus einer anderen Unit sieht die Hilfe nicht - Restrisiko). Im `finally`-Teil gesperrt, obwohl dort kein Sprung uebersetzt (Delphi 12 E2126, FPC 3.2.2 Fehler 06040 - Mikroprobe 2026-10-12): Code unter einer inaktiven Direktive sieht kein Compiler. Folgefunde: ohne das Exit melden SCA121 bzw. SCA132 vereinzelt, was das Exit vorher verdeckte (Korpus je 1) |
 | Selbstzuweisung von X entfernen | SCA047 | loescht `X := X;` - allein auf der Zeile die ganze Zeile -, auch Pfade (`Pt.Y := Pt.Y;`, `R^.F := R^.F;`). Bedeutungsgleich; war ein anderer Wert gemeint (Tippfehler, Katalog: `FCount := ACount`), fehlt er weiterhin - der Hinweis sagt es. Gegenprobe: links und rechts derselbe Pfad wie in der Meldung (ohne Leerraum, Gross/klein egal), dahinter endet die Anweisung. Die Wurzel muss eine Variable sein (DeclaredTypeOf oder Inline-Variable), kein Pfadteil eine Property der Unit (ihr Setter liefe sonst nicht mehr). Gesperrt fuer `Result := Result` (stillt vielleicht W1035 bzw. den FPC-Hinweis "Function result does not seem to be set" - der Katalog empfiehlt dort das Unterdruecken), wenn X auch eine Routine der Unit ist (rechts koennte ein rekursiver Aufruf stehen), bei einem `class operator Assign` in der Unit (verwaltete Records: die Zuweisung fuehrt Code aus; ein Record aus einer anderen Unit mit Assign-Operator ist nicht erkennbar - Restrisiko), bei einem Kommentar auf der Zeile (`Pt.Y := Pt.Y; // + Scroll` traegt die Absicht), als einzige Anweisung hinter `then`/`else`/`do`, eines case-Zweigs oder eines Blocks, ueber mehrere Zeilen und im `with`-Block |
+| Ungenutzte Routine 'X' loeschen | SCA164 | loescht die freie Routine des implementation-Teils vom Kopf bis zu ihrem `end;` - samt lokaler Abschnitte und Routinen (Baustein Routinengrenzen: Variantenrecord, Prozedurtypen, Direktiven auf Folgezeilen, `asm` mit `@@end`), der Zeilen direkt darueber, die nur Kommentar, `///`-Doku oder ein Attribut tragen (ein Abschnittsmarker `{ Helpers }` bleibt, `{ X }` mit dem Namen der Routine geht mit), EINER Leerzeile (dahinter, sonst davor) und einer `forward`-Deklaration; ein Einzeiler `procedure X; begin end;` als ganze Zeile. Bedeutungsgleich. Den Beweis fuehrt die Hilfe neu am Puffer: der Name steht ausserhalb der Routine nirgends als Code - auch nicht in einem inaktiven `$IFDEF`-Zweig (Korpus: mORMot `ExchgLen`, der Detektor meldete trotz Aufruf), als `@X`, in `exports` oder im interface-Teil -, in keinem String-Literal (`GetProcAddress`, RTTI, Skript-Registrierung) und in keiner Direktive (`{$EXTERNALSYM X}`). Gesperrt bei Overloads, Methoden (das meldet SCA147), `export`/`public`/`alias`/`external`/`forward`/`interrupt`, `{$L}`/`{$LINK}` in der Datei (der C-Code ruft per Name), `{$I}` im implementation-Teil (dort kann ein Aufrufer stehen), einer Direktive im Bereich ausser ausgeglichenem `$IF..`/`$ENDIF` bzw. `$REGION` (`{$DEFINE}`, `{$R-}` wirkten weiter), zwei Routinen auf einer Zeile, einem Kopf vor `implementation` (Programme meldet der Detektor nicht) und unsicheren Grenzen (lokaler Klassentyp, Kopf im Rumpf, `$IFDEF`-geteilter Rumpf) |
+| Ungenutzte private Methode 'X' loeschen | SCA147 | loescht die Deklaration im Klassenrumpf (samt `///`-Doku; ein Gruppenkommentar wie `{ Private declarations }` bleibt) und die Implementierung wie bei SCA164 (Baustein Decl/Impl-Finder: verschachtelte Klassen `TOuter.TInner.X`, generische `TFoo<T>.X`, `class procedure`). Bedeutungsgleich. Nur unter `private`/`strict private`; der Name steht nur in Deklaration und Implementierung (rekursive Aufrufe im eigenen Rumpf zaehlen nicht). Gesperrt bei `virtual`/`dynamic`/`override`/`abstract`/`reintroduce`/`message`/`overload`/`dispid`, Konstruktor, Destruktor und Operator, mehr als einer Deklaration oder Implementierung, keiner Implementierung in der Datei (Include, abstract), Property-Accessor, Name als String-Literal (`MethodAddress`), `{$RTTI}` in der Datei, Attribut an Methode oder Klasse, `{$I}` im Klassenrumpf (dort kann `property P read X` stehen) oder im implementation-Teil, einem Interface der Klasse aus einer anderen Unit (die Methode kann sein Member sein) und einer `.dfm`/`.fmx`/`.lfm` neben der Unit, die den Namen nennt (der Detektor liest nur `.dfm`). Der leere private-Abschnitt, der bleiben kann, meldet danach SCA087 (eigene Hilfe) |
 | Leeren Sichtbarkeitsabschnitt entfernen | SCA087 | loescht die Zeile des leeren Abschnitts (`public`, `strict private` ...). Nur, wenn sie genau diesen Abschnitt traegt, ohne Kommentar; gesperrt bei `strict` allein auf der Zeile (es gehoert zur naechsten) und bei einer Compiler-Direktive bis zum naechsten Abschnitt (der Abschnitt waere vielleicht nur in einem Zweig leer) |
 | Hier / In dieser Datei unterdruecken | jeder Fund in Pascal-Quelltext | setzt `// noinspection <Art>` ueber die Fundzeile bzw. `// noinspection-file <Art>` hinter die Kopfanweisung (`fakSuppress`); ein vorhandener Marker bekommt die Art dazu, ausser er lautet `All`/`*` (dann eine eigene Zeile). Nicht angeboten, wenn die Fundzeile in einem Block-Kommentar oder mehrzeiligen String liegt. Einen wirkungslosen Marker (SCA165) entfernt "Wirkungslosen Unterdrueck-Marker entfernen" stattdessen - nur, wenn er genau EINE Art nennt; ein Mehrarten- oder `All`-Marker steht gesperrt mit Grund da, denn SCA165 kommt auch, wenn nur die Arten des aktiven Scan-Profils nichts unterdrueckt haben |
 
@@ -327,6 +330,8 @@ Projekt scannen. Gluehbirne oder Editor-Kontextmenue auf der Fundzeile:
 | SCA098 RedundantConditional | `if Active then Result := True else Result := False;` (Result: Boolean) | Bedingung direkt an Result zuweisen |
 | SCA080 RedundantJump | `Exit;` als letzte Anweisung der Routine | Ueberfluessiges Exit entfernen |
 | SCA047 SelfAssignment | `FCount := FCount;` (Feld der Unit) | Selbstzuweisung von FCount entfernen |
+| SCA164 UnusedRoutine | `procedure Helper; begin end;` im implementation-Teil, nirgends gerufen | Ungenutzte Routine 'Helper' loeschen |
+| SCA147 UnusedPrivateMethod | private Methode ohne Aufruf in der Unit | Ungenutzte private Methode 'X' loeschen (danach SCA087: leeren Abschnitt entfernen) |
 | SCA165 UnusedSuppression | wirkungsloser `// noinspection`-Marker | Marker entfernen - nur bei genau einer Art; Mehrarten- und `All`-Marker stehen gesperrt da (unter diesem Teilprofil wirken sie vielleicht nur scheinbar nicht) |
 | SCA142 UnsortedUses, SCA007 UnusedUses | Fund auf einer uses-Zeile | uses: Eintraege qualifizieren (Winapi.Windows, System.SysUtils ...) - nur im Kontextmenue, nicht in der Gluehbirne: es behebt den Fund nicht |
 | jede Regel ausser SCA165 | beliebig | Hier / in dieser Datei unterdruecken; Stelle zeigen (Kontextmenue) |
@@ -441,11 +446,18 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
   Charge R8 keinen), woertlich (Charge R9).
 * `uTestRdxSimpleFixes` / `uTestRdxNilFix` / `uTestRdxExprFixes` /
   `uTestRdxStructFixes` / `uTestRdxBlockFixes` / `uTestRdxLineFixes` /
-  `uTestRdxRaiseFixes` / `uTestRdxDeclFixes` / `uTestRdxFlowFixes` - die
+  `uTestRdxRaiseFixes` / `uTestRdxDeclFixes` / `uTestRdxFlowFixes` /
+  `uTestRdxRoutineFixes` / `uTestRdxMethodFixes` - die
   Quick-Fixes SCA074/SCA075/SCA085/SCA087/SCA139, SCA126,
   SCA066/SCA072/SCA084, SCA007/SCA168, SCA101/SCA099,
-  SCA082/SCA071/SCA088/SCA123, SCA020/SCA120/SCA122, SCA117/SCA197/SCA149
-  bzw. SCA098/SCA080/SCA047 auf Text, ohne Parser.
+  SCA082/SCA071/SCA088/SCA123, SCA020/SCA120/SCA122, SCA117/SCA197/SCA149,
+  SCA098/SCA080/SCA047 bzw. SCA164 (samt den Bausteinen Routinengrenzen
+  und Decl/Impl-Finder) und SCA147 auf Text, ohne Parser.
+* `uTestRdxRoutineFixesDetector` - SCA164/SCA147 gegen die echten
+  Detektoren: Fund -> Hilfe -> Fund weg, die Katalog-Beispiele (SCA147
+  mit Implementierung, danach SCA087 -> genau `good`), Funde, die der
+  Detektor meldet und die Hilfe ablehnt (Name als String-Literal, eine
+  `.fmx` nennt die Methode). Eigene Unit, nur Delphi.
 * `uTestRdxSimpleFixesDetector` - dieselben Hilfen gegen den echten
   Detektor: nach der Hilfe meldet er nichts mehr; die Katalog-Beispiele
   `bad` werden genau `good` (SCA074 und SCA139: das `good` traegt eine
@@ -465,12 +477,13 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext
+bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext
 ```
 
-Erwartet (Stand 2026-10-14, Charge R10): `PASSED 285  FAILED 0` - 18 Testunits,
+Erwartet (Stand 2026-10-14, Charge H3b): `PASSED 310  FAILED 0` - 20 Testunits,
 davon 72 Tests fuer "Lokale Variable einfuehren", 12 fuer die Quick-Fixes der
-Charge H2, 7 der Charge R8 (6 fuer die geteilten Laeufe in
+Charge H2, 25 der Charge H3b (SCA164 und Bausteine 13 in
+`uTestRdxRoutineFixes`, SCA147 12 in `uTestRdxMethodFixes`), 7 der Charge R8 (6 fuer die geteilten Laeufe in
 `uTestRdxCodeMap`, 1 fuer den Fremdtyp-Beweis von SCA126 in `uTestRdxNilFix`),
 1 der Charge R9 (SCA085: `{$` hinter `//` ist keine Direktive, in
 `uTestRdxSimpleFixes`) und 2 der Charge R10 (E27: Klassen der Delphi-Quellen
@@ -482,7 +495,7 @@ Der Pruefstand uebersetzt die Core-Units des Quellstellen-Dienstes
 des Moduls (`uRdxRecipes`, `uRdxScopeTable`, `uRdxBufferMath`,
 `uRdxSuppress`, `uRdxSimpleFixes`, `uRdxRtlTypes` samt der erzeugten
 `uRdxRtlTypes.inc`, `uRdxStructFixes`, `uRdxLineFixes`, `uRdxRaiseFixes`,
-`uRdxDeclFixes`, `uRdxFlowFixes`, `uRdxCodeMap`,
+`uRdxDeclFixes`, `uRdxFlowFixes`, `uRdxRoutineFixes`, `uRdxCodeMap`,
 `uRdxIntroPlan`, `uRdxIntroEdits`). Testunits kommen aus `reDelphix\tests`,
 sonst aus `StaticCodeAnalyserForm\tests` (Core-Tests wie
 `uTestSourcePlaces`, `uTestRefactorConcat`).

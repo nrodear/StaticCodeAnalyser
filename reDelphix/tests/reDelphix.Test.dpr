@@ -28,11 +28,18 @@ program reDelphix.Test;
 //                        auf Text, ohne Parser
 //   * uTestRdxFlowFixes - Quick-Fixes SCA098/SCA080/SCA047 (ganze
 //                        Anweisungen) auf Text, ohne Parser
+//   * uTestRdxRoutineFixes - Quick-Fix SCA164 (ungenutzte Routine) und
+//                        die Bausteine Routinengrenzen und Decl/Impl-
+//                        Finder auf Text, ohne Parser
+//   * uTestRdxMethodFixes - Quick-Fix SCA147 (ungenutzte private
+//                        Methode) auf Text, ohne Parser
 //   * uTestRdxExprFixes - Editorhilfen SCA066/SCA072/SCA084 (uQuickFix-
 //                        Umzug) auf Text, ohne Parser
 //   * uTestRdxNilFix   - Editorhilfe SCA126 auf Text, ohne Parser
 //   * uTestRdxSimpleFixesDetector - dieselben Hilfen gegen den echten
 //                        Detektor, Katalog-Beispiele bad -> good
+//   * uTestRdxRoutineFixesDetector - SCA164/SCA147 gegen die echten
+//                        Detektoren (Fund -> Hilfe -> Fund weg)
 //   * uTestRdxCodeMap  - Code-Sicht (uRdxCodeMap) gegen ScanCodeLine des
 //                        Cores (Drift-Waechter), StartsInside
 //   * uTestRdxQualifyUses - Planung von "uses: X -> Scope.X" (QualifyUses)
@@ -78,6 +85,7 @@ uses
   uRdxRaiseFixes in '..\source\uRdxRaiseFixes.pas',
   uRdxDeclFixes in '..\source\uRdxDeclFixes.pas',
   uRdxFlowFixes in '..\source\uRdxFlowFixes.pas',
+  uRdxRoutineFixes in '..\source\uRdxRoutineFixes.pas',
   uRdxRecipeRunner in '..\source\uRdxRecipeRunner.pas',
   uRdxFixTable in '..\source\uRdxFixTable.pas',
   uRdxIntroPlan in '..\source\uRdxIntroPlan.pas',
@@ -95,8 +103,11 @@ uses
   uTestRdxRaiseFixes in 'uTestRdxRaiseFixes.pas',
   uTestRdxDeclFixes in 'uTestRdxDeclFixes.pas',
   uTestRdxFlowFixes in 'uTestRdxFlowFixes.pas',
+  uTestRdxRoutineFixes in 'uTestRdxRoutineFixes.pas',
+  uTestRdxMethodFixes in 'uTestRdxMethodFixes.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',
   uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas',
+  uTestRdxRoutineFixesDetector in 'uTestRdxRoutineFixesDetector.pas',
   uTestRdxCodeMap in 'uTestRdxCodeMap.pas',
   uTestRdxQualifyUses in 'uTestRdxQualifyUses.pas',
   uTestRdxFixTable in 'uTestRdxFixTable.pas',

@@ -29,6 +29,8 @@
       "RedundantConditional",
       "RedundantJump",
       "SelfAssignment",
+      "UnusedRoutine",
+      "UnusedPrivateMethod",
       "UnusedSuppression",
       "UnsortedUses",
       "UnusedUses",

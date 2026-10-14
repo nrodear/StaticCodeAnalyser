@@ -2346,6 +2346,12 @@ msgstr "Überflüssiges %s entfernen"
 msgid "Remove the self-assignment of %s"
 msgstr "Selbstzuweisung von %s entfernen"
 
+msgid "Delete unused routine '%s'"
+msgstr "Ungenutzte Routine '%s' löschen"
+
+msgid "Delete unused private method '%s'"
+msgstr "Ungenutzte private Methode '%s' löschen"
+
 msgid "(changes behavior)"
 msgstr "(ändert Verhalten)"
 
