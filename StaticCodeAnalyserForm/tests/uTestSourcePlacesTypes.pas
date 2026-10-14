@@ -425,7 +425,9 @@ begin
       '''''x''; liegt hinter dem Kommentar');
     Assert.IsFalse(P.SpanHasComment(TRefactorSpan.Make(ROLE_STATEMENT, 4, 1, 4, 12)),
       'Zeile 4 bis vor den Zeilenkommentar');
-    Assert.IsTrue(P.SpanHasComment(TRefactorSpan.Make(ROLE_STATEMENT, 4, 1, 4, 22)),
+    // Zeile 4 ist 20 Zeichen lang, das Ende ist exklusiv: 21 = ganze Zeile.
+    // Ein Ende dahinter verwirft SpanFits (Welle 1) - frueher stand hier 22.
+    Assert.IsTrue(P.SpanHasComment(TRefactorSpan.Make(ROLE_STATEMENT, 4, 1, 4, 21)),
       'Zeile 4 mit Zeilenkommentar');
     Assert.IsFalse(P.SpanHasComment(TRefactorSpan.Make(ROLE_STATEMENT, 90, 1, 91, 2)),
       'ausserhalb der Datei False');

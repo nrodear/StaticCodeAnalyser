@@ -2869,23 +2869,29 @@ begin
 
   // Bedingungstext zwischen 'if' und 'then' erfassen
   // (fuer Guards bei NilDeref / DivByZero noetig).
-  // Seit 2026-10-14 wie ParseWhileStmt/ParseCaseStmt (Review Bereich C,
-  // Major 14): JoinTokInto statt Leerzeichen nach JEDEM Token - 'Obj.Member'
-  // blieb sonst 'Obj . Member', und uSymbolReferenceIndex sah den Member-
-  // Zugriff nicht (FP VisibilityCheck -> E2361 beim Umbau). QuoteStrLit
-  // verdoppelt eingebettete Apostrophe wieder: ein nacktes ' im Literal
-  // oeffnete fuer die Literal-Blanker der Detektoren einen falschen
-  // String (FP MagicNumber, FN NilComparison).
+  // Form: ein Leerzeichen nach JEDEM Token ('( x > 50 )', 'Obj . Member') -
+  // anders als while/case (JoinTokInto). Rund 20 Detektoren lesen diesen
+  // Text und sind gegen genau diese Form geschrieben (MagicNumber prueft
+  // z. B. die linke Grenze des Operators auf Leerraum). Der Versuch, sie
+  // hier kompakt zu schreiben (Welle 1, 98561aa0), brach MagicNumber
+  // komplett und SCA010-Guards still (Bau 2026-10-14): die Ursache jenes
+  // Umbaus - uSymbolReferenceIndex sah 'Obj . Member' nicht (FP
+  // VisibilityCheck) - ist jetzt im Konsumenten geloest
+  // (ScanExprForDottedRefs ueberspringt Leerraum um den Punkt).
+  // QuoteStrLit bleibt: es verdoppelt eingebettete Apostrophe wieder - ein
+  // nacktes ' im Literal oeffnete fuer die Literal-Blanker der Detektoren
+  // einen falschen String (FP MagicNumber, FN NilComparison).
   CondText := '';
   while not (Tok.Kind in [tkKwThen, tkKwEnd, tkEof]) do
   begin
     if Tok.Kind = tkStrLit then
-      JoinTokInto(CondText, QuoteStrLit(Tok.Value))
+      CondText := CondText + QuoteStrLit(Tok.Value)
     else
-      JoinTokInto(CondText, Tok.Value);
+      CondText := CondText + Tok.Value;
+    CondText := CondText + ' ';
     Next;
   end;
-  IfNode.TypeRef := CondText;
+  IfNode.TypeRef := Trim(CondText);
 
   Eat(tkKwThen);
 

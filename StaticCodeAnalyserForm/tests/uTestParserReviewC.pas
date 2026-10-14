@@ -18,7 +18,7 @@ type
   TTestParserReviewC = class
   public
     [Test] procedure StrictPrivate_NoPhantomField;
-    [Test] procedure IfCondition_QuotesDoubled_AndCompactJoin;
+    [Test] procedure IfCondition_QuotesDoubled_SpacedForm;
     [Test] procedure ForHeader_DottedMemberWithoutSpaces_KeepsAssignSpacing;
     [Test] procedure ForVar_TypedInlineVariable_Unchanged;
     [Test] procedure ArgumentScanner_UnbalancedParen_StopsAtBlockEnd;
@@ -105,18 +105,25 @@ begin
     Assert.IsNull(NodeNamed(Root, nkField, 'strict'));
     Assert.IsNotNull(NodeNamed(Root, nkField, 'FA'));
     Assert.AreEqual('string', NodeNamed(Root, nkField, 'FB').TypeRef);
-    Assert.AreEqual<Integer>(3, CountKind(Root, nkVisibilitySection),
-      'strict private, strict protected, public');
+    // Die erste Sektion legt der Parser immer an: die implizite
+    // 'published' vor dem ersten Schluesselwort (Bestand). Kein 'strict'.
+    Assert.AreEqual<Integer>(4, CountKind(Root, nkVisibilitySection),
+      'implizit published, strict private, strict protected, public');
+    Assert.IsNull(NodeNamed(Root, nkVisibilitySection, 'strict'),
+      'keine Sektion namens strict');
+    Assert.IsNotNull(NodeNamed(Root, nkVisibilitySection, 'protected'));
   finally
     Root.Free;
   end;
 end;
 
-procedure TTestParserReviewC.IfCondition_QuotesDoubled_AndCompactJoin;
-// Wie while/case: ein eingebetteter Apostroph steht wieder verdoppelt
-// (sonst oeffnete er fuer die Literal-Blanker der Detektoren einen
-// falschen String), und 'Obj.Count' bleibt zusammen (vorher 'Obj . Count',
-// unsichtbar fuer uSymbolReferenceIndex).
+procedure TTestParserReviewC.IfCondition_QuotesDoubled_SpacedForm;
+// Ein eingebetteter Apostroph steht wieder verdoppelt (sonst oeffnete er
+// fuer die Literal-Blanker der Detektoren einen falschen String). Die Form
+// bleibt die alte - ein Leerzeichen nach jedem Token -, weil rund 20
+// Detektoren gegen sie geschrieben sind (Welle 1 schrieb sie kompakt und
+// brach MagicNumber, Bau 2026-10-14). 'Obj . Count' sieht der Symbolindex
+// trotzdem (uTestSymbolReferenceIndex.Build_IfConditionDottedMember_Indexed).
 const
   SRC =
     'unit i; interface implementation'#13#10 +
@@ -135,7 +142,7 @@ begin
     L := Root.FindAll(nkIfStmt);
     try
       Assert.AreEqual<Integer>(1, L.Count);
-      Assert.AreEqual('(S=''it''''s'')and(Obj.Count>1)', L[0].TypeRef);
+      Assert.AreEqual('( S = ''it''''s'' ) and ( Obj . Count > 1 )', L[0].TypeRef);
     finally
       L.Free;
     end;

@@ -947,9 +947,11 @@ begin
     '  Q.ParamByName(''a'').AsInteger := 2;',                    // 19
     'end;'])), 'angelegter Name der ersten Instanz gilt nicht weiter');
   // Gegen-Review FX+E7, Minor 1: auch 'unvollstaendig' (SQL.Add(Var)) und
-  // 'dynamisch angefasst' der ERSTEN Instanz gelten fuer die zweite nicht -
-  // sonst bliebe sie trotz vollstaendigem SQL unbeurteilt (FN).
-  Assert.AreEqual('A:Q.a@18', Scan(L([
+  // 'dynamisch angefasst' (Params[0]) der ERSTEN Instanz gelten fuer die
+  // zweite nicht - sonst bliebe sie trotz vollstaendigem SQL unbeurteilt
+  // (FN). Beide Urteile kommen: (a) 'a' ist kein Platzhalter, (b) ':b' wird
+  // nie gesetzt - das (b) beweist, dass DynRefs zurueckgesetzt ist.
+  Assert.AreEqual('B:Q.b@17 | A:Q.a@18', Scan(L([
     'procedure P;',                                              // 10
     'begin',                                                     // 11
     '  Q := TFDQuery.Create(nil);',                              // 12

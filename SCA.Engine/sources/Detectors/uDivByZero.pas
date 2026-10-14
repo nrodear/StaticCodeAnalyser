@@ -362,12 +362,12 @@ begin
     // Wortgrenzen-Pruefung verhindert dass z.B. 'myvar > 0' faelschlich
     // auch 'myvariant' schuetzt.
     //
-    // AST-Form: ParseIfStmt legt die Bedingung seit Welle 1 (cde8c272)
-    // wie while/case per JoinTokInto ab - Operatoren OHNE umgebende
-    // Leerzeichen ('n>0', '0<>n'). Jede Form braucht deshalb ihren
-    // kompakten Zwilling, wie in IsGuardedByWhileCond. Der Yoda-Guard
-    // 'if 0 <> N then' und 'if N >= 1 then' hatten keinen und fielen
-    // still durch (Gegen-Review Welle 1, Major 1: neue SCA010-FPs).
+    // AST-Form: ParseIfStmt legt die Bedingung mit einem Leerzeichen nach
+    // jedem Token ab ('n > 0'); Welle 1 schrieb sie kurz kompakt ('n>0'),
+    // das ist seit dem Bau 2026-10-14 zurueckgenommen (s. uParser2). Die
+    // kompakten Zwillinge bleiben trotzdem vollstaendig - wie in
+    // IsGuardedByWhileCond, dessen Bedingung kompakt steht - damit kein
+    // Guard an der Schreibweise haengt (Gegen-Review Welle 1, Major 1).
     if TDetectorUtils.ContainsWholeWordLower(VarLow + ' > 0',  Low)  or
        TDetectorUtils.ContainsWholeWordLower(VarLow + '>0',    Low)  or
        TDetectorUtils.ContainsWholeWordLower(VarLow + ' >= 1', Low)  or

@@ -28,6 +28,9 @@ type
     [Test] procedure Build_BareCall_NotIndexed;
     [Test] procedure Build_AssignDottedLhs_IndexedAsMember;
     [Test] procedure Build_NestedDottedAccess_RightmostIndexed;
+    // Bau 2026-10-14: die if-Bedingung steht als 'Obj . Count' im AST
+    // (Leerzeichen nach jedem Token) - der Member muss trotzdem zaehlen.
+    [Test] procedure Build_IfConditionDottedMember_Indexed;
 
     // ---- Case-Insensitivity --------------------------------------------
     [Test] procedure Lookup_IsCaseInsensitive;
@@ -139,6 +142,33 @@ begin
   try
     Assert.IsTrue(Idx.HasExternalRefs('dostuff', 'other.pas'),
       'DoStuff sollte als Member-Referenz indexiert sein');
+  finally
+    Idx.Free;
+    if TFile.Exists(Tmp) then TFile.Delete(Tmp);
+  end;
+end;
+
+procedure TTestSymbolReferenceIndex.Build_IfConditionDottedMember_Indexed;
+// Review Bereich C, Major 14: 'Obj.Count' in einer if-Bedingung kam als
+// 'Obj . Count' an und blieb unsichtbar (FP VisibilityCheck). Welle 1 schrieb
+// dafuer die Bedingung kompakt - das brach MagicNumber; jetzt ueberspringt
+// ScanExprForDottedRefs Leerraum um den Punkt. Gegenprobe: ein Wort hinter
+// einem Leerzeichen ohne Punkt ('Count > 1') ist kein Member.
+const SRC =
+  'unit u; implementation'#13#10 +
+  'procedure Run;'#13#10 +
+  'var Obj: TObject; Limit: Integer;'#13#10 +
+  'begin if (Obj.Count > 1) and (Limit > 0) then Exit; end;';
+var
+  Idx : TSymbolReferenceIndex;
+  Tmp : string;
+begin
+  Idx := BuildIndexOver(SRC, Tmp);
+  try
+    Assert.IsTrue(Idx.HasExternalRefs('count', 'other.pas'),
+      'Count aus der if-Bedingung muss als Member-Referenz zaehlen');
+    Assert.IsFalse(Idx.HasExternalRefs('limit', 'other.pas'),
+      'Limit steht ohne Punkt - kein Member');
   finally
     Idx.Free;
     if TFile.Exists(Tmp) then TFile.Delete(Tmp);

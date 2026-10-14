@@ -269,8 +269,14 @@ var
       end;
       // Erstes Ident (potentielles 'Obj')
       while (i <= L) and IsIdentCharLocal(Expr[i]) do Inc(i);
+      // Leerraum um den Punkt ueberspringen: die if-Bedingung steht mit
+      // einem Leerzeichen nach jedem Token im AST ('Obj . Member'), while/
+      // case/for kompakt - beide Formen muessen den Member melden (sonst FP
+      // VisibilityCheck, Review Bereich C Major 14; Bau 2026-10-14).
+      while (i <= L) and (Expr[i] = ' ') do Inc(i);
       if (i > L) or (Expr[i] <> '.') then Continue;
       Inc(i);  // skip '.'
+      while (i <= L) and (Expr[i] = ' ') do Inc(i);
       if (i > L) or not IsIdentCharLocal(Expr[i]) then Continue;
       // Zweites Ident (potentielles 'Member' = Property/Field/Method)
       StartSecond := i;
