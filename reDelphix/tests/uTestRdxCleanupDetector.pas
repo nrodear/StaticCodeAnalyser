@@ -46,166 +46,47 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uParser2, uMethodd12, uSCAConsts, uRuleCatalog,
+  System.SysUtils, System.Generics.Collections,
+  uAstNode, uMethodd12, uSCAConsts, uRuleCatalog,
   uCommentedOutCode, uUnusedLocal,
-  uEngineApi, uRdxBufferMath, uRdxRecipeRunner, uRdxFixTable;
+  uTestRdxDetectorKit;   // TSeen, Join, Detect-/Plan-/Apply-Helfer (Charge H3c)
 
-type
-  // Was die Hilfe aus einem Fund liest - wie der Anbieter aus TLeakFinding.
-  TSeen = record
-    Line : Integer;
-    Msg  : string;
-  end;
-
-// ---- Helfer (wie uTestRdxSimpleFixesDetector) ----
-
-function Join(const ALines: array of string): string;
-begin
-  Result := string.Join(#13#10, ALines);
-end;
+// ---- Helfer (die gemeinsamen seit Charge H3c in uTestRdxDetectorKit) ----
 
 function InImplementation(const AText: string): string;
 begin
   Result := Join(['unit t;', 'interface', 'implementation', AText, 'end.']);
 end;
 
-function WriteTemp(const ASource: string): string;
-var
-  SL : TStringList;
+// Der Verteiler fuer den echten Detektor der Art AKind (TDetectorRun).
+procedure RunDetector(AKind: TFindingKind; Root: TAstNode;
+  const Path: string; Results: TObjectList<TLeakFinding>);
 begin
-  Result := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
-    + 'rdx_cleanup_' + GUIDToString(TGUID.NewGuid) + '.pas';
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    SL.SaveToFile(Result);
-  finally
-    SL.Free;
-  end;
+  if AKind = fkCommentedOutCode then
+    TCommentedOutCodeDetector.AnalyzeUnit(Root, Path, Results)
+  else
+    TUnusedLocalDetector.AnalyzeUnit(Root, Path, Results);
 end;
 
 // Funde der Art AKind - der echte Detektor auf dem echten AST.
 function Detect(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
-var
-  Path    : string;
-  Parser  : TParser2;
-  Root    : TAstNode;
-  Results : TObjectList<TLeakFinding>;
-  F       : TLeakFinding;
-  n       : Integer;
 begin
-  Result := nil;
-  Path := WriteTemp(ASource);
-  Results := TObjectList<TLeakFinding>.Create(True);
-  try
-    Parser := TParser2.Create;
-    try
-      Root := Parser.ParseFile(Path);
-      try
-        if AKind = fkCommentedOutCode then
-          TCommentedOutCodeDetector.AnalyzeUnit(Root, Path, Results)
-        else
-          TUnusedLocalDetector.AnalyzeUnit(Root, Path, Results);
-      finally
-        Root.Free;
-      end;
-    finally
-      Parser.Free;
-    end;
-    SetLength(Result, Results.Count);
-    n := 0;
-    for F in Results do
-      if F.Kind = AKind then
-      begin
-        Result[n].Line := F.LineInt;
-        Result[n].Msg  := F.Message;
-        Inc(n);
-      end;
-    SetLength(Result, n);
-  finally
-    Results.Free;
-    DeleteFile(Path);
-  end;
+  Result := DetectSource('rdx_cleanup_', ASource, AKind, RunDetector);
 end;
 
-// Die Hilfe fuer EINEN Fund ueber den Einstieg des Anbieters.
-function PlanFix(const ASource: string; AKind: TFindingKind;
-  const ASeen: TSeen; out AEdits: TArray<TRdxEdit>; out AReason: string): Boolean;
-var
-  SL      : TStringList;
-  Places  : TSourcePlaces;
-  Finding : TLeakFinding;
-  O       : TRdxFixOutcome;
-begin
-  Assert.IsTrue(TRdxFixTable.Handles(AKind), 'FixFor kennt die Art');
-  SL := TStringList.Create;
-  Places := TSourcePlaces.Create;
-  Finding := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, AKind);
-  try
-    SL.Text := ASource;
-    Assert.IsTrue(Places.OpenSource('t.pas', ASource), 'OpenSource');
-    O := TRdxFixTable.FixFor(Places, SL, Finding,
-      TRdxRecipeRunner.UsesNamesOf(Places));
-  finally
-    Finding.Free;
-    Places.Free;
-    SL.Free;
-  end;
-  AEdits  := O.Edits;
-  AReason := O.Reason;
-  Result  := O.Enabled;
-end;
-
-// Schreibt wie der Editor: alle Ersetzungen gegen denselben Puffer geprueft.
-function Apply(const ASource: string; const AEdits: TArray<TRdxEdit>): string;
-var
-  Bytes : TBytes;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-begin
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, AEdits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
-end;
-
-// Fund fuer Fund, nach jeder Ersetzung neu gemeldet (wie der Benutzer es
-// taete), bis der Detektor schweigt. Der Detektor muss mindestens einmal
-// melden - sonst prueft der Fall nichts.
+// Fund fuer Fund, bis der Detektor schweigt. Der Detektor muss mindestens
+// einmal melden - sonst prueft der Fall nichts.
 function FixAll(const ASource: string; AKind: TFindingKind): string;
-const
-  MAX_PASSES = 10;
-var
-  Seen   : TArray<TSeen>;
-  Edits  : TArray<TRdxEdit>;
-  Reason : string;
-  Pass   : Integer;
 begin
-  Result := ASource;
   Assert.IsTrue(Length(Detect(ASource, AKind)) > 0, 'der Detektor meldet');
-  for Pass := 1 to MAX_PASSES do
-  begin
-    Seen := Detect(Result, AKind);
-    if Length(Seen) = 0 then Exit;
-    Assert.IsTrue(PlanFix(Result, AKind, Seen[0], Edits, Reason),
-      Format('Zeile %d: %s', [Seen[0].Line, Reason]));
-    Result := Apply(Result, Edits);
-  end;
-  Assert.Fail(Format('der Detektor meldet nach %d Runden noch', [MAX_PASSES]));
+  Result := FixAllWith(ASource, AKind, Detect);
 end;
 
 // Der erste Fund muss abgelehnt werden, mit AReasonPart im Grund.
 procedure AssertNoHelp(const ASource: string; AKind: TFindingKind;
   const AReasonPart: string);
-var
-  Seen   : TArray<TSeen>;
-  Edits  : TArray<TRdxEdit>;
-  Reason : string;
 begin
-  Seen := Detect(ASource, AKind);
-  Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet');
-  Assert.IsFalse(PlanFix(ASource, AKind, Seen[0], Edits, Reason), 'keine Hilfe');
-  Assert.IsTrue(Pos(AReasonPart, Reason) > 0, Reason);
+  AssertNoHelpWith(ASource, AKind, AReasonPart, Detect);
 end;
 
 // Der Rumpf einer Routine P in einer Unit.
@@ -213,12 +94,6 @@ function InProc(const ALines: array of string): string;
 begin
   Result := InImplementation(Join(['procedure P;', 'begin']) + #13#10
     + Join(ALines) + #13#10 + 'end;');
-end;
-
-function Snip(const AExample: string): string;
-begin
-  Result := StringReplace(AExample, #13#10, #10, [rfReplaceAll]);
-  Result := StringReplace(Result, #10, #13#10, [rfReplaceAll]);
 end;
 
 { ---- SCA070 ---- }
@@ -305,9 +180,9 @@ var
 begin
   Meta := TRuleCatalog.GetRuleCanonical(fkUnusedLocalVar);
   Assert.AreEqual(InImplementation('procedure P;' + #13#10
-    + Snip(Meta.GoodExample)),
-    FixAll(InImplementation('procedure P;' + #13#10 + Snip(Meta.BadExample)),
-      fkUnusedLocalVar));
+    + CatalogText(Meta.GoodExample)),
+    FixAll(InImplementation('procedure P;' + #13#10
+      + CatalogText(Meta.BadExample)), fkUnusedLocalVar));
 end;
 
 procedure TTestRdxCleanupDetector.Sca053_InlineVar_RoundTrip;

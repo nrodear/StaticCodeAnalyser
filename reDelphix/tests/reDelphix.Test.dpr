@@ -35,6 +35,8 @@ program reDelphix.Test;
 //                        Methode) auf Text, ohne Parser
 //   * uTestRdxCleanupFixes - Quick-Fixes SCA070/SCA053 (Aufraeumen,
 //                        Charge H3a) und CutEdit auf Text, ohne Parser
+//   * uTestRdxCleanupScope - SCA053-Sperren der Charge H3c (Include,
+//                        Makro, asm, Klammer) auf Text, ohne Parser
 //   * uTestRdxCleanupDetector - dieselben Hilfen gegen die echten
 //                        Detektoren uCommentedOutCode/uUnusedLocal
 //   * uTestRdxExprFixes - Editorhilfen SCA066/SCA072/SCA084 (uQuickFix-
@@ -44,6 +46,8 @@ program reDelphix.Test;
 //                        Detektor, Katalog-Beispiele bad -> good
 //   * uTestRdxRoutineFixesDetector - SCA164/SCA147 gegen die echten
 //                        Detektoren (Fund -> Hilfe -> Fund weg)
+//   * uTestRdxDetectorKit - gemeinsame Helfer der drei Detektor-Rundlaeufe
+//                        (keine Fixture; Charge H3c)
 //   * uTestRdxCodeMap  - Code-Sicht (uRdxCodeMap) gegen ScanCodeLine des
 //                        Cores (Drift-Waechter), StartsInside
 //   * uTestRdxQualifyUses - Planung von "uses: X -> Scope.X" (QualifyUses)
@@ -111,10 +115,12 @@ uses
   uTestRdxRoutineFixes in 'uTestRdxRoutineFixes.pas',
   uTestRdxMethodFixes in 'uTestRdxMethodFixes.pas',
   uTestRdxCleanupFixes in 'uTestRdxCleanupFixes.pas',
+  uTestRdxCleanupScope in 'uTestRdxCleanupScope.pas',
   uTestRdxCleanupDetector in 'uTestRdxCleanupDetector.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',
   uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas',
   uTestRdxRoutineFixesDetector in 'uTestRdxRoutineFixesDetector.pas',
+  uTestRdxDetectorKit in 'uTestRdxDetectorKit.pas',
   uTestRdxCodeMap in 'uTestRdxCodeMap.pas',
   uTestRdxQualifyUses in 'uTestRdxQualifyUses.pas',
   uTestRdxFixTable in 'uTestRdxFixTable.pas',

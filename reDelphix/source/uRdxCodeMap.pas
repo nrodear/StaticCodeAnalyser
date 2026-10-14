@@ -33,6 +33,14 @@ const
   STATEMENT_PREV: array[0..11] of string = (';', 'begin', 'then', 'else',
     'do', 'try', 'finally', 'except', 'repeat', ':', 'initialization',
     'finalization');
+  // Das Wort einer Include-Direktive ('{$I datei}', '{$INCLUDE datei}').
+  INCLUDE_WORDS: array[0..1] of string = ('i', 'include');
+  // Damit beginnt der Kopf einer Routine (bis Charge H3c je eine Kopie in
+  // uRdxCleanupFixes, uRdxRoutineFixes und uRdxRaiseFixes; Gegen-Review H3,
+  // Major 2). uRdxDeclFixes.HEADER_WORDS nimmt 'property' dazu - dort
+  // beginnt eine Member-Signatur, kein Routinenkopf.
+  ROUTINE_WORDS: array[0..4] of string = ('procedure', 'function',
+    'constructor', 'destructor', 'operator');
 
 type
   // Zeichenklassen einer Datei, spaltentreu: 'c' Code, 's' String-Literal,
@@ -177,6 +185,66 @@ function DirectiveBefore(AMap: TRdxCodeMap; AFromLine: Integer;
 // (2026-10-14) je eine Kopie in uRdxLineFixes, uRdxDeclFixes und
 // uRdxStructFixes.
 function DirectiveInLines(AMap: TRdxCodeMap; AFrom, ATo: Integer): Boolean;
+// DirectiveAt nur an '{' bzw. '(' - fuer Durchsichten ueber jedes Zeichen
+// einer Datei (DirectiveAt kopiert je Aufruf). Bis Charge H3c in
+// uRdxRoutineFixes.
+function OpensDirective(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
+// Das Wort einer Direktive an (ALine, ACol): '{$IFDEF X}' -> 'ifdef'; AArg:
+// dahinter Leerraum oder ein Quote (Dateiname - '{$I x.inc}', nicht
+// '{$I+}'). Bis Charge H3c in uRdxRoutineFixes.
+function DirectiveWord(AMap: TRdxCodeMap; ALine, ACol: Integer;
+  out AArg: Boolean): string;
+// Der Text der Direktive an (ALine, ACol) hinter ihrem Wort bis vor den
+// Schliesser auf derselben Zeile ('{$DEFINE M := X}' -> ' M := X'; ohne
+// Schliesser bis zum Zeilenende).
+function DirectiveArgs(AMap: TRdxCodeMap; ALine, ACol: Integer): string;
+// Die Datei einer Include-Direktive an (ALine, ACol) ('{$I x.inc}',
+// '{$INCLUDE ''a b.inc''}', '(*$I x*)'), ohne Quotes; '' ohne Include.
+function IncludeFileAt(AMap: TRdxCodeMap; ALine, ACol: Integer): string;
+// Ein {$I datei} in den Zeilen AFrom..ATo? Zeile oder 0. Bis Charge H3c in
+// uRdxRoutineFixes (SCA147: Include im Klassenrumpf), seitdem auch fuer
+// SCA053 (Include im Gueltigkeitsbereich).
+function IncludeInLines(AMap: TRdxCodeMap; AFrom, ATo: Integer): Integer;
+
+// Gleicher Bezeichner? ALow und AKey sind klein geschrieben (LowerCase senkt
+// nur ASCII); Zeichen ueber #127 gelten als gleich, wenn beide darueber
+// liegen - Delphi vergleicht Bezeichner auch dort ohne Gross/klein (ein
+// Aufruf mit grossem Umlaut ruft die Routine mit kleinem), und ein Treffer
+// zu viel sperrt nur. Bis Charge H3c nur in uRdxCleanupFixes (SCA053); seitdem
+// auch fuer SCA164/SCA147 (Gegen-Review H3, Verdacht 1).
+function SameIdent(const ALow, AKey: string): Boolean;
+// Kommt ALowName als ganzer Bezeichner in ALowText vor (beides klein,
+// Vergleich wie SameIdent)? Fuer Texte ausserhalb der Code-Sicht:
+// String-Literale, Direktiven, Form- und Include-Dateien.
+function HasIdentWord(const ALowText, ALowName: string): Boolean;
+// AWord als ganzes Wort in AText, gleich geschrieben; Wortgrenze nur
+// ASCII - wie der Detektor (TDetectorUtils) die Grenze eines Code-Merkmals
+// bzw. Markers sieht. Bis Charge H3c als HasWord in uRdxCleanupFixes.
+function HasAsciiWord(const AText, AWord: string): Boolean;
+// Steht in AText ein Unterdrueck- oder Absichtsmarker - 'noinspection'
+// bzw. die Marker von SCA019 in jeder Schreibweise, 'XXX' nur gross (klein
+// ist es dort ein Platzhalter)? '' oder der Grund. SCA070 prueft den
+// geloeschten Text, SCA164/SCA147 die Kommentare ueber dem Kopf (Gegen-
+// Review H3, Minor 3); bis Charge H3c in uRdxCleanupFixes - hier, weil
+// uRdxCleanupFixes seitdem uRdxRoutineFixes braucht (ReadRoutine) und
+// beide sich sonst gegenseitig einbanden.
+function MarkerReason(const AText: string): string;
+
+// Dieselbe Stelle (Zeile und Spalte)? Bis Charge H3c je eine Kopie in
+// uRdxFlowFixes, uRdxCleanupFixes und uRdxRoutineFixes.
+function SameTok(const A, B: TRdxToken): Boolean;
+// Beginnt an T ein Routinenkopf? Ein Wort aus ROUTINE_WORDS als
+// Schluesselwort, davor (APrev) nichts aus NOT_HEAD_AFTER - kein Typ einer
+// Variablen, eines Parameters oder eines Typs (':', '='), keine anonyme
+// Methode (':=', '(', ','), kein 'reference to', kein 'array of
+// procedure', kein Attribut-Inhalt ('['). Die eine Kopferkennung der
+// Planer: bis Charge H3c stand sie als IsHeadAt in uRdxRoutineFixes und
+// als IsHeader mit einer Positivliste der Vorgaenger (';', 'class',
+// 'implementation', 'interface') in uRdxCleanupFixes (Gegen-Review H3,
+// Major 2; im Korpus-Harness ohne Unterschied).
+function IsRoutineHeadAfter(const T, APrev: TRdxToken): Boolean;
+// Dasselbe mit dem Token davor aus der Code-Sicht.
+function IsRoutineHead(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
 
 // ---- Geteilte Laeufe der Planer (Charge R8, 2026-10-14: bis dahin je
 // Planer eine Kopie - Klammerabgleich 4x, "genau ein Token" 7x, end-Bilanz
@@ -232,6 +300,19 @@ implementation
 
 uses
   System.SysUtils;   // CharInSet, LowerCase, Format
+
+const
+  // Davor beginnt ein Routinenwort KEINEN Kopf: Typ einer Variablen oder
+  // eines Parameters, Typdeklaration, anonyme Methode, 'reference to',
+  // 'array of procedure' (IsRoutineHeadAfter).
+  NOT_HEAD_AFTER: array[0..7] of string = (':', '=', 'to', '(', ',', ':=',
+    'of', '[');
+  // Absichtsmarker wie bei SCA019 (uTodoComment) - die drei hier in jeder
+  // Schreibweise, MARKER_XXX nur gross; ein Unterdrueck-Marker wirkt auf
+  // andere Funde (MarkerReason).
+  INTENT_MARKERS: array[0..2] of string = ('todo', 'fixme', 'hack');
+  MARKER_XXX      = 'XXX';
+  MARKER_SUPPRESS = 'noinspection';
 
 // Zeichen > #127 wie der Core (uRefactorInfoBuilder) und uRdxRecipes:
 // Bezeichner mit Umlaut sind in Delphi erlaubt - sonst lehnten die Planer
@@ -625,6 +706,184 @@ begin
     for Co := 1 to Length(AMap.Raw(Li)) do
       if DirectiveAt(AMap, Li, Co) then
         Exit(True);
+end;
+
+function OpensDirective(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
+var
+  L : string;
+begin
+  L := AMap.Raw(ALine);
+  Result := (ACol <= Length(L)) and CharInSet(L[ACol], ['{', '('])
+    and DirectiveAt(AMap, ALine, ACol);
+end;
+
+// Die Spalte hinter '{$' bzw. '(*$' der Direktive an ACol.
+function DirectiveBody(const L: string; ACol: Integer): Integer;
+begin
+  Result := ACol + Length('{$');
+  if L[ACol] = '(' then
+    Result := ACol + Length('(*$');
+end;
+
+function DirectiveWord(AMap: TRdxCodeMap; ALine, ACol: Integer;
+  out AArg: Boolean): string;
+var
+  L    : string;
+  i, j : Integer;
+begin
+  L := AMap.Raw(ALine);
+  i := DirectiveBody(L, ACol);
+  j := i;
+  while (j <= Length(L)) and CharInSet(L[j], ['A'..'Z', 'a'..'z']) do
+    Inc(j);
+  Result := LowerCase(Copy(L, i, j - i));
+  AArg := (j <= Length(L)) and CharInSet(L[j], [' ', #9, '''']);
+end;
+
+function DirectiveArgs(AMap: TRdxCodeMap; ALine, ACol: Integer): string;
+var
+  L       : string;
+  i, Stop : Integer;
+begin
+  L := AMap.Raw(ALine);
+  i := DirectiveBody(L, ACol);
+  while (i <= Length(L)) and CharInSet(L[i], ['A'..'Z', 'a'..'z']) do
+    Inc(i);
+  if L[ACol] = '(' then
+    Stop := Pos('*)', L, i)
+  else
+    Stop := Pos('}', L, i);
+  if Stop = 0 then
+    Stop := Length(L) + 1;
+  Result := Copy(L, i, Stop - i);
+end;
+
+function IncludeFileAt(AMap: TRdxCodeMap; ALine, ACol: Integer): string;
+var
+  Arg : Boolean;
+  Q   : Integer;
+begin
+  Result := '';
+  if not InList(DirectiveWord(AMap, ALine, ACol, Arg), INCLUDE_WORDS)
+     or not Arg then
+    Exit;
+  Result := Trim(DirectiveArgs(AMap, ALine, ACol));
+  if Copy(Result, 1, 1) = '''' then
+  begin
+    Q := Pos('''', Result, 2);
+    if Q = 0 then
+      Q := Length(Result) + 1;
+    Exit(Copy(Result, 2, Q - 2));
+  end;
+  Q := Pos(' ', Result);
+  if Q > 0 then
+    Result := Copy(Result, 1, Q - 1);
+end;
+
+function IncludeInLines(AMap: TRdxCodeMap; AFrom, ATo: Integer): Integer;
+var
+  Li, Co : Integer;
+  Arg    : Boolean;
+begin
+  Result := 0;
+  for Li := AFrom to ATo do
+    for Co := 1 to Length(AMap.Raw(Li)) do
+      if OpensDirective(AMap, Li, Co)
+         and InList(DirectiveWord(AMap, Li, Co, Arg), INCLUDE_WORDS) and Arg then
+        Exit(Li);
+end;
+
+function SameIdent(const ALow, AKey: string): Boolean;
+var
+  i : Integer;
+begin
+  Result := Length(ALow) = Length(AKey);
+  i := 1;
+  while Result and (i <= Length(ALow)) do
+  begin
+    if (ALow[i] > #127) or (AKey[i] > #127) then
+      Result := (ALow[i] > #127) and (AKey[i] > #127)
+    else
+      Result := ALow[i] = AKey[i];
+    Inc(i);
+  end;
+end;
+
+function HasIdentWord(const ALowText, ALowName: string): Boolean;
+var
+  i, S : Integer;
+begin
+  Result := False;
+  if ALowName = '' then Exit;
+  i := 1;
+  while i <= Length(ALowText) do
+    if not IsIdentChar(ALowText[i]) then
+      Inc(i)
+    else
+    begin
+      S := i;
+      while (i <= Length(ALowText)) and IsIdentChar(ALowText[i]) do
+        Inc(i);
+      if (i - S = Length(ALowName))
+         and SameIdent(Copy(ALowText, S, i - S), ALowName) then
+        Exit(True);
+    end;
+end;
+
+// Bezeichner-Zeichen nur ASCII (HasAsciiWord).
+function IsAsciiIdent(C: Char): Boolean;
+begin
+  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
+end;
+
+function HasAsciiWord(const AText, AWord: string): Boolean;
+var
+  P, E : Integer;
+begin
+  Result := False;
+  P := Pos(AWord, AText);
+  while P > 0 do
+  begin
+    E := P + Length(AWord);
+    if ((P = 1) or not IsAsciiIdent(AText[P - 1]))
+       and ((E > Length(AText)) or not IsAsciiIdent(AText[E])) then
+      Exit(True);
+    P := Pos(AWord, AText, P + 1);
+  end;
+end;
+
+function MarkerReason(const AText: string): string;
+var
+  Low, M : string;
+begin
+  Result := '';
+  Low := LowerCase(AText);
+  if Pos(MARKER_SUPPRESS, Low) > 0 then
+    Exit('noinspection-Marker im Bereich - er unterdrueckt andere Funde');
+  for M in INTENT_MARKERS do
+    if HasAsciiWord(Low, M) then
+      Exit(Format('%s im Bereich - ein Absichtskommentar bleibt stehen',
+        [UpperCase(M)]));
+  if HasAsciiWord(AText, MARKER_XXX) then
+    Result := 'XXX im Bereich - ein Absichtskommentar bleibt stehen';
+end;
+
+function SameTok(const A, B: TRdxToken): Boolean;
+begin
+  Result := (A.Line = B.Line) and (A.Col = B.Col);
+end;
+
+function IsRoutineHeadAfter(const T, APrev: TRdxToken): Boolean;
+begin
+  Result := InList(T.Low, ROUTINE_WORDS) and IsKeywordAfter(T, APrev)
+    and not InList(APrev.Low, NOT_HEAD_AFTER);
+end;
+
+function IsRoutineHead(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
+begin
+  // Erst das Wort, dann das Token davor (Before liest rueckwaerts).
+  Result := InList(T.Low, ROUTINE_WORDS)
+    and IsRoutineHeadAfter(T, Before(AMap, T));
 end;
 
 // Die Klammerart zu einer oeffnenden Klammer; '' fuer alles andere.

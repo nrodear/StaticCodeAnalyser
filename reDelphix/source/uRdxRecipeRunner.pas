@@ -38,6 +38,9 @@ const
   // reichlich Reserve fuer Abfragen zwischen Aufbau und Klick (Gluehbirne
   // im Hintergrund). Review reDelphiX 2026-10-07, Blocker 2.
   RDX_ACTION_BATCHES = 8 * MAX_FINDINGS_PER_MENU;
+  // Grund ohne offene Datei (MapFix, uRdxFixTable.RoutineFix; bis Charge
+  // H3c stand er dort als R_NO_FILE_OPEN doppelt - Minor 6).
+  R_NO_FILE = 'keine Datei geoeffnet';
 
 type
   // Haelt Objekte in Chargen: BeginBatch eroeffnet eine Charge (ein
@@ -467,7 +470,6 @@ uses
 {$IFEND}
 
 const
-  R_NO_FILE = 'keine Datei geoeffnet';
   R_NIL_TYPE_UNKNOWN = 'Typ von %s unbekannt - bei einem Funktions- oder '
     + 'Methodenzeiger ruft ''= nil'' ihn auf, Assigned() nicht';
   R_NIL_IN_WITH = 'with-Anweisung - ein Operand koennte ein Member des '

@@ -17,7 +17,12 @@ unit uTestRdxRoutineFixes;
 //          exports, interface), Overload, String-Literal, Direktive mit dem
 //          Namen, {$L}, {$I}, Schalter-Direktive, unausgeglichenes $IFDEF,
 //          export, Methode, zwei Routinen auf einer Zeile, Programm,
-//          verschobene Meldung.
+//          verschobene Meldung. Charge H3c (Gegen-Review H3, je mit der
+//          Pruefer-Fixture aus rc/cases164.txt bzw. casesuni.txt): Include
+//          vor implementation (Planer nennt es, IncludeReason liest es;
+//          Kopf-Includes nicht), FPC-Direktiven in Klammern, Marker und
+//          Ueberschrift ueber dem Kopf bleiben, globaler FPC-Operator,
+//          Aufruf in anderer Umlaut-Schreibung.
 // Die Gegenprobe mit dem echten Detektor steht in
 // uTestRdxRoutineFixesDetector (nur Delphi).
 
@@ -43,6 +48,11 @@ type
     [Test] procedure Sca164_Directives_NoHelp;
     [Test] procedure Sca164_Reachable_NoHelp;
     [Test] procedure Sca164_Moved_NoHelp;
+    [Test] procedure Sca164_InterfaceInclude;
+    [Test] procedure Sca164_FpcModifierBracket_NoHelp;
+    [Test] procedure Sca164_MarkerAndHeadingStay;
+    [Test] procedure Sca164_GlobalOperator_NoHelp;
+    [Test] procedure Sca164_UmlautCall_NoHelp;
   end;
 
 implementation
@@ -172,6 +182,27 @@ begin
     Result := TRdxRoutineFixes.ReadRoutine(Map, LineHead(Map, ALine), R);
   finally
     Map.Free;
+    SL.Free;
+  end;
+end;
+
+// Ein Verzeichnis fuer Include-Dateien (mit Trenner).
+function TempDir: string;
+begin
+  Result := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
+    + 'rdx_h3c_inc' + PathDelim;
+  ForceDirectories(Result);
+end;
+
+procedure WriteText(const APath, AText: string);
+var
+  SL : TStringList;
+begin
+  SL := TStringList.Create;
+  try
+    SL.Text := AText;
+    SL.SaveToFile(APath);
+  finally
     SL.Free;
   end;
 end;
@@ -336,14 +367,14 @@ end;
 
 procedure TTestRdxRoutineFixes.Sca164_DocCommentsBlankLine;
 begin
-  // '///'-Doku und der Kommentar direkt darueber gehen mit, die lokale
-  // Routine (sie ruft Dead - im eigenen Bereich zaehlt das nicht) und die
-  // Leerzeile dahinter auch.
+  // '///'-Doku und der Kommentar direkt darueber gehen mit (er nennt die
+  // Routine), die lokale Routine (sie ruft Dead - im eigenen Bereich zaehlt
+  // das nicht) und die Leerzeile dahinter auch.
   Assert.AreEqual(InImpl(['procedure Keep;', 'begin', 'end;', '',
       'procedure Keep2;', 'begin', '  Keep;', 'end;']),
     FixOk(InImpl(['procedure Keep;', 'begin', 'end;', '',
       '/// <summary>Helper</summary>',
-      '// does X',
+      '// Dead does X',
       'procedure Dead(A: Integer);',       // 10
       'var',
       '  I: Integer;',
@@ -476,6 +507,129 @@ begin
   PlanOf(InImpl(['procedure Dead;', 'begin', 'end;']), 4,
     'Routine Dead is unused', R);
   Assert.IsTrue(Pos('fehlt in der Meldung', R) > 0, R);
+end;
+
+// ---- Charge H3c (Gegen-Review H3) ----
+
+procedure TTestRdxRoutineFixes.Sca164_InterfaceInclude;
+var
+  P         : TRdxRoutinePlan;
+  R, Dir, U : string;
+  Incs      : TArray<string>;
+begin
+  // Pruefer-Fall (Minor 4): das Include im interface-Teil kann Foo
+  // deklarieren - nach dem Loeschen E2065. Der Planer nennt es, der
+  // Aufrufer liest es neben der Unit (IncludeReason).
+  P := PlanOf(Join(['unit u;', 'interface', '{$I decls.inc}', 'implementation',
+    '', 'procedure Foo;', 'begin', 'end;', '', 'procedure Bar;', 'begin',
+    'end;', '', 'end.']), 6, Msg('Foo'), R);
+  Assert.AreEqual('', R);
+  Assert.AreEqual<Integer>(1, Integer(Length(P.Includes)), 'Includes');
+  Assert.AreEqual('decls.inc', P.Includes[0]);
+  Dir := TempDir;
+  U := Dir + 'u.pas';
+  try
+    WriteText(Dir + 'decls.inc', 'procedure Foo;');
+    R := TRdxRoutineFixes.IncludeReason(U, P.Includes, 'Foo');
+    Assert.IsTrue(Pos('nennt Foo', R) > 0, R);
+    // Verschachtelt: decls.inc bindet deeper.inc ein - fehlt es, keine
+    // Hilfe; nennt keines Foo, Hilfe.
+    WriteText(Dir + 'decls.inc', Join(['{$DEFINE FAST}', '{$I deeper.inc}']));
+    R := TRdxRoutineFixes.IncludeReason(U, P.Includes, 'Foo');
+    Assert.IsTrue(Pos('eingebunden von decls.inc', R) > 0, R);
+    WriteText(Dir + 'deeper.inc', '{$R-}');
+    Assert.AreEqual('', TRdxRoutineFixes.IncludeReason(U, P.Includes, 'Foo'));
+    // Nicht neben der Unit bzw. ohne Datei der Unit: keine Hilfe.
+    DeleteFile(Dir + 'decls.inc');
+    R := TRdxRoutineFixes.IncludeReason(U, P.Includes, 'Foo');
+    Assert.IsTrue(Pos('nicht neben der Unit', R) > 0, R);
+    R := TRdxRoutineFixes.IncludeReason('', P.Includes, 'Foo');
+    Assert.IsTrue(Pos('unbekannt', R) > 0, R);
+  finally
+    DeleteFile(Dir + 'decls.inc');
+    DeleteFile(Dir + 'deeper.inc');
+    RemoveDir(Dir);
+  end;
+  // {$I %DATE%} (FPC) setzt einen String ein, keine Datei.
+  SetLength(Incs, 1);
+  Incs[0] := '%DATE%';
+  Assert.AreEqual('', TRdxRoutineFixes.IncludeReason('', Incs, 'Foo'));
+  // Im Kopf der Unit - vor interface bzw. vor uses - duerfen nur Direktiven
+  // stehen: diese Includes muss niemand lesen (jcl.inc, CnWizards.inc).
+  P := PlanOf(Join(['unit u;', '{$I jedi.inc}', 'interface', '{$I cfg.inc}',
+    'uses Classes;', 'implementation', '', 'procedure Foo;', 'begin', 'end;',
+    '', 'end.']), 8, Msg('Foo'), R);
+  Assert.AreEqual('', R);
+  Assert.AreEqual<Integer>(0, Integer(Length(P.Includes)), 'Kopf-Includes');
+end;
+
+procedure TTestRdxRoutineFixes.Sca164_FpcModifierBracket_NoHelp;
+begin
+  // Pruefer-Faelle (Minor 4): FPC-Direktiven in eckigen Klammern - per
+  // alias bzw. public von aussen erreichbar.
+  AssertRefused(InImpl(['procedure Foo; [public, alias: ''FOO_C''];', 'begin',
+    'end;', '', 'procedure Bar;', 'begin', 'end;']), 4, 'Foo', 'public');
+  AssertRefused(InImpl(['procedure Foo; [public];', 'begin', 'end;']), 4,
+    'Foo', 'public');
+  // Wort-Direktiven hinter der Klammer liest der Planer weiter.
+  AssertRefused(InImpl(['procedure Foo; [cdecl]; export;', 'begin', 'end;']),
+    4, 'Foo', 'export');
+end;
+
+procedure TTestRdxRoutineFixes.Sca164_MarkerAndHeadingStay;
+begin
+  // Pruefer-Faelle (Minor 3): ein Unterdrueck-Marker fuer die Datei ...
+  Assert.AreEqual(InImpl(['', '// noinspection-file UnusedRoutine, LongMethod',
+      'procedure Bar;', 'begin', 'end;']),
+    FixOk(InImpl(['', '// noinspection-file UnusedRoutine, LongMethod',
+      'procedure Foo;', 'begin', 'end;', '', 'procedure Bar;', 'begin',
+      'end;']), 6, 'Foo'));
+  // ... und Abschnittsueberschrift samt Absichtsmarker bleiben stehen.
+  Assert.AreEqual(InImpl(['', '// ===== interne Hilfsroutinen =====',
+      '// TODO: Bar beschleunigen', 'procedure Bar;', 'begin', 'end;']),
+    FixOk(InImpl(['', '// ===== interne Hilfsroutinen =====',
+      '// TODO: Bar beschleunigen', 'procedure Foo;', 'begin', 'end;', '',
+      'procedure Bar;', 'begin', 'end;']), 7, 'Foo'));
+  // Ein Kommentar ohne den Namen bleibt (Ueberschrift oder Beschreibung -
+  // am Text nicht zu unterscheiden); einer, der ihn nennt, geht mit der
+  // Doku darueber.
+  Assert.AreEqual(InImpl(['procedure Keep;', 'begin', 'end;', '',
+      '// default is case-sensitive', '/// <summary>Bar</summary>',
+      '{ Bar: tut nichts }', 'procedure Bar;', 'begin', 'end;', '',
+      'procedure Keep2;', 'begin', '  Keep;', 'end;']),
+    FixOk(InImpl(['procedure Keep;', 'begin', 'end;', '',
+      '// default is case-sensitive', 'procedure Foo;', 'begin', 'end;', '',
+      '/// <summary>Bar</summary>', '{ Bar: tut nichts }', 'procedure Bar;',
+      'begin', 'end;', '', 'procedure Keep2;', 'begin', '  Keep;', 'end;']), 9,
+      'Foo'));
+  Assert.AreEqual(InImpl(['procedure Keep;', 'begin', 'end;', '',
+      '// default is case-sensitive', 'procedure Foo;', 'begin', 'end;', '',
+      'procedure Keep2;', 'begin', '  Keep;', 'end;']),
+    FixOk(InImpl(['procedure Keep;', 'begin', 'end;', '',
+      '// default is case-sensitive', 'procedure Foo;', 'begin', 'end;', '',
+      '/// <summary>Bar</summary>', '{ Bar: tut nichts }', 'procedure Bar;',
+      'begin', 'end;', '', 'procedure Keep2;', 'begin', '  Keep;', 'end;']), 15,
+      'Bar'));
+end;
+
+procedure TTestRdxRoutineFixes.Sca164_GlobalOperator_NoHelp;
+begin
+  // Minor 12: ein globaler FPC-Operator ist keine Methode einer Klasse.
+  AssertRefused(InImpl(['operator explicit(A: TFoo): Integer;', 'begin',
+    '  Result := 0;', 'end;']), 4, 'explicit', 'globaler Operator');
+end;
+
+procedure TTestRdxRoutineFixes.Sca164_UmlautCall_NoHelp;
+var
+  Lower, Upper : string;
+begin
+  // Pruefer-Fall (casesuni, Verdacht 1): der Aufruf in Grossschreibung mit
+  // Umlaut ruft dieselbe Routine.
+  Lower := 'Pr' + #$00FC + 'fe';
+  Upper := 'PR' + #$00DC + 'FE';
+  AssertRefused(InImpl(['procedure ' + Lower + ';', 'begin', 'end;', '',
+    'procedure Bar;', 'begin', '  ' + Upper + ';', 'end;']), 4, Lower,
+    'verwendet');
 end;
 
 initialization
