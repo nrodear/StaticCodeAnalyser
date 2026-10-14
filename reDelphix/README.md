@@ -465,8 +465,10 @@ Ohne Delphi (FPC 3.2.2):
 bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext
 ```
 
-Erwartet (Stand 2026-10-14): `PASSED 268  FAILED 0` - 18 Testunits, davon 72 Tests
-fuer "Lokale Variable einfuehren" und 12 fuer die Quick-Fixes der Charge H2.
+Erwartet (Stand 2026-10-14, Charge R8): `PASSED 282  FAILED 0` - 18 Testunits,
+davon 72 Tests fuer "Lokale Variable einfuehren", 12 fuer die Quick-Fixes der
+Charge H2 und 7 der Charge R8 (6 fuer die geteilten Laeufe in
+`uTestRdxCodeMap`, 1 fuer den Fremdtyp-Beweis von SCA126 in `uTestRdxNilFix`).
 
 Der Pruefstand uebersetzt die Core-Units des Quellstellen-Dienstes
 (`uRefactor*`, `uSourcePlaces`, `uFindingActions`, `ScanCodeLine` aus

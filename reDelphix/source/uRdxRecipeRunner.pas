@@ -791,28 +791,63 @@ begin
     Result := '';
 end;
 
+// S ohne Leerraum (alles <= ' ') - vorab bemessen statt verkettet (SCA110).
+function WithoutBlanks(const S: string): string;
+var
+  i, n : Integer;
+begin
+  SetLength(Result, Length(S));
+  n := 0;
+  for i := 1 to Length(S) do
+    if S[i] > ' ' then
+    begin
+      Inc(n);
+      Result[n] := S[i];
+    end;
+  SetLength(Result, n);
+end;
+
 // Gleicher Operand ohne Leerraum und Schreibung: 'Result' = 'result'.
 function SameOperandText(const A, B: string): Boolean;
 var
-  SA, SB : string;
-  i      : Integer;
+  SA : string;
 begin
-  SA := '';
-  SB := '';
-  for i := 1 to Length(A) do
-    if A[i] > ' ' then SA := SA + A[i];
-  for i := 1 to Length(B) do
-    if B[i] > ' ' then SB := SB + B[i];
-  Result := (SA <> '') and SameText(SA, SB);
+  SA := WithoutBlanks(A);
+  Result := (SA <> '') and SameText(SA, WithoutBlanks(B));
+end;
+
+const
+  // So viele Operanden "laut Kompilat" nennt der Hinweis mit Namen.
+  MAX_HINT_NAMES = 3;
+
+// Die ersten MAX_HINT_NAMES Namen, mit ', ' verbunden; ', ...' bei mehr.
+function ByCompilerNames(const ANames: TArray<string>): string;
+var
+  SB : TStringBuilder;
+  i  : Integer;
+begin
+  SB := TStringBuilder.Create;
+  try
+    for i := 0 to High(ANames) do
+    begin
+      if i = MAX_HINT_NAMES then
+      begin
+        SB.Append(', ...');
+        Break;
+      end;
+      if SB.Length > 0 then SB.Append(', ');
+      SB.Append(ANames[i]);
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
 end;
 
 // Hinweis eines aktiven Format-Eintrags: Termzahl, bei Selbst-Anhaengen
 // das Ziel (ABehind, sonst ''), Herkunft der Argumente.
 function FormatHintOf(const ABuild: TRdxFormatBuild; ATerms: Integer;
   const ABehind: string): string;
-var
-  Names : string;
-  i     : Integer;
 begin
   Result := Format('%d Terme', [ATerms]);
   if ABehind <> '' then
@@ -820,23 +855,67 @@ begin
   if Length(ABuild.ByCompiler) = 0 then
     Result := Result + ', alle bewiesen'
   else
-  begin
-    Names := '';
-    for i := 0 to High(ABuild.ByCompiler) do
-    begin
-      if i = 3 then
-      begin
-        Names := Names + ', ...';
-        Break;
-      end;
-      if Names <> '' then Names := Names + ', ';
-      Names := Names + ABuild.ByCompiler[i];
-    end;
     Result := Result + Format(', %d laut Kompilat (%s)',
-      [Length(ABuild.ByCompiler), Names]);
-  end;
+      [Length(ABuild.ByCompiler), ByCompilerNames(ABuild.ByCompiler)]);
   if ABuild.Numeric > 0 then
     Result := Result + Format(', %d numerisch (%%d/%%u)', [ABuild.Numeric]);
+end;
+
+// Ohne Beschreibung: der Grund aus Describe, sonst 'keine Beschreibung'.
+function NoInfoReason(const AWhy: string): string;
+begin
+  Result := AWhy;
+  if Result = '' then
+    Result := 'keine Beschreibung';
+end;
+
+// Keine Zuweisung mit Kette - dazu der Grund aus Describe, wenn er neben
+// einer Beschreibung steht (die Kette passte nicht).
+function NoChainReason(const AWhy: string): string;
+begin
+  Result := 'keine Zuweisung mit Kette';
+  if AWhy <> '' then
+    Result := Result + ': ' + AWhy;
+end;
+
+// Selbst-Anhaengen 'X := X + ...' (ein Drittel der Korpus-Stellen): der
+// erste Operand ist das Ziel.
+function IsSelfAppend(const AParts: TRdxParts; AInfo: TRefactorInfo;
+  ALast: Integer): Boolean;
+begin
+  Result := (ALast >= 3) and (AInfo.Parts[1].Role = ROLE_OPERAND)
+    and SameOperandText(AParts[1].Text, AParts[0].Text);
+end;
+
+// Der Grund, wenn BuildFormatCall ablehnt: hinter 'X +' nur Literale heisst
+// anders als 'kein Operand'.
+function BuildReasonOf(const ABuild: TRdxFormatBuild;
+  const ABehind: string): string;
+begin
+  Result := ABuild.Reason;
+  if (ABehind <> '') and (ABuild.Operands = 0)
+     and (Pos('kein Operand', ABuild.Reason) > 0) then
+    Result := 'hinter ' + ABehind + ' stehen nur Literale';
+end;
+
+// Format() lebt in System.SysUtils: fehlt die Unit, kommt sie mit - nicht
+// ausgrauen, sondern die uses-Klausel ergaenzen (Nico, 2026-10-06). ''
+// oder der Grund, wenn die Einfuegung nicht planbar ist.
+function FormatUsesReason(APlaces: TSourcePlaces;
+  const AUsesNames: TArray<string>; var AOutcome: TRdxFormatOutcome): string;
+var
+  Plan : TRdxUsesPlan;
+begin
+  Result := '';
+  if TRdxRecipes.HasUnit(AUsesNames, 'SysUtils') then Exit;
+  Plan := TRdxRecipeRunner.PlanUses(APlaces, 'SysUtils', 'System.SysUtils');
+  if not Plan.Needed then Exit;
+  if Plan.Reason <> '' then
+    Exit('System.SysUtils fehlt in uses: ' + Plan.Reason);
+  AOutcome.NeedsUses := True;
+  AOutcome.UsesName  := Plan.Name;
+  AOutcome.UsesEdit  := Plan.Edit;
+  AOutcome.Hint := AOutcome.Hint + ' + uses ' + Plan.Name;
 end;
 
 class function TRdxRecipeRunner.FormatRewrite(APlaces: TSourcePlaces;
@@ -847,15 +926,13 @@ var
   Last   : Integer;
   First  : Integer;
   Build  : TRdxFormatBuild;
-  Plan   : TRdxUsesPlan;
   TType  : string;
   Behind : string;
 begin
   Result := Default(TRdxFormatOutcome);
   if AInfo = nil then
   begin
-    Result.Reason := AWhy;
-    if Result.Reason = '' then Result.Reason := 'keine Beschreibung';
+    Result.Reason := NoInfoReason(AWhy);
     Exit;
   end;
   Parts := PartsOf(APlaces, AInfo);
@@ -863,12 +940,9 @@ begin
   // Eine Kette hat mindestens zwei Terme (Ziel + zwei Parts). Ein
   // einzelner Term - etwa das schon umgeformte 'X := Format(...)' -
   // ist keine (zweiter Lauf, Rewrite_AppliedOnce_NoSecondFinding).
-  // AWhy neben einer Beschreibung: die Kette passte nicht (Describe).
   if (Last < 2) or (AInfo.Parts[0].Role <> ROLE_TARGET) then
   begin
-    Result.Reason := 'keine Zuweisung mit Kette';
-    if AWhy <> '' then
-      Result.Reason := Result.Reason + ': ' + AWhy;
+    Result.Reason := NoChainReason(AWhy);
     Exit;
   end;
   // Ziel mit Nicht-Unicode-String-Typ: Format liefert UnicodeString, die
@@ -880,15 +954,12 @@ begin
       [TRdxRecipes.CollapseWhitespace(Parts[0].Text), TType]);
     Exit;
   end;
-  // Selbst-Anhaengen 'X := X + ...' (ein Drittel der Korpus-Stellen):
-  // Format nur ueber den Rest, X bleibt vorn - 'X := X + Format(...)'.
+  // Selbst-Anhaengen: Format nur ueber den Rest, X bleibt vorn -
+  // 'X := X + Format(...)'.
   First := 1;
-  if (Last >= 3) and (AInfo.Parts[1].Role = ROLE_OPERAND)
-     and SameOperandText(Parts[1].Text, Parts[0].Text) then
-  begin
+  Result.SelfAppend := IsSelfAppend(Parts, AInfo, Last);
+  if Result.SelfAppend then
     First := 2;
-    Result.SelfAppend := True;
-  end;
   // Ersetzt wird vom ersten (bzw. zweiten) bis zum letzten Term; Ziel und
   // ':=' (und bei Selbst-Anhaengen 'X +') bleiben.
   Result.Span := TRefactorSpan.Make(ROLE_STATEMENT,
@@ -924,10 +995,7 @@ begin
   if not TRdxRecipes.BuildFormatCall(Copy(Parts, First, Last - First + 1),
        Build, TType) then
   begin
-    Result.Reason := Build.Reason;
-    if (Behind <> '') and (Build.Operands = 0)
-       and (Pos('kein Operand', Build.Reason) > 0) then
-      Result.Reason := 'hinter ' + Behind + ' stehen nur Literale';
+    Result.Reason := BuildReasonOf(Build, Behind);
     Exit;
   end;
   Result.NewText    := Build.NewText;
@@ -936,25 +1004,8 @@ begin
   Result.Numeric    := Build.Numeric;
   Result.ByCompiler := Build.ByCompiler;
   Result.Hint := FormatHintOf(Build, Last - First + 1, Behind);
-  // Format() lebt in System.SysUtils: fehlt die Unit, kommt sie mit -
-  // nicht ausgrauen, sondern die uses-Klausel ergaenzen (Nico, 2026-10-06).
-  if not TRdxRecipes.HasUnit(AUsesNames, 'SysUtils') then
-  begin
-    Plan := PlanUses(APlaces, 'SysUtils', 'System.SysUtils');
-    if Plan.Needed then
-    begin
-      if Plan.Reason <> '' then
-      begin
-        Result.Reason := 'System.SysUtils fehlt in uses: ' + Plan.Reason;
-        Exit;
-      end;
-      Result.NeedsUses := True;
-      Result.UsesName  := Plan.Name;
-      Result.UsesEdit  := Plan.Edit;
-      Result.Hint := Result.Hint + ' + uses ' + Plan.Name;
-    end;
-  end;
-  Result.Enabled := True;
+  Result.Reason := FormatUsesReason(APlaces, AUsesNames, Result);
+  Result.Enabled := Result.Reason = '';
 end;
 
 // Die uses-Klauseln der Datei, je Klausel ihre Eintraege: interface und
@@ -2144,32 +2195,127 @@ end;
 
 { ---- uses-Eintraege qualifizieren (QualifyUses) ---- }
 
-// Steht die Klausel so, wie uUnsortedUses (SCA142) sie will? CompareText
-// je Nachbarpaar - gleichwertig zu 'sortierte Kopie = Original'.
-function NamesSorted(const ANames: TArray<string>): Boolean;
+type
+  // Was QualifyUses je Klausel braucht (QualifyClause): die Scope-Tabelle,
+  // das Rahmenwerk der Datei, die gefragte Zeile und die Pruefung auf eine
+  // eigene Unit des Projekts.
+  TRdxQualifyCtx = record
+    Scopes    : TRdxScopeTable;
+    Fw        : TRdxFramework;
+    Line      : Integer;
+    IsOwnUnit : TRdxOwnUnitCheck;
+  end;
+
+const
+  // So viele Ziele nennt die Vorschau von 'alle qualifizieren'.
+  MAX_QUALIFY_PREVIEW = 3;
+
+// Die aufgeloesten Namen der Eintraege einer Klausel.
+function ClauseNames(const AEntries: TArray<TRefactorSpan>): TArray<string>;
 var
-  k : Integer;
+  i : Integer;
 begin
-  Result := True;
-  for k := 1 to High(ANames) do
-    if CompareText(ANames[k - 1], ANames[k]) > 0 then
-      Exit(False);
+  SetLength(Result, Length(AEntries));
+  for i := 0 to High(AEntries) do
+    Result[i] := AEntries[i].Resolved;
+end;
+
+// Ein Eintrag als TRdxQualifyItem: Why und Edit nach Scope-Tabelle und
+// eigener Unit (qwOk mit Edit, wenn die Tabelle ihn eindeutig aufloest).
+// False fuer einen leeren oder schon qualifizierten Eintrag - kein Item.
+function QualifyItemOf(const ACtx: TRdxQualifyCtx; const AEntry: TRefactorSpan;
+  out AItem: TRdxQualifyItem): Boolean;
+var
+  Q, Reason : string;
+begin
+  AItem := Default(TRdxQualifyItem);
+  AItem.Short := AEntry.Resolved;
+  Result := (AItem.Short <> '') and (Pos('.', AItem.Short) = 0);
+  if not Result then Exit;
+  if not ACtx.Scopes.Resolve(AItem.Short, ACtx.Fw, Q, Reason) then
+  begin
+    AItem.Why := qwScopeTable;
+    AItem.ScopeReason := Reason;
+  end
+  else if Assigned(ACtx.IsOwnUnit) and ACtx.IsOwnUnit(AItem.Short) then
+    AItem.Why := qwOwnUnit
+  else
+  begin
+    AItem.Qualified     := Q;
+    AItem.Edit.Span     := AEntry;
+    AItem.Edit.Expected := AItem.Short;
+    AItem.Edit.NewText  := Q;
+  end;
+end;
+
+// Bleibt die sortierte Klausel ANames sortiert, wenn der Eintrag AIndex zu
+// AQualified wird? Dieselbe Regel wie uUnsortedUses (SCA142):
+// TRdxRecipes.IsSortedUses.
+function StaysSorted(const ANames: TArray<string>; AIndex: Integer;
+  const AQualified: string): Boolean;
+var
+  Single : TArray<string>;
+begin
+  Single := Copy(ANames);
+  Single[AIndex] := AQualified;
+  Result := TRdxRecipes.IsSortedUses(Single);
+end;
+
+// Die Ersetzung AEdit zu 'alle qualifizieren' und ihr Ziel in die Vorschau
+// (die ersten MAX_QUALIFY_PREVIEW).
+procedure TakeIntoAll(var APlan: TRdxQualifyPlan; const AEdit: TRdxEdit);
+begin
+  SetLength(APlan.All, Length(APlan.All) + 1);
+  APlan.All[High(APlan.All)] := AEdit;
+  if Length(APlan.All) > MAX_QUALIFY_PREVIEW then Exit;
+  if APlan.AllPreview <> '' then
+    APlan.AllPreview := APlan.AllPreview + ', ';
+  APlan.AllPreview := APlan.AllPreview + AEdit.NewText;
+end;
+
+// EINE Klausel: Items der gefragten Zeile, 'alle qualifizieren' (All,
+// Vorschau) und ob das eine sortierte Klausel unsortiert machte. Bis Charge
+// R8 der Rumpf der Schleife in QualifyUses (SCA176 46).
+procedure QualifyClause(const ACtx: TRdxQualifyCtx;
+  const AEntries: TArray<TRefactorSpan>; var APlan: TRdxQualifyPlan);
+var
+  Names, AllNames : TArray<string>;
+  Sorted          : Boolean;
+  i               : Integer;
+  Item            : TRdxQualifyItem;
+begin
+  Names := ClauseNames(AEntries);
+  Sorted := TRdxRecipes.IsSortedUses(Names);
+  AllNames := Copy(Names);
+  for i := 0 to High(AEntries) do
+  begin
+    if not QualifyItemOf(ACtx, AEntries[i], Item) then Continue;
+    if Item.Why = qwOk then
+    begin
+      AllNames[i] := Item.Qualified;
+      TakeIntoAll(APlan, Item.Edit);
+      // Eine sortierte Klausel bleibt sortiert, sonst kein Angebot - der
+      // Klick erzeugte einen neuen SCA142-Fund (Minor 14).
+      if Sorted and not StaysSorted(Names, i, Item.Qualified) then
+        Item.Why := qwUnsorts;
+    end;
+    if AEntries[i].StartLine = ACtx.Line then
+    begin
+      SetLength(APlan.Items, Length(APlan.Items) + 1);
+      APlan.Items[High(APlan.Items)] := Item;
+    end;
+  end;
+  if Sorted and not TRdxRecipes.IsSortedUses(AllNames) then
+    APlan.AllUnsorts := True;
 end;
 
 class function TRdxRecipeRunner.QualifyUses(APlaces: TSourcePlaces;
   AScopes: TRdxScopeTable; ALine: Integer;
   const AIsOwnUnit: TRdxOwnUnitCheck): TRdxQualifyPlan;
 var
-  Clauses   : TArray<TArray<TRefactorSpan>>;
-  Entries   : TArray<TRefactorSpan>;
-  Names     : TArray<string>;
-  AllNames  : TArray<string>;
-  Single    : TArray<string>;
-  c, i      : Integer;
-  Fw        : TRdxFramework;
-  Item      : TRdxQualifyItem;
-  Q, Reason : string;
-  Sorted    : Boolean;
+  Clauses : TArray<TArray<TRefactorSpan>>;
+  Ctx     : TRdxQualifyCtx;
+  c       : Integer;
 begin
   Result := Default(TRdxQualifyPlan);
   if not LineInUsesClause(APlaces, ALine) then Exit;
@@ -2196,63 +2342,14 @@ begin
     Result.Block := qbFpcSwitch;
     Exit;
   end;
-  Fw := TRdxRecipes.DetectFramework(UsesNamesOf(APlaces));
+  Ctx.Scopes    := AScopes;
+  Ctx.Fw        := TRdxRecipes.DetectFramework(UsesNamesOf(APlaces));
+  Ctx.Line      := ALine;
+  Ctx.IsOwnUnit := AIsOwnUnit;
   Clauses := ClausesOf(APlaces);
   for c := 0 to High(Clauses) do
-  begin
-    Entries := Clauses[c];
-    SetLength(Names, Length(Entries));
-    for i := 0 to High(Entries) do
-      Names[i] := Entries[i].Resolved;
-    Sorted := NamesSorted(Names);
-    AllNames := Copy(Names);
-    for i := 0 to High(Entries) do
-    begin
-      Item := Default(TRdxQualifyItem);
-      Item.Short := Entries[i].Resolved;
-      if (Item.Short = '') or (Pos('.', Item.Short) > 0) then Continue;
-      if not AScopes.Resolve(Item.Short, Fw, Q, Reason) then
-      begin
-        Item.Why := qwScopeTable;
-        Item.ScopeReason := Reason;
-      end
-      else if Assigned(AIsOwnUnit) and AIsOwnUnit(Item.Short) then
-        Item.Why := qwOwnUnit
-      else
-      begin
-        Item.Qualified     := Q;
-        Item.Edit.Span     := Entries[i];
-        Item.Edit.Expected := Item.Short;
-        Item.Edit.NewText  := Q;
-        AllNames[i] := Q;
-        SetLength(Result.All, Length(Result.All) + 1);
-        Result.All[High(Result.All)] := Item.Edit;
-        if Length(Result.All) <= 3 then
-        begin
-          if Result.AllPreview <> '' then
-            Result.AllPreview := Result.AllPreview + ', ';
-          Result.AllPreview := Result.AllPreview + Q;
-        end;
-        // Eine sortierte Klausel bleibt sortiert, sonst kein Angebot -
-        // der Klick erzeugte einen neuen SCA142-Fund (Minor 14).
-        if Sorted then
-        begin
-          Single := Copy(Names);
-          Single[i] := Q;
-          if not NamesSorted(Single) then
-            Item.Why := qwUnsorts;
-        end;
-      end;
-      if Entries[i].StartLine = ALine then
-      begin
-        SetLength(Result.Items, Length(Result.Items) + 1);
-        Result.Items[High(Result.Items)] := Item;
-      end;
-    end;
-    if Sorted and not NamesSorted(AllNames) then
-      Result.AllUnsorts := True;
-  end;
-  if Length(Result.All) > 3 then
+    QualifyClause(Ctx, Clauses[c], Result);
+  if Length(Result.All) > MAX_QUALIFY_PREVIEW then
     Result.AllPreview := Result.AllPreview + ', ...';
 end;
 
