@@ -578,32 +578,137 @@ begin
   end;
 end;
 
+type
+  // Zustand der Suche nach dem Anweisungsende, ueber die Zeilen getragen:
+  // Klammer-/Blocktiefe und das letzte signifikante Zeichen (fuer den
+  // Abschluss OHNE ';' und fuer "ein Wort hinter '.' ist kein
+  // Schluesselwort"). Default = Tiefe 0, kein Zeichen (#0).
+  TStmtScan = record
+    Depth   : Integer;
+    SigLine : Integer;   // Position des letzten signifikanten Zeichens
+    SigCol  : Integer;
+    PrevSig : Char;      // das Zeichen selbst
+    procedure NoteSig(ALine, ACol: Integer; AChar: Char);
+  end;
+
+  // Ergebnis eines Schritts der Suche: weiter (ssNext), Abschluss ohne
+  // ';' vor einem Schluesselwort (ssKeywordEnd), ';' auf Tiefe 0
+  // (ssSemicolon) oder eine schliessende Klammer ohne oeffnende - die
+  // Startposition lag in einem Klammerausdruck (ssUnbalanced).
+  TScanStep = (ssNext, ssKeywordEnd, ssSemicolon, ssUnbalanced);
+
+procedure TStmtScan.NoteSig(ALine, ACol: Integer; AChar: Char);
+begin
+  SigLine := ALine;
+  SigCol  := ACol;
+  PrevSig := AChar;
+end;
+
+function StepWord(const AView: string; var ACol: Integer; ALine: Integer;
+  var AScan: TStmtScan): TScanStep;
+// Ein Bezeichner ab AView[ACol]: Schluesselwoerter aendern die Tiefe oder
+// beenden die Anweisung (ClassifyWord). Danach steht ACol hinter dem Wort,
+// sein letztes Zeichen ist das signifikante.
+var
+  K       : Integer;
+  WordCls : TWordClass;
+begin
+  Result := ssNext;
+  K := ACol;
+  while (K <= Length(AView)) and TRefactorInfoBuilder.IsIdentChar(AView[K]) do
+    Inc(K);
+  // Hinter '.', '&', '$', '#' ist ein Wort kein Schluesselwort
+  // (Member-Zugriff, escapter Bezeichner, Hex-/Zeichen-Literal).
+  WordCls := wcNone;
+  if not CharInSet(AScan.PrevSig, ['.', '&', '$', '#']) then
+    WordCls := ClassifyWord(LowerCase(Copy(AView, ACol, K - ACol)));
+  case WordCls of
+    wcOpener:
+      Inc(AScan.Depth);
+    wcEnd:
+      if AScan.Depth > 0 then Dec(AScan.Depth)
+      else Exit(ssKeywordEnd);
+    wcTerminator:
+      if AScan.Depth = 0 then Exit(ssKeywordEnd);
+  else
+    ;   // wcNone: ein gewoehnliches Wort, nur signifikant
+  end;
+  AScan.NoteSig(ALine, K - 1, AView[K - 1]);
+  ACol := K;
+end;
+
+function StepSymbol(const AView: string; var ACol: Integer; ALine: Integer;
+  var AScan: TStmtScan): TScanStep;
+// Ein Zeichen an AView[ACol], das weder Leerraum noch Bezeichneranfang ist:
+// Klammern aendern die Tiefe, ';' auf Tiefe 0 beendet die Anweisung (ACol
+// bleibt dann auf dem ';'); sonst ist es signifikant und ACol rueckt vor.
+var
+  C : Char;
+begin
+  Result := ssNext;
+  C := AView[ACol];
+  case C of
+    '(', '[':
+      Inc(AScan.Depth);
+    ')', ']':
+      begin
+        // Schliessende Klammer ohne oeffnende: die Startposition lag
+        // IN einem Klammerausdruck - das ist keine Anweisung.
+        if AScan.Depth = 0 then Exit(ssUnbalanced);
+        Dec(AScan.Depth);
+      end;
+    ';':
+      if AScan.Depth = 0 then Exit(ssSemicolon);
+  else
+    ;   // jedes andere Zeichen ist nur signifikant
+  end;
+  AScan.NoteSig(ALine, ACol, C);
+  Inc(ACol);
+end;
+
+function ScanViewLine(const AView: string; var ACol: Integer; ALine: Integer;
+  var AScan: TStmtScan): TScanStep;
+// Die Code-Sicht AView ab Spalte ACol bis zum Zeilenende lesen oder bis ein
+// Schritt die Suche beendet (bei ssSemicolon steht ACol dann auf dem ';').
+// Leerraum wird uebersprungen und ist nicht signifikant.
+begin
+  Result := ssNext;
+  while (ACol <= Length(AView)) and (Result = ssNext) do
+  begin
+    if AView[ACol] <= ' ' then
+      Inc(ACol)
+    else if TRefactorInfoBuilder.IsIdentStart(AView[ACol]) then
+      Result := StepWord(AView, ACol, ALine, AScan)
+    else
+      Result := StepSymbol(AView, ACol, ALine, AScan);
+  end;
+end;
+
 class function TRefactorInfoBuilder.FindStatementEnd(ALines: TStrings;
   ALine, ACol: Integer; out ASpan: TRefactorSpan;
   out AHasSemicolon: Boolean): Boolean;
+// Zeile fuer Zeile die Code-Sicht lesen (LineView traegt den
+// Kommentarzustand weiter), je Zeile ScanViewLine; die Schritte selbst
+// stehen in StepWord/StepSymbol (Regel s. Kopf der Unit). Hier bleibt
+// nur der Rahmen: Zeilenfolge, Abschluss, Mehrzeilenstring.
 var
   State    : TCommentScanState;
   LineSt   : TCommentScanState;   // Kommentarzustand am Zeilenanfang
   Li       : Integer;
   FromCol  : Integer;
   LastLine : Integer;
-  J, K     : Integer;
+  J        : Integer;
   View     : string;
-  C        : Char;
-  PrevSig  : Char;      // letztes signifikantes Zeichen davor
-  Depth    : Integer;
-  SigLine  : Integer;   // Position des letzten signifikanten Zeichens
-  SigCol   : Integer;
-  WordCls  : TWordClass;
+  Scan     : TStmtScan;
 
   // Abschluss OHNE ';': der Bereich endet hinter dem letzten
   // signifikanten Zeichen vor dem Schluesselwort.
   function FinishBeforeKeyword: Boolean;
   begin
-    Result := SigLine > 0;
+    Result := Scan.SigLine > 0;
     if Result then
       ASpan := TRefactorSpan.Make(ROLE_STATEMENT, ALine, ACol,
-        SigLine, SigCol + 1);
+        Scan.SigLine, Scan.SigCol + 1);
   end;
 
 begin
@@ -613,10 +718,7 @@ begin
   if not StartsOnCode(ALines, ALine, ACol) then Exit;
 
   State    := Default(TCommentScanState);
-  Depth    := 0;
-  SigLine  := 0;
-  SigCol   := 0;
-  PrevSig  := #0;
+  Scan     := Default(TStmtScan);
   LastLine := ALine + MAX_STATEMENT_LINES - 1;
   if LastLine > ALines.Count then LastLine := ALines.Count;
 
@@ -627,63 +729,20 @@ begin
     J := FromCol;
     LineSt := State;
     View := LineView(ALines[Li - 1], J, State);
-    while J <= Length(View) do
-    begin
-      C := View[J];
-      if C <= ' ' then
-      begin
-        Inc(J);
-        Continue;
-      end;
-
-      if IsIdentStart(C) then
-      begin
-        K := J;
-        while (K <= Length(View)) and IsIdentChar(View[K]) do Inc(K);
-        // Hinter '.', '&', '$', '#' ist ein Wort kein Schluesselwort
-        // (Member-Zugriff, escapter Bezeichner, Hex-/Zeichen-Literal).
-        WordCls := wcNone;
-        if not CharInSet(PrevSig, ['.', '&', '$', '#']) then
-          WordCls := ClassifyWord(LowerCase(Copy(View, J, K - J)));
-        case WordCls of
-          wcOpener:
-            Inc(Depth);
-          wcEnd:
-            if Depth > 0 then Dec(Depth)
-            else Exit(FinishBeforeKeyword);
-          wcTerminator:
-            if Depth = 0 then Exit(FinishBeforeKeyword);
+    case ScanViewLine(View, J, Li, Scan) of
+      ssKeywordEnd:
+        Exit(FinishBeforeKeyword);
+      ssUnbalanced:
+        Exit;
+      ssSemicolon:
+        begin
+          ASpan := TRefactorSpan.Make(ROLE_STATEMENT, ALine, ACol,
+            Li, J + 1);
+          AHasSemicolon := True;
+          Exit(True);
         end;
-        SigLine := Li;
-        SigCol  := K - 1;
-        PrevSig := View[K - 1];
-        J := K;
-        Continue;
-      end;
-
-      case C of
-        '(', '[':
-          Inc(Depth);
-        ')', ']':
-          begin
-            // Schliessende Klammer ohne oeffnende: die Startposition lag
-            // IN einem Klammerausdruck - das ist keine Anweisung.
-            if Depth = 0 then Exit;
-            Dec(Depth);
-          end;
-        ';':
-          if Depth = 0 then
-          begin
-            ASpan := TRefactorSpan.Make(ROLE_STATEMENT, ALine, ACol,
-              Li, J + 1);
-            AHasSemicolon := True;
-            Exit(True);
-          end;
-      end;
-      SigLine := Li;
-      SigCol  := J;
-      PrevSig := C;
-      Inc(J);
+    else
+      ;   // ssNext: die Zeile ist zu Ende, die Anweisung noch nicht
     end;
     // Die Anweisung laeuft ueber diese Zeile hinaus. Oeffnet die Zeile
     // einen Mehrzeilenstring, waeren die Folgezeilen fuer die Code-Sicht
