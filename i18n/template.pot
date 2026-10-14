@@ -49,11 +49,11 @@ msgstr ""
 msgid "\"%s\" already exists. Overwrite it?"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1739
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1771
 msgid "\"%s\" is a built-in profile and cannot be changed."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1779
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1811
 msgid "\"%s\" is a built-in profile."
 msgstr ""
 
@@ -118,7 +118,7 @@ msgstr ""
 msgid "%s contains no profiles."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1543
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1575
 msgid "%s is not a valid JSON object."
 msgstr ""
 
@@ -166,7 +166,7 @@ msgstr ""
 msgid "8-bit string cast silently drops non-codepage characters"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1730
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1762
 #: SCA.SharedUI/sources/uProfileViewer.pas:679
 msgid "A profile without rules would find nothing."
 msgstr ""
@@ -263,7 +263,7 @@ msgstr ""
 msgid "All severities"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1725
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1757
 msgid "Allowed characters: letters, digits, hyphen, underscore and dot."
 msgstr ""
 
@@ -512,7 +512,7 @@ msgstr ""
 msgid "Cannot move the editor cursor to line %d, column %d"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1535
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1567
 msgid "Cannot read %s: %s"
 msgstr ""
 
@@ -1083,7 +1083,7 @@ msgstr ""
 msgid "File not found: "
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1518
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1550
 msgid "File not found: %s"
 msgstr ""
 
@@ -1102,7 +1102,7 @@ msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2884
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5707
-#: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:799
+#: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:823
 msgid "Finding action failed: %s"
 msgstr ""
 
@@ -1613,7 +1613,7 @@ msgstr ""
 msgid "Nil dereference: access through a possibly nil reference"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:776
+#: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:800
 msgid "No actions for this line"
 msgstr ""
 
@@ -2411,11 +2411,11 @@ msgstr ""
 msgid "Text (one-line hint, no window)"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1716
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1748
 msgid "The profile name must not be empty."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1784
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1816
 msgid "There is no profile \"%s\"."
 msgstr ""
 

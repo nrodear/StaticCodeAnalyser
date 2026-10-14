@@ -719,6 +719,44 @@ end;
 
 { ---- Menue ---- }
 
+// Die drei Helfer halten BulbBeforeMenu unter der SCA176-Grenze; keine
+// Methoden, weil der Manager an der Methodengrenze steht (SCA138).
+
+// Schluessel (Editorfenster) der Birne ABulb in ABulbs; 0, wenn sie dort
+// nicht steht - EditorOf(0) liefert dann nil.
+function EditorKeyOfBulb(ABulbs: TDictionary<HWND, TSCABulbButton>;
+  ABulb: TObject): HWND;
+var
+  Pair : TPair<HWND, TSCABulbButton>;
+begin
+  Result := 0;
+  for Pair in ABulbs do
+    if Pair.Value = ABulb then
+      Exit(Pair.Key);
+end;
+
+// Meldungen werfender Anbieter (Model.Errors) an DebugView, je eine Zeile.
+procedure LogProviderErrors(const AErrors: TArray<string>);
+var
+  i : Integer;
+begin
+  for i := 0 to High(AErrors) do
+    BulbLog('finding action provider failed - ' + AErrors[i]);
+end;
+
+// Die frische Antwort der Anbieter (AHasActions) in die gemerkte
+// Entscheidung des Editors AEditorWnd uebernehmen - nur, wenn es dort
+// schon eine gibt; ohne Eintrag bleibt ADecisions unveraendert.
+procedure NoteProviderAnswerIn(ADecisions: TDictionary<HWND, TBulbDecision>;
+  AEditorWnd: HWND; AHasActions: Boolean);
+var
+  D : TBulbDecision;
+begin
+  if not ADecisions.TryGetValue(AEditorWnd, D) then Exit;
+  D.NoteProviderAnswer(AHasActions);
+  ADecisions.AddOrSetValue(AEditorWnd, D);
+end;
+
 // Vor dem Oeffnen: zu welchem Editor gehoert die geklickte Birne? Dessen
 // Caret-Zeile bestimmt die Funde; die Aktionen werden JETZT erfragt -
 // frisch, damit die Objekte der Anbieter zum Menue passen. Nur verfuegbare
@@ -726,40 +764,26 @@ end;
 // die gemerkte - ist nichts mehr da, geht die Birne danach aus.
 procedure TFindingBulbManager.BulbBeforeMenu(Sender: TObject);
 var
-  Pair      : TPair<HWND, TSCABulbButton>;
   EditorWnd : HWND;
   Ed        : TWinControl;
   FileName  : string;
   Line      : Integer;
   Model     : TFindingMenuModel;
   Item      : TMenuItem;
-  D         : TBulbDecision;
-  i         : Integer;
 begin
   FMenu.Items.Clear;
   FActions := nil;
   try
-    EditorWnd := 0;
-    for Pair in FBulbs do
-      if Pair.Value = Sender then
-      begin
-        EditorWnd := Pair.Key;
-        Break;
-      end;
+    EditorWnd := EditorKeyOfBulb(FBulbs, Sender);
     Ed := EditorOf(EditorWnd);
     if Assigned(Ed) and Assigned(FFindingsAt) and CaretOf(Ed, FileName, Line) then
     begin
       Model := BuildFindingMenuModel(FFindingsAt(FileName, Line),
         [moHeaders, moAvailableFixesOnly]);
-      for i := 0 to High(Model.Errors) do
-        BulbLog('finding action provider failed - ' + Model.Errors[i]);
+      LogProviderErrors(Model.Errors);
       FActions := Model.Actions;
       FillPopupFromModel(FMenu, Model, ActionClick, 0, FMenu, nil);
-      if FDecisions.TryGetValue(EditorWnd, D) then
-      begin
-        D.NoteProviderAnswer(not Model.IsEmpty);
-        FDecisions.AddOrSetValue(EditorWnd, D);
-      end;
+      NoteProviderAnswerIn(FDecisions, EditorWnd, not Model.IsEmpty);
       if Model.IsEmpty then
         Schedule(Ed);
     end;
