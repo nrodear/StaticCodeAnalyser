@@ -475,13 +475,16 @@ begin
   AReason := '';
   FirstWide := -1;
   Iface := -1;
-  State.InBraceComment := False;
-  State.InParenComment := False;
+  State := Default(TCommentScanState);
   for i := 0 to ALines.Count - 1 do
   begin
-    // Die 'interface'-Zeile: nur das Wort, ohne Kommentarzustand
-    // (ScanCodeLine laeuft unten ohnehin ueber jede Zeile).
-    if (Iface < 0) and SameText(Trim(ALines[i]), 'interface') then
+    // Die 'interface'-Zeile: nur das Wort - und nur ausserhalb eines
+    // Blockkommentars (State gilt hier fuer den Zeilenanfang, weil
+    // ParseHostMarkerLine ihn erst danach fortschreibt): ein auskommentierter
+    // Unit-Kopf { unit X; interface ... } liesse den Marker sonst im Kommentar
+    // landen, wo BuildMap ihn nie liest (Gegen-Review FX+E7, Verdacht 1).
+    if (Iface < 0) and not (State.InBraceComment or State.InParenComment)
+       and SameText(Trim(ALines[i]), 'interface') then
       Iface := i;
     if not ParseHostMarkerLine(ALines[i], msPascal, State, Kinds, FileWide)
        or not FileWide then

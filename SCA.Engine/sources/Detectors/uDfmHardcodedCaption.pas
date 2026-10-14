@@ -613,6 +613,9 @@ var
 begin
   if Graph = nil then Exit;
 
+  // Regime kommt erst aus LadeNachbarPas; Default() haelt den Record auch
+  // dann definiert, wenn ein spaeterer Ausstieg vor dem Aufruf liegt.
+  Wissen := Default(TNachbarWissen);
   Wissen.ResIdents      := TStringList.Create;
   Wissen.Zuweisungen    := TStringList.Create;
   Wissen.Ueberschrieben := TStringList.Create;

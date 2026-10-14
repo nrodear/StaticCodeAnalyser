@@ -498,7 +498,12 @@ abgrenzen kann, lehnt er ab (lieber nichts tun als falschen Code schreiben).
   eigenen Zeilen - `X := if C then` / `A` / `else`, auch `X :=` / `if C
   then` / ...), Abbruch: der Leser geht von der Zweigzeile aufwaerts bis
   zum `if` oder bis eine Zeile eine Anweisung beendet (`;`) bzw. einen
-  Zweig oder Block oeffnet - dann ist das `if` eine Anweisung. In
+  Zweig oder Block oeffnet - dann ist das `if` eine Anweisung. Grenze:
+  verteilt sich die Bedingung des Ausdrucks selbst ueber Zeilen (`X := if
+  (A and` / `B) then` / `Foo(1)` / `else` / `Bar(42);`), endet der Gang an
+  `B) then`, das `if` darueber wird nicht erreicht und der Arm wird wie
+  bei einer if-Anweisung umschlossen - das Ergebnis uebersetzt nicht (kein
+  stiller Fehler). In
   reDelphix soll der vorhandene
   Block-Planer (SCA101, WrapInBlock) einspringen. D1 lehnt Zweige ohne
   begin ganz ab, ebenso Zeilen mit `|` (Trennzeichen des Templates) und

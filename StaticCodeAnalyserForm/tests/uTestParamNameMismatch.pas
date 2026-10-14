@@ -946,6 +946,20 @@ begin
     '  Q.ParamByName(''x'').AsInteger := 1;',                    // 18
     '  Q.ParamByName(''a'').AsInteger := 2;',                    // 19
     'end;'])), 'angelegter Name der ersten Instanz gilt nicht weiter');
+  // Gegen-Review FX+E7, Minor 1: auch 'unvollstaendig' (SQL.Add(Var)) und
+  // 'dynamisch angefasst' der ERSTEN Instanz gelten fuer die zweite nicht -
+  // sonst bliebe sie trotz vollstaendigem SQL unbeurteilt (FN).
+  Assert.AreEqual('A:Q.a@18', Scan(L([
+    'procedure P;',                                              // 10
+    'begin',                                                     // 11
+    '  Q := TFDQuery.Create(nil);',                              // 12
+    '  Q.SQL.Add(SomeVar);',                                     // 13
+    '  Q.Params[0].AsInteger := 1;',                             // 14
+    '  Q.Free;',                                                 // 15
+    '  Q := TFDQuery.Create(nil);',                              // 16
+    '  Q.SQL.Text := ''select * from t where b = :b'';',         // 17
+    '  Q.ParamByName(''a'').AsInteger := 1;',                    // 18
+    'end;'])), 'unvollstaendige erste Instanz macht die zweite nicht stumm');
 end;
 
 { --- angelegte Parameter --------------------------------------------------- }

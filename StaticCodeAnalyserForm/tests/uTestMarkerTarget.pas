@@ -204,6 +204,15 @@ begin
   Assert.IsTrue(TSuppression.MarkerTargetFor(Dfm, 3, fkDfmHardcodedCaption,
     T, Why), Why);
   Assert.AreEqual<Integer>(1, T.Line, 'ohne interface-Zeile: Zeile 1');
+  // 'interface' in einem auskommentierten Unit-Kopf zaehlt nicht - der
+  // Marker landete sonst im Kommentar, wo BuildMap ihn nie liest
+  // (Gegen-Review FX+E7, Verdacht 1): Ziel ist die echte Zeile 6.
+  WriteFile('Form5.pas', '{ unit Old;'#13#10'interface'#13#10'}'#13#10 +
+    'unit Form5;'#13#10#13#10'interface'#13#10'implementation'#13#10'end.');
+  Dfm := WriteFile('Form5.dfm', FORM_DFM_SRC);
+  Assert.IsTrue(TSuppression.MarkerTargetFor(Dfm, 3, fkDfmHardcodedCaption,
+    T, Why), Why);
+  Assert.AreEqual<Integer>(6, T.Line, 'interface im Blockkommentar zaehlt nicht');
 end;
 
 initialization

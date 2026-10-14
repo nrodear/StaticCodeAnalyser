@@ -1238,11 +1238,16 @@ begin
   // Zuweisung aus fremder Quelle (Q := DM.qry) setzt nur die Flags: dort
   // gilt der bestehende Vertrag (Zugriffe vor der ersten SQL-Operation
   // zaehlen nicht, kein (b)).
+  // Incomplete/DynRefs gehoeren ebenfalls zur alten Instanz: ein SQL.Add(Var)
+  // der ERSTEN Instanz darf die zweite nicht unbeurteilt lassen (Gegen-Review
+  // FX+E7, Minor 1).
   if Created then
   begin
     FQs[Q].Parts := nil;
     FQs[Q].Refs := nil;
     FQs[Q].Known := nil;
+    FQs[Q].Incomplete := False;
+    FQs[Q].DynRefs := False;
   end;
   FQs[Q].Created := Created;
   FQs[Q].Reset := False;
