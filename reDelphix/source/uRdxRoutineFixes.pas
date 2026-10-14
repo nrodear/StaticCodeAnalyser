@@ -69,6 +69,7 @@ unit uRdxRoutineFixes;
 interface
 
 uses
+  System.Classes,    // TStrings (TRdxIncludeTest), TStringList (Includes)
   uRdxBufferMath, uRdxCodeMap;
 
 const
@@ -208,11 +209,35 @@ type
 function HasDirective(const R: TRdxRoutine; const AWords: array of string;
   out AWord: string): Boolean;
 
+type
+  // Die Pruefung eines gelesenen Includes AFile (Zeilen und Code-Sicht):
+  // '' oder der Grund. AArg ist das Argument des Aufrufers (SCA164: der
+  // Name der Routine).
+  TRdxIncludeTest = function(const AFile: string; ALines: TStrings;
+    AMap: TRdxCodeMap; const AArg: string): string;
+
+  // Was IncludeChainReason je Include prueft: Test mit Arg, und MissingFmt
+  // fuer ein Include, das nicht zu finden oder zu lesen ist (%s die Datei,
+  // %s die Ursache - 'nicht neben der Unit gefunden', 'nicht lesbar' ...).
+  TRdxIncludeCheck = record
+    Test       : TRdxIncludeTest;
+    Arg        : string;
+    MissingFmt : string;
+  end;
+
+// Die Include-Dateien AIncludes der Unit AUnitFile lesen - neben der Unit,
+// ohne Endung auch mit .inc/.pas, verschachtelte Includes ebenso (bis
+// MAX_INCLUDE_DEPTH) - und jede mit ACheck.Test pruefen: '' oder der erste
+// Grund, auch fuer ein Include, das nicht zu finden oder zu lesen ist.
+// '{$I %DATE%}' (FPC) ist keine Datei. Bis Charge Q14 nur fuer SCA164
+// (IncludeReason); SCA014 prueft damit die Compiler-Weichen der Includes.
+function IncludeChainReason(const AUnitFile: string;
+  const AIncludes: TArray<string>; const ACheck: TRdxIncludeCheck): string;
+
 implementation
 
 uses
   System.SysUtils,
-  System.Classes,    // TStringList (IncludeReason)
   uRefactorInfo,     // TRefactorSpan.Make
   uRdxStructFixes;   // RangeText
 
@@ -2012,10 +2037,10 @@ end;
 
 // Das Include AFile (relativ zu ADir, sonst zum Verzeichnis der Unit
 // AUnitDir) und seine verschachtelten Includes bis MAX_INCLUDE_DEPTH: ''
-// wenn keines AName nennt, sonst der Grund (auch: nicht gefunden, nicht
-// lesbar).
-function IncludeFileReason(const ADir, AUnitDir, AFile, AName: string;
-  ADepth: Integer): string;
+// wenn ACheck.Test fuer keines einen Grund nennt, sonst der Grund (auch:
+// nicht gefunden, nicht lesbar - ACheck.MissingFmt).
+function IncludeFileReason(const ADir, AUnitDir, AFile: string;
+  const ACheck: TRdxIncludeCheck; ADepth: Integer): string;
 var
   Path, F : string;
   SL      : TStringList;
@@ -2025,25 +2050,23 @@ begin
   Result := '';
   if Copy(AFile, 1, 1) = '%' then Exit;
   if AUnitDir = '' then
-    Exit(Format(R_INC_MISSING, [AFile, 'die Datei der Unit ist unbekannt']));
+    Exit(Format(ACheck.MissingFmt, [AFile, 'die Datei der Unit ist unbekannt']));
   if ADepth > MAX_INCLUDE_DEPTH then
-    Exit(Format(R_INC_MISSING, [AFile, 'zu tief verschachtelt']));
+    Exit(Format(ACheck.MissingFmt, [AFile, 'zu tief verschachtelt']));
   Path := FindInclude(ADir, AFile);
   if Path = '' then
     Path := FindInclude(AUnitDir, AFile);
   if Path = '' then
-    Exit(Format(R_INC_MISSING, [AFile, 'nicht neben der Unit gefunden']));
+    Exit(Format(ACheck.MissingFmt, [AFile, 'nicht neben der Unit gefunden']));
   Nested := nil;
   Map := nil;
   SL := TStringList.Create;
   try
     if not ReadIncludeText(Path, SL) then
-      Exit(Format(R_INC_MISSING, [AFile, 'nicht lesbar']));
-    if HasIdentWord(LowerCase(SL.Text), LowerCase(AName)) then
-      Exit(Format('das Include %s nennt %s - eine Deklaration im '
-        + 'interface-Teil (nach dem Loeschen E2065) oder ein Aufruf, den die '
-        + 'Hilfe nicht sieht', [AFile, AName]));
+      Exit(Format(ACheck.MissingFmt, [AFile, 'nicht lesbar']));
     Map := TRdxCodeMap.Create(SL);
+    Result := ACheck.Test(AFile, SL, Map, ACheck.Arg);
+    if Result <> '' then Exit;
     Nested := IncludesUpTo(Map, Map.LineCount);
   finally
     Map.Free;
@@ -2051,17 +2074,15 @@ begin
   end;
   for F in Nested do
   begin
-    Result := IncludeFileReason(ExtractFilePath(Path), AUnitDir, F, AName,
+    Result := IncludeFileReason(ExtractFilePath(Path), AUnitDir, F, ACheck,
       ADepth + 1);
     if Result <> '' then
       Exit(Format('%s (eingebunden von %s)', [Result, AFile]));
   end;
 end;
 
-{ TRdxRoutineFixes }
-
-class function TRdxRoutineFixes.IncludeReason(const AUnitFile: string;
-  const AIncludes: TArray<string>; const AName: string): string;
+function IncludeChainReason(const AUnitFile: string;
+  const AIncludes: TArray<string>; const ACheck: TRdxIncludeCheck): string;
 var
   F, Dir : string;
 begin
@@ -2069,9 +2090,34 @@ begin
   Dir := ExtractFilePath(AUnitFile);
   for F in AIncludes do
   begin
-    Result := IncludeFileReason(Dir, Dir, F, AName, 1);
+    Result := IncludeFileReason(Dir, Dir, F, ACheck, 1);
     if Result <> '' then Exit;
   end;
+end;
+
+// SCA164: nennt das Include AFile die Routine AArg als Wort? '' oder der
+// Grund (TRdxIncludeTest).
+function NameInInclude(const AFile: string; ALines: TStrings;
+  AMap: TRdxCodeMap; const AArg: string): string;
+begin
+  Result := '';
+  if HasIdentWord(LowerCase(ALines.Text), LowerCase(AArg)) then
+    Result := Format('das Include %s nennt %s - eine Deklaration im '
+      + 'interface-Teil (nach dem Loeschen E2065) oder ein Aufruf, den die '
+      + 'Hilfe nicht sieht', [AFile, AArg]);
+end;
+
+{ TRdxRoutineFixes }
+
+class function TRdxRoutineFixes.IncludeReason(const AUnitFile: string;
+  const AIncludes: TArray<string>; const AName: string): string;
+var
+  Check : TRdxIncludeCheck;
+begin
+  Check.Test := NameInInclude;
+  Check.Arg := AName;
+  Check.MissingFmt := R_INC_MISSING;
+  Result := IncludeChainReason(AUnitFile, AIncludes, Check);
 end;
 
 class function TRdxRoutineFixes.ReadRoutine(AMap: TRdxCodeMap;

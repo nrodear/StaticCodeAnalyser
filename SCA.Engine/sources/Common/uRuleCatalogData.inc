@@ -172,7 +172,7 @@ const
       GoodEx   : 'const MAX_RETRIES = 3;' + #13#10 + 'if RetryCount > MAX_RETRIES then ...';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA015
     (

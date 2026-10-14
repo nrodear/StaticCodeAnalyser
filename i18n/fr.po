@@ -2375,6 +2375,9 @@ msgstr "Initialiser Result avec %s"
 msgid "Initialize Result first: %s"
 msgstr "Initialiser Result d'abord : %s"
 
+msgid "Introduce local constant for %s"
+msgstr "Introduire une constante locale pour %s"
+
 msgid "(changes behavior)"
 msgstr "(modifie le comportement)"
 

@@ -184,7 +184,8 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxRtlTypes;      // IsRtlClassOrInterface (SCA196: Interface aus der RTL)
+  uRdxRtlTypes,      // IsRtlClassOrInterface (SCA196: Interface aus der RTL)
+  uRdxCompilerTraces;  // OldCompilerTrace (SCA121: Spuren alter Compiler)
 
 const
   SPAN_RESULT = 'result';
@@ -254,8 +255,6 @@ const
   // FPC-Modi ohne Result (SCA121/SCA196).
   NO_RESULT_MODES: array[0..4] of string = ('fpc', 'tp', 'macpas', 'iso',
     'extendedpascal');
-  // Damit beginnt eine Datei, die der Compiler uebersetzt (SCA121).
-  PROGRAM_WORDS: array[0..2] of string = ('program', 'library', 'package');
   // SCA196: die Rueckgabetypen je Initialisierung - wie
   // uManagedResultUninit.IsResultPointerType (klein, ohne 'system.').
   STRING_TYPES: array[0..11] of string = ('string', 'unicodestring',
@@ -299,24 +298,6 @@ const
   VALUE_NUL       = '#0';
   VALUE_NIL       = 'nil';
   VALUE_EMPTY_SET = '[]';
-  // SCA121: Spuren von Compilern vor Delphi 2009 (OldCompilerTrace) - die
-  // Includes der Kits, die ab Delphi 5/6 bauen (JEDI/JCL/JVCL, CnPack/
-  // CnWizards, Indy) ...
-  KIT_INCLUDES: array[0..5] of string = ('jedi.inc', 'jvcl.inc', 'jcl.inc',
-    'cnpack.inc', 'cnwizards.inc', 'idcompilerdefines.inc');
-  // ... und die Bedingungen, in denen ein Versionssymbol steht.
-  CONDITION_WORDS: array[0..3] of string = ('ifdef', 'ifndef', 'if',
-    'elseif');
-  // Delphi 2009: VER200, CompilerVersion 20, COMPILER12, RTL200.
-  D2009_VER = 200;
-  D2009_COMPILER_VERSION = 20;
-  D2009_COMPILER = 12;
-  D2009_DELPHI_YEAR = 2009;
-  DELPHI_LAST_NUMBER = 8;   // DELPHI1..DELPHI8, danach Jahreszahlen
-  FPC_3_FULLVERSION = 30000;
-  // ConditionTokens: Zeichen eines Worts bzw. eines Vergleichs.
-  WORD_CHARS: TSysCharSet = ['A'..'Z', '0'..'9', '_', '.'];
-  COMPARE_CHARS: TSysCharSet = ['<', '>', '='];
   OBJECT_KINDS: array[0..0] of string = ('object');
   RECORD_KINDS: array[0..0] of string = ('record');
   ARRAY_KINDS: array[0..1] of string = ('array', 'tarray');
@@ -325,6 +306,8 @@ const
   STMT_VARCLEAR     = 'VarClear(Result)';
   R_MOVED  = 'Zeile verschoben? Datei neu pruefen';
   R_BY_HAND = 'von Hand';
+  // SCA121: was nur der Compiler kennt (ScriptReason, uRdxCompilerTraces).
+  FEATURE_DEFAULT = 'Default()';
   // SCA196: als Konstante - ein Literal mit dem Wort im Exit-Argument
   // haelt der Detektor SCA196 selbst fuer ein Lesen von Result (Selbstscan
   // der Charge H5).
@@ -1132,33 +1115,6 @@ begin
   end;
 end;
 
-// SCA121: Default() ist ein Compiler-Intrinsic (Delphi 2009, FPC 3.0) -
-// Skript-Units ('unit X;' ohne implementation-Teil: xEdit-Skripte,
-// JvInterpreter-Beispiele) und Include-Dateien uebersetzt kein Compiler,
-// ihre Interpreter kennen es nicht. '' oder der Grund.
-function ScriptReason(AMap: TRdxCodeMap): string;
-var
-  T, P : TRdxToken;
-begin
-  T := NextToken(AMap, 1, 1);
-  if InList(T.Low, PROGRAM_WORDS) then
-    Exit('');
-  if T.Low <> 'unit' then
-    Exit('die Datei beginnt nicht mit unit/program/library (Include oder '
-      + 'Skript?) - Default() kennt nur der Compiler');
-  P := T;
-  T := After(AMap, T);
-  while T.Low <> '' do
-  begin
-    if (T.Low = 'implementation') and IsKeywordAfter(T, P) then
-      Exit('');
-    P := T;
-    T := After(AMap, T);
-  end;
-  Result := 'unit ohne implementation-Teil (Skript?) - Default() kennt nur '
-    + 'der Compiler';
-end;
-
 // Hat R den Namen AName (letztes Glied, ohne Typparameter)? '' oder der
 // Grund.
 function NameReason(const R: TRdxRoutine; const AName: string): string;
@@ -1415,162 +1371,23 @@ begin
     AValue := 'Default(' + AType + ')';
 end;
 
-// Die Zahl direkt hinter APrefix am Anfang von AUpper ('DELPHI2007_UP',
-// 'DELPHI' -> 2007); -1 ohne Ziffer dahinter.
-function NumberAfter(const AUpper, APrefix: string): Integer;
-var
-  i : Integer;
-begin
-  Result := -1;
-  if Copy(AUpper, 1, Length(APrefix)) <> APrefix then Exit;
-  i := Length(APrefix) + 1;
-  while (i <= Length(AUpper)) and CharInSet(AUpper[i], ['0'..'9']) do
-    Inc(i);
-  if i > Length(APrefix) + 1 then
-    Result := StrToIntDef(Copy(AUpper, Length(APrefix) + 1,
-      i - Length(APrefix) - 1), -1);
-end;
-
-// Ein Versionssymbol eines Compilers vor Delphi 2009 (bzw. FPC 3.0):
-// VERnnn unter VER200 (FPC: VER2_6 ...), DELPHI1..DELPHI8 und
-// DELPHI2005..DELPHI2009 (auch mit Zusatz: DELPHI2007_UP), COMPILERn bis
-// COMPILER12, BCBn bis BCB12, RTLnnn bis RTL200 - wer danach fragt, baut
-// auch mit dem aelteren Compiler.
-function OldVersionWord(const AUpper: string): Boolean;
-var
-  N : Integer;
-begin
-  N := NumberAfter(AUpper, 'DELPHI');
-  Result := ((N >= 1) and (N <= DELPHI_LAST_NUMBER))
-    or ((N >= 2005) and (N <= D2009_DELPHI_YEAR));
-  N := NumberAfter(AUpper, 'VER');
-  Result := Result or ((N >= 0) and (N < D2009_VER));
-  N := NumberAfter(AUpper, 'COMPILER');
-  Result := Result or ((N >= 0) and (N <= D2009_COMPILER));
-  N := NumberAfter(AUpper, 'BCB');
-  Result := Result or ((N >= 0) and (N <= D2009_COMPILER));
-  N := NumberAfter(AUpper, 'RTL');
-  Result := Result or ((N >= 0) and (N <= D2009_VER));
-end;
-
-// Die Woerter und Vergleichszeichen eines Bedingungstexts, gross
-// ('CompilerVersion >= 20.0' -> COMPILERVERSION, >=, 20.0).
-function ConditionTokens(const AArgs: string): TArray<string>;
-var
-  U       : string;
-  i, j, N : Integer;
-  Chars   : TSysCharSet;
-begin
-  U := UpperCase(AArgs);
-  SetLength(Result, Length(U));
-  N := 0;
-  i := 1;
-  while i <= Length(U) do
-  begin
-    Chars := WORD_CHARS;
-    if CharInSet(U[i], COMPARE_CHARS) then
-      Chars := COMPARE_CHARS;
-    j := i;
-    while (j <= Length(U)) and CharInSet(U[j], Chars) do
-      Inc(j);
-    if j > i then
-    begin
-      Result[N] := Copy(U, i, j - i);
-      Inc(N);
-      i := j;
-    end
-    else
-      Inc(i);
-  end;
-  SetLength(Result, N);
-end;
-
-// Die Zahl vor dem ersten '.' von AWord ('20.0' -> 20); -1 ohne Zahl.
-function LeadingNumber(const AWord: string): Integer;
-var
-  P : Integer;
-begin
-  P := Pos('.', AWord + '.');
-  Result := StrToIntDef(Copy(AWord, 1, P - 1), -1);
-end;
-
-// Ein Vergleich 'CompilerVersion|RTLVersion <op> n' mit n bis 20 bzw.
-// 'FPC_FULLVERSION <op> n' mit n unter 30000 an AToks[i]?
-function OldComparisonAt(const AToks: TArray<string>; i: Integer): Boolean;
-var
-  N : Integer;
-begin
-  Result := False;
-  if (i + 2 > High(AToks)) or not CharInSet(AToks[i + 1][1], ['<', '>', '='])
-  then
-    Exit;
-  N := LeadingNumber(AToks[i + 2]);
-  if (AToks[i] = 'COMPILERVERSION') or (AToks[i] = 'RTLVERSION') then
-    Result := (N >= 0) and (N <= D2009_COMPILER_VERSION)
-  else if AToks[i] = 'FPC_FULLVERSION' then
-    Result := (N >= 0) and (N < FPC_3_FULLVERSION);
-end;
-
-// Eine Spur alter Compiler im Bedingungstext AArgs ('{$IFDEF DELPHI2007_UP}',
-// '{$IF CompilerVersion < 20}') - das Symbol bzw. der Vergleich; '' ohne.
-function OldSymbolIn(const AArgs: string): string;
-var
-  Toks : TArray<string>;
-  i    : Integer;
-begin
-  Result := '';
-  Toks := ConditionTokens(AArgs);
-  for i := 0 to High(Toks) do
-    if OldVersionWord(Toks[i]) then
-      Exit(Toks[i])
-    else if OldComparisonAt(Toks, i) then
-      Exit(Toks[i] + ' ' + Toks[i + 1] + ' ' + Toks[i + 2]);
-end;
-
-// Die Spur alter Compiler in der Direktive an (ALine, ACol): ein
-// Kit-Include (KIT_INCLUDES, klein ohne Pfad) oder ein Versionssymbol in
-// einer Bedingung; '' ohne.
-function OldTraceAt(AMap: TRdxCodeMap; ALine, ACol: Integer): string;
-var
-  W   : string;
-  Arg : Boolean;
-begin
-  Result := '';
-  W := DirectiveWord(AMap, ALine, ACol, Arg);
-  if InList(W, INCLUDE_WORDS) then
-  begin
-    Result := LowerCase(IncludeFileAt(AMap, ALine, ACol));
-    Result := Copy(Result, LastDelimiter('\/', Result) + 1, MaxInt);
-    if not InList(Result, KIT_INCLUDES) then
-      Result := '';
-  end
-  else if InList(W, CONDITION_WORDS) then
-    Result := OldSymbolIn(DirectiveArgs(AMap, ALine, ACol));
-end;
-
 // SCA121: traegt die Datei Spuren von Compilern vor Delphi 2009 bzw. FPC
-// 3.0, die Default() nicht kennen (OldTraceAt)? Gegen-Review H5, Minor 4:
-// CnWizards baut ab Delphi 5 (CnWizUtils), JVCL setzt Result teils nur ab
-// DELPHI2007_UP. '' oder der Grund.
+// 3.0, die Default() nicht kennen (uRdxCompilerTraces, FLOOR_DEFAULT_FN)?
+// Gegen-Review H5, Minor 4: CnWizards baut ab Delphi 5 (CnWizUtils), JVCL
+// setzt Result teils nur ab DELPHI2007_UP. Die Suche steht seit Charge Q14
+// in uRdxCompilerTraces (SCA014 braucht sie mit der Schwelle 10.3). '' oder
+// der Grund.
 function OldCompilerReason(AMap: TRdxCodeMap): string;
 var
-  Li, Co : Integer;
-  L, S   : string;
+  Li : Integer;
+  S  : string;
 begin
   Result := '';
-  for Li := 1 to AMap.LineCount do
-  begin
-    L := AMap.Raw(Li);
-    for Co := 1 to Length(L) do
-      if CharInSet(L[Co], ['{', '(']) and OpensDirective(AMap, Li, Co) then
-      begin
-        S := OldTraceAt(AMap, Li, Co);
-        if S <> '' then
-          Exit(Format('Default() gibt es erst ab Delphi 2009 bzw. FPC 3.0 - '
-            + 'die Datei traegt Spuren aelterer Compiler (%s, Zeile %d); %s',
-            [S, Li, R_BY_HAND]));
-      end;
-  end;
+  S := OldCompilerTrace(AMap, FLOOR_DEFAULT_FN, Li);
+  if S <> '' then
+    Result := Format('Default() gibt es erst ab Delphi 2009 bzw. FPC 3.0 - '
+      + 'die Datei traegt Spuren aelterer Compiler (%s, Zeile %d); %s',
+      [S, Li, R_BY_HAND]);
 end;
 
 // SCA121: der Wert fuer 'Result := <Wert>;' zur Funktion R in AValue
@@ -1998,7 +1815,7 @@ begin
   if AReason = '' then
     AReason := BodyReason(AMap, R);
   if AReason = '' then
-    AReason := ScriptReason(AMap);
+    AReason := ScriptReason(AMap, FEATURE_DEFAULT);
   if AReason = '' then
     AReason := ResultModeReason(AMap);
   if AReason = '' then

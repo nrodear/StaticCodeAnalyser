@@ -121,7 +121,8 @@ uses
   uRdxRoutineFixes,  // SCA164, SCA147
   uRdxCleanupFixes,  // SCA070, SCA053
   uRdxTryFixes,      // SCA009, SCA001, SCA109, SCA153, SCA156
-  uRdxResultFixes;   // SCA096, SCA097, SCA121, SCA196
+  uRdxResultFixes,   // SCA096, SCA097, SCA121, SCA196
+  uRdxMagicFixes;    // SCA014
 
 const
   // Hinweise der Hilfen (deutsch wie die Gruende; Pruefstand und Tests
@@ -199,6 +200,11 @@ const
     + '(wie Default(T)) statt zufaellig - spaetere Zuweisungen gelten weiter';
   R_RESULT_INIT_HINT = 'Result beginnt jetzt leer statt mit dem alten Inhalt '
     + 'der Zielvariable des Aufrufers';
+  // SCA014 (Charge Q14, E28): die Inline-Konstante haelt die Bedeutung des
+  // Literals (E26); den vorlaeufigen Namen benennt der Benutzer selbst um -
+  // keine Sync-Edit-Sitzung der Hilfe.
+  R_MAGIC_HINT = 'gleiche Bedeutung - die Konstante %s haelt das Literal; '
+    + 'umbenennen mit Strg+Umschalt+J (Sync Edit) oder von Hand';
   // SCA001: nur diese Variante bekommt die Hilfe (Feld TLeakFinding.
   // LeakVariant, das uLeakDetector2 setzt; properties.variant im SARIF).
   LEAK_VARIANT_FOF = 'freed-outside-finally';
@@ -320,6 +326,14 @@ begin
   AOutcome.Edits := APlan.Edits;
 end;
 
+// SCA014: der Menuetext nennt die Zahl (schon, wenn der Planer ablehnt),
+// den Namen der Konstante nennt der Hinweis.
+procedure MagicParts(const APlan: TRdxMagicPlan; var AOutcome: TRdxFixOutcome);
+begin
+  AOutcome.Name := APlan.Value;
+  AOutcome.Edits := APlan.Edits;
+end;
+
 // SCA098: X und (in der Gegenrichtung) die Bedingung als Boolean bewiesen
 // (CondAssignReason, uRdxRecipeRunner).
 function CondCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
@@ -346,6 +360,16 @@ begin
   if Length(APlan.Includes) > 0 then
     Result := TRdxRoutineFixes.IncludeReason(AFinding.FileName,
       APlan.Includes, APlan.Name);
+end;
+
+// SCA014: was nur die Platte weiss - Lazarus-Dateiart oder -Projekt neben
+// der Unit, die Compiler-Weichen ihrer Includes (TRdxMagicFixes).
+function MagicCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  AFinding: TLeakFinding; const APlan: TRdxMagicPlan): string;
+begin
+  Result := TRdxMagicFixes.FileReason(AFinding.FileName);
+  if Result = '' then
+    Result := TRdxMagicFixes.IncludeReason(AFinding.FileName, AMap);
 end;
 
 // Die Plan-Formen der Tabelle.
@@ -394,6 +418,17 @@ begin
   Result.Planner := APlanner;
   Result.Parts := ResultParts;
   Result.Check := nil;
+  Result.NeedsOpen := False;
+end;
+
+// SCA014 (Charge Q14): eine Ersetzung (Deklaration davor, das Literal
+// ersetzt, bei einem Zweig begin..end), Name die Zahl, danach MagicCheck.
+function MagicForm(
+  APlanner: TRdxPlannerOf<TRdxMagicPlan>): TRdxPlanForm<TRdxMagicPlan>;
+begin
+  Result.Planner := APlanner;
+  Result.Parts := MagicParts;
+  Result.Check := MagicCheck;
   Result.NeedsOpen := False;
 end;
 
@@ -858,16 +893,30 @@ begin
       'System.Variants', Result);
 end;
 
+// SCA014: 'const MagicNr01 = 200;' vor der Anweisung, das Literal der
+// if-Bedingung durch den Namen; der Hinweis nennt den Namen.
+function PlanMagicNumber(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxMagicPlan;
+begin
+  Result := TRdxFixFrame.Run<TRdxMagicPlan>(
+    MagicForm(TRdxMagicFixes.MagicNumber),
+    APlaces, ALines, AFinding, P);
+  if Result.Enabled then
+    Result.Hint := Format(R_MAGIC_HINT, [P.Name]);
+end;
+
 { ---- Die Tabelle ---- }
 
 const
-  FIX_ROW_HIGH = 38;
+  FIX_ROW_HIGH = 39;
 
   // Je Art eine Zeile; die Reihenfolge ist die der Chargen (Stufe 2a,
   // Stufe 2 Rest, uQuickFix-Umzug/Stufe 3, Zeilen, Ausnahmen, Deklarationen
   // H1, Anweisungen H2, Routinen H3b, Aufraeumen H3a, try/finally H4,
-  // Ergebnis und Konstruktoren H5). Der Menuetext steht unter demselben
-  // Index in FIX_CAPTIONS (s. Kopf).
+  // Ergebnis und Konstruktoren H5, Magic Number Q14). Der Menuetext steht
+  // unter demselben Index in FIX_CAPTIONS (s. Kopf).
   FIX_ROWS: array[0..FIX_ROW_HIGH] of TRdxFixRow = (
     (Kind: fkExplicitTObjectInheritance; Plan: PlanExplicitTObject;
      Hint: R_TOBJECT_HINT; HintByPlanner: False; Changes: False; Alt: nil),
@@ -953,7 +1002,11 @@ const
     (Kind: fkRoutineResultUnassigned; Plan: PlanResultDefault;
      Hint: R_RESULT_DEFAULT_HINT; HintByPlanner: False; Changes: True; Alt: nil),
     (Kind: fkManagedResultUninit; Plan: PlanManagedResult;
-     Hint: ''; HintByPlanner: True; Changes: True; Alt: nil)
+     Hint: ''; HintByPlanner: True; Changes: True; Alt: nil),
+    // Charge Q14: bedeutungsgleich (E26), den Hinweis setzt der Adapter
+    // (Name der Konstante).
+    (Kind: fkMagicNumber; Plan: PlanMagicNumber;
+     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil)
   );
 
   // Menuetexte (msgids) unter dem Index der Zeile; '%s' = Name der Hilfe
@@ -962,7 +1015,7 @@ const
   // SCA080, die Routine bzw. Methode bei SCA164/SCA147, die Variable bei SCA053,
   // X bzw. die Sperre bzw. der Puffer bei SCA009/SCA001/SCA109/SCA153/SCA156,
   // die Anweisung bei SCA096/SCA196, der Wert bei SCA121 - ein Literal oder
-  // Default(T), Charge H5c).
+  // Default(T), Charge H5c; die Zahl bei SCA014, Charge Q14).
   FIX_CAPTIONS: array[0..FIX_ROW_HIGH] of string = (
     'Remove (TObject) from the class declaration',
     'Use FreeAndNil(%s)',
@@ -1002,7 +1055,8 @@ const
     'Call %s first in the constructor',
     'Call inherited last in the destructor',
     'Initialize Result with %s',
-    'Initialize Result first: %s'
+    'Initialize Result first: %s',
+    'Introduce local constant for %s'
   );
 
   // Menuetexte des zweiten Eintrags (Alt), '' ohne.
@@ -1012,7 +1066,7 @@ const
     '', '', '', '', '', '',
     'Raise ENotImplemented in the empty body',
     '', '', '', '', '', '', '', '', '', '', '', '',
-    '', '', '', '', '', '', '', '', ''
+    '', '', '', '', '', '', '', '', '', ''
   );
 
 var

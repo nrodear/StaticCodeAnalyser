@@ -42,6 +42,7 @@
       "DestructorWithoutInherited",
       "RoutineResultUnassigned",
       "ManagedResultUninit",
+      "MagicNumber",
       "UnusedSuppression",
       "UnsortedUses",
       "UnusedUses",
