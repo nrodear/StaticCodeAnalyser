@@ -714,6 +714,40 @@ def pruefe_reservierte_bezeichner(pfad, befunde):
 
 
 # --------------------------------------------------------------------------
+# 3d) Generischer Typ im Create passt nicht zum Feld (Bau 2026-10-14, E2010)
+# --------------------------------------------------------------------------
+# FX stellte FDoomed von TList<TSCABulbButton> auf TList<TDoomedBulb> um,
+# der Konstruktor erzeugte weiter TList<TSCABulbButton> - FPC-Pruefstand
+# uebersetzt IDE-Units nicht, erst dcc32 meldete E2010. Je Unit werden die
+# Deklarationen 'Name : TGen<Args>' gesammelt und gegen jedes
+# 'Name := TGen<Args>.Create' derselben Unit gehalten; Argumente werden
+# ohne Leerraum und in Kleinschreibung verglichen.
+def pruefe_generische_create(pfad, befunde):
+    """'F := TList<A>.Create' bei 'F : TList<B>' -> E2010."""
+    code = _nur_code(lies(pfad))
+    decl = {}
+    # Namenslisten ('A, B: TList<X>') und EINE Schachtelungsstufe
+    # ('TDictionary<string, TList<X>>'); Klammern beenden den Typ, sonst
+    # frisst '<...>' einen Parameter samt Rueckgabetyp.
+    args = r'[^<>;=()]*(?:<[^<>;=()]*>[^<>;=()]*)*'
+    for m in re.finditer(r'\b([A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*)'
+                         r'\s*:\s*(T[A-Za-z0-9_]*<' + args + r'>)\s*[;)]', code):
+        typ = re.sub(r'\s+', '', m.group(2)).lower()
+        for name in re.split(r'\s*,\s*', m.group(1)):
+            decl.setdefault(name.lower(), set()).add(typ)
+    for nr, ln in enumerate(code.split('\n'), 1):
+        for m in re.finditer(r'\b([A-Za-z_][A-Za-z0-9_]*)\s*:=\s*'
+                             r'(T[A-Za-z0-9_]*<' + args + r'>)\.Create\b', ln):
+            name = m.group(1).lower()
+            typ = re.sub(r'\s+', '', m.group(2)).lower()
+            if name in decl and typ not in decl[name]:
+                befunde.append("%s:%d  %s := %s.Create, deklariert als %s "
+                               "(E2010)"
+                               % (os.path.basename(pfad), nr, m.group(1),
+                                  m.group(2), ' / '.join(sorted(decl[name]))))
+
+
+# --------------------------------------------------------------------------
 def dateien_bestimmen(argv):
     if argv and argv[0] == '--all':
         out = []
@@ -751,6 +785,7 @@ def main():
         pruefe_uses_zuerst(d, befunde)
         pruefe_rtl_uses(d, befunde)
         pruefe_reservierte_bezeichner(d, befunde)
+        pruefe_generische_create(d, befunde)
         if os.sep + 'tests' + os.sep in d.replace('/', os.sep):
             pruefe_unbeendete_konstante(d, befunde)
             pruefe_fixture_klassen(d, befunde)
