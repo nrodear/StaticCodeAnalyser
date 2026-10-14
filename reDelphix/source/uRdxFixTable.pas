@@ -192,8 +192,10 @@ const
     + 'Destruktor folgt danach der Konvention';
   R_DTOR_HINT = 'der Elterndestruktor laeuft jetzt am Ende und gibt die '
     + 'geerbten Felder frei';
-  R_RESULT_DEFAULT_HINT = 'Result ist jetzt von Anfang an Default(T) statt '
-    + 'zufaellig - spaetere Zuweisungen gelten weiter';
+  // SCA121: der Wert ist ein Literal (0, False, '''', nil ...) oder
+  // Default(T) - beides der Anfangswert des Typs (Charge H5c).
+  R_RESULT_DEFAULT_HINT = 'Result beginnt jetzt mit dem Anfangswert des Typs '
+    + '(wie Default(T)) statt zufaellig - spaetere Zuweisungen gelten weiter';
   R_RESULT_INIT_HINT = 'Result beginnt jetzt leer statt mit dem alten Inhalt '
     + 'der Zielvariable des Aufrufers';
   // SCA001: nur diese Variante bekommt die Hilfe (Feld TLeakFinding.
@@ -829,7 +831,8 @@ const
   // Direktive bei SCA149, das Ziel bzw. Exit/Continue bei SCA098/SCA047/
   // SCA080, die Routine bzw. Methode bei SCA164/SCA147, die Variable bei SCA053,
   // X bzw. die Sperre bzw. der Puffer bei SCA009/SCA001/SCA109/SCA153/SCA156,
-  // die Anweisung bei SCA096/SCA196, der Rueckgabetyp bei SCA121).
+  // die Anweisung bei SCA096/SCA196, der Wert bei SCA121 - ein Literal oder
+  // Default(T), Charge H5c).
   FIX_CAPTIONS: array[0..FIX_ROW_HIGH] of string = (
     'Remove (TObject) from the class declaration',
     'Use FreeAndNil(%s)',
@@ -868,7 +871,7 @@ const
     'Free the buffer %s in a try/finally block',
     'Call %s first in the constructor',
     'Call inherited last in the destructor',
-    'Initialize Result with Default(%s)',
+    'Initialize Result with %s',
     'Initialize Result first: %s'
   );
 

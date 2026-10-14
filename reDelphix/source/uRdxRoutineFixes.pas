@@ -71,6 +71,12 @@ interface
 uses
   uRdxBufferMath, uRdxCodeMap;
 
+const
+  // Woerter zwischen 'class' und der Vorfahrenliste ('class abstract(TBase)',
+  // 'class sealed'). Seit Charge H5c oeffentlich: uRdxResultFixes liest den
+  // ersten Eintrag der Liste mit Qualifizierung (Gegen-Review H5, Minor 3).
+  CLASS_MODIFIERS: array[0..1] of string = ('abstract', 'sealed');
+
 type
   // Grenzen einer Routine (ReadRoutine) bzw. einer Methodendeklaration im
   // Klassenrumpf (dann ohne Rumpf: Body.Low = '').
@@ -278,7 +284,6 @@ const
   DISPATCH_MEMBERS: array[0..3] of string = ('gettypeinfocount',
     'gettypeinfo', 'getidsofnames', 'invoke');
   MAX_INTERFACES = 64;
-  CLASS_MODIFIERS: array[0..1] of string = ('abstract', 'sealed');
   COND_OPEN: array[0..3] of string = ('if', 'ifdef', 'ifndef', 'ifopt');
   COND_MID: array[0..1] of string = ('else', 'elseif');
   COND_CLOSE: array[0..1] of string = ('endif', 'ifend');
