@@ -644,7 +644,7 @@ const
       GoodEx   : 'begin' + #13#10 + '  DoStuff;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA054
     (
@@ -835,7 +835,7 @@ const
       GoodEx   : '// TODO: re-enable once issue #123 is fixed - see history';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA071
     (

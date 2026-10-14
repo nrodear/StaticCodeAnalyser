@@ -68,6 +68,7 @@ contains
   uRdxDeclFixes in 'source\uRdxDeclFixes.pas',
   uRdxFlowFixes in 'source\uRdxFlowFixes.pas',
   uRdxRoutineFixes in 'source\uRdxRoutineFixes.pas',
+  uRdxCleanupFixes in 'source\uRdxCleanupFixes.pas',
   uRdxRecipeRunner in 'source\uRdxRecipeRunner.pas',
   uRdxFixTable in 'source\uRdxFixTable.pas',
   uRdxLog in 'source\uRdxLog.pas',

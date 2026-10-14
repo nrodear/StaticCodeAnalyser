@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2422 Zeilen, 81258 Bytes
-  CPoLines_de: array[0..2421] of string = (
+  // i18n\de.po - 2427 Zeilen, 81413 Bytes
+  CPoLines_de: array[0..2426] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2368,6 +2368,11 @@ const
     '',
     'msgid "Delete unused private method ''%s''"',
     'msgstr "Ungenutzte private Methode ''%s'' l'#$00F6'schen"',
+    'msgid "Delete commented-out code"',
+    'msgstr "Auskommentierten Code l'#$00F6'schen"',
+    '',
+    'msgid "Remove unused variable ''%s''"',
+    'msgstr "Ungenutzte Variable ''%s'' entfernen"',
     '',
     'msgid "(changes behavior)"',
     'msgstr "('#$00E4'ndert Verhalten)"',
@@ -2711,8 +2716,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2418 Zeilen, 85103 Bytes
-  CPoLines_fr: array[0..2417] of string = (
+  // i18n\fr.po - 2423 Zeilen, 85268 Bytes
+  CPoLines_fr: array[0..2422] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -5062,6 +5067,11 @@ const
     '',
     'msgid "Delete unused private method ''%s''"',
     'msgstr "Supprimer la m'#$00E9'thode priv'#$00E9'e inutilis'#$00E9'e ''%s''"',
+    'msgid "Delete commented-out code"',
+    'msgstr "Supprimer le code mis en commentaire"',
+    '',
+    'msgid "Remove unused variable ''%s''"',
+    'msgstr "Supprimer la variable inutilis'#$00E9'e ''%s''"',
     '',
     'msgid "(changes behavior)"',
     'msgstr "(modifie le comportement)"',

@@ -2347,6 +2347,11 @@ msgstr "Supprimer la routine inutilisée '%s'"
 
 msgid "Delete unused private method '%s'"
 msgstr "Supprimer la méthode privée inutilisée '%s'"
+msgid "Delete commented-out code"
+msgstr "Supprimer le code mis en commentaire"
+
+msgid "Remove unused variable '%s'"
+msgstr "Supprimer la variable inutilisée '%s'"
 
 msgid "(changes behavior)"
 msgstr "(modifie le comportement)"

@@ -31,6 +31,8 @@
       "SelfAssignment",
       "UnusedRoutine",
       "UnusedPrivateMethod",
+      "CommentedOutCode",
+      "UnusedLocalVar",
       "UnusedSuppression",
       "UnsortedUses",
       "UnusedUses",
