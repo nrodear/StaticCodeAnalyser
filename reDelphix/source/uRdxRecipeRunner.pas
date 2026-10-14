@@ -447,6 +447,15 @@ function CondAssignReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
 // SCA047: ist das Ziel ein Speicherplatz? '' oder der Grund.
 function SelfAssignReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
   ALine: Integer; const ATarget: string): string;
+// Fehlt die Unit AShortName in uses (AUsesNames), haengt die Einfuegung
+// (PlanUses, Name nach der Schreibweise der Datei) an AOutcome.Edits und
+// ' + uses <Name>' an den Hinweis. False (Edits geleert, Grund gesetzt),
+// wenn sie nicht planbar ist. Bis Charge H5 nur fuer SysUtils
+// (AppendSysUtils: FreeAndNil, raise ...); seitdem auch fuer Variants
+// (SCA196: VarClear(Result)).
+function AppendUses(APlaces: TSourcePlaces; const AUsesNames: TArray<string>;
+  const AShortName, AQualifiedName: string;
+  var AOutcome: TRdxFixOutcome): Boolean;
 
 implementation
 
@@ -1383,20 +1392,18 @@ begin
       + 'Feld aus einer anderen Unit?)', [AName]);
 end;
 
-// FreeAndNil steht in SysUtils: fehlt die Unit in uses, haengt die
-// Einfuegung an AOutcome.Edits und an den Hinweis. False (Edits geleert,
-// Grund gesetzt), wenn die Einfuegung nicht planbar ist.
-function AppendSysUtils(APlaces: TSourcePlaces;
-  const AUsesNames: TArray<string>; var AOutcome: TRdxFixOutcome): Boolean;
+function AppendUses(APlaces: TSourcePlaces; const AUsesNames: TArray<string>;
+  const AShortName, AQualifiedName: string;
+  var AOutcome: TRdxFixOutcome): Boolean;
 var
   Plan : TRdxUsesPlan;
 begin
   Result := True;
-  if TRdxRecipes.HasUnit(AUsesNames, 'SysUtils') then Exit;
-  Plan := TRdxRecipeRunner.PlanUses(APlaces, 'SysUtils', 'System.SysUtils');
+  if TRdxRecipes.HasUnit(AUsesNames, AShortName) then Exit;
+  Plan := TRdxRecipeRunner.PlanUses(APlaces, AShortName, AQualifiedName);
   if Plan.Needed and (Plan.Reason <> '') then
   begin
-    AOutcome.Reason := 'System.SysUtils fehlt in uses: ' + Plan.Reason;
+    AOutcome.Reason := AQualifiedName + ' fehlt in uses: ' + Plan.Reason;
     AOutcome.Edits := nil;
     Exit(False);
   end;
@@ -1406,6 +1413,16 @@ begin
     AOutcome.Edits[High(AOutcome.Edits)] := Plan.Edit;
     AOutcome.Hint := AOutcome.Hint + ' + uses ' + Plan.Name;
   end;
+end;
+
+// FreeAndNil steht in SysUtils: fehlt die Unit in uses, haengt die
+// Einfuegung an AOutcome.Edits und an den Hinweis (AppendUses). False
+// (Edits geleert, Grund gesetzt), wenn die Einfuegung nicht planbar ist.
+function AppendSysUtils(APlaces: TSourcePlaces;
+  const AUsesNames: TArray<string>; var AOutcome: TRdxFixOutcome): Boolean;
+begin
+  Result := AppendUses(APlaces, AUsesNames, 'SysUtils', 'System.SysUtils',
+    AOutcome);
 end;
 
 class function TRdxFixRunner.FreeAndNilFix(APlaces: TSourcePlaces;
