@@ -7,7 +7,7 @@ unit uTestRdxSimpleFixesDetector;
 // in der sechsten, SCA020/SCA120/SCA122 in der siebten, SCA117/SCA197/
 // SCA149 in der achten, SCA098/SCA080/SCA047 in der neunten Fixture),
 // TSourcePlaces und
-// TRdxFixRunner.FixFor - derselbe Einstieg wie im Anbieter. Je Fall meldet
+// TRdxFixTable.FixFor - derselbe Einstieg wie im Anbieter. Je Fall meldet
 // der Detektor, die Hilfe plant aus dem Fund (Art, Zeile, Meldung), die
 // Ersetzungen werden angewandt - und derselbe Detektor meldet danach
 // NICHTS mehr. Dazu die Katalog-
@@ -211,7 +211,8 @@ uses
   uCastAndFree, uEmptyMethod, uMissingRaise, uReRaiseException, uRdxRaiseFixes,
   uPublicMemberWithoutDoc, uInterfaceGuid, uMissingOverride, uRdxDeclFixes,
   uRedundantConditional, uRedundantJump, uSelfAssignment,
-  uEngineApi, uRdxBufferMath, uRdxRecipeRunner;
+  uEngineApi, uRdxBufferMath, uRdxRecipeRunner,
+  uRdxFixTable;   // der Einstieg des Anbieters (Charge R8: Tabelle statt Ketten)
 
 type
   // Was die Hilfe aus einem Fund liest - wie der Anbieter aus TLeakFinding.
@@ -384,14 +385,14 @@ var
   Finding : TLeakFinding;
   O       : TRdxFixOutcome;
 begin
-  Assert.IsTrue(TRdxFixRunner.Handles(AKind), 'FixFor kennt die Art');
+  Assert.IsTrue(TRdxFixTable.Handles(AKind), 'FixFor kennt die Art');
   SL := TStringList.Create;
   Places := TSourcePlaces.Create;
   Finding := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, AKind);
   try
     SL.Text := ASource;
     Assert.IsTrue(Places.OpenSource('t.pas', ASource), 'OpenSource');
-    O := TRdxFixRunner.FixFor(Places, SL, Finding,
+    O := TRdxFixTable.FixFor(Places, SL, Finding,
       TRdxRecipeRunner.UsesNamesOf(Places));
   finally
     Finding.Free;
@@ -403,7 +404,7 @@ begin
   Result  := O.Enabled;
 end;
 
-// Der zweite Eintrag (TRdxFixRunner.AlternativeFixFor) fuer EINEN Fund -
+// Der zweite Eintrag (TRdxFixTable.AlternativeFixFor) fuer EINEN Fund -
 // SCA168 (else mit raise) und SCA020 (raise ENotImplemented).
 function PlanAltFix(const ASource: string; AKind: TFindingKind;
   const ASeen: TSeen): TRdxFixOutcome;
@@ -418,7 +419,7 @@ begin
   try
     SL.Text := ASource;
     Assert.IsTrue(Places.OpenSource('t.pas', ASource), 'OpenSource');
-    Result := TRdxFixRunner.AlternativeFixFor(Places, SL, Finding,
+    Result := TRdxFixTable.AlternativeFixFor(Places, SL, Finding,
       TRdxRecipeRunner.UsesNamesOf(Places));
   finally
     Finding.Free;
@@ -1238,12 +1239,12 @@ var
   K    : TFindingKind;
   Want : Boolean;
 begin
-  // Hilfen = TRdxFixRunner.Handles, dazu Format() (SCA044, eigenes Rezept)
+  // Hilfen = TRdxFixTable.Handles, dazu Format() (SCA044, eigenes Rezept)
   // und 'Marker entfernen' (SCA165). Nicht: die SQL-Vorlage (SCA003, nur
   // Zwischenablage) und uses-qualifizieren (ein Umbau, keine Hilfe).
   for K := Low(TFindingKind) to High(TFindingKind) do
   begin
-    Want := TRdxFixRunner.Handles(K)
+    Want := TRdxFixTable.Handles(K)
       or (K in [fkConcatToFormat, fkUnusedSuppression]);
     Assert.AreEqual(Want, TRuleCatalog.GetRuleCanonical(K).EditorHelp,
       'editorHelp in rules/sca-rules.json: ' + KindName(K));
@@ -1303,7 +1304,7 @@ begin
   try
     SL.Text := Src;
     Assert.IsTrue(Places.OpenSource('t.pas', Src), 'OpenSource');
-    O := TRdxFixRunner.FixFor(Places, SL, Finding,
+    O := TRdxFixTable.FixFor(Places, SL, Finding,
       TRdxRecipeRunner.UsesNamesOf(Places));
   finally
     Finding.Free;
@@ -1481,22 +1482,26 @@ end;
 
 procedure TTestRdxSimpleFixesDetector5.Sca101_SameMeaning;
 var
-  Src  : string;
-  Seen : TArray<TSeen>;
-  SL   : TStringList;
-  O    : TRdxFixOutcome;
+  Src     : string;
+  Seen    : TArray<TSeen>;
+  SL      : TStringList;
+  Finding : TLeakFinding;
+  O       : TRdxFixOutcome;
 begin
   // Bedeutungsgleich: kein '(changes behavior)', Strg+Alt+F darf sie
-  // ausfuehren; der Hinweis sagt es.
+  // ausfuehren; der Hinweis sagt es. Ueber die Tabelle - sie setzt den
+  // Hinweis, nicht der Rumpf (Charge R8); BlockFix braucht keinen Dienst.
   Src := InRoutine('if Obj <> nil then Obj.Free;');
   Seen := Detect(Src, fkBeginEndRequired);
   Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet');
   SL := TStringList.Create;
+  Finding := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
+    fkBeginEndRequired);
   try
     SL.Text := Src;
-    O := TRdxFixRunner.BlockFix(fkBeginEndRequired, SL, Seen[0].Line,
-      Seen[0].Msg);
+    O := TRdxFixTable.FixFor(nil, SL, Finding, nil);
   finally
+    Finding.Free;
     SL.Free;
   end;
   Assert.IsTrue(O.Enabled, O.Reason);
@@ -1660,7 +1665,7 @@ begin
   try
     SL.Text := ASource;
     Assert.IsTrue(Places.OpenSource('t.pas', ASource), 'OpenSource');
-    Result := TRdxFixRunner.FixFor(Places, SL, Finding,
+    Result := TRdxFixTable.FixFor(Places, SL, Finding,
       TRdxRecipeRunner.UsesNamesOf(Places));
   finally
     Finding.Free;

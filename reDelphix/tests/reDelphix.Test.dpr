@@ -36,6 +36,8 @@ program reDelphix.Test;
 //   * uTestRdxCodeMap  - Code-Sicht (uRdxCodeMap) gegen ScanCodeLine des
 //                        Cores (Drift-Waechter), StartsInside
 //   * uTestRdxQualifyUses - Planung von "uses: X -> Scope.X" (QualifyUses)
+//   * uTestRdxFixTable - die Tabelle der einfachen Hilfen (uRdxFixTable):
+//                        jede Zeile mit Planer, Hinweis und Menuetext
 //   * uTestRdxIntroPlan - Code-Aktion "Lokale Variable einfuehren": das
 //                        Literal am Caret, Deklaration, Spalten (Textlogik)
 //   * uTestRdxIntroRefuse - dieselbe Aktion: Zweig ohne begin, Ablehnungen
@@ -76,6 +78,7 @@ uses
   uRdxDeclFixes in '..\source\uRdxDeclFixes.pas',
   uRdxFlowFixes in '..\source\uRdxFlowFixes.pas',
   uRdxRecipeRunner in '..\source\uRdxRecipeRunner.pas',
+  uRdxFixTable in '..\source\uRdxFixTable.pas',
   uRdxIntroPlan in '..\source\uRdxIntroPlan.pas',
   uRdxIntroEdits in '..\source\uRdxIntroEdits.pas',
   uTestRdxRecipes in 'uTestRdxRecipes.pas',
@@ -95,6 +98,7 @@ uses
   uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas',
   uTestRdxCodeMap in 'uTestRdxCodeMap.pas',
   uTestRdxQualifyUses in 'uTestRdxQualifyUses.pas',
+  uTestRdxFixTable in 'uTestRdxFixTable.pas',
   uTestRdxIntroPlan in 'uTestRdxIntroPlan.pas',
   uTestRdxIntroRefuse in 'uTestRdxIntroRefuse.pas',
   uTestRdxIntroGuards in 'uTestRdxIntroGuards.pas',
