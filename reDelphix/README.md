@@ -27,7 +27,7 @@ reDelphix.d12.dpk / .dproj        {$DESIGNONLY}, requires rtl, vcl, designide, S
 source\uRdxRegister.pas           Register -> Anbieter an TFindingActions anmelden; finalization: abmelden
 source\uRdxProvider.pas           je Fund die Aktionen bauen (Anker/fixMode aus dem Regelkatalog); Quell-Cache TRdxSourceCache
 source\uRdxRecipeRunner.pas       Rezept-Laeufer auf TSourcePlaces: Fund -> Beschreibung -> Ersetzung; ohne ToolsAPI, testbar
-source\uRdxFixTable.pas           Tabelle der einfachen Hilfen: je Fundart Planer, Hinweis, Kennzeichnung (E2), zweiter Eintrag, Menuetext (Charge R8); ohne ToolsAPI
+source\uRdxFixTable.pas           Tabelle der einfachen Hilfen: je Fundart Planer, Hinweis, Kennzeichnung (E2), zweiter Eintrag, Menuetext (Charge R8); EIN Geruest fuer die Planer mit Plan-Record (TRdxFixFrame, generisch, Charge H5c); ohne ToolsAPI, nur Delphi
 source\uRdxRecipes.pas            reine Textlogik: Literal-Codec, Format() nach der Kompilat-Regel, SQL-Vorlage, uses-Schreibweise, Rahmenwerk
 source\uRdxScopeTable.pas         Kurzname -> qualifizierte Unit (Compiler-Reihenfolge der Scope-Liste)
 source\uRdxSimpleFixes.pas        Quick-Fixes SCA066/SCA072/SCA074/SCA075/SCA084/SCA085/SCA087/SCA126/SCA139 (reine Textlogik)

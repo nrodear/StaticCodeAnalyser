@@ -130,7 +130,7 @@ type
     NeedsVariants : Boolean;
   end;
 
-  // Die Form der Planer (uRdxFixTable: ResultFix).
+  // Die Form der Planer (uRdxFixTable: ResultForm im Geruest TRdxFixFrame).
   TRdxResultPlanner = function(AMap: TRdxCodeMap; ALine: Integer;
     const AMessage: string; out APlan: TRdxResultPlan;
     out AReason: string): Boolean;

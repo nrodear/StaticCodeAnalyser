@@ -19,7 +19,8 @@ unit uRdxFixTable;
 // die Unit braucht uRdxRecipeRunner, der den Quellstellen-Dienst braucht.
 // Die Rumpf-Routinen der Hilfen bleiben, wo sie sind (uRdxRecipeRunner,
 // die Planer-Units); hier stehen nur die Adapter auf eine gemeinsame Form
-// (TRdxFixPlanner) und die Zeilen.
+// (TRdxFixPlanner), das EINE Geruest der Planer mit Plan-Record
+// (TRdxFixFrame, Charge H5c) und die Zeilen.
 //
 // MENUETEXTE: englische msgids, uebersetzt ueber i18n/*.po (Editorhilfen
 // E6). Sie stehen in FIX_CAPTIONS und FIX_ALT_CAPTIONS - zwei String-
@@ -206,6 +207,195 @@ const
   // Entscheid E2: eine Hilfe, die das Verhalten aendern kann, sagt es.
   CAP_CHANGES  = '(changes behavior)';
   NAME_UNKNOWN = 'X';
+
+{ ---- Das Geruest der Planer-Adapter (Charge H5c) ----
+  Gegen-Review H5, Major 2: bis Charge H5c stand das Geruest - Code-Sicht
+  oeffnen, Planer rufen, Name, Grund und Ersetzungen uebernehmen, gesperrt
+  ohne Ersetzungen - je Plan-Form einmal: FlowFix (uRdxRecipeRunner),
+  RoutineFix, TryFix und ResultFix (hier). Jetzt EIN Geruest
+  (TRdxFixFrame.Run); je Plan-Form steht nur noch, was sie unterscheidet
+  (TRdxPlanForm): wie Name und Ersetzungen aus dem Plan kommen (Parts),
+  eine Pruefung nach dem Angebot (Check) und ob der Quellstellen-Dienst
+  offen sein muss (NeedsOpen). Generisch, weil die Planer-Units ihre
+  Plan-Records behalten (sie laufen im FPC-Pruefstand); diese Unit
+  uebersetzt nur Delphi (reDelphix.Test), nicht der Pruefstand. Bewusst
+  NICHT im Geruest: MapFix (uRdxRecipeRunner) - der Laeufer braucht es
+  selbst (ExplicitTObjectFix, EmptySectionFix), und seine Planer liefern
+  genau eine Ersetzung ohne Plan-Record.
+  Delphi-Regeln dazu: freie generische Funktionen gibt es nicht - Run ist
+  eine generische Klassenmethode; die Typen stehen im implementation-Teil
+  (E2506: ein Generic des interface-Teils duerfte keine Symbole des
+  implementation-Teils nutzen); Planer, Parts und Check sind schlichte
+  Funktionszeiger (kein 'of object', keine anonyme Methode, die etwas
+  einfaengt) - die statischen Klassenmethoden der Planer-Units passen
+  unmittelbar hinein. ---- }
+
+type
+  // Die Form eines Planers auf der Code-Sicht: ein Plan oder der Grund;
+  // True genau dann, wenn AReason = '' (so alle Planer der Tabelle).
+  TRdxPlannerOf<TPlan> = function(AMap: TRdxCodeMap; ALine: Integer;
+    const AMessage: string; out APlan: TPlan; out AReason: string): Boolean;
+  // Name (Menuetext) und Ersetzungen eines Plans in das Ergebnis.
+  TRdxPlanPartsOf<TPlan> = procedure(const APlan: TPlan;
+    var AOutcome: TRdxFixOutcome);
+  // Die Pruefung nach einem Angebot, solange die Code-Sicht offen ist; ''
+  // oder der Grund.
+  TRdxPlanCheckOf<TPlan> = function(APlaces: TSourcePlaces;
+    AMap: TRdxCodeMap; AFinding: TLeakFinding; const APlan: TPlan): string;
+
+  // Eine Plan-Form: Planer, Parts, Check (nil = keiner) und ob der
+  // Quellstellen-Dienst offen sein muss (SCA098/SCA080/SCA047 - bis Charge
+  // H5c OpenMapFor in FlowFix).
+  TRdxPlanForm<TPlan> = record
+    Planner   : TRdxPlannerOf<TPlan>;
+    Parts     : TRdxPlanPartsOf<TPlan>;
+    Check     : TRdxPlanCheckOf<TPlan>;
+    NeedsOpen : Boolean;
+  end;
+
+  // Das Geruest.
+  TRdxFixFrame = class
+  public
+    // Ohne Zeilen bzw. (NeedsOpen) ohne offenen Quellstellen-Dienst:
+    // R_NO_FILE. Sonst der Planer auf der Code-Sicht, Name und Ersetzungen
+    // per Parts, nach einem Angebot der Check; gesperrt ohne Ersetzungen.
+    // Den Plan bekommt der Aufrufer in APlan (Kennzeichnung, Variants).
+    class function Run<TPlan>(const AForm: TRdxPlanForm<TPlan>;
+      APlaces: TSourcePlaces; ALines: TStrings; AFinding: TLeakFinding;
+      out APlan: TPlan): TRdxFixOutcome; static;
+  end;
+
+class function TRdxFixFrame.Run<TPlan>(const AForm: TRdxPlanForm<TPlan>;
+  APlaces: TSourcePlaces; ALines: TStrings; AFinding: TLeakFinding;
+  out APlan: TPlan): TRdxFixOutcome;
+var
+  Map : TRdxCodeMap;
+begin
+  Result := Default(TRdxFixOutcome);
+  APlan := Default(TPlan);
+  Result.Reason := R_NO_FILE;
+  if not Assigned(ALines) then Exit;
+  if AForm.NeedsOpen and not (Assigned(APlaces) and APlaces.IsOpen) then
+    Exit;
+  Map := TRdxCodeMap.Create(ALines);
+  try
+    Result.Enabled := AForm.Planner(Map, AFinding.LineInt, AFinding.Message,
+      APlan, Result.Reason);
+    AForm.Parts(APlan, Result);
+    if Result.Enabled and Assigned(AForm.Check) then
+      Result.Reason := AForm.Check(APlaces, Map, AFinding, APlan);
+  finally
+    Map.Free;
+  end;
+  Result.Enabled := Result.Enabled and (Result.Reason = '');
+  if not Result.Enabled then
+    Result.Edits := nil;
+end;
+
+// Parts je Plan-Form: der Name fuer den Menuetext und die Ersetzungen
+// (gesperrt leert Run sie wieder).
+procedure FlowParts(const APlan: TRdxFlowPlan; var AOutcome: TRdxFixOutcome);
+begin
+  AOutcome.Name := APlan.Target;
+  AOutcome.Edits := TArray<TRdxEdit>.Create(APlan.Edit);
+end;
+
+procedure RoutineParts(const APlan: TRdxRoutinePlan;
+  var AOutcome: TRdxFixOutcome);
+begin
+  AOutcome.Name := APlan.Name;
+  AOutcome.Edits := APlan.Edits;
+end;
+
+procedure TryParts(const APlan: TRdxTryPlan; var AOutcome: TRdxFixOutcome);
+begin
+  AOutcome.Name := APlan.Name;
+  AOutcome.Edits := TArray<TRdxEdit>.Create(APlan.Edit);
+end;
+
+procedure ResultParts(const APlan: TRdxResultPlan;
+  var AOutcome: TRdxFixOutcome);
+begin
+  AOutcome.Name := APlan.Name;
+  AOutcome.Edits := APlan.Edits;
+end;
+
+// SCA098: X und (in der Gegenrichtung) die Bedingung als Boolean bewiesen
+// (CondAssignReason, uRdxRecipeRunner).
+function CondCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  AFinding: TLeakFinding; const APlan: TRdxFlowPlan): string;
+begin
+  Result := CondAssignReason(APlaces, AMap, AFinding.LineInt, APlan);
+end;
+
+// SCA047 prueft das Ziel des Plans (SelfAssignReason nimmt den Namen).
+function SelfAssignCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  AFinding: TLeakFinding; const APlan: TRdxFlowPlan): string;
+begin
+  Result := SelfAssignReason(APlaces, AMap, AFinding.LineInt, APlan.Target);
+end;
+
+// SCA164: die Include-Dateien vor implementation liest die Hilfe von der
+// Platte neben der Unit (Gegen-Review H3, Minor 4) - sie koennen die
+// Routine deklarieren oder rufen; nicht gefunden heisst keine Hilfe. Nur,
+// wenn der Plan welche nennt (SCA147 nennt keine).
+function IncludeCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  AFinding: TLeakFinding; const APlan: TRdxRoutinePlan): string;
+begin
+  Result := '';
+  if Length(APlan.Includes) > 0 then
+    Result := TRdxRoutineFixes.IncludeReason(AFinding.FileName,
+      APlan.Includes, APlan.Name);
+end;
+
+// Die Plan-Formen der Tabelle.
+// SCA098, SCA080, SCA047 (Charge H2): mit offenem Quellstellen-Dienst,
+// ACheck danach (nil = keiner) - Typen, with-Bloecke. Name ist das Ziel
+// bzw. Exit/Continue.
+function FlowForm(APlanner: TRdxPlannerOf<TRdxFlowPlan>;
+  ACheck: TRdxPlanCheckOf<TRdxFlowPlan>): TRdxPlanForm<TRdxFlowPlan>;
+begin
+  Result.Planner := APlanner;
+  Result.Parts := FlowParts;
+  Result.Check := ACheck;
+  Result.NeedsOpen := True;
+end;
+
+// SCA164, SCA147 (Charge H3b): alle Ersetzungen (Deklaration und
+// Implementierung bzw. forward und Rumpf) in EINEM Undo-Schritt, Name die
+// Routine bzw. Methode, danach die Include-Dateien (IncludeCheck).
+function RoutineForm(
+  APlanner: TRdxPlannerOf<TRdxRoutinePlan>): TRdxPlanForm<TRdxRoutinePlan>;
+begin
+  Result.Planner := APlanner;
+  Result.Parts := RoutineParts;
+  Result.Check := IncludeCheck;
+  Result.NeedsOpen := False;
+end;
+
+// SCA009, SCA001, SCA109, SCA153, SCA156 (Charge H4): eine Ersetzung von
+// der Zeile von A bis zur Freigabe; Name X, die Sperre bzw. der Puffer -
+// schon aus der Meldung, auch wenn der Planer ablehnt.
+function TryForm(
+  APlanner: TRdxPlannerOf<TRdxTryPlan>): TRdxPlanForm<TRdxTryPlan>;
+begin
+  Result.Planner := APlanner;
+  Result.Parts := TryParts;
+  Result.Check := nil;
+  Result.NeedsOpen := False;
+end;
+
+// SCA096, SCA097, SCA121, SCA196 (Charge H5): eine Ersetzung (SCA097: zwei,
+// wenn der letzten Anweisung das ';' fehlt); Kennzeichnung nach dem Fund
+// und der Bedarf an Variants kommen mit dem Plan.
+function ResultForm(
+  APlanner: TRdxPlannerOf<TRdxResultPlan>): TRdxPlanForm<TRdxResultPlan>;
+begin
+  Result.Planner := APlanner;
+  Result.Parts := ResultParts;
+  Result.Check := nil;
+  Result.NeedsOpen := False;
+end;
 
 { ---- Die Planer je Art: Adapter auf die Rumpf-Routinen, alle in der Form
   TRdxFixPlanner (Zeile und Meldung aus dem Fund). ---- }
@@ -425,76 +615,42 @@ end;
 
 function PlanRedundantConditional(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxFlowPlan;
 begin
-  Result := FlowFix(APlaces, ALines, AFinding,
-    TRdxFlowFixes.RedundantConditional, CondAssignReason);
+  Result := TRdxFixFrame.Run<TRdxFlowPlan>(
+    FlowForm(TRdxFlowFixes.RedundantConditional, CondCheck),
+    APlaces, ALines, AFinding, P);
 end;
 
 function PlanRedundantJump(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxFlowPlan;
 begin
-  Result := FlowFix(APlaces, ALines, AFinding, TRdxFlowFixes.RedundantJump, nil);
-end;
-
-// SCA047 prueft das Ziel des Plans (SelfAssignReason nimmt den Namen).
-function SelfAssignPlanReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
-  ALine: Integer; const APlan: TRdxFlowPlan): string;
-begin
-  Result := SelfAssignReason(APlaces, AMap, ALine, APlan.Target);
+  Result := TRdxFixFrame.Run<TRdxFlowPlan>(
+    FlowForm(TRdxFlowFixes.RedundantJump, nil),
+    APlaces, ALines, AFinding, P);
 end;
 
 function PlanSelfAssignment(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := FlowFix(APlaces, ALines, AFinding, TRdxFlowFixes.SelfAssignment,
-    SelfAssignPlanReason);
-end;
-
-// SCA164, SCA147 (Charge H3b): der Planer auf der Code-Sicht, alle
-// Ersetzungen (Deklaration und Implementierung bzw. forward und Rumpf) in
-// EINEM Undo-Schritt. Name: die Routine bzw. Methode (Menuetext). Das
-// Geruest gleicht MapFix (uRdxRecipeRunner), der Planer hat aber eine
-// andere Form - mehrere Ersetzungen, Name und Include-Dateien im Plan;
-// ein gemeinsames Geruest braeuchte einen Generic oder eine
-// Methodenreferenz, die der FPC-Pruefstand nicht kennt (Gegen-Review H3,
-// Minor 6: nur der Grund ohne Datei ist jetzt derselbe, R_NO_FILE).
-function RoutineFix(ALines: TStrings; AFinding: TLeakFinding;
-  APlan: TRdxRoutinePlanner): TRdxFixOutcome;
 var
-  Map  : TRdxCodeMap;
-  Plan : TRdxRoutinePlan;
+  P : TRdxFlowPlan;
 begin
-  Result := Default(TRdxFixOutcome);
-  if not Assigned(ALines) then
-  begin
-    Result.Reason := R_NO_FILE;
-    Exit;
-  end;
-  Map := TRdxCodeMap.Create(ALines);
-  try
-    Result.Enabled := APlan(Map, AFinding.LineInt, AFinding.Message, Plan,
-      Result.Reason);
-  finally
-    Map.Free;
-  end;
-  Result.Name := Plan.Name;
-  // SCA164: die Include-Dateien vor implementation liest die Hilfe von der
-  // Platte neben der Unit (Gegen-Review H3, Minor 4) - sie koennen die
-  // Routine deklarieren oder rufen; nicht gefunden heisst keine Hilfe.
-  if Result.Enabled and (Length(Plan.Includes) > 0) then
-  begin
-    Result.Reason := TRdxRoutineFixes.IncludeReason(AFinding.FileName,
-      Plan.Includes, Plan.Name);
-    Result.Enabled := Result.Reason = '';
-  end;
-  if Result.Enabled then
-    Result.Edits := Plan.Edits;
+  Result := TRdxFixFrame.Run<TRdxFlowPlan>(
+    FlowForm(TRdxFlowFixes.SelfAssignment, SelfAssignCheck),
+    APlaces, ALines, AFinding, P);
 end;
 
 function PlanUnusedRoutine(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxRoutinePlan;
 begin
-  Result := RoutineFix(ALines, AFinding, TRdxRoutineFixes.UnusedRoutine);
+  Result := TRdxFixFrame.Run<TRdxRoutinePlan>(
+    RoutineForm(TRdxRoutineFixes.UnusedRoutine),
+    APlaces, ALines, AFinding, P);
 end;
 
 // SCA147: bindet die Formdatei neben der Unit (.dfm/.fmx/.lfm) die Methode
@@ -536,9 +692,12 @@ end;
 
 function PlanUnusedPrivateMethod(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxRoutinePlan;
 begin
-  Result := RoutineFix(ALines, AFinding,
-    TRdxRoutineFixes.UnusedPrivateMethod);
+  Result := TRdxFixFrame.Run<TRdxRoutinePlan>(
+    RoutineForm(TRdxRoutineFixes.UnusedPrivateMethod),
+    APlaces, ALines, AFinding, P);
   if not Result.Enabled then Exit;
   Result.Reason := FormReason(AFinding.FileName, Result.Name);
   if Result.Reason = '' then Exit;
@@ -564,41 +723,14 @@ begin
   Result.Name := TRdxCleanupFixes.UnusedVarName(AFinding.Message);
 end;
 
-// SCA009, SCA001, SCA109, SCA153, SCA156 (Charge H4): der Baustein B5
-// (uRdxTryFixes) auf der Code-Sicht - eine Ersetzung von der Zeile von A bis
-// zur Freigabe. Name: X, die Sperre bzw. der Puffer (Menuetext), schon aus
-// der Meldung, auch wenn der Planer ablehnt. Wie RoutineFix eine eigene
-// Planer-Form (Plan mit Name) - MapFix kennt nur die Ersetzung.
-function TryFix(ALines: TStrings; AFinding: TLeakFinding;
-  APlan: TRdxTryPlanner): TRdxFixOutcome;
-var
-  Map  : TRdxCodeMap;
-  Plan : TRdxTryPlan;
-  Why  : string;
-begin
-  Result := Default(TRdxFixOutcome);
-  Plan := Default(TRdxTryPlan);
-  Why := R_NO_FILE;
-  if Assigned(ALines) then
-  begin
-    Map := TRdxCodeMap.Create(ALines);
-    try
-      Result.Enabled := APlan(Map, AFinding.LineInt, AFinding.Message, Plan,
-        Why);
-    finally
-      Map.Free;
-    end;
-  end;
-  Result.Name := Plan.Name;
-  Result.Reason := Why;
-  if Result.Enabled then
-    Result.Edits := TArray<TRdxEdit>.Create(Plan.Edit);
-end;
-
 function PlanMissingFinally(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxTryPlan;
 begin
-  Result := TryFix(ALines, AFinding, TRdxTryFixes.MissingFinally);
+  Result := TRdxFixFrame.Run<TRdxTryPlan>(
+    TryForm(TRdxTryFixes.MissingFinally),
+    APlaces, ALines, AFinding, P);
 end;
 
 // SCA001: nur freed-outside-finally - das Free ist da, liegt aber neben dem
@@ -612,9 +744,12 @@ function PlanMemoryLeak(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
   LeakVar : string;
+  P       : TRdxTryPlan;
 begin
   if AFinding.LeakVariant = LEAK_VARIANT_FOF then
-    Exit(TryFix(ALines, AFinding, TRdxTryFixes.FreedOutsideFinally));
+    Exit(TRdxFixFrame.Run<TRdxTryPlan>(
+      TryForm(TRdxTryFixes.FreedOutsideFinally),
+      APlaces, ALines, AFinding, P));
   LeakVar := AFinding.MemoryLeakVariant;
   Result := Default(TRdxFixOutcome);
   Result.Name := TRdxTryFixes.NameOf(AFinding.Message);
@@ -624,51 +759,32 @@ end;
 
 function PlanLockWithoutFinally(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxTryPlan;
 begin
-  Result := TryFix(ALines, AFinding, TRdxTryFixes.LockWithoutFinally);
+  Result := TRdxFixFrame.Run<TRdxTryPlan>(
+    TryForm(TRdxTryFixes.LockWithoutFinally),
+    APlaces, ALines, AFinding, P);
 end;
 
 function PlanUnpairedLock(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxTryPlan;
 begin
-  Result := TryFix(ALines, AFinding, TRdxTryFixes.UnpairedLock);
+  Result := TRdxFixFrame.Run<TRdxTryPlan>(
+    TryForm(TRdxTryFixes.UnpairedLock),
+    APlaces, ALines, AFinding, P);
 end;
 
 function PlanGetMemWithoutFree(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := TryFix(ALines, AFinding, TRdxTryFixes.GetMemWithoutFree);
-end;
-
-// SCA096, SCA097, SCA121, SCA196 (Charge H5): der Planer APlanner aus
-// uRdxResultFixes auf der Code-Sicht - eine Ersetzung (SCA097: zwei, wenn
-// der letzten Anweisung das ';' fehlt). Name fuer den Menuetext,
-// Kennzeichnung nach dem Fund und der Bedarf an Variants kommen mit dem
-// Plan (APlan) - wie TryFix eine eigene Planer-Form. Bis Charge H5c hiess
-// der Planer APlan und der Plan APlanOut (Gegen-Review H5, Minor 7).
-function ResultFix(ALines: TStrings; AFinding: TLeakFinding;
-  APlanner: TRdxResultPlanner; out APlan: TRdxResultPlan): TRdxFixOutcome;
 var
-  Map : TRdxCodeMap;
-  Why : string;
+  P : TRdxTryPlan;
 begin
-  Result := Default(TRdxFixOutcome);
-  APlan := Default(TRdxResultPlan);
-  Why := R_NO_FILE;
-  if Assigned(ALines) then
-  begin
-    Map := TRdxCodeMap.Create(ALines);
-    try
-      Result.Enabled := APlanner(Map, AFinding.LineInt, AFinding.Message,
-        APlan, Why);
-    finally
-      Map.Free;
-    end;
-  end;
-  Result.Name := APlan.Name;
-  Result.Reason := Why;
-  if Result.Enabled then
-    Result.Edits := APlan.Edits;
+  Result := TRdxFixFrame.Run<TRdxTryPlan>(
+    TryForm(TRdxTryFixes.GetMemWithoutFree),
+    APlaces, ALines, AFinding, P);
 end;
 
 // SCA096: 'inherited Create;' (direkter TObject-Erbe, bedeutungsgleich)
@@ -679,7 +795,9 @@ function PlanCtorInherited(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxResultPlan;
 begin
-  Result := ResultFix(ALines, AFinding, TRdxResultFixes.ConstructorInherited, P);
+  Result := TRdxFixFrame.Run<TRdxResultPlan>(
+    ResultForm(TRdxResultFixes.ConstructorInherited),
+    APlaces, ALines, AFinding, P);
   Result.ChangesBehavior := P.Changes;
   if not Result.Enabled then Exit;
   if P.Changes then
@@ -695,7 +813,9 @@ function PlanDtorInherited(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxResultPlan;
 begin
-  Result := ResultFix(ALines, AFinding, TRdxResultFixes.DestructorInherited, P);
+  Result := TRdxFixFrame.Run<TRdxResultPlan>(
+    ResultForm(TRdxResultFixes.DestructorInherited),
+    APlaces, ALines, AFinding, P);
   Result.ChangesBehavior := P.Changes;
   if not Result.Enabled then Exit;
   if P.Changes then
@@ -714,7 +834,9 @@ function PlanResultDefault(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxResultPlan;
 begin
-  Result := ResultFix(ALines, AFinding, TRdxResultFixes.ResultDefault, P);
+  Result := TRdxFixFrame.Run<TRdxResultPlan>(
+    ResultForm(TRdxResultFixes.ResultDefault),
+    APlaces, ALines, AFinding, P);
 end;
 
 // SCA196: VarClear (Variant/OleVariant) braucht unter FPC die Unit Variants
@@ -726,7 +848,9 @@ function PlanManagedResult(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxResultPlan;
 begin
-  Result := ResultFix(ALines, AFinding, TRdxResultFixes.ManagedResultInit, P);
+  Result := TRdxFixFrame.Run<TRdxResultPlan>(
+    ResultForm(TRdxResultFixes.ManagedResultInit),
+    APlaces, ALines, AFinding, P);
   if not Result.Enabled then Exit;
   Result.Hint := R_RESULT_INIT_HINT;
   if P.NeedsVariants then

@@ -104,7 +104,8 @@ type
     Includes : TArray<string>;
   end;
 
-  // Die Form beider Planer (uRdxFixTable: RoutineFix).
+  // Die Form beider Planer (uRdxFixTable: RoutineForm im Geruest
+  // TRdxFixFrame).
   TRdxRoutinePlanner = function(AMap: TRdxCodeMap; ALine: Integer;
     const AMessage: string; out APlan: TRdxRoutinePlan;
     out AReason: string): Boolean;

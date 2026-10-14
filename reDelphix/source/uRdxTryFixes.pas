@@ -118,7 +118,7 @@ type
     Name : string;
   end;
 
-  // Die Form der Planer (uRdxFixTable: TryFix).
+  // Die Form der Planer (uRdxFixTable: TryForm im Geruest TRdxFixFrame).
   TRdxTryPlanner = function(AMap: TRdxCodeMap; ALine: Integer;
     const AMessage: string; out APlan: TRdxTryPlan;
     out AReason: string): Boolean;
