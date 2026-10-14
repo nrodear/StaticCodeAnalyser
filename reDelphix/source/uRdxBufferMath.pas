@@ -127,6 +127,11 @@ function PlanByteEdits(const ABytes: TBytes; const AEdits: TArray<TRdxEdit>;
 function ApplyByteEdits(const ABytes: TBytes;
   const APlan: TArray<TRdxByteEdit>): TBytes;
 
+// Haengt AEdit an AList an (die Ersetzungen eines Plans). Bis Charge H5c je
+// eine Kopie in uRdxRoutineFixes und uRdxResultFixes (Gegen-Review H5,
+// Minor 6).
+procedure AddEdit(var AList: TArray<TRdxEdit>; const AEdit: TRdxEdit);
+
 implementation
 
 uses
@@ -409,6 +414,12 @@ begin
     View.Starts.Free;
     View.Lines.Free;
   end;
+end;
+
+procedure AddEdit(var AList: TArray<TRdxEdit>; const AEdit: TRdxEdit);
+begin
+  SetLength(AList, Length(AList) + 1);
+  AList[High(AList)] := AEdit;
 end;
 
 end.

@@ -347,37 +347,26 @@ type
   end;
 
   // SCA096/SCA097: der Konstruktor bzw. Destruktor und seine Klasse
-  // (MethodCtxReason).
+  // (MethodCtxReason). Bis Charge H5c hiessen die Felder R und O
+  // (Gegen-Review H5, Minor 7).
   TRdxMethodCtx = record
-    R : TRdxRoutine;
-    O : TRdxOwner;
+    Routine : TRdxRoutine;
+    Owner   : TRdxOwner;
   end;
 
   // SCA196: die Funktion um die Lese-Zeile und ihr Rueckgabetyp wie im
   // Quelltext (FuncCtxReason).
   TRdxFuncCtx = record
-    R      : TRdxRoutine;
-    TypeTx : string;
+    Routine : TRdxRoutine;
+    TypeTx  : string;
   end;
 
 { ---- Kleinkram ---- }
 
-procedure AddEdit(var AList: TArray<TRdxEdit>; const AEdit: TRdxEdit);
-begin
-  SetLength(AList, Length(AList) + 1);
-  AList[High(AList)] := AEdit;
-end;
-
-procedure AddToken(var AList: TArray<TRdxToken>; const T: TRdxToken);
-begin
-  SetLength(AList, Length(AList) + 1);
-  AList[High(AList)] := T;
-end;
-
-function TokText(AMap: TRdxCodeMap; const T: TRdxToken): string;
-begin
-  Result := Copy(AMap.Raw(T.Line), T.Col, T.Len);
-end;
+// AddEdit (uRdxBufferMath), AddToken, TokText, LastPart, FirstOnLine und
+// DirectiveBetween (uRdxCodeMap) sowie HasDirective (uRdxRoutineFixes) sind
+// geteilt - bis Charge H5c standen hier Kopien, TokText verdeckte still die
+// geteilte Fassung (Gegen-Review H5, Minor 6).
 
 // Ersetzt das Token T durch ANewText.
 function TokenEdit(AMap: TRdxCodeMap; const T: TRdxToken;
@@ -395,15 +384,10 @@ begin
   Result := Copy(S, 1, SkipBlanks(S, 1) - 1);
 end;
 
-// 'TOuter.TInner.Create' -> 'TOuter.TInner' bzw. 'Create'.
+// 'TOuter.TInner.Create' -> 'TOuter.TInner' (das letzte Glied: LastPart).
 function OwnerPathOf(const AName: string): string;
 begin
   Result := Copy(AName, 1, LastDelimiter('.', AName) - 1);
-end;
-
-function ShortNameOf(const AName: string): string;
-begin
-  Result := Copy(AName, LastDelimiter('.', AName) + 1, MaxInt);
 end;
 
 // Der Text zwischen AKey und AStop in AMessage (Leerraum am Rand weg); ''
@@ -421,34 +405,12 @@ begin
     Result := Trim(Copy(AMessage, P, Q - P));
 end;
 
-// Steht T als erstes auf seiner Zeile - davor nur Leerraum, und die Zeile
-// beginnt nicht in einem Kommentar oder mehrzeiligen String?
-function FirstOnLine(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
+// Steht T als erstes auf seiner Zeile (FirstOnLine), und die Zeile beginnt
+// nicht in einem Kommentar oder mehrzeiligen String? Erst dann zaehlt seine
+// Einrueckung bzw. bekommt eine Einfuegung davor eine eigene Zeile.
+function OwnLineAt(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
 begin
-  Result := (SkipBlanks(AMap.Raw(T.Line), 1) = T.Col)
-    and not AMap.StartsInside(T.Line);
-end;
-
-// Beginnt zwischen dem Ende von A und dem Anfang von B eine Direktive?
-function DirectiveBetween(AMap: TRdxCodeMap; const A, B: TRdxToken): Boolean;
-var
-  Li, Co, Stop : Integer;
-begin
-  Result := False;
-  Co := A.EndCol;
-  for Li := A.Line to B.Line do
-  begin
-    Stop := Length(AMap.Raw(Li));
-    if Li = B.Line then
-      Stop := B.Col - 1;
-    while Co <= Stop do
-    begin
-      if OpensDirective(AMap, Li, Co) then
-        Exit(True);
-      Inc(Co);
-    end;
-    Co := 1;
-  end;
+  Result := FirstOnLine(AMap, T) and not AMap.StartsInside(T.Line);
 end;
 
 // Hinter dem Namen ANameTok: '[<..>] = [packed] <Art>' - das Token der Art;
@@ -654,7 +616,7 @@ var
 begin
   F := After(AMap, R.Body);
   if (F.Line > R.Body.Line) and not SameTok(F, R.EndTok)
-     and FirstOnLine(AMap, F) then
+     and OwnLineAt(AMap, F) then
     Exit(LeadingBlanks(AMap.Raw(F.Line)));
   B := LeadingBlanks(AMap.Raw(R.Body.Line));
   Result := B + IndentStep(B, '');
@@ -769,13 +731,13 @@ begin
   Stop := AClass;
   if Close.Low <> '' then
     Stop := Close;
-  if DirectiveBetween(AMap, Before(AMap, AClass), Stop) then
+  if DirectiveBetween(AMap, Before(AMap, AClass), Stop.Line, Stop.Col) then
     Exit(Format('Compiler-Direktive in der Vorfahrenliste (Zeile %d) - der '
       + 'Vorfahr haengt an einem Zweig; %s', [AClass.Line, R_BY_HAND]));
   Low := LowerCase(First);
   AOwner.Parent := 'TObject';
   if First <> '' then
-    AOwner.Parent := ShortNameOf(First);
+    AOwner.Parent := LastPart(First);
   // 'class(IFoo)': der erste Eintrag ist ein Interface - Vorfahr TObject.
   // Nur ein unqualifiziertes Interface DIESER Unit beweist das; ein
   // fremdes 'IFoo' bzw. 'Other.IFoo' kann eine Klasse sein.
@@ -796,7 +758,7 @@ var
   Low   : string;
 begin
   AOwner := Default(TRdxOwner);
-  Low := LowerCase(ShortNameOf(AClassPath));
+  Low := LowerCase(LastPart(AClassPath));
   Heads := TRdxRoutineFixes.FindClassHeads(AMap, AClassPath);
   if Length(Heads) = 0 then
   begin
@@ -809,7 +771,7 @@ begin
   end;
   if Length(Heads) > 1 then
     Exit(Format('%d Klassen namens %s in der Unit - mehrdeutig',
-      [Length(Heads), ShortNameOf(AClassPath)]));
+      [Length(Heads), LastPart(AClassPath)]));
   AOwner.ClassTok := Heads[0];
   if After(AMap, Heads[0]).Low = 'helper' then
     Exit('class helper - inherited meint dort die erweiterte Klasse');
@@ -820,7 +782,7 @@ end;
 function DeclHeadsOf(AMap: TRdxCodeMap; const R: TRdxRoutine): TArray<TRdxToken>;
 begin
   Result := TRdxRoutineFixes.FindMethodDecls(AMap, OwnerPathOf(R.Name),
-    ShortNameOf(R.Name));
+    LastPart(R.Name));
 end;
 
 // Die EINE Deklaration der Methode R. '' oder der Grund.
@@ -833,24 +795,13 @@ begin
   Heads := DeclHeadsOf(AMap, R);
   if Length(Heads) = 0 then
     Exit(Format('keine Deklaration von %s im Rumpf der Klasse %s - %s',
-      [ShortNameOf(R.Name), OwnerPathOf(R.Name), R_MOVED]));
+      [LastPart(R.Name), OwnerPathOf(R.Name), R_MOVED]));
   if Length(Heads) > 1 then
     Exit(Format('%d Deklarationen von %s in Klassen dieses Namens - '
-      + 'Overload?', [Length(Heads), ShortNameOf(R.Name)]));
+      + 'Overload?', [Length(Heads), LastPart(R.Name)]));
   Result := TRdxRoutineFixes.MethodDecl(AMap, Heads[0], D);
   if Result <> '' then
     Result := 'Deklaration: ' + Result;
-end;
-
-// Traegt D die Direktive AWord?
-function HasDirectiveWord(const D: TRdxRoutine; const AWord: string): Boolean;
-var
-  S : string;
-begin
-  Result := False;
-  for S in D.Directives do
-    if S = AWord then
-      Exit(True);
 end;
 
 // SCA096 (b): die Deklaration traegt override (ohne overload). '' oder der
@@ -859,14 +810,15 @@ function CtorOverrideReason(AMap: TRdxCodeMap; const R: TRdxRoutine;
   const AOwner: TRdxOwner): string;
 var
   D : TRdxRoutine;
+  W : string;
 begin
   Result := DeclOf(AMap, R, D);
   if Result <> '' then Exit;
-  if not HasDirectiveWord(D, KW_OVERRIDE) then
+  if not HasDirective(D, [KW_OVERRIDE], W) then
     Exit(Format('Elternklasse %s und keine override-Deklaration - welcher '
       + 'Elternkonstruktor mit welchen Argumenten laufen soll, ist Entwurf; '
       + '%s', [AOwner.Parent, R_BY_HAND]));
-  if HasDirectiveWord(D, KW_OVERLOAD) then
+  if HasDirective(D, [KW_OVERLOAD], W) then
     Exit('override mit overload - welcher geerbte Konstruktor gemeint ist, '
       + 'ist nicht sicher; ' + R_BY_HAND);
 end;
@@ -995,9 +947,10 @@ end;
 function DtorOverrideReason(AMap: TRdxCodeMap; const R: TRdxRoutine): string;
 var
   D : TRdxRoutine;
+  W : string;
 begin
   Result := DeclOf(AMap, R, D);
-  if (Result = '') and not HasDirectiveWord(D, KW_OVERRIDE) then
+  if (Result = '') and not HasDirective(D, [KW_OVERRIDE], W) then
     Result := 'die Deklaration traegt kein override - dann verdeckt der '
       + 'Destruktor die virtuelle Methode (SCA149); ' + R_BY_HAND;
 end;
@@ -1010,6 +963,7 @@ function AbstractDeclReason(AMap: TRdxCodeMap; const ACls, AMethod: string;
 var
   H : TRdxToken;
   D : TRdxRoutine;
+  W : string;
 begin
   Result := '';
   AFound := False;
@@ -1021,7 +975,7 @@ begin
       Exit(Format('die Deklaration von %s.%s in Zeile %d ist nicht zu lesen '
         + '- ob sie abstrakt ist, bleibt offen; %s',
         [ACls, AMethod, H.Line, R_BY_HAND]));
-    if HasDirectiveWord(D, KW_ABSTRACT) then
+    if HasDirective(D, [KW_ABSTRACT], W) then
       Exit(Format('%s.%s ist abstrakt (Zeile %d) - inherited ruft dort nichts '
         + 'bzw. uebersetzt unter FPC objfpc nicht; %s',
         [ACls, AMethod, H.Line, R_BY_HAND]));
@@ -1045,9 +999,9 @@ var
   Step, Mode  : Integer;
 begin
   Result := '';
-  O := ACtx.O;
+  O := ACtx.Owner;
   Cls := O.Parent;
-  Method := ShortNameOf(ACtx.R.Name);
+  Method := LastPart(ACtx.Routine.Name);
   for Step := 1 to MAX_CHAIN do
   begin
     if O.DirectTObject then Exit;
@@ -1215,7 +1169,7 @@ begin
   N := AName;
   if Pos('<', N) > 0 then
     N := Copy(N, 1, Pos('<', N) - 1);
-  if not SameIdent(LowerCase(ShortNameOf(R.Name)), LowerCase(N)) then
+  if not SameIdent(LowerCase(LastPart(R.Name)), LowerCase(N)) then
     Result := Format('die Routine heisst %s, die Meldung nennt %s - %s',
       [R.Name, AName, R_MOVED]);
 end;
@@ -1326,7 +1280,7 @@ var
   Name : string;
 begin
   Result := '';
-  Name := LowerCase(ShortNameOf(R.Name));
+  Name := LowerCase(LastPart(R.Name));
   P := R.Body;
   T := After(AMap, R.Body);
   while (T.Low <> '') and not SameTok(T, R.EndTok) do
@@ -1704,7 +1658,7 @@ function InterfaceProven(AMap: TRdxCodeMap; const AType: string): Boolean;
 var
   Name : string;
 begin
-  Name := ShortNameOf(AType);
+  Name := LastPart(AType);
   if Pos('<', Name) > 0 then
     Name := Copy(Name, 1, Pos('<', Name) - 1);
   Result := (Length(Name) >= 2) and (Name[1] = 'I')
@@ -1825,15 +1779,15 @@ begin
   end;
   if Pos(Key, AMessage) = 0 then
     Exit(Format('Meldung unbekannt - kein "%s"', [Key]));
-  Result := RoutineOnLine(AMap, ALine, AWord, What, ACtx.R);
+  Result := RoutineOnLine(AMap, ALine, AWord, What, ACtx.Routine);
   if Result = '' then
-    Result := MethodHeadReason(ACtx.R);
+    Result := MethodHeadReason(ACtx.Routine);
   if Result = '' then
-    Result := BodyReason(AMap, ACtx.R);
+    Result := BodyReason(AMap, ACtx.Routine);
   if Result = '' then
-    Result := InheritedReason(AMap, ACtx.R);
+    Result := InheritedReason(AMap, ACtx.Routine);
   if Result = '' then
-    Result := OwnerOf(AMap, OwnerPathOf(ACtx.R.Name), ACtx.O);
+    Result := OwnerOf(AMap, OwnerPathOf(ACtx.Routine.Name), ACtx.Owner);
 end;
 
 // SCA096: die Variante nach dem Vorfahren - (a) 'inherited Create' ruft
@@ -1846,22 +1800,22 @@ end;
 function CtorVariantReason(AMap: TRdxCodeMap; const ACtx: TRdxMethodCtx;
   var APlan: TRdxResultPlan): string;
 begin
-  if ACtx.O.CreateOfTObject then
+  if ACtx.Owner.CreateOfTObject then
   begin
     APlan.Name := STMT_INHERITED_CREATE;
-    if Length(DeclHeadsOf(AMap, ACtx.R)) = 0 then
+    if Length(DeclHeadsOf(AMap, ACtx.Routine)) = 0 then
       Exit(Format('keine Deklaration von %s im Rumpf der Klasse %s - %s',
-        [ShortNameOf(ACtx.R.Name), OwnerPathOf(ACtx.R.Name), R_MOVED]));
+        [LastPart(ACtx.Routine.Name), OwnerPathOf(ACtx.Routine.Name), R_MOVED]));
     Exit('');
   end;
-  Result := CtorOverrideReason(AMap, ACtx.R, ACtx.O);
+  Result := CtorOverrideReason(AMap, ACtx.Routine, ACtx.Owner);
   APlan.Changes := Result = '';
   if Result = '' then
     Result := AbstractReason(AMap, ACtx);
   if Result = '' then
-    Result := DelegationReason(AMap, ACtx.R);
+    Result := DelegationReason(AMap, ACtx.Routine);
   if Result = '' then
-    Result := BlockedReason(AMap, ACtx.R);
+    Result := BlockedReason(AMap, ACtx.Routine);
 end;
 
 // SCA196: die Funktion um die Lese-Zeile ALine - auf der Zeile steht
@@ -1874,20 +1828,20 @@ begin
   ACtx := Default(TRdxFuncCtx);
   if not ReadsResultOn(AMap, ALine) then
     Exit(R_NO_READ);
-  Result := EnclosingRoutine(AMap, ALine, ACtx.R);
+  Result := EnclosingRoutine(AMap, ALine, ACtx.Routine);
   if Result = '' then
-    Result := NameReason(ACtx.R, AName);
+    Result := NameReason(ACtx.Routine, AName);
   if Result = '' then
-    Result := BodyReason(AMap, ACtx.R);
+    Result := BodyReason(AMap, ACtx.Routine);
   if Result = '' then
     Result := ResultModeReason(AMap);
   if Result = '' then
-    Result := ResultTypeOf(AMap, ACtx.R, ACtx.TypeTx);
+    Result := ResultTypeOf(AMap, ACtx.Routine, ACtx.TypeTx);
   if (Result = '') and not SameTypeText(ACtx.TypeTx, AMsgType) then
     Result := Format('der Kopf nennt %s, die Meldung %s - %s',
       [ACtx.TypeTx, AMsgType, R_MOVED]);
   if Result = '' then
-    Result := AbsoluteReason(AMap, ACtx.R);
+    Result := AbsoluteReason(AMap, ACtx.Routine);
 end;
 
 { ---- Gemeinsamer Abschluss ---- }
@@ -1955,13 +1909,13 @@ begin
   Last := Before(AMap, En);
   if SameTok(Last, R.Body) then
     Exit(FirstEdits(AMap, R, AStmt, AEdits));
-  if DirectiveBetween(AMap, Last, En) then
+  if DirectiveBetween(AMap, Last, En.Line, En.Col) then
     Exit('Compiler-Direktive zwischen der letzten Anweisung und end - das '
       + 'Ende kann je Zweig anders aussehen; ' + R_BY_HAND);
   Semi := '';
   if Last.Low <> ';' then
     Semi := ';';
-  if FirstOnLine(AMap, En) then
+  if OwnLineAt(AMap, En) then
   begin
     if Semi <> '' then
       AddEdit(AEdits, TokenEdit(AMap, Last, TokText(AMap, Last) + Semi));
@@ -1990,7 +1944,7 @@ begin
   if AReason = '' then
     AReason := CtorVariantReason(AMap, Ctx, APlan);
   if AReason = '' then
-    AReason := FirstEdits(AMap, Ctx.R, APlan.Name + ';', Edits);
+    AReason := FirstEdits(AMap, Ctx.Routine, APlan.Name + ';', Edits);
   Result := Finish(APlan, Edits, AReason);
 end;
 
@@ -2007,16 +1961,16 @@ begin
   Edits := nil;
   AReason := MethodCtxReason(AMap, ALine, AMessage, KW_DESTRUCTOR, Ctx);
   if AReason = '' then
-    AReason := DtorOverrideReason(AMap, Ctx.R);
+    AReason := DtorOverrideReason(AMap, Ctx.Routine);
   if AReason = '' then
     AReason := AbstractReason(AMap, Ctx);
   if AReason = '' then
-    AReason := DeadEndReason(AMap, Ctx.R);
+    AReason := DeadEndReason(AMap, Ctx.Routine);
   if AReason = '' then
-    AReason := LastStatement(AMap, Ctx.R, STMT_INHERITED + ';', Edits);
+    AReason := LastStatement(AMap, Ctx.Routine, STMT_INHERITED + ';', Edits);
   // TObject.Destroy ist leer: bei direktem TObject-Erben gleiche Bedeutung.
   if AReason = '' then
-    APlan.Changes := not Ctx.O.DirectTObject;
+    APlan.Changes := not Ctx.Owner.DirectTObject;
   Result := Finish(APlan, Edits, AReason);
 end;
 
@@ -2088,7 +2042,7 @@ begin
   begin
     APlan.Name := Stmt;
     APlan.NeedsVariants := Vars;
-    AReason := FirstEdits(AMap, Ctx.R, Stmt + ';', Edits);
+    AReason := FirstEdits(AMap, Ctx.Routine, Stmt + ';', Edits);
   end;
   Result := Finish(APlan, Edits, AReason);
 end;

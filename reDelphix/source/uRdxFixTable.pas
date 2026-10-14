@@ -640,34 +640,35 @@ begin
   Result := TryFix(ALines, AFinding, TRdxTryFixes.GetMemWithoutFree);
 end;
 
-// SCA096, SCA097, SCA121, SCA196 (Charge H5): die Planer aus uRdxResultFixes
-// auf der Code-Sicht - eine Ersetzung (SCA097: zwei, wenn der letzten
-// Anweisung das ';' fehlt). Name fuer den Menuetext, Kennzeichnung nach dem
-// Fund und der Bedarf an Variants kommen mit dem Plan (APlanOut) - wie
-// TryFix eine eigene Planer-Form.
+// SCA096, SCA097, SCA121, SCA196 (Charge H5): der Planer APlanner aus
+// uRdxResultFixes auf der Code-Sicht - eine Ersetzung (SCA097: zwei, wenn
+// der letzten Anweisung das ';' fehlt). Name fuer den Menuetext,
+// Kennzeichnung nach dem Fund und der Bedarf an Variants kommen mit dem
+// Plan (APlan) - wie TryFix eine eigene Planer-Form. Bis Charge H5c hiess
+// der Planer APlan und der Plan APlanOut (Gegen-Review H5, Minor 7).
 function ResultFix(ALines: TStrings; AFinding: TLeakFinding;
-  APlan: TRdxResultPlanner; out APlanOut: TRdxResultPlan): TRdxFixOutcome;
+  APlanner: TRdxResultPlanner; out APlan: TRdxResultPlan): TRdxFixOutcome;
 var
   Map : TRdxCodeMap;
   Why : string;
 begin
   Result := Default(TRdxFixOutcome);
-  APlanOut := Default(TRdxResultPlan);
+  APlan := Default(TRdxResultPlan);
   Why := R_NO_FILE;
   if Assigned(ALines) then
   begin
     Map := TRdxCodeMap.Create(ALines);
     try
-      Result.Enabled := APlan(Map, AFinding.LineInt, AFinding.Message,
-        APlanOut, Why);
+      Result.Enabled := APlanner(Map, AFinding.LineInt, AFinding.Message,
+        APlan, Why);
     finally
       Map.Free;
     end;
   end;
-  Result.Name := APlanOut.Name;
+  Result.Name := APlan.Name;
   Result.Reason := Why;
   if Result.Enabled then
-    Result.Edits := APlanOut.Edits;
+    Result.Edits := APlan.Edits;
 end;
 
 // SCA096: 'inherited Create;' (direkter TObject-Erbe, bedeutungsgleich)
@@ -703,6 +704,11 @@ begin
     Result.Hint := R_DTOR_TOBJECT_HINT;
 end;
 
+// SCA121: 'Result := <Wert>;' als erste Anweisung - ein Literal oder
+// Default(T), Name ist der Wert (Menuetext 'Initialize Result with %s').
+// Hinweis und Kennzeichnung setzt die Zeile fest (immer gekennzeichnet:
+// Result ist danach definiert statt zufaellig); den Plan selbst braucht
+// der Adapter nicht.
 function PlanResultDefault(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 var

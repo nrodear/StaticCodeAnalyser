@@ -200,6 +200,13 @@ type
       const AIncludes: TArray<string>; const AName: string): string; static;
   end;
 
+// Traegt R eine der Direktiven AWords (klein)? AWord: die erste, '' ohne.
+// Seit Charge H5c oeffentlich - uRdxResultFixes fragt 'override', 'overload'
+// und 'abstract' (bis dahin dort als HasDirectiveWord kopiert; Gegen-Review
+// H5, Minor 6).
+function HasDirective(const R: TRdxRoutine; const AWords: array of string;
+  out AWord: string): Boolean;
+
 implementation
 
 uses
@@ -380,28 +387,17 @@ type
 
 { ---- Token und Texte ---- }
 
-// TokBefore und TokText stehen seit Charge H4c in uRdxCodeMap.
+// TokBefore und TokText stehen seit Charge H4c in uRdxCodeMap, AddToken
+// und LastPart seit Charge H5c (dort), AddEdit in uRdxBufferMath.
 function TokInRange(const T, AFirst, ALast: TRdxToken): Boolean;
 begin
   Result := not TokBefore(T, AFirst) and not TokBefore(ALast, T);
-end;
-
-procedure AddToken(var AList: TArray<TRdxToken>; const T: TRdxToken);
-begin
-  SetLength(AList, Length(AList) + 1);
-  AList[High(AList)] := T;
 end;
 
 procedure AddText(var AList: TArray<string>; const S: string);
 begin
   SetLength(AList, Length(AList) + 1);
   AList[High(AList)] := S;
-end;
-
-procedure AddEdit(var AList: TArray<TRdxEdit>; const AEdit: TRdxEdit);
-begin
-  SetLength(AList, Length(AList) + 1);
-  AList[High(AList)] := AEdit;
 end;
 
 // Glieder zu 'A.B.C' (TStringBuilder - keine Verkettung in der Schleife).
@@ -1854,12 +1850,6 @@ begin
       Exit('Interface-Kette zu lang - Grenzen nicht sicher');
     Result := InterfaceReason(AMap, Name, ALowMethod, Work);
   end;
-end;
-
-// Der letzte Teil eines Pfads ('TOuter.TInner' -> 'TInner').
-function LastPart(const S: string): string;
-begin
-  Result := Copy(S, LastDelimiter('.', S) + 1, MaxInt);
 end;
 
 // Klasse, Sichtbarkeit, Attribute, Interfaces und Zahl der Deklarationen.

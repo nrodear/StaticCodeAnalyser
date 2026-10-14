@@ -185,6 +185,13 @@ function DirectiveBefore(AMap: TRdxCodeMap; AFromLine: Integer;
 // (2026-10-14) je eine Kopie in uRdxLineFixes, uRdxDeclFixes und
 // uRdxStructFixes.
 function DirectiveInLines(AMap: TRdxCodeMap; AFrom, ATo: Integer): Boolean;
+// Beginnt zwischen dem Ende des Tokens APrev und (ALine, ACol) eine
+// Direktive (DirectiveAt)? Leeres APrev: ab Dateianfang. Anders als
+// DirectiveBefore (ab Spalte 1 einer Zeile) beginnt die Suche HINTER
+// einem Token. Bis Charge H5c in uRdxSimpleFixes, eine Fassung von Token
+// zu Token in uRdxResultFixes (Gegen-Review H5, Minor 6).
+function DirectiveBetween(AMap: TRdxCodeMap; const APrev: TRdxToken;
+  ALine, ACol: Integer): Boolean;
 // DirectiveAt nur an '{' bzw. '(' - fuer Durchsichten ueber jedes Zeichen
 // einer Datei (DirectiveAt kopiert je Aufruf). Bis Charge H3c in
 // uRdxRoutineFixes.
@@ -221,6 +228,9 @@ function HasIdentWord(const ALowText, ALowName: string): Boolean;
 // ASCII - wie der Detektor (TDetectorUtils) die Grenze eines Code-Merkmals
 // bzw. Markers sieht. Bis Charge H3c als HasWord in uRdxCleanupFixes.
 function HasAsciiWord(const AText, AWord: string): Boolean;
+// Das letzte Glied eines Pfads ('TOuter.TInner' -> 'TInner'). Bis Charge
+// H5c in uRdxRoutineFixes und als ShortNameOf in uRdxResultFixes.
+function LastPart(const S: string): string;
 // Steht in AText ein Unterdrueck- oder Absichtsmarker - 'noinspection'
 // bzw. die Marker von SCA019 in jeder Schreibweise, 'XXX' nur gross (klein
 // ist es dort ein Platzhalter)? '' oder der Grund. SCA070 prueft den
@@ -241,6 +251,14 @@ function TokBefore(const A, B: TRdxToken): Boolean;
 // klein). Bis Charge H4c je eine Kopie in uRdxRoutineFixes und
 // uRdxTryFixes.
 function TokText(AMap: TRdxCodeMap; const T: TRdxToken): string;
+// Haengt T an AList an. Bis Charge H5c je eine Kopie in uRdxRoutineFixes
+// und uRdxResultFixes (Gegen-Review H5, Minor 6).
+procedure AddToken(var AList: TArray<TRdxToken>; const T: TRdxToken);
+// Steht T als erstes auf seiner Zeile - davor nur Leerraum? Ob die Zeile
+// in einem Kommentar oder mehrzeiligen String beginnt, prueft der
+// Aufrufer selbst (StartsInside). Bis Charge H5c in uRdxTryFixes, eine
+// Variante mit StartsInside in uRdxResultFixes.
+function FirstOnLine(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
 // Beginnt an T ein Routinenkopf? Ein Wort aus ROUTINE_WORDS als
 // Schluesselwort, davor (APrev) nichts aus NOT_HEAD_AFTER - kein Typ einer
 // Variablen, eines Parameters oder eines Typs (':', '='), keine anonyme
@@ -723,6 +741,29 @@ begin
         Exit(True);
 end;
 
+function DirectiveBetween(AMap: TRdxCodeMap; const APrev: TRdxToken;
+  ALine, ACol: Integer): Boolean;
+var
+  Li, j, First, Last : Integer;
+begin
+  Result := False;
+  First := 1;
+  if APrev.Low <> '' then First := APrev.Line;
+  for Li := First to ALine do
+  begin
+    j := 1;
+    if (APrev.Low <> '') and (Li = APrev.Line) then j := APrev.EndCol;
+    Last := Length(AMap.Raw(Li));
+    if Li = ALine then Last := ACol - 1;
+    while j <= Last do
+    begin
+      if DirectiveAt(AMap, Li, j) then
+        Exit(True);
+      Inc(j);
+    end;
+  end;
+end;
+
 function OpensDirective(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
 var
   L : string;
@@ -867,6 +908,11 @@ begin
   end;
 end;
 
+function LastPart(const S: string): string;
+begin
+  Result := Copy(S, LastDelimiter('.', S) + 1, MaxInt);
+end;
+
 function MarkerReason(const AText: string): string;
 var
   Low, M : string;
@@ -896,6 +942,17 @@ end;
 function TokText(AMap: TRdxCodeMap; const T: TRdxToken): string;
 begin
   Result := Copy(AMap.Raw(T.Line), T.Col, T.Len);
+end;
+
+procedure AddToken(var AList: TArray<TRdxToken>; const T: TRdxToken);
+begin
+  SetLength(AList, Length(AList) + 1);
+  AList[High(AList)] := T;
+end;
+
+function FirstOnLine(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
+begin
+  Result := SkipBlanks(AMap.Raw(T.Line), 1) = T.Col;
 end;
 
 function IsRoutineHeadAfter(const T, APrev: TRdxToken): Boolean;

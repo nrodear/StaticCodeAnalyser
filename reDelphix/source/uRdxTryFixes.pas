@@ -455,11 +455,8 @@ begin
     and (InList(N.Low, LIST_ENDS) or (N.Low = 'else')));
 end;
 
-// Steht T als erstes auf seiner Zeile (davor nur Leerraum)?
-function FirstOnLine(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
-begin
-  Result := SkipBlanks(AMap.Raw(T.Line), 1) = T.Col;
-end;
+// FirstOnLine (steht T als erstes auf seiner Zeile?) steht seit Charge H5c
+// in uRdxCodeMap - uRdxResultFixes hatte eine Variante.
 
 // Hinter '()' (leere Klammern) dessen ')', sonst T.
 function EmptyParensAfter(AMap: TRdxCodeMap; const T: TRdxToken): TRdxToken;
