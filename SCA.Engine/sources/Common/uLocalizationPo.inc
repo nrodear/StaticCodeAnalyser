@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2428 Zeilen, 81402 Bytes
-  CPoLines_de: array[0..2427] of string = (
+  // i18n\de.po - 2437 Zeilen, 81706 Bytes
+  CPoLines_de: array[0..2436] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2375,6 +2375,15 @@ const
     'msgid "Remove unused variable %s"',
     'msgstr "Ungenutzte Variable %s entfernen"',
     '',
+    'msgid "Free %s in a try/finally block"',
+    'msgstr "%s in einem try/finally-Block freigeben"',
+    '',
+    'msgid "Release the lock %s in a try/finally block"',
+    'msgstr "Sperre %s in einem try/finally-Block freigeben"',
+    '',
+    'msgid "Free the buffer %s in a try/finally block"',
+    'msgstr "Puffer %s in einem try/finally-Block freigeben"',
+    '',
     'msgid "(changes behavior)"',
     'msgstr "('#$00E4'ndert Verhalten)"',
     '',
@@ -2717,8 +2726,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2424 Zeilen, 85257 Bytes
-  CPoLines_fr: array[0..2423] of string = (
+  // i18n\fr.po - 2433 Zeilen, 85558 Bytes
+  CPoLines_fr: array[0..2432] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -5074,6 +5083,15 @@ const
     '',
     'msgid "Remove unused variable %s"',
     'msgstr "Supprimer la variable inutilis'#$00E9'e %s"',
+    '',
+    'msgid "Free %s in a try/finally block"',
+    'msgstr "Lib'#$00E9'rer %s dans un bloc try/finally"',
+    '',
+    'msgid "Release the lock %s in a try/finally block"',
+    'msgstr "Lib'#$00E9'rer le verrou %s dans un bloc try/finally"',
+    '',
+    'msgid "Free the buffer %s in a try/finally block"',
+    'msgstr "Lib'#$00E9'rer le tampon %s dans un bloc try/finally"',
     '',
     'msgid "(changes behavior)"',
     'msgstr "(modifie le comportement)"',

@@ -118,7 +118,8 @@ uses
   uRdxDeclFixes,     // SCA117, SCA197, SCA149
   uRdxFlowFixes,     // SCA098, SCA080, SCA047
   uRdxRoutineFixes,  // SCA164, SCA147
-  uRdxCleanupFixes;  // SCA070, SCA053
+  uRdxCleanupFixes,  // SCA070, SCA053
+  uRdxTryFixes;      // SCA009, SCA001, SCA109, SCA153, SCA156
 
 const
   // Hinweise der Hilfen (deutsch wie die Gruende; Pruefstand und Tests
@@ -171,6 +172,17 @@ const
     + 'Versionsverwaltung kennt ihn noch';
   R_UNUSED_VAR_HINT = 'gleiche Bedeutung - die Variable kommt nirgends sonst '
     + 'vor';
+  // Charge H4 (try/finally): alle gekennzeichnet (E2) - B laeuft danach
+  // auch dort, wo es bisher uebersprungen wurde; das ist der Fix.
+  R_TRY_OBJECT_HINT = 'Free laeuft jetzt auch bei einer Ausnahme und bei Exit '
+    + '- die Zeilen dazwischen ruecken in den try-Teil';
+  R_TRY_LOCK_HINT   = 'die Sperre wird jetzt auch bei einer Ausnahme '
+    + 'freigegeben - die Zeilen dazwischen ruecken in den try-Teil';
+  R_TRY_BUFFER_HINT = 'FreeMem laeuft jetzt auch bei einer Ausnahme und bei '
+    + 'Exit - die Zeilen dazwischen ruecken in den try-Teil';
+  // SCA001: nur diese Variante bekommt die Hilfe (TLeakFinding.
+  // MemoryLeakVariant, properties.variant im SARIF).
+  LEAK_VARIANT_FOF = 'freed-outside-finally';
   R_NO_FINDING = 'kein Fund';
   R_NO_ROW     = 'keine einfache Hilfe fuer diese Regel';
   // Entscheid E2: eine Hilfe, die das Verhalten aendern kann, sagt es.
@@ -534,15 +546,91 @@ begin
   Result.Name := TRdxCleanupFixes.UnusedVarName(AFinding.Message);
 end;
 
+// SCA009, SCA001, SCA109, SCA153, SCA156 (Charge H4): der Baustein B5
+// (uRdxTryFixes) auf der Code-Sicht - eine Ersetzung von der Zeile von A bis
+// zur Freigabe. Name: X, die Sperre bzw. der Puffer (Menuetext), schon aus
+// der Meldung, auch wenn der Planer ablehnt. Wie RoutineFix eine eigene
+// Planer-Form (Plan mit Name) - MapFix kennt nur die Ersetzung.
+function TryFix(ALines: TStrings; AFinding: TLeakFinding;
+  APlan: TRdxTryPlanner): TRdxFixOutcome;
+var
+  Map  : TRdxCodeMap;
+  Plan : TRdxTryPlan;
+  Why  : string;
+begin
+  Result := Default(TRdxFixOutcome);
+  Plan := Default(TRdxTryPlan);
+  Why := R_NO_FILE;
+  if Assigned(ALines) then
+  begin
+    Map := TRdxCodeMap.Create(ALines);
+    try
+      Result.Enabled := APlan(Map, AFinding.LineInt, AFinding.Message, Plan,
+        Why);
+    finally
+      Map.Free;
+    end;
+  end;
+  Result.Name := Plan.Name;
+  Result.Reason := Why;
+  if Result.Enabled then
+    Result.Edits := TArray<TRdxEdit>.Create(Plan.Edit);
+end;
+
+function PlanMissingFinally(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := TryFix(ALines, AFinding, TRdxTryFixes.MissingFinally);
+end;
+
+// SCA001: nur freed-outside-finally - das Free ist da, liegt aber neben dem
+// finally. proven-leak (Konzept: eigene Hilfe, Aufwand L), never-freed und
+// return-value-not-freed (Weitergabe bzw. Besitz unbekannt) bekommen keine;
+// der Eintrag steht dann gesperrt mit der Variante da. Massgeblich ist das
+// FELD LeakVariant, das uLeakDetector2 setzt - nicht die Ableitung
+// MemoryLeakVariant: die haelt einen Fund ohne Feld (uFieldLeak) mit
+// Warning-Schwere fuer freed-outside-finally.
+function PlanMemoryLeak(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  LeakVar : string;
+begin
+  if AFinding.LeakVariant = LEAK_VARIANT_FOF then
+    Exit(TryFix(ALines, AFinding, TRdxTryFixes.FreedOutsideFinally));
+  LeakVar := AFinding.MemoryLeakVariant;
+  Result := Default(TRdxFixOutcome);
+  Result.Name := TRdxTryFixes.NameOf(AFinding.Message);
+  Result.Reason := Format('keine Hilfe fuer die Variante %s - nur fuer %s '
+    + '(Free vorhanden, aber neben dem finally)', [LeakVar, LEAK_VARIANT_FOF]);
+end;
+
+function PlanLockWithoutFinally(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := TryFix(ALines, AFinding, TRdxTryFixes.LockWithoutFinally);
+end;
+
+function PlanUnpairedLock(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := TryFix(ALines, AFinding, TRdxTryFixes.UnpairedLock);
+end;
+
+function PlanGetMemWithoutFree(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := TryFix(ALines, AFinding, TRdxTryFixes.GetMemWithoutFree);
+end;
+
 { ---- Die Tabelle ---- }
 
 const
-  FIX_ROW_HIGH = 29;
+  FIX_ROW_HIGH = 34;
 
   // Je Art eine Zeile; die Reihenfolge ist die der Chargen (Stufe 2a,
   // Stufe 2 Rest, uQuickFix-Umzug/Stufe 3, Zeilen, Ausnahmen, Deklarationen
-  // H1, Anweisungen H2, Routinen H3b, Aufraeumen H3a). Der Menuetext steht
-  // unter demselben Index in FIX_CAPTIONS (s. Kopf).
+  // H1, Anweisungen H2, Routinen H3b, Aufraeumen H3a, try/finally H4). Der
+  // Menuetext steht unter demselben Index in FIX_CAPTIONS (s. Kopf).
   FIX_ROWS: array[0..FIX_ROW_HIGH] of TRdxFixRow = (
     (Kind: fkExplicitTObjectInheritance; Plan: PlanExplicitTObject;
      Hint: R_TOBJECT_HINT; HintByPlanner: False; Changes: False; Alt: nil),
@@ -607,13 +695,25 @@ const
     (Kind: fkCommentedOutCode; Plan: PlanCommentedOut;
      Hint: R_COMMENTED_HINT; HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkUnusedLocalVar; Plan: PlanUnusedVar;
-     Hint: R_UNUSED_VAR_HINT; HintByPlanner: False; Changes: False; Alt: nil)
+     Hint: R_UNUSED_VAR_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    // Charge H4: alle gekennzeichnet (E2) - Strg+Alt+F laesst sie aus.
+    (Kind: fkMissingFinally; Plan: PlanMissingFinally;
+     Hint: R_TRY_OBJECT_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+    (Kind: fkMemoryLeak; Plan: PlanMemoryLeak;
+     Hint: R_TRY_OBJECT_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+    (Kind: fkLockWithoutTryFinally; Plan: PlanLockWithoutFinally;
+     Hint: R_TRY_LOCK_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+    (Kind: fkUnpairedLock; Plan: PlanUnpairedLock;
+     Hint: R_TRY_LOCK_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+    (Kind: fkGetMemWithoutFreeMem; Plan: PlanGetMemWithoutFree;
+     Hint: R_TRY_BUFFER_HINT; HintByPlanner: False; Changes: True; Alt: nil)
   );
 
   // Menuetexte (msgids) unter dem Index der Zeile; '%s' = Name der Hilfe
   // (X bei SCA085/SCA139, die Unit bei SCA007, der Cast-Typ bei SCA123, die
   // Direktive bei SCA149, das Ziel bzw. Exit/Continue bei SCA098/SCA047/
-  // SCA080, die Routine bzw. Methode bei SCA164/SCA147, die Variable bei SCA053).
+  // SCA080, die Routine bzw. Methode bei SCA164/SCA147, die Variable bei SCA053,
+  // X bzw. die Sperre bzw. der Puffer bei SCA009/SCA001/SCA109/SCA153/SCA156).
   FIX_CAPTIONS: array[0..FIX_ROW_HIGH] of string = (
     'Remove (TObject) from the class declaration',
     'Use FreeAndNil(%s)',
@@ -644,7 +744,12 @@ const
     'Delete unused routine %s',
     'Delete unused private method %s',
     'Delete commented-out code',
-    'Remove unused variable %s'
+    'Remove unused variable %s',
+    'Free %s in a try/finally block',
+    'Free %s in a try/finally block',
+    'Release the lock %s in a try/finally block',
+    'Release the lock %s in a try/finally block',
+    'Free the buffer %s in a try/finally block'
   );
 
   // Menuetexte des zweiten Eintrags (Alt), '' ohne.
@@ -653,7 +758,8 @@ const
     'Add an else branch that raises an exception',
     '', '', '', '', '', '',
     'Raise ENotImplemented in the empty body',
-    '', '', '', '', '', '', '', '', '', '', '', ''
+    '', '', '', '', '', '', '', '', '', '', '', '',
+    '', '', '', '', ''
   );
 
 var

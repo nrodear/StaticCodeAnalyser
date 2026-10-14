@@ -93,6 +93,7 @@
       "cwe": ["CWE-401"],
       "configKey": "[Detectors] LeakyClasses",
       "detectorUnit": "uLeakDetector2.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "list := TStringList.Create;\nDoStuff(list);   // <-- exception here leaks list",
         "good": "list := TStringList.Create;\ntry\n  DoStuff(list);\nfinally\n  list.Free;\nend;"
@@ -256,6 +257,7 @@
       "type": "Code Smell",
       "tags": ["memory", "exception-safety"],
       "detectorUnit": "uMissingFinally.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "obj := TFoo.Create;\nobj.DoStuff;\nobj.Free;",
         "good": "obj := TFoo.Create;\ntry obj.DoStuff finally obj.Free end;"
@@ -2226,6 +2228,7 @@
       "tags": ["concurrency", "lock", "exception-safety"],
       "cwe": ["CWE-667"],
       "detectorUnit": "uLockWithoutTryFinally.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "FLock.Enter;\nDoWork;     // exception here leaves FLock held forever\nFLock.Leave;",
         "good": "FLock.Enter;\ntry\n  DoWork;\nfinally\n  FLock.Leave;\nend;"
@@ -3100,6 +3103,7 @@
       "type": "Bug",
       "tags": ["concurrency", "mormot", "exception-safety", "sonar50"],
       "detectorUnit": "uUnpairedLock.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "FLocker.Lock;\nDoStuff;\nFLocker.UnLock;",
         "good": "FLocker.Lock;\ntry\n  DoStuff;\nfinally\n  FLocker.UnLock;\nend;"
@@ -3165,6 +3169,7 @@
       "type": "Bug",
       "tags": ["memory-leak", "exception-safety", "mormot", "sonar50"],
       "detectorUnit": "uGetMemWithoutFreeMem.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "GetMem(P, 1024);\nDoStuff(P);\nFreeMem(P);",
         "good": "GetMem(P, 1024);\ntry\n  DoStuff(P);\nfinally\n  FreeMem(P);\nend;"
