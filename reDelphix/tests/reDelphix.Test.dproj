@@ -128,6 +128,7 @@
         <DCCReference Include="uTestRdxCleanupDetector.pas"/>
         <DCCReference Include="uTestRdxTryFixes.pas"/>
         <DCCReference Include="uTestRdxTryLocks.pas"/>
+        <DCCReference Include="uTestRdxTryGates.pas"/>
         <DCCReference Include="uTestRdxTryFixesDetector.pas"/>
         <DCCReference Include="uTestRdxNilFix.pas"/>
         <DCCReference Include="uTestRdxSimpleFixesDetector.pas"/>

@@ -9,7 +9,9 @@ unit uTestRdxCodeMap;
 // seit Charge R8 (2026-10-14) die geteilten Laeufe der Planer:
 // Klammerabgleich (MatchClose, AfterClose), "genau ein Token auf der Zeile"
 // (OneTokenOnLine), end-Bilanz (BlockEnd) und DirectiveInLines - bis dahin
-// je Planer eine Kopie.
+// je Planer eine Kopie. Seit Charge H4c TokBefore/TokText (bis dahin je
+// eine Kopie in uRdxRoutineFixes und uRdxTryFixes) und IsKeywordAt (kein
+// Schluesselwort vor ':=' - benanntes OLE-Argument 'End := 1').
 
 interface
 
@@ -30,6 +32,8 @@ type
     [Test] procedure OneTokenOnLine_NoneOneMany;
     [Test] procedure BlockEnd_NestedAndHook;
     [Test] procedure DirectiveInLines_NotInLineComment;
+    // Charge H4c.
+    [Test] procedure TokHelpers_AndKeywordAt;
   end;
 
 implementation
@@ -342,6 +346,45 @@ begin
       Assert.IsTrue(DirectiveInLines(Map, 3, 3), '(*$ zaehlt');
       Assert.IsFalse(DirectiveInLines(Map, 4, 4));
       Assert.IsFalse(DirectiveInLines(Map, 4, 1), 'leerer Bereich');
+    finally
+      Map.Free;
+    end;
+  finally
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxCodeMap.TokHelpers_AndKeywordAt;
+var
+  SL      : TStringList;
+  Map     : TRdxCodeMap;
+  A, B, E : TRdxToken;
+begin
+  SL := TStringList.Create;
+  try
+    SL.Text := Join(['R := Doc.Range(Start := 0, End := 1);', 'X.End; &End;',
+      'end;']);
+    Map := TRdxCodeMap.Create(SL);
+    try
+      A := TokenAt(Map, 1, 1);
+      B := TokenAt(Map, 1, 6);
+      Assert.IsTrue(TokBefore(A, B), 'gleiche Zeile, Spalte davor');
+      Assert.IsFalse(TokBefore(B, A));
+      Assert.IsFalse(TokBefore(A, A), 'dieselbe Stelle ist nicht davor');
+      Assert.IsTrue(TokBefore(B, TokenAt(Map, 2, 1)), 'Zeile davor');
+      Assert.AreEqual('Doc', TokText(Map, B), 'Gross/klein wie im Quelltext');
+      E := TokenAt(Map, 1, 28);
+      Assert.AreEqual('end', E.Low);
+      Assert.IsTrue(IsKeywordAfter(E, Before(Map, E)),
+        'IsKeywordAfter sieht das := dahinter nicht');
+      Assert.IsFalse(IsKeywordAt(Map, E, Before(Map, E)),
+        'End := 1 ist ein benanntes Argument');
+      E := TokenAt(Map, 2, 3);
+      Assert.IsFalse(IsKeywordAt(Map, E, Before(Map, E)), 'X.End');
+      E := TokenAt(Map, 2, 9);
+      Assert.IsFalse(IsKeywordAt(Map, E, Before(Map, E)), '&End');
+      E := TokenAt(Map, 3, 1);
+      Assert.IsTrue(IsKeywordAt(Map, E, Before(Map, E)), 'end;');
     finally
       Map.Free;
     end;

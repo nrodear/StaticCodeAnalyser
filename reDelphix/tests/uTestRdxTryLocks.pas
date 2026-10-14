@@ -12,12 +12,17 @@ unit uTestRdxTryLocks;
 //          TMonitor.Enter/Exit(O), 'EnterCriticalSection(...)';
 //   SCA156 GetMemWithoutFreeMem - GetMem(P, N), P := AllocMem(N),
 //          P := GetMem(N) (FPC); FreeMem(P[, N]).
-// Sperren je eine: Frueh-Freigabe, zweite Sperre, Exit, Break nach aussen
-// (in einer inneren Schleife geht es), umschliessender Handler mit der
-// Freigabe, TMonitor.Enter mit Timeout, mehrdeutige bzw. verschobene Zeile;
-// ReallocMem, Result, kein einfacher Zeiger, Zeiger veraendert, Exit mit
-// Weitergabe. Objekte (SCA009/SCA001) und die Form des Bausteins:
-// uTestRdxTryFixes.
+// Sperren je eine: Frueh-Freigabe (auch in anderer Schreibweise: 'Self.',
+// Release fuer Enter, 'LeaveCriticalSection(Self.FCS)' - Gegen-Review H4,
+// Minor 1), zweite Sperre, Exit, Break nach aussen (in einer inneren
+// Schleife geht es), umschliessender Handler mit der Freigabe,
+// TMonitor.Enter mit Timeout bzw. TryEnter (eigener Grund, Minor 5),
+// mehrdeutige bzw. verschobene Zeile; ReallocMem, Result, kein einfacher
+// Zeiger, Zeiger veraendert (auch per Cast 'Inc(PByte(P), 4)'), Exit mit
+// Weitergabe, Weitergabe ohne Ausstieg ('FBuf := P', Blocker 1),
+// 'System.GetMem'/'System.FreeMem' (Minor 4). Objekte (SCA009/SCA001) und
+// die Form des Bausteins: uTestRdxTryFixes, die Sperren des Gegen-Reviews
+// an Objekten: uTestRdxTryGates.
 
 interface
 
@@ -40,11 +45,14 @@ type
     [Test] procedure Sca109_Monitor;
     [Test] procedure Sca109_CriticalSection;
     [Test] procedure Sca109_HandlerReleases;
+    [Test] procedure Sca109_ReleaseOtherSpelling;
     [Test] procedure Sca156_GetMem;
     [Test] procedure Sca156_AllocMemAndFunctionForm;
     [Test] procedure Sca156_Refusals;
     [Test] procedure Sca156_PointerChanged;
     [Test] procedure Sca156_ExitAndEscape;
+    [Test] procedure Sca156_HandOver;
+    [Test] procedure Sca156_SystemQualified;
   end;
 
 implementation
@@ -251,9 +259,11 @@ begin
   // Nur eine fremde Freigabe: keine Hilfe.
   AssertRefused(r153, Plain('FLock.Lock;', 'Foo;', 'FOther.Release;'),
     'FLock.Lock', 'keine Freigabe FLock.UnLock');
-  // 'Self.FLock' und 'FLock' sind als Text verschieden.
+  // 'Self.FLock' und 'FLock' sind als Text verschieden - B muss genau so
+  // heissen wie A; dieselbe Sperre in anderer Schreibweise sperrt (bis
+  // Charge H4c: "keine Freigabe").
   AssertRefused(r153, Plain('Self.FLock.Lock;', 'Foo;', 'FLock.UnLock;'),
-    'FLock.Lock', 'keine Freigabe Self.FLock.UnLock');
+    'FLock.Lock', 'in anderer Schreibweise');
   Assert.AreEqual(Wrapped('Self.FLock.Lock;', 'Foo;', 'Self.FLock.UnLock;'),
     Fix(r153, Plain('Self.FLock.Lock;', 'Foo;', 'Self.FLock.UnLock;'),
       'FLock.Lock', R), R);
@@ -327,9 +337,10 @@ begin
       'FSync', R), R);
   Assert.AreEqual(Wrapped('FCS.Acquire;', 'Foo;', 'FCS.Release;'),
     Fix(r109, Plain('FCS.Acquire;', 'Foo;', 'FCS.Release;'), 'FCS', R), R);
-  // Die Freigabe muss zur Sperre passen (Enter -> Leave, nicht Release).
+  // Die Freigabe muss zur Sperre passen (Enter -> Leave); Release gibt bei
+  // TCriticalSection dieselbe Sperre frei - von Hand pruefen.
   AssertRefused(r109, Plain('FCS.Enter;', 'Foo;', 'FCS.Release;'), 'FCS',
-    'keine Freigabe FCS.Leave');
+    'in anderer Schreibweise');
 end;
 
 procedure TTestRdxTryLocks.Sca109_Monitor;
@@ -344,9 +355,15 @@ begin
     'TMonitor.Exit(Self);'),
     Fix(r109, Plain('TMonitor.Enter(Self);', 'Foo;', 'TMonitor.Exit(Self);'),
       'TMonitor.Enter(self)', R), R);
-  // Mit Timeout ist Enter eine Bedingung, keine Sperre.
+  // Mit Timeout ist Enter eine Bedingung, keine Sperre - TryEnter ebenso
+  // (SCA109 meldet beide als 'TMonitor.Enter(o)'); bis Charge H4c hiess der
+  // Grund "Zeile verschoben?" (Gegen-Review H4, Minor 5).
   AssertRefused(r109, Plain('TMonitor.Enter(FList, 100);', 'Foo;',
-    'TMonitor.Exit(FList);'), 'TMonitor.Enter(flist)', 'keine Sperre');
+    'TMonitor.Exit(FList);'), 'TMonitor.Enter(flist)',
+    'eine Bedingung, keine Sperre');
+  AssertRefused(r109, Plain('if TMonitor.TryEnter(FList) then', 'Foo;',
+    'TMonitor.Exit(FList);'), 'TMonitor.Enter(flist)',
+    'eine Bedingung, keine Sperre');
 end;
 
 procedure TTestRdxTryLocks.Sca109_CriticalSection;
@@ -365,6 +382,36 @@ begin
   AssertRefusedAt(r109, InProc(['  try', '    FLock.Enter;', '    Foo;',
     '    FLock.Leave;', '  except', '    FLock.Leave;', '    raise;', '  end;']),
     7, 'FLock', 'except-Teil');
+  // Auch in anderer Schreibweise (Gegen-Review H4, Minor 1).
+  AssertRefusedAt(r109, InProc(['  try', '    FLock.Enter;', '    Foo;',
+    '    FLock.Leave;', '  except', '    Self.FLock.Release;', '    raise;',
+    '  end;']), 7, 'FLock', 'except-Teil');
+end;
+
+// Frueh-Freigabe vor einem raise, anders geschrieben als A - nach dem Fix
+// liefe die Freigabe im finally ein zweites Mal (Gegen-Review H4, Minor 1,
+// Pruefer-Fixture rc/cases5.txt; bis Charge H4c angeboten).
+function Early(const AEnter, ARelease, ALeave: string): string;
+begin
+  Result := InProc(['  ' + AEnter, '  if Bad then', '  begin',
+    '    ' + ARelease, '    raise EFoo.Create(''x'');', '  end;', '  Work;',
+    '  ' + ALeave]);
+end;
+
+procedure TTestRdxTryLocks.Sca109_ReleaseOtherSpelling;
+begin
+  AssertRefused(r109, Early('FLock.Enter;', 'FLock.Release;', 'FLock.Leave;'),
+    'FLock', 'in anderer Schreibweise');
+  AssertRefused(r109, Early('FLock.Enter;', 'Self.FLock.Leave;',
+    'FLock.Leave;'), 'FLock', 'in anderer Schreibweise');
+  AssertRefused(r109, Early('FLock.Enter;', 'TCriticalSection(FLock).Leave;',
+    'FLock.Leave;'), 'FLock', 'in anderer Schreibweise');
+  AssertRefused(r153, Early('EnterCriticalSection(FCS);',
+    'LeaveCriticalSection(Self.FCS);', 'LeaveCriticalSection(FCS);'),
+    'EnterCriticalSection', 'in anderer Schreibweise');
+  // Gleich geschrieben: wie bisher die zweite Freigabe.
+  AssertRefused(r109, Early('FLock.Enter;', 'FLock.Leave;', 'FLock.Leave;'),
+    'FLock', 'zweite Freigabe');
 end;
 
 // ---- SCA156 ----
@@ -420,6 +467,15 @@ procedure TTestRdxTryLocks.Sca156_PointerChanged;
 begin
   AssertRefused(r156, InProc(['  GetMem(P, N);', '  Inc(P, 4);',
     '  FreeMem(P);']), 'GetMem', 'veraendert den Zeiger');
+  // Durch einen Cast hindurch (Gegen-Review H4, Minor 1; bis Charge H4c
+  // angeboten - FreeMem gaebe den versetzten Zeiger frei).
+  AssertRefused(r156, InProc(['  GetMem(P, 100);', '  Inc(PByte(P), 4);',
+    '  Work(P);', '  Dec(PByte(P), 4);', '  FreeMem(P);']), 'GetMem',
+    'Inc(P) in Zeile 7 veraendert den Zeiger');
+  // Eine frueh freigebende Typumwandlung vor einem raise.
+  AssertRefused(r156, InProc(['  GetMem(P, N);', '  if Bad then', '  begin',
+    '    FreeMem(PByte(P));', '    raise EFoo.Create(''x'');', '  end;',
+    '  FreeMem(P);']), 'GetMem', 'in anderer Schreibweise');
   AssertRefused(r156, InProc(['  GetMem(P, N);', '  P := Q;', '  FreeMem(P);']),
     'GetMem', 'zweite Zuweisung');
   AssertRefused(r156, InProc(['  GetMem(P, N);', '  Swap(@P);',
@@ -438,6 +494,48 @@ begin
   // Exit, und P wird weitergegeben.
   AssertRefused(r156, InProc(['  GetMem(P, N);', '  if Keep(P) then',
     '    Exit;', '  FreeMem(P);']), 'GetMem', 'weitergegeben');
+end;
+
+// Weitergabe ohne Ausstieg (Gegen-Review H4, Blocker 1): P wird
+// festgehalten - im Fehlerfall gaebe FreeMem ihn frei, waehrend der Halter
+// ihn noch kennt (Pruefer-Fixture rc/cases3.txt: 'FBuf := P .. FBuf :=
+// nil', bis Charge H4c angeboten). Ein lokaler Name haelt nichts fest.
+procedure TTestRdxTryLocks.Sca156_HandOver;
+var
+  R : string;
+begin
+  AssertRefused(r156, InProc(['  GetMem(P, 100);', '  FBuf := P;', '  Work;',
+    '  FBuf := nil;', '  FreeMem(P, 100);']), 'GetMem',
+    'an FBuf weitergegeben');
+  AssertRefused(r156, InProc(['  GetMem(P, 100);', '  FList.Add(P);',
+    '  Work;', '  FreeMem(P);']), 'GetMem', 'an Add weitergegeben');
+  Assert.AreEqual(Join(['unit u;', 'interface', 'implementation',
+    'procedure P;', 'var', '  Q: Pointer;', 'begin', '  GetMem(P, 100);',
+    '  try', '    Q := P;', '    Work(Q);', '  finally', '    FreeMem(P);',
+    '  end;', 'end;', 'end.']),
+    FixAt(r156, Join(['unit u;', 'interface', 'implementation',
+      'procedure P;', 'var', '  Q: Pointer;', 'begin', '  GetMem(P, 100);',
+      '  Q := P;', '  Work(Q);', '  FreeMem(P);', 'end;', 'end.']), 8,
+      'GetMem', R), R);
+end;
+
+// 'System.' ist die RTL, kein eigener Speichermanager (Gegen-Review H4,
+// Minor 4; bis Charge H4c: 'System.GetMem' "eigener Speichermanager",
+// 'System.FreeMem(P)' als B "zweite Freigabe").
+procedure TTestRdxTryLocks.Sca156_SystemQualified;
+var
+  R : string;
+begin
+  Assert.AreEqual(Wrapped('System.GetMem(P, 10);', 'Work(P);', 'FreeMem(P);'),
+    Fix(r156, Plain('System.GetMem(P, 10);', 'Work(P);', 'FreeMem(P);'),
+      'GetMem', R), R);
+  Assert.AreEqual(Wrapped('P := AllocMem(10);', 'Work(P);',
+    'System.FreeMem(P);'),
+    Fix(r156, Plain('P := AllocMem(10);', 'Work(P);', 'System.FreeMem(P);'),
+      'AllocMem', R), R);
+  // Ein anderer Qualifizierer bleibt ein eigener Speichermanager.
+  AssertRefused(r156, Plain('MM.GetMem(P, 10);', 'Work(P);', 'FreeMem(P);'),
+    'GetMem', 'eigenen Speichermanagers');
 end;
 
 initialization

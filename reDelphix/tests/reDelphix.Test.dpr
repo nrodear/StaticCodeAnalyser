@@ -41,6 +41,9 @@ program reDelphix.Test;
 //                        Baustein B5) auf Text, ohne Parser
 //   * uTestRdxTryLocks - dieselben an Sperren und Puffern SCA109/SCA153/
 //                        SCA156 auf Text, ohne Parser
+//   * uTestRdxTryGates - die Sperren und Formen aus dem Gegen-Review H4
+//                        (Charge H4c: Weitergabe ohne Ausstieg, andere
+//                        Schreibweisen, 'End :=', Einrueckung ...)
 //   * uTestRdxTryFixesDetector - die try/finally-Hilfen gegen die echten
 //                        Detektoren (Fund -> Hilfe -> Fund weg)
 //   * uTestRdxCleanupDetector - dieselben Hilfen gegen die echten
@@ -126,6 +129,7 @@ uses
   uTestRdxCleanupDetector in 'uTestRdxCleanupDetector.pas',
   uTestRdxTryFixes in 'uTestRdxTryFixes.pas',
   uTestRdxTryLocks in 'uTestRdxTryLocks.pas',
+  uTestRdxTryGates in 'uTestRdxTryGates.pas',
   uTestRdxTryFixesDetector in 'uTestRdxTryFixesDetector.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',
   uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas',

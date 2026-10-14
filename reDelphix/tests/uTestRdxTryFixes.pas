@@ -10,15 +10,18 @@ unit uTestRdxTryFixes;
 //          B ohne ';' vor end, A ueber Zeilen, Inline-var als A;
 //   Inhalt - Strukturen im Bereich (if/begin, Schleifen, case, try/finally,
 //          try/except), Exit, Break/Continue in einer inneren Schleife,
-//          umschliessendes try ohne X im Handler, SCA009-Suffix;
+//          umschliessendes try ohne X im Handler, SCA009-Suffix (sagt
+//          nichts ueber den Ort - seit Charge H4c wie ohne, Gegen-Review
+//          H4, Major 1);
 //   Sperren - je eine: Kontext von A, Zeile von A und B, keine Freigabe in
 //          der Liste, zweite bzw. bedingte Freigabe, zweite Zuweisung,
 //          nichts zu schuetzen, Direktive, mehrzeiliger String, Inline-
 //          Deklaration, Marke, goto, asm, Break/Continue nach aussen, Exit
-//          mit Weitergabe, raise X, Handler um den Bereich, Suffix ohne
-//          try/except im Bereich bzw. mit umschliessendem, veraltete Zeile.
-// Sperren (SCA109/SCA153) und Puffer (SCA156): uTestRdxTryLocks; dieselben
-// Hilfen gegen die echten Detektoren: uTestRdxTryFixesDetector (nur Delphi).
+//          mit Weitergabe, raise X, Handler um den Bereich, veraltete Zeile.
+// Sperren (SCA109/SCA153) und Puffer (SCA156): uTestRdxTryLocks; die
+// Sperren aus dem Gegen-Review H4 (Weitergabe ohne Ausstieg, andere
+// Schreibweisen, raise-Ausdruck ...): uTestRdxTryGates; dieselben Hilfen
+// gegen die echten Detektoren: uTestRdxTryFixesDetector (nur Delphi).
 
 interface
 
@@ -318,26 +321,29 @@ end;
 
 procedure TTestRdxTryFixes.Sca009_Suffix;
 var
-  R : string;
+  R, S : string;
 begin
-  // Das try/except der Meldung liegt ganz im Bereich.
+  // Das Suffix sagt nur, dass die METHODE irgendwo ein try/except hat
+  // (uMissingFinally) - der Planer prueft wie ohne (Gegen-Review H4,
+  // Major 1; bis Charge H4c lehnte er die beiden letzten Formen ab). Das
+  // try/except liegt ganz im Bereich:
   Assert.AreEqual(InProc(['  X := TFoo.Create;', '  try', '    try',
     '      X.Load;', '    except', '      Log;', '    end;', '  finally',
     '    X.Free;', '  end;']),
     Fix(InProc(['  X := TFoo.Create;', '  try', '    X.Load;', '  except',
       '    Log;', '  end;', '  X.Free;']), 6, 'X' + SUFFIX, R), R);
-  // Es umschliesst den Bereich - nicht angeboten (Konzept), ohne Suffix
-  // schon (der Handler kennt X nicht).
-  AssertRefused(InProc(['  try', '    X := TFoo.Create;', '    X.Run;',
-    '    X.Free;', '  except', '    Log;', '  end;']), 7, 'X' + SUFFIX,
-    'umschliesst den Bereich');
-  Assert.AreNotEqual('', Fix(InProc(['  try', '    X := TFoo.Create;',
-    '    X.Run;', '    X.Free;', '  except', '    Log;', '  end;']), 7, 'X', R),
-    R);
-  // Es liegt vor dem Bereich - im Bereich keines.
-  AssertRefused(InProc(['  try', '    Foo;', '  except', '    Log;', '  end;',
-    '  X := TFoo.Create;', '  X.Run;', '  X.Free;']), 11, 'X' + SUFFIX,
-    'im Bereich liegt keines');
+  // Es umschliesst den Bereich und nennt X nicht: nach dem Fix laeuft erst
+  // das finally, dann der Handler - richtig.
+  Assert.AreEqual(InProc(['  try', '    X := TFoo.Create;', '    try',
+    '      X.Run;', '    finally', '      X.Free;', '    end;', '  except',
+    '    Log;', '  end;']),
+    Fix(InProc(['  try', '    X := TFoo.Create;', '    X.Run;', '    X.Free;',
+      '  except', '    Log;', '  end;']), 7, 'X' + SUFFIX, R), R);
+  // Es liegt vor dem Bereich: dieselbe Hilfe wie ohne Suffix.
+  S := InProc(['  try', '    Foo;', '  except', '    Log;', '  end;',
+    '  X := TFoo.Create;', '  X.Run;', '  X.Free;']);
+  Assert.AreNotEqual('', Fix(S, 11, 'X' + SUFFIX, R), R);
+  Assert.AreEqual(Fix(S, 11, 'X', R), Fix(S, 11, 'X' + SUFFIX, R), R);
 end;
 
 procedure TTestRdxTryFixes.Sca001_FreedOutsideFinally;

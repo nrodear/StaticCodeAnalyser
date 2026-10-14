@@ -2,13 +2,21 @@ unit uRdxTryFixes;
 
 // reDelphix - Quick-Fixes "try/finally", OHNE ToolsAPI und ohne Parser
 // (Konzept_Editorhilfen_Recherche_2026-10-11, Abschnitt 5 Baustein B5,
-// Abschnitt 6 Charge H4):
+// Abschnitt 6 Charge H4; Gegen-Review H4 in Charge H4c):
 //   SCA009 MissingFinally: 'X := TFoo.Create..;' .. 'X.Free;' (auch
-//          'FreeAndNil(X)', 'X.Destroy') - die Zeilen dazwischen kommen in
-//          den try-Teil, die Freigabe ins finally; ein direkt folgendes
-//          'X := nil;' geht mit. Mit dem Meldungs-Suffix ' (try/except
-//          instead of try/finally)' nur, wenn ein try/except im Bereich
-//          liegt und keines ihn umschliesst.
+//          'FreeAndNil(X)', qualifiziert 'SysUtils.FreeAndNil(X)',
+//          'X.Destroy') - die Zeilen dazwischen kommen in den try-Teil, die
+//          Freigabe ins finally; ein direkt folgendes 'X := nil;' geht mit,
+//          wenn es allein auf seiner Zeile steht bzw. die Zeile von B
+//          beschliesst. Das Meldungs-Suffix ' (try/except instead of
+//          try/finally)' sagt nur, dass die METHODE irgendwo ein try/except
+//          hat (uMissingFinally: HasExcept rekursiv), nichts ueber den Ort -
+//          der Planer liest nur den Namen davor. Bis Charge H4c verlangte er
+//          mit dem Suffix ein try/except im Bereich und keines drumherum;
+//          das war ein Lesefehler des Detektors (Gegen-Review H4, Major 1):
+//          ein umschliessendes try/except, dessen Handler X nicht nennt, ist
+//          nach dem Fix richtig (erst finally, dann der Handler); nennt er
+//          X, sperrt die Handler-Pruefung (EnclosingReason).
 //   SCA001 MemoryLeak: dieselbe Hilfe, nur fuer die Variante
 //          freed-outside-finally - die prueft der Aufrufer (uRdxFixTable,
 //          Feld TLeakFinding.LeakVariant); proven-leak, never-freed und
@@ -16,13 +24,14 @@ unit uRdxTryFixes;
 //   SCA109 LockWithoutTryFinally, SCA153 UnpairedLock: die Sperre (Lock/
 //          UnLock, Enter/Leave, Acquire/Release, BeginWrite/EndWrite,
 //          TMonitor.Enter(O)/TMonitor.Exit(O), EnterCriticalSection(CS)/
-//          LeaveCriticalSection(CS)). Die Freigabe bestimmt der Planer
+//          LeaveCriticalSection(CS)). Die Freigabe B bestimmt der Planer
 //          selbst: derselbe Empfaenger bzw. dasselbe Argument, als Text
 //          ohne Leerraum gleich - SCA153 nimmt jedes 'unlock'/'release' im
 //          200-Zeichen-Fenster, auch das fremder Objekte.
 //   SCA156 GetMemWithoutFreeMem: 'GetMem(P, N);' bzw. 'P := AllocMem(N);'
-//          (auch FPC 'P := GetMem(N);') .. 'FreeMem(P);'; ReallocMem
-//          sperrt (der Puffer bestand schon vorher).
+//          (auch FPC 'P := GetMem(N);', auch 'System.GetMem') ..
+//          'FreeMem(P);'; ReallocMem sperrt (der Puffer bestand schon
+//          vorher).
 //
 // BAUSTEIN B5 (TryFinally): A ist eine ganze Anweisung in einer
 // Anweisungsliste (davor ';', begin, try, finally, except, repeat), B ihre
@@ -36,7 +45,9 @@ unit uRdxTryFixes;
 //     end;
 // try/finally/end in eigenen Zeilen, eingerueckt wie A; die Stufe ist die
 // der Liste (Einrueckung von A gegen die ihres Oeffners), sonst zwei
-// Leerzeichen bzw. ein Tab. Leerzeilen bleiben leer.
+// Leerzeichen bzw. ein Tab - sie kommt hinter den Leerraum, den eine Zeile
+// mit A teilt (gemischte Einrueckung bleibt in ihrer Art). Leerzeilen
+// bleiben leer.
 //
 // WIRKUNG (alle gekennzeichnet, Entscheid E2 - Strg+Alt+F laesst sie aus):
 // B laeuft danach auch bei einer Ausnahme zwischen A und B - das ist der
@@ -51,6 +62,12 @@ unit uRdxTryFixes;
 //     anderen Zweig oder Block), eine zweite bzw. bedingte Freigabe oder
 //     eine zweite Zuweisung/Sperre im Bereich (Doppelfreigabe), nichts
 //     zwischen A und B (es gaebe nichts zu schuetzen);
+//   * eine Freigabe in ANDERER Schreibweise im Bereich (Gegen-Review H4,
+//     Minor 1 - nach dem Fix liefe sie doppelt): 'Self.FLock.Leave' bzw.
+//     'TFoo(FLock).Leave' gegen 'FLock', Leave/Release fuer Enter/Acquire
+//     (TCriticalSection kennt beide), 'LeaveCriticalSection(Self.FCS)',
+//     'TObject(X).Free', 'Self.X.Free', 'FreeMem(PByte(P))'; B selbst muss
+//     genau so heissen wie A;
 //   * Direktive, Marke/goto (ein Sprung in einen try-Block uebersetzt
 //     nicht), Inline-var/const auf der Ebene von A (ihr Gueltigkeitsbereich
 //     schrumpfte auf den try-Block), mehrzeiliges '''-Literal (Einruecken
@@ -58,16 +75,34 @@ unit uRdxTryFixes;
 //   * Break/Continue, deren Schleife den Bereich umschliesst (B liefe dort
 //     jetzt mit - ein Objekt, das hinter der Schleife noch gebraucht wird,
 //     waere frei); Exit bei einer Sperre (Konzept: Ablehnung); Exit bei
-//     einem Objekt bzw. Puffer, der im Bereich weitergegeben wird (der
-//     Ausstieg koennte den Besitz uebergeben haben); 'raise X';
+//     einem Objekt bzw. Puffer, der im Bereich irgendwie weitergegeben wird
+//     (der Ausstieg koennte den Besitz uebergeben haben); X in einem
+//     raise-Ausdruck ('raise X', 'raise TObject(X)', 'raise X at ..') oder
+//     als Argument von RaiseOuterException/ThrowOuterException;
+//   * Weitergabe auch OHNE Ausstieg (Objekt, Puffer; Gegen-Review H4,
+//     Blocker 1 - im Fehlerfall gaebe finally X frei, waehrend ein Halter es
+//     noch kennt: aus einem Leck wuerde ein Use-after-free): X als direktes
+//     Argument eines Aufrufs, dessen Name mit add/insert/push/enqueue/
+//     register/attach/subscribe/put beginnt (ausser InsertComponent - der
+//     Destruktor meldet sich beim Owner ab - und AddStrings, das nur den
+//     Inhalt kopiert), auch durch eine Typumwandlung hindurch
+//     ('List.Add(TObject(X))'); X als ganze rechte Seite einer Zuweisung an
+//     etwas anderes als eine lokale Variable der Routine (Feld, Property,
+//     Element, Result, globale Variable, Parameter); ein Methodenzeiger
+//     'X.M' an ein Ereignis (Ziel 'On..'/'FOn..'); '@X' bzw. '@X.M'.
+//     Bewusst eng (Entscheid H4c): die breite Fassung - jedes Argument,
+//     jede Zuweisung - kostete im Referenzkorpus 372 von 909
+//     Objekt-Angeboten;
 //   * die Variable (bzw. die Freigabe der Sperre) im except-/finally-Teil
 //     eines try, das A umschliesst - nach dem Fix liefe dort eine zweite
 //     Freigabe bzw. ein Zugriff auf ein freigegebenes Objekt;
-//   * Puffer: Inc/Dec/GetMem/ReallocMem bzw. '@' auf P im Bereich (FreeMem
+//   * Puffer: Inc/Dec/GetMem/ReallocMem auf P - auch durch eine
+//     Typumwandlung ('Inc(PByte(P), 4)') - bzw. '@P' im Bereich (FreeMem
 //     gaebe einen anderen Zeiger frei).
-// Eine Weitergabe ohne Ausstieg (Liste.Add(X) .. Liste.Remove(X); X.Free)
-// sieht der Planer nicht als Sperre - im Fehlerfall gaebe finally X frei,
-// waehrend die Liste es noch kennt (Restrisiko, README).
+// Was bleibt (README, Restrisiken): eine Weitergabe ueber einen Alias
+// ('Y := X; List.Add(Y)'), an einen Konstruktor, der den Besitz uebernimmt
+// ('TReader.Create(X)'), an einen Aufruf anderen Namens ('Store(X)') oder
+// als Methodenzeiger im Argument ('Subscribe(X.Handler)').
 
 interface
 
@@ -93,8 +128,9 @@ type
   // auch im FPC-Pruefstand).
   TRdxTryFixes = class
   public
-    // SCA009: die Erzeugung von X (Meldung: 'X' bzw. 'X (try/except instead
-    // of try/finally)') auf ALine und ihre Freigabe in try/finally setzen.
+    // SCA009: die Erzeugung von X (Meldung: 'X', auch mit dem Suffix
+    // ' (try/except instead of try/finally)' - es sagt nichts ueber den
+    // Ort, s. Kopf) auf ALine und ihre Freigabe in try/finally setzen.
     class function MissingFinally(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out APlan: TRdxTryPlan;
       out AReason: string): Boolean; static;
@@ -133,11 +169,11 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxStructFixes;   // RangeText, CommentInRange
+  uRdxStructFixes,   // RangeText, CommentInRange, CanAppendLine
+  uRdxRoutineFixes;  // ReadRoutine (lokale Variablen der Routine um A)
 
 const
   SPAN_TRY = 'try';
-  KEY_SUFFIX   = ' (try/except instead of try/finally)';
   KEY_LOCK109  = 'Lock acquired (';
   KEY_LOCK109E = ') but no enclosing';
   KEY_LOCK153  = 'leaks the lock (';
@@ -155,6 +191,7 @@ const
     'initialization', 'finalization', 'unit', 'program', 'library');
   // Freigaben eines Objekts ('X.Free') bzw. eines Puffers ('FreeMem(P)').
   FREE_METHODS: array[0..2] of string = ('free', 'destroy', 'disposeof');
+  FREE_AND_NIL = 'freeandnil';
   FREEMEM_WORDS: array[0..1] of string = ('freemem', 'freememandnil');
   // Sie veraendern P (Puffer): FreeMem gaebe danach einen anderen Zeiger
   // frei.
@@ -162,6 +199,42 @@ const
     'reallocmem');
   // Hinter X: ein Member-Zugriff, keine Weitergabe von X.
   MEMBER_SUFFIXES: array[0..2] of string = ('.', '[', '^');
+  // Davor bzw. dahinter: ein direktes Argument ('F(X)', 'F(A, X, B)').
+  ARG_STARTS: array[0..1] of string = ('(', ',');
+  ARG_ENDS: array[0..1] of string = (',', ')');
+  // Weitergabe ohne Ausstieg (Blocker 1, s. Kopf): ein Aufruf, dessen Name
+  // so beginnt, haelt ein direktes Argument fest ...
+  STORE_PREFIXES: array[0..7] of string = ('add', 'insert', 'push',
+    'enqueue', 'register', 'attach', 'subscribe', 'put');
+  // ... ausser diesen: InsertComponent - TComponent.Destroy meldet sich
+  // beim Owner ab (RemoveComponent), Free im finally laesst dort keinen
+  // Verweis zurueck; AddStrings kopiert nur Strings und Objects von X.
+  STORE_HARMLESS: array[0..1] of string = ('insertcomponent', 'addstrings');
+  // Sie werfen ihr Argument als Ausnahme (wie 'raise X').
+  RAISE_CALLS: array[0..1] of string = ('raiseouterexception',
+    'throwouterexception');
+  // Eine Ebene Typumwandlung ('List.Add(TObject(X))'): X, dann der Cast.
+  MAX_ARG_LEVELS = 2;
+  // Typumwandlungen ohne T/P/I-Namen (IsCastName).
+  CAST_WORDS: array[0..6] of string = ('pointer', 'nativeint', 'nativeuint',
+    'integer', 'cardinal', 'int64', 'uint64');
+  // So viele Token liest der Planer rueckwaerts bis zum Anfang des Ziels
+  // einer Zuweisung - laenger heisst: kein Ziel, das er sicher liest.
+  MAX_TARGET_TOKENS = 64;
+  // Abschnitte im Deklarationsteil einer Routine: nur var deklariert
+  // Variablen; davor bzw. dahinter steht ein deklarierter Name ('var A,
+  // B: T;').
+  VAR_SECTIONS: array[0..1] of string = ('var', 'threadvar');
+  SECTION_WORDS: array[0..5] of string = ('var', 'threadvar', 'const', 'type',
+    'label', 'resourcestring');
+  DECL_PREV: array[0..3] of string = ('var', 'threadvar', ';', ',');
+  DECL_NEXT: array[0..1] of string = (':', ',');
+  // Ein Ereignis heisst 'On..' bzw. als Feld 'FOn..' (Ziel eines
+  // Methodenzeigers 'X.M').
+  EVENT_PREFIX = 'on';
+  EVENT_FIELD  = 'FOn';
+  SELF_WORD = 'self';
+  SELF_DOT  = 'self.';
   // Schleifenkoepfe bis zum do.
   LOOP_HEADS: array[0..1] of string = ('for', 'while');
   INLINE_DECLS: array[0..1] of string = ('var', 'const');
@@ -176,8 +249,13 @@ const
   // (IndentStep): eine ausgerichtete Zeile ('1: begin' und darunter weit
   // eingerueckt) ist keine Stufe.
   MAX_STEP = 4;
+  // Die zweite Haelfte eines UTF-16-Surrogatpaars (TryEdit).
+  LOW_SURROGATE_FIRST = $DC00;
+  LOW_SURROGATE_LAST  = $DFFF;
   R_MOVED = 'Zeile verschoben? Datei neu pruefen';
   R_BY_HAND = 'von Hand pruefen';
+  R_HELD = 'bei einer Ausnahme gaebe finally es frei, waehrend der Halter '
+    + 'es noch kennt; von Hand pruefen';
 
 type
   TRdxPairKind = (pkObject, pkLock, pkBuffer);
@@ -218,7 +296,6 @@ type
     What   : string;         // die Freigabe fuer die Gruende ('X.Free', 'FLock.Leave')
     First  : TRdxToken;      // erstes Token von A
     Semi   : TRdxToken;      // das ';' hinter A
-    Suffix : Boolean;        // SCA009: '(try/except instead of try/finally)'
   end;
 
   // Der Lauf von A nach B (ScanSpan): Klammern, Bloecke und Schleifen, was
@@ -232,9 +309,8 @@ type
     NextBegin  : Char;             // Art des naechsten begin (BLOCK_LOOP hinter do)
     Singles    : TArray<Integer>;  // Tiefen offener Schleifenrumpfe ohne begin
     HasCode    : Boolean;
-    HasExcept  : Boolean;          // ein try/except im Bereich
     ExitLine   : Integer;          // erstes Exit, 0 = keins
-    EscapeLine : Integer;          // erste Weitergabe von X, 0 = keine
+    Escape     : TRdxToken;        // erste Weitergabe von X (fuer Exit); Low = '' ohne
     B          : TRdxToken;        // erstes Token der Freigabe
     BLast      : TRdxToken;        // ihr letztes (';' bzw. 'X := nil;')
     Reason     : string;
@@ -264,23 +340,17 @@ const
   // Dieselben fuer die Gruende, wie Delphi sie schreibt.
   RELEASE_CAPS: array[0..3] of string = ('UnLock', 'Leave', 'Release',
     'EndWrite');
+  // Familie je Index von LOCK_PAIRS: Enter/Leave und Acquire/Release sind
+  // bei TCriticalSection dieselbe Sperre (SameLockLoose).
+  LOCK_FAMILY: array[0..3] of Integer = (0, 1, 1, 2);
   LOCK_CALLS: array[TRdxLockSide] of string = ('entercriticalsection',
     'leavecriticalsection');
   MONITOR_CALLS: array[TRdxLockSide] of string = ('enter', 'exit');
+  MONITOR_TRY = 'tryenter';
   // SCA109 meldet nur diese Methoden (uLockWithoutTryFinally).
   METHODS_109: array[0..2] of string = ('enter', 'acquire', 'beginwrite');
 
 { ---- kleine Helfer ---- }
-
-function TokBefore(const A, B: TRdxToken): Boolean;
-begin
-  Result := (A.Line < B.Line) or ((A.Line = B.Line) and (A.Col < B.Col));
-end;
-
-function TokText(AMap: TRdxCodeMap; const T: TRdxToken): string;
-begin
-  Result := Copy(AMap.Raw(T.Line), T.Col, T.Len);
-end;
 
 // Ohne Leerraum und klein - wie Empfaenger und Argumente verglichen werden.
 // Zeichen fuer Zeichen, ohne Verkettung in der Schleife (SCA110).
@@ -320,8 +390,7 @@ begin
     AFrom.Line, AFrom.Col, ATo.Line, ATo.EndCol)), #10, ' ', [rfReplaceAll]));
 end;
 
-// Der Text zwischen AOpen und ACloser (dem ersten dahinter bzw. bei
-// ALastCloser dem letzten der Meldung); '' ohne.
+// Der Text zwischen AOpen und dem ersten ACloser dahinter; '' ohne.
 function MessagePart(const AMessage, AOpen, ACloser: string): string;
 var
   P, Q : Integer;
@@ -350,8 +419,9 @@ begin
     Result := Copy(AMessage, P, Q - P);
 end;
 
-// Das erste Wort der Meldung (SCA009/SCA001: der Variablenname, auch vor
-// ' (try/except ...)' und ' - Rueckgabewert'); '' ohne.
+// Das erste Wort der Meldung (SCA009/SCA001: der Variablenname - so faellt
+// das Suffix ' (try/except ...)' weg, s. Kopf -, auch vor ' -
+// Rueckgabewert'); '' ohne.
 function FirstWordOf(const AMessage: string): string;
 var
   i : Integer;
@@ -371,24 +441,18 @@ begin
   Result := T.IsWord and (APrev.Low <> '.') and SameIdent(T.Low, AKey);
 end;
 
-function IsListEnd(const T, APrev: TRdxToken): Boolean;
+// end/until/except/finally als Schluesselwort (IsKeywordAt: 'End := 1' ist
+// ein benanntes Argument).
+function IsListEnd(AMap: TRdxCodeMap; const T, APrev: TRdxToken): Boolean;
 begin
-  Result := IsKeywordAfter(T, APrev) and InList(T.Low, LIST_ENDS);
+  Result := IsKeywordAt(AMap, T, APrev) and InList(T.Low, LIST_ENDS);
 end;
 
-// Hinter (ALine, ACol) nur Leerraum oder Kommentar, und die Folgezeile
-// beginnt nicht in einem Kommentar oder mehrzeiligen String - dort darf
-// eine Zeile hinein (try bzw. end;).
-function LineEndsAfter(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
-var
-  L  : string;
-  Co : Integer;
+// Endet an N (APrev davor) die Anweisung - ';', das Listenende oder else?
+function EndsStatement(AMap: TRdxCodeMap; const N, APrev: TRdxToken): Boolean;
 begin
-  L := AMap.Raw(ALine);
-  for Co := ACol + 1 to Length(L) do
-    if (AMap.ClassAt(ALine, Co) <> 'k') and not IsBlank(L[Co]) then
-      Exit(False);
-  Result := not AMap.StartsInside(ALine + 1);
+  Result := (N.Low = ';') or (IsKeywordAt(AMap, N, APrev)
+    and (InList(N.Low, LIST_ENDS) or (N.Low = 'else')));
 end;
 
 // Steht T als erstes auf seiner Zeile (davor nur Leerraum)?
@@ -409,34 +473,78 @@ begin
     Result := C;
 end;
 
-// Das Ende der Anweisung ab AFrom: das ';' ausserhalb von Klammern und
-// Bloecken (eine anonyme Methode im Argument traegt eigene) oder, steht
-// keines davor, das Listenende (end, until, except, finally, else); Low =
-// '' am Dateiende.
+// Das letzte Glied eines qualifizierten Namens ab T ('SysUtils.FreeAndNil'
+// -> 'FreeAndNil', 'Windows.EnterCriticalSection'); T selbst, wenn kein
+// '.' folgt.
+function QualifiedEnd(AMap: TRdxCodeMap; const T: TRdxToken): TRdxToken;
+var
+  D, N : TRdxToken;
+begin
+  Result := T;
+  if not T.IsWord then Exit;
+  D := After(AMap, Result);
+  N := After(AMap, D);
+  while (D.Low = '.') and N.IsWord do
+  begin
+    Result := N;
+    D := After(AMap, Result);
+    N := After(AMap, D);
+  end;
+end;
+
+// Rueckwaerts ab AFrom (einschliesslich) die erste '(' bzw. '[', die bis
+// AFrom nicht geschlossen ist; Low = '' ohne (';' oder Dateianfang davor).
+function UnmatchedOpener(AMap: TRdxCodeMap; const AFrom: TRdxToken): TRdxToken;
+var
+  T     : TRdxToken;
+  Depth : Integer;
+begin
+  Result := Default(TRdxToken);
+  Depth := 0;
+  T := AFrom;
+  while (T.Low <> '') and (T.Low <> ';') do
+  begin
+    if (T.Low = ')') or (T.Low = ']') then
+      Inc(Depth)
+    else if (T.Low = '(') or (T.Low = '[') then
+    begin
+      if Depth = 0 then
+        Exit(T);
+      Dec(Depth);
+    end;
+    T := Before(AMap, T);
+  end;
+end;
+
 // Ein Token von StatementStop: Klammer- und Blocktiefe fortschreiben; True,
 // wo die Anweisung endet.
-function StopStep(const T, APrev: TRdxToken; var AParen, ADepth: Integer): Boolean;
+function StopStep(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
+  var AParen, ADepth: Integer): Boolean;
 var
-  Word : Boolean;
+  IsKw : Boolean;
 begin
   Result := False;
-  Word := IsKeywordAfter(T, APrev);
+  IsKw := IsKeywordAt(AMap, T, APrev);
   if (T.Low = '(') or (T.Low = '[') then
     Inc(AParen)
   else if (T.Low = ')') or (T.Low = ']') then
     Dec(AParen)
-  else if Word and IsEndOpener(T.Low) then
+  else if IsKw and IsEndOpener(T.Low) then
     Inc(ADepth)
   else if (AParen > 0) or (ADepth > 0) then
   begin
-    if Word and (T.Low = 'end') then
+    if IsKw and (T.Low = 'end') then
       Dec(ADepth);
   end
   else
     Result := (T.Low = ';')
-      or (Word and (InList(T.Low, LIST_ENDS) or (T.Low = 'else')));
+      or (IsKw and (InList(T.Low, LIST_ENDS) or (T.Low = 'else')));
 end;
 
+// Das Ende der Anweisung ab AFrom: das ';' ausserhalb von Klammern und
+// Bloecken (eine anonyme Methode im Argument traegt eigene) oder, steht
+// keines davor, das Listenende (end, until, except, finally, else); Low =
+// '' am Dateiende.
 function StatementStop(AMap: TRdxCodeMap; const AFrom: TRdxToken): TRdxToken;
 var
   T, P         : TRdxToken;
@@ -448,7 +556,7 @@ begin
   T := AFrom;
   while T.Low <> '' do
   begin
-    if StopStep(T, P, Paren, Depth) then
+    if StopStep(AMap, T, P, Paren, Depth) then
       Exit(T);
     P := T;
     T := After(AMap, T);
@@ -572,9 +680,7 @@ function CallAt(AMap: TRdxCodeMap; const T: TRdxToken; ASide: TRdxLockSide;
 var
   F, O : TRdxToken;
 begin
-  F := T;
-  while (After(AMap, F).Low = '.') and After(AMap, After(AMap, F)).IsWord do
-    F := After(AMap, After(AMap, F));
+  F := QualifiedEnd(AMap, T);
   O := After(AMap, F);
   Result := False;
   if (F.Low <> LOCK_CALLS[ASide]) or (O.Low <> '(') then Exit;
@@ -617,19 +723,110 @@ begin
     or CallAt(AMap, T, ASide, S) or MethodAt(AMap, T, ASide, S));
 end;
 
-// Dieselbe Sperre wie A (Form, Schluessel, Methode)?
+// Dieselbe Sperre wie A (Form, Schluessel, Methode)? So genau muss B zu A
+// passen.
 function SameLock(const A, B: TRdxLockSite): Boolean;
 begin
   Result := (A.Form = B.Form) and (A.Key = B.Key)
     and ((A.Form <> lfMethod) or (A.Meth = B.Meth));
 end;
 
-// Ab T die Freigabe von A? AHit.KeyTok: das Token mit dem Namen (Objekt,
-// Puffer), AHit.Last: das letzte Token des Aufrufs.
+// 'tfoo(x)' -> 'x': der ganze Schluessel ist ein Name ohne Punkt mit EINER
+// Klammer darum und etwas darin; sonst unveraendert. Auch ein Aufruf
+// 'getlock(i)' wird so zu 'i' - ein Treffer zu viel sperrt nur.
+function Uncast(const AKey: string): string;
+var
+  i, Open, Depth : Integer;
+begin
+  Result := AKey;
+  Open := Pos('(', AKey);
+  if (Open < 2) or (Open >= Length(AKey) - 1) or (AKey[Length(AKey)] <> ')')
+     or not IsIdentStart(AKey[1]) then
+    Exit;
+  for i := 2 to Open - 1 do
+    if not IsIdentChar(AKey[i]) then
+      Exit;
+  Depth := 0;
+  for i := Open to Length(AKey) - 1 do
+  begin
+    if AKey[i] = '(' then
+      Inc(Depth)
+    else if AKey[i] = ')' then
+      Dec(Depth);
+    if Depth = 0 then
+      Exit;   // die Klammer schliesst vor dem Ende - kein Cast
+  end;
+  Result := Copy(AKey, Open + 1, Length(AKey) - Open - 1);
+end;
+
+// Ein Schluessel ohne 'self.' davor und ohne Typumwandlung drumherum
+// ('tfoo(self.flock)' -> 'flock', 'self' -> '' wie die eigene Methode) -
+// so vergleichen die Gates eine Freigabe in anderer Schreibweise
+// (Gegen-Review H4, Minor 1).
+function NormKey(const AKey: string): string;
+var
+  OldLen : Integer;
+begin
+  Result := AKey;
+  repeat
+    OldLen := Length(Result);
+    if Copy(Result, 1, Length(SELF_DOT)) = SELF_DOT then
+      Delete(Result, 1, Length(SELF_DOT));
+    Result := Uncast(Result);
+  until Length(Result) = OldLen;
+  if Result = SELF_WORD then
+    Result := '';
+end;
+
+// Dieselbe Sperre in irgendeiner Schreibweise: Schluessel normalisiert
+// (NormKey), Enter/Acquire bzw. Leave/Release als eine Familie
+// (LOCK_FAMILY) - fuer die Gates, nicht fuer B.
+function SameLockLoose(const A, B: TRdxLockSite): Boolean;
+begin
+  Result := (A.Form = B.Form) and (NormKey(A.Key) = NormKey(B.Key))
+    and ((A.Form <> lfMethod) or (LOCK_FAMILY[A.Meth] = LOCK_FAMILY[B.Meth]));
+end;
+
+// Ab T ein Verweis auf die Variable AKey: 'X' oder 'Self.X'; ALast = das
+// Token mit dem Namen.
+function PlainRefAt(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
+  const AKey: string; out ALast: TRdxToken): Boolean;
+var
+  D : TRdxToken;
+begin
+  ALast := T;
+  if MentionsKey(T, APrev, AKey) then Exit(True);
+  D := After(AMap, T);
+  Result := (T.Low = SELF_WORD) and (APrev.Low <> '.') and (D.Low = '.');
+  if not Result then Exit;
+  ALast := After(AMap, D);
+  Result := ALast.IsWord and SameIdent(ALast.Low, AKey);
+end;
+
+// Wie PlainRefAt, auch in einer Typumwandlung 'TFoo(X)' bzw.
+// 'TFoo(Self.X)'; ALast = das Token mit dem Namen bzw. die ')'.
+function RefAt(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
+  const AKey: string; out ALast: TRdxToken): Boolean;
+var
+  O, V, C : TRdxToken;
+begin
+  ALast := T;
+  if APrev.Low = '.' then Exit(False);
+  Result := PlainRefAt(AMap, T, APrev, AKey, ALast);
+  if Result or not T.IsWord then Exit;
+  O := After(AMap, T);
+  V := After(AMap, O);
+  if (O.Low <> '(') or not PlainRefAt(AMap, V, O, AKey, C) then Exit;
+  ALast := After(AMap, C);
+  Result := ALast.Low = ')';
+end;
+
+// Ab T die Freigabe B von X? AHit.KeyTok: das Token mit dem Namen,
+// AHit.Last: das letzte Token des Aufrufs.
 function ObjectReleaseAt(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
   const AKey: string; out AHit: TRdxReleaseHit): Boolean;
 var
-  D, M, O, V, C : TRdxToken;
+  D, M, F, O, V, C : TRdxToken;
 begin
   Result := False;
   AHit := Default(TRdxReleaseHit);
@@ -642,9 +839,11 @@ begin
     AHit.Last := EmptyParensAfter(AMap, M);
     Exit(True);
   end;
-  // Auch qualifiziert ('SysUtils.FreeAndNil(X)').
-  if (T.Low <> 'freeandnil') or not T.IsWord then Exit;
-  O := After(AMap, T);
+  // Auch qualifiziert ('SysUtils.FreeAndNil(X)') - ab dem ersten Glied, so
+  // ist B eine ganze Anweisung (Gegen-Review H4, Minor 4).
+  F := QualifiedEnd(AMap, T);
+  if F.Low <> FREE_AND_NIL then Exit;
+  O := After(AMap, F);
   V := After(AMap, O);
   C := After(AMap, V);
   Result := (O.Low = '(') and MentionsKey(V, O, AKey) and (C.Low = ')');
@@ -652,17 +851,19 @@ begin
   AHit.Last := C;
 end;
 
-function BufferReleaseAt(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
+// Ab T die Freigabe B von P ('FreeMem(P)', 'FreeMem(P, N)', auch
+// qualifiziert 'System.FreeMem(P)').
+function BufferReleaseAt(AMap: TRdxCodeMap; const T: TRdxToken;
   const AKey: string; out AHit: TRdxReleaseHit): Boolean;
 var
-  O, N : TRdxToken;
+  F, O, N : TRdxToken;
 begin
   Result := False;
   AHit := Default(TRdxReleaseHit);
-  // Auch qualifiziert ('System.FreeMem(P)').
-  if not InList(T.Low, FREEMEM_WORDS) or not T.IsWord then
+  F := QualifiedEnd(AMap, T);
+  if not InList(F.Low, FREEMEM_WORDS) then
     Exit;
-  O := After(AMap, T);
+  O := After(AMap, F);
   AHit.KeyTok := After(AMap, O);
   N := After(AMap, AHit.KeyTok);
   if (O.Low <> '(') or not MentionsKey(AHit.KeyTok, O, AKey)
@@ -683,13 +884,49 @@ begin
     pkObject:
       Result := ObjectReleaseAt(AMap, T, APrev, APair.Key, AHit);
     pkBuffer:
-      Result := BufferReleaseAt(AMap, T, APrev, APair.Key, AHit);
+      Result := BufferReleaseAt(AMap, T, APair.Key, AHit);
   else
     Result := (APrev.Low <> '.') and LockSiteAt(AMap, T, sdRelease, S)
-      and (S.Form = APair.Lock.Form) and (S.Key = APair.Lock.Key)
-      and ((S.Form <> lfMethod) or (S.Meth = APair.Lock.Meth));
+      and SameLock(S, APair.Lock);
     AHit.Last := S.Last;
   end;
+end;
+
+// Ab T eine Freigabe von X bzw. P in irgendeiner Schreibweise:
+// 'TObject(X).Free', 'Self.X.Destroy', 'FreeAndNil(Self.X)',
+// 'FreeMem(PByte(P))' - fuer die Gates; B selbst liest ReleaseAt.
+function AnyVarReleaseAt(AMap: TRdxCodeMap; const APair: TRdxPair;
+  const T, APrev: TRdxToken): Boolean;
+var
+  F, O, Last : TRdxToken;
+begin
+  Result := False;
+  if (APair.Kind = pkObject) and RefAt(AMap, T, APrev, APair.Key, Last) then
+  begin
+    O := After(AMap, Last);
+    Result := (O.Low = '.') and InList(After(AMap, O).Low, FREE_METHODS);
+  end;
+  if Result or (APrev.Low = '.') then Exit;
+  F := QualifiedEnd(AMap, T);
+  if ((APair.Kind = pkObject) and (F.Low <> FREE_AND_NIL))
+     or ((APair.Kind = pkBuffer) and not InList(F.Low, FREEMEM_WORDS)) then
+    Exit;
+  O := After(AMap, F);
+  Result := (O.Low = '(') and RefAt(AMap, After(AMap, O), O, APair.Key, Last)
+    and InList(After(AMap, Last).Low, ARG_ENDS);
+end;
+
+// Dasselbe fuer die Sperre: derselbe Schluessel und dieselbe Familie
+// (SameLockLoose).
+function AnyReleaseAt(AMap: TRdxCodeMap; const APair: TRdxPair;
+  const T, APrev: TRdxToken): Boolean;
+var
+  S : TRdxLockSite;
+begin
+  if APair.Kind <> pkLock then
+    Exit(AnyVarReleaseAt(AMap, APair, T, APrev));
+  Result := (APrev.Low <> '.') and LockSiteAt(AMap, T, sdRelease, S)
+    and SameLockLoose(S, APair.Lock);
 end;
 
 { ---- TRdxSpan ---- }
@@ -745,6 +982,321 @@ begin
     Result := Kinds[Length(Kinds)];
 end;
 
+{ ---- Die Routine um A: lokale Variablen (Weitergabe-Sperre) ---- }
+
+// Die innerste Routine, deren Rumpf AAt enthaelt - rueckwaerts bis zu
+// ihrem Kopf, Grenzen per ReadRoutine (lokale Routinen davor enthalten AAt
+// nicht und werden uebergangen). False ohne.
+function RoutineAround(AMap: TRdxCodeMap; const AAt: TRdxToken;
+  out ARoutine: TRdxRoutine): Boolean;
+var
+  T, P : TRdxToken;
+begin
+  ARoutine := Default(TRdxRoutine);
+  T := Before(AMap, AAt);
+  while T.Low <> '' do
+  begin
+    P := Before(AMap, T);
+    if IsRoutineHeadAfter(T, P)
+       and (TRdxRoutineFixes.ReadRoutine(AMap, T, ARoutine) = '')
+       and (ARoutine.Body.Low <> '') and TokBefore(ARoutine.Body, AAt)
+       and TokBefore(AAt, ARoutine.EndTok) then
+      Exit(True);
+    if IsKeywordAt(AMap, T, P) and InList(T.Low, UNIT_BOUNDS) then
+      Break;
+    T := P;
+  end;
+  Result := False;
+end;
+
+// Wird an T (P davor) der Name AName deklariert ('var A, B: T;' - davor
+// var, ';' bzw. ',', dahinter ':' bzw. ',')?
+function DeclaresName(AMap: TRdxCodeMap; const T, P: TRdxToken;
+  const AName: string): Boolean;
+begin
+  Result := SameIdent(T.Low, AName) and InList(P.Low, DECL_PREV)
+    and InList(After(AMap, T).Low, DECL_NEXT);
+end;
+
+// Eine lokale Routine ab ihrem Kopf T ueberspringen: T wird ihr letztes
+// ';'. False, wenn ihre Grenzen nicht sicher sind.
+function SkipLocalRoutine(AMap: TRdxCodeMap; var T: TRdxToken): Boolean;
+var
+  Local : TRdxRoutine;
+begin
+  Result := TRdxRoutineFixes.ReadRoutine(AMap, T, Local) = '';
+  if Result then
+    T := Local.Last;
+end;
+
+// AName im var-Abschnitt des Deklarationsteils von ARoutine (zwischen Kopf
+// und Rumpf; lokale Routinen - ihre Variablen gehoeren nicht hierher -
+// uebersprungen)?
+function VarInSections(AMap: TRdxCodeMap; const ARoutine: TRdxRoutine;
+  const AName: string): Boolean;
+var
+  T, P  : TRdxToken;
+  InVar : Boolean;
+begin
+  Result := False;
+  InVar := False;
+  P := ARoutine.HeaderEnd;
+  T := After(AMap, P);
+  while (T.Low <> '') and TokBefore(T, ARoutine.Body) do
+  begin
+    if IsRoutineHeadAfter(T, P) then
+    begin
+      if not SkipLocalRoutine(AMap, T) then
+        Exit;
+      InVar := False;
+    end
+    else if IsKeywordAt(AMap, T, P) and InList(T.Low, SECTION_WORDS) then
+      InVar := InList(T.Low, VAR_SECTIONS)
+    else if InVar and DeclaresName(AMap, T, P, AName) then
+      Exit(True);
+    P := T;
+    T := After(AMap, T);
+  end;
+end;
+
+// AName als Inline-var ('var A, B: T' bzw. 'var A := ..') im Rumpf ab
+// ABody vor AAt?
+function InlineVarBefore(AMap: TRdxCodeMap; const ABody, AAt: TRdxToken;
+  const AName: string): Boolean;
+var
+  T, P, N : TRdxToken;
+begin
+  Result := False;
+  P := ABody;
+  T := After(AMap, ABody);
+  while (T.Low <> '') and TokBefore(T, AAt) do
+  begin
+    if (T.Low = 'var') and IsKeywordAt(AMap, T, P) then
+    begin
+      N := After(AMap, T);
+      while N.IsWord do
+      begin
+        if SameIdent(N.Low, AName) then
+          Exit(True);
+        if After(AMap, N).Low <> ',' then
+          Break;
+        N := After(AMap, After(AMap, N));
+      end;
+    end;
+    P := T;
+    T := After(AMap, T);
+  end;
+end;
+
+// Ist AName eine lokale Variable der Routine um AAt (var-Abschnitt oder
+// Inline-var davor)? Parameter zaehlen nicht (NonLocalTarget).
+function IsLocalVar(AMap: TRdxCodeMap; const AAt: TRdxToken;
+  const AName: string): Boolean;
+var
+  R : TRdxRoutine;
+begin
+  Result := RoutineAround(AMap, AAt, R) and (VarInSections(AMap, R, AName)
+    or InlineVarBefore(AMap, R.Body, AAt, AName));
+end;
+
+// Beginnt die Anweisung mit dem ':=' AAssign mit einem Inline-'var'
+// ('var Y := X', 'var Y: TFoo := X')? Die Deklaration ist lokal.
+function InlineDeclBefore(AMap: TRdxCodeMap; const AAssign: TRdxToken): Boolean;
+var
+  T, P : TRdxToken;
+  n    : Integer;
+begin
+  Result := False;
+  T := Before(AMap, AAssign);
+  for n := 1 to MAX_TARGET_TOKENS do
+  begin
+    if (T.Low = '') or InList(T.Low, LIST_PREV) or InList(T.Low, BRANCH_WORDS) then
+      Exit;
+    P := Before(AMap, T);
+    if (T.Low = 'var') and IsKeywordAt(AMap, T, P) then
+      Exit(True);
+    T := P;
+  end;
+end;
+
+// Das erste Token des Ziels vor AAssign (':='): rueckwaerts ueber Namen,
+// '.', '^' und Klammern ('Items.Objects[I]', 'P^.Next', 'F(x).Y'); APlain
+// = ein Name allein. Low = '' ohne lesbares Ziel.
+function TargetStart(AMap: TRdxCodeMap; const AAssign: TRdxToken;
+  out APlain: Boolean): TRdxToken;
+var
+  T, P : TRdxToken;
+  n    : Integer;
+begin
+  Result := Default(TRdxToken);
+  APlain := True;
+  T := Before(AMap, AAssign);
+  for n := 1 to MAX_TARGET_TOKENS do
+  begin
+    if (T.Low = ')') or (T.Low = ']') then
+      T := Before(AMap, UnmatchedOpener(AMap, Before(AMap, T)))
+    else if T.Low = '^' then
+      T := Before(AMap, T)
+    else if T.IsWord then
+    begin
+      P := Before(AMap, T);
+      if P.Low <> '.' then
+        Exit(T);
+      T := Before(AMap, P);
+    end
+    else
+      Exit;
+    APlain := False;
+  end;
+end;
+
+// Das Ziel der Zuweisung mit dem ':=' AAssign, wenn es keine lokale
+// Variable der Routine um AAt ist - Feld, Property, Element, Result,
+// globale Variable, Parameter (lieber eine Sperre zu viel: ein var-/out-
+// Parameter gaebe X an den Aufrufer); '' fuer eine lokale.
+function NonLocalTarget(AMap: TRdxCodeMap; const AAssign, AAt: TRdxToken): string;
+var
+  First : TRdxToken;
+  Plain : Boolean;
+begin
+  Result := '';
+  if InlineDeclBefore(AMap, AAssign) then Exit;
+  First := TargetStart(AMap, AAssign, Plain);
+  if Plain and (First.Low <> 'result') and IsLocalVar(AMap, AAt, First.Low) then
+    Exit;
+  if First.Low = '' then
+    First := Before(AMap, AAssign);
+  Result := SourceText(AMap, First, Before(AMap, AAssign));
+end;
+
+{ ---- Weitergabe ohne Ausstieg (Gegen-Review H4, Blocker 1) ---- }
+
+// Haelt ein Aufruf namens ALow ein direktes Argument fest (STORE_PREFIXES
+// ausser STORE_HARMLESS)?
+function IsStoreCall(const ALow: string): Boolean;
+var
+  S : string;
+begin
+  Result := False;
+  if InList(ALow, STORE_HARMLESS) then Exit;
+  for S in STORE_PREFIXES do
+    if Copy(ALow, 1, Length(S)) = S then
+      Exit(True);
+end;
+
+// Der Name des Aufrufs, dessen direktes Argument AFirst..ALast ist (davor
+// '(' bzw. ',', dahinter ',' bzw. ')'); Low = '' ohne - auch fuer ein
+// Element bzw. eine Menge ('[').
+function CallOfArg(AMap: TRdxCodeMap; const AFirst, ALast: TRdxToken): TRdxToken;
+var
+  P, O : TRdxToken;
+begin
+  Result := Default(TRdxToken);
+  P := Before(AMap, AFirst);
+  if not InList(P.Low, ARG_STARTS)
+     or not InList(After(AMap, ALast).Low, ARG_ENDS) then
+    Exit;
+  O := UnmatchedOpener(AMap, P);
+  if O.Low <> '(' then Exit;
+  P := Before(AMap, O);
+  if P.IsWord then
+    Result := P;
+end;
+
+// Sieht AName wie ein Typ aus - eine Typumwandlung 'TObject(X)',
+// 'PByte(P)', 'IFoo(X)', 'Pointer(X)'? Delphi-Konvention: T, P bzw. I und
+// ein Grossbuchstabe. Ein Funktionsaufruf 'AttToHtml(X)' gibt dagegen nur
+// sein Ergebnis weiter, nicht X (Korpus-Harness H4c: 'Strings.Add(
+// AttToHtml(Datt))' sperrte sonst sechsmal).
+function IsCastName(const AName: string): Boolean;
+begin
+  Result := InList(LowerCase(AName), CAST_WORDS)
+    or ((Length(AName) > 1) and CharInSet(AName[1], ['T', 'P', 'I'])
+      and CharInSet(AName[2], ['A'..'Z']));
+end;
+
+// X an T als direktes Argument eines Aufrufs, der es festhaelt bzw. wirft
+// - auch durch eine Typumwandlung hindurch ('List.Add(TObject(X))', eine
+// Ebene: ist der Aufruf um X ein Cast mit nur diesem Argument, zaehlt der
+// um ihn). '' oder der Grund.
+function CallArgReason(AMap: TRdxCodeMap; const T: TRdxToken): string;
+var
+  First, Last, Call : TRdxToken;
+  Level             : Integer;
+begin
+  Result := '';
+  First := T;
+  Last := T;
+  for Level := 1 to MAX_ARG_LEVELS do
+  begin
+    Call := CallOfArg(AMap, First, Last);
+    if Call.Low = '' then Exit;
+    if InList(Call.Low, RAISE_CALLS) then
+      Exit(Format('%s wird in Zeile %d an %s uebergeben - das Objekt ist die '
+        + 'Ausnahme; finally gaebe es vor dem Handler frei',
+        [TokText(AMap, T), T.Line, TokText(AMap, Call)]));
+    if IsStoreCall(Call.Low) then
+      Exit(Format('%s wird in Zeile %d an %s weitergegeben - %s',
+        [TokText(AMap, T), T.Line, TokText(AMap, Call), R_HELD]));
+    if (Before(AMap, First).Low <> '(') or (After(AMap, Last).Low <> ')')
+       or not IsCastName(TokText(AMap, Call)) then
+      Exit;
+    First := Call;
+    Last := After(AMap, Last);
+  end;
+end;
+
+// Heisst AName wie ein Ereignis - 'On..' (Gross/klein egal, ein 'Online'
+// sperrt nur) bzw. das Feld 'FOn..'?
+function IsEventName(const AName: string): Boolean;
+begin
+  Result := SameText(Copy(AName, 1, Length(EVENT_PREFIX)), EVENT_PREFIX)
+    or (Copy(AName, 1, Length(EVENT_FIELD)) = EVENT_FIELD);
+end;
+
+// X an T rechts einer Zuweisung (APrev = ':='): als ganze rechte Seite an
+// keinen lokalen Namen ('FCurrent := X;') oder als Methodenzeiger 'X.M'
+// an ein Ereignis ('Btn.OnClick := X.Handler;'). '' oder der Grund.
+function AssignReason(AMap: TRdxCodeMap; const T, APrev: TRdxToken): string;
+var
+  N, M, Target : TRdxToken;
+begin
+  Result := '';
+  if APrev.Low <> ':=' then Exit;
+  N := After(AMap, T);
+  M := After(AMap, N);
+  if (N.Low = '.') and M.IsWord
+     and EndsStatement(AMap, After(AMap, M), M) then
+  begin
+    Target := Before(AMap, APrev);
+    if Target.IsWord and IsEventName(TokText(AMap, Target)) then
+      Result := Format('Methodenzeiger %s.%s an %s in Zeile %d - %s',
+        [TokText(AMap, T), TokText(AMap, M), TokText(AMap, Target), T.Line,
+        R_HELD]);
+    Exit;
+  end;
+  if not EndsStatement(AMap, N, T) then Exit;
+  Result := NonLocalTarget(AMap, APrev, T);
+  if Result <> '' then
+    Result := Format('%s wird in Zeile %d an %s weitergegeben (kein lokaler '
+      + 'Name der Routine) - %s', [TokText(AMap, T), T.Line, Result, R_HELD]);
+end;
+
+// Weitergabe ohne Ausstieg (s. Kopf): X an T wird festgehalten - '@X',
+// Argument eines Speicher-Aufrufs, Zuweisung an keinen lokalen Namen,
+// Methodenzeiger an ein Ereignis. Im Fehlerfall gaebe finally X frei,
+// waehrend der Halter es noch kennt. '' oder der Grund.
+function HandOverReason(AMap: TRdxCodeMap; const T, APrev: TRdxToken): string;
+begin
+  if APrev.Low = '@' then
+    Exit(Format('@%s in Zeile %d - ein Zeiger bzw. Methodenzeiger auf das '
+      + 'Objekt verlaesst den Bereich; %s', [TokText(AMap, T), T.Line,
+      R_HELD]));
+  Result := CallArgReason(AMap, T);
+  if Result = '' then
+    Result := AssignReason(AMap, T, APrev);
+end;
+
 { ---- Der Lauf von A nach B ---- }
 
 // B an T: die Freigabe auf Tiefe 0 hinter ';' - als ganze Anweisung (davor
@@ -766,32 +1318,66 @@ begin
   E := After(AMap, Last);
   if E.Low = ';' then
     Last := E
-  else if not IsListEnd(E, Last) then
+  else if not IsListEnd(AMap, E, Last) then
     S.Reason := Format('die Freigabe in Zeile %d ist keine ganze Anweisung',
       [T.Line]);
   S.B := T;
   S.BLast := Last;
 end;
 
-// Puffer: Inc(P)/Dec(P)/GetMem(P)/ReallocMem(P) an T? '' oder der Grund.
+// Puffer: Inc(P)/Dec(P)/GetMem(P)/ReallocMem(P) an T, auch durch eine
+// Typumwandlung ('Inc(PByte(P), 4)', Gegen-Review H4, Minor 1)? '' oder
+// der Grund.
 function BufferChangeReason(AMap: TRdxCodeMap; const APair: TRdxPair;
   const T, APrev: TRdxToken): string;
 var
-  O : TRdxToken;
+  O, V, Last : TRdxToken;
 begin
   Result := '';
   if (APair.Kind <> pkBuffer) or not InList(T.Low, BUFFER_CHANGERS)
-     or not IsKeywordAfter(T, APrev) then
+     or not IsKeywordAt(AMap, T, APrev) then
     Exit;
   O := After(AMap, T);
-  if (O.Low = '(') and MentionsKey(After(AMap, O), O, APair.Key) then
+  V := After(AMap, O);
+  if (O.Low = '(') and (MentionsKey(V, O, APair.Key)
+     or (RefAt(AMap, V, O, APair.Key, Last)
+       and InList(After(AMap, Last).Low, ARG_ENDS))) then
     Result := Format('%s(%s) in Zeile %d veraendert den Zeiger - FreeMem gaebe '
-      + 'im finally einen anderen frei', [TokText(AMap, T), APair.Key, T.Line]);
+      + 'im finally einen anderen frei', [TokText(AMap, T), APair.Name,
+      T.Line]);
+end;
+
+// 'raise ..' an T: nennt der Ausdruck X ausser als Member-Zugriff ('raise
+// X', 'raise TObject(X)', 'raise X at Addr', 'raise EFoo.Create(X)'), ist
+// das Objekt (Teil) der Ausnahme - finally gaebe es vor dem Handler frei
+// (Gegen-Review H4, Minor 1: bis Charge H4c nur das Token hinter raise).
+// '' oder der Grund.
+function RaiseReason(AMap: TRdxCodeMap; const APair: TRdxPair;
+  const T, APrev: TRdxToken): string;
+var
+  U, P, Stop : TRdxToken;
+begin
+  Result := '';
+  if (T.Low <> 'raise') or not IsKeywordAt(AMap, T, APrev) then Exit;
+  Stop := StatementStop(AMap, After(AMap, T));
+  P := T;
+  U := After(AMap, T);
+  while (U.Low <> '') and TokBefore(U, Stop) do
+  begin
+    if MentionsKey(U, P, APair.Key)
+       and not InList(After(AMap, U).Low, MEMBER_SUFFIXES) then
+      Exit(Format('raise %s in Zeile %d - %s ist (Teil) der Ausnahme; finally '
+        + 'gaebe es vor dem Handler frei', [SourceText(AMap, After(AMap, T),
+        Before(AMap, Stop)), T.Line, TokText(AMap, U)]));
+    P := U;
+    U := After(AMap, U);
+  end;
 end;
 
 // Ein Vorkommen der Variablen (Objekt, Puffer) an T: zweite Zuweisung,
-// Adresse, 'raise X' sperren; eine Weitergabe (kein Member-Zugriff) merkt
-// sich S fuer die Exit-Sperre. '' oder der Grund.
+// '@P' bei einem Puffer, Weitergabe ohne Ausstieg (HandOverReason)
+// sperren; jede andere Nennung ausser einem Member-Zugriff merkt sich S fuer
+// die Exit-Sperre. '' oder der Grund.
 function VarUseReason(AMap: TRdxCodeMap; const APair: TRdxPair;
   var S: TRdxSpan; const T, APrev: TRdxToken): string;
 var
@@ -806,15 +1392,15 @@ begin
   if (APrev.Low = '@') and (APair.Kind = pkBuffer) then
     Exit(Format('@%s in Zeile %d - der Zeiger kann sich aendern',
       [TokText(AMap, T), T.Line]));
-  if APrev.Low = 'raise' then
-    Exit(Format('raise %s in Zeile %d - das Objekt ist die Ausnahme; finally '
-      + 'gaebe es vor dem Handler frei', [TokText(AMap, T), T.Line]));
-  if not InList(N.Low, MEMBER_SUFFIXES) and (S.EscapeLine = 0) then
-    S.EscapeLine := T.Line;
+  Result := HandOverReason(AMap, T, APrev);
+  if (Result = '') and not InList(N.Low, MEMBER_SUFFIXES)
+     and (S.Escape.Low = '') then
+    S.Escape := T;
 end;
 
-// Eine Freigabe bzw. (Sperre) zweite Sperre an T, die nicht B ist. '' oder
-// der Grund.
+// Eine Freigabe bzw. (Sperre) zweite Sperre an T, die nicht B ist - auch
+// in anderer Schreibweise -, bzw. ein Vorkommen der Variablen, das sperrt.
+// '' oder der Grund.
 function UseReason(AMap: TRdxCodeMap; const APair: TRdxPair;
   var S: TRdxSpan; const T, APrev: TRdxToken): string;
 var
@@ -825,11 +1411,20 @@ begin
     Exit(Format('%s in Zeile %d - eine bedingte, tiefer liegende oder zweite '
       + 'Freigabe im Bereich; mit finally liefe sie doppelt',
       [APair.What, T.Line]));
+  if AnyReleaseAt(AMap, APair, T, APrev) then
+    Exit(Format('die Freigabe in Zeile %d gibt %s in anderer Schreibweise '
+      + 'frei (Self., Typumwandlung, Leave/Release) - mit finally liefe sie '
+      + 'doppelt; %s', [T.Line, APair.Name, R_BY_HAND]));
   if APair.Kind <> pkLock then
-    Exit(VarUseReason(AMap, APair, S, T, APrev));
+  begin
+    Result := RaiseReason(AMap, APair, T, APrev);
+    if Result = '' then
+      Result := VarUseReason(AMap, APair, S, T, APrev);
+    Exit;
+  end;
   Result := '';
   if (APrev.Low <> '.') and LockSiteAt(AMap, T, sdAcquire, L)
-     and SameLock(L, APair.Lock) then
+     and SameLockLoose(L, APair.Lock) then
     Result := Format('die Sperre wird in Zeile %d noch einmal genommen - %s',
       [T.Line, R_BY_HAND]);
 end;
@@ -847,10 +1442,7 @@ begin
     S.PopBlock;
   end
   else if (T.Low = 'except') or (T.Low = 'finally') then
-  begin
-    S.EndSingles;
-    S.HasExcept := S.HasExcept or (T.Low = 'except');
-  end
+    S.EndSingles
   else if T.Low = 'case' then
     S.PushBlock(BLOCK_CASE)
   else if T.Low = 'repeat' then
@@ -939,7 +1531,7 @@ begin
     Dec(S.Paren)
   else if (T.Low = ';') and (S.Paren = 0) then
     S.EndSingles
-  else if IsKeywordAfter(T, APrev) then
+  else if IsKeywordAt(AMap, T, APrev) then
   begin
     HeadStep(S, T);
     S.Reason := JumpReason(APair, S, T, APrev);
@@ -979,10 +1571,13 @@ begin
 end;
 
 // Hinter 'X.Free;' ein 'X := nil;' als naechste Anweisung? Dann geht es
-// mit ins finally (S.BLast).
+// mit ins finally (S.BLast) - aber nur, wenn es allein auf seiner Zeile
+// steht bzw. die Zeile von B beschliesst und dahinter nichts mehr kommt;
+// sonst bleibt es hinter dem end stehen (Gegen-Review H4, Minor 6: bis
+// Charge H4c verwarf 'X := nil; Foo;' die ganze Hilfe).
 procedure TakeNil(AMap: TRdxCodeMap; const APair: TRdxPair; var S: TRdxSpan);
 var
-  V, A, N, E : TRdxToken;
+  V, A, N, E, Last : TRdxToken;
 begin
   if (APair.Kind <> pkObject) or (S.BLast.Low <> ';')
      or (After(AMap, After(AMap, S.B)).Low <> 'free') then
@@ -993,9 +1588,14 @@ begin
   E := After(AMap, N);
   if (V.Low <> APair.Key) or (A.Low <> ':=') or (N.Low <> 'nil') then Exit;
   if E.Low = ';' then
-    S.BLast := E
-  else if IsListEnd(E, N) then
-    S.BLast := N;
+    Last := E
+  else if IsListEnd(AMap, E, N) then
+    Last := N
+  else
+    Exit;
+  if ((V.Line = S.BLast.Line) or FirstOnLine(AMap, V))
+     and CanAppendLine(AMap, Last.Line, Last.EndCol - 1) then
+    S.BLast := Last;
 end;
 
 { ---- Gegenproben am Bereich ---- }
@@ -1035,7 +1635,7 @@ begin
   else if not FirstOnLine(AMap, S.B) then
     Result := Format('vor der Freigabe in Zeile %d steht weiterer Code - '
       + 'try/finally/end stehen in eigenen Zeilen', [S.B.Line])
-  else if not LineEndsAfter(AMap, S.BLast.Line, S.BLast.EndCol - 1) then
+  else if not CanAppendLine(AMap, S.BLast.Line, S.BLast.EndCol - 1) then
     Result := Format('hinter der Freigabe in Zeile %d steht weiterer Code',
       [S.BLast.Line])
   else if DirectiveInLines(AMap, APair.First.Line, S.BLast.Line) then
@@ -1044,10 +1644,10 @@ begin
   else if MultiStringIn(AMap, APair.First.Line, S.BLast.Line) then
     Result := 'mehrzeiliges String-Literal im Bereich - Einruecken aenderte '
       + 'seinen Inhalt'
-  else if (S.ExitLine > 0) and (S.EscapeLine > 0) then
+  else if (S.ExitLine > 0) and (S.Escape.Low <> '') then
     Result := Format('Exit in Zeile %d, und %s wird in Zeile %d weitergegeben '
       + '- der Ausstieg koennte den Besitz uebergeben haben; %s',
-      [S.ExitLine, APair.Key, S.EscapeLine, R_BY_HAND]);
+      [S.ExitLine, TokText(AMap, S.Escape), S.Escape.Line, R_BY_HAND]);
 end;
 
 { TRdxTryScan }
@@ -1102,7 +1702,7 @@ begin
   while T.Low <> '' do
   begin
     P := Before(AMap, T);
-    if IsKeywordAfter(T, P) and Scan.Step(T, P) then
+    if IsKeywordAt(AMap, T, P) and Scan.Step(T, P) then
       Break;
     T := P;
   end;
@@ -1116,6 +1716,7 @@ function HandlerOf(AMap: TRdxCodeMap; const ATry: TRdxToken;
 var
   T, Prev : TRdxToken;
   Depth   : Integer;
+  IsKw    : Boolean;
 begin
   AStart := Default(TRdxToken);
   AEnd := Default(TRdxToken);
@@ -1124,9 +1725,10 @@ begin
   T := After(AMap, ATry);
   while T.Low <> '' do
   begin
-    if IsKeywordAfter(T, Prev) and IsEndOpener(T.Low) then
+    IsKw := IsKeywordAt(AMap, T, Prev);
+    if IsKw and IsEndOpener(T.Low) then
       Inc(Depth)
-    else if IsKeywordAfter(T, Prev) and (T.Low = 'end') then
+    else if IsKw and (T.Low = 'end') then
     begin
       Dec(Depth);
       if Depth = 0 then
@@ -1135,7 +1737,7 @@ begin
         Exit(AStart.Low <> '');
       end;
     end
-    else if (Depth = 1) and IsKeywordAfter(T, Prev)
+    else if (Depth = 1) and IsKw
        and ((T.Low = 'except') or (T.Low = 'finally')) then
       AStart := T;
     Prev := T;
@@ -1145,13 +1747,13 @@ begin
 end;
 
 // Kommt A im Handler AStart..AEnd vor - die Variable (Objekt, Puffer)
-// bzw. die Freigabe der Sperre? Das Token oder leer.
+// bzw. die Freigabe der Sperre, auch in anderer Schreibweise? Das Token
+// oder leer.
 function MentionIn(AMap: TRdxCodeMap; const APair: TRdxPair;
   const AStart, AEnd: TRdxToken): TRdxToken;
 var
-  T, P    : TRdxToken;
-  Release : TRdxReleaseHit;
-  Hit     : Boolean;
+  T, P : TRdxToken;
+  Hit  : Boolean;
 begin
   Result := Default(TRdxToken);
   P := AStart;
@@ -1159,7 +1761,7 @@ begin
   while (T.Low <> '') and TokBefore(T, AEnd) do
   begin
     if APair.Kind = pkLock then
-      Hit := ReleaseAt(AMap, APair, T, P, Release)
+      Hit := AnyReleaseAt(AMap, APair, T, P)
     else
       Hit := MentionsKey(T, P, APair.Key);
     if Hit then
@@ -1171,10 +1773,9 @@ end;
 
 // Die umschliessenden try-Bloecke: ihr Handler darf A nicht kennen (nach
 // dem Fix liefe er hinter dem finally - zweite Freigabe, Zugriff auf ein
-// freigegebenes Objekt); mit dem SCA009-Suffix darf keiner ein try/except
-// sein, und im Bereich muss eines liegen. '' oder der Grund.
-function EnclosingReason(AMap: TRdxCodeMap; const APair: TRdxPair;
-  const S: TRdxSpan): string;
+// freigegebenes Objekt). Ein try/except, dessen Handler A nicht nennt,
+// ist richtig (s. Kopf, SCA009-Suffix). '' oder der Grund.
+function EnclosingReason(AMap: TRdxCodeMap; const APair: TRdxPair): string;
 var
   Tries      : TArray<TRdxToken>;
   i          : Integer;
@@ -1193,13 +1794,7 @@ begin
       Exit(Format('der %s-Teil des try in Zeile %d um den Bereich nennt %s '
         + '(Zeile %d) - nach dem Fix liefe er hinter dem finally', [Start.Low,
         Tries[i].Line, TokText(AMap, Hit), Hit.Line]));
-    if APair.Suffix and (Start.Low = 'except') then
-      Exit(Format('die Meldung nennt ein try/except - es umschliesst den '
-        + 'Bereich (Zeile %d) und liegt nicht ganz darin', [Tries[i].Line]));
   end;
-  if APair.Suffix and not S.HasExcept then
-    Result := 'die Meldung nennt ein try/except - im Bereich liegt keines; '
-      + R_BY_HAND;
 end;
 
 { ---- Der Baustein B5 ---- }
@@ -1231,7 +1826,7 @@ begin
   if not FirstOnLine(AMap, APair.First) then
     Result := 'vor der Anweisung steht auf ihrer Zeile weiterer Code - '
       + 'try/finally/end stehen in eigenen Zeilen'
-  else if not LineEndsAfter(AMap, APair.Semi.Line, APair.Semi.Col) then
+  else if not CanAppendLine(AMap, APair.Semi.Line, APair.Semi.Col) then
     Result := 'hinter der Anweisung steht auf ihrer Zeile weiterer Code';
 end;
 
@@ -1248,12 +1843,15 @@ begin
   while T.Low <> '' do
   begin
     P := Before(AMap, T);
-    if IsKeywordAfter(T, P) and ((T.Low = 'end') or (T.Low = 'until')) then
-      Inc(Depth)
-    else if IsKeywordAfter(T, P) and InList(T.Low, LIST_PREV) and (Depth = 0) then
-      Exit(T)
-    else if IsKeywordAfter(T, P) and (IsEndOpener(T.Low) or (T.Low = 'repeat')) then
-      Dec(Depth);
+    if IsKeywordAt(AMap, T, P) then
+    begin
+      if (T.Low = 'end') or (T.Low = 'until') then
+        Inc(Depth)
+      else if InList(T.Low, LIST_PREV) and (Depth = 0) then
+        Exit(T)
+      else if IsEndOpener(T.Low) or (T.Low = 'repeat') then
+        Dec(Depth);
+    end;
     T := P;
   end;
 end;
@@ -1288,25 +1886,44 @@ begin
   Result := IndentStep(AIndent, '');
 end;
 
-// Eine Zeile eine Stufe tiefer; eine leere bleibt leer.
-function Deeper(const ALine, AStep: string): string;
+// Eine Zeile eine Stufe tiefer; eine leere bleibt leer. Die Stufe kommt
+// HINTER den Teil des fuehrenden Leerraums, den die Zeile mit AInd (der
+// Einrueckung von A) teilt: unter A mit '<Tab>  ' wird '<Tab>  X.Run'
+// zu '<Tab>    X.Run', nicht zu '  <Tab>  X.Run' (Gegen-Review H4,
+// Minor 3). Bei Leerraum aus einer Zeichenart ist das dasselbe wie davor.
+function Deeper(const ALine, AInd, AStep: string): string;
+var
+  k : Integer;
 begin
   Result := ALine;
-  if Trim(ALine) <> '' then
-    Result := AStep + ALine;
+  if Trim(ALine) = '' then Exit;
+  k := 0;
+  while (k < Length(AInd)) and (k < Length(ALine))
+     and (ALine[k + 1] = AInd[k + 1]) do
+    Inc(k);
+  Result := Copy(ALine, 1, k) + AStep + Copy(ALine, k + 1, MaxInt);
+end;
+
+// Die zweite Haelfte eines UTF-16-Surrogatpaars?
+function IsSecondHalf(C: Char): Boolean;
+begin
+  Result := (Ord(C) >= LOW_SURROGATE_FIRST) and (Ord(C) <= LOW_SURROGATE_LAST);
 end;
 
 // Die Ersetzung: vom letzten Zeichen der Zeile von A bis zum Ende der
 // letzten Zeile von B - try, die Zeilen dazwischen eine Stufe tiefer,
 // finally, B eine Stufe tiefer, end;. Der Bereich beginnt AUF einem Zeichen
-// (SpanFits), das unveraendert neu geschrieben wird.
+// (SpanFits: nicht hinter dem Zeilenende), das unveraendert neu geschrieben
+// wird - ist es die zweite Haelfte eines Surrogatpaars (Emoji im
+// Kommentar), auf der ersten: sonst schnitte er mitten im Zeichen
+// (Gegen-Review H4, Verdacht 13).
 function TryEdit(AMap: TRdxCodeMap; const APair: TRdxPair;
   const S: TRdxSpan): TRdxEdit;
 var
-  ALine, Li  : Integer;
-  L, Ind     : string;
-  Step, Text : string;
-  SB         : TStringBuilder;
+  ALine, Li, First : Integer;
+  L, Ind           : string;
+  Step, Text       : string;
+  SB               : TStringBuilder;
 begin
   Result := Default(TRdxEdit);
   ALine := APair.Semi.Line;
@@ -1314,21 +1931,24 @@ begin
   Ind := Copy(L, 1, SkipBlanks(L, 1) - 1);
   Step := ListStep(AMap, APair.First, Ind);
   Text := AMap.Raw(ALine);
+  First := Length(Text);
+  if (First > 1) and IsSecondHalf(Text[First]) then
+    Dec(First);
   SB := TStringBuilder.Create;
   try
-    SB.Append(Copy(Text, Length(Text), 1)).Append(#10);
+    SB.Append(Copy(Text, First, MaxInt)).Append(#10);
     SB.Append(Ind).Append('try').Append(#10);
     for Li := ALine + 1 to S.B.Line - 1 do
-      SB.Append(Deeper(AMap.Raw(Li), Step)).Append(#10);
+      SB.Append(Deeper(AMap.Raw(Li), Ind, Step)).Append(#10);
     SB.Append(Ind).Append('finally');
     for Li := S.B.Line to S.BLast.Line do
-      SB.Append(#10).Append(Deeper(AMap.Raw(Li), Step));
+      SB.Append(#10).Append(Deeper(AMap.Raw(Li), Ind, Step));
     SB.Append(#10).Append(Ind).Append('end;');
     Result.NewText := SB.ToString;
   finally
     SB.Free;
   end;
-  Result.Span := TRefactorSpan.Make(SPAN_TRY, ALine, Length(Text), S.BLast.Line,
+  Result.Span := TRefactorSpan.Make(SPAN_TRY, ALine, First, S.BLast.Line,
     Length(AMap.Raw(S.BLast.Line)) + 1);
   Result.Expected := RangeText(AMap, Result.Span);
 end;
@@ -1350,7 +1970,7 @@ begin
   TakeNil(AMap, APair, S);
   Result := SpanReason(AMap, APair, S);
   if Result = '' then
-    Result := EnclosingReason(AMap, APair, S);
+    Result := EnclosingReason(AMap, APair);
   if Result = '' then
     AEdit := TryEdit(AMap, APair, S);
 end;
@@ -1377,7 +1997,7 @@ begin
   ASite.First := T;
   if not MentionsKey(T, APrev, AKey) or (T.Low <> AKey) then
     Exit(False);
-  if (APrev.Low = 'var') and IsKeywordAfter(APrev, Before(AMap, APrev)) then
+  if (APrev.Low = 'var') and IsKeywordAt(AMap, APrev, Before(AMap, APrev)) then
   begin
     ASite.First := APrev;
     ASite.Assign := AssignAfter(AMap, T);
@@ -1508,6 +2128,29 @@ begin
   end;
 end;
 
+// Steht auf ALine 'TMonitor.TryEnter(..)' oder 'TMonitor.Enter(O,
+// Timeout)'? Beides ist eine Bedingung (Ergebnis Boolean), keine Sperre -
+// SCA109 meldet sie trotzdem als 'TMonitor.Enter(o)' (Gegen-Review H4,
+// Minor 5: bis Charge H4c hiess der Grund "Zeile verschoben?").
+function MonitorConditionOn(AMap: TRdxCodeMap; ALine: Integer): Boolean;
+var
+  T, M : TRdxToken;
+  S    : TRdxLockSite;
+begin
+  Result := False;
+  S := Default(TRdxLockSite);
+  T := NextToken(AMap, ALine, 1);
+  while (T.Low <> '') and (T.Line = ALine) do
+  begin
+    M := After(AMap, After(AMap, T));
+    if (T.Low = 'tmonitor') and (After(AMap, T).Low = '.')
+       and ((M.Low = MONITOR_TRY) or ((M.Low = MONITOR_CALLS[sdAcquire])
+         and not MonitorAt(AMap, T, sdAcquire, S))) then
+      Exit(True);
+    T := After(AMap, T);
+  end;
+end;
+
 // SCA109/SCA153: die eine Sperre auf ALine, die zur Meldung passt. '' oder
 // der Grund; APair mit Lock, First, Semi und What.
 function LockPair(AMap: TRdxCodeMap; ALine: Integer; const AText: string;
@@ -1535,6 +2178,10 @@ begin
     Prev := T;
     T := After(AMap, T);
   end;
+  if (n = 0) and MonitorConditionOn(AMap, ALine) then
+    Exit('TMonitor.Enter mit Timeout bzw. TMonitor.TryEnter ist eine '
+      + 'Bedingung, keine Sperre - ob sie gilt, sagt erst das Ergebnis; '
+      + R_BY_HAND);
   Result := OneTokenReason(ALine, n, 'keine Sperre "' + AText + '"',
     '%d Sperren "' + AText + '"');
   if Result <> '' then Exit;
@@ -1549,16 +2196,32 @@ begin
       + 'oder Teil eines Ausdrucks)';
 end;
 
-// SCA156: die Allokation AFunc (GetMem/AllocMem) an T - 'GetMem(P, N)' oder
-// 'P := GetMem(N)'/'P := AllocMem(N)'. '' oder der Grund; APair mit Key,
-// First, What.
-function BufferAt(AMap: TRdxCodeMap; const T: TRdxToken;
+// SCA156: der Anfang des Aufrufs T - T selbst bzw. 'System' vor
+// 'System.GetMem' (die RTL, Gegen-Review H4, Minor 4); Low = '' bei einem
+// anderen Qualifizierer (eigener Speichermanager).
+function AllocStart(AMap: TRdxCodeMap; const T, APrev: TRdxToken): TRdxToken;
+var
+  Q : TRdxToken;
+begin
+  Result := T;
+  if APrev.Low <> '.' then Exit;
+  Q := Before(AMap, APrev);
+  if (Q.Low = 'system') and (Before(AMap, Q).Low <> '.') then
+    Result := Q
+  else
+    Result := Default(TRdxToken);
+end;
+
+// SCA156: die Allokation an T (AStart: ihr erstes Token, AllocStart) -
+// 'GetMem(P, N)' oder 'P := GetMem(N)'/'P := AllocMem(N)'. '' oder der
+// Grund; APair mit Key, First, What.
+function BufferAt(AMap: TRdxCodeMap; const T, AStart: TRdxToken;
   var APair: TRdxPair): string;
 var
   P, V, C : TRdxToken;
 begin
   Result := '';
-  P := Before(AMap, T);
+  P := Before(AMap, AStart);
   if P.Low = ':=' then
   begin
     V := Before(AMap, P);
@@ -1574,7 +2237,7 @@ begin
     C := After(AMap, V);
     if not V.IsWord or (C.Low <> ',') then
       Exit('das erste Argument von GetMem ist kein einfacher Bezeichner');
-    APair.First := T;
+    APair.First := AStart;
   end
   else
     Exit('AllocMem ohne Zuweisung - der Puffer ist nicht zu fassen');
@@ -1587,27 +2250,34 @@ end;
 function BufferPair(AMap: TRdxCodeMap; ALine: Integer; const AFunc: string;
   var APair: TRdxPair): string;
 var
-  T, Prev, Hit, C : TRdxToken;
-  n, Qualified    : Integer;
+  T, Prev, Hit, Start, Q, C : TRdxToken;
+  n, Qualified              : Integer;
+  Func                      : string;
 begin
   APair.Kind := pkBuffer;
-  if LowerCase(AFunc) = 'reallocmem' then
+  Func := LowerCase(AFunc);
+  if Func = 'reallocmem' then
     Exit('ReallocMem - der Puffer bestand schon vorher (fremder bzw. '
       + 'vorhandener Speicher); ' + R_BY_HAND);
   Hit := Default(TRdxToken);
+  Start := Hit;
   n := 0;
   Qualified := 0;
   Prev := PrevToken(AMap, ALine, 1);
   T := NextToken(AMap, ALine, 1);
   while (T.Low <> '') and (T.Line = ALine) do
   begin
-    if (T.Low = LowerCase(AFunc)) and (After(AMap, T).Low = '(')
-       and (Prev.Low = '.') then
-      Inc(Qualified)
-    else if (T.Low = LowerCase(AFunc)) and (After(AMap, T).Low = '(') then
+    if (T.Low = Func) and (After(AMap, T).Low = '(') then
     begin
-      Inc(n);
-      Hit := T;
+      Q := AllocStart(AMap, T, Prev);
+      if Q.Low = '' then
+        Inc(Qualified)
+      else
+      begin
+        Inc(n);
+        Hit := T;
+        Start := Q;
+      end;
     end;
     Prev := T;
     T := After(AMap, T);
@@ -1618,7 +2288,7 @@ begin
   Result := OneTokenReason(ALine, n, 'kein Aufruf ' + AFunc + '(',
     '%d Aufrufe ' + AFunc + '(');
   if Result = '' then
-    Result := BufferAt(AMap, Hit, APair);
+    Result := BufferAt(AMap, Hit, Start, APair);
   if Result <> '' then Exit;
   C := MatchClose(AMap, After(AMap, Hit));
   APair.Semi := After(AMap, C);
@@ -1630,35 +2300,31 @@ end;
 
 // SCA009/SCA001: der Name aus der Meldung, dann der Baustein.
 function ObjectFix(AMap: TRdxCodeMap; ALine: Integer; const AMessage: string;
-  var APair: TRdxPair; out APlan: TRdxTryPlan): string;
+  out APlan: TRdxTryPlan): string;
+var
+  Pair : TRdxPair;
 begin
   APlan := Default(TRdxTryPlan);
   APlan.Name := FirstWordOf(AMessage);
-  Result := ObjectPair(AMap, ALine, APlan.Name, APair);
+  Pair := Default(TRdxPair);
+  Result := ObjectPair(AMap, ALine, APlan.Name, Pair);
   if Result = '' then
-    Result := TryFinally(AMap, APair, APlan.Edit);
+    Result := TryFinally(AMap, Pair, APlan.Edit);
 end;
 
 class function TRdxTryFixes.MissingFinally(AMap: TRdxCodeMap; ALine: Integer;
   const AMessage: string; out APlan: TRdxTryPlan;
   out AReason: string): Boolean;
-var
-  Pair : TRdxPair;
 begin
-  Pair := Default(TRdxPair);
-  Pair.Suffix := Pos(KEY_SUFFIX, AMessage) > 0;
-  AReason := ObjectFix(AMap, ALine, AMessage, Pair, APlan);
+  AReason := ObjectFix(AMap, ALine, AMessage, APlan);
   Result := AReason = '';
 end;
 
 class function TRdxTryFixes.FreedOutsideFinally(AMap: TRdxCodeMap;
   ALine: Integer; const AMessage: string; out APlan: TRdxTryPlan;
   out AReason: string): Boolean;
-var
-  Pair : TRdxPair;
 begin
-  Pair := Default(TRdxPair);
-  AReason := ObjectFix(AMap, ALine, AMessage, Pair, APlan);
+  AReason := ObjectFix(AMap, ALine, AMessage, APlan);
   Result := AReason = '';
 end;
 

@@ -180,8 +180,8 @@ const
     + 'freigegeben - die Zeilen dazwischen ruecken in den try-Teil';
   R_TRY_BUFFER_HINT = 'FreeMem laeuft jetzt auch bei einer Ausnahme und bei '
     + 'Exit - die Zeilen dazwischen ruecken in den try-Teil';
-  // SCA001: nur diese Variante bekommt die Hilfe (TLeakFinding.
-  // MemoryLeakVariant, properties.variant im SARIF).
+  // SCA001: nur diese Variante bekommt die Hilfe (Feld TLeakFinding.
+  // LeakVariant, das uLeakDetector2 setzt; properties.variant im SARIF).
   LEAK_VARIANT_FOF = 'freed-outside-finally';
   R_NO_FINDING = 'kein Fund';
   R_NO_ROW     = 'keine einfache Hilfe fuer diese Regel';
@@ -587,9 +587,9 @@ end;
 // finally. proven-leak (Konzept: eigene Hilfe, Aufwand L), never-freed und
 // return-value-not-freed (Weitergabe bzw. Besitz unbekannt) bekommen keine;
 // der Eintrag steht dann gesperrt mit der Variante da. Massgeblich ist das
-// FELD LeakVariant, das uLeakDetector2 setzt - nicht die Ableitung
-// MemoryLeakVariant: die haelt einen Fund ohne Feld (uFieldLeak) mit
-// Warning-Schwere fuer freed-outside-finally.
+// FELD LeakVariant (uLeakDetector2), nicht die Ableitung MemoryLeakVariant:
+// die raet ohne Feld nach der Schwere (uFieldLeak hat lsError: never-freed)
+// - heute liefern beide dasselbe (Gegen-Review H4, Minor 8).
 function PlanMemoryLeak(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
