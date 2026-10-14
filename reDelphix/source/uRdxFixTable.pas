@@ -159,7 +159,8 @@ const
   R_SELF_HINT = 'die Zuweisung bewirkt nichts - war ein anderer Wert gemeint '
     + '(Tippfehler), fehlt er weiterhin';
   R_ROUTINE_HINT = 'gleiche Bedeutung - der Name steht sonst nirgends im '
-    + 'Code der Datei; Kommentar und Leerzeile darueber gehen mit';
+    + 'Code der Datei; Doku und ein Kommentar darueber, der die Routine nennt, '
+    + 'gehen mit';
   R_METHOD_HINT  = 'gleiche Bedeutung - Deklaration und Implementierung '
     + 'gehen, der Name steht sonst nirgends im Code der Datei';
   R_NO_FILE_OPEN = 'keine Datei geoeffnet';
@@ -443,6 +444,15 @@ begin
     Map.Free;
   end;
   Result.Name := Plan.Name;
+  // SCA164: die Include-Dateien vor implementation liest die Hilfe von der
+  // Platte neben der Unit (Gegen-Review H3, Minor 4) - sie koennen die
+  // Routine deklarieren oder rufen; nicht gefunden heisst keine Hilfe.
+  if Result.Enabled and (Length(Plan.Includes) > 0) then
+  begin
+    Result.Reason := TRdxRoutineFixes.IncludeReason(AFinding.FileName,
+      Plan.Includes, Plan.Name);
+    Result.Enabled := Result.Reason = '';
+  end;
   if Result.Enabled then
     Result.Edits := Plan.Edits;
 end;

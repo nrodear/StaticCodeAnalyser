@@ -35,14 +35,24 @@ unit uRdxRoutineFixes;
 //                   'class procedure'). Mehr als ein Treffer heisst Overload
 //                   oder mehrdeutig - die Aufrufer lehnen dann ab.
 //
-// WAS MITGEHT: ueber einer Implementierung die direkt anhaengenden Zeilen
-// nur aus Kommentar - sie beschreiben die Routine; bliebe ein '// default
-// is case-sensitive' stehen, laege er nach dem Loeschen ueber der naechsten
-// Routine (Korpus: 24 '//'- und 72 Block-Kommentare direkt ueber
-// SCA164-Koepfen, meist Trenner '(*---*)' und Beschreibungen). Ein
-// Abschnittsmarker '{ TFoo }' bleibt stehen (er gehoert zur Gruppe). Ueber
-// einer Deklaration im Klassenrumpf nur '///' - dort steht oft ein
-// Gruppenkommentar ('{ Private declarations }').
+// WAS MITGEHT: ueber einer Implementierung '///'-Doku, Attribute und die
+// direkt anhaengenden Zeilen nur aus Kommentar, wenn sie die Routine beim
+// Namen nennen ('// Name: Foo()', '{ TFoo.Bar }') und keinen Marker tragen
+// (noinspection, Absichtsmarker wie SCA019). Bis Charge H3c ging JEDER
+// Kommentar darueber mit; das Gegen-Review H3 (Minor 3) fand darunter
+// Abschnittsueberschriften ('(* === run-time registration functions ===
+// *)', '{ layout vars }') und einen Absichtsmarker - eine Ueberschrift ist
+// von einer Beschreibung am Text nicht sicher zu unterscheiden, deshalb
+// bleibt jetzt jeder Kommentar, der die Routine nicht nennt
+// (Korpus-Harness: bei 101 der 897 SCA164-Angebote bleibt er jetzt stehen -
+// 53 Trenner, 43 Texte, 4 Ueberschriften mit Trenner, 1 Absichtsmarker;
+// kein Angebot faellt weg). Preis: eine Beschreibung ohne den Namen ('//
+// default is case-sensitive') bleibt stehen und liegt danach ueber dem,
+// was folgt - sichtbar und von Hand zu loeschen; eine geloeschte
+// Ueberschrift waere still verloren. Ein Abschnittsmarker '{ TFoo }' bleibt
+// ohnehin (er gehoert zur Gruppe). Ueber einer Deklaration im Klassenrumpf
+// nur '///' - dort steht oft ein Gruppenkommentar ('{ Private
+// declarations }').
 //
 // GRENZEN: Programme und Bibliotheken (.dpr) meldet SCA164 nicht - der
 // Detektor sieht nur Kinder des implementation-Knotens; der Planer verlangt
@@ -74,9 +84,13 @@ type
 
   // Ergebnis der Planer: alle Ersetzungen (EIN Undo-Schritt) und der Name
   // fuer den Menuetext - schon aus der Meldung, auch wenn abgelehnt wird.
+  // Includes: die Dateien der {$I}-Direktiven vor 'implementation' (SCA164)
+  // - der Puffer zeigt ihren Inhalt nicht; der Aufrufer liest sie neben der
+  // Unit und prueft sie (IncludeReason), bevor er die Hilfe anbietet.
   TRdxRoutinePlan = record
-    Edits : TArray<TRdxEdit>;
-    Name  : string;
+    Edits    : TArray<TRdxEdit>;
+    Name     : string;
+    Includes : TArray<string>;
   end;
 
   // Die Form beider Planer (uRdxFixTable: RoutineFix).
@@ -107,12 +121,15 @@ type
 
     // SCA164: die Routine der Meldung 'Top-level routine X appears unused
     // ...' mit Kopf auf ALine loeschen (s. Kopf der Unit). Keine Hilfe fuer
-    // Methoden, Koepfe vor 'implementation', export/public/alias/external/
-    // forward/interrupt-Direktiven, Overloads, jede Verwendung ausserhalb
-    // der Routine, den Namen in einem String-Literal oder einer Direktive,
-    // {$L}/{$LINK} in der Datei, {$I} im implementation-Teil, eine
-    // Direktive im Bereich ausser ausgeglichenem $IF../$ENDIF bzw. $REGION,
-    // zwei Routinen auf einer Zeile.
+    // Methoden, globale FPC-Operatoren, Koepfe vor 'implementation',
+    // export/public/alias/external/forward/interrupt-Direktiven (auch FPC
+    // in Klammern: '[public, alias: ''X'']'), Overloads, jede Verwendung
+    // ausserhalb der Routine (Umlaute ohne Gross/klein), den Namen in einem
+    // String-Literal oder einer Direktive, {$L}/{$LINK} in der Datei, {$I}
+    // im implementation-Teil, eine Direktive im Bereich ausser
+    // ausgeglichenem $IF../$ENDIF bzw. $REGION, zwei Routinen auf einer
+    // Zeile. Die {$I}-Dateien davor nennt APlan.Includes - der Aufrufer
+    // prueft sie mit IncludeReason.
     class function UnusedRoutine(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out APlan: TRdxRoutinePlan;
       out AReason: string): Boolean; static;
@@ -123,7 +140,9 @@ type
     // reintroduce/message/overload/dispid, Konstruktor/Destruktor/Operator,
     // Attribut an Klasse oder Methode, {$RTTI} in der Datei, {$I} im
     // Klassenrumpf oder im implementation-Teil, einem Interface der Klasse
-    // aus einer anderen Unit, mehr als einer Deklaration oder
+    // aus einer anderen Unit (auch als erster Eintrag 'class(IFremd)' oder
+    // als Vorfahr eines lokalen Interfaces) bzw. einem Member von
+    // IInterface/IDispatch als Name, mehr als einer Deklaration oder
     // Implementierung, keiner Implementierung in der Datei, jeder weiteren
     // Verwendung (auch Property-Accessor, String-Literal, Direktive) und
     // einer Direktive im Bereich wie bei SCA164. Die Formdatei prueft der
@@ -136,12 +155,23 @@ type
     // etwa als Ereignis 'OnClick = AName'? Den Text liest der Aufrufer.
     class function FormNamesMethod(const AFormText, AName: string): Boolean;
       static;
+
+    // SCA164: die Include-Dateien AIncludes (TRdxRoutinePlan.Includes) der
+    // Unit AUnitFile lesen - neben der Unit, ohne Endung auch mit .inc/.pas,
+    // verschachtelte Includes ebenso. '' wenn keine AName als Wort nennt;
+    // sonst der Grund - auch, wenn eine nicht zu finden oder zu lesen ist:
+    // sie kann die Routine im interface-Teil deklarieren (nach dem Loeschen
+    // E2065) oder rufen (Gegen-Review H3, Minor 4). '{$I %DATE%}' (FPC) ist
+    // keine Datei.
+    class function IncludeReason(const AUnitFile: string;
+      const AIncludes: TArray<string>; const AName: string): string; static;
   end;
 
 implementation
 
 uses
   System.SysUtils,
+  System.Classes,    // TStringList (IncludeReason)
   uRefactorInfo,     // TRefactorSpan.Make
   uRdxStructFixes;   // RangeText
 
@@ -215,12 +245,24 @@ const
   FIELD_MARKS: array[0..2] of string = (':', ',', '=');
   NO_SPECIAL: array[0..2] of string = ('constructor', 'destructor',
     'operator');
+  CTOR_DTOR: array[0..1] of string = ('constructor', 'destructor');
+  KW_OPERATOR = 'operator';
+  // SCA147, Interfaces der Klasse (ForeignInterfaceReason, wie Gate E des
+  // Detektors): die Wurzeln aus System - nie in der Datei deklariert, ihre
+  // Member bekannt - und die Grenze der Kette (Detektor: 64).
+  INTERFACE_KINDS: array[0..1] of string = ('interface', 'dispinterface');
+  ROOT_INTERFACES: array[0..2] of string = ('iinterface', 'iunknown',
+    'idispatch');
+  ROOT_MEMBERS: array[0..2] of string = ('queryinterface', '_addref',
+    '_release');
+  DISPATCH_MEMBERS: array[0..3] of string = ('gettypeinfocount',
+    'gettypeinfo', 'getidsofnames', 'invoke');
+  MAX_INTERFACES = 64;
   CLASS_MODIFIERS: array[0..1] of string = ('abstract', 'sealed');
   COND_OPEN: array[0..3] of string = ('if', 'ifdef', 'ifndef', 'ifopt');
   COND_MID: array[0..1] of string = ('else', 'elseif');
   COND_CLOSE: array[0..1] of string = ('endif', 'ifend');
   LINK_WORDS: array[0..1] of string = ('l', 'link');
-  INCLUDE_WORDS: array[0..1] of string = ('i', 'include');
   // Property-Teile, hinter denen ein Methodenname Accessor ist.
   ACCESSOR_WORDS: array[0..4] of string = ('read', 'write', 'stored', 'add',
     'remove');
@@ -236,6 +278,14 @@ const
   R_IMPL_INCLUDE = '{$I}-Include im implementation-Teil (Zeile %d) - dort '
     + 'kann ein Aufrufer stehen, den die Hilfe nicht sieht';
   R_LAST_LINE = 'die Routine endet auf der letzten Zeile der Datei';
+  // SCA164: Include-Dateien vor implementation (IncludeReason).
+  R_INC_MISSING = 'Include %s vor implementation %s - es kann die Routine '
+    + 'deklarieren (interface-Teil) oder rufen, die Hilfe sieht es nicht';
+  MAX_INCLUDE_DEPTH = 4;
+  INCLUDE_EXTENSIONS: array[0..1] of string = ('.inc', '.pas');
+  // Folgt eines davon einem Include, steht es im Kopf der Unit
+  // (IncludesUpTo).
+  HEADER_FOLLOWERS: array[0..2] of string = ('unit', 'interface', 'uses');
 
 type
   // Ganze Zeilen Top..Bottom - ein Loeschbereich.
@@ -245,8 +295,8 @@ type
   end;
 
   // Was ueber einem Kopf mitgeht: '///'-Doku und Attributzeilen
-  // (Klassenrumpf, forward) oder dazu jede Zeile nur aus Kommentar
-  // (Implementierung).
+  // (Klassenrumpf, forward) oder dazu Kommentarzeilen, die die Routine
+  // nennen (Implementierung, StepAbove).
   TRdxAbove = (abDocOnly, abComments);
 
   // Ein Lauf ueber alle Code-Token: 'implementation' und jedes Vorkommen
@@ -442,7 +492,7 @@ end;
 function IsHeadNamed(AMap: TRdxCodeMap; const T: TRdxToken;
   const AArg: string): Boolean;
 begin
-  Result := IsHeadAt(AMap, T) and (After(AMap, T).Low = AArg);
+  Result := IsHeadAt(AMap, T) and SameIdent(After(AMap, T).Low, AArg);
 end;
 
 // Der Anfang des Kopfs zum Routinenwort T: 'class' davor oder T selbst.
@@ -529,17 +579,14 @@ begin
     and not InList(After(AMap, T).Low, FIELD_MARKS);
 end;
 
-// Die Direktiven hinter dem Kopf ('overload; inline;', 'external ''x''
-// name ''y'';'), auch auf Folgezeilen: je ein Wort aus AList bis zu seinem
-// ';'. R.Last wird das letzte ';', AAfter das Token dahinter.
-function ReadDirectives(AMap: TRdxCodeMap; var R: TRdxRoutine;
-  const AList: array of string; out AAfter: TRdxToken): string;
+// Ab T je ein Wort aus AList bis zu seinem ';' (wird R.Last); T wird das
+// Token hinter der letzten Direktive. '' oder der Grund.
+function DirectiveRun(AMap: TRdxCodeMap; var R: TRdxRoutine;
+  const AList: array of string; var T: TRdxToken): string;
 var
-  T, S : TRdxToken;
+  S : TRdxToken;
 begin
   Result := '';
-  R.Last := R.HeaderEnd;
-  T := After(AMap, R.HeaderEnd);
   while IsDirectiveAt(AMap, T, AList) do
   begin
     AddText(R.Directives, T.Low);
@@ -549,7 +596,66 @@ begin
     R.Last := S;
     T := After(AMap, S);
   end;
-  AAfter := T;
+end;
+
+// Die Direktiven hinter dem Kopf ('overload; inline;', 'external ''x''
+// name ''y'';'), auch auf Folgezeilen: je ein Wort aus AList bis zu seinem
+// ';'. R.Last wird das letzte ';', AAfter das Token dahinter.
+function ReadDirectives(AMap: TRdxCodeMap; var R: TRdxRoutine;
+  const AList: array of string; out AAfter: TRdxToken): string;
+begin
+  R.Last := R.HeaderEnd;
+  AAfter := After(AMap, R.HeaderEnd);
+  Result := DirectiveRun(AMap, R, AList, AAfter);
+end;
+
+// FPC-Direktiven in eckigen Klammern hinter dem Kopf ('procedure Foo;
+// [public, alias: ''FOO_C''];', Gegen-Review H3, Minor 4): die Woerter in
+// der Klammer werden Direktiven, R.Last das ';' dahinter, AAfter das Token
+// danach. Ohne sie las ReadDeclPart die Klammer als Deklarationsteil, und
+// eine per alias von aussen erreichbare Routine bekam die Hilfe. '' oder
+// der Grund.
+function ReadModifierBracket(AMap: TRdxCodeMap; var R: TRdxRoutine;
+  const AOpen: TRdxToken; out AAfter: TRdxToken): string;
+var
+  T, Close, S : TRdxToken;
+begin
+  AAfter := Default(TRdxToken);
+  Close := MatchClose(AMap, AOpen);
+  if Close.Low = '' then
+    Exit('FPC-Direktiven "[" ohne "]"');
+  T := After(AMap, AOpen);
+  while (T.Low <> '') and not SameTok(T, Close) do
+  begin
+    if T.IsWord then
+      AddText(R.Directives, T.Low);
+    T := After(AMap, T);
+  end;
+  S := After(AMap, Close);
+  if S.Low <> KW_SEMI then
+    Exit('FPC-Direktiven "[..]" ohne ";"');
+  R.Last := S;
+  AAfter := After(AMap, S);
+  Result := '';
+end;
+
+// Die Direktiven hinter einem Kopf im implementation-Teil: Woerter
+// (ReadDirectives) und FPC-Klammern (ReadModifierBracket), auch im Wechsel.
+// AAfter ist das erste Token des Deklarationsteils. Nur hier, nicht im
+// Klassenrumpf: dort beginnt '[' das Attribut des naechsten Members.
+function ReadRoutineDirectives(AMap: TRdxCodeMap; var R: TRdxRoutine;
+  out AAfter: TRdxToken): string;
+var
+  Open : TRdxToken;
+begin
+  Result := ReadDirectives(AMap, R, ROUTINE_DIRECTIVES, AAfter);
+  while (Result = '') and (AAfter.Low = '[') do
+  begin
+    Open := AAfter;
+    Result := ReadModifierBracket(AMap, R, Open, AAfter);
+    if Result = '' then
+      Result := DirectiveRun(AMap, R, ROUTINE_DIRECTIVES, AAfter);
+  end;
 end;
 
 // Eine lokale Routine ab T (Kopfwort hinter ';'): T wird ihr letztes ';'.
@@ -721,7 +827,7 @@ begin
   if Result = '' then
     Result := HeaderEndFrom(AMap, T, R.HeaderEnd);
   if Result = '' then
-    Result := ReadDirectives(AMap, R, ROUTINE_DIRECTIVES, T);
+    Result := ReadRoutineDirectives(AMap, R, T);
   if (Result <> '') or HasDirective(R, BODYLESS_DIRECTIVES, W) then Exit;
   Result := ReadDeclPart(AMap, R, T, ADepth);
   if Result = '' then
@@ -803,23 +909,85 @@ begin
       MaxInt));
 end;
 
-// Gehoert die Zeile ueber dem Kopf von R zu ihm (AMode)?
-function BelongsAbove(AMap: TRdxCodeMap; ALine: Integer;
-  const R: TRdxRoutine; AMode: TRdxAbove): Boolean;
+// Eine Zeile eines Kommentar-Laufs ueber dem Kopf: nur Kommentar, weder
+// '///'-Doku noch Attribut noch Abschnittsmarker '{ TFoo }'.
+function RunLine(AMap: TRdxCodeMap; ALine: Integer;
+  const AName: string): Boolean;
 begin
-  Result := DocLine(AMap, ALine) or AttrLine(AMap, ALine)
-    or ((AMode = abComments) and CommentOnly(AMap, ALine)
-        and not MarkerLine(AMap, ALine, R.Name));
+  Result := (ALine >= 1) and CommentOnly(AMap, ALine)
+    and not DocLine(AMap, ALine) and not AttrLine(AMap, ALine)
+    and not MarkerLine(AMap, ALine, AName);
+end;
+
+// Die Zeilen ATop..ABottom als ein Text.
+function LinesText(AMap: TRdxCodeMap; ATop, ABottom: Integer): string;
+var
+  SB : TStringBuilder;
+  Li : Integer;
+begin
+  SB := TStringBuilder.Create;
+  try
+    for Li := ATop to ABottom do
+      SB.Append(AMap.Raw(Li)).Append(#10);
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+// Geht der Kommentar-Lauf ATop..ABottom ueber dem Kopf von R mit? Nur, wenn
+// er die Routine beim Namen nennt (dann beschreibt er sie) und keinen
+// Unterdrueck- oder Absichtsmarker traegt (MarkerReason, wie SCA070).
+function RunGoes(AMap: TRdxCodeMap; ATop, ABottom: Integer;
+  const R: TRdxRoutine): Boolean;
+var
+  Text : string;
+begin
+  Text := LinesText(AMap, ATop, ABottom);
+  Result := (MarkerReason(Text) = '')
+    and HasWord(LowerCase(Text), LowerCase(Copy(R.Name,
+      LastDelimiter('.', R.Name) + 1, MaxInt)));
+end;
+
+// Ein Schritt nach oben ab ATop (TopAbove): die neue oberste Zeile oder ATop,
+// wenn darueber nichts mehr zum Kopf gehoert. '///'-Doku und Attribute
+// gehoeren immer dazu; bei abComments auch ein ganzer Kommentar-Lauf, wenn
+// er mitgeht (RunGoes).
+function StepAbove(AMap: TRdxCodeMap; const R: TRdxRoutine; AMode: TRdxAbove;
+  ATop: Integer): Integer;
+var
+  L, Run : Integer;
+begin
+  Result := ATop;
+  L := ATop - 1;
+  if L < 1 then Exit;
+  if DocLine(AMap, L) or AttrLine(AMap, L) then
+    Exit(L);
+  if (AMode = abDocOnly) or not RunLine(AMap, L, R.Name) then Exit;
+  Run := L;
+  while RunLine(AMap, Run - 1, R.Name) do
+    Dec(Run);
+  if RunGoes(AMap, Run, L, R) then
+    Result := Run;
 end;
 
 // Die oberste Zeile, die zum Kopf von R gehoert. Ein Block-Kommentar, der
-// in einer Code-Zeile darueber beginnt, bleibt ganz stehen.
+// in einer Code-Zeile darueber beginnt, bleibt ganz stehen. Seit Charge H3c
+// (Gegen-Review H3, Minor 3) geht ein Kommentar ueber einer Implementierung
+// nur mit, wenn er die Routine nennt und keinen Marker traegt - eine
+// Abschnittsueberschrift ('(* === run-time registration functions === *)',
+// '{ layout vars }'), ein '// noinspection-file' oder ein Absichtsmarker
+// gehoert zur Gruppe bzw. zur Datei und bleibt stehen, mit allem darueber.
 function TopAbove(AMap: TRdxCodeMap; const R: TRdxRoutine;
   AMode: TRdxAbove): Integer;
+var
+  Prev : Integer;
 begin
   Result := R.Head.Line;
-  while (Result > 1) and BelongsAbove(AMap, Result - 1, R, AMode) do
-    Dec(Result);
+  repeat
+    Prev := Result;
+    Result := StepAbove(AMap, R, AMode, Result);
+  until Result = Prev;
   while (Result < R.Head.Line) and AMap.StartsInside(Result) do
     Inc(Result);
 end;
@@ -917,38 +1085,8 @@ begin
   Result.Expected := RangeText(AMap, Result.Span);
 end;
 
-{ ---- Direktiven ---- }
-
-// DirectiveAt nur an '{' bzw. '(' - die Durchsichten laufen ueber jedes
-// Zeichen der Datei, DirectiveAt kopiert je Aufruf.
-function OpensDirective(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
-var
-  L : string;
-begin
-  L := AMap.Raw(ALine);
-  Result := (ACol <= Length(L)) and CharInSet(L[ACol], ['{', '('])
-    and DirectiveAt(AMap, ALine, ACol);
-end;
-
-// Das Wort einer Direktive an (ALine, ACol): '{$IFDEF X}' -> 'ifdef'; AArg:
-// dahinter Leerraum oder ein Quote (Dateiname - '{$I x.inc}', nicht
-// '{$I+}').
-function DirectiveWord(AMap: TRdxCodeMap; ALine, ACol: Integer;
-  out AArg: Boolean): string;
-var
-  L    : string;
-  i, j : Integer;
-begin
-  L := AMap.Raw(ALine);
-  i := ACol + Length('{$');
-  if L[ACol] = '(' then
-    i := ACol + Length('(*$');
-  j := i;
-  while (j <= Length(L)) and CharInSet(L[j], ['A'..'Z', 'a'..'z']) do
-    Inc(j);
-  Result := LowerCase(Copy(L, i, j - i));
-  AArg := (j <= Length(L)) and CharInSet(L[j], [' ', #9, '''']);
-end;
+{ ---- Direktiven (OpensDirective, DirectiveWord, IncludeInLines: seit
+  Charge H3c in uRdxCodeMap) ---- }
 
 // Ein offenes Gegenstueck vom Stapel nehmen (AWant 'c' oder 'r'). '' oder
 // der Grund.
@@ -1051,14 +1189,14 @@ begin
   Text := LowerCase(Copy(AMap.Raw(ALine), ACol,
     RunEnd(AMap, ALine, ACol) - ACol + 1));
   if (Facts.NameDirective = 0) and not InOwn(ALine)
-     and HasWord(Text, LowName) then
+     and HasIdentWord(Text, LowName) then
     Facts.NameDirective := ALine;
 end;
 
 procedure TRdxFactScan.Literal(AMap: TRdxCodeMap; ALine, ACol, AEnd: Integer);
 begin
   if (Facts.NameLiteral = 0) and not InOwn(ALine)
-     and HasWord(LowerCase(Copy(AMap.Raw(ALine), ACol, AEnd - ACol + 1)),
+     and HasIdentWord(LowerCase(Copy(AMap.Raw(ALine), ACol, AEnd - ACol + 1)),
        LowName) then
     Facts.NameLiteral := ALine;
 end;
@@ -1110,7 +1248,9 @@ end;
 
 // Ein Lauf ueber alle Code-Token: 'implementation' und jedes Vorkommen von
 // ALowName als Wort - auch in inaktiven $IFDEF-Zweigen (die Code-Sicht
-// wertet keine Direktiven aus).
+// wertet keine Direktiven aus). Umlaute vergleicht SameIdent ohne Gross/
+// klein (Verdacht 1 des Gegen-Reviews H3: ein Aufruf mit grossem Umlaut
+// zaehlte nicht, die Hilfe loeschte die gerufene Routine).
 function ScanName(AMap: TRdxCodeMap; const ALowName: string): TRdxNameScan;
 var
   T, P : TRdxToken;
@@ -1120,7 +1260,7 @@ begin
   T := NextToken(AMap, 1, 1);
   while T.Low <> '' do
   begin
-    if T.Low = ALowName then
+    if SameIdent(T.Low, ALowName) then
       AddToken(Result.Hits, T)
     else if (T.Low = 'implementation') and (Result.Impl.Low = '')
        and IsKeywordAfter(T, P) then
@@ -1252,8 +1392,14 @@ var
 begin
   Result := '';
   if (Length(R.Parts) > 1) or (R.Head.Low = KW_CLASS)
-     or InList(R.Keyword.Low, NO_SPECIAL) then
+     or InList(R.Keyword.Low, CTOR_DTOR) then
     Result := 'Methode einer Klasse - die meldet SCA147 bzw. SCA148'
+  else if R.Keyword.Low = KW_OPERATOR then
+    // FPC: globaler Operator ('operator explicit(A: TFoo): Integer;') - bis
+    // Charge H3c hiess auch er "Methode einer Klasse" (Gegen-Review H3,
+    // Minor 12).
+    Result := 'globaler Operator (FPC) - der Compiler ruft ihn ueber sein '
+      + 'Zeichen bzw. die Umwandlung, nicht ueber den Namen'
   else if HasDirective(R, REACHABLE_DIRECTIVES, W) then
     Result := Format('Direktive %s - die Routine ist von aussen erreichbar '
       + 'oder hat keinen Rumpf', [W]);
@@ -1285,6 +1431,30 @@ begin
     Result := 'forward-Deklaration: ' + Result;
 end;
 
+// Die Dateien der Include-Direktiven in den Zeilen 1..ALast, der Reihe
+// nach - ohne die im Kopf der Unit: folgt einem Include 'unit', 'interface'
+// oder 'uses', darf es nur tragen, was davor stehen darf, Direktiven und
+// Kommentare (eine Deklaration davor waere ein Fehler - uses ist die erste
+// Klausel, E2029). Es kann die Routine weder deklarieren noch rufen; so
+// stehen die Konfigurations-Includes 'jcl.inc', 'jvcl.inc', 'CnWizards.inc'
+// (Korpus: im Kopf, meist in einem anderen Verzeichnis als die Unit).
+function IncludesUpTo(AMap: TRdxCodeMap; ALast: Integer): TArray<string>;
+var
+  Li, Co : Integer;
+  F      : string;
+begin
+  Result := nil;
+  for Li := 1 to ALast do
+    for Co := 1 to Length(AMap.Raw(Li)) do
+      if OpensDirective(AMap, Li, Co) then
+      begin
+        F := IncludeFileAt(AMap, Li, Co);
+        if (F <> '')
+           and not InList(NextToken(AMap, Li, Co).Low, HEADER_FOLLOWERS) then
+          AddText(Result, F);
+      end;
+end;
+
 // Der Plan fuer die freie Routine R: Nachweis am Puffer, Bereiche,
 // Ersetzungen (die forward-Deklaration zuerst). '' oder der Grund.
 function PlanRoutine(AMap: TRdxCodeMap; const R: TRdxRoutine;
@@ -1314,6 +1484,9 @@ begin
   if FwdL.Top > 0 then
     AddEdit(APlan.Edits, LinesEdit(AMap, FwdL, SPAN_164));
   AddEdit(APlan.Edits, LinesEdit(AMap, Main, SPAN_164));
+  // Die Zeile von 'implementation' zaehlt mit: dort vor oder hinter dem
+  // Wort sieht FileFacts (ImplInclude ab der Zeile danach) es nicht.
+  APlan.Includes := IncludesUpTo(AMap, Scan.Impl.Line);
 end;
 
 { ---- SCA147 ---- }
@@ -1377,7 +1550,8 @@ var
 begin
   Result := False;
   AClass := Default(TRdxToken);
-  if (T.Low <> ALowName) or not IsKeywordAfter(T, Before(AMap, T)) then Exit;
+  if not SameIdent(T.Low, ALowName) or not IsKeywordAfter(T, Before(AMap, T)) then
+    Exit;
   N := After(AMap, T);
   if N.Low = '<' then
     N := AfterClose(AMap, N);
@@ -1429,20 +1603,6 @@ begin
     P := Result;
     Result := After(AMap, Result);
   end;
-end;
-
-// Ein {$I datei} in den Zeilen AFrom..ATo? Zeile oder 0.
-function IncludeInLines(AMap: TRdxCodeMap; AFrom, ATo: Integer): Integer;
-var
-  Li, Co : Integer;
-  Arg    : Boolean;
-begin
-  Result := 0;
-  for Li := AFrom to ATo do
-    for Co := 1 to Length(AMap.Raw(Li)) do
-      if OpensDirective(AMap, Li, Co)
-         and InList(DirectiveWord(AMap, Li, Co, Arg), INCLUDE_WORDS) and Arg then
-        Exit(Li);
 end;
 
 // Die Sichtbarkeit, unter der AHead im Rumpf ab AClass auf Tiefe 1 steht;
@@ -1551,44 +1711,145 @@ begin
     AddText(Result, Last);
 end;
 
-// Deklariert die Datei 'ALowName [<..>] = interface' (bzw. dispinterface)?
-function DeclaresInterface(AMap: TRdxCodeMap; const ALowName: string): Boolean;
+// 'T [<..>] = interface' bzw. dispinterface: das Token 'interface'; Low =
+// '' ohne diese Form.
+function InterfaceKindAt(AMap: TRdxCodeMap; const T: TRdxToken): TRdxToken;
 var
-  T, N : TRdxToken;
+  N : TRdxToken;
+begin
+  Result := Default(TRdxToken);
+  N := After(AMap, T);
+  if N.Low = '<' then
+    N := AfterClose(AMap, N);
+  if N.Low <> '=' then Exit;
+  N := After(AMap, N);
+  if InList(N.Low, INTERFACE_KINDS) then
+    Result := N;
+end;
+
+// Deklariert die Datei 'ALowName [<..>] = interface' (bzw. dispinterface)?
+// AParents bekommt die Vorfahren jeder solchen Deklaration dazu (die
+// Vorwaerts-Deklaration 'IFoo = interface;' traegt keine, die volle schon).
+// Der Name wird genau verglichen - ein Treffer zu viel hiesse hier "lokal",
+// also weniger Sperre.
+function InterfaceParents(AMap: TRdxCodeMap; const ALowName: string;
+  var AParents: TArray<string>): Boolean;
+var
+  T, K  : TRdxToken;
+  Names : TArray<string>;
+  S     : string;
 begin
   Result := False;
   T := NextToken(AMap, 1, 1);
   while T.Low <> '' do
   begin
+    K := Default(TRdxToken);
     if T.Low = ALowName then
+      K := InterfaceKindAt(AMap, T);
+    if K.Low <> '' then
     begin
-      N := After(AMap, T);
-      if N.Low = '<' then
-        N := AfterClose(AMap, N);
-      if (N.Low = '=')
-         and InList(After(AMap, N).Low, ['interface', 'dispinterface']) then
-        Exit(True);
+      Result := True;
+      Names := HeritageNames(AMap, K);
+      for S in Names do
+        AddText(AParents, S);
     end;
     T := After(AMap, T);
   end;
 end;
 
-// Ein Interface der Klasse aus einer anderen Unit? Dann kann die Methode
-// eines seiner Member sein (Aufruf ueber das Interface, ohne Namen in
-// dieser Unit). Der erste Eintrag ist die Vorfahrklasse. '' oder Grund.
-function ForeignInterfaceReason(AMap: TRdxCodeMap;
-  const AClass: TRdxToken): string;
+// 'IFoo' -> True, 'Item' -> False: die Delphi-Konvention I +
+// Grossbuchstabe, in Original-Schreibung (wie der Detektor,
+// Sca147IsInterfaceStyleName).
+function InterfaceStyle(const S: string): Boolean;
+begin
+  Result := (Length(S) >= 2) and (S[1] = 'I') and CharInSet(S[2], ['A'..'Z']);
+end;
+
+// Die Interfaces der Vorfahrenliste: ab dem zweiten Eintrag jeder (Delphi-
+// Grammatik), der erste nur, wenn er wie ein Interface heisst oder in der
+// Datei als Interface steht - 'class(IFremd)' hat die Basis TObject.
+function ImplementedInterfaces(AMap: TRdxCodeMap;
+  const AClass: TRdxToken): TArray<string>;
 var
-  Names : TArray<string>;
-  i     : Integer;
+  Names, Dummy : TArray<string>;
+  i            : Integer;
+begin
+  Result := nil;
+  Dummy := nil;
+  Names := HeritageNames(AMap, AClass);
+  for i := 0 to High(Names) do
+    if (i > 0) or InterfaceStyle(Names[i])
+       or InterfaceParents(AMap, LowerCase(Names[i]), Dummy) then
+      AddText(Result, Names[i]);
+end;
+
+// Gehoert ALowMethod zu den Membern der System-Wurzel ALowRoot
+// (IInterface/IUnknown bzw. IDispatch)?
+function RootMember(const ALowRoot, ALowMethod: string): Boolean;
+begin
+  Result := InList(ALowMethod, ROOT_MEMBERS)
+    or ((ALowRoot = 'idispatch') and InList(ALowMethod, DISPATCH_MEMBERS));
+end;
+
+// Ein Interface AName der Arbeitsliste: eine Wurzel (nur ein Name aus
+// ihren Membern sperrt) oder in der Datei deklariert (seine Vorfahren
+// kommen an AWork) - sonst aus einer anderen Unit. '' oder der Grund.
+function InterfaceReason(AMap: TRdxCodeMap; const AName, ALowMethod: string;
+  var AWork: TArray<string>): string;
+var
+  Key, P  : string;
+  Parents : TArray<string>;
 begin
   Result := '';
-  Names := HeritageNames(AMap, AClass);
-  for i := 1 to High(Names) do
-    if not DeclaresInterface(AMap, LowerCase(Names[i])) then
-      Exit(Format('die Klasse implementiert %s (nicht in dieser Datei '
-        + 'deklariert) - die Methode kann ein Interface-Member sein',
-        [Names[i]]));
+  Key := LowerCase(AName);
+  Parents := nil;
+  if InList(Key, ROOT_INTERFACES) then
+  begin
+    if RootMember(Key, ALowMethod) then
+      Result := Format('%s ist ein Member von %s - die Methode kann es '
+        + 'implementieren', [ALowMethod, AName]);
+  end
+  else if InterfaceParents(AMap, Key, Parents) then
+  begin
+    for P in Parents do
+      AddText(AWork, P);
+  end
+  else
+    Result := Format('die Klasse implementiert %s (nicht in dieser Datei '
+      + 'deklariert) - die Methode kann ein Interface-Member sein', [AName]);
+end;
+
+// Ein Interface der Klasse aus einer anderen Unit - direkt oder als
+// Vorfahr eines Interfaces dieser Datei? Dann kann die Methode eines seiner
+// Member sein (Aufruf ueber das Interface, ohne Namen in dieser Unit). Gate
+// E des Detektors nachgebildet (Sca147TryResolveIfaceMembers; Gegen-Review
+// H3, Minor 2 - bis Charge H3c fehlten 'class(IFremd)' und die Vorfahren
+// lokaler Interfaces, nach der Hilfe E2291): jedes lokale Interface bringt
+// seine Vorfahren mit; IInterface/IUnknown/IDispatch sind bekannt - dort
+// sperrt nur ein Methodenname aus ihren Membern. Die Member lokaler
+// Interfaces findet schon die Namenssuche (Vorkommen ausserhalb von
+// Deklaration und Implementierung). '' oder der Grund.
+function ForeignInterfaceReason(AMap: TRdxCodeMap; const AClass: TRdxToken;
+  const ALowMethod: string): string;
+var
+  Work, Seen : TArray<string>;
+  i          : Integer;
+  Name       : string;
+begin
+  Result := '';
+  Seen := nil;
+  Work := ImplementedInterfaces(AMap, AClass);
+  i := 0;
+  while (Result = '') and (i < Length(Work)) do
+  begin
+    Name := Work[i];
+    Inc(i);
+    if InList(LowerCase(Name), Seen) then Continue;
+    AddText(Seen, LowerCase(Name));
+    if Length(Seen) > MAX_INTERFACES then
+      Exit('Interface-Kette zu lang - Grenzen nicht sicher');
+    Result := InterfaceReason(AMap, Name, ALowMethod, Work);
+  end;
 end;
 
 // Der letzte Teil eines Pfads ('TOuter.TInner' -> 'TInner').
@@ -1630,7 +1891,7 @@ begin
   if IncLine > 0 then
     Exit(Format('{$I}-Include im Klassenrumpf (Zeile %d) - dort kann die '
       + 'Methode stehen (Property-Accessor)', [IncLine]));
-  Result := ForeignInterfaceReason(AMap, C.ClassTok);
+  Result := ForeignInterfaceReason(AMap, C.ClassTok, LowerCase(D.Name));
 end;
 
 // Die eine Implementierung der Methode, gelesen bis zu ihrem Ende. '' oder
@@ -1708,7 +1969,115 @@ begin
   AddEdit(APlan.Edits, LinesEdit(AMap, ImplL, SPAN_147));
 end;
 
+{ ---- SCA164: Include-Dateien vor implementation ---- }
+
+// Die Datei AFile eines Includes, relativ zu ADir (Verzeichnis mit
+// Trenner); ohne Endung auch mit .inc bzw. .pas wie die Compiler. '' wenn
+// keine da ist.
+function IncludePath(const ADir, AFile: string): string;
+var
+  Ext : string;
+begin
+  Result := AFile;
+  if (ExtractFileDrive(AFile) = '')
+     and ((AFile = '') or not CharInSet(AFile[1], ['\', '/'])) then
+    Result := ADir + AFile;
+  if FileExists(Result) then Exit;
+  if ExtractFileExt(AFile) = '' then
+    for Ext in INCLUDE_EXTENSIONS do
+      if FileExists(Result + Ext) then
+        Exit(Result + Ext);
+  Result := '';
+end;
+
+// IncludePath, und fuer '\datei.inc' (mORMot-Kopien im Korpus) auch die
+// Datei neben der Unit - gelesen wird nur, was da ist; was der Compiler
+// nimmt, haengt am Suchpfad.
+function FindInclude(const ADir, AFile: string): string;
+begin
+  Result := IncludePath(ADir, AFile);
+  if (Result = '') and (AFile <> '') and CharInSet(AFile[1], ['\', '/']) then
+    Result := IncludePath(ADir, Copy(AFile, 2, MaxInt));
+end;
+
+// Die Datei APath nach ALines; False, wenn sie nicht zu lesen ist (Oeffnen,
+// Lesen, Kodierung - wie die Formdatei in uRdxFixTable).
+function ReadIncludeText(const APath: string; ALines: TStringList): Boolean;
+begin
+  Result := True;
+  try
+    ALines.LoadFromFile(APath);
+  except
+    on EStreamError do
+      Result := False;
+    on EEncodingError do
+      Result := False;
+  end;
+end;
+
+// Das Include AFile (relativ zu ADir, sonst zum Verzeichnis der Unit
+// AUnitDir) und seine verschachtelten Includes bis MAX_INCLUDE_DEPTH: ''
+// wenn keines AName nennt, sonst der Grund (auch: nicht gefunden, nicht
+// lesbar).
+function IncludeFileReason(const ADir, AUnitDir, AFile, AName: string;
+  ADepth: Integer): string;
+var
+  Path, F : string;
+  SL      : TStringList;
+  Map     : TRdxCodeMap;
+  Nested  : TArray<string>;
+begin
+  Result := '';
+  if Copy(AFile, 1, 1) = '%' then Exit;
+  if AUnitDir = '' then
+    Exit(Format(R_INC_MISSING, [AFile, 'die Datei der Unit ist unbekannt']));
+  if ADepth > MAX_INCLUDE_DEPTH then
+    Exit(Format(R_INC_MISSING, [AFile, 'zu tief verschachtelt']));
+  Path := FindInclude(ADir, AFile);
+  if Path = '' then
+    Path := FindInclude(AUnitDir, AFile);
+  if Path = '' then
+    Exit(Format(R_INC_MISSING, [AFile, 'nicht neben der Unit gefunden']));
+  Nested := nil;
+  Map := nil;
+  SL := TStringList.Create;
+  try
+    if not ReadIncludeText(Path, SL) then
+      Exit(Format(R_INC_MISSING, [AFile, 'nicht lesbar']));
+    if HasIdentWord(LowerCase(SL.Text), LowerCase(AName)) then
+      Exit(Format('das Include %s nennt %s - eine Deklaration im '
+        + 'interface-Teil (nach dem Loeschen E2065) oder ein Aufruf, den die '
+        + 'Hilfe nicht sieht', [AFile, AName]));
+    Map := TRdxCodeMap.Create(SL);
+    Nested := IncludesUpTo(Map, Map.LineCount);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+  for F in Nested do
+  begin
+    Result := IncludeFileReason(ExtractFilePath(Path), AUnitDir, F, AName,
+      ADepth + 1);
+    if Result <> '' then
+      Exit(Format('%s (eingebunden von %s)', [Result, AFile]));
+  end;
+end;
+
 { TRdxRoutineFixes }
+
+class function TRdxRoutineFixes.IncludeReason(const AUnitFile: string;
+  const AIncludes: TArray<string>; const AName: string): string;
+var
+  F, Dir : string;
+begin
+  Result := '';
+  Dir := ExtractFilePath(AUnitFile);
+  for F in AIncludes do
+  begin
+    Result := IncludeFileReason(Dir, Dir, F, AName, 1);
+    if Result <> '' then Exit;
+  end;
+end;
 
 class function TRdxRoutineFixes.ReadRoutine(AMap: TRdxCodeMap;
   const AHead: TRdxToken; out ARoutine: TRdxRoutine): string;
@@ -1746,10 +2115,10 @@ var
   i, n : Integer;
 begin
   n := Length(AClassParts);
-  Result := (Length(AParts) > n) and (AParts[High(AParts)] = ALowMethod);
+  Result := (Length(AParts) > n) and SameIdent(AParts[High(AParts)], ALowMethod);
   if not Result then Exit;
   for i := 1 to n do
-    Result := Result and (AParts[High(AParts) - i] = AClassParts[n - i]);
+    Result := Result and SameIdent(AParts[High(AParts) - i], AClassParts[n - i]);
 end;
 
 class function TRdxRoutineFixes.FindMethodImpls(AMap: TRdxCodeMap;
@@ -1849,7 +2218,7 @@ end;
 class function TRdxRoutineFixes.FormNamesMethod(const AFormText,
   AName: string): Boolean;
 begin
-  Result := HasWord(LowerCase(AFormText), LowerCase(AName));
+  Result := HasIdentWord(LowerCase(AFormText), LowerCase(AName));
 end;
 
 end.

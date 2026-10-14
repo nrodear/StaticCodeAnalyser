@@ -282,6 +282,26 @@ def list_part(text):
     return text[p:] if p >= 0 else text
 
 
+def drift_detail(old, new):
+    """Wo die Datei vom Generat abweicht: die erste abweichende Zeile; sind
+    alle gemeinsamen Zeilen gleich, die Zeilenzahl (zip schwieg bis Charge
+    H3c, wenn nur Zeilen fehlten oder dazukamen - Gegen-Review H3, Minor
+    11); sind auch die gleich, unterscheiden sich nur die Zeilenenden."""
+    a_lines, b_lines = old.splitlines(), new.splitlines()
+    for nr, (a, b) in enumerate(zip(a_lines, b_lines), 1):
+        if a != b:
+            return ('  Zeile %d Datei: %s\n  Zeile %d neu  : %s'
+                    % (nr, a[:120], nr, b[:120]))
+    if len(a_lines) != len(b_lines):
+        nr = min(len(a_lines), len(b_lines)) + 1
+        rest = a_lines[nr - 1:] or b_lines[nr - 1:]
+        return ('  Zeilenzahl: Datei %d, neu %d - ab Zeile %d nur in der %s: %s'
+                % (len(a_lines), len(b_lines), nr,
+                   'Datei' if len(a_lines) > len(b_lines) else 'neuen Fassung',
+                   rest[0][:120]))
+    return '  alle Zeilen gleich - nur Zeilenenden bzw. Dateiende weichen ab'
+
+
 def main(argv):
     check = '--check' in argv
     date = None
@@ -335,11 +355,7 @@ def main(argv):
                   % os.path.relpath(DST, ROOT))
             # Erste abweichende Zeile mitgeben: ohne sie war ein einmaliges
             # DRIFT (2026-10-14) nicht mehr zu erklaeren.
-            for nr, (a, b) in enumerate(zip(old.splitlines(), text.splitlines()), 1):
-                if a != b:
-                    print('  Zeile %d Datei: %s' % (nr, a[:120]))
-                    print('  Zeile %d neu  : %s' % (nr, b[:120]))
-                    break
+            print(drift_detail(old, text))
             return 1
         print('OK: ' + os.path.relpath(DST, ROOT))
         return 0

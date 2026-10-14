@@ -123,6 +123,7 @@
         <DCCReference Include="uTestRdxRoutineFixes.pas"/>
         <DCCReference Include="uTestRdxMethodFixes.pas"/>
         <DCCReference Include="uTestRdxCleanupFixes.pas"/>
+        <DCCReference Include="uTestRdxCleanupScope.pas"/>
         <DCCReference Include="uTestRdxCleanupDetector.pas"/>
         <DCCReference Include="uTestRdxNilFix.pas"/>
         <DCCReference Include="uTestRdxSimpleFixesDetector.pas"/>

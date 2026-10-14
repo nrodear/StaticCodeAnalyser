@@ -11,6 +11,11 @@ unit uTestRdxMethodFixes;
 //   Accessor, Name als String-Literal, {$RTTI}, Attribut an Methode und
 //   Klasse, keine Implementierung, {$I} im implementation-Teil, Interface
 //   aus einer anderen Unit, verschobene Meldung; die Formdatei-Pruefung.
+//   Charge H3c (Gegen-Review H3, Pruefer-Fixtures rc/cases147.txt,
+//   casesuni.txt): Interface als erster Eintrag 'class(IFremd)', fremder
+//   Vorfahr eines lokalen Interfaces, IInterface-Member als Name, lokale
+//   Kette bis IInterface (Hilfe); Kommentar ueber der Implementierung ohne
+//   den Namen bleibt; Aufruf in anderer Umlaut-Schreibung.
 // Die Gegenprobe mit dem echten Detektor steht in
 // uTestRdxRoutineFixesDetector (nur Delphi).
 
@@ -35,6 +40,10 @@ type
     [Test] procedure Sca147_ForeignInterface_NoHelp;
     [Test] procedure Sca147_Moved_NoHelp;
     [Test] procedure Sca147_FormNamesMethod;
+    [Test] procedure Sca147_FirstEntryInterface_NoHelp;
+    [Test] procedure Sca147_InterfaceAncestors;
+    [Test] procedure Sca147_CommentAboveImpl;
+    [Test] procedure Sca147_UmlautCall_NoHelp;
   end;
 
 implementation
@@ -170,9 +179,9 @@ end;
 procedure TTestRdxMethodFixes.Sca147_DeclAndImpl;
 begin
   // '///' geht mit der Deklaration, der Gruppenkommentar im Rumpf bleibt;
-  // ueber der Implementierung gehen Kommentar und Leerzeile mit, der
-  // Abschnittsmarker '{ TFoo }' bleibt; der rekursive Aufruf im eigenen
-  // Rumpf zaehlt nicht.
+  // ueber der Implementierung gehen Kommentar (er nennt die Methode) und
+  // Leerzeile mit, der Abschnittsmarker '{ TFoo }' bleibt; der rekursive
+  // Aufruf im eigenen Rumpf zaehlt nicht.
   Assert.AreEqual(UnitOf([
       '  TFoo = class',
       '  private',
@@ -205,7 +214,7 @@ begin
       '',
       '{ TFoo }',
       '',
-      '// Old helper',
+      '// Dead: old helper',
       'procedure TFoo.Dead(A: Integer);',
       'begin',
       '  if A > 0 then',
@@ -355,6 +364,77 @@ begin
   Assert.IsTrue(TRdxRoutineFixes.FormNamesMethod(FORM, 'formshow'));
   Assert.IsFalse(TRdxRoutineFixes.FormNamesMethod(FORM, 'Form'));
   Assert.IsFalse(TRdxRoutineFixes.FormNamesMethod(FORM, 'FormShowX'));
+end;
+
+// ---- Charge H3c (Gegen-Review H3) ----
+
+procedure TTestRdxMethodFixes.Sca147_FirstEntryInterface_NoHelp;
+begin
+  // Pruefer-Fall (Minor 2): 'class(IFremd)' - die Basis ist TObject, der
+  // erste Eintrag ein Interface aus einer anderen Unit (nach der Hilfe
+  // E2291, wenn Bar sein Member ist).
+  AssertRefused(UnitOf(['  TImpl = class(IExternal)', '  private',
+    '    procedure Bar;', '  end;'], ['procedure TImpl.Bar;', 'begin',
+    'end;']), 6, 'TImpl', 'Bar', 'IExternal');
+end;
+
+procedure TTestRdxMethodFixes.Sca147_InterfaceAncestors;
+begin
+  // Pruefer-Fall (Minor 2): das lokale IFoo erbt von IExternal.
+  AssertRefused(UnitOf(['  IFoo = interface(IExternal)', '  end;',
+    '  TImpl = class(TInterfacedObject, IFoo)', '  private',
+    '    procedure Bar;', '  end;'], ['procedure TImpl.Bar;', 'begin',
+    'end;']), 8, 'TImpl', 'Bar', 'IExternal');
+  // Eine Kette lokaler Interfaces bis IInterface: alle bekannt, Bar ist
+  // keines ihrer Member - die Hilfe bleibt.
+  Assert.AreEqual(Bare(['  IBase = interface(IInterface)', '  end;',
+      '  IFoo = interface(IBase)', '  end;',
+      '  TImpl = class(TInterfacedObject, IFoo)', '  private', '  end;']),
+    FixOk(UnitOf(['  IBase = interface(IInterface)', '  end;',
+      '  IFoo = interface(IBase)', '  end;',
+      '  TImpl = class(TInterfacedObject, IFoo)', '  private',
+      '    procedure Bar;', '  end;'], ['procedure TImpl.Bar;', 'begin',
+      'end;']), 10, 'TImpl', 'Bar'));
+  // Ein Member von IInterface als Name: _AddRef bedient das Interface.
+  AssertRefused(UnitOf(['  TImpl = class(TObject, IInterface)', '  private',
+    '    function _AddRef: Integer; stdcall;', '  end;'],
+    ['function TImpl._AddRef: Integer;', 'begin', '  Result := 1;', 'end;']),
+    6, 'TImpl', '_AddRef', 'Member von IInterface');
+end;
+
+procedure TTestRdxMethodFixes.Sca147_CommentAboveImpl;
+var
+  Src : string;
+begin
+  // Minor 3: ein Kommentar ohne den Namen der Methode bleibt (er kann eine
+  // Gruppe ueberschreiben); einer, der sie nennt, geht mit.
+  Src := UnitOf(['  TFoo = class', '  private', '    procedure Dead;',
+    '    procedure Dead2;', '  end;'], ['', '// Gruppe: Aufraeumen',
+    'procedure TFoo.Dead;', 'begin', 'end;', '', '// Dead2 raeumt auf',
+    'procedure TFoo.Dead2;', 'begin', 'end;']);
+  Assert.AreEqual(UnitOf(['  TFoo = class', '  private', '    procedure Dead2;',
+      '  end;'], ['', '// Gruppe: Aufraeumen', '// Dead2 raeumt auf',
+      'procedure TFoo.Dead2;', 'begin', 'end;']),
+    FixOk(Src, 6, 'TFoo', 'Dead'));
+  Assert.AreEqual(UnitOf(['  TFoo = class', '  private', '    procedure Dead;',
+      '  end;'], ['', '// Gruppe: Aufraeumen', 'procedure TFoo.Dead;', 'begin',
+      'end;']),
+    FixOk(Src, 7, 'TFoo', 'Dead2'));
+end;
+
+procedure TTestRdxMethodFixes.Sca147_UmlautCall_NoHelp;
+var
+  Lower, Upper : string;
+begin
+  // Pruefer-Fall (casesuni, Verdacht 1) fuer Methoden: der Aufruf in
+  // Grossschreibung mit Umlaut.
+  Lower := 'Pr' + #$00FC + 'fe';
+  Upper := 'PR' + #$00DC + 'FE';
+  AssertRefused(UnitOf(['  TFoo = class', '  private',
+    '    procedure ' + Lower + ';', '  public', '    procedure Run;', '  end;'],
+    ['procedure TFoo.' + Lower + ';', 'begin', 'end;', '',
+    'procedure TFoo.Run;', 'begin', '  ' + Upper + ';', 'end;']), 6, 'TFoo',
+    Lower, 'verwendet');
 end;
 
 initialization

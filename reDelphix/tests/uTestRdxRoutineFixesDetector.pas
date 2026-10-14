@@ -257,7 +257,8 @@ end;
 
 procedure TTestRdxRoutineFixesDetector.Sca147_RoundTrip;
 begin
-  // '///' an der Deklaration, Kommentar und Leerzeile an der
+  // '///' an der Deklaration, Kommentar (er nennt die Methode - seit
+  // Charge H3c bleibt einer ohne den Namen) und Leerzeile an der
   // Implementierung gehen mit. Ohne rekursiven Aufruf: den zaehlte der
   // Detektor als Verwendung (mehr als zwei Vorkommen) - der Planer-Fall
   // steht in uTestRdxMethodFixes.
@@ -270,7 +271,7 @@ begin
       '  private', '    /// <summary>Old</summary>',
       '    procedure Dead(A: Integer);', '    procedure Used;', '  public',
       '    procedure Run;', '  end;', 'implementation', '',
-      '// Old helper', 'procedure TFoo.Dead(A: Integer);', 'begin',
+      '// Dead: old helper', 'procedure TFoo.Dead(A: Integer);', 'begin',
       'end;', '',
       'procedure TFoo.Used;', 'begin', 'end;', '', 'procedure TFoo.Run;',
       'begin', '  Used;', 'end;', '', 'end.']), fkUnusedPrivateMethod));

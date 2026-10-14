@@ -35,6 +35,8 @@ program reDelphix.Test;
 //                        Methode) auf Text, ohne Parser
 //   * uTestRdxCleanupFixes - Quick-Fixes SCA070/SCA053 (Aufraeumen,
 //                        Charge H3a) und CutEdit auf Text, ohne Parser
+//   * uTestRdxCleanupScope - SCA053-Sperren der Charge H3c (Include,
+//                        Makro, asm, Klammer) auf Text, ohne Parser
 //   * uTestRdxCleanupDetector - dieselben Hilfen gegen die echten
 //                        Detektoren uCommentedOutCode/uUnusedLocal
 //   * uTestRdxExprFixes - Editorhilfen SCA066/SCA072/SCA084 (uQuickFix-
@@ -111,6 +113,7 @@ uses
   uTestRdxRoutineFixes in 'uTestRdxRoutineFixes.pas',
   uTestRdxMethodFixes in 'uTestRdxMethodFixes.pas',
   uTestRdxCleanupFixes in 'uTestRdxCleanupFixes.pas',
+  uTestRdxCleanupScope in 'uTestRdxCleanupScope.pas',
   uTestRdxCleanupDetector in 'uTestRdxCleanupDetector.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',
   uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas',

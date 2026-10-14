@@ -34,7 +34,10 @@ unit uRdxCleanupFixes;
 // uebergreifend) und das Code-Merkmal der ersten und letzten Zeile, SCA053
 // ueber die Vorkommen des Namens im Rohtext der Routine (die Code-Sicht
 // liest Code unter einer inaktiven Direktive und in asm als Code - beides
-// zaehlt als Verwendung).
+// zaehlt als Verwendung). Was den Namen verwenden kann, ohne ihn als Code zu
+// tragen, sperrt (Gegen-Review H3, Charge H3c): ein {$I}-Include, eine
+// Direktive mit dem Namen und asm im Gueltigkeitsbereich (Stack-Rahmen),
+// ein FPC-Makro mit dem Namen in der Datei.
 
 interface
 
@@ -77,7 +80,10 @@ type
     // 'absolute', einem Typ ueber mehrere Zeilen (record), einem Attribut,
     // einem Kommentar im geloeschten Text, einer Direktive in der Deklaration bzw. ihrer
     // var-Section und einem 'class operator Initialize/Finalize' in der
-    // Unit (verwalteter Record: die Variable fuehrt Code aus).
+    // Unit (verwalteter Record: die Variable fuehrt Code aus); seit Charge
+    // H3c auch bei einer Deklaration in einer offenen Klammer (Parameter),
+    // einem {$I}-Include, einer Direktive mit dem Namen oder asm im
+    // Gueltigkeitsbereich und einem FPC-Makro mit dem Namen in der Datei.
     class function UnusedLocalVar(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
@@ -113,7 +119,8 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxStructFixes;   // RangeText, CommentInRange
+  uRdxStructFixes,   // RangeText, CommentInRange
+  uRdxRoutineFixes;  // ReadRoutine (SCA053: Ende des Gueltigkeitsbereichs)
 
 const
   SPAN_070 = 'sca070';
@@ -126,12 +133,6 @@ const
   R_MOVED = 'Zeile verschoben? Datei neu pruefen';
   // Zahlen aus einer Meldung - darueber ist sie kaputt (kein Ueberlauf).
   MAX_NUMBER = 10000000;
-  // SCA070: Absichtskommentare wie bei SCA019 (uTodoComment) - die drei
-  // Marker hier in jeder Schreibweise, MARKER_XXX nur gross (klein ist es
-  // dort ein Platzhalter); ein Unterdrueck-Marker wirkt auf andere Funde.
-  INTENT_MARKERS: array[0..2] of string = ('todo', 'fixme', 'hack');
-  MARKER_XXX      = 'XXX';
-  MARKER_SUPPRESS = 'noinspection';
   // SCA053: Schluesselwoerter von Delphi - kein Variablenname (17
   // Korpusfunde nennen 'resourcestring': der Parser las die Section als
   // Variable).
@@ -173,14 +174,18 @@ const
   // Hinter dem ';' eines prozeduralen Typs: gehoert noch zur Deklaration.
   CALL_CONVENTIONS: array[0..6] of string = ('stdcall', 'cdecl', 'register',
     'pascal', 'safecall', 'winapi', 'varargs');
-  // Hier endet ein Deklarationsteil ohne Rumpf.
-  BODY_STOPS: array[0..7] of string = ('end', 'implementation',
-    'initialization', 'finalization', 'interface', 'unit', 'program',
-    'library');
   // Hinter dem Namen eines weiteren Section-Eintrags ('Name ,' / 'Name :').
   ITEM_FOLLOW: array[0..1] of string = (',', ':');
-  // Lokale Routine ohne Rumpf.
-  NO_BODY: array[0..1] of string = ('forward', 'external');
+  // So viele lokale Routinen vor einer var-Section ueberspringt die Suche
+  // nach ihrer Routine (OwnerRoutine).
+  MAX_OWNER_STEPS = 64;
+  // Stehen in keiner Parameterliste - rueckwaerts endet dort die Suche nach
+  // einer offenen Klammer (InOpenParen).
+  PAREN_STOPS: array[0..3] of string = ('begin', 'end', 'implementation',
+    'interface');
+  // FPC-Makro: '{$DEFINE M := X}' (MacroReason).
+  MACRO_WORDS: array[0..1] of string = ('define', 'definec');
+  MACRO_ASSIGN = ':=';
 
 type
   // SCA070: die Region der Meldung.
@@ -269,30 +274,6 @@ begin
     Result := 1
   else if (T.Low = ')') or (T.Low = ']') then
     Result := -1;
-end;
-
-// Bezeichner-Zeichen nur ASCII - wie der Detektor (TDetectorUtils) die
-// Wortgrenze eines Code-Merkmals sieht.
-function IsAsciiIdent(C: Char): Boolean;
-begin
-  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
-end;
-
-// AWord als ganzes Wort in AText (gleiche Schreibweise).
-function HasWord(const AText, AWord: string): Boolean;
-var
-  P, E : Integer;
-begin
-  Result := False;
-  P := Pos(AWord, AText);
-  while P > 0 do
-  begin
-    E := P + Length(AWord);
-    if ((P = 1) or not IsAsciiIdent(AText[P - 1]))
-       and ((E > Length(AText)) or not IsAsciiIdent(AText[E])) then
-      Exit(True);
-    P := Pos(AWord, AText, P + 1);
-  end;
 end;
 
 // Die Zahl ab S[AAt] (Ziffern); 0 ohne.
@@ -703,8 +684,8 @@ begin
   S := Trim(StripBackticks(APiece));
   Low := LowerCase(S);
   Result := ((S <> '') and (S[Length(S)] = ';')) or (Pos(':=', S) > 0)
-    or HasWord(Low, 'begin') or HasWord(Low, 'procedure')
-    or HasWord(Low, 'function');
+    or HasAsciiWord(Low, 'begin') or HasAsciiWord(Low, 'procedure')
+    or HasAsciiWord(Low, 'function');
 end;
 
 // Der Inhalt von AComment auf ALine (ohne Begrenzer), ab Spalte AFrom.
@@ -807,24 +788,6 @@ begin
     ATo := CloserStart(AMap, G);
 end;
 
-// Steht im geloeschten Text ein Unterdrueck- oder Absichtsmarker? '' oder
-// der Grund.
-function MarkerReason(const AText: string): string;
-var
-  Low, M : string;
-begin
-  Result := '';
-  Low := LowerCase(AText);
-  if Pos(MARKER_SUPPRESS, Low) > 0 then
-    Exit('noinspection-Marker im Bereich - er unterdrueckt andere Funde');
-  for M in INTENT_MARKERS do
-    if HasWord(Low, M) then
-      Exit(Format('%s im Bereich - ein Absichtskommentar bleibt stehen',
-        [UpperCase(M)]));
-  if HasWord(AText, MARKER_XXX) then
-    Result := 'XXX im Bereich - ein Absichtskommentar bleibt stehen';
-end;
-
 class function TRdxCleanupFixes.CommentedOutCode(AMap: TRdxCodeMap;
   ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
@@ -867,26 +830,6 @@ begin
   if Q = 0 then
     Q := Length(AMessage) + 1;
   Result := Trim(Copy(AMessage, Length(KEY_VAR) + 1, Q - Length(KEY_VAR) - 1));
-end;
-
-// Gleicher Bezeichner? Beide klein geschrieben (ASCII); Zeichen ueber #127
-// gelten als gleich, wenn beide darueber liegen - Delphi vergleicht
-// Bezeichner auch dort ohne Gross/klein, und ein Treffer zu viel sperrt
-// nur.
-function SameIdent(const ALow, AKey: string): Boolean;
-var
-  i : Integer;
-begin
-  Result := Length(ALow) = Length(AKey);
-  i := 1;
-  while Result and (i <= Length(ALow)) do
-  begin
-    if (ALow[i] > #127) or (AKey[i] > #127) then
-      Result := (ALow[i] > #127) and (AKey[i] > #127)
-    else
-      Result := ALow[i] = AKey[i];
-    Inc(i);
-  end;
 end;
 
 // Steht an T ein Routinenkopf (kein prozeduraler Typ, keine anonyme
@@ -1151,6 +1094,34 @@ begin
       + '("%s")', [K.Low]);
 end;
 
+// Steht T in einer offenen Klammer - ein Parameter einer Routine oder eines
+// Prozedurtyps ('F: function(' bzw. 'procedure Inner(' und auf der
+// Folgezeile 'var X: Integer;')? Dort ist 'var' ein Parametermodifikator,
+// kein Abschnitt (Gegen-Review H3, Minor 1: die Hilfe loeschte den
+// Parameter, aus 'Inner(A, A)' wurde ein Aufruf mit zu vielen Argumenten).
+// Rueckwaerts mit Klammerbilanz bis zur oeffnenden Klammer; begin, end,
+// implementation und interface stehen in keiner Parameterliste - dort ist
+// T sicher draussen.
+function InOpenParen(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
+var
+  P, Q  : TRdxToken;
+  Depth : Integer;
+begin
+  Result := False;
+  Depth := 0;
+  P := Before(AMap, T);
+  while P.Low <> '' do
+  begin
+    Q := Before(AMap, P);
+    Dec(Depth, ParenDelta(P));
+    if Depth < 0 then
+      Exit(True);
+    if (Depth = 0) and IsKeywordAfter(P, Q) and InList(P.Low, PAREN_STOPS) then
+      Exit;
+    P := Q;
+  end;
+end;
+
 // Wohin die Deklaration gehoert: Inline in einem Block oder var-Section
 // einer Routine. Setzt VarTok, InBlock und Stop. '' oder der Grund.
 function OwnerReason(AMap: TRdxCodeMap; var ADecl: TRdxVarDecl): string;
@@ -1167,6 +1138,9 @@ begin
   else
     Result := Format('unklar, wozu die Deklaration gehoert ("%s" davor)',
       [ADecl.Lead.Low]);
+  if (Result = '') and InOpenParen(AMap, ADecl.First) then
+    Result := 'die Deklaration steht in einer offenen Klammer - ein Parameter '
+      + 'einer Routine bzw. eines Prozedurtyps, keine lokale Variable';
   if Result <> '' then
     Exit;
   if Before(AMap, ADecl.VarTok).Low = 'class' then
@@ -1179,94 +1153,35 @@ begin
       + 'Hilfe';
 end;
 
-// Das end zu einem record (case darin hat kein eigenes end); Low = ''
-// ohne.
-function RecordEnd(AMap: TRdxCodeMap; const ARecord: TRdxToken): TRdxToken;
+// Die Routine, deren Deklarationsteil die var-Section von ADecl traegt:
+// ab dem Kopf, an dem die Rueckwaertssuche endete (ADecl.Stop); endet deren
+// Routine vor der Section (eine lokale Routine davor), weiter ab ihrem Kopf
+// rueckwaerts. Die Grenzen liest der Baustein ReadRoutine
+// (uRdxRoutineFixes) - bis Charge H3c hatte SCA053 einen eigenen Leser
+// (BodyEnd mit BodyStep und RecordEnd, Gegen-Review H3, Major 2). Der
+// endete bei einem 'end' als Bezeichner ('Range(start := 0, End := 0)',
+// benanntes OLE-Argument) mitten im Rumpf, und eine Verwendung dahinter
+// blieb ungesehen; ReadRoutine verlangt hinter dem end ein ';' und lehnt
+// dort ab. '' oder der Grund.
+function OwnerRoutine(AMap: TRdxCodeMap; const ADecl: TRdxVarDecl;
+  out R: TRdxRoutine): string;
 var
-  T, Prev : TRdxToken;
-  Depth   : Integer;
+  H, Stop : TRdxToken;
+  n       : Integer;
 begin
-  Result := Default(TRdxToken);
-  Depth := 1;
-  Prev := ARecord;
-  T := After(AMap, ARecord);
-  while T.Low <> '' do
+  H := ADecl.Stop;
+  for n := 1 to MAX_OWNER_STEPS do
   begin
-    if IsKeywordAfter(T, Prev) and (T.Low = 'record') then
-      Inc(Depth)
-    else if IsKeywordAfter(T, Prev) and (T.Low = 'end') then
-    begin
-      Dec(Depth);
-      if Depth = 0 then
-        Exit(T);
-    end;
-    Prev := T;
-    T := After(AMap, T);
-  end;
-end;
-
-// Ein Wort vorwaerts im Deklarationsteil (BodyEnd): records und Rumpfe
-// lokaler Routinen werden uebersprungen (T wird ihr end), ein Kopf zaehlt
-// APending hoch; rsFound am Rumpf der Routine selbst (AEnd ist sein end),
-// rsStop an einem Ende ohne Rumpf.
-function BodyStep(AMap: TRdxCodeMap; var T: TRdxToken; const APrev: TRdxToken;
-  var APending: Integer; var AEnd: TRdxToken): TRdxStep;
-var
-  E, L : TRdxToken;
-begin
-  Result := rsGoOn;
-  if T.Low = 'record' then
-    T := RecordEnd(AMap, T)
-  else if IsHeader(T, APrev) then
-    Inc(APending)
-  else if InList(T.Low, NO_BODY) and (APending > 0) then
-    Dec(APending)
-  else if (T.Low = 'begin') or (T.Low = 'asm') then
-  begin
-    BlockEnd(AMap, T, nil, E, L);
-    if E.Low = '' then
-      Exit(rsStop);
-    if APending = 0 then
-    begin
-      AEnd := E;
-      Exit(rsFound);
-    end;
-    Dec(APending);
-    T := E;
-  end
-  else if InList(T.Low, BODY_STOPS) then
-    Result := rsStop;
-end;
-
-// Das end des Rumpfs der Routine, deren Deklarationsteil ASemi enthaelt:
-// das erste begin/asm auf dieser Ebene, das nicht zu einer lokalen Routine
-// gehoert. '' oder der Grund.
-function BodyEnd(AMap: TRdxCodeMap; const ASemi: TRdxToken;
-  out AEnd: TRdxToken): string;
-var
-  T, Prev : TRdxToken;
-  Pending : Integer;
-  Step    : TRdxStep;
-begin
-  AEnd := Default(TRdxToken);
-  Pending := 0;
-  Prev := ASemi;
-  T := After(AMap, ASemi);
-  while T.Low <> '' do
-  begin
-    Step := rsGoOn;
-    if ParenDelta(T) > 0 then
-      T := MatchClose(AMap, T)
-    else if IsKeywordAfter(T, Prev) then
-      Step := BodyStep(AMap, T, Prev, Pending, AEnd);
-    if Step = rsFound then
+    Result := TRdxRoutineFixes.ReadRoutine(AMap, H, R);
+    if Result <> '' then
+      Exit('Rumpf der Routine nicht gefunden - ' + Result);
+    if not TokAfter(ADecl.VarTok, R.Last) then
       Exit('');
-    if (Step = rsStop) or (T.Low = '') then
-      Break;
-    Prev := T;
-    T := After(AMap, T);
+    if InsideBlock(AMap, H, Stop) or not InList(Stop.Low, ROUTINE_WORDS) then
+      Exit('Rumpf der Routine nicht gefunden');
+    H := Stop;
   end;
-  Result := 'Rumpf der Routine nicht gefunden';
+  Result := 'Rumpf der Routine nicht gefunden - zu viele lokale Routinen';
 end;
 
 // Das end (bzw. until) des Blocks, in dem die Inline-Deklaration AVar
@@ -1321,13 +1236,89 @@ begin
   end;
 end;
 
+// Die erste Zeile von AFrom bis ATo mit einer Direktive, deren Text hinter
+// dem Wort AKey als Bezeichner nennt ('{$DEFINE M := X}', '{$IFDEF X}');
+// 0 ohne.
+function DirectiveNaming(AMap: TRdxCodeMap; AFrom, ATo: Integer;
+  const AKey: string): Integer;
+var
+  Li, Co : Integer;
+begin
+  Result := 0;
+  for Li := AFrom to ATo do
+    for Co := 1 to Length(AMap.Raw(Li)) do
+      if OpensDirective(AMap, Li, Co)
+         and HasIdentWord(LowerCase(DirectiveArgs(AMap, Li, Co)), AKey) then
+        Exit(Li);
+end;
+
+// Was im Gueltigkeitsbereich (AFrom bis ATo) den Namen verwenden kann, ohne
+// dass er dort als Code steht (Gegen-Review H3, Major 1 und Verdacht 2): ein
+// {$I datei} - die Include-Datei sieht weder die Hilfe noch der Detektor
+// (er expandiert Includes nicht; mit einer globalen Variablen gleichen
+// Namens bindet sie danach still an die globale); eine Direktive, die den
+// Namen nennt (FPC-Makro '{$DEFINE M := X}'); ein asm-Block - Assembler
+// spricht lokale Variablen auch ueber den Stack-Rahmen an ('[ebp-4]'), und
+// die Hilfe veraendert das Stack-Layout. '' oder der Grund.
+function ScopeReason(AMap: TRdxCodeMap; const AFrom, ATo: TRdxToken;
+  const AKey: string): string;
+var
+  T, P : TRdxToken;
+  Li   : Integer;
+begin
+  Result := '';
+  Li := IncludeInLines(AMap, AFrom.Line, ATo.Line);
+  if Li > 0 then
+    Exit(Format('{$I}-Include im Gueltigkeitsbereich (Zeile %d) - dort kann '
+      + 'der Name stehen, den die Hilfe nicht sieht', [Li]));
+  Li := DirectiveNaming(AMap, AFrom.Line, ATo.Line, AKey);
+  if Li > 0 then
+    Exit(Format('eine Direktive nennt "%s" (Zeile %d) - Makro oder Bedingung, '
+      + 'die Hilfe wertet sie nicht aus', [AKey, Li]));
+  P := Before(AMap, AFrom);
+  T := AFrom;
+  while (T.Low <> '') and not TokAfter(T, ATo) do
+  begin
+    if (T.Low = 'asm') and IsKeywordAfter(T, P) then
+      Exit(Format('asm im Gueltigkeitsbereich (Zeile %d) - Assembler kann die '
+        + 'Variable ueber den Stack-Rahmen ansprechen, ohne ihren Namen',
+        [T.Line]));
+    P := T;
+    T := After(AMap, T);
+  end;
+end;
+
+// Ein FPC-Makro irgendwo in der Datei, das den Namen einsetzt ('{$DEFINE M
+// := X}' vor der Routine, M im Rumpf)? Die Durchsicht des
+// Gueltigkeitsbereichs sieht nur M. '' oder der Grund.
+function MacroReason(AMap: TRdxCodeMap; const AKey: string): string;
+var
+  Li, Co : Integer;
+  Arg    : Boolean;
+  Args   : string;
+begin
+  Result := '';
+  for Li := 1 to AMap.LineCount do
+    for Co := 1 to Length(AMap.Raw(Li)) do
+      if OpensDirective(AMap, Li, Co)
+         and InList(DirectiveWord(AMap, Li, Co, Arg), MACRO_WORDS) then
+      begin
+        Args := LowerCase(DirectiveArgs(AMap, Li, Co));
+        if (Pos(MACRO_ASSIGN, Args) > 0) and HasIdentWord(Args, AKey) then
+          Exit(Format('ein Makro setzt "%s" ein ({$DEFINE ... := ...} in Zeile '
+            + '%d) - die Hilfe sieht seine Verwendung nicht', [AKey, Li]));
+      end;
+end;
+
 // Der Gueltigkeitsbereich: inline vom var bis zum end seines Blocks, sonst
 // vom Routinenkopf bis zum end des Rumpfs (lokale Routinen darin
-// eingeschlossen). '' oder der Grund (auch eine Verwendung).
+// eingeschlossen). '' oder der Grund (auch eine Verwendung, ein Include,
+// eine Direktive oder asm darin, ein Makro mit dem Namen).
 function UseReason(AMap: TRdxCodeMap; const ADecl: TRdxVarDecl;
   const AKey: string): string;
 var
   From, Upto : TRdxToken;
+  R          : TRdxRoutine;
 begin
   Result := '';
   if ADecl.InBlock then
@@ -1340,11 +1331,16 @@ begin
   else
   begin
     From := ADecl.Stop;
-    Result := BodyEnd(AMap, ADecl.Semi, Upto);
+    Result := OwnerRoutine(AMap, ADecl, R);
     if Result <> '' then
       Exit;
+    Upto := R.EndTok;
   end;
   Result := ScanUses(AMap, From, Upto, ADecl.Name, AKey);
+  if Result = '' then
+    Result := ScopeReason(AMap, From, Upto, AKey);
+  if Result = '' then
+    Result := MacroReason(AMap, AKey);
 end;
 
 // Ein 'class operator Initialize/Finalize' in der Unit (Delphi 10.4:
