@@ -37,6 +37,8 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
+  System.JSON,                     // TJSONObject in den Lader-Helfern
+                                   // (strict private; E2003 sonst)
   uSCAConsts;
 
 type
@@ -176,6 +178,18 @@ type
     class var FGuard            : TObject;
     class procedure EnsureLoaded; static;
     class procedure LoadFromJsonFile(const FileName: string); static;
+    // Die Abschnitte der Katalogdatei liest je ein Helfer des Laders
+    // (SCA176; alle brauchen die strict-privaten Parse*-Funktionen):
+    // eine Regel aus ihrem JSON-Objekt - K/KindName hat der Lader schon
+    // aufgeloest - samt Fix-Metadaten und Rueckfall auf die
+    // einkompilierte Tabelle ...
+    class function ParseRule(RObj: TJSONObject; K: TFindingKind;
+      const KindName: string): TRuleMeta; static;
+    // ... ihre Sonar-Impacts (nil ohne 'impacts'-Array; ein Eintrag, der
+    // kein Objekt ist, bleibt leer statt zu werfen) ...
+    class function ParseImpacts(RObj: TJSONObject): TArray<TSonarImpact>; static;
+    // ... und der Profile-Block samt 'default'-Garantie.
+    class procedure LoadProfiles(Root: TJSONObject); static;
     class procedure LoadFallback; static;
     class function FindJsonFile: string; static;
     class function ParseSeverity(const S: string): TLeakSeverity; static;
@@ -309,7 +323,7 @@ implementation
 
 uses
   Winapi.Windows,                  // OutputDebugString
-  System.IOUtils, System.JSON,
+  System.IOUtils,                  // System.JSON steht im Interface (Lader-Helfer)
   System.Generics.Defaults,        // TIStringComparer - Profilnamen (G5-4)
   uJsonFormat,                     // JsonFormatEscaped (WriteUserProfiles)
   uLocalization;                   // NormalizeLangCode - EINE Normalisierung
@@ -347,6 +361,38 @@ begin
   SetLength(Result, AArr.Count);
   for i := 0 to AArr.Count - 1 do
     Result[i] := AArr.Items[i].Value;
+end;
+
+// Safe-Lookups fuer den Lader: FindValue liefert nil bei fehlendem Key,
+// GetValue<T> wirft EJSONPathException. Letzteres hat den 'owasp not
+// found'-Crash produziert, weil die meisten Rules kein owasp-Feld haben.
+// Ein Wert des falschen Typs (String statt Objekt) zaehlt wie fehlend.
+function FindObject(O: TJSONObject; const Name: string): TJSONObject;
+var V: TJSONValue;
+begin
+  if O = nil then Exit(nil);
+  V := O.FindValue(Name);
+  if V is TJSONObject then Result := TJSONObject(V) else Result := nil;
+end;
+
+function FindArray(O: TJSONObject; const Name: string): TJSONArray;
+var V: TJSONValue;
+begin
+  if O = nil then Exit(nil);
+  V := O.FindValue(Name);
+  if V is TJSONArray then Result := TJSONArray(V) else Result := nil;
+end;
+
+// Werte des Arrays Name als Strings (tags/cwe/owasp einer Regel); nil,
+// wenn das Feld fehlt oder kein Array ist - FindArray ist nil-safe.
+function JsonStringsVon(O: TJSONObject; const Name: string): TArray<string>;
+var
+  Arr : TJSONArray;
+begin
+  Result := nil;
+  Arr := FindArray(O, Name);
+  if Arr <> nil then
+    Result := JsonArrayToStrings(Arr);
 end;
 
 const
@@ -687,26 +733,11 @@ begin
 end;
 
 class procedure TRuleCatalog.LoadFromJsonFile(const FileName: string);
-
-  // Safe-Lookups: FindValue liefert nil bei fehlendem Key, GetValue<T>
-  // wirft EJSONPathException. Letzteres hat den 'owasp not found'-Crash
-  // produziert, weil die meisten Rules kein owasp-Feld haben.
-  function FindObject(O: TJSONObject; const Name: string): TJSONObject;
-  var V: TJSONValue;
-  begin
-    if O = nil then Exit(nil);
-    V := O.FindValue(Name);
-    if V is TJSONObject then Result := TJSONObject(V) else Result := nil;
-  end;
-
-  function FindArray(O: TJSONObject; const Name: string): TJSONArray;
-  var V: TJSONValue;
-  begin
-    if O = nil then Exit(nil);
-    V := O.FindValue(Name);
-    if V is TJSONArray then Result := TJSONArray(V) else Result := nil;
-  end;
-
+// Rahmen des Laders: Datei, Tool-Block, Regelschleife, Profile. Die Felder
+// einer Regel liest ParseRule (mit ParseImpacts), den Profile-Block
+// LoadProfiles - in derselben Reihenfolge wie vorher in dieser Routine,
+// damit auch die Diagnosen (BekannterWert, EditorHelpVon) in derselben
+// Folge kommen. Laeuft unter dem Katalog-Monitor des Aufrufers (s. FGuard).
 var
   Json     : TJSONValue;
   Root     : TJSONObject;
@@ -717,14 +748,7 @@ var
   Meta     : TRuleMeta;
   K        : TFindingKind;
   KindName : string;
-  ArrVal   : TJSONArray;
-  Examples : TJSONObject;
   i        : Integer;
-  Tags     : TList<string>;
-  Profiles : TJSONObject;
-  ProfPair : TJSONPair;
-  ProfArr  : TJSONArray;
-  Idx      : Integer;
 begin
   Json := TJSONObject.ParseJSONValue(TFile.ReadAllText(FileName));
   if not (Json is TJSONObject) then
@@ -765,129 +789,137 @@ begin
       KindName := RObj.GetValue<string>('kind', '');
       if not KindFromName(KindName, K) then Continue; // unbekannter Kind -> skip
 
-      Meta := Default(TRuleMeta);
-      Meta.ID               := RObj.GetValue<string>('id', '');
-      Meta.Kind             := K;
-      Meta.Name             := RObj.GetValue<string>(JSON_FLD_NAME, KindName);
-      Meta.ShortDescription := RObj.GetValue<string>('shortDescription', '');
-      Meta.FullDescription  := RObj.GetValue<string>('fullDescription', '');
-      Meta.DefaultSeverity  := ParseSeverity(RObj.GetValue<string>('defaultSeverity', ''));
-      Meta.FindingType      := ParseFindingType(RObj.GetValue<string>('type', ''));
-      Meta.ConfigKey        := RObj.GetValue<string>('configKey', '');
-      Meta.DetectorUnit     := RObj.GetValue<string>('detectorUnit', '');
-
-      // Arrays (tags / cwe / owasp) - FindArray ist nil-safe, GetValue<T>
-      // wuerde EJSONPathException werfen wenn der Key fehlt (z.B. die
-      // meisten Rules haben kein owasp-Feld).
-      Tags := TList<string>.Create;
-      try
-        ArrVal := FindArray(RObj, 'tags');
-        if ArrVal <> nil then
-          for var T in ArrVal do Tags.Add(T.Value);
-        Meta.Tags := Tags.ToArray;
-
-        Tags.Clear;
-        ArrVal := FindArray(RObj, 'cwe');
-        if ArrVal <> nil then
-          for var T in ArrVal do Tags.Add(T.Value);
-        Meta.CWE := Tags.ToArray;
-
-        Tags.Clear;
-        ArrVal := FindArray(RObj, 'owasp');
-        if ArrVal <> nil then
-          for var T in ArrVal do Tags.Add(T.Value);
-        Meta.OWASP := Tags.ToArray;
-      finally
-        Tags.Free;
-      end;
-
-      // Examples (optional - Rules ohne examples haben kein 'examples'-Feld)
-      Examples := FindObject(RObj, 'examples');
-      if Examples <> nil then
-      begin
-        Meta.BadExample  := Examples.GetValue<string>('bad', '');
-        Meta.GoodExample := Examples.GetValue<string>('good', '');
-      end;
-
-      // Quellstellen-Dienst: Anker und Fix-Politik, optional. Nur ein
-      // bekannter String zaehlt (BekannterWert) - ein Objekt oder Array
-      // riss mit GetValue<string> das Laden auf. Test
-      // AnchorAndFixModeUseKnownValues haelt die Wertemenge der Datei.
-      Meta.Anchor  := BekannterWert(RObj, 'anchor', Meta.ID, KNOWN_ANCHORS);
-      Meta.FixMode := BekannterWert(RObj, 'fixMode', Meta.ID, KNOWN_FIX_MODES);
-      // Leer -> einkompilierter Wert (Minor 40). Eine aeltere oder von
-      // Hand gekuerzte sca-rules.json ohne die zwei Felder (gefunden ueber
-      // den Exe-/Modul-Aufwaertswalk oder %APPDATA%) schaltete reDelphix
-      // sonst still ab: kein Fund bot mehr eine Umformung an. Abschalten
-      // geht ausdruecklich mit fixMode 'none' - das ist nicht leer.
-      if FallbackZeileVon(K, Idx) then
-      begin
-        if Meta.Anchor = '' then
-          Meta.Anchor := RULE_CATALOG_DATA[Idx].Anchor;
-        if Meta.FixMode = '' then
-          Meta.FixMode := RULE_CATALOG_DATA[Idx].FixMode;
-      end;
-      Meta.EditorHelp := EditorHelpVon(RObj, K, Meta.ID, Meta.FixMode);
-
-      // SonarQube MQR-Felder (cleanCodeAttribute + impacts). Optional in der
-      // JSON - Rules ohne diese Felder bekommen leere Werte. Test
-      // EveryFindingKindHasMqrMapping schreit wenn welche fehlen.
-      Meta.CleanCodeAttribute := RObj.GetValue<string>('cleanCodeAttribute', '');
-      ArrVal := FindArray(RObj, 'impacts');
-      if ArrVal <> nil then
-      begin
-        SetLength(Meta.Impacts, ArrVal.Count);
-        for var IxImp := 0 to ArrVal.Count - 1 do
-        begin
-          // UPSTREAM-BEFUND 5 (GITLAK): 'as' liefert nie nil, es wirft
-          // EInvalidCast - der Guard darunter konnte also nie greifen.
-          // Ein handgepflegtes "impacts": ["high"] in sca-rules.json riss
-          // damit EnsureLoaded auf, ueber GetRule und ResolvedRuleId bis in
-          // jeden Exporter: der Lauf starb beim EXPORT, nach getaner
-          // Analyse. Jede andere Umwandlung in dieser Methode ist
-          // is-gepruefft; das hier war die einzige Ausnahme.
-          if not (ArrVal.Items[IxImp] is TJSONObject) then Continue;
-          var IObj := ArrVal.Items[IxImp] as TJSONObject;
-          Meta.Impacts[IxImp].SoftwareQuality :=
-            ParseSoftwareQuality(IObj.GetValue<string>('softwareQuality', ''));
-          Meta.Impacts[IxImp].Severity :=
-            ParseImpactSeverity(IObj.GetValue<string>('severity', ''));
-        end;
-      end;
-
+      Meta := ParseRule(RObj, K, KindName);
       FRules.AddOrSetValue(K, Meta);
       if Meta.ID <> '' then
         FRulesByID.AddOrSetValue(Meta.ID, Meta);
     end;
 
-    // ---- Profile-Block (optional) ----
-    // Format: "profiles": { "<name>": ["Kind1","Kind2","*","!Style", ...], ... }
-    // Token-Semantik (Reihenfolge zaehlt - links nach rechts angewandt):
-    //   * '*'                  expandiert zu allen Kinds
-    //   * 'Kind'               fuegt Kind hinzu
-    //   * '!Kind' bzw. '-Kind' entfernt Kind aus dem aktuellen Set
-    // Beispiel "selftest-quiet": ["*","!BeginEndRequired","!TooLongLine"]
-    // = "alle Detektoren AUSSER zwei Style-Regeln".
-    // Unbekannte Kind-Tokens werden still ignoriert - kein Crash, der
-    // Rest des Profils greift weiter. (Aelteres Tool, neueres JSON.)
-    Profiles := FindObject(Root, 'profiles');
-    if Profiles <> nil then
-    begin
-      for i := 0 to Profiles.Count - 1 do
-      begin
-        ProfPair := Profiles.Pairs[i];
-        if not (ProfPair.JsonValue is TJSONArray) then Continue;
-        ProfArr := ProfPair.JsonValue as TJSONArray;
-        FProfiles.AddOrSetValue(ProfPair.JsonString.Value,
-                                ParseProfileTokens(JsonArrayToStrings(ProfArr)));
-      end;
-    end;
-    // 'default' garantieren - falls die JSON ihn nicht hat, immer AllKinds.
-    if not FProfiles.ContainsKey('default') then
-      FProfiles.AddOrSetValue('default', AllKinds);
+    LoadProfiles(Root);
   finally
     Json.Free;
   end;
+end;
+
+class function TRuleCatalog.ParseRule(RObj: TJSONObject; K: TFindingKind;
+  const KindName: string): TRuleMeta;
+var
+  Examples : TJSONObject;
+  Idx      : Integer;
+begin
+  Result := Default(TRuleMeta);
+  Result.ID               := RObj.GetValue<string>('id', '');
+  Result.Kind             := K;
+  Result.Name             := RObj.GetValue<string>(JSON_FLD_NAME, KindName);
+  Result.ShortDescription := RObj.GetValue<string>('shortDescription', '');
+  Result.FullDescription  := RObj.GetValue<string>('fullDescription', '');
+  Result.DefaultSeverity  := ParseSeverity(RObj.GetValue<string>('defaultSeverity', ''));
+  Result.FindingType      := ParseFindingType(RObj.GetValue<string>('type', ''));
+  Result.ConfigKey        := RObj.GetValue<string>('configKey', '');
+  Result.DetectorUnit     := RObj.GetValue<string>('detectorUnit', '');
+
+  // Arrays (tags / cwe / owasp) - JsonStringsVon ist nil-safe, GetValue<T>
+  // wuerde EJSONPathException werfen wenn der Key fehlt (z.B. die
+  // meisten Rules haben kein owasp-Feld).
+  Result.Tags  := JsonStringsVon(RObj, 'tags');
+  Result.CWE   := JsonStringsVon(RObj, 'cwe');
+  Result.OWASP := JsonStringsVon(RObj, 'owasp');
+
+  // Examples (optional - Rules ohne examples haben kein 'examples'-Feld)
+  Examples := FindObject(RObj, 'examples');
+  if Examples <> nil then
+  begin
+    Result.BadExample  := Examples.GetValue<string>('bad', '');
+    Result.GoodExample := Examples.GetValue<string>('good', '');
+  end;
+
+  // Quellstellen-Dienst: Anker und Fix-Politik, optional. Nur ein
+  // bekannter String zaehlt (BekannterWert) - ein Objekt oder Array
+  // riss mit GetValue<string> das Laden auf. Test
+  // AnchorAndFixModeUseKnownValues haelt die Wertemenge der Datei.
+  Result.Anchor  := BekannterWert(RObj, 'anchor', Result.ID, KNOWN_ANCHORS);
+  Result.FixMode := BekannterWert(RObj, 'fixMode', Result.ID, KNOWN_FIX_MODES);
+  // Leer -> einkompilierter Wert (Minor 40). Eine aeltere oder von
+  // Hand gekuerzte sca-rules.json ohne die zwei Felder (gefunden ueber
+  // den Exe-/Modul-Aufwaertswalk oder %APPDATA%) schaltete reDelphix
+  // sonst still ab: kein Fund bot mehr eine Umformung an. Abschalten
+  // geht ausdruecklich mit fixMode 'none' - das ist nicht leer.
+  if FallbackZeileVon(K, Idx) then
+  begin
+    if Result.Anchor = '' then
+      Result.Anchor := RULE_CATALOG_DATA[Idx].Anchor;
+    if Result.FixMode = '' then
+      Result.FixMode := RULE_CATALOG_DATA[Idx].FixMode;
+  end;
+  Result.EditorHelp := EditorHelpVon(RObj, K, Result.ID, Result.FixMode);
+
+  // SonarQube MQR-Felder (cleanCodeAttribute + impacts). Optional in der
+  // JSON - Rules ohne diese Felder bekommen leere Werte. Test
+  // EveryFindingKindHasMqrMapping schreit wenn welche fehlen.
+  Result.CleanCodeAttribute := RObj.GetValue<string>('cleanCodeAttribute', '');
+  Result.Impacts := ParseImpacts(RObj);
+end;
+
+class function TRuleCatalog.ParseImpacts(RObj: TJSONObject): TArray<TSonarImpact>;
+var
+  ArrVal : TJSONArray;
+  IxImp  : Integer;
+  IObj   : TJSONObject;
+begin
+  Result := nil;   // ohne 'impacts'-Array bleibt das Feld leer (nil)
+  ArrVal := FindArray(RObj, 'impacts');
+  if ArrVal = nil then Exit;
+  SetLength(Result, ArrVal.Count);
+  for IxImp := 0 to ArrVal.Count - 1 do
+  begin
+    // UPSTREAM-BEFUND 5 (GITLAK): 'as' liefert nie nil, es wirft
+    // EInvalidCast - der Guard darunter konnte also nie greifen.
+    // Ein handgepflegtes "impacts": ["high"] in sca-rules.json riss
+    // damit EnsureLoaded auf, ueber GetRule und ResolvedRuleId bis in
+    // jeden Exporter: der Lauf starb beim EXPORT, nach getaner
+    // Analyse. Jede andere Umwandlung im Lader ist is-gepruefft; das
+    // hier war die einzige Ausnahme.
+    if not (ArrVal.Items[IxImp] is TJSONObject) then Continue;
+    IObj := ArrVal.Items[IxImp] as TJSONObject;
+    Result[IxImp].SoftwareQuality :=
+      ParseSoftwareQuality(IObj.GetValue<string>('softwareQuality', ''));
+    Result[IxImp].Severity :=
+      ParseImpactSeverity(IObj.GetValue<string>('severity', ''));
+  end;
+end;
+
+class procedure TRuleCatalog.LoadProfiles(Root: TJSONObject);
+// ---- Profile-Block (optional) ----
+// Format: "profiles": { "<name>": ["Kind1","Kind2","*","!Style", ...], ... }
+// Token-Semantik (Reihenfolge zaehlt - links nach rechts angewandt):
+//   * '*'                  expandiert zu allen Kinds
+//   * 'Kind'               fuegt Kind hinzu
+//   * '!Kind' bzw. '-Kind' entfernt Kind aus dem aktuellen Set
+// Beispiel "selftest-quiet": ["*","!BeginEndRequired","!TooLongLine"]
+// = "alle Detektoren AUSSER zwei Style-Regeln".
+// Unbekannte Kind-Tokens werden still ignoriert - kein Crash, der
+// Rest des Profils greift weiter. (Aelteres Tool, neueres JSON.)
+var
+  Profiles : TJSONObject;
+  ProfPair : TJSONPair;
+  ProfArr  : TJSONArray;
+  i        : Integer;
+begin
+  Profiles := FindObject(Root, 'profiles');
+  if Profiles <> nil then
+  begin
+    for i := 0 to Profiles.Count - 1 do
+    begin
+      ProfPair := Profiles.Pairs[i];
+      if not (ProfPair.JsonValue is TJSONArray) then Continue;
+      ProfArr := ProfPair.JsonValue as TJSONArray;
+      FProfiles.AddOrSetValue(ProfPair.JsonString.Value,
+                              ParseProfileTokens(JsonArrayToStrings(ProfArr)));
+    end;
+  end;
+  // 'default' garantieren - falls die JSON ihn nicht hat, immer AllKinds.
+  if not FProfiles.ContainsKey('default') then
+    FProfiles.AddOrSetValue('default', AllKinds);
 end;
 
 class function TRuleCatalog.MakeFallbackMeta(K: TFindingKind): TRuleMeta;

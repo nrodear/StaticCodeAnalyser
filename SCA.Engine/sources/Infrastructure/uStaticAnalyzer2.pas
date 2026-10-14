@@ -1601,6 +1601,42 @@ begin
   end;
 end;
 
+{ ---- Helfer fuer ParseFiles / ParseLeaks ---- }
+
+// Vorkommen von AName in ACounts um eins erhoehen; ein neuer Name
+// beginnt bei 1. Eigene Routine, damit die Zaehlung in ParseFiles nicht
+// die fuenfte Ebene der Schleifen ist (SCA018).
+procedure CountName(ACounts: TDictionary<string, Integer>;
+  const AName: string);
+begin
+  if ACounts.ContainsKey(AName) then
+    ACounts[AName] := ACounts[AName] + 1
+  else
+    ACounts.Add(AName, 1);
+end;
+
+// Entdeckte Klassen (Auto-Discovery in ParseLeaks) uebernehmen: jede
+// Klasse aus AClasses, die nicht in AExcludes steht, an ARuntime (die
+// per-Scan-LeakyClasses; nil fuer die Static-only-Gruppe, die keine
+// Instanzen hat und keine Leak-Detektion braucht) und an ALog (die Liste
+// fuer das .log). Beide Ziele und AExcludes sind nil-sicher - der Guard
+// bleibt als Spiegel des alten Codes. Reihenfolge je Klasse: erst
+// Laufzeit, dann Log.
+procedure TakeDiscoveredClasses(const AClasses: TArray<string>;
+  AExcludes, ARuntime, ALog: TStringList);
+var
+  Cls : string;
+begin
+  for Cls in AClasses do
+  begin
+    if Assigned(AExcludes) and (AExcludes.IndexOf(Cls) >= 0) then Continue;
+    if Assigned(ARuntime) then
+      ARuntime.Add(Cls);
+    if Assigned(ALog) then
+      ALog.Add(Cls);
+  end;
+end;
+
 { Zaehlt uses-Items ueber alle Dateien und liefert Top-N sortiert. }
 
 class procedure TStaticAnalyzer2.ParseFiles(FileList: TStringList;
@@ -1643,12 +1679,7 @@ begin
           for UsesNode in UsesList do
             for Item in UsesNode.Children do
               if Item.Kind = nkUsesItem then
-              begin
-                if NameCounts.ContainsKey(Item.Name) then
-                  NameCounts[Item.Name] := NameCounts[Item.Name] + 1
-                else
-                  NameCounts.Add(Item.Name, 1);
-              end;
+                CountName(NameCounts, Item.Name);
         finally
           UsesList.Free;
         end;
@@ -2184,28 +2215,15 @@ begin
           var StaticOnly   : TArray<string>;
           TCustomClassDiscovery.DiscoverInUnit(Root, Instantiable, StaticOnly);
 
-          for var Cls in Instantiable do
-          begin
-            if Assigned(LeakyClassExcludes) and
-               (LeakyClassExcludes.IndexOf(Cls) >= 0) then Continue;
-            // TD-1 Inkrement 2c: Discovery-Funde an die per-Scan-Kopie haengen
-            // (nicht mehr an den Prozess-Global). Ctx.LeakyClasses existiert
-            // immer (Constructor), der Guard bleibt als Spiegel des alten Codes.
-            if Assigned(Ctx.LeakyClasses) then
-              Ctx.LeakyClasses.Add(Cls);
-            if Assigned(DiscoveredClasses) then
-              DiscoveredClasses.Add(Cls);
-          end;
-
-          for var Cls in StaticOnly do
-          begin
-            if Assigned(LeakyClassExcludes) and
-               (LeakyClassExcludes.IndexOf(Cls) >= 0) then Continue;
-            // Bewusst NICHT in LeakyClasses - static-only Klassen haben
-            // keine Instanzen und brauchen keine Leak-Detektion.
-            if Assigned(DiscoveredStaticClasses) then
-              DiscoveredStaticClasses.Add(Cls);
-          end;
+          // TD-1 Inkrement 2c: Discovery-Funde an die per-Scan-Kopie haengen
+          // (nicht mehr an den Prozess-Global). Ctx.LeakyClasses existiert
+          // immer (Constructor). Static-only bewusst NICHT in LeakyClasses
+          // (nil) - die Schleifen selbst stehen in TakeDiscoveredClasses,
+          // sonst waere der Ausschluss-Guard die fuenfte Ebene (SCA018).
+          TakeDiscoveredClasses(Instantiable, LeakyClassExcludes,
+            Ctx.LeakyClasses, DiscoveredClasses);
+          TakeDiscoveredClasses(StaticOnly, LeakyClassExcludes,
+            nil, DiscoveredStaticClasses);
         except
           // Audit 2026-07-01 (Error-Handling): Discovery-Fehler auf EINER Datei
           // darf nicht den GESAMTEN Scan abreissen (frueher: Exception

@@ -91,6 +91,14 @@ type
     // False = die Kinder nicht betreten (Typ-Sektionen, Inline-Konstanten).
     function StrictBodyNode(Sc: TMethodScope; N, APar: TAstNode): Boolean;
     function ResolveStrict(const IdentLow: string; Line: Integer): string;
+    // Member IdentLow der Klasse AClassKey und ihrer Vorfahren in dieser
+    // Unit (strenger Modus). True = die Kette hat entschieden: AType ist
+    // der Typ oder '' (Member mehrdeutig; Klasse unbekannt oder
+    // mehrdeutig; Kette zu tief; Vorfahr ohne Eintrag). False = die Kette
+    // endet ohne den Namen ('' oder TObject) - dann entscheidet die
+    // Unit-Ebene.
+    function StrictMemberType(const AClassKey, IdentLow: string;
+      out AType: string): Boolean;
   public
     // AShortStringAware (Review reDelphiX 2026-10-07, Minor 11): True
     // traegt eine Deklaration 'string[N]' als 'shortstring' ein statt als
@@ -228,21 +236,17 @@ end;
 function ReduceToBareTypeLow(const TypeRef: string): string;
 // 'Integer' -> 'integer'; 'Integer=5' -> 'integer'; 'array of Byte' -> 'array';
 // 'TList<T>' -> 'tlist'; leerer/generischer Rest -> wie extrahiert.
+// Der Basistyp ist das laengste Praefix aus Bezeichnerzeichen - einmal
+// kopiert statt je Zeichen angehaengt (SCA110), dasselbe Ergebnis.
 var
-  S  : string;
-  i  : Integer;
-  ch : Char;
+  S : string;
+  i : Integer;
 begin
   S := LowerCase(Trim(TypeRef));
-  Result := '';
-  for i := 1 to Length(S) do
-  begin
-    ch := S[i];
-    if CharInSet(ch, ['a'..'z', '0'..'9', '_']) then
-      Result := Result + ch
-    else
-      Break;  // erstes Nicht-Ident-Zeichen beendet den Basistyp
-  end;
+  i := 1;
+  while (i <= Length(S)) and CharInSet(S[i], ['a'..'z', '0'..'9', '_']) do
+    Inc(i);   // erstes Nicht-Ident-Zeichen beendet den Basistyp
+  Result := Copy(S, 1, i - 1);
 end;
 
 function ReduceToDeclaredTypeLow(const TypeRef: string): string;
@@ -638,6 +642,8 @@ begin
       end;
     nkField:
       AddStrictIdent(Sc.Idents, LowerCase(Trim(N.Name)), BareTypeOf(N.TypeRef));
+  else
+    ;   // Bloecke, Anweisungen, Zweige: nichts eintragen, Kinder betreten
   end;
 end;
 
@@ -728,6 +734,8 @@ begin
           end;
         nkField:
           AddStrictIdent(FGlobals, LowerCase(Trim(N.Name)), BareTypeOf(N.TypeRef));
+      else
+        ;   // Unit, Sektionen, uses: nichts eintragen, nur die Kinder betreten
       end;
       for i := N.Children.Count - 1 downto 0 do
         Stack.Add(N.Children[i]);
@@ -737,30 +745,89 @@ begin
   end;
 end;
 
-function TTypeResolver.ResolveStrict(const IdentLow: string;
-  Line: Integer): string;
+{ ---- Lookup ---- }
+
+// Innersten Routinen-Scope waehlen, der die Zeile enthaelt (kleinste
+// Spanne); nil, wenn keiner sie enthaelt. Bei gleicher Spanne bleibt der
+// zuerst eingetragene (striktes <). Eine Wahl fuer beide Modi - vorher
+// stand die Schleife woertlich in ResolveStrict und ResolveTypeAt.
+function InnermostScope(AScopes: TObjectList<TTypeResolver.TMethodScope>;
+  Line: Integer): TTypeResolver.TMethodScope;
 var
-  Sc, Best : TMethodScope;
+  Sc       : TTypeResolver.TMethodScope;
   BestSpan : Integer;
-  T, Key   : string;
-  Parent   : string;
-  Members  : TDictionary<string, string>;
-  i, Depth : Integer;
 begin
-  Result := '';
-  Best := nil; BestSpan := MaxInt;
-  for Sc in FScopes do
+  Result := nil; BestSpan := MaxInt;
+  for Sc in AScopes do
     if (Line >= Sc.LineStart) and (Line <= Sc.LineEnd) then
       if (Sc.LineEnd - Sc.LineStart) < BestSpan then
       begin
-        Best := Sc; BestSpan := Sc.LineEnd - Sc.LineStart;
+        Result := Sc; BestSpan := Sc.LineEnd - Sc.LineStart;
       end;
+end;
+
+// True, wenn Line in einer verschachtelten Routine von Sc liegt
+// (nkNestedRange): deren Deklarationen kennt der AST nicht.
+function InNestedRoutine(Sc: TTypeResolver.TMethodScope;
+  Line: Integer): Boolean;
+var
+  i : Integer;
+begin
+  Result := False;
+  for i := 0 to High(Sc.NestStarts) do
+    if (Line >= Sc.NestStarts[i]) and (Line <= Sc.NestEnds[i]) then
+      Exit(True);
+end;
+
+function TTypeResolver.StrictMemberType(const AClassKey, IdentLow: string;
+  out AType: string): Boolean;
+// Vertrag in der Deklaration. Jeder Ausstieg aus der Kette ist eine
+// Entscheidung (True); nur das regulaere Ende der Kette ('' oder
+// TObject) gibt die Frage an die Unit-Ebene weiter (False).
+var
+  Key, Parent, T : string;
+  Members        : TDictionary<string, string>;
+  Depth          : Integer;
+begin
+  AType  := '';
+  Result := False;
+  Key    := AClassKey;
+  Depth  := 0;
+  while (Key <> '') and (Key <> 'tobject') do
+  begin
+    if FAmbigClasses.ContainsKey(Key)
+       or not FMembers.TryGetValue(Key, Members) then
+      Exit(True);   // Klasse unbekannt oder mehrdeutig: jeder Name kann ein Member sein
+    if Members.TryGetValue(IdentLow, T) then
+    begin
+      if T <> STRICT_AMBIGUOUS then
+        AType := T;
+      Exit(True);
+    end;
+    Inc(Depth);
+    if Depth >= STRICT_MAX_ANCESTORS then
+      Exit(True);
+    // Eigene Variable fuer das Ergebnis: Key als const UND out hiesse,
+    // der out-String wird vor dem Lesen des Schluessels geleert.
+    if not FParents.TryGetValue(Key, Parent) then
+      Exit(True);
+    Key := Parent;
+  end;
+end;
+
+function TTypeResolver.ResolveStrict(const IdentLow: string;
+  Line: Integer): string;
+var
+  Best : TMethodScope;
+  T    : string;
+begin
+  Result := '';
+  Best := InnermostScope(FScopes, Line);
   if Best <> nil then
   begin
     // Verschachtelte Routine: ihre Deklarationen kennt der AST nicht.
-    for i := 0 to High(Best.NestStarts) do
-      if (Line >= Best.NestStarts[i]) and (Line <= Best.NestEnds[i]) then
-        Exit;
+    if InNestedRoutine(Best, Line) then
+      Exit;
     // Namen der Routine: eine Inline-Variable, deren Block die Zeile
     // deckt, verdeckt alles Weitere - ausserhalb ihrer Spanne existiert
     // sie nicht; sonst Parameter/Sektion/Result.
@@ -772,27 +839,10 @@ begin
     if Best.NestedType then
       Exit;   // Member der aeusseren Klasse unbekannt
     // Member der eigenen Klasse und ihrer Vorfahren in dieser Unit.
-    Key := Best.ClassKey;
-    Depth := 0;
-    while (Key <> '') and (Key <> 'tobject') do
+    if StrictMemberType(Best.ClassKey, IdentLow, T) then
     begin
-      if FAmbigClasses.ContainsKey(Key)
-         or not FMembers.TryGetValue(Key, Members) then
-        Exit;   // Klasse unbekannt oder mehrdeutig: jeder Name kann ein Member sein
-      if Members.TryGetValue(IdentLow, T) then
-      begin
-        if T <> STRICT_AMBIGUOUS then
-          Result := T;
-        Exit;
-      end;
-      Inc(Depth);
-      if Depth >= STRICT_MAX_ANCESTORS then
-        Exit;
-      // Eigene Variable fuer das Ergebnis: Key als const UND out hiesse,
-      // der out-String wird vor dem Lesen des Schluessels geleert.
-      if not FParents.TryGetValue(Key, Parent) then
-        Exit;
-      Key := Parent;
+      Result := T;
+      Exit;
     end;
   end;
   if FGlobals.TryGetValue(IdentLow, T) and (T <> STRICT_AMBIGUOUS) then
@@ -811,9 +861,8 @@ end;
 
 function TTypeResolver.ResolveTypeAt(const IdentLow: string; Line: Integer): string;
 var
-  Sc, Best : TMethodScope;
-  BestSpan : Integer;
-  T        : string;
+  Best : TMethodScope;
+  T    : string;
 begin
   Result := '';
   if IdentLow = '' then Exit;
@@ -821,13 +870,7 @@ begin
     Exit(ResolveStrict(IdentLow, Line));
 
   // Innersten Method-Scope waehlen, der die Zeile enthaelt (kleinste Spanne).
-  Best := nil; BestSpan := MaxInt;
-  for Sc in FScopes do
-    if (Line >= Sc.LineStart) and (Line <= Sc.LineEnd) then
-      if (Sc.LineEnd - Sc.LineStart) < BestSpan then
-      begin
-        Best := Sc; BestSpan := Sc.LineEnd - Sc.LineStart;
-      end;
+  Best := InnermostScope(FScopes, Line);
 
   if (Best <> nil) and Best.Idents.TryGetValue(IdentLow, T) then
     Exit(T);
