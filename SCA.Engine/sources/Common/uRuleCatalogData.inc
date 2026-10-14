@@ -24,7 +24,7 @@ const
         'finally' + #13#10 + '  list.Free;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA002
     (
@@ -116,7 +116,7 @@ const
       GoodEx   : 'obj := TFoo.Create;' + #13#10 + 'try obj.DoStuff finally obj.Free end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA010
     (
@@ -1299,7 +1299,7 @@ const
         '  FLock.Leave;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA110
     (
@@ -1907,7 +1907,7 @@ const
         '  FLocker.UnLock;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA154
     (
@@ -1944,7 +1944,7 @@ const
         '  FreeMem(P);' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA157
     (

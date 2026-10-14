@@ -22,9 +22,12 @@ uses
 
 type
   // Was die Hilfe aus einem Fund liest - wie der Anbieter aus TLeakFinding.
+  // Variant: TLeakFinding.LeakVariant (SCA001 - die Hilfe der Charge H4
+  // gibt es nur fuer freed-outside-finally); '' bei allen anderen Regeln.
   TSeen = record
-    Line : Integer;
-    Msg  : string;
+    Line    : Integer;
+    Msg     : string;
+    Variant : string;
   end;
 
   // Der Verteiler einer Testunit: ruft fuer AKind den echten Detektor auf
@@ -144,8 +147,9 @@ begin
     for F in Results do
       if F.Kind = AKind then
       begin
-        Result[n].Line := F.LineInt;
-        Result[n].Msg  := F.Message;
+        Result[n].Line    := F.LineInt;
+        Result[n].Msg     := F.Message;
+        Result[n].Variant := F.LeakVariant;
         Inc(n);
       end;
     SetLength(Result, n);
@@ -179,6 +183,7 @@ begin
   Places := TSourcePlaces.Create;
   Finding := TLeakFinding.New(AFile, '', ASeen.Line, ASeen.Msg, AKind);
   try
+    Finding.LeakVariant := ASeen.Variant;
     SL.Text := ASource;
     Assert.IsTrue(Places.OpenSource(AFile, ASource), 'OpenSource');
     Result := TRdxFixTable.FixFor(Places, SL, Finding,

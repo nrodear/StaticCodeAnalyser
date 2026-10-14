@@ -8,7 +8,8 @@ leeren Sichtbarkeitsabschnitt, leere Klammern und ueberfluessige Vergleiche
 mit True/False bzw. nil entfernen, `if C then X := True else X := False`
 durch `X := C` ersetzen, ueberfluessige `Exit;`/`Continue;` und
 Selbstzuweisungen entfernen, auskommentierten Code und ungenutzte lokale
-Variablen loeschen, Unterdruecken und Stelle zeigen. Es liest die Stellen ueber den Quellstellen-Dienst
+Variablen loeschen, Freigaben (Free, UnLock/Leave, FreeMem) in try/finally
+setzen, Unterdruecken und Stelle zeigen. Es liest die Stellen ueber den Quellstellen-Dienst
 `TSourcePlaces` der SCA-Engine und schreibt nur in den IDE-Editor - nie in
 eine Datei und nie, ohne vorher jeden Bereich im Puffer mit dem Text zu
 vergleichen, auf dem die Aktion beim Menueaufbau beschrieben wurde (siehe
@@ -37,6 +38,7 @@ source\uRdxDeclFixes.pas          Quick-Fixes an Deklarationen SCA117/SCA197/SCA
 source\uRdxFlowFixes.pas          Quick-Fixes an ganzen Anweisungen SCA098/SCA080/SCA047 (Charge H2), reine Textlogik
 source\uRdxRoutineFixes.pas       Quick-Fixes SCA164/SCA147 (ungenutzte Routine / private Methode loeschen, Charge H3b) und die Bausteine Routinengrenzen und Decl/Impl-Finder, reine Textlogik
 source\uRdxCleanupFixes.pas       Quick-Fixes "Aufraeumen" SCA070/SCA053 (Charge H3a) und der Baustein CutEdit (loeschen und aufraeumen), reine Textlogik
+source\uRdxTryFixes.pas           Quick-Fixes try/finally SCA009/SCA001/SCA109/SCA153/SCA156 (Charge H4) und der Baustein B5 (Anweisung und Freigabe in try/finally), reine Textlogik
 source\uRdxIntroPlan.pas          Code-Aktion "Lokale Variable einfuehren" (ohne Fund): Literal am Caret, Deklaration, Spalten, Ablehnungen (reine Textlogik)
 source\uRdxIntroEdits.pas         dieselbe Aktion: Puffertext, Ziel am Caret, Ersetzungen des Writers, Ende des Sync-Blocks (reine Textlogik; IDE-Teil folgt)
 source\uRdxSuppress.pas           Unterdrueck-Marker setzen und entfernen (reine Textlogik)
@@ -45,7 +47,7 @@ source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung
 source\uRdxEditor.pas             ToolsAPI: Puffer lesen, Bereich markieren, Bereiche ersetzen (ein Undo-Schritt), Projekt-Units
 source\uRdxLog.pas                Protokoll %TEMP%\reDelphix.log + DebugView
 data\unitscopes.txt               die Scope-Tabelle (erzeugt), als RCDATA eingelinkt (data\unitscopes.rc)
-tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 28 Testunits (siehe "Pruefen")
+tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 32 Testunits und einer Hilfs-Unit (siehe "Pruefen")
 tools\gen_unitscopes.py           erzeugt data\unitscopes.txt aus der Delphi-Installation
 tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik unter FPC 3.2.2 und fuehrt Tests aus
 tools\probe\RdxCorpusProbe.dpr    Korpus-Probe: Rezept 5.1 ueber eine Liste von Fundstellen, CSV
@@ -134,8 +136,13 @@ die Engine also vorher. DCUs landen wie bei den anderen Projekten in
 | Ungenutzte private Methode X loeschen | SCA147 | loescht die Deklaration im Klassenrumpf (samt `///`-Doku; ein Gruppenkommentar wie `{ Private declarations }` bleibt) und die Implementierung wie bei SCA164 (Baustein Decl/Impl-Finder: verschachtelte Klassen `TOuter.TInner.X`, generische `TFoo<T>.X`, `class procedure`). Bedeutungsgleich. Nur unter `private`/`strict private`; der Name steht nur in Deklaration und Implementierung (rekursive Aufrufe im eigenen Rumpf zaehlen nicht). Gesperrt bei `virtual`/`dynamic`/`override`/`abstract`/`reintroduce`/`message`/`overload`/`dispid`, Konstruktor, Destruktor und Operator, mehr als einer Deklaration oder Implementierung, keiner Implementierung in der Datei (Include, abstract), Property-Accessor, Name als String-Literal (`MethodAddress`), `{$RTTI}` in der Datei, Attribut an Methode oder Klasse, `{$I}` im Klassenrumpf (dort kann `property P read X` stehen) oder im implementation-Teil, einem Interface der Klasse aus einer anderen Unit (die Methode kann sein Member sein; wie Gate E des Detektors auch `class(IFremd)` mit dem Interface als erstem Eintrag und der fremde Vorfahr eines lokalen Interfaces), einem Member von `IInterface`/`IDispatch` als Name (`_AddRef`) und einer `.dfm`/`.fmx`/`.lfm` neben der Unit, die den Namen nennt (der Detektor liest nur `.dfm`). Der leere private-Abschnitt, der bleiben kann, meldet danach SCA087 (eigene Hilfe) |
 | Auskommentierten Code loeschen | SCA070 | loescht die Region der Meldung ab Zeile und Spalte (`Comment at column C` bzw. `block of N lines starting at column C`): eine `//`-Zeile ganz, einen Kommentar hinter Code ab seiner Spalte (kein Leerraum am Zeilenende), die Inhaltszeilen eines mehrzeiligen `{ }`/`(* *)` (41 % der Korpusfunde zeigen auf eine Inhaltszeile). Bedeutungsgleich. Nur, was der Fund abdeckt: der Detektor bewertet jede Zeile einzeln und fasst gemeldete Zeilen zu einer Region zusammen, solange dazwischen nur reine Kommentarzeilen stehen - Prosa vor oder hinter der Region bleibt im Kommentar, ein langer Block mit Leerzeilen ergibt mehrere Funde. Die Begrenzer gehen erst mit, wenn der Kommentar danach nur noch Leerraum traegt (der letzte Fund raeumt auf); traegt er davor bzw. dahinter Text, bleibt der Oeffner bzw. Schliesser. Gegenprobe: ab der Spalte bis zum Ende der letzten Zeile nur Kommentar und Leerraum (Code-Sicht, ueber Zeilen; ein Delphi-12-Mehrzeilenstring ist kein Kommentar - der Detektor kennt ihn nicht), die Spalte am Anfang eines Kommentars bzw. einer Inhaltszeile, erste und letzte Zeile mit Code-Merkmal wie im Detektor (`;` am Ende, `:=`, begin, procedure/function). Gesperrt bei einer Direktive im Bereich, einem Doku-Kommentar (`///`, `{*`, `(**`), einem Kommentar vor dem ersten Code der Datei (Lizenz-/Kopfkommentar), `noinspection` oder TODO/FIXME/HACK/XXX im geloeschten Text (Absichtskommentare wie bei SCA019) und wenn mehrere Kommentare in der Region stehen und einer mit Text ueber sie hinausreicht (der Schnitt waere nicht zusammenhaengend). Zwischen zwei Token bleibt ein Leerzeichen, wo sie sonst verschmoelzen (`begin{x}end` -> `begin end`). Folgefunde (Korpus-Rundlauf): SCA117, wo der Kommentar ueber einer public-Deklaration stand und ihr als Doku galt (54 von 6.696), SCA020, wo er der einzige Inhalt eines Rumpfs war (2), SCA021 DuplicateBlock (Bloecke werden gleich bzw. ungleich) und SCA070 selbst, wo ein Adapter-Doku-Kopf `{ procedure X; }` seine auskommentierte Routine verliert (3) |
 | Ungenutzte Variable X entfernen | SCA053 | loescht die Deklaration: `X: T;` samt Zeile (ein `//`-Kommentar dahinter geht mit), `A, X, B: T;` -> `A, B: T;` (erstes, mittleres, letztes Element, auch ueber Zeilen), `var` mit, wenn die Section dadurch leer wird, inline `var X: T;` als ganze Anweisung. Bedeutungsgleich. Gegenprobe auf dem Rohtext: der Name kommt vom Routinenkopf vor der Section (inline: vom `var`) bis zum Ende des Rumpfs bzw. Blocks sonst nirgends als Code vor - lokale Routinen, Code unter einer inaktiven Direktive und `asm` zaehlen mit, ein Name hinter `.` ist ein Member. Gesperrt bei `for var` (der Detektor meldet die Laufvariable, Korpus 75 von 757), einem Schluesselwort als Name (`resourcestring`: der Parser liest die Section als Variable, 17 Funde), einer const-/resourcestring-Section, einem Initialisierer (`= 5`, `:= F()`), `absolute`, einem Typ ueber mehrere Zeilen (`record`), einem Attribut, einer Aufrufkonvention hinter dem Typ, einem Kommentar in der Deklaration, einer Direktive in der Deklaration bzw. ihrer var-Section (ein Zweig koennte leer werden), einem `class operator Initialize/Finalize` in der Unit (verwalteter Record: die Variable fuehrt Code aus; ein solcher Typ aus einer anderen Unit ist nicht erkennbar - Restrisiko), als einzige Anweisung eines Blocks, ausserhalb einer Routine, in einer offenen Klammer (`F: function(` bzw. `procedure Inner(` und auf der Folgezeile `var X: T;` - ein Parameter, keine Variable), bei einem `{$I}`-Include im Gueltigkeitsbereich (die Hilfe sieht es nicht; mit einer globalen Variablen gleichen Namens bindet es danach still an sie), einer Direktive, die den Namen nennt, `asm` im Gueltigkeitsbereich (`[ebp-4]` spricht die Variable ohne Namen an) und einem FPC-Makro `{$DEFINE M := X}` in der Datei (Charge H3c; Korpus: keines der 629 Angebote betroffen). Das Ende des Gueltigkeitsbereichs liest seit Charge H3c der Baustein Routinengrenzen (`ReadRoutine`): ein `end` als Bezeichner (`Range(start := 0, End := 0)`, benanntes OLE-Argument) beendete ihn vorher still mitten im Rumpf, eine Verwendung dahinter blieb ungesehen - jetzt keine Hilfe (Korpus: 4 Angebote in einer Formatierer-Testdatei). Ein `with` im Gueltigkeitsbereich sperrt nicht - kommt der Name nirgends vor, kann es ihn nicht binden. Im Korpus-Rundlauf verschwand jeder der 629 Funde (528 im Lauf der Charge H3a, die 101 nach dem Wegfall der with-Sperre im Gegen-Review H3), ohne dass ein anderer derselben Regel kam. Folgefunde anderer Regeln: SCA021 DuplicateBlock (28 Bloecke werden ungleich), SCA001 (die Zaehlung verschiebt sich: 15 Funde weniger, 13 mehr), SCA009 (6 weniger) und SCA007 (1 mehr - die geloeschte `TList<Integer>`-Variable war der letzte Nutzer von `System.Generics.Collections`) |
+| X in einem try/finally-Block freigeben (aendert Verhalten) | SCA009, SCA001 (nur Variante freed-outside-finally) | Baustein B5 (Charge H4): die Erzeugung `X := TFoo.Create..;` (auch `var X[: T] := ..`, CreateFmt & Co., ueber Zeilen) bleibt stehen, die Zeilen bis zur Freigabe `X.Free`/`X.Destroy`/`FreeAndNil(X)` kommen eine Stufe tiefer in den `try`-Teil, die Freigabe ins `finally` (ein direkt folgendes `X := nil;` geht mit). `try`/`finally`/`end;` stehen in eigenen Zeilen, eingerueckt wie die Erzeugung; die Stufe ist die der Liste (Einrueckung der Erzeugung gegen ihren Oeffner `begin`/`try`/`except`/..., hoechstens vier Zeichen, sonst zwei Leerzeichen bzw. ein Tab), Leerzeilen bleiben leer, Kommentarzeilen ruecken mit. Gekennzeichnet nach E2: Free laeuft danach auch bei einer Ausnahme und bei Exit - das ist der Fix. Nachweis am Puffer: die Erzeugung ist eine ganze Anweisung einer Anweisungsliste (nicht hinter then/else/do, kein case-Zweig), allein auf ihrer Zeile, die rechte Seite traegt ein `.Create..`; die Freigabe steht als ganze, UNBEDINGTE Anweisung in DERSELBEN Liste dahinter (Blocktiefe 0, hinter `;`), allein auf ihrer Zeile. Gesperrt: keine solche Freigabe (sie steht tiefer, in einem Zweig oder fehlt), eine bedingte, tiefer liegende oder zweite Freigabe bzw. eine zweite Zuweisung an X im Bereich (Doppelfreigabe), nichts zwischen Erzeugung und Freigabe (es gaebe nichts zu schuetzen), Direktive, Marke/goto (ein Sprung in einen try-Block uebersetzt nicht), asm, Inline-`var`/`const` auf der Ebene der Erzeugung (ihr Gueltigkeitsbereich schrumpfte auf den try-Teil), mehrzeiliges `'''`-Literal (Einruecken aenderte es), Break/Continue, deren Schleife den Bereich umschliesst (X waere hinter der Schleife frei; in einer Schleife ganz im Bereich gehen sie), Exit, wenn X im Bereich weitergegeben wird (`if Liste.TryAdd(X) then Exit;` - der Ausstieg uebergibt vielleicht den Besitz), `raise X` und ein umschliessendes try, dessen except- bzw. finally-Teil X nennt (er liefe danach hinter dem finally: zweite Freigabe bzw. Zugriff auf ein freies Objekt). Mit dem Meldungs-Suffix `(try/except instead of try/finally)` nur, wenn ein try/except im Bereich liegt und keines ihn umschliesst (Konzept). SCA001: never-freed, return-value und proven-leak stehen gesperrt mit ihrer Variante da (massgeblich ist das Feld `TLeakFinding.LeakVariant`, das uLeakDetector2 setzt - ein Fund ohne Feld, etwa von uFieldLeak, bekommt keine Hilfe). Restrisiko: eine Weitergabe ohne Ausstieg (`Liste.Add(X) .. Liste.Remove(X); X.Free`) - im Fehlerfall gaebe finally X frei, waehrend die Liste es noch kennt. Korpus: SCA009 857 von 1.102, SCA001 52 von 67 (freed-outside-finally); im Rundlauf verschwand jeder Fund. Folgefunde: SCA001 freed-outside-finally fuer weitere Variablen derselben Routine (sie hat jetzt ein try/finally, deren Free steht daneben - 212 Angebote), SCA090 NestedTry, SCA012 LongMethod |
+| Sperre X in einem try/finally-Block freigeben (aendert Verhalten) | SCA109, SCA153 | derselbe Baustein fuer Sperren: Lock/UnLock, Enter/Leave, Acquire/Release, BeginWrite/EndWrite, `TMonitor.Enter(O)`/`TMonitor.Exit(O)`, `EnterCriticalSection(CS)`/`LeaveCriticalSection(CS)` (auch qualifiziert) und die eigene Methode `Lock;`/`UnLock;`. Die Freigabe bestimmt die Hilfe selbst: derselbe Empfaenger bzw. dasselbe Argument, als Text ohne Leerraum gleich (`Self.FLock` und `FLock` sind verschieden) - SCA153 nimmt jedes `unlock`/`release` im 200-Zeichen-Fenster, auch das fremder Objekte. Die Sperre der Meldung wird auf der Zeile nachgeprueft (SCA153: `FLocker.Lock`, `Lock`, `EnterCriticalSection`; SCA109: das Wort vor `.Enter`/`.Acquire`/`.BeginWrite`, `TMonitor.Enter(o)`, `EnterCriticalSection(...)`). Gesperrt wie oben, dazu: Exit im Bereich (Konzept), eine zweite Sperre derselben Sperre, `Lock(..)` bzw. `TMonitor.Enter(O, Timeout)` mit Argumenten (keine bzw. eine bedingte Sperre) und ein umschliessender Handler, der sie freigibt. Korpus: SCA109 30 von 35, SCA153 219 von 241; ein Fund an beiden Regeln verschwindet mit der einen Hilfe aus beiden |
+| Puffer X in einem try/finally-Block freigeben (aendert Verhalten) | SCA156 | derselbe Baustein fuer `GetMem(P, N)`, `P := AllocMem(N)` und `P := GetMem(N)` (FPC) mit `FreeMem(P[, N])` bzw. `FreeMemAndNil(P)`. Gesperrt wie oben, dazu: ReallocMem (der Puffer bestand schon vorher), `Result := ..` (der Puffer verlaesst die Routine), ein erstes Argument, das kein einfacher Bezeichner ist (`Pointer(P)`), ein qualifizierter Aufruf (eigener Speichermanager) und `Inc`/`Dec`/`GetMem`/`ReallocMem`/`@` auf P im Bereich (FreeMem gaebe einen anderen Zeiger frei). Korpus: 38 von 85 |
 | Leeren Sichtbarkeitsabschnitt entfernen | SCA087 | loescht die Zeile des leeren Abschnitts (`public`, `strict private` ...). Nur, wenn sie genau diesen Abschnitt traegt, ohne Kommentar; gesperrt bei `strict` allein auf der Zeile (es gehoert zur naechsten) und bei einer Compiler-Direktive bis zum naechsten Abschnitt (der Abschnitt waere vielleicht nur in einem Zweig leer) |
 | Hier / In dieser Datei unterdruecken | jeder Fund in Pascal-Quelltext | setzt `// noinspection <Art>` ueber die Fundzeile bzw. `// noinspection-file <Art>` hinter die Kopfanweisung (`fakSuppress`); ein vorhandener Marker bekommt die Art dazu, ausser er lautet `All`/`*` (dann eine eigene Zeile). Nicht angeboten, wenn die Fundzeile in einem Block-Kommentar oder mehrzeiligen String liegt. Einen wirkungslosen Marker (SCA165) entfernt "Wirkungslosen Unterdrueck-Marker entfernen" stattdessen - nur, wenn er genau EINE Art nennt; ein Mehrarten- oder `All`-Marker steht gesperrt mit Grund da, denn SCA165 kommt auch, wenn nur die Arten des aktiven Scan-Profils nichts unterdrueckt haben |
+
+**Verschachtelte Sperren und Puffer** (Nebenbefund, Charge H4): die lexikalischen Detektoren SCA153/SCA109/SCA156 sehen eine zweite, noch ungeschuetzte Sperre bzw. Allokation derselben Routine nach der Hilfe nicht mehr - SCA153 haelt sie hinter einem offenen `try` bzw. vor einem `try` fuer geschuetzt, SCA156 genuegt ein `finally` vor IRGENDEINEM FreeMem. Im Korpus-Rundlauf verschwanden so 7 Funde, ohne behoben zu sein (`aBitmap.Canvas.Lock` neben `FBuffer.Canvas.Lock` in uCEFBufferPanel, `GetMem(OutPutBuffer)` neben `GetMem(InPutBuffer)` in JvUIBObj). Die Hilfe ist dort richtig; die andere Stelle von Hand nachsehen. Die innere zuerst zu schuetzen hilft nicht - dann verdeckt sie die aeussere ebenso; eine Sperre in der Hilfe brachte deshalb nichts.
 
 **SCA150 BoolAlwaysTrue** bekommt bewusst keine Hilfe (in Charge H2
 optional): die Meldung nennt weder Spalte noch Ausdruck; im Realwelt-Korpus
@@ -338,6 +345,11 @@ Projekt scannen. Gluehbirne oder Editor-Kontextmenue auf der Fundzeile:
 | SCA147 UnusedPrivateMethod | private Methode ohne Aufruf in der Unit | Ungenutzte private Methode X loeschen (danach SCA087: leeren Abschnitt entfernen) |
 | SCA070 CommentedOutCode | `// X := 1;` allein zwischen Code | Auskommentierten Code loeschen |
 | SCA053 UnusedLocalVar | `var Tmp: Integer;` ohne Verwendung | Ungenutzte Variable Tmp entfernen |
+| SCA009 MissingFinally | `L := TStringList.Create; L.Add('a'); ShowMessage(L.Text); L.Free;` | L in einem try/finally-Block freigeben (gekennzeichnet) |
+| SCA001 MemoryLeak | `L := TStringList.Create; S := TStringList.Create; try .. finally S.Free; end; L.Free;` (Variante freed-outside-finally) | L in einem try/finally-Block freigeben (gekennzeichnet); bei den anderen Varianten gesperrt mit Grund |
+| SCA153 UnpairedLock | `FLocker.Lock; DoStuff; FLocker.UnLock;` | Sperre FLocker in einem try/finally-Block freigeben (gekennzeichnet) |
+| SCA109 LockWithoutTryFinally | `FLock.Enter; DoWork; FLock.Leave;` | Sperre FLock in einem try/finally-Block freigeben (gekennzeichnet) |
+| SCA156 GetMemWithoutFreeMem | `GetMem(P, 1024); DoStuff(P); FreeMem(P);` | Puffer P in einem try/finally-Block freigeben (gekennzeichnet) |
 | SCA165 UnusedSuppression | wirkungsloser `// noinspection`-Marker | Marker entfernen - nur bei genau einer Art; Mehrarten- und `All`-Marker stehen gesperrt da (unter diesem Teilprofil wirken sie vielleicht nur scheinbar nicht) |
 | SCA142 UnsortedUses, SCA007 UnusedUses | Fund auf einer uses-Zeile | uses: Eintraege qualifizieren (Winapi.Windows, System.SysUtils ...) - nur im Kontextmenue, nicht in der Gluehbirne: es behebt den Fund nicht |
 | jede Regel ausser SCA165 | beliebig | Hier / in dieser Datei unterdruecken; Stelle zeigen (Kontextmenue) |
@@ -481,10 +493,25 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
   Funden (for var, resourcestring, Kopfkommentar, TODO, Mehrzeilenstring,
   Attribut), dazu der with-Rundlauf (with sperrt nicht). Das Katalog-Beispiel von SCA070 meldet der Detektor
   nicht (zwei benachbarte `//`-Zeilen gelten ihm als Doku-Block).
-* `uTestRdxDetectorKit` - keine Fixture: die gemeinsamen Helfer der drei
+* `uTestRdxTryFixes` / `uTestRdxTryLocks` - die Quick-Fixes try/finally der Charge H4
+  (Baustein B5) auf Text, ohne Parser: die Form (Stufe zwei/vier Zeichen bzw. Tab,
+  ausgerichtete Zeilen, Leerzeilen, Kommentare, `X := nil`, FreeAndNil/Destroy, B ohne `;`,
+  A ueber Zeilen, Inline-var), Strukturen im Bereich, Exit und innere Schleifen,
+  umschliessendes try, SCA009-Suffix, die SCA001-Form und je Sperre ein Fall; Sperren
+  SCA153/SCA109 (Paare, Partner per Text, Frueh-Freigabe, zweite Sperre, Exit, Break,
+  TMonitor mit Timeout, Handler) und Puffer SCA156 (GetMem/AllocMem/FPC-Form, ReallocMem,
+  Result, Zeiger veraendert, Exit mit Weitergabe) - 20 und 17 Tests.
+* `uTestRdxTryFixesDetector` - dieselben Hilfen gegen die echten Detektoren (nur
+  Delphi): Rundlauf SCA009 (auch mit Suffix), SCA001 freed-outside-finally (Variante
+  aus dem Fund, gekennzeichnet, Menuetext), Katalog-Beispiele SCA153/SCA109/SCA156
+  `bad` -> `good` (SCA109 ohne den Kommentar in `bad`; SCA009: `good` ist einzeilig),
+  Funde, die die Hilfe ablehnt (bedingtes Free, never-freed, fremde Freigabe,
+  ReallocMem) - 13 Tests; ohne Delphi gegengeprueft (CLI-Exe und FPC-Planer, 12/12).
+* `uTestRdxDetectorKit` - keine Fixture: die gemeinsamen Helfer der
   Detektor-Rundlaeufe (Datei schreiben, echter Detektor auf echtem AST,
   Hilfe ueber `TRdxFixTable.FixFor`, anwenden wie der Editor, Fund fuer Fund
-  bis der Detektor schweigt); bis Charge H3c je eine Kopie. Nur Delphi.
+  bis der Detektor schweigt); bis Charge H3c je eine Kopie. Seit Charge H4
+  traegt `TSeen` die Variante des Funds (SCA001). Nur Delphi.
 * `uTestRdxSimpleFixesDetector` - dieselben Hilfen gegen den echten
   Detektor: nach der Hilfe meldet er nichts mehr; die Katalog-Beispiele
   `bad` werden genau `good` (SCA074 und SCA139: das `good` traegt eine
@@ -504,10 +531,10 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext
+bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext
 ```
 
-Erwartet (Stand 2026-10-14, Charge H3c): `PASSED 348  FAILED 0` - 22 Testunits,
+Erwartet (Stand 2026-10-14, Charge H4): `PASSED 385  FAILED 0` - 24 Testunits,
 davon 72 Tests fuer "Lokale Variable einfuehren", 12 fuer die Quick-Fixes der
 Charge H2, 25 der Charge H3b (SCA164 und Bausteine 13 in
 `uTestRdxRoutineFixes`, SCA147 12 in `uTestRdxMethodFixes`), 18 der
@@ -516,8 +543,9 @@ Charge H3c (SCA164 5 in `uTestRdxRoutineFixes`, SCA147 4 in
 `uTestRdxCodeMap`, 1 fuer den Fremdtyp-Beweis von SCA126 in `uTestRdxNilFix`),
 1 der Charge R9 (SCA085: `{$` hinter `//` ist keine Direktive, in
 `uTestRdxSimpleFixes`) und 2 der Charge R10 (E27: Klassen der Delphi-Quellen
-als Beweis fuer SCA126, `uRdxRtlTypes`, in `uTestRdxNilFix`) und 20 der
-Charge H3a (`uTestRdxCleanupFixes`).
+als Beweis fuer SCA126, `uRdxRtlTypes`, in `uTestRdxNilFix`), 20 der
+Charge H3a (`uTestRdxCleanupFixes`) und 37 der Charge H4 (`uTestRdxTryFixes` 20,
+`uTestRdxTryLocks` 17).
 
 Der Pruefstand uebersetzt die Core-Units des Quellstellen-Dienstes
 (`uRefactor*`, `uSourcePlaces`, `uFindingActions`, `ScanCodeLine` aus
@@ -525,7 +553,7 @@ Der Pruefstand uebersetzt die Core-Units des Quellstellen-Dienstes
 des Moduls (`uRdxRecipes`, `uRdxScopeTable`, `uRdxBufferMath`,
 `uRdxSuppress`, `uRdxSimpleFixes`, `uRdxRtlTypes` samt der erzeugten
 `uRdxRtlTypes.inc`, `uRdxStructFixes`, `uRdxLineFixes`, `uRdxRaiseFixes`,
-`uRdxDeclFixes`, `uRdxFlowFixes`, `uRdxRoutineFixes`, `uRdxCleanupFixes`, `uRdxCodeMap`,
+`uRdxDeclFixes`, `uRdxFlowFixes`, `uRdxRoutineFixes`, `uRdxCleanupFixes`, `uRdxTryFixes`, `uRdxCodeMap`,
 `uRdxIntroPlan`, `uRdxIntroEdits`). Testunits kommen aus `reDelphix\tests`,
 sonst aus `StaticCodeAnalyserForm\tests` (Core-Tests wie
 `uTestSourcePlaces`, `uTestRefactorConcat`).

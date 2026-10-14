@@ -2354,6 +2354,15 @@ msgstr "Supprimer le code mis en commentaire"
 msgid "Remove unused variable %s"
 msgstr "Supprimer la variable inutilisée %s"
 
+msgid "Free %s in a try/finally block"
+msgstr "Libérer %s dans un bloc try/finally"
+
+msgid "Release the lock %s in a try/finally block"
+msgstr "Libérer le verrou %s dans un bloc try/finally"
+
+msgid "Free the buffer %s in a try/finally block"
+msgstr "Libérer le tampon %s dans un bloc try/finally"
+
 msgid "(changes behavior)"
 msgstr "(modifie le comportement)"
 

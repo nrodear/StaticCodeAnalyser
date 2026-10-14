@@ -131,6 +131,7 @@
         <DCCReference Include="source\uRdxFlowFixes.pas"/>
         <DCCReference Include="source\uRdxRoutineFixes.pas"/>
         <DCCReference Include="source\uRdxCleanupFixes.pas"/>
+        <DCCReference Include="source\uRdxTryFixes.pas"/>
         <DCCReference Include="source\uRdxRecipeRunner.pas"/>
         <DCCReference Include="source\uRdxFixTable.pas"/>
         <DCCReference Include="source\uRdxLog.pas"/>

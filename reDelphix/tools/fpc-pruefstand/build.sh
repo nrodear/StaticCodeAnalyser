@@ -95,7 +95,7 @@ adapt "$SCA/SCA.Engine/sources/Infrastructure/uSourcePlaces.pas" "$HERE/uSourceP
 # Modul reDelphix: nur die ToolsAPI-freien Units (Rezepte, Scope-Tabelle).
 # Fehlt eine, scheitern nur die Tests, die sie brauchen - deshalb Warnung.
 # FPC sucht Units nur hier (cwd) - eine neue Unit muss in diese Liste.
-for u in uRdxRecipes uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxSuppress uRdxSimpleFixes uRdxStructFixes uRdxLineFixes uRdxRaiseFixes uRdxDeclFixes uRdxFlowFixes uRdxRoutineFixes uRdxCleanupFixes uRdxIntroPlan uRdxIntroEdits uRdxRtlTypes; do
+for u in uRdxRecipes uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxSuppress uRdxSimpleFixes uRdxStructFixes uRdxLineFixes uRdxRaiseFixes uRdxDeclFixes uRdxFlowFixes uRdxRoutineFixes uRdxCleanupFixes uRdxTryFixes uRdxIntroPlan uRdxIntroEdits uRdxRtlTypes; do
   if [ -f "$RDX/source/$u.pas" ]; then
     adapt "$RDX/source/$u.pas" "$HERE/$u.pas"
   else
