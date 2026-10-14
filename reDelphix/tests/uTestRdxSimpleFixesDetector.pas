@@ -47,9 +47,12 @@ type
     // derselben Unit und ein Pfad auf eine Methode ohne Argumente.
     [Test] procedure Sca126_ProcTypeOfOwnUnit_NoHelp;
     [Test] procedure Sca126_PathOperands;
-    // Semantik-Gegen-Review 2026-10-14 (Major, Charge R8): ein Typ einer
-    // anderen Unit ist nicht bewiesen - wie bei SCA084.
+    // Semantik-Gegen-Review 2026-10-14 (Major, Charge R8): ein Kundentyp
+    // einer anderen Unit ist nicht bewiesen - wie bei SCA084.
     [Test] procedure Sca126_ForeignType_NoHelp;
+    // Entscheid E27 (Nico 2026-10-14, Charge R10): eine Klasse der Delphi-
+    // Quellen (uRdxRtlTypes) ist bewiesen, auch aus einer anderen Unit.
+    [Test] procedure Sca126_RtlType_Helps;
   end;
 
   // Stufe 2, Rest (2026-10-10): SCA074, SCA087, SCA139 - eine eigene
@@ -689,6 +692,7 @@ const
     '  end;'#13#10 +
     '  TFoo = class'#13#10 +
     '    FList: TList;'#13#10 +
+    '    FDriver: TChromium;'#13#10 +
     '    FOwner: TObject;'#13#10 +
     '    FOnChange: TNotifyEvent;'#13#10 +
     '    function Check(Obj: TObject; P: TNode): Boolean;'#13#10 +
@@ -705,7 +709,9 @@ const
 procedure TTestRdxSimpleFixesDetector.Sca126_RoundTrip;
 begin
   // Operanden mit bewiesenem Typ: TObject (Feld und Parameter) und die
-  // Klasse TNode dieser Unit. FList: TList (andere Unit) bleibt ohne Hilfe
+  // Klasse TNode dieser Unit. FList: TList (System.Classes) ist seit E27
+  // ueber die Liste der Delphi-Quellen bewiesen (Sca126_RtlType_Helps);
+  // FDriver: TChromium (Kundentyp, andere Unit) bleibt ohne Hilfe
   // (Sca126_ForeignType_NoHelp).
   Assert.AreEqual(
     Format(UNIT_126, [Join([
@@ -732,13 +738,27 @@ end;
 
 procedure TTestRdxSimpleFixesDetector.Sca126_ForeignType_NoHelp;
 begin
-  // TList kommt aus System.Classes: DeclaredTypeOf liefert 'tlist', die
-  // Datei beweist nicht, dass es eine Klasse ist - ein 'TObjFactory =
-  // function: TObject' einer anderen Unit saehe genauso aus, und
-  // '= nil' riefe ihn auf, Assigned() nicht (Charge R8).
+  // TChromium kommt aus einer fremden Unit (CEF): DeclaredTypeOf liefert
+  // 'tchromium', weder die Datei noch die Liste der Delphi-Quellen beweist,
+  // dass es eine Klasse ist - ein 'TObjFactory = function: TObject' einer
+  // anderen Unit saehe genauso aus, und '= nil' riefe ihn auf, Assigned()
+  // nicht (Charge R8; bis E27 stand hier FList: TList).
   AssertNoHelp(Format(UNIT_126, [Join([
-    '  if FList <> nil then',
-    '    FList.Clear;'])]), fkNilComparison, 'nicht als Klasse');
+    '  if FDriver <> nil then',
+    '    FDriver.Free;'])]), fkNilComparison, 'nicht als Klasse');
+end;
+
+procedure TTestRdxSimpleFixesDetector.Sca126_RtlType_Helps;
+begin
+  // E27: TList aus System.Classes steht in der Liste der Delphi-Quellen
+  // (uRdxRtlTypes) - bewiesen, obwohl diese Unit es nicht deklariert.
+  Assert.AreEqual(
+    Format(UNIT_126, [Join([
+      '  if Assigned(FList) then',
+      '    FList.Clear;'])]),
+    FixAll(Format(UNIT_126, [Join([
+      '  if FList <> nil then',
+      '    FList.Clear;'])]), fkNilComparison));
 end;
 
 procedure TTestRdxSimpleFixesDetector.Sca126_TwoStatementsOnOneLine_NoHelp;
@@ -1178,6 +1198,15 @@ begin
       'if Assigned(Obj) and (Obj <> nil) then Exit;',
       'if (Obj <> nil) and Assigned(Obj) then Exit;'])),
       fkAssignedAndAssignedNil));
+  // E27 (Charge R10): eine Klasse der Delphi-Quellen aus einer anderen
+  // Unit ist bewiesen (uRdxRtlTypes) - derselbe Beweis wie bei SCA126.
+  Assert.AreEqual(Join(['unit t;', 'interface', 'implementation',
+    'uses System.Classes;', 'procedure P;', 'var', '  L: TStringList;', 'begin',
+    '  if Assigned(L) then Exit;', 'end;', 'end.']),
+    FixAll(Join(['unit t;', 'interface', 'implementation',
+      'uses System.Classes;', 'procedure P;', 'var', '  L: TStringList;', 'begin',
+      '  if Assigned(L) and (L <> nil) then Exit;', 'end;', 'end.']),
+      fkAssignedAndAssignedNil));
 end;
 
 procedure TTestRdxSimpleFixesDetector3.Sca084_ProcType_NoHelp;
@@ -1216,10 +1245,12 @@ end;
 
 procedure TTestRdxSimpleFixesDetector3.Sca084_OtherUnitType_NoHelp;
 begin
-  // TStringList ist eine Klasse - beweisen laesst es sich in dieser Unit
-  // nicht; SCA084 bleibt bei der Zulassungsliste.
+  // TChromium (CEF) ist eine Klasse - beweisen laesst es sich weder in
+  // dieser Unit noch ueber die Liste der Delphi-Quellen; SCA084 bleibt bei
+  // der Zulassungsliste (bis E27 stand hier TStringList, seitdem bewiesen:
+  // Sca084_RoundTrip).
   AssertNoHelp(Join(['unit t;', 'interface', 'implementation',
-    'uses System.Classes;', 'procedure P;', 'var', '  L: TStringList;', 'begin',
+    'uses uCef;', 'procedure P;', 'var', '  L: TChromium;', 'begin',
     '  if Assigned(L) and (L <> nil) then Exit;', 'end;', 'end.']),
     fkAssignedAndAssignedNil, 'nicht als Klasse');
 end;

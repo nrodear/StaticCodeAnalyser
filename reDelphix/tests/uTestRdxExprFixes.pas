@@ -395,9 +395,19 @@ begin
       '  TFactory<T> = reference to function: T;',
       '  TLookup = TFn;',
       '  // TGone = record',
+      'var',
+      '  GBmp: TBitmap = nil;',
       'implementation',
+      'procedure P(X: TControl = nil; Y: Vcl.Graphics.TCanvas = nil);',
+      'begin',
+      'end;',
       'end.']);
     Map := TRdxCodeMap.Create(SL);
+    // Variable bzw. Parameter mit Anfangswert: keine Deklaration des Typs
+    // (Charge R10 - vorher kam 'nil' heraus).
+    Assert.AreEqual('', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tbitmap'), 'var mit nil');
+    Assert.AreEqual('', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tcontrol'), 'Default-Parameter');
+    Assert.AreEqual('', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tcanvas'), 'qualifiziert');
     Assert.AreEqual('record', TRdxSimpleFixes.DeclaredTypeKind(Map, 'TRec'));
     Assert.AreEqual('record', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tpk'), 'packed');
     Assert.AreEqual('procedure', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tcb'));
@@ -455,8 +465,16 @@ begin
     Assert.IsTrue(TRdxExprFixes.PointerLikeType(Map, 'tobject'));
     Assert.IsFalse(TRdxExprFixes.PointerLikeType(Map, 'trec'), 'Record');
     Assert.IsFalse(TRdxExprFixes.PointerLikeType(Map, 'tlookup'), 'Funktionstyp');
-    Assert.IsFalse(TRdxExprFixes.PointerLikeType(Map, 'tstringlist'),
-      'andere Unit: nicht bewiesen');
+    // E27 (Charge R10): TStringList steht in der Liste der Delphi-Quellen
+    // (uRdxRtlTypes) - bewiesen, auch ueber den Alias TMyList dieser Unit;
+    // ein Kundentyp einer anderen Unit bleibt unbewiesen.
+    Assert.IsTrue(TRdxExprFixes.PointerLikeType(Map, 'tstringlist'),
+      'andere Unit, RTL-Klasse (E27)');
+    Assert.IsTrue(TRdxExprFixes.PointerLikeType(Map, 'tmylist'),
+      'Alias auf eine RTL-Klasse (E27)');
+    Assert.IsFalse(TRdxExprFixes.PointerLikeType(Map, 'tchromium'),
+      'Kundentyp einer anderen Unit: nicht bewiesen');
+    Assert.IsFalse(TRdxExprFixes.PointerLikeType(Map, 'tname'), 'string-Alias');
   finally
     Map.Free;
     SL.Free;

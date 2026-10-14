@@ -9,6 +9,7 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
+- **reDelphix: the SCA126/SCA084 editor helps (`X = nil` -> `not Assigned(X)`) now accept classes and interfaces of the Delphi RTL/VCL/FMX/Data sources as proven types** (generated list `uRdxRtlTypes.inc`, `tools/gen-rtl-types.py`, decision E27; `var X: TBitmap = nil` is no longer misread as a declaration of `TBitmap`); a customer type from another unit still gets no help, since a function type there would be called by `= nil` but not by `Assigned()`.
 - **CLI: a relative `[Baseline] File=` is resolved against the project
   first, then the working directory.** Until now the CLI took the
   value as written, i.e. relative to the directory the CLI was

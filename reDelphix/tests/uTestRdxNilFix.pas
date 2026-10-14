@@ -34,13 +34,18 @@ type
     // Semantik-Gegen-Review 2026-10-14 (Major, Charge R8): der positive
     // Beweis wie bei SCA084 - ein Typ einer anderen Unit bleibt ohne Hilfe.
     [Test] procedure Sca126_ForeignType_NotProven;
+    // Entscheid E27 (Nico 2026-10-14, Charge R10): Klassen und Interfaces
+    // der Delphi-Quellen gelten als bewiesen (uRdxRtlTypes), Kundentypen
+    // nicht; die eigene Unit behaelt das letzte Wort.
+    [Test] procedure Sca126_RtlType_Proven;
+    [Test] procedure RtlTypes_Lookup;
   end;
 
 implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxSimpleFixes;
+  uRdxBufferMath, uRdxCodeMap, uRdxSimpleFixes, uRdxRtlTypes;
 
 // ---- Helfer ----
 
@@ -359,7 +364,7 @@ begin
     '    Next: TNode;',
     '    FMaker: TObjFactory;',
     '    [Weak] FOwner: TObject;',
-    '    FA, FB: TList;',
+    '    FA, FB: TChromium;',   // Kundentyp aus einer anderen Unit (bis E27: TList)
     '    procedure Run(First: Integer);',
     '    property Count: Integer read FCount;',
     '  end;',
@@ -389,11 +394,12 @@ begin
   // Auch ueber einen Alias.
   Assert.IsTrue(Pos('Prozedurtyp', ReasonIn(FieldUnit, 'F', 'tlookup')) > 0,
     'Alias');
-  // Eine Klasse derselben Unit geht; ein Typ einer anderen Unit (TList aus
-  // System.Classes) ist nicht bewiesen - bis Charge R8 ging er durch
-  // (Sca126_ForeignType_NotProven).
+  // Eine Klasse derselben Unit geht; ein Kundentyp einer anderen Unit
+  // (TChromium) ist nicht bewiesen - bis Charge R8 ging er durch
+  // (Sca126_ForeignType_NotProven); eine RTL-Klasse wie TList ist es seit
+  // E27 (Sca126_RtlType_Proven).
   Assert.AreEqual('', ReasonIn(FieldUnit, 'N', 'tnode'));
-  R := ReasonIn(FieldUnit, 'L', 'tlist');
+  R := ReasonIn(FieldUnit, 'L', 'tchromium');
   Assert.IsTrue(Pos('nicht als Klasse', R) > 0, 'Fremdtyp: ' + R);
   // Die Namensregeln von NilOperandRisk gelten weiter.
   Assert.AreNotEqual('', ReasonIn(FieldUnit, 'FOnChange', 'tnotifyevent'));
@@ -414,8 +420,9 @@ begin
   Assert.AreEqual('', ReasonIn(FieldUnit, 'TFoo(Sender)', ''));
   Assert.AreEqual('', ReasonIn(FieldUnit, 'P^', ''));
   // Das letzte Glied als Feld bewiesen: Klasse (auch mit Attribut) oder
-  // Record; ein Feld der Gruppe 'FA, FB: TList' ist als Feld bewiesen, sein
-  // Typ TList aber nicht (andere Unit) - keine Hilfe (Charge R8).
+  // Record; ein Feld der Gruppe 'FA, FB: TChromium' ist als Feld bewiesen,
+  // sein Typ TChromium aber nicht (Kundentyp, andere Unit) - keine Hilfe
+  // (Charge R8; bis E27 stand hier TList).
   Assert.AreEqual('', ReasonIn(FieldUnit, 'P.Next', ''));
   Assert.AreEqual('', ReasonIn(FieldUnit, 'Self.FOwner', ''));
   Assert.IsTrue(Pos('nicht als Klasse', ReasonIn(FieldUnit, 'Obj.FB', '')) > 0,
@@ -441,7 +448,7 @@ begin
   // FieldTypeOf selbst: Typwort, qualifiziert, mehrdeutig.
   Assert.AreEqual('tnode', FieldTypeIn(FieldUnit, 'Next'));
   Assert.AreEqual('tobject', FieldTypeIn(FieldUnit, 'FOwner'));
-  Assert.AreEqual('tlist', FieldTypeIn(FieldUnit, 'FA'));
+  Assert.AreEqual('tchromium', FieldTypeIn(FieldUnit, 'FA'));
   Assert.AreEqual('', FieldTypeIn(FieldUnit, 'First'), 'Parameter und lokal');
   Assert.AreEqual('', FieldTypeIn(FieldUnit, 'Count'), 'Property');
   Assert.AreEqual('tobject', FieldTypeIn(Join(['unit u;', 'interface', 'type',
@@ -498,6 +505,90 @@ begin
   Assert.AreEqual('', ReasonIn(ForeignUnit, 'IN', 'inode'));
   Assert.AreEqual('', ReasonIn(ForeignUnit, 'A', 'talias'));
   Assert.AreEqual('', ReasonIn(ForeignUnit, 'N.Next', ''), 'Feld mit Klasse der Unit');
+end;
+
+// Eine Unit mit Fremdtypen der RTL/VCL und eines Kunden - und RTL-Namen,
+// die sie selbst anders deklariert (Charge R10, E27).
+function RtlUnit: string;
+begin
+  Result := Join(['unit u;', 'interface',
+    'uses System.Classes, Vcl.Forms, uCef;', 'type',
+    '  TStrAlias = TStringList;',          // Alias auf eine RTL-Klasse
+    '  TList = record X: Integer; end;',   // RTL-Name, hier ein Record
+    '  TStream = function: TObject;',      // RTL-Name, hier ein Funktionstyp
+    '  TFoo = class(TObject)',
+    '    FList: TStringList;',
+    '    FDriver: TChromium;',             // aus uCef: Kundentyp
+    '    procedure Paint(C: TCanvas = nil);',
+    '  end;',
+    'implementation',
+    'var',
+    '  GBmp: TBitmap = nil;',              // kein 'TBitmap = nil'-Typ
+    'end.']);
+end;
+
+procedure TTestRdxNilFix.Sca126_RtlType_Proven;
+var
+  R : string;
+begin
+  // E27: 'FList: TStringList' aus System.Classes - diese Unit beweist es
+  // nicht, die Liste der Delphi-Quellen (uRdxRtlTypes) schon. Generische
+  // Argumente und Unit-Praefixe stoeren den Beweis nicht.
+  Assert.AreEqual('', ReasonIn(RtlUnit, 'FList', 'tstringlist'));
+  Assert.AreEqual('', ReasonIn(RtlUnit, 'FForm', 'tform'), 'Vcl.Forms');
+  Assert.AreEqual('', ReasonIn(RtlUnit, 'FItems', 'tlist<tobject>'), 'generisch');
+  Assert.AreEqual('', ReasonIn(RtlUnit, 'FQual', 'system.classes.tstringlist'),
+    'qualifiziert');
+  Assert.AreEqual('', ReasonIn(RtlUnit, 'S', 'istream'), 'Interface aus Winapi.ActiveX');
+  Assert.AreEqual('', ReasonIn(RtlUnit, 'A', 'tstralias'),
+    'Alias dieser Unit auf eine RTL-Klasse');
+  Assert.AreEqual('', ReasonIn(RtlUnit, 'Obj.FList', ''), 'Pfad auf ein Feld mit RTL-Klasse');
+  // 'GBmp: TBitmap = nil' und 'C: TCanvas = nil' deklarieren keinen Typ
+  // (DeclaredTypeKind las bis R10 'nil' als Art - die Liste kam nie dran).
+  Assert.AreEqual('', ReasonIn(RtlUnit, 'GBmp', 'tbitmap'), 'var mit Anfangswert');
+  Assert.AreEqual('', ReasonIn(RtlUnit, 'C', 'tcanvas'), 'Default-Parameter');
+  // Kundentypen bleiben ohne Hilfe - streng wie bisher.
+  R := ReasonIn(RtlUnit, 'FDriver', 'tchromium');
+  Assert.IsTrue(Pos('nicht als Klasse', R) > 0, R);
+  Assert.IsTrue(Pos('tchromium', R) > 0, 'der Typ steht im Grund: ' + R);
+  Assert.IsTrue(Pos('nicht als Klasse', ReasonIn(RtlUnit, 'F', 'tobjfactory')) > 0,
+    'Kundentyp');
+  // Einen RTL-Namen, den DIESE Unit anders deklariert, entscheidet die
+  // Unit: ein Funktionstyp 'TStream' sperrt, ein Record 'TList' bleibt
+  // unbewiesen - die Liste ueberstimmt die Deklaration nicht.
+  Assert.IsTrue(Pos('Prozedurtyp', ReasonIn(RtlUnit, 'F', 'tstream')) > 0,
+    'Funktionstyp mit RTL-Namen');
+  Assert.IsTrue(Pos('nicht als Klasse', ReasonIn(RtlUnit, 'L', 'tlist')) > 0,
+    'Record mit RTL-Namen');
+  // Die Namensregeln (NilOperandRisk) laufen vor der Liste.
+  Assert.AreNotEqual('', ReasonIn(RtlUnit, 'FOnChange', 'tnotifyevent'));
+  Assert.AreNotEqual('', ReasonIn(RtlUnit, 'S', 'string'));
+end;
+
+procedure TTestRdxNilFix.RtlTypes_Lookup;
+begin
+  // Drin: Klassen und Interfaces der RTL, VCL, FMX, Winapi; generische
+  // Argumente und Unit-Praefixe fallen weg.
+  Assert.IsTrue(IsRtlClassOrInterface('tstringlist'));
+  Assert.IsTrue(IsRtlClassOrInterface('iinterface'));
+  Assert.IsTrue(IsRtlClassOrInterface('tform'), 'Vcl.Forms');
+  Assert.IsTrue(IsRtlClassOrInterface('tcontrol'), 'auch in FMX.Controls');
+  Assert.IsTrue(IsRtlClassOrInterface('idispatch'), 'Winapi.ActiveX');
+  Assert.IsTrue(IsRtlClassOrInterface('tlist<integer>'), 'generische Argumente');
+  Assert.IsTrue(IsRtlClassOrInterface('system.classes.tlist'), 'Unit-Praefix');
+  Assert.IsTrue(IsRtlClassOrInterface('TStringList'), 'Grossschreibung schadet nicht');
+  // NICHT drin: was kein Beweis fuer "Klasse oder Interface" ist.
+  Assert.IsFalse(IsRtlClassOrInterface('tnotifyevent'), 'Methodenzeiger');
+  Assert.IsFalse(IsRtlClassOrInterface('tproc'), 'reference to');
+  Assert.IsFalse(IsRtlClassOrInterface('tthreadmethod'), 'procedure of object');
+  Assert.IsFalse(IsRtlClassOrInterface('tclass'), 'class of');
+  Assert.IsFalse(IsRtlClassOrInterface('pchar'), 'Zeigertyp');
+  Assert.IsFalse(IsRtlClassOrInterface('tmethod'), 'Record');
+  Assert.IsFalse(IsRtlClassOrInterface('tobjfactory'), 'Kundentyp');
+  Assert.IsFalse(IsRtlClassOrInterface('tchromium'), 'Kundentyp (CEF)');
+  Assert.IsFalse(IsRtlClassOrInterface('record'), 'Typwort');
+  Assert.IsFalse(IsRtlClassOrInterface(''), 'leer');
+  Assert.IsFalse(IsRtlClassOrInterface('system.classes.'), 'Praefix ohne Namen');
 end;
 
 initialization
