@@ -35,6 +35,10 @@ unit uRdxRoutineFixes;
 //                   implementation-Teil ('TOuter.TInner.Bar', 'TFoo<T>.Bar',
 //                   'class procedure'). Mehr als ein Treffer heisst Overload
 //                   oder mehrdeutig - die Aufrufer lehnen dann ab.
+//   FindClassHeads / HeritageOf / MethodDecl
+//                   Klassenkopf (Charge H5, SCA096/SCA097): die Koepfe einer
+//                   Klasse mit Rumpf, ihre Vorfahrenliste und die
+//                   Direktiven einer Deklaration ('override').
 //
 // WAS MITGEHT: ueber einer Implementierung '///'-Doku, Attribute und die
 // direkt anhaengenden Zeilen nur aus Kommentar, wenn sie die Routine beim
@@ -124,6 +128,23 @@ type
     // ('TOuter.TInner.Bar' passt zu 'TInner' und zu 'TOuter.TInner').
     class function FindMethodImpls(AMap: TRdxCodeMap;
       const AClassPath, AMethod: string): TArray<TRdxToken>; static;
+    // Eine Methodendeklaration im Klassenrumpf ab AHead (ein Kopf aus
+    // FindMethodDecls): Name, Kopf und Direktiven ('override', 'overload'
+    // ...). '' oder der Grund. Seit Charge H5 oeffentlich (SCA096/SCA097:
+    // traegt der Konstruktor bzw. Destruktor 'override'?).
+    class function MethodDecl(AMap: TRdxCodeMap; const AHead: TRdxToken;
+      out ADecl: TRdxRoutine): string; static;
+    // Baustein Klassenkopf (Charge H5, SCA096/SCA097): die Koepfe 'Name
+    // [<..>] = [packed] class' mit Rumpf, deren Name das letzte Glied von
+    // AClassPath ist - je Treffer das Token 'class' (wie FindMethodDecls:
+    // mehr als einer heisst mehrdeutig).
+    class function FindClassHeads(AMap: TRdxCodeMap;
+      const AClassPath: string): TArray<TRdxToken>; static;
+    // ... und die Namen der Vorfahrenliste hinter AClass ('class(TBase,
+    // IFoo)' -> TBase, IFoo; je das letzte Glied wie im Text, ohne
+    // Typargumente); leer ohne Liste ('class', 'class sealed').
+    class function HeritageOf(AMap: TRdxCodeMap;
+      const AClass: TRdxToken): TArray<string>; static;
 
     // SCA164: die Routine der Meldung 'Top-level routine X appears unused
     // ...' mit Kopf auf ALine loeschen (s. Kopf der Unit). Keine Hilfe fuer
@@ -2081,18 +2102,11 @@ end;
 class function TRdxRoutineFixes.FindMethodDecls(AMap: TRdxCodeMap;
   const AClassPath, AMethod: string): TArray<TRdxToken>;
 var
-  T, C     : TRdxToken;
-  LowClass : string;
+  C : TRdxToken;
 begin
   Result := nil;
-  LowClass := LowerCase(LastPart(AClassPath));
-  T := NextToken(AMap, 1, 1);
-  while T.Low <> '' do
-  begin
-    if ClassHeadAt(AMap, T, LowClass, C) then
-      AddMemberHeads(AMap, C, LowerCase(AMethod), Result);
-    T := After(AMap, T);
-  end;
+  for C in FindClassHeads(AMap, AClassPath) do
+    AddMemberHeads(AMap, C, LowerCase(AMethod), Result);
 end;
 
 // Passen die Glieder AParts eines Kopfs zu AClassParts + ALowMethod? Die
@@ -2137,6 +2151,35 @@ begin
     P := T;
     T := After(AMap, T);
   end;
+end;
+
+class function TRdxRoutineFixes.MethodDecl(AMap: TRdxCodeMap;
+  const AHead: TRdxToken; out ADecl: TRdxRoutine): string;
+begin
+  Result := ReadMethodDecl(AMap, AHead, ADecl);
+end;
+
+class function TRdxRoutineFixes.FindClassHeads(AMap: TRdxCodeMap;
+  const AClassPath: string): TArray<TRdxToken>;
+var
+  T, C     : TRdxToken;
+  LowClass : string;
+begin
+  Result := nil;
+  LowClass := LowerCase(LastPart(AClassPath));
+  T := NextToken(AMap, 1, 1);
+  while T.Low <> '' do
+  begin
+    if ClassHeadAt(AMap, T, LowClass, C) then
+      AddToken(Result, C);
+    T := After(AMap, T);
+  end;
+end;
+
+class function TRdxRoutineFixes.HeritageOf(AMap: TRdxCodeMap;
+  const AClass: TRdxToken): TArray<string>;
+begin
+  Result := HeritageNames(AMap, AClass);
 end;
 
 class function TRdxRoutineFixes.UnusedRoutine(AMap: TRdxCodeMap;

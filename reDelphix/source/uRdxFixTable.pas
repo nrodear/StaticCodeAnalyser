@@ -119,7 +119,8 @@ uses
   uRdxFlowFixes,     // SCA098, SCA080, SCA047
   uRdxRoutineFixes,  // SCA164, SCA147
   uRdxCleanupFixes,  // SCA070, SCA053
-  uRdxTryFixes;      // SCA009, SCA001, SCA109, SCA153, SCA156
+  uRdxTryFixes,      // SCA009, SCA001, SCA109, SCA153, SCA156
+  uRdxResultFixes;   // SCA096, SCA097, SCA121, SCA196
 
 const
   // Hinweise der Hilfen (deutsch wie die Gruende; Pruefstand und Tests
@@ -180,6 +181,21 @@ const
     + 'freigegeben - die Zeilen dazwischen ruecken in den try-Teil';
   R_TRY_BUFFER_HINT = 'FreeMem laeuft jetzt auch bei einer Ausnahme und bei '
     + 'Exit - die Zeilen dazwischen ruecken in den try-Teil';
+  // Charge H5 (Ergebnis und Konstruktoren): SCA096/SCA097 je nach Fund -
+  // direkter TObject-Erbe bedeutungsgleich, sonst gekennzeichnet; SCA121/
+  // SCA196 immer gekennzeichnet (Result ist danach definiert).
+  R_CTOR_TOBJECT_HINT = 'TObject.Create ist leer - gleiche Bedeutung; der '
+    + 'Konstruktor folgt danach der Konvention';
+  R_CTOR_OVERRIDE_HINT = 'der ueberschriebene Elternkonstruktor laeuft jetzt '
+    + 'zuerst, mit denselben Argumenten';
+  R_DTOR_TOBJECT_HINT = 'TObject.Destroy ist leer - gleiche Bedeutung; der '
+    + 'Destruktor folgt danach der Konvention';
+  R_DTOR_HINT = 'der Elterndestruktor laeuft jetzt am Ende und gibt die '
+    + 'geerbten Felder frei';
+  R_RESULT_DEFAULT_HINT = 'Result ist jetzt von Anfang an Default(T) statt '
+    + 'zufaellig - spaetere Zuweisungen gelten weiter';
+  R_RESULT_INIT_HINT = 'Result beginnt jetzt leer statt mit dem alten Inhalt '
+    + 'der Zielvariable des Aufrufers';
   // SCA001: nur diese Variante bekommt die Hilfe (TLeakFinding.
   // MemoryLeakVariant, properties.variant im SARIF).
   LEAK_VARIANT_FOF = 'freed-outside-finally';
@@ -622,15 +638,104 @@ begin
   Result := TryFix(ALines, AFinding, TRdxTryFixes.GetMemWithoutFree);
 end;
 
+// SCA096, SCA097, SCA121, SCA196 (Charge H5): die Planer aus uRdxResultFixes
+// auf der Code-Sicht - eine Ersetzung (SCA097: zwei, wenn der letzten
+// Anweisung das ';' fehlt). Name fuer den Menuetext, Kennzeichnung nach dem
+// Fund und der Bedarf an Variants kommen mit dem Plan (APlanOut) - wie
+// TryFix eine eigene Planer-Form.
+function ResultFix(ALines: TStrings; AFinding: TLeakFinding;
+  APlan: TRdxResultPlanner; out APlanOut: TRdxResultPlan): TRdxFixOutcome;
+var
+  Map : TRdxCodeMap;
+  Why : string;
+begin
+  Result := Default(TRdxFixOutcome);
+  APlanOut := Default(TRdxResultPlan);
+  Why := R_NO_FILE;
+  if Assigned(ALines) then
+  begin
+    Map := TRdxCodeMap.Create(ALines);
+    try
+      Result.Enabled := APlan(Map, AFinding.LineInt, AFinding.Message,
+        APlanOut, Why);
+    finally
+      Map.Free;
+    end;
+  end;
+  Result.Name := APlanOut.Name;
+  Result.Reason := Why;
+  if Result.Enabled then
+    Result.Edits := APlanOut.Edits;
+end;
+
+// SCA096: 'inherited Create;' (direkter TObject-Erbe, bedeutungsgleich)
+// bzw. 'inherited;' (override, gekennzeichnet) - wie SCA149 entscheidet der
+// Planer, die Zeile traegt Hinweis und Kennzeichnung nicht fest.
+function PlanCtorInherited(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxResultPlan;
+begin
+  Result := ResultFix(ALines, AFinding, TRdxResultFixes.ConstructorInherited, P);
+  Result.ChangesBehavior := P.Changes;
+  if not Result.Enabled then Exit;
+  if P.Changes then
+    Result.Hint := R_CTOR_OVERRIDE_HINT
+  else
+    Result.Hint := R_CTOR_TOBJECT_HINT;
+end;
+
+// SCA097: 'inherited;' am Ende - gekennzeichnet, ausser bei direktem
+// TObject-Erben (TObject.Destroy ist leer).
+function PlanDtorInherited(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxResultPlan;
+begin
+  Result := ResultFix(ALines, AFinding, TRdxResultFixes.DestructorInherited, P);
+  Result.ChangesBehavior := P.Changes;
+  if not Result.Enabled then Exit;
+  if P.Changes then
+    Result.Hint := R_DTOR_HINT
+  else
+    Result.Hint := R_DTOR_TOBJECT_HINT;
+end;
+
+function PlanResultDefault(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxResultPlan;
+begin
+  Result := ResultFix(ALines, AFinding, TRdxResultFixes.ResultDefault, P);
+end;
+
+// SCA196: VarClear (Variant/OleVariant) braucht unter FPC die Unit Variants
+// (Delphi kennt es auch ohne; die Unit bringt ohnehin jede Variant-
+// Operation mit) - fehlt sie in uses, kommt sie mit (AppendUses, wie
+// SysUtils bei FreeAndNil).
+function PlanManagedResult(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxResultPlan;
+begin
+  Result := ResultFix(ALines, AFinding, TRdxResultFixes.ManagedResultInit, P);
+  if not Result.Enabled then Exit;
+  Result.Hint := R_RESULT_INIT_HINT;
+  if P.NeedsVariants then
+    Result.Enabled := AppendUses(APlaces, AUsesNames, 'Variants',
+      'System.Variants', Result);
+end;
+
 { ---- Die Tabelle ---- }
 
 const
-  FIX_ROW_HIGH = 34;
+  FIX_ROW_HIGH = 38;
 
   // Je Art eine Zeile; die Reihenfolge ist die der Chargen (Stufe 2a,
   // Stufe 2 Rest, uQuickFix-Umzug/Stufe 3, Zeilen, Ausnahmen, Deklarationen
-  // H1, Anweisungen H2, Routinen H3b, Aufraeumen H3a, try/finally H4). Der
-  // Menuetext steht unter demselben Index in FIX_CAPTIONS (s. Kopf).
+  // H1, Anweisungen H2, Routinen H3b, Aufraeumen H3a, try/finally H4,
+  // Ergebnis und Konstruktoren H5). Der Menuetext steht unter demselben
+  // Index in FIX_CAPTIONS (s. Kopf).
   FIX_ROWS: array[0..FIX_ROW_HIGH] of TRdxFixRow = (
     (Kind: fkExplicitTObjectInheritance; Plan: PlanExplicitTObject;
      Hint: R_TOBJECT_HINT; HintByPlanner: False; Changes: False; Alt: nil),
@@ -706,14 +811,25 @@ const
     (Kind: fkUnpairedLock; Plan: PlanUnpairedLock;
      Hint: R_TRY_LOCK_HINT; HintByPlanner: False; Changes: True; Alt: nil),
     (Kind: fkGetMemWithoutFreeMem; Plan: PlanGetMemWithoutFree;
-     Hint: R_TRY_BUFFER_HINT; HintByPlanner: False; Changes: True; Alt: nil)
+     Hint: R_TRY_BUFFER_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+    // Charge H5: SCA096/SCA097 kennzeichnet der Planer nach dem Fund (wie
+    // SCA149), SCA121/SCA196 immer.
+    (Kind: fkConstructorWithoutInherited; Plan: PlanCtorInherited;
+     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+    (Kind: fkDestructorWithoutInherited; Plan: PlanDtorInherited;
+     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+    (Kind: fkRoutineResultUnassigned; Plan: PlanResultDefault;
+     Hint: R_RESULT_DEFAULT_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+    (Kind: fkManagedResultUninit; Plan: PlanManagedResult;
+     Hint: ''; HintByPlanner: True; Changes: True; Alt: nil)
   );
 
   // Menuetexte (msgids) unter dem Index der Zeile; '%s' = Name der Hilfe
   // (X bei SCA085/SCA139, die Unit bei SCA007, der Cast-Typ bei SCA123, die
   // Direktive bei SCA149, das Ziel bzw. Exit/Continue bei SCA098/SCA047/
   // SCA080, die Routine bzw. Methode bei SCA164/SCA147, die Variable bei SCA053,
-  // X bzw. die Sperre bzw. der Puffer bei SCA009/SCA001/SCA109/SCA153/SCA156).
+  // X bzw. die Sperre bzw. der Puffer bei SCA009/SCA001/SCA109/SCA153/SCA156,
+  // die Anweisung bei SCA096/SCA196, der Rueckgabetyp bei SCA121).
   FIX_CAPTIONS: array[0..FIX_ROW_HIGH] of string = (
     'Remove (TObject) from the class declaration',
     'Use FreeAndNil(%s)',
@@ -749,7 +865,11 @@ const
     'Free %s in a try/finally block',
     'Release the lock %s in a try/finally block',
     'Release the lock %s in a try/finally block',
-    'Free the buffer %s in a try/finally block'
+    'Free the buffer %s in a try/finally block',
+    'Call %s first in the constructor',
+    'Call inherited last in the destructor',
+    'Initialize Result with Default(%s)',
+    'Initialize Result first: %s'
   );
 
   // Menuetexte des zweiten Eintrags (Alt), '' ohne.
@@ -759,7 +879,7 @@ const
     '', '', '', '', '', '',
     'Raise ENotImplemented in the empty body',
     '', '', '', '', '', '', '', '', '', '', '', '',
-    '', '', '', '', ''
+    '', '', '', '', '', '', '', '', ''
   );
 
 var

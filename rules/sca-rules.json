@@ -1976,6 +1976,7 @@
       "type": "Bug",
       "tags": ["inheritance", "initialization"],
       "detectorUnit": "uConstructorWithoutInherited.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "constructor TFoo.Create;\nbegin\n  FX := 0;\nend;",
         "good": "constructor TFoo.Create;\nbegin\n  inherited;\n  FX := 0;\nend;"
@@ -1995,6 +1996,7 @@
       "type": "Bug",
       "tags": ["inheritance", "memory-leak"],
       "detectorUnit": "uDestructorWithoutInherited.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "destructor TFoo.Destroy;\nbegin\n  FreeAndNil(FBar);\nend;",
         "good": "destructor TFoo.Destroy;\nbegin\n  FreeAndNil(FBar);\n  inherited;\nend;"
@@ -2464,6 +2466,7 @@
       "type": "Bug",
       "tags": ["function", "uninitialized", "sonardelphi"],
       "detectorUnit": "uRoutineResultAssigned.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "function GetCount(L: TList): Integer;\nbegin\n  if L = nil then\n    LogMessage('nil list');\n  // Result never set -> garbage\nend;",
         "good": "function GetCount(L: TList): Integer;\nbegin\n  Result := 0;\n  if L <> nil then\n    Result := L.Count;\nend;"
@@ -3963,6 +3966,7 @@
         "memory"
       ],
       "detectorUnit": "uManagedResultUninit.pas",
+      "editorHelp": true,
       "examples": {
         "bad": "function CollectNames(const L: TStrings): TArray<string>;\nvar i: Integer;\nbegin\n  for i := 0 to L.Count - 1 do\n    Result := Result + [L[i]];  // reads the CALLER's old array on first iteration\nend;",
         "good": "function CollectNames(const L: TStrings): TArray<string>;\nvar i: Integer;\nbegin\n  Result := [];  // or: Result := nil; / SetLength(Result, 0);\n  for i := 0 to L.Count - 1 do\n    Result := Result + [L[i]];\nend;"

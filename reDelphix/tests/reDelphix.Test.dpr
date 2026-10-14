@@ -41,6 +41,12 @@ program reDelphix.Test;
 //                        Baustein B5) auf Text, ohne Parser
 //   * uTestRdxTryLocks - dieselben an Sperren und Puffern SCA109/SCA153/
 //                        SCA156 auf Text, ohne Parser
+//   * uTestRdxResultFixes - Quick-Fixes SCA121/SCA196 (Charge H5, Result
+//                        initialisieren) auf Text, ohne Parser
+//   * uTestRdxInheritedFixes - Quick-Fixes SCA096/SCA097 (inherited in
+//                        Konstruktor/Destruktor) auf Text, ohne Parser
+//   * uTestRdxResultFixesDetector - die Hilfen der Charge H5 gegen die
+//                        echten Detektoren (Fund -> Hilfe -> Fund weg)
 //   * uTestRdxTryFixesDetector - die try/finally-Hilfen gegen die echten
 //                        Detektoren (Fund -> Hilfe -> Fund weg)
 //   * uTestRdxCleanupDetector - dieselben Hilfen gegen die echten
@@ -102,6 +108,7 @@ uses
   uRdxRoutineFixes in '..\source\uRdxRoutineFixes.pas',
   uRdxCleanupFixes in '..\source\uRdxCleanupFixes.pas',
   uRdxTryFixes in '..\source\uRdxTryFixes.pas',
+  uRdxResultFixes in '..\source\uRdxResultFixes.pas',
   uRdxRecipeRunner in '..\source\uRdxRecipeRunner.pas',
   uRdxFixTable in '..\source\uRdxFixTable.pas',
   uRdxIntroPlan in '..\source\uRdxIntroPlan.pas',
@@ -127,6 +134,9 @@ uses
   uTestRdxTryFixes in 'uTestRdxTryFixes.pas',
   uTestRdxTryLocks in 'uTestRdxTryLocks.pas',
   uTestRdxTryFixesDetector in 'uTestRdxTryFixesDetector.pas',
+  uTestRdxResultFixes in 'uTestRdxResultFixes.pas',
+  uTestRdxInheritedFixes in 'uTestRdxInheritedFixes.pas',
+  uTestRdxResultFixesDetector in 'uTestRdxResultFixesDetector.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',
   uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas',
   uTestRdxRoutineFixesDetector in 'uTestRdxRoutineFixesDetector.pas',

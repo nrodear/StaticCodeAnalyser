@@ -1137,7 +1137,7 @@ const
         '  FX := 0;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA097
     (
@@ -1150,7 +1150,7 @@ const
         '  inherited;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA098
     (
@@ -1450,7 +1450,7 @@ const
         #13#10 + '  if L <> nil then' + #13#10 + '    Result := L.Count;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA122
     (
@@ -2449,7 +2449,7 @@ const
         #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA197
     (

@@ -2363,6 +2363,18 @@ msgstr "Libérer le verrou %s dans un bloc try/finally"
 msgid "Free the buffer %s in a try/finally block"
 msgstr "Libérer le tampon %s dans un bloc try/finally"
 
+msgid "Call %s first in the constructor"
+msgstr "Appeler %s en premier dans le constructeur"
+
+msgid "Call inherited last in the destructor"
+msgstr "Appeler inherited en dernier dans le destructeur"
+
+msgid "Initialize Result with Default(%s)"
+msgstr "Initialiser Result avec Default(%s)"
+
+msgid "Initialize Result first: %s"
+msgstr "Initialiser Result d'abord : %s"
+
 msgid "(changes behavior)"
 msgstr "(modifie le comportement)"
 
