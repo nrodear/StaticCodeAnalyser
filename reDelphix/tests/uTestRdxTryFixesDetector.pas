@@ -15,7 +15,8 @@ unit uTestRdxTryFixesDetector;
 // fremde Freigabe, ReallocMem).
 //
 // Ohne Delphi gegengeprueft (Charge H4): dieselben Quellen mit der CLI-Exe
-// gescannt und ueber den FPC-Planer (Korpus-Harness) behoben.
+// gescannt und ueber den FPC-Planer (Korpus-Harness) behoben; ebenso der
+// Fall der Charge H4c (Suffix mit umschliessendem try/except).
 
 interface
 
@@ -29,6 +30,7 @@ type
     [Test] procedure Sca009_RoundTrip;
     [Test] procedure Sca009_CatalogExample;
     [Test] procedure Sca009_Suffix_RoundTrip;
+    [Test] procedure Sca009_SuffixEnclosingExcept_RoundTrip;
     [Test] procedure Sca009_ConditionalFree_NoHelp;
     [Test] procedure Sca001_FreedOutsideFinally_RoundTrip;
     [Test] procedure Sca001_Outcome_MarkedWithCaption;
@@ -193,6 +195,29 @@ begin
     '  try', '    try', '      L.LoadFromFile(''x.txt'');', '    except',
     '      ShowMessage(''x'');', '    end;', '    ShowMessage(L.Text);',
     '  finally', '    L.Free;', '  end;']),
+    FixAll(Src, fkMissingFinally));
+end;
+
+procedure TTestRdxTryFixesDetector.Sca009_SuffixEnclosingExcept_RoundTrip;
+var
+  Seen : TArray<TSeen>;
+  Src  : string;
+begin
+  // Das Suffix sagt nur, dass die Methode irgendwo ein try/except hat
+  // (Gegen-Review H4, Major 1): hier umschliesst es den Bereich und nennt L
+  // nicht - nach dem Fix laeuft erst das finally, dann der Handler. Bis
+  // Charge H4c gesperrt; Korpus: 41 solche Funde.
+  Src := InProc(['  L: TStringList;'], ['  try', '    L := TStringList.Create;',
+    '    L.LoadFromFile(''x.txt'');', '    ShowMessage(L.Text);', '    L.Free;',
+    '  except', '    ShowMessage(''x'');', '  end;']);
+  Seen := Detect(Src, fkMissingFinally);
+  Assert.AreEqual<Integer>(1, Length(Seen));
+  Assert.IsTrue(Pos('(try/except instead of try/finally)', Seen[0].Msg) > 0,
+    Seen[0].Msg);
+  Assert.AreEqual(InProc(['  L: TStringList;'], ['  try',
+    '    L := TStringList.Create;', '    try', '      L.LoadFromFile(''x.txt'');',
+    '      ShowMessage(L.Text);', '    finally', '      L.Free;', '    end;',
+    '  except', '    ShowMessage(''x'');', '  end;']),
     FixAll(Src, fkMissingFinally));
 end;
 

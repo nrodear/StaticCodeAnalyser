@@ -47,6 +47,9 @@ program reDelphix.Test;
 //                        Konstruktor/Destruktor) auf Text, ohne Parser
 //   * uTestRdxResultFixesDetector - die Hilfen der Charge H5 gegen die
 //                        echten Detektoren (Fund -> Hilfe -> Fund weg)
+//   * uTestRdxTryGates - die Sperren und Formen aus dem Gegen-Review H4
+//                        (Charge H4c: Weitergabe ohne Ausstieg, andere
+//                        Schreibweisen, 'End :=', Einrueckung ...)
 //   * uTestRdxTryFixesDetector - die try/finally-Hilfen gegen die echten
 //                        Detektoren (Fund -> Hilfe -> Fund weg)
 //   * uTestRdxCleanupDetector - dieselben Hilfen gegen die echten
@@ -133,6 +136,7 @@ uses
   uTestRdxCleanupDetector in 'uTestRdxCleanupDetector.pas',
   uTestRdxTryFixes in 'uTestRdxTryFixes.pas',
   uTestRdxTryLocks in 'uTestRdxTryLocks.pas',
+  uTestRdxTryGates in 'uTestRdxTryGates.pas',
   uTestRdxTryFixesDetector in 'uTestRdxTryFixesDetector.pas',
   uTestRdxResultFixes in 'uTestRdxResultFixes.pas',
   uTestRdxInheritedFixes in 'uTestRdxInheritedFixes.pas',
