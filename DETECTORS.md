@@ -458,7 +458,7 @@ Managed return types (string family, dynamic arrays, `Variant`, interfaces) retu
 | SCA197 | **InterfaceWithoutGuid** | Interface declared without a GUID - Supports()/QueryInterface() cannot ask for it at run time | Warning | Code Smell | ✅ | `uInterfaceGuid` |
 | SCA198 | **DuplicateInterfaceGuid** | Same GUID on two interfaces - Supports() returns the first one, no compiler error | Warning | Bug | ✅ | `uInterfaceGuid` |
 | SCA199 | **ParamNameMismatch** | ParamByName name not among the :placeholders of the SQL the routine gives that query (run-time "parameter not found"), or a placeholder the routine never binds | Warning | Bug | ✅ | `uParamNameMismatch` |
-| SCA200 | **HardcodedIpAddress** | IPv4/IPv6 address (private, shared or public) in a string literal - move it to the configuration or use a host name; loopback, documentation, multicast, versions and OIDs are not reported | Warning | Security Hotspot | ✅ | `uHardcodedIpAddress` |
+| SCA200 | **HardcodedIpAddress** | IPv4/IPv6 address (private, shared or public) in a string literal - move it to the configuration or use a host name; loopback, documentation, multicast, versions and OIDs are not reported (a host word beside the version word wins: `Version_IPv4 := '1.2.3.4'` is reported, `IPv4` counts as the host word `ip`) | Warning | Security Hotspot | ✅ | `uHardcodedIpAddress` |
 | SCA201 | **HardcodedIpInConfig** | IPv4/IPv6 address as a value in an .ini file of the source tree (configuration pass, not a per-unit detector; `; noinspection` markers) | Hint | Security Hotspot | ✅ | `uHardcodedIpInConfig` |
 
 ## ⚙️ Configuration — SCA001 OwnershipSinks (memory-leak whitelist)

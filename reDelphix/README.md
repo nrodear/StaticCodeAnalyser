@@ -447,7 +447,7 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
   Ablehnungen und Schutzregeln, Ende des Sync-Blocks und die Ersetzungen
   des Writers Ende zu Ende auf UTF-8-Pufferbytes (CRLF, LF, BOM,
   Mehrbyte-Zeichen), Kontext ueber Zeilen (mehrzeilige Strings, asm,
-  initialization, FPC-Weiche, Direktiven, Kommentargrenzen) - 72 Tests, reine
+  initialization, FPC-Weiche, Direktiven, Kommentargrenzen) - 79 Tests, reine
   Textlogik.
 
 Ohne Delphi (FPC 3.2.2):

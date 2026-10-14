@@ -28,6 +28,8 @@ type
     [Test] procedure ParseIPv6_Rejects;
     [Test] procedure WordParts_CamelAndUnderscore;
     [Test] procedure WordParts_Ipv4Ipv6_IsHostWordIp;
+    // Gegen-Review Welle 1, Minor 10: 'IPv4' zaehlt nur am Wortanfang.
+    [Test] procedure WordParts_IpvInsideWord_StaysOneWord;
   end;
 
 implementation
@@ -209,6 +211,18 @@ begin
   // kein Treffer: 'IPvoid' ist kein IPv4/IPv6, 'ipv' ohne Ziffer auch nicht
   Assert.AreEqual('i,pvoid,', JoinWords(TIpAddressScan.WordParts('IPvoid')), 'IPvoid');
   Assert.AreEqual('ipv,', JoinWords(TIpAddressScan.WordParts('ipv')), 'ipv');
+end;
+
+procedure TTestIpAddressScanGrammar.WordParts_IpvInsideWord_StaysOneWord;
+begin
+  // 'myipv4' ist EIN Wort 'myipv' (die Ziffer beendet es) - 'ip' entsteht
+  // nur am Wortanfang oder hinter einem Camel-Bruch ('MyIPv4').
+  Assert.AreEqual('myipv,', JoinWords(TIpAddressScan.WordParts('myipv4')), 'myipv4');
+  Assert.AreEqual('my,ip,', JoinWords(TIpAddressScan.WordParts('MyIPv4')), 'MyIPv4');
+  Assert.AreEqual('version,ip,', JoinWords(TIpAddressScan.WordParts('Version_IPv4')),
+    'Version_IPv4');
+  Assert.AreEqual('help,ip,', JoinWords(TIpAddressScan.WordParts('help_ipv4')),
+    'help_ipv4');
 end;
 
 initialization

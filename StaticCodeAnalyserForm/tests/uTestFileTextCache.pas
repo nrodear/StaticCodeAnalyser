@@ -38,6 +38,7 @@ type
     [Test] procedure RemoveFile_DetachesHeldEntry_NextGetLoadsFresh;
     [Test] procedure ForceStat_StaleEntry_OldReaderKeepsOldLines;
     [Test] procedure ReleaseLines_NilAndForeignList_Harmless;
+    [Test] procedure DoubleRelease_WithSecondHolder_AttachedEntrySurvives;
     [Test] procedure AcquireLines_WithoutCache_CallerOwnsList;
 
     // ---- Dekodierpfad ----
@@ -226,6 +227,34 @@ begin
   ReleaseLines(L1, True);   // einer gibt zurueck - der andere liest weiter
   Assert.AreEqual('e', L2[0], 'zweiter Halter liest weiter');
   ReleaseLines(L2, True);   // jetzt frei
+end;
+
+procedure TTestFileTextCache.DoubleRelease_WithSecondHolder_AttachedEntrySurvives;
+// Pinnt, was ReleaseEntry WIRKLICH schuetzt (Gegen-Review Welle 1, Minor
+// 9): der Zaehler faellt nie unter 0, mehr nicht. Ein Doppel-Release des
+// ersten Halters nimmt dem zweiten den Halt - solange der Eintrag
+// EINGEHAENGT bleibt, ueberlebt er das (kein Free, der naechste GetLines
+// liefert dieselbe Liste). Die ausgehaengte Variante (Clear dazwischen)
+// gaebe den Eintrag unter dem zweiten Leser frei; sie ist absichtlich
+// NICHT ausgefuehrt - ein Use-after-free beweist nichts Verlaessliches.
+var
+  F          : string;
+  L1, L2, L3 : TStringList;
+begin
+  F := Schreibe('f.pas', 'f');
+  L1 := FCache.GetLines(F);
+  L2 := FCache.GetLines(F);
+  Assert.IsTrue(L1 = L2, 'Cache-Treffer: dieselbe Liste, zwei Halter');
+  ReleaseLines(L1, True);
+  ReleaseLines(L1, True);   // Aufrufer-Fehler: ein zweites Mal
+  Assert.AreEqual<Integer>(1, FCache.EntryCount,
+    'eingehaengt: das Doppel-Release gibt den Eintrag nicht frei');
+  Assert.AreEqual('f', L2[0], 'zweiter Halter liest weiter');
+  L3 := FCache.GetLines(F);
+  Assert.IsTrue(L3 = L2, 'derselbe Eintrag, keine Neuladung');
+  ReleaseLines(L3, True);
+  ReleaseLines(L2, True);   // Zaehler klemmt bei 0 - kein Fehler
+  Assert.AreEqual<Integer>(1, FCache.EntryCount, 'bleibt eingehaengt');
 end;
 
 procedure TTestFileTextCache.AcquireLines_WithoutCache_CallerOwnsList;

@@ -37,6 +37,9 @@ type
     // mit drei Bedeutungen aufgeloest - jetzt EINE Regel in der Engine.
     [Test] procedure ResolveConfigured_RelativeAgainstProjectDir;
     [Test] procedure ResolveConfigured_AbsoluteAndEmptyUnchanged;
+    // CLI-Rueckfall (Gegen-Review Welle 1, Major 4): erst projektrelativ,
+    // sonst das Arbeitsverzeichnis - nur, wenn die Datei dort existiert.
+    [Test] procedure ResolveConfiguredWithFallback_ProjectFirst_ThenCwd;
     // BuildCountSource stand byte-gleich in EXE und Plugin.
     [Test] procedure NewOnly_EmptySetIsSource_LoadedSetFiltersIntoOwnedList;
   end;
@@ -275,6 +278,43 @@ begin
     'fuehrender Trenner gilt als absolut (wie bisher in beiden Wirten)');
   Assert.AreEqual('', TBaseline.ResolveConfigured('', FTmp));
   Assert.AreEqual('', TBaseline.ResolveConfigured('   ', FTmp), 'nur Leerraum');
+end;
+
+procedure TTestBaselineResolve.ResolveConfiguredWithFallback_ProjectFirst_ThenCwd;
+var
+  Proj, Cwd, Abs : string;
+  Used           : Boolean;
+begin
+  Proj := TPath.Combine(FTmp, 'proj');
+  Cwd  := TPath.Combine(FTmp, 'cwd');
+  TDirectory.CreateDirectory(Proj);
+  TDirectory.CreateDirectory(Cwd);
+  // Nirgends vorhanden: der projektrelative Pfad bleibt (die Fehlermeldung
+  // nennt den erwarteten Ort), kein Rueckfall.
+  Assert.AreEqual(TPath.Combine(Proj, 'b.json'),
+    TBaseline.ResolveConfiguredWithFallback('b.json', Proj, Cwd, Used));
+  Assert.IsFalse(Used, 'nirgends vorhanden: kein Rueckfall');
+  // Nur im CWD: der alte CLI-Weg, gemeldet ueber Used.
+  MakeFile('cwd\b.json');
+  Assert.AreEqual(TPath.Combine(Cwd, 'b.json'),
+    TBaseline.ResolveConfiguredWithFallback('b.json', Proj, Cwd, Used));
+  Assert.IsTrue(Used, 'nur im CWD: Rueckfall');
+  // In beiden: das Projekt gewinnt.
+  MakeFile('proj\b.json');
+  Assert.AreEqual(TPath.Combine(Proj, 'b.json'),
+    TBaseline.ResolveConfiguredWithFallback('b.json', Proj, Cwd, Used));
+  Assert.IsFalse(Used, 'projektrelativ vorhanden: kein Rueckfall');
+  // Absolut, leer und ohne Rueckfall-Verzeichnis wie ResolveConfigured.
+  Abs := TPath.Combine(FTmp, 'x.json');
+  Assert.AreEqual(Abs,
+    TBaseline.ResolveConfiguredWithFallback(Abs, Proj, Cwd, Used));
+  Assert.IsFalse(Used, 'absolut: kein Rueckfall');
+  Assert.AreEqual('',
+    TBaseline.ResolveConfiguredWithFallback('  ', Proj, Cwd, Used));
+  Assert.AreEqual(TPath.Combine(Proj, 'c.json'),
+    TBaseline.ResolveConfiguredWithFallback('c.json', Proj, '', Used),
+    'ohne Rueckfall-Verzeichnis');
+  Assert.IsFalse(Used);
 end;
 
 procedure TTestBaselineResolve.NewOnly_EmptySetIsSource_LoadedSetFiltersIntoOwnedList;

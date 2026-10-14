@@ -6,6 +6,45 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Changed
+- **CLI: a relative `[Baseline] File=` is resolved against the project
+  first, then the working directory.** Until now the CLI took the
+  value as written, i.e. relative to the directory the CLI was
+  started from, while the GUI and the IDE plugin resolved it against
+  the project (or group) directory. The CLI now uses the same rule as
+  the other two hosts - the directory of the `.dproj`/`.groupproj`,
+  otherwise the `--path` root - and falls back to the old behaviour
+  only when the file does not exist there but does exist relative to
+  the working directory; that fallback is announced with a
+  `Baseline: ... using the working directory` line, so a CI job that
+  relied on it keeps running and shows why. A file that exists in
+  neither place is reported against the project-relative path.
+- **Suppressing a form-file finding (`.dfm`/`.lfm`) now writes the
+  file-wide marker** `// noinspection-file <Rule>` into the sister
+  unit instead of a per-line marker above the unit line whose number
+  happened to match the form line. The per-line form was correct only
+  until the next edit above it shifted the line numbers - the
+  file-wide marker is not tied to a line, and it is the same marker
+  the Claude prompt has recommended for form files. A second request
+  for the same rule on the same form reports that the marker already
+  exists instead of adding another one.
+
+### Fixed
+- **SCA010 (DivByZero) lost the Yoda guard `if 0 <> N then` and
+  `if N >= 1 then`** after the parser started storing `if` conditions
+  without spaces around operators (`0<>N`); the guard list only knew
+  the spaced spellings. Both forms are recognised again.
+- **SCA199 (ParamNameMismatch): a query variable created twice in one
+  routine** (`Q := TFDQuery.Create ... Q.Free; Q := TFDQuery.Create`)
+  kept the SQL and parameter names of the first instance, so a
+  `ParamByName` of the second instance matched a placeholder that
+  only existed in the first SQL and the mismatch went unreported. A
+  re-creation now starts with an empty SQL and parameter record.
+
+---
+
 ## [v0.9.18] - 2026-09-10 - Error means proven, a baseline that holds, and one findings report
 
 ### Added - the findings workbench

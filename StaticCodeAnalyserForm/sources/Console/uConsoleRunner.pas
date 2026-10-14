@@ -1405,7 +1405,9 @@ function BaselineConfigDir(const Args: TCliArgs;
 // Verzeichnis, gegen das [Baseline] File= aufgeloest wird: das des
 // Projekts bzw. der Gruppe, sonst die Scan-Wurzel - dieselbe Regel wie EXE
 // und Plugin (TBaseline.ResolveConfigured). Bis 2026-10-14 ging der Wert
-// roh durch, also relativ zum Arbeitsverzeichnis des Aufrufers. Leer
+// roh durch, also relativ zum Arbeitsverzeichnis des Aufrufers; das bleibt
+// als Rueckfall, wenn die Datei projektrelativ nicht existiert
+// (ResolveConfiguredWithFallback, Gegen-Review Welle 1, Major 4). Leer
 // (Datei-Modus ohne Projekt): der Pfad bleibt relativ wie bisher.
 begin
   if AProjOrGroup <> '' then
@@ -1871,8 +1873,19 @@ begin
       var Probed := TStringList.Create;
       try
         if EffBaseline = '' then
-          EffBaseline := TBaseline.ResolveConfigured(Settings.BaselineFile,
-            BaselineConfigDir(Args, BlProjOrGroup));
+        begin
+          // Projektrelativ wie EXE und Plugin; existiert die Datei dort
+          // nicht, der alte CLI-Weg (relativ zum Arbeitsverzeichnis) -
+          // CI-Aufrufe aus einem anderen CWD brachen sonst still
+          // (Gegen-Review Welle 1, Major 4). Der Rueckfall wird genannt.
+          var UsedCwd: Boolean;
+          EffBaseline := TBaseline.ResolveConfiguredWithFallback(
+            Settings.BaselineFile, BaselineConfigDir(Args, BlProjOrGroup),
+            GetCurrentDir, UsedCwd);
+          if UsedCwd and not Args.Quiet then
+            WriteLn('Baseline: [Baseline] File= not found beside the ' +
+              'project - using the working directory: ', EffBaseline);
+        end;
         if EffBaseline = '' then
           EffBaseline := TBaseline.ResolveBaselinePath(
             BlProjOrGroup, Args.Path, Probed)

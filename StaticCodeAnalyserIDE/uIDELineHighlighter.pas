@@ -3152,10 +3152,14 @@ procedure TFindingEditorEvents.RepairEmptyHitCache(const Editor: TWinControl);
 // kein Klick. Fuer den Editor des Speichers mit vorhandenen Marken laeuft
 // deshalb dieselbe Reparatur wie beim Fehltreffer (gedrosselt, einmal je
 // Sichtzustand). Zeigervergleich - FSavedEditor wird nicht dereferenziert
-// (Welle 1).
+// (Welle 1). Gate auf die Marken DIESER Datei (FLastPaintedFile), nicht
+// auf irgendwelche: Marken in einer anderen Datei fuellten den Speicher
+// dieses Editors nie, der Voll-Repaint waere umsonst (Gegen-Review
+// Welle 1, Minor 7).
 begin
   if (Editor = FSavedEditor) and Assigned(GHighlighter)
-     and GHighlighter.HasMarks and WantsHitCacheRepair(Editor) then
+     and GHighlighter.HasMarksForFile(FLastPaintedFile)
+     and WantsHitCacheRepair(Editor) then
     GHighlighter.InvalidateAllLines;
 end;
 

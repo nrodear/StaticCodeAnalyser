@@ -173,9 +173,9 @@ IOTAEditWriter nach -, nicht nur Offsets.
 |---|---|---|
 | `uTestVnpPlan` | 15 | Literal am Caret, gleiche Literale (nur Code), Formen (hex, Bruch, Exponent, `_`, Bereich), Spalten, Kommentare (auch `*)` in Spalte 1), freier Name (auch ueber 99 hinaus), FPC-Weiche, Bytes/Zeichen; alle 44 Pruefungen des frueheren Ad-hoc-Tests |
 | `uTestVnpRefuse` | 9 | begin..end fuer den Zweig, alle Ablehnungen (case-Zweig, Sprungmarke, on-Handler, Zeilenanfang, schon benannt - `var X := 42;` wie `const X = 42;`, Konstanten, Deklarationszeilen, Zeile darueber) |
-| `uTestVnpGuards` | 16 | Schutzregeln aus dem Korpus-A/B und dem Review vom 2026-10-13: Routinen-Koepfe und Eigenschaften (auch Fortsetzungen `message`/`dispid`/`external`/`stdcall` auf der Folgezeile), Typ-/Sprungmarken-/asm-/exports-/Attribut-Zeilen, generische Deklarationen, case-Marken hinter `for`, on-Handler ohne Variable, zweite `var`/`const` hinter einer Anweisung, Zeilen, die einen Ausdruck oder eine Liste fortsetzen, Schluesselwoerter hinter Kommentaren, `initialization` darueber, `else` des eigenen `if`, offene Bloecke, Bedingungsausdruck in der Zeile darueber, Direktiven zwischen Zweig und Anweisung, mehrzeilige Strings, Ende des Sync-Blocks |
+| `uTestVnpGuards` | 18 | Schutzregeln aus dem Korpus-A/B und dem Review vom 2026-10-13: Routinen-Koepfe und Eigenschaften (auch Fortsetzungen `message`/`dispid`/`external`/`stdcall` auf der Folgezeile; `Register<Integer>(42)` und `Register; X := 42` sind Anweisungen), Typ-/Sprungmarken-/asm-/exports-/Attribut-Zeilen, typisierte Konstanten, generische Deklarationen, case-Marken hinter `for`, on-Handler ohne Variable, zweite `var`/`const` hinter einer Anweisung, Zeilen, die einen Ausdruck oder eine Liste fortsetzen, Schluesselwoerter hinter Kommentaren, `initialization` darueber, `else` des eigenen `if`, offene Bloecke, Bedingungsausdruck in der Zeile darueber, Direktiven zwischen Zweig und Anweisung, mehrzeilige Strings, Ende des Sync-Blocks |
 | `uTestVnpEdits` | 20 | C1h Ende zu Ende: Demo-Faelle 1-6 (CR LF, LF, BOM, Umlaute und Euro VOR dem Literal), Text-Schnappschuss (Zeilenende je Zeile, BOM in Zeile 1), Zeile darueber, Ziel am Caret, Writer-Vertrag |
-| `uTestVnpContext` | 12 | Zusammenhang ueber Zeilen in `TargetAt` (Review 2026-10-13): mehrzeilige Strings mit fuenf Quotes, asm-Block, initialization-Abschnitt, FPC-Weiche, Direktive auch ohne Block, Zeile darueber ab ihrem Kommentar-Zustand, `*)` in Spalte 1, Kommentargrenzen eines begin..end, else-Arm eines Bedingungsausdrucks, Zeilenenden je Zeile, Vorbedingung von `IntroduceEdits` |
+| `uTestVnpContext` | 17 | Zusammenhang ueber Zeilen in `TargetAt` (Review 2026-10-13, Gegen-Review 2026-10-14): mehrzeilige Strings mit fuenf Quotes und `''' + '''`, Kommentar- und String-Zustand in einem Lauf, asm-Block (auch Sprungmarke `@end:`), initialization-Abschnitt, FPC-Weiche, Direktive auch ohne Block und auf der Zeile darueber, Zeile darueber ab ihrem Kommentar-Zustand, `*)` in Spalte 1, Kommentargrenzen eines begin..end, Bedingungsausdruck mit Armen auf eigenen Zeilen, Zeilenenden je Zeile, Vorbedingung von `IntroduceEdits` |
 | `uTestVnpTemplate` | 20 | D1: Template-Code, Template-XML (wie `ifnil.xml`), eigenes Template erkennen, Anweisung loeschen/zurueckschreiben, Modell der Template-Expansion (Annahme D-M3 - in der IDE zu bestaetigen) |
 
 Ohne IDE: `bash VarNameProject/tools/fpc-pruefstand/build.sh` (alle
@@ -478,9 +478,9 @@ abgrenzen kann, lehnt er ab (lieber nichts tun als falschen Code schreiben).
   ueber die Zeile; die Zeile darueber muss eine Anweisung beenden (`;`,
   `begin`, `try` ...). Beginnt sie in einem Kommentar, zaehlt nur ihr Code
   hinter dessen Ende (`{ Bsp:` / `Foo; // } if A then` ist ein Zweig).
-  Steht zwischen der Zeile darueber und der Anweisung eine Direktive
-  (`{$IFDEF}`), Abbruch - mit und ohne Block. Nicht gesehen: eine
-  Direktive AUF der Zeile darueber (`Foo; {$ENDIF}`).
+  Steht auf der Zeile darueber oder zwischen ihr und der Anweisung eine
+  Direktive (`{$IFDEF}`, auch `Foo; {$ENDIF}` oder `{$IFDEF A} if B then
+  {$ELSE} Foo; {$ENDIF}`), Abbruch - mit und ohne Block.
 - Eingefuegte Zeilen enden wie die Zeile, vor die sie kommen (`begin` wie
   die Zweigzeile, Deklaration und `end;` wie die Anweisung); eine letzte
   Zeile ohne Zeilenende bekommt das erste Zeilenende der Datei, eine Datei
@@ -492,11 +492,14 @@ abgrenzen kann, lehnt er ab (lieber nichts tun als falschen Code schreiben).
   schliesst, jedes `else` gehoert zu einem `if` derselben Zeile, und es
   schliesst nichts von ausserhalb (`until`, `finally`, `end`). Endet die
   Zweigzeile oder die Anweisung in einem offenen `{`/`(*`-Kommentar,
-  Abbruch (`begin` bzw. `end;` landete im Kommentar). Gehoert das
-  `then`/`else` zu einem Bedingungsausdruck (Delphi 13: `X := if C then A`
-  auf der Zeile darueber oder der Zeile vor einem `else`), Abbruch;
-  liegt das `if` noch weiter oben, sieht der Leser es nicht (dann
-  Compilerfehler, nichts Stilles). In reDelphix soll der vorhandene
+  Abbruch (`begin` bzw. `end;` landete im Kommentar oder String). Gehoert
+  das `then`/`else` zu einem Bedingungsausdruck (Delphi 13: `X := if C
+  then A` auf der Zeile darueber, oder weiter oben mit den Armen auf
+  eigenen Zeilen - `X := if C then` / `A` / `else`, auch `X :=` / `if C
+  then` / ...), Abbruch: der Leser geht von der Zweigzeile aufwaerts bis
+  zum `if` oder bis eine Zeile eine Anweisung beendet (`;`) bzw. einen
+  Zweig oder Block oeffnet - dann ist das `if` eine Anweisung. In
+  reDelphix soll der vorhandene
   Block-Planer (SCA101, WrapInBlock) einspringen. D1 lehnt Zweige ohne
   begin ganz ab, ebenso Zeilen mit `|` (Trennzeichen des Templates) und
   `]]>` (Ende des CDATA-Abschnitts).
@@ -521,8 +524,11 @@ abgrenzen kann, lehnt er ab (lieber nichts tun als falschen Code schreiben).
   Delphi 13) oder endet er mit `,` ausserhalb von Klammern (case-Marken).
 - Nie in einem mehrzeiligen String (Delphi 12, `'''` ... `'''`, auch mit
   fuenf oder mehr Quotes - geschlossen wird er nur von genau so vielen
-  Quotes am Zeilenanfang wie der Oeffner hatte) und nie in einem Kommentar
-  ueber mehrere Zeilen.
+  Quotes am Zeilenanfang wie der Oeffner hatte; hinter dem Schliesser kann
+  auf derselben Zeile ein neuer beginnen, `''' + '''`) und nie in einem
+  Kommentar ueber mehrere Zeilen. Kommentar- und String-Zustand laufen in
+  einem Lauf: ein `'''` in einem Kommentarblock oeffnet nichts, ein `{`
+  oder `(*` im Text eines Strings schliesst nichts auf.
 - Nie im `initialization`-/`finalization`-Abschnitt (ob dort eine
   Inline-Deklaration gilt, ist nicht gemessen) und nie in einer Datei mit
   FPC-Weiche (`{$IFDEF FPC}`, `{$MODE ...}`): FPC 3.2 kennt keine

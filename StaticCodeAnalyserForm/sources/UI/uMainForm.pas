@@ -2260,9 +2260,11 @@ end;
 procedure TForm2.SuppressSelectedFinding;
 // Ctrl+Alt+S, wie im Plugin: die Marker-Zeile UEBER die Fundzeile -
 // '// noinspection <RuleName>', in einer Konfigurationsdatei
-// '; noinspection', bei einem .dfm-Fund in die .pas (Host und Zeile aus
-// TSuppression.MarkerTargetFor; bis 2026-10-14 ging die '//'-Zeile in die
-// .dfm, und das Formular lud nicht mehr - Review MAJOR 2). Das Plugin
+// '; noinspection', bei einem .dfm-Fund der DATEIWEITE Marker in die .pas
+// (Host und Zeile aus TSuppression.MarkerTargetFor; bis 2026-10-14 ging
+// die '//'-Zeile in die .dfm, und das Formular lud nicht mehr - Review
+// MAJOR 2; die Zeilenform in der .pas hing an der Zeilennummer, Gegen-
+// Review Welle 1, Major 3). Das Plugin
 // schreibt in den IDE-Editor (Strg+Z nimmt zurueck); hier geht es in die
 // DATEI - uSourceLineEdit schreibt nur, wenn die Byte-Treue-Probe
 // besteht. Der Befund verschwindet wie im Plugin erst mit dem naechsten

@@ -123,6 +123,18 @@ type
     [Test] procedure Div_ModLeadingZeroLiteral_NoFinding;
   end;
 
+  // ---- DivByZero: kompakte Guard-Formen (Gegen-Review Welle 1, Major 1) --
+  // Eigene Fixture: TTestDivByZeroExt liegt laengst ueber der Grenze von
+  // 20 Tests je Fixture. ParseIfStmt schreibt die Bedingung seit Welle 1
+  // kompakt ('0<>n'); HasGuardingIf kannte nur die gespacete Yoda-Form.
+  [TestFixture]
+  TTestDivByZeroCompactGuards = class
+  public
+    [Test] procedure Div_YodaNotEqualGuard_NoFinding;
+    [Test] procedure Div_GreaterEqualOneGuard_NoFinding;
+    [Test] procedure Div_YodaEqualZero_StillReported;   // TP-Gegenprobe
+  end;
+
   // ---- DeadCode Erweiterungen --------------------------------------------------------
   [TestFixture]
   TTestDeadCodeExt = class
@@ -1802,6 +1814,68 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkDivByZero) >= 1,
     'Re-Zuweisung zwischen Else-Kante und Division hebt die Suppression auf');
+  finally F.Free; end;
+end;
+
+// =============================================================================
+// DivByZero: kompakte Guard-Formen
+// =============================================================================
+
+procedure TTestDivByZeroCompactGuards.Div_YodaNotEqualGuard_NoFinding;
+// Repro des Gegen-Reviews (scratchpad w2/rs/divz/uDivGuard.pas, Funktion B):
+// 'if 0 <> N then Result := T div N' - der Parser legt '0<>N' ab, der
+// Guard kannte nur '0 <> n' und meldete einen SCA010-FP.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function B(T, N: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  if 0 <> N then'#13#10+
+  '    Result := T div N;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'if 0 <> N (kompakt 0<>n) schuetzt die Division');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroCompactGuards.Div_GreaterEqualOneGuard_NoFinding;
+// Funktion A des Repros: 'if N >= 1 then' - kompakt 'n>=1', ebenfalls ohne
+// Zwilling in HasGuardingIf (IsGuardedByWhileCond hatte ihn).
+const SRC =
+  'unit t; implementation'#13#10+
+  'function A(T, N: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  if N >= 1 then'#13#10+
+  '    Result := T div N;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'if N >= 1 (kompakt n>=1) schuetzt die Division');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroCompactGuards.Div_YodaEqualZero_StillReported;
+// Gegenprobe: 'if 0 = N then' ist kein Guard (im then-Zweig IST N null) -
+// die neuen Zwillinge duerfen nicht ueber '0<>' hinaus greifen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function E(T, N: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  if 0 = N then'#13#10+
+  '    Result := T div N;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDivByZero) >= 1,
+    'if 0 = N schuetzt nicht - weiterhin ein Fund');
   finally F.Free; end;
 end;
 

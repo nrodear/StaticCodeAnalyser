@@ -1229,6 +1229,21 @@ begin
     end;
   end;
   Q := QueryOf(Key, Disp);
+  // Erneute Erzeugung derselben Variablen (Q := TFDQuery.Create ... Free
+  // ... Q := TFDQuery.Create): die neue Instanz beginnt ohne SQL, ohne
+  // Parameterzugriffe und ohne angelegte Namen - sonst matchte ein
+  // ParamByName der zweiten Instanz das SQL der ersten (FN; Gegen-Review
+  // Welle 1, Minor 11). Das Urteil ueber die erste Instanz geht damit
+  // verloren (bewusst: lieber ein stilles Nein als ein falsches Ja). Eine
+  // Zuweisung aus fremder Quelle (Q := DM.qry) setzt nur die Flags: dort
+  // gilt der bestehende Vertrag (Zugriffe vor der ersten SQL-Operation
+  // zaehlen nicht, kein (b)).
+  if Created then
+  begin
+    FQs[Q].Parts := nil;
+    FQs[Q].Refs := nil;
+    FQs[Q].Known := nil;
+  end;
   FQs[Q].Created := Created;
   FQs[Q].Reset := False;
   FQs[Q].HasSqlOp := False;

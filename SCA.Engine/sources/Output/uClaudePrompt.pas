@@ -286,13 +286,6 @@ begin
   Result := StringOfChar('`', Longest + 1);
 end;
 
-function FileWideMarkerFor(AKind: TFindingKind): string;
-// Dateiweiter Pascal-Marker ('// noinspection-file X', Syntax aus dem
-// Kopf von uSuppression) - TSuppression liefert nur die Zeilenform.
-begin
-  Result := '// noinspection-file ' + KindName(AKind);
-end;
-
 function FormUnitFor(const AFormFile: string): string;
 // Die Schwester-Unit einer Formdatei: die vorhandene (.pas, bei Lazarus
 // .pp), sonst der .pas-Name daneben - fuer den Hinweis reicht der Name.
@@ -406,13 +399,18 @@ begin
     //
     // Eine Formdatei (.dfm, bei Lazarus .lfm) kennt keinen Kommentar: ihre
     // Funde lesen die Marker aus der Schwester-Unit (uSuppression.
-    // ResolveMarkerHostFile), und weil die Zeilen der Form dort kein
-    // Gegenstueck haben, traegt nur der dateiweite Marker in der Unit -
-    // ein '// noinspection X' in der .dfm waere Datenmuell im Formular
-    // (Review 2026-10-13; vorher stand hier die Zeilenform).
+    // ResolveMarkerHostFile). Ein Zeilenmarker wirkte dort nur, wenn seine
+    // Zielzeile in der Unit zufaellig die Nummer der Fundzeile der Form
+    // traegt - jeder Edit darueber verschoebe das still. Der dateiweite
+    // Marker haengt an keiner Zeilennummer; er ist der robuste Weg und
+    // derselbe, den TSuppression.MarkerTargetFor fuer Strg+Alt+S liefert
+    // (Gegen-Review Welle 1, Major 3; vorher stand hier die Zeilenform).
+    // Ein '// noinspection X' in der .dfm selbst waere Datenmuell im
+    // Formular (Review 2026-10-13).
     if TStaticFiles.IsFormFileName(F.FileName) then
       SB.AppendLine(Format(_('If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on its own line in the unit `%s` (a form file takes no comment marker; the file-wide marker in its unit covers the form).'),
-        [FileWideMarkerFor(F.Kind), ExtractFileName(FormUnitFor(F.FileName))]))
+        [TSuppression.FileWideMarkerFor(FormUnitFor(F.FileName), F.Kind),
+         ExtractFileName(FormUnitFor(F.FileName))]))
     else
       SB.AppendLine(Format(_('If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on its own line directly above the affected line.'),
         [TSuppression.MarkerLineFor(F.FileName, F.Kind)]));

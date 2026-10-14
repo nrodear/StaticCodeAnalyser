@@ -701,8 +701,14 @@ begin
   if Entry = nil then Exit;
   FLock.Enter;
   try
-    // Nie unter 0: ein doppeltes ReleaseLines desselben Aufrufers darf
-    // einem anderen Leser den Eintrag nicht unter den Fuessen wegziehen.
+    // Nie unter 0 - mehr Schutz gibt es hier nicht: ein doppeltes
+    // ReleaseLines desselben Aufrufers ist nur dann folgenlos, wenn kein
+    // zweiter Halter da ist. Mit zweitem Halter nimmt es DESSEN Halt; ist
+    // der Eintrag dann ausgehaengt (Clear/RemoveFile), wird er unter dem
+    // zweiten Leser frei. Der Vertrag bleibt "genau einmal zurueckgeben"
+    // (uTestFileTextCache.DoubleRelease_WithSecondHolder_AttachedEntry-
+    // Survives; Gegen-Review Welle 1, Minor 9 - der Kommentar versprach
+    // vorher einen Schutz, den der Code nicht hat).
     if Entry.FUsers > 0 then
       Dec(Entry.FUsers);
     if (Entry.FUsers = 0) and Entry.FDetached then

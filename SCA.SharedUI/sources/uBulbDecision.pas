@@ -33,7 +33,10 @@ unit uBulbDecision;
 // stempelt aber den Stand, damit der Takt (NeedsRevisit) nicht alle
 // 250 ms neu plant, bis die Zeile wieder sichtbar ist (Review 2026-10-14,
 // Minor "Caret ausserhalb -> 250-ms-Neuplanung"). Wird sie sichtbar, holt
-// WantsFindings die Funde nach (der Fingerabdruck gilt als unbekannt).
+// WantsFindings die Funde nach (der Fingerabdruck gilt als unbekannt); eine
+// schon beantwortete Anbieter-Frage bleibt dabei beantwortet - gleiche
+// Funde, gleicher Schluessel, keine neue Frage (Gegen-Review Welle 1,
+// Minor 6: sonst parste reDelphix nach jedem Raus- und Reinscrollen).
 //
 // Zeitbasis UInt64 (GetTickCount64): kein Abschneiden nach 49,7 Tagen. Die
 // Uhr kommt als Parameter herein - die Tests laufen ohne Sleep.
@@ -176,7 +179,14 @@ begin
   BeginLine(AFile, ALine, ANowMs);
   FSigKnown := False;
   FFindSig  := '';
-  FKey      := '';
+  // Eine beantwortete Anbieter-Frage bleibt beantwortet: wird die Zeile
+  // wieder sichtbar und sind die Funde dieselben, gilt der Schluessel
+  // weiter, und niemand parst neu (vorher: FKey immer leer - reDelphix
+  // parste nach jedem Raus- und Reinscrollen die Datei erneut; Gegen-
+  // Review Welle 1, Minor 6). Nur eine noch OFFENE Frage wird verworfen -
+  // sie hielte NeedsRevisit sonst alle 250 ms wach, obwohl niemand fragt.
+  if not FChecked then
+    FKey := '';
 end;
 
 function TBulbDecision.WantsProviderCheck(const ALineText: string;

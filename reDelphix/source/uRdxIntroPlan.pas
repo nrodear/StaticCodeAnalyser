@@ -99,9 +99,24 @@ function SectionStateAfter(const ACode: string; AState: Char): Char;
 // Ausdrucks waere kein Code (Pruefer 2026-10-13, Harness 8).
 function ContinuesIfExpression(const ACode: string): Boolean;
 
+// Gehoert ein 'then' oder 'else' am Zeilenende zu einem Bedingungsausdruck
+// (Delphi 13), dessen 'if' weiter oben steht? ACodeAbove: der Code der
+// Zeilen von dort aufwaerts (nur Code-Zeilen, von unten nach oben; bei
+// einem 'else' die Zeilen UEBER der else-Zeile, bei einem 'then' die
+// then-Zeile selbst zuerst). Aufwaerts bis zum 'if': mitten in einer Zeile
+// (ContinuesIfExpression) ein Ausdruck; als erstes Wort einer Zeile ein
+// Ausdruck, wenn die Zeile darueber keine Anweisung beendet und keinen
+// Zweig oder Block oeffnet ('X :=' / 'if C then' / 'A' / 'else'); eine
+// Zeile, die vorher eine Anweisung beendet (';' am Ende) oder einen Zweig
+// oder Block oeffnet, heisst: das then/else gehoert zu einer if-ANWEISUNG.
+// Ohne 'if' darueber ebenso. Vorher zaehlte nur EINE Zeile ueber dem
+// else, und 'X := if C then' / 'A' / 'else' / 'Foo(42);' bekam begin..end
+// mitten im Ausdruck (Pruefer 2026-10-14, a).
+function IfExpressionAbove(const ACodeAbove: array of string): Boolean;
+
 // Traegt die Zeile eine FPC-Weiche oder einen FPC-Modus ('{$IFDEF FPC}',
-// '{$IFNDEF FPC}', '{$IF DEFINED(FPC)}', '{$MODE ...}', auch als
-// '(*$..*)')? Dieselben Spuren wie reDelphix (TRdxRecipes.
+// '{$IFNDEF FPC}', '{$IF DEFINED(FPC)}', '{$IF FPC_FULLVERSION ...}',
+// '{$MODE ...}', auch als '(*$..*)')? Dieselben Spuren wie reDelphix (TRdxRecipes.
 // LineLooksFpcAware): eine Inline-Konstante gibt es in FPC 3.2 nicht, in
 // so einer Datei lehnt TargetAt ab. Ein Treffer in einem Kommentar macht
 // nur vorsichtig, nie falsch.
@@ -120,8 +135,11 @@ function Utf8Len(const S: string): Integer;
 function CharColOfByte(const ALine: string; AByteIndex: Integer): Integer;
 
 // Ist am Ende von ALine ein String noch offen? So beginnt ein mehrzeiliger
-// String (Delphi 12: ''' am Zeilenende).
-function StringOpenAtEnd(const ALine: string): Boolean;
+// String (Delphi 12: ''' am Zeilenende). AState ist der Kommentar-Zustand
+// am Zeilenanfang ('c', 'b', 'p') - eine Zeile, die in einem Kommentar
+// beginnt, zaehlt erst ab dessen Ende (ein ''' im Kommentar oeffnet
+// nichts; Pruefer 2026-10-14, c).
+function StringOpenAtEnd(const ALine: string; AState: Char = 'c'): Boolean;
 
 implementation
 
@@ -164,15 +182,20 @@ const
   // darueber endet mit ';', der Zeilen-Leser hielte sie sonst fuer eine
   // Anweisung (Pruefer 2026-10-13, Harness 1-3). Sie sind keine
   // reservierten Woerter: als Anweisung ('Index := 5', 'Name.X(42)',
-  // 'Message(42)', 'Index[1] := 42') folgt ':=', '.', '(' oder '['.
-  HEAD_DIRECTIVES: array[0..26] of string = ('message', 'dispid',
+  // 'Message(42)', 'Index[1] := 42', 'Register<Integer>(42)', 'Register;
+  // X := 42') folgt ':=', '.', '(', '[', '^', '<' oder ein ';' mit einer
+  // Anweisung dahinter (StartsHeadDirective). 'vectorcall' und
+  // 'assembler' dazu (Pruefer 2026-10-14, d).
+  HEAD_DIRECTIVES: array[0..28] of string = ('message', 'dispid',
     'external', 'index', 'name', 'stdcall', 'cdecl', 'safecall', 'pascal',
     'register', 'winapi', 'overload', 'override', 'virtual', 'dynamic',
     'abstract', 'reintroduce', 'inline', 'static', 'forward', 'deprecated',
-    'platform', 'experimental', 'library', 'varargs', 'delayed', 'final');
+    'platform', 'experimental', 'library', 'varargs', 'delayed', 'final',
+    'vectorcall', 'assembler');
   // Dahinter ist ein 'message', 'index' usw. eine Anweisung, keine
   // Fortsetzung eines Kopfs.
-  STATEMENT_AFTER_WORD: array[0..4] of string = (':=', '.', '(', '[', '^');
+  STATEMENT_AFTER_WORD: array[0..5] of string = (':=', '.', '(', '[', '^',
+    '<');
   // Hinter diesen Woertern beginnt ein 'if' eine ANWEISUNG; jedes andere
   // Token davor ('X := if ...', 'Foo(if ...', '1 + if ...') macht es zum
   // Bedingungsausdruck (Delphi 13).
@@ -184,8 +207,8 @@ const
     'finalization');
   // Spuren einer FPC-Weiche, ohne Leerraum und klein geschrieben (wie
   // TRdxRecipes.FPC_TELLS in reDelphix).
-  FPC_TELLS: array[0..4] of string = ('{$mode', '(*$mode', '$ifdeffpc',
-    '$ifndeffpc', 'defined(fpc');
+  FPC_TELLS: array[0..5] of string = ('{$mode', '(*$mode', '$ifdeffpc',
+    '$ifndeffpc', 'defined(fpc', 'fpc_fullversion');
   // Bloecke einer Zeile: diese Woerter oeffnen ...
   BLOCK_OPENERS: array[0..4] of string = ('begin', 'try', 'case', 'repeat',
     'asm');
@@ -335,12 +358,12 @@ begin
   ScanLine(ALine, 'c', Result, EndState);
 end;
 
-function StringOpenAtEnd(const ALine: string): Boolean;
+function StringOpenAtEnd(const ALine: string; AState: Char): Boolean;
 var
   Classes  : string;
   EndState : Char;
 begin
-  ScanLine(ALine, 'c', Classes, EndState);
+  ScanLine(ALine, AState, Classes, EndState);
   Result := EndState = 's';
 end;
 
@@ -511,7 +534,10 @@ end;
 
 // Die Woerter (klein geschrieben) und Satzzeichen des Codes einer Zeile -
 // Strings und Kommentare fallen weg, ':=' ist EIN Token, ein Wort mit '&'
-// davor ('&begin') ist ein Bezeichner, kein Schluesselwort.
+// davor ('&begin') ist ein Bezeichner, kein Schluesselwort - ebenso eines
+// mit '@' davor: die asm-Sprungmarke '@end:' ist kein 'end' und beendet
+// den asm-Block nicht (Pruefer 2026-10-14, d; '@X' als Adresse bleibt
+// ein Token, das kein Wort und kein Wert ist).
 function TokensOf(const ALine: string): TArray<TRdxIntroToken>;
 var
   S    : string;
@@ -524,7 +550,7 @@ begin
   while i <= Length(S) do
   begin
     j := i + 1;
-    if IsIdentChar(S[i]) or (S[i] = '&') then
+    if IsIdentChar(S[i]) or (S[i] = '&') or (S[i] = '@') then
       while (j <= Length(S)) and IsIdentChar(S[j]) do
         Inc(j)
     else if (S[i] = ':') and (CharAt(S, i + 1) = '=') then
@@ -905,12 +931,52 @@ end;
 
 // Beginnt der Code mit einer Kopf-Fortsetzung (HEAD_DIRECTIVES), hinter
 // der keine Anweisung steht ('message WM_USER + 5;', 'stdcall; external
-// ...')? 'Index := 5;' oder 'Message(42);' ist eine Anweisung.
+// ...')? 'Index := 5;', 'Message(42);' und 'Register<Integer>(42);' sind
+// Anweisungen (STATEMENT_AFTER_WORD) - ebenso 'Register; X := 42;': ein
+// ';' direkt hinter dem Wort, wenn danach etwas anderes als die naechste
+// Kopf-Fortsetzung kommt ('stdcall; external ...' bleibt ein Kopf;
+// Pruefer 2026-10-14, d).
 function StartsHeadDirective(const ATokens: TArray<TRdxIntroToken>): Boolean;
 begin
   Result := (Length(ATokens) > 0) and InList(ATokens[0].Text, HEAD_DIRECTIVES)
     and ((Length(ATokens) = 1)
          or not InList(ATokens[1].Text, STATEMENT_AFTER_WORD));
+  if Result and (Length(ATokens) > 2) and (ATokens[1].Text = ';') then
+    Result := InList(ATokens[2].Text, HEAD_DIRECTIVES);
+end;
+
+// Ist die Zeile eine typisierte Konstante oder eine initialisierte
+// Variable 'Name: Typ = Wert;' (const-/var-Abschnitt)? Erstes Token ein
+// Name (kein Wert), dann ':', spaeter '=' auf oberster Ebene - und kein
+// ':=' und kein Anweisungswort (if, while, ...) auf oberster Ebene: 'lbl:
+// if A = 1 then B;' ist eine Sprungmarke, 'C: Integer = 42;' die Konstante.
+// Vorher nannte der Grund sie "case-Zweig" (Pruefer 2026-10-14, d).
+function IsTypedConstDecl(const ATokens: TArray<TRdxIntroToken>): Boolean;
+const
+  STATEMENT_WORDS: array[0..13] of string = ('if', 'while', 'for', 'case',
+    'repeat', 'begin', 'try', 'with', 'goto', 'raise', 'then', 'do', 'else',
+    'on');
+var
+  i, Depth : Integer;
+  HasEqual : Boolean;
+begin
+  Result := False;
+  if (Length(ATokens) < 4) or IsDigit(ATokens[0].Text[1])
+     or not IsIdentChar(ATokens[0].Text[1]) or (ATokens[1].Text <> ':') then
+    Exit;
+  Depth := 0;
+  HasEqual := False;
+  for i := 2 to High(ATokens) do
+  begin
+    Inc(Depth, ParenStep(ATokens[i].Text));
+    if Depth <> 0 then
+      Continue;
+    if (ATokens[i].Text = ':=') or InList(ATokens[i].Text, STATEMENT_WORDS) then
+      Exit;
+    if ATokens[i].Text = '=' then
+      HasEqual := True;
+  end;
+  Result := HasEqual;
 end;
 
 // Die Pruefungen, die nur die Zeile selbst brauchen: '' oder der Grund.
@@ -943,6 +1009,10 @@ begin
   else if InList(W, NOT_A_START) then
     Result := Format('die Zeile beginnt mit "%s" - davor darf keine '
       + 'Deklaration', [W])
+  else if IsTypedConstDecl(ATokens) then
+    Result := 'die Zeile ist eine typisierte Konstante oder initialisierte '
+      + 'Variable "Name: Typ = Wert" (const-/var-Abschnitt) - ihr Wert '
+      + 'bleibt, wie er ist'
   else if IsLabeled(ATokens) then
     Result := 'die Zeile ist ein case-Zweig, eine Sprungmarke oder ein '
       + 'on-Handler - davor darf keine Deklaration'
@@ -1091,6 +1161,43 @@ begin
     if (T[k].Text = 'if') and not InList(T[k - 1].Text, IF_STATEMENT_AFTER) then
       Exit(True);
   Result := False;
+end;
+
+// Beendet der Code eine Anweisung (';' am Ende) oder oeffnet er einen
+// Zweig oder Block (letztes Token aus IF_STATEMENT_AFTER)? Leer: ja - vor
+// der ersten Zeile ist nichts offen.
+function EndsStatementOrBranch(const ACode: string): Boolean;
+var
+  T : TArray<TRdxIntroToken>;
+begin
+  T := TokensOf(ACode);
+  Result := (Length(T) = 0) or InList(T[High(T)].Text, IF_STATEMENT_AFTER);
+end;
+
+function IfExpressionAbove(const ACodeAbove: array of string): Boolean;
+var
+  k    : Integer;
+  T    : TArray<TRdxIntroToken>;
+  Next : string;
+begin
+  Result := False;
+  for k := 0 to High(ACodeAbove) do
+  begin
+    if ContinuesIfExpression(ACodeAbove[k]) then
+      Exit(True);
+    T := TokensOf(ACodeAbove[k]);
+    if (Length(T) > 0) and (T[0].Text = 'if') then
+    begin
+      // 'if' als erstes Wort: Ausdruck nur, wenn die Zeile darueber offen
+      // endet ('X :=', 'Foo(', 'A +'); ohne Zeile darueber eine Anweisung.
+      Next := '';
+      if k < High(ACodeAbove) then
+        Next := ACodeAbove[k + 1];
+      Exit(not EndsStatementOrBranch(Next));
+    end;
+    if EndsStatementOrBranch(ACodeAbove[k]) then
+      Exit;
+  end;
 end;
 
 function LineLooksFpcAware(const ALine: string): Boolean;

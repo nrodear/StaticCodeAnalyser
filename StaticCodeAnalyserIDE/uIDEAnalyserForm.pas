@@ -512,8 +512,8 @@ type
     // Bietet kein Anbieter einen fuer diesen Fund an (kein Anbieter geladen;
     // Config-/DFM-Funde - reDelphix kennt nur Pascal-Quelltext), schreibt
     // das Plugin selbst: die Marker-Zeile an das Ziel aus
-    // TSuppression.MarkerTargetFor (bei .dfm in die .pas) ueber
-    // TIDEEditor.InsertLineAbove.
+    // TSuppression.MarkerTargetFor (bei .dfm der dateiweite Marker in die
+    // .pas) ueber TIDEEditor.InsertLineAbove.
     procedure ApplySuppressForRow(RowIdx: Integer);
     procedure UpdateHelp(Row: Integer);
     // Sammelt alle Befunde aus FDisplayedFindings die zur gleichen Datei
@@ -2974,7 +2974,8 @@ var
   F      : TLeakFinding;
   Model  : TFindingMenuModel;
   Choice : TFindingKeyChoice;
-  i      : Integer;
+  Errs   : string;   // alle Anbieterfehler in einer Zeile
+  Msg    : string;   // Ergebnis der Taste
 begin
   Result := False;
   if not Assigned(FDisplayedFindings) or (RowIdx <= 0)
@@ -2983,21 +2984,33 @@ begin
   if not Assigned(F) then Exit;
   Model := BuildFindingMenuModel(TArray<TLeakFinding>.Create(F), []);
   // Ein werfender Anbieter blieb bis 2026-10-14 unsichtbar - die Taste
-  // meldete dann nur "nicht verfuegbar: SCAnnn".
-  for i := 0 to High(Model.Errors) do
-    StatusMode(Format(_('Finding actions: provider failed - %s'),
-      [Model.Errors[i]]));
+  // meldete dann nur "nicht verfuegbar: SCAnnn". Die Fehler stehen MIT
+  // dem Ergebnis in einer Zeile: ein StatusMode je Fehler wurde von der
+  // Folgemeldung sofort ueberschrieben (Gegen-Review Welle 1, Minor 8).
+  Errs := string.Join('; ', Model.Errors);
+  if Errs <> '' then
+    Errs := Format(_('Finding actions: provider failed - %s'), [Errs]);
   Choice := Model.FirstRunnable(AKind);
+  Msg := '';
   case Choice.Verdict of
     kvRun:
       if RunFindingAction(Model.Actions[Choice.Index], Self) then
-        StatusMode(Format(ADoneFmt, [Model.Actions[Choice.Index].Caption]));
+        Msg := Format(ADoneFmt, [Model.Actions[Choice.Index].Caption]);
     kvDisabled, kvChangesBehavior:
-      StatusMode(Format(AMissingFmt,
-        [SkippedActionText(Model.Actions[Choice.Index], Choice.Verdict)]));
+      Msg := Format(AMissingFmt,
+        [SkippedActionText(Model.Actions[Choice.Index], Choice.Verdict)]);
   else
-    Exit;   // kvNone: keine Aktion dieser Art - der Aufrufer entscheidet
+    // kvNone: keine Aktion dieser Art - der Aufrufer entscheidet; die
+    // Anbieterfehler sieht er trotzdem (seine Meldung kommt danach).
+    if Errs <> '' then StatusMode(Errs);
+    Exit;
   end;
+  if (Msg <> '') and (Errs <> '') then
+    StatusMode(Msg + ' | ' + Errs)
+  else if Msg <> '' then
+    StatusMode(Msg)
+  else if Errs <> '' then
+    StatusMode(Errs);
   Result := True;
 end;
 
@@ -3032,10 +3045,17 @@ procedure TAnalyserFrame.ApplySuppressForRow(RowIdx: Integer);
 // reDelphix kennt nur Pascal-Quelltext, bis 2026-10-14 war Ctrl+Alt+S
 // dafuer tot, sobald reDelphix geladen war - Review MAJOR 1), schreibt
 // das Plugin die Marker-Zeile selbst: `// noinspection <KindName>` bzw.
-// `; noinspection` in einer Konfigurationsdatei, bei einem .dfm-Fund in
-// die .pas - Host und Zeile aus TSuppression.MarkerTargetFor, das ablehnt,
-// wenn der Marker dort nicht wirken kann. Schreibt das Ergebnis in die
+// `; noinspection` in einer Konfigurationsdatei, bei einem .dfm-Fund der
+// DATEIWEITE Marker `// noinspection-file <KindName>` in die .pas - Host
+// und Zeile aus TSuppression.MarkerTargetFor, das ablehnt, wenn der Marker
+// dort nicht wirken kann oder schon da ist. Schreibt das Ergebnis in die
 // Status-Bar.
+// GRENZE: MarkerTargetFor liest die .pas von der Platte. Ein
+// ungespeicherter Host-Puffer eines .dfm-Funds kann abweichen (IsModified
+// ist in D12 nicht verlaesslich, s. uIDEEditorIntegration) - der Marker
+// landet dann an der aus der Datei berechneten Zeile des Puffers; Strg+Z
+// nimmt ihn zurueck, der naechste Scan zeigt den Stand (Gegen-Review
+// Welle 1, Minor 8).
 var
   F      : TLeakFinding;
   Target : TMarkerTarget;

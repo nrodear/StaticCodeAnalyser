@@ -237,6 +237,18 @@ type
     // zum .sca-Raten.
     class function ResolveConfigured(const AConfigured,
       AProjectDir: string): string; static;
+    // ResolveConfigured mit Rueckfall fuer die CLI (Gegen-Review Welle 1,
+    // Major 4): bis 2026-10-14 loeste die CLI einen relativen [Baseline]
+    // File= gegen ihr Arbeitsverzeichnis auf; CI-Aufrufe aus einem anderen
+    // CWD als dem Projektordner verlassen sich darauf. Erst projektrelativ
+    // (AProjectDir); existiert die Datei dort nicht, gegen AFallbackDir
+    // (das CWD) - und nur, wenn sie DORT existiert (AUsedFallback=True,
+    // der Aufrufer loggt das). Sonst bleibt der projektrelative Pfad, damit
+    // die Fehlermeldung den Ort nennt, an dem die Datei erwartet wird.
+    // Absolute und leere Pfade wie ResolveConfigured.
+    class function ResolveConfiguredWithFallback(const AConfigured,
+      AProjectDir, AFallbackDir: string;
+      out AUsedFallback: Boolean): string; static;
   end;
 
   // Non-destruktiver Baseline-Filter fuer Live-Consumer (IDE-Editor, EXE):
@@ -1721,6 +1733,24 @@ begin
   if (Result = '') or IsAbsolutePathText(Result) then Exit;
   if AProjectDir <> '' then
     Result := IncludeTrailingPathDelimiter(AProjectDir) + Result;
+end;
+
+class function TBaseline.ResolveConfiguredWithFallback(const AConfigured,
+  AProjectDir, AFallbackDir: string; out AUsedFallback: Boolean): string;
+var
+  Alt : string;
+begin
+  AUsedFallback := False;
+  Result := ResolveConfigured(AConfigured, AProjectDir);
+  if (Result = '') or IsAbsolutePathText(Trim(AConfigured))
+     or (AFallbackDir = '') or FileExists(Result) then
+    Exit;
+  Alt := ResolveConfigured(AConfigured, AFallbackDir);
+  if FileExists(Alt) then
+  begin
+    Result := Alt;
+    AUsedFallback := True;
+  end;
 end;
 
 end.

@@ -387,19 +387,21 @@ end;
 // '*' oder ')' allein in Spalte 1 schliesst nicht.
 procedure TTestVnpPlan.Comment_StarParenAtColumnOne;
 begin
+  // Die Char-Ergebnisse per IsTrue: DUnitX hat keine Char-Ueberladung von
+  // AreEqual (Gegen-Review Welle 1, Verdacht E2250/E2251).
   Assert.AreEqual(' X := 1;', CodePartFrom('*) X := 1;', 'p'),
     '*) in Spalte 1: nur der Code dahinter');
-  Assert.AreEqual('c', CommentStateAfter('*) X := 1;', 'p'),
+  Assert.IsTrue(CommentStateAfter('*) X := 1;', 'p') = 'c',
     '*) in Spalte 1 schliesst');
   Assert.AreEqual('', CodePartFrom('*)', 'p'), '*) allein: kein Code');
-  Assert.AreEqual('c', CommentStateAfter('*)', 'p'), '*) allein schliesst');
+  Assert.IsTrue(CommentStateAfter('*)', 'p') = 'c', '*) allein schliesst');
   Assert.AreEqual(' Y', CodePartFrom(' *) Y', 'p'), '*) in Spalte 2');
   Assert.AreEqual('', CodePartFrom('*', 'p'), '* allein bleibt Kommentar');
-  Assert.AreEqual('p', CommentStateAfter('*', 'p'), '* allein schliesst nicht');
+  Assert.IsTrue(CommentStateAfter('*', 'p') = 'p', '* allein schliesst nicht');
   Assert.AreEqual('', CodePartFrom(') X', 'p'), ') ohne * bleibt Kommentar');
-  Assert.AreEqual('p', CommentStateAfter(') X', 'p'),
+  Assert.IsTrue(CommentStateAfter(') X', 'p') = 'p',
     ') ohne * schliesst nicht');
-  Assert.AreEqual('b', CommentStateAfter('*) X', 'b'),
+  Assert.IsTrue(CommentStateAfter('*) X', 'b') = 'b',
     'im { }-Kommentar schliesst *) nicht');
 end;
 
@@ -467,6 +469,9 @@ begin
   Assert.IsTrue(LineLooksFpcAware('{$IF DEFINED(FPC)}'), 'IF DEFINED(FPC)');
   Assert.IsTrue(LineLooksFpcAware('{$IF Defined(FPC) and (FPC_FULLVERSION '
     + '>= 30200)}'), 'IF Defined(FPC) and ...');
+  // FPC_FULLVERSION allein ist eine Weiche (Pruefer 2026-10-14, d).
+  Assert.IsTrue(LineLooksFpcAware('{$IF FPC_FULLVERSION >= 30200}'),
+    'IF FPC_FULLVERSION allein');
   Assert.IsTrue(LineLooksFpcAware('{$MODE objfpc}{$H+}'), 'MODE objfpc');
   Assert.IsTrue(LineLooksFpcAware('{$mode delphiunicode}'),
     'mode delphiunicode');
