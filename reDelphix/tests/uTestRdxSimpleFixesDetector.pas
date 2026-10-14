@@ -47,6 +47,9 @@ type
     // derselben Unit und ein Pfad auf eine Methode ohne Argumente.
     [Test] procedure Sca126_ProcTypeOfOwnUnit_NoHelp;
     [Test] procedure Sca126_PathOperands;
+    // Semantik-Gegen-Review 2026-10-14 (Major, Charge R8): ein Typ einer
+    // anderen Unit ist nicht bewiesen - wie bei SCA084.
+    [Test] procedure Sca126_ForeignType_NoHelp;
   end;
 
   // Stufe 2, Rest (2026-10-10): SCA074, SCA087, SCA139 - eine eigene
@@ -685,6 +688,7 @@ const
     '  end;'#13#10 +
     '  TFoo = class'#13#10 +
     '    FList: TList;'#13#10 +
+    '    FOwner: TObject;'#13#10 +
     '    FOnChange: TNotifyEvent;'#13#10 +
     '    function Check(Obj: TObject; P: TNode): Boolean;'#13#10 +
     '  end;'#13#10 +
@@ -699,27 +703,41 @@ const
 
 procedure TTestRdxSimpleFixesDetector.Sca126_RoundTrip;
 begin
+  // Operanden mit bewiesenem Typ: TObject (Feld und Parameter) und die
+  // Klasse TNode dieser Unit. FList: TList (andere Unit) bleibt ohne Hilfe
+  // (Sca126_ForeignType_NoHelp).
   Assert.AreEqual(
     Format(UNIT_126, [Join([
-      '  if Assigned(FList) then',
-      '    FList.Clear;',
+      '  if Assigned(FOwner) then',
+      '    FOwner.Free;',
       '  while Assigned(P) do',
       '    P := P.Next;',
       '  B := not Assigned(Obj);',
-      '  Result := Assigned(FList) and Assigned(Obj);',
+      '  Result := Assigned(FOwner) and Assigned(Obj);',
       '  Assert(Assigned(Obj), ''x'');',
       '  if not Assigned(Obj) then',
-      '    Exit(not Assigned(FList));'])]),
+      '    Exit(not Assigned(FOwner));'])]),
     FixAll(Format(UNIT_126, [Join([
-      '  if FList <> nil then',
-      '    FList.Clear;',
+      '  if FOwner <> nil then',
+      '    FOwner.Free;',
       '  while P <> nil do',
       '    P := P.Next;',
       '  B := Obj = nil;',
-      '  Result := (FList <> nil) and not (Obj = nil);',
+      '  Result := (FOwner <> nil) and not (Obj = nil);',
       '  Assert(Obj <> nil, ''x'');',
       '  if nil = Obj then',
-      '    Exit(FList = nil);'])]), fkNilComparison));
+      '    Exit(FOwner = nil);'])]), fkNilComparison));
+end;
+
+procedure TTestRdxSimpleFixesDetector.Sca126_ForeignType_NoHelp;
+begin
+  // TList kommt aus System.Classes: DeclaredTypeOf liefert 'tlist', die
+  // Datei beweist nicht, dass es eine Klasse ist - ein 'TObjFactory =
+  // function: TObject' einer anderen Unit saehe genauso aus, und
+  // '= nil' riefe ihn auf, Assigned() nicht (Charge R8).
+  AssertNoHelp(Format(UNIT_126, [Join([
+    '  if FList <> nil then',
+    '    FList.Clear;'])]), fkNilComparison, 'nicht als Klasse');
 end;
 
 procedure TTestRdxSimpleFixesDetector.Sca126_TwoStatementsOnOneLine_NoHelp;

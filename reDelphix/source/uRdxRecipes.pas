@@ -362,6 +362,9 @@ type
 
 implementation
 
+uses
+  uRdxCodeMap;   // IsIdentStart, IsIdentChar (Charge R8: eine Regel statt drei)
+
 const
   // Paar-Regel von LooksLikeSql (Review 2026-10-07, Nit 6): je Verb die
   // Strukturwoerter, die grammatisch dahinter stehen koennen.
@@ -739,17 +742,17 @@ const
     'value', 'asvariant', 'fieldvalues', 'null', 'unassigned', 'true',
     'false', 'nil');
 
+// Bezeichner-Zeichen: IsIdentStart/IsIdentChar aus uRdxCodeMap (Zeichen >
+// #127 wie der Core, uRefactorInfoBuilder) - bis Charge R8 eine eigene
+// Kopie. Die kurzen Namen bleiben fuer die Leser dieser Unit.
 function IsIdentStartCh(C: Char): Boolean;
 begin
-  // Zeichen > #127 wie der Core (uRefactorInfoBuilder.IsIdentStart):
-  // Bezeichner mit Umlaut sind in Delphi erlaubt.
-  Result := (C = '_') or ((C >= 'A') and (C <= 'Z')) or ((C >= 'a') and (C <= 'z'))
-    or (C > #127);
+  Result := IsIdentStart(C);
 end;
 
 function IsIdentCh(C: Char): Boolean;
 begin
-  Result := IsIdentStartCh(C) or ((C >= '0') and (C <= '9'));
+  Result := IsIdentChar(C);
 end;
 
 // Literale ('...' mit '' und #nn) durch 'x' ersetzen, damit Klammern und
@@ -1798,8 +1801,12 @@ const
     'datasnap', 'rest', 'posix', 'macapi', 'androidapi', 'iosapi',
     'firedac', 'ibx', 'bde');
   // Spuren einer FPC-Weiche, ohne Leerraum und klein (LineLooksFpcAware).
-  FPC_TELLS: array[0..4] of string = (
-    '{$mode', '(*$mode', '$ifdeffpc', '$ifndeffpc', 'defined(fpc');
+  // 'fpc_fullversion' allein ist eine Weiche ('{$IF FPC_FULLVERSION >=
+  // 30200}'; Pruefer 2026-10-14, d) - dieselbe Liste wie im Labor
+  // (uRdxIntroPlan/uVnpPlan FPC_TELLS), seit Charge R8 nachgezogen.
+  FPC_TELLS: array[0..5] of string = (
+    '{$mode', '(*$mode', '$ifdeffpc', '$ifndeffpc', 'defined(fpc',
+    'fpc_fullversion');
   USES_IN_WORD = 'in';
   PAREN_OPEN   = '(*';
   PAREN_CLOSE  = '*)';
