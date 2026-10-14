@@ -31,6 +31,9 @@ type
     [Test] procedure NeedsRevisit_WhileProviderQuestionWaitsForSettle;
     [Test] procedure MenuAnswer_CorrectsDecision;
     [Test] procedure ClockBackwards_CountsAsExpired;
+    // Gegen-Review Welle 1, Minor 6: Birne an -> Zeile unsichtbar -> wieder
+    // sichtbar: die Antwort bleibt, keine neue Anbieterfrage.
+    [Test] procedure HiddenThenVisible_KeepsAnsweredKey;
   end;
 
 implementation
@@ -225,6 +228,37 @@ begin
     'rueckwaerts laufende Uhr: lieber einmal zu frueh als nie');
   Assert.IsTrue(D.WantsProviderCheck(TEXT_1, 100),
     'auch die Ruhezeit gilt dann als abgelaufen');
+end;
+
+procedure TTestBulbDecision.HiddenThenVisible_KeepsAnsweredKey;
+var
+  D : TBulbDecision;
+  T : UInt64;
+begin
+  T := BulbOn(D, 1000);
+  D.NoteLineHidden(FILE_A, 10, T + 10);
+  Assert.IsFalse(D.ShowsBulb, 'unsichtbar: keine Birne');
+  Assert.IsFalse(D.NeedsRevisit(FILE_A, 10, T + 20), 'unsichtbar: kein Takt');
+  Assert.IsTrue(D.WantsFindings(FILE_A, 10, T + 30), 'sichtbar: Funde holen');
+  D.NoteFindings(FILE_A, 10, SIG_1, T + 30);
+  Assert.IsFalse(D.WantsProviderCheck(TEXT_1, T + 30 + BULB_SETTLE_MS),
+    'gleiche Funde, gleicher Schluessel: die Antwort gilt - reDelphix '
+    + 'parst nicht erneut');
+  Assert.IsTrue(D.ShowsBulb, 'die Birne ist wieder da');
+  // Andere Funde nach dem Verstecken: neuer Schluessel, Frage nach der
+  // Ruhezeit - bis dahin gilt die alte Antwort (wie beim Tippen).
+  D.NoteLineHidden(FILE_A, 10, T + 40);
+  D.NoteFindings(FILE_A, 10, SIG_2, T + 50);
+  Assert.IsFalse(D.WantsProviderCheck(TEXT_1, T + 50), 'Ruhezeit beginnt');
+  Assert.IsTrue(D.ShowsBulb, 'bis zur neuen Antwort gilt die alte');
+  Assert.IsTrue(D.WantsProviderCheck(TEXT_1, T + 50 + BULB_SETTLE_MS));
+  // Eine noch OFFENE Frage beim Verstecken wird verworfen - kein Takt.
+  D.Reset;
+  D.NoteFindings(FILE_A, 10, SIG_1, 1000);
+  Assert.IsFalse(D.WantsProviderCheck(TEXT_1, 1000), 'Ruhezeit beginnt');
+  D.NoteLineHidden(FILE_A, 10, 1100);
+  Assert.IsFalse(D.NeedsRevisit(FILE_A, 10, 1200),
+    'offene Frage verworfen: kein Takt alle 250 ms');
 end;
 
 initialization

@@ -115,6 +115,14 @@ const
   SIG_SEP             = #1;    // Trenner im Fingerabdruck der Funde einer Zeile
 
 type
+  // Eine vorgemerkte Birne (RetireBulb) und der Editor, dessen Kind sie
+  // ist. Parent ist nur ein Zeiger zum VERGLEICH in Notification - er wird
+  // nie dereferenziert, der Editor kann laengst tot sein.
+  TDoomedBulb = record
+    Bulb   : TSCABulbButton;
+    Parent : TComponent;
+  end;
+
   TFindingBulbManager = class(TComponent)
   private
     FFindingsAt : TBulbFindingsAt;
@@ -128,8 +136,14 @@ type
     // Birnen eines Editors, der ein neues Handle bekam (RetireBulb aus
     // Schedule): ausgeblendet und freigegeben erst in ProcessPending aus der
     // Nachrichtenschleife - nicht im Paint-Rueckruf des Editors, aber
-    // solange das Paket geladen ist.
-    FDoomed     : TList<TSCABulbButton>;
+    // solange das Paket geladen ist. Je Eintrag auch der Editor (Parent),
+    // dessen Kind die Birne ist - beim Vormerken notiert, nie beim Abbau
+    // gelesen: stirbt der Editor vor ProcessPending, nimmt er die Birne als
+    // Kind mit, und Notification raeumt den Eintrag ueber den gemerkten
+    // Parent (zweites Netz neben der FreeNotification der Birne selbst;
+    // Gegen-Review IDE 2026-10-14) - sonst liefe Visible/Free auf ein
+    // freigegebenes Objekt.
+    FDoomed     : TList<TDoomedBulb>;
     FMenu       : TPopupMenu;
     FActions    : TArray<TFindingAction>;   // die des zuletzt geoeffneten Menues
     procedure WndProc(var Msg: TMessage);
@@ -199,6 +213,7 @@ destructor TFindingBulbManager.Destroy;
 var
   Bulbs : TArray<TSCABulbButton>;
   B     : TSCABulbButton;
+  D     : TDoomedBulb;
 begin
   FDestroying := True;
   // 1) keine Nachrichten und Timer mehr
@@ -213,7 +228,9 @@ begin
   //    wirft das Freigeben einer Birne (ihr Editorfenster ist im Abbau
   //    der IDE schon halb zerlegt), muessen die uebrigen trotzdem frei
   //    werden - ihre VMT liegt in diesem Paket.
-  Bulbs := FBulbs.Values.ToArray + FDoomed.ToArray;
+  Bulbs := FBulbs.Values.ToArray;
+  for D in FDoomed do
+    Bulbs := Bulbs + [D.Bulb];
   for B in Bulbs do
   try
     B.Free;
@@ -238,6 +255,20 @@ begin
   inherited Destroy;
 end;
 
+// Vorgemerkte Eintraege (FDoomed) zu AComponent streichen - die Birne
+// selbst oder ihr Editor (Parent); nur Zeigervergleich, nichts wird
+// angefasst. Keine Methode: der Manager steht an der Methodengrenze
+// (SCA138).
+procedure ForgetDoomedOf(ADoomed: TList<TDoomedBulb>; AComponent: TComponent);
+var
+  i : Integer;
+begin
+  if not Assigned(ADoomed) then Exit;
+  for i := ADoomed.Count - 1 downto 0 do
+    if (ADoomed[i].Bulb = AComponent) or (ADoomed[i].Parent = AComponent) then
+      ADoomed.Delete(i);
+end;
+
 procedure TFindingBulbManager.Notification(AComponent: TComponent;
   Operation: TOperation);
 var
@@ -255,9 +286,9 @@ begin
       Keys := Keys + [Pair.Key];
   for Key in Keys do
     FBulbs.Remove(Key);
-  // ... auch eine vorgemerkte, die ihr Editor schon mitnimmt.
-  if Assigned(FDoomed) then
-    FDoomed.Remove(TSCABulbButton(AComponent));
+  // ... auch eine vorgemerkte: ihre eigene Abmeldung (Bulb) oder die ihres
+  // Editors (Parent), der sie als Kind schon mitgenommen hat.
+  ForgetDoomedOf(FDoomed, AComponent);
   // Ein Editor geht: alles zu ihm vergessen (die Birne als Kind stirbt
   // mit) - unter JEDEM Handle, unter dem er stand (Minor 21).
   Keys := nil;
@@ -279,12 +310,16 @@ end;
 procedure TFindingBulbManager.RetireBulb(AKey: HWND);
 var
   B : TSCABulbButton;
+  D : TDoomedBulb;
 begin
   // Nur vormerken - Schedule ruft dies aus dem Paint-Rueckruf, und dort
-  // darf kein Visible gesetzt werden (REGELN im Kopf).
+  // darf kein Visible gesetzt werden (REGELN im Kopf). Der Parent wird
+  // JETZT notiert, solange die Birne sicher lebt (s. FDoomed).
   if FBulbs.TryGetValue(AKey, B) then
   begin
-    FDoomed.Add(B);
+    D.Bulb := B;
+    D.Parent := B.Parent;
+    FDoomed.Add(D);
     if not FPosted then
       FPosted := PostMessage(FWnd, WM_SCA_BULB_UPDATE, 0, 0);
   end;
@@ -385,10 +420,11 @@ var
 begin
   if FDestroying then Exit;
   // Vorgemerkte Birnen umgezogener Editoren: hier, aus der
-  // Nachrichtenschleife, ausblenden und freigeben.
+  // Nachrichtenschleife, ausblenden und freigeben. Nur Eintraege, deren
+  // Editor noch nicht abgemeldet ist (Notification raeumt die anderen).
   while FDoomed.Count > 0 do
   begin
-    B := FDoomed[FDoomed.Count - 1];
+    B := FDoomed[FDoomed.Count - 1].Bulb;
     FDoomed.Delete(FDoomed.Count - 1);
     B.Visible := False;
     B.Free;
