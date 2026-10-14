@@ -169,7 +169,8 @@ type
       const AName: string): string; static;
     // Das erste Wort hinter 'ATypeName =' in der Datei ('record', 'class',
     // 'procedure', 'reference' ...; 'packed' uebersprungen), klein; '' wenn
-    // die Datei den Typ nicht deklariert.
+    // die Datei den Typ nicht deklariert. 'X: ATypeName = nil' (Variable
+    // oder Parameter mit Anfangswert) ist keine Deklaration (Charge R10).
     class function DeclaredTypeKind(AMap: TRdxCodeMap;
       const ATypeName: string): string; static;
   end;
@@ -229,8 +230,11 @@ type
     class function ProceduralType(AMap: TRdxCodeMap;
       const ATypeLow: string): Boolean; static;
     // Als Klasse, Interface oder Zeiger BEWIESEN: TObject, Pointer,
-    // IInterface/IUnknown oder in dieser Unit so deklariert (auch ueber
-    // Alias). Eine Zulassungsliste - Typen anderer Units fallen heraus.
+    // IInterface/IUnknown, in dieser Unit so deklariert (auch ueber Alias)
+    // oder - zweiter Beweisweg, Entscheid E27 (Nico 2026-10-14) - eine
+    // Klasse oder ein Interface der Delphi-Quellen (uRdxRtlTypes, Liste
+    // aus RTL/VCL/FMX/Data/...). Eine Zulassungsliste - Kundentypen
+    // anderer Units fallen heraus.
     class function PointerLikeType(AMap: TRdxCodeMap;
       const ATypeLow: string): Boolean; static;
   end;
@@ -272,8 +276,9 @@ type
     //     Glied eine parameterlose Methode sein: '= nil' ruft sie auf,
     //     Assigned() prueft den Methodenzeiger - die Logik kippte;
     //   * der Typ muss POSITIV als Klasse, Interface oder Zeiger bewiesen
-    //     sein (PointerLikeType: TObject, Pointer, IInterface oder in
-    //     dieser Unit so deklariert) - wie SCA084. Ein Typ aus einer
+    //     sein (PointerLikeType: TObject, Pointer, IInterface, in dieser
+    //     Unit so deklariert oder - E27 - Klasse/Interface der Delphi-
+    //     Quellen, uRdxRtlTypes) - wie SCA084. Ein Kundentyp aus einer
     //     anderen Unit mit neutralem Namen ('TObjFactory' aus uFactories)
     //     bleibt ohne Hilfe (Semantik-Gegen-Review 2026-10-14, Charge R8).
     // '' = kein Einwand.
@@ -285,7 +290,7 @@ implementation
 
 uses
   System.SysUtils, System.StrUtils,   // PosEx, EndsText, ContainsText
-  uRefactorInfo;
+  uRefactorInfo, uRdxRtlTypes;
 
 const
   MAX_REGION_LINES = 25;
@@ -777,7 +782,15 @@ begin
   T := NextToken(AMap, 1, 1);
   while T.Low <> '' do
   begin
-    if (T.Low = TypeLow) and (AfterTypeParams(AMap, T).Low = '=') then
+    // ':' oder '.' davor: 'var X: TBitmap = nil;', ein Default-Parameter
+    // 'Exclude: TControl = nil' oder 'C: Vcl.Graphics.TBitmap = nil' - das
+    // ist der Typ einer Variablen mit Anfangswert, keine Deklaration des
+    // Typs. Bis Charge R10 kam hier 'nil' heraus, und eine RTL-Klasse wie
+    // TBitmap galt in der ganzen Unit als unbewiesen (Messung R10: 431
+    // SCA126-Angebote mehr, die die Liste aus E27 sonst nicht erreicht).
+    // Ein Typ wird nie hinter ':' oder '.' deklariert.
+    if (T.Low = TypeLow) and (AfterTypeParams(AMap, T).Low = '=')
+       and not InList(Before(AMap, T).Low, [':', '.']) then
     begin
       K := After(AMap, AfterTypeParams(AMap, T));
       if K.Low = 'packed' then
@@ -1517,6 +1530,23 @@ begin
   Result := (ATypeLow = '^') or InList(ATypeLow, POINTER_TYPES)
     or InList(Kind, POINTER_TYPES)
     or InList(Kind, ['class', 'interface', 'dispinterface', '^']);
+  if Result then Exit;
+  // Zweiter Beweisweg, Entscheid E27 (Nico 2026-10-14): NACH dem Beweis
+  // dieser Unit - eine Klasse oder ein Interface der Delphi-Quellen gilt
+  // als bewiesen (uRdxRtlTypes, erzeugt aus Delphi 12 und 13). Das holt
+  // 'FList: TStringList', 'Form: TForm' zurueck, die seit Charge R8 ohne
+  // Hilfe blieben (im Korpus 58,8 % der SCA126-Angebote, Messung R9);
+  // Kundentypen bleiben R_NOT_PROVEN. Gefragt wird der Name, den diese
+  // Unit NICHT selbst deklariert: ATypeLow, wenn die Unit ihn nicht kennt
+  // (Kind = ''), sonst das Ende der Alias-Kette ('TMyList = TStringList'
+  // -> 'tstringlist'). Deklariert die Unit den Namen als etwas anderes
+  // ('record', 'procedure', ein Aufzaehlungstyp), ist Kind ein Typwort
+  // oder kein Bezeichner - fuer die steht nichts in der Liste, die Unit
+  // behaelt das letzte Wort. Einen Kunden-Prozedurtyp mit RTL-Namen in
+  // derselben Unit faengt ProceduralType vorher ab (beide Aufrufer).
+  if Kind = '' then
+    Kind := ATypeLow;
+  Result := IsRtlClassOrInterface(Kind);
 end;
 
 { ---- SCA126: Zaehlen wie der Detektor ---- }
@@ -2321,8 +2351,8 @@ const
   R_PROC_IN_UNIT = '%s hat den Prozedurtyp %s (in dieser Unit deklariert) - '
     + '"= nil" ruft ihn auf, Assigned() nicht';
   R_NOT_PROVEN   = '%s: Typ %s ist in dieser Unit nicht als Klasse, Interface '
-    + 'oder Zeiger bewiesen - einen Funktionstyp einer anderen Unit riefe '
-    + '"= nil" auf, Assigned() nicht';
+    + 'oder Zeiger bewiesen und keine Klasse der Delphi-Quellen - einen '
+    + 'Funktionstyp einer anderen Unit riefe "= nil" auf, Assigned() nicht';
 var
   TypeLow : string;
   Ident   : string;
@@ -2358,7 +2388,9 @@ begin
   // TObjFactory' mit 'function: TObject' dort) ging bis Charge R8 durch -
   // 'if FMaker = nil' wurde 'if not Assigned(FMaker)', ein anderer Sinn.
   // Das kostet Angebote bei Fremdtypen und gewinnt Sicherheit (Semantik-
-  // Gegen-Review 2026-10-14, Major).
+  // Gegen-Review 2026-10-14, Major). Seit E27 (Charge R10) zaehlen die
+  // Klassen und Interfaces der Delphi-Quellen als bewiesen (uRdxRtlTypes,
+  // in PointerLikeType) - Kundentypen bleiben draussen.
   if not TRdxExprFixes.PointerLikeType(AMap, TypeLow) then
     Result := Format(R_NOT_PROVEN, [AOperand, TypeLow]);
 end;

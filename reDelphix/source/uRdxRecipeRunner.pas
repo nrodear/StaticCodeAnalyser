@@ -1604,7 +1604,12 @@ end;
 // Funktionstyp riefe 'X <> nil' auf, Assigned(X) nicht. Eine Zulassungs-
 // liste (Gegen-Review 2026-10-10: die Ausschlussliste liess Aliasse,
 // generische und qualifizierte Funktionstypen durch); im Realwelt-Korpus
-// meldet SCA084 nur vier Stellen. '' oder der Grund.
+// meldet SCA084 nur vier Stellen. Derselbe Beweis wie SCA126
+// (TRdxNilFix.NilOperandReason): PointerLikeType kennt seit E27 (Charge
+// R10) auch die Klassen und Interfaces der Delphi-Quellen (uRdxRtlTypes) -
+// GEWOLLT auch hier: 'Assigned(L) and (L <> nil)' mit 'L: TStringList'
+// ist derselbe Fall wie bei SCA126, die Gefahr (ein Funktionstyp aus einer
+// anderen Unit) dieselbe, also auch der Beweis. '' oder der Grund.
 function AssignedNilReason(AMap: TRdxCodeMap;
   const AName, ATypeLow: string): string;
 begin
@@ -1619,8 +1624,8 @@ begin
     Exit(Format(R_PROC_TYPE, [AName, AName]));
   if not TRdxExprFixes.PointerLikeType(AMap, ATypeLow) then
     Result := Format('%s: Typ %s ist in dieser Unit nicht als Klasse, '
-      + 'Interface oder Zeiger bewiesen - ein Funktionstyp riefe "%s <> nil" '
-      + 'auf', [AName, ATypeLow, AName]);
+      + 'Interface oder Zeiger bewiesen und keine Klasse der Delphi-Quellen '
+      + '- ein Funktionstyp riefe "%s <> nil" auf', [AName, ATypeLow, AName]);
 end;
 
 // SCA072/SCA084: ist X an ALine sicher der Operand, fuer den die Umformung
