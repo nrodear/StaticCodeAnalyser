@@ -115,6 +115,7 @@ uses
   uRdxRoutineFixes in '..\source\uRdxRoutineFixes.pas',
   uRdxCleanupFixes in '..\source\uRdxCleanupFixes.pas',
   uRdxTryFixes in '..\source\uRdxTryFixes.pas',
+  uRdxCompilerTraces in '..\source\uRdxCompilerTraces.pas',
   uRdxResultFixes in '..\source\uRdxResultFixes.pas',
   uRdxRecipeRunner in '..\source\uRdxRecipeRunner.pas',
   uRdxFixTable in '..\source\uRdxFixTable.pas',
