@@ -134,6 +134,9 @@
         <DCCReference Include="source\uRdxTryFixes.pas"/>
         <DCCReference Include="source\uRdxCompilerTraces.pas"/>
         <DCCReference Include="source\uRdxResultFixes.pas"/>
+        <DCCReference Include="source\uRdxIntroPlan.pas"/>
+        <DCCReference Include="source\uRdxIntroEdits.pas"/>
+        <DCCReference Include="source\uRdxMagicFixes.pas"/>
         <DCCReference Include="source\uRdxRecipeRunner.pas"/>
         <DCCReference Include="source\uRdxFixTable.pas"/>
         <DCCReference Include="source\uRdxLog.pas"/>

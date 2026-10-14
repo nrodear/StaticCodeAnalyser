@@ -51,6 +51,11 @@ program reDelphix.Test;
 //                        Default(T), Typ der Unit)
 //   * uTestRdxResultFixesDetector - die Hilfen der Charge H5 gegen die
 //                        echten Detektoren (Fund -> Hilfe -> Fund weg)
+//   * uTestRdxMagicFix - Quick-Fix SCA014 (Charge Q14, Lokale Konstante
+//                        einfuehren) auf Text, ohne Parser: Ziel aus dem
+//                        Fund, Name, Spuren alter Compiler, FPC
+//   * uTestRdxMagicFixDetector - dieselbe Hilfe gegen den echten
+//                        Detektor uMagicNumbers (Fund -> Hilfe -> Fund weg)
 //   * uTestRdxTryGates - die Sperren und Formen aus dem Gegen-Review H4
 //                        (Charge H4c: Weitergabe ohne Ausstieg, andere
 //                        Schreibweisen, 'End :=', Einrueckung ...)
@@ -121,6 +126,7 @@ uses
   uRdxFixTable in '..\source\uRdxFixTable.pas',
   uRdxIntroPlan in '..\source\uRdxIntroPlan.pas',
   uRdxIntroEdits in '..\source\uRdxIntroEdits.pas',
+  uRdxMagicFixes in '..\source\uRdxMagicFixes.pas',
   uTestRdxRecipes in 'uTestRdxRecipes.pas',
   uTestRdxSca044 in 'uTestRdxSca044.pas',
   uTestRdxActionRing in 'uTestRdxActionRing.pas',
@@ -147,6 +153,8 @@ uses
   uTestRdxInheritedFixes in 'uTestRdxInheritedFixes.pas',
   uTestRdxResultGuards in 'uTestRdxResultGuards.pas',
   uTestRdxResultFixesDetector in 'uTestRdxResultFixesDetector.pas',
+  uTestRdxMagicFix in 'uTestRdxMagicFix.pas',
+  uTestRdxMagicFixDetector in 'uTestRdxMagicFixDetector.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',
   uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas',
   uTestRdxRoutineFixesDetector in 'uTestRdxRoutineFixesDetector.pas',

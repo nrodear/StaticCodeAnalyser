@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2449 Zeilen, 82048 Bytes
-  CPoLines_de: array[0..2448] of string = (
+  // i18n\de.po - 2452 Zeilen, 82134 Bytes
+  CPoLines_de: array[0..2451] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2396,6 +2396,9 @@ const
     'msgid "Initialize Result first: %s"',
     'msgstr "Result zuerst initialisieren: %s"',
     '',
+    'msgid "Introduce local constant for %s"',
+    'msgstr "Lokale Konstante f'#$00FC'r %s einf'#$00FC'hren"',
+    '',
     'msgid "(changes behavior)"',
     'msgstr "('#$00E4'ndert Verhalten)"',
     '',
@@ -2738,8 +2741,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2445 Zeilen, 85906 Bytes
-  CPoLines_fr: array[0..2444] of string = (
+  // i18n\fr.po - 2448 Zeilen, 85996 Bytes
+  CPoLines_fr: array[0..2447] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -5116,6 +5119,9 @@ const
     '',
     'msgid "Initialize Result first: %s"',
     'msgstr "Initialiser Result d''abord : %s"',
+    '',
+    'msgid "Introduce local constant for %s"',
+    'msgstr "Introduire une constante locale pour %s"',
     '',
     'msgid "(changes behavior)"',
     'msgstr "(modifie le comportement)"',

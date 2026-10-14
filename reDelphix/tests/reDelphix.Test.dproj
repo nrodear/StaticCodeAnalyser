@@ -110,6 +110,7 @@
         <DCCReference Include="..\source\uRdxFixTable.pas"/>
         <DCCReference Include="..\source\uRdxIntroPlan.pas"/>
         <DCCReference Include="..\source\uRdxIntroEdits.pas"/>
+        <DCCReference Include="..\source\uRdxMagicFixes.pas"/>
         <DCCReference Include="uTestRdxRecipes.pas"/>
         <DCCReference Include="uTestRdxSca044.pas"/>
         <DCCReference Include="uTestRdxActionRing.pas"/>
@@ -136,6 +137,8 @@
         <DCCReference Include="uTestRdxInheritedFixes.pas"/>
         <DCCReference Include="uTestRdxResultGuards.pas"/>
         <DCCReference Include="uTestRdxResultFixesDetector.pas"/>
+        <DCCReference Include="uTestRdxMagicFix.pas"/>
+        <DCCReference Include="uTestRdxMagicFixDetector.pas"/>
         <DCCReference Include="uTestRdxNilFix.pas"/>
         <DCCReference Include="uTestRdxSimpleFixesDetector.pas"/>
         <DCCReference Include="uTestRdxRoutineFixesDetector.pas"/>

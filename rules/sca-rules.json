@@ -358,6 +358,7 @@
       "tags": ["maintainability"],
       "configKey": "[Detectors] MagicNumberTrivials",
       "detectorUnit": "uMagicNumbers.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "if RetryCount > 3 then ...",
         "good": "const MAX_RETRIES = 3;\nif RetryCount > MAX_RETRIES then ..."

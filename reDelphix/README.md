@@ -41,7 +41,9 @@ source\uRdxRoutineFixes.pas       Quick-Fixes SCA164/SCA147 (ungenutzte Routine 
 source\uRdxCleanupFixes.pas       Quick-Fixes "Aufraeumen" SCA070/SCA053 (Charge H3a) und der Baustein CutEdit (loeschen und aufraeumen), reine Textlogik
 source\uRdxTryFixes.pas           Quick-Fixes try/finally SCA009/SCA001/SCA109/SCA153/SCA156 (Charge H4) und der Baustein B5 (Anweisung und Freigabe in try/finally), reine Textlogik
 source\uRdxResultFixes.pas        Quick-Fixes SCA096/SCA097 (inherited in Konstruktor/Destruktor) und SCA121/SCA196 (Result initialisieren, Charge H5) und die Bausteine erste/letzte Anweisung des Rumpfs, reine Textlogik
-source\uRdxIntroPlan.pas          Code-Aktion "Lokale Variable einfuehren" (ohne Fund): Literal am Caret, Deklaration, Spalten, Ablehnungen (reine Textlogik)
+source\uRdxCompilerTraces.pas     Spuren alter Compiler je Sprachmittel (Default() ab Delphi 2009, Inline-Konstante ab 10.3) und Skript-Units, reine Textlogik (Charge Q14; bis dahin in uRdxResultFixes)
+source\uRdxMagicFixes.pas         Quick-Fix SCA014 "Lokale Konstante einfuehren" (Charge Q14, E28): Ziel aus dem Fund, dann uRdxIntroPlan/uRdxIntroEdits ohne Sync-Edit-Sitzung; Platte: Lazarus-Projekt und Includes neben der Unit
+source\uRdxIntroPlan.pas          Code-Aktion "Lokale Variable einfuehren" (ohne Fund; seit Charge Q14 auch der Quick-Fix SCA014): Literal am Caret, Deklaration, Spalten, Ablehnungen (reine Textlogik)
 source\uRdxIntroEdits.pas         dieselbe Aktion: Puffertext, Ziel am Caret, Ersetzungen des Writers, Ende des Sync-Blocks (reine Textlogik; IDE-Teil folgt)
 source\uRdxSuppress.pas           Unterdrueck-Marker setzen und entfernen (reine Textlogik)
 source\uRdxCodeMap.pas            Code-Sicht der Datei (Kommentare, Strings, mehrzeilige Strings) und Token-Leser
@@ -49,7 +51,7 @@ source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung
 source\uRdxEditor.pas             ToolsAPI: Puffer lesen, Bereich markieren, Bereiche ersetzen (ein Undo-Schritt), Projekt-Units
 source\uRdxLog.pas                Protokoll %TEMP%\reDelphix.log + DebugView
 data\unitscopes.txt               die Scope-Tabelle (erzeugt), als RCDATA eingelinkt (data\unitscopes.rc)
-tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 36 Testunits und einer Hilfs-Unit (siehe "Pruefen")
+tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 39 Testunits und einer Hilfs-Unit (siehe "Pruefen")
 tools\gen_unitscopes.py           erzeugt data\unitscopes.txt aus der Delphi-Installation
 tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik unter FPC 3.2.2 und fuehrt Tests aus
 tools\probe\RdxCorpusProbe.dpr    Korpus-Probe: Rezept 5.1 ueber eine Liste von Fundstellen, CSV
@@ -145,6 +147,7 @@ die Engine also vorher. DCUs landen wie bei den anderen Projekten in
 | inherited als Letztes im Destruktor aufrufen (aendert Verhalten, ausser bei TObject) | SCA097 | Baustein "letzte Anweisung": `inherited;` in eine eigene Zeile direkt vor das `end` des Rumpfs (eingerueckt wie die erste Anweisung; Kommentarzeilen davor bleiben davor), steht `end` nicht am Zeilenanfang, inline hinter der letzten Anweisung; fehlt ihr das `;`, kommt es mit (zweite Ersetzung). Leerer Rumpf: wie die erste Anweisung. Nur mit `override` an der Deklaration im Klassenrumpf - sonst verdeckt Destroy die virtuelle Methode (eigentlich SCA149). Gekennzeichnet nach E2: der Elterndestruktor laeuft danach und gibt die geerbten Felder frei; erbt die Klasse direkt von TObject, bedeutungsgleich und nicht gekennzeichnet (TObject.Destroy ist leer). Gesperrt: kein `override`, eine letzte Anweisung `Exit`/`raise`/`Halt`/`Abort`/`goto` (inherited liefe nie), `Exit` oder `goto` auf jeder Tiefe (der Ablauf verlaesst den Destruktor vor dem Ende - Abbrevia `TMultiTree.Destroy`), eine in der Unit abstrakte geerbte Methode und unter `{$mode objfpc}` eine Vorfahrenkette ausserhalb der Unit (wie SCA096; Korpus 9, doublecmd), eine Direktive zwischen letzter Anweisung und `end` (das Ende kann je Zweig anders aussehen), `inherited` im Text der Routine (`//inherited Destroy; not needed`, `fSafe^.DoneAndFreeMem; // = inherited Destroy` - Korpus 16), `object`-Typ, `class destructor`, asm, eine Direktive zwischen Kopf und `begin`. Korpus: 128 von 156 (90 bedeutungsgleich); im Rundlauf verschwand jeder Fund; Folgefund SCA020 EmptyMethod faellt weg |
 | Result mit dem Anfangswert initialisieren (aendert Verhalten) | SCA121 | `Result := <Wert>;` als erste Anweisung (Baustein wie SCA096), der Wert nach dem Rueckgabetyp T aus dem Kopf wie im Quelltext (generisch, qualifiziert, der Typparameter `T`, `class operator`; ein Implementierungskopf ohne Signatur `function TFoo.Bar;` nimmt T aus der Deklaration im Klassenrumpf): seit Charge H5c ein Literal, wo der Typ es traegt - `False` (Boolean-Familie), `0` (Ganzzahl-, Gleitkomma-, Datums- und Waehrungstypen der RTL), `''` (string-Familie, `string[n]`), `#0` (Char), `nil` (Pointer, PChar, TObject, TClass, TBytes, TArray<..>, *DynArray, Klassen und Interfaces der Delphi-Quellen), `[]` bzw. der erste Wert einer schlichten Aufzaehlung (Typen der Unit; deklariert die Unit einen Namen selbst, gilt ihre Definition) -, sonst `Default(T)` (Records, Typparameter, Unbekanntes). Gekennzeichnet nach E2: Result ist danach definiert statt zufaellig; spaetere Zuweisungen gelten weiter (die Einfuegung am Anfang ueberschreibt nichts, auch nicht eine Zuweisung in einem `$IFDEF`-Zweig, den der Detektor nicht sah). `Default()` gibt es ab Delphi 2009 bzw. FPC 3.0 - in einer Datei mit Spuren aelterer Compiler (`{$I jvcl.inc}`, `jedi.inc`, `jcl.inc`, `CnPack.inc`, `CnWizards.inc`, `IdCompilerDefines.inc`, `{$IFDEF DELPHI2007_UP}`, `VER150`, `COMPILER6_UP`, `{$IF CompilerVersion < 20}` ...) ist es gesperrt (Korpus 11; JVCL und CnWizards bauen ab Delphi 5/6). Gesperrt ausserdem: eine Zuweisung an Result bzw. den Funktionsnamen oder `Exit(Wert)` im Rumpf - auch im inaktiven `$IFDEF`-Zweig, ohne lokale Routinen (der Detektor sah sie nicht, der Fund ist fraglich: Indy `IdStackDotNet`; Korpus 32), eine Datei ohne `implementation`-Teil bzw. ohne unit/program/library-Kopf (xEdit-/JvInterpreter-Skripte und Includes - ihr Interpreter kennt Default() nicht; Korpus 128 von 277), `{$mode fpc/tp/macpas/iso}` und `{$X-}`/`{$EXTENDEDSYNTAX OFF}` (dort gibt es kein Result), asm-Rumpf oder asm-Block im Rumpf, eine Direktive zwischen Kopf und `begin` (Korpus 15), ein Rueckgabetyp, der kein einfacher Typbezeichner ist (FPC `specialize`, ueber Zeilen, mit Kommentar), eine freie Funktion ohne Signatur im Kopf (die Deklaration im interface-Teil liest die Hilfe nicht), mehrere Deklarationen. Korpus: 89 von 277 (43 `''`, 17 `nil`, 13 `False`, 7 `0`, 9 `Default(T)`); im Rundlauf verschwand jeder Fund; Folgefund SCA020 EmptyMethod faellt weg |
 | Result zuerst initialisieren (aendert Verhalten) | SCA196 | als erste Anweisung `Result := '';` (die string-Familie des Detektors: string, UnicodeString, AnsiString, WideString, ShortString, RawUtf8 ...), `Result := nil;` (TArray<..>, TBytes, die *DynArray der RTL bzw. `Name = array of` in der Unit, ein Interface der Unit bzw. der Delphi-Quellen; deklariert die Unit den Namen selbst, gilt nur ihre Definition - `TBytes = array[0..3] of Byte` ist gesperrt, Charge H5c) oder `VarClear(Result);` (Variant, OleVariant - fehlt Variants in uses, kommt `System.Variants` bzw. `Variants` mit, wie SysUtils bei FreeAndNil: FPC kennt VarClear nur dort). Die Meldung zeigt auf die Lese-Zeile: die Hilfe sucht die innerste Routine um sie (Koepfe aufwaerts, Routinengrenzen wie SCA164), Name und Rueckgabetyp muessen zur Meldung passen, auf der Zeile muss `Result` stehen. Lokale Routinen zwischen Kopf und `begin` sperren nicht mehr (das Konzept nannte sie, als nur leere Rumpfe lesbar waren): eingefuegt wird hinter dem `begin` der aeusseren Routine, vor jedem Aufruf einer lokalen. Gekennzeichnet: Result haengt danach nicht mehr am alten Inhalt der Zielvariable des Aufrufers - fuer jeden Aufrufer mit leerem Ziel identisch. Gesperrt: ein Typ, der nicht als String, dynamisches Array, Interface oder Variant bewiesen ist (ein fremdes `IFoo` kann ein Record sein), `absolute Result`, asm, eine Direktive zwischen Kopf und `begin`, ein FPC-Modus ohne Result. Korpus: 43 von 43; im Rundlauf verschwand jeder Fund; Folgefund SCA012 LongMethod (2 - die Routine waechst um eine Zeile) |
+| Lokale Konstante fuer N einfuehren | SCA014 | Charge Q14 (E28): `const MagicNr01 = N;` als eigene Anweisung direkt vor der Anweisung mit der if-Bedingung, das Literal der Bedingung durch den Namen - nur DAS eine, gleiche Literale hinter `then` bleiben; ein Zweig ohne `begin` bekommt `begin..end`. Die Logik ist die der Code-Aktion "Lokale Konstante einfuehren" (`uRdxIntroPlan`/`uRdxIntroEdits`, unten) - ohne Sync-Edit-Sitzung, EINE Ersetzung, ein Undo-Schritt. Name: der erste `MagicNrNN`, der in der Datei nicht als Wort vorkommt; umbenennen mit Strg+Umschalt+J (Sync Edit) oder von Hand (Hinweis). Bedeutungsgleich (E26: die Konstante haelt Faltung, Ueberladungswahl und vorzeichenlose Rechnung des Literals). Ziel aus dem Fund: die Zahl der Meldung als Vergleichswert (hinter `>=`, `<=`, `<>`, `>`, `<`, `=`) in den if-Bedingungen der Fundzeile, auch ueber Folgezeilen bis `then` - kein Teil von `200.5`, `$200`, `#200`, `-200`, `200_000`; keiner: Zeile verschoben, mehrere: mehrdeutig (Korpus 102), einer in einer Folgezeile der Bedingung: gesperrt (193 - die Konstante gehoerte vor die if-Zeile). Gesperrt ausserdem: die Sperren der Code-Aktion (`else if` 319, Zweig ueber mehrere Zeilen 261, Zeile darueber ohne Anweisungsende 74, Direktive davor 28, case-Zweig, asm, initialization, mehrzeilige Strings und Kommentare ...), eine FPC-Weiche in der Datei (1.724) oder einem Include (63), Spuren von Compilern vor Delphi 10.3 in der Datei (1.275) oder einem Include (108: `jvcl.inc` & Co., `VER320`, `CompilerVersion >= 33`, `DELPHIXE2_UP`, `CONDITIONALEXPRESSIONS` ... - die Schwelle selbst zaehlt mit, so schuetzt `dmvcframework.inc` Delphi 10.0 bis 10.2), ein Include, das nicht neben der Unit liegt (55), ein Lazarus-Projekt/-Paket (`.lpi`/`.lpk`/`.lpr`) bis zwei Verzeichnisse ueber der Unit (88, doublecmd/CnWizards/mORMot/Indy), `.pp`/`.lpr`, xEdit-Skripte (18). Korpus: 696 von 5.036 (1 mit `begin..end`); im Rundlauf verschwand jeder Fund, 23-mal meldet der Detektor danach die naechste Zahl derselben Bedingung (er meldet je if eine); Folgefunde SCA021 DuplicateBlock (+-), SCA144 FloatEquality -2 (sieht nur Literale), SCA072 RedundantBoolean -2 (Nebenbefund: sein const-Abschnitt-Tracker haelt die Inline-Konstante fuer einen const-Abschnitt) |
 | Leeren Sichtbarkeitsabschnitt entfernen | SCA087 | loescht die Zeile des leeren Abschnitts (`public`, `strict private` ...). Nur, wenn sie genau diesen Abschnitt traegt, ohne Kommentar; gesperrt bei `strict` allein auf der Zeile (es gehoert zur naechsten) und bei einer Compiler-Direktive bis zum naechsten Abschnitt (der Abschnitt waere vielleicht nur in einem Zweig leer) |
 | Hier / In dieser Datei unterdruecken | jeder Fund in Pascal-Quelltext | setzt `// noinspection <Art>` ueber die Fundzeile bzw. `// noinspection-file <Art>` hinter die Kopfanweisung (`fakSuppress`); ein vorhandener Marker bekommt die Art dazu, ausser er lautet `All`/`*` (dann eine eigene Zeile). Nicht angeboten, wenn die Fundzeile in einem Block-Kommentar oder mehrzeiligen String liegt. Einen wirkungslosen Marker (SCA165) entfernt "Wirkungslosen Unterdrueck-Marker entfernen" stattdessen - nur, wenn er genau EINE Art nennt; ein Mehrarten- oder `All`-Marker steht gesperrt mit Grund da, denn SCA165 kommt auch, wenn nur die Arten des aktiven Scan-Profils nichts unterdrueckt haben |
 
@@ -360,6 +363,7 @@ Projekt scannen. Gluehbirne oder Editor-Kontextmenue auf der Fundzeile:
 | SCA097 DestructorWithoutInherited | `destructor TFoo.Destroy; begin FreeAndNil(FBar); end;` mit `destructor Destroy; override;` | inherited als Letztes im Destruktor aufrufen (gekennzeichnet, ausser bei direktem TObject-Erben) |
 | SCA121 RoutineResultUnassigned | `function GetCount(L: TList): Integer; begin if L = nil then LogMessage('nil list'); end;` | Result mit 0 initialisieren (gekennzeichnet) |
 | SCA196 ManagedResultUninit | `for I := 0 to High(A) do Result := Result + A[I];` (Result: string) | Result zuerst initialisieren: Result := '' (gekennzeichnet) |
+| SCA014 MagicNumber | `if Count > 200 then` (Unit ohne FPC-Weiche, ohne Spuren aelterer Compiler) | Lokale Konstante fuer 200 einfuehren: `const MagicNr01 = 200;` davor |
 | SCA165 UnusedSuppression | wirkungsloser `// noinspection`-Marker | Marker entfernen - nur bei genau einer Art; Mehrarten- und `All`-Marker stehen gesperrt da (unter diesem Teilprofil wirken sie vielleicht nur scheinbar nicht) |
 | SCA142 UnsortedUses, SCA007 UnusedUses | Fund auf einer uses-Zeile | uses: Eintraege qualifizieren (Winapi.Windows, System.SysUtils ...) - nur im Kontextmenue, nicht in der Gluehbirne: es behebt den Fund nicht |
 | jede Regel ausser SCA165 | beliebig | Hier / in dieser Datei unterdruecken; Stelle zeigen (Kontextmenue) |
@@ -402,7 +406,13 @@ Rechnung des Literals.
   Units, 72 Tests: Plan 15, Refuse 9, Guards 16, Edits 20, Context 12)
   stehen in reDelphix.Test und laufen im FPC-Pruefstand (Kommando unter
   "Pruefen").
-  Das Package bietet die Aktion noch nicht an.
+  Das Package bietet die Aktion ohne Fund noch nicht an.
+* **Quick-Fix SCA014 (Charge Q14, Entscheid E28):** dieselbe Logik schreibt
+  die Konstante zu einem SCA014-Fund - `TargetAt` mit dem Literal der
+  if-Bedingung als Caret, `IntroduceEdits` nur fuer dieses eine Literal,
+  OHNE Sync-Edit-Sitzung, ueber den Schreibweg der Tabelle
+  (`uRdxMagicFixes`, Zeile `fkMagicNumber` in `uRdxFixTable`; Aktionen-
+  Tabelle oben).
 * **Die IDE-Aktion folgt** nach dem Prototyp fuer Enter und Esc im Labor
   (E25: Esc zerstoert im Sync Edit der IDE Text, auch ohne unseren Code -
   UI-Test 2026-10-11).
@@ -574,14 +584,28 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
   Mehrbyte-Zeichen), Kontext ueber Zeilen (mehrzeilige Strings, asm,
   initialization, FPC-Weiche, Direktiven, Kommentargrenzen) - 79 Tests, reine
   Textlogik.
+* `uTestRdxMagicFix` - der Quick-Fix SCA014 der Charge Q14 auf Text, ohne Parser:
+  Nicos Fall (Alcinoe ALCipher Unit1.pas:268), Einzug, Zweig mit begin..end, nur das
+  Literal der Bedingung, zwei if auf einer Zeile, Nicht-ASCII davor; Ziel aus dem Fund
+  (Hex/Float/Vorzeichen/Zifferntrenner, mehrdeutig auch ueber Zeilen, Folgezeile,
+  veraltete Zeile, Meldung ohne Zahl), Name kollisionsfrei, Spuren alter Compiler
+  (Schwelle 10.3; SCA121 bleibt bei 2009), FPC-Weiche, xEdit-Skript, Sperren der
+  Code-Aktion, Lazarus-Projekt neben der Unit, Includes (FPC, alt, verschachtelt,
+  fehlend) - 20 Tests; Mutanten-Selbstpruefung: 16 gezielte Mutanten, alle rot.
+* `uTestRdxMagicFixDetector` - dieselbe Hilfe gegen den echten Detektor
+  `uMagicNumbers` (nur Delphi): Katalog-Beispiel (mit 42 - die 3 ist trivial),
+  Nicos Fall, zwei Funde nacheinander (MagicNr02), Zweig, Menuetext/Hinweis/keine
+  Kennzeichnung, mehrdeutig, alte Compiler, Lazarus-Paket und FPC-Include ueber den
+  Check der Tabelle - 9 Tests; ohne Delphi gegengeprueft (CLI-Exe und FPC-Planer,
+  6/6 der Rundlauf- und Sperrfaelle).
 
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext
+bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix
 ```
 
-Erwartet (Stand 2026-10-14, Chargen H5+H4c+H5c): `PASSED 453  FAILED 0` - 28 Testunits,
+Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+Q14): `PASSED 473  FAILED 0` - 29 Testunits,
 davon 72 Tests fuer "Lokale Variable einfuehren", 12 fuer die Quick-Fixes der
 Charge H2, 25 der Charge H3b (SCA164 und Bausteine 13 in
 `uTestRdxRoutineFixes`, SCA147 12 in `uTestRdxMethodFixes`), 18 der
@@ -595,7 +619,7 @@ Charge H3a (`uTestRdxCleanupFixes`), 37 der Charge H4 (`uTestRdxTryFixes` 20,
 `uTestRdxTryLocks` 17), 34 der Charge H5 (`uTestRdxResultFixes` 17,
 `uTestRdxInheritedFixes` 17), 17 der Charge H4c (`uTestRdxTryGates` 13,
 `uTestRdxTryLocks` 3, `uTestRdxCodeMap` 1 fuer TokBefore/TokText/IsKeywordAt) und 17
-der Charge H5c (`uTestRdxResultGuards`).
+der Charge H5c (`uTestRdxResultGuards`) und 20 der Charge Q14 (`uTestRdxMagicFix`).
 
 Der Pruefstand uebersetzt die Core-Units des Quellstellen-Dienstes
 (`uRefactor*`, `uSourcePlaces`, `uFindingActions`, `ScanCodeLine` aus
@@ -604,7 +628,7 @@ des Moduls (`uRdxRecipes`, `uRdxScopeTable`, `uRdxBufferMath`,
 `uRdxSuppress`, `uRdxSimpleFixes`, `uRdxRtlTypes` samt der erzeugten
 `uRdxRtlTypes.inc`, `uRdxStructFixes`, `uRdxLineFixes`, `uRdxRaiseFixes`,
 `uRdxDeclFixes`, `uRdxFlowFixes`, `uRdxRoutineFixes`, `uRdxCleanupFixes`, `uRdxTryFixes`,
-`uRdxResultFixes`, `uRdxCodeMap`,
+`uRdxResultFixes`, `uRdxCompilerTraces`, `uRdxMagicFixes`, `uRdxCodeMap`,
 `uRdxIntroPlan`, `uRdxIntroEdits`). Testunits kommen aus `reDelphix\tests`,
 sonst aus `StaticCodeAnalyserForm\tests` (Core-Tests wie
 `uTestSourcePlaces`, `uTestRefactorConcat`).
