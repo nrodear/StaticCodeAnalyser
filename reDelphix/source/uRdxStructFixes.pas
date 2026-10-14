@@ -120,6 +120,11 @@ function LastCharBefore(AMap: TRdxCodeMap; const ATok: TRdxToken;
 // LastCharBefore. False am Dateiende.
 function FirstCharAfter(AMap: TRdxCodeMap; const ATok: TRdxToken;
   out ALine, ACol: Integer): Boolean;
+// Darf hinter Zeile ALine eine Zeile hinein? Hinter ACol nur Leerraum oder
+// Kommentar, und die Folgezeile beginnt nicht in einem Kommentar oder
+// mehrzeiligen String (die neue Zeile laege darin). Seit Charge H4c auch
+// fuer uRdxTryFixes (dort bis dahin als Kopie LineEndsAfter).
+function CanAppendLine(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
 
 implementation
 
@@ -1116,9 +1121,6 @@ begin
       Exit(False);
 end;
 
-// Darf hinter Zeile ALine eine Zeile hinein? Hinter ACol nur Leerraum oder
-// Kommentar, und die Folgezeile beginnt nicht in einem Kommentar oder
-// mehrzeiligen String (die neue Zeile laege darin).
 function CanAppendLine(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
 begin
   Result := TailIsComment(AMap, ALine, ACol)

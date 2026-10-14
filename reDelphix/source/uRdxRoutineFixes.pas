@@ -354,20 +354,10 @@ type
 
 { ---- Token und Texte ---- }
 
-// Steht A vor B?
-function TokBefore(const A, B: TRdxToken): Boolean;
-begin
-  Result := (A.Line < B.Line) or ((A.Line = B.Line) and (A.Col < B.Col));
-end;
-
+// TokBefore und TokText stehen seit Charge H4c in uRdxCodeMap.
 function TokInRange(const T, AFirst, ALast: TRdxToken): Boolean;
 begin
   Result := not TokBefore(T, AFirst) and not TokBefore(ALast, T);
-end;
-
-function TokText(AMap: TRdxCodeMap; const T: TRdxToken): string;
-begin
-  Result := Copy(AMap.Raw(T.Line), T.Col, T.Len);
 end;
 
 procedure AddToken(var AList: TArray<TRdxToken>; const T: TRdxToken);

@@ -233,6 +233,14 @@ function MarkerReason(const AText: string): string;
 // Dieselbe Stelle (Zeile und Spalte)? Bis Charge H3c je eine Kopie in
 // uRdxFlowFixes, uRdxCleanupFixes und uRdxRoutineFixes.
 function SameTok(const A, B: TRdxToken): Boolean;
+// Steht A vor B (Zeile, dann Spalte)? Bis Charge H4c je eine Kopie in
+// uRdxRoutineFixes und uRdxTryFixes (uRdxCleanupFixes.TokAfter rechnete
+// dasselbe ueber TRdxTextPos; Gegen-Review H4, Minor 10).
+function TokBefore(const A, B: TRdxToken): Boolean;
+// Der Text von T wie im Quelltext (Gross/klein erhalten - T.Low ist
+// klein). Bis Charge H4c je eine Kopie in uRdxRoutineFixes und
+// uRdxTryFixes.
+function TokText(AMap: TRdxCodeMap; const T: TRdxToken): string;
 // Beginnt an T ein Routinenkopf? Ein Wort aus ROUTINE_WORDS als
 // Schluesselwort, davor (APrev) nichts aus NOT_HEAD_AFTER - kein Typ einer
 // Variablen, eines Parameters oder eines Typs (':', '='), keine anonyme
@@ -287,6 +295,13 @@ function BlockEnd(AMap: TRdxCodeMap; const AFrom: TRdxToken;
 function InList(const ALow: string; const AList: array of string): Boolean;
 // Ein Wort als Schluesselwort - nicht hinter '&', '@' oder '.' (APrev).
 function IsKeywordAfter(const T, APrev: TRdxToken): Boolean;
+// Dasselbe, und dahinter steht kein ':=' - ein benanntes OLE-Argument
+// ('Range(Start := 0, End := 1)') traegt ein Schluesselwort als Namen
+// (Gegen-Review H4, Minor 2; dieselbe Klasse wie SCA053 in H3c). Bis
+// Charge H4c nutzt nur uRdxTryFixes die Fassung: IsKeywordAfter kennt das
+// Token dahinter nicht, und die anderen Planer darauf umzustellen bewegte
+// ihre Angebote - eine eigene Charge.
+function IsKeywordAt(AMap: TRdxCodeMap; const T, APrev: TRdxToken): Boolean;
 // ALow oeffnet einen Block mit eigenem 'end' (END_OPENERS).
 function IsEndOpener(const ALow: string): Boolean;
 // Eine Einrueckstufe: was ADeeperLine ueber AIndent hinaus einrueckt;
@@ -873,6 +888,16 @@ begin
   Result := (A.Line = B.Line) and (A.Col = B.Col);
 end;
 
+function TokBefore(const A, B: TRdxToken): Boolean;
+begin
+  Result := (A.Line < B.Line) or ((A.Line = B.Line) and (A.Col < B.Col));
+end;
+
+function TokText(AMap: TRdxCodeMap; const T: TRdxToken): string;
+begin
+  Result := Copy(AMap.Raw(T.Line), T.Col, T.Len);
+end;
+
 function IsRoutineHeadAfter(const T, APrev: TRdxToken): Boolean;
 begin
   Result := InList(T.Low, ROUTINE_WORDS) and IsKeywordAfter(T, APrev)
@@ -1024,6 +1049,11 @@ end;
 function IsKeywordAfter(const T, APrev: TRdxToken): Boolean;
 begin
   Result := T.IsWord and not InList(APrev.Low, IDENT_PREFIXES);
+end;
+
+function IsKeywordAt(AMap: TRdxCodeMap; const T, APrev: TRdxToken): Boolean;
+begin
+  Result := IsKeywordAfter(T, APrev) and (After(AMap, T).Low <> ':=');
 end;
 
 function IsEndOpener(const ALow: string): Boolean;

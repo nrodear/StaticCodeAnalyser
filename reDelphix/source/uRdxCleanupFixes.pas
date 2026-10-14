@@ -247,10 +247,11 @@ begin
   Result := TextPos(T.Line, T.EndCol);
 end;
 
-// T liegt hinter ATo.
+// T liegt hinter ATo (uRdxCodeMap.TokBefore umgekehrt; bis Charge H4c
+// ueber PosBefore/TokPos gerechnet).
 function TokAfter(const T, ATo: TRdxToken): Boolean;
 begin
-  Result := PosBefore(TokPos(ATo), TokPos(T));
+  Result := TokBefore(ATo, T);
 end;
 
 function SpanOf(const AFrom, ATo: TRdxTextPos;
