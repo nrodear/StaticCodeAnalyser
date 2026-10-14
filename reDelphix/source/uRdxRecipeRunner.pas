@@ -30,7 +30,8 @@ uses
   uRdxScopeTable,   // TRdxScopeTable (QualifyUses)
   uRdxBufferMath,   // TRdxEdit
   uRdxCodeMap,      // TRdxCodeMap: Bausteine der Tabelle uRdxFixTable (Charge R8)
-  uRdxFlowFixes;    // TRdxFlowPlan (CondAssignReason)
+  uRdxFlowFixes,    // TRdxFlowPlan (CondAssignReason)
+  uRdxSqlTemplate;  // Rezept 5.2 (Charge S1): BuildSqlTemplate, AddSqlFacts
 
 const
   // So viele Provide-Chargen haelt der Anbieter am Leben: ein Menue fragt
@@ -312,8 +313,11 @@ type
     class function QualifyUses(APlaces: TSourcePlaces; AScopes: TRdxScopeTable;
       ALine: Integer; const AIsOwnUnit: TRdxOwnUnitCheck): TRdxQualifyPlan; static;
 
-    // Rezept 5.2: parametrisierte Vorlage (nur Text). Eingerueckt wie die
-    // Anweisung - Tabs bleiben Tabs (Minor 31).
+    // Rezept 5.2: parametrisierte Vorlage (nur Text; uRdxSqlTemplate).
+    // Eingerueckt wie die Anweisung - Tabs bleiben Tabs (Minor 31). Die
+    // Fakten am Puffertext (Konstanten, FireDAC-Verbindung) sammelt
+    // AddSqlFacts auf einer Code-Sicht des Dienstes; im with-Block ist
+    // kein Name bewiesen (Charge S1).
     class function SqlTemplate(APlaces: TSourcePlaces; AInfo: TRefactorInfo;
       AIsCall: Boolean; out ATemplate, AHint, AReason: string): Boolean; static;
   end;
@@ -1295,12 +1299,56 @@ begin
     PlanNewClause(APlaces, Result);
 end;
 
+// Die Zeilen des Dienstes als Liste - die Code-Sicht fuer AddSqlFacts.
+function PlacesLines(APlaces: TSourcePlaces): TStringList;
+var
+  L : Integer;
+begin
+  Result := TStringList.Create;
+  for L := 1 to APlaces.LineCount do
+    Result.Add(APlaces.LineText(L));
+end;
+
+// Die Anfrage an BuildSqlTemplate: Ziel, Teile mit ihren Zeilen, with-
+// Block, uses-Namen, Einrueckung - und die Fakten am Puffertext.
+function SqlRequestOf(APlaces: TSourcePlaces; AInfo: TRefactorInfo;
+  const AParts: TRdxParts; AIsCall: Boolean): TRdxSqlRequest;
+var
+  i     : Integer;
+  Lines : TStringList;
+  Map   : TRdxCodeMap;
+begin
+  Result := Default(TRdxSqlRequest);
+  Result.Target := AParts[0].Text;
+  Result.IsCall := AIsCall;
+  Result.Parts  := AParts;
+  // Einrueckung wie vor der Anweisung - Tabs bleiben Tabs (Minor 31).
+  Result.Indent := TRdxRecipes.IndentTextOf(Copy(
+    APlaces.LineText(AInfo.Span.StartLine), 1, AInfo.InsertIndent));
+  SetLength(Result.PartLines, Length(AInfo.Parts));
+  for i := 0 to High(AInfo.Parts) do
+    Result.PartLines[i] := AInfo.Parts[i].StartLine;
+  Result.InWith    := APlaces.InWithBlock(AInfo.Span.StartLine);
+  Result.UsesNames := TRdxRecipeRunner.UsesNamesOf(APlaces);
+  Lines := PlacesLines(APlaces);
+  try
+    Map := TRdxCodeMap.Create(Lines);
+    try
+      AddSqlFacts(Map, Result);
+    finally
+      Map.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
 class function TRdxRecipeRunner.SqlTemplate(APlaces: TSourcePlaces;
   AInfo: TRefactorInfo; AIsCall: Boolean;
   out ATemplate, AHint, AReason: string): Boolean;
 var
   Parts : TRdxParts;
-  i, N  : Integer;
+  Built : TRdxSqlTemplate;
 begin
   Result    := False;
   ATemplate := '';
@@ -1317,16 +1365,15 @@ begin
     AReason := 'kein Ziel erkannt';
     Exit;
   end;
-  // Einrueckung wie vor der Anweisung - Tabs bleiben Tabs (Minor 31).
-  if not TRdxRecipes.BuildSqlTemplate(Parts[0].Text, AIsCall, Parts,
-       TRdxRecipes.IndentTextOf(Copy(APlaces.LineText(AInfo.Span.StartLine),
-         1, AInfo.InsertIndent)), ATemplate, AReason) then
-    Exit;
-  N := 0;
-  for i := 0 to High(Parts) do
-    if Parts[i].Role = ROLE_OPERAND then Inc(N);
-  AHint  := Format('%d Parameter, nichts wird geschrieben', [N]);
-  Result := True;
+  Result := BuildSqlTemplate(SqlRequestOf(APlaces, AInfo, Parts, AIsCall),
+    Built);
+  if Result then
+  begin
+    ATemplate := Built.Text;
+    AHint     := SqlHintOf(Built);
+  end
+  else
+    AReason := Built.Reason;
 end;
 
 { TRdxFixRunner }

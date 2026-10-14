@@ -117,6 +117,11 @@ type
     [Test] procedure Sql_TwoCallsOnLine_Ambiguous;
     [Test] procedure Sql_NestedCallInArgument_NotAmbiguous;
     [Test] procedure Sql_TabIndent_KeepsTabs;
+    // Charge S1 (Nico, IDE-Test 2026-10-14): delphimvcframework
+    // EntGenTestsU.pas - DDL mit Konstante ueber FConn.ExecSQL; und die
+    // FireDAC-Overload ExecSQL(SQL, [Werte]) mit eingesetzter Konstante.
+    [Test] procedure Sql_NicoDdlExecSql_Refused;
+    [Test] procedure Sql_FireDacExecSql_OverloadWithConstant;
     [Test] procedure Anchor_Call_OnAssignLine_NoStatement;
     [Test] procedure HeadOf_StripsArguments;
     // Minor 20: Gegenprobe gegen den Fund (Puffer juenger als Fundliste).
@@ -1175,8 +1180,8 @@ begin
   Assert.IsTrue(R.IsCall, 'Aufruf-Knoten');
   Assert.IsTrue(R.Built, R.Reason);
   Assert.AreEqual(
-    '  Obj.SQL.Add(''SELECT * FROM t WHERE a = :p1'');' + sLineBreak +
-    '  Obj.ParamByName(''p1'').Value := Marker;', R.Template);
+    '  Obj.SQL.Add(''SELECT * FROM t WHERE a = :Marker'');' + sLineBreak +
+    '  Obj.ParamByName(''Marker'').Value := Marker;', R.Template);
   Assert.AreEqual('1 Parameter, nichts wird geschrieben', R.Hint);
 end;
 
@@ -1184,17 +1189,27 @@ procedure TTestRdxSca044.Sql_AssignAnchor_TextTemplate;
 var
   R : TSqlRun;
 begin
+  // Bis Charge S1 stand hier 'SELECT '' + Marker + '' FROM '' + Tag' mit
+  // der Vorlage 'SELECT :p1 FROM :p2' - Spalten und Tabelle als Parameter,
+  // ungueltiges SQL. Jetzt nur Werte (uTestRdxSqlTemplate).
   R := RunSql(UnitWith(
-    '  Obj.SQL.Text := ''SELECT '' + Marker + '' FROM '' + Tag;'),
+    '  Obj.SQL.Text := ''SELECT * FROM t WHERE a = '' + Marker + '' AND b = '' + Tag;'),
     'Obj.SQL.Text', 'assign-or-call');
   Assert.IsTrue(R.Described, R.Why);
   Assert.IsFalse(R.IsCall, 'Zuweisung');
   Assert.IsTrue(R.Built, R.Reason);
   Assert.AreEqual(
-    '  Obj.SQL.Text := ''SELECT :p1 FROM :p2'';' + sLineBreak +
-    '  Obj.ParamByName(''p1'').Value := Marker;' + sLineBreak +
-    '  Obj.ParamByName(''p2'').Value := Tag;', R.Template);
+    '  Obj.SQL.Text := ''SELECT * FROM t WHERE a = :Marker AND b = :Tag'';' + sLineBreak +
+    '  Obj.ParamByName(''Marker'').Value := Marker;' + sLineBreak +
+    '  Obj.ParamByName(''Tag'').Value := Tag;', R.Template);
   Assert.AreEqual('2 Parameter, nichts wird geschrieben', R.Hint);
+  // Tabelle und Spalten an Bezeichner-Positionen: abgelehnt mit Grund.
+  R := RunSql(UnitWith(
+    '  Obj.SQL.Text := ''SELECT '' + Marker + '' FROM '' + Tag;'),
+    'Obj.SQL.Text', 'assign-or-call');
+  Assert.IsTrue(R.Described, R.Why);
+  Assert.IsFalse(R.Built, R.Template);
+  Assert.IsTrue(Pos('Namen pruefen/Whitelist', R.Reason) > 0, R.Reason);
 end;
 
 procedure TTestRdxSca044.Sql_TwoCallsOnLine_Ambiguous;
@@ -1214,12 +1229,13 @@ var
 begin
   // Ein Aufruf IM Argument ist kein eigener Knoten (uParser2 legt die
   // Argumente als Text ab) - die Zeile bleibt eindeutig.
-  R := RunSql(UnitWith('  Obj.SQL.Add(''x'' + IntToStr(Id));'),
+  R := RunSql(UnitWith('  Obj.SQL.Add(''WHERE id = '' + IntToStr(Id));'),
     'Obj.SQL.Add', 'assign-or-call');
   Assert.IsTrue(R.Described, R.Why);
   Assert.IsTrue(R.IsCall);
   Assert.IsTrue(R.Built, R.Reason);
-  Assert.IsTrue(Pos('Obj.ParamByName(''p1'').Value := IntToStr(Id);', R.Template) > 0,
+  // IntToStr(Id) bindet Id selbst (Charge S1).
+  Assert.IsTrue(Pos('Obj.ParamByName(''Id'').Value := Id;', R.Template) > 0,
     R.Template);
 end;
 
@@ -1232,8 +1248,73 @@ begin
   R := RunSql(UnitWith(#9#9 + SQL_ADD), 'Obj.SQL.Add', 'assign-or-call');
   Assert.IsTrue(R.Built, R.Why + R.Reason);
   Assert.AreEqual(
-    #9#9'Obj.SQL.Add(''SELECT * FROM t WHERE a = :p1'');' + sLineBreak +
-    #9#9'Obj.ParamByName(''p1'').Value := Marker;', R.Template);
+    #9#9'Obj.SQL.Add(''SELECT * FROM t WHERE a = :Marker'');' + sLineBreak +
+    #9#9'Obj.ParamByName(''Marker'').Value := Marker;', R.Template);
+end;
+
+// Eine Unit wie delphimvcframework EntGenTestsU.pas: FireDAC.Comp.Client
+// in uses, FConn: TFDConnection, Konstante der Unit, ABody im Rumpf von
+// CreateTable(const AColumnTypes: string; AId: Integer).
+function EntGenUnit(const ABody: string): string;
+begin
+  Result :=
+    'unit EntGen;'#13#10 +
+    'interface'#13#10 +
+    'uses System.SysUtils, FireDAC.Comp.Client;'#13#10 +
+    'type TTest = class'#13#10 +
+    '  FConn: TFDConnection;'#13#10 +
+    '  procedure CreateTable(const AColumnTypes: string; AId: Integer);'#13#10 +
+    'end;'#13#10 +
+    'implementation'#13#10 +
+    'const'#13#10 +
+    '  TEST_TABLE_SOFTDEL     = ''entgen_test_softdel'';'#13#10 +
+    'procedure TTest.CreateTable(const AColumnTypes: string; AId: Integer);'#13#10 +
+    'begin'#13#10 +
+    ABody + #13#10 +
+    'end;'#13#10 +
+    'end.';
+end;
+
+procedure TTestRdxSca044.Sql_NicoDdlExecSql_Refused;
+var
+  R : TSqlRun;
+begin
+  // Bis Charge S1: 'CREATE TABLE :p1 (  id BIGSERIAL PRIMARY KEY, :p2)'
+  // samt '// <Query>.ParamByName(''p1'').Value := TEST_TABLE_SOFTDEL;'.
+  R := RunSql(EntGenUnit(
+    '  FConn.ExecSQL('#13#10 +
+    '    ''CREATE TABLE '' + TEST_TABLE_SOFTDEL + '' ('' +'#13#10 +
+    '    ''  id BIGSERIAL PRIMARY KEY, '' + AColumnTypes + '')'');'),
+    'FConn.ExecSQL', 'assign-or-call');
+  Assert.IsTrue(R.Described, R.Why);
+  Assert.IsTrue(R.IsCall, 'Aufruf-Knoten');
+  Assert.IsFalse(R.Built, R.Template);
+  Assert.IsTrue(Pos('DDL/DCL (CREATE ...)', R.Reason) > 0, R.Reason);
+  Assert.IsTrue(Pos('Namen pruefen/Whitelist', R.Reason) > 0, R.Reason);
+end;
+
+procedure TTestRdxSca044.Sql_FireDacExecSql_OverloadWithConstant;
+var
+  R : TSqlRun;
+begin
+  // Die Konstante kommt in den Text, IntToStr(AId) bindet AId, FConn ist
+  // als TFDConnection mit FireDAC.Comp.Client nachgewiesen.
+  R := RunSql(EntGenUnit(
+    '  FConn.ExecSQL(''DELETE FROM '' + TEST_TABLE_SOFTDEL + '' WHERE id = '' + IntToStr(AId));'),
+    'FConn.ExecSQL', 'assign-or-call');
+  Assert.IsTrue(R.Described, R.Why);
+  Assert.IsTrue(R.Built, R.Reason);
+  Assert.AreEqual(
+    '  FConn.ExecSQL(''DELETE FROM entgen_test_softdel WHERE id = :Id'', [AId]);',
+    R.Template);
+  Assert.AreEqual('1 Parameter, 1 Konstante(n) im Text, nichts wird geschrieben',
+    R.Hint);
+  // Ohne FireDAC.Comp.Client bindet ExecSQL nichts - abgelehnt.
+  R := RunSql(StringReplace(EntGenUnit(
+    '  FConn.ExecSQL(''DELETE FROM '' + TEST_TABLE_SOFTDEL + '' WHERE id = '' + IntToStr(AId));'),
+    ', FireDAC.Comp.Client', '', []), 'FConn.ExecSQL', 'assign-or-call');
+  Assert.IsFalse(R.Built, R.Template);
+  Assert.IsTrue(Pos('bindet keine Parameter', R.Reason) > 0, R.Reason);
 end;
 
 procedure TTestRdxSca044.Anchor_Call_OnAssignLine_NoStatement;

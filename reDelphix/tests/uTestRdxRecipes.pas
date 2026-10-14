@@ -12,8 +12,9 @@ unit uTestRdxRecipes;
 //     '%' -> '%%', Sperre fuer SQL-Text (SCA003), Sperre ohne Operand
 //     im with-Block beweist kein Name etwas, IntToStr(x) wird nur %d/%u,
 //     wenn der Core den Aufruf als RTL bewiesen hat
-//   * SQL-Vorlage: Zuweisung und Aufruf, Parameter nie in Quotes, ohne
-//     Query-Objekt als Kommentar, Einrueckung mit Tabs bleibt Tabs
+//   * SQL-Vorlage: nur das Query-Objekt des Ziels (QueryObjectOf); die
+//     Vorlage selbst pinnen seit Charge S1 uTestRdxSqlTemplate und
+//     uTestRdxSqlFacts
 //   * Fund-Abgleich: Ziel und '+'-Zahl aus den Meldungen von SCA044/SCA003,
 //     die '+'-Zaehlung von SCA044 auf dem Knotentext
 //   * uses: Schreibweise der Datei (nur Delphi-Scopes zaehlen, FPC-Weiche
@@ -91,16 +92,8 @@ type
     [Test] procedure TargetsComparable_AsciiBoth_True;
     [Test] procedure TargetsComparable_NonAsciiEitherSide_False;
 
-    // ---- SQL-Vorlage ---------------------------------------------------
+    // ---- SQL-Vorlage (die Tests der Vorlage: uTestRdxSqlTemplate) ------
     [Test] procedure QueryObject_Forms;
-    [Test] procedure SqlTemplate_Assign;
-    [Test] procedure SqlTemplate_Call;
-    [Test] procedure SqlTemplate_QuotedParam_Unquoted;
-    [Test] procedure SqlTemplate_ArgumentRole_Blocked;
-    // Review 2026-10-07 Minor 24: String-Puffer statt Query-Objekt.
-    [Test] procedure SqlTemplate_PlainStringTarget;
-    // Minor 31: Tab-Einrueckung bleibt Tab-Einrueckung.
-    [Test] procedure SqlTemplate_TabIndent_KeepsTabs;
 
     // ---- uses ----------------------------------------------------------
     [Test] procedure Framework_FromUnitNames;
@@ -895,113 +888,15 @@ begin
   Assert.AreEqual('DM.SQLQuery1', TRdxRecipes.QueryObjectOf('DM.SQLQuery1.SQL.Text'),
     'das Glied .SQL ganz, nicht der Anfang von .SQLQuery1');
   // Ein blosser Bezeichner kommt unveraendert zurueck - das ist KEIN
-  // Query-Objekt; BuildSqlTemplate fragt deshalb HasQueryObject (Review
-  // 2026-10-07, Minor 24; SqlTemplate_PlainStringTarget).
+  // Query-Objekt; BuildSqlTemplate (uRdxSqlTemplate) fragt deshalb
+  // HasQueryObject (Review 2026-10-07, Minor 24; uTestRdxSqlTemplate,
+  // PlainStringTarget_CommentForm).
   Assert.AreEqual('SQLText', TRdxRecipes.QueryObjectOf('SQLText'));
   Assert.IsFalse(TRdxRecipes.HasQueryObject('SQLText'), 'String-Puffer');
   Assert.IsFalse(TRdxRecipes.HasQueryObject('Self.SQLText'), 'kein Glied .SQL');
   Assert.IsTrue(TRdxRecipes.HasQueryObject('Query.SQL.Text'));
   Assert.IsTrue(TRdxRecipes.HasQueryObject('FDQuery1.SQL.Add'));
   Assert.IsTrue(TRdxRecipes.HasQueryObject('Cmd.CommandText'));
-end;
-
-procedure TTestRdxRecipes.SqlTemplate_Assign;
-var
-  Parts    : TRdxParts;
-  Template : string;
-  Reason   : string;
-begin
-  Parts := [Target('Query.SQL.Text'),
-            Lit('''SELECT * FROM users WHERE id = '''), Op('Id', rvUnknown)];
-  Assert.IsTrue(TRdxRecipes.BuildSqlTemplate('Query.SQL.Text', False, Parts, '  ',
-    Template, Reason), Reason);
-  Assert.AreEqual(
-    '  Query.SQL.Text := ''SELECT * FROM users WHERE id = :p1'';' + sLineBreak +
-    '  Query.ParamByName(''p1'').Value := Id;', Template);
-end;
-
-procedure TTestRdxRecipes.SqlTemplate_Call;
-var
-  Parts    : TRdxParts;
-  Template : string;
-  Reason   : string;
-begin
-  Parts := [Target('Query.SQL.Add'),
-            Lit('''SELECT * FROM t WHERE a = '''), Op('A', rvUnknown),
-            Lit(''' AND b = '''), Op('B', rvUnknown)];
-  Assert.IsTrue(TRdxRecipes.BuildSqlTemplate('Query.SQL.Add', True, Parts, '',
-    Template, Reason), Reason);
-  Assert.AreEqual(
-    'Query.SQL.Add(''SELECT * FROM t WHERE a = :p1 AND b = :p2'');' + sLineBreak +
-    'Query.ParamByName(''p1'').Value := A;' + sLineBreak +
-    'Query.ParamByName(''p2'').Value := B;', Template);
-end;
-
-procedure TTestRdxRecipes.SqlTemplate_QuotedParam_Unquoted;
-var
-  Parts    : TRdxParts;
-  Template : string;
-  Reason   : string;
-begin
-  // WHERE name=''' + Name + '''' -> der Parameter steht nicht in Quotes
-  Parts := [Target('Q.SQL.Text'),
-            Lit('''SELECT * FROM u WHERE name='''''''), Op('Name', rvUnknown),
-            Lit('''''''''')];
-  Assert.IsTrue(TRdxRecipes.BuildSqlTemplate('Q.SQL.Text', False, Parts, '',
-    Template, Reason), Reason);
-  Assert.IsTrue(Pos('WHERE name=:p1''', Template) > 0, Template);
-  Assert.IsFalse(Pos(''':p1''', Template) > 0, 'kein Parameter in Quotes');
-end;
-
-procedure TTestRdxRecipes.SqlTemplate_ArgumentRole_Blocked;
-var
-  Parts    : TRdxParts;
-  Template : string;
-  Reason   : string;
-begin
-  Parts := [Target('ExecuteFmt'), TRdxRecipes.MakePart(ROLE_ARGUMENT, '''x'''),
-            TRdxRecipes.MakePart(ROLE_ARGUMENT, '[a]')];
-  Assert.IsFalse(TRdxRecipes.BuildSqlTemplate('ExecuteFmt', True, Parts, '',
-    Template, Reason));
-  Assert.IsTrue(Pos('Argument', Reason) > 0, Reason);
-end;
-
-procedure TTestRdxRecipes.SqlTemplate_PlainStringTarget;
-var
-  Parts    : TRdxParts;
-  Template : string;
-  Reason   : string;
-begin
-  // SCA003 meldet auch einen lokalen String-Puffer: 'S.ParamByName'
-  // uebersetzte nicht - die Parameterzeilen werden Kommentar mit
-  // Platzhalter, die SQL-Zeile bleibt.
-  Parts := [Target('S'), Lit('''SELECT * FROM t WHERE id='''), Op('Id', rvUnknown)];
-  Assert.IsTrue(TRdxRecipes.BuildSqlTemplate('S', False, Parts, '  ',
-    Template, Reason), Reason);
-  Assert.AreEqual(
-    '  S := ''SELECT * FROM t WHERE id=:p1'';' + sLineBreak +
-    '  // <Query>.ParamByName(''p1'').Value := Id;', Template);
-end;
-
-procedure TTestRdxRecipes.SqlTemplate_TabIndent_KeepsTabs;
-var
-  Parts    : TRdxParts;
-  Template : string;
-  Reason   : string;
-begin
-  // Die Einrueckung kommt als Text: zwei Tabs bleiben zwei Tabs, auch vor
-  // den ParamByName-Zeilen (bis Minor 31 wurden es zwei Leerzeichen).
-  Parts := [Target('Q.SQL.Text'), Lit('''SELECT * FROM t WHERE id='''),
-            Op('Id', rvUnknown)];
-  Assert.IsTrue(TRdxRecipes.BuildSqlTemplate('Q.SQL.Text', False, Parts, #9#9,
-    Template, Reason), Reason);
-  Assert.AreEqual(
-    #9#9'Q.SQL.Text := ''SELECT * FROM t WHERE id=:p1'';' + sLineBreak +
-    #9#9'Q.ParamByName(''p1'').Value := Id;', Template);
-  // Gemischt bleibt gemischt; was kein Tab ist, wird ein Leerzeichen.
-  Assert.AreEqual('  '#9, TRdxRecipes.IndentTextOf('  '#9));
-  Assert.AreEqual('  '#9' ', TRdxRecipes.IndentTextOf('ab'#9'c'));
-  Assert.AreEqual('', TRdxRecipes.IndentTextOf(''));
 end;
 
 { ---- uses ---- }

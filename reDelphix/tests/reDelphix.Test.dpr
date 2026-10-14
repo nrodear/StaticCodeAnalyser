@@ -4,7 +4,7 @@ program reDelphix.Test;
 // reDelphix.Test Project; Tests fuer alle Varianten des Detektors SCA044").
 //
 // Prueft den ToolsAPI-freien Teil des Moduls gegen den ECHTEN Core:
-//   * uTestRdxRecipes  - Literal-Codec, Format()-Bau, SQL-Vorlage,
+//   * uTestRdxRecipes  - Literal-Codec, Format()-Bau, Query-Objekt,
 //                        Scope-Tabelle (reine Textlogik)
 //   * uTestRdxSca044   - Ende zu Ende: Parser, Detektor SCA044,
 //                        TSourcePlaces, Rezept-Laeufer - je Variante eine
@@ -45,6 +45,11 @@ program reDelphix.Test;
 //                        initialisieren) auf Text, ohne Parser
 //   * uTestRdxInheritedFixes - Quick-Fixes SCA096/SCA097 (inherited in
 //                        Konstruktor/Destruktor) auf Text, ohne Parser
+//   * uTestRdxSqlTemplate - SQL-Vorlage zu SCA003 (Charge S1): nur Werte
+//                        werden Parameter, DDL/Namen abgelehnt, Konstanten
+//                        im Text, FireDAC-ExecSQL, Namen aus dem Operanden
+//   * uTestRdxSqlFacts - ihre Nachweise am Quelltext: Konstante, FireDAC-
+//                        Verbindung, Parameternamen, Platzhalter (SCA199)
 //   * uTestRdxResultGuards - die Sperren und Werte aus dem Gegen-Review H5
 //                        (Charge H5c: Delegation, abstrakt/objfpc, Exit auf
 //                        jeder Tiefe, Vorfahrenliste, Literal statt
@@ -116,6 +121,7 @@ uses
   uRdxCleanupFixes in '..\source\uRdxCleanupFixes.pas',
   uRdxTryFixes in '..\source\uRdxTryFixes.pas',
   uRdxResultFixes in '..\source\uRdxResultFixes.pas',
+  uRdxSqlTemplate in '..\source\uRdxSqlTemplate.pas',
   uRdxRecipeRunner in '..\source\uRdxRecipeRunner.pas',
   uRdxFixTable in '..\source\uRdxFixTable.pas',
   uRdxIntroPlan in '..\source\uRdxIntroPlan.pas',
@@ -145,6 +151,8 @@ uses
   uTestRdxResultFixes in 'uTestRdxResultFixes.pas',
   uTestRdxInheritedFixes in 'uTestRdxInheritedFixes.pas',
   uTestRdxResultGuards in 'uTestRdxResultGuards.pas',
+  uTestRdxSqlTemplate in 'uTestRdxSqlTemplate.pas',
+  uTestRdxSqlFacts in 'uTestRdxSqlFacts.pas',
   uTestRdxResultFixesDetector in 'uTestRdxResultFixesDetector.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',
   uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas',

@@ -9,10 +9,11 @@ unit uRdxRecipes;
 // WAS HIER ENTSTEHT
 //
 //   BuildFormatCall   'a' + X + 'b'      ->  Format('a%sb', [X])
-//   BuildSqlTemplate  Q.SQL.Text := 'SELECT ... ' + Id
-//                     ->  Q.SQL.Text := 'SELECT ... :p1';
-//                         Q.ParamByName('p1').Value := Id;      (Vorlage)
 //   DetectFramework   VCL oder FMX, aus den qualifizierten uses-Eintraegen
+//
+// Die SQL-Vorlage (Rezept 5.2, SCA003) steht seit Charge S1 (2026-10-15)
+// in uRdxSqlTemplate; hier bleiben ihre Bausteine Literal-Codec,
+// QueryObjectOf/HasQueryObject und IndentTextOf.
 //
 // Die Fakten kommen aus dem Core (Teilbereiche mit Rolle und Typ), die
 // Politik steht hier: ein Format() wird nach der Kompilat-Regel gebaut
@@ -289,20 +290,9 @@ type
     // nur dann hat QueryObjectOf ein Objekt mit ParamByName.
     class function HasQueryObject(const ATarget: string): Boolean; static;
 
-    // Rezept 5.2 - parametrisierte Vorlage (nie geschrieben, nur Text).
-    // AIsCall: das Ziel ist ein Aufrufkopf (Q.SQL.Add) statt einer
-    // Zuweisung. AIndentText: Einrueckung jeder Zeile, wie sie vor der
-    // Anweisung steht - Tabs bleiben Tabs (Review 2026-10-07, Minor 31;
-    // IndentTextOf). Ein Ziel ohne
-    // Query-Objekt ist ein String-Puffer ('S := ''SELECT ..'' + Id' -
-    // SCA003 meldet auch den): dann stehen die ParamByName-Zeilen als
-    // Kommentar mit dem Platzhalter '<Query>' da, 'S.ParamByName'
-    // uebersetzte nicht (Review 2026-10-07, Minor 24).
-    class function BuildSqlTemplate(const ATarget: string; AIsCall: Boolean;
-      const AParts: TRdxParts; const AIndentText: string;
-      out ATemplate, AReason: string): Boolean; static;
     // Einrueckung aus dem Zeilenanfang vor einer Anweisung: Tabs bleiben
-    // Tabs, jedes andere Zeichen wird ein Leerzeichen.
+    // Tabs, jedes andere Zeichen wird ein Leerzeichen (Review 2026-10-07,
+    // Minor 31) - die Einrueckung der SQL-Vorlage (uRdxSqlTemplate).
     class function IndentTextOf(const ALinePrefix: string): string; static;
 
     // Rahmenwerk einer Datei aus ihren uses-Eintraegen (qualifizierte
@@ -1746,95 +1736,6 @@ begin
   for i := 1 to Length(Result) do
     if Result[i] <> #9 then
       Result[i] := ' ';
-end;
-
-class function TRdxRecipes.BuildSqlTemplate(const ATarget: string;
-  AIsCall: Boolean; const AParts: TRdxParts; const AIndentText: string;
-  out ATemplate, AReason: string): Boolean;
-var
-  i        : Integer;
-  SB       : TStringBuilder;
-  Sql      : string;
-  Value    : string;
-  N        : Integer;
-  Operands : TArray<string>;
-  Obj      : string;
-  Indent   : string;
-  Head     : string;
-  k        : Integer;
-  PName    : string;
-begin
-  Result    := False;
-  ATemplate := '';
-  AReason   := '';
-  N   := 0;
-  SetLength(Operands, 0);
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(AParts) do
-    begin
-      if AParts[i].Role = ROLE_TARGET then Continue;
-      if AParts[i].Role = ROLE_LITERAL then
-      begin
-        if not DecodeLiteral(AParts[i].Text, Value) then
-        begin
-          AReason := 'Literal nicht lesbar: ' + CollapseWhitespace(AParts[i].Text);
-          Exit;
-        end;
-        SB.Append(Value);
-      end
-      else if AParts[i].Role = ROLE_OPERAND then
-      begin
-        Inc(N);
-        SB.Append(':p' + IntToStr(N));
-        SetLength(Operands, N);
-        Operands[N - 1] := CollapseWhitespace(AParts[i].Text);
-      end
-      else
-      begin
-        AReason := 'Aufruf mit mehreren Argumenten - keine Vorlage';
-        Exit;
-      end;
-    end;
-    Sql := SB.ToString;
-  finally
-    SB.Free;
-  end;
-  if N = 0 then
-  begin
-    AReason := 'kein Operand in der Kette';
-    Exit;
-  end;
-  // Ein Parameter steht nie in Quotes: WHERE name=':p1' -> WHERE name=:p1
-  for k := 1 to N do
-  begin
-    PName := ':p' + IntToStr(k);
-    Sql := StringReplace(Sql, '''' + PName + '''', PName, [rfReplaceAll]);
-  end;
-  // Ohne Query-Objekt (String-Puffer 'S := ...'): 'S.ParamByName'
-  // uebersetzte nicht - die Parameterzeilen werden Kommentar mit
-  // Platzhalter, der Leser setzt sein Query-Objekt ein (Minor 24).
-  if HasQueryObject(ATarget) then
-    Obj := QueryObjectOf(ATarget)
-  else
-    Obj := '// <Query>';
-  Indent := AIndentText;
-  if AIsCall then
-    Head := Trim(ATarget) + '(' + EncodeLiteral(Sql) + ');'
-  else
-    Head := Trim(ATarget) + ' := ' + EncodeLiteral(Sql) + ';';
-  SB := TStringBuilder.Create;
-  try
-    SB.Append(Indent + Head);
-    for k := 1 to N do
-      SB.Append(sLineBreak + Indent + Obj + '.ParamByName('
-        + EncodeLiteral('p' + IntToStr(k)) + ').Value := ' + Operands[k - 1]
-        + ';');
-    ATemplate := SB.ToString;
-  finally
-    SB.Free;
-  end;
-  Result := True;
 end;
 
 class function TRdxRecipes.DetectFramework(
