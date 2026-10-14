@@ -2346,6 +2346,12 @@ msgstr "Überflüssiges %s entfernen"
 msgid "Remove the self-assignment of %s"
 msgstr "Selbstzuweisung von %s entfernen"
 
+msgid "Delete commented-out code"
+msgstr "Auskommentierten Code löschen"
+
+msgid "Remove unused variable '%s'"
+msgstr "Ungenutzte Variable '%s' entfernen"
+
 msgid "(changes behavior)"
 msgstr "(ändert Verhalten)"
 

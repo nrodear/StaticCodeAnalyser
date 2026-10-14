@@ -29,6 +29,8 @@
       "RedundantConditional",
       "RedundantJump",
       "SelfAssignment",
+      "CommentedOutCode",
+      "UnusedLocalVar",
       "UnusedSuppression",
       "UnsortedUses",
       "UnusedUses",

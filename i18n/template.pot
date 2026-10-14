@@ -126,7 +126,7 @@ msgstr ""
 msgid "%s: no fixMode in the rule catalog"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:605
+#: reDelphix/source/uRdxFixTable.pas:634
 msgid "(changes behavior)"
 msgstr ""
 
@@ -201,15 +201,15 @@ msgstr ""
 msgid "Add"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Add \"%s;\" to the declaration"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:597
+#: reDelphix/source/uRdxFixTable.pas:626
 msgid "Add an else branch that raises an exception"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Add an empty else branch"
 msgstr ""
 
@@ -349,7 +349,7 @@ msgstr ""
 msgid "Assert() without explanatory message"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Assign the condition to %s directly"
 msgstr ""
 
@@ -849,6 +849,10 @@ msgstr ""
 msgid "Debug output left in production code"
 msgstr ""
 
+#: reDelphix/source/uRdxFixTable.pas:628
+msgid "Delete commented-out code"
+msgstr ""
+
 #: SCA.SharedUI/sources/uProfileViewer.pas:407
 msgid "Delete profile"
 msgstr ""
@@ -1306,11 +1310,11 @@ msgstr ""
 msgid "Input control sits directly on the form - wrap it in a panel"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Insert a documentation skeleton"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Insert a new GUID"
 msgstr ""
 
@@ -1482,7 +1486,7 @@ msgstr ""
 msgid "Many DB components on one form - extract into a TDataModule"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Mark the empty body as intentional"
 msgstr ""
 
@@ -1565,7 +1569,7 @@ msgstr ""
 msgid "Move / FillChar uses SizeOf(pointer-type) - copies only 4/8 bytes, not the target buffer"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Move the keyword to column 1"
 msgstr ""
 
@@ -1851,7 +1855,7 @@ msgstr ""
 msgid "Published method looks like an event handler but no component binds it"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Put the branch in begin..end"
 msgstr ""
 
@@ -1874,7 +1878,7 @@ msgstr ""
 msgid "Quick-Fix: the reDelphix package is not loaded"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:597
+#: reDelphix/source/uRdxFixTable.pas:626
 msgid "Raise ENotImplemented in the empty body"
 msgstr ""
 
@@ -1886,7 +1890,7 @@ msgstr ""
 msgid "Raise inside destructor without try/except - cleanup is aborted"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Raise the exception"
 msgstr ""
 
@@ -1943,7 +1947,7 @@ msgstr ""
 msgid "Reload"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Remove (TObject) from the class declaration"
 msgstr ""
 
@@ -1958,43 +1962,47 @@ msgstr ""
 msgid "Remove rules"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Remove the cast to %s before Free"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Remove the empty parentheses"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Remove the empty visibility section"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Remove the extra semicolon"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Remove the redundant %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Remove the redundant comparison with True/False"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Remove the redundant comparison with nil"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Remove the self-assignment of %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Remove unit %s from uses"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
+msgid "Remove unused variable '%s'"
+msgstr ""
+
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Replace begin with initialization"
 msgstr ""
 
@@ -2512,19 +2520,19 @@ msgstr ""
 msgid "Unit-level keyword not at column 1"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Use Assigned() instead of comparing with nil"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Use FreeAndNil(%s)"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Use raise; to keep the original stack trace"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:599
+#: reDelphix/source/uRdxFixTable.pas:628
 msgid "Use the condition as the Assert message"
 msgstr ""
 

@@ -116,7 +116,8 @@ uses
   uRdxLineFixes,     // SCA082, SCA071, SCA088
   uRdxRaiseFixes,    // SCA020, SCA120, SCA122
   uRdxDeclFixes,     // SCA117, SCA197, SCA149
-  uRdxFlowFixes;     // SCA098, SCA080, SCA047
+  uRdxFlowFixes,     // SCA098, SCA080, SCA047
+  uRdxCleanupFixes;  // SCA070, SCA053
 
 const
   // Hinweise der Hilfen (deutsch wie die Gruende; Pruefstand und Tests
@@ -156,6 +157,10 @@ const
   R_JUMP_HINT = 'gleiche Bedeutung - der Ablauf verlaesst den Block ohnehin';
   R_SELF_HINT = 'die Zuweisung bewirkt nichts - war ein anderer Wert gemeint '
     + '(Tippfehler), fehlt er weiterhin';
+  R_COMMENTED_HINT = 'gleiche Bedeutung - nur Kommentar faellt weg; die '
+    + 'Versionsverwaltung kennt ihn noch';
+  R_UNUSED_VAR_HINT = 'gleiche Bedeutung - die Variable kommt nirgends sonst '
+    + 'vor';
   R_NO_FINDING = 'kein Fund';
   R_NO_ROW     = 'keine einfache Hilfe fuer diese Regel';
   // Entscheid E2: eine Hilfe, die das Verhalten aendern kann, sagt es.
@@ -405,14 +410,32 @@ begin
     SelfAssignPlanReason);
 end;
 
+// SCA070 (Charge H3a): die Region der Meldung (Zeilen, Spalte).
+function PlanCommentedOut(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxCleanupFixes.CommentedOutCode);
+end;
+
+// SCA053 (Charge H3a): Name fuer den Menuetext aus der Meldung - auch,
+// wenn der Planer ablehnt.
+function PlanUnusedVar(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxCleanupFixes.UnusedLocalVar);
+  Result.Name := TRdxCleanupFixes.UnusedVarName(AFinding.Message);
+end;
+
 { ---- Die Tabelle ---- }
 
 const
-  FIX_ROW_HIGH = 25;
+  FIX_ROW_HIGH = 27;
 
   // Je Art eine Zeile; die Reihenfolge ist die der Chargen (Stufe 2a,
   // Stufe 2 Rest, uQuickFix-Umzug/Stufe 3, Zeilen, Ausnahmen, Deklarationen
-  // H1, Anweisungen H2). Der Menuetext steht unter demselben Index in
+  // H1, Anweisungen H2, Aufraeumen H3a). Der Menuetext steht unter demselben Index in
   // FIX_CAPTIONS (s. Kopf).
   FIX_ROWS: array[0..FIX_ROW_HIGH] of TRdxFixRow = (
     (Kind: fkExplicitTObjectInheritance; Plan: PlanExplicitTObject;
@@ -470,13 +493,17 @@ const
     (Kind: fkRedundantJump; Plan: PlanRedundantJump;
      Hint: R_JUMP_HINT; HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkSelfAssignment; Plan: PlanSelfAssignment;
-     Hint: R_SELF_HINT; HintByPlanner: False; Changes: False; Alt: nil)
+     Hint: R_SELF_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkCommentedOutCode; Plan: PlanCommentedOut;
+     Hint: R_COMMENTED_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkUnusedLocalVar; Plan: PlanUnusedVar;
+     Hint: R_UNUSED_VAR_HINT; HintByPlanner: False; Changes: False; Alt: nil)
   );
 
   // Menuetexte (msgids) unter dem Index der Zeile; '%s' = Name der Hilfe
   // (X bei SCA085/SCA139, die Unit bei SCA007, der Cast-Typ bei SCA123, die
   // Direktive bei SCA149, das Ziel bzw. Exit/Continue bei SCA098/SCA047/
-  // SCA080).
+  // SCA080, die Variable bei SCA053).
   FIX_CAPTIONS: array[0..FIX_ROW_HIGH] of string = (
     'Remove (TObject) from the class declaration',
     'Use FreeAndNil(%s)',
@@ -503,7 +530,9 @@ const
     'Add "%s;" to the declaration',
     'Assign the condition to %s directly',
     'Remove the redundant %s',
-    'Remove the self-assignment of %s'
+    'Remove the self-assignment of %s',
+    'Delete commented-out code',
+    'Remove unused variable ''%s'''
   );
 
   // Menuetexte des zweiten Eintrags (Alt), '' ohne.
@@ -512,7 +541,7 @@ const
     'Add an else branch that raises an exception',
     '', '', '', '', '', '',
     'Raise ENotImplemented in the empty body',
-    '', '', '', '', '', '', '', ''
+    '', '', '', '', '', '', '', '', '', ''
   );
 
 var

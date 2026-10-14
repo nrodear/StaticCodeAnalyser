@@ -2342,6 +2342,12 @@ msgstr "Supprimer le %s superflu"
 msgid "Remove the self-assignment of %s"
 msgstr "Supprimer l'auto-affectation de %s"
 
+msgid "Delete commented-out code"
+msgstr "Supprimer le code mis en commentaire"
+
+msgid "Remove unused variable '%s'"
+msgstr "Supprimer la variable inutilisée '%s'"
+
 msgid "(changes behavior)"
 msgstr "(modifie le comportement)"
 

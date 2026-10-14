@@ -28,6 +28,10 @@ program reDelphix.Test;
 //                        auf Text, ohne Parser
 //   * uTestRdxFlowFixes - Quick-Fixes SCA098/SCA080/SCA047 (ganze
 //                        Anweisungen) auf Text, ohne Parser
+//   * uTestRdxCleanupFixes - Quick-Fixes SCA070/SCA053 (Aufraeumen,
+//                        Charge H3a) und CutEdit auf Text, ohne Parser
+//   * uTestRdxCleanupDetector - dieselben Hilfen gegen die echten
+//                        Detektoren uCommentedOutCode/uUnusedLocal
 //   * uTestRdxExprFixes - Editorhilfen SCA066/SCA072/SCA084 (uQuickFix-
 //                        Umzug) auf Text, ohne Parser
 //   * uTestRdxNilFix   - Editorhilfe SCA126 auf Text, ohne Parser
@@ -78,6 +82,7 @@ uses
   uRdxRaiseFixes in '..\source\uRdxRaiseFixes.pas',
   uRdxDeclFixes in '..\source\uRdxDeclFixes.pas',
   uRdxFlowFixes in '..\source\uRdxFlowFixes.pas',
+  uRdxCleanupFixes in '..\source\uRdxCleanupFixes.pas',
   uRdxRecipeRunner in '..\source\uRdxRecipeRunner.pas',
   uRdxFixTable in '..\source\uRdxFixTable.pas',
   uRdxIntroPlan in '..\source\uRdxIntroPlan.pas',
@@ -95,6 +100,8 @@ uses
   uTestRdxRaiseFixes in 'uTestRdxRaiseFixes.pas',
   uTestRdxDeclFixes in 'uTestRdxDeclFixes.pas',
   uTestRdxFlowFixes in 'uTestRdxFlowFixes.pas',
+  uTestRdxCleanupFixes in 'uTestRdxCleanupFixes.pas',
+  uTestRdxCleanupDetector in 'uTestRdxCleanupDetector.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',
   uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas',
   uTestRdxCodeMap in 'uTestRdxCodeMap.pas',

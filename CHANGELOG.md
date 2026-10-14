@@ -8,6 +8,10 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **reDelphix: editor help "Delete commented-out code" for SCA070** - deletes exactly the region the finding covers (a `//` line, a comment behind code from its column, the content lines of a multi-line `{ }`/`(* *)`); the delimiters go only when the comment is empty afterwards, a directive, doc comment (`///`, `{*`, `(**`), file header comment, TODO/FIXME/HACK/XXX or `noinspection` in the range blocks it, and a Delphi 12 multi-line string is never taken for a comment.
+- **reDelphix: editor help "Remove unused variable 'X'" for SCA053** - removes the declaration (`X: T;` with its line, one name of `A, X, B: T`, the `var` keyword when the section becomes empty, an inline `var X: T;`) after checking that the name occurs nowhere else in the routine text, including nested routines, inactive `{$IFDEF}` branches and `asm`; `for var`, a local `resourcestring` section read as a variable, initializers, `absolute`, attributes, `with` blocks, directives in the section and managed records (`class operator Initialize`) get no help.
+
 ### Changed
 - **reDelphix: the SCA126/SCA084 editor helps (`X = nil` -> `not Assigned(X)`) now accept classes and interfaces of the Delphi RTL/VCL/FMX/Data sources as proven types** (generated list `uRdxRtlTypes.inc`, `tools/gen-rtl-types.py`, decision E27; `var X: TBitmap = nil` is no longer misread as a declaration of `TBitmap`); a customer type from another unit still gets no help, since a function type there would be called by `= nil` but not by `Assigned()`.
 - **CLI: a relative `[Baseline] File=` is resolved against the project
