@@ -75,8 +75,7 @@ type
     // Schluesselwort als Name ('resourcestring'), einer const-/
     // resourcestring-Section, einem Initialisierer ('= 5', ':= F()'),
     // 'absolute', einem Typ ueber mehrere Zeilen (record), einem Attribut,
-    // einem with-Block im Gueltigkeitsbereich, einem Kommentar im
-    // geloeschten Text, einer Direktive in der Deklaration bzw. ihrer
+    // einem Kommentar im geloeschten Text, einer Direktive in der Deklaration bzw. ihrer
     // var-Section und einem 'class operator Initialize/Finalize' in der
     // Unit (verwalteter Record: die Variable fuehrt Code aus).
     class function UnusedLocalVar(AMap: TRdxCodeMap; ALine: Integer;
@@ -1297,8 +1296,11 @@ begin
 end;
 
 // Kommt AKey von AFrom bis ATo (einschliesslich) noch einmal als Code vor -
-// ausser an ASkip und hinter '.' (ein Member)? Dazu die with-Sperre. ''
-// oder der Grund.
+// ausser an ASkip und hinter '.' (ein Member)? '' oder der Grund.
+// Keine with-Sperre (bis 2026-10-14 vorhanden, kostete 104 Korpusangebote):
+// kommt der Name im Bereich nirgends vor, kann ein with ihn nicht binden -
+// das Entfernen der Deklaration aendert keine Bindung. Kommt er vor, lehnt
+// schon die Pruefung oben ab.
 function ScanUses(AMap: TRdxCodeMap; const AFrom, ATo, ASkip: TRdxToken;
   const AKey: string): string;
 var
@@ -1314,9 +1316,6 @@ begin
       Exit(Format('der Name kommt im Gueltigkeitsbereich noch vor (Zeile %d) '
         + '- auch unter {$IFDEF} und in asm zaehlt er als Verwendung',
         [T.Line]));
-    if (T.Low = 'with') and IsKeywordAfter(T, P) then
-      Exit(Format('with-Block im Gueltigkeitsbereich (Zeile %d) - von Hand '
-        + 'entscheiden', [T.Line]));
     P := T;
     T := After(AMap, T);
   end;

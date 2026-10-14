@@ -39,7 +39,7 @@ type
     [Test] procedure Sca053_InlineVar_RoundTrip;
     [Test] procedure Sca053_ForVar_NoHelp;
     [Test] procedure Sca053_Resourcestring_NoHelp;
-    [Test] procedure Sca053_With_NoHelp;
+    [Test] procedure Sca053_With_RoundTrip;
     [Test] procedure Sca053_Attribute_NoHelp;
   end;
 
@@ -333,11 +333,15 @@ begin
     'end;'])), fkUnusedLocalVar, 'Schluesselwort');
 end;
 
-procedure TTestRdxCleanupDetector.Sca053_With_NoHelp;
+procedure TTestRdxCleanupDetector.Sca053_With_RoundTrip;
 begin
-  AssertNoHelp(InImplementation(Join(['procedure P(L: TList);', 'var',
-    '  X: Integer;', 'begin', '  with L do', '    Clear;', 'end;'])),
-    fkUnusedLocalVar, 'with');
+  // Ein with im Gueltigkeitsbereich sperrt nicht (die Variable kommt nirgends
+  // vor, with kann sie nicht binden) - Fund weg, Section leer, var geht mit.
+  Assert.AreEqual(InImplementation(Join(['procedure P(L: TList);', 'begin',
+    '  with L do', '    Clear;', 'end;'])),
+    FixAll(InImplementation(Join(['procedure P(L: TList);', 'var',
+      '  X: Integer;', 'begin', '  with L do', '    Clear;', 'end;'])),
+      fkUnusedLocalVar));
 end;
 
 procedure TTestRdxCleanupDetector.Sca053_Attribute_NoHelp;

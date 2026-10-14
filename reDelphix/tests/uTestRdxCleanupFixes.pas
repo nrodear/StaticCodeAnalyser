@@ -383,6 +383,12 @@ begin
     'end;']),
     Fix(ckVar, InImpl(['procedure P(L: TList);', 'var', '  Count: Integer;',
       'begin', '  L.Count := 1;', 'end;']), 6, VarMsg('Count'), R), R);
+  // Ein with im Gueltigkeitsbereich sperrt nicht: kommt X nirgends vor, kann
+  // with es nicht binden (die frueher vorhandene with-Sperre war wirkungslos).
+  Assert.AreEqual(InImpl(['procedure P(L: TList);', 'begin', '  with L do',
+    '    Clear;', 'end;']),
+    Fix(ckVar, InImpl(['procedure P(L: TList);', 'var', '  X: Integer;',
+      'begin', '  with L do', '    Clear;', 'end;']), 6, VarMsg('X'), R), R);
 end;
 
 procedure TTestRdxCleanupFixes.Sca053_SectionBecomesEmpty;
@@ -520,8 +526,6 @@ end;
 
 procedure TTestRdxCleanupFixes.Sca053_ContextRefusals;
 begin
-  AssertRefused(ckVar, InImpl(['procedure P(L: TList);', 'var', '  X: Integer;',
-    'begin', '  with L do', '    Clear;', 'end;']), 6, VarMsg('X'), 'with-Block');
   // Die Section liegt (teils) unter einer Direktive: ein Zweig koennte leer
   // werden.
   AssertRefused(ckVar, InImpl(['procedure P;', 'var', '  X: Integer;',
