@@ -105,6 +105,7 @@
         <DCCReference Include="..\source\uRdxCleanupFixes.pas"/>
         <DCCReference Include="..\source\uRdxTryFixes.pas"/>
         <DCCReference Include="..\source\uRdxResultFixes.pas"/>
+        <DCCReference Include="..\source\uRdxSqlTemplate.pas"/>
         <DCCReference Include="..\source\uRdxRecipeRunner.pas"/>
         <DCCReference Include="..\source\uRdxFixTable.pas"/>
         <DCCReference Include="..\source\uRdxIntroPlan.pas"/>
@@ -134,6 +135,8 @@
         <DCCReference Include="uTestRdxResultFixes.pas"/>
         <DCCReference Include="uTestRdxInheritedFixes.pas"/>
         <DCCReference Include="uTestRdxResultGuards.pas"/>
+        <DCCReference Include="uTestRdxSqlTemplate.pas"/>
+        <DCCReference Include="uTestRdxSqlFacts.pas"/>
         <DCCReference Include="uTestRdxResultFixesDetector.pas"/>
         <DCCReference Include="uTestRdxNilFix.pas"/>
         <DCCReference Include="uTestRdxSimpleFixesDetector.pas"/>
