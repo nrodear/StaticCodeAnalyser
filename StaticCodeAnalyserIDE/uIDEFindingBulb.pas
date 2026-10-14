@@ -203,7 +203,7 @@ begin
   FBulbs      := TDictionary<HWND, TSCABulbButton>.Create;
   FDecisions  := TDictionary<HWND, TBulbDecision>.Create;
   FPending    := TList<HWND>.Create;
-  FDoomed     := TList<TSCABulbButton>.Create;
+  FDoomed     := TList<TDoomedBulb>.Create;
   FMenu       := TPopupMenu.Create(nil);
   FWnd := AllocateHWnd(WndProc);
   SetTimer(FWnd, TIMER_CARET, CARET_POLL_MS, nil);
