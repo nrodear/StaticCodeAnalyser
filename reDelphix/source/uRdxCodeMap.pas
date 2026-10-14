@@ -653,7 +653,12 @@ begin
   Depth := 0;
   T := AOpen;
   // T.Line - AOpen.Line statt AOpen.Line + AMaxLines: MaxInt als Vorgabe
-  // liefe sonst ueber.
+  // liefe sonst ueber. Die Grenze gilt VOR dem Token: das alte
+  // MatchForward (uRdxSimpleFixes, bis Charge R8) verarbeitete das erste
+  // Token jenseits der Grenze - in der Regel das erste der Zeile
+  // AOpen.Line + MAX_REGION_LINES + 1 - noch und brach erst danach ab;
+  // stand dort die schliessende Klammer, fand es sie. MatchClose bricht
+  // davor ab (Richtung: weniger Angebot, kein falsches; Gegen-Review R8).
   while (T.Low <> '') and (T.Line - AOpen.Line <= AMaxLines) do
   begin
     if T.Low = AOpen.Low then

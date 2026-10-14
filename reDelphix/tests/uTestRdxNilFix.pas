@@ -405,6 +405,11 @@ var
   R : string;
 begin
   // Ein Pfad, der auf ')', ']' oder '^' endet, vergleicht ein Ergebnis.
+  // BEWUSSTE LUECKE, hier nur GEPINNT (Gegen-Review R8, Verdacht): fuer
+  // diese Operanden gibt es keinen Typbeweis - 'FItems[I]' koennte ein
+  // Element eines Arrays von Funktionszeigern sein, 'TFoo(Sender)' ein
+  // Cast auf einen Funktionstyp. Der Test haelt den Bestand fest, nicht
+  // seine Richtigkeit; ob die Luecke schliesst, entscheidet Nico.
   Assert.AreEqual('', ReasonIn(FieldUnit, 'FItems[I]', ''));
   Assert.AreEqual('', ReasonIn(FieldUnit, 'TFoo(Sender)', ''));
   Assert.AreEqual('', ReasonIn(FieldUnit, 'P^', ''));

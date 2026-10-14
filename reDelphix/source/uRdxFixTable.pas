@@ -121,7 +121,11 @@ uses
 const
   // Hinweise der Hilfen (deutsch wie die Gruende; Pruefstand und Tests
   // pruefen sie woertlich). Bis Charge R8 in uRdxRecipeRunner (LineHint,
-  // DeclHint, FlowHint und je Rumpf).
+  // DeclHint, FlowHint und je Rumpf) - bis auf die ersten vier: SCA075,
+  // SCA074, SCA087 und SCA066 bekommen mit der Tabelle ERSTMALS einen
+  // festen Hinweis; bis dahin blieb ihr Hint leer, und der Eintrag stand
+  // ohne Erklaerung im Menue (Gegen-Review R8, Major 1; uTestRdxFixTable
+  // pinnt R_TOBJECT_HINT woertlich).
   R_TOBJECT_HINT  = 'TObject ist ohnehin der Vorfahr - gleiche Bedeutung';
   R_ASSERT_HINT   = 'die Bedingung als Text - so nennt die Meldung, was '
     + 'fehlschlug';
