@@ -25,6 +25,9 @@ type
     [Test] procedure Ini_SectionHeadWithComment;
     [Test] procedure Ini_HostCompoundAndSection_RescueSmallNumber;
     [Test] procedure Ini_Ipv4Key_RescuesSmallNumber;
+    // Gegen-Review Welle 1, Minor 10: 'ip' aus 'ipv4' im Schluessel
+    // schlaegt das Fliesstext- und das Versionswort daneben - gepinnt.
+    [Test] procedure Ini_IpvKeyBeatsTextAndVersionWord_Pinned;
     [Test] procedure Ini_LongLine_StaysLinear;
   end;
 
@@ -48,7 +51,10 @@ const
     'IP Address = 172.16.5.20');                             // 13
 
   LONG_LINE_ADDRESSES = 4000;
-  LONG_LINE_BUDGET_MS = 2000;   // vor dem Zeiger in CountOtherFractions ~88 s
+  // Grosszuegig: der Test faengt nur die quadratische Regression (vor dem
+  // Zeiger in CountOtherFractions ~88 s), nicht die Laufzeit - mit 2 s
+  // flackerte er unter Last oder im Debug-Bau (Gegen-Review Welle 1).
+  LONG_LINE_BUDGET_MS = 15000;
 
 function SampleHits: TArray<TIniIpHit>;
 var
@@ -164,6 +170,21 @@ begin
   Assert.AreEqual('/IPv4:8.8.8.8=', IniGot(['IPv4=8.8.8.8']), 'IPv4=');
   Assert.AreEqual('IPv6/Primary:1.1.1.1=', IniGot(['[IPv6]', 'Primary=1.1.1.1']), '[IPv6]');
   Assert.AreEqual('/Fallback:1.1.1.1=small-number', IniGot(['Fallback=1.1.1.1']), 'Gegenprobe');
+end;
+
+procedure TTestIpAddressScanIni.Ini_IpvKeyBeatsTextAndVersionWord_Pinned;
+begin
+  // 'help_ipv4': die Teile 'help' und 'ip' - das Host-Wort verhindert
+  // den Fliesstext-Verzicht und rettet die Kleinzahl: gemeldet.
+  Assert.AreEqual('/help_ipv4:8.8.8.8=', IniGot(['help_ipv4=8.8.8.8']), 'help_ipv4');
+  Assert.AreEqual('/help_v4:10.0.0.5=text-key', IniGot(['help_v4=10.0.0.5']),
+    'help_v4: Fliesstext ohne Host-Wort');
+  // 'version_ipv4': das Versionswort NEBEN dem Host-Wort zaehlt nicht
+  // (Build-Server-Regel) - gemeldet; ohne 'ip' eine Version.
+  Assert.AreEqual('/version_ipv4:10.0.0.5=', IniGot(['version_ipv4=10.0.0.5']),
+    'version_ipv4');
+  Assert.AreEqual('/version_v4:10.0.0.5=version', IniGot(['version_v4=10.0.0.5']),
+    'version_v4');
 end;
 
 procedure TTestIpAddressScanIni.Ini_LongLine_StaysLinear;

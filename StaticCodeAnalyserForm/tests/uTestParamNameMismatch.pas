@@ -100,6 +100,7 @@ type
     [Test] procedure Scan_AccessBeforeFirstSqlOp_LaterTypoReported;
     [Test] procedure Scan_CreatedQuery_AccessBeforeSql_Kept;
     [Test] procedure Scan_ReassignedQuery_AccessBeforeSql_Discarded;
+    [Test] procedure Scan_RecreatedQuery_OldSqlForgotten;
     // --- angelegte Parameter (CreateParam/Add/CreateParameter) ----------
     [Test] procedure Scan_CreateParamLiteral_KnownName;
     [Test] procedure Scan_ParamsAddAndCreateParameter_KnownNames;
@@ -912,6 +913,39 @@ begin
     '  Q := DM.qryOther;',
     '  Q.ParamByName(''x'').AsInteger := 1;',
     'end;'])));
+end;
+
+procedure TTestParamNameMismatchReview.Scan_RecreatedQuery_OldSqlForgotten;
+begin
+  // Gegen-Review Welle 1, Minor 11: dieselbe Variable ein zweites Mal
+  // erzeugt - das SQL und die Zugriffe der ersten Instanz gelten fuer die
+  // zweite nicht mehr. Vorher matchte das zweite 'a' das alte ':a' (FN).
+  Assert.AreEqual('A:Q.a@18', Scan(L([
+    'procedure P;',                                              // 10
+    'begin',                                                     // 11
+    '  Q := TFDQuery.Create(nil);',                              // 12
+    '  Q.SQL.Text := ''select * from t where a = :a'';',         // 13
+    '  Q.ParamByName(''a'').AsInteger := 1;',                    // 14
+    '  Q.Free;',                                                 // 15
+    '  Q := TFDQuery.Create(nil);',                              // 16
+    '  Q.SQL.Text := ''select * from t where b = :b'';',         // 17
+    '  Q.ParamByName(''a'').AsInteger := 1;',                    // 18
+    '  Q.ParamByName(''b'').AsInteger := 2;',                    // 19
+    'end;'])), 'zweite Instanz: a ist kein Platzhalter mehr');
+  // Gegenprobe: passende Namen in beiden Instanzen - still; auch ein
+  // per CreateParam angelegter Name der ersten Instanz gilt nicht weiter.
+  Assert.AreEqual('A:Q.x@18', Scan(L([
+    'procedure P;',                                              // 10
+    'begin',                                                     // 11
+    '  Q := TFDQuery.Create(nil);',                              // 12
+    '  Q.SQL.Text := ''select * from t where a = :a'';',         // 13
+    '  Q.Params.CreateParam(ftInteger, ''x'', ptInput);',        // 14
+    '  Q.Free;',                                                 // 15
+    '  Q := TFDQuery.Create(nil);',                              // 16
+    '  Q.SQL.Text := ''select * from t where a = :a'';',         // 17
+    '  Q.ParamByName(''x'').AsInteger := 1;',                    // 18
+    '  Q.ParamByName(''a'').AsInteger := 2;',                    // 19
+    'end;'])), 'angelegter Name der ersten Instanz gilt nicht weiter');
 end;
 
 { --- angelegte Parameter --------------------------------------------------- }

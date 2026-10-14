@@ -361,14 +361,23 @@ begin
     // Strikte Guards: die Bedingung selbst schuetzt direkt vor 0.
     // Wortgrenzen-Pruefung verhindert dass z.B. 'myvar > 0' faelschlich
     // auch 'myvariant' schuetzt.
+    //
+    // AST-Form: ParseIfStmt legt die Bedingung seit Welle 1 (cde8c272)
+    // wie while/case per JoinTokInto ab - Operatoren OHNE umgebende
+    // Leerzeichen ('n>0', '0<>n'). Jede Form braucht deshalb ihren
+    // kompakten Zwilling, wie in IsGuardedByWhileCond. Der Yoda-Guard
+    // 'if 0 <> N then' und 'if N >= 1 then' hatten keinen und fielen
+    // still durch (Gegen-Review Welle 1, Major 1: neue SCA010-FPs).
     if TDetectorUtils.ContainsWholeWordLower(VarLow + ' > 0',  Low)  or
        TDetectorUtils.ContainsWholeWordLower(VarLow + '>0',    Low)  or
        TDetectorUtils.ContainsWholeWordLower(VarLow + ' >= 1', Low)  or
+       TDetectorUtils.ContainsWholeWordLower(VarLow + '>=1',   Low)  or
        TDetectorUtils.ContainsWholeWordLower(VarLow + ' <> 0', Low)  or
        TDetectorUtils.ContainsWholeWordLower(VarLow + '<>0',   Low)  or
        TDetectorUtils.ContainsWholeWordLower('0 < '  + VarLow, Low)  or
        TDetectorUtils.ContainsWholeWordLower('0<'    + VarLow, Low)  or
-       TDetectorUtils.ContainsWholeWordLower('0 <> ' + VarLow, Low)  then
+       TDetectorUtils.ContainsWholeWordLower('0 <> ' + VarLow, Low)  or
+       TDetectorUtils.ContainsWholeWordLower('0<>'   + VarLow, Low)  then
       Exit(True);
 
     // G5/G6: Guards, die 0 ausschliessen, ohne die 0 zu nennen.

@@ -22,6 +22,10 @@ type
     [Test] procedure V6_Low96_UnspecifiedLoopbackMappedNat64;
     [Test] procedure V6_RegistryBlocks;
     [Test] procedure V6_OutsideGlobalUnicast_Reserved;
+    // Gegen-Review Welle 1, Minor 10: die Raender von 2000::/3 und der
+    // Dokumentationsblock 3fff::/20 - '1fff::1' liegt knapp darunter,
+    // '2002::' (6to4) ist oeffentlich, auch mit Null-Interface-ID.
+    [Test] procedure V6_GlobalUnicastEdges_Pinned;
     [Test] procedure IsReportable_OnlyPrivateCgnatPublic;
     [Test] procedure ClassLabel_UniqueLocalSiteLocalEmbedded;
   end;
@@ -157,6 +161,19 @@ end;
 procedure TTestIpAddressScanClasses.V6_OutsideGlobalUnicast_Reserved;
 begin
   CheckV6(V6_UNASSIGNED);
+end;
+
+procedure TTestIpAddressScanClasses.V6_GlobalUnicastEdges_Pinned;
+const
+  EDGES: array[0..5] of TTextCase = (
+    (Input: '1fff::1'; Expected: 'reserved'),        // knapp unter 2000::/3
+    (Input: '2000::'; Expected: 'public'),           // untere Kante
+    (Input: '2002::'; Expected: 'public'),           // 6to4, Interface-ID null
+    (Input: '2002:c000:0204::1'; Expected: 'public'),
+    (Input: '3fff::1'; Expected: 'documentation'),   // 3fff::/20
+    (Input: '3fff:1000::1'; Expected: 'public'));    // hinter 3fff:0fff
+begin
+  CheckV6(EDGES);
 end;
 
 procedure TTestIpAddressScanClasses.IsReportable_OnlyPrivateCgnatPublic;

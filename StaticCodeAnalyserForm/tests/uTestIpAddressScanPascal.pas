@@ -32,6 +32,13 @@ type
     [Test] procedure Pascal_Ipv4Word_RescuesSmallNumber;
     [Test] procedure Pascal_Positions_QuoteOfTheLiteral;
     [Test] procedure Pascal_SameAddressTwoLines_TwoHits;
+    // Gegen-Review Welle 1, Minor 10: das Host-Wort 'ip' aus 'IPv4'/'IPv6'
+    // schlaegt das Versionswort daneben - Entscheid: so lassen (Build-
+    // Server-Regel) und pinnen.
+    [Test] procedure Pascal_IpvWordBeatsVersionWord_Pinned;
+    // Dedupe ueber zwei Literale derselben Zeile: Pos zeigt auf das
+    // Literal des GEMELDETEN Treffers; beide gemeldet / beide verworfen.
+    [Test] procedure Pascal_DedupePos_OverTwoLiterals;
   end;
 
 implementation
@@ -210,6 +217,55 @@ end;
 procedure TTestIpAddressScanPascal.Pascal_Ipv4Word_RescuesSmallNumber;
 begin
   CheckPascal(IPV_WORD);
+end;
+
+procedure TTestIpAddressScanPascal.Pascal_IpvWordBeatsVersionWord_Pinned;
+begin
+  // 'Version_IPv4' zerlegt WordParts in 'version' und 'ip': das Host-Wort
+  // hebelt das Versions-Gate aus (kein Versionskopf, Versionswort NEBEN
+  // einem Host-Wort) und rettet die Kleinzahl - gemeldet. Gegenprobe ohne
+  // 'ip': Version.
+  Assert.AreEqual('1.2.3.4=',
+    PascalGot('  Version_IPv4 := ''1.2.3.4'';'), 'Version_IPv4');
+  Assert.AreEqual('1.2.3.4=version',
+    PascalGot('  Version_V4 := ''1.2.3.4'';'), 'Version_V4');
+  // 'myipv4' bleibt EIN Wort 'myipv' - 'IPv4' zaehlt nur am Wortanfang
+  // (auch nach einem Camel-Bruch), nicht mitten im Wort.
+  Assert.AreEqual('1.2.3.4=small-number',
+    PascalGot('  myipv4 := ''1.2.3.4'';'), 'myipv4 ist kein Host-Wort');
+end;
+
+procedure TTestIpAddressScanPascal.Pascal_DedupePos_OverTwoLiterals;
+var
+  H    : TArray<TCodeIpHit>;
+  Code : string;
+begin
+  // Gemeldet im ERSTEN Literal, verworfen (Produktpraefix) im zweiten:
+  // der Eintrag bleibt beim ersten - Pos zeigt auf dessen Quote.
+  Code := '  A := ''10.0.0.5''; B := ''srv-10.0.0.5'';';
+  H := TIpAddressScan.ScanPascalCode(Code);
+  // (Meldungen ohne das Wort "des" - SCA162 liest es als DES.)
+  Assert.AreEqual<Integer>(1, Length(H), 'gemeldet/verworfen: ein Treffer');
+  Assert.AreEqual('', H[0].Reason, 'gemeldet/verworfen: gemeldet');
+  Assert.AreEqual<Integer>(8, H[0].Pos, 'gemeldet/verworfen: Quote vom ersten Literal');
+  // Umgekehrt: der gemeldete Treffer im zweiten Literal ersetzt den
+  // verworfenen - Pos wandert zum zweiten Literal.
+  Code := '  A := ''srv-10.0.0.5''; B := ''10.0.0.5'';';
+  H := TIpAddressScan.ScanPascalCode(Code);
+  Assert.AreEqual<Integer>(1, Length(H), 'verworfen/gemeldet: ein Treffer');
+  Assert.AreEqual('', H[0].Reason, 'verworfen/gemeldet: gemeldet');
+  Assert.AreEqual<Integer>(29, H[0].Pos, 'verworfen/gemeldet: Quote vom zweiten Literal');
+  // Beide gemeldet: ein Eintrag, der erste bleibt.
+  Code := '  A := ''10.0.0.5''; B := ''10.0.0.5'';';
+  H := TIpAddressScan.ScanPascalCode(Code);
+  Assert.AreEqual<Integer>(1, Length(H), 'beide gemeldet: ein Treffer');
+  Assert.AreEqual<Integer>(8, H[0].Pos, 'beide gemeldet: Quote vom ersten Literal');
+  // Beide verworfen: ein Eintrag mit dem Grund vom ersten Literal.
+  Code := '  A := ''srv-10.0.0.5''; B := ''app-10.0.0.5'';';
+  H := TIpAddressScan.ScanPascalCode(Code);
+  Assert.AreEqual<Integer>(1, Length(H), 'beide verworfen: ein Treffer');
+  Assert.AreEqual('product', H[0].Reason, 'beide verworfen: Grund vom ersten Literal');
+  Assert.AreEqual<Integer>(8, H[0].Pos, 'beide verworfen: Quote vom ersten Literal');
 end;
 
 procedure TTestIpAddressScanPascal.Pascal_Positions_QuoteOfTheLiteral;
