@@ -206,63 +206,23 @@ begin
     Result := AText.Eol;
 end;
 
-// Der Kommentar-Zustand am Anfang der Zeilen 1..ARow ('c' Code, 'b' in
-// { }, 'p' in (* *)) - fuer Kommentare ueber mehrere Zeilen (Korpus-A/B
-// 2026-10-11: auskommentierter Code und Prosa darin sahen aus wie Code).
-function StartStates(const AText: TVnpText; ARow: Integer): TArray<Char>;
-var
-  i : Integer;
-begin
-  Result := nil;
-  SetLength(Result, ARow);
-  if ARow > 0 then
-    Result[0] := 'c';
-  for i := 1 to ARow - 1 do
-    Result[i] := CommentStateAfter(AText.Lines[i - 1], Result[i - 1]);
-end;
-
-function PrevCodeRow(const AText: TVnpText; ARow: Integer): Integer;
-var
-  States : TArray<Char>;
-  i      : Integer;
-begin
-  Result := 0;
-  States := StartStates(AText, ARow);
-  for i := ARow - 2 downto 0 do
-    if Trim(CodePartFrom(AText.Lines[i], States[i])) <> '' then
-      Exit(i + 1);
-end;
-
-// Die Zeile ARow (1-basiert) oder '' fuer 0.
-function LineOrEmpty(const AText: TVnpText; ARow: Integer): string;
-begin
-  Result := '';
-  if (ARow >= 1) and (ARow <= Length(AText.Lines)) then
-    Result := AText.Lines[ARow - 1];
-end;
-
-// Steht zwischen der Zeile darueber AFromRow und der Anweisung AToRow eine
-// Compiler-Direktive ({$IFDEF ...})? Dann gilt die Zeile darueber nur in
-// einem Zweig der bedingten Uebersetzung: begin und end landeten in
-// verschiedenen Zweigen (Korpus-A/B 2026-10-11), und ohne Block stuende
-// die Deklaration im anderen Zweig hinter einem 'then' ('{$IFDEF A} if B
-// then {$ELSE} Foo; {$ENDIF}' - Pruefer 2026-10-13, Harness 7). Eine
-// Direktive AUF der Zeile darueber sieht die Pruefung nicht (Grenze).
-function DirectiveBetween(const AText: TVnpText;
-  AFromRow, AToRow: Integer): Boolean;
-var
-  i : Integer;
-begin
-  for i := AFromRow to AToRow - 2 do
-    if (Pos('{$', AText.Lines[i]) > 0) or (Pos('(*$', AText.Lines[i]) > 0) then
-      Exit(True);
-  Result := False;
-end;
+type
+  // Eine Zeile ueber dem Caret, wie TargetAt sie sieht: der Zustand an
+  // ihrem Anfang ('c' Code, 'b' in { }, 'p' in (* *), 's' in einem
+  // mehrzeiligen String) und ihr Code-Anteil (Strings bleiben, Kommentare
+  // fallen weg; eine Inhaltszeile eines mehrzeiligen Strings hat keinen,
+  // eine Zeile, die ihn schliesst, den Rest hinter dem Schliesser).
+  TVnpRow = record
+    State : Char;
+    Code  : string;
+  end;
+  TVnpRows = TArray<TVnpRow>;
 
 // Die Zahl der Quotes, mit denen die (getrimmte) Zeile einen mehrzeiligen
 // String oeffnet (Delphi 12: mindestens drei am Zeilenende, der String
-// bleibt offen), sonst 0.
-function OpenerQuotes(const ALine: string): Integer;
+// bleibt offen), sonst 0. AState: der Kommentar-Zustand am Zeilenanfang -
+// ein ''' in einem Kommentarblock oeffnet nichts.
+function OpenerQuotes(const ALine: string; AState: Char): Integer;
 var
   i : Integer;
 begin
@@ -270,7 +230,7 @@ begin
   while (i > 0) and (ALine[i] = '''') do
     Dec(i);
   Result := Length(ALine) - i;
-  if (Result < MIN_MULTILINE_QUOTES) or not StringOpenAtEnd(ALine) then
+  if (Result < MIN_MULTILINE_QUOTES) or not StringOpenAtEnd(ALine, AState) then
     Result := 0;
 end;
 
@@ -286,38 +246,124 @@ begin
     and ((Length(ALine) <= AQuotes) or (ALine[AQuotes + 1] <> ''''));
 end;
 
-// Liegt Zeile ARow in einem mehrzeiligen String (Delphi 12)? Der
-// Zeilen-Leser saehe dort Code und aenderte still den String (Korpus-A/B
-// 2026-10-11).
-function InMultiLineString(const AText: TVnpText; ARow: Integer): Boolean;
+// Der Zustand nach der Zeile ALine, die im Kommentar-Zustand AState
+// beginnt: ein offener Kommentar - oder 's' mit AQuotes, wenn die Zeile
+// im Code endet und dort einen mehrzeiligen String oeffnet.
+function NextState(const ALine: string; AState: Char;
+  var AQuotes: Integer): Char;
+begin
+  Result := CommentStateAfter(ALine, AState);
+  if Result <> 'c' then
+    Exit;
+  AQuotes := OpenerQuotes(Trim(ALine), AState);
+  if AQuotes > 0 then
+    Result := 's';
+end;
+
+// Die Zeilen 1..ACount (hoechstens alle): Zustand am Anfang und Code-
+// Anteil, Kommentar- und String-Zustand in EINEM Lauf - fuer Kommentare
+// und Strings ueber mehrere Zeilen (Korpus-A/B 2026-10-11: auskommentierter
+// Code und Prosa darin sahen aus wie Code; der Zeilen-Leser saehe in einem
+// String Code und aenderte ihn still). Eine Inhaltszeile des Strings sieht
+// der Kommentar-Leser nicht ('{' im Text vergiftete sonst die Zeilen
+// danach), ein ''' in einem Kommentarblock oeffnet keinen String, und
+// hinter dem Schliesser geht es im Code weiter - auch mit einem neuen
+// Oeffner (''' + '''; Pruefer 2026-10-14, c).
+function RowsUpTo(const AText: TVnpText; ACount: Integer): TVnpRows;
 var
   i, Quotes : Integer;
-  L         : string;
+  L, T      : string;
+  State     : Char;
 begin
-  Quotes := 0;   // 0 = kein String offen, sonst die Quote-Zahl des Oeffners
-  for i := 0 to ARow - 2 do
+  Result := nil;
+  if ACount > Length(AText.Lines) then
+    ACount := Length(AText.Lines);
+  SetLength(Result, ACount);
+  State := 'c';
+  Quotes := 0;
+  for i := 0 to ACount - 1 do
   begin
-    L := Trim(AText.Lines[i]);
-    if Quotes = 0 then
-      Quotes := OpenerQuotes(L)
-    else if ClosesWith(L, Quotes) then
-      Quotes := 0;
+    L := AText.Lines[i];
+    Result[i].State := State;
+    Result[i].Code := '';
+    if State <> 's' then
+    begin
+      Result[i].Code := CodePartFrom(L, State);
+      State := NextState(L, State, Quotes);
+      Continue;
+    end;
+    T := Trim(L);
+    if ClosesWith(T, Quotes) then
+    begin
+      T := Copy(T, Quotes + 1, MaxInt);
+      Result[i].Code := CodePart(T);
+      State := NextState(T, 'c', Quotes);
+    end;
   end;
-  Result := Quotes > 0;
+end;
+
+// Die naechste Zeile ueber ARow mit Code (0 am Dateianfang) in ARows.
+function PrevCodeRowIn(const ARows: TVnpRows; ARow: Integer): Integer;
+var
+  i : Integer;
+begin
+  Result := 0;
+  i := ARow - 2;
+  if i > High(ARows) then
+    i := High(ARows);
+  while i >= 0 do
+  begin
+    if Trim(ARows[i].Code) <> '' then
+      Exit(i + 1);
+    Dec(i);
+  end;
+end;
+
+function PrevCodeRow(const AText: TVnpText; ARow: Integer): Integer;
+begin
+  Result := PrevCodeRowIn(RowsUpTo(AText, ARow), ARow);
+end;
+
+// Die Zeile ARow (1-basiert) oder '' fuer 0.
+function LineOrEmpty(const AText: TVnpText; ARow: Integer): string;
+begin
+  Result := '';
+  if (ARow >= 1) and (ARow <= Length(AText.Lines)) then
+    Result := AText.Lines[ARow - 1];
+end;
+
+// Steht auf der Zeile darueber AFromRow oder zwischen ihr und der
+// Anweisung AToRow eine Compiler-Direktive ({$IFDEF ...})? Dann gilt die
+// Zeile darueber nur in einem Zweig der bedingten Uebersetzung: begin und
+// end landeten in verschiedenen Zweigen (Korpus-A/B 2026-10-11), und ohne
+// Block stuende die Deklaration im anderen Zweig hinter einem 'then'
+// ('{$IFDEF A} if B then {$ELSE} Foo; {$ENDIF}' - Pruefer 2026-10-13,
+// Harness 7). Die Direktive AUF der Zeile darueber zaehlt mit: die
+// Spanne lag strikt dazwischen, und genau dieser Fall stand still hinter
+// dem then (Pruefer 2026-10-14, b). Geprueft wird die rohe Zeile - ein
+// '{$' in einem String zaehlt auch (lieber ablehnen).
+function DirectiveBetween(const AText: TVnpText;
+  AFromRow, AToRow: Integer): Boolean;
+var
+  i : Integer;
+begin
+  for i := AFromRow - 1 to AToRow - 2 do
+    if (i >= 0) and ((Pos('{$', AText.Lines[i]) > 0)
+       or (Pos('(*$', AText.Lines[i]) > 0)) then
+      Exit(True);
+  Result := False;
 end;
 
 // Der Abschnitt, in dem Zeile ARow liegt ('c' Code, 'a' asm-Block, 'i'
-// initialization/finalization) - die Zeilen darueber, jede ab ihrem
-// Kommentar-Zustand, durch uVnpPlan.SectionStateAfter gefaltet.
-function SectionAt(const AText: TVnpText; ARow: Integer;
-  const AStates: TArray<Char>): Char;
+// initialization/finalization) - der Code der Zeilen darueber (ARows)
+// durch uVnpPlan.SectionStateAfter gefaltet.
+function SectionAt(const ARows: TVnpRows; ARow: Integer): Char;
 var
   i : Integer;
 begin
   Result := 'c';
   for i := 0 to ARow - 2 do
-    Result := SectionStateAfter(CodePartFrom(AText.Lines[i], AStates[i]),
-      Result);
+    Result := SectionStateAfter(ARows[i].Code, Result);
 end;
 
 // Traegt irgendeine Zeile der Datei eine FPC-Weiche (uVnpPlan.
@@ -334,20 +380,19 @@ begin
 end;
 
 // Was an der Caret-Zeile ARow selbst keinen Code zulaesst - vor dem Plan:
-// '' oder der Grund. AStates sind die Kommentar-Zustaende am Anfang der
-// Zeilen 1..ARow (StartStates).
+// '' oder der Grund. ARows sind die Zeilen 1..ARow (RowsUpTo).
 function ContextReason(const AText: TVnpText; ARow: Integer;
-  const AStates: TArray<Char>): string;
+  const ARows: TVnpRows): string;
 var
   Section : Char;
 begin
   Result := '';
-  if InMultiLineString(AText, ARow) then
+  if ARows[ARow - 1].State = 's' then
     Exit('die Zeile liegt in einem mehrzeiligen String - dort ist kein Code');
-  if AStates[ARow - 1] <> 'c' then
+  if ARows[ARow - 1].State <> 'c' then
     Exit('die Zeile liegt in einem mehrzeiligen Kommentar - dort ist kein '
       + 'Code');
-  Section := SectionAt(AText, ARow, AStates);
+  Section := SectionAt(ARows, ARow);
   if Section = 'a' then
     Exit('die Zeile liegt in einem asm-Block - dort ist kein Pascal-Code');
   if Section = 'i' then
@@ -358,75 +403,97 @@ begin
       + 'eine Inline-Konstante gibt es in FPC 3.2 nicht');
 end;
 
-// Der Kommentar-Zustand am Anfang der Zeile ARow (1-basiert) aus AStates,
-// 'c' fuer 0 (keine Zeile).
-function StateOrCode(const AStates: TArray<Char>; ARow: Integer): Char;
+// Die Zeile darueber APrevRow fuer den Plan: roh ab ihrem Kommentar-
+// Zustand (beginnt sie in einem Kommentar, ist ihr Code der Teil hinter
+// dessen Ende - Pruefer 2026-10-13, Minor 1); schliesst sie einen
+// mehrzeiligen String, nur der Code hinter dem Schliesser, als Code-
+// Zeile. '' und 'c' fuer 0 (keine Zeile).
+procedure PrevForPlan(const AText: TVnpText; const ARows: TVnpRows;
+  APrevRow: Integer; out ALine: string; out AState: Char);
 begin
-  Result := 'c';
-  if (ARow >= 1) and (ARow <= Length(AStates)) then
-    Result := AStates[ARow - 1];
+  ALine := LineOrEmpty(AText, APrevRow);
+  AState := 'c';
+  if (APrevRow >= 1) and (APrevRow <= Length(ARows)) then
+    AState := ARows[APrevRow - 1].State;
+  if AState = 's' then
+  begin
+    ALine := ARows[APrevRow - 1].Code;
+    AState := 'c';
+  end;
 end;
 
-// Gehoert das 'else' am Ende der Zweigzeile APrevRow zu einem
-// Bedingungsausdruck ('X := if C then A' / 'else' / 'Foo(42);')? Das
-// entscheidet die Code-Zeile VOR der else-Zeile (uVnpPlan.
-// ContinuesIfExpression); das 'X := if ... else' auf EINER Zeile prueft
-// schon der Plan.
-function ElseOfIfExpression(const AText: TVnpText; APrevRow: Integer;
-  const AStates: TArray<Char>): Boolean;
+// Der Code der Zeile AFromRow und der Code-Zeilen darueber, von unten nach
+// oben (0: leer) - fuer uVnpPlan.IfExpressionAbove.
+function CodeFromRowUp(const ARows: TVnpRows; AFromRow: Integer): TArray<string>;
 var
-  Before : Integer;
+  Row : Integer;
 begin
-  Result := False;
-  if not SameText(LastWord(CodePartFrom(AText.Lines[APrevRow - 1],
-       AStates[APrevRow - 1])), 'else') then
-    Exit;
-  Before := PrevCodeRow(AText, APrevRow);
-  if Before > 0 then
-    Result := ContinuesIfExpression(CodePartFrom(AText.Lines[Before - 1],
-      AStates[Before - 1]));
+  Result := nil;
+  Row := AFromRow;
+  while Row > 0 do
+  begin
+    Result := Result + [ARows[Row - 1].Code];
+    Row := PrevCodeRowIn(ARows, Row);
+  end;
+end;
+
+// Gehoert das then/else am Ende der Zweigzeile APrevRow zu einem
+// Bedingungsausdruck (Delphi 13: 'X := if C then A' / 'else' / 'Foo(42);',
+// 'X :=' / 'if C then' / 'A' / 'else' / ..., 'X :=' / 'if C then' /
+// 'Foo(42);')? Aufwaerts bis zum 'if' entscheidet uVnpPlan.
+// IfExpressionAbove; das 'X := if ... then' bzw. '... else' auf der
+// Zweigzeile selbst prueft schon der Plan. Vorher zaehlte nur EINE Zeile
+// ueber dem else (Pruefer 2026-10-14, a).
+function BranchOfIfExpression(const ATarget: TVnpTarget;
+  const ARows: TVnpRows): Boolean;
+begin
+  if SameText(LastWord(ARows[ATarget.PrevRow - 1].Code), 'else') then
+    Result := IfExpressionAbove(CodeFromRowUp(ARows,
+      PrevCodeRowIn(ARows, ATarget.PrevRow)))
+  else
+    Result := IfExpressionAbove(CodeFromRowUp(ARows, ATarget.PrevRow));
 end;
 
 // Der Zweig (Plan.Wrap) bekommt begin..end: 'begin' an den Anfang der
 // Zeile nach der Zweigzeile, 'end;' an den Anfang der Zeile nach der
 // Anweisung - beide Stellen muessen Code sein, nicht das Innere eines
-// Kommentars ('X := 42; { Kommentar' / 'geht weiter }' - Pruefer
-// 2026-10-13, Harness 5/6/20/24), und das Zeilenende hinter der Anweisung
-// muss es geben. '' oder der Grund.
+// Kommentars oder Strings ('X := 42; { Kommentar' / 'geht weiter }' -
+// Pruefer 2026-10-13, Harness 5/6/20/24), und das Zeilenende hinter der
+// Anweisung muss es geben. ARows reicht bis zur Zeile NACH der Anweisung
+// (ihr Zustand am Anfang = der am Ende der Anweisung). '' oder der Grund.
 function BlockReason(const AText: TVnpText; const ATarget: TVnpTarget;
-  const AStates: TArray<Char>): string;
+  const ARows: TVnpRows): string;
 begin
   if ATarget.SourceRow >= Length(AText.Starts) then
     Result := 'die Anweisung ist die letzte Zeile ohne Zeilenende - kein '
       + 'Platz fuer end;'
-  else if AStates[ATarget.PrevRow] <> 'c' then
-    Result := 'die Zweigzeile endet in einem offenen Kommentar - "begin" '
-      + 'landete darin'
-  else if CommentStateAfter(AText.Lines[ATarget.SourceRow - 1], 'c') <> 'c'
-  then
-    Result := 'die Anweisung endet in einem offenen Kommentar - "end;" '
-      + 'landete darin'
-  else if ElseOfIfExpression(AText, ATarget.PrevRow, AStates) then
-    Result := 'das else darueber gehoert zu einem Bedingungsausdruck (Delphi '
-      + '13: "X := if C then A" / "else" / ...) - ein begin..end mitten im '
-      + 'Ausdruck ist kein Code'
+  else if ARows[ATarget.PrevRow].State <> 'c' then
+    Result := 'die Zweigzeile endet in einem offenen Kommentar oder String '
+      + '- "begin" landete darin'
+  else if ARows[ATarget.SourceRow].State <> 'c' then
+    Result := 'die Anweisung endet in einem offenen Kommentar oder String - '
+      + '"end;" landete darin'
+  else if BranchOfIfExpression(ATarget, ARows) then
+    Result := 'das then/else darueber gehoert zu einem Bedingungsausdruck '
+      + '(Delphi 13: "X := if C then A" / "else" / ...) - ein begin..end '
+      + 'mitten im Ausdruck ist kein Code'
   else
     Result := '';
 end;
 
 // Was die Zeilen um einen (fuer sich gueltigen) Plan verbieten: eine
-// Direktive zwischen der Zeile darueber und der Anweisung - fuer JEDEN
-// Plan, nicht nur mit Block (Pruefer 2026-10-13, Major 4) - und bei
+// Direktive auf oder unter der Zeile darueber bis zur Anweisung - fuer
+// JEDEN Plan, nicht nur mit Block (Pruefer 2026-10-13, Major 4) - und bei
 // begin..end die Grenzen des Blocks (BlockReason). '' oder der Grund.
 function PlacementReason(const AText: TVnpText; const ATarget: TVnpTarget;
-  const AStates: TArray<Char>): string;
+  const ARows: TVnpRows): string;
 begin
   if DirectiveBetween(AText, ATarget.PrevRow, ATarget.SourceRow) then
-    Result := 'zwischen der Zeile darueber und der Anweisung steht eine '
-      + 'Direktive - in einem anderen Zweig der bedingten Uebersetzung '
-      + 'stuende die Deklaration woanders'
+    Result := 'auf der Zeile darueber oder zwischen ihr und der Anweisung '
+      + 'steht eine Direktive - in einem anderen Zweig der bedingten '
+      + 'Uebersetzung stuende die Deklaration woanders'
   else if ATarget.Plan.Wrap then
-    Result := BlockReason(AText, ATarget, AStates)
+    Result := BlockReason(AText, ATarget, ARows)
   else
     Result := '';
 end;
@@ -434,8 +501,10 @@ end;
 function TargetAt(const AText: TVnpText; ARow, ACol: Integer;
   const ANameBase: string): TVnpTarget;
 var
-  States : TArray<Char>;
-  Why    : string;
+  Rows      : TVnpRows;
+  Why       : string;
+  PrevLine  : string;
+  PrevState : Char;
 begin
   Result := Default(TVnpTarget);
   Result.SourceRow := ARow;
@@ -447,25 +516,23 @@ begin
   end;
   // Vor dem Plan: in einem mehrzeiligen String oder Kommentar, im
   // asm-Block, im initialization-Abschnitt und in einer FPC-Datei ist
-  // nichts zu tun.
-  States := StartStates(AText, ARow);
-  Why := ContextReason(AText, ARow, States);
+  // nichts zu tun. Die Zeilen bis EINE hinter der Anweisung: ihr Zustand
+  // am Anfang ist der am Ende der Anweisung (BlockReason).
+  Rows := RowsUpTo(AText, ARow + 1);
+  Why := ContextReason(AText, ARow, Rows);
   if Why <> '' then
   begin
     Result.Plan.Reason := Why;
     Exit;
   end;
   Result.Name := NextFreeName(AText.Text, ANameBase);
-  Result.PrevRow := PrevCodeRow(AText, ARow);
-  // Die Zeile darueber zaehlt ab ihrem Kommentar-Zustand: beginnt sie in
-  // einem Kommentar, ist ihr Code der Teil hinter dessen Ende (Pruefer
-  // 2026-10-13, Minor 1).
-  Result.Plan := PlanIntroduce(AText.Lines[ARow - 1],
-    LineOrEmpty(AText, Result.PrevRow), ACol, Result.Name,
-    StateOrCode(States, Result.PrevRow));
+  Result.PrevRow := PrevCodeRowIn(Rows, ARow);
+  PrevForPlan(AText, Rows, Result.PrevRow, PrevLine, PrevState);
+  Result.Plan := PlanIntroduce(AText.Lines[ARow - 1], PrevLine, ACol,
+    Result.Name, PrevState);
   if not Result.Plan.Ok then
     Exit;
-  Why := PlacementReason(AText, Result, States);
+  Why := PlacementReason(AText, Result, Rows);
   if Why <> '' then
   begin
     Result.Plan.Ok := False;

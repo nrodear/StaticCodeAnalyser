@@ -47,6 +47,9 @@ type
     [Test] procedure Context_MultiLineString;
     [Test] procedure Context_MultiLineComment;
     [Test] procedure Context_SyncBlockEnd;
+    // Gegen-Review Welle 1 (Pruefer 2026-10-14, d)
+    [Test] procedure Guard_HeadDirectiveVsStatement;
+    [Test] procedure Guard_TypedConstant_NamedCorrectly;
   end;
 
 implementation
@@ -416,6 +419,58 @@ begin
   Assert.IsTrue(G.Plan.Ok, 'Kommentar dazwischen: ' + G.Plan.Reason);
   Assert.IsTrue(G.Plan.Wrap, 'Kommentar dazwischen, Wrap');
   Assert.AreEqual<Integer>(2, G.PrevRow, 'Kommentar dazwischen, PrevRow');
+end;
+
+// Kopf-Fortsetzung oder Anweisung: 'Register<Integer>(42);' (Generikum)
+// und 'Register; X := 42;' (zwei Anweisungen) sind Anweisungen;
+// 'stdcall; external ... index 5;' bleibt ein Kopf, 'vectorcall' und
+// 'assembler' gehoeren zur Liste (Pruefer 2026-10-14, d).
+procedure TTestRdxIntroGuards.Guard_HeadDirectiveVsStatement;
+var
+  P : TRdxIntroPlan;
+begin
+  // Die 42 in Spalte 21.
+  P := PlanIntroduce('  Register<Integer>(42);', 'begin', 21, 'N01');
+  Assert.IsTrue(P.Ok, 'Register<Integer>(42): ' + P.Reason);
+  Assert.AreEqual('  Register<Integer>(N01);', P.NewUseLine,
+    'Register<Integer>(42), NewUseLine');
+  // Die 42 in Spalte 18.
+  P := PlanIntroduce('  Register; X := 42;', 'begin', 18, 'N01');
+  Assert.IsTrue(P.Ok, 'Register; X := 42: ' + P.Reason);
+  Assert.AreEqual('  Register; X := N01;', P.NewUseLine,
+    'Register; X := 42, NewUseLine');
+  // Die 5 in Spalte 35 bzw. 38 und 38.
+  P := PlanIntroduce('  stdcall; external ''x.dll'' index 5;',
+    'function Foo: Integer;', 35, 'N01');
+  AssertRefusedWith(P, '"stdcall"', 'stdcall; external bleibt ein Kopf');
+  P := PlanIntroduce('  vectorcall; external ''x.dll'' index 5;',
+    'function Foo: Integer;', 38, 'N01');
+  AssertRefusedWith(P, '"vectorcall"', 'vectorcall');
+  P := PlanIntroduce('  assembler; external ''x.dll'' index 5;',
+    'function Foo: Integer;', 37, 'N01');
+  AssertRefusedWith(P, '"assembler"', 'assembler');
+end;
+
+// 'C: Integer = 42;' im const-Abschnitt ist eine typisierte Konstante -
+// der Grund nannte sie "case-Zweig" (Pruefer 2026-10-14, d). Eine
+// Sprungmarke mit Vergleich dahinter ('lbl: if A = 1 then B;') und ein
+// case-Zweig bleiben, was sie sind.
+procedure TTestRdxIntroGuards.Guard_TypedConstant_NamedCorrectly;
+var
+  P : TRdxIntroPlan;
+begin
+  // Die 42 in Spalte 16.
+  P := PlanIntroduce('  C: Integer = 42;', 'const', 16, 'N01');
+  AssertRefusedWith(P, 'typisierte Konstante', 'typisierte Konstante');
+  // Die 9 in Spalte 15.
+  P := PlanIntroduce('  A: array[0..9] of Byte = (1, 2);', 'const', 15, 'N01');
+  AssertRefusedWith(P, 'typisierte Konstante', 'typisierte Array-Konstante');
+  // Die 1 in Spalte 15.
+  P := PlanIntroduce('  lbl: if A = 1 then B;', 'begin', 15, 'N01');
+  AssertRefusedWith(P, 'Sprungmarke', 'Sprungmarke mit Vergleich');
+  // Die 42 in Spalte 13.
+  P := PlanIntroduce('    1: X := 42;', '  case K of', 13, 'N01');
+  AssertRefusedWith(P, 'case-Zweig', 'case-Zweig');
 end;
 
 // In einem mehrzeiligen String (Delphi 12, ''' ... ''') ist kein Code - die

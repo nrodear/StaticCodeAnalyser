@@ -49,6 +49,12 @@ type
     // Zeilenenden und Vorbedingung
     [Test] procedure RowEol_MixedEndings;
     [Test] procedure IntroduceEdits_RefusedPlanIsEmpty;
+    // Gegen-Review Welle 1 (Pruefer 2026-10-14, a-d)
+    [Test] procedure Wrap_IfExpressionArmsOnOwnLines;
+    [Test] procedure DirectiveOnPrevLine;
+    [Test] procedure MultiLineString_ReopenedAfterCloser;
+    [Test] procedure CommentAndStringStates_Combined;
+    [Test] procedure AsmLabel_DoesNotEndAsm;
   end;
 
 implementation
@@ -347,6 +353,146 @@ begin
     '    Foo(42);', 'end;']);
   AssertAccepted(TargetIn(B, 6, 9), True, 5,
     'else der Anweisung, Arm darueber');
+end;
+
+// Der Bedingungsausdruck ueber mehrere Zeilen (Delphi 13): das 'if' steht
+// weiter oben als eine Zeile ueber dem else ('X := if C then' / 'A' /
+// 'else' / 'Foo(42);'), oder als erstes Wort einer Zeile hinter einem
+// offenen 'X :=' - vorher bekam der else-Arm begin..end mitten im
+// Ausdruck (Pruefer 2026-10-14, a). Aufwaerts endet die Suche an einer
+// Zeile, die eine Anweisung beendet (';') - das if davor ist dann eine
+// Anweisung.
+procedure TTestRdxIntroContext.Wrap_IfExpressionArmsOnOwnLines;
+var
+  B : string;
+begin
+  B := Buf(['procedure P;', 'begin', '  X := if C then', '    A', '  else',
+    '    Foo(42);', 'end;']);
+  // Zeile 6, die 42 in Spalte 9.
+  AssertRefusedWith(TargetIn(B, 6, 9), 'Bedingungsausdruck',
+    'then-Arm auf eigener Zeile, else-Arm darunter');
+  B := Buf(['procedure P;', 'begin', '  X :=', '    if C then', '      A',
+    '    else', '      Foo(42);', 'end;']);
+  AssertRefusedWith(TargetIn(B, 7, 11), 'Bedingungsausdruck',
+    'if als erstes Wort hinter X :=');
+  // Unvollstaendiger Ausdruck (noch ohne else, mit ';' - mitten im Tippen):
+  // Zeile 5, die 42 in Spalte 11, Zweigzeile 'if C then', darueber das
+  // offene 'X :=' - vorher bekam die Zeile begin..end.
+  B := Buf(['procedure P;', 'begin', '  X :=', '    if C then', '      Foo(42);',
+    'end;']);
+  AssertRefusedWith(TargetIn(B, 5, 11), 'Bedingungsausdruck',
+    'then-Arm hinter if als erstem Wort');
+  B := Buf(['procedure P;', 'begin', '  Y := Foo(', '    if C then', '      1',
+    '    else', '      Bar(42));', 'end;']);
+  AssertRefusedWith(TargetIn(B, 7, 11), 'Bedingungsausdruck',
+    'if als Argument hinter Foo(');
+  // if-Anweisung: die Zeile ueber dem if beendet eine Anweisung.
+  B := Buf(['procedure P;', 'begin', '  Z := 1;', '  if C then', '    A',
+    '  else', '    Foo(42);', 'end;']);
+  AssertAccepted(TargetIn(B, 7, 9), True, 6, 'if-Anweisung hinter Z := 1;');
+  // Ein kompletter Ausdruck DARUEBER (endet mit ';') zaehlt nicht fuer
+  // das else weiter unten.
+  B := Buf(['procedure P;', 'begin', '  X := if C then A else B;',
+    '  if D then', '    A', '  else', '    Foo(42);', 'end;']);
+  AssertAccepted(TargetIn(B, 7, 9), True, 6,
+    'Ausdruck darueber ist abgeschlossen');
+  B := Buf(['procedure P;', 'begin', '  1:', '    if C then', '      Foo(42);',
+    'end;']);
+  AssertAccepted(TargetIn(B, 5, 11), True, 4, 'if hinter einer case-Marke');
+end;
+
+// Die Direktive AUF der Zeile darueber zaehlt wie eine dazwischen:
+// '{$IFDEF A} if B then {$ELSE} Foo; {$ENDIF}' ueber 'X := 42;' - in
+// Konfiguration A stuende 'const' direkt hinter dem then, still (Pruefer
+// 2026-10-14, b; vorher lag die Spanne strikt dazwischen). Ein Kommentar
+// ohne '$' auf der Zeile darueber stoert nicht.
+procedure TTestRdxIntroContext.DirectiveOnPrevLine;
+var
+  B : string;
+begin
+  B := Buf(['procedure P;', 'begin',
+    '  {$IFDEF A} if B then {$ELSE} Foo; {$ENDIF}', '  X := 42;', 'end;']);
+  // Zeile 4, die 42 in Spalte 8.
+  AssertRefusedWith(TargetIn(B, 4, 8), 'Direktive',
+    'IFDEF/ELSE/ENDIF auf der Zeile darueber');
+  B := Buf(['begin', '  Foo; {$ENDIF}', '  X := 42;', 'end;']);
+  AssertRefusedWith(TargetIn(B, 3, 8), 'Direktive', 'ENDIF am Zeilenende');
+  B := Buf(['begin', '  Foo; (*$ENDIF*)', '  X := 42;', 'end;']);
+  AssertRefusedWith(TargetIn(B, 3, 8), 'Direktive', '(*$ENDIF*) am Zeilenende');
+  B := Buf(['begin', '  Foo; { kein Dollar }', '  X := 42;', 'end;']);
+  AssertAccepted(TargetIn(B, 3, 8), False, 2, 'Kommentar ohne Direktive');
+end;
+
+// Hinter dem Schliesser eines mehrzeiligen Strings kann auf derselben
+// Zeile ein neuer beginnen (''' + '''): die Zeilen danach sind wieder
+// String, keine Code-Zeilen (Pruefer 2026-10-14, c; vorher galt 'SELECT
+// 42' als Code, und die Deklaration landete im zweiten String).
+procedure TTestRdxIntroContext.MultiLineString_ReopenedAfterCloser;
+var
+  B : string;
+begin
+  B := Buf(['procedure P;', 'begin', '  S := ' + Q(3), '    a',
+    '    ' + Q(3) + ' + ' + Q(3), '    SELECT 42', '    ' + Q(3) + ';',
+    '  X := 42;', 'end;']);
+  // Zeile 6, die 42 in Spalte 12: im zweiten String.
+  AssertRefusedWith(TargetIn(B, 6, 12), 'mehrzeiligen String',
+    'Zeile im wieder geoeffneten String');
+  // Zeile 8, die 42 in Spalte 8: hinter dem zweiten Schliesser; die Zeile
+  // darueber ist der Schliesser mit ';'.
+  AssertAccepted(TargetIn(B, 8, 8), False, 7, 'hinter dem zweiten String');
+  // Schliesser mit Code dahinter als Zeile darueber: nur der Code zaehlt.
+  B := Buf(['begin', '  S := ' + Q(3), '    a', '    ' + Q(3) + ' + B;',
+    '  X := 42;', 'end;']);
+  AssertAccepted(TargetIn(B, 5, 8), False, 4, 'Schliesser mit Code dahinter');
+  B := Buf(['begin', '  if S = ' + Q(3), '    a', '    ' + Q(3) + ' then',
+    '    X := 42;', 'end;']);
+  AssertAccepted(TargetIn(B, 5, 10), True, 4,
+    'Schliesser mit then dahinter: Zweig');
+end;
+
+// Kommentar- und String-Zustand laufen in EINEM Lauf (Pruefer 2026-10-14,
+// Minor zu c): ein ''' am Ende einer Zeile in einem Kommentarblock oeffnet
+// keinen String, und ein '{' oder '(*' in einer Inhaltszeile eines
+// Strings oeffnet keinen Kommentar.
+procedure TTestRdxIntroContext.CommentAndStringStates_Combined;
+var
+  B : string;
+begin
+  B := Buf(['begin', '  { Beispiel:', '    S := ' + Q(3), '  }', '  X := 42;',
+    'end;']);
+  // Zeile 5, die 42 in Spalte 8: kein String offen, Zeile darueber 'begin'.
+  AssertAccepted(TargetIn(B, 5, 8), False, 1, 'Oeffner im Kommentarblock');
+  B := Buf(['begin', '  (* Beispiel:', '    S := ' + Q(3), '  *)', '  X := 42;',
+    'end;']);
+  AssertAccepted(TargetIn(B, 5, 8), False, 1, 'Oeffner im (*-Kommentarblock');
+  B := Buf(['begin', '  S := ' + Q(3), '    { kein Kommentar', '    (* auch nicht',
+    '    ' + Q(3) + ';', '  X := 42;', 'end;']);
+  // Zeile 6, die 42 in Spalte 8: die Klammern im String vergiften die
+  // Zeilen danach nicht; Zeile darueber ist der Schliesser.
+  AssertAccepted(TargetIn(B, 6, 8), False, 5, 'Klammern im String');
+  Assert.AreEqual<Integer>(5, PrevCodeRow(TextIn(B), 6),
+    'PrevCodeRow: der Schliesser ist die Code-Zeile darueber');
+  // Ein Oeffner hinter dem Ende eines Kommentarblocks zaehlt.
+  B := Buf(['begin', '  { x', '  } S := ' + Q(3), '    SELECT 42', '    ' + Q(3) + ';',
+    'end;']);
+  AssertRefusedWith(TargetIn(B, 4, 12), 'mehrzeiligen String',
+    'Oeffner hinter dem Kommentarende');
+end;
+
+// Die asm-Sprungmarke '@end:' ist kein 'end' - der Block bleibt offen
+// (Pruefer 2026-10-14, d; TokensOf trennte das '@' ab, und 'end' beendete
+// den asm-Zustand).
+procedure TTestRdxIntroContext.AsmLabel_DoesNotEndAsm;
+var
+  B : string;
+begin
+  B := Buf(['procedure P;', 'asm', '@end:', '  mov eax, 5', '@@loop:',
+    '  mov edx, 1', 'end;', '', 'procedure Q;', 'begin', '  X := 42;', 'end;']);
+  // Zeile 4, die 5 in Spalte 12; Zeile 6, die 1 in Spalte 12.
+  AssertRefusedWith(TargetIn(B, 4, 12), 'asm-Block', 'hinter @end:');
+  AssertRefusedWith(TargetIn(B, 6, 12), 'asm-Block', 'hinter @@loop:');
+  // Zeile 11, die 42 in Spalte 8.
+  AssertAccepted(TargetIn(B, 11, 8), False, 10, 'hinter dem asm-Block');
 end;
 
 // Eingefuegte Zeilen bekommen das Zeilenende der Zeile, vor die sie
