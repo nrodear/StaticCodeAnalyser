@@ -116,7 +116,8 @@ uses
   uRdxLineFixes,     // SCA082, SCA071, SCA088
   uRdxRaiseFixes,    // SCA020, SCA120, SCA122
   uRdxDeclFixes,     // SCA117, SCA197, SCA149
-  uRdxFlowFixes;     // SCA098, SCA080, SCA047
+  uRdxFlowFixes,     // SCA098, SCA080, SCA047
+  uRdxRoutineFixes;  // SCA164, SCA147
 
 const
   // Hinweise der Hilfen (deutsch wie die Gruende; Pruefstand und Tests
@@ -156,6 +157,15 @@ const
   R_JUMP_HINT = 'gleiche Bedeutung - der Ablauf verlaesst den Block ohnehin';
   R_SELF_HINT = 'die Zuweisung bewirkt nichts - war ein anderer Wert gemeint '
     + '(Tippfehler), fehlt er weiterhin';
+  R_ROUTINE_HINT = 'gleiche Bedeutung - der Name steht sonst nirgends im '
+    + 'Code der Datei; Kommentar und Leerzeile darueber gehen mit';
+  R_METHOD_HINT  = 'gleiche Bedeutung - Deklaration und Implementierung '
+    + 'gehen, der Name steht sonst nirgends im Code der Datei';
+  R_NO_FILE_OPEN = 'keine Datei geoeffnet';
+  R_FORM_UNREADABLE = 'Formdatei %s nicht lesbar (%s) - eine Ereignis-'
+    + 'Bindung ist nicht auszuschliessen';
+  // SCA147: Formdateien, die eine Methode per Name an ein Ereignis binden.
+  FORM_EXTENSIONS: array[0..2] of string = ('.dfm', '.fmx', '.lfm');
   R_NO_FINDING = 'kein Fund';
   R_NO_ROW     = 'keine einfache Hilfe fuer diese Regel';
   // Entscheid E2: eine Hilfe, die das Verhalten aendern kann, sagt es.
@@ -405,15 +415,97 @@ begin
     SelfAssignPlanReason);
 end;
 
+// SCA164, SCA147 (Charge H3b): der Planer auf der Code-Sicht, alle
+// Ersetzungen (Deklaration und Implementierung bzw. forward und Rumpf) in
+// EINEM Undo-Schritt. Name: die Routine bzw. Methode (Menuetext).
+function RoutineFix(ALines: TStrings; AFinding: TLeakFinding;
+  APlan: TRdxRoutinePlanner): TRdxFixOutcome;
+var
+  Map  : TRdxCodeMap;
+  Plan : TRdxRoutinePlan;
+begin
+  Result := Default(TRdxFixOutcome);
+  if not Assigned(ALines) then
+  begin
+    Result.Reason := R_NO_FILE_OPEN;
+    Exit;
+  end;
+  Map := TRdxCodeMap.Create(ALines);
+  try
+    Result.Enabled := APlan(Map, AFinding.LineInt, AFinding.Message, Plan,
+      Result.Reason);
+  finally
+    Map.Free;
+  end;
+  Result.Name := Plan.Name;
+  if Result.Enabled then
+    Result.Edits := Plan.Edits;
+end;
+
+function PlanUnusedRoutine(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := RoutineFix(ALines, AFinding, TRdxRoutineFixes.UnusedRoutine);
+end;
+
+// SCA147: bindet die Formdatei neben der Unit (.dfm/.fmx/.lfm) die Methode
+// per Name an ein Ereignis ('OnClick = AName')? Die Hilfe sieht sonst nur
+// den Puffer; der Detektor prueft nur .dfm (und .lfm im FPC-Dialekt).
+// Gelesen wird die Platte - ein im Designer neu gesetztes Ereignis traegt
+// die IDE in den published-Teil ein, nicht unter private. '' oder Grund.
+function FormReason(const AUnitFile, AName: string): string;
+var
+  Ext, Form : string;
+  SL        : TStringList;
+begin
+  Result := '';
+  if AUnitFile = '' then Exit;
+  for Ext in FORM_EXTENSIONS do
+  begin
+    Form := ChangeFileExt(AUnitFile, Ext);
+    if not FileExists(Form) then Continue;
+    SL := TStringList.Create;
+    try
+      // Oeffnen/Lesen (EStreamError: EFOpenError, EReadError) und die
+      // Kodierung (EEncodingError) - alles andere ist kein Lesefehler.
+      try
+        SL.LoadFromFile(Form);
+      except
+        on E: EStreamError do
+          Exit(Format(R_FORM_UNREADABLE, [ExtractFileName(Form), E.Message]));
+        on E: EEncodingError do
+          Exit(Format(R_FORM_UNREADABLE, [ExtractFileName(Form), E.Message]));
+      end;
+      if TRdxRoutineFixes.FormNamesMethod(SL.Text, AName) then
+        Exit(Format('die Formdatei %s nennt %s - per Name an ein Ereignis '
+          + 'gebunden', [ExtractFileName(Form), AName]));
+    finally
+      SL.Free;
+    end;
+  end;
+end;
+
+function PlanUnusedPrivateMethod(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := RoutineFix(ALines, AFinding,
+    TRdxRoutineFixes.UnusedPrivateMethod);
+  if not Result.Enabled then Exit;
+  Result.Reason := FormReason(AFinding.FileName, Result.Name);
+  if Result.Reason = '' then Exit;
+  Result.Enabled := False;
+  Result.Edits := nil;
+end;
+
 { ---- Die Tabelle ---- }
 
 const
-  FIX_ROW_HIGH = 25;
+  FIX_ROW_HIGH = 27;
 
   // Je Art eine Zeile; die Reihenfolge ist die der Chargen (Stufe 2a,
   // Stufe 2 Rest, uQuickFix-Umzug/Stufe 3, Zeilen, Ausnahmen, Deklarationen
-  // H1, Anweisungen H2). Der Menuetext steht unter demselben Index in
-  // FIX_CAPTIONS (s. Kopf).
+  // H1, Anweisungen H2, Routinen H3b). Der Menuetext steht unter demselben
+  // Index in FIX_CAPTIONS (s. Kopf).
   FIX_ROWS: array[0..FIX_ROW_HIGH] of TRdxFixRow = (
     (Kind: fkExplicitTObjectInheritance; Plan: PlanExplicitTObject;
      Hint: R_TOBJECT_HINT; HintByPlanner: False; Changes: False; Alt: nil),
@@ -470,13 +562,17 @@ const
     (Kind: fkRedundantJump; Plan: PlanRedundantJump;
      Hint: R_JUMP_HINT; HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkSelfAssignment; Plan: PlanSelfAssignment;
-     Hint: R_SELF_HINT; HintByPlanner: False; Changes: False; Alt: nil)
+     Hint: R_SELF_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkUnusedRoutine; Plan: PlanUnusedRoutine;
+     Hint: R_ROUTINE_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkUnusedPrivateMethod; Plan: PlanUnusedPrivateMethod;
+     Hint: R_METHOD_HINT; HintByPlanner: False; Changes: False; Alt: nil)
   );
 
   // Menuetexte (msgids) unter dem Index der Zeile; '%s' = Name der Hilfe
   // (X bei SCA085/SCA139, die Unit bei SCA007, der Cast-Typ bei SCA123, die
   // Direktive bei SCA149, das Ziel bzw. Exit/Continue bei SCA098/SCA047/
-  // SCA080).
+  // SCA080, die Routine bzw. Methode bei SCA164/SCA147).
   FIX_CAPTIONS: array[0..FIX_ROW_HIGH] of string = (
     'Remove (TObject) from the class declaration',
     'Use FreeAndNil(%s)',
@@ -503,7 +599,9 @@ const
     'Add "%s;" to the declaration',
     'Assign the condition to %s directly',
     'Remove the redundant %s',
-    'Remove the self-assignment of %s'
+    'Remove the self-assignment of %s',
+    'Delete unused routine ''%s''',
+    'Delete unused private method ''%s'''
   );
 
   // Menuetexte des zweiten Eintrags (Alt), '' ohne.
@@ -512,7 +610,7 @@ const
     'Add an else branch that raises an exception',
     '', '', '', '', '', '',
     'Raise ENotImplemented in the empty body',
-    '', '', '', '', '', '', '', ''
+    '', '', '', '', '', '', '', '', '', ''
   );
 
 var

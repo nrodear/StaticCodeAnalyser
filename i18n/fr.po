@@ -2342,6 +2342,12 @@ msgstr "Supprimer le %s superflu"
 msgid "Remove the self-assignment of %s"
 msgstr "Supprimer l'auto-affectation de %s"
 
+msgid "Delete unused routine '%s'"
+msgstr "Supprimer la routine inutilisée '%s'"
+
+msgid "Delete unused private method '%s'"
+msgstr "Supprimer la méthode privée inutilisée '%s'"
+
 msgid "(changes behavior)"
 msgstr "(modifie le comportement)"
 

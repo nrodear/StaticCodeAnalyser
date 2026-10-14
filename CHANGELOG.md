@@ -8,6 +8,10 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **reDelphix: quick-fix "Delete unused routine 'X'" for SCA164 (UnusedRoutine)** - deletes the free routine from its header to its `end;` together with nested routines, the comment/`///`/attribute lines directly above, one blank line and a `forward` declaration; offered only when the name occurs nowhere else as code in the file (inactive `{$IFDEF}` branches included), in no string literal and no directive, and refused for overloads, `export`/`public`/`external`, `{$L}`, `{$I}` in the implementation section and switch directives in the range (reference corpus: offered for 897 of 1,090 findings).
+- **reDelphix: quick-fix "Delete unused private method 'X'" for SCA147 (UnusedPrivateMethod)** - deletes the declaration (with its `///` doc) and the implementation; refused outside `private`, for virtual/override/message/overload methods, attributes, `{$RTTI}`, interfaces declared in another unit, a sibling `.dfm`/`.fmx`/`.lfm` naming the method and any other use (reference corpus: offered for 103 of 110 findings).
+
 ### Changed
 - **reDelphix: the SCA126/SCA084 editor helps (`X = nil` -> `not Assigned(X)`) now accept classes and interfaces of the Delphi RTL/VCL/FMX/Data sources as proven types** (generated list `uRdxRtlTypes.inc`, `tools/gen-rtl-types.py`, decision E27; `var X: TBitmap = nil` is no longer misread as a declaration of `TBitmap`); a customer type from another unit still gets no help, since a function type there would be called by `= nil` but not by `Assigned()`.
 - **CLI: a relative `[Baseline] File=` is resolved against the project

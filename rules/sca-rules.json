@@ -2957,6 +2957,7 @@
       "type": "Code Smell",
       "tags": ["dead-code", "maintainability", "sonar50"],
       "detectorUnit": "uUnusedPrivateMethod.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "TFoo = class\nprivate\n  procedure HelperA;            // <- never called\npublic\n  procedure DoStuff;\nend;",
         "good": "TFoo = class\npublic\n  procedure DoStuff;\nend;\n// or call HelperA from DoStuff to make the dependency explicit"
@@ -3321,6 +3322,7 @@
       "type": "Code Smell",
       "tags": ["dead-code", "maintainability", "sonardelphi"],
       "detectorUnit": "uUnusedRoutine.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "implementation\nprocedure InternalHelper;     // never called\nbegin\n  WriteLn('hi');\nend;\nend.",
         "good": "implementation\n// remove InternalHelper, or call it from somewhere,\n// or move it to interface if it should be exported"
