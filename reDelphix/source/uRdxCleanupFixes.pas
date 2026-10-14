@@ -52,6 +52,10 @@ type
     Col  : Integer;
   end;
 
+  // Die Planer der Charge H3a (s. Kopf): je Fund EINE Ersetzung oder der
+  // Grund, warum keine - auf dem Puffertext ueber die Code-Sicht, ohne
+  // ToolsAPI und Parser (laeuft auch im FPC-Pruefstand). Der Aufrufer ist
+  // die Tabelle uRdxFixTable (MapFix).
   TRdxCleanupFixes = class
   public
     // SCA070: die Region der Meldung ('Comment at column C ...' bzw.
@@ -93,6 +97,7 @@ type
     class function UnusedVarName(const AMessage: string): string; static;
   end;
 
+// Die Stelle (ALine, ACol) als TRdxTextPos.
 function TextPos(ALine, ACol: Integer): TRdxTextPos;
 
 // Gemeinsamer Baustein (Charge H3, "loeschen und aufraeumen"): den Text von
@@ -149,12 +154,6 @@ const
   // Abschnitte eines Deklarationsteils.
   SECTION_WORDS: array[0..5] of string = ('var', 'const', 'type',
     'resourcestring', 'label', 'threadvar');
-  ROUTINE_WORDS: array[0..4] of string = ('procedure', 'function',
-    'constructor', 'destructor', 'operator');
-  // Davor steht ein Routinenkopf - nicht ein prozeduraler Typ ('= procedure',
-  // ': function') oder eine anonyme Methode (':= procedure').
-  HEADER_PREV: array[0..3] of string = (';', 'class', 'implementation',
-    'interface');
   UNIT_BOUNDS: array[0..4] of string = ('implementation', 'interface',
     'program', 'library', 'unit');
   // Rueckwaerts: Paare mit 'end' bzw. 'until'.
@@ -248,11 +247,6 @@ begin
   Result := TextPos(T.Line, T.EndCol);
 end;
 
-function SameTok(const A, B: TRdxToken): Boolean;
-begin
-  Result := (A.Line = B.Line) and (A.Col = B.Col);
-end;
-
 // T liegt hinter ATo.
 function TokAfter(const T, ATo: TRdxToken): Boolean;
 begin
@@ -297,14 +291,16 @@ end;
 
 { ---- CutEdit: loeschen und aufraeumen ---- }
 
-// Die ganzen Zeilen AFirst..ALast samt Zeilenende loeschen. Ein Bereich
+// Die ganzen Zeilen AFirst..ALast samt Zeilenende loeschen (bis Charge
+// H3c LinesEdit - gleich benannt wie die Ersetzung ganzer Zeilen in
+// uRdxRoutineFixes, mit anderem Vertrag; Minor 5). Ein Bereich
 // beginnt auf einem Zeichen (SpanFits: weder hinter einem Zeilenende noch
 // auf einer leeren Zeile). Ist AFirst leer oder steht hinter ALast (letzte
 // Zeile der Datei) kein Zeilenende, beginnt er deshalb AUF dem letzten
 // Zeichen der naechsten nicht leeren Zeile P davor, das neu geschrieben
 // wird - samt den Zeilenenden der Leerzeilen zwischen P und AFirst, die
 // bleiben. '' oder der Grund.
-function LinesEdit(AMap: TRdxCodeMap; AFirst, ALast: Integer;
+function LinesCut(AMap: TRdxCodeMap; AFirst, ALast: Integer;
   const ARole: string; out AEdit: TRdxEdit): string;
 var
   P : Integer;
@@ -423,9 +419,9 @@ begin
   TailBlank := SkipBlanks(AMap.Raw(ATo.Line), ATo.Col)
     > Length(AMap.Raw(ATo.Line));
   if LeadBlank and (ATo.Col = 1) then
-    Result := LinesEdit(AMap, AFrom.Line, ATo.Line - 1, ARole, AEdit)
+    Result := LinesCut(AMap, AFrom.Line, ATo.Line - 1, ARole, AEdit)
   else if LeadBlank and TailBlank then
-    Result := LinesEdit(AMap, AFrom.Line, ATo.Line, ARole, AEdit)
+    Result := LinesCut(AMap, AFrom.Line, ATo.Line, ARole, AEdit)
   else if LeadBlank then
     AEdit := IndentCut(AMap, AFrom, ATo, ARole)
   else if TailBlank then
@@ -792,14 +788,14 @@ class function TRdxCleanupFixes.CommentedOutCode(AMap: TRdxCodeMap;
   ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
-  Region         : TRdxRegion;
-  List           : TRdxCommentList;
-  CutFrom, CutTo : TRdxTextPos;
+  Region            : TRdxRegion;
+  List              : TRdxCommentList;
+  CutStart, CutStop : TRdxTextPos;
 begin
   AEdit := Default(TRdxEdit);
   List := nil;
-  CutFrom := TextPos(0, 0);
-  CutTo := TextPos(0, 0);
+  CutStart := TextPos(0, 0);
+  CutStop := TextPos(0, 0);
   if not RegionOf(AMessage, ALine, Region) then
     AReason := 'Spalte oder Zeilenzahl fehlt in der Meldung'
   else
@@ -809,11 +805,12 @@ begin
   if AReason = '' then
     AReason := CommentReason(AMap, Region, List);
   if AReason = '' then
-    AReason := CommentCut(AMap, Region, List, CutFrom, CutTo);
+    AReason := CommentCut(AMap, Region, List, CutStart, CutStop);
   if AReason = '' then
-    AReason := MarkerReason(RangeText(AMap, SpanOf(CutFrom, CutTo, SPAN_070)));
+    AReason := MarkerReason(RangeText(AMap, SpanOf(CutStart, CutStop,
+      SPAN_070)));
   if AReason = '' then
-    AReason := CutEdit(AMap, CutFrom, CutTo, SPAN_070, AEdit);
+    AReason := CutEdit(AMap, CutStart, CutStop, SPAN_070, AEdit);
   Result := AReason = '';
 end;
 
@@ -830,14 +827,6 @@ begin
   if Q = 0 then
     Q := Length(AMessage) + 1;
   Result := Trim(Copy(AMessage, Length(KEY_VAR) + 1, Q - Length(KEY_VAR) - 1));
-end;
-
-// Steht an T ein Routinenkopf (kein prozeduraler Typ, keine anonyme
-// Methode)?
-function IsHeader(const T, APrev: TRdxToken): Boolean;
-begin
-  Result := InList(T.Low, ROUTINE_WORDS)
-    and ((APrev.Low = '') or InList(APrev.Low, HEADER_PREV));
 end;
 
 // Liest NameOn das Token T noch (auf ALine oder einer Fortsetzungszeile:
@@ -1003,7 +992,7 @@ begin
     Result := True
   else if ADepth = 0 then
     Result := InList(T.Low, SECTION_WORDS) or InList(T.Low, UNIT_BOUNDS)
-      or IsHeader(T, APrev);
+      or IsRoutineHeadAfter(T, APrev);
 end;
 
 // Das Wort, das die Section um AFirst eroeffnet (var, const, ...) -
@@ -1042,7 +1031,7 @@ begin
     Exit
   else if InList(T.Low, LIST_OPENERS) then
     Result := rsFound
-  else if InList(T.Low, BLOCK_PAIRS) or IsHeader(T, APrev)
+  else if InList(T.Low, BLOCK_PAIRS) or IsRoutineHeadAfter(T, APrev)
      or InList(T.Low, UNIT_BOUNDS) then
     Result := rsStop;
 end;
@@ -1489,14 +1478,14 @@ class function TRdxCleanupFixes.UnusedLocalVar(AMap: TRdxCodeMap;
   ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
-  Key            : string;
-  Decl           : TRdxVarDecl;
-  CutFrom, CutTo : TRdxTextPos;
+  Key               : string;
+  Decl              : TRdxVarDecl;
+  CutStart, CutStop : TRdxTextPos;
 begin
   AEdit := Default(TRdxEdit);
   Decl := Default(TRdxVarDecl);
-  CutFrom := TextPos(0, 0);
-  CutTo := TextPos(0, 0);
+  CutStart := TextPos(0, 0);
+  CutStop := TextPos(0, 0);
   Key := LowerCase(UnusedVarName(AMessage));
   if Key = '' then
     AReason := 'Variablenname fehlt in der Meldung'
@@ -1510,12 +1499,12 @@ begin
   if AReason = '' then
     AReason := ManagedRecordReason(AMap);
   if AReason = '' then
-    AReason := VarCut(AMap, Decl, CutFrom, CutTo);
+    AReason := VarCut(AMap, Decl, CutStart, CutStop);
   if AReason = '' then
-    AReason := CutReason(AMap, Decl, CutFrom, CutTo);
+    AReason := CutReason(AMap, Decl, CutStart, CutStop);
   if AReason = '' then
-    AReason := CutEdit(AMap, CutFrom, WithTrailingComment(AMap, CutFrom,
-      CutTo), SPAN_053, AEdit);
+    AReason := CutEdit(AMap, CutStart, WithTrailingComment(AMap, CutStart,
+      CutStop), SPAN_053, AEdit);
   Result := AReason = '';
 end;
 

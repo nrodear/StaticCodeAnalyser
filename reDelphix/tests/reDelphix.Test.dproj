@@ -128,6 +128,7 @@
         <DCCReference Include="uTestRdxNilFix.pas"/>
         <DCCReference Include="uTestRdxSimpleFixesDetector.pas"/>
         <DCCReference Include="uTestRdxRoutineFixesDetector.pas"/>
+        <DCCReference Include="uTestRdxDetectorKit.pas"/>
         <DCCReference Include="uTestRdxCodeMap.pas"/>
         <DCCReference Include="uTestRdxQualifyUses.pas"/>
         <DCCReference Include="uTestRdxFixTable.pas"/>

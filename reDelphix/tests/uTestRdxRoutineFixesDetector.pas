@@ -32,181 +32,47 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uParser2, uMethodd12, uSCAConsts, uRuleCatalog,
+  System.SysUtils, System.Generics.Collections,
+  uAstNode, uMethodd12, uSCAConsts, uRuleCatalog,
   uUnusedRoutine, uUnusedPrivateMethod, uEmptyVisibilitySection,
-  uEngineApi, uRdxBufferMath, uRdxRecipeRunner, uRdxFixTable;
+  uRdxRecipeRunner,      // TRdxFixOutcome
+  uTestRdxDetectorKit;   // TSeen, Join, Detect-/Plan-/Apply-Helfer (Charge H3c)
 
-type
-  // Was die Hilfe aus einem Fund liest - wie der Anbieter aus TLeakFinding.
-  TSeen = record
-    Line : Integer;
-    Msg  : string;
-  end;
+// ---- Helfer (die gemeinsamen seit Charge H3c in uTestRdxDetectorKit) ----
 
-// ---- Helfer ----
-
-function Join(const ALines: array of string): string;
+// Der Verteiler fuer den echten Detektor der Art AKind (TDetectorRun).
+procedure RunDetector(AKind: TFindingKind; Root: TAstNode;
+  const Path: string; Results: TObjectList<TLeakFinding>);
 begin
-  Result := string.Join(#13#10, ALines);
-end;
-
-function TempName(const AExt: string): string;
-begin
-  Result := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
-    + 'rdx_routine_' + GUIDToString(TGUID.NewGuid) + AExt;
-end;
-
-procedure WriteText(const APath, AText: string);
-var
-  SL : TStringList;
-begin
-  SL := TStringList.Create;
-  try
-    SL.Text := AText;
-    SL.SaveToFile(APath);
-  finally
-    SL.Free;
+  case AKind of
+    fkUnusedRoutine:
+      TUnusedRoutineDetector.AnalyzeUnit(Root, Path, Results);
+    fkUnusedPrivateMethod:
+      TUnusedPrivateMethodDetector.AnalyzeUnit(Root, Path, Results);
+    fkEmptyVisibilitySection:
+      TEmptyVisibilitySectionDetector.AnalyzeUnit(Root, Path, Results);
+  else
+    Assert.Fail('kein Detektor fuer diese Art');
   end;
 end;
 
-// Funde der Art AKind in der Datei APath - der echte Detektor auf dem
-// echten AST.
-function DetectFile(const APath: string; AKind: TFindingKind): TArray<TSeen>;
-var
-  Parser  : TParser2;
-  Root    : TAstNode;
-  Results : TObjectList<TLeakFinding>;
-  F       : TLeakFinding;
-  n       : Integer;
-begin
-  Result := nil;
-  Results := TObjectList<TLeakFinding>.Create(True);
-  try
-    Parser := TParser2.Create;
-    try
-      Root := Parser.ParseFile(APath);
-      try
-        case AKind of
-          fkUnusedRoutine:
-            TUnusedRoutineDetector.AnalyzeUnit(Root, APath, Results);
-          fkUnusedPrivateMethod:
-            TUnusedPrivateMethodDetector.AnalyzeUnit(Root, APath, Results);
-          fkEmptyVisibilitySection:
-            TEmptyVisibilitySectionDetector.AnalyzeUnit(Root, APath, Results);
-        else
-          Assert.Fail('kein Detektor fuer diese Art');
-        end;
-      finally
-        Root.Free;
-      end;
-    finally
-      Parser.Free;
-    end;
-    SetLength(Result, Results.Count);
-    n := 0;
-    for F in Results do
-      if F.Kind = AKind then
-      begin
-        Result[n].Line := F.LineInt;
-        Result[n].Msg := F.Message;
-        Inc(n);
-      end;
-    SetLength(Result, n);
-  finally
-    Results.Free;
-  end;
-end;
-
+// Funde der Art AKind - der echte Detektor auf dem echten AST.
 function Detect(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
-var
-  Path : string;
 begin
-  Path := TempName('.pas');
-  WriteText(Path, ASource);
-  try
-    Result := DetectFile(Path, AKind);
-  finally
-    DeleteFile(Path);
-  end;
+  Result := DetectSource('rdx_routine_', ASource, AKind, RunDetector);
 end;
 
-// Die Hilfe fuer EINEN Fund ueber den Einstieg des Anbieters; AFile ist der
-// Dateiname des Funds (die Formdatei-Pruefung von SCA147 liest daneben).
-function PlanFix(const ASource, AFile: string; AKind: TFindingKind;
-  const ASeen: TSeen): TRdxFixOutcome;
-var
-  SL      : TStringList;
-  Places  : TSourcePlaces;
-  Finding : TLeakFinding;
-begin
-  Assert.IsTrue(TRdxFixTable.Handles(AKind), 'FixFor kennt die Art');
-  SL := TStringList.Create;
-  Places := TSourcePlaces.Create;
-  Finding := TLeakFinding.New(AFile, '', ASeen.Line, ASeen.Msg, AKind);
-  try
-    SL.Text := ASource;
-    Assert.IsTrue(Places.OpenSource(AFile, ASource), 'OpenSource');
-    Result := TRdxFixTable.FixFor(Places, SL, Finding,
-      TRdxRecipeRunner.UsesNamesOf(Places));
-  finally
-    Finding.Free;
-    Places.Free;
-    SL.Free;
-  end;
-end;
-
-function Apply(const ASource: string; const AEdits: TArray<TRdxEdit>): string;
-var
-  Bytes : TBytes;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-begin
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, AEdits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
-end;
-
-// Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt.
+// Fund fuer Fund, bis der Detektor schweigt (uTestRdxDetectorKit).
 function FixAll(const ASource: string; AKind: TFindingKind): string;
-const
-  MAX_PASSES = 10;
-var
-  Seen : TArray<TSeen>;
-  O    : TRdxFixOutcome;
-  Pass : Integer;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    Seen := Detect(Result, AKind);
-    if Length(Seen) = 0 then Exit;
-    O := PlanFix(Result, 't.pas', AKind, Seen[0]);
-    Assert.IsTrue(O.Enabled, Format('Zeile %d: %s', [Seen[0].Line, O.Reason]));
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail(Format('der Detektor meldet nach %d Runden noch', [MAX_PASSES]));
+  Result := FixAllWith(ASource, AKind, Detect);
 end;
 
 // Der erste Fund muss abgelehnt werden, mit AReasonPart im Grund.
 procedure AssertNoHelp(const ASource: string; AKind: TFindingKind;
   const AReasonPart: string);
-var
-  Seen : TArray<TSeen>;
-  O    : TRdxFixOutcome;
 begin
-  Seen := Detect(ASource, AKind);
-  Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet');
-  O := PlanFix(ASource, 't.pas', AKind, Seen[0]);
-  Assert.IsFalse(O.Enabled, 'keine Hilfe');
-  Assert.IsTrue(Pos(AReasonPart, O.Reason) > 0, O.Reason);
-end;
-
-function Snip(const AExample: string): string;
-begin
-  Result := StringReplace(AExample, #13#10, #10, [rfReplaceAll]);
-  Result := StringReplace(Result, #10, #13#10, [rfReplaceAll]);
+  AssertNoHelpWith(ASource, AKind, AReasonPart, Detect);
 end;
 
 // ---- SCA164 ----
@@ -238,7 +104,7 @@ begin
   Assert.IsTrue(Pos('remove InternalHelper', Meta.GoodExample) > 0,
     Meta.GoodExample);
   Assert.AreEqual(Join(['unit t;', 'interface', 'implementation', 'end.']),
-    FixAll(Join(['unit t;', 'interface', Snip(Meta.BadExample)]),
+    FixAll(Join(['unit t;', 'interface', CatalogText(Meta.BadExample)]),
     fkUnusedRoutine));
 end;
 
@@ -286,13 +152,13 @@ begin
   // bleibt der leere private-Abschnitt - SCA087 meldet ihn, und dessen
   // Hilfe fuehrt genau zu 'good' (ohne die Zeile mit dem Rat in Worten).
   Meta := TRuleCatalog.GetRuleCanonical(fkUnusedPrivateMethod);
-  Res := FixAll(Join(['unit t;', 'interface', 'type', Snip(Meta.BadExample),
-    'implementation', 'procedure TFoo.HelperA;', 'begin', 'end;', '',
-    'procedure TFoo.DoStuff;', 'begin', 'end;', 'end.']),
+  Res := FixAll(Join(['unit t;', 'interface', 'type',
+    CatalogText(Meta.BadExample), 'implementation', 'procedure TFoo.HelperA;',
+    'begin', 'end;', '', 'procedure TFoo.DoStuff;', 'begin', 'end;', 'end.']),
     fkUnusedPrivateMethod);
   Assert.AreEqual<Integer>(1, Length(Detect(Res, fkEmptyVisibilitySection)),
     'SCA087 meldet den leeren Abschnitt');
-  Good := Snip(Meta.GoodExample);
+  Good := CatalogText(Meta.GoodExample);
   Good := Copy(Good, 1, Pos('end;', Good) + Length('end;') - 1);
   Assert.AreEqual(Join(['unit t;', 'interface', 'type', Good,
     'implementation', 'procedure TFoo.DoStuff;', 'begin', 'end;', 'end.']),
@@ -321,18 +187,18 @@ begin
     '  private', '    procedure FormShow(Sender: TObject);', '  end;',
     'implementation', 'procedure TForm1.FormShow(Sender: TObject);', 'begin',
     'end;', 'end.']);
-  Pas := TempName('.pas');
+  Pas := TempName('rdx_routine_', '.pas');
   Fmx := ChangeFileExt(Pas, '.fmx');
   WriteText(Pas, Src);
   WriteText(Fmx, Join(['object Form1: TForm1', '  OnShow = FormShow', 'end']));
   try
-    Seen := DetectFile(Pas, fkUnusedPrivateMethod);
+    Seen := DetectFile(Pas, fkUnusedPrivateMethod, RunDetector);
     Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet');
-    O := PlanFix(Src, Pas, fkUnusedPrivateMethod, Seen[0]);
+    O := PlanFixIn(Src, Pas, fkUnusedPrivateMethod, Seen[0]);
     Assert.IsFalse(O.Enabled, 'keine Hilfe');
     Assert.IsTrue(Pos('Formdatei', O.Reason) > 0, O.Reason);
     // Ohne Formdatei hilft sie.
-    O := PlanFix(Src, 't.pas', fkUnusedPrivateMethod, Seen[0]);
+    O := PlanFixIn(Src, 't.pas', fkUnusedPrivateMethod, Seen[0]);
     Assert.IsTrue(O.Enabled, O.Reason);
   finally
     DeleteFile(Fmx);

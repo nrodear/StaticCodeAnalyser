@@ -35,6 +35,12 @@ const
     'finalization');
   // Das Wort einer Include-Direktive ('{$I datei}', '{$INCLUDE datei}').
   INCLUDE_WORDS: array[0..1] of string = ('i', 'include');
+  // Damit beginnt der Kopf einer Routine (bis Charge H3c je eine Kopie in
+  // uRdxCleanupFixes, uRdxRoutineFixes und uRdxRaiseFixes; Gegen-Review H3,
+  // Major 2). uRdxDeclFixes.HEADER_WORDS nimmt 'property' dazu - dort
+  // beginnt eine Member-Signatur, kein Routinenkopf.
+  ROUTINE_WORDS: array[0..4] of string = ('procedure', 'function',
+    'constructor', 'destructor', 'operator');
 
 type
   // Zeichenklassen einer Datei, spaltentreu: 'c' Code, 's' String-Literal,
@@ -224,6 +230,22 @@ function HasAsciiWord(const AText, AWord: string): Boolean;
 // beide sich sonst gegenseitig einbanden.
 function MarkerReason(const AText: string): string;
 
+// Dieselbe Stelle (Zeile und Spalte)? Bis Charge H3c je eine Kopie in
+// uRdxFlowFixes, uRdxCleanupFixes und uRdxRoutineFixes.
+function SameTok(const A, B: TRdxToken): Boolean;
+// Beginnt an T ein Routinenkopf? Ein Wort aus ROUTINE_WORDS als
+// Schluesselwort, davor (APrev) nichts aus NOT_HEAD_AFTER - kein Typ einer
+// Variablen, eines Parameters oder eines Typs (':', '='), keine anonyme
+// Methode (':=', '(', ','), kein 'reference to', kein 'array of
+// procedure', kein Attribut-Inhalt ('['). Die eine Kopferkennung der
+// Planer: bis Charge H3c stand sie als IsHeadAt in uRdxRoutineFixes und
+// als IsHeader mit einer Positivliste der Vorgaenger (';', 'class',
+// 'implementation', 'interface') in uRdxCleanupFixes (Gegen-Review H3,
+// Major 2; im Korpus-Harness ohne Unterschied).
+function IsRoutineHeadAfter(const T, APrev: TRdxToken): Boolean;
+// Dasselbe mit dem Token davor aus der Code-Sicht.
+function IsRoutineHead(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
+
 // ---- Geteilte Laeufe der Planer (Charge R8, 2026-10-14: bis dahin je
 // Planer eine Kopie - Klammerabgleich 4x, "genau ein Token" 7x, end-Bilanz
 // 3x). ----
@@ -280,6 +302,11 @@ uses
   System.SysUtils;   // CharInSet, LowerCase, Format
 
 const
+  // Davor beginnt ein Routinenwort KEINEN Kopf: Typ einer Variablen oder
+  // eines Parameters, Typdeklaration, anonyme Methode, 'reference to',
+  // 'array of procedure' (IsRoutineHeadAfter).
+  NOT_HEAD_AFTER: array[0..7] of string = (':', '=', 'to', '(', ',', ':=',
+    'of', '[');
   // Absichtsmarker wie bei SCA019 (uTodoComment) - die drei hier in jeder
   // Schreibweise, MARKER_XXX nur gross; ein Unterdrueck-Marker wirkt auf
   // andere Funde (MarkerReason).
@@ -839,6 +866,24 @@ begin
         [UpperCase(M)]));
   if HasAsciiWord(AText, MARKER_XXX) then
     Result := 'XXX im Bereich - ein Absichtskommentar bleibt stehen';
+end;
+
+function SameTok(const A, B: TRdxToken): Boolean;
+begin
+  Result := (A.Line = B.Line) and (A.Col = B.Col);
+end;
+
+function IsRoutineHeadAfter(const T, APrev: TRdxToken): Boolean;
+begin
+  Result := InList(T.Low, ROUTINE_WORDS) and IsKeywordAfter(T, APrev)
+    and not InList(APrev.Low, NOT_HEAD_AFTER);
+end;
+
+function IsRoutineHead(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
+begin
+  // Erst das Wort, dann das Token davor (Before liest rueckwaerts).
+  Result := InList(T.Low, ROUTINE_WORDS)
+    and IsRoutineHeadAfter(T, Before(AMap, T));
 end;
 
 // Die Klammerart zu einer oeffnenden Klammer; '' fuer alles andere.

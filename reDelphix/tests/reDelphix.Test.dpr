@@ -46,6 +46,8 @@ program reDelphix.Test;
 //                        Detektor, Katalog-Beispiele bad -> good
 //   * uTestRdxRoutineFixesDetector - SCA164/SCA147 gegen die echten
 //                        Detektoren (Fund -> Hilfe -> Fund weg)
+//   * uTestRdxDetectorKit - gemeinsame Helfer der drei Detektor-Rundlaeufe
+//                        (keine Fixture; Charge H3c)
 //   * uTestRdxCodeMap  - Code-Sicht (uRdxCodeMap) gegen ScanCodeLine des
 //                        Cores (Drift-Waechter), StartsInside
 //   * uTestRdxQualifyUses - Planung von "uses: X -> Scope.X" (QualifyUses)
@@ -118,6 +120,7 @@ uses
   uTestRdxNilFix in 'uTestRdxNilFix.pas',
   uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas',
   uTestRdxRoutineFixesDetector in 'uTestRdxRoutineFixesDetector.pas',
+  uTestRdxDetectorKit in 'uTestRdxDetectorKit.pas',
   uTestRdxCodeMap in 'uTestRdxCodeMap.pas',
   uTestRdxQualifyUses in 'uTestRdxQualifyUses.pas',
   uTestRdxFixTable in 'uTestRdxFixTable.pas',

@@ -17,7 +17,8 @@ unit uRdxRoutineFixes;
 // MethodAddress, RTTI, Skript-Registrierung per Name) und in keiner
 // Direktive ($EXTERNALSYM). Kommentare zaehlen nicht als Verwendung.
 //
-// BAUSTEINE (Konzept Abschnitt 5; die Routinengrenzen tragen spaeter
+// BAUSTEINE (Konzept Abschnitt 5; die Routinengrenzen tragen seit Charge
+// H3c das Ende des Gueltigkeitsbereichs von SCA053 und spaeter
 // SCA121/SCA196/SCA097/SCA096, der Finder SCA106/SCA054):
 //   ReadRoutine     Routinengrenzen fuer Rumpfe jeder Groesse: Kopf (auch
 //                   'class' davor, qualifizierter und generischer Name) ->
@@ -98,6 +99,11 @@ type
     const AMessage: string; out APlan: TRdxRoutinePlan;
     out AReason: string): Boolean;
 
+  // Die Planer der Charge H3b und ihre Bausteine (s. Kopf): je Fund alle
+  // Ersetzungen in EINEM Plan oder der Grund, warum keine - auf dem
+  // Puffertext ueber die Code-Sicht, ohne ToolsAPI und Parser (laeuft auch
+  // im FPC-Pruefstand). Was nur die Platte weiss (Formdatei, Include-
+  // Dateien), liest der Aufrufer uRdxFixTable bzw. IncludeReason.
   TRdxRoutineFixes = class
   public
     // Baustein Routinengrenzen: die Routine, deren Kopf an AHead beginnt
@@ -181,13 +187,6 @@ const
   KW_CLASS = 'class';
   KW_END   = 'end';
   KW_SEMI  = ';';
-  ROUTINE_WORDS: array[0..4] of string = ('procedure', 'function',
-    'constructor', 'destructor', 'operator');
-  // Davor beginnt ein Routinenwort KEINEN Kopf: Typ einer Variablen oder
-  // eines Parameters, Typdeklaration, anonyme Methode, 'reference to',
-  // 'array of procedure'.
-  NOT_HEAD_AFTER: array[0..7] of string = (':', '=', 'to', '(', ',', ':=',
-    'of', '[');
   // Direktiven hinter einem Routinenkopf im implementation-Teil (Delphi und
   // FPC). Ein anderes Wort beginnt den Deklarationsteil - ist es dort
   // fremd, lehnt ReadRoutine ab.
@@ -355,11 +354,6 @@ type
 
 { ---- Token und Texte ---- }
 
-function SameTok(const A, B: TRdxToken): Boolean;
-begin
-  Result := (A.Line = B.Line) and (A.Col = B.Col);
-end;
-
 // Steht A vor B?
 function TokBefore(const A, B: TRdxToken): Boolean;
 begin
@@ -432,8 +426,13 @@ begin
   AddText(Result, Rest);
 end;
 
-// Kommt ALowName als ganzes Wort in ALowText vor (beides klein)?
-function HasWord(const ALowText, ALowName: string): Boolean;
+// Kommt ALowName als ganzes Wort in ALowText vor (beides klein, genau
+// gleich; Wortgrenze wie IsIdentChar)? Anders als HasIdentWord (uRdxCodeMap,
+// Umlaute ohne Gross/klein - fuer Verwendungen: ein Treffer zu viel sperrt)
+// genau: hier entscheidet es, ob ein Kommentar ueber dem Kopf mitgeht. Bis
+// Charge H3c HasWord, gleich benannt wie das ASCII-HasWord von
+// uRdxCleanupFixes (Minor 5).
+function HasExactWord(const ALowText, ALowName: string): Boolean;
 var
   P, E : Integer;
 begin
@@ -477,22 +476,11 @@ begin
       Result := After(AMap, Result);
 end;
 
-// Beginnt an T ein Routinenkopf? Ein Routinenwort als Schluesselwort, davor
-// nichts aus NOT_HEAD_AFTER (Typ, anonyme Methode).
-function IsHeadAt(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
-var
-  P : TRdxToken;
-begin
-  if not InList(T.Low, ROUTINE_WORDS) then Exit(False);
-  P := Before(AMap, T);
-  Result := IsKeywordAfter(T, P) and not InList(P.Low, NOT_HEAD_AFTER);
-end;
-
 // Ein Kopf, dessen Name mit AArg (klein) beginnt - fuer OneTokenOnLine.
 function IsHeadNamed(AMap: TRdxCodeMap; const T: TRdxToken;
   const AArg: string): Boolean;
 begin
-  Result := IsHeadAt(AMap, T) and SameIdent(After(AMap, T).Low, AArg);
+  Result := IsRoutineHead(AMap, T) and SameIdent(After(AMap, T).Low, AArg);
 end;
 
 // Der Anfang des Kopfs zum Routinenwort T: 'class' davor oder T selbst.
@@ -945,7 +933,7 @@ var
 begin
   Text := LinesText(AMap, ATop, ABottom);
   Result := (MarkerReason(Text) = '')
-    and HasWord(LowerCase(Text), LowerCase(Copy(R.Name,
+    and HasExactWord(LowerCase(Text), LowerCase(Copy(R.Name,
       LastDelimiter('.', R.Name) + 1, MaxInt)));
 end;
 
@@ -1302,7 +1290,7 @@ begin
   else if InExports(AMap, AHit) then
     Result := Format('die exports-Klausel nennt %s (Zeile %d)',
       [AName, AHit.Line])
-  else if IsHeadAt(AMap, P) then
+  else if IsRoutineHead(AMap, P) then
     Result := Format('zweite Routine %s in Zeile %d - Overload, '
       + '$IFDEF-Zwilling oder Deklaration', [AName, AHit.Line])
   else if InList(P.Low, ACCESSOR_WORDS) then
@@ -1356,7 +1344,7 @@ var
 begin
   AFwd := Default(TRdxRoutine);
   K := Before(AMap, AHit);
-  Result := (AHit.Line > AImplLine) and IsHeadAt(AMap, K)
+  Result := (AHit.Line > AImplLine) and IsRoutineHead(AMap, K)
     and (ReadRoutineAt(AMap, HeadStart(AMap, K), 0, AFwd) = '')
     and (Length(AFwd.Parts) = 1)
     and HasDirective(AFwd, ['forward'], W);
@@ -2136,7 +2124,7 @@ begin
   T := NextToken(AMap, 1, 1);
   while T.Low <> '' do
   begin
-    if InImpl and IsHeadAt(AMap, T) then
+    if InImpl and IsRoutineHead(AMap, T) then
     begin
       R := Default(TRdxRoutine);
       R.Keyword := T;

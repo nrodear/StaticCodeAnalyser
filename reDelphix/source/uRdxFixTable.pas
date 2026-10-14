@@ -163,7 +163,6 @@ const
     + 'gehen mit';
   R_METHOD_HINT  = 'gleiche Bedeutung - Deklaration und Implementierung '
     + 'gehen, der Name steht sonst nirgends im Code der Datei';
-  R_NO_FILE_OPEN = 'keine Datei geoeffnet';
   R_FORM_UNREADABLE = 'Formdatei %s nicht lesbar (%s) - eine Ereignis-'
     + 'Bindung ist nicht auszuschliessen';
   // SCA147: Formdateien, die eine Methode per Name an ein Ereignis binden.
@@ -423,7 +422,12 @@ end;
 
 // SCA164, SCA147 (Charge H3b): der Planer auf der Code-Sicht, alle
 // Ersetzungen (Deklaration und Implementierung bzw. forward und Rumpf) in
-// EINEM Undo-Schritt. Name: die Routine bzw. Methode (Menuetext).
+// EINEM Undo-Schritt. Name: die Routine bzw. Methode (Menuetext). Das
+// Geruest gleicht MapFix (uRdxRecipeRunner), der Planer hat aber eine
+// andere Form - mehrere Ersetzungen, Name und Include-Dateien im Plan;
+// ein gemeinsames Geruest braeuchte einen Generic oder eine
+// Methodenreferenz, die der FPC-Pruefstand nicht kennt (Gegen-Review H3,
+// Minor 6: nur der Grund ohne Datei ist jetzt derselbe, R_NO_FILE).
 function RoutineFix(ALines: TStrings; AFinding: TLeakFinding;
   APlan: TRdxRoutinePlanner): TRdxFixOutcome;
 var
@@ -433,7 +437,7 @@ begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(ALines) then
   begin
-    Result.Reason := R_NO_FILE_OPEN;
+    Result.Reason := R_NO_FILE;
     Exit;
   end;
   Map := TRdxCodeMap.Create(ALines);
@@ -637,10 +641,10 @@ const
     'Assign the condition to %s directly',
     'Remove the redundant %s',
     'Remove the self-assignment of %s',
-    'Delete unused routine ''%s''',
-    'Delete unused private method ''%s''',
+    'Delete unused routine %s',
+    'Delete unused private method %s',
     'Delete commented-out code',
-    'Remove unused variable ''%s'''
+    'Remove unused variable %s'
   );
 
   // Menuetexte des zweiten Eintrags (Alt), '' ohne.

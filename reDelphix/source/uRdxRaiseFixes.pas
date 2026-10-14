@@ -69,8 +69,6 @@ const
   SPAN_020 = 'sca020';
   SPAN_120 = 'sca120';
   SPAN_122 = 'sca122';
-  ROUTINE_WORDS: array[0..4] of string = ('procedure', 'function',
-    'constructor', 'destructor', 'operator');
   // Hier endet eine Anweisung.
   STATEMENT_ENDS: array[0..5] of string = (';', 'end', 'else', 'until',
     'except', 'finally');
@@ -160,6 +158,12 @@ end;
 
 // Ab dem Kopf das begin des Rumpfs - ohne lokale Routine dazwischen
 // (deren begin waere es nicht sicher) und ohne asm. '' oder der Grund.
+// Bewusst nicht der Baustein ReadRoutine (uRdxRoutineFixes, Gegen-Review
+// H3, Major 2): SCA020 braucht nur den LEEREN Rumpf direkt hinter dem Kopf
+// und lehnt eine lokale Routine und asm mit eigenem Grund ab; ReadRoutine
+// liest beides und lehnt anderes ab (lokaler Klassentyp, nichts Neues
+// hinter dem end) - der Wechsel aenderte Angebote und Gruende von SCA020.
+// Zweite Kopie eines Routinen-Lesers nach Rule of Three vertretbar.
 function BodyBegin(AMap: TRdxCodeMap; const AKeyword: TRdxToken;
   out ABegin: TRdxToken): string;
 var
