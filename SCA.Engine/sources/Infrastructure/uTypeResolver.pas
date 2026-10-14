@@ -48,7 +48,7 @@ type
         LineEnd   : Integer;
         Idents    : TDictionary<string, string>; // identLow -> bareTypeLow
         // Nur im strengen Modus (s. Konstruktor):
-        Inline     : TArray<TInlineVar>; // Inline-Variablen mit Blockspanne
+        InlineVars : TArray<TInlineVar>; // Inline-Variablen mit Blockspanne (nicht 'Inline': reserviert)
         ClassKey   : string;            // Klasse aus 'TFoo.Bar' (klein), '' = keine
         // Methode eines verschachtelten Typs ('TOuter.TInner.Go'): die
         // Member der aeusseren Klasse kennt die Kette nicht - jenseits der
@@ -570,7 +570,7 @@ begin
   V.LineStart := N.Line;
   V.LineEnd   := TAstSpans.SubtreeMaxLine(APar);
   if V.LineEnd < V.LineStart then V.LineEnd := V.LineStart;
-  Sc.Inline := Sc.Inline + [V];
+  Sc.InlineVars := Sc.InlineVars + [V];
 end;
 
 // Typ der Inline-Variablen IdentLow an Line: die engste Spanne gewinnt;
@@ -584,19 +584,19 @@ begin
   AType  := '';
   Result := False;
   BestSpan := MaxInt;
-  for i := 0 to High(Sc.Inline) do
+  for i := 0 to High(Sc.InlineVars) do
   begin
-    if Sc.Inline[i].Id <> IdentLow then Continue;
-    if (Line < Sc.Inline[i].LineStart) or (Line > Sc.Inline[i].LineEnd) then
+    if Sc.InlineVars[i].Id <> IdentLow then Continue;
+    if (Line < Sc.InlineVars[i].LineStart) or (Line > Sc.InlineVars[i].LineEnd) then
       Continue;
-    Span := Sc.Inline[i].LineEnd - Sc.Inline[i].LineStart;
+    Span := Sc.InlineVars[i].LineEnd - Sc.InlineVars[i].LineStart;
     if (not Result) or (Span < BestSpan) then
     begin
       Result   := True;
       BestSpan := Span;
-      AType    := Sc.Inline[i].TypeLow;
+      AType    := Sc.InlineVars[i].TypeLow;
     end
-    else if (Span = BestSpan) and (AType <> Sc.Inline[i].TypeLow) then
+    else if (Span = BestSpan) and (AType <> Sc.InlineVars[i].TypeLow) then
       AType := '';
   end;
 end;
