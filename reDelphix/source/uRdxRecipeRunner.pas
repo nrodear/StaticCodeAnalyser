@@ -28,7 +28,9 @@ uses
   uMethodd12,       // TLeakFinding
   uSCAConsts,       // TFindingKind
   uRdxScopeTable,   // TRdxScopeTable (QualifyUses)
-  uRdxBufferMath;   // TRdxEdit
+  uRdxBufferMath,   // TRdxEdit
+  uRdxCodeMap,      // TRdxCodeMap: Bausteine der Tabelle uRdxFixTable (Charge R8)
+  uRdxFlowFixes;    // TRdxFlowPlan (FlowFix)
 
 const
   // So viele Provide-Chargen haelt der Anbieter am Leben: ein Menue fragt
@@ -314,19 +316,13 @@ type
   end;
 
   // Editorhilfen Stufe 2a: die einfachen Hilfen aus uRdxSimpleFixes, mit
-  // dem Quellstellen-Dienst verbunden. Eine weitere Regel ist ein Zweig
-  // mehr in Handles/FixFor - der Anbieter braucht dafuer kein neues Rezept.
+  // dem Quellstellen-Dienst verbunden - die Ruempfe je Regel. Den Einstieg
+  // (Handles, FixFor, AlternativeFixFor), Hinweise und Menuetexte fuehrt
+  // seit Charge R8 die Tabelle uRdxFixTable: eine weitere Regel ist dort
+  // eine Zeile und hier eine Routine, kein Zweig in einem Verteiler.
   // ALines ist immer derselbe Text, aus dem APlaces geoeffnet wurde.
   TRdxFixRunner = class
   public
-    // True, wenn FixFor fuer diese Art eine Hilfe kennt.
-    class function Handles(AKind: TFindingKind): Boolean; static;
-
-    // Die Hilfe fuer einen Fund: Art, Zeile und Meldung aus AFinding.
-    class function FixFor(APlaces: TSourcePlaces; ALines: TStrings;
-      AFinding: TLeakFinding;
-      const AUsesNames: TArray<string>): TRdxFixOutcome; static;
-
     // SCA075: 'class(TObject)' -> 'class' an der Spalte aus der Meldung
     // (nur die Zeilen, kein Parser noetig).
     class function ExplicitTObjectFix(ALines: TStrings; ALine: Integer;
@@ -386,7 +382,7 @@ type
     // SCA007: den uses-Eintrag AUnit (die Meldung) auf ALine loeschen
     // (TRdxStructFixes.RemoveUsesEntry). Gesperrt bei Direktiven in einer
     // uses-Klausel. Aendert evtl. das Verhalten: der initialization-
-    // Abschnitt der Unit laeuft nicht mehr (ChangesBehavior).
+    // Abschnitt der Unit laeuft nicht mehr (Kennzeichnung in uRdxFixTable).
     class function UnusedUsesFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer; const AUnit: string): TRdxFixOutcome; static;
 
@@ -406,27 +402,57 @@ type
     // das else hinter dem 'end else' auf ALine.
     class function BlockFix(AKind: TFindingKind; ALines: TStrings;
       ALine: Integer; const AMessage: string): TRdxFixOutcome; static;
-
-
-    // Ein zweiter Menueeintrag fuer denselben Fund, Variant = 1: SCA168
-    // (else mit raise; Nico 2026-10-10: beide Eintraege) und - genauso -
-    // SCA020 (raise ENotImplemented im leeren Rumpf). Variant = 0: keiner.
-    class function AlternativeFixFor(APlaces: TSourcePlaces; ALines: TStrings;
-      AFinding: TLeakFinding;
-      const AUsesNames: TArray<string>): TRdxFixOutcome; static;
   end;
+
+  // Bausteine der Tabelle (uRdxFixTable, Charge R8). Die Planer der
+  // Zeilen- und Deklarations-Hilfen haben alle diese Form
+  // (TRdxLineFixes.DoubleSemicolon, TRdxDeclFixes.DocSkeleton ...); MapFix
+  // oeffnet ihnen die Code-Sicht.
+  TRdxMapPlanner = function(AMap: TRdxCodeMap; ALine: Integer;
+    const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  // Die Planer der Anweisungs-Hilfen (uRdxFlowFixes) und die Typpruefung
+  // dazu (FlowFix).
+  TRdxFlowPlanner = function(AMap: TRdxCodeMap; ALine: Integer;
+    const AMessage: string; out APlan: TRdxFlowPlan;
+    out AReason: string): Boolean;
+  TRdxFlowReason = function(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+    ALine: Integer; const APlan: TRdxFlowPlan): string;
+
+// SCA075, SCA087 und die Zeilen-Hilfen SCA082/SCA071/SCA088, SCA020/SCA120/
+// SCA122, SCA117/SCA197/SCA149: APlan arbeitet nur auf den Zeilen, ohne
+// Parser - Spalte bzw. Abschnitt stehen in der Meldung, die Code-Sicht
+// kennt den Kommentar-Zustand der Zeilen davor. Ohne ALines R_NO_FILE; die
+// Ersetzung nach Edits[0], sonst der Grund.
+function MapFix(ALines: TStrings; ALine: Integer; const AMessage: string;
+  APlan: TRdxMapPlanner): TRdxFixOutcome;
+// SCA098, SCA080, SCA047 (Charge H2): APlan auf den Zeilen, danach AReason
+// (nil = keine) mit dem Quellstellen-Dienst - Typen, with-Bloecke. Name ist
+// das Ziel bzw. Exit/Continue (Menuetext).
+function FlowFix(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; APlan: TRdxFlowPlanner;
+  AReason: TRdxFlowReason): TRdxFixOutcome;
+// SCA123: 'TFoo(X).Free' -> 'X.Free' - Bedingungen am Rumpf.
+function CastFreeFix(APlaces: TSourcePlaces; ALines: TStrings;
+  ALine: Integer; const AMessage: string): TRdxFixOutcome;
+// SCA020, zweiter Eintrag: raise ENotImplemented im leeren Rumpf.
+function EmptyRaiseFix(APlaces: TSourcePlaces; ALines: TStrings;
+  ALine: Integer; const AUsesNames: TArray<string>): TRdxFixOutcome;
+// SCA098: X und (in der Gegenrichtung) die Bedingung als Boolean bewiesen?
+// '' oder der Grund.
+function CondAssignReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  ALine: Integer; const APlan: TRdxFlowPlan): string;
+// SCA047: ist das Ziel ein Speicherplatz? '' oder der Grund.
+function SelfAssignReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  ALine: Integer; const ATarget: string): string;
 
 implementation
 
 uses
   System.StrUtils,   // IndexText (UnitStillUsed)
-  uRdxCodeMap,       // TRdxCodeMap: Code-Sicht der Datei fuer die Planer
   uRdxSimpleFixes,   // Planer der einfachen Hilfen (reine Textlogik)
   uRdxStructFixes,   // Planer SCA007/SCA168 (uses-Eintrag, case-else)
-  uRdxLineFixes,     // Planer SCA082/SCA071/SCA088/SCA123 (eine Zeile)
-  uRdxRaiseFixes,    // Planer SCA020/SCA120/SCA122 (Ausnahmen, leerer Rumpf)
-  uRdxDeclFixes,     // Planer SCA117/SCA197/SCA149 (Deklarationen, Charge H1)
-  uRdxFlowFixes,     // Planer SCA098/SCA080/SCA047 (ganze Anweisung, Charge H2)
+  uRdxLineFixes,     // Planer SCA123 (CastFreeFix)
+  uRdxRaiseFixes,    // Planer SCA020 mit raise (EmptyRaiseFix)
   uUnusedUses,       // KnownIdents: SCA007-Fund am Puffer nachpruefen
   uSourcePlaces;     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
 
@@ -451,44 +477,12 @@ const
   R_FREENIL_HINT = 'FreeAndNil setzt %s auf nil, bevor der Destruktor laeuft';
   R_WITH_MEMBER  = 'with-Anweisung in der Routine - %s koennte ein Member sein';
   R_NO_HELP      = 'keine Hilfe an dieser Stelle';
-  R_CASE_ELSE_HINT  = 'alle anderen Werte: nichts tun (wie bisher)';
+  // Hinweise, die der Rumpf selbst setzt - vor dem ' + uses ...' bzw. mit
+  // dem Namen; die festen Hinweise je Art fuehrt uRdxFixTable (Charge R8).
   R_CASE_RAISE_HINT = 'unbehandelte Werte loesen EProgrammerError aus';
-  R_BLOCK_HINT      = 'gleiche Bedeutung - nur die Form; eine weitere '
-    + 'Anweisung gehoert danach sichtbar in den Zweig';
-  // Hinweise der Zeilen-Hilfen (LineFix).
-  R_SEMI_HINT   = 'das zweite ";" war eine leere Anweisung';
-  R_INDENT_HINT = 'nur Leerraum';
-  R_INIT_HINT   = 'gleiche Bedeutung - der Abschnitt kann danach ein '
-    + 'finalization bekommen';
   R_CAST_HINT   = '%s ist schon als %s deklariert - der Cast aendert nichts';
-  R_EMPTY_HINT  = 'die Absicht steht im Rumpf - ein Grund dahinter hilft dem '
-    + 'naechsten Leser';
   R_EMPTY_RAISE_HINT = 'ein Aufruf loest ENotImplemented aus statt nichts zu '
     + 'tun';
-  R_MISSING_RAISE_HINT = 'die Exception wird jetzt ausgeloest - der Code '
-    + 'dahinter laeuft im Fehlerfall nicht mehr';
-  R_RERAISE_HINT = 'dieselbe Exception - der Original-Stack-Trace bleibt '
-    + 'erhalten';
-  R_DOC_HINT     = 'das Geruest ist leer - summary, param und returns '
-    + 'ausfuellen';
-  R_GUID_HINT    = 'eine neue GUID - nur fuer eigene Interfaces, nie fuer '
-    + 'COM-Importe';
-  R_OVERRIDE_HINT = 'der virtuelle Aufruf landet danach in dieser Methode';
-  R_REINTRODUCE_HINT = 'nur die Warnung W1010 entfaellt - die Methode '
-    + 'verdeckt die geerbten weiterhin';
-  // Ueber LineFix (nur die Zeilen); SCA123 hat einen eigenen Weg.
-  LINE_FIX_KINDS: TFindingKinds = [fkSuperfluousSemicolon,
-    fkUnitLevelKeywordIndent, fkLegacyInitializationSection, fkCastAndFree,
-    fkEmptyMethod, fkMissingRaise, fkReRaiseException,
-    fkPublicMemberWithoutDoc, fkInterfaceWithoutGuid, fkMissingOverride];
-  // Ueber FlowFix (uRdxFlowFixes, Charge H2): ganze Anweisungen.
-  FLOW_FIX_KINDS: TFindingKinds = [fkRedundantConditional, fkRedundantJump,
-    fkSelfAssignment];
-  // Hinweise der Anweisungs-Hilfen (FlowFix).
-  R_COND_HINT = 'gleiche Bedeutung - eine Zuweisung statt zweier Zweige';
-  R_JUMP_HINT = 'gleiche Bedeutung - der Ablauf verlaesst den Block ohnehin';
-  R_SELF_HINT = 'die Zuweisung bewirkt nichts - war ein anderer Wert gemeint '
-    + '(Tippfehler), fehlt er weiterhin';
   R_PROC_TYPE    = '%s hat einen Prozedurtyp - "%s <> nil" ruft ihn auf, '
     + 'Assigned() nicht';
 
@@ -797,28 +791,63 @@ begin
     Result := '';
 end;
 
+// S ohne Leerraum (alles <= ' ') - vorab bemessen statt verkettet (SCA110).
+function WithoutBlanks(const S: string): string;
+var
+  i, n : Integer;
+begin
+  SetLength(Result, Length(S));
+  n := 0;
+  for i := 1 to Length(S) do
+    if S[i] > ' ' then
+    begin
+      Inc(n);
+      Result[n] := S[i];
+    end;
+  SetLength(Result, n);
+end;
+
 // Gleicher Operand ohne Leerraum und Schreibung: 'Result' = 'result'.
 function SameOperandText(const A, B: string): Boolean;
 var
-  SA, SB : string;
-  i      : Integer;
+  SA : string;
 begin
-  SA := '';
-  SB := '';
-  for i := 1 to Length(A) do
-    if A[i] > ' ' then SA := SA + A[i];
-  for i := 1 to Length(B) do
-    if B[i] > ' ' then SB := SB + B[i];
-  Result := (SA <> '') and SameText(SA, SB);
+  SA := WithoutBlanks(A);
+  Result := (SA <> '') and SameText(SA, WithoutBlanks(B));
+end;
+
+const
+  // So viele Operanden "laut Kompilat" nennt der Hinweis mit Namen.
+  MAX_HINT_NAMES = 3;
+
+// Die ersten MAX_HINT_NAMES Namen, mit ', ' verbunden; ', ...' bei mehr.
+function ByCompilerNames(const ANames: TArray<string>): string;
+var
+  SB : TStringBuilder;
+  i  : Integer;
+begin
+  SB := TStringBuilder.Create;
+  try
+    for i := 0 to High(ANames) do
+    begin
+      if i = MAX_HINT_NAMES then
+      begin
+        SB.Append(', ...');
+        Break;
+      end;
+      if SB.Length > 0 then SB.Append(', ');
+      SB.Append(ANames[i]);
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
 end;
 
 // Hinweis eines aktiven Format-Eintrags: Termzahl, bei Selbst-Anhaengen
 // das Ziel (ABehind, sonst ''), Herkunft der Argumente.
 function FormatHintOf(const ABuild: TRdxFormatBuild; ATerms: Integer;
   const ABehind: string): string;
-var
-  Names : string;
-  i     : Integer;
 begin
   Result := Format('%d Terme', [ATerms]);
   if ABehind <> '' then
@@ -826,23 +855,67 @@ begin
   if Length(ABuild.ByCompiler) = 0 then
     Result := Result + ', alle bewiesen'
   else
-  begin
-    Names := '';
-    for i := 0 to High(ABuild.ByCompiler) do
-    begin
-      if i = 3 then
-      begin
-        Names := Names + ', ...';
-        Break;
-      end;
-      if Names <> '' then Names := Names + ', ';
-      Names := Names + ABuild.ByCompiler[i];
-    end;
     Result := Result + Format(', %d laut Kompilat (%s)',
-      [Length(ABuild.ByCompiler), Names]);
-  end;
+      [Length(ABuild.ByCompiler), ByCompilerNames(ABuild.ByCompiler)]);
   if ABuild.Numeric > 0 then
     Result := Result + Format(', %d numerisch (%%d/%%u)', [ABuild.Numeric]);
+end;
+
+// Ohne Beschreibung: der Grund aus Describe, sonst 'keine Beschreibung'.
+function NoInfoReason(const AWhy: string): string;
+begin
+  Result := AWhy;
+  if Result = '' then
+    Result := 'keine Beschreibung';
+end;
+
+// Keine Zuweisung mit Kette - dazu der Grund aus Describe, wenn er neben
+// einer Beschreibung steht (die Kette passte nicht).
+function NoChainReason(const AWhy: string): string;
+begin
+  Result := 'keine Zuweisung mit Kette';
+  if AWhy <> '' then
+    Result := Result + ': ' + AWhy;
+end;
+
+// Selbst-Anhaengen 'X := X + ...' (ein Drittel der Korpus-Stellen): der
+// erste Operand ist das Ziel.
+function IsSelfAppend(const AParts: TRdxParts; AInfo: TRefactorInfo;
+  ALast: Integer): Boolean;
+begin
+  Result := (ALast >= 3) and (AInfo.Parts[1].Role = ROLE_OPERAND)
+    and SameOperandText(AParts[1].Text, AParts[0].Text);
+end;
+
+// Der Grund, wenn BuildFormatCall ablehnt: hinter 'X +' nur Literale heisst
+// anders als 'kein Operand'.
+function BuildReasonOf(const ABuild: TRdxFormatBuild;
+  const ABehind: string): string;
+begin
+  Result := ABuild.Reason;
+  if (ABehind <> '') and (ABuild.Operands = 0)
+     and (Pos('kein Operand', ABuild.Reason) > 0) then
+    Result := 'hinter ' + ABehind + ' stehen nur Literale';
+end;
+
+// Format() lebt in System.SysUtils: fehlt die Unit, kommt sie mit - nicht
+// ausgrauen, sondern die uses-Klausel ergaenzen (Nico, 2026-10-06). ''
+// oder der Grund, wenn die Einfuegung nicht planbar ist.
+function FormatUsesReason(APlaces: TSourcePlaces;
+  const AUsesNames: TArray<string>; var AOutcome: TRdxFormatOutcome): string;
+var
+  Plan : TRdxUsesPlan;
+begin
+  Result := '';
+  if TRdxRecipes.HasUnit(AUsesNames, 'SysUtils') then Exit;
+  Plan := TRdxRecipeRunner.PlanUses(APlaces, 'SysUtils', 'System.SysUtils');
+  if not Plan.Needed then Exit;
+  if Plan.Reason <> '' then
+    Exit('System.SysUtils fehlt in uses: ' + Plan.Reason);
+  AOutcome.NeedsUses := True;
+  AOutcome.UsesName  := Plan.Name;
+  AOutcome.UsesEdit  := Plan.Edit;
+  AOutcome.Hint := AOutcome.Hint + ' + uses ' + Plan.Name;
 end;
 
 class function TRdxRecipeRunner.FormatRewrite(APlaces: TSourcePlaces;
@@ -853,15 +926,13 @@ var
   Last   : Integer;
   First  : Integer;
   Build  : TRdxFormatBuild;
-  Plan   : TRdxUsesPlan;
   TType  : string;
   Behind : string;
 begin
   Result := Default(TRdxFormatOutcome);
   if AInfo = nil then
   begin
-    Result.Reason := AWhy;
-    if Result.Reason = '' then Result.Reason := 'keine Beschreibung';
+    Result.Reason := NoInfoReason(AWhy);
     Exit;
   end;
   Parts := PartsOf(APlaces, AInfo);
@@ -869,12 +940,9 @@ begin
   // Eine Kette hat mindestens zwei Terme (Ziel + zwei Parts). Ein
   // einzelner Term - etwa das schon umgeformte 'X := Format(...)' -
   // ist keine (zweiter Lauf, Rewrite_AppliedOnce_NoSecondFinding).
-  // AWhy neben einer Beschreibung: die Kette passte nicht (Describe).
   if (Last < 2) or (AInfo.Parts[0].Role <> ROLE_TARGET) then
   begin
-    Result.Reason := 'keine Zuweisung mit Kette';
-    if AWhy <> '' then
-      Result.Reason := Result.Reason + ': ' + AWhy;
+    Result.Reason := NoChainReason(AWhy);
     Exit;
   end;
   // Ziel mit Nicht-Unicode-String-Typ: Format liefert UnicodeString, die
@@ -886,15 +954,12 @@ begin
       [TRdxRecipes.CollapseWhitespace(Parts[0].Text), TType]);
     Exit;
   end;
-  // Selbst-Anhaengen 'X := X + ...' (ein Drittel der Korpus-Stellen):
-  // Format nur ueber den Rest, X bleibt vorn - 'X := X + Format(...)'.
+  // Selbst-Anhaengen: Format nur ueber den Rest, X bleibt vorn -
+  // 'X := X + Format(...)'.
   First := 1;
-  if (Last >= 3) and (AInfo.Parts[1].Role = ROLE_OPERAND)
-     and SameOperandText(Parts[1].Text, Parts[0].Text) then
-  begin
+  Result.SelfAppend := IsSelfAppend(Parts, AInfo, Last);
+  if Result.SelfAppend then
     First := 2;
-    Result.SelfAppend := True;
-  end;
   // Ersetzt wird vom ersten (bzw. zweiten) bis zum letzten Term; Ziel und
   // ':=' (und bei Selbst-Anhaengen 'X +') bleiben.
   Result.Span := TRefactorSpan.Make(ROLE_STATEMENT,
@@ -930,10 +995,7 @@ begin
   if not TRdxRecipes.BuildFormatCall(Copy(Parts, First, Last - First + 1),
        Build, TType) then
   begin
-    Result.Reason := Build.Reason;
-    if (Behind <> '') and (Build.Operands = 0)
-       and (Pos('kein Operand', Build.Reason) > 0) then
-      Result.Reason := 'hinter ' + Behind + ' stehen nur Literale';
+    Result.Reason := BuildReasonOf(Build, Behind);
     Exit;
   end;
   Result.NewText    := Build.NewText;
@@ -942,25 +1004,8 @@ begin
   Result.Numeric    := Build.Numeric;
   Result.ByCompiler := Build.ByCompiler;
   Result.Hint := FormatHintOf(Build, Last - First + 1, Behind);
-  // Format() lebt in System.SysUtils: fehlt die Unit, kommt sie mit -
-  // nicht ausgrauen, sondern die uses-Klausel ergaenzen (Nico, 2026-10-06).
-  if not TRdxRecipes.HasUnit(AUsesNames, 'SysUtils') then
-  begin
-    Plan := PlanUses(APlaces, 'SysUtils', 'System.SysUtils');
-    if Plan.Needed then
-    begin
-      if Plan.Reason <> '' then
-      begin
-        Result.Reason := 'System.SysUtils fehlt in uses: ' + Plan.Reason;
-        Exit;
-      end;
-      Result.NeedsUses := True;
-      Result.UsesName  := Plan.Name;
-      Result.UsesEdit  := Plan.Edit;
-      Result.Hint := Result.Hint + ' + uses ' + Plan.Name;
-    end;
-  end;
-  Result.Enabled := True;
+  Result.Reason := FormatUsesReason(APlaces, AUsesNames, Result);
+  Result.Enabled := Result.Reason = '';
 end;
 
 // Die uses-Klauseln der Datei, je Klausel ihre Eintraege: interface und
@@ -1285,209 +1330,8 @@ end;
 
 { TRdxFixRunner }
 
-class function TRdxFixRunner.Handles(AKind: TFindingKind): Boolean;
-begin
-  Result := AKind in [fkExplicitTObjectInheritance, fkFreeAndNilHint,
-    fkNilComparison, fkAssertMessage, fkEmptyVisibilitySection,
-    fkFreeWithoutNil, fkEmptyArgumentList, fkRedundantBoolean,
-    fkAssignedAndAssignedNil, fkUnusedUses, fkDefaultCaseInCaseStatement,
-    fkBeginEndRequired, fkIfElseBegin] + LINE_FIX_KINDS + FLOW_FIX_KINDS;
-end;
-
-// Die Zeilen-Hilfen (uRdxLineFixes) - ein dritter Verteiler (SCA091); er
-// steht weiter unten bei seinen Planern.
-function LineFixFor(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding): TRdxFixOutcome; forward;
-
-// X aus der SCA085-Meldung '`X.Free; X := nil;` - prefer ...'; '' ohne
-// diese Form.
-function FreeTargetOf(const AMessage: string): string;
-var
-  P, Q : Integer;
-begin
-  Result := '';
-  P := Pos('`', AMessage);
-  if P = 0 then Exit;
-  Q := Pos('.Free', AMessage, P + 1);
-  if Q = 0 then Exit;
-  Result := Trim(Copy(AMessage, P + 1, Q - P - 1));
-end;
-
-// Die Hilfen aus dem uQuickFix-Umzug und der Stufe 3 (SCA066, SCA072,
-// SCA084, SCA007, SCA168, SCA101, SCA099) - ein zweiter Verteiler, damit
-// FixFor ueberschaubar bleibt (SCA091).
-function LaterFixFor(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding): TRdxFixOutcome;
-begin
-  Result := Default(TRdxFixOutcome);
-  case AFinding.Kind of
-    fkEmptyArgumentList:
-      Result := TRdxFixRunner.EmptyArgsFix(APlaces, ALines, AFinding.LineInt,
-        AFinding.Message);
-    fkRedundantBoolean, fkAssignedAndAssignedNil:
-      Result := TRdxFixRunner.OperandFix(AFinding.Kind, APlaces, ALines,
-        AFinding.LineInt, AFinding.Message);
-    fkUnusedUses:
-      Result := TRdxFixRunner.UnusedUsesFix(APlaces, ALines, AFinding.LineInt,
-        AFinding.Message);
-    fkDefaultCaseInCaseStatement:
-      Result := TRdxFixRunner.CaseElseFix(APlaces, ALines, AFinding.LineInt);
-    fkBeginEndRequired, fkIfElseBegin:
-      Result := TRdxFixRunner.BlockFix(AFinding.Kind, ALines, AFinding.LineInt,
-        AFinding.Message);
-  else
-    Result := LineFixFor(APlaces, ALines, AFinding);
-  end;
-end;
-
-class function TRdxFixRunner.FixFor(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-var
-  Named : string;
-begin
-  Result := Default(TRdxFixOutcome);
-  if not Assigned(AFinding) then
-  begin
-    Result.Reason := 'kein Fund';
-    Exit;
-  end;
-  case AFinding.Kind of
-    fkExplicitTObjectInheritance:
-      Result := ExplicitTObjectFix(ALines, AFinding.LineInt, AFinding.Message);
-    fkFreeAndNilHint:
-      begin
-        Result := FreeAndNilFix(APlaces, ALines, AFinding.LineInt, AUsesNames);
-        // Gegenprobe gegen den Fund wie bei SCA044/SCA003 (Minor 20, hier
-        // Nit 26): die Meldung nennt X ('`X.Free; X := nil;` - ...'). Steht
-        // nach Einfuegungen oberhalb ein anderes Paar auf der Zeile, nicht
-        // umschreiben.
-        Named := FreeTargetOf(AFinding.Message);
-        if Result.Enabled and (Named <> '')
-           and not SameText(TRdxRecipes.AsciiOnly(Named),
-                            TRdxRecipes.AsciiOnly(Result.Name)) then
-        begin
-          Result.Enabled := False;
-          Result.Edits   := nil;
-          Result.Reason  := Format('Zeile %d traegt %s.Free, der Fund nennt %s - '
-            + 'Zeile verschoben? Datei neu pruefen',
-            [AFinding.LineInt, Result.Name, Named]);
-        end;
-      end;
-    fkNilComparison:
-      Result := NilComparisonFix(APlaces, ALines, AFinding.LineInt);
-    fkAssertMessage:
-      Result := AssertMessageFix(APlaces, ALines, AFinding.LineInt,
-        AFinding.Message);
-    fkEmptyVisibilitySection:
-      Result := EmptySectionFix(ALines, AFinding.LineInt, AFinding.Message);
-    fkFreeWithoutNil:
-      Result := FreeWithoutNilFix(APlaces, ALines, AFinding.LineInt,
-        AFinding.Message, AUsesNames);
-  else
-    Result := LaterFixFor(APlaces, ALines, AFinding);
-  end;
-end;
-
-// Hinweis der Deklarations-Hilfen (Charge H1). SCA149 nach dem Rat der
-// Meldung (TRdxDeclFixes.DirectiveFor) - nur override, nie reintroduce als
-// zweiter Eintrag: Strg+Alt+F liesse das gekennzeichnete override aus und
-// deckte den Polymorphie-Fehler mit reintroduce still zu.
-function DeclHint(AKind: TFindingKind; const AMessage: string): string;
-begin
-  case AKind of
-    fkPublicMemberWithoutDoc:
-      Result := R_DOC_HINT;
-    fkInterfaceWithoutGuid:
-      Result := R_GUID_HINT;
-    fkMissingOverride:
-      if TRdxDeclFixes.DirectiveFor(AMessage) = DIRECTIVE_OVERRIDE then
-        Result := R_OVERRIDE_HINT
-      else
-        Result := R_REINTRODUCE_HINT;
-  else
-    Result := '';
-  end;
-end;
-
-// Der Hinweis einer Zeilen-Hilfe (LineFix).
-function LineHint(AKind: TFindingKind; const AMessage: string): string;
-begin
-  case AKind of
-    fkSuperfluousSemicolon:
-      Result := R_SEMI_HINT;
-    fkUnitLevelKeywordIndent:
-      Result := R_INDENT_HINT;
-    fkLegacyInitializationSection:
-      Result := R_INIT_HINT;
-    fkEmptyMethod:
-      Result := R_EMPTY_HINT;
-    fkMissingRaise:
-      Result := R_MISSING_RAISE_HINT;
-    fkReRaiseException:
-      Result := R_RERAISE_HINT;
-  else
-    Result := DeclHint(AKind, AMessage);
-  end;
-end;
-
-// Die Deklarations-Hilfen (uRdxDeclFixes): SCA117 Geruest, SCA197 neue
-// GUID, SCA149 Direktive.
-function DeclPlan(AKind: TFindingKind; AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; var AOutcome: TRdxFixOutcome): Boolean;
-begin
-  case AKind of
-    fkPublicMemberWithoutDoc:
-      Result := TRdxDeclFixes.DocSkeleton(AMap, ALine, AMessage,
-        AOutcome.Edits[0], AOutcome.Reason);
-    fkInterfaceWithoutGuid:
-      Result := TRdxDeclFixes.InterfaceGuid(AMap, ALine, AMessage,
-        AOutcome.Edits[0], AOutcome.Reason);
-    fkMissingOverride:
-      Result := TRdxDeclFixes.MethodDirective(AMap, ALine, AMessage,
-        AOutcome.Edits[0], AOutcome.Reason);
-  else
-    AOutcome.Reason := 'keine Zeilen-Hilfe fuer diese Regel';
-    Result := False;
-  end;
-end;
-
-// Der Planer einer Zeilen-Hilfe: die Ersetzung nach AOutcome.Edits[0],
-// sonst der Grund. SCA020 hier mit dem Absichtskommentar (der raise-
-// Eintrag ist EmptyRaiseFix).
-function LinePlan(AKind: TFindingKind; AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; var AOutcome: TRdxFixOutcome): Boolean;
-begin
-  case AKind of
-    fkSuperfluousSemicolon:
-      Result := TRdxLineFixes.DoubleSemicolon(AMap, ALine, AMessage,
-        AOutcome.Edits[0], AOutcome.Reason);
-    fkUnitLevelKeywordIndent:
-      Result := TRdxLineFixes.KeywordIndent(AMap, ALine, AMessage,
-        AOutcome.Edits[0], AOutcome.Reason);
-    fkLegacyInitializationSection:
-      Result := TRdxLineFixes.LegacyInit(AMap, ALine, AOutcome.Edits[0],
-        AOutcome.Reason);
-    fkEmptyMethod:
-      Result := TRdxRaiseFixes.EmptyBody(AMap, ALine, '', AOutcome.Edits[0],
-        AOutcome.Reason);
-    fkMissingRaise:
-      Result := TRdxRaiseFixes.MissingRaise(AMap, ALine, AMessage,
-        AOutcome.Edits[0], AOutcome.Reason);
-    fkReRaiseException:
-      Result := TRdxRaiseFixes.ReRaise(AMap, ALine, AMessage,
-        AOutcome.Edits[0], AOutcome.Reason);
-  else
-    Result := DeclPlan(AKind, AMap, ALine, AMessage, AOutcome);
-  end;
-end;
-
-// SCA075, SCA087 und die Zeilen-Hilfen SCA082/SCA071/SCA088, SCA020/SCA120/
-// SCA122, SCA117/SCA197/SCA149 (LinePlan):
-// die Planer arbeiten nur auf den Zeilen, ohne Parser. Spalte bzw.
-// Abschnitt stehen in der Meldung - die Spalte kennt den Kommentar-Zustand
-// der Zeilen davor, ein Neuscan der Zeile nicht.
-function LinesOnlyFix(AKind: TFindingKind; ALines: TStrings; ALine: Integer;
-  const AMessage: string): TRdxFixOutcome;
+function MapFix(ALines: TStrings; ALine: Integer; const AMessage: string;
+  APlan: TRdxMapPlanner): TRdxFixOutcome;
 var
   Map : TRdxCodeMap;
 begin
@@ -1500,16 +1344,7 @@ begin
   SetLength(Result.Edits, 1);
   Map := TRdxCodeMap.Create(ALines);
   try
-    case AKind of
-      fkEmptyVisibilitySection:
-        Result.Enabled := TRdxSimpleFixes.EmptySection(Map, ALine, AMessage,
-          Result.Edits[0], Result.Reason);
-      fkExplicitTObjectInheritance:
-        Result.Enabled := TRdxSimpleFixes.ExplicitTObject(Map, ALine, AMessage,
-          Result.Edits[0], Result.Reason);
-    else
-      Result.Enabled := LinePlan(AKind, Map, ALine, AMessage, Result);
-    end;
+    Result.Enabled := APlan(Map, ALine, AMessage, Result.Edits[0], Result.Reason);
   finally
     Map.Free;
   end;
@@ -1520,7 +1355,7 @@ end;
 class function TRdxFixRunner.ExplicitTObjectFix(ALines: TStrings;
   ALine: Integer; const AMessage: string): TRdxFixOutcome;
 begin
-  Result := LinesOnlyFix(fkExplicitTObjectInheritance, ALines, ALine, AMessage);
+  Result := MapFix(ALines, ALine, AMessage, TRdxSimpleFixes.ExplicitTObject);
 end;
 
 // SCA085: ist AName an ALine sicher eine Variable? FreeAndNil braucht eine;
@@ -1636,7 +1471,7 @@ end;
 class function TRdxFixRunner.EmptySectionFix(ALines: TStrings; ALine: Integer;
   const AMessage: string): TRdxFixOutcome;
 begin
-  Result := LinesOnlyFix(fkEmptyVisibilitySection, ALines, ALine, AMessage);
+  Result := MapFix(ALines, ALine, AMessage, TRdxSimpleFixes.EmptySection);
 end;
 
 // X aus der SCA139-Meldung 'X.Free without subsequent X := nil - ...';
@@ -1914,7 +1749,6 @@ var
 begin
   Result := Default(TRdxFixOutcome);
   Result.Name := Trim(AUnit);
-  Result.ChangesBehavior := True;
   Index := -1;
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
     Result.Reason := R_NO_FILE
@@ -1987,8 +1821,6 @@ class function TRdxFixRunner.CaseElseFix(APlaces: TSourcePlaces;
   ALines: TStrings; ALine: Integer): TRdxFixOutcome;
 begin
   Result := CaseElseOutcome(APlaces, ALines, ALine, '');
-  if Result.Enabled then
-    Result.Hint := R_CASE_ELSE_HINT;
 end;
 
 class function TRdxFixRunner.CaseRaiseFix(APlaces: TSourcePlaces;
@@ -2037,9 +1869,7 @@ begin
   finally
     Map.Free;
   end;
-  if Result.Enabled then
-    Result.Hint := R_BLOCK_HINT
-  else
+  if not Result.Enabled then
     Result.Edits := nil;
 end;
 
@@ -2095,24 +1925,6 @@ begin
     Result.Hint := Format(R_CAST_HINT, [Result.Edits[0].NewText, Result.Name])
   else
     Result.Edits := nil;
-end;
-
-// SCA082, SCA071, SCA088 (TRdxLineFixes), SCA020, SCA120, SCA122
-// (TRdxRaiseFixes) und SCA117, SCA197, SCA149 (TRdxDeclFixes): nur die
-// Zeilen - LinesOnlyFix mit dem Hinweis der Regel. SCA120 und SCA149 mit
-// override aendern das Verhalten (das ist der Fix) und sind nach E2
-// gekennzeichnet; die uebrigen sind bedeutungsgleich. Name traegt bei
-// SCA149 die Direktive (Menuetext).
-function LineFix(AKind: TFindingKind; ALines: TStrings; ALine: Integer;
-  const AMessage: string): TRdxFixOutcome;
-begin
-  Result := LinesOnlyFix(AKind, ALines, ALine, AMessage);
-  if AKind = fkMissingOverride then
-    Result.Name := TRdxDeclFixes.DirectiveFor(AMessage);
-  Result.ChangesBehavior := (AKind = fkMissingRaise)
-    or ((AKind = fkMissingOverride) and (Result.Name = DIRECTIVE_OVERRIDE));
-  if Result.Enabled then
-    Result.Hint := LineHint(AKind, AMessage);
 end;
 
 // SCA020, zweiter Eintrag: raise ENotImplemented im leeren Rumpf - aendert
@@ -2208,54 +2020,12 @@ begin
       + 'Feld aus einer anderen Unit?)', [Root]);
 end;
 
-// Der Planer der Anweisungs-Hilfe zum Fund (uRdxFlowFixes).
-function FlowPlan(AFinding: TLeakFinding; AMap: TRdxCodeMap;
-  out APlan: TRdxFlowPlan; out AReason: string): Boolean;
-begin
-  case AFinding.Kind of
-    fkRedundantConditional:
-      Result := TRdxFlowFixes.RedundantConditional(AMap, AFinding.LineInt,
-        AFinding.Message, APlan, AReason);
-    fkRedundantJump:
-      Result := TRdxFlowFixes.RedundantJump(AMap, AFinding.LineInt,
-        AFinding.Message, APlan, AReason);
-  else
-    Result := TRdxFlowFixes.SelfAssignment(AMap, AFinding.LineInt,
-      AFinding.Message, APlan, AReason);
-  end;
-end;
-
-// Was der Planer nicht weiss: die Typen (SCA098, SCA047) und with-Bloecke.
-function FlowTypeReason(AKind: TFindingKind; APlaces: TSourcePlaces;
-  AMap: TRdxCodeMap; ALine: Integer; const APlan: TRdxFlowPlan): string;
-begin
-  case AKind of
-    fkRedundantConditional:
-      Result := CondAssignReason(APlaces, AMap, ALine, APlan);
-    fkSelfAssignment:
-      Result := SelfAssignReason(APlaces, AMap, ALine, APlan.Target);
-  else
-    Result := '';
-  end;
-end;
-
-function FlowHint(AKind: TFindingKind): string;
-begin
-  case AKind of
-    fkRedundantConditional:
-      Result := R_COND_HINT;
-    fkRedundantJump:
-      Result := R_JUMP_HINT;
-  else
-    Result := R_SELF_HINT;
-  end;
-end;
-
 // SCA098, SCA080, SCA047 (Charge H2): der Planer auf den Zeilen, danach die
-// Pruefung mit dem Quellstellen-Dienst. Alle drei bedeutungsgleich; Name
-// ist das Ziel bzw. Exit/Continue (Menuetext).
+// Pruefung mit dem Quellstellen-Dienst. Alle drei bedeutungsgleich - den
+// Hinweis setzt die Tabelle.
 function FlowFix(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding): TRdxFixOutcome;
+  AFinding: TLeakFinding; APlan: TRdxFlowPlanner;
+  AReason: TRdxFlowReason): TRdxFixOutcome;
 var
   Map  : TRdxCodeMap;
   Plan : TRdxFlowPlan;
@@ -2264,11 +2034,11 @@ begin
   Map := OpenMapFor(APlaces, ALines, Result);
   if Map = nil then Exit;
   try
-    Result.Enabled := FlowPlan(AFinding, Map, Plan, Result.Reason);
+    Result.Enabled := APlan(Map, AFinding.LineInt, AFinding.Message, Plan,
+      Result.Reason);
     Result.Name := Plan.Target;
-    if Result.Enabled then
-      Result.Reason := FlowTypeReason(AFinding.Kind, APlaces, Map,
-        AFinding.LineInt, Plan);
+    if Result.Enabled and Assigned(AReason) then
+      Result.Reason := AReason(APlaces, Map, AFinding.LineInt, Plan);
   finally
     Map.Free;
   end;
@@ -2279,35 +2049,6 @@ begin
     Exit;
   end;
   Result.Edits[0] := Plan.Edit;
-  Result.Hint := FlowHint(AFinding.Kind);
-end;
-
-// Die Zeilen-Hilfen (uRdxLineFixes) - der dritte Verteiler (SCA091),
-// oben vorwaerts deklariert. Dazu die Anweisungs-Hilfen (FlowFix).
-function LineFixFor(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding): TRdxFixOutcome;
-begin
-  Result := Default(TRdxFixOutcome);
-  if AFinding.Kind = fkCastAndFree then
-    Result := CastFreeFix(APlaces, ALines, AFinding.LineInt, AFinding.Message)
-  else if AFinding.Kind in LINE_FIX_KINDS then
-    Result := LineFix(AFinding.Kind, ALines, AFinding.LineInt, AFinding.Message)
-  else if AFinding.Kind in FLOW_FIX_KINDS then
-    Result := FlowFix(APlaces, ALines, AFinding)
-  else
-    Result.Reason := 'keine einfache Hilfe fuer diese Regel';
-end;
-
-class function TRdxFixRunner.AlternativeFixFor(APlaces: TSourcePlaces;
-  ALines: TStrings; AFinding: TLeakFinding;
-  const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := Default(TRdxFixOutcome);
-  if not Assigned(AFinding) then Exit;
-  if AFinding.Kind = fkDefaultCaseInCaseStatement then
-    Result := CaseRaiseFix(APlaces, ALines, AFinding.LineInt, AUsesNames)
-  else if AFinding.Kind = fkEmptyMethod then
-    Result := EmptyRaiseFix(APlaces, ALines, AFinding.LineInt, AUsesNames);
 end;
 
 // Der Text, auf dem uNilComparison den Knoten zaehlt (Analyse
@@ -2454,32 +2195,127 @@ end;
 
 { ---- uses-Eintraege qualifizieren (QualifyUses) ---- }
 
-// Steht die Klausel so, wie uUnsortedUses (SCA142) sie will? CompareText
-// je Nachbarpaar - gleichwertig zu 'sortierte Kopie = Original'.
-function NamesSorted(const ANames: TArray<string>): Boolean;
+type
+  // Was QualifyUses je Klausel braucht (QualifyClause): die Scope-Tabelle,
+  // das Rahmenwerk der Datei, die gefragte Zeile und die Pruefung auf eine
+  // eigene Unit des Projekts.
+  TRdxQualifyCtx = record
+    Scopes    : TRdxScopeTable;
+    Fw        : TRdxFramework;
+    Line      : Integer;
+    IsOwnUnit : TRdxOwnUnitCheck;
+  end;
+
+const
+  // So viele Ziele nennt die Vorschau von 'alle qualifizieren'.
+  MAX_QUALIFY_PREVIEW = 3;
+
+// Die aufgeloesten Namen der Eintraege einer Klausel.
+function ClauseNames(const AEntries: TArray<TRefactorSpan>): TArray<string>;
 var
-  k : Integer;
+  i : Integer;
 begin
-  Result := True;
-  for k := 1 to High(ANames) do
-    if CompareText(ANames[k - 1], ANames[k]) > 0 then
-      Exit(False);
+  SetLength(Result, Length(AEntries));
+  for i := 0 to High(AEntries) do
+    Result[i] := AEntries[i].Resolved;
+end;
+
+// Ein Eintrag als TRdxQualifyItem: Why und Edit nach Scope-Tabelle und
+// eigener Unit (qwOk mit Edit, wenn die Tabelle ihn eindeutig aufloest).
+// False fuer einen leeren oder schon qualifizierten Eintrag - kein Item.
+function QualifyItemOf(const ACtx: TRdxQualifyCtx; const AEntry: TRefactorSpan;
+  out AItem: TRdxQualifyItem): Boolean;
+var
+  Q, Reason : string;
+begin
+  AItem := Default(TRdxQualifyItem);
+  AItem.Short := AEntry.Resolved;
+  Result := (AItem.Short <> '') and (Pos('.', AItem.Short) = 0);
+  if not Result then Exit;
+  if not ACtx.Scopes.Resolve(AItem.Short, ACtx.Fw, Q, Reason) then
+  begin
+    AItem.Why := qwScopeTable;
+    AItem.ScopeReason := Reason;
+  end
+  else if Assigned(ACtx.IsOwnUnit) and ACtx.IsOwnUnit(AItem.Short) then
+    AItem.Why := qwOwnUnit
+  else
+  begin
+    AItem.Qualified     := Q;
+    AItem.Edit.Span     := AEntry;
+    AItem.Edit.Expected := AItem.Short;
+    AItem.Edit.NewText  := Q;
+  end;
+end;
+
+// Bleibt die sortierte Klausel ANames sortiert, wenn der Eintrag AIndex zu
+// AQualified wird? Dieselbe Regel wie uUnsortedUses (SCA142):
+// TRdxRecipes.IsSortedUses.
+function StaysSorted(const ANames: TArray<string>; AIndex: Integer;
+  const AQualified: string): Boolean;
+var
+  Single : TArray<string>;
+begin
+  Single := Copy(ANames);
+  Single[AIndex] := AQualified;
+  Result := TRdxRecipes.IsSortedUses(Single);
+end;
+
+// Die Ersetzung AEdit zu 'alle qualifizieren' und ihr Ziel in die Vorschau
+// (die ersten MAX_QUALIFY_PREVIEW).
+procedure TakeIntoAll(var APlan: TRdxQualifyPlan; const AEdit: TRdxEdit);
+begin
+  SetLength(APlan.All, Length(APlan.All) + 1);
+  APlan.All[High(APlan.All)] := AEdit;
+  if Length(APlan.All) > MAX_QUALIFY_PREVIEW then Exit;
+  if APlan.AllPreview <> '' then
+    APlan.AllPreview := APlan.AllPreview + ', ';
+  APlan.AllPreview := APlan.AllPreview + AEdit.NewText;
+end;
+
+// EINE Klausel: Items der gefragten Zeile, 'alle qualifizieren' (All,
+// Vorschau) und ob das eine sortierte Klausel unsortiert machte. Bis Charge
+// R8 der Rumpf der Schleife in QualifyUses (SCA176 46).
+procedure QualifyClause(const ACtx: TRdxQualifyCtx;
+  const AEntries: TArray<TRefactorSpan>; var APlan: TRdxQualifyPlan);
+var
+  Names, AllNames : TArray<string>;
+  Sorted          : Boolean;
+  i               : Integer;
+  Item            : TRdxQualifyItem;
+begin
+  Names := ClauseNames(AEntries);
+  Sorted := TRdxRecipes.IsSortedUses(Names);
+  AllNames := Copy(Names);
+  for i := 0 to High(AEntries) do
+  begin
+    if not QualifyItemOf(ACtx, AEntries[i], Item) then Continue;
+    if Item.Why = qwOk then
+    begin
+      AllNames[i] := Item.Qualified;
+      TakeIntoAll(APlan, Item.Edit);
+      // Eine sortierte Klausel bleibt sortiert, sonst kein Angebot - der
+      // Klick erzeugte einen neuen SCA142-Fund (Minor 14).
+      if Sorted and not StaysSorted(Names, i, Item.Qualified) then
+        Item.Why := qwUnsorts;
+    end;
+    if AEntries[i].StartLine = ACtx.Line then
+    begin
+      SetLength(APlan.Items, Length(APlan.Items) + 1);
+      APlan.Items[High(APlan.Items)] := Item;
+    end;
+  end;
+  if Sorted and not TRdxRecipes.IsSortedUses(AllNames) then
+    APlan.AllUnsorts := True;
 end;
 
 class function TRdxRecipeRunner.QualifyUses(APlaces: TSourcePlaces;
   AScopes: TRdxScopeTable; ALine: Integer;
   const AIsOwnUnit: TRdxOwnUnitCheck): TRdxQualifyPlan;
 var
-  Clauses   : TArray<TArray<TRefactorSpan>>;
-  Entries   : TArray<TRefactorSpan>;
-  Names     : TArray<string>;
-  AllNames  : TArray<string>;
-  Single    : TArray<string>;
-  c, i      : Integer;
-  Fw        : TRdxFramework;
-  Item      : TRdxQualifyItem;
-  Q, Reason : string;
-  Sorted    : Boolean;
+  Clauses : TArray<TArray<TRefactorSpan>>;
+  Ctx     : TRdxQualifyCtx;
+  c       : Integer;
 begin
   Result := Default(TRdxQualifyPlan);
   if not LineInUsesClause(APlaces, ALine) then Exit;
@@ -2506,63 +2342,14 @@ begin
     Result.Block := qbFpcSwitch;
     Exit;
   end;
-  Fw := TRdxRecipes.DetectFramework(UsesNamesOf(APlaces));
+  Ctx.Scopes    := AScopes;
+  Ctx.Fw        := TRdxRecipes.DetectFramework(UsesNamesOf(APlaces));
+  Ctx.Line      := ALine;
+  Ctx.IsOwnUnit := AIsOwnUnit;
   Clauses := ClausesOf(APlaces);
   for c := 0 to High(Clauses) do
-  begin
-    Entries := Clauses[c];
-    SetLength(Names, Length(Entries));
-    for i := 0 to High(Entries) do
-      Names[i] := Entries[i].Resolved;
-    Sorted := NamesSorted(Names);
-    AllNames := Copy(Names);
-    for i := 0 to High(Entries) do
-    begin
-      Item := Default(TRdxQualifyItem);
-      Item.Short := Entries[i].Resolved;
-      if (Item.Short = '') or (Pos('.', Item.Short) > 0) then Continue;
-      if not AScopes.Resolve(Item.Short, Fw, Q, Reason) then
-      begin
-        Item.Why := qwScopeTable;
-        Item.ScopeReason := Reason;
-      end
-      else if Assigned(AIsOwnUnit) and AIsOwnUnit(Item.Short) then
-        Item.Why := qwOwnUnit
-      else
-      begin
-        Item.Qualified     := Q;
-        Item.Edit.Span     := Entries[i];
-        Item.Edit.Expected := Item.Short;
-        Item.Edit.NewText  := Q;
-        AllNames[i] := Q;
-        SetLength(Result.All, Length(Result.All) + 1);
-        Result.All[High(Result.All)] := Item.Edit;
-        if Length(Result.All) <= 3 then
-        begin
-          if Result.AllPreview <> '' then
-            Result.AllPreview := Result.AllPreview + ', ';
-          Result.AllPreview := Result.AllPreview + Q;
-        end;
-        // Eine sortierte Klausel bleibt sortiert, sonst kein Angebot -
-        // der Klick erzeugte einen neuen SCA142-Fund (Minor 14).
-        if Sorted then
-        begin
-          Single := Copy(Names);
-          Single[i] := Q;
-          if not NamesSorted(Single) then
-            Item.Why := qwUnsorts;
-        end;
-      end;
-      if Entries[i].StartLine = ALine then
-      begin
-        SetLength(Result.Items, Length(Result.Items) + 1);
-        Result.Items[High(Result.Items)] := Item;
-      end;
-    end;
-    if Sorted and not NamesSorted(AllNames) then
-      Result.AllUnsorts := True;
-  end;
-  if Length(Result.All) > 3 then
+    QualifyClause(Ctx, Clauses[c], Result);
+  if Length(Result.All) > MAX_QUALIFY_PREVIEW then
     Result.AllPreview := Result.AllPreview + ', ...';
 end;
 

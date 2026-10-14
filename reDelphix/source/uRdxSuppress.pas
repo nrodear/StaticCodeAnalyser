@@ -137,6 +137,32 @@ begin
   Result := SameText(K, 'all') or (K = '*');
 end;
 
+// Das naechste Wort der Artenliste ab AFrom, getrennt an SEPARATORS wie der
+// Core; AFrom rueckt dahinter. '' am Ende. Bis Charge R8 je eine Zeichen-
+// Schleife in KindCount und KindListed.
+function NextKindWord(const AList: string; var AFrom: Integer): string;
+var
+  Start : Integer;
+begin
+  while (AFrom <= Length(AList)) and CharInSet(AList[AFrom], SEPARATORS) do
+    Inc(AFrom);
+  Start := AFrom;
+  while (AFrom <= Length(AList)) and not CharInSet(AList[AFrom], SEPARATORS) do
+    Inc(AFrom);
+  Result := Copy(AList, Start, AFrom - Start);
+end;
+
+// Ein reiner Bezeichner: Anfangszeichen, dann nur Bezeichnerzeichen.
+function IsIdentWord(const AWord: string): Boolean;
+var
+  k : Integer;
+begin
+  Result := (AWord <> '') and IsIdentStart(AWord[1]);
+  for k := 2 to Length(AWord) do
+    if not IsIdentChar(AWord[k]) then
+      Exit(False);
+end;
+
 // Zahl der Arten, die der Marker nennt: die fuehrenden Woerter der Liste,
 // die reine Bezeichner sind. Das erste andere Wort ('(Grund', '-', 'bis
 // Q3:') beendet die Liste - so zaehlt '// noinspection X (Grund)' eine Art.
@@ -144,30 +170,19 @@ end;
 // vorsichtige Seite, der Aufrufer lehnt dann ab.
 function KindCount(const ACommentText: string): Integer;
 var
-  List  : string;
-  Word_ : string;
-  i, k  : Integer;
-  Ident : Boolean;
+  List, W : string;
+  i       : Integer;
 begin
   Result := 0;
   List := KindList(ACommentText);
-  Word_ := '';
-  for i := 1 to Length(List) + 1 do
-    if (i > Length(List)) or CharInSet(List[i], SEPARATORS) then
-    begin
-      if Word_ <> '' then
-      begin
-        Ident := IsIdentStart(Word_[1]);
-        for k := 2 to Length(Word_) do
-          if not IsIdentChar(Word_[k]) then
-            Ident := False;
-        if not Ident then Exit;
-        Inc(Result);
-      end;
-      Word_ := '';
-    end
-    else
-      Word_ := Word_ + List[i];
+  i := 1;
+  W := NextKindWord(List, i);
+  while W <> '' do
+  begin
+    if not IsIdentWord(W) then Exit;
+    Inc(Result);
+    W := NextKindWord(List, i);
+  end;
 end;
 
 // Steht AKindName schon in der Artenliste des Markers? Die Liste wie
@@ -176,22 +191,19 @@ end;
 // Quick-Fix-Units 2026-10-14), getrennt an SEPARATORS wie der Core.
 function KindListed(const AText, AKindName: string): Boolean;
 var
-  List  : string;
-  Word_ : string;
-  i     : Integer;
+  List, W : string;
+  i       : Integer;
 begin
   Result := False;
   List := KindList(CommentBody(AText));
-  Word_ := '';
-  for i := 1 to Length(List) + 1 do
-    if (i > Length(List)) or CharInSet(List[i], SEPARATORS) then
-    begin
-      if SameText(Word_, AKindName) then
-        Exit(True);
-      Word_ := '';
-    end
-    else
-      Word_ := Word_ + List[i];
+  i := 1;
+  W := NextKindWord(List, i);
+  while W <> '' do
+  begin
+    if SameText(W, AKindName) then
+      Exit(True);
+    W := NextKindWord(List, i);
+  end;
 end;
 
 // Marker-Zeile mit AKindName direkt hinter dem Tag (und einem ':').

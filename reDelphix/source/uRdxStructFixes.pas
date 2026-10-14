@@ -441,32 +441,24 @@ end;
 
 { ---- SCA168 ---- }
 
+// Das Wort 'case' (OneTokenOnLine, CaseTokenOn).
+function IsCaseWord(AMap: TRdxCodeMap; const T: TRdxToken;
+  const AArg: string): Boolean;
+begin
+  Result := T.Low = 'case';
+end;
+
 // Das eine 'case' im Code der Zeile ALine. '' oder der Grund.
 function CaseTokenOn(AMap: TRdxCodeMap; ALine: Integer;
   out ACase: TRdxToken): string;
 var
-  T : TRdxToken;
-  n : Integer;
+  S : TRdxLineSearch;
 begin
-  Result := '';
-  ACase := Default(TRdxToken);
-  n := 0;
-  T := NextToken(AMap, ALine, 1);
-  while (T.Low <> '') and (T.Line = ALine) do
-  begin
-    if T.Low = 'case' then
-    begin
-      Inc(n);
-      ACase := T;
-    end;
-    T := After(AMap, T);
-  end;
-  if n = 0 then
-    Result := 'kein case auf der gemeldeten Zeile - Zeile verschoben? Datei '
-      + 'neu pruefen'
-  else if n > 1 then
-    Result := Format('Zeile %d traegt %d case-Anweisungen - mehrdeutig',
-      [ALine, n]);
+  S := Default(TRdxLineSearch);
+  S.Test    := IsCaseWord;
+  S.What    := 'kein case';
+  S.ManyFmt := '%d case-Anweisungen';
+  Result := OneTokenOnLine(AMap, ALine, S, ACase);
 end;
 
 // Auf oberster Ebene des case: ein else, das dem case gehoert (ElseOwner:
@@ -491,49 +483,24 @@ begin
     Result := 'das case hat einen otherwise-Zweig (FPC)';
 end;
 
-// Ein Schritt der Bilanz: ADepth fortschreiben; '' oder der Grund zum
-// Abbruch. '&End', '@@End' (asm-Label) und 'X.End' sind Bezeichner, keine
-// Schluesselwoerter (IDENT_PREFIXES, wie in den uebrigen Bilanzen).
-function BalanceStep(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
-  var ADepth: Integer): string;
+// Der Haken der end-Bilanz von SCA168 (BlockEnd, MatchingEnd): auf der
+// obersten Ebene des case ein Schluesselwort gegen TopLevelReason halten.
+// '&Else' und 'X.Else' sind Bezeichner (IsKeywordAfter), kein Zweig.
+function CaseTopHook(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
+  ADepth: Integer): string;
 begin
   Result := '';
-  if InList(APrev.Low, IDENT_PREFIXES) then Exit;
-  if IsEndOpener(T.Low) then
-    Inc(ADepth)
-  else if T.Low = 'end' then
-    Dec(ADepth)
-  else if ADepth = 1 then
+  if (ADepth = 1) and IsKeywordAfter(T, APrev) then
     Result := TopLevelReason(AMap, T, APrev);
 end;
 
 // Das end zum case ACase und das Token davor (ALast). '' oder der Grund.
 function MatchingEnd(AMap: TRdxCodeMap; const ACase: TRdxToken;
   out AEnd, ALast: TRdxToken): string;
-var
-  T, Prev : TRdxToken;
-  Depth   : Integer;
 begin
-  Result := '';
-  AEnd := Default(TRdxToken);
-  ALast := Default(TRdxToken);
-  Depth := 1;
-  Prev := ACase;
-  T := After(AMap, ACase);
-  while T.Low <> '' do
-  begin
-    Result := BalanceStep(AMap, T, Prev, Depth);
-    if Result <> '' then Exit;
-    if Depth = 0 then
-    begin
-      AEnd := T;
-      ALast := Prev;
-      Exit;
-    end;
-    Prev := T;
-    T := After(AMap, T);
-  end;
-  Result := 'kein end zum case gefunden';
+  Result := BlockEnd(AMap, ACase, CaseTopHook, AEnd, ALast);
+  if (Result = '') and (AEnd.Low = '') then
+    Result := 'kein end zum case gefunden';
 end;
 
 // Der Ersatz fuer das end: steht es am Zeilenanfang, das else in eigener
@@ -663,38 +630,35 @@ begin
   Result := AReason = '';
 end;
 
+// Das end eines Paars 'end else', das uIfElseBegin meldet - nicht 'end
+// else if' usw. (OneTokenOnLine, ElseAfterEndOn).
+function IsEndElsePair(AMap: TRdxCodeMap; const T: TRdxToken;
+  const AArg: string): Boolean;
+var
+  N : TRdxToken;
+begin
+  Result := False;
+  N := After(AMap, T);
+  if (T.Low <> 'end') or (N.Low <> 'else') then Exit;
+  Result := not InList(Before(AMap, T).Low, IDENT_PREFIXES)
+    and not InList(After(AMap, N).Low, SCA099_ALLOWED);
+end;
+
 class function TRdxStructFixes.ElseAfterEndOn(AMap: TRdxCodeMap;
   ALine: Integer; out AKeyword: TRdxToken; out AReason: string): Boolean;
 var
-  T, Prev, N : TRdxToken;
-  Count      : Integer;
+  S      : TRdxLineSearch;
+  EndTok : TRdxToken;
 begin
   AKeyword := Default(TRdxToken);
-  AReason := '';
-  Count := 0;
-  Prev := PrevToken(AMap, ALine, 1);
-  T := NextToken(AMap, ALine, 1);
-  while (T.Low <> '') and (T.Line = ALine) do
-  begin
-    N := After(AMap, T);
-    // Nur Paare, die uIfElseBegin meldet - nicht 'end else if' usw.
-    if (T.Low = 'end') and (N.Low = 'else')
-       and not InList(Prev.Low, IDENT_PREFIXES)
-       and not InList(After(AMap, N).Low, SCA099_ALLOWED) then
-    begin
-      Inc(Count);
-      AKeyword := N;
-    end;
-    Prev := T;
-    T := N;
-  end;
-  if Count = 0 then
-    AReason := 'kein "end else" auf der gemeldeten Zeile - Zeile verschoben? '
-      + 'Datei neu pruefen'
-  else if Count > 1 then
-    AReason := Format('Zeile %d traegt %d-mal "end else" - mehrdeutig',
-      [ALine, Count]);
+  S := Default(TRdxLineSearch);
+  S.Test    := IsEndElsePair;
+  S.What    := 'kein "end else"';
+  S.ManyFmt := '%d-mal "end else"';
+  AReason := OneTokenOnLine(AMap, ALine, S, EndTok);
   Result := AReason = '';
+  if Result then
+    AKeyword := After(AMap, EndTok);
 end;
 
 // Klammertiefe rueckwaerts: ')' und ']' hoch, '(' und '[' herunter. True,
@@ -1038,40 +1002,32 @@ begin
   Result := 'Ende der Anweisung nicht gefunden';
 end;
 
+// Der Haken der end-Bilanz von ListEnd (BlockEnd): eine Inline-
+// Deklaration im else-Zweig sperrt.
+function ListDeclHook(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
+  ADepth: Integer): string;
+begin
+  Result := '';
+  if IsKeywordAfter(T, APrev) and InList(T.Low, INLINE_DECLS) then
+    Result := Format('Inline-Deklaration (%s) im else-Zweig - begin..end engte '
+      + 'ihren Gueltigkeitsbereich ein', [T.Low]);
+end;
+
 // Das Ende der Anweisungsliste hinter dem else eines case oder except: das
-// end, das den case bzw. try schliesst (Bilanz wie MatchingEnd). Endet die
-// Liste auf ';', HasSemi. '' oder der Grund.
+// end, das den case bzw. try schliesst (end-Bilanz BlockEnd ab dem else).
+// Endet die Liste auf ';', HasSemi. '' oder der Grund.
 function ListEnd(AMap: TRdxCodeMap; var ABranch: TRdxBranch): string;
 var
-  T, Prev : TRdxToken;
-  Depth   : Integer;
+  EndTok, Last : TRdxToken;
 begin
-  Depth := 0;
-  Prev := ABranch.Keyword;
-  T := ABranch.First;
-  while T.Low <> '' do
-  begin
-    if IsKeywordAfter(T, Prev) and InList(T.Low, INLINE_DECLS) then
-      Exit(Format('Inline-Deklaration (%s) im else-Zweig - begin..end engte '
-        + 'ihren Gueltigkeitsbereich ein', [T.Low]));
-    if IsKeywordAfter(T, Prev) and IsEndOpener(T.Low) then
-      Inc(Depth)
-    else if IsKeywordAfter(T, Prev) and (T.Low = 'end') then
-    begin
-      if Depth = 0 then
-      begin
-        ABranch.Stop := T;
-        ABranch.HasSemi := Prev.Low = ';';
-        ABranch.LastLine := Prev.Line;
-        ABranch.LastCol := Prev.Col;
-        Exit('');
-      end;
-      Dec(Depth);
-    end;
-    Prev := T;
-    T := After(AMap, T);
-  end;
-  Result := 'kein end zum else-Zweig gefunden';
+  Result := BlockEnd(AMap, ABranch.Keyword, ListDeclHook, EndTok, Last);
+  if Result <> '' then Exit;
+  if EndTok.Low = '' then
+    Exit('kein end zum else-Zweig gefunden');
+  ABranch.Stop := EndTok;
+  ABranch.HasSemi := Last.Low = ';';
+  ABranch.LastLine := Last.Line;
+  ABranch.LastCol := Last.Col;
 end;
 
 // Das erste Zeichen aus Code oder String hinter ATok (Kommentare und
@@ -1139,16 +1095,12 @@ end;
 // Gegen-Review SCA101, Minor 2). Zeilenweise: lieber zu streng.
 function DirectiveInRange(AMap: TRdxCodeMap; const B: TRdxBranch): Boolean;
 var
-  Li, Co, Last : Integer;
+  Last : Integer;
 begin
-  Result := False;
   Last := B.LastLine;
   if B.Stop.Line > Last then
     Last := B.Stop.Line;
-  for Li := B.CheckFrom to Last do
-    for Co := 1 to Length(AMap.Raw(Li)) do
-      if DirectiveAt(AMap, Li, Co) then
-        Exit(True);
+  Result := DirectiveInLines(AMap, B.CheckFrom, Last);
 end;
 
 // Hinter (ALine, ACol) auf der Zeile nur Leerraum oder Kommentar?

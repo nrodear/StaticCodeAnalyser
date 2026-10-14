@@ -496,22 +496,6 @@ begin
   end;
 end;
 
-// Die ')' bzw. ']' zur Klammer AOpen; Low = '' ohne.
-function MatchingClose(AMap: TRdxCodeMap; const AOpen: TRdxToken): TRdxToken;
-var
-  Depth : Integer;
-begin
-  Depth := 0;
-  Result := AOpen;
-  while Result.Low <> '' do
-  begin
-    Inc(Depth, ParenDelta(Result));
-    if Depth = 0 then
-      Exit;
-    Result := After(AMap, Result);
-  end;
-end;
-
 function BoolForm(AMap: TRdxCodeMap; const ARange: TRdxTokRange;
   var AIdents: TArray<string>; ALevel: Integer): Boolean; forward;
 
@@ -540,7 +524,7 @@ begin
   end;
   if T.Low <> '(' then
     Exit(False);
-  Close := MatchingClose(AMap, T);
+  Close := MatchClose(AMap, T);
   if (Close.Low = '') or not SameTok(After(AMap, Close), ARange.Stop) then
     Exit(False);
   Inner.First := After(AMap, T);
@@ -680,12 +664,12 @@ begin
     Prev := T;
     T := N;
   end;
+  // Die Gruende wie bei jeder Token-Suche (OneTokenReason) - die Zaehlung
+  // bleibt eigen: jeder Sprung zaehlt, nicht nur der gemeldete.
   if Hits = 0 then
-    Result := Format('kein "%s;" auf der gemeldeten Zeile - %s', [AWord,
-      R_MOVED])
+    Result := OneTokenReason(ALine, 0, 'kein "' + AWord + ';"', '')
   else if Jumps > 1 then
-    Result := Format('Zeile %d traegt %d Sprunganweisungen - mehrdeutig',
-      [ALine, Jumps])
+    Result := OneTokenReason(ALine, Jumps, '', '%d Sprunganweisungen')
   else if ASemi.Line <> AJump.Line then
     Result := 'Sprung und ";" auf verschiedenen Zeilen';
 end;
@@ -993,35 +977,31 @@ begin
   Result := (Cur.Low = ';') or (Cur.Low = '') or InList(Cur.Low, STMT_STOPS);
 end;
 
+// 'AArg := AArg' an T (OneTokenOnLine, SelfOn).
+function IsSelfAssignOf(AMap: TRdxCodeMap; const T: TRdxToken;
+  const AArg: string): Boolean;
+var
+  S : TRdxStmtSite;
+begin
+  Result := SelfAt(AMap, T, Before(AMap, T), AArg, S);
+end;
+
 // Die eine Selbstzuweisung AKey auf ALine. '' oder der Grund.
 function SelfOn(AMap: TRdxCodeMap; ALine: Integer; const AKey: string;
   out ASite: TRdxStmtSite): string;
 var
-  T, Prev : TRdxToken;
-  S       : TRdxStmtSite;
-  n       : Integer;
+  S   : TRdxLineSearch;
+  Hit : TRdxToken;
 begin
-  Result := '';
   ASite := Default(TRdxStmtSite);
-  n := 0;
-  Prev := PrevToken(AMap, ALine, 1);
-  T := NextToken(AMap, ALine, 1);
-  while (T.Low <> '') and (T.Line = ALine) do
-  begin
-    if SelfAt(AMap, T, Prev, AKey, S) then
-    begin
-      Inc(n);
-      ASite := S;
-    end;
-    Prev := T;
-    T := After(AMap, T);
-  end;
-  if n = 0 then
-    Result := Format('keine Selbstzuweisung "%s := %s" auf der gemeldeten '
-      + 'Zeile - %s', [AKey, AKey, R_MOVED])
-  else if n > 1 then
-    Result := Format('Zeile %d traegt %d Selbstzuweisungen von %s - '
-      + 'mehrdeutig', [ALine, n, AKey]);
+  S := Default(TRdxLineSearch);
+  S.Test    := IsSelfAssignOf;
+  S.Arg     := AKey;
+  S.What    := 'keine Selbstzuweisung "' + AKey + ' := ' + AKey + '"';
+  S.ManyFmt := '%d Selbstzuweisungen von ' + AKey;
+  Result := OneTokenOnLine(AMap, ALine, S, Hit);
+  if Result = '' then
+    SelfAt(AMap, Hit, Before(AMap, Hit), AKey, ASite);
 end;
 
 // Ein 'class operator Assign' in der Unit (Delphi 10.4: verwaltete

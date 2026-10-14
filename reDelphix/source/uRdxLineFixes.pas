@@ -184,71 +184,38 @@ begin
     Result := UpperCase(Copy(AWord, 1, 1)) + Copy(Result, 2, MaxInt);
 end;
 
+// Ein begin als Schluesselwort (OneTokenOnLine, BeginOn).
+function IsBeginKeyword(AMap: TRdxCodeMap; const T: TRdxToken;
+  const AArg: string): Boolean;
+begin
+  Result := (T.Low = 'begin') and IsKeywordAfter(T, Before(AMap, T));
+end;
+
 // Das eine begin (Schluesselwort, Code) auf ALine. '' oder der Grund.
 function BeginOn(AMap: TRdxCodeMap; ALine: Integer;
   out ABegin: TRdxToken): string;
 var
-  T, Prev : TRdxToken;
-  n       : Integer;
+  S : TRdxLineSearch;
 begin
-  Result := '';
-  ABegin := Default(TRdxToken);
-  n := 0;
-  Prev := PrevToken(AMap, ALine, 1);
-  T := NextToken(AMap, ALine, 1);
-  while (T.Low <> '') and (T.Line = ALine) do
-  begin
-    if (T.Low = 'begin') and IsKeywordAfter(T, Prev) then
-    begin
-      Inc(n);
-      ABegin := T;
-    end;
-    Prev := T;
-    T := After(AMap, T);
-  end;
-  if n = 0 then
-    Result := 'kein begin auf der gemeldeten Zeile - Zeile verschoben? '
-      + 'Datei neu pruefen'
-  else if n > 1 then
-    Result := Format('Zeile %d traegt %d begin - mehrdeutig', [ALine, n]);
+  S := Default(TRdxLineSearch);
+  S.Test    := IsBeginKeyword;
+  S.What    := 'kein begin';
+  S.ManyFmt := '%d begin';
+  Result := OneTokenOnLine(AMap, ALine, S, ABegin);
 end;
 
-// Das end zu ABegin (Bilanz wie MatchingEnd) - steht es vor dem '.'?
+// Das end zu ABegin (end-Bilanz BlockEnd) - steht es vor dem '.'?
 // '' oder der Grund.
 function EndsUnit(AMap: TRdxCodeMap; const ABegin: TRdxToken): string;
 var
-  T, Prev : TRdxToken;
-  Depth   : Integer;
+  EndTok, Last : TRdxToken;
 begin
-  Depth := 1;
-  Prev := ABegin;
-  T := After(AMap, ABegin);
-  while (T.Low <> '') and (Depth > 0) do
-  begin
-    if IsKeywordAfter(T, Prev) and IsEndOpener(T.Low) then
-      Inc(Depth)
-    else if IsKeywordAfter(T, Prev) and (T.Low = 'end') then
-      Dec(Depth);
-    Prev := T;
-    if Depth > 0 then
-      T := After(AMap, T);
-  end;
-  Result := '';
-  if Depth > 0 then
+  Result := BlockEnd(AMap, ABegin, nil, EndTok, Last);
+  if EndTok.Low = '' then
     Result := 'kein end zum begin gefunden'
-  else if After(AMap, T).Low <> '.' then
+  else if After(AMap, EndTok).Low <> '.' then
     Result := 'das end zu diesem begin steht nicht vor dem Punkt - kein '
       + 'Unit-Rumpf';
-end;
-
-function DirectiveOnLine(AMap: TRdxCodeMap; ALine: Integer): Boolean;
-var
-  Co : Integer;
-begin
-  Result := False;
-  for Co := 1 to Length(AMap.Raw(ALine)) do
-    if DirectiveAt(AMap, ALine, Co) then
-      Exit(True);
 end;
 
 class function TRdxLineFixes.LegacyInit(AMap: TRdxCodeMap; ALine: Integer;
@@ -263,7 +230,7 @@ begin
     AReason := 'keine Unit - in program/library ist begin der Rumpf'
   else
     AReason := BeginOn(AMap, ALine, B);
-  if (AReason = '') and DirectiveOnLine(AMap, ALine) then
+  if (AReason = '') and DirectiveInLines(AMap, ALine, ALine) then
     AReason := 'Compiler-Direktive auf der Zeile des begin';
   if AReason = '' then
     AReason := EndsUnit(AMap, B);
@@ -301,30 +268,13 @@ type
   // Was an einem Token steht (CastAt).
   TRdxCastKind = (ckNone, ckFree, ckDestroy, ckOpenLine);
 
-// Ab dem '(' AOpen die schliessende ')' auf derselben Zeile. False ohne.
+// Ab dem '(' AOpen die schliessende ')' auf derselben Zeile (MatchClose
+// ohne weitere Zeilen). False ohne.
 function CloseParen(AMap: TRdxCodeMap; const AOpen: TRdxToken;
   out AClose: TRdxToken): Boolean;
-var
-  T     : TRdxToken;
-  Depth : Integer;
 begin
-  Result := False;
-  AClose := Default(TRdxToken);
-  Depth := 0;
-  T := AOpen;
-  while (T.Low <> '') and (T.Line = AOpen.Line) do
-  begin
-    if T.Low = '(' then
-      Inc(Depth)
-    else if T.Low = ')' then
-      Dec(Depth);
-    if Depth = 0 then
-    begin
-      AClose := T;
-      Exit(True);
-    end;
-    T := After(AMap, T);
-  end;
+  AClose := MatchClose(AMap, AOpen, 0);
+  Result := AClose.Low <> '';
 end;
 
 // Steht an T der Cast 'ATarget(...)'? ckFree/ckDestroy mit '.Free' bzw.
@@ -384,9 +334,9 @@ begin
     Prev := T;
     T := After(AMap, T);
   end;
+  // Die Gruende "keiner"/"mehrere" wie bei jeder Token-Suche (OneTokenReason).
   if n > 1 then
-    Result := Format('Zeile %d traegt %d Casts %s(...).Free - mehrdeutig',
-      [ALine, n, ATarget])
+    Result := OneTokenReason(ALine, n, '', '%d Casts ' + ATarget + '(...).Free')
   else if n = 1 then
     Exit
   else if ckDestroy in Seen then
@@ -394,8 +344,7 @@ begin
   else if ckOpenLine in Seen then
     Result := Format('der Cast %s(...) geht ueber mehrere Zeilen', [ATarget])
   else
-    Result := Format('kein %s(...).Free auf der gemeldeten Zeile - Zeile '
-      + 'verschoben? Datei neu pruefen', [ATarget]);
+    Result := OneTokenReason(ALine, 0, 'kein ' + ATarget + '(...).Free', '');
 end;
 
 // Ist der Operand zwischen den Klammern ein Bezeichnerpfad (A, A.B,

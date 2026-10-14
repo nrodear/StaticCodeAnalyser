@@ -92,6 +92,13 @@ type
     EndTok   : TRdxToken;
   end;
 
+// Ein Routinen-Wort als Schluesselwort (OneTokenOnLine, HeaderOn).
+function IsRoutineWord(AMap: TRdxCodeMap; const T: TRdxToken;
+  const AArg: string): Boolean;
+begin
+  Result := IsKeywordAfter(T, Before(AMap, T)) and InList(T.Low, ROUTINE_WORDS);
+end;
+
 // Das eine Routinen-Wort auf ALine. Zwei Koepfe auf einer Zeile
 // ('procedure P1; begin end; procedure P2; ...') heissen mehrdeutig - der
 // Fund koennte jeden meinen (Gegen-Review Ausnahme-Hilfen, Major 3).
@@ -99,30 +106,13 @@ type
 function HeaderOn(AMap: TRdxCodeMap; ALine: Integer;
   out AKeyword: TRdxToken): string;
 var
-  T, Prev : TRdxToken;
-  n       : Integer;
+  S : TRdxLineSearch;
 begin
-  Result := '';
-  AKeyword := Default(TRdxToken);
-  n := 0;
-  Prev := PrevToken(AMap, ALine, 1);
-  T := NextToken(AMap, ALine, 1);
-  while (T.Low <> '') and (T.Line = ALine) do
-  begin
-    if IsKeywordAfter(T, Prev) and InList(T.Low, ROUTINE_WORDS) then
-    begin
-      Inc(n);
-      AKeyword := T;
-    end;
-    Prev := T;
-    T := After(AMap, T);
-  end;
-  if n = 0 then
-    Result := 'kein Methodenkopf auf der gemeldeten Zeile - Zeile verschoben? '
-      + 'Datei neu pruefen'
-  else if n > 1 then
-    Result := Format('Zeile %d traegt %d Routinenkoepfe - mehrdeutig',
-      [ALine, n]);
+  S := Default(TRdxLineSearch);
+  S.Test    := IsRoutineWord;
+  S.What    := 'kein Methodenkopf';
+  S.ManyFmt := '%d Routinenkoepfe';
+  Result := OneTokenOnLine(AMap, ALine, S, AKeyword);
 end;
 
 // Der Name hinter dem Routinen-Wort bis vor '(' ':' ';' oder bis zum
@@ -295,25 +285,6 @@ begin
       Q - P - Length(KEY_EXCEPTION));
 end;
 
-// Ab dem '(' AOpen (auch ueber Zeilen) das Token hinter der passenden ')'.
-function AfterParens(AMap: TRdxCodeMap; const AOpen: TRdxToken): TRdxToken;
-var
-  Depth : Integer;
-begin
-  Depth := 0;
-  Result := AOpen;
-  while Result.Low <> '' do
-  begin
-    if Result.Low = '(' then
-      Inc(Depth)
-    else if Result.Low = ')' then
-      Dec(Depth);
-    Result := After(AMap, Result);
-    if Depth = 0 then
-      Exit;
-  end;
-end;
-
 // Steht an T 'ATarget.Create..' als ganze Anweisung? Dann True; AWhole
 // False, wenn es nur Teil eines Ausdrucks ist.
 function CreateAt(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
@@ -333,7 +304,7 @@ begin
   Result := True;
   N := After(AMap, C);
   if N.Low = '(' then
-    N := AfterParens(AMap, N);
+    N := AfterClose(AMap, N);
   // Ein then-Zweig ist nur dann eine Anweisung, wenn sein if eine ist -
   // in 'Foo(if C then EFoo.Create(..) else nil)' waere raise E2029
   // (Gegen-Review Ausnahme-Hilfen, Major 2).
@@ -341,13 +312,23 @@ begin
     and TRdxStructFixes.StartsStatementAt(AMap, T);
 end;
 
+// 'AArg.Create..' an T (OneTokenOnLine, MissingRaise) - ob als ganze
+// Anweisung, prueft der Aufrufer am einen Treffer noch einmal.
+function IsCreateOf(AMap: TRdxCodeMap; const T: TRdxToken;
+  const AArg: string): Boolean;
+var
+  Whole : Boolean;
+begin
+  Result := CreateAt(AMap, T, Before(AMap, T), AArg, Whole);
+end;
+
 class function TRdxRaiseFixes.MissingRaise(AMap: TRdxCodeMap; ALine: Integer;
   const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
-  Target       : string;
-  T, Prev, Hit : TRdxToken;
-  Whole, Found : Boolean;
-  n            : Integer;
+  Target : string;
+  Hit    : TRdxToken;
+  Whole  : Boolean;
+  S      : TRdxLineSearch;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -358,29 +339,14 @@ begin
     AReason := 'Exception-Klasse fehlt in der Meldung';
     Exit;
   end;
-  n := 0;
-  Found := False;
-  Hit := Default(TRdxToken);
-  Prev := PrevToken(AMap, ALine, 1);
-  T := NextToken(AMap, ALine, 1);
-  while (T.Low <> '') and (T.Line = ALine) do
-  begin
-    if CreateAt(AMap, T, Prev, Target, Whole) then
-    begin
-      Inc(n);
-      Found := Whole;
-      Hit := T;
-    end;
-    Prev := T;
-    T := After(AMap, T);
-  end;
-  if n = 0 then
-    AReason := Format('kein %s.Create auf der gemeldeten Zeile - Zeile '
-      + 'verschoben? Datei neu pruefen', [Target])
-  else if n > 1 then
-    AReason := Format('Zeile %d traegt %d-mal %s.Create - mehrdeutig',
-      [ALine, n, Target])
-  else if not Found then
+  S := Default(TRdxLineSearch);
+  S.Test    := IsCreateOf;
+  S.Arg     := Target;
+  S.What    := 'kein ' + Target + '.Create';
+  S.ManyFmt := '%d-mal ' + Target + '.Create';
+  AReason := OneTokenOnLine(AMap, ALine, S, Hit);
+  if (AReason = '') and CreateAt(AMap, Hit, Before(AMap, Hit), Target, Whole)
+     and not Whole then
     AReason := Format('%s.Create(..) steht nicht als ganze Anweisung - '
       + 'Teil eines Ausdrucks?', [Target]);
   if AReason <> '' then Exit;
@@ -501,38 +467,34 @@ begin
     [AName]);
 end;
 
+// 'raise AArg' vor dem Ende der Anweisung an T (OneTokenOnLine, RaiseOn).
+function IsRaiseOf(AMap: TRdxCodeMap; const T: TRdxToken;
+  const AArg: string): Boolean;
+var
+  N : TRdxToken;
+begin
+  N := After(AMap, T);
+  Result := (T.Low = 'raise') and SameText(N.Low, AArg)
+    and InList(After(AMap, N).Low, STATEMENT_ENDS);
+end;
+
 // Das eine 'raise AName' (vor dem Ende der Anweisung) auf ALine, raise und
 // Name auf derselben Zeile ohne Kommentar dazwischen. '' oder der Grund.
 function RaiseOn(AMap: TRdxCodeMap; ALine: Integer; const AName: string;
   out AHit, AVar: TRdxToken): string;
 var
-  T, N  : TRdxToken;
-  Count : Integer;
+  S : TRdxLineSearch;
 begin
-  Result := '';
-  AHit := Default(TRdxToken);
   AVar := Default(TRdxToken);
-  Count := 0;
-  T := NextToken(AMap, ALine, 1);
-  while (T.Low <> '') and (T.Line = ALine) do
-  begin
-    N := After(AMap, T);
-    if (T.Low = 'raise') and SameText(N.Low, AName)
-       and InList(After(AMap, N).Low, STATEMENT_ENDS) then
-    begin
-      Inc(Count);
-      AHit := T;
-      AVar := N;
-    end;
-    T := N;
-  end;
-  if Count = 0 then
-    Result := Format('kein "raise %s" auf der gemeldeten Zeile - Zeile '
-      + 'verschoben? Datei neu pruefen', [AName])
-  else if Count > 1 then
-    Result := Format('Zeile %d traegt %d-mal "raise %s" - mehrdeutig',
-      [ALine, Count, AName])
-  else if (AVar.Line <> AHit.Line)
+  S := Default(TRdxLineSearch);
+  S.Test    := IsRaiseOf;
+  S.Arg     := AName;
+  S.What    := 'kein "raise ' + AName + '"';
+  S.ManyFmt := '%d-mal "raise ' + AName + '"';
+  Result := OneTokenOnLine(AMap, ALine, S, AHit);
+  if Result <> '' then Exit;
+  AVar := After(AMap, AHit);
+  if (AVar.Line <> AHit.Line)
      or AMap.HasNonCode(AHit.Line, AHit.Col, AVar.EndCol - 1) then
     Result := 'Kommentar oder Zeilenumbruch zwischen raise und Name';
 end;

@@ -5,7 +5,11 @@ unit uTestRdxCodeMap;
 // muessen die Spalte des '//'-Kommentars und der offene Block-Kommentar am
 // Zeilenanfang uebereinstimmen - der Drift-Waechter fuer die zwei Kopien
 // derselben Regel (Review reDelphiX nach Bereichen 2026-10-10, Minor 7).
-// Dazu StartsInside, auf dem die Unterdrueck-Hilfen bauen (Major 1).
+// Dazu StartsInside, auf dem die Unterdrueck-Hilfen bauen (Major 1), und
+// seit Charge R8 (2026-10-14) die geteilten Laeufe der Planer:
+// Klammerabgleich (MatchClose, AfterClose), "genau ein Token auf der Zeile"
+// (OneTokenOnLine), end-Bilanz (BlockEnd) und DirectiveInLines - bis dahin
+// je Planer eine Kopie.
 
 interface
 
@@ -19,6 +23,13 @@ type
     [Test] procedure AgreesWithScanCodeLine;
     [Test] procedure StartsInside_BlockComments;
     [Test] procedure StartsInside_MultiLineString;
+    // Charge R8: die geteilten Laeufe der Planer.
+    [Test] procedure MatchClose_Pairs;
+    [Test] procedure MatchClose_LineLimit;
+    [Test] procedure AfterClose_BehindOrEmpty;
+    [Test] procedure OneTokenOnLine_NoneOneMany;
+    [Test] procedure BlockEnd_NestedAndHook;
+    [Test] procedure DirectiveInLines_NotInLineComment;
   end;
 
 implementation
@@ -26,6 +37,47 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uDetectorUtils, uRdxCodeMap;
+
+// Zeilen mit CRLF verbunden (string.Join kennt FPC nicht).
+function Join(const ALines: array of string): string;
+var
+  SB : TStringBuilder;
+  i  : Integer;
+begin
+  SB := TStringBuilder.Create;
+  try
+    for i := 0 to High(ALines) do
+    begin
+      if i > 0 then SB.Append(#13#10);
+      SB.Append(ALines[i]);
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+// Zeile und Spalte eines Tokens als 'Z:S' - fuer kurze Vergleiche.
+function Pos2(const T: TRdxToken): string;
+begin
+  Result := Format('%d:%d', [T.Line, T.Col]);
+end;
+
+// Praedikat fuer OneTokenOnLine: das Wort AArg.
+function IsWordArg(AMap: TRdxCodeMap; const T: TRdxToken;
+  const AArg: string): Boolean;
+begin
+  Result := T.Low = AArg;
+end;
+
+// Haken fuer BlockEnd: ein 'if' auf der obersten Ebene bricht ab.
+function StopAtTopIf(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
+  ADepth: Integer): string;
+begin
+  Result := '';
+  if (ADepth = 1) and (T.Low = 'if') then
+    Result := 'if auf Tiefe 1';
+end;
 
 const
   // Je Eintrag eine Datei; keine ''' am Zeilenende (die kennt nur die
@@ -119,6 +171,177 @@ begin
       Assert.AreEqual<Integer>(0, Map.LineCommentCol(2), 'String, kein Kommentar');
       Assert.IsTrue(Map.StartsInside(3));
       Assert.IsFalse(Map.StartsInside(4));
+    finally
+      Map.Free;
+    end;
+  finally
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxCodeMap.MatchClose_Pairs;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  try
+    SL.Text := Join(['a(b[c](d))e;', 'X<A, B<C>> := 1;', '(a']);
+    Map := TRdxCodeMap.Create(SL);
+    try
+      Assert.AreEqual('1:10', Pos2(MatchClose(Map, TokenAt(Map, 1, 2))),
+        '( ueber eine innere Gruppe hinweg');
+      Assert.AreEqual('1:6', Pos2(MatchClose(Map, TokenAt(Map, 1, 4))), '[');
+      Assert.AreEqual('1:9', Pos2(MatchClose(Map, TokenAt(Map, 1, 7))),
+        'innere (');
+      Assert.AreEqual('2:10', Pos2(MatchClose(Map, TokenAt(Map, 2, 2))),
+        '< zaehlt nur < und >');
+      Assert.AreEqual('', MatchClose(Map, TokenAt(Map, 1, 1)).Low,
+        'kein Oeffner: leer');
+      Assert.AreEqual('', MatchClose(Map, TokenAt(Map, 3, 1)).Low,
+        'ohne Schluss: leer');
+    finally
+      Map.Free;
+    end;
+  finally
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxCodeMap.MatchClose_LineLimit;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  try
+    SL.Text := Join(['(a', 'b', ')']);
+    Map := TRdxCodeMap.Create(SL);
+    try
+      Assert.AreEqual('3:1', Pos2(MatchClose(Map, TokenAt(Map, 1, 1))),
+        'ohne Grenze ueber Zeilen');
+      Assert.AreEqual('3:1', Pos2(MatchClose(Map, TokenAt(Map, 1, 1), 2)),
+        'Grenze 2 reicht bis Zeile 3');
+      Assert.AreEqual('', MatchClose(Map, TokenAt(Map, 1, 1), 1).Low,
+        'Grenze 1 endet vor Zeile 3');
+      Assert.AreEqual('', MatchClose(Map, TokenAt(Map, 1, 1), 0).Low,
+        'Grenze 0: nur die eigene Zeile');
+    finally
+      Map.Free;
+    end;
+  finally
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxCodeMap.AfterClose_BehindOrEmpty;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  try
+    SL.Text := Join(['(a) b', '(c', '(d)']);
+    Map := TRdxCodeMap.Create(SL);
+    try
+      Assert.AreEqual('b', AfterClose(Map, TokenAt(Map, 1, 1)).Low);
+      Assert.AreEqual('', AfterClose(Map, TokenAt(Map, 2, 1)).Low,
+        'ohne Schluss: leer, nicht das erste Token der Datei');
+      Assert.AreEqual('', AfterClose(Map, TokenAt(Map, 3, 1)).Low,
+        'Schluss am Dateiende: leer');
+    finally
+      Map.Free;
+    end;
+  finally
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxCodeMap.OneTokenOnLine_NoneOneMany;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  S   : TRdxLineSearch;
+  Hit : TRdxToken;
+begin
+  SL := TStringList.Create;
+  try
+    SL.Text := Join(['x := 1; y := x; // z', 'z := 2;']);
+    Map := TRdxCodeMap.Create(SL);
+    try
+      S := Default(TRdxLineSearch);
+      S.Test    := IsWordArg;
+      S.What    := 'kein Treffer';
+      S.ManyFmt := '%d-mal das Wort';
+      S.Arg := 'y';
+      Assert.AreEqual('', OneTokenOnLine(Map, 1, S, Hit));
+      Assert.AreEqual('1:9', Pos2(Hit));
+      S.Arg := 'x';
+      Assert.AreEqual('Zeile 1 traegt 2-mal das Wort - mehrdeutig',
+        OneTokenOnLine(Map, 1, S, Hit));
+      S.Arg := 'z';
+      Assert.AreEqual('kein Treffer auf der gemeldeten Zeile - Zeile '
+        + 'verschoben? Datei neu pruefen', OneTokenOnLine(Map, 1, S, Hit),
+        'ein z im Kommentar zaehlt nicht, Zeile 2 auch nicht');
+      Assert.AreEqual('', Hit.Low, 'ohne Treffer leer');
+      Assert.AreEqual('', OneTokenOnLine(Map, 2, S, Hit));
+      Assert.AreEqual('2:1', Pos2(Hit));
+    finally
+      Map.Free;
+    end;
+  finally
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxCodeMap.BlockEnd_NestedAndHook;
+var
+  SL        : TStringList;
+  Map       : TRdxCodeMap;
+  EndTok, L : TRdxToken;
+begin
+  SL := TStringList.Create;
+  try
+    SL.Text := Join(['begin', '  if a then begin b; end;', '  &end := 1;',
+      '  try c; finally d; end;', 'end;', 'begin', '  e;']);
+    Map := TRdxCodeMap.Create(SL);
+    try
+      Assert.AreEqual('', BlockEnd(Map, TokenAt(Map, 1, 1), nil, EndTok, L));
+      Assert.AreEqual('5:1', Pos2(EndTok),
+        'innere Bloecke und der Bezeichner &end zaehlen nicht');
+      Assert.AreEqual('4:24', Pos2(L), 'das Token vor dem end: das ";"');
+      Assert.AreEqual('if auf Tiefe 1',
+        BlockEnd(Map, TokenAt(Map, 1, 1), StopAtTopIf, EndTok, L),
+        'der Haken bricht ab');
+      Assert.AreEqual('', EndTok.Low, 'nach dem Abbruch leer');
+      Assert.AreEqual('', BlockEnd(Map, TokenAt(Map, 6, 1), nil, EndTok, L),
+        'ohne end: kein Grund ...');
+      Assert.AreEqual('', EndTok.Low, '... aber auch kein end');
+    finally
+      Map.Free;
+    end;
+  finally
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxCodeMap.DirectiveInLines_NotInLineComment;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  try
+    SL.Text := Join(['a; // {$IFDEF X}', 'b; {$IFDEF Y}', 'c; (*$ENDIF*)',
+      'd;']);
+    Map := TRdxCodeMap.Create(SL);
+    try
+      Assert.IsFalse(DirectiveInLines(Map, 1, 1),
+        '{$ im //-Kommentar ist keine Direktive (wie DirectiveAt)');
+      Assert.IsTrue(DirectiveInLines(Map, 1, 2));
+      Assert.IsTrue(DirectiveInLines(Map, 3, 3), '(*$ zaehlt');
+      Assert.IsFalse(DirectiveInLines(Map, 4, 4));
+      Assert.IsFalse(DirectiveInLines(Map, 4, 1), 'leerer Bereich');
     finally
       Map.Free;
     end;

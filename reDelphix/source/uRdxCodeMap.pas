@@ -111,6 +111,31 @@ type
     function EndCol: Integer;   // hinter dem letzten Zeichen
   end;
 
+  // Praedikat einer Token-Suche auf einer Zeile (OneTokenOnLine): passt T?
+  // AArg ist der Suchbegriff des Aufrufers (ein Name, ein Ziel), '' ohne.
+  // Das Token davor holt sich ein Praedikat selbst (Before) - eine plaine
+  // Funktion, weil FPC 3.2 keine Funktionsreferenzen kennt.
+  TRdxTokenTest = function(AMap: TRdxCodeMap; const T: TRdxToken;
+    const AArg: string): Boolean;
+
+  // Eine Token-Suche auf einer Zeile (OneTokenOnLine): das Praedikat, sein
+  // Argument und die Texte der Gruende - What ist, was fehlt ('kein begin',
+  // 'keine Selbstzuweisung "x := x"'), ManyFmt der Text der Mehrdeutigkeit
+  // mit %d fuer die Zahl der Treffer ('%d begin', '%d-mal "end else"').
+  // Bis Charge R8 (2026-10-14) stand diese Suche siebenmal in den Planern.
+  TRdxLineSearch = record
+    Test    : TRdxTokenTest;
+    Arg     : string;
+    What    : string;
+    ManyFmt : string;
+  end;
+
+  // Haken der end-Bilanz (BlockEnd): je Token, das weder Oeffner noch end
+  // ist, mit dem Token davor und der Tiefe (1 = oberste Ebene des Blocks);
+  // liefert den Grund, die Bilanz abzubrechen, oder ''.
+  TRdxBlockHook = function(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
+    ADepth: Integer): string;
+
 // Bezeichner-Zeichen wie im Core (TRefactorInfoBuilder): Buchstabe, '_'
 // oder ein Zeichen ueber #127 (Umlaute sind in Delphi-Bezeichnern erlaubt)
 // beginnt einen Bezeichner, dazu Ziffern darin. Zahlen beginnen NICHT mit
@@ -148,6 +173,47 @@ function DirectiveAt(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
 // Dateiende, wenn ATo leer ist.
 function DirectiveBefore(AMap: TRdxCodeMap; AFromLine: Integer;
   const ATo: TRdxToken): Boolean;
+// Eine Direktive (DirectiveAt) in den Zeilen AFrom..ATo? Bis Charge R8
+// (2026-10-14) je eine Kopie in uRdxLineFixes, uRdxDeclFixes und
+// uRdxStructFixes.
+function DirectiveInLines(AMap: TRdxCodeMap; AFrom, ATo: Integer): Boolean;
+
+// ---- Geteilte Laeufe der Planer (Charge R8, 2026-10-14: bis dahin je
+// Planer eine Kopie - Klammerabgleich 4x, "genau ein Token" 7x, end-Bilanz
+// 3x). ----
+
+// Die schliessende Klammer zu AOpen - '(' zu ')', '[' zu ']', '<' zu '>' -
+// ab AOpen gezaehlt, nur die eigene Klammerart, ueber Zeilen hinweg; Low =
+// '' ohne (auch, wenn AOpen keine dieser Klammern ist). AMaxLines begrenzt
+// die Suche auf die Zeilen bis AOpen.Line + AMaxLines (0 = nur die Zeile
+// von AOpen).
+function MatchClose(AMap: TRdxCodeMap; const AOpen: TRdxToken;
+  AMaxLines: Integer = MaxInt): TRdxToken;
+// Das Token hinter der schliessenden Klammer zu AOpen (MatchClose); Low =
+// '' ohne Klammer oder am Dateiende.
+function AfterClose(AMap: TRdxCodeMap; const AOpen: TRdxToken): TRdxToken;
+
+// Genau ein Code-Token auf ALine, auf das ASearch.Test passt: '' und das
+// Token in AHit; sonst der Grund (OneTokenReason; AHit ist dann der letzte
+// Treffer oder leer). Die Planer lehnen so Funde ab, deren Zeile verschoben
+// (kein Treffer) oder mehrdeutig (mehrere) ist.
+function OneTokenOnLine(AMap: TRdxCodeMap; ALine: Integer;
+  const ASearch: TRdxLineSearch; out AHit: TRdxToken): string;
+// Der Grund zu ACount Treffern auf ALine: 0 -> '<AWhat> auf der
+// gemeldeten Zeile - Zeile verschoben? Datei neu pruefen'; mehr als 1 ->
+// 'Zeile N traegt <AManyFmt mit ACount> - mehrdeutig'; genau 1 -> ''.
+function OneTokenReason(ALine, ACount: Integer;
+  const AWhat, AManyFmt: string): string;
+
+// Die end-Bilanz vorwaerts ab hinter AFrom (dem Oeffner bzw. dem else einer
+// Anweisungsliste): END_OPENERS als Schluesselwort zaehlen hoch, 'end'
+// herunter ('&End', '@@End', 'X.End' sind Bezeichner, IsKeywordAfter). Das
+// end, das die Bilanz schliesst, kommt nach AEnd, das Token davor nach
+// ALast; beide leer, wenn keines kommt. AHook (nil = keiner) sieht jedes
+// andere Token und kann mit einem Grund abbrechen - der ist dann das
+// Ergebnis, sonst ''.
+function BlockEnd(AMap: TRdxCodeMap; const AFrom: TRdxToken;
+  AHook: TRdxBlockHook; out AEnd, ALast: TRdxToken): string;
 
 // ALow ist eines der Woerter in AList (gleich geschrieben).
 function InList(const ALow: string; const AList: array of string): Boolean;
@@ -165,7 +231,7 @@ function ColumnFromMessage(const AMessage: string): Integer;
 implementation
 
 uses
-  System.SysUtils;   // CharInSet, LowerCase
+  System.SysUtils;   // CharInSet, LowerCase, Format
 
 // Zeichen > #127 wie der Core (uRefactorInfoBuilder) und uRdxRecipes:
 // Bezeichner mit Umlaut sind in Delphi erlaubt - sonst lehnten die Planer
@@ -547,6 +613,137 @@ begin
     for Co := 1 to Stop do
       if DirectiveAt(AMap, Li, Co) then
         Exit(True);
+  end;
+end;
+
+function DirectiveInLines(AMap: TRdxCodeMap; AFrom, ATo: Integer): Boolean;
+var
+  Li, Co : Integer;
+begin
+  Result := False;
+  for Li := AFrom to ATo do
+    for Co := 1 to Length(AMap.Raw(Li)) do
+      if DirectiveAt(AMap, Li, Co) then
+        Exit(True);
+end;
+
+// Die Klammerart zu einer oeffnenden Klammer; '' fuer alles andere.
+function CloserOf(const AOpenLow: string): string;
+begin
+  if AOpenLow = '(' then
+    Result := ')'
+  else if AOpenLow = '[' then
+    Result := ']'
+  else if AOpenLow = '<' then
+    Result := '>'
+  else
+    Result := '';
+end;
+
+function MatchClose(AMap: TRdxCodeMap; const AOpen: TRdxToken;
+  AMaxLines: Integer): TRdxToken;
+var
+  Close : string;
+  Depth : Integer;
+  T     : TRdxToken;
+begin
+  Result := Default(TRdxToken);
+  Close := CloserOf(AOpen.Low);
+  if Close = '' then Exit;
+  Depth := 0;
+  T := AOpen;
+  // T.Line - AOpen.Line statt AOpen.Line + AMaxLines: MaxInt als Vorgabe
+  // liefe sonst ueber.
+  while (T.Low <> '') and (T.Line - AOpen.Line <= AMaxLines) do
+  begin
+    if T.Low = AOpen.Low then
+      Inc(Depth)
+    else if T.Low = Close then
+    begin
+      Dec(Depth);
+      if Depth = 0 then
+        Exit(T);
+    end;
+    T := After(AMap, T);
+  end;
+end;
+
+function AfterClose(AMap: TRdxCodeMap; const AOpen: TRdxToken): TRdxToken;
+var
+  Close : TRdxToken;
+begin
+  Result := Default(TRdxToken);
+  Close := MatchClose(AMap, AOpen);
+  if Close.Low <> '' then
+    Result := After(AMap, Close);
+end;
+
+function OneTokenReason(ALine, ACount: Integer;
+  const AWhat, AManyFmt: string): string;
+begin
+  Result := '';
+  if ACount = 0 then
+    Result := Format('%s auf der gemeldeten Zeile - Zeile verschoben? Datei '
+      + 'neu pruefen', [AWhat])
+  else if ACount > 1 then
+    Result := Format('Zeile %d traegt %s - mehrdeutig',
+      [ALine, Format(AManyFmt, [ACount])]);
+end;
+
+function OneTokenOnLine(AMap: TRdxCodeMap; ALine: Integer;
+  const ASearch: TRdxLineSearch; out AHit: TRdxToken): string;
+var
+  T : TRdxToken;
+  n : Integer;
+begin
+  AHit := Default(TRdxToken);
+  n := 0;
+  T := NextToken(AMap, ALine, 1);
+  while (T.Low <> '') and (T.Line = ALine) do
+  begin
+    if ASearch.Test(AMap, T, ASearch.Arg) then
+    begin
+      Inc(n);
+      AHit := T;
+    end;
+    T := After(AMap, T);
+  end;
+  Result := OneTokenReason(ALine, n, ASearch.What, ASearch.ManyFmt);
+end;
+
+function BlockEnd(AMap: TRdxCodeMap; const AFrom: TRdxToken;
+  AHook: TRdxBlockHook; out AEnd, ALast: TRdxToken): string;
+var
+  T, Prev : TRdxToken;
+  Depth   : Integer;
+begin
+  Result := '';
+  AEnd := Default(TRdxToken);
+  ALast := Default(TRdxToken);
+  Depth := 1;
+  Prev := AFrom;
+  T := After(AMap, AFrom);
+  while T.Low <> '' do
+  begin
+    if IsKeywordAfter(T, Prev) and IsEndOpener(T.Low) then
+      Inc(Depth)
+    else if IsKeywordAfter(T, Prev) and (T.Low = 'end') then
+    begin
+      Dec(Depth);
+      if Depth = 0 then
+      begin
+        AEnd := T;
+        ALast := Prev;
+        Exit;
+      end;
+    end
+    else if Assigned(AHook) then
+    begin
+      Result := AHook(AMap, T, Prev, Depth);
+      if Result <> '' then Exit;
+    end;
+    Prev := T;
+    T := After(AMap, T);
   end;
 end;
 

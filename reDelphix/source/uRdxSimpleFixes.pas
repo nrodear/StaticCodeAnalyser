@@ -270,7 +270,12 @@ type
     //     letztes Glied in der Datei als Feld bewiesen ist (FieldTypeOf,
     //     dessen Typ geht durch dieselben Pruefungen). Sonst koennte das
     //     Glied eine parameterlose Methode sein: '= nil' ruft sie auf,
-    //     Assigned() prueft den Methodenzeiger - die Logik kippte.
+    //     Assigned() prueft den Methodenzeiger - die Logik kippte;
+    //   * der Typ muss POSITIV als Klasse, Interface oder Zeiger bewiesen
+    //     sein (PointerLikeType: TObject, Pointer, IInterface oder in
+    //     dieser Unit so deklariert) - wie SCA084. Ein Typ aus einer
+    //     anderen Unit mit neutralem Namen ('TObjFactory' aus uFactories)
+    //     bleibt ohne Hilfe (Semantik-Gegen-Review 2026-10-14, Charge R8).
     // '' = kein Einwand.
     class function NilOperandReason(AMap: TRdxCodeMap;
       const AOperand, ATypeLow: string): string; static;
@@ -308,9 +313,8 @@ const
     + 'koennte der Name als Zeiger gelten';
   R_BINDS_OTHER   = '%s - der Vergleich bindet dort anders';
   // Token, nach denen eine Anweisung beginnt (SCA066; ':' hinter einer
-  // case-Marke).
-  STATEMENT_STARTS: array[0..9] of string = (';', 'begin', 'then', 'else',
-    'do', 'try', 'finally', 'except', 'repeat', ':');
+  // case-Marke): STATEMENT_PREV aus uRdxCodeMap - bis Charge R8 eine
+  // eigene Liste ohne initialization/finalization.
   // Token, hinter denen die ganze rechte Seite bzw. Bedingung beginnt.
   WHOLE_EXPR_STARTS: array[0..3] of string = (':=', 'if', 'while', 'until');
   // Token, hinter denen ein Aufruf als ganze Anweisung/Bedingung endet.
@@ -491,28 +495,26 @@ begin
   Result := True;
 end;
 
-// Eine Compiler-Direktive ('{$' bzw. '(*$' als Kommentar) zwischen dem
-// Token APrev und (ALine, ACol)?
+// Eine Compiler-Direktive zwischen dem Token APrev und (ALine, ACol)?
+// Dieselbe Regel wie DirectiveAt (uRdxCodeMap): ein '{$' in einem
+// '//'-Kommentar ist keine - bis Charge R8 zaehlte es hier mit.
 function DirectiveBetween(AMap: TRdxCodeMap; const APrev: TRdxToken;
   ALine, ACol: Integer): Boolean;
 var
   Li, j, First, Last : Integer;
-  L                  : string;
 begin
   Result := False;
   First := 1;
   if APrev.Low <> '' then First := APrev.Line;
   for Li := First to ALine do
   begin
-    L := AMap.Raw(Li);
     j := 1;
     if (APrev.Low <> '') and (Li = APrev.Line) then j := APrev.EndCol;
-    Last := Length(L);
+    Last := Length(AMap.Raw(Li));
     if Li = ALine then Last := ACol - 1;
     while j <= Last do
     begin
-      if (AMap.ClassAt(Li, j) = 'k')
-         and ((Copy(L, j, 2) = '{$') or (Copy(L, j, 3) = '(*$')) then
+      if DirectiveAt(AMap, Li, j) then
         Exit(True);
       Inc(j);
     end;
@@ -684,15 +686,15 @@ end;
 function DeclaresAfter(AMap: TRdxCodeMap; const AKeywords: array of string;
   const AName: string): Boolean;
 var
-  T   : TRdxToken;
-  Low : string;
+  T       : TRdxToken;
+  NameLow : string;
 begin
   Result := False;
-  Low := LowerCase(AName);
+  NameLow := LowerCase(AName);
   T := NextToken(AMap, 1, 1);
   while T.Low <> '' do
   begin
-    if InList(T.Low, AKeywords) and (NameAfter(AMap, T).Low = Low) then
+    if InList(T.Low, AKeywords) and (NameAfter(AMap, T).Low = NameLow) then
       Exit(True);
     T := After(AMap, T);
   end;
@@ -722,16 +724,16 @@ end;
 class function TRdxSimpleFixes.DeclaresInlineVar(AMap: TRdxCodeMap;
   ALine: Integer; const AName: string): Boolean;
 var
-  T, N : TRdxToken;
-  Low  : string;
+  T, N    : TRdxToken;
+  NameLow : string;
 begin
   Result := False;
-  Low := LowerCase(AName);
+  NameLow := LowerCase(AName);
   T := NextToken(AMap, RoutineStartLine(AMap, ALine), 1);
   while (T.Low <> '') and (T.Line < ALine) do
   begin
     N := After(AMap, T);
-    if (T.Low = 'var') and (N.Low = Low) and (After(AMap, N).Low = ':=') then
+    if (T.Low = 'var') and (N.Low = NameLow) and (After(AMap, N).Low = ':=') then
       Exit(True);
     T := N;
   end;
@@ -766,16 +768,16 @@ end;
 class function TRdxSimpleFixes.DeclaredTypeKind(AMap: TRdxCodeMap;
   const ATypeName: string): string;
 var
-  T, K : TRdxToken;
-  Low  : string;
+  T, K    : TRdxToken;
+  TypeLow : string;
 begin
   Result := '';
-  Low := LowerCase(ATypeName);
-  if Low = '' then Exit;
+  TypeLow := LowerCase(ATypeName);
+  if TypeLow = '' then Exit;
   T := NextToken(AMap, 1, 1);
   while T.Low <> '' do
   begin
-    if (T.Low = Low) and (AfterTypeParams(AMap, T).Low = '=') then
+    if (T.Low = TypeLow) and (AfterTypeParams(AMap, T).Low = '=') then
     begin
       K := After(AMap, AfterTypeParams(AMap, T));
       if K.Low = 'packed' then
@@ -1180,7 +1182,7 @@ begin
   ATarget := '';
   Lhs := Before(AMap, AAssign);
   if not Lhs.IsWord or IsKeyword(Lhs.Low)
-     or not InList(Before(AMap, Lhs).Low, STATEMENT_STARTS) then
+     or not InList(Before(AMap, Lhs).Low, STATEMENT_PREV) then
     Exit('links von := steht keine einfache Variable (Pfad, Index oder '
       + 'var-Deklaration) - ihr Typ entscheidet ueber die Bedeutung');
   ATarget := Copy(AMap.Raw(Lhs.Line), Lhs.Col, Lhs.Len);
@@ -1212,7 +1214,7 @@ begin
   Next := After(AMap, AClose);
   if InList(Prev.Low, DECL_STARTS) then
     Exit(DeclArgsReason(Next));
-  if (not InList(Prev.Low, STATEMENT_STARTS)
+  if (not InList(Prev.Low, STATEMENT_PREV)
       and not InList(Prev.Low, WHOLE_EXPR_STARTS))
      or ((Next.Low <> '') and not InList(Next.Low, CALL_ENDS)) then
     Exit(R_IN_EXPRESSION);
@@ -1509,8 +1511,11 @@ class function TRdxExprFixes.PointerLikeType(AMap: TRdxCodeMap;
 var
   Kind : string;
 begin
+  // '^' allein: ein Feld mit anonymem Zeigertyp ('FX: ^Integer'), so
+  // liefert es FieldTypeOf (SCA126, Charge R8).
   Kind := ResolvedTypeKind(AMap, ATypeLow);
-  Result := InList(ATypeLow, POINTER_TYPES) or InList(Kind, POINTER_TYPES)
+  Result := (ATypeLow = '^') or InList(ATypeLow, POINTER_TYPES)
+    or InList(Kind, POINTER_TYPES)
     or InList(Kind, ['class', 'interface', 'dispinterface', '^']);
 end;
 
@@ -1599,29 +1604,12 @@ type
   // Ein Schritt beim Lesen eines Operanden nach links.
   TRdxScanStep = (stMore, stDone, stFail);
 
-// Ende einer Klammergruppe ab dem oeffnenden Token (gleiche Klammerart);
-// Low = '' wenn nicht gefunden.
+// Ende einer Klammergruppe ab dem oeffnenden Token (gleiche Klammerart)
+// innerhalb von MAX_REGION_LINES; Low = '' wenn nicht gefunden. Seit
+// Charge R8 der geteilte MatchClose (uRdxCodeMap).
 function MatchForward(AMap: TRdxCodeMap; const AOpen: TRdxToken): TRdxToken;
-var
-  Depth : Integer;
-  T     : TRdxToken;
-  Close : string;
 begin
-  if AOpen.Low = '(' then Close := ')' else Close := ']';
-  Depth := 0;
-  T := AOpen;
-  while T.Low <> '' do
-  begin
-    if T.Low = AOpen.Low then Inc(Depth)
-    else if T.Low = Close then
-    begin
-      Dec(Depth);
-      if Depth = 0 then Exit(T);
-    end;
-    if T.Line > AOpen.Line + MAX_REGION_LINES then Break;
-    T := After(AMap, T);
-  end;
-  Result := Default(TRdxToken);
+  Result := MatchClose(AMap, AOpen, MAX_REGION_LINES);
 end;
 
 function MatchBackward(AMap: TRdxCodeMap; const AClose: TRdxToken): TRdxToken;
@@ -2271,17 +2259,17 @@ end;
 procedure FieldScanStep(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
   const ANameLow: string; var AScan: TFieldScan);
 var
-  Word  : Boolean;
-  Colon : TRdxToken;
+  IsWord : Boolean;   // nicht 'Word': verdeckte System.Word (Gegen-Review R8)
+  Colon  : TRdxToken;
 begin
-  Word := not InList(APrev.Low, IDENT_PREFIXES);
+  IsWord := not InList(APrev.Low, IDENT_PREFIXES);
   if OpensTypeBody(AMap, T, APrev) then
     Inc(AScan.Body)
-  else if Word and ((T.Low = 'begin') or (T.Low = 'implementation')) then
+  else if IsWord and ((T.Low = 'begin') or (T.Low = 'implementation')) then
     AScan.Body := 0
   else if AScan.Body = 0 then
     Exit
-  else if Word and (T.Low = 'end') then
+  else if IsWord and (T.Low = 'end') then
   begin
     Dec(AScan.Body);
     AScan.Paren := 0;
@@ -2304,17 +2292,17 @@ class function TRdxSimpleFixes.FieldTypeOf(AMap: TRdxCodeMap;
 var
   T, Prev : TRdxToken;
   Scan    : TFieldScan;
-  Low     : string;
+  NameLow : string;   // nicht 'Low': verdeckte System.Low (Gegen-Review R8)
 begin
   Result := '';
-  Low := LowerCase(AName);
-  if Low = '' then Exit;
+  NameLow := LowerCase(AName);
+  if NameLow = '' then Exit;
   Scan := Default(TFieldScan);
   Prev := Default(TRdxToken);
   T := NextToken(AMap, 1, 1);
   while T.Low <> '' do
   begin
-    FieldScanStep(AMap, T, Prev, Low, Scan);
+    FieldScanStep(AMap, T, Prev, NameLow, Scan);
     Prev := T;
     T := After(AMap, T);
   end;
@@ -2332,6 +2320,9 @@ const
     + 'den Methodenzeiger';
   R_PROC_IN_UNIT = '%s hat den Prozedurtyp %s (in dieser Unit deklariert) - '
     + '"= nil" ruft ihn auf, Assigned() nicht';
+  R_NOT_PROVEN   = '%s: Typ %s ist in dieser Unit nicht als Klasse, Interface '
+    + 'oder Zeiger bewiesen - einen Funktionstyp einer anderen Unit riefe '
+    + '"= nil" auf, Assigned() nicht';
 var
   TypeLow : string;
   Ident   : string;
@@ -2352,7 +2343,15 @@ begin
     if Result <> '' then Exit;
   end;
   if TRdxExprFixes.ProceduralType(AMap, TypeLow) then
-    Result := Format(R_PROC_IN_UNIT, [AOperand, TypeLow]);
+    Exit(Format(R_PROC_IN_UNIT, [AOperand, TypeLow]));
+  // Der POSITIVE Beweis wie bei SCA084 (AssignedNilReason): ein Typ aus
+  // einer anderen Unit mit unauffaelligem Namen ('uses uFactories; FMaker:
+  // TObjFactory' mit 'function: TObject' dort) ging bis Charge R8 durch -
+  // 'if FMaker = nil' wurde 'if not Assigned(FMaker)', ein anderer Sinn.
+  // Das kostet Angebote bei Fremdtypen und gewinnt Sicherheit (Semantik-
+  // Gegen-Review 2026-10-14, Major).
+  if not TRdxExprFixes.PointerLikeType(AMap, TypeLow) then
+    Result := Format(R_NOT_PROVEN, [AOperand, TypeLow]);
 end;
 
 end.

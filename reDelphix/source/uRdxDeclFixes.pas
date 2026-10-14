@@ -147,27 +147,6 @@ type
 
 { ---- Signatur-Leser ---- }
 
-// Das Token hinter der schliessenden Klammer zu AOpen ('(' oder '[' oder
-// '<'); Low = '' am Dateiende.
-function AfterGroup(AMap: TRdxCodeMap; const AOpen: TRdxToken;
-  const AClose: string): TRdxToken;
-var
-  Depth : Integer;
-begin
-  Depth := 0;
-  Result := AOpen;
-  while Result.Low <> '' do
-  begin
-    if Result.Low = AOpen.Low then
-      Inc(Depth)
-    else if Result.Low = AClose then
-      Dec(Depth);
-    Result := After(AMap, Result);
-    if Depth = 0 then
-      Exit;
-  end;
-end;
-
 // Ein Token auf Tiefe 1 der Typparameter (hinter APrev): True, wenn es ein
 // Name ist. Hinter ':' bis zum naechsten ';' stehen Einschraenkungen, auch
 // durch ',' getrennt ('<T: class, constructor>').
@@ -320,17 +299,17 @@ begin
   if T.Low = '<' then
   begin
     ASig.TypeParams := TypeParamsOf(AMap, T);
-    T := AfterGroup(AMap, T, '>');
+    T := AfterClose(AMap, T);
   end;
   if (T.Low = '(') and (ASig.Keyword.Low <> 'property') then
   begin
     ASig.Params := ParamNamesOf(AMap, T, ')', ASig.ParamShape);
-    T := AfterGroup(AMap, T, ')');
+    T := AfterClose(AMap, T);
   end
   else if (T.Low = '[') and (ASig.Keyword.Low = 'property') then
   begin
     ASig.Params := ParamNamesOf(AMap, T, ']', ASig.ParamShape);
-    T := AfterGroup(AMap, T, ']');
+    T := AfterClose(AMap, T);
   end;
   ASig.HasResult := (T.Low = ':')
     and InList(ASig.Keyword.Low, ['function', 'operator']);
@@ -339,7 +318,7 @@ begin
   while (T.Low <> '') and (T.Low <> ';') do
   begin
     if InList(T.Low, ['(', '[', '<']) then
-      T := AfterGroup(AMap, T, Copy(')]>', Pos(T.Low, '([<'), 1))
+      T := AfterClose(AMap, T)
     else
       T := After(AMap, T);
   end;
@@ -352,18 +331,6 @@ begin
   ASig.ResultShape := TokensBetween(AMap, Rest, T);
   AReason := '';
   Result := True;
-end;
-
-// Eine Direktive zwischen den Zeilen AFrom und ATo?
-function DirectiveInLines(AMap: TRdxCodeMap; AFrom, ATo: Integer): Boolean;
-var
-  Li, Co : Integer;
-begin
-  Result := False;
-  for Li := AFrom to ATo do
-    for Co := 1 to Length(AMap.Raw(Li)) do
-      if DirectiveAt(AMap, Li, Co) then
-        Exit(True);
 end;
 
 { ---- SCA117 ---- }
@@ -555,7 +522,7 @@ begin
   ANext := After(AMap, AKeyword);
   if ANext.Low = '(' then
   begin
-    ANext := AfterGroup(AMap, ANext, ')');
+    ANext := AfterClose(AMap, ANext);
     ALast := Before(AMap, ANext);
   end;
   if ANext.Low = ';' then
@@ -815,7 +782,7 @@ begin
   if not (T.IsWord and SameText(T.Low, AName)) then Exit;
   N := After(AMap, T);
   if N.Low = '<' then
-    N := AfterGroup(AMap, N, '>');
+    N := AfterClose(AMap, N);
   if N.Low <> '=' then Exit;
   AClass := After(AMap, N);
   N := After(AMap, AClass);

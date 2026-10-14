@@ -24,6 +24,7 @@ reDelphix.d12.dpk / .dproj        {$DESIGNONLY}, requires rtl, vcl, designide, S
 source\uRdxRegister.pas           Register -> Anbieter an TFindingActions anmelden; finalization: abmelden
 source\uRdxProvider.pas           je Fund die Aktionen bauen (Anker/fixMode aus dem Regelkatalog); Quell-Cache TRdxSourceCache
 source\uRdxRecipeRunner.pas       Rezept-Laeufer auf TSourcePlaces: Fund -> Beschreibung -> Ersetzung; ohne ToolsAPI, testbar
+source\uRdxFixTable.pas           Tabelle der einfachen Hilfen: je Fundart Planer, Hinweis, Kennzeichnung (E2), zweiter Eintrag, Menuetext (Charge R8); ohne ToolsAPI
 source\uRdxRecipes.pas            reine Textlogik: Literal-Codec, Format() nach der Kompilat-Regel, SQL-Vorlage, uses-Schreibweise, Rahmenwerk
 source\uRdxScopeTable.pas         Kurzname -> qualifizierte Unit (Compiler-Reihenfolge der Scope-Liste)
 source\uRdxSimpleFixes.pas        Quick-Fixes SCA066/SCA072/SCA074/SCA075/SCA084/SCA085/SCA087/SCA126/SCA139 (reine Textlogik)
@@ -40,7 +41,7 @@ source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung
 source\uRdxEditor.pas             ToolsAPI: Puffer lesen, Bereich markieren, Bereiche ersetzen (ein Undo-Schritt), Projekt-Units
 source\uRdxLog.pas                Protokoll %TEMP%\reDelphix.log + DebugView
 data\unitscopes.txt               die Scope-Tabelle (erzeugt), als RCDATA eingelinkt (data\unitscopes.rc)
-tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 22 Testunits (siehe "Pruefen")
+tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 23 Testunits (siehe "Pruefen")
 tools\gen_unitscopes.py           erzeugt data\unitscopes.txt aus der Delphi-Installation
 tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik unter FPC 3.2.2 und fuehrt Tests aus
 tools\probe\RdxCorpusProbe.dpr    Korpus-Probe: Rezept 5.1 ueber eine Liste von Fundstellen, CSV
@@ -423,10 +424,18 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
 * `uTestRdxSuppress` - Unterdrueck-Marker setzen und entfernen, auch in
   Block-Kommentar, mehrzeiligem String, Lizenzkopf und mit `All`.
 * `uTestRdxCodeMap` - die Code-Sicht gegen `TDetectorUtils.ScanCodeLine`
-  des Cores (Drift-Waechter) und der Zustand am Zeilenanfang.
+  des Cores (Drift-Waechter), der Zustand am Zeilenanfang und die
+  geteilten Laeufe der Planer (Charge R8): Klammerabgleich (`MatchClose`,
+  `AfterClose`), "genau ein Token auf der Zeile" (`OneTokenOnLine`),
+  end-Bilanz (`BlockEnd`), `DirectiveInLines`.
 * `uTestRdxQualifyUses` - die Planung von "uses: X -> Scope.X"
   (`TRdxRecipeRunner.QualifyUses`): Eintraege der Zeile, alle,
   Sortierung, FPC-Weiche, Direktiven, eigene Unit.
+* `uTestRdxFixTable` - die Tabelle der einfachen Hilfen (`uRdxFixTable`,
+  Charge R8): jede Zeile mit Planer, Hinweis (fest oder vom Planer) und
+  Menuetext, zweiter Eintrag genau mit zweitem Menuetext, Arten eindeutig
+  und gleich `Handles`; Menuetexte mit Name, Variante und Kennzeichnung;
+  Einstieg ohne Fund und ohne Zeile.
 * `uTestRdxSimpleFixes` / `uTestRdxNilFix` / `uTestRdxExprFixes` /
   `uTestRdxStructFixes` / `uTestRdxBlockFixes` / `uTestRdxLineFixes` /
   `uTestRdxRaiseFixes` / `uTestRdxDeclFixes` / `uTestRdxFlowFixes` - die
@@ -456,8 +465,10 @@ Ohne Delphi (FPC 3.2.2):
 bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext
 ```
 
-Erwartet (Stand 2026-10-14): `PASSED 268  FAILED 0` - 18 Testunits, davon 72 Tests
-fuer "Lokale Variable einfuehren" und 12 fuer die Quick-Fixes der Charge H2.
+Erwartet (Stand 2026-10-14, Charge R8): `PASSED 282  FAILED 0` - 18 Testunits,
+davon 72 Tests fuer "Lokale Variable einfuehren", 12 fuer die Quick-Fixes der
+Charge H2 und 7 der Charge R8 (6 fuer die geteilten Laeufe in
+`uTestRdxCodeMap`, 1 fuer den Fremdtyp-Beweis von SCA126 in `uTestRdxNilFix`).
 
 Der Pruefstand uebersetzt die Core-Units des Quellstellen-Dienstes
 (`uRefactor*`, `uSourcePlaces`, `uFindingActions`, `ScanCodeLine` aus

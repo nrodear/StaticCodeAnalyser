@@ -1060,6 +1060,10 @@ begin
   Assert.IsTrue(TRdxRecipes.LineLooksFpcAware('{$MODE ObjFPC}{$H+}'));
   Assert.IsTrue(TRdxRecipes.LineLooksFpcAware('(*$IFDEF FPC*)'));
   Assert.IsTrue(TRdxRecipes.LineLooksFpcAware('{$ifdef'#9'fpc}'), 'Tab statt Leerzeichen');
+  // FPC_FULLVERSION allein ist eine Weiche (Pruefer 2026-10-14, d) - wie
+  // im Labor (uRdxIntroPlan), seit Charge R8 auch hier.
+  Assert.IsTrue(TRdxRecipes.LineLooksFpcAware('{$IF FPC_FULLVERSION >= 30200}'),
+    'FPC_FULLVERSION allein');
   Assert.IsFalse(TRdxRecipes.LineLooksFpcAware('unit FpcTools;'), 'nur Direktiven zaehlen');
   Assert.IsFalse(TRdxRecipes.LineLooksFpcAware('{$IFDEF MSWINDOWS}'));
   Assert.IsFalse(TRdxRecipes.LineLooksFpcAware('{$R *.res}'));

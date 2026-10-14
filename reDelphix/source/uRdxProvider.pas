@@ -25,8 +25,9 @@ unit uRdxProvider;
 //
 // WAS ANGEBOTEN WIRD
 //
-// Die Menuetexte sind englische msgids (CAP_* unten, uebersetzt ueber
-// i18n/*.po); hier stehen sie deutsch zur Erlaeuterung.
+// Die Menuetexte sind englische msgids (CAP_* unten; die der einfachen
+// Hilfen in uRdxFixTable, FIX_CAPTIONS; uebersetzt ueber i18n/*.po); hier
+// stehen sie deutsch zur Erlaeuterung.
 //
 //   "Stelle zeigen"                    wenn sich die Anweisung des Funds
 //                                      beschreiben laesst (Anker der Regel);
@@ -180,8 +181,9 @@ type
       const ACtx: TRdxRecipeContext);
     procedure AddUsesActions(var AList: TArray<TFindingAction>;
       const ACtx: TRdxRecipeContext);
-    // Die einfachen Editorhilfen ueber TRdxFixRunner (welche Regeln:
-    // TRdxFixRunner.Handles) - eine weitere Regel braucht hier kein Rezept.
+    // Die einfachen Editorhilfen ueber die Tabelle uRdxFixTable (welche
+    // Regeln: TRdxFixTable.Handles; Planer, Hinweis und Menuetext je Zeile)
+    // - eine weitere Regel braucht hier kein Rezept.
     procedure AddSimpleFix(var AList: TArray<TFindingAction>;
       const ACtx: TRdxRecipeContext);
     // Text-Rezepte (Editorhilfen Stufe 1)
@@ -225,6 +227,7 @@ uses
   uFileTextCache,   // LoadFileSmart: dieselbe Dekodierung wie der Scan
   uLocalization,
   uRuleCatalog,
+  uRdxFixTable,     // Tabelle der einfachen Hilfen: Planer und Menuetexte
   uRdxSuppress,
   uRdxEditor,
   uRdxLog;          // Protokoll: DebugView + %TEMP%\reDelphix.log
@@ -241,34 +244,6 @@ const
   CAP_USES     = 'uses: qualify entries';
   // fixMode einer Regel, ausdruecklich abgeschaltet (Minor 5).
   FIX_NONE     = 'none';
-  CAP_FREENIL  = 'Use FreeAndNil(%s)';
-  CAP_ASSIGNED = 'Use Assigned() instead of comparing with nil';
-  CAP_TOBJECT  = 'Remove (TObject) from the class declaration';
-  CAP_ASSERT   = 'Use the condition as the Assert message';
-  CAP_EMPTYSEC = 'Remove the empty visibility section';
-  CAP_NOARGS   = 'Remove the empty parentheses';
-  CAP_REDBOOL  = 'Remove the redundant comparison with True/False';
-  CAP_NILCHECK = 'Remove the redundant comparison with nil';
-  CAP_UNUSEDUSES = 'Remove unit %s from uses';
-  CAP_CASE_ELSE  = 'Add an empty else branch';
-  CAP_CASE_RAISE = 'Add an else branch that raises an exception';
-  CAP_BEGIN_END  = 'Put the branch in begin..end';
-  CAP_SEMI       = 'Remove the extra semicolon';
-  CAP_INDENT     = 'Move the keyword to column 1';
-  CAP_INIT       = 'Replace begin with initialization';
-  CAP_CAST       = 'Remove the cast to %s before Free';
-  CAP_EMPTY_INTENT  = 'Mark the empty body as intentional';
-  CAP_EMPTY_RAISE   = 'Raise ENotImplemented in the empty body';
-  CAP_MISSING_RAISE = 'Raise the exception';
-  CAP_RERAISE       = 'Use raise; to keep the original stack trace';
-  CAP_DOC           = 'Insert a documentation skeleton';
-  CAP_GUID          = 'Insert a new GUID';
-  CAP_DIRECTIVE     = 'Add "%s;" to the declaration';
-  CAP_COND_ASSIGN   = 'Assign the condition to %s directly';
-  CAP_JUMP          = 'Remove the redundant %s';
-  CAP_SELF_ASSIGN   = 'Remove the self-assignment of %s';
-  // Entscheid E2: eine Hilfe, die das Verhalten aendern kann, sagt es.
-  CAP_CHANGES    = '(changes behavior)';
   DIAG_PREFIX  = 'reDelphix: ';
   // Fuer das Protokoll (deutsch wie die uebrigen Zeilen).
   SOURCE_NAMES : array[TRdxTextSource] of string =
@@ -632,134 +607,20 @@ begin
   end;
 end;
 
-// Menuetexte der Anweisungs-Hilfen (SCA098, SCA080, SCA047, Charge H2) -
-// ein fuenfter Verteiler (SCA091). AName ist das Ziel bzw. Exit/Continue.
-function FlowFixCaption(AKind: TFindingKind; const AName: string): string;
-begin
-  case AKind of
-    fkRedundantConditional:
-      Result := Format(_(CAP_COND_ASSIGN), [AName]);
-    fkRedundantJump:
-      Result := Format(_(CAP_JUMP), [AName]);
-    fkSelfAssignment:
-      Result := Format(_(CAP_SELF_ASSIGN), [AName]);
-  else
-    Result := uSCAConsts.KindName(AKind);
-  end;
-end;
-
-// Menuetexte der Deklarations-Hilfen (SCA117, SCA197, SCA149) - ein
-// vierter Verteiler (SCA091). AName ist bei SCA149 die Direktive.
-function DeclFixCaption(AKind: TFindingKind; const AName: string): string;
-begin
-  case AKind of
-    fkPublicMemberWithoutDoc:
-      Result := _(CAP_DOC);
-    fkInterfaceWithoutGuid:
-      Result := _(CAP_GUID);
-    fkMissingOverride:
-      Result := Format(_(CAP_DIRECTIVE), [AName]);
-  else
-    Result := FlowFixCaption(AKind, AName);
-  end;
-end;
-
-// Menuetexte der Zeilen-Hilfen (SCA082, SCA071, SCA088, SCA123, SCA020,
-// SCA120, SCA122) - ein dritter Verteiler (SCA091). AName ist der Cast-Typ
-// bei SCA123, AVariant waehlt bei SCA020 den Eintrag.
-function LineFixCaption(AKind: TFindingKind; AVariant: Integer;
-  const AName: string): string;
-begin
-  case AKind of
-    fkSuperfluousSemicolon:
-      Result := _(CAP_SEMI);
-    fkUnitLevelKeywordIndent:
-      Result := _(CAP_INDENT);
-    fkLegacyInitializationSection:
-      Result := _(CAP_INIT);
-    fkCastAndFree:
-      Result := Format(_(CAP_CAST), [AName]);
-    fkEmptyMethod:
-      if AVariant = 1 then
-        Result := _(CAP_EMPTY_RAISE)
-      else
-        Result := _(CAP_EMPTY_INTENT);
-    fkMissingRaise:
-      Result := _(CAP_MISSING_RAISE);
-    fkReRaiseException:
-      Result := _(CAP_RERAISE);
-  else
-    Result := DeclFixCaption(AKind, AName);
-  end;
-end;
-
-// Menuetexte der Hilfen aus dem uQuickFix-Umzug und der Stufe 3 (SCA066,
-// SCA072, SCA084, SCA007, SCA168, SCA101, SCA099) - ein zweiter Verteiler
-// (SCA091).
-// AVariant waehlt den Eintrag, AName ist die Unit bei SCA007.
-function LaterFixCaption(AKind: TFindingKind; AVariant: Integer;
-  const AName: string): string;
-begin
-  case AKind of
-    fkEmptyArgumentList:
-      Result := _(CAP_NOARGS);
-    fkRedundantBoolean:
-      Result := _(CAP_REDBOOL);
-    fkAssignedAndAssignedNil:
-      Result := _(CAP_NILCHECK);
-    fkUnusedUses:
-      Result := Format(_(CAP_UNUSEDUSES), [AName]);
-    fkDefaultCaseInCaseStatement:
-      if AVariant = 1 then
-        Result := _(CAP_CASE_RAISE)
-      else
-        Result := _(CAP_CASE_ELSE);
-    fkBeginEndRequired, fkIfElseBegin:
-      Result := _(CAP_BEGIN_END);
-  else
-    Result := LineFixCaption(AKind, AVariant, AName);
-  end;
-end;
-
-// Menuetext einer einfachen Hilfe; AOutcome.Name ist X bei SCA085/SCA139
-// und die Unit bei SCA007 ('' wenn der Planer abgelehnt hat, bevor X
-// feststand), Variant waehlt den Eintrag, ChangesBehavior haengt die
-// Kennzeichnung an (E2).
-function SimpleFixCaption(AKind: TFindingKind;
-  const AOutcome: TRdxFixOutcome): string;
-var
-  N : string;
-begin
-  N := AOutcome.Name;
-  if N = '' then N := 'X';
-  case AKind of
-    fkFreeAndNilHint, fkFreeWithoutNil:
-      Result := Format(_(CAP_FREENIL), [N]);
-    fkNilComparison:
-      Result := _(CAP_ASSIGNED);
-    fkExplicitTObjectInheritance:
-      Result := _(CAP_TOBJECT);
-    fkAssertMessage:
-      Result := _(CAP_ASSERT);
-    fkEmptyVisibilitySection:
-      Result := _(CAP_EMPTYSEC);
-  else
-    Result := LaterFixCaption(AKind, AOutcome.Variant, N);
-  end;
-  if AOutcome.ChangesBehavior then
-    Result := Result + ' ' + _(CAP_CHANGES);
-end;
-
 procedure TRdxProvider.AddSimpleFix(var AList: TArray<TFindingAction>;
   const ACtx: TRdxRecipeContext);
 
   // Ein Eintrag zu AOutcome: mit seinen Ersetzungen oder gesperrt mit Grund.
+  // Menuetext, Variante und Kennzeichnung (E2) kommen aus der Tabelle;
+  // ohne Menuetext kein Eintrag - bis Charge R8 stand dann der interne
+  // Name der Art im Menue (uTestRdxFixTable haelt jede Zeile vollstaendig).
   procedure AddOutcome(const AOutcome: TRdxFixOutcome);
   var
     Caption : string;
     Act     : TRdxAction;
   begin
-    Caption := SimpleFixCaption(ACtx.Finding.Kind, AOutcome);
+    Caption := TRdxFixTable.CaptionFor(ACtx.Finding.Kind, AOutcome);
+    if Caption = '' then Exit;
     if not AOutcome.Enabled then
       Add(AList, Caption, AOutcome.Reason, False, nil)
     else
@@ -775,13 +636,13 @@ procedure TRdxProvider.AddSimpleFix(var AList: TArray<TFindingAction>;
 var
   Alt : TRdxFixOutcome;
 begin
-  if not TRdxFixRunner.Handles(ACtx.Finding.Kind)
+  if not TRdxFixTable.Handles(ACtx.Finding.Kind)
      or not IsPascalSource(ACtx.FileName)
      or (ACtx.FixMode = FIX_NONE) then Exit;
-  AddOutcome(TRdxFixRunner.FixFor(FSource.Places, ACtx.Lines, ACtx.Finding,
+  AddOutcome(TRdxFixTable.FixFor(FSource.Places, ACtx.Lines, ACtx.Finding,
     FUsesNames));
   // Zweiter Eintrag derselben Regel (SCA168, SCA020: jeweils mit raise).
-  Alt := TRdxFixRunner.AlternativeFixFor(FSource.Places, ACtx.Lines,
+  Alt := TRdxFixTable.AlternativeFixFor(FSource.Places, ACtx.Lines,
     ACtx.Finding, FUsesNames);
   if Alt.Variant > 0 then
     AddOutcome(Alt);

@@ -31,6 +31,9 @@ type
     // Unit, Pfad-Operanden nur mit bewiesenem Feld.
     [Test] procedure Sca126_ProcTypeOfOwnUnit;
     [Test] procedure Sca126_PathOperands;
+    // Semantik-Gegen-Review 2026-10-14 (Major, Charge R8): der positive
+    // Beweis wie bei SCA084 - ein Typ einer anderen Unit bleibt ohne Hilfe.
+    [Test] procedure Sca126_ForeignType_NotProven;
   end;
 
 implementation
@@ -386,9 +389,12 @@ begin
   // Auch ueber einen Alias.
   Assert.IsTrue(Pos('Prozedurtyp', ReasonIn(FieldUnit, 'F', 'tlookup')) > 0,
     'Alias');
-  // Eine Klasse derselben Unit und ein Typ einer anderen Unit gehen.
+  // Eine Klasse derselben Unit geht; ein Typ einer anderen Unit (TList aus
+  // System.Classes) ist nicht bewiesen - bis Charge R8 ging er durch
+  // (Sca126_ForeignType_NotProven).
   Assert.AreEqual('', ReasonIn(FieldUnit, 'N', 'tnode'));
-  Assert.AreEqual('', ReasonIn(FieldUnit, 'L', 'tlist'));
+  R := ReasonIn(FieldUnit, 'L', 'tlist');
+  Assert.IsTrue(Pos('nicht als Klasse', R) > 0, 'Fremdtyp: ' + R);
   // Die Namensregeln von NilOperandRisk gelten weiter.
   Assert.AreNotEqual('', ReasonIn(FieldUnit, 'FOnChange', 'tnotifyevent'));
   Assert.AreNotEqual('', ReasonIn(FieldUnit, 'S', 'string'));
@@ -402,11 +408,13 @@ begin
   Assert.AreEqual('', ReasonIn(FieldUnit, 'FItems[I]', ''));
   Assert.AreEqual('', ReasonIn(FieldUnit, 'TFoo(Sender)', ''));
   Assert.AreEqual('', ReasonIn(FieldUnit, 'P^', ''));
-  // Das letzte Glied als Feld bewiesen: Klasse (auch Feldgruppe und mit
-  // Attribut) oder Record.
+  // Das letzte Glied als Feld bewiesen: Klasse (auch mit Attribut) oder
+  // Record; ein Feld der Gruppe 'FA, FB: TList' ist als Feld bewiesen, sein
+  // Typ TList aber nicht (andere Unit) - keine Hilfe (Charge R8).
   Assert.AreEqual('', ReasonIn(FieldUnit, 'P.Next', ''));
   Assert.AreEqual('', ReasonIn(FieldUnit, 'Self.FOwner', ''));
-  Assert.AreEqual('', ReasonIn(FieldUnit, 'Obj.FB', ''));
+  Assert.IsTrue(Pos('nicht als Klasse', ReasonIn(FieldUnit, 'Obj.FB', '')) > 0,
+    'Feldgruppe mit Fremdtyp');
   Assert.AreEqual('', ReasonIn(FieldUnit, 'R.Data', ''));
   // Nicht bewiesen: eine Methode ohne Argumente wuerde von '= nil'
   // aufgerufen, Assigned() pruefte nur den Methodenzeiger.
@@ -444,6 +452,47 @@ begin
     '  TA = class;', '  TB<T: record> = class', '    procedure Q(FX: T);',
     '  end;', 'implementation', 'end.']), 'FX'),
     'Vorwaertsdeklaration und Einschraenkung oeffnen keinen Rumpf');
+end;
+
+// Eine Unit, die ihre Typen von anderswo bezieht - und eigene daneben.
+function ForeignUnit: string;
+begin
+  Result := Join(['unit u;', 'interface', 'uses uFactories;', 'type',
+    '  TNode = class(TObject)',
+    '    FMaker: TObjFactory;',   // aus uFactories: dort 'function: TObject'
+    '    Next: TNode;',
+    '  end;',
+    '  PNode = ^TNode;',
+    '  INode = interface end;',
+    '  TAlias = TNode;',
+    'implementation',
+    'end.']);
+end;
+
+procedure TTestRdxNilFix.Sca126_ForeignType_NotProven;
+var
+  R : string;
+begin
+  // 'uses uFactories; FMaker: TObjFactory' mit 'TObjFactory = function:
+  // TObject' DORT: der Name verraet nichts, die Deklaration steht nicht in
+  // dieser Unit - 'if FMaker = nil' als 'if not Assigned(FMaker)' aenderte
+  // den Sinn. Darum der positive Beweis (PointerLikeType) wie bei SCA084.
+  R := ReasonIn(ForeignUnit, 'FMaker', 'tobjfactory');
+  Assert.IsTrue(Pos('nicht als Klasse', R) > 0, R);
+  Assert.IsTrue(Pos('tobjfactory', R) > 0, 'der Typ steht im Grund: ' + R);
+  // Auch ueber den Pfad: das Feld ist bewiesen, sein Typ nicht.
+  Assert.IsTrue(Pos('nicht als Klasse', ReasonIn(ForeignUnit, 'Obj.FMaker', '')) > 0,
+    'Pfad auf ein Feld mit Fremdtyp');
+  // Bewiesen: TObject, Pointer, IInterface, Klasse/Interface/Zeiger dieser
+  // Unit, ein Alias darauf.
+  Assert.AreEqual('', ReasonIn(ForeignUnit, 'O', 'tobject'));
+  Assert.AreEqual('', ReasonIn(ForeignUnit, 'P', 'pointer'));
+  Assert.AreEqual('', ReasonIn(ForeignUnit, 'I', 'iinterface'));
+  Assert.AreEqual('', ReasonIn(ForeignUnit, 'N', 'tnode'));
+  Assert.AreEqual('', ReasonIn(ForeignUnit, 'PN', 'pnode'));
+  Assert.AreEqual('', ReasonIn(ForeignUnit, 'IN', 'inode'));
+  Assert.AreEqual('', ReasonIn(ForeignUnit, 'A', 'talias'));
+  Assert.AreEqual('', ReasonIn(ForeignUnit, 'N.Next', ''), 'Feld mit Klasse der Unit');
 end;
 
 initialization
