@@ -143,7 +143,12 @@ def collect(label, base, names, counts, per_folder):
     """Alle Deklarationen unter base: names[name] -> set(label),
     counts[(label, art)] -> Zahl, per_folder[(label, ordner)] -> Zahl."""
     files = 0
-    for dp, dn, fn in os.walk(base):
+    # onerror: os.walk ueberspringt ein Verzeichnis, das sich gerade nicht
+    # auflisten laesst, sonst STILL - die Liste waere kuerzer und --check
+    # meldete DRIFT ohne Grund (einmal beobachtet, 2026-10-14). Laut abbrechen.
+    def walk_error(err):
+        raise SystemExit('Quellordner nicht lesbar: %s' % err)
+    for dp, dn, fn in os.walk(base, onerror=walk_error):
         dn.sort()
         for f in sorted(fn):
             if not f.lower().endswith(('.pas', '.inc')):
@@ -328,6 +333,13 @@ def main(argv):
         if old != text:
             print('DRIFT: %s weicht vom Generat ab - tools/gen-rtl-types.py laufen lassen'
                   % os.path.relpath(DST, ROOT))
+            # Erste abweichende Zeile mitgeben: ohne sie war ein einmaliges
+            # DRIFT (2026-10-14) nicht mehr zu erklaeren.
+            for nr, (a, b) in enumerate(zip(old.splitlines(), text.splitlines()), 1):
+                if a != b:
+                    print('  Zeile %d Datei: %s' % (nr, a[:120]))
+                    print('  Zeile %d neu  : %s' % (nr, b[:120]))
+                    break
             return 1
         print('OK: ' + os.path.relpath(DST, ROOT))
         return 0
