@@ -28,7 +28,7 @@ source\uRdxRegister.pas           Register -> Anbieter an TFindingActions anmeld
 source\uRdxProvider.pas           je Fund die Aktionen bauen (Anker/fixMode aus dem Regelkatalog); Quell-Cache TRdxSourceCache
 source\uRdxRecipeRunner.pas       Rezept-Laeufer auf TSourcePlaces: Fund -> Beschreibung -> Ersetzung; ohne ToolsAPI, testbar
 source\uRdxFixTable.pas           Tabelle der einfachen Hilfen: je Fundart Planer, Hinweis, Kennzeichnung (E2), zweiter Eintrag, Menuetext (Charge R8); EIN Geruest fuer die Planer mit Plan-Record (TRdxFixFrame, generisch, Charge H5c); ohne ToolsAPI, nur Delphi
-source\uRdxRecipes.pas            reine Textlogik: Literal-Codec, Format() nach der Kompilat-Regel, SQL-Vorlage, uses-Schreibweise, Rahmenwerk
+source\uRdxRecipes.pas            reine Textlogik: Literal-Codec, Format() nach der Kompilat-Regel, Query-Objekt eines SQL-Ziels, uses-Schreibweise, Rahmenwerk
 source\uRdxScopeTable.pas         Kurzname -> qualifizierte Unit (Compiler-Reihenfolge der Scope-Liste)
 source\uRdxSimpleFixes.pas        Quick-Fixes SCA066/SCA072/SCA074/SCA075/SCA084/SCA085/SCA087/SCA126/SCA139 (reine Textlogik)
 source\uRdxRtlTypes.pas           Klassen und Interfaces der Delphi-Quellen (E27): Beweis fuer SCA084/SCA126 bei Fremdtypen; Liste uRdxRtlTypes.inc erzeugt von tools\gen-rtl-types.py (Repo-Wurzel)
@@ -40,6 +40,7 @@ source\uRdxFlowFixes.pas          Quick-Fixes an ganzen Anweisungen SCA098/SCA08
 source\uRdxRoutineFixes.pas       Quick-Fixes SCA164/SCA147 (ungenutzte Routine / private Methode loeschen, Charge H3b) und die Bausteine Routinengrenzen, Decl/Impl-Finder und (seit Charge H5) Klassenkopf, reine Textlogik
 source\uRdxCleanupFixes.pas       Quick-Fixes "Aufraeumen" SCA070/SCA053 (Charge H3a) und der Baustein CutEdit (loeschen und aufraeumen), reine Textlogik
 source\uRdxTryFixes.pas           Quick-Fixes try/finally SCA009/SCA001/SCA109/SCA153/SCA156 (Charge H4) und der Baustein B5 (Anweisung und Freigabe in try/finally), reine Textlogik
+source\uRdxSqlTemplate.pas        SQL-Vorlage zu SCA003 (Rezept 5.2, Charge S1): nur Werte werden Parameter (DDL, Namen, unbekannte Anweisungsart lehnen ab), Konstanten in den Text, FireDAC-ExecSQL, Namen aus dem Operanden; Nachweise am Quelltext (Konstante, FireDAC-Verbindung), reine Textlogik
 source\uRdxResultFixes.pas        Quick-Fixes SCA096/SCA097 (inherited in Konstruktor/Destruktor) und SCA121/SCA196 (Result initialisieren, Charge H5) und die Bausteine erste/letzte Anweisung des Rumpfs, reine Textlogik
 source\uRdxIntroPlan.pas          Code-Aktion "Lokale Variable einfuehren" (ohne Fund): Literal am Caret, Deklaration, Spalten, Ablehnungen (reine Textlogik)
 source\uRdxIntroEdits.pas         dieselbe Aktion: Puffertext, Ziel am Caret, Ersetzungen des Writers, Ende des Sync-Blocks (reine Textlogik; IDE-Teil folgt)
@@ -108,7 +109,7 @@ die Engine also vorher. DCUs landen wie bei den anderen Projekten in
 |---|---|---|
 | Stelle zeigen | alle mit beschreibbarer Anweisung (Anker der Regel) | markiert den exakten Bereich im Editor. Nur Kontextmenue und Dock-Grid (`fakNavigate`), nicht die Gluehbirne. Ausgegraut, wenn der Bereich hinter Spalte 32767 bzw. hinter 32766 Bytes seiner Zeile liegt (die Editor-Markierung rechnet in SmallInt); liegt er beim Klick hinter dem Pufferende, meldet die Aktion das und markiert nichts |
 | Format() aus Verkettung bilden | SCA044 (`fixMode: auto`) | ersetzt die Terme durch `Format('...%s...', [..])` nach der Kompilat-Regel (unten). `IntToStr(n)` mit bekanntem Ganzzahltyp wird `%d`/`%u` mit `n`; `n.ToString` bleibt `%s`. Ein Char-Operand bekannten Typs geht als `string(c)` hinein, damit ein `#0` erhalten bleibt. `X := X + ...` wird `X := X + Format(...)`. Gesperrt bei SQL-Literalen, Kommentar oder Direktive im ersetzten Bereich, Variant-Anzeichen, Zahl-Operanden, Nicht-Unicode-Strings. Fehlt `System.SysUtils` (dort lebt `Format`), wird es als zweite Ersetzung in die uses-Klausel eingefuegt (unten) - der Menuetext sagt `+ uses System.SysUtils` bzw. `+ uses SysUtils` |
-| Parametrisierte Vorlage in die Zwischenablage | SCA003 (`fixMode: assisted`) | baut `:p1..:pn` und `ParamByName`-Zeilen, eingerueckt wie die Anweisung (Tabs bleiben Tabs). Ist das Ziel kein Query-Objekt (kein Glied `.SQL` oder `.CommandText`, etwa ein String-Puffer `S`), stehen die `ParamByName`-Zeilen als Kommentar mit dem Platzhalter `<Query>` da. Schreibt NIE in den Editor |
+| Parametrisierte Vorlage in die Zwischenablage | SCA003 (`fixMode: assisted`) | `uRdxSqlTemplate` (Charge S1): ein Operand wird nur dort Parameter, wo SQL einen WERT erwartet - hinter `=`, `<>`, `<`, `>`, `LIKE`, `BETWEEN`/`AND`, als Element von `IN (..)`/`VALUES (..)`, hinter `LIMIT`/`OFFSET` (TOP/FIRST/SKIP nicht: dort nimmt SQL Server bzw. Access nur eine Zahl); ein Operand IN einem SQL-String macht den ganzen String zum Parameter (`LIKE ''%' + X + '%''` -> `LIKE :X`, Wert `'%' + X + '%'`), `IntToStr(x)`/`QuotedStr(x)` binden `x`. Ausgegraut mit Grund: DDL/DCL (CREATE, ALTER, DROP, TRUNCATE, RENAME, COMMENT, GRANT, REVOKE), Bezeichner-Positionen (FROM, INTO, UPDATE, ORDER BY, Spalten-/SELECT-Liste, Funktionsargument), ein Operand, der an einem Bezeichner klebt oder in einem gequoteten Namen/Kommentar steht, ein Operand allein in `IN (..)` (kann eine ganze Liste sein), eine Anweisung, die nicht mit DML oder einer Klausel (WHERE, AND, ...) beginnt (`'ENGINE=' + X`, `PRAGMA`), eine Kette ohne SQL-Literal (`FormatUtf8(..)`), "nur Konstanten". Konstanten (am Quelltext nachgewiesen: untypisiert, in der Unit bzw. Routine sichtbar, kein anderer Name gleich deklariert) kommen mit einfachem Literal in den Text, sonst bleibt die Verkettung; ebenso `sLineBreak` und bei `S := S + ..` der bisherige Text. Namen aus dem Operanden (`AColumnTypes` -> `:ColumnTypes`, `FId` -> `:Id`, `Edit1.Text` -> `:Edit1Text`, Kollision -> `2`, `3`). Ziel Query-Objekt (`.SQL`, `.CommandText`): `ParamByName`-Zeilen; String-Puffer: Zeilen `// Parameter binden: ParamByName(..).Value := ..;`; `X.ExecSQL(..)` nur mit FireDAC.Comp.Client in uses und X ueberall als TFDConnection deklariert: `X.ExecSQL('..:Id..', [Wert])`; jeder andere Aufruf bindet nichts - ausgegraut. Schreibt NIE in den Editor |
 | uses: X -> Scope.X | Fund in einer uses-Klausel, auch der Programm-Klausel einer .dpr/.lpr | qualifiziert den Eintrag, dazu "uses: alle n Eintraege qualifizieren". Mehrdeutiges (Forms: VCL/FMX) nur bei erkennbarem Rahmenwerk, nie bei gleichnamiger Projekt-Unit und nie, wenn die Reihenfolge System/Vcl der Projekt-Scopes entscheiden wuerde. Gesperrt, wenn eine uses-Klausel Compiler-Direktiven traegt oder in einem `$IFDEF`-Zweig liegt, und in einer Datei mit FPC-Weiche oder FPC-Modus (FPC 3.2 kennt keine Unit-Scopes). Macht der Eintrag (bzw. "alle") eine sortierte Klausel unsortiert, steht er gesperrt da (sonst kaeme ein neuer SCA142-Fund). Ein Umbau, keine Hilfe zum Fund (`fakRefactor`): nur Kontextmenue und Dock-Grid, nie die Gluehbirne, und je Menue nur einmal, auch wenn mehrere Funde auf der Zeile stehen |
 | FreeAndNil(X) verwenden | SCA085 | `X.Free;` + `X := nil;` -> `FreeAndNil(X);`. X muss in der Unit deklariert sein (keine Property, kein geerbtes Feld); gesperrt in einem `with`-Block. Fehlt `System.SysUtils`, kommt die uses-Einfuegung mit (unten) |
 | Assigned() statt Vergleich mit nil verwenden | SCA126 | schreibt ALLE nil-Vergleiche der einen Anweisung um, die auf der Fundzeile beginnt (`X = nil` -> `not Assigned(X)`). Zwei solche Anweisungen auf der Zeile heissen mehrdeutig; ein Operand vom Typ String, Variant, Menge, Array oder Prozedur/Ereignis sperrt, ebenso ein blosser Bezeichner ohne beweisbaren Typ (geerbt aus einer anderen Unit). Bewiesen ist ein Typ, den die Unit als Klasse, Interface oder Zeiger deklariert (auch ueber Alias) oder der eine Klasse/ein Interface der Delphi-Quellen ist (Entscheid E27, `uRdxRtlTypes`: RTL, VCL, FMX, Data, Winapi ... aus Delphi 12 und 13, erzeugt von `tools\gen-rtl-types.py`); ein Kundentyp aus einer anderen Unit sperrt - ein Funktionstyp dort riefe `= nil` auf, `Assigned()` nicht |
@@ -320,7 +321,7 @@ Projekt scannen. Gluehbirne oder Editor-Kontextmenue auf der Fundzeile:
 | Regel | Fund | Erwartete Hilfe |
 |---|---|---|
 | SCA044 ConcatToFormat | `s := 'a' + x + 'b';` | Format() aus Verkettung bilden (fehlt System.SysUtils, kommt es in uses) |
-| SCA003 SQLInjection | `Q.SQL.Text := 'SELECT ... ' + Id;` | Parametrisierte Vorlage (in die Zwischenablage, schreibt nichts) |
+| SCA003 SQLInjection | `Q.SQL.Text := 'SELECT * FROM t WHERE id = ' + IntToStr(Id);` | Parametrisierte Vorlage `.. WHERE id = :Id` mit `Q.ParamByName('Id').Value := Id;` (in die Zwischenablage, schreibt nichts); `'.. FROM ' + Tbl` oder DDL: ausgegraut mit Grund |
 | SCA075 ExplicitTObjectInheritance | `TFoo = class(TObject)` | (TObject) entfernen |
 | SCA085 FreeAndNilHint | `X.Free; X := nil;` | FreeAndNil(X) |
 | SCA126 NilComparison | `if X <> nil then` | Assigned(X) |
@@ -421,7 +422,7 @@ Rechnung des Literals.
 **`tests\reDelphix.Test.dproj`** (DUnitX, Konsole/TestInsight, in der
 d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
 
-* `uTestRdxRecipes` - Literal-Codec, Format()-Bau, SQL-Vorlage,
+* `uTestRdxRecipes` - Literal-Codec, Format()-Bau, Query-Objekt eines SQL-Ziels,
   Scope-Tabelle (auch die echte `data\unitscopes.txt`),
   uses-Schreibweise/-Sortierung/-Einfuegestelle, Kompilat-Regel
   (Operandenform, Variant-Anzeichen, RTL-Konstanten und -Funktionen,
@@ -547,6 +548,19 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
   Zuweisung im Rumpf; SCA196 Typdefinition der Unit - 17 Tests (drei davon Grenzen, die
   schon vorher gruen waren: Prozeduraufruf ist keine Delegation, eigenes TPersistent,
   TPersistent.Destroy bleibt gekennzeichnet).
+* `uTestRdxSqlTemplate` - die SQL-Vorlage zu SCA003 (Charge S1): Nicos Fall
+  (`FConn.ExecSQL('CREATE TABLE ' + KONSTANTE + .. + AColumnTypes ..)`: DDL
+  ausgegraut), Bezeichner-Positionen, Konstante im Text bzw. als Verkettung,
+  "nur Konstanten", kein SQL-Literal, LIKE mit `'%' + X + '%'`, IN-/VALUES-Liste,
+  FireDAC-Overload und Aufruf ohne Bindung, PostgreSQL-`::`, Namenskollision,
+  klebende Operanden, Bruchstuecke (`S := S + ..`), LIMIT/TOP, BETWEEN - 20 Tests,
+  davon 19 gegen e788e0c7 rot (die sechs alten `SqlTemplate_*` aus
+  `uTestRdxRecipes` mit sprechenden Namen statt `:p1`).
+* `uTestRdxSqlFacts` - ihre Nachweise am Quelltext: Konstante der Unit, der
+  Routine, aus dem interface; nicht bewiesen bei Parameter/Feld/typisierter
+  Konstante gleichen Namens, lokaler Konstante einer anderen Routine, Deklaration
+  hinter der Verwendung; zwei Zweige; FireDAC-Verbindung (uses und Typ);
+  Parameternamen; Platzhalter nach SCA199; AddSqlFacts - 16 Tests.
 * `uTestRdxResultFixesDetector` - dieselben Hilfen gegen die echten Detektoren (nur
   Delphi): Rundlauf und Katalog-Beispiele (SCA097 `bad` -> genau `good`; SCA096: `good`
   zeigt `inherited;`, die Hilfe setzt bei direktem TObject-Erben `inherited Create;`;
@@ -578,10 +592,10 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext
+bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxSqlTemplate uTestRdxSqlFacts
 ```
 
-Erwartet (Stand 2026-10-14, Chargen H5+H4c+H5c): `PASSED 453  FAILED 0` - 28 Testunits,
+Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1): `PASSED 483  FAILED 0` - 30 Testunits,
 davon 72 Tests fuer "Lokale Variable einfuehren", 12 fuer die Quick-Fixes der
 Charge H2, 25 der Charge H3b (SCA164 und Bausteine 13 in
 `uTestRdxRoutineFixes`, SCA147 12 in `uTestRdxMethodFixes`), 18 der
@@ -594,8 +608,10 @@ als Beweis fuer SCA126, `uRdxRtlTypes`, in `uTestRdxNilFix`), 20 der
 Charge H3a (`uTestRdxCleanupFixes`), 37 der Charge H4 (`uTestRdxTryFixes` 20,
 `uTestRdxTryLocks` 17), 34 der Charge H5 (`uTestRdxResultFixes` 17,
 `uTestRdxInheritedFixes` 17), 17 der Charge H4c (`uTestRdxTryGates` 13,
-`uTestRdxTryLocks` 3, `uTestRdxCodeMap` 1 fuer TokBefore/TokText/IsKeywordAt) und 17
-der Charge H5c (`uTestRdxResultGuards`).
+`uTestRdxTryLocks` 3, `uTestRdxCodeMap` 1 fuer TokBefore/TokText/IsKeywordAt), 17
+der Charge H5c (`uTestRdxResultGuards`) und 36 der Charge S1 (`uTestRdxSqlTemplate` 20,
+`uTestRdxSqlFacts` 16; die sechs SQL-Vorlagen-Tests aus `uTestRdxRecipes` sind dorthin
+umgezogen).
 
 Der Pruefstand uebersetzt die Core-Units des Quellstellen-Dienstes
 (`uRefactor*`, `uSourcePlaces`, `uFindingActions`, `ScanCodeLine` aus
@@ -604,7 +620,7 @@ des Moduls (`uRdxRecipes`, `uRdxScopeTable`, `uRdxBufferMath`,
 `uRdxSuppress`, `uRdxSimpleFixes`, `uRdxRtlTypes` samt der erzeugten
 `uRdxRtlTypes.inc`, `uRdxStructFixes`, `uRdxLineFixes`, `uRdxRaiseFixes`,
 `uRdxDeclFixes`, `uRdxFlowFixes`, `uRdxRoutineFixes`, `uRdxCleanupFixes`, `uRdxTryFixes`,
-`uRdxResultFixes`, `uRdxCodeMap`,
+`uRdxResultFixes`, `uRdxSqlTemplate`, `uRdxCodeMap`,
 `uRdxIntroPlan`, `uRdxIntroEdits`). Testunits kommen aus `reDelphix\tests`,
 sonst aus `StaticCodeAnalyserForm\tests` (Core-Tests wie
 `uTestSourcePlaces`, `uTestRefactorConcat`).
