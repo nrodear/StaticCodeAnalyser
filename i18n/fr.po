@@ -2726,3 +2726,60 @@ msgstr "%s a le type procédural %s (déclaré dans cette unité) - « = nil » 
 
 msgid "%s: type %s is not proven in this unit as a class, interface or pointer and is not a class of the Delphi sources - \"= nil\" would call a function type of another unit, Assigned() would not"
 msgstr "%s : le type %s n'est prouvé dans cette unité ni comme classe, ni comme interface, ni comme pointeur, et ce n'est pas une classe des sources Delphi - « = nil » appellerait un type fonction d'une autre unité, Assigned() non"
+
+msgid "no \";;\" at the reported place"
+msgstr "aucun « ;; » à l'endroit signalé"
+
+msgid "the message has no keyword or column"
+msgstr "le mot-clé ou la colonne manque dans le message"
+
+msgid "the keyword is not at the reported place"
+msgstr "le mot-clé n'est pas à l'endroit signalé"
+
+msgid "%s belongs to a type declaration - not a unit section"
+msgstr "%s appartient à une déclaration de type - pas une section d'unité"
+
+msgid "no begin"
+msgstr "aucun begin"
+
+msgid "no end found for the begin"
+msgstr "aucun end trouvé pour le begin"
+
+msgid "the end of this begin is not before the dot - not a unit body"
+msgstr "le end de ce begin ne précède pas le point - pas un corps d'unité"
+
+msgid "not a unit - in program/library, begin is the body"
+msgstr "pas une unité - dans program/library, begin est le corps"
+
+msgid "compiler directive on the line of the begin"
+msgstr "directive de compilation sur la ligne du begin"
+
+msgid "%d casts %s(...).Free"
+msgstr "%d transtypages %s(...).Free"
+
+msgid "only for Free - Destroy stays as it is"
+msgstr "uniquement pour Free - Destroy reste tel quel"
+
+msgid "the cast %s(...) spans several lines"
+msgstr "le transtypage %s(...) s'étend sur plusieurs lignes"
+
+msgid "no %s(...).Free"
+msgstr "aucun %s(...).Free"
+
+msgid "comment or string in the cast"
+msgstr "commentaire ou chaîne dans le transtypage"
+
+msgid "\"%s\" as operand - not the same without the cast"
+msgstr "« %s » comme opérande - pas équivalent sans le transtypage"
+
+msgid "the operand is not a simple identifier (path) - a call or an index, for example; the cast could be needed to compile"
+msgstr "l'opérande n'est pas un simple identificateur (chemin) - par exemple un appel ou un index ; le transtypage pourrait être nécessaire à la compilation"
+
+msgid "the operand is not a simple identifier (path)"
+msgstr "l'opérande n'est pas un simple identificateur (chemin)"
+
+msgid "the message has no type name"
+msgstr "le nom de type manque dans le message"
+
+msgid "%s is an interface - %s(X).Free would call its method Free, X.Free the one of TObject"
+msgstr "%s est une interface - %s(X).Free appellerait sa méthode Free, X.Free celle de TObject"

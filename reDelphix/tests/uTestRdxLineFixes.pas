@@ -261,10 +261,11 @@ begin
   // Interface-Cast: IFoo(X).Free riefe eine Interface-Methode.
   Assert.AreEqual('', Fix(lkCast, InUnit(['  IFoo(X).Free;']), 6, CastMsg('IFoo'), R));
   Assert.IsTrue(Pos('Interface', R) > 0, R);
-  // Nur Free.
+  // Nur Free. 'nur fuer Free' traegt in de.po das echte Umlaut-u (Charge
+  // G1) - geprueft wird der zweite Teil des Grunds, die Quelle bleibt ASCII.
   Assert.AreEqual('', Fix(lkCast, InUnit(['  TFoo(X).Destroy;']), 6, CastMsg('TFoo'),
     R));
-  Assert.IsTrue(Pos('nur fuer Free', R) > 0, R);
+  Assert.IsTrue(Pos('Destroy bleibt, wie es ist', R) > 0, R);
   // Aufruf bzw. Index als Operand: der Cast kann zum Uebersetzen noetig sein.
   Assert.AreEqual('', Fix(lkCast, InUnit(['  TFoo(List[0]).Free;']), 6,
     CastMsg('TFoo'), R));

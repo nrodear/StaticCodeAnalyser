@@ -2730,3 +2730,60 @@ msgstr "%s hat den Prozedurtyp %s (in dieser Unit deklariert) - \"= nil\" ruft i
 
 msgid "%s: type %s is not proven in this unit as a class, interface or pointer and is not a class of the Delphi sources - \"= nil\" would call a function type of another unit, Assigned() would not"
 msgstr "%s: Typ %s ist in dieser Unit nicht als Klasse, Interface oder Zeiger bewiesen und keine Klasse der Delphi-Quellen - einen Funktionstyp einer anderen Unit riefe \"= nil\" auf, Assigned() nicht"
+
+msgid "no \";;\" at the reported place"
+msgstr "kein \";;\" an der gemeldeten Stelle"
+
+msgid "the message has no keyword or column"
+msgstr "Schlüsselwort oder Spalte fehlt in der Meldung"
+
+msgid "the keyword is not at the reported place"
+msgstr "das Schlüsselwort steht nicht an der gemeldeten Stelle"
+
+msgid "%s belongs to a type declaration - not a unit section"
+msgstr "%s gehört zu einer Typ-Deklaration - kein Unit-Abschnitt"
+
+msgid "no begin"
+msgstr "kein begin"
+
+msgid "no end found for the begin"
+msgstr "kein end zum begin gefunden"
+
+msgid "the end of this begin is not before the dot - not a unit body"
+msgstr "das end zu diesem begin steht nicht vor dem Punkt - kein Unit-Rumpf"
+
+msgid "not a unit - in program/library, begin is the body"
+msgstr "keine Unit - in program/library ist begin der Rumpf"
+
+msgid "compiler directive on the line of the begin"
+msgstr "Compiler-Direktive auf der Zeile des begin"
+
+msgid "%d casts %s(...).Free"
+msgstr "%d Casts %s(...).Free"
+
+msgid "only for Free - Destroy stays as it is"
+msgstr "nur für Free - Destroy bleibt, wie es ist"
+
+msgid "the cast %s(...) spans several lines"
+msgstr "der Cast %s(...) geht über mehrere Zeilen"
+
+msgid "no %s(...).Free"
+msgstr "kein %s(...).Free"
+
+msgid "comment or string in the cast"
+msgstr "Kommentar oder String im Cast"
+
+msgid "\"%s\" as operand - not the same without the cast"
+msgstr "\"%s\" als Operand - ohne den Cast nicht dasselbe"
+
+msgid "the operand is not a simple identifier (path) - a call or an index, for example; the cast could be needed to compile"
+msgstr "der Operand ist kein einfacher Bezeichner(pfad) - etwa ein Aufruf oder ein Index; der Cast könnte zum Übersetzen nötig sein"
+
+msgid "the operand is not a simple identifier (path)"
+msgstr "der Operand ist kein einfacher Bezeichner(pfad)"
+
+msgid "the message has no type name"
+msgstr "Typname fehlt in der Meldung"
+
+msgid "%s is an interface - %s(X).Free would call its method Free, X.Free the one of TObject"
+msgstr "%s ist ein Interface - %s(X).Free riefe dessen Methode Free, X.Free die von TObject"

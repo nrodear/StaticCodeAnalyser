@@ -57,6 +57,10 @@ msgstr ""
 msgid "\"%s\" already exists. Overwrite it?"
 msgstr ""
 
+#: reDelphix/source/uRdxLineFixes.pas:383
+msgid "\"%s\" as operand - not the same without the cast"
+msgstr ""
+
 #: reDelphix/source/uRdxSimpleFixes.pas:1480
 msgid "\"%s\" before the expression - the parenthesis belongs to a call or cast"
 msgstr ""
@@ -90,6 +94,10 @@ msgstr ""
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1970
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1934
 msgid "%d / %d findings"
+msgstr ""
+
+#: reDelphix/source/uRdxLineFixes.pas:357
+msgid "%d casts %s(...).Free"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1862
@@ -154,6 +162,10 @@ msgstr ""
 msgid "%s - line moved? Analyse the file again"
 msgstr ""
 
+#: reDelphix/source/uRdxLineFixes.pas:177
+msgid "%s belongs to a type declaration - not a unit section"
+msgstr ""
+
 #: SCA.SharedUI/sources/uProfileViewer.pas:872
 msgid "%s contains no profiles."
 msgstr ""
@@ -164,6 +176,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxSimpleFixes.pas:2484
 msgid "%s has the procedural type %s (declared in this unit) - \"= nil\" calls it, Assigned() does not"
+msgstr ""
+
+#: reDelphix/source/uRdxLineFixes.pas:416
+msgid "%s is an interface - %s(X).Free would call its method Free, X.Free the one of TObject"
 msgstr ""
 
 #: reDelphix/source/uRdxSimpleFixes.pas:1284
@@ -2903,6 +2919,10 @@ msgstr ""
 msgid "comment or directive in the statement"
 msgstr ""
 
+#: reDelphix/source/uRdxLineFixes.pas:377
+msgid "comment or string in the cast"
+msgstr ""
+
 #: reDelphix/source/uRdxSimpleFixes.pas:673
 msgid "comment or string in the nil line"
 msgstr ""
@@ -2917,6 +2937,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxSimpleFixes.pas:625
 msgid "compiler directive before X.Free; - the statement before it does not always apply"
+msgstr ""
+
+#: reDelphix/source/uRdxLineFixes.pas:249
+msgid "compiler directive on the line of the begin"
 msgstr ""
 
 #: reDelphix/source/uRdxSimpleFixes.pas:1050
@@ -3027,8 +3051,24 @@ msgstr ""
 msgid "nested nil comparisons"
 msgstr ""
 
+#: reDelphix/source/uRdxLineFixes.pas:121
+msgid "no \";;\" at the reported place"
+msgstr ""
+
 #: reDelphix/source/uRdxSimpleFixes.pas:1518
 msgid "no \"Assigned(X) and (X <> nil)\" on one line at the place (no quick fix without parentheses around the comparison)"
+msgstr ""
+
+#: reDelphix/source/uRdxLineFixes.pas:365
+msgid "no %s(...).Free"
+msgstr ""
+
+#: reDelphix/source/uRdxLineFixes.pas:217
+msgid "no begin"
+msgstr ""
+
+#: reDelphix/source/uRdxLineFixes.pas:230
+msgid "no end found for the begin"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:782
@@ -3075,6 +3115,10 @@ msgstr ""
 msgid "no valid range"
 msgstr ""
 
+#: reDelphix/source/uRdxLineFixes.pas:245
+msgid "not a unit - in program/library, begin is the body"
+msgstr ""
+
 #: reDelphix/source/uRdxProvider.pas:813
 #: reDelphix/source/uRdxProvider.pas:829
 msgid "nothing to offer"
@@ -3082,6 +3126,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2399
 msgid "on E: Exception catches everything - too broad"
+msgstr ""
+
+#: reDelphix/source/uRdxLineFixes.pas:361
+msgid "only for Free - Destroy stays as it is"
 msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2963
@@ -3140,6 +3188,10 @@ msgstr ""
 msgid "the call is part of an expression - without parentheses the name could be taken as a pointer"
 msgstr ""
 
+#: reDelphix/source/uRdxLineFixes.pas:363
+msgid "the cast %s(...) spans several lines"
+msgstr ""
+
 #: reDelphix/source/uRdxSimpleFixes.pas:516
 msgid "the class body starts on the same line"
 msgstr ""
@@ -3154,8 +3206,16 @@ msgstr ""
 msgid "the comparison with True/False is no longer at the reported place"
 msgstr ""
 
+#: reDelphix/source/uRdxLineFixes.pas:232
+msgid "the end of this begin is not before the dot - not a unit body"
+msgstr ""
+
 #: reDelphix/source/uRdxSimpleFixes.pas:1378
 msgid "the expression continues after %s - the comparison binds differently there"
+msgstr ""
+
+#: reDelphix/source/uRdxLineFixes.pas:175
+msgid "the keyword is not at the reported place"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:777
@@ -3166,12 +3226,20 @@ msgstr ""
 msgid "the message has no column"
 msgstr ""
 
+#: reDelphix/source/uRdxLineFixes.pas:170
+msgid "the message has no keyword or column"
+msgstr ""
+
 #: reDelphix/source/uRdxSimpleFixes.pas:1145
 msgid "the message has no receiver"
 msgstr ""
 
 #: reDelphix/source/uRdxSimpleFixes.pas:1067
 msgid "the message has no section"
+msgstr ""
+
+#: reDelphix/source/uRdxLineFixes.pas:414
+msgid "the message has no type name"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:392
@@ -3182,6 +3250,15 @@ msgstr ""
 #: reDelphix/source/uRdxSimpleFixes.pas:638
 #: reDelphix/source/uRdxSimpleFixes.pas:640
 msgid "the next line is not \"X := nil;\""
+msgstr ""
+
+#: reDelphix/source/uRdxLineFixes.pas:388
+#: reDelphix/source/uRdxLineFixes.pas:393
+msgid "the operand is not a simple identifier (path)"
+msgstr ""
+
+#: reDelphix/source/uRdxLineFixes.pas:385
+msgid "the operand is not a simple identifier (path) - a call or an index, for example; the cast could be needed to compile"
 msgstr ""
 
 #: reDelphix/source/uRdxSimpleFixes.pas:1346
