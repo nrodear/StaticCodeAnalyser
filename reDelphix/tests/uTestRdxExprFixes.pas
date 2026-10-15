@@ -24,6 +24,9 @@ type
     [Test] procedure Sca066_OwnFunction_Refused;
     // Gegen-Review 2026-10-10: welche Namen der Laeufer pruefen muss.
     [Test] procedure Sca066_CalleeAndTarget;
+    // Review R3-02 (Charge FC): eine Property mit Prozedurtyp - auch hinter
+    // einem Pfad - bekommt keine Hilfe; Felder und Methoden schon.
+    [Test] procedure Sca066_PropertyCall_Refused;
     // ---- SCA072 ----
     [Test] procedure Sca072_Variants;
     [Test] procedure Sca072_Refusals;
@@ -32,6 +35,10 @@ type
     [Test] procedure Sca084_Refusals;
     [Test] procedure DeclaredTypeKind_Kinds;
     [Test] procedure TypeKinds_ResolvedProceduralPointerLike;
+    // Review R3-03 (Charge FC): die Fragen an die ganze Datei lesen nur noch
+    // die Zeilen, die den Namen nennen - mit demselben Ergebnis, auch wenn
+    // Schluesselwort und Name auf verschiedenen Zeilen stehen.
+    [Test] procedure DeclarationQueries_LineFilter;
   end;
 
 implementation
@@ -375,6 +382,82 @@ begin
   end;
 end;
 
+// Der Dialog des Pruefer-Falls R3-02 (Alcinoe.FMX.Dialogs.pas:1767/1768):
+// Properties mit 'reference to' bzw. 'of object' und ihre Felder; ARoutine
+// ist der Kopf der Routine, deren einzige Anweisung ALine ist (Zeile 18).
+function DialogUnit(const ARoutine, ALine: string): string;
+begin
+  Result := Join(['unit u;', 'interface', 'type',
+    '  TRefProc = reference to procedure;',
+    '  TObjProc = procedure of object;',
+    '  TDlg = class',
+    '  private',
+    '    FRefProc: TRefProc;',
+    '    FObjProc: TObjProc;',
+    '  public',
+    '    property RefProc: TRefProc read FRefProc write FRefProc;',
+    '    property ObjProc: TObjProc read FObjProc;',
+    '    procedure Run;',
+    '  end;',
+    'implementation',
+    ARoutine,
+    'begin',
+    ALine,
+    'end;',
+    'end.']);
+end;
+
+procedure TTestRdxExprFixes.Sca066_PropertyCall_Refused;
+const
+  SHOW = 'procedure Show(Dlg: TDlg);';
+  // Property hinter einem Pfad ('reference to', 'of object') bzw. als
+  // blosser Name in einer Methode der Klasse.
+  REFUSED: array[0..2, 0..1] of string = (
+    (SHOW, '  if Assigned(Dlg.RefProc) then Dlg.RefProc()'),
+    (SHOW, '  Dlg.ObjProc();'),
+    ('procedure TDlg.Run;', '  RefProc();'));
+  // Feld mit Prozedurtyp (Delphi ruft eine Variable ohne () auf - DocWiki,
+  // RTL 'FProc;') und Methode: weiter Hilfen.
+  OFFERED: array[0..1, 0..1] of string = (
+    ('  Dlg.FRefProc();', '  Dlg.FRefProc;'),
+    ('  Dlg.Run();', '  Dlg.Run;'));
+  EVENTS: array[0..1] of string = ('  Dlg.FOnRun();', '  Dlg.OnIdle();');
+var
+  i : Integer;
+  F : TFixResult;
+begin
+  // Bis Charge FC lieferte der Planer hier 'OK callee= target=' - der
+  // Laeufer prueft dann nichts mehr (CallReason), die Zeile wurde
+  // '.. then Dlg.RefProc', und ob Delphi das aufruft, ist nicht belegt.
+  for i := 0 to High(REFUSED) do
+  begin
+    F := Fix('E', DialogUnit(REFUSED[i, 0], REFUSED[i, 1]), 18,
+      Pos('()', REFUSED[i, 1]));
+    Assert.AreEqual('', F.Text, REFUSED[i, 1]);
+    Assert.IsTrue(Pos('als Property deklariert', F.Reason) > 0,
+      REFUSED[i, 1] + ': ' + F.Reason);
+  end;
+  for i := 0 to High(OFFERED) do
+  begin
+    F := Fix('E', DialogUnit(SHOW, OFFERED[i, 0]), 18, Pos('()', OFFERED[i, 0]));
+    Assert.AreEqual(DialogUnit(SHOW, OFFERED[i, 1]), F.Text,
+      OFFERED[i, 0] + ': ' + F.Reason);
+  end;
+  // Ein Ereignisname bleibt gesperrt; ob Feld oder Property, sieht der
+  // Planer ohne Typ nicht - der Grund nennt beides (Nachpruefung FC: bis
+  // dahin nannte er jede solche Sperre eine Ereignis-Property, im Korpus
+  // sind es aber alle Felder wie 'FOnChange()').
+  for i := 0 to High(EVENTS) do
+  begin
+    F := Fix('E', DialogUnit(SHOW, EVENTS[i]), 18, Pos('()', EVENTS[i]));
+    Assert.AreEqual('', F.Text, EVENTS[i]);
+    Assert.IsTrue(Pos('als Feld ruft Delphi es ohne () auf', F.Reason) > 0,
+      EVENTS[i] + ': ' + F.Reason);
+    Assert.IsTrue(Pos('als Property ist das nicht belegt', F.Reason) > 0,
+      EVENTS[i] + ': ' + F.Reason);
+  end;
+end;
+
 procedure TTestRdxExprFixes.DeclaredTypeKind_Kinds;
 var
   SL  : TStringList;
@@ -475,6 +558,93 @@ begin
     Assert.IsFalse(TRdxExprFixes.PointerLikeType(Map, 'tchromium'),
       'Kundentyp einer anderen Unit: nicht bewiesen');
     Assert.IsFalse(TRdxExprFixes.PointerLikeType(Map, 'tname'), 'string-Alias');
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxExprFixes.DeclarationQueries_LineFilter;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  // Dieselben Antworten wie der Lauf ueber jedes Token bis Charge FC - die
+  // Faelle, an denen ein Vorfilter je Zeile scheitern koennte: Schluessel-
+  // wort und Name auf verschiedenen Zeilen, Kette ueber Zeilen, Name nur im
+  // Kommentar oder als Teil eines laengeren Namens, zwei Nennungen auf
+  // einer Zeile (erst Aufruf, dann Kopf), der erste Treffer zaehlt.
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Join([
+      'unit u;',
+      'interface',
+      'type',
+      '  TSplit',
+      '    = class',
+      '    procedure',
+      '      Spread;',
+      '    procedure Spreadsheet;',
+      '    property Items: TList read FItems; // property Ghost',
+      '  end;',
+      'var',
+      '  V: TLate = nil;',
+      'type',
+      '  TLate = record end;',
+      'implementation',
+      'procedure TSplit.',
+      '  Chained;',
+      'begin',
+      'end;',
+      'procedure Q; begin Two.Go; end; procedure Go;',
+      'begin',
+      'end;',
+      'procedure Q2; begin Two.Hop; end;',
+      'procedure Hop;',
+      'begin',
+      'end;',
+      '// Later: der Typ folgt',
+      'type',
+      '  Later = record end;',
+      '  TEq=class(TObject)end;',
+      'procedure(*c*)Glued;',
+      'end.']);
+    Map := TRdxCodeMap.Create(SL);
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Spread'),
+      'Name auf der Zeile hinter dem Schluesselwort');
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'SPREAD'), 'Gross/klein');
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Chained'),
+      'Kette ueber zwei Zeilen');
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Go'),
+      'zweite Nennung auf der Zeile');
+    Assert.IsFalse(TRdxSimpleFixes.DeclaresRoutine(Map, 'Sheet'),
+      'nur Teil eines laengeren Namens');
+    Assert.IsFalse(TRdxSimpleFixes.DeclaresRoutine(Map, 'Two'), 'Aufruf-Pfad');
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresProperty(Map, 'Items'));
+    Assert.IsFalse(TRdxSimpleFixes.DeclaresProperty(Map, 'Ghost'),
+      'nur im Kommentar');
+    Assert.IsFalse(TRdxSimpleFixes.DeclaresProperty(Map, ''), 'leerer Name');
+    Assert.AreEqual('class', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tsplit'),
+      '"=" auf der Folgezeile');
+    Assert.AreEqual('record', TRdxSimpleFixes.DeclaredTypeKind(Map, 'TLate'),
+      'Variable mit Anfangswert davor, Typ dahinter');
+    // Nachpruefung R3-03: der Vorfilter sucht den Namen als WORT, ohne
+    // Kopie der Zeile, und springt ueber Zeilen ohne Token. Die Grenze
+    // ist jedes Zeichen, das kein Bezeichnerzeichen ist - nicht nur
+    // Leerraum ('=' dahinter, Kommentar-Ende davor) -, und die Zeile, auf
+    // der das naechste Token liegt, zaehlt selbst (Kopf auf der Folgezeile
+    // eines Aufrufs, Typ hinter einer Zeile ohne den Namen).
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Hop'),
+      'Kopf auf der Zeile des naechsten Tokens');
+    Assert.AreEqual('record', TRdxSimpleFixes.DeclaredTypeKind(Map, 'Later'),
+      'Name erst im Kommentar, dann eine Zeile ohne ihn');
+    Assert.AreEqual('class', TRdxSimpleFixes.DeclaredTypeKind(Map, 'TEq'),
+      '"=" direkt hinter dem Namen');
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Glued'),
+      'Kommentar-Ende direkt vor dem Namen');
+    Assert.IsFalse(TRdxSimpleFixes.DeclaresRoutine(Map, 'Glue'),
+      'Teil eines Namens');
   finally
     Map.Free;
     SL.Free;

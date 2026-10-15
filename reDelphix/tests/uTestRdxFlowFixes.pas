@@ -409,6 +409,11 @@ begin
     '    class operator Assign(var D: TR; const [ref] S: TR);', '  end;',
     'procedure P;', 'begin', '  Foo;', '  X := X;', 'end;']), 11, SelfMsg('X'),
     'operator Assign');
+  // 'Assign' erst auf der Zeile hinter 'operator': der Vorfilter je Zeile
+  // (Review R3-03, Charge FC) sucht die Zeilen mit 'operator'.
+  AssertRefused(wkSelf, InImpl(['type', '  TR = record', '    class operator',
+    '      Assign(var D: TR; const [ref] S: TR);', '  end;', 'procedure P;',
+    'begin', '  Foo;', '  X := X;', 'end;']), 12, SelfMsg('X'), 'operator Assign');
   AssertRefused(wkSelf, InProc(['  Foo;', '  Pt.Y := Pt.Y; // + Scroll']), 7,
     SelfMsg('Pt.Y'), 'Kommentar');
   // FPC-Parser-Fehlalarm: 'out.n_points := n_points' ist keine

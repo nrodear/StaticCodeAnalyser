@@ -18,6 +18,10 @@ uses
   uRdxBufferMath, uRdxCodeMap;
 
 type
+  // Die Planer an einer Zeile (SCA082, SCA071, SCA088, SCA123): reine
+  // Textlogik auf der Code-Sicht, alle vier bedeutungsgleich. Ob X den
+  // Cast-Typ schon hat (SCA123), prueft der Aufrufer mit dem
+  // Quellstellen-Dienst.
   TRdxLineFixes = class
   public
     // SCA082: an der Spalte aus der Meldung ('at column N') ein ';', danach
@@ -146,23 +150,24 @@ class function TRdxLineFixes.KeywordIndent(AMap: TRdxCodeMap;
   ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
-  L, Word : string;
+  L       : string;
+  Keyword : string;   // nicht 'Word': verdeckte System.Word (Review R3-06)
   Col     : Integer;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
   L := AMap.Raw(ALine);
-  if not KeywordOf(AMessage, Word, Col) then
+  if not KeywordOf(AMessage, Keyword, Col) then
     AReason := 'Schluesselwort oder Spalte fehlt in der Meldung'
   else if AMap.StartsInside(ALine) then
     AReason := 'die Zeile beginnt in einem Kommentar oder String'
   else if (SkipBlanks(L, 1) <> Col) or not AMap.IsCode(ALine, Col)
-     or not SameText(TokenAt(AMap, ALine, Col).Low, Word) then
+     or not SameText(TokenAt(AMap, ALine, Col).Low, Keyword) then
     AReason := R_KW_MOVED
   else if InList(PrevToken(AMap, ALine, Col).Low, TYPE_KEYWORD_PREV) then
     AReason := Format('%s gehoert zu einer Typ-Deklaration - kein '
-      + 'Unit-Abschnitt', [Word]);
+      + 'Unit-Abschnitt', [Keyword]);
   if AReason <> '' then Exit;
   AEdit.Span := TRefactorSpan.Make(SPAN_071, ALine, 1, ALine, Col);
   AEdit.Expected := Copy(L, 1, Col - 1);

@@ -69,6 +69,10 @@ type
     CondIdents   : TArray<string>;
   end;
 
+  // Die Planer an ganzen Anweisungen (SCA098, SCA080, SCA047): reine
+  // Textlogik auf der Code-Sicht. Was nur der Quellstellen-Dienst weiss -
+  // X als Boolean bzw. Variable bewiesen, ein with-Block um die Zeile -,
+  // prueft der Aufrufer (TRdxFixRunner) am Plan (Target, CondIdents).
   TRdxFlowFixes = class
   public
     // SCA098: das eine 'if C then X := W1 else X := W2' auf ALine - X, W1
@@ -110,7 +114,8 @@ type
 implementation
 
 uses
-  uRdxSimpleFixes,   // DeclaresRoutine (eigene Routine Exit, Funktionsname)
+  uRdxSimpleFixes,   // DeclaresRoutine (eigene Routine Exit, Funktionsname),
+                     // NextTokenOnLineWith (class operator Assign)
   uRdxStructFixes;   // StartsStatementAt, ElseBelongsToIf, Bereichshelfer
 
 const
@@ -858,19 +863,19 @@ class function TRdxFlowFixes.RedundantJump(AMap: TRdxCodeMap; ALine: Integer;
   const AMessage: string; out APlan: TRdxFlowPlan;
   out AReason: string): Boolean;
 var
-  Word        : string;
+  JumpWord    : string;   // nicht 'Word': verdeckte System.Word (Review R3-06)
   Jump, Semi  : TRdxToken;
 begin
   APlan := Default(TRdxFlowPlan);
   Jump := Default(TRdxToken);
   Semi := Default(TRdxToken);
-  Word := JumpOf(AMessage);
-  if Word = '' then
+  JumpWord := JumpOf(AMessage);
+  if JumpWord = '' then
     AReason := 'Sprunganweisung fehlt in der Meldung'
   else
   begin
-    APlan.Target := UpperCase(Copy(Word, 1, 1)) + Copy(Word, 2, MaxInt);
-    AReason := JumpOn(AMap, ALine, Word, Jump, Semi);
+    APlan.Target := UpperCase(Copy(JumpWord, 1, 1)) + Copy(JumpWord, 2, MaxInt);
+    AReason := JumpOn(AMap, ALine, JumpWord, Jump, Semi);
   end;
   if AReason = '' then
     AReason := JumpReason(AMap, Jump, Semi);
@@ -1000,18 +1005,22 @@ begin
 end;
 
 // Ein 'class operator Assign' in der Unit (Delphi 10.4: verwaltete
-// Records)? Dann ruft eine Zuweisung Code.
+// Records)? Dann ruft eine Zuweisung Code. Nur die Zeilen, die 'operator'
+// nennen (NextTokenOnLineWith, Review R3-03 - bis Charge FC ein Lauf ueber
+// jedes Token der Datei je SCA047-Fund).
 function DeclaresAssignOperator(AMap: TRdxCodeMap): Boolean;
+const
+  KW_OPERATOR = 'operator';
 var
   T : TRdxToken;
 begin
   Result := False;
-  T := NextToken(AMap, 1, 1);
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), KW_OPERATOR);
   while T.Low <> '' do
   begin
-    if (T.Low = 'operator') and (After(AMap, T).Low = 'assign') then
+    if (T.Low = KW_OPERATOR) and (After(AMap, T).Low = 'assign') then
       Exit(True);
-    T := After(AMap, T);
+    T := NextTokenOnLineWith(AMap, T, KW_OPERATOR);
   end;
 end;
 

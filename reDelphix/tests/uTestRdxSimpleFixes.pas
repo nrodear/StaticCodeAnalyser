@@ -274,6 +274,13 @@ begin
     'falsche Spalte');
   Assert.AreEqual('', Fix075(InUnit('  TFoo = class(TObject)'), 4, 0, R),
     'keine Spalte in der Meldung');
+  Assert.IsTrue(Pos('Spalte fehlt', R) > 0, R);
+  // Die Spalte liegt hinter dem Ende der (inzwischen gekuerzten) Zeile: die
+  // Meldung hat ihre Spalte, die Zeile hat sich geaendert (Review R3,
+  // verpasst - bis Charge FC hiess es auch hier 'Spalte fehlt').
+  Assert.AreEqual('', Fix075(InUnit('  TFoo = class'), 4, 30, R),
+    'Spalte hinter dem Zeilenende');
+  Assert.IsTrue(Pos('nicht mehr an der gemeldeten Stelle', R) > 0, R);
 end;
 
 // ---- SCA085 ----

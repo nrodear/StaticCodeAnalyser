@@ -39,6 +39,13 @@ type
     // nicht; die eigene Unit behaelt das letzte Wort.
     [Test] procedure Sca126_RtlType_Proven;
     [Test] procedure RtlTypes_Lookup;
+    // Review R6-13 (Charge FC): ein Feld mit einem Typ IN einer generischen
+    // Klasse ('TList<Integer>.TEmptyFunc') gilt nicht mehr als die aeussere
+    // Klasse.
+    [Test] procedure Sca126_NestedGenericType;
+    // Review R3-03 (Charge FC): FieldTypeOf springt ueber Zeilen ohne
+    // Rumpfwort - mit demselben Ergebnis wie der Lauf ueber jedes Token.
+    [Test] procedure FieldTypeOf_LineFilter;
   end;
 
 implementation
@@ -589,6 +596,81 @@ begin
   Assert.IsFalse(IsRtlClassOrInterface('record'), 'Typwort');
   Assert.IsFalse(IsRtlClassOrInterface(''), 'leer');
   Assert.IsFalse(IsRtlClassOrInterface('system.classes.'), 'Praefix ohne Namen');
+  // Ein Typ IN einer generischen Klasse zaehlt mit seinem eigenen Namen
+  // (Review R6-13, Charge FC): bis dahin fiel alles ab dem ersten '<' weg,
+  // und 'tlist<integer>.tsomething' galt als TList - bewiesen, egal was
+  // TSomething ist (ein Funktionstyp riefe '= nil' auf).
+  Assert.IsFalse(IsRtlClassOrInterface('tlist<integer>.tsomething'),
+    'geschachtelter Typ, unbekannt');
+  Assert.IsFalse(IsRtlClassOrInterface('tlist<integer>.temptyfunc'),
+    'geschachtelter Funktionstyp');
+  Assert.IsTrue(IsRtlClassOrInterface('tdictionary<string,integer>.tpairenumerator'),
+    'geschachtelte Klasse der RTL');
+  Assert.IsTrue(IsRtlClassOrInterface('tdictionary<string,tlist<integer>>'),
+    'geschachtelte Typargumente');
+  Assert.IsFalse(IsRtlClassOrInterface('tthread.tsystemtimes'),
+    'Record in einer Klasse');
+end;
+
+procedure TTestRdxNilFix.Sca126_NestedGenericType;
+var
+  Src, R : string;
+begin
+  // Der verpasste Punkt zu R6-13: FieldTypeOf las bis Charge FC beim Feld
+  // 'FGet: TList<Integer>.TEmptyFunc' den aeusseren Namen 'tlist' - der
+  // Pfad 'Obj.FGet = nil' galt dann als Klasse bewiesen, und die
+  // Namensregel (..func) sah 'temptyfunc' nie.
+  Src := Join(['unit u;', 'interface', 'uses System.Generics.Collections;',
+    'type',
+    '  TFoo = class',
+    '    FGet: TList<Integer>.TEmptyFunc;',
+    '    FWho: TList<Integer>.TSomething;',
+    '    FPairs: TDictionary<string, TList<Integer>>.TPairEnumerator;',
+    '    FList: TList<Integer>;',
+    '  end;',
+    'implementation', 'end.']);
+  Assert.AreEqual('temptyfunc', FieldTypeIn(Src, 'FGet'));
+  Assert.AreEqual('tsomething', FieldTypeIn(Src, 'FWho'));
+  Assert.AreEqual('tpairenumerator', FieldTypeIn(Src, 'FPairs'),
+    'geschachtelte Typargumente');
+  Assert.AreEqual('tlist', FieldTypeIn(Src, 'FList'), 'wie bisher');
+  R := ReasonIn(Src, 'Obj.FGet', '');
+  Assert.IsTrue(Pos('temptyfunc', R) > 0, 'Funktionstyp nach Name: ' + R);
+  R := ReasonIn(Src, 'Obj.FWho', '');
+  Assert.IsTrue(Pos('nicht als Klasse', R) > 0, 'nicht bewiesen: ' + R);
+  Assert.AreEqual('', ReasonIn(Src, 'Obj.FPairs', ''), 'Klasse der RTL');
+  Assert.AreEqual('', ReasonIn(Src, 'Obj.FList', ''), 'TList wie bisher');
+end;
+
+procedure TTestRdxNilFix.FieldTypeOf_LineFilter;
+var
+  Src : string;
+begin
+  // Rumpfwort erst auf der Zeile hinter dem '=' (das Token davor muss beim
+  // Sprung stimmen), ein Rumpf, der mitten auf einer Zeile endet und einen
+  // neuen beginnt, ein Rumpfwort nur im Kommentar, ein 'begin' dazwischen
+  // und der Name zuletzt nur in einem Kommentar. Rumpfwort und Name als
+  // Wort ohne Leerraum drumherum ('=class(', ')FE:' - Nachpruefung R3-03).
+  Src := Join(['unit u;', 'interface', 'type',
+    '  TBar =',
+    '    class',
+    '    FA: TObject;',
+    '  end; TBaz = record FB: Pointer; end;',
+    '  // keine class hier',
+    '  TQux = class FC: TStrings; procedure P; end;',
+    '  TPack=class(TObject)FE:TList;end;',
+    'implementation',
+    'procedure TQux.P;',
+    'begin',
+    'end;',
+    '// FA FB FC FE',
+    'end.']);
+  Assert.AreEqual('tobject', FieldTypeIn(Src, 'FA'));
+  Assert.AreEqual('pointer', FieldTypeIn(Src, 'FB'));
+  Assert.AreEqual('tstrings', FieldTypeIn(Src, 'FC'));
+  Assert.AreEqual('tlist', FieldTypeIn(Src, 'FE'), 'ohne Leerraum');
+  Assert.AreEqual('', FieldTypeIn(Src, 'FD'), 'nirgends');
+  Assert.AreEqual('', FieldTypeIn(Src, ''), 'leerer Name');
 end;
 
 initialization

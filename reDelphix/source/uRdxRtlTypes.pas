@@ -24,8 +24,11 @@ interface
 // True, wenn ATypeLow (klein) in den Delphi-Quellen als Klasse oder
 // Interface deklariert ist. Generische Argumente und Unit-Praefixe fallen
 // vorher weg: 'tlist<integer>' -> 'tlist', 'system.classes.tlist' ->
-// 'tlist'. Metaklassen ('class of'), Zeiger-, Prozedur-, Record-Typen und
-// Aliasse stehen nicht in der Liste - fuer sie bleibt es bei False.
+// 'tlist'; ein Typ IN einer generischen Klasse zaehlt mit seinem eigenen
+// Namen: 'tdictionary<string,integer>.tpairenumerator' -> 'tpairenumerator'
+// (bis Charge FC: 'tdictionary', die aeussere Klasse - Review R6-13).
+// Metaklassen ('class of'), Zeiger-, Prozedur-, Record-Typen und Aliasse
+// stehen nicht in der Liste - fuer sie bleibt es bei False.
 function IsRtlClassOrInterface(const ATypeLow: string): Boolean;
 
 implementation
@@ -35,24 +38,40 @@ uses
 
 {$I uRdxRtlTypes.inc}
 
-// 'system.classes.tlist<tobject>' -> 'tlist': alles ab '<' weg, dann das
-// letzte Glied hinter einem '.'. Klein geschrieben, weil die Liste klein
-// ist - die Aufrufer geben schon klein (DeclaredTypeOf, FieldTypeOf).
+// 'system.classes.tlist<tobject>' -> 'tlist', 'tlist<integer>.tsomething'
+// -> 'tsomething': erst die generischen Argumente weg (balanciert, auch
+// geschachtelt: 'tlist<tpair<a,b>>'), DANN das letzte Glied hinter einem
+// '.'. Bis Charge FC schnitt die Funktion alles ab dem ersten '<' ab - ein
+// Typ IN einer generischen Klasse galt dann als die aeussere Klasse
+// ('tlist<integer>.temptyfunc' -> 'tlist', bewiesen), egal was er ist
+// (Review R6-13). Ein '<' ohne '>' schneidet den Rest ab wie bisher. Der
+// geschachtelte Name folgt derselben Namensregel wie jeder Kundentyp (E27,
+// Kopf der .inc): JCL 'TJclTree<T>.TTreeNode' (dort ein Alias der Klasse
+// TJclTreeNode<T>) gilt ueber die VCL-Klasse TTreeNode als bewiesen - im
+// Korpus ab8 bis zu 264 SCA126-Operanden, die bis Charge FC als 'tjcltree'
+// unbewiesen blieben (je nachdem, ob DeclaredTypeOf den ganzen Namen
+// liefert; ohne Delphi nicht pruefbar). Klein geschrieben, weil die Liste
+// klein ist - die Aufrufer geben schon klein (DeclaredTypeOf, FieldTypeOf).
 function BareRtlName(const ATypeLow: string): string;
 var
-  i, Start, Stop : Integer;
+  i, n, Depth : Integer;
+  Outer       : string;
 begin
-  Stop := Pos('<', ATypeLow) - 1;
-  if Stop < 0 then
-    Stop := Length(ATypeLow);
-  Start := 1;
-  for i := Stop downto 1 do
-    if ATypeLow[i] = '.' then
+  SetLength(Outer, Length(ATypeLow));
+  n := 0;
+  Depth := 0;
+  for i := 1 to Length(ATypeLow) do
+    if ATypeLow[i] = '<' then
+      Inc(Depth)
+    else if (ATypeLow[i] = '>') and (Depth > 0) then
+      Dec(Depth)
+    else if Depth = 0 then
     begin
-      Start := i + 1;
-      Break;
+      Inc(n);
+      Outer[n] := ATypeLow[i];
     end;
-  Result := LowerCase(Trim(Copy(ATypeLow, Start, Stop - Start + 1)));
+  SetLength(Outer, n);
+  Result := LowerCase(Trim(Copy(Outer, LastDelimiter('.', Outer) + 1, MaxInt)));
 end;
 
 function IsRtlClassOrInterface(const ATypeLow: string): Boolean;

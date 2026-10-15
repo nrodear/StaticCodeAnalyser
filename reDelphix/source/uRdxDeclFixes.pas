@@ -8,8 +8,11 @@ unit uRdxDeclFixes;
 //   SCA197 InterfaceWithoutGuid: ['{neue GUID}'] hinter den Kopf.
 //   SCA149 MissingOverride: 'override;' bzw. 'reintroduce;' hinter den Kopf.
 // Baustein Signatur-Leser (ReadSignature): Name, Typparameter, Parameter-
-// namen, Rueckgabe und das ';' hinter dem Kopf - geteilt mit spaeteren
-// Hilfen (SCA121 Result := Default(T), SCA135).
+// namen, Rueckgabe und das ';' hinter dem Kopf - genutzt von SCA117 (das
+// Geruest) und SCA149 (die Form der Methode und ihrer Basis). Geplant war
+// er auch fuer SCA121/SCA135; SCA121 (Charge H5, uRdxResultFixes) liest den
+// Kopf aber ueber TRdxRoutine.HeaderEnd (uRdxRoutineFixes), nicht hierueber
+// (Review R3-08, Charge FC: hier stand "geteilt mit SCA121, SCA135").
 // GRUNDSATZ wie in uRdxSimpleFixes: lieber keine Hilfe als eine falsche -
 // der Planer prueft den Fund am aktuellen Text nach.
 
@@ -43,6 +46,11 @@ type
     HeaderEnd  : TRdxToken;        // das ';' hinter dem Kopf (Routinen)
   end;
 
+  // Die Planer an Deklarationen (SCA117, SCA197, SCA149) und der Signatur-
+  // Leser: reine Textlogik auf der Code-Sicht, ohne Parser - den Vorfahren
+  // sucht SCA149 im Text der Unit (wie der Detektor). Der Aufrufer
+  // (uRdxFixTable, MapFix) setzt nur Kennzeichnung und Hinweis (SCA149:
+  // override aendert das Verhalten); alle Sperren stehen hier.
   TRdxDeclFixes = class
   public
     // Der Kopf, der auf ALine beginnt ('class' davor erlaubt): procedure,
@@ -574,6 +582,10 @@ begin
   Result := False;
   for Li := 1 to AMap.LineCount do
   begin
+    // Ohne '$' keine Direktive - UpperCase nur fuer diese Zeilen (Review
+    // R3-03, Charge FC: bis dahin je Zeile der Datei, zweimal je Fund).
+    if Pos('$', AMap.Raw(Li)) = 0 then
+      Continue;
     U := UpperCase(AMap.Raw(Li));
     P := Pos('$' + AName, U);
     if P < 2 then Continue;

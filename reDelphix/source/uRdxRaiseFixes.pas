@@ -9,7 +9,8 @@ unit uRdxRaiseFixes;
 //   SCA120 MissingRaise: 'raise ' vor 'EFoo.Create(..)', das als ganze
 //          Anweisung steht (aendert das Verhalten: das ist der Fix).
 //   SCA122 ReRaiseException: 'raise E;' -> 'raise;' im Handler 'on E: ..
-//          do' (bedeutungsgleich bis auf den Stack-Trace).
+//          do' (bedeutungsgleich bis auf den Stack-Trace - solange E im
+//          Handler nicht neu zugewiesen wird).
 // GRUNDSATZ wie in uRdxSimpleFixes: lieber keine Hilfe als eine falsche -
 // der Planer prueft den Fund am aktuellen Text nach.
 
@@ -26,6 +27,10 @@ const
   INTENT_INLINE = '{ intentionally empty }';
 
 type
+  // Die Planer an Ausnahmen und leeren Rumpfen (SCA020, SCA120, SCA122):
+  // reine Textlogik auf der Code-Sicht. Die uses-Ergaenzung (SysUtils fuer
+  // ENotImplemented) und die Kennzeichnung "aendert Verhalten" setzt der
+  // Aufrufer (uRdxRecipeRunner, uRdxFixTable).
   TRdxRaiseFixes = class
   public
     // SCA020: der leere Rumpf der Methode, deren Kopf auf ALine beginnt
@@ -52,7 +57,11 @@ type
     // variable "E" ...') -> 'raise'. Nur, wenn rueckwaerts der eigene
     // Handler 'on E: T do' kommt, bevor ein except/finally oder eine
     // anonyme Methode: im except eines inneren try wuerfe 'raise;' die
-    // innere Exception weiter.
+    // innere Exception weiter. Und nicht, wenn E dazwischen neu zugewiesen
+    // wird ('E := EWrapped.Create(..)'): 'raise E' wirft dann das neue
+    // Objekt, 'raise;' die urspruengliche Exception (Review R3, Charge FC).
+    // GRENZE: eine Uebergabe als var-/out-Argument ('Wrap(E)') aendert E
+    // ebenso - die sieht der Planer nicht.
     class function ReRaise(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
@@ -436,14 +445,30 @@ begin
 end;
 
 // Ein Schritt rueckwaerts (ReRaiseReason): ganze Bloecke (end..begin,
-// until..repeat) ueberspringen, auf oberster Ebene HandlerStep.
+// until..repeat) ueberspringen, auf oberster Ebene HandlerStep. Auf jeder
+// Tiefe sperrt eine Zuweisung an die gebundene Variable ('E := ..', nicht
+// 'Obj.E := ..'): 'raise E' wirft danach das neue Objekt, 'raise;' die
+// urspruengliche Exception - nicht nur ein anderer Stack-Trace, eine andere
+// Exception (Review R3, verpasst, Charge FC; FPC-Probe: 'aussen: ersetzt'
+// mit raise E gegen 'aussen: innen' mit raise;). Ein inneres 'on E: ..',
+// das E verdeckt, sperrt dabei mit - lieber keine Hilfe.
 function RaiseBackStep(AMap: TRdxCodeMap; const T: TRdxToken;
   const AName: string; var ABlock: Integer; out AReason: string): TRdxStep;
+var
+  P : TRdxToken;
 begin
   Result := rsGoOn;
   AReason := '';
+  P := Before(AMap, T);
+  if SameText(T.Low, AName) and not InList(P.Low, IDENT_PREFIXES)
+     and (After(AMap, T).Low = ':=') then
+  begin
+    AReason := Format('%s wird zwischen Handler und raise neu zugewiesen - '
+      + '"raise %s;" wirft dann ein anderes Objekt als "raise;"', [AName, AName]);
+    Exit(rsStop);
+  end;
   // Satzzeichen und Bezeichner zaehlen nicht.
-  if not IsKeywordAfter(T, Before(AMap, T)) then Exit;
+  if not IsKeywordAfter(T, P) then Exit;
   if (T.Low = 'end') or (T.Low = 'until') then
     Inc(ABlock)
   else if (IsEndOpener(T.Low) or (T.Low = 'repeat')) and (ABlock > 0) then
