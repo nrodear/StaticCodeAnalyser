@@ -1522,6 +1522,7 @@ Nachher:
 - X ist kein bloßer Bezeichner (`Self.X`, Pfad) oder nicht in der Unit deklariert; `with`-Block
 - der Typ von X ist in der Unit ein `record`, `object` oder `interface` (`Free` ist dort eine eigene Methode)
 - `Free` mit Klammern oder mehrfach auf der Zeile, `X.Destroy`
+- die Unit deklariert eine eigene Routine `Free` (FreeAndNil riefe sie nicht auf)
 
 **Beispiel**
 
@@ -1620,7 +1621,7 @@ end;
 
 **Platzhalter:** `%s` = die Direktive (`override` bzw. `reintroduce`).
 
-**Wirkung:** Nach dem Rat der Meldung: bei gleicher Signatur `override`, bei abweichender `reintroduce`. Die Direktive kommt direkt hinter das `;` des Kopfs, vor vorhandene Direktiven. Nie beide als Einträge: Strg+Alt+F ließe das gekennzeichnete `override` aus und deckte den Polymorphie-Fehler mit `reintroduce` still zu.
+**Wirkung:** Nach dem Rat der Meldung: bei gleicher Signatur `override`, bei abweichender `reintroduce`. `reintroduce` kommt direkt hinter das `;` des Kopfs (vor vorhandene Direktiven), `override` hinter ein vorhandenes `overload` (sonst ebenfalls direkt hinter den Kopf) – die Reihenfolge der Sprachreferenz. Nie beide als Einträge: Strg+Alt+F ließe das gekennzeichnete `override` aus und deckte den Polymorphie-Fehler mit `reintroduce` still zu.
 
 **Nicht angeboten**
 

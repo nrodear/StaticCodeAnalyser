@@ -27,6 +27,10 @@ const
   INTENT_INLINE = '{ intentionally empty }';
 
 type
+  // Die Planer an Ausnahmen und leeren Rumpfen (SCA020, SCA120, SCA122):
+  // reine Textlogik auf der Code-Sicht. Die uses-Ergaenzung (SysUtils fuer
+  // ENotImplemented) und die Kennzeichnung "aendert Verhalten" setzt der
+  // Aufrufer (uRdxRecipeRunner, uRdxFixTable).
   TRdxRaiseFixes = class
   public
     // SCA020: der leere Rumpf der Methode, deren Kopf auf ALine beginnt

@@ -1932,12 +1932,12 @@ type
 // Bedingung das Schluesselwort if/while/case)?
 function StartsStatement(AMap: TRdxCodeMap; const ASite: TRdxNilSite): Boolean;
 var
-  Low : string;
+  KwLow : string;   // nicht 'Low': verdeckte System.Low (Review R3-06)
 begin
   if not AMap.IsCode(ASite.Line, ASite.Col) then Exit(False);
   if ASite.Anchor <> naCondition then Exit(True);
-  Low := TokenAt(AMap, ASite.Line, ASite.Col).Low;
-  Result := (Low = 'if') or (Low = 'while') or (Low = 'case');
+  KwLow := TokenAt(AMap, ASite.Line, ASite.Col).Low;
+  Result := (KwLow = 'if') or (KwLow = 'while') or (KwLow = 'case');
 end;
 
 // Endet der Bereich bei T (auf Klammertiefe 0)? Bedingung bis

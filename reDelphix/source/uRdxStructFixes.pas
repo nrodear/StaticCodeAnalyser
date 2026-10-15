@@ -35,6 +35,11 @@ type
     UsesLine : Integer;
   end;
 
+  // Die Planer an Strukturen ueber mehrere Token oder Zeilen (SCA007,
+  // SCA168, SCA101/SCA099) und ihre geteilten Bausteine (StartsStatementAt,
+  // ElseBelongsToIf): reine Textlogik auf der Code-Sicht. Die uses-Eintraege,
+  // die FPC-Weiche und die uses-Ergaenzung fuer EProgrammerError liefert
+  // bzw. prueft der Aufrufer (uRdxRecipeRunner).
   TRdxStructFixes = class
   public
     // SCA007: den Eintrag AIndex der Klausel loeschen. Vor dem letzten
@@ -1042,19 +1047,19 @@ end;
 function StatementStep(const T, APrev: TRdxToken; var AParen: Integer;
   out AReason: string): TRdxStep;
 var
-  Word : Boolean;
+  IsKw : Boolean;   // nicht 'Word': verdeckte System.Word (Review R3-06)
 begin
   Result := rsGoOn;
   AReason := '';
-  Word := IsKeywordAfter(T, APrev);
+  IsKw := IsKeywordAfter(T, APrev);
   if (T.Low = '(') or (T.Low = '[') then
     Inc(AParen)
   else if (T.Low = ')') or (T.Low = ']') then
     Dec(AParen)
   else if (AParen = 0)
-     and ((T.Low = ';') or (Word and InList(T.Low, BRANCH_STOPPERS))) then
+     and ((T.Low = ';') or (IsKw and InList(T.Low, BRANCH_STOPPERS))) then
     Result := rsFound
-  else if Word and (InList(T.Low, NOT_IN_BRANCH)
+  else if IsKw and (InList(T.Low, NOT_IN_BRANCH)
      or InList(T.Low, BRANCH_STOPPERS)) then
   begin
     AReason := Format('"%s" in der Anweisung - Struktur, bedingter '
