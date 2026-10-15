@@ -2,8 +2,10 @@ unit uTestRdxFormatGuards;
 
 // Tests fuer die Nacharbeit des Code-Reviews an der Format()-Umformung
 // (Charge FB, uRdxRecipes): kein Literal ueber 255 Elemente im
-// Formatstring (R2-02 - E2056 bis Delphi 11, SplitLongLiteral) und kein
-// Zeiger am Kettenanfang (R2-04 - 'P + N' rechnet Zeiger-Arithmetik). Reine
+// Formatstring (R2-02 - E2056 bis Delphi 11, SplitLongLiteral; seit der
+// Nachpruefung nach UTF-8 gezaehlt) und kein Zeiger am Kettenanfang (R2-04
+// - 'P + N' rechnet Zeiger-Arithmetik; beim Selbst-Anhaengen ist das Ziel
+// der Anfang). Reine
 // Textlogik - laeuft in reDelphix.Test UND im FPC-Pruefstand. Die Tests
 // gegen BuildFormatCall waren gegen den Stand 4358b769 rot (402 Zeichen in
 // einem Literal; P + FOffset angeboten), die Split_*-Tests pruefen den neuen
@@ -33,6 +35,10 @@ type
     // R2-04: Zeiger am Kettenanfang.
     [Test] procedure Format_PointerStart_Blocked;
     [Test] procedure Format_PointerThenString_Allowed;
+    // Nachpruefung FB: hinter 'X +' (Selbst-Anhaengen) ist X der Anfang;
+    // die Laenge zaehlt vorsichtig nach UTF-8.
+    [Test] procedure Format_SelfAppend_PointerFirst_Allowed;
+    [Test] procedure Split_Utf8Widths;
   end;
 
 implementation
@@ -227,8 +233,8 @@ begin
   // Ein Surrogat-Paar an der Grenze geht ganz ins naechste Literal.
   Assert.AreEqual('''' + StringOfChar('a', 254) + ''' + ''' + PAIR + 'b''',
     SplitLongLiteral('''' + StringOfChar('a', 254) + PAIR + 'b'''));
-  // Zeichen ueber ASCII zaehlen vorsichtig zwei (DBCS einer ANSI-Datei):
-  // 127 je Literal.
+  // ae (U+00E4) zaehlt zwei wie in UTF-8 (auch ein DBCS-Zeichen einer
+  // ANSI-Datei hat zwei): 127 je Literal.
   Assert.AreEqual('''' + StringOfChar(AE, 127) + ''' + ''' + StringOfChar(AE, 73)
     + '''', SplitLongLiteral('''' + StringOfChar(AE, 200) + ''''));
 end;
@@ -280,6 +286,58 @@ begin
     Op('P', rvString, 'pchar'), Op('Name', rvString, 'string'), Lit('''x''')],
     NewText, Reason), Reason);
   Assert.AreEqual('Format(''%s%sx'', [P, Name])', NewText);
+end;
+
+{ ---- Nachpruefung FB ---- }
+
+procedure TTestRdxFormatGuards.Format_SelfAppend_PointerFirst_Allowed;
+var
+  B : TRdxFormatBuild;
+begin
+  // Pruefer uTestFbProbeC: 'S := S + P + N + ''.txt''' mit P: PChar - der
+  // Laeufer gibt nur die Terme hinter 'S +' weiter, der Kettenanfang ist S,
+  // ein String: S + P verkettet. Bis dahin 'Zeiger am Kettenanfang' (Stand
+  // 3d753de6), 4358b769 bot es an.
+  Assert.IsTrue(TRdxRecipes.BuildFormatCall([Op('P', rvString, 'pchar'),
+    Op('N', rvUnknown), Lit('''.txt''')], B, '', csBehindTarget), B.Reason);
+  Assert.AreEqual('Format(''%s%s.txt'', [P, N])', B.NewText);
+  Assert.IsTrue(TRdxRecipes.BuildFormatCall([Op('PChar(T)', rvUnknown),
+    Op('Ofs', rvUnknown), Lit('''.txt''')], B, '', csBehindTarget), B.Reason);
+  Assert.AreEqual('Format(''%s%s.txt'', [PChar(T), Ofs])', B.NewText);
+  // Gegenprobe: am Kettenanfang bleibt die Sperre (R2-04).
+  Assert.IsFalse(TRdxRecipes.BuildFormatCall([Op('P', rvString, 'pchar'),
+    Op('N', rvUnknown), Lit('''.txt''')], B), B.NewText);
+  Assert.IsTrue(Pos('Zeiger', B.Reason) > 0, B.Reason);
+end;
+
+// ACount-mal AChar - ohne StringOfChar und TStringBuilder: unter FPC 3.2.2
+// nehmen beide den Umweg ueber AnsiString, ein CJK-Zeichen wird dort '?'.
+function Repeated(AChar: Char; ACount: Integer): string;
+var
+  i : Integer;
+begin
+  SetLength(Result, ACount);
+  for i := 1 to ACount do
+    Result[i] := AChar;
+end;
+
+procedure TTestRdxFormatGuards.Split_Utf8Widths;
+const
+  PAIR = #$D83D#$DE00;   // U+1F600: vier Bytes in UTF-8
+  CJK  = #$4E2D;         // drei Bytes
+begin
+  // Pruefer, Punkt 6: zaehlt Delphi bis 11 die UTF-8-Bytes seiner inneren
+  // Form, waren die Literale bis dahin zu lang - alles ueber ASCII zaehlte
+  // zwei. Gegen den Stand 3d753de6 rot: dort blieb jedes EIN Literal.
+  Assert.AreEqual('''' + StringOfChar('a', 252) + ''' + ''' + PAIR + '''',
+    SplitLongLiteral('''' + StringOfChar('a', 252) + PAIR + ''''),
+    'Surrogat-Paar zaehlt vier');
+  Assert.AreEqual('''' + Repeated(CJK, 85) + ''' + ''' + Repeated(CJK, 42)
+    + '''', SplitLongLiteral('''' + Repeated(CJK, 127) + ''''),
+    'CJK zaehlt drei: 85 je Literal');
+  Assert.AreEqual('''' + StringOfChar('a', 253) + ''' + #$4E2D',
+    SplitLongLiteral('''' + StringOfChar('a', 253) + '''#$4E2D'),
+    '#-Code nach seinem Wert');
 end;
 
 initialization

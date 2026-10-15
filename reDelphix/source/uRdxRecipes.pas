@@ -86,6 +86,13 @@ type
     ByCompiler : TArray<string>;   // Operanden, fuer die nur das Kompilat buergt
   end;
 
+  // Wo die Terme fuer BuildFormatCall in der Kette stehen: am Anfang - dort
+  // rechnet ein Zeiger als erster Term Zeiger-Arithmetik (Review FB R2-04)
+  // - oder hinter dem Ziel beim Selbst-Anhaengen 'X := X + ..': dort ist X
+  // der Anfang, ein String, und jeder Term dahinter verkettet (Nachpruefung
+  // FB - bis dahin lehnte 'S := S + P + N + ''x''' mit P: PChar falsch ab).
+  TRdxChainStart = (csChainHead, csBehindTarget);
+
   // Rahmenwerk einer Datei nach ihren qualifizierten uses-Eintraegen
   // (DetectFramework): keins erkennbar, VCL ('Vcl.*'), FMX ('FMX.*') oder
   // beide - davon haengt ab, welchen Scope ein mehrdeutiger Kurzname
@@ -138,12 +145,12 @@ type
     // ATargetType: deklarierter Typ des Ziels (nackt, klein), wenn bekannt;
     // bei einem Unicode-Ziel (string/unicodestring/widestring) duerfen
     // Nicht-Unicode-Operanden mit, Format wandelt sie wie die Zuweisung.
-    // Gesperrt auch ein Zeiger am Kettenanfang ('P + N + ''x''' mit P:
-    // PChar rechnet Zeiger-Arithmetik, Review FB R2-04). Der Formatstring
-    // geht durch SplitLongLiteral (kein Literal ueber 255 Elemente).
+    // Gesperrt auch ein Zeiger am Kettenanfang (Review FB R2-04; nicht bei
+    // AStart = csBehindTarget). Der Formatstring geht durch SplitLongLiteral
+    // (kein Literal ueber 255 Elemente).
     class function BuildFormatCall(const AParts: TRdxParts;
-      out ABuild: TRdxFormatBuild;
-      const ATargetType: string = ''): Boolean; overload; static;
+      out ABuild: TRdxFormatBuild; const ATargetType: string = '';
+      AStart: TRdxChainStart = csChainHead): Boolean; overload; static;
     // Dasselbe ohne Zieltyp und ohne die Herkunft der Argumente - nur Text
     // und Grund; fuer Aufrufer, die die Zaehler nicht brauchen (Tests,
     // Korpus-Probe).
@@ -386,9 +393,11 @@ type
 // brechen - SCA074 sperrt dieselbe Grenze (Review FB, R2-02: aus Ketten
 // mit kurzen Literalen wurde ein Formatstring von 376 Zeichen). Der Wert
 // bleibt gleich, 'a' + 'b' ist ein konstanter Ausdruck. Ein Lauf aus
-// '..'-Teilen und #-Codes zaehlt als EIN Literal; ein Zeichen ueber
-// ASCII und ein #-Code ab 128 zaehlen vorsichtig zwei (ein DBCS-Zeichen
-// einer ANSI-Datei, ein Surrogat-Paar). Geteilt wird bevorzugt hinter
+// '..'-Teilen und #-Codes zaehlt als EIN Literal; ein Zeichen bzw. #-Code
+// zaehlt vorsichtig so viel wie in UTF-8 (1 bis 3, ein Surrogat-Paar 4):
+// ob Delphi bis 11 Zeichen oder die UTF-8-Bytes seiner inneren Form
+// zaehlt, ist hier nicht belegt (Nachpruefung FB) - die Teilung kostet
+// nichts, ein Literal ueber der Grenze den Bau. Geteilt wird bevorzugt hinter
 // einem Leerzeichen, wenn das Literal dort mindestens halb voll ist,
 // nie in einem Surrogat-Paar. Ein Text anderer Form kommt unveraendert
 // zurueck. Frei statt in TRdxRecipes (Charge FB): die Klasse traegt schon
@@ -1371,6 +1380,12 @@ const
   // Schliesst das Literal, verkettet, oeffnet ein neues.
   LITERAL_JOIN = ''' + ''';
   PLUS_JOIN    = ' + ';
+  // UTF-8-Laenge eines Zeichens (ElementWidth): bis hier ein bzw. zwei
+  // Bytes, darueber drei; ein Surrogat-Paar (ab U+10000) vier.
+  UTF8_ONE_BYTE_BELOW  = $80;
+  UTF8_TWO_BYTES_BELOW = $800;
+  UTF8_BMP_BYTES       = 3;
+  UTF8_PAIR_BYTES      = 4;
 
 type
   // Zustand von SplitLongLiteral: die Ausgabe, die Elemente des laufenden
@@ -1395,13 +1410,18 @@ begin
   Result := (C >= #$DC00) and (C <= #$DFFF);
 end;
 
-// Elemente eines Zeichens bzw. Codes: ASCII eins, sonst vorsichtig zwei.
+// Elemente eines Zeichens bzw. Codes: vorsichtig seine Laenge in UTF-8 -
+// ASCII eins, bis U+07FF zwei, sonst drei (ein einzelnes Surrogat auch).
+// Bis zur Nachpruefung FB zaehlte alles ueber ASCII zwei; ein CJK-Zeichen
+// (drei Bytes) liess so ein Literal von bis zu 381 Bytes zu.
 function ElementWidth(ACode: Integer): Integer;
 begin
-  if ACode < 128 then
+  if ACode < UTF8_ONE_BYTE_BELOW then
     Result := 1
+  else if ACode < UTF8_TWO_BYTES_BELOW then
+    Result := 2
   else
-    Result := 2;
+    Result := UTF8_BMP_BYTES;
 end;
 
 // Vor einem Element mit AWidth Elementen: passt es nicht mehr ins
@@ -1431,8 +1451,8 @@ begin
 end;
 
 // Ein '..'-Teil ab ASource[AAt] (Quote): Element fuer Element in die
-// Ausgabe ('' ist EIN Element, ein Surrogat-Paar auch). False ohne
-// schliessendes Quote.
+// Ausgabe ('' ist EIN Element, ein Surrogat-Paar auch - es zaehlt vier,
+// wie in UTF-8). False ohne schliessendes Quote.
 function SplitQuotedPart(var S: TRdxLiteralSplit; const ASource: string;
   var AAt: Integer): Boolean;
 var
@@ -1459,7 +1479,10 @@ begin
     end
     else if IsHighSurrogateCh(ASource[AAt]) and (AAt < Length(ASource))
        and IsLowSurrogateCh(ASource[AAt + 1]) then
+    begin
       Elem := Copy(ASource, AAt, 2);
+      Width := UTF8_PAIR_BYTES;
+    end;
     SplitBeforeElement(S, Width);
     S.Output := S.Output + Elem;
     Inc(S.Run, Width);
@@ -1876,16 +1899,20 @@ end;
 // Kette uebersetzt, auch wenn FOffset eine Zahl ist, und Format('%s%sx',
 // [P, FOffset]) wirft EConvertError. Gesperrt, wenn der erste Term als
 // PChar/PWideChar/PAnsiChar deklariert oder ein Cast darauf ist und der
-// zweite weder Literal noch bewiesener String. Bekannte Grenze: ein PChar
+// zweite weder Literal noch bewiesener String. Nicht beim Selbst-Anhaengen
+// (AStart = csBehindTarget): dort beginnt die Kette mit dem Ziel X, einem
+// String - 'X + P' verkettet (Nachpruefung FB). Bekannte Grenze: ein PChar
 // UNBEKANNTEN Typs am Anfang (Feld oder Funktion einer anderen Unit) bleibt
 // unsichtbar - dann wirft Format zur Laufzeit, statt still falsch zu
 // rechnen. '' oder der Grund.
-function PointerStartReason(const AParts: TRdxParts): string;
+function PointerStartReason(const AParts: TRdxParts;
+  AStart: TRdxChainStart): string;
 var
   i, n  : Integer;
   Terms : array[0..1] of TRdxPart;
 begin
   Result := '';
+  if AStart = csBehindTarget then Exit;
   n := 0;
   for i := 0 to High(AParts) do
   begin
@@ -1908,7 +1935,8 @@ begin
 end;
 
 class function TRdxRecipes.BuildFormatCall(const AParts: TRdxParts;
-  out ABuild: TRdxFormatBuild; const ATargetType: string): Boolean;
+  out ABuild: TRdxFormatBuild; const ATargetType: string;
+  AStart: TRdxChainStart): Boolean;
 var
   i    : Integer;
   Scan : TRdxFormatScan;
@@ -1918,7 +1946,7 @@ begin
   Scan   := Default(TRdxFormatScan);
   Scan.TargetU := (ATargetType = 'string') or (ATargetType = 'unicodestring')
     or (ATargetType = 'widestring');
-  ABuild.Reason := PointerStartReason(AParts);
+  ABuild.Reason := PointerStartReason(AParts, AStart);
   if ABuild.Reason <> '' then Exit;
   for i := 0 to High(AParts) do
   begin

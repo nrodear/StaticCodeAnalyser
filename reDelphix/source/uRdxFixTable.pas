@@ -228,6 +228,11 @@ const
     + '(Menueaufbau im Hauptthread); von Hand';
   WHAT_FORMS    = 'Formdateien';
   WHAT_INCLUDES = 'Include-Dateien';
+  // Win32-Namensraum vor einem Pfad (WithoutNamespacePrefix): '\\?\' (lange
+  // Pfade) und '\\.\' (Geraete-Namensraum); dahinter 'UNC\' = Netzpfad.
+  WIN32_NS_PREFIXES: array[0..1] of string = ('\\?\', '\\.\');
+  WIN32_NS_UNC = 'UNC\';
+  UNC_LEAD     = '\\';
   // SCA001: nur diese Variante bekommt die Hilfe (Feld TLeakFinding.
   // LeakVariant, das uLeakDetector2 setzt; properties.variant im SARIF).
   LEAK_VARIANT_FOF = 'freed-outside-finally';
@@ -392,20 +397,44 @@ begin
     Result := Format(R_MAGIC_REMOTE, [ExtractFileDrive(AFileName)]);
 end;
 
+// AFileName ohne den Vorsatz des Win32-Namensraums: '\\?\C:\src\t.pas' ->
+// 'C:\src\t.pas' (ein lokaler Pfad, lang geschrieben; ebenso '\\.\'),
+// '\\?\UNC\srv\share\t.pas' -> '\\srv\share\t.pas'. Ohne Vorsatz
+// unveraendert.
+function WithoutNamespacePrefix(const AFileName: string): string;
+var
+  i : Integer;
+begin
+  Result := AFileName;
+  for i := 0 to High(WIN32_NS_PREFIXES) do
+    if Copy(AFileName, 1, Length(WIN32_NS_PREFIXES[i])) = WIN32_NS_PREFIXES[i] then
+    begin
+      Result := Copy(AFileName, Length(WIN32_NS_PREFIXES[i]) + 1, MaxInt);
+      if SameText(Copy(Result, 1, Length(WIN32_NS_UNC)), WIN32_NS_UNC) then
+        Result := UNC_LEAD + Copy(Result, Length(WIN32_NS_UNC) + 1, MaxInt);
+      Exit;
+    end;
+end;
+
 // SCA147/SCA164 (Review FB, R2-07): liegt die Unit auf einem Netzpfad
 // ('\\server\share\..', auch mit '/') oder einem Netzlaufwerk? Dann liest
 // die Hilfe dort nichts (AWhat: was sie lesen wollte) - dieselbe Regel wie
 // SCA014; die UNC-Form ist die von uRdxMagicFixes.FileReason (dort
 // privat, zweite Kopie - die gemeinsamen Helfer legt eine spaetere Charge
-// zusammen). '' oder der Grund.
+// zusammen). Der Win32-Namensraum zaehlt ohne Vorsatz
+// (WithoutNamespacePrefix; Nachpruefung FB: '\\?\C:\..' hiess bis dahin
+// "Netzpfad"). '' oder der Grund.
 function NetworkPathReason(const AFileName, AWhat: string): string;
+var
+  Path : string;
 begin
   Result := '';
-  if (Length(AFileName) > 2) and CharInSet(AFileName[1], ['\', '/'])
-     and CharInSet(AFileName[2], ['\', '/']) then
-    Result := Format(R_REMOTE_FILES, [ExtractFileDir(AFileName), AWhat])
-  else if IsRemoteDrive(AFileName) then
-    Result := Format(R_REMOTE_FILES, [ExtractFileDrive(AFileName), AWhat]);
+  Path := WithoutNamespacePrefix(AFileName);
+  if (Length(Path) > 2) and CharInSet(Path[1], ['\', '/'])
+     and CharInSet(Path[2], ['\', '/']) then
+    Result := Format(R_REMOTE_FILES, [ExtractFileDir(Path), AWhat])
+  else if IsRemoteDrive(Path) then
+    Result := Format(R_REMOTE_FILES, [ExtractFileDrive(Path), AWhat]);
 end;
 
 // SCA164: die Include-Dateien vor implementation liest die Hilfe von der

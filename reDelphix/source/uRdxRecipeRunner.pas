@@ -512,9 +512,14 @@ const
   R_FREENIL_HINT = 'FreeAndNil setzt %s auf nil, bevor der Destruktor laeuft';
   // Typ-Sperren von SCA085/SCA139 (FreeTypeReason, Review FB R2-01/R3-01)
   // und der const-Parameter von SCA139 (ConstParamReason, R2-03).
-  R_NOT_AN_OBJECT = '%s ist kein Objekt (%s: record, object, interface oder '
-    + 'Zeiger dieser Unit) - Free ist eine eigene Methode, FreeAndNil nimmt '
-    + 'nur ein TObject';
+  R_NOT_AN_OBJECT = '%s ist kein Objekt (%s: record, object, interface, '
+    + 'Zeiger oder eigener Typ dieser Unit) - Free ist eine eigene Methode, '
+    + 'FreeAndNil nimmt nur ein TObject';
+  // Was DeclaredTypeKind fuer einen ausformulierten Typ liefert - kein
+  // Alias auf einen Typ einer anderen Unit (ForeignTypeName).
+  OWN_TYPE_WORDS: array[0..12] of string = ('class', 'record', 'object',
+    'interface', 'dispinterface', 'type', 'procedure', 'function',
+    'reference', 'set', 'array', 'string', 'file');
   R_OWN_FREE = 'die Unit deklariert eine eigene Methode Free - FreeAndNil '
     + 'riefe sie nicht auf';
   R_POINTER_NAME = '%s hat den Typ %s - nach Delphi-Konvention ein Zeiger aus '
@@ -934,6 +939,18 @@ begin
     and SameOperandText(AParts[1].Text, AParts[0].Text);
 end;
 
+// Wo die Terme fuer BuildFormatCall in der Kette stehen: beim Selbst-
+// Anhaengen hinter 'X +' - X ist der Kettenanfang, ein String, und ein
+// Zeiger dahinter verkettet (Nachpruefung FB zu R2-04: 'X := X + P + N'
+// lehnte bis dahin als "Zeiger am Kettenanfang" ab); sonst am Anfang.
+function ChainStartOf(const AOutcome: TRdxFormatOutcome): TRdxChainStart;
+begin
+  if AOutcome.SelfAppend then
+    Result := csBehindTarget
+  else
+    Result := csChainHead;
+end;
+
 // Der Grund, wenn BuildFormatCall ablehnt: hinter 'X +' nur Literale heisst
 // anders als 'kein Operand'.
 function BuildReasonOf(const ABuild: TRdxFormatBuild;
@@ -1040,7 +1057,7 @@ begin
   if Result.SelfAppend then
     Behind := TRdxRecipes.CollapseWhitespace(Parts[0].Text);
   if not TRdxRecipes.BuildFormatCall(Copy(Parts, First, Last - First + 1),
-       Build, TType) then
+       Build, TType, ChainStartOf(Result)) then
   begin
     Result.Reason := BuildReasonOf(Build, Behind);
     Exit;
@@ -1491,10 +1508,31 @@ begin
   end;
 end;
 
+// Der Name, unter dem der Typ ATypeLow aus einer anderen Unit kommt:
+// ATypeLow selbst, wenn diese Unit ihn nicht deklariert; das Ende seiner
+// Alias-Kette, wenn sie die Unit verlaesst ('PMyKey = PEVP_PKEY' ->
+// 'pevp_pkey', TRdxExprFixes.ResolvedTypeKind; Nachpruefung FB - bis dahin
+// galt ein solcher Alias als Typ dieser Unit und behielt die Hilfe); ''
+// fuer einen Typ, den die Unit ausformuliert (class, record, '^' ...).
+function ForeignTypeName(AMap: TRdxCodeMap; const ATypeLow: string): string;
+var
+  Kind : string;
+begin
+  Kind := TRdxExprFixes.ResolvedTypeKind(AMap, ATypeLow);
+  if Kind = '' then
+    Result := ATypeLow
+  else if TRdxRecipes.IsPlainIdent(Kind) and not InList(Kind, OWN_TYPE_WORDS)
+     and (TRdxSimpleFixes.DeclaredTypeKind(AMap, Kind) = '') then
+    Result := Kind
+  else
+    Result := '';
+end;
+
 // SCA085/SCA139: ruft 'X.Free' sicher TObject.Free? FreeAndNil(X) uebergeht
 // eine eigene Methode Free und nimmt X als TObject. Gesperrt (ATypeLow = der
 // deklarierte Typ von X):
-//   * ein record/object/interface oder Zeiger ('PFoo = ^TFoo') dieser Unit
+//   * ein record/object/interface, Zeiger ('PFoo = ^TFoo') oder eigener Typ
+//     ('PFoo = type ^TFoo') dieser Unit, auch ueber Aliasse der Unit
 //     (DeclaresValueType) - 'X.Free' ist dort eine eigene Methode, beim
 //     Zeiger die des Ziels;
 //   * eine Routine Free irgendwo in der Unit (eine Klasse, die zurueckgibt
@@ -1502,7 +1540,8 @@ end;
 //     ohne Parser auch dann, wenn sie einer anderen Klasse gehoert (Korpus
 //     ab8: 1 SCA085-Angebot weniger, Alcinoe dwsUtils);
 //   * ein Typ einer anderen Unit, der nach Konvention ein Zeiger ist
-//     (PointerNamedType: 'PEVP_PKEY').
+//     (PointerNamedType: 'PEVP_PKEY'), auch hinter einem Alias der Unit
+//     (ForeignTypeName: 'PMyKey = PEVP_PKEY').
 // Bis Review FB (R2-01/R3-01) pruefte das nur SCA139; SCA085 bot
 // 'FreeAndNil(result)' fuer 'result: PX509_CRL' an - Delphi 12: E2010, FPC
 // und Delphi bis 10.3: TObject.Free auf einer OpenSSL-Struktur. Typen
@@ -1518,7 +1557,8 @@ begin
     Result := Format(R_NOT_AN_OBJECT, [AName, ATypeLow])
   else if TRdxSimpleFixes.DeclaresRoutine(AMap, 'Free') then
     Result := R_OWN_FREE
-  else if PointerNamedType(AMap, ATypeLow, Spelling) then
+  else if PointerNamedType(AMap, ForeignTypeName(AMap, ATypeLow),
+       Spelling) then
     Result := Format(R_POINTER_NAME, [AName, Spelling]);
 end;
 
@@ -1645,13 +1685,16 @@ begin
 end;
 
 // Das Kopfwort (procedure, function, constructor, destructor, operator)
-// einer Routine, deren Kopf auf ALine beginnt ('class' davor erlaubt);
+// einer Routine, deren Kopf auf ALine beginnt ('class' davor erlaubt, auch
+// Attribute auf derselben Zeile: '[Weak] procedure ..' - Nachpruefung FB);
 // Low = '' ohne. AFirstCol: die Spalte des ersten Tokens der Zeile.
 function RoutineKeywordOn(AMap: TRdxCodeMap; ALine: Integer;
   out AFirstCol: Integer): TRdxToken;
 begin
   Result := NextToken(AMap, ALine, 1);
   AFirstCol := Result.Col;
+  while (Result.Low = '[') and (Result.Line = ALine) do
+    Result := AfterClose(AMap, Result);
   if Result.Low = 'class' then
     Result := After(AMap, Result);
   if (Result.Line <> ALine) or not InList(Result.Low, ['procedure', 'function',

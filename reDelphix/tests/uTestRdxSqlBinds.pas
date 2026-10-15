@@ -4,10 +4,12 @@ unit uTestRdxSqlBinds;
 // uRdxSqlTemplate): kein Literal ueber 255 Elemente in der Vorlage (R2-02),
 // eine Unit-Konstante ist in einer Methode mit fremdem Vorfahr nicht
 // bewiesen - ein geerbtes Member gleichen Namens bindet vorher (R2-05) -
-// und ein schon maskierter Wert wird nicht woertlich Parameter (R2-06).
-// Reine Textlogik - laeuft in reDelphix.Test UND im FPC-Pruefstand. Nur die
-// Schnittstelle, die es vor der Charge gab (BuildSqlTemplate, SqlConstOf,
-// AddSqlFacts): jeder Test war gegen den Stand 4358b769 rot.
+// und ein schon maskierter Wert wird nicht woertlich Parameter (R2-06; die
+// Nachpruefung: Aufruf ohne Klammern, Empfaenger als Aufruf, Literale mit
+// Apostroph, verschachtelte Maskierungen). Reine Textlogik - laeuft in
+// reDelphix.Test UND im FPC-Pruefstand. Nur die Schnittstelle, die es vor
+// der Charge gab (BuildSqlTemplate, SqlConstOf, AddSqlFacts): jeder Test
+// war gegen den Stand 4358b769 rot.
 
 interface
 
@@ -28,6 +30,11 @@ type
     [Test] procedure DoubledQuotes_InSqlString_BindRawValue;
     [Test] procedure AnsiQuotedStr_BindsRawValue;
     [Test] procedure OtherEscapes_Refused;
+    // Nachpruefung R2-06 (Pruefer FB_verify, probe1/probe2): die Restluecken.
+    [Test] procedure Escape_MemberWithoutParens_Refused;
+    [Test] procedure DoubledQuotes_BehindCall_BindsReceiver;
+    [Test] procedure QuoteLiteral_OtherForms_Refused;
+    [Test] procedure Escape_Nested_Refused;
   end;
 
 implementation
@@ -349,6 +356,83 @@ begin
     Lit('''SELECT * FROM users WHERE login = '''),
     Op('StringReplace(X, ' + Apos(1) + ', ' + Apos(2) + ', [rfReplaceAll])')]),
     'maskiert');
+end;
+
+{ ---- Nachpruefung R2-06 ----
+  Jeder Fall war gegen 4358b769 UND gegen den ersten Stand der Charge
+  (3d753de6) rot: dort wurde er angeboten, die Maskierung landete im
+  Parameter. }
+
+const
+  // SQL-Text bis zum Operanden: im SQL-String (IN_*) bzw. davor (OUT_HEAD).
+  IN_HEAD  = '''SELECT * FROM users WHERE login = ''''''';
+  IN_TAIL  = '''''''''';
+  OUT_HEAD = '''SELECT * FROM users WHERE login = ''';
+  BIND_X   = 'Q.SQL.Text := ''SELECT * FROM users WHERE login = :X'';'
+    + sLineBreak + 'Q.ParamByName(''X'').Value := ';
+
+// Der Operand AOp im SQL-String bzw. hinter '= '.
+function InString(const AOp: string): TRdxSqlRequest;
+begin
+  Result := Req([Target('Q.SQL.Text'), Lit(IN_HEAD), Op(AOp), Lit(IN_TAIL)]);
+end;
+
+function OutOfString(const AOp: string): TRdxSqlRequest;
+begin
+  Result := Req([Target('Q.SQL.Text'), Lit(OUT_HEAD), Op(AOp)]);
+end;
+
+procedure TTestRdxSqlBinds.Escape_MemberWithoutParens_Refused;
+begin
+  // TStringHelper.QuotedString ohne Klammern ist ein Aufruf wie
+  // QuotedStr(X): bis dahin ':Edit1TextQuotedString' mit dem Wert samt
+  // Quotes (probe2), im String und davor.
+  AssertRefused(OutOfString('Edit1.Text.QuotedString'),
+    'maskiert (QuotedString)');
+  AssertRefused(InString('Edit1.Text.QuotedString'),
+    'maskiert (QuotedString)');
+  AssertRefused(InString('Edit1.Text.QuotedString.Trim'),
+    'maskiert (QuotedString)');
+  // Ein Feld gleichen Musters sperrt mit - ohne Typ ist es von einer
+  // Methode ohne Argumente nicht zu unterscheiden (vorsichtig).
+  AssertRefused(InString('Obj.QuoteChar'), 'maskiert (QuoteChar)');
+end;
+
+procedure TTestRdxSqlBinds.DoubledQuotes_BehindCall_BindsReceiver;
+begin
+  // Der Empfaenger von Replace ist ein Aufruf: bis dahin nahm CallParts die
+  // ERSTE '(' - der Wert trug O''Brien (probe1 'Trim(X).Replace').
+  Assert.AreEqual(BIND_X + 'Trim(X);', Ok(InString('Trim(X).Replace('
+    + Apos(1) + ', ' + Apos(2) + ')')));
+  // x.Replace mit rfReplaceAll ist dieselbe Form.
+  Assert.AreEqual(BIND_X + 'X;', Ok(InString('X.Replace(' + Apos(1) + ', '
+    + Apos(2) + ', [rfReplaceAll])')));
+end;
+
+procedure TTestRdxSqlBinds.QuoteLiteral_OtherForms_Refused;
+begin
+  // Nur das erste Vorkommen (probe1), danach noch ein Glied (probe1:
+  // ':Trim'), ein anderes Ersatzzeichen (MySQL \'), Quotes per Format.
+  AssertRefused(InString('StringReplace(X, ' + Apos(1) + ', ' + Apos(2)
+    + ', [])'), 'maskiert (Literal mit Apostroph)');
+  AssertRefused(InString('X.Replace(' + Apos(1) + ', ' + Apos(2) + ', [])'),
+    'maskiert (Literal mit Apostroph)');
+  AssertRefused(InString('X.Replace(' + Apos(1) + ', ' + Apos(2) + ').Trim'),
+    'maskiert (Literal mit Apostroph)');
+  AssertRefused(InString('StringReplace(X, #39, ''\'''''', [rfReplaceAll])'),
+    'maskiert (Literal mit Apostroph)');
+  AssertRefused(OutOfString('Format(''''''%s'''''', [X])'),
+    'maskiert (Literal mit Apostroph)');
+end;
+
+procedure TTestRdxSqlBinds.Escape_Nested_Refused;
+begin
+  // Die bindbaren Formen packen nur EINE Maskierung aus - steckt darin
+  // noch eine, truege der Parameter sie.
+  AssertRefused(OutOfString('QuotedStr(StringReplace(X, ' + Apos(1) + ', '
+    + Apos(2) + ', [rfReplaceAll]))'), 'maskiert (verdoppelte Apostrophe)');
+  AssertRefused(InString('StringReplace(QuotedStr(X), ' + Apos(1) + ', '
+    + Apos(2) + ', [rfReplaceAll])'), 'maskiert (QuotedStr)');
 end;
 
 initialization

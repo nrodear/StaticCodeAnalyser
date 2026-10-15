@@ -17,6 +17,9 @@ unit uTestRdxFreeGatesDetector;
 //   * Pin (missed R2(3)): ein Unit-Global, das wie ein geerbtes Member
 //     heisst, ist in einer Methode einer TForm-Ableitung nicht bewiesen -
 //     das leistet der strenge Resolver (StrictMemberType) schon.
+//   * Nachpruefung: ein fremder Zeiger hinter einem Alias der Unit
+//     (PMyKey = PEVP_PKEY), ein Attribut vor dem Kopf auf derselben Zeile,
+//     der Win32-Namensraum ('\\?\C:\..' lokal, '\\?\UNC\..' Netzpfad).
 // Jeder Test ausser den beiden Hilfe-Gegenproben (Sca139_VarParam_Helps,
 // Sca072_*) war gegen den Stand 4358b769 rot: dort bot der Laeufer die
 // Hilfe an bzw. lehnte mit einem anderen Grund ab.
@@ -44,6 +47,10 @@ type
     [Test] procedure Sca164_UncPathWithInclude_NoHelp;
     // ---- Pin des strengen Resolvers (missed R2(3)) ----
     [Test] procedure Sca072_UnitGlobalShadowedByInherited_NoHelp;
+    // ---- Nachpruefung FB (Pruefer FB_verify, gprobe F4/C21/N1) ----
+    [Test] procedure Sca139_ForeignPointerBehindUnitAlias_NoHelp;
+    [Test] procedure Sca139_ConstParam_AttributeOnHeadLine_NoHelp;
+    [Test] procedure Sca147_Win32NamespacePaths;
   end;
 
 implementation
@@ -60,6 +67,10 @@ const
   // Eine Freigabe, die es nicht gibt: die Hilfen duerfen dort nichts lesen.
   // noinspection HardcodedPath (Testdaten: der Netzpfad IST der Testfall)
   UNC_FILE = '\\rdx-fb-nohost\share\src\t.pas';
+  // Derselbe Netzpfad im Win32-Namensraum ('\\?\UNC\..').
+  UNC_NS_FILE = '\\?\UNC\rdx-fb-nohost\share\src\t.pas';
+  // Vorsatz fuer lange lokale Pfade ('\\?\C:\..').
+  LONG_PATH_PREFIX = '\\?\';
 
 // ---- Helfer ----
 
@@ -239,6 +250,15 @@ end;
 
 { ---- SCA147/SCA164 (R2-07) ---- }
 
+// Eine Klasse mit einer unbenutzten privaten Methode Dead (SCA147).
+function DeadMethodUnit: string;
+begin
+  Result := Join(['unit t;', 'interface', 'type', '  TFoo = class',
+    '  private', '    procedure Dead;', '  public', '    procedure Run;',
+    '  end;', 'implementation', 'procedure TFoo.Dead;', 'begin', 'end;',
+    'procedure TFoo.Run;', 'begin', 'end;', 'end.']);
+end;
+
 procedure TTestRdxFreeGatesDetector.Sca147_UncPath_NoHelp;
 var
   Src : string;
@@ -247,10 +267,7 @@ begin
   // Bis Charge FB las die Hilfe auf jeder Unit .dfm/.fmx/.lfm daneben
   // (FormReason: dreimal FileExists im Hauptthread) - auch auf einer
   // Freigabe, die nicht antwortet.
-  Src := Join(['unit t;', 'interface', 'type', '  TFoo = class', '  private',
-    '    procedure Dead;', '  public', '    procedure Run;', '  end;',
-    'implementation', 'procedure TFoo.Dead;', 'begin', 'end;',
-    'procedure TFoo.Run;', 'begin', 'end;', 'end.']);
+  Src := DeadMethodUnit;
   O := PlanAt(Src, UNC_FILE, fkUnusedPrivateMethod,
     LineOf(Src, '    procedure Dead;'));
   Assert.IsFalse(O.Enabled, 'keine Hilfe auf dem Netzpfad');
@@ -298,6 +315,48 @@ begin
   Assert.IsTrue(Pos('nicht als Boolean bewiesen', O.Reason) > 0, O.Reason);
   O := PlanAt(Src, 't.pas', fkRedundantBoolean, LineOf(Src, '// free'));
   Assert.IsTrue(O.Enabled, O.Reason);
+end;
+
+{ ---- Nachpruefung FB ----
+  Gegen den ersten Stand der Charge (3d753de6) rot: dort bot der Laeufer
+  die Hilfe an (F4, C21) bzw. nannte '\\?\C:\..' einen Netzpfad (N1). Die
+  Textteile laufen woertlich extrahiert auch unter FPC (Nachbesserung,
+  gprobe: F4/F9/F11/F12, C21/C22/C23, N1/N7/N8/N9). }
+
+procedure TTestRdxFreeGatesDetector.Sca139_ForeignPointerBehindUnitAlias_NoHelp;
+begin
+  // gprobe F4: 'PMyKey = PEVP_PKEY' - der Alias steht in dieser Unit, sein
+  // Ziel ist ein fremder Zeiger. Bis dahin galt PMyKey als Typ der Unit,
+  // nach dem Konventionsnamen wurde nicht gefragt.
+  AssertNoHelp(HolderUnit('  PMyKey = PEVP_PKEY;', 'FKey: PMyKey;',
+    'FKey.Free;'), fkFreeWithoutNil, 'Typ PEVP_PKEY');
+end;
+
+procedure TTestRdxFreeGatesDetector.Sca139_ConstParam_AttributeOnHeadLine_NoHelp;
+begin
+  // gprobe C21: ein Attribut vor dem Kopf auf DERSELBEN Zeile - die Zeile
+  // galt nicht als Kopf, FreeAndNil(ABucket) blieb die Hilfe.
+  AssertNoHelp(StringReplace(BucketsUnit('const ABucket'),
+    'procedure TBuckets.Add(', '[Weak] procedure TBuckets.Add(', []),
+    fkFreeWithoutNil, 'const-Parameter');
+end;
+
+procedure TTestRdxFreeGatesDetector.Sca147_Win32NamespacePaths;
+var
+  Src : string;
+  O   : TRdxFixOutcome;
+begin
+  // gprobe N1: '\\?\C:\..' (lange Pfade) ist lokal - die Hilfe bleibt; bis
+  // dahin hiess er "Netzpfad". '\\?\UNC\srv\..' ist der Netzpfad '\\srv\..'.
+  Src := DeadMethodUnit;
+  O := PlanAt(Src, LONG_PATH_PREFIX + TempName('rdx_fb_ns_', '.pas'),
+    fkUnusedPrivateMethod, LineOf(Src, '    procedure Dead;'));
+  Assert.IsTrue(O.Enabled, O.Reason);
+  O := PlanAt(Src, UNC_NS_FILE, fkUnusedPrivateMethod,
+    LineOf(Src, '    procedure Dead;'));
+  Assert.IsFalse(O.Enabled, 'keine Hilfe auf dem Netzpfad');
+  Assert.IsTrue(Pos('Netzpfad \\rdx-fb-nohost\share\src', O.Reason) > 0,
+    O.Reason);
 end;
 
 initialization

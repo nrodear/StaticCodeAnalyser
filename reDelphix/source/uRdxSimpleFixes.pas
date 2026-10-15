@@ -143,15 +143,17 @@ type
       const AReceiver: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
     // True, wenn die Datei ATypeName als record, object, interface,
-    // dispinterface oder Zeiger deklariert ('TFoo = packed record', 'PFoo =
-    // ^TFoo'): 'X.Free' ist dann eine eigene Methode (Record, object - auch
+    // dispinterface, Zeiger oder eigenen Typ deklariert ('TFoo = packed
+    // record', 'PFoo = ^TFoo', 'PFoo = type ^TFoo'), auch ueber ihre
+    // Aliasse ('TA = TB', TRdxExprFixes.ResolvedTypeKind; Nachpruefung
+    // FB): 'X.Free' ist dann eine eigene Methode (Record, object - auch
     // ueber den Zeiger, den Delphi dereferenziert) bzw. ein Interface-
     // Aufruf, FreeAndNil(X) waere falsch (Review FB, R2-01/R3-01: mORMot
     // 'PX509_CRL = ^X509_CRL', ein object mit eigenem Free - FPC rief
     // TObject.Free auf der OpenSSL-Struktur, Zugriffsverletzung). VERTRAG
-    // WEITER ALS DER NAME: Interface und Zeiger sind keine Werttypen,
-    // zaehlen hier aber mit - gemeint ist "kein Klassentyp, auf dem
-    // FreeAndNil uebersetzt und das Richtige tut". Der Name bleibt, weil
+    // WEITER ALS DER NAME: Interface, Zeiger und eigener Typ sind keine
+    // Werttypen, zaehlen hier aber mit - gemeint ist "kein Klassentyp, auf
+    // dem FreeAndNil uebersetzt und das Richtige tut". Der Name bleibt, weil
     // ihn uRdxRecipeRunner (SCA085, SCA139) ruft; umbenennen in einer
     // Charge, die beide Units anfasst. Ein Typ aus einer anderen Unit (auch
     // ein Alias oder ein generischer Record 'TRec<T>') ist hier unbekannt
@@ -790,11 +792,15 @@ class function TRdxSimpleFixes.DeclaresValueType(AMap: TRdxCodeMap;
 var
   Kind : string;
 begin
-  Kind := DeclaredTypeKind(AMap, ATypeName);
+  // Durch die Aliasse der Unit ('TA = TB; TB = record', Nachpruefung FB).
+  Kind := TRdxExprFixes.ResolvedTypeKind(AMap, LowerCase(ATypeName));
   // '^': 'PFoo = ^TFoo' (Review FB, R2-01) - FreeAndNil(P) nimmt den Zeiger
-  // als TObject, 'P.Free' meint das Ziel.
+  // als TObject, 'P.Free' meint das Ziel. 'type': ein eigener Typ ('PFoo =
+  // type ^TFoo', Nachpruefung FB) - was hinter 'type' steht, liest
+  // DeclaredTypeKind nicht; meist ein Zeiger oder Werttyp, eine Klasse dort
+  // ist selten und bleibt vorsichtig mitgezaehlt.
   Result := (Kind = 'record') or (Kind = 'object') or (Kind = 'interface')
-    or (Kind = 'dispinterface') or (Kind = '^');
+    or (Kind = 'dispinterface') or (Kind = '^') or (Kind = 'type');
 end;
 
 // Kopf eines Assert-Aufrufs an (ALine, ACol): 'Assert' als Wort im Code,

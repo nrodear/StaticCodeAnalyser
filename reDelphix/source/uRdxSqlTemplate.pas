@@ -66,10 +66,14 @@ unit uRdxSqlTemplate;
 //    die der Parameter nicht braucht; IntToStr macht aus einer Zahl einen
 //    Text). Ein schon maskierter Wert (Review FB, R2-06): verdoppelt ein
 //    Operand IN einem SQL-String die Apostrophe (StringReplace(x, '''',
-//    '''''', [rfReplaceAll]), ReplaceStr/ReplaceText, x.Replace(..)), ist
-//    sein Wert x; jeder andere Aufruf mit 'quote' oder 'escape' im Namen
-//    (EscapeString, QuotedStr im String, AnsiQuotedStr(x, '"')) sperrt -
-//    der Parameter truege die Maskierung in die Daten.
+//    '''''', [rfReplaceAll]), ReplaceStr/ReplaceText, x.Replace(..), auch
+//    Trim(x).Replace(..)), ist sein Wert x; jeder andere Aufruf mit 'quote'
+//    oder 'escape' im Namen (EscapeString, QuotedStr im String,
+//    AnsiQuotedStr(x, '"'), auch ohne Klammern als Glied hinter einem
+//    Punkt: x.QuotedString) und jedes andere Literal mit Apostroph im
+//    Operanden (StringReplace ohne rfReplaceAll, x.Replace(..).Trim)
+//    sperrt - der Parameter truege die Maskierung in die Daten. Den Inhalt
+//    einer Variable sieht die Vorlage nicht.
 //    Ein Zeilenkommentar ('-- ..') endet am Zeilenende - auch an
 //    sLineBreak/LineEnding zwischen zwei Literalen (Minor 10).
 // 2. Konstanten. Ein Operand, der am Quelltext als untypisierte Konstante
@@ -306,6 +310,13 @@ const
   ARGS_STRING_REPLACE = 4;   // StringReplace(x, '''', '''''', [rfReplaceAll])
   ARGS_REPLACE_STR    = 3;   // ReplaceStr(x, '''', '''''')
   ARGS_HELPER_REPLACE = 2;   // x.Replace('''', '''''')
+  ARGS_HELPER_REPLACE_FLAGS = 3;   // x.Replace('''', '''''', [rfReplaceAll])
+  // Was R_ESCAPED in der Klammer nennt, wenn kein maskierender Aufruf es
+  // ist (EscapeMarkOf; Nachpruefung R2-06).
+  MARK_DOUBLED       = 'verdoppelte Apostrophe';
+  MARK_QUOTE_LITERAL = 'Literal mit Apostroph';
+  // Zeichen eines #-Codes hinter dem '#' ('#39', '#$27').
+  CHAR_CODE_CHARS = ['$', '0'..'9', 'A'..'F', 'a'..'f'];
   // Davor darf QuotedStr/AnsiQuotedStr stehen (wie CallArg).
   SYSUTILS_QUALIFIERS: array[0..2] of string = ('', 'sysutils',
     'system.sysutils');
@@ -700,8 +711,16 @@ end;
   Ein Operand, der seinen Wert schon fuer SQL-Text maskiert, darf nicht
   woertlich Parameter werden: 'StringReplace(X, '''', '''''', ..)' in einem
   SQL-String bzw. 'AnsiQuotedStr(X, '''')' als Wert truegen O''Brien bzw.
-  'O''Brien' in die Daten. Die gleichwertigen Formen binden X selbst; jeder
-  andere Aufruf mit 'quote' oder 'escape' im Namen sperrt. }
+  'O''Brien' in die Daten. Die gleichwertigen Formen binden X selbst (auch
+  hinter einem Aufruf: 'Trim(X).Replace(..)' bindet Trim(X)), sofern X
+  nicht selbst maskiert. Sonst sperrt (EscapeMarkOf) jeder Aufruf mit
+  'quote' oder 'escape' im Namen - mit Klammern oder als Glied hinter einem
+  Punkt auch ohne ('X.QuotedString', TStringHelper) - und jedes Literal mit
+  einem Apostroph im Operanden: wer '''' schreibt, baut SQL-String-Syntax
+  ('StringReplace(X, '''', '''''', [])' nur fuer das erste Vorkommen,
+  'X.Replace(..).Trim', Format('''%s''', [X]); Nachpruefung R2-06). Nicht
+  sichtbar: der Inhalt einer Variable und Konstanten als Argumente
+  ('StringReplace(X, Q, QQ, ..)') - die Vorlage folgt keinem Datenfluss. }
 
 // Die Argumente der Klammergruppe ab AText[AOpen] ('('), getrennt an
 // Kommata auf oberster Ebene ausserhalb von Strings; False, wenn die
@@ -740,32 +759,101 @@ begin
     AppendTo(AArgs, Trim(Copy(AText, Start, i - Start)));
 end;
 
-// AText = '[Unit.]Kopf(a, b, ..)': der Kopf klein ohne die Glieder davor,
-// AQual der Text vor dem Kopf ohne '.' ('' ohne), die Argumente
-// (TopLevelArgs). False, wenn AText nicht mit der schliessenden Klammer
-// des Aufrufs endet.
+// Die '(' der LETZTEN Klammergruppe auf oberster Ebene, wenn AText mit
+// ihr endet ('Trim(X).Replace(a, b)': die hinter Replace); 0 sonst.
+// Strings zaehlen nicht.
+function FinalGroupOpen(const AText: string): Integer;
+var
+  i, Depth : Integer;
+begin
+  Result := 0;
+  Depth := 0;
+  i := 1;
+  while i <= Length(AText) do
+  begin
+    if AText[i] = '''' then
+    begin
+      SkipLiteral(AText, i);
+      Continue;
+    end;
+    if CharInSet(AText[i], ['(', '[']) then
+    begin
+      if (Depth = 0) and (AText[i] = '(') then
+        Result := i;
+      Inc(Depth);
+    end
+    else if CharInSet(AText[i], [')', ']']) then
+      Dec(Depth);
+    Inc(i);
+  end;
+  if (Depth <> 0) or (CharAt(AText, Length(AText)) <> ')') then
+    Result := 0;
+end;
+
+// AText = '[Empfaenger.]Kopf(a, b, ..)' - Kopf ist der Name vor der
+// letzten Klammergruppe (FinalGroupOpen), klein; AQual der Text vor dem
+// '.' davor ('' ohne: 'SysUtils' bei 'SysUtils.QuotedStr(x)', 'Trim(X)' bei
+// 'Trim(X).Replace(..)' - bis zur Nachpruefung R2-06 galt die ERSTE '(',
+// und 'Trim(X).Replace(..)' war keine Form); die Argumente (TopLevelArgs).
+// False, wenn AText nicht so endet oder vor dem Kopf etwas anderes als ein
+// '.' steht.
 function CallParts(const AText: string; out AQual, AHead: string;
   out AArgs: TArray<string>): Boolean;
 var
-  T       : string;
-  Open, P : Integer;
+  T, Before : string;
+  Open, P   : Integer;
 begin
   Result := False;
   AQual := '';
   AHead := '';
   AArgs := nil;
   T := Trim(AText);
-  Open := Pos('(', T);
-  if (Open < 2) or (CharAt(T, Length(T)) <> ')') then Exit;
-  AHead := Trim(Copy(T, 1, Open - 1));
-  P := LastDelimiter('.', AHead);
-  if P > 0 then
+  Open := FinalGroupOpen(T);
+  if Open < 2 then Exit;
+  Before := TrimRight(Copy(T, 1, Open - 1));
+  P := Length(Before);
+  while (P > 0) and IsIdentChar(Before[P]) do
+    Dec(P);
+  AHead := LowerCase(Copy(Before, P + 1, MaxInt));
+  Before := TrimRight(Copy(Before, 1, P));
+  if CharAt(Before, Length(Before)) = '.' then
+    AQual := TrimRight(Copy(Before, 1, Length(Before) - 1))
+  else if Before <> '' then
+    Exit;   // 'not Foo(..)', '@Foo(..)': kein Aufruf als ganzer Operand
+  Result := (AHead <> '') and TopLevelArgs(T, Open, AArgs);
+end;
+
+// Ist AText ein Empfaenger ohne Operator auf oberster Ebene ('Trim(X)',
+// 'Edit1.Text')? Ein Leerraum dort trennt Terme ('A - B.Replace(..)':
+// der Empfaenger ist nur B) - dann keine Form.
+function IsReceiverText(const AText: string): Boolean;
+var
+  i, Depth : Integer;
+begin
+  Result := AText <> '';
+  Depth := 0;
+  i := 1;
+  while Result and (i <= Length(AText)) do
   begin
-    AQual := Copy(AHead, 1, P - 1);
-    AHead := Copy(AHead, P + 1, MaxInt);
+    if AText[i] = '''' then
+    begin
+      SkipLiteral(AText, i);
+      Continue;
+    end;
+    if CharInSet(AText[i], ['(', '[']) then
+      Inc(Depth)
+    else if CharInSet(AText[i], [')', ']']) then
+      Dec(Depth)
+    else if (Depth = 0) and IsBlank(AText[i]) then
+      Result := False;
+    Inc(i);
   end;
-  AHead := LowerCase(AHead);
-  Result := TopLevelArgs(T, Open, AArgs);
+end;
+
+// Nennt das Flags-Argument rfReplaceAll (alle Vorkommen)?
+function HasReplaceAll(const AFlags: string): Boolean;
+begin
+  Result := Pos('rfreplaceall', LowerCase(AFlags)) > 0;
 end;
 
 // Ist ASource das Literal AValue (dekodiert, ''''/#39 gleich)?
@@ -798,8 +886,10 @@ end;
 
 // Verdoppelt AText die Apostrophe von x - StringReplace(x, '''', '''''',
 // [rfReplaceAll ..]), ReplaceStr/ReplaceText(x, '''', ''''''), x.Replace(
-// '''', '''''')? True mit AInner = x. In einem SQL-String ist der Wert dann
-// x (R2-06).
+// '''', '''''') bzw. x.Replace('''', '''''', [rfReplaceAll ..]), x auch ein
+// Aufruf ('Trim(X).Replace(..)')? True mit AInner = x. In einem SQL-String
+// ist der Wert dann x (R2-06). Ohne rfReplaceAll verdoppeln StringReplace
+// und x.Replace(.., []) nur das erste Vorkommen - keine Form.
 function DoubledQuotesInner(const AText: string; out AInner: string): Boolean;
 var
   Qual, Head : string;
@@ -810,13 +900,15 @@ begin
   Result := False;
   if not CallParts(AText, Qual, Head, Args) then Exit;
   if (Head = 'stringreplace') and (Length(Args) = ARGS_STRING_REPLACE)
-     and (Pos('rfreplaceall', LowerCase(Args[High(Args)])) > 0) then
+     and HasReplaceAll(Args[High(Args)]) then
     First := 1
   else if InList(Head, REPLACE_ALL_FUNCS)
      and (Length(Args) = ARGS_REPLACE_STR) then
     First := 1
-  else if (Head = 'replace') and (Qual <> '')
-     and (Length(Args) = ARGS_HELPER_REPLACE) then
+  else if (Head = 'replace') and IsReceiverText(Qual)
+     and ((Length(Args) = ARGS_HELPER_REPLACE)
+       or ((Length(Args) = ARGS_HELPER_REPLACE_FLAGS)
+         and HasReplaceAll(Args[High(Args)]))) then
     First := 0   // x.Replace(..): der Empfaenger ist x
   else
     Exit;
@@ -830,8 +922,25 @@ begin
   Result := AInner <> '';
 end;
 
+// Das Zeichen vor AText[AAt], Leerraum uebersprungen; #0 am Anfang.
+function CharBefore(const AText: string; AAt: Integer): Char;
+var
+  i : Integer;
+begin
+  i := AAt - 1;
+  while (i >= 1) and IsBlank(AText[i]) do
+    Dec(i);
+  Result := CharAt(AText, i);
+end;
+
 // Der erste Aufruf in AText (ausserhalb von Strings), dessen Name 'quote'
-// oder 'escape' traegt, wie geschrieben; '' ohne.
+// oder 'escape' traegt, wie geschrieben; '' ohne. Aufruf heisst: ein Name
+// vor '(' oder ein Glied hinter '.' - auch ohne Klammern, so ruft Delphi
+// eine Methode ohne Argumente ('Edit1.Text.QuotedString', TStringHelper;
+// Nachpruefung R2-06 - bis dahin galt nur 'Name('). Ein Feld oder eine
+// Property gleichen Musters ('Obj.QuoteChar') sperrt mit, vorsichtig. Ein
+// blosser Name ohne Klammern ist eine Variable: ihren Inhalt sieht die
+// Vorlage nicht.
 function EscapeCallIn(const AText: string): string;
 var
   i, Start : Integer;
@@ -848,13 +957,86 @@ begin
       while (i <= Length(AText)) and IsIdentChar(AText[i]) do
         Inc(i);
       W := Copy(AText, Start, i - Start);
-      if (CharAt(AText, SkipBlanks(AText, i)) = '(')
+      if ((CharAt(AText, SkipBlanks(AText, i)) = '(')
+          or (CharBefore(AText, Start) = '.'))
          and ((Pos('quote', LowerCase(W)) > 0)
            or (Pos('escape', LowerCase(W)) > 0)) then
         Exit(W);
     end
     else
       Inc(i);
+end;
+
+// Ein Literal-Stueck ab AText[i] - ein '..'-Teil oder ein #-Code; i rueckt
+// dahinter. True, wenn es einen Apostroph traegt: '' im Teil ('''',
+// 'it''s') bzw. der Code #39/#$27.
+function LiteralPieceHasQuote(const AText: string; var i: Integer): Boolean;
+var
+  Start : Integer;
+  Value : string;
+begin
+  Start := i;
+  Inc(i);
+  if AText[Start] = '''' then
+  begin
+    while (i <= Length(AText)) and (AText[i] <> '''') do
+      Inc(i);
+    Result := CharAt(AText, i + 1) = '''';
+    Inc(i);
+    Exit;
+  end;
+  while (i <= Length(AText)) and CharInSet(AText[i], CHAR_CODE_CHARS) do
+    Inc(i);
+  Result := TRdxRecipes.DecodeLiteral(Copy(AText, Start, i - Start), Value)
+    and (Pos('''', Value) > 0);
+end;
+
+// Traegt ein Literal in AText einen Apostroph (LiteralPieceHasQuote)?
+// (Nachpruefung R2-06)
+function HasQuoteLiteral(const AText: string): Boolean;
+var
+  i : Integer;
+begin
+  Result := False;
+  i := 1;
+  while not Result and (i <= Length(AText)) do
+    if CharInSet(AText[i], ['''', '#']) then
+      Result := LiteralPieceHasQuote(AText, i)
+    else
+      Inc(i);
+end;
+
+// Was AText fuer SQL-Text maskiert: der Name eines maskierenden Aufrufs
+// (EscapeCallIn), MARK_DOUBLED fuer die Verdoppel-Formen
+// (DoubledQuotesInner), MARK_QUOTE_LITERAL fuer jedes andere Literal mit
+// Apostroph (HasQuoteLiteral); '' ohne. Der Grund nennt es (R_ESCAPED).
+function EscapeMarkOf(const AText: string): string;
+var
+  Inner : string;
+begin
+  Result := EscapeCallIn(AText);
+  if Result <> '' then Exit;
+  if DoubledQuotesInner(AText, Inner) then
+    Result := MARK_DOUBLED
+  else if HasQuoteLiteral(AText) then
+    Result := MARK_QUOTE_LITERAL;
+end;
+
+// Ein Operand IN einem SQL-String: sein Wert im Parameter (AValue) und ''
+// - oder die Maskierung, die sperrt. Verdoppelt er die Apostrophe
+// (DoubledQuotesInner), ist der Wert das Argument x, sofern x nicht
+// selbst maskiert ('StringReplace(QuotedStr(X), ..)'); sonst sperrt jede
+// Maskierung (EscapeMarkOf).
+function InStringEscape(const AText: string; out AValue: string): string;
+var
+  Inner : string;
+begin
+  AValue := AText;
+  if not DoubledQuotesInner(AText, Inner) then
+    Exit(EscapeMarkOf(AText));
+  Result := EscapeMarkOf(Inner);
+  if Result = '' then
+    AValue := Inner;
 end;
 
 // Der Wert eines Operanden ausserhalb eines Strings: IntToStr(x),
@@ -1331,24 +1513,23 @@ begin
 end;
 
 // Ein Lauf im Code, dessen Wert schon maskiert ist (R2-06): ein einzelnes
-// QuotedStr(x)/AnsiQuotedStr(x, '''') bindet x (UnwrapValue); sonst sperrt
-// jedes Glied mit einem maskierenden Aufruf oder verdoppelten Apostrophen.
-// '' oder der Grund.
+// QuotedStr(x)/AnsiQuotedStr(x, '''') bindet x (UnwrapValue), sofern x
+// nicht selbst maskiert ('QuotedStr(StringReplace(X, ..))'); sonst sperrt
+// jedes Glied mit einer Maskierung (EscapeMarkOf). '' oder der Grund.
 function EscapedRunReason(const S: TSqlScan; AFirst, ALast: Integer): string;
 var
   k           : Integer;
-  Head, Inner : string;
+  Mark, Inner : string;
 begin
   Result := '';
-  if (AFirst = ALast) and QuoteCallInner(S.Segs[AFirst].Text, Inner) then
-    Exit;
   for k := AFirst to ALast do
   begin
-    Head := EscapeCallIn(S.Segs[k].Text);
-    if (Head = '') and DoubledQuotesInner(S.Segs[k].Text, Inner) then
-      Head := 'verdoppelte Apostrophe';
-    if Head <> '' then
-      Exit(Format(R_ESCAPED, [Shown(S.Segs[k].Text), Head]));
+    if (AFirst = ALast) and QuoteCallInner(S.Segs[k].Text, Inner) then
+      Mark := EscapeMarkOf(Inner)
+    else
+      Mark := EscapeMarkOf(S.Segs[k].Text);
+    if Mark <> '' then
+      Exit(Format(R_ESCAPED, [Shown(S.Segs[k].Text), Mark]));
   end;
 end;
 
@@ -1851,23 +2032,19 @@ end;
 // Stueck seines Werts. Verdoppelt der Operand die Apostrophe ('''' ->
 // '''''', die Maskierung fuer SQL-Text), ist sein Wert im Parameter das
 // Argument selbst - auch der Name kommt dann daher ('X.Replace(..)' ->
-// :X); ein anderer maskierender Aufruf (QuotedStr, EscapeString ...)
-// sperrt (Review FB, R2-06).
+// :X); jede andere Maskierung (QuotedStr, EscapeString, X.QuotedString,
+// ein Literal mit Apostroph) sperrt (Review FB, R2-06; InStringEscape).
 procedure TakeInString(var S: TSqlScan; const ASeg: TSqlSeg);
 var
-  Value, Head : string;
+  Value, Mark : string;
 begin
   FlushStrBuf(S);
   Value := ASeg.Text;
   if ASeg.Kind = skOperand then
   begin
-    if not DoubledQuotesInner(ASeg.Text, Value) then
-    begin
-      Value := ASeg.Text;
-      Head := EscapeCallIn(ASeg.Text);
-      if Head <> '' then
-        S.Reason := Format(R_ESCAPED, [Shown(ASeg.Text), Head]);
-    end;
+    Mark := InStringEscape(ASeg.Text, Value);
+    if Mark <> '' then
+      S.Reason := Format(R_ESCAPED, [Shown(ASeg.Text), Mark]);
     if S.StrFirst = '' then
       S.StrFirst := Value;
   end;
