@@ -126,7 +126,7 @@ Details je Hilfe (Menuetexte en/de/fr, Sperren, Beispiel vorher/nachher):
 | Parametrisierte Vorlage in die Zwischenablage | SCA003 (`fixMode: assisted`) | `uRdxSqlTemplate` (Charge S1, Nacharbeit SQc): ein Operand wird nur dort Parameter, wo SQL einen WERT erwartet - hinter `=`, `<>`, `<`, `>`, `LIKE`, `BETWEEN`/`AND`, als Element von `IN (..)`/`VALUES (..)`, hinter `LIMIT`/`OFFSET` nur `IntToStr(x)` (ein Text wird bei MySQL `'10'`; TOP/FIRST/SKIP nicht: dort nimmt SQL Server bzw. Access nur eine Zahl); ein Operand IN einem SQL-String macht den ganzen String zum Parameter (`LIKE ''%' + X + '%''` -> `LIKE :X`, Wert `'%' + X + '%'`; auch `N'..'`, ein `::typ` dahinter bleibt), `IntToStr(x)`/`QuotedStr(x)` binden `x`. Ausgegraut mit Grund: DDL/DCL (CREATE, ALTER, DROP, TRUNCATE, RENAME, COMMENT, GRANT, REVOKE) und prozedurale Bloecke (BEGIN, DECLARE, EXECUTE BLOCK) - fuer den REST des Texts, auch hinter `;` (Prozedur- und Triggerrumpf) -, Bezeichner-Positionen (FROM, INTO, UPDATE, ORDER BY, Spalten-/SELECT-Liste, Funktionsargument), ein nackter Operand in einer Join-Bedingung (`ON a.id = ' + X`), ein Operand, der an einem Bezeichner klebt oder in einem gequoteten Namen/Kommentar steht, ein Operand bzw. SQL-String allein in `IN (..)`/`VALUES (..)` (kann eine ganze Liste sein; `IntToStr`/`QuotedStr` sind EIN Wert), eine Anweisung, die nicht mit DML oder einer Klausel (WHERE, AND, ...) beginnt (`'ENGINE=' + X`, `PRAGMA`), ein `?` im Text, eine Kette ohne SQL-Literal (`FormatUtf8(..)`), "nur Konstanten". Konstanten (am Quelltext nachgewiesen: untypisiert, sichtbar - Unit ab der Deklaration, lokal bis zum Ende ihrer Routine, Klassenkonstante nur in den Methoden ihrer Klasse -, kein anderer Name gleich deklariert, auch keine Inline-Variable `var X := ..`/`for var X in ..`) werden mitgelesen, ihr NAME bleibt in der Vorlage (`'.. FROM ' + TBL + ' WHERE id = :Id'`); ebenso bleiben `sLineBreak` (beendet einen `--`-Kommentar) und bei `S := S + ..` der bisherige Text. Namen aus dem Operanden (`AColumnTypes` -> `:ColumnTypes`, `FId` -> `:Id`, `Edit1.Text` -> `:Edit1Text`, Kollision -> `2`, `3`, hoechstens 30 Zeichen; ein Oracle-/SQL-92-Wort bekommt ein `p` davor, z. B. `:pRows`; Umlaute -> `:p1`). Ziel Query-Objekt (`.SQL`, `.CommandText`): `ParamByName`-Zeilen - bei nachgewiesenem ADO-Objekt (`TADOQuery`/`TADOCommand`/`TADODataSet`/`TADOStoredProc`, `Data.Win.ADODB` in uses) `X.Parameters.ParamByName`; bei `Q.SQL.Add(..)` liest die Vorlage die frueheren `Q.SQL.Add`-Zeilen derselben Routine bis `Q.SQL.Clear`/`Q.SQL.Text :=` mit (Anweisungsart, DDL-Sperre; ihre und die spaeteren Platzhalter sind vergeben); String-Puffer: Zeilen `// Parameter binden: ParamByName(..).Value := ..;`; `X.ExecSQL(..)` nur mit FireDAC.Comp.Client in uses und X ueberall als TFDConnection deklariert: `X.ExecSQL('..:Id..', [Wert])`; jeder andere Aufruf bindet nichts - ausgegraut. Schreibt NIE in den Editor |
 | uses: X -> Scope.X | Fund in einer uses-Klausel, auch der Programm-Klausel einer .dpr/.lpr | qualifiziert den Eintrag, dazu "uses: alle n Eintraege qualifizieren". Mehrdeutiges (Forms: VCL/FMX) nur bei erkennbarem Rahmenwerk, nie bei gleichnamiger Projekt-Unit und nie, wenn die Reihenfolge System/Vcl der Projekt-Scopes entscheiden wuerde. Gesperrt, wenn eine uses-Klausel Compiler-Direktiven traegt oder in einem `$IFDEF`-Zweig liegt, und in einer Datei mit FPC-Weiche oder FPC-Modus (FPC 3.2 kennt keine Unit-Scopes). Macht der Eintrag (bzw. "alle") eine sortierte Klausel unsortiert, steht er gesperrt da (sonst kaeme ein neuer SCA142-Fund). Ein Umbau, keine Hilfe zum Fund (`fakRefactor`): nur Kontextmenue und Dock-Grid, nie die Gluehbirne, und je Menue nur einmal, auch wenn mehrere Funde auf der Zeile stehen |
 | FreeAndNil(X) verwenden | SCA085 | `X.Free;` + `X := nil;` -> `FreeAndNil(X);`. X muss in der Unit deklariert sein (keine Property, kein geerbtes Feld); gesperrt in einem `with`-Block. Ein Kommentar im Ausdruck (`X{owned}.Free;`, `X.{c}Free;`, `X.Free {c};` - der Detektor liest ohne Kommentare und meldet diese Formen) sperrt mit dem Grund `Kommentar im Ausdruck X.Free;` (bis Review R6-04 hiess er `X.Free; steht nicht mehr an der gemeldeten Stelle`). Fehlt `System.SysUtils`, kommt die uses-Einfuegung mit (unten) |
-| Assigned() statt Vergleich mit nil verwenden | SCA126 | schreibt ALLE nil-Vergleiche der einen Anweisung um, die auf der Fundzeile beginnt (`X = nil` -> `not Assigned(X)`). Zwei solche Anweisungen auf der Zeile heissen mehrdeutig; ein Operand vom Typ String, Variant, Menge, Array oder Prozedur/Ereignis sperrt, ebenso ein blosser Bezeichner ohne beweisbaren Typ (geerbt aus einer anderen Unit). Bewiesen ist ein Typ, den die Unit als Klasse, Interface oder Zeiger deklariert (auch ueber Alias) oder der eine Klasse/ein Interface der Delphi-Quellen ist (Entscheid E27, `uRdxRtlTypes`: RTL, VCL, FMX, Data, Winapi ... aus Delphi 12 und 13, erzeugt von `tools\gen-rtl-types.py`); ein Kundentyp aus einer anderen Unit sperrt - ein Funktionstyp dort riefe `= nil` auf, `Assigned()` nicht |
+| Assigned() statt Vergleich mit nil verwenden | SCA126 | schreibt ALLE nil-Vergleiche der einen Anweisung um, die auf der Fundzeile beginnt (`X = nil` -> `not Assigned(X)`). Zwei solche Anweisungen auf der Zeile heissen mehrdeutig; ein Operand vom Typ String, Variant, Menge, Array oder Prozedur/Ereignis sperrt, ebenso ein blosser Bezeichner ohne beweisbaren Typ (geerbt aus einer anderen Unit). Bewiesen ist ein Typ, den die Unit als Klasse, Interface oder Zeiger deklariert (auch ueber Alias) oder der eine Klasse/ein Interface der Delphi-Quellen ist (Entscheid E27, `uRdxRtlTypes`: RTL, VCL, FMX, Data, Winapi ... aus Delphi 12 und 13, erzeugt von `tools\gen-rtl-types.py`); ein Kundentyp aus einer anderen Unit sperrt - ein Funktionstyp dort riefe `= nil` auf, `Assigned()` nicht. Gesperrt in einem `with`-Block (ein Operand koennte ein Member des with-Ausdrucks sein) |
 | (TObject) aus der Klassendeklaration entfernen | SCA075 | `class(TObject)` -> `class` an der Spalte aus der Meldung (nur Zeilen, ohne Parser) |
 | FreeAndNil(X) verwenden | SCA139 | `X.Free` -> `FreeAndNil(X)`, auch hinter `then`/`else`/`do` (ersetzt wird nur der Ausdruck). Dieselbe Variablen-Pruefung wie SCA085; X muss ein blosser Bezeichner sein (kein `Self.X`, kein Pfad), `Free` ohne Klammern und genau einmal auf der Zeile. Gesperrt, wenn der Typ von X in der Unit ein `record`, `object` oder `interface` ist (`Free` ist dort eine eigene Methode), und bei `X.Destroy`. Fehlt `System.SysUtils`, kommt die uses-Einfuegung mit |
 | Bedingung als Assert-Meldung verwenden | SCA074 | `Assert(c)` -> `Assert(c, 'c')` an der Spalte aus der Meldung; Apostrophe der Bedingung werden verdoppelt. Nur, wenn die Klammer auf derselben Zeile schliesst und kein Kommentar darin steht; nicht bei `Obj.Assert`, nicht, wenn die Unit selbst eine Routine `Assert` deklariert, nicht im `with`-Block. Ein Literal ueber 255 Zeichen (E2056) sperrt |
@@ -362,6 +362,26 @@ sonst ersetzt es sie in einem Zug. Danach `reDelphix.d12` bereinigen und
 neu erzeugen (siehe "Bauen und installieren"). Eine `unitscopes.txt` neben
 der BPL hat Vorrang vor der eingelinkten Ressource.
 
+## RTL-Typliste pflegen
+
+```
+python tools\gen-rtl-types.py              # schreibt source\uRdxRtlTypes.inc neu
+python tools\gen-rtl-types.py --check      # Gate: byte-genau vergleichen, nichts schreiben
+python tools\gen-rtl-types.py --source 23.0=D:\pfad\source --source 37.0=E:\pfad\source
+```
+
+`source\uRdxRtlTypes.inc` (Entscheid E27) traegt die Namen aller Klassen und
+Interfaces aus `<Studio>\source` von Delphi 12 (23.0) und Delphi 13 (37.0) -
+der zweite Typbeweis fuer SCA126/SCA084 (`uRdxRtlTypes`, "Was die Aktionen
+tun"). Das Skript liegt im SCA-Repo unter `tools\` (Repo-Wurzel); ohne
+`--source` liest es die Quellen der Standardinstallation. Nach einem neuen
+Delphi oder Update die Liste neu erzeugen und mit committen. `--check`
+endet mit Exit 1 bei Drift (die Meldung nennt die erste abweichende Zeile
+bzw. die Zeilenzahl) und mit Exit 2, wenn eine Quelle fehlt - ohne die
+Delphi-Quellen laeuft das Gate nicht. Der Kopf der Datei traegt das Datum
+der letzten Listenaenderung. Danach `reDelphix.d12` und `reDelphix.Test` neu
+erzeugen; der FPC-Pruefstand kopiert die `.inc` je Lauf mit.
+
 ## Code-Aktionen in der IDE ausprobieren
 
 Profil **`code-aktionen`** in `data\profile-code-aktionen.json`: nur die
@@ -438,7 +458,7 @@ statt 4294967295, waehlte Integer- statt ShortInt-/Byte-Ueberladungen);
 die Konstante behaelt Faltung, Ueberladungswahl und die vorzeichenlose
 Rechnung des Literals.
 
-* **Stand (Bereich C, 2026-10-14, UNGEBAUT):** nur Logik und Tests.
+* **Stand (Bereich C, 2026-10-14; gebaut und gruen mit f42462e6):** nur Logik und Tests.
   `uRdxIntroPlan` und `uRdxIntroEdits` sind 1:1 aus dem Labor
   `VarNameProject` uebernommen (Entscheid E24: erst der im Labor
   gemessene Stand), nur umbenannt (`TVnp*` -> `TRdxIntro*`,
@@ -454,7 +474,7 @@ Rechnung des Literals.
   Inline-Konstante), Zeilenende je Zeile (`RowEol`, wie
   `uRdxBufferMath.BufferEol`), Vorbedingung `Plan.Ok` von `IntroduceEdits`,
   Namen jenseits von `MagicNr99`. Die Tests `uTestRdxIntro*` (jetzt fuenf
-  Units, 72 Tests: Plan 15, Refuse 9, Guards 16, Edits 20, Context 12)
+  Units, 79 Tests: Plan 15, Refuse 9, Guards 18, Edits 20, Context 17)
   stehen in reDelphix.Test und laufen im FPC-Pruefstand (Kommando unter
   "Pruefen").
   Das Package bietet die Aktion ohne Fund noch nicht an.
@@ -682,7 +702,8 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   loescht die Zuweisung). Fixture 9 prueft dazu die Sperren des Laeufers
   fuer SCA098/SCA047 (Boolean bewiesen, Variable, with-Block).
 * `uTestRdxIntroPlan` / `uTestRdxIntroRefuse` / `uTestRdxIntroGuards` /
-  `uTestRdxIntroEdits` - "Lokale Variable einfuehren" (Abschnitt oben): das
+  `uTestRdxIntroEdits` / `uTestRdxIntroContext` - "Lokale Variable
+  einfuehren" (Abschnitt oben): das
   Literal am Caret, Deklaration und Spalten, Zweig ohne `begin`, alle
   Ablehnungen und Schutzregeln, Ende des Sync-Blocks und die Ersetzungen
   des Writers Ende zu Ende auf UTF-8-Pufferbytes (CRLF, LF, BOM,
@@ -859,7 +880,7 @@ lesbarer Eingabe oder nicht schreibbarer Ausgabe. Die Python-Nachbildung
 der Regeln (Audit 2026-10-06) ist eine Obergrenze; was zaehlt, ist die
 Probe.
 
-## Grenzen (Stand 2026-10-09)
+## Grenzen (Stand 2026-10-15)
 
 * Nur Delphi 12 / Win32. Fuer Delphi 13 (64-Bit-IDE) braucht es ein zweites
   Paket mit Win64-Ziel.
@@ -871,4 +892,10 @@ Probe.
   Anweisung mit einem solchen Literal beschreibt der Core gar nicht, es
   gibt dort also keine Umformung.
 * In einem `with`-Block gilt kein Name als bewiesen (Kompilat-Regel oben),
-  und `FreeAndNil(X)` sowie die Assert-Meldung werden dort nicht angeboten.
+  und jede Hilfe, die einen Namen der Unit zuordnet, sperrt dort (er
+  koennte ein Member des with-Ausdrucks sein): `FreeAndNil(X)` (SCA085,
+  SCA139), Assert-Meldung (SCA074), `Assigned()` (SCA126), leere Klammern
+  (SCA066), Vergleich mit True/False bzw. nil (SCA072, SCA084), Cast vor
+  `Free` (SCA123), Bedingung zuweisen (SCA098), Selbstzuweisung (SCA047).
+  SCA053 sperrt dort nicht: der Name kommt im Bereich nicht vor, ein `with`
+  kann ihn nicht binden.
