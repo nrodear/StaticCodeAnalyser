@@ -34,6 +34,14 @@ jobs:
           python3 tools/i18n_extract.py --check
           python3 tools/gen_po_inc.py --check
 
+      # Ein abweichender Format-Platzhalter in einer Uebersetzung wirft zur
+      # Laufzeit EConvertError (Birnen-/Kontextmenue) - fr.po deckt kein Test
+      # ab, darum statisch pruefen (2026-10-15, reDelphix-Texte in SCA-Sprache).
+      - name: Format-Platzhalter msgid/msgstr
+        run: |
+          python3 tools/po_placeholder_gate.py --selftest
+          python3 tools/po_placeholder_gate.py
+
       - name: Show missing strings (on failure)
         if: failure()
         run: |
