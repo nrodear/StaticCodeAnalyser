@@ -446,6 +446,14 @@ begin
       '    1: A;'#13#10'  else'#13#10'  end;', []), FixCase(Src, 10, '', R), R);
   Assert.AreEqual('', FixCase(Src, 6, '', R), 'lokaler Record');
   Assert.IsTrue(Pos('Variantenteil', R) > 0, R);
+  // Je Zweig einer Direktive ein 'Foo(' vor einer case-Anweisung (Fixture
+  // s08 der Nachpruefung FC): die offene '(' ist kein Variantenteil, die
+  // Lage ist unklar - gesperrt, aber nicht mehr mit dem Grund
+  // 'Variantenteil'.
+  Assert.AreEqual('', FixCase(InProc(['  {$IFDEF A} Foo( {$ELSE} Bar( {$ENDIF} 1);',
+    '  case X of', '    1: ;', '  end;']), 6, '', R), 'Direktive vor dem case');
+  Assert.IsTrue(Pos('offenen ( und dem case', R) > 0, R);
+  Assert.IsTrue(Pos('Variantenteil', R) = 0, R);
 end;
 
 initialization

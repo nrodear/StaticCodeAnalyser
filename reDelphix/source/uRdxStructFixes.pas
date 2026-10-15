@@ -190,6 +190,9 @@ const
     'finalization');
   R_CASE_IN_RECORD = 'das case steht im Variantenteil eines Records - kein '
     + 'case-Statement (Fund verschoben? Datei neu pruefen)';
+  R_CASE_OPEN_PAREN = 'zwischen einer offenen ( und dem case steht eine '
+    + 'Compiler-Direktive - ein Zweig kann die Klammer offen lassen, ob das '
+    + 'case eine Anweisung ist, ist unklar';
   R_BRANCH_MOVED = 'kein then/else/do an der gemeldeten Stelle - Zeile '
     + 'verschoben? Datei neu pruefen';
   R_NO_ELSE_OWNER = 'kein if, case oder except zum else gefunden';
@@ -643,9 +646,12 @@ end;
 // oberster Ebene heisst Anweisung (''); ein 'record' - auf jeder Tiefe: ein
 // case in seinem Variantenteil hat kein eigenes end, die Bilanz stimmt dort
 // nicht (wie TRdxElseScan.StepWord) - oder eine offene '(' (Feldliste eines
-// Variantenzweigs, 'case Tag of 0: (case ..') heisst Variantenteil. Ohne
-// offenen Block bis zum Dateianfang (ein Fragment) ist die Lage unklar -
-// auch das sperrt. '' oder der Grund.
+// Variantenzweigs, 'case Tag of 0: (case ..') heisst Variantenteil. Steht
+// zwischen der offenen '(' und dem case eine Direktive, kann auch ein Zweig
+// die Klammer offen lassen ('{$IFDEF A} Foo( {$ELSE} Bar( {$ENDIF} 1);' vor
+// einer case-Anweisung) - dann ist die Lage unklar (bis zur Nachpruefung FC
+// hiess auch das Variantenteil). Ohne offenen Block bis zum Dateianfang (ein
+// Fragment) ist die Lage ebenso unklar. Alles das sperrt. '' oder der Grund.
 function CaseContextReason(AMap: TRdxCodeMap; const ACase: TRdxToken): string;
 var
   T, P         : TRdxToken;
@@ -661,6 +667,9 @@ begin
     Step := CaseScanStep(T, P, Block, Paren);
     if Step = rsFound then
       Exit('');
+    if (Step = rsStop) and (T.Low = '(')
+       and DirectiveBetween(AMap, T, ACase.Line, ACase.Col) then
+      Exit(R_CASE_OPEN_PAREN);
     if Step = rsStop then
       Exit(R_CASE_IN_RECORD);
     T := P;

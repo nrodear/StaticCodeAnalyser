@@ -421,6 +421,7 @@ const
   OFFERED: array[0..1, 0..1] of string = (
     ('  Dlg.FRefProc();', '  Dlg.FRefProc;'),
     ('  Dlg.Run();', '  Dlg.Run;'));
+  EVENTS: array[0..1] of string = ('  Dlg.FOnRun();', '  Dlg.OnIdle();');
 var
   i : Integer;
   F : TFixResult;
@@ -441,6 +442,19 @@ begin
     F := Fix('E', DialogUnit(SHOW, OFFERED[i, 0]), 18, Pos('()', OFFERED[i, 0]));
     Assert.AreEqual(DialogUnit(SHOW, OFFERED[i, 1]), F.Text,
       OFFERED[i, 0] + ': ' + F.Reason);
+  end;
+  // Ein Ereignisname bleibt gesperrt; ob Feld oder Property, sieht der
+  // Planer ohne Typ nicht - der Grund nennt beides (Nachpruefung FC: bis
+  // dahin nannte er jede solche Sperre eine Ereignis-Property, im Korpus
+  // sind es aber alle Felder wie 'FOnChange()').
+  for i := 0 to High(EVENTS) do
+  begin
+    F := Fix('E', DialogUnit(SHOW, EVENTS[i]), 18, Pos('()', EVENTS[i]));
+    Assert.AreEqual('', F.Text, EVENTS[i]);
+    Assert.IsTrue(Pos('als Feld ruft Delphi es ohne () auf', F.Reason) > 0,
+      EVENTS[i] + ': ' + F.Reason);
+    Assert.IsTrue(Pos('als Property ist das nicht belegt', F.Reason) > 0,
+      EVENTS[i] + ': ' + F.Reason);
   end;
 end;
 
@@ -586,6 +600,15 @@ begin
       'procedure Q; begin Two.Go; end; procedure Go;',
       'begin',
       'end;',
+      'procedure Q2; begin Two.Hop; end;',
+      'procedure Hop;',
+      'begin',
+      'end;',
+      '// Later: der Typ folgt',
+      'type',
+      '  Later = record end;',
+      '  TEq=class(TObject)end;',
+      'procedure(*c*)Glued;',
       'end.']);
     Map := TRdxCodeMap.Create(SL);
     Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Spread'),
@@ -606,6 +629,22 @@ begin
       '"=" auf der Folgezeile');
     Assert.AreEqual('record', TRdxSimpleFixes.DeclaredTypeKind(Map, 'TLate'),
       'Variable mit Anfangswert davor, Typ dahinter');
+    // Nachpruefung R3-03: der Vorfilter sucht den Namen als WORT, ohne
+    // Kopie der Zeile, und springt ueber Zeilen ohne Token. Die Grenze
+    // ist jedes Zeichen, das kein Bezeichnerzeichen ist - nicht nur
+    // Leerraum ('=' dahinter, Kommentar-Ende davor) -, und die Zeile, auf
+    // der das naechste Token liegt, zaehlt selbst (Kopf auf der Folgezeile
+    // eines Aufrufs, Typ hinter einer Zeile ohne den Namen).
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Hop'),
+      'Kopf auf der Zeile des naechsten Tokens');
+    Assert.AreEqual('record', TRdxSimpleFixes.DeclaredTypeKind(Map, 'Later'),
+      'Name erst im Kommentar, dann eine Zeile ohne ihn');
+    Assert.AreEqual('class', TRdxSimpleFixes.DeclaredTypeKind(Map, 'TEq'),
+      '"=" direkt hinter dem Namen');
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Glued'),
+      'Kommentar-Ende direkt vor dem Namen');
+    Assert.IsFalse(TRdxSimpleFixes.DeclaresRoutine(Map, 'Glue'),
+      'Teil eines Namens');
   finally
     Map.Free;
     SL.Free;

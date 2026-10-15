@@ -1863,6 +1863,7 @@ end;
 - schon ein `else` oder (FPC) `otherwise` hinter `;`
 - ein case ohne Zweige, zwei `case` auf der Zeile
 - ein case, das keine Anweisung ist: der Variantenteil eines Records (ein verschobener Fund) oder ein case ohne umschließenden Block (Fragment)
+- eine offene `(` vor dem case mit einer Direktive dazwischen – ein Zweig kann sie offen lassen, die Lage ist unklar
 - Eintrag 2: in Dateien mit FPC-Weiche oder FPC-Modus (FPC kennt EProgrammerError nicht)
 
 **Beispiel (Eintrag 1)**

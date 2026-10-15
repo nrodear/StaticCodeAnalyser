@@ -649,7 +649,8 @@ begin
   // Rumpfwort erst auf der Zeile hinter dem '=' (das Token davor muss beim
   // Sprung stimmen), ein Rumpf, der mitten auf einer Zeile endet und einen
   // neuen beginnt, ein Rumpfwort nur im Kommentar, ein 'begin' dazwischen
-  // und der Name zuletzt nur in einem Kommentar.
+  // und der Name zuletzt nur in einem Kommentar. Rumpfwort und Name als
+  // Wort ohne Leerraum drumherum ('=class(', ')FE:' - Nachpruefung R3-03).
   Src := Join(['unit u;', 'interface', 'type',
     '  TBar =',
     '    class',
@@ -657,15 +658,17 @@ begin
     '  end; TBaz = record FB: Pointer; end;',
     '  // keine class hier',
     '  TQux = class FC: TStrings; procedure P; end;',
+    '  TPack=class(TObject)FE:TList;end;',
     'implementation',
     'procedure TQux.P;',
     'begin',
     'end;',
-    '// FA FB FC',
+    '// FA FB FC FE',
     'end.']);
   Assert.AreEqual('tobject', FieldTypeIn(Src, 'FA'));
   Assert.AreEqual('pointer', FieldTypeIn(Src, 'FB'));
   Assert.AreEqual('tstrings', FieldTypeIn(Src, 'FC'));
+  Assert.AreEqual('tlist', FieldTypeIn(Src, 'FE'), 'ohne Leerraum');
   Assert.AreEqual('', FieldTypeIn(Src, 'FD'), 'nirgends');
   Assert.AreEqual('', FieldTypeIn(Src, ''), 'leerer Name');
 end;

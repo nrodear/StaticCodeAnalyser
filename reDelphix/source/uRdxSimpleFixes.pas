@@ -197,11 +197,14 @@ type
     // object' - fehlt der Beleg (FPC -Mdelphi ruft sie auf, Delphi 12 ist
     // ungeprueft). Darum keine Hilfe bei einem Namen, den die Unit als
     // Property deklariert (auch hinter einem Pfad: 'Dlg.RefProc()') oder der
-    // wie ein Ereignis heisst ('OnIdle()', 'FOnIdle()' - meist eine Property
-    // einer anderen Unit). GRENZE: eine Property einer anderen Unit mit
-    // unauffaelligem Namen sieht das nicht; das klaert erst eine Delphi-12-
-    // Probe ('Obj.Prop;' je Feld/Getter und reference to/of object). Ob ein
-    // blosser Name eine Variable ist, prueft der Aufrufer (APlan.Callee).
+    // wie ein Ereignis heisst ('OnIdle()', 'FOnIdle()'): ob Feld oder
+    // Property, sieht der Planer ohne Typ nicht - ein Feld riefe Delphi
+    // ohne () auf (im Korpus ab8 sind alle 14 Sperren dieser Art Felder,
+    // 'FOnChange()'), dort ist die Sperre nur vorsichtig. GRENZE: eine
+    // Property einer anderen Unit mit unauffaelligem Namen sieht das nicht;
+    // das klaert erst eine Delphi-12-Probe ('Obj.Prop;' je Feld/Getter und
+    // reference to/of object). Ob ein blosser Name eine Variable ist,
+    // prueft der Aufrufer (APlan.Callee).
     class function EmptyArgs(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out APlan: TRdxCallEdit;
       out AReason: string): Boolean; static;
@@ -298,15 +301,16 @@ type
   end;
 
 // Das naechste Token hinter ATok auf einer Zeile, deren Text ALow (klein)
-// enthaelt - Gross/klein egal, auch in einem Kommentar oder String; ATok =
-// Default(TRdxToken): ab Dateianfang, Low = '' am Dateiende. Vorfilter der
-// Fragen an die ganze Datei (Review R3-03, Charge FC: bis dahin las jede
-// Frage alle Token, ~0,1 s je Frage auf 30.000 Zeilen im IDE-Hauptthread):
-// ein Token mit Low = ALow steht nur auf einer solchen Zeile (ein Token
-// endet mit seiner Zeile, Low ist LowerCase seines Textes), die anderen
-// Zeilen kosten einen Textvergleich statt eines Laufs durch die Code-
-// Sicht. Die Token kommen in der Reihenfolge der Datei. Seit Charge FC auch
-// fuer uRdxFlowFixes ('class operator Assign').
+// als Wort nennt (HasWordNoCase) - Gross/klein egal, auch in einem
+// Kommentar oder String; ATok = Default(TRdxToken): ab Dateianfang, Low =
+// '' am Dateiende. Vorfilter der Fragen an die ganze Datei (Review R3-03,
+// Charge FC: bis dahin las jede Frage alle Token, ~0,1 s je Frage auf
+// 30.000 Zeilen im IDE-Hauptthread): ein Token mit Low = ALow steht nur auf
+// einer solchen Zeile (ein Token endet mit seiner Zeile, Low ist LowerCase
+// seines Textes, s. HasWordNoCase), die anderen Zeilen kosten einen
+// Textvergleich statt eines Laufs durch die Code-Sicht. Die Token kommen in
+// der Reihenfolge der Datei. Seit Charge FC auch fuer uRdxFlowFixes ('class
+// operator Assign').
 function NextTokenOnLineWith(AMap: TRdxCodeMap; const ATok: TRdxToken;
   const ALow: string): TRdxToken;
 
@@ -695,38 +699,87 @@ end;
 
 { ---- Vorfilter der Fragen an die ganze Datei (Review R3-03) ---- }
 
-// Enthaelt der Text der Zeile ALine ALow (klein) - Gross/klein egal, auch
-// in einem Kommentar oder String? '' kommt nie vor (Pos('') = 0).
-// Dasselbe LowerCase wie TRdxToken.Low: ein Token mit Low = ALow liegt
-// darum nur auf einer solchen Zeile.
+// Steht der Treffer S[AAt..AAt + Length(ALow) - 1] frei: kein
+// Bezeichnerzeichen davor, wenn ALow mit einem beginnt, und keines
+// dahinter, wenn ALow mit einem endet?
+function WordBounded(const S: string; AAt: Integer;
+  const ALow: string): Boolean;
+var
+  Behind : Integer;
+begin
+  Behind := AAt + Length(ALow);
+  Result := not (IsIdentChar(ALow[1]) and (AAt > 1)
+                 and IsIdentChar(S[AAt - 1]))
+    and not (IsIdentChar(ALow[Length(ALow)]) and (Behind <= Length(S))
+             and IsIdentChar(S[Behind]));
+end;
+
+// Nennt S das Wort ALow (klein)? Gross/klein egal wie LowerCase - Delphi
+// und FPC senken nur 'A'..'Z' (FPC-Probe Charge FC: #$C4, #$0130 bleiben)
+// -, ohne Kopie von S: bis zur Nachpruefung R3-03 legte der Vorfilter je
+// Zeile ein LowerCase an, und ein Name, der auf fast jeder Zeile als
+// Teilwort steht ('e', der Typparameter 'T'), kostete mehr als der Lauf
+// ueber alle Token (mscorlib_TLB: 98 -> 238 ms). Als WORT (WordBounded):
+// ein Bezeichner- oder Zahl-Token endet erst vor einem Zeichen, das kein
+// Bezeichnerzeichen ist, oder vor einem Kommentar-/String-Anfang ('{',
+// '(*', '//', '''' - keines ist eins), und das Token davor endet ebenso
+// (TokenAt) - ein Token mit Low = ALow steht darum in seiner Zeile frei;
+// ein Satzzeichen-Token (ALow ohne Bezeichnerzeichen am Rand) braucht
+// keine Grenze. '' kommt nie vor. Nicht uRdxCodeMap.HasIdentWord: das
+// verlangt den Text klein geschrieben, also wieder eine Kopie je Zeile.
+function HasWordNoCase(const S, ALow: string): Boolean;
+var
+  i, k : Integer;
+  C    : Char;
+begin
+  Result := False;
+  if ALow = '' then Exit;
+  for i := 1 to Length(S) - Length(ALow) + 1 do
+  begin
+    k := 0;
+    repeat
+      C := S[i + k];
+      if (C >= 'A') and (C <= 'Z') then
+        C := Char(Ord(C) + 32);
+      if C <> ALow[k + 1] then
+        Break;
+      Inc(k);
+    until k = Length(ALow);
+    if (k = Length(ALow)) and WordBounded(S, i, ALow) then
+      Exit(True);
+  end;
+end;
+
+// Nennt der Text der Zeile ALine ALow (klein) als Wort (HasWordNoCase) -
+// auch in einem Kommentar oder String? Ein Token mit Low = ALow liegt nur
+// auf einer solchen Zeile.
 function LineMentions(AMap: TRdxCodeMap; ALine: Integer;
   const ALow: string): Boolean;
 begin
-  Result := Pos(ALow, LowerCase(AMap.Raw(ALine))) > 0;
+  Result := HasWordNoCase(AMap.Raw(ALine), ALow);
 end;
 
-function NextTokenOnLineWith(AMap: TRdxCodeMap; const ATok: TRdxToken;
+// Das erste Token ab Zeile ALine auf einer Zeile, die ALow nennt; Low = ''
+// ohne. Nennt eine Zeile ALow nur in einem Kommentar oder String, liegt das
+// naechste Token (NextToken) erst auf einer spaeteren Zeile, die Zeilen
+// dazwischen tragen keines - die Suche geht mit seiner Zeile weiter. Ein
+// Kommentarblock, dessen Zeilen ALow nennen, wird so einmal gelesen, nicht
+// je Zeile bis zu seinem Ende.
+function FirstTokenOnLineWith(AMap: TRdxCodeMap; ALine: Integer;
   const ALow: string): TRdxToken;
 var
   Li : Integer;
 begin
-  Li := 1;
-  if ATok.Low <> '' then
-  begin
-    // Auf der Zeile von ATok weiter - sie nennt ALow schon.
-    Result := After(AMap, ATok);
-    if (Result.Low = '') or (Result.Line = ATok.Line) then
-      Exit;
-    Li := ATok.Line + 1;
-  end;
+  Li := ALine;
   while Li <= AMap.LineCount do
   begin
     if LineMentions(AMap, Li, ALow) then
     begin
-      // Das erste Token der Zeile; nennt sie ALow nur in einem Kommentar
-      // oder String, beginnt das naechste Token erst spaeter - weiter.
       Result := NextToken(AMap, Li, 1);
-      if Result.Line = Li then
+      if (Result.Low = '') or (Result.Line = Li) then
+        Exit;
+      Li := Result.Line;
+      if LineMentions(AMap, Li, ALow) then
         Exit;
     end;
     Inc(Li);
@@ -734,7 +787,23 @@ begin
   Result := Default(TRdxToken);
 end;
 
-// Die letzte Zeile, deren Text ALow enthaelt (LineMentions); 0 ohne.
+function NextTokenOnLineWith(AMap: TRdxCodeMap; const ATok: TRdxToken;
+  const ALow: string): TRdxToken;
+begin
+  if ATok.Low = '' then
+    Exit(FirstTokenOnLineWith(AMap, 1, ALow));
+  // Auf der Zeile von ATok weiter - sie nennt ALow schon. Liegt das naechste
+  // Token auf einer spaeteren Zeile, steht davor keines: nennt seine Zeile
+  // ALow, ist es selbst die Antwort (bis zur Nachpruefung R3-03 las die
+  // Suche diese Zeile ein zweites Mal ab Spalte 1), sonst geht es hinter
+  // ihr weiter.
+  Result := After(AMap, ATok);
+  if (Result.Low <> '') and (Result.Line <> ATok.Line)
+     and not LineMentions(AMap, Result.Line, ALow) then
+    Result := FirstTokenOnLineWith(AMap, Result.Line + 1, ALow);
+end;
+
+// Die letzte Zeile, deren Text ALow als Wort nennt (LineMentions); 0 ohne.
 function LastLineWith(AMap: TRdxCodeMap; const ALow: string): Integer;
 var
   Li : Integer;
@@ -1307,13 +1376,17 @@ begin
      or ((Next.Low <> '') and not InList(Next.Low, CALL_ENDS)) then
     Exit(R_IN_EXPRESSION);
   Name := Copy(AMap.Raw(AName.Line), AName.Col, AName.Len);
-  // Property mit Prozedurtyp: ob Delphi sie ohne () aufruft, ist nicht
-  // belegt (s. EmptyArgs; bis Charge FC hiess es hier, eine
-  // Methodenreferenz rufe Delphi ohne () nicht auf - fuer Variablen
-  // widerlegt die DocWiki das).
+  // Ein Ereignisname ist eine Property - ob Delphi eine Property mit
+  // Prozedurtyp ohne () aufruft, ist nicht belegt (s. EmptyArgs) - oder
+  // ein Feld, das Delphi ohne () aufruft ('FOnChange()', Horse 'class var
+  // FOnListen: TProc'); welches gemeint ist, sieht der Planer ohne Typ
+  // nicht. Bis Charge FC hiess es hier, eine Methodenreferenz rufe Delphi
+  // ohne () nicht auf - fuer Variablen widerlegt die DocWiki das; bis zur
+  // Nachpruefung FC nannte der Grund jede Sperre eine Ereignis-Property.
   if HasCapPrefix(Name, 'On') or HasCapPrefix(Name, 'FOn') then
-    Exit(Format('%s sieht nach Ereignis aus - ob Delphi eine Ereignis-'
-      + 'Property ohne () aufruft, ist nicht belegt', [Name]));
+    Exit(Format('%s sieht nach Ereignis aus - als Feld ruft Delphi es ohne '
+      + '() auf, als Property ist das nicht belegt; welches gemeint ist, '
+      + 'bleibt ohne Typ offen', [Name]));
   // Ueber den Namen, nicht den Typ: der Pfad davor ist ohne Parser
   // unbekannt. Eine gleichnamige Methode einer anderen Klasse verliert so
   // ihre Hilfe (Korpus ab8: 1 von 6080 Angeboten, 'Binarizer.BlackMatrix()'
@@ -2416,17 +2489,18 @@ begin
 end;
 
 // Nennt der Text der Zeile ALine ein Wort, mit dem ein Typrumpf beginnt
-// (OpensTypeBody: 'record' und TYPE_BODY_WORDS - 'interface' deckt
-// 'dispinterface' mit)? Gross/klein egal, auch in Kommentar oder String.
+// (OpensTypeBody: 'record' und TYPE_BODY_WORDS)? Gross/klein egal, auch in
+// Kommentar oder String; als Wort und ohne Kopie der Zeile wie
+// LineMentions (HasWordNoCase).
 function MentionsTypeBody(AMap: TRdxCodeMap; ALine: Integer): Boolean;
 var
   L, W : string;
 begin
-  L := LowerCase(AMap.Raw(ALine));
-  Result := Pos('record', L) > 0;
+  L := AMap.Raw(ALine);
+  Result := HasWordNoCase(L, 'record');
   if not Result then
     for W in TYPE_BODY_WORDS do
-      if Pos(W, L) > 0 then
+      if HasWordNoCase(L, W) then
         Exit(True);
 end;
 
