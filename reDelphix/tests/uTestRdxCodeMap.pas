@@ -283,6 +283,13 @@ begin
       S.Arg := 'x';
       Assert.AreEqual('Zeile 1 traegt 2-mal das Wort - mehrdeutig',
         OneTokenOnLine(Map, 1, S, Hit));
+      // ManyArg kommt als %s ins Muster - Text aus der Meldung, auch mit
+      // '%', steht nie im Muster selbst (Nachpruefung C1). Pos auf das
+      // umlautfreie Ende: 'traegt' bekommt in de.po einen echten Umlaut.
+      S.ManyFmt := '%d-mal %s';
+      S.ManyArg := 'x 100%';
+      Assert.IsTrue(Pos('2-mal x 100% - mehrdeutig',
+        OneTokenOnLine(Map, 1, S, Hit)) > 0, 'ManyArg als %s im Muster');
       S.Arg := 'z';
       Assert.AreEqual('kein Treffer auf der gemeldeten Zeile - Zeile '
         + 'verschoben? Datei neu pruefen', OneTokenOnLine(Map, 1, S, Hit),
