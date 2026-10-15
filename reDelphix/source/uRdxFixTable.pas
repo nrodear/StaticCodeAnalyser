@@ -201,9 +201,12 @@ const
   R_DTOR_HINT = 'der Elterndestruktor laeuft jetzt am Ende und gibt die '
     + 'geerbten Felder frei';
   // SCA121: der Wert ist ein Literal (0, False, '''', nil ...) oder
-  // Default(T) - beides der Anfangswert des Typs (Charge H5c).
-  R_RESULT_DEFAULT_HINT = 'Result beginnt jetzt mit dem Anfangswert des Typs '
-    + '(wie Default(T)) statt zufaellig - spaetere Zuweisungen gelten weiter';
+  // Default(T) (Charge H5c); der Menuetext nennt ihn. Bis Charge FB hiess es
+  // '(wie Default(T))' - das stimmt nicht, wenn ein Member wie der erste
+  // Aufzaehlungswert heisst (Gegen-Review R5-06, Fall 2; Absprache mit FE:
+  // der Text muss fuer Literal UND Default(T) stimmen).
+  R_RESULT_DEFAULT_HINT = 'Result beginnt jetzt mit dem genannten Wert statt '
+    + 'zufaellig - spaetere Zuweisungen gelten weiter';
   R_RESULT_INIT_HINT = 'Result beginnt jetzt leer statt mit dem alten Inhalt '
     + 'der Zielvariable des Aufrufers';
   // SCA014 (Charge Q14, E28): die Inline-Konstante haelt die Bedeutung des
@@ -217,6 +220,14 @@ const
   // Include-Dateien (Gegen-Review Q14, Verdacht e; UNC prueft FileReason).
   R_MAGIC_REMOTE = 'Netzlaufwerk %s - die Hilfe liest dort keine Projekt- '
     + 'und Include-Dateien (Menueaufbau im Hauptthread); von Hand';
+  // SCA147/SCA164 auf einem Netzpfad bzw. Netzlaufwerk (Review FB, R2-07):
+  // dieselbe Regel wie SCA014 - FileExists auf einer nicht erreichbaren
+  // Freigabe blockierte den IDE-Hauptthread (Gegen-Review R4-03: 2,5 bis
+  // 16 s je Aufruf).
+  R_REMOTE_FILES = 'Netzpfad %s - die Hilfe liest dort keine %s '
+    + '(Menueaufbau im Hauptthread); von Hand';
+  WHAT_FORMS    = 'Formdateien';
+  WHAT_INCLUDES = 'Include-Dateien';
   // SCA001: nur diese Variante bekommt die Hilfe (Feld TLeakFinding.
   // LeakVariant, das uLeakDetector2 setzt; properties.variant im SARIF).
   LEAK_VARIANT_FOF = 'freed-outside-finally';
@@ -361,31 +372,56 @@ begin
   Result := SelfAssignReason(APlaces, AMap, AFinding.LineInt, APlan.Target);
 end;
 
+// Liegt AFileName auf einem Netzlaufwerk ('Z:' ueber GetDriveType)?
+function IsRemoteDrive(const AFileName: string): Boolean;
+var
+  Drive : string;
+begin
+  Drive := ExtractFileDrive(AFileName);
+  Result := (Length(Drive) = 2) and (Drive[2] = ':')
+    and (GetDriveType(PChar(Drive + PathDelim)) = DRIVE_REMOTE);
+end;
+
+// SCA014: liegt die Datei auf einem Netzlaufwerk? Dann liest die Hilfe
+// nichts von der Platte - der Menueaufbau laeuft im Hauptthread
+// (Gegen-Review Q14, Verdacht e; UNC prueft TRdxMagicFixes.FileReason).
+function RemoteDriveReason(const AFileName: string): string;
+begin
+  Result := '';
+  if IsRemoteDrive(AFileName) then
+    Result := Format(R_MAGIC_REMOTE, [ExtractFileDrive(AFileName)]);
+end;
+
+// SCA147/SCA164 (Review FB, R2-07): liegt die Unit auf einem Netzpfad
+// ('\\server\share\..', auch mit '/') oder einem Netzlaufwerk? Dann liest
+// die Hilfe dort nichts (AWhat: was sie lesen wollte) - dieselbe Regel wie
+// SCA014; die UNC-Form ist die von uRdxMagicFixes.FileReason (dort
+// privat, zweite Kopie - die gemeinsamen Helfer legt eine spaetere Charge
+// zusammen). '' oder der Grund.
+function NetworkPathReason(const AFileName, AWhat: string): string;
+begin
+  Result := '';
+  if (Length(AFileName) > 2) and CharInSet(AFileName[1], ['\', '/'])
+     and CharInSet(AFileName[2], ['\', '/']) then
+    Result := Format(R_REMOTE_FILES, [ExtractFileDir(AFileName), AWhat])
+  else if IsRemoteDrive(AFileName) then
+    Result := Format(R_REMOTE_FILES, [ExtractFileDrive(AFileName), AWhat]);
+end;
+
 // SCA164: die Include-Dateien vor implementation liest die Hilfe von der
 // Platte neben der Unit (Gegen-Review H3, Minor 4) - sie koennen die
 // Routine deklarieren oder rufen; nicht gefunden heisst keine Hilfe. Nur,
-// wenn der Plan welche nennt (SCA147 nennt keine).
+// wenn der Plan welche nennt (SCA147 nennt keine), und nicht auf einem
+// Netzpfad (NetworkPathReason, R2-07).
 function IncludeCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
   AFinding: TLeakFinding; const APlan: TRdxRoutinePlan): string;
 begin
   Result := '';
-  if Length(APlan.Includes) > 0 then
+  if Length(APlan.Includes) = 0 then Exit;
+  Result := NetworkPathReason(AFinding.FileName, WHAT_INCLUDES);
+  if Result = '' then
     Result := TRdxRoutineFixes.IncludeReason(AFinding.FileName,
       APlan.Includes, APlan.Name);
-end;
-
-// SCA014: liegt die Datei auf einem Netzlaufwerk ('Z:' ueber
-// GetDriveType)? Dann liest die Hilfe nichts von der Platte - der
-// Menueaufbau laeuft im Hauptthread (Gegen-Review Q14, Verdacht e).
-function RemoteDriveReason(const AFileName: string): string;
-var
-  Drive : string;
-begin
-  Result := '';
-  Drive := ExtractFileDrive(AFileName);
-  if (Length(Drive) = 2) and (Drive[2] = ':')
-     and (GetDriveType(PChar(Drive + PathDelim)) = DRIVE_REMOTE) then
-    Result := Format(R_MAGIC_REMOTE, [Drive]);
 end;
 
 // SCA014: was nur die Platte weiss - Netzlaufwerk, Lazarus-Dateiart oder
@@ -721,7 +757,9 @@ end;
 // per Name an ein Ereignis ('OnClick = AName')? Die Hilfe sieht sonst nur
 // den Puffer; der Detektor prueft nur .dfm (und .lfm im FPC-Dialekt).
 // Gelesen wird die Platte - ein im Designer neu gesetztes Ereignis traegt
-// die IDE in den published-Teil ein, nicht unter private. '' oder Grund.
+// die IDE in den published-Teil ein, nicht unter private. Auf einem
+// Netzpfad liest die Hilfe nichts (der Aufrufer prueft NetworkPathReason
+// vorher, R2-07). '' oder Grund.
 function FormReason(const AUnitFile, AName: string): string;
 var
   Ext, Form : string;
@@ -763,7 +801,9 @@ begin
     RoutineForm(TRdxRoutineFixes.UnusedPrivateMethod),
     APlaces, ALines, AFinding, P);
   if not Result.Enabled then Exit;
-  Result.Reason := FormReason(AFinding.FileName, Result.Name);
+  Result.Reason := NetworkPathReason(AFinding.FileName, WHAT_FORMS);
+  if Result.Reason = '' then
+    Result.Reason := FormReason(AFinding.FileName, Result.Name);
   if Result.Reason = '' then Exit;
   Result.Enabled := False;
   Result.Edits := nil;

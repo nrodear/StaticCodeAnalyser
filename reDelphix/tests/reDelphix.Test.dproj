@@ -119,6 +119,7 @@
         <DCCReference Include="uTestRdxBufferMath.pas"/>
         <DCCReference Include="uTestRdxSuppress.pas"/>
         <DCCReference Include="uTestRdxSimpleFixes.pas"/>
+        <DCCReference Include="uTestRdxFreeTypes.pas"/>
         <DCCReference Include="uTestRdxExprFixes.pas"/>
         <DCCReference Include="uTestRdxStructFixes.pas"/>
         <DCCReference Include="uTestRdxBlockFixes.pas"/>
@@ -148,6 +149,7 @@
         <DCCReference Include="uTestRdxNilFix.pas"/>
         <DCCReference Include="uTestRdxSimpleFixesDetector.pas"/>
         <DCCReference Include="uTestRdxRoutineFixesDetector.pas"/>
+        <DCCReference Include="uTestRdxFreeGatesDetector.pas"/>
         <DCCReference Include="uTestRdxDetectorKit.pas"/>
         <DCCReference Include="uTestRdxCodeMap.pas"/>
         <DCCReference Include="uTestRdxQualifyUses.pas"/>

@@ -142,17 +142,22 @@ type
     class function FreeOnly(AMap: TRdxCodeMap; ALine: Integer;
       const AReceiver: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
-    // True, wenn die Datei ATypeName als record, object, interface oder
-    // dispinterface deklariert ('TFoo = packed record'): 'X.Free' ist dann
-    // eine eigene Methode (Record, object) bzw. ein Interface-Aufruf,
-    // FreeAndNil(X) waere falsch. VERTRAG WEITER ALS DER NAME: ein Interface
-    // ist kein Werttyp, zaehlt hier aber mit - gemeint ist "kein Klassentyp,
-    // auf dem FreeAndNil uebersetzt und das Richtige tut". Der Name bleibt,
-    // weil ihn uRdxRecipeRunner (SCA139) ruft; umbenennen in einer Charge,
-    // die den Laeufer anfasst. Ein Typ aus einer anderen Unit (auch ein
-    // Alias, ein Zeiger oder ein generischer Record 'TRec<T>') ist hier
-    // unbekannt (False) - in Delphi ab 10.4 faellt ein Record dort als
-    // Fehler E2010 auf (FreeAndNil nimmt const [ref] TObject).
+    // True, wenn die Datei ATypeName als record, object, interface,
+    // dispinterface oder Zeiger deklariert ('TFoo = packed record', 'PFoo =
+    // ^TFoo'): 'X.Free' ist dann eine eigene Methode (Record, object - auch
+    // ueber den Zeiger, den Delphi dereferenziert) bzw. ein Interface-
+    // Aufruf, FreeAndNil(X) waere falsch (Review FB, R2-01/R3-01: mORMot
+    // 'PX509_CRL = ^X509_CRL', ein object mit eigenem Free - FPC rief
+    // TObject.Free auf der OpenSSL-Struktur, Zugriffsverletzung). VERTRAG
+    // WEITER ALS DER NAME: Interface und Zeiger sind keine Werttypen,
+    // zaehlen hier aber mit - gemeint ist "kein Klassentyp, auf dem
+    // FreeAndNil uebersetzt und das Richtige tut". Der Name bleibt, weil
+    // ihn uRdxRecipeRunner (SCA085, SCA139) ruft; umbenennen in einer
+    // Charge, die beide Units anfasst. Ein Typ aus einer anderen Unit (auch
+    // ein Alias oder ein generischer Record 'TRec<T>') ist hier unbekannt
+    // (False) - in Delphi ab 10.4 faellt ein Record dort als Fehler E2010
+    // auf (FreeAndNil nimmt const [ref] TObject); einen fremden Zeiger mit
+    // Konventionsnamen ('PEVP_PKEY') sperrt der Laeufer selbst.
     class function DeclaresValueType(AMap: TRdxCodeMap;
       const ATypeName: string): Boolean; static;
     // Typ des Feldes AName, wenn die Datei es als Feld eines Klassen-,
@@ -786,8 +791,10 @@ var
   Kind : string;
 begin
   Kind := DeclaredTypeKind(AMap, ATypeName);
+  // '^': 'PFoo = ^TFoo' (Review FB, R2-01) - FreeAndNil(P) nimmt den Zeiger
+  // als TObject, 'P.Free' meint das Ziel.
   Result := (Kind = 'record') or (Kind = 'object') or (Kind = 'interface')
-    or (Kind = 'dispinterface');
+    or (Kind = 'dispinterface') or (Kind = '^');
 end;
 
 // Kopf eines Assert-Aufrufs an (ALine, ACol): 'Assert' als Wort im Code,
