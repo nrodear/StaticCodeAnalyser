@@ -721,7 +721,7 @@ begin
   AReason := '';
   L := AMap.Raw(ALine);
   if ACol <= 0 then
-    AReason := 'Spalte fehlt in der Meldung'
+    AReason := R_NO_COLUMN
   else if not AMap.IsCode(ALine, ACol) or not IsIdentStart(L[ACol])
      or ((ACol > 1) and IsIdentChar(L[ACol - 1])) then
     AReason := R_BRANCH_MOVED
@@ -766,17 +766,15 @@ begin
     AKeyword := After(AMap, EndTok);
 end;
 
-// Klammertiefe rueckwaerts: ')' und ']' hoch, '(' und '[' herunter. True,
-// wenn T eine Klammer war.
+// Klammertiefe rueckwaerts: ')' und ']' hoch, '(' und '[' herunter
+// (ParenDelta, uRdxCodeMap, abgezogen). True, wenn T eine Klammer war.
 function ParenBack(const T: TRdxToken; var AParen: Integer): Boolean;
+var
+  Delta : Integer;
 begin
-  Result := True;
-  if (T.Low = ')') or (T.Low = ']') then
-    Inc(AParen)
-  else if (T.Low = '(') or (T.Low = '[') then
-    Dec(AParen)
-  else
-    Result := False;
+  Delta := ParenDelta(T);
+  Dec(AParen, Delta);
+  Result := Delta <> 0;
 end;
 
 // FindOwner, ein Token ausserhalb von Klammern: ';' oder ein Wort aus
@@ -1056,15 +1054,15 @@ end;
 function StatementStep(const T, APrev: TRdxToken; var AParen: Integer;
   out AReason: string): TRdxStep;
 var
-  IsKw : Boolean;   // nicht 'Word': verdeckte System.Word (Review R3-06)
+  IsKw  : Boolean;   // nicht 'Word': verdeckte System.Word (Review R3-06)
+  Delta : Integer;
 begin
   Result := rsGoOn;
   AReason := '';
   IsKw := IsKeywordAfter(T, APrev);
-  if (T.Low = '(') or (T.Low = '[') then
-    Inc(AParen)
-  else if (T.Low = ')') or (T.Low = ']') then
-    Dec(AParen)
+  Delta := ParenDelta(T);
+  if Delta <> 0 then
+    Inc(AParen, Delta)
   else if (AParen = 0)
      and ((T.Low = ';') or (IsKw and InList(T.Low, BRANCH_STOPPERS))) then
     Result := rsFound

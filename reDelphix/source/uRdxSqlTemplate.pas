@@ -2414,6 +2414,7 @@ function ValueTextAfter(AMap: TRdxCodeMap; const AEq: TRdxToken): string;
 var
   T     : TRdxToken;
   Depth : Integer;
+  Delta : Integer;
   n     : Integer;
 begin
   Result := '';
@@ -2422,10 +2423,9 @@ begin
   for n := 1 to MAX_WALK do
   begin
     if T.Low = '' then Exit;
-    if (T.Low = '(') or (T.Low = '[') then
-      Inc(Depth)
-    else if (T.Low = ')') or (T.Low = ']') then
-      Dec(Depth)
+    Delta := ParenDelta(T);
+    if Delta <> 0 then
+      Inc(Depth, Delta)
     else if (T.Low = ';') and (Depth = 0) then
       Exit(Trim(RawBetween(AMap, AEq.Line, AEq.EndCol, T.Line, T.Col)));
     T := After(AMap, T);

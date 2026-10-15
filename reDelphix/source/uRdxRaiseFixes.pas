@@ -72,7 +72,8 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxStructFixes;   // StartsStatementAt (SCA120: kein bedingter Ausdruck)
+  uRdxStructFixes;   // StartsStatementAt (SCA120: kein bedingter Ausdruck),
+                     // CommentInRange
 
 const
   SPAN_020 = 'sca020';
@@ -123,8 +124,11 @@ begin
 end;
 
 // Der Name hinter dem Routinen-Wort bis vor '(' ':' ';' oder bis zum
-// Zeilenende (die Parameter auf der Folgezeile). '' ohne Name.
-function NameAfter(AMap: TRdxCodeMap; const AKeyword: TRdxToken): string;
+// Zeilenende (die Parameter auf der Folgezeile) - als TEXT, mit allen
+// Gliedern ('TFoo.Bar'). '' ohne Name. Bis Charge B2S-a hiess sie
+// NameAfter wie uRdxSimpleFixes.NameAfter, die das letzte Glied als TOKEN
+// liefert (Review R3-05).
+function HeaderNameText(AMap: TRdxCodeMap; const AKeyword: TRdxToken): string;
 var
   First, T : TRdxToken;
   L        : string;
@@ -144,25 +148,6 @@ begin
   else if AMap.LineCommentCol(AKeyword.Line) > 0 then
     Stop := AMap.LineCommentCol(AKeyword.Line);
   Result := Trim(Copy(L, First.Col, Stop - First.Col));
-end;
-
-// Ein Kommentar (oder eine Direktive) zwischen den Token A und B?
-function CommentBetween(AMap: TRdxCodeMap; const A, B: TRdxToken): Boolean;
-var
-  Li, First, Last : Integer;
-begin
-  Result := False;
-  for Li := A.Line to B.Line do
-  begin
-    First := 1;
-    if Li = A.Line then
-      First := A.EndCol;
-    Last := Length(AMap.Raw(Li));
-    if Li = B.Line then
-      Last := B.Col - 1;
-    if AMap.HasComment(Li, First, Last) then
-      Exit(True);
-  end;
 end;
 
 // Ab dem Kopf das begin des Rumpfs - ohne lokale Routine dazwischen
@@ -206,7 +191,7 @@ begin
   ABody := Default(TRdxMethodBody);
   Result := HeaderOn(AMap, ALine, ABody.Keyword);
   if Result <> '' then Exit;
-  ABody.Name := NameAfter(AMap, ABody.Keyword);
+  ABody.Name := HeaderNameText(AMap, ABody.Keyword);
   Result := BodyBegin(AMap, ABody.Keyword, ABody.BeginTok);
   if Result <> '' then Exit;
   ABody.EndTok := After(AMap, ABody.BeginTok);
@@ -217,8 +202,11 @@ begin
   // Ein Kommentar im Rumpf ist keine Absicht (sonst schwiege der Detektor):
   // auskommentierter Code (SCA070) - der Absichtskommentar verdeckte ihn,
   // und ein schon eingefuegter Kommentar kaeme doppelt (Gegen-Review,
-  // Minor 4/5).
-  else if CommentBetween(AMap, ABody.BeginTok, ABody.EndTok) then
+  // Minor 4/5). Zwischen begin und end (CommentInRange - bis Charge B2S-a
+  // als CommentBetween kopiert, derselbe Lauf mit Token statt Bereich).
+  else if CommentInRange(AMap, TRefactorSpan.Make(SPAN_020,
+    ABody.BeginTok.Line, ABody.BeginTok.EndCol, ABody.EndTok.Line,
+    ABody.EndTok.Col)) then
     Result := 'im Rumpf steht schon ein Kommentar ohne Absicht - '
       + 'auskommentierter Code (SCA070)? Von Hand entscheiden';
 end;
@@ -370,18 +358,6 @@ begin
 end;
 
 { ---- SCA122 ---- }
-
-// E aus 'Re-raise of bound variable "E" loses ...'.
-function BoundNameOf(const AMessage: string): string;
-var
-  P, Q : Integer;
-begin
-  Result := '';
-  P := Pos('"', AMessage);
-  Q := Pos('"', AMessage, P + 1);
-  if (P > 0) and (Q > P + 1) then
-    Result := Copy(AMessage, P + 1, Q - P - 1);
-end;
 
 // Ist ADo das 'do' eines Handlers 'on Name: T do' (bzw. 'on T do', dann
 // AName = '')? Typ auch mit Punkten ('SysUtils.EFoo').
@@ -536,7 +512,9 @@ var
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  Name := BoundNameOf(AMessage);
+  // E aus 'Re-raise of bound variable "E" loses ...' (bis Charge B2S-a
+  // eine eigene Kopie BoundNameOf).
+  Name := QuotedText(AMessage, '"');
   if Name = '' then
     AReason := 'Name der Variablen fehlt in der Meldung'
   else

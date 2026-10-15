@@ -11,7 +11,9 @@ unit uTestRdxCodeMap;
 // (OneTokenOnLine), end-Bilanz (BlockEnd) und DirectiveInLines - bis dahin
 // je Planer eine Kopie. Seit Charge H4c TokBefore/TokText (bis dahin je
 // eine Kopie in uRdxRoutineFixes und uRdxTryFixes) und IsKeywordAt (kein
-// Schluesselwort vor ':=' - benanntes OLE-Argument 'End := 1').
+// Schluesselwort vor ':=' - benanntes OLE-Argument 'End := 1'). Seit
+// Charge B2S-a die geteilten Helfer der Fix-Units QuotedText und
+// ParenDelta (Review R3-05: bis dahin fuenf bzw. sieben Kopien).
 
 interface
 
@@ -34,6 +36,8 @@ type
     [Test] procedure DirectiveInLines_NotInLineComment;
     // Charge H4c.
     [Test] procedure TokHelpers_AndKeywordAt;
+    // Charge B2S-a.
+    [Test] procedure SharedHelpers_QuotedTextAndParenDelta;
   end;
 
 implementation
@@ -391,6 +395,36 @@ begin
   finally
     SL.Free;
   end;
+end;
+
+procedure TTestRdxCodeMap.SharedHelpers_QuotedTextAndParenDelta;
+var
+  T : TRdxToken;
+begin
+  // QuotedText: der Text zwischen den ERSTEN beiden Zeichen, wie
+  // geschrieben - so lasen ihn QuotedNameOf, BoundNameOf, KeywordOf,
+  // SectionNameOf (dort danach klein) und TRdxMagicFixes.NumberOf.
+  Assert.AreEqual('IFoo', QuotedText('Interface "IFoo" has no GUID', '"'));
+  Assert.AreEqual('Strict Private',
+    QuotedText('Empty `Strict Private` section', '`'), 'Gross/klein bleibt');
+  Assert.AreEqual('', QuotedText('ohne Zeichen', '"'), 'keines');
+  Assert.AreEqual('', QuotedText('nur "eines', '"'), 'nur eines');
+  Assert.AreEqual('', QuotedText('leer "" dann "x"', '"'),
+    'die ersten beiden umschliessen nichts');
+  // ParenDelta: beide Klammerarten, '<' nicht.
+  T := Default(TRdxToken);
+  T.Low := '(';
+  Assert.AreEqual<Integer>(1, ParenDelta(T), '(');
+  T.Low := '[';
+  Assert.AreEqual<Integer>(1, ParenDelta(T), '[');
+  T.Low := ')';
+  Assert.AreEqual<Integer>(-1, ParenDelta(T), ')');
+  T.Low := ']';
+  Assert.AreEqual<Integer>(-1, ParenDelta(T), ']');
+  T.Low := '<';
+  Assert.AreEqual<Integer>(0, ParenDelta(T), '< zaehlt nicht');
+  T.Low := '';
+  Assert.AreEqual<Integer>(0, ParenDelta(T), 'kein Token');
 end;
 
 initialization

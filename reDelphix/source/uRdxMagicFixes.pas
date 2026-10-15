@@ -222,18 +222,15 @@ const
 
 { ---- Ziel aus dem Fund ---- }
 
+// Die Zahl zwischen den ersten beiden '"' (QuotedText, uRdxCodeMap; bis
+// Charge B2S-a hier ausgeschrieben), dann die Ziffern-Probe.
 class function TRdxMagicFixes.NumberOf(const AMessage: string): string;
 var
-  P, Q   : Integer;
   Digits : string;
   C      : Char;
 begin
-  Result := '';
-  P := Pos('"', AMessage);
-  if P = 0 then Exit;
-  Q := Pos('"', AMessage, P + 1);
-  if Q <= P + 1 then Exit;
-  Result := Copy(AMessage, P + 1, Q - P - 1);
+  Result := QuotedText(AMessage, '"');
+  if Result = '' then Exit;
   Digits := Result;
   if Digits[1] = '-' then
     Delete(Digits, 1, 1);

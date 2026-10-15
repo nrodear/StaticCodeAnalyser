@@ -345,7 +345,8 @@ const
   SPAN_066 = 'sca066';
   SPAN_072 = 'sca072';
   SPAN_084 = 'sca084';
-  R_NO_COLUMN     = 'Spalte fehlt in der Meldung';
+  // R_NO_COLUMN ('Spalte fehlt in der Meldung') steht seit Charge B2S-a
+  // einmal in uRdxCodeMap, neben ColumnFromMessage (Review R3-05).
   R_ARGS_MOVED    = '() steht nicht mehr an der gemeldeten Stelle';
   R_BOOL_MOVED    = 'der Vergleich mit True/False steht nicht mehr an der '
     + 'gemeldeten Stelle';
@@ -1150,18 +1151,11 @@ begin
 end;
 
 // 'Empty `strict private` section ...' - der Abschnitt zwischen den
-// Backticks (uEmptyVisibilitySection.SektionsName), klein; '' ohne sie.
+// Backticks (uEmptyVisibilitySection.SektionsName), klein; '' ohne sie
+// (QuotedText, uRdxCodeMap - bis Charge B2S-a hier ausgeschrieben).
 function SectionNameOf(const AMessage: string): string;
-var
-  p, q : Integer;
 begin
-  Result := '';
-  p := Pos('`', AMessage);
-  q := 0;
-  if p > 0 then
-    q := Pos('`', AMessage, p + 1);
-  if q > 0 then
-    Result := LowerCase(Copy(AMessage, p + 1, q - p - 1));
+  Result := LowerCase(QuotedText(AMessage, '`'));
 end;
 
 // Traegt die Zeile ALine (Text L) genau den Abschnitt AName - ohne
@@ -2047,8 +2041,12 @@ type
   end;
 
 // Beginnt an ASite noch die gemeldete Anweisung (Code; bei einer
-// Bedingung das Schluesselwort if/while/case)?
-function StartsStatement(AMap: TRdxCodeMap; const ASite: TRdxNilSite): Boolean;
+// Bedingung das Schluesselwort if/while/case)? Ein Abgleich des Funds mit
+// dem Text (Zeile verschoben?), keine Frage nach der Syntax - die stellt
+// TRdxStructFixes.StartsStatementAt (beginnt an einem Token eine
+// Anweisung?), deren Kern in uRdxStructFixes ebenfalls StartsStatement
+// heisst; bis Charge B2S-a trug diese hier denselben Namen (Review R3-05).
+function StatementStillAt(AMap: TRdxCodeMap; const ASite: TRdxNilSite): Boolean;
 var
   KwLow : string;   // nicht 'Low': verdeckte System.Low (Review R3-06)
 begin
@@ -2066,16 +2064,6 @@ begin
     Result := IsConditionEnd(T)
   else
     Result := IsStatementEnd(T);
-end;
-
-function DepthDelta(const T: TRdxToken): Integer;
-begin
-  if (T.Low = '(') or (T.Low = '[') then
-    Result := 1
-  else if (T.Low = ')') or (T.Low = ']') then
-    Result := -1
-  else
-    Result := 0;
 end;
 
 // Ein 'nil' im Bereich: ein Vergleich (ACmp.OpTok gesetzt), keiner
@@ -2151,7 +2139,7 @@ begin
         AScan.EndTok := T;
         Break;
       end;
-      Inc(Depth, DepthDelta(T));
+      Inc(Depth, ParenDelta(T));
       Result := TakeToken(AMap, T, AScan);
       if Result <> '' then Exit;
       T := After(AMap, T);
@@ -2165,9 +2153,15 @@ begin
     Result := 'Ende der Anweisung nicht gefunden';
 end;
 
-// Kommentar oder Direktive im Bereich AFirst..ALast? Der Detektor sieht
-// sie nicht, eine Ersetzung koennte sie zerreissen.
-function RegionHasComment(AMap: TRdxCodeMap; const AFirst, ALast: TRdxToken): Boolean;
+// Kommentar oder Direktive bei der Anweisung AFirst..ALast? Der Detektor
+// sieht sie nicht, eine Ersetzung koennte sie zerreissen. Auf EINER Zeile
+// zaehlt der Bereich ab AFirst.Col bis ALast.Col; ueber mehrere Zeilen
+// zaehlt jede GANZE Zeile von AFirst.Line bis ALast.Line - auch ein
+// Kommentar vor AFirst oder hinter ALast. Bewusst breiter als
+// CommentInRange (zeichengenau im Bereich); bis Charge B2S-a hiess sie
+// RegionHasComment, wie ein Synonym von CommentInRange (Review R3-05).
+function CommentOnRegionLines(AMap: TRdxCodeMap;
+  const AFirst, ALast: TRdxToken): Boolean;
 var
   i : Integer;
 begin
@@ -2306,14 +2300,14 @@ begin
   Expected := TRdxNilFix.CountNilComparisons(ASite.NodeText);
   if Expected = 0 then
     Exit('kein nil-Vergleich im Fund');
-  if not StartsStatement(AMap, ASite) then
+  if not StatementStillAt(AMap, ASite) then
     Exit('Anweisung steht nicht mehr an der gemeldeten Stelle');
   Result := ScanStatement(AMap, ASite, AScan);
   if Result <> '' then Exit;
   if not CountMatches(Length(AScan.Cmps), Expected, ASite.NodeText) then
     Exit(Format('Code und Fund passen nicht zusammen (%d statt %d Vergleiche)',
       [Length(AScan.Cmps), Expected]));
-  if RegionHasComment(AMap, AScan.StartTok, AScan.EndTok) then
+  if CommentOnRegionLines(AMap, AScan.StartTok, AScan.EndTok) then
     Result := 'Kommentar oder Direktive in der Anweisung';
 end;
 

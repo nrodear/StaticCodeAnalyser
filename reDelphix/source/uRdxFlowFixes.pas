@@ -222,17 +222,11 @@ type
 
 { ---- gemeinsam ---- }
 
-// Klammertiefe: '(' und '[' +1, ')' und ']' -1, sonst 0.
-function ParenDelta(const T: TRdxToken): Integer;
-begin
-  Result := 0;
-  if (T.Low = '(') or (T.Low = '[') then
-    Result := 1
-  else if (T.Low = ')') or (T.Low = ']') then
-    Result := -1;
-end;
-
-// Kommentar oder Direktive irgendwo auf ALine?
+// Kommentar oder Direktive irgendwo auf ALine - auf der GANZEN Zeile, auch
+// vor oder hinter der Anweisung? Anders als CommentInRange (nur der
+// Bereich, den die Ersetzung ueberschreibt, zeichengenau): SCA080 und
+// SCA047 loeschen eine Anweisung, die ein Kommentar daneben vielleicht
+// erklaert (R_LINE_COMMENT) - der Bereich allein saehe ihn nicht.
 function LineHasComment(AMap: TRdxCodeMap; ALine: Integer): Boolean;
 begin
   Result := AMap.HasComment(ALine, 1, Length(AMap.Raw(ALine)));

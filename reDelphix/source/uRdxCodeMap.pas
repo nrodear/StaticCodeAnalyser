@@ -286,6 +286,14 @@ function MatchClose(AMap: TRdxCodeMap; const AOpen: TRdxToken;
 // Das Token hinter der schliessenden Klammer zu AOpen (MatchClose); Low =
 // '' ohne Klammer oder am Dateiende.
 function AfterClose(AMap: TRdxCodeMap; const AOpen: TRdxToken): TRdxToken;
+// Klammertiefe eines Tokens: '(' und '[' +1, ')' und ']' -1, sonst 0 -
+// beide Klammerarten gemeinsam ('<' und '>' nicht: ob Vergleich oder
+// Typparameter, weiss erst der Aufrufer, s. MatchClose). Rueckwaerts
+// gelesen zieht der Aufrufer den Wert ab. Bis Charge B2S-a je eine Kopie
+// als ParenDelta in uRdxFlowFixes und uRdxCleanupFixes und als DepthDelta
+// in uRdxSimpleFixes, dazu ausgeschrieben in uRdxStructFixes, uRdxTryFixes
+// und uRdxSqlTemplate (Review R3-05).
+function ParenDelta(const T: TRdxToken): Integer;
 
 // Genau ein Code-Token auf ALine, auf das ASearch.Test passt: '' und das
 // Token in AHit; sonst der Grund (OneTokenReason; AHit ist dann der letzte
@@ -329,9 +337,24 @@ function IsEndOpener(const ALow: string): Boolean;
 // Eine Einrueckstufe: was ADeeperLine ueber AIndent hinaus einrueckt;
 // sonst ein Tab, wenn AIndent Tabs traegt, oder zwei Leerzeichen.
 function IndentStep(const AIndent, ADeeperLine: string): string;
+const
+  // Der Grund, wenn eine Meldung keine Spalte nennt (ColumnFromMessage
+  // liefert 0). Bis Charge B2S-a je eine Konstante in uRdxSimpleFixes und
+  // uRdxLineFixes und ein Literal in uRdxStructFixes (Review R3-05).
+  R_NO_COLUMN = 'Spalte fehlt in der Meldung';
+
 // 'at column N' aus einer Meldung; 0 = nicht vorhanden. Bis 2026-10-10 in
 // uRdxSimpleFixes, seit SCA101 auch fuer uRdxStructFixes.
 function ColumnFromMessage(const AMessage: string): Integer;
+// Der Text zwischen den ersten beiden AQuote in AText ('Interface "IFoo"
+// has no GUID' mit '"' -> 'IFoo', 'Empty `strict private` section' mit
+// '`' -> 'strict private'); '' ohne zwei AQuote oder ohne Text
+// dazwischen. Wie geschrieben - klein schreibt der Aufrufer. Bis Charge
+// B2S-a als QuotedNameOf (uRdxDeclFixes) und BoundNameOf (uRdxRaiseFixes)
+// byte-gleich kopiert und in KeywordOf (uRdxLineFixes), SectionNameOf
+// (uRdxSimpleFixes) und TRdxMagicFixes.NumberOf ausgeschrieben (Review
+// R3-05).
+function QuotedText(const AText: string; AQuote: Char): string;
 
 implementation
 
@@ -1028,6 +1051,15 @@ begin
     Result := After(AMap, Close);
 end;
 
+function ParenDelta(const T: TRdxToken): Integer;
+begin
+  Result := 0;
+  if (T.Low = '(') or (T.Low = '[') then
+    Result := 1
+  else if (T.Low = ')') or (T.Low = ']') then
+    Result := -1;
+end;
+
 function OneTokenReason(ALine, ACount: Integer;
   const AWhat, AManyFmt: string; const AArg: string): string;
 begin
@@ -1150,6 +1182,18 @@ begin
     Result := Result * 10 + Ord(AMessage[i]) - Ord('0');
     Inc(i);
   end;
+end;
+
+function QuotedText(const AText: string; AQuote: Char): string;
+var
+  P, Q : Integer;
+begin
+  Result := '';
+  P := Pos(AQuote, AText);
+  if P = 0 then Exit;
+  Q := Pos(AQuote, AText, P + 1);
+  if Q > P + 1 then
+    Result := Copy(AText, P + 1, Q - P - 1);
 end;
 
 end.

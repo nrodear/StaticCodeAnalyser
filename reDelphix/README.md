@@ -606,7 +606,9 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   des Cores (Drift-Waechter), der Zustand am Zeilenanfang und die
   geteilten Laeufe der Planer (Charge R8): Klammerabgleich (`MatchClose`,
   `AfterClose`), "genau ein Token auf der Zeile" (`OneTokenOnLine`),
-  end-Bilanz (`BlockEnd`), `DirectiveInLines`.
+  end-Bilanz (`BlockEnd`), `DirectiveInLines`; seit Charge B2S-a die
+  geteilten Helfer der Fix-Units `QuotedText` (Text zwischen den ersten
+  beiden Zeichen) und `ParenDelta` (Klammertiefe) - Review R3-05.
 * `uTestRdxProjectUnits` - der Index der Projekt-Units fuer "uses: X ->
   Scope.X" (`TRdxProjectUnits`, Review R1-02): Module (Pfad, Endung, gross/
   klein egal), Dateien `.pas`/`.pp` im Verzeichnis, Suchpfad relativ/absolut/
@@ -884,8 +886,9 @@ Ohne Delphi (FPC 3.2.2):
 bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths
 ```
 
-Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+B1-FA+FB+FC+B1-FD+B1-FE+FF+B2S-a): `PASSED 642  FAILED 0` - 41 Testunits,
-davon 11 der Charge B2S-a (`uTestRdxPaths` 10, `uTestRdxProjectUnits` 1),
+Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+B1-FA+FB+FC+B1-FD+B1-FE+FF+B2S-a): `PASSED 643  FAILED 0` - 41 Testunits,
+davon 12 der Charge B2S-a (`uTestRdxPaths` 10, `uTestRdxProjectUnits` 1,
+`uTestRdxCodeMap` 1),
 28 der Charge B1-FA (`uTestRdxSuppressTargets` 20, Review R1-01/R1-03
 und Nachbesserung; `uTestRdxBufferMath` 1, R1-04; `uTestRdxProjectUnits` 7,
 R1-02),

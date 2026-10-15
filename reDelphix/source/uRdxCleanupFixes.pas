@@ -278,16 +278,6 @@ begin
     ATo.Col);
 end;
 
-// Klammertiefe: '(' und '[' +1, ')' und ']' -1, sonst 0.
-function ParenDelta(const T: TRdxToken): Integer;
-begin
-  Result := 0;
-  if (T.Low = '(') or (T.Low = '[') then
-    Result := 1
-  else if (T.Low = ')') or (T.Low = ']') then
-    Result := -1;
-end;
-
 // Die Zahl ab S[AAt] (Ziffern); 0 ohne.
 function NumberAt(const S: string; AAt: Integer): Integer;
 begin
