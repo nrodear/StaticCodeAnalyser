@@ -13,7 +13,7 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2765 Zeilen, 94924 Bytes
+  // i18n\de.po - 2765 Zeilen, 94929 Bytes
   CPoLines_de: array[0..2764] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -2574,7 +2574,7 @@ const
     'msgid "jump and \";\" on different lines"',
     'msgstr "Sprung und \";\" auf verschiedenen Zeilen"',
     '',
-    'msgid "comment on the line - it may explain the spot; %s"',
+    'msgid "comment on the line - it may explain the place; %s"',
     'msgstr "Kommentar auf der Zeile - er erkl'#$00E4'rt die Stelle vielleicht; %s"',
     '',
     'msgid "code follows the jump - no redundant jump; %s"',
@@ -2619,7 +2619,7 @@ const
     'msgid "the message has no target"',
     'msgstr "Ziel fehlt in der Meldung"',
     '',
-    'msgid "nothing stands before the range, and it reaches the end of the file - %s"',
+    'msgid "nothing precedes the range, and it reaches the end of the file - %s"',
     'msgstr "vor dem Bereich steht nichts, und er reicht bis zum Dateiende - %s"',
     '',
     'msgid "empty range"',
@@ -2676,7 +2676,7 @@ const
     'msgid "initialized variable - the expression can have side effects"',
     'msgstr "initialisierte Variable - der Ausdruck kann Seiteneffekte haben"',
     '',
-    'msgid "absolute variable - it lies on the memory of another one"',
+    'msgid "absolute variable - it occupies the memory of another one"',
     'msgstr "absolute-Variable - sie liegt auf dem Speicher einer anderen"',
     '',
     'msgid "type with \"%s\" (across several lines) - %s"',
@@ -2745,7 +2745,7 @@ const
     'msgid "the name still occurs in the scope (line %d) - under {$IFDEF} and in asm it also counts as a use"',
     'msgstr "der Name kommt im G'#$00FC'ltigkeitsbereich noch vor (Zeile %d) - auch unter {$IFDEF} und in asm z'#$00E4'hlt er als Verwendung"',
     '',
-    'msgid "{$I} include in the scope (line %d) - the name may occur there, which the quick fix does not see"',
+    'msgid "{$I} include in the scope (line %d) - it may contain the name in a place that the quick fix does not see"',
     'msgstr "{$I}-Include im G'#$00FC'ltigkeitsbereich (Zeile %d) - dort kann der Name stehen, den die Hilfe nicht sieht"',
     '',
     'msgid "a directive names \"%s\" (line %d) - macro or condition, the quick fix does not evaluate it"',
@@ -3054,7 +3054,7 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2761 Zeilen, 99220 Bytes
+  // i18n\fr.po - 2761 Zeilen, 99235 Bytes
   CPoLines_fr: array[0..2760] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -5611,7 +5611,7 @@ const
     'msgid "jump and \";\" on different lines"',
     'msgstr "saut et \";\" sur des lignes diff'#$00E9'rentes"',
     '',
-    'msgid "comment on the line - it may explain the spot; %s"',
+    'msgid "comment on the line - it may explain the place; %s"',
     'msgstr "commentaire sur la ligne - il explique peut-'#$00EA'tre l''endroit; %s"',
     '',
     'msgid "code follows the jump - no redundant jump; %s"',
@@ -5656,7 +5656,7 @@ const
     'msgid "the message has no target"',
     'msgstr "la cible manque dans le message"',
     '',
-    'msgid "nothing stands before the range, and it reaches the end of the file - %s"',
+    'msgid "nothing precedes the range, and it reaches the end of the file - %s"',
     'msgstr "rien ne pr'#$00E9'c'#$00E8'de la plage, et elle va jusqu'''#$00E0' la fin du fichier - %s"',
     '',
     'msgid "empty range"',
@@ -5713,7 +5713,7 @@ const
     'msgid "initialized variable - the expression can have side effects"',
     'msgstr "variable initialis'#$00E9'e - l''expression peut avoir des effets de bord"',
     '',
-    'msgid "absolute variable - it lies on the memory of another one"',
+    'msgid "absolute variable - it occupies the memory of another one"',
     'msgstr "variable absolute - elle occupe la m'#$00E9'moire d''une autre"',
     '',
     'msgid "type with \"%s\" (across several lines) - %s"',
@@ -5782,8 +5782,8 @@ const
     'msgid "the name still occurs in the scope (line %d) - under {$IFDEF} and in asm it also counts as a use"',
     'msgstr "le nom appara'#$00EE't encore dans la port'#$00E9'e (ligne %d) - m'#$00EA'me sous {$IFDEF} et dans asm, il compte comme une utilisation"',
     '',
-    'msgid "{$I} include in the scope (line %d) - the name may occur there, which the quick fix does not see"',
-    'msgstr "include {$I} dans la port'#$00E9'e (ligne %d) - le nom peut s''y trouver, ce que le Quick-Fix ne voit pas"',
+    'msgid "{$I} include in the scope (line %d) - it may contain the name in a place that the quick fix does not see"',
+    'msgstr "include {$I} dans la port'#$00E9'e (ligne %d) - il peut contenir le nom '#$00E0' un endroit que le Quick-Fix ne voit pas"',
     '',
     'msgid "a directive names \"%s\" (line %d) - macro or condition, the quick fix does not evaluate it"',
     'msgstr "une directive nomme \"%s\" (ligne %d) - macro ou condition, le Quick-Fix ne l'''#$00E9'value pas"',

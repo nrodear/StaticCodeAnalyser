@@ -171,7 +171,7 @@ const
   KEY_ASSIGN = ' := ';
   // msgid (E29) fuer SCA080 und SCA047 - %s = MsgDecideByHand; der Trenner
   // '; ' bleibt im Satz (deutsch bisher '...; von Hand entscheiden').
-  R_LINE_COMMENT = 'comment on the line - it may explain the spot; %s';
+  R_LINE_COMMENT = 'comment on the line - it may explain the place; %s';
 
 type
   // Eine ganze Anweisung (DeleteEdit): ihr erstes Token, das Token davor

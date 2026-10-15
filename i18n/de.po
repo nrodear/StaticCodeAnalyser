@@ -2557,7 +2557,7 @@ msgstr "%d Sprunganweisungen"
 msgid "jump and \";\" on different lines"
 msgstr "Sprung und \";\" auf verschiedenen Zeilen"
 
-msgid "comment on the line - it may explain the spot; %s"
+msgid "comment on the line - it may explain the place; %s"
 msgstr "Kommentar auf der Zeile - er erklärt die Stelle vielleicht; %s"
 
 msgid "code follows the jump - no redundant jump; %s"
@@ -2602,7 +2602,7 @@ msgstr "die Unit deklariert einen class operator Assign - eine Zuweisung kann do
 msgid "the message has no target"
 msgstr "Ziel fehlt in der Meldung"
 
-msgid "nothing stands before the range, and it reaches the end of the file - %s"
+msgid "nothing precedes the range, and it reaches the end of the file - %s"
 msgstr "vor dem Bereich steht nichts, und er reicht bis zum Dateiende - %s"
 
 msgid "empty range"
@@ -2659,7 +2659,7 @@ msgstr "Namensliste nicht lesbar"
 msgid "initialized variable - the expression can have side effects"
 msgstr "initialisierte Variable - der Ausdruck kann Seiteneffekte haben"
 
-msgid "absolute variable - it lies on the memory of another one"
+msgid "absolute variable - it occupies the memory of another one"
 msgstr "absolute-Variable - sie liegt auf dem Speicher einer anderen"
 
 msgid "type with \"%s\" (across several lines) - %s"
@@ -2728,7 +2728,7 @@ msgstr "Rumpf der Routine nicht gefunden - zu viele lokale Routinen"
 msgid "the name still occurs in the scope (line %d) - under {$IFDEF} and in asm it also counts as a use"
 msgstr "der Name kommt im Gültigkeitsbereich noch vor (Zeile %d) - auch unter {$IFDEF} und in asm zählt er als Verwendung"
 
-msgid "{$I} include in the scope (line %d) - the name may occur there, which the quick fix does not see"
+msgid "{$I} include in the scope (line %d) - it may contain the name in a place that the quick fix does not see"
 msgstr "{$I}-Include im Gültigkeitsbereich (Zeile %d) - dort kann der Name stehen, den die Hilfe nicht sieht"
 
 msgid "a directive names \"%s\" (line %d) - macro or condition, the quick fix does not evaluate it"

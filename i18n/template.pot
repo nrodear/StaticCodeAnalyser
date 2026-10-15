@@ -2776,7 +2776,7 @@ msgid "a macro inserts \"%s\" ({$DEFINE ... := ...} in line %d) - the quick fix 
 msgstr ""
 
 #: reDelphix/source/uRdxCleanupFixes.pas:940
-msgid "absolute variable - it lies on the memory of another one"
+msgid "absolute variable - it occupies the memory of another one"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:496
@@ -2849,7 +2849,7 @@ msgstr ""
 
 #: reDelphix/source/uRdxFlowFixes.pas:810
 #: reDelphix/source/uRdxFlowFixes.pas:1049
-msgid "comment on the line - it may explain the spot; %s"
+msgid "comment on the line - it may explain the place; %s"
 msgstr ""
 
 #: reDelphix/source/uRdxFlowFixes.pas:415
@@ -3079,7 +3079,7 @@ msgid "no var section before the declaration"
 msgstr ""
 
 #: reDelphix/source/uRdxCleanupFixes.pas:340
-msgid "nothing stands before the range, and it reaches the end of the file - %s"
+msgid "nothing precedes the range, and it reaches the end of the file - %s"
 msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:813
@@ -3274,7 +3274,7 @@ msgid "with statement names multiple targets - ambiguous member lookup"
 msgstr ""
 
 #: reDelphix/source/uRdxCleanupFixes.pas:1344
-msgid "{$I} include in the scope (line %d) - the name may occur there, which the quick fix does not see"
+msgid "{$I} include in the scope (line %d) - it may contain the name in a place that the quick fix does not see"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1276

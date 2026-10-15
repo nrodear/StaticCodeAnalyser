@@ -337,8 +337,8 @@ begin
   while (P >= 1) and (AMap.Raw(P) = '') do
     Dec(P);
   if P < 1 then
-    Exit(_('nothing stands before the range, and it reaches the end of the '
-      + 'file - %s', [MsgDeleteByHand]));
+    Exit(_('nothing precedes the range, and it reaches the end of the file '
+      + '- %s', [MsgDeleteByHand]));
   L := AMap.Raw(P);
   Col := Length(L);
   if (Col > 1) and IsLowSurrogate(L[Col]) then
@@ -937,7 +937,7 @@ begin
   else if not IsKeywordAfter(T, APrev) then
     Exit
   else if T.Low = 'absolute' then
-    Result := _('absolute variable - it lies on the memory of another one')
+    Result := _('absolute variable - it occupies the memory of another one')
   else if InList(T.Low, MULTI_LINE_TYPES) then
     Result := _('type with "%s" (across several lines) - %s',
       [T.Low, MsgDeleteByHand])
@@ -1341,8 +1341,8 @@ begin
   Result := '';
   Li := IncludeInLines(AMap, AFrom.Line, ATo.Line);
   if Li > 0 then
-    Exit(_('{$I} include in the scope (line %d) - the name may occur there, '
-      + 'which the quick fix does not see', [Li]));
+    Exit(_('{$I} include in the scope (line %d) - it may contain the name in '
+      + 'a place that the quick fix does not see', [Li]));
   Li := DirectiveNaming(AMap, AFrom.Line, ATo.Line, AKey);
   if Li > 0 then
     Exit(_('a directive names "%s" (line %d) - macro or condition, the quick '
