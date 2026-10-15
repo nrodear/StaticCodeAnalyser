@@ -80,6 +80,7 @@ contains
   uRdxIntroEdits in 'source\uRdxIntroEdits.pas',
   uRdxMagicFixes in 'source\uRdxMagicFixes.pas',
   uRdxRecipeRunner in 'source\uRdxRecipeRunner.pas',
+  uRdxFixRunner in 'source\uRdxFixRunner.pas',
   uRdxFixTable in 'source\uRdxFixTable.pas',
   uRdxLog in 'source\uRdxLog.pas',
   uRdxEditor in 'source\uRdxEditor.pas',

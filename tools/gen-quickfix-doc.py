@@ -9,8 +9,9 @@ WOHER WAS KOMMT - je Angabe EINE Quelle:
   welche Hilfen es gibt,     reDelphix/source/uRdxFixTable.pas: FIX_ROWS,
   ihre Menuetexte (msgids)   FIX_CAPTIONS und FIX_ALT_CAPTIONS (parallele
   und die Kennzeichnung (E2) Arrays, Index fuer Index) und die Planer;
-                             reDelphix/source/uRdxRecipeRunner.pas (Rumpf-
-                             Routinen, die die Kennzeichnung setzen);
+                             reDelphix/source/uRdxFixRunner.pas (Rumpf-
+                             Routinen, die die Kennzeichnung setzen; bis
+                             Charge B2S-b in uRdxRecipeRunner.pas);
                              reDelphix/source/uRdxProvider.pas: die Rezepte
                              (Konstruktor), ihre Menuetexte (CAP_*, _('..')),
                              Art (fakFix ...) und Regel-Bindung (fixMode,
@@ -69,7 +70,7 @@ if hasattr(sys.stderr, 'reconfigure'):
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RDX = os.path.join(REPO, 'reDelphix')
 SRC_TABLE = os.path.join(RDX, 'source', 'uRdxFixTable.pas')
-SRC_RUNNER = os.path.join(RDX, 'source', 'uRdxRecipeRunner.pas')
+SRC_RUNNER = os.path.join(RDX, 'source', 'uRdxFixRunner.pas')
 SRC_PROVIDER = os.path.join(RDX, 'source', 'uRdxProvider.pas')
 CATALOG = os.path.join(REPO, 'rules', 'sca-rules.json')
 PO_FILES = (('de', os.path.join(REPO, 'i18n', 'de.po')),

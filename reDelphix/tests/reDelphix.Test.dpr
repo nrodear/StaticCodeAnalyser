@@ -173,6 +173,7 @@ uses
   uRdxResultFixes in '..\source\uRdxResultFixes.pas',
   uRdxSqlTemplate in '..\source\uRdxSqlTemplate.pas',
   uRdxRecipeRunner in '..\source\uRdxRecipeRunner.pas',
+  uRdxFixRunner in '..\source\uRdxFixRunner.pas',
   uRdxFixTable in '..\source\uRdxFixTable.pas',
   uRdxIntroPlan in '..\source\uRdxIntroPlan.pas',
   uRdxIntroEdits in '..\source\uRdxIntroEdits.pas',

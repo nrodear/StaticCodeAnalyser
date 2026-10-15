@@ -16,9 +16,10 @@ unit uRdxFixTable;
 // Zeile hat Planer, Hinweis (oder der Planer setzt ihn) und Menuetext.
 //
 // OHNE ToolsAPI: in reDelphix.Test uebersetzbar. Nicht im FPC-Pruefstand -
-// die Unit braucht uRdxRecipeRunner, der den Quellstellen-Dienst braucht.
-// Die Rumpf-Routinen der Hilfen bleiben, wo sie sind (uRdxRecipeRunner,
-// die Planer-Units); hier stehen nur die Adapter auf eine gemeinsame Form
+// die Unit braucht uRdxRecipeRunner und uRdxFixRunner, die den
+// Quellstellen-Dienst brauchen. Die Rumpf-Routinen der Hilfen bleiben, wo
+// sie sind (uRdxFixRunner - bis Charge B2S-b in uRdxRecipeRunner -, die
+// Planer-Units); hier stehen nur die Adapter auf eine gemeinsame Form
 // (TRdxFixPlanner), das EINE Geruest der Planer mit Plan-Record
 // (TRdxFixFrame, Charge H5c) und die Zeilen.
 //
@@ -112,6 +113,11 @@ implementation
 
 uses
   System.SysUtils,
+  // Ruempfe der Hilfen mit Quellstellen-Dienst und Bausteine der Tabelle
+  // (TRdxFixRunner, MapFix, CastFreeFix, EmptyRaiseFix, AppendUses,
+  // CondAssignReason, SelfAssignReason) - bis Charge B2S-b in
+  // uRdxRecipeRunner (Review R6-12)
+  uRdxFixRunner,
   uRdxPaths,         // IsNetworkPath, RemoteDriveOf, WithoutNamespacePrefix
   uRdxText,          // _(): in die reDelphix-Sprache (E29), nie uLocalization
   uRdxRecipes,       // AsciiOnly (SCA085-Gegenprobe)
@@ -246,7 +252,7 @@ const
   offen sein muss (NeedsOpen). Generisch, weil die Planer-Units ihre
   Plan-Records behalten (sie laufen im FPC-Pruefstand); diese Unit
   uebersetzt nur Delphi (reDelphix.Test), nicht der Pruefstand. Bewusst
-  NICHT im Geruest: MapFix (uRdxRecipeRunner) - der Laeufer braucht es
+  NICHT im Geruest: MapFix (uRdxFixRunner) - der Laeufer braucht es
   selbst (ExplicitTObjectFix, EmptySectionFix), und seine Planer liefern
   genau eine Ersetzung ohne Plan-Record.
   Delphi-Regeln dazu: freie generische Funktionen gibt es nicht - Run ist
@@ -356,7 +362,7 @@ begin
 end;
 
 // SCA098: X und (in der Gegenrichtung) die Bedingung als Boolean bewiesen
-// (CondAssignReason, uRdxRecipeRunner).
+// (CondAssignReason, uRdxFixRunner).
 function CondCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
   AFinding: TLeakFinding; const APlan: TRdxFlowPlan): string;
 begin

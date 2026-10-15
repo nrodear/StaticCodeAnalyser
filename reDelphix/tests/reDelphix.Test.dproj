@@ -121,6 +121,7 @@
         <DCCReference Include="..\source\uRdxResultFixes.pas"/>
         <DCCReference Include="..\source\uRdxSqlTemplate.pas"/>
         <DCCReference Include="..\source\uRdxRecipeRunner.pas"/>
+        <DCCReference Include="..\source\uRdxFixRunner.pas"/>
         <DCCReference Include="..\source\uRdxFixTable.pas"/>
         <DCCReference Include="..\source\uRdxIntroPlan.pas"/>
         <DCCReference Include="..\source\uRdxIntroEdits.pas"/>
