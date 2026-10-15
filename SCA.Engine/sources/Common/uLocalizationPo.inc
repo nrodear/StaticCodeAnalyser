@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2517 Zeilen, 83843 Bytes
-  CPoLines_de: array[0..2516] of string = (
+  // i18n\de.po - 2558 Zeilen, 85703 Bytes
+  CPoLines_de: array[0..2557] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2531,7 +2531,48 @@ const
     'msgstr "kein Kopf %s"',
     '',
     'msgid "%d headers %s"',
-    'msgstr "%d K'#$00F6'pfe %s"'
+    'msgstr "%d K'#$00F6'pfe %s"',
+    '',
+    '# reDelphix G7 (uRdxFixTable, uRdxSuppress, uRdxBufferMath, uRdxEditor, uRdxScopeTable, uRdxProvider)',
+    '',
+    'msgid "Source in the editor differs from the state when the menu was built - nothing written (reopen the menu) (line %d, the buffer has %d lines)"',
+    'msgstr "Quelltext im Editor weicht vom Stand beim Men'#$00FC'aufbau ab - nicht geschrieben (Men'#$00FC' neu '#$00F6'ffnen) (Zeile %d, der Puffer hat %d Zeilen)"',
+    '',
+    'msgid "Source in the editor differs from the state when the menu was built - nothing written (reopen the menu) (from character %d: expected \"%s\", editor \"%s\")"',
+    'msgstr "Quelltext im Editor weicht vom Stand beim Men'#$00FC'aufbau ab - nicht geschrieben (Men'#$00FC' neu '#$00F6'ffnen) (ab Zeichen %d: erwartet \"%s\", Editor \"%s\")"',
+    '',
+    'msgid "Position in the buffer cannot be computed (%d..%d of %d)"',
+    'msgstr "Position im Puffer nicht berechenbar (%d..%d von %d)"',
+    '',
+    'msgid "Byte range differs from the state when the menu was built - nothing written (from character %d: expected \"%s\", editor \"%s\")"',
+    'msgstr "Byte-Bereich weicht vom Stand beim Men'#$00FC'aufbau ab - nicht geschrieben (ab Zeichen %d: erwartet \"%s\", Editor \"%s\")"',
+    '',
+    'msgid "No replacement"',
+    'msgstr "keine Ersetzung"',
+    '',
+    'msgid "Replacements overlap (bytes %d..%d and %d..%d)"',
+    'msgstr "Ersetzungen '#$00FC'berlappen (Bytes %d..%d und %d..%d)"',
+    '',
+    'msgid "Cannot open or find the file in the editor"',
+    'msgstr "Datei lie'#$00DF' sich im Editor nicht '#$00F6'ffnen oder finden"',
+    '',
+    'msgid "Editor view not available"',
+    'msgstr "Editor-Ansicht nicht verf'#$00FC'gbar"',
+    '',
+    'msgid "Editor buffer not readable"',
+    'msgstr "Editor-Puffer nicht lesbar"',
+    '',
+    'msgid "Editor buffer not writable"',
+    'msgstr "Editor-Puffer nicht beschreibbar"',
+    '',
+    'msgid "Editor buffer is read-only - nothing written"',
+    'msgstr "Editor-Puffer ist schreibgesch'#$00FC'tzt - nicht geschrieben"',
+    '',
+    'msgid "%s [log: %s]"',
+    'msgstr "%s [Protokoll: %s]"',
+    '',
+    'msgid "action kind %d without execution"',
+    'msgstr "Aktionsart %d ohne Ausf'#$00FC'hrung"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -2806,8 +2847,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2513 Zeilen, 87809 Bytes
-  CPoLines_fr: array[0..2512] of string = (
+  // i18n\fr.po - 2554 Zeilen, 89851 Bytes
+  CPoLines_fr: array[0..2553] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -5320,7 +5361,48 @@ const
     'msgstr "aucun en-t'#$00EA'te %s"',
     '',
     'msgid "%d headers %s"',
-    'msgstr "%d en-t'#$00EA'tes %s"'
+    'msgstr "%d en-t'#$00EA'tes %s"',
+    '',
+    '# reDelphix G7 (uRdxFixTable, uRdxSuppress, uRdxBufferMath, uRdxEditor, uRdxScopeTable, uRdxProvider)',
+    '',
+    'msgid "Source in the editor differs from the state when the menu was built - nothing written (reopen the menu) (line %d, the buffer has %d lines)"',
+    'msgstr "Le code source dans l'''#$00E9'diteur diff'#$00E8're de l'''#$00E9'tat au moment de la construction du menu - rien n''a '#$00E9't'#$00E9' '#$00E9'crit (rouvrez le menu) (ligne %d, le tampon a %d lignes)"',
+    '',
+    'msgid "Source in the editor differs from the state when the menu was built - nothing written (reopen the menu) (from character %d: expected \"%s\", editor \"%s\")"',
+    'msgstr "Le code source dans l'''#$00E9'diteur diff'#$00E8're de l'''#$00E9'tat au moment de la construction du menu - rien n''a '#$00E9't'#$00E9' '#$00E9'crit (rouvrez le menu) ('#$00E0' partir du caract'#$00E8're %d : attendu '#$00AB' %s '#$00BB', '#$00E9'diteur '#$00AB' %s '#$00BB')"',
+    '',
+    'msgid "Position in the buffer cannot be computed (%d..%d of %d)"',
+    'msgstr "Position dans le tampon impossible '#$00E0' calculer (%d..%d sur %d)"',
+    '',
+    'msgid "Byte range differs from the state when the menu was built - nothing written (from character %d: expected \"%s\", editor \"%s\")"',
+    'msgstr "La plage d''octets diff'#$00E8're de l'''#$00E9'tat au moment de la construction du menu - rien n''a '#$00E9't'#$00E9' '#$00E9'crit ('#$00E0' partir du caract'#$00E8're %d : attendu '#$00AB' %s '#$00BB', '#$00E9'diteur '#$00AB' %s '#$00BB')"',
+    '',
+    'msgid "No replacement"',
+    'msgstr "Aucun remplacement"',
+    '',
+    'msgid "Replacements overlap (bytes %d..%d and %d..%d)"',
+    'msgstr "Les remplacements se chevauchent (octets %d..%d et %d..%d)"',
+    '',
+    'msgid "Cannot open or find the file in the editor"',
+    'msgstr "Impossible d''ouvrir ou de trouver le fichier dans l'''#$00E9'diteur"',
+    '',
+    'msgid "Editor view not available"',
+    'msgstr "Vue de l'''#$00E9'diteur non disponible"',
+    '',
+    'msgid "Editor buffer not readable"',
+    'msgstr "Tampon de l'''#$00E9'diteur illisible"',
+    '',
+    'msgid "Editor buffer not writable"',
+    'msgstr "Tampon de l'''#$00E9'diteur non modifiable"',
+    '',
+    'msgid "Editor buffer is read-only - nothing written"',
+    'msgstr "Le tampon de l'''#$00E9'diteur est en lecture seule - rien n''a '#$00E9't'#$00E9' '#$00E9'crit"',
+    '',
+    'msgid "%s [log: %s]"',
+    'msgstr "%s [journal : %s]"',
+    '',
+    'msgid "action kind %d without execution"',
+    'msgstr "type d''action %d sans ex'#$00E9'cution"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

@@ -2515,3 +2515,44 @@ msgstr "kein Kopf %s"
 
 msgid "%d headers %s"
 msgstr "%d Köpfe %s"
+
+# reDelphix G7 (uRdxFixTable, uRdxSuppress, uRdxBufferMath, uRdxEditor, uRdxScopeTable, uRdxProvider)
+
+msgid "Source in the editor differs from the state when the menu was built - nothing written (reopen the menu) (line %d, the buffer has %d lines)"
+msgstr "Quelltext im Editor weicht vom Stand beim Menüaufbau ab - nicht geschrieben (Menü neu öffnen) (Zeile %d, der Puffer hat %d Zeilen)"
+
+msgid "Source in the editor differs from the state when the menu was built - nothing written (reopen the menu) (from character %d: expected \"%s\", editor \"%s\")"
+msgstr "Quelltext im Editor weicht vom Stand beim Menüaufbau ab - nicht geschrieben (Menü neu öffnen) (ab Zeichen %d: erwartet \"%s\", Editor \"%s\")"
+
+msgid "Position in the buffer cannot be computed (%d..%d of %d)"
+msgstr "Position im Puffer nicht berechenbar (%d..%d von %d)"
+
+msgid "Byte range differs from the state when the menu was built - nothing written (from character %d: expected \"%s\", editor \"%s\")"
+msgstr "Byte-Bereich weicht vom Stand beim Menüaufbau ab - nicht geschrieben (ab Zeichen %d: erwartet \"%s\", Editor \"%s\")"
+
+msgid "No replacement"
+msgstr "keine Ersetzung"
+
+msgid "Replacements overlap (bytes %d..%d and %d..%d)"
+msgstr "Ersetzungen überlappen (Bytes %d..%d und %d..%d)"
+
+msgid "Cannot open or find the file in the editor"
+msgstr "Datei ließ sich im Editor nicht öffnen oder finden"
+
+msgid "Editor view not available"
+msgstr "Editor-Ansicht nicht verfügbar"
+
+msgid "Editor buffer not readable"
+msgstr "Editor-Puffer nicht lesbar"
+
+msgid "Editor buffer not writable"
+msgstr "Editor-Puffer nicht beschreibbar"
+
+msgid "Editor buffer is read-only - nothing written"
+msgstr "Editor-Puffer ist schreibgeschützt - nicht geschrieben"
+
+msgid "%s [log: %s]"
+msgstr "%s [Protokoll: %s]"
+
+msgid "action kind %d without execution"
+msgstr "Aktionsart %d ohne Ausführung"

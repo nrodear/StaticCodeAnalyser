@@ -253,9 +253,9 @@ uses
 const
   // Menuetexte ueber _() (Editorhilfen E6): englische msgids, de/fr in
   // i18n/*.po, angezeigt in der reDelphix-Sprache (uRdxText, Entscheid
-  // E29: wie die SCA-Oberflaeche oder redelphix.ini [UI] Language). Die
-  // Gruende aus den reinen Rezept-Units (uRdxRecipes, uRdxRecipeRunner)
-  // sind noch deutsch - sie stellen die Chargen C1..Cn um.
+  // E29: wie die SCA-Oberflaeche oder redelphix.ini [UI] Language). Gruende
+  // und Hinweise der Planer kommen schon uebersetzt aus ihren Units
+  // (Charge C1 und die Gruppen danach) - hier nie ein zweites _().
   CAP_SHOW     = 'Show location';
   CAP_FORMAT   = 'Build Format() from concatenation';
   CAP_SQL      = 'Copy parameterized template to clipboard';
@@ -291,9 +291,9 @@ begin
       Clipboard.AsText := FTemplate;
   else
     // Jede Art hat oben ihren Zweig; eine neue ohne Zweig faellt hier auf,
-    // statt still nichts zu tun (SCA168).
-    raise ERdxActionFailed.CreateFmt('reDelphix: Aktionsart %d ohne '
-      + 'Ausfuehrung', [Ord(FKind)]);
+    // statt still nichts zu tun (SCA168) - der Host zeigt die Meldung.
+    raise ERdxActionFailed.Create(DIAG_PREFIX
+      + _('action kind %d without execution', [Ord(FKind)]));
   end;
 end;
 

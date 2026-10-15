@@ -2511,3 +2511,44 @@ msgstr "aucun en-tête %s"
 
 msgid "%d headers %s"
 msgstr "%d en-têtes %s"
+
+# reDelphix G7 (uRdxFixTable, uRdxSuppress, uRdxBufferMath, uRdxEditor, uRdxScopeTable, uRdxProvider)
+
+msgid "Source in the editor differs from the state when the menu was built - nothing written (reopen the menu) (line %d, the buffer has %d lines)"
+msgstr "Le code source dans l'éditeur diffère de l'état au moment de la construction du menu - rien n'a été écrit (rouvrez le menu) (ligne %d, le tampon a %d lignes)"
+
+msgid "Source in the editor differs from the state when the menu was built - nothing written (reopen the menu) (from character %d: expected \"%s\", editor \"%s\")"
+msgstr "Le code source dans l'éditeur diffère de l'état au moment de la construction du menu - rien n'a été écrit (rouvrez le menu) (à partir du caractère %d : attendu « %s », éditeur « %s »)"
+
+msgid "Position in the buffer cannot be computed (%d..%d of %d)"
+msgstr "Position dans le tampon impossible à calculer (%d..%d sur %d)"
+
+msgid "Byte range differs from the state when the menu was built - nothing written (from character %d: expected \"%s\", editor \"%s\")"
+msgstr "La plage d'octets diffère de l'état au moment de la construction du menu - rien n'a été écrit (à partir du caractère %d : attendu « %s », éditeur « %s »)"
+
+msgid "No replacement"
+msgstr "Aucun remplacement"
+
+msgid "Replacements overlap (bytes %d..%d and %d..%d)"
+msgstr "Les remplacements se chevauchent (octets %d..%d et %d..%d)"
+
+msgid "Cannot open or find the file in the editor"
+msgstr "Impossible d'ouvrir ou de trouver le fichier dans l'éditeur"
+
+msgid "Editor view not available"
+msgstr "Vue de l'éditeur non disponible"
+
+msgid "Editor buffer not readable"
+msgstr "Tampon de l'éditeur illisible"
+
+msgid "Editor buffer not writable"
+msgstr "Tampon de l'éditeur non modifiable"
+
+msgid "Editor buffer is read-only - nothing written"
+msgstr "Le tampon de l'éditeur est en lecture seule - rien n'a été écrit"
+
+msgid "%s [log: %s]"
+msgstr "%s [journal : %s]"
+
+msgid "action kind %d without execution"
+msgstr "type d'action %d sans exécution"

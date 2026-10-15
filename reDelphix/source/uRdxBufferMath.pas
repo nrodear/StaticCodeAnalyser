@@ -56,6 +56,14 @@ type
     NewText  : string;    // schon mit dem Zeilenende des Puffers
   end;
 
+  // Die erste abweichende Stelle zweier Texte samt Umfeld in beiden - das
+  // Detail einer Abweichung (FirstMismatch).
+  TRdxMismatch = record
+    At       : Integer;   // 1-basiert
+    Expected : string;    // Umfeld im erwarteten Text, sichtbar (Visible)
+    Actual   : string;    // Umfeld im gefundenen Text, sichtbar (Visible)
+  end;
+
 // Byte-Offset (0-basiert) jedes Zeilenanfangs; Terminatoren CRLF, LF und
 // CR - dieselbe Trennung wie TStringList.Text.
 procedure LineStartsOf(const ABytes: TBytes; AStarts: TList<Integer>);
@@ -118,14 +126,19 @@ function BufferEol(const ABytes: TBytes): string;
 // Zeilenumbrueche und Tabulatoren sichtbar machen (Meldung, Protokoll).
 function Visible(const S: string): string;
 
-// Erste abweichende Stelle samt Umfeld aus beiden Texten.
-function DescribeMismatch(const AExpected, AActual: string): string;
+// Erste abweichende Stelle samt Umfeld aus beiden Texten - als Teile, die
+// eine Meldung in IHREN Satz setzt (PlanByteEdits: eine msgid je Meldung,
+// Entscheid E29). Bis Charge G7 hiess die Funktion DescribeMismatch und
+// lieferte das Detail fertig formatiert (deutsch), das an den Satz davor
+// gehaengt wurde.
+function FirstMismatch(const AExpected, AActual: string): TRdxMismatch;
 
 // Prueft ALLE Ersetzungen einer Aktion gegen DENSELBEN Puffer - je als
 // Zeilen (SpanText) und als Bytes (der Ausschnitt, der geloescht wuerde) -
 // und liefert sie AUFSTEIGEND nach Byte-Position (so verlangt es der
 // IOTAEditWriter, der nur vorwaerts kopiert). Ueberlappende Bereiche,
-// ein leerer Erwartungstext oder eine Abweichung -> False und AError; dann
+// ein leerer Erwartungstext oder eine Abweichung -> False und AError (in
+// der reDelphix-Sprache, uRdxText - die Meldung sieht der Benutzer); dann
 // darf NICHTS geschrieben werden (Review Major 3: kein Teilschreiben).
 function PlanByteEdits(const ABytes: TBytes; const AEdits: TArray<TRdxEdit>;
   out APlan: TArray<TRdxByteEdit>; out AError: string): Boolean;
@@ -145,11 +158,28 @@ procedure AddEdit(var AList: TArray<TRdxEdit>; const AEdit: TRdxEdit);
 implementation
 
 uses
-  uRefactorInfoBuilder;   // SpanText: derselbe Bereichstext wie beim Scan
+  uRefactorInfoBuilder,   // SpanText: derselbe Bereichstext wie beim Scan
+  uRdxText;               // _(): Meldungen in der reDelphix-Sprache (E29)
 
 const
-  SDiffers = 'Quelltext im Editor weicht vom Stand beim Menueaufbau ab - '
-    + 'nicht geschrieben (Menue neu oeffnen)';
+  // Die Meldungen von PlanByteEdits - der Benutzer sieht sie, wenn eine
+  // Aktion nicht schreibt (uRdxEditor.ReplaceSpans). Englische msgids,
+  // uebersetzt mit _() an der Verwendung (Entscheid E29). Jede Abweichung
+  // ist EIN ganzer Satz samt Detail ('ab Zeichen ...', FirstMismatch): bis
+  // Charge G7 hing das Detail aus DescribeMismatch an den Satz davor -
+  // uebersetzt stellten de und fr die Woerter dann nicht selbst.
+  S_DIFFERS_LINES = 'Source in the editor differs from the state when the '
+    + 'menu was built - nothing written (reopen the menu) (line %d, the '
+    + 'buffer has %d lines)';
+  S_DIFFERS_AT = 'Source in the editor differs from the state when the menu '
+    + 'was built - nothing written (reopen the menu) (from character %d: '
+    + 'expected "%s", editor "%s")';
+  S_NO_POSITION = 'Position in the buffer cannot be computed (%d..%d of %d)';
+  S_BYTES_DIFFER_AT = 'Byte range differs from the state when the menu was '
+    + 'built - nothing written (from character %d: expected "%s", editor '
+    + '"%s")';
+  S_NO_EDIT = 'No replacement';
+  S_OVERLAP = 'Replacements overlap (bytes %d..%d and %d..%d)';
   BYTE_CR  = 13;
   BYTE_LF  = 10;
 
@@ -270,7 +300,7 @@ begin
   Result := StringReplace(Result, #9, '\t', [rfReplaceAll]);
 end;
 
-function DescribeMismatch(const AExpected, AActual: string): string;
+function FirstMismatch(const AExpected, AActual: string): TRdxMismatch;
 const
   CTX    = 24;
   BEFORE = 8;
@@ -284,8 +314,9 @@ begin
   while (i <= n) and (AExpected[i] = AActual[i]) do Inc(i);
   From := i - BEFORE;
   if From < 1 then From := 1;
-  Result := Format(' (ab Zeichen %d: erwartet "%s", Editor "%s")', [i,
-    Visible(Copy(AExpected, From, CTX)), Visible(Copy(AActual, From, CTX))]);
+  Result.At       := i;
+  Result.Expected := Visible(Copy(AExpected, From, CTX));
+  Result.Actual   := Visible(Copy(AActual, From, CTX));
 end;
 
 // Einfuegesortierung nach StartPos - eine Aktion hat eine Handvoll Edits.
@@ -313,25 +344,26 @@ function PlanOne(const AView: TBufferView; const AEdit: TRdxEdit;
 var
   Actual : string;
   Slice  : string;
+  M      : TRdxMismatch;
 begin
   Result := False;
   AOut := Default(TRdxByteEdit);
   if not AEdit.Span.IsValid or (AEdit.Expected = '') then
   begin
-    AError := 'kein gueltiger Bereich';
+    AError := MsgNoValidRange;
     Exit;
   end;
   // 1) als Zeilen gegen den erwarteten Text (Stand beim Menueaufbau)
   if AEdit.Span.EndLine > AView.Lines.Count then
   begin
-    AError := SDiffers + Format(' (Zeile %d, der Puffer hat %d Zeilen)',
-      [AEdit.Span.EndLine, AView.Lines.Count]);
+    AError := _(S_DIFFERS_LINES, [AEdit.Span.EndLine, AView.Lines.Count]);
     Exit;
   end;
   Actual := TRefactorInfoBuilder.SpanText(AView.Lines, AEdit.Span);
   if Actual <> AEdit.Expected then
   begin
-    AError := SDiffers + DescribeMismatch(AEdit.Expected, Actual);
+    M := FirstMismatch(AEdit.Expected, Actual);
+    AError := _(S_DIFFERS_AT, [M.At, M.Expected, M.Actual]);
     Exit;
   end;
   // 2) Byte-Offsets aus demselben Puffer; der Ausschnitt muss den
@@ -343,16 +375,16 @@ begin
      or (AOut.EndPos <= AOut.StartPos)
      or (AOut.EndPos > Length(AView.Bytes)) then
   begin
-    AError := Format('Position im Puffer nicht berechenbar (%d..%d von %d)',
-      [AOut.StartPos, AOut.EndPos, Length(AView.Bytes)]);
+    AError := _(S_NO_POSITION, [AOut.StartPos, AOut.EndPos,
+      Length(AView.Bytes)]);
     Exit;
   end;
   Slice := NormalizeEol(TEncoding.UTF8.GetString(AView.Bytes, AOut.StartPos,
     AOut.EndPos - AOut.StartPos));
   if Slice <> AEdit.Expected then
   begin
-    AError := 'Byte-Bereich weicht vom Stand beim Menueaufbau ab - nicht geschrieben'
-      + DescribeMismatch(AEdit.Expected, Slice);
+    M := FirstMismatch(AEdit.Expected, Slice);
+    AError := _(S_BYTES_DIFFER_AT, [M.At, M.Expected, M.Actual]);
     Exit;
   end;
   AOut.NewText := StringReplace(AEdit.NewText, #10, AView.Eol, [rfReplaceAll]);
@@ -397,7 +429,7 @@ begin
   APlan  := nil;
   if Length(AEdits) = 0 then
   begin
-    AError := 'keine Ersetzung';
+    AError := _(S_NO_EDIT);
     Exit;
   end;
   View.Bytes  := ABytes;
@@ -422,9 +454,8 @@ begin
     for i := 1 to High(APlan) do
       if APlan[i].StartPos < APlan[i - 1].EndPos then
       begin
-        AError := Format('Ersetzungen ueberlappen (Bytes %d..%d und %d..%d)',
-          [APlan[i - 1].StartPos, APlan[i - 1].EndPos, APlan[i].StartPos,
-           APlan[i].EndPos]);
+        AError := _(S_OVERLAP, [APlan[i - 1].StartPos, APlan[i - 1].EndPos,
+          APlan[i].StartPos, APlan[i].EndPos]);
         APlan := nil;
         Exit;
       end;

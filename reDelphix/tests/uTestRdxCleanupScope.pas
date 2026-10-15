@@ -208,6 +208,7 @@ var
   S, E       : Integer;
   Head, Tail : string;
   Slice, Ins : string;
+  M          : TRdxMismatch;
   {$IFNDEF FPC}
   Edits      : TArray<TRdxEdit>;
   Plan       : TArray<TRdxByteEdit>;
@@ -229,7 +230,13 @@ begin
       Exit('Position im Puffer nicht berechenbar');
     Slice := NormalizeEol(Utf8Part(Bytes, S, E - S));
     if Slice <> AEdit.Expected then
-      Exit('Byte-Bereich weicht ab' + DescribeMismatch(AEdit.Expected, Slice));
+    begin
+      // Das Detail wie PlanOne (seit Charge G7 FirstMismatch statt des
+      // fertigen deutschen DescribeMismatch).
+      M := FirstMismatch(AEdit.Expected, Slice);
+      Exit(Format('Byte-Bereich weicht ab (ab Zeichen %d: erwartet "%s", '
+        + 'Editor "%s")', [M.At, M.Expected, M.Actual]));
+    end;
   finally
     SL.Free;
     Starts.Free;

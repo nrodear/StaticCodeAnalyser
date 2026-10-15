@@ -130,6 +130,10 @@ msgstr ""
 msgid "%s - line moved? Analyse the file again"
 msgstr ""
 
+#: reDelphix/source/uRdxEditor.pas:140
+msgid "%s [log: %s]"
+msgstr ""
+
 #: SCA.SharedUI/sources/uProfileViewer.pas:872
 msgid "%s contains no profiles."
 msgstr ""
@@ -493,6 +497,10 @@ msgstr ""
 msgid "Build Format() from concatenation"
 msgstr ""
 
+#: reDelphix/source/uRdxBufferMath.pas:387
+msgid "Byte range differs from the state when the menu was built - nothing written (from character %d: expected \"%s\", editor \"%s\")"
+msgstr ""
+
 #: SCA.SharedUI/sources/uExportMenu.pas:161
 msgid "CSV (filtered view)..."
 msgstr ""
@@ -535,9 +543,14 @@ msgstr ""
 msgid "Cancelling analysis..."
 msgstr ""
 
-#: reDelphix/source/uRdxEditor.pas:411
-#: reDelphix/source/uRdxEditor.pas:420
+#: reDelphix/source/uRdxEditor.pas:416
+#: reDelphix/source/uRdxEditor.pas:425
 msgid "Cannot move the editor cursor to line %d, column %d"
+msgstr ""
+
+#: reDelphix/source/uRdxEditor.pas:374
+#: reDelphix/source/uRdxEditor.pas:480
+msgid "Cannot open or find the file in the editor"
 msgstr ""
 
 #: SCA.Engine/sources/Common/uRuleCatalog.pas:1567
@@ -985,12 +998,30 @@ msgstr ""
 msgid "ERROR"
 msgstr ""
 
+#: reDelphix/source/uRdxEditor.pas:487
+msgid "Editor buffer is read-only - nothing written"
+msgstr ""
+
+#: reDelphix/source/uRdxEditor.pas:385
+#: reDelphix/source/uRdxEditor.pas:494
+msgid "Editor buffer not readable"
+msgstr ""
+
+#: reDelphix/source/uRdxEditor.pas:507
+msgid "Editor buffer not writable"
+msgstr ""
+
 #: StaticCodeAnalyserIDE/uIDESCAOptions.pas:476
 msgid "Editor marker color scheme:"
 msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDESCAOptions.pas:285
 msgid "Editor right-click triggers a single-file analysis; findings appear as stripes + hover overlays in the editor (no dock)."
+msgstr ""
+
+#: reDelphix/source/uRdxEditor.pas:380
+#: reDelphix/source/uRdxEditor.pas:405
+msgid "Editor view not available"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2182
@@ -1497,7 +1528,7 @@ msgstr ""
 msgid "Line ends with whitespace - diff hygiene"
 msgstr ""
 
-#: reDelphix/source/uRdxEditor.pas:394
+#: reDelphix/source/uRdxEditor.pas:399
 msgid "Line too long for the editor selection (the editor reaches at most column %d)"
 msgstr ""
 
@@ -1708,6 +1739,10 @@ msgstr ""
 msgid "No matches."
 msgstr ""
 
+#: reDelphix/source/uRdxBufferMath.pas:432
+msgid "No replacement"
+msgstr ""
+
 #: SCA.SharedUI/sources/uProfileViewer.pas:495
 msgid "No rule catalogue found - profiles unavailable."
 msgstr ""
@@ -1837,6 +1872,10 @@ msgstr ""
 msgid "Pointer type alias should start with \"P\""
 msgstr ""
 
+#: reDelphix/source/uRdxBufferMath.pas:378
+msgid "Position in the buffer cannot be computed (%d..%d of %d)"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:3434
 msgid "Prefer Assigned() over \"= nil\" / \"<> nil\""
 msgstr ""
@@ -1950,7 +1989,7 @@ msgstr ""
 msgid "Raise the exception"
 msgstr ""
 
-#: reDelphix/source/uRdxEditor.pas:388
+#: reDelphix/source/uRdxEditor.pas:393
 msgid "Range %d:%d to %d:%d lies behind the end of the editor buffer (%d lines) - rescan the file"
 msgstr ""
 
@@ -2064,6 +2103,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxFixTable.pas:1224
 msgid "Replace begin with initialization"
+msgstr ""
+
+#: reDelphix/source/uRdxBufferMath.pas:457
+msgid "Replacements overlap (bytes %d..%d and %d..%d)"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:1420
@@ -2367,6 +2410,14 @@ msgstr ""
 
 #: SCA.SharedUI/sources/uExportMenu.pas:210
 msgid "Sonar: write Generic Issue report (all findings)..."
+msgstr ""
+
+#: reDelphix/source/uRdxBufferMath.pas:366
+msgid "Source in the editor differs from the state when the menu was built - nothing written (reopen the menu) (from character %d: expected \"%s\", editor \"%s\")"
+msgstr ""
+
+#: reDelphix/source/uRdxBufferMath.pas:359
+msgid "Source in the editor differs from the state when the menu was built - nothing written (reopen the menu) (line %d, the buffer has %d lines)"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2120
@@ -2725,6 +2776,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:315
 msgid "You are a senior Delphi developer reviewing the output of a static code analyser. Target version: Delphi 12 Athens (RTL/VCL). Suggest minimal, idiomatic fixes - no sweeping refactors, no style overhauls, no new dependencies unless strictly required."
+msgstr ""
+
+#: reDelphix/source/uRdxProvider.pas:296
+msgid "action kind %d without execution"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:496
