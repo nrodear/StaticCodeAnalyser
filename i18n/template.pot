@@ -106,8 +106,20 @@ msgstr ""
 msgid "%d of %d rules shown, %d selected"
 msgstr ""
 
+#: reDelphix/source/uRdxRaiseFixes.pas:124
+msgid "%d routine headers"
+msgstr ""
+
 #: SCA.SharedUI/sources/uProfileViewer.pas:284
 msgid "%d rules, %d selected"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:506
+msgid "%d times \"raise %s\""
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:354
+msgid "%d times %s.Create"
 msgstr ""
 
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:827
@@ -120,6 +132,10 @@ msgstr ""
 
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:825
 msgid "%s (no findings)"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:263
+msgid "%s - an exception there would leave a half-built object or no destructor"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:752
@@ -140,6 +156,14 @@ msgstr ""
 
 #: SCA.Engine/sources/Common/uRuleCatalog.pas:1575
 msgid "%s is not a valid JSON object."
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:450
+msgid "%s is reassigned between handler and raise - \"raise %s;\" then raises a different object than \"raise;\""
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:359
+msgid "%s.Create(..) is not a whole statement - part of an expression?"
 msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:810
@@ -2727,12 +2751,24 @@ msgstr ""
 msgid "You are a senior Delphi developer reviewing the output of a static code analyser. Target version: Delphi 12 Athens (RTL/VCL). Suggest minimal, idiomatic fixes - no sweeping refactors, no style overhauls, no new dependencies unless strictly required."
 msgstr ""
 
+#: reDelphix/source/uRdxRaiseFixes.pas:242
+msgid "a comment spanning several lines starts after the begin"
+msgstr ""
+
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:496
 msgid "analyse only files changed in current branch"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3225
 msgid "analyser.ini is not writable - dialect unchanged."
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:411
+msgid "anonymous method in the handler (the raise inside it or one before it) - cannot be checked safely"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:182
+msgid "asm body"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2196
@@ -2753,6 +2789,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2334
 msgid "class(TObject) - TObject is the default base, drop it"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:513
+msgid "comment or line break between raise and name"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:802
@@ -2839,6 +2879,26 @@ msgstr ""
 msgid "literal not readable: %s"
 msgstr ""
 
+#: reDelphix/source/uRdxRaiseFixes.pas:179
+msgid "local routine between header and body - which begin is meant is not certain"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:266
+msgid "name of the method not on the header line"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:505
+msgid "no \"raise %s\""
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:353
+msgid "no %s.Create"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:186
+msgid "no body found for the method"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:782
 msgid "no file open"
 msgstr ""
@@ -2847,8 +2907,16 @@ msgstr ""
 msgid "no findings"
 msgstr ""
 
+#: reDelphix/source/uRdxRaiseFixes.pas:479
+msgid "no handler \"on %s: ... do\" found before the raise"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:837
 msgid "no header %s"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:123
+msgid "no method header"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:822
@@ -2884,12 +2952,32 @@ msgstr ""
 msgid "own unit %s in the project"
 msgstr ""
 
+#: reDelphix/source/uRdxRaiseFixes.pas:405
+msgid "raise is in the except/finally of an inner try - \"raise;\" would re-raise a different exception there"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:426
+msgid "raise is in the handler of \"%s\", not of \"%s\""
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:239
+msgid "something else follows the begin - a line of its own would not fit"
+msgstr ""
+
 #: StaticCodeAnalyserIDE/uIDESonarOptions.pas:414
 msgid "sonar.projectKey not found in "
 msgstr ""
 
 #: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:595
 msgid "svn not found. Install TortoiseSVN WITH the option \"command line client tools\" or set the path to svn.exe in analyser.ini."
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:214
+msgid "the body already holds a comment without intent - commented-out code (SCA070)? Decide by hand"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:201
+msgid "the body is not empty - code under a directive or an asm block (the detector sees only the active branch) or finding outdated"
 msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:578
@@ -2903,6 +2991,14 @@ msgstr ""
 
 #: reDelphix/source/uRdxText.pas:757
 msgid "the message has no column"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:345
+msgid "the message has no exception class"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:531
+msgid "the message has no name of the variable"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:392
@@ -2936,6 +3032,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:394
 msgid "what to test or check after the fix to confirm the issue is gone (and no regressions)."
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:419
+msgid "with statement between handler and raise - the name could be a member"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:1682

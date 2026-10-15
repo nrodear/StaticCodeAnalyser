@@ -2515,3 +2515,80 @@ msgstr "kein Kopf %s"
 
 msgid "%d headers %s"
 msgstr "%d Köpfe %s"
+
+# reDelphix G2 (uRdxResultFixes, uRdxRaiseFixes)
+
+msgid "no method header"
+msgstr "kein Methodenkopf"
+
+msgid "%d routine headers"
+msgstr "%d Routinenköpfe"
+
+msgid "local routine between header and body - which begin is meant is not certain"
+msgstr "lokale Routine zwischen Kopf und Rumpf - welches begin gemeint ist, ist nicht sicher"
+
+msgid "asm body"
+msgstr "asm-Rumpf"
+
+msgid "no body found for the method"
+msgstr "kein Rumpf zur Methode gefunden"
+
+msgid "the body is not empty - code under a directive or an asm block (the detector sees only the active branch) or finding outdated"
+msgstr "der Rumpf ist nicht leer - Code unter einer Direktive bzw. ein asm-Block (der Detektor sieht nur den aktiven Zweig) oder Fund veraltet"
+
+msgid "the body already holds a comment without intent - commented-out code (SCA070)? Decide by hand"
+msgstr "im Rumpf steht schon ein Kommentar ohne Absicht - auskommentierter Code (SCA070)? Von Hand entscheiden"
+
+msgid "something else follows the begin - a line of its own would not fit"
+msgstr "hinter dem begin steht noch etwas - eine eigene Zeile passte nicht"
+
+msgid "a comment spanning several lines starts after the begin"
+msgstr "hinter dem begin beginnt ein Kommentar über Zeilen"
+
+msgid "%s - an exception there would leave a half-built object or no destructor"
+msgstr "%s - eine Exception dort hinterließe ein halbes Objekt bzw. keinen Destruktor"
+
+msgid "name of the method not on the header line"
+msgstr "Name der Methode nicht auf der Kopfzeile"
+
+msgid "the message has no exception class"
+msgstr "Exception-Klasse fehlt in der Meldung"
+
+msgid "no %s.Create"
+msgstr "kein %s.Create"
+
+msgid "%d times %s.Create"
+msgstr "%d-mal %s.Create"
+
+msgid "%s.Create(..) is not a whole statement - part of an expression?"
+msgstr "%s.Create(..) steht nicht als ganze Anweisung - Teil eines Ausdrucks?"
+
+msgid "raise is in the except/finally of an inner try - \"raise;\" would re-raise a different exception there"
+msgstr "raise steht im except/finally eines inneren try - \"raise;\" würde dort eine andere Exception weiterwerfen"
+
+msgid "anonymous method in the handler (the raise inside it or one before it) - cannot be checked safely"
+msgstr "anonyme Methode im Handler (das raise darin oder eine davor) - nicht sicher prüfbar"
+
+msgid "with statement between handler and raise - the name could be a member"
+msgstr "with-Anweisung zwischen Handler und raise - der Name könnte ein Member sein"
+
+msgid "raise is in the handler of \"%s\", not of \"%s\""
+msgstr "raise steht im Handler von \"%s\", nicht von \"%s\""
+
+msgid "%s is reassigned between handler and raise - \"raise %s;\" then raises a different object than \"raise;\""
+msgstr "%s wird zwischen Handler und raise neu zugewiesen - \"raise %s;\" wirft dann ein anderes Objekt als \"raise;\""
+
+msgid "no handler \"on %s: ... do\" found before the raise"
+msgstr "kein Handler \"on %s: ... do\" vor dem raise gefunden"
+
+msgid "no \"raise %s\""
+msgstr "kein \"raise %s\""
+
+msgid "%d times \"raise %s\""
+msgstr "%d-mal \"raise %s\""
+
+msgid "comment or line break between raise and name"
+msgstr "Kommentar oder Zeilenumbruch zwischen raise und Name"
+
+msgid "the message has no name of the variable"
+msgstr "Name der Variablen fehlt in der Meldung"

@@ -2511,3 +2511,80 @@ msgstr "aucun en-tête %s"
 
 msgid "%d headers %s"
 msgstr "%d en-têtes %s"
+
+# reDelphix G2 (uRdxResultFixes, uRdxRaiseFixes)
+
+msgid "no method header"
+msgstr "aucun en-tête de méthode"
+
+msgid "%d routine headers"
+msgstr "%d en-têtes de routine"
+
+msgid "local routine between header and body - which begin is meant is not certain"
+msgstr "routine locale entre l'en-tête et le corps - le begin visé n'est pas certain"
+
+msgid "asm body"
+msgstr "corps asm"
+
+msgid "no body found for the method"
+msgstr "aucun corps trouvé pour la méthode"
+
+msgid "the body is not empty - code under a directive or an asm block (the detector sees only the active branch) or finding outdated"
+msgstr "le corps n'est pas vide - du code sous une directive ou un bloc asm (le détecteur ne voit que la branche active) ou résultat périmé"
+
+msgid "the body already holds a comment without intent - commented-out code (SCA070)? Decide by hand"
+msgstr "le corps contient déjà un commentaire sans intention - code mis en commentaire (SCA070) ? À décider à la main"
+
+msgid "something else follows the begin - a line of its own would not fit"
+msgstr "quelque chose suit encore le begin - une ligne à part ne conviendrait pas"
+
+msgid "a comment spanning several lines starts after the begin"
+msgstr "un commentaire sur plusieurs lignes commence après le begin"
+
+msgid "%s - an exception there would leave a half-built object or no destructor"
+msgstr "%s - une exception à cet endroit laisserait un objet à moitié construit ou aucun destructeur"
+
+msgid "name of the method not on the header line"
+msgstr "nom de la méthode absent de la ligne d'en-tête"
+
+msgid "the message has no exception class"
+msgstr "la classe d'exception manque dans le message"
+
+msgid "no %s.Create"
+msgstr "aucun %s.Create"
+
+msgid "%d times %s.Create"
+msgstr "%d fois %s.Create"
+
+msgid "%s.Create(..) is not a whole statement - part of an expression?"
+msgstr "%s.Create(..) n'est pas une instruction complète - partie d'une expression ?"
+
+msgid "raise is in the except/finally of an inner try - \"raise;\" would re-raise a different exception there"
+msgstr "raise se trouve dans le except/finally d'un try interne - « raise; » y relancerait une autre exception"
+
+msgid "anonymous method in the handler (the raise inside it or one before it) - cannot be checked safely"
+msgstr "méthode anonyme dans le gestionnaire (contenant le raise ou placée avant lui) - impossible à vérifier de façon sûre"
+
+msgid "with statement between handler and raise - the name could be a member"
+msgstr "instruction with entre le gestionnaire et raise - le nom pourrait être un membre"
+
+msgid "raise is in the handler of \"%s\", not of \"%s\""
+msgstr "raise se trouve dans le gestionnaire de « %s », pas de « %s »"
+
+msgid "%s is reassigned between handler and raise - \"raise %s;\" then raises a different object than \"raise;\""
+msgstr "%s est réaffecté entre le gestionnaire et raise - « raise %s; » lève alors un autre objet que « raise; »"
+
+msgid "no handler \"on %s: ... do\" found before the raise"
+msgstr "aucun gestionnaire « on %s: ... do » trouvé avant le raise"
+
+msgid "no \"raise %s\""
+msgstr "aucun « raise %s »"
+
+msgid "%d times \"raise %s\""
+msgstr "%d fois « raise %s »"
+
+msgid "comment or line break between raise and name"
+msgstr "commentaire ou saut de ligne entre raise et le nom"
+
+msgid "the message has no name of the variable"
+msgstr "le nom de la variable manque dans le message"
