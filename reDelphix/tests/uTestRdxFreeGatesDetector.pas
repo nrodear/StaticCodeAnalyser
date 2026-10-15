@@ -20,8 +20,12 @@ unit uTestRdxFreeGatesDetector;
 //   * Nachpruefung: ein fremder Zeiger hinter einem Alias der Unit
 //     (PMyKey = PEVP_PKEY), ein Attribut vor dem Kopf auf derselben Zeile,
 //     der Win32-Namensraum ('\\?\C:\..' lokal, '\\?\UNC\..' Netzpfad).
+//   * Gegenpruefung V-B2S-3 (Charge B2S-a): SCA147 auf einem Netzlaufwerk,
+//     auch lang geschrieben - der Grund nennt das Laufwerk (Naht
+//     SetRdxRemoteDriveTest statt GetDriveType).
 // Jeder Test ausser den beiden Hilfe-Gegenproben (Sca139_VarParam_Helps,
-// Sca072_*) war gegen den Stand 4358b769 rot: dort bot der Laeufer die
+// Sca072_*) und dem Netzlaufwerk-Test (die Naht gibt es erst seit Charge
+// B2S-a) war gegen den Stand 4358b769 rot: dort bot der Laeufer die
 // Hilfe an bzw. lehnte mit einem anderen Grund ab.
 
 interface
@@ -51,6 +55,8 @@ type
     [Test] procedure Sca139_ForeignPointerBehindUnitAlias_NoHelp;
     [Test] procedure Sca139_ConstParam_AttributeOnHeadLine_NoHelp;
     [Test] procedure Sca147_Win32NamespacePaths;
+    // ---- Gegenpruefung V-B2S-3 ----
+    [Test] procedure Sca147_RemoteDrive_NoHelp;
   end;
 
 implementation
@@ -61,6 +67,7 @@ uses
   uFreeAndNilHint, uFreeWithoutNil, uUnusedRoutine, uUnusedPrivateMethod,
   uRedundantBoolean,
   uRdxRecipeRunner,      // TRdxFixOutcome
+  uRdxPaths,             // SetRdxRemoteDriveTest (Naht fuer das Netzlaufwerk)
   uTestRdxDetectorKit;   // TSeen, Join, Detect-/Plan-/Apply-Helfer
 
 const
@@ -71,6 +78,8 @@ const
   UNC_NS_FILE = '\\?\UNC\rdx-fb-nohost\share\src\t.pas';
   // Vorsatz fuer lange lokale Pfade ('\\?\C:\..').
   LONG_PATH_PREFIX = '\\?\';
+  // Das Netzlaufwerk der Attrappe (FakeRemoteDrive).
+  DRIVE_Q = 'Q:';
 
 // ---- Helfer ----
 
@@ -134,6 +143,13 @@ begin
       Exit(i + 1);
   Result := 0;
   Assert.Fail('Zeile fehlt: ' + AText);
+end;
+
+// Attrappe fuer GetDriveType in der Netzpfad-Regel (uRdxPaths): nur Q: ist
+// ein Netzlaufwerk.
+function FakeRemoteDrive(const ADrive: string): Boolean;
+begin
+  Result := SameText(ADrive, DRIVE_Q);
 end;
 
 // Eine Klasse THolder mit dem Feld AField und der Methode Reset, deren
@@ -357,6 +373,38 @@ begin
   Assert.IsFalse(O.Enabled, 'keine Hilfe auf dem Netzpfad');
   Assert.IsTrue(Pos('Netzpfad \\rdx-fb-nohost\share\src', O.Reason) > 0,
     O.Reason);
+end;
+
+{ ---- Gegenpruefung V-B2S-3 ---- }
+
+procedure TTestRdxFreeGatesDetector.Sca147_RemoteDrive_NoHelp;
+var
+  Src, QFile : string;
+  O          : TRdxFixOutcome;
+begin
+  // Der Laufwerks-Zweig von NetworkPathReason (uRdxFixTable, seit Charge
+  // B2S-a ueber uRdxPaths.RemoteDriveOf): auf einem Netzlaufwerk liest die
+  // Hilfe keine Formdatei neben der Unit, und der Grund nennt das
+  // Laufwerk - auch lang geschrieben ('\\?\Q:\..'), dort ohne den Vorsatz.
+  // Q: ist eines nur ueber die Naht; der Pfad besteht aus Teilen (ein
+  // Literal waere ein SCA016-Fund im Selbstscan).
+  Src := DeadMethodUnit;
+  QFile := DRIVE_Q + PathDelim + 'src' + PathDelim + 't.pas';
+  SetRdxRemoteDriveTest(FakeRemoteDrive);
+  try
+    O := PlanAt(Src, QFile, fkUnusedPrivateMethod,
+      LineOf(Src, '    procedure Dead;'));
+    Assert.IsFalse(O.Enabled, 'keine Hilfe auf dem Netzlaufwerk');
+    Assert.IsTrue(Pos('Netzpfad Q: - die Hilfe liest dort keine Formdateien',
+      O.Reason) > 0, O.Reason);
+    O := PlanAt(Src, LONG_PATH_PREFIX + QFile, fkUnusedPrivateMethod,
+      LineOf(Src, '    procedure Dead;'));
+    Assert.IsFalse(O.Enabled, 'keine Hilfe, auch lang geschrieben');
+    Assert.IsTrue(Pos('Netzpfad Q: - die Hilfe liest dort keine Formdateien',
+      O.Reason) > 0, O.Reason);
+  finally
+    SetRdxRemoteDriveTest(nil);
+  end;
 end;
 
 initialization

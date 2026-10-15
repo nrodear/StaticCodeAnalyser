@@ -710,7 +710,10 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   ist in einer Methode einer TForm-Ableitung nicht bewiesen (strenger Resolver);
   Nachpruefung: fremder Zeiger hinter einem Alias der Unit (`PMyKey = PEVP_PKEY`),
   Attribut vor dem Kopf auf derselben Zeile, `\\?\C:\..` lokal und `\\?\UNC\..`
-  Netzpfad - 13 Tests. Ohne Delphi gegengeprueft: die Sperr-Funktionen woertlich unter FPC
+  Netzpfad; Gegenpruefung V-B2S-3: SCA147 auf einem Netzlaufwerk, auch als
+  `\\?\Q:\..` - der Grund nennt `Netzpfad Q:` (Laufwerks-Zweig von
+  `NetworkPathReason`, Q: ueber die Naht `SetRdxRemoteDriveTest`) - 14 Tests. Ohne
+  Delphi gegengeprueft: die Sperr-Funktionen woertlich unter FPC
   an denselben Fixtures (alt Hilfe, neu Sperre) und an allen 1.540
   SCA085/SCA139-Funden des Korpus.
 * `uTestRdxFreeTypes` - `DeclaresValueType` mit Zeigertyp der Unit (`PX509_CRL =
@@ -892,8 +895,13 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   Kennzeichnung, mehrdeutig, Zifferntrenner (`200_000`, `200_000.5`: der Detektor
   meldet `200`, die Hilfe nennt den Fehlalarm - faellt, sobald eine Detektor-Charge
   ihn behebt), alte Compiler, Lazarus-Paket und FPC-Include ueber den Check der
-  Tabelle - 10 Tests; ohne Delphi gegengeprueft (CLI-Exe und FPC-Planer, 6/6 der
-  Rundlauf- und Sperrfaelle, die Trenner-Formen 2/2 in der Nachbesserung FF).
+  Tabelle, dazu das Netzlaufwerk (`RemoteDriveReason`, auch lang geschrieben
+  `\\?\Q:\..`: der Grund nennt `Netzlaufwerk Q:`; Q: ueber die Naht
+  `SetRdxRemoteDriveTest`, Gegenpruefung V-B2S-3) - 11 Tests; ohne Delphi
+  gegengeprueft (CLI-Exe und FPC-Planer, 6/6 der Rundlauf- und Sperrfaelle, die
+  Trenner-Formen 2/2 in der Nachbesserung FF; das Netzlaufwerk ueber die Huellen
+  `RemoteDriveReason`/`NetworkPathReason` woertlich unter FPC, vier Mutanten der
+  Huellen je rot).
 
 Ohne Delphi (FPC 3.2.2):
 

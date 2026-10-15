@@ -10,7 +10,8 @@ unit uTestRdxMagicFixDetector;
 // Katalog-Beispiel (aus 'bad' wird 'good' bis auf den Namen), Menuetext,
 // Hinweis und Kennzeichnung, und die Sperren, die erst die Tabelle
 // beitraegt (MagicCheck: Lazarus-Projekt neben der Unit, Include mit
-// FPC-Weiche).
+// FPC-Weiche, Netzlaufwerk - auch lang geschrieben, Gegenpruefung
+// V-B2S-3).
 //
 // Ohne Delphi gegengeprueft (Charge Q14): dieselben Quellen mit der CLI-Exe
 // gescannt und ueber den FPC-Planer (Korpus-Harness) behoben.
@@ -35,6 +36,8 @@ type
     [Test] procedure Sca014_OldCompiler_NoHelp;
     [Test] procedure Sca014_LazarusProject_NoHelp;
     [Test] procedure Sca014_FpcInclude_NoHelp;
+    // Gegenpruefung V-B2S-3: das Netzlaufwerk (RemoteDriveReason).
+    [Test] procedure Sca014_RemoteDrive_NoHelp;
   end;
 
 implementation
@@ -45,7 +48,12 @@ uses
   uMagicNumbers,
   uRdxRecipeRunner,      // TRdxFixOutcome
   uRdxFixTable,          // CaptionFor
+  uRdxPaths,             // SetRdxRemoteDriveTest (Naht fuer das Netzlaufwerk)
   uTestRdxDetectorKit;   // TSeen, Join, Detect-/Plan-/Apply-Helfer
+
+const
+  // Das Netzlaufwerk der Attrappe (FakeRemoteDrive).
+  DRIVE_Q = 'Q:';
 
 // ---- Helfer ----
 
@@ -94,6 +102,13 @@ begin
   Seen := DetectFile(AFile, fkMagicNumber, RunDetector);
   Assert.AreEqual<Integer>(1, Length(Seen), 'genau ein Fund');
   Result := PlanFixIn(ASource, AFile, fkMagicNumber, Seen[0]);
+end;
+
+// Attrappe fuer GetDriveType in der Netzpfad-Regel (uRdxPaths): nur Q: ist
+// ein Netzlaufwerk.
+function FakeRemoteDrive(const ADrive: string): Boolean;
+begin
+  Result := SameText(ADrive, DRIVE_Q);
 end;
 
 // ---- Faelle ----
@@ -282,6 +297,41 @@ begin
     DeleteFile(Dir + 'defs.inc');
     DeleteFile(Dir + 'u.pas');
     RemoveDeepDir(Dir);
+  end;
+end;
+
+// Der Check der Tabelle (MagicCheck fragt zuerst RemoteDriveReason): die
+// Unit auf einem Netzlaufwerk - dort liest die Hilfe weder Projekt- noch
+// Include-Dateien. Q: ist eines nur ueber die Naht (SetRdxRemoteDriveTest),
+// die Hilfe sieht die Platte nicht an; die Pfade bestehen aus Teilen (ein
+// Literal waere ein SCA016-Fund im Selbstscan). Lang geschrieben
+// ('\\?\Q:\..') nennt der Grund seit Charge B2S-a ebenso das Laufwerk
+// (uRdxPaths.RemoteDriveOf zieht den Vorsatz ab) - bis dahin sah die
+// Laufwerks-Probe dort keines, und FileReason lehnte als "Netzpfad
+// (\\?\Q:\src)" ab. Die gewollte Aenderung war bis zur Gegenpruefung
+// V-B2S-3 ohne Test; ein Laufwerk mit Vorsatz im Grund faellt hier auf.
+procedure TTestRdxMagicFixDetector.Sca014_RemoteDrive_NoHelp;
+var
+  Seen     : TArray<TSeen>;
+  Src      : string;
+  UnitPath : string;
+  O        : TRdxFixOutcome;
+begin
+  Src := InUnit([], ['  Foo;', '  if X > 300 then Bar;']);
+  Seen := Detect(Src, fkMagicNumber);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'genau ein Fund');
+  UnitPath := DRIVE_Q + PathDelim + 'src' + PathDelim + 'u.pas';
+  SetRdxRemoteDriveTest(FakeRemoteDrive);
+  try
+    O := PlanFixIn(Src, UnitPath, fkMagicNumber, Seen[0]);
+    Assert.IsFalse(O.Enabled, 'keine Hilfe auf dem Netzlaufwerk');
+    Assert.IsTrue(Pos('Netzlaufwerk Q: - ', O.Reason) > 0, O.Reason);
+    O := PlanFixIn(Src, PathDelim + PathDelim + '?' + PathDelim + UnitPath,
+      fkMagicNumber, Seen[0]);
+    Assert.IsFalse(O.Enabled, 'keine Hilfe, auch lang geschrieben');
+    Assert.IsTrue(Pos('Netzlaufwerk Q: - ', O.Reason) > 0, O.Reason);
+  finally
+    SetRdxRemoteDriveTest(nil);
   end;
 end;
 
