@@ -244,7 +244,7 @@ begin
   Assert.IsTrue(Pos('","', R) > 0, R);
   Assert.AreEqual('', FixUses(Src, Clause(3, [Entry(3, 6, 'A')]), 2, R),
     'Index ausserhalb');
-  Assert.IsTrue(R <> '');
+  Assert.IsTrue(Pos('kein solcher uses-Eintrag', R) > 0, R);
 end;
 
 // ---- SCA168 ----

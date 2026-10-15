@@ -266,18 +266,26 @@ end;
 
 // ---- Ziel aus dem Fund ----
 
-// Hex, Float, Vorzeichen, Zifferntrenner, Zeichencode und Klammern sind
-// nicht der Vergleichswert "200" (so meldet der Detektor auch nicht).
+// Hex, Float, Vorzeichen, Zeichencode und Klammern sind nicht der
+// Vergleichswert "200" - so meldet der Detektor sie auch nicht (CLI-Scan
+// im Review R6-05): steht eine davon an der Stelle, ist die Zeile seit dem
+// Scan geaendert.
 procedure TTestRdxMagicFix.Target_OtherFormsAreNotTheNumber;
 const
-  FORMS: array[0..6] of string = ('X > $200', 'X > 200.5', 'X > -200',
-    'X > 200_000', 'C = #200', 'X > (200)', 'X > 1e200');
+  FORMS: array[0..5] of string = ('X > $200', 'X > 200.5', 'X > -200',
+    'C = #200', 'X > (200)', 'X > 1e200');
 var
   Form : string;
 begin
   for Form in FORMS do
     AssertRefused(UnitWith([], ['  Foo;', '  if ' + Form + ' then Bar;']),
       Form, '200', 'Zeile verschoben?');
+  // '200_000' meldet der Detektor dagegen als "200" (er liest '_000' als
+  // Bezeichner): ein frischer Fehlalarm. Der Grund nennt ihn - bis Review
+  // R6-05 hiess er 'Zeile verschoben?', und ein neuer Scan fand denselben
+  // Fund wieder.
+  AssertRefused(UnitWith([], ['  Foo;', '  if X > 200_000 then Bar;']),
+    'X > 200_000', '200', 'Zifferntrennern nur den ersten Block 200');
 end;
 
 // '200.5' daneben zaehlt nicht - das eine "200" ist eindeutig.
