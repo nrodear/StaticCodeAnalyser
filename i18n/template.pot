@@ -68,7 +68,7 @@ msgstr ""
 msgid "%d / %d findings"
 msgstr ""
 
-#: reDelphix/source/uRdxRecipeRunner.pas:768
+#: reDelphix/source/uRdxRecipeRunner.pas:770
 msgid "%d according to the compiler (%s)"
 msgstr ""
 
@@ -114,11 +114,11 @@ msgstr ""
 msgid "%d rules, %d selected"
 msgstr ""
 
-#: reDelphix/source/uRdxRecipeRunner.pas:773
+#: reDelphix/source/uRdxRecipeRunner.pas:775
 msgid "%d terms behind %s, %s"
 msgstr ""
 
-#: reDelphix/source/uRdxRecipeRunner.pas:771
+#: reDelphix/source/uRdxRecipeRunner.pas:773
 msgid "%d terms, %s"
 msgstr ""
 
@@ -191,7 +191,7 @@ msgid "%s is declared as a property in this unit - the assignment may call a set
 msgstr ""
 
 #: reDelphix/source/uRdxFixRunner.pas:419
-#: reDelphix/source/uRdxRecipeRunner.pas:842
+#: reDelphix/source/uRdxRecipeRunner.pas:846
 msgid "%s is missing in uses: %s"
 msgstr ""
 
@@ -232,7 +232,7 @@ msgstr ""
 msgid "%s is used in the text - the finding is older than the text; analyse the file again"
 msgstr ""
 
-#: reDelphix/source/uRdxRecipeRunner.pas:775
+#: reDelphix/source/uRdxRecipeRunner.pas:777
 msgid "%s, %d numeric (%%d/%%u)"
 msgstr ""
 
@@ -2838,7 +2838,7 @@ msgstr ""
 msgid "a call raises ENotImplemented instead of doing nothing"
 msgstr ""
 
-#: reDelphix/source/uRdxRecipeRunner.pas:766
+#: reDelphix/source/uRdxRecipeRunner.pas:768
 msgid "all proven"
 msgstr ""
 
@@ -2878,7 +2878,7 @@ msgstr ""
 msgid "class(TObject) - TObject is the default base, drop it"
 msgstr ""
 
-#: reDelphix/source/uRdxRecipeRunner.pas:917
+#: reDelphix/source/uRdxRecipeRunner.pas:921
 msgid "comment in the range"
 msgstr ""
 
@@ -2986,7 +2986,7 @@ msgstr ""
 msgid "line %d is ambiguous (%d statements)"
 msgstr ""
 
-#: reDelphix/source/uRdxRecipeRunner.pas:1182
+#: reDelphix/source/uRdxRecipeRunner.pas:1186
 msgid "line %d of the section not readable"
 msgstr ""
 
@@ -2998,16 +2998,16 @@ msgstr ""
 msgid "literal not readable: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxRecipeRunner.pas:791
+#: reDelphix/source/uRdxRecipeRunner.pas:795
 msgid "no assignment with a chain"
 msgstr ""
 
-#: reDelphix/source/uRdxRecipeRunner.pas:793
+#: reDelphix/source/uRdxRecipeRunner.pas:797
 msgid "no assignment with a chain: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxRecipeRunner.pas:783
-#: reDelphix/source/uRdxRecipeRunner.pas:1267
+#: reDelphix/source/uRdxRecipeRunner.pas:787
+#: reDelphix/source/uRdxRecipeRunner.pas:1271
 msgid "no description"
 msgstr ""
 
@@ -3044,11 +3044,11 @@ msgstr ""
 msgid "no statement with a nil comparison starts on line %d"
 msgstr ""
 
-#: reDelphix/source/uRdxRecipeRunner.pas:1273
+#: reDelphix/source/uRdxRecipeRunner.pas:1277
 msgid "no target recognized"
 msgstr ""
 
-#: reDelphix/source/uRdxRecipeRunner.pas:1176
+#: reDelphix/source/uRdxRecipeRunner.pas:1180
 msgid "no uses clause and no interface/implementation"
 msgstr ""
 
@@ -3117,7 +3117,7 @@ msgstr ""
 msgid "own unit %s in the project"
 msgstr ""
 
-#: reDelphix/source/uRdxRecipeRunner.pas:899
+#: reDelphix/source/uRdxRecipeRunner.pas:903
 msgid "range not readable"
 msgstr ""
 
@@ -3129,7 +3129,7 @@ msgstr ""
 msgid "svn not found. Install TortoiseSVN WITH the option \"command line client tools\" or set the path to svn.exe in analyser.ini."
 msgstr ""
 
-#: reDelphix/source/uRdxRecipeRunner.pas:881
+#: reDelphix/source/uRdxRecipeRunner.pas:885
 msgid "target '%s' is %s - Format returns UnicodeString"
 msgstr ""
 
@@ -3175,7 +3175,7 @@ msgstr ""
 msgid "the unit declares its own routine %s"
 msgstr ""
 
-#: reDelphix/source/uRdxRecipeRunner.pas:826
+#: reDelphix/source/uRdxRecipeRunner.pas:830
 msgid "there are only literals behind %s"
 msgstr ""
 
@@ -3209,7 +3209,7 @@ msgid "unknown"
 msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:553
-#: reDelphix/source/uRdxRecipeRunner.pas:1129
+#: reDelphix/source/uRdxRecipeRunner.pas:1133
 msgid "uses clause contains compiler directives (line %d)"
 msgstr ""
 
@@ -3217,7 +3217,7 @@ msgstr ""
 msgid "uses clause is not in alphabetical order"
 msgstr ""
 
-#: reDelphix/source/uRdxRecipeRunner.pas:1152
+#: reDelphix/source/uRdxRecipeRunner.pas:1156
 msgid "uses entry in line %d not readable"
 msgstr ""
 

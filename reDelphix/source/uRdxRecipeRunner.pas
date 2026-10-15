@@ -756,11 +756,13 @@ end;
 // Hinweis eines aktiven Format-Eintrags: Termzahl, bei Selbst-Anhaengen
 // das Ziel (ABehind, sonst ''), Herkunft der Argumente. Die Teile sind
 // uebersetzte ganze Saetze, verbunden ueber %s (HINT_*) - Namen und Ziel
-// stehen als Format-Argumente darin, ein '%' in ihnen bleibt Text.
+// stehen als Format-Argumente darin, ein '%' in ihnen bleibt Text. Head
+// statt Result als Argument: Format schreibt in das Ziel der Zuweisung,
+// das Argument darf nicht dieselbe Variable sein.
 function FormatHintOf(const ABuild: TRdxFormatBuild; ATerms: Integer;
   const ABehind: string): string;
 var
-  Origin : string;
+  Origin, Head : string;
 begin
   if Length(ABuild.ByCompiler) = 0 then
     Origin := _(HINT_ALL_PROVEN)
@@ -768,11 +770,13 @@ begin
     Origin := _(HINT_BY_COMPILER, [Length(ABuild.ByCompiler),
       ByCompilerNames(ABuild.ByCompiler)]);
   if ABehind = '' then
-    Result := _(HINT_TERMS, [ATerms, Origin])
+    Head := _(HINT_TERMS, [ATerms, Origin])
   else
-    Result := _(HINT_TERMS_BEHIND, [ATerms, ABehind, Origin]);
+    Head := _(HINT_TERMS_BEHIND, [ATerms, ABehind, Origin]);
   if ABuild.Numeric > 0 then
-    Result := _(HINT_NUMERIC, [Result, ABuild.Numeric]);
+    Result := _(HINT_NUMERIC, [Head, ABuild.Numeric])
+  else
+    Result := Head;
 end;
 
 // Ohne Beschreibung: der Grund aus Describe, sonst R_NO_INFO.
