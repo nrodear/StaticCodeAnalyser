@@ -2511,3 +2511,173 @@ msgstr "aucun en-tête %s"
 
 msgid "%d headers %s"
 msgstr "%d en-têtes %s"
+
+# reDelphix G3 (uRdxTryFixes, uRdxDeclFixes)
+
+msgid "on an exception, finally would free it while the holder still refers to it; %s"
+msgstr "en cas d'exception, finally le libérerait alors que le détenteur le référence encore ; %s"
+
+msgid "%s is passed in line %d to %s - the object is the exception; finally would free it before the handler"
+msgstr "%s est passé à la ligne %d à %s - l'objet est l'exception ; finally le libérerait avant le gestionnaire"
+
+msgid "%s is handed over in line %d to %s - %s"
+msgstr "%s est transmis à la ligne %d à %s - %s"
+
+msgid "method pointer %s.%s to %s in line %d - %s"
+msgstr "pointeur de méthode %s.%s vers %s à la ligne %d - %s"
+
+msgid "%s is handed over in line %d to %s (not a local name of the routine) - %s"
+msgstr "%s est transmis à la ligne %d à %s (pas un nom local de la routine) - %s"
+
+msgid "@%s in line %d - a pointer or method pointer to the object leaves the range; %s"
+msgstr "@%s à la ligne %d - un pointeur ou pointeur de méthode vers l'objet quitte la plage ; %s"
+
+msgid "the release in line %d spells %s differently - %s"
+msgstr "la libération à la ligne %d écrit %s autrement - %s"
+
+msgid "the release in line %d is not a whole statement"
+msgstr "la libération à la ligne %d n'est pas une instruction complète"
+
+msgid "%s(%s) in line %d changes the pointer - FreeMem in the finally would free a different one"
+msgstr "%s(%s) à la ligne %d modifie le pointeur - FreeMem dans le finally en libérerait un autre"
+
+msgid "raise %s in line %d - %s is (part of) the exception; finally would free it before the handler"
+msgstr "raise %s à la ligne %d - %s est (une partie de) l'exception ; finally le libérerait avant le gestionnaire"
+
+msgid "second assignment to %s in line %d - the release in the finally would hit a different object"
+msgstr "deuxième affectation à %s à la ligne %d - la libération dans le finally toucherait un autre objet"
+
+msgid "@%s in line %d - the pointer can change"
+msgstr "@%s à la ligne %d - le pointeur peut changer"
+
+msgid "%s in line %d - a conditional, deeper or second release in the range; with finally it would run twice"
+msgstr "%s à la ligne %d - une libération conditionnelle, plus profonde ou seconde dans la plage ; avec finally, elle s'exécuterait deux fois"
+
+msgid "the release in line %d frees %s in a different spelling (Self., typecast, Leave/Release) - with finally it would run twice; %s"
+msgstr "la libération à la ligne %d libère %s sous une autre écriture (Self., transtypage, Leave/Release) - avec finally, elle s'exécuterait deux fois ; %s"
+
+msgid "the lock is taken again in line %d - %s"
+msgstr "le verrou est pris à nouveau à la ligne %d - %s"
+
+msgid "Exit in line %d - with finally the exit would now release the lock; %s"
+msgstr "Exit à la ligne %d - avec finally, la sortie libérerait maintenant le verrou ; %s"
+
+msgid "%s in line %d leaves the range - the release would now run there too; %s"
+msgstr "%s à la ligne %d quitte la plage - la libération s'y exécuterait maintenant aussi ; %s"
+
+msgid "goto in line %d - a jump into or out of a try block; %s"
+msgstr "goto à la ligne %d - un saut vers ou hors d'un bloc try ; %s"
+
+msgid "asm in line %d in the range"
+msgstr "asm à la ligne %d dans la plage"
+
+msgid "inline declaration (%s) in line %d - its scope would shrink to the try block"
+msgstr "déclaration inline (%s) à la ligne %d - sa portée se réduirait au bloc try"
+
+msgid "label %s: in line %d - a goto into the try block does not compile"
+msgstr "étiquette %s: à la ligne %d - un goto dans le bloc try ne compile pas"
+
+msgid "no release %s as a whole, unconditional statement in the same statement list after line %d - it is deeper, in another branch or missing; %s"
+msgstr "aucune libération %s en instruction complète et inconditionnelle dans la même liste d'instructions après la ligne %d - elle est plus profonde, dans une autre branche ou absente ; %s"
+
+msgid "%s directly follows line %d - nothing to protect"
+msgstr "%s suit directement la ligne %d - rien à protéger"
+
+msgid "other code precedes the release in line %d - try/finally/end stand on lines of their own"
+msgstr "d'autre code précède la libération à la ligne %d - try/finally/end se placent sur leurs propres lignes"
+
+msgid "other code follows the release in line %d"
+msgstr "d'autre code suit la libération à la ligne %d"
+
+msgid "compiler directive in the range - try or finally might end up in only one branch"
+msgstr "directive de compilation dans la plage - try ou finally pourrait ne se trouver que dans une seule branche"
+
+msgid "multi-line string literal in the range - indenting would change its content"
+msgstr "littéral chaîne multiligne dans la plage - l'indentation modifierait son contenu"
+
+msgid "Exit in line %d, and %s is handed over in line %d - the exit might have transferred ownership; %s"
+msgstr "Exit à la ligne %d, et %s est transmis à la ligne %d - la sortie pourrait avoir transféré la propriété ; %s"
+
+msgid "the try in line %d around the range cannot be read safely - %s"
+msgstr "le try à la ligne %d autour de la plage ne se lit pas de façon sûre - %s"
+
+msgid "the %s part of the try in line %d around the range names %s (line %d) - after the fix it would run after the finally"
+msgstr "la partie %s du try à la ligne %d autour de la plage nomme %s (ligne %d) - après la correction, elle s'exécuterait après le finally"
+
+msgid "the statement stands alone after %s without begin - it belongs to no statement list"
+msgstr "l'instruction est seule après %s sans begin - elle n'appartient à aucune liste d'instructions"
+
+msgid "the statement is a case branch or follows a label"
+msgstr "l'instruction est une branche case ou suit une étiquette"
+
+msgid "other code precedes the statement on its line - try/finally/end stand on lines of their own"
+msgstr "d'autre code précède l'instruction sur sa ligne - try/finally/end se placent sur leurs propres lignes"
+
+msgid "other code follows the statement on its line"
+msgstr "d'autre code suit l'instruction sur sa ligne"
+
+msgid "%s is not a local variable of the routine (field, global variable, parameter) - %s"
+msgstr "%s n'est pas une variable locale de la routine (champ, variable globale, paramètre) - %s"
+
+msgid "%s.Free or FreeAndNil(%s)"
+msgstr "%s.Free ou FreeAndNil(%s)"
+
+msgid "the message has no variable"
+msgstr "la variable manque dans le message"
+
+msgid "no assignment \"%s := ..\""
+msgstr "aucune affectation \"%s := ..\""
+
+msgid "%d assignments to %s"
+msgstr "%d affectations à %s"
+
+msgid "the creation is the last statement of its list - no release after it"
+msgstr "la création est la dernière instruction de sa liste - aucune libération derrière"
+
+msgid "no creation (\".Create..\") in the assignment - finding outdated? %s"
+msgstr "aucune création (\".Create..\") dans l'affectation - résultat périmé ? %s"
+
+msgid "the message has no lock"
+msgstr "le verrou manque dans le message"
+
+msgid "TMonitor.Enter with a timeout or TMonitor.TryEnter is a condition, not a lock - only the result tells whether it holds; %s"
+msgstr "TMonitor.Enter avec délai ou TMonitor.TryEnter est une condition, pas un verrou - seul le résultat dit s'il est acquis ; %s"
+
+msgid "no lock \"%s\""
+msgstr "aucun verrou \"%s\""
+
+msgid "%d locks \"%s\""
+msgstr "%d verrous \"%s\""
+
+msgid "the lock is not a whole statement with \";\" (last of the list or part of an expression)"
+msgstr "le verrou n'est pas une instruction complète avec \";\" (dernière de la liste ou partie d'une expression)"
+
+msgid "the assignment goes to an expression, not to a variable"
+msgstr "l'affectation va à une expression, pas à une variable"
+
+msgid "Result - the buffer leaves the routine"
+msgstr "Result - le tampon quitte la routine"
+
+msgid "the first argument of GetMem is not a simple identifier"
+msgstr "le premier argument de GetMem n'est pas un identificateur simple"
+
+msgid "AllocMem without assignment - the buffer cannot be tracked"
+msgstr "AllocMem sans affectation - le tampon est insaisissable"
+
+msgid "ReallocMem - the buffer existed before (foreign or existing memory); %s"
+msgstr "ReallocMem - le tampon existait déjà (mémoire étrangère ou existante) ; %s"
+
+msgid "%s of a custom memory manager (qualified) - %s"
+msgstr "%s d'un gestionnaire de mémoire propre (qualifié) - %s"
+
+msgid "no call %s("
+msgstr "aucun appel %s("
+
+msgid "%d calls %s("
+msgstr "%d appels %s("
+
+msgid "the allocation is not a whole statement with \";\""
+msgstr "l'allocation n'est pas une instruction complète avec \";\""
+
+msgid "the message has no allocation"
+msgstr "l'allocation manque dans le message"

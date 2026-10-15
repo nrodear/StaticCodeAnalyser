@@ -68,6 +68,14 @@ msgstr ""
 msgid "%d / %d findings"
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:2226
+msgid "%d assignments to %s"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:2470
+msgid "%d calls %s("
+msgstr ""
+
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1862
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1925
 msgid "%d context hashes"
@@ -96,6 +104,10 @@ msgstr ""
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1852
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1915
 msgid "%d hidden by baseline"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:2356
+msgid "%d locks \"%s\""
 msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDEFindingActionMenu.pas:92
@@ -134,12 +146,52 @@ msgstr ""
 msgid "%s contains no profiles."
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:1780
+msgid "%s directly follows line %d - nothing to protect"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1520
+msgid "%s in line %d - a conditional, deeper or second release in the range; with finally it would run twice"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1618
+msgid "%s in line %d leaves the range - the release would now run there too; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1387
+msgid "%s is handed over in line %d to %s (not a local name of the routine) - %s"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1348
+msgid "%s is handed over in line %d to %s - %s"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:832
 msgid "%s is no longer at the reported place"
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:2116
+msgid "%s is not a local variable of the routine (field, global variable, parameter) - %s"
+msgstr ""
+
 #: SCA.Engine/sources/Common/uRuleCatalog.pas:1575
 msgid "%s is not a valid JSON object."
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1344
+msgid "%s is passed in line %d to %s - the object is the exception; finally would free it before the handler"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:2467
+msgid "%s of a custom memory manager (qualified) - %s"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1454
+msgid "%s(%s) in line %d changes the pointer - FreeMem in the finally would free a different one"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:2206
+msgid "%s.Free or FreeAndNil(%s)"
 msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:810
@@ -184,6 +236,14 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:3491
 msgid "8-bit string cast silently drops non-codepage characters"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1401
+msgid "@%s in line %d - a pointer or method pointer to the object leaves the range; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1502
+msgid "@%s in line %d - the pointer can change"
 msgstr ""
 
 #: SCA.Engine/sources/Common/uRuleCatalog.pas:1762
@@ -281,6 +341,10 @@ msgstr ""
 
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:703
 msgid "All severities"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:2424
+msgid "AllocMem without assignment - the buffer cannot be tracked"
 msgstr ""
 
 #: SCA.Engine/sources/Common/uRuleCatalog.pas:1757
@@ -1062,6 +1126,14 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:3295
 msgid "Exception is constructed but never raised"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1610
+msgid "Exit in line %d - with finally the exit would now release the lock; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1794
+msgid "Exit in line %d, and %s is handed over in line %d - the exit might have transferred ownership; %s"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2452
@@ -1987,6 +2059,10 @@ msgstr ""
 msgid "Real bugs / security holes (severity Error). Fix immediately."
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:2441
+msgid "ReallocMem - the buffer existed before (foreign or existing memory); %s"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:376
 msgid "Recommended fix"
 msgstr ""
@@ -2080,6 +2156,10 @@ msgstr ""
 
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:369
 msgid "Reset panel + clear editor markers (main grid stays)"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:2413
+msgid "Result - the buffer leaves the routine"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:3330
@@ -2459,6 +2539,10 @@ msgstr ""
 msgid "TLS verification disabled - MITM-attack surface"
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:2350
+msgid "TMonitor.Enter with a timeout or TMonitor.TryEnter is a condition, not a lock - only the result tells whether it holds; %s"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:3176
 msgid "TThread destroyed without Terminate+WaitFor - worker may still be running"
 msgstr ""
@@ -2735,6 +2819,10 @@ msgstr ""
 msgid "analyser.ini is not writable - dialect unchanged."
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:1624
+msgid "asm in line %d in the range"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2196
 msgid "asm..end block - platform-specific, hard to port"
 msgstr ""
@@ -2753,6 +2841,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2334
 msgid "class(TObject) - TObject is the default base, drop it"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1788
+msgid "compiler directive in the range - try or finally might end up in only one branch"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:802
@@ -2815,6 +2907,10 @@ msgstr ""
 msgid "git not found. Install Git for Windows (git-scm.com) or set the path to git.exe in analyser.ini."
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:1621
+msgid "goto in line %d - a jump into or out of a try block; %s"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2084
 msgid "goto weakens structured control flow"
 msgstr ""
@@ -2831,12 +2927,40 @@ msgstr ""
 msgid "in"
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:1627
+msgid "inline declaration (%s) in line %d - its scope would shrink to the try block"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1640
+msgid "label %s: in line %d - a goto into the try block does not compile"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:742
 msgid "line moved? Analyse the file again"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:817
 msgid "literal not readable: %s"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1379
+msgid "method pointer %s.%s to %s in line %d - %s"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1791
+msgid "multi-line string literal in the range - indenting would change its content"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:2225
+msgid "no assignment \"%s := ..\""
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:2469
+msgid "no call %s("
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:2234
+msgid "no creation (\".Create..\") in the assignment - finding outdated? %s"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:782
@@ -2851,8 +2975,16 @@ msgstr ""
 msgid "no header %s"
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:2355
+msgid "no lock \"%s\""
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:822
 msgid "no operand in the chain"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1711
+msgid "no release %s as a whole, unconditional statement in the same statement list after line %d - it is deeper, in another branch or missing; %s"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:767
@@ -2868,12 +3000,32 @@ msgstr ""
 msgid "on E: Exception catches everything - too broad"
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:371
+msgid "on an exception, finally would free it while the holder still refers to it; %s"
+msgstr ""
+
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2963
 msgid "only from the menu or the light bulb"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:807
 msgid "only statement after %s - an empty block would remain (SCA077)"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1786
+msgid "other code follows the release in line %d"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1975
+msgid "other code follows the statement on its line"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1783
+msgid "other code precedes the release in line %d - try/finally/end stand on lines of their own"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1972
+msgid "other code precedes the statement on its line - try/finally/end stand on lines of their own"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2562
@@ -2884,6 +3036,14 @@ msgstr ""
 msgid "own unit %s in the project"
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:1478
+msgid "raise %s in line %d - %s is (part of) the exception; finally would free it before the handler"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1499
+msgid "second assignment to %s in line %d - the release in the finally would hit a different object"
+msgstr ""
+
 #: StaticCodeAnalyserIDE/uIDESonarOptions.pas:414
 msgid "sonar.projectKey not found in "
 msgstr ""
@@ -2892,21 +3052,85 @@ msgstr ""
 msgid "svn not found. Install TortoiseSVN WITH the option \"command line client tools\" or set the path to svn.exe in analyser.ini."
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:1940
+msgid "the %s part of the try in line %d around the range names %s (line %d) - after the fix it would run after the finally"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:2477
+msgid "the allocation is not a whole statement with \";\""
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:2411
+msgid "the assignment goes to an expression, not to a variable"
+msgstr ""
+
 #: reDelphix/source/uRdxProvider.pas:578
 #: reDelphix/source/uRdxProvider.pas:636
 msgid "the clause would no longer be sorted (new SCA142)"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:2231
+msgid "the creation is the last statement of its list - no release after it"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:2420
+msgid "the first argument of GetMem is not a simple identifier"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:777
 msgid "the line starts inside a comment or string"
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:2365
+msgid "the lock is not a whole statement with \";\" (last of the list or part of an expression)"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1536
+msgid "the lock is taken again in line %d - %s"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:2563
+msgid "the message has no allocation"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:757
 msgid "the message has no column"
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:2333
+msgid "the message has no lock"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:2208
+msgid "the message has no variable"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:392
 msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1523
+msgid "the release in line %d frees %s in a different spelling (Self., typecast, Leave/Release) - with finally it would run twice; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1431
+msgid "the release in line %d is not a whole statement"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1424
+msgid "the release in line %d spells %s differently - %s"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1960
+msgid "the statement is a case branch or follows a label"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1957
+msgid "the statement stands alone after %s without begin - it belongs to no statement list"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:1936
+msgid "the try in line %d around the range cannot be read safely - %s"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:812
