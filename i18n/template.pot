@@ -68,6 +68,10 @@ msgstr ""
 msgid "%d / %d findings"
 msgstr ""
 
+#: reDelphix/source/uRdxRecipeRunner.pas:768
+msgid "%d according to the compiler (%s)"
+msgstr ""
+
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1862
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1925
 msgid "%d context hashes"
@@ -110,6 +114,14 @@ msgstr ""
 msgid "%d rules, %d selected"
 msgstr ""
 
+#: reDelphix/source/uRdxRecipeRunner.pas:773
+msgid "%d terms behind %s, %s"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipeRunner.pas:771
+msgid "%d terms, %s"
+msgstr ""
+
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:827
 msgid "%s (%d findings)"
 msgstr ""
@@ -130,20 +142,106 @@ msgstr ""
 msgid "%s - line moved? Analyse the file again"
 msgstr ""
 
+#: reDelphix/source/uRdxFixRunner.pas:892
+msgid "%s appears more than once on line %d"
+msgstr ""
+
 #: SCA.SharedUI/sources/uProfileViewer.pas:872
 msgid "%s contains no profiles."
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:718
+msgid "%s has a procedural type (%s) - without () Delphi reads the name as a pointer"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:771
+msgid "%s has a procedural type - \"%s <> nil\" calls it, Assigned() does not"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:398
+msgid "%s has the type %s - by Delphi convention a pointer from another unit (Free is then the one of the target, FreeAndNil takes only a TObject)"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:1141
+msgid "%s in the condition is not proven as Boolean here - with a Variant \"not\" would be bitwise"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:646
+msgid "%s is a const parameter - FreeAndNil does not reach the caller's variable (FPC: error, Delphi up to 10.3: E2197)"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:710
+msgid "%s is a variable (procedural type) - only () calls it safely"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:1078
+msgid "%s is already declared as %s - the cast changes nothing"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:1047
+msgid "%s is declared as %s, not as %s - another type can hide Free, or the cast is needed to compile"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:301
+msgid "%s is declared as a property in this unit - FreeAndNil needs a variable"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:1165
+msgid "%s is declared as a property in this unit - the assignment may call a setter"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:419
+#: reDelphix/source/uRdxRecipeRunner.pas:842
+msgid "%s is missing in uses: %s"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:832
 msgid "%s is no longer at the reported place"
 msgstr ""
 
+#: reDelphix/source/uRdxFixRunner.pas:889
+msgid "%s is no longer on line %d of a uses clause"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:1038
+msgid "%s is not a plain identifier - its type cannot be checked"
+msgstr ""
+
 #: SCA.Engine/sources/Common/uRuleCatalog.pas:1575
 msgid "%s is not a valid JSON object."
 msgstr ""
 
+#: reDelphix/source/uRdxFixRunner.pas:393
+msgid "%s is not an object (%s: record, object, interface, pointer or own type of this unit) - Free is a method of its own, FreeAndNil takes only a TObject"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:307
+#: reDelphix/source/uRdxFixRunner.pas:1172
+msgid "%s is not known as a variable here (property or field from another unit?)"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:1131
+msgid "%s is not proven as Boolean here (type: %s) - with Variant %s would get the value of the condition instead of True/False"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:794
+msgid "%s is not proven as Boolean here (type: %s) - with Variant or LongBool \"= True\" is not the same"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:918
+msgid "%s is used in the text - the finding is older than the text; analyse the file again"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipeRunner.pas:775
+msgid "%s, %d numeric (%%d/%%u)"
+msgstr ""
+
 #: reDelphix/source/uRdxProvider.pas:810
 msgid "%s: no fixMode in the rule catalog"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:773
+msgid "%s: type %s is not proven in this unit as a class, interface or pointer and is not a class of the Delphi sources - a function type would call \"%s <> nil\""
 msgstr ""
 
 #: reDelphix/source/uRdxFixTable.pas:1230
@@ -1194,6 +1292,11 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:3685
 msgid "Free without nil-out - prefer FreeAndNil for dangling-pointer safety"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:471
+#: reDelphix/source/uRdxFixRunner.pas:689
+msgid "FreeAndNil sets %s to nil before the destructor runs"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:3896
@@ -2731,6 +2834,14 @@ msgstr ""
 msgid "You are a senior Delphi developer reviewing the output of a static code analyser. Target version: Delphi 12 Athens (RTL/VCL). Suggest minimal, idiomatic fixes - no sweeping refactors, no style overhauls, no new dependencies unless strictly required."
 msgstr ""
 
+#: reDelphix/source/uRdxFixRunner.pas:1107
+msgid "a call raises ENotImplemented instead of doing nothing"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipeRunner.pas:766
+msgid "all proven"
+msgstr ""
+
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:496
 msgid "analyse only files changed in current branch"
 msgstr ""
@@ -2751,12 +2862,24 @@ msgstr ""
 msgid "case statement has many branches - consider dispatch table"
 msgstr ""
 
+#: reDelphix/source/uRdxRecipeRunner.pas:536
+msgid "chain on line %d has %d x '+', the finding names %d - line changed? Analyse the file again"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipeRunner.pas:562
+msgid "chain on line %d: the source text splits differently than the parser sees it (%d x '+')"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:792
 msgid "check by hand"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2334
 msgid "class(TObject) - TObject is the default base, drop it"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipeRunner.pas:917
+msgid "comment in the range"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:802
@@ -2771,6 +2894,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxText.pas:797
 msgid "delete by hand"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:908
+msgid "directive in a uses clause - an entry may apply only in one branch"
 msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:863
@@ -2802,6 +2929,14 @@ msgstr ""
 msgid "file with an FPC switch or FPC mode - FPC 3.2 knows no unit scopes"
 msgstr ""
 
+#: reDelphix/source/uRdxFixRunner.pas:987
+msgid "file with an FPC switch or FPC mode - FPC does not know EProgrammerError"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:732
+msgid "file with an FPC switch or FPC mode - in objfpc only Foo() calls a procedure variable"
+msgstr ""
+
 #: reDelphix/source/uRdxProvider.pas:823
 msgid "finding without file name"
 msgstr ""
@@ -2827,6 +2962,10 @@ msgstr ""
 msgid "h2. Code analysis: "
 msgstr ""
 
+#: reDelphix/source/uRdxFixRunner.pas:933
+msgid "heuristic finding - compile afterwards; if %s has an initialization section (registration), it no longer runs"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2843
 msgid "if X then Y := True else Y := False - assign expression directly"
 msgstr ""
@@ -2835,12 +2974,41 @@ msgstr ""
 msgid "in"
 msgstr ""
 
+#: reDelphix/source/uRdxRecipeRunner.pas:528
+msgid "line %d carries %s, the finding names %s"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:1222
+msgid "line %d is ambiguous (%d statements with a nil comparison)"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipeRunner.pas:491
+msgid "line %d is ambiguous (%d statements)"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipeRunner.pas:1182
+msgid "line %d of the section not readable"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:742
 msgid "line moved? Analyse the file again"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:817
 msgid "literal not readable: %s"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipeRunner.pas:791
+msgid "no assignment with a chain"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipeRunner.pas:793
+msgid "no assignment with a chain: %s"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipeRunner.pas:783
+#: reDelphix/source/uRdxRecipeRunner.pas:1267
+msgid "no description"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:782
@@ -2861,6 +3029,27 @@ msgstr ""
 
 #: reDelphix/source/uRdxText.pas:822
 msgid "no operand in the chain"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:740
+#: reDelphix/source/uRdxFixRunner.pas:825
+msgid "no quick fix at this place"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipeRunner.pas:489
+msgid "no statement found on line %d"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:1219
+msgid "no statement with a nil comparison starts on line %d"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipeRunner.pas:1273
+msgid "no target recognized"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipeRunner.pas:1176
+msgid "no uses clause and no interface/implementation"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:767
@@ -2928,12 +3117,20 @@ msgstr ""
 msgid "own unit %s in the project"
 msgstr ""
 
+#: reDelphix/source/uRdxRecipeRunner.pas:899
+msgid "range not readable"
+msgstr ""
+
 #: StaticCodeAnalyserIDE/uIDESonarOptions.pas:414
 msgid "sonar.projectKey not found in "
 msgstr ""
 
 #: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:595
 msgid "svn not found. Install TortoiseSVN WITH the option \"command line client tools\" or set the path to svn.exe in analyser.ini."
+msgstr ""
+
+#: reDelphix/source/uRdxRecipeRunner.pas:881
+msgid "target '%s' is %s - Format returns UnicodeString"
 msgstr ""
 
 #: reDelphix/source/uRdxRecipes.pas:1867
@@ -2943,6 +3140,10 @@ msgstr ""
 #: reDelphix/source/uRdxProvider.pas:578
 #: reDelphix/source/uRdxProvider.pas:636
 msgid "the clause would no longer be sorted (new SCA142)"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:1137
+msgid "the condition is not proven as Boolean (a call, a path or arithmetic as operand) - with a Variant \"not\" would be bitwise"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:777
@@ -2957,20 +3158,67 @@ msgstr ""
 msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
 msgstr ""
 
-#: reDelphix/source/uRdxRecipeRunner.pas:802
+#: reDelphix/source/uRdxRecipeRunner.pas:573
+msgid "the statement cannot be described"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:1162
+msgid "the target is missing"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:395
+msgid "the unit declares its own method Free - FreeAndNil would not call it"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:494
+#: reDelphix/source/uRdxFixRunner.pas:764
+msgid "the unit declares its own routine %s"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipeRunner.pas:826
 msgid "there are only literals behind %s"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:1249
+msgid "type of %s unknown - for a function or method pointer '= nil' calls it, Assigned() does not"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:766
+msgid "type of %s unknown - for a function type \"%s <> nil\" calls it, Assigned() does not"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:715
+msgid "type of %s unknown - if it is procedural, Delphi reads the name without () as a pointer"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:1044
+msgid "type of %s unknown - only a cast to its own type is provably without effect"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:812
 msgid "unclear what the statement belongs to (\"%s\" before it)"
 msgstr ""
 
+#: reDelphix/source/uRdxFixRunner.pas:995
+msgid "unhandled values raise EProgrammerError"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:793
+#: reDelphix/source/uRdxFixRunner.pas:1130
+msgid "unknown"
+msgstr ""
+
 #: reDelphix/source/uRdxProvider.pas:553
+#: reDelphix/source/uRdxRecipeRunner.pas:1129
 msgid "uses clause contains compiler directives (line %d)"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:3752
 msgid "uses clause is not in alphabetical order"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipeRunner.pas:1152
+msgid "uses entry in line %d not readable"
 msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:631
@@ -2990,8 +3238,22 @@ msgstr ""
 msgid "what to test or check after the fix to confirm the issue is gone (and no regressions)."
 msgstr ""
 
+#: reDelphix/source/uRdxFixRunner.pas:1299
+msgid "with statement - an operand could be a member of the with expression"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:1682
 msgid "with statement can silently rebind identifiers - avoid it"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:304
+#: reDelphix/source/uRdxFixRunner.pas:497
+#: reDelphix/source/uRdxFixRunner.pas:707
+#: reDelphix/source/uRdxFixRunner.pas:786
+#: reDelphix/source/uRdxFixRunner.pas:1041
+#: reDelphix/source/uRdxFixRunner.pas:1125
+#: reDelphix/source/uRdxFixRunner.pas:1159
+msgid "with statement in the routine - %s could be a member"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:4379

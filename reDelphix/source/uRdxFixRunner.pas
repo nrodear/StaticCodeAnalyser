@@ -14,11 +14,16 @@ unit uRdxFixRunner;
 // OHNE ToolsAPI, in reDelphix.Test uebersetzbar; nicht im FPC-Pruefstand
 // - wie uRdxRecipeRunner und uRdxFixTable braucht die Unit den
 // Quellstellen-Dienst des Cores (TSourcePlaces), TFindingKind und
-// uUnusedUses. Den Ergebnistyp TRdxFixOutcome (samt TRdxEdit), R_NO_FILE
-// und die uses-Fragen (PlanUses, ClausesOf, UsesKeywordLine,
-// UsesDirectiveLine, SourceLooksFpcAware) liefert uRdxRecipeRunner; die
-// Version des Quellstellen-Vertrags prueft die Unit selbst (s.
-// implementation).
+// uUnusedUses. Den Ergebnistyp TRdxFixOutcome (samt TRdxEdit) und die
+// uses-Fragen (PlanUses, ClausesOf, UsesKeywordLine, UsesDirectiveLine,
+// SourceLooksFpcAware) liefert uRdxRecipeRunner; die Version des
+// Quellstellen-Vertrags prueft die Unit selbst (s. implementation).
+//
+// TEXTE (Entscheid E29, Gruppe G6): Gruende und Hinweise sind englische
+// msgids, uebersetzt ueber uRdxText._ in der Unit, die sie formuliert
+// (Konstanten R_* hier, _() an der Verwendung); ohne offene Datei
+// MsgNoFileOpen. Die Konstanten-Namen liest der Korpus-Snapshot
+// (gen_tables.py) - umbenennen nur mit dem Harness zusammen.
 
 interface
 
@@ -145,8 +150,8 @@ type
 // SCA075, SCA087 und die Zeilen-Hilfen SCA082/SCA071/SCA088, SCA020/SCA120/
 // SCA122, SCA117/SCA197/SCA149: APlan arbeitet nur auf den Zeilen, ohne
 // Parser - Spalte bzw. Abschnitt stehen in der Meldung, die Code-Sicht
-// kennt den Kommentar-Zustand der Zeilen davor. Ohne ALines R_NO_FILE; die
-// Ersetzung nach Edits[0], sonst der Grund.
+// kennt den Kommentar-Zustand der Zeilen davor. Ohne ALines MsgNoFileOpen;
+// die Ersetzung nach Edits[0], sonst der Grund.
 function MapFix(ALines: TStrings; ALine: Integer; const AMessage: string;
   APlan: TRdxMapPlanner): TRdxFixOutcome;
 // SCA123: 'TFoo(X).Free' -> 'X.Free' - Bedingungen am Rumpf.
@@ -185,7 +190,8 @@ uses
   uRdxRaiseFixes,    // Planer SCA020 mit raise (EmptyRaiseFix)
   uRdxRtlTypes,      // IsRtlClassOrInterface: Klasse 'PDFDocument' ist kein Zeiger
   uUnusedUses,       // KnownIdents: SCA007-Fund am Puffer nachpruefen
-  uSourcePlaces;     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
+  uSourcePlaces,     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
+  uRdxText;          // _, MsgNoFileOpen, MsgMovedSuffix (E29)
 
 // Diese Ruempfe sind gegen Version 1 des Quellstellen-Vertrags geschrieben
 // (uSourcePlaces, Abschnitt VERTRAGSVERSION): ihre Typ- und with-Beweise
@@ -202,40 +208,52 @@ uses
 {$IFEND}
 
 const
-  R_NIL_TYPE_UNKNOWN = 'Typ von %s unbekannt - bei einem Funktions- oder '
-    + 'Methodenzeiger ruft ''= nil'' ihn auf, Assigned() nicht';
-  R_NIL_IN_WITH = 'with-Anweisung - ein Operand koennte ein Member des '
-    + 'with-Ausdrucks sein';
+  // Gruende und Hinweise sind msgids (E29): englisch, uebersetzt mit _() an
+  // der Verwendung in DIESER Unit (der Extraktor loest nur Konstanten der
+  // eigenen Unit auf); deutsch steht der bisherige Wortlaut in i18n/de.po.
+  R_NIL_TYPE_UNKNOWN = 'type of %s unknown - for a function or method '
+    + 'pointer ''= nil'' calls it, Assigned() does not';
+  R_NIL_IN_WITH = 'with statement - an operand could be a member of the with '
+    + 'expression';
   // Der Unterschied, den der Benutzer kennen sollte (SCA085, SCA139):
   // FreeAndNil setzt ERST nil, dann laeuft der Destruktor.
-  R_FREENIL_HINT = 'FreeAndNil setzt %s auf nil, bevor der Destruktor laeuft';
+  R_FREENIL_HINT = 'FreeAndNil sets %s to nil before the destructor runs';
   // Typ-Sperren von SCA085/SCA139 (FreeTypeReason, Review FB R2-01/R3-01)
   // und der const-Parameter von SCA139 (ConstParamReason, R2-03).
-  R_NOT_AN_OBJECT = '%s ist kein Objekt (%s: record, object, interface, '
-    + 'Zeiger oder eigener Typ dieser Unit) - Free ist eine eigene Methode, '
-    + 'FreeAndNil nimmt nur ein TObject';
+  R_NOT_AN_OBJECT = '%s is not an object (%s: record, object, interface, '
+    + 'pointer or own type of this unit) - Free is a method of its own, '
+    + 'FreeAndNil takes only a TObject';
   // Was DeclaredTypeKind fuer einen ausformulierten Typ liefert - kein
   // Alias auf einen Typ einer anderen Unit (ForeignTypeName).
   OWN_TYPE_WORDS: array[0..12] of string = ('class', 'record', 'object',
     'interface', 'dispinterface', 'type', 'procedure', 'function',
     'reference', 'set', 'array', 'string', 'file');
-  R_OWN_FREE = 'die Unit deklariert eine eigene Methode Free - FreeAndNil '
-    + 'riefe sie nicht auf';
-  R_POINTER_NAME = '%s hat den Typ %s - nach Delphi-Konvention ein Zeiger aus '
-    + 'einer anderen Unit (Free ist dann die des Ziels, FreeAndNil nimmt nur '
-    + 'ein TObject)';
-  R_CONST_PARAM = '%s ist ein const-Parameter - FreeAndNil erreicht die '
-    + 'Variable des Aufrufers nicht (FPC: Fehler, Delphi bis 10.3: E2197)';
-  R_WITH_MEMBER  = 'with-Anweisung in der Routine - %s koennte ein Member sein';
-  R_NO_HELP      = 'keine Hilfe an dieser Stelle';
+  R_OWN_FREE = 'the unit declares its own method Free - FreeAndNil would not '
+    + 'call it';
+  R_POINTER_NAME = '%s has the type %s - by Delphi convention a pointer from '
+    + 'another unit (Free is then the one of the target, FreeAndNil takes '
+    + 'only a TObject)';
+  R_CONST_PARAM = '%s is a const parameter - FreeAndNil does not reach the '
+    + 'caller''s variable (FPC: error, Delphi up to 10.3: E2197)';
+  R_WITH_MEMBER  = 'with statement in the routine - %s could be a member';
+  R_NO_HELP      = 'no quick fix at this place';
   // Hinweise, die der Rumpf selbst setzt - vor dem ' + uses ...' bzw. mit
   // dem Namen; die festen Hinweise je Art fuehrt uRdxFixTable (Charge R8).
-  R_CASE_RAISE_HINT = 'unbehandelte Werte loesen EProgrammerError aus';
-  R_CAST_HINT   = '%s ist schon als %s deklariert - der Cast aendert nichts';
-  R_EMPTY_RAISE_HINT = 'ein Aufruf loest ENotImplemented aus statt nichts zu '
-    + 'tun';
-  R_PROC_TYPE    = '%s hat einen Prozedurtyp - "%s <> nil" ruft ihn auf, '
-    + 'Assigned() nicht';
+  R_CASE_RAISE_HINT = 'unhandled values raise EProgrammerError';
+  R_CAST_HINT   = '%s is already declared as %s - the cast changes nothing';
+  R_EMPTY_RAISE_HINT = 'a call raises ENotImplemented instead of doing '
+    + 'nothing';
+  R_PROC_TYPE    = '%s has a procedural type - "%s <> nil" calls it, '
+    + 'Assigned() does not';
+  // Zweimal gebraucht (VariableCheck SCA085/SCA139, SelfAssignReason SCA047).
+  R_NOT_A_VARIABLE = '%s is not known as a variable here (property or field '
+    + 'from another unit?)';
+  // Eine eigene Routine verdeckt die der RTL (SCA074 Assert, SCA084
+  // Assigned) - %s ist der Code-Name.
+  R_OWN_ROUTINE = 'the unit declares its own routine %s';
+  // Steht als %s in '(type: %s)', wenn DeclaredTypeOf keinen Typ kennt -
+  // nur Text: die Vergleiche davor laufen auf den Code-Namen ('boolean').
+  R_UNKNOWN_TYPE = 'unknown';
 
 { TRdxFixRunner }
 
@@ -247,7 +265,7 @@ begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(ALines) then
   begin
-    Result.Reason := R_NO_FILE;
+    Result.Reason := MsgNoFileOpen;
     Exit;
   end;
   SetLength(Result.Edits, 1);
@@ -280,14 +298,13 @@ function VariableCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
 begin
   Result := '';
   if TRdxSimpleFixes.DeclaresProperty(AMap, AName) then
-    Exit(Format('%s ist in dieser Unit als Property deklariert - FreeAndNil '
-      + 'braucht eine Variable', [AName]));
+    Exit(_('%s is declared as a property in this unit - FreeAndNil needs a '
+      + 'variable', [AName]));
   if TRdxSimpleFixes.WithBefore(AMap, ALine) or APlaces.InWithBlock(ALine) then
-    Exit(Format(R_WITH_MEMBER, [AName]));
+    Exit(_(R_WITH_MEMBER, [AName]));
   if (APlaces.DeclaredTypeOf(ALine, AName) = '')
      and not TRdxSimpleFixes.DeclaresInlineVar(AMap, ALine, AName) then
-    Result := Format('%s ist hier nicht als Variable bekannt (Property oder '
-      + 'Feld aus einer anderen Unit?)', [AName]);
+    Result := _(R_NOT_A_VARIABLE, [AName]);
 end;
 
 // Ist ATypeLow nach Delphi-Konvention ein Zeigertyp aus einer anderen
@@ -373,12 +390,12 @@ var
 begin
   Result := '';
   if TRdxSimpleFixes.DeclaresValueType(AMap, ATypeLow) then
-    Result := Format(R_NOT_AN_OBJECT, [AName, ATypeLow])
+    Result := _(R_NOT_AN_OBJECT, [AName, ATypeLow])
   else if TRdxSimpleFixes.DeclaresRoutine(AMap, 'Free') then
-    Result := R_OWN_FREE
+    Result := _(R_OWN_FREE)
   else if PointerNamedType(AMap, ForeignTypeName(AMap, ATypeLow),
        Spelling) then
-    Result := Format(R_POINTER_NAME, [AName, Spelling]);
+    Result := _(R_POINTER_NAME, [AName, Spelling]);
 end;
 
 function FreeMethodReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
@@ -398,7 +415,9 @@ begin
   Plan := TRdxRecipeRunner.PlanUses(APlaces, AShortName, AQualifiedName);
   if Plan.Needed and (Plan.Reason <> '') then
   begin
-    AOutcome.Reason := AQualifiedName + ' fehlt in uses: ' + Plan.Reason;
+    // Dieselbe msgid wie uRdxRecipeRunner.FormatUsesReason (Format()).
+    AOutcome.Reason := _('%s is missing in uses: %s',
+      [AQualifiedName, Plan.Reason]);
     AOutcome.Edits := nil;
     Exit(False);
   end;
@@ -429,7 +448,7 @@ begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
   begin
-    Result.Reason := R_NO_FILE;
+    Result.Reason := MsgNoFileOpen;
     Exit;
   end;
   Map := TRdxCodeMap.Create(ALines);
@@ -449,7 +468,7 @@ begin
     Result.Edits := nil;
     Exit;
   end;
-  Result.Hint := Format(R_FREENIL_HINT, [Result.Name]);
+  Result.Hint := _(R_FREENIL_HINT, [Result.Name]);
   Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
 end;
 
@@ -461,20 +480,21 @@ begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
   begin
-    Result.Reason := R_NO_FILE;
+    Result.Reason := MsgNoFileOpen;
     Exit;
   end;
   SetLength(Result.Edits, 1);
   Map := TRdxCodeMap.Create(ALines);
   try
     // Eine eigene Routine Assert (Methode oder global) bindet vor
-    // System.Assert - ihre Parameter kennt hier niemand.
+    // System.Assert - ihre Parameter kennt hier niemand. Der with-Grund
+    // ist woertlich R_WITH_MEMBER mit 'Assert' (bis E29 ein eigenes
+    // Literal mit demselben Wortlaut).
     if TRdxSimpleFixes.DeclaresRoutine(Map, 'Assert') then
-      Result.Reason := 'die Unit deklariert eine eigene Routine Assert'
+      Result.Reason := _(R_OWN_ROUTINE, ['Assert'])
     else if TRdxSimpleFixes.WithBefore(Map, ALine)
             or APlaces.InWithBlock(ALine) then
-      Result.Reason := 'with-Anweisung in der Routine - Assert koennte ein '
-        + 'Member sein'
+      Result.Reason := _(R_WITH_MEMBER, ['Assert'])
     else
       Result.Enabled := TRdxSimpleFixes.AssertMessage(Map, ALine, AMessage,
         Result.Edits[0], Result.Reason);
@@ -623,7 +643,7 @@ begin
       Continue;
     end;
     if HeadHasConstParam(AMap, Keyword, LowerCase(AName)) then
-      Exit(Format(R_CONST_PARAM, [AName]));
+      Exit(_(R_CONST_PARAM, [AName]));
     if FirstCol = 1 then
       Exit;
   end;
@@ -638,7 +658,7 @@ begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
   begin
-    Result.Reason := R_NO_FILE;
+    Result.Reason := MsgNoFileOpen;
     Exit;
   end;
   // X wie in der Meldung - auch fuer Menuetext und Grund, wenn der Planer
@@ -666,7 +686,7 @@ begin
     Result.Edits := nil;
     Exit;
   end;
-  Result.Hint := Format(R_FREENIL_HINT, [Result.Name]);
+  Result.Hint := _(R_FREENIL_HINT, [Result.Name]);
   Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
 end;
 
@@ -684,19 +704,19 @@ begin
   Result := '';
   if (APlan.Callee = '') and (APlan.Target = '') then Exit;
   if TRdxSimpleFixes.WithBefore(AMap, ALine) or APlaces.InWithBlock(ALine) then
-    Exit(Format(R_WITH_MEMBER, [APlan.Callee + APlan.Target]));
+    Exit(_(R_WITH_MEMBER, [APlan.Callee + APlan.Target]));
   if (APlan.Callee <> '')
      and (APlaces.DeclaredTypeOf(ALine, APlan.Callee) <> '') then
-    Exit(Format('%s ist eine Variable (Prozedurtyp) - erst () ruft sie '
-      + 'sicher auf', [APlan.Callee]));
+    Exit(_('%s is a variable (procedural type) - only () calls it safely',
+      [APlan.Callee]));
   if APlan.Target = '' then Exit;
   TypeLow := APlaces.DeclaredTypeOf(ALine, APlan.Target);
   if TypeLow = '' then
-    Result := Format('Typ von %s unbekannt - ist er prozedural, liest Delphi '
-      + 'den Namen ohne () als Zeiger', [APlan.Target])
+    Result := _('type of %s unknown - if it is procedural, Delphi reads the '
+      + 'name without () as a pointer', [APlan.Target])
   else if TRdxExprFixes.ProceduralType(AMap, TypeLow) then
-    Result := Format('%s hat einen Prozedurtyp (%s) - ohne () liest Delphi den '
-      + 'Namen als Zeiger', [APlan.Target, TypeLow]);
+    Result := _('%s has a procedural type (%s) - without () Delphi reads the '
+      + 'name as a pointer', [APlan.Target, TypeLow]);
 end;
 
 class function TRdxFixRunner.EmptyArgsFix(APlaces: TSourcePlaces;
@@ -707,17 +727,17 @@ var
 begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
-    Result.Reason := R_NO_FILE
+    Result.Reason := MsgNoFileOpen
   else if TRdxRecipeRunner.SourceLooksFpcAware(APlaces) then
-    Result.Reason := 'Datei mit FPC-Weiche oder FPC-Modus - in objfpc ruft '
-      + 'erst Foo() eine Prozedurvariable auf';
+    Result.Reason := _('file with an FPC switch or FPC mode - in objfpc only '
+      + 'Foo() calls a procedure variable');
   if Result.Reason <> '' then Exit;
   Map := TRdxCodeMap.Create(ALines);
   try
     if TRdxExprFixes.EmptyArgs(Map, ALine, AMessage, Plan, Result.Reason) then
       Result.Reason := CallReason(APlaces, Map, ALine, Plan)
     else if Result.Reason = '' then
-      Result.Reason := R_NO_HELP;
+      Result.Reason := _(R_NO_HELP);
   finally
     Map.Free;
   end;
@@ -741,18 +761,18 @@ function AssignedNilReason(AMap: TRdxCodeMap;
   const AName, ATypeLow: string): string;
 begin
   if TRdxSimpleFixes.DeclaresRoutine(AMap, 'Assigned') then
-    Exit('die Unit deklariert eine eigene Routine Assigned');
+    Exit(_(R_OWN_ROUTINE, ['Assigned']));
   if ATypeLow = '' then
-    Exit(Format('Typ von %s unbekannt - bei einem Funktionstyp ruft '
-      + '"%s <> nil" ihn auf, Assigned() nicht', [AName, AName]));
+    Exit(_('type of %s unknown - for a function type "%s <> nil" calls it, '
+      + 'Assigned() does not', [AName, AName]));
   Result := TRdxNilFix.NilOperandRisk(AName, ATypeLow);
   if Result <> '' then Exit;
   if TRdxExprFixes.ProceduralType(AMap, ATypeLow) then
-    Exit(Format(R_PROC_TYPE, [AName, AName]));
+    Exit(_(R_PROC_TYPE, [AName, AName]));
   if not TRdxExprFixes.PointerLikeType(AMap, ATypeLow) then
-    Result := Format('%s: Typ %s ist in dieser Unit nicht als Klasse, '
-      + 'Interface oder Zeiger bewiesen und keine Klasse der Delphi-Quellen '
-      + '- ein Funktionstyp riefe "%s <> nil" auf', [AName, ATypeLow, AName]);
+    Result := _('%s: type %s is not proven in this unit as a class, '
+      + 'interface or pointer and is not a class of the Delphi sources - a '
+      + 'function type would call "%s <> nil"', [AName, ATypeLow, AName]);
 end;
 
 // SCA072/SCA084: ist X an ALine sicher der Operand, fuer den die Umformung
@@ -763,16 +783,16 @@ var
   TypeLow : string;
 begin
   if TRdxSimpleFixes.WithBefore(AMap, ALine) or APlaces.InWithBlock(ALine) then
-    Exit(Format(R_WITH_MEMBER, [AName]));
+    Exit(_(R_WITH_MEMBER, [AName]));
   TypeLow := APlaces.DeclaredTypeOf(ALine, AName);
   if AKind = fkRedundantBoolean then
   begin
     if TypeLow = 'boolean' then
       Exit('');
     if TypeLow = '' then
-      TypeLow := 'unbekannt';
-    Exit(Format('%s ist hier nicht als Boolean bewiesen (Typ: %s) - bei '
-      + 'Variant oder LongBool ist "= True" nicht dasselbe', [AName, TypeLow]));
+      TypeLow := _(R_UNKNOWN_TYPE);
+    Exit(_('%s is not proven as Boolean here (type: %s) - with Variant or '
+      + 'LongBool "= True" is not the same', [AName, TypeLow]));
   end;
   Result := AssignedNilReason(AMap, AName, TypeLow);
 end;
@@ -788,7 +808,7 @@ begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
   begin
-    Result.Reason := R_NO_FILE;
+    Result.Reason := MsgNoFileOpen;
     Exit;
   end;
   Map := TRdxCodeMap.Create(ALines);
@@ -802,7 +822,7 @@ begin
     if Ok then
       Result.Reason := OperandReason(AKind, APlaces, Map, ALine, Plan.Name)
     else if Result.Reason = '' then
-      Result.Reason := R_NO_HELP;
+      Result.Reason := _(R_NO_HELP);
   finally
     Map.Free;
   end;
@@ -866,10 +886,10 @@ begin
         AIndex := k;
       end;
   if n = 0 then
-    Result := Format('%s steht nicht mehr auf Zeile %d einer uses-Klausel - '
-      + 'Zeile verschoben? Datei neu pruefen', [AUnit, ALine])
+    Result := MsgMovedSuffix(_('%s is no longer on line %d of a uses clause',
+      [AUnit, ALine]))
   else if n > 1 then
-    Result := Format('%s steht mehrmals auf Zeile %d', [AUnit, ALine]);
+    Result := _('%s appears more than once on line %d', [AUnit, ALine]);
 end;
 
 class function TRdxFixRunner.UnusedUsesFix(APlaces: TSourcePlaces;
@@ -883,19 +903,20 @@ begin
   Result.Name := Trim(AUnit);
   Index := -1;
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
-    Result.Reason := R_NO_FILE
+    Result.Reason := MsgNoFileOpen
   else if TRdxRecipeRunner.UsesDirectiveLine(APlaces) > 0 then
-    Result.Reason := 'Direktive in einer uses-Klausel - ein Eintrag gilt evtl. '
-      + 'nur in einem Zweig'
+    Result.Reason := _('directive in a uses clause - an entry may apply only '
+      + 'in one branch')
   else
     Result.Reason := FindUsesEntry(APlaces, ALine, Result.Name, Clause, Index);
   if Result.Reason <> '' then Exit;
   SetLength(Result.Edits, 1);
   Map := TRdxCodeMap.Create(ALines);
   try
+    // Eigener Satz (Variante, c_groups 3): '; ' vor 'Datei neu pruefen'.
     if UnitStillUsed(Map, Result.Name) then
-      Result.Reason := Format('%s wird im Text benutzt - der Fund ist aelter '
-        + 'als der Text; Datei neu pruefen', [Result.Name])
+      Result.Reason := _('%s is used in the text - the finding is older than '
+        + 'the text; analyse the file again', [Result.Name])
     else
       Result.Enabled := TRdxStructFixes.RemoveUsesEntry(Map, Clause, Index,
         Result.Edits[0], Result.Reason);
@@ -909,21 +930,21 @@ begin
   end;
   // Der Detektor ist heuristisch (Bezeichnerliste je Unit): ein Typ, den
   // er nicht kennt (TDataModule, TStream ...), macht den Fund falsch.
-  Result.Hint := Format('heuristischer Fund - danach kompilieren; hat %s einen '
-    + 'initialization-Abschnitt (Registrierung), laeuft er nicht mehr',
+  Result.Hint := _('heuristic finding - compile afterwards; if %s has an '
+    + 'initialization section (registration), it no longer runs',
     [Result.Name]);
 end;
 
 // Eingang eines Laeufers mit Quellstellen-Dienst: ohne offene Datei nil
-// und R_NO_FILE in AOutcome.Reason; sonst die Code-Sicht (der Aufrufer gibt
-// sie frei) und Platz fuer eine Ersetzung in AOutcome.Edits.
+// und MsgNoFileOpen in AOutcome.Reason; sonst die Code-Sicht (der Aufrufer
+// gibt sie frei) und Platz fuer eine Ersetzung in AOutcome.Edits.
 function OpenMapFor(APlaces: TSourcePlaces; ALines: TStrings;
   var AOutcome: TRdxFixOutcome): TRdxCodeMap;
 begin
   Result := nil;
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
   begin
-    AOutcome.Reason := R_NO_FILE;
+    AOutcome.Reason := MsgNoFileOpen;
     Exit;
   end;
   SetLength(AOutcome.Edits, 1);
@@ -963,15 +984,15 @@ begin
      and TRdxRecipeRunner.SourceLooksFpcAware(APlaces) then
   begin
     Result := Default(TRdxFixOutcome);
-    Result.Reason := 'Datei mit FPC-Weiche oder FPC-Modus - FPC kennt '
-      + 'EProgrammerError nicht';
+    Result.Reason := _('file with an FPC switch or FPC mode - FPC does not '
+      + 'know EProgrammerError');
   end
   else
     Result := CaseElseOutcome(APlaces, ALines, ALine, RAISE_UNHANDLED);
   Result.Variant := 1;
   Result.ChangesBehavior := True;
   if not Result.Enabled then Exit;
-  Result.Hint := R_CASE_RAISE_HINT;
+  Result.Hint := _(R_CASE_RAISE_HINT);
   Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
 end;
 
@@ -984,7 +1005,7 @@ begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(ALines) then
   begin
-    Result.Reason := R_NO_FILE;
+    Result.Reason := MsgNoFileOpen;
     Exit;
   end;
   Map := TRdxCodeMap.Create(ALines);
@@ -1014,17 +1035,17 @@ var
 begin
   Result := '';
   if Pos('.', AOperand) > 0 then
-    Exit(Format('%s ist kein blosser Bezeichner - sein Typ ist nicht '
-      + 'pruefbar', [AOperand]));
+    Exit(_('%s is not a plain identifier - its type cannot be checked',
+      [AOperand]));
   if TRdxSimpleFixes.WithBefore(AMap, ALine) or APlaces.InWithBlock(ALine) then
-    Exit(Format(R_WITH_MEMBER, [AOperand]));
+    Exit(_(R_WITH_MEMBER, [AOperand]));
   Declared := APlaces.DeclaredTypeOf(ALine, AOperand);
   if Declared = '' then
-    Result := Format('Typ von %s unbekannt - nur ein Cast auf den eigenen Typ '
-      + 'ist beweisbar ohne Wirkung', [AOperand])
+    Result := _('type of %s unknown - only a cast to its own type is provably '
+      + 'without effect', [AOperand])
   else if not SameText(Declared, ATarget) then
-    Result := Format('%s ist als %s deklariert, nicht als %s - ein anderer Typ '
-      + 'kann Free verdecken, oder der Cast ist zum Uebersetzen noetig',
+    Result := _('%s is declared as %s, not as %s - another type can hide '
+      + 'Free, or the cast is needed to compile',
       [AOperand, Declared, ATarget]);
 end;
 
@@ -1054,7 +1075,7 @@ begin
   end;
   Result.Enabled := Result.Enabled and (Result.Reason = '');
   if Result.Enabled then
-    Result.Hint := Format(R_CAST_HINT, [Result.Edits[0].NewText, Result.Name])
+    Result.Hint := _(R_CAST_HINT, [Result.Edits[0].NewText, Result.Name])
   else
     Result.Edits := nil;
 end;
@@ -1083,7 +1104,7 @@ begin
     Result.Edits := nil;
     Exit;
   end;
-  Result.Hint := R_EMPTY_RAISE_HINT;
+  Result.Hint := _(R_EMPTY_RAISE_HINT);
   Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
 end;
 
@@ -1101,24 +1122,24 @@ var
 begin
   Result := '';
   if TRdxSimpleFixes.WithBefore(AMap, ALine) or APlaces.InWithBlock(ALine) then
-    Exit(Format(R_WITH_MEMBER, [APlan.Target]));
+    Exit(_(R_WITH_MEMBER, [APlan.Target]));
   TypeLow := APlaces.DeclaredTypeOf(ALine, APlan.Target);
   if TypeLow <> 'boolean' then
   begin
     if TypeLow = '' then
-      TypeLow := 'unbekannt';
-    Exit(Format('%s ist hier nicht als Boolean bewiesen (Typ: %s) - bei '
-      + 'Variant bekaeme %s den Wert der Bedingung statt True/False',
+      TypeLow := _(R_UNKNOWN_TYPE);
+    Exit(_('%s is not proven as Boolean here (type: %s) - with Variant %s '
+      + 'would get the value of the condition instead of True/False',
       [APlan.Target, TypeLow, APlan.Target]));
   end;
   if not APlan.Negated then Exit;
   if not APlan.CondBoolean then
-    Exit('die Bedingung ist nicht als Boolean bewiesen (ein Aufruf, ein Pfad '
-      + 'oder Arithmetik als Operand) - bei einem Variant waere "not" bitweise');
+    Exit(_('the condition is not proven as Boolean (a call, a path or '
+      + 'arithmetic as operand) - with a Variant "not" would be bitwise'));
   for Ident in APlan.CondIdents do
     if APlaces.DeclaredTypeOf(ALine, Ident) <> 'boolean' then
-      Exit(Format('%s in der Bedingung ist hier nicht als Boolean bewiesen - '
-        + 'bei einem Variant waere "not" bitweise', [Ident]));
+      Exit(_('%s in the condition is not proven as Boolean here - with a '
+        + 'Variant "not" would be bitwise', [Ident]));
 end;
 
 // SCA047: ist das Ziel ein Speicherplatz? Der Detektor hat es aufgeloest;
@@ -1135,21 +1156,20 @@ var
 begin
   Result := '';
   if TRdxSimpleFixes.WithBefore(AMap, ALine) or APlaces.InWithBlock(ALine) then
-    Exit(Format(R_WITH_MEMBER, [ATarget]));
+    Exit(_(R_WITH_MEMBER, [ATarget]));
   Parts := StringReplace(ATarget, '^', '', [rfReplaceAll]).Split(['.']);
   if Length(Parts) = 0 then
-    Exit('Ziel fehlt');
+    Exit(_('the target is missing'));
   for i := 0 to High(Parts) do
     if TRdxSimpleFixes.DeclaresProperty(AMap, Trim(Parts[i])) then
-      Exit(Format('%s ist in dieser Unit als Property deklariert - die '
-        + 'Zuweisung ruft vielleicht einen Setter', [Trim(Parts[i])]));
+      Exit(_('%s is declared as a property in this unit - the assignment '
+        + 'may call a setter', [Trim(Parts[i])]));
   Root := Trim(Parts[0]);
   if SameText(Root, 'Self') and (Length(Parts) > 1) then
     Root := Trim(Parts[1]);
   if (APlaces.DeclaredTypeOf(ALine, Root) = '')
      and not TRdxSimpleFixes.DeclaresInlineVar(AMap, ALine, Root) then
-    Result := Format('%s ist hier nicht als Variable bekannt (Property oder '
-      + 'Feld aus einer anderen Unit?)', [Root]);
+    Result := _(R_NOT_A_VARIABLE, [Root]);
 end;
 
 // Der Text, auf dem uNilComparison den Knoten zaehlt (Analyse
@@ -1196,10 +1216,10 @@ begin
         ASite.Anchor := naStatement;
     end;
   if Hits = 0 then
-    Result := Format('keine Anweisung mit nil-Vergleich beginnt auf Zeile %d',
+    Result := _('no statement with a nil comparison starts on line %d',
       [ALine])
   else if Hits > 1 then
-    Result := Format('Zeile %d ist mehrdeutig (%d Anweisungen mit nil-Vergleich)',
+    Result := _('line %d is ambiguous (%d statements with a nil comparison)',
       [ALine, Hits]);
 end;
 
@@ -1226,7 +1246,7 @@ begin
     begin
       TypeLow := APlaces.DeclaredTypeOf(ALine, APlan.Operands[i]);
       if TypeLow = '' then
-        Exit(Format(R_NIL_TYPE_UNKNOWN, [APlan.Operands[i]]));
+        Exit(_(R_NIL_TYPE_UNKNOWN, [APlan.Operands[i]]));
     end;
     Result := TRdxNilFix.NilOperandReason(AMap, APlan.Operands[i], TypeLow);
     if Result <> '' then Exit;
@@ -1262,7 +1282,7 @@ begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
   begin
-    Result.Reason := R_NO_FILE;
+    Result.Reason := MsgNoFileOpen;
     Exit;
   end;
   Result.Reason := PickNilSite(APlaces, ALine, Site);
@@ -1276,7 +1296,7 @@ begin
     if APlaces.InWithBlock(Site.Line)
        or TRdxSimpleFixes.WithBefore(Map, Site.Line) then
     begin
-      Result.Reason := R_NIL_IN_WITH;
+      Result.Reason := _(R_NIL_IN_WITH);
       Exit;
     end;
     if not TRdxNilFix.NilComparison(Map, Site, Plan) then

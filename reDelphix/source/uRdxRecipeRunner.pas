@@ -40,9 +40,12 @@ const
   // reichlich Reserve fuer Abfragen zwischen Aufbau und Klick (Gluehbirne
   // im Hintergrund). Review reDelphiX 2026-10-07, Blocker 2.
   RDX_ACTION_BATCHES = 8 * MAX_FINDINGS_PER_MENU;
-  // Grund ohne offene Datei (Describe, PlanUses; die Ruempfe in
-  // uRdxFixRunner, das Geruest uRdxFixTable.TRdxFixFrame; bis Charge H3c
-  // stand er dort als R_NO_FILE_OPEN doppelt - Minor 6).
+  // Grund ohne offene Datei - bis Charge H3c als R_NO_FILE_OPEN doppelt
+  // (Minor 6). Seit E29 (Gruppe G6) nehmen Describe, PlanUses und die
+  // Ruempfe in uRdxFixRunner die uebersetzte Fassung uRdxText.MsgNoFileOpen;
+  // die Konstante bleibt nur fuer das Geruest uRdxFixTable.TRdxFixFrame,
+  // bis die Gruppen gemergt sind - dann entfallen sie und ihre Ausnahme in
+  // tools/rdx_i18n_gate.allow (c_groups 0).
   R_NO_FILE = 'keine Datei geoeffnet';
 
 type
@@ -362,7 +365,7 @@ uses
   // gebraucht, nicht in der Schnittstelle (Gegen-Review S1, Minor 7).
   uRdxSqlTemplate,
   uSourcePlaces,     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
-  uRdxText;          // _ (E29)
+  uRdxText;          // _, MsgNoFileOpen, MsgMovedSuffix (E29)
 
 // Dieser Laeufer ist gegen Version 1 des Quellstellen-Vertrags geschrieben
 // (uSourcePlaces, Abschnitt VERTRAGSVERSION). Steigt die Version, bricht
@@ -483,9 +486,9 @@ begin
     Kinds := [TNodeKind.nkAssign, TNodeKind.nkCall];
   Nodes := APlaces.NodesAt(AQuery.Line, Kinds);
   if Length(Nodes) = 0 then
-    AWhy := Format('keine Anweisung auf Zeile %d gefunden', [AQuery.Line])
+    AWhy := _('no statement found on line %d', [AQuery.Line])
   else if Length(Nodes) > 1 then
-    AWhy := Format('Zeile %d ist mehrdeutig (%d Anweisungen)',
+    AWhy := _('line %d is ambiguous (%d statements)',
       [AQuery.Line, Length(Nodes)])
   else
   begin
@@ -522,14 +525,17 @@ begin
       Same := SameText(TRdxRecipes.AsciiOnly(NodeKey),
         TRdxRecipes.AsciiOnly(QueryKey));
     if not Same then
-      Exit(Format('Zeile %d traegt %s, der Fund nennt %s - Zeile verschoben? '
-        + 'Datei neu pruefen', [AQuery.Line, NodeKey, AQuery.Target]));
+      Exit(MsgMovedSuffix(_('line %d carries %s, the finding names %s',
+        [AQuery.Line, NodeKey, AQuery.Target])));
   end;
   if (AQuery.Plus < 0) or (ANode.Kind <> TNodeKind.nkAssign) then Exit;
   Plus := TRdxRecipes.TopLevelPlusCount(ANode.TypeRef);
+  // Eigener Satz statt MsgMovedSuffix: die Zeile ist veraendert, nicht
+  // verschoben (Variante, c_groups 3 - der Wortlaut bleibt).
   if Plus <> AQuery.Plus then
-    Result := Format('Kette auf Zeile %d hat %d x ''+'', der Fund nennt %d - '
-      + 'Zeile veraendert? Datei neu pruefen', [AQuery.Line, Plus, AQuery.Plus]);
+    Result := _('chain on line %d has %d x ''+'', the finding names %d - '
+      + 'line changed? Analyse the file again',
+      [AQuery.Line, Plus, AQuery.Plus]);
 end;
 
 // Kette bzw. Aufruf des Knotens, sonst wenigstens die Anweisung (fuer
@@ -553,8 +559,8 @@ begin
     begin
       Probe := APlaces.ChainOf(ANode.Line, ANode.Col, ANode.Name);
       if Assigned(Probe) then
-        AWhy := Format('Kette auf Zeile %d: der Quelltext zerfaellt anders '
-          + 'als der Parser sie sieht (%d x ''+'')', [ANode.Line, Plus]);
+        AWhy := _('chain on line %d: the source text splits differently '
+          + 'than the parser sees it (%d x ''+'')', [ANode.Line, Plus]);
       Probe.Free;
     end;
   end
@@ -564,7 +570,7 @@ begin
   if Result = nil then
     Result := APlaces.StatementAt(ANode.Line, ANode.Col);
   if (Result = nil) and (AWhy = '') then
-    AWhy := 'Anweisung laesst sich nicht beschreiben';
+    AWhy := _('the statement cannot be described');
 end;
 
 class function TRdxRecipeRunner.DescribeAnchor(APlaces: TSourcePlaces;
@@ -608,7 +614,7 @@ begin
   AWhy    := '';
   if not Assigned(APlaces) or not APlaces.IsOpen then
   begin
-    AWhy := R_NO_FILE;
+    AWhy := MsgNoFileOpen;
     Exit;
   end;
   if not SingleNodeAt(APlaces, AQuery, N, AWhy) then Exit;
@@ -710,6 +716,18 @@ end;
 const
   // So viele Operanden "laut Kompilat" nennt der Hinweis mit Namen.
   MAX_HINT_NAMES = 3;
+  // Der Hinweis eines aktiven Format-Eintrags (FormatHintOf), msgids (E29):
+  // ein Satz je Form - Termzahl mit bzw. ohne Ziel des Selbst-Anhaengens,
+  // die Herkunft der Argumente als %s darin, die numerischen als Satzende
+  // um den ganzen Hinweis. Deutsch bisher '3 Terme hinter S, alle
+  // bewiesen, 1 numerisch (%d/%u)'.
+  HINT_TERMS        = '%d terms, %s';
+  HINT_TERMS_BEHIND = '%d terms behind %s, %s';
+  HINT_ALL_PROVEN   = 'all proven';
+  HINT_BY_COMPILER  = '%d according to the compiler (%s)';
+  HINT_NUMERIC      = '%s, %d numeric (%%d/%%u)';
+  // Ohne Beschreibung der Stelle (NoInfoReason, SqlTemplate).
+  R_NO_INFO = 'no description';
 
 // Die ersten MAX_HINT_NAMES Namen, mit ', ' verbunden; ', ...' bei mehr.
 function ByCompilerNames(const ANames: TArray<string>): string;
@@ -736,37 +754,43 @@ begin
 end;
 
 // Hinweis eines aktiven Format-Eintrags: Termzahl, bei Selbst-Anhaengen
-// das Ziel (ABehind, sonst ''), Herkunft der Argumente.
+// das Ziel (ABehind, sonst ''), Herkunft der Argumente. Die Teile sind
+// uebersetzte ganze Saetze, verbunden ueber %s (HINT_*) - Namen und Ziel
+// stehen als Format-Argumente darin, ein '%' in ihnen bleibt Text.
 function FormatHintOf(const ABuild: TRdxFormatBuild; ATerms: Integer;
   const ABehind: string): string;
+var
+  Origin : string;
 begin
-  Result := Format('%d Terme', [ATerms]);
-  if ABehind <> '' then
-    Result := Result + ' hinter ' + ABehind;
   if Length(ABuild.ByCompiler) = 0 then
-    Result := Result + ', alle bewiesen'
+    Origin := _(HINT_ALL_PROVEN)
   else
-    Result := Result + Format(', %d laut Kompilat (%s)',
-      [Length(ABuild.ByCompiler), ByCompilerNames(ABuild.ByCompiler)]);
+    Origin := _(HINT_BY_COMPILER, [Length(ABuild.ByCompiler),
+      ByCompilerNames(ABuild.ByCompiler)]);
+  if ABehind = '' then
+    Result := _(HINT_TERMS, [ATerms, Origin])
+  else
+    Result := _(HINT_TERMS_BEHIND, [ATerms, ABehind, Origin]);
   if ABuild.Numeric > 0 then
-    Result := Result + Format(', %d numerisch (%%d/%%u)', [ABuild.Numeric]);
+    Result := _(HINT_NUMERIC, [Result, ABuild.Numeric]);
 end;
 
-// Ohne Beschreibung: der Grund aus Describe, sonst 'keine Beschreibung'.
+// Ohne Beschreibung: der Grund aus Describe, sonst R_NO_INFO.
 function NoInfoReason(const AWhy: string): string;
 begin
   Result := AWhy;
   if Result = '' then
-    Result := 'keine Beschreibung';
+    Result := _(R_NO_INFO);
 end;
 
 // Keine Zuweisung mit Kette - dazu der Grund aus Describe, wenn er neben
 // einer Beschreibung steht (die Kette passte nicht).
 function NoChainReason(const AWhy: string): string;
 begin
-  Result := 'keine Zuweisung mit Kette';
-  if AWhy <> '' then
-    Result := Result + ': ' + AWhy;
+  if AWhy = '' then
+    Result := _('no assignment with a chain')
+  else
+    Result := _('no assignment with a chain: %s', [AWhy]);
 end;
 
 // Selbst-Anhaengen 'X := X + ...' (ein Drittel der Korpus-Stellen): der
@@ -815,7 +839,7 @@ begin
   Plan := TRdxRecipeRunner.PlanUses(APlaces, 'SysUtils', 'System.SysUtils');
   if not Plan.Needed then Exit;
   if Plan.Reason <> '' then
-    Exit('System.SysUtils fehlt in uses: ' + Plan.Reason);
+    Exit(_('%s is missing in uses: %s', ['System.SysUtils', Plan.Reason]));
   AOutcome.NeedsUses := True;
   AOutcome.UsesName  := Plan.Name;
   AOutcome.UsesEdit  := Plan.Edit;
@@ -854,7 +878,7 @@ begin
   TType := Parts[0].Resolved;
   if TRdxRecipes.IsNonUnicodeStringType(TType) then
   begin
-    Result.Reason := Format('Ziel ''%s'' ist %s - Format liefert UnicodeString',
+    Result.Reason := _('target ''%s'' is %s - Format returns UnicodeString',
       [TRdxRecipes.CollapseWhitespace(Parts[0].Text), TType]);
     Exit;
   end;
@@ -872,7 +896,7 @@ begin
   Result.Expected := APlaces.TextOf(Result.Span);
   if Result.Expected = '' then
   begin
-    Result.Reason := 'Bereich nicht lesbar';
+    Result.Reason := _('range not readable');
     Exit;
   end;
   // Ein Kommentar im ERSETZTEN Bereich ginge verloren - ein Kommentar
@@ -890,7 +914,7 @@ begin
   // (reDelphix.Test Rewrite_CommentInChain_Disabled, rot 2026-10-07).
   if APlaces.SpanHasComment(Result.Span) then
   begin
-    Result.Reason := 'Kommentar im Bereich';
+    Result.Reason := _('comment in the range');
     Exit;
   end;
   Behind := '';
@@ -1100,7 +1124,10 @@ begin
   i := TRdxRecipeRunner.DirectiveLineIn(APlaces, AEntries);
   if i > 0 then
   begin
-    APlan.Reason := Format('uses-Klausel traegt Compiler-Direktiven (Zeile %d)', [i]);
+    // Dieselbe msgid wie der Sperrgrund 'uses qualifizieren' des Anbieters
+    // (uRdxProvider) - derselbe Satz, schon in de.po/fr.po.
+    APlan.Reason := _('uses clause contains compiler directives (line %d)',
+      [i]);
     Exit;
   end;
   SetLength(Names, Length(AEntries));
@@ -1122,8 +1149,7 @@ begin
   Old := APlaces.TextOf(E);
   if Old = '' then
   begin
-    APlan.Reason := Format('uses-Eintrag in Zeile %d nicht lesbar',
-      [E.StartLine]);
+    APlan.Reason := _('uses entry in line %d not readable', [E.StartLine]);
     Exit;
   end;
   APlan.Edit.Span     := E;
@@ -1147,13 +1173,13 @@ begin
     Line := APlaces.SectionLine(TUsesSection.usInterface);
   if Line = 0 then
   begin
-    APlan.Reason := 'keine uses-Klausel und kein interface/implementation';
+    APlan.Reason := _('no uses clause and no interface/implementation');
     Exit;
   end;
   Text := APlaces.LineText(Line);
   if Trim(Text) = '' then
   begin
-    APlan.Reason := Format('Zeile %d des Abschnitts nicht lesbar', [Line]);
+    APlan.Reason := _('line %d of the section not readable', [Line]);
     Exit;
   end;
   APlan.Edit.Span     := TRefactorSpan.Make(ROLE_STATEMENT, Line, 1, Line,
@@ -1173,7 +1199,7 @@ begin
   if not Assigned(APlaces) or not APlaces.IsOpen then
   begin
     Result.Needed := True;
-    Result.Reason := R_NO_FILE;
+    Result.Reason := MsgNoFileOpen;
     Exit;
   end;
   AllNames := UsesNamesOf(APlaces);
@@ -1238,13 +1264,13 @@ begin
   AOffer := Default(TRdxSqlOffer);
   if (AInfo = nil) or (ALines = nil) then
   begin
-    AOffer.Reason := 'keine Beschreibung';
+    AOffer.Reason := _(R_NO_INFO);
     Exit;
   end;
   Parts := PartsOf(APlaces, AInfo);
   if (Length(Parts) = 0) or (Parts[0].Role <> ROLE_TARGET) then
   begin
-    AOffer.Reason := 'kein Ziel erkannt';
+    AOffer.Reason := _('no target recognized');
     Exit;
   end;
   Result := BuildSqlTemplate(SqlRequestOf(APlaces, ALines, AInfo, Parts,

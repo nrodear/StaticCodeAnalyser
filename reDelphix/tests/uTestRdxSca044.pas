@@ -1385,7 +1385,10 @@ begin
   Assert.AreEqual<Integer>(1, FindingsOf(Src, fkConcatToFormat, Msg));
   Assert.IsFalse(DescribeForFinding(UnitWith('  Text := Marker + ''a'' + Tag;'),
     fkConcatToFormat, Msg, 'Text := Marker', Why));
-  Assert.IsTrue(Pos('veraendert', Why) > 0, Why);
+  // Der Grund 'Zeile veraendert?' (MismatchOf, '+'-Zahl). Umlautfreies
+  // Teilstueck: 'veraendert' steht in de.po mit echtem Umlaut (E29, Gruppe
+  // G6); "x '+', der Fund nennt" traegt nur dieser Grund.
+  Assert.IsTrue(Pos('x ''+'', der Fund nennt', Why) > 0, Why);
 end;
 
 procedure TTestRdxSca044.Describe_Sca003Finding_CallTarget;

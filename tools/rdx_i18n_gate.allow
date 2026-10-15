@@ -27,3 +27,4 @@ uRdxLog.pas | unit | Protokoll (reDelphix.log, OutputDebugString): Zeilen fuer d
 uRdxProvider.pas | const OPEN_NAMES | Protokoll: Woerter der Provide-Zeile im reDelphix.log (Argument von RdxLog, nie in der Oberflaeche)
 uRdxProvider.pas | const SOURCE_NAMES | Protokoll: Quelle des Texts in der Provide-Zeile im reDelphix.log ('quelle=Editor-Puffer', Argument von RdxLog, nie in der Oberflaeche) - seit FIX-C1 sieht die Heuristik einzelne Woerter
 uRdxProvider.pas | name S_TOO_LONG | die msgid steht in uRdxEditor (dort _(S_TOO_LONG), derselbe Text) - der Extraktor findet sie dort
+uRdxRecipeRunner.pas | const R_NO_FILE | bleibt bis zum Merge der Gruppen (c_groups 0): eigene Stellen und uRdxFixRunner nehmen MsgNoFileOpen, die Konstante braucht nur noch uRdxFixTable.TRdxFixFrame.Run (Gruppe G7) - Konstante und Eintrag entfernt der Merge
