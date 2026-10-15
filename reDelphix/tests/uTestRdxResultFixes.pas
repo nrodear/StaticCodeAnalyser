@@ -16,8 +16,12 @@ unit uTestRdxResultFixes;
 //          umschliessende Routine von der Lese-Zeile aus (auch mit lokaler
 //          Routine davor), Typbeweise (RTL-DynArray, 'array of' und
 //          Interface der Unit); Sperren unbewiesener Typ, absolute Result,
-//          Typ anders als in der Meldung, Zeile ohne Result.
-// SCA096/SCA097: uTestRdxInheritedFixes; gegen die echten Detektoren:
+//          Typ anders als in der Meldung, Zeile ohne Result; seit Charge B1
+//          ein Typname, den die Unit auch lokal bzw. geschachtelt definiert
+//          (Gegen-Review R5, R5-06).
+// Dazu die Laufzeit der Planer SCA096/SCA097 auf einer grossen Unit (R5-07,
+// ein Planerlauf statt je Frage ein Lauf ueber die ganze Datei).
+// SCA096/SCA097 sonst: uTestRdxInheritedFixes; gegen die echten Detektoren:
 // uTestRdxResultFixesDetector (nur Delphi).
 
 interface
@@ -46,6 +50,8 @@ type
     [Test] procedure Sca196_Enclosing;
     [Test] procedure Refuse196_TypeNotProven;
     [Test] procedure Refuse196_Stale;
+    [Test] procedure Refuse196_TypeScope;
+    [Test] procedure Planners_LargeUnitInTime;
   end;
 
 implementation
@@ -500,6 +506,93 @@ begin
   Assert.AreEqual('', PlanOf(TRdxResultFixes.ManagedResultInit, S,
     LineOf(S, 'Use(Result)'), 'Function F reads Result before', R).Name);
   Assert.IsTrue(Pos('fehlt in der Meldung', R) > 0, R);
+end;
+
+// Die Unit definiert den Typnamen auch lokal in einer anderen Routine bzw.
+// geschachtelt in einer Klasse (Gegen-Review R5, R5-06; Pruefer-Fixtures
+// R5/r4.txt, R5_verify/v06b.txt): welche Definition gilt, haengt am
+// Gueltigkeitsbereich - bis Charge B1 'Result := nil;' fuer mORMots RawUtf8
+// (ein String) wegen eines lokalen 'RawUtf8 = array of Byte'.
+procedure TTestRdxResultFixes.Refuse196_TypeScope;
+begin
+  AssertRefused196(InUnit(['procedure Helper;', 'type',
+    '  RawUtf8 = array of Byte;', 'var', '  X: RawUtf8;', 'begin',
+    '  SetLength(X, 1);', 'end;', 'function Join(const A: RawUtf8): RawUtf8;',
+    'begin', '  Result := Result + A;', 'end;']), 'Result := Result', 'Join',
+    'RawUtf8', 'Gueltigkeitsbereich');
+  AssertRefused196(Join(['unit u;', 'interface', 'type', '  TA = class',
+    '  public type', '    TItems = array of Integer;', '  end;',
+    'implementation', 'function GetItems: TItems;', 'begin',
+    '  Result := Result + [1];', 'end;', 'end.']), 'Result := Result',
+    'GetItems', 'TItems', 'Gueltigkeitsbereich');
+end;
+
+// Die Unit von Planers_LargeUnitInTime: TFoo erbt von TBase (in der Unit),
+// TBase von TComponent (nicht in der Unit); der Konstruktor ruft ACalls
+// verschiedene Prozeduren, AFillers Klassen fuellen die Datei.
+function LargeUnit(AFillers, ACalls: Integer): string;
+var
+  SB : TStringBuilder;
+  i  : Integer;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.Append('unit u;'#13#10'interface'#13#10'type'#13#10);
+    SB.Append('  TBase = class(TComponent)'#13#10'  public'#13#10);
+    SB.Append('    constructor Create(A: Integer); virtual;'#13#10'  end;'#13#10);
+    SB.Append('  TFoo = class(TBase)'#13#10'  public'#13#10);
+    SB.Append('    constructor Create(A: Integer); override;'#13#10);
+    SB.Append('    destructor Destroy; override;'#13#10'  end;'#13#10);
+    for i := 1 to AFillers do
+      SB.Append(Format('  TFiller%d = class'#13#10'    procedure M;'#13#10
+        + '  end;'#13#10, [i]));
+    SB.Append('implementation'#13#10);
+    SB.Append('constructor TFoo.Create(A: Integer);'#13#10'begin'#13#10);
+    for i := 1 to ACalls do
+      SB.Append(Format('  Init%d(A);'#13#10, [i]));
+    SB.Append('end;'#13#10'destructor TFoo.Destroy;'#13#10'begin'#13#10);
+    SB.Append('  Done;'#13#10'end;'#13#10);
+    for i := 1 to AFillers do
+      SB.Append(Format('procedure TFiller%d.M;'#13#10'begin'#13#10
+        + '  Work(%d);'#13#10'end;'#13#10, [i, i]));
+    SB.Append('end.');
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+// Laufzeit (Gegen-Review R5, R5-07): SCA096 und SCA097 auf einer Unit von
+// gut 20.000 Zeilen. Bis Charge B1 las jede Frage nach Klassenkopf bzw.
+// Methodendeklaration die ganze Datei - fuer SCA096 je Aufruf im Rumpf die
+// ganze Vorfahrenkette (gut 120 Laeufe, FPC-Pruefstand rund 5 s); jetzt ein
+// Index je Planerlauf (rund 0,1 s). Die Schranke laesst Rechner-
+// Schwankung mehr als Faktor 5 Luft.
+procedure TTestRdxResultFixes.Planners_LargeUnitInTime;
+const
+  MAX_MS = 1500;
+var
+  S, R : string;
+  P    : TRdxResultPlan;
+  T0   : TDateTime;
+  Ms   : Int64;
+begin
+  S := LargeUnit(3000, 20);
+  T0 := Now;
+  P := PlanOf(TRdxResultFixes.ConstructorInherited, S,
+    LineOf(S, 'constructor TFoo.Create'), 'Constructor has no `inherited` '
+    + 'call - parent class is not initialized.', R);
+  Ms := Round((Now - T0) * MSecsPerDay);
+  Assert.AreEqual('', R, 'SCA096 angeboten');
+  Assert.AreEqual(STMT_INHERITED, P.Name);
+  Assert.IsTrue(Ms < MAX_MS, Format('SCA096: %d ms', [Ms]));
+  T0 := Now;
+  P := PlanOf(TRdxResultFixes.DestructorInherited, S,
+    LineOf(S, 'destructor TFoo.Destroy'), 'Destructor has no `inherited` '
+    + 'call - parent class cleanup is skipped.', R);
+  Ms := Round((Now - T0) * MSecsPerDay);
+  Assert.AreEqual('', R, 'SCA097 angeboten');
+  Assert.IsTrue(Ms < MAX_MS, Format('SCA097: %d ms', [Ms]));
 end;
 
 initialization

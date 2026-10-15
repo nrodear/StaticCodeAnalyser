@@ -1000,12 +1000,12 @@ end;
 |---|---|---|
 | `Call inherited last in the destructor` | `inherited als Letztes im Destruktor aufrufen` | `Appeler inherited en dernier dans le destructeur` |
 
-**Wirkung:** Setzt `inherited;` in eine eigene Zeile direkt vor das `end` des Rumpfs, eingerückt wie die erste Anweisung; fehlt der letzten Anweisung das `;`, kommt es mit. Nur mit `override` an der Deklaration.
+**Wirkung:** Setzt `inherited;` in eine eigene Zeile direkt vor das `end` des Rumpfs, eingerückt wie die erste Anweisung; fehlt der letzten Anweisung das `;`, kommt es hinter ihr letztes Zeichen – auch hinter ein String-Literal. Nur mit `override` an der Deklaration.
 
 **Nicht angeboten**
 
 - kein `override` an der Deklaration (dann verdeckt Destroy die virtuelle Methode – eigentlich SCA149)
-- eine letzte Anweisung `Exit`/`raise`/`Halt`/`Abort`/`goto`, `Exit` oder `goto` auf irgendeiner Tiefe
+- eine letzte Anweisung `Exit`/`raise`/`Halt`/`Abort`/`goto` (auch `System.Exit`, `System.Halt`, `SysUtils.Abort`), `Exit` (auch `System.Exit`) oder `goto` auf irgendeiner Tiefe
 - eine in der Unit abstrakte geerbte Methode, `{$mode objfpc}` mit einem Vorfahren außerhalb der Unit
 - eine Direktive zwischen letzter Anweisung und `end`, `inherited` im Text der Routine
 - `object`-Typ, `class destructor`, asm, eine Direktive zwischen Kopf und `begin`
@@ -1330,14 +1330,14 @@ Nachher:
 |---|---|---|
 | `Initialize Result with %s` | `Result mit %s initialisieren` | `Initialiser Result avec %s` |
 
-**Platzhalter:** `%s` = der eingesetzte Wert (`0`, `''`, `nil`, `Default(T)` …).
+**Platzhalter:** `%s` = der eingesetzte Wert (`0`, `''`, `nil`, `Low(T)`, `Default(T)` …).
 
-**Wirkung:** Setzt `Result := <Wert>;` als erste Anweisung. Der Wert folgt dem Rückgabetyp: `False`, `0`, `''`, `#0`, `nil`, `[]` bzw. der erste Wert einer Aufzählung der Unit, sonst `Default(T)` (Records, Typparameter, Unbekanntes).
+**Wirkung:** Setzt `Result := <Wert>;` als erste Anweisung. Der Wert folgt dem Rückgabetyp: `False`, `0`, `''`, `#0`, `nil`, `[]` bzw. `Low(T)` für eine schlichte Aufzählung der Unit, sonst `Default(T)` (Records, Typparameter, Unbekanntes, ein Typname, den die Unit auch in einer Routine oder einem Klassenrumpf definiert).
 
 **Nicht angeboten**
 
 - `Default(T)` in Dateien mit Spuren von Compilern vor Delphi 2009 (`jvcl.inc`, `VER150`, `CompilerVersion < 20` …)
-- eine Zuweisung an Result bzw. den Funktionsnamen oder `Exit(Wert)` im Rumpf – auch im inaktiven `$IFDEF`-Zweig
+- eine Zuweisung an Result bzw. den Funktionsnamen oder `Exit(Wert)` (auch `System.Exit(Wert)`) im Rumpf – auch im inaktiven `$IFDEF`-Zweig
 - eine Datei ohne `implementation`-Teil bzw. ohne unit/program/library-Kopf (Skripte, Includes)
 - ein FPC-Modus ohne Result, `{$X-}`, asm, eine Direktive zwischen Kopf und `begin`
 - ein Rückgabetyp, der kein einfacher Typbezeichner ist, eine freie Funktion ohne Signatur im Kopf, mehrere Deklarationen
@@ -1923,7 +1923,7 @@ Nachher:
 
 **Nicht angeboten**
 
-- ein Typ, der nicht als String, dynamisches Array, Interface oder Variant bewiesen ist (ein fremdes `IFoo` kann ein Record sein); deklariert die Unit den Namen selbst, gilt nur ihre Definition
+- ein Typ, der nicht als String, dynamisches Array, Interface oder Variant bewiesen ist (ein fremdes `IFoo` kann ein Record sein); deklariert die Unit den Namen selbst, gilt nur ihre Definition auf Unit-Ebene – eine Definition in einer Routine oder einem Klassenrumpf sperrt
 - `absolute Result`, asm, eine Direktive zwischen Kopf und `begin`, ein FPC-Modus ohne Result
 - Name oder Typ passen nicht zur Meldung, auf der Zeile steht kein `Result` (Zeile verschoben)
 

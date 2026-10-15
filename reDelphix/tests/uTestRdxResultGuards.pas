@@ -24,6 +24,11 @@ unit uTestRdxResultGuards;
 //          (auch im inaktiven Zweig), Exit(Wert); eine lokale Routine, die
 //          Result schreibt, sperrt nicht;
 //   SCA196 Minor 8: eine Typdefinition der Unit gilt vor dem RTL-Namen.
+// Dazu das Gegen-Review R5 (Charge B1, je gegen 4358b769 rot): SCA121 Low(T)
+// statt des ersten Werts einer Aufzaehlung, die ein Member verdeckt, und
+// Typdefinitionen nur auf Unit-Ebene (R5-06); SCA096 'class(IFoo)' nur mit
+// einem Interface auf Unit-Ebene (missed 1); 'System.Exit(Wert)' schreibt
+// Result (R5-05).
 
 interface
 
@@ -51,6 +56,9 @@ type
     [Test] procedure Refuse121_ResultWritten;
     [Test] procedure Sca121_LocalRoutineWritesResult;
     [Test] procedure Refuse196_OwnTypeDefinition;
+    [Test] procedure Sca121_EnumLowNotShadowed;
+    [Test] procedure Sca121_TypeScope;
+    [Test] procedure Refuse096_NestedInterface;
   end;
 
 implementation
@@ -450,15 +458,18 @@ const
 var
   R : string;
 begin
-  Assert.AreEqual('mdNone', Value121(NO_HEAD, OWN, 'TMode', R), R);
+  // Eine schlichte Aufzaehlung: Low(T) (seit Charge B1 statt des ersten
+  // Werts, den ein Member gleichen Namens verdecken kann - R5-06).
+  Assert.AreEqual('Low(TMode)', Value121(NO_HEAD, OWN, 'TMode', R), R);
   Assert.AreEqual('nil', Value121(NO_HEAD, OWN, 'TItem', R), R);
   Assert.AreEqual('[]', Value121(NO_HEAD, OWN, 'TModes', R), R);
   Assert.AreEqual('Default(TPoint3)', Value121(NO_HEAD, OWN, 'TPoint3', R), R);
   Assert.AreEqual('nil', Value121(NO_HEAD, OWN, 'TInts', R), R);
-  // Eigene Ordinalwerte bzw. {$SCOPEDENUMS ON}: Default(T).
+  // Eigene Ordinalwerte: Default(T) - Low(T) waere dort ein anderer Wert.
+  // {$SCOPEDENUMS ON} stoert Low(T) nicht.
   Assert.AreEqual('Default(TMode)', Value121(NO_HEAD, ASSIGNED_ENUM, 'TMode',
     R), R);
-  Assert.AreEqual('Default(TMode)', Value121(SCOPED, ENUM_ONLY, 'TMode', R), R);
+  Assert.AreEqual('Low(TMode)', Value121(SCOPED, ENUM_ONLY, 'TMode', R), R);
   Assert.AreEqual('Default(Integer)', Value121(NO_HEAD, REDEFINED, 'Integer',
     R), R);
 end;
@@ -490,8 +501,10 @@ end;
 procedure TTestRdxResultGuards.Refuse121_ResultWritten;
 const
   // Indy IdStackDotNet.HostByAddress: Result nur im inaktiven Zweig.
-  BODIES: array[0..3] of string = ('{$IFDEF DOTNET} Result := Host; {$ENDIF}',
-    'F := 1;', 'Result.X := 1;', 'if A > 0 then Exit(A);');
+  // 'System.Exit(A)' seit Charge B1 (Gegen-Review R5, R5-05).
+  BODIES: array[0..4] of string = ('{$IFDEF DOTNET} Result := Host; {$ENDIF}',
+    'F := 1;', 'Result.X := 1;', 'if A > 0 then Exit(A);',
+    'if A > 0 then System.Exit(A);');
 var
   B, S : string;
 begin
@@ -547,6 +560,94 @@ begin
     Format(MSG_196, ['F', 'RawUtf8']));
   Assert.AreNotEqual('', F.Text, F.Reason);
   Assert.AreEqual('Result := ''''', F.Plan.Name);
+end;
+
+// ---- Gegen-Review R5 (Charge B1) ----
+
+// Ein Member der Klasse mit dem Namen des ersten Werts verdeckt ihn (R5-06;
+// Pruefer-Fixtures R5/r1.txt, R5_verify/v06.txt): bis Charge B1 'Result :=
+// None;' - mit einer Property uebersetzte das nicht, mit einem Feld nahm
+// Result still den Feldwert. Low(T) verdeckt kein Member; ein Parameter
+// namens Low verdeckte die Funktion - dann Default(T).
+procedure TTestRdxResultGuards.Sca121_EnumLowNotShadowed;
+const
+  BY_PROPERTY: array[0..6] of string = ('  TMode = (None, Fast);',
+    '  TFoo = class', '  private', '    function GetNone: Integer;', '  public',
+    '    property None: Integer read GetNone;', '  end;');
+  BY_FIELD: array[0..3] of string = ('  TMode = (None, Fast);',
+    '  TFoo = class', '    None: TMode;', '  end;');
+var
+  S : string;
+  F : TFixRun;
+begin
+  S := UnitWith(NO_HEAD, BY_PROPERTY, ['function TFoo.GetMode: TMode;',
+    'begin', '  Log(1);', 'end;']);
+  F := RunFix(TRdxResultFixes.ResultDefault, S, 'function TFoo.GetMode',
+    Format(MSG_121, ['GetMode']));
+  Assert.AreEqual(StringReplace(S, '  Log(1);',
+    '  Result := Low(TMode);'#13#10'  Log(1);', []), F.Text, F.Reason);
+  S := UnitWith(NO_HEAD, BY_FIELD, ['function TFoo.GetMode: TMode;', 'begin',
+    '  Log(1);', 'end;']);
+  F := RunFix(TRdxResultFixes.ResultDefault, S, 'function TFoo.GetMode',
+    Format(MSG_121, ['GetMode']));
+  Assert.AreEqual('Low(TMode)', F.Plan.Name, F.Reason);
+  S := UnitWith(NO_HEAD, BY_FIELD, ['function Pick(Low: Integer): TMode;',
+    'begin', '  Log(Low);', 'end;']);
+  F := RunFix(TRdxResultFixes.ResultDefault, S, 'function Pick',
+    Format(MSG_121, ['Pick']));
+  Assert.AreEqual('Default(TMode)', F.Plan.Name, F.Reason);
+end;
+
+// Eine Typdefinition gilt nur auf Unit-Ebene (R5-06; Pruefer-Fixtures
+// R5/r1.txt, r4.txt, R5_verify/v06.txt): ein geschachtelter Typ einer
+// anderen Klasse bzw. ein lokaler Typ einer anderen Routine ist nicht
+// sichtbar - bis Charge B1 'Result := mA;' (E2003) bzw. 'Result := nil;' fuer
+// System.Types.TPoint (E2010). Steht eine Definition nicht auf Unit-Ebene,
+// Default(T) - der Compiler loest es wie den Kopf auf. Eine Definition
+// hinter einer Routine bleibt auf Unit-Ebene.
+procedure TTestRdxResultGuards.Sca121_TypeScope;
+const
+  NESTED: array[0..6] of string = ('  TA = class', '  public type',
+    '    TMode = (mA, mB);', '  end;', '  TC = class',
+    '    function F: TMode;', '  end;');
+  POINT_TYPES: array[0..0] of string = ('  TAlias = Integer;');
+var
+  S : string;
+  F : TFixRun;
+begin
+  S := UnitWith(NO_HEAD, NESTED, ['function TC.F: TMode;', 'begin', '  Log(1);',
+    'end;']);
+  F := RunFix(TRdxResultFixes.ResultDefault, S, 'function TC.F',
+    Format(MSG_121, ['F']));
+  Assert.AreEqual('Default(TMode)', F.Plan.Name, F.Reason);
+  S := UnitWith(NO_HEAD, POINT_TYPES, ['procedure Other;', 'type',
+    '  TPoint = ^Integer;', 'var', '  P: TPoint;', 'begin', '  P := nil;',
+    'end;', 'function GetPos: TPoint;', 'begin', '  Log(1);', 'end;']);
+  F := RunFix(TRdxResultFixes.ResultDefault, S, 'function GetPos',
+    Format(MSG_121, ['GetPos']));
+  Assert.AreEqual('Default(TPoint)', F.Plan.Name, F.Reason);
+  // Auf Unit-Ebene hinter einer Routine: das Literal bleibt.
+  S := UnitWith(NO_HEAD, POINT_TYPES, ['procedure Other;', 'begin', 'end;',
+    'type', '  TKind = (kA, kB);', 'function GetKind: TKind;', 'begin',
+    '  Log(1);', 'end;']);
+  F := RunFix(TRdxResultFixes.ResultDefault, S, 'function GetKind',
+    Format(MSG_121, ['GetKind']));
+  Assert.AreEqual('Low(TKind)', F.Plan.Name, F.Reason);
+end;
+
+// 'class(IFoo)' erbt nur mit einem Interface IFoo auf Unit-Ebene direkt von
+// TObject (missed 1): ein IFoo, geschachtelt in einer anderen Klasse, ist
+// dort nicht sichtbar - bis Charge B1 'inherited Create;' als
+// bedeutungsgleich. Jetzt ist der Vorfahr unbekannt: Entwurf.
+procedure TTestRdxResultGuards.Refuse096_NestedInterface;
+const
+  TYPES: array[0..7] of string = ('  TOuter = class', '  public type',
+    '    IFoo = interface', '    end;', '  end;', '  TFoo = class(IFoo)',
+    '    constructor Create(A: Integer);', '  end;');
+begin
+  AssertRefused(TRdxResultFixes.ConstructorInherited,
+    CtorSource(NO_HEAD, TYPES, ['  Log(A);']), 'constructor TFoo', MSG_CTOR,
+    'Elternklasse IFoo und keine override-Deklaration');
 end;
 
 initialization

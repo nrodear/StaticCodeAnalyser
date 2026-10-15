@@ -8,8 +8,8 @@ unit uRdxResultFixes;
 //          (a) 'inherited Create;', wenn 'inherited Create' in dieser Unit
 //              belegt TObject.Create ruft: die Klasse erbt DIREKT von
 //              TObject ('class', 'class(TObject)', als erster Eintrag ein
-//              unqualifiziertes Interface der Unit) oder von einem
-//              Vorfahren ohne eigenen Konstruktor (NO_CTOR_PARENTS:
+//              unqualifiziertes Interface der Unit auf Unit-Ebene) oder
+//              von einem Vorfahren ohne eigenen Konstruktor (NO_CTOR_PARENTS:
 //              TPersistent, TInterfacedObject, TCustomAttribute - in den
 //              Delphi-Quellen nachgesehen, s. dort). TObject.Create ist
 //              leer, gleiche Bedeutung. Nie nacktes 'inherited;': es
@@ -25,7 +25,8 @@ unit uRdxResultFixes;
 //          Elternkonstruktors Entwurf - keine Hilfe.
 //   SCA097 DestructorWithoutInherited: 'inherited;' als letzte Anweisung
 //          vor dem end des Rumpfs (fehlt der letzten Anweisung das ';',
-//          kommt es mit). Nur mit 'override' an der Deklaration (sonst
+//          kommt es hinter ihr letztes Zeichen - auch hinter ein
+//          String-Literal). Nur mit 'override' an der Deklaration (sonst
 //          verdeckt Destroy die virtuelle Methode - eigentlich SCA149).
 //          Gekennzeichnet, ausser die Klasse erbt direkt von TObject
 //          (TObject.Destroy ist leer; TPersistent.Destroy nicht).
@@ -33,9 +34,11 @@ unit uRdxResultFixes;
 //          Anweisung, der Wert nach dem Rueckgabetyp T (aus dem Kopf bzw.
 //          bei einem Implementierungskopf ohne Signatur aus der Deklaration
 //          im Klassenrumpf): ein Literal, wo der Typ es traegt - False,
-//          0, '''', #0, nil, [] bzw. der erste Wert einer Aufzaehlung der
-//          Unit (InitValueFor) -, sonst Default(T) (Records, Typparameter,
-//          Unbekanntes). Default() gibt es erst ab Delphi 2009 bzw. FPC
+//          0, '''', #0, nil, [] bzw. Low(T) fuer eine schlichte Aufzaehlung
+//          der Unit (InitValueFor; Typen der Unit nur auf Unit-Ebene) -,
+//          sonst Default(T) (Records, Typparameter, Unbekanntes, ein Name,
+//          den die Unit auch lokal bzw. geschachtelt definiert). Default()
+//          gibt es erst ab Delphi 2009 bzw. FPC
 //          3.0 - eine Datei mit Spuren aelterer Compiler bekommt es nicht
 //          (OldCompilerTrace; Gegen-Review H5, Minor 4: 96 der 132
 //          Angebote lagen in JVCL/CnWizards, die ab Delphi 5/6 bauen).
@@ -47,7 +50,8 @@ unit uRdxResultFixes;
 //          TBytes, *DynArray, Interface) bzw. 'VarClear(Result);' (Variant,
 //          OleVariant - fehlt Variants in uses, ergaenzt sie der Aufrufer,
 //          uRdxFixTable). Deklariert die Unit den Typnamen selbst, gilt nur
-//          ihre Definition (OwnTypeStatement). Die Meldung zeigt auf die
+//          ihre Definition auf Unit-Ebene; eine lokale bzw. geschachtelte
+//          sperrt (OwnTypeStatement). Die Meldung zeigt auf die
 //          LESE-Zeile; Kopf und begin sucht der Planer (innerste Routine um
 //          die Zeile, Name und Rueckgabetyp wie in der Meldung).
 //          Gekennzeichnet: Result haengt danach nicht mehr am alten Inhalt
@@ -65,11 +69,17 @@ unit uRdxResultFixes;
 //                   mit '{ intentionally empty }').
 //   LastStatement   AStmt als letzte Anweisung: eine eigene Zeile vor dem
 //                   end, wenn es seine Zeile beginnt, sonst inline hinter
-//                   der letzten Anweisung; fehlt ihr das ';', kommt es mit.
+//                   der letzten Anweisung; fehlt ihr das ';', kommt es mit
+//                   - hinter ihr letztes Zeichen aus Code oder String
+//                   (uRdxStructFixes.LastCharBefore).
 //                   Leerer Rumpf: wie FirstStatement.
 // Die Routinengrenzen liest uRdxRoutineFixes.ReadRoutine (Kopf, lokale
 // Abschnitte und Routinen, begin bzw. asm, passendes end), den Klassenkopf
-// FindClassHeads/HeritageOf, die Deklaration FindMethodDecls/MethodDecl.
+// HeritageOf, die Deklaration FindMethodDecls/MethodDecl. Typdeklarationen,
+// Klassenkoepfe und die Namen hinter 'constructor' liest EIN Lauf je
+// Planeraufruf (TRdxScan, Gegen-Review R5, R5-07); ob eine Typdeklaration
+// auf Unit-Ebene steht, ein Lauf nach dem Muster BuildScopes (AtUnitLevel,
+// R5-06).
 // Lokale Routinen zwischen Kopf und begin sperren deshalb NICHT mehr (das
 // Konzept nannte sie, als nur MethodBodyOn fuer leere Rumpfe bestand):
 // ReadRoutine ueberspringt sie, eingefuegt wird hinter dem begin der
@@ -88,17 +98,24 @@ unit uRdxResultFixes;
 // ausserhalb der Unit (FPC lehnt 'inherited' auf eine abstrakte Methode
 // ab, das ist dann nicht beweisbar). SCA096 (b) dazu ein Aufruf eines
 // eigenen Konstruktors (Delegation, auch ohne 'Create' im Namen). SCA097
-// dazu: letzte Anweisung Exit/raise/Halt/Abort/goto, Exit oder goto auf
+// dazu: letzte Anweisung Exit/raise/Halt/Abort/goto (auch 'System.Exit',
+// 'System.Halt', 'SysUtils.Abort'), Exit (auch 'System.Exit') oder goto auf
 // jeder Tiefe (inherited am Ende liefe dort nie) und eine Direktive
 // zwischen letzter Anweisung und end. SCA121/SCA196: FPC-Modus ohne Result
 // (fpc, tp, macpas, iso), '{$X-}'; SCA121 dazu eine Datei ohne
 // implementation-Teil (xEdit-/JvInterpreter-Skripte kennen Default() nicht),
-// eine Zuweisung an Result bzw. den Funktionsnamen oder Exit(Wert) im Rumpf
-// (der Detektor sah sie nicht - meist in einem inaktiven Zweig), Default()
-// in einer Datei mit Spuren alter Compiler und ein Rueckgabetyp, der kein
-// einfacher Typbezeichner ist (FPC 'specialize'); SCA196 dazu 'absolute
-// Result' und ein Typ, der weder String noch dynamisches Array, Interface
-// oder Variant BEWIESEN ist.
+// eine Zuweisung an Result bzw. den Funktionsnamen oder Exit(Wert) (auch
+// 'System.Exit(Wert)') im Rumpf (der Detektor sah sie nicht - meist in
+// einem inaktiven Zweig), Default() in einer Datei mit Spuren alter Compiler
+// und ein Rueckgabetyp, der kein einfacher Typbezeichner ist (FPC
+// 'specialize'); SCA196 dazu 'absolute Result', ein Typ, der weder String
+// noch dynamisches Array, Interface oder Variant BEWIESEN ist, und ein
+// Typname, den die Unit auch lokal bzw. geschachtelt definiert.
+//
+// GRENZE (SCA121, Low(T)): ein Member namens Low - etwa eine Property eines
+// Bereichs-Typs in einem Vorfahren aus einer anderen Unit - verdeckte die
+// Funktion; das sieht die Hilfe nicht, der Compiler meldet es (ein
+// Parameter bzw. eine lokale Variable Low gibt Default(T)).
 //
 // GRUNDSATZ wie in uRdxSimpleFixes: lieber keine Hilfe als eine falsche -
 // der Planer prueft den Fund am aktuellen Text nach.
@@ -184,6 +201,7 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
+  uRdxStructFixes,   // LastCharBefore (SCA097: Ende der letzten Anweisung)
   uRdxRtlTypes,      // IsRtlClassOrInterface (SCA196: Interface aus der RTL)
   uRdxCompilerTraces;  // OldCompilerTrace (SCA121: Spuren alter Compiler)
 
@@ -214,6 +232,15 @@ const
   // Damit endet der Ablauf: ein inherited dahinter liefe nie (SCA097).
   DEAD_END_WORDS: array[0..4] of string = ('exit', 'raise', 'halt', 'abort',
     'goto');
+  // ... auch qualifiziert, mit der Unit der RTL davor (Gegen-Review R5,
+  // R5-05: die letzte Anweisung begann mit 'system' bzw. 'sysutils', und
+  // ein totes 'inherited;' kam dahinter). Ein anderer Empfaenger
+  // ('FConn.Abort') ist eine Methode, kein Ende.
+  DEAD_END_PATHS: array[0..3] of string = ('system.exit', 'system.halt',
+    'sysutils.abort', 'system.sysutils.abort');
+  // Die Unit der Spruenge Exit/Break/Continue ('System.Exit'; in Klassen mit
+  // einem eigenen Exit - TMonitor - steht es so in den Delphi-Quellen).
+  SYSTEM_UNIT = 'system';
   // SCA097: damit verlaesst der Ablauf den Destruktor vor dem Ende - auf
   // jeder Tiefe (JumpReason; Gegen-Review H5, Minor 2). raise/Halt/Abort
   // mitten im Rumpf sind Fehlerpfade; dort fehlt inherited ohnehin.
@@ -222,6 +249,25 @@ const
   // So weit folgen die Planer der Vorfahrenkette in der Unit (OwnConstructor,
   // AbstractReason) - eine Grenze gegen Zyklen in kaputtem Code.
   MAX_CHAIN = 16;
+  // So viele Token liest DeclAt rueckwaerts durch die Typparameter
+  // 'TFoo<A, B> =' - laenger heisst: keine Deklaration.
+  MAX_GENERIC_TOKENS = 64;
+  // Der Lauf von AtUnitLevel (R5-06, nach dem Muster
+  // uRdxSqlTemplate.BuildScopes): offene Bloecke je ein Zeichen - Typ mit
+  // Rumpf, Record (sein 'case' hat kein eigenes end), Code (begin, try,
+  // asm, case).
+  FRAME_TYPE   = 'T';
+  FRAME_RECORD = 'R';
+  FRAME_CODE   = 'C';
+  // Diese Woerter oeffnen hinter '=' bzw. 'packed' einen Typ mit Rumpf.
+  BODY_TYPES: array[0..3] of string = ('class', 'object', 'interface',
+    'dispinterface');
+  TYPE_LEADS: array[0..1] of string = ('=', 'packed');
+  // Hinter 'record' in einer Typ-Einschraenkung ('<T: record>').
+  CONSTRAINT_FOLLOWERS: array[0..2] of string = ('>', ',', ';');
+  // In diesen Dateien stehen Routinen mit Rumpf ab dem Dateianfang, in
+  // einer Unit erst hinter 'implementation'.
+  PROGRAM_HEADS: array[0..1] of string = ('program', 'library');
   // FPC-Modi, in denen 'inherited' auf eine abstrakte Methode nicht
   // uebersetzt ("Abstract methods cannot be called directly", FPC 3.2.2;
   // der Delphi-Modus laesst den Aufruf still weg - Gegen-Review H5, Minor 1).
@@ -308,12 +354,48 @@ const
   R_BY_HAND = 'von Hand';
   // SCA121: was nur der Compiler kennt (ScriptReason, uRdxCompilerTraces).
   FEATURE_DEFAULT = 'Default()';
+  // SCA121: der Anfangswert einer Aufzaehlung ist Low(T) (EnumValue).
+  LOW_FUNC = 'low';
   // SCA196: als Konstante - ein Literal mit dem Wort im Exit-Argument
   // haelt der Detektor SCA196 selbst fuer ein Lesen von Result (Selbstscan
   // der Charge H5).
   R_NO_READ = 'kein Result auf der gemeldeten Zeile - ' + R_MOVED;
 
 type
+  // Eine Typdeklaration der Datei (TRdxScan): 'Name [<..>] = [packed] Art'
+  // - der Name, das Token davor (im Typabschnitt eines aus TYPE_DECL_PREV)
+  // und die Art (KindAfterName). Auch 'A = B' in einem Ausdruck steht hier
+  // - die Fragen filtern wie bis Charge B1 ihre eigenen Laeufe.
+  TRdxTypeDecl = record
+    NameTok : TRdxToken;
+    PrevTok : TRdxToken;
+    KindTok : TRdxToken;
+  end;
+
+  // Eine gemerkte Antwort von ClassHeads bzw. MethodDecls.
+  TRdxHeadsMemo = record
+    Key   : string;
+    Heads : TArray<TRdxToken>;
+  end;
+
+  // Ein Planerlauf (Gegen-Review R5, R5-07): die Code-Sicht und was sonst
+  // jede Frage neu ueber die ganze Datei las. Die Typdeklarationen und die
+  // Namen hinter 'constructor' sammelt EIN Lauf beim ersten Bedarf
+  // (IndexScan); die Klassenkoepfe kommen aus diesem Index (ClassHeads, wie
+  // FindClassHeads), die Methodendeklarationen (FindMethodDecls - je Frage
+  // ein Lauf ueber die ganze Datei) je Klasse und Methode einmal und ohne
+  // Klassenkopf gar nicht. Bis Charge B1 las ein SCA096-Lauf
+  // mormot.core.variants.pas dreizehnmal ganz (562 ms im IDE-Hauptthread).
+  // Gilt fuer EINEN Planeraufruf - die Code-Sicht liegt danach nicht mehr
+  // fest.
+  TRdxScan = record
+    Map     : TRdxCodeMap;
+    Indexed : Boolean;
+    Decls   : TArray<TRdxTypeDecl>;
+    Ctors   : TArray<string>;
+    Memos   : TArray<TRdxHeadsMemo>;
+  end;
+
   // Die Klasse einer Methode (OwnerOf).
   //   Parent          erster Vorfahr wie im Text (letztes Glied); 'TObject'
   //                   ohne Liste
@@ -329,12 +411,13 @@ type
     CreateOfTObject : Boolean;
   end;
 
-  // SCA096/SCA097: der Konstruktor bzw. Destruktor und seine Klasse
-  // (MethodCtxReason). Bis Charge H5c hiessen die Felder R und O
-  // (Gegen-Review H5, Minor 7).
+  // SCA096/SCA097: der Konstruktor bzw. Destruktor, seine Klasse und der
+  // Planerlauf (MethodCtxReason legt ihn an). Bis Charge H5c hiessen die
+  // Felder R und O (Gegen-Review H5, Minor 7).
   TRdxMethodCtx = record
     Routine : TRdxRoutine;
     Owner   : TRdxOwner;
+    Scan    : TRdxScan;
   end;
 
   // SCA196: die Funktion um die Lese-Zeile und ihr Rueckgabetyp wie im
@@ -359,6 +442,17 @@ begin
     T.EndCol);
   Result.Expected := TokText(AMap, T);
   Result.NewText := ANewText;
+end;
+
+// Haengt ASuffix an das Zeichen (ALine, ACol): es wird mit ASuffix dahinter
+// neu geschrieben - ein leerer Erwartungstext ist nicht erlaubt (wie
+// uRdxStructFixes.AppendSemicolon).
+function CharEdit(AMap: TRdxCodeMap; ALine, ACol: Integer;
+  const ASuffix: string): TRdxEdit;
+begin
+  Result.Span := TRefactorSpan.Make(SPAN_RESULT, ALine, ACol, ALine, ACol + 1);
+  Result.Expected := Copy(AMap.Raw(ALine), ACol, 1);
+  Result.NewText := Result.Expected + ASuffix;
 end;
 
 // Leerraum am Zeilenanfang.
@@ -410,30 +504,106 @@ begin
     Result := After(AMap, Result);
 end;
 
-// Gibt es 'ALowName [<..>] = [packed] <Art>' mit einer Art aus AKinds in
-// der Datei? Das Token der Art (Low = '' ohne) - der erste Treffer.
-function TypeDeclKind(AMap: TRdxCodeMap; const ALowName: string;
-  const AKinds: array of string): TRdxToken;
-var
-  T, P : TRdxToken;
+{ ---- Ein Planerlauf (R5-07) ---- }
+
+// Ein neuer Planerlauf auf AMap (TRdxScan; der Index entsteht beim ersten
+// Bedarf).
+function NewScan(AMap: TRdxCodeMap): TRdxScan;
 begin
-  Result := Default(TRdxToken);
-  P := Default(TRdxToken);
-  T := NextToken(AMap, 1, 1);
+  Result := Default(TRdxScan);
+  Result.Map := AMap;
+end;
+
+// Rueckwaerts ab AClose ('>' der Typparameter 'TFoo<A, B>') die passende
+// '<'; Low = '' ohne (';' oder Dateianfang davor, mehr als
+// MAX_GENERIC_TOKENS Token).
+function OpenAngleBefore(AMap: TRdxCodeMap; const AClose: TRdxToken): TRdxToken;
+var
+  Depth, n : Integer;
+begin
+  Result := AClose;
+  Depth := 0;
+  for n := 1 to MAX_GENERIC_TOKENS do
+  begin
+    if Result.Low = '>' then
+      Inc(Depth)
+    else if Result.Low = '<' then
+      Dec(Depth);
+    if (Depth = 0) or (Result.Low = '') or (Result.Low = ';') then Break;
+    Result := Before(AMap, Result);
+  end;
+  if (Depth <> 0) or (Result.Low <> '<') then
+    Result := Default(TRdxToken);
+end;
+
+// Die Deklaration, deren '=' AEq ist: der Name davor - hinter '<..>' der
+// Name vor der '<' -, das Token davor und die Art (KindAfterName prueft
+// vorwaerts nach, wie bis Charge B1 jeder eigene Lauf). False ohne.
+function DeclAt(AMap: TRdxCodeMap; const AEq: TRdxToken;
+  out ADecl: TRdxTypeDecl): Boolean;
+var
+  T : TRdxToken;
+begin
+  ADecl := Default(TRdxTypeDecl);
+  T := Before(AMap, AEq);
+  if T.Low = '>' then
+    T := Before(AMap, OpenAngleBefore(AMap, T));
+  if not T.IsWord then Exit(False);
+  ADecl.NameTok := T;
+  ADecl.PrevTok := Before(AMap, T);
+  ADecl.KindTok := KindAfterName(AMap, T);
+  Result := ADecl.KindTok.Low <> '';
+end;
+
+// Der eine Lauf des Planerlaufs (s. TRdxScan): jede Deklaration an einem
+// '=' und jeder Name hinter 'constructor' (auch '&Name').
+procedure IndexScan(var AScan: TRdxScan);
+var
+  T    : TRdxToken;
+  D    : TRdxTypeDecl;
+  Ctor : Boolean;
+begin
+  if AScan.Indexed then Exit;
+  AScan.Indexed := True;
+  Ctor := False;
+  T := NextToken(AScan.Map, 1, 1);
   while T.Low <> '' do
   begin
-    if SameIdent(T.Low, ALowName) and IsKeywordAfter(T, P)
-       and InList(KindAfterName(AMap, T).Low, AKinds) then
-      Exit(KindAfterName(AMap, T));
-    P := T;
-    T := After(AMap, T);
+    if (T.Low = '=') and DeclAt(AScan.Map, T, D) then
+    begin
+      SetLength(AScan.Decls, Length(AScan.Decls) + 1);
+      AScan.Decls[High(AScan.Decls)] := D;
+    end;
+    if Ctor and T.IsWord then
+    begin
+      SetLength(AScan.Ctors, Length(AScan.Ctors) + 1);
+      AScan.Ctors[High(AScan.Ctors)] := T.Low;
+    end;
+    Ctor := (T.Low = KW_CONSTRUCTOR) or (Ctor and (T.Low = '&'));
+    T := After(AScan.Map, T);
   end;
 end;
 
-function DeclaredAs(AMap: TRdxCodeMap; const ALowName: string;
+// Gibt es 'ALowName [<..>] = [packed] <Art>' mit einer Art aus AKinds in
+// der Datei? Das Token der Art (Low = '' ohne) - der erste Treffer.
+function TypeDeclKind(var AScan: TRdxScan; const ALowName: string;
+  const AKinds: array of string): TRdxToken;
+var
+  D : TRdxTypeDecl;
+begin
+  IndexScan(AScan);
+  for D in AScan.Decls do
+    if SameIdent(D.NameTok.Low, ALowName)
+       and IsKeywordAfter(D.NameTok, D.PrevTok)
+       and InList(D.KindTok.Low, AKinds) then
+      Exit(D.KindTok);
+  Result := Default(TRdxToken);
+end;
+
+function DeclaredAs(var AScan: TRdxScan; const ALowName: string;
   const AKinds: array of string): Boolean;
 begin
-  Result := TypeDeclKind(AMap, ALowName, AKinds).Low <> '';
+  Result := TypeDeclKind(AScan, ALowName, AKinds).Low <> '';
 end;
 
 // Die Definitionen des Typnamens ALowName in der Unit: je 'Name [<..>] =
@@ -442,31 +612,244 @@ end;
 // nicht als Typ deklariert. Mehrere Treffer stehen unter $IFDEF-Zwillingen.
 // SCA196 und SCA121 (Gegen-Review H5, Minor 8): deklariert die Unit einen
 // Namen selbst ('TBytes = array[0..3] of Byte'), gilt nur ihre Definition.
-function TypeDefsOf(AMap: TRdxCodeMap; const ALowName: string): TArray<TRdxToken>;
+function TypeDefsOf(var AScan: TRdxScan;
+  const ALowName: string): TArray<TRdxToken>;
 var
-  T, P, K : TRdxToken;
+  D : TRdxTypeDecl;
+  K : TRdxToken;
 begin
   Result := nil;
+  IndexScan(AScan);
+  for D in AScan.Decls do
+    if SameIdent(D.NameTok.Low, ALowName)
+       and InList(D.PrevTok.Low, TYPE_DECL_PREV) then
+    begin
+      K := D.KindTok;
+      // 'Name = type X': ein eigener Typ mit der Definition von X.
+      if K.Low = 'type' then
+        K := After(AScan.Map, K);
+      if K.Low <> '' then
+        AddToken(Result, K);
+    end;
+end;
+
+function DeclaresTypeName(var AScan: TRdxScan; const ALowName: string): Boolean;
+begin
+  Result := Length(TypeDefsOf(AScan, ALowName)) > 0;
+end;
+
+// Die gemerkte Antwort zu AKey (TRdxScan.Memos); False ohne.
+function FindMemo(const AScan: TRdxScan; const AKey: string;
+  out AHeads: TArray<TRdxToken>): Boolean;
+var
+  M : TRdxHeadsMemo;
+begin
+  for M in AScan.Memos do
+    if M.Key = AKey then
+    begin
+      AHeads := M.Heads;
+      Exit(True);
+    end;
+  AHeads := nil;
+  Result := False;
+end;
+
+procedure KeepMemo(var AScan: TRdxScan; const AKey: string;
+  const AHeads: TArray<TRdxToken>);
+begin
+  SetLength(AScan.Memos, Length(AScan.Memos) + 1);
+  AScan.Memos[High(AScan.Memos)].Key := AKey;
+  AScan.Memos[High(AScan.Memos)].Heads := AHeads;
+end;
+
+// Hat der Typ ab AKind (class, object, interface ...) einen Rumpf mit end?
+// Nicht 'class;' (vorwaerts), 'class of' (Metaklasse), 'class(TBase);'
+// (Kurzform). Dieselbe Probe wie uRdxRoutineFixes.TypeHasBody und
+// uRdxSqlTemplate.HasTypeBody (beide privat) - der Routinen-/Typ-Index des
+// Gegen-Reviews R5 (R5-03) legt sie zusammen.
+function TypeHasBody(AMap: TRdxCodeMap; const AKind: TRdxToken): Boolean;
+var
+  N : TRdxToken;
+begin
+  N := After(AMap, AKind);
+  while InList(N.Low, CLASS_MODIFIERS) do
+    N := After(AMap, N);
+  if N.Low = '(' then
+    N := AfterClose(AMap, N);
+  Result := not InList(N.Low, [';', 'of', '']);
+end;
+
+// Die Koepfe 'Name [<..>] = [packed] class' mit Rumpf, deren Name das
+// letzte Glied von AClassPath ist - je Treffer das Token 'class', aus dem
+// Index und gemerkt: dieselbe Probe wie TRdxRoutineFixes.FindClassHeads
+// (ClassHeadAt), das je Frage die ganze Datei liest.
+function ClassHeads(var AScan: TRdxScan;
+  const AClassPath: string): TArray<TRdxToken>;
+var
+  Low, Key : string;
+  D        : TRdxTypeDecl;
+begin
+  Low := LowerCase(LastPart(AClassPath));
+  Key := 'class:' + Low;
+  if FindMemo(AScan, Key, Result) then Exit;
+  IndexScan(AScan);
+  for D in AScan.Decls do
+    if SameIdent(D.NameTok.Low, Low)
+       and IsKeywordAfter(D.NameTok, D.PrevTok)
+       and (D.KindTok.Low = KW_CLASS)
+       and TypeHasBody(AScan.Map, D.KindTok) then
+      AddToken(Result, D.KindTok);
+  KeepMemo(AScan, Key, Result);
+end;
+
+// TRdxRoutineFixes.FindMethodDecls einmal je Klasse und Methode des Laufs -
+// und nicht ohne Klassenkopf (ClassHeads): ohne den findet es nichts.
+function MethodDecls(var AScan: TRdxScan;
+  const AClassPath, AMethod: string): TArray<TRdxToken>;
+var
+  Key : string;
+begin
+  Key := 'method:' + LowerCase(LastPart(AClassPath)) + '.' + LowerCase(AMethod);
+  if FindMemo(AScan, Key, Result) then Exit;
+  if Length(ClassHeads(AScan, AClassPath)) > 0 then
+    Result := TRdxRoutineFixes.FindMethodDecls(AScan.Map, AClassPath, AMethod);
+  KeepMemo(AScan, Key, Result);
+end;
+
+// Steht ALowName irgendwo hinter 'constructor'? Ohne das ist er kein
+// Konstruktor einer Klasse der Unit (OwnConstructor fragt sonst je
+// Aufruf im Rumpf die ganze Vorfahrenkette ab).
+function IsCtorName(var AScan: TRdxScan; const ALowName: string): Boolean;
+begin
+  IndexScan(AScan);
+  Result := InList(ALowName, AScan.Ctors);
+end;
+
+{ ---- Gueltigkeitsbereich einer Typdeklaration (R5-06) ---- }
+
+// Steht oben auf dem Stapel AOpen (AtUnitLevel) ein Typ mit Rumpf?
+function InTypeFrame(const AOpen: string): Boolean;
+begin
+  Result := (AOpen <> '')
+    and CharInSet(AOpen[Length(AOpen)], [FRAME_TYPE, FRAME_RECORD]);
+end;
+
+// Ein Schluesselwort T (APrev davor) beim Lauf von AtUnitLevel: ein Typ mit
+// Rumpf (TypeHasBody), ein record (nicht als Einschraenkung '<T: record>')
+// bzw. begin/try/asm/case kommen auf den Stapel AOpen, end nimmt den
+// obersten herunter. Ein 'case' im record hat kein eigenes end.
+procedure StepFrames(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
+  var AOpen: string);
+begin
+  if T.Low = KW_END then
+    Delete(AOpen, Length(AOpen), 1)
+  else if T.Low = 'record' then
+  begin
+    if not InList(After(AMap, T).Low, CONSTRAINT_FOLLOWERS) then
+      AOpen := AOpen + FRAME_RECORD;
+  end
+  else if InList(T.Low, BODY_TYPES) and InList(APrev.Low, TYPE_LEADS) then
+  begin
+    if TypeHasBody(AMap, T) then
+      AOpen := AOpen + FRAME_TYPE;
+  end
+  else if T.Low = 'case' then
+  begin
+    if (AOpen = '') or (AOpen[Length(AOpen)] <> FRAME_RECORD) then
+      AOpen := AOpen + FRAME_CODE;
+  end
+  else if IsEndOpener(T.Low) then
+    AOpen := AOpen + FRAME_CODE;
+end;
+
+// Die Routine ab dem Kopf T beim Lauf von AtUnitLevel: hat sie einen Rumpf,
+// rueckt T auf ihr letztes ';' (der Lauf ueberspringt sie). False, wenn
+// ADecl in ihr liegt (eine lokale Deklaration) oder ihre Grenzen nicht
+// sicher zu lesen sind.
+function SkipRoutine(AMap: TRdxCodeMap; var T: TRdxToken;
+  const ADecl: TRdxToken): Boolean;
+var
+  R : TRdxRoutine;
+begin
+  Result := TRdxRoutineFixes.ReadRoutine(AMap, T, R) = '';
+  if not Result or (R.Body.Low = '') then Exit;
+  Result := TokBefore(R.Last, ADecl);
+  T := R.Last;
+end;
+
+// R5-06: steht die Typdeklaration an ADecl (ein Token der Deklaration, etwa
+// die Art aus TypeDefsOf) auf Unit-Ebene - nicht in einem Klassen-, Record-
+// oder Interface-Rumpf und nicht in einer Routine? Nur dort ist sie in jeder
+// Routine der Unit sichtbar; ein geschachtelter Typ einer anderen Klasse
+// bzw. ein lokaler Typ einer anderen Routine ist es nicht (Gegen-Review R5:
+// 'type TPoint = ^Integer' in einer Routine machte 'Result := nil;' fuer
+// System.Types.TPoint). Ein Lauf vom Dateianfang bis ADecl nach dem Muster
+// uRdxSqlTemplate.BuildScopes: Bloecke mit end auf einem Stapel, eine
+// Routine mit Rumpf (hinter 'implementation', in program/library ab
+// Dateianfang) wird ganz uebersprungen (SkipRoutine) - liegt ADecl darin,
+// ist die Deklaration lokal. Sind die Grenzen einer Routine davor nicht
+// sicher zu lesen: False (lieber Default(T) bzw. keine Hilfe).
+function AtUnitLevel(AMap: TRdxCodeMap; const ADecl: TRdxToken): Boolean;
+var
+  T, P     : TRdxToken;
+  Open     : string;
+  Routines : Boolean;
+begin
+  Open := '';
   P := Default(TRdxToken);
   T := NextToken(AMap, 1, 1);
-  while T.Low <> '' do
+  Routines := InList(T.Low, PROGRAM_HEADS);
+  while (T.Low <> '') and TokBefore(T, ADecl) do
   begin
-    K := Default(TRdxToken);
-    if SameIdent(T.Low, ALowName) and InList(P.Low, TYPE_DECL_PREV) then
-      K := KindAfterName(AMap, T);
-    // 'Name = type X': ein eigener Typ mit der Definition von X.
-    if K.Low = 'type' then
-      K := After(AMap, K);
-    if K.Low <> '' then
-      AddToken(Result, K);
+    // Nur Schluesselwoerter zaehlen - ein Wort hinter '.', '&' bzw. '@' ist
+    // ein Bezeichner (IsKeywordAfter).
+    if IsKeywordAfter(T, P) then
+    begin
+      if T.Low = 'implementation' then
+        Routines := True
+      else if Routines and IsRoutineHeadAfter(T, P)
+         and not InTypeFrame(Open) then
+      begin
+        if not SkipRoutine(AMap, T, ADecl) then
+          Exit(False);
+      end
+      else
+        StepFrames(AMap, T, P, Open);
+    end;
     P := T;
     T := After(AMap, T);
   end;
+  Result := Open = '';
 end;
 
-function DeclaresTypeName(AMap: TRdxCodeMap; const ALowName: string): Boolean;
+// Stehen alle Definitionen ADefs (TypeDefsOf) auf Unit-Ebene (AtUnitLevel)?
+function AllAtUnitLevel(AMap: TRdxCodeMap;
+  const ADefs: TArray<TRdxToken>): Boolean;
+var
+  K : TRdxToken;
 begin
-  Result := Length(TypeDefsOf(AMap, ALowName)) > 0;
+  for K in ADefs do
+    if not AtUnitLevel(AMap, K) then
+      Exit(False);
+  Result := True;
+end;
+
+// Missed 1 (Gegen-Review R5): deklariert die Unit ALowName auf Unit-Ebene
+// als Interface? 'class(IFoo)' erbt nur dann direkt von TObject - ein IFoo,
+// das geschachtelt in einer anderen Klasse steht, ist dort nicht sichtbar
+// (ein fremdes IFoo kann eine Klasse sein).
+function UnitInterface(var AScan: TRdxScan; const ALowName: string): Boolean;
+var
+  D : TRdxTypeDecl;
+begin
+  IndexScan(AScan);
+  for D in AScan.Decls do
+    if SameIdent(D.NameTok.Low, ALowName)
+       and IsKeywordAfter(D.NameTok, D.PrevTok)
+       and InList(D.KindTok.Low, INTERFACE_KINDS)
+       and AtUnitLevel(AScan.Map, D.KindTok) then
+      Exit(True);
+  Result := False;
 end;
 
 // Die Zeile der ersten Direktive '{$AWord ...}' der Datei, deren Text
@@ -700,21 +1083,22 @@ end;
 // 'class({$IFDEF FPC}TPersistent{$ELSE}TObject{$ENDIF})' las die Code-Sicht
 // als TObject, 'class{$IFDEF X}(TComponent){$ENDIF}' haengt den Vorfahren
 // an einen Zweig (Gegen-Review H5, Minor 3).
-function ParentReason(AMap: TRdxCodeMap; const AClass: TRdxToken;
+function ParentReason(var AScan: TRdxScan; const AClass: TRdxToken;
   var AOwner: TRdxOwner): string;
 var
   First, Low  : string;
   Open, Close : TRdxToken;
   Stop        : TRdxToken;
 begin
-  First := FirstHeritage(AMap, AClass, Open, Close);
+  First := FirstHeritage(AScan.Map, AClass, Open, Close);
   if (Open.Low <> '') and (Close.Low = '') then
     Exit(Format('Vorfahrenliste ohne ")" (Zeile %d) - %s',
       [AClass.Line, R_BY_HAND]));
   Stop := AClass;
   if Close.Low <> '' then
     Stop := Close;
-  if DirectiveBetween(AMap, Before(AMap, AClass), Stop.Line, Stop.Col) then
+  if DirectiveBetween(AScan.Map, Before(AScan.Map, AClass), Stop.Line,
+       Stop.Col) then
     Exit(Format('Compiler-Direktive in der Vorfahrenliste (Zeile %d) - der '
       + 'Vorfahr haengt an einem Zweig; %s', [AClass.Line, R_BY_HAND]));
   Low := LowerCase(First);
@@ -722,19 +1106,20 @@ begin
   if First <> '' then
     AOwner.Parent := LastPart(First);
   // 'class(IFoo)': der erste Eintrag ist ein Interface - Vorfahr TObject.
-  // Nur ein unqualifiziertes Interface DIESER Unit beweist das; ein
-  // fremdes 'IFoo' bzw. 'Other.IFoo' kann eine Klasse sein.
+  // Nur ein unqualifiziertes Interface DIESER Unit auf Unit-Ebene beweist
+  // das (UnitInterface); ein fremdes 'IFoo' bzw. 'Other.IFoo' kann eine
+  // Klasse sein.
   AOwner.DirectTObject := (First = '') or InList(Low, ROOT_PARENTS)
-    or ((Pos('.', First) = 0) and DeclaredAs(AMap, Low, INTERFACE_KINDS));
+    or ((Pos('.', First) = 0) and UnitInterface(AScan, Low));
   AOwner.CreateOfTObject := AOwner.DirectTObject
     or (InList(Low, NO_CTOR_PARENTS)
-        and not DeclaresTypeName(AMap, LowerCase(AOwner.Parent)));
+        and not DeclaresTypeName(AScan, LowerCase(AOwner.Parent)));
   Result := '';
 end;
 
 // Die Klasse AClassPath in der Unit: genau ein Kopf mit Rumpf, kein class
 // helper; ihr erster Vorfahr (ParentReason). '' oder der Grund.
-function OwnerOf(AMap: TRdxCodeMap; const AClassPath: string;
+function OwnerOf(var AScan: TRdxScan; const AClassPath: string;
   out AOwner: TRdxOwner): string;
 var
   Heads : TArray<TRdxToken>;
@@ -742,12 +1127,12 @@ var
 begin
   AOwner := Default(TRdxOwner);
   Low := LowerCase(LastPart(AClassPath));
-  Heads := TRdxRoutineFixes.FindClassHeads(AMap, AClassPath);
+  Heads := ClassHeads(AScan, AClassPath);
   if Length(Heads) = 0 then
   begin
-    if DeclaredAs(AMap, Low, OBJECT_KINDS) then
+    if DeclaredAs(AScan, Low, OBJECT_KINDS) then
       Exit('object-Typ (altes Objektmodell) - ' + R_BY_HAND);
-    if DeclaredAs(AMap, Low, RECORD_KINDS) then
+    if DeclaredAs(AScan, Low, RECORD_KINDS) then
       Exit('Record - ohne Vererbung');
     Exit(Format('Klasse %s nicht in dieser Unit - der Vorfahr ist nicht '
       + 'beweisbar', [AClassPath]));
@@ -756,46 +1141,46 @@ begin
     Exit(Format('%d Klassen namens %s in der Unit - mehrdeutig',
       [Length(Heads), LastPart(AClassPath)]));
   AOwner.ClassTok := Heads[0];
-  if After(AMap, Heads[0]).Low = 'helper' then
+  if After(AScan.Map, Heads[0]).Low = 'helper' then
     Exit('class helper - inherited meint dort die erweiterte Klasse');
-  Result := ParentReason(AMap, Heads[0], AOwner);
+  Result := ParentReason(AScan, Heads[0], AOwner);
 end;
 
 // Die Deklarationen der Methode R im Rumpf ihrer Klasse.
-function DeclHeadsOf(AMap: TRdxCodeMap; const R: TRdxRoutine): TArray<TRdxToken>;
+function DeclHeadsOf(var AScan: TRdxScan;
+  const R: TRdxRoutine): TArray<TRdxToken>;
 begin
-  Result := TRdxRoutineFixes.FindMethodDecls(AMap, OwnerPathOf(R.Name),
-    LastPart(R.Name));
+  Result := MethodDecls(AScan, OwnerPathOf(R.Name), LastPart(R.Name));
 end;
 
 // Die EINE Deklaration der Methode R. '' oder der Grund.
-function DeclOf(AMap: TRdxCodeMap; const R: TRdxRoutine;
+function DeclOf(var AScan: TRdxScan; const R: TRdxRoutine;
   out D: TRdxRoutine): string;
 var
   Heads : TArray<TRdxToken>;
 begin
   D := Default(TRdxRoutine);
-  Heads := DeclHeadsOf(AMap, R);
+  Heads := DeclHeadsOf(AScan, R);
   if Length(Heads) = 0 then
     Exit(Format('keine Deklaration von %s im Rumpf der Klasse %s - %s',
       [LastPart(R.Name), OwnerPathOf(R.Name), R_MOVED]));
   if Length(Heads) > 1 then
     Exit(Format('%d Deklarationen von %s in Klassen dieses Namens - '
       + 'Overload?', [Length(Heads), LastPart(R.Name)]));
-  Result := TRdxRoutineFixes.MethodDecl(AMap, Heads[0], D);
+  Result := TRdxRoutineFixes.MethodDecl(AScan.Map, Heads[0], D);
   if Result <> '' then
     Result := 'Deklaration: ' + Result;
 end;
 
 // SCA096 (b): die Deklaration traegt override (ohne overload). '' oder der
 // Grund.
-function CtorOverrideReason(AMap: TRdxCodeMap; const R: TRdxRoutine;
+function CtorOverrideReason(var AScan: TRdxScan; const R: TRdxRoutine;
   const AOwner: TRdxOwner): string;
 var
   D : TRdxRoutine;
   W : string;
 begin
-  Result := DeclOf(AMap, R, D);
+  Result := DeclOf(AScan, R, D);
   if Result <> '' then Exit;
   if not HasDirective(D, [KW_OVERRIDE], W) then
     Exit(Format('Elternklasse %s und keine override-Deklaration - welcher '
@@ -836,10 +1221,11 @@ begin
 end;
 
 // SCA096 (b): ist ALowName ein Konstruktor der Klasse AClassPath oder eines
-// ihrer Vorfahren in dieser Unit (FindMethodDecls je Glied der Kette,
+// ihrer Vorfahren in dieser Unit (MethodDecls je Glied der Kette,
 // hoechstens MAX_CHAIN)? 'class constructor' zaehlt nicht - ihn ruft keine
-// Anweisung.
-function OwnConstructor(AMap: TRdxCodeMap; const AClassPath,
+// Anweisung. Steht der Name nirgends hinter 'constructor' (IsCtorName),
+// braucht es die Kette nicht.
+function OwnConstructor(var AScan: TRdxScan; const AClassPath,
   ALowName: string): Boolean;
 var
   Cls   : string;
@@ -849,15 +1235,16 @@ var
   Step  : Integer;
 begin
   Result := False;
+  if not IsCtorName(AScan, ALowName) then Exit;
   Cls := AClassPath;
   for Step := 1 to MAX_CHAIN do
   begin
-    for H in TRdxRoutineFixes.FindMethodDecls(AMap, Cls, ALowName) do
+    for H in MethodDecls(AScan, Cls, ALowName) do
       if H.Low = KW_CONSTRUCTOR then
         Exit(True);
-    Heads := TRdxRoutineFixes.FindClassHeads(AMap, Cls);
+    Heads := ClassHeads(AScan, Cls);
     if Length(Heads) <> 1 then Exit;
-    Names := TRdxRoutineFixes.HeritageOf(AMap, Heads[0]);
+    Names := TRdxRoutineFixes.HeritageOf(AScan.Map, Heads[0]);
     if Length(Names) = 0 then Exit;
     Cls := Names[0];
   end;
@@ -873,6 +1260,27 @@ begin
     and InList(After(AMap, T).Low, CALL_ENDS);
 end;
 
+// SCA096 (b): der Grund fuer eine Delegation am Wort T in Anweisungsstellung
+// (s. DelegationReason), '' ohne. ASeen: die Namen, deren Deklarationen
+// schon abgefragt sind.
+function DelegationAt(var AScan: TRdxScan; const R: TRdxRoutine;
+  const T: TRdxToken; var ASeen: TArray<string>): string;
+begin
+  Result := '';
+  if Copy(T.Low, 1, Length(CREATE_PREFIX)) = CREATE_PREFIX then
+    Exit(Format('Aufruf %s in Zeile %d - vielleicht ein anderer '
+      + 'Konstruktor der Klasse (Delegation), der die Elternklasse schon '
+      + 'initialisiert; inherited davor liefe doppelt; %s',
+      [TokText(AScan.Map, T), T.Line, R_BY_HAND]));
+  if not CallCandidate(AScan.Map, T) or InList(T.Low, ASeen) then Exit;
+  if OwnConstructor(AScan, OwnerPathOf(R.Name), T.Low) then
+    Exit(Format('Aufruf %s in Zeile %d - ein Konstruktor der Klasse '
+      + '(Delegation), der die Elternklasse schon initialisiert; inherited '
+      + 'davor liefe doppelt; %s', [TokText(AScan.Map, T), T.Line, R_BY_HAND]));
+  SetLength(ASeen, Length(ASeen) + 1);
+  ASeen[High(ASeen)] := T.Low;
+end;
+
 // SCA096 (b): ruft der Rumpf als Anweisung einen Konstruktor der Klasse
 // selbst - 'CreateNew(AOwner);', 'Self.CreateEx(..)', 'OpenOptions(..)'?
 // Das ist eine Delegation, die der Detektor nur fuer 'Create(' kennt; der
@@ -885,28 +1293,7 @@ end;
 // Major 1: mORMot THttpClientSocket.OpenFrom ruft OpenOptions, der selbst
 // Create und OpenBind ruft - 'inherited;' davor oeffnete zuerst ueber
 // TCrtSocket.OpenFrom eine zweite Verbindung). '' oder der Grund.
-// SCA096 (b): der Grund fuer eine Delegation am Wort T in Anweisungsstellung
-// (s. DelegationReason), '' ohne. ASeen: die Namen, deren Deklarationen
-// schon abgefragt sind.
-function DelegationAt(AMap: TRdxCodeMap; const R: TRdxRoutine;
-  const T: TRdxToken; var ASeen: TArray<string>): string;
-begin
-  Result := '';
-  if Copy(T.Low, 1, Length(CREATE_PREFIX)) = CREATE_PREFIX then
-    Exit(Format('Aufruf %s in Zeile %d - vielleicht ein anderer '
-      + 'Konstruktor der Klasse (Delegation), der die Elternklasse schon '
-      + 'initialisiert; inherited davor liefe doppelt; %s',
-      [TokText(AMap, T), T.Line, R_BY_HAND]));
-  if not CallCandidate(AMap, T) or InList(T.Low, ASeen) then Exit;
-  if OwnConstructor(AMap, OwnerPathOf(R.Name), T.Low) then
-    Exit(Format('Aufruf %s in Zeile %d - ein Konstruktor der Klasse '
-      + '(Delegation), der die Elternklasse schon initialisiert; inherited '
-      + 'davor liefe doppelt; %s', [TokText(AMap, T), T.Line, R_BY_HAND]));
-  SetLength(ASeen, Length(ASeen) + 1);
-  ASeen[High(ASeen)] := T.Low;
-end;
-
-function DelegationReason(AMap: TRdxCodeMap; const R: TRdxRoutine): string;
+function DelegationReason(var AScan: TRdxScan; const R: TRdxRoutine): string;
 var
   T, P : TRdxToken;
   Seen : TArray<string>;
@@ -914,25 +1301,26 @@ begin
   Result := '';
   Seen := nil;
   P := R.Body;
-  T := After(AMap, R.Body);
+  T := After(AScan.Map, R.Body);
   while (T.Low <> '') and not SameTok(T, R.EndTok) do
   begin
     if T.IsWord and (InList(P.Low, STATEMENT_PREV)
-                     or ((P.Low = '.') and (Before(AMap, P).Low = KW_SELF))) then
-      Result := DelegationAt(AMap, R, T, Seen);
+                     or ((P.Low = '.')
+                         and (Before(AScan.Map, P).Low = KW_SELF))) then
+      Result := DelegationAt(AScan, R, T, Seen);
     if Result <> '' then Exit;
     P := T;
-    T := After(AMap, T);
+    T := After(AScan.Map, T);
   end;
 end;
 
 // SCA097: die Deklaration traegt override. '' oder der Grund.
-function DtorOverrideReason(AMap: TRdxCodeMap; const R: TRdxRoutine): string;
+function DtorOverrideReason(var AScan: TRdxScan; const R: TRdxRoutine): string;
 var
   D : TRdxRoutine;
   W : string;
 begin
-  Result := DeclOf(AMap, R, D);
+  Result := DeclOf(AScan, R, D);
   if (Result = '') and not HasDirective(D, [KW_OVERRIDE], W) then
     Result := 'die Deklaration traegt kein override - dann verdeckt der '
       + 'Destruktor die virtuelle Methode (SCA149); ' + R_BY_HAND;
@@ -941,7 +1329,7 @@ end;
 // SCA096 (b), SCA097: die Deklarationen von AMethod in der Klasse ACls der
 // Unit (ohne 'class constructor/destructor'). AFound, wenn es welche gibt;
 // '' oder der Grund, wenn eine 'abstract' traegt oder nicht zu lesen ist.
-function AbstractDeclReason(AMap: TRdxCodeMap; const ACls, AMethod: string;
+function AbstractDeclReason(var AScan: TRdxScan; const ACls, AMethod: string;
   out AFound: Boolean): string;
 var
   H : TRdxToken;
@@ -950,11 +1338,11 @@ var
 begin
   Result := '';
   AFound := False;
-  for H in TRdxRoutineFixes.FindMethodDecls(AMap, ACls, AMethod) do
+  for H in MethodDecls(AScan, ACls, AMethod) do
   begin
     if H.Low = KW_CLASS then Continue;
     AFound := True;
-    if TRdxRoutineFixes.MethodDecl(AMap, H, D) <> '' then
+    if TRdxRoutineFixes.MethodDecl(AScan.Map, H, D) <> '' then
       Exit(Format('die Deklaration von %s.%s in Zeile %d ist nicht zu lesen '
         + '- ob sie abstrakt ist, bleibt offen; %s',
         [ACls, AMethod, H.Line, R_BY_HAND]));
@@ -973,7 +1361,7 @@ end;
 // ausserhalb der Unit, ist das unter {$mode objfpc}/{$mode fpc} nicht
 // beweisbar -> sperren; in Delphi bleibt es beim Angebot. TObject (Create,
 // Destroy) ist nie abstrakt. '' oder der Grund.
-function AbstractReason(AMap: TRdxCodeMap; const ACtx: TRdxMethodCtx): string;
+function AbstractReason(var ACtx: TRdxMethodCtx): string;
 var
   Cls, Method : string;
   Heads       : TArray<TRdxToken>;
@@ -989,14 +1377,14 @@ begin
   begin
     if O.DirectTObject then Exit;
     Cls := O.Parent;
-    Heads := TRdxRoutineFixes.FindClassHeads(AMap, Cls);
+    Heads := ClassHeads(ACtx.Scan, Cls);
     if Length(Heads) <> 1 then Break;
-    Result := AbstractDeclReason(AMap, Cls, Method, Found);
+    Result := AbstractDeclReason(ACtx.Scan, Cls, Method, Found);
     if (Result <> '') or Found then Exit;
     O := Default(TRdxOwner);
-    if ParentReason(AMap, Heads[0], O) <> '' then Break;
+    if ParentReason(ACtx.Scan, Heads[0], O) <> '' then Break;
   end;
-  Mode := DirectiveLine(AMap, 'mode', ABSTRACT_FATAL_MODES);
+  Mode := DirectiveLine(ACtx.Scan.Map, 'mode', ABSTRACT_FATAL_MODES);
   if Mode > 0 then
     Result := Format('{$mode objfpc/fpc} in Zeile %d, und die geerbte Methode '
       + 'ist ab %s nicht in dieser Unit zu sehen - ist sie abstrakt, '
@@ -1034,12 +1422,34 @@ begin
   end;
 end;
 
-// SCA097: steht Exit oder goto irgendwo im Rumpf - auf jeder Tiefe, auch
-// in einer anonymen Methode (lieber keine Hilfe)? Lokale Routinen stehen
-// vor dem begin und zaehlen nicht. Dann verlaesst der Ablauf den
-// Destruktor dort vor dem Ende, und ein inherited am Ende liefe auf diesem
-// Weg nie (Gegen-Review H5, Minor 2: Abbrevia TMultiTree.Destroy endet mit
-// 'Curr.Free; exit;' in einer Schleife). '' oder der Grund.
+// Steht das Wort T (APrev davor) hinter 'System.' - 'System.Exit', das Exit
+// der RTL? Hinter '.' ist ein Wort kein Schluesselwort (IsKeywordAfter),
+// der Sprung blieb so ungesehen (Gegen-Review R5, R5-05). 'TMonitor.Exit'
+// bzw. 'Foo.System.Exit' zaehlen nicht. Dieselbe Probe steht in
+// uRdxTryFixes (SystemQualified).
+function SystemQualified(AMap: TRdxCodeMap; const T, APrev: TRdxToken): Boolean;
+var
+  Q : TRdxToken;
+begin
+  Result := False;
+  if (APrev.Low <> '.') or not T.IsWord then Exit;
+  Q := Before(AMap, APrev);
+  Result := (Q.Low = SYSTEM_UNIT) and (Before(AMap, Q).Low <> '.');
+end;
+
+// Exit an T (APrev davor) - als Schluesselwort oder als 'System.Exit'?
+function IsExitAt(AMap: TRdxCodeMap; const T, APrev: TRdxToken): Boolean;
+begin
+  Result := (T.Low = 'exit')
+    and (IsKeywordAfter(T, APrev) or SystemQualified(AMap, T, APrev));
+end;
+
+// SCA097: steht Exit (auch 'System.Exit') oder goto irgendwo im Rumpf - auf
+// jeder Tiefe, auch in einer anonymen Methode (lieber keine Hilfe)? Lokale
+// Routinen stehen vor dem begin und zaehlen nicht. Dann verlaesst der
+// Ablauf den Destruktor dort vor dem Ende, und ein inherited am Ende liefe
+// auf diesem Weg nie (Gegen-Review H5, Minor 2: Abbrevia TMultiTree.Destroy
+// endet mit 'Curr.Free; exit;' in einer Schleife). '' oder der Grund.
 function JumpReason(AMap: TRdxCodeMap; const R: TRdxRoutine): string;
 var
   T, P : TRdxToken;
@@ -1049,7 +1459,8 @@ begin
   T := After(AMap, R.Body);
   while (T.Low <> '') and not SameTok(T, R.EndTok) do
   begin
-    if InList(T.Low, JUMP_WORDS) and IsKeywordAfter(T, P) then
+    if IsExitAt(AMap, T, P)
+       or (InList(T.Low, JUMP_WORDS) and IsKeywordAfter(T, P)) then
       Exit(Format('%s in Zeile %d - der Ablauf verlaesst den Destruktor dort '
         + 'vor dem Ende, ein inherited am Ende liefe auf diesem Weg nie; %s',
         [TokText(AMap, T), T.Line, R_BY_HAND]));
@@ -1058,17 +1469,50 @@ begin
   end;
 end;
 
-// SCA097: endet der Rumpf mit Exit, raise, Halt, Abort oder goto? Dann
+// Der Pfad ab T wie im Quelltext, Glieder mit '.' ('System.SysUtils.Abort');
+// ALow dasselbe klein. Nur T selbst, wenn kein '.' folgt; '' ohne T.
+function PathAt(AMap: TRdxCodeMap; const T: TRdxToken;
+  out ALow: string): string;
+var
+  D, N : TRdxToken;
+  SB   : TStringBuilder;
+begin
+  Result := TokText(AMap, T);
+  ALow := T.Low;
+  if T.Low = '' then Exit;
+  SB := TStringBuilder.Create;
+  try
+    SB.Append(Result);
+    D := After(AMap, T);
+    N := After(AMap, D);
+    while (D.Low = '.') and N.IsWord do
+    begin
+      SB.Append('.').Append(TokText(AMap, N));
+      D := After(AMap, N);
+      N := After(AMap, D);
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+  // TokenAt senkt jedes Glied mit LowerCase - den ganzen Pfad ebenso.
+  ALow := LowerCase(Result);
+end;
+
+// SCA097: endet der Rumpf mit Exit, raise, Halt, Abort oder goto - auch
+// qualifiziert ('System.Exit', 'SysUtils.Abort', DEAD_END_PATHS)? Dann
 // liefe ein inherited dahinter nie. Dazu Exit/goto auf jeder Tiefe
 // (JumpReason). '' oder der Grund.
 function DeadEndReason(AMap: TRdxCodeMap; const R: TRdxRoutine): string;
 var
-  S : TRdxToken;
+  S         : TRdxToken;
+  Path, Low : string;
 begin
   S := LastStatementStart(AMap, R);
-  if InList(S.Low, DEAD_END_WORDS) then
+  Path := PathAt(AMap, S, Low);
+  if InList(S.Low, DEAD_END_WORDS) or InList(Low, DEAD_END_PATHS) then
     Exit(Format('die letzte Anweisung ist %s (Zeile %d) - inherited '
-      + 'dahinter liefe nie; %s', [TokText(AMap, S), S.Line, R_BY_HAND]));
+      + 'dahinter liefe nie; %s', [Path, S.Line, R_BY_HAND]));
   Result := JumpReason(AMap, R);
 end;
 
@@ -1155,19 +1599,19 @@ end;
 
 // Der Rueckgabetyp von R - aus dem Kopf, bei einer Methode ohne Signatur
 // aus ihrer Deklaration im Klassenrumpf. '' oder der Grund.
-function ResultTypeOf(AMap: TRdxCodeMap; const R: TRdxRoutine;
+function ResultTypeOf(var AScan: TRdxScan; const R: TRdxRoutine;
   out AType: string): string;
 var
   D : TRdxRoutine;
 begin
-  Result := TypeAfterHead(AMap, R, AType);
+  Result := TypeAfterHead(AScan.Map, R, AType);
   if (Result <> '') or (AType <> '') then Exit;
   if Length(R.Parts) < 2 then
     Exit('Kopf ohne Rueckgabetyp, keine Methode - die Deklaration liest die '
       + 'Hilfe nicht; ' + R_BY_HAND);
-  Result := DeclOf(AMap, R, D);
+  Result := DeclOf(AScan, R, D);
   if Result = '' then
-    Result := TypeAfterHead(AMap, D, AType);
+    Result := TypeAfterHead(AScan.Map, D, AType);
   if (Result = '') and (AType = '') then
     Result := 'auch die Deklaration nennt keinen Rueckgabetyp';
 end;
@@ -1207,18 +1651,20 @@ end;
 
 // SCA121: schreibt das Token T (davor APrev) Result - 'Result := ..' bzw.
 // 'Name := ..' mit dem Funktionsnamen ALowName, auch ueber Selektoren, oder
-// 'Exit(Wert)'?
+// 'Exit(Wert)' (auch 'System.Exit(Wert)', IsExitAt)?
 function WritesResult(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
   const ALowName: string): Boolean;
 var
   N : TRdxToken;
 begin
-  Result := False;
-  if not IsKeywordAfter(T, APrev) then Exit;
-  if (T.Low = KW_RESULT) or SameIdent(T.Low, ALowName) then
-    Exit(AssignsAt(AMap, T));
-  N := After(AMap, T);
-  Result := (T.Low = 'exit') and (N.Low = '(') and (After(AMap, N).Low <> ')');
+  if IsExitAt(AMap, T, APrev) then
+  begin
+    N := After(AMap, T);
+    Exit((N.Low = '(') and (After(AMap, N).Low <> ')'));
+  end;
+  Result := IsKeywordAfter(T, APrev)
+    and ((T.Low = KW_RESULT) or SameIdent(T.Low, ALowName))
+    and AssignsAt(AMap, T);
 end;
 
 // SCA121: weist der Rumpf Result oder dem Funktionsnamen irgendwo zu - auch
@@ -1272,7 +1718,7 @@ end;
 
 // SCA121: steht AName in den Koepfen und Deklarationsteilen von R (zwischen
 // Kopf und begin: Parameter, lokale Variablen, lokale Routinen)? Dann
-// verdeckt er dort einen gleichnamigen Wert einer Aufzaehlung.
+// verdeckt er dort die Funktion Low (EnumValue).
 function NamedInHead(AMap: TRdxCodeMap; const R: TRdxRoutine;
   const ALowName: string): Boolean;
 var
@@ -1288,37 +1734,39 @@ begin
   end;
 end;
 
-// SCA121: der erste Wert der Aufzaehlung ab ihrem '(' K - wenn sie schlicht
-// ist (nur Namen mit ',', kein '=' fuer eigene Ordinalwerte), die Datei kein
-// {$SCOPEDENUMS} kennt (dort braeuchte er den Typnamen davor, den Delphi
-// vor 2009 nicht kennt) und Kopf und Deklarationsteil von R den Namen
-// nicht verdecken; sonst ''.
-function EnumFirst(AMap: TRdxCodeMap; const K: TRdxToken;
-  const R: TRdxRoutine): string;
+// SCA121: der Anfangswert der Aufzaehlung AType ab ihrem '(' K - 'Low(T)',
+// wenn sie schlicht ist (nur Namen mit ',', kein '=' fuer eigene
+// Ordinalwerte: dann ist Low(T) derselbe Wert wie Default(T)) und Kopf und
+// Deklarationsteil von R den Namen Low nicht verdecken; sonst ''. Bis Charge
+// B1 stand hier der erste Wert selbst - ein Member der Klasse gleichen
+// Namens (property bzw. Feld 'None') verdeckte ihn: 'Result := None;'
+// uebersetzte nicht bzw. nahm still den Feldwert (Gegen-Review R5, R5-06).
+// Low(T) gibt es in jeder Delphi-Version, und {$SCOPEDENUMS} spielt keine
+// Rolle mehr.
+function EnumValue(AMap: TRdxCodeMap; const K: TRdxToken;
+  const R: TRdxRoutine; const AType: string): string;
 var
-  First, T, C : TRdxToken;
+  T, C : TRdxToken;
 begin
   Result := '';
-  First := After(AMap, K);
+  T := After(AMap, K);
   C := MatchClose(AMap, K);
-  if not First.IsWord or (C.Low = '') then Exit;
-  T := First;
+  if not T.IsWord or (C.Low = '') then Exit;
   while not SameTok(T, C) do
   begin
     if not (T.IsWord or (T.Low = ',')) then Exit;
     T := After(AMap, T);
   end;
-  if (DirectiveLine(AMap, 'scopedenums', []) = 0)
-     and not NamedInHead(AMap, R, First.Low) then
-    Result := TokText(AMap, First);
+  if not NamedInHead(AMap, R, LOW_FUNC) then
+    Result := Format('Low(%s)', [AType]);
 end;
 
-// SCA121: der Anfangswert nach der Definition K ('=' davor, TypeDefsOf) -
-// Klasse, Metaklasse, Interface, Zeiger, Routinentyp und dynamisches Array:
-// nil; Menge: []; String-Alias: ''; schlichte Aufzaehlung: ihr erster Wert
-// (EnumFirst); sonst '' (dann Default(T)).
+// SCA121: der Anfangswert nach der Definition K ('=' davor, TypeDefsOf) des
+// Typs AType - Klasse, Metaklasse, Interface, Zeiger, Routinentyp und
+// dynamisches Array: nil; Menge: []; String-Alias: ''; schlichte
+// Aufzaehlung: Low(T) (EnumValue); sonst '' (dann Default(T)).
 function DefValue(AMap: TRdxCodeMap; const K: TRdxToken;
-  const R: TRdxRoutine): string;
+  const R: TRdxRoutine; const AType: string): string;
 var
   N : TRdxToken;
 begin
@@ -1332,15 +1780,19 @@ begin
   else if InList(K.Low, STRING_TYPES) then
     Result := VALUE_EMPTY
   else if K.Low = '(' then
-    Result := EnumFirst(AMap, K, R);
+    Result := EnumValue(AMap, K, R, AType);
 end;
 
 // SCA121: der Anfangswert fuer den Rueckgabetyp AType (wie im Kopf) der
 // Funktion R in AValue: deklariert die Unit den Namen selbst, nach ihrer
 // Definition (DefValue; mehrere Definitionen unter $IFDEF muessen denselben
 // Wert ergeben), sonst nach der RTL (RtlTypeValue); wo kein Literal passt -
-// Records, Typparameter, Unbekanntes -, 'Default(AType)'. '' oder der Grund.
-function InitValueFor(AMap: TRdxCodeMap; const R: TRdxRoutine;
+// Records, Typparameter, Unbekanntes -, 'Default(AType)'. Steht eine
+// Definition des Namens nicht auf Unit-Ebene (AtUnitLevel: geschachtelt in
+// einer Klasse, lokal in einer Routine), haengt am Gueltigkeitsbereich,
+// welche gilt - dann Default(AType), das der Compiler wie den Kopf aufloest
+// (Gegen-Review R5, R5-06). '' oder der Grund.
+function InitValueFor(var AScan: TRdxScan; const R: TRdxRoutine;
   const AType: string; out AValue: string): string;
 var
   Low, Base, V : string;
@@ -1356,13 +1808,15 @@ begin
     Base := Copy(Base, 1, Pos('<', Base) - 1);
   Defs := nil;
   if Pos('.', Base) = 0 then
-    Defs := TypeDefsOf(AMap, Base);
+    Defs := TypeDefsOf(AScan, Base);
+  AValue := 'Default(' + AType + ')';
+  if not AllAtUnitLevel(AScan.Map, Defs) then Exit;
   AValue := RtlTypeValue(Low);
   if Length(Defs) > 0 then
-    AValue := DefValue(AMap, Defs[0], R);
+    AValue := DefValue(AScan.Map, Defs[0], R, AType);
   for K in Defs do
   begin
-    V := DefValue(AMap, K, R);
+    V := DefValue(AScan.Map, K, R, AType);
     if V <> AValue then
       Exit(Format('%s ist in dieser Unit mehrfach verschieden definiert '
         + '($IFDEF-Zweige?) - %s', [AType, R_BY_HAND]));
@@ -1394,20 +1848,20 @@ end;
 // (InitValueFor); Default(T) nur mit einfachem Typbezeichner
 // (TypeTextReason) und ohne Spuren alter Compiler (OldCompilerReason). ''
 // oder der Grund.
-function ValueReason(AMap: TRdxCodeMap; const R: TRdxRoutine;
+function ValueReason(var AScan: TRdxScan; const R: TRdxRoutine;
   out AValue: string): string;
 var
   TypeTx : string;
 begin
   AValue := '';
   TypeTx := '';
-  Result := ResultTypeOf(AMap, R, TypeTx);
+  Result := ResultTypeOf(AScan, R, TypeTx);
   if Result = '' then
-    Result := InitValueFor(AMap, R, TypeTx, AValue);
+    Result := InitValueFor(AScan, R, TypeTx, AValue);
   if (Result <> '') or (AValue <> 'Default(' + TypeTx + ')') then Exit;
   Result := TypeTextReason(TypeTx);
   if Result = '' then
-    Result := OldCompilerReason(AMap);
+    Result := OldCompilerReason(AScan.Map);
 end;
 
 // SCA196: gleicher Typ wie in der Meldung (ohne Leerraum, Gross/klein
@@ -1455,15 +1909,15 @@ end;
 
 // SCA196: ein dynamisches Array? Die Namen der RTL oder 'Name = array of'
 // bzw. 'Name = TArray<..>' in der Unit.
-function DynArrayProven(AMap: TRdxCodeMap; const ALow: string): Boolean;
+function DynArrayProven(var AScan: TRdxScan; const ALow: string): Boolean;
 var
   K : TRdxToken;
 begin
   if InList(ALow, RTL_DYN_ARRAYS) then
     Exit(True);
-  K := TypeDeclKind(AMap, ALow, ARRAY_KINDS);
-  Result := ((K.Low = 'array') and (After(AMap, K).Low = 'of'))
-    or ((K.Low = 'tarray') and (After(AMap, K).Low = '<'));
+  K := TypeDeclKind(AScan, ALow, ARRAY_KINDS);
+  Result := ((K.Low = 'array') and (After(AScan.Map, K).Low = 'of'))
+    or ((K.Low = 'tarray') and (After(AScan.Map, K).Low = '<'));
 end;
 
 // SCA196: ein Interface? 'I' + Grossbuchstabe und als Interface in der
@@ -1471,7 +1925,7 @@ end;
 // stehen Klassen UND Interfaces, und die I-Schreibweise trennt sie NICHT
 // (Winapi.D3D10: ID3D10EffectPass = class - Gegen-Review H5, Minor 8); fuer
 // 'Result := nil' ist das gleich, beide nehmen nil.
-function InterfaceProven(AMap: TRdxCodeMap; const AType: string): Boolean;
+function InterfaceProven(var AScan: TRdxScan; const AType: string): Boolean;
 var
   Name : string;
 begin
@@ -1480,7 +1934,7 @@ begin
     Name := Copy(Name, 1, Pos('<', Name) - 1);
   Result := (Length(Name) >= 2) and (Name[1] = 'I')
     and CharInSet(Name[2], ['A'..'Z'])
-    and (DeclaredAs(AMap, LowerCase(Name), INTERFACE_KINDS)
+    and (DeclaredAs(AScan, LowerCase(Name), INTERFACE_KINDS)
          or IsRtlClassOrInterface(LowerCase(Name)));
 end;
 
@@ -1506,9 +1960,13 @@ end;
 // SCA196: deklariert die Unit den Typnamen ALowBase (ohne Typargumente)
 // selbst, gilt nur ihre Definition - 'TBytes = array[0..3] of Byte'
 // uebersetzte 'Result := nil' nicht (Gegen-Review H5, Minor 8). Mehrere
-// Definitionen ($IFDEF) muessen dieselbe Anweisung ergeben. '' oder der
-// Grund; AStmt leer, wenn die Unit den Namen nicht deklariert.
-function OwnTypeStatement(AMap: TRdxCodeMap; const ALowBase, AType: string;
+// Definitionen ($IFDEF) muessen dieselbe Anweisung ergeben; eine, die nicht
+// auf Unit-Ebene steht (AtUnitLevel), sperrt - welche gilt, haengt am
+// Gueltigkeitsbereich (Gegen-Review R5, R5-06: ein lokales 'RawUtf8 = array
+// of Byte' einer anderen Routine machte 'Result := nil;' fuer mORMots
+// RawUtf8). '' oder der Grund; AStmt leer, wenn die Unit den Namen nicht
+// deklariert.
+function OwnTypeStatement(var AScan: TRdxScan; const ALowBase, AType: string;
   out AStmt: string): string;
 var
   K     : TRdxToken;
@@ -1518,13 +1976,17 @@ begin
   Result := '';
   AStmt := '';
   First := True;
-  for K in TypeDefsOf(AMap, ALowBase) do
+  for K in TypeDefsOf(AScan, ALowBase) do
   begin
-    S := DefStatement(AMap, K);
+    if not AtUnitLevel(AScan.Map, K) then
+      Exit(Format('%s ist in dieser Unit auch in einer Routine bzw. einem '
+        + 'Typ definiert (Zeile %d) - welche Definition gilt, haengt am '
+        + 'Gueltigkeitsbereich; %s', [AType, K.Line, R_BY_HAND]));
+    S := DefStatement(AScan.Map, K);
     if S = '' then
       Exit(Format('%s ist in dieser Unit als "%s ..." definiert (Zeile %d) - '
         + 'kein dynamisches Array, Interface, String oder Variant; %s',
-        [AType, TokText(AMap, K), K.Line, R_BY_HAND]));
+        [AType, TokText(AScan.Map, K), K.Line, R_BY_HAND]));
     if not First and (S <> AStmt) then
       Exit(Format('%s ist in dieser Unit mehrfach verschieden definiert '
         + '($IFDEF-Zweige?) - %s', [AType, R_BY_HAND]));
@@ -1537,7 +1999,7 @@ end;
 // oder der Grund; AVariants bei VarClear. Ein unqualifizierter Name, den
 // die Unit selbst deklariert, gilt nach ihrer Definition (OwnTypeStatement),
 // alle anderen nach der RTL.
-function StatementFor(AMap: TRdxCodeMap; const AType: string;
+function StatementFor(var AScan: TRdxScan; const AType: string;
   out AStmt: string; out AVariants: Boolean): string;
 var
   Low, Base : string;
@@ -1550,7 +2012,7 @@ begin
   if Pos('<', Base) > 0 then
     Base := Copy(Base, 1, Pos('<', Base) - 1);
   if Pos('.', Base) = 0 then
-    Result := OwnTypeStatement(AMap, Base, AType, AStmt);
+    Result := OwnTypeStatement(AScan, Base, AType, AStmt);
   if (Result <> '') or (AStmt <> '') then
   begin
     AVariants := AStmt = STMT_VARCLEAR;
@@ -1567,7 +2029,7 @@ begin
     AStmt := STMT_VARCLEAR;
     AVariants := True;
   end
-  else if DynArrayProven(AMap, Low) or InterfaceProven(AMap, AType) then
+  else if DynArrayProven(AScan, Low) or InterfaceProven(AScan, AType) then
     AStmt := STMT_NIL
   else
     Result := Format('Rueckgabetyp %s ist nicht als String, dynamisches '
@@ -1580,13 +2042,14 @@ end;
 // AWord ('constructor' bzw. 'destructor') auf ALine, eine Methode mit
 // Klasse ohne 'class' davor, ein begin-Rumpf ohne asm und ohne Direktive
 // davor, kein 'inherited' im Text der Routine und die Klasse in der Unit.
-// '' oder der Grund.
+// Legt den Planerlauf ACtx.Scan an. '' oder der Grund.
 function MethodCtxReason(AMap: TRdxCodeMap; ALine: Integer;
   const AMessage, AWord: string; out ACtx: TRdxMethodCtx): string;
 var
   Key, What : string;
 begin
   ACtx := Default(TRdxMethodCtx);
+  ACtx.Scan := NewScan(AMap);
   Key := KEY_DTOR;
   What := 'eines Destruktors';
   if AWord = KW_CONSTRUCTOR then
@@ -1604,7 +2067,7 @@ begin
   if Result = '' then
     Result := InheritedReason(AMap, ACtx.Routine);
   if Result = '' then
-    Result := OwnerOf(AMap, OwnerPathOf(ACtx.Routine.Name), ACtx.Owner);
+    Result := OwnerOf(ACtx.Scan, OwnerPathOf(ACtx.Routine.Name), ACtx.Owner);
 end;
 
 // SCA096: die Variante nach dem Vorfahren - (a) 'inherited Create' ruft
@@ -1614,51 +2077,51 @@ end;
 // TObject.Create); (b) override: 'inherited', gekennzeichnet, nicht
 // abstrakt geerbt, ohne Delegation und nicht blockiert. Setzt APlan.Name
 // bzw. APlan.Changes. '' oder der Grund.
-function CtorVariantReason(AMap: TRdxCodeMap; const ACtx: TRdxMethodCtx;
+function CtorVariantReason(var ACtx: TRdxMethodCtx;
   var APlan: TRdxResultPlan): string;
 begin
   if ACtx.Owner.CreateOfTObject then
   begin
     APlan.Name := STMT_INHERITED_CREATE;
-    if Length(DeclHeadsOf(AMap, ACtx.Routine)) = 0 then
+    if Length(DeclHeadsOf(ACtx.Scan, ACtx.Routine)) = 0 then
       Exit(Format('keine Deklaration von %s im Rumpf der Klasse %s - %s',
         [LastPart(ACtx.Routine.Name), OwnerPathOf(ACtx.Routine.Name), R_MOVED]));
     Exit('');
   end;
-  Result := CtorOverrideReason(AMap, ACtx.Routine, ACtx.Owner);
+  Result := CtorOverrideReason(ACtx.Scan, ACtx.Routine, ACtx.Owner);
   APlan.Changes := Result = '';
   if Result = '' then
-    Result := AbstractReason(AMap, ACtx);
+    Result := AbstractReason(ACtx);
   if Result = '' then
-    Result := DelegationReason(AMap, ACtx.Routine);
+    Result := DelegationReason(ACtx.Scan, ACtx.Routine);
   if Result = '' then
-    Result := BlockedReason(AMap, ACtx.Routine);
+    Result := BlockedReason(ACtx.Scan.Map, ACtx.Routine);
 end;
 
 // SCA196: die Funktion um die Lese-Zeile ALine - auf der Zeile steht
 // Result, die innerste Routine heisst AName, hat einen begin-Rumpf ohne
 // asm, Result gibt es (Modus), ihr Rueckgabetyp ist AMsgType, kein
 // 'absolute Result'. '' oder der Grund; ACtx.TypeTx wie im Quelltext.
-function FuncCtxReason(AMap: TRdxCodeMap; ALine: Integer;
+function FuncCtxReason(var AScan: TRdxScan; ALine: Integer;
   const AName, AMsgType: string; out ACtx: TRdxFuncCtx): string;
 begin
   ACtx := Default(TRdxFuncCtx);
-  if not ReadsResultOn(AMap, ALine) then
+  if not ReadsResultOn(AScan.Map, ALine) then
     Exit(R_NO_READ);
-  Result := EnclosingRoutine(AMap, ALine, ACtx.Routine);
+  Result := EnclosingRoutine(AScan.Map, ALine, ACtx.Routine);
   if Result = '' then
     Result := NameReason(ACtx.Routine, AName);
   if Result = '' then
-    Result := BodyReason(AMap, ACtx.Routine);
+    Result := BodyReason(AScan.Map, ACtx.Routine);
   if Result = '' then
-    Result := ResultModeReason(AMap);
+    Result := ResultModeReason(AScan.Map);
   if Result = '' then
-    Result := ResultTypeOf(AMap, ACtx.Routine, ACtx.TypeTx);
+    Result := ResultTypeOf(AScan, ACtx.Routine, ACtx.TypeTx);
   if (Result = '') and not SameTypeText(ACtx.TypeTx, AMsgType) then
     Result := Format('der Kopf nennt %s, die Meldung %s - %s',
       [ACtx.TypeTx, AMsgType, R_MOVED]);
   if Result = '' then
-    Result := AbsoluteReason(AMap, ACtx.Routine);
+    Result := AbsoluteReason(AScan.Map, ACtx.Routine);
 end;
 
 { ---- Gemeinsamer Abschluss ---- }
@@ -1717,6 +2180,7 @@ class function TRdxResultFixes.LastStatement(AMap: TRdxCodeMap;
 var
   Last, En : TRdxToken;
   E        : TRdxEdit;
+  Li, Co   : Integer;
   Semi     : string;
 begin
   AEdits := nil;
@@ -1729,21 +2193,27 @@ begin
   if DirectiveBetween(AMap, Last, En.Line, En.Col) then
     Exit('Compiler-Direktive zwischen der letzten Anweisung und end - das '
       + 'Ende kann je Zweig anders aussehen; ' + R_BY_HAND);
+  // Die letzte Anweisung endet am letzten Zeichen aus Code ODER String vor
+  // end - der Token-Leser sieht keine Strings: 'FState := ''x''' endete
+  // fuer ihn auf ':=', und das ';' bzw. 'inherited;' kam vor das Literal
+  // (Gegen-Review R5, R5-01: 'FState :=; ''x''', bei TObject-Erben als
+  // bedeutungsgleich gekennzeichnet).
+  if not LastCharBefore(AMap, En, Li, Co) then
+    Exit('Ende der letzten Anweisung nicht gefunden');
   Semi := '';
-  if Last.Low <> ';' then
+  if (Copy(AMap.Raw(Li), Co, 1) <> ';') or not AMap.IsCode(Li, Co) then
     Semi := ';';
   if OwnLineAt(AMap, En) then
   begin
     if Semi <> '' then
-      AddEdit(AEdits, TokenEdit(AMap, Last, TokText(AMap, Last) + Semi));
+      AddEdit(AEdits, CharEdit(AMap, Li, Co, Semi));
     E.Span := TRefactorSpan.Make(SPAN_RESULT, En.Line, 1, En.Line, En.EndCol);
     E.Expected := Copy(AMap.Raw(En.Line), 1, En.EndCol - 1);
     E.NewText := BodyIndent(AMap, R) + AStmt + #10 + E.Expected;
     AddEdit(AEdits, E);
   end
   else
-    AddEdit(AEdits, TokenEdit(AMap, Last,
-      TokText(AMap, Last) + Semi + ' ' + AStmt));
+    AddEdit(AEdits, CharEdit(AMap, Li, Co, Semi + ' ' + AStmt));
   Result := '';
 end;
 
@@ -1759,7 +2229,7 @@ begin
   Edits := nil;
   AReason := MethodCtxReason(AMap, ALine, AMessage, KW_CONSTRUCTOR, Ctx);
   if AReason = '' then
-    AReason := CtorVariantReason(AMap, Ctx, APlan);
+    AReason := CtorVariantReason(Ctx, APlan);
   if AReason = '' then
     AReason := FirstEdits(AMap, Ctx.Routine, APlan.Name + ';', Edits);
   Result := Finish(APlan, Edits, AReason);
@@ -1778,9 +2248,9 @@ begin
   Edits := nil;
   AReason := MethodCtxReason(AMap, ALine, AMessage, KW_DESTRUCTOR, Ctx);
   if AReason = '' then
-    AReason := DtorOverrideReason(AMap, Ctx.Routine);
+    AReason := DtorOverrideReason(Ctx.Scan, Ctx.Routine);
   if AReason = '' then
-    AReason := AbstractReason(AMap, Ctx);
+    AReason := AbstractReason(Ctx);
   if AReason = '' then
     AReason := DeadEndReason(AMap, Ctx.Routine);
   if AReason = '' then
@@ -1795,6 +2265,7 @@ class function TRdxResultFixes.ResultDefault(AMap: TRdxCodeMap;
   ALine: Integer; const AMessage: string; out APlan: TRdxResultPlan;
   out AReason: string): Boolean;
 var
+  Scan  : TRdxScan;
   R     : TRdxRoutine;
   Name  : string;
   Value : string;
@@ -1804,6 +2275,7 @@ begin
   Edits := nil;
   Value := '';
   AReason := '';
+  Scan := NewScan(AMap);
   Name := TextBetween(AMessage, KEY_FUNC, KEY_NEVER);
   if Name = '' then
     AReason := 'Name der Funktion fehlt in der Meldung';
@@ -1822,7 +2294,7 @@ begin
     AReason := AssignedReason(AMap, R);
   if AReason = '' then
   begin
-    AReason := ValueReason(AMap, R, Value);
+    AReason := ValueReason(Scan, R, Value);
     APlan.Name := Value;
   end;
   if AReason = '' then
@@ -1834,6 +2306,7 @@ class function TRdxResultFixes.ManagedResultInit(AMap: TRdxCodeMap;
   ALine: Integer; const AMessage: string; out APlan: TRdxResultPlan;
   out AReason: string): Boolean;
 var
+  Scan    : TRdxScan;
   Ctx     : TRdxFuncCtx;
   Name    : string;
   MsgType : string;
@@ -1844,17 +2317,18 @@ begin
   APlan := Default(TRdxResultPlan);
   Edits := nil;
   AReason := '';
+  Scan := NewScan(AMap);
   Name := TextBetween(AMessage, KEY_FUNC, KEY_READS);
   MsgType := TextBetween(AMessage, KEY_TYPE, KEY_TYPE_END);
   if (Name = '') or (MsgType = '') then
     AReason := 'Funktion oder Rueckgabetyp fehlt in der Meldung'
   // Der Name im Menue schon aus der Meldung (der Beweis folgt).
-  else if StatementFor(AMap, MsgType, Stmt, Vars) = '' then
+  else if StatementFor(Scan, MsgType, Stmt, Vars) = '' then
     APlan.Name := Stmt;
   if AReason = '' then
-    AReason := FuncCtxReason(AMap, ALine, Name, MsgType, Ctx);
+    AReason := FuncCtxReason(Scan, ALine, Name, MsgType, Ctx);
   if AReason = '' then
-    AReason := StatementFor(AMap, Ctx.TypeTx, Stmt, Vars);
+    AReason := StatementFor(Scan, Ctx.TypeTx, Stmt, Vars);
   if AReason = '' then
   begin
     APlan.Name := Stmt;
