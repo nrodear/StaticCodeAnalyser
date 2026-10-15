@@ -1768,12 +1768,6 @@ begin
   end;
 end;
 
-procedure AppendTo(var AList: TArray<string>; const S: string);
-begin
-  SetLength(AList, Length(AList) + 1);
-  AList[High(AList)] := S;
-end;
-
 // Ein Literal-Term: sein Quelltext in den Formatstring (AppendLiteralSource)
 // und sein Wert zu den Literalen. '' oder der Grund.
 function TakeLiteral(const APart: TRdxPart; var AScan: TRdxFormatScan): string;
@@ -1784,7 +1778,7 @@ begin
   if not TRdxRecipes.DecodeLiteral(APart.Text, Value)
      or not AppendLiteralSource(AScan.Fmt, AScan.InQuote, APart.Text) then
     Exit('Literal nicht lesbar: ' + TRdxRecipes.CollapseCode(APart.Text));
-  AppendTo(AScan.Literals, Value);
+  AddText(AScan.Literals, Value);
 end;
 
 // Das Urteil ueber einen Operanden fuer den Format-Aufruf: JudgeOperand,
@@ -1826,7 +1820,7 @@ begin
     ovByCompiler:
       begin
         AppendQuoted(AScan.Fmt, AScan.InQuote, '%s');
-        AppendTo(ABuild.ByCompiler, ATxt);
+        AddText(ABuild.ByCompiler, ATxt);
       end;
   else
     Exit(OperandRejectReason(Verdict, APart, ATxt));
@@ -1864,7 +1858,7 @@ begin
     if Result <> '' then Exit;
   end;
   Inc(ABuild.Operands);
-  AppendTo(AScan.Args, Txt);
+  AddText(AScan.Args, Txt);
 end;
 
 // Die Kette als Ganzes: mindestens ein Operand und ein Literal (ohne

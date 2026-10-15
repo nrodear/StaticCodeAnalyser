@@ -1589,8 +1589,12 @@ begin
   Result := (Q.Low = SYSTEM_UNIT) and (Before(AMap, Q).Low <> '.');
 end;
 
-// Spruenge, asm und Inline-Deklarationen. '' oder der Grund.
-function JumpReason(const APair: TRdxPair; var S: TRdxSpan;
+// Spruenge, asm und Inline-Deklarationen im Bereich des try/finally. ''
+// oder der Grund. Bis zur Nachpruefung B2S hiess sie JumpReason wie zwei
+// andere Routinen mit anderem Vertrag (uRdxFlowFixes.RedundantJumpReason
+// fuer SCA080, uRdxResultFixes.LeavesDestructorReason fuer SCA097; Review
+// R3-05/R5-03).
+function SpanJumpReason(const APair: TRdxPair; var S: TRdxSpan;
   const T, APrev: TRdxToken): string;
 begin
   Result := '';
@@ -1639,12 +1643,12 @@ begin
   if IsKeywordAt(AMap, T, APrev) then
   begin
     HeadStep(S, T);
-    Result := JumpReason(APair, S, T, APrev);
+    Result := SpanJumpReason(APair, S, T, APrev);
     if Result = '' then
       Result := BlockReason(S, T);
   end
   else if InList(T.Low, SYSTEM_JUMPS) and SystemQualified(AMap, T, APrev) then
-    Result := JumpReason(APair, S, T, APrev);
+    Result := SpanJumpReason(APair, S, T, APrev);
 end;
 
 // Ein Token des Laufs (ScanSpan): rsFound an B, rsStop mit S.Reason.

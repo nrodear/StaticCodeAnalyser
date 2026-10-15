@@ -793,9 +793,13 @@ begin
   Result := False;
 end;
 
-// Gegenprobe wie der Detektor und die Sperren ohne Bezug zur Form der
-// Zeile. '' oder der Grund.
-function JumpReason(AMap: TRdxCodeMap; const AJump, ASemi: TRdxToken): string;
+// SCA080 (ueberfluessiger Sprung): Gegenprobe wie der Detektor und die
+// Sperren ohne Bezug zur Form der Zeile. '' oder der Grund. Nicht zu
+// verwechseln mit LeavesDestructorReason (uRdxResultFixes, SCA097: ein
+// Sprung verlaesst den Destruktor vor inherited) und SpanJumpReason
+// (uRdxTryFixes: ein Sprung im Bereich eines try/finally) - bis zur
+// Nachpruefung B2S hiessen alle drei JumpReason (Review R3-05/R5-03).
+function RedundantJumpReason(AMap: TRdxCodeMap; const AJump, ASemi: TRdxToken): string;
 begin
   Result := '';
   if LineHasComment(AMap, AJump.Line) then
@@ -875,7 +879,7 @@ begin
     AReason := JumpOn(AMap, ALine, JumpWord, Jump, Semi);
   end;
   if AReason = '' then
-    AReason := JumpReason(AMap, Jump, Semi);
+    AReason := RedundantJumpReason(AMap, Jump, Semi);
   if AReason = '' then
   begin
     APlan.Target := Copy(AMap.Raw(Jump.Line), Jump.Col, Jump.Len);

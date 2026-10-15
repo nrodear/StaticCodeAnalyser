@@ -13,7 +13,8 @@ unit uTestRdxCodeMap;
 // eine Kopie in uRdxRoutineFixes und uRdxTryFixes) und IsKeywordAt (kein
 // Schluesselwort vor ':=' - benanntes OLE-Argument 'End := 1'). Seit
 // Charge B2S-a die geteilten Helfer der Fix-Units QuotedText und
-// ParenDelta (Review R3-05: bis dahin fuenf bzw. sieben Kopien).
+// ParenDelta (Review R3-05: bis dahin fuenf Kopien bzw. drei Kopien und
+// sieben ausgeschriebene Zaehlungen).
 
 interface
 

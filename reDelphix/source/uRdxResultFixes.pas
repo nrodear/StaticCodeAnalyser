@@ -250,7 +250,8 @@ const
   // einem eigenen Exit - TMonitor - steht es so in den Delphi-Quellen).
   SYSTEM_UNIT = 'system';
   // SCA097: damit verlaesst der Ablauf den Destruktor vor dem Ende - auf
-  // jeder Tiefe (JumpReason; Gegen-Review H5, Minor 2). raise/Halt/Abort
+  // jeder Tiefe (LeavesDestructorReason; Gegen-Review H5, Minor 2).
+  // raise/Halt/Abort
   // mitten im Rumpf sind Fehlerpfade; dort fehlt inherited ohnehin.
   JUMP_WORDS: array[0..1] of string = ('exit', 'goto');
   KW_ABSTRACT = 'abstract';
@@ -1509,8 +1510,11 @@ end;
 // Routinen stehen vor dem begin und zaehlen nicht. Dann verlaesst der
 // Ablauf den Destruktor dort vor dem Ende, und ein inherited am Ende liefe
 // auf diesem Weg nie (Gegen-Review H5, Minor 2: Abbrevia TMultiTree.Destroy
-// endet mit 'Curr.Free; exit;' in einer Schleife). '' oder der Grund.
-function JumpReason(AMap: TRdxCodeMap; const R: TRdxRoutine): string;
+// endet mit 'Curr.Free; exit;' in einer Schleife). '' oder der Grund. Bis
+// zur Nachpruefung B2S hiess sie JumpReason wie zwei andere Routinen mit
+// anderem Vertrag (uRdxFlowFixes.RedundantJumpReason fuer SCA080,
+// uRdxTryFixes.SpanJumpReason fuer den try-Bereich; Review R3-05/R5-03).
+function LeavesDestructorReason(AMap: TRdxCodeMap; const R: TRdxRoutine): string;
 var
   T, P : TRdxToken;
 begin
@@ -1562,7 +1566,7 @@ end;
 // SCA097: endet der Rumpf mit Exit, raise, Halt, Abort oder goto - auch
 // qualifiziert ('System.Exit', 'SysUtils.Abort', DEAD_END_PATHS)? Dann
 // liefe ein inherited dahinter nie. Dazu Exit/goto auf jeder Tiefe
-// (JumpReason). '' oder der Grund.
+// (LeavesDestructorReason). '' oder der Grund.
 function DeadEndReason(AMap: TRdxCodeMap; const R: TRdxRoutine): string;
 var
   S         : TRdxToken;
@@ -1573,7 +1577,7 @@ begin
   if InList(S.Low, DEAD_END_WORDS) or InList(Low, DEAD_END_PATHS) then
     Exit(Format('die letzte Anweisung ist %s (Zeile %d) - inherited '
       + 'dahinter liefe nie; %s', [Path, S.Line, R_BY_HAND]));
-  Result := JumpReason(AMap, R);
+  Result := LeavesDestructorReason(AMap, R);
 end;
 
 { ---- Result (SCA121, SCA196) ---- }

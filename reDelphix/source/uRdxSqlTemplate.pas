@@ -581,12 +581,6 @@ begin
     Result := #0;
 end;
 
-procedure AppendTo(var AList: TArray<string>; const S: string);
-begin
-  SetLength(AList, Length(AList) + 1);
-  AList[High(AList)] := S;
-end;
-
 function JoinWith(const AItems: TArray<string>; const ASep: string): string;
 var
   SB : TStringBuilder;
@@ -750,7 +744,7 @@ begin
       Dec(Depth)
     else if (AText[i] = ',') and (Depth = 1) then
     begin
-      AppendTo(AArgs, Trim(Copy(AText, Start, i - Start)));
+      AddText(AArgs, Trim(Copy(AText, Start, i - Start)));
       Start := i + 1;
     end;
     if Depth = 0 then
@@ -759,7 +753,7 @@ begin
   end;
   Result := i = Length(AText);
   if Result then
-    AppendTo(AArgs, Trim(Copy(AText, Start, i - Start)));
+    AddText(AArgs, Trim(Copy(AText, Start, i - Start)));
 end;
 
 // Die '(' der LETZTEN Klammergruppe auf oberster Ebene, wenn AText mit
@@ -1089,7 +1083,7 @@ function ReadPath(const AText: string; var i: Integer): TArray<string>;
 begin
   Result := nil;
   repeat
-    AppendTo(Result, ReadIdent(AText, i));
+    AddText(Result, ReadIdent(AText, i));
     while CharAt(AText, i) = '[' do
       SkipIndex(AText, i);
     if (CharAt(AText, i) <> '.') or not IsIdentStart(CharAt(AText, i + 1)) then
@@ -1164,9 +1158,9 @@ begin
   for i := 0 to High(AParts) do
     if not SameText(AParts[i], 'self') then
       if Length(Segs) = 0 then
-        AppendTo(Segs, WithoutPrefix(AParts[i]))
+        AddText(Segs, WithoutPrefix(AParts[i]))
       else
-        AppendTo(Segs, AParts[i]);
+        AddText(Segs, AParts[i]);
   Result := JoinWith(Segs, '');
   if HasNonAscii(Result) then
     Exit('');
@@ -1569,7 +1563,7 @@ begin
   P.Value := AValue;
   SetLength(S.Params, Length(S.Params) + 1);
   S.Params[High(S.Params)] := P;
-  AppendTo(S.Used, LowerCase(P.Name));
+  AddText(S.Used, LowerCase(P.Name));
   if IsIdentChar(OutLast(S)) then
     EmitText(S, ' ');
   EmitText(S, ':' + P.Name);
@@ -1696,7 +1690,7 @@ end;
 procedure FlushStrBuf(var S: TSqlScan);
 begin
   if S.StrBuf <> '' then
-    AppendTo(S.StrParts, SplitLongLiteral(
+    AddText(S.StrParts, SplitLongLiteral(
       TRdxRecipes.EncodeLiteral(S.StrBuf)));
   S.StrBuf := '';
 end;
@@ -1832,7 +1826,7 @@ begin
     Inc(Result);
   Nm := LowerCase(Copy(T, i + 1, Result - i - 1));
   if not (((Nm = 'new') or (Nm = 'old')) and (CharAt(T, Result) = '.')) then
-    AppendTo(S.Found, Nm);
+    AddText(S.Found, Nm);
   EmitText(S, Copy(T, i, Result - i));
   PushTok(S, 'v');
 end;
@@ -1849,7 +1843,7 @@ begin
   EmitText(S, Op);
   if Op = '(' then
   begin
-    AppendTo(S.Openers, S.Tok[0]);
+    AddText(S.Openers, S.Tok[0]);
     PushTok(S, Op);
   end
   else if Op = ')' then
@@ -1922,7 +1916,7 @@ begin
   j := i + 1;
   while IsIdentChar(CharAt(T, j)) do
     Inc(j);
-  AppendTo(S.Found, LowerCase(Copy(T, i + 1, j - i - 1)));
+  AddText(S.Found, LowerCase(Copy(T, i + 1, j - i - 1)));
 end;
 
 // Name, Zeilen- oder Block-Kommentar: Zeichen uebernehmen bis zum Ende.
@@ -1990,7 +1984,7 @@ begin
     Exit(UnwrapValue(S.Segs[AFirst].Text));
   Items := nil;
   for k := AFirst to ALast do
-    AppendTo(Items, S.Segs[k].Text);
+    AddText(Items, S.Segs[k].Text);
   Result := JoinWith(Items, ' + ');
 end;
 
@@ -2051,7 +2045,7 @@ begin
     if S.StrFirst = '' then
       S.StrFirst := Value;
   end;
-  AppendTo(S.StrParts, Value);
+  AddText(S.StrParts, Value);
   EmitExpr(S, ASeg.Text, #0);
 end;
 
@@ -2096,7 +2090,7 @@ begin
   if S.Mode = lmString then
   begin
     FlushStrBuf(S);
-    AppendTo(S.StrParts, Seg.Expr);
+    AddText(S.StrParts, Seg.Expr);
   end;
   EmitExpr(S, Seg.Expr, Seg.Text[Length(Seg.Text)]);
   ReadMuted(S, ASeg);
@@ -2159,9 +2153,9 @@ begin
   Items := nil;
   for i := 0 to High(APieces) do
     if APieces[i].IsExpr then
-      AppendTo(Items, APieces[i].Text)
+      AddText(Items, APieces[i].Text)
     else if APieces[i].Text <> '' then
-      AppendTo(Items, SplitLongLiteral(
+      AddText(Items, SplitLongLiteral(
         TRdxRecipes.EncodeLiteral(APieces[i].Text)));
   if Length(Items) = 0 then
     Result := ''''''
@@ -2195,7 +2189,7 @@ var
 begin
   Items := nil;
   for i := 0 to High(AParams) do
-    AppendTo(Items, AParams[i].Value);
+    AddText(Items, AParams[i].Value);
   Result := JoinWith(Items, ', ');
 end;
 
@@ -2273,7 +2267,7 @@ begin
   Existing := SqlPlaceholders(PlainSqlOf(S.Segs));
   S.Used := Copy(Existing, 0, Length(Existing));
   for Name in AReq.ChainNames do
-    AppendTo(S.Used, LowerCase(Name));
+    AddText(S.Used, LowerCase(Name));
   ScanSegs(S);
   AResult.Reason := S.Reason;
   if (AResult.Reason = '') and (S.QMarks > 0) then
@@ -2328,12 +2322,12 @@ begin
   Result := T.Low;
   if not T.IsWord then Exit;
   Parts := nil;
-  AppendTo(Parts, T.Low);
+  AddText(Parts, T.Low);
   D := After(AMap, T);
   while (D.Low = '.') and After(AMap, D).IsWord do
   begin
     T := After(AMap, D);
-    AppendTo(Parts, T.Low);
+    AddText(Parts, T.Low);
     D := After(AMap, T);
   end;
   Result := JoinWith(Parts, '.');
@@ -2404,10 +2398,10 @@ begin
   if ALine1 = ALine2 then
     Exit(Copy(AMap.Raw(ALine1), ACol1, ACol2 - ACol1));
   Lines := nil;
-  AppendTo(Lines, Copy(AMap.Raw(ALine1), ACol1, MaxInt));
+  AddText(Lines, Copy(AMap.Raw(ALine1), ACol1, MaxInt));
   for L := ALine1 + 1 to ALine2 - 1 do
-    AppendTo(Lines, AMap.Raw(L));
-  AppendTo(Lines, Copy(AMap.Raw(ALine2), 1, ACol2 - 1));
+    AddText(Lines, AMap.Raw(L));
+  AddText(Lines, Copy(AMap.Raw(ALine2), 1, ACol2 - 1));
   Result := JoinWith(Lines, sLineBreak);
 end;
 
@@ -3001,7 +2995,7 @@ begin
       Exit;
     if ((Scope <> cvUnit) or not Shadowed)
        and VisibleAt(AScopes, ADecls[i], ALine) then
-      AppendTo(AValues, ADecls[i].Text);
+      AddText(AValues, ADecls[i].Text);
   end;
   Result := True;
 end;
@@ -3319,7 +3313,7 @@ begin
     begin
       Step := ChainStepOn(AMap, L, Cols[k], AChain.Key, Text);
       if Step in [chFragment, chFragmentStop] then
-        AppendTo(AChain.Frags, Text);
+        AddText(AChain.Frags, Text);
       if Step in [chFragmentStop, chStop] then
         Exit;
     end;
@@ -3350,7 +3344,7 @@ begin
         Exit;
       Found := SqlPlaceholders(Text);
       for Name in Found do
-        AppendTo(AChain.Names, Name);
+        AddText(AChain.Names, Name);
     end;
     Inc(L);
   end;
@@ -3384,7 +3378,7 @@ begin
       SB.Append(#13#10);
       Found := SqlPlaceholders(AChain.Frags[i]);
       for Name in Found do
-        AppendTo(AChain.Names, Name);
+        AddText(AChain.Names, Name);
     end;
     APrefix := SB.ToString;
   finally

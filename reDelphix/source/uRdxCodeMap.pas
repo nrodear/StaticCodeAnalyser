@@ -265,7 +265,8 @@ function TokText(AMap: TRdxCodeMap; const T: TRdxToken): string;
 procedure AddToken(var AList: TArray<TRdxToken>; const T: TRdxToken);
 // Haengt S an AList an. Bis Charge B2S-b in uRdxRoutineFixes - seitdem
 // brauchen es dort die Planer SCA164/SCA147 und uRdxBlocks die Bausteine
-// (Review R6-12).
+// (Review R6-12); seit der Nachpruefung B2S auch uRdxRecipes und
+// uRdxSqlTemplate (bis dahin je eine Kopie AppendTo).
 procedure AddText(var AList: TArray<string>; const S: string);
 // Steht T als erstes auf seiner Zeile - davor nur Leerraum? Ob die Zeile
 // in einem Kommentar oder mehrzeiligen String beginnt, prueft der
