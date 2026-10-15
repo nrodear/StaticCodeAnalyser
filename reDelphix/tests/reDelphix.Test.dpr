@@ -16,6 +16,8 @@ program reDelphix.Test;
 //   * uTestRdxSuppress - Unterdrueck-Marker setzen und entfernen
 //   * uTestRdxSuppressTargets - Ziele eines Markers wie im Core (Review
 //                        R1-01/R1-03): Entfernen und Setzen ueber Kommentarzeilen
+//   * uTestRdxSuppressCore - dieselben Hilfen gegen den ECHTEN Core
+//                        (TSuppression): Drift-Waechter (Pruefer B1-FA)
 //   * uTestRdxSimpleFixes - Editorhilfen SCA074/SCA075/SCA085/SCA087/
 //                        SCA139 auf Text, ohne Parser
 //   * uTestRdxStructFixes - Editorhilfen SCA007/SCA168 (uses-Eintrag,
@@ -159,6 +161,7 @@ uses
   uTestRdxBufferMath in 'uTestRdxBufferMath.pas',
   uTestRdxSuppress in 'uTestRdxSuppress.pas',
   uTestRdxSuppressTargets in 'uTestRdxSuppressTargets.pas',
+  uTestRdxSuppressCore in 'uTestRdxSuppressCore.pas',
   uTestRdxSimpleFixes in 'uTestRdxSimpleFixes.pas',
   uTestRdxExprFixes in 'uTestRdxExprFixes.pas',
   uTestRdxStructFixes in 'uTestRdxStructFixes.pas',

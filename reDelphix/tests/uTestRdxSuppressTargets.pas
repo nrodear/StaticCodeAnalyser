@@ -13,6 +13,12 @@ unit uTestRdxSuppressTargets;
 //     zwischen einen Marker und sein Kommentar-Ziel (Leerzeile dazwischen)
 //     - dessen Art kam zurueck. Jetzt wird der Marker darueber erweitert,
 //     ein nicht erweiterbarer sperrt.
+//   * Nachbesserung (Pruefer, new_issue 1): beides nur, wenn eine Art des
+//     Markers auf einer Kommentarzeile gemeldet werden kann (TodoComment,
+//     CommentedOutCode, TooLongLine ...). '// noinspection
+//     ExceptionTooGeneral' mit Warum-Kommentar darunter - die Form des
+//     Projekts - wirkt nur auf dem Code; die erste Fassung sperrte das
+//     Entfernen auch dort.
 // Jede Ersetzung laeuft durch PlanByteEdits und ApplyByteEdits (CRLF wie im
 // Editor).
 
@@ -30,15 +36,20 @@ type
     [Test] procedure RemoveMarker_CommentTargetAcrossBlank_Refused;
     [Test] procedure RemoveMarker_BraceCommentTarget_Offered;
     [Test] procedure RemoveMarker_TrailingMarkerCommentTarget_Refused;
-    [Test] procedure RemoveMarker_Stacked_UpperRefusedLowerOffered;
+    [Test] procedure RemoveMarker_Stacked_LineKindUpperRefused;
     [Test] procedure RemoveMarker_FileMarkerAboveComment_Offered;
     [Test] procedure RemoveMarker_LineMarkerAtEnd_Offered;
     [Test] procedure RoundTrip_TodoLine_NoPingPong;
+    // Nachbesserung: nur Arten, die auf einer Kommentarzeile gemeldet werden
+    [Test] procedure RemoveMarker_CodeKindWithWarumComment_Offered;
+    [Test] procedure RemoveMarker_Stacked_CodeKindUpperOffered;
+    [Test] procedure RemoveMarker_KindBehindReason_CountsLikeCore;
     // R1-03: LineMarker auf einer Kommentarzeile
     [Test] procedure LineMarker_CommentLine_ExtendsAcrossBlank;
     [Test] procedure LineMarker_CommentLine_KindListedAcrossBlank;
     [Test] procedure LineMarker_CommentLine_AllMarkerAbove_Refused;
     [Test] procedure LineMarker_CommentLine_TrailingMarkerAbove_Refused;
+    [Test] procedure LineMarker_CommentLine_TrailingCodeKindAbove_Inserts;
     [Test] procedure LineMarker_CommentLine_PlainCommentAbove_Inserts;
     [Test] procedure LineMarker_CommentLine_FileMarkerAbove_Inserts;
     [Test] procedure LineMarker_CommentLine_MarkerInBlockComment_Inserts;
@@ -200,18 +211,50 @@ begin
     '  X := 2;']), 7, 'Kommentarzeile 8');
 end;
 
-procedure TTestRdxSuppressTargets.RemoveMarker_Stacked_UpperRefusedLowerOffered;
+procedure TTestRdxSuppressTargets.RemoveMarker_Stacked_LineKindUpperRefused;
 var
   S : string;
 begin
   // Dem oberen Marker ist die Markerzeile darunter die naechste nicht-leere
-  // Zeile - eine Kommentarzeile; lieber ablehnen. Der untere zielt allein
-  // auf den Code.
-  S := Src(['  // noinspection MemoryLeak', '  // noinspection FormatMismatch',
+  // Zeile - eine Kommentarzeile, und TooLongLine wird auf jeder Zeile
+  // gemeldet, auch auf einem langen Marker: lieber ablehnen. Der untere
+  // zielt allein auf den Code.
+  S := Src(['  // noinspection TooLongLine', '  // noinspection FormatMismatch',
     '  L := TStringList.Create;']);
   ExpectRemoveRefused(S, 7, 'Kommentarzeile 8');
-  ExpectRemoved(S, 8, Src(['  // noinspection MemoryLeak',
+  ExpectRemoved(S, 8, Src(['  // noinspection TooLongLine',
     '  L := TStringList.Create;']));
+end;
+
+procedure TTestRdxSuppressTargets.RemoveMarker_CodeKindWithWarumComment_Offered;
+begin
+  // Pruefer new_issue 1: die Form des Projekts - Marker, Warum-Kommentar,
+  // Code. ExceptionTooGeneral wird nie auf einer Kommentarzeile gemeldet,
+  // der Marker wirkt nur auf dem Code; meldet der Core ihn (SCA165), ist er
+  // wirklich wirkungslos. Die erste Fassung von R1-01 sperrte hier.
+  ExpectRemoved(Src(['  // noinspection ExceptionTooGeneral',
+    '  // Aktionsgrenze: jeder Fehler geht als Meldung an den Aufrufer',
+    '  X := 2;']), 7,
+    Src(['  // Aktionsgrenze: jeder Fehler geht als Meldung an den Aufrufer',
+    '  X := 2;']));
+end;
+
+procedure TTestRdxSuppressTargets.RemoveMarker_Stacked_CodeKindUpperOffered;
+begin
+  // Gestapelt mit einer Code-Art: auf der Markerzeile darunter kann
+  // MemoryLeak nicht stehen - der obere Marker zielt nur auf den Code.
+  ExpectRemoved(Src(['  // noinspection MemoryLeak',
+    '  // noinspection FormatMismatch', '  L := TStringList.Create;']), 7,
+    Src(['  // noinspection FormatMismatch', '  L := TStringList.Create;']));
+end;
+
+procedure TTestRdxSuppressTargets.RemoveMarker_KindBehindReason_CountsLikeCore;
+begin
+  // Der Core liest JEDES Wort der Liste als Art (ParseCommentText), auch
+  // hinter einem Grund: der Marker gilt dort auch TodoComment - und die
+  // TODO-Zeile darunter ist sein Kommentar-Ziel.
+  ExpectRemoveRefused(Src(['  // noinspection ExceptionTooGeneral - TodoComment',
+    TODO_LINE, '  X := 2;']), 7, 'Kommentarzeile 8');
 end;
 
 procedure TTestRdxSuppressTargets.RemoveMarker_FileMarkerAboveComment_Offered;
@@ -272,6 +315,17 @@ procedure TTestRdxSuppressTargets.LineMarker_CommentLine_TrailingMarkerAbove_Ref
 begin
   ExpectLineRefused(Src(['  X := 1; // noinspection TodoComment', '',
     '  // TODO: X := 1;', '  X := 2;']), 9, 'CommentedOutCode', 'Zeile 7');
+end;
+
+procedure TTestRdxSuppressTargets.LineMarker_CommentLine_TrailingCodeKindAbove_Inserts;
+begin
+  // Ein Marker hinter Code mit einer Code-Art verliert nichts, wenn eine
+  // Zeile zwischen ihn und die Kommentarzeile kommt - ExceptionTooGeneral
+  // stand dort nie. Wie vor R1-03 eine eigene Zeile.
+  Assert.AreEqual(Src(['  X := 1; // noinspection ExceptionTooGeneral', '',
+    '  // noinspection CommentedOutCode', '  // TODO: X := 1;', '  X := 2;']),
+    LineMarked(Src(['  X := 1; // noinspection ExceptionTooGeneral', '',
+    '  // TODO: X := 1;', '  X := 2;']), 9, 'CommentedOutCode'));
 end;
 
 procedure TTestRdxSuppressTargets.LineMarker_CommentLine_PlainCommentAbove_Inserts;

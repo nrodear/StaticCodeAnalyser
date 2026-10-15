@@ -2161,7 +2161,7 @@ uses Winapi.Windows, System.Classes, Foo;
 **Nicht angeboten**
 
 - ausgegraut: der Marker nennt mehr als eine Art oder lautet `All` – SCA165 kommt auch, wenn nur die Arten des aktiven Scan-Profils nichts unterdrückt haben
-- ausgegraut: die nächste nicht-leere Zeile hinter dem Marker ist eine `//`-Kommentarzeile vor dem Code (etwa ein TODO, bei gestapelten Markern die Markerzeile darunter) – SCA165 prüft nur die Code-Zeile, auf der Kommentarzeile wirkt der Marker vielleicht doch
+- ausgegraut: die nächste nicht-leere Zeile hinter dem Marker ist eine `//`-Kommentarzeile vor dem Code (etwa ein TODO, bei gestapelten Markern die Markerzeile darunter), und seine Art kann auf einer Kommentarzeile gemeldet werden (TodoComment, CommentedOutCode, NoSonarMarker, TabulationCharacter, TooLongLine, TrailingWhitespace, CustomRule, SCA185–SCA193, UnusedSuppression) – SCA165 prüft nur die Code-Zeile, auf der Kommentarzeile wirkt der Marker vielleicht doch; ein Marker einer Code-Art mit Warum-Kommentar darunter wird entfernt
 - der Marker liegt in einem Blockkommentar
 - ein `; noinspection`-Marker einer Konfigurationsdatei (.ini) – reDelphix liest nur Pascal-Quelltext
 
@@ -2215,7 +2215,7 @@ Nachher:
 
 - die Fundzeile liegt in einem Blockkommentar oder mehrzeiligen String
 - die Art steht schon im Marker
-- „Hier“ auf einer `//`-Kommentarzeile, die ein Marker trägt, der sich nicht erweitern lässt (`All`, Marker hinter Code)
+- „Hier“ auf einer `//`-Kommentarzeile, die ein Marker trägt, der sich nicht erweitern lässt (`All`, Marker hinter Code) und eine Art nennt, die auf Kommentarzeilen gemeldet wird
 - SCA165 selbst – einen wirkungslosen Marker entfernt „Wirkungslosen Unterdrück-Marker entfernen“
 - Funde außerhalb von Pascal-Quelltext (.dfm, Konfiguration) – dort setzt das Plugin den Marker selbst (Strg+Alt+S)
 
