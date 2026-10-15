@@ -109,6 +109,8 @@ program reDelphix.Test;
 //   * uTestRdxText     - die Sprache der reDelphix-Texte (uRdxText,
 //                        Entscheid E29): Override, redelphix.ini (Vorlage,
 //                        auto/fest), Sprache der SCA, analyser.ini
+//   * uTestRdxTextMsgs - die gemeinsamen Texte aus uRdxText (Charge C1):
+//                        je Funktion en/de/fr, de = bisheriger Wortlaut
 //
 // SPRACHE: der Hauptblock setzt die reDelphix-Texte fuer ALLE Tests auf
 // Deutsch (SetRdxLanguageOverride('de'), wie der FPC-Pruefstand) - die
@@ -219,6 +221,7 @@ uses
   uTestRdxIntroGuards in 'uTestRdxIntroGuards.pas',
   uTestRdxIntroEdits in 'uTestRdxIntroEdits.pas',
   uTestRdxIntroContext in 'uTestRdxIntroContext.pas',
+  uTestRdxTextMsgs in 'uTestRdxTextMsgs.pas',
   uTestRdxText in 'uTestRdxText.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }

@@ -176,6 +176,7 @@
         <DCCReference Include="uTestRdxIntroEdits.pas"/>
         <DCCReference Include="uTestRdxIntroContext.pas"/>
         <DCCReference Include="uTestRdxText.pas"/>
+        <DCCReference Include="uTestRdxTextMsgs.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

@@ -62,6 +62,22 @@ unit uRdxText;
 //
 // Threadsicher: Override, Verzeichnis und ini-Cache liegen hinter GLock;
 // TranslateTo laeuft ausserhalb (eigene Sperre in uLocalization).
+//
+// GEMEINSAME TEXTE (Charge C1, Msg...)
+//
+// Gruende und Hinweise, die mehr als eine Unit braucht, haben hier EINE
+// msgid und eine Funktion. Legten zwei Units dieselbe msgid selbst an,
+// stuende sie in de.po/fr.po doppelt (die erste gewinnt, msgfmt meldet
+// einen Fehler); schrieben sie zwei englische Saetze fuer denselben
+// deutschen, liefen die Uebersetzungen auseinander. Jede msgid ist ein
+// GANZER englischer Satz, variable Teile sind Format-Platzhalter - so
+// stellt de/fr die Wortstellung selbst. Ein Argument AReason ist ein schon
+// uebersetzter ganzer Satz; ACode, AKeyword, APrevToken und AName sind
+// Quelltext und bleiben, wie sie sind. Die deutsche Fassung ist der
+// bisherige Wortlaut der Planer, mit echten Umlauten (uTestRdxTextMsgs
+// pinnt ihn in de, en und fr). Wann welche Funktion gilt und wie ein
+// zusammengesetzter Grund entsteht: reDelphix/README.md, Abschnitt
+// "Texte umstellen".
 
 interface
 
@@ -117,6 +133,83 @@ function IniTextValue(const AText, ASection, AKey: string): string;
 function ResolveRdxLanguage(const ARdxValue, AScaLanguage,
   AAnalyserValue: string): string;
 
+{ ---- Gemeinsame Texte (Charge C1, siehe Kopf) ---- }
+
+// 'line moved? Analyse the file again' - die gemeldete Zeile traegt nicht
+// mehr, was der Fund nennt. Allein als Grund oder als %s im eigenen Satz,
+// wenn ein anderer Trenner als ' - ' davor steht; sonst MsgMovedSuffix.
+function MsgLineMoved: string;
+
+// '<AReason> - line moved? Analyse the file again' - der haeufigste
+// zusammengesetzte Grund ('... - Zeile verschoben? Datei neu pruefen').
+function MsgMovedSuffix(const AReason: string): string;
+
+// '<AReason> - finding outdated? Analyse the file again' (deutsch '... -
+// Fund veraltet? Datei neu pruefen'): der Code widerspricht dem Fund - er
+// traegt schon, was die Hilfe einsetzen wuerde, oder benutzt, was der Fund
+// ungenutzt nennt.
+function MsgStaleSuffix(const AReason: string): string;
+
+// 'the message has no column' - die Meldung nennt keine Spalte, die
+// Hilfe braucht eine.
+function MsgNoColumn: string;
+
+// 'end of the statement not found'.
+function MsgStatementEndNotFound: string;
+
+// 'no valid range' - ein Bereich ohne gueltige Grenzen bzw. ohne
+// erwarteten Text (Editor und Byte-Rechnung).
+function MsgNoValidRange: string;
+
+// 'end of the header not found' - das ';' hinter einem Routinenkopf fehlt.
+function MsgHeaderEndNotFound: string;
+
+// 'the line starts inside a comment or string' - der Zeilenanfang liegt in
+// einem mehrzeiligen Kommentar bzw. String.
+function MsgLineStartsInCommentOrString: string;
+
+// 'no file open' - keine Quelle zum Fund (Laeufer, Tabelle).
+function MsgNoFileOpen: string;
+
+// 'by hand' - Schluss eines Grundes: das bleibt Handarbeit. Kein eigener
+// Satz: steht als %s im Satz der Unit, die den Trenner davor ('; ',
+// ' - ', ', ') selbst traegt.
+function MsgByHand: string;
+
+// 'check by hand' - wie MsgByHand ('von Hand pruefen').
+function MsgCheckByHand: string;
+
+// 'delete by hand' - wie MsgByHand ('von Hand loeschen').
+function MsgDeleteByHand: string;
+
+// 'decide by hand' - wie MsgByHand ('von Hand entscheiden').
+function MsgDecideByHand: string;
+
+// 'only statement after <AKeyword> - an empty block would remain (SCA077)';
+// AKeyword ist das Wort davor (begin, try, repeat ...).
+function MsgOnlyStatementEmptyBlock(const AKeyword: string): string;
+
+// 'unclear what the statement belongs to ("<APrevToken>" before it)' -
+// das Token vor der Anweisung passt zu keiner Anweisungsliste.
+function MsgUnclearStatementOwner(const APrevToken: string): string;
+
+// 'literal not readable: <ACode>' - ACode ist der Quelltext des Literals
+// (vom Aufrufer gekuerzt bzw. zusammengezogen).
+function MsgLiteralUnreadable(const ACode: string): string;
+
+// 'no operand in the chain' - eine Verkettung ohne Operanden (nur
+// Literale). Wer auf diesen Grund verzweigt, prueft vor der Uebersetzung
+// (eine Kennung), nie auf den Text.
+function MsgNoOperandInChain: string;
+
+// '<ACount> declarations of <AName> in classes of this name - overload?' -
+// welche Deklaration zur Implementierung gehoert, bleibt offen.
+function MsgDeclsInClassesOfName(ACount: Integer; const AName: string): string;
+
+// '<ACode> is no longer at the reported place' - ACode ist das Code-Stueck
+// des Funds ('Assert(', 'class(TObject)', 'X.Free;'), kein Satzteil.
+function MsgNoLongerAtReportedPlace(const ACode: string): string;
+
 implementation
 
 uses
@@ -140,6 +233,32 @@ const
   // 30 KB, redelphix.ini zwei.
   MAX_INI_BYTES     = 1024 * 1024;
   UTF8_BOM: array[0..2] of Byte = ($EF, $BB, $BF);
+
+  // Die msgids der gemeinsamen Texte (Charge C1). Uebersetzt wird mit
+  // _(KONSTANTE) HIER: tools/i18n_extract.py loest nur Konstanten derselben
+  // Unit auf - ein _(MSG_X) in einer anderen Unit fehlte in template.pot.
+  MSG_LINE_MOVED     = 'line moved? Analyse the file again';
+  MSG_MOVED_SUFFIX   = '%s - line moved? Analyse the file again';
+  MSG_STALE_SUFFIX   = '%s - finding outdated? Analyse the file again';
+  MSG_NO_COLUMN      = 'the message has no column';
+  MSG_STMT_END       = 'end of the statement not found';
+  MSG_NO_RANGE       = 'no valid range';
+  MSG_HEADER_END     = 'end of the header not found';
+  MSG_STARTS_INSIDE  = 'the line starts inside a comment or string';
+  MSG_NO_FILE        = 'no file open';
+  MSG_BY_HAND        = 'by hand';
+  MSG_CHECK_BY_HAND  = 'check by hand';
+  MSG_DELETE_BY_HAND = 'delete by hand';
+  MSG_DECIDE_BY_HAND = 'decide by hand';
+  MSG_EMPTY_BLOCK    = 'only statement after %s - an empty block would '
+    + 'remain (SCA077)';
+  MSG_UNCLEAR_OWNER  = 'unclear what the statement belongs to ("%s" before '
+    + 'it)';
+  MSG_LITERAL        = 'literal not readable: %s';
+  MSG_NO_OPERAND     = 'no operand in the chain';
+  MSG_DECLS_IN_CLASS = '%d declarations of %s in classes of this name - '
+    + 'overload?';
+  MSG_NOT_AT_PLACE   = '%s is no longer at the reported place';
 
   // Die Vorlage - Aufbau und Ton wie DEFAULT_INI_CONTENT in uRepoSettings
   // (englisch, je Option ein Erklaerblock, die Vorgabe aktiv, Beispiele
@@ -583,6 +702,103 @@ end;
 function RdxIniTemplate: string;
 begin
   Result := RDX_INI_TEMPLATE;
+end;
+
+{ ---- Gemeinsame Texte ---- }
+
+function MsgLineMoved: string;
+begin
+  Result := _(MSG_LINE_MOVED);
+end;
+
+function MsgMovedSuffix(const AReason: string): string;
+begin
+  Result := _(MSG_MOVED_SUFFIX, [AReason]);
+end;
+
+function MsgStaleSuffix(const AReason: string): string;
+begin
+  Result := _(MSG_STALE_SUFFIX, [AReason]);
+end;
+
+function MsgNoColumn: string;
+begin
+  Result := _(MSG_NO_COLUMN);
+end;
+
+function MsgStatementEndNotFound: string;
+begin
+  Result := _(MSG_STMT_END);
+end;
+
+function MsgNoValidRange: string;
+begin
+  Result := _(MSG_NO_RANGE);
+end;
+
+function MsgHeaderEndNotFound: string;
+begin
+  Result := _(MSG_HEADER_END);
+end;
+
+function MsgLineStartsInCommentOrString: string;
+begin
+  Result := _(MSG_STARTS_INSIDE);
+end;
+
+function MsgNoFileOpen: string;
+begin
+  Result := _(MSG_NO_FILE);
+end;
+
+function MsgByHand: string;
+begin
+  Result := _(MSG_BY_HAND);
+end;
+
+function MsgCheckByHand: string;
+begin
+  Result := _(MSG_CHECK_BY_HAND);
+end;
+
+function MsgDeleteByHand: string;
+begin
+  Result := _(MSG_DELETE_BY_HAND);
+end;
+
+function MsgDecideByHand: string;
+begin
+  Result := _(MSG_DECIDE_BY_HAND);
+end;
+
+function MsgOnlyStatementEmptyBlock(const AKeyword: string): string;
+begin
+  Result := _(MSG_EMPTY_BLOCK, [AKeyword]);
+end;
+
+function MsgUnclearStatementOwner(const APrevToken: string): string;
+begin
+  Result := _(MSG_UNCLEAR_OWNER, [APrevToken]);
+end;
+
+function MsgLiteralUnreadable(const ACode: string): string;
+begin
+  Result := _(MSG_LITERAL, [ACode]);
+end;
+
+function MsgNoOperandInChain: string;
+begin
+  Result := _(MSG_NO_OPERAND);
+end;
+
+function MsgDeclsInClassesOfName(ACount: Integer; const AName: string): string;
+begin
+  Result := _(MSG_DECLS_IN_CLASS, [ACount, AName]);
+end;
+
+function MsgNoLongerAtReportedPlace(const ACode: string): string;
+begin
+  Result := _(MSG_NOT_AT_PLACE, [ACode]);
 end;
 
 initialization
