@@ -14,9 +14,11 @@ unit uRdxFixRunner;
 // OHNE ToolsAPI, in reDelphix.Test uebersetzbar; nicht im FPC-Pruefstand
 // - wie uRdxRecipeRunner und uRdxFixTable braucht die Unit den
 // Quellstellen-Dienst des Cores (TSourcePlaces), TFindingKind und
-// uUnusedUses. Den Ergebnistyp TRdxFixOutcome, R_NO_FILE und die
-// uses-Fragen (PlanUses, ClausesOf, UsesKeywordLine, UsesDirectiveLine,
-// SourceLooksFpcAware) liefert uRdxRecipeRunner.
+// uUnusedUses. Den Ergebnistyp TRdxFixOutcome (samt TRdxEdit), R_NO_FILE
+// und die uses-Fragen (PlanUses, ClausesOf, UsesKeywordLine,
+// UsesDirectiveLine, SourceLooksFpcAware) liefert uRdxRecipeRunner; die
+// Version des Quellstellen-Vertrags prueft die Unit selbst (s.
+// implementation).
 
 interface
 
@@ -24,10 +26,12 @@ uses
   System.Classes,    // TStrings
   uEngineApi,        // TSourcePlaces
   uSCAConsts,        // TFindingKind (OperandFix, BlockFix)
-  uRdxBufferMath,    // TRdxEdit (TRdxMapPlanner)
   uRdxCodeMap,       // TRdxCodeMap (TRdxMapPlanner, CondAssignReason ...)
   uRdxFlowFixes,     // TRdxFlowPlan (CondAssignReason)
-  uRdxRecipeRunner;  // TRdxFixOutcome
+  // TRdxFixOutcome; TRdxEdit (TRdxMapPlanner) als Alias auf
+  // uRdxBufferMath.TRdxEdit - derselbe Typ, darum steht uRdxBufferMath
+  // nicht in den uses (Gegenpruefung V-B2S-4).
+  uRdxRecipeRunner;
 
 type
   // Editorhilfen seit Stufe 2a: die Ruempfe der Hilfen, deren Planer den
@@ -181,7 +185,21 @@ uses
   uRdxRaiseFixes,    // Planer SCA020 mit raise (EmptyRaiseFix)
   uRdxRtlTypes,      // IsRtlClassOrInterface: Klasse 'PDFDocument' ist kein Zeiger
   uUnusedUses,       // KnownIdents: SCA007-Fund am Puffer nachpruefen
-  uSourcePlaces;     // TNodeRef, TNodeKind (wie bis Charge B2S-b in uRdxRecipeRunner)
+  uSourcePlaces;     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
+
+// Diese Ruempfe sind gegen Version 1 des Quellstellen-Vertrags geschrieben
+// (uSourcePlaces, Abschnitt VERTRAGSVERSION): ihre Typ- und with-Beweise
+// fragen DeclaredTypeOf, InWithBlock und NodesAt (SCA085/SCA139, SCA126,
+// SCA066, SCA072/SCA084, SCA074, SCA123, SCA098, SCA047) - seit Charge
+// B2S-b stehen die meisten Typ- und with-Fragen an den Vertrag hier.
+// Steigt die Version, bricht der Bau hier ab und nennt diese Unit;
+// uRdxRecipeRunner prueft dasselbe fuer den Rezept-Laeufer (bis zur
+// Gegenpruefung V-B2S-5 stand die Pruefung nur dort und nannte nur ihn).
+// Eine zur Laufzeit getauschte BPL erkennt das nicht - das leistet die
+// Paketbindung.
+{$IF SOURCE_PLACES_VERSION <> 1}
+  {$MESSAGE ERROR 'reDelphix: SOURCE_PLACES_VERSION hat sich geaendert - Vertrag in uSourcePlaces (VERTRAGSVERSION) pruefen, uRdxFixRunner anpassen'}
+{$IFEND}
 
 const
   R_NIL_TYPE_UNKNOWN = 'Typ von %s unbekannt - bei einem Funktions- oder '

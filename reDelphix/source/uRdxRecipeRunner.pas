@@ -368,7 +368,10 @@ uses
 // der Bau hier ab, statt still gegen geaenderte Signaturen, Rollen,
 // Koordinaten oder eine schwaechere Typableitung zu laufen. Eine zur
 // Laufzeit getauschte BPL erkennt das nicht - das leistet die Paket-
-// bindung (Review reDelphiX 2026-10-07, Nit 27).
+// bindung (Review reDelphiX 2026-10-07, Nit 27). Die Ruempfe der
+// einfachen Hilfen (seit Charge B2S-b in uRdxFixRunner, dort die meisten
+// Typ- und with-Fragen an den Vertrag) pruefen dasselbe in ihrer Unit,
+// mit deren Namen in der Meldung (Gegenpruefung V-B2S-5).
 {$IF SOURCE_PLACES_VERSION <> 1}
   {$MESSAGE ERROR 'reDelphix: SOURCE_PLACES_VERSION hat sich geaendert - Vertrag in uSourcePlaces (VERTRAGSVERSION) pruefen, uRdxRecipeRunner anpassen'}
 {$IFEND}
