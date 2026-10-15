@@ -839,7 +839,7 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   Pruefstand kopiert und passt sie bei jedem Lauf mit an (kein
   Aufrufargument; die Registrierungspruefung trifft sie nicht, sie hat
   keine Fixture). Varianten mit anderem Vertrag bleiben unter eigenem Namen
-  in ihrer Testunit (`LineAt`, `LineOfOrFail`, `WriteUtf8`, `Joined`;
+  in ihrer Testunit (`LineAt`, `LineOfOrFail`, `WriteUtf8`;
   `JoinLines`/`Buf` der Intro-Tests verketten selbst, denn `TStringBuilder`
   ist unter FPC ein AnsiString-Bauer und `Join` dort nicht verlustfrei) -
   die Liste steht im Kopf der Unit.

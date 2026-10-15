@@ -45,7 +45,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRefactorInfo, uRdxRecipes;
+  uRefactorInfo, uRdxRecipes,
+  uTestRdxTextKit;     // JoinWith (Joined)
 
 const
   // Elemente eines String-Literals bis Delphi 11 (E2056).
@@ -120,20 +121,12 @@ begin
   AddDecoded(Result, Copy(AExpr, Start, MaxInt));
 end;
 
-// Die Werte aneinander (TStringBuilder wie Words: nur ASCII).
+// Die Werte aneinander, ohne Trenner - JoinWith der Hilfs-Unit (Review
+// R6-08: bis dahin eine Kopie derselben Schleife; wie Words nur ASCII
+// unter FPC).
 function Joined(const AValues: TArray<string>): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
 begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(AValues) do
-      SB.Append(AValues[i]);
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
+  Result := JoinWith('', AValues);
 end;
 
 // Der Formatstring aus 'Format(<Fmt>, [<AArgs>])'.

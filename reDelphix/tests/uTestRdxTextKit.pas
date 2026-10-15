@@ -29,7 +29,6 @@ unit uTestRdxTextKit;
 //   * uTestRdxIntroEdits.JoinLines und uTestRdxIntroContext.Buf (je mit
 //     JoinFrom) - sie verketten selbst und bleiben so auch unter FPC
 //     verlustfrei (Join nicht, s. dort);
-//   * uTestRdxFormatGuards.Joined - Verkettung ohne Trenner;
 //   * uTestRdxSca044.WriteTemp - Name aus Uhrzeit und Zufall;
 //   * uTestRdxMagicFixDetector.DeepDir/RemoveDeepDir - raeumt nur die drei
 //     leeren Ebenen ab, die Dateien loescht der Test;
