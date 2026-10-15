@@ -2515,3 +2515,89 @@ msgstr "kein Kopf %s"
 
 msgid "%d headers %s"
 msgstr "%d Köpfe %s"
+
+# reDelphix G4 (uRdxCleanupFixes, uRdxFlowFixes)
+
+msgid "only statement after %s - an empty branch would remain"
+msgstr "einzige Anweisung hinter %s - es bliebe ein leerer Zweig stehen"
+
+msgid "only statement of a case branch or after a label"
+msgstr "einzige Anweisung eines case-Zweigs bzw. hinter einer Marke"
+
+msgid "the statement spans several lines"
+msgstr "die Anweisung geht über mehrere Zeilen"
+
+msgid "no \"if .. then %s := .. else %s := ..\" on the reported line"
+msgstr "kein \"if .. then %s := .. else %s := ..\" auf der gemeldeten Zeile"
+
+msgid "line %d carries %d such if statements - ambiguous (the message names no column)"
+msgstr "Zeile %d trägt %d solche if-Anweisungen - mehrdeutig (die Meldung nennt keine Spalte)"
+
+msgid "the expression continues after \"%s\" - not a plain if..else"
+msgstr "hinter \"%s\" geht der Ausdruck weiter - kein reines if..else"
+
+msgid "comment or directive in the statement - it would be lost"
+msgstr "Kommentar oder Direktive in der Anweisung - er ginge verloren"
+
+msgid "empty condition"
+msgstr "leere Bedingung"
+
+msgid "the if is inside an expression (conditional expression, Delphi 13) - not a statement"
+msgstr "das if steht in einem Ausdruck (bedingter Ausdruck, Delphi 13) - keine Anweisung"
+
+msgid "the message has no target or values"
+msgstr "Ziel oder Werte fehlen in der Meldung"
+
+msgid "no \"%s;\""
+msgstr "kein \"%s;\""
+
+msgid "%d jump statements"
+msgstr "%d Sprunganweisungen"
+
+msgid "jump and \";\" on different lines"
+msgstr "Sprung und \";\" auf verschiedenen Zeilen"
+
+msgid "comment on the line - it may explain the spot; %s"
+msgstr "Kommentar auf der Zeile - er erklärt die Stelle vielleicht; %s"
+
+msgid "code follows the jump - no redundant jump; %s"
+msgstr "hinter dem Sprung folgt noch Code - kein überflüssiger Sprung; %s"
+
+msgid "Exit in a loop is an early return, not a no-op"
+msgstr "Exit in einer Schleife ist eine Früh-Rückkehr, kein No-Op"
+
+msgid "jump in the finally part - Delphi (E2126) and FPC (06040) do not compile it; %s"
+msgstr "Sprung im finally-Teil - Delphi (E2126) und FPC (06040) übersetzen ihn nicht; %s"
+
+msgid "the unit declares its own routine %s - the jump may call it"
+msgstr "die Unit deklariert eine eigene Routine %s - der Sprung ruft vielleicht sie auf"
+
+msgid "%s - the jump is the only statement there"
+msgstr "%s - der Sprung ist dort die einzige Anweisung"
+
+msgid "no then branch before the else"
+msgstr "kein then-Zweig vor dem else"
+
+msgid "comment between the then branch and the jump - it would be lost"
+msgstr "Kommentar zwischen then-Zweig und Sprung - er ginge verloren"
+
+msgid "the message has no jump statement"
+msgstr "Sprunganweisung fehlt in der Meldung"
+
+msgid "no self-assignment \"%s := %s\""
+msgstr "keine Selbstzuweisung \"%s := %s\""
+
+msgid "%d self-assignments of %s"
+msgstr "%d Selbstzuweisungen von %s"
+
+msgid "Result := Result may silence a compiler message (Delphi W1035, FPC \"Function result does not seem to be set\") - removed, it would come back; decide by hand or suppress"
+msgstr "Result := Result stillt vielleicht eine Compiler-Meldung (Delphi W1035, FPC \"Function result does not seem to be set\") - entfernt käme sie zurück; von Hand entscheiden oder unterdrücken"
+
+msgid "%s is also the name of a routine of this unit - the right side may be a (recursive) call"
+msgstr "%s ist auch der Name einer Routine dieser Unit - rechts kann ein (rekursiver) Aufruf stehen"
+
+msgid "the unit declares a class operator Assign - an assignment can run code there"
+msgstr "die Unit deklariert einen class operator Assign - eine Zuweisung kann dort Code ausführen"
+
+msgid "the message has no target"
+msgstr "Ziel fehlt in der Meldung"

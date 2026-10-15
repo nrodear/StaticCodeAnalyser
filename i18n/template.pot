@@ -98,6 +98,10 @@ msgstr ""
 msgid "%d hidden by baseline"
 msgstr ""
 
+#: reDelphix/source/uRdxFlowFixes.pas:673
+msgid "%d jump statements"
+msgstr ""
+
 #: StaticCodeAnalyserIDE/uIDEFindingActionMenu.pas:92
 msgid "%d more findings on this line are not listed"
 msgstr ""
@@ -108,6 +112,10 @@ msgstr ""
 
 #: SCA.SharedUI/sources/uProfileViewer.pas:284
 msgid "%d rules, %d selected"
+msgstr ""
+
+#: reDelphix/source/uRdxFlowFixes.pas:1013
+msgid "%d self-assignments of %s"
 msgstr ""
 
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:827
@@ -130,8 +138,16 @@ msgstr ""
 msgid "%s - line moved? Analyse the file again"
 msgstr ""
 
+#: reDelphix/source/uRdxFlowFixes.pas:839
+msgid "%s - the jump is the only statement there"
+msgstr ""
+
 #: SCA.SharedUI/sources/uProfileViewer.pas:872
 msgid "%s contains no profiles."
+msgstr ""
+
+#: reDelphix/source/uRdxFlowFixes.pas:1058
+msgid "%s is also the name of a routine of this unit - the right side may be a (recursive) call"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:832
@@ -1062,6 +1078,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:3295
 msgid "Exception is constructed but never raised"
+msgstr ""
+
+#: reDelphix/source/uRdxFlowFixes.pas:816
+msgid "Exit in a loop is an early return, not a no-op"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2452
@@ -2082,6 +2102,10 @@ msgstr ""
 msgid "Reset panel + clear editor markers (main grid stays)"
 msgstr ""
 
+#: reDelphix/source/uRdxFlowFixes.pas:1054
+msgid "Result := Result may silence a compiler message (Delphi W1035, FPC \"Function result does not seem to be set\") - removed, it would come back; decide by hand or suppress"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:3330
 msgid "Result of managed type is read before it is assigned"
 msgstr ""
@@ -2755,6 +2779,23 @@ msgstr ""
 msgid "class(TObject) - TObject is the default base, drop it"
 msgstr ""
 
+#: reDelphix/source/uRdxFlowFixes.pas:814
+msgid "code follows the jump - no redundant jump; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxFlowFixes.pas:844
+msgid "comment between the then branch and the jump - it would be lost"
+msgstr ""
+
+#: reDelphix/source/uRdxFlowFixes.pas:810
+#: reDelphix/source/uRdxFlowFixes.pas:1049
+msgid "comment on the line - it may explain the spot; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxFlowFixes.pas:415
+msgid "comment or directive in the statement - it would be lost"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:802
 msgid "decide by hand"
 msgstr ""
@@ -2771,6 +2812,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:863
 msgid "editor buffer empty or not readable"
+msgstr ""
+
+#: reDelphix/source/uRdxFlowFixes.pas:417
+msgid "empty condition"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:772
@@ -2831,12 +2876,32 @@ msgstr ""
 msgid "in"
 msgstr ""
 
+#: reDelphix/source/uRdxFlowFixes.pas:675
+msgid "jump and \";\" on different lines"
+msgstr ""
+
+#: reDelphix/source/uRdxFlowFixes.pas:818
+msgid "jump in the finally part - Delphi (E2126) and FPC (06040) do not compile it; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxFlowFixes.pas:398
+msgid "line %d carries %d such if statements - ambiguous (the message names no column)"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:742
 msgid "line moved? Analyse the file again"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:817
 msgid "literal not readable: %s"
+msgstr ""
+
+#: reDelphix/source/uRdxFlowFixes.pas:671
+msgid "no \"%s;\""
+msgstr ""
+
+#: reDelphix/source/uRdxFlowFixes.pas:395
+msgid "no \"if .. then %s := .. else %s := ..\" on the reported line"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:782
@@ -2853,6 +2918,14 @@ msgstr ""
 
 #: reDelphix/source/uRdxText.pas:822
 msgid "no operand in the chain"
+msgstr ""
+
+#: reDelphix/source/uRdxFlowFixes.pas:1012
+msgid "no self-assignment \"%s := %s\""
+msgstr ""
+
+#: reDelphix/source/uRdxFlowFixes.pas:841
+msgid "no then branch before the else"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:767
@@ -2876,6 +2949,14 @@ msgstr ""
 msgid "only statement after %s - an empty block would remain (SCA077)"
 msgstr ""
 
+#: reDelphix/source/uRdxFlowFixes.pas:251
+msgid "only statement after %s - an empty branch would remain"
+msgstr ""
+
+#: reDelphix/source/uRdxFlowFixes.pas:254
+msgid "only statement of a case branch or after a label"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2562
 msgid "out parameter - prefer Result or var"
 msgstr ""
@@ -2897,6 +2978,14 @@ msgstr ""
 msgid "the clause would no longer be sorted (new SCA142)"
 msgstr ""
 
+#: reDelphix/source/uRdxFlowFixes.pas:411
+msgid "the expression continues after \"%s\" - not a plain if..else"
+msgstr ""
+
+#: reDelphix/source/uRdxFlowFixes.pas:419
+msgid "the if is inside an expression (conditional expression, Delphi 13) - not a statement"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:777
 msgid "the line starts inside a comment or string"
 msgstr ""
@@ -2905,8 +2994,32 @@ msgstr ""
 msgid "the message has no column"
 msgstr ""
 
+#: reDelphix/source/uRdxFlowFixes.pas:883
+msgid "the message has no jump statement"
+msgstr ""
+
+#: reDelphix/source/uRdxFlowFixes.pas:1091
+msgid "the message has no target"
+msgstr ""
+
+#: reDelphix/source/uRdxFlowFixes.pas:605
+msgid "the message has no target or values"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:392
 msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
+msgstr ""
+
+#: reDelphix/source/uRdxFlowFixes.pas:275
+msgid "the statement spans several lines"
+msgstr ""
+
+#: reDelphix/source/uRdxFlowFixes.pas:1061
+msgid "the unit declares a class operator Assign - an assignment can run code there"
+msgstr ""
+
+#: reDelphix/source/uRdxFlowFixes.pas:821
+msgid "the unit declares its own routine %s - the jump may call it"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:812
