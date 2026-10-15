@@ -29,7 +29,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uEngineApi, uRdxScopeTable, uRdxRecipeRunner;
+  uEngineApi, uRdxScopeTable, uRdxRecipeRunner,
+  uTestRdxTextKit;   // LineOf
 
 const
   SCOPES: array[0..4] of string = (
@@ -50,23 +51,6 @@ begin
     for S in SCOPES do
       SL.Add(S);
     Result.LoadFromStrings(SL);
-  finally
-    SL.Free;
-  end;
-end;
-
-function LineOf(const ASource, AMarker: string): Integer;
-var
-  SL : TStringList;
-  i  : Integer;
-begin
-  Result := 0;
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    for i := 0 to SL.Count - 1 do
-      if Pos(AMarker, SL[i]) > 0 then
-        Exit(i + 1);
   finally
     SL.Free;
   end;

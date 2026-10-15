@@ -61,7 +61,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxRoutineFixes;
+  uRdxCodeMap, uRdxRoutineFixes,
+  uTestRdxTextKit;   // Join, Apply, WriteText
 
 // ---- Helfer ----
 
@@ -69,25 +70,6 @@ function Msg(const AClass, AMethod: string): string;
 begin
   Result := 'Private method ' + AClass + '.' + AMethod
     + ' appears unused (no call within the unit)';
-end;
-
-// Zeilen mit CRLF verbunden (TStringBuilder: string.Join kennt FPC nicht).
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
 end;
 
 // Eine Unit: ADecl im interface-Teil (ab Zeile 4, hinter 'type'), AImpl
@@ -103,17 +85,6 @@ function Bare(const ADecl: array of string): string;
 begin
   Result := Join(['unit u;', 'interface', 'type']) + #13#10 + Join(ADecl)
     + #13#10'implementation'#13#10'end.';
-end;
-
-function Apply(const ASource: string; const AEdits: TArray<TRdxEdit>): string;
-var
-  Bytes : TBytes;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-begin
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, AEdits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
 end;
 
 // Neuer Text oder '' bei Ablehnung (AReason).
@@ -470,20 +441,6 @@ begin
   end;
 end;
 
-// Schreibt AText nach APath (Include-Dateien neben der Unit).
-procedure SaveText(const APath, AText: string);
-var
-  SL : TStringList;
-begin
-  SL := TStringList.Create;
-  try
-    SL.Text := AText;
-    SL.SaveToFile(APath);
-  finally
-    SL.Free;
-  end;
-end;
-
 procedure TTestRdxMethodFixes.Sca147_IncludeBeforeImplementation_Read;
 var
   P         : TRdxRoutinePlan;
@@ -512,11 +469,11 @@ begin
   ForceDirectories(Dir);
   U := Dir + 'u.pas';
   try
-    SaveText(Dir + 'derived.inc', Join(['type', '  TBar = class(TFoo)',
+    WriteText(Dir + 'derived.inc', Join(['type', '  TBar = class(TFoo)',
       '    property X: Integer read GetX;', '  end;']));
     R := TRdxRoutineFixes.IncludeReason(U, P.Includes, P.Name);
     Assert.IsTrue(Pos('nennt GetX', R) > 0, R);
-    SaveText(Dir + 'derived.inc', '{$R-}');
+    WriteText(Dir + 'derived.inc', '{$R-}');
     Assert.AreEqual('', TRdxRoutineFixes.IncludeReason(U, P.Includes, P.Name));
     DeleteFile(Dir + 'derived.inc');
     R := TRdxRoutineFixes.IncludeReason(U, P.Includes, P.Name);

@@ -42,7 +42,8 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uLocalization,   // SetLanguage, CurrentLanguage: die Sprache der SCA
-  uRdxText;        // _ (immer qualifiziert: uLocalization hat auch eines)
+  uRdxText,        // _ (immer qualifiziert: uLocalization hat auch eines)
+  uTestRdxTextKit; // TempName, RemoveTree
 
 const
   CHANGES_DE = '('#$00E4'ndert Verhalten)';
@@ -52,37 +53,14 @@ const
 // Ein frisches, noch NICHT angelegtes Verzeichnis TEMP\rdx_c0_<GUID>\ - so
 // prueft der Vorlagen-Test auch das Anlegen des Ordners.
 function FreshDir: string;
-var
-  G : TGUID;
 begin
-  CreateGUID(G);
-  Result := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
-    + 'rdx_c0_' + GUIDToString(G) + PathDelim;
+  Result := TempName('rdx_c0_', PathDelim);
 end;
 
-// Loescht den Baum ADir (mit Trenner) samt Inhalt.
-procedure RemoveTree(const ADir: string);
-var
-  SR : TSearchRec;
-begin
-  if FindFirst(ADir + '*', faAnyFile, SR) = 0 then
-  try
-    repeat
-      if (SR.Name = '.') or (SR.Name = '..') then
-        Continue;
-      if (SR.Attr and faDirectory) <> 0 then
-        RemoveTree(ADir + SR.Name + PathDelim)
-      else
-        DeleteFile(ADir + SR.Name);
-    until FindNext(SR) <> 0;
-  finally
-    FindClose(SR);
-  end;
-  RemoveDir(ADir);
-end;
-
-// Schreibt AText als UTF-8 ohne BOM (TStringList waere unter FPC ANSI).
-procedure WriteText(const APath, AText: string);
+// Schreibt AText als UTF-8 ohne BOM, den Text unveraendert. Eigener Name:
+// uTestRdxTextKit.WriteText schreibt ueber TStringList - unter FPC ANSI,
+// mit Zeilenende am Schluss.
+procedure WriteUtf8(const APath, AText: string);
 var
   Bytes : TBytes;
   FS    : TFileStream;
@@ -315,8 +293,8 @@ begin
   Scope := EnterIni('fr');
   try
     ForceDirectories(Scope.Dir);
-    WriteText(RdxIniPath, '[UI]'#13#10'Language=auto'#13#10);
-    WriteText(Scope.Dir + 'analyser.ini', '[UI]'#13#10'Language=de'#13#10);
+    WriteUtf8(RdxIniPath, '[UI]'#13#10'Language=auto'#13#10);
+    WriteUtf8(Scope.Dir + 'analyser.ini', '[UI]'#13#10'Language=de'#13#10);
     Assert.AreEqual('fr', RdxLanguage, 'die gesetzte SCA-Sprache vor der ini');
     Assert.AreEqual('Afficher l''emplacement', uRdxText._('Show location'));
     // Umschalten in den SCA-Optionen (SetLanguage) gilt beim naechsten
@@ -338,8 +316,8 @@ begin
   Scope := EnterIni('');
   try
     ForceDirectories(Scope.Dir);
-    WriteText(RdxIniPath, RdxIniTemplate);
-    WriteText(Scope.Dir + 'analyser.ini', '[UI]'#13#10';Language=fr'#13#10
+    WriteUtf8(RdxIniPath, RdxIniTemplate);
+    WriteUtf8(Scope.Dir + 'analyser.ini', '[UI]'#13#10';Language=fr'#13#10
       + 'Language=de'#13#10);
     Assert.AreEqual('de', RdxLanguage,
       'analyser.ini [UI] Language - das auskommentierte Beispiel zaehlt nicht');
@@ -349,7 +327,7 @@ begin
   Scope := EnterIni('');
   try
     ForceDirectories(Scope.Dir);
-    WriteText(Scope.Dir + 'analyser.ini', '[UI]'#13#10';Language=de'#13#10);
+    WriteUtf8(Scope.Dir + 'analyser.ini', '[UI]'#13#10';Language=de'#13#10);
     Assert.AreEqual('en', RdxLanguage,
       'nur ein auskommentiertes Beispiel: Englisch');
     Assert.IsTrue(FileExists(RdxIniPath), 'redelphix.ini wurde angelegt');
@@ -365,7 +343,7 @@ begin
   Scope := EnterIni('de');
   try
     ForceDirectories(Scope.Dir);
-    WriteText(RdxIniPath, '[UI]'#13#10'Language=fr'#13#10);
+    WriteUtf8(RdxIniPath, '[UI]'#13#10'Language=fr'#13#10);
     Assert.AreEqual('fr', RdxLanguage);
     Assert.AreEqual('Afficher l''emplacement', uRdxText._('Show location'));
     Assert.AreEqual('de', CurrentLanguage,
@@ -386,10 +364,10 @@ begin
   try
     ForceDirectories(Scope.Dir);
     T0 := EncodeDate(2020, 1, 1) + EncodeTime(10, 0, 0, 0);
-    WriteText(RdxIniPath, '[UI]'#13#10'Language=de'#13#10);
+    WriteUtf8(RdxIniPath, '[UI]'#13#10'Language=de'#13#10);
     Assert.AreEqual<Integer>(0, FileSetDate(RdxIniPath, DateTimeToFileDate(T0)));
     Assert.AreEqual('de', RdxLanguage);
-    WriteText(RdxIniPath, '[UI]'#13#10'Language=fr'#13#10);
+    WriteUtf8(RdxIniPath, '[UI]'#13#10'Language=fr'#13#10);
     Assert.AreEqual<Integer>(0, FileSetDate(RdxIniPath, DateTimeToFileDate(T0)));
     Assert.AreEqual('de', RdxLanguage, 'gleiche Dateizeit: der Cache gilt');
     Assert.AreEqual<Integer>(0, FileSetDate(RdxIniPath,
@@ -410,7 +388,7 @@ begin
   Scope := EnterIni('');
   try
     ForceDirectories(Scope.Dir);
-    WriteText(Scope.Dir + 'blocker', 'Datei statt Ordner');
+    WriteUtf8(Scope.Dir + 'blocker', 'Datei statt Ordner');
     SetRdxConfigDir(Scope.Dir + 'blocker' + PathDelim + 'sub' + PathDelim);
     Assert.AreEqual('en', RdxLanguage, 'Vorgabe auto, keine Ausnahme');
     Assert.IsFalse(FileExists(RdxIniPath), 'keine Datei');

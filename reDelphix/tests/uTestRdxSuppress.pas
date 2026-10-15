@@ -42,7 +42,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxSuppress;
+  uRdxBufferMath, uRdxSuppress,
+  uTestRdxTextKit;   // Apply
 
 const
   CODE = '  L := TStringList';   // Anfang der Fundzeile
@@ -56,20 +57,6 @@ const
     '  L := TStringList.Create;'#13#10 +
     'end;'#13#10 +
     'end.';
-
-// Wendet AEdit auf ASource an (wie der Editor) und liefert den neuen Text.
-function Apply(const ASource: string; const AEdit: TRdxEdit): string;
-var
-  Bytes : TBytes;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-  Ok    : Boolean;
-begin
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Ok := PlanByteEdits(Bytes, [AEdit], Plan, Err);
-  Assert.IsTrue(Ok, Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
-end;
 
 function LinesOf(const ASource: string): TStringList;
 begin

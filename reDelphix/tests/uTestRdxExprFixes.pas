@@ -45,44 +45,10 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxSimpleFixes;
+  uRdxCodeMap, uRdxSimpleFixes,
+  uTestRdxTextKit;   // Join, Apply
 
 // ---- Helfer ----
-
-function Apply(const ASource: string; const AEdits: array of TRdxEdit): string;
-var
-  Bytes : TBytes;
-  Edits : TArray<TRdxEdit>;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-  i     : Integer;
-begin
-  SetLength(Edits, Length(AEdits));
-  for i := 0 to High(AEdits) do
-    Edits[i] := AEdits[i];
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, Edits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
-end;
-
-// Zeilen mit CRLF verbunden (TStringBuilder: string.Join kennt FPC nicht).
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
 
 // Eine Zeile in einer kleinen Unit (Zeile 4).
 function InUnit(const ALine: string): string;

@@ -43,7 +43,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxMagicFixes;
+  uRdxBufferMath, uRdxCodeMap, uRdxMagicFixes,
+  uTestRdxTextKit;   // Join, LineOf, WriteText, NewTempDir, RemoveTree
 
 const
   MSG = 'Magic number "%s" in if condition - use a constant';
@@ -55,49 +56,10 @@ const
 
 // ---- Helfer ----
 
-procedure WriteText(const APath, AText: string);
-var
-  SL : TStringList;
-begin
-  SL := TStringList.Create;
-  try
-    SL.Text := AText;
-    SL.SaveToFile(APath);
-  finally
-    SL.Free;
-  end;
-end;
-
 // Ein frischer Baum TEMP\rdx_sqc_<GUID>\ (mit Trenner).
 function FreshRoot: string;
-var
-  G : TGUID;
 begin
-  CreateGUID(G);
-  Result := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
-    + 'rdx_sqc_' + GUIDToString(G) + PathDelim;
-  ForceDirectories(Result);
-end;
-
-// Loescht den Baum ADir (mit Trenner) samt Inhalt.
-procedure RemoveTree(const ADir: string);
-var
-  SR : TSearchRec;
-begin
-  if FindFirst(ADir + '*', faAnyFile, SR) = 0 then
-  try
-    repeat
-      if (SR.Name = '.') or (SR.Name = '..') then
-        Continue;
-      if (SR.Attr and faDirectory) <> 0 then
-        RemoveTree(ADir + SR.Name + PathDelim)
-      else
-        DeleteFile(ADir + SR.Name);
-    until FindNext(SR) <> 0;
-  finally
-    FindClose(SR);
-  end;
-  RemoveDir(ADir);
+  Result := NewTempDir('rdx_sqc_');
 end;
 
 // Der Baum fuer einen Test: Root\a\b\c\u.pas - C das Verzeichnis der Unit,
@@ -134,43 +96,6 @@ begin
   Assert.IsTrue(Pos(APart, R) > 0, APart + ' <> ' + R);
 end;
 
-// Zeilen mit CRLF verbunden (TStringBuilder: string.Join kennt FPC nicht).
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
-// Die erste Zeile (1-basiert) von ASource, die AOnLine traegt; 0 ohne.
-function LineWith(const ASource, AOnLine: string): Integer;
-var
-  SL : TStringList;
-  i  : Integer;
-begin
-  Result := 0;
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    for i := 0 to SL.Count - 1 do
-      if (Result = 0) and (Pos(AOnLine, SL[i]) > 0) then
-        Result := i + 1;
-  finally
-    SL.Free;
-  end;
-end;
-
 // Der Plan fuer den Fund "AValue" auf der ersten Zeile mit AOnLine, gegen
 // die UTF-8-Bytes von ASource geprueft und angewendet wie der Editor
 // (PlanByteEdits, ApplyByteEdits): der neue Text.
@@ -190,7 +115,7 @@ begin
   try
     SL.Text := ASource;
     Map := TRdxCodeMap.Create(SL);
-    Ok := TRdxMagicFixes.MagicNumber(Map, LineWith(ASource, AOnLine),
+    Ok := TRdxMagicFixes.MagicNumber(Map, LineOf(ASource, AOnLine),
       Format(MSG, [AValue]), Plan, Reason);
   finally
     Map.Free;

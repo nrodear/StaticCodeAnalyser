@@ -36,7 +36,8 @@ uses
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog,
   uUnusedRoutine, uUnusedPrivateMethod, uEmptyVisibilitySection,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uTestRdxDetectorKit;   // TSeen, Join, Detect-/Plan-/Apply-Helfer (Charge H3c)
+  uTestRdxDetectorKit,   // TSeen, Detect-/Plan-/FixAll-Helfer (Charge H3c)
+  uTestRdxTextKit;       // Join, WriteText, TempName
 
 // ---- Helfer (die gemeinsamen seit Charge H3c in uTestRdxDetectorKit) ----
 

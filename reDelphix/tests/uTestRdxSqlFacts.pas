@@ -38,45 +38,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRefactorInfo, uRdxRecipes, uRdxCodeMap, uRdxSqlTemplate;
-
-// Zeilen mit CRLF verbunden (TStringBuilder: string.Join kennt FPC nicht).
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then
-        SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
-// Die erste Zeile (1-basiert), die AText enthaelt; 0 ohne.
-function LineOf(const ASource, AText: string): Integer;
-var
-  SL : TStringList;
-  i  : Integer;
-begin
-  Result := 0;
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    for i := 0 to SL.Count - 1 do
-      if Pos(AText, SL[i]) > 0 then
-        Exit(i + 1);
-  finally
-    SL.Free;
-  end;
-end;
+  uRefactorInfo, uRdxRecipes, uRdxCodeMap, uRdxSqlTemplate,
+  uTestRdxTextKit;   // Join, LineOf
 
 // SqlConstOf(AName) an der Zeile mit AUse.
 function ConstIn(const ASource, AName, AUse: string): TRdxSqlConst;

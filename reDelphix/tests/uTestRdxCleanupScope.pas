@@ -77,28 +77,10 @@ implementation
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uRefactorInfo, uRdxBufferMath, uRdxCodeMap, uRdxCleanupFixes;
+  uRefactorInfo, uRdxBufferMath, uRdxCodeMap, uRdxCleanupFixes,
+  uTestRdxTextKit;   // Join
 
 // ---- Helfer ----
-
-// Zeilen mit CRLF verbunden (TStringBuilder: string.Join kennt FPC nicht).
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
 
 // Eine Unit, deren implementation ALines traegt (ab Zeile 4).
 function InImpl(const ALines: array of string): string;
@@ -194,8 +176,9 @@ begin
     Result := TEncoding.UTF8.GetString(ABytes, AFrom, ACount);
 end;
 
-// Zeile ALine (1-basiert) von ALines; '' ausserhalb.
-function LineOf(ALines: TStrings; ALine: Integer): string;
+// Zeile ALine (1-basiert) von ALines; '' ausserhalb. Eigener Name:
+// uTestRdxTextKit.LineOf sucht dagegen die Nummer einer Zeile.
+function LineAt(ALines: TStrings; ALine: Integer): string;
 begin
   Result := '';
   if (ALine >= 1) and (ALine <= ALines.Count) then
@@ -244,8 +227,8 @@ begin
   try
     SL.Text := ASource;
     LineStartsOf(Bytes, Starts);
-    if SplitsPair(LineOf(SL, AEdit.Span.StartLine), AEdit.Span.StartCol)
-       or SplitsPair(LineOf(SL, AEdit.Span.EndLine), AEdit.Span.EndCol) then
+    if SplitsPair(LineAt(SL, AEdit.Span.StartLine), AEdit.Span.StartCol)
+       or SplitsPair(LineAt(SL, AEdit.Span.EndLine), AEdit.Span.EndCol) then
       Exit('Byte-Bereich weicht ab: Spalte mitten in einem Surrogatpaar');
     if not OffsetOf(Starts, SL, AEdit.Span.StartLine, AEdit.Span.StartCol, S)
        or not OffsetOf(Starts, SL, AEdit.Span.EndLine, AEdit.Span.EndCol, E)

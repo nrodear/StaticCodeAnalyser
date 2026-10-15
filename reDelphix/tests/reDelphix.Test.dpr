@@ -89,6 +89,9 @@ program reDelphix.Test;
 //                        Detektoren (Fund -> Hilfe -> Fund weg)
 //   * uTestRdxDetectorKit - gemeinsame Helfer der Detektor-Rundlaeufe
 //                        (keine Fixture; Charge H3c)
+//   * uTestRdxTextKit  - gemeinsame Helfer der Testunits: Join, Apply,
+//                        LineOf, WriteText, Temp-Verzeichnisse (keine
+//                        Fixture, FPC-tauglich; Review R6-08)
 //   * uTestRdxCodeMap  - Code-Sicht (uRdxCodeMap) gegen ScanCodeLine des
 //                        Cores (Drift-Waechter), StartsInside
 //   * uTestRdxQualifyUses - Planung von "uses: X -> Scope.X" (QualifyUses)
@@ -210,6 +213,7 @@ uses
   uTestRdxRoutineFixesDetector in 'uTestRdxRoutineFixesDetector.pas',
   uTestRdxFreeGatesDetector in 'uTestRdxFreeGatesDetector.pas',
   uTestRdxDetectorKit in 'uTestRdxDetectorKit.pas',
+  uTestRdxTextKit in 'uTestRdxTextKit.pas',
   uTestRdxCodeMap in 'uTestRdxCodeMap.pas',
   uTestRdxQualifyUses in 'uTestRdxQualifyUses.pas',
   uTestRdxProjectUnits in 'uTestRdxProjectUnits.pas',

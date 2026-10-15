@@ -61,7 +61,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxResultFixes;
+  uRdxCodeMap, uRdxResultFixes,
+  uTestRdxTextKit;   // Join, Apply, LineStartingWith
 
 const
   MSG_121 = 'Function %s never assigns Result (return value undefined)';
@@ -77,60 +78,11 @@ const
 
 // ---- Helfer ----
 
-function Apply(const ASource: string; const AEdits: TArray<TRdxEdit>): string;
-var
-  Bytes : TBytes;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-begin
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, AEdits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
-end;
-
-// Zeilen mit CRLF verbunden (TStringBuilder: string.Join kennt FPC nicht).
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
 // Eine Unit: interface (ohne Typen) + implementation mit den Zeilen AImpl.
 function InUnit(const AImpl: array of string): string;
 begin
   Result := Join(['unit u;', 'interface', 'implementation']) + #13#10
     + Join(AImpl) + #13#10 + 'end.';
-end;
-
-// Die erste Zeile (1-basiert), die mit AStart beginnt (Leerraum davor
-// zaehlt nicht); 0 ohne.
-function LineOf(const ASource, AStart: string): Integer;
-var
-  SL : TStringList;
-  i  : Integer;
-begin
-  Result := 0;
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    for i := 0 to SL.Count - 1 do
-      if Copy(TrimLeft(SL[i]), 1, Length(AStart)) = AStart then
-        Exit(i + 1);
-  finally
-    SL.Free;
-  end;
 end;
 
 // Der Plan des Planers APlanner fuer Zeile ALine; AReason = '' heisst Hilfe.
@@ -158,8 +110,8 @@ var
   P : TRdxResultPlan;
 begin
   Result := '';
-  P := PlanOf(TRdxResultFixes.ResultDefault, ASource, LineOf(ASource, AHead),
-    Format(MSG_121, [AName]), AReason);
+  P := PlanOf(TRdxResultFixes.ResultDefault, ASource,
+    LineStartingWith(ASource, AHead), Format(MSG_121, [AName]), AReason);
   if AReason = '' then
     Result := Apply(ASource, P.Edits);
 end;
@@ -176,7 +128,7 @@ function Fix196(const ASource, ARead, AMessage: string; out AReason: string;
 begin
   Result := '';
   APlan := PlanOf(TRdxResultFixes.ManagedResultInit, ASource,
-    LineOf(ASource, ARead), AMessage, AReason);
+    LineStartingWith(ASource, ARead), AMessage, AReason);
   if AReason = '' then
     Result := Apply(ASource, APlan.Edits);
 end;
@@ -427,8 +379,8 @@ begin
   // ShortString und System.-Praefix gehoeren zur string-Familie.
   S := ReadsResult(NO_TYPES, 'System.ShortString');
   Assert.AreEqual('Result := ''''', PlanOf(TRdxResultFixes.ManagedResultInit,
-    S, LineOf(S, 'Use(Result)'), Format(MSG_196, ['F', 'System.ShortString']),
-    R).Name, R);
+    S, LineStartingWith(S, 'Use(Result)'),
+    Format(MSG_196, ['F', 'System.ShortString']), R).Name, R);
 end;
 
 procedure TTestRdxResultFixes.Sca196_NilKinds;
@@ -461,8 +413,9 @@ begin
   Assert.AreEqual('VarClear(Result)', P.Name);
   Assert.IsTrue(P.NeedsVariants, 'Variants in uses');
   S := ReadsResult(NO_TYPES, 'OleVariant');
-  P := PlanOf(TRdxResultFixes.ManagedResultInit, S, LineOf(S, 'Use(Result)'),
-    Format(MSG_196, ['F', 'OleVariant']), R);
+  P := PlanOf(TRdxResultFixes.ManagedResultInit, S,
+    LineStartingWith(S, 'Use(Result)'), Format(MSG_196, ['F', 'OleVariant']),
+    R);
   Assert.IsTrue(P.NeedsVariants, R);
 end;
 
@@ -511,7 +464,8 @@ begin
     'end;']), 'Use(X)', 'F', 'string', 'kein Result');
   S := ReadsResult(NO_TYPES, 'string');
   Assert.AreEqual('', PlanOf(TRdxResultFixes.ManagedResultInit, S,
-    LineOf(S, 'Use(Result)'), 'Function F reads Result before', R).Name);
+    LineStartingWith(S, 'Use(Result)'), 'Function F reads Result before',
+    R).Name);
   Assert.IsTrue(Pos('fehlt in der Meldung', R) > 0, R);
 end;
 
@@ -595,14 +549,14 @@ begin
   S := LargeUnit(3000, 20);
   T0 := Now;
   P := PlanOf(TRdxResultFixes.ConstructorInherited, S,
-    LineOf(S, 'constructor TFoo.Create'), MSG_CTOR, R);
+    LineStartingWith(S, 'constructor TFoo.Create'), MSG_CTOR, R);
   Ms := Round((Now - T0) * MSecsPerDay);
   Assert.AreEqual('', R, 'SCA096 angeboten');
   Assert.AreEqual(STMT_INHERITED, P.Name);
   Assert.IsTrue(Ms < MAX_MS, Format('SCA096: %d ms', [Ms]));
   T0 := Now;
   P := PlanOf(TRdxResultFixes.DestructorInherited, S,
-    LineOf(S, 'destructor TFoo.Destroy'), MSG_DTOR, R);
+    LineStartingWith(S, 'destructor TFoo.Destroy'), MSG_DTOR, R);
   Ms := Round((Now - T0) * MSecsPerDay);
   Assert.AreEqual('', R, 'SCA097 angeboten');
   Assert.IsTrue(Ms < MAX_MS, Format('SCA097: %d ms', [Ms]));
@@ -639,20 +593,20 @@ begin
     'implementation', 'constructor TBar.Create(AOwner: TComponent);', 'begin',
     '  OpenEx(AOwner);', 'end;', 'end.']);
   PlanOf(TRdxResultFixes.ConstructorInherited, S,
-    LineOf(S, 'constructor TBar.Create'), MSG_CTOR, R);
+    LineStartingWith(S, 'constructor TBar.Create'), MSG_CTOR, R);
   Assert.IsTrue(Pos('Aufruf OpenEx in Zeile 16 - ein Konstruktor der Klasse '
     + '(Delegation)', R) > 0, R);
   S := Join(['unit u;', 'interface', 'type', Join(GEN_DTOR), '  end;',
     'implementation', 'destructor TBar.Destroy;', 'begin', '  FList.Free;',
     'end;', 'end.']);
   PlanOf(TRdxResultFixes.DestructorInherited, S,
-    LineOf(S, 'destructor TBar.Destroy'), MSG_DTOR, R);
+    LineStartingWith(S, 'destructor TBar.Destroy'), MSG_DTOR, R);
   Assert.IsTrue(Pos('TGen.Destroy ist abstrakt (Zeile 6)', R) > 0, R);
   S := Join(['unit u;', 'interface', 'type', Join(MULTI), '  end;',
     'implementation', 'destructor TMulti<T1, T2>.Destroy;', 'begin',
     '  FItems.Free;', 'end;', 'end.']);
   P := PlanOf(TRdxResultFixes.DestructorInherited, S,
-    LineOf(S, 'destructor TMulti'), MSG_DTOR, R);
+    LineStartingWith(S, 'destructor TMulti'), MSG_DTOR, R);
   Assert.AreEqual('', R, 'SCA097 an TMulti angeboten');
   Assert.IsFalse(P.Changes, 'direkter TObject-Erbe');
   Assert.AreEqual(StringReplace(S, '  FItems.Free;', '  FItems.Free;'#13#10

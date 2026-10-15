@@ -39,7 +39,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxDeclFixes;
+  uRdxBufferMath, uRdxCodeMap, uRdxDeclFixes,
+  uTestRdxTextKit;   // Join, JoinWith, Apply
 
 type
   TRdxDeclKind = (dkDoc, dkGuid, dkDirective);
@@ -48,45 +49,6 @@ const
   GUID_1 = '{11111111-2222-3333-4444-555555555555}';
 
 // ---- Helfer ----
-
-function Apply(const ASource: string; const AEdit: TRdxEdit): string;
-var
-  Bytes : TBytes;
-  Edits : TArray<TRdxEdit>;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-begin
-  SetLength(Edits, 1);
-  Edits[0] := AEdit;
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, Edits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
-end;
-
-// Teile mit ASep verbunden (TStringBuilder: string.Join kennt FPC nicht).
-function JoinWith(const ASep: string; const AParts: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(AParts) do
-    begin
-      if i > 0 then SB.Append(ASep);
-      SB.Append(AParts[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
-// Zeilen mit CRLF verbunden.
-function Join(const ALines: array of string): string;
-begin
-  Result := JoinWith(#13#10, ALines);
-end;
 
 // Die frisch erzeugte GUID hinter '[''' als GUID geprueft und durch GUID_1
 // ersetzt - so bleiben die Vergleiche fest.

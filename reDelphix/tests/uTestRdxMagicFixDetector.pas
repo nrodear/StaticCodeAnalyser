@@ -45,7 +45,8 @@ uses
   uMagicNumbers,
   uRdxRecipeRunner,      // TRdxFixOutcome
   uRdxFixTable,          // CaptionFor
-  uTestRdxDetectorKit;   // TSeen, Join, Detect-/Plan-/Apply-Helfer
+  uTestRdxDetectorKit,   // TSeen, Detect-/Plan-/FixAll-Helfer
+  uTestRdxTextKit;       // Join, WriteText, TempName
 
 // ---- Helfer ----
 

@@ -33,38 +33,13 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxScopeTable;
+  uRdxScopeTable,
+  uTestRdxTextKit;   // NewTempDir, RemoveTree
 
 // Ein frisches Verzeichnis TEMP\rdx_fa_<GUID>\ (angelegt).
 function FreshDir: string;
-var
-  G : TGUID;
 begin
-  CreateGUID(G);
-  Result := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
-    + 'rdx_fa_' + GUIDToString(G) + PathDelim;
-  ForceDirectories(Result);
-end;
-
-// Loescht den Baum ADir (mit Trenner) samt Inhalt.
-procedure RemoveTree(const ADir: string);
-var
-  SR : TSearchRec;
-begin
-  if FindFirst(ADir + '*', faAnyFile, SR) = 0 then
-  try
-    repeat
-      if (SR.Name = '.') or (SR.Name = '..') then
-        Continue;
-      if (SR.Attr and faDirectory) <> 0 then
-        RemoveTree(ADir + SR.Name + PathDelim)
-      else
-        DeleteFile(ADir + SR.Name);
-    until FindNext(SR) <> 0;
-  finally
-    FindClose(SR);
-  end;
-  RemoveDir(ADir);
+  Result := NewTempDir('rdx_fa_');
 end;
 
 // Eine leere Datei APath.

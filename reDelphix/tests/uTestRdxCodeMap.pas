@@ -40,26 +40,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uDetectorUtils, uRdxCodeMap;
-
-// Zeilen mit CRLF verbunden (string.Join kennt FPC nicht).
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
+  uDetectorUtils, uRdxCodeMap,
+  uTestRdxTextKit;   // Join
 
 // Zeile und Spalte eines Tokens als 'Z:S' - fuer kurze Vergleiche.
 function Pos2(const T: TRdxToken): string;

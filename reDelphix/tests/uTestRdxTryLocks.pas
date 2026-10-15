@@ -59,7 +59,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxTryFixes;
+  uRdxCodeMap, uRdxTryFixes,
+  uTestRdxTextKit;   // Join, Apply
 
 const
   MSG_109 = 'Lock acquired (%s) but no enclosing try..finally - an exception '
@@ -73,39 +74,6 @@ type
   TRule = (r109, r153, r156);
 
 // ---- Helfer ----
-
-function Apply(const ASource: string; const AEdit: TRdxEdit): string;
-var
-  Bytes : TBytes;
-  Edits : TArray<TRdxEdit>;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-begin
-  SetLength(Edits, 1);
-  Edits[0] := AEdit;
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, Edits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
-end;
-
-// Zeilen mit CRLF verbunden (TStringBuilder: string.Join kennt FPC nicht).
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
 
 // Eine Unit mit Routine Run und ihren lokalen Puffern P und Buf (SCA156
 // verlangt seit Charge B1-FE eine lokale Variable, Gegen-Review R5, R5-02);

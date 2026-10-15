@@ -60,7 +60,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxSuppress;
+  uRdxBufferMath, uRdxSuppress,
+  uTestRdxTextKit;   // Apply
 
 const
   EOL  = #13#10;
@@ -85,21 +86,6 @@ begin
   finally
     L.Free;
   end;
-end;
-
-// Wendet AEdit auf ASource an (wie der Editor) und liefert den neuen Text.
-function Apply(const ASource: string; const AEdit: TRdxEdit): string;
-var
-  Bytes : TBytes;
-  Plan  : TArray<TRdxByteEdit>;
-  Edits : TArray<TRdxEdit>;
-  Err   : string;
-begin
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  SetLength(Edits, 1);
-  Edits[0] := AEdit;
-  Assert.IsTrue(PlanByteEdits(Bytes, Edits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
 end;
 
 // RemoveMarker fuer AMarkerLine von ASource: False mit einem Grund, der
