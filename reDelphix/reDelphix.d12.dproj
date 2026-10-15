@@ -119,6 +119,7 @@
         <DCCReference Include="SCA.Engine.dcp"/>
         <DCCReference Include="source\uRdxText.pas"/>
         <DCCReference Include="source\uRdxRecipes.pas"/>
+        <DCCReference Include="source\uRdxPaths.pas"/>
         <DCCReference Include="source\uRdxScopeTable.pas"/>
         <DCCReference Include="source\uRdxBufferMath.pas"/>
         <DCCReference Include="source\uRdxCodeMap.pas"/>

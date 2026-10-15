@@ -114,9 +114,6 @@ type
 implementation
 
 uses
-  // Vor System.SysUtils, damit deren Namen gelten (FindClose u. a.):
-  // GetDriveType fuer den Netzlaufwerk-Test der Projekt-Units.
-  Winapi.Windows,
   System.SysUtils, System.Classes,
   ToolsAPI,
   uCrashDiag,       // EStackExhausted
@@ -544,19 +541,6 @@ begin
   end;
 end;
 
-// Ein Netzlaufwerk ('Z:' ueber GetDriveType)? Der Test fuer
-// TRdxProjectUnits.IsRemote - UNC prueft der Index selbst. Zweite Kopie
-// der Regel aus uRdxFixTable.RemoteDriveReason (SCA014); zusammenlegen mit
-// den geteilten Helfern.
-function IsRemoteDrive(const APath: string): Boolean;
-var
-  Drive : string;
-begin
-  Drive := ExtractFileDrive(APath);
-  Result := (Length(Drive) = 2) and (Drive[2] = ':')
-    and (GetDriveType(PChar(Drive + PathDelim)) = DRIVE_REMOTE);
-end;
-
 const
   UNIT_SEARCH_PATH = 'DCC_UnitSearchPath';
   // Obergrenze fuer die Kette der Eltern-Konfigurationen (Debug -> Base
@@ -651,7 +635,9 @@ var
 begin
   Result := TRdxProjectUnits.Create;
   try
-    Result.IsRemote := IsRemoteDrive;
+    // Netzpfade (UNC und Netzlaufwerke) liest der Index nicht - er fragt
+    // die Regel uRdxPaths.IsNetworkPath selbst (bis Charge B2S-a setzte
+    // diese Unit dafuer einen eigenen GetDriveType-Test).
     // 1) Dateien neben der bearbeiteten Datei
     if ANearFile <> '' then
       Result.AddDir(ExtractFilePath(ANearFile));

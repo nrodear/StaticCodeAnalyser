@@ -69,8 +69,9 @@ unit uRdxRoutineFixes;
 // fuer SCA164 und (seit Charge B1-FD) SCA147 die vor 'implementation' ohne
 // die im Kopf der Unit (IncludesUpTo) im Check der Tabelle, seit Charge Q14
 // fuer SCA014 alle (AllIncludes, Compiler-Weichen; uRdxMagicFixes). Auf
-// einem Netzpfad (UNC oder Netzlaufwerk, IsNetworkPath) liest sie nichts
-// und nennt den Grund - der Menueaufbau laeuft im Hauptthread (R4-03). Der
+// einem Netzpfad (UNC oder Netzlaufwerk; die Regel steht seit Charge
+// B2S-a in uRdxPaths.IsNetworkPath) liest sie nichts und nennt den Grund -
+// der Menueaufbau laeuft im Hauptthread (R4-03). Der
 // Leser gehoert in eine eigene Unit (uRdxIncludes, samt IncludesUpTo und
 // AllIncludes - seit der Nachpruefung der Charge B1-FD eine Durchsicht,
 // IncludesWhere, statt einer Kopie in uRdxMagicFixes); das traegt die
@@ -250,21 +251,12 @@ type
 // Grund, auch fuer ein Include, das nicht zu finden oder zu lesen ist.
 // '{$I %DATE%}' (FPC) ist keine Datei. Bis Charge Q14 nur fuer SCA164
 // (IncludeReason); SCA014 prueft damit die Compiler-Weichen der Includes.
-// Liegt die Unit oder ein Include auf einem Netzpfad (IsNetworkPath), wird
-// nichts gelesen: der Grund kommt ohne Plattenzugriff (Gegen-Review R4-03).
+// Liegt die Unit oder ein Include im Netz (uRdxPaths.IsNetworkPath; bis
+// Charge B2S-a eine eigene Regel hier, die '\\?\C:\..' fuer einen
+// Netzpfad hielt), wird nichts gelesen: der Grund kommt ohne
+// Plattenzugriff (Gegen-Review R4-03).
 function IncludeChainReason(const AUnitFile: string;
   const AIncludes: TArray<string>; const ACheck: TRdxIncludeCheck): string;
-
-// Liegt APath im Netz - UNC ('\\server\share\..', auch mit '/') oder ein
-// Laufwerk, das Windows als Netzlaufwerk fuehrt (GetDriveType)? Dort liest
-// reDelphix nichts von der Platte: der Menueaufbau laeuft im Hauptthread,
-// und ein nicht erreichbarer Server haelt jedes FileExists sekundenlang auf
-// (Gegen-Review R4-03: 9 bis 16 s je Include). Ein relativer Pfad liegt
-// nirgends. Die Netzpfad-Regel der Planer-Units, die von der Platte lesen
-// (Includes, SCA014 FileReason); bis Charge B1-FD pruefte nur SCA014 den
-// Pfad der Unit (uRdxMagicFixes UNC, uRdxFixTable.RemoteDriveReason das
-// Netzlaufwerk), kein Include und SCA164/SCA147 gar nichts.
-function IsNetworkPath(const APath: string): Boolean;
 
 // Wo das Include AFile einer Datei in ADir (Verzeichnis mit Trenner) zuerst
 // gesucht wird: ein Pfad mit Laufwerk bzw. UNC wie er ist, einer ab der
@@ -302,6 +294,7 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
+  uRdxPaths,         // IsNetworkPath (Includes nie aus dem Netz)
   uRdxStructFixes;   // RangeText
 
 const
@@ -409,8 +402,6 @@ const
   // Ursache fuer MissingFmt: Unit oder Include auf einem Netzpfad (R4-03).
   R_INC_NETWORK = 'auf einem Netzpfad (%s) - nicht gelesen, der Menueaufbau '
     + 'laeuft im Hauptthread';
-  // GetDriveType: ein Netzlaufwerk (DRIVE_REMOTE, WinBase.h).
-  DRIVE_KIND_REMOTE = 4;
   // SCA164/SCA147: Marker im geloeschten Bereich, die ausserhalb wirken
   // (MarkerLinesReason, Gegen-Review R4-04).
   MARKER_FILE = 'noinspection-file';
@@ -2191,37 +2182,6 @@ begin
 end;
 
 { ---- SCA164/SCA147 (und SCA014): Include-Dateien vor implementation ---- }
-
-{$IFDEF MSWINDOWS}
-// GetDriveType aus kernel32, selbst deklariert statt Winapi.Windows: die
-// Unit braechte Tausende Namen in den Planer (vor System.SysUtils
-// verdeckte sie FindClose u. a.), und der FPC-Pruefstand kennt
-// Winapi.Windows nicht (FPC: Windows).
-function GetDriveTypeW(lpRootPathName: PWideChar): Cardinal; stdcall;
-  external 'kernel32.dll' name 'GetDriveTypeW';
-{$ENDIF}
-
-// Ist ADrive ('Z:') ein Netzlaufwerk? GetDriveType fragt die
-// Laufwerkstabelle von Windows, nicht den Server - auch ein getrenntes
-// Netzlaufwerk antwortet sofort.
-function IsRemoteDrive(const ADrive: string): Boolean;
-begin
-  {$IFDEF MSWINDOWS}
-  Result := GetDriveTypeW(PWideChar(ADrive + '\')) = DRIVE_KIND_REMOTE;
-  {$ELSE}
-  Result := False;
-  {$ENDIF}
-end;
-
-function IsNetworkPath(const APath: string): Boolean;
-begin
-  if (Length(APath) > 2) and CharInSet(APath[1], ['\', '/'])
-     and CharInSet(APath[2], ['\', '/']) then
-    Exit(True);
-  Result := (Length(APath) >= 2) and (APath[2] = ':')
-    and CharInSet(APath[1], ['A'..'Z', 'a'..'z'])
-    and IsRemoteDrive(Copy(APath, 1, 2));
-end;
 
 // Der Teil von APath, der ihn zum Netzpfad macht ('\\server\share' bzw.
 // 'Z:'), fuer den Grund.

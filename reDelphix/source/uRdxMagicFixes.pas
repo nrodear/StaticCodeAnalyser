@@ -68,7 +68,7 @@ unit uRdxMagicFixes;
 //     (Verdacht e): sie lehnt ab; seit Charge B1-FD gilt das auch fuer
 //     ein Include auf einem Netzpfad in einer lokalen Unit
 //     ('{$I \\server\share\defs.inc}' wartete 9 bis 16 s, Gegen-Review
-//     R4-03; Regel uRdxRoutineFixes.IsNetworkPath, geprueft vor jedem
+//     R4-03; Regel uRdxPaths.IsNetworkPath, geprueft vor jedem
 //     FileExists). Zwischengespeichert wird nichts: je
 //     Aufruf liest FileReason hoechstens drei Verzeichnisse und die Koepfe
 //     ihrer .dproj (Korpus-Harness, FPC: 1.010 Aufrufe in 231 ms, 0,2 ms
@@ -167,7 +167,8 @@ uses
   uRefactorInfo,        // TRefactorSpan.Make
   uRdxIntroPlan,        // CharColOfByte, LineLooksFpcAware
   uRdxIntroEdits,       // TextOf, TargetAt, IntroduceEdits, ApplyIntroEdits
-  uRdxRoutineFixes,     // IncludeChainReason, AllIncludes, IsNetworkPath
+  uRdxPaths,            // IsNetworkPath
+  uRdxRoutineFixes,     // IncludeChainReason, AllIncludes
   uRdxCompilerTraces;   // OldCompilerTrace, ScriptReason, FLOOR_INLINE_DECL
 
 const
@@ -688,9 +689,9 @@ begin
     Result := Format(R_LEGACY, [AFiles.Legacy, ADir]);
 end;
 
-// Netzpfad: uRdxRoutineFixes.IsNetworkPath (UNC und Netzlaufwerk, seit
-// Charge B1-FD die eine Regel fuer Unit und Includes; bis dahin stand hier
-// eine eigene Kopie nur fuer UNC).
+// Netzpfad: uRdxPaths.IsNetworkPath (UNC und Netzlaufwerk, seit Charge
+// B1-FD die eine Regel fuer Unit und Includes - bis dahin stand hier eine
+// eigene Kopie nur fuer UNC; seit Charge B2S-a ist '\\?\C:\..' lokal).
 class function TRdxMagicFixes.FileReason(const AFileName: string): string;
 var
   Ext, Dir, Up : string;

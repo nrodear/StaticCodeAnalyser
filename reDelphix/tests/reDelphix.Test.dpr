@@ -94,6 +94,9 @@ program reDelphix.Test;
 //   * uTestRdxQualifyUses - Planung von "uses: X -> Scope.X" (QualifyUses)
 //   * uTestRdxProjectUnits - Index der Projekt-Units fuer "uses: X ->
 //                        Scope.X" (TRdxProjectUnits, Review R1-02)
+//   * uTestRdxPaths    - die eine Netzpfad-Regel (uRdxPaths, Charge
+//                        B2S-a): UNC, Win32-Namensraum, Netzlaufwerk ueber
+//                        die Naht; SCA164/SCA014 auf '\\?\C:\..'
 //   * uTestRdxFixTable - die Tabelle der einfachen Hilfen (uRdxFixTable):
 //                        jede Zeile mit Planer, Hinweis und Menuetext
 //   * uTestRdxIntroPlan - Code-Aktion "Lokale Variable einfuehren": das
@@ -145,6 +148,7 @@ uses
   DUnitX.TestFramework,
   uRdxText in '..\source\uRdxText.pas',
   uRdxRecipes in '..\source\uRdxRecipes.pas',
+  uRdxPaths in '..\source\uRdxPaths.pas',
   uRdxScopeTable in '..\source\uRdxScopeTable.pas',
   uRdxBufferMath in '..\source\uRdxBufferMath.pas',
   uRdxCodeMap in '..\source\uRdxCodeMap.pas',
@@ -213,6 +217,7 @@ uses
   uTestRdxCodeMap in 'uTestRdxCodeMap.pas',
   uTestRdxQualifyUses in 'uTestRdxQualifyUses.pas',
   uTestRdxProjectUnits in 'uTestRdxProjectUnits.pas',
+  uTestRdxPaths in 'uTestRdxPaths.pas',
   uTestRdxFixTable in 'uTestRdxFixTable.pas',
   uTestRdxIntroPlan in 'uTestRdxIntroPlan.pas',
   uTestRdxIntroRefuse in 'uTestRdxIntroRefuse.pas',

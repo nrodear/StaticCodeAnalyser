@@ -70,7 +70,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxRoutineFixes;
+  uRdxBufferMath, uRdxCodeMap, uRdxRoutineFixes,
+  uRdxPaths;   // IsNetworkPath (seit Charge B2S-a dort, bis dahin hier)
 
 const
   MSG_TAIL = ' appears unused (no caller within the unit, no interface '
