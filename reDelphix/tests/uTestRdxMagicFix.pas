@@ -332,7 +332,10 @@ end;
 
 // Eine Inline-Konstante gibt es erst ab Delphi 10.3: jede Spur eines
 // aelteren Compilers sperrt - auch die Schwelle selbst ('CompilerVersion
-// >= 33' schuetzt gerade die Inline-Form fuer aeltere Compiler).
+// >= 33' schuetzt gerade die Inline-Form fuer aeltere Compiler). Geprueft
+// wird ein umlautfreies Teilstueck des Grunds ('... - die Datei traegt
+// Spuren aelterer Compiler' hat in i18n/de.po echte Umlaute, Entscheid
+// E29; die Testquellen bleiben ASCII).
 procedure TTestRdxMagicFix.Refuse_OldCompilerTraces;
 const
   TRACES: array[0..8] of string = ('{$I jedi.inc}', '{$IFDEF VER320}{$ENDIF}',
@@ -345,7 +348,7 @@ var
 begin
   for T in TRACES do
     AssertRefused(UnitWith([T], ['  Foo;', '  if X > 300 then Bar;']),
-      'X > 300', '300', 'Spuren aelterer Compiler');
+      'X > 300', '300', 'gibt es erst ab Delphi 10.3 - die Datei');
 end;
 
 // Was nur neuere Compiler nennt, sperrt nicht; ein Kommentar ist keine
@@ -479,7 +482,9 @@ end;
 
 // Die Includes der Unit (auch im Kopf, auch verschachtelt): eine FPC-Weiche
 // oder Spur aelterer Compiler sperrt, ein fehlendes Include auch; ein
-// Include ohne beides nicht.
+// Include ohne beides nicht. Die Gruende tragen in i18n/de.po echte
+// Umlaute ('traegt', 'aelterer', Entscheid E29) - geprueft werden
+// umlautfreie Teilstuecke davor und dahinter.
 procedure TTestRdxMagicFix.Disk_IncludeTraces;
 var
   Dir, U, R : string;
@@ -499,11 +504,13 @@ begin
     Assert.IsTrue(Pos('Include defs.inc nicht neben der Unit', R) > 0, R);
     WriteText(Dir + 'defs.inc', '{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}');
     R := TRdxMagicFixes.IncludeReason(U, Map);
-    Assert.IsTrue(Pos('das Include defs.inc traegt eine FPC-Weiche', R) > 0, R);
+    Assert.IsTrue(Pos('das Include defs.inc ', R) > 0, R);
+    Assert.IsTrue(Pos(' eine FPC-Weiche (Zeile 1)', R) > 0, R);
     WriteText(Dir + 'defs.inc', Join(['{$DEFINE FAST}', '{$I deeper.inc}']));
     WriteText(Dir + 'deeper.inc', '{$IF CompilerVersion < 30}{$IFEND}');
     R := TRdxMagicFixes.IncludeReason(U, Map);
-    Assert.IsTrue(Pos('Spuren aelterer Compiler (COMPILERVERSION < 30', R) > 0, R);
+    Assert.IsTrue(Pos('das Include deeper.inc ', R) > 0, R);
+    Assert.IsTrue(Pos(' Compiler (COMPILERVERSION < 30, Zeile 1)', R) > 0, R);
     Assert.IsTrue(Pos('eingebunden von defs.inc', R) > 0, R);
     WriteText(Dir + 'deeper.inc', '{$IF CompilerVersion >= 35}{$IFEND}');
     Assert.AreEqual('', TRdxMagicFixes.IncludeReason(U, Map));

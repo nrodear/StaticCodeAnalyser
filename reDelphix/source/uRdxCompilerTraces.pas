@@ -107,13 +107,17 @@ function OldCompilerTrace(AMap: TRdxCodeMap; const AFloor: TRdxCompilerFloor;
 // Include-Dateien nicht - ihre Interpreter kennen AFeature ('Default()',
 // 'eine Inline-Konstante') nicht. '' oder der Grund. Bis Charge Q14 in
 // uRdxResultFixes (SCA121); SCA014 braucht dieselbe Sperre (Korpus: die
-// xEdit-Skripte unter 'Edit Scripts').
+// xEdit-Skripte unter 'Edit Scripts'). AFeature kommt schon uebersetzt
+// (Code wie 'Default()' bleibt, wie er ist) und steht als %s im Satz -
+// der Aufrufer uebersetzt, was er uebergibt (Entscheid E29; ein _(AFeature)
+// hier haette keine msgid).
 function ScriptReason(AMap: TRdxCodeMap; const AFeature: string): string;
 
 implementation
 
 uses
-  System.SysUtils;
+  System.SysUtils,
+  uRdxText;             // _ (Gruende in der Sprache der SCA, E29)
 
 const
   // Die Includes der Kits, die vor beiden Schwellen bauen (JEDI/JCL/JVCL,
@@ -317,8 +321,8 @@ begin
   if InList(T.Low, PROGRAM_WORDS) then
     Exit('');
   if T.Low <> 'unit' then
-    Exit('die Datei beginnt nicht mit unit/program/library (Include oder '
-      + 'Skript?) - ' + AFeature + ' kennt nur der Compiler');
+    Exit(_('the file does not start with unit/program/library (include or '
+      + 'script?) - only the compiler knows %s', [AFeature]));
   P := T;
   T := After(AMap, T);
   while T.Low <> '' do
@@ -328,8 +332,8 @@ begin
     P := T;
     T := After(AMap, T);
   end;
-  Result := 'unit ohne implementation-Teil (Skript?) - ' + AFeature
-    + ' kennt nur der Compiler';
+  Result := _('unit without an implementation part (script?) - only the '
+    + 'compiler knows %s', [AFeature]);
 end;
 
 end.

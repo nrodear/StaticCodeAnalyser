@@ -2511,3 +2511,164 @@ msgstr "aucun en-tête %s"
 
 msgid "%d headers %s"
 msgstr "%d en-têtes %s"
+
+# reDelphix G9 (uRdxMagicFixes, uRdxIntroPlan, uRdxIntroEdits, uRdxCompilerTraces)
+
+msgid "line %d carries no if"
+msgstr "la ligne %d ne porte aucun if"
+
+msgid "the if condition on line %d compares with %s - with digit separators the detector reads only the first block %s (false alarm); no literal to replace"
+msgstr "la condition if de la ligne %d compare avec %s - avec des séparateurs de chiffres, le détecteur ne lit que le premier bloc %s (fausse alerte) ; aucun littéral à remplacer"
+
+msgid "no if condition on line %d compares with %s"
+msgstr "aucune condition if de la ligne %d ne compare avec %s"
+
+msgid "the if condition on line %d compares %d times with %s - ambiguous; the quick fix replaces exactly one literal"
+msgstr "la condition if de la ligne %d compare %d fois avec %s - ambigu ; le Quick-Fix remplace exactement un littéral"
+
+msgid "%s is in line %d, a continuation line of the if condition - the constant would belong before the if line (not supported)"
+msgstr "%s se trouve à la ligne %d, une ligne de continuation de la condition if - la constante devrait précéder la ligne du if (non pris en charge)"
+
+msgid "the line is in the main block of the program (begin from line %d) - whether an inline declaration is valid there has not been measured; %s"
+msgstr "la ligne se trouve dans le bloc principal du programme (begin à partir de la ligne %d) - il n'a pas été mesuré si une déclaration inline y est valide; %s"
+
+msgid "an inline constant exists only from Delphi 10.3 on - the file shows traces of older compilers (%s, line %d); %s"
+msgstr "une constante inline n'existe qu'à partir de Delphi 10.3 - le fichier porte des traces de compilateurs plus anciens (%s, ligne %d); %s"
+
+msgid "the message names no number (\"Magic number \"N\" ...\")"
+msgstr "le message ne nomme aucun nombre (« Magic number \"N\" ... »)"
+
+msgid "the message names %s - the detector does not report signed numbers, the literal has no sign; not supported"
+msgstr "le message nomme %s - le détecteur ne signale pas les nombres signés, le littéral n'a pas de signe ; non pris en charge"
+
+msgid "at the literal in column %d the code action reads \"%s\" instead of %s"
+msgstr "pour le littéral de la colonne %d, l'action de code lit « %s » au lieu de %s"
+
+msgid "an inline constant"
+msgstr "une constante inline"
+
+msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 10.3, which has no inline constants; %s"
+msgstr "projet %s dans le répertoire %s sans ProjectVersion lisible (Delphi 2007 n'en écrivait pas) - l'unité se compile sans doute aussi avec un Delphi antérieur à 10.3, qui ne connaît pas les constantes inline; %s"
+
+msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 = 18.5) - there are no inline constants there; %s"
+msgstr "projet %s dans le répertoire %s avec ProjectVersion %s (avant Delphi 10.3 = 18.5) - les constantes inline n'y existent pas; %s"
+
+msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 10.3, which has no inline constants; %s"
+msgstr "ancien fichier de projet %s dans le répertoire %s - l'unité se compile sans doute aussi avec un Delphi antérieur à 10.3, qui ne connaît pas les constantes inline; %s"
+
+msgid "Lazarus/FPC file (%s) - FPC 3.2 has no inline constants"
+msgstr "fichier Lazarus/FPC (%s) - FPC 3.2 ne connaît pas les constantes inline"
+
+msgid "network path (%s) - the quick fix reads no project or include files there (the menu is built in the main thread); %s"
+msgstr "chemin réseau (%s) - le Quick-Fix n'y lit aucun fichier de projet ni include (le menu est construit dans le thread principal); %s"
+
+msgid "Lazarus project/package %s in the directory %s - the unit probably also builds with FPC, and FPC 3.2 has no inline constants"
+msgstr "projet/paquet Lazarus %s dans le répertoire %s - l'unité se compile sans doute aussi avec FPC, et FPC 3.2 ne connaît pas les constantes inline"
+
+msgid "the include %s carries an FPC switch (line %d) - FPC 3.2 has no inline constants"
+msgstr "le fichier include %s porte un aiguillage FPC (ligne %d) - FPC 3.2 ne connaît pas les constantes inline"
+
+msgid "the include %s shows traces of older compilers (%s, line %d) - an inline constant exists only from Delphi 10.3 on; %s"
+msgstr "le fichier include %s porte des traces de compilateurs plus anciens (%s, ligne %d) - une constante inline n'existe qu'à partir de Delphi 10.3; %s"
+
+msgid "include %s %s - the quick fix does not see its compiler switches (FPC, older Delphi)"
+msgstr "fichier include %s %s - le Quick-Fix ne voit pas ses aiguillages de compilation (FPC, Delphi plus anciens)"
+
+msgid "the literal is in the declaration before \":=\" (type, default value or dispid) - the action changes nothing there"
+msgstr "le littéral se trouve dans la déclaration avant « := » (type, valeur par défaut ou dispid) - l'action n'y change rien"
+
+msgid "the line declares a constant after the statement (\"const ...\") - its value stays as it is"
+msgstr "la ligne déclare une constante après l'instruction (« const ... ») - sa valeur reste telle quelle"
+
+msgid "the literal alone is already the value of a declaration - it already has a name"
+msgstr "le littéral est déjà à lui seul la valeur d'une déclaration - il a déjà un nom"
+
+msgid "the line declares a constant - its value stays as it is (the action does not change constant declarations)"
+msgstr "la ligne déclare une constante - sa valeur reste telle quelle (l'action ne modifie pas les déclarations de constantes)"
+
+msgid "the line starts with \"%s\" - a declaration, label or asm line; no declaration is allowed there"
+msgstr "la ligne commence par « %s » - une déclaration, une étiquette ou une ligne asm ; aucune déclaration n'y est autorisée"
+
+msgid "the line starts with \"%s\" - the continuation of a routine header or a property (message, dispid, external ...); no declaration is allowed there"
+msgstr "la ligne commence par « %s » - la suite d'un en-tête de routine ou d'une propriété (message, dispid, external ...) ; aucune déclaration n'y est autorisée"
+
+msgid "the line is an attribute (\"[...]\") - only constants are allowed there"
+msgstr "la ligne est un attribut (« [...] ») - seules des constantes y sont autorisées"
+
+msgid "the line is a declaration \"Name = ...\" (const or type section) - no inline declaration is allowed there"
+msgstr "la ligne est une déclaration « Nom = ... » (section const ou type) - aucune déclaration inline n'y est autorisée"
+
+msgid "the line starts with \"%s\" - no declaration may precede it"
+msgstr "la ligne commence par « %s » - aucune déclaration ne peut la précéder"
+
+msgid "the line is a typed constant or initialized variable \"Name: Type = Value\" (const/var section) - its value stays as it is"
+msgstr "la ligne est une constante typée ou une variable initialisée « Nom: Type = Valeur » (section const/var) - sa valeur reste telle quelle"
+
+msgid "the line is a case branch, a label or an on handler - no declaration may precede it"
+msgstr "la ligne est une branche case, une étiquette ou un gestionnaire on - aucune déclaration ne peut la précéder"
+
+msgid "the line starts with a value - it continues an expression and is not a statement"
+msgstr "la ligne commence par une valeur - elle poursuit une expression et n'est pas une instruction"
+
+msgid "the line ends with \",\" - a list (e.g. case labels) that continues in the next line"
+msgstr "la ligne se termine par « , » - une liste (p. ex. des étiquettes case) qui continue à la ligne suivante"
+
+msgid "the line above belongs to a conditional expression (Delphi 13: \"X := if C then ...\") - a begin..end in the middle of the expression is not code"
+msgstr "la ligne au-dessus appartient à une expression conditionnelle (Delphi 13 : « X := if C then ... ») - un begin..end au milieu de l'expression n'est pas du code"
+
+msgid "the statement in the branch does not end on this line with \";\" (multi-line or before else) - not supported"
+msgstr "l'instruction de la branche ne se termine pas sur cette ligne par « ; » (sur plusieurs lignes ou avant else) - non pris en charge"
+
+msgid "the line holds more than the one statement of the branch (a second \";\", an else without its own if, an open block) - begin..end around the line would change what runs in the branch"
+msgstr "la ligne contient plus que l'unique instruction de la branche (un second « ; », un else sans if propre, un bloc ouvert) - un begin..end autour de la ligne changerait ce qui s'exécute dans la branche"
+
+msgid "the line above starts the initialization/finalization section - whether an inline declaration is valid there has not been measured"
+msgstr "la ligne au-dessus commence la section initialization/finalization - il n'a pas été mesuré si une déclaration inline y est valide"
+
+msgid "the line above neither ends a statement nor ends with then/do/else - unclear where the declaration belongs"
+msgstr "la ligne au-dessus ne termine pas d'instruction et ne se termine pas par then/do/else - impossible de savoir où va la déclaration"
+
+msgid "no number literal at the caret"
+msgstr "aucun littéral numérique au curseur"
+
+msgid "the line is inside a multi-line string - there is no code there"
+msgstr "la ligne se trouve dans une chaîne sur plusieurs lignes - il n'y a pas de code à cet endroit"
+
+msgid "the line is inside a multi-line comment - there is no code there"
+msgstr "la ligne se trouve dans un commentaire sur plusieurs lignes - il n'y a pas de code à cet endroit"
+
+msgid "the line is inside an asm block - there is no Pascal code there"
+msgstr "la ligne se trouve dans un bloc asm - il n'y a pas de code Pascal à cet endroit"
+
+msgid "the line is in the initialization/finalization section - whether an inline declaration is valid there has not been measured"
+msgstr "la ligne se trouve dans la section initialization/finalization - il n'a pas été mesuré si une déclaration inline y est valide"
+
+msgid "the file carries an FPC switch ({$IFDEF FPC}, {$MODE ...}) - FPC 3.2 has no inline constants"
+msgstr "le fichier porte un aiguillage FPC ({$IFDEF FPC}, {$MODE ...}) - FPC 3.2 ne connaît pas les constantes inline"
+
+msgid "the statement is the last line without a line end - no room for end;"
+msgstr "l'instruction est la dernière ligne sans fin de ligne - pas de place pour end;"
+
+msgid "the branch line ends in an open comment or string - \"begin\" would end up inside it"
+msgstr "la ligne de branche se termine dans un commentaire ou une chaîne ouverts - « begin » s'y retrouverait"
+
+msgid "the statement ends in an open comment or string - \"end;\" would end up inside it"
+msgstr "l'instruction se termine dans un commentaire ou une chaîne ouverts - « end; » s'y retrouverait"
+
+msgid "the then/else above belongs to a conditional expression (Delphi 13: \"X := if C then A\" / \"else\" / ...) - a begin..end in the middle of the expression is not code"
+msgstr "le then/else au-dessus appartient à une expression conditionnelle (Delphi 13 : « X := if C then A » / « else » / ...) - un begin..end au milieu de l'expression n'est pas du code"
+
+msgid "there is a directive on the line above or between it and the statement - in another branch of the conditional compilation the declaration would be somewhere else"
+msgstr "une directive se trouve sur la ligne au-dessus ou entre elle et l'instruction - dans une autre branche de la compilation conditionnelle, la déclaration se trouverait ailleurs"
+
+msgid "the caret line %d is not in the buffer"
+msgstr "la ligne du curseur %d n'est pas dans le tampon"
+
+msgid "replacement at byte %d (length %d) does not ascend or reaches beyond the buffer (position %d, buffer %d)"
+msgstr "remplacement à l'octet %d (longueur %d) non croissant ou hors du tampon (position %d, tampon %d)"
+
+msgid "the file does not start with unit/program/library (include or script?) - only the compiler knows %s"
+msgstr "le fichier ne commence pas par unit/program/library (include ou script ?) - seul le compilateur connaît %s"
+
+msgid "unit without an implementation part (script?) - only the compiler knows %s"
+msgstr "unit sans partie implementation (script ?) - seul le compilateur connaît %s"

@@ -25,6 +25,9 @@ unit uRdxIntroEdits;
 // (Ends/RowEol, Eol als Rueckfall = erstes Zeilenende) entsprechen
 // uRdxBufferMath.BufferEol; ein einzelnes CR ist hier kein Zeilenende
 // (BufferMath: doch) - bis zur Zusammenlegung bewusst so belassen.
+// Abweichung vom Labor (Entscheid E29): die Gruende und die Meldung von
+// ApplyIntroEdits sind englische msgids, uebersetzt mit uRdxText._ in die
+// Sprache der SCA-Oberflaeche (deutscher Wortlaut in i18n/de.po).
 //
 // Positionen: Zeilen 1-basiert; Spalten 1-basierte Zeichenspalten der
 // Zeile (UTF-16, wie uRdxIntroPlan); Offsets UTF-8-Bytes ab Pufferanfang -
@@ -129,6 +132,9 @@ function ApplyIntroEdits(const ABytes: TBytes;
   const AEdits: TRdxIntroByteEdits): TBytes;
 
 implementation
+
+uses
+  uRdxText;    // _ (Gruende in der Sprache der SCA, E29)
 
 const
   BYTE_LF = 10;
@@ -378,19 +384,19 @@ var
 begin
   Result := '';
   if ARows[ARow - 1].State = 's' then
-    Exit('die Zeile liegt in einem mehrzeiligen String - dort ist kein Code');
+    Exit(_('the line is inside a multi-line string - there is no code there'));
   if ARows[ARow - 1].State <> 'c' then
-    Exit('die Zeile liegt in einem mehrzeiligen Kommentar - dort ist kein '
-      + 'Code');
+    Exit(_('the line is inside a multi-line comment - there is no code '
+      + 'there'));
   Section := SectionAt(ARows, ARow);
   if Section = 'a' then
-    Exit('die Zeile liegt in einem asm-Block - dort ist kein Pascal-Code');
+    Exit(_('the line is inside an asm block - there is no Pascal code there'));
   if Section = 'i' then
-    Exit('die Zeile liegt im initialization-/finalization-Abschnitt - ob '
-      + 'dort eine Inline-Deklaration gilt, ist nicht gemessen');
+    Exit(_('the line is in the initialization/finalization section - whether '
+      + 'an inline declaration is valid there has not been measured'));
   if SourceLooksFpcAware(AText) then
-    Exit('die Datei traegt eine FPC-Weiche ({$IFDEF FPC}, {$MODE ...}) - '
-      + 'eine Inline-Konstante gibt es in FPC 3.2 nicht');
+    Exit(_('the file carries an FPC switch ({$IFDEF FPC}, {$MODE ...}) - '
+      + 'FPC 3.2 has no inline constants'));
 end;
 
 // Die Zeile darueber APrevRow fuer den Plan: roh ab ihrem Kommentar-
@@ -455,18 +461,18 @@ function BlockReason(const AText: TRdxIntroText; const ATarget: TRdxIntroTarget;
   const ARows: TRdxIntroRows): string;
 begin
   if ATarget.SourceRow >= Length(AText.Starts) then
-    Result := 'die Anweisung ist die letzte Zeile ohne Zeilenende - kein '
-      + 'Platz fuer end;'
+    Result := _('the statement is the last line without a line end - no room '
+      + 'for end;')
   else if ARows[ATarget.PrevRow].State <> 'c' then
-    Result := 'die Zweigzeile endet in einem offenen Kommentar oder String '
-      + '- "begin" landete darin'
+    Result := _('the branch line ends in an open comment or string - "begin" '
+      + 'would end up inside it')
   else if ARows[ATarget.SourceRow].State <> 'c' then
-    Result := 'die Anweisung endet in einem offenen Kommentar oder String - '
-      + '"end;" landete darin'
+    Result := _('the statement ends in an open comment or string - "end;" '
+      + 'would end up inside it')
   else if BranchOfIfExpression(ATarget, ARows) then
-    Result := 'das then/else darueber gehoert zu einem Bedingungsausdruck '
-      + '(Delphi 13: "X := if C then A" / "else" / ...) - ein begin..end '
-      + 'mitten im Ausdruck ist kein Code'
+    Result := _('the then/else above belongs to a conditional expression '
+      + '(Delphi 13: "X := if C then A" / "else" / ...) - a begin..end in the '
+      + 'middle of the expression is not code')
   else
     Result := '';
 end;
@@ -479,9 +485,9 @@ function PlacementReason(const AText: TRdxIntroText; const ATarget: TRdxIntroTar
   const ARows: TRdxIntroRows): string;
 begin
   if DirectiveBetween(AText, ATarget.PrevRow, ATarget.SourceRow) then
-    Result := 'auf der Zeile darueber oder zwischen ihr und der Anweisung '
-      + 'steht eine Direktive - in einem anderen Zweig der bedingten '
-      + 'Uebersetzung stuende die Deklaration woanders'
+    Result := _('there is a directive on the line above or between it and '
+      + 'the statement - in another branch of the conditional compilation '
+      + 'the declaration would be somewhere else')
   else if ATarget.Plan.Wrap then
     Result := BlockReason(AText, ATarget, ARows)
   else
@@ -500,8 +506,7 @@ begin
   Result.SourceRow := ARow;
   if (ARow < 1) or (ARow > Length(AText.Lines)) then
   begin
-    Result.Plan.Reason := Format('die Caret-Zeile %d liegt nicht im Puffer',
-      [ARow]);
+    Result.Plan.Reason := _('the caret line %d is not in the buffer', [ARow]);
     Exit;
   end;
   // Vor dem Plan: in einem mehrzeiligen String oder Kommentar, im
@@ -624,9 +629,11 @@ begin
   begin
     if (E.Offset < At) or (E.Len < 0)
        or (E.Offset + E.Len > Length(ABytes)) then
-      raise EArgumentException.CreateFmt('Ersetzung bei Byte %d (Laenge %d) '
-        + 'steigt nicht auf oder ragt aus dem Puffer (Stand %d, Puffer %d)',
-        [E.Offset, E.Len, At, Length(ABytes)]);
+      // Uebersetzt wie die Gruende: laeuft die Ausnahme bis zum Host, sieht
+      // der Nutzer sie als Fehlermeldung.
+      raise EArgumentException.Create(_('replacement at byte %d (length %d) '
+        + 'does not ascend or reaches beyond the buffer (position %d, buffer '
+        + '%d)', [E.Offset, E.Len, At, Length(ABytes)]));
     AppendBytes(Result, ABytes, At, E.Offset - At);
     Ins := TEncoding.UTF8.GetBytes(E.Text);
     AppendBytes(Result, Ins, 0, Length(Ins));

@@ -134,6 +134,10 @@ msgstr ""
 msgid "%s contains no profiles."
 msgstr ""
 
+#: reDelphix/source/uRdxMagicFixes.pas:370
+msgid "%s is in line %d, a continuation line of the if condition - the constant would belong before the if line (not supported)"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:832
 msgid "%s is no longer at the reported place"
 msgstr ""
@@ -1460,6 +1464,14 @@ msgstr ""
 msgid "Large integer literal without digit grouping"
 msgstr ""
 
+#: reDelphix/source/uRdxMagicFixes.pas:724
+msgid "Lazarus project/package %s in the directory %s - the unit probably also builds with FPC, and FPC 3.2 has no inline constants"
+msgstr ""
+
+#: reDelphix/source/uRdxMagicFixes.pas:714
+msgid "Lazarus/FPC file (%s) - FPC 3.2 has no inline constants"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:1779
 msgid "Length()/.Count minus a constant can underflow on empty input"
 msgstr ""
@@ -2727,6 +2739,14 @@ msgstr ""
 msgid "You are a senior Delphi developer reviewing the output of a static code analyser. Target version: Delphi 12 Athens (RTL/VCL). Suggest minimal, idiomatic fixes - no sweeping refactors, no style overhauls, no new dependencies unless strictly required."
 msgstr ""
 
+#: reDelphix/source/uRdxMagicFixes.pas:565
+msgid "an inline constant"
+msgstr ""
+
+#: reDelphix/source/uRdxMagicFixes.pas:531
+msgid "an inline constant exists only from Delphi 10.3 on - the file shows traces of older compilers (%s, line %d); %s"
+msgstr ""
+
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:496
 msgid "analyse only files changed in current branch"
 msgstr ""
@@ -2737,6 +2757,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2196
 msgid "asm..end block - platform-specific, hard to port"
+msgstr ""
+
+#: reDelphix/source/uRdxMagicFixes.pas:562
+msgid "at the literal in column %d the code action reads \"%s\" instead of %s"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:787
@@ -2831,12 +2855,24 @@ msgstr ""
 msgid "in"
 msgstr ""
 
+#: reDelphix/source/uRdxMagicFixes.pas:766
+msgid "include %s %s - the quick fix does not see its compiler switches (FPC, older Delphi)"
+msgstr ""
+
+#: reDelphix/source/uRdxMagicFixes.pas:355
+msgid "line %d carries no if"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:742
 msgid "line moved? Analyse the file again"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:817
 msgid "literal not readable: %s"
+msgstr ""
+
+#: reDelphix/source/uRdxMagicFixes.pas:716
+msgid "network path (%s) - the quick fix reads no project or include files there (the menu is built in the main thread); %s"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:782
@@ -2851,6 +2887,14 @@ msgstr ""
 msgid "no header %s"
 msgstr ""
 
+#: reDelphix/source/uRdxMagicFixes.pas:363
+msgid "no if condition on line %d compares with %s"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroPlan.pas:1105
+msgid "no number literal at the caret"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:822
 msgid "no operand in the chain"
 msgstr ""
@@ -2862,6 +2906,10 @@ msgstr ""
 #: reDelphix/source/uRdxProvider.pas:813
 #: reDelphix/source/uRdxProvider.pas:829
 msgid "nothing to offer"
+msgstr ""
+
+#: reDelphix/source/uRdxMagicFixes.pas:697
+msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 10.3, which has no inline constants; %s"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2399
@@ -2884,6 +2932,18 @@ msgstr ""
 msgid "own unit %s in the project"
 msgstr ""
 
+#: reDelphix/source/uRdxMagicFixes.pas:693
+msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 = 18.5) - there are no inline constants there; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxMagicFixes.pas:691
+msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 10.3, which has no inline constants; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroEdits.pas:634
+msgid "replacement at byte %d (length %d) does not ascend or reaches beyond the buffer (position %d, buffer %d)"
+msgstr ""
+
 #: StaticCodeAnalyserIDE/uIDESonarOptions.pas:414
 msgid "sonar.projectKey not found in "
 msgstr ""
@@ -2892,25 +2952,177 @@ msgstr ""
 msgid "svn not found. Install TortoiseSVN WITH the option \"command line client tools\" or set the path to svn.exe in analyser.ini."
 msgstr ""
 
+#: reDelphix/source/uRdxIntroEdits.pas:467
+msgid "the branch line ends in an open comment or string - \"begin\" would end up inside it"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroEdits.pas:509
+msgid "the caret line %d is not in the buffer"
+msgstr ""
+
 #: reDelphix/source/uRdxProvider.pas:578
 #: reDelphix/source/uRdxProvider.pas:636
 msgid "the clause would no longer be sorted (new SCA142)"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroEdits.pas:398
+msgid "the file carries an FPC switch ({$IFDEF FPC}, {$MODE ...}) - FPC 3.2 has no inline constants"
+msgstr ""
+
+#: reDelphix/source/uRdxCompilerTraces.pas:324
+msgid "the file does not start with unit/program/library (include or script?) - only the compiler knows %s"
+msgstr ""
+
+#: reDelphix/source/uRdxMagicFixes.pas:366
+msgid "the if condition on line %d compares %d times with %s - ambiguous; the quick fix replaces exactly one literal"
+msgstr ""
+
+#: reDelphix/source/uRdxMagicFixes.pas:359
+msgid "the if condition on line %d compares with %s - with digit separators the detector reads only the first block %s (false alarm); no literal to replace"
+msgstr ""
+
+#: reDelphix/source/uRdxMagicFixes.pas:750
+msgid "the include %s carries an FPC switch (line %d) - FPC 3.2 has no inline constants"
+msgstr ""
+
+#: reDelphix/source/uRdxMagicFixes.pas:754
+msgid "the include %s shows traces of older compilers (%s, line %d) - an inline constant exists only from Delphi 10.3 on; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroPlan.pas:1050
+msgid "the line above belongs to a conditional expression (Delphi 13: \"X := if C then ...\") - a begin..end in the middle of the expression is not code"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroPlan.pas:1086
+msgid "the line above neither ends a statement nor ends with then/do/else - unclear where the declaration belongs"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroPlan.pas:1081
+msgid "the line above starts the initialization/finalization section - whether an inline declaration is valid there has not been measured"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroPlan.pas:1006
+msgid "the line declares a constant - its value stays as it is (the action does not change constant declarations)"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroPlan.pas:878
+msgid "the line declares a constant after the statement (\"const ...\") - its value stays as it is"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroPlan.pas:1034
+msgid "the line ends with \",\" - a list (e.g. case labels) that continues in the next line"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroPlan.pas:1057
+msgid "the line holds more than the one statement of the branch (a second \";\", an else without its own if, an open block) - begin..end around the line would change what runs in the branch"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroPlan.pas:1028
+msgid "the line is a case branch, a label or an on handler - no declaration may precede it"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroPlan.pas:1019
+msgid "the line is a declaration \"Name = ...\" (const or type section) - no inline declaration is allowed there"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroPlan.pas:1025
+msgid "the line is a typed constant or initialized variable \"Name: Type = Value\" (const/var section) - its value stays as it is"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroPlan.pas:1016
+msgid "the line is an attribute (\"[...]\") - only constants are allowed there"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroEdits.pas:395
+msgid "the line is in the initialization/finalization section - whether an inline declaration is valid there has not been measured"
+msgstr ""
+
+#: reDelphix/source/uRdxMagicFixes.pas:519
+msgid "the line is in the main block of the program (begin from line %d) - whether an inline declaration is valid there has not been measured; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroEdits.pas:389
+msgid "the line is inside a multi-line comment - there is no code there"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroEdits.pas:387
+msgid "the line is inside a multi-line string - there is no code there"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroEdits.pas:393
+msgid "the line is inside an asm block - there is no Pascal code there"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:777
 msgid "the line starts inside a comment or string"
 msgstr ""
 
+#: reDelphix/source/uRdxIntroPlan.pas:1009
+msgid "the line starts with \"%s\" - a declaration, label or asm line; no declaration is allowed there"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroPlan.pas:1022
+msgid "the line starts with \"%s\" - no declaration may precede it"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroPlan.pas:1012
+msgid "the line starts with \"%s\" - the continuation of a routine header or a property (message, dispid, external ...); no declaration is allowed there"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroPlan.pas:1031
+msgid "the line starts with a value - it continues an expression and is not a statement"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroPlan.pas:1003
+msgid "the literal alone is already the value of a declaration - it already has a name"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroPlan.pas:875
+msgid "the literal is in the declaration before \":=\" (type, default value or dispid) - the action changes nothing there"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:757
 msgid "the message has no column"
+msgstr ""
+
+#: reDelphix/source/uRdxMagicFixes.pas:551
+msgid "the message names %s - the detector does not report signed numbers, the literal has no sign; not supported"
+msgstr ""
+
+#: reDelphix/source/uRdxMagicFixes.pas:549
+msgid "the message names no number (\"Magic number \"N\" ...\")"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:392
 msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
 msgstr ""
 
+#: reDelphix/source/uRdxIntroEdits.pas:470
+msgid "the statement ends in an open comment or string - \"end;\" would end up inside it"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroPlan.pas:1054
+msgid "the statement in the branch does not end on this line with \";\" (multi-line or before else) - not supported"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroEdits.pas:464
+msgid "the statement is the last line without a line end - no room for end;"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroEdits.pas:473
+msgid "the then/else above belongs to a conditional expression (Delphi 13: \"X := if C then A\" / \"else\" / ...) - a begin..end in the middle of the expression is not code"
+msgstr ""
+
+#: reDelphix/source/uRdxIntroEdits.pas:488
+msgid "there is a directive on the line above or between it and the statement - in another branch of the conditional compilation the declaration would be somewhere else"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:812
 msgid "unclear what the statement belongs to (\"%s\" before it)"
+msgstr ""
+
+#: reDelphix/source/uRdxCompilerTraces.pas:335
+msgid "unit without an implementation part (script?) - only the compiler knows %s"
 msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:553
