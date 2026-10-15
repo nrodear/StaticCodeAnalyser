@@ -60,7 +60,11 @@ unit uRdxMagicFixes;
 //     den Includes, auch ein Include, das nicht neben der Unit liegt
 //     (IncludeReason). Auf einem Netzpfad (UNC) bzw. Netzlaufwerk liest die
 //     Hilfe nichts von der Platte - der Menueaufbau laeuft im Hauptthread
-//     (Verdacht e): sie lehnt ab. Zwischengespeichert wird nichts: je
+//     (Verdacht e): sie lehnt ab; seit Charge B1-FD gilt das auch fuer
+//     ein Include auf einem Netzpfad in einer lokalen Unit
+//     ('{$I \\server\share\defs.inc}' wartete 9 bis 16 s, Gegen-Review
+//     R4-03; Regel uRdxRoutineFixes.IsNetworkPath, geprueft vor jedem
+//     FileExists). Zwischengespeichert wird nichts: je
 //     Aufruf liest FileReason hoechstens drei Verzeichnisse und die Koepfe
 //     ihrer .dproj (Korpus-Harness, FPC: 1.010 Aufrufe in 231 ms, 0,2 ms
 //     je Fund; IncludeReason mit den Includes rund 7 ms) - ein Cache
@@ -133,17 +137,19 @@ type
     // Projektdateien: eine .dproj mit ProjectVersion unter
     // FLOOR_INLINE_DECL.ProjectVersion (18.5 = Delphi 10.3; ohne lesbare
     // Version zaehlt sie als alt) bzw. - ohne .dproj dort - eine alte
-    // Projektdatei (.dof, .bdsproj, .bpr, .bpg). Ein Netzpfad (UNC) wird
-    // nicht gelesen. '' oder der Grund. Die FPC-Weiche IN der Datei prueft
-    // schon TargetAt.
+    // Projektdatei (.dof, .bdsproj, .bpr, .bpg). Ein Netzpfad (UNC oder
+    // Netzlaufwerk, IsNetworkPath) wird nicht gelesen. '' oder der Grund.
+    // Die FPC-Weiche IN der Datei prueft schon TargetAt.
     class function FileReason(const AFileName: string): string; static;
 
     // Die Include-Dateien der Unit AFileName (alle {$I} in AMap, auch die
     // im Kopf - dort stehen die Compiler-Weichen: jvcl.inc,
-    // mormot.defines.inc ...) lesen, verschachtelte ebenso
+    // mormot.defines.inc ...; uRdxRoutineFixes.AllIncludes, bis zur
+    // Nachpruefung der Charge B1-FD hier kopiert) lesen, verschachtelte ebenso
     // (uRdxRoutineFixes.IncludeChainReason): '' oder der Grund - eine
     // FPC-Weiche oder Spur aelterer Compiler darin, oder ein Include, das
-    // nicht neben der Unit liegt (seine Weichen sieht die Hilfe nicht).
+    // nicht neben der Unit liegt oder auf einem Netzpfad (nicht gelesen) -
+    // seine Weichen sieht die Hilfe dann nicht.
     class function IncludeReason(const AFileName: string;
       AMap: TRdxCodeMap): string; static;
   end;
@@ -156,7 +162,7 @@ uses
   uRefactorInfo,        // TRefactorSpan.Make
   uRdxIntroPlan,        // CharColOfByte, LineLooksFpcAware
   uRdxIntroEdits,       // TextOf, TargetAt, IntroduceEdits, ApplyIntroEdits
-  uRdxRoutineFixes,     // IncludeChainReason
+  uRdxRoutineFixes,     // IncludeChainReason, AllIncludes, IsNetworkPath
   uRdxCompilerTraces;   // OldCompilerTrace, ScriptReason, FLOOR_INLINE_DECL
 
 const
@@ -370,7 +376,13 @@ end;
 // Die Ersetzungen der Code-Aktion (Bytes, aufsteigend) als EINE Ersetzung
 // fuer PlanByteEdits: von Spalte 1 der Zeile der ersten bis hinter die
 // letzte; Expected und NewText aus den Bytes vor und nach ApplyIntroEdits
-// (Zeilenenden #10 wie SpanText).
+// (Zeilenenden #10 wie SpanText). Ein Bereich beginnt auf einem Zeichen
+// (TRefactorInfoBuilder.SpanFits): ist die erste Zeile LEER - eine
+// Leerzeile zwischen Zweigzeile und Anweisung, vor die IntroduceEdits
+// 'begin' setzt -, beginnt er am Anfang der naechsten nicht leeren Zeile
+// davor, die unveraendert in Expected und NewText steht. Bis Charge B1-FD
+// begann er auf der Leerzeile: der Eintrag stand freigegeben im Menue, und
+// jeder Klick scheiterte mit "Menue neu oeffnen" (Gegen-Review R4-02).
 function AsOneEdit(const AText: TRdxIntroText;
   const AEdits: TRdxIntroByteEdits): TRdxEdit;
 var
@@ -392,6 +404,8 @@ begin
   end;
   Row1 := RowOfByte(AText, First);
   Row2 := RowOfByte(AText, Last);
+  while (Row1 > 1) and (AText.Lines[Row1 - 1] = '') do
+    Dec(Row1);
   First := AText.Starts[Row1 - 1];
   Delta := Length(NewBytes) - Length(OldBytes);
   Result.Span := TRefactorSpan.Make(SPAN_MAGIC, Row1, 1, Row2,
@@ -405,7 +419,11 @@ end;
 
 // Das 'begin' des Hauptblocks einer Datei, die mit program bzw. library
 // beginnt: von ihrem letzten 'end.' rueckwaerts bis zu dem Oeffner, der
-// die end-Bilanz schliesst (END_OPENERS); Low = '' ohne.
+// die end-Bilanz schliesst (END_OPENERS); Low = '' ohne. Ein end bzw.
+// Oeffner mit ':=' dahinter ist ein benanntes Argument ('Doc.Range(Start
+// := 0, End := 1)') und zaehlt nicht (IsKeywordAt) - bis Charge B1-FD
+// verdeckte es den Hauptblock, und die Hilfe bot dort an (Gegen-Review R4,
+// missed 3; wie H4c).
 function MainBlockBegin(AMap: TRdxCodeMap): TRdxToken;
 var
   T, P  : TRdxToken;
@@ -423,7 +441,7 @@ begin
     T := Before(AMap, T);
     if T.Low = '' then Exit;
     P := Before(AMap, T);
-    if not IsKeywordAfter(T, P) then Continue;
+    if not IsKeywordAt(AMap, T, P) then Continue;
     if T.Low = KW_END then
       Inc(Depth)
     else if IsEndOpener(T.Low) then
@@ -622,14 +640,9 @@ begin
     Result := Format(R_LEGACY, [AFiles.Legacy, ADir]);
 end;
 
-// Ein Netzpfad ('\\server\share\..', auch mit '/')? Den liest die Hilfe
-// nicht (Verdacht e).
-function IsNetworkPath(const AFileName: string): Boolean;
-begin
-  Result := (Length(AFileName) > 2) and CharInSet(AFileName[1], ['\', '/'])
-    and CharInSet(AFileName[2], ['\', '/']);
-end;
-
+// Netzpfad: uRdxRoutineFixes.IsNetworkPath (UNC und Netzlaufwerk, seit
+// Charge B1-FD die eine Regel fuer Unit und Includes; bis dahin stand hier
+// eine eigene Kopie nur fuer UNC).
 class function TRdxMagicFixes.FileReason(const AFileName: string): string;
 var
   Ext, Dir, Up : string;
@@ -665,24 +678,6 @@ begin
     if Up = Dir then Exit;
     Dir := Up;
   end;
-end;
-
-// Alle Include-Dateien der Datei, der Reihe nach (auch im Kopf).
-function AllIncludes(AMap: TRdxCodeMap): TArray<string>;
-var
-  Li, Co : Integer;
-  F      : string;
-begin
-  Result := nil;
-  for Li := 1 to AMap.LineCount do
-    for Co := 1 to Length(AMap.Raw(Li)) do
-      if CharInSet(AMap.Raw(Li)[Co], ['{', '('])
-         and OpensDirective(AMap, Li, Co) then
-      begin
-        F := IncludeFileAt(AMap, Li, Co);
-        if F <> '' then
-          Result := Result + [F];
-      end;
 end;
 
 // Die Pruefung eines Includes (TRdxIncludeTest): eine FPC-Weiche oder eine

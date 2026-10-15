@@ -12,6 +12,12 @@ unit uTestRdxMagicGuards;
 // und zwei darueber) bleibt im eigenen Baum, und eine fremde Projektdatei
 // in TEMP kippt keinen Test (Gegen-Review Q14, Minor 14); jeder Test raeumt
 // seinen Baum ab.
+// Charge B1-FD (Code-Review reDelphix, Bereich R4; je gegen 4358b769 rot,
+// Fixtures des Pruefers rc/r402.txt, rmain.txt, vunc.pas): Leerzeile
+// zwischen Zweigzeile und Anweisung (R4-02 - die eine Ersetzung begann auf
+// der Leerzeile, PlanByteEdits lehnte jeden Klick ab), 'End := 1' im
+// Hauptblock (missed 3) und ein Include auf einem Netzpfad in einer
+// lokalen Unit (R4-03 - ohne Plattenzugriff abgelehnt).
 
 interface
 
@@ -28,13 +34,16 @@ type
     [Test] procedure Disk_LazarusBeforeDelphi;
     [Test] procedure Disk_NetworkPath_Refused;
     [Test] procedure MainBlock_ProgramAndLibrary_Refused;
+    [Test] procedure Wrap_BlankLineBeforeStatement_Writes;
+    [Test] procedure MainBlock_NamedEndArg_Refused;
+    [Test] procedure Disk_IncludeOnNetworkPath_NoDiskAccess;
   end;
 
 implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxCodeMap, uRdxMagicFixes;
+  uRdxBufferMath, uRdxCodeMap, uRdxMagicFixes;
 
 const
   MSG = 'Magic number "%s" in if condition - use a constant';
@@ -142,6 +151,58 @@ begin
   finally
     SB.Free;
   end;
+end;
+
+// Die erste Zeile (1-basiert) von ASource, die AOnLine traegt; 0 ohne.
+function LineWith(const ASource, AOnLine: string): Integer;
+var
+  SL : TStringList;
+  i  : Integer;
+begin
+  Result := 0;
+  SL := TStringList.Create;
+  try
+    SL.Text := ASource;
+    for i := 0 to SL.Count - 1 do
+      if (Result = 0) and (Pos(AOnLine, SL[i]) > 0) then
+        Result := i + 1;
+  finally
+    SL.Free;
+  end;
+end;
+
+// Der Plan fuer den Fund "AValue" auf der ersten Zeile mit AOnLine, gegen
+// die UTF-8-Bytes von ASource geprueft und angewendet wie der Editor
+// (PlanByteEdits, ApplyByteEdits): der neue Text.
+function FixText(const ASource, AOnLine, AValue: string): string;
+var
+  SL     : TStringList;
+  Map    : TRdxCodeMap;
+  Plan   : TRdxMagicPlan;
+  Reason : string;
+  Ok     : Boolean;
+  Bytes  : TBytes;
+  BPlan  : TArray<TRdxByteEdit>;
+  Err    : string;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Ok := TRdxMagicFixes.MagicNumber(Map, LineWith(ASource, AOnLine),
+      Format(MSG, [AValue]), Plan, Reason);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+  Assert.IsTrue(Ok, 'Plan: ' + Reason);
+  Bytes := TEncoding.UTF8.GetBytes(ASource);
+  // Erst das Ergebnis: die Meldung soll Err NACH dem Aufruf zeigen (die
+  // Reihenfolge der Argumente ist nicht festgelegt).
+  Ok := PlanByteEdits(Bytes, Plan.Edits, BPlan, Err);
+  Assert.IsTrue(Ok, 'Schreiben: ' + Err);
+  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, BPlan));
 end;
 
 // Der Planer fuer den Fund "AValue" auf der ersten Zeile mit AOnLine: ''
@@ -307,6 +368,117 @@ begin
   Assert.AreEqual('', PlanReason(Join(['program p;', 'procedure Q;', 'begin',
     '  if ParamCount > 200 then Halt;', 'end;', 'begin', '  Q;', 'end.']),
     'ParamCount', '200'));
+end;
+
+{ ---- Charge B1-FD (Code-Review reDelphix, R4) ---- }
+
+procedure TTestRdxMagicGuards.Wrap_BlankLineBeforeStatement_Writes;
+const
+  HEAD: array[0..4] of string = ('unit u;', 'interface', 'implementation',
+    'procedure P(A: Boolean; X: Integer);', 'begin');
+var
+  Src, Want : string;
+begin
+  // R4-02, Pruefer-Fall r402 (1): zwischen Zweigzeile und Anweisung steht
+  // eine Leerzeile. 'begin' kommt an ihren Anfang - die eine Ersetzung
+  // begann dort, auf einer LEEREN Zeile (SpanFits), und jeder Klick
+  // meldete "Menue neu oeffnen". Jetzt beginnt sie an der Zweigzeile.
+  Src := Join([HEAD[0], HEAD[1], HEAD[2], HEAD[3], HEAD[4], '  if A then', '',
+    '    if X > 200 then Foo;', 'end;', 'end.']);
+  Want := Join([HEAD[0], HEAD[1], HEAD[2], HEAD[3], HEAD[4], '  if A then',
+    '  begin', '', '    const MagicNr01 = 200;', '    if X > MagicNr01 then Foo;',
+    '  end;', 'end;', 'end.']);
+  Assert.AreEqual(Want, FixText(Src, 'X > 200', '200'), 'Leerzeile, CRLF');
+  // r402 (2): LF, 'for var' als Zweig.
+  Src := StringReplace(Join([HEAD[0], HEAD[1], HEAD[2], HEAD[3], HEAD[4],
+    '  for var I := 0 to 3 do', '', '    if X > 200 then Foo;', 'end;', 'end.']),
+    #13#10, #10, [rfReplaceAll]);
+  Want := StringReplace(Join([HEAD[0], HEAD[1], HEAD[2], HEAD[3], HEAD[4],
+    '  for var I := 0 to 3 do', '  begin', '', '    const MagicNr01 = 200;',
+    '    if X > MagicNr01 then Foo;', '  end;', 'end;', 'end.']), #13#10, #10,
+    [rfReplaceAll]);
+  Assert.AreEqual(Want, FixText(Src, 'X > 200', '200'), 'Leerzeile, LF');
+  // r402 (3): Leerzeile und Kommentarzeile davor; zwei Leerzeilen.
+  Assert.AreEqual(Join([HEAD[0], HEAD[1], HEAD[2], HEAD[3], HEAD[4],
+      '  if A then', '  begin', '', '    // Grenze', '    const MagicNr01 = 200;',
+      '    if X > MagicNr01 then Foo;', '  end;', 'end;', 'end.']),
+    FixText(Join([HEAD[0], HEAD[1], HEAD[2], HEAD[3], HEAD[4], '  if A then',
+      '', '    // Grenze', '    if X > 200 then Foo;', 'end;', 'end.']),
+      'X > 200', '200'), 'Leer- und Kommentarzeile');
+  Assert.AreEqual(Join([HEAD[0], HEAD[1], HEAD[2], HEAD[3], HEAD[4],
+      '  if A then', '  begin', '', '', '    const MagicNr01 = 200;',
+      '    if X > MagicNr01 then Foo;', '  end;', 'end;', 'end.']),
+    FixText(Join([HEAD[0], HEAD[1], HEAD[2], HEAD[3], HEAD[4], '  if A then',
+      '', '', '    if X > 200 then Foo;', 'end;', 'end.']), 'X > 200', '200'),
+    'zwei Leerzeilen');
+  // Gegenprobe (r402 (4)): eine Zeile nur aus Leerzeichen ging schon vorher.
+  Assert.AreEqual(Join([HEAD[0], HEAD[1], HEAD[2], HEAD[3], HEAD[4],
+      '  if A then', '  begin', '    ', '    const MagicNr01 = 200;',
+      '    if X > MagicNr01 then Foo;', '  end;', 'end;', 'end.']),
+    FixText(Join([HEAD[0], HEAD[1], HEAD[2], HEAD[3], HEAD[4], '  if A then',
+      '    ', '    if X > 200 then Foo;', 'end;', 'end.']), 'X > 200', '200'),
+    'Leerzeichen-Zeile');
+end;
+
+procedure TTestRdxMagicGuards.MainBlock_NamedEndArg_Refused;
+var
+  R : string;
+begin
+  // missed 3, Pruefer-Fall rmain (1): 'End' als benanntes Argument im
+  // Hauptblock - die end-Bilanz rueckwaerts zaehlte es als end und fand
+  // den Hauptblock nicht; die Hilfe bot dort an.
+  R := PlanReason(Join(['program p;', 'var', '  Doc: Variant;', '  X: Integer;',
+    'begin', '  Doc.Range(Start := 0, End := 1);',
+    '  if X > 200 then Writeln(''a'');', 'end.']), 'X > 200', '200');
+  Assert.IsTrue(Pos('Hauptblock des Programms (begin ab Zeile 5)', R) > 0, R);
+  // 'Begin' als Name schloss die Bilanz zu frueh (Zeile 3 statt 2).
+  R := PlanReason(Join(['library l;', 'begin', '  Foo(Begin := 1);',
+    '  if X > 200 then Y;', 'end.']), 'X > 200', '200');
+  Assert.IsTrue(Pos('Hauptblock des Programms (begin ab Zeile 2)', R) > 0, R);
+end;
+
+procedure TTestRdxMagicGuards.Disk_IncludeOnNetworkPath_NoDiskAccess;
+var
+  T        : TTree;
+  Unc, R   : string;
+  SL       : TStringList;
+  Map      : TRdxCodeMap;
+  T0       : TDateTime;
+  Ms       : Integer;
+  i        : Integer;
+begin
+  // R4-03, Pruefer-Fall vunc: eine LOKALE Unit bindet ein Include auf einem
+  // Netzpfad ein. FileReason prueft nur den Pfad der Unit; IncludeReason
+  // fragte FileExists auf dem Netzpfad - bei einem nicht erreichbaren
+  // Server 9 bis 16 s im Hauptthread, bei jedem Menueaufbau. Jetzt lehnt sie
+  // ohne Plattenzugriff ab. Den Pfad setzt der Test aus Teilen zusammen (ein
+  // Pfad als Literal waere ein SCA016-Fund im Selbstscan).
+  T := NewTree;
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    for i := 0 to 1 do
+    begin
+      Unc := PathDelim + PathDelim + 'rdx-b1fd-gibt-es-nicht' + PathDelim
+        + 'share' + PathDelim;
+      if i = 1 then
+        Unc := StringReplace(Unc, PathDelim, '/', [rfReplaceAll]);
+      SL.Text := Join(['unit u;', 'interface', '{$I ' + Unc + 'defs.inc}',
+        'implementation', 'end.']);
+      Map.Free;
+      Map := TRdxCodeMap.Create(SL);
+      Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U), 'die Unit ist lokal');
+      T0 := Now;
+      R := TRdxMagicFixes.IncludeReason(T.U, Map);
+      Ms := Round((Now - T0) * MSecsPerDay);
+      Assert.IsTrue(Pos('auf einem Netzpfad', R) > 0, R);
+      Assert.IsTrue(Ms < 2000, Format('ohne Plattenzugriff: %d ms', [Ms]));
+    end;
+  finally
+    Map.Free;
+    SL.Free;
+    RemoveTree(T.Root);
+  end;
 end;
 
 end.

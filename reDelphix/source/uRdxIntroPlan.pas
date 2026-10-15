@@ -12,13 +12,19 @@ unit uRdxIntroPlan;
 // wird und WO der Name danach steht.
 //
 // Die Deklaration ist eine Inline-KONSTANTE, keine Variable (Nico
-// 2026-10-13, E26): eine Konstante behaelt Faltung, Ueberladungswahl und
-// die vorzeichenlose Rechnung des Literals. Die Kompilierprobe
-// probe\VnpTypeProbe.dpr (Win32, D12) zeigte fuer 'var X := 1': 'C - X'
-// mit C: Cardinal ergab -1 statt 4294967295 (P2.33/34), und Integer-
-// statt ShortInt-/Byte-Ueberladungen wurden gewaehlt (P4.9-16). Eine
-// Inline-Konstante gibt es in FPC 3.2 nicht - Dateien mit FPC-Weiche
-// lehnt uRdxIntroEdits.TargetAt ab (LineLooksFpcAware).
+// 2026-10-13, E26). Gemessen ist nur der Mangel der Variablen: die
+// Kompilierprobe probe\VnpTypeProbe.dpr (Win32, D12) zeigte fuer 'var X
+// := 1': 'C - X' mit C: Cardinal ergab -1 statt 4294967295 (P2.33/34), und
+// Integer- statt ShortInt-/Byte-Ueberladungen wurden gewaehlt (P4.9-16).
+// Dass die untypisierte Konstante Faltung, Ueberladungswahl und die
+// vorzeichenlose Rechnung des Literals BEHAELT, ist die Praemisse von E26 -
+// ihr Beleg, Teil P6 der Probe, ist noch nicht gebaut (das Protokoll vom
+// 2026-10-11 hat nur P1-P5; Code-Review R4-10). Fuer den Quick-Fix SCA014
+// (nur ein Vergleichswert einer if-Bedingung, uRdxMagicFixes) gilt sie als
+// sicher; fuer diese Aktion (alle gleichen Literale der Zeile, auch in
+// Arithmetik und Aufrufen) entscheidet P6. Eine Inline-Konstante gibt es
+// in FPC 3.2 nicht - Dateien mit FPC-Weiche lehnt uRdxIntroEdits.TargetAt
+// ab (LineLooksFpcAware).
 //
 // 1:1 aus dem Labor VarNameProject (uVnpPlan, Stand 2026-10-14 nach dem
 // Review F/B vom 2026-10-13, Entscheid E24: erst der im Labor gemessene
