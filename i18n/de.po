@@ -2556,3 +2556,66 @@ msgstr "%s [Protokoll: %s]"
 
 msgid "action kind %d without execution"
 msgstr "Aktionsart %d ohne Ausführung"
+
+msgid "the finding line lies in a block comment or multi-line string - a marker would have no effect there or would become part of the string"
+msgstr "Fundzeile liegt in einem Block-Kommentar oder mehrzeiligen String - ein Marker wirkte dort nicht bzw. würde Teil des Strings"
+
+msgid "the marker applies to all kinds (All) - perhaps ineffective only under the current scan profile, please check by hand"
+msgstr "Marker gilt für alle Arten (All) - wirkungslos vielleicht nur unter dem aktuellen Scan-Profil, bitte von Hand prüfen"
+
+msgid "the marker names several kinds - perhaps ineffective only under the current scan profile, please check by hand"
+msgstr "Marker nennt mehrere Arten - wirkungslos vielleicht nur unter dem aktuellen Scan-Profil, bitte von Hand prüfen"
+
+msgid "the marker names no recognizable kind"
+msgstr "Marker nennt keine erkennbare Art"
+
+msgid "the marker also targets the comment line %d, and its kind can be reported there - SCA165 checks only the code line; please check by hand"
+msgstr "Marker zielt auch auf die Kommentarzeile %d, und seine Art kann dort gemeldet werden - SCA165 prüft nur die Code-Zeile; bitte von Hand prüfen"
+
+msgid "the marker in line %d applies to this comment line and cannot be extended (All or behind code) - a new line in between would take its target away; please add by hand"
+msgstr "Marker in Zeile %d gilt für diese Kommentarzeile und lässt sich nicht erweitern (All oder hinter Code) - eine neue Zeile dazwischen nähme ihm das Ziel; bitte von Hand ergänzen"
+
+msgid "the marker is already there"
+msgstr "Marker steht schon da"
+
+msgid "no unit line found"
+msgstr "keine unit-Zeile gefunden"
+
+msgid "no finding line"
+msgstr "keine Fundzeile"
+
+msgid "the finding line is empty"
+msgstr "Fundzeile ist leer"
+
+msgid "a block comment starts after the unit line"
+msgstr "hinter der unit-Zeile beginnt ein Block-Kommentar"
+
+msgid "no file"
+msgstr "keine Datei"
+
+msgid "no marker line"
+msgstr "keine Markerzeile"
+
+msgid "no marker in the line"
+msgstr "kein Marker in der Zeile"
+
+msgid "already qualified"
+msgstr "bereits qualifiziert"
+
+msgid "not in the scope table (project or third-party unit)"
+msgstr "nicht in der Scope-Tabelle (Projekt- oder Fremd-Unit)"
+
+msgid "order System/Vcl depends on the project (DCC_Namespace): %s"
+msgstr "Reihenfolge System/Vcl projektabhängig (DCC_Namespace): %s"
+
+msgid "file uses VCL and FMX: %s"
+msgstr "Datei nutzt VCL und FMX: %s"
+
+msgid "framework (VCL/FMX) of the file not recognizable: %s"
+msgstr "Rahmenwerk (VCL/FMX) der Datei nicht erkennbar: %s"
+
+msgid "no scope prefix of the framework fits: %s"
+msgstr "kein Scope-Präfix des Rahmenwerks passt: %s"
+
+msgid "network path in the unit search path or next to the file (%s) - reDelphix does not read there (the menu is built in the main thread); whether the project has a unit of this name is open - %s"
+msgstr "Netzpfad im Unit-Suchpfad oder neben der Datei (%s) - reDelphix liest dort nicht (Menüaufbau im Hauptthread); ob das Projekt eine Unit dieses Namens hat, ist offen - %s"

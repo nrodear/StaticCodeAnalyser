@@ -102,7 +102,8 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,   // TRefactorSpan.Make
-  uRdxCodeMap;     // TRdxCodeMap, NextToken: Code-Sicht mit Block-Kommentaren
+  uRdxCodeMap,     // TRdxCodeMap, NextToken: Code-Sicht mit Block-Kommentaren
+  uRdxText;        // _(): Gruende in der reDelphix-Sprache (E29)
 
 const
   TAG          = 'noinspection';
@@ -110,21 +111,27 @@ const
   SEPARATORS   = [',', ';', ' ', #9];
   SPAN_ROLE    = 'suppress';
 
-  R_IN_COMMENT = 'Fundzeile liegt in einem Block-Kommentar oder mehrzeiligen '
-    + 'String - ein Marker wirkte dort nicht bzw. wuerde Teil des Strings';
-  R_WILDCARD   = 'Marker gilt fuer alle Arten (All) - wirkungslos vielleicht '
-    + 'nur unter dem aktuellen Scan-Profil, bitte von Hand pruefen';
-  R_MULTI_KIND = 'Marker nennt mehrere Arten - wirkungslos vielleicht nur '
-    + 'unter dem aktuellen Scan-Profil, bitte von Hand pruefen';
-  R_NO_KIND    = 'Marker nennt keine erkennbare Art';
+  // Die Gruende: englische msgids, uebersetzt mit _() an der Verwendung
+  // (Entscheid E29). 'please check by hand' gehoert hier zum Satz - nicht
+  // MsgCheckByHand (anderer Wortlaut, c_groups Abschnitt 3).
+  R_IN_COMMENT = 'the finding line lies in a block comment or multi-line '
+    + 'string - a marker would have no effect there or would become part of '
+    + 'the string';
+  R_WILDCARD   = 'the marker applies to all kinds (All) - perhaps ineffective '
+    + 'only under the current scan profile, please check by hand';
+  R_MULTI_KIND = 'the marker names several kinds - perhaps ineffective only '
+    + 'under the current scan profile, please check by hand';
+  R_NO_KIND    = 'the marker names no recognizable kind';
   // Review R1-01 (s. Kopf): SCA165 prueft nur das Code-Ziel.
-  R_COMMENT_TARGET = 'Marker zielt auch auf die Kommentarzeile %d, und seine '
-    + 'Art kann dort gemeldet werden - SCA165 prueft nur die Code-Zeile; '
-    + 'bitte von Hand pruefen';
+  R_COMMENT_TARGET = 'the marker also targets the comment line %d, and its '
+    + 'kind can be reported there - SCA165 checks only the code line; please '
+    + 'check by hand';
   // Review R1-03 (s. Kopf): der Marker darueber traegt die Kommentarzeile.
-  R_SPLITS_TARGET = 'Marker in Zeile %d gilt fuer diese Kommentarzeile und '
-    + 'laesst sich nicht erweitern (All oder hinter Code) - eine neue Zeile '
-    + 'dazwischen naehme ihm das Ziel; bitte von Hand ergaenzen';
+  R_SPLITS_TARGET = 'the marker in line %d applies to this comment line and '
+    + 'cannot be extended (All or behind code) - a new line in between would '
+    + 'take its target away; please add by hand';
+  R_MARKER_THERE  = 'the marker is already there';
+  R_NO_UNIT_LINE  = 'no unit line found';
 
   // Die Arten, die der Core auf einer reinen '//'-Zeile melden kann - nur
   // fuer sie wirkt das Kommentar-Ziel eines Markers (s. Kopf; Namen wie
@@ -445,7 +452,7 @@ begin
   if Result then
     AEdit := WholeLine(ALines, ALine, WithKind(Prev, TAG, AKindName))
   else
-    AReason := 'Marker steht schon da';
+    AReason := _(R_MARKER_THERE);
 end;
 
 class function TRdxSuppress.LineMarker(ALines: TStrings; ALine: Integer;
@@ -461,13 +468,13 @@ begin
   if (ALines = nil) or (ALine < 1) or (ALine > ALines.Count)
      or (AKindName = '') then
   begin
-    AReason := 'keine Fundzeile';
+    AReason := _('no finding line');
     Exit;
   end;
   Code := ALines[ALine - 1];
   if Trim(Code) = '' then
   begin
-    AReason := 'Fundzeile ist leer';
+    AReason := _('the finding line is empty');
     Exit;
   end;
   Map := TRdxCodeMap.Create(ALines);
@@ -477,7 +484,7 @@ begin
     // darin: im Kommentar ohne Wirkung, im String als neuer Inhalt.
     if Map.StartsInside(ALine) then
     begin
-      AReason := R_IN_COMMENT;
+      AReason := _(R_IN_COMMENT);
       Exit;
     end;
     Above := MarkerSlotAbove(ALines, ALine);
@@ -489,7 +496,7 @@ begin
     if IsCoreCommentLine(Code)
        and ReachesCommentLine(LineMarkerText(Map, Above)) then
     begin
-      AReason := Format(R_SPLITS_TARGET, [Above]);
+      AReason := _(R_SPLITS_TARGET, [Above]);
       Exit;
     end;
   finally
@@ -517,15 +524,15 @@ begin
   Tok := NextToken(AMap, 1, 1);
   if (Tok.Low <> 'unit') and (Tok.Low <> 'program')
      and (Tok.Low <> 'library') and (Tok.Low <> 'package') then
-    Exit('keine unit-Zeile gefunden');
+    Exit(_(R_NO_UNIT_LINE));
   repeat
     Tok := After(AMap, Tok);
   until (Tok.Low = ';') or (Tok.Low = '');
   if Tok.Low = '' then
-    Exit('keine unit-Zeile gefunden');
+    Exit(_(R_NO_UNIT_LINE));
   AHead := Tok.Line;
   if AMap.StartsInside(AHead + 1) then
-    Result := 'hinter der unit-Zeile beginnt ein Block-Kommentar';
+    Result := _('a block comment starts after the unit line');
 end;
 
 class function TRdxSuppress.FileMarker(ALines: TStrings;
@@ -540,7 +547,7 @@ begin
   AReason := '';
   if (ALines = nil) or (ALines.Count = 0) or (AKindName = '') then
   begin
-    AReason := 'keine Datei';
+    AReason := _('no file');
     Exit;
   end;
   Map := TRdxCodeMap.Create(ALines);
@@ -553,7 +560,7 @@ begin
       begin
         if KindListed(ALines[i - 1], AKindName) then
         begin
-          AReason := 'Marker steht schon da';
+          AReason := _(R_MARKER_THERE);
           Exit;
         end;
         AEdit := WholeLine(ALines, i, WithKind(ALines[i - 1], TAG_FILEWIDE, AKindName));
@@ -595,12 +602,12 @@ function KindsReason(const AKinds: string): string;
 begin
   Result := '';
   if IsWildcard(AKinds) then
-    Exit(R_WILDCARD);
+    Exit(_(R_WILDCARD));
   case KindCount(AKinds) of
-    0: Result := R_NO_KIND;
+    0: Result := _(R_NO_KIND);
     1: ;
   else
-    Result := R_MULTI_KIND;
+    Result := _(R_MULTI_KIND);
   end;
 end;
 
@@ -621,7 +628,7 @@ begin
     Exit;
   MarkerTargets(ALines, AMarkerLine, NextNonEmpty, NextCode);
   if (NextNonEmpty > 0) and (NextNonEmpty <> NextCode) then
-    Result := Format(R_COMMENT_TARGET, [NextNonEmpty]);
+    Result := _(R_COMMENT_TARGET, [NextNonEmpty]);
 end;
 
 // Eine reine Kommentarzeile AMarkerLine (Text AText) ganz entfernen, samt
@@ -664,14 +671,14 @@ begin
   AReason := '';
   if (ALines = nil) or (AMarkerLine < 1) or (AMarkerLine > ALines.Count) then
   begin
-    AReason := 'keine Markerzeile';
+    AReason := _('no marker line');
     Exit;
   end;
   Text := ALines[AMarkerLine - 1];
   Col := LineCommentCol(ALines, AMarkerLine);
   if (Col = 0) or (Pos(TAG, LowerCase(Copy(Text, Col, MaxInt))) = 0) then
   begin
-    AReason := 'kein Marker in der Zeile';
+    AReason := _('no marker in the line');
     Exit;
   end;
   AReason := KindsReason(Copy(Text, Col + 2, MaxInt));

@@ -2778,8 +2778,16 @@ msgstr ""
 msgid "You are a senior Delphi developer reviewing the output of a static code analyser. Target version: Delphi 12 Athens (RTL/VCL). Suggest minimal, idiomatic fixes - no sweeping refactors, no style overhauls, no new dependencies unless strictly required."
 msgstr ""
 
+#: reDelphix/source/uRdxSuppress.pas:535
+msgid "a block comment starts after the unit line"
+msgstr ""
+
 #: reDelphix/source/uRdxProvider.pas:296
 msgid "action kind %d without execution"
+msgstr ""
+
+#: reDelphix/source/uRdxScopeTable.pas:403
+msgid "already qualified"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:496
@@ -2849,6 +2857,10 @@ msgstr ""
 msgid "file not readable"
 msgstr ""
 
+#: reDelphix/source/uRdxScopeTable.pas:429
+msgid "file uses VCL and FMX: %s"
+msgstr ""
+
 #: reDelphix/source/uRdxProvider.pas:556
 msgid "file with an FPC switch or FPC mode - FPC 3.2 knows no unit scopes"
 msgstr ""
@@ -2863,6 +2875,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:1706
 msgid "for-loop range is reversed - the loop body never runs"
+msgstr ""
+
+#: reDelphix/source/uRdxScopeTable.pas:443
+msgid "framework (VCL/FMX) of the file not recognizable: %s"
 msgstr ""
 
 #: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:416
@@ -2894,8 +2910,20 @@ msgstr ""
 msgid "literal not readable: %s"
 msgstr ""
 
+#: reDelphix/source/uRdxScopeTable.pas:546
+msgid "network path in the unit search path or next to the file (%s) - reDelphix does not read there (the menu is built in the main thread); whether the project has a unit of this name is open - %s"
+msgstr ""
+
+#: reDelphix/source/uRdxSuppress.pas:550
+msgid "no file"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:782
 msgid "no file open"
+msgstr ""
+
+#: reDelphix/source/uRdxSuppress.pas:471
+msgid "no finding line"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:372
@@ -2906,12 +2934,33 @@ msgstr ""
 msgid "no header %s"
 msgstr ""
 
+#: reDelphix/source/uRdxSuppress.pas:681
+msgid "no marker in the line"
+msgstr ""
+
+#: reDelphix/source/uRdxSuppress.pas:674
+msgid "no marker line"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:822
 msgid "no operand in the chain"
 msgstr ""
 
+#: reDelphix/source/uRdxScopeTable.pas:448
+msgid "no scope prefix of the framework fits: %s"
+msgstr ""
+
+#: reDelphix/source/uRdxSuppress.pas:527
+#: reDelphix/source/uRdxSuppress.pas:532
+msgid "no unit line found"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:767
 msgid "no valid range"
+msgstr ""
+
+#: reDelphix/source/uRdxScopeTable.pas:409
+msgid "not in the scope table (project or third-party unit)"
 msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:813
@@ -2929,6 +2978,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxText.pas:807
 msgid "only statement after %s - an empty block would remain (SCA077)"
+msgstr ""
+
+#: reDelphix/source/uRdxScopeTable.pas:417
+msgid "order System/Vcl depends on the project (DCC_Namespace): %s"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2562
@@ -2952,8 +3005,41 @@ msgstr ""
 msgid "the clause would no longer be sorted (new SCA142)"
 msgstr ""
 
+#: reDelphix/source/uRdxSuppress.pas:477
+msgid "the finding line is empty"
+msgstr ""
+
+#: reDelphix/source/uRdxSuppress.pas:487
+msgid "the finding line lies in a block comment or multi-line string - a marker would have no effect there or would become part of the string"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:777
 msgid "the line starts inside a comment or string"
+msgstr ""
+
+#: reDelphix/source/uRdxSuppress.pas:631
+msgid "the marker also targets the comment line %d, and its kind can be reported there - SCA165 checks only the code line; please check by hand"
+msgstr ""
+
+#: reDelphix/source/uRdxSuppress.pas:605
+msgid "the marker applies to all kinds (All) - perhaps ineffective only under the current scan profile, please check by hand"
+msgstr ""
+
+#: reDelphix/source/uRdxSuppress.pas:499
+msgid "the marker in line %d applies to this comment line and cannot be extended (All or behind code) - a new line in between would take its target away; please add by hand"
+msgstr ""
+
+#: reDelphix/source/uRdxSuppress.pas:455
+#: reDelphix/source/uRdxSuppress.pas:563
+msgid "the marker is already there"
+msgstr ""
+
+#: reDelphix/source/uRdxSuppress.pas:607
+msgid "the marker names no recognizable kind"
+msgstr ""
+
+#: reDelphix/source/uRdxSuppress.pas:610
+msgid "the marker names several kinds - perhaps ineffective only under the current scan profile, please check by hand"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:757

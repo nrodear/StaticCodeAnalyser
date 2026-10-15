@@ -2552,3 +2552,66 @@ msgstr "%s [journal : %s]"
 
 msgid "action kind %d without execution"
 msgstr "type d'action %d sans exécution"
+
+msgid "the finding line lies in a block comment or multi-line string - a marker would have no effect there or would become part of the string"
+msgstr "la ligne du résultat se trouve dans un commentaire de bloc ou une chaîne multiligne - un marqueur n'y aurait aucun effet ou ferait partie de la chaîne"
+
+msgid "the marker applies to all kinds (All) - perhaps ineffective only under the current scan profile, please check by hand"
+msgstr "le marqueur vaut pour tous les types (All) - peut-être sans effet uniquement avec le profil d'analyse actuel, veuillez vérifier à la main"
+
+msgid "the marker names several kinds - perhaps ineffective only under the current scan profile, please check by hand"
+msgstr "le marqueur nomme plusieurs types - peut-être sans effet uniquement avec le profil d'analyse actuel, veuillez vérifier à la main"
+
+msgid "the marker names no recognizable kind"
+msgstr "le marqueur ne nomme aucun type reconnaissable"
+
+msgid "the marker also targets the comment line %d, and its kind can be reported there - SCA165 checks only the code line; please check by hand"
+msgstr "le marqueur vise aussi la ligne de commentaire %d, et son type peut y être signalé - SCA165 ne vérifie que la ligne de code ; veuillez vérifier à la main"
+
+msgid "the marker in line %d applies to this comment line and cannot be extended (All or behind code) - a new line in between would take its target away; please add by hand"
+msgstr "le marqueur de la ligne %d vaut pour cette ligne de commentaire et ne peut pas être étendu (All ou derrière du code) - une nouvelle ligne intercalée lui enlèverait sa cible ; veuillez compléter à la main"
+
+msgid "the marker is already there"
+msgstr "le marqueur est déjà présent"
+
+msgid "no unit line found"
+msgstr "aucune ligne unit trouvée"
+
+msgid "no finding line"
+msgstr "aucune ligne de résultat"
+
+msgid "the finding line is empty"
+msgstr "la ligne du résultat est vide"
+
+msgid "a block comment starts after the unit line"
+msgstr "un commentaire de bloc commence après la ligne unit"
+
+msgid "no file"
+msgstr "aucun fichier"
+
+msgid "no marker line"
+msgstr "aucune ligne de marqueur"
+
+msgid "no marker in the line"
+msgstr "aucun marqueur dans la ligne"
+
+msgid "already qualified"
+msgstr "déjà qualifié"
+
+msgid "not in the scope table (project or third-party unit)"
+msgstr "absent de la table des portées (unité du projet ou tierce)"
+
+msgid "order System/Vcl depends on the project (DCC_Namespace): %s"
+msgstr "ordre System/Vcl dépendant du projet (DCC_Namespace) : %s"
+
+msgid "file uses VCL and FMX: %s"
+msgstr "le fichier utilise VCL et FMX : %s"
+
+msgid "framework (VCL/FMX) of the file not recognizable: %s"
+msgstr "framework (VCL/FMX) du fichier non reconnaissable : %s"
+
+msgid "no scope prefix of the framework fits: %s"
+msgstr "aucun préfixe de portée du framework ne convient : %s"
+
+msgid "network path in the unit search path or next to the file (%s) - reDelphix does not read there (the menu is built in the main thread); whether the project has a unit of this name is open - %s"
+msgstr "chemin réseau dans le chemin de recherche des unités ou à côté du fichier (%s) - reDelphix n'y lit pas (le menu est construit dans le thread principal) ; on ne sait pas si le projet a une unité de ce nom - %s"
