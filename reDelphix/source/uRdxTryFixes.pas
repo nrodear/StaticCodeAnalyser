@@ -29,9 +29,12 @@ unit uRdxTryFixes;
 //          ohne Leerraum gleich - SCA153 nimmt jedes 'unlock'/'release' im
 //          200-Zeichen-Fenster, auch das fremder Objekte.
 //   SCA156 GetMemWithoutFreeMem: 'GetMem(P, N);' bzw. 'P := AllocMem(N);'
-//          (auch FPC 'P := GetMem(N);', auch 'System.GetMem') ..
-//          'FreeMem(P);'; ReallocMem sperrt (der Puffer bestand schon
-//          vorher).
+//          (auch FPC 'P := GetMem(N);', auch 'System.GetMem', auch als
+//          Inline-Deklaration 'var P[: T] := AllocMem(N);') ..
+//          'FreeMem(P);' - ein direkt folgendes 'P := nil;' geht mit wie bei
+//          Objekten; ReallocMem sperrt (der Puffer bestand schon vorher), P
+//          muss eine lokale Variable der Routine sein (Charge B1,
+//          HolderReason).
 //
 // BAUSTEIN B5 (TryFinally): A ist eine ganze Anweisung in einer
 // Anweisungsliste (davor ';', begin, try, finally, except, repeat), B ihre
@@ -76,20 +79,23 @@ unit uRdxTryFixes;
 //     jetzt mit - ein Objekt, das hinter der Schleife noch gebraucht wird,
 //     waere frei); Exit bei einer Sperre (Konzept: Ablehnung); Exit bei
 //     einem Objekt bzw. Puffer, der im Bereich irgendwie weitergegeben wird
-//     (der Ausstieg koennte den Besitz uebergeben haben); X in einem
-//     raise-Ausdruck ('raise X', 'raise TObject(X)', 'raise X at ..') oder
-//     als Argument von RaiseOuterException/ThrowOuterException;
+//     (der Ausstieg koennte den Besitz uebergeben haben) - die Spruenge
+//     auch als 'System.Exit'/'System.Break'/'System.Continue' (Charge B1,
+//     SystemQualified); X in einem raise-Ausdruck ('raise X', 'raise
+//     TObject(X)', 'raise X at ..') oder als Argument von
+//     RaiseOuterException/ThrowOuterException;
 //   * Weitergabe auch OHNE Ausstieg (Objekt, Puffer; Gegen-Review H4,
 //     Blocker 1 - im Fehlerfall gaebe finally X frei, waehrend ein Halter es
 //     noch kennt: aus einem Leck wuerde ein Use-after-free): X als direktes
 //     Argument eines Aufrufs, dessen Name mit add/insert/push/enqueue/
 //     register/attach/subscribe/put beginnt (ausser InsertComponent - der
 //     Destruktor meldet sich beim Owner ab - und AddStrings, das nur den
-//     Inhalt kopiert), auch durch eine Typumwandlung hindurch
-//     ('List.Add(TObject(X))'); X als ganze rechte Seite einer Zuweisung an
-//     etwas anderes als eine lokale Variable der Routine (Feld, Property,
+//     Inhalt kopiert); X als ganze rechte Seite einer Zuweisung an etwas
+//     anderes als eine lokale Variable der Routine (Feld, Property,
 //     Element, Result, globale Variable, Parameter); ein Methodenzeiger
-//     'X.M' an ein Ereignis (Ziel 'On..'/'FOn..'); '@X' bzw. '@X.M'.
+//     'X.M' an ein Ereignis (Ziel 'On..'/'FOn..'); '@X' bzw. '@X.M'. X
+//     auch in einer Huelle - Typumwandlung, Klammern, 'as' ('List.Add(
+//     TObject(X))', 'FCurrent := X as TFoo', seit Charge B1 WrappedAt).
 //     Bewusst eng (Entscheid H4c): die breite Fassung - jedes Argument,
 //     jede Zuweisung - kostete im Referenzkorpus 372 von 909
 //     Objekt-Angeboten;
@@ -98,7 +104,9 @@ unit uRdxTryFixes;
 //     Freigabe bzw. ein Zugriff auf ein freigegebenes Objekt;
 //   * Puffer: Inc/Dec/GetMem/ReallocMem auf P - auch durch eine
 //     Typumwandlung ('Inc(PByte(P), 4)') - bzw. '@P' im Bereich (FreeMem
-//     gaebe einen anderen Zeiger frei).
+//     gaebe einen anderen Zeiger frei); P keine lokale Variable der Routine
+//     (Feld, globale Variable, Parameter - nach finally kennte der Halter
+//     den freien Puffer, Gegen-Review R5, R5-02).
 // Was bleibt (README, Restrisiken): eine Weitergabe ueber einen Alias
 // ('Y := X; List.Add(Y)'), an einen Konstruktor, der den Besitz uebernimmt
 // ('TReader.Create(X)'), an einen Aufruf anderen Namens ('Store(X)') oder
@@ -213,8 +221,9 @@ const
   // Sie werfen ihr Argument als Ausnahme (wie 'raise X').
   RAISE_CALLS: array[0..1] of string = ('raiseouterexception',
     'throwouterexception');
-  // Eine Ebene Typumwandlung ('List.Add(TObject(X))'): X, dann der Cast.
-  MAX_ARG_LEVELS = 2;
+  // So viele Huellen um X - Typumwandlung, Klammern, 'as' - liest die
+  // Weitergabe-Sperre ('List.Add(TObject((X)))', WrappedAt).
+  MAX_WRAP_LEVELS = 4;
   // Typumwandlungen ohne T/P/I-Namen (IsCastName).
   CAST_WORDS: array[0..6] of string = ('pointer', 'nativeint', 'nativeuint',
     'integer', 'cardinal', 'int64', 'uint64');
@@ -239,6 +248,9 @@ const
   LOOP_HEADS: array[0..1] of string = ('for', 'while');
   INLINE_DECLS: array[0..1] of string = ('var', 'const');
   JUMP_OUT: array[0..1] of string = ('break', 'continue');
+  // Die Spruenge, die auch qualifiziert stehen ('System.Exit', SpanStep).
+  SYSTEM_UNIT = 'system';
+  SYSTEM_JUMPS: array[0..2] of string = ('exit', 'break', 'continue');
   // Blockarten je Tiefe (TRdxSpan.Kinds).
   BLOCK_LOOP  = 'L';
   BLOCK_CASE  = 'C';
@@ -1096,14 +1108,15 @@ begin
     or InlineVarBefore(AMap, R.Body, AAt, AName));
 end;
 
-// Beginnt die Anweisung mit dem ':=' AAssign mit einem Inline-'var'
-// ('var Y := X', 'var Y: TFoo := X')? Die Deklaration ist lokal.
-function InlineDeclBefore(AMap: TRdxCodeMap; const AAssign: TRdxToken): Boolean;
+// Das Inline-'var', mit dem die Anweisung mit dem ':=' AAssign beginnt
+// ('var Y := X', 'var Y: TFoo := X'); Low = '' ohne. Die Deklaration ist
+// lokal.
+function InlineVarOf(AMap: TRdxCodeMap; const AAssign: TRdxToken): TRdxToken;
 var
   T, P : TRdxToken;
   n    : Integer;
 begin
-  Result := False;
+  Result := Default(TRdxToken);
   T := Before(AMap, AAssign);
   for n := 1 to MAX_TARGET_TOKENS do
   begin
@@ -1111,7 +1124,7 @@ begin
       Exit;
     P := Before(AMap, T);
     if (T.Low = 'var') and IsKeywordAt(AMap, T, P) then
-      Exit(True);
+      Exit(T);
     T := P;
   end;
 end;
@@ -1157,7 +1170,7 @@ var
   Plain : Boolean;
 begin
   Result := '';
-  if InlineDeclBefore(AMap, AAssign) then Exit;
+  if InlineVarOf(AMap, AAssign).Low <> '' then Exit;
   First := TargetStart(AMap, AAssign, Plain);
   if Plain and (First.Low <> 'result') and IsLocalVar(AMap, AAt, First.Low) then
     Exit;
@@ -1212,35 +1225,105 @@ begin
       and CharInSet(AName[2], ['A'..'Z']));
 end;
 
-// X an T als direktes Argument eines Aufrufs, der es festhaelt bzw. wirft
-// - auch durch eine Typumwandlung hindurch ('List.Add(TObject(X))', eine
-// Ebene: ist der Aufruf um X ein Cast mit nur diesem Argument, zaehlt der
-// um ihn). '' oder der Grund.
-function CallArgReason(AMap: TRdxCodeMap; const T: TRdxToken): string;
+// Ist W (ein Wort vor '(') eine Typumwandlung (IsCastName) - und kein
+// Aufruf, der sein Argument festhaelt oder wirft ('PUTDATA(X)' sieht wie
+// ein Cast aus)?
+function IsCastWord(AMap: TRdxCodeMap; const W: TRdxToken): Boolean;
+begin
+  Result := W.IsWord and IsCastName(TokText(AMap, W))
+    and not IsStoreCall(W.Low) and not InList(W.Low, RAISE_CALLS);
+end;
+
+// Das Ende des Typs hinter 'as' AAs: 'TFoo', 'System.TObject' bzw. das '>'
+// von 'TList<T>'; Low = '' ohne lesbaren Typ.
+function AsTypeEnd(AMap: TRdxCodeMap; const AAs: TRdxToken): TRdxToken;
 var
-  First, Last, Call : TRdxToken;
-  Level             : Integer;
+  N : TRdxToken;
+begin
+  Result := Default(TRdxToken);
+  N := After(AMap, AAs);
+  if not N.IsWord then Exit;
+  Result := QualifiedEnd(AMap, N);
+  N := After(AMap, Result);
+  if N.Low = '<' then
+    Result := MatchClose(AMap, N);
+end;
+
+// Das erste Token der Klammer AOpen samt Typumwandlung davor: 'TFoo(' bzw.
+// 'System.TObject(' ab dem ersten Glied, '(' allein bei blossen Klammern;
+// Low = '' hinter einem Namen, der kein Cast ist (ein Aufruf 'F(X)' - X ist
+// dort sein Argument, CallOfArg).
+function WrapStart(AMap: TRdxCodeMap; const AOpen: TRdxToken): TRdxToken;
+var
+  W, D : TRdxToken;
+begin
+  Result := AOpen;
+  W := Before(AMap, AOpen);
+  if not W.IsWord then Exit;
+  if not IsCastWord(AMap, W) then
+    Exit(Default(TRdxToken));
+  repeat
+    Result := W;
+    D := Before(AMap, W);
+    W := Before(AMap, D);
+  until (D.Low <> '.') or not W.IsWord;
+end;
+
+// X an T samt seinen Huellen - eine Typumwandlung 'TFoo(X)' (IsCastWord, X
+// allein in der Klammer, auch qualifiziert 'System.TObject(X)'), Klammern
+// '(X)' und 'X as TFoo' -, bis zu MAX_WRAP_LEVELS geschachtelt: AFirst..
+// ALast ist der ganze Ausdruck, der X weiterreicht; ohne Huelle T selbst.
+// Bis Charge B1 sah die Weitergabe-Sperre X nur direkt hinter ':=' bzw. als
+// Argument und packte nur den Cast im Aufruf aus: 'FCurrent := TFoo(X);',
+// 'FCurrent := X as TFoo;' und 'List.Add(X as TObject);' gingen durch
+// (Gegen-Review R5, R5-04).
+procedure WrappedAt(AMap: TRdxCodeMap; const T: TRdxToken;
+  out AFirst, ALast: TRdxToken);
+var
+  P, N, S : TRdxToken;
+  Level   : Integer;
+begin
+  AFirst := T;
+  ALast := T;
+  for Level := 1 to MAX_WRAP_LEVELS do
+  begin
+    N := After(AMap, ALast);
+    if N.Low = 'as' then
+    begin
+      S := AsTypeEnd(AMap, N);
+      if S.Low = '' then Exit;
+      ALast := S;
+    end
+    else
+    begin
+      P := Before(AMap, AFirst);
+      if (P.Low <> '(') or (N.Low <> ')') then Exit;
+      S := WrapStart(AMap, P);
+      if S.Low = '' then Exit;
+      AFirst := S;
+      ALast := N;
+    end;
+  end;
+end;
+
+// X an T als direktes Argument eines Aufrufs, der es festhaelt bzw. wirft
+// - auch in einer Huelle (AFirst..ALast, WrappedAt: 'List.Add(TObject(X))',
+// 'List.Add(X as TObject)'). '' oder der Grund.
+function CallArgReason(AMap: TRdxCodeMap;
+  const T, AFirst, ALast: TRdxToken): string;
+var
+  Call : TRdxToken;
 begin
   Result := '';
-  First := T;
-  Last := T;
-  for Level := 1 to MAX_ARG_LEVELS do
-  begin
-    Call := CallOfArg(AMap, First, Last);
-    if Call.Low = '' then Exit;
-    if InList(Call.Low, RAISE_CALLS) then
-      Exit(Format('%s wird in Zeile %d an %s uebergeben - das Objekt ist die '
-        + 'Ausnahme; finally gaebe es vor dem Handler frei',
-        [TokText(AMap, T), T.Line, TokText(AMap, Call)]));
-    if IsStoreCall(Call.Low) then
-      Exit(Format('%s wird in Zeile %d an %s weitergegeben - %s',
-        [TokText(AMap, T), T.Line, TokText(AMap, Call), R_HELD]));
-    if (Before(AMap, First).Low <> '(') or (After(AMap, Last).Low <> ')')
-       or not IsCastName(TokText(AMap, Call)) then
-      Exit;
-    First := Call;
-    Last := After(AMap, Last);
-  end;
+  Call := CallOfArg(AMap, AFirst, ALast);
+  if Call.Low = '' then Exit;
+  if InList(Call.Low, RAISE_CALLS) then
+    Exit(Format('%s wird in Zeile %d an %s uebergeben - das Objekt ist die '
+      + 'Ausnahme; finally gaebe es vor dem Handler frei',
+      [TokText(AMap, T), T.Line, TokText(AMap, Call)]));
+  if IsStoreCall(Call.Low) then
+    Result := Format('%s wird in Zeile %d an %s weitergegeben - %s',
+      [TokText(AMap, T), T.Line, TokText(AMap, Call), R_HELD]);
 end;
 
 // Heisst AName wie ein Ereignis - 'On..' (Gross/klein egal, ein 'Online'
@@ -1251,29 +1334,32 @@ begin
     or (Copy(AName, 1, Length(EVENT_FIELD)) = EVENT_FIELD);
 end;
 
-// X an T rechts einer Zuweisung (APrev = ':='): als ganze rechte Seite an
-// keinen lokalen Namen ('FCurrent := X;') oder als Methodenzeiger 'X.M'
-// an ein Ereignis ('Btn.OnClick := X.Handler;'). '' oder der Grund.
-function AssignReason(AMap: TRdxCodeMap; const T, APrev: TRdxToken): string;
+// X an T als ganze rechte Seite einer Zuweisung - auch in einer Huelle
+// (AFirst..ALast, WrappedAt: 'FCurrent := TFoo(X);') - an keinen lokalen
+// Namen ('FCurrent := X;') oder als Methodenzeiger 'X.M' an ein Ereignis
+// ('Btn.OnClick := X.Handler;'). '' oder der Grund.
+function AssignReason(AMap: TRdxCodeMap;
+  const T, AFirst, ALast: TRdxToken): string;
 var
-  N, M, Target : TRdxToken;
+  A, N, M, Target : TRdxToken;
 begin
   Result := '';
-  if APrev.Low <> ':=' then Exit;
-  N := After(AMap, T);
+  A := Before(AMap, AFirst);
+  if A.Low <> ':=' then Exit;
+  N := After(AMap, ALast);
   M := After(AMap, N);
   if (N.Low = '.') and M.IsWord
      and EndsStatement(AMap, After(AMap, M), M) then
   begin
-    Target := Before(AMap, APrev);
+    Target := Before(AMap, A);
     if Target.IsWord and IsEventName(TokText(AMap, Target)) then
       Result := Format('Methodenzeiger %s.%s an %s in Zeile %d - %s',
         [TokText(AMap, T), TokText(AMap, M), TokText(AMap, Target), T.Line,
         R_HELD]);
     Exit;
   end;
-  if not EndsStatement(AMap, N, T) then Exit;
-  Result := NonLocalTarget(AMap, APrev, T);
+  if not EndsStatement(AMap, N, ALast) then Exit;
+  Result := NonLocalTarget(AMap, A, T);
   if Result <> '' then
     Result := Format('%s wird in Zeile %d an %s weitergegeben (kein lokaler '
       + 'Name der Routine) - %s', [TokText(AMap, T), T.Line, Result, R_HELD]);
@@ -1281,17 +1367,21 @@ end;
 
 // Weitergabe ohne Ausstieg (s. Kopf): X an T wird festgehalten - '@X',
 // Argument eines Speicher-Aufrufs, Zuweisung an keinen lokalen Namen,
-// Methodenzeiger an ein Ereignis. Im Fehlerfall gaebe finally X frei,
-// waehrend der Halter es noch kennt. '' oder der Grund.
+// Methodenzeiger an ein Ereignis, auch in einer Huelle (WrappedAt). Im
+// Fehlerfall gaebe finally X frei, waehrend der Halter es noch kennt. ''
+// oder der Grund.
 function HandOverReason(AMap: TRdxCodeMap; const T, APrev: TRdxToken): string;
+var
+  First, Last : TRdxToken;
 begin
   if APrev.Low = '@' then
     Exit(Format('@%s in Zeile %d - ein Zeiger bzw. Methodenzeiger auf das '
       + 'Objekt verlaesst den Bereich; %s', [TokText(AMap, T), T.Line,
       R_HELD]));
-  Result := CallArgReason(AMap, T);
+  WrappedAt(AMap, T, First, Last);
+  Result := CallArgReason(AMap, T, First, Last);
   if Result = '' then
-    Result := AssignReason(AMap, T, APrev);
+    Result := AssignReason(AMap, T, First, Last);
 end;
 
 { ---- Der Lauf von A nach B ---- }
@@ -1470,6 +1560,22 @@ begin
     S.EndSingles;
 end;
 
+// Steht das Wort T (APrev davor) hinter 'System.' - 'System.Exit',
+// 'System.Break', die Spruenge der RTL (Vcl.ActnMan schreibt
+// 'System.Break')? Hinter '.' ist ein Wort kein Schluesselwort
+// (IsKeywordAt), der Sprung blieb so ungesehen (Gegen-Review R5, R5-05:
+// 'if C then System.Exit;' bei einer Sperre angeboten). 'TMonitor.Exit(O)'
+// ist die Freigabe einer Sperre. Dieselbe Probe steht in uRdxResultFixes.
+function SystemQualified(AMap: TRdxCodeMap; const T, APrev: TRdxToken): Boolean;
+var
+  Q : TRdxToken;
+begin
+  Result := False;
+  if (APrev.Low <> '.') or not T.IsWord then Exit;
+  Q := Before(AMap, APrev);
+  Result := (Q.Low = SYSTEM_UNIT) and (Before(AMap, Q).Low <> '.');
+end;
+
 // Spruenge, asm und Inline-Deklarationen. '' oder der Grund.
 function JumpReason(const APair: TRdxPair; var S: TRdxSpan;
   const T, APrev: TRdxToken): string;
@@ -1510,6 +1616,24 @@ begin
       + 'uebersetzt nicht', [TokText(AMap, T), T.Line]);
 end;
 
+// Ein Wort des Laufs (SpanStep): als Schluesselwort Koepfe, Spruenge und
+// Bloecke; ein qualifizierter Sprung 'System.Exit' wie das Schluesselwort
+// (SystemQualified). '' oder der Grund.
+function WordReason(AMap: TRdxCodeMap; const APair: TRdxPair;
+  var S: TRdxSpan; const T, APrev: TRdxToken): string;
+begin
+  Result := '';
+  if IsKeywordAt(AMap, T, APrev) then
+  begin
+    HeadStep(S, T);
+    Result := JumpReason(APair, S, T, APrev);
+    if Result = '' then
+      Result := BlockReason(S, T);
+  end
+  else if InList(T.Low, SYSTEM_JUMPS) and SystemQualified(AMap, T, APrev) then
+    Result := JumpReason(APair, S, T, APrev);
+end;
+
 // Ein Token des Laufs (ScanSpan): rsFound an B, rsStop mit S.Reason.
 function SpanStep(AMap: TRdxCodeMap; const APair: TRdxPair; var S: TRdxSpan;
   const T, APrev: TRdxToken): TRdxStep;
@@ -1528,12 +1652,9 @@ begin
     Dec(S.Paren)
   else if (T.Low = ';') and (S.Paren = 0) then
     S.EndSingles
-  else if IsKeywordAt(AMap, T, APrev) then
+  else
   begin
-    HeadStep(S, T);
-    S.Reason := JumpReason(APair, S, T, APrev);
-    if S.Reason = '' then
-      S.Reason := BlockReason(S, T);
+    S.Reason := WordReason(AMap, APair, S, T, APrev);
     if S.Reason <> '' then Exit;
   end;
   Result := rsGoOn;
@@ -1567,17 +1688,21 @@ begin
       [APair.What, APair.Semi.Line, R_BY_HAND]);
 end;
 
-// Hinter 'X.Free;' ein 'X := nil;' als naechste Anweisung? Dann geht es
-// mit ins finally (S.BLast) - aber nur, wenn es allein auf seiner Zeile
-// steht bzw. die Zeile von B beschliesst und dahinter nichts mehr kommt;
-// sonst bleibt es hinter dem end stehen (Gegen-Review H4, Minor 6: bis
-// Charge H4c verwarf 'X := nil; Foo;' die ganze Hilfe).
+// Hinter 'X.Free;' bzw. 'FreeMem(P);' ein 'X := nil;' als naechste
+// Anweisung? Dann geht es mit ins finally (S.BLast) - aber nur, wenn es
+// allein auf seiner Zeile steht bzw. die Zeile von B beschliesst und
+// dahinter nichts mehr kommt; sonst bleibt es hinter dem end stehen
+// (Gegen-Review H4, Minor 6: bis Charge H4c verwarf 'X := nil; Foo;' die
+// ganze Hilfe). Puffer seit Charge B1 (Gegen-Review R5, R5-02): Freigabe und
+// nil bleiben beisammen wie bei Objekten.
 procedure TakeNil(AMap: TRdxCodeMap; const APair: TRdxPair; var S: TRdxSpan);
 var
   V, A, N, E, Last : TRdxToken;
 begin
-  if (APair.Kind <> pkObject) or (S.BLast.Low <> ';')
-     or (After(AMap, After(AMap, S.B)).Low <> 'free') then
+  if (APair.Kind = pkLock) or (S.BLast.Low <> ';') then Exit;
+  // Ein Objekt nur hinter 'X.Free' (wie bis Charge B1).
+  if (APair.Kind = pkObject)
+     and (After(AMap, After(AMap, S.B)).Low <> 'free') then
     Exit;
   V := After(AMap, S.BLast);
   A := After(AMap, V);
@@ -1950,6 +2075,25 @@ begin
   Result.Expected := RangeText(AMap, Result.Span);
 end;
 
+// Puffer: ist P eine lokale Variable der Routine (var-Abschnitt,
+// Inline-var - auch die Allokation selbst, 'var P := AllocMem(N)')? Sonst
+// kennt ein Feld, eine globale Variable oder der Aufrufer (Parameter) den
+// Puffer weiter: bei einer Ausnahme gaebe finally ihn frei, das 'P := nil'
+// dahinter liefe nicht, und aus einem Leck wuerde eine Doppelfreigabe
+// (Gegen-Review R5, R5-02: globaler Puffer, den die finalization freigibt).
+// Objekte meldet der Detektor nur als lokale Variable (SCA009/SCA001), dort
+// genuegt die Weitergabe-Sperre. Als letzte Probe: die Gruende davor
+// bleiben, wie sie waren. '' oder der Grund.
+function HolderReason(AMap: TRdxCodeMap; const APair: TRdxPair): string;
+begin
+  Result := '';
+  if (APair.Kind <> pkBuffer) or (APair.First.Low = 'var')
+     or IsLocalVar(AMap, APair.First, APair.Key) then
+    Exit;
+  Result := Format('%s ist keine lokale Variable der Routine (Feld, globale '
+    + 'Variable, Parameter) - %s', [APair.Name, R_HELD]);
+end;
+
 // Baustein B5 (s. Kopf): A (APair.First..APair.Semi) und seine Freigabe in
 // derselben Liste in try/finally setzen. '' und AEdit oder der Grund.
 function TryFinally(AMap: TRdxCodeMap; const APair: TRdxPair;
@@ -1968,6 +2112,8 @@ begin
   Result := SpanReason(AMap, APair, S);
   if Result = '' then
     Result := EnclosingReason(AMap, APair);
+  if Result = '' then
+    Result := HolderReason(AMap, APair);
   if Result = '' then
     AEdit := TryEdit(AMap, APair, S);
 end;
@@ -2052,7 +2198,7 @@ begin
     T := After(AMap, T);
   end;
   Result := OneTokenReason(ALine, n, 'keine Zuweisung "' + AName + ' := .."',
-    '%d Zuweisungen an ' + AName);
+    '%d Zuweisungen an %s', AName);
   if Result <> '' then Exit;
   APair.First := Hit.First;
   APair.Semi := StatementStop(AMap, After(AMap, Hit.Assign));
@@ -2179,8 +2325,9 @@ begin
     Exit('TMonitor.Enter mit Timeout bzw. TMonitor.TryEnter ist eine '
       + 'Bedingung, keine Sperre - ob sie gilt, sagt erst das Ergebnis; '
       + R_BY_HAND);
+  // Der Sperrtext der Meldung als Argument, nicht im Muster (OneTokenReason).
   Result := OneTokenReason(ALine, n, 'keine Sperre "' + AText + '"',
-    '%d Sperren "' + AText + '"');
+    '%d Sperren "%s"', AText);
   if Result <> '' then Exit;
   APair.Lock := Hit;
   APair.First := Hit.First;
@@ -2210,23 +2357,34 @@ begin
 end;
 
 // SCA156: die Allokation an T (AStart: ihr erstes Token, AllocStart) -
-// 'GetMem(P, N)' oder 'P := GetMem(N)'/'P := AllocMem(N)'. '' oder der
-// Grund; APair mit Key, First, What.
+// 'GetMem(P, N)', 'P := GetMem(N)'/'P := AllocMem(N)' oder die
+// Inline-Deklaration 'var P[: T] := AllocMem(N)' (wie CreateAt; bis Charge
+// B1 las der Planer dort den Typnamen als Puffer, Gegen-Review R5, R5-10).
+// '' oder der Grund; APair mit Key, Name, First, What.
 function BufferAt(AMap: TRdxCodeMap; const T, AStart: TRdxToken;
   var APair: TRdxPair): string;
 var
-  P, V, C : TRdxToken;
+  P, V, C, D : TRdxToken;
 begin
   Result := '';
   P := Before(AMap, AStart);
   if P.Low = ':=' then
   begin
-    V := Before(AMap, P);
+    D := InlineVarOf(AMap, P);
+    if D.Low <> '' then
+    begin
+      V := After(AMap, D);
+      APair.First := D;
+    end
+    else
+    begin
+      V := Before(AMap, P);
+      APair.First := V;
+    end;
     if not V.IsWord or (Before(AMap, V).Low = '.') then
       Exit('die Zuweisung geht an einen Ausdruck, nicht an eine Variable');
     if V.Low = 'result' then
       Exit('Result - der Puffer verlaesst die Routine');
-    APair.First := V;
   end
   else if T.Low = 'getmem' then
   begin
@@ -2283,7 +2441,7 @@ begin
     Exit(Format('%s eines eigenen Speichermanagers (qualifiziert) - %s',
       [AFunc, R_BY_HAND]));
   Result := OneTokenReason(ALine, n, 'kein Aufruf ' + AFunc + '(',
-    '%d Aufrufe ' + AFunc + '(');
+    '%d Aufrufe %s(', AFunc);
   if Result = '' then
     Result := BufferAt(AMap, Hit, Start, APair);
   if Result <> '' then Exit;

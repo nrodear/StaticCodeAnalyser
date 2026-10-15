@@ -107,11 +107,14 @@ begin
   end;
 end;
 
-// Eine Unit mit Routine P; ALines ist ihr Rumpf (ab Zeile 6).
+// Eine Unit mit Routine Run und ihren lokalen Puffern P und Buf (SCA156
+// verlangt seit Charge B1 eine lokale Variable, Gegen-Review R5, R5-02);
+// ALines ist ihr Rumpf (ab Zeile 6).
 function InProc(const ALines: array of string): string;
 begin
-  Result := Join(['unit u;', 'interface', 'implementation', 'procedure P;',
-    'begin']) + #13#10 + Join(ALines) + #13#10 + Join(['end;', 'end.']);
+  Result := Join(['unit u;', 'interface', 'implementation',
+    'procedure Run; var P, Buf: Pointer;', 'begin']) + #13#10 + Join(ALines)
+    + #13#10 + Join(['end;', 'end.']);
 end;
 
 // Der Plan der Hilfe ARule fuer Zeile ALine mit dem Meldungsteil AText.
@@ -510,11 +513,11 @@ begin
   AssertRefused(r156, InProc(['  GetMem(P, 100);', '  FList.Add(P);',
     '  Work;', '  FreeMem(P);']), 'GetMem', 'an Add weitergegeben');
   Assert.AreEqual(Join(['unit u;', 'interface', 'implementation',
-    'procedure P;', 'var', '  Q: Pointer;', 'begin', '  GetMem(P, 100);',
+    'procedure Run;', 'var', '  P, Q: Pointer;', 'begin', '  GetMem(P, 100);',
     '  try', '    Q := P;', '    Work(Q);', '  finally', '    FreeMem(P);',
     '  end;', 'end;', 'end.']),
     FixAt(r156, Join(['unit u;', 'interface', 'implementation',
-      'procedure P;', 'var', '  Q: Pointer;', 'begin', '  GetMem(P, 100);',
+      'procedure Run;', 'var', '  P, Q: Pointer;', 'begin', '  GetMem(P, 100);',
       '  Q := P;', '  Work(Q);', '  FreeMem(P);', 'end;', 'end.']), 8,
       'GetMem', R), R);
 end;

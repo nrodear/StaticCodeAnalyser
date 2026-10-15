@@ -89,7 +89,7 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 40 Qui
 
 - die Varianten never-freed, return-value-not-freed und proven-leak: der Eintrag steht gesperrt mit der Variante da (maßgeblich ist das Feld `LeakVariant` des Funds)
 - die Freigabe ist bedingt, liegt tiefer, steht doppelt oder in anderer Schreibweise da, oder X bekommt im Bereich eine zweite Zuweisung
-- X wird im Bereich weitergegeben (Argument eines Add-/Insert-/Register-…-Aufrufs, Zuweisung an ein Feld oder `Result`, Methodenzeiger, `@X`) oder steht in einem raise-Ausdruck
+- X wird im Bereich weitergegeben (Argument eines Add-/Insert-/Register-…-Aufrufs, Zuweisung an ein Feld oder `Result`, Methodenzeiger, `@X` – auch durch Cast, Klammern oder `as`) oder steht in einem raise-Ausdruck
 - Direktive, Marke/goto, asm, Inline-`var`/`const` auf der Ebene der Erzeugung, mehrzeiliges `'''`-Literal im Bereich
 
 **Beispiel**
@@ -187,8 +187,8 @@ uses
 
 - keine unbedingte Freigabe von X in derselben Anweisungsliste (sie fehlt, steht tiefer oder in einem Zweig), eine zweite Freigabe oder eine zweite Zuweisung an X im Bereich
 - Erzeugung oder Freigabe nicht allein auf ihrer Zeile, die Erzeugung hinter then/else/do oder in einem case-Zweig, nichts zwischen Erzeugung und Freigabe
-- X wird im Bereich weitergegeben: direktes Argument eines Add-/Insert-/Push-/Register-…-Aufrufs, ganze rechte Seite einer Zuweisung an Feld, Property, `Result` oder Parameter, Methodenzeiger an ein Ereignis, `@X`; X in einem raise-Ausdruck
-- Exit bei weitergegebenem X, Break/Continue, deren Schleife den Bereich umschließt
+- X wird im Bereich weitergegeben: direktes Argument eines Add-/Insert-/Push-/Register-…-Aufrufs, ganze rechte Seite einer Zuweisung an Feld, Property, `Result` oder Parameter – auch durch Cast, Klammern oder `as` (`FCurrent := TFoo(X)`, `List.Add(X as TObject)`) –, Methodenzeiger an ein Ereignis, `@X`; X in einem raise-Ausdruck
+- Exit bei weitergegebenem X, Break/Continue, deren Schleife den Bereich umschließt – auch als `System.Exit`/`System.Break`/`System.Continue`
 - Direktive, Marke/goto, asm, Inline-`var`/`const` auf der Ebene der Erzeugung, mehrzeiliges `'''`-Literal, ein umschließendes try, dessen except- bzw. finally-Teil X nennt
 
 **Beispiel**
@@ -1198,7 +1198,7 @@ Nachher:
 
 **Nicht angeboten**
 
-- Exit im Bereich, eine zweite Sperre derselben Sperre, eine frühere Freigabe – auch in anderer Schreibweise (`Self.FLock.Leave`, `FLock.Release` nach `FLock.Enter`)
+- Exit im Bereich (auch `System.Exit`), eine zweite Sperre derselben Sperre, eine frühere Freigabe – auch in anderer Schreibweise (`Self.FLock.Leave`, `FLock.Release` nach `FLock.Enter`)
 - `TMonitor.Enter(O, Timeout)` bzw. `TMonitor.TryEnter(O)` (eine Bedingung)
 - ein umschließender Handler, der die Sperre freigibt
 - die Sperre der Meldung steht nicht mehr auf der Zeile; die übrigen Sperren wie bei SCA009 (Direktive, goto, asm …)
@@ -1697,7 +1697,7 @@ Nachher:
 
 **Nicht angeboten**
 
-- Exit im Bereich, eine zweite Sperre derselben Sperre, eine frühere Freigabe – auch in anderer Schreibweise
+- Exit im Bereich (auch `System.Exit`), eine zweite Sperre derselben Sperre, eine frühere Freigabe – auch in anderer Schreibweise
 - `Lock(..)` mit Argumenten (keine Sperre), `TMonitor.Enter(O, Timeout)` bzw. `TMonitor.TryEnter(O)`
 - ein umschließender Handler, der die Sperre freigibt
 - die Sperre der Meldung steht nicht mehr auf der Zeile; die übrigen Sperren wie bei SCA009
@@ -1739,10 +1739,11 @@ Nachher:
 
 **Platzhalter:** `%s` = der Puffer.
 
-**Wirkung:** Derselbe Baustein wie bei SCA009, für `GetMem(P, N)`, `P := AllocMem(N)` und `P := GetMem(N)` (FPC) mit `FreeMem(P[, N])` bzw. `FreeMemAndNil(P)`.
+**Wirkung:** Derselbe Baustein wie bei SCA009, für `GetMem(P, N)`, `P := AllocMem(N)`, `var P[: T] := AllocMem(N)` und `P := GetMem(N)` (FPC) mit `FreeMem(P[, N])` bzw. `FreeMemAndNil(P)`; ein direkt folgendes `P := nil;` geht mit ins `finally`. P muss eine lokale Variable der Routine sein.
 
 **Nicht angeboten**
 
+- P ist keine lokale Variable der Routine (Feld, globale Variable, Parameter) – nach dem `finally` kennte der Halter den freigegebenen Puffer, eine finalization bzw. ein Destruktor gäbe ihn ein zweites Mal frei
 - `ReallocMem` (der Puffer bestand schon vorher), `Result := ..` (der Puffer verlässt die Routine)
 - ein erstes Argument, das kein einfacher Bezeichner ist (`Pointer(P)`), ein qualifizierter Aufruf außer `System.`
 - `Inc`/`Dec`/`GetMem`/`ReallocMem`/`@` auf P im Bereich, auch durch einen Cast; eine Freigabe in anderer Schreibweise
@@ -1753,20 +1754,30 @@ Nachher:
 Vorher:
 
 ```pascal
+procedure Run;
+var
+  P: Pointer;
+begin
   GetMem(P, 1024);
   DoStuff(P);
   FreeMem(P);
+end;
 ```
 
 Nachher:
 
 ```pascal
+procedure Run;
+var
+  P: Pointer;
+begin
   GetMem(P, 1024);
   try
     DoStuff(P);
   finally
     FreeMem(P);
   end;
+end;
 ```
 
 <a id="sca164"></a>
