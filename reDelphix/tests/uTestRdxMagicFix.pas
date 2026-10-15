@@ -55,31 +55,13 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxCompilerTraces, uRdxMagicFixes;
+  uRdxCodeMap, uRdxCompilerTraces, uRdxMagicFixes,
+  uTestRdxTextKit;   // Join, Apply, LineOf, WriteText, NewTempDir, RemoveTree
 
 const
   MSG = 'Magic number "%s" in if condition - use a constant';
 
 // ---- Helfer ----
-
-// Zeilen mit CRLF verbunden (TStringBuilder: string.Join kennt FPC nicht).
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
 
 // Eine Unit mit der Prozedur P und dem Rumpf ABody; AHead vor interface.
 function UnitWith(const AHead, ABody: array of string): string;
@@ -87,35 +69,6 @@ begin
   Result := Join(['unit u;']) + #13#10 + Join(AHead) + #13#10
     + Join(['interface', 'implementation', 'procedure P(X, Y: Integer);',
       'begin']) + #13#10 + Join(ABody) + #13#10 + Join(['end;', 'end.']);
-end;
-
-function Apply(const ASource: string; const AEdits: TArray<TRdxEdit>): string;
-var
-  Bytes : TBytes;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-begin
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, AEdits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
-end;
-
-// Die erste Zeile (1-basiert), die AText enthaelt; 0 ohne.
-function LineOf(const ASource, AText: string): Integer;
-var
-  SL : TStringList;
-  i  : Integer;
-begin
-  Result := 0;
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    for i := 0 to SL.Count - 1 do
-      if Pos(AText, SL[i]) > 0 then
-        Exit(i + 1);
-  finally
-    SL.Free;
-  end;
 end;
 
 type
@@ -484,53 +437,15 @@ end;
 // damit nichts aus einem frueheren Lauf oder aus TEMP selbst im Fenster von
 // FileReason liegt (Gegen-Review Q14, Minor 14; RemoveTree raeumt ab).
 function FreshDir(const AName: string): string;
-var
-  G : TGUID;
 begin
-  CreateGUID(G);
-  Result := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
-    + 'rdx_q14_' + GUIDToString(G) + PathDelim + AName + PathDelim;
+  Result := NewTempDir('rdx_q14_') + AName + PathDelim;
   ForceDirectories(Result);
-end;
-
-// Loescht den Baum ADir (mit Trenner) samt Inhalt.
-procedure RemoveTree(const ADir: string);
-var
-  SR : TSearchRec;
-begin
-  if FindFirst(ADir + '*', faAnyFile, SR) = 0 then
-  try
-    repeat
-      if (SR.Name = '.') or (SR.Name = '..') then
-        Continue;
-      if (SR.Attr and faDirectory) <> 0 then
-        RemoveTree(ADir + SR.Name + PathDelim)
-      else
-        DeleteFile(ADir + SR.Name);
-    until FindNext(SR) <> 0;
-  finally
-    FindClose(SR);
-  end;
-  RemoveDir(ADir);
 end;
 
 // Das Verzeichnis ueber ADir (mit Trenner) - die GUID-Wurzel von FreshDir.
 function ParentDir(const ADir: string): string;
 begin
   Result := ExtractFilePath(ExcludeTrailingPathDelimiter(ADir));
-end;
-
-procedure WriteText(const APath, AText: string);
-var
-  SL : TStringList;
-begin
-  SL := TStringList.Create;
-  try
-    SL.Text := AText;
-    SL.SaveToFile(APath);
-  finally
-    SL.Free;
-  end;
 end;
 
 // Die Dateiart (.pp, .lpr) und ein Lazarus-Projekt bzw. -Paket im

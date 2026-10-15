@@ -46,10 +46,11 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Generics.Collections,
+  System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog,
   uCommentedOutCode, uUnusedLocal,
-  uTestRdxDetectorKit;   // TSeen, Join, Detect-/Plan-/Apply-Helfer (Charge H3c)
+  uTestRdxDetectorKit,   // TSeen, Detect-/Plan-/FixAll-Helfer (Charge H3c)
+  uTestRdxTextKit;       // Join
 
 // ---- Helfer (die gemeinsamen seit Charge H3c in uTestRdxDetectorKit) ----
 

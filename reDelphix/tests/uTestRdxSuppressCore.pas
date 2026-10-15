@@ -53,7 +53,8 @@ uses
   uFileTextCache,      // gFileTextCache
   uRdxBufferMath,      // TRdxEdit
   uRdxSuppress,
-  uTestRdxDetectorKit; // WriteTemp, Apply
+  uTestRdxDetectorKit, // WriteTemp
+  uTestRdxTextKit;     // Apply
 
 const
   EOL  = #13#10;
@@ -138,16 +139,6 @@ begin
       Exit(True);
 end;
 
-// Eine Ersetzung wie der Editor (uTestRdxDetectorKit.Apply).
-function ApplyOne(const ASource: string; const AEdit: TRdxEdit): string;
-var
-  Edits : TArray<TRdxEdit>;
-begin
-  SetLength(Edits, 1);
-  Edits[0] := AEdit;
-  Result := Apply(ASource, Edits);
-end;
-
 // LineMarker fuer ALine von ASource: angeboten, liefert den neuen Text.
 function LineMarked(const ASource: string; ALine: Integer;
   const AKind: string): string;
@@ -160,7 +151,7 @@ begin
   try
     L.Text := ASource;
     Assert.IsTrue(TRdxSuppress.LineMarker(L, ALine, AKind, E, R), R);
-    Result := ApplyOne(ASource, E);
+    Result := Apply(ASource, E);
   finally
     L.Free;
   end;
@@ -180,7 +171,7 @@ begin
     L.Text := ASource;
     Result := TRdxSuppress.RemoveMarker(L, AMarkerLine, E, AReason);
     if Result then
-      ANewSource := ApplyOne(ASource, E);
+      ANewSource := Apply(ASource, E);
   finally
     L.Free;
   end;

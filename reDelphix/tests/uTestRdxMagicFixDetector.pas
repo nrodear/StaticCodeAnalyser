@@ -43,13 +43,14 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections,
+  System.SysUtils, System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog,
   uMagicNumbers,
   uRdxRecipeRunner,      // TRdxFixOutcome
   uRdxFixTable,          // CaptionFor
   uRdxPaths,             // SetRdxRemoteDriveTest (Naht fuer das Netzlaufwerk)
-  uTestRdxDetectorKit;   // TSeen, Join, Detect-/Plan-/Apply-Helfer
+  uTestRdxDetectorKit,   // TSeen, Detect-/Plan-/FixAll-Helfer
+  uTestRdxTextKit;       // Join, WriteText, TempName
 
 const
   // Das Netzlaufwerk der Attrappe (FakeRemoteDrive).

@@ -163,7 +163,8 @@ uses
   uAstNode, uParser2, uMethodd12, uSCAConsts, uConcatToFormat,
   uUnsortedUses,   // SCA142 auf dem Ergebnis einer uses-Ergaenzung
   uEngineApi, uRefactorInfo, uRdxRecipes, uRdxRecipeRunner,
-  uRdxBufferMath;   // PlanByteEdits/ApplyByteEdits - der Weg des Editors
+  uRdxBufferMath,   // TRdxEdit
+  uTestRdxTextKit;  // Apply (der Weg des Editors), LineOf, WriteText
 
 const
   // Eine Unit mit allem, was die Varianten brauchen: Feld, Parameter
@@ -190,39 +191,14 @@ begin
   Result := HEAD + ABody + FOOT;
 end;
 
-// Schreibt ASource in eine Temp-Datei und liefert deren Pfad.
+// Schreibt ASource in eine Temp-Datei und liefert deren Pfad (eigener
+// Name aus Uhrzeit und Zufall, geschrieben wie uTestRdxTextKit.WriteText).
 function WriteTemp(const ASource: string): string;
-var
-  SL : TStringList;
 begin
   Result := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
     + 'rdx_sca044_' + FormatDateTime('hhnnsszzz', Now)
     + IntToStr(Random(1000000)) + '.pas';
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    SL.SaveToFile(Result);
-  finally
-    SL.Free;
-  end;
-end;
-
-// Zeile (1-basiert) der ersten Quellzeile, die AMarker enthaelt.
-function LineOf(const ASource, AMarker: string): Integer;
-var
-  SL : TStringList;
-  i  : Integer;
-begin
-  Result := 0;
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    for i := 0 to SL.Count - 1 do
-      if Pos(AMarker, SL[i]) > 0 then
-        Exit(i + 1);
-  finally
-    SL.Free;
-  end;
+  WriteText(Result, ASource);
 end;
 
 // Funde der Art AKind in der Datei - die echten Detektoren SCA044
@@ -433,32 +409,18 @@ begin
   Result.NewText  := AOutcome.NewText;
 end;
 
-// Wendet die Ersetzungen so an wie der Editor (uRdxEditor.ReplaceSpans):
-// EIN Plan ueber denselben Puffer - PlanByteEdits prueft jeden erwarteten
-// Text, sortiert, lehnt Ueberlappungen ab und setzt #10 im neuen Text auf
-// das Zeilenende des Puffers -, dann ApplyByteEdits. Bis 2026-10-10 eine
-// eigene TStringList-Nachbildung, Kette und uses nacheinander (Review
-// reDelphiX nach Bereichen, Minor 25).
-function ApplyEdits(const ASource: string; const AEdits: TArray<TRdxEdit>): string;
-var
-  Bytes : TBytes;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-begin
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, AEdits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
-end;
-
 // Alle Ersetzungen des Ergebnisses in EINER Aktion, wie der Anbieter sie
-// uebergibt: die Kette und gegebenenfalls die uses-Ergaenzung.
+// uebergibt: die Kette und gegebenenfalls die uses-Ergaenzung - angewendet
+// wie der Editor (uTestRdxTextKit.Apply: ein Plan ueber denselben Puffer).
+// Bis 2026-10-10 eine eigene TStringList-Nachbildung, Kette und uses
+// nacheinander (Review reDelphiX nach Bereichen, Minor 25).
 function ApplyOutcome(const ASource: string;
   const AOutcome: TRdxFormatOutcome): string;
 begin
   if AOutcome.NeedsUses then
-    Result := ApplyEdits(ASource, [EditOf(AOutcome), AOutcome.UsesEdit])
+    Result := Apply(ASource, [EditOf(AOutcome), AOutcome.UsesEdit])
   else
-    Result := ApplyEdits(ASource, [EditOf(AOutcome)]);
+    Result := Apply(ASource, [EditOf(AOutcome)]);
 end;
 
 { ---- Detektor-Heuristik ---- }

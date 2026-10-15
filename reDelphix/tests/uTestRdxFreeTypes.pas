@@ -33,28 +33,9 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Classes,
-  uRdxCodeMap, uRdxSimpleFixes;
-
-// Zeilen mit CRLF verbunden (string.Join kennt FPC nicht).
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then
-        SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
+  System.Classes,
+  uRdxCodeMap, uRdxSimpleFixes,
+  uTestRdxTextKit;   // Join
 
 // DeclaresValueType(ATypeName) in einer Unit mit den Typen ATypes.
 function ValueTypeIn(const ATypes: array of string;

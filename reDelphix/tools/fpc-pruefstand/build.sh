@@ -4,6 +4,10 @@
 # Aufruf: build.sh <testunit> [<testunit> ...]
 #   Testunits kommen aus <SCA>\StaticCodeAnalyserForm\tests
 #   oder - wenn dort vorhanden - aus reDelphix\tests.
+#   Die Hilfs-Unit der Testunits (reDelphix\tests\uTestRdxTextKit: Join,
+#   Apply, LineOf, WriteText, Temp-Verzeichnisse - keine Fixture, Review
+#   R6-08) kopiert und passt jeder Lauf mit an wie eine Quelle; sie ist
+#   kein Aufrufargument.
 # Pfadregel: <SCA> ist der Checkout, in dem dieses Skript liegt (das
 #   Verzeichnis ueber reDelphix). Core, Rezepte und Tests kommen so immer
 #   aus EINEM Stand, auch in einem Worktree oder zweiten Klon.
@@ -196,6 +200,14 @@ for u in uRdxText uRdxRecipes uRdxPaths uRdxScopeTable uRdxBufferMath uRdxCodeMa
     echo "WARNUNG: $RDX/source/$u.pas fehlt - Testunits, die $u brauchen, scheitern beim Bau" >&2
   fi
 done
+# Die Hilfs-Unit der Testunits (Review R6-08: bis dahin je Testunit eine
+# Kopie von Join, Apply, LineOf ...) kommt bei JEDEM Lauf mit, unabhaengig
+# von den aufgerufenen Testunits - FPC uebersetzt sie nur, wenn eine sie
+# bindet. Sie hat keine Fixture: die Registrierungspruefung in Schritt 3
+# sieht in ihr keine Klasse (wie in uTestRdxDetectorKit), als
+# Aufrufargument scheitert sie an "genau EINE Fixture" (Exit 2).
+need "$RDX/tests/uTestRdxTextKit.pas"
+UNITS+=("$RDX/tests/uTestRdxTextKit.pas")
 adapt "$WORK" "${UNITS[@]}" || exit 2
 # Grabsteine (s. Kopf): je kopierter Unit und fuer uDetectorUtils eine
 # Quelle neben dem Skript, an der FPC sofort mit dem Hinweis abbricht.

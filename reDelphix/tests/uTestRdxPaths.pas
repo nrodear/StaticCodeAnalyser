@@ -42,7 +42,8 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxCodeMap, uRdxRoutineFixes, uRdxMagicFixes,
-  uRdxPaths;
+  uRdxPaths,
+  uTestRdxTextKit;   // Join, JoinWith, WriteText, RemoveTree
 
 const
   DRIVE_C = 'C:';
@@ -55,23 +56,11 @@ const
 // Die Teile mit ASep verbunden (ein Pfad als Literal waere ein
 // SCA016-Fund im Selbstscan). ASep als string: der TStringBuilder von FPC
 // 3.2 baut AnsiString, ein Char haengte er nicht sicher als Zeichen an.
+// JoinWith der Hilfs-Unit (Review R6-08; bis zum Merge der Charge B2T eine
+// Kopie derselben Schleife).
 function PathOf(const AParts: array of string; const ASep: string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
 begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(AParts) do
-    begin
-      if i > 0 then
-        SB.Append(ASep);
-      SB.Append(AParts[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
+  Result := JoinWith(ASep, AParts);
 end;
 
 // Der Vorsatz des Win32-Namensraums: '\\?\' (lange Pfade) bzw. '\\.\'.
@@ -97,58 +86,8 @@ begin
   Result := ADrive <> '';
 end;
 
-// Zeilen mit CRLF verbunden (TStringBuilder: string.Join kennt FPC nicht).
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
-procedure WriteText(const APath, AText: string);
-var
-  SL : TStringList;
-begin
-  SL := TStringList.Create;
-  try
-    SL.Text := AText;
-    SL.SaveToFile(APath);
-  finally
-    SL.Free;
-  end;
-end;
-
-// Loescht den Baum ADir (mit Trenner) samt Inhalt.
-procedure RemoveTree(const ADir: string);
-var
-  SR : TSearchRec;
-begin
-  if FindFirst(ADir + '*', faAnyFile, SR) = 0 then
-  try
-    repeat
-      if (SR.Name = '.') or (SR.Name = '..') then
-        Continue;
-      if (SR.Attr and faDirectory) <> 0 then
-        RemoveTree(ADir + SR.Name + PathDelim)
-      else
-        DeleteFile(ADir + SR.Name);
-    until FindNext(SR) <> 0;
-  finally
-    FindClose(SR);
-  end;
-  RemoveDir(ADir);
-end;
+// Join, WriteText und RemoveTree kommen aus uTestRdxTextKit (Review R6-08;
+// bis zum Merge der Charge B2T hier je eine byte-gleiche Kopie).
 
 // Der Baum fuer einen Test: Root\a\b\c\u.pas (s. Kopf); Root und das
 // Verzeichnis der Unit mit Trenner.

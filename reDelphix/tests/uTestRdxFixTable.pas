@@ -32,27 +32,9 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Classes,
-  uMethodd12, uSCAConsts, uRdxRecipeRunner, uRdxFixTable;
-
-// Zeilen mit CRLF verbunden - wie in den uebrigen Testunits.
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
+  System.Classes,
+  uMethodd12, uSCAConsts, uRdxRecipeRunner, uRdxFixTable,
+  uTestRdxTextKit;   // Join
 
 procedure TTestRdxFixTable.EveryRow_HasPlanHintAndCaption;
 var

@@ -70,9 +70,10 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxRoutineFixes,
+  uRdxCodeMap, uRdxRoutineFixes,
   uRdxBlocks,  // ReadRoutine, Finder, IncludeSearchPath (seit Charge B2S-b)
-  uRdxPaths;   // IsNetworkPath (seit Charge B2S-a dort, bis dahin hier)
+  uRdxPaths,   // IsNetworkPath (seit Charge B2S-a dort, bis dahin hier)
+  uTestRdxTextKit;   // Join, Apply, WriteText, NewTempDir
 
 const
   MSG_TAIL = ' appears unused (no caller within the unit, no interface '
@@ -85,42 +86,11 @@ begin
   Result := 'Top-level routine ' + AName + MSG_TAIL;
 end;
 
-// Zeilen mit CRLF verbunden (TStringBuilder: string.Join kennt FPC nicht).
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
 // Eine Unit, deren implementation ALines traegt (ab Zeile 4).
 function InImpl(const ALines: array of string): string;
 begin
   Result := Join(['unit u;', 'interface', 'implementation']) + #13#10
     + Join(ALines) + #13#10 + 'end.';
-end;
-
-// Alle Ersetzungen gegen dieselben Bytes - wie der Editor.
-function Apply(const ASource: string; const AEdits: TArray<TRdxEdit>): string;
-var
-  Bytes : TBytes;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-begin
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, AEdits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
 end;
 
 // Der Plan fuer die Meldung AMessage auf Zeile ALine; AReason = '' heisst
@@ -204,26 +174,8 @@ end;
 // sich parallele Laeufe die Dateien, und ein deeper.inc aus einem
 // abgebrochenen Lauf machte Sca164_InterfaceInclude rot (Review R6-07).
 function TempDir: string;
-var
-  G : TGUID;
 begin
-  CreateGUID(G);
-  Result := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
-    + 'rdx_h3c_' + GUIDToString(G) + PathDelim;
-  ForceDirectories(Result);
-end;
-
-procedure WriteText(const APath, AText: string);
-var
-  SL : TStringList;
-begin
-  SL := TStringList.Create;
-  try
-    SL.Text := AText;
-    SL.SaveToFile(APath);
-  finally
-    SL.Free;
-  end;
+  Result := NewTempDir('rdx_h3c_');
 end;
 
 procedure AssertReadRefused(const ASource: string; ALine: Integer;

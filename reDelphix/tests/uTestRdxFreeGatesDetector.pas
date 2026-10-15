@@ -68,7 +68,8 @@ uses
   uRedundantBoolean,
   uRdxRecipeRunner,      // TRdxFixOutcome
   uRdxPaths,             // SetRdxRemoteDriveTest (Naht fuer das Netzlaufwerk)
-  uTestRdxDetectorKit;   // TSeen, Join, Detect-/Plan-/Apply-Helfer
+  uTestRdxDetectorKit,   // TSeen, Detect-/Plan-/FixAll-Helfer
+  uTestRdxTextKit;       // Join, Apply, TempName
 
 const
   // Eine Freigabe, die es nicht gibt: die Hilfen duerfen dort nichts lesen.
@@ -131,8 +132,10 @@ begin
   Assert.Fail(Format('kein Fund auf Zeile %d', [ALine]));
 end;
 
-// Die erste Zeile (1-basiert), die AText enthaelt.
-function LineOf(const ASource, AText: string): Integer;
+// Die erste Zeile (1-basiert), die AText enthaelt; ohne Treffer scheitert
+// der Test. Eigener Name: uTestRdxTextKit.LineOf liefert dann 0 und trennt
+// auch an LF und CR (Review R6-08).
+function LineOfOrFail(const ASource, AText: string): Integer;
 var
   Lines : TArray<string>;
   i     : Integer;
@@ -258,7 +261,8 @@ begin
   // Gegenprobe: ein var-Parameter IST die Variable des Aufrufers -
   // FreeAndNil(ABucket) bleibt die Hilfe.
   Src := BucketsUnit('var ABucket');
-  O := PlanAt(Src, 't.pas', fkFreeWithoutNil, LineOf(Src, 'ABucket.Free;'));
+  O := PlanAt(Src, 't.pas', fkFreeWithoutNil,
+    LineOfOrFail(Src, 'ABucket.Free;'));
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.AreEqual(StringReplace(Src, 'ABucket.Free;', 'FreeAndNil(ABucket);',
     []), Apply(Src, O.Edits));
@@ -285,12 +289,12 @@ begin
   // Freigabe, die nicht antwortet.
   Src := DeadMethodUnit;
   O := PlanAt(Src, UNC_FILE, fkUnusedPrivateMethod,
-    LineOf(Src, '    procedure Dead;'));
+    LineOfOrFail(Src, '    procedure Dead;'));
   Assert.IsFalse(O.Enabled, 'keine Hilfe auf dem Netzpfad');
   Assert.IsTrue(Pos('Netzpfad', O.Reason) > 0, O.Reason);
   // Dieselbe Unit lokal: die Hilfe bleibt.
   O := PlanAt(Src, 't.pas', fkUnusedPrivateMethod,
-    LineOf(Src, '    procedure Dead;'));
+    LineOfOrFail(Src, '    procedure Dead;'));
   Assert.IsTrue(O.Enabled, O.Reason);
 end;
 
@@ -304,7 +308,8 @@ begin
   Src := Join(['unit t;', 'interface', 'uses System.SysUtils;',
     '{$I defs.inc}', 'procedure Run;', 'implementation', 'procedure Dead;',
     'begin', 'end;', 'procedure Run;', 'begin', 'end;', 'end.']);
-  O := PlanAt(Src, UNC_FILE, fkUnusedRoutine, LineOf(Src, 'procedure Dead;'));
+  O := PlanAt(Src, UNC_FILE, fkUnusedRoutine,
+    LineOfOrFail(Src, 'procedure Dead;'));
   Assert.IsFalse(O.Enabled, 'keine Hilfe auf dem Netzpfad');
   Assert.IsTrue(Pos('Netzpfad', O.Reason) > 0, O.Reason);
 end;
@@ -326,10 +331,10 @@ begin
     'procedure TForm1.Check;', 'begin', '  if Visible = True then // method',
     '    Close;', 'end;', 'procedure Free2;', 'begin',
     '  if Visible = True then // free', '    Exit;', 'end;', 'end.']);
-  O := PlanAt(Src, 't.pas', fkRedundantBoolean, LineOf(Src, '// method'));
+  O := PlanAt(Src, 't.pas', fkRedundantBoolean, LineOfOrFail(Src, '// method'));
   Assert.IsFalse(O.Enabled, 'Methode einer TForm-Ableitung');
   Assert.IsTrue(Pos('nicht als Boolean bewiesen', O.Reason) > 0, O.Reason);
-  O := PlanAt(Src, 't.pas', fkRedundantBoolean, LineOf(Src, '// free'));
+  O := PlanAt(Src, 't.pas', fkRedundantBoolean, LineOfOrFail(Src, '// free'));
   Assert.IsTrue(O.Enabled, O.Reason);
 end;
 
@@ -366,10 +371,10 @@ begin
   // dahin hiess er "Netzpfad". '\\?\UNC\srv\..' ist der Netzpfad '\\srv\..'.
   Src := DeadMethodUnit;
   O := PlanAt(Src, LONG_PATH_PREFIX + TempName('rdx_fb_ns_', '.pas'),
-    fkUnusedPrivateMethod, LineOf(Src, '    procedure Dead;'));
+    fkUnusedPrivateMethod, LineOfOrFail(Src, '    procedure Dead;'));
   Assert.IsTrue(O.Enabled, O.Reason);
   O := PlanAt(Src, UNC_NS_FILE, fkUnusedPrivateMethod,
-    LineOf(Src, '    procedure Dead;'));
+    LineOfOrFail(Src, '    procedure Dead;'));
   Assert.IsFalse(O.Enabled, 'keine Hilfe auf dem Netzpfad');
   Assert.IsTrue(Pos('Netzpfad \\rdx-fb-nohost\share\src', O.Reason) > 0,
     O.Reason);
@@ -393,12 +398,12 @@ begin
   SetRdxRemoteDriveTest(FakeRemoteDrive);
   try
     O := PlanAt(Src, QFile, fkUnusedPrivateMethod,
-      LineOf(Src, '    procedure Dead;'));
+      LineOfOrFail(Src, '    procedure Dead;'));
     Assert.IsFalse(O.Enabled, 'keine Hilfe auf dem Netzlaufwerk');
     Assert.IsTrue(Pos('Netzpfad Q: - die Hilfe liest dort keine Formdateien',
       O.Reason) > 0, O.Reason);
     O := PlanAt(Src, LONG_PATH_PREFIX + QFile, fkUnusedPrivateMethod,
-      LineOf(Src, '    procedure Dead;'));
+      LineOfOrFail(Src, '    procedure Dead;'));
     Assert.IsFalse(O.Enabled, 'keine Hilfe, auch lang geschrieben');
     Assert.IsTrue(Pos('Netzpfad Q: - die Hilfe liest dort keine Formdateien',
       O.Reason) > 0, O.Reason);

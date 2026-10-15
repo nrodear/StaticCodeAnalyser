@@ -17,9 +17,13 @@
 #   7. ein Harness nach altem Muster (-Fu<Skriptverzeichnis>, bleibendes
 #      -FU-Verzeichnis, die Quellen seiner .ppu sind weg): FPC bricht am
 #      Grabstein ab, mit und ohne -B, statt die alte .ppu still zu nehmen;
-#   8. TMPDIR im Windows-Stil mit Backslashes: der Lauf ist gruen.
+#   8. TMPDIR im Windows-Stil mit Backslashes: der Lauf ist gruen;
+#   9. die Hilfs-Unit uTestRdxTextKit (Review R6-08): jeder Lauf legt ihre
+#      angepasste Kopie ab, auch wenn keine aufgerufene Testunit sie bindet;
+#      als Aufrufargument Exit 2 (keine Fixture).
 # Die Faelle 7 und 8 kamen mit der Nachbesserung der Charge FF; das build.sh
-# des ersten Durchgangs (88713262) besteht sie nicht.
+# des ersten Durchgangs (88713262) besteht sie nicht. Fall 9a besteht erst
+# das build.sh mit R6-08 (davor kopierte es die Hilfs-Unit nicht).
 # Die Faelle 4 und 5 laufen gegen eine Mini-SCA-Wurzel im Temp-Verzeichnis
 # (SCA_ROOT) - der Checkout bleibt unberuehrt; Fall 7 liest die Grabsteine
 # neben dem Skript nur.
@@ -195,5 +199,17 @@ r=$?
   && [ -z "$(ls -A "$TMP/tmpdir")" ]
 ok=$?
 verdict $ok "8  TMPDIR mit Backslashes -> gruen, Arbeitsverzeichnis danach weg" "$TMP/8.txt"
+
+# 9) Hilfs-Unit: die Kopie liegt im PRUEFSTAND_DIR aus Fall 6b (gebaut mit
+#    uTestRdxBench, das sie nicht bindet) - angepasst wie eine Quelle.
+K="$TMP/eigen/uTestRdxTextKit.pas"
+[ -f "$K" ] && grep -q 'SysUtils, Classes,' "$K" && ! grep -q 'System\.SysUtils' "$K"
+ok=$?
+verdict $ok "9a Hilfs-Unit uTestRdxTextKit angepasst mitkopiert, ohne dass eine Testunit sie bindet" "$TMP/6b.txt"
+bash "$BUILD" uTestRdxTextKit > "$TMP/9.txt" 2>&1
+r=$?
+[ $r -eq 2 ] && grep -q 'uTestRdxTextKit: 0 Fixture' "$TMP/9.txt"
+ok=$?
+verdict $ok "9b Hilfs-Unit als Aufrufargument -> Exit 2 (keine Fixture)" "$TMP/9.txt"
 
 exit $bad

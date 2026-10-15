@@ -54,7 +54,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxCodeMap, uRdxBlocks, uRdxTryFixes, uRdxResultFixes;
+  uRdxCodeMap, uRdxBlocks, uRdxTryFixes, uRdxResultFixes,
+  uTestRdxTextKit;   // Join, LineStartingWith
 
 const
   MSG_CTOR = 'Constructor has no `inherited` call - parent class is not '
@@ -69,43 +70,9 @@ const
 
 // ---- Helfer ----
 
-// Zeilen mit CRLF verbunden (TStringBuilder: string.Join kennt FPC nicht).
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
-// Die erste Zeile (1-basiert), die mit AStart beginnt (Leerraum davor
-// zaehlt nicht); 0 ohne.
-function LineOf(const ASource, AStart: string): Integer;
-var
-  SL : TStringList;
-  i  : Integer;
-begin
-  Result := 0;
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    for i := 0 to SL.Count - 1 do
-      if Pos(AStart, TrimLeft(SL[i])) = 1 then
-        Exit(i + 1);
-  finally
-    SL.Free;
-  end;
-end;
+// Join und LineStartingWith kommen aus uTestRdxTextKit (Review R6-08; bis
+// zum Merge der Charge B2T hier je eine Kopie - das lokale LineOf hatte den
+// Vertrag von LineStartingWith, NICHT den von uTestRdxTextKit.LineOf).
 
 // Das erste Token AWord (klein) auf der Zeile ALine; Low = '' ohne.
 function TokOn(AMap: TRdxCodeMap; ALine: Integer; const AWord: string): TRdxToken;
@@ -140,7 +107,7 @@ begin
   try
     SL.Text := ASource;
     Map := TRdxCodeMap.Create(SL);
-    TRdxTryFixes.MissingFinally(Map, LineOf(ASource, 'X := TFoo.Create'),
+    TRdxTryFixes.MissingFinally(Map, LineStartingWith(ASource, 'X := TFoo.Create'),
       'X', P, Result);
   finally
     Map.Free;
@@ -195,15 +162,15 @@ begin
   try
     SL.Text := Src;
     Map := TRdxCodeMap.Create(SL);
-    T := TokOn(Map, LineOf(Src, 'Run;'), 'run');
+    T := TokOn(Map, LineStartingWith(Src, 'Run;'), 'run');
     Assert.IsTrue(TRdxBlocks.HeadBefore(Map, T, [], S), 'erster Kopf');
     Assert.AreEqual('', S.Reason, 'Inner lesbar');
     Assert.AreEqual('Inner', S.Routine.Name);
     Assert.IsFalse(S.Stop);
     Assert.IsTrue(TRdxBlocks.HeadBefore(Map, T, [], S), 'zweiter Kopf');
     Assert.AreEqual('Outer', S.Routine.Name);
-    Assert.AreEqual<Integer>(LineOf(Src, 'procedure Outer;'), S.Tok.Line);
-    Assert.IsTrue(TokBefore(S.Routine.Body, TokOn(Map, LineOf(Src, 'Run;'),
+    Assert.AreEqual<Integer>(LineStartingWith(Src, 'procedure Outer;'), S.Tok.Line);
+    Assert.IsTrue(TokBefore(S.Routine.Body, TokOn(Map, LineStartingWith(Src, 'Run;'),
       'run')), 'Rumpf von Outer vor Run');
   finally
     Map.Free;
@@ -228,11 +195,11 @@ begin
   try
     SL.Text := Src;
     Map := TRdxCodeMap.Create(SL);
-    T := TokOn(Map, LineOf(Src, 'Init;'), 'init');
+    T := TokOn(Map, LineStartingWith(Src, 'Init;'), 'init');
     Assert.IsTrue(TRdxBlocks.HeadBefore(Map, T, ['initialization'], S));
     Assert.IsTrue(S.Stop, 'Abschnittswort beendet');
     Assert.AreEqual('initialization', S.Tok.Low);
-    T := TokOn(Map, LineOf(Src, 'Init;'), 'init');
+    T := TokOn(Map, LineStartingWith(Src, 'Init;'), 'init');
     Assert.IsTrue(TRdxBlocks.HeadBefore(Map, T, [], S));
     Assert.IsFalse(S.Stop, 'ohne AStops weiter');
     // Rueckwaerts kommt der spaetere Kopf zuerst: Inner steht hinter Outer.
@@ -264,10 +231,10 @@ begin
   try
     SL.Text := Src;
     Map := TRdxCodeMap.Create(SL);
-    T := TokOn(Map, LineOf(Src, 'Run;'), 'run');
+    T := TokOn(Map, LineStartingWith(Src, 'Run;'), 'run');
     Assert.IsTrue(TRdxBlocks.HeadBefore(Map, T, [], S));
     Assert.IsTrue(Pos('lokaler Klassen', S.Reason) > 0, S.Reason);
-    Assert.AreEqual<Integer>(LineOf(Src, 'procedure Inner;'), S.Tok.Line);
+    Assert.AreEqual<Integer>(LineStartingWith(Src, 'procedure Inner;'), S.Tok.Line);
     Assert.IsTrue(TRdxBlocks.HeadBefore(Map, T, [], S));
     Assert.IsTrue(Pos('lokale Routine Inner', S.Reason) > 0, S.Reason);
   finally
@@ -330,7 +297,7 @@ begin
   try
     SL.Text := Src;
     Map := TRdxCodeMap.Create(SL);
-    T := TokOn(Map, LineOf(Src, 'X := TFoo.Create'), 'x');
+    T := TokOn(Map, LineStartingWith(Src, 'X := TFoo.Create'), 'x');
     Assert.IsTrue(TRdxBlocks.HeadBefore(Map, T, [], S), 'ein Kopf vor X');
     Assert.AreEqual('operator', S.Tok.Low, 'zuerst der Pseudo-Kopf');
     Assert.IsTrue(S.Reason <> '', 'seine Grenzen sind nicht sicher');
@@ -353,9 +320,9 @@ begin
     '  begin', '  end;', 'begin', '  Result := Result + ''x'';', 'end;',
     'end.']);
   R := ResultReason(TRdxResultFixes.ManagedResultInit, Src,
-    LineOf(Src, 'Result := Result'), MSG_196);
+    LineStartingWith(Src, 'Result := Result'), MSG_196);
   Assert.IsTrue(Pos(Format('Routine in Zeile %d: lokaler Klassen',
-    [LineOf(Src, 'procedure Inner;')]), R) = 1, R);
+    [LineStartingWith(Src, 'procedure Inner;')]), R) = 1, R);
 end;
 
 // SCA196 an einer Funktion in EINER Zeile: Kopf und Lesen von Result
@@ -372,7 +339,7 @@ begin
   Src := Join(['unit u;', 'interface', 'implementation',
     'function F: string; begin Result := Result + ''x''; end;', 'end.']);
   R := ResultReason(TRdxResultFixes.ManagedResultInit, Src,
-    LineOf(Src, 'function F:'), MSG_196);
+    LineStartingWith(Src, 'function F:'), MSG_196);
   Assert.AreEqual('', R, 'Hilfe fuer F auf der Fundzeile');
 end;
 
@@ -401,7 +368,7 @@ begin
     Assert.AreEqual<Integer>(1, Integer(Length(Heads)), 'ein Kopf');
     Members := TRdxBlocks.MemberHeads(Map, Heads[0], 'Run');
     Assert.AreEqual<Integer>(2, Integer(Length(Members)), 'zwei Overloads');
-    Assert.AreEqual<Integer>(LineOf(Src, 'procedure Run; overload;'),
+    Assert.AreEqual<Integer>(LineStartingWith(Src, 'procedure Run; overload;'),
       Members[0].Line);
     Assert.AreEqual<Integer>(2, Integer(Length(TRdxBlocks.FindMethodDecls(Map,
       'TFoo', 'Run'))), 'FindMethodDecls gleich');
@@ -424,7 +391,7 @@ begin
     '  {$ENDIF}', '  TFoo = class(TBase)', '    constructor Create; override;',
     '  end;'], ['constructor TFoo.Create;', 'begin', '  Init;', 'end;']);
   R := ResultReason(TRdxResultFixes.ConstructorInherited, Src,
-    LineOf(Src, 'constructor TFoo.Create;'), MSG_CTOR);
+    LineStartingWith(Src, 'constructor TFoo.Create;'), MSG_CTOR);
   Assert.IsTrue(Pos('Aufruf Init in Zeile', R) = 1, R);
   Assert.IsTrue(Pos('(Delegation)', R) > 0, R);
 end;
@@ -444,7 +411,7 @@ begin
     '  {$ENDIF}', '  TFoo = class(TBase)', '    constructor Create; override;',
     '  end;'], ['constructor TFoo.Create;', 'begin', '  Run;', 'end;']);
   R := ResultReason(TRdxResultFixes.ConstructorInherited, Src,
-    LineOf(Src, 'constructor TFoo.Create;'), MSG_CTOR);
+    LineStartingWith(Src, 'constructor TFoo.Create;'), MSG_CTOR);
   Assert.IsTrue(Pos('TBase.Create ist abstrakt', R) = 1, R);
 end;
 
@@ -473,7 +440,7 @@ begin
     Map := TRdxCodeMap.Create(SL);
     for i := 0 to High(FORMS) do
     begin
-      Kind := TokOn(Map, LineOf(Src, FORMS[i]), 'class');
+      Kind := TokOn(Map, LineStartingWith(Src, FORMS[i]), 'class');
       Assert.IsTrue(TypeHasBody(Map, Kind) = BODY[i], FORMS[i]);
     end;
   finally

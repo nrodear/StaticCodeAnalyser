@@ -41,7 +41,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxRaiseFixes;
+  uRdxBufferMath, uRdxCodeMap, uRdxRaiseFixes,
+  uTestRdxTextKit;   // Join, Apply
 
 type
   TRdxRaiseKind = (rkEmpty, rkMissing, rkReRaise);
@@ -50,39 +51,6 @@ const
   EMPTY_MSG = 'Method body is empty';
 
 // ---- Helfer ----
-
-function Apply(const ASource: string; const AEdit: TRdxEdit): string;
-var
-  Bytes : TBytes;
-  Edits : TArray<TRdxEdit>;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-begin
-  SetLength(Edits, 1);
-  Edits[0] := AEdit;
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, Edits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
-end;
-
-// Zeilen mit CRLF verbunden (TStringBuilder: string.Join kennt FPC nicht).
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
 
 // Die Hilfe AKind fuer Zeile ALine: neuer Text oder '' bei Ablehnung.
 // AArg ist bei rkEmpty das Anweisungsformat ('' = Kommentar), sonst die

@@ -60,7 +60,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxResultFixes;
+  uRdxCodeMap, uRdxResultFixes,
+  uTestRdxTextKit;   // Join, Apply, LineStartingWith
 
 const
   MSG_CTOR = 'Constructor has no `inherited` call - parent class is not '
@@ -72,60 +73,11 @@ const
 
 // ---- Helfer ----
 
-function Apply(const ASource: string; const AEdits: TArray<TRdxEdit>): string;
-var
-  Bytes : TBytes;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-begin
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, AEdits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
-end;
-
-// Zeilen mit CRLF verbunden (TStringBuilder: string.Join kennt FPC nicht).
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
 // Eine Unit mit den Typen ATypes (interface) und den Zeilen AImpl.
 function InUnit(const ATypes, AImpl: array of string): string;
 begin
   Result := Join(['unit u;', 'interface', 'type']) + #13#10 + Join(ATypes)
     + #13#10 + 'implementation' + #13#10 + Join(AImpl) + #13#10 + 'end.';
-end;
-
-// Die erste Zeile (1-basiert), die mit AStart beginnt (Leerraum davor
-// zaehlt nicht); 0 ohne.
-function LineOf(const ASource, AStart: string): Integer;
-var
-  SL : TStringList;
-  i  : Integer;
-begin
-  Result := 0;
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    for i := 0 to SL.Count - 1 do
-      if Copy(TrimLeft(SL[i]), 1, Length(AStart)) = AStart then
-        Exit(i + 1);
-  finally
-    SL.Free;
-  end;
 end;
 
 // Der Plan fuer die Zeile, die mit AHead beginnt; AReason = '' heisst Hilfe.
@@ -140,7 +92,7 @@ begin
   try
     SL.Text := ASource;
     Map := TRdxCodeMap.Create(SL);
-    APlanner(Map, LineOf(ASource, AHead), AMessage, Result, AReason);
+    APlanner(Map, LineStartingWith(ASource, AHead), AMessage, Result, AReason);
   finally
     Map.Free;
     SL.Free;

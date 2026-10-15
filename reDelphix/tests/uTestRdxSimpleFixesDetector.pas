@@ -219,7 +219,8 @@ uses
   uRedundantConditional, uRedundantJump, uSelfAssignment,
   uEngineApi, uRdxBufferMath, uRdxRecipeRunner,
   uRdxFixTable,   // der Einstieg des Anbieters (Charge R8: Tabelle statt Ketten)
-  uTestRdxDetectorKit;   // TSeen, Join, Detect-/Plan-/Apply-Helfer (Charge H3c)
+  uTestRdxDetectorKit,   // TSeen, Detect-/Plan-/FixAll-Helfer (Charge H3c)
+  uTestRdxTextKit;       // Join, Apply
 
 // ---- Helfer (die gemeinsamen seit Charge H3c in uTestRdxDetectorKit) ----
 

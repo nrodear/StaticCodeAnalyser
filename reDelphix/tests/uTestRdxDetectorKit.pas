@@ -9,6 +9,9 @@ unit uTestRdxDetectorKit;
 // H3, Minor 9); reine Verschiebung. Welcher Detektor zu welcher Art laeuft,
 // bleibt in der Testunit (TDetectorRun) - die drei registrieren
 // verschiedene Detektormengen.
+// Join, Apply, WriteText und TempName stehen seit Review R6-08 in der
+// FPC-tauglichen Hilfs-Unit uTestRdxTextKit (auch fuer die Testunits ohne
+// Detektor) - hier bleibt, was Parser, Detektoren und Anbieter brauchen.
 
 interface
 
@@ -39,16 +42,12 @@ type
   TDetectFunc = function(const ASource: string;
     AKind: TFindingKind): TArray<TSeen>;
 
-// Zeilen mit CRLF verbunden.
-function Join(const ALines: array of string): string;
 // Ein Katalog-Beispiel als Quelltext: Zeilenenden CRLF (JSON liefert #10,
 // der eingebaute Katalog #13#10). uTestRdxSimpleFixesDetector laesst dazu
 // '...' weg (eigene Snip).
 function CatalogText(const AExample: string): string;
-// Ein Dateiname im TEMP-Verzeichnis: APrefix + GUID + AExt.
-function TempName(const APrefix, AExt: string): string;
-procedure WriteText(const APath, AText: string);
-// ASource in eine neue .pas-Datei im TEMP-Verzeichnis; ihr Name.
+// ASource in eine neue .pas-Datei im TEMP-Verzeichnis (TempName,
+// WriteText aus uTestRdxTextKit); ihr Name.
 function WriteTemp(const APrefix, ASource: string): string;
 // Funde der Art AKind in der Datei APath - ARun auf dem echten AST.
 function DetectFile(const APath: string; AKind: TFindingKind;
@@ -64,10 +63,9 @@ function PlanFixIn(const ASource, AFile: string; AKind: TFindingKind;
 function PlanFix(const ASource: string; AKind: TFindingKind;
   const ASeen: TSeen; out AEdits: TArray<TRdxEdit>;
   out AReason: string): Boolean;
-// Schreibt wie der Editor: alle Ersetzungen gegen denselben Puffer geprueft.
-function Apply(const ASource: string; const AEdits: TArray<TRdxEdit>): string;
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet (wie der Benutzer es
-// taete), bis der Detektor (ADetect) schweigt.
+// taete) und angewendet wie der Editor (uTestRdxTextKit.Apply), bis der
+// Detektor (ADetect) schweigt.
 function FixAllWith(const ASource: string; AKind: TFindingKind;
   ADetect: TDetectFunc): string;
 // Der erste Fund muss abgelehnt werden, mit AReasonPart im Grund.
@@ -81,36 +79,13 @@ uses
   DUnitX.TestFramework,
   uParser2,           // TParser2
   uEngineApi,         // TSourcePlaces
-  uRdxFixTable;       // TRdxFixTable.FixFor
-
-function Join(const ALines: array of string): string;
-begin
-  Result := string.Join(#13#10, ALines);
-end;
+  uRdxFixTable,       // TRdxFixTable.FixFor
+  uTestRdxTextKit;    // TempName, WriteText, Apply (Review R6-08)
 
 function CatalogText(const AExample: string): string;
 begin
   Result := StringReplace(AExample, #13#10, #10, [rfReplaceAll]);
   Result := StringReplace(Result, #10, #13#10, [rfReplaceAll]);
-end;
-
-function TempName(const APrefix, AExt: string): string;
-begin
-  Result := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
-    + APrefix + GUIDToString(TGUID.NewGuid) + AExt;
-end;
-
-procedure WriteText(const APath, AText: string);
-var
-  SL : TStringList;
-begin
-  SL := TStringList.Create;
-  try
-    SL.Text := AText;
-    SL.SaveToFile(APath);
-  finally
-    SL.Free;
-  end;
 end;
 
 function WriteTemp(const APrefix, ASource: string): string;
@@ -205,17 +180,6 @@ begin
   AEdits  := O.Edits;
   AReason := O.Reason;
   Result  := O.Enabled;
-end;
-
-function Apply(const ASource: string; const AEdits: TArray<TRdxEdit>): string;
-var
-  Bytes : TBytes;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-begin
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, AEdits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
 end;
 
 function FixAllWith(const ASource: string; AKind: TFindingKind;

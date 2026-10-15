@@ -63,10 +63,10 @@ source\uRdxText.pas               Sprache der Texte: _() in die reDelphix-Sprach
 data\unitscopes.txt               die Scope-Tabelle (erzeugt), als RCDATA eingelinkt (data\unitscopes.rc)
 data\quickfixes-doc.json          Titel, Wirkung, Sperren und Beispiele je Quick-Fix (von Hand gepflegt) - Quelle fuer QUICKFIXES.md
 QUICKFIXES.md                     alle Quick-Fixes mit Menuetext en/de/fr, Kennzeichnung, Sperren, Beispiel - ERZEUGT von tools\gen-quickfix-doc.py (Repo-Wurzel)
-tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 54 Testunits und einer Hilfs-Unit (siehe "Pruefen"); Konfigurationen Debug/Release (TestInsight) und CI (Konsole, Exit-Code)
+tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 54 Testunits und zwei Hilfs-Units (siehe "Pruefen"); Konfigurationen Debug/Release (TestInsight) und CI (Konsole, Exit-Code)
 tools\gen_unitscopes.py           erzeugt data\unitscopes.txt aus der Delphi-Installation
-tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik unter FPC 3.2.2 in einem eigenen Arbeitsverzeichnis je Lauf und fuehrt Tests aus (Sprache 'de', Stub uLocalization.pas liest die echten i18n\*.po); neben dem Skript nur Grabsteine der Kopien (siehe "Pruefen")
-tools\fpc-pruefstand\selftest.sh  Selbsttest von build.sh (zwei Laeufe zugleich, FPC-Exit, Testzahl, Registrierung, Test ohne Assert, PRUEFSTAND_DIR, Grabsteine, TMPDIR mit Backslashes)
+tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik (dazu die Hilfs-Unit tests\uTestRdxTextKit) unter FPC 3.2.2 in einem eigenen Arbeitsverzeichnis je Lauf und fuehrt Tests aus (Sprache 'de', Stub uLocalization.pas liest die echten i18n\*.po); neben dem Skript nur Grabsteine der Kopien (siehe "Pruefen")
+tools\fpc-pruefstand\selftest.sh  Selbsttest von build.sh (zwei Laeufe zugleich, FPC-Exit, Testzahl, Registrierung, Test ohne Assert, PRUEFSTAND_DIR, Grabsteine, TMPDIR mit Backslashes, Hilfs-Unit)
 tools\probe\RdxCorpusProbe.dpr    Korpus-Probe: Rezept 5.1 ueber eine Liste von Fundstellen, CSV
 tools\probe\sites_from_sarif.py   Fundstellen einer Regel aus einem SARIF-Lauf ziehen
 ```
@@ -868,7 +868,29 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   Detektor-Rundlaeufe (Datei schreiben, echter Detektor auf echtem AST,
   Hilfe ueber `TRdxFixTable.FixFor`, anwenden wie der Editor, Fund fuer Fund
   bis der Detektor schweigt); bis Charge H3c je eine Kopie. Seit Charge H4
-  traegt `TSeen` die Variante des Funds (SCA001). Nur Delphi.
+  traegt `TSeen` die Variante des Funds (SCA001). Nur Delphi. `Join`,
+  `Apply`, `WriteText` und `TempName` kommen seit Review R6-08 aus
+  `uTestRdxTextKit`.
+* `uTestRdxTextKit` - keine Fixture: die gemeinsamen Helfer der Testunits
+  (Review R6-08) - `Join` (CRLF, kein Zeilenende hinter der letzten Zeile),
+  `JoinWith`, `Apply` (eine oder mehrere Ersetzungen wie der Editor: ein Plan
+  ueber die UTF-8-Bytes, `PlanByteEdits`/`ApplyByteEdits`; lehnt der Plan ab,
+  scheitert der Test mit dem Grund), `LineOf` (erste Zeile, die den Text
+  enthaelt; 0 ohne), `LineStartingWith` (erste Zeile, die - ohne fuehrenden
+  Leerraum, auch Tabulatoren - mit dem Text beginnt; den Text selbst ohne
+  Einzug angeben, mit Einzug trifft er nie),
+  `WriteText` (ueber TStringList), `TempName`/`NewTempDir`/`RemoveTree`
+  (frische Namen und Verzeichnisse unter TEMP). Bis dahin hatte fast jede
+  Testunit eigene Kopien (`Join` 28-mal, `Apply` 22-mal samt `ApplyEdits`
+  und `ApplyOne`, `LineOf` 9-mal, `RemoveTree` 4-mal); die Kopien sind
+  ersetzt, kein Test und kein Assert hat sich geaendert. FPC-tauglich: der
+  Pruefstand kopiert und passt sie bei jedem Lauf mit an (kein
+  Aufrufargument; die Registrierungspruefung trifft sie nicht, sie hat
+  keine Fixture). Varianten mit anderem Vertrag bleiben unter eigenem Namen
+  in ihrer Testunit (`LineAt`, `LineOfOrFail`, `WriteUtf8`;
+  `JoinLines`/`Buf` der Intro-Tests verketten selbst, denn `TStringBuilder`
+  ist unter FPC ein AnsiString-Bauer und `Join` dort nicht verlustfrei) -
+  die Liste steht im Kopf der Unit.
 * `uTestRdxSimpleFixesDetector` - dieselben Hilfen gegen den echten
   Detektor: nach der Hilfe meldet er nichts mehr; die Katalog-Beispiele
   `bad` werden genau `good` (SCA074 und SCA139: das `good` traegt eine
@@ -970,7 +992,10 @@ des Moduls (`uRdxRecipes`, `uRdxPaths`, `uRdxScopeTable` samt `TRdxProjectUnits`
 `uRdxCodeMap`,
 `uRdxIntroPlan`, `uRdxIntroEdits`, `uRdxText`). Testunits kommen aus `reDelphix\tests`,
 sonst aus `StaticCodeAnalyserForm\tests` (Core-Tests wie
-`uTestSourcePlaces`, `uTestRefactorConcat`).
+`uTestSourcePlaces`, `uTestRefactorConcat`). Die Hilfs-Unit
+`tests\uTestRdxTextKit` kopiert und passt jeder Lauf mit an, gleich welche
+Testunits er baut (Review R6-08); als Aufrufargument lehnt das Skript sie
+ab (keine Fixture).
 
 * **Sprache (Charge C0):** der Runner setzt `SetRdxLanguageOverride('de')`
   vor den Tests, wie `reDelphix.Test.dpr`. Die echte `uLocalization`
@@ -1037,8 +1062,11 @@ sonst aus `StaticCodeAnalyserForm\tests` (Core-Tests wie
 * **Selbsttest** der Regeln oben an kleinen Laeufen (zwei Laeufe zugleich,
   FPC-Exit, fehlende Suite, Registrierung, Test ohne Assert,
   `PRUEFSTAND_DIR`, Harness nach altem Muster mit und ohne `-B`, `TMPDIR`
-  mit Backslashes); das build.sh vor Charge FF besteht keine der elf
-  Pruefungen, das des ersten Durchgangs der Charge die letzten drei nicht:
+  mit Backslashes, die Hilfs-Unit `uTestRdxTextKit` mitkopiert bzw. als
+  Aufrufargument abgelehnt); das build.sh vor Charge FF besteht keine der
+  elf Pruefungen der Faelle 1 bis 8, das des ersten Durchgangs der Charge
+  die letzten drei davon nicht, das vor Review R6-08 die Pruefung 9a nicht
+  (mit den Testunits von R6-08 dazu 1a und 3):
 
   ```
   bash reDelphix/tools/fpc-pruefstand/selftest.sh
