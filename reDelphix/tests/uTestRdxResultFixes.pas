@@ -433,12 +433,14 @@ begin
     '  function Inner: Integer;', '  begin', '    Result := 1;', '  end;',
     'begin', '  Result := '''';', '  Result := Result + IntToStr(Inner);',
     'end;']), Fix196(S, 'Result := Result', Msg196('Outer', 'string'), R, P), R);
-  // Liegt die Zeile in der lokalen Routine, heisst die Routine anders.
+  // Liegt die Zeile in der lokalen Routine, heisst die Routine anders. Der
+  // Grund schreibt 'heisst' in de mit Eszett - geprueft wird das Teilstueck
+  // mit beiden Namen.
   S := InUnit(['function Outer: Integer;', '  function Inner: string;',
     '  begin', '    Result := Result + ''x'';', '  end;', 'begin',
     '  Result := Length(Inner);', 'end;']);
   AssertRefused196(S, 'Result := Result', 'Outer', 'string',
-    'die Routine heisst Inner');
+    'Inner, die Meldung nennt Outer');
 end;
 
 procedure TTestRdxResultFixes.Refuse196_TypeNotProven;
@@ -484,16 +486,19 @@ const
     '  SetLength(X, 1);', 'end;');
   JOIN_FN: array[0..3] of string = ('function Join(const A: RawUtf8): RawUtf8;',
     'begin', '  Result := Result + A;', 'end;');
+  // Das Teilstueck des Grunds ohne Umlaut - 'Gueltigkeitsbereich' traegt in
+  // de einen echten Umlaut (Texte umstellen, E29).
+  SCOPE_PART = 'welche Definition gilt';
 begin
   AssertRefused196(InUnit([Join(HELPER), Join(JOIN_FN)]), 'Result := Result',
-    'Join', 'RawUtf8', 'Gueltigkeitsbereich');
+    'Join', 'RawUtf8', SCOPE_PART);
   AssertRefused196(Join([Join(HELPER), '', Join(JOIN_FN)]), 'Result := Result',
-    'Join', 'RawUtf8', 'Gueltigkeitsbereich');
+    'Join', 'RawUtf8', SCOPE_PART);
   AssertRefused196(Join(['unit u;', 'interface', 'type', '  TA = class',
     '  public type', '    TItems = array of Integer;', '  end;',
     'implementation', 'function GetItems: TItems;', 'begin',
     '  Result := Result + [1];', 'end;', 'end.']), 'Result := Result',
-    'GetItems', 'TItems', 'Gueltigkeitsbereich');
+    'GetItems', 'TItems', SCOPE_PART);
 end;
 
 // Die Unit von Planers_LargeUnitInTime: TFoo erbt von TBase (in der Unit),

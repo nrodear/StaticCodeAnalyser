@@ -2588,3 +2588,171 @@ msgstr "commentaire ou saut de ligne entre raise et le nom"
 
 msgid "the message has no name of the variable"
 msgstr "le nom de la variable manque dans le message"
+
+msgid "routine in line %d: %s"
+msgstr "routine à la ligne %d : %s"
+
+msgid "no routine around the reported line"
+msgstr "aucune routine autour de la ligne signalée"
+
+msgid "no body (forward/external)"
+msgstr "aucun corps (forward/external)"
+
+msgid "asm body - the quick fix does not see registers and stack; %s"
+msgstr "corps asm - le Quick-Fix ne voit pas les registres ni la pile; %s"
+
+msgid "compiler directive between header and begin - header or body depend on a branch; %s"
+msgstr "directive de compilation entre l'en-tête et begin - l'en-tête ou le corps dépendent d'une branche; %s"
+
+msgid "asm in the body (line %d) - the quick fix does not see registers and stack; %s"
+msgstr "asm dans le corps (ligne %d) - le Quick-Fix ne voit pas les registres ni la pile; %s"
+
+msgid "class %s - without an inheritance chain, inherited does not belong there"
+msgstr "class %s - sans chaîne d'héritage, inherited n'y a pas sa place"
+
+msgid "%s without a class (no TClass.Name) - %s"
+msgstr "%s sans classe (pas de TClasse.Name) - %s"
+
+msgid "\"inherited\" already appears in line %d (inactive branch, comment or local routine) - %s"
+msgstr "« inherited » figure déjà à la ligne %d (branche inactive, commentaire ou routine locale) - %s"
+
+msgid "ancestor list without \")\" (line %d) - %s"
+msgstr "liste des ancêtres sans « ) » (ligne %d) - %s"
+
+msgid "compiler directive in the ancestor list (line %d) - the ancestor depends on a branch; %s"
+msgstr "directive de compilation dans la liste des ancêtres (ligne %d) - l'ancêtre dépend d'une branche; %s"
+
+msgid "object type (old object model) - %s"
+msgstr "type object (ancien modèle objet) - %s"
+
+msgid "record - no inheritance"
+msgstr "record - pas d'héritage"
+
+msgid "class %s not in this unit - the ancestor cannot be proven"
+msgstr "classe %s absente de cette unité - l'ancêtre n'est pas prouvable"
+
+msgid "%d classes named %s in the unit - ambiguous"
+msgstr "%d classes nommées %s dans l'unité - ambigu"
+
+msgid "class helper - inherited means the extended class there"
+msgstr "class helper - inherited y désigne la classe étendue"
+
+msgid "no declaration of %s in the body of class %s"
+msgstr "aucune déclaration de %s dans le corps de la classe %s"
+
+msgid "declaration: %s"
+msgstr "déclaration : %s"
+
+msgid "parent class %s and no override declaration - which parent constructor should run with which arguments is a design decision; %s"
+msgstr "classe parente %s et aucune déclaration override - le choix du constructeur parent et de ses arguments relève de la conception; %s"
+
+msgid "override with overload - which inherited constructor is meant is not certain; %s"
+msgstr "override avec overload - le constructeur hérité visé n'est pas certain; %s"
+
+msgid "the constructor aborts with its first statement (line %d, blocked constructor) - inherited before it would run in vain; %s"
+msgstr "le constructeur s'interrompt dès sa première instruction (ligne %d, constructeur bloqué) - un inherited placé avant s'exécuterait en vain; %s"
+
+msgid "call %s in line %d - maybe another constructor of the class (delegation) that already initializes the parent class; inherited before it would run twice; %s"
+msgstr "appel %s à la ligne %d - peut-être un autre constructeur de la classe (délégation) qui initialise déjà la classe parente; un inherited placé avant s'exécuterait deux fois; %s"
+
+msgid "call %s in line %d - a constructor of the class (delegation) that already initializes the parent class; inherited before it would run twice; %s"
+msgstr "appel %s à la ligne %d - un constructeur de la classe (délégation) qui initialise déjà la classe parente; un inherited placé avant s'exécuterait deux fois; %s"
+
+msgid "the declaration carries no override - then the destructor hides the virtual method (SCA149); %s"
+msgstr "la déclaration ne porte pas override - le destructeur masque alors la méthode virtuelle (SCA149); %s"
+
+msgid "the declaration of %s.%s in line %d cannot be read - whether it is abstract remains open; %s"
+msgstr "la déclaration de %s.%s à la ligne %d est illisible - reste à savoir si elle est abstraite; %s"
+
+msgid "%s.%s is abstract (line %d) - inherited calls nothing there or does not compile under FPC objfpc; %s"
+msgstr "%s.%s est abstraite (ligne %d) - inherited n'y appelle rien ou ne compile pas sous FPC objfpc; %s"
+
+msgid "{$mode objfpc/fpc} in line %d, and from %s on the inherited method is not visible in this unit - if it is abstract, FPC does not compile the inherited; not provable, %s"
+msgstr "{$mode objfpc/fpc} à la ligne %d, et à partir de %s la méthode héritée n'est pas visible dans cette unité - si elle est abstraite, FPC ne compile pas le inherited; non prouvable, %s"
+
+msgid "%s in line %d - the control flow leaves the destructor there before the end, an inherited at the end would never run on this path; %s"
+msgstr "%s à la ligne %d - le flux d'exécution quitte le destructeur à cet endroit avant la fin, un inherited à la fin ne s'exécuterait jamais sur ce chemin; %s"
+
+msgid "the last statement is %s (line %d) - inherited after it would never run; %s"
+msgstr "la dernière instruction est %s (ligne %d) - un inherited placé après ne s'exécuterait jamais; %s"
+
+msgid "%s in line %d - there is no Result there"
+msgstr "%s à la ligne %d - Result n'y existe pas"
+
+msgid "the routine is called %s, the message names %s"
+msgstr "la routine s'appelle %s, le message nomme %s"
+
+msgid "return type across several lines - %s"
+msgstr "type de retour sur plusieurs lignes - %s"
+
+msgid "comment or directive in the return type - %s"
+msgstr "commentaire ou directive dans le type de retour - %s"
+
+msgid "header without return type, not a method - the quick fix does not read the declaration; %s"
+msgstr "en-tête sans type de retour, pas une méthode - le Quick-Fix ne lit pas la déclaration; %s"
+
+msgid "the declaration names no return type either"
+msgstr "la déclaration ne nomme pas non plus de type de retour"
+
+msgid "FPC \"specialize\" in the return type - Default() with the type by hand"
+msgstr "FPC « specialize » dans le type de retour - Default() avec le type à la main"
+
+msgid "return type \"%s\" is not a simple type identifier - %s"
+msgstr "le type de retour « %s » n'est pas un identificateur de type simple - %s"
+
+msgid "%s in line %d writes Result (inactive branch?) - the detector did not see it, the finding is doubtful; %s"
+msgstr "%s à la ligne %d écrit Result (branche inactive ?) - le détecteur ne l'a pas vu, le résultat est douteux; %s"
+
+msgid "%s is also defined in the declaration part of the function (line %d) - in the body the name means this type, in the header the outer one; %s"
+msgstr "%s est aussi défini dans la partie déclarative de la fonction (ligne %d) - dans le corps, le nom désigne ce type, dans l'en-tête le type extérieur; %s"
+
+msgid "%s is defined several times differently in this unit ($IFDEF branches?) - %s"
+msgstr "%s est défini plusieurs fois différemment dans cette unité (branches $IFDEF ?) - %s"
+
+msgid "Default() exists only from Delphi 2009 or FPC 3.0 on - the file shows traces of older compilers (%s, line %d); %s"
+msgstr "Default() n'existe qu'à partir de Delphi 2009 ou FPC 3.0 - le fichier porte des traces de compilateurs plus anciens (%s, ligne %d); %s"
+
+msgid "\"absolute Result\" in line %d - Result is written through the alias; %s"
+msgstr "« absolute Result » à la ligne %d - Result est écrit via l'alias; %s"
+
+msgid "%s is also defined in a routine or a type in this unit (line %d) - which definition applies depends on the scope; %s"
+msgstr "%s est aussi défini dans une routine ou un type de cette unité (ligne %d) - la définition applicable dépend de la portée; %s"
+
+msgid "%s is defined in this unit as \"%s ...\" (line %d) - not a dynamic array, interface, string or variant; %s"
+msgstr "%s est défini dans cette unité comme « %s ... » (ligne %d) - ni tableau dynamique, ni interface, ni chaîne, ni variant; %s"
+
+msgid "return type %s is not proven as string, dynamic array, interface or variant - %s"
+msgstr "le type de retour %s n'est prouvé ni comme chaîne, ni comme tableau dynamique, ni comme interface, ni comme variant - %s"
+
+msgid "of a destructor"
+msgstr "de destructeur"
+
+msgid "of a constructor"
+msgstr "de constructeur"
+
+msgid "unknown message - no \"%s\""
+msgstr "message inconnu - pas de « %s »"
+
+msgid "no Result on the reported line"
+msgstr "aucun Result sur la ligne signalée"
+
+msgid "the header names %s, the message %s"
+msgstr "l'en-tête nomme %s, le message %s"
+
+msgid "no begin body"
+msgstr "aucun corps begin"
+
+msgid "compiler directive between the last statement and end - the end can look different in each branch; %s"
+msgstr "directive de compilation entre la dernière instruction et end - la fin peut différer selon la branche; %s"
+
+msgid "end of the last statement not found"
+msgstr "fin de la dernière instruction introuvable"
+
+msgid "the message has no function name"
+msgstr "le nom de la fonction manque dans le message"
+
+msgid "of a function"
+msgstr "de fonction"
+
+msgid "the message has no function or return type"
+msgstr "la fonction ou le type de retour manque dans le message"

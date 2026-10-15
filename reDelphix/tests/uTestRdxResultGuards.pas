@@ -443,7 +443,10 @@ begin
   for T in TRACES do
   begin
     Assert.AreEqual('', Value121([T], NO_TYPES, 'TGUID', R), T);
-    Assert.IsTrue(Pos('Spuren aelterer Compiler', R) > 0, T + ': ' + R);
+    // Umlautfreies Teilstueck: 'Spuren aelterer Compiler' traegt in de einen
+    // echten Umlaut (Texte umstellen, E29).
+    Assert.IsTrue(Pos('Default() gibt es erst ab Delphi 2009', R) > 0,
+      T + ': ' + R);
     // Ein Literal kennt jeder Compiler.
     Assert.AreEqual('False', Value121([T], NO_TYPES, 'Boolean', R), T + ': ' + R);
   end;

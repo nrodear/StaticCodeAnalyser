@@ -2592,3 +2592,171 @@ msgstr "Kommentar oder Zeilenumbruch zwischen raise und Name"
 
 msgid "the message has no name of the variable"
 msgstr "Name der Variablen fehlt in der Meldung"
+
+msgid "routine in line %d: %s"
+msgstr "Routine in Zeile %d: %s"
+
+msgid "no routine around the reported line"
+msgstr "keine Routine um die gemeldete Zeile"
+
+msgid "no body (forward/external)"
+msgstr "kein Rumpf (forward/external)"
+
+msgid "asm body - the quick fix does not see registers and stack; %s"
+msgstr "asm-Rumpf - Register und Stapel sieht die Hilfe nicht; %s"
+
+msgid "compiler directive between header and begin - header or body depend on a branch; %s"
+msgstr "Compiler-Direktive zwischen Kopf und begin - Kopf oder Rumpf hängen an einem Zweig; %s"
+
+msgid "asm in the body (line %d) - the quick fix does not see registers and stack; %s"
+msgstr "asm im Rumpf (Zeile %d) - Register und Stapel sieht die Hilfe nicht; %s"
+
+msgid "class %s - without an inheritance chain, inherited does not belong there"
+msgstr "class %s - ohne Vererbungskette, inherited gehört nicht hinein"
+
+msgid "%s without a class (no TClass.Name) - %s"
+msgstr "%s ohne Klasse (kein TKlasse.Name) - %s"
+
+msgid "\"inherited\" already appears in line %d (inactive branch, comment or local routine) - %s"
+msgstr "\"inherited\" steht schon in Zeile %d (inaktiver Zweig, Kommentar oder lokale Routine) - %s"
+
+msgid "ancestor list without \")\" (line %d) - %s"
+msgstr "Vorfahrenliste ohne \")\" (Zeile %d) - %s"
+
+msgid "compiler directive in the ancestor list (line %d) - the ancestor depends on a branch; %s"
+msgstr "Compiler-Direktive in der Vorfahrenliste (Zeile %d) - der Vorfahr hängt an einem Zweig; %s"
+
+msgid "object type (old object model) - %s"
+msgstr "object-Typ (altes Objektmodell) - %s"
+
+msgid "record - no inheritance"
+msgstr "Record - ohne Vererbung"
+
+msgid "class %s not in this unit - the ancestor cannot be proven"
+msgstr "Klasse %s nicht in dieser Unit - der Vorfahr ist nicht beweisbar"
+
+msgid "%d classes named %s in the unit - ambiguous"
+msgstr "%d Klassen namens %s in der Unit - mehrdeutig"
+
+msgid "class helper - inherited means the extended class there"
+msgstr "class helper - inherited meint dort die erweiterte Klasse"
+
+msgid "no declaration of %s in the body of class %s"
+msgstr "keine Deklaration von %s im Rumpf der Klasse %s"
+
+msgid "declaration: %s"
+msgstr "Deklaration: %s"
+
+msgid "parent class %s and no override declaration - which parent constructor should run with which arguments is a design decision; %s"
+msgstr "Elternklasse %s und keine override-Deklaration - welcher Elternkonstruktor mit welchen Argumenten laufen soll, ist Entwurf; %s"
+
+msgid "override with overload - which inherited constructor is meant is not certain; %s"
+msgstr "override mit overload - welcher geerbte Konstruktor gemeint ist, ist nicht sicher; %s"
+
+msgid "the constructor aborts with its first statement (line %d, blocked constructor) - inherited before it would run in vain; %s"
+msgstr "der Konstruktor bricht mit seiner ersten Anweisung ab (Zeile %d, blockierter Konstruktor) - inherited davor liefe vergeblich; %s"
+
+msgid "call %s in line %d - maybe another constructor of the class (delegation) that already initializes the parent class; inherited before it would run twice; %s"
+msgstr "Aufruf %s in Zeile %d - vielleicht ein anderer Konstruktor der Klasse (Delegation), der die Elternklasse schon initialisiert; inherited davor liefe doppelt; %s"
+
+msgid "call %s in line %d - a constructor of the class (delegation) that already initializes the parent class; inherited before it would run twice; %s"
+msgstr "Aufruf %s in Zeile %d - ein Konstruktor der Klasse (Delegation), der die Elternklasse schon initialisiert; inherited davor liefe doppelt; %s"
+
+msgid "the declaration carries no override - then the destructor hides the virtual method (SCA149); %s"
+msgstr "die Deklaration trägt kein override - dann verdeckt der Destruktor die virtuelle Methode (SCA149); %s"
+
+msgid "the declaration of %s.%s in line %d cannot be read - whether it is abstract remains open; %s"
+msgstr "die Deklaration von %s.%s in Zeile %d ist nicht zu lesen - ob sie abstrakt ist, bleibt offen; %s"
+
+msgid "%s.%s is abstract (line %d) - inherited calls nothing there or does not compile under FPC objfpc; %s"
+msgstr "%s.%s ist abstrakt (Zeile %d) - inherited ruft dort nichts bzw. übersetzt unter FPC objfpc nicht; %s"
+
+msgid "{$mode objfpc/fpc} in line %d, and from %s on the inherited method is not visible in this unit - if it is abstract, FPC does not compile the inherited; not provable, %s"
+msgstr "{$mode objfpc/fpc} in Zeile %d, und die geerbte Methode ist ab %s nicht in dieser Unit zu sehen - ist sie abstrakt, übersetzt FPC das inherited nicht; nicht beweisbar, %s"
+
+msgid "%s in line %d - the control flow leaves the destructor there before the end, an inherited at the end would never run on this path; %s"
+msgstr "%s in Zeile %d - der Ablauf verlässt den Destruktor dort vor dem Ende, ein inherited am Ende liefe auf diesem Weg nie; %s"
+
+msgid "the last statement is %s (line %d) - inherited after it would never run; %s"
+msgstr "die letzte Anweisung ist %s (Zeile %d) - inherited dahinter liefe nie; %s"
+
+msgid "%s in line %d - there is no Result there"
+msgstr "%s in Zeile %d - dort gibt es kein Result"
+
+msgid "the routine is called %s, the message names %s"
+msgstr "die Routine heißt %s, die Meldung nennt %s"
+
+msgid "return type across several lines - %s"
+msgstr "Rückgabetyp über mehrere Zeilen - %s"
+
+msgid "comment or directive in the return type - %s"
+msgstr "Kommentar oder Direktive im Rückgabetyp - %s"
+
+msgid "header without return type, not a method - the quick fix does not read the declaration; %s"
+msgstr "Kopf ohne Rückgabetyp, keine Methode - die Deklaration liest die Hilfe nicht; %s"
+
+msgid "the declaration names no return type either"
+msgstr "auch die Deklaration nennt keinen Rückgabetyp"
+
+msgid "FPC \"specialize\" in the return type - Default() with the type by hand"
+msgstr "FPC \"specialize\" im Rückgabetyp - Default() mit dem Typ von Hand"
+
+msgid "return type \"%s\" is not a simple type identifier - %s"
+msgstr "Rückgabetyp \"%s\" ist kein einfacher Typbezeichner - %s"
+
+msgid "%s in line %d writes Result (inactive branch?) - the detector did not see it, the finding is doubtful; %s"
+msgstr "%s in Zeile %d schreibt Result (inaktiver Zweig?) - der Detektor sah es nicht, der Fund ist fraglich; %s"
+
+msgid "%s is also defined in the declaration part of the function (line %d) - in the body the name means this type, in the header the outer one; %s"
+msgstr "%s ist auch im Deklarationsteil der Funktion definiert (Zeile %d) - im Rumpf meint der Name diesen Typ, im Kopf den äußeren; %s"
+
+msgid "%s is defined several times differently in this unit ($IFDEF branches?) - %s"
+msgstr "%s ist in dieser Unit mehrfach verschieden definiert ($IFDEF-Zweige?) - %s"
+
+msgid "Default() exists only from Delphi 2009 or FPC 3.0 on - the file shows traces of older compilers (%s, line %d); %s"
+msgstr "Default() gibt es erst ab Delphi 2009 bzw. FPC 3.0 - die Datei trägt Spuren älterer Compiler (%s, Zeile %d); %s"
+
+msgid "\"absolute Result\" in line %d - Result is written through the alias; %s"
+msgstr "\"absolute Result\" in Zeile %d - Result wird über den Alias geschrieben; %s"
+
+msgid "%s is also defined in a routine or a type in this unit (line %d) - which definition applies depends on the scope; %s"
+msgstr "%s ist in dieser Unit auch in einer Routine bzw. einem Typ definiert (Zeile %d) - welche Definition gilt, hängt am Gültigkeitsbereich; %s"
+
+msgid "%s is defined in this unit as \"%s ...\" (line %d) - not a dynamic array, interface, string or variant; %s"
+msgstr "%s ist in dieser Unit als \"%s ...\" definiert (Zeile %d) - kein dynamisches Array, Interface, String oder Variant; %s"
+
+msgid "return type %s is not proven as string, dynamic array, interface or variant - %s"
+msgstr "Rückgabetyp %s ist nicht als String, dynamisches Array, Interface oder Variant bewiesen - %s"
+
+msgid "of a destructor"
+msgstr "eines Destruktors"
+
+msgid "of a constructor"
+msgstr "eines Konstruktors"
+
+msgid "unknown message - no \"%s\""
+msgstr "Meldung unbekannt - kein \"%s\""
+
+msgid "no Result on the reported line"
+msgstr "kein Result auf der gemeldeten Zeile"
+
+msgid "the header names %s, the message %s"
+msgstr "der Kopf nennt %s, die Meldung %s"
+
+msgid "no begin body"
+msgstr "kein begin-Rumpf"
+
+msgid "compiler directive between the last statement and end - the end can look different in each branch; %s"
+msgstr "Compiler-Direktive zwischen der letzten Anweisung und end - das Ende kann je Zweig anders aussehen; %s"
+
+msgid "end of the last statement not found"
+msgstr "Ende der letzten Anweisung nicht gefunden"
+
+msgid "the message has no function name"
+msgstr "Name der Funktion fehlt in der Meldung"
+
+msgid "of a function"
+msgstr "einer Funktion"
+
+msgid "the message has no function or return type"
+msgstr "Funktion oder Rückgabetyp fehlt in der Meldung"

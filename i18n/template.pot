@@ -61,11 +61,23 @@ msgstr ""
 msgid "\"%s\" was not imported: %s"
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:1989
+msgid "\"absolute Result\" in line %d - Result is written through the alias; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1120
+msgid "\"inherited\" already appears in line %d (inactive branch, comment or local routine) - %s"
+msgstr ""
+
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1945
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1951
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1970
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1934
 msgid "%d / %d findings"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1228
+msgid "%d classes named %s in the unit - ambiguous"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1862
@@ -150,6 +162,37 @@ msgstr ""
 msgid "%s contains no profiles."
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:1556
+msgid "%s in line %d - the control flow leaves the destructor there before the end, an inherited at the end would never run on this path; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1625
+#: reDelphix/source/uRdxResultFixes.pas:1627
+#: reDelphix/source/uRdxResultFixes.pas:1631
+msgid "%s in line %d - there is no Result there"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1784
+msgid "%s in line %d writes Result (inactive branch?) - the detector did not see it, the finding is doubtful; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:2085
+msgid "%s is also defined in a routine or a type in this unit (line %d) - which definition applies depends on the scope; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1884
+msgid "%s is also defined in the declaration part of the function (line %d) - in the body the name means this type, in the header the outer one; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:2090
+msgid "%s is defined in this unit as \"%s ...\" (line %d) - not a dynamic array, interface, string or variant; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1925
+#: reDelphix/source/uRdxResultFixes.pas:2094
+msgid "%s is defined several times differently in this unit ($IFDEF branches?) - %s"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:832
 msgid "%s is no longer at the reported place"
 msgstr ""
@@ -160,6 +203,14 @@ msgstr ""
 
 #: reDelphix/source/uRdxRaiseFixes.pas:450
 msgid "%s is reassigned between handler and raise - \"raise %s;\" then raises a different object than \"raise;\""
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1105
+msgid "%s without a class (no TClass.Name) - %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1439
+msgid "%s.%s is abstract (line %d) - inherited calls nothing there or does not compile under FPC objfpc; %s"
 msgstr ""
 
 #: reDelphix/source/uRdxRaiseFixes.pas:359
@@ -901,6 +952,10 @@ msgstr ""
 msgid "Debug output left in production code"
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:1945
+msgid "Default() exists only from Delphi 2009 or FPC 3.0 on - the file shows traces of older compilers (%s, line %d); %s"
+msgstr ""
+
 #: reDelphix/source/uRdxFixTable.pas:1224
 msgid "Delete commented-out code"
 msgstr ""
@@ -1100,6 +1155,10 @@ msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:629
 msgid "Export findings: HTML / JSON / CSV / Jira / Clipboard / Sonar"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1720
+msgid "FPC \"specialize\" in the return type - Default() with the type by hand"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:328
@@ -2763,12 +2822,24 @@ msgstr ""
 msgid "analyser.ini is not writable - dialect unchanged."
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:1182
+msgid "ancestor list without \")\" (line %d) - %s"
+msgstr ""
+
 #: reDelphix/source/uRdxRaiseFixes.pas:411
 msgid "anonymous method in the handler (the raise inside it or one before it) - cannot be checked safely"
 msgstr ""
 
 #: reDelphix/source/uRdxRaiseFixes.pas:182
 msgid "asm body"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1045
+msgid "asm body - the quick fix does not see registers and stack; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1055
+msgid "asm in the body (line %d) - the quick fix does not see registers and stack; %s"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2196
@@ -2779,6 +2850,14 @@ msgstr ""
 msgid "by hand"
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:1366
+msgid "call %s in line %d - a constructor of the class (delegation) that already initializes the parent class; inherited before it would run twice; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1360
+msgid "call %s in line %d - maybe another constructor of the class (delegation) that already initializes the parent class; inherited before it would run twice; %s"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2696
 msgid "case statement has many branches - consider dispatch table"
 msgstr ""
@@ -2787,16 +2866,48 @@ msgstr ""
 msgid "check by hand"
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:1102
+msgid "class %s - without an inheritance chain, inherited does not belong there"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1224
+msgid "class %s not in this unit - the ancestor cannot be proven"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1232
+msgid "class helper - inherited means the extended class there"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2334
 msgid "class(TObject) - TObject is the default base, drop it"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1686
+msgid "comment or directive in the return type - %s"
 msgstr ""
 
 #: reDelphix/source/uRdxRaiseFixes.pas:513
 msgid "comment or line break between raise and name"
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:1048
+msgid "compiler directive between header and begin - header or body depend on a branch; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:2298
+msgid "compiler directive between the last statement and end - the end can look different in each branch; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1189
+msgid "compiler directive in the ancestor list (line %d) - the ancestor depends on a branch; %s"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:802
 msgid "decide by hand"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1259
+msgid "declaration: %s"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3821
@@ -2815,6 +2926,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxText.pas:772
 msgid "end of the header not found"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:2306
+msgid "end of the last statement not found"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:762
@@ -2863,6 +2978,10 @@ msgstr ""
 msgid "h2. Code analysis: "
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:1700
+msgid "header without return type, not a method - the quick fix does not read the declaration; %s"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2843
 msgid "if X then Y := True else Y := False - assign expression directly"
 msgstr ""
@@ -2895,8 +3014,26 @@ msgstr ""
 msgid "no %s.Create"
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:2214
+msgid "no Result on the reported line"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:2267
+#: reDelphix/source/uRdxResultFixes.pas:2292
+msgid "no begin body"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1043
+msgid "no body (forward/external)"
+msgstr ""
+
 #: reDelphix/source/uRdxRaiseFixes.pas:186
 msgid "no body found for the method"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1252
+#: reDelphix/source/uRdxResultFixes.pas:2191
+msgid "no declaration of %s in the body of class %s"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:782
@@ -2923,6 +3060,10 @@ msgstr ""
 msgid "no operand in the chain"
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:1033
+msgid "no routine around the reported line"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:767
 msgid "no valid range"
 msgstr ""
@@ -2930,6 +3071,22 @@ msgstr ""
 #: reDelphix/source/uRdxProvider.pas:813
 #: reDelphix/source/uRdxProvider.pas:829
 msgid "nothing to offer"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1221
+msgid "object type (old object model) - %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:2162
+msgid "of a constructor"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:2158
+msgid "of a destructor"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:2388
+msgid "of a function"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2399
@@ -2948,8 +3105,16 @@ msgstr ""
 msgid "out parameter - prefer Result or var"
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:1277
+msgid "override with overload - which inherited constructor is meant is not certain; %s"
+msgstr ""
+
 #: reDelphix/source/uRdxProvider.pas:575
 msgid "own unit %s in the project"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1273
+msgid "parent class %s and no override declaration - which parent constructor should run with which arguments is a design decision; %s"
 msgstr ""
 
 #: reDelphix/source/uRdxRaiseFixes.pas:405
@@ -2958,6 +3123,26 @@ msgstr ""
 
 #: reDelphix/source/uRdxRaiseFixes.pas:426
 msgid "raise is in the handler of \"%s\", not of \"%s\""
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1223
+msgid "record - no inheritance"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1724
+msgid "return type \"%s\" is not a simple type identifier - %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:2137
+msgid "return type %s is not proven as string, dynamic array, interface or variant - %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1684
+msgid "return type across several lines - %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1025
+msgid "routine in line %d: %s"
 msgstr ""
 
 #: reDelphix/source/uRdxRaiseFixes.pas:239
@@ -2985,6 +3170,30 @@ msgstr ""
 msgid "the clause would no longer be sorted (new SCA142)"
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:1305
+msgid "the constructor aborts with its first statement (line %d, blocked constructor) - inherited before it would run in vain; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1414
+msgid "the declaration carries no override - then the destructor hides the virtual method (SCA149); %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1706
+msgid "the declaration names no return type either"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1435
+msgid "the declaration of %s.%s in line %d cannot be read - whether it is abstract remains open; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:2225
+msgid "the header names %s, the message %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1606
+msgid "the last statement is %s (line %d) - inherited after it would never run; %s"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:777
 msgid "the line starts inside a comment or string"
 msgstr ""
@@ -2997,6 +3206,14 @@ msgstr ""
 msgid "the message has no exception class"
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:2385
+msgid "the message has no function name"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:2428
+msgid "the message has no function or return type"
+msgstr ""
+
 #: reDelphix/source/uRdxRaiseFixes.pas:531
 msgid "the message has no name of the variable"
 msgstr ""
@@ -3005,8 +3222,16 @@ msgstr ""
 msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:1663
+msgid "the routine is called %s, the message names %s"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:812
 msgid "unclear what the statement belongs to (\"%s\" before it)"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:2165
+msgid "unknown message - no \"%s\""
 msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:553
@@ -3044,6 +3269,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:4379
 msgid "with statement names multiple targets - ambiguous member lookup"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1478
+msgid "{$mode objfpc/fpc} in line %d, and from %s on the inherited method is not visible in this unit - if it is abstract, FPC does not compile the inherited; not provable, %s"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1276
