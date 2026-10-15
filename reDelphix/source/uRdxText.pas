@@ -77,12 +77,15 @@ unit uRdxText;
 // stellt de/fr die Wortstellung selbst. Ein Argument AReason ist ein schon
 // uebersetzter ganzer Satz, AWhose eine schon uebersetzte Ergaenzung des
 // Aufrufers ('of a destructor'); ACode, AKeyword, APrevToken und AName
-// sind Quelltext und bleiben, wie sie sind. Einzige Ausnahme vom ganzen
-// Satz ist MsgHeadersFmt: ein MUSTER fuer TRdxLineSearch.ManyFmt, das erst
-// uRdxCodeMap.OneTokenReason mit Zahl und Ergaenzung fuellt (Nachpruefung
-// C1, V-C1-12: die Kopf-Suche steht in uRdxResultFixes UND
-// uRdxRoutineFixes - dieselbe msgid aus zwei Gruppen stuende sonst doppelt
-// in de.po/fr.po). Die deutsche Fassung ist der bisherige Wortlaut der
+// sind Quelltext und bleiben, wie sie sind. Ausnahmen vom ganzen Satz
+// (Nachpruefung C1, V-C1-12 und Runde 3): die Satzenden MsgByHand,
+// MsgCheckByHand, MsgDeleteByHand und MsgDecideByHand stehen als %s im
+// Satz der Unit, nie allein als Grund; MsgNoHeader ist eine Nominalphrase
+// fuer TRdxLineSearch.What, die uRdxCodeMap.OneTokenReason zum Satz
+// ergaenzt; MsgHeadersFmt ist ein MUSTER fuer TRdxLineSearch.ManyFmt, das
+// OneTokenReason mit Zahl und Ergaenzung fuellt (die Kopf-Suche steht in
+// uRdxResultFixes UND uRdxRoutineFixes - dieselbe msgid aus zwei Gruppen
+// stuende sonst doppelt in de.po/fr.po). Die deutsche Fassung ist der bisherige Wortlaut der
 // Planer, mit echten Umlauten (uTestRdxTextMsgs pinnt ihn in de, en und
 // fr). Wann welche Funktion gilt und wie ein zusammengesetzter Grund
 // entsteht: reDelphix/README.md, Abschnitt "Texte umstellen".

@@ -50,7 +50,7 @@ Was es meldet (je Fund Unit, Zeile, Art, Text):
 Grenzen der Heuristik: sie kennt Woerter und Endungen, keine Sprache. Ein
 deutscher Text, dessen Woerter in keiner Liste stehen und keine der
 Endungen tragen, faellt nicht auf - auch einer aus rein deutschen
-Woertern. Gemessen an den 814 Texten der i18n/de.po (Nachpruefung 2,
+Woertern. Gemessen an den 816 Texten der i18n/de.po (Nachpruefung 2,
 V-C1-10): 86 erkennt sie nicht (vor GERMAN_MORE/GERMAN_FORM/GERMAN_UNG
 226 - darunter 'Verzeichnis analysieren', 'FreeAndNil(%s) verwenden',
 'Bedingung direkt an %s zuweisen', 'Tiefe Verschachtelung'); 25 davon
@@ -107,7 +107,7 @@ ALLOW_FILE = REPO / "tools" / "rdx_i18n_gate.allow"
 # 'fund', 'gilt', 'leer'; Nachpruefung 2 gegen die Hunspell-Woerterbuecher
 # unten). Kriterium ist, dass keines in einer englischen msgid steht: alle
 # Listen und Regeln zusammen gegen alle msgids der SCA gemessen
-# (template.pot 674, de.po 814, fr.po 811, vor C1 795; Nachpruefung FIX-C1
+# (template.pot 676, de.po 816, fr.po 813, vor C1 795; Nachpruefung FIX-C1
 # und 2) 0 Treffer - eine msgid oder ein englischer Meldungsschluessel der
 # SCA ausserhalb von _() faellt nicht auf. Traegt eine NEUE englische msgid
 # eines dieser Woerter ('I am', 'man page'), meldet das Gate sie als
@@ -837,6 +837,15 @@ def _mutants():
         ("Protokoll ohne Ausnahme", b, "# leer\n", ["text"], 0, False),
         ("tote Ausnahme", b, a + "uRdxProbe.pas | text gibt es nicht | Probe\n", [], 1, False),
         ("deutsch im Kommentar", b.replace("// die Zeile", "// die Zeile ist nicht 'kein Text' und"), a, [], 0, False),
+        # Nachpruefung C1 Runde 3: die Reinheitsregel 'msgid-Konstante = reine
+        # Literal-Kette' (ein Wert, der mit einem Literal BEGINNT) und der
+        # (* *)-Zweig des Kommentar-Strippers liefen im Selbsttest nie.
+        ("Konstante Literal + Bezeichner",
+         b.replace("R_GOOD = " + ENGLISH_CONST, "R_GOOD = 'no Result on the line - ' + KEY_MSG"),
+         a, ["fremd"], 0, False),
+        ("deutsch im (* *)-Kommentar",
+         b.replace("  // die Zeile ist ein Kommentar - kein Text", "  (* die Zeile ist 'kein Text' *)"),
+         a, [], 0, False),
         ("Ausnahme text", b.replace("_('no valid range')", "'kein gueltiger Bereich'"),
          a + "uRdxProbe.pas | text kein gueltiger Bereich | Probe\n", [], 0, False),
         ("Ausnahme const", b.replace("_(R_GOOD)", "R_GOOD").replace(ENGLISH_CONST, GERMAN_CONST),

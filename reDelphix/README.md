@@ -452,14 +452,14 @@ die in der Unit keine reine Literal-Kette ist, und dynamische Argumente
 (`_(AWhat)`, `_(Format(..))`, `_('a ' + X)` - der Extraktor uebergeht sie
 still). Die Heuristik kennt Woerter und Endungen, keine Sprache: still
 bleibt ein deutscher Text, dessen Woerter in keiner Liste stehen und
-keine der Endungen tragen - von den 789 deutschen Texten der `de.po`
+keine der Endungen tragen - von den 791 deutschen Texten der `de.po`
 erkennt sie 61 nicht (meist Beschriftungen aus ein, zwei Woertern wie
 `Speicherleck` oder `Toter Code`) -, und einer nur aus Woertern, die es
-auch englisch gibt (`Parameter` ohne Zahl). Gegen alle 814 msgids der SCA
+auch englisch gibt (`Parameter` ohne Zahl). Gegen alle 816 msgids der SCA
 meldet sie nichts. Ein gruenes Gate beweist deshalb nicht, dass kein
 deutscher Text mehr im Quelltext steht: die eigenen Diff-Zeilen liest bei
 der Umstellung jemand auf ihre Sprache. `--report` zeigt den Stand je Unit,
-`--unit uRdxFlowFixes.pas` prueft nur diese Unit, `--selftest` faehrt 35
+`--unit uRdxFlowFixes.pas` prueft nur diese Unit, `--selftest` faehrt 37
 Faelle (Mutanten und gutartige Abwandlungen einer Probe-Unit, dazu die
 Heuristik an deutschen und englischen Proben). Bewusst feste Texte
 (Protokoll) stehen mit Begruendung in `tools\rdx_i18n_gate.allow`; ein
