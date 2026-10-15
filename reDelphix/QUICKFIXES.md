@@ -795,6 +795,7 @@ Nachher:
 **Nicht angeboten**
 
 - X ist nicht in der Unit deklariert (Property, geerbtes Feld) oder steht im `with`-Block
+- der Typ von X ist in der Unit ein `record`, `object`, `interface` oder ein Zeiger (`PFoo = ^TFoo`), die Unit deklariert eine Routine `Free`, oder der Typ ist nach Konvention ein Zeiger einer anderen Unit (`PEVP_PKEY`) – `FreeAndNil` nimmt nur ein `TObject`
 - eine Direktive vor `X.Free;` (das nil würde bedingt)
 - die Zeile trägt ein anderes Paar als die Meldung (Zeile verschoben)
 - `System.SysUtils` fehlt und die uses-Klausel trägt Direktiven oder liegt in einem `$IFDEF`-Zweig
@@ -1518,7 +1519,8 @@ Nachher:
 **Nicht angeboten**
 
 - X ist kein bloßer Bezeichner (`Self.X`, Pfad) oder nicht in der Unit deklariert; `with`-Block
-- der Typ von X ist in der Unit ein `record`, `object` oder `interface` (`Free` ist dort eine eigene Methode)
+- der Typ von X ist in der Unit ein `record`, `object`, `interface` oder ein Zeiger (`Free` ist dort eine eigene Methode bzw. die des Ziels), die Unit deklariert eine Routine `Free`, oder der Typ ist nach Konvention ein Zeiger einer anderen Unit
+- X ist ein `const`- bzw. `constref`-Parameter (FPC: Fehler, Delphi bis 10.3: E2197; ab 10.4 würde nur die lokale Kopie nil)
 - `Free` mit Klammern oder mehrfach auf der Zeile, `X.Destroy`
 
 **Beispiel**
@@ -1558,6 +1560,7 @@ Nachher:
 - der Name als String-Literal (`MethodAddress`), `{$RTTI}` in der Datei, ein Attribut an Methode oder Klasse
 - `{$I}` im Klassenrumpf oder im implementation-Teil, ein Interface der Klasse aus einer anderen Unit
 - eine `.dfm`/`.fmx`/`.lfm` neben der Unit nennt den Namen (Bindung an ein Ereignis)
+- die Unit liegt auf einem Netzpfad bzw. Netzlaufwerk – die Hilfe liest dort keine Formdatei (Menüaufbau im Hauptthread)
 
 **Beispiel**
 
@@ -1789,7 +1792,7 @@ Nachher:
 
 - Overloads, Methoden (das meldet SCA147), globale FPC-Operatoren
 - `export`/`public`/`alias`/`external`/`forward`/`interrupt`, `{$L}`/`{$LINK}` in der Datei
-- `{$I}` im implementation-Teil oder ein Include davor, das die Routine nennt oder nicht neben der Unit liegt
+- `{$I}` im implementation-Teil oder ein Include davor, das die Routine nennt oder nicht neben der Unit liegt; mit Include davor eine Unit auf einem Netzpfad bzw. Netzlaufwerk (kein Plattenzugriff im Hauptthread)
 - eine Direktive im Bereich außer ausgeglichenem `$IF..`/`$ENDIF` bzw. `$REGION`
 - zwei Routinen auf einer Zeile, ein Kopf vor `implementation`, unsichere Grenzen (lokaler Klassentyp, `$IFDEF`-geteilter Rumpf)
 
@@ -2024,12 +2027,13 @@ Rezepte des Anbieters (`uRdxProvider`), in der Reihenfolge des Menüs.
 |---|---|---|
 | `Build Format() from concatenation` | `Format() aus Verkettung bilden` | `Construire Format() à partir de la concaténation` |
 
-**Wirkung:** Ersetzt die Terme einer `+`-Kette durch `Format('...%s...', [..])` nach der Kompilat-Regel: `IntToStr(n)` mit bekanntem Ganzzahltyp wird `%d`/`%u` mit `n`, ein Char-Operand bekannten Typs geht als `string(c)` hinein, `X := X + ...` wird `X := X + Format(...)`. Fehlt `System.SysUtils`, kommt es als zweite Ersetzung in die uses-Klausel (eine sortierte Liste bleibt sortiert); der Hinweis des Eintrags sagt dann `+ uses System.SysUtils`.
+**Wirkung:** Ersetzt die Terme einer `+`-Kette durch `Format('...%s...', [..])` nach der Kompilat-Regel: `IntToStr(n)` mit bekanntem Ganzzahltyp wird `%d`/`%u` mit `n`, ein Char-Operand bekannten Typs geht als `string(c)` hinein, `X := X + ...` wird `X := X + Format(...)`. Kein Literal im Formatstring trägt mehr als 255 Zeichen (bis Delphi 11 E2056): ein längerer Teil wird mit ` + ` geteilt, der Wert bleibt. Fehlt `System.SysUtils`, kommt es als zweite Ersetzung in die uses-Klausel (eine sortierte Liste bleibt sortiert); der Hinweis des Eintrags sagt dann `+ uses System.SysUtils`.
 
 **Nicht angeboten**
 
 - SQL-Literale in der Kette, ein Kommentar oder eine Direktive im ersetzten Bereich
 - Variant-Anzeichen (`.Value`, `FieldValues`, als Variant deklariert …), Zahl-Operanden und Aufrufe mit Zahl-Ergebnis
+- ein Zeiger am Kettenanfang (`P + N + '.txt'` mit `P: PChar` bzw. `PChar(S)` – Delphi rechnet zuerst Zeiger-Arithmetik)
 - Nicht-Unicode-Strings als Ziel oder Operand (`AnsiString`, `RawByteString`, `UTF8String`, `ShortString`), ein `AnsiChar`-Operand
 - die Zeile trägt nicht mehr Ziel und `+`-Zahl des Funds (Zeile verschoben)
 - `System.SysUtils` fehlt und die uses-Klausel trägt Direktiven oder liegt in einem `$IFDEF`-Zweig
@@ -2062,7 +2066,7 @@ Nachher:
 |---|---|---|
 | `Copy parameterized template to clipboard` | `Parametrisierte Vorlage in die Zwischenablage` | `Copier le modèle paramétré dans le presse-papiers` |
 
-**Wirkung:** Baut aus der SQL-Verkettung eine Vorlage mit Parametern und legt sie in die Zwischenablage – schreibt nie in den Editor. Parameter wird ein Operand nur dort, wo SQL einen Wert erwartet (hinter `=`, `<>`, `<`, `>`, `LIKE`, `BETWEEN`/`AND`, in `IN (..)`/`VALUES (..)`); die Namen kommen aus dem Operanden (`FId` → `:Id`), Konstanten behalten ihren Namen. Ziel Query-Objekt: `ParamByName`-Zeilen (bei ADO `Parameters.ParamByName`); `ExecSQL` einer FireDAC-Verbindung: die Überladung mit Werten.
+**Wirkung:** Baut aus der SQL-Verkettung eine Vorlage mit Parametern und legt sie in die Zwischenablage – schreibt nie in den Editor. Parameter wird ein Operand nur dort, wo SQL einen Wert erwartet (hinter `=`, `<>`, `<`, `>`, `LIKE`, `BETWEEN`/`AND`, in `IN (..)`/`VALUES (..)`); die Namen kommen aus dem Operanden (`FId` → `:Id`), Konstanten behalten ihren Namen. `QuotedStr(x)`, `AnsiQuotedStr(x, '''')` und das Verdoppeln der Apostrophe in einem SQL-String (`StringReplace(x, '''', '''''', [rfReplaceAll])`) binden `x`; ein SQL-Text über 255 Zeichen wird mit ` + ` geteilt. Ziel Query-Objekt: `ParamByName`-Zeilen (bei ADO `Parameters.ParamByName`); `ExecSQL` einer FireDAC-Verbindung: die Überladung mit Werten.
 
 **Nicht angeboten**
 
@@ -2070,6 +2074,8 @@ Nachher:
 - Bezeichner-Positionen (FROM, INTO, ORDER BY, Spalten- und SELECT-Liste), ein nackter Operand in einer Join-Bedingung, ein Operand, der an einem Bezeichner klebt
 - eine Anweisung, die nicht mit DML oder einer Klausel beginnt, ein `?` im Text, eine Kette ohne SQL-Literal, nur Konstanten
 - ein Aufruf, der den Text ohne Parameterkanal ausführt
+- ein schon maskierter Wert (`EscapeString(x)`, `QuotedStr` in einem SQL-String, `AnsiQuotedStr(x, '"')`) – der Parameter trüge die Maskierung in die Daten
+- eine Konstante der Unit gilt in einer Methode einer Klasse mit Vorfahr von außerhalb (`class(TForm)`) nicht als bewiesen – ein geerbtes Member gleichen Namens bindet vorher
 
 **Beispiel**
 
