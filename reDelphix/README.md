@@ -430,16 +430,24 @@ Umlauten; fr in `fr.po`; je Funktion ein Test in en/de/fr in
 
 Gate: `python tools\rdx_i18n_gate.py` meldet deutsche Text-Literale in
 `source\`, die weder erstes Argument von `_()` noch Wert einer
-msgid-Konstante sind (Heuristik: ein deutsches Wort, auch als Ende eines
-zusammengesetzten wie `Formdateien` oder `asm-Rumpf`, ein Umlaut, ein
-umschriebener Umlaut in einer Folge, die es englisch nicht gibt, oder
-`%d` mit grossgeschriebenem Nomen - auch ein einzelnes Wort; verkettete
-Literale zaehlen als ein Text), dazu deutsche msgids, qualifizierte
-Aufrufe `X._()`, `_(KONSTANTE)` mit einer Konstante, die in der Unit keine
-reine Literal-Kette ist, und dynamische Argumente (`_(AWhat)`,
-`_(Format(..))`, `_('a ' + X)` - der Extraktor uebergeht sie still). Nicht
-sehen kann es einen deutschen Text nur aus Woertern, die es auch englisch
-gibt (`Parameter` ohne Zahl). `--report` zeigt den Stand je Unit,
+msgid-Konstante sind (Heuristik: ein Wort der deutschen Wortlisten, auch
+als Ende eines zusammengesetzten wie `Formdateien` oder `asm-Rumpf`, eine
+deutsche Endung wie `-ieren`, `-iert`, `-heit` oder ein grossgeschriebenes
+Nomen auf `-ung`, ein Umlaut, ein umschriebener Umlaut in einer Folge, die
+es englisch nicht gibt, oder `%d` mit grossgeschriebenem Nomen - auch ein
+einzelnes Wort; verkettete Literale zaehlen als ein Text), dazu deutsche
+msgids, qualifizierte Aufrufe `X._()`, `_(KONSTANTE)` mit einer Konstante,
+die in der Unit keine reine Literal-Kette ist, und dynamische Argumente
+(`_(AWhat)`, `_(Format(..))`, `_('a ' + X)` - der Extraktor uebergeht sie
+still). Die Heuristik kennt Woerter und Endungen, keine Sprache: still
+bleibt ein deutscher Text, dessen Woerter in keiner Liste stehen und
+keine der Endungen tragen - von den 789 deutschen Texten der `de.po`
+erkennt sie 61 nicht (meist Beschriftungen aus ein, zwei Woertern wie
+`Speicherleck` oder `Toter Code`) -, und einer nur aus Woertern, die es
+auch englisch gibt (`Parameter` ohne Zahl). Gegen alle 814 msgids der SCA
+meldet sie nichts. Ein gruenes Gate beweist deshalb nicht, dass kein
+deutscher Text mehr im Quelltext steht: die eigenen Diff-Zeilen liest bei
+der Umstellung jemand auf ihre Sprache. `--report` zeigt den Stand je Unit,
 `--unit uRdxFlowFixes.pas` prueft nur diese Unit, `--selftest` faehrt 35
 Faelle (Mutanten und gutartige Abwandlungen einer Probe-Unit, dazu die
 Heuristik an deutschen und englischen Proben). Bewusst feste Texte

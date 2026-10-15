@@ -10,22 +10,26 @@ ENGLISCHE msgid, uebersetzt ueber uRdxText._ in die Sprache der
 SCA-Oberflaeche. Vor der Umstellung standen rund 960 deutsche
 Text-Literale fest im Quelltext; die Umstellung laeuft in Gruppen je Unit.
 Dieses Gate zeigt, was noch fehlt, und haelt den Stand danach: ein neuer
-deutscher Grund ohne _() faellt sofort auf, nicht erst einem Nutzer mit
-englischer Oberflaeche.
+deutscher Grund ohne _() faellt auf, sobald er ein Wort der Listen oder
+eine der Endungen traegt (Grenzen unten) - nicht erst einem Nutzer mit
+englischer Oberflaeche. Einen Beweis, dass kein deutscher Text mehr im
+Quelltext steht, liefert es nicht.
 
 Was es meldet (je Fund Unit, Zeile, Art, Text):
   text      ein deutsches Text-Literal, das weder erstes Argument von _()
             ist noch Wert einer msgid-Konstante. Deutsch (is_german): ein
             Wort aus drei Buchstaben und ein typisch deutsches Wort - als
-            ganzes Wort (Liste des Inventars, scratchpad
-            w7/i18n_inventory.py, erweitert) oder als Ende eines
-            zusammengesetzten ('Formdateien', 'asm-Rumpf') -, ein Umlaut,
-            ein umschriebener Umlaut in einer Folge, die es englisch nicht
-            gibt ('Groesse') oder eine Zahl mit grossgeschriebenem Nomen
-            ('%d Parameter'). Ein Leerzeichen braucht es nicht: auch ein
-            einzelnes Wort ('unbekannt') ist Text. Verkettete Literale
-            ('a ' + 'b', 'a'#13) zaehlen als EIN Text; ein Bezeichner
-            dazwischen trennt.
+            ganzes Wort (GERMAN: Liste des Inventars, scratchpad
+            w7/i18n_inventory.py, erweitert; GERMAN_MORE: Wortschatz der
+            deutschen reDelphix- und de.po-Texte) oder als Ende eines
+            zusammengesetzten ('Formdateien', 'asm-Rumpf') -, eine
+            deutsche Endung ('analysieren', 'initialisiert', 'Sicherheit',
+            'Verschachtelung'), ein Umlaut, ein umschriebener Umlaut in
+            einer Folge, die es englisch nicht gibt ('Groesse') oder eine
+            Zahl mit grossgeschriebenem Nomen ('%d Parameter'). Ein
+            Leerzeichen braucht es nicht: auch ein einzelnes Wort
+            ('unbekannt') ist Text. Verkettete Literale ('a ' + 'b',
+            'a'#13) zaehlen als EIN Text; ein Bezeichner dazwischen trennt.
   msgid     ein deutscher Text IN _() bzw. in einer msgid-Konstante - die
             msgid ist englisch (E29), die deutsche Fassung steht in de.po.
   qualif    ein qualifizierter Aufruf X._(..): tools/i18n_extract.py sieht
@@ -43,13 +47,24 @@ Was es meldet (je Fund Unit, Zeile, Art, Text):
             Text unuebersetzt. Text fuer eine andere Unit uebersetzt der
             Aufrufer (reDelphix/README.md, "Texte umstellen").
 
-Grenzen der Heuristik: ein deutscher Text nur aus Woertern, die es auch
-englisch gibt ('Parameter' ohne Zahl, 'Operand', 'Format'), faellt nicht
-auf; ein englischer mit '%d <Grosswort>' ('%d Bytes') faellt auf - dann
-klein schreiben wie jede msgid. Stand Nachpruefung FIX-C1: alle nicht
-gemeldeten Ketten mit Buchstaben in reDelphix/source gesichtet - darunter
-kein sichtbarer deutscher Text mehr (nur Protokoll, Code, englische
-Meldungsschluessel).
+Grenzen der Heuristik: sie kennt Woerter und Endungen, keine Sprache. Ein
+deutscher Text, dessen Woerter in keiner Liste stehen und keine der
+Endungen tragen, faellt nicht auf - auch einer aus rein deutschen
+Woertern. Gemessen an den 814 Texten der i18n/de.po (Nachpruefung 2,
+V-C1-10): 86 erkennt sie nicht (vor GERMAN_MORE/GERMAN_FORM/GERMAN_UNG
+226 - darunter 'Verzeichnis analysieren', 'FreeAndNil(%s) verwenden',
+'Bedingung direkt an %s zuweisen', 'Tiefe Verschachtelung'); 25 davon
+sind unuebersetzt (msgstr = msgid), 61 deutsch, meist Beschriftungen aus
+ein, zwei Woertern ('Speicherleck', 'Toter Code', 'Mehrfaches Exit',
+'Dialekt: FPC/Lazarus'). Ebenso still bleibt ein Text nur aus Woertern,
+die es auch englisch gibt ('Parameter' ohne Zahl, 'Operand', 'Format',
+'Wert'). Die Sprache der eigenen Diff-Zeilen prueft bei der Umstellung
+deshalb, wer sie liest. Ein englischer Text mit '%d <Grosswort>' ('%d
+Bytes') faellt auf - dann klein schreiben wie jede msgid. Stand
+Nachpruefung FIX-C1: alle nicht gemeldeten Ketten mit Buchstaben in
+reDelphix/source gesichtet - darunter kein sichtbarer deutscher Text mehr
+(nur Protokoll, Code, englische Meldungsschluessel); die Erweiterung der
+Nachpruefung 2 meldet dort keine weitere Kette.
 
 msgid-Konstante = wie der Extraktor: eine Konstante derselben Unit, deren
 Deklaration ihre Zeile eroeffnet und deren Wert eine reine Literal-Kette
@@ -86,12 +101,17 @@ ALLOW_FILE = REPO / "tools" / "rdx_i18n_gate.allow"
 # Typisch deutsche Woerter: die Liste des Inventars (w7/i18n_inventory.py)
 # und Woerter aus reDelphix-Texten, die keines davon tragen (Nachmessung
 # Charge C1: '%d Aufrufe %s(', ', alle bewiesen', 'Implementierung: ',
-# '%d-mal ' ...), dazu deutsche Endungen ('Sprunganweisungen'). Nur Woerter,
-# die es im Englischen nicht gibt: zusammen mit GERMAN_TAIL, TRANSCRIPTION
-# und COUNT_NOUN gegen alle msgids der SCA gemessen (template.pot 674,
-# de.po 814, fr.po 811, vor C1 795; Nachpruefung FIX-C1) 0 Treffer - eine
-# msgid oder ein englischer Meldungsschluessel der SCA ausserhalb von _()
-# faellt nicht auf.
+# '%d-mal ' ...), dazu deutsche Endungen ('Sprunganweisungen'). Kriterium
+# ist NICHT, dass es das Wort englisch nicht gibt: 24 der 178 Woerter sind
+# auch englische Wortformen ('die', 'den', 'man', 'am', 'er', 'es', 'bis',
+# 'fund', 'gilt', 'leer'; Nachpruefung 2 gegen die Hunspell-Woerterbuecher
+# unten). Kriterium ist, dass keines in einer englischen msgid steht: alle
+# Listen und Regeln zusammen gegen alle msgids der SCA gemessen
+# (template.pot 674, de.po 814, fr.po 811, vor C1 795; Nachpruefung FIX-C1
+# und 2) 0 Treffer - eine msgid oder ein englischer Meldungsschluessel der
+# SCA ausserhalb von _() faellt nicht auf. Traegt eine NEUE englische msgid
+# eines dieser Woerter ('I am', 'man page'), meldet das Gate sie als
+# 'msgid' - dann umformulieren.
 GERMAN = re.compile(
     r"\b(der|die|das|den|dem|des|ein|eine|einen|einer|eines|nicht|kein|keine|"
     r"keinen|keiner|ist|sind|wird|werden|mit|ohne|und|oder|aber|auf|aus|bei|"
@@ -114,11 +134,81 @@ GERMAN = re.compile(
     r"muesste|soll|sollte|darf|kann|koennen)\b"
     r"|\b\w*(ungen|keiten|heiten|lich|liche|lichen|ische|ischen|isch)\b",
     re.I)
+# Weitere deutsche Woerter (Nachpruefung 2, V-C1-10): Saetze aus rein
+# deutschen Woertern ohne eines aus GERMAN blieben still ('Verzeichnis
+# analysieren', 'FreeAndNil(%s) verwenden', 'Bedingung direkt an %s
+# zuweisen'). Quelle: die Woerter der deutschen Texte in reDelphix/source
+# ab drei Vorkommen und haeufige Verben/Nomen der i18n/de.po, ohne
+# Fachkuerzel (ifdef, rtti, dispid, objfpc). Jedes Wort ist gegen die
+# 285.015 Wortformen der englischen Hunspell-Woerterbuecher (en_US, en_GB,
+# en_AU, en_CA, en_ZA der LibreOffice-Installation, Grundform mit den
+# Affix-Regeln) und gegen die Woerter aller msgids geprueft: keines ist
+# englisch ('wert' flog deshalb heraus - 'thou wert').
+GERMAN_MORE = re.compile(
+    r"\b(kommentar|einem|methode|typ|direktive|ende|klasse|ausdruck|beginnt|"
+    r"nennt|gehoert|teil|bedingung|sieht|gibt|abschnitt|mehr|stelle|ruft|"
+    r"zum|zeiger|sein|vergleich|bleibt|namen|endet|jetzt|pfad|projekt|"
+    r"sicher|liegt|detektor|freigabe|statt|liest|mehrere|liefe|vielleicht|"
+    r"eigene|ihn|objekt|konstruktor|rueckgabetyp|vom|ihr|liste|naechsten|"
+    r"feld|frei|funktion|menueaufbau|destruktor|klausel|ziel|folgt|ausnahme|"
+    r"eigenen|einfacher|ganze|ginge|nie|riefe|routinen|zur|bezeichner|"
+    r"bindet|ersten|kennt|klassen|einzige|offen|attribut|doppelt|gaebe|geht|"
+    r"gemeint|hauptthread|letzten|methodenzeiger|netzpfad|prozedurtyp|"
+    r"verlaesst|verloren|weiterer|ihrer|braucht|entscheiden|erlaubt|namens|"
+    r"neben|schluesselwort|setzt|verzeichnis|weiche|wozu|anderer|ausdrucks|"
+    r"beweisbar|blosser|derselben|elternklasse|ereignis|ersetzung|haengt|"
+    r"letzte|namensliste|offenen|reicht|vergleicht|vorfahr|werte|zahl|"
+    r"zweite|seinen|aktion|anonyme|bliebe|diesem|direktiven|doku|kopfs|"
+    r"nirgends|passt|sichtbar|uebersetzt|verdeckt|verwendung|abstrakt|"
+    r"aelterer|allein|andere|anfang|anweisungsliste|argumenten|baut|"
+    r"bedingter|dateiende|funktionstyp|gegenstueck|gemessen|haben|ihren|"
+    r"inhalt|konvention|leerraum|marke|mehrzeiligen|meint|pruefbar|ruecken|"
+    r"skript|spuren|stuende|uebersetzen|unterstuetzt|weiter|weitergegeben|"
+    r"wohl|befund|befunde|befunden|regel|regeln|hinweis|hinweise|methoden|"
+    r"quelltext|direkt|viele|aktuelle|aktuellen|enthaelt|zwei|aufrufer|"
+    r"laesst|schleife|wirkt|wirken|beschreibung|verwenden|verwendet|zuerst|"
+    r"zwischenablage|ausfuehren|bricht|eindeutig|mehrfach|menue|schreiben|"
+    r"schreibt|setzen|gesetzt|tabelle|ungenutzt|ungenutzte|virtuelle|diesen|"
+    r"durch|eigenes|ergaenzen|konnte|konnten|speichern|gespeichert|vorher|"
+    r"nachher|weitere|aktionen|ausserhalb|gebunden|komponente|komponenten|"
+    r"unterdruecken|warnung|anzeigen|angezeigt|aufrufen|aufgerufen|einmal|"
+    r"erreicht|fenster|geladen|mehreren|risiko|sehen|stattdessen|verbindung|"
+    r"waehlen|gewaehlt|wurde|wurden|zugewiesen|zuweisen|abbrechen|"
+    r"abgebrochen|aufnehmen|aufteilen|doppelte|freigeben|freigegeben|"
+    r"neustart|ordner|referenz|warum|ausgabe|betrifft|eingabe|erneut|falsch|"
+    r"falsches|fehlendes|genutzt|instanz|jede|jeder|jedes|kopiert|neuen|"
+    r"rueckgabewert|sprache|suche|treffer|verwerfen|zugriff|anlegen|"
+    r"ausblenden|ausgewaehlt|behalten|benutzen|bevorzugen|eingebaut|"
+    r"einfuehren|erscheint|erzeugen|erzeugt|eventuell|fertig|geaendert|"
+    r"gefiltert|gegen|gesucht|greift|gruppe|gueltigen|kandidaten|schwer|"
+    r"seit|sicht|siehe|sitzt|starten|trenner|unveraendert|verhalten|"
+    r"verliert|wahr|zeigen|fehlgeschlagen|nutzen|nutzt|vorschlag|ursache|"
+    r"anzeige|angewendet|angewandt|einrichten|fehlender|ungenutzter|"
+    r"empfohlen|ermitteln|ermittelt|besser)\b",
+    re.I)
+# Deutsche Endungen ohne englisches Wort in denselben Woerterbuechern
+# (Nachpruefung 2): Verben auf -ieren/-iert ('analysieren', 'kopieren',
+# 'initialisiert'), Nomen auf -heit/-keit/-schaft ('Sicherheit'). In den
+# Woerterbuechern enden so nur 'Fahrenheit' (ausgenommen) und die
+# Lehnwoerter 'Gesundheit', 'durchkomponiert'.
+GERMAN_FORM = re.compile(
+    r"\b\w+(?:ieren|iert|ierte|ierten|ierter|iertes|(?<!fahren)heit|keit|"
+    r"schaft)\b",
+    re.I)
+# Grossgeschriebene Nomen auf -ung ab acht Buchstaben ('Bedingung',
+# 'Verschachtelung', 'Zuweisung'). Kuerzere und kleingeschriebene tragen
+# englische Woerter und Namen ('young', 'hamstrung', 'Samsung') - deshalb
+# Gross/klein-genau und ohne die kurzen ('Warnung' steht in GERMAN_MORE).
+# Am Satzanfang grossgeschrieben treffen 46 Formen der Woerterbuecher
+# ('Hamstrung', 'Aqualung', Orts- und Lehnwoerter) - keine in einer msgid.
+GERMAN_UNG = re.compile(r"\b[A-Z][a-z]{4,}ung\b")
 # Deutsche Nomen auch als ENDE eines zusammengesetzten Worts - ohne \b
 # davor (Nachpruefung FIX-C1, V-C1-1): '%d Routinenkoepfe', 'Formdateien',
 # 'Include-Dateien', 'Ansi-Ergebnis', 'asm-Rumpf' trugen kein Wort der
-# Liste als ganzes Wort und blieben still. Nur Nomen, auf die kein
-# englisches Wort endet ('fund' fehlt: 'refund').
+# Liste als ganzes Wort und blieben still. Nomen, auf die kaum ein
+# englisches Wort endet ('fund' fehlt: 'refund'); laut den Woerterbuechern
+# (Nachpruefung 2) enden so nur 'diskette' (kette), 'puffer', 'platte' und
+# Namen ('Schwarzkopf', 'Rosenzweig') - keines in einer msgid.
 GERMAN_TAIL = re.compile(
     r"(datei|dateien|zeile|zeilen|spalte|spalten|kopf|koepfe|rumpf|ergebnis|"
     r"ergebnisse|puffer|platte|anweisung|deklaration|deklarationen|klammer|"
@@ -153,8 +243,9 @@ KINDS = ("unit", "const", "text", "regex", "call", "name")
 
 
 def is_german(text):
-    """Ein Wort aus drei Buchstaben und ein deutsches Wort (GERMAN, auch als
-    Ende eines zusammengesetzten: GERMAN_TAIL), ein Umlaut, ein
+    """Ein Wort aus drei Buchstaben und ein deutsches Wort (GERMAN,
+    GERMAN_MORE, auch als Ende eines zusammengesetzten: GERMAN_TAIL), eine
+    deutsche Endung (GERMAN_FORM, GERMAN_UNG), ein Umlaut, ein
     umschriebener Umlaut (TRANSCRIPTION) oder eine Zahl mit grossem Nomen
     (COUNT_NOUN). Das Leerzeichen der Inventar-Heuristik verlangt sie seit
     FIX-C1 nicht mehr: 'unbekannt' und 'Formdateien' standen als einzelnes
@@ -162,6 +253,9 @@ def is_german(text):
     if WORD3.search(text) is None:
         return False
     return (GERMAN.search(text) is not None
+            or GERMAN_MORE.search(text) is not None
+            or GERMAN_FORM.search(text) is not None
+            or GERMAN_UNG.search(text) is not None
             or GERMAN_TAIL.search(text) is not None
             or UMLAUT.search(text) is not None
             or TRANSCRIPTION.search(text) is not None
@@ -770,14 +864,19 @@ def selftest():
             print("SELFTEST FEHLER: %s - Arten %r (erwartet %r), tote Ausnahmen %d "
                   "(erwartet %d), Listenfehler %s" % (name, got_arts, arts, got_dead, dead, got_err))
             ok = False
+    # Je eine Probe, die nur GERMAN_MORE ('verwenden'), GERMAN_FORM
+    # ('qualifizieren', 'Sicherheit') bzw. GERMAN_UNG ('Verschachtelung')
+    # erkennt (Nachpruefung 2) - ohne die Regel wird der Selbsttest rot.
     german = ("kein gueltiger Bereich", "%d Routinenkoepfe", "Formdateien",
               "Include-Dateien", "asm-Rumpf", "unbekannt", "%d Parameter",
-              "Groesse ueberschritten", "Rueckgabe")
+              "Groesse ueberschritten", "Rueckgabe", "FreeAndNil(%s) verwenden",
+              "uses: %s qualifizieren", "Sicherheit", "Tiefe Verschachtelung")
     english = ("Comment at column ", "%d begin", "unassigned", "Default()",
                "%d declarations of %s in classes of this name - overload?",
                "Remove the cast to %s before Free", "Parameter",
                "the coefficient does not match the query values", "blueberry",
-               "AEngine", "TAesSignature")
+               "AEngine", "TAesSignature", "Fahrenheit", "Samsung",
+               "the statement is no longer at the reported place")
     wrong = ([t for t in german if not is_german(t)]
              + [t for t in english if is_german(t)])
     if wrong:
