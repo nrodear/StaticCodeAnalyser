@@ -34,10 +34,11 @@ unit uRdxResultFixes;
 //          Anweisung, der Wert nach dem Rueckgabetyp T (aus dem Kopf bzw.
 //          bei einem Implementierungskopf ohne Signatur aus der Deklaration
 //          im Klassenrumpf): ein Literal, wo der Typ es traegt - False,
-//          0, '''', #0, nil, [] bzw. Low(T) fuer eine schlichte Aufzaehlung
-//          der Unit (InitValueFor; Typen der Unit nur auf Unit-Ebene) -,
-//          sonst Default(T) (Records, Typparameter, Unbekanntes, ein Name,
-//          den die Unit auch lokal bzw. geschachtelt definiert). Default()
+//          0, '''', #0, nil, [] bzw. System.Low(T) fuer eine schlichte
+//          Aufzaehlung der Unit (InitValueFor; Typen der Unit nur auf
+//          Unit-Ebene) -, sonst Default(T) (Records, Typparameter,
+//          Unbekanntes, ein Name, den die Unit auch lokal in einer anderen
+//          Routine bzw. geschachtelt definiert). Default()
 //          gibt es erst ab Delphi 2009 bzw. FPC
 //          3.0 - eine Datei mit Spuren aelterer Compiler bekommt es nicht
 //          (OldCompilerTrace; Gegen-Review H5, Minor 4: 96 der 132
@@ -76,10 +77,10 @@ unit uRdxResultFixes;
 // Die Routinengrenzen liest uRdxRoutineFixes.ReadRoutine (Kopf, lokale
 // Abschnitte und Routinen, begin bzw. asm, passendes end), den Klassenkopf
 // HeritageOf, die Deklaration FindMethodDecls/MethodDecl. Typdeklarationen,
-// Klassenkoepfe und die Namen hinter 'constructor' liest EIN Lauf je
-// Planeraufruf (TRdxScan, Gegen-Review R5, R5-07); ob eine Typdeklaration
-// auf Unit-Ebene steht, ein Lauf nach dem Muster BuildScopes (AtUnitLevel,
-// R5-06).
+// Klassenkoepfe (auch 'TGen<T: class; U> = class') und die Namen hinter
+// 'constructor' liest EIN Lauf je Planeraufruf (TRdxScan, Gegen-Review R5,
+// R5-07); ob eine Typdeklaration auf Unit-Ebene steht, ein Lauf nach dem
+// Muster BuildScopes (AtUnitLevel, R5-06).
 // Lokale Routinen zwischen Kopf und begin sperren deshalb NICHT mehr (das
 // Konzept nannte sie, als nur MethodBodyOn fuer leere Rumpfe bestand):
 // ReadRoutine ueberspringt sie, eingefuegt wird hinter dem begin der
@@ -108,14 +109,21 @@ unit uRdxResultFixes;
 // 'System.Exit(Wert)') im Rumpf (der Detektor sah sie nicht - meist in
 // einem inaktiven Zweig), Default() in einer Datei mit Spuren alter Compiler
 // und ein Rueckgabetyp, der kein einfacher Typbezeichner ist (FPC
-// 'specialize'); SCA196 dazu 'absolute Result', ein Typ, der weder String
-// noch dynamisches Array, Interface oder Variant BEWIESEN ist, und ein
-// Typname, den die Unit auch lokal bzw. geschachtelt definiert.
+// 'specialize') bzw. den die Funktion in ihrem Deklarationsteil selbst
+// definiert (im Rumpf meinte der Name den lokalen Typ); SCA196 dazu
+// 'absolute Result', ein Typ, der weder String noch dynamisches Array,
+// Interface oder Variant BEWIESEN ist, und ein Typname, den die Unit auch
+// lokal bzw. geschachtelt definiert.
 //
-// GRENZE (SCA121, Low(T)): ein Member namens Low - etwa eine Property eines
-// Bereichs-Typs in einem Vorfahren aus einer anderen Unit - verdeckte die
-// Funktion; das sieht die Hilfe nicht, der Compiler meldet es (ein
-// Parameter bzw. eine lokale Variable Low gibt Default(T)).
+// GRENZE (SCA121, System.Low(T)): verdecken kann es nur ein Bezeichner
+// System. Nennt die Unit selbst einen, gibt es Default(T); einen aus einer
+// anderen Unit - etwa ein Member System eines Vorfahren - sieht die Hilfe
+// nicht, der Compiler meldet es. Ein Low in Klasse, Vorfahr, Record, Unit
+// oder Routine stoert nicht mehr (Nachpruefung R5-06).
+// GRENZE (SCA121/SCA196): was der Gueltigkeitsbereich aus anderen Units
+// beitraegt - ein geschachtelter Typ gleichen Namens in einem Vorfahren -,
+// sieht die Hilfe nicht; sie nimmt die Definition der Unit bzw. der RTL
+// (einen Widerspruch meldet in der Regel der Compiler).
 //
 // GRUNDSATZ wie in uRdxSimpleFixes: lieber keine Hilfe als eine falsche -
 // der Planer prueft den Fund am aktuellen Text nach.
@@ -249,9 +257,11 @@ const
   // So weit folgen die Planer der Vorfahrenkette in der Unit (OwnConstructor,
   // AbstractReason) - eine Grenze gegen Zyklen in kaputtem Code.
   MAX_CHAIN = 16;
-  // So viele Token liest DeclAt rueckwaerts durch die Typparameter
-  // 'TFoo<A, B> =' - laenger heisst: keine Deklaration.
-  MAX_GENERIC_TOKENS = 64;
+  // Was ausser Woertern in einer Typparameterliste steht ('TFoo<A, B>',
+  // 'TGen<T: class; U: IFoo<T>>', '&Name') - DeclAt liest rueckwaerts nur
+  // diese Token (OpenAngleBefore).
+  TYPE_PARAM_TOKENS: array[0..6] of string = ('<', '>', ',', ';', ':', '.',
+    '&');
   // Der Lauf von AtUnitLevel (R5-06, nach dem Muster
   // uRdxSqlTemplate.BuildScopes): offene Bloecke je ein Zeichen - Typ mit
   // Rumpf, Record (sein 'case' hat kein eigenes end), Code (begin, try,
@@ -265,9 +275,10 @@ const
   TYPE_LEADS: array[0..1] of string = ('=', 'packed');
   // Hinter 'record' in einer Typ-Einschraenkung ('<T: record>').
   CONSTRAINT_FOLLOWERS: array[0..2] of string = ('>', ',', ';');
-  // In diesen Dateien stehen Routinen mit Rumpf ab dem Dateianfang, in
-  // einer Unit erst hinter 'implementation'.
-  PROGRAM_HEADS: array[0..1] of string = ('program', 'library');
+  // Routinen mit Rumpf stehen in einer Unit erst hinter 'implementation', in
+  // jeder anderen Datei - program, library, Include ohne Kopf - ab dem
+  // Dateianfang (AtUnitLevel).
+  UNIT_HEAD = 'unit';
   // FPC-Modi, in denen 'inherited' auf eine abstrakte Methode nicht
   // uebersetzt ("Abstract methods cannot be called directly", FPC 3.2.2;
   // der Delphi-Modus laesst den Aufruf still weg - Gegen-Review H5, Minor 1).
@@ -354,8 +365,9 @@ const
   R_BY_HAND = 'von Hand';
   // SCA121: was nur der Compiler kennt (ScriptReason, uRdxCompilerTraces).
   FEATURE_DEFAULT = 'Default()';
-  // SCA121: der Anfangswert einer Aufzaehlung ist Low(T) (EnumValue).
-  LOW_FUNC = 'low';
+  // SCA121: der Anfangswert einer schlichten Aufzaehlung T (EnumValue) -
+  // qualifiziert, kein anderes Low verdeckt die Funktion.
+  ENUM_FIRST_FMT = 'System.Low(%s)';
   // SCA196: als Konstante - ein Literal mit dem Wort im Exit-Argument
   // haelt der Detektor SCA196 selbst fuer ein Lesen von Result (Selbstscan
   // der Charge H5).
@@ -379,21 +391,26 @@ type
   end;
 
   // Ein Planerlauf (Gegen-Review R5, R5-07): die Code-Sicht und was sonst
-  // jede Frage neu ueber die ganze Datei las. Die Typdeklarationen und die
-  // Namen hinter 'constructor' sammelt EIN Lauf beim ersten Bedarf
-  // (IndexScan); die Klassenkoepfe kommen aus diesem Index (ClassHeads, wie
-  // FindClassHeads), die Methodendeklarationen (FindMethodDecls - je Frage
-  // ein Lauf ueber die ganze Datei) je Klasse und Methode einmal und ohne
-  // Klassenkopf gar nicht. Bis Charge B1 las ein SCA096-Lauf
-  // mormot.core.variants.pas dreizehnmal ganz (562 ms im IDE-Hauptthread).
-  // Gilt fuer EINEN Planeraufruf - die Code-Sicht liegt danach nicht mehr
-  // fest.
+  // jede Frage neu ueber die ganze Datei las. Die Typdeklarationen, die
+  // Namen hinter 'constructor' und ob die Unit einen Bezeichner System
+  // nennt (OwnSystem: 'System' ohne '.' dahinter - er verdeckte die Unit
+  // System, EnumValue) sammelt EIN Lauf beim ersten Bedarf (IndexScan); die
+  // Klassenkoepfe kommen aus diesem Index (ClassHeads - in Pascal dieselben
+  // wie FindClassHeads: Korpus-Gegenrechnung der Nachpruefung R5-07 ueber
+  // 8.795 Koepfe in 1.044 Dateien, anders nur zwei Codevorlagen 'T<#Name> =
+  // class', die kein Pascal sind), die Methodendeklarationen
+  // (FindMethodDecls - je Frage ein Lauf ueber die ganze Datei) je Klasse
+  // und Methode einmal und ohne Klassenkopf gar nicht. Bis Charge B1 las
+  // ein SCA096-Lauf mormot.core.variants.pas dreizehnmal ganz (562 ms im
+  // IDE-Hauptthread). Gilt fuer EINEN Planeraufruf - die Code-Sicht liegt
+  // danach nicht mehr fest.
   TRdxScan = record
-    Map     : TRdxCodeMap;
-    Indexed : Boolean;
-    Decls   : TArray<TRdxTypeDecl>;
-    Ctors   : TArray<string>;
-    Memos   : TArray<TRdxHeadsMemo>;
+    Map       : TRdxCodeMap;
+    Indexed   : Boolean;
+    Decls     : TArray<TRdxTypeDecl>;
+    Ctors     : TArray<string>;
+    Memos     : TArray<TRdxHeadsMemo>;
+    OwnSystem : Boolean;
   end;
 
   // Die Klasse einer Methode (OwnerOf).
@@ -515,25 +532,35 @@ begin
 end;
 
 // Rueckwaerts ab AClose ('>' der Typparameter 'TFoo<A, B>') die passende
-// '<'; Low = '' ohne (';' oder Dateianfang davor, mehr als
-// MAX_GENERIC_TOKENS Token).
+// '<'; Low = '' ohne. Gelesen werden nur Token, die in einer
+// Typparameterliste stehen koennen - Woerter und TYPE_PARAM_TOKENS, auch das
+// ';' zwischen Gruppen mit Einschraenkung ('TGen<T: class; U>'); jedes andere
+// Token und der Dateianfang beenden die Suche ohne Treffer. Bis zur
+// Nachpruefung R5-07 brach sie an jedem ';' ab: ein Kopf 'TGen<T: class; U>
+// = class' fehlte im Index, ein solcher Vorfahr galt als nicht in der Unit -
+// die Sperren Delegation (SCA096) und abstrakt (SCA097) sahen ihn nicht, und
+// seine Methoden lehnte die Hilfe mit "nicht in dieser Unit" ab.
 function OpenAngleBefore(AMap: TRdxCodeMap; const AClose: TRdxToken): TRdxToken;
 var
-  Depth, n : Integer;
+  T     : TRdxToken;
+  Depth : Integer;
 begin
-  Result := AClose;
+  Result := Default(TRdxToken);
+  if AClose.Low <> '>' then Exit;
+  T := AClose;
   Depth := 0;
-  for n := 1 to MAX_GENERIC_TOKENS do
+  while T.IsWord or InList(T.Low, TYPE_PARAM_TOKENS) do
   begin
-    if Result.Low = '>' then
+    if T.Low = '>' then
       Inc(Depth)
-    else if Result.Low = '<' then
+    else if T.Low = '<' then
+    begin
       Dec(Depth);
-    if (Depth = 0) or (Result.Low = '') or (Result.Low = ';') then Break;
-    Result := Before(AMap, Result);
+      if Depth = 0 then
+        Exit(T);
+    end;
+    T := Before(AMap, T);
   end;
-  if (Depth <> 0) or (Result.Low <> '<') then
-    Result := Default(TRdxToken);
 end;
 
 // Die Deklaration, deren '=' AEq ist: der Name davor - hinter '<..>' der
@@ -556,16 +583,18 @@ begin
 end;
 
 // Der eine Lauf des Planerlaufs (s. TRdxScan): jede Deklaration an einem
-// '=' und jeder Name hinter 'constructor' (auch '&Name').
+// '=', jeder Name hinter 'constructor' (auch '&Name') und ein 'System' ohne
+// '.' dahinter (OwnSystem).
 procedure IndexScan(var AScan: TRdxScan);
 var
-  T    : TRdxToken;
+  T, P : TRdxToken;
   D    : TRdxTypeDecl;
   Ctor : Boolean;
 begin
   if AScan.Indexed then Exit;
   AScan.Indexed := True;
   Ctor := False;
+  P := Default(TRdxToken);
   T := NextToken(AScan.Map, 1, 1);
   while T.Low <> '' do
   begin
@@ -580,8 +609,13 @@ begin
       AScan.Ctors[High(AScan.Ctors)] := T.Low;
     end;
     Ctor := (T.Low = KW_CONSTRUCTOR) or (Ctor and (T.Low = '&'));
+    if (P.Low = SYSTEM_UNIT) and (T.Low <> '.') then
+      AScan.OwnSystem := True;
+    P := T;
     T := After(AScan.Map, T);
   end;
+  if P.Low = SYSTEM_UNIT then
+    AScan.OwnSystem := True;
 end;
 
 // Gibt es 'ALowName [<..>] = [packed] <Art>' mit einer Art aus AKinds in
@@ -785,10 +819,13 @@ end;
 // 'type TPoint = ^Integer' in einer Routine machte 'Result := nil;' fuer
 // System.Types.TPoint). Ein Lauf vom Dateianfang bis ADecl nach dem Muster
 // uRdxSqlTemplate.BuildScopes: Bloecke mit end auf einem Stapel, eine
-// Routine mit Rumpf (hinter 'implementation', in program/library ab
-// Dateianfang) wird ganz uebersprungen (SkipRoutine) - liegt ADecl darin,
-// ist die Deklaration lokal. Sind die Grenzen einer Routine davor nicht
-// sicher zu lesen: False (lieber Default(T) bzw. keine Hilfe).
+// Routine mit Rumpf (in einer Unit hinter 'implementation', in jeder anderen
+// Datei ab Dateianfang - program, library und seit der Nachpruefung R5-06
+// auch ein Include ohne Kopf, dort galt der lokale Typ einer Routine als
+// Unit-Ebene) wird ganz uebersprungen (SkipRoutine) - liegt ADecl darin, ist
+// die Deklaration lokal. Sind die Grenzen einer Routine davor nicht sicher
+// zu lesen - etwa ein Kopf ohne Rumpf im interface-Teil eines Includes -:
+// False (lieber Default(T) bzw. keine Hilfe).
 function AtUnitLevel(AMap: TRdxCodeMap; const ADecl: TRdxToken): Boolean;
 var
   T, P     : TRdxToken;
@@ -798,7 +835,7 @@ begin
   Open := '';
   P := Default(TRdxToken);
   T := NextToken(AMap, 1, 1);
-  Routines := InList(T.Low, PROGRAM_HEADS);
+  Routines := T.Low <> UNIT_HEAD;
   while (T.Low <> '') and TokBefore(T, ADecl) do
   begin
     // Nur Schluesselwoerter zaehlen - ein Wort hinter '.', '&' bzw. '@' ist
@@ -1253,7 +1290,9 @@ end;
 // SCA096 (b): koennte das Wort T in Anweisungsstellung ein Aufruf eines
 // eigenen Konstruktors sein - ein ganzer Aufruf ('Init;', 'OpenOptions(..)',
 // CALL_ENDS dahinter), kein Schluesselwort einer Anweisung? Nur dann fragt
-// DelegationReason die Deklarationen ab (sie durchlaufen die ganze Datei).
+// DelegationAt nach einem Konstruktor dieses Namens (OwnConstructor: erst
+// die Namen hinter 'constructor' aus dem Index, dann je Glied der
+// Vorfahrenkette die gemerkten Methodendeklarationen).
 function CallCandidate(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
 begin
   Result := T.IsWord and not InList(T.Low, STATEMENT_WORDS)
@@ -1716,62 +1755,52 @@ begin
     Result := VALUE_NIL;
 end;
 
-// SCA121: steht AName in den Koepfen und Deklarationsteilen von R (zwischen
-// Kopf und begin: Parameter, lokale Variablen, lokale Routinen)? Dann
-// verdeckt er dort die Funktion Low (EnumValue).
-function NamedInHead(AMap: TRdxCodeMap; const R: TRdxRoutine;
-  const ALowName: string): Boolean;
-var
-  T : TRdxToken;
-begin
-  Result := False;
-  T := R.Head;
-  while (T.Low <> '') and not SameTok(T, R.Body) do
-  begin
-    if SameIdent(T.Low, ALowName) then
-      Exit(True);
-    T := After(AMap, T);
-  end;
-end;
-
-// SCA121: der Anfangswert der Aufzaehlung AType ab ihrem '(' K - 'Low(T)',
-// wenn sie schlicht ist (nur Namen mit ',', kein '=' fuer eigene
-// Ordinalwerte: dann ist Low(T) derselbe Wert wie Default(T)) und Kopf und
-// Deklarationsteil von R den Namen Low nicht verdecken; sonst ''. Bis Charge
-// B1 stand hier der erste Wert selbst - ein Member der Klasse gleichen
-// Namens (property bzw. Feld 'None') verdeckte ihn: 'Result := None;'
-// uebersetzte nicht bzw. nahm still den Feldwert (Gegen-Review R5, R5-06).
-// Low(T) gibt es in jeder Delphi-Version, und {$SCOPEDENUMS} spielt keine
-// Rolle mehr.
-function EnumValue(AMap: TRdxCodeMap; const K: TRdxToken;
-  const R: TRdxRoutine; const AType: string): string;
+// SCA121: der Anfangswert der Aufzaehlung AType ab ihrem '(' K -
+// 'System.Low(T)', wenn sie schlicht ist (nur Namen mit ',', kein '=' fuer
+// eigene Ordinalwerte: dann ist es derselbe Wert wie Default(T)); sonst ''.
+// Bis Charge B1 stand hier der erste Wert selbst - ein Member gleichen
+// Namens (property bzw. Feld 'None') verdeckte ihn (Gegen-Review R5,
+// R5-06); das unqualifizierte 'Low(T)' der Charge B1 verdeckte ebenso jedes
+// andere Low im Gueltigkeitsbereich - eine Property bzw. ein Feld der Klasse,
+// eines Vorfahren oder eines Records, eine Variable der Unit (Nachpruefung
+// R5-06: neben 'property Low' uebersetzte 'Result := Low(TKind);' nicht).
+// Qualifiziert verdeckt es nur ein Bezeichner System: nennt die Unit selbst
+// einen (OwnSystem), '' - dann Default(T). Unit-qualifizierte
+// Compiler-Funktionen stehen so in den Delphi-Quellen 37.0 (System.Length,
+// System.SizeOf), in JCL/JVCL (System.Length) und DWScript ('System.High(
+// Self)' in einem Helper mit eigenem High); FPC 3.2.2 uebersetzt
+// System.Low(T) neben property, Feld und Parameter Low (Modi delphi,
+// delphiunicode, objfpc). {$SCOPEDENUMS} spielt keine Rolle.
+function EnumValue(var AScan: TRdxScan; const K: TRdxToken;
+  const AType: string): string;
 var
   T, C : TRdxToken;
 begin
   Result := '';
-  T := After(AMap, K);
-  C := MatchClose(AMap, K);
+  T := After(AScan.Map, K);
+  C := MatchClose(AScan.Map, K);
   if not T.IsWord or (C.Low = '') then Exit;
   while not SameTok(T, C) do
   begin
     if not (T.IsWord or (T.Low = ',')) then Exit;
-    T := After(AMap, T);
+    T := After(AScan.Map, T);
   end;
-  if not NamedInHead(AMap, R, LOW_FUNC) then
-    Result := Format('Low(%s)', [AType]);
+  IndexScan(AScan);
+  if not AScan.OwnSystem then
+    Result := Format(ENUM_FIRST_FMT, [AType]);
 end;
 
 // SCA121: der Anfangswert nach der Definition K ('=' davor, TypeDefsOf) des
 // Typs AType - Klasse, Metaklasse, Interface, Zeiger, Routinentyp und
 // dynamisches Array: nil; Menge: []; String-Alias: ''; schlichte
-// Aufzaehlung: Low(T) (EnumValue); sonst '' (dann Default(T)).
-function DefValue(AMap: TRdxCodeMap; const K: TRdxToken;
-  const R: TRdxRoutine; const AType: string): string;
+// Aufzaehlung: System.Low(T) (EnumValue); sonst '' (dann Default(T)).
+function DefValue(var AScan: TRdxScan; const K: TRdxToken;
+  const AType: string): string;
 var
   N : TRdxToken;
 begin
   Result := '';
-  N := After(AMap, K);
+  N := After(AScan.Map, K);
   if InList(K.Low, NIL_KINDS) or ((K.Low = 'array') and (N.Low = 'of'))
      or ((K.Low = 'tarray') and (N.Low = '<')) then
     Result := VALUE_NIL
@@ -1780,7 +1809,27 @@ begin
   else if InList(K.Low, STRING_TYPES) then
     Result := VALUE_EMPTY
   else if K.Low = '(' then
-    Result := EnumValue(AMap, K, R, AType);
+    Result := EnumValue(AScan, K, AType);
+end;
+
+// SCA121: steht eine Definition ADefs des Rueckgabetyps AType im
+// Deklarationsteil der Funktion R selbst ('function GetMode: TMode; type
+// TMode = (xA, xB); begin')? Dann meint der Name im Kopf den aeusseren Typ,
+// im Rumpf den lokalen - 'Default(TMode)' bzw. 'System.Low(TMode)' passten
+// nicht zu Result (Nachpruefung R5-06: FPC "Incompatible types"; bis dahin
+// lehnte die Hilfe nur ab, wenn auch die Unit den Namen anders definierte).
+// '' oder der Grund.
+function OwnLocalTypeReason(const R: TRdxRoutine;
+  const ADefs: TArray<TRdxToken>; const AType: string): string;
+var
+  K : TRdxToken;
+begin
+  Result := '';
+  for K in ADefs do
+    if TokBefore(R.Head, K) and TokBefore(K, R.Body) then
+      Exit(Format('%s ist auch im Deklarationsteil der Funktion definiert '
+        + '(Zeile %d) - im Rumpf meint der Name diesen Typ, im Kopf den '
+        + 'aeusseren; %s', [AType, K.Line, R_BY_HAND]));
 end;
 
 // SCA121: der Anfangswert fuer den Rueckgabetyp AType (wie im Kopf) der
@@ -1789,9 +1838,10 @@ end;
 // Wert ergeben), sonst nach der RTL (RtlTypeValue); wo kein Literal passt -
 // Records, Typparameter, Unbekanntes -, 'Default(AType)'. Steht eine
 // Definition des Namens nicht auf Unit-Ebene (AtUnitLevel: geschachtelt in
-// einer Klasse, lokal in einer Routine), haengt am Gueltigkeitsbereich,
-// welche gilt - dann Default(AType), das der Compiler wie den Kopf aufloest
-// (Gegen-Review R5, R5-06). '' oder der Grund.
+// einer Klasse, lokal in einer anderen Routine), haengt am
+// Gueltigkeitsbereich, welche gilt - dann Default(AType), das der Compiler
+// wie den Kopf aufloest (Gegen-Review R5, R5-06); eine Definition in R
+// selbst sperrt (OwnLocalTypeReason). '' oder der Grund.
 function InitValueFor(var AScan: TRdxScan; const R: TRdxRoutine;
   const AType: string; out AValue: string): string;
 var
@@ -1799,7 +1849,6 @@ var
   K            : TRdxToken;
   Defs         : TArray<TRdxToken>;
 begin
-  Result := '';
   Low := LowerCase(StringReplace(AType, ' ', '', [rfReplaceAll]));
   if Copy(Low, 1, 7) = 'system.' then
     Delete(Low, 1, 7);
@@ -1810,13 +1859,14 @@ begin
   if Pos('.', Base) = 0 then
     Defs := TypeDefsOf(AScan, Base);
   AValue := 'Default(' + AType + ')';
-  if not AllAtUnitLevel(AScan.Map, Defs) then Exit;
+  Result := OwnLocalTypeReason(R, Defs, AType);
+  if (Result <> '') or not AllAtUnitLevel(AScan.Map, Defs) then Exit;
   AValue := RtlTypeValue(Low);
   if Length(Defs) > 0 then
-    AValue := DefValue(AScan.Map, Defs[0], R, AType);
+    AValue := DefValue(AScan, Defs[0], AType);
   for K in Defs do
   begin
-    V := DefValue(AScan.Map, K, R, AType);
+    V := DefValue(AScan, K, AType);
     if V <> AValue then
       Exit(Format('%s ist in dieser Unit mehrfach verschieden definiert '
         + '($IFDEF-Zweige?) - %s', [AType, R_BY_HAND]));

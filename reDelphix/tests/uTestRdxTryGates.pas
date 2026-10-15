@@ -24,7 +24,8 @@ unit uTestRdxTryGates;
 // Huelle (Cast, Klammern, 'as') bei Zuweisung und Speicher-Aufruf (R5-04),
 // 'System.Exit'/'System.Break' (R5-05), nur lokale Puffer und 'P := nil' mit
 // ins finally (R5-02), Puffer als Inline-var (R5-10), '%' im Sperrtext der
-// Meldung (missed 2).
+// Meldung (missed 2); nach der Nachpruefung (gegen d840f1e5 rot) Huellen
+// beliebig tief.
 // Sperren und Puffer: uTestRdxTryLocks; die Form des Bausteins und die
 // Sperren der Charge H4: uTestRdxTryFixes.
 
@@ -55,6 +56,7 @@ type
     [Test] procedure Buffer_LocalOnly;
     [Test] procedure Buffer_InlineVar;
     [Test] procedure Lock_PercentInMessage;
+    [Test] procedure HandOver_DeepWrap;
   end;
 
 implementation
@@ -616,6 +618,17 @@ begin
     Format(MSG_153, ['Locks[%1].Lock']), R);
   Assert.IsTrue(Pos('Zeile 6 traegt 2 Sperren "Locks[%1].Lock" - mehrdeutig',
     R) > 0, R);
+end;
+
+// Huellen beliebig tief (Nachpruefung R5-04, Nit; gegen d840f1e5 rot): bis
+// dahin las die Weitergabe-Sperre hoechstens vier - mit der fuenften (Cast,
+// Klammern, 'as') wurde wieder angeboten.
+procedure TTestRdxTryGates.HandOver_DeepWrap;
+begin
+  AssertRefused(Around(['FCurrent := TFoo(TFoo(TFoo(TFoo(TFoo(X)))));',
+    'DoWork;']), 'an FCurrent weitergegeben');
+  AssertRefused(Around(['List.Add(TObject((((X as TFoo)))));', 'DoWork;']),
+    'an Add weitergegeben');
 end;
 
 initialization

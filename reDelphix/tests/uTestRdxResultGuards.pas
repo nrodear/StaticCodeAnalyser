@@ -28,7 +28,9 @@ unit uTestRdxResultGuards;
 // statt des ersten Werts einer Aufzaehlung, die ein Member verdeckt, und
 // Typdefinitionen nur auf Unit-Ebene (R5-06); SCA096 'class(IFoo)' nur mit
 // einem Interface auf Unit-Ebene (missed 1); 'System.Exit(Wert)' schreibt
-// Result (R5-05).
+// Result (R5-05). Nach der Nachpruefung (je gegen d840f1e5 rot): qualifiziert
+// System.Low(T) - ein Low der Klasse bzw. der Unit verdeckte Low(T) - und
+// keine Hilfe, wenn die Funktion den Rueckgabetyp selbst definiert.
 
 interface
 
@@ -458,18 +460,20 @@ const
 var
   R : string;
 begin
-  // Eine schlichte Aufzaehlung: Low(T) (seit Charge B1 statt des ersten
-  // Werts, den ein Member gleichen Namens verdecken kann - R5-06).
-  Assert.AreEqual('Low(TMode)', Value121(NO_HEAD, OWN, 'TMode', R), R);
+  // Eine schlichte Aufzaehlung: System.Low(T) (seit Charge B1 statt des
+  // ersten Werts, den ein Member gleichen Namens verdecken kann - R5-06;
+  // qualifiziert seit der Nachpruefung, s. Sca121_EnumLowNotShadowed).
+  Assert.AreEqual('System.Low(TMode)', Value121(NO_HEAD, OWN, 'TMode', R), R);
   Assert.AreEqual('nil', Value121(NO_HEAD, OWN, 'TItem', R), R);
   Assert.AreEqual('[]', Value121(NO_HEAD, OWN, 'TModes', R), R);
   Assert.AreEqual('Default(TPoint3)', Value121(NO_HEAD, OWN, 'TPoint3', R), R);
   Assert.AreEqual('nil', Value121(NO_HEAD, OWN, 'TInts', R), R);
   // Eigene Ordinalwerte: Default(T) - Low(T) waere dort ein anderer Wert.
-  // {$SCOPEDENUMS ON} stoert Low(T) nicht.
+  // {$SCOPEDENUMS ON} stoert System.Low(T) nicht.
   Assert.AreEqual('Default(TMode)', Value121(NO_HEAD, ASSIGNED_ENUM, 'TMode',
     R), R);
-  Assert.AreEqual('Low(TMode)', Value121(SCOPED, ENUM_ONLY, 'TMode', R), R);
+  Assert.AreEqual('System.Low(TMode)', Value121(SCOPED, ENUM_ONLY, 'TMode', R),
+    R);
   Assert.AreEqual('Default(Integer)', Value121(NO_HEAD, REDEFINED, 'Integer',
     R), R);
 end;
@@ -567,8 +571,12 @@ end;
 // Ein Member der Klasse mit dem Namen des ersten Werts verdeckt ihn (R5-06;
 // Pruefer-Fixtures R5/r1.txt, R5_verify/v06.txt): bis Charge B1 'Result :=
 // None;' - mit einer Property uebersetzte das nicht, mit einem Feld nahm
-// Result still den Feldwert. Low(T) verdeckt kein Member; ein Parameter
-// namens Low verdeckte die Funktion - dann Default(T).
+// Result still den Feldwert. Das unqualifizierte 'Low(T)' der Charge B1
+// verdeckte jedes andere Low (Nachpruefung R5-06, FE_verify/fx/a06.txt
+// Faelle 2 und 3; je gegen d840f1e5 rot): eine Property Low der eigenen
+// Klasse, eine Variable Low der Unit - 'Result := Low(TKind);' uebersetzte
+// nicht (FPC "Incompatible types"). System.Low(T) verdeckt nur ein
+// Bezeichner System; nennt die Unit einen, Default(T).
 procedure TTestRdxResultGuards.Sca121_EnumLowNotShadowed;
 const
   BY_PROPERTY: array[0..6] of string = ('  TMode = (None, Fast);',
@@ -576,6 +584,14 @@ const
     '    property None: Integer read GetNone;', '  end;');
   BY_FIELD: array[0..3] of string = ('  TMode = (None, Fast);',
     '  TFoo = class', '    None: TMode;', '  end;');
+  LOW_PROPERTY: array[0..7] of string = ('  TKind = (kA, kB);',
+    '  TRange = class', '  private', '    FLow: Integer;', '  public',
+    '    property Low: Integer read FLow;', '    function GetKind: TKind;',
+    '  end;');
+  LOW_VAR: array[0..2] of string = ('  TKind = (kA, kB);', 'var',
+    '  Low: Integer;');
+  OWN_SYSTEM: array[0..3] of string = ('  TMode = (None, Fast);',
+    '  TFoo = class', '    System: Integer;', '  end;');
 var
   S : string;
   F : TFixRun;
@@ -585,16 +601,35 @@ begin
   F := RunFix(TRdxResultFixes.ResultDefault, S, 'function TFoo.GetMode',
     Format(MSG_121, ['GetMode']));
   Assert.AreEqual(StringReplace(S, '  Log(1);',
-    '  Result := Low(TMode);'#13#10'  Log(1);', []), F.Text, F.Reason);
+    '  Result := System.Low(TMode);'#13#10'  Log(1);', []), F.Text, F.Reason);
   S := UnitWith(NO_HEAD, BY_FIELD, ['function TFoo.GetMode: TMode;', 'begin',
     '  Log(1);', 'end;']);
   F := RunFix(TRdxResultFixes.ResultDefault, S, 'function TFoo.GetMode',
     Format(MSG_121, ['GetMode']));
-  Assert.AreEqual('Low(TMode)', F.Plan.Name, F.Reason);
+  Assert.AreEqual('System.Low(TMode)', F.Plan.Name, F.Reason);
+  // Ein Low der Klasse, der Unit oder ein Parameter Low stoeren nicht mehr.
+  S := UnitWith(NO_HEAD, LOW_PROPERTY, ['function TRange.GetKind: TKind;',
+    'begin', '  Log(1);', 'end;']);
+  F := RunFix(TRdxResultFixes.ResultDefault, S, 'function TRange.GetKind',
+    Format(MSG_121, ['GetKind']));
+  Assert.AreEqual(StringReplace(S, '  Log(1);',
+    '  Result := System.Low(TKind);'#13#10'  Log(1);', []), F.Text, F.Reason);
+  // Die Unit System selbst ('System.Exit') ist kein eigenes System.
+  S := UnitWith(NO_HEAD, LOW_VAR, ['function GetKind: TKind;', 'begin',
+    '  if Low > 0 then System.Exit;', 'end;']);
+  F := RunFix(TRdxResultFixes.ResultDefault, S, 'function GetKind',
+    Format(MSG_121, ['GetKind']));
+  Assert.AreEqual('System.Low(TKind)', F.Plan.Name, F.Reason);
   S := UnitWith(NO_HEAD, BY_FIELD, ['function Pick(Low: Integer): TMode;',
     'begin', '  Log(Low);', 'end;']);
   F := RunFix(TRdxResultFixes.ResultDefault, S, 'function Pick',
     Format(MSG_121, ['Pick']));
+  Assert.AreEqual('System.Low(TMode)', F.Plan.Name, F.Reason);
+  // Ein eigenes System verdeckte die Unit: Default(T).
+  S := UnitWith(NO_HEAD, OWN_SYSTEM, ['function TFoo.GetMode: TMode;',
+    'begin', '  Log(1);', 'end;']);
+  F := RunFix(TRdxResultFixes.ResultDefault, S, 'function TFoo.GetMode',
+    Format(MSG_121, ['GetMode']));
   Assert.AreEqual('Default(TMode)', F.Plan.Name, F.Reason);
 end;
 
@@ -604,17 +639,31 @@ end;
 // sichtbar - bis Charge B1 'Result := mA;' (E2003) bzw. 'Result := nil;' fuer
 // System.Types.TPoint (E2010). Steht eine Definition nicht auf Unit-Ebene,
 // Default(T) - der Compiler loest es wie den Kopf auf. Eine Definition
-// hinter einer Routine bleibt auf Unit-Ebene.
+// hinter einer Routine bleibt auf Unit-Ebene. Definiert die Funktion den
+// Namen selbst, meint er im Rumpf den lokalen Typ, im Kopf den aeusseren -
+// keine Hilfe (Nachpruefung R5-06, FE_verify/fx/a06.txt Fall 1; gegen
+// d840f1e5 rot: 'Result := Default(TMode);', FPC "Incompatible types").
 procedure TTestRdxResultGuards.Sca121_TypeScope;
 const
   NESTED: array[0..6] of string = ('  TA = class', '  public type',
     '    TMode = (mA, mB);', '  end;', '  TC = class',
     '    function F: TMode;', '  end;');
   POINT_TYPES: array[0..0] of string = ('  TAlias = Integer;');
+  ENUM_ONLY: array[0..0] of string = ('  TMode = (mA, mB);');
 var
   S : string;
   F : TFixRun;
 begin
+  S := UnitWith(NO_HEAD, ENUM_ONLY, ['function GetMode: TMode;', 'type',
+    '  TMode = (xA, xB);', 'begin', '  Log(1);', 'end;']);
+  AssertRefused(TRdxResultFixes.ResultDefault, S, 'function GetMode',
+    Format(MSG_121, ['GetMode']), 'TMode ist auch im Deklarationsteil der '
+    + 'Funktion definiert (Zeile 9)');
+  // Auch ohne Definition der Unit (4358b769: 'Result := xA;').
+  S := UnitWith(NO_HEAD, POINT_TYPES, ['function GetMode: TFremd;', 'type',
+    '  TFremd = (xA, xB);', 'begin', '  Log(1);', 'end;']);
+  AssertRefused(TRdxResultFixes.ResultDefault, S, 'function GetMode',
+    Format(MSG_121, ['GetMode']), 'im Deklarationsteil der Funktion');
   S := UnitWith(NO_HEAD, NESTED, ['function TC.F: TMode;', 'begin', '  Log(1);',
     'end;']);
   F := RunFix(TRdxResultFixes.ResultDefault, S, 'function TC.F',
@@ -632,7 +681,7 @@ begin
     '  Log(1);', 'end;']);
   F := RunFix(TRdxResultFixes.ResultDefault, S, 'function GetKind',
     Format(MSG_121, ['GetKind']));
-  Assert.AreEqual('Low(TKind)', F.Plan.Name, F.Reason);
+  Assert.AreEqual('System.Low(TKind)', F.Plan.Name, F.Reason);
 end;
 
 // 'class(IFoo)' erbt nur mit einem Interface IFoo auf Unit-Ebene direkt von

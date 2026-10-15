@@ -1330,9 +1330,9 @@ Nachher:
 |---|---|---|
 | `Initialize Result with %s` | `Result mit %s initialisieren` | `Initialiser Result avec %s` |
 
-**Platzhalter:** `%s` = der eingesetzte Wert (`0`, `''`, `nil`, `Low(T)`, `Default(T)` …).
+**Platzhalter:** `%s` = der eingesetzte Wert (`0`, `''`, `nil`, `System.Low(T)`, `Default(T)` …).
 
-**Wirkung:** Setzt `Result := <Wert>;` als erste Anweisung. Der Wert folgt dem Rückgabetyp: `False`, `0`, `''`, `#0`, `nil`, `[]` bzw. `Low(T)` für eine schlichte Aufzählung der Unit, sonst `Default(T)` (Records, Typparameter, Unbekanntes, ein Typname, den die Unit auch in einer Routine oder einem Klassenrumpf definiert).
+**Wirkung:** Setzt `Result := <Wert>;` als erste Anweisung. Der Wert folgt dem Rückgabetyp: `False`, `0`, `''`, `#0`, `nil`, `[]` bzw. `System.Low(T)` für eine schlichte Aufzählung der Unit (qualifiziert – kein anderes `Low` in Klasse, Vorfahr oder Unit verdeckt es), sonst `Default(T)` (Records, Typparameter, Unbekanntes, ein Typname, den die Unit auch in einer anderen Routine oder einem Klassenrumpf definiert, eine Unit mit eigenem Bezeichner `System`).
 
 **Nicht angeboten**
 
@@ -1340,7 +1340,7 @@ Nachher:
 - eine Zuweisung an Result bzw. den Funktionsnamen oder `Exit(Wert)` (auch `System.Exit(Wert)`) im Rumpf – auch im inaktiven `$IFDEF`-Zweig
 - eine Datei ohne `implementation`-Teil bzw. ohne unit/program/library-Kopf (Skripte, Includes)
 - ein FPC-Modus ohne Result, `{$X-}`, asm, eine Direktive zwischen Kopf und `begin`
-- ein Rückgabetyp, der kein einfacher Typbezeichner ist, eine freie Funktion ohne Signatur im Kopf, mehrere Deklarationen
+- ein Rückgabetyp, der kein einfacher Typbezeichner ist oder den die Funktion in ihrem Deklarationsteil selbst definiert (im Rumpf meinte der Name den lokalen Typ), eine freie Funktion ohne Signatur im Kopf, mehrere Deklarationen
 
 **Beispiel**
 
@@ -1923,7 +1923,7 @@ Nachher:
 
 **Nicht angeboten**
 
-- ein Typ, der nicht als String, dynamisches Array, Interface oder Variant bewiesen ist (ein fremdes `IFoo` kann ein Record sein); deklariert die Unit den Namen selbst, gilt nur ihre Definition auf Unit-Ebene – eine Definition in einer Routine oder einem Klassenrumpf sperrt
+- ein Typ, der nicht als String, dynamisches Array, Interface oder Variant bewiesen ist (ein fremdes `IFoo` kann ein Record sein); deklariert die Unit den Namen selbst, gilt nur ihre Definition auf Unit-Ebene – eine Definition in einer Routine oder einem Klassenrumpf sperrt (auch in einem Include ohne unit-Kopf)
 - `absolute Result`, asm, eine Direktive zwischen Kopf und `begin`, ein FPC-Modus ohne Result
 - Name oder Typ passen nicht zur Meldung, auf der Zeile steht kein `Result` (Zeile verschoben)
 

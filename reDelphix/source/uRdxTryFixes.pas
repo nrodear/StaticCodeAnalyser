@@ -94,8 +94,9 @@ unit uRdxTryFixes;
 //     anderes als eine lokale Variable der Routine (Feld, Property,
 //     Element, Result, globale Variable, Parameter); ein Methodenzeiger
 //     'X.M' an ein Ereignis (Ziel 'On..'/'FOn..'); '@X' bzw. '@X.M'. X
-//     auch in einer Huelle - Typumwandlung, Klammern, 'as' ('List.Add(
-//     TObject(X))', 'FCurrent := X as TFoo', seit Charge B1 WrappedAt).
+//     auch in Huellen - Typumwandlung, Klammern, 'as', beliebig tief
+//     geschachtelt ('List.Add(TObject(X))', 'FCurrent := X as TFoo', seit
+//     Charge B1 WrappedAt).
 //     Bewusst eng (Entscheid H4c): die breite Fassung - jedes Argument,
 //     jede Zuweisung - kostete im Referenzkorpus 372 von 909
 //     Objekt-Angeboten;
@@ -221,9 +222,6 @@ const
   // Sie werfen ihr Argument als Ausnahme (wie 'raise X').
   RAISE_CALLS: array[0..1] of string = ('raiseouterexception',
     'throwouterexception');
-  // So viele Huellen um X - Typumwandlung, Klammern, 'as' - liest die
-  // Weitergabe-Sperre ('List.Add(TObject((X)))', WrappedAt).
-  MAX_WRAP_LEVELS = 4;
   // Typumwandlungen ohne T/P/I-Namen (IsCastName).
   CAST_WORDS: array[0..6] of string = ('pointer', 'nativeint', 'nativeuint',
     'integer', 'cardinal', 'int64', 'uint64');
@@ -1269,41 +1267,51 @@ begin
   until (D.Low <> '.') or not W.IsWord;
 end;
 
+// Eine Huelle mehr um AFirst..ALast (s. WrappedAt): ' as TFoo' dahinter bzw.
+// eine Klammer drumherum - davor nichts oder eine Typumwandlung. True, wenn
+// der Bereich gewachsen ist.
+function WrapOnce(AMap: TRdxCodeMap; var AFirst, ALast: TRdxToken): Boolean;
+var
+  P, N, S : TRdxToken;
+begin
+  Result := False;
+  N := After(AMap, ALast);
+  if N.Low = 'as' then
+  begin
+    S := AsTypeEnd(AMap, N);
+    if S.Low = '' then Exit;
+    ALast := S;
+    Exit(True);
+  end;
+  P := Before(AMap, AFirst);
+  if (P.Low <> '(') or (N.Low <> ')') then Exit;
+  S := WrapStart(AMap, P);
+  if S.Low = '' then Exit;
+  AFirst := S;
+  ALast := N;
+  Result := True;
+end;
+
 // X an T samt seinen Huellen - eine Typumwandlung 'TFoo(X)' (IsCastWord, X
 // allein in der Klammer, auch qualifiziert 'System.TObject(X)'), Klammern
-// '(X)' und 'X as TFoo' -, bis zu MAX_WRAP_LEVELS geschachtelt: AFirst..
-// ALast ist der ganze Ausdruck, der X weiterreicht; ohne Huelle T selbst.
-// Bis Charge B1 sah die Weitergabe-Sperre X nur direkt hinter ':=' bzw. als
-// Argument und packte nur den Cast im Aufruf aus: 'FCurrent := TFoo(X);',
-// 'FCurrent := X as TFoo;' und 'List.Add(X as TObject);' gingen durch
-// (Gegen-Review R5, R5-04).
+// '(X)' und 'X as TFoo' -, beliebig tief geschachtelt: AFirst..ALast ist der
+// ganze Ausdruck, der X weiterreicht; ohne Huelle T selbst. Jede Huelle
+// macht den Bereich groesser (WrapOnce), der Lauf endet also spaetestens an
+// den Grenzen der Datei. Bis Charge B1 sah die Weitergabe-Sperre X nur
+// direkt hinter ':=' bzw. als Argument und packte nur den Cast im Aufruf
+// aus: 'FCurrent := TFoo(X);', 'FCurrent := X as TFoo;' und 'List.Add(X as
+// TObject);' gingen durch (Gegen-Review R5, R5-04); bis zur Nachpruefung
+// las sie hoechstens vier Huellen, mit der fuenften ging es wieder durch.
 procedure WrappedAt(AMap: TRdxCodeMap; const T: TRdxToken;
   out AFirst, ALast: TRdxToken);
 var
-  P, N, S : TRdxToken;
-  Level   : Integer;
+  Grown : Boolean;
 begin
   AFirst := T;
   ALast := T;
-  for Level := 1 to MAX_WRAP_LEVELS do
-  begin
-    N := After(AMap, ALast);
-    if N.Low = 'as' then
-    begin
-      S := AsTypeEnd(AMap, N);
-      if S.Low = '' then Exit;
-      ALast := S;
-    end
-    else
-    begin
-      P := Before(AMap, AFirst);
-      if (P.Low <> '(') or (N.Low <> ')') then Exit;
-      S := WrapStart(AMap, P);
-      if S.Low = '' then Exit;
-      AFirst := S;
-      ALast := N;
-    end;
-  end;
+  Grown := True;
+  while Grown do
+    Grown := WrapOnce(AMap, AFirst, ALast);
 end;
 
 // X an T als direktes Argument eines Aufrufs, der es festhaelt bzw. wirft
