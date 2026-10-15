@@ -56,11 +56,11 @@ source\uRdxCodeMap.pas            Code-Sicht der Datei (Kommentare, Strings, meh
 source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung aller Ersetzungen, Spaltengrenze, Textwahl
 source\uRdxEditor.pas             ToolsAPI: Puffer lesen, Bereich markieren, Bereiche ersetzen (ein Undo-Schritt), Projekt-Units
 source\uRdxLog.pas                Protokoll %TEMP%\reDelphix.log + DebugView
-source\uRdxText.pas               Sprache der Texte: _() in die reDelphix-Sprache (wie die SCA-Oberflaeche oder redelphix.ini [UI] Language), redelphix.ini samt Vorlage (Entscheid E29, siehe "Sprache und redelphix.ini"); ohne ToolsAPI
+source\uRdxText.pas               Sprache der Texte: _() in die reDelphix-Sprache (wie die SCA-Oberflaeche oder redelphix.ini [UI] Language), redelphix.ini samt Vorlage (Entscheid E29, siehe "Sprache und redelphix.ini"); die gemeinsamen Texte mehrerer Units (Msg..., Charge C1); ohne ToolsAPI
 data\unitscopes.txt               die Scope-Tabelle (erzeugt), als RCDATA eingelinkt (data\unitscopes.rc)
 data\quickfixes-doc.json          Titel, Wirkung, Sperren und Beispiele je Quick-Fix (von Hand gepflegt) - Quelle fuer QUICKFIXES.md
 QUICKFIXES.md                     alle Quick-Fixes mit Menuetext en/de/fr, Kennzeichnung, Sperren, Beispiel - ERZEUGT von tools\gen-quickfix-doc.py (Repo-Wurzel)
-tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 45 Testunits und einer Hilfs-Unit (siehe "Pruefen"); Konfigurationen Debug/Release (TestInsight) und CI (Konsole, Exit-Code)
+tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 53 Testunits und einer Hilfs-Unit (siehe "Pruefen"); Konfigurationen Debug/Release (TestInsight) und CI (Konsole, Exit-Code)
 tools\gen_unitscopes.py           erzeugt data\unitscopes.txt aus der Delphi-Installation
 tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik unter FPC 3.2.2 in einem eigenen Arbeitsverzeichnis je Lauf und fuehrt Tests aus (Sprache 'de', Stub uLocalization.pas liest die echten i18n\*.po); neben dem Skript nur Grabsteine der Kopien (siehe "Pruefen")
 tools\fpc-pruefstand\selftest.sh  Selbsttest von build.sh (zwei Laeufe zugleich, FPC-Exit, Testzahl, Registrierung, Test ohne Assert, PRUEFSTAND_DIR, Grabsteine, TMPDIR mit Backslashes)
@@ -327,8 +327,10 @@ Eintraege, Meldungen - erscheinen in der Sprache der SCA-Oberflaeche
 `i18n\de.po` und `i18n\fr.po` wie in der SCA. Uebersetzt sind bisher die
 Menuetexte und ein Teil der Meldungen (Diagnosen des Anbieters,
 Spaltengrenze und Pufferende im Editor); Hinweise und Gruende der Hilfen
-und die uebrigen Meldungen stehen noch deutsch im Quelltext (Umstellung in
-den Chargen C1..Cn).
+und die uebrigen Meldungen stehen noch deutsch im Quelltext. Die
+Umstellung laeuft in Gruppen je Unit; Charge C1 legt das Fundament: die
+gemeinsamen Texte in `uRdxText` und das Gate `tools\rdx_i18n_gate.py`
+(siehe "Texte umstellen").
 
 Eigene Einstellungen stehen in `%APPDATA%\StaticCodeAnalyser\redelphix.ini`,
 neben `analyser.ini`. Fehlt die Datei, legt reDelphix sie beim ersten Text
@@ -356,6 +358,79 @@ FPC-Pruefstands): mit Override liest und schreibt reDelphix keine
 `RDX_INI_TEMPLATE` (uRdxText) erklaert und hier in einer Tabelle unter
 `` ### `[Sektion]` `` eingetragen - `tools\config_doc_gate.py` gleicht die
 drei ab.
+
+## Texte umstellen (Entscheid E29, Charge C1 und folgende)
+
+Muster fuer jeden Text, der aus dem Quelltext in die `.po` wandert:
+
+* Die msgid ist englisch, ein Satz eine msgid; variable Teile sind
+  Format-Platzhalter (`_('line %d carries %s', [N, S])`). Uebersetzte
+  Teilstuecke werden nie verkettet - de und fr stellen die Woerter anders.
+* Konstanten: `R_X = 'english text';` und `_(R_X)` in DERSELBEN Unit.
+  `tools\i18n_extract.py` loest nur Konstanten derselben Unit auf, und nur
+  reine Literal-Ketten (`R_A + '..'` ist fuer ihn keine Konstante) - sonst
+  fehlt die msgid in `template.pot`.
+* Texte, die mehrere Units brauchen, kommen aus `uRdxText` (Tabelle) -
+  keine zweite msgid dafuer. Ein zusammengesetzter Grund wird zum ganzen
+  Satz der Unit, das gemeinsame Ende haengt die Funktion an:
+  `MsgMovedSuffix(_('no Result on the reported line'))` statt
+  `'kein Result auf der gemeldeten Zeile - ' + R_MOVED`. Steht ein anderer
+  Trenner davor, kommt der gemeinsame Text als `%s` in den Satz der Unit
+  (`_('... no redundant jump; %s', [MsgLineMoved])`).
+* Text, der an eine andere Unit geht (`TRdxLineSearch.What`/`ManyFmt` fuer
+  `OneTokenReason`, `ScriptReason(AFeature)`), uebersetzt der Aufrufer; die
+  empfangende Unit setzt ihn per `%s` in ihren Satz, ohne ihn noch einmal
+  zu uebersetzen (`_(AWhat)` waere dynamisch und haette keine msgid).
+* Wer auf einen Grund verzweigt (`Pos`, `=`, `StartsText`), prueft vor der
+  Uebersetzung - eine Kennung oder ein Feld, nie den Text (der ist in en
+  und fr ein anderer).
+* `.po`: die neuen Eintraege als EIN Block am Ende von `i18n\de.po`
+  (bisheriger Wortlaut, echte Umlaute) und `i18n\fr.po`, eingeleitet mit
+  `# reDelphix <Gruppe> (<Units>)`, keine msgid doppelt; danach
+  `python tools\i18n_extract.py`, `python tools\gen_po_inc.py`,
+  `python tools\po_placeholder_gate.py`, `bash tools/i18n_audit.sh`.
+* Tests pruefen deutsche Teilstuecke. Traegt eines jetzt einen Umlaut,
+  nehmen sie ein umlautfreies (die Quellen bleiben ASCII, keine
+  `#$00FC`-Escapes) oder vergleichen mit der Funktion aus `uRdxText`
+  (`Assert.AreEqual(MsgNoFileOpen, O.Reason)`).
+
+Die gemeinsamen Texte (`uRdxText`; de wie bisher, in `de.po` mit echten
+Umlauten; fr in `fr.po`; je Funktion ein Test in en/de/fr in
+`uTestRdxTextMsgs`):
+
+| Funktion | msgid | de | Verwendung |
+|---|---|---|---|
+| `MsgLineMoved` | line moved? Analyse the file again | Zeile verschoben? Datei neu pruefen | allein, oder als `%s` hinter einem anderen Trenner als ` - ` |
+| `MsgMovedSuffix(R)` | %s - line moved? Analyse the file again | %s - Zeile verschoben? Datei neu pruefen | `R + ' - ' + R_MOVED` (12 Units) |
+| `MsgStaleSuffix(R)` | %s - finding outdated? Analyse the file again | %s - Fund veraltet? Datei neu pruefen | Decl-, Routine-, StructFixes |
+| `MsgNoColumn` | the message has no column | Spalte fehlt in der Meldung | Line-, Simple-, StructFixes |
+| `MsgStatementEndNotFound` | end of the statement not found | Ende der Anweisung nicht gefunden | Simple-, StructFixes |
+| `MsgNoValidRange` | no valid range | kein gueltiger Bereich | BufferMath, Editor |
+| `MsgHeaderEndNotFound` | end of the header not found | Ende des Kopfs nicht gefunden | Decl-, RoutineFixes |
+| `MsgLineStartsInCommentOrString` | the line starts inside a comment or string | die Zeile beginnt in einem Kommentar oder String | Decl-, LineFixes |
+| `MsgNoFileOpen` | no file open | keine Datei geoeffnet | RecipeRunner, FixTable (statt `R_NO_FILE`) |
+| `MsgByHand` | by hand | von Hand | `%s` hinter `; `, ` - ` oder `, ` |
+| `MsgCheckByHand` | check by hand | von Hand pruefen | wie `MsgByHand` |
+| `MsgDeleteByHand` | delete by hand | von Hand loeschen | wie `MsgByHand` |
+| `MsgDecideByHand` | decide by hand | von Hand entscheiden | wie `MsgByHand` |
+| `MsgOnlyStatementEmptyBlock(K)` | only statement after %s - an empty block would remain (SCA077) | einzige Anweisung hinter %s - es bliebe ein leerer Block (SCA077) | Cleanup-, FlowFixes |
+| `MsgUnclearStatementOwner(T)` | unclear what the statement belongs to ("%s" before it) | unklar, wozu die Anweisung gehoert ("%s" davor) | Flow-, TryFixes |
+| `MsgLiteralUnreadable(C)` | literal not readable: %s | Literal nicht lesbar: %s | Recipes, SqlTemplate |
+| `MsgNoOperandInChain` | no operand in the chain | kein Operand in der Kette | Recipes, SqlTemplate |
+| `MsgDeclsInClassesOfName(N, S)` | %d declarations of %s in classes of this name - overload? | %d Deklarationen von %s in Klassen dieses Namens - Overload? | Result-, RoutineFixes |
+| `MsgNoLongerAtReportedPlace(C)` | %s is no longer at the reported place | %s steht nicht mehr an der gemeldeten Stelle | SimpleFixes (Code als `%s`) |
+
+Gate: `python tools\rdx_i18n_gate.py` meldet deutsche Text-Literale in
+`source\`, die weder erstes Argument von `_()` noch Wert einer
+msgid-Konstante sind (Heuristik des Inventars: Leerzeichen, Wort, deutsches
+Wort oder Umlaut; verkettete Literale zaehlen als ein Text), dazu deutsche
+msgids, qualifizierte Aufrufe `X._()` und `_(KONSTANTE)` mit einer
+Konstante, die in der Unit keine reine Literal-Kette ist. `--report` zeigt
+den Stand je Unit, `--unit uRdxFlowFixes.pas` prueft nur diese Unit,
+`--selftest` faehrt 23 Mutanten. Bewusst feste Texte (Protokoll) stehen
+mit Begruendung in `tools\rdx_i18n_gate.allow`; ein Eintrag, der nichts
+mehr trifft, ist selbst ein Fund. Stand Charge C1: 729 Funde in 24 Units -
+rot, bis die Umstellung durch ist, und deshalb noch nicht in der CI.
 
 ## Scope-Tabelle pflegen
 
@@ -637,6 +712,12 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   die Platte unberuehrt - 13 Tests, in reDelphix.Test (echte
   `uLocalization`) und im FPC-Pruefstand (Stub). Die ini-Tests lenken das
   Verzeichnis nach `TEMP\rdx_c0_<GUID>` um (`SetRdxConfigDir`).
+* `uTestRdxTextMsgs` - die gemeinsamen Texte aus `uRdxText` (Charge C1):
+  je Funktion en (die msgid samt Argumenten woertlich), de (gefaltet gleich
+  dem bisherigen Wortlaut der Planer, dazu die Zahl der echten Umlaute) und
+  fr (Akzente gefaltet) - die Quelle bleibt ASCII; ein Grund mit `%d` geht
+  woertlich durch - 19 Tests, in reDelphix.Test und im FPC-Pruefstand (der
+  Stub liest auch `i18n\fr.po`).
 * `uTestRdxSimpleFixes` / `uTestRdxNilFix` / `uTestRdxExprFixes` /
   `uTestRdxStructFixes` / `uTestRdxBlockFixes` / `uTestRdxLineFixes` /
   `uTestRdxRaiseFixes` / `uTestRdxDeclFixes` / `uTestRdxFlowFixes` /
@@ -869,14 +950,15 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes
+bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxTextMsgs uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes
 ```
 
-Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+B1-FA+FB+FC+B1-FD+B1-FE+FF): `PASSED 631  FAILED 0` - 40 Testunits,
+Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+B1-FA+FB+FC+B1-FD+B1-FE+FF+C1): `PASSED 650  FAILED 0` - 41 Testunits,
 davon 28 der Charge B1-FA (`uTestRdxSuppressTargets` 20, Review R1-01/R1-03
 und Nachbesserung; `uTestRdxBufferMath` 1, R1-04; `uTestRdxProjectUnits` 7,
 R1-02),
 13 der Charge C0 (`uTestRdxText`, Sprache der Texte),
+19 der Charge C1 (`uTestRdxTextMsgs`, gemeinsame Texte),
 23 der Charge FB (`uTestRdxFormatGuards` 10, `uTestRdxSqlBinds` 10, `uTestRdxFreeTypes` 3),
 6 der Charge FC
 (`uTestRdxExprFixes` 2, `uTestRdxNilFix` 2, `uTestRdxStructFixes` 1, `uTestRdxRaiseFixes` 1),
