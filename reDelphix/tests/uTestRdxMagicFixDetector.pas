@@ -40,7 +40,7 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections,
+  System.SysUtils, System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog,
   uMagicNumbers,
   uRdxRecipeRunner,      // TRdxFixOutcome

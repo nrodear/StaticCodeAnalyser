@@ -77,7 +77,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uRefactorInfo, uRdxBufferMath, uRdxCodeMap, uRdxCleanupFixes,
+  uRdxBufferMath, uRdxCodeMap, uRdxCleanupFixes,
   uTestRdxTextKit;   // Join, Apply
 
 // ---- Helfer ----

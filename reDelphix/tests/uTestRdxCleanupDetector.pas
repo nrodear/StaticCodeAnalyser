@@ -46,7 +46,7 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Generics.Collections,
+  System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog,
   uCommentedOutCode, uUnusedLocal,
   uTestRdxDetectorKit,   // TSeen, Detect-/Plan-/FixAll-Helfer (Charge H3c)
