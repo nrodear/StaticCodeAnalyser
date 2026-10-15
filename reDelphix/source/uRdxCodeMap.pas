@@ -2,14 +2,14 @@ unit uRdxCodeMap;
 
 // reDelphix - Code-Sicht einer Datei und Token-Leser darauf, OHNE ToolsAPI.
 // Gemeinsame Grundlage der Planer (uRdxSimpleFixes), der Unterdrueck-Hilfen
-// (uRdxSuppress) und des Laeufers (uRdxRecipeRunner); bis 2026-10-10 lag sie
-// in uRdxSimpleFixes, und uRdxSuppress zog dafuer die Planer mit (Review
-// reDelphiX nach Bereichen, Minor 7). Seit Charge B2S-a stehen hier auch
-// die geteilten Helfer der Planer, die bis dahin in einer Planer-Unit lagen
-// oder kopiert waren - Bereiche (uRdxStructFixes), Fragen an die ganze
-// Datei samt DeclaresRoutine (uRdxSimpleFixes), Klammertiefe und
-// Meldungstext (Review R3-05/R3-07): eine Planer-Unit bindet fuer solche
-// Helfer keine andere mehr ein.
+// (uRdxSuppress) und der Laeufer (uRdxRecipeRunner, uRdxFixRunner); bis
+// 2026-10-10 lag sie in uRdxSimpleFixes, und uRdxSuppress zog dafuer die
+// Planer mit (Review reDelphiX nach Bereichen, Minor 7). Seit Charge B2S-a
+// stehen hier auch die geteilten Helfer der Planer, die bis dahin in einer
+// Planer-Unit lagen oder kopiert waren - Bereiche (uRdxStructFixes), Fragen
+// an die ganze Datei samt DeclaresRoutine (uRdxSimpleFixes), Klammertiefe
+// und Meldungstext (Review R3-05/R3-07): eine Planer-Unit bindet fuer
+// solche Helfer keine andere mehr ein.
 //
 // Verhaeltnis zum Core: TDetectorUtils.ScanCodeLine ist dieselbe Regel fuer
 // Kommentare und einzeilige Strings - uTestRdxCodeMap prueft beide an
@@ -58,8 +58,10 @@ type
   // LineCount lesen dagegen live aus ALines. ALines muss darum laenger
   // leben als die Map und darf waehrend ihrer Lebensdauer nicht veraendert
   // werden; sonst passen Klassen und Text nicht mehr zusammen, und die
-  // Planer lesen Code, wo ein Kommentar steht. Die Aufrufer (uRdxProvider,
-  // uRdxRecipeRunner, die Tests) bauen die Map je Lauf neu.
+  // Planer lesen Code, wo ein Kommentar steht. Die Aufrufer (uRdxFixRunner,
+  // uRdxFixTable, uRdxRecipeRunner und uRdxSuppress mit den Zeilen aus
+  // uRdxProvider, uRdxBlocks fuer Include-Dateien, die Tests) bauen die Map
+  // je Lauf neu.
   TRdxCodeMap = class
   private
     FLines   : TStrings;
@@ -416,7 +418,7 @@ function DeclaresAfter(AMap: TRdxCodeMap; const AKeywords: array of string;
 // Deklariert die Datei eine Routine AName ('procedure AName' bzw.
 // 'function AName', auch als Methode)? Dann bindet der Name nicht an die
 // RTL. TRdxSimpleFixes.DeclaresRoutine bleibt als Einstieg der Klasse
-// (uRdxRecipeRunner, Tests) und ruft diese.
+// (uRdxFixRunner, Tests) und ruft diese.
 function DeclaresRoutine(AMap: TRdxCodeMap; const AName: string): Boolean;
 
 const

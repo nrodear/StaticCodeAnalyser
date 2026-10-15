@@ -6,9 +6,11 @@ unit uRdxBlocks;
 // uRdxRoutineFixes (SCA164/SCA147), und fuenf andere Planer-Units banden
 // sie dafuer ein - uRdxResultFixes sogar im interface. Seitdem haengt fuer
 // diese Bausteine keine Planer-Unit mehr an einer anderen, nur an
-// uRdxCodeMap und hier. Der Inhalt ist unveraendert umgezogen (Namen,
-// Vertraege, Gruende); die Klassenmethoden heissen TRdxBlocks.X statt
-// TRdxRoutineFixes.X.
+// uRdxCodeMap und hier. Die Bausteine aus uRdxRoutineFixes sind
+// unveraendert umgezogen (Namen, Vertraege, Gruende); die Klassenmethoden
+// heissen TRdxBlocks.X statt TRdxRoutineFixes.X. NEU in derselben Charge
+// (Teil D): HeadBefore samt TRdxHeadStep (Gegen-Review R5-03) und
+// MemberHeads (R5-07).
 //
 // BAUSTEINE (Konzept_Editorhilfen_Recherche_2026-10-11, Abschnitt 5; die
 // Routinengrenzen tragen seit Charge H3c das Ende des
@@ -23,13 +25,24 @@ unit uRdxBlocks;
 //                   forward/external: ohne Rumpf. (uRdxRaiseFixes.
 //                   MethodBodyOn kennt nur leere Rumpfe ohne lokale
 //                   Routinen.)
-//   TRdxBlocks.FindMethodDecls / FindMethodImpls
+//   TRdxBlocks.HeadBefore
+//                   die innerste Routine um eine Stelle: von einem Token
+//                   rueckwaerts zum naechsten Routinenkopf samt Grenzen
+//                   (ReadRoutine) bzw. dem Grund, oder zu einem Wort aus
+//                   AStops (Teil D, R5-03; bis dahin je eine Kopie in
+//                   uRdxTryFixes und uRdxResultFixes). Die Politik waehlt
+//                   der Aufrufer (RoutineAround, EnclosingRoutine).
+//   TRdxBlocks.FindMethodDecls / FindMethodImpls / MemberHeads
 //                   Decl/Impl-Finder: die Deklarationen einer Methode auf
 //                   Tiefe 1 im Rumpf ihrer Klasse (auch verschachtelte und
 //                   generische Klassen) und ihre Implementierungskoepfe im
 //                   implementation-Teil ('TOuter.TInner.Bar', 'TFoo<T>.Bar',
 //                   'class procedure'). Mehr als ein Treffer heisst Overload
 //                   oder mehrdeutig - die Aufrufer lehnen dann ab.
+//                   MemberHeads: die Deklarationen in EINEM Klassenrumpf
+//                   (Teil D, R5-07: der Index der Klassenkoepfe in
+//                   uRdxResultFixes fragt so je Kopf, statt je Frage die
+//                   ganze Datei zu lesen).
 //   TRdxBlocks.FindClassHeads / HeritageOf / MethodDecl, EnclosingClass,
 //   ClassEnd, TypeHasBody
 //                   Klassenkopf (Charge H5, SCA096/SCA097; SCA147): die

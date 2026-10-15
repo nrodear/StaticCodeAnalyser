@@ -39,7 +39,8 @@ type
   // SCA168, SCA101/SCA099) und ihre geteilten Bausteine (StartsStatementAt,
   // ElseBelongsToIf): reine Textlogik auf der Code-Sicht. Die uses-Eintraege,
   // die FPC-Weiche und die uses-Ergaenzung fuer EProgrammerError liefert
-  // bzw. prueft der Aufrufer (uRdxRecipeRunner).
+  // bzw. prueft der Aufrufer (uRdxFixRunner: TRdxFixRunner.UnusedUsesFix
+  // bzw. CaseRaiseFix).
   TRdxStructFixes = class
   public
     // SCA007: den Eintrag AIndex der Klausel loeschen. Vor dem letzten

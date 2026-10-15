@@ -27,7 +27,7 @@ unit uRdxSimpleFixes;
 // ist KEIN ChangesBehavior-Fall: FreeAndNil ist genau die Form, die der
 // Detektor verlangt (sein 'good'-Beispiel), und der Unterschied ist ein
 // Gewinn (kein haengender Zeiger nach einer Exception im Destruktor). Der
-// Nutzer erfaehrt ihn trotzdem: der Hint der Hilfe (uRdxRecipeRunner,
+// Nutzer erfaehrt ihn trotzdem: der Hint der Hilfe (uRdxFixRunner,
 // R_FREENIL_HINT) nennt die Reihenfolge.
 
 interface
@@ -155,7 +155,7 @@ type
     // WEITER ALS DER NAME: Interface, Zeiger und eigener Typ sind keine
     // Werttypen, zaehlen hier aber mit - gemeint ist "kein Klassentyp, auf
     // dem FreeAndNil uebersetzt und das Richtige tut". Der Name bleibt, weil
-    // ihn uRdxRecipeRunner (SCA085, SCA139) ruft; umbenennen in einer
+    // ihn uRdxFixRunner (SCA085, SCA139) ruft; umbenennen in einer
     // Charge, die beide Units anfasst. Ein Typ aus einer anderen Unit (auch
     // ein Alias oder ein generischer Record 'TRec<T>') ist hier unbekannt
     // (False) - in Delphi ab 10.4 faellt ein Record dort als Fehler E2010
@@ -758,7 +758,7 @@ end;
 { ---- SCA074, SCA087, SCA139 (Editorhilfen Stufe 2, Rest) ---- }
 
 // Die Regel steht seit Charge B2S-a in uRdxCodeMap (Review R3-07); der
-// Einstieg der Klasse bleibt fuer uRdxRecipeRunner und die Tests.
+// Einstieg der Klasse bleibt fuer uRdxFixRunner und die Tests.
 class function TRdxSimpleFixes.DeclaresRoutine(AMap: TRdxCodeMap;
   const AName: string): Boolean;
 begin
@@ -2460,16 +2460,15 @@ begin
   end;
   if TRdxExprFixes.ProceduralType(AMap, TypeLow) then
     Exit(Format(R_PROC_IN_UNIT, [AOperand, TypeLow]));
-  // Der POSITIVE Beweis wie bei SCA084 (AssignedNilReason in
-  // uRdxRecipeRunner, der OperandReason-Pfad von TRdxFixRunner.OperandFix -
-  // nicht in dieser Unit): ein Typ aus
-  // einer anderen Unit mit unauffaelligem Namen ('uses uFactories; FMaker:
-  // TObjFactory' mit 'function: TObject' dort) ging bis Charge R8 durch -
-  // 'if FMaker = nil' wurde 'if not Assigned(FMaker)', ein anderer Sinn.
-  // Das kostet Angebote bei Fremdtypen und gewinnt Sicherheit (Semantik-
-  // Gegen-Review 2026-10-14, Major). Seit E27 (Charge R10) zaehlen die
-  // Klassen und Interfaces der Delphi-Quellen als bewiesen (uRdxRtlTypes,
-  // in PointerLikeType) - Kundentypen bleiben draussen.
+  // Der POSITIVE Beweis wie bei SCA084 (AssignedNilReason in uRdxFixRunner,
+  // der OperandReason-Pfad von TRdxFixRunner.OperandFix - nicht in dieser
+  // Unit): ein Typ aus einer anderen Unit mit unauffaelligem Namen ('uses
+  // uFactories; FMaker: TObjFactory' mit 'function: TObject' dort) ging bis
+  // Charge R8 durch - 'if FMaker = nil' wurde 'if not Assigned(FMaker)', ein
+  // anderer Sinn. Das kostet Angebote bei Fremdtypen und gewinnt Sicherheit
+  // (Semantik-Gegen-Review 2026-10-14, Major). Seit E27 (Charge R10) zaehlen
+  // die Klassen und Interfaces der Delphi-Quellen als bewiesen
+  // (uRdxRtlTypes, in PointerLikeType) - Kundentypen bleiben draussen.
   if not TRdxExprFixes.PointerLikeType(AMap, TypeLow) then
     Result := Format(R_NOT_PROVEN, [AOperand, TypeLow]);
 end;
