@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2517 Zeilen, 83843 Bytes
-  CPoLines_de: array[0..2516] of string = (
+  // i18n\de.po - 2531 Zeilen, 84310 Bytes
+  CPoLines_de: array[0..2530] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2531,7 +2531,21 @@ const
     'msgstr "kein Kopf %s"',
     '',
     'msgid "%d headers %s"',
-    'msgstr "%d K'#$00F6'pfe %s"'
+    'msgstr "%d K'#$00F6'pfe %s"',
+    '',
+    '# reDelphix G5 (uRdxRoutineFixes, uRdxBlocks, uRdxCodeMap)',
+    '',
+    'msgid "noinspection marker in the range - it suppresses other findings"',
+    'msgstr "noinspection-Marker im Bereich - er unterdr'#$00FC'ckt andere Funde"',
+    '',
+    'msgid "%s in the range - an intent comment stays"',
+    'msgstr "%s im Bereich - ein Absichtskommentar bleibt stehen"',
+    '',
+    'msgid "%s on the reported line"',
+    'msgstr "%s auf der gemeldeten Zeile"',
+    '',
+    'msgid "line %d carries %s - ambiguous"',
+    'msgstr "Zeile %d tr'#$00E4'gt %s - mehrdeutig"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -2806,8 +2820,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2513 Zeilen, 87809 Bytes
-  CPoLines_fr: array[0..2512] of string = (
+  // i18n\fr.po - 2527 Zeilen, 88287 Bytes
+  CPoLines_fr: array[0..2526] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -5320,7 +5334,21 @@ const
     'msgstr "aucun en-t'#$00EA'te %s"',
     '',
     'msgid "%d headers %s"',
-    'msgstr "%d en-t'#$00EA'tes %s"'
+    'msgstr "%d en-t'#$00EA'tes %s"',
+    '',
+    '# reDelphix G5 (uRdxRoutineFixes, uRdxBlocks, uRdxCodeMap)',
+    '',
+    'msgid "noinspection marker in the range - it suppresses other findings"',
+    'msgstr "marqueur noinspection dans la plage - il masque d''autres r'#$00E9'sultats"',
+    '',
+    'msgid "%s in the range - an intent comment stays"',
+    'msgstr "%s dans la plage - un commentaire d''intention reste en place"',
+    '',
+    'msgid "%s on the reported line"',
+    'msgstr "%s sur la ligne signal'#$00E9'e"',
+    '',
+    'msgid "line %d carries %s - ambiguous"',
+    'msgstr "la ligne %d porte %s - ambigu"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

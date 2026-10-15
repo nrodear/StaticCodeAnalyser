@@ -134,12 +134,21 @@ msgstr ""
 msgid "%s contains no profiles."
 msgstr ""
 
+#: reDelphix/source/uRdxCodeMap.pas:1058
+#: reDelphix/source/uRdxCodeMap.pas:1060
+msgid "%s in the range - an intent comment stays"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:832
 msgid "%s is no longer at the reported place"
 msgstr ""
 
 #: SCA.Engine/sources/Common/uRuleCatalog.pas:1575
 msgid "%s is not a valid JSON object."
+msgstr ""
+
+#: reDelphix/source/uRdxCodeMap.pas:1178
+msgid "%s on the reported line"
 msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:810
@@ -2831,6 +2840,10 @@ msgstr ""
 msgid "in"
 msgstr ""
 
+#: reDelphix/source/uRdxCodeMap.pas:1180
+msgid "line %d carries %s - ambiguous"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:742
 msgid "line moved? Analyse the file again"
 msgstr ""
@@ -2857,6 +2870,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxText.pas:767
 msgid "no valid range"
+msgstr ""
+
+#: reDelphix/source/uRdxCodeMap.pas:1055
+msgid "noinspection marker in the range - it suppresses other findings"
 msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:813

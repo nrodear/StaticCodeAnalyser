@@ -2511,3 +2511,17 @@ msgstr "aucun en-tête %s"
 
 msgid "%d headers %s"
 msgstr "%d en-têtes %s"
+
+# reDelphix G5 (uRdxRoutineFixes, uRdxBlocks, uRdxCodeMap)
+
+msgid "noinspection marker in the range - it suppresses other findings"
+msgstr "marqueur noinspection dans la plage - il masque d'autres résultats"
+
+msgid "%s in the range - an intent comment stays"
+msgstr "%s dans la plage - un commentaire d'intention reste en place"
+
+msgid "%s on the reported line"
+msgstr "%s sur la ligne signalée"
+
+msgid "line %d carries %s - ambiguous"
+msgstr "la ligne %d porte %s - ambigu"

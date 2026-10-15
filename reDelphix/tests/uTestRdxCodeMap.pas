@@ -14,7 +14,10 @@ unit uTestRdxCodeMap;
 // Schluesselwort vor ':=' - benanntes OLE-Argument 'End := 1'). Seit
 // Charge B2S-a die geteilten Helfer der Fix-Units QuotedText und
 // ParenDelta (Review R3-05: bis dahin fuenf Kopien bzw. drei Kopien und
-// sieben ausgeschriebene Zaehlungen).
+// sieben ausgeschriebene Zaehlungen). Seit der Umstellung der Texte
+// (Entscheid E29, Gruppe G5) sind die Rahmen von OneTokenReason und die
+// Gruende von MarkerReason msgids - Reasons_FollowLanguage prueft en/fr,
+// die anderen Tests laufen wie der Pruefstand in de.
 
 interface
 
@@ -39,6 +42,8 @@ type
     [Test] procedure TokHelpers_AndKeywordAt;
     // Charge B2S-a.
     [Test] procedure SharedHelpers_QuotedTextAndParenDelta;
+    // Umstellung E29 (Gruppe G5): die Gruende folgen der reDelphix-Sprache.
+    [Test] procedure Reasons_FollowLanguage;
   end;
 
 implementation
@@ -46,6 +51,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uDetectorUtils, uRdxCodeMap,
+  uRdxText,          // _, MsgMovedSuffix, Sprache der Gruende (E29)
   uTestRdxTextKit;   // Join
 
 // Zeile und Spalte eines Tokens als 'Z:S' - fuer kurze Vergleiche.
@@ -254,6 +260,7 @@ var
   Map : TRdxCodeMap;
   S   : TRdxLineSearch;
   Hit : TRdxToken;
+  R   : string;
 begin
   SL := TStringList.Create;
   try
@@ -268,8 +275,15 @@ begin
       Assert.AreEqual('', OneTokenOnLine(Map, 1, S, Hit));
       Assert.AreEqual('1:9', Pos2(Hit));
       S.Arg := 'x';
-      Assert.AreEqual('Zeile 1 traegt 2-mal das Wort - mehrdeutig',
-        OneTokenOnLine(Map, 1, S, Hit));
+      // Der Rahmen ist seit der Umstellung E29 eine msgid, und 'traegt'
+      // bekommt in de.po einen echten Umlaut - die Quelle bleibt ASCII: der
+      // ganze Text gegen _() mit derselben msgid, der deutsche Wortlaut
+      // ueber seine umlautfreien Teilstuecke.
+      R := OneTokenOnLine(Map, 1, S, Hit);
+      Assert.AreEqual(_('line %d carries %s - ambiguous', [1, '2-mal das Wort']),
+        R);
+      Assert.IsTrue(Pos('Zeile 1 tr', R) = 1, R);
+      Assert.IsTrue(Pos(' 2-mal das Wort - mehrdeutig', R) > 0, R);
       // ManyArg kommt als %s ins Muster - Text aus der Meldung, auch mit
       // '%', steht nie im Muster selbst (Nachpruefung C1). Pos auf das
       // umlautfreie Ende: 'traegt' bekommt in de.po einen echten Umlaut.
@@ -278,8 +292,10 @@ begin
       Assert.IsTrue(Pos('2-mal x 100% - mehrdeutig',
         OneTokenOnLine(Map, 1, S, Hit)) > 0, 'ManyArg als %s im Muster');
       S.Arg := 'z';
-      Assert.AreEqual('kein Treffer auf der gemeldeten Zeile - Zeile '
-        + 'verschoben? Datei neu pruefen', OneTokenOnLine(Map, 1, S, Hit),
+      // Der Satz dieser Unit (umlautfrei) mit dem gemeinsamen Ende aus
+      // uRdxText - 'pruefen' bekommt dort in de.po den echten Umlaut.
+      Assert.AreEqual(MsgMovedSuffix('kein Treffer auf der gemeldeten Zeile'),
+        OneTokenOnLine(Map, 1, S, Hit),
         'ein z im Kommentar zaehlt nicht, Zeile 2 auch nicht');
       Assert.AreEqual('', Hit.Low, 'ohne Treffer leer');
       Assert.AreEqual('', OneTokenOnLine(Map, 2, S, Hit));
@@ -415,6 +431,49 @@ begin
   Assert.AreEqual<Integer>(0, ParenDelta(T), '< zaehlt nicht');
   T.Low := '';
   Assert.AreEqual<Integer>(0, ParenDelta(T), 'kein Token');
+end;
+
+procedure TTestRdxCodeMap.Reasons_FollowLanguage;
+const
+  // So uebergibt ein Aufrufer What und ManyFmt: schon uebersetzt.
+  WHAT_NONE = 'no begin';
+  MANY_FMT  = '%d begin';
+var
+  Old : string;
+begin
+  // Die Saetze von OneTokenReason und MarkerReason sind msgids (Entscheid
+  // E29, Gruppe G5); AWhat und AManyFmt kommen schon uebersetzt vom
+  // Aufrufer und gehen unveraendert hinein (ein zweites _() faende keine
+  // msgid), AArg ebenso. fr nur ueber Teilstuecke ohne Akzent - die Quelle
+  // bleibt ASCII.
+  Old := RdxLanguageOverride;
+  try
+    SetRdxLanguageOverride('en');
+    Assert.AreEqual('no begin on the reported line - line moved? Analyse the '
+      + 'file again', OneTokenReason(3, 0, WHAT_NONE, MANY_FMT));
+    Assert.AreEqual('line 3 carries 2 begin - ambiguous',
+      OneTokenReason(3, 2, WHAT_NONE, MANY_FMT));
+    Assert.AreEqual('line 3 carries 2 headers of x - ambiguous',
+      OneTokenReason(3, 2, '', '%d headers %s', 'of x'), 'AArg als %s');
+    Assert.AreEqual('noinspection marker in the range - it suppresses other '
+      + 'findings', MarkerReason('// noinspection UnusedRoutine'));
+    Assert.AreEqual('TODO in the range - an intent comment stays',
+      MarkerReason('// todo: later'));
+    Assert.AreEqual('XXX in the range - an intent comment stays',
+      MarkerReason('// XXX'));
+    SetRdxLanguageOverride('fr');
+    Assert.AreEqual('la ligne 3 porte 2 begin - ambigu',
+      OneTokenReason(3, 2, WHAT_NONE, MANY_FMT));
+    Assert.IsTrue(Pos('x sur la ligne signal',
+      OneTokenReason(3, 0, 'x', '')) = 1, 'fr: Satz dieser Unit');
+  finally
+    SetRdxLanguageOverride(Old);
+  end;
+  // Die Sprache des Laufs (de): der bisherige Wortlaut.
+  Assert.AreEqual('TODO im Bereich - ein Absichtskommentar bleibt stehen',
+    MarkerReason('// todo: later'));
+  Assert.IsTrue(Pos('noinspection-Marker im Bereich - er unterdr',
+    MarkerReason('// noinspection X')) = 1, 'de');
 end;
 
 initialization

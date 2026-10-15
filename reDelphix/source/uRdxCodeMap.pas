@@ -140,8 +140,11 @@ type
   // Mehrdeutigkeit mit %d fuer die Zahl der Treffer und %s fuer ManyArg
   // ('%d begin', '%d-mal "end else"'). Text aus der Meldung (ein Name, ein
   // Ziel) gehoert in ManyArg, nie in das Muster (OneTokenReason) - so wird
-  // das Muster eine msgid (Texte umstellen, Nachpruefung C1). Bis Charge R8
-  // (2026-10-14) stand diese Suche siebenmal in den Planern.
+  // das Muster eine msgid (Texte umstellen, Nachpruefung C1). What und
+  // ManyFmt kommen SCHON UEBERSETZT vom Aufrufer (uRdxText._: What als ganze
+  // Nominalphrase, ManyFmt als unformatiertes Muster); OneTokenReason setzt
+  // sie nur in seinen Satz (Entscheid E29). Bis Charge R8 (2026-10-14) stand
+  // diese Suche siebenmal in den Planern.
   TRdxLineSearch = record
     Test    : TRdxTokenTest;
     Arg     : string;
@@ -319,13 +322,17 @@ function ParenDelta(const T: TRdxToken): Integer;
 // (kein Treffer) oder mehrdeutig (mehrere) ist.
 function OneTokenOnLine(AMap: TRdxCodeMap; ALine: Integer;
   const ASearch: TRdxLineSearch; out AHit: TRdxToken): string;
-// Der Grund zu ACount Treffern auf ALine: 0 -> '<AWhat> auf der
-// gemeldeten Zeile - Zeile verschoben? Datei neu pruefen'; mehr als 1 ->
-// 'Zeile N traegt <AManyFmt mit ACount fuer %d und AArg fuer %s> -
-// mehrdeutig'; genau 1 -> ''. AManyFmt ist ein Format-Muster: Text aus der
-// Meldung gehoert in AArg, nie in das Muster - ein '%' darin (Delphi-11-
-// Binaerliteral '%101') warf sonst EConvertError (Gegen-Review R5, missed 2:
-// uRdxTryFixes.LockPair setzte den Sperrtext der Meldung ins Muster).
+// Der Grund zu ACount Treffern auf ALine: 0 -> '<AWhat> on the reported
+// line - line moved? Analyse the file again' (de: '<AWhat> auf der
+// gemeldeten Zeile - Zeile verschoben? Datei neu pruefen'); mehr als 1 ->
+// 'line N carries <AManyFmt mit ACount fuer %d und AArg fuer %s> -
+// ambiguous' (de: 'Zeile N traegt ... - mehrdeutig'); genau 1 -> ''. Die
+// Saetze sind msgids (uRdxText._); AWhat und AManyFmt uebersetzt der
+// Aufrufer, AArg ist Text aus der Meldung und bleibt. AManyFmt ist ein
+// Format-Muster: Text aus der Meldung gehoert in AArg, nie in das Muster -
+// ein '%' darin (Delphi-11-Binaerliteral '%101') warf sonst EConvertError
+// (Gegen-Review R5, missed 2: uRdxTryFixes.LockPair setzte den Sperrtext
+// der Meldung ins Muster).
 function OneTokenReason(ALine, ACount: Integer;
   const AWhat, AManyFmt: string; const AArg: string = ''): string;
 
@@ -429,7 +436,11 @@ function DeclaresRoutine(AMap: TRdxCodeMap; const AName: string): Boolean;
 const
   // Der Grund, wenn eine Meldung keine Spalte nennt (ColumnFromMessage
   // liefert 0). Bis Charge B2S-a je eine Konstante in uRdxSimpleFixes und
-  // uRdxLineFixes und ein Literal in uRdxStructFixes (Review R3-05).
+  // uRdxLineFixes und ein Literal in uRdxStructFixes (Review R3-05). Der
+  // uebersetzte Text ist uRdxText.MsgNoColumn (Entscheid E29); die Konstante
+  // bleibt nur, bis die Gruppen der drei Planer-Units ihre Verwendungen auf
+  // MsgNoColumn umgestellt haben - der Merge entfernt sie samt Eintrag in
+  // tools/rdx_i18n_gate.allow (Texte umstellen, Querschnitt R_NO_COLUMN).
   R_NO_COLUMN = 'Spalte fehlt in der Meldung';
 
 // 'at column N' aus einer Meldung; 0 = nicht vorhanden. Bis 2026-10-10 in
@@ -448,7 +459,8 @@ function QuotedText(const AText: string; AQuote: Char): string;
 implementation
 
 uses
-  System.SysUtils;   // CharInSet, LowerCase, Format
+  System.SysUtils,   // CharInSet, LowerCase, Format
+  uRdxText;          // _, MsgMovedSuffix (Texte in der Sprache der SCA, E29)
 
 const
   // Davor beginnt ein Routinenwort KEINEN Kopf: Typ einer Variablen oder
@@ -462,6 +474,10 @@ const
   INTENT_MARKERS: array[0..2] of string = ('todo', 'fixme', 'hack');
   MARKER_XXX      = 'XXX';
   MARKER_SUPPRESS = 'noinspection';
+  // Der Grund zu einem Absichtsmarker (MarkerReason, msgid; %s der Marker in
+  // Grossbuchstaben). Bis zur Umstellung E29 stand der Satz fuer MARKER_XXX
+  // ein zweites Mal ausgeschrieben, mit demselben Wortlaut.
+  R_INTENT_KEPT = '%s in the range - an intent comment stays';
 
 // Zeichen > #127 wie der Core (uRefactorInfoBuilder) und uRdxRecipes:
 // Bezeichner mit Umlaut sind in Delphi erlaubt - sonst lehnten die Planer
@@ -1036,13 +1052,12 @@ begin
   Result := '';
   Low := LowerCase(AText);
   if Pos(MARKER_SUPPRESS, Low) > 0 then
-    Exit('noinspection-Marker im Bereich - er unterdrueckt andere Funde');
+    Exit(_('noinspection marker in the range - it suppresses other findings'));
   for M in INTENT_MARKERS do
     if HasAsciiWord(Low, M) then
-      Exit(Format('%s im Bereich - ein Absichtskommentar bleibt stehen',
-        [UpperCase(M)]));
+      Exit(_(R_INTENT_KEPT, [UpperCase(M)]));
   if HasAsciiWord(AText, MARKER_XXX) then
-    Result := 'XXX im Bereich - ein Absichtskommentar bleibt stehen';
+    Result := _(R_INTENT_KEPT, [MARKER_XXX]);
 end;
 
 function SameTok(const A, B: TRdxToken): Boolean;
@@ -1160,10 +1175,9 @@ function OneTokenReason(ALine, ACount: Integer;
 begin
   Result := '';
   if ACount = 0 then
-    Result := Format('%s auf der gemeldeten Zeile - Zeile verschoben? Datei '
-      + 'neu pruefen', [AWhat])
+    Result := MsgMovedSuffix(_('%s on the reported line', [AWhat]))
   else if ACount > 1 then
-    Result := Format('Zeile %d traegt %s - mehrdeutig',
+    Result := _('line %d carries %s - ambiguous',
       [ALine, Format(AManyFmt, [ACount, AArg])]);
 end;
 

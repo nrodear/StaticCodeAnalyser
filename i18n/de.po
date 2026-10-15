@@ -2515,3 +2515,17 @@ msgstr "kein Kopf %s"
 
 msgid "%d headers %s"
 msgstr "%d Köpfe %s"
+
+# reDelphix G5 (uRdxRoutineFixes, uRdxBlocks, uRdxCodeMap)
+
+msgid "noinspection marker in the range - it suppresses other findings"
+msgstr "noinspection-Marker im Bereich - er unterdrückt andere Funde"
+
+msgid "%s in the range - an intent comment stays"
+msgstr "%s im Bereich - ein Absichtskommentar bleibt stehen"
+
+msgid "%s on the reported line"
+msgstr "%s auf der gemeldeten Zeile"
+
+msgid "line %d carries %s - ambiguous"
+msgstr "Zeile %d trägt %s - mehrdeutig"
