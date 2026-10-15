@@ -2631,3 +2631,84 @@ msgstr "Compiler-Direktive im Bereich - begin oder end stünde auf der anderen S
 
 msgid "the else belongs to a case or except - a statement list follows it"
 msgstr "das else gehört zu einem case bzw. except - dahinter steht eine Anweisungsliste"
+
+msgid "doubled apostrophes"
+msgstr "verdoppelte Apostrophe"
+
+msgid "literal with an apostrophe"
+msgstr "Literal mit Apostroph"
+
+msgid "call with several arguments - no template"
+msgstr "Aufruf mit mehreren Argumenten - keine Vorlage"
+
+msgid "only constants - no injection risk"
+msgstr "nur Konstanten - kein Injection-Risiko"
+
+msgid "no SQL text in the chain - the statement is built elsewhere (Format, function, editor content), no template"
+msgstr "kein SQL-Text in der Kette - die Anweisung entsteht anderswo (Format, Funktion, Editor-Inhalt), keine Vorlage"
+
+msgid "DDL/DCL (%s ...): %s"
+msgstr "DDL/DCL (%s ...): %s"
+
+msgid "table/column names and DDL cannot be parameterized - check names/whitelist"
+msgstr "Tabellen-/Spaltennamen und DDL lassen sich nicht parametrisieren - Namen prüfen/Whitelist"
+
+msgid "procedural block (%s ...) - parameters of a statement do not apply inside it; %s"
+msgstr "prozeduraler Block (%s ...) - Parameter einer Anweisung gelten darin nicht; %s"
+
+msgid "operand '%s' is already escaped for SQL text (%s) - a parameter needs the raw value; remove the escaping, %s"
+msgstr "Operand '%s' ist schon für SQL-Text maskiert (%s) - ein Parameter braucht den Rohwert; Maskierung entfernen, %s"
+
+msgid "operand '%s' is at the start of the SQL text - no value. %s"
+msgstr "Operand '%s' steht am Anfang des SQL-Texts - kein Wert. %s"
+
+msgid "operand '%s' directly follows '%s' - it is not visible whether a value belongs there"
+msgstr "Operand '%s' folgt direkt auf '%s' - ob dort ein Wert steht, ist nicht sichtbar"
+
+msgid "operand '%s' is after '%s' - SQL expects no value there. %s"
+msgstr "Operand '%s' steht hinter '%s' - dort erwartet SQL keinen Wert. %s"
+
+msgid "statement type unknown ('%s') - it is not visible whether '%s' is a value"
+msgstr "Anweisungsart unbekannt ('%s') - ob '%s' ein Wert ist, ist nicht sichtbar"
+
+msgid "operand '%s' is in an SQL string that a constant or an earlier line of the chain opens or closes - the template would have to cut it; %s"
+msgstr "Operand '%s' steht in einem SQL-String, den eine Konstante oder eine frühere Zeile der Kette öffnet bzw. schließt - die Vorlage müsste sie zerschneiden; %s"
+
+msgid "operand '%s' is part of an identifier. %s"
+msgstr "Operand '%s' ist Teil eines Bezeichners. %s"
+
+msgid "operand '%s' after %s is text - MySQL inserts it as a string ('10' instead of 10, syntax error); only IntToStr(x) binds a number"
+msgstr "Operand '%s' hinter %s ist ein Text - MySQL setzt ihn als String ein ('10' statt 10, Syntaxfehler); nur IntToStr(x) bindet eine Zahl"
+
+msgid "operand '%s' is the whole %s list - a parameter is ONE value, not a list"
+msgstr "Operand '%s' ist die ganze %s-Liste - ein Parameter ist EIN Wert, keine Liste"
+
+msgid "operand '%s' is in a join condition (ON) - a column is usually meant there. %s"
+msgstr "Operand '%s' steht in einer Join-Bedingung (ON) - dort ist meist eine Spalte gemeint. %s"
+
+msgid "operand '%s' is in a quoted name. %s"
+msgstr "Operand '%s' steht in einem gequoteten Namen. %s"
+
+msgid "operand '%s' is in an SQL comment - no template"
+msgstr "Operand '%s' steht in einem SQL-Kommentar - keine Vorlage"
+
+msgid "SQL string around '%s' does not close - no template"
+msgstr "SQL-String um '%s' schließt nicht - keine Vorlage"
+
+msgid "// bind parameters: "
+msgstr "// Parameter binden: "
+
+msgid "%s() binds no parameters (no FireDAC connection proven) - use a query object with ParamByName"
+msgstr "%s() bindet keine Parameter (keine FireDAC-Verbindung nachgewiesen) - Query-Objekt mit ParamByName verwenden"
+
+msgid "the SQL text already carries the placeholder :%s - the order of the values for ExecSQL is unclear"
+msgstr "der SQL-Text trägt schon den Platzhalter :%s - die Reihenfolge der Werte für ExecSQL ist unklar"
+
+msgid "the SQL text carries a positional placeholder '?' - named parameters do not mix with it; %s"
+msgstr "der SQL-Text trägt einen positionalen Platzhalter '?' - benannte Parameter mischen sich damit nicht; %s"
+
+msgid "%d parameter(s), %d constant(s) read as well, nothing is written"
+msgstr "%d Parameter, %d Konstante(n) mitgelesen, nichts wird geschrieben"
+
+msgid "%d parameter(s), nothing is written"
+msgstr "%d Parameter, nichts wird geschrieben"

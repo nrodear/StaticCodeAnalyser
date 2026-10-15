@@ -206,7 +206,9 @@ begin
   SetConst(R, 2, sckLiteral, 'entgen_test_softdel');
   R.Binding := sbFireDacExecSql;
   AssertRefused(R, 'DDL/DCL (CREATE ...)');
-  AssertRefused(R, 'Namen pruefen/Whitelist');
+  // Umlautfreies Teilstueck von R_NAMES: de.po traegt 'Namen pruefen' mit
+  // echtem Umlaut (Charge G8, Entscheid E29) - Pascal bleibt ASCII.
+  AssertRefused(R, 'nicht parametrisieren');
   // Ohne Nachweise ebenso - der Inhalt entscheidet vor dem Ziel.
   AssertRefused(CallReq(R.Parts), 'DDL/DCL (CREATE ...)');
   // ALTER/DROP/GRANT ebenso.
@@ -225,7 +227,8 @@ begin
   // Nur der Wert ist Parameter - eine Tabelle davor sperrt die Vorlage
   // ganz (eine halbe Vorlage liesse die Injection stehen).
   AssertRefused(Req([Target('Q.SQL.Text'), Lit('''SELECT * FROM '''),
-    Op('Tbl'), Lit(''' WHERE id = '''), Op('Id')]), 'Namen pruefen/Whitelist');
+    Op('Tbl'), Lit(''' WHERE id = '''), Op('Id')]),
+    'nicht parametrisieren');   // umlautfrei wie oben (R_NAMES)
 end;
 
 procedure TTestRdxSqlTemplate.OrderByAndSelectList_Refused;

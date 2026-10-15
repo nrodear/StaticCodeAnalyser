@@ -114,7 +114,8 @@ unit uRdxSqlTemplate;
 //    Variant) - die Werte in der Reihenfolge der Parameter; traegt der
 //    Text schon einen Platzhalter, ist die Reihenfolge unklar (abgelehnt).
 //    Ein String-Puffer ('S := ..'): Kommentarzeilen '// Parameter binden:
-//    ParamByName(..).Value := ..;' - wer S ausfuehrt, bindet. Jeder andere
+//    ParamByName(..).Value := ..;' (BIND_COMMENT in der Sprache der
+//    Oberflaeche) - wer S ausfuehrt, bindet. Jeder andere
 //    Aufruf (Connection.Query(..), AddQuery(..), ExecSQL ohne Beweis)
 //    fuehrt den Text sofort aus und bindet nichts: abgelehnt, die
 //    Vorlage liefe mit ungebundenen Parametern in einen Laufzeitfehler.
@@ -203,8 +204,9 @@ type
 // Rezept 5.2 (Kopf der Unit). False mit Grund in AResult.Reason.
 function BuildSqlTemplate(const AReq: TRdxSqlRequest;
   out AResult: TRdxSqlTemplate): Boolean;
-// Hinweis fuer das Menue: 'n Parameter[, k Konstante(n) mitgelesen],
-// nichts wird geschrieben'.
+// Hinweis fuer das Menue in der Sprache der Oberflaeche (uRdxText._),
+// deutsch 'n Parameter[, k Konstante(n) mitgelesen], nichts wird
+// geschrieben'.
 function SqlHintOf(const AResult: TRdxSqlTemplate): string;
 // Setzt AReq.Consts (je Operand SqlConstOf an seiner Zeile, nicht im
 // with-Block; Routinen- und Typgrenzen einmal fuer alle), AReq.Binding
@@ -255,55 +257,61 @@ uses
   System.SysUtils,
   System.StrUtils,    // PosEx
   uRefactorInfo,      // ROLE_TARGET, ROLE_LITERAL, ROLE_OPERAND
-  uRdxBlocks;         // ReadRoutine (lokale Konstanten), HeritageOf,
+  uRdxBlocks,         // ReadRoutine (lokale Konstanten), HeritageOf,
                       // TypeHasBody, CLASS_MODIFIERS
+  uRdxText;           // _() und die gemeinsamen Texte (Entscheid E29)
 
 const
-  // Gruende - deutsch ohne Umlaute wie in den Nachbar-Units (Statustext).
-  R_NAMES = 'Tabellen-/Spaltennamen und DDL lassen sich nicht '
-    + 'parametrisieren - Namen pruefen/Whitelist';
-  R_OPERAND     = 'Operand ''%s'' ';
-  R_DDL         = 'DDL/DCL (%s ...): ' + R_NAMES;
-  R_BLOCK       = 'prozeduraler Block (%s ...) - Parameter einer Anweisung '
-    + 'gelten darin nicht; von Hand';
-  R_JOIN_ON     = R_OPERAND + 'steht in einer Join-Bedingung (ON) - dort '
-    + 'ist meist eine Spalte gemeint. ' + R_NAMES;
-  R_LIMIT_TEXT  = R_OPERAND + 'hinter %s ist ein Text - MySQL setzt ihn als '
-    + 'String ein (''10'' statt 10, Syntaxfehler); nur IntToStr(x) bindet eine '
-    + 'Zahl';
-  R_CUT         = R_OPERAND + 'steht in einem SQL-String, den eine Konstante '
-    + 'oder eine fruehere Zeile der Kette oeffnet bzw. schliesst - die '
-    + 'Vorlage muesste sie zerschneiden; von Hand';
-  R_QMARK       = 'der SQL-Text traegt einen positionalen Platzhalter ''?'' - '
-    + 'benannte Parameter mischen sich damit nicht; von Hand';
-  R_NOT_VALUE   = R_OPERAND + 'steht hinter ''%s'' - dort erwartet SQL '
-    + 'keinen Wert. ' + R_NAMES;
-  R_AT_START    = R_OPERAND + 'steht am Anfang des SQL-Texts - kein Wert. '
-    + R_NAMES;
-  R_GLUED       = R_OPERAND + 'ist Teil eines Bezeichners. ' + R_NAMES;
-  R_QUOTED_NAME = R_OPERAND + 'steht in einem gequoteten Namen. ' + R_NAMES;
-  R_IN_COMMENT  = R_OPERAND + 'steht in einem SQL-Kommentar - keine Vorlage';
-  R_WHOLE_LIST  = R_OPERAND + 'ist die ganze %s-Liste - ein Parameter ist '
-    + 'EIN Wert, keine Liste';
-  R_HEAD        = 'Anweisungsart unbekannt (''%s'') - ob ''%s'' ein Wert '
-    + 'ist, ist nicht sichtbar';
-  R_AFTER_EXPR  = R_OPERAND + 'folgt direkt auf ''%s'' - ob dort ein Wert '
-    + 'steht, ist nicht sichtbar';
-  R_NO_SQL_TEXT = 'kein SQL-Text in der Kette - die Anweisung entsteht '
-    + 'anderswo (Format, Funktion, Editor-Inhalt), keine Vorlage';
-  R_ONLY_CONST  = 'nur Konstanten - kein Injection-Risiko';
-  R_OPEN_STRING = 'SQL-String um ''%s'' schliesst nicht - keine Vorlage';
-  R_NO_CHANNEL  = '%s() bindet keine Parameter (keine FireDAC-Verbindung '
-    + 'nachgewiesen) - Query-Objekt mit ParamByName verwenden';
-  R_PLACEHOLDER = 'der SQL-Text traegt schon den Platzhalter :%s - die '
-    + 'Reihenfolge der Werte fuer ExecSQL ist unklar';
-  R_ARGUMENT    = 'Aufruf mit mehreren Argumenten - keine Vorlage';
-  R_NO_OPERAND  = 'kein Operand in der Kette';
-  R_LITERAL     = 'Literal nicht lesbar: ';
+  // Gruende (Entscheid E29): englische msgids, je ein GANZER Satz als
+  // reine Literal-Kette - tools/i18n_extract.py loest _(KONSTANTE) nur fuer
+  // solche Konstanten auf (bis Charge G8 waren R_DDL, R_JOIN_ON, R_CUT,
+  // R_ESCAPED ... aus R_OPERAND und R_NAMES zusammengesetzt und fehlten so
+  // in template.pot). Uebersetzt wird an der Verwendung: _(R_X, [..]); der
+  // gemeinsame Schluss R_NAMES kommt als SCHON UEBERSETZTES %s dazu
+  // (_(R_X, [Op, _(R_NAMES)])), 'von Hand' als MsgByHand (uRdxText) - der
+  // Trenner davor ('; ', ', ', '. ') steht im Satz. de/fr in i18n/*.po
+  // (Block G8), deutsch der bisherige Wortlaut.
+  R_NAMES = 'table/column names and DDL cannot be parameterized - check '
+    + 'names/whitelist';
+  R_DDL         = 'DDL/DCL (%s ...): %s';
+  R_BLOCK       = 'procedural block (%s ...) - parameters of a statement do '
+    + 'not apply inside it; %s';
+  R_JOIN_ON     = 'operand ''%s'' is in a join condition (ON) - a column is '
+    + 'usually meant there. %s';
+  R_LIMIT_TEXT  = 'operand ''%s'' after %s is text - MySQL inserts it as a '
+    + 'string (''10'' instead of 10, syntax error); only IntToStr(x) binds a '
+    + 'number';
+  R_CUT         = 'operand ''%s'' is in an SQL string that a constant or an '
+    + 'earlier line of the chain opens or closes - the template would have to '
+    + 'cut it; %s';
+  R_QMARK       = 'the SQL text carries a positional placeholder ''?'' - '
+    + 'named parameters do not mix with it; %s';
+  R_NOT_VALUE   = 'operand ''%s'' is after ''%s'' - SQL expects no value '
+    + 'there. %s';
+  R_AT_START    = 'operand ''%s'' is at the start of the SQL text - no '
+    + 'value. %s';
+  R_GLUED       = 'operand ''%s'' is part of an identifier. %s';
+  R_QUOTED_NAME = 'operand ''%s'' is in a quoted name. %s';
+  R_IN_COMMENT  = 'operand ''%s'' is in an SQL comment - no template';
+  R_WHOLE_LIST  = 'operand ''%s'' is the whole %s list - a parameter is ONE '
+    + 'value, not a list';
+  R_HEAD        = 'statement type unknown (''%s'') - it is not visible '
+    + 'whether ''%s'' is a value';
+  R_AFTER_EXPR  = 'operand ''%s'' directly follows ''%s'' - it is not '
+    + 'visible whether a value belongs there';
+  R_NO_SQL_TEXT = 'no SQL text in the chain - the statement is built '
+    + 'elsewhere (Format, function, editor content), no template';
+  R_ONLY_CONST  = 'only constants - no injection risk';
+  R_OPEN_STRING = 'SQL string around ''%s'' does not close - no template';
+  R_NO_CHANNEL  = '%s() binds no parameters (no FireDAC connection proven) '
+    + '- use a query object with ParamByName';
+  R_PLACEHOLDER = 'the SQL text already carries the placeholder :%s - the '
+    + 'order of the values for ExecSQL is unclear';
+  R_ARGUMENT    = 'call with several arguments - no template';
   // Review FB, R2-06: ein schon maskierter Wert ('O''Brien' bzw. mit
   // Quotes) truege die Maskierung in die Daten des Parameters.
-  R_ESCAPED     = R_OPERAND + 'ist schon fuer SQL-Text maskiert (%s) - ein '
-    + 'Parameter braucht den Rohwert; Maskierung entfernen, von Hand';
+  R_ESCAPED     = 'operand ''%s'' is already escaped for SQL text (%s) - a '
+    + 'parameter needs the raw value; remove the escaping, %s';
 
   // Maskierungs-Formen (R2-06): ersetzen ALLE Vorkommen (StrUtils) - mit
   // '''' -> '''''' verdoppeln sie die Apostrophe.
@@ -315,9 +323,10 @@ const
   ARGS_HELPER_REPLACE = 2;   // x.Replace('''', '''''')
   ARGS_HELPER_REPLACE_FLAGS = 3;   // x.Replace('''', '''''', [rfReplaceAll])
   // Was R_ESCAPED in der Klammer nennt, wenn kein maskierender Aufruf es
-  // ist (EscapeMarkOf; Nachpruefung R2-06).
-  MARK_DOUBLED       = 'verdoppelte Apostrophe';
-  MARK_QUOTE_LITERAL = 'Literal mit Apostroph';
+  // ist (EscapeMarkOf; Nachpruefung R2-06) - msgids, EscapeMarkOf gibt sie
+  // uebersetzt zurueck (der Name eines Aufrufs bleibt Code).
+  MARK_DOUBLED       = 'doubled apostrophes';
+  MARK_QUOTE_LITERAL = 'literal with an apostrophe';
   // Zeichen eines #-Codes hinter dem '#' ('#39', '#$27').
   CHAR_CODE_CHARS = ['$', '0'..'9', 'A'..'F', 'a'..'f'];
   // Davor darf QuotedStr/AnsiQuotedStr stehen (wie CallArg).
@@ -386,7 +395,10 @@ const
     'validate', 'value', 'values', 'varchar', 'varchar2', 'view', 'when',
     'whenever', 'where', 'with', 'year', 'zone');
   // Kommentarzeile vor ParamByName, wenn das Ziel ein String-Puffer ist.
-  BIND_COMMENT = '// Parameter binden: ';
+  // Steht im erzeugten Code des Nutzers und folgt deshalb der Sprache der
+  // Oberflaeche wie ein Grund (msgid; _(BIND_COMMENT) in ComposeTemplate,
+  // Entscheid E29).
+  BIND_COMMENT = '// bind parameters: ';
   // Vor dem Token eines stehenden Ausdrucks (TakeKept): kein SQL-Wort
   // trifft es, der Grund zeigt den Ausdruck (R_AFTER_EXPR).
   KEPT_MARK = #1;
@@ -1006,7 +1018,8 @@ end;
 // Was AText fuer SQL-Text maskiert: der Name eines maskierenden Aufrufs
 // (EscapeCallIn), MARK_DOUBLED fuer die Verdoppel-Formen
 // (DoubledQuotesInner), MARK_QUOTE_LITERAL fuer jedes andere Literal mit
-// Apostroph (HasQuoteLiteral); '' ohne. Der Grund nennt es (R_ESCAPED).
+// Apostroph (HasQuoteLiteral) - beide uebersetzt; '' ohne. Der Grund nennt
+// es (R_ESCAPED); die Aufrufer fragen nur auf '' (nie auf den Text).
 function EscapeMarkOf(const AText: string): string;
 var
   Inner : string;
@@ -1014,9 +1027,9 @@ begin
   Result := EscapeCallIn(AText);
   if Result <> '' then Exit;
   if DoubledQuotesInner(AText, Inner) then
-    Result := MARK_DOUBLED
+    Result := _(MARK_DOUBLED)
   else if HasQuoteLiteral(AText) then
-    Result := MARK_QUOTE_LITERAL;
+    Result := _(MARK_QUOTE_LITERAL);
 end;
 
 // Ein Operand IN einem SQL-String: sein Wert im Parameter (AValue) und ''
@@ -1291,13 +1304,13 @@ begin
   if P.Role = ROLE_LITERAL then
   begin
     if not TRdxRecipes.DecodeLiteral(P.Text, Value) then
-      Exit(R_LITERAL + TRdxRecipes.CollapseWhitespace(P.Text));
+      Exit(MsgLiteralUnreadable(TRdxRecipes.CollapseWhitespace(P.Text)));
     AddSeg(ASegs, skText, Value, False);
   end
   else if P.Role = ROLE_OPERAND then
     TakeOperandPart(AReq, AIndex, ASegs, ACount)
   else
-    Exit(R_ARGUMENT);
+    Exit(_(R_ARGUMENT));
   Inc(ACount.Terms);
 end;
 
@@ -1343,11 +1356,11 @@ begin
     if Result <> '' then Exit;
   end;
   if (ACount.All = 0) or ((ACount.Ops = 0) and (ACount.Consts = 0)) then
-    Result := R_NO_OPERAND
+    Result := MsgNoOperandInChain
   else if ACount.Ops = 0 then
-    Result := R_ONLY_CONST
+    Result := _(R_ONLY_CONST)
   else if Trim(PlainSqlOf(ASegs)) = '' then
-    Result := R_NO_SQL_TEXT;   // FormatUtf8(..), Memo.Text + #13#10
+    Result := _(R_NO_SQL_TEXT);   // FormatUtf8(..), Memo.Text + #13#10
 end;
 
 { ---- Ausgabe ---- }
@@ -1465,9 +1478,9 @@ begin
   Result := '';
   if S.Lock = '' then Exit;
   if InList(LowerCase(S.Lock), DDL_HEADS) then
-    Result := Format(R_DDL, [S.Lock])
+    Result := _(R_DDL, [S.Lock, _(R_NAMES)])
   else
-    Result := Format(R_BLOCK, [S.Lock]);
+    Result := _(R_BLOCK, [S.Lock, MsgByHand]);
 end;
 
 function IsValueContext(const ATok: TSqlTok3; const AOpener: string): Boolean;
@@ -1526,7 +1539,7 @@ begin
     else
       Mark := EscapeMarkOf(S.Segs[k].Text);
     if Mark <> '' then
-      Exit(Format(R_ESCAPED, [Shown(S.Segs[k].Text), Mark]));
+      Exit(_(R_ESCAPED, [Shown(S.Segs[k].Text), Mark, MsgByHand]));
   end;
 end;
 
@@ -1540,17 +1553,17 @@ var
 begin
   Result := '';
   if ATok[0] = '' then
-    Exit(Format(R_AT_START, [Shown(AOperand)]));
+    Exit(_(R_AT_START, [Shown(AOperand), _(R_NAMES)]));
   if Copy(ATok[0], 1, 1) = KEPT_MARK then
-    Exit(Format(R_AFTER_EXPR, [Shown(AOperand),
+    Exit(_(R_AFTER_EXPR, [Shown(AOperand),
       Shown(Copy(ATok[0], 2, MaxInt))]));
   if not IsValueContext(ATok, AOpener) then
-    Exit(Format(R_NOT_VALUE, [Shown(AOperand), ATok[0]]));
+    Exit(_(R_NOT_VALUE, [Shown(AOperand), ATok[0], _(R_NAMES)]));
   if InList(AHead, DML_HEADS) or InList(AHead, CLAUSE_HEADS) then Exit;
   Head := AHead;
   if Head = '' then
     Head := HEAD_UNKNOWN;
-  Result := Format(R_HEAD, [Head, Shown(AOperand)]);
+  Result := _(R_HEAD, [Head, Shown(AOperand)]);
 end;
 
 { ---- Parameter ---- }
@@ -1715,15 +1728,15 @@ begin
     Result := ValueReason(S.StrTok, S.StrOpener, S.StrHead, S.StrFirst);
   if Result <> '' then Exit;
   if S.Mute or S.StrMuted then
-    Exit(Format(R_CUT, [Shown(S.StrFirst)]));
+    Exit(_(R_CUT, [Shown(S.StrFirst), MsgByHand]));
   if not FollowsValue(AFollow) then
-    Exit(Format(R_GLUED, [Shown(S.StrFirst)]));
+    Exit(_(R_GLUED, [Shown(S.StrFirst), _(R_NAMES)]));
   if InList(S.StrTok[0], NUMBER_AFTER) then
-    Exit(Format(R_LIMIT_TEXT, [Shown(S.StrFirst), UpperCase(S.StrTok[0])]));
+    Exit(_(R_LIMIT_TEXT, [Shown(S.StrFirst), UpperCase(S.StrTok[0])]));
   // ''' + X + ''' allein in IN (..)/VALUES (..): X kann '1'',''2' sein
   // wie der nackte Operand (Minor 1).
   if (S.StrTok[0] = '(') and (ASolid = ')') and not SoleIntToStr(S.StrParts) then
-    Result := Format(R_WHOLE_LIST, [Shown(S.StrFirst), UpperCase(S.StrOpener)]);
+    Result := _(R_WHOLE_LIST, [Shown(S.StrFirst), UpperCase(S.StrOpener)]);
 end;
 
 // Der String schliesst (AFollow, ASolid: was dahinter steht, StringReason).
@@ -2000,18 +2013,18 @@ begin
   Result := LockReason(S);
   if Result <> '' then Exit;
   if GluesAfter(S.LastCh) then
-    Exit(Format(R_GLUED, [Shown(Op)]));
+    Exit(_(R_GLUED, [Shown(Op), _(R_NAMES)]));
   Result := ValueReason(S.Tok, TopOpener(S), S.Head, Op);
   if Result <> '' then Exit;
   if not FollowsValue(CharsFrom(S, ALast + 1, 2)) then
-    Exit(Format(R_GLUED, [Shown(Op)]));
+    Exit(_(R_GLUED, [Shown(Op), _(R_NAMES)]));
   if InList(S.Tok[0], NUMBER_AFTER)
      and not ((AFirst = ALast) and CallArg(Op, 'IntToStr', Inner)) then
-    Exit(Format(R_LIMIT_TEXT, [Shown(Op), UpperCase(S.Tok[0])]));
+    Exit(_(R_LIMIT_TEXT, [Shown(Op), UpperCase(S.Tok[0])]));
   if (S.Clause = CLAUSE_ON) and not Single then
-    Exit(Format(R_JOIN_ON, [Shown(Op)]));
+    Exit(_(R_JOIN_ON, [Shown(Op), _(R_NAMES)]));
   if (S.Tok[0] = '(') and (NextNonBlank(S, ALast + 1) = ')') and not Single then
-    Exit(Format(R_WHOLE_LIST, [Shown(Op), UpperCase(TopOpener(S))]));
+    Exit(_(R_WHOLE_LIST, [Shown(Op), UpperCase(TopOpener(S))]));
   Result := EscapedRunReason(S, AFirst, ALast);
 end;
 
@@ -2041,7 +2054,7 @@ begin
   begin
     Mark := InStringEscape(ASeg.Text, Value);
     if Mark <> '' then
-      S.Reason := Format(R_ESCAPED, [Shown(ASeg.Text), Mark]);
+      S.Reason := _(R_ESCAPED, [Shown(ASeg.Text), Mark, MsgByHand]);
     if S.StrFirst = '' then
       S.StrFirst := Value;
   end;
@@ -2102,9 +2115,10 @@ begin
   case S.Mode of
     lmCode   : Result := TakeBareRun(S, ASeg);
     lmString : TakeInString(S, S.Segs[ASeg]);
-    lmName   : S.Reason := Format(R_QUOTED_NAME, [Shown(S.Segs[ASeg].Text)]);
+    lmName   : S.Reason := _(R_QUOTED_NAME, [Shown(S.Segs[ASeg].Text),
+                 _(R_NAMES)]);
   else
-    S.Reason := Format(R_IN_COMMENT, [Shown(S.Segs[ASeg].Text)]);
+    S.Reason := _(R_IN_COMMENT, [Shown(S.Segs[ASeg].Text)]);
   end;
 end;
 
@@ -2126,7 +2140,7 @@ begin
     Inc(k);
   end;
   if (S.Reason = '') and (S.Mode = lmString) and (S.StrFirst <> '') then
-    S.Reason := Format(R_OPEN_STRING, [Shown(S.StrFirst)]);
+    S.Reason := _(R_OPEN_STRING, [Shown(S.StrFirst)]);
 end;
 
 function SqlPlaceholders(const ASql: string): TArray<string>;
@@ -2225,11 +2239,11 @@ begin
       AReq.Indent, QueryPrefixOf(AReq))
   else if not AReq.IsCall then
     AText := AReq.Indent + StatementOf(AReq, Sql) + BindLines(S.Params,
-      AReq.Indent, BIND_COMMENT)
+      AReq.Indent, _(BIND_COMMENT))
   else if AReq.Binding <> sbFireDacExecSql then
-    Result := Format(R_NO_CHANNEL, [Target])
+    Result := _(R_NO_CHANNEL, [Target])
   else if Length(AExisting) > 0 then
-    Result := Format(R_PLACEHOLDER, [AExisting[0]])
+    Result := _(R_PLACEHOLDER, [AExisting[0]])
   else
     AText := AReq.Indent + Target + '(' + Sql + ', [' + ValuesOf(S.Params)
       + ']);';
@@ -2271,7 +2285,7 @@ begin
   ScanSegs(S);
   AResult.Reason := S.Reason;
   if (AResult.Reason = '') and (S.QMarks > 0) then
-    AResult.Reason := R_QMARK;
+    AResult.Reason := _(R_QMARK, [MsgByHand]);
   if AResult.Reason = '' then
     AResult.Reason := ComposeTemplate(AReq, S, Existing, AResult.Text);
   if AResult.Reason <> '' then Exit;
@@ -2280,13 +2294,15 @@ begin
   Result := True;
 end;
 
+// Zwei ganze Saetze statt angehaengter Stuecke (Entscheid E29): de/fr
+// stellen die Woerter selbst.
 function SqlHintOf(const AResult: TRdxSqlTemplate): string;
 begin
-  Result := Format('%d Parameter', [AResult.Params]);
   if AResult.ConstsRead > 0 then
-    Result := Result + Format(', %d Konstante(n) mitgelesen',
-      [AResult.ConstsRead]);
-  Result := Result + ', nichts wird geschrieben';
+    Result := _('%d parameter(s), %d constant(s) read as well, nothing is '
+      + 'written', [AResult.Params, AResult.ConstsRead])
+  else
+    Result := _('%d parameter(s), nothing is written', [AResult.Params]);
 end;
 
 { ---- Deklarationen am Quelltext ---- }

@@ -45,7 +45,7 @@ msgstr ""
 msgid " · "
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:806
+#: reDelphix/source/uRdxStructFixes.pas:807
 msgid "\"%s\" after a \";\" before the else - header of an anonymous method? It is unclear what the else belongs to"
 msgstr ""
 
@@ -53,7 +53,7 @@ msgstr ""
 msgid "\"%s\" already exists. Overwrite it?"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:986
+#: reDelphix/source/uRdxStructFixes.pas:987
 msgid "\"%s\" in the statement - structure, conditional expression, anonymous method or inline declaration"
 msgstr ""
 
@@ -76,7 +76,7 @@ msgstr ""
 msgid "%d / %d findings"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:425
+#: reDelphix/source/uRdxStructFixes.pas:426
 msgid "%d case statements"
 msgstr ""
 
@@ -118,11 +118,19 @@ msgstr ""
 msgid "%d of %d rules shown, %d selected"
 msgstr ""
 
+#: reDelphix/source/uRdxSqlTemplate.pas:2302
+msgid "%d parameter(s), %d constant(s) read as well, nothing is written"
+msgstr ""
+
+#: reDelphix/source/uRdxSqlTemplate.pas:2305
+msgid "%d parameter(s), nothing is written"
+msgstr ""
+
 #: SCA.SharedUI/sources/uProfileViewer.pas:284
 msgid "%d rules, %d selected"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:677
+#: reDelphix/source/uRdxStructFixes.pas:678
 msgid "%d times \"end else\""
 msgstr ""
 
@@ -156,6 +164,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Common/uRuleCatalog.pas:1575
 msgid "%s is not a valid JSON object."
+msgstr ""
+
+#: reDelphix/source/uRdxSqlTemplate.pas:2244
+msgid "%s() binds no parameters (no FireDAC connection proven) - use a query object with ParamByName"
 msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:810
@@ -192,6 +204,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2164
 msgid "// NOSONAR suppression marker found - audit it"
+msgstr ""
+
+#: reDelphix/source/uRdxSqlTemplate.pas:2242
+msgid "// bind parameters: "
 msgstr ""
 
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:390
@@ -840,6 +856,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:1475
 msgid "DB-control class does not fit the field data type"
+msgstr ""
+
+#: reDelphix/source/uRdxSqlTemplate.pas:1481
+msgid "DDL/DCL (%s ...): %s"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uDfmTextViewer.pas:43
@@ -2173,6 +2193,10 @@ msgstr ""
 msgid "SQL query is built from a UI input field - parameterize instead of concatenating"
 msgstr ""
 
+#: reDelphix/source/uRdxSqlTemplate.pas:2143
+msgid "SQL string around '%s' does not close - no template"
+msgstr ""
+
 #: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:603
 msgid "SVN call failed (exit code = %d)"
 msgstr ""
@@ -2759,6 +2783,10 @@ msgstr ""
 msgid "by hand"
 msgstr ""
 
+#: reDelphix/source/uRdxSqlTemplate.pas:1313
+msgid "call with several arguments - no template"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2696
 msgid "case statement has many branches - consider dispatch table"
 msgstr ""
@@ -2771,19 +2799,19 @@ msgstr ""
 msgid "class(TObject) - TObject is the default base, drop it"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:301
+#: reDelphix/source/uRdxStructFixes.pas:302
 msgid "comma before or semicolon after the last entry not found"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:358
+#: reDelphix/source/uRdxStructFixes.pas:359
 msgid "comment or directive in the range to be deleted"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:615
+#: reDelphix/source/uRdxStructFixes.pas:616
 msgid "compiler directive in the case - a branch could shift the end count"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1226
+#: reDelphix/source/uRdxStructFixes.pas:1227
 msgid "compiler directive in the range - begin or end would be on the other side"
 msgstr ""
 
@@ -2801,19 +2829,23 @@ msgstr ""
 msgid "delete by hand"
 msgstr ""
 
+#: reDelphix/source/uRdxSqlTemplate.pas:1030
+msgid "doubled apostrophes"
+msgstr ""
+
 #: reDelphix/source/uRdxProvider.pas:863
 msgid "editor buffer empty or not readable"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:446
+#: reDelphix/source/uRdxStructFixes.pas:447
 msgid "else in the case, owner unclear: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1063
+#: reDelphix/source/uRdxStructFixes.pas:1064
 msgid "empty statement after the %s"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1059
+#: reDelphix/source/uRdxStructFixes.pas:1060
 msgid "end of file after the %s"
 msgstr ""
 
@@ -2875,7 +2907,7 @@ msgstr ""
 msgid "in"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1029
+#: reDelphix/source/uRdxStructFixes.pas:1030
 msgid "inline declaration (%s) in the else branch - begin..end would narrow its scope"
 msgstr ""
 
@@ -2887,31 +2919,39 @@ msgstr ""
 msgid "literal not readable: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:294
+#: reDelphix/source/uRdxSqlTemplate.pas:1032
+msgid "literal with an apostrophe"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:295
 msgid "no \",\" after the entry"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:288
+#: reDelphix/source/uRdxStructFixes.pas:289
 msgid "no \";\" after the only entry"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:676
+#: reDelphix/source/uRdxStructFixes.pas:677
 msgid "no \"end else\""
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:592
+#: reDelphix/source/uRdxSqlTemplate.pas:1363
+msgid "no SQL text in the chain - the statement is built elsewhere (Format, function, editor content), no template"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:593
 msgid "no block found around the case (fragment?) - it is unclear whether it is a statement"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:424
+#: reDelphix/source/uRdxStructFixes.pas:425
 msgid "no case"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:469
+#: reDelphix/source/uRdxStructFixes.pas:470
 msgid "no end found for the case"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1043
+#: reDelphix/source/uRdxStructFixes.pas:1044
 msgid "no end found for the else branch"
 msgstr ""
 
@@ -2927,8 +2967,8 @@ msgstr ""
 msgid "no header %s"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:804
-#: reDelphix/source/uRdxStructFixes.pas:855
+#: reDelphix/source/uRdxStructFixes.pas:805
+#: reDelphix/source/uRdxStructFixes.pas:856
 msgid "no if, case or except found for the else"
 msgstr ""
 
@@ -2936,17 +2976,17 @@ msgstr ""
 msgid "no operand in the chain"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:743
+#: reDelphix/source/uRdxStructFixes.pas:744
 msgid "no start of the statement found for the %s"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:382
+#: reDelphix/source/uRdxStructFixes.pas:383
 msgid "no such uses entry"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:642
-#: reDelphix/source/uRdxStructFixes.pas:648
-#: reDelphix/source/uRdxStructFixes.pas:1220
+#: reDelphix/source/uRdxStructFixes.pas:643
+#: reDelphix/source/uRdxStructFixes.pas:649
+#: reDelphix/source/uRdxStructFixes.pas:1221
 msgid "no then/else/do at the reported place"
 msgstr ""
 
@@ -2963,12 +3003,65 @@ msgstr ""
 msgid "on E: Exception catches everything - too broad"
 msgstr ""
 
+#: reDelphix/source/uRdxSqlTemplate.pas:1361
+msgid "only constants - no injection risk"
+msgstr ""
+
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2963
 msgid "only from the menu or the light bulb"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:807
 msgid "only statement after %s - an empty block would remain (SCA077)"
+msgstr ""
+
+#: reDelphix/source/uRdxSqlTemplate.pas:1735
+#: reDelphix/source/uRdxSqlTemplate.pas:2023
+msgid "operand '%s' after %s is text - MySQL inserts it as a string ('10' instead of 10, syntax error); only IntToStr(x) binds a number"
+msgstr ""
+
+#: reDelphix/source/uRdxSqlTemplate.pas:1558
+msgid "operand '%s' directly follows '%s' - it is not visible whether a value belongs there"
+msgstr ""
+
+#: reDelphix/source/uRdxSqlTemplate.pas:1561
+msgid "operand '%s' is after '%s' - SQL expects no value there. %s"
+msgstr ""
+
+#: reDelphix/source/uRdxSqlTemplate.pas:1542
+#: reDelphix/source/uRdxSqlTemplate.pas:2057
+msgid "operand '%s' is already escaped for SQL text (%s) - a parameter needs the raw value; remove the escaping, %s"
+msgstr ""
+
+#: reDelphix/source/uRdxSqlTemplate.pas:1556
+msgid "operand '%s' is at the start of the SQL text - no value. %s"
+msgstr ""
+
+#: reDelphix/source/uRdxSqlTemplate.pas:2025
+msgid "operand '%s' is in a join condition (ON) - a column is usually meant there. %s"
+msgstr ""
+
+#: reDelphix/source/uRdxSqlTemplate.pas:2118
+msgid "operand '%s' is in a quoted name. %s"
+msgstr ""
+
+#: reDelphix/source/uRdxSqlTemplate.pas:2121
+msgid "operand '%s' is in an SQL comment - no template"
+msgstr ""
+
+#: reDelphix/source/uRdxSqlTemplate.pas:1731
+msgid "operand '%s' is in an SQL string that a constant or an earlier line of the chain opens or closes - the template would have to cut it; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxSqlTemplate.pas:1733
+#: reDelphix/source/uRdxSqlTemplate.pas:2016
+#: reDelphix/source/uRdxSqlTemplate.pas:2020
+msgid "operand '%s' is part of an identifier. %s"
+msgstr ""
+
+#: reDelphix/source/uRdxSqlTemplate.pas:1739
+#: reDelphix/source/uRdxSqlTemplate.pas:2027
+msgid "operand '%s' is the whole %s list - a parameter is ONE value, not a list"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2562
@@ -2979,7 +3072,11 @@ msgstr ""
 msgid "own unit %s in the project"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:783
+#: reDelphix/source/uRdxSqlTemplate.pas:1483
+msgid "procedural block (%s ...) - parameters of a statement do not apply inside it; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:784
 msgid "record before the else - the end count is uncertain"
 msgstr ""
 
@@ -2987,31 +3084,54 @@ msgstr ""
 msgid "sonar.projectKey not found in "
 msgstr ""
 
+#: reDelphix/source/uRdxSqlTemplate.pas:1566
+msgid "statement type unknown ('%s') - it is not visible whether '%s' is a value"
+msgstr ""
+
 #: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:595
 msgid "svn not found. Install TortoiseSVN WITH the option \"command line client tools\" or set the path to svn.exe in analyser.ini."
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:932
+#: reDelphix/source/uRdxSqlTemplate.pas:1481
+#: reDelphix/source/uRdxSqlTemplate.pas:1556
+#: reDelphix/source/uRdxSqlTemplate.pas:1561
+#: reDelphix/source/uRdxSqlTemplate.pas:1733
+#: reDelphix/source/uRdxSqlTemplate.pas:2016
+#: reDelphix/source/uRdxSqlTemplate.pas:2020
+#: reDelphix/source/uRdxSqlTemplate.pas:2025
+#: reDelphix/source/uRdxSqlTemplate.pas:2119
+msgid "table/column names and DDL cannot be parameterized - check names/whitelist"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:933
 msgid "the %s is in an expression (conditional expression, Delphi 13) - not a branch of a statement"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:742
+#: reDelphix/source/uRdxStructFixes.pas:743
 msgid "the %s is in parentheses"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:444
+#: reDelphix/source/uRdxSqlTemplate.pas:2246
+msgid "the SQL text already carries the placeholder :%s - the order of the values for ExecSQL is unclear"
+msgstr ""
+
+#: reDelphix/source/uRdxSqlTemplate.pas:2288
+msgid "the SQL text carries a positional placeholder '?' - named parameters do not mix with it; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:445
 msgid "the case already has an else branch"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:449
+#: reDelphix/source/uRdxStructFixes.pas:450
 msgid "the case has an otherwise branch (FPC)"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:611
+#: reDelphix/source/uRdxStructFixes.pas:612
 msgid "the case has no branches"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:589
+#: reDelphix/source/uRdxStructFixes.pas:590
 msgid "the case is in the variant part of a record - not a case statement (finding moved? Analyse the file again)"
 msgstr ""
 
@@ -3020,19 +3140,19 @@ msgstr ""
 msgid "the clause would no longer be sorted (new SCA142)"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1247
+#: reDelphix/source/uRdxStructFixes.pas:1248
 msgid "the else belongs to a case or except - a statement list follows it"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:853
+#: reDelphix/source/uRdxStructFixes.pas:854
 msgid "the else is in parentheses"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:770
+#: reDelphix/source/uRdxStructFixes.pas:771
 msgid "the else matches no if"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:266
+#: reDelphix/source/uRdxStructFixes.pas:267
 msgid "the keyword uses is not on the expected line"
 msgstr ""
 
@@ -3048,19 +3168,19 @@ msgstr ""
 msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:366
+#: reDelphix/source/uRdxStructFixes.pas:367
 msgid "the range contains more than this entry - would another one be deleted with it? Analyse the file again"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1061
+#: reDelphix/source/uRdxStructFixes.pas:1062
 msgid "the statement is already in begin..end"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1068
+#: reDelphix/source/uRdxStructFixes.pas:1069
 msgid "the statement starts with a string"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:587
+#: reDelphix/source/uRdxStructFixes.pas:588
 msgid "there is a compiler directive between an open ( and the case - a branch can leave the parenthesis open, so it is unclear whether the case is a statement"
 msgstr ""
 

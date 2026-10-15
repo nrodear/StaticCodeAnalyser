@@ -1199,7 +1199,7 @@ begin
     'Obj.SQL.Text', 'assign-or-call');
   Assert.IsTrue(R.Described, R.Why);
   Assert.IsFalse(R.Built, R.Template);
-  Assert.IsTrue(Pos('Namen pruefen/Whitelist', R.Reason) > 0, R.Reason);
+  Assert.IsTrue(Pos('nicht parametrisieren', R.Reason) > 0, R.Reason); // umlautfrei (de.po, G8)
 end;
 
 procedure TTestRdxSca044.Sql_TwoCallsOnLine_Ambiguous;
@@ -1280,7 +1280,7 @@ begin
   Assert.IsTrue(R.IsCall, 'Aufruf-Knoten');
   Assert.IsFalse(R.Built, R.Template);
   Assert.IsTrue(Pos('DDL/DCL (CREATE ...)', R.Reason) > 0, R.Reason);
-  Assert.IsTrue(Pos('Namen pruefen/Whitelist', R.Reason) > 0, R.Reason);
+  Assert.IsTrue(Pos('nicht parametrisieren', R.Reason) > 0, R.Reason); // umlautfrei (de.po, G8)
 end;
 
 procedure TTestRdxSca044.Sql_FireDacExecSql_OverloadWithConstant;

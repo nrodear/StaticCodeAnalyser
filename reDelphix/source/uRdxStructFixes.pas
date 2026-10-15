@@ -175,7 +175,8 @@ const
   // als Literal in _() an ihrer einzigen Stelle. R_BRANCH ist der Satz OHNE
   // das gemeinsame Ende ' - Zeile verschoben? ...' - das haengt
   // MsgMovedSuffix an (uRdxText). Der Wortlaut von R_CASE_IN_RECORD bleibt
-  // eine eigene Variante ('(Fund verschoben? ...)' in Klammern, c_groups 3).
+  // eine eigene Variante ('(Fund verschoben? ...)' in Klammern) - die
+  // Umstellung vereinheitlicht keine Wortlaute.
   R_CASE_IN_RECORD = 'the case is in the variant part of a record - not a '
     + 'case statement (finding moved? Analyse the file again)';
   R_CASE_OPEN_PAREN = 'there is a compiler directive between an open ( and '
@@ -417,8 +418,8 @@ var
   S : TRdxLineSearch;
 begin
   // What und ManyFmt uebersetzt der Aufrufer (OneTokenReason setzt sie in
-  // seinen Satz, c_groups 2.5); ManyFmt bleibt ein Muster - _() ohne
-  // Argumente formatiert nicht.
+  // seinen Satz; README, "Texte umstellen"); ManyFmt bleibt ein Muster -
+  // _() ohne Argumente formatiert nicht.
   S := Default(TRdxLineSearch);
   S.Test    := IsCaseWord;
   S.What    := _('no case');
