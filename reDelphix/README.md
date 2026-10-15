@@ -441,10 +441,12 @@ reine Literal-Kette ist, und dynamische Argumente (`_(AWhat)`,
 sehen kann es einen deutschen Text nur aus Woertern, die es auch englisch
 gibt (`Parameter` ohne Zahl). `--report` zeigt den Stand je Unit,
 `--unit uRdxFlowFixes.pas` prueft nur diese Unit, `--selftest` faehrt 35
-Mutanten. Bewusst feste Texte (Protokoll) stehen mit Begruendung in
-`tools\rdx_i18n_gate.allow`; ein Eintrag, der nichts mehr trifft, ist
-selbst ein Fund. Stand nach der Nachpruefung C1: 738 Funde in 24 Units -
-rot, bis die Umstellung durch ist, und deshalb noch nicht in der CI.
+Faelle (Mutanten und gutartige Abwandlungen einer Probe-Unit, dazu die
+Heuristik an deutschen und englischen Proben). Bewusst feste Texte
+(Protokoll) stehen mit Begruendung in `tools\rdx_i18n_gate.allow`; ein
+Eintrag, der nichts mehr trifft, ist selbst ein Fund. Stand nach der
+Nachpruefung C1: 738 Funde in 24 Units - rot, bis die Umstellung durch
+ist, und deshalb noch nicht in der CI.
 
 ## Scope-Tabelle pflegen
 
