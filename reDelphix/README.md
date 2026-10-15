@@ -16,6 +16,11 @@ eine Datei und nie, ohne vorher jeden Bereich im Puffer mit dem Text zu
 vergleichen, auf dem die Aktion beim Menueaufbau beschrieben wurde (siehe
 "Welcher Text gilt").
 
+Alle Quick-Fixes mit Menuetext (en/de/fr), Wirkung, Sperren und einem
+Beispiel vorher/nachher: [QUICKFIXES.md](QUICKFIXES.md) - erzeugt aus dem
+Quelltext und `data\quickfixes-doc.json` von `tools\gen-quickfix-doc.py`
+(Repo-Wurzel).
+
 Konzept: `Konzept_SourceRefactor_Quellstellen_2026-10-02.md`, Abschnitt 15
 (in `reDelphix\`), Code-Aktionen (frueher "Editorhilfen"): `Konzept_Editorhilfen_2026-10-08.md`
 (Repo-Wurzel) - beide lokal, gitignored.
@@ -52,6 +57,8 @@ source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung
 source\uRdxEditor.pas             ToolsAPI: Puffer lesen, Bereich markieren, Bereiche ersetzen (ein Undo-Schritt), Projekt-Units
 source\uRdxLog.pas                Protokoll %TEMP%\reDelphix.log + DebugView
 data\unitscopes.txt               die Scope-Tabelle (erzeugt), als RCDATA eingelinkt (data\unitscopes.rc)
+data\quickfixes-doc.json          Titel, Wirkung, Sperren und Beispiele je Quick-Fix (von Hand gepflegt) - Quelle fuer QUICKFIXES.md
+QUICKFIXES.md                     alle Quick-Fixes mit Menuetext en/de/fr, Kennzeichnung, Sperren, Beispiel - ERZEUGT von tools\gen-quickfix-doc.py (Repo-Wurzel)
 tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 41 Testunits und einer Hilfs-Unit (siehe "Pruefen")
 tools\gen_unitscopes.py           erzeugt data\unitscopes.txt aus der Delphi-Installation
 tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik unter FPC 3.2.2 und fuehrt Tests aus
@@ -106,6 +113,9 @@ die Engine also vorher. DCUs landen wie bei den anderen Projekten in
      verdoppelt es fuer das Menue.
 
 ## Was die Aktionen tun
+
+Details je Hilfe (Menuetexte en/de/fr, Sperren, Beispiel vorher/nachher):
+[QUICKFIXES.md](QUICKFIXES.md).
 
 | Aktion | Regel | Verhalten |
 |---|---|---|
@@ -682,6 +692,25 @@ sonst aus `StaticCodeAnalyserForm\tests` (Core-Tests wie
 `uRdxEditor` und `uRdxProvider` sind ToolsAPI und nur im Package
 uebersetzbar; `uRdxRecipeRunner` ist der testbare Kern dazwischen (in
 reDelphix.Test, nicht im FPC-Pruefstand).
+
+**Doku der Quick-Fixes** (`QUICKFIXES.md`, Entscheid E30), ohne Delphi
+(Repo-Wurzel; auch in der CI, `.github/workflows/quickfix-doc.yml`):
+
+```
+python tools/gen-quickfix-doc.py --check
+python tools/gen-quickfix-doc.py --selftest
+```
+
+`--check` meldet KONSISTENZ (Exit 1), wenn eine Zeile in `FIX_ROWS` oder ein
+Rezept des Anbieters keinen Eintrag in `data\quickfixes-doc.json` hat (oder
+ein Eintrag keine Hilfe), eine Regel mit `editorHelp` im Katalog keine Hilfe
+hat oder ein Pflichtfeld fehlt, und DRIFT mit der ersten abweichenden
+Zeile, wenn die Datei nicht mehr byte-gleich neu erzeugt waere. Eine
+fehlende Uebersetzung ist kein Fehler: sie steht als `(fehlt)` in der
+Datei. `--selftest` belegt an Mutanten (auch am Quelltext: neue Zeile in
+`FIX_ROWS`, neues Rezept), dass das Gate rot wird. Nach einer neuen Hilfe,
+einem geaenderten Menuetext oder einer geaenderten Uebersetzung:
+`python tools/gen-quickfix-doc.py` und `QUICKFIXES.md` mit committen.
 
 ## Korpus-Probe
 
