@@ -973,6 +973,10 @@ end;
 // Review R5-03; bis Charge B2S-b hier zeilenweise ausgeschrieben, mit
 // HeadsOnLine) - die Politik dieser Frage bleibt, wie sie war: Zeilen statt
 // Token, der erste unsichere Kopf beendet die Suche, kein Abschnittswort.
+// Bestand: auch ein Schein-Kopf im Rumpf der Funktion - die Zuweisung an
+// eine Variable Operator ('operator' steht in ROUTINE_WORDS, ist aber kein
+// reserviertes Wort) - beendet sie mit seinem Grund; lieber keine Hilfe
+// als die falsche Routine (Gegenpruefung V-B2S-1).
 // (uRdxTryFixes.RoutineAround fragt anders: Token, unsichere Koepfe
 // uebergangen, ein Abschnittswort der Unit beendet die Suche.)
 function EnclosingRoutine(AMap: TRdxCodeMap; ALine: Integer;

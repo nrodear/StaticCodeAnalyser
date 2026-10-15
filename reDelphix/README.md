@@ -632,11 +632,14 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   Suche nach der Routine um eine Stelle (`HeadBefore`: die lokale Routine vor der
   aeusseren, ein Abschnittswort beendet, ein unsicherer Kopf kommt mit Grund,
   Dateianfang) und die Politik ihrer Aufrufer, je wie vor der Charge (SCA009: um eine
-  unsichere lokale Routine ist Y kein lokaler Name; SCA196: der erste unsichere Kopf
-  beendet mit seiner Zeile); `MemberHeads`; der Index der Klassenkoepfe von SCA096 -
+  unsichere lokale Routine ist Y kein lokaler Name, und ein unsicherer Kopf im Rumpf -
+  `Operator := ..`, `operator` ist kein reserviertes Wort - wird uebergangen, Y bleibt
+  lokal; gegen die Mutante "der erste unsichere Kopf beendet" rot, Gegenpruefung
+  V-B2S-1; SCA196: der erste unsichere Kopf beendet mit seiner Zeile); `MemberHeads`;
+  der Index der Klassenkoepfe von SCA096 -
   zwei Koepfe einer Klasse in `$IFDEF`-Zweigen (Delegation) und der Rueckfall auf
   `FindMethodDecls` bei einem generischen Kopf, den der Index nicht liest
-  (`TBase<T(X)>`; ohne den Rueckfall rot); `TypeHasBody` (9 Tests, FPC-Pruefstand).
+  (`TBase<T(X)>`; ohne den Rueckfall rot); `TypeHasBody` (10 Tests, FPC-Pruefstand).
 * `uTestRdxQualifyUses` - die Planung von "uses: X -> Scope.X"
   (`TRdxRecipeRunner.QualifyUses`): Eintraege der Zeile, alle,
   Sortierung, FPC-Weiche, Direktiven, eigene Unit.
@@ -898,8 +901,8 @@ Ohne Delphi (FPC 3.2.2):
 bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths uTestRdxBlocks
 ```
 
-Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+B1-FA+FB+FC+B1-FD+B1-FE+FF+B2S-a+B2S-b): `PASSED 652  FAILED 0` - 42 Testunits,
-davon 9 der Charge B2S-b (`uTestRdxBlocks`), 12 der Charge B2S-a (`uTestRdxPaths` 10, `uTestRdxProjectUnits` 1,
+Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+B1-FA+FB+FC+B1-FD+B1-FE+FF+B2S-a+B2S-b): `PASSED 653  FAILED 0` - 42 Testunits,
+davon 10 der Charge B2S-b (`uTestRdxBlocks`, einer davon aus der Gegenpruefung), 12 der Charge B2S-a (`uTestRdxPaths` 10, `uTestRdxProjectUnits` 1,
 `uTestRdxCodeMap` 1),
 28 der Charge B1-FA (`uTestRdxSuppressTargets` 20, Review R1-01/R1-03
 und Nachbesserung; `uTestRdxBufferMath` 1, R1-04; `uTestRdxProjectUnits` 7,

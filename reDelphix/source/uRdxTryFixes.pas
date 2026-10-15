@@ -995,9 +995,13 @@ end;
 // B2S-b hier ausgeschrieben); die Politik dieser Frage bleibt, wie sie war:
 // ein Kopf, dessen Grenzen nicht sicher sind, wird uebergangen - die Suche
 // geht davor weiter -, und ein Abschnittswort der Unit (UNIT_BOUNDS)
-// beendet sie. (SCA196 in uRdxResultFixes fragt anders: Zeilen statt
-// Token, und der erste unsichere Kopf beendet dort die Suche mit seinem
-// Grund.)
+// beendet sie. Den Unterschied zeigt ein unsicherer Kopf im Rumpf der
+// gesuchten Routine selbst - etwa die Zuweisung an eine Variable Operator
+// ('operator' steht in ROUTINE_WORDS, ist aber kein reserviertes Wort):
+// hier geht die Suche an ihm vorbei zur Routine davor (gepinnt in
+// uTestRdxBlocks.TryPolicy_UnsafeHeadSkipped, Gegenpruefung V-B2S-1).
+// (SCA196 in uRdxResultFixes fragt anders: Zeilen statt Token, und der
+// erste unsichere Kopf beendet dort die Suche mit seinem Grund.)
 function RoutineAround(AMap: TRdxCodeMap; const AAt: TRdxToken;
   out ARoutine: TRdxRoutine): Boolean;
 var

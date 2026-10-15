@@ -8,9 +8,13 @@ unit uTestRdxBlocks;
 //          ein Wort aus AStops beendet, ein unsicherer Kopf kommt mit
 //          seinem Grund, am Dateianfang False.
 //   Politik uRdxTryFixes.RoutineAround (SCA009, Weitergabe an eine lokale
-//          Variable) und uRdxResultFixes.EnclosingRoutine (SCA196: der
+//          Variable: ein unsicherer Kopf wird uebergangen, die Suche geht
+//          davor weiter) und uRdxResultFixes.EnclosingRoutine (SCA196: der
 //          ERSTE unsichere Kopf beendet mit seinem Grund und seiner Zeile) -
-//          beide wie vor der Charge.
+//          beide wie vor der Charge. Die Politik von SCA009 trennt erst ein
+//          unsicherer Kopf IM Rumpf der gesuchten Routine ('Operator :=
+//          ..', TryPolicy_UnsafeHeadSkipped; Gegenpruefung V-B2S-1: gegen
+//          die Mutante "der erste unsichere Kopf beendet" rot).
 //   MemberHeads und der Index der Klassenkoepfe in uRdxResultFixes (R5-07):
 //          zwei Koepfe einer Klasse in $IFDEF-Zweigen aus dem Index
 //          (Delegation SCA096); ein generischer Kopf, den der Index nicht
@@ -33,6 +37,7 @@ type
     [Test] procedure HeadBefore_StopWordAndFileStart;
     [Test] procedure HeadBefore_UnsafeHeadReason;
     [Test] procedure TryPolicy_LocalVarAroundUnsafeLocalRoutine;
+    [Test] procedure TryPolicy_UnsafeHeadSkipped;
     [Test] procedure ResultPolicy_FirstUnsafeHeadEnds;
     [Test] procedure MemberHeads_DepthOneOfOneClass;
     [Test] procedure Sca096_TwoClassHeadsFromIndex;
@@ -268,11 +273,14 @@ end;
 
 // ---- Die Politik der Aufrufer ----
 
-// SCA009 (RoutineAround: unsichere Koepfe uebergangen): X an eine lokale
-// Variable Y der Routine ist kein Halter - angeboten, auch mit einer
-// lokalen Routine davor. Ist deren Grenze unsicher (lokaler Klassentyp),
-// findet die Suche keine Routine mit sicheren Grenzen um X: Y gilt nicht
-// als lokal, keine Hilfe - wie vor der Charge.
+// SCA009 (RoutineAround): X an eine lokale Variable Y der Routine ist kein
+// Halter - angeboten, auch mit einer lokalen Routine davor (ihr Kopf kommt
+// rueckwaerts zuerst, ihr Rumpf enthaelt X nicht). Ist deren Grenze
+// unsicher (lokaler Klassentyp), ist es auch die von P (ReadRoutine liest
+// Inner mit): keine Routine mit sicheren Grenzen um X, Y gilt nicht als
+// lokal, keine Hilfe - wie vor der Charge. Beide Faelle gelten unter jeder
+// Politik fuer unsichere Koepfe (uebergehen oder beenden); die Politik von
+// RoutineAround pinnt TryPolicy_UnsafeHeadSkipped.
 procedure TTestRdxBlocks.TryPolicy_LocalVarAroundUnsafeLocalRoutine;
 var
   Ok, Unsafe : string;
@@ -286,6 +294,46 @@ begin
     '  procedure Inner;' + #13#10 + '    type TLoc = class end;', []);
   Assert.IsTrue(Pos('kein lokaler Name', TryReason(Unsafe)) > 0,
     TryReason(Unsafe));
+end;
+
+// SCA009 (RoutineAround: ein unsicherer Kopf wird uebergangen, die Suche
+// geht davor weiter): 'Operator := ..' im Rumpf von P. 'operator' steht in
+// ROUTINE_WORDS, ist aber kein reserviertes Wort - HeadBefore haelt die
+// Zuweisung fuer einen Kopf, dessen Grenzen ReadRoutine nicht liest (der
+// erste Schritt rueckwaerts von X kommt mit Grund; die Vorbedingung prueft
+// der Test mit). RoutineAround geht davor weiter zu P: Y ist lokal, die
+// Hilfe bleibt - wie vor der Charge. Beendete der erste unsichere Kopf die
+// Suche (die Politik von SCA196), fehlte die Routine um X, und SCA009
+// lehnte mit 'kein lokaler Name' ab (Gegenpruefung V-B2S-1: mit dieser
+// Mutante rot, ohne sie gruen). Bestand: SCA196 (EnclosingRoutine) endet
+// an demselben Pseudo-Kopf mit dessen Grund - dort gewollt, lieber keine
+// Hilfe als die falsche Routine.
+procedure TTestRdxBlocks.TryPolicy_UnsafeHeadSkipped;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  T   : TRdxToken;
+  S   : TRdxHeadStep;
+  Src : string;
+begin
+  Src := Join(['unit u;', 'interface', 'implementation', 'procedure P;',
+    'var', '  Y: TFoo;', 'begin', '  Operator := ''+'';',
+    '  X := TFoo.Create;', '  Y := X;', '  Y.Run;', '  X.Free;', 'end;',
+    'end.']);
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Src;
+    Map := TRdxCodeMap.Create(SL);
+    T := TokOn(Map, LineOf(Src, 'X := TFoo.Create'), 'x');
+    Assert.IsTrue(TRdxBlocks.HeadBefore(Map, T, [], S), 'ein Kopf vor X');
+    Assert.AreEqual('operator', S.Tok.Low, 'zuerst der Pseudo-Kopf');
+    Assert.IsTrue(S.Reason <> '', 'seine Grenzen sind nicht sicher');
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+  Assert.AreEqual('', TryReason(Src), 'Y ist lokal in P');
 end;
 
 // SCA196 (EnclosingRoutine: der ERSTE unsichere Kopf von der Lese-Zeile
