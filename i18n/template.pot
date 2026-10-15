@@ -46,7 +46,7 @@ msgid " · "
 msgstr ""
 
 #: reDelphix/source/uRdxSimpleFixes.pas:884
-msgid "\"%s Assert\" is not the call of System.Assert"
+msgid "\"%s Assert\" is not a call to System.Assert"
 msgstr ""
 
 #: reDelphix/source/uRdxSimpleFixes.pas:1484
@@ -3056,7 +3056,7 @@ msgid "no \";;\" at the reported place"
 msgstr ""
 
 #: reDelphix/source/uRdxSimpleFixes.pas:1518
-msgid "no \"Assigned(X) and (X <> nil)\" on one line at the place (no quick fix without parentheses around the comparison)"
+msgid "no \"Assigned(X) and (X <> nil)\" on one line here (no quick fix without parentheses around the comparison)"
 msgstr ""
 
 #: reDelphix/source/uRdxLineFixes.pas:365

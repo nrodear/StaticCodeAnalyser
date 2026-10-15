@@ -2547,8 +2547,8 @@ msgstr "commentaire ou chaîne dans la ligne du nil"
 msgid "Assert is qualified here - not System.Assert"
 msgstr "Assert est qualifié ici - ce n'est pas System.Assert"
 
-msgid "\"%s Assert\" is not the call of System.Assert"
-msgstr "« %s Assert » n'est pas l'appel de System.Assert"
+msgid "\"%s Assert\" is not a call to System.Assert"
+msgstr "« %s Assert » n'est pas un appel à System.Assert"
 
 msgid "Assert already has a message"
 msgstr "Assert a déjà un message"
@@ -2667,7 +2667,7 @@ msgstr "« %s » avant l'expression - la parenthèse appartient à un appel ou �
 msgid "\"%s\" after the expression binds only to its last part"
 msgstr "« %s » après l'expression ne porte que sur sa dernière partie"
 
-msgid "no \"Assigned(X) and (X <> nil)\" on one line at the place (no quick fix without parentheses around the comparison)"
+msgid "no \"Assigned(X) and (X <> nil)\" on one line here (no quick fix without parentheses around the comparison)"
 msgstr "aucun « Assigned(X) and (X <> nil) » sur une seule ligne à cet endroit (pas de Quick-Fix sans parenthèses autour de la comparaison)"
 
 msgid "comment in the expression"

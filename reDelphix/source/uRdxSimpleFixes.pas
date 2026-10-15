@@ -881,7 +881,7 @@ begin
     Exit(_('Assert is qualified here - not System.Assert'));
   if (Prev.Low = 'inherited') or (Prev.Low = 'procedure')
      or (Prev.Low = 'function') then
-    Exit(_('"%s Assert" is not the call of System.Assert', [Prev.Low]));
+    Exit(_('"%s Assert" is not a call to System.Assert', [Prev.Low]));
   AOpenCol := SkipBlanks(L, ACol + 6);
   if (AOpenCol > Length(L)) or (L[AOpenCol] <> '(')
      or not AMap.IsCode(ALine, AOpenCol) then
@@ -1515,8 +1515,8 @@ begin
     Keep := 6
   else
   begin
-    AReason := _('no "Assigned(X) and (X <> nil)" on one line at the place '
-      + '(no quick fix without parentheses around the comparison)');
+    AReason := _('no "Assigned(X) and (X <> nil)" on one line here (no quick '
+      + 'fix without parentheses around the comparison)');
     Exit;
   end;
   AReason := AssignedNilContext(AMap, First, Toks[9]);

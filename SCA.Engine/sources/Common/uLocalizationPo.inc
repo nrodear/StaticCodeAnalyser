@@ -13,7 +13,7 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2789 Zeilen, 95401 Bytes
+  // i18n\de.po - 2789 Zeilen, 95391 Bytes
   CPoLines_de: array[0..2788] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -2568,7 +2568,7 @@ const
     'msgid "Assert is qualified here - not System.Assert"',
     'msgstr "Assert ist hier qualifiziert - nicht System.Assert"',
     '',
-    'msgid "\"%s Assert\" is not the call of System.Assert"',
+    'msgid "\"%s Assert\" is not a call to System.Assert"',
     'msgstr "\"%s Assert\" ist nicht der Aufruf von System.Assert"',
     '',
     'msgid "Assert already has a message"',
@@ -2688,7 +2688,7 @@ const
     'msgid "\"%s\" after the expression binds only to its last part"',
     'msgstr "\"%s\" hinter dem Ausdruck bindet nur an seinen letzten Teil"',
     '',
-    'msgid "no \"Assigned(X) and (X <> nil)\" on one line at the place (no quick fix without parentheses around the comparison)"',
+    'msgid "no \"Assigned(X) and (X <> nil)\" on one line here (no quick fix without parentheses around the comparison)"',
     'msgstr "kein \"Assigned(X) and (X <> nil)\" auf einer Zeile an der Stelle (ohne Klammern um den Vergleich keine Hilfe)"',
     '',
     'msgid "comment in the expression"',
@@ -3078,7 +3078,7 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2785 Zeilen, 99883 Bytes
+  // i18n\fr.po - 2785 Zeilen, 99874 Bytes
   CPoLines_fr: array[0..2784] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -5629,8 +5629,8 @@ const
     'msgid "Assert is qualified here - not System.Assert"',
     'msgstr "Assert est qualifi'#$00E9' ici - ce n''est pas System.Assert"',
     '',
-    'msgid "\"%s Assert\" is not the call of System.Assert"',
-    'msgstr "'#$00AB' %s Assert '#$00BB' n''est pas l''appel de System.Assert"',
+    'msgid "\"%s Assert\" is not a call to System.Assert"',
+    'msgstr "'#$00AB' %s Assert '#$00BB' n''est pas un appel '#$00E0' System.Assert"',
     '',
     'msgid "Assert already has a message"',
     'msgstr "Assert a d'#$00E9'j'#$00E0' un message"',
@@ -5749,7 +5749,7 @@ const
     'msgid "\"%s\" after the expression binds only to its last part"',
     'msgstr "'#$00AB' %s '#$00BB' apr'#$00E8's l''expression ne porte que sur sa derni'#$00E8're partie"',
     '',
-    'msgid "no \"Assigned(X) and (X <> nil)\" on one line at the place (no quick fix without parentheses around the comparison)"',
+    'msgid "no \"Assigned(X) and (X <> nil)\" on one line here (no quick fix without parentheses around the comparison)"',
     'msgstr "aucun '#$00AB' Assigned(X) and (X <> nil) '#$00BB' sur une seule ligne '#$00E0' cet endroit (pas de Quick-Fix sans parenth'#$00E8'ses autour de la comparaison)"',
     '',
     'msgid "comment in the expression"',
