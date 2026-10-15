@@ -43,6 +43,9 @@ type
     // Klasse ('TList<Integer>.TEmptyFunc') gilt nicht mehr als die aeussere
     // Klasse.
     [Test] procedure Sca126_NestedGenericType;
+    // Review R3-03 (Charge FC): FieldTypeOf springt ueber Zeilen ohne
+    // Rumpfwort - mit demselben Ergebnis wie der Lauf ueber jedes Token.
+    [Test] procedure FieldTypeOf_LineFilter;
   end;
 
 implementation
@@ -637,6 +640,34 @@ begin
   Assert.IsTrue(Pos('nicht als Klasse', R) > 0, 'nicht bewiesen: ' + R);
   Assert.AreEqual('', ReasonIn(Src, 'Obj.FPairs', ''), 'Klasse der RTL');
   Assert.AreEqual('', ReasonIn(Src, 'Obj.FList', ''), 'TList wie bisher');
+end;
+
+procedure TTestRdxNilFix.FieldTypeOf_LineFilter;
+var
+  Src : string;
+begin
+  // Rumpfwort erst auf der Zeile hinter dem '=' (das Token davor muss beim
+  // Sprung stimmen), ein Rumpf, der mitten auf einer Zeile endet und einen
+  // neuen beginnt, ein Rumpfwort nur im Kommentar, ein 'begin' dazwischen
+  // und der Name zuletzt nur in einem Kommentar.
+  Src := Join(['unit u;', 'interface', 'type',
+    '  TBar =',
+    '    class',
+    '    FA: TObject;',
+    '  end; TBaz = record FB: Pointer; end;',
+    '  // keine class hier',
+    '  TQux = class FC: TStrings; procedure P; end;',
+    'implementation',
+    'procedure TQux.P;',
+    'begin',
+    'end;',
+    '// FA FB FC',
+    'end.']);
+  Assert.AreEqual('tobject', FieldTypeIn(Src, 'FA'));
+  Assert.AreEqual('pointer', FieldTypeIn(Src, 'FB'));
+  Assert.AreEqual('tstrings', FieldTypeIn(Src, 'FC'));
+  Assert.AreEqual('', FieldTypeIn(Src, 'FD'), 'nirgends');
+  Assert.AreEqual('', FieldTypeIn(Src, ''), 'leerer Name');
 end;
 
 initialization

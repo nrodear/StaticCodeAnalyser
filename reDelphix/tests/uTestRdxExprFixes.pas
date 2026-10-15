@@ -35,6 +35,10 @@ type
     [Test] procedure Sca084_Refusals;
     [Test] procedure DeclaredTypeKind_Kinds;
     [Test] procedure TypeKinds_ResolvedProceduralPointerLike;
+    // Review R3-03 (Charge FC): die Fragen an die ganze Datei lesen nur noch
+    // die Zeilen, die den Namen nennen - mit demselben Ergebnis, auch wenn
+    // Schluesselwort und Name auf verschiedenen Zeilen stehen.
+    [Test] procedure DeclarationQueries_LineFilter;
   end;
 
 implementation
@@ -540,6 +544,68 @@ begin
     Assert.IsFalse(TRdxExprFixes.PointerLikeType(Map, 'tchromium'),
       'Kundentyp einer anderen Unit: nicht bewiesen');
     Assert.IsFalse(TRdxExprFixes.PointerLikeType(Map, 'tname'), 'string-Alias');
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxExprFixes.DeclarationQueries_LineFilter;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  // Dieselben Antworten wie der Lauf ueber jedes Token bis Charge FC - die
+  // Faelle, an denen ein Vorfilter je Zeile scheitern koennte: Schluessel-
+  // wort und Name auf verschiedenen Zeilen, Kette ueber Zeilen, Name nur im
+  // Kommentar oder als Teil eines laengeren Namens, zwei Nennungen auf
+  // einer Zeile (erst Aufruf, dann Kopf), der erste Treffer zaehlt.
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Join([
+      'unit u;',
+      'interface',
+      'type',
+      '  TSplit',
+      '    = class',
+      '    procedure',
+      '      Spread;',
+      '    procedure Spreadsheet;',
+      '    property Items: TList read FItems; // property Ghost',
+      '  end;',
+      'var',
+      '  V: TLate = nil;',
+      'type',
+      '  TLate = record end;',
+      'implementation',
+      'procedure TSplit.',
+      '  Chained;',
+      'begin',
+      'end;',
+      'procedure Q; begin Two.Go; end; procedure Go;',
+      'begin',
+      'end;',
+      'end.']);
+    Map := TRdxCodeMap.Create(SL);
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Spread'),
+      'Name auf der Zeile hinter dem Schluesselwort');
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'SPREAD'), 'Gross/klein');
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Chained'),
+      'Kette ueber zwei Zeilen');
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Go'),
+      'zweite Nennung auf der Zeile');
+    Assert.IsFalse(TRdxSimpleFixes.DeclaresRoutine(Map, 'Sheet'),
+      'nur Teil eines laengeren Namens');
+    Assert.IsFalse(TRdxSimpleFixes.DeclaresRoutine(Map, 'Two'), 'Aufruf-Pfad');
+    Assert.IsTrue(TRdxSimpleFixes.DeclaresProperty(Map, 'Items'));
+    Assert.IsFalse(TRdxSimpleFixes.DeclaresProperty(Map, 'Ghost'),
+      'nur im Kommentar');
+    Assert.IsFalse(TRdxSimpleFixes.DeclaresProperty(Map, ''), 'leerer Name');
+    Assert.AreEqual('class', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tsplit'),
+      '"=" auf der Folgezeile');
+    Assert.AreEqual('record', TRdxSimpleFixes.DeclaredTypeKind(Map, 'TLate'),
+      'Variable mit Anfangswert davor, Typ dahinter');
   finally
     Map.Free;
     SL.Free;

@@ -110,7 +110,8 @@ type
 implementation
 
 uses
-  uRdxSimpleFixes,   // DeclaresRoutine (eigene Routine Exit, Funktionsname)
+  uRdxSimpleFixes,   // DeclaresRoutine (eigene Routine Exit, Funktionsname),
+                     // NextTokenOnLineWith (class operator Assign)
   uRdxStructFixes;   // StartsStatementAt, ElseBelongsToIf, Bereichshelfer
 
 const
@@ -1000,18 +1001,22 @@ begin
 end;
 
 // Ein 'class operator Assign' in der Unit (Delphi 10.4: verwaltete
-// Records)? Dann ruft eine Zuweisung Code.
+// Records)? Dann ruft eine Zuweisung Code. Nur die Zeilen, die 'operator'
+// nennen (NextTokenOnLineWith, Review R3-03 - bis Charge FC ein Lauf ueber
+// jedes Token der Datei je SCA047-Fund).
 function DeclaresAssignOperator(AMap: TRdxCodeMap): Boolean;
+const
+  KW_OPERATOR = 'operator';
 var
   T : TRdxToken;
 begin
   Result := False;
-  T := NextToken(AMap, 1, 1);
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), KW_OPERATOR);
   while T.Low <> '' do
   begin
-    if (T.Low = 'operator') and (After(AMap, T).Low = 'assign') then
+    if (T.Low = KW_OPERATOR) and (After(AMap, T).Low = 'assign') then
       Exit(True);
-    T := After(AMap, T);
+    T := NextTokenOnLineWith(AMap, T, KW_OPERATOR);
   end;
 end;
 

@@ -574,6 +574,10 @@ begin
   Result := False;
   for Li := 1 to AMap.LineCount do
   begin
+    // Ohne '$' keine Direktive - UpperCase nur fuer diese Zeilen (Review
+    // R3-03, Charge FC: bis dahin je Zeile der Datei, zweimal je Fund).
+    if Pos('$', AMap.Raw(Li)) = 0 then
+      Continue;
     U := UpperCase(AMap.Raw(Li));
     P := Pos('$' + AName, U);
     if P < 2 then Continue;

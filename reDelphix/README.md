@@ -558,7 +558,10 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
   R3/R6, je Befund gegen 4358b769 rot belegt): SCA066 an einer Property mit
   Prozedurtyp, SCA168 im Variantenteil eines Records, SCA122 mit neu
   zugewiesener Variable, SCA075 mit einer Spalte hinter dem Zeilenende,
-  Typen in generischen Klassen (`uRdxRtlTypes`, `FieldTypeOf`).
+  Typen in generischen Klassen (`uRdxRtlTypes`, `FieldTypeOf`); dazu die
+  Gleichwertigkeit des Zeilen-Vorfilters der Fragen an die ganze Datei
+  (`DeclarationQueries_LineFilter`, `FieldTypeOf_LineFilter` - fuenf
+  Mutanten des Vorfilters, alle rot).
 * `uTestRdxRoutineFixesDetector` - SCA164/SCA147 gegen die echten
   Detektoren: Fund -> Hilfe -> Fund weg, die Katalog-Beispiele (SCA147
   mit Implementierung, danach SCA087 -> genau `good`), Funde, die der
@@ -702,9 +705,9 @@ Ohne Delphi (FPC 3.2.2):
 bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText
 ```
 
-Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+FC): `PASSED 545  FAILED 0` - 34 Testunits,
-davon 13 der Charge C0 (`uTestRdxText`, Sprache der Texte), 4 der Charge FC
-(`uTestRdxExprFixes` 1, `uTestRdxNilFix` 1, `uTestRdxStructFixes` 1, `uTestRdxRaiseFixes` 1),
+Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+FC): `PASSED 547  FAILED 0` - 34 Testunits,
+davon 13 der Charge C0 (`uTestRdxText`, Sprache der Texte), 6 der Charge FC
+(`uTestRdxExprFixes` 2, `uTestRdxNilFix` 2, `uTestRdxStructFixes` 1, `uTestRdxRaiseFixes` 1),
 davon 72 Tests fuer "Lokale Variable einfuehren", 12 fuer die Quick-Fixes der
 Charge H2, 25 der Charge H3b (SCA164 und Bausteine 13 in
 `uTestRdxRoutineFixes`, SCA147 12 in `uTestRdxMethodFixes`), 18 der

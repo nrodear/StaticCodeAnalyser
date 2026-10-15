@@ -297,6 +297,19 @@ type
       const AOperand, ATypeLow: string): string; static;
   end;
 
+// Das naechste Token hinter ATok auf einer Zeile, deren Text ALow (klein)
+// enthaelt - Gross/klein egal, auch in einem Kommentar oder String; ATok =
+// Default(TRdxToken): ab Dateianfang, Low = '' am Dateiende. Vorfilter der
+// Fragen an die ganze Datei (Review R3-03, Charge FC: bis dahin las jede
+// Frage alle Token, ~0,1 s je Frage auf 30.000 Zeilen im IDE-Hauptthread):
+// ein Token mit Low = ALow steht nur auf einer solchen Zeile (ein Token
+// endet mit seiner Zeile, Low ist LowerCase seines Textes), die anderen
+// Zeilen kosten einen Textvergleich statt eines Laufs durch die Code-
+// Sicht. Die Token kommen in der Reihenfolge der Datei. Seit Charge FC auch
+// fuer uRdxFlowFixes ('class operator Assign').
+function NextTokenOnLineWith(AMap: TRdxCodeMap; const ATok: TRdxToken;
+  const ALow: string): TRdxToken;
+
 implementation
 
 uses
@@ -680,22 +693,87 @@ begin
     Result := After(AMap, After(AMap, Result));
 end;
 
+{ ---- Vorfilter der Fragen an die ganze Datei (Review R3-03) ---- }
+
+// Enthaelt der Text der Zeile ALine ALow (klein) - Gross/klein egal, auch
+// in einem Kommentar oder String? '' kommt nie vor (Pos('') = 0).
+// Dasselbe LowerCase wie TRdxToken.Low: ein Token mit Low = ALow liegt
+// darum nur auf einer solchen Zeile.
+function LineMentions(AMap: TRdxCodeMap; ALine: Integer;
+  const ALow: string): Boolean;
+begin
+  Result := Pos(ALow, LowerCase(AMap.Raw(ALine))) > 0;
+end;
+
+function NextTokenOnLineWith(AMap: TRdxCodeMap; const ATok: TRdxToken;
+  const ALow: string): TRdxToken;
+var
+  Li : Integer;
+begin
+  Li := 1;
+  if ATok.Low <> '' then
+  begin
+    // Auf der Zeile von ATok weiter - sie nennt ALow schon.
+    Result := After(AMap, ATok);
+    if (Result.Low = '') or (Result.Line = ATok.Line) then
+      Exit;
+    Li := ATok.Line + 1;
+  end;
+  while Li <= AMap.LineCount do
+  begin
+    if LineMentions(AMap, Li, ALow) then
+    begin
+      // Das erste Token der Zeile; nennt sie ALow nur in einem Kommentar
+      // oder String, beginnt das naechste Token erst spaeter - weiter.
+      Result := NextToken(AMap, Li, 1);
+      if Result.Line = Li then
+        Exit;
+    end;
+    Inc(Li);
+  end;
+  Result := Default(TRdxToken);
+end;
+
+// Die letzte Zeile, deren Text ALow enthaelt (LineMentions); 0 ohne.
+function LastLineWith(AMap: TRdxCodeMap; const ALow: string): Integer;
+var
+  Li : Integer;
+begin
+  for Li := AMap.LineCount downto 1 do
+    if LineMentions(AMap, Li, ALow) then
+      Exit(Li);
+  Result := 0;
+end;
+
 // Steht im Code der Datei eines der Woerter AKeywords, gefolgt vom Namen
 // AName (letztes Segment: 'procedure TFoo.Bar' zaehlt fuer 'Bar')?
+// Gesucht wird vom Namen aus (Review R3-03, Charge FC): je Token AName auf
+// einer Zeile, die ihn nennt (NextTokenOnLineWith), rueckwaerts ueber die
+// Kette ('TFoo.') zum Wort davor - die Umkehrung von NameAfter, die
+// NameAfter danach bestaetigt. Dasselbe Ergebnis wie der Lauf ueber jedes
+// Token bis Charge FC: NameAfter(K) = N heisst K R1 . R2 . ... . N, und
+// von N fuehren die '.' rueckwaerts genau zu K (K ist ein Schluesselwort,
+// kein '.'). Ein leerer Name ist nie deklariert.
 function DeclaresAfter(AMap: TRdxCodeMap; const AKeywords: array of string;
   const AName: string): Boolean;
 var
-  T       : TRdxToken;
+  T, K    : TRdxToken;
   NameLow : string;
 begin
   Result := False;
   NameLow := LowerCase(AName);
-  T := NextToken(AMap, 1, 1);
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), NameLow);
   while T.Low <> '' do
   begin
-    if InList(T.Low, AKeywords) and (NameAfter(AMap, T).Low = NameLow) then
-      Exit(True);
-    T := After(AMap, T);
+    if T.Low = NameLow then
+    begin
+      K := Before(AMap, T);
+      while K.Low = '.' do
+        K := Before(AMap, Before(AMap, K));
+      if InList(K.Low, AKeywords) and (NameAfter(AMap, K).Low = NameLow) then
+        Exit(True);
+    end;
+    T := NextTokenOnLineWith(AMap, T, NameLow);
   end;
 end;
 
@@ -773,7 +851,10 @@ begin
   Result := '';
   TypeLow := LowerCase(ATypeName);
   if TypeLow = '' then Exit;
-  T := NextToken(AMap, 1, 1);
+  // Nur die Token der Zeilen, die den Namen nennen (Review R3-03, Charge
+  // FC) - in der Reihenfolge der Datei, also derselbe erste Treffer wie im
+  // Lauf ueber jedes Token.
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), TypeLow);
   while T.Low <> '' do
   begin
     // ':' oder '.' davor: 'var X: TBitmap = nil;', ein Default-Parameter
@@ -791,7 +872,7 @@ begin
         K := After(AMap, K);
       Exit(K.Low);
     end;
-    T := After(AMap, T);
+    T := NextTokenOnLineWith(AMap, T, TypeLow);
   end;
 end;
 
@@ -2334,21 +2415,57 @@ begin
   end;
 end;
 
+// Nennt der Text der Zeile ALine ein Wort, mit dem ein Typrumpf beginnt
+// (OpensTypeBody: 'record' und TYPE_BODY_WORDS - 'interface' deckt
+// 'dispinterface' mit)? Gross/klein egal, auch in Kommentar oder String.
+function MentionsTypeBody(AMap: TRdxCodeMap; ALine: Integer): Boolean;
+var
+  L, W : string;
+begin
+  L := LowerCase(AMap.Raw(ALine));
+  Result := Pos('record', L) > 0;
+  if not Result then
+    for W in TYPE_BODY_WORDS do
+      if Pos(W, L) > 0 then
+        Exit(True);
+end;
+
 class function TRdxSimpleFixes.FieldTypeOf(AMap: TRdxCodeMap;
   const AName: string): string;
 var
-  T, Prev : TRdxToken;
-  Scan    : TFieldScan;
-  NameLow : string;   // nicht 'Low': verdeckte System.Low (Gegen-Review R8)
+  T, Prev  : TRdxToken;
+  Scan     : TFieldScan;
+  NameLow  : string;   // nicht 'Low': verdeckte System.Low (Gegen-Review R8)
+  Li, Last : Integer;
 begin
   Result := '';
   NameLow := LowerCase(AName);
   if NameLow = '' then Exit;
   Scan := Default(TFieldScan);
+  // Derselbe Lauf wie bis Charge FC, aber mit Spruengen (Review R3-03):
+  // ausserhalb eines Rumpfs (Body = 0) aendert nur ein Token, das einen
+  // Rumpf oeffnet, den Zustand (FieldScanStep: begin/implementation setzen
+  // 0 auf 0, alles andere endet dort) - am Anfang einer Zeile ohne
+  // Rumpfwort (MentionsTypeBody) springt der Lauf darum zur naechsten Zeile
+  // mit einem; Prev ist dort wie im Lauf das Token davor. Hinter der letzten
+  // Zeile mit dem Namen aendert kein Token mehr Found oder Multi.
+  Last := LastLineWith(AMap, NameLow);
   Prev := Default(TRdxToken);
   T := NextToken(AMap, 1, 1);
-  while T.Low <> '' do
+  while (T.Low <> '') and (T.Line <= Last) do
   begin
+    if (Scan.Body = 0) and (T.Line <> Prev.Line)
+       and not MentionsTypeBody(AMap, T.Line) then
+    begin
+      Li := T.Line + 1;
+      while (Li <= Last) and not MentionsTypeBody(AMap, Li) do
+        Inc(Li);
+      if Li > Last then
+        Break;
+      T := NextToken(AMap, Li, 1);
+      Prev := Before(AMap, T);
+      Continue;
+    end;
     FieldScanStep(AMap, T, Prev, NameLow, Scan);
     Prev := T;
     T := After(AMap, T);
