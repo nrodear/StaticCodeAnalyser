@@ -921,8 +921,8 @@ end;
 procedure TTestRdxRecipes.UsesNameFor_FollowsFileStyle;
 begin
   // Ohne Vorbild oder mit einem Eintrag unter einem Delphi-Scope:
-  // qualifiziert. (Keine 'System.SysUtils'/'System.Classes' im Test - der
-  // FPC-Pruefstand schreibt diese Namen in den kopierten Quellen um.)
+  // qualifiziert. (Bis Charge FF mied der Test 'System.SysUtils' - der
+  // FPC-Pruefstand schrieb Unitnamen auch in Literalen um, Review R6-03.)
   Assert.AreEqual('System.Math', TRdxRecipes.UsesNameFor(nil, 'Math', 'System.Math'));
   Assert.AreEqual('System.Math',
     TRdxRecipes.UsesNameFor(['Classes', 'Winapi.Windows'], 'Math', 'System.Math'));

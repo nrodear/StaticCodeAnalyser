@@ -32,16 +32,25 @@ type
     class procedure RegisterTestFixture(AClass: TClass);
   end;
 
+var
+  // Zahl der Assert-Aufrufe seit dem letzten Nullsetzen: der Runner von
+  // build.sh setzt sie vor jedem Test auf 0 und wertet einen Test ohne
+  // Assert als rot - wie TestInsight und reDelphix.Test (FailsOnNoAsserts
+  // = True, Review R6-09).
+  AssertCalls: Integer = 0;
+
 implementation
 
 class procedure Assert.IsTrue(ACond: Boolean; const AMsg: string);
 begin
+  Inc(AssertCalls);
   if not ACond then
     raise ETestFailure.Create('IsTrue failed. ' + AMsg);
 end;
 
 class procedure Assert.IsFalse(ACond: Boolean; const AMsg: string);
 begin
+  Inc(AssertCalls);
   if ACond then
     raise ETestFailure.Create('IsFalse failed. ' + AMsg);
 end;
@@ -49,6 +58,7 @@ end;
 class procedure Assert.AreEqual(const AExpected, AActual: string;
   const AMsg: string);
 begin
+  Inc(AssertCalls);
   if AExpected <> AActual then
     raise ETestFailure.Create('expected <' + AExpected + '> but was <'
       + AActual + '>. ' + AMsg);
@@ -57,6 +67,7 @@ end;
 class procedure Assert.AreEqualInt(AExpected, AActual: Integer;
   const AMsg: string);
 begin
+  Inc(AssertCalls);
   if AExpected <> AActual then
     raise ETestFailure.Create('expected <' + IntToStr(AExpected)
       + '> but was <' + IntToStr(AActual) + '>. ' + AMsg);
@@ -65,6 +76,7 @@ end;
 class procedure Assert.AreNotEqual(const AExpected, AActual: string;
   const AMsg: string);
 begin
+  Inc(AssertCalls);
   if AExpected = AActual then
     raise ETestFailure.Create('values are equal <' + AActual + '>. ' + AMsg);
 end;
@@ -72,12 +84,14 @@ end;
 class procedure Assert.AreNotSame(AExpected, AActual: TObject;
   const AMsg: string);
 begin
+  Inc(AssertCalls);
   if AExpected = AActual then
     raise ETestFailure.Create('objects are the same. ' + AMsg);
 end;
 
 class procedure Assert.Pass(const AMsg: string);
 begin
+  Inc(AssertCalls);
   raise ETestPass.Create(AMsg);
 end;
 

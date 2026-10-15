@@ -186,11 +186,17 @@ begin
   end;
 end;
 
-// Ein Verzeichnis fuer Include-Dateien (mit Trenner).
+// Ein frisches Verzeichnis TEMP\rdx_h3c_<GUID>\ fuer Include-Dateien (mit
+// Trenner), eigen je Aufruf: unter dem festen Namen 'rdx_h3c_inc' teilten
+// sich parallele Laeufe die Dateien, und ein deeper.inc aus einem
+// abgebrochenen Lauf machte Sca164_InterfaceInclude rot (Review R6-07).
 function TempDir: string;
+var
+  G : TGUID;
 begin
+  CreateGUID(G);
   Result := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
-    + 'rdx_h3c_inc' + PathDelim;
+    + 'rdx_h3c_' + GUIDToString(G) + PathDelim;
   ForceDirectories(Result);
 end;
 

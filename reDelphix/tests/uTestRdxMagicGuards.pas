@@ -309,4 +309,7 @@ begin
     'ParamCount', '200'));
 end;
 
+initialization
+  TDUnitX.RegisterTestFixture(TTestRdxMagicGuards);
+
 end.

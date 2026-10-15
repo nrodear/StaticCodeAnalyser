@@ -1,3 +1,6 @@
+# Kopien und Erzeugnisse von build.sh-Laeufen vor Charge FF lagen hier;
+# seit FF baut build.sh in einem eigenen Arbeitsverzeichnis und loescht
+# solche Reste. Die Muster bleiben fuer alte Checkouts.
 out/
 runner.pas
 uDetectorUtils.pas

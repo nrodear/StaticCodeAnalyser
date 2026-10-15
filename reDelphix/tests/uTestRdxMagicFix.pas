@@ -589,4 +589,7 @@ begin
   end;
 end;
 
+initialization
+  TDUnitX.RegisterTestFixture(TTestRdxMagicFix);
+
 end.

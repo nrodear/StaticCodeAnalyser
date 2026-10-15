@@ -60,10 +60,10 @@ source\uRdxText.pas               Sprache der Texte: _() in die reDelphix-Sprach
 data\unitscopes.txt               die Scope-Tabelle (erzeugt), als RCDATA eingelinkt (data\unitscopes.rc)
 data\quickfixes-doc.json          Titel, Wirkung, Sperren und Beispiele je Quick-Fix (von Hand gepflegt) - Quelle fuer QUICKFIXES.md
 QUICKFIXES.md                     alle Quick-Fixes mit Menuetext en/de/fr, Kennzeichnung, Sperren, Beispiel - ERZEUGT von tools\gen-quickfix-doc.py (Repo-Wurzel)
-tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 41 Testunits und einer Hilfs-Unit (siehe "Pruefen")
-tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 44 Testunits und einer Hilfs-Unit (siehe "Pruefen")
+tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 45 Testunits und einer Hilfs-Unit (siehe "Pruefen"); Konfigurationen Debug/Release (TestInsight) und CI (Konsole, Exit-Code)
 tools\gen_unitscopes.py           erzeugt data\unitscopes.txt aus der Delphi-Installation
-tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik unter FPC 3.2.2 und fuehrt Tests aus (Sprache 'de', Stub uLocalization.pas liest die echten i18n\*.po)
+tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik unter FPC 3.2.2 in einem eigenen Arbeitsverzeichnis je Lauf und fuehrt Tests aus (Sprache 'de', Stub uLocalization.pas liest die echten i18n\*.po)
+tools\fpc-pruefstand\selftest.sh  Selbsttest von build.sh (zwei Laeufe zugleich, FPC-Exit, Testzahl, Registrierung, Test ohne Assert, PRUEFSTAND_DIR)
 tools\probe\RdxCorpusProbe.dpr    Korpus-Probe: Rezept 5.1 ueber eine Liste von Fundstellen, CSV
 tools\probe\sites_from_sarif.py   Fundstellen einer Regel aus einem SARIF-Lauf ziehen
 ```
@@ -479,14 +479,30 @@ Rechnung des Literals.
 
 ## Pruefen
 
-**`tests\reDelphix.Test.dproj`** (DUnitX, Konsole/TestInsight, in der
-d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
+**`tests\reDelphix.Test.dproj`** (DUnitX, in der d12-Projektgruppe): prueft
+den ToolsAPI-freien Teil gegen den echten Core. Die Konfigurationen Debug
+und Release definieren `TESTINSIGHT`: der Lauf geht an TestInsight, der
+Exit-Code ist immer 0. Einen auswertbaren Exit-Code (1 bei einem roten Test
+oder einer Ausnahme im Runner) liefert nur die Konfiguration **CI** (ohne
+`TESTINSIGHT`, mit `CI`: Konsole, NUnit-XML, keine Pause) - nach
+`rsvars.bat` etwa `msbuild reDelphix.Test.dproj /t:Build /p:Config=CI
+/p:Platform=Win32`, dann `Output\reDelphixTest\Win32 CI\reDelphix.Test.exe`
+(Review R6-09; bis dahin galt `TESTINSIGHT` fuer alle Konfigurationen).
+TestInsight, Konsolen-Runner und FPC-Pruefstand werten einen Test ohne
+Assert als rot (`FailsOnNoAsserts`). Jede Testunit meldet ihre Fixture im
+initialization-Teil mit `TDUnitX.RegisterTestFixture` an - ein Runner mit
+`UseRTTI = False` (DUnitX-Vorgabe) liesse sie sonst still aus; der
+FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
 
 * `uTestRdxRecipes` - Literal-Codec, Format()-Bau, Query-Objekt eines SQL-Ziels,
   Scope-Tabelle (auch die echte `data\unitscopes.txt`),
   uses-Schreibweise/-Sortierung/-Einfuegestelle, Kompilat-Regel
   (Operandenform, Variant-Anzeichen, RTL-Konstanten und -Funktionen,
   Herkunft der Argumente, `%d`/`%u`) - reine Textlogik.
+* `uTestRdxBench` - Selbstpruefung des FPC-Pruefstands (Review R6-03):
+  Unitnamen, `[Test]`/`[TestFixture]` und `Assert.AreEqual<Integer>(` in
+  einem String-Literal kommen unangepasst an - 3 Tests; mit dem build.sh vor
+  Charge FF alle rot, in reDelphix.Test trivial gruen.
 * `uTestRdxSca044` - Ende zu Ende je Variante des Detektors SCA044:
   Parser, Detektor, `TSourcePlaces`, `uRdxRecipeRunner` - aktiv bei
   String-Lokalen/Parametern/Feldern, Char, `.ToString`, bekannten
@@ -697,12 +713,13 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText
+bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxBench
 ```
 
-Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0): `PASSED 541  FAILED 0` - 34 Testunits,
-davon 13 der Charge C0 (`uTestRdxText`, Sprache der Texte),
-davon 72 Tests fuer "Lokale Variable einfuehren", 12 fuer die Quick-Fixes der
+Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+FF): `PASSED 544  FAILED 0` - 35 Testunits,
+davon 3 der Charge FF (`uTestRdxBench`, Selbstpruefung des Pruefstands),
+13 der Charge C0 (`uTestRdxText`, Sprache der Texte),
+79 Tests fuer "Lokale Variable einfuehren", 12 fuer die Quick-Fixes der
 Charge H2, 25 der Charge H3b (SCA164 und Bausteine 13 in
 `uTestRdxRoutineFixes`, SCA147 12 in `uTestRdxMethodFixes`), 18 der
 Charge H3c (SCA164 5 in `uTestRdxRoutineFixes`, SCA147 4 in
@@ -742,18 +759,52 @@ sonst aus `StaticCodeAnalyserForm\tests` (Core-Tests wie
   kleiner .po-Leser, bewusst kein `_()`). Das Skript kopiert je Lauf die
   echten `i18n\*.po` nach `out\i18n\` neben den Runner - eine deutsche
   Erwartung prueft so zugleich, dass ihre msgid in `i18n\de.po` steht.
+  (`out\` liegt im Arbeitsverzeichnis des Laufs, s. u.)
 
 * **Pfadregel:** die SCA-Wurzel ist der Checkout, in dem das Skript liegt
   (das Verzeichnis ueber `reDelphix`) - Core, Rezepte und Tests kommen so
   immer aus EINEM Stand, auch in einem Worktree oder zweiten Klon.
   `SCA_ROOT=<pfad>` ueberschreibt das bewusst. Die erste Zeile des Laufs
   nennt beide Wurzeln mit Branch und Commit.
-* Kopien eines frueheren Laufs loescht das Skript vor dem Kopieren; eine
-  fehlende Pflichtquelle oder Testunit bricht ab, statt still eine alte
-  Kopie zu uebersetzen.
-* **Exit:** 0 alle Tests gruen; 1 Test rot oder Bau gescheitert; 2 Aufruf-
-  oder Quellfehler, auch wenn die Zahl der `[Test]`-Attribute einer
-  Testunit nicht zur Zahl der erkannten Testmethoden passt.
+* **Arbeitsverzeichnis (Review R6-02):** jeder Lauf kopiert, erzeugt und
+  baut in einem eigenen Verzeichnis unter `TMPDIR` (Kopien, Stubs,
+  `runner.pas`, `out\`) und loescht es danach; die erste Zeile nennt es.
+  Zwei Laeufe im selben Checkout stoeren sich nicht mehr - bis dahin
+  loeschte ein zweiter Lauf die Kopien des ersten, und der meldete fremde
+  Tests als eigenes Gruen (oder scheiterte an einem halb geschriebenen
+  `runner.pas`). `PRUEFSTAND_DIR=<pfad>` nimmt ein eigenes Verzeichnis und
+  laesst es stehen - fuer einen Korpus-Harness, der gegen die angepassten
+  Units baut (`fpc -Fu<pfad>`); das Skript verwaltet es ganz (Marke
+  `.pruefstand`; ein fremdes, nicht leeres Verzeichnis lehnt es ab). Kopien
+  frueherer Laeufe neben dem Skript loescht es, damit ein Harness mit
+  `-Fu<Skriptverzeichnis>` scheitert, statt still alte Kopien zu
+  uebersetzen. Der Runner selbst laeuft im Skriptverzeichnis: Tests suchen
+  Daten des Checkouts von dort aus (`data\unitscopes.txt`).
+* **Anpassung fuer FPC 3.2.2 (Review R6-03):** `System.SysUtils` ->
+  `SysUtils` und die anderen Unitnamen, `Assert.AreEqual<Integer>(` ->
+  `Assert.AreEqualInt(`, `[TestFixture]`/`[Test]` am Zeilenanfang weg - nur
+  AUSSERHALB von String-Literalen. Ein Test, der einen qualifizierten
+  Unitnamen oder ein Attribut als Text prueft, sieht unter FPC dieselben
+  Daten wie unter Delphi (bis dahin wurde aus `'System.Classes'` im Literal
+  `'Classes'` und aus `'    [Test]'` eine Leerzeile; `uTestRdxBench` haelt
+  das fest).
+* Eine fehlende Pflichtquelle oder Testunit bricht ab, statt still eine
+  alte Kopie zu uebersetzen.
+* **Exit:** 0 alle Tests gruen; 1 Test rot (auch ein Test ohne Assert),
+  Bau gescheitert (der FPC-Exit zaehlt) oder der Lauf zaehlt nicht genau so
+  viele Tests, wie die Testunits `[Test]`-Attribute tragen (Review R6-02);
+  2 Aufruf- oder Quellfehler, auch wenn die Zahl der `[Test]`-Attribute
+  einer Testunit nicht zur Zahl der erkannten Testmethoden passt oder eine
+  Testunit - aufgerufen oder in `reDelphix\tests` - eine Fixture nicht mit
+  `TDUnitX.RegisterTestFixture` anmeldet (Review R6-06).
+* **Selbsttest** der Regeln oben an kleinen Laeufen (zwei Laeufe zugleich,
+  FPC-Exit, fehlende Suite, Registrierung, Test ohne Assert,
+  `PRUEFSTAND_DIR`); das build.sh vor Charge FF besteht keinen der acht
+  Faelle:
+
+  ```
+  bash reDelphix/tools/fpc-pruefstand/selftest.sh
+  ```
 
 `uRdxEditor` und `uRdxProvider` sind ToolsAPI und nur im Package
 uebersetzbar; `uRdxRecipeRunner` ist der testbare Kern dazwischen (in
