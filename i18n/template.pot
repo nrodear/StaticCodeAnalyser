@@ -73,7 +73,7 @@ msgstr ""
 msgid "%d context hashes"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:796
+#: reDelphix/source/uRdxText.pas:801
 msgid "%d declarations of %s in classes of this name - overload?"
 msgstr ""
 
@@ -118,11 +118,11 @@ msgstr ""
 msgid "%s (no findings)"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:721
+#: reDelphix/source/uRdxText.pas:726
 msgid "%s - finding outdated? Analyse the file again"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:716
+#: reDelphix/source/uRdxText.pas:721
 msgid "%s - line moved? Analyse the file again"
 msgstr ""
 
@@ -130,7 +130,7 @@ msgstr ""
 msgid "%s contains no profiles."
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:801
+#: reDelphix/source/uRdxText.pas:806
 msgid "%s is no longer at the reported place"
 msgstr ""
 
@@ -2735,7 +2735,7 @@ msgstr ""
 msgid "asm..end block - platform-specific, hard to port"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:756
+#: reDelphix/source/uRdxText.pas:761
 msgid "by hand"
 msgstr ""
 
@@ -2743,7 +2743,7 @@ msgstr ""
 msgid "case statement has many branches - consider dispatch table"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:761
+#: reDelphix/source/uRdxText.pas:766
 msgid "check by hand"
 msgstr ""
 
@@ -2751,7 +2751,7 @@ msgstr ""
 msgid "class(TObject) - TObject is the default base, drop it"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:771
+#: reDelphix/source/uRdxText.pas:776
 msgid "decide by hand"
 msgstr ""
 
@@ -2761,7 +2761,7 @@ msgstr ""
 msgid "default"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:766
+#: reDelphix/source/uRdxText.pas:771
 msgid "delete by hand"
 msgstr ""
 
@@ -2769,11 +2769,11 @@ msgstr ""
 msgid "editor buffer empty or not readable"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:741
+#: reDelphix/source/uRdxText.pas:746
 msgid "end of the header not found"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:731
+#: reDelphix/source/uRdxText.pas:736
 msgid "end of the statement not found"
 msgstr ""
 
@@ -2827,15 +2827,15 @@ msgstr ""
 msgid "in"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:711
+#: reDelphix/source/uRdxText.pas:716
 msgid "line moved? Analyse the file again"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:786
+#: reDelphix/source/uRdxText.pas:791
 msgid "literal not readable: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:751
+#: reDelphix/source/uRdxText.pas:756
 msgid "no file open"
 msgstr ""
 
@@ -2843,11 +2843,11 @@ msgstr ""
 msgid "no findings"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:791
+#: reDelphix/source/uRdxText.pas:796
 msgid "no operand in the chain"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:736
+#: reDelphix/source/uRdxText.pas:741
 msgid "no valid range"
 msgstr ""
 
@@ -2864,7 +2864,7 @@ msgstr ""
 msgid "only from the menu or the light bulb"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:776
+#: reDelphix/source/uRdxText.pas:781
 msgid "only statement after %s - an empty block would remain (SCA077)"
 msgstr ""
 
@@ -2889,11 +2889,11 @@ msgstr ""
 msgid "the clause would no longer be sorted (new SCA142)"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:746
+#: reDelphix/source/uRdxText.pas:751
 msgid "the line starts inside a comment or string"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:726
+#: reDelphix/source/uRdxText.pas:731
 msgid "the message has no column"
 msgstr ""
 
@@ -2901,7 +2901,7 @@ msgstr ""
 msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:781
+#: reDelphix/source/uRdxText.pas:786
 msgid "unclear what the statement belongs to (\"%s\" before it)"
 msgstr ""
 

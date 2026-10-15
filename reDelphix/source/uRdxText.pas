@@ -66,7 +66,10 @@ unit uRdxText;
 // GEMEINSAME TEXTE (Charge C1, Msg...)
 //
 // Gruende und Hinweise, die mehr als eine Unit braucht, haben hier EINE
-// msgid und eine Funktion. Legten zwei Units dieselbe msgid selbst an,
+// msgid und eine Funktion - dazu ein Satz, den EINE Unit mit wechselndem
+// Code-Stueck fuenfmal schrieb (MsgNoLongerAtReportedPlace, nur
+// uRdxSimpleFixes: ein Satz mit dem Code als %s statt fuenf msgids, die
+// Ausnahme laut Auftrag C1). Legten zwei Units dieselbe msgid selbst an,
 // stuende sie in de.po/fr.po doppelt (die erste gewinnt, msgfmt meldet
 // einen Fehler); schrieben sie zwei englische Saetze fuer denselben
 // deutschen, liefen die Uebersetzungen auseinander. Jede msgid ist ein
@@ -208,6 +211,8 @@ function MsgDeclsInClassesOfName(ACount: Integer; const AName: string): string;
 
 // '<ACode> is no longer at the reported place' - ACode ist das Code-Stueck
 // des Funds ('Assert(', 'class(TObject)', 'X.Free;'), kein Satzteil.
+// Einziger Nutzer ist uRdxSimpleFixes (fuenf Code-Stuecke) - die Ausnahme
+// vom Kopfvertrag "mehr als eine Unit" (Auftrag C1).
 function MsgNoLongerAtReportedPlace(const ACode: string): string;
 
 implementation
