@@ -828,7 +828,9 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   `JoinWith`, `Apply` (eine oder mehrere Ersetzungen wie der Editor: ein Plan
   ueber die UTF-8-Bytes, `PlanByteEdits`/`ApplyByteEdits`; lehnt der Plan ab,
   scheitert der Test mit dem Grund), `LineOf` (erste Zeile, die den Text
-  enthaelt; 0 ohne), `LineStartingWith` (erste Zeile, die so beginnt),
+  enthaelt; 0 ohne), `LineStartingWith` (erste Zeile, die - ohne fuehrenden
+  Leerraum, auch Tabulatoren - mit dem Text beginnt; den Text selbst ohne
+  Einzug angeben, mit Einzug trifft er nie),
   `WriteText` (ueber TStringList), `TempName`/`NewTempDir`/`RemoveTree`
   (frische Namen und Verzeichnisse unter TEMP). Bis dahin hatte fast jede
   Testunit eigene Kopien (`Join` 28-mal, `Apply` 22-mal samt `ApplyEdits`

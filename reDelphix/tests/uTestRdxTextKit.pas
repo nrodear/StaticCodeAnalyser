@@ -63,8 +63,10 @@ function Apply(const ASource: string; const AEdit: TRdxEdit): string; overload;
 // Die erste Zeile (1-basiert), die AText enthaelt; 0 ohne Treffer. Zeilen
 // wie TStringList.Text (CRLF, LF, CR).
 function LineOf(const ASource, AText: string): Integer;
-// Die erste Zeile (1-basiert), die - ohne fuehrende Leerzeichen - mit
-// AStart beginnt; 0 ohne Treffer.
+// Die erste Zeile (1-basiert), die - ohne fuehrenden Leerraum - mit AStart
+// beginnt; 0 ohne Treffer. Den Leerraum nimmt TrimLeft: Leerzeichen,
+// Tabulatoren, jedes Zeichen bis #32. AStart steht deshalb ohne Einzug - ein
+// AStart mit fuehrendem Leerraum trifft nie.
 function LineStartingWith(const ASource, AStart: string): Integer;
 // Schreibt AText ueber TStringList.SaveToFile nach APath: Zeilenenden CRLF,
 // eines auch hinter der letzten Zeile, Kodierung wie TStringList - ohne
