@@ -2619,3 +2619,129 @@ msgstr "kein Scope-Präfix des Rahmenwerks passt: %s"
 
 msgid "network path in the unit search path or next to the file (%s) - reDelphix does not read there (the menu is built in the main thread); whether the project has a unit of this name is open - %s"
 msgstr "Netzpfad im Unit-Suchpfad oder neben der Datei (%s) - reDelphix liest dort nicht (Menüaufbau im Hauptthread); ob das Projekt eine Unit dieses Namens hat, ist offen - %s"
+
+msgid "the virtual call then ends up in this method"
+msgstr "der virtuelle Aufruf landet danach in dieser Methode"
+
+msgid "only the warning W1010 goes away - the method still hides the inherited ones"
+msgstr "nur die Warnung W1010 entfällt - die Methode verdeckt die geerbten weiterhin"
+
+msgid "form file %s not readable (%s) - an event binding cannot be ruled out"
+msgstr "Formdatei %s nicht lesbar (%s) - eine Ereignis-Bindung ist nicht auszuschließen"
+
+msgid "TObject.Create is empty - same meaning; the constructor then follows the convention"
+msgstr "TObject.Create ist leer - gleiche Bedeutung; der Konstruktor folgt danach der Konvention"
+
+msgid "the overridden parent constructor now runs first, with the same arguments"
+msgstr "der überschriebene Elternkonstruktor läuft jetzt zuerst, mit denselben Argumenten"
+
+msgid "TObject.Destroy is empty - same meaning; the destructor then follows the convention"
+msgstr "TObject.Destroy ist leer - gleiche Bedeutung; der Destruktor folgt danach der Konvention"
+
+msgid "the parent destructor now runs at the end and frees the inherited fields"
+msgstr "der Elterndestruktor läuft jetzt am Ende und gibt die geerbten Felder frei"
+
+msgid "Result now starts empty instead of with the old content of the caller's target variable"
+msgstr "Result beginnt jetzt leer statt mit dem alten Inhalt der Zielvariable des Aufrufers"
+
+msgid "same meaning - the constant %s holds the literal; rename it by hand or with Refactor > Rename (Ctrl+Shift+E)"
+msgstr "gleiche Bedeutung - die Konstante %s hält das Literal; umbenennen von Hand oder mit Refactor > Rename (Strg+Umschalt+E)"
+
+msgid "network drive %s - the quick fix reads no project or include files there (the menu is built in the main thread); %s"
+msgstr "Netzlaufwerk %s - die Hilfe liest dort keine Projekt- und Include-Dateien (Menüaufbau im Hauptthread); %s"
+
+msgid "network path %s - the quick fix reads no form files there (the menu is built in the main thread); %s"
+msgstr "Netzpfad %s - die Hilfe liest dort keine Formdateien (Menüaufbau im Hauptthread); %s"
+
+msgid "network path %s - the quick fix reads no include files there (the menu is built in the main thread); %s"
+msgstr "Netzpfad %s - die Hilfe liest dort keine Include-Dateien (Menüaufbau im Hauptthread); %s"
+
+msgid "no finding"
+msgstr "kein Fund"
+
+msgid "no simple quick fix for this rule"
+msgstr "keine einfache Hilfe für diese Regel"
+
+msgid "line %d carries %s.Free, the finding names %s"
+msgstr "Zeile %d trägt %s.Free, der Fund nennt %s"
+
+msgid "the form file %s names %s - bound to an event by name"
+msgstr "die Formdatei %s nennt %s - per Name an ein Ereignis gebunden"
+
+msgid "no quick fix for the variant %s - only for %s (Free present, but beside the finally)"
+msgstr "keine Hilfe für die Variante %s - nur für %s (Free vorhanden, aber neben dem finally)"
+
+msgid "TObject is the ancestor anyway - same meaning"
+msgstr "TObject ist ohnehin der Vorfahr - gleiche Bedeutung"
+
+msgid "the condition as text - so the message names what failed"
+msgstr "die Bedingung als Text - so nennt die Meldung, was fehlschlug"
+
+msgid "the section was empty - same meaning"
+msgstr "der Abschnitt war leer - gleiche Bedeutung"
+
+msgid "same meaning - Delphi calls the routine without parentheses too"
+msgstr "gleiche Bedeutung - Delphi ruft die Routine auch ohne Klammern auf"
+
+msgid "all other values: do nothing (as before)"
+msgstr "alle anderen Werte: nichts tun (wie bisher)"
+
+msgid "same meaning - only the form; a further statement then visibly belongs to the branch"
+msgstr "gleiche Bedeutung - nur die Form; eine weitere Anweisung gehört danach sichtbar in den Zweig"
+
+msgid "the second \";\" was an empty statement"
+msgstr "das zweite \";\" war eine leere Anweisung"
+
+msgid "whitespace only"
+msgstr "nur Leerraum"
+
+msgid "same meaning - the section can then get a finalization"
+msgstr "gleiche Bedeutung - der Abschnitt kann danach ein finalization bekommen"
+
+msgid "the intent is in the body - a reason after it helps the next reader"
+msgstr "die Absicht steht im Rumpf - ein Grund dahinter hilft dem nächsten Leser"
+
+msgid "the exception is now raised - the code after it no longer runs in the error case"
+msgstr "die Exception wird jetzt ausgelöst - der Code dahinter läuft im Fehlerfall nicht mehr"
+
+msgid "the same exception - the original stack trace is kept"
+msgstr "dieselbe Exception - der Original-Stack-Trace bleibt erhalten"
+
+msgid "the skeleton is empty - fill in summary, param and returns"
+msgstr "das Gerüst ist leer - summary, param und returns ausfüllen"
+
+msgid "a new GUID - only for your own interfaces, never for COM imports"
+msgstr "eine neue GUID - nur für eigene Interfaces, nie für COM-Importe"
+
+msgid "same meaning - one assignment instead of two branches"
+msgstr "gleiche Bedeutung - eine Zuweisung statt zweier Zweige"
+
+msgid "same meaning - the control flow leaves the block anyway"
+msgstr "gleiche Bedeutung - der Ablauf verlässt den Block ohnehin"
+
+msgid "the assignment has no effect - if another value was meant (typo), it is still missing"
+msgstr "die Zuweisung bewirkt nichts - war ein anderer Wert gemeint (Tippfehler), fehlt er weiterhin"
+
+msgid "same meaning - the name appears nowhere else in the code of the file; documentation and a comment above it that names the routine go with it"
+msgstr "gleiche Bedeutung - der Name steht sonst nirgends im Code der Datei; Doku und ein Kommentar darüber, der die Routine nennt, gehen mit"
+
+msgid "same meaning - declaration and implementation go, the name appears nowhere else in the code of the file"
+msgstr "gleiche Bedeutung - Deklaration und Implementierung gehen, der Name steht sonst nirgends im Code der Datei"
+
+msgid "same meaning - only a comment is removed; version control still knows it"
+msgstr "gleiche Bedeutung - nur Kommentar fällt weg; die Versionsverwaltung kennt ihn noch"
+
+msgid "same meaning - the variable appears nowhere else"
+msgstr "gleiche Bedeutung - die Variable kommt nirgends sonst vor"
+
+msgid "Free now also runs on an exception and on Exit - the lines in between move into the try part"
+msgstr "Free läuft jetzt auch bei einer Ausnahme und bei Exit - die Zeilen dazwischen rücken in den try-Teil"
+
+msgid "the lock is now also released on an exception - the lines in between move into the try part"
+msgstr "die Sperre wird jetzt auch bei einer Ausnahme freigegeben - die Zeilen dazwischen rücken in den try-Teil"
+
+msgid "FreeMem now also runs on an exception and on Exit - the lines in between move into the try part"
+msgstr "FreeMem läuft jetzt auch bei einer Ausnahme und bei Exit - die Zeilen dazwischen rücken in den try-Teil"
+
+msgid "Result now starts with the named value instead of a random one - later assignments still apply"
+msgstr "Result beginnt jetzt mit dem genannten Wert statt zufällig - spätere Zuweisungen gelten weiter"

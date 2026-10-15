@@ -2615,3 +2615,129 @@ msgstr "aucun préfixe de portée du framework ne convient : %s"
 
 msgid "network path in the unit search path or next to the file (%s) - reDelphix does not read there (the menu is built in the main thread); whether the project has a unit of this name is open - %s"
 msgstr "chemin réseau dans le chemin de recherche des unités ou à côté du fichier (%s) - reDelphix n'y lit pas (le menu est construit dans le thread principal) ; on ne sait pas si le projet a une unité de ce nom - %s"
+
+msgid "the virtual call then ends up in this method"
+msgstr "l'appel virtuel aboutit ensuite dans cette méthode"
+
+msgid "only the warning W1010 goes away - the method still hides the inherited ones"
+msgstr "seul l'avertissement W1010 disparaît - la méthode masque toujours celles héritées"
+
+msgid "form file %s not readable (%s) - an event binding cannot be ruled out"
+msgstr "fichier de fiche %s illisible (%s) - une liaison d'événement ne peut pas être exclue"
+
+msgid "TObject.Create is empty - same meaning; the constructor then follows the convention"
+msgstr "TObject.Create est vide - même sens ; le constructeur suit ensuite la convention"
+
+msgid "the overridden parent constructor now runs first, with the same arguments"
+msgstr "le constructeur parent redéfini s'exécute désormais en premier, avec les mêmes arguments"
+
+msgid "TObject.Destroy is empty - same meaning; the destructor then follows the convention"
+msgstr "TObject.Destroy est vide - même sens ; le destructeur suit ensuite la convention"
+
+msgid "the parent destructor now runs at the end and frees the inherited fields"
+msgstr "le destructeur parent s'exécute désormais à la fin et libère les champs hérités"
+
+msgid "Result now starts empty instead of with the old content of the caller's target variable"
+msgstr "Result commence désormais vide au lieu de reprendre l'ancien contenu de la variable cible de l'appelant"
+
+msgid "same meaning - the constant %s holds the literal; rename it by hand or with Refactor > Rename (Ctrl+Shift+E)"
+msgstr "même sens - la constante %s contient le littéral ; la renommer à la main ou avec Refactor > Rename (Ctrl+Maj+E)"
+
+msgid "network drive %s - the quick fix reads no project or include files there (the menu is built in the main thread); %s"
+msgstr "lecteur réseau %s - le Quick-Fix n'y lit aucun fichier de projet ni include (le menu est construit dans le thread principal); %s"
+
+msgid "network path %s - the quick fix reads no form files there (the menu is built in the main thread); %s"
+msgstr "chemin réseau %s - le Quick-Fix n'y lit aucun fichier de fiche (le menu est construit dans le thread principal); %s"
+
+msgid "network path %s - the quick fix reads no include files there (the menu is built in the main thread); %s"
+msgstr "chemin réseau %s - le Quick-Fix n'y lit aucun fichier include (le menu est construit dans le thread principal); %s"
+
+msgid "no finding"
+msgstr "aucun résultat"
+
+msgid "no simple quick fix for this rule"
+msgstr "aucun Quick-Fix simple pour cette règle"
+
+msgid "line %d carries %s.Free, the finding names %s"
+msgstr "la ligne %d porte %s.Free, le résultat nomme %s"
+
+msgid "the form file %s names %s - bound to an event by name"
+msgstr "le fichier de fiche %s nomme %s - lié à un événement par son nom"
+
+msgid "no quick fix for the variant %s - only for %s (Free present, but beside the finally)"
+msgstr "aucun Quick-Fix pour la variante %s - seulement pour %s (Free présent, mais à côté du finally)"
+
+msgid "TObject is the ancestor anyway - same meaning"
+msgstr "TObject est de toute façon l'ancêtre - même sens"
+
+msgid "the condition as text - so the message names what failed"
+msgstr "la condition sous forme de texte - le message nomme ainsi ce qui a échoué"
+
+msgid "the section was empty - same meaning"
+msgstr "la section était vide - même sens"
+
+msgid "same meaning - Delphi calls the routine without parentheses too"
+msgstr "même sens - Delphi appelle aussi la routine sans parenthèses"
+
+msgid "all other values: do nothing (as before)"
+msgstr "toutes les autres valeurs : ne rien faire (comme avant)"
+
+msgid "same meaning - only the form; a further statement then visibly belongs to the branch"
+msgstr "même sens - seule la forme change ; une instruction supplémentaire appartient ensuite visiblement à la branche"
+
+msgid "the second \";\" was an empty statement"
+msgstr "le second « ; » était une instruction vide"
+
+msgid "whitespace only"
+msgstr "uniquement des espaces"
+
+msgid "same meaning - the section can then get a finalization"
+msgstr "même sens - la section peut ensuite recevoir un finalization"
+
+msgid "the intent is in the body - a reason after it helps the next reader"
+msgstr "l'intention figure dans le corps - une raison à la suite aide le prochain lecteur"
+
+msgid "the exception is now raised - the code after it no longer runs in the error case"
+msgstr "l'exception est désormais levée - le code qui suit ne s'exécute plus en cas d'erreur"
+
+msgid "the same exception - the original stack trace is kept"
+msgstr "la même exception - la pile d'appels d'origine est conservée"
+
+msgid "the skeleton is empty - fill in summary, param and returns"
+msgstr "le squelette est vide - remplir summary, param et returns"
+
+msgid "a new GUID - only for your own interfaces, never for COM imports"
+msgstr "un nouveau GUID - uniquement pour vos propres interfaces, jamais pour des imports COM"
+
+msgid "same meaning - one assignment instead of two branches"
+msgstr "même sens - une affectation au lieu de deux branches"
+
+msgid "same meaning - the control flow leaves the block anyway"
+msgstr "même sens - le flux d'exécution quitte le bloc de toute façon"
+
+msgid "the assignment has no effect - if another value was meant (typo), it is still missing"
+msgstr "l'affectation n'a aucun effet - si une autre valeur était voulue (faute de frappe), elle manque toujours"
+
+msgid "same meaning - the name appears nowhere else in the code of the file; documentation and a comment above it that names the routine go with it"
+msgstr "même sens - le nom n'apparaît nulle part ailleurs dans le code du fichier ; la documentation et un commentaire au-dessus qui nomme la routine sont supprimés avec elle"
+
+msgid "same meaning - declaration and implementation go, the name appears nowhere else in the code of the file"
+msgstr "même sens - la déclaration et l'implémentation sont supprimées, le nom n'apparaît nulle part ailleurs dans le code du fichier"
+
+msgid "same meaning - only a comment is removed; version control still knows it"
+msgstr "même sens - seul un commentaire disparaît ; le contrôle de version le connaît encore"
+
+msgid "same meaning - the variable appears nowhere else"
+msgstr "même sens - la variable n'apparaît nulle part ailleurs"
+
+msgid "Free now also runs on an exception and on Exit - the lines in between move into the try part"
+msgstr "Free s'exécute désormais aussi en cas d'exception et d'Exit - les lignes intermédiaires passent dans la partie try"
+
+msgid "the lock is now also released on an exception - the lines in between move into the try part"
+msgstr "le verrou est désormais libéré aussi en cas d'exception - les lignes intermédiaires passent dans la partie try"
+
+msgid "FreeMem now also runs on an exception and on Exit - the lines in between move into the try part"
+msgstr "FreeMem s'exécute désormais aussi en cas d'exception et d'Exit - les lignes intermédiaires passent dans la partie try"
+
+msgid "Result now starts with the named value instead of a random one - later assignments still apply"
+msgstr "Result commence désormais avec la valeur indiquée au lieu d'une valeur aléatoire - les affectations ultérieures restent valables"

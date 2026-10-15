@@ -23,16 +23,19 @@ unit uRdxFixTable;
 // (TRdxFixPlanner), das EINE Geruest der Planer mit Plan-Record
 // (TRdxFixFrame, Charge H5c) und die Zeilen.
 //
-// MENUETEXTE: englische msgids, uebersetzt ueber i18n/*.po (Editorhilfen
-// E6) in die reDelphix-Sprache (uRdxText._, Entscheid E29 - wie die
+// TEXTE: englische msgids, uebersetzt ueber i18n/*.po (Editorhilfen E6)
+// in die reDelphix-Sprache (uRdxText._, Entscheid E29 - wie die
 // SCA-Oberflaeche oder redelphix.ini [UI] Language; uRdxText nennt den
-// Weg). Sie stehen in FIX_CAPTIONS und FIX_ALT_CAPTIONS - zwei String-
+// Weg): Menuetexte, Hinweise und Gruende. Menuetexte und feste Hinweise
+// stehen in FIX_CAPTIONS, FIX_ALT_CAPTIONS und FIX_HINTS - drei String-
 // Arrays parallel zu FIX_ROWS, nicht als Feld der Zeile: tools/
 // i18n_extract.py liest nur _('..'), _(KONSTANTE) und _(ARRAY[i]); ein
 // Record-Feld bliebe fuer template.pot unsichtbar, und msgmerge markierte
-// die Uebersetzungen als obsolet. uTestRdxFixTable haelt die drei Arrays
-// zusammen (gleicher Index, kein leerer Menuetext, zweiter Menuetext genau
-// mit zweitem Planer).
+// die Uebersetzungen als obsolet (bis Charge G7 stand der Hinweis als Feld
+// Hint in der Zeile, deutsch). uTestRdxFixTable und tools/
+// gen-quickfix-doc.py --check halten die vier Arrays zusammen (gleicher
+// Index, kein leerer Menuetext, zweiter Menuetext genau mit zweitem
+// Planer, fester Hinweis genau ohne HintByPlanner).
 
 interface
 
@@ -51,10 +54,11 @@ type
     AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 
   // Eine Zeile der Tabelle (FIX_ROWS).
-  //   Hint           Hinweis des aktiven Eintrags (deutsch, wie die
-  //                  Gruende); '' nur mit HintByPlanner: der Planer setzt
-  //                  ihn selbst (aus Name oder Ersetzung, bei SCA085/SCA139
-  //                  vor dem ' + uses ...'). Genau eines von beiden.
+  //   HintByPlanner  True: der Planer setzt den Hinweis des aktiven
+  //                  Eintrags selbst (aus Name oder Ersetzung, bei SCA085/
+  //                  SCA139 vor dem ' + uses ...'); False: der feste Hinweis
+  //                  unter demselben Index in FIX_HINTS (msgid, RawHint).
+  //                  Genau eines von beiden.
   //   Changes        Kennzeichnung '(aendert Verhalten)' (E2), soweit sie
   //                  nicht vom Fund abhaengt - SCA149 (override oder
   //                  reintroduce) entscheidet der Planer.
@@ -65,15 +69,14 @@ type
   TRdxFixRow = record
     Kind          : TFindingKind;
     Plan          : TRdxFixPlanner;
-    Hint          : string;
     HintByPlanner : Boolean;
     Changes       : Boolean;
     Alt           : TRdxFixPlanner;
   end;
 
   // Der Einstieg des Anbieters und der Tests. Eine weitere Regel ist eine
-  // Zeile mehr in FIX_ROWS samt Menuetext in FIX_CAPTIONS - kein Zweig
-  // mehr in einem Verteiler.
+  // Zeile mehr in FIX_ROWS samt Menuetext in FIX_CAPTIONS und Hinweis in
+  // FIX_HINTS - kein Zweig mehr in einem Verteiler.
   TRdxFixTable = class
   public
     // True, wenn die Tabelle fuer diese Art eine Hilfe kennt.
@@ -81,8 +84,9 @@ type
 
     // Die Hilfe fuer einen Fund: der Planer seiner Art, danach der Hinweis
     // der Zeile (wenn der Planer keinen setzte) und die Kennzeichnung.
-    // Ohne Fund: Reason 'kein Fund'; ohne Zeile: 'keine einfache Hilfe
-    // fuer diese Regel'.
+    // Hinweis und Grund in der reDelphix-Sprache (uRdxText). Ohne Fund:
+    // Reason 'no finding' (de 'kein Fund'); ohne Zeile: 'no simple quick
+    // fix for this rule'.
     class function FixFor(APlaces: TSourcePlaces; ALines: TStrings;
       AFinding: TLeakFinding;
       const AUsesNames: TArray<string>): TRdxFixOutcome; static;
@@ -102,11 +106,13 @@ type
     class function CaptionFor(AKind: TFindingKind;
       const AOutcome: TRdxFixOutcome): string; static;
 
-    // Fuer uTestRdxFixTable: die Zeilen und ihre Menuetexte (msgids,
-    // unuebersetzt; AVariant 0 oder 1).
+    // Fuer uTestRdxFixTable: die Zeilen, ihre Menuetexte (msgids,
+    // unuebersetzt; AVariant 0 oder 1) und ihre festen Hinweise (msgid aus
+    // FIX_HINTS, unuebersetzt; '' bei HintByPlanner).
     class function RowCount: Integer; static;
     class function Row(AIndex: Integer): TRdxFixRow; static;
     class function RawCaption(AIndex, AVariant: Integer): string; static;
+    class function RawHint(AIndex: Integer): string; static;
   end;
 
 implementation
@@ -135,108 +141,61 @@ uses
   uRdxMagicFixes;    // SCA014
 
 const
-  // Hinweise der Hilfen (deutsch wie die Gruende; Pruefstand und Tests
-  // pruefen sie woertlich). Bis Charge R8 in uRdxRecipeRunner (LineHint,
-  // DeclHint, FlowHint und je Rumpf) - bis auf die ersten vier: SCA075,
-  // SCA074, SCA087 und SCA066 bekommen mit der Tabelle ERSTMALS einen
-  // festen Hinweis; bis dahin blieb ihr Hint leer, und der Eintrag stand
-  // ohne Erklaerung im Menue (Gegen-Review R8, Major 1; uTestRdxFixTable
-  // pinnt R_TOBJECT_HINT woertlich).
-  R_TOBJECT_HINT  = 'TObject ist ohnehin der Vorfahr - gleiche Bedeutung';
-  R_ASSERT_HINT   = 'die Bedingung als Text - so nennt die Meldung, was '
-    + 'fehlschlug';
-  R_EMPTYSEC_HINT = 'der Abschnitt war leer - gleiche Bedeutung';
-  R_NOARGS_HINT   = 'gleiche Bedeutung - Delphi ruft die Routine auch ohne '
-    + 'Klammern auf';
-  R_CASE_ELSE_HINT = 'alle anderen Werte: nichts tun (wie bisher)';
-  R_BLOCK_HINT     = 'gleiche Bedeutung - nur die Form; eine weitere '
-    + 'Anweisung gehoert danach sichtbar in den Zweig';
-  R_SEMI_HINT   = 'das zweite ";" war eine leere Anweisung';
-  R_INDENT_HINT = 'nur Leerraum';
-  R_INIT_HINT   = 'gleiche Bedeutung - der Abschnitt kann danach ein '
-    + 'finalization bekommen';
-  R_EMPTY_HINT  = 'die Absicht steht im Rumpf - ein Grund dahinter hilft dem '
-    + 'naechsten Leser';
-  R_MISSING_RAISE_HINT = 'die Exception wird jetzt ausgeloest - der Code '
-    + 'dahinter laeuft im Fehlerfall nicht mehr';
-  R_RERAISE_HINT = 'dieselbe Exception - der Original-Stack-Trace bleibt '
-    + 'erhalten';
-  R_DOC_HINT     = 'das Geruest ist leer - summary, param und returns '
-    + 'ausfuellen';
-  R_GUID_HINT    = 'eine neue GUID - nur fuer eigene Interfaces, nie fuer '
-    + 'COM-Importe';
-  R_OVERRIDE_HINT = 'der virtuelle Aufruf landet danach in dieser Methode';
-  R_REINTRODUCE_HINT = 'nur die Warnung W1010 entfaellt - die Methode '
-    + 'verdeckt die geerbten weiterhin';
-  R_COND_HINT = 'gleiche Bedeutung - eine Zuweisung statt zweier Zweige';
-  R_JUMP_HINT = 'gleiche Bedeutung - der Ablauf verlaesst den Block ohnehin';
-  R_SELF_HINT = 'die Zuweisung bewirkt nichts - war ein anderer Wert gemeint '
-    + '(Tippfehler), fehlt er weiterhin';
-  R_ROUTINE_HINT = 'gleiche Bedeutung - der Name steht sonst nirgends im '
-    + 'Code der Datei; Doku und ein Kommentar darueber, der die Routine nennt, '
-    + 'gehen mit';
-  R_METHOD_HINT  = 'gleiche Bedeutung - Deklaration und Implementierung '
-    + 'gehen, der Name steht sonst nirgends im Code der Datei';
-  R_FORM_UNREADABLE = 'Formdatei %s nicht lesbar (%s) - eine Ereignis-'
-    + 'Bindung ist nicht auszuschliessen';
+  // Hinweise und Gruende, die ein Planer-Adapter setzt: englische msgids,
+  // uebersetzt mit _() an der Verwendung (Entscheid E29). Die festen
+  // Hinweise der Zeilen stehen in FIX_HINTS (unten, parallel zu FIX_ROWS);
+  // bis Charge R8 standen alle in uRdxRecipeRunner (LineHint, DeclHint,
+  // FlowHint und je Rumpf), bis Charge G7 deutsch.
+  R_OVERRIDE_HINT = 'the virtual call then ends up in this method';
+  R_REINTRODUCE_HINT = 'only the warning W1010 goes away - the method still '
+    + 'hides the inherited ones';
+  R_FORM_UNREADABLE = 'form file %s not readable (%s) - an event binding '
+    + 'cannot be ruled out';
   // SCA147: Formdateien, die eine Methode per Name an ein Ereignis binden.
   FORM_EXTENSIONS: array[0..2] of string = ('.dfm', '.fmx', '.lfm');
-  R_COMMENTED_HINT = 'gleiche Bedeutung - nur Kommentar faellt weg; die '
-    + 'Versionsverwaltung kennt ihn noch';
-  R_UNUSED_VAR_HINT = 'gleiche Bedeutung - die Variable kommt nirgends sonst '
-    + 'vor';
-  // Charge H4 (try/finally): alle gekennzeichnet (E2) - B laeuft danach
-  // auch dort, wo es bisher uebersprungen wurde; das ist der Fix.
-  R_TRY_OBJECT_HINT = 'Free laeuft jetzt auch bei einer Ausnahme und bei Exit '
-    + '- die Zeilen dazwischen ruecken in den try-Teil';
-  R_TRY_LOCK_HINT   = 'die Sperre wird jetzt auch bei einer Ausnahme '
-    + 'freigegeben - die Zeilen dazwischen ruecken in den try-Teil';
-  R_TRY_BUFFER_HINT = 'FreeMem laeuft jetzt auch bei einer Ausnahme und bei '
-    + 'Exit - die Zeilen dazwischen ruecken in den try-Teil';
   // Charge H5 (Ergebnis und Konstruktoren): SCA096/SCA097 je nach Fund -
   // direkter TObject-Erbe bedeutungsgleich, sonst gekennzeichnet; SCA121/
   // SCA196 immer gekennzeichnet (Result ist danach definiert).
-  R_CTOR_TOBJECT_HINT = 'TObject.Create ist leer - gleiche Bedeutung; der '
-    + 'Konstruktor folgt danach der Konvention';
-  R_CTOR_OVERRIDE_HINT = 'der ueberschriebene Elternkonstruktor laeuft jetzt '
-    + 'zuerst, mit denselben Argumenten';
-  R_DTOR_TOBJECT_HINT = 'TObject.Destroy ist leer - gleiche Bedeutung; der '
-    + 'Destruktor folgt danach der Konvention';
-  R_DTOR_HINT = 'der Elterndestruktor laeuft jetzt am Ende und gibt die '
-    + 'geerbten Felder frei';
-  // SCA121: der Wert ist ein Literal (0, False, '''', nil ...) oder
-  // Default(T) (Charge H5c); der Menuetext nennt ihn. Bis Charge FB hiess es
-  // '(wie Default(T))' - das stimmt nicht, wenn ein Member wie der erste
-  // Aufzaehlungswert heisst (Gegen-Review R5-06, Fall 2; Absprache mit FE:
-  // der Text muss fuer Literal UND Default(T) stimmen).
-  R_RESULT_DEFAULT_HINT = 'Result beginnt jetzt mit dem genannten Wert statt '
-    + 'zufaellig - spaetere Zuweisungen gelten weiter';
-  R_RESULT_INIT_HINT = 'Result beginnt jetzt leer statt mit dem alten Inhalt '
-    + 'der Zielvariable des Aufrufers';
+  R_CTOR_TOBJECT_HINT = 'TObject.Create is empty - same meaning; the '
+    + 'constructor then follows the convention';
+  R_CTOR_OVERRIDE_HINT = 'the overridden parent constructor now runs first, '
+    + 'with the same arguments';
+  R_DTOR_TOBJECT_HINT = 'TObject.Destroy is empty - same meaning; the '
+    + 'destructor then follows the convention';
+  R_DTOR_HINT = 'the parent destructor now runs at the end and frees the '
+    + 'inherited fields';
+  R_RESULT_INIT_HINT = 'Result now starts empty instead of with the old '
+    + 'content of the caller''s target variable';
   // SCA014 (Charge Q14, E28): die Inline-Konstante haelt die Bedeutung des
   // Literals (E26); den vorlaeufigen Namen benennt der Benutzer selbst um -
   // keine Sync-Edit-Sitzung der Hilfe, und auch kein Rat dazu: Esc
   // zerstoert im Sync Edit Text (UI-Test 2026-10-11), Strg+Umschalt+J
-  // braucht eine Markierung (Gegen-Review Q14, Minor 13).
-  R_MAGIC_HINT = 'gleiche Bedeutung - die Konstante %s haelt das Literal; '
-    + 'umbenennen von Hand oder mit Refactor > Rename (Strg+Umschalt+E)';
+  // braucht eine Markierung (Gegen-Review Q14, Minor 13). Die Taste nennt
+  // die Uebersetzung so, wie die IDE ihrer Sprache sie beschriftet (de
+  // 'Strg+Umschalt+E').
+  R_MAGIC_HINT = 'same meaning - the constant %s holds the literal; rename it '
+    + 'by hand or with Refactor > Rename (Ctrl+Shift+E)';
   // SCA014 auf einem Netzlaufwerk: die Hilfe liest dort keine Projekt- und
   // Include-Dateien (Gegen-Review Q14, Verdacht e; UNC prueft FileReason).
-  R_MAGIC_REMOTE = 'Netzlaufwerk %s - die Hilfe liest dort keine Projekt- '
-    + 'und Include-Dateien (Menueaufbau im Hauptthread); von Hand';
+  // Das Ende ('by hand') kommt als %s aus uRdxText (MsgByHand), der
+  // Trenner '; ' davor bleibt im Satz.
+  R_MAGIC_REMOTE = 'network drive %s - the quick fix reads no project or '
+    + 'include files there (the menu is built in the main thread); %s';
   // SCA147/SCA164 auf einem Netzpfad bzw. Netzlaufwerk (Review FB, R2-07):
   // dieselbe Regel wie SCA014 - FileExists auf einer nicht erreichbaren
   // Freigabe blockierte den IDE-Hauptthread (Gegen-Review R4-03: 2,5 bis
-  // 16 s je Aufruf).
-  R_REMOTE_FILES = 'Netzpfad %s - die Hilfe liest dort keine %s '
-    + '(Menueaufbau im Hauptthread); von Hand';
-  WHAT_FORMS    = 'Formdateien';
-  WHAT_INCLUDES = 'Include-Dateien';
+  // 16 s je Aufruf). Je Dateiart, die die Hilfe lesen wollte, ein ganzer
+  // Satz (E29: kein Nomen als %s - bis Charge G7 'liest dort keine %s'
+  // mit WHAT_FORMS/WHAT_INCLUDES); das Ende wie bei R_MAGIC_REMOTE.
+  R_REMOTE_FORMS = 'network path %s - the quick fix reads no form files '
+    + 'there (the menu is built in the main thread); %s';
+  R_REMOTE_INCLUDES = 'network path %s - the quick fix reads no include '
+    + 'files there (the menu is built in the main thread); %s';
   // SCA001: nur diese Variante bekommt die Hilfe (Feld TLeakFinding.
   // LeakVariant, das uLeakDetector2 setzt; properties.variant im SARIF).
   LEAK_VARIANT_FOF = 'freed-outside-finally';
-  R_NO_FINDING = 'kein Fund';
-  R_NO_ROW     = 'keine einfache Hilfe fuer diese Regel';
+  R_NO_FINDING = 'no finding';
+  R_NO_ROW     = 'no simple quick fix for this rule';
   // Entscheid E2: eine Hilfe, die das Verhalten aendern kann, sagt es.
   CAP_CHANGES  = '(changes behavior)';
   NAME_UNKNOWN = 'X';
@@ -290,9 +249,10 @@ type
   TRdxFixFrame = class
   public
     // Ohne Zeilen bzw. (NeedsOpen) ohne offenen Quellstellen-Dienst:
-    // R_NO_FILE. Sonst der Planer auf der Code-Sicht, Name und Ersetzungen
-    // per Parts, nach einem Angebot der Check; gesperrt ohne Ersetzungen.
-    // Den Plan bekommt der Aufrufer in APlan (Kennzeichnung, Variants).
+    // MsgNoFileOpen (uRdxText). Sonst der Planer auf der Code-Sicht, Name
+    // und Ersetzungen per Parts, nach einem Angebot der Check; gesperrt
+    // ohne Ersetzungen. Den Plan bekommt der Aufrufer in APlan
+    // (Kennzeichnung, Variants).
     class function Run<TPlan>(const AForm: TRdxPlanForm<TPlan>;
       APlaces: TSourcePlaces; ALines: TStrings; AFinding: TLeakFinding;
       out APlan: TPlan): TRdxFixOutcome; static;
@@ -306,7 +266,7 @@ var
 begin
   Result := Default(TRdxFixOutcome);
   APlan := Default(TPlan);
-  Result.Reason := R_NO_FILE;
+  Result.Reason := MsgNoFileOpen;
   if not Assigned(ALines) then Exit;
   if AForm.NeedsOpen and not (Assigned(APlaces) and APlaces.IsOpen) then
     Exit;
@@ -387,40 +347,63 @@ begin
   Result := '';
   Drive := RemoteDriveOf(AFileName);
   if Drive <> '' then
-    Result := Format(R_MAGIC_REMOTE, [Drive]);
+    Result := _(R_MAGIC_REMOTE, [Drive, MsgByHand]);
 end;
 
 // SCA147/SCA164 (Review FB, R2-07): liegt die Unit im Netz
 // (uRdxPaths.IsNetworkPath: UNC, auch mit '/' oder als '\\?\UNC\..', oder
 // ein Netzlaufwerk; '\\?\C:\..' ist lokal)? Dann liest die Hilfe dort
-// nichts (AWhat: was sie lesen wollte) - dieselbe Regel wie SCA014. Der
-// Grund nennt das Verzeichnis ohne Namensraum-Vorsatz bzw. das
-// Netzlaufwerk. '' oder der Grund.
-function NetworkPathReason(const AFileName, AWhat: string): string;
+// nichts - dieselbe Regel wie SCA014. APlace ist der Ort fuer den Grund:
+// das Netzlaufwerk bzw. das Verzeichnis ohne Namensraum-Vorsatz. Bis
+// Charge G7 NetworkPathReason mit dem Nomen der Dateiart als %s - jetzt
+// setzt der Grund je Art (RemoteFormsReason, RemoteIncludesReason) den Ort
+// in seinen eigenen Satz (E29).
+function NetworkPlaceOf(const AFileName: string; out APlace: string): Boolean;
 var
-  Path, Drive : string;
+  Path : string;
+begin
+  APlace := '';
+  Result := IsNetworkPath(AFileName);
+  if not Result then Exit;
+  Path := WithoutNamespacePrefix(AFileName);
+  APlace := RemoteDriveOf(Path);
+  if APlace = '' then
+    APlace := ExtractFileDir(Path);
+end;
+
+// SCA147: die Formdateien neben einer Unit im Netz liest die Hilfe nicht
+// (NetworkPlaceOf). '' oder der Grund.
+function RemoteFormsReason(const AFileName: string): string;
+var
+  Place : string;
 begin
   Result := '';
-  if not IsNetworkPath(AFileName) then Exit;
-  Path := WithoutNamespacePrefix(AFileName);
-  Drive := RemoteDriveOf(Path);
-  if Drive <> '' then
-    Result := Format(R_REMOTE_FILES, [Drive, AWhat])
-  else
-    Result := Format(R_REMOTE_FILES, [ExtractFileDir(Path), AWhat]);
+  if NetworkPlaceOf(AFileName, Place) then
+    Result := _(R_REMOTE_FORMS, [Place, MsgByHand]);
+end;
+
+// SCA164 (und SCA147 mit Includes im Plan): die Include-Dateien neben einer
+// Unit im Netz liest die Hilfe nicht (NetworkPlaceOf). '' oder der Grund.
+function RemoteIncludesReason(const AFileName: string): string;
+var
+  Place : string;
+begin
+  Result := '';
+  if NetworkPlaceOf(AFileName, Place) then
+    Result := _(R_REMOTE_INCLUDES, [Place, MsgByHand]);
 end;
 
 // SCA164: die Include-Dateien vor implementation liest die Hilfe von der
 // Platte neben der Unit (Gegen-Review H3, Minor 4) - sie koennen die
 // Routine deklarieren oder rufen; nicht gefunden heisst keine Hilfe. Nur,
 // wenn der Plan welche nennt (seit Charge B1-FD auch der von SCA147), und
-// nicht auf einem Netzpfad (NetworkPathReason, R2-07).
+// nicht auf einem Netzpfad (RemoteIncludesReason, R2-07).
 function IncludeCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
   AFinding: TLeakFinding; const APlan: TRdxRoutinePlan): string;
 begin
   Result := '';
   if Length(APlan.Includes) = 0 then Exit;
-  Result := NetworkPathReason(AFinding.FileName, WHAT_INCLUDES);
+  Result := RemoteIncludesReason(AFinding.FileName);
   if Result = '' then
     Result := TRdxRoutineFixes.IncludeReason(AFinding.FileName,
       APlan.Includes, APlan.Name);
@@ -540,9 +523,8 @@ begin
   begin
     Result.Enabled := False;
     Result.Edits   := nil;
-    Result.Reason  := Format('Zeile %d traegt %s.Free, der Fund nennt %s - '
-      + 'Zeile verschoben? Datei neu pruefen',
-      [AFinding.LineInt, Result.Name, Named]);
+    Result.Reason  := MsgMovedSuffix(_('line %d carries %s.Free, the '
+      + 'finding names %s', [AFinding.LineInt, Result.Name, Named]));
   end;
 end;
 
@@ -710,9 +692,9 @@ begin
   Result.ChangesBehavior := Result.Name = DIRECTIVE_OVERRIDE;
   if not Result.Enabled then Exit;
   if Result.ChangesBehavior then
-    Result.Hint := R_OVERRIDE_HINT
+    Result.Hint := _(R_OVERRIDE_HINT)
   else
-    Result.Hint := R_REINTRODUCE_HINT;
+    Result.Hint := _(R_REINTRODUCE_HINT);
 end;
 
 function PlanRedundantConditional(APlaces: TSourcePlaces; ALines: TStrings;
@@ -760,7 +742,7 @@ end;
 // den Puffer; der Detektor prueft nur .dfm (und .lfm im FPC-Dialekt).
 // Gelesen wird die Platte - ein im Designer neu gesetztes Ereignis traegt
 // die IDE in den published-Teil ein, nicht unter private. Auf einem
-// Netzpfad liest die Hilfe nichts (der Aufrufer prueft NetworkPathReason
+// Netzpfad liest die Hilfe nichts (der Aufrufer prueft RemoteFormsReason
 // vorher, R2-07). '' oder Grund.
 function FormReason(const AUnitFile, AName: string): string;
 var
@@ -781,13 +763,13 @@ begin
         SL.LoadFromFile(Form);
       except
         on E: EStreamError do
-          Exit(Format(R_FORM_UNREADABLE, [ExtractFileName(Form), E.Message]));
+          Exit(_(R_FORM_UNREADABLE, [ExtractFileName(Form), E.Message]));
         on E: EEncodingError do
-          Exit(Format(R_FORM_UNREADABLE, [ExtractFileName(Form), E.Message]));
+          Exit(_(R_FORM_UNREADABLE, [ExtractFileName(Form), E.Message]));
       end;
       if TRdxRoutineFixes.FormNamesMethod(SL.Text, AName) then
-        Exit(Format('die Formdatei %s nennt %s - per Name an ein Ereignis '
-          + 'gebunden', [ExtractFileName(Form), AName]));
+        Exit(_('the form file %s names %s - bound to an event by name',
+          [ExtractFileName(Form), AName]));
     finally
       SL.Free;
     end;
@@ -803,7 +785,7 @@ begin
     RoutineForm(TRdxRoutineFixes.UnusedPrivateMethod),
     APlaces, ALines, AFinding, P);
   if not Result.Enabled then Exit;
-  Result.Reason := NetworkPathReason(AFinding.FileName, WHAT_FORMS);
+  Result.Reason := RemoteFormsReason(AFinding.FileName);
   if Result.Reason = '' then
     Result.Reason := FormReason(AFinding.FileName, Result.Name);
   if Result.Reason = '' then Exit;
@@ -859,8 +841,8 @@ begin
   LeakVar := AFinding.MemoryLeakVariant;
   Result := Default(TRdxFixOutcome);
   Result.Name := TRdxTryFixes.NameOf(AFinding.Message);
-  Result.Reason := Format('keine Hilfe fuer die Variante %s - nur fuer %s '
-    + '(Free vorhanden, aber neben dem finally)', [LeakVar, LEAK_VARIANT_FOF]);
+  Result.Reason := _('no quick fix for the variant %s - only for %s (Free '
+    + 'present, but beside the finally)', [LeakVar, LEAK_VARIANT_FOF]);
 end;
 
 function PlanLockWithoutFinally(APlaces: TSourcePlaces; ALines: TStrings;
@@ -907,9 +889,9 @@ begin
   Result.ChangesBehavior := P.Changes;
   if not Result.Enabled then Exit;
   if P.Changes then
-    Result.Hint := R_CTOR_OVERRIDE_HINT
+    Result.Hint := _(R_CTOR_OVERRIDE_HINT)
   else
-    Result.Hint := R_CTOR_TOBJECT_HINT;
+    Result.Hint := _(R_CTOR_TOBJECT_HINT);
 end;
 
 // SCA097: 'inherited;' am Ende - gekennzeichnet, ausser bei direktem
@@ -925,9 +907,9 @@ begin
   Result.ChangesBehavior := P.Changes;
   if not Result.Enabled then Exit;
   if P.Changes then
-    Result.Hint := R_DTOR_HINT
+    Result.Hint := _(R_DTOR_HINT)
   else
-    Result.Hint := R_DTOR_TOBJECT_HINT;
+    Result.Hint := _(R_DTOR_TOBJECT_HINT);
 end;
 
 // SCA121: 'Result := <Wert>;' als erste Anweisung - ein Literal oder
@@ -958,7 +940,7 @@ begin
     ResultForm(TRdxResultFixes.ManagedResultInit),
     APlaces, ALines, AFinding, P);
   if not Result.Enabled then Exit;
-  Result.Hint := R_RESULT_INIT_HINT;
+  Result.Hint := _(R_RESULT_INIT_HINT);
   if P.NeedsVariants then
     Result.Enabled := AppendUses(APlaces, AUsesNames, 'Variants',
       'System.Variants', Result);
@@ -975,7 +957,7 @@ begin
     MagicForm(TRdxMagicFixes.MagicNumber),
     APlaces, ALines, AFinding, P);
   if Result.Enabled then
-    Result.Hint := Format(R_MAGIC_HINT, [P.Name]);
+    Result.Hint := _(R_MAGIC_HINT, [P.Name]);
 end;
 
 { ---- Die Tabelle ---- }
@@ -986,98 +968,167 @@ const
   // Je Art eine Zeile; die Reihenfolge ist die der Chargen (Stufe 2a,
   // Stufe 2 Rest, uQuickFix-Umzug/Stufe 3, Zeilen, Ausnahmen, Deklarationen
   // H1, Anweisungen H2, Routinen H3b, Aufraeumen H3a, try/finally H4,
-  // Ergebnis und Konstruktoren H5, Magic Number Q14). Der Menuetext steht
-  // unter demselben Index in FIX_CAPTIONS (s. Kopf).
+  // Ergebnis und Konstruktoren H5, Magic Number Q14). Der feste Hinweis
+  // steht unter demselben Index in FIX_HINTS, der Menuetext in
+  // FIX_CAPTIONS (s. Kopf).
   FIX_ROWS: array[0..FIX_ROW_HIGH] of TRdxFixRow = (
     (Kind: fkExplicitTObjectInheritance; Plan: PlanExplicitTObject;
-     Hint: R_TOBJECT_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkFreeAndNilHint; Plan: PlanFreeAndNil;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     (Kind: fkNilComparison; Plan: PlanNilComparison;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     (Kind: fkAssertMessage; Plan: PlanAssertMessage;
-     Hint: R_ASSERT_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkEmptyVisibilitySection; Plan: PlanEmptySection;
-     Hint: R_EMPTYSEC_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkFreeWithoutNil; Plan: PlanFreeWithoutNil;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     (Kind: fkEmptyArgumentList; Plan: PlanEmptyArgs;
-     Hint: R_NOARGS_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkRedundantBoolean; Plan: PlanOperand;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     (Kind: fkAssignedAndAssignedNil; Plan: PlanOperand;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     // SCA007: der initialization-Abschnitt der Unit laeuft nicht mehr (E2).
     (Kind: fkUnusedUses; Plan: PlanUnusedUses;
-     Hint: ''; HintByPlanner: True; Changes: True; Alt: nil),
+     HintByPlanner: True; Changes: True; Alt: nil),
     (Kind: fkDefaultCaseInCaseStatement; Plan: PlanCaseElse;
-     Hint: R_CASE_ELSE_HINT; HintByPlanner: False; Changes: False;
-     Alt: PlanCaseRaise),
+     HintByPlanner: False; Changes: False; Alt: PlanCaseRaise),
     (Kind: fkBeginEndRequired; Plan: PlanBlock;
-     Hint: R_BLOCK_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkIfElseBegin; Plan: PlanBlock;
-     Hint: R_BLOCK_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkSuperfluousSemicolon; Plan: PlanDoubleSemicolon;
-     Hint: R_SEMI_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkUnitLevelKeywordIndent; Plan: PlanKeywordIndent;
-     Hint: R_INDENT_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkLegacyInitializationSection; Plan: PlanLegacyInit;
-     Hint: R_INIT_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkCastAndFree; Plan: PlanCastFree;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     (Kind: fkEmptyMethod; Plan: PlanEmptyIntent;
-     Hint: R_EMPTY_HINT; HintByPlanner: False; Changes: False;
-     Alt: PlanEmptyRaise),
+     HintByPlanner: False; Changes: False; Alt: PlanEmptyRaise),
     // SCA120: die Exception wird jetzt ausgeloest - das ist der Fix (E2).
     (Kind: fkMissingRaise; Plan: PlanMissingRaise;
-     Hint: R_MISSING_RAISE_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     (Kind: fkReRaiseException; Plan: PlanReRaise;
-     Hint: R_RERAISE_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkPublicMemberWithoutDoc; Plan: PlanDocSkeleton;
-     Hint: R_DOC_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkInterfaceWithoutGuid; Plan: PlanInterfaceGuid;
-     Hint: R_GUID_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkMissingOverride; Plan: PlanMissingOverride;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     (Kind: fkRedundantConditional; Plan: PlanRedundantConditional;
-     Hint: R_COND_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkRedundantJump; Plan: PlanRedundantJump;
-     Hint: R_JUMP_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkSelfAssignment; Plan: PlanSelfAssignment;
-     Hint: R_SELF_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkUnusedRoutine; Plan: PlanUnusedRoutine;
-     Hint: R_ROUTINE_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkUnusedPrivateMethod; Plan: PlanUnusedPrivateMethod;
-     Hint: R_METHOD_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkCommentedOutCode; Plan: PlanCommentedOut;
-     Hint: R_COMMENTED_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkUnusedLocalVar; Plan: PlanUnusedVar;
-     Hint: R_UNUSED_VAR_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     // Charge H4: alle gekennzeichnet (E2) - Strg+Alt+F laesst sie aus.
     (Kind: fkMissingFinally; Plan: PlanMissingFinally;
-     Hint: R_TRY_OBJECT_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     (Kind: fkMemoryLeak; Plan: PlanMemoryLeak;
-     Hint: R_TRY_OBJECT_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     (Kind: fkLockWithoutTryFinally; Plan: PlanLockWithoutFinally;
-     Hint: R_TRY_LOCK_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     (Kind: fkUnpairedLock; Plan: PlanUnpairedLock;
-     Hint: R_TRY_LOCK_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     (Kind: fkGetMemWithoutFreeMem; Plan: PlanGetMemWithoutFree;
-     Hint: R_TRY_BUFFER_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     // Charge H5: SCA096/SCA097 kennzeichnet der Planer nach dem Fund (wie
     // SCA149), SCA121/SCA196 immer.
     (Kind: fkConstructorWithoutInherited; Plan: PlanCtorInherited;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     (Kind: fkDestructorWithoutInherited; Plan: PlanDtorInherited;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     (Kind: fkRoutineResultUnassigned; Plan: PlanResultDefault;
-     Hint: R_RESULT_DEFAULT_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     (Kind: fkManagedResultUninit; Plan: PlanManagedResult;
-     Hint: ''; HintByPlanner: True; Changes: True; Alt: nil),
+     HintByPlanner: True; Changes: True; Alt: nil),
     // Charge Q14: bedeutungsgleich (E26), den Hinweis setzt der Adapter
     // (Name der Konstante).
     (Kind: fkMagicNumber; Plan: PlanMagicNumber;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil)
+     HintByPlanner: True; Changes: False; Alt: nil)
+  );
+
+  // Die festen Hinweise (englische msgids) unter dem Index der Zeile;
+  // '' genau bei HintByPlanner - FixFor uebersetzt mit _(FIX_HINTS[i]),
+  // nie _('') (die msgid '' ist der Kopf der .po). Bis Charge G7 als
+  // Feld Hint der Zeile (deutsch) - fuer tools/i18n_extract.py
+  // unsichtbar (s. Kopf). SCA075, SCA074, SCA087 und SCA066 haben ihren
+  // festen Hinweis seit der Tabelle (Charge R8; bis dahin leer, der
+  // Eintrag stand ohne Erklaerung im Menue - Gegen-Review R8, Major 1).
+  FIX_HINTS: array[0..FIX_ROW_HIGH] of string = (
+    'TObject is the ancestor anyway - same meaning',
+    '',
+    '',
+    'the condition as text - so the message names what failed',
+    'the section was empty - same meaning',
+    '',
+    'same meaning - Delphi calls the routine without parentheses too',
+    '',
+    '',
+    '',
+    'all other values: do nothing (as before)',
+    'same meaning - only the form; a further statement then visibly belongs '
+      + 'to the branch',
+    'same meaning - only the form; a further statement then visibly belongs '
+      + 'to the branch',
+    'the second ";" was an empty statement',
+    'whitespace only',
+    'same meaning - the section can then get a finalization',
+    '',
+    'the intent is in the body - a reason after it helps the next reader',
+    'the exception is now raised - the code after it no longer runs in the '
+      + 'error case',
+    'the same exception - the original stack trace is kept',
+    'the skeleton is empty - fill in summary, param and returns',
+    'a new GUID - only for your own interfaces, never for COM imports',
+    '',
+    'same meaning - one assignment instead of two branches',
+    'same meaning - the control flow leaves the block anyway',
+    'the assignment has no effect - if another value was meant (typo), it is '
+      + 'still missing',
+    'same meaning - the name appears nowhere else in the code of the file; '
+      + 'documentation and a comment above it that names the routine go '
+      + 'with it',
+    'same meaning - declaration and implementation go, the name appears '
+      + 'nowhere else in the code of the file',
+    'same meaning - only a comment is removed; version control still knows it',
+    'same meaning - the variable appears nowhere else',
+    // Charge H4 (try/finally): alle gekennzeichnet (E2) - B laeuft danach
+    // auch dort, wo es bisher uebersprungen wurde; das ist der Fix.
+    'Free now also runs on an exception and on Exit - the lines in between '
+      + 'move into the try part',
+    'Free now also runs on an exception and on Exit - the lines in between '
+      + 'move into the try part',
+    'the lock is now also released on an exception - the lines in between '
+      + 'move into the try part',
+    'the lock is now also released on an exception - the lines in between '
+      + 'move into the try part',
+    'FreeMem now also runs on an exception and on Exit - the lines in between '
+      + 'move into the try part',
+    '',
+    '',
+    // SCA121: der Wert ist ein Literal (0, False, '''', nil ...) oder
+    // Default(T) (Charge H5c); der Menuetext nennt ihn. Bis Charge FB hiess
+    // es '(wie Default(T))' - das stimmt nicht, wenn ein Member wie der
+    // erste Aufzaehlungswert heisst (Gegen-Review R5-06, Fall 2; Absprache
+    // mit FE: der Text muss fuer Literal UND Default(T) stimmen).
+    'Result now starts with the named value instead of a random one - later '
+      + 'assignments still apply',
+    '',
+    ''
   );
 
   // Menuetexte (msgids) unter dem Index der Zeile; '%s' = Name der Hilfe
@@ -1169,6 +1220,11 @@ begin
     Result := FIX_CAPTIONS[AIndex];
 end;
 
+class function TRdxFixTable.RawHint(AIndex: Integer): string;
+begin
+  Result := FIX_HINTS[AIndex];
+end;
+
 class function TRdxFixTable.FixFor(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
@@ -1177,18 +1233,19 @@ begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(AFinding) then
   begin
-    Result.Reason := R_NO_FINDING;
+    Result.Reason := _(R_NO_FINDING);
     Exit;
   end;
   Idx := GRowIndex[AFinding.Kind];
   if Idx < 0 then
   begin
-    Result.Reason := R_NO_ROW;
+    Result.Reason := _(R_NO_ROW);
     Exit;
   end;
   Result := FIX_ROWS[Idx].Plan(APlaces, ALines, AFinding, AUsesNames);
-  if Result.Enabled and (Result.Hint = '') then
-    Result.Hint := FIX_ROWS[Idx].Hint;
+  // Nie _('') - die msgid '' ist der Kopf der .po (HintByPlanner: '').
+  if Result.Enabled and (Result.Hint = '') and (FIX_HINTS[Idx] <> '') then
+    Result.Hint := _(FIX_HINTS[Idx]);
   // Auch gesperrt gekennzeichnet (wie bisher): der Eintrag steht mit Grund
   // im Menue und sagt, was er taete.
   Result.ChangesBehavior := Result.ChangesBehavior or FIX_ROWS[Idx].Changes;

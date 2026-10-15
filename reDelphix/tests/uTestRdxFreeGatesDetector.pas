@@ -387,8 +387,9 @@ var
   Src, QFile : string;
   O          : TRdxFixOutcome;
 begin
-  // Der Laufwerks-Zweig von NetworkPathReason (uRdxFixTable, seit Charge
-  // B2S-a ueber uRdxPaths.RemoteDriveOf): auf einem Netzlaufwerk liest die
+  // Der Laufwerks-Zweig von NetworkPlaceOf/RemoteFormsReason (uRdxFixTable,
+  // bis Charge G7 NetworkPathReason; seit Charge B2S-a ueber
+  // uRdxPaths.RemoteDriveOf): auf einem Netzlaufwerk liest die
   // Hilfe keine Formdatei neben der Unit, und der Grund nennt das
   // Laufwerk - auch lang geschrieben ('\\?\Q:\..'), dort ohne den Vorsatz.
   // Q: ist eines nur ueber die Naht; der Pfad besteht aus Teilen (ein
