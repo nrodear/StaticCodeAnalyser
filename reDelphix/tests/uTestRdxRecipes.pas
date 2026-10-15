@@ -1087,6 +1087,7 @@ begin
     Assert.IsTrue(T.Resolve('ComCtrls', fwUnknown, Q, Why), Why);
     Assert.AreEqual('Vcl.ComCtrls', Q);
     Assert.IsFalse(T.Resolve('Forms', fwBoth, Q, Why));
+    Assert.IsTrue(Pos('VCL und FMX', Why) > 0, Why);
     Assert.IsFalse(T.Resolve('MyUnit', fwVcl, Q, Why));
     Assert.IsTrue(Pos('nicht in der Scope-Tabelle', Why) > 0, Why);
   finally
@@ -1125,6 +1126,7 @@ begin
     Assert.IsTrue(Pos('DCC_Namespace', Why) > 0, Why);
     Assert.IsFalse(T.Resolve('Skia', fwUnknown, Q, Why),
       'Rahmenwerk unbekannt: VCL moeglich');
+    Assert.IsTrue(Pos('DCC_Namespace', Why) > 0, Why);
     // Eine FMX-Datei hat kein Vcl in der Liste: System vor FMX wie bisher.
     Assert.IsTrue(T.Resolve('Skia', fwFmx, Q, Why), Why);
     Assert.AreEqual('System.Skia', Q);

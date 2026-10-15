@@ -126,7 +126,7 @@ begin
   try
     Assert.IsFalse(TRdxSuppress.LineMarker(L, 7, KIND, E, R),
       'gross/klein wie der Core');
-    Assert.IsTrue(R <> '');
+    Assert.IsTrue(Pos('schon da', R) > 0, R);
   finally
     L.Free;
   end;
@@ -151,9 +151,14 @@ var
 begin
   L := LinesOf('unit u;'#13#10#13#10'end.');
   try
+    // Jede Ablehnung mit IHREM Grund (Nachbesserung FF, Befundklasse
+    // R6-04: bis dahin prueften diese Asserts nur das False).
     Assert.IsFalse(TRdxSuppress.LineMarker(L, 2, 'X', E, R));
+    Assert.IsTrue(Pos('Fundzeile ist leer', R) > 0, R);
     Assert.IsFalse(TRdxSuppress.LineMarker(L, 99, 'X', E, R));
+    Assert.IsTrue(Pos('keine Fundzeile', R) > 0, R);
     Assert.IsFalse(TRdxSuppress.LineMarker(L, 1, '', E, R));
+    Assert.IsTrue(Pos('keine Fundzeile', R) > 0, R);
   finally
     L.Free;
   end;
@@ -191,6 +196,7 @@ begin
       'noinspection-file MagicNumber, TooLongLine', []), Apply(Src, E));
     Assert.IsFalse(TRdxSuppress.FileMarker(L, 'toolongline', E, R),
       'steht schon da');
+    Assert.IsTrue(Pos('schon da', R) > 0, R);
   finally
     L.Free;
   end;
@@ -201,6 +207,7 @@ begin
   try
     Assert.IsFalse(TRdxSuppress.FileMarker(L, 'TooLongLine', E, R),
       'Tag:Art steht schon da');
+    Assert.IsTrue(Pos('schon da', R) > 0, R);
     Assert.IsTrue(TRdxSuppress.FileMarker(L, 'MagicNumber', E, R), R);
     Assert.AreEqual(StringReplace(Src, 'noinspection-file:TooLongLine',
       'noinspection-file: MagicNumber,TooLongLine', []), Apply(Src, E));
@@ -360,8 +367,10 @@ begin
   L := LinesOf(Src);
   try
     Assert.IsFalse(TRdxSuppress.LineMarker(L, 7, 'TooLongLine', E, R));
+    Assert.IsTrue(Pos('mehrzeiligen String', R) > 0, R);
     Assert.IsFalse(TRdxSuppress.LineMarker(L, 8, 'TooLongLine', E, R),
       'auch die schliessende Zeile liegt noch im String');
+    Assert.IsTrue(Pos('mehrzeiligen String', R) > 0, R);
     Assert.IsTrue(TRdxSuppress.LineMarker(L, 6, 'TooLongLine', E, R), R);
   finally
     L.Free;

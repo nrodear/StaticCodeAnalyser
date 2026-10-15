@@ -281,11 +281,21 @@ begin
     AssertRefused(UnitWith([], ['  Foo;', '  if ' + Form + ' then Bar;']),
       Form, '200', 'Zeile verschoben?');
   // '200_000' meldet der Detektor dagegen als "200" (er liest '_000' als
-  // Bezeichner): ein frischer Fehlalarm. Der Grund nennt ihn - bis Review
-  // R6-05 hiess er 'Zeile verschoben?', und ein neuer Scan fand denselben
-  // Fund wieder.
+  // Bezeichner), mit Bruchteil ebenso: ein frischer Fehlalarm. Der Grund
+  // nennt ihn samt dem Literal - bis Review R6-05 hiess er 'Zeile
+  // verschoben?' (fuer '200_000.5' bis zur Nachbesserung FF), und ein neuer
+  // Scan fand denselben Fund wieder.
   AssertRefused(UnitWith([], ['  Foo;', '  if X > 200_000 then Bar;']),
-    'X > 200_000', '200', 'Zifferntrennern nur den ersten Block 200');
+    'X > 200_000', '200', 'vergleicht mit 200_000 - der Detektor liest bei '
+    + 'Zifferntrennern nur den ersten Block 200');
+  AssertRefused(UnitWith([], ['  Foo;', '  if X > 200_000.5 then Bar;']),
+    'X > 200_000.5', '200', 'vergleicht mit 200_000.5 - der Detektor liest '
+    + 'bei Zifferntrennern nur den ersten Block 200');
+  // Einen Wert liest der Detektor nur hinter einem Vergleich: steht
+  // '200_000' anderswo in der Bedingung, ist die Zeile seit dem Scan
+  // geaendert (diese Form meldet er nicht).
+  AssertRefused(UnitWith([], ['  Foo;', '  if Foo(200_000) > X then Bar;']),
+    'Foo(200_000) > X', '200', 'Zeile verschoben?');
 end;
 
 // '200.5' daneben zaehlt nicht - das eine "200" ist eindeutig.

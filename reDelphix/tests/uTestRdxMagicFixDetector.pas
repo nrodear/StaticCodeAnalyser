@@ -30,6 +30,8 @@ type
     [Test] procedure Sca014_Branch_RoundTrip;
     [Test] procedure Sca014_Outcome_CaptionAndHint;
     [Test] procedure Sca014_Ambiguous_NoHelp;
+    // Review R6-05 (Nachbesserung FF): Zifferntrenner, ein Fehlalarm.
+    [Test] procedure Sca014_DigitSeparator_FalseAlarm_NoHelp;
     [Test] procedure Sca014_OldCompiler_NoHelp;
     [Test] procedure Sca014_LazarusProject_NoHelp;
     [Test] procedure Sca014_FpcInclude_NoHelp;
@@ -188,6 +190,23 @@ procedure TTestRdxMagicFixDetector.Sca014_Ambiguous_NoHelp;
 begin
   AssertNoHelp(InUnit([], ['  Foo;', '  if (X > 200) or (Y < 200) then Bar;']),
     'mehrdeutig');
+end;
+
+// '200_000' - auch mit Bruchteil - meldet der Detektor als "200" (er liest
+// '_000' als Bezeichner; ohne Delphi gegengeprueft: CLI-Exe, beide Formen):
+// ein Fehlalarm, die Hilfe nennt ihn samt dem Literal statt 'Zeile
+// verschoben?'. Behebt eine Detektor-Charge den Fehlalarm, meldet der
+// Detektor hier nichts mehr, und der Test faellt mit 'der Detektor meldet'
+// - dann diesen Test und den Trenner-Zweig von TRdxMagicFixes.LiteralAt
+// anpassen.
+procedure TTestRdxMagicFixDetector.Sca014_DigitSeparator_FalseAlarm_NoHelp;
+begin
+  AssertNoHelp(InUnit([], ['  Foo;', '  if X > 200_000 then Bar;']),
+    'vergleicht mit 200_000 - der Detektor liest bei Zifferntrennern nur den '
+    + 'ersten Block 200');
+  AssertNoHelp(InUnit([], ['  Foo;', '  if X > 200_000.5 then Bar;']),
+    'vergleicht mit 200_000.5 - der Detektor liest bei Zifferntrennern nur '
+    + 'den ersten Block 200');
 end;
 
 // Eine Unit, die nach Delphi XE2 fragt, baut auch dort - ohne
