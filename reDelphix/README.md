@@ -381,6 +381,14 @@ Muster fuer jeden Text, der aus dem Quelltext in die `.po` wandert:
   `OneTokenReason`, `ScriptReason(AFeature)`), uebersetzt der Aufrufer; die
   empfangende Unit setzt ihn per `%s` in ihren Satz, ohne ihn noch einmal
   zu uebersetzen (`_(AWhat)` waere dynamisch und haette keine msgid).
+  `ManyFmt` ist ein Muster (`_('%d self-assignments of %s')`): `%d` die
+  Zahl der Treffer, `%s` das Feld `ManyArg` bzw. das Argument `AArg` von
+  `OneTokenReason` - Text aus der Meldung steht nie im Muster (ein `%`
+  darin warf EConvertError).
+* Eine Text-Konstante im interface, die eine andere Unit benutzt
+  (`R_NO_FILE` in `uRdxFixTable`), faellt erst mit ihrer letzten
+  Verwendung - Delphi-Units uebersetzt der FPC-Pruefstand nicht, ein Rest
+  fiele erst im IDE-Bau auf (E2003).
 * Wer auf einen Grund verzweigt (`Pos`, `=`, `StartsText`), prueft vor der
   Uebersetzung - eine Kennung oder ein Feld, nie den Text (der ist in en
   und fr ein anderer).
@@ -422,14 +430,20 @@ Umlauten; fr in `fr.po`; je Funktion ein Test in en/de/fr in
 
 Gate: `python tools\rdx_i18n_gate.py` meldet deutsche Text-Literale in
 `source\`, die weder erstes Argument von `_()` noch Wert einer
-msgid-Konstante sind (Heuristik des Inventars: Leerzeichen, Wort, deutsches
-Wort oder Umlaut; verkettete Literale zaehlen als ein Text), dazu deutsche
-msgids, qualifizierte Aufrufe `X._()` und `_(KONSTANTE)` mit einer
-Konstante, die in der Unit keine reine Literal-Kette ist. `--report` zeigt
-den Stand je Unit, `--unit uRdxFlowFixes.pas` prueft nur diese Unit,
-`--selftest` faehrt 23 Mutanten. Bewusst feste Texte (Protokoll) stehen
-mit Begruendung in `tools\rdx_i18n_gate.allow`; ein Eintrag, der nichts
-mehr trifft, ist selbst ein Fund. Stand Charge C1: 729 Funde in 24 Units -
+msgid-Konstante sind (Heuristik: ein deutsches Wort, auch als Ende eines
+zusammengesetzten wie `Formdateien` oder `asm-Rumpf`, ein Umlaut, ein
+umschriebener Umlaut in einer Folge, die es englisch nicht gibt, oder
+`%d` mit grossgeschriebenem Nomen - auch ein einzelnes Wort; verkettete
+Literale zaehlen als ein Text), dazu deutsche msgids, qualifizierte
+Aufrufe `X._()`, `_(KONSTANTE)` mit einer Konstante, die in der Unit keine
+reine Literal-Kette ist, und dynamische Argumente (`_(AWhat)`,
+`_(Format(..))`, `_('a ' + X)` - der Extraktor uebergeht sie still). Nicht
+sehen kann es einen deutschen Text nur aus Woertern, die es auch englisch
+gibt (`Parameter` ohne Zahl). `--report` zeigt den Stand je Unit,
+`--unit uRdxFlowFixes.pas` prueft nur diese Unit, `--selftest` faehrt 35
+Mutanten. Bewusst feste Texte (Protokoll) stehen mit Begruendung in
+`tools\rdx_i18n_gate.allow`; ein Eintrag, der nichts mehr trifft, ist
+selbst ein Fund. Stand nach der Nachpruefung C1: 738 Funde in 24 Units -
 rot, bis die Umstellung durch ist, und deshalb noch nicht in der CI.
 
 ## Scope-Tabelle pflegen
