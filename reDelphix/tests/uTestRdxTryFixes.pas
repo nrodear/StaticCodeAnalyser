@@ -57,7 +57,7 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Classes,
+  System.Classes,
   uRdxCodeMap, uRdxTryFixes,
   uTestRdxTextKit;   // Join, Apply
 

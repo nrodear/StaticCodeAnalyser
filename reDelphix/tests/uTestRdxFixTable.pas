@@ -32,7 +32,7 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Classes,
+  System.Classes,
   uMethodd12, uSCAConsts, uRdxRecipeRunner, uRdxFixTable,
   uTestRdxTextKit;   // Join
 

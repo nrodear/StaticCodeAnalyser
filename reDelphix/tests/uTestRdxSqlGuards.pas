@@ -46,7 +46,7 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Classes,
+  System.Classes,
   uRefactorInfo, uRdxRecipes, uRdxCodeMap, uRdxSqlTemplate,
   uTestRdxTextKit;   // Join, LineOf
 

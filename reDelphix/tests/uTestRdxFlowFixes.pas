@@ -46,7 +46,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxFlowFixes,
+  uRdxCodeMap, uRdxFlowFixes,
   uTestRdxTextKit;   // Join, Apply
 
 type

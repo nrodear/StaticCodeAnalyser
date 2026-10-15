@@ -36,7 +36,7 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Classes,
+  System.Classes,
   uRdxBufferMath, uRdxCodeMap, uRdxStructFixes,
   uTestRdxTextKit;   // Join, Apply
 

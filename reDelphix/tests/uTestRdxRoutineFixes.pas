@@ -70,7 +70,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxRoutineFixes,
+  uRdxCodeMap, uRdxRoutineFixes,
   uTestRdxTextKit;   // Join, Apply, WriteText, NewTempDir
 
 const

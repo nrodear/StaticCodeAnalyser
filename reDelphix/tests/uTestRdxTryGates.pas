@@ -63,7 +63,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxTryFixes,
+  uRdxCodeMap, uRdxTryFixes,
   uTestRdxTextKit;   // Join, Apply
 
 const
