@@ -77,6 +77,9 @@ type
     [Test] procedure Numeric_CardinalArg_UsesU;
     [Test] procedure SelfAppend_FormatOverRest;
     [Test] procedure SelfAppend_OnlyLiterals_Disabled;
+    // Nachpruefung FB zu R2-04: hinter 'X +' ist X der Kettenanfang - ein
+    // Zeiger als erster Term dahinter verkettet.
+    [Test] procedure SelfAppend_PointerCastFirst_Enabled;
     // AH22 (Verifikations-Workflow nach AH21): Ansi-Operand bei
     // Unicode-Ziel, Variant-Quellen ohne Tell, Klammergruppe, Literal-
     // Quelltext, Leerraum in Literalen, Kommentar vor der Kette,
@@ -1166,6 +1169,22 @@ begin
   Assert.IsFalse(RunRecipe(UnitWith(
     '  Text := Text + ''a'' + #13#10 + ''b'' + ''c'';'), 'Text := Text', O));
   Assert.IsTrue(Pos('nur Literale', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.SelfAppend_PointerCastFirst_Enabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Pruefer FB_verify (uTestFbProbeC): die Sperre 'Zeiger am Kettenanfang'
+  // (R2-04) traf beim Selbst-Anhaengen den ersten Term HINTER 'Text +' -
+  // dort verkettet Delphi aber Text + PChar(Marker), der Anfang ist Text.
+  // Gegen den ersten Stand der Charge (3d753de6) rot, 4358b769 bot es an.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := Text + PChar(Marker) + Obj.ClassName + ''.txt'';'),
+    'Text := Text', O), O.Reason);
+  Assert.IsTrue(O.SelfAppend);
+  Assert.AreEqual('Format(''%s%s.txt'', [PChar(Marker), Obj.ClassName])',
+    O.NewText);
 end;
 
 { ---- Review reDelphiX 2026-10-07, Welle 2 ---- }

@@ -86,10 +86,26 @@ type
     ByCompiler : TArray<string>;   // Operanden, fuer die nur das Kompilat buergt
   end;
 
+  // Wo die Terme fuer BuildFormatCall in der Kette stehen: am Anfang - dort
+  // rechnet ein Zeiger als erster Term Zeiger-Arithmetik (Review FB R2-04)
+  // - oder hinter dem Ziel beim Selbst-Anhaengen 'X := X + ..': dort ist X
+  // der Anfang, ein String, und jeder Term dahinter verkettet (Nachpruefung
+  // FB - bis dahin lehnte 'S := S + P + N + ''x''' mit P: PChar falsch ab).
+  TRdxChainStart = (csChainHead, csBehindTarget);
+
+  // Rahmenwerk einer Datei nach ihren qualifizierten uses-Eintraegen
+  // (DetectFramework): keins erkennbar, VCL ('Vcl.*'), FMX ('FMX.*') oder
+  // beide - davon haengt ab, welchen Scope ein mehrdeutiger Kurzname
+  // ('Forms', 'Graphics') bekommt.
   TRdxFramework = (fwUnknown, fwVcl, fwFmx, fwBoth);
 
   TRdxRecipes = class
   public
+    // Ein Teilbereich fuer die Rezepte (TRdxPart): Rolle, Quelltext, Core-
+    // Urteil und - falls bekannt - deklarierter Typ des Operanden bzw. des
+    // Arguments von IntToStr(x). HeadResolved, InWith und Shadowed setzt der
+    // Aufrufer danach (TRdxRecipeRunner.PartsOf); hier stehen sie auf ''
+    // bzw. False.
     class function MakePart(const ARole, AText: string;
       AValueType: TRefactorValueType = rvUnknown;
       const AResolved: string = '';
@@ -100,6 +116,7 @@ type
     class function DecodeLiteral(const ASource: string;
       out AValue: string): Boolean; static;
     // Wert -> Quelltext: Quotes verdoppelt, Steuerzeichen (< #32) als #nn.
+    // Die Laenge begrenzt erst SplitLongLiteral.
     class function EncodeLiteral(const AValue: string): string; static;
 
     // Zeilenumbrueche und Tabulatoren zu einem Leerzeichen, aussen getrimmt.
@@ -128,9 +145,15 @@ type
     // ATargetType: deklarierter Typ des Ziels (nackt, klein), wenn bekannt;
     // bei einem Unicode-Ziel (string/unicodestring/widestring) duerfen
     // Nicht-Unicode-Operanden mit, Format wandelt sie wie die Zuweisung.
+    // Gesperrt auch ein Zeiger am Kettenanfang (Review FB R2-04; nicht bei
+    // AStart = csBehindTarget). Der Formatstring geht durch SplitLongLiteral
+    // (kein Literal ueber 255 Elemente).
     class function BuildFormatCall(const AParts: TRdxParts;
-      out ABuild: TRdxFormatBuild;
-      const ATargetType: string = ''): Boolean; overload; static;
+      out ABuild: TRdxFormatBuild; const ATargetType: string = '';
+      AStart: TRdxChainStart = csChainHead): Boolean; overload; static;
+    // Dasselbe ohne Zieltyp und ohne die Herkunft der Argumente - nur Text
+    // und Grund; fuer Aufrufer, die die Zaehler nicht brauchen (Tests,
+    // Korpus-Probe).
     class function BuildFormatCall(const AParts: TRdxParts;
       out ANewText, AReason: string): Boolean; overload; static;
 
@@ -184,6 +207,8 @@ type
     //     rvString): eine gleichnamige Funktion der Unit nimmt der Core
     //     zurueck (rvUnknown), dann bleibt IntToStr(x) stehen (strittiger
     //     Minor 3).
+    //   * Nachtrag Review FB (R2-04): am Kettenanfang hinter einem Zeiger
+    //     buergt das Kompilat nicht - PointerStartReason (implementation).
 
     // True, wenn der Text die Form eines Operanden hat: Bezeichner (oder
     // eine Klammergruppe mit folgendem '.', '[' oder '^', z. B.
@@ -216,12 +241,22 @@ type
     // PAnsiChar, AnsiChar.
     class function IsNonUnicodeStringType(const ATypeLow: string): Boolean;
       static;
+    // True fuer genau einen Bezeichner: ein Anfangszeichen, dann nur
+    // Bezeichnerzeichen (IsIdentStart/IsIdentChar wie der Core, also auch
+    // Nicht-ASCII) - kein Punkt, keine Klammer, kein Leerraum. '' ist keiner.
     class function IsPlainIdent(const AText: string): Boolean; static;
     // Name, unter dem eine Funktion der Unit den Term verdecken koennte:
     // Kopf eines Aufrufs ('paramstr' aus 'ParamStr(1)') oder ein blosser
     // Bezeichner ('slinebreak'), klein; '' bei qualifizierten oder
     // zusammengesetzten Termen ('SysUtils.Trim(x)', 'TPath.GetTempPath').
     class function ShadowNameOf(const AText: string): string; static;
+    // Das Urteil der Kompilat-Regel (Block oben) ueber EINEN Term fuer %s:
+    // ein Literal ist ovString; sonst entscheiden der deklarierte Typ
+    // (Resolved, HeadResolved) und das Core-Urteil (ValueType), dann
+    // RTL-Namen (nicht im with-Block, nicht Shadowed), Variant-Anzeichen,
+    // Cast- bzw. Aufrufkopf und zuletzt die Form (ovByCompiler oder
+    // ovNoOperand). Die Stellung in der Kette (Zeiger am Anfang) prueft
+    // BuildFormatCall.
     class function JudgeOperand(const APart: TRdxPart): TRdxOperandVerdict;
       static;
     // '%d' fuer vorzeichenbehaftete Ganzzahlen und Byte/Word, '%u' fuer
@@ -349,6 +384,26 @@ type
     class function SortedInsertIndex(const AUnitNames: TArray<string>;
       const ANewName: string): Integer; static;
   end;
+
+// Teilt einen Zeichenketten-Quelltext ('..'-Teile und #-Codes ohne
+// Leerraum dazwischen - so bauen ihn EncodeLiteral und der Formatstring
+// von BuildFormatCall) mit ' + ' in Literale von hoechstens 255
+// Elementen: bis Delphi 11 traegt ein Literal nicht mehr (E2056; Delphi
+// 12 erlaubt mehr), und eine Hilfe darf Code fuer aeltere Compiler nicht
+// brechen - SCA074 sperrt dieselbe Grenze (Review FB, R2-02: aus Ketten
+// mit kurzen Literalen wurde ein Formatstring von 376 Zeichen). Der Wert
+// bleibt gleich, 'a' + 'b' ist ein konstanter Ausdruck. Ein Lauf aus
+// '..'-Teilen und #-Codes zaehlt als EIN Literal; ein Zeichen bzw. #-Code
+// zaehlt vorsichtig so viel wie in UTF-8 (1 bis 3, ein Surrogat-Paar 4):
+// ob Delphi bis 11 Zeichen oder die UTF-8-Bytes seiner inneren Form
+// zaehlt, ist hier nicht belegt (Nachpruefung FB) - die Teilung kostet
+// nichts, ein Literal ueber der Grenze den Bau. Geteilt wird bevorzugt hinter
+// einem Leerzeichen, wenn das Literal dort mindestens halb voll ist,
+// nie in einem Surrogat-Paar. Ein Text anderer Form kommt unveraendert
+// zurueck. Frei statt in TRdxRecipes (Charge FB): die Klasse traegt schon
+// mehr Methoden, als der Selbstscan erlaubt (SCA138), und der Baustein
+// braucht keinen ihrer Teile.
+function SplitLongLiteral(const ASource: string): string;
 
 implementation
 
@@ -1316,6 +1371,174 @@ begin
   Result := Ok;
 end;
 
+{ ---- Literal-Laenge (E2056, Review FB R2-02) ---- }
+
+const
+  // Elemente eines String-Literals bis Delphi 11 (E2056) - dieselbe Grenze
+  // wie MAX_ASSERT_LITERAL der SCA074-Hilfe (uRdxSimpleFixes).
+  MAX_LITERAL_ELEMENTS = 255;
+  // Schliesst das Literal, verkettet, oeffnet ein neues.
+  LITERAL_JOIN = ''' + ''';
+  PLUS_JOIN    = ' + ';
+  // UTF-8-Laenge eines Zeichens (ElementWidth): bis hier ein bzw. zwei
+  // Bytes, darueber drei; ein Surrogat-Paar (ab U+10000) vier.
+  UTF8_ONE_BYTE_BELOW  = $80;
+  UTF8_TWO_BYTES_BELOW = $800;
+  UTF8_BMP_BYTES       = 3;
+  UTF8_PAIR_BYTES      = 4;
+
+type
+  // Zustand von SplitLongLiteral: die Ausgabe, die Elemente des laufenden
+  // Literals, wo der offene '..'-Teil in der Ausgabe beginnt (Laenge der
+  // Ausgabe hinter seinem Quote) und wo darin zuletzt ein Leerzeichen stand
+  // (Laenge der Ausgabe dahinter, 0 = keins; BlankRun = Elemente bis dort).
+  TRdxLiteralSplit = record
+    Output    : string;
+    Run       : Integer;
+    SpanStart : Integer;
+    BlankAt   : Integer;
+    BlankRun  : Integer;
+  end;
+
+function IsHighSurrogateCh(C: Char): Boolean;
+begin
+  Result := (C >= #$D800) and (C <= #$DBFF);
+end;
+
+function IsLowSurrogateCh(C: Char): Boolean;
+begin
+  Result := (C >= #$DC00) and (C <= #$DFFF);
+end;
+
+// Elemente eines Zeichens bzw. Codes: vorsichtig seine Laenge in UTF-8 -
+// ASCII eins, bis U+07FF zwei, sonst drei (ein einzelnes Surrogat auch).
+// Bis zur Nachpruefung FB zaehlte alles ueber ASCII zwei; ein CJK-Zeichen
+// (drei Bytes) liess so ein Literal von bis zu 381 Bytes zu.
+function ElementWidth(ACode: Integer): Integer;
+begin
+  if ACode < UTF8_ONE_BYTE_BELOW then
+    Result := 1
+  else if ACode < UTF8_TWO_BYTES_BELOW then
+    Result := 2
+  else
+    Result := UTF8_BMP_BYTES;
+end;
+
+// Vor einem Element mit AWidth Elementen: passt es nicht mehr ins
+// laufende Literal, wird geteilt - steht der '..'-Teil noch leer da, vor
+// seinem Quote; sonst hinter dem letzten Leerzeichen, wenn das Literal
+// dort mindestens halb voll war; sonst hier.
+procedure SplitBeforeElement(var S: TRdxLiteralSplit; AWidth: Integer);
+begin
+  if S.Run + AWidth <= MAX_LITERAL_ELEMENTS then Exit;
+  if Length(S.Output) = S.SpanStart then
+  begin
+    Insert(PLUS_JOIN, S.Output, S.SpanStart);
+    Inc(S.SpanStart, Length(PLUS_JOIN));
+    S.Run := 0;
+  end
+  else if (S.BlankAt > 0) and (2 * S.BlankRun >= MAX_LITERAL_ELEMENTS) then
+  begin
+    Insert(LITERAL_JOIN, S.Output, S.BlankAt + 1);
+    S.Run := S.Run - S.BlankRun;
+  end
+  else
+  begin
+    S.Output := S.Output + LITERAL_JOIN;
+    S.Run := 0;
+  end;
+  S.BlankAt := 0;
+end;
+
+// Ein '..'-Teil ab ASource[AAt] (Quote): Element fuer Element in die
+// Ausgabe ('' ist EIN Element, ein Surrogat-Paar auch - es zaehlt vier,
+// wie in UTF-8). False ohne schliessendes Quote.
+function SplitQuotedPart(var S: TRdxLiteralSplit; const ASource: string;
+  var AAt: Integer): Boolean;
+var
+  Elem  : string;
+  Width : Integer;
+begin
+  S.Output := S.Output + '''';
+  S.SpanStart := Length(S.Output);
+  S.BlankAt := 0;
+  Inc(AAt);
+  while AAt <= Length(ASource) do
+  begin
+    Width := ElementWidth(Ord(ASource[AAt]));
+    Elem := ASource[AAt];
+    if ASource[AAt] = '''' then
+    begin
+      if (AAt = Length(ASource)) or (ASource[AAt + 1] <> '''') then
+      begin
+        S.Output := S.Output + '''';
+        Inc(AAt);
+        Exit(True);
+      end;
+      Elem := '''''';
+    end
+    else if IsHighSurrogateCh(ASource[AAt]) and (AAt < Length(ASource))
+       and IsLowSurrogateCh(ASource[AAt + 1]) then
+    begin
+      Elem := Copy(ASource, AAt, 2);
+      Width := UTF8_PAIR_BYTES;
+    end;
+    SplitBeforeElement(S, Width);
+    S.Output := S.Output + Elem;
+    Inc(S.Run, Width);
+    Inc(AAt, Length(Elem));
+    if (Elem = ' ') or (Elem = #9) then
+    begin
+      S.BlankAt := Length(S.Output);
+      S.BlankRun := S.Run;
+    end;
+  end;
+  Result := False;
+end;
+
+// Ein #-Code ab ASource[AAt] (CharCodeSpan): passt er nicht mehr ins
+// laufende Literal, beginnt mit ihm ein neues. False ohne Ziffer.
+function SplitCharCode(var S: TRdxLiteralSplit; const ASource: string;
+  var AAt: Integer): Boolean;
+var
+  Start, Code, Width : Integer;
+begin
+  Start := AAt;
+  Result := CharCodeSpan(ASource, AAt, Code);
+  if not Result then Exit;
+  Width := ElementWidth(Code);
+  if S.Run + Width > MAX_LITERAL_ELEMENTS then
+  begin
+    S.Output := S.Output + PLUS_JOIN;
+    S.Run := 0;
+  end;
+  S.Output := S.Output + Copy(ASource, Start, AAt - Start);
+  Inc(S.Run, Width);
+  S.BlankAt := 0;
+end;
+
+function SplitLongLiteral(const ASource: string): string;
+var
+  S  : TRdxLiteralSplit;
+  i  : Integer;
+  Ok : Boolean;
+begin
+  S := Default(TRdxLiteralSplit);
+  i := 1;
+  Ok := ASource <> '';
+  while Ok and (i <= Length(ASource)) do
+    if ASource[i] = '''' then
+      Ok := SplitQuotedPart(S, ASource, i)
+    else if ASource[i] = '#' then
+      Ok := SplitCharCode(S, ASource, i)
+    else
+      Ok := False;
+  if Ok then
+    Result := S.Output
+  else
+    Result := ASource;
+end;
+
 class function TRdxRecipes.NumericArgument(const APart: TRdxPart;
   out AArgument, ASpec: string): Boolean;
 begin
@@ -1658,8 +1881,62 @@ begin
     Result := 'SQL-Text: Umformung gesperrt (SCA003)';
 end;
 
+const
+  // Zeigertypen, mit denen 'P + N' rechnet statt verkettet (R2-04).
+  PCHAR_TYPES: array[0..2] of string = ('pchar', 'pwidechar', 'pansichar');
+
+// Ein Zeiger-Term: als PChar/PWideChar/PAnsiChar deklariert oder ein Cast
+// darauf ('PChar(S)').
+function IsPointerTerm(const APart: TRdxPart): Boolean;
+begin
+  Result := (APart.Role = ROLE_OPERAND) and (InList(APart.Resolved, PCHAR_TYPES)
+    or InList(CallHeadOf(Trim(APart.Text)), PCHAR_TYPES));
+end;
+
+// Zeiger am Kettenanfang (Kompilat-Regel, Nachtrag Review FB R2-04): das
+// Kompilat buergt hier NICHT. 'P + FOffset + ''x''' mit P: PChar rechnet
+// zuerst P + FOffset als Zeiger-Arithmetik und verkettet erst dann - die
+// Kette uebersetzt, auch wenn FOffset eine Zahl ist, und Format('%s%sx',
+// [P, FOffset]) wirft EConvertError. Gesperrt, wenn der erste Term als
+// PChar/PWideChar/PAnsiChar deklariert oder ein Cast darauf ist und der
+// zweite weder Literal noch bewiesener String. Nicht beim Selbst-Anhaengen
+// (AStart = csBehindTarget): dort beginnt die Kette mit dem Ziel X, einem
+// String - 'X + P' verkettet (Nachpruefung FB). Bekannte Grenze: ein PChar
+// UNBEKANNTEN Typs am Anfang (Feld oder Funktion einer anderen Unit) bleibt
+// unsichtbar - dann wirft Format zur Laufzeit, statt still falsch zu
+// rechnen. '' oder der Grund.
+function PointerStartReason(const AParts: TRdxParts;
+  AStart: TRdxChainStart): string;
+var
+  i, n  : Integer;
+  Terms : array[0..1] of TRdxPart;
+begin
+  Result := '';
+  if AStart = csBehindTarget then Exit;
+  n := 0;
+  for i := 0 to High(AParts) do
+  begin
+    if AParts[i].Role = ROLE_TARGET then
+      Continue;
+    Terms[n] := AParts[i];
+    Inc(n);
+    if n = 2 then
+      Break;
+  end;
+  if (n < 2) or not IsPointerTerm(Terms[0])
+     or (Terms[1].Role <> ROLE_OPERAND)
+     or (TRdxRecipes.JudgeOperand(Terms[1]) = ovString) then
+    Exit;
+  Result := Format('Operand ''%s'': Zeiger am Kettenanfang - ''%s + %s'' '
+    + 'rechnet Delphi als Zeiger-Arithmetik, Format nicht',
+    [TRdxRecipes.CollapseCode(Terms[0].Text),
+     TRdxRecipes.CollapseCode(Terms[0].Text),
+     TRdxRecipes.CollapseCode(Terms[1].Text)]);
+end;
+
 class function TRdxRecipes.BuildFormatCall(const AParts: TRdxParts;
-  out ABuild: TRdxFormatBuild; const ATargetType: string): Boolean;
+  out ABuild: TRdxFormatBuild; const ATargetType: string;
+  AStart: TRdxChainStart): Boolean;
 var
   i    : Integer;
   Scan : TRdxFormatScan;
@@ -1669,6 +1946,8 @@ begin
   Scan   := Default(TRdxFormatScan);
   Scan.TargetU := (ATargetType = 'string') or (ATargetType = 'unicodestring')
     or (ATargetType = 'widestring');
+  ABuild.Reason := PointerStartReason(AParts, AStart);
+  if ABuild.Reason <> '' then Exit;
   for i := 0 to High(AParts) do
   begin
     if AParts[i].Role = ROLE_TARGET then
@@ -1684,8 +1963,10 @@ begin
   ABuild.Reason := ChainReason(Scan, ABuild);
   if ABuild.Reason <> '' then Exit;
   if Scan.InQuote then Scan.Fmt := Scan.Fmt + '''';
-  ABuild.NewText := 'Format(' + Scan.Fmt + ', [' + JoinStrings(Scan.Args, ', ')
-    + '])';
+  // Die Literale der Kette einzeln kurz, zusammen im Formatstring evtl. nicht
+  // mehr (E2056 bis Delphi 11; Review FB R2-02).
+  ABuild.NewText := 'Format(' + SplitLongLiteral(Scan.Fmt) + ', ['
+    + JoinStrings(Scan.Args, ', ') + '])';
   Result := True;
 end;
 

@@ -24,6 +24,9 @@ type
     [Test] procedure CaptionFor_NameVariantChanges;
     [Test] procedure FixFor_NoFindingOrRow;
     [Test] procedure FixFor_TableHintAndChanges;
+    // Charge FB (missed R5(5), Absprache mit FE zu R5-06): der feste
+    // Hinweis von SCA121 stimmt fuer jeden eingesetzten Wert.
+    [Test] procedure ResultDefaultHint_NamesShownValue;
   end;
 
 implementation
@@ -220,6 +223,27 @@ begin
     F.Free;
     SL.Free;
   end;
+end;
+
+procedure TTestRdxFixTable.ResultDefaultHint_NamesShownValue;
+var
+  i : Integer;
+  R : TRdxFixRow;
+begin
+  // Der Menuetext nennt den Wert (ein Literal oder Default(T)); bis Charge
+  // FB versprach der Hinweis '(wie Default(T))' - falsch, wenn ein Member
+  // wie der erste Aufzaehlungswert heisst (Gegen-Review R5-06, Fall 2).
+  for i := 0 to TRdxFixTable.RowCount - 1 do
+  begin
+    R := TRdxFixTable.Row(i);
+    if R.Kind <> fkRoutineResultUnassigned then
+      Continue;
+    Assert.IsFalse(R.HintByPlanner, 'SCA121: fester Hinweis der Zeile');
+    Assert.AreEqual('Result beginnt jetzt mit dem genannten Wert statt '
+      + 'zufaellig - spaetere Zuweisungen gelten weiter', R.Hint);
+    Exit;
+  end;
+  Assert.Fail('keine Zeile fuer SCA121');
 end;
 
 initialization

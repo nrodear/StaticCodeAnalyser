@@ -96,21 +96,30 @@ type
     Reason : string;      // wenn Needed, aber keine Stelle bestimmbar
   end;
 
-  // Ergebnis einer einfachen Hilfe (TRdxFixRunner): die Ersetzungen fuer
-  // EINEN Undo-Schritt und ein Hinweis fuers Menue - oder der Grund, warum
-  // es keine Hilfe gibt.
+  // Ergebnis einer einfachen Hilfe (TRdxFixRunner, Planer der Tabelle
+  // uRdxFixTable): die Ersetzungen fuer EINEN Undo-Schritt und ein Hinweis
+  // fuers Menue - oder der Grund, warum es keine Hilfe gibt.
   TRdxFixOutcome = record
     Enabled : Boolean;
     Edits   : TArray<TRdxEdit>;
-    Name    : string;    // X fuer den Menuetext: SCA085 wie im Puffer, SCA139 wie in der Meldung
+    // Was fuer '%s' im Menuetext der Zeile steht (uRdxFixTable,
+    // FIX_CAPTIONS - die Liste je Art dort): X bei SCA085 (wie im Puffer)
+    // und SCA139 (wie in der Meldung), die Unit, der Cast-Typ, die
+    // Direktive, Routine, Variable, Sperre, der Wert, die Zahl ... - auch,
+    // wenn abgelehnt wird, soweit der Planer ihn schon kennt.
+    Name    : string;
     Hint    : string;    // bei Enabled = True
     Reason  : string;    // bei Enabled = False
     // 0 = die Hilfe (FixFor), 1 = der zweite Eintrag (AlternativeFixFor:
     // SCA168 else mit raise, SCA020 raise ENotImplemented).
     Variant : Integer;
-    // Entscheid E2 (Konzept Editorhilfen): der Menuetext traegt
-    // '(aendert Verhalten)' - SCA007 (initialization-Abschnitt der Unit),
-    // SCA168 und SCA020 mit raise, SCA120 (raise davor).
+    // Entscheid E2 (Konzept Editorhilfen): der Menuetext traegt die
+    // Kennzeichnung (msgid '(changes behavior)', uRdxFixTable.CAP_CHANGES).
+    // Gesetzt von der Zeile (FIX_ROWS.Changes: fest bei SCA007, SCA120,
+    // SCA009/SCA001/SCA109/SCA153/SCA156, SCA121, SCA196) oder vom Planer
+    // je nach Fund (SCA149 override, SCA096/SCA097, die zweiten Eintraege
+    // von SCA168 und SCA020 mit raise). Massgeblich ist FIX_ROWS - diese
+    // Aufzaehlung ist nur die Uebersicht (Stand Charge FB).
     ChangesBehavior : Boolean;
   end;
 
@@ -330,12 +339,15 @@ type
       AInfo: TRefactorInfo; AIsCall: Boolean; out AOffer: TRdxSqlOffer): Boolean; static;
   end;
 
-  // Editorhilfen Stufe 2a: die einfachen Hilfen aus uRdxSimpleFixes, mit
-  // dem Quellstellen-Dienst verbunden - die Ruempfe je Regel. Den Einstieg
+  // Editorhilfen seit Stufe 2a: die Ruempfe der Hilfen, deren Planer den
+  // Quellstellen-Dienst brauchen (Typen, with-Bloecke, uses) - die Planer
+  // selbst stehen in uRdxSimpleFixes, uRdxStructFixes, uRdxLineFixes,
+  // uRdxRaiseFixes, uRdxFlowFixes und weiteren Planer-Units. Den Einstieg
   // (Handles, FixFor, AlternativeFixFor), Hinweise und Menuetexte fuehrt
   // seit Charge R8 die Tabelle uRdxFixTable: eine weitere Regel ist dort
-  // eine Zeile und hier eine Routine, kein Zweig in einem Verteiler.
-  // ALines ist immer derselbe Text, aus dem APlaces geoeffnet wurde.
+  // eine Zeile und - wo sie den Dienst braucht - hier eine Routine, kein
+  // Zweig in einem Verteiler. ALines ist immer derselbe Text, aus dem
+  // APlaces geoeffnet wurde.
   TRdxFixRunner = class
   public
     // SCA075: 'class(TObject)' -> 'class' an der Spalte aus der Meldung
@@ -346,7 +358,10 @@ type
     // SCA085: 'X.Free;' (ALine) + 'X := nil;' -> 'FreeAndNil(X);'. X muss
     // in dieser Unit deklariert sein (DeclaredTypeOf): eine Property
     // uebersetzt als Argument nicht, ein geerbtes Feld ist nicht pruefbar -
-    // beides keine Hilfe. Fehlt SysUtils, kommt die uses-Einfuegung mit.
+    // beides keine Hilfe. Dazu dieselbe Typ-Sperre wie SCA139 (seit Review
+    // FB, R2-01/R3-01): kein record/object/interface/Zeiger dieser Unit,
+    // keine eigene Methode Free in der Unit, kein fremder Zeigertyp nach
+    // Namenskonvention. Fehlt SysUtils, kommt die uses-Einfuegung mit.
     class function FreeAndNilFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer; const AUsesNames: TArray<string>): TRdxFixOutcome; static;
 
@@ -369,9 +384,12 @@ type
       const AMessage: string): TRdxFixOutcome; static;
 
     // SCA139: 'X.Free' -> 'FreeAndNil(X)', X aus der Meldung. Dieselbe
-    // Variablen-Pruefung wie SCA085; dazu kein record/object/interface
-    // dieser Unit als Typ und keine eigene Methode Free in der Unit ('X.Free'
-    // riefe sie, FreeAndNil nicht). Fehlt SysUtils, kommt die uses-
+    // Variablen- und Typ-Pruefung wie SCA085 (kein record/object/interface/
+    // Zeiger dieser Unit, keine eigene Methode Free in der Unit - 'X.Free'
+    // riefe sie, FreeAndNil nicht -, kein fremder Zeigertyp nach
+    // Namenskonvention); dazu kein const-/constref-Parameter (Review FB,
+    // R2-03: FPC und Delphi bis 10.3 uebersetzen das nicht, ab 10.4 wird
+    // nur die lokale Kopie nil). Fehlt SysUtils, kommt die uses-
     // Einfuegung mit.
     class function FreeWithoutNilFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer; const AMessage: string;
@@ -470,6 +488,7 @@ uses
   uRdxStructFixes,   // Planer SCA007/SCA168 (uses-Eintrag, case-else)
   uRdxLineFixes,     // Planer SCA123 (CastFreeFix)
   uRdxRaiseFixes,    // Planer SCA020 mit raise (EmptyRaiseFix)
+  uRdxRtlTypes,      // IsRtlClassOrInterface: Klasse 'PDFDocument' ist kein Zeiger
   uUnusedUses,       // KnownIdents: SCA007-Fund am Puffer nachpruefen
   uSourcePlaces;     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
 
@@ -491,6 +510,23 @@ const
   // Der Unterschied, den der Benutzer kennen sollte (SCA085, SCA139):
   // FreeAndNil setzt ERST nil, dann laeuft der Destruktor.
   R_FREENIL_HINT = 'FreeAndNil setzt %s auf nil, bevor der Destruktor laeuft';
+  // Typ-Sperren von SCA085/SCA139 (FreeTypeReason, Review FB R2-01/R3-01)
+  // und der const-Parameter von SCA139 (ConstParamReason, R2-03).
+  R_NOT_AN_OBJECT = '%s ist kein Objekt (%s: record, object, interface, '
+    + 'Zeiger oder eigener Typ dieser Unit) - Free ist eine eigene Methode, '
+    + 'FreeAndNil nimmt nur ein TObject';
+  // Was DeclaredTypeKind fuer einen ausformulierten Typ liefert - kein
+  // Alias auf einen Typ einer anderen Unit (ForeignTypeName).
+  OWN_TYPE_WORDS: array[0..12] of string = ('class', 'record', 'object',
+    'interface', 'dispinterface', 'type', 'procedure', 'function',
+    'reference', 'set', 'array', 'string', 'file');
+  R_OWN_FREE = 'die Unit deklariert eine eigene Methode Free - FreeAndNil '
+    + 'riefe sie nicht auf';
+  R_POINTER_NAME = '%s hat den Typ %s - nach Delphi-Konvention ein Zeiger aus '
+    + 'einer anderen Unit (Free ist dann die des Ziels, FreeAndNil nimmt nur '
+    + 'ein TObject)';
+  R_CONST_PARAM = '%s ist ein const-Parameter - FreeAndNil erreicht die '
+    + 'Variable des Aufrufers nicht (FPC: Fehler, Delphi bis 10.3: E2197)';
   R_WITH_MEMBER  = 'with-Anweisung in der Routine - %s koennte ein Member sein';
   R_NO_HELP      = 'keine Hilfe an dieser Stelle';
   // Hinweise, die der Rumpf selbst setzt - vor dem ' + uses ...' bzw. mit
@@ -903,6 +939,18 @@ begin
     and SameOperandText(AParts[1].Text, AParts[0].Text);
 end;
 
+// Wo die Terme fuer BuildFormatCall in der Kette stehen: beim Selbst-
+// Anhaengen hinter 'X +' - X ist der Kettenanfang, ein String, und ein
+// Zeiger dahinter verkettet (Nachpruefung FB zu R2-04: 'X := X + P + N'
+// lehnte bis dahin als "Zeiger am Kettenanfang" ab); sonst am Anfang.
+function ChainStartOf(const AOutcome: TRdxFormatOutcome): TRdxChainStart;
+begin
+  if AOutcome.SelfAppend then
+    Result := csBehindTarget
+  else
+    Result := csChainHead;
+end;
+
 // Der Grund, wenn BuildFormatCall ablehnt: hinter 'X +' nur Literale heisst
 // anders als 'kein Operand'.
 function BuildReasonOf(const ABuild: TRdxFormatBuild;
@@ -1009,7 +1057,7 @@ begin
   if Result.SelfAppend then
     Behind := TRdxRecipes.CollapseWhitespace(Parts[0].Text);
   if not TRdxRecipes.BuildFormatCall(Copy(Parts, First, Last - First + 1),
-       Build, TType) then
+       Build, TType, ChainStartOf(Result)) then
   begin
     Result.Reason := BuildReasonOf(Build, Behind);
     Exit;
@@ -1423,6 +1471,103 @@ begin
       + 'Feld aus einer anderen Unit?)', [AName]);
 end;
 
+// Ist ATypeLow nach Delphi-Konvention ein Zeigertyp aus einer anderen
+// Unit? 'P' und dahinter ein Grossbuchstabe, eine Ziffer oder '_' in einer
+// Schreibweise des Quelltexts ('PEVP_PKEY', 'PSSL_CTX'; nicht 'Parser'),
+// nicht in dieser Unit deklariert (dort entscheidet DeclaresValueType bzw.
+// die Deklaration) und keine Klasse der Delphi-Quellen ('PDFDocument' aus
+// iOSapi, uRdxRtlTypes). Korpus ab8 (Review FB, R3-01): 8 SCA085-Funde mit
+// fremdem P-Typ - alle Zeiger aus mormot.lib.openssl11 auf ein object mit
+// eigenem Free -, kein Klassentyp unter den Empfaengern von SCA085/SCA139.
+// ASpelling: die gefundene Schreibweise.
+function PointerNamedType(AMap: TRdxCodeMap; const ATypeLow: string;
+  out ASpelling: string): Boolean;
+var
+  T : TRdxToken;
+  S : string;
+begin
+  Result := False;
+  ASpelling := '';
+  if (Length(ATypeLow) < 2) or (ATypeLow[1] <> 'p')
+     or (TRdxSimpleFixes.DeclaredTypeKind(AMap, ATypeLow) <> '')
+     or IsRtlClassOrInterface(ATypeLow) then
+    Exit;
+  T := NextToken(AMap, 1, 1);
+  while T.Low <> '' do
+  begin
+    if T.Low = ATypeLow then
+    begin
+      S := TokText(AMap, T);
+      if (S[1] = 'P') and CharInSet(S[2], ['A'..'Z', '0'..'9', '_']) then
+      begin
+        ASpelling := S;
+        Exit(True);
+      end;
+    end;
+    T := After(AMap, T);
+  end;
+end;
+
+// Der Name, unter dem der Typ ATypeLow aus einer anderen Unit kommt:
+// ATypeLow selbst, wenn diese Unit ihn nicht deklariert; das Ende seiner
+// Alias-Kette, wenn sie die Unit verlaesst ('PMyKey = PEVP_PKEY' ->
+// 'pevp_pkey', TRdxExprFixes.ResolvedTypeKind; Nachpruefung FB - bis dahin
+// galt ein solcher Alias als Typ dieser Unit und behielt die Hilfe); ''
+// fuer einen Typ, den die Unit ausformuliert (class, record, '^' ...).
+function ForeignTypeName(AMap: TRdxCodeMap; const ATypeLow: string): string;
+var
+  Kind : string;
+begin
+  Kind := TRdxExprFixes.ResolvedTypeKind(AMap, ATypeLow);
+  if Kind = '' then
+    Result := ATypeLow
+  else if TRdxRecipes.IsPlainIdent(Kind) and not InList(Kind, OWN_TYPE_WORDS)
+     and (TRdxSimpleFixes.DeclaredTypeKind(AMap, Kind) = '') then
+    Result := Kind
+  else
+    Result := '';
+end;
+
+// SCA085/SCA139: ruft 'X.Free' sicher TObject.Free? FreeAndNil(X) uebergeht
+// eine eigene Methode Free und nimmt X als TObject. Gesperrt (ATypeLow = der
+// deklarierte Typ von X):
+//   * ein record/object/interface, Zeiger ('PFoo = ^TFoo') oder eigener Typ
+//     ('PFoo = type ^TFoo') dieser Unit, auch ueber Aliasse der Unit
+//     (DeclaresValueType) - 'X.Free' ist dort eine eigene Methode, beim
+//     Zeiger die des Ziels;
+//   * eine Routine Free irgendwo in der Unit (eine Klasse, die zurueckgibt
+//     statt freizugeben: ein Pool mit 'procedure Free; reintroduce') -
+//     ohne Parser auch dann, wenn sie einer anderen Klasse gehoert (Korpus
+//     ab8: 1 SCA085-Angebot weniger, Alcinoe dwsUtils);
+//   * ein Typ einer anderen Unit, der nach Konvention ein Zeiger ist
+//     (PointerNamedType: 'PEVP_PKEY'), auch hinter einem Alias der Unit
+//     (ForeignTypeName: 'PMyKey = PEVP_PKEY').
+// Bis Review FB (R2-01/R3-01) pruefte das nur SCA139; SCA085 bot
+// 'FreeAndNil(result)' fuer 'result: PX509_CRL' an - Delphi 12: E2010, FPC
+// und Delphi bis 10.3: TObject.Free auf einer OpenSSL-Struktur. Typen
+// anderer Units ohne Konventionsnamen sieht das nicht; ein Record dort
+// faellt in Delphi ab 10.4 als Fehler E2010 auf. '' oder der Grund.
+function FreeTypeReason(AMap: TRdxCodeMap;
+  const AName, ATypeLow: string): string;
+var
+  Spelling : string;
+begin
+  Result := '';
+  if TRdxSimpleFixes.DeclaresValueType(AMap, ATypeLow) then
+    Result := Format(R_NOT_AN_OBJECT, [AName, ATypeLow])
+  else if TRdxSimpleFixes.DeclaresRoutine(AMap, 'Free') then
+    Result := R_OWN_FREE
+  else if PointerNamedType(AMap, ForeignTypeName(AMap, ATypeLow),
+       Spelling) then
+    Result := Format(R_POINTER_NAME, [AName, Spelling]);
+end;
+
+function FreeMethodReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  ALine: Integer; const AName: string): string;
+begin
+  Result := FreeTypeReason(AMap, AName, APlaces.DeclaredTypeOf(ALine, AName));
+end;
+
 function AppendUses(APlaces: TSourcePlaces; const AUsesNames: TArray<string>;
   const AShortName, AQualifiedName: string;
   var AOutcome: TRdxFixOutcome): Boolean;
@@ -1474,6 +1619,9 @@ begin
          Result.Name, Result.Reason) then
       Exit;
     Result.Reason := VariableCheck(APlaces, Map, ALine, Result.Name);
+    // Dieselbe Typ-Sperre wie SCA139 (Review FB, R2-01/R3-01).
+    if Result.Reason = '' then
+      Result.Reason := FreeMethodReason(APlaces, Map, ALine, Result.Name);
   finally
     Map.Free;
   end;
@@ -1536,22 +1684,130 @@ begin
     Result := Trim(Copy(AMessage, 1, P - 1));
 end;
 
-// SCA139: ruft 'X.Free' sicher TObject.Free? FreeAndNil(X) uebergeht eine
-// eigene Methode Free - in einem record/object/interface dieser Unit oder
-// in einer Klasse dieser Unit (etwa ein Pool, der zurueckgibt statt
-// freizugeben). Typen aus anderen Units sieht das nicht; ein Record dort
-// faellt in Delphi ab 10.4 als Fehler E2010 auf. '' oder der Grund.
-function FreeMethodReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
-  ALine: Integer; const AName: string): string;
+// Das Kopfwort (procedure, function, constructor, destructor, operator)
+// einer Routine, deren Kopf auf ALine beginnt ('class' davor erlaubt, auch
+// Attribute auf derselben Zeile: '[Weak] procedure ..' - Nachpruefung FB);
+// Low = '' ohne. AFirstCol: die Spalte des ersten Tokens der Zeile.
+function RoutineKeywordOn(AMap: TRdxCodeMap; ALine: Integer;
+  out AFirstCol: Integer): TRdxToken;
+begin
+  Result := NextToken(AMap, ALine, 1);
+  AFirstCol := Result.Col;
+  while (Result.Low = '[') and (Result.Line = ALine) do
+    Result := AfterClose(AMap, Result);
+  if Result.Low = 'class' then
+    Result := After(AMap, Result);
+  if (Result.Line <> ALine) or not InList(Result.Low, ['procedure', 'function',
+       'constructor', 'destructor', 'operator']) then
+    Result := Default(TRdxToken);
+end;
+
+type
+  // Zustand des Laufs durch eine Parameterliste (ConstNameStep): eckige
+  // Klammern (Attribut '[ref]', Mengen-Vorgabe), der Modifizierer der
+  // Gruppe und ob der Lauf hinter ihrem ':' steht.
+  TRdxParamWalk = record
+    Square   : Integer;
+    Modifier : string;
+    InType   : Boolean;
+  end;
+
+// Ein Token auf Klammertiefe 1 einer Parameterliste: True, wenn es ein Name
+// einer const- bzw. constref-Gruppe ist. Gruppen trennt ';', vor dem ':'
+// stehen Modifizierer, Attribute und die Namen.
+function ConstNameStep(var W: TRdxParamWalk; const T: TRdxToken): Boolean;
+begin
+  Result := False;
+  if T.Low = '[' then
+    Inc(W.Square)
+  else if T.Low = ']' then
+    Dec(W.Square)
+  else if W.Square > 0 then
+    Exit
+  else if T.Low = ';' then
+  begin
+    W.Modifier := '';
+    W.InType := False;
+  end
+  else if T.Low = ':' then
+    W.InType := True
+  else if W.InType then
+    Exit
+  else if InList(T.Low, ['const', 'constref', 'var', 'out']) then
+    W.Modifier := T.Low
+  else
+    Result := T.IsWord and ((W.Modifier = 'const') or (W.Modifier = 'constref'));
+end;
+
+// Nennt der Kopf ab AKeyword ANameLow (klein) als const- bzw. constref-
+// Parameter? Der Name der Routine darf qualifiziert und generisch sein
+// ('procedure TFoo.Bar<T>(const A: T)') - TRdxDeclFixes.ReadSignature
+// liest nur Deklarationen ohne Punkt.
+function HeadHasConstParam(AMap: TRdxCodeMap; const AKeyword: TRdxToken;
+  const ANameLow: string): Boolean;
+var
+  T     : TRdxToken;
+  Depth : Integer;
+  W     : TRdxParamWalk;
+begin
+  Result := False;
+  T := After(AMap, AKeyword);
+  while T.IsWord do
+  begin
+    T := After(AMap, T);
+    if T.Low = '<' then
+      T := AfterClose(AMap, T);
+    if T.Low <> '.' then
+      Break;
+    T := After(AMap, T);
+  end;
+  if T.Low <> '(' then Exit;
+  W := Default(TRdxParamWalk);
+  Depth := 0;
+  repeat
+    if T.Low = '(' then
+      Inc(Depth)
+    else if T.Low = ')' then
+      Dec(Depth)
+    else if (Depth = 1) and ConstNameStep(W, T) and (T.Low = ANameLow) then
+      Exit(True);
+    T := After(AMap, T);
+  until (Depth = 0) or (T.Low = '');
+end;
+
+// SCA139: ist AName ein const- bzw. constref-Parameter einer Routine um
+// ALine? FreeAndNil(X) braucht eine Variable: FPC meldet "Can't assign
+// values to const variable", Delphi bis 10.3 (var-Parameter) E2197; ab
+// 10.4 uebersetzt es (const [ref]), setzt aber nur die lokale Kopie auf nil
+// - beim Aufrufer bleibt der Zeiger haengen, den SCA139 meint (Review FB,
+// R2-03; Korpus ab8: 15 von 363 SCA139-Funden, 2 davon in FPC-Dateien von
+// doublecmd). Gelesen werden die Koepfe ueber ALine bis zum ersten in
+// Spalte 1 (Konvention: Implementierungen stehen am Zeilenanfang) bzw. bis
+// 'implementation' - eine lokale Routine sieht die Parameter der
+// aeusseren; ein gleichnamiger const-Parameter einer lokalen Routine davor
+// sperrt mit (vorsichtig). Eine anonyme Methode im Ausdruck sieht das
+// nicht. '' oder der Grund.
+function ConstParamReason(AMap: TRdxCodeMap; ALine: Integer;
+  const AName: string): string;
+var
+  Li, FirstCol : Integer;
+  Keyword      : TRdxToken;
 begin
   Result := '';
-  if TRdxSimpleFixes.DeclaresValueType(AMap,
-       APlaces.DeclaredTypeOf(ALine, AName)) then
-    Result := Format('%s ist kein Objekt (record, object oder interface '
-      + 'dieser Unit) - Free ist eine eigene Methode', [AName])
-  else if TRdxSimpleFixes.DeclaresRoutine(AMap, 'Free') then
-    Result := 'die Unit deklariert eine eigene Methode Free - FreeAndNil '
-      + 'riefe sie nicht auf';
+  for Li := ALine downto 1 do
+  begin
+    Keyword := RoutineKeywordOn(AMap, Li, FirstCol);
+    if Keyword.Low = '' then
+    begin
+      if NextToken(AMap, Li, 1).Low = 'implementation' then
+        Exit;
+      Continue;
+    end;
+    if HeadHasConstParam(AMap, Keyword, LowerCase(AName)) then
+      Exit(Format(R_CONST_PARAM, [AName]));
+    if FirstCol = 1 then
+      Exit;
+  end;
 end;
 
 class function TRdxFixRunner.FreeWithoutNilFix(APlaces: TSourcePlaces;
@@ -1581,6 +1837,8 @@ begin
     Result.Reason := VariableCheck(APlaces, Map, ALine, Result.Name);
     if Result.Reason = '' then
       Result.Reason := FreeMethodReason(APlaces, Map, ALine, Result.Name);
+    if Result.Reason = '' then
+      Result.Reason := ConstParamReason(Map, ALine, Result.Name);
   finally
     Map.Free;
   end;

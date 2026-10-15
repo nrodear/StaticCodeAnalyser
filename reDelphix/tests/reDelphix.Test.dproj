@@ -115,12 +115,14 @@
         <DCCReference Include="..\source\uRdxMagicFixes.pas"/>
         <DCCReference Include="uTestRdxRecipes.pas"/>
         <DCCReference Include="uTestRdxSca044.pas"/>
+        <DCCReference Include="uTestRdxFormatGuards.pas"/>
         <DCCReference Include="uTestRdxActionRing.pas"/>
         <DCCReference Include="uTestRdxBufferMath.pas"/>
         <DCCReference Include="uTestRdxSuppress.pas"/>
         <DCCReference Include="uTestRdxSuppressTargets.pas"/>
         <DCCReference Include="uTestRdxSuppressCore.pas"/>
         <DCCReference Include="uTestRdxSimpleFixes.pas"/>
+        <DCCReference Include="uTestRdxFreeTypes.pas"/>
         <DCCReference Include="uTestRdxExprFixes.pas"/>
         <DCCReference Include="uTestRdxStructFixes.pas"/>
         <DCCReference Include="uTestRdxBlockFixes.pas"/>
@@ -143,6 +145,7 @@
         <DCCReference Include="uTestRdxSqlTemplate.pas"/>
         <DCCReference Include="uTestRdxSqlFacts.pas"/>
         <DCCReference Include="uTestRdxSqlGuards.pas"/>
+        <DCCReference Include="uTestRdxSqlBinds.pas"/>
         <DCCReference Include="uTestRdxResultFixesDetector.pas"/>
         <DCCReference Include="uTestRdxMagicFix.pas"/>
         <DCCReference Include="uTestRdxMagicGuards.pas"/>
@@ -150,6 +153,7 @@
         <DCCReference Include="uTestRdxNilFix.pas"/>
         <DCCReference Include="uTestRdxSimpleFixesDetector.pas"/>
         <DCCReference Include="uTestRdxRoutineFixesDetector.pas"/>
+        <DCCReference Include="uTestRdxFreeGatesDetector.pas"/>
         <DCCReference Include="uTestRdxDetectorKit.pas"/>
         <DCCReference Include="uTestRdxCodeMap.pas"/>
         <DCCReference Include="uTestRdxQualifyUses.pas"/>
