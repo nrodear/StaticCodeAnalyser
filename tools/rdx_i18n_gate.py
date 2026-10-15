@@ -135,10 +135,12 @@ COUNT_NOUN = re.compile(r"%d [A-Z][a-z]{2,}")
 # der 16.051 Pascal-Dateien des Realwelt-Korpus (nur deutsche Woerter bzw.
 # Namen: zulaessig, Rueck, Gaertner) und an allen msgids (0). Gross/klein
 # zaehlt: ohne sie trafen 56 Bezeichner wie 'AEngine', 'TAesSignature',
-# 'WSAEHOSTDOWN' (Parameter, Typen, Konstanten). Weggelassen, weil englisch:
-# oes (does), uer (query), ues (values), uen (sequence), uess (guess), uem
-# (uEmptyBlock), oeff mitten im Wort (coefficient), ueb/uef/ueg/ueh
-# (bluebar, valuefor, Bluegrass, valuehex), aend (metaend), aeb, oest.
+# 'WSAEHOSTDOWN' (Parameter, Typen, Konstanten). Weggelassen, weil der
+# Korpus sie in englischem bzw. fremdem Code traegt: oes (does), uer
+# (query), ues (values), uen (sequence), uess (guess), uem (uEmptyBlock),
+# oeff mitten im Wort (coefficient), ueb/uef/ueg/ueh (bluebar, valuefor,
+# Bluegrass, valuehex), aend (metaend), aeb (Hex-Ziffern), oest
+# (portugiesisch 'insercaoestado').
 TRANSCRIPTION = re.compile(
     r"[Aa]e(?:h|u|ng|ss|lt|rk|rt|gt|ch)|[Oo]e(?:ss|nn|sch|gl|pf|rt)"
     r"|[Uu]e(?:lt|nf|rz|tz|ck)|\b[Uu]eber|\b[Oo]eff")
