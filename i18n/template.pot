@@ -45,8 +45,28 @@ msgstr ""
 msgid " · "
 msgstr ""
 
+#: reDelphix/source/uRdxSimpleFixes.pas:884
+msgid "\"%s Assert\" is not the call of System.Assert"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1484
+msgid "\"%s\" after the expression binds only to its last part"
+msgstr ""
+
 #: SCA.SharedUI/sources/uProfileViewer.pas:634
 msgid "\"%s\" already exists. Overwrite it?"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1480
+msgid "\"%s\" before the expression - the parenthesis belongs to a call or cast"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1476
+msgid "\"%s\" before the expression binds only to its first part"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1048
+msgid "\"%s\" follows the section - it is not empty"
 msgstr ""
 
 #: SCA.Engine/sources/Common/uRuleCatalog.pas:1771
@@ -55,6 +75,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Common/uRuleCatalog.pas:1811
 msgid "\"%s\" is a built-in profile."
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1376
+msgid "\"%s\" is left of the name - the comparison binds differently there"
 msgstr ""
 
 #: SCA.SharedUI/sources/uProfileViewer.pas:805
@@ -134,6 +158,18 @@ msgstr ""
 msgid "%s contains no profiles."
 msgstr ""
 
+#: reDelphix/source/uRdxSimpleFixes.pas:2479
+msgid "%s ends in %s - not proven as a field in this unit: \"= nil\" would call a method without arguments, Assigned() would only check the method pointer"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:2484
+msgid "%s has the procedural type %s (declared in this unit) - \"= nil\" calls it, Assigned() does not"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1284
+msgid "%s is declared as a property in this unit - if the call means it, it is not proven whether Delphi calls a property of procedural type without ()"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:832
 msgid "%s is no longer at the reported place"
 msgstr ""
@@ -142,8 +178,44 @@ msgstr ""
 msgid "%s is not a valid JSON object."
 msgstr ""
 
+#: reDelphix/source/uRdxSimpleFixes.pas:2251
+msgid "%s is of type %s - Assigned() is not reliably equivalent for it"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1276
+msgid "%s looks like an event - as a field Delphi calls it without (), as a property that is not proven; which one is meant stays open without the type"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:2247
+msgid "%s looks like an event or function - Assigned() then checks the pointer, not the result"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1289
+msgid "%s() in the function %s - without parentheses the meaning depends on the dialect (recursion or result)"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1125
+msgid "%s.Destroy instead of %s.Free - FreeAndNil replaces only Free"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1123
+msgid "%s.Free appears more than once on the line"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1161
+msgid "%s.Free is attached to a path - FreeAndNil needs a variable"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1128
+msgid "%s.Free is no longer on the line"
+msgstr ""
+
 #: reDelphix/source/uRdxProvider.pas:810
 msgid "%s: no fixMode in the rule catalog"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:2495
+msgid "%s: type %s is not proven in this unit as a class, interface or pointer and is not a class of the Delphi sources - \"= nil\" would call a function type of another unit, Assigned() would not"
 msgstr ""
 
 #: reDelphix/source/uRdxFixTable.pas:1230
@@ -365,6 +437,22 @@ msgstr ""
 msgid "As of: "
 msgstr ""
 
+#: reDelphix/source/uRdxSimpleFixes.pas:924
+msgid "Assert already has a message"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:927
+msgid "Assert does not end on this line"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:881
+msgid "Assert is qualified here - not System.Assert"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:958
+msgid "Assert without a condition"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2318
 msgid "Assert() without explanatory message"
 msgstr ""
@@ -373,8 +461,16 @@ msgstr ""
 msgid "Assign the condition to %s directly"
 msgstr ""
 
+#: reDelphix/source/uRdxSimpleFixes.pas:1474
+msgid "Assigned is qualified here - not the system routine"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2533
 msgid "Assigned(X) and (X <> nil) - one check is enough"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:2089
+msgid "Assigned(X) is already in the statement (SCA084)"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2859
@@ -2719,12 +2815,28 @@ msgstr ""
 msgid "Write baseline from current scan..."
 msgstr ""
 
+#: reDelphix/source/uRdxSimpleFixes.pas:1168
+msgid "X.Free() with parentheses"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2548
 msgid "X.Free; X := nil; -> use FreeAndNil(X)"
 msgstr ""
 
+#: reDelphix/source/uRdxSimpleFixes.pas:620
+msgid "X.Free; is the statement after \"%s\" - the nil would become conditional"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:315
 msgid "You are a senior Delphi developer reviewing the output of a static code analyser. Target version: Delphi 12 Athens (RTL/VCL). Suggest minimal, idiomatic fixes - no sweeping refactors, no style overhauls, no new dependencies unless strictly required."
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1258
+msgid "a link of the call chain is not a plain name"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1374
+msgid "a path is on the left - its type cannot be proven here"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:496
@@ -2735,8 +2847,16 @@ msgstr ""
 msgid "analyser.ini is not writable - dialect unchanged."
 msgstr ""
 
+#: reDelphix/source/uRdxSimpleFixes.pas:1957
+msgid "anonymous method in the statement"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2196
 msgid "asm..end block - platform-specific, hard to port"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:2106
+msgid "boundary of the comparison unclear (\"%s %s ... %s\")"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:787
@@ -2755,8 +2875,64 @@ msgstr ""
 msgid "class(TObject) - TObject is the default base, drop it"
 msgstr ""
 
+#: reDelphix/source/uRdxSimpleFixes.pas:498
+msgid "class(TObject) is inside a comment or string"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:2160
+msgid "code and finding do not match (%d instead of %d comparisons)"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1412
+msgid "comment in the comparison"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:951
+msgid "comment in the condition"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1526
+msgid "comment in the expression"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:606
+msgid "comment in the expression X.Free;"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:2163
+msgid "comment or directive in the statement"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:673
+msgid "comment or string in the nil line"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1021
+msgid "comment or string on the line - it would be lost on deletion"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:2103
+msgid "comparison spans several lines"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:625
+msgid "compiler directive before X.Free; - the statement before it does not always apply"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1050
+msgid "compiler directive up to the next section - the empty section may apply only in one branch"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:964
+msgid "condition too long for a string literal (255 characters)"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:802
 msgid "decide by hand"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1243
+msgid "declaration: neither \";\" nor \":\" follows ()"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3821
@@ -2831,12 +3007,28 @@ msgstr ""
 msgid "in"
 msgstr ""
 
+#: reDelphix/source/uRdxSimpleFixes.pas:1033
+msgid "line %d carries more than \"%s\""
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:742
 msgid "line moved? Analyse the file again"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:817
 msgid "literal not readable: %s"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1351
+msgid "more than whitespace between the name and ()"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:2190
+msgid "nested nil comparisons"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1518
+msgid "no \"Assigned(X) and (X <> nil)\" on one line at the place (no quick fix without parentheses around the comparison)"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:782
@@ -2851,8 +3043,32 @@ msgstr ""
 msgid "no header %s"
 msgstr ""
 
+#: reDelphix/source/uRdxSimpleFixes.pas:663
+msgid "no line after the nil assignment"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1071
+msgid "no line after the section"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:2152
+msgid "no nil comparison in the finding"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:822
 msgid "no operand in the chain"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1349
+msgid "no plain name before () (member or result call)"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1371
+msgid "no plain name left of the comparison"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1232
+msgid "no simple variable left of := (path, index or var declaration) - its type decides the meaning"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:767
@@ -2876,6 +3092,18 @@ msgstr ""
 msgid "only statement after %s - an empty block would remain (SCA077)"
 msgstr ""
 
+#: reDelphix/source/uRdxSimpleFixes.pas:1945
+msgid "operand after the comparison is ambiguous"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1934
+msgid "operand before the comparison is ambiguous"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:2084
+msgid "operand spans several lines"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2562
 msgid "out parameter - prefer Result or var"
 msgstr ""
@@ -2884,17 +3112,50 @@ msgstr ""
 msgid "own unit %s in the project"
 msgstr ""
 
+#: reDelphix/source/uRdxSimpleFixes.pas:645
+msgid "something else follows X := nil"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:614
+msgid "something else follows X.Free;"
+msgstr ""
+
 #: StaticCodeAnalyserIDE/uIDESonarOptions.pas:414
 msgid "sonar.projectKey not found in "
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1031
+msgid "strict on the line before belongs to this section"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1026
+msgid "strict stands alone - it belongs to the next line"
 msgstr ""
 
 #: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:595
 msgid "svn not found. Install TortoiseSVN WITH the option \"command line client tools\" or set the path to svn.exe in analyser.ini."
 msgstr ""
 
+#: reDelphix/source/uRdxSimpleFixes.pas:1266
+msgid "the call is part of an expression - without parentheses the name could be taken as a pointer"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:516
+msgid "the class body starts on the same line"
+msgstr ""
+
 #: reDelphix/source/uRdxProvider.pas:578
 #: reDelphix/source/uRdxProvider.pas:636
 msgid "the clause would no longer be sorted (new SCA142)"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1369
+#: reDelphix/source/uRdxSimpleFixes.pas:1402
+msgid "the comparison with True/False is no longer at the reported place"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1378
+msgid "the expression continues after %s - the comparison binds differently there"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:777
@@ -2905,8 +3166,34 @@ msgstr ""
 msgid "the message has no column"
 msgstr ""
 
+#: reDelphix/source/uRdxSimpleFixes.pas:1145
+msgid "the message has no receiver"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1067
+msgid "the message has no section"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:392
 msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:636
+#: reDelphix/source/uRdxSimpleFixes.pas:638
+#: reDelphix/source/uRdxSimpleFixes.pas:640
+msgid "the next line is not \"X := nil;\""
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:1346
+msgid "the parentheses contain more than whitespace"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:2156
+msgid "the statement is no longer at the reported place"
+msgstr ""
+
+#: reDelphix/source/uRdxSimpleFixes.pas:2476
+msgid "type of %s not proven - \"= nil\" would call a function or method pointer, Assigned() would not"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:812
