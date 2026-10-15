@@ -11,8 +11,10 @@ unit uTestRdxBufferMath;
 // das Ergebnis, nicht nur die Offsets.
 //
 // Dazu die SmallInt-Grenze der Editor-Markierung (Nit 8: Spalte und
-// Byte-Praefix bis 32767) und die Wahl des Textes (Nit 24: offen, aber
-// leer oder nicht lesbar, sperrt - kein stiller Rueckfall auf die Platte).
+// Byte-Praefix bis 32767), die Wahl des Textes (Nit 24: offen, aber
+// leer oder nicht lesbar, sperrt - kein stiller Rueckfall auf die Platte)
+// und welche Dateien der Anbieter ueberhaupt liest (Review R1-04: nur
+// Pascal-Quelltext).
 
 interface
 
@@ -40,6 +42,8 @@ type
     [Test] procedure SpanFitsEditor_BothEnds;
     // Nit 24: offener Puffer schlaegt die Platte, auch leer
     [Test] procedure ChooseTextSource_OpenBufferWins;
+    // Review R1-04: nur Pascal-Quelltext liest der Anbieter
+    [Test] procedure IsPascalSource_OnlyPascalFiles;
   end;
 
 implementation
@@ -286,6 +290,23 @@ begin
     'offen, aber nicht lesbar');
   Assert.IsTrue(ChooseTextSource(True, False, 'Rest') = txBlocked,
     'Lesefehler zaehlt, auch mit Teiltext');
+end;
+
+procedure TTestRdxBufferMath.IsPascalSource_OnlyPascalFiles;
+const
+  // Relative Pfade (ein Punkt im Verzeichnis zaehlt nicht als Endung).
+  PASCAL: array[0..6] of string = ('src\Main.pas', 'Proj.DPR', 'pkg.dpk',
+    'jedi.inc', 'laz.lpr', 'unit.PP', 'x.y\Mixed.Pas');
+  // Formulare, Konfiguration, Projekte: dort liest Provide nichts mehr.
+  OTHER: array[0..7] of string = ('Main.dfm', 'Main.fmx', 'Main.lfm',
+    'app.ini', 'Proj.dproj', 'notes.txt', 'src.pas\README', '');
+var
+  i : Integer;
+begin
+  for i := 0 to High(PASCAL) do
+    Assert.IsTrue(IsPascalSource(PASCAL[i]), PASCAL[i]);
+  for i := 0 to High(OTHER) do
+    Assert.IsFalse(IsPascalSource(OTHER[i]), OTHER[i]);
 end;
 
 initialization

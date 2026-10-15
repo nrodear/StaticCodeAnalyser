@@ -515,7 +515,8 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
 * `uTestRdxBufferMath` - Zeile/Spalte -> Byte im UTF-8-Puffer mit
   Tabulator, Umlaut, Surrogatpaar und kombinierendem Zeichen (CRLF, LF,
   CR), Pruefung aller Ersetzungen einer Aktion, Spaltengrenze 32767,
-  Textwahl Puffer/Platte/gesperrt.
+  Textwahl Puffer/Platte/gesperrt, nur Pascal-Quelltext wird gelesen
+  (`IsPascalSource`, Review R1-04).
 * `uTestRdxSuppress` - Unterdrueck-Marker setzen und entfernen, auch in
   Block-Kommentar, mehrzeiligem String, Lizenzkopf und mit `All`.
 * `uTestRdxSuppressTargets` - die Ziele eines Markers wie im Core (naechste
@@ -706,8 +707,9 @@ Ohne Delphi (FPC 3.2.2):
 bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText
 ```
 
-Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+B1-FA): `PASSED 557  FAILED 0` - 35 Testunits,
-davon 16 der Charge B1-FA (`uTestRdxSuppressTargets`, Review R1-01/R1-03),
+Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+B1-FA): `PASSED 558  FAILED 0` - 35 Testunits,
+davon 17 der Charge B1-FA (`uTestRdxSuppressTargets` 16, Review R1-01/R1-03;
+`uTestRdxBufferMath` 1, R1-04),
 13 der Charge C0 (`uTestRdxText`, Sprache der Texte),
 davon 72 Tests fuer "Lokale Variable einfuehren", 12 fuer die Quick-Fixes der
 Charge H2, 25 der Charge H3b (SCA164 und Bausteine 13 in
