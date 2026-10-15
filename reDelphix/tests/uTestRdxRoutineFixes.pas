@@ -27,6 +27,11 @@ unit uTestRdxRoutineFixes;
 //          hinter 'end;' bzw. der forward-Deklaration und
 //          'noinspection-file' im Rumpf sperren (R4-04); Include bzw. Unit
 //          auf einem Netzpfad ohne Plattenzugriff abgelehnt (R4-03).
+//          Nachpruefung B1-FD: ein '// noinspection' ueber dem Kopf bzw.
+//          der forward-Deklaration (eigene Zeile, hinter Leerzeile oder
+//          hinter dem 'end;' davor) zielt auf die Routine - keine Hilfe
+//          (neu 1); '{$I \datei.inc}' liegt auf dem Laufwerk der Unit,
+//          nicht dem aktuellen (neu 5, IncludeSearchPath).
 // Die Gegenprobe mit dem echten Detektor steht in
 // uTestRdxRoutineFixesDetector (nur Delphi).
 
@@ -57,7 +62,7 @@ type
     [Test] procedure Sca164_MarkerAndHeadingStay;
     [Test] procedure Sca164_GlobalOperator_NoHelp;
     [Test] procedure Sca164_UmlautCall_NoHelp;
-    [Test] procedure Sca164_TrailingMarker_NoHelp;
+    [Test] procedure Sca164_MarkerAround_NoHelp;
     [Test] procedure Sca164_IncludeOnNetworkPath_NoDiskAccess;
   end;
 
@@ -640,7 +645,7 @@ end;
 
 // ---- Charge B1-FD (Code-Review reDelphix, R4; je gegen 4358b769 rot) ----
 
-procedure TTestRdxRoutineFixes.Sca164_TrailingMarker_NoHelp;
+procedure TTestRdxRoutineFixes.Sca164_MarkerAround_NoHelp;
 begin
   // R4-04, Pruefer-Fall r404 (3): der Marker hinter 'end;' gilt der Routine
   // dahinter (uSuppression.BuildMap) - mit der letzten Zeile geloescht,
@@ -667,6 +672,29 @@ begin
   Assert.AreEqual(InImpl(['procedure Other;', 'begin', 'end;']),
     FixOk(InImpl(['procedure Helper;', 'begin', '  // noinspection X',
       '  Foo;', 'end;', 'procedure Other;', 'begin', 'end;']), 4, 'Helper'));
+  // Nachpruefung B1-FD, neu 1: ein Marker ueber dem Kopf zielt auf die
+  // Routine (uSuppression.BuildMap: die naechste Code-Zeile); TopAbove
+  // laesst ihn stehen, und geloescht galt er still der Routine dahinter -
+  // auf eigener Zeile, hinter einer Leerzeile, hinter dem 'end;' davor und
+  // ueber der forward-Deklaration.
+  AssertRefused(InImpl(['// noinspection CyclomaticComplexity',
+    'procedure Helper;', 'begin', 'end;', 'procedure Other;', 'begin',
+    'end;']), 5, 'Helper', 'in Zeile 4 zielt');
+  AssertRefused(InImpl(['// noinspection X', '', 'procedure Helper;', 'begin',
+    'end;', 'procedure Other;', 'begin', 'end;']), 6, 'Helper',
+    'in Zeile 4 zielt');
+  AssertRefused(InImpl(['procedure Keep;', 'begin',
+    'end; // noinspection EmptyMethod', 'procedure Helper;', 'begin', 'end;',
+    'procedure Other;', 'begin', '  Keep;', 'end;']), 7, 'Helper',
+    'in Zeile 6 zielt');
+  AssertRefused(InImpl(['// noinspection X', 'procedure Helper; forward;',
+    'procedure Other;', 'begin', 'end;', 'procedure Helper;', 'begin',
+    'end;']), 9, 'Helper', 'in Zeile 4 zielt');
+  // Gegenprobe: der Marker ueber einer anderen Routine zielt weiter auf sie.
+  Assert.AreEqual(InImpl(['// noinspection X', 'procedure Keep;', 'begin',
+      'end;']),
+    FixOk(InImpl(['// noinspection X', 'procedure Keep;', 'begin', 'end;', '',
+      'procedure Helper;', 'begin', 'end;']), 9, 'Helper'));
 end;
 
 procedure TTestRdxRoutineFixes.Sca164_IncludeOnNetworkPath_NoDiskAccess;
@@ -709,6 +737,22 @@ begin
     [rfReplaceAll]) + 'x.inc'), 'UNC mit /');
   Assert.IsFalse(IsNetworkPath(Dir + 'u.pas'), 'TEMP ist lokal');
   Assert.IsFalse(IsNetworkPath('defs.inc'), 'relativ');
+  // Nachpruefung B1-FD, neu 5: '{$I \x.inc}' liegt ab der Wurzel des
+  // Laufwerks der Unit - FileExists suchte es vorher auf dem aktuellen
+  // Laufwerk des Prozesses (in der IDE irgendeinem, auch einem
+  // Netzlaufwerk, an dem IsNetworkPath vorbeisah). Ohne Laufwerk im
+  // Verzeichnis wird nicht gesucht; relativ und absolut wie bisher.
+  Assert.AreEqual(ExtractFileDrive(Dir) + PathDelim + 'x.inc',
+    IncludeSearchPath(Dir, PathDelim + 'x.inc'), 'ab der Wurzel');
+  Assert.AreEqual(ExtractFileDrive(Dir) + '/x.inc',
+    IncludeSearchPath(Dir, '/x.inc'), 'ab der Wurzel mit /');
+  Assert.AreEqual(Unc + 'x.inc',
+    IncludeSearchPath(Unc + 'src' + PathDelim, PathDelim + 'x.inc'), 'UNC');
+  Assert.AreEqual('', IncludeSearchPath('src' + PathDelim,
+    PathDelim + 'x.inc'), 'ohne Laufwerk');
+  Assert.AreEqual(Dir + 'x.inc', IncludeSearchPath(Dir, 'x.inc'), 'relativ');
+  Assert.AreEqual(Dir + 'y.inc', IncludeSearchPath(Unc, Dir + 'y.inc'),
+    'absolut');
 end;
 
 initialization

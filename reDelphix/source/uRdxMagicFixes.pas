@@ -144,7 +144,8 @@ type
 
     // Die Include-Dateien der Unit AFileName (alle {$I} in AMap, auch die
     // im Kopf - dort stehen die Compiler-Weichen: jvcl.inc,
-    // mormot.defines.inc ...) lesen, verschachtelte ebenso
+    // mormot.defines.inc ...; uRdxRoutineFixes.AllIncludes, bis zur
+    // Nachpruefung der Charge B1-FD hier kopiert) lesen, verschachtelte ebenso
     // (uRdxRoutineFixes.IncludeChainReason): '' oder der Grund - eine
     // FPC-Weiche oder Spur aelterer Compiler darin, oder ein Include, das
     // nicht neben der Unit liegt oder auf einem Netzpfad (nicht gelesen) -
@@ -161,7 +162,7 @@ uses
   uRefactorInfo,        // TRefactorSpan.Make
   uRdxIntroPlan,        // CharColOfByte, LineLooksFpcAware
   uRdxIntroEdits,       // TextOf, TargetAt, IntroduceEdits, ApplyIntroEdits
-  uRdxRoutineFixes,     // IncludeChainReason, IsNetworkPath
+  uRdxRoutineFixes,     // IncludeChainReason, AllIncludes, IsNetworkPath
   uRdxCompilerTraces;   // OldCompilerTrace, ScriptReason, FLOOR_INLINE_DECL
 
 const
@@ -677,24 +678,6 @@ begin
     if Up = Dir then Exit;
     Dir := Up;
   end;
-end;
-
-// Alle Include-Dateien der Datei, der Reihe nach (auch im Kopf).
-function AllIncludes(AMap: TRdxCodeMap): TArray<string>;
-var
-  Li, Co : Integer;
-  F      : string;
-begin
-  Result := nil;
-  for Li := 1 to AMap.LineCount do
-    for Co := 1 to Length(AMap.Raw(Li)) do
-      if CharInSet(AMap.Raw(Li)[Co], ['{', '('])
-         and OpensDirective(AMap, Li, Co) then
-      begin
-        F := IncludeFileAt(AMap, Li, Co);
-        if F <> '' then
-          Result := Result + [F];
-      end;
 end;
 
 // Die Pruefung eines Includes (TRdxIncludeTest): eine FPC-Weiche oder eine

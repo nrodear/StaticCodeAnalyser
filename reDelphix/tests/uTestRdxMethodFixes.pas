@@ -20,6 +20,10 @@ unit uTestRdxMethodFixes;
 //   ein Include vor implementation steht im Plan und wird gelesen (R4-05,
 //   Property-Accessor einer Nachfahrenklasse im Include); Marker hinter der
 //   Deklaration bzw. dem end der Implementierung sperren (R4-04).
+//   Nachpruefung B1-FD (neu 1): ein '// noinspection' ueber der
+//   Deklaration bzw. der Implementierung zielt auf sie - keine Hilfe; einer
+//   ueber dem Member dahinter bleibt dessen Marker. Das Include-Verzeichnis
+//   ist je Lauf frisch (wie TempDir in uTestRdxRoutineFixes, Review R6-07).
 // Die Gegenprobe mit dem echten Detektor steht in
 // uTestRdxRoutineFixesDetector (nur Delphi).
 
@@ -50,6 +54,7 @@ type
     [Test] procedure Sca147_UmlautCall_NoHelp;
     [Test] procedure Sca147_IncludeBeforeImplementation_Read;
     [Test] procedure Sca147_TrailingMarker_NoHelp;
+    [Test] procedure Sca147_MarkerAbove_NoHelp;
   end;
 
 implementation
@@ -483,6 +488,7 @@ procedure TTestRdxMethodFixes.Sca147_IncludeBeforeImplementation_Read;
 var
   P         : TRdxRoutinePlan;
   R, Dir, U : string;
+  G         : TGUID;
 begin
   // R4-05, Pruefer-Fall r405 (1): ein Include zwischen Klasse und
   // implementation kann eine Nachfahrenklasse tragen ('TBar = class(TFoo)
@@ -500,8 +506,9 @@ begin
   Assert.AreEqual('derived.inc', P.Includes[0]);
   // Der Check liest es neben der Unit: nennt es GetX, keine Hilfe; fehlt
   // es, ebenso; ohne den Namen bleibt die Hilfe.
+  CreateGUID(G);
   Dir := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
-    + 'rdx_b1fd_inc' + PathDelim;
+    + 'rdx_b1fd_' + GUIDToString(G) + PathDelim;
   ForceDirectories(Dir);
   U := Dir + 'u.pas';
   try
@@ -544,6 +551,38 @@ begin
     ['procedure TFoo.Dead;', 'begin', 'end; // noinspection EmptyMethod',
     'procedure TFoo.Used;', 'begin', 'end;', '', 'procedure TFoo.Run;',
     'begin', '  Used;', 'end;']), 6, 'TFoo', 'Dead', 'Zeile 14 endet');
+end;
+
+// ---- Nachpruefung B1-FD ----
+
+procedure TTestRdxMethodFixes.Sca147_MarkerAbove_NoHelp;
+begin
+  // Neu 1 fuer SCA147: der Marker ueber der Deklaration gilt ihr
+  // (uSuppression.BuildMap: die naechste Code-Zeile) - geloescht, galt er
+  // still dem Member dahinter ...
+  AssertRefused(UnitOf(['  TFoo = class', '  private',
+    '    // noinspection ShortVariableName', '    procedure Dead;',
+    '    procedure Used;', '  public', '    procedure Run;', '  end;'],
+    ['procedure TFoo.Dead;', 'begin', 'end;', '', 'procedure TFoo.Used;',
+    'begin', 'end;', '', 'procedure TFoo.Run;', 'begin', '  Used;', 'end;']),
+    7, 'TFoo', 'Dead', 'in Zeile 6 zielt');
+  // ... der ueber der Implementierung (TopAbove laesst ihn stehen) der
+  // Routine dahinter.
+  AssertRefused(UnitOf(['  TFoo = class', '  private', '    procedure Dead;',
+    '    procedure Used;', '  public', '    procedure Run;', '  end;'],
+    ['// noinspection EmptyMethod', 'procedure TFoo.Dead;', 'begin', 'end;',
+    '', 'procedure TFoo.Used;', 'begin', 'end;', '', 'procedure TFoo.Run;',
+    'begin', '  Used;', 'end;']), 6, 'TFoo', 'Dead', 'in Zeile 12 zielt');
+  // Gegenprobe: ein Marker ueber dem Member dahinter zielt weiter auf ihn.
+  Assert.AreEqual(UnitOf(['  TFoo = class', '  private', '    // noinspection X',
+      '    procedure Used;', '  public', '    procedure Run;', '  end;'],
+      ['procedure TFoo.Used;', 'begin', 'end;', '', 'procedure TFoo.Run;',
+      'begin', '  Used;', 'end;']),
+    FixOk(UnitOf(['  TFoo = class', '  private', '    procedure Dead;',
+      '    // noinspection X', '    procedure Used;', '  public',
+      '    procedure Run;', '  end;'], ['procedure TFoo.Dead;', 'begin',
+      'end;', '', 'procedure TFoo.Used;', 'begin', 'end;', '',
+      'procedure TFoo.Run;', 'begin', '  Used;', 'end;']), 6, 'TFoo', 'Dead'));
 end;
 
 initialization

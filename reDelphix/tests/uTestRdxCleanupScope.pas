@@ -32,6 +32,18 @@ unit uTestRdxCleanupScope;
 //             bei SCA019 bleibt);
 //   R4-09     CutEdit am Dateiende hinter einem Surrogatpaar (SCA070) -
 //             der Bereich beginnt auf der ersten Haelfte.
+// Nachpruefung B1-FD (je gegen 64ab9869 bzw. als Mutante rot):
+//   neu 1     ein '// noinspection' ueber der Deklaration (eigene Zeile
+//             oder hinter dem Code darueber) zielt auf sie - keine Hilfe,
+//             er gaelte danach der Zeile dahinter; noinspection-file,
+//             ein Absichtsmarker (SCA019), ein Marker ueber einer
+//             anderen Code-Zeile und ein Schnitt, der die Zeile stehen
+//             laesst, sperren nicht;
+//   neu 4     UntilEnd: die Klammerbilanz (eine anonyme Methode in der
+//             until-Bedingung) und der Halt am Listenende ('until A end');
+//             die Nachbildung von PlanByteEdits im R4-09-Test lehnt eine
+//             Spalte mitten im Surrogatpaar selbst ab (unter FPC 3.2
+//             kodiert TEncoding die Haelfte anders als Delphi).
 // Eigene Unit: uTestRdxCleanupFixes traegt 20 Tests (Grenze je Fixture).
 
 interface
@@ -57,6 +69,8 @@ type
     [Test] procedure Sca053_InlineUntilCondition_NoHelp;
     [Test] procedure Sca053_TrailingMarker_Stays;
     [Test] procedure Sca070_LastLineBehindSurrogatePair;
+    [Test] procedure Sca053_MarkerAbove_NoHelp;
+    [Test] procedure Sca053_UntilEnd_ParenAndListEnd;
   end;
 
 implementation
@@ -180,13 +194,35 @@ begin
     Result := TEncoding.UTF8.GetString(ABytes, AFrom, ACount);
 end;
 
+// Zeile ALine (1-basiert) von ALines; '' ausserhalb.
+function LineOf(ALines: TStrings; ALine: Integer): string;
+begin
+  Result := '';
+  if (ALine >= 1) and (ALine <= ALines.Count) then
+    Result := ALines[ALine - 1];
+end;
+
+// Beginnt ACol in ALine mitten in einem Surrogatpaar (auf der zweiten
+// Haelfte)? PlanOne rechnet den Byte-Anfang ueber Utf8PrefixLength - unter
+// Delphi wird die erste Haelfte allein zu U+FFFD, der Ausschnitt beginnt
+// mitten im Zeichen und passt nie (Gegen-Review R4-09). TEncoding von FPC
+// 3.2 kodiert die Haelfte anders, und der Vergleich ging dort durch
+// (Nachpruefung B1-FD, neu 4) - die Nachbildung prueft es deshalb selbst.
+function SplitsPair(const ALine: string; ACol: Integer): Boolean;
+begin
+  Result := (ACol > 1) and (ACol <= Length(ALine))
+    and (Ord(ALine[ACol]) >= $DC00) and (Ord(ALine[ACol]) <= $DFFF)
+    and (Ord(ALine[ACol - 1]) >= $D800) and (Ord(ALine[ACol - 1]) <= $DBFF);
+end;
+
 // AEdit auf die UTF-8-Bytes von ASource anwenden wie der Editor: dieselbe
 // Pruefung wie PlanByteEdits (Zeilen, dann der Byte-Ausschnitt) - '' und
 // der neue Text in AResult, sonst der Fehler. Unter FPC 3.2 haelt
 // TStringList AnsiString, und SpanText (PlanByteEdits) schneidet dort in
 // Bytes statt Zeichen; deshalb hier die Byte-Pruefung von PlanOne ueber
-// OffsetOf (Zeichen) - eine Grenze des Pruefstands wie in den Korpus-
-// Harnessen, nicht des Codes. Unter Delphi zusaetzlich PlanByteEdits.
+// OffsetOf (Zeichen) samt SplitsPair - eine Grenze des Pruefstands wie in
+// den Korpus-Harnessen, nicht des Codes. Unter Delphi zusaetzlich
+// PlanByteEdits.
 function ApplyAsEditor(const ASource: string; const AEdit: TRdxEdit;
   out AResult: string): string;
 var
@@ -208,6 +244,9 @@ begin
   try
     SL.Text := ASource;
     LineStartsOf(Bytes, Starts);
+    if SplitsPair(LineOf(SL, AEdit.Span.StartLine), AEdit.Span.StartCol)
+       or SplitsPair(LineOf(SL, AEdit.Span.EndLine), AEdit.Span.EndCol) then
+      Exit('Byte-Bereich weicht ab: Spalte mitten in einem Surrogatpaar');
     if not OffsetOf(Starts, SL, AEdit.Span.StartLine, AEdit.Span.StartCol, S)
        or not OffsetOf(Starts, SL, AEdit.Span.EndLine, AEdit.Span.EndCol, E)
        or (E <= S) or (E > Length(Bytes)) then
@@ -484,6 +523,73 @@ begin
   finally
     RestoreCodePage(OldCp);
   end;
+end;
+
+// ---- Nachpruefung B1-FD ----
+
+procedure TTestRdxCleanupScope.Sca053_MarkerAbove_NoHelp;
+begin
+  // Neu 1, Fall des Pruefers: der Marker ueber X gilt X (uSuppression.
+  // BuildMap: die naechste Code-Zeile) - nach der Hilfe galt er still Y.
+  AssertRefused(InImpl(['procedure P;', 'var',
+    '  // noinspection ShortVariableName', '  X: Integer;', '  Y: Integer;',
+    'begin', '  Y := 1;', 'end;']), 7, 'X', 'in Zeile 6 zielt');
+  // Hinter dem Code darueber zielt er ebenso auf die Code-Zeile darunter;
+  // eine Leerzeile dazwischen aendert nichts.
+  AssertRefused(InImpl(['procedure P;', 'var',
+    '  A: Integer; // noinspection ShortVariableName', '', '  X: Integer;',
+    '  Y: Integer;', 'begin', '  A := 1;', '  Y := A;', 'end;']), 8, 'X',
+    'in Zeile 6 zielt');
+  // Inline ebenso.
+  AssertRefused(InImpl(['procedure P;', 'begin', '  // noinspection Foo',
+    '  var X: Integer;', '  Bar;', 'end;']), 7, 'X', 'in Zeile 6 zielt');
+  // Gegenproben: '// noinspection-file' gilt der Datei, ein Absichtsmarker
+  // (SCA019) ist kein Zielmarker - beide bleiben stehen, die Hilfe greift.
+  Assert.AreEqual(InImpl(['procedure P;', 'var',
+      '  // noinspection-file ShortVariableName', '  Y: Integer;', 'begin',
+      '  Y := 1;', 'end;']),
+    FixOk(InImpl(['procedure P;', 'var',
+      '  // noinspection-file ShortVariableName', '  X: Integer;',
+      '  Y: Integer;', 'begin', '  Y := 1;', 'end;']), 7, 'X'));
+  Assert.AreEqual(InImpl(['procedure P;', 'var', '  // TODO: aufraeumen',
+      '  Y: Integer;', 'begin', '  Y := 1;', 'end;']),
+    FixOk(InImpl(['procedure P;', 'var', '  // TODO: aufraeumen',
+      '  X: Integer;', '  Y: Integer;', 'begin', '  Y := 1;', 'end;']), 7,
+      'X'));
+  // Der Marker zielt auf eine andere Code-Zeile (A), bzw. die Zeile bleibt
+  // ('A, X: Integer;' -> 'A: Integer;'): sein Ziel aendert sich nicht.
+  Assert.AreEqual(InImpl(['procedure P;', 'var',
+      '  // noinspection ShortVariableName', '  A: Integer;', '  Y: Integer;',
+      'begin', '  A := 1;', '  Y := A;', 'end;']),
+    FixOk(InImpl(['procedure P;', 'var',
+      '  // noinspection ShortVariableName', '  A: Integer;', '  X: Integer;',
+      '  Y: Integer;', 'begin', '  A := 1;', '  Y := A;', 'end;']), 8, 'X'));
+  Assert.AreEqual(InImpl(['procedure P;', 'var',
+      '  // noinspection ShortVariableName', '  A: Integer;', 'begin',
+      '  A := 1;', 'end;']),
+    FixOk(InImpl(['procedure P;', 'var',
+      '  // noinspection ShortVariableName', '  A, X: Integer;', 'begin',
+      '  A := 1;', 'end;']), 7, 'X'));
+end;
+
+procedure TTestRdxCleanupScope.Sca053_UntilEnd_ParenAndListEnd;
+begin
+  // Neu 4, Klammerbilanz: die until-Bedingung traegt eine anonyme Methode -
+  // ihr ';' und ihr end liegen in der Klammer und beenden die Bedingung
+  // nicht; die Verwendung von X dahinter sperrt.
+  AssertRefused(InImpl(['procedure P;', 'begin', '  repeat',
+    '    var X: Integer;', '    Foo;', '  until Any(function: Boolean',
+    '    begin', '      Bar;', '      Result := X > 0;', '    end);',
+    'end;']), 7, 'X', 'noch vor (Zeile 12)');
+  // Halt am Listenende: 'until Done' ohne ';' endet am end des Blocks - das
+  // X im else-Zweig ist das globale, die unbenutzte Inline-Variable geht.
+  Assert.AreEqual(InImpl(['var', '  X: Integer;', 'procedure P(C: Boolean);',
+      'begin', '  if C then', '  begin', '    repeat', '      Foo;',
+      '    until Done', '  end', '  else', '    X := 1;', 'end;']),
+    FixOk(InImpl(['var', '  X: Integer;', 'procedure P(C: Boolean);', 'begin',
+      '  if C then', '  begin', '    repeat', '      var X: Integer;',
+      '      Foo;', '    until Done', '  end', '  else', '    X := 1;',
+      'end;']), 11, 'X'));
 end;
 
 initialization

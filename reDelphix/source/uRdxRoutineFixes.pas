@@ -65,15 +65,17 @@ unit uRdxRoutineFixes;
 // die nach SCA147 uebrig bleibt, meldet danach SCA087 (eigene Hilfe).
 //
 // PLATTE: die Planer sind Textlogik, die Unit ist es nicht ganz (Gegen-
-// Review R4-08) - IncludeChainReason liest die Include-Dateien vor
-// 'implementation' von der Platte: fuer SCA164 und (seit Charge B1-FD)
-// SCA147 im Check der Tabelle, seit Charge Q14 auch fuer SCA014
-// (uRdxMagicFixes, Compiler-Weichen der Includes). Auf einem Netzpfad (UNC
-// oder Netzlaufwerk, IsNetworkPath) liest sie nichts und nennt den Grund -
-// der Menueaufbau laeuft im Hauptthread (R4-03). Der Leser gehoert in eine
-// eigene Unit (uRdxIncludes, samt IncludesUpTo und der zweiten Kopie
-// uRdxMagicFixes.AllIncludes); das traegt die Charge der Schichtung, weil
-// eine neue Unit Paket, Projekt und Pruefstand beruehrt.
+// Review R4-08) - IncludeChainReason liest Include-Dateien von der Platte:
+// fuer SCA164 und (seit Charge B1-FD) SCA147 die vor 'implementation' ohne
+// die im Kopf der Unit (IncludesUpTo) im Check der Tabelle, seit Charge Q14
+// fuer SCA014 alle (AllIncludes, Compiler-Weichen; uRdxMagicFixes). Auf
+// einem Netzpfad (UNC oder Netzlaufwerk, IsNetworkPath) liest sie nichts
+// und nennt den Grund - der Menueaufbau laeuft im Hauptthread (R4-03). Der
+// Leser gehoert in eine eigene Unit (uRdxIncludes, samt IncludesUpTo und
+// AllIncludes - seit der Nachpruefung der Charge B1-FD eine Durchsicht,
+// IncludesWhere, statt einer Kopie in uRdxMagicFixes); das traegt die
+// Charge der Schichtung (Review R6-12), weil eine neue Unit Paket, Projekt
+// und Pruefstand beruehrt.
 //
 // GRUNDSATZ wie in uRdxSimpleFixes: lieber keine Hilfe als eine falsche.
 
@@ -173,10 +175,11 @@ type
     // String-Literal oder einer Direktive, {$L}/{$LINK} in der Datei, {$I}
     // im implementation-Teil, eine Direktive im Bereich ausser
     // ausgeglichenem $IF../$ENDIF bzw. $REGION, zwei Routinen auf einer
-    // Zeile, einen Marker-Kommentar, der ausserhalb wirkt ('end; //
-    // noinspection X' auf der letzten Zeile, '// noinspection-file' im
-    // Bereich - MarkerLinesReason). Die {$I}-Dateien davor nennt
-    // APlan.Includes - der Aufrufer prueft sie mit IncludeReason.
+    // Zeile, einen Marker-Kommentar, der ausserhalb wirkt (auf der letzten
+    // Zeile 'end; // noinspection X', '// noinspection-file' im Bereich -
+    // MarkerLinesReason) oder von aussen in den Bereich zielt (ueber dem
+    // Kopf '// noinspection X' - MarkerAboveReason). Die {$I}-Dateien davor
+    // nennt APlan.Includes - der Aufrufer prueft sie mit IncludeReason.
     class function UnusedRoutine(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out APlan: TRdxRoutinePlan;
       out AReason: string): Boolean; static;
@@ -192,8 +195,9 @@ type
     // IInterface/IDispatch als Name, mehr als einer Deklaration oder
     // Implementierung, keiner Implementierung in der Datei, jeder weiteren
     // Verwendung (auch Property-Accessor, String-Literal, Direktive), einer
-    // Direktive im Bereich und einem Marker-Kommentar, der ausserhalb wirkt,
-    // wie bei SCA164. Die Formdatei prueft der Aufrufer (FormNamesMethod),
+    // Direktive im Bereich und einem Marker-Kommentar, der ausserhalb wirkt
+    // oder von aussen in einen der Bereiche zielt, wie bei SCA164. Die
+    // Formdatei prueft der Aufrufer (FormNamesMethod),
     // die {$I}-Dateien davor (seit Charge B1-FD in APlan.Includes) ebenso
     // mit IncludeReason.
     class function UnusedPrivateMethod(AMap: TRdxCodeMap; ALine: Integer;
@@ -261,6 +265,37 @@ function IncludeChainReason(const AUnitFile: string;
 // Pfad der Unit (uRdxMagicFixes UNC, uRdxFixTable.RemoteDriveReason das
 // Netzlaufwerk), kein Include und SCA164/SCA147 gar nichts.
 function IsNetworkPath(const APath: string): Boolean;
+
+// Wo das Include AFile einer Datei in ADir (Verzeichnis mit Trenner) zuerst
+// gesucht wird: ein Pfad mit Laufwerk bzw. UNC wie er ist, einer ab der
+// Wurzel ('\datei.inc', mORMot-Kopien im Korpus) auf dem Laufwerk von ADir,
+// sonst relativ zu ADir; '' fuer einen Pfad ab der Wurzel, wenn ADir kein
+// Laufwerk nennt. Bis zur Nachpruefung der Charge B1-FD suchte FileExists
+// '\datei.inc' auf dem aktuellen Laufwerk des Prozesses - in der IDE
+// irgendeinem, auch einem Netzlaufwerk, an dem IsNetworkPath vorbeisah.
+// Oeffentlich fuer die Tests (reine Pfadrechnung, kein Plattenzugriff).
+function IncludeSearchPath(const ADir, AFile: string): string;
+
+// Die Dateien aller Include-Direktiven der Datei, der Reihe nach - auch die
+// im Kopf der Unit (SCA014 prueft die Compiler-Weichen jedes Includes).
+// Dieselbe Durchsicht wie die Includes vor implementation fuer SCA164/
+// SCA147 (dort ohne Kopf); bis zur Nachpruefung der Charge B1-FD stand sie
+// als zweite Kopie in uRdxMagicFixes (Gegen-Review R4-08).
+function AllIncludes(AMap: TRdxCodeMap): TArray<string>;
+
+// Zielt ein Zeilen-Marker '// noinspection X' ueber der Zeile ATop auf ATop
+// oder eine Zeile dahinter? uSuppression.BuildMap gibt jedem '//'-Marker,
+// auf eigener Zeile wie hinter Code, zwei Ziele: die naechste nicht leere
+// Zeile und die naechste Code-Zeile (eine Zeile, die mit '//' beginnt, ist
+// keine). Ab der letzten Code-Zeile ueber ATop zielt deshalb jeder Marker
+// in den Bereich ab ATop; wird der geloescht, gilt der Marker still der
+// naechsten Code-Zeile dahinter, und deren Funde verschwinden - das
+// Spiegelbild von Gegen-Review R4-04 (Nachpruefung B1-FD: '// noinspection
+// ShortVariableName' ueber 'X: Integer;' galt nach SCA053 'Y: Integer;').
+// '// noinspection-file' gilt der Datei. '' oder der Grund. SCA053, SCA164
+// und SCA147 fragen es fuer jeden Bereich, dessen erste Zeile ihren Code
+// verliert.
+function MarkerAboveReason(AMap: TRdxCodeMap; ATop: Integer): string;
 
 implementation
 
@@ -364,9 +399,13 @@ const
   R_IMPL_INCLUDE = '{$I}-Include im implementation-Teil (Zeile %d) - dort '
     + 'kann ein Aufrufer stehen, den die Hilfe nicht sieht';
   R_LAST_LINE = 'die Routine endet auf der letzten Zeile der Datei';
-  // SCA164/SCA147: Include-Dateien vor implementation (IncludeReason).
-  R_INC_MISSING = 'Include %s vor implementation %s - es kann die Routine '
-    + 'deklarieren (interface-Teil) oder rufen, die Hilfe sieht es nicht';
+  // SCA164/SCA147: Include-Dateien vor implementation (IncludeReason) - fuer
+  // beide Regeln: die Routine deklarieren oder rufen (SCA164) bzw. die
+  // Methode als Property-Accessor einer Nachfahrenklasse nennen (SCA147;
+  // bis zur Nachpruefung der Charge B1-FD sprach der Text nur von SCA164).
+  R_INC_MISSING = 'Include %s vor implementation %s - es kann den Namen '
+    + 'deklarieren, rufen oder als Property-Accessor nennen, die Hilfe sieht '
+    + 'es nicht';
   // Ursache fuer MissingFmt: Unit oder Include auf einem Netzpfad (R4-03).
   R_INC_NETWORK = 'auf einem Netzpfad (%s) - nicht gelesen, der Menueaufbau '
     + 'laeuft im Hauptthread';
@@ -379,7 +418,14 @@ const
     + 'ganzen Datei und ginge mit verloren; von Hand loeschen';
   R_MARKER_TAIL = 'Zeile %d endet mit dem Kommentar "%s" - ein Marker hinter '
     + 'Code gilt der Zeile dahinter bzw. bleibt stehen; von Hand loeschen';
-  // So viel des Kommentars nennt R_MARKER_TAIL.
+  // SCA053/SCA164/SCA147: ein Zeilen-Marker ueber dem Bereich, der in ihn
+  // zielt (MarkerAboveReason; uSuppression.ParseCommentText: der Kommentar
+  // beginnt mit dem Wort).
+  MARKER_LINE = 'noinspection';
+  R_MARKER_ABOVE = 'der Marker "%s" in Zeile %d zielt auf die geloeschte '
+    + 'Zeile und gaelte danach still der naechsten Code-Zeile; von Hand '
+    + 'loeschen';
+  // So viel des Kommentars nennen R_MARKER_TAIL und R_MARKER_ABOVE.
   MARKER_QUOTE_LEN = 40;
   MAX_INCLUDE_DEPTH = 4;
   INCLUDE_EXTENSIONS: array[0..1] of string = ('.inc', '.pas');
@@ -1153,6 +1199,51 @@ begin
   Result.Expected := RangeText(AMap, Result.Span);
 end;
 
+// Der Zeilen-Marker der Zeile ALine: ihr '//'-Kommentar (aus Code heraus),
+// wenn er mit 'noinspection' beginnt wie bei uSuppression.ParseCommentText,
+// aber nicht 'noinspection-file' (der gilt der Datei) - gekuerzt fuer den
+// Grund; sonst ''.
+function LineMarkerAt(AMap: TRdxCodeMap; ALine: Integer): string;
+var
+  Slash   : Integer;
+  Comment : string;
+begin
+  Result := '';
+  Slash := AMap.LineCommentCol(ALine);
+  if Slash = 0 then Exit;
+  Comment := LowerCase(TrimLeft(Copy(AMap.Raw(ALine), Slash + Length('//'),
+    MaxInt)));
+  if (Copy(Comment, 1, Length(MARKER_LINE)) = MARKER_LINE)
+     and (Copy(Comment, 1, Length(MARKER_FILE)) <> MARKER_FILE) then
+    Result := TrimRight(Copy(AMap.Raw(ALine), Slash, MARKER_QUOTE_LEN));
+end;
+
+// Rueckwaerts ab ATop - 1 ueber Leerzeilen und Zeilen, die mit '//'
+// beginnen, bis einschliesslich der ersten Code-Zeile: genau dort steht
+// ein Marker, dessen naechste Code-Zeile ATop oder eine dahinter ist (s.
+// Interface; die Zielsuche von BuildMap liest den Rohtext so).
+function MarkerAboveReason(AMap: TRdxCodeMap; ATop: Integer): string;
+var
+  Li        : Integer;
+  S, Marker : string;
+begin
+  Result := '';
+  Li := ATop - 1;
+  while Li >= 1 do
+  begin
+    S := TrimLeft(AMap.Raw(Li));
+    if S <> '' then
+    begin
+      Marker := LineMarkerAt(AMap, Li);
+      if Marker <> '' then
+        Exit(Format(R_MARKER_ABOVE, [Marker, Li]));
+      if Copy(S, 1, Length('//')) <> '//' then
+        Exit;
+    end;
+    Dec(Li);
+  end;
+end;
+
 // Marker, die das Loeschen der ganzen Zeilen ALines mitnaehme, obwohl sie
 // ausserhalb wirken (Gegen-Review R4-04): ein '//'-Kommentar mit Marker
 // (MarkerReason: noinspection oder ein Absichtsmarker wie bei SCA019) hinter
@@ -1161,14 +1252,17 @@ end;
 // 'end; // noinspection UnusedRoutine' zielte auf die Routine dahinter);
 // ein Absichtskommentar bleibt wie ueber dem Kopf stehen -, und ein
 // '// noinspection-file' irgendwo im Bereich (er gilt der ganzen Datei).
-// Marker in den Zeilen davor zielen in den Bereich selbst; ueber dem Kopf
-// laesst TopAbove sie stehen. '' oder der Grund.
+// Dazu ein Zeilen-Marker darueber, der in den Bereich zielt
+// (MarkerAboveReason): TopAbove laesst einen Kommentar-Lauf mit Marker
+// ueber dem Kopf stehen, und bis zur Nachpruefung der Charge B1-FD galt er
+// danach still der Routine dahinter. '' oder der Grund.
 function MarkerLinesReason(AMap: TRdxCodeMap; const ALines: TRdxLines): string;
 var
   Li, Slash, Last : Integer;
   Comment         : string;
 begin
-  Result := '';
+  Result := MarkerAboveReason(AMap, ALines.Top);
+  if Result <> '' then Exit;
   Last := 0;
   for Li := ALines.Top to ALines.Bottom do
   begin
@@ -1535,13 +1629,10 @@ begin
 end;
 
 // Die Dateien der Include-Direktiven in den Zeilen 1..ALast, der Reihe
-// nach - ohne die im Kopf der Unit: folgt einem Include 'unit', 'interface'
-// oder 'uses', darf es nur tragen, was davor stehen darf, Direktiven und
-// Kommentare (eine Deklaration davor waere ein Fehler - uses ist die erste
-// Klausel, E2029). Es kann die Routine weder deklarieren noch rufen; so
-// stehen die Konfigurations-Includes 'jcl.inc', 'jvcl.inc', 'CnWizards.inc'
-// (Korpus: im Kopf, meist in einem anderen Verzeichnis als die Unit).
-function IncludesUpTo(AMap: TRdxCodeMap; ALast: Integer): TArray<string>;
+// nach - ohne die, hinter denen eines der Woerter ASkipBefore folgt (die
+// eine Durchsicht fuer IncludesUpTo und AllIncludes).
+function IncludesWhere(AMap: TRdxCodeMap; ALast: Integer;
+  const ASkipBefore: array of string): TArray<string>;
 var
   Li, Co : Integer;
   F      : string;
@@ -1553,9 +1644,26 @@ begin
       begin
         F := IncludeFileAt(AMap, Li, Co);
         if (F <> '')
-           and not InList(NextToken(AMap, Li, Co).Low, HEADER_FOLLOWERS) then
+           and not InList(NextToken(AMap, Li, Co).Low, ASkipBefore) then
           AddText(Result, F);
       end;
+end;
+
+// Die Dateien der Include-Direktiven in den Zeilen 1..ALast, der Reihe
+// nach - ohne die im Kopf der Unit: folgt einem Include 'unit', 'interface'
+// oder 'uses', darf es nur tragen, was davor stehen darf, Direktiven und
+// Kommentare (eine Deklaration davor waere ein Fehler - uses ist die erste
+// Klausel, E2029). Es kann die Routine weder deklarieren noch rufen; so
+// stehen die Konfigurations-Includes 'jcl.inc', 'jvcl.inc', 'CnWizards.inc'
+// (Korpus: im Kopf, meist in einem anderen Verzeichnis als die Unit).
+function IncludesUpTo(AMap: TRdxCodeMap; ALast: Integer): TArray<string>;
+begin
+  Result := IncludesWhere(AMap, ALast, HEADER_FOLLOWERS);
+end;
+
+function AllIncludes(AMap: TRdxCodeMap): TArray<string>;
+begin
+  Result := IncludesWhere(AMap, AMap.LineCount, []);
 end;
 
 // Der Plan fuer die freie Routine R: Nachweis am Puffer, Bereiche,
@@ -2124,17 +2232,29 @@ begin
     Result := APath;
 end;
 
-// Die Datei AFile eines Includes, relativ zu ADir (Verzeichnis mit
-// Trenner); ohne Endung auch mit .inc bzw. .pas wie die Compiler. '' wenn
-// keine da ist.
+function IncludeSearchPath(const ADir, AFile: string): string;
+begin
+  if ExtractFileDrive(AFile) <> '' then
+    Result := AFile
+  else if (AFile <> '') and CharInSet(AFile[1], ['\', '/']) then
+  begin
+    Result := ExtractFileDrive(ADir);
+    if Result <> '' then
+      Result := Result + AFile;
+  end
+  else
+    Result := ADir + AFile;
+end;
+
+// Die Datei AFile eines Includes, gesucht wie IncludeSearchPath (relativ zu
+// ADir, Verzeichnis mit Trenner); ohne Endung auch mit .inc bzw. .pas wie
+// die Compiler. '' wenn keine da ist.
 function IncludePath(const ADir, AFile: string): string;
 var
   Ext : string;
 begin
-  Result := AFile;
-  if (ExtractFileDrive(AFile) = '')
-     and ((AFile = '') or not CharInSet(AFile[1], ['\', '/'])) then
-    Result := ADir + AFile;
+  Result := IncludeSearchPath(ADir, AFile);
+  if Result = '' then Exit;
   if FileExists(Result) then Exit;
   if ExtractFileExt(AFile) = '' then
     for Ext in INCLUDE_EXTENSIONS do
@@ -2246,16 +2366,19 @@ begin
   end;
 end;
 
-// SCA164: nennt das Include AFile die Routine AArg als Wort? '' oder der
-// Grund (TRdxIncludeTest).
+// SCA164/SCA147: nennt das Include AFile die Routine bzw. Methode AArg als
+// Wort? '' oder der Grund (TRdxIncludeTest) - fuer beide Regeln: eine
+// Deklaration im interface-Teil (nach dem Loeschen E2065), ein Aufruf oder
+// ein Property-Accessor einer Nachfahrenklasse (nach dem Loeschen E2003;
+// bis zur Nachpruefung der Charge B1-FD nannte der Text nur SCA164).
 function NameInInclude(const AFile: string; ALines: TStrings;
   AMap: TRdxCodeMap; const AArg: string): string;
 begin
   Result := '';
   if HasIdentWord(LowerCase(ALines.Text), LowerCase(AArg)) then
-    Result := Format('das Include %s nennt %s - eine Deklaration im '
-      + 'interface-Teil (nach dem Loeschen E2065) oder ein Aufruf, den die '
-      + 'Hilfe nicht sieht', [AFile, AArg]);
+    Result := Format('das Include %s nennt %s - als Deklaration (nach dem '
+      + 'Loeschen E2065), Aufruf oder Property-Accessor (E2003), die Hilfe '
+      + 'sieht es nicht', [AFile, AArg]);
 end;
 
 { TRdxRoutineFixes }

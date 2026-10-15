@@ -171,6 +171,7 @@
       "nichtAngeboten": [
         "`for var` (der Detektor meldet die Laufvariable) und ein Schlüsselwort als Name (`resourcestring`)",
         "eine const-/resourcestring-Section, ein Initialisierer (`= 5`, `:= F()`), `absolute`, ein Typ über mehrere Zeilen, ein Attribut, ein Kommentar oder eine Direktive in der Deklaration",
+        "ein `// noinspection` darüber, der auf die Zeile der Deklaration zielt – gelöscht gälte er der Zeile dahinter",
         "ein `class operator Initialize/Finalize` in der Unit (die Variable führt Code aus)",
         "ein `{$I}`-Include, eine Direktive, die den Namen nennt, oder `asm` im Gültigkeitsbereich; ein FPC-Makro `{$DEFINE M := X}` in der Datei",
         "die einzige Anweisung eines Blocks, außerhalb einer Routine, in einer offenen Klammer (ein Parameter, keine Variable)"
@@ -834,7 +835,7 @@
         "mehr als eine Deklaration oder Implementierung, keine Implementierung in der Datei, Property-Accessor",
         "der Name als String-Literal (`MethodAddress`), `{$RTTI}` in der Datei, ein Attribut an Methode oder Klasse",
         "`{$I}` im Klassenrumpf oder im implementation-Teil, ein Include davor, das den Namen nennt (Property-Accessor einer Nachfahrenklasse), nicht neben der Unit oder auf einem Netzpfad liegt, ein Interface der Klasse aus einer anderen Unit",
-        "ein Marker-Kommentar (`noinspection`, TODO …) hinter der Deklaration oder dem `end;` der Implementierung – er gilt der Zeile dahinter",
+        "ein Marker-Kommentar (`noinspection`, TODO …) hinter der Deklaration oder dem `end;` der Implementierung – er gilt der Zeile dahinter –, oder ein `// noinspection` darüber, der auf sie zielt",
         "eine `.dfm`/`.fmx`/`.lfm` neben der Unit nennt den Namen (Bindung an ein Ereignis)"
       ],
       "beispielVorher": [
@@ -987,7 +988,7 @@
         "`export`/`public`/`alias`/`external`/`forward`/`interrupt`, `{$L}`/`{$LINK}` in der Datei",
         "`{$I}` im implementation-Teil oder ein Include davor, das die Routine nennt, nicht neben der Unit liegt oder – wie die Unit selbst – auf einem Netzpfad (kein Plattenzugriff beim Menüaufbau)",
         "eine Direktive im Bereich außer ausgeglichenem `$IF..`/`$ENDIF` bzw. `$REGION`",
-        "ein Marker-Kommentar (`noinspection`, TODO …) hinter dem `end;` bzw. der `forward`-Deklaration – er gilt der Zeile dahinter – oder `// noinspection-file` in der Routine",
+        "ein Marker-Kommentar (`noinspection`, TODO …) hinter dem `end;` bzw. der `forward`-Deklaration – er gilt der Zeile dahinter –, `// noinspection-file` in der Routine oder ein `// noinspection` über dem Kopf bzw. der `forward`-Deklaration, der auf die Routine zielt",
         "zwei Routinen auf einer Zeile, ein Kopf vor `implementation`, unsichere Grenzen (lokaler Klassentyp, `$IFDEF`-geteilter Rumpf)"
       ],
       "beispielVorher": [

@@ -13,8 +13,15 @@ unit uRdxCleanupFixes;
 //          ausser er traegt einen Marker - dann bleibt er als eigene
 //          Zeile), 'A, X, B: T;' -> 'A, B: T;' (erstes/letztes Element,
 //          auch ueber Zeilen), 'var' mit, wenn die Section leer wird,
-//          inline 'var X: T;' als ganze Anweisung.
-// Beide sind bedeutungsgleich.
+//          inline 'var X: T;' als ganze Anweisung. Zielt ein
+//          '// noinspection' darueber auf die Zeile, keine Hilfe - er gaelte
+//          danach der Zeile dahinter (MarkerAboveCut).
+// Beide sind bedeutungsgleich. GRENZE SCA070: ein '// noinspection' direkt
+// ueber der geloeschten Region zielt danach auf die naechste nicht leere
+// Zeile - meist die Code-Zeile, die er ohnehin traf; nur wenn dort wieder
+// ein '//'-Kommentar steht oder die Region aus Zeilen eines '{ }' bestand,
+// wandert er (Nachpruefung B1-FD, nicht gesperrt: die Sperre traefe vor
+// allem den harmlosen Fall '// noinspection X' / '// alter Code' / Code).
 //
 // WIE VIEL SCA070 LOESCHT (Detektor uCommentedOutCode gelesen): er bewertet
 // JEDE Zeile einzeln (ein Kommentarstueck mit mindestens zwei Code-Merkmalen,
@@ -91,7 +98,9 @@ type
     // Unit (verwalteter Record: die Variable fuehrt Code aus); seit Charge
     // H3c auch bei einer Deklaration in einer offenen Klammer (Parameter),
     // einem {$I}-Include, einer Direktive mit dem Namen oder asm im
-    // Gueltigkeitsbereich und einem FPC-Makro mit dem Namen in der Datei.
+    // Gueltigkeitsbereich und einem FPC-Makro mit dem Namen in der Datei;
+    // seit der Nachpruefung der Charge B1-FD bei einem '// noinspection'
+    // darueber, der auf die Zeile zielt (MarkerAboveCut).
     class function UnusedLocalVar(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
@@ -129,7 +138,8 @@ uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
   uRdxStructFixes,   // RangeText, CommentInRange
-  uRdxRoutineFixes;  // ReadRoutine (SCA053: Ende des Gueltigkeitsbereichs)
+  uRdxRoutineFixes;  // ReadRoutine (SCA053: Ende des Gueltigkeitsbereichs),
+                     // MarkerAboveReason (Marker ueber der Deklaration)
 
 const
   SPAN_070 = 'sca070';
@@ -1537,6 +1547,20 @@ begin
     Result := TextPos(ATo.Line, Length(L) + 1);
 end;
 
+// Steht vor AFrom nur Leerraum, verliert die Zeile mit dem Schnitt ihren
+// Code (sie geht ganz, oder ein Rest rueckt an die Einrueckung): ein
+// Zeilen-Marker darueber, der auf sie zielt, gaelte danach anderem Code
+// (uRdxRoutineFixes.MarkerAboveReason; Nachpruefung B1-FD: der Marker
+// '// noinspection ShortVariableName' ueber 'X: Integer;' galt nach der
+// Hilfe 'Y: Integer;'). Bleibt Code davor ('A, X: T' -> 'A: T'), bleibt
+// auch das Ziel. '' oder der Grund.
+function MarkerAboveCut(AMap: TRdxCodeMap; const AFrom: TRdxTextPos): string;
+begin
+  Result := '';
+  if SkipBlanks(AMap.Raw(AFrom.Line), 1) >= AFrom.Col then
+    Result := MarkerAboveReason(AMap, AFrom.Line);
+end;
+
 // Name, Gruppe, Form und Besitzer der Deklaration. '' oder der Grund.
 function DeclReason(AMap: TRdxCodeMap; ALine: Integer; const AKey: string;
   out ADecl: TRdxVarDecl): string;
@@ -1584,6 +1608,8 @@ begin
     AReason := VarCut(AMap, Decl, CutStart, CutStop);
   if AReason = '' then
     AReason := CutReason(AMap, Decl, CutStart, CutStop);
+  if AReason = '' then
+    AReason := MarkerAboveCut(AMap, CutStart);
   if AReason = '' then
     AReason := CutEdit(AMap, CutStart, WithTrailingComment(AMap, CutStart,
       CutStop), SPAN_053, AEdit);
