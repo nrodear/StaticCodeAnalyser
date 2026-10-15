@@ -473,9 +473,11 @@ procedure TTestRdxCleanupFixes.Sca053_ShapeRefusals;
 begin
   AssertRefused(ckVar, InProc(['  for var I := 1 to 3 do', '    Foo;']), 6,
     VarMsg('I'), 'for var');
+  // Umlautfreies Teilstueck: de.po traegt 'Schluesselwort' seit der
+  // Umstellung (E29, Gruppe G4) mit echtem Umlaut, die Quelle bleibt ASCII.
   AssertRefused(ckVar, InImpl(['procedure P;', 'resourcestring',
     '  SX = ''x'';', 'begin', 'end;']), 5, VarMsg('resourcestring'),
-    'Schluesselwort');
+    'Parser las eine Section als Variable');
   AssertRefused(ckVar, InImpl(['procedure P;', 'const', '  C: Integer = 1;',
     '  X: Integer = 2;', 'begin', 'end;']), 7, VarMsg('X'), 'const-Section');
   AssertRefused(ckVar, InImpl(['procedure P;', 'var', '  X: Integer = 2;',

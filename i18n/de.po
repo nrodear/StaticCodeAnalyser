@@ -2601,3 +2601,165 @@ msgstr "die Unit deklariert einen class operator Assign - eine Zuweisung kann do
 
 msgid "the message has no target"
 msgstr "Ziel fehlt in der Meldung"
+
+msgid "nothing stands before the range, and it reaches the end of the file - %s"
+msgstr "vor dem Bereich steht nichts, und er reicht bis zum Dateiende - %s"
+
+msgid "empty range"
+msgstr "leerer Bereich"
+
+msgid "the finding reaches line %d, the file has %d lines"
+msgstr "der Fund reicht bis Zeile %d, die Datei hat %d Zeilen"
+
+msgid "no comment at line %d column %d"
+msgstr "an Zeile %d Spalte %d steht kein Kommentar"
+
+msgid "line %d carries code or text next to the comment (column %d) - %s"
+msgstr "Zeile %d trägt neben dem Kommentar Code oder Text (Spalte %d) - %s"
+
+msgid "comment at line %d column %d not readable"
+msgstr "Kommentar an Zeile %d Spalte %d nicht lesbar"
+
+msgid "column %d points into the middle of a comment"
+msgstr "Spalte %d zeigt mitten in einen Kommentar"
+
+msgid "directive in the range (line %d) - it is active code, not a comment"
+msgstr "Direktive im Bereich (Zeile %d) - sie ist aktiver Code, kein Kommentar"
+
+msgid "documentation comment (///, {* or (**, line %d) - its sample code stays"
+msgstr "Doku-Kommentar (///, {* bzw. (**, Zeile %d) - sein Beispielcode bleibt"
+
+msgid "comment without an end up to the end of the file"
+msgstr "Kommentar ohne Ende bis zum Dateiende"
+
+msgid "comment before the first code of the file (license or header comment) - %s"
+msgstr "Kommentar vor dem ersten Code der Datei (Lizenz- oder Kopfkommentar) - %s"
+
+msgid "line %d does not look like code (no \";\" at the end, no \":=\", no begin/procedure/function)"
+msgstr "Zeile %d sieht nicht nach Code aus (kein \";\" am Ende, kein \":=\", kein begin/procedure/function)"
+
+msgid "no comment at the reported place"
+msgstr "kein Kommentar an der gemeldeten Stelle"
+
+msgid "several comments, and one reaches beyond the finding with text - the cut would not be contiguous; %s"
+msgstr "mehrere Kommentare, und einer reicht mit Text über den Fund hinaus - der Schnitt wäre nicht zusammenhängend; %s"
+
+msgid "the message has no column or line count"
+msgstr "Spalte oder Zeilenzahl fehlt in der Meldung"
+
+msgid "no \"%s\""
+msgstr "kein \"%s\""
+
+msgid "%d times \"%s\""
+msgstr "%d-mal \"%s\""
+
+msgid "name list not readable"
+msgstr "Namensliste nicht lesbar"
+
+msgid "initialized variable - the expression can have side effects"
+msgstr "initialisierte Variable - der Ausdruck kann Seiteneffekte haben"
+
+msgid "absolute variable - it lies on the memory of another one"
+msgstr "absolute-Variable - sie liegt auf dem Speicher einer anderen"
+
+msgid "type with \"%s\" (across several lines) - %s"
+msgstr "Typ mit \"%s\" (über mehrere Zeilen) - %s"
+
+msgid "\"%s\" in the type - declaration not readable"
+msgstr "\"%s\" im Typ - Deklaration nicht lesbar"
+
+msgid "bracket without a counterpart in the type"
+msgstr "Klammer ohne Gegenstück im Typ"
+
+msgid "no \";\" after the type"
+msgstr "kein \";\" hinter dem Typ"
+
+msgid "for var - the control variable of a loop (the detector does not count the loop header as a use) - no quick fix"
+msgstr "for var - die Laufvariable einer Schleife (der Detektor zählt den Schleifenkopf nicht als Verwendung) - keine Hilfe"
+
+msgid "inline declaration with initializer \":=\" - the expression can have side effects"
+msgstr "Inline-Deklaration mit Initialisierer \":=\" - der Ausdruck kann Seiteneffekte haben"
+
+msgid "no \":\" after the name list (\"%s\")"
+msgstr "kein \":\" hinter der Namensliste (\"%s\")"
+
+msgid "\"%s\" after the type still belongs to the declaration - %s"
+msgstr "\"%s\" hinter dem Typ gehört noch zur Deklaration - %s"
+
+msgid "local %s section - not a variable"
+msgstr "lokale %s-Section - keine Variable"
+
+msgid "no var section before the declaration"
+msgstr "keine var-Section vor der Deklaration"
+
+msgid "the declaration is not in a var section (\"%s\")"
+msgstr "die Deklaration steht nicht in einer var-Section (\"%s\")"
+
+msgid "attribute before the declaration - %s"
+msgstr "Attribut vor der Deklaration - %s"
+
+msgid "the name is inside an attribute (\"[...]\") - not a variable"
+msgstr "der Name steht in einem Attribut (\"[...]\") - keine Variable"
+
+msgid "unclear what the declaration belongs to (\"%s\" before it)"
+msgstr "unklar, wozu die Deklaration gehört (\"%s\" davor)"
+
+msgid "the declaration is inside an open parenthesis - a parameter of a routine or of a procedural type, not a local variable"
+msgstr "die Deklaration steht in einer offenen Klammer - ein Parameter einer Routine bzw. eines Prozedurtyps, keine lokale Variable"
+
+msgid "class var - a class field, not a local variable"
+msgstr "class var - ein Klassenfeld, keine lokale Variable"
+
+msgid "declaration after \";\" in a statement block - unclear"
+msgstr "Deklaration hinter \";\" in einem Anweisungsblock - unklar"
+
+msgid "no routine around the declaration (global variable?) - no quick fix"
+msgstr "keine Routine um die Deklaration (globale Variable?) - keine Hilfe"
+
+msgid "routine body not found - %s"
+msgstr "Rumpf der Routine nicht gefunden - %s"
+
+msgid "routine body not found"
+msgstr "Rumpf der Routine nicht gefunden"
+
+msgid "routine body not found - too many local routines"
+msgstr "Rumpf der Routine nicht gefunden - zu viele lokale Routinen"
+
+msgid "the name still occurs in the scope (line %d) - under {$IFDEF} and in asm it also counts as a use"
+msgstr "der Name kommt im Gültigkeitsbereich noch vor (Zeile %d) - auch unter {$IFDEF} und in asm zählt er als Verwendung"
+
+msgid "{$I} include in the scope (line %d) - the name may occur there, which the quick fix does not see"
+msgstr "{$I}-Include im Gültigkeitsbereich (Zeile %d) - dort kann der Name stehen, den die Hilfe nicht sieht"
+
+msgid "a directive names \"%s\" (line %d) - macro or condition, the quick fix does not evaluate it"
+msgstr "eine Direktive nennt \"%s\" (Zeile %d) - Makro oder Bedingung, die Hilfe wertet sie nicht aus"
+
+msgid "asm in the scope (line %d) - assembler can address the variable via the stack frame, without its name"
+msgstr "asm im Gültigkeitsbereich (Zeile %d) - Assembler kann die Variable über den Stack-Rahmen ansprechen, ohne ihren Namen"
+
+msgid "a macro inserts \"%s\" ({$DEFINE ... := ...} in line %d) - the quick fix does not see its use"
+msgstr "ein Makro setzt \"%s\" ein ({$DEFINE ... := ...} in Zeile %d) - die Hilfe sieht seine Verwendung nicht"
+
+msgid "no end of the block around the declaration found"
+msgstr "kein Ende des Blocks um die Deklaration gefunden"
+
+msgid "the unit declares a class operator Initialize/Finalize (managed record) - a variable can run code"
+msgstr "die Unit deklariert einen class operator Initialize/Finalize (verwalteter Record) - eine Variable kann Code ausführen"
+
+msgid "unclear what the inline declaration belongs to (\"%s\" before it)"
+msgstr "unklar, wozu die Inline-Deklaration gehört (\"%s\" davor)"
+
+msgid "comment in the declaration - it would be lost"
+msgstr "Kommentar in der Deklaration - er ginge verloren"
+
+msgid "directive in the declaration or its var section - a branch could become empty"
+msgstr "Direktive in der Deklaration bzw. ihrer var-Section - ein Zweig könnte leer werden"
+
+msgid "the name list does not start on the reported line"
+msgstr "die Namensliste beginnt nicht auf der gemeldeten Zeile"
+
+msgid "the message has no variable name"
+msgstr "Variablenname fehlt in der Meldung"
+
+msgid "\"%s\" is a keyword, not a variable (the parser read a section as a variable) - no quick fix"
+msgstr "\"%s\" ist ein Schlüsselwort, keine Variable (der Parser las eine Section als Variable) - keine Hilfe"
