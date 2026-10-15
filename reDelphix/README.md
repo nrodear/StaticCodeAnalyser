@@ -83,8 +83,7 @@ tools\probe\sites_from_sarif.py   Fundstellen einer Regel aus einem SARIF-Lauf z
 * reDelphix ist gegen Version 1 des Quellstellen-Vertrags geschrieben.
   `uRdxRecipeRunner` (Rezept-Laeufer) und `uRdxFixRunner` (Ruempfe der
   einfachen Hilfen, seit Charge B2S-b die meisten Typ- und with-Fragen an den
-  Vertrag)
-  pruefen `SOURCE_PLACES_VERSION` beim Uebersetzen
+  Vertrag) pruefen `SOURCE_PLACES_VERSION` beim Uebersetzen
   (`{$IF SOURCE_PLACES_VERSION <> 1}` mit `{$MESSAGE ERROR}`, die Meldung
   nennt die Unit): hebt die Engine die Version, bricht der Bau von
   reDelphix ab, bis beide gegen den neuen Vertrag geprueft sind. Eine zur
@@ -640,10 +639,10 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   `Operator := ..`, `operator` ist kein reserviertes Wort - wird uebergangen, Y bleibt
   lokal; gegen die Mutante "der erste unsichere Kopf beendet" rot, Gegenpruefung
   V-B2S-1; SCA196: der erste unsichere Kopf beendet mit seiner Zeile); `MemberHeads`;
-  der Index der Klassenkoepfe von SCA096 -
-  zwei Koepfe einer Klasse in `$IFDEF`-Zweigen (Delegation) und der Rueckfall auf
-  `FindMethodDecls` bei einem generischen Kopf, den der Index nicht liest
-  (`TBase<T(X)>`; ohne den Rueckfall rot); `TypeHasBody` (10 Tests, FPC-Pruefstand).
+  der Index der Klassenkoepfe von SCA096 - zwei Koepfe einer Klasse in
+  `$IFDEF`-Zweigen (Delegation) und der Rueckfall auf `FindMethodDecls` bei einem
+  generischen Kopf, den der Index nicht liest (`TBase<T(X)>`; ohne den Rueckfall
+  rot); `TypeHasBody` (10 Tests, FPC-Pruefstand).
 * `uTestRdxQualifyUses` - die Planung von "uses: X -> Scope.X"
   (`TRdxRecipeRunner.QualifyUses`): Eintraege der Zeile, alle,
   Sortierung, FPC-Weiche, Direktiven, eigene Unit.
