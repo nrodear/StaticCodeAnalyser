@@ -384,9 +384,9 @@ Muster fuer jeden Text, der aus dem Quelltext in die `.po` wandert:
   `ManyFmt` ist ein Muster (`_('%d self-assignments of %s')`): `%d` die
   Zahl der Treffer, `%s` das Feld `ManyArg` bzw. das Argument `AArg` von
   `OneTokenReason` - Text aus der Meldung steht nie im Muster (ein `%`
-  darin warf EConvertError). Die Kopf-Suche, die `uRdxResultFixes` und
-  `uRdxRoutineFixes` beide stellen, nimmt `What` und `ManyFmt` aus
-  `uRdxText` (`MsgNoHeader`, `MsgHeadersFmt`).
+  darin warf EConvertError). Die Kopf-Suche, die in `uRdxResultFixes` und
+  in `uRdxRoutineFixes` steht, nimmt `What` und `ManyFmt` aus `uRdxText`
+  (`MsgNoHeader`, `MsgHeadersFmt`).
 * Eine Text-Konstante im interface, die eine andere Unit benutzt
   (`R_NO_FILE` in `uRdxFixTable`), faellt erst mit ihrer letzten
   Verwendung - Delphi-Units uebersetzt der FPC-Pruefstand nicht, ein Rest
@@ -402,7 +402,14 @@ Muster fuer jeden Text, der aus dem Quelltext in die `.po` wandert:
 * Tests pruefen deutsche Teilstuecke. Traegt eines jetzt einen Umlaut,
   nehmen sie ein umlautfreies (die Quellen bleiben ASCII, keine
   `#$00FC`-Escapes) oder vergleichen mit der Funktion aus `uRdxText`
-  (`Assert.AreEqual(MsgNoFileOpen, O.Reason)`).
+  (`Assert.AreEqual(MsgNoFileOpen, O.Reason)`). Die zwoelf Testunits, die
+  nur `reDelphix.Test` uebersetzt (in `reDelphix.Test.dpr`, nicht in der
+  Kommandozeile des FPC-Pruefstands unter "Pruefen": die sieben
+  `*Detector`-Units, `uTestRdxFixTable`, `uTestRdxSca044`,
+  `uTestRdxActionRing`, `uTestRdxQualifyUses`, `uTestRdxSuppressCore`),
+  laufen vor dem IDE-Bau nirgends - ihre Assertions auf Gruende der
+  umgestellten Units (`Pos`, `AreEqual`, Helfer wie `AssertNoHelp(..,
+  'Teilstueck')`) sucht man vor dem Umstellen von Hand.
 
 Die gemeinsamen Texte (`uRdxText`; de wie bisher, in `de.po` mit echten
 Umlauten; fr in `fr.po`; je Funktion ein Test in en/de/fr in
