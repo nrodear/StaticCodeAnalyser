@@ -18,6 +18,8 @@ unit uTestRdxMagicGuards;
 // der Leerzeile, PlanByteEdits lehnte jeden Klick ab), 'End := 1' im
 // Hauptblock (missed 3) und ein Include auf einem Netzpfad in einer
 // lokalen Unit (R4-03 - ohne Plattenzugriff abgelehnt).
+// Charge G9 (Entscheid E29): die Gruende folgen der reDelphix-Sprache,
+// auch zusammengesetzte (Reasons_FollowRdxLanguage).
 
 interface
 
@@ -37,6 +39,7 @@ type
     [Test] procedure Wrap_BlankLineBeforeStatement_Writes;
     [Test] procedure MainBlock_NamedEndArg_Refused;
     [Test] procedure Disk_IncludeOnNetworkPath_NoDiskAccess;
+    [Test] procedure Reasons_FollowRdxLanguage;
   end;
 
 implementation
@@ -44,6 +47,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxBufferMath, uRdxCodeMap, uRdxMagicFixes,
+  uRdxText,          // SetRdxLanguageOverride, MsgByHand
   uTestRdxTextKit;   // Join, LineOf, WriteText, NewTempDir, RemoveTree
 
 const
@@ -397,6 +401,85 @@ begin
       Assert.IsTrue(Ms < 2000, Format('ohne Plattenzugriff: %d ms', [Ms]));
     end;
   finally
+    Map.Free;
+    SL.Free;
+    RemoveTree(T.Root);
+  end;
+end;
+
+{ ---- Charge G9 (Entscheid E29): Sprache der Gruende ---- }
+
+// Endet S mit ATail?
+function EndsWithText(const S, ATail: string): Boolean;
+begin
+  Result := (Length(S) >= Length(ATail))
+    and (Copy(S, Length(S) - Length(ATail) + 1, MaxInt) = ATail);
+end;
+
+// Die Gruende folgen der reDelphix-Sprache (en/de/fr), auch zusammen-
+// gesetzte: der Aufrufer uebersetzt, was er weitergibt (FEATURE_INLINE an
+// uRdxCompilerTraces.ScriptReason, das Muster R_INC_UNSEEN an
+// uRdxBlocks.IncludeChainReason - die Ursache darin setzt uRdxBlocks ein,
+// sie bleibt hier offen), und 'von Hand' steht als MsgByHand hinter '; '.
+// Geprueft wird je Sprache das Satzende in ASCII (die Umlaute und Akzente
+// der .po liegen davor), in en dazu der ganze Satz. Danach gilt wieder die
+// Sprache des Laufs.
+procedure TTestRdxMagicGuards.Reasons_FollowRdxLanguage;
+const
+  LANGS: array[0..2] of string = ('en', 'de', 'fr');
+  // Skript ('unit' ohne implementation): das uebersetzte FEATURE_INLINE an
+  // seiner Stelle im Satz von ScriptReason.
+  SCRIPT_TAIL: array[0..2] of string = ('(script?) - only the compiler knows '
+    + 'an inline constant', '(Skript?) - eine Inline-Konstante kennt nur der '
+    + 'Compiler', ' une constante inline');
+  // Netzpfad: der Satz vor MsgByHand.
+  NET_TAIL: array[0..2] of string = ('(the menu is built in the main thread); ',
+    'im Hauptthread); ', 'dans le thread principal); ');
+  // Fehlendes Include: das Muster R_INC_UNSEEN hinter der Ursache.
+  INC_TAIL: array[0..2] of string = (' - the quick fix does not see its '
+    + 'compiler switches (FPC, older Delphi)', ' Delphi) sieht die Hilfe nicht',
+    ' - le Quick-Fix ne voit pas ses aiguillages de compilation (FPC, Delphi '
+    + 'plus anciens)');
+var
+  T        : TTree;
+  SL       : TStringList;
+  Map      : TRdxCodeMap;
+  Old, Src : string;
+  Net, R   : string;
+  i        : Integer;
+begin
+  Src := Join(['unit userscript;', '', 'procedure P(X: Integer);', 'begin',
+    '  Foo;', '  if X > 300 then Bar;', 'end;', '', 'end.']);
+  // Den Netzpfad setzt der Test aus Teilen zusammen (SCA016, s. o.).
+  Net := PathDelim + PathDelim + 'rdx-g9-gibt-es-nicht' + PathDelim + 'share'
+    + PathDelim + 'u.pas';
+  T := NewTree;
+  SL := TStringList.Create;
+  Map := nil;
+  Old := RdxLanguageOverride;
+  try
+    SL.Text := Join(['unit u;', 'interface', '{$I defs.inc}', 'implementation',
+      'end.']);
+    Map := TRdxCodeMap.Create(SL);
+    for i := 0 to High(LANGS) do
+    begin
+      SetRdxLanguageOverride(LANGS[i]);
+      R := PlanReason(Src, 'X > 300', '300');
+      Assert.IsTrue(EndsWithText(R, SCRIPT_TAIL[i]), LANGS[i] + ', Skript: ' + R);
+      R := TRdxMagicFixes.FileReason(Net);
+      Assert.IsTrue(EndsWithText(R, NET_TAIL[i] + MsgByHand),
+        LANGS[i] + ', Netzpfad: ' + R);
+      R := TRdxMagicFixes.IncludeReason(T.U, Map);
+      Assert.IsTrue(EndsWithText(R, INC_TAIL[i]), LANGS[i] + ', Include: ' + R);
+    end;
+    SetRdxLanguageOverride('en');
+    Assert.AreEqual('unit without an implementation part (script?) - only the '
+      + 'compiler knows an inline constant', PlanReason(Src, 'X > 300', '300'));
+    Assert.AreEqual('network path (' + ExtractFileDir(Net) + ') - the quick fix '
+      + 'reads no project or include files there (the menu is built in the '
+      + 'main thread); by hand', TRdxMagicFixes.FileReason(Net));
+  finally
+    SetRdxLanguageOverride(Old);
     Map.Free;
     SL.Free;
     RemoveTree(T.Root);
