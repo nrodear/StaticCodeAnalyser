@@ -20,10 +20,21 @@
 #   Korpus-Harness, der gegen die angepassten Units baut (fpc -Fu<pfad>).
 #   Das Skript verwaltet es ganz (Marke .pruefstand): ein vorhandenes, nicht
 #   leeres Verzeichnis ohne Marke lehnt es ab, eins mit Marke leert es.
-#   Kopien frueherer Laeufe NEBEN dem Skript (bis Charge FF lagen sie hier)
-#   loescht es, damit ein Harness mit -Fu<Skriptverzeichnis> scheitert,
-#   statt still alte Kopien zu uebersetzen. Der Runner selbst laeuft im
-#   Skriptverzeichnis (Tests suchen Daten des Checkouts von dort aus).
+#   Ein TMPDIR im Windows-Stil ('C:\Users\..') wird wie PRUEFSTAND_DIR zum
+#   POSIX-Pfad (cd && pwd) - awk wertete die Backslashes sonst als Escapes.
+# Grabsteine: bis Charge FF lagen die Kopien NEBEN dem Skript, und
+#   Korpus-Harnesse bauten mit -Fu<Skriptverzeichnis> und einem bleibenden
+#   -FU-Verzeichnis. Findet FPC zu einer .ppu im -FU keine Quelle mehr,
+#   nimmt es die .ppu still - auch mit -B -, und der Harness prueft alten
+#   Planer-Code. Darum loescht das Skript solche Kopien und legt je
+#   kopierter Unit einen Grabstein ab (<unit>.pas mit {$FATAL ...}): seine
+#   Dateizeit weicht von der in der alten .ppu ab, FPC uebersetzt ihn und
+#   bricht mit dem Hinweis auf PRUEFSTAND_DIR ab (Nachbesserung FF). Ein
+#   Harness baut deshalb so (je Bau ein leeres -FU-Verzeichnis):
+#     PRUEFSTAND_DIR=<eigen> bash build.sh <testunit>
+#     fpc -Mdelphiunicode -Fu<eigen> -FU<frisch> -FE<frisch> harness.pas
+#   Der Runner selbst laeuft im Skriptverzeichnis (Tests suchen Daten des
+#   Checkouts von dort aus).
 # Anpassung fuer FPC 3.2.2 (adapt): System.SysUtils -> SysUtils & Co.,
 #   Assert.AreEqual<Integer>( -> Assert.AreEqualInt( und [TestFixture]/
 #   [Test] am Zeilenanfang weg - alles nur AUSSERHALB von String-Literalen:
@@ -89,20 +100,29 @@ if [ -n "${PRUEFSTAND_DIR:-}" ]; then
 else
   WORK="$(mktemp -d "${TMPDIR:-/tmp}/rdx-pruefstand.XXXXXX")" || exit 2
   trap 'cd "$HERE" && rm -rf "$WORK"' EXIT
+  WORK="$(cd "$WORK" && pwd)" || exit 2
 fi
 OUT="$WORK/out"
 mkdir -p "$OUT" || exit 2
 BRANCH="$(git -C "$SCA" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
 REV="$(git -C "$SCA" rev-parse --short HEAD 2>/dev/null || echo '?')"
 echo "Pruefstand: SCA=$SCA ($BRANCH @ $REV)  RDX=$RDX  Arbeitsverzeichnis=$WORK"
-# Kopien frueherer Laeufe neben dem Skript - genau die Muster der
-# .gitignore; die eingecheckten Stubs (uParser2, uAstNode, HashStub,
-# DUnitX ...) bleiben und kommen als Kopie ins Arbeitsverzeichnis.
-rm -rf "$HERE/out"
-rm -f "$HERE"/uDetectorUtils.pas "$HERE"/uRefactor*.pas "$HERE"/uSourcePlaces.pas \
-      "$HERE"/uFindingActions.pas "$HERE"/uRdx*.pas "$HERE"/uRdx*.inc \
-      "$HERE"/uTest*.pas "$HERE"/runner.pas
-cp "$HERE"/*.pas "$WORK/" || exit 2
+# Neben dem Skript liegen die eingecheckten Stubs (uParser2, uAstNode,
+# HashStub, DUnitX ...) und - genau nach den Mustern der .gitignore -
+# Kopien frueherer Laeufe bzw. Grabsteine: diese weg (die Grabsteine
+# kommen in Schritt 2 neu), nur die Stubs ins Arbeitsverzeichnis.
+OLD=()
+STUBS=()
+for f in "$HERE"/*.pas "$HERE"/*.inc; do
+  [ -e "$f" ] || continue
+  case "${f##*/}" in
+    uDetectorUtils.pas|uRefactor*.pas|uSourcePlaces.pas|uFindingActions.pas|uRdx*.pas|uRdx*.inc|uTest*.pas|runner.pas)
+      OLD+=("$f") ;;
+    *) STUBS+=("$f") ;;
+  esac
+done
+rm -rf "$HERE/out" ${OLD[@]+"${OLD[@]}"}
+cp "${STUBS[@]}" "$WORK/" || exit 2
 need "$WORK/DUnitX.TestFramework.pas"
 need "$WORK/uLocalization.pas"
 
@@ -126,11 +146,14 @@ need "$SRC"
 # adapt <zielverzeichnis> <datei> ...: je Datei eine Kopie gleichen Namens.
 # Felder mit -F"'": ungerade = ausserhalb eines String-Literals ('' im
 # Literal ergibt ein leeres Feld dazwischen, das nichts zu ersetzen hat).
-# Ein Attribut steht nur am Zeilenanfang, also im ersten Feld.
+# Ein Attribut steht nur am Zeilenanfang, also im ersten Feld. Das
+# Zielverzeichnis kommt ueber die Umgebung: awk -v wertet Backslashes im
+# Wert als Escapes ('C:\Users\..\tmp' -> '\t' wird ein Tabulator).
 adapt() {
   local dir="$1"
   shift
-  awk -F"'" -v OFS="'" -v dir="$dir" '
+  ADAPT_DIR="$dir" awk -F"'" -v OFS="'" '
+    BEGIN { dir = ENVIRON["ADAPT_DIR"] }
     FNR == 1 {
       if (out != "") close(out)
       out = FILENAME
@@ -174,6 +197,15 @@ for u in uRdxText uRdxRecipes uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxSupp
   fi
 done
 adapt "$WORK" "${UNITS[@]}" || exit 2
+# Grabsteine (s. Kopf): je kopierter Unit und fuer uDetectorUtils eine
+# Quelle neben dem Skript, an der FPC sofort mit dem Hinweis abbricht.
+for u in uDetectorUtils.pas "${UNITS[@]##*/}"; do
+  u="${u%.pas}"
+  printf '%s\n' \
+    "{ Grabstein von build.sh: die angepassten Kopien liegen im Arbeitsverzeichnis des Laufs (Kopf von build.sh). }" \
+    "{\$FATAL $u: keine Pruefstand-Kopie neben build.sh - PRUEFSTAND_DIR=<eigen> bash build.sh <testunit>, dann fpc -Fu<eigen> mit frischem -FU}" \
+    "unit $u;" "" "interface" "" "implementation" "" "end." > "$HERE/$u.pas" || exit 2
+done
 # Die erzeugte Typliste (uRdxRtlTypes.inc, {$I} in uRdxRtlTypes) kommt als
 # Kopie mit - FPC sucht Include-Dateien neben der Unit.
 need "$RDX/source/uRdxRtlTypes.inc"

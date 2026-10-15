@@ -62,8 +62,8 @@ data\quickfixes-doc.json          Titel, Wirkung, Sperren und Beispiele je Quick
 QUICKFIXES.md                     alle Quick-Fixes mit Menuetext en/de/fr, Kennzeichnung, Sperren, Beispiel - ERZEUGT von tools\gen-quickfix-doc.py (Repo-Wurzel)
 tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 45 Testunits und einer Hilfs-Unit (siehe "Pruefen"); Konfigurationen Debug/Release (TestInsight) und CI (Konsole, Exit-Code)
 tools\gen_unitscopes.py           erzeugt data\unitscopes.txt aus der Delphi-Installation
-tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik unter FPC 3.2.2 in einem eigenen Arbeitsverzeichnis je Lauf und fuehrt Tests aus (Sprache 'de', Stub uLocalization.pas liest die echten i18n\*.po)
-tools\fpc-pruefstand\selftest.sh  Selbsttest von build.sh (zwei Laeufe zugleich, FPC-Exit, Testzahl, Registrierung, Test ohne Assert, PRUEFSTAND_DIR)
+tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik unter FPC 3.2.2 in einem eigenen Arbeitsverzeichnis je Lauf und fuehrt Tests aus (Sprache 'de', Stub uLocalization.pas liest die echten i18n\*.po); neben dem Skript nur Grabsteine der Kopien (siehe "Pruefen")
+tools\fpc-pruefstand\selftest.sh  Selbsttest von build.sh (zwei Laeufe zugleich, FPC-Exit, Testzahl, Registrierung, Test ohne Assert, PRUEFSTAND_DIR, Grabsteine, TMPDIR mit Backslashes)
 tools\probe\RdxCorpusProbe.dpr    Korpus-Probe: Rezept 5.1 ueber eine Liste von Fundstellen, CSV
 tools\probe\sites_from_sarif.py   Fundstellen einer Regel aus einem SARIF-Lauf ziehen
 ```
@@ -793,14 +793,29 @@ sonst aus `StaticCodeAnalyserForm\tests` (Core-Tests wie
   Zwei Laeufe im selben Checkout stoeren sich nicht mehr - bis dahin
   loeschte ein zweiter Lauf die Kopien des ersten, und der meldete fremde
   Tests als eigenes Gruen (oder scheiterte an einem halb geschriebenen
-  `runner.pas`). `PRUEFSTAND_DIR=<pfad>` nimmt ein eigenes Verzeichnis und
-  laesst es stehen - fuer einen Korpus-Harness, der gegen die angepassten
-  Units baut (`fpc -Fu<pfad>`); das Skript verwaltet es ganz (Marke
-  `.pruefstand`; ein fremdes, nicht leeres Verzeichnis lehnt es ab). Kopien
-  frueherer Laeufe neben dem Skript loescht es, damit ein Harness mit
-  `-Fu<Skriptverzeichnis>` scheitert, statt still alte Kopien zu
-  uebersetzen. Der Runner selbst laeuft im Skriptverzeichnis: Tests suchen
-  Daten des Checkouts von dort aus (`data\unitscopes.txt`).
+  `runner.pas`). Ein `TMPDIR` im Windows-Stil (`C:\Users\..`) wird zum
+  POSIX-Pfad - awk las die Backslashes darin als Escapes und brach ab
+  (Nachbesserung FF). `PRUEFSTAND_DIR=<pfad>` nimmt ein eigenes Verzeichnis
+  und laesst es stehen - fuer einen Korpus-Harness, der gegen die
+  angepassten Units baut; das Skript verwaltet es ganz (Marke `.pruefstand`;
+  ein fremdes, nicht leeres Verzeichnis lehnt es ab). Ein Harness baut so,
+  je Bau mit einem leeren `-FU`-Verzeichnis:
+
+  ```
+  PRUEFSTAND_DIR=<eigen> bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxCodeMap
+  fpc -Mdelphiunicode -Fu<eigen> -FU<frisch> -FE<frisch> harness.pas
+  ```
+
+  Neben dem Skript liegen keine Kopien mehr (bis Charge FF lagen sie dort),
+  sondern je kopierter Unit ein **Grabstein** (`<unit>.pas` mit
+  `{$FATAL ...}`, von denselben `.gitignore`-Mustern erfasst wie die
+  Kopien): ein Harness nach altem Muster (`-Fu<Skriptverzeichnis>` und ein
+  bleibendes `-FU`) bricht daran mit dem Hinweis auf `PRUEFSTAND_DIR` ab.
+  Ohne Grabstein naehme FPC zu einer `.ppu`, deren Quelle es nicht mehr
+  findet, still die alte - auch mit `-B` -, und der Harness pruefte alten
+  Planer-Code (Nachbesserung FF). Der Runner selbst laeuft im
+  Skriptverzeichnis: Tests suchen Daten des Checkouts von dort aus
+  (`data\unitscopes.txt`).
 * **Anpassung fuer FPC 3.2.2 (Review R6-03):** `System.SysUtils` ->
   `SysUtils` und die anderen Unitnamen, `Assert.AreEqual<Integer>(` ->
   `Assert.AreEqualInt(`, `[TestFixture]`/`[Test]` am Zeilenanfang weg - nur
@@ -820,8 +835,9 @@ sonst aus `StaticCodeAnalyserForm\tests` (Core-Tests wie
   `TDUnitX.RegisterTestFixture` anmeldet (Review R6-06).
 * **Selbsttest** der Regeln oben an kleinen Laeufen (zwei Laeufe zugleich,
   FPC-Exit, fehlende Suite, Registrierung, Test ohne Assert,
-  `PRUEFSTAND_DIR`); das build.sh vor Charge FF besteht keinen der acht
-  Faelle:
+  `PRUEFSTAND_DIR`, Harness nach altem Muster mit und ohne `-B`, `TMPDIR`
+  mit Backslashes); das build.sh vor Charge FF besteht keine der elf
+  Pruefungen, das des ersten Durchgangs der Charge die letzten drei nicht:
 
   ```
   bash reDelphix/tools/fpc-pruefstand/selftest.sh

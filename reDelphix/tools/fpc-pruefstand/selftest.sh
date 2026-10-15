@@ -13,9 +13,16 @@
 #   4. eine Testunit ohne TDUnitX.RegisterTestFixture: Exit 2;
 #   5. ein Test ohne Assert: rot (FailsOnNoAsserts wie TestInsight);
 #   6. PRUEFSTAND_DIR: ein fremdes, nicht leeres Verzeichnis wird
-#      abgelehnt, ein eigenes geleert und behalten.
+#      abgelehnt, ein eigenes geleert und behalten;
+#   7. ein Harness nach altem Muster (-Fu<Skriptverzeichnis>, bleibendes
+#      -FU-Verzeichnis, die Quellen seiner .ppu sind weg): FPC bricht am
+#      Grabstein ab, mit und ohne -B, statt die alte .ppu still zu nehmen;
+#   8. TMPDIR im Windows-Stil mit Backslashes: der Lauf ist gruen.
+# Die Faelle 7 und 8 kamen mit der Nachbesserung der Charge FF; das build.sh
+# des ersten Durchgangs (88713262) besteht sie nicht.
 # Die Faelle 4 und 5 laufen gegen eine Mini-SCA-Wurzel im Temp-Verzeichnis
-# (SCA_ROOT) - der Checkout bleibt unberuehrt.
+# (SCA_ROOT) - der Checkout bleibt unberuehrt; Fall 7 liest die Grabsteine
+# neben dem Skript nur.
 # Aufruf: bash selftest.sh    Exit: 0 alle Faelle wie erwartet, 1 sonst.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -148,5 +155,45 @@ r2=$?
   && [ ! -f "$TMP/eigen/uRdxAlt.pas" ]
 ok=$?
 verdict $ok "6b eigenes PRUEFSTAND_DIR: geleert, Kopien und runner.exe bleiben" "$TMP/6b.txt"
+
+# Windows-Pfad fuer den FPC (ein Windows-Programm); ohne cygpath bleibt er.
+winpath() {
+  cygpath -w "$1" 2>/dev/null || printf '%s' "$1"
+}
+
+# 7) Harness nach altem Muster: gebaut gegen Kopien, die es nicht mehr
+#    gibt (wie die Kopien neben dem Skript bis Charge FF), neu gebaut mit
+#    -Fu<Skriptverzeichnis> und demselben -FU-Verzeichnis.
+H="$TMP/harness"
+mkdir -p "$H/out"
+printf 'program h;\n\nuses\n  uRdxCodeMap;\n\nbegin\nend.\n' > "$H/h.pas"
+PRUEFSTAND_DIR="$TMP/hps" bash "$BUILD" uTestRdxBench > "$TMP/7.txt" 2>&1
+# Die Kopien eine Stunde zurueck - so alt ist ein alter Bau mindestens
+# (FPC vergleicht die Dateizeit der Quelle mit der in der .ppu).
+touch -d '1 hour ago' "$TMP/hps"/*.pas >> "$TMP/7.txt" 2>&1
+( cd "$H" && "$REAL_FPC" -Mdelphiunicode -Fu"$(winpath "$TMP/hps")" -FEout -FUout h.pas ) >> "$TMP/7.txt" 2>&1
+r0=$?
+rm -rf "$TMP/hps"
+( cd "$H" && "$REAL_FPC" -Mdelphiunicode -Fu"$(winpath "$HERE")" -FEout -FUout h.pas ) > "$TMP/7a.txt" 2>&1
+r1=$?
+( cd "$H" && "$REAL_FPC" -B -Mdelphiunicode -Fu"$(winpath "$HERE")" -FEout -FUout h.pas ) > "$TMP/7b.txt" 2>&1
+r2=$?
+[ $r0 -eq 0 ] && [ $r1 -ne 0 ] && grep -q 'uRdxCodeMap: keine Pruefstand-Kopie neben build.sh' "$TMP/7a.txt"
+ok=$?
+cat "$TMP/7a.txt" >> "$TMP/7.txt"
+verdict $ok "7a Harness mit -Fu<Skriptverzeichnis> und alter .ppu -> Abbruch am Grabstein" "$TMP/7.txt"
+[ $r0 -eq 0 ] && [ $r2 -ne 0 ] && grep -q 'uRdxCodeMap: keine Pruefstand-Kopie neben build.sh' "$TMP/7b.txt"
+ok=$?
+verdict $ok "7b dasselbe mit -B" "$TMP/7b.txt"
+
+# 8) TMPDIR im Windows-Stil: '\t' in '...\tmpdir' las awk -v als Tabulator
+#    ('fatal: can't redirect'), '\n' in 'C:\Users\n...' als Zeilenende.
+mkdir -p "$TMP/tmpdir"
+TMPDIR="$(winpath "$TMP")\\tmpdir" bash "$BUILD" uTestRdxBench > "$TMP/8.txt" 2>&1
+r=$?
+[ $r -eq 0 ] && grep -qx "PASSED $(tests_of uTestRdxBench)  FAILED 0" "$TMP/8.txt" \
+  && [ -z "$(ls -A "$TMP/tmpdir")" ]
+ok=$?
+verdict $ok "8  TMPDIR mit Backslashes -> gruen, Arbeitsverzeichnis danach weg" "$TMP/8.txt"
 
 exit $bad
