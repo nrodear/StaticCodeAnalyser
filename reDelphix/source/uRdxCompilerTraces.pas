@@ -66,15 +66,21 @@ type
   //                CONDITIONALEXPRESSIONS (fragt nach Delphi 6) - fuer
   //                SCA121 aus (dort nie gemessen, die Angebote sollen sich
   //                mit dieser Unit nicht bewegen)
+  //   ProjectVersion  die <ProjectVersion> einer .dproj in Zehnteln, UNTER
+  //                der ein Projekt alt ist (Delphi 2009 = 12.0, 10.3 =
+  //                18.5). Nur der Plattenblick von SCA014 liest sie
+  //                (uRdxMagicFixes.FileReason, Gegen-Review Q14, Major 3);
+  //                SCA121 hat keinen - der braeuchte eine eigene Messung.
   TRdxCompilerFloor = record
-    Ver          : Integer;
-    Version      : Integer;
-    Compiler     : Integer;
-    DelphiNumber : Integer;
-    DelphiYear   : Integer;
-    Rtl          : Integer;
-    FpcFull      : Integer;
-    XeNames      : Boolean;
+    Ver            : Integer;
+    Version        : Integer;
+    Compiler       : Integer;
+    DelphiNumber   : Integer;
+    DelphiYear     : Integer;
+    Rtl            : Integer;
+    FpcFull        : Integer;
+    XeNames        : Boolean;
+    ProjectVersion : Integer;
   end;
 
 const
@@ -83,12 +89,12 @@ const
   // uRdxResultFixes standen.
   FLOOR_DEFAULT_FN: TRdxCompilerFloor = (Ver: 200; Version: 20; Compiler: 12;
     DelphiNumber: 8; DelphiYear: 2009; Rtl: 200; FpcFull: 30000;
-    XeNames: False);
+    XeNames: False; ProjectVersion: 120);
   // SCA014 Inline-Konstante: Delphi 10.3 Rio (VER330, CompilerVersion 33,
   // COMPILER26/DELPHI26 der JEDI-Zaehlung, RTL330); FPC kennt keine.
   FLOOR_INLINE_DECL: TRdxCompilerFloor = (Ver: 330; Version: 33; Compiler: 26;
     DelphiNumber: 26; DelphiYear: 2010; Rtl: 330; FpcFull: MaxInt;
-    XeNames: True);
+    XeNames: True; ProjectVersion: 185);
 
 // Die erste Spur alter Compiler (bis AFloor) in den Direktiven der Datei:
 // das Symbol, der Vergleich ('COMPILERVERSION >= 33') bzw. der Name der

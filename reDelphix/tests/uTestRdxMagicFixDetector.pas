@@ -103,10 +103,15 @@ var
 begin
   // 'bad' ist 'if RetryCount > 3 then ...', 'good' deklariert MAX_RETRIES
   // auf Unit-Ebene - die Hilfe schreibt die Inline-Konstante direkt davor,
-  // mit dem vorlaeufigen Namen MagicNr01. Die 3 steht in der Vorgabe-Liste
-  // der trivialen Zahlen (uSCAConsts.DEFAULT_MAGIC_TRIVIALS: 0..7, 8, 10,
-  // 16 ...) - der Detektor meldet das Katalog-Beispiel so nicht; hier mit
-  // 42 (Nebenbefund Charge Q14).
+  // mit dem vorlaeufigen Namen MagicNr01. Hier mit 42: dieser Test laeuft
+  // ohne ApplyDetectorThresholds, also mit der Vorgabe-Liste der
+  // trivialen Zahlen aus uSCAConsts.DEFAULT_MAGIC_TRIVIALS - dort ist die
+  // 3 trivial. EXE, Plugin und CLI setzen dagegen die Liste aus
+  // TRepoSettings ('0,1,2,-1,10,100', uRepoSettings) - dort meldet der
+  // Detektor die 3 (Referenzlauf ab8, Katalog-Beispiel im Plugin). Keine
+  // ini-Drift (analyser.ini traegt MagicNumberTrivials auskommentiert),
+  // sondern zwei Vorgaben im Bestand; sie anzugleichen bewegt Funde - eine
+  // Detektor-Charge (Gegen-Review Q14, Minor 12).
   Meta := TRuleCatalog.GetRuleCanonical(fkMagicNumber);
   Bad := StringReplace(CatalogText(Meta.BadExample), ' ...', ' Retry;', []);
   Bad := StringReplace(Bad, '> 3 ', '> 42 ', []);
@@ -171,7 +176,10 @@ begin
   Assert.AreEqual('Introduce local constant for 200',
     TRdxFixTable.CaptionFor(fkMagicNumber, O));
   Assert.IsTrue(Pos('MagicNr01', O.Hint) > 0, O.Hint);
-  Assert.IsTrue(Pos('Strg+Umschalt+J', O.Hint) > 0, O.Hint);
+  // Umbenennen von Hand oder mit Refactor > Rename - nicht Sync Edit (Esc
+  // zerstoert dort Text; Gegen-Review Q14, Minor 13).
+  Assert.IsTrue(Pos('Strg+Umschalt+E', O.Hint) > 0, O.Hint);
+  Assert.IsFalse(Pos('Strg+Umschalt+J', O.Hint) > 0, O.Hint);
 end;
 
 // Zweimal 200 in der Bedingung: mehrdeutig (E28: nur eines, sonst sperren).
@@ -189,14 +197,38 @@ begin
     '  if X > 300 then Bar;']), 'Spuren aelterer Compiler');
 end;
 
+// Ein Verzeichnis TEMP\<APrefix><GUID>\a\b\ (mit Trenner): das Fenster
+// von FileReason (die Unit und zwei Ebenen darueber) bleibt im eigenen
+// Baum - eine fremde Projektdatei in TEMP kippt den Test nicht
+// (Gegen-Review Q14, Minor 14). Die Wurzel raeumt RemoveDeepDir ab.
+function DeepDir(const APrefix: string): string;
+begin
+  Result := IncludeTrailingPathDelimiter(TempName(APrefix, '')) + 'a'
+    + PathDelim + 'b' + PathDelim;
+  ForceDirectories(Result);
+end;
+
+// Raeumt den Baum von DeepDir ab (die Dateien hat der Test geloescht).
+procedure RemoveDeepDir(const ADir: string);
+var
+  D : string;
+  i : Integer;
+begin
+  D := ExcludeTrailingPathDelimiter(ADir);
+  for i := 1 to 3 do
+  begin
+    RemoveDir(D);
+    D := ExtractFileDir(D);
+  end;
+end;
+
 // Der Check der Tabelle (MagicCheck): ein Lazarus-Paket neben der Unit.
 procedure TTestRdxMagicFixDetector.Sca014_LazarusProject_NoHelp;
 var
   Dir : string;
   O   : TRdxFixOutcome;
 begin
-  Dir := IncludeTrailingPathDelimiter(TempName('rdx_magic_laz_', ''));
-  ForceDirectories(Dir);
+  Dir := DeepDir('rdx_magic_laz_');
   try
     WriteText(Dir + 'pkg.lpk', '<?xml version="1.0"?>');
     O := OutcomeIn(InUnit([], ['  Foo;', '  if X > 300 then Bar;']),
@@ -208,7 +240,7 @@ begin
   finally
     DeleteFile(Dir + 'pkg.lpk');
     DeleteFile(Dir + 'u.pas');
-    RemoveDir(Dir);
+    RemoveDeepDir(Dir);
   end;
 end;
 
@@ -218,8 +250,7 @@ var
   Dir : string;
   O   : TRdxFixOutcome;
 begin
-  Dir := IncludeTrailingPathDelimiter(TempName('rdx_magic_inc_', ''));
-  ForceDirectories(Dir);
+  Dir := DeepDir('rdx_magic_inc_');
   try
     WriteText(Dir + 'defs.inc', '{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}');
     O := OutcomeIn(InUnit(['{$I defs.inc}'], ['  Foo;',
@@ -230,7 +261,7 @@ begin
   finally
     DeleteFile(Dir + 'defs.inc');
     DeleteFile(Dir + 'u.pas');
-    RemoveDir(Dir);
+    RemoveDeepDir(Dir);
   end;
 end;
 

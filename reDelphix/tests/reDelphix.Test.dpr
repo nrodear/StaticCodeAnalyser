@@ -62,6 +62,9 @@ program reDelphix.Test;
 //   * uTestRdxMagicFix - Quick-Fix SCA014 (Charge Q14, Lokale Konstante
 //                        einfuehren) auf Text, ohne Parser: Ziel aus dem
 //                        Fund, Name, Spuren alter Compiler, FPC
+//   * uTestRdxMagicGuards - die Nacharbeit des Gegen-Reviews (Charge
+//                        SQc): alte Delphi-Projekte neben der Unit,
+//                        Netzpfad, Hauptblock eines Programms
 //   * uTestRdxMagicFixDetector - dieselbe Hilfe gegen den echten
 //                        Detektor uMagicNumbers (Fund -> Hilfe -> Fund weg)
 //   * uTestRdxTryGates - die Sperren und Formen aus dem Gegen-Review H4
@@ -166,6 +169,7 @@ uses
   uTestRdxSqlGuards in 'uTestRdxSqlGuards.pas',
   uTestRdxResultFixesDetector in 'uTestRdxResultFixesDetector.pas',
   uTestRdxMagicFix in 'uTestRdxMagicFix.pas',
+  uTestRdxMagicGuards in 'uTestRdxMagicGuards.pas',
   uTestRdxMagicFixDetector in 'uTestRdxMagicFixDetector.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',
   uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas',
