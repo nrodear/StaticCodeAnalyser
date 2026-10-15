@@ -118,6 +118,7 @@
         <DCCReference Include="uTestRdxActionRing.pas"/>
         <DCCReference Include="uTestRdxBufferMath.pas"/>
         <DCCReference Include="uTestRdxSuppress.pas"/>
+        <DCCReference Include="uTestRdxSuppressTargets.pas"/>
         <DCCReference Include="uTestRdxSimpleFixes.pas"/>
         <DCCReference Include="uTestRdxExprFixes.pas"/>
         <DCCReference Include="uTestRdxStructFixes.pas"/>

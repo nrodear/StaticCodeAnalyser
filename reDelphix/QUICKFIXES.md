@@ -2160,6 +2160,7 @@ uses Winapi.Windows, System.Classes, Foo;
 **Nicht angeboten**
 
 - ausgegraut: der Marker nennt mehr als eine Art oder lautet `All` – SCA165 kommt auch, wenn nur die Arten des aktiven Scan-Profils nichts unterdrückt haben
+- ausgegraut: die nächste nicht-leere Zeile hinter dem Marker ist eine `//`-Kommentarzeile vor dem Code (etwa ein TODO, bei gestapelten Markern die Markerzeile darunter) – SCA165 prüft nur die Code-Zeile, auf der Kommentarzeile wirkt der Marker vielleicht doch
 - der Marker liegt in einem Blockkommentar
 
 **Beispiel**
@@ -2206,12 +2207,13 @@ Nachher:
 
 **Platzhalter:** `%s` = die Fundart (Kind-Name, etwa `MemoryLeak`).
 
-**Wirkung:** „Hier“ setzt `// noinspection <Art>` in eine eigene Zeile über die Fundzeile, eingerückt wie sie; „In dieser Datei“ setzt `// noinspection-file <Art>` hinter die Kopfanweisung der Unit. Ein vorhandener Marker bekommt die Art dazu, außer er lautet `All`/`*` (dann eine eigene Zeile).
+**Wirkung:** „Hier“ setzt `// noinspection <Art>` in eine eigene Zeile über die Fundzeile, eingerückt wie sie; „In dieser Datei“ setzt `// noinspection-file <Art>` hinter die Kopfanweisung der Unit. Ein vorhandener Marker bekommt die Art dazu, außer er lautet `All`/`*` (dann eine eigene Zeile). Auf einer `//`-Kommentarzeile (etwa einem TODO) bekommt der Marker, der sie schon trägt, die Art auch über Leerzeilen hinweg – eine neue Zeile dazwischen nähme ihm sein Ziel.
 
 **Nicht angeboten**
 
 - die Fundzeile liegt in einem Blockkommentar oder mehrzeiligen String
 - die Art steht schon im Marker
+- „Hier“ auf einer `//`-Kommentarzeile, die ein Marker trägt, der sich nicht erweitern lässt (`All`, Marker hinter Code)
 - SCA165 selbst – einen wirkungslosen Marker entfernt „Wirkungslosen Unterdrück-Marker entfernen“
 - Funde außerhalb von Pascal-Quelltext (.dfm, Konfiguration) – dort setzt das Plugin den Marker selbst (Strg+Alt+S)
 
