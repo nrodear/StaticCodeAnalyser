@@ -43,7 +43,7 @@ unit uRdxScopeTable;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections,
+  System.Classes, System.Generics.Collections,
   uRdxRecipes;
 
 const
@@ -141,6 +141,14 @@ type
 implementation
 
 uses
+  // System.SysUtils nur hier: die Schnittstelle braucht keinen seiner
+  // Namen (bis Charge B2S im interface-uses, Gegenpruefung V2-B2S-3). Vor
+  // uRdxPaths: ein gleicher Name kommt weiter von dort. Delphi: kein hier
+  // benutzter Name steht zugleich in SysUtils und in System.Classes,
+  // System.Generics.Collections oder uRdxRecipes - die Aufloesung bleibt.
+  // FPC (Pruefstand) deklariert TArray<T> auch in SysUtils: die
+  // Schnittstelle nimmt es dort jetzt aus ObjPas - derselbe Code.
+  System.SysUtils,
   uRdxPaths;   // IsNetworkPath, HasUncLead
 
 const
