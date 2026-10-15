@@ -139,6 +139,7 @@
         <DCCReference Include="uTestRdxResultGuards.pas"/>
         <DCCReference Include="uTestRdxSqlTemplate.pas"/>
         <DCCReference Include="uTestRdxSqlFacts.pas"/>
+        <DCCReference Include="uTestRdxSqlGuards.pas"/>
         <DCCReference Include="uTestRdxResultFixesDetector.pas"/>
         <DCCReference Include="uTestRdxMagicFix.pas"/>
         <DCCReference Include="uTestRdxMagicFixDetector.pas"/>

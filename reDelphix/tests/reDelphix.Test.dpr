@@ -50,6 +50,9 @@ program reDelphix.Test;
 //                        im Text, FireDAC-ExecSQL, Namen aus dem Operanden
 //   * uTestRdxSqlFacts - ihre Nachweise am Quelltext: Konstante, FireDAC-
 //                        Verbindung, Parameternamen, Platzhalter (SCA199)
+//   * uTestRdxSqlGuards - die Nacharbeit des Gegen-Reviews (Charge SQc):
+//                        Inline-Variable, Sichtbarkeit, Name der Konstante
+//                        bleibt, DDL-Sperre, Kette Q.SQL.Add, ADO, LIMIT, '?'
 //   * uTestRdxResultGuards - die Sperren und Werte aus dem Gegen-Review H5
 //                        (Charge H5c: Delegation, abstrakt/objfpc, Exit auf
 //                        jeder Tiefe, Vorfahrenliste, Literal statt
@@ -160,6 +163,7 @@ uses
   uTestRdxResultGuards in 'uTestRdxResultGuards.pas',
   uTestRdxSqlTemplate in 'uTestRdxSqlTemplate.pas',
   uTestRdxSqlFacts in 'uTestRdxSqlFacts.pas',
+  uTestRdxSqlGuards in 'uTestRdxSqlGuards.pas',
   uTestRdxResultFixesDetector in 'uTestRdxResultFixesDetector.pas',
   uTestRdxMagicFix in 'uTestRdxMagicFix.pas',
   uTestRdxMagicFixDetector in 'uTestRdxMagicFixDetector.pas',

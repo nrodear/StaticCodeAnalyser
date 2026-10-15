@@ -27,38 +27,72 @@ unit uRdxSqlTemplate;
 //        oder ','),
 //      * hinter LIMIT und OFFSET: MySQL (vorbereitete Anweisung),
 //        PostgreSQL, SQLite, Firebird 4 und SQL Server (OFFSET .. ROWS)
-//        nehmen dort Parameter. TOP, FIRST und SKIP nicht: SQL Server
-//        verlangt TOP (@n) mit Klammern, Access/Jet nur eine Zahl,
-//        Firebird FIRST (?) mit Klammern.
+//        nehmen dort Parameter - aber nur fuer IntToStr(x): ein anderer
+//        Operand ist in Pascal ein Text, MySQL bindet ihn als 'LIMIT ''10'''
+//        (Syntaxfehler; Gegen-Review S1, Verdacht b). TOP, FIRST und SKIP
+//        nicht: SQL Server verlangt TOP (@n) mit Klammern, Access/Jet nur
+//        eine Zahl, Firebird FIRST (?) mit Klammern.
 //    Alles andere lehnt ab, mit dem Wort davor im Grund - Bezeichner-
 //    Positionen (FROM, JOIN, INTO, UPDATE, TABLE, ORDER BY, GROUP BY,
 //    Spalten- und SELECT-Liste, Funktionsargumente: ein Argument kann
-//    eine Spalte sein), ein Operand, der an einem Bezeichner klebt
-//    ('col_' + X, X + '_tmp', 'tbl.' + X), in einem gequoteten Namen oder
-//    einem SQL-Kommentar steht. Eine Anweisung, die mit CREATE, ALTER,
+//    eine Spalte sein), ein nackter Operand in einer Join-Bedingung (ON:
+//    'a.id = ' + X ist meist eine Spalte; IntToStr(x), QuotedStr(x) und ein
+//    SQL-String sind Werte - Minor 1), ein Operand, der an einem Bezeichner
+//    klebt ('col_' + X, X + '_tmp', 'tbl.' + X), in einem gequoteten Namen
+//    oder einem SQL-Kommentar steht. Eine Anweisung, die mit CREATE, ALTER,
 //    DROP, TRUNCATE, RENAME, COMMENT, GRANT oder REVOKE beginnt, hat keine
-//    Parameter (DDL/DCL). Sonst muss sie mit einem DML-Wort beginnen
-//    (SELECT, INSERT, UPDATE, DELETE, MERGE, WITH, REPLACE, UPSERT) oder -
-//    als Bruchstueck ('Q.SQL.Add(..)', 'S := S + ..') - mit einer Klausel
-//    (WHERE, AND, OR, HAVING, VALUES, LIMIT, OFFSET, FROM, JOIN ...); sonst
-//    ist nicht sichtbar, ob ein '=' einen Wert erwartet ('ENGINE=' in
-//    einem CREATE TABLE, 'SET NAMES').
+//    Parameter (DDL/DCL); ebenso ein prozeduraler Block (BEGIN, DECLARE,
+//    Firebird EXECUTE BLOCK). Diese Sperre gilt fuer den REST des Texts,
+//    auch hinter ';' - dort beginnt der Rumpf einer Prozedur oder eines
+//    Triggers, keine neue Anweisung (Major 2). Sonst muss die Anweisung
+//    mit einem DML-Wort beginnen (SELECT, INSERT, UPDATE, DELETE, MERGE,
+//    WITH, REPLACE, UPSERT) oder - als Bruchstueck ('Q.SQL.Add(..)', 'S :=
+//    S + ..') - mit einer Klausel (WHERE, AND, OR, HAVING, VALUES, LIMIT,
+//    OFFSET, FROM, JOIN ...); sonst ist nicht sichtbar, ob ein '=' einen
+//    Wert erwartet ('ENGINE=' in einem CREATE TABLE, 'SET NAMES'). Ein
+//    '?' im Text (positionaler Platzhalter) mischt sich nicht mit
+//    benannten - abgelehnt (Verdacht c).
 //    Ein Operand IN einem SQL-String ('.. LIKE ''%' + X + '%''') macht
 //    den GANZEN String zum Parameter, sein Wert ist der zusammengesetzte
 //    Ausdruck ('%' + X + '%'); die Position des Strings entscheidet wie
-//    oben. Ein Operand allein in IN (...) bzw. VALUES (...) kann eine
-//    ganze Liste sein ('1,2,3') - abgelehnt, ausser IntToStr(x).
+//    oben. N'..' (nationaler String) zaehlt wie '..', ein '::typ'
+//    (PostgreSQL-Cast) darf hinter dem Wert stehen (Minor 10). Ein
+//    Operand bzw. SQL-String allein in IN (...) bzw. VALUES (...) kann eine
+//    ganze Liste sein ('1,2,3', ''' + X + ''' mit X = '1'',''2') -
+//    abgelehnt, ausser IntToStr(x) und QuotedStr(x): sie ergeben genau
+//    EINEN Wert (Minor 1 und 10).
 //    Ein Wert ausserhalb eines Strings: IntToStr(x) und QuotedStr(x)
 //    binden x selbst (QuotedStr setzte die Quotes, die der Parameter
 //    nicht braucht; IntToStr macht aus einer Zahl einen Text).
+//    Ein Zeilenkommentar ('-- ..') endet am Zeilenende - auch an
+//    sLineBreak/LineEnding zwischen zwei Literalen (Minor 10).
 // 2. Konstanten. Ein Operand, der am Quelltext als untypisierte Konstante
-//    der Unit oder der Routine nachgewiesen ist (SqlConstOf - ein Name in
-//    GROSSBUCHSTABEN beweist nichts), wird nie Parameter: mit einfachem
-//    String-Literal als Wert kommt der Wert in den SQL-Text, sonst bleibt
-//    die Verkettung stehen. sLineBreak/LineEnding bleiben als Verkettung
-//    und gelten als Leerraum, das Ziel selbst ('S := S + ..') bleibt
-//    stehen. Bleibt kein Operand: keine Vorlage, "nur Konstanten".
-// 3. Ziel. Query-Objekt (Glied .SQL/.CommandText): ParamByName-Zeilen.
+//    nachgewiesen ist (SqlConstOf - ein Name in GROSSBUCHSTABEN beweist
+//    nichts), wird nie Parameter. Ist ihr Wert ein einfaches String-
+//    Literal, LIEST die Vorlage ihn mit (Position, Strings, Platzhalter),
+//    in der Vorlage bleibt aber ihr NAME stehen ('.. FROM ' + TBL + '
+//    WHERE id = :Id'; Gegen-Review S1, Major 1 - bis dahin kam der Wert in
+//    den Text, und die Vorlage verlor die Konstante). Oeffnet oder
+//    schliesst ihr Wert einen SQL-String, der Parameter wird, muesste die
+//    Vorlage die Konstante zerschneiden - abgelehnt. Ohne einfachen Wert
+//    bleibt sie als stehender Ausdruck. sLineBreak/LineEnding bleiben als
+//    Verkettung und gelten als Leerraum, das Ziel selbst ('S := S + ..')
+//    bleibt stehen. Bleibt kein Operand: keine Vorlage, "nur Konstanten".
+//    Sichtbar (Minor 5) ist eine Konstante der Unit ab ihrer Deklaration,
+//    eine lokale bis zum Ende IHRER Routine (auch einer verschachtelten),
+//    eine Klassen- bzw. Record-Konstante nur in den Methoden dieser Klasse
+//    (Kopf 'TKlasse.Methode'). Den Beweis verwerfen jede andere
+//    Deklaration des Namens, auch eine Inline-Variable ('var X := ..',
+//    'for var X in ..', Blocker), 'on X: E do' und eine Inline-Konstante
+//    im Rumpf (sie gilt nur in ihrem Block). Die Routinen- und Typgrenzen
+//    rechnet AddSqlFacts einmal je Anfrage (Minor 6).
+// 3. Ziel. Query-Objekt (Glied .SQL/.CommandText): ParamByName-Zeilen; ist
+//    das Objekt in der Datei ueberall als TADOQuery, TADOCommand,
+//    TADODataSet oder TADOStoredProc deklariert und nennen die uses
+//    Data.Win.ADODB bzw. ADODB (AdoObjectProven), '.Parameters.ParamByName'
+//    - die ADO-Klassen haben kein ParamByName (Minor 11). Nicht
+//    nachweisbar (Objekt aus einem Datenmodul, einer anderen Unit): wie
+//    bisher ParamByName - bei ADO von Hand '.Parameters.' einfuegen.
 //    'X.ExecSQL(..)' nur, wenn die Unit FireDAC.Comp.Client nutzt UND X in
 //    der Datei ueberall als TFDConnection deklariert ist
 //    (FireDacConnectionProven): dann die Overload
@@ -70,16 +104,30 @@ unit uRdxSqlTemplate;
 //    Aufruf (Connection.Query(..), AddQuery(..), ExecSQL ohne Beweis)
 //    fuehrt den Text sofort aus und bindet nichts: abgelehnt, die
 //    Vorlage liefe mit ungebundenen Parametern in einen Laufzeitfehler.
+//    Kette (Major 2, Verdacht a): bei 'Q.SQL.Add(..)' liest AddSqlFacts
+//    die frueheren Q.SQL.Add-Zeilen derselben Routine bis zu Q.SQL.Clear
+//    bzw. Q.SQL.Text := (ChainWith) - die Vorlage liest sie stumm vor dem
+//    eigenen Text: sie bestimmen Anweisungsart und DDL-Sperre mit ('CREATE
+//    VIEW v AS' in der Zeile davor). Ihre Platzhalter und die der
+//    spaeteren Q.SQL.Add-Zeilen sind vergeben. Nicht gesehen: eine
+//    fruehere Anweisung auf derselben Zeile, with-Bloecke, andere
+//    Schreibweisen (SQL.Insert, Assign, ein Puffer 'S := S + ..') - dort
+//    endet die Kette. Zwei noch nicht umgestellte Zeilen koennen denselben
+//    Namen vorschlagen (AId und FId -> :Id); ist die erste Vorlage
+//    eingefuegt, sieht die zweite ihren Platzhalter.
 // 4. Namen (SqlParamName) aus dem Operanden: AColumnTypes -> ColumnTypes,
 //    FId -> Id, Edit1.Text -> Edit1Text, IntToStr(Id) -> Id (der erste
 //    Pfad, der kein Aufrufkopf ist); A/F vor einem Wort mit Grossbuchstabe
-//    faellt weg (ADOQuery1 bleibt); nur Buchstaben, Ziffern, '_'; hoechstens
-//    MAX_NAME Zeichen; ein SQL-Wort bekommt ein 'p' davor (Oracle: ORA-01745
-//    bei :date, :level ...); Ersatz pN. Kollisionen mit vorhandenen
-//    Platzhaltern und untereinander bekommen 2, 3, ... angehaengt. Die
-//    vorhandenen liest SqlPlaceholders nach den Regeln von SCA199
-//    (uParamNameScan): '::' (PostgreSQL-Cast), ':=', ':1', ':new.', ein
-//    ':' direkt hinter einem Bezeichner, ')' oder ']' sind keine.
+//    faellt weg (ADOQuery1 bleibt); nur Buchstaben, Ziffern, '_' - ein
+//    Name mit Zeichen ueber ASCII ('Groesse' mit sz) wird pN (Minor 3);
+//    hoechstens MAX_NAME Zeichen, auch mit Nummer (Minor 2); ein SQL-Wort
+//    (Oracle-reserviert und SQL-92-Kern, RESERVED_NAMES) bekommt ein 'p'
+//    davor (Oracle: ORA-01745 bei :date, :rows, :start ...); Ersatz pN.
+//    Kollisionen mit vorhandenen Platzhaltern und untereinander bekommen
+//    2, 3, ... angehaengt. Die vorhandenen liest SqlPlaceholders nach den
+//    Regeln von SCA199 (uParamNameScan): '::' (PostgreSQL-Cast), ':=',
+//    ':1', ':new.', ein ':' direkt hinter einem Bezeichner, ')' oder ']'
+//    sind keine.
 
 interface
 
@@ -93,7 +141,8 @@ type
   // Was am Quelltext ueber einen Operanden bewiesen ist (SqlConstOf).
   TRdxSqlConstKind = (
     sckNone,      // keine Konstante (oder nicht nachgewiesen)
-    sckLiteral,   // untypisierte Konstante, Wert ein einfaches String-Literal
+    sckLiteral,   // untypisierte Konstante, Wert ein einfaches String-
+                  // Literal: wird mitgelesen, der Name bleibt stehen
     sckKept);     // untypisierte Konstante mit anderem Wert: bleibt Verkettung
 
   TRdxSqlConst = record
@@ -102,61 +151,79 @@ type
   end;
   TRdxSqlConsts = TArray<TRdxSqlConst>;
 
-  // Wie die Werte bei einem AUFRUF als Ziel an die Parameter kommen.
+  // Wie die Werte an die Parameter kommen (Kopf der Unit, Punkt 3).
   TRdxSqlBinding = (
-    sbByTarget,         // nur ein Query-Objekt-Aufruf (Q.SQL.Add) bindet
-    sbFireDacExecSql);  // X.ExecSQL(SQL, [Werte]) - FireDAC nachgewiesen
+    sbByTarget,         // Query-Objekt: X.ParamByName(..) (Q.SQL.Add)
+    sbFireDacExecSql,   // X.ExecSQL(SQL, [Werte]) - FireDAC nachgewiesen
+    sbAdoParameters);   // X.Parameters.ParamByName(..) - ADO nachgewiesen
 
   // Die Anfrage an BuildSqlTemplate. Parts in Quelltext-Reihenfolge,
   // Parts[0] darf ROLE_TARGET sein. Die Fakten am Quelltext (Consts,
-  // Binding) setzt AddSqlFacts aus PartLines (Zeile je Part), InWith (die
-  // Anweisung steht in einem with-Block: kein Name ist bewiesen) und
-  // UsesNames; ohne sie gilt kein Operand als Konstante und kein Aufruf
-  // als FireDAC.
+  // Binding, Prefix, ChainNames) setzt AddSqlFacts aus PartLines (Zeile je
+  // Part), InWith (die Anweisung steht in einem with-Block: kein Name ist
+  // bewiesen) und UsesNames; ohne sie gilt kein Operand als Konstante,
+  // kein Aufruf als FireDAC, kein Objekt als ADO, und es gibt keine Kette.
   TRdxSqlRequest = record
-    Target    : string;
-    IsCall    : Boolean;
-    Parts     : TRdxParts;
-    Indent    : string;     // Einrueckung jeder Zeile, Tabs bleiben Tabs
-    PartLines : TArray<Integer>;
-    InWith    : Boolean;
-    UsesNames : TArray<string>;
-    Consts    : TRdxSqlConsts;   // je Part (gleicher Index)
-    Binding   : TRdxSqlBinding;
+    Target     : string;
+    IsCall     : Boolean;
+    Parts      : TRdxParts;
+    Indent     : string;     // Einrueckung jeder Zeile, Tabs bleiben Tabs
+    PartLines  : TArray<Integer>;
+    InWith     : Boolean;
+    UsesNames  : TArray<string>;
+    Consts     : TRdxSqlConsts;   // je Part (gleicher Index)
+    Binding    : TRdxSqlBinding;
+    // Kette 'Q.SQL.Add' (Kopf der Unit, Punkt 3): der SQL-Text der
+    // frueheren Zeilen, je mit Zeilenende - stumm vor dem eigenen Text
+    // gelesen; und die Platzhalter der Kette (klein), die kein neuer Name
+    // treffen darf.
+    Prefix     : string;
+    ChainNames : TArray<string>;
   end;
 
   TRdxSqlTemplate = record
-    Text    : string;    // die Vorlage (Zeilen mit sLineBreak)
-    Reason  : string;    // bei False
-    Params  : Integer;   // Parameter in der Vorlage
-    Inlined : Integer;   // Konstanten, deren Wert in den SQL-Text kam
+    Text       : string;    // die Vorlage (Zeilen mit sLineBreak)
+    Reason     : string;    // bei False
+    Params     : Integer;   // Parameter in der Vorlage
+    ConstsRead : Integer;   // Konstanten, deren Wert mitgelesen wurde
   end;
 
 // Rezept 5.2 (Kopf der Unit). False mit Grund in AResult.Reason.
 function BuildSqlTemplate(const AReq: TRdxSqlRequest;
   out AResult: TRdxSqlTemplate): Boolean;
-// Hinweis fuer das Menue: 'n Parameter[, k Konstante(n) im Text], nichts
-// wird geschrieben'.
+// Hinweis fuer das Menue: 'n Parameter[, k Konstante(n) mitgelesen],
+// nichts wird geschrieben'.
 function SqlHintOf(const AResult: TRdxSqlTemplate): string;
 // Setzt AReq.Consts (je Operand SqlConstOf an seiner Zeile, nicht im
-// with-Block) und AReq.Binding (FireDacConnectionProven bei einem Aufruf
-// ausserhalb eines with-Blocks).
+// with-Block; Routinen- und Typgrenzen einmal fuer alle), AReq.Binding
+// (FireDacConnectionProven bei einem Aufruf, AdoObjectProven beim Query-
+// Objekt - beides ausserhalb eines with-Blocks) und bei 'Q.SQL.Add(..)'
+// AReq.Prefix/ChainNames (die Kette, Kopf der Unit, Punkt 3).
 procedure AddSqlFacts(AMap: TRdxCodeMap; var AReq: TRdxSqlRequest);
 // Ist AName (ein blosser Bezeichner) an ALine eine Konstante? Jede
 // Deklaration des Namens in der Datei muss eine untypisierte Konstante
 // sein ('Name = Wert;' in einer const-Section; ein Parameter, eine
-// Variable, ein Feld, eine typisierte Konstante, ein Typ oder eine Routine
-// gleichen Namens irgendwo in der Datei - auch im inaktiven $IFDEF-Zweig -
-// verwirft den Beweis); gilt muss eine, die vor ALine steht und dort
-// sichtbar ist: auf Unit-Ebene ueberall danach, in einer Routine nur bis zu
-// deren Ende. Mehrere sichtbare mit verschiedenem Wert: sckKept.
+// Variable - auch 'var Name := ..' und 'for var Name in ..' -, ein Feld,
+// eine Property, 'on Name: E do', eine typisierte Konstante, eine
+// Inline-Konstante im Rumpf, ein Typ oder eine Routine gleichen Namens
+// irgendwo in der Datei - auch im inaktiven $IFDEF-Zweig - verwirft den
+// Beweis); gelten muss eine, die vor ALine steht und dort sichtbar ist
+// (Kopf der Unit, Punkt 2: Unit-Ebene ab der Deklaration, lokal bis zum
+// Ende ihrer Routine, Klassenkonstante in den Methoden ihrer Klasse).
+// Mehrere sichtbare mit verschiedenem Wert: sckKept.
 function SqlConstOf(AMap: TRdxCodeMap; const AName: string;
   ALine: Integer): TRdxSqlConst;
 // True, wenn die uses-Klauseln FireDAC.Comp.Client nennen und AReceiver
 // (ein Bezeichner, 'Self.' davor erlaubt) in der Datei mindestens einmal
-// und nur als TFDConnection deklariert ist (Feld, Variable, Parameter,
-// Property).
+// und nur als TFDConnection deklariert ist (Feld, Variable, Parameter;
+// eine Property gleichen Namens verwirft den Beweis - ihr Typ wird nicht
+// gelesen, Gegen-Review S1, Minor 4).
 function FireDacConnectionProven(AMap: TRdxCodeMap;
+  const AUsesNames: TArray<string>; const AReceiver: string): Boolean;
+// Dasselbe fuer ADO (Minor 11): die uses nennen Data.Win.ADODB oder
+// ADODB, AReceiver ist ueberall als TADOQuery, TADOCommand, TADODataSet
+// oder TADOStoredProc deklariert (auch qualifiziert).
+function AdoObjectProven(AMap: TRdxCodeMap;
   const AUsesNames: TArray<string>; const AReceiver: string): Boolean;
 // 'FConn' aus 'FConn.ExecSQL', sonst ''.
 function ExecSqlReceiverOf(const ATarget: string): string;
@@ -178,6 +245,18 @@ const
     + 'parametrisieren - Namen pruefen/Whitelist';
   R_OPERAND     = 'Operand ''%s'' ';
   R_DDL         = 'DDL/DCL (%s ...): ' + R_NAMES;
+  R_BLOCK       = 'prozeduraler Block (%s ...) - Parameter einer Anweisung '
+    + 'gelten darin nicht; von Hand';
+  R_JOIN_ON     = R_OPERAND + 'steht in einer Join-Bedingung (ON) - dort '
+    + 'ist meist eine Spalte gemeint. ' + R_NAMES;
+  R_LIMIT_TEXT  = R_OPERAND + 'hinter %s ist ein Text - MySQL setzt ihn als '
+    + 'String ein (''10'' statt 10, Syntaxfehler); nur IntToStr(x) bindet eine '
+    + 'Zahl';
+  R_CUT         = R_OPERAND + 'steht in einem SQL-String, den eine Konstante '
+    + 'oder eine fruehere Zeile der Kette oeffnet bzw. schliesst - die '
+    + 'Vorlage muesste sie zerschneiden; von Hand';
+  R_QMARK       = 'der SQL-Text traegt einen positionalen Platzhalter ''?'' - '
+    + 'benannte Parameter mischen sich damit nicht; von Hand';
   R_NOT_VALUE   = R_OPERAND + 'steht hinter ''%s'' - dort erwartet SQL '
     + 'keinen Wert. ' + R_NAMES;
   R_AT_START    = R_OPERAND + 'steht am Anfang des SQL-Texts - kein Wert. '
@@ -206,6 +285,21 @@ const
   // Erste Woerter einer Anweisung (Kopf der Unit, Punkt 1).
   DDL_HEADS: array[0..7] of string = ('create', 'alter', 'drop', 'truncate',
     'rename', 'comment', 'grant', 'revoke');
+  // Beginnt ein prozeduraler Block (Firebird 'EXECUTE BLOCK' ueber
+  // BLOCK_AFTER_EXECUTE): auch er sperrt den Rest des Texts (Major 2).
+  BLOCK_HEADS: array[0..1] of string = ('begin', 'declare');
+  HEAD_EXECUTE = 'execute';
+  WORD_BLOCK   = 'block';
+  // Diese Woerter beenden eine Join-Bedingung (ON) bzw. beginnen sie.
+  CLAUSE_WORDS: array[0..19] of string = ('on', 'where', 'join', 'inner',
+    'left', 'right', 'full', 'cross', 'group', 'order', 'having', 'union',
+    'limit', 'offset', 'set', 'values', 'select', 'from', 'returning',
+    'using');
+  CLAUSE_ON = 'on';
+  // Dahinter nimmt SQL nur eine Zahl (Verdacht b).
+  NUMBER_AFTER: array[0..1] of string = ('limit', 'offset');
+  // Ein Buchstabe direkt vor einem String: N'..' (nationaler String).
+  NATIONAL_PREFIX = 'n';
   DML_HEADS: array[0..7] of string = ('select', 'insert', 'update', 'delete',
     'merge', 'with', 'replace', 'upsert');
   CLAUSE_HEADS: array[0..16] of string = ('where', 'and', 'or', 'having',
@@ -219,12 +313,32 @@ const
   // Zeilenumbruch-Konstanten der RTL: im SQL Leerraum.
   LINE_BREAK_NAMES: array[0..3] of string = ('slinebreak', 'system.slinebreak',
     'lineending', 'system.lineending');
-  // Als Parametername nicht ohne 'p' davor (SQL-Woerter; Oracle ORA-01745).
-  RESERVED_NAMES: array[0..37] of string = ('access', 'all', 'and', 'as',
-    'asc', 'between', 'by', 'comment', 'date', 'desc', 'distinct', 'file',
-    'from', 'group', 'in', 'index', 'is', 'key', 'level', 'like', 'limit',
-    'mode', 'not', 'null', 'number', 'offset', 'or', 'order', 'select', 'set',
-    'size', 'table', 'time', 'timestamp', 'type', 'uid', 'user', 'where');
+  // Als Parametername nicht ohne 'p' davor (Oracle ORA-01745 - die
+  // reservierten Woerter von Oracle, dazu der SQL-92-Kern und die Woerter
+  // der Liste bis Charge SQc; Gegen-Review S1, Minor 2).
+  RESERVED_NAMES: array[0..161] of string = ('access', 'add', 'all', 'alter',
+    'and', 'any', 'as', 'asc', 'audit', 'begin', 'between', 'both', 'by',
+    'case', 'cast', 'char', 'check', 'cluster', 'collate', 'column',
+    'comment', 'compress', 'connect', 'constraint', 'create', 'cross',
+    'current', 'current_date', 'current_time', 'current_timestamp',
+    'current_user', 'date', 'day', 'decimal', 'declare', 'default', 'delete',
+    'desc', 'distinct', 'double', 'drop', 'else', 'end', 'escape', 'except',
+    'exclusive', 'exists', 'false', 'fetch', 'file', 'first', 'float', 'for',
+    'foreign', 'from', 'full', 'grant', 'group', 'having', 'hour',
+    'identified', 'immediate', 'in', 'increment', 'index', 'initial', 'inner',
+    'insert', 'integer', 'intersect', 'interval', 'into', 'is', 'join', 'key',
+    'leading', 'left', 'level', 'like', 'limit', 'lock', 'long', 'maxextents',
+    'minus', 'minute', 'mlslabel', 'mode', 'modify', 'month', 'natural',
+    'next', 'noaudit', 'nocompress', 'not', 'nowait', 'null', 'number', 'of',
+    'offline', 'offset', 'on', 'online', 'only', 'option', 'or', 'order',
+    'outer', 'pctfree', 'position', 'primary', 'prior', 'public', 'raw',
+    'references', 'rename', 'resource', 'revoke', 'right', 'row', 'rowid',
+    'rownum', 'rows', 'second', 'select', 'session', 'set', 'share', 'size',
+    'smallint', 'some', 'start', 'successful', 'synonym', 'sysdate', 'table',
+    'then', 'time', 'timestamp', 'to', 'trailing', 'trigger', 'true', 'type',
+    'uid', 'union', 'unique', 'unknown', 'update', 'user', 'using',
+    'validate', 'value', 'values', 'varchar', 'varchar2', 'view', 'when',
+    'whenever', 'where', 'with', 'year', 'zone');
   // Kommentarzeile vor ParamByName, wenn das Ziel ein String-Puffer ist.
   BIND_COMMENT = '// Parameter binden: ';
   // Vor dem Token eines stehenden Ausdrucks (TakeKept): kein SQL-Wort
@@ -244,11 +358,16 @@ const
 
   // Deklarationen am Quelltext (SqlConstOf, FireDacConnectionProven).
   // Davor beginnt 'Name:' bzw. 'Name, ..:' eine Deklaration (Variable,
-  // Feld, Parameter, typisierte Konstante; auch eine Marke oder ein
-  // case-Zweig hinter ';' zaehlt - das macht den Beweis nur vorsichtiger).
-  DECL_LEADS: array[0..18] of string = (';', 'var', 'const', 'threadvar',
+  // Feld, Parameter, typisierte Konstante, die Variable eines
+  // on-Handlers; auch eine Marke oder ein case-Zweig hinter ';' zaehlt -
+  // das macht den Beweis nur vorsichtiger).
+  DECL_LEADS: array[0..19] of string = (';', 'var', 'const', 'threadvar',
     '(', ',', ')', 'out', 'constref', ']', 'private', 'protected', 'public',
-    'published', 'automated', 'strict', 'record', 'class', 'object');
+    'published', 'automated', 'strict', 'record', 'class', 'object', 'on');
+  // Hinter 'var Name' bzw. 'for var Name' steht ohne Typ ':=' oder 'in' -
+  // eine Inline-Variable mit abgeleitetem Typ (Gegen-Review S1, Blocker).
+  INLINE_VAR_AFTER: array[0..1] of string = (':=', 'in');
+  KW_VAR = 'var';
   // Davor beginnt 'Name =' eine Konstante oder einen Typ.
   CONST_LEADS: array[0..2] of string = (';', 'const', ']');
   // Rueckwaerts von einer Deklaration: hier beginnt ihre Section.
@@ -256,40 +375,64 @@ const
     'threadvar', 'resourcestring', 'label', 'begin', 'interface',
     'implementation', 'initialization', 'finalization', 'program',
     'library', 'unit', 'uses');
-  FIREDAC_CLIENT = 'FireDAC.Comp.Client';
-  FIREDAC_CONNECTION: array[0..1] of string = ('tfdconnection',
-    'firedac.comp.client.tfdconnection');
+  // Die Units und Typen der Nachweise (TypedReceiverProven): ein Typ steht
+  // bloss oder mit einer dieser Units davor.
+  FIREDAC_UNITS: array[0..0] of string = ('firedac.comp.client');
+  FIREDAC_TYPES: array[0..0] of string = ('tfdconnection');
+  ADO_UNITS: array[0..1] of string = ('data.win.adodb', 'adodb');
+  ADO_TYPES: array[0..3] of string = ('tadoquery', 'tadocommand',
+    'tadodataset', 'tadostoredproc');
+  ADO_PARAMETERS = 'Parameters.';
   EXEC_SQL = '.execsql';
+  SELF_PREFIX = 'self.';
+  // Die Kette 'Q.SQL.Add' (ChainWith): die Glieder hinter dem Objekt ...
+  CHAIN_SQL = '.sql.';
+  CHAIN_ADD   = 'add';
+  CHAIN_CLEAR = 'clear';
+  CHAIN_TEXT  = 'text';
+  // ... und so viele Zeilen weit sucht sie je Richtung.
+  MAX_CHAIN_LINES = 200;
+  // Ein Ausdruck in einer frueheren Zeile (kein Literal): fuer das Lesen
+  // ein Wert-Wort - klebt wie der Ausdruck ('col_' + X -> 'col_x').
+  CHAIN_VALUE = 'x';
 
 type
   // ---- die Kette als Segmente ----
 
-  TSqlSegKind = (skText, skOperand, skKept);
+  TSqlSegKind = (skText, skOperand, skKept, skConst, skChain);
 
-  // Ein Stueck der Kette fuer den Leser: SQL-Text (Literale und eingesetzte
-  // Konstanten, zusammengelegt), ein Operand (wird Parameter oder lehnt ab)
-  // oder ein Ausdruck, der stehen bleibt (Konstante ohne einfachen Wert,
-  // sLineBreak - dann Blank -, das Ziel selbst bei 'S := S + ..').
+  // Ein Stueck der Kette fuer den Leser: SQL-Text (Literale, zusammen-
+  // gelegt), ein Operand (wird Parameter oder lehnt ab), ein Ausdruck, der
+  // stehen bleibt (Konstante ohne einfachen Wert, sLineBreak - dann Blank
+  // -, das Ziel selbst bei 'S := S + ..'), eine Konstante mit einfachem
+  // Wert (Text ihr Wert - mitgelesen -, Expr ihr Name - ausgegeben) oder
+  // die frueheren Zeilen der Kette (nur gelesen, Kopf der Unit, Punkt 3).
   TSqlSeg = record
     Kind  : TSqlSegKind;
-    Text  : string;     // skText: SQL-Text; sonst Pascal-Quelltext
+    Text  : string;     // skText/skConst/skChain: SQL-Text; sonst Pascal
+    Expr  : string;     // skConst: der Name der Konstante
     Blank : Boolean;    // skKept: gilt im SQL als Leerraum
   end;
   TSqlSegs = TArray<TSqlSeg>;
 
   TSqlSegCount = record
-    Terms   : Integer;   // Literal- und Operanden-Parts bisher
-    All     : Integer;   // Operanden-Parts
-    Ops     : Integer;   // davon Operanden (keine Konstante, kein Ziel)
-    Consts  : Integer;   // davon Konstanten (auch sLineBreak)
-    Inlined : Integer;   // davon Konstanten mit Wert im SQL-Text
+    Terms      : Integer;   // Literal- und Operanden-Parts bisher
+    All        : Integer;   // Operanden-Parts
+    Ops        : Integer;   // davon Operanden (keine Konstante, kein Ziel)
+    Consts     : Integer;   // davon Konstanten (auch sLineBreak)
+    ConstsRead : Integer;   // davon Konstanten mit mitgelesenem Wert
   end;
 
   // ---- der Leser ----
 
+  // Ein Stueck der Ausgabe: SQL-Text oder ein Pascal-Ausdruck; Tail ist
+  // bei einem Ausdruck das letzte SQL-Zeichen zur Laufzeit (eine Konstante:
+  // das letzte ihres Werts), #0 unbekannt - davon haengt ab, ob ein
+  // Platzhalter ein Leerzeichen davor braucht (AddParam).
   TSqlPiece = record
     IsExpr : Boolean;   // Pascal-Ausdruck statt SQL-Text
     Text   : string;
+    Tail   : Char;
   end;
 
   TSqlParam = record
@@ -303,8 +446,10 @@ type
 
   // Zustand des Lesers ueber die Segmente (ScanSegs): die Ausgabe in
   // Stuecken, die Parameter, die letzten Token, die offenen Klammern (je
-  // das Token davor), das erste Wort der Anweisung (Head) und - waehrend
-  // ein SQL-String offen ist - dessen Umfeld und Inhalt.
+  // das Token davor), das erste Wort der Anweisung (Head), die Sperre fuer
+  // den Rest des Texts (Lock), die letzte Klausel und - waehrend ein
+  // SQL-String offen ist - dessen Umfeld und Inhalt. Mute: der Leser liest
+  // den Wert einer Konstante bzw. die Kette - ohne Ausgabe.
   TSqlScan = record
     Segs      : TSqlSegs;
     Mode      : TSqlLexMode;
@@ -312,7 +457,11 @@ type
     Tok       : TSqlTok3;
     Openers   : TArray<string>;
     Head      : string;          // '' = noch kein Wort in dieser Anweisung
+    Lock      : string;          // DDL-/Block-Kopf, gross; '' = keine Sperre
+    Clause    : string;          // letztes Klausel-Wort (CLAUSE_WORDS)
+    QMarks    : Integer;         // '?' im Code
     LastCh    : Char;            // letztes SQL-Zeichen (Klebeprobe)
+    Mute      : Boolean;
     Pieces    : TArray<TSqlPiece>;
     Params    : TArray<TSqlParam>;
     Used      : TArray<string>;  // vergebene und vorhandene Namen, klein
@@ -323,6 +472,7 @@ type
     StrTok    : TSqlTok3;
     StrOpener : string;
     StrHead   : string;
+    StrMuted  : Boolean;         // geoeffnet in einer Konstante / der Kette
     StrParts  : TArray<string>;  // Wert als Pascal-Stuecke
     StrBuf    : string;          // Text seit dem letzten Stueck
     StrFirst  : string;          // erster Operand im String ('' = keiner)
@@ -335,15 +485,45 @@ type
 
   TSqlDecl = record
     Kind : TSqlDeclKind;
-    Line : Integer;
-    Text : string;   // dkConst: Quelltext des Werts; dkTyped: Typ (klein)
+    Tok  : TRdxToken;   // der Name in der Deklaration
+    Text : string;      // dkConst: Quelltext des Werts; dkTyped: Typ (klein)
   end;
   TSqlDecls = TArray<TSqlDecl>;
 
-  TSqlLineRange = record
-    First : Integer;
-    Last  : Integer;
+  // Eine Routine mit Rumpf (auch verschachtelt): Kopf, Rumpf (begin bzw.
+  // asm) und ihr letztes ';'; ClassLow das Klassen-Glied des Namens
+  // ('TFoo.P' -> 'tfoo'), '' ohne.
+  TSqlRoutine = record
+    Head     : TRdxToken;
+    Body     : TRdxToken;
+    Last     : TRdxToken;
+    ClassLow : string;
   end;
+
+  // Ein Typ mit Rumpf (class, record, object, interface): sein Oeffner,
+  // sein end und sein Name (klein, ohne Typparameter; '' anonym).
+  TSqlTypeBody = record
+    Open    : TRdxToken;
+    Close   : TRdxToken;
+    NameLow : string;
+  end;
+
+  // Die Grenzen der Datei fuer die Sichtbarkeit (Kopf der Unit, Punkt 2) -
+  // einmal je Anfrage gerechnet (Built), erst wenn ein Name eine
+  // Konstante ist.
+  TSqlScopes = record
+    Built    : Boolean;
+    Complete : Boolean;   // der Lauf erreichte das Dateiende (MAX_WALK)
+    Routines : TArray<TSqlRoutine>;
+    Types    : TArray<TSqlTypeBody>;
+    // nur beim Lauf (BuildScopes): ab hier liest er Routinen (BodyStart),
+    // und die Routinen, deren Rumpf noch kommt
+    Start    : TRdxToken;
+    Jumps    : TArray<Integer>;
+  end;
+
+  // Wo eine Konstante gilt (ScopeOf).
+  TSqlConstScope = (cvUnit, cvLocal, cvClass, cvInline);
 
 { ---- kleine Helfer ---- }
 
@@ -582,8 +762,20 @@ begin
     Delete(Result, 1, 1);
 end;
 
+// Traegt S ein Zeichen ueber ASCII?
+function HasNonAscii(const S: string): Boolean;
+var
+  i : Integer;
+begin
+  for i := 1 to Length(S) do
+    if S[i] > #127 then
+      Exit(True);
+  Result := False;
+end;
+
 // Die Glieder ohne 'Self' aneinander, das erste ohne A/F-Praefix; nur
-// Zeichen eines Parameternamens.
+// Zeichen eines Parameternamens. '' bei einem Zeichen ueber ASCII: aus
+// 'Groesse' mit sz wurde ':Gre' (Gegen-Review S1, Minor 3) - dann pN.
 function NameOfPath(const AParts: TArray<string>): string;
 var
   Segs : TArray<string>;
@@ -596,26 +788,31 @@ begin
         AppendTo(Segs, WithoutPrefix(AParts[i]))
       else
         AppendTo(Segs, AParts[i]);
-  Result := NameCharsOf(JoinWith(Segs, ''));
+  Result := JoinWith(Segs, '');
+  if HasNonAscii(Result) then
+    Exit('');
+  Result := NameCharsOf(Result);
 end;
 
 function SqlParamName(const AExpr: string): string;
 begin
   Result := NameOfPath(FirstValuePath(AExpr));
   if Result = '' then Exit;
-  if CharInSet(Result[1], ['0'..'9']) then
+  if CharInSet(Result[1], ['0'..'9'])
+     or InList(LowerCase(Result), RESERVED_NAMES) then
     Result := 'p' + Result;
+  // Erst danach kuerzen: das 'p' zaehlt mit (Minor 2).
   Result := Copy(Result, 1, MAX_NAME);
-  if InList(LowerCase(Result), RESERVED_NAMES) then
-    Result := 'p' + Result;
 end;
 
-// ABase oder - schon vergeben - ABase2, ABase3 ...; ohne ABase pN.
+// ABase oder - schon vergeben - ABase2, ABase3 ...; ohne ABase pN. Mit
+// Nummer hoechstens MAX_NAME Zeichen (Minor 2): die Nummer ersetzt das
+// Ende.
 function UniqueName(const ABase: string; const AUsed: TArray<string>;
   AIndex: Integer): string;
 var
-  Base : string;
-  k    : Integer;
+  Base, Num : string;
+  k         : Integer;
 begin
   Base := ABase;
   if Base = '' then
@@ -624,7 +821,8 @@ begin
   k := 2;
   while InList(LowerCase(Result), AUsed) do
   begin
-    Result := Base + IntToStr(k);
+    Num := IntToStr(k);
+    Result := Copy(Base, 1, MAX_NAME - Length(Num)) + Num;
     Inc(k);
   end;
 end;
@@ -650,7 +848,16 @@ begin
   SetLength(ASegs, n + 1);
   ASegs[n].Kind  := AKind;
   ASegs[n].Text  := AText;
+  ASegs[n].Expr  := '';
   ASegs[n].Blank := ABlank;
+end;
+
+// Eine Konstante mit einfachem Wert: AValue wird gelesen, AName steht in
+// der Vorlage (Kopf der Unit, Punkt 2).
+procedure AddConstSeg(var ASegs: TSqlSegs; const AValue, AName: string);
+begin
+  AddSeg(ASegs, skConst, AValue, False);
+  ASegs[High(ASegs)].Expr := AName;
 end;
 
 function ConstAt(const AReq: TRdxSqlRequest; AIndex: Integer): TRdxSqlConst;
@@ -672,12 +879,14 @@ begin
   C := ConstAt(AReq, AIndex);
   if C.Kind <> sckNone then
     Inc(ACount.Consts);
-  if C.Kind = sckLiteral then
+  // Ein leerer Wert ('') traegt nichts zum Lesen bei - er bleibt als
+  // stehender Ausdruck.
+  if (C.Kind = sckLiteral) and (C.Value <> '') then
   begin
-    AddSeg(ASegs, skText, C.Value, False);
-    Inc(ACount.Inlined);
+    AddConstSeg(ASegs, C.Value, Txt);
+    Inc(ACount.ConstsRead);
   end
-  else if C.Kind = sckKept then
+  else if C.Kind <> sckNone then
     AddSeg(ASegs, skKept, Txt, False)
   else if InList(LowerCase(Txt), LINE_BREAK_NAMES) then
   begin
@@ -719,6 +928,13 @@ begin
   Inc(ACount.Terms);
 end;
 
+// Traegt das Segment SQL-Text zum Lesen (Literal, Wert einer Konstante,
+// die Kette)?
+function IsSqlSeg(const ASeg: TSqlSeg): Boolean;
+begin
+  Result := ASeg.Kind in [skText, skConst, skChain];
+end;
+
 // Die SQL-Texte der Kette, Ausdruecke als ein Leerzeichen - die Vorlage
 // fuer SqlPlaceholders vor dem eigentlichen Lesen (ein Name darf auch
 // keinen Platzhalter treffen, der erst HINTER dem Operanden steht).
@@ -730,7 +946,7 @@ begin
   SB := TStringBuilder.Create;
   try
     for i := 0 to High(ASegs) do
-      if ASegs[i].Kind = skText then
+      if IsSqlSeg(ASegs[i]) then
         SB.Append(ASegs[i].Text)
       else
         SB.Append(' ');
@@ -763,11 +979,13 @@ end;
 
 { ---- Ausgabe ---- }
 
+// SQL-Text in die Ausgabe - nicht, waehrend der Leser den Wert einer
+// Konstante oder die Kette liest (Mute).
 procedure EmitText(var S: TSqlScan; const AText: string);
 var
   n : Integer;
 begin
-  if AText = '' then Exit;
+  if (AText = '') or S.Mute then Exit;
   n := Length(S.Pieces);
   if (n > 0) and not S.Pieces[n - 1].IsExpr then
     S.Pieces[n - 1].Text := S.Pieces[n - 1].Text + AText
@@ -776,10 +994,13 @@ begin
     SetLength(S.Pieces, n + 1);
     S.Pieces[n].IsExpr := False;
     S.Pieces[n].Text   := AText;
+    S.Pieces[n].Tail   := #0;
   end;
 end;
 
-procedure EmitExpr(var S: TSqlScan; const AExpr: string);
+// Ein Pascal-Ausdruck in die Ausgabe; ATail sein letztes SQL-Zeichen zur
+// Laufzeit (#0 unbekannt).
+procedure EmitExpr(var S: TSqlScan; const AExpr: string; ATail: Char);
 var
   n : Integer;
 begin
@@ -787,16 +1008,21 @@ begin
   SetLength(S.Pieces, n + 1);
   S.Pieces[n].IsExpr := True;
   S.Pieces[n].Text   := AExpr;
+  S.Pieces[n].Tail   := ATail;
 end;
 
-// Letztes Zeichen der Ausgabe, #0 hinter einem Ausdruck oder am Anfang.
+// Letztes SQL-Zeichen der Ausgabe zur Laufzeit: das des letzten Texts bzw.
+// der Tail eines Ausdrucks; #0 unbekannt oder am Anfang.
 function OutLast(const S: TSqlScan): Char;
 var
   n : Integer;
 begin
   Result := #0;
   n := Length(S.Pieces);
-  if (n > 0) and not S.Pieces[n - 1].IsExpr then
+  if n = 0 then Exit;
+  if S.Pieces[n - 1].IsExpr then
+    Result := S.Pieces[n - 1].Tail
+  else
     Result := CharAt(S.Pieces[n - 1].Text, Length(S.Pieces[n - 1].Text));
 end;
 
@@ -830,16 +1056,46 @@ begin
     Result := S.Openers[High(S.Openers)];
 end;
 
+// Eine neue Anweisung hinter ';' - die Sperre (Lock) bleibt (Major 2).
 procedure NewStatement(var S: TSqlScan);
 begin
   S.Head := '';
+  S.Clause := '';
   S.Openers := nil;
   S.Tok[2] := '';
   S.Tok[1] := '';
   S.Tok[0] := ';';
 end;
 
+// Setzt die Sperre fuer den Rest des Texts, wenn das erste Wort AHead
+// einer Anweisung DDL/DCL oder einen prozeduralen Block beginnt (Kopf der
+// Unit, Punkt 1).
+procedure LockByHead(var S: TSqlScan; const AHead: string);
+begin
+  if (S.Lock = '') and (InList(AHead, DDL_HEADS) or InList(AHead, BLOCK_HEADS)) then
+    S.Lock := UpperCase(AHead);
+end;
+
+// Dasselbe fuer das zweite Wort von Firebirds 'EXECUTE BLOCK'.
+procedure LockByExecuteBlock(var S: TSqlScan; const AWord: string);
+begin
+  if (S.Lock = '') and (S.Head = HEAD_EXECUTE) and (S.Tok[0] = HEAD_EXECUTE)
+     and (AWord = WORD_BLOCK) then
+    S.Lock := UpperCase(HEAD_EXECUTE + ' ' + WORD_BLOCK);
+end;
+
 { ---- Urteile ---- }
+
+// Die Sperre fuer den Rest des Texts als Grund; '' ohne.
+function LockReason(const S: TSqlScan): string;
+begin
+  Result := '';
+  if S.Lock = '' then Exit;
+  if InList(LowerCase(S.Lock), DDL_HEADS) then
+    Result := Format(R_DDL, [S.Lock])
+  else
+    Result := Format(R_BLOCK, [S.Lock]);
+end;
 
 function IsValueContext(const ATok: TSqlTok3; const AOpener: string): Boolean;
 begin
@@ -856,22 +1112,38 @@ begin
     '+', '-', '*', '/', '|', '%']);
 end;
 
+// Duerfen die (bis zu zwei) Zeichen AFollow hinter einem Wert stehen - ein
+// Folger wie oben oder der PostgreSQL-Cast '::' (Minor 10)?
+function FollowsValue(const AFollow: string): Boolean;
+begin
+  Result := IsValueFollower(CharAt(AFollow, 1)) or (Copy(AFollow, 1, 2) = '::');
+end;
+
 // Klebt ein Operand hinter C an einem Bezeichner ('col_', 'tbl.', '@', ':')?
 function GluesAfter(C: Char): Boolean;
 begin
   Result := IsIdentChar(C) or CharInSet(C, ['.', '@', ':', '$', '#']);
 end;
 
-// Die Urteile ueber die Position eines Werts: DDL, Anfang, Wert-Kontext,
-// Anweisungsart. '' oder der Grund.
+// IntToStr(x) bzw. QuotedStr(x): genau EIN Wert (eine Zahl bzw. ein
+// SQL-String) - keine Liste, keine Spalte (Minor 1 und 10).
+function IsOneValue(const AOperand: string): Boolean;
+var
+  Inner : string;
+begin
+  Result := CallArg(AOperand, 'IntToStr', Inner)
+    or CallArg(AOperand, 'QuotedStr', Inner);
+end;
+
+// Die Urteile ueber die Position eines Werts: Anfang, Wert-Kontext,
+// Anweisungsart (die Sperre fuer DDL prueft LockReason davor). '' oder der
+// Grund.
 function ValueReason(const ATok: TSqlTok3; const AOpener, AHead,
   AOperand: string): string;
 var
   Head : string;
 begin
   Result := '';
-  if InList(AHead, DDL_HEADS) then
-    Exit(Format(R_DDL, [UpperCase(AHead)]));
   if ATok[0] = '' then
     Exit(Format(R_AT_START, [Shown(AOperand)]));
   if Copy(ATok[0], 1, 1) = KEPT_MARK then
@@ -904,7 +1176,95 @@ begin
   S.LastCh := 'v';
 end;
 
+{ ---- Was hinter einer Stelle steht ---- }
+
+// Die ersten ACount SQL-Zeichen ab Segment ASeg: Text (auch der Wert einer
+// Konstante), ein Leerraum-Ausdruck als ' ', ein anderer Ausdruck oder
+// Operand als 'x' (klebt) und Schluss; kuerzer am Ende (CharAt -> #0).
+function CharsFrom(const S: TSqlScan; ASeg, ACount: Integer): string;
+var
+  SB : TStringBuilder;
+  k  : Integer;
+begin
+  SB := TStringBuilder.Create;
+  try
+    k := ASeg;
+    while (SB.Length < ACount) and (k <= High(S.Segs)) do
+    begin
+      if IsSqlSeg(S.Segs[k]) then
+        SB.Append(Copy(S.Segs[k].Text, 1, ACount - SB.Length))
+      else if S.Segs[k].Blank then
+        SB.Append(' ')
+      else
+      begin
+        SB.Append('x');
+        Break;
+      end;
+      Inc(k);
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+// Erstes Zeichen ab Segment ASeg, das kein Leerraum ist (')' bei der
+// ganzen Liste); 'x' fuer einen Ausdruck, #0 am Ende.
+function NextNonBlank(const S: TSqlScan; ASeg: Integer): Char;
+var
+  k : Integer;
+  T : string;
+begin
+  for k := ASeg to High(S.Segs) do
+    if IsSqlSeg(S.Segs[k]) then
+    begin
+      T := TrimLeft(S.Segs[k].Text);
+      if T <> '' then
+        Exit(T[1]);
+    end
+    else if not S.Segs[k].Blank then
+      Exit('x');
+  Result := #0;
+end;
+
+// Die zwei Zeichen hinter T[i] - ueber das Ende von T in die folgenden
+// Segmente (ab ASeg + 1).
+function FollowAt(const S: TSqlScan; const T: string; i, ASeg: Integer): string;
+begin
+  Result := Copy(T, i + 1, 2);
+  if Length(Result) < 2 then
+    Result := Result + CharsFrom(S, ASeg + 1, 2 - Length(Result));
+end;
+
+// Das erste Zeichen hinter T[i], das kein Leerraum ist (NextNonBlank).
+function SolidAt(const S: TSqlScan; const T: string; i, ASeg: Integer): Char;
+var
+  Rest : string;
+begin
+  Rest := TrimLeft(Copy(T, i + 1, MaxInt));
+  if Rest <> '' then
+    Result := Rest[1]
+  else
+    Result := NextNonBlank(S, ASeg + 1);
+end;
+
 { ---- SQL-Strings ---- }
+
+// Steht direkt vor dem Quote ein N (N'..', nationaler String; Minor 10),
+// das als eigenes Wort im letzten Text-Stueck der Ausgabe liegt? Dann
+// zaehlt das Wort davor als Position, und das N faellt mit dem String weg,
+// wenn er Parameter wird.
+function NationalPrefix(const S: TSqlScan): Boolean;
+var
+  L : string;
+begin
+  Result := False;
+  if (S.Tok[0] <> NATIONAL_PREFIX) or not CharInSet(S.LastCh, ['n', 'N'])
+     or S.Mute or (S.StrLen <= 0) then
+    Exit;
+  L := S.Pieces[S.StrCount - 1].Text;
+  Result := CharInSet(L[S.StrLen], ['n', 'N']);
+end;
 
 procedure OpenString(var S: TSqlScan);
 begin
@@ -912,9 +1272,17 @@ begin
   S.StrLen := -1;
   if (S.StrCount > 0) and not S.Pieces[S.StrCount - 1].IsExpr then
     S.StrLen := Length(S.Pieces[S.StrCount - 1].Text);
-  S.StrTok    := S.Tok;
+  S.StrTok := S.Tok;
+  if NationalPrefix(S) then
+  begin
+    Dec(S.StrLen);
+    S.StrTok[0] := S.Tok[1];
+    S.StrTok[1] := S.Tok[2];
+    S.StrTok[2] := '';
+  end;
   S.StrOpener := TopOpener(S);
   S.StrHead   := S.Head;
+  S.StrMuted  := S.Mute;
   S.StrParts  := nil;
   S.StrBuf    := '';
   S.StrFirst  := '';
@@ -929,25 +1297,41 @@ begin
   S.StrBuf := '';
 end;
 
-// Erstes SQL-Zeichen ab Segment ASeg: Text -> sein erstes Zeichen,
-// Leerraum-Ausdruck -> ' ', ein anderer Ausdruck oder Operand -> 'x'
-// (klebt), Ende -> #0.
-function SegStart(const S: TSqlScan; ASeg: Integer): Char;
+// Ist der Wert des Strings genau IntToStr(x) - EIN Wert, auch allein in
+// einer Liste?
+function SoleIntToStr(const AParts: TArray<string>): Boolean;
+var
+  Inner : string;
 begin
-  if ASeg > High(S.Segs) then
-    Result := #0
-  else if S.Segs[ASeg].Kind = skText then
-    Result := S.Segs[ASeg].Text[1]
-  else if (S.Segs[ASeg].Kind = skKept) and S.Segs[ASeg].Blank then
-    Result := ' '
-  else
-    Result := 'x';
+  Result := (Length(AParts) = 1) and CallArg(AParts[0], 'IntToStr', Inner);
 end;
 
-// Der String schliesst (AFollower: das Zeichen dahinter). Ohne Operand ein
-// gewoehnliches Literal; mit Operand wird er EIN Parameter, wenn er an
-// einer Wert-Position steht.
-procedure CloseString(var S: TSqlScan; AFollower: Char);
+// Darf der String mit Operand Parameter werden? AFollow: die zwei Zeichen
+// hinter dem schliessenden Quote, ASolid das erste, das kein Leerraum ist.
+// '' oder der Grund.
+function StringReason(const S: TSqlScan; const AFollow: string;
+  ASolid: Char): string;
+begin
+  Result := LockReason(S);
+  if Result = '' then
+    Result := ValueReason(S.StrTok, S.StrOpener, S.StrHead, S.StrFirst);
+  if Result <> '' then Exit;
+  if S.Mute or S.StrMuted then
+    Exit(Format(R_CUT, [Shown(S.StrFirst)]));
+  if not FollowsValue(AFollow) then
+    Exit(Format(R_GLUED, [Shown(S.StrFirst)]));
+  if InList(S.StrTok[0], NUMBER_AFTER) then
+    Exit(Format(R_LIMIT_TEXT, [Shown(S.StrFirst), UpperCase(S.StrTok[0])]));
+  // ''' + X + ''' allein in IN (..)/VALUES (..): X kann '1'',''2' sein
+  // wie der nackte Operand (Minor 1).
+  if (S.StrTok[0] = '(') and (ASolid = ')') and not SoleIntToStr(S.StrParts) then
+    Result := Format(R_WHOLE_LIST, [Shown(S.StrFirst), UpperCase(S.StrOpener)]);
+end;
+
+// Der String schliesst (AFollow, ASolid: was dahinter steht, StringReason).
+// Ohne Operand ein gewoehnliches Literal; mit Operand wird er EIN
+// Parameter, wenn er an einer Wert-Position steht.
+procedure CloseString(var S: TSqlScan; const AFollow: string; ASolid: Char);
 begin
   S.Mode := lmCode;
   S.LastCh := '''';
@@ -958,37 +1342,32 @@ begin
     Exit;
   end;
   FlushStrBuf(S);
-  S.Reason := ValueReason(S.StrTok, S.StrOpener, S.StrHead, S.StrFirst);
-  if (S.Reason = '') and not IsValueFollower(AFollower) then
-    S.Reason := Format(R_GLUED, [Shown(S.StrFirst)]);
+  S.Reason := StringReason(S, AFollow, ASolid);
   if S.Reason <> '' then Exit;
   CutOutput(S);
   AddParam(S, S.StrFirst, JoinWith(S.StrParts, ' + '));
 end;
 
+// Ein Zeichen im String. Liest der Leser stumm (Wert einer Konstante, die
+// Kette), steht das Zeichen schon in deren Namen - nicht im Wert.
 function StepString(var S: TSqlScan; const T: string; i, ASeg: Integer): Integer;
-var
-  Follower : Char;
 begin
   Result := i + 1;
   if T[i] <> '''' then
   begin
     EmitText(S, T[i]);
-    S.StrBuf := S.StrBuf + T[i];
+    if not S.Mute then
+      S.StrBuf := S.StrBuf + T[i];
   end
   else if CharAt(T, i + 1) = '''' then
   begin
     EmitText(S, '''''');
-    S.StrBuf := S.StrBuf + '''';
+    if not S.Mute then
+      S.StrBuf := S.StrBuf + '''';
     Result := i + 2;
   end
   else
-  begin
-    Follower := CharAt(T, i + 1);
-    if i = Length(T) then
-      Follower := SegStart(S, ASeg + 1);
-    CloseString(S, Follower);
-  end;
+    CloseString(S, FollowAt(S, T, i, ASeg), SolidAt(S, T, i, ASeg));
 end;
 
 { ---- Code, Namen, Kommentare ---- }
@@ -1012,7 +1391,14 @@ begin
   EmitText(S, W);
   W := LowerCase(W);
   if S.Head = '' then
+  begin
     S.Head := W;
+    LockByHead(S, W);
+  end
+  else
+    LockByExecuteBlock(S, W);
+  if InList(W, CLAUSE_WORDS) then
+    S.Clause := W;
   PushTok(S, W);
 end;
 
@@ -1071,7 +1457,13 @@ begin
   else if Op = ';' then
     NewStatement(S)
   else
+  begin
+    // Ein positionaler Platzhalter (Verdacht c) - BuildSqlTemplate lehnt
+    // ab, wenn benannte dazukaemen.
+    if Op = '?' then
+      Inc(S.QMarks);
     PushTok(S, Op);
+  end;
 end;
 
 function OpenMode(var S: TSqlScan; AMode: TSqlLexMode; const AOpen: string;
@@ -1175,11 +1567,12 @@ end;
 { ---- Operanden ---- }
 
 // Das letzte Segment des Laufs ab ASeg: Operanden und stehende Ausdruecke
-// ohne SQL-Text dazwischen sind EIN Wert (ein Leerraum-Ausdruck trennt).
+// ohne SQL-Text dazwischen sind EIN Wert (ein Leerraum-Ausdruck und der
+// Wert einer Konstante trennen).
 function RunEnd(const S: TSqlScan; ASeg: Integer): Integer;
 begin
   Result := ASeg;
-  while (Result < High(S.Segs)) and (S.Segs[Result + 1].Kind <> skText)
+  while (Result < High(S.Segs)) and not IsSqlSeg(S.Segs[Result + 1])
     and not S.Segs[Result + 1].Blank do
     Inc(Result);
 end;
@@ -1197,40 +1590,29 @@ begin
   Result := JoinWith(Items, ' + ');
 end;
 
-// Erstes Zeichen hinter dem Lauf, das kein Leerraum ist (')' bei der
-// ganzen Liste).
-function NextNonBlank(const S: TSqlScan; ASeg: Integer): Char;
-var
-  k : Integer;
-  T : string;
-begin
-  for k := ASeg to High(S.Segs) do
-    if S.Segs[k].Kind = skText then
-    begin
-      T := TrimLeft(S.Segs[k].Text);
-      if T <> '' then
-        Exit(T[1]);
-    end
-    else if not S.Segs[k].Blank then
-      Exit('x');
-  Result := #0;
-end;
-
+// Darf der Lauf AFirst..ALast im Code Parameter werden? '' oder der Grund
+// (Kopf der Unit, Punkt 1).
 function BareReason(const S: TSqlScan; AFirst, ALast: Integer): string;
 var
   Op, Inner : string;
+  Single    : Boolean;
 begin
   Op := S.Segs[AFirst].Text;
-  if InList(S.Head, DDL_HEADS) then
-    Exit(Format(R_DDL, [UpperCase(S.Head)]));
+  Single := (AFirst = ALast) and IsOneValue(Op);
+  Result := LockReason(S);
+  if Result <> '' then Exit;
   if GluesAfter(S.LastCh) then
     Exit(Format(R_GLUED, [Shown(Op)]));
   Result := ValueReason(S.Tok, TopOpener(S), S.Head, Op);
   if Result <> '' then Exit;
-  if not IsValueFollower(SegStart(S, ALast + 1)) then
+  if not FollowsValue(CharsFrom(S, ALast + 1, 2)) then
     Exit(Format(R_GLUED, [Shown(Op)]));
-  if (S.Tok[0] = '(') and (NextNonBlank(S, ALast + 1) = ')')
+  if InList(S.Tok[0], NUMBER_AFTER)
      and not ((AFirst = ALast) and CallArg(Op, 'IntToStr', Inner)) then
+    Exit(Format(R_LIMIT_TEXT, [Shown(Op), UpperCase(S.Tok[0])]));
+  if (S.Clause = CLAUSE_ON) and not Single then
+    Exit(Format(R_JOIN_ON, [Shown(Op)]));
+  if (S.Tok[0] = '(') and (NextNonBlank(S, ALast + 1) = ')') and not Single then
     Result := Format(R_WHOLE_LIST, [Shown(Op), UpperCase(TopOpener(S))]);
 end;
 
@@ -1252,9 +1634,11 @@ begin
   AppendTo(S.StrParts, ASeg.Text);
   if (ASeg.Kind = skOperand) and (S.StrFirst = '') then
     S.StrFirst := ASeg.Text;
-  EmitExpr(S, ASeg.Text);
+  EmitExpr(S, ASeg.Text, #0);
 end;
 
+// Ein stehender Ausdruck. sLineBreak/LineEnding (Blank) beenden einen
+// Zeilenkommentar ('-- alle' + sLineBreak + 'WHERE ..'; Minor 10).
 procedure TakeKept(var S: TSqlScan; const ASeg: TSqlSeg);
 begin
   if S.Mode = lmString then
@@ -1262,11 +1646,42 @@ begin
     TakeInString(S, ASeg);
     Exit;
   end;
-  EmitExpr(S, ASeg.Text);
+  if ASeg.Blank then
+    EmitExpr(S, ASeg.Text, #10)
+  else
+    EmitExpr(S, ASeg.Text, #0);
+  if (S.Mode = lmLineComment) and ASeg.Blank then
+    S.Mode := lmCode;
   if (S.Mode = lmCode) and not ASeg.Blank then
     PushTok(S, KEPT_MARK + ASeg.Text);
   if S.Mode = lmCode then
     S.LastCh := ' ';
+end;
+
+// Liest das Segment ASeg ohne Ausgabe (der Wert einer Konstante, die
+// Kette).
+procedure ReadMuted(var S: TSqlScan; ASeg: Integer);
+begin
+  S.Mute := True;
+  ScanText(S, ASeg);
+  S.Mute := False;
+end;
+
+// Eine Konstante mit einfachem Wert: ihr NAME in die Ausgabe (im String
+// ein Stueck seines Werts), ihr Wert wird stumm gelesen (Kopf der Unit,
+// Punkt 2).
+procedure TakeConst(var S: TSqlScan; ASeg: Integer);
+var
+  Seg : TSqlSeg;
+begin
+  Seg := S.Segs[ASeg];
+  if S.Mode = lmString then
+  begin
+    FlushStrBuf(S);
+    AppendTo(S.StrParts, Seg.Expr);
+  end;
+  EmitExpr(S, Seg.Expr, Seg.Text[Length(Seg.Text)]);
+  ReadMuted(S, ASeg);
 end;
 
 function TakeOperandSeg(var S: TSqlScan; ASeg: Integer): Integer;
@@ -1288,12 +1703,14 @@ begin
   k := 0;
   while (k <= High(S.Segs)) and (S.Reason = '') do
   begin
-    if S.Segs[k].Kind = skText then
-      ScanText(S, k)
-    else if S.Segs[k].Kind = skKept then
-      TakeKept(S, S.Segs[k])
+    case S.Segs[k].Kind of
+      skText  : ScanText(S, k);
+      skKept  : TakeKept(S, S.Segs[k]);
+      skConst : TakeConst(S, k);
+      skChain : ReadMuted(S, k);
     else
       k := TakeOperandSeg(S, k);
+    end;
     Inc(k);
   end;
   if (S.Reason = '') and (S.Mode = lmString) and (S.StrFirst <> '') then
@@ -1369,6 +1786,15 @@ begin
     Result := Trim(AReq.Target) + ' := ' + ASql + ';';
 end;
 
+// Wovor 'ParamByName' beim Query-Objekt steht: 'Q.' bzw. bei ADO
+// 'Q.Parameters.' (Minor 11).
+function QueryPrefixOf(const AReq: TRdxSqlRequest): string;
+begin
+  Result := TRdxRecipes.QueryObjectOf(Trim(AReq.Target)) + '.';
+  if AReq.Binding = sbAdoParameters then
+    Result := Result + ADO_PARAMETERS;
+end;
+
 // Die Vorlage nach dem Ziel (Kopf der Unit, Punkt 3). '' oder der Grund.
 function ComposeTemplate(const AReq: TRdxSqlRequest; const S: TSqlScan;
   const AExisting: TArray<string>; out AText: string): string;
@@ -1381,7 +1807,7 @@ begin
   Sql := SqlExprOf(S.Pieces);
   if TRdxRecipes.HasQueryObject(Target) then
     AText := AReq.Indent + StatementOf(AReq, Sql) + BindLines(S.Params,
-      AReq.Indent, TRdxRecipes.QueryObjectOf(Target) + '.')
+      AReq.Indent, QueryPrefixOf(AReq))
   else if not AReq.IsCall then
     AText := AReq.Indent + StatementOf(AReq, Sql) + BindLines(S.Params,
       AReq.Indent, BIND_COMMENT)
@@ -1394,35 +1820,57 @@ begin
       + ']);';
 end;
 
+// Die Kette APrefix als erstes Segment vor ASegs.
+function ChainSegs(const APrefix: string; const ASegs: TSqlSegs): TSqlSegs;
+var
+  i : Integer;
+begin
+  SetLength(Result, Length(ASegs) + 1);
+  Result[0] := Default(TSqlSeg);
+  Result[0].Kind := skChain;
+  Result[0].Text := APrefix;
+  for i := 0 to High(ASegs) do
+    Result[i + 1] := ASegs[i];
+end;
+
 function BuildSqlTemplate(const AReq: TRdxSqlRequest;
   out AResult: TRdxSqlTemplate): Boolean;
 var
   S        : TSqlScan;
   Count    : TSqlSegCount;
   Existing : TArray<string>;
+  Name     : string;
 begin
   Result := False;
   AResult := Default(TRdxSqlTemplate);
   S := Default(TSqlScan);
   AResult.Reason := SegsOf(AReq, S.Segs, Count);
   if AResult.Reason <> '' then Exit;
+  // Die frueheren Zeilen der Kette liest der Leser zuerst - stumm.
+  if AReq.Prefix <> '' then
+    S.Segs := ChainSegs(AReq.Prefix, S.Segs);
   Existing := SqlPlaceholders(PlainSqlOf(S.Segs));
   S.Used := Copy(Existing, 0, Length(Existing));
+  for Name in AReq.ChainNames do
+    AppendTo(S.Used, LowerCase(Name));
   ScanSegs(S);
   AResult.Reason := S.Reason;
+  if (AResult.Reason = '') and (S.QMarks > 0) then
+    AResult.Reason := R_QMARK;
   if AResult.Reason = '' then
     AResult.Reason := ComposeTemplate(AReq, S, Existing, AResult.Text);
   if AResult.Reason <> '' then Exit;
-  AResult.Params  := Length(S.Params);
-  AResult.Inlined := Count.Inlined;
+  AResult.Params     := Length(S.Params);
+  AResult.ConstsRead := Count.ConstsRead;
   Result := True;
 end;
 
 function SqlHintOf(const AResult: TRdxSqlTemplate): string;
 begin
   Result := Format('%d Parameter', [AResult.Params]);
-  if AResult.Inlined > 0 then
-    Result := Result + Format(', %d Konstante(n) im Text', [AResult.Inlined]);
+  if AResult.ConstsRead > 0 then
+    Result := Result + Format(', %d Konstante(n) mitgelesen',
+      [AResult.ConstsRead]);
   Result := Result + ', nichts wird geschrieben';
 end;
 
@@ -1585,14 +2033,18 @@ begin
     D.Kind := dkOther;
 end;
 
-// Ist das Wort T (der gesuchte Name) eine Deklaration? D: welche.
+// Ist das Wort T (der gesuchte Name) eine Deklaration? D: welche. Eine
+// Inline-Variable mit abgeleitetem Typ ('var Name := ..', 'for var Name
+// in ..' bzw. ':= ..') ist dkOther - bis Charge SQc sah DeclAt sie nicht,
+// und eine Unit-Konstante gleichen Namens galt als bewiesen (Gegen-Review
+// S1, Blocker).
 function DeclAt(AMap: TRdxCodeMap; const T: TRdxToken;
   out D: TSqlDecl): Boolean;
 var
   P, N : TRdxToken;
 begin
   D := Default(TSqlDecl);
-  D.Line := T.Line;
+  D.Tok := T;
   P := Before(AMap, T);
   if P.Low = '&' then
     P := Before(AMap, P);
@@ -1601,6 +2053,8 @@ begin
   N := After(AMap, T);
   Result := True;
   if InList(P.Low, ROUTINE_WORDS) or (P.Low = 'property') then
+    D.Kind := dkOther
+  else if (P.Low = KW_VAR) and InList(N.Low, INLINE_VAR_AFTER) then
     D.Kind := dkOther
   else if (N.Low = ':') or (N.Low = ',') then
     Result := TypedDeclAt(AMap, P, N, D)
@@ -1663,57 +2117,356 @@ begin
   end;
 end;
 
-// Die Zeilen der Routinen mit Rumpf ab BodyStart (Kopf bis letztes ';');
-// lokale Routinen liegen in ihnen.
-procedure AddRange(var ARanges: TArray<TSqlLineRange>; var ACount: Integer;
-  const R: TRdxRoutine);
+{ ---- Grenzen der Datei (Sichtbarkeit, Kopf der Unit, Punkt 2) ---- }
+
+type
+  // Ein offener Block beim Lauf durch die Datei (BuildScopes): ein Typ mit
+  // Rumpf (IsType; IsRecord: dort hat 'case' kein eigenes end) oder ein
+  // begin/try/case/asm.
+  TSqlFrame = record
+    IsType   : Boolean;
+    IsRecord : Boolean;
+    Open     : TRdxToken;
+    NameLow  : string;
+  end;
+
+const
+  // Diese Glieder hinter 'Q.SQL.' lesen nur - die Kette laeuft weiter.
+  CHAIN_READS: array[0..3] of string = ('text', 'count', 'beginupdate',
+    'endupdate');
+  // Diese Woerter oeffnen hinter '=' bzw. 'packed' einen Typ mit Rumpf.
+  TYPE_KINDS: array[0..3] of string = ('class', 'object', 'interface',
+    'dispinterface');
+  TYPE_LEADS: array[0..1] of string = ('=', 'packed');
+  TYPE_MODIFIERS: array[0..1] of string = ('abstract', 'sealed');
+  // Hinter 'record' in einer Typ-Einschraenkung ('<T: record>').
+  CONSTRAINT_FOLLOWERS: array[0..2] of string = ('>', ',', ';');
+  KW_RECORD = 'record';
+  KW_CASE   = 'case';
+  KW_END    = 'end';
+
+// Liegt T zwischen A und B (beide eingeschlossen)?
+function TokWithin(const T, A, B: TRdxToken): Boolean;
 begin
-  if ACount = Length(ARanges) then
-    SetLength(ARanges, ACount * 2 + 8);
-  ARanges[ACount].First := R.Head.Line;
-  ARanges[ACount].Last  := R.Last.Line;
-  Inc(ACount);
+  Result := not TokBefore(T, A) and not TokBefore(B, T);
 end;
 
-function RoutineRanges(AMap: TRdxCodeMap): TArray<TSqlLineRange>;
+// Hat der Typ ab AKind (class, object, interface ...) einen Rumpf mit end?
+// Nicht 'class;' (vorwaerts), 'class of' (Metaklasse), 'class(TBase);'
+// (Kurzform) - wie uRdxRoutineFixes.TypeHasBody.
+function HasTypeBody(AMap: TRdxCodeMap; const AKind: TRdxToken): Boolean;
 var
-  T, P  : TRdxToken;
-  R     : TRdxRoutine;
-  n     : Integer;
-  Count : Integer;
+  N : TRdxToken;
 begin
-  Result := nil;
-  Count := 0;
-  T := BodyStart(AMap);
-  P := Before(AMap, T);
+  N := After(AMap, AKind);
+  while InList(N.Low, TYPE_MODIFIERS) do
+    N := After(AMap, N);
+  if N.Low = '(' then
+    N := AfterClose(AMap, N);
+  Result := not InList(N.Low, [';', 'of', '']);
+end;
+
+// Oeffnet T (Schluesselwort, APrev davor) einen Typ mit Rumpf? 'record'
+// immer, ausser als Einschraenkung ('<T: record>'); class, object,
+// interface, dispinterface hinter '=' bzw. 'packed' mit Rumpf.
+function OpensTypeBody(AMap: TRdxCodeMap; const T, APrev: TRdxToken): Boolean;
+begin
+  if T.Low = KW_RECORD then
+    Exit(not InList(After(AMap, T).Low, CONSTRAINT_FOLLOWERS));
+  Result := InList(T.Low, TYPE_KINDS) and InList(APrev.Low, TYPE_LEADS)
+    and HasTypeBody(AMap, T);
+end;
+
+// Der Name des Typs, dessen Oeffner AKind ist ('TFoo = class', 'TFoo<T> =
+// packed record'): klein, ohne Typparameter; '' ohne Namen (der record
+// eines Felds).
+function TypeNameBefore(AMap: TRdxCodeMap; const AKind: TRdxToken): string;
+var
+  T     : TRdxToken;
+  Depth : Integer;
+  n     : Integer;
+begin
+  Result := '';
+  T := Before(AMap, AKind);
+  if T.Low = 'packed' then
+    T := Before(AMap, T);
+  if T.Low <> '=' then Exit;
+  T := Before(AMap, T);
+  Depth := 0;
+  for n := 1 to MAX_WALK do
+  begin
+    if T.Low = '>' then
+      Inc(Depth)
+    else if T.Low = '<' then
+      Dec(Depth);
+    if (Depth = 0) and (T.Low <> '<') then
+      Break;
+    T := Before(AMap, T);
+    if T.Low = '' then Exit;
+  end;
+  if (T.Low = '<') or (T.Low = '>') then Exit;
+  if T.IsWord then
+    Result := T.Low;
+end;
+
+procedure PushFrame(var AStack: TArray<TSqlFrame>; AIsType, AIsRecord: Boolean;
+  const AOpen: TRdxToken; const ANameLow: string);
+var
+  n : Integer;
+begin
+  n := Length(AStack);
+  SetLength(AStack, n + 1);
+  AStack[n].IsType   := AIsType;
+  AStack[n].IsRecord := AIsRecord;
+  AStack[n].Open     := AOpen;
+  AStack[n].NameLow  := ANameLow;
+end;
+
+function TopIs(const AStack: TArray<TSqlFrame>; AType: Boolean): Boolean;
+begin
+  Result := (Length(AStack) > 0) and (AStack[High(AStack)].IsType = AType);
+end;
+
+// 'end' schliesst den obersten Block; ein Typ wird zu AScopes.Types.
+procedure PopFrame(var AStack: TArray<TSqlFrame>; const AEnd: TRdxToken;
+  var AScopes: TSqlScopes);
+var
+  F : TSqlFrame;
+  n : Integer;
+begin
+  if Length(AStack) = 0 then Exit;
+  F := AStack[High(AStack)];
+  SetLength(AStack, Length(AStack) - 1);
+  if not F.IsType then Exit;
+  n := Length(AScopes.Types);
+  SetLength(AScopes.Types, n + 1);
+  AScopes.Types[n].Open    := F.Open;
+  AScopes.Types[n].Close   := AEnd;
+  AScopes.Types[n].NameLow := F.NameLow;
+end;
+
+// Ein Schluesselwort beim Lauf (BuildScopes): Typ-Oeffner, end, case
+// (im record ohne eigenes end), begin/try/asm.
+procedure StepFrames(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
+  var AStack: TArray<TSqlFrame>; var AScopes: TSqlScopes);
+begin
+  if OpensTypeBody(AMap, T, APrev) then
+    PushFrame(AStack, True, T.Low = KW_RECORD, T, TypeNameBefore(AMap, T))
+  else if T.Low = KW_END then
+    PopFrame(AStack, T, AScopes)
+  else if T.Low = KW_CASE then
+  begin
+    if not (TopIs(AStack, True) and AStack[High(AStack)].IsRecord) then
+      PushFrame(AStack, False, False, T, '');
+  end
+  else if IsEndOpener(T.Low) then
+    PushFrame(AStack, False, False, T, '');
+end;
+
+// Die Routine mit Rumpf ab dem Kopf T (ReadRoutine) zu AScopes.Routines;
+// ClassLow das Klassen-Glied ihres Namens. False ohne Rumpf.
+function AddRoutineAt(AMap: TRdxCodeMap; const T: TRdxToken;
+  var AScopes: TSqlScopes): Boolean;
+var
+  R : TRdxRoutine;
+  n : Integer;
+begin
+  Result := (TRdxRoutineFixes.ReadRoutine(AMap, T, R) = '') and (R.Body.Low <> '');
+  if not Result then Exit;
+  n := Length(AScopes.Routines);
+  SetLength(AScopes.Routines, n + 1);
+  AScopes.Routines[n].Head := R.Head;
+  AScopes.Routines[n].Body := R.Body;
+  AScopes.Routines[n].Last := R.Last;
+  AScopes.Routines[n].ClassLow := '';
+  if Length(R.Parts) >= 2 then
+    AScopes.Routines[n].ClassLow := R.Parts[High(R.Parts) - 1];
+end;
+
+// Ein Schritt des Laufs (BuildScopes) am Schluesselwort T: eine Routine
+// mit Rumpf merkt ihren Rumpf in AJumps (der Lauf springt dort hinter ihr
+// letztes ';' - ihre Zeilen hat ReadRoutine schon gelesen, und im Rumpf
+// steht keine benannte Routine und kein Typ), dann die Bloecke.
+procedure StepKeyword(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
+  var AStack: TArray<TSqlFrame>; var AScopes: TSqlScopes);
+var
+  n : Integer;
+begin
+  if IsRoutineHeadAfter(T, APrev) and not TopIs(AStack, True)
+     and not TokBefore(T, AScopes.Start) and AddRoutineAt(AMap, T, AScopes) then
+  begin
+    n := Length(AScopes.Jumps);
+    SetLength(AScopes.Jumps, n + 1);
+    AScopes.Jumps[n] := High(AScopes.Routines);
+  end;
+  StepFrames(AMap, T, APrev, AStack, AScopes);
+end;
+
+// Steht der Lauf am Rumpf der zuletzt gemerkten Routine? Dann ihr letztes
+// ';' (der Lauf geht dahinter weiter); sonst T selbst. Gemerkte, deren
+// Rumpf schon hinter dem Lauf liegt, fallen weg.
+function JumpFrom(var AScopes: TSqlScopes; const T: TRdxToken): TRdxToken;
+var
+  R : Integer;
+begin
+  Result := T;
+  while Length(AScopes.Jumps) > 0 do
+  begin
+    R := AScopes.Jumps[High(AScopes.Jumps)];
+    if not TokBefore(AScopes.Routines[R].Body, T) then
+    begin
+      if SameTok(AScopes.Routines[R].Body, T) then
+      begin
+        Result := AScopes.Routines[R].Last;
+        SetLength(AScopes.Jumps, Length(AScopes.Jumps) - 1);
+      end;
+      Exit;
+    end;
+    SetLength(AScopes.Jumps, Length(AScopes.Jumps) - 1);
+  end;
+end;
+
+// EIN Lauf durch die Datei (Minor 6: bis Charge SQc je Operand neu): die
+// Typen mit Rumpf und - ab BodyStart, nicht in einem Typrumpf - alle
+// Routinen mit Rumpf, auch verschachtelte (Minor 5: die lokale Konstante
+// einer inneren Routine galt bis dahin in der aeusseren).
+procedure BuildScopes(AMap: TRdxCodeMap; var AScopes: TSqlScopes);
+var
+  T, P, J : TRdxToken;
+  Stack   : TArray<TSqlFrame>;
+  n       : Integer;
+begin
+  AScopes.Built := True;
+  AScopes.Routines := nil;
+  AScopes.Types := nil;
+  AScopes.Jumps := nil;
+  Stack := nil;
+  AScopes.Start := BodyStart(AMap);
+  P := Default(TRdxToken);
+  T := NextToken(AMap, 1, 1);
   for n := 1 to MAX_WALK do
   begin
     if T.Low = '' then Break;
-    if IsRoutineHeadAfter(T, P)
-       and (TRdxRoutineFixes.ReadRoutine(AMap, T, R) = '')
-       and (R.Body.Low <> '') then
+    J := JumpFrom(AScopes, T);
+    if SameTok(J, T) then
     begin
-      AddRange(Result, Count, R);
-      T := R.Last;
-    end;
-    P := T;
-    T := After(AMap, T);
+      if IsKeywordAfter(T, P) then
+        StepKeyword(AMap, T, P, Stack, AScopes);
+      P := T;
+    end
+    else
+      P := J;
+    T := After(AMap, P);
   end;
-  SetLength(Result, Count);
+  // Bricht der Lauf an MAX_WALK ab, fehlen Grenzen - dann ist keine
+  // Konstante bewiesen (ConstOfName).
+  AScopes.Complete := T.Low = '';
 end;
 
-// Gilt eine Konstante aus ADeclLine an AUseLine? Davor deklariert und - in
-// einer Routine - nicht hinter deren Ende.
-function Visible(ADeclLine, AUseLine: Integer;
-  const ARanges: TArray<TSqlLineRange>): Boolean;
+// Umfasst die Routine I die Zeile ALine?
+function RoutineHasLine(const AScopes: TSqlScopes; I, ALine: Integer): Boolean;
+begin
+  Result := (AScopes.Routines[I].Head.Line <= ALine)
+    and (ALine <= AScopes.Routines[I].Last.Line);
+end;
+
+// Die innerste Routine (spaetester Kopf), die die Zeile ALine umfasst; -1
+// ohne.
+function InnermostAt(const AScopes: TSqlScopes; ALine: Integer): Integer;
 var
   i : Integer;
 begin
-  Result := ADeclLine < AUseLine;
-  if not Result then Exit;
-  for i := 0 to High(ARanges) do
-    if (ADeclLine >= ARanges[i].First) and (ADeclLine <= ARanges[i].Last) then
-      Exit(AUseLine <= ARanges[i].Last);
+  Result := -1;
+  for i := 0 to High(AScopes.Routines) do
+    if RoutineHasLine(AScopes, i, ALine) and ((Result < 0)
+       or TokBefore(AScopes.Routines[Result].Head, AScopes.Routines[i].Head)) then
+      Result := i;
+end;
+
+// Die aeusserste Routine (fruehester Kopf), die die Zeile ALine umfasst;
+// -1 ohne.
+function OutermostAt(const AScopes: TSqlScopes; ALine: Integer): Integer;
+var
+  i : Integer;
+begin
+  Result := -1;
+  for i := 0 to High(AScopes.Routines) do
+    if RoutineHasLine(AScopes, i, ALine) and ((Result < 0)
+       or TokBefore(AScopes.Routines[i].Head, AScopes.Routines[Result].Head)) then
+      Result := i;
+end;
+
+// Die innerste Routine bzw. der innerste Typrumpf um ATok; -1 ohne.
+function InnermostRoutine(const AScopes: TSqlScopes; const ATok: TRdxToken): Integer;
+var
+  i : Integer;
+begin
+  Result := -1;
+  for i := 0 to High(AScopes.Routines) do
+    if TokWithin(ATok, AScopes.Routines[i].Head, AScopes.Routines[i].Last)
+       and ((Result < 0) or TokBefore(AScopes.Routines[Result].Head,
+         AScopes.Routines[i].Head)) then
+      Result := i;
+end;
+
+function InnermostType(const AScopes: TSqlScopes; const ATok: TRdxToken): Integer;
+var
+  i : Integer;
+begin
+  Result := -1;
+  for i := 0 to High(AScopes.Types) do
+    if TokWithin(ATok, AScopes.Types[i].Open, AScopes.Types[i].Close)
+       and ((Result < 0) or TokBefore(AScopes.Types[Result].Open,
+         AScopes.Types[i].Open)) then
+      Result := i;
+end;
+
+// Wo gilt die Konstante, deren Name an ATok deklariert ist? Im Typrumpf
+// (AOwner: der Typ), im Rumpf einer Routine (Inline-Konstante), im
+// Deklarationsteil einer Routine (ARoutine) oder auf Unit-Ebene.
+function ScopeOf(const AScopes: TSqlScopes; const ATok: TRdxToken;
+  out AOwner: string; out ARoutine: Integer): TSqlConstScope;
+var
+  Ty : Integer;
+begin
+  AOwner := '';
+  ARoutine := InnermostRoutine(AScopes, ATok);
+  Ty := InnermostType(AScopes, ATok);
+  if (Ty >= 0) and ((ARoutine < 0)
+     or TokBefore(AScopes.Routines[ARoutine].Head, AScopes.Types[Ty].Open)) then
+  begin
+    AOwner := AScopes.Types[Ty].NameLow;
+    Exit(cvClass);
+  end;
+  if ARoutine < 0 then
+    Exit(cvUnit);
+  if TokBefore(ATok, AScopes.Routines[ARoutine].Body) then
+    Result := cvLocal
+  else
+    Result := cvInline;
+end;
+
+// Gilt die Konstante D an ALine (Kopf der Unit, Punkt 2)?
+function VisibleAt(const AScopes: TSqlScopes; const D: TSqlDecl;
+  ALine: Integer): Boolean;
+var
+  Owner : string;
+  R     : Integer;
+begin
+  Result := False;
+  if D.Tok.Line >= ALine then Exit;
+  case ScopeOf(AScopes, D.Tok, Owner, R) of
+    cvUnit  : Result := True;
+    cvLocal : Result := ALine <= AScopes.Routines[R].Last.Line;
+    cvClass :
+      begin
+        R := OutermostAt(AScopes, ALine);
+        Result := (Owner <> '') and (R >= 0)
+          and (AScopes.Routines[R].ClassLow = Owner);
+      end;
+  else
+    Result := False;   // cvInline: nur in ihrem Block (ConstOfName)
+  end;
 end;
 
 // Ein Wert, wenn alle sichtbaren Konstanten dasselbe einfache Literal
@@ -1736,13 +2489,15 @@ begin
   Result.Kind := sckLiteral;
 end;
 
-function SqlConstOf(AMap: TRdxCodeMap; const AName: string;
-  ALine: Integer): TRdxSqlConst;
+// SqlConstOf mit den Grenzen der Datei aus AScopes (erst gerechnet, wenn
+// alle Deklarationen Konstanten sind).
+function ConstOfName(AMap: TRdxCodeMap; var AScopes: TSqlScopes;
+  const AName: string; ALine: Integer): TRdxSqlConst;
 var
   Decls  : TSqlDecls;
-  Ranges : TArray<TSqlLineRange>;
   Values : TArray<string>;
-  i      : Integer;
+  Owner  : string;
+  i, R   : Integer;
 begin
   Result := Default(TRdxSqlConst);
   if not Assigned(AMap) or not TRdxRecipes.IsPlainIdent(Trim(AName)) then Exit;
@@ -1750,14 +2505,33 @@ begin
   if Length(Decls) = 0 then Exit;
   for i := 0 to High(Decls) do
     if Decls[i].Kind <> dkConst then Exit;
-  Ranges := RoutineRanges(AMap);
+  if not AScopes.Built then
+    BuildScopes(AMap, AScopes);
+  if not AScopes.Complete then Exit;
   Values := nil;
   for i := 0 to High(Decls) do
-    if Visible(Decls[i].Line, ALine, Ranges) then
+  begin
+    // Eine Inline-Konstante gilt nur in ihrem Block - sie verwirft den
+    // Beweis wie eine Variable (Blocker, Minor 5).
+    if ScopeOf(AScopes, Decls[i].Tok, Owner, R) = cvInline then
+      Exit;
+    if VisibleAt(AScopes, Decls[i], ALine) then
       AppendTo(Values, Decls[i].Text);
+  end;
   if Length(Values) > 0 then
     Result := ConstOfValues(Values);
 end;
+
+function SqlConstOf(AMap: TRdxCodeMap; const AName: string;
+  ALine: Integer): TRdxSqlConst;
+var
+  Scopes : TSqlScopes;
+begin
+  Scopes := Default(TSqlScopes);
+  Result := ConstOfName(AMap, Scopes, AName, ALine);
+end;
+
+{ ---- Ziel: FireDAC, ADO ---- }
 
 function ExecSqlReceiverOf(const ATarget: string): string;
 var
@@ -1770,44 +2544,416 @@ begin
     Result := Copy(T, 1, Length(T) - Length(EXEC_SQL));
 end;
 
-function FireDacConnectionProven(AMap: TRdxCodeMap;
-  const AUsesNames: TArray<string>; const AReceiver: string): Boolean;
+// Ist ATypeLow einer der Typen ATypes - bloss oder mit einer der Units
+// AUnits davor ('firedac.comp.client.tfdconnection')?
+function IsTypeOf(const ATypeLow: string; const AUnits,
+  ATypes: array of string): Boolean;
 var
-  Name      : string;
-  Decls     : TSqlDecls;
-  i         : Integer;
-  HasClient : Boolean;
+  Dot : Integer;
+begin
+  Dot := LastDelimiter('.', ATypeLow);
+  if Dot = 0 then
+    Exit(InList(ATypeLow, ATypes));
+  Result := InList(Copy(ATypeLow, Dot + 1, MaxInt), ATypes)
+    and InList(Copy(ATypeLow, 1, Dot - 1), AUnits);
+end;
+
+// Nennen die uses eine der Units AUnits, und ist AReceiver (ein Bezeichner,
+// 'Self.' davor erlaubt) in der Datei mindestens einmal und nur als einer
+// der Typen ATypes deklariert?
+function TypedReceiverProven(AMap: TRdxCodeMap; const AUsesNames: TArray<string>;
+  const AUnits, ATypes: array of string; const AReceiver: string): Boolean;
+var
+  Name    : string;
+  Decls   : TSqlDecls;
+  i       : Integer;
+  HasUnit : Boolean;
 begin
   Result := False;
   Name := Trim(AReceiver);
-  if SameText(Copy(Name, 1, 5), 'self.') then
-    Delete(Name, 1, 5);
+  if SameText(Copy(Name, 1, Length(SELF_PREFIX)), SELF_PREFIX) then
+    Delete(Name, 1, Length(SELF_PREFIX));
   if not Assigned(AMap) or not TRdxRecipes.IsPlainIdent(Name) then Exit;
-  HasClient := False;
+  HasUnit := False;
   for i := 0 to High(AUsesNames) do
-    HasClient := HasClient or SameText(Trim(AUsesNames[i]), FIREDAC_CLIENT);
-  if not HasClient then Exit;
+    HasUnit := HasUnit or InList(LowerCase(Trim(AUsesNames[i])), AUnits);
+  if not HasUnit then Exit;
   Decls := DeclsOf(AMap, Name);
   if Length(Decls) = 0 then Exit;
   for i := 0 to High(Decls) do
-    if (Decls[i].Kind <> dkTyped) or not InList(Decls[i].Text, FIREDAC_CONNECTION) then
+    if (Decls[i].Kind <> dkTyped) or not IsTypeOf(Decls[i].Text, AUnits, ATypes) then
       Exit;
   Result := True;
 end;
 
+function FireDacConnectionProven(AMap: TRdxCodeMap;
+  const AUsesNames: TArray<string>; const AReceiver: string): Boolean;
+begin
+  Result := TypedReceiverProven(AMap, AUsesNames, FIREDAC_UNITS, FIREDAC_TYPES,
+    AReceiver);
+end;
+
+function AdoObjectProven(AMap: TRdxCodeMap;
+  const AUsesNames: TArray<string>; const AReceiver: string): Boolean;
+begin
+  Result := TypedReceiverProven(AMap, AUsesNames, ADO_UNITS, ADO_TYPES,
+    AReceiver);
+end;
+
+{ ---- Die Kette 'Q.SQL.Add' (Kopf der Unit, Punkt 3) ---- }
+
+type
+  // Eine Suche in der Kette: das Objekt (klein, ohne 'Self.') mit '.sql.',
+  // die Zeilen der Anweisung und was gefunden ist.
+  TSqlChain = record
+    Key    : string;
+    First  : Integer;
+    Last   : Integer;
+    Frags  : TArray<string>;   // SQL-Text der frueheren Zeilen, rueckwaerts
+    Names  : TArray<string>;
+  end;
+
+  // Was an einer Stelle 'Q.SQL.<Glied>' steht.
+  TSqlChainStep = (chIgnore, chFragment, chFragmentStop, chStop);
+
+// Hinter das String- bzw. Zeichen-Literal ab ARaw[i] ('..', '#13', '#$0A',
+// auch aneinander: 'a'#13#10'b').
+function LiteralRunEnd(const ARaw: string; i: Integer): Integer;
+begin
+  Result := i;
+  while Result <= Length(ARaw) do
+    if ARaw[Result] = '''' then
+      SkipLiteral(ARaw, Result)
+    else if ARaw[Result] = '#' then
+    begin
+      Inc(Result);
+      if CharAt(ARaw, Result) = '$' then
+        Inc(Result);
+      while CharInSet(CharAt(ARaw, Result), ['0'..'9', 'A'..'F', 'a'..'f']) do
+        Inc(Result);
+    end
+    else
+      Break;
+end;
+
+// Hinter den Term ab ARaw[i]: bis zum '+' auf Klammertiefe 0 (Strings
+// zaehlen nicht) bzw. zum Ende.
+function TermEnd(const ARaw: string; i: Integer): Integer;
+var
+  Depth : Integer;
+begin
+  Result := i;
+  Depth := 0;
+  while Result <= Length(ARaw) do
+    if ARaw[Result] = '''' then
+      SkipLiteral(ARaw, Result)
+    else
+    begin
+      if CharInSet(ARaw[Result], ['(', '[']) then
+        Inc(Depth)
+      else if CharInSet(ARaw[Result], [')', ']']) then
+        Dec(Depth)
+      else if (ARaw[Result] = '+') and (Depth <= 0) then
+        Exit;
+      Inc(Result);
+    end;
+end;
+
+// Hinter einen Kommentar ab ARaw[i] ('{..}', '(*..*)', '//' bis zum
+// Zeilenende); i selbst, wenn dort keiner beginnt.
+function CommentEnd(const ARaw: string; i: Integer): Integer;
+var
+  P : Integer;
+begin
+  Result := i;
+  if ARaw[i] = '{' then
+    P := PosEx('}', ARaw, i) + 1
+  else if Copy(ARaw, i, 2) = '(*' then
+    P := PosEx('*)', ARaw, i) + 2
+  else if Copy(ARaw, i, 2) = '//' then
+    P := PosEx(#10, ARaw, i) + 1
+  else
+    Exit;
+  if P <= i + 1 then
+    P := Length(ARaw) + 1;
+  Result := P;
+end;
+
+// Der SQL-Text einer Pascal-Verkettung ARaw (Argument von Q.SQL.Add, Wert
+// von Q.SQL.Text :=): Literale dekodiert, sLineBreak als Zeilenende,
+// jeder andere Term als KEPT_MARK - ein Ausdruck, der stehen bleibt (der
+// Leser kennt seinen Text nicht; am Anfang setzt er keine Anweisungsart).
+// Der SQL-Text eines Terms ab ARaw[i] in ASB; liefert die Stelle dahinter.
+function AppendTerm(ASB: TStringBuilder; const ARaw: string; i: Integer): Integer;
+var
+  Value : string;
+begin
+  if CharInSet(ARaw[i], ['''', '#']) then
+  begin
+    Result := LiteralRunEnd(ARaw, i);
+    if TRdxRecipes.DecodeLiteral(Copy(ARaw, i, Result - i), Value) then
+      ASB.Append(Value)
+    else
+      ASB.Append(KEPT_MARK);
+    Exit;
+  end;
+  Result := TermEnd(ARaw, i);
+  if InList(LowerCase(Trim(Copy(ARaw, i, Result - i))), LINE_BREAK_NAMES) then
+    ASB.Append(#13#10)
+  else
+    ASB.Append(KEPT_MARK);
+end;
+
+function ChainTextOf(const ARaw: string): string;
+var
+  SB   : TStringBuilder;
+  i, j : Integer;
+begin
+  SB := TStringBuilder.Create;
+  try
+    i := 1;
+    while i <= Length(ARaw) do
+    begin
+      j := CommentEnd(ARaw, i);
+      if j > i then
+        i := j
+      else if (ARaw[i] <= ' ') or (ARaw[i] = '+') then
+        Inc(i)
+      else
+        i := AppendTerm(SB, ARaw, i);
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+// Was ein Glied hinter 'Q.SQL.' an AMember fuer die Kette bedeutet; AText
+// der SQL-Text bei einem Bruchstueck.
+function ChainStepAt(AMap: TRdxCodeMap; const AMember: TRdxToken;
+  out AText: string): TSqlChainStep;
+var
+  N, Close : TRdxToken;
+begin
+  AText := '';
+  N := After(AMap, AMember);
+  if AMember.Low = CHAIN_CLEAR then
+    Exit(chStop);
+  if (AMember.Low = CHAIN_ADD) and (N.Low = '(') then
+  begin
+    Close := MatchClose(AMap, N);
+    if Close.Low = '' then
+      Exit(chStop);
+    AText := ChainTextOf(RawBetween(AMap, N.Line, N.EndCol, Close.Line, Close.Col));
+    Exit(chFragment);
+  end;
+  if (AMember.Low = CHAIN_TEXT) and (N.Low = ':=') then
+  begin
+    AText := ChainTextOf(ValueTextAfter(AMap, N));
+    Exit(chFragmentStop);
+  end;
+  // Gelesen (ShowMessage(Q.SQL.Text), Count, BeginUpdate) aendert nichts;
+  // jedes andere Glied (Insert, Delete, Assign, LoadFromFile ...) kann den
+  // Text aendern - dort endet die Kette.
+  if InList(AMember.Low, CHAIN_READS) then
+    Result := chIgnore
+  else
+    Result := chStop;
+end;
+
+// Die Spalten, an denen AKey ('q.sql.') auf ALine im Code beginnt - als
+// Glied eines Ausdrucks nur hinter 'Self.' ('Self.Q.SQL.').
+function ChainColsOn(AMap: TRdxCodeMap; ALine: Integer;
+  const AKey: string): TArray<Integer>;
+var
+  L    : string;
+  c, n : Integer;
+begin
+  Result := nil;
+  n := 0;
+  L := LowerCase(AMap.Raw(ALine));
+  c := PosEx(AKey, L, 1);
+  while c > 0 do
+  begin
+    if AMap.IsCode(ALine, c) and not IsIdentChar(CharAt(L, c - 1))
+       and ((CharAt(L, c - 1) <> '.')
+         or (Copy(L, c - Length(SELF_PREFIX), Length(SELF_PREFIX)) = SELF_PREFIX)) then
+    begin
+      SetLength(Result, n + 1);
+      Result[n] := c;
+      Inc(n);
+    end;
+    c := PosEx(AKey, L, c + 1);
+  end;
+end;
+
+// Der Schritt an der Stelle ACol von ALine (ChainColsOn).
+function ChainStepOn(AMap: TRdxCodeMap; ALine, ACol: Integer;
+  const AKey: string; out AText: string): TSqlChainStep;
+begin
+  Result := ChainStepAt(AMap, NextToken(AMap, ALine, ACol + Length(AKey)), AText);
+end;
+
+// Rueckwaerts von der Zeile vor der Anweisung bis zum Rumpfbeginn der
+// Routine ARoutine: die Bruchstuecke bis Clear bzw. 'SQL.Text :='.
+procedure ChainBack(AMap: TRdxCodeMap; const ARoutine: TSqlRoutine;
+  var AChain: TSqlChain);
+var
+  L, k : Integer;
+  Cols : TArray<Integer>;
+  Step : TSqlChainStep;
+  Text : string;
+begin
+  L := AChain.First - 1;
+  while (L >= ARoutine.Body.Line) and (L >= AChain.First - MAX_CHAIN_LINES) do
+  begin
+    Cols := ChainColsOn(AMap, L, AChain.Key);
+    for k := High(Cols) downto 0 do
+    begin
+      Step := ChainStepOn(AMap, L, Cols[k], AChain.Key, Text);
+      if Step in [chFragment, chFragmentStop] then
+        AppendTo(AChain.Frags, Text);
+      if Step in [chFragmentStop, chStop] then
+        Exit;
+    end;
+    Dec(L);
+  end;
+end;
+
+// Vorwaerts von der Zeile hinter der Anweisung bis zum Ende der Routine:
+// die Platzhalter der spaeteren Bruchstuecke bis Clear bzw. 'SQL.Text :='.
+procedure ChainAhead(AMap: TRdxCodeMap; const ARoutine: TSqlRoutine;
+  var AChain: TSqlChain);
+var
+  L, k : Integer;
+  Cols : TArray<Integer>;
+  Step  : TSqlChainStep;
+  Text  : string;
+  Name  : string;
+  Found : TArray<string>;
+begin
+  L := AChain.Last + 1;
+  while (L <= ARoutine.Last.Line) and (L <= AChain.Last + MAX_CHAIN_LINES) do
+  begin
+    Cols := ChainColsOn(AMap, L, AChain.Key);
+    for k := 0 to High(Cols) do
+    begin
+      Step := ChainStepOn(AMap, L, Cols[k], AChain.Key, Text);
+      if Step <> chFragment then
+        Exit;
+      Found := SqlPlaceholders(Text);
+      for Name in Found do
+        AppendTo(AChain.Names, Name);
+    end;
+    Inc(L);
+  end;
+end;
+
+// Die Kette um die Anweisung AChain.First..Last in derselben Routine
+// (Kopf der Unit, Punkt 3): APrefix der SQL-Text der frueheren Zeilen (je
+// mit #13#10) bis Clear bzw. 'SQL.Text :=', AChain.Names die Platzhalter
+// der frueheren und spaeteren Zeilen (klein); ausserhalb einer Routine
+// beides leer. Die Grenzen der Datei aus AScopes.
+procedure ChainWith(AMap: TRdxCodeMap; var AScopes: TSqlScopes;
+  var AChain: TSqlChain; out APrefix: string);
+var
+  R, i  : Integer;
+  Name  : string;
+  Found : TArray<string>;
+  SB    : TStringBuilder;
+begin
+  APrefix := '';
+  if not AScopes.Built then
+    BuildScopes(AMap, AScopes);
+  R := InnermostAt(AScopes, AChain.First);
+  if R < 0 then Exit;
+  ChainBack(AMap, AScopes.Routines[R], AChain);
+  ChainAhead(AMap, AScopes.Routines[R], AChain);
+  SB := TStringBuilder.Create;
+  try
+    for i := High(AChain.Frags) downto 0 do
+    begin
+      SB.Append(AChain.Frags[i]);
+      SB.Append(#13#10);
+      Found := SqlPlaceholders(AChain.Frags[i]);
+      for Name in Found do
+        AppendTo(AChain.Names, Name);
+    end;
+    APrefix := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+// Die Suche fuer das Objekt AObject (QueryObjectOf) auf den Zeilen
+// AFirst..ALast.
+function ChainFor(const AObject: string; AFirst, ALast: Integer): TSqlChain;
+var
+  Obj : string;
+begin
+  Result := Default(TSqlChain);
+  Obj := LowerCase(Trim(AObject));
+  if Copy(Obj, 1, Length(SELF_PREFIX)) = SELF_PREFIX then
+    Delete(Obj, 1, Length(SELF_PREFIX));
+  Result.Key := Obj + CHAIN_SQL;
+  Result.First := AFirst;
+  Result.Last := ALast;
+end;
+
+// Ist ATarget ein 'Q.SQL.Add' - das Glied der Kette?
+function IsChainTarget(const ATarget: string): Boolean;
+var
+  Low : string;
+begin
+  Low := LowerCase(Trim(ATarget));
+  Result := (Length(Low) > Length(CHAIN_SQL + CHAIN_ADD))
+    and (Copy(Low, Length(Low) - Length(CHAIN_SQL + CHAIN_ADD) + 1, MaxInt)
+      = CHAIN_SQL + CHAIN_ADD);
+end;
+
+// Die Zeilen der Anweisung: die erste und die letzte aus PartLines.
+procedure StatementLines(const AReq: TRdxSqlRequest; out AFirst, ALast: Integer);
+var
+  L : Integer;
+begin
+  AFirst := MaxInt;
+  ALast := 0;
+  for L in AReq.PartLines do
+    if L > 0 then
+    begin
+      if L < AFirst then AFirst := L;
+      if L > ALast then ALast := L;
+    end;
+end;
+
 procedure AddSqlFacts(AMap: TRdxCodeMap; var AReq: TRdxSqlRequest);
 var
-  i : Integer;
+  i, First, Last : Integer;
+  Scopes         : TSqlScopes;
+  Chain          : TSqlChain;
 begin
+  Scopes := Default(TSqlScopes);
   SetLength(AReq.Consts, Length(AReq.Parts));
   for i := 0 to High(AReq.Parts) do
     if (AReq.Parts[i].Role = ROLE_OPERAND) and not AReq.Parts[i].InWith
        and not AReq.InWith and (i <= High(AReq.PartLines)) then
-      AReq.Consts[i] := SqlConstOf(AMap, AReq.Parts[i].Text, AReq.PartLines[i]);
-  if AReq.IsCall and not AReq.InWith
-     and FireDacConnectionProven(AMap, AReq.UsesNames,
+      AReq.Consts[i] := ConstOfName(AMap, Scopes, AReq.Parts[i].Text,
+        AReq.PartLines[i]);
+  // Im with-Block ist kein Name bewiesen - kein Kanal, keine Kette.
+  if AReq.InWith or not Assigned(AMap) then Exit;
+  if AReq.IsCall and FireDacConnectionProven(AMap, AReq.UsesNames,
        ExecSqlReceiverOf(AReq.Target)) then
-    AReq.Binding := sbFireDacExecSql;
+    AReq.Binding := sbFireDacExecSql
+  else if TRdxRecipes.HasQueryObject(AReq.Target)
+     and AdoObjectProven(AMap, AReq.UsesNames,
+       TRdxRecipes.QueryObjectOf(Trim(AReq.Target))) then
+    AReq.Binding := sbAdoParameters;
+  StatementLines(AReq, First, Last);
+  if not AReq.IsCall or not IsChainTarget(AReq.Target) or (Last = 0) then
+    Exit;
+  Chain := ChainFor(TRdxRecipes.QueryObjectOf(Trim(AReq.Target)), First, Last);
+  ChainWith(AMap, Scopes, Chain, AReq.Prefix);
+  AReq.ChainNames := Chain.Names;
 end;
 
 end.

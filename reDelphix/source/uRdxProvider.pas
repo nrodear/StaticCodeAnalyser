@@ -508,8 +508,8 @@ end;
 procedure TRdxProvider.AddSqlTemplate(var AList: TArray<TFindingAction>;
   const ACtx: TRdxRecipeContext);
 var
-  Template, Hint, Reason : string;
-  Act : TRdxAction;
+  Offer : TRdxSqlOffer;
+  Act   : TRdxAction;
 begin
   if ACtx.FixMode <> 'assisted' then Exit;
   if ACtx.Info = nil then
@@ -517,15 +517,15 @@ begin
     Add(AList, _(CAP_SQL), ACtx.Why, False, nil);
     Exit;
   end;
-  if not TRdxRecipeRunner.SqlTemplate(FSource.Places, ACtx.Info, ACtx.IsCall,
-       Template, Hint, Reason) then
+  if not TRdxRecipeRunner.SqlTemplate(FSource.Places, ACtx.Lines, ACtx.Info,
+       ACtx.IsCall, Offer) then
   begin
-    Add(AList, _(CAP_SQL), Reason, False, nil);
+    Add(AList, _(CAP_SQL), Offer.Reason, False, nil);
     Exit;
   end;
   Act := NewAction(akSqlTemplate, '');
-  Act.FTemplate := Template;
-  Add(AList, _(CAP_SQL), Hint, True, Act);
+  Act.FTemplate := Offer.Template;
+  Add(AList, _(CAP_SQL), Offer.Hint, True, Act);
 end;
 
 procedure TRdxProvider.AddUsesActions(var AList: TArray<TFindingAction>;

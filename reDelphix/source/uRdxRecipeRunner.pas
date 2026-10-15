@@ -30,8 +30,7 @@ uses
   uRdxScopeTable,   // TRdxScopeTable (QualifyUses)
   uRdxBufferMath,   // TRdxEdit
   uRdxCodeMap,      // TRdxCodeMap: Bausteine der Tabelle uRdxFixTable (Charge R8)
-  uRdxFlowFixes,    // TRdxFlowPlan (CondAssignReason)
-  uRdxSqlTemplate;  // Rezept 5.2 (Charge S1): BuildSqlTemplate, AddSqlFacts
+  uRdxFlowFixes;    // TRdxFlowPlan (CondAssignReason)
 
 const
   // So viele Provide-Chargen haelt der Anbieter am Leben: ein Menue fragt
@@ -178,6 +177,15 @@ type
     SelfAppend : Boolean;
   end;
 
+  // Was TRdxRecipeRunner.SqlTemplate liefert: die Vorlage und den Hinweis
+  // fuers Menue, sonst den Grund (Charge SQc: ein Ergebnis statt drei
+  // out-Parameter, SCA013).
+  TRdxSqlOffer = record
+    Template : string;
+    Hint     : string;
+    Reason   : string;
+  end;
+
   TRdxRecipeRunner = class
   public
     // Der Kopf eines nkCall-Knotens: der Teil von TNodeRef.Name vor '('.
@@ -313,13 +321,13 @@ type
     class function QualifyUses(APlaces: TSourcePlaces; AScopes: TRdxScopeTable;
       ALine: Integer; const AIsOwnUnit: TRdxOwnUnitCheck): TRdxQualifyPlan; static;
 
-    // Rezept 5.2: parametrisierte Vorlage (nur Text; uRdxSqlTemplate).
-    // Eingerueckt wie die Anweisung - Tabs bleiben Tabs (Minor 31). Die
-    // Fakten am Puffertext (Konstanten, FireDAC-Verbindung) sammelt
-    // AddSqlFacts auf einer Code-Sicht des Dienstes; im with-Block ist
-    // kein Name bewiesen (Charge S1).
-    class function SqlTemplate(APlaces: TSourcePlaces; AInfo: TRefactorInfo;
-      AIsCall: Boolean; out ATemplate, AHint, AReason: string): Boolean; static;
+    // Rezept 5.2: parametrisierte Vorlage (nur Text; uRdxSqlTemplate),
+    // eingerueckt wie die Anweisung (Tabs bleiben, Minor 31). Die Fakten
+    // (Konstanten, FireDAC-/ADO-Objekt, Kette Q.SQL.Add) sammelt
+    // AddSqlFacts auf ALines, dem Text von APlaces (Gegen-Review S1, Minor
+    // 8: bis dahin eine zweite Kopie); im with-Block ist nichts bewiesen.
+    class function SqlTemplate(APlaces: TSourcePlaces; ALines: TStrings;
+      AInfo: TRefactorInfo; AIsCall: Boolean; out AOffer: TRdxSqlOffer): Boolean; static;
   end;
 
   // Editorhilfen Stufe 2a: die einfachen Hilfen aus uRdxSimpleFixes, mit
@@ -455,6 +463,9 @@ implementation
 
 uses
   System.StrUtils,   // IndexText (UnitStillUsed)
+  // Rezept 5.2 (Charge S1): BuildSqlTemplate, AddSqlFacts - nur hier
+  // gebraucht, nicht in der Schnittstelle (Gegen-Review S1, Minor 7).
+  uRdxSqlTemplate,
   uRdxSimpleFixes,   // Planer der einfachen Hilfen (reine Textlogik)
   uRdxStructFixes,   // Planer SCA007/SCA168 (uses-Eintrag, case-else)
   uRdxLineFixes,     // Planer SCA123 (CastFreeFix)
@@ -1299,24 +1310,14 @@ begin
     PlanNewClause(APlaces, Result);
 end;
 
-// Die Zeilen des Dienstes als Liste - die Code-Sicht fuer AddSqlFacts.
-function PlacesLines(APlaces: TSourcePlaces): TStringList;
-var
-  L : Integer;
-begin
-  Result := TStringList.Create;
-  for L := 1 to APlaces.LineCount do
-    Result.Add(APlaces.LineText(L));
-end;
-
 // Die Anfrage an BuildSqlTemplate: Ziel, Teile mit ihren Zeilen, with-
-// Block, uses-Namen, Einrueckung - und die Fakten am Puffertext.
-function SqlRequestOf(APlaces: TSourcePlaces; AInfo: TRefactorInfo;
-  const AParts: TRdxParts; AIsCall: Boolean): TRdxSqlRequest;
+// Block, uses-Namen, Einrueckung - und die Fakten am Puffertext ALines.
+function SqlRequestOf(APlaces: TSourcePlaces; ALines: TStrings;
+  AInfo: TRefactorInfo; const AParts: TRdxParts;
+  AIsCall: Boolean): TRdxSqlRequest;
 var
-  i     : Integer;
-  Lines : TStringList;
-  Map   : TRdxCodeMap;
+  i   : Integer;
+  Map : TRdxCodeMap;
 begin
   Result := Default(TRdxSqlRequest);
   Result.Target := AParts[0].Text;
@@ -1330,50 +1331,43 @@ begin
     Result.PartLines[i] := AInfo.Parts[i].StartLine;
   Result.InWith    := APlaces.InWithBlock(AInfo.Span.StartLine);
   Result.UsesNames := TRdxRecipeRunner.UsesNamesOf(APlaces);
-  Lines := PlacesLines(APlaces);
+  Map := TRdxCodeMap.Create(ALines);
   try
-    Map := TRdxCodeMap.Create(Lines);
-    try
-      AddSqlFacts(Map, Result);
-    finally
-      Map.Free;
-    end;
+    AddSqlFacts(Map, Result);
   finally
-    Lines.Free;
+    Map.Free;
   end;
 end;
 
 class function TRdxRecipeRunner.SqlTemplate(APlaces: TSourcePlaces;
-  AInfo: TRefactorInfo; AIsCall: Boolean;
-  out ATemplate, AHint, AReason: string): Boolean;
+  ALines: TStrings; AInfo: TRefactorInfo; AIsCall: Boolean;
+  out AOffer: TRdxSqlOffer): Boolean;
 var
   Parts : TRdxParts;
   Built : TRdxSqlTemplate;
 begin
-  Result    := False;
-  ATemplate := '';
-  AHint     := '';
-  AReason   := '';
-  if AInfo = nil then
+  Result := False;
+  AOffer := Default(TRdxSqlOffer);
+  if (AInfo = nil) or (ALines = nil) then
   begin
-    AReason := 'keine Beschreibung';
+    AOffer.Reason := 'keine Beschreibung';
     Exit;
   end;
   Parts := PartsOf(APlaces, AInfo);
   if (Length(Parts) = 0) or (Parts[0].Role <> ROLE_TARGET) then
   begin
-    AReason := 'kein Ziel erkannt';
+    AOffer.Reason := 'kein Ziel erkannt';
     Exit;
   end;
-  Result := BuildSqlTemplate(SqlRequestOf(APlaces, AInfo, Parts, AIsCall),
-    Built);
+  Result := BuildSqlTemplate(SqlRequestOf(APlaces, ALines, AInfo, Parts,
+    AIsCall), Built);
   if Result then
   begin
-    ATemplate := Built.Text;
-    AHint     := SqlHintOf(Built);
+    AOffer.Template := Built.Text;
+    AOffer.Hint     := SqlHintOf(Built);
   end
   else
-    AReason := Built.Reason;
+    AOffer.Reason := Built.Reason;
 end;
 
 { TRdxFixRunner }
