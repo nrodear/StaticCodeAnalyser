@@ -25,6 +25,19 @@ Schaden:
                                        ersten Start bekommt, verschweigt
                                        eine Stellschraube.
 
+ZWEITE DATEI: redelphix.ini (Entscheid E29, 2026-10-15)
+--------------------------------------------------------
+reDelphix hat eine eigene ini neben analyser.ini - dieselbe Fehlerklasse,
+ein eigenes Tripel: der Code liest ueber RdxIniValue/ReadRdxIni
+(reDelphix/source/uRdxText.pas), die Vorlage ist RDX_INI_TEMPLATE in
+derselben Unit, die Doku die Tabellen unter '### `[Sektion]`' im
+Abschnitt "## Sprache und redelphix.ini" von reDelphix/README.md. Getrennt
+von analyser.ini geprueft: [UI] Language steht in beiden Dateien, mit
+verschiedener Vorgabe (en bzw. auto) - zusammengeworfen saehe das Gate
+einen fehlenden Schluessel der einen Datei in der anderen als vorhanden.
+Dass uRdxText im Fall 'auto' auch analyser.ini [UI] Language liest, zaehlt
+hier nicht: der Schluessel gehoert der SCA, die ihn selbst liest.
+
 EXIT-CODE
   0  deckungsgleich
   1  mindestens eine Abweichung
@@ -52,6 +65,18 @@ DOKU = REPO / 'docs' / 'configuration.md'
 
 QUELLEN = ('SCA.Engine', 'SCA.SharedUI',
            'StaticCodeAnalyserForm/sources', 'StaticCodeAnalyserIDE')
+
+# redelphix.ini (s. Kopf): Code, Vorlage, Doku-Abschnitt.
+RDX_QUELLEN = ('reDelphix/source',)
+RDX_VORLAGE = REPO / 'reDelphix' / 'source' / 'uRdxText.pas'
+RDX_DOKU = REPO / 'reDelphix' / 'README.md'
+RDX_ABSCHNITT = '## Sprache und redelphix.ini'
+# RdxIniValue(<Sektion>, <Schluessel>) und der interne ReadRdxIni - beide
+# Argumente Literal oder Konstante wie bei LESER. Die Deklarationen
+# ('(const ASection, ...') passen nicht: 'const ASection' ist kein Token.
+RDX_LESER = re.compile(
+    r"\b(?:RdxIniValue|ReadRdxIni)\s*\(\s*"
+    r"('[\w.<>]+'|[A-Za-z_]\w*)\s*,\s*('[\w.<>]+'|[A-Za-z_]\w*)")
 
 # Ini.ReadString(<Sektion>, <Schluessel>, ...) und die Quick-Varianten.
 # BEIDE Argumente duerfen ein Literal ODER ein Bezeichner sein: das Projekt
@@ -105,10 +130,14 @@ def normiere(paar):
     return paar
 
 
-def code_schluessel():
-    """(Sektion, Schluessel) -> Menge der Fundorte."""
+def code_schluessel(quellen=QUELLEN, leser=LESER, dynamisch=DYNAMISCH):
+    """(Sektion, Schluessel) -> Menge der Fundorte.
+
+    Ohne Argumente analyser.ini; redelphix.ini mit RDX_QUELLEN/RDX_LESER
+    und ohne DYNAMISCH (dort setzt niemand Schluessel zusammen).
+    """
     out = {}
-    for q in QUELLEN:
+    for q in quellen:
         wurzel = REPO / q
         if not wurzel.is_dir():
             continue
@@ -127,30 +156,32 @@ def code_schluessel():
                 return _k.get(x)
 
             rel = str(p.relative_to(REPO)).replace('\\', '/')
-            for m in LESER.finditer(t):
+            for m in leser.finditer(t):
                 sek, key = loese(m.group(1)), loese(m.group(2))
                 if not sek or not key:
                     continue        # Bezeichner ohne auffindbare Konstante
                 out.setdefault((sek, key), set()).add(rel)
             # Zusammengesetzte Schluessel: nur der Praefix steht als
             # Literal im Code, der Rest entsteht zur Laufzeit.
-            for marke, ziel in DYNAMISCH.items():
+            for marke, ziel in dynamisch.items():
                 if marke in t:
                     out.setdefault(ziel, set()).add(rel)
     return out
 
 
-def vorlagen_schluessel():
-    """Was DEFAULT_INI_CONTENT anbietet - aktiv wie auskommentiert.
+def vorlagen_schluessel(datei=SETTINGS, konstante='DEFAULT_INI_CONTENT'):
+    """Was die Vorlage anbietet - aktiv wie auskommentiert.
 
+    Ohne Argumente DEFAULT_INI_CONTENT (analyser.ini), sonst die
+    Konstante in datei (RDX_INI_TEMPLATE fuer redelphix.ini).
     Der Block ist eine Pascal-Stringverkettung mit VERDOPPELTEN
     Apostrophen; deshalb geparst statt gegrept. Ende ist die erste
     Literalzeile ohne abschliessendes Plus - die Suche nach "';" am
     Zeilenende laeuft ueber den Block hinaus, weil weiter unten
     'FBaseBranch := '''';' auf dasselbe Muster passt.
     """
-    t = io.open(SETTINGS, encoding='utf-8').read()
-    i = t.index('  DEFAULT_INI_CONTENT =')
+    t = io.open(datei, encoding='utf-8-sig').read()
+    i = t.index('  %s =' % konstante)
     zeilen = []
     for z in t[i:].split(NL):
         zeilen.append(z)
@@ -185,11 +216,24 @@ def vorlagen_schluessel():
     return aktiv, beispiel
 
 
-def doku_schluessel(pfad):
-    """Aus den Markdown-Tabellen: '## `[Sektion]`' und '| `Key` | ...'."""
+def doku_schluessel(pfad, abschnitt=None):
+    """Aus den Markdown-Tabellen: '## `[Sektion]`' und '| `Key` | ...'.
+
+    Mit abschnitt nur die Zeilen von dieser Ueberschrift bis zur naechsten
+    '## '-Ueberschrift (reDelphix/README.md beschreibt mehr als die ini);
+    fehlt die Ueberschrift, ist das ein Lesefehler, kein leerer Abschnitt.
+    """
     out = set()
     sek = None
-    for z in io.open(pfad, encoding='utf-8-sig'):
+    zeilen = io.open(pfad, encoding='utf-8-sig').read().split(NL)
+    if abschnitt is not None:
+        kopf = [n for n, z in enumerate(zeilen) if z.rstrip() == abschnitt]
+        if not kopf:
+            raise ValueError('Abschnitt "%s" fehlt in %s' % (abschnitt, pfad))
+        rest = zeilen[kopf[0] + 1:]
+        ende = [n for n, z in enumerate(rest) if z.startswith('## ')]
+        zeilen = rest[:ende[0]] if ende else rest
+    for z in zeilen:
         m = re.match(r'^##+\s+`\[(\w+)\]`', z)
         if m:
             sek = m.group(1)
@@ -215,29 +259,30 @@ def zeig(titel, menge, extra=None):
     return len(menge)
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--list', action='store_true',
-                    help='alle Schluessel je Quelle zeigen')
-    args = ap.parse_args()
+def lies_tripel():
+    """Je ini (Name, Code, (aktiv, Beispiel), Doku, Ausnahmen)."""
+    return (
+        ('analyser.ini', code_schluessel(), vorlagen_schluessel(),
+         doku_schluessel(DOKU), NUR_ZUSTAND),
+        ('redelphix.ini', code_schluessel(RDX_QUELLEN, RDX_LESER, {}),
+         vorlagen_schluessel(RDX_VORLAGE, 'RDX_INI_TEMPLATE'),
+         doku_schluessel(RDX_DOKU, RDX_ABSCHNITT), frozenset()),
+    )
 
-    try:
-        code = code_schluessel()
-        aktiv, beispiel = vorlagen_schluessel()
-        doku = doku_schluessel(DOKU)
-    except (OSError, ValueError) as e:
-        print('Lesefehler: %s' % e, file=sys.stderr)
-        return 2
 
+def pruefe(name, code, vorlage_paar, doku, ausnahmen, liste):
+    """Die vier Richtungen EINER ini; Rueckgabe: Zahl der Abweichungen."""
+    aktiv, beispiel = vorlage_paar
     vorlage = {normiere(k) for k in (aktiv | beispiel)}
     beispiel = {normiere(k) for k in beispiel}
-    code_keys = {normiere(k) for k in code} - NUR_ZUSTAND
+    code_keys = {normiere(k) for k in code} - ausnahmen
     doku = {normiere(k) for k in doku}
 
-    if args.list:
-        for name, m in (('CODE', code_keys), ('VORLAGE', vorlage),
-                        ('DOKU', doku)):
-            print('%s (%d):' % (name, len(m)))
+    print('== %s ==' % name)
+    if liste:
+        for titel, m in (('CODE', code_keys), ('VORLAGE', vorlage),
+                         ('DOKU', doku)):
+            print('%s (%d):' % (titel, len(m)))
             for sek, key in sorted(m):
                 print('   [%s] %s' % (sek, key))
             print()
@@ -258,16 +303,38 @@ def main():
     print()
     print('Code %d   Vorlage %d (davon %d nur als Beispiel)   Doku %d'
           % (len(code_keys), len(vorlage), len(beispiel), len(doku)))
-    if NUR_ZUSTAND:
+    if ausnahmen:
         print('Ausgenommen als reiner Sitzungszustand: %s'
-              % ', '.join('[%s] %s' % k for k in sorted(NUR_ZUSTAND)))
+              % ', '.join('[%s] %s' % k for k in sorted(ausnahmen)))
+    print()
+    return fehler
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--list', action='store_true',
+                    help='alle Schluessel je Quelle zeigen')
+    args = ap.parse_args()
+
+    try:
+        tripel = lies_tripel()
+    except (OSError, ValueError) as e:
+        print('Lesefehler: %s' % e, file=sys.stderr)
+        return 2
+
+    fehler = 0
+    for name, code, vorlage_paar, doku, ausnahmen in tripel:
+        fehler += pruefe(name, code, vorlage_paar, doku, ausnahmen,
+                         args.list)
+    if args.list:
+        return 0
     if fehler:
         print('ABWEICHUNGEN: %d.' % fehler)
         print('Der Code ist die Wahrheit. Was er nicht liest, gehoert '
               'nicht in Vorlage oder Doku; was er liest, gehoert in beide.')
         return 1
     print('GATE GRUEN: Code, INI-Vorlage und Doku nennen dieselben '
-          'Schluessel.')
+          'Schluessel (analyser.ini und redelphix.ini).')
     return 0
 
 

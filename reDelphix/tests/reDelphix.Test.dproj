@@ -89,6 +89,7 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
+        <DCCReference Include="..\source\uRdxText.pas"/>
         <DCCReference Include="..\source\uRdxRecipes.pas"/>
         <DCCReference Include="..\source\uRdxScopeTable.pas"/>
         <DCCReference Include="..\source\uRdxBufferMath.pas"/>
@@ -156,6 +157,7 @@
         <DCCReference Include="uTestRdxIntroGuards.pas"/>
         <DCCReference Include="uTestRdxIntroEdits.pas"/>
         <DCCReference Include="uTestRdxIntroContext.pas"/>
+        <DCCReference Include="uTestRdxText.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

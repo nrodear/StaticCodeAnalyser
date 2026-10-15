@@ -21,6 +21,10 @@ unit uLocalization;
 //     TDictionary. Strings ohne Eintrag fallen auf die englische Original-
 //     Version zurueck (kein Crash, kein leerer String).
 //   * SetLanguage('en') / ('') / unbekanntes Kuerzel -> Identity (Englisch).
+//   * TranslateTo('de', S) uebersetzt in eine BESTIMMTE Sprache, ohne die
+//     aktive anzufassen - fuer Module mit eigener Sprachwahl (reDelphix,
+//     Entscheid E29: redelphix.ini [UI] Language). Derselbe Cache wie
+//     SetLanguage.
 //
 // Woher die .po kommt (in dieser Reihenfolge):
 //   1. <Verzeichnis des eigenen Moduls>\i18n\<lang>.po - optionaler
@@ -63,6 +67,30 @@ procedure SetLanguage(const Lang: string);
 
 // Liefert die zuletzt gesetzte Sprache unveraendert zurueck (oder '').
 function CurrentLanguage: string;
+
+// Uebersetzt S in die Sprache ALang, OHNE die aktive Sprache anzufassen:
+// SetLanguage, _() und CurrentLanguage bleiben, wie sie sind.
+// WOZU (Entscheid E29, 2026-10-15): reDelphix haengt in derselben BPL
+// (SCA.Engine) und hat eine eigene Sprachwahl (redelphix.ini [UI]
+// Language) - ein SetLanguage dort stellte die ganze SCA-Oberflaeche um.
+// Vertrag:
+//   * ALang wie bei SetLanguage: NormalizeLangCode ('de-DE' -> 'de');
+//     ''/kein Kuerzel/Kuerzel ohne .po -> Identity (S unveraendert); 'en'
+//     laedt wie SetLanguage('en') die en.po - die ist Identitaet.
+//   * Derselbe Cache wie SetLanguage (MapFor): je Kuerzel wird die .po
+//     EINMAL geladen, auch eine ergebnislose; ein TranslateTo('de', ..)
+//     nach SetLanguage('de') parst nicht erneut und umgekehrt.
+//   * Threadsicher wie SetLanguage: der Cache-Zugriff laeuft unter der
+//     Sperre, eine gelieferte Tabelle wird nie veraendert oder vor der
+//     finalization freigegeben. Wirft nie (Laden/Parsen enden still auf
+//     Englisch, LoadLanguage).
+//   * Kosten: Sperre plus zwei Dictionary-Lookups je Aufruf - fuer
+//     Menuetexte gedacht, nicht fuer den Hot-Path (der bleibt _()).
+function TranslateTo(const ALang, S: string): string; overload;
+
+// Format-Variante: erst in ALang uebersetzen, dann formatieren (wie _()).
+function TranslateTo(const ALang, FormatStr: string;
+  const Args: array of const): string; overload;
 
 // Alle auswaehlbaren UI-Sprachen als normalisierte Kuerzel, sortiert und
 // dublettenfrei (Backlog-Welle 1, 2026-07-26 - Speisung der Sprachauswahl
@@ -525,32 +553,57 @@ begin
   Result := Format(_(FormatStr), Args);
 end;
 
-procedure SetLanguage(const Lang: string);
+// Die Tabelle zu einem (noch nicht normalisierten) Kuerzel aus dem Cache,
+// beim ersten Bedarf geladen; nil = Identity (kein Kuerzel, keine oder
+// kaputte .po). EIN Weg fuer SetLanguage und TranslateTo (Entscheid E29) -
+// zwei Kopien der Cache-Logik liefen auseinander. Nach der finalization
+// (GLangCache = nil, Modul wird entladen) Identity statt AV.
+function MapFor(const ALang: string): TDictionary<string, string>;
 var
   Norm : string;
-  Map  : TDictionary<string, string>;
 begin
-  GCurrentLang := Lang;
-  Norm := NormalizeLangCode(Lang);
-  if Norm = '' then
-  begin
-    GActiveMap := nil;                 // Default/unbrauchbar -> Englisch
-    Exit;
-  end;
+  Result := nil;
+  Norm := NormalizeLangCode(ALang);
+  if (Norm = '') or (GLangCache = nil) then
+    Exit;                              // Default/unbrauchbar -> Englisch
 
   // Lazy + idempotent: erst beim ersten Bedarf parsen, danach nur Cache.
   TMonitor.Enter(GLangCache);
   try
-    if not GLangCache.TryGetValue(Norm, Map) then
+    if not GLangCache.TryGetValue(Norm, Result) then
     begin
-      Map := LoadLanguage(Norm);
-      GLangCache.Add(Norm, Map);       // auch nil cachen (kein Re-Parse)
+      Result := LoadLanguage(Norm);
+      GLangCache.Add(Norm, Result);    // auch nil cachen (kein Re-Parse)
     end;
   finally
     TMonitor.Exit(GLangCache);
   end;
+end;
 
-  GActiveMap := Map;
+procedure SetLanguage(const Lang: string);
+begin
+  GCurrentLang := Lang;
+  GActiveMap := MapFor(Lang);
+end;
+
+function TranslateTo(const ALang, S: string): string;
+var
+  Map   : TDictionary<string, string>;
+  Value : string;
+begin
+  // Die Tabelle wird ausserhalb der Sperre gelesen - wie in _(): eine
+  // veroeffentlichte Tabelle aendert sich nie mehr (s. var-Block).
+  Map := MapFor(ALang);
+  if (Map <> nil) and Map.TryGetValue(S, Value) then
+    Result := Value
+  else
+    Result := S;
+end;
+
+function TranslateTo(const ALang, FormatStr: string;
+  const Args: array of const): string;
+begin
+  Result := Format(TranslateTo(ALang, FormatStr), Args);
 end;
 
 function CurrentLanguage: string;

@@ -257,8 +257,9 @@ begin
   O := PlanFixIn(FofSource, 't.pas', fkMemoryLeak, Seen[0]);
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.IsTrue(O.ChangesBehavior, 'aendert Verhalten');
-  Assert.AreEqual('Free L in a try/finally block (changes behavior)',
-    TRdxFixTable.CaptionFor(fkMemoryLeak, O));
+  // Menuetext deutsch: der Testlauf steht auf 'de' (Charge C0, E29).
+  Assert.AreEqual('L in einem try/finally-Block freigeben ('#$00E4'ndert '
+    + 'Verhalten)', TRdxFixTable.CaptionFor(fkMemoryLeak, O));
   Assert.IsTrue(Pos('auch bei einer Ausnahme', O.Hint) > 0, O.Hint);
 end;
 

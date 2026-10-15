@@ -20,6 +20,12 @@ given in.
 > SonarQube settings are **not** in this file - see
 > [sonar-config.md](sonar-config.md).
 
+> reDelphix, the code actions of the IDE plugin, keeps its own settings in
+> `redelphix.ini` next to this file and creates it with a commented
+> template on first use. With its default `[UI] Language=auto` the
+> reDelphix texts follow `Language` below - see
+> [reDelphix/README.md](../reDelphix/README.md#sprache-und-redelphixini).
+
 
 ## `[Scan]`
 
@@ -155,7 +161,7 @@ rate.
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `Language` | String | `en` | UI language: `de`, `en`, `fr`. Empty = system locale. |
+| `Language` | String | `en` | UI language: `de`, `en`, `fr`. Empty or unknown = English. reDelphix follows this key unless its own `redelphix.ini` says otherwise (see above). |
 | `Theme` | String | `system` | Standalone theme: `system` (follow Windows), `light`, `dark`. |
 | `Element.<Name>` | Bool | `True` | **Kill switch per UI element of the IDE plugin.** `0` disables exactly that element without uninstalling - for when one of them disturbs the IDE. Takes effect after an IDE restart; skipped elements are reported via debug output (prefix `SCA-UI`). Valid names: `SharedUiHooks`, `DockForm`, `LineHighlighter`, `EditorBulb` (light bulb with the finding actions at the caret line; it receives its editor events from `LineHighlighter`, so `LineHighlighter=0` silences it too), `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `OptionsPageSCA`, `OptionsPageSonar`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` is deliberately not switchable - it carries the teardown of all the others. The standalone EXE ignores these keys. |
 | `ClipboardOnClick` | Integer | `1` | What a row click copies: `1` nothing, `2` Jira mini issue, `3` Markdown prompt. |

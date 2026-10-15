@@ -55,6 +55,7 @@ requires
   SCA.Engine;
 
 contains
+  uRdxText in 'source\uRdxText.pas',
   uRdxRecipes in 'source\uRdxRecipes.pas',
   uRdxScopeTable in 'source\uRdxScopeTable.pas',
   uRdxBufferMath in 'source\uRdxBufferMath.pas',

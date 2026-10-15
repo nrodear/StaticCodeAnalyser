@@ -21,6 +21,13 @@ l'emportent sur le fichier, pour l'exécution où elles sont indiquées.
 > Les réglages SonarQube ne sont **pas** dans ce fichier — voir
 > [sonar-config.md](sonar-config.md).
 
+> reDelphix, les actions de code du plugin IDE, garde ses propres réglages
+> dans `redelphix.ini`, à côté de ce fichier, et le crée avec un modèle
+> commenté à la première utilisation. Avec la valeur par défaut
+> `[UI] Language=auto`, les textes de reDelphix suivent la clé `Language`
+> ci-dessous — voir
+> [reDelphix/README.md](../reDelphix/README.md#sprache-und-redelphixini).
+
 
 ## `[Scan]`
 
@@ -161,7 +168,7 @@ l'argument repose sur la raison structurelle plutôt que sur le taux.
 
 | Clé | Type | Défaut | Signification |
 |---|---|---|---|
-| `Language` | String | `en` | Langue de l'interface : `de`, `en`, `fr`. Vide = paramètres régionaux du système. |
+| `Language` | String | `en` | Langue de l'interface : `de`, `en`, `fr`. Vide ou inconnue = anglais. reDelphix suit cette clé tant que son propre `redelphix.ini` n'en décide pas autrement (voir plus haut). |
 | `Theme` | String | `system` | Thème de l'exécutable autonome : `system` (suivre Windows), `light`, `dark`. |
 | `Element.<Nom>` | Bool | `True` | **Coupe-circuit par élément d'interface du plugin IDE.** `0` désactive exactement cet élément sans désinstaller — pour le cas où l'un d'eux perturbe l'IDE. Prend effet après un redémarrage de l'IDE ; les éléments ignorés sont signalés en sortie de débogage (préfixe `SCA-UI`). Noms valides : `SharedUiHooks`, `DockForm`, `LineHighlighter`, `EditorBulb` (ampoule avec les actions du résultat sur la ligne du curseur ; elle reçoit ses événements d'éditeur de `LineHighlighter`, donc `LineHighlighter=0` la désactive aussi), `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `OptionsPageSCA`, `OptionsPageSonar`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` n'est délibérément pas désactivable — il porte le démontage de tous les autres. L'exécutable autonome ignore ces clés. |
 | `ClipboardOnClick` | Integer | `1` | Ce qu'un clic sur une ligne copie : `1` rien, `2` mini-ticket Jira, `3` invite Markdown. |

@@ -95,7 +95,7 @@ adapt "$SCA/SCA.Engine/sources/Infrastructure/uSourcePlaces.pas" "$HERE/uSourceP
 # Modul reDelphix: nur die ToolsAPI-freien Units (Rezepte, Scope-Tabelle).
 # Fehlt eine, scheitern nur die Tests, die sie brauchen - deshalb Warnung.
 # FPC sucht Units nur hier (cwd) - eine neue Unit muss in diese Liste.
-for u in uRdxRecipes uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxSuppress uRdxSimpleFixes uRdxStructFixes uRdxLineFixes uRdxRaiseFixes uRdxDeclFixes uRdxFlowFixes uRdxRoutineFixes uRdxCleanupFixes uRdxTryFixes uRdxResultFixes uRdxSqlTemplate uRdxIntroPlan uRdxIntroEdits uRdxRtlTypes uRdxCompilerTraces uRdxMagicFixes; do
+for u in uRdxText uRdxRecipes uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxSuppress uRdxSimpleFixes uRdxStructFixes uRdxLineFixes uRdxRaiseFixes uRdxDeclFixes uRdxFlowFixes uRdxRoutineFixes uRdxCleanupFixes uRdxTryFixes uRdxResultFixes uRdxSqlTemplate uRdxIntroPlan uRdxIntroEdits uRdxRtlTypes uRdxCompilerTraces uRdxMagicFixes; do
   if [ -f "$RDX/source/$u.pas" ]; then
     adapt "$RDX/source/$u.pas" "$HERE/$u.pas"
   else
@@ -106,12 +106,22 @@ done
 # Kopie mit - FPC sucht Include-Dateien neben der Unit, also hier.
 need "$RDX/source/uRdxRtlTypes.inc"
 tr -d '\r' < "$RDX/source/uRdxRtlTypes.inc" > "$HERE/uRdxRtlTypes.inc"
+# Sprache (Entscheid E29, Charge C0): uRdxText uebersetzt ueber den
+# eingecheckten Stub uLocalization.pas (die echte Unit uebersetzt unter FPC
+# 3.2.2 nicht). Der Stub liest die ECHTEN i18n/*.po neben dem Runner
+# (out/i18n/ - wie <Modul>\i18n\<lang>.po der echten Unit), frisch je Lauf:
+# eine deutsche Erwartung prueft so zugleich die msgid in i18n/de.po.
+need "$HERE/uLocalization.pas"
+need "$SCA/i18n/de.po"
+rm -rf "$OUT/i18n"
+mkdir -p "$OUT/i18n"
+cp "$SCA"/i18n/*.po "$OUT/i18n/"
 
 # --- 3) Runner erzeugen ------------------------------------------------------
 # Laeuft in der aktuellen Shell (Gruppe, keine Subshell): ein exit hier
 # beendet das Skript, Meldungen gehen deshalb nach stderr.
 {
-  printf 'program runner;\n\nuses\n  SysUtils, DUnitX.TestFramework'
+  printf 'program runner;\n\nuses\n  SysUtils, DUnitX.TestFramework, uRdxText'
   for t in "$@"; do printf ',\n  %s' "$t"; done
   printf ';\n\ntype\n  TTestProc = procedure of object;\n\nvar\n  Passed, Failed : Integer;\n\n'
   printf 'procedure Run(const AName: string; AProc: TTestProc);\nbegin\n  try\n    AProc();\n    Inc(Passed);\n'
@@ -154,6 +164,10 @@ tr -d '\r' < "$RDX/source/uRdxRtlTypes.inc" > "$HERE/uRdxRtlTypes.inc"
     printf '  finally\n    T.Free;\n  end;\nend;\n\n'
   done
   printf 'begin\n  Passed := 0;\n  Failed := 0;\n'
+  # Die reDelphix-Texte deutsch wie in reDelphix.Test.dpr: die Erwartungen
+  # der Tests sind deutsch, und redelphix.ini bzw. %APPDATA% bleiben aus
+  # dem Lauf heraus (uRdxText liest mit Override keine ini).
+  printf "  SetRdxLanguageOverride('de');\n"
   i=0
   for t in "$@"; do i=$((i+1)); printf '  RunSuite%d;\n' "$i"; done
   printf "  Writeln('PASSED ', Passed, '  FAILED ', Failed);\n  if Failed > 0 then Halt(1);\nend.\n"

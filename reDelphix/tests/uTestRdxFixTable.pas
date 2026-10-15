@@ -97,32 +97,42 @@ begin
 end;
 
 procedure TTestRdxFixTable.CaptionFor_NameVariantChanges;
+// Seit Charge C0 (Entscheid E29) uebersetzt CaptionFor in die reDelphix-
+// Sprache, und der Testlauf steht auf Deutsch (reDelphix.Test.dpr): die
+// Erwartungen sind die msgstr aus i18n/de.po - so prueft der Test auch,
+// dass die msgids dort stehen. Die englische msgid selbst liefert
+// RawCaption.
 var
   O : TRdxFixOutcome;
+  i : Integer;
 begin
   O := Default(TRdxFixOutcome);
   O.Name := 'Obj';
-  Assert.AreEqual('Use FreeAndNil(Obj)',
+  Assert.AreEqual('FreeAndNil(Obj) verwenden',
     TRdxFixTable.CaptionFor(fkFreeAndNilHint, O));
   O.Name := '';
-  Assert.AreEqual('Use FreeAndNil(X)',
+  Assert.AreEqual('FreeAndNil(X) verwenden',
     TRdxFixTable.CaptionFor(fkFreeWithoutNil, O), 'ohne Namen steht X');
-  Assert.AreEqual('Use Assigned() instead of comparing with nil',
+  Assert.AreEqual('Assigned() statt Vergleich mit nil verwenden',
     TRdxFixTable.CaptionFor(fkNilComparison, O));
   O.Variant := 1;
-  Assert.AreEqual('Add an else branch that raises an exception',
+  Assert.AreEqual('else-Zweig mit Exception erg'#$00E4'nzen',
     TRdxFixTable.CaptionFor(fkDefaultCaseInCaseStatement, O));
-  Assert.AreEqual('Raise ENotImplemented in the empty body',
+  Assert.AreEqual('ENotImplemented im leeren Rumpf ausl'#$00F6'sen',
     TRdxFixTable.CaptionFor(fkEmptyMethod, O));
   Assert.AreEqual('', TRdxFixTable.CaptionFor(fkSuperfluousSemicolon, O),
     'ohne zweiten Eintrag kein Menuetext');
   O.Variant := 0;
   O.ChangesBehavior := True;
   O.Name := 'System.Classes';
-  Assert.AreEqual('Remove unit System.Classes from uses (changes behavior)',
-    TRdxFixTable.CaptionFor(fkUnusedUses, O));
+  Assert.AreEqual('Unit System.Classes aus uses entfernen ('#$00E4'ndert '
+    + 'Verhalten)', TRdxFixTable.CaptionFor(fkUnusedUses, O));
   Assert.AreEqual('', TRdxFixTable.CaptionFor(fkConcatToFormat, O),
     'ohne Zeile kein Menuetext (und kein KindName)');
+  for i := 0 to TRdxFixTable.RowCount - 1 do
+    if TRdxFixTable.Row(i).Kind = fkFreeAndNilHint then
+      Assert.AreEqual('Use FreeAndNil(%s)', TRdxFixTable.RawCaption(i, 0),
+        'die msgid bleibt englisch');
 end;
 
 procedure TTestRdxFixTable.FixFor_NoFindingOrRow;
@@ -186,8 +196,8 @@ begin
     O := TRdxFixTable.FixFor(nil, nil, F, nil);
     Assert.AreEqual('override', O.Name);
     Assert.IsTrue(O.ChangesBehavior);
-    Assert.AreEqual('Add "override;" to the declaration (changes behavior)',
-      TRdxFixTable.CaptionFor(fkMissingOverride, O));
+    Assert.AreEqual('"override;" an die Deklaration anf'#$00FC'gen ('#$00E4
+      + 'ndert Verhalten)', TRdxFixTable.CaptionFor(fkMissingOverride, O));
   finally
     F.Free;
   end;
