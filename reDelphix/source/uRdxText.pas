@@ -75,12 +75,17 @@ unit uRdxText;
 // deutschen, liefen die Uebersetzungen auseinander. Jede msgid ist ein
 // GANZER englischer Satz, variable Teile sind Format-Platzhalter - so
 // stellt de/fr die Wortstellung selbst. Ein Argument AReason ist ein schon
-// uebersetzter ganzer Satz; ACode, AKeyword, APrevToken und AName sind
-// Quelltext und bleiben, wie sie sind. Die deutsche Fassung ist der
-// bisherige Wortlaut der Planer, mit echten Umlauten (uTestRdxTextMsgs
-// pinnt ihn in de, en und fr). Wann welche Funktion gilt und wie ein
-// zusammengesetzter Grund entsteht: reDelphix/README.md, Abschnitt
-// "Texte umstellen".
+// uebersetzter ganzer Satz, AWhose eine schon uebersetzte Ergaenzung des
+// Aufrufers ('of a destructor'); ACode, AKeyword, APrevToken und AName
+// sind Quelltext und bleiben, wie sie sind. Einzige Ausnahme vom ganzen
+// Satz ist MsgHeadersFmt: ein MUSTER fuer TRdxLineSearch.ManyFmt, das erst
+// uRdxCodeMap.OneTokenReason mit Zahl und Ergaenzung fuellt (Nachpruefung
+// C1, V-C1-12: die Kopf-Suche steht in uRdxResultFixes UND
+// uRdxRoutineFixes - dieselbe msgid aus zwei Gruppen stuende sonst doppelt
+// in de.po/fr.po). Die deutsche Fassung ist der bisherige Wortlaut der
+// Planer, mit echten Umlauten (uTestRdxTextMsgs pinnt ihn in de, en und
+// fr). Wann welche Funktion gilt und wie ein zusammengesetzter Grund
+// entsteht: reDelphix/README.md, Abschnitt "Texte umstellen".
 
 interface
 
@@ -215,6 +220,22 @@ function MsgDeclsInClassesOfName(ACount: Integer; const AName: string): string;
 // vom Kopfvertrag "mehr als eine Unit" (Auftrag C1).
 function MsgNoLongerAtReportedPlace(const ACode: string): string;
 
+// 'no header <AWhose>' - die Kopf-Suche fand auf der gemeldeten Zeile
+// keinen Routinenkopf (TRdxLineSearch.What in uRdxResultFixes.RoutineOnLine
+// und uRdxRoutineFixes.HeadOn; deutsch bisher 'kein Kopf ' + Ergaenzung).
+// AWhose ist die schon uebersetzte Ergaenzung des Aufrufers ('of a
+// destructor', 'of the routine Foo' - de 'eines Destruktors', 'der Routine
+// Foo'), kein Quelltext; OneTokenReason haengt 'auf der gemeldeten Zeile'
+// an.
+function MsgNoHeader(const AWhose: string): string;
+
+// '%d headers %s' - das MUSTER fuer TRdxLineSearch.ManyFmt derselben Suche
+// (deutsch bisher '%d Koepfe ' + Ergaenzung): %d die Zahl der Koepfe, %s
+// das Feld ManyArg mit derselben Ergaenzung wie bei MsgNoHeader. Es geht
+// unformatiert an OneTokenReason - die Ergaenzung nie ins Muster haengen
+// (ein '%' darin warf EConvertError).
+function MsgHeadersFmt: string;
+
 implementation
 
 uses
@@ -264,6 +285,8 @@ const
   MSG_DECLS_IN_CLASS = '%d declarations of %s in classes of this name - '
     + 'overload?';
   MSG_NOT_AT_PLACE   = '%s is no longer at the reported place';
+  MSG_NO_HEADER      = 'no header %s';
+  MSG_HEADERS_FMT    = '%d headers %s';
 
   // Die Vorlage - Aufbau und Ton wie DEFAULT_INI_CONTENT in uRepoSettings
   // (englisch, je Option ein Erklaerblock, die Vorgabe aktiv, Beispiele
@@ -804,6 +827,18 @@ end;
 function MsgNoLongerAtReportedPlace(const ACode: string): string;
 begin
   Result := _(MSG_NOT_AT_PLACE, [ACode]);
+end;
+
+function MsgNoHeader(const AWhose: string): string;
+begin
+  Result := _(MSG_NO_HEADER, [AWhose]);
+end;
+
+function MsgHeadersFmt: string;
+begin
+  // _() ohne Argumente formatiert nicht: %d und %s bleiben fuer
+  // OneTokenReason stehen.
+  Result := _(MSG_HEADERS_FMT);
 end;
 
 initialization

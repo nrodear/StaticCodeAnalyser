@@ -2505,3 +2505,9 @@ msgstr "%d déclarations de %s dans des classes de ce nom - overload ?"
 
 msgid "%s is no longer at the reported place"
 msgstr "%s n'est plus à l'endroit signalé"
+
+msgid "no header %s"
+msgstr "aucun en-tête %s"
+
+msgid "%d headers %s"
+msgstr "%d en-têtes %s"

@@ -1,13 +1,16 @@
 unit uTestRdxTextMsgs;
 
 // Die gemeinsamen Texte aus uRdxText (Charge C1, Entscheid E29): je
-// Funktion ein Test in en, de und fr. en ist die msgid samt Argumenten
-// woertlich. de ist der bisherige Wortlaut der Planer (Stand 9713942b) mit
-// echten Umlauten - verglichen wird die gefaltete Fassung (Umlaute als
-// ae/oe/ue/ss) mit dem alten Text, dazu die Zahl der echten Umlaute; so
-// bleibt die Quelle ASCII, ohne '#$00FC'-Escapes, und ein vergessener
-// Umlaut ('pruefen' in de.po) faellt ebenso auf wie ein falscher (ein
-// Umlaut in 'Queue'). fr wird mit gefalteten Akzenten verglichen.
+// Funktion ein Test in en, de und fr - nur die beiden Texte der Kopf-Suche
+// (MsgNoHeader, MsgHeadersFmt; Nachpruefung C1) teilen einen, die Fixture
+// hat damit die Grenze von 20 Tests erreicht. en ist die msgid samt
+// Argumenten woertlich. de ist der bisherige Wortlaut der Planer (Stand
+// 9713942b) mit echten Umlauten - verglichen wird die gefaltete Fassung
+// (Umlaute als ae/oe/ue/ss) mit dem alten Text, dazu die Zahl der echten
+// Umlaute; so bleibt die Quelle ASCII, ohne '#$00FC'-Escapes, und ein
+// vergessener Umlaut ('pruefen' in de.po) faellt ebenso auf wie ein
+// falscher (ein Umlaut in 'Queue'). fr wird mit gefalteten Akzenten
+// verglichen.
 // Laeuft in reDelphix.Test (echte uLocalization, eingebettete .po) UND im
 // FPC-Pruefstand (Stub uLocalization liest die echten i18n/*.po, build.sh
 // kopiert alle Sprachen) - jeder Test stellt die Sprache des Laufs ('de')
@@ -41,6 +44,7 @@ type
     [Test] procedure NoOperandInChain_ThreeLanguages;
     [Test] procedure DeclsInClassesOfName_ThreeLanguages;
     [Test] procedure NoLongerAtReportedPlace_ThreeLanguages;
+    [Test] procedure HeaderSearch_ThreeLanguages;
   end;
 
 implementation
@@ -176,6 +180,11 @@ end;
 function ProbeNotAtPlace: string;
 begin
   Result := MsgNoLongerAtReportedPlace('Assert(');
+end;
+
+function ProbeNoHeader: string;
+begin
+  Result := MsgNoHeader(PROBE_REASON);
 end;
 
 // ---- Tests: ADe ist woertlich der Text der genannten Planer ----
@@ -328,6 +337,17 @@ begin
   Check3(ProbeNotAtPlace, 'Assert( is no longer at the reported place',
     'Assert( steht nicht mehr an der gemeldeten Stelle', 0,
     'Assert( n''est plus a l''endroit signale');
+end;
+
+procedure TTestRdxTextMsgs.HeaderSearch_ThreeLanguages;
+// Die Kopf-Suche (TRdxLineSearch) in uRdxResultFixes.RoutineOnLine und
+// uRdxRoutineFixes.HeadOn: What 'kein Kopf ' + Ergaenzung, ManyFmt
+// '%d Koepfe ' + Ergaenzung. Die Ergaenzung geht woertlich durch; das
+// Muster kommt unformatiert - %d und %s stehen in allen drei Sprachen.
+begin
+  Check3(ProbeNoHeader, 'no header R%d', 'kein Kopf R%d', 0,
+    'aucun en-tete R%d');
+  Check3(MsgHeadersFmt, '%d headers %s', '%d Koepfe %s', 1, '%d en-tetes %s');
 end;
 
 initialization

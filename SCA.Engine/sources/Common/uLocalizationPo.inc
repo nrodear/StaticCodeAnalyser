@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2511 Zeilen, 83754 Bytes
-  CPoLines_de: array[0..2510] of string = (
+  // i18n\de.po - 2517 Zeilen, 83843 Bytes
+  CPoLines_de: array[0..2516] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2525,7 +2525,13 @@ const
     'msgstr "%d Deklarationen von %s in Klassen dieses Namens - Overload?"',
     '',
     'msgid "%s is no longer at the reported place"',
-    'msgstr "%s steht nicht mehr an der gemeldeten Stelle"'
+    'msgstr "%s steht nicht mehr an der gemeldeten Stelle"',
+    '',
+    'msgid "no header %s"',
+    'msgstr "kein Kopf %s"',
+    '',
+    'msgid "%d headers %s"',
+    'msgstr "%d K'#$00F6'pfe %s"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -2800,8 +2806,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2507 Zeilen, 87712 Bytes
-  CPoLines_fr: array[0..2506] of string = (
+  // i18n\fr.po - 2513 Zeilen, 87809 Bytes
+  CPoLines_fr: array[0..2512] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -5308,7 +5314,13 @@ const
     'msgstr "%d d'#$00E9'clarations de %s dans des classes de ce nom - overload ?"',
     '',
     'msgid "%s is no longer at the reported place"',
-    'msgstr "%s n''est plus '#$00E0' l''endroit signal'#$00E9'"'
+    'msgstr "%s n''est plus '#$00E0' l''endroit signal'#$00E9'"',
+    '',
+    'msgid "no header %s"',
+    'msgstr "aucun en-t'#$00EA'te %s"',
+    '',
+    'msgid "%d headers %s"',
+    'msgstr "%d en-t'#$00EA'tes %s"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

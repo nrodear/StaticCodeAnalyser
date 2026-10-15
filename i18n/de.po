@@ -2509,3 +2509,9 @@ msgstr "%d Deklarationen von %s in Klassen dieses Namens - Overload?"
 
 msgid "%s is no longer at the reported place"
 msgstr "%s steht nicht mehr an der gemeldeten Stelle"
+
+msgid "no header %s"
+msgstr "kein Kopf %s"
+
+msgid "%d headers %s"
+msgstr "%d Köpfe %s"

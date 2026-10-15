@@ -384,7 +384,9 @@ Muster fuer jeden Text, der aus dem Quelltext in die `.po` wandert:
   `ManyFmt` ist ein Muster (`_('%d self-assignments of %s')`): `%d` die
   Zahl der Treffer, `%s` das Feld `ManyArg` bzw. das Argument `AArg` von
   `OneTokenReason` - Text aus der Meldung steht nie im Muster (ein `%`
-  darin warf EConvertError).
+  darin warf EConvertError). Die Kopf-Suche, die `uRdxResultFixes` und
+  `uRdxRoutineFixes` beide stellen, nimmt `What` und `ManyFmt` aus
+  `uRdxText` (`MsgNoHeader`, `MsgHeadersFmt`).
 * Eine Text-Konstante im interface, die eine andere Unit benutzt
   (`R_NO_FILE` in `uRdxFixTable`), faellt erst mit ihrer letzten
   Verwendung - Delphi-Units uebersetzt der FPC-Pruefstand nicht, ein Rest
@@ -404,7 +406,7 @@ Muster fuer jeden Text, der aus dem Quelltext in die `.po` wandert:
 
 Die gemeinsamen Texte (`uRdxText`; de wie bisher, in `de.po` mit echten
 Umlauten; fr in `fr.po`; je Funktion ein Test in en/de/fr in
-`uTestRdxTextMsgs`):
+`uTestRdxTextMsgs`, die beiden Texte der Kopf-Suche teilen einen):
 
 | Funktion | msgid | de | Verwendung |
 |---|---|---|---|
@@ -427,6 +429,8 @@ Umlauten; fr in `fr.po`; je Funktion ein Test in en/de/fr in
 | `MsgNoOperandInChain` | no operand in the chain | kein Operand in der Kette | Recipes, SqlTemplate |
 | `MsgDeclsInClassesOfName(N, S)` | %d declarations of %s in classes of this name - overload? | %d Deklarationen von %s in Klassen dieses Namens - Overload? | Result-, RoutineFixes |
 | `MsgNoLongerAtReportedPlace(C)` | %s is no longer at the reported place | %s steht nicht mehr an der gemeldeten Stelle | SimpleFixes (Code als `%s`) |
+| `MsgNoHeader(W)` | no header %s | kein Kopf %s | Result-, RoutineFixes: `TRdxLineSearch.What` der Kopf-Suche, W die schon uebersetzte Ergaenzung (`_('of a destructor')`) |
+| `MsgHeadersFmt` | %d headers %s | %d Koepfe %s | dieselbe Suche: das Muster fuer `ManyFmt`, `%s` = `ManyArg` (dieselbe Ergaenzung) |
 
 Gate: `python tools\rdx_i18n_gate.py` meldet deutsche Text-Literale in
 `source\`, die weder erstes Argument von `_()` noch Wert einer
@@ -740,8 +744,10 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   je Funktion en (die msgid samt Argumenten woertlich), de (gefaltet gleich
   dem bisherigen Wortlaut der Planer, dazu die Zahl der echten Umlaute) und
   fr (Akzente gefaltet) - die Quelle bleibt ASCII; ein Grund mit `%d` geht
-  woertlich durch - 19 Tests, in reDelphix.Test und im FPC-Pruefstand (der
-  Stub liest auch `i18n\fr.po`).
+  woertlich durch, das Muster `MsgHeadersFmt` kommt unformatiert - 20
+  Tests (die beiden Texte der Kopf-Suche teilen einen; damit ist die
+  Fixture voll), in reDelphix.Test und im FPC-Pruefstand (der Stub liest
+  auch `i18n\fr.po`).
 * `uTestRdxSimpleFixes` / `uTestRdxNilFix` / `uTestRdxExprFixes` /
   `uTestRdxStructFixes` / `uTestRdxBlockFixes` / `uTestRdxLineFixes` /
   `uTestRdxRaiseFixes` / `uTestRdxDeclFixes` / `uTestRdxFlowFixes` /
@@ -977,12 +983,13 @@ Ohne Delphi (FPC 3.2.2):
 bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxTextMsgs uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes
 ```
 
-Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+B1-FA+FB+FC+B1-FD+B1-FE+FF+C1): `PASSED 650  FAILED 0` - 41 Testunits,
+Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+B1-FA+FB+FC+B1-FD+B1-FE+FF+C1): `PASSED 651  FAILED 0` - 41 Testunits,
 davon 28 der Charge B1-FA (`uTestRdxSuppressTargets` 20, Review R1-01/R1-03
 und Nachbesserung; `uTestRdxBufferMath` 1, R1-04; `uTestRdxProjectUnits` 7,
 R1-02),
 13 der Charge C0 (`uTestRdxText`, Sprache der Texte),
-19 der Charge C1 (`uTestRdxTextMsgs`, gemeinsame Texte),
+20 der Charge C1 (`uTestRdxTextMsgs`, gemeinsame Texte; 1 aus der
+Nachpruefung),
 23 der Charge FB (`uTestRdxFormatGuards` 10, `uTestRdxSqlBinds` 10, `uTestRdxFreeTypes` 3),
 6 der Charge FC
 (`uTestRdxExprFixes` 2, `uTestRdxNilFix` 2, `uTestRdxStructFixes` 1, `uTestRdxRaiseFixes` 1),
