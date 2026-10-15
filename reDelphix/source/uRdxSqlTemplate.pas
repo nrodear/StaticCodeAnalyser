@@ -61,9 +61,15 @@ unit uRdxSqlTemplate;
 //    ganze Liste sein ('1,2,3', ''' + X + ''' mit X = '1'',''2') -
 //    abgelehnt, ausser IntToStr(x) und QuotedStr(x): sie ergeben genau
 //    EINEN Wert (Minor 1 und 10).
-//    Ein Wert ausserhalb eines Strings: IntToStr(x) und QuotedStr(x)
-//    binden x selbst (QuotedStr setzte die Quotes, die der Parameter
-//    nicht braucht; IntToStr macht aus einer Zahl einen Text).
+//    Ein Wert ausserhalb eines Strings: IntToStr(x), QuotedStr(x) und
+//    AnsiQuotedStr(x, '''') binden x selbst (QuotedStr setzte die Quotes,
+//    die der Parameter nicht braucht; IntToStr macht aus einer Zahl einen
+//    Text). Ein schon maskierter Wert (Review FB, R2-06): verdoppelt ein
+//    Operand IN einem SQL-String die Apostrophe (StringReplace(x, '''',
+//    '''''', [rfReplaceAll]), ReplaceStr/ReplaceText, x.Replace(..)), ist
+//    sein Wert x; jeder andere Aufruf mit 'quote' oder 'escape' im Namen
+//    (EscapeString, QuotedStr im String, AnsiQuotedStr(x, '"')) sperrt -
+//    der Parameter truege die Maskierung in die Daten.
 //    Ein Zeilenkommentar ('-- ..') endet am Zeilenende - auch an
 //    sLineBreak/LineEnding zwischen zwei Literalen (Minor 10).
 // 2. Konstanten. Ein Operand, der am Quelltext als untypisierte Konstante
@@ -78,10 +84,14 @@ unit uRdxSqlTemplate;
 //    bleibt sie als stehender Ausdruck. sLineBreak/LineEnding bleiben als
 //    Verkettung und gelten als Leerraum, das Ziel selbst ('S := S + ..')
 //    bleibt stehen. Bleibt kein Operand: keine Vorlage, "nur Konstanten".
-//    Sichtbar (Minor 5) ist eine Konstante der Unit ab ihrer Deklaration,
-//    eine lokale bis zum Ende IHRER Routine (auch einer verschachtelten),
-//    eine Klassen- bzw. Record-Konstante nur in den Methoden dieser Klasse
-//    (Kopf 'TKlasse.Methode'). Den Beweis verwerfen jede andere
+//    Sichtbar (Minor 5) ist eine Konstante der Unit ab ihrer Deklaration -
+//    aber nicht in einer Methode einer Klasse, die Member von ausserhalb
+//    der Datei erbt (class(TForm), Helper): dort bindet ein geerbtes Member
+//    gleichen Namens ('Name' aus TComponent) vor der Unit-Konstante (Review
+//    FB, R2-05) -, eine lokale bis zum Ende IHRER Routine (auch einer
+//    verschachtelten), eine Klassen- bzw. Record-Konstante nur in den
+//    Methoden dieser Klasse (Kopf 'TKlasse.Methode'). Den Beweis verwerfen
+//    jede andere
 //    Deklaration des Namens, auch eine Inline-Variable ('var X := ..',
 //    'for var X in ..', Blocker), 'on X: E do' und eine Inline-Konstante
 //    im Rumpf (sie gilt nur in ihrem Block). Die Routinen- und Typgrenzen
@@ -208,9 +218,11 @@ procedure AddSqlFacts(AMap: TRdxCodeMap; var AReq: TRdxSqlRequest);
 // Inline-Konstante im Rumpf, ein Typ oder eine Routine gleichen Namens
 // irgendwo in der Datei - auch im inaktiven $IFDEF-Zweig - verwirft den
 // Beweis); gelten muss eine, die vor ALine steht und dort sichtbar ist
-// (Kopf der Unit, Punkt 2: Unit-Ebene ab der Deklaration, lokal bis zum
-// Ende ihrer Routine, Klassenkonstante in den Methoden ihrer Klasse).
-// Mehrere sichtbare mit verschiedenem Wert: sckKept.
+// (Kopf der Unit, Punkt 2: Unit-Ebene ab der Deklaration - nicht in einer
+// Methode einer Klasse mit Vorfahr von ausserhalb, dort kann ein geerbtes
+// Member den Namen tragen -, lokal bis zum Ende ihrer Routine,
+// Klassenkonstante in den Methoden ihrer Klasse). Mehrere sichtbare mit
+// verschiedenem Wert: sckKept.
 function SqlConstOf(AMap: TRdxCodeMap; const AName: string;
   ALine: Integer): TRdxSqlConst;
 // True, wenn die uses-Klauseln FireDAC.Comp.Client nennen und AReceiver
@@ -281,6 +293,26 @@ const
   R_ARGUMENT    = 'Aufruf mit mehreren Argumenten - keine Vorlage';
   R_NO_OPERAND  = 'kein Operand in der Kette';
   R_LITERAL     = 'Literal nicht lesbar: ';
+  // Review FB, R2-06: ein schon maskierter Wert ('O''Brien' bzw. mit
+  // Quotes) truege die Maskierung in die Daten des Parameters.
+  R_ESCAPED     = R_OPERAND + 'ist schon fuer SQL-Text maskiert (%s) - ein '
+    + 'Parameter braucht den Rohwert; Maskierung entfernen, von Hand';
+
+  // Maskierungs-Formen (R2-06): ersetzen ALLE Vorkommen (StrUtils) - mit
+  // '''' -> '''''' verdoppeln sie die Apostrophe.
+  REPLACE_ALL_FUNCS: array[0..3] of string = ('replacestr', 'ansireplacestr',
+    'replacetext', 'ansireplacetext');
+  // Argumente der Maskierungs-Formen (DoubledQuotesInner).
+  ARGS_STRING_REPLACE = 4;   // StringReplace(x, '''', '''''', [rfReplaceAll])
+  ARGS_REPLACE_STR    = 3;   // ReplaceStr(x, '''', '''''')
+  ARGS_HELPER_REPLACE = 2;   // x.Replace('''', '''''')
+  // Davor darf QuotedStr/AnsiQuotedStr stehen (wie CallArg).
+  SYSUTILS_QUALIFIERS: array[0..2] of string = ('', 'sysutils',
+    'system.sysutils');
+  // So vielen Vorfahren folgt InheritsForeign (R2-05) - wie
+  // STRICT_MAX_ANCESTORS des strengen Resolvers im Core.
+  MAX_ANCESTORS = 32;
+  KW_HELPER = 'helper';
 
   // Erste Woerter einer Anweisung (Kopf der Unit, Punkt 1).
   DDL_HEADS: array[0..7] of string = ('create', 'alter', 'drop', 'truncate',
@@ -654,14 +686,185 @@ begin
   Result := Result and (AInner <> '');
 end;
 
-// Der Wert eines Operanden ausserhalb eines Strings: IntToStr(x) und
-// QuotedStr(x) binden x (Kopf der Unit, Punkt 1).
+// Hinter das String-Literal ab AText[i] (ein Quote; '' sind zwei Literale).
+// Seit Charge FB hier oben - CallParts und EscapeCallIn brauchen es.
+procedure SkipLiteral(const AText: string; var i: Integer);
+begin
+  Inc(i);
+  while (i <= Length(AText)) and (AText[i] <> '''') do
+    Inc(i);
+  Inc(i);
+end;
+
+{ ---- Maskierte Werte (Review FB, R2-06) ----
+  Ein Operand, der seinen Wert schon fuer SQL-Text maskiert, darf nicht
+  woertlich Parameter werden: 'StringReplace(X, '''', '''''', ..)' in einem
+  SQL-String bzw. 'AnsiQuotedStr(X, '''')' als Wert truegen O''Brien bzw.
+  'O''Brien' in die Daten. Die gleichwertigen Formen binden X selbst; jeder
+  andere Aufruf mit 'quote' oder 'escape' im Namen sperrt. }
+
+// Die Argumente der Klammergruppe ab AText[AOpen] ('('), getrennt an
+// Kommata auf oberster Ebene ausserhalb von Strings; False, wenn die
+// Gruppe nicht genau am Ende von AText schliesst ('Foo(a).Bar(b)').
+function TopLevelArgs(const AText: string; AOpen: Integer;
+  out AArgs: TArray<string>): Boolean;
+var
+  i, Depth, Start : Integer;
+begin
+  AArgs := nil;
+  Depth := 0;
+  Start := AOpen + 1;
+  i := AOpen;
+  while i <= Length(AText) do
+  begin
+    if AText[i] = '''' then
+    begin
+      SkipLiteral(AText, i);
+      Continue;
+    end;
+    if CharInSet(AText[i], ['(', '[']) then
+      Inc(Depth)
+    else if CharInSet(AText[i], [')', ']']) then
+      Dec(Depth)
+    else if (AText[i] = ',') and (Depth = 1) then
+    begin
+      AppendTo(AArgs, Trim(Copy(AText, Start, i - Start)));
+      Start := i + 1;
+    end;
+    if Depth = 0 then
+      Break;
+    Inc(i);
+  end;
+  Result := i = Length(AText);
+  if Result then
+    AppendTo(AArgs, Trim(Copy(AText, Start, i - Start)));
+end;
+
+// AText = '[Unit.]Kopf(a, b, ..)': der Kopf klein ohne die Glieder davor,
+// AQual der Text vor dem Kopf ohne '.' ('' ohne), die Argumente
+// (TopLevelArgs). False, wenn AText nicht mit der schliessenden Klammer
+// des Aufrufs endet.
+function CallParts(const AText: string; out AQual, AHead: string;
+  out AArgs: TArray<string>): Boolean;
+var
+  T       : string;
+  Open, P : Integer;
+begin
+  Result := False;
+  AQual := '';
+  AHead := '';
+  AArgs := nil;
+  T := Trim(AText);
+  Open := Pos('(', T);
+  if (Open < 2) or (CharAt(T, Length(T)) <> ')') then Exit;
+  AHead := Trim(Copy(T, 1, Open - 1));
+  P := LastDelimiter('.', AHead);
+  if P > 0 then
+  begin
+    AQual := Copy(AHead, 1, P - 1);
+    AHead := Copy(AHead, P + 1, MaxInt);
+  end;
+  AHead := LowerCase(AHead);
+  Result := TopLevelArgs(T, Open, AArgs);
+end;
+
+// Ist ASource das Literal AValue (dekodiert, ''''/#39 gleich)?
+function IsLiteralOf(const ASource, AValue: string): Boolean;
+var
+  V : string;
+begin
+  Result := TRdxRecipes.DecodeLiteral(ASource, V) and (V = AValue);
+end;
+
+// QuotedStr(x) bzw. AnsiQuotedStr(x, '''') - x in Apostrophen (Kopf der
+// Unit, Punkt 1), bloss oder mit SysUtils davor: True mit AInner = x.
+// AnsiQuotedStr mit einem anderen Zeichen ('"') ist ein Name oder ein
+// Dialekt - keine Form.
+function QuoteCallInner(const AText: string; out AInner: string): Boolean;
+var
+  Qual, Head : string;
+  Args       : TArray<string>;
+begin
+  AInner := '';
+  Result := CallParts(AText, Qual, Head, Args)
+    and InList(LowerCase(Qual), SYSUTILS_QUALIFIERS)
+    and (((Head = 'quotedstr') and (Length(Args) = 1))
+      or ((Head = 'ansiquotedstr') and (Length(Args) = 2)
+        and IsLiteralOf(Args[1], '''')))
+    and (Args[0] <> '');
+  if Result then
+    AInner := Args[0];
+end;
+
+// Verdoppelt AText die Apostrophe von x - StringReplace(x, '''', '''''',
+// [rfReplaceAll ..]), ReplaceStr/ReplaceText(x, '''', ''''''), x.Replace(
+// '''', '''''')? True mit AInner = x. In einem SQL-String ist der Wert dann
+// x (R2-06).
+function DoubledQuotesInner(const AText: string; out AInner: string): Boolean;
+var
+  Qual, Head : string;
+  Args       : TArray<string>;
+  First      : Integer;   // Index des Arguments '''' (dahinter '''''')
+begin
+  AInner := '';
+  Result := False;
+  if not CallParts(AText, Qual, Head, Args) then Exit;
+  if (Head = 'stringreplace') and (Length(Args) = ARGS_STRING_REPLACE)
+     and (Pos('rfreplaceall', LowerCase(Args[High(Args)])) > 0) then
+    First := 1
+  else if InList(Head, REPLACE_ALL_FUNCS)
+     and (Length(Args) = ARGS_REPLACE_STR) then
+    First := 1
+  else if (Head = 'replace') and (Qual <> '')
+     and (Length(Args) = ARGS_HELPER_REPLACE) then
+    First := 0   // x.Replace(..): der Empfaenger ist x
+  else
+    Exit;
+  if not IsLiteralOf(Args[First], '''')
+     or not IsLiteralOf(Args[First + 1], '''''') then
+    Exit;
+  if First = 0 then
+    AInner := Qual
+  else
+    AInner := Args[0];
+  Result := AInner <> '';
+end;
+
+// Der erste Aufruf in AText (ausserhalb von Strings), dessen Name 'quote'
+// oder 'escape' traegt, wie geschrieben; '' ohne.
+function EscapeCallIn(const AText: string): string;
+var
+  i, Start : Integer;
+  W        : string;
+begin
+  Result := '';
+  i := 1;
+  while i <= Length(AText) do
+    if AText[i] = '''' then
+      SkipLiteral(AText, i)
+    else if IsIdentStart(AText[i]) then
+    begin
+      Start := i;
+      while (i <= Length(AText)) and IsIdentChar(AText[i]) do
+        Inc(i);
+      W := Copy(AText, Start, i - Start);
+      if (CharAt(AText, SkipBlanks(AText, i)) = '(')
+         and ((Pos('quote', LowerCase(W)) > 0)
+           or (Pos('escape', LowerCase(W)) > 0)) then
+        Exit(W);
+    end
+    else
+      Inc(i);
+end;
+
+// Der Wert eines Operanden ausserhalb eines Strings: IntToStr(x),
+// QuotedStr(x) und AnsiQuotedStr(x, '''') binden x (Kopf der Unit, Punkt 1).
 function UnwrapValue(const AText: string): string;
 var
   Inner : string;
 begin
   Result := AText;
-  if CallArg(AText, 'IntToStr', Inner) or CallArg(AText, 'QuotedStr', Inner) then
+  if CallArg(AText, 'IntToStr', Inner) or QuoteCallInner(AText, Inner) then
     Result := Inner;
 end;
 
@@ -708,15 +911,6 @@ begin
       Exit;
     Inc(i);
   until False;
-end;
-
-// Hinter das String-Literal ab AText[i] (ein Quote; '' sind zwei Literale).
-procedure SkipLiteral(const AText: string; var i: Integer);
-begin
-  Inc(i);
-  while (i <= Length(AText)) and (AText[i] <> '''') do
-    Inc(i);
-  Inc(i);
 end;
 
 function StartsPath(const AText: string; i: Integer): Boolean;
@@ -1125,14 +1319,37 @@ begin
   Result := IsIdentChar(C) or CharInSet(C, ['.', '@', ':', '$', '#']);
 end;
 
-// IntToStr(x) bzw. QuotedStr(x): genau EIN Wert (eine Zahl bzw. ein
-// SQL-String) - keine Liste, keine Spalte (Minor 1 und 10).
+// IntToStr(x) bzw. QuotedStr(x)/AnsiQuotedStr(x, ''''): genau EIN Wert
+// (eine Zahl bzw. ein SQL-String) - keine Liste, keine Spalte (Minor 1 und
+// 10).
 function IsOneValue(const AOperand: string): Boolean;
 var
   Inner : string;
 begin
   Result := CallArg(AOperand, 'IntToStr', Inner)
-    or CallArg(AOperand, 'QuotedStr', Inner);
+    or QuoteCallInner(AOperand, Inner);
+end;
+
+// Ein Lauf im Code, dessen Wert schon maskiert ist (R2-06): ein einzelnes
+// QuotedStr(x)/AnsiQuotedStr(x, '''') bindet x (UnwrapValue); sonst sperrt
+// jedes Glied mit einem maskierenden Aufruf oder verdoppelten Apostrophen.
+// '' oder der Grund.
+function EscapedRunReason(const S: TSqlScan; AFirst, ALast: Integer): string;
+var
+  k           : Integer;
+  Head, Inner : string;
+begin
+  Result := '';
+  if (AFirst = ALast) and QuoteCallInner(S.Segs[AFirst].Text, Inner) then
+    Exit;
+  for k := AFirst to ALast do
+  begin
+    Head := EscapeCallIn(S.Segs[k].Text);
+    if (Head = '') and DoubledQuotesInner(S.Segs[k].Text, Inner) then
+      Head := 'verdoppelte Apostrophe';
+    if Head <> '' then
+      Exit(Format(R_ESCAPED, [Shown(S.Segs[k].Text), Head]));
+  end;
 end;
 
 // Die Urteile ueber die Position eines Werts: Anfang, Wert-Kontext,
@@ -1290,10 +1507,13 @@ begin
   EmitText(S, '''');
 end;
 
+// Der Text seit dem letzten Stueck als Literal in den Wert des Strings -
+// ueber 255 Elemente geteilt wie in SqlExprOf (R2-02).
 procedure FlushStrBuf(var S: TSqlScan);
 begin
   if S.StrBuf <> '' then
-    AppendTo(S.StrParts, TRdxRecipes.EncodeLiteral(S.StrBuf));
+    AppendTo(S.StrParts, SplitLongLiteral(
+      TRdxRecipes.EncodeLiteral(S.StrBuf)));
   S.StrBuf := '';
 end;
 
@@ -1613,7 +1833,8 @@ begin
   if (S.Clause = CLAUSE_ON) and not Single then
     Exit(Format(R_JOIN_ON, [Shown(Op)]));
   if (S.Tok[0] = '(') and (NextNonBlank(S, ALast + 1) = ')') and not Single then
-    Result := Format(R_WHOLE_LIST, [Shown(Op), UpperCase(TopOpener(S))]);
+    Exit(Format(R_WHOLE_LIST, [Shown(Op), UpperCase(TopOpener(S))]));
+  Result := EscapedRunReason(S, AFirst, ALast);
 end;
 
 // Ein Operand im Code: mit seinem Lauf EIN Wert. Liefert das letzte
@@ -1627,13 +1848,30 @@ begin
 end;
 
 // Ein Operand oder stehender Ausdruck in einem offenen SQL-String: ein
-// Stueck seines Werts.
+// Stueck seines Werts. Verdoppelt der Operand die Apostrophe ('''' ->
+// '''''', die Maskierung fuer SQL-Text), ist sein Wert im Parameter das
+// Argument selbst - auch der Name kommt dann daher ('X.Replace(..)' ->
+// :X); ein anderer maskierender Aufruf (QuotedStr, EscapeString ...)
+// sperrt (Review FB, R2-06).
 procedure TakeInString(var S: TSqlScan; const ASeg: TSqlSeg);
+var
+  Value, Head : string;
 begin
   FlushStrBuf(S);
-  AppendTo(S.StrParts, ASeg.Text);
-  if (ASeg.Kind = skOperand) and (S.StrFirst = '') then
-    S.StrFirst := ASeg.Text;
+  Value := ASeg.Text;
+  if ASeg.Kind = skOperand then
+  begin
+    if not DoubledQuotesInner(ASeg.Text, Value) then
+    begin
+      Value := ASeg.Text;
+      Head := EscapeCallIn(ASeg.Text);
+      if Head <> '' then
+        S.Reason := Format(R_ESCAPED, [Shown(ASeg.Text), Head]);
+    end;
+    if S.StrFirst = '' then
+      S.StrFirst := Value;
+  end;
+  AppendTo(S.StrParts, Value);
   EmitExpr(S, ASeg.Text, #0);
 end;
 
@@ -1730,7 +1968,9 @@ end;
 { ---- die Vorlage ---- }
 
 // Der SQL-Ausdruck aus den Stuecken: Text als Literal, Ausdruecke wie
-// geschrieben, mit ' + ' verbunden.
+// geschrieben, mit ' + ' verbunden. Ein Text-Stueck traegt die Literale
+// mehrerer Kettenglieder - ueber 255 Elemente teilt es SplitLongLiteral
+// (E2056 bis Delphi 11; Review FB R2-02).
 function SqlExprOf(const APieces: TArray<TSqlPiece>): string;
 var
   i     : Integer;
@@ -1741,7 +1981,8 @@ begin
     if APieces[i].IsExpr then
       AppendTo(Items, APieces[i].Text)
     else if APieces[i].Text <> '' then
-      AppendTo(Items, TRdxRecipes.EncodeLiteral(APieces[i].Text));
+      AppendTo(Items, SplitLongLiteral(
+        TRdxRecipes.EncodeLiteral(APieces[i].Text)));
   if Length(Items) = 0 then
     Result := ''''''
   else
@@ -2469,6 +2710,77 @@ begin
   end;
 end;
 
+// Der Typrumpf mit dem Namen ANameLow - genau einer, sonst -1 (keiner, oder
+// mehrere: {$IFDEF}-Zweige, gleichnamige geschachtelte Typen).
+function TypeBodyNamed(const AScopes: TSqlScopes; const ANameLow: string): Integer;
+var
+  i : Integer;
+begin
+  Result := -1;
+  for i := 0 to High(AScopes.Types) do
+    if AScopes.Types[i].NameLow = ANameLow then
+    begin
+      if Result >= 0 then
+        Exit(-1);
+      Result := i;
+    end;
+end;
+
+// Erbt die Klasse AClassLow Member von ausserhalb der Datei? Dann kann in
+// ihren Methoden ein geerbtes Member ('Name' aus TComponent, 'Caption' aus
+// TControl) einen gleichnamigen Namen der Unit verdecken: Delphi bindet ihn
+// an Self, bevor es die Unit-Ebene fragt (Review FB, R2-05 - derselbe
+// Grundsatz wie StrictMemberType im strengen Resolver des Cores). True fuer
+// einen Vorfahr ohne eindeutigen Rumpf in der Datei (class(TForm), auch
+// qualifiziert oder generisch), einen Helper ('class helper for ..', 'record
+// helper for ..') und eine Kette ueber MAX_ANCESTORS; False fuer einen
+// Record, eine Klasse ohne Vorfahr (TObject) und eine Kette, die ganz in der
+// Datei liegt.
+function InheritsForeign(AMap: TRdxCodeMap; const AScopes: TSqlScopes;
+  const AClassLow: string): Boolean;
+var
+  Key      : string;
+  Ty, Step : Integer;
+  T, Nx    : TRdxToken;
+  Names    : TArray<string>;
+begin
+  Key := AClassLow;
+  for Step := 1 to MAX_ANCESTORS do
+  begin
+    Ty := TypeBodyNamed(AScopes, Key);
+    if Ty < 0 then
+      Exit(True);
+    T := AScopes.Types[Ty].Open;
+    Nx := After(AMap, T);
+    while InList(Nx.Low, TYPE_MODIFIERS) do
+      Nx := After(AMap, Nx);
+    if Nx.Low = KW_HELPER then
+      Exit(True);
+    if T.Low = KW_RECORD then
+      Exit(False);
+    Names := TRdxRoutineFixes.HeritageOf(AMap, T);
+    if Length(Names) = 0 then
+      Exit(False);
+    Key := LowerCase(Names[0]);
+    if Key = 'tobject' then
+      Exit(False);
+  end;
+  Result := True;
+end;
+
+// Kann an ALine ein geerbtes Member fremder Herkunft einen Namen der Unit
+// verdecken (InheritsForeign)? Massgeblich ist die aeusserste Routine um
+// ALine - eine lokale Routine einer Methode sieht deren Member auch.
+function UnitNamesShadowedAt(AMap: TRdxCodeMap; const AScopes: TSqlScopes;
+  ALine: Integer): Boolean;
+var
+  R : Integer;
+begin
+  R := OutermostAt(AScopes, ALine);
+  Result := (R >= 0) and (AScopes.Routines[R].ClassLow <> '')
+    and InheritsForeign(AMap, AScopes, AScopes.Routines[R].ClassLow);
+end;
+
 // Ein Wert, wenn alle sichtbaren Konstanten dasselbe einfache Literal
 // tragen; sonst sckKept.
 function ConstOfValues(const AValues: TArray<string>): TRdxSqlConst;
@@ -2489,6 +2801,34 @@ begin
   Result.Kind := sckLiteral;
 end;
 
+// Die Werte der Deklarationen ADecls, die an ALine sichtbar sind
+// (VisibleAt) - ohne Unit-Konstanten, wenn dort ein geerbtes Member
+// fremder Herkunft den Namen tragen kann (UnitNamesShadowedAt, R2-05).
+// False, wenn eine Inline-Konstante den Beweis verwirft: sie gilt nur in
+// ihrem Block, wie eine Variable (Blocker, Minor 5).
+function VisibleValues(AMap: TRdxCodeMap; const AScopes: TSqlScopes;
+  const ADecls: TSqlDecls; ALine: Integer; out AValues: TArray<string>): Boolean;
+var
+  Owner    : string;
+  i, R     : Integer;
+  Scope    : TSqlConstScope;
+  Shadowed : Boolean;
+begin
+  Result := False;
+  AValues := nil;
+  Shadowed := UnitNamesShadowedAt(AMap, AScopes, ALine);
+  for i := 0 to High(ADecls) do
+  begin
+    Scope := ScopeOf(AScopes, ADecls[i].Tok, Owner, R);
+    if Scope = cvInline then
+      Exit;
+    if ((Scope <> cvUnit) or not Shadowed)
+       and VisibleAt(AScopes, ADecls[i], ALine) then
+      AppendTo(AValues, ADecls[i].Text);
+  end;
+  Result := True;
+end;
+
 // SqlConstOf mit den Grenzen der Datei aus AScopes (erst gerechnet, wenn
 // alle Deklarationen Konstanten sind).
 function ConstOfName(AMap: TRdxCodeMap; var AScopes: TSqlScopes;
@@ -2496,8 +2836,7 @@ function ConstOfName(AMap: TRdxCodeMap; var AScopes: TSqlScopes;
 var
   Decls  : TSqlDecls;
   Values : TArray<string>;
-  Owner  : string;
-  i, R   : Integer;
+  i      : Integer;
 begin
   Result := Default(TRdxSqlConst);
   if not Assigned(AMap) or not TRdxRecipes.IsPlainIdent(Trim(AName)) then Exit;
@@ -2508,17 +2847,8 @@ begin
   if not AScopes.Built then
     BuildScopes(AMap, AScopes);
   if not AScopes.Complete then Exit;
-  Values := nil;
-  for i := 0 to High(Decls) do
-  begin
-    // Eine Inline-Konstante gilt nur in ihrem Block - sie verwirft den
-    // Beweis wie eine Variable (Blocker, Minor 5).
-    if ScopeOf(AScopes, Decls[i].Tok, Owner, R) = cvInline then
-      Exit;
-    if VisibleAt(AScopes, Decls[i], ALine) then
-      AppendTo(Values, Decls[i].Text);
-  end;
-  if Length(Values) > 0 then
+  if VisibleValues(AMap, AScopes, Decls, ALine, Values)
+     and (Length(Values) > 0) then
     Result := ConstOfValues(Values);
 end;
 

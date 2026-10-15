@@ -115,6 +115,7 @@
         <DCCReference Include="..\source\uRdxMagicFixes.pas"/>
         <DCCReference Include="uTestRdxRecipes.pas"/>
         <DCCReference Include="uTestRdxSca044.pas"/>
+        <DCCReference Include="uTestRdxFormatGuards.pas"/>
         <DCCReference Include="uTestRdxActionRing.pas"/>
         <DCCReference Include="uTestRdxBufferMath.pas"/>
         <DCCReference Include="uTestRdxSuppress.pas"/>
@@ -142,6 +143,7 @@
         <DCCReference Include="uTestRdxSqlTemplate.pas"/>
         <DCCReference Include="uTestRdxSqlFacts.pas"/>
         <DCCReference Include="uTestRdxSqlGuards.pas"/>
+        <DCCReference Include="uTestRdxSqlBinds.pas"/>
         <DCCReference Include="uTestRdxResultFixesDetector.pas"/>
         <DCCReference Include="uTestRdxMagicFix.pas"/>
         <DCCReference Include="uTestRdxMagicGuards.pas"/>
