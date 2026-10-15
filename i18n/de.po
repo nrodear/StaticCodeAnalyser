@@ -2515,3 +2515,119 @@ msgstr "kein Kopf %s"
 
 msgid "%d headers %s"
 msgstr "%d Köpfe %s"
+
+# reDelphix G8 (uRdxStructFixes, uRdxSqlTemplate)
+
+msgid "the keyword uses is not on the expected line"
+msgstr "Schlüsselwort uses nicht auf der erwarteten Zeile"
+
+msgid "no \";\" after the only entry"
+msgstr "hinter dem einzigen Eintrag steht kein \";\""
+
+msgid "no \",\" after the entry"
+msgstr "hinter dem Eintrag steht kein \",\""
+
+msgid "comma before or semicolon after the last entry not found"
+msgstr "Komma vor bzw. Semikolon hinter dem letzten Eintrag nicht gefunden"
+
+msgid "comment or directive in the range to be deleted"
+msgstr "Kommentar oder Direktive im zu löschenden Bereich"
+
+msgid "the range contains more than this entry - would another one be deleted with it? Analyse the file again"
+msgstr "im Bereich steht mehr als dieser Eintrag - ginge ein weiterer mit? Datei neu prüfen"
+
+msgid "no such uses entry"
+msgstr "kein solcher uses-Eintrag"
+
+msgid "no case"
+msgstr "kein case"
+
+msgid "%d case statements"
+msgstr "%d case-Anweisungen"
+
+msgid "the case already has an else branch"
+msgstr "das case hat schon einen else-Zweig"
+
+msgid "else in the case, owner unclear: %s"
+msgstr "else im case, Besitzer unklar: %s"
+
+msgid "the case has an otherwise branch (FPC)"
+msgstr "das case hat einen otherwise-Zweig (FPC)"
+
+msgid "no end found for the case"
+msgstr "kein end zum case gefunden"
+
+msgid "there is a compiler directive between an open ( and the case - a branch can leave the parenthesis open, so it is unclear whether the case is a statement"
+msgstr "zwischen einer offenen ( und dem case steht eine Compiler-Direktive - ein Zweig kann die Klammer offen lassen, ob das case eine Anweisung ist, ist unklar"
+
+msgid "the case is in the variant part of a record - not a case statement (finding moved? Analyse the file again)"
+msgstr "das case steht im Variantenteil eines Records - kein case-Statement (Fund verschoben? Datei neu prüfen)"
+
+msgid "no block found around the case (fragment?) - it is unclear whether it is a statement"
+msgstr "kein Block um das case gefunden (Fragment?) - ob es eine Anweisung ist, ist unklar"
+
+msgid "the case has no branches"
+msgstr "das case hat keine Zweige"
+
+msgid "compiler directive in the case - a branch could shift the end count"
+msgstr "Compiler-Direktive im case - ein Zweig könnte die end-Bilanz verschieben"
+
+msgid "no then/else/do at the reported place"
+msgstr "kein then/else/do an der gemeldeten Stelle"
+
+msgid "no \"end else\""
+msgstr "kein \"end else\""
+
+msgid "%d times \"end else\""
+msgstr "%d-mal \"end else\""
+
+msgid "the %s is in parentheses"
+msgstr "das %s steht in Klammern"
+
+msgid "no start of the statement found for the %s"
+msgstr "keinen Anfang der Anweisung zum %s gefunden"
+
+msgid "the else matches no if"
+msgstr "das else passt zu keinem if"
+
+msgid "record before the else - the end count is uncertain"
+msgstr "record vor dem else - die end-Bilanz ist unsicher"
+
+msgid "no if, case or except found for the else"
+msgstr "kein if, case oder except zum else gefunden"
+
+msgid "\"%s\" after a \";\" before the else - header of an anonymous method? It is unclear what the else belongs to"
+msgstr "\"%s\" hinter einem \";\" vor dem else - Kopf einer anonymen Methode? Wem das else gehört, ist unklar"
+
+msgid "the else is in parentheses"
+msgstr "das else steht in Klammern"
+
+msgid "the %s is in an expression (conditional expression, Delphi 13) - not a branch of a statement"
+msgstr "das %s steht in einem Ausdruck (bedingter Ausdruck, Delphi 13) - kein Zweig einer Anweisung"
+
+msgid "\"%s\" in the statement - structure, conditional expression, anonymous method or inline declaration"
+msgstr "\"%s\" in der Anweisung - Struktur, bedingter Ausdruck, anonyme Methode oder Inline-Deklaration"
+
+msgid "inline declaration (%s) in the else branch - begin..end would narrow its scope"
+msgstr "Inline-Deklaration (%s) im else-Zweig - begin..end engte ihren Gültigkeitsbereich ein"
+
+msgid "no end found for the else branch"
+msgstr "kein end zum else-Zweig gefunden"
+
+msgid "end of file after the %s"
+msgstr "Dateiende hinter dem %s"
+
+msgid "the statement is already in begin..end"
+msgstr "die Anweisung steht schon in begin..end"
+
+msgid "empty statement after the %s"
+msgstr "leere Anweisung hinter dem %s"
+
+msgid "the statement starts with a string"
+msgstr "die Anweisung beginnt mit einem String"
+
+msgid "compiler directive in the range - begin or end would be on the other side"
+msgstr "Compiler-Direktive im Bereich - begin oder end stünde auf der anderen Seite"
+
+msgid "the else belongs to a case or except - a statement list follows it"
+msgstr "das else gehört zu einem case bzw. except - dahinter steht eine Anweisungsliste"

@@ -45,8 +45,16 @@ msgstr ""
 msgid " · "
 msgstr ""
 
+#: reDelphix/source/uRdxStructFixes.pas:806
+msgid "\"%s\" after a \";\" before the else - header of an anonymous method? It is unclear what the else belongs to"
+msgstr ""
+
 #: SCA.SharedUI/sources/uProfileViewer.pas:634
 msgid "\"%s\" already exists. Overwrite it?"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:986
+msgid "\"%s\" in the statement - structure, conditional expression, anonymous method or inline declaration"
 msgstr ""
 
 #: SCA.Engine/sources/Common/uRuleCatalog.pas:1771
@@ -66,6 +74,10 @@ msgstr ""
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1970
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1934
 msgid "%d / %d findings"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:425
+msgid "%d case statements"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1862
@@ -108,6 +120,10 @@ msgstr ""
 
 #: SCA.SharedUI/sources/uProfileViewer.pas:284
 msgid "%d rules, %d selected"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:677
+msgid "%d times \"end else\""
 msgstr ""
 
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:827
@@ -2755,6 +2771,22 @@ msgstr ""
 msgid "class(TObject) - TObject is the default base, drop it"
 msgstr ""
 
+#: reDelphix/source/uRdxStructFixes.pas:301
+msgid "comma before or semicolon after the last entry not found"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:358
+msgid "comment or directive in the range to be deleted"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:615
+msgid "compiler directive in the case - a branch could shift the end count"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:1226
+msgid "compiler directive in the range - begin or end would be on the other side"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:802
 msgid "decide by hand"
 msgstr ""
@@ -2771,6 +2803,18 @@ msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:863
 msgid "editor buffer empty or not readable"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:446
+msgid "else in the case, owner unclear: %s"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:1063
+msgid "empty statement after the %s"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:1059
+msgid "end of file after the %s"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:772
@@ -2831,12 +2875,44 @@ msgstr ""
 msgid "in"
 msgstr ""
 
+#: reDelphix/source/uRdxStructFixes.pas:1029
+msgid "inline declaration (%s) in the else branch - begin..end would narrow its scope"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:742
 msgid "line moved? Analyse the file again"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:817
 msgid "literal not readable: %s"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:294
+msgid "no \",\" after the entry"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:288
+msgid "no \";\" after the only entry"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:676
+msgid "no \"end else\""
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:592
+msgid "no block found around the case (fragment?) - it is unclear whether it is a statement"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:424
+msgid "no case"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:469
+msgid "no end found for the case"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:1043
+msgid "no end found for the else branch"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:782
@@ -2851,8 +2927,27 @@ msgstr ""
 msgid "no header %s"
 msgstr ""
 
+#: reDelphix/source/uRdxStructFixes.pas:804
+#: reDelphix/source/uRdxStructFixes.pas:855
+msgid "no if, case or except found for the else"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:822
 msgid "no operand in the chain"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:743
+msgid "no start of the statement found for the %s"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:382
+msgid "no such uses entry"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:642
+#: reDelphix/source/uRdxStructFixes.pas:648
+#: reDelphix/source/uRdxStructFixes.pas:1220
+msgid "no then/else/do at the reported place"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:767
@@ -2884,6 +2979,10 @@ msgstr ""
 msgid "own unit %s in the project"
 msgstr ""
 
+#: reDelphix/source/uRdxStructFixes.pas:783
+msgid "record before the else - the end count is uncertain"
+msgstr ""
+
 #: StaticCodeAnalyserIDE/uIDESonarOptions.pas:414
 msgid "sonar.projectKey not found in "
 msgstr ""
@@ -2892,9 +2991,49 @@ msgstr ""
 msgid "svn not found. Install TortoiseSVN WITH the option \"command line client tools\" or set the path to svn.exe in analyser.ini."
 msgstr ""
 
+#: reDelphix/source/uRdxStructFixes.pas:932
+msgid "the %s is in an expression (conditional expression, Delphi 13) - not a branch of a statement"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:742
+msgid "the %s is in parentheses"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:444
+msgid "the case already has an else branch"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:449
+msgid "the case has an otherwise branch (FPC)"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:611
+msgid "the case has no branches"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:589
+msgid "the case is in the variant part of a record - not a case statement (finding moved? Analyse the file again)"
+msgstr ""
+
 #: reDelphix/source/uRdxProvider.pas:578
 #: reDelphix/source/uRdxProvider.pas:636
 msgid "the clause would no longer be sorted (new SCA142)"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:1247
+msgid "the else belongs to a case or except - a statement list follows it"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:853
+msgid "the else is in parentheses"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:770
+msgid "the else matches no if"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:266
+msgid "the keyword uses is not on the expected line"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:777
@@ -2907,6 +3046,22 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:392
 msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:366
+msgid "the range contains more than this entry - would another one be deleted with it? Analyse the file again"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:1061
+msgid "the statement is already in begin..end"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:1068
+msgid "the statement starts with a string"
+msgstr ""
+
+#: reDelphix/source/uRdxStructFixes.pas:587
+msgid "there is a compiler directive between an open ( and the case - a branch can leave the parenthesis open, so it is unclear whether the case is a statement"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:812
