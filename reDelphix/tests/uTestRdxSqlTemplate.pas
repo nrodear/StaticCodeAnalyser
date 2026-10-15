@@ -462,4 +462,7 @@ begin
     Op('Cond')]), 'steht hinter ''where''');
 end;
 
+initialization
+  TDUnitX.RegisterTestFixture(TTestRdxSqlTemplate);
+
 end.

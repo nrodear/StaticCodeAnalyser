@@ -235,6 +235,7 @@ Nachher:
 **Nicht angeboten**
 
 - die Zahl der Meldung steht nicht oder mehrfach als Vergleichswert in den if-Bedingungen der Fundzeile (Zeile verschoben bzw. mehrdeutig), oder nur in einer Folgezeile der Bedingung
+- eine Zahl mit Zifferntrennern (`if X > 200_000`, auch `200_000.5`): der Detektor meldet nur ihren ersten Block (`200`) – ein Fehlalarm, der Grund sagt es
 - die Sperren der Code-Aktion „Lokale Konstante einführen“: `else if`, Zweig über mehrere Zeilen, Zeile darüber ohne Anweisungsende, Direktive davor, case-Zweig, asm, initialization, mehrzeilige Strings und Kommentare
 - Dateien, die FPC oder ein Compiler vor Delphi 10.3 übersetzt: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, ein Include, das nicht neben der Unit liegt, ein Lazarus-Projekt/-Paket in der Nähe, `.pp`/`.lpr`, ein altes Delphi-Projekt (`.dproj` vor 10.3, `.dof`, `.bdsproj`, `.bpr`, `.bpg`)
 - ein Netzpfad oder Netzlaufwerk, auch für ein Include der Unit (kein Plattenzugriff beim Menüaufbau im Hauptthread)
@@ -800,6 +801,7 @@ Nachher:
 - der Typ von X ist in der Unit – auch über einen Alias – ein `record`, `object`, `interface`, ein Zeiger (`PFoo = ^TFoo`) oder ein eigener Typ (`= type ..`), die Unit deklariert eine Routine `Free`, oder der Typ ist nach Konvention ein Zeiger einer anderen Unit (`PEVP_PKEY`, auch hinter einem Alias der Unit) – `FreeAndNil` nimmt nur ein `TObject`
 - eine Direktive vor `X.Free;` (das nil würde bedingt)
 - die Zeile trägt ein anderes Paar als die Meldung (Zeile verschoben)
+- ein Kommentar im Ausdruck (`X{owned}.Free;`, `X.{c}Free;`, `X.Free {c};`) – der Detektor meldet diese Formen wie `X.Free;`, der Grund nennt den Kommentar
 - `System.SysUtils` fehlt und die uses-Klausel trägt Direktiven oder liegt in einem `$IFDEF`-Zweig
 
 **Beispiel**

@@ -398,6 +398,7 @@ const
   POINTER_TYPES: array[0..3] of string = ('tobject', 'pointer', 'iinterface',
     'iunknown');
   R_FREE_MOVED    = 'X.Free; steht nicht mehr an der gemeldeten Stelle';
+  R_FREE_COMMENT  = 'Kommentar im Ausdruck X.Free;';
   R_NOT_NIL_LINE  = 'die naechste Zeile ist nicht "X := nil;"';
 
 // Steht ab S[AAt] das Wort AWord (Gross/Klein egal, rechts kein
@@ -544,6 +545,30 @@ end;
 // '//'-Kommentar ist keine, bis Charge R8 zaehlte es hier mit) steht seit
 // Charge H5c in uRdxCodeMap - uRdxResultFixes hatte eine zweite Fassung.
 
+// Traegt die Zeile ALine ab AColX 'X.Free;', sobald Kommentare und Strings
+// wegfallen? So liest der Detektor (ScanCodeLine ohne Spalten): er meldet
+// 'X{owned}.Free;', 'X.{c}Free;' und 'X.Free {c};' wie 'X.Free;'.
+function FreeCallAroundComment(AMap: TRdxCodeMap; ALine, AColX: Integer): Boolean;
+var
+  L, Code                   : string;
+  i, n                      : Integer;
+  NameEnd, FreeEnd, SemiCol : Integer;
+begin
+  L := AMap.Raw(ALine);
+  if AColX > Length(L) then
+    Exit(False);
+  SetLength(Code, Length(L) - AColX + 1);
+  n := 0;
+  for i := AColX to Length(L) do
+    if AMap.IsCode(ALine, i) then
+    begin
+      Inc(n);
+      Code[n] := L[i];
+    end;
+  SetLength(Code, n);
+  Result := MatchFreeCall(Code, 1, NameEnd, FreeEnd, SemiCol);
+end;
+
 // Zeile ALine: erste Anweisung 'X.Free;' - wie
 // uFreeAndNilHint.ExtractFreeReceiver, aber auf der Code-Sicht -, dahinter
 // hoechstens ein //-Kommentar, und nicht allein hinter then/else/do oder
@@ -561,10 +586,17 @@ begin
   AColX := 1;
   while (AColX <= Length(L)) and (IsBlank(L[AColX]) or not AMap.IsCode(ALine, AColX)) do
     Inc(AColX);
+  // Ein Kommentar im Ausdruck zeigt sich erst, wenn der Rohtext NICHT passt
+  // (in 'X.Free;' selbst ist kein Platz fuer einen): passt dann die
+  // Code-Sicht, nennt der Grund den Kommentar statt einer verschobenen
+  // Zeile - der Fund ist frisch (Review R6-04; die Sperre stand bis dahin
+  // HINTER dem Treffer auf dem Rohtext und griff nie).
   if not MatchFreeCall(L, AColX, ANameEnd, AFreeEnd, SemiCol) then
+  begin
+    if FreeCallAroundComment(AMap, ALine, AColX) then
+      Exit(R_FREE_COMMENT);
     Exit(R_FREE_MOVED);
-  if AMap.HasNonCode(ALine, AColX, SemiCol) then
-    Exit('Kommentar im Ausdruck X.Free;');
+  end;
   // Hinter dem ';' nur noch Leerraum oder ein //-Kommentar: weiterer Code
   // liefe sonst NACH dem nil (Reihenfolge), ein {-Kommentar oder eine
   // Direktive koennte die nil-Zeile umschliessen.

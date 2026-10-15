@@ -32,6 +32,9 @@ type
     [Test] procedure Sca085_Property_NoHelp;
     [Test] procedure Sca085_PropertyBesideSameNamedField_NoHelp;
     [Test] procedure Sca085_InlineVar_Helps;
+    // Review R6-04 (Nachbesserung FF): der Detektor meldet 'X{c}.Free;'
+    // und Co., die Hilfe nennt den Kommentar als Grund.
+    [Test] procedure Sca085_CommentInExpression_NoHelp;
     [Test] procedure Sca085_CatalogExample;
     // ---- SCA126 ----
     [Test] procedure Sca126_RoundTrip;
@@ -549,6 +552,23 @@ begin
       '  var L := TList.Create;',
       '  L.Free;',
       '  L := nil;'])]), fkFreeAndNilHint));
+end;
+
+procedure TTestRdxSimpleFixesDetector.Sca085_CommentInExpression_NoHelp;
+const
+  FORMS: array[0..2] of string = ('  FList{owned}.Free;', '  FList.{c}Free;',
+    '  FList.Free {c};');
+var
+  Form : string;
+begin
+  // Der Detektor liest die Zeile ohne Kommentare und meldet diese Formen
+  // wie 'FList.Free;' (ohne Delphi gegengeprueft: CLI-Exe, SCA085 auf allen
+  // drei). Die Hilfe ersetzt nicht ueber einen Kommentar hinweg und nennt
+  // ihn - bis Review R6-04 lautete der Grund direkt nach dem Scan 'X.Free;
+  // steht nicht mehr an der gemeldeten Stelle'.
+  for Form in FORMS do
+    AssertNoHelp(Format(UNIT_085, ['uses System.SysUtils;', Join([Form,
+      '  FList := nil;'])]), fkFreeAndNilHint, 'Kommentar im Ausdruck');
 end;
 
 procedure TTestRdxSimpleFixesDetector.Sca085_CatalogExample;

@@ -207,7 +207,9 @@ begin
   B := Bytes('a := 1;');
   Assert.IsFalse(PlanByteEdits(B, [Edit(1, 1, 2, '', 'x')], Plan, Err),
     'blind einfuegen ist nicht erlaubt - immer gegen Text pruefen');
+  Assert.IsTrue(Pos('kein gueltiger Bereich', Err) > 0, Err);
   Assert.IsFalse(PlanByteEdits(B, nil, Plan, Err), 'keine Ersetzung');
+  Assert.IsTrue(Pos('keine Ersetzung', Err) > 0, Err);
 end;
 
 procedure TTestRdxBufferMath.Plan_EmptyBuffer_Rejected;

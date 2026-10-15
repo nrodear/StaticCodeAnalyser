@@ -921,8 +921,8 @@ end;
 procedure TTestRdxRecipes.UsesNameFor_FollowsFileStyle;
 begin
   // Ohne Vorbild oder mit einem Eintrag unter einem Delphi-Scope:
-  // qualifiziert. (Keine 'System.SysUtils'/'System.Classes' im Test - der
-  // FPC-Pruefstand schreibt diese Namen in den kopierten Quellen um.)
+  // qualifiziert. (Bis Charge FF mied der Test 'System.SysUtils' - der
+  // FPC-Pruefstand schrieb Unitnamen auch in Literalen um, Review R6-03.)
   Assert.AreEqual('System.Math', TRdxRecipes.UsesNameFor(nil, 'Math', 'System.Math'));
   Assert.AreEqual('System.Math',
     TRdxRecipes.UsesNameFor(['Classes', 'Winapi.Windows'], 'Math', 'System.Math'));
@@ -1087,6 +1087,7 @@ begin
     Assert.IsTrue(T.Resolve('ComCtrls', fwUnknown, Q, Why), Why);
     Assert.AreEqual('Vcl.ComCtrls', Q);
     Assert.IsFalse(T.Resolve('Forms', fwBoth, Q, Why));
+    Assert.IsTrue(Pos('VCL und FMX', Why) > 0, Why);
     Assert.IsFalse(T.Resolve('MyUnit', fwVcl, Q, Why));
     Assert.IsTrue(Pos('nicht in der Scope-Tabelle', Why) > 0, Why);
   finally
@@ -1125,6 +1126,7 @@ begin
     Assert.IsTrue(Pos('DCC_Namespace', Why) > 0, Why);
     Assert.IsFalse(T.Resolve('Skia', fwUnknown, Q, Why),
       'Rahmenwerk unbekannt: VCL moeglich');
+    Assert.IsTrue(Pos('DCC_Namespace', Why) > 0, Why);
     // Eine FMX-Datei hat kein Vcl in der Liste: System vor FMX wie bisher.
     Assert.IsTrue(T.Resolve('Skia', fwFmx, Q, Why), Why);
     Assert.AreEqual('System.Skia', Q);

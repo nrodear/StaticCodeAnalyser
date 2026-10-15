@@ -561,4 +561,7 @@ begin
     Lit('''SELECT * FROM t WHERE a = ''''?'''' AND b = '''), Op('X')]))) > 0);
 end;
 
+initialization
+  TDUnitX.RegisterTestFixture(TTestRdxSqlGuards);
+
 end.

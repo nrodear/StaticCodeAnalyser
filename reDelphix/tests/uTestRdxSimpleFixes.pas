@@ -263,18 +263,25 @@ procedure TTestRdxSimpleFixes.Sca075_Refusals;
 var
   R : string;
 begin
+  // Je Ablehnung auch der Grund (Review R6-04): ein Test ohne ihn bliebe
+  // gruen, wenn eine andere Sperre greift oder eine Sperre nie erreicht wird.
   Assert.AreEqual('', Fix075(InUnit('  TFoo = class(TObject) procedure P; end;'), 4, 10, R),
     'Rumpf in derselben Zeile');
-  Assert.IsTrue(R <> '');
+  Assert.IsTrue(Pos('Klassenrumpf beginnt in derselben Zeile', R) > 0, R);
+  // 'class(TObject, IFoo)' meldet der Detektor nicht - steht es an der
+  // Stelle, hat sich die Zeile seit dem Scan geaendert.
   Assert.AreEqual('', Fix075(InUnit('  TFoo = class(TObject, IFoo)'), 4, 10, R),
     'nie class(IFoo)');
+  Assert.IsTrue(Pos('nicht mehr an der gemeldeten Stelle', R) > 0, R);
   Assert.AreEqual('', Fix075(InUnit('  TFoo = class(TComponent)'), 4, 10, R),
     'Puffer geaendert');
+  Assert.IsTrue(Pos('nicht mehr an der gemeldeten Stelle', R) > 0, R);
   Assert.AreEqual('', Fix075(InUnit('  TFoo = class(TObject)'), 4, 11, R),
     'falsche Spalte');
+  Assert.IsTrue(Pos('nicht mehr an der gemeldeten Stelle', R) > 0, R);
   Assert.AreEqual('', Fix075(InUnit('  TFoo = class(TObject)'), 4, 0, R),
     'keine Spalte in der Meldung');
-  Assert.IsTrue(Pos('Spalte fehlt', R) > 0, R);
+  Assert.IsTrue(Pos('Spalte fehlt in der Meldung', R) > 0, R);
   // Die Spalte liegt hinter dem Ende der (inzwischen gekuerzten) Zeile: die
   // Meldung hat ihre Spalte, die Zeile hat sich geaendert (Review R3,
   // verpasst - bis Charge FC hiess es auch hier 'Spalte fehlt').
@@ -450,6 +457,23 @@ const
   // Zeile vor X.Free; - das nil wuerde bedingt
   GUARDS: array[0..4] of string = ('  if FOwns then', '  else',
     '  with FData do', '  for I := 0 to 1 do', '  1:');
+  // Je Ablehnung auch der Grund (Review R6-04): ohne ihn blieb gruen, dass
+  // die Kommentar-Sperre nie griff - nach einem frischen Scan hiess es
+  // 'X.Free; steht nicht mehr an der gemeldeten Stelle'. Spalten:
+  // Free-Zeile, nil-Zeile, Grund.
+  CASES: array[0..9, 0..2] of string = (
+    // Der Detektor liest ohne Kommentare und meldet diese drei Formen.
+    ('  X{owned}.Free;', '  X := nil;', 'Kommentar im Ausdruck'),
+    ('  X.{c}Free;', '  X := nil;', 'Kommentar im Ausdruck'),
+    ('  X.Free {c};', '  X := nil;', 'Kommentar im Ausdruck'),
+    // Leerzeichen vor dem Punkt meldet er nicht: Zeile seit dem Scan anders.
+    ('  X (*c*).Free;', '  X := nil;', 'nicht mehr an der gemeldeten Stelle'),
+    ('  DoSomething;', '  X := nil;', 'nicht mehr an der gemeldeten Stelle'),
+    ('  X.Free; Log(''x'');', '  X := nil;', 'hinter X.Free; steht noch etwas'),
+    ('  X.Free; {$IFDEF A}', '  X := nil;', 'hinter X.Free; steht noch etwas'),
+    ('  X.Free;', '  X := nil; Y := 0;', 'hinter X := nil steht noch etwas'),
+    ('  X.Free;', '  Y := nil;', 'ist nicht "X := nil;"'),
+    ('  X.Free;', '  X := nil; // weg', 'Kommentar oder String in der nil-Zeile'));
 var
   R   : string;
   Src : string;
@@ -462,22 +486,14 @@ begin
     Assert.AreEqual('', Fix085(Src, 5, R), GUARDS[i]);
     Assert.IsTrue(Pos('bedingt', R) > 0, R);
   end;
-  Assert.AreEqual('', Fix085(FreeNil('  X.Free; Log(''x'');', '  X := nil;'), 4, R),
-    'Code nach Free;');
-  Assert.AreEqual('', Fix085(FreeNil('  X.Free; {$IFDEF A}', '  X := nil;'), 4, R),
-    'Direktive nach Free;');
-  Assert.AreEqual('', Fix085(FreeNil('  X{owned}.Free;', '  X := nil;'), 4, R),
-    'Kommentar im Ausdruck');
-  Assert.AreEqual('', Fix085(FreeNil('  X.Free;', '  X := nil; Y := 0;'), 4, R),
-    'Code nach nil');
-  Assert.AreEqual('', Fix085(FreeNil('  X.Free;', '  Y := nil;'), 4, R),
-    'andere Variable');
-  Assert.AreEqual('', Fix085(FreeNil('  X.Free;', '  X := nil; // weg'), 4, R),
-    'Kommentar in der nil-Zeile');
+  for i := 0 to High(CASES) do
+  begin
+    Assert.AreEqual('', Fix085(FreeNil(CASES[i, 0], CASES[i, 1]), 4, R), CASES[i, 0]);
+    Assert.IsTrue(Pos(CASES[i, 2], R) > 0, CASES[i, 0] + ' / ' + CASES[i, 1] + ': ' + R);
+  end;
   Assert.AreEqual('', Fix085(Join(['  X.Free;', '  X := nil;']), 1, R),
     'nil-Zeile ist die letzte');
-  Assert.AreEqual('', Fix085(FreeNil('  DoSomething;', '  X := nil;'), 4, R),
-    'kein Free');
+  Assert.IsTrue(Pos('keine Zeile hinter der nil-Zuweisung', R) > 0, R);
 end;
 
 // ---- SCA074 ----
@@ -655,7 +671,7 @@ begin
     '    FX: Integer;']), 6, 'private', R));
   Assert.IsTrue(Pos('strict', R) > 0, R);
   Assert.AreEqual('', Fix087(Join(['  public']), 1, 'public', R), 'letzte Zeile');
-  Assert.IsTrue(R <> '');
+  Assert.IsTrue(Pos('keine Zeile hinter dem Abschnitt', R) > 0, R);
 end;
 
 // ---- SCA139 ----

@@ -26,17 +26,22 @@ unit uRdxMagicFixes;
 // trivial ist. Nie: Hex ('$FF' - keine Ziffer), Float ('3.5', '1e3' -
 // uebersprungen), ein Vorzeichen ('-5': der Lexer trennt '-' ab, im
 // Bedingungstext steht '- 5') und ein Literal in Klammern ('> (200)').
-// Bei '200_000' meldet er "200" (der Lexer liest '_000' als Bezeichner) -
-// das Literal heisst dann anders, die Hilfe findet es nicht.
+// Bei '200_000' (auch '200_000.5') meldet er "200" (der Lexer liest
+// '_000' als Bezeichner) - ein Fehlalarm: das Literal heisst anders, die
+// Hilfe findet es nicht.
 //
 // ZIEL AUS DEM FUND (der Planer prueft nach, statt dem Detektor zu
 // glauben): die Zahl aus der Meldung; auf der Fundzeile jede if-Bedingung
 // vom 'if' bis zu ihrem 'then' (auch ueber Folgezeilen); darin die
 // Zahl-Token mit genau diesem Text, direkt hinter einem Vergleich (kein
 // Teil von '200.5', '$200', '#200', '-200', '200_000'). Genau einer: das
-// Ziel. Keiner: Zeile verschoben. Mehrere: mehrdeutig (gesperrt - der
-// Detektor meldete danach den naechsten, und welches er meinte, sagt die
-// Meldung nicht). Steht der eine in einer Folgezeile der Bedingung: die
+// Ziel. Keiner: Zeile verschoben - ausser es steht dort ein Vergleichswert
+// mit Zifferntrennern, dessen erster Block die Zahl ist (auch mit
+// Bruchteil): dann nennt der Grund den Fehlalarm (Review R6-05;
+// Korpus: 1 von 5.036, ISSigFunc.pas).
+// Mehrere: mehrdeutig (gesperrt - der Detektor meldete danach den
+// naechsten, und welches er meinte, sagt die Meldung nicht). Steht der
+// eine in einer Folgezeile der Bedingung: die
 // Konstante gehoerte vor die if-Zeile, die Code-Aktion setzt sie vor die
 // Zeile des Literals - gesperrt.
 //
@@ -238,19 +243,29 @@ begin
       Exit('');
 end;
 
-// Ist T ein Vergleichswert - davor ein Vergleich, dahinter kein Bruchteil
-// ('200.5': das Token endet am '.')?
-function IsComparedValue(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
+// Die Spalte hinter dem Zahl-Literal an T samt einem direkt folgenden
+// Bruchteil ('200.5', '200_000.5': das Token endet am '.'); ohne
+// Bruchteil T.EndCol.
+function NumberEnd(AMap: TRdxCodeMap; const T: TRdxToken): Integer;
 var
   L : string;
-  E : Integer;
 begin
-  Result := InList(Before(AMap, T).Low, COMPARE_OPS);
-  if not Result then Exit;
   L := AMap.Raw(T.Line);
-  E := T.EndCol;
-  Result := not ((E < Length(L)) and (L[E] = '.')
-    and CharInSet(L[E + 1], ['0'..'9']));
+  Result := T.EndCol;
+  if (Result < Length(L)) and (L[Result] = '.')
+     and CharInSet(L[Result + 1], ['0'..'9']) then
+  begin
+    Inc(Result);
+    while (Result <= Length(L)) and IsIdentChar(L[Result]) do
+      Inc(Result);
+  end;
+end;
+
+// Ist T ein Vergleichswert - davor ein Vergleich, dahinter kein Bruchteil?
+function IsComparedValue(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
+begin
+  Result := InList(Before(AMap, T).Low, COMPARE_OPS)
+    and (NumberEnd(AMap, T) = T.EndCol);
 end;
 
 // Ein Schluesselwort AWord an T (nicht '&If', 'X.Then')?
@@ -260,11 +275,34 @@ begin
   Result := (T.Low = AWord) and IsKeywordAfter(T, Before(AMap, T));
 end;
 
+// Ein Vergleichswert mit Zifferntrennern (ab Delphi 11), dessen erster
+// Block AValue ist ('200_000', auch '200_000.5', zu "200"): sein Text wie
+// in der Zeile, sonst ''. Der Detektor liest '_000' als Bezeichner und
+// meldet den ersten Block - ein Fehlalarm (Review R6-05), mit Bruchteil
+// ebenso (Nachbesserung FF). Davor muss ein Vergleich stehen: nur dort
+// liest der Detektor einen Wert ('Foo(200_000) > X' meldet er nicht).
+function SeparatedValue(AMap: TRdxCodeMap; const T: TRdxToken;
+  const AValue: string): string;
+var
+  C : Char;
+begin
+  Result := '';
+  if (Copy(T.Low, 1, Length(AValue) + 1) <> AValue + '_')
+     or not InList(Before(AMap, T).Low, COMPARE_OPS) then
+    Exit;
+  for C in T.Low do
+    if not CharInSet(C, ['0'..'9', '_']) then
+      Exit;
+  Result := Copy(AMap.Raw(T.Line), T.Col, NumberEnd(AMap, T) - T.Col);
+end;
+
 // Die Vergleichswerte AValue in der Bedingung hinter AIf bis zu ihrem
 // 'then' (bzw. 'end', Dateiende, MAX_COND_LINES): ihre Zahl, der letzte
-// in AHit.
+// in AHit; der erste Vergleichswert mit Zifferntrennern, dessen erster
+// Block AValue ist, in ASeparated (SeparatedValue; nur, solange noch
+// keiner gesetzt ist).
 function CountInCondition(AMap: TRdxCodeMap; const AIf: TRdxToken;
-  const AValue: string; var AHit: TRdxToken): Integer;
+  const AValue: string; var AHit: TRdxToken; var ASeparated: string): Integer;
 var
   T : TRdxToken;
 begin
@@ -277,7 +315,9 @@ begin
     begin
       Inc(Result);
       AHit := T;
-    end;
+    end
+    else if ASeparated = '' then
+      ASeparated := SeparatedValue(AMap, T, AValue);
     T := After(AMap, T);
   end;
 end;
@@ -287,10 +327,12 @@ class function TRdxMagicFixes.LiteralAt(AMap: TRdxCodeMap; ALine: Integer;
 var
   T, Hit : TRdxToken;
   Ifs, N : Integer;
+  Sep    : string;
 begin
   ACol := 0;
   Ifs := 0;
   N := 0;
+  Sep := '';
   Hit := Default(TRdxToken);
   T := NextToken(AMap, ALine, 1);
   while (T.Low <> '') and (T.Line = ALine) do
@@ -298,12 +340,18 @@ begin
     if IsKeyword(AMap, T, KW_IF) then
     begin
       Inc(Ifs);
-      Inc(N, CountInCondition(AMap, T, AValue, Hit));
+      Inc(N, CountInCondition(AMap, T, AValue, Hit, Sep));
     end;
     T := After(AMap, T);
   end;
   if Ifs = 0 then
     Result := Format('Zeile %d traegt kein if - %s', [ALine, R_MOVED])
+  else if (N = 0) and (Sep <> '') then
+    // Der Fund ist frisch, nur falsch gelesen - 'Zeile verschoben?' liesse
+    // den Nutzer neu scannen und denselben Fund wiederfinden.
+    Result := Format('die if-Bedingung auf Zeile %d vergleicht mit %s - der '
+      + 'Detektor liest bei Zifferntrennern nur den ersten Block %s '
+      + '(Fehlalarm); kein Literal zu ersetzen', [ALine, Sep, AValue])
   else if N = 0 then
     Result := Format('keine if-Bedingung auf Zeile %d vergleicht mit %s - %s',
       [ALine, AValue, R_MOVED])

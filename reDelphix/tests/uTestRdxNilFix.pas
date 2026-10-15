@@ -209,20 +209,27 @@ begin
   Assert.AreEqual('', Fix126(InUnit('  Exit(''Value <> nil'');'), At(4, 3, naStatement,
     'Value <> nil'), R), 'Fehlalarm im String');
   Assert.IsTrue(Pos('passen nicht', R) > 0, R);
+  // Je Ablehnung auch der Grund (Review R6-04): ein Test ohne ihn bliebe
+  // gruen, wenn eine andere Sperre greift oder eine Sperre nie erreicht wird.
   Assert.AreEqual('', Fix126(InUnit('  if X {c} = nil then'), At(4, 3, naCondition,
     'X = nil'), R), 'Kommentar im Bereich');
+  Assert.IsTrue(Pos('Kommentar oder Direktive in der Anweisung', R) > 0, R);
   Assert.AreEqual('', Fix126(InUnit('  if Assigned(X) and (X <> nil) then'), At(4, 3,
     naCondition, 'Assigned ( X ) and ( X <> nil )'), R), 'SCA084');
   Assert.IsTrue(Pos('SCA084', R) > 0, R);
   Assert.AreEqual('', Fix126(InUnit('  TThread.Queue(nil, procedure begin if F <> nil then F.Close; end);'),
     At(4, 3, naStatement, 'TThread.Queue(nil, procedure begin if F <> nil then F.Close; end)'), R),
     'anonyme Methode');
+  Assert.IsTrue(Pos('anonyme Methode', R) > 0, R);
   Assert.AreEqual('', Fix126(InUnit('  if Obj = nil then Exit;'), At(4, 6, naCondition,
     'Obj = nil'), R), 'Spalte zeigt nicht auf if');
+  Assert.IsTrue(Pos('nicht mehr an der gemeldeten Stelle', R) > 0, R);
   Assert.AreEqual('', Fix126(InUnit('  X := nil;'), At(4, 3, naStatement, 'nil'), R),
     'kein Vergleich im Fund');
+  Assert.IsTrue(Pos('kein nil-Vergleich im Fund', R) > 0, R);
   Assert.AreEqual('', Fix126(InUnit('  if @FOnGet = nil then'), At(4, 3, naCondition,
     '@ FOnGet = nil'), R), '@-Operand');
+  Assert.IsTrue(Pos('Grenze des Vergleichs unklar', R) > 0, R);
 end;
 
 procedure TTestRdxNilFix.Sca126_CountMatchesDetectorRule;

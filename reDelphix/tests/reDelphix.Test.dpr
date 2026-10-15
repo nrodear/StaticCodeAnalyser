@@ -6,6 +6,8 @@ program reDelphix.Test;
 // Prueft den ToolsAPI-freien Teil des Moduls gegen den ECHTEN Core:
 //   * uTestRdxRecipes  - Literal-Codec, Format()-Bau, Query-Objekt,
 //                        Scope-Tabelle (reine Textlogik)
+//   * uTestRdxBench    - Selbstpruefung des FPC-Pruefstands: Literale
+//                        bleiben unangepasst (Review R6-03)
 //   * uTestRdxSca044   - Ende zu Ende: Parser, Detektor SCA044,
 //                        TSourcePlaces, Rezept-Laeufer - je Variante eine
 //                        Temp-Datei, derselbe Weg wie im IDE-Package
@@ -101,6 +103,9 @@ program reDelphix.Test;
 //                        Zusammenhang ueber Zeilen, Ende des Sync-Blocks
 //   * uTestRdxIntroEdits - dieselbe Aktion: Ersetzungen des Writers (C1h)
 //                        Ende zu Ende auf UTF-8-Pufferbytes
+//   * uTestRdxIntroContext - dieselbe Aktion: Zusammenhang ueber Zeilen
+//                        (mehrzeilige Strings, asm, initialization, FPC-
+//                        Weiche, Direktiven, Kommentargrenzen)
 //   * uTestRdxText     - die Sprache der reDelphix-Texte (uRdxText,
 //                        Entscheid E29): Override, redelphix.ini (Vorlage,
 //                        auto/fest), Sprache der SCA, analyser.ini
@@ -115,8 +120,15 @@ program reDelphix.Test;
 // (wie StaticCodeAnalyserForm\tests\TestProject), die Modul-Units aus
 // ..\source. Kein ToolsAPI: uRdxEditor und uRdxProvider bleiben draussen.
 //
-// CLI-Lauf: Console-Subsystem; TestInsight-Lauf: GUI-Subsystem (Muster
-// aus TestProject.dpr, s. dort).
+// LAUF: Debug und Release definieren TESTINSIGHT - GUI-Subsystem,
+// TestInsight.DUnitX.RunRegisteredTests, Exit-Code immer 0 (TestInsight
+// verwirft das Ergebnis). Einen auswertbaren Exit-Code liefert nur die
+// Konfiguration CI (ohne TESTINSIGHT, mit CI): Console-Subsystem,
+// Konsolen- und NUnit-Logger, ExitCode 1 bei einem roten Test oder einer
+// Ausnahme im Runner, keine Pause am Ende (Review R6-09 - bis dahin galt
+// TESTINSIGHT fuer alle Konfigurationen, der Zweig unten wurde nie
+// uebersetzt). Beide Runner werten einen Test ohne Assert als rot
+// (FailsOnNoAsserts wie TestInsight; ebenso der FPC-Pruefstand).
 {$IFNDEF TESTINSIGHT}
 {$APPTYPE CONSOLE}
 {$ENDIF}
@@ -156,6 +168,7 @@ uses
   uRdxIntroEdits in '..\source\uRdxIntroEdits.pas',
   uRdxMagicFixes in '..\source\uRdxMagicFixes.pas',
   uTestRdxRecipes in 'uTestRdxRecipes.pas',
+  uTestRdxBench in 'uTestRdxBench.pas',
   uTestRdxSca044 in 'uTestRdxSca044.pas',
   uTestRdxFormatGuards in 'uTestRdxFormatGuards.pas',
   uTestRdxActionRing in 'uTestRdxActionRing.pas',
@@ -230,7 +243,7 @@ begin
     TDUnitX.CheckCommandLine;
     runner := TDUnitX.CreateRunner;
     runner.UseRTTI := True;
-    runner.FailsOnNoAsserts := False;
+    runner.FailsOnNoAsserts := True;
     if TDUnitX.Options.ConsoleMode <> TDunitXConsoleMode.Off then
     begin
       logger := TDUnitXConsoleLogger.Create

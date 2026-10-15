@@ -7,8 +7,9 @@ program measure;
 // genommen, an dem die Zerlegung gelingt.
 //
 // ABGELOEST durch reDelphix/tools/probe/RdxCorpusProbe (echter Parser und
-// Laeufer); bleibt als Mess-Historie. Uebersetzbar nur nach einem
-// build.sh-Lauf (kopierte Units): fpc -Mdelphiunicode measure.pas.
+// Laeufer); bleibt als Mess-Historie. Uebersetzbar gegen die kopierten Units
+// eines build.sh-Laufs mit PRUEFSTAND_DIR=<dir>:
+// fpc -Mdelphiunicode -Fu<dir> measure.pas.
 
 uses
   SysUtils, Classes, uRefactorInfo, uRefactorInfoBuilder, uRefactorConcat;

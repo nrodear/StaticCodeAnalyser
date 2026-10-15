@@ -481,4 +481,7 @@ begin
   end;
 end;
 
+initialization
+  TDUnitX.RegisterTestFixture(TTestRdxMagicGuards);
+
 end.
