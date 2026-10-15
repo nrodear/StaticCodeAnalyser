@@ -43,11 +43,11 @@ source\uRdxRaiseFixes.pas         Quick-Fixes an Ausnahmen und leeren Rumpfen SC
 source\uRdxDeclFixes.pas          Quick-Fixes an Deklarationen SCA117/SCA197/SCA149, reine Textlogik
 source\uRdxFlowFixes.pas          Quick-Fixes an ganzen Anweisungen SCA098/SCA080/SCA047 (Charge H2), reine Textlogik
 source\uRdxRoutineFixes.pas       Quick-Fixes SCA164/SCA147 (ungenutzte Routine / private Methode loeschen, Charge H3b): Loeschbereiche, Namen in der Datei, Interfaces der Klasse; die Include-Dateien vor implementation prueft IncludeReason ueber die Include-Kette in uRdxBlocks, reine Textlogik
-source\uRdxBlocks.pas             die Bausteine der Planer (Charge B2S-b, Review R6-12; bis dahin in uRdxRoutineFixes): Routinengrenzen (ReadRoutine), Decl/Impl-Finder (FindMethodDecls/FindMethodImpls), Klassenkopf (FindClassHeads, HeritageOf, MethodDecl, EnclosingClass, ClassEnd), Zeilen-Marker ueber einem Bereich (MarkerAboveReason) und die Include-Kette (IncludeChainReason) - Textlogik bis auf diese Kette: sie liest Includes von der Platte - fuer SCA164/SCA147 die vor implementation ohne die im Kopf der Unit (IncludesUpTo), fuer SCA014 alle (AllIncludes; eine Durchsicht, IncludesWhere) -, nie auf einem Netzpfad (uRdxPaths.IsNetworkPath), `{$I \datei.inc}` auf dem Laufwerk der Unit (IncludeSearchPath); keine Planer-Unit bindet fuer sie eine andere ein
+source\uRdxBlocks.pas             die Bausteine der Planer (Charge B2S-b, Review R6-12; bis dahin in uRdxRoutineFixes): Routinengrenzen (ReadRoutine), Decl/Impl-Finder (FindMethodDecls/FindMethodImpls), Klassenkopf (FindClassHeads, HeritageOf, MethodDecl, EnclosingClass, ClassEnd, TypeHasBody; MemberHeads je Klassenkopf), die Suche nach der Routine um eine Stelle (HeadBefore - die Politik je Frage bleibt beim Aufrufer: SCA009 und Co. in uRdxTryFixes, SCA196 in uRdxResultFixes; Review R5-03), Zeilen-Marker ueber einem Bereich (MarkerAboveReason) und die Include-Kette (IncludeChainReason) - Textlogik bis auf diese Kette: sie liest Includes von der Platte - fuer SCA164/SCA147 die vor implementation ohne die im Kopf der Unit (IncludesUpTo), fuer SCA014 alle (AllIncludes; eine Durchsicht, IncludesWhere) -, nie auf einem Netzpfad (uRdxPaths.IsNetworkPath), `{$I \datei.inc}` auf dem Laufwerk der Unit (IncludeSearchPath); keine Planer-Unit bindet fuer sie eine andere ein
 source\uRdxCleanupFixes.pas       Quick-Fixes "Aufraeumen" SCA070/SCA053 (Charge H3a) und der Baustein CutEdit (loeschen und aufraeumen), reine Textlogik
 source\uRdxTryFixes.pas           Quick-Fixes try/finally SCA009/SCA001/SCA109/SCA153/SCA156 (Charge H4) und der Baustein B5 (Anweisung und Freigabe in try/finally), reine Textlogik
 source\uRdxSqlTemplate.pas        SQL-Vorlage zu SCA003 (Rezept 5.2, Charge S1, Nacharbeit SQc): nur Werte werden Parameter (DDL - auch hinter ';' -, Namen, Join-Bedingung, unbekannte Anweisungsart lehnen ab), Konstanten mitgelesen, ihr Name bleibt, FireDAC-ExecSQL, ADO-Parameters, Kette Q.SQL.Add, Namen aus dem Operanden; Nachweise am Quelltext (Konstante mit Sichtbarkeit ueber Routinen/Klassen, FireDAC-/ADO-Objekt), reine Textlogik
-source\uRdxResultFixes.pas        Quick-Fixes SCA096/SCA097 (inherited in Konstruktor/Destruktor) und SCA121/SCA196 (Result initialisieren, Charge H5) und die Bausteine erste/letzte Anweisung des Rumpfs, reine Textlogik
+source\uRdxResultFixes.pas        Quick-Fixes SCA096/SCA097 (inherited in Konstruktor/Destruktor) und SCA121/SCA196 (Result initialisieren, Charge H5) und die Bausteine erste/letzte Anweisung des Rumpfs, reine Textlogik; ein Index je Planerlauf (Typdeklarationen, Klassenkoepfe, seit Charge B2S-b auch die Methodendeklarationen je Kopf - kein Lauf ueber die ganze Datei je Vorfahr mehr, Review R5-07)
 source\uRdxCompilerTraces.pas     Spuren alter Compiler je Sprachmittel (Default() ab Delphi 2009, Inline-Konstante ab 10.3; dazu die ProjectVersion der .dproj, Charge SQc) und Skript-Units, reine Textlogik (Charge Q14; bis dahin in uRdxResultFixes)
 source\uRdxMagicFixes.pas         Quick-Fix SCA014 "Lokale Konstante einfuehren" (Charge Q14, E28): Ziel aus dem Fund, dann uRdxIntroPlan/uRdxIntroEdits ohne Sync-Edit-Sitzung; Platte: Lazarus-Projekt, alte Delphi-Projekte (.dof/.bdsproj/.bpr/.bpg, .dproj vor 10.3) und Includes neben der Unit, kein Netzpfad (Charge SQc; seit Charge B1-FD auch kein Include auf einem Netzpfad; `\\?\C:\..` ist seit Charge B2S-a lokal)
 source\uRdxIntroPlan.pas          Code-Aktion "Lokale Variable einfuehren" (ohne Fund; seit Charge Q14 auch der Quick-Fix SCA014): Literal am Caret, Deklaration, Spalten, Ablehnungen (reine Textlogik)
@@ -62,7 +62,7 @@ source\uRdxText.pas               Sprache der Texte: _() in die reDelphix-Sprach
 data\unitscopes.txt               die Scope-Tabelle (erzeugt), als RCDATA eingelinkt (data\unitscopes.rc)
 data\quickfixes-doc.json          Titel, Wirkung, Sperren und Beispiele je Quick-Fix (von Hand gepflegt) - Quelle fuer QUICKFIXES.md
 QUICKFIXES.md                     alle Quick-Fixes mit Menuetext en/de/fr, Kennzeichnung, Sperren, Beispiel - ERZEUGT von tools\gen-quickfix-doc.py (Repo-Wurzel)
-tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 53 Testunits und einer Hilfs-Unit (siehe "Pruefen"); Konfigurationen Debug/Release (TestInsight) und CI (Konsole, Exit-Code)
+tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 54 Testunits und einer Hilfs-Unit (siehe "Pruefen"); Konfigurationen Debug/Release (TestInsight) und CI (Konsole, Exit-Code)
 tools\gen_unitscopes.py           erzeugt data\unitscopes.txt aus der Delphi-Installation
 tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik unter FPC 3.2.2 in einem eigenen Arbeitsverzeichnis je Lauf und fuehrt Tests aus (Sprache 'de', Stub uLocalization.pas liest die echten i18n\*.po); neben dem Skript nur Grabsteine der Kopien (siehe "Pruefen")
 tools\fpc-pruefstand\selftest.sh  Selbsttest von build.sh (zwei Laeufe zugleich, FPC-Exit, Testzahl, Registrierung, Test ohne Assert, PRUEFSTAND_DIR, Grabsteine, TMPDIR mit Backslashes)
@@ -627,6 +627,15 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   lokalen langen Pfad - beide gegen 9713942b rot ("Netzpfad"), je mit einer
   Gegenprobe, dass die Datei ueber den langen Pfad gelesen wird (10 Tests,
   FPC-Pruefstand).
+* `uTestRdxBlocks` - Bausteine in `uRdxBlocks` (Charge B2S-b, Review R5-03/R5-07): die
+  Suche nach der Routine um eine Stelle (`HeadBefore`: die lokale Routine vor der
+  aeusseren, ein Abschnittswort beendet, ein unsicherer Kopf kommt mit Grund,
+  Dateianfang) und die Politik ihrer Aufrufer, je wie vor der Charge (SCA009: um eine
+  unsichere lokale Routine ist Y kein lokaler Name; SCA196: der erste unsichere Kopf
+  beendet mit seiner Zeile); `MemberHeads`; der Index der Klassenkoepfe von SCA096 -
+  zwei Koepfe einer Klasse in `$IFDEF`-Zweigen (Delegation) und der Rueckfall auf
+  `FindMethodDecls` bei einem generischen Kopf, den der Index nicht liest
+  (`TBase<T(X)>`; ohne den Rueckfall rot); `TypeHasBody` (9 Tests, FPC-Pruefstand).
 * `uTestRdxQualifyUses` - die Planung von "uses: X -> Scope.X"
   (`TRdxRecipeRunner.QualifyUses`): Eintraege der Zeile, alle,
   Sortierung, FPC-Weiche, Direktiven, eigene Unit.
@@ -885,11 +894,11 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths
+bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths uTestRdxBlocks
 ```
 
-Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+B1-FA+FB+FC+B1-FD+B1-FE+FF+B2S-a): `PASSED 643  FAILED 0` - 41 Testunits,
-davon 12 der Charge B2S-a (`uTestRdxPaths` 10, `uTestRdxProjectUnits` 1,
+Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+B1-FA+FB+FC+B1-FD+B1-FE+FF+B2S-a+B2S-b): `PASSED 652  FAILED 0` - 42 Testunits,
+davon 9 der Charge B2S-b (`uTestRdxBlocks`), 12 der Charge B2S-a (`uTestRdxPaths` 10, `uTestRdxProjectUnits` 1,
 `uTestRdxCodeMap` 1),
 28 der Charge B1-FA (`uTestRdxSuppressTargets` 20, Review R1-01/R1-03
 und Nachbesserung; `uTestRdxBufferMath` 1, R1-04; `uTestRdxProjectUnits` 7,

@@ -399,18 +399,24 @@ type
   // wie FindClassHeads: Korpus-Gegenrechnung der Nachpruefung R5-07 ueber
   // 8.795 Koepfe in 1.044 Dateien, anders nur zwei Codevorlagen 'T<#Name> =
   // class', die kein Pascal sind), die Methodendeklarationen
-  // (FindMethodDecls - je Frage ein Lauf ueber die ganze Datei) je Klasse
-  // und Methode einmal und ohne Klassenkopf gar nicht. Bis Charge B1-FE las
-  // ein SCA096-Lauf mormot.core.variants.pas dreizehnmal ganz (562 ms im
-  // IDE-Hauptthread). Gilt fuer EINEN Planeraufruf - die Code-Sicht liegt
-  // danach nicht mehr fest.
+  // je Klasse und Methode einmal, ohne Klassenkopf gar nicht und seit
+  // Charge B2S-b ebenfalls aus dem Index (MethodDecls: je Kopf
+  // TRdxBlocks.MemberHeads statt FindMethodDecls, das je Frage die ganze
+  // Datei las). Bis Charge B1-FE las ein SCA096-Lauf
+  // mormot.core.variants.pas dreizehnmal ganz (562 ms im IDE-Hauptthread).
+  // GenericMiss: ein '=' hinter '>', dessen Deklaration DeclAt nicht lesen
+  // kann (OpenAngleBefore scheitert an einem Token in den Typparametern) -
+  // dort kann FindClassHeads einen Kopf sehen, den der Index nicht hat;
+  // MethodDecls fragt dann wie bisher FindMethodDecls. Gilt fuer EINEN
+  // Planeraufruf - die Code-Sicht liegt danach nicht mehr fest.
   TRdxScan = record
-    Map       : TRdxCodeMap;
-    Indexed   : Boolean;
-    Decls     : TArray<TRdxTypeDecl>;
-    Ctors     : TArray<string>;
-    Memos     : TArray<TRdxHeadsMemo>;
-    OwnSystem : Boolean;
+    Map         : TRdxCodeMap;
+    Indexed     : Boolean;
+    Decls       : TArray<TRdxTypeDecl>;
+    Ctors       : TArray<string>;
+    Memos       : TArray<TRdxHeadsMemo>;
+    OwnSystem   : Boolean;
+    GenericMiss : Boolean;
   end;
 
   // Die Klasse einer Methode (OwnerOf).
@@ -582,13 +588,28 @@ begin
   Result := ADecl.KindTok.Low <> '';
 end;
 
+// Ein '=' im Lauf von IndexScan: die Deklaration in den Index (DeclAt) -
+// oder, wenn DeclAt sie nicht lesen kann und davor '>' steht, GenericMiss
+// (s. TRdxScan).
+procedure IndexDecl(var AScan: TRdxScan; const AEq: TRdxToken);
+var
+  D : TRdxTypeDecl;
+begin
+  if DeclAt(AScan.Map, AEq, D) then
+  begin
+    SetLength(AScan.Decls, Length(AScan.Decls) + 1);
+    AScan.Decls[High(AScan.Decls)] := D;
+  end
+  else if Before(AScan.Map, AEq).Low = '>' then
+    AScan.GenericMiss := True;
+end;
+
 // Der eine Lauf des Planerlaufs (s. TRdxScan): jede Deklaration an einem
-// '=', jeder Name hinter 'constructor' (auch '&Name') und ein 'System' ohne
-// '.' dahinter (OwnSystem).
+// '=' (IndexDecl), jeder Name hinter 'constructor' (auch '&Name') und ein
+// 'System' ohne '.' dahinter (OwnSystem).
 procedure IndexScan(var AScan: TRdxScan);
 var
   T, P : TRdxToken;
-  D    : TRdxTypeDecl;
   Ctor : Boolean;
 begin
   if AScan.Indexed then Exit;
@@ -598,11 +619,8 @@ begin
   T := NextToken(AScan.Map, 1, 1);
   while T.Low <> '' do
   begin
-    if (T.Low = '=') and DeclAt(AScan.Map, T, D) then
-    begin
-      SetLength(AScan.Decls, Length(AScan.Decls) + 1);
-      AScan.Decls[High(AScan.Decls)] := D;
-    end;
+    if T.Low = '=' then
+      IndexDecl(AScan, T);
     if Ctor and T.IsWord then
     begin
       SetLength(AScan.Ctors, Length(AScan.Ctors) + 1);
@@ -696,22 +714,10 @@ begin
   AScan.Memos[High(AScan.Memos)].Heads := AHeads;
 end;
 
-// Hat der Typ ab AKind (class, object, interface ...) einen Rumpf mit end?
-// Nicht 'class;' (vorwaerts), 'class of' (Metaklasse), 'class(TBase);'
-// (Kurzform). Dieselbe Probe wie uRdxBlocks.TypeHasBody und
-// uRdxSqlTemplate.HasTypeBody (beide privat) - der Routinen-/Typ-Index des
-// Gegen-Reviews R5 (R5-03) legt sie zusammen.
-function TypeHasBody(AMap: TRdxCodeMap; const AKind: TRdxToken): Boolean;
-var
-  N : TRdxToken;
-begin
-  N := After(AMap, AKind);
-  while InList(N.Low, CLASS_MODIFIERS) do
-    N := After(AMap, N);
-  if N.Low = '(' then
-    N := AfterClose(AMap, N);
-  Result := not InList(N.Low, [';', 'of', '']);
-end;
+// TypeHasBody (hat der Typ einen Rumpf mit end?) stand bis Charge B2S-b hier
+// als Kopie - dieselbe Probe wie in uRdxRoutineFixes und
+// uRdxSqlTemplate.HasTypeBody; seitdem die eine in uRdxBlocks (Gegen-Review
+// R5, R5-03).
 
 // Die Koepfe 'Name [<..>] = [packed] class' mit Rumpf, deren Name das
 // letzte Glied von AClassPath ist - je Treffer das Token 'class', aus dem
@@ -737,16 +743,33 @@ begin
 end;
 
 // TRdxBlocks.FindMethodDecls einmal je Klasse und Methode des Laufs -
-// und nicht ohne Klassenkopf (ClassHeads): ohne den findet es nichts.
+// und nicht ohne Klassenkopf (ClassHeads): ohne den findet es nichts. Die
+// Koepfe nimmt es seit Charge B2S-b aus dem Index (ClassHeads, je Kopf
+// TRdxBlocks.MemberHeads) statt aus FindClassHeads - das las je Frage die
+// ganze Datei, je Vorfahr in der Unit einmal (Gegen-Review R5-07: zwei
+// Laeufe von je gut 90 ms auf wbInterface.pas, FPC i386). Dieselben Koepfe
+// in derselben Reihenfolge: der Index sieht jeden Kopf, den FindClassHeads
+// sieht (dieselben Proben ueber dasselbe '=', s. TRdxScan.GenericMiss) -
+// ausser einem generischen Kopf, dessen Typparameter OpenAngleBefore nicht
+// lesen kann; liegt in der Datei ein solches '=' hinter '>', fragt es wie
+// bisher FindMethodDecls.
 function MethodDecls(var AScan: TRdxScan;
   const AClassPath, AMethod: string): TArray<TRdxToken>;
 var
-  Key : string;
+  Key   : string;
+  Heads : TArray<TRdxToken>;
+  C     : TRdxToken;
+  H     : TRdxToken;
 begin
   Key := 'method:' + LowerCase(LastPart(AClassPath)) + '.' + LowerCase(AMethod);
   if FindMemo(AScan, Key, Result) then Exit;
-  if Length(ClassHeads(AScan, AClassPath)) > 0 then
-    Result := TRdxBlocks.FindMethodDecls(AScan.Map, AClassPath, AMethod);
+  Heads := ClassHeads(AScan, AClassPath);
+  if (Length(Heads) > 0) and AScan.GenericMiss then
+    Result := TRdxBlocks.FindMethodDecls(AScan.Map, AClassPath, AMethod)
+  else
+    for C in Heads do
+      for H in TRdxBlocks.MemberHeads(AScan.Map, C, AMethod) do
+        AddToken(Result, H);
   KeepMemo(AScan, Key, Result);
 end;
 
@@ -942,45 +965,39 @@ begin
     Result := TRdxBlocks.ReadRoutine(AMap, K, R);
 end;
 
-// Die Koepfe auf ALine (Kopfwort-Token, links nach rechts).
-function HeadsOnLine(AMap: TRdxCodeMap; ALine: Integer): TArray<TRdxToken>;
-var
-  T : TRdxToken;
-begin
-  Result := nil;
-  T := NextToken(AMap, ALine, 1);
-  while (T.Low <> '') and (T.Line = ALine) do
-  begin
-    if IsRoutineHead(AMap, T) then
-      AddToken(Result, T);
-    T := After(AMap, T);
-  end;
-end;
-
 // SCA196: die innerste Routine, deren begin..end die Zeile ALine umfasst -
 // Koepfe von ALine aufwaerts, je Zeile von rechts (eine lokale Routine
 // steht hinter dem Kopf ihrer aeusseren). Ein Kopf, dessen Grenzen nicht
-// sicher zu lesen sind, beendet die Suche mit seinem Grund.
+// sicher zu lesen sind, beendet die Suche mit seinem Grund. Die Suche ist
+// der Baustein TRdxBlocks.HeadBefore ab dem Ende der Zeile ALine (Gegen-
+// Review R5-03; bis Charge B2S-b hier zeilenweise ausgeschrieben, mit
+// HeadsOnLine) - die Politik dieser Frage bleibt, wie sie war: Zeilen statt
+// Token, der erste unsichere Kopf beendet die Suche, kein Abschnittswort.
+// (uRdxTryFixes.RoutineAround fragt anders: Token, unsichere Koepfe
+// uebergangen, ein Abschnittswort der Unit beendet die Suche.)
 function EnclosingRoutine(AMap: TRdxCodeMap; ALine: Integer;
   out R: TRdxRoutine): string;
 var
-  Li, i : Integer;
-  Heads : TArray<TRdxToken>;
+  T : TRdxToken;
+  S : TRdxHeadStep;
 begin
-  for Li := ALine downto 1 do
+  R := Default(TRdxRoutine);
+  // Die Suche beginnt vor dem Anfang der Zeile dahinter: am letzten Token
+  // der Zeile ALine (bzw. einer Zeile davor).
+  T := Default(TRdxToken);
+  T.Line := ALine + 1;
+  T.Col := 1;
+  while TRdxBlocks.HeadBefore(AMap, T, [], S) do
   begin
-    Heads := HeadsOnLine(AMap, Li);
-    for i := High(Heads) downto 0 do
+    if S.Reason <> '' then
+      Exit(Format('Routine in Zeile %d: %s', [S.Tok.Line, S.Reason]));
+    if (S.Routine.Body.Low <> '') and (S.Routine.Body.Line <= ALine)
+       and (ALine <= S.Routine.EndTok.Line) then
     begin
-      Result := TRdxBlocks.ReadRoutine(AMap, Heads[i], R);
-      if Result <> '' then
-        Exit(Format('Routine in Zeile %d: %s', [Li, Result]));
-      if (R.Body.Low <> '') and (R.Body.Line <= ALine)
-         and (ALine <= R.EndTok.Line) then
-        Exit('');
+      R := S.Routine;
+      Exit('');
     end;
   end;
-  R := Default(TRdxRoutine);
   Result := 'keine Routine um die gemeldete Zeile - ' + R_MOVED;
 end;
 

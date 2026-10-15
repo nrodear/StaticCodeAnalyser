@@ -105,6 +105,17 @@ type
     Vis      : string;
   end;
 
+  // Ein Schritt der Suche nach der Routine um eine Stelle
+  // (TRdxBlocks.HeadBefore): ein Routinenkopf samt Grenzen bzw. dem Grund,
+  // warum sie nicht sicher sind - oder ein Schluesselwort, an dem die Suche
+  // endet (Stop).
+  TRdxHeadStep = record
+    Tok     : TRdxToken;     // das Kopfwort bzw. das Wort aus AStops
+    Stop    : Boolean;       // Tok ist ein Wort aus AStops, kein Kopf
+    Reason  : string;        // Kopf: '' oder der Grund (ReadRoutine)
+    Routine : TRdxRoutine;   // Kopf: die Grenzen (gelesen bis zum Grund)
+  end;
+
   // Die Bausteine mit Klassen-Namen (bis Charge B2S-b
   // TRdxRoutineFixes.ReadRoutine usw.): auf dem Puffertext ueber die
   // Code-Sicht, ohne ToolsAPI und Parser (laeuft auch im FPC-Pruefstand).
@@ -118,11 +129,38 @@ type
     class function ReadRoutine(AMap: TRdxCodeMap; const AHead: TRdxToken;
       out ARoutine: TRdxRoutine): string; static;
 
+    // Baustein "innerste Routine um eine Stelle" (Gegen-Review R5-03): von
+    // T rueckwaerts - T selbst nicht - zum naechsten Routinenkopf
+    // (IsRoutineHead) bzw. zum naechsten Schluesselwort aus AStops (Stop);
+    // True mit AStep, und T steht auf dem gefundenen Token (der naechste
+    // Aufruf sucht davor weiter); False am Dateianfang. Ein Kopf kommt mit
+    // seinen Grenzen (ReadRoutine) bzw. dem Grund, warum sie nicht sicher
+    // sind. Ob die Routine die Stelle umfasst und was ein unsicherer Kopf
+    // heisst, entscheidet die Frage des Aufrufers - seine Politik, eine
+    // kleine Huelle: uRdxTryFixes.RoutineAround (Rumpf um ein Token,
+    // unsichere Koepfe uebergangen, ein Abschnittswort der Unit beendet die
+    // Suche) und uRdxResultFixes.EnclosingRoutine (SCA196: Rumpf um eine
+    // Zeile, der erste unsichere Kopf beendet die Suche mit seinem Grund).
+    // Bis Charge B2S-b lief die Suche in beiden als eigene Kopie, Token fuer
+    // Token bzw. Zeile fuer Zeile. Die SQL-Vorlage fragt statt dessen ihren
+    // Index aus EINEM Lauf (uRdxSqlTemplate.BuildScopes): sie hat viele
+    // Fragen je Lauf und einen anderen Vertrag (Kopf bis letztes ';').
+    class function HeadBefore(AMap: TRdxCodeMap; var T: TRdxToken;
+      const AStops: array of string; out AStep: TRdxHeadStep): Boolean;
+      static;
+
     // Baustein Decl/Impl-Finder: die Koepfe ('class' bzw. Kopfwort) der
     // Methode AMethod auf Tiefe 1 im Rumpf jeder Klasse, die wie das letzte
     // Glied von AClassPath heisst.
     class function FindMethodDecls(AMap: TRdxCodeMap;
       const AClassPath, AMethod: string): TArray<TRdxToken>; static;
+    // ... und dasselbe fuer EINEN Klassenkopf AClass (das Token 'class',
+    // etwa aus FindClassHeads) - FindMethodDecls fragt so jeden seiner
+    // Koepfe. Seit Charge B2S-b oeffentlich: uRdxResultFixes nimmt die
+    // Koepfe aus seinem Index statt eines Laufs ueber die ganze Datei je
+    // Frage (Gegen-Review R5-07).
+    class function MemberHeads(AMap: TRdxCodeMap; const AClass: TRdxToken;
+      const AMethod: string): TArray<TRdxToken>; static;
     // ... und ihre Implementierungskoepfe hinter 'implementation': die
     // letzten Glieder des Namens sind AClassPath + AMethod
     // ('TOuter.TInner.Bar' passt zu 'TInner' und zu 'TOuter.TInner').
@@ -1203,6 +1241,36 @@ begin
   Result := ReadRoutineAt(AMap, H, 0, ARoutine);
 end;
 
+// Rueckwaerts Token fuer Token wie bis Charge B2S-b uRdxTryFixes.
+// RoutineAround: das Token davor (P) entscheidet, ob T ein Kopf ist
+// (IsRoutineHeadAfter) bzw. ein Schluesselwort (IsKeywordAt).
+class function TRdxBlocks.HeadBefore(AMap: TRdxCodeMap; var T: TRdxToken;
+  const AStops: array of string; out AStep: TRdxHeadStep): Boolean;
+var
+  P : TRdxToken;
+begin
+  AStep := Default(TRdxHeadStep);
+  T := Before(AMap, T);
+  while T.Low <> '' do
+  begin
+    P := Before(AMap, T);
+    if IsRoutineHeadAfter(T, P) then
+    begin
+      AStep.Tok := T;
+      AStep.Reason := ReadRoutine(AMap, T, AStep.Routine);
+      Exit(True);
+    end;
+    if InList(T.Low, AStops) and IsKeywordAt(AMap, T, P) then
+    begin
+      AStep.Tok := T;
+      AStep.Stop := True;
+      Exit(True);
+    end;
+    T := P;
+  end;
+  Result := False;
+end;
+
 class function TRdxBlocks.FindMethodDecls(AMap: TRdxCodeMap;
   const AClassPath, AMethod: string): TArray<TRdxToken>;
 var
@@ -1211,6 +1279,13 @@ begin
   Result := nil;
   for C in FindClassHeads(AMap, AClassPath) do
     AddMemberHeads(AMap, C, LowerCase(AMethod), Result);
+end;
+
+class function TRdxBlocks.MemberHeads(AMap: TRdxCodeMap;
+  const AClass: TRdxToken; const AMethod: string): TArray<TRdxToken>;
+begin
+  Result := nil;
+  AddMemberHeads(AMap, AClass, LowerCase(AMethod), Result);
 end;
 
 // Passen die Glieder AParts eines Kopfs zu AClassParts + ALowMethod? Die

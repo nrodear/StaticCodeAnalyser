@@ -988,28 +988,32 @@ end;
 
 { ---- Die Routine um A: lokale Variablen (Weitergabe-Sperre) ---- }
 
-// Die innerste Routine, deren Rumpf AAt enthaelt - rueckwaerts bis zu
-// ihrem Kopf, Grenzen per ReadRoutine (lokale Routinen davor enthalten AAt
-// nicht und werden uebergangen). False ohne.
+// Die innerste Routine, deren Rumpf AAt enthaelt (begin < AAt < end) -
+// rueckwaerts bis zu ihrem Kopf, Grenzen per ReadRoutine (lokale Routinen
+// davor enthalten AAt nicht und werden uebergangen). False ohne. Die Suche
+// ist der Baustein TRdxBlocks.HeadBefore (Gegen-Review R5-03, bis Charge
+// B2S-b hier ausgeschrieben); die Politik dieser Frage bleibt, wie sie war:
+// ein Kopf, dessen Grenzen nicht sicher sind, wird uebergangen - die Suche
+// geht davor weiter -, und ein Abschnittswort der Unit (UNIT_BOUNDS)
+// beendet sie. (SCA196 in uRdxResultFixes fragt anders: Zeilen statt
+// Token, und der erste unsichere Kopf beendet dort die Suche mit seinem
+// Grund.)
 function RoutineAround(AMap: TRdxCodeMap; const AAt: TRdxToken;
   out ARoutine: TRdxRoutine): Boolean;
 var
-  T, P : TRdxToken;
+  T : TRdxToken;
+  S : TRdxHeadStep;
 begin
   ARoutine := Default(TRdxRoutine);
-  T := Before(AMap, AAt);
-  while T.Low <> '' do
-  begin
-    P := Before(AMap, T);
-    if IsRoutineHeadAfter(T, P)
-       and (TRdxBlocks.ReadRoutine(AMap, T, ARoutine) = '')
-       and (ARoutine.Body.Low <> '') and TokBefore(ARoutine.Body, AAt)
-       and TokBefore(AAt, ARoutine.EndTok) then
+  T := AAt;
+  while TRdxBlocks.HeadBefore(AMap, T, UNIT_BOUNDS, S) and not S.Stop do
+    if (S.Reason = '') and (S.Routine.Body.Low <> '')
+       and TokBefore(S.Routine.Body, AAt)
+       and TokBefore(AAt, S.Routine.EndTok) then
+    begin
+      ARoutine := S.Routine;
       Exit(True);
-    if IsKeywordAt(AMap, T, P) and InList(T.Low, UNIT_BOUNDS) then
-      Break;
-    T := P;
-  end;
+    end;
   Result := False;
 end;
 

@@ -172,6 +172,7 @@
         <DCCReference Include="uTestRdxQualifyUses.pas"/>
         <DCCReference Include="uTestRdxProjectUnits.pas"/>
         <DCCReference Include="uTestRdxPaths.pas"/>
+        <DCCReference Include="uTestRdxBlocks.pas"/>
         <DCCReference Include="uTestRdxFixTable.pas"/>
         <DCCReference Include="uTestRdxIntroPlan.pas"/>
         <DCCReference Include="uTestRdxIntroRefuse.pas"/>

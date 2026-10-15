@@ -255,7 +255,8 @@ uses
   System.SysUtils,
   System.StrUtils,    // PosEx
   uRefactorInfo,      // ROLE_TARGET, ROLE_LITERAL, ROLE_OPERAND
-  uRdxBlocks;         // ReadRoutine: Grenzen der Routinen (lokale Konstanten)
+  uRdxBlocks;         // ReadRoutine (lokale Konstanten), HeritageOf,
+                      // TypeHasBody, CLASS_MODIFIERS
 
 const
   // Gruende - deutsch ohne Umlaute wie in den Nachbar-Units (Statustext).
@@ -2558,7 +2559,9 @@ const
   TYPE_KINDS: array[0..3] of string = ('class', 'object', 'interface',
     'dispinterface');
   TYPE_LEADS: array[0..1] of string = ('=', 'packed');
-  TYPE_MODIFIERS: array[0..1] of string = ('abstract', 'sealed');
+  // Die Woerter zwischen 'class' und Vorfahrenliste ('class sealed') sind
+  // seit Charge B2S-b uRdxBlocks.CLASS_MODIFIERS (bis dahin hier als
+  // TYPE_MODIFIERS mit demselben Inhalt).
   // Hinter 'record' in einer Typ-Einschraenkung ('<T: record>').
   CONSTRAINT_FOLLOWERS: array[0..2] of string = ('>', ',', ';');
   KW_RECORD = 'record';
@@ -2571,20 +2574,10 @@ begin
   Result := not TokBefore(T, A) and not TokBefore(B, T);
 end;
 
-// Hat der Typ ab AKind (class, object, interface ...) einen Rumpf mit end?
-// Nicht 'class;' (vorwaerts), 'class of' (Metaklasse), 'class(TBase);'
-// (Kurzform) - wie uRdxBlocks.TypeHasBody.
-function HasTypeBody(AMap: TRdxCodeMap; const AKind: TRdxToken): Boolean;
-var
-  N : TRdxToken;
-begin
-  N := After(AMap, AKind);
-  while InList(N.Low, TYPE_MODIFIERS) do
-    N := After(AMap, N);
-  if N.Low = '(' then
-    N := AfterClose(AMap, N);
-  Result := not InList(N.Low, [';', 'of', '']);
-end;
+// Hat der Typ ab AKind einen Rumpf mit end? Das fragt seit Charge B2S-b
+// uRdxBlocks.TypeHasBody - bis dahin stand die Probe hier als HasTypeBody
+// (dritte Kopie neben uRdxRoutineFixes und uRdxResultFixes; Gegen-Review
+// R5, R5-03).
 
 // Oeffnet T (Schluesselwort, APrev davor) einen Typ mit Rumpf? 'record'
 // immer, ausser als Einschraenkung ('<T: record>'); class, object,
@@ -2594,7 +2587,7 @@ begin
   if T.Low = KW_RECORD then
     Exit(not InList(After(AMap, T).Low, CONSTRAINT_FOLLOWERS));
   Result := InList(T.Low, TYPE_KINDS) and InList(APrev.Low, TYPE_LEADS)
-    and HasTypeBody(AMap, T);
+    and TypeHasBody(AMap, T);
 end;
 
 // Der Name des Typs, dessen Oeffner AKind ist ('TFoo = class', 'TFoo<T> =
@@ -2816,7 +2809,12 @@ begin
       Result := i;
 end;
 
-// Die innerste Routine bzw. der innerste Typrumpf um ATok; -1 ohne.
+// Die innerste Routine bzw. der innerste Typrumpf um ATok; -1 ohne. Eine
+// Frage an den Index des einen Laufs (BuildScopes), mit dem Vertrag der
+// Vorlage: die Routine umfasst ATok vom Kopf bis zum letzten ';' samt
+// Deklarationsteil (lokale Konstanten). Die Rueckwaertssuche der anderen
+// Planer (uRdxBlocks.TRdxBlocks.HeadBefore, Gegen-Review R5-03) fragt je
+// Frage neu - hier kommen viele Fragen auf einen Lauf.
 function InnermostRoutine(const AScopes: TSqlScopes; const ATok: TRdxToken): Integer;
 var
   i : Integer;
@@ -2931,7 +2929,7 @@ begin
       Exit(True);
     T := AScopes.Types[Ty].Open;
     Nx := After(AMap, T);
-    while InList(Nx.Low, TYPE_MODIFIERS) do
+    while InList(Nx.Low, CLASS_MODIFIERS) do
       Nx := After(AMap, Nx);
     if Nx.Low = KW_HELPER then
       Exit(True);

@@ -97,6 +97,11 @@ program reDelphix.Test;
 //   * uTestRdxPaths    - die eine Netzpfad-Regel (uRdxPaths, Charge
 //                        B2S-a): UNC, Win32-Namensraum, Netzlaufwerk ueber
 //                        die Naht; SCA164/SCA014 auf '\\?\C:\..'
+//   * uTestRdxBlocks   - Bausteine in uRdxBlocks (Charge B2S-b): die Suche
+//                        nach der Routine um eine Stelle (HeadBefore) mit
+//                        den Politiken von SCA009 und SCA196,
+//                        MemberHeads und der Index der Klassenkoepfe
+//                        (SCA096), TypeHasBody
 //   * uTestRdxFixTable - die Tabelle der einfachen Hilfen (uRdxFixTable):
 //                        jede Zeile mit Planer, Hinweis und Menuetext
 //   * uTestRdxIntroPlan - Code-Aktion "Lokale Variable einfuehren": das
@@ -219,6 +224,7 @@ uses
   uTestRdxQualifyUses in 'uTestRdxQualifyUses.pas',
   uTestRdxProjectUnits in 'uTestRdxProjectUnits.pas',
   uTestRdxPaths in 'uTestRdxPaths.pas',
+  uTestRdxBlocks in 'uTestRdxBlocks.pas',
   uTestRdxFixTable in 'uTestRdxFixTable.pas',
   uTestRdxIntroPlan in 'uTestRdxIntroPlan.pas',
   uTestRdxIntroRefuse in 'uTestRdxIntroRefuse.pas',
