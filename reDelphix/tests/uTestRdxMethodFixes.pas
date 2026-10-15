@@ -16,6 +16,10 @@ unit uTestRdxMethodFixes;
 //   Vorfahr eines lokalen Interfaces, IInterface-Member als Name, lokale
 //   Kette bis IInterface (Hilfe); Kommentar ueber der Implementierung ohne
 //   den Namen bleibt; Aufruf in anderer Umlaut-Schreibung.
+//   Charge B1-FD (Code-Review reDelphix, R4, Pruefer-Fixture rc/r405.txt):
+//   ein Include vor implementation steht im Plan und wird gelesen (R4-05,
+//   Property-Accessor einer Nachfahrenklasse im Include); Marker hinter der
+//   Deklaration bzw. dem end der Implementierung sperren (R4-04).
 // Die Gegenprobe mit dem echten Detektor steht in
 // uTestRdxRoutineFixesDetector (nur Delphi).
 
@@ -44,6 +48,8 @@ type
     [Test] procedure Sca147_InterfaceAncestors;
     [Test] procedure Sca147_CommentAboveImpl;
     [Test] procedure Sca147_UmlautCall_NoHelp;
+    [Test] procedure Sca147_IncludeBeforeImplementation_Read;
+    [Test] procedure Sca147_TrailingMarker_NoHelp;
   end;
 
 implementation
@@ -435,6 +441,109 @@ begin
     ['procedure TFoo.' + Lower + ';', 'begin', 'end;', '',
     'procedure TFoo.Run;', 'begin', '  ' + Upper + ';', 'end;']), 6, 'TFoo',
     Lower, 'verwendet');
+end;
+
+// ---- Charge B1-FD (Code-Review reDelphix, R4; je gegen 4358b769 rot) ----
+
+// Der Plan des Planers fuer die Meldung zu AClass.AMethod auf Zeile ALine.
+function MethodPlan(const ASource: string; ALine: Integer; const AClass,
+  AMethod: string; out AReason: string): TRdxRoutinePlan;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    TRdxRoutineFixes.UnusedPrivateMethod(Map, ALine, Msg(AClass, AMethod),
+      Result, AReason);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+// Schreibt AText nach APath (Include-Dateien neben der Unit).
+procedure SaveText(const APath, AText: string);
+var
+  SL : TStringList;
+begin
+  SL := TStringList.Create;
+  try
+    SL.Text := AText;
+    SL.SaveToFile(APath);
+  finally
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxMethodFixes.Sca147_IncludeBeforeImplementation_Read;
+var
+  P         : TRdxRoutinePlan;
+  R, Dir, U : string;
+begin
+  // R4-05, Pruefer-Fall r405 (1): ein Include zwischen Klasse und
+  // implementation kann eine Nachfahrenklasse tragen ('TBar = class(TFoo)
+  // property X: Integer read GetX; end;' - private ist in der ganzen Unit
+  // sichtbar). Der Planer nannte es nicht, der Check der Tabelle las nichts,
+  // und nach der Hilfe brach das Include mit E2003. Jetzt steht es in
+  // P.Includes wie bei SCA164.
+  P := MethodPlan(UnitOf(['  TFoo = class', '  private',
+    '    function GetX: Integer;', '  public', '    procedure Run;', '  end;',
+    '{$I derived.inc}'], ['function TFoo.GetX: Integer;', 'begin',
+    '  Result := 1;', 'end;', 'procedure TFoo.Run;', 'begin', 'end;']), 6,
+    'TFoo', 'GetX', R);
+  Assert.AreEqual('', R, 'der Planer selbst bietet an');
+  Assert.AreEqual<Integer>(1, Integer(Length(P.Includes)), 'Includes');
+  Assert.AreEqual('derived.inc', P.Includes[0]);
+  // Der Check liest es neben der Unit: nennt es GetX, keine Hilfe; fehlt
+  // es, ebenso; ohne den Namen bleibt die Hilfe.
+  Dir := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
+    + 'rdx_b1fd_inc' + PathDelim;
+  ForceDirectories(Dir);
+  U := Dir + 'u.pas';
+  try
+    SaveText(Dir + 'derived.inc', Join(['type', '  TBar = class(TFoo)',
+      '    property X: Integer read GetX;', '  end;']));
+    R := TRdxRoutineFixes.IncludeReason(U, P.Includes, P.Name);
+    Assert.IsTrue(Pos('nennt GetX', R) > 0, R);
+    SaveText(Dir + 'derived.inc', '{$R-}');
+    Assert.AreEqual('', TRdxRoutineFixes.IncludeReason(U, P.Includes, P.Name));
+    DeleteFile(Dir + 'derived.inc');
+    R := TRdxRoutineFixes.IncludeReason(U, P.Includes, P.Name);
+    Assert.IsTrue(Pos('nicht neben der Unit', R) > 0, R);
+  finally
+    DeleteFile(Dir + 'derived.inc');
+    RemoveDir(Dir);
+  end;
+  // Ein Include im Kopf der Unit (vor interface) traegt nur Direktiven -
+  // es steht nicht im Plan.
+  P := MethodPlan(Join(['unit u;', '{$I cfg.inc}', 'interface', 'type',
+    '  TFoo = class', '  private', '    procedure Dead;', '  end;',
+    'implementation', 'procedure TFoo.Dead;', 'begin', 'end;', 'end.']), 7,
+    'TFoo', 'Dead', R);
+  Assert.AreEqual('', R);
+  Assert.AreEqual<Integer>(0, Integer(Length(P.Includes)), 'Kopf-Include');
+end;
+
+procedure TTestRdxMethodFixes.Sca147_TrailingMarker_NoHelp;
+begin
+  // R4-04 fuer SCA147: der Marker hinter der Deklaration gilt dem Member
+  // dahinter (uSuppression.BuildMap) ...
+  AssertRefused(UnitOf(['  TFoo = class', '  private',
+    '    procedure Dead; // noinspection DuplicateString',
+    '    procedure Used;', '  public', '    procedure Run;', '  end;'],
+    ['procedure TFoo.Dead;', 'begin', 'end;', '', 'procedure TFoo.Used;',
+    'begin', 'end;', '', 'procedure TFoo.Run;', 'begin', '  Used;', 'end;']),
+    6, 'TFoo', 'Dead', 'Zeile 6 endet mit dem Kommentar');
+  // ... der hinter dem end der Implementierung der Routine dahinter.
+  AssertRefused(UnitOf(['  TFoo = class', '  private', '    procedure Dead;',
+    '    procedure Used;', '  public', '    procedure Run;', '  end;'],
+    ['procedure TFoo.Dead;', 'begin', 'end; // noinspection EmptyMethod',
+    'procedure TFoo.Used;', 'begin', 'end;', '', 'procedure TFoo.Run;',
+    'begin', '  Used;', 'end;']), 6, 'TFoo', 'Dead', 'Zeile 14 endet');
 end;
 
 initialization

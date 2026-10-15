@@ -64,6 +64,17 @@ unit uRdxRoutineFixes;
 // deshalb ein 'implementation' vor dem Kopf. Eine leere private-Sektion,
 // die nach SCA147 uebrig bleibt, meldet danach SCA087 (eigene Hilfe).
 //
+// PLATTE: die Planer sind Textlogik, die Unit ist es nicht ganz (Gegen-
+// Review R4-08) - IncludeChainReason liest die Include-Dateien vor
+// 'implementation' von der Platte: fuer SCA164 und (seit Charge B1-FD)
+// SCA147 im Check der Tabelle, seit Charge Q14 auch fuer SCA014
+// (uRdxMagicFixes, Compiler-Weichen der Includes). Auf einem Netzpfad (UNC
+// oder Netzlaufwerk, IsNetworkPath) liest sie nichts und nennt den Grund -
+// der Menueaufbau laeuft im Hauptthread (R4-03). Der Leser gehoert in eine
+// eigene Unit (uRdxIncludes, samt IncludesUpTo und der zweiten Kopie
+// uRdxMagicFixes.AllIncludes); das traegt die Charge der Schichtung, weil
+// eine neue Unit Paket, Projekt und Pruefstand beruehrt.
+//
 // GRUNDSATZ wie in uRdxSimpleFixes: lieber keine Hilfe als eine falsche.
 
 interface
@@ -96,20 +107,19 @@ type
 
   // Ergebnis der Planer: alle Ersetzungen (EIN Undo-Schritt) und der Name
   // fuer den Menuetext - schon aus der Meldung, auch wenn abgelehnt wird.
-  // Includes: die Dateien der {$I}-Direktiven vor 'implementation' (SCA164)
+  // Includes: die Dateien der {$I}-Direktiven vor 'implementation' (SCA164;
+  // seit Charge B1-FD auch SCA147 - ein Include im interface-Teil kann eine
+  // Nachfahrenklasse mit 'property P read X' tragen, Gegen-Review R4-05)
   // - der Puffer zeigt ihren Inhalt nicht; der Aufrufer liest sie neben der
-  // Unit und prueft sie (IncludeReason), bevor er die Hilfe anbietet.
+  // Unit und prueft sie (IncludeReason), bevor er die Hilfe anbietet. Das
+  // Geruest der Tabelle nimmt die Planer als TRdxPlannerOf<TRdxRoutinePlan>
+  // (uRdxFixTable; der eigene Typ TRdxRoutinePlanner hier war seit Charge
+  // H5c unbenutzt und ist mit B1-FD gestrichen, Gegen-Review R4-07).
   TRdxRoutinePlan = record
     Edits    : TArray<TRdxEdit>;
     Name     : string;
     Includes : TArray<string>;
   end;
-
-  // Die Form beider Planer (uRdxFixTable: RoutineForm im Geruest
-  // TRdxFixFrame).
-  TRdxRoutinePlanner = function(AMap: TRdxCodeMap; ALine: Integer;
-    const AMessage: string; out APlan: TRdxRoutinePlan;
-    out AReason: string): Boolean;
 
   // Die Planer der Charge H3b und ihre Bausteine (s. Kopf): je Fund alle
   // Ersetzungen in EINEM Plan oder der Grund, warum keine - auf dem
@@ -163,8 +173,10 @@ type
     // String-Literal oder einer Direktive, {$L}/{$LINK} in der Datei, {$I}
     // im implementation-Teil, eine Direktive im Bereich ausser
     // ausgeglichenem $IF../$ENDIF bzw. $REGION, zwei Routinen auf einer
-    // Zeile. Die {$I}-Dateien davor nennt APlan.Includes - der Aufrufer
-    // prueft sie mit IncludeReason.
+    // Zeile, einen Marker-Kommentar, der ausserhalb wirkt ('end; //
+    // noinspection X' auf der letzten Zeile, '// noinspection-file' im
+    // Bereich - MarkerLinesReason). Die {$I}-Dateien davor nennt
+    // APlan.Includes - der Aufrufer prueft sie mit IncludeReason.
     class function UnusedRoutine(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out APlan: TRdxRoutinePlan;
       out AReason: string): Boolean; static;
@@ -179,9 +191,11 @@ type
     // als Vorfahr eines lokalen Interfaces) bzw. einem Member von
     // IInterface/IDispatch als Name, mehr als einer Deklaration oder
     // Implementierung, keiner Implementierung in der Datei, jeder weiteren
-    // Verwendung (auch Property-Accessor, String-Literal, Direktive) und
-    // einer Direktive im Bereich wie bei SCA164. Die Formdatei prueft der
-    // Aufrufer (FormNamesMethod).
+    // Verwendung (auch Property-Accessor, String-Literal, Direktive), einer
+    // Direktive im Bereich und einem Marker-Kommentar, der ausserhalb wirkt,
+    // wie bei SCA164. Die Formdatei prueft der Aufrufer (FormNamesMethod),
+    // die {$I}-Dateien davor (seit Charge B1-FD in APlan.Includes) ebenso
+    // mit IncludeReason.
     class function UnusedPrivateMethod(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out APlan: TRdxRoutinePlan;
       out AReason: string): Boolean; static;
@@ -191,13 +205,14 @@ type
     class function FormNamesMethod(const AFormText, AName: string): Boolean;
       static;
 
-    // SCA164: die Include-Dateien AIncludes (TRdxRoutinePlan.Includes) der
-    // Unit AUnitFile lesen - neben der Unit, ohne Endung auch mit .inc/.pas,
-    // verschachtelte Includes ebenso. '' wenn keine AName als Wort nennt;
-    // sonst der Grund - auch, wenn eine nicht zu finden oder zu lesen ist:
-    // sie kann die Routine im interface-Teil deklarieren (nach dem Loeschen
-    // E2065) oder rufen (Gegen-Review H3, Minor 4). '{$I %DATE%}' (FPC) ist
-    // keine Datei.
+    // SCA164/SCA147: die Include-Dateien AIncludes (TRdxRoutinePlan.
+    // Includes) der Unit AUnitFile lesen - neben der Unit, ohne Endung auch
+    // mit .inc/.pas, verschachtelte Includes ebenso. '' wenn keine AName
+    // als Wort nennt; sonst der Grund - auch, wenn eine nicht zu finden oder
+    // zu lesen ist oder auf einem Netzpfad liegt: sie kann die Routine im
+    // interface-Teil deklarieren (nach dem Loeschen E2065), rufen (Gegen-
+    // Review H3, Minor 4) bzw. die Methode als Property-Accessor einer
+    // Nachfahrenklasse nennen (R4-05). '{$I %DATE%}' (FPC) ist keine Datei.
     class function IncludeReason(const AUnitFile: string;
       const AIncludes: TArray<string>; const AName: string): string; static;
   end;
@@ -231,8 +246,21 @@ type
 // Grund, auch fuer ein Include, das nicht zu finden oder zu lesen ist.
 // '{$I %DATE%}' (FPC) ist keine Datei. Bis Charge Q14 nur fuer SCA164
 // (IncludeReason); SCA014 prueft damit die Compiler-Weichen der Includes.
+// Liegt die Unit oder ein Include auf einem Netzpfad (IsNetworkPath), wird
+// nichts gelesen: der Grund kommt ohne Plattenzugriff (Gegen-Review R4-03).
 function IncludeChainReason(const AUnitFile: string;
   const AIncludes: TArray<string>; const ACheck: TRdxIncludeCheck): string;
+
+// Liegt APath im Netz - UNC ('\\server\share\..', auch mit '/') oder ein
+// Laufwerk, das Windows als Netzlaufwerk fuehrt (GetDriveType)? Dort liest
+// reDelphix nichts von der Platte: der Menueaufbau laeuft im Hauptthread,
+// und ein nicht erreichbarer Server haelt jedes FileExists sekundenlang auf
+// (Gegen-Review R4-03: 9 bis 16 s je Include). Ein relativer Pfad liegt
+// nirgends. Die Netzpfad-Regel der Planer-Units, die von der Platte lesen
+// (Includes, SCA014 FileReason); bis Charge B1-FD pruefte nur SCA014 den
+// Pfad der Unit (uRdxMagicFixes UNC, uRdxFixTable.RemoteDriveReason das
+// Netzlaufwerk), kein Include und SCA164/SCA147 gar nichts.
+function IsNetworkPath(const APath: string): Boolean;
 
 implementation
 
@@ -336,9 +364,23 @@ const
   R_IMPL_INCLUDE = '{$I}-Include im implementation-Teil (Zeile %d) - dort '
     + 'kann ein Aufrufer stehen, den die Hilfe nicht sieht';
   R_LAST_LINE = 'die Routine endet auf der letzten Zeile der Datei';
-  // SCA164: Include-Dateien vor implementation (IncludeReason).
+  // SCA164/SCA147: Include-Dateien vor implementation (IncludeReason).
   R_INC_MISSING = 'Include %s vor implementation %s - es kann die Routine '
     + 'deklarieren (interface-Teil) oder rufen, die Hilfe sieht es nicht';
+  // Ursache fuer MissingFmt: Unit oder Include auf einem Netzpfad (R4-03).
+  R_INC_NETWORK = 'auf einem Netzpfad (%s) - nicht gelesen, der Menueaufbau '
+    + 'laeuft im Hauptthread';
+  // GetDriveType: ein Netzlaufwerk (DRIVE_REMOTE, WinBase.h).
+  DRIVE_KIND_REMOTE = 4;
+  // SCA164/SCA147: Marker im geloeschten Bereich, die ausserhalb wirken
+  // (MarkerLinesReason, Gegen-Review R4-04).
+  MARKER_FILE = 'noinspection-file';
+  R_MARKER_FILE = '"// noinspection-file" in Zeile %d - der Marker gilt der '
+    + 'ganzen Datei und ginge mit verloren; von Hand loeschen';
+  R_MARKER_TAIL = 'Zeile %d endet mit dem Kommentar "%s" - ein Marker hinter '
+    + 'Code gilt der Zeile dahinter bzw. bleibt stehen; von Hand loeschen';
+  // So viel des Kommentars nennt R_MARKER_TAIL.
+  MARKER_QUOTE_LEN = 40;
   MAX_INCLUDE_DEPTH = 4;
   INCLUDE_EXTENSIONS: array[0..1] of string = ('.inc', '.pas');
   // Folgt eines davon einem Include, steht es im Kopf der Unit
@@ -1111,6 +1153,41 @@ begin
   Result.Expected := RangeText(AMap, Result.Span);
 end;
 
+// Marker, die das Loeschen der ganzen Zeilen ALines mitnaehme, obwohl sie
+// ausserhalb wirken (Gegen-Review R4-04): ein '//'-Kommentar mit Marker
+// (MarkerReason: noinspection oder ein Absichtsmarker wie bei SCA019) hinter
+// dem Code der letzten nicht leeren Zeile - '// noinspection X' hinter Code
+// gilt der naechsten Zeile, und die bleibt stehen (uSuppression.BuildMap;
+// 'end; // noinspection UnusedRoutine' zielte auf die Routine dahinter);
+// ein Absichtskommentar bleibt wie ueber dem Kopf stehen -, und ein
+// '// noinspection-file' irgendwo im Bereich (er gilt der ganzen Datei).
+// Marker in den Zeilen davor zielen in den Bereich selbst; ueber dem Kopf
+// laesst TopAbove sie stehen. '' oder der Grund.
+function MarkerLinesReason(AMap: TRdxCodeMap; const ALines: TRdxLines): string;
+var
+  Li, Slash, Last : Integer;
+  Comment         : string;
+begin
+  Result := '';
+  Last := 0;
+  for Li := ALines.Top to ALines.Bottom do
+  begin
+    Slash := AMap.LineCommentCol(Li);
+    if (Slash > 0) and (Pos(MARKER_FILE,
+         LowerCase(Copy(AMap.Raw(Li), Slash, MaxInt))) > 0) then
+      Exit(Format(R_MARKER_FILE, [Li]));
+    if Trim(AMap.Raw(Li)) <> '' then
+      Last := Li;
+  end;
+  if Last = 0 then Exit;
+  Slash := AMap.LineCommentCol(Last);
+  if Slash = 0 then Exit;
+  Comment := Copy(AMap.Raw(Last), Slash, MaxInt);
+  if MarkerReason(Comment) <> '' then
+    Result := Format(R_MARKER_TAIL, [Last,
+      TrimRight(Copy(Comment, 1, MARKER_QUOTE_LEN))]);
+end;
+
 { ---- Direktiven (OpensDirective, DirectiveWord, IncludeInLines: seit
   Charge H3c in uRdxCodeMap) ---- }
 
@@ -1506,6 +1583,10 @@ begin
     Scan.Impl.Line, Main, FwdL), R.Name);
   if Result = '' then
     Result := DirectiveBalance(AMap, Main);
+  if Result = '' then
+    Result := MarkerLinesReason(AMap, Main);
+  if (Result = '') and (FwdL.Top > 0) then
+    Result := MarkerLinesReason(AMap, FwdL);
   if Result <> '' then Exit;
   if FwdL.Top > 0 then
     AddEdit(APlan.Edits, LinesEdit(AMap, FwdL, SPAN_164));
@@ -1984,12 +2065,64 @@ begin
     Result := DirectiveBalance(AMap, ImplL);
   if (Result = '') and (DeclL.Bottom >= ImplL.Top) then
     Result := 'Deklaration und Implementierung ueberlappen';
+  if Result = '' then
+    Result := MarkerLinesReason(AMap, DeclL);
+  if Result = '' then
+    Result := MarkerLinesReason(AMap, ImplL);
   if Result <> '' then Exit;
   AddEdit(APlan.Edits, LinesEdit(AMap, DeclL, SPAN_147));
   AddEdit(APlan.Edits, LinesEdit(AMap, ImplL, SPAN_147));
+  // Includes vor implementation wie bei SCA164 (Gegen-Review R4-05): eines
+  // ausserhalb des Klassenrumpfs kann eine Nachfahrenklasse mit 'property
+  // P read X' tragen - private ist in der ganzen Unit sichtbar; nach dem
+  // Loeschen E2003 im Include. Der Detektor liest sie nicht (Gate F nur
+  // hinter implementation), die Includes im Klassenrumpf lehnt schon
+  // MethodContextReason ab. Der Check der Tabelle liest sie neben der Unit
+  // (IncludeReason): nennt eines den Namen oder fehlt es, keine Hilfe.
+  APlan.Includes := IncludesUpTo(AMap, Scan.Impl.Line);
 end;
 
-{ ---- SCA164: Include-Dateien vor implementation ---- }
+{ ---- SCA164/SCA147 (und SCA014): Include-Dateien vor implementation ---- }
+
+{$IFDEF MSWINDOWS}
+// GetDriveType aus kernel32, selbst deklariert statt Winapi.Windows: die
+// Unit braechte Tausende Namen in den Planer (vor System.SysUtils
+// verdeckte sie FindClose u. a.), und der FPC-Pruefstand kennt
+// Winapi.Windows nicht (FPC: Windows).
+function GetDriveTypeW(lpRootPathName: PWideChar): Cardinal; stdcall;
+  external 'kernel32.dll' name 'GetDriveTypeW';
+{$ENDIF}
+
+// Ist ADrive ('Z:') ein Netzlaufwerk? GetDriveType fragt die
+// Laufwerkstabelle von Windows, nicht den Server - auch ein getrenntes
+// Netzlaufwerk antwortet sofort.
+function IsRemoteDrive(const ADrive: string): Boolean;
+begin
+  {$IFDEF MSWINDOWS}
+  Result := GetDriveTypeW(PWideChar(ADrive + '\')) = DRIVE_KIND_REMOTE;
+  {$ELSE}
+  Result := False;
+  {$ENDIF}
+end;
+
+function IsNetworkPath(const APath: string): Boolean;
+begin
+  if (Length(APath) > 2) and CharInSet(APath[1], ['\', '/'])
+     and CharInSet(APath[2], ['\', '/']) then
+    Exit(True);
+  Result := (Length(APath) >= 2) and (APath[2] = ':')
+    and CharInSet(APath[1], ['A'..'Z', 'a'..'z'])
+    and IsRemoteDrive(Copy(APath, 1, 2));
+end;
+
+// Der Teil von APath, der ihn zum Netzpfad macht ('\\server\share' bzw.
+// 'Z:'), fuer den Grund.
+function NetworkRoot(const APath: string): string;
+begin
+  Result := ExtractFileDrive(APath);
+  if Result = '' then
+    Result := APath;
+end;
 
 // Die Datei AFile eines Includes, relativ zu ADir (Verzeichnis mit
 // Trenner); ohne Endung auch mit .inc bzw. .pas wie die Compiler. '' wenn
@@ -2035,17 +2168,32 @@ begin
   end;
 end;
 
+// Liegt eines der Verzeichnisse, in denen ein Include gesucht wird, oder
+// der Include-Pfad selbst ('{$I \\server\share\defs.inc}') im Netz? Der
+// Teil, der es zum Netzpfad macht (NetworkRoot), sonst ''.
+function NetworkPlace(const ADir, AUnitDir, AFile: string): string;
+begin
+  Result := '';
+  if IsNetworkPath(AFile) then
+    Result := NetworkRoot(AFile)
+  else if IsNetworkPath(AUnitDir) then
+    Result := NetworkRoot(AUnitDir)
+  else if IsNetworkPath(ADir) then
+    Result := NetworkRoot(ADir);
+end;
+
 // Das Include AFile (relativ zu ADir, sonst zum Verzeichnis der Unit
 // AUnitDir) und seine verschachtelten Includes bis MAX_INCLUDE_DEPTH: ''
 // wenn ACheck.Test fuer keines einen Grund nennt, sonst der Grund (auch:
-// nicht gefunden, nicht lesbar - ACheck.MissingFmt).
+// nicht gefunden, nicht lesbar, auf einem Netzpfad - ACheck.MissingFmt).
+// Den Netzpfad prueft sie VOR jedem FileExists (Gegen-Review R4-03).
 function IncludeFileReason(const ADir, AUnitDir, AFile: string;
   const ACheck: TRdxIncludeCheck; ADepth: Integer): string;
 var
-  Path, F : string;
-  SL      : TStringList;
-  Map     : TRdxCodeMap;
-  Nested  : TArray<string>;
+  Path, F, Net : string;
+  SL           : TStringList;
+  Map          : TRdxCodeMap;
+  Nested       : TArray<string>;
 begin
   Result := '';
   if Copy(AFile, 1, 1) = '%' then Exit;
@@ -2053,6 +2201,9 @@ begin
     Exit(Format(ACheck.MissingFmt, [AFile, 'die Datei der Unit ist unbekannt']));
   if ADepth > MAX_INCLUDE_DEPTH then
     Exit(Format(ACheck.MissingFmt, [AFile, 'zu tief verschachtelt']));
+  Net := NetworkPlace(ADir, AUnitDir, AFile);
+  if Net <> '' then
+    Exit(Format(ACheck.MissingFmt, [AFile, Format(R_INC_NETWORK, [Net])]));
   Path := FindInclude(ADir, AFile);
   if Path = '' then
     Path := FindInclude(AUnitDir, AFile);

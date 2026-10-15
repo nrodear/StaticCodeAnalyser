@@ -91,13 +91,13 @@
     },
     "MagicNumber": {
       "titel": "Lokale Konstante einführen",
-      "was": "Setzt `const MagicNr01 = N;` als eigene Anweisung direkt vor die Anweisung mit der if-Bedingung und ersetzt das Literal der Bedingung durch den Namen – nur dieses eine; gleiche Literale hinter `then` bleiben. Ein Zweig ohne `begin` bekommt `begin..end`. Der Name ist der erste `MagicNrNN`, der in der Datei nicht vorkommt; umbenennen von Hand oder mit Refactor > Rename (Strg+Umschalt+E). Bedeutungsgleich: die Inline-Konstante behält Faltung, Überladungswahl und vorzeichenlose Rechnung des Literals (E26).",
+      "was": "Setzt `const MagicNr01 = N;` als eigene Anweisung direkt vor die Anweisung mit der if-Bedingung und ersetzt das Literal der Bedingung durch den Namen – nur dieses eine; gleiche Literale hinter `then` bleiben. Ein Zweig ohne `begin` bekommt `begin..end`. Der Name ist der erste `MagicNrNN`, der in der Datei nicht vorkommt; umbenennen von Hand oder mit Refactor > Rename (Strg+Umschalt+E). Bedeutungsgleich nach der Prämisse von E26: die untypisierte Inline-Konstante behält Faltung, Überladungswahl und vorzeichenlose Rechnung des Literals – für einen Vergleichswert einer if-Bedingung gilt das als sicher, gemessen ist es noch nicht (Teil P6 der Kompilierprobe, Bau offen).",
       "platzhalter": "`%s` = die Zahl aus der Meldung; den Namen der Konstante nennt der Hinweis des Eintrags.",
       "nichtAngeboten": [
         "die Zahl der Meldung steht nicht oder mehrfach als Vergleichswert in den if-Bedingungen der Fundzeile (Zeile verschoben bzw. mehrdeutig), oder nur in einer Folgezeile der Bedingung",
         "die Sperren der Code-Aktion „Lokale Konstante einführen“: `else if`, Zweig über mehrere Zeilen, Zeile darüber ohne Anweisungsende, Direktive davor, case-Zweig, asm, initialization, mehrzeilige Strings und Kommentare",
         "Dateien, die FPC oder ein Compiler vor Delphi 10.3 übersetzt: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, ein Include, das nicht neben der Unit liegt, ein Lazarus-Projekt/-Paket in der Nähe, `.pp`/`.lpr`, ein altes Delphi-Projekt (`.dproj` vor 10.3, `.dof`, `.bdsproj`, `.bpr`, `.bpg`)",
-        "ein Netzpfad oder Netzlaufwerk (kein Plattenzugriff beim Menüaufbau im Hauptthread)",
+        "ein Netzpfad oder Netzlaufwerk, auch für ein Include der Unit (kein Plattenzugriff beim Menüaufbau im Hauptthread)",
         "der Hauptblock eines Programms bzw. einer Bibliothek"
       ],
       "beispielVorher": [
@@ -166,7 +166,7 @@
     },
     "UnusedLocalVar": {
       "titel": "Ungenutzte lokale Variable entfernen",
-      "was": "Löscht die Deklaration: `X: T;` samt Zeile (ein `//`-Kommentar dahinter geht mit), aus `A, X, B: T;` wird `A, B: T;`, `var` geht mit, wenn die Section dadurch leer wird, eine Inline-Deklaration `var X: T;` als ganze Anweisung. Bedeutungsgleich – vorher prüft die Hilfe am Text, dass der Name im Gültigkeitsbereich sonst nirgends als Code vorkommt (auch in lokalen Routinen, inaktiven Zweigen und asm).",
+      "was": "Löscht die Deklaration: `X: T;` samt Zeile (ein `//`-Kommentar dahinter geht mit – außer er trägt einen Marker, `noinspection` oder TODO/FIXME/HACK/XXX: der gilt der Zeile dahinter bzw. bleibt stehen, als eigene Zeile), aus `A, X, B: T;` wird `A, B: T;`, `var` geht mit, wenn die Section dadurch leer wird, eine Inline-Deklaration `var X: T;` als ganze Anweisung. Bedeutungsgleich – vorher prüft die Hilfe am Text, dass der Name im Gültigkeitsbereich sonst nirgends als Code vorkommt (auch in lokalen Routinen, inaktiven Zweigen und asm).",
       "platzhalter": "`%s` = die Variable aus der Meldung.",
       "nichtAngeboten": [
         "`for var` (der Detektor meldet die Laufvariable) und ein Schlüsselwort als Name (`resourcestring`)",
@@ -833,7 +833,8 @@
         "nicht unter `private`/`strict private`; `virtual`/`dynamic`/`override`/`abstract`/`reintroduce`/`message`/`overload`, Konstruktor, Destruktor, Operator",
         "mehr als eine Deklaration oder Implementierung, keine Implementierung in der Datei, Property-Accessor",
         "der Name als String-Literal (`MethodAddress`), `{$RTTI}` in der Datei, ein Attribut an Methode oder Klasse",
-        "`{$I}` im Klassenrumpf oder im implementation-Teil, ein Interface der Klasse aus einer anderen Unit",
+        "`{$I}` im Klassenrumpf oder im implementation-Teil, ein Include davor, das den Namen nennt (Property-Accessor einer Nachfahrenklasse), nicht neben der Unit oder auf einem Netzpfad liegt, ein Interface der Klasse aus einer anderen Unit",
+        "ein Marker-Kommentar (`noinspection`, TODO …) hinter der Deklaration oder dem `end;` der Implementierung – er gilt der Zeile dahinter",
         "eine `.dfm`/`.fmx`/`.lfm` neben der Unit nennt den Namen (Bindung an ein Ereignis)"
       ],
       "beispielVorher": [
@@ -984,8 +985,9 @@
       "nichtAngeboten": [
         "Overloads, Methoden (das meldet SCA147), globale FPC-Operatoren",
         "`export`/`public`/`alias`/`external`/`forward`/`interrupt`, `{$L}`/`{$LINK}` in der Datei",
-        "`{$I}` im implementation-Teil oder ein Include davor, das die Routine nennt oder nicht neben der Unit liegt",
+        "`{$I}` im implementation-Teil oder ein Include davor, das die Routine nennt, nicht neben der Unit liegt oder – wie die Unit selbst – auf einem Netzpfad (kein Plattenzugriff beim Menüaufbau)",
         "eine Direktive im Bereich außer ausgeglichenem `$IF..`/`$ENDIF` bzw. `$REGION`",
+        "ein Marker-Kommentar (`noinspection`, TODO …) hinter dem `end;` bzw. der `forward`-Deklaration – er gilt der Zeile dahinter – oder `// noinspection-file` in der Routine",
         "zwei Routinen auf einer Zeile, ein Kopf vor `implementation`, unsichere Grenzen (lokaler Klassentyp, `$IFDEF`-geteilter Rumpf)"
       ],
       "beispielVorher": [

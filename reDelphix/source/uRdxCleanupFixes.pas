@@ -9,9 +9,11 @@ unit uRdxCleanupFixes;
 //          Inhaltszeile, nicht auf den Oeffner) - die Begrenzer nur, wenn
 //          der Kommentar danach leer ist.
 //   SCA053 UnusedLocalVar: die Deklaration der ungenutzten Variable
-//          loeschen - 'X: T;' samt Zeile, 'A, X, B: T;' -> 'A, B: T;'
-//          (erstes/letztes Element, auch ueber Zeilen), 'var' mit, wenn die
-//          Section leer wird, inline 'var X: T;' als ganze Anweisung.
+//          loeschen - 'X: T;' samt Zeile (ein '//'-Kommentar dahinter mit,
+//          ausser er traegt einen Marker - dann bleibt er als eigene
+//          Zeile), 'A, X, B: T;' -> 'A, B: T;' (erstes/letztes Element,
+//          auch ueber Zeilen), 'var' mit, wenn die Section leer wird,
+//          inline 'var X: T;' als ganze Anweisung.
 // Beide sind bedeutungsgleich.
 //
 // WIE VIEL SCA070 LOESCHT (Detektor uCommentedOutCode gelesen): er bewertet
@@ -77,7 +79,9 @@ type
     // variable: X (declared but never read or written)') auf ALine bzw.
     // ihren Fortsetzungszeilen loeschen. Gegenprobe auf dem Rohtext: der
     // Name kommt vom Routinenkopf (inline: vom var) bis zum Ende des
-    // Gueltigkeitsbereichs sonst nirgends als Code vor - hinter '.' steht
+    // Gueltigkeitsbereichs (inline: das end des Blocks bzw. das Ende der
+    // until-Bedingung; ein 'End := 1' als benanntes Argument beendet ihn
+    // nicht) sonst nirgends als Code vor - hinter '.' steht
     // ein Member, keine Verwendung. Keine Hilfe bei 'for var', einem
     // Schluesselwort als Name ('resourcestring'), einer const-/
     // resourcestring-Section, einem Initialisierer ('= 5', ':= F()'),
@@ -185,6 +189,9 @@ const
   // FPC-Makro: '{$DEFINE M := X}' (MacroReason).
   MACRO_WORDS: array[0..1] of string = ('define', 'definec');
   MACRO_ASSIGN = ':=';
+  // Die zweite Haelfte eines UTF-16-Surrogatpaars (LinesCut).
+  LOW_SURROGATE_FIRST = $DC00;
+  LOW_SURROGATE_LAST  = $DFFF;
 
 type
   // SCA070: die Region der Meldung.
@@ -292,6 +299,14 @@ end;
 
 { ---- CutEdit: loeschen und aufraeumen ---- }
 
+// Die zweite Haelfte eines UTF-16-Surrogatpaars? (Zweite Kopie neben
+// uRdxTryFixes.IsSecondHalf - die Zusammenlegung der geteilten Helfer ist
+// eine eigene Charge.)
+function IsLowSurrogate(C: Char): Boolean;
+begin
+  Result := (Ord(C) >= LOW_SURROGATE_FIRST) and (Ord(C) <= LOW_SURROGATE_LAST);
+end;
+
 // Die ganzen Zeilen AFirst..ALast samt Zeilenende loeschen (bis Charge
 // H3c LinesEdit - gleich benannt wie die Ersetzung ganzer Zeilen in
 // uRdxRoutineFixes, mit anderem Vertrag; Minor 5). Ein Bereich
@@ -300,12 +315,15 @@ end;
 // Zeile der Datei) kein Zeilenende, beginnt er deshalb AUF dem letzten
 // Zeichen der naechsten nicht leeren Zeile P davor, das neu geschrieben
 // wird - samt den Zeilenenden der Leerzeilen zwischen P und AFirst, die
-// bleiben. '' oder der Grund.
+// bleiben. Ist dieses Zeichen die zweite Haelfte eines Surrogatpaars
+// (Emoji in einem Kommentar), beginnt er auf der ersten: sonst schnitte er
+// mitten im Zeichen, und PlanByteEdits lehnte jeden Klick ab (Gegen-Review
+// R4-09; wie uRdxTryFixes.TryEdit). '' oder der Grund.
 function LinesCut(AMap: TRdxCodeMap; AFirst, ALast: Integer;
   const ARole: string; out AEdit: TRdxEdit): string;
 var
-  P : Integer;
-  L : string;
+  P, Col : Integer;
+  L      : string;
 begin
   Result := '';
   AEdit := Default(TRdxEdit);
@@ -322,19 +340,22 @@ begin
     Exit('vor dem Bereich steht nichts, und er reicht bis zum Dateiende - '
       + 'von Hand loeschen');
   L := AMap.Raw(P);
+  Col := Length(L);
+  if (Col > 1) and IsLowSurrogate(L[Col]) then
+    Dec(Col);
   // Es bleiben die Zeilenenden von P bis AFirst - 1; hinter der letzten
   // Zeile der Datei liegt das von ALast ausserhalb des Bereichs und
   // uebernimmt das von AFirst - 1.
   if ALast < AMap.LineCount then
   begin
-    AEdit.Span := TRefactorSpan.Make(ARole, P, Length(L), ALast + 1, 1);
-    AEdit.NewText := Copy(L, Length(L), 1) + StringOfChar(#10, AFirst - P);
+    AEdit.Span := TRefactorSpan.Make(ARole, P, Col, ALast + 1, 1);
+    AEdit.NewText := Copy(L, Col, MaxInt) + StringOfChar(#10, AFirst - P);
   end
   else
   begin
-    AEdit.Span := TRefactorSpan.Make(ARole, P, Length(L), ALast,
+    AEdit.Span := TRefactorSpan.Make(ARole, P, Col, ALast,
       Length(AMap.Raw(ALast)) + 1);
-    AEdit.NewText := Copy(L, Length(L), 1)
+    AEdit.NewText := Copy(L, Col, MaxInt)
       + StringOfChar(#10, AFirst - 1 - P);
   end;
   AEdit.Expected := RangeText(AMap, AEdit.Span);
@@ -1039,6 +1060,10 @@ end;
 
 // Liegt AVar in einem Anweisungsblock (Inline-Deklaration)? AStop ist das
 // Token, an dem die Suche endete: der Blockoeffner bzw. der Routinenkopf.
+// Ein Schluesselwort mit ':=' dahinter ist ein benanntes Argument und
+// zaehlt nicht (IsKeywordAt, wie BlockStop seit Charge B1-FD - vorher hielt
+// die Suche 'End := 1' davor fuer ein end und las die Deklaration als
+// var-Section; ReadRoutine lehnte sie dann ab).
 function InsideBlock(AMap: TRdxCodeMap; const AVar: TRdxToken;
   out AStop: TRdxToken): Boolean;
 var
@@ -1054,7 +1079,7 @@ begin
   begin
     P := Before(AMap, T);
     Step := rsGoOn;
-    if IsKeywordAfter(T, P) then
+    if IsKeywordAt(AMap, T, P) then
       Step := BlockStep(T, P, Depth);
     if Step <> rsGoOn then
     begin
@@ -1174,8 +1199,58 @@ begin
   Result := 'Rumpf der Routine nicht gefunden - zu viele lokale Routinen';
 end;
 
-// Das end (bzw. until) des Blocks, in dem die Inline-Deklaration AVar
-// steht; Low = '' ohne.
+// Das letzte Token der Bedingung hinter AUntil: vor dem ';' bzw. vor dem
+// Schluesselwort, das die umgebende Anweisungsliste schliesst (LIST_ENDS),
+// Klammern uebersprungen; Low = '' ohne Ende. Ob Delphi eine
+// Inline-Variable des repeat-Teils in der until-Bedingung gelten laesst,
+// ist ohne Compiler nicht gemessen - mitlesen sperrt hoechstens (Gegen-
+// Review R4, missed 1: eine Verwendung nur dort blieb ungesehen).
+function UntilEnd(AMap: TRdxCodeMap; const AUntil: TRdxToken): TRdxToken;
+var
+  T, Prev : TRdxToken;
+  Depth   : Integer;
+begin
+  Result := Default(TRdxToken);
+  Depth := 0;
+  Prev := AUntil;
+  T := After(AMap, AUntil);
+  while T.Low <> '' do
+  begin
+    Inc(Depth, ParenDelta(T));
+    if Depth < 0 then
+      Exit;
+    if (Depth = 0) and ((T.Low = ';')
+       or (InList(T.Low, LIST_ENDS) and IsKeywordAt(AMap, T, Prev))) then
+      Exit(Prev);
+    Prev := T;
+    T := After(AMap, T);
+  end;
+end;
+
+// Ein Schluesselwort T in BlockStop: Oeffner (END_OPENERS, repeat) zaehlen
+// hoch, end/until herunter; True, wenn T auf Tiefe 0 den Block schliesst.
+function ClosesBlock(const T: TRdxToken; var ADepth: Integer): Boolean;
+begin
+  Result := False;
+  if IsEndOpener(T.Low) or (T.Low = 'repeat') then
+    Inc(ADepth)
+  else if (T.Low = 'end') or (T.Low = 'until') then
+  begin
+    Result := ADepth = 0;
+    if not Result then
+      Dec(ADepth);
+  end;
+end;
+
+// Das Ende des Gueltigkeitsbereichs der Inline-Deklaration AVar: das end
+// ihres Blocks bzw. - in repeat..until - das letzte Token der until-
+// Bedingung (UntilEnd); Low = '' ohne. Ein end/until bzw. Oeffner mit ':='
+// dahinter ist der Name eines benannten Arguments ('Doc.Range(Start := 0,
+// End := 1)', OLE) und zaehlt nicht (IsKeywordAt): bis Charge B1-FD endete
+// der Bereich dort still, eine Verwendung dahinter blieb ungesehen, und die
+// Hilfe loeschte die benutzte Deklaration - mit einem Feld oder einer
+// globalen Variablen gleichen Namens band die Verwendung danach still an
+// sie (Gegen-Review R4-01; var-Sections lehnt ReadRoutine dort ab).
 function BlockStop(AMap: TRdxCodeMap; const AVar: TRdxToken): TRdxToken;
 var
   T, Prev : TRdxToken;
@@ -1187,13 +1262,11 @@ begin
   T := After(AMap, AVar);
   while T.Low <> '' do
   begin
-    if IsKeywordAfter(T, Prev) and (IsEndOpener(T.Low) or (T.Low = 'repeat')) then
-      Inc(Depth)
-    else if IsKeywordAfter(T, Prev) and ((T.Low = 'end') or (T.Low = 'until')) then
+    if IsKeywordAt(AMap, T, Prev) and ClosesBlock(T, Depth) then
     begin
-      if Depth = 0 then
-        Exit(T);
-      Dec(Depth);
+      if T.Low = 'until' then
+        Exit(UntilEnd(AMap, T));
+      Exit(T);
     end;
     Prev := T;
     T := After(AMap, T);
@@ -1441,7 +1514,14 @@ begin
 end;
 
 // Steht die Deklaration allein auf ihrer Zeile und folgt ihr nur ein
-// '//'-Kommentar, geht er mit der Zeile (er beschreibt die Variable).
+// '//'-Kommentar, geht er mit der Zeile (er beschreibt die Variable) -
+// ausser er traegt einen Marker (MarkerReason: noinspection oder ein
+// Absichtsmarker wie bei SCA019). Ein '// noinspection X' hinter Code gilt
+// der naechsten Zeile (uSuppression.BuildMap), ein Absichtskommentar
+// bleibt wie bei SCA070 stehen; bis Charge B1-FD gingen beide mit, die
+// Funde der Folgezeile erschienen danach wieder (Gegen-Review R4-04). Dann
+// endet der Schnitt vor dem Kommentar, und CutEdit rueckt ihn an die
+// Einrueckung - als eigene Zeile gilt er derselben Folgezeile.
 function WithTrailingComment(AMap: TRdxCodeMap;
   const AFrom, ATo: TRdxTextPos): TRdxTextPos;
 var
@@ -1452,7 +1532,8 @@ begin
   L := AMap.Raw(ATo.Line);
   Slash := AMap.LineCommentCol(ATo.Line);
   if (Slash > 0) and (SkipBlanks(L, ATo.Col) = Slash)
-     and (SkipBlanks(AMap.Raw(AFrom.Line), 1) >= AFrom.Col) then
+     and (SkipBlanks(AMap.Raw(AFrom.Line), 1) >= AFrom.Col)
+     and (MarkerReason(Copy(L, Slash, MaxInt)) = '') then
     Result := TextPos(ATo.Line, Length(L) + 1);
 end;
 

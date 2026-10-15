@@ -22,7 +22,11 @@ unit uTestRdxRoutineFixes;
 //          vor implementation (Planer nennt es, IncludeReason liest es;
 //          Kopf-Includes nicht), FPC-Direktiven in Klammern, Marker und
 //          Ueberschrift ueber dem Kopf bleiben, globaler FPC-Operator,
-//          Aufruf in anderer Umlaut-Schreibung.
+//          Aufruf in anderer Umlaut-Schreibung. Charge B1-FD (Code-Review
+//          reDelphix, R4, Pruefer-Fixtures rc/r404.txt, vunc.pas): Marker
+//          hinter 'end;' bzw. der forward-Deklaration und
+//          'noinspection-file' im Rumpf sperren (R4-04); Include bzw. Unit
+//          auf einem Netzpfad ohne Plattenzugriff abgelehnt (R4-03).
 // Die Gegenprobe mit dem echten Detektor steht in
 // uTestRdxRoutineFixesDetector (nur Delphi).
 
@@ -53,6 +57,8 @@ type
     [Test] procedure Sca164_MarkerAndHeadingStay;
     [Test] procedure Sca164_GlobalOperator_NoHelp;
     [Test] procedure Sca164_UmlautCall_NoHelp;
+    [Test] procedure Sca164_TrailingMarker_NoHelp;
+    [Test] procedure Sca164_IncludeOnNetworkPath_NoDiskAccess;
   end;
 
 implementation
@@ -630,6 +636,79 @@ begin
   AssertRefused(InImpl(['procedure ' + Lower + ';', 'begin', 'end;', '',
     'procedure Bar;', 'begin', '  ' + Upper + ';', 'end;']), 4, Lower,
     'verwendet');
+end;
+
+// ---- Charge B1-FD (Code-Review reDelphix, R4; je gegen 4358b769 rot) ----
+
+procedure TTestRdxRoutineFixes.Sca164_TrailingMarker_NoHelp;
+begin
+  // R4-04, Pruefer-Fall r404 (3): der Marker hinter 'end;' gilt der Routine
+  // dahinter (uSuppression.BuildMap) - mit der letzten Zeile geloescht,
+  // erschiene ihr unterdrueckter Fund wieder.
+  AssertRefused(InImpl(['procedure Helper;', 'begin',
+    'end; // noinspection UnusedRoutine', 'procedure Other;', 'begin',
+    'end;']), 4, 'Helper', 'Zeile 6 endet mit dem Kommentar "// noinspection');
+  // Ein Absichtskommentar dort bleibt wie ueber dem Kopf stehen.
+  AssertRefused(InImpl(['procedure Helper;', 'begin', 'end; // TODO: weg?',
+    'procedure Other;', 'begin', 'end;']), 4, 'Helper', 'Zeile 6 endet');
+  // forward-Deklaration: ihre letzte Zeile ebenso.
+  AssertRefused(InImpl(['procedure Helper; forward; // noinspection X',
+    'procedure Other;', 'begin', 'end;', 'procedure Helper;', 'begin',
+    'end;']), 8, 'Helper', 'Zeile 4 endet');
+  // '// noinspection-file' im Rumpf gilt der ganzen Datei.
+  AssertRefused(InImpl(['procedure Helper;', 'begin',
+    '  // noinspection-file DuplicateString', 'end;', 'procedure Other;',
+    'begin', 'end;']), 4, 'Helper', 'noinspection-file" in Zeile 6');
+  // Gegenproben: ein Kommentar ohne Marker hinter end geht mit; ein Marker
+  // auf eigener Zeile im Rumpf zielt in den Rumpf.
+  Assert.AreEqual(InImpl(['procedure Other;', 'begin', 'end;']),
+    FixOk(InImpl(['procedure Helper;', 'begin', 'end; // Helper',
+      'procedure Other;', 'begin', 'end;']), 4, 'Helper'));
+  Assert.AreEqual(InImpl(['procedure Other;', 'begin', 'end;']),
+    FixOk(InImpl(['procedure Helper;', 'begin', '  // noinspection X',
+      '  Foo;', 'end;', 'procedure Other;', 'begin', 'end;']), 4, 'Helper'));
+end;
+
+procedure TTestRdxRoutineFixes.Sca164_IncludeOnNetworkPath_NoDiskAccess;
+var
+  Unc, Dir, R : string;
+  T0          : TDateTime;
+  Ms          : Integer;
+  Incs        : TArray<string>;
+begin
+  // R4-03, Pruefer-Fall vunc: Include auf einem Netzpfad in einer lokalen
+  // Unit bzw. eine Unit auf einem Netzpfad - IncludeReason fragte FileExists
+  // dort (9 bis 16 s im Hauptthread je Menueaufbau, SCA164 hatte gar keine
+  // Netzpfad-Pruefung). Jetzt kommt der Grund ohne Plattenzugriff. Pfade aus
+  // Teilen (ein Literal waere ein SCA016-Fund im Selbstscan).
+  Unc := PathDelim + PathDelim + 'rdx-b1fd-gibt-es-nicht' + PathDelim + 'share'
+    + PathDelim;
+  Dir := TempDir;
+  try
+    SetLength(Incs, 1);
+    Incs[0] := Unc + 'defs.inc';
+    T0 := Now;
+    R := TRdxRoutineFixes.IncludeReason(Dir + 'u.pas', Incs, 'Helper');
+    Ms := Round((Now - T0) * MSecsPerDay);
+    Assert.IsTrue(Pos('auf einem Netzpfad', R) > 0, R);
+    Assert.IsTrue(Ms < 2000, Format('Include: %d ms', [Ms]));
+    Incs[0] := 'defs.inc';
+    T0 := Now;
+    R := TRdxRoutineFixes.IncludeReason(Unc + 'src' + PathDelim + 'u.pas', Incs,
+      'Helper');
+    Ms := Round((Now - T0) * MSecsPerDay);
+    Assert.IsTrue(Pos('auf einem Netzpfad', R) > 0, R);
+    Assert.IsTrue(Ms < 2000, Format('Unit: %d ms', [Ms]));
+  finally
+    RemoveDir(Dir);
+  end;
+  // Die Regel: UNC mit beiden Trennern, ein lokales Laufwerk und ein
+  // relativer Pfad sind kein Netzpfad.
+  Assert.IsTrue(IsNetworkPath(Unc + 'x.inc'), 'UNC');
+  Assert.IsTrue(IsNetworkPath(StringReplace(Unc, PathDelim, '/',
+    [rfReplaceAll]) + 'x.inc'), 'UNC mit /');
+  Assert.IsFalse(IsNetworkPath(Dir + 'u.pas'), 'TEMP ist lokal');
+  Assert.IsFalse(IsNetworkPath('defs.inc'), 'relativ');
 end;
 
 initialization
