@@ -2446,3 +2446,68 @@ msgstr "La plage %d:%d à %d:%d se trouve après la fin du tampon de l'éditeur 
 
 msgid "Cannot move the editor cursor to line %d, column %d"
 msgstr "Impossible de placer le curseur de l'éditeur à la ligne %d, colonne %d"
+
+# reDelphix C1 (uRdxText, gemeinsame Texte)
+
+msgid "line moved? Analyse the file again"
+msgstr "ligne déplacée ? Analysez à nouveau le fichier"
+
+msgid "%s - line moved? Analyse the file again"
+msgstr "%s - ligne déplacée ? Analysez à nouveau le fichier"
+
+msgid "%s - finding outdated? Analyse the file again"
+msgstr "%s - résultat périmé ? Analysez à nouveau le fichier"
+
+msgid "the message has no column"
+msgstr "la colonne manque dans le message"
+
+msgid "end of the statement not found"
+msgstr "fin de l'instruction introuvable"
+
+msgid "no valid range"
+msgstr "aucune plage valide"
+
+msgid "end of the header not found"
+msgstr "fin de l'en-tête introuvable"
+
+msgid "the line starts inside a comment or string"
+msgstr "la ligne commence dans un commentaire ou une chaîne"
+
+msgid "no file open"
+msgstr "aucun fichier ouvert"
+
+msgid "by hand"
+msgstr "à la main"
+
+msgid "check by hand"
+msgstr "à vérifier à la main"
+
+msgid "delete by hand"
+msgstr "à supprimer à la main"
+
+msgid "decide by hand"
+msgstr "à décider à la main"
+
+msgid "only statement after %s - an empty block would remain (SCA077)"
+msgstr "seule instruction après %s - il resterait un bloc vide (SCA077)"
+
+msgid "unclear what the statement belongs to (\"%s\" before it)"
+msgstr "impossible de savoir à quoi appartient l'instruction (« %s » devant)"
+
+msgid "literal not readable: %s"
+msgstr "littéral illisible : %s"
+
+msgid "no operand in the chain"
+msgstr "aucun opérande dans la concaténation"
+
+msgid "%d declarations of %s in classes of this name - overload?"
+msgstr "%d déclarations de %s dans des classes de ce nom - overload ?"
+
+msgid "%s is no longer at the reported place"
+msgstr "%s n'est plus à l'endroit signalé"
+
+msgid "no header %s"
+msgstr "aucun en-tête %s"
+
+msgid "%d headers %s"
+msgstr "%d en-têtes %s"

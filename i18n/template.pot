@@ -73,6 +73,10 @@ msgstr ""
 msgid "%d context hashes"
 msgstr ""
 
+#: reDelphix/source/uRdxText.pas:827
+msgid "%d declarations of %s in classes of this name - overload?"
+msgstr ""
+
 #: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:691
 msgid "%d file(s) - running..."
 msgstr ""
@@ -83,6 +87,10 @@ msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDELineHighlighter.pas:1861
 msgid "%d findings on this line"
+msgstr ""
+
+#: reDelphix/source/uRdxText.pas:844
+msgid "%d headers %s"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1852
@@ -114,8 +122,20 @@ msgstr ""
 msgid "%s (no findings)"
 msgstr ""
 
+#: reDelphix/source/uRdxText.pas:752
+msgid "%s - finding outdated? Analyse the file again"
+msgstr ""
+
+#: reDelphix/source/uRdxText.pas:747
+msgid "%s - line moved? Analyse the file again"
+msgstr ""
+
 #: SCA.SharedUI/sources/uProfileViewer.pas:872
 msgid "%s contains no profiles."
+msgstr ""
+
+#: reDelphix/source/uRdxText.pas:832
+msgid "%s is no longer at the reported place"
 msgstr ""
 
 #: SCA.Engine/sources/Common/uRuleCatalog.pas:1575
@@ -2719,12 +2739,24 @@ msgstr ""
 msgid "asm..end block - platform-specific, hard to port"
 msgstr ""
 
+#: reDelphix/source/uRdxText.pas:787
+msgid "by hand"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2696
 msgid "case statement has many branches - consider dispatch table"
 msgstr ""
 
+#: reDelphix/source/uRdxText.pas:792
+msgid "check by hand"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2334
 msgid "class(TObject) - TObject is the default base, drop it"
+msgstr ""
+
+#: reDelphix/source/uRdxText.pas:802
+msgid "decide by hand"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3821
@@ -2733,8 +2765,20 @@ msgstr ""
 msgid "default"
 msgstr ""
 
+#: reDelphix/source/uRdxText.pas:797
+msgid "delete by hand"
+msgstr ""
+
 #: reDelphix/source/uRdxProvider.pas:863
 msgid "editor buffer empty or not readable"
+msgstr ""
+
+#: reDelphix/source/uRdxText.pas:772
+msgid "end of the header not found"
+msgstr ""
+
+#: reDelphix/source/uRdxText.pas:762
+msgid "end of the statement not found"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:3550
@@ -2787,8 +2831,32 @@ msgstr ""
 msgid "in"
 msgstr ""
 
+#: reDelphix/source/uRdxText.pas:742
+msgid "line moved? Analyse the file again"
+msgstr ""
+
+#: reDelphix/source/uRdxText.pas:817
+msgid "literal not readable: %s"
+msgstr ""
+
+#: reDelphix/source/uRdxText.pas:782
+msgid "no file open"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:372
 msgid "no findings"
+msgstr ""
+
+#: reDelphix/source/uRdxText.pas:837
+msgid "no header %s"
+msgstr ""
+
+#: reDelphix/source/uRdxText.pas:822
+msgid "no operand in the chain"
+msgstr ""
+
+#: reDelphix/source/uRdxText.pas:767
+msgid "no valid range"
 msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:813
@@ -2802,6 +2870,10 @@ msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2963
 msgid "only from the menu or the light bulb"
+msgstr ""
+
+#: reDelphix/source/uRdxText.pas:807
+msgid "only statement after %s - an empty block would remain (SCA077)"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2562
@@ -2825,8 +2897,20 @@ msgstr ""
 msgid "the clause would no longer be sorted (new SCA142)"
 msgstr ""
 
+#: reDelphix/source/uRdxText.pas:777
+msgid "the line starts inside a comment or string"
+msgstr ""
+
+#: reDelphix/source/uRdxText.pas:757
+msgid "the message has no column"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:392
 msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
+msgstr ""
+
+#: reDelphix/source/uRdxText.pas:812
+msgid "unclear what the statement belongs to (\"%s\" before it)"
 msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:553

@@ -136,14 +136,18 @@ type
 
   // Eine Token-Suche auf einer Zeile (OneTokenOnLine): das Praedikat, sein
   // Argument und die Texte der Gruende - What ist, was fehlt ('kein begin',
-  // 'keine Selbstzuweisung "x := x"'), ManyFmt der Text der Mehrdeutigkeit
-  // mit %d fuer die Zahl der Treffer ('%d begin', '%d-mal "end else"').
-  // Bis Charge R8 (2026-10-14) stand diese Suche siebenmal in den Planern.
+  // 'keine Selbstzuweisung "x := x"'), ManyFmt das Format-Muster der
+  // Mehrdeutigkeit mit %d fuer die Zahl der Treffer und %s fuer ManyArg
+  // ('%d begin', '%d-mal "end else"'). Text aus der Meldung (ein Name, ein
+  // Ziel) gehoert in ManyArg, nie in das Muster (OneTokenReason) - so wird
+  // das Muster eine msgid (Texte umstellen, Nachpruefung C1). Bis Charge R8
+  // (2026-10-14) stand diese Suche siebenmal in den Planern.
   TRdxLineSearch = record
     Test    : TRdxTokenTest;
     Arg     : string;
     What    : string;
     ManyFmt : string;
+    ManyArg : string;
   end;
 
   // Haken der end-Bilanz (BlockEnd): je Token, das weder Oeffner noch end
@@ -1181,7 +1185,8 @@ begin
     end;
     T := After(AMap, T);
   end;
-  Result := OneTokenReason(ALine, n, ASearch.What, ASearch.ManyFmt);
+  Result := OneTokenReason(ALine, n, ASearch.What, ASearch.ManyFmt,
+    ASearch.ManyArg);
 end;
 
 function BlockEnd(AMap: TRdxCodeMap; const AFrom: TRdxToken;
