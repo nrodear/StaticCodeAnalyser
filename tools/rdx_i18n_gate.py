@@ -15,11 +15,17 @@ englischer Oberflaeche.
 
 Was es meldet (je Fund Unit, Zeile, Art, Text):
   text      ein deutsches Text-Literal, das weder erstes Argument von _()
-            ist noch Wert einer msgid-Konstante - die Heuristik des
-            Inventars (scratchpad w7/i18n_inventory.py): ein Leerzeichen,
-            ein Wort aus drei Buchstaben und ein typisch deutsches Wort
-            (oder ein Umlaut). Verkettete Literale ('a ' + 'b', 'a'#13)
-            zaehlen als EIN Text; ein Bezeichner dazwischen trennt.
+            ist noch Wert einer msgid-Konstante. Deutsch (is_german): ein
+            Wort aus drei Buchstaben und ein typisch deutsches Wort - als
+            ganzes Wort (Liste des Inventars, scratchpad
+            w7/i18n_inventory.py, erweitert) oder als Ende eines
+            zusammengesetzten ('Formdateien', 'asm-Rumpf') -, ein Umlaut,
+            ein umschriebener Umlaut in einer Folge, die es englisch nicht
+            gibt ('Groesse') oder eine Zahl mit grossgeschriebenem Nomen
+            ('%d Parameter'). Ein Leerzeichen braucht es nicht: auch ein
+            einzelnes Wort ('unbekannt') ist Text. Verkettete Literale
+            ('a ' + 'b', 'a'#13) zaehlen als EIN Text; ein Bezeichner
+            dazwischen trennt.
   msgid     ein deutscher Text IN _() bzw. in einer msgid-Konstante - die
             msgid ist englisch (E29), die deutsche Fassung steht in de.po.
   qualif    ein qualifizierter Aufruf X._(..): tools/i18n_extract.py sieht
@@ -29,6 +35,21 @@ Was es meldet (je Fund Unit, Zeile, Art, Text):
             Extraktor loest nur Konstanten derselben Unit auf; die msgid
             fehlte in template.pot (Lehre: msgid-Konstanten nicht
             verschieben).
+  dynamisch _(..) mit einem anderen ersten Argument als einer Literal-Kette
+            oder einer msgid-Konstante bzw. einem msgid-Array dieser Unit:
+            ein Parameter (_(AWhat)), _(Format(..)), _('a ' + X). Der
+            Extraktor ueberspringt den Aufruf still (nur --dynamic nennt
+            ihn), die msgid fehlte in template.pot, de und fr zeigten den
+            Text unuebersetzt. Text fuer eine andere Unit uebersetzt der
+            Aufrufer (reDelphix/README.md, "Texte umstellen").
+
+Grenzen der Heuristik: ein deutscher Text nur aus Woertern, die es auch
+englisch gibt ('Parameter' ohne Zahl, 'Operand', 'Format'), faellt nicht
+auf; ein englischer mit '%d <Grosswort>' ('%d Bytes') faellt auf - dann
+klein schreiben wie jede msgid. Stand Nachpruefung FIX-C1: alle nicht
+gemeldeten Ketten mit Buchstaben in reDelphix/source gesichtet - darunter
+kein sichtbarer deutscher Text mehr (nur Protokoll, Code, englische
+Meldungsschluessel).
 
 msgid-Konstante = wie der Extraktor: eine Konstante derselben Unit, deren
 Deklaration ihre Zeile eroeffnet und deren Wert eine reine Literal-Kette
@@ -66,9 +87,11 @@ ALLOW_FILE = REPO / "tools" / "rdx_i18n_gate.allow"
 # und Woerter aus reDelphix-Texten, die keines davon tragen (Nachmessung
 # Charge C1: '%d Aufrufe %s(', ', alle bewiesen', 'Implementierung: ',
 # '%d-mal ' ...), dazu deutsche Endungen ('Sprunganweisungen'). Nur Woerter,
-# die es im Englischen nicht gibt: gegen alle 795 msgids der SCA (englisch)
-# gemessen 0 Treffer - eine msgid oder ein englischer Meldungsschluessel
-# der SCA ausserhalb von _() faellt nicht auf.
+# die es im Englischen nicht gibt: zusammen mit GERMAN_TAIL, TRANSCRIPTION
+# und COUNT_NOUN gegen alle msgids der SCA gemessen (template.pot 674,
+# de.po 814, fr.po 811, vor C1 795; Nachpruefung FIX-C1) 0 Treffer - eine
+# msgid oder ein englischer Meldungsschluessel der SCA ausserhalb von _()
+# faellt nicht auf.
 GERMAN = re.compile(
     r"\b(der|die|das|den|dem|des|ein|eine|einen|einer|eines|nicht|kein|keine|"
     r"keinen|keiner|ist|sind|wird|werden|mit|ohne|und|oder|aber|auf|aus|bei|"
@@ -91,6 +114,34 @@ GERMAN = re.compile(
     r"muesste|soll|sollte|darf|kann|koennen)\b"
     r"|\b\w*(ungen|keiten|heiten|lich|liche|lichen|ische|ischen|isch)\b",
     re.I)
+# Deutsche Nomen auch als ENDE eines zusammengesetzten Worts - ohne \b
+# davor (Nachpruefung FIX-C1, V-C1-1): '%d Routinenkoepfe', 'Formdateien',
+# 'Include-Dateien', 'Ansi-Ergebnis', 'asm-Rumpf' trugen kein Wort der
+# Liste als ganzes Wort und blieben still. Nur Nomen, auf die kein
+# englisches Wort endet ('fund' fehlt: 'refund').
+GERMAN_TAIL = re.compile(
+    r"(datei|dateien|zeile|zeilen|spalte|spalten|kopf|koepfe|rumpf|ergebnis|"
+    r"ergebnisse|puffer|platte|anweisung|deklaration|deklarationen|klammer|"
+    r"klammern|konstante|konstanten|zuweisung|bereich|bereiche|zweig|zweige|"
+    r"kette|ketten|vorlage|vorlagen|aufruf|aufrufe|meldung|eintrag|eintraege|"
+    r"zeichen|schluessel|woerter|fehler)\b",
+    re.I)
+# Eine Zahl mit grossgeschriebenem Nomen ('%d Parameter', '%d Casts '): im
+# Deutschen gross, in einer englischen msgid klein ('%d parameters') - so
+# faellt ein Text auf, dessen Woerter es auch englisch gibt.
+COUNT_NOUN = re.compile(r"%d [A-Z][a-z]{2,}")
+# Umschriebene Umlaute ('Groesse ueberschritten'), nur in Folgen, die im
+# Englischen nicht vorkommen: gemessen an 552.502 verschiedenen Woertern
+# der 16.051 Pascal-Dateien des Realwelt-Korpus (nur deutsche Woerter bzw.
+# Namen: zulaessig, Rueck, Gaertner) und an allen msgids (0). Gross/klein
+# zaehlt: ohne sie trafen 56 Bezeichner wie 'AEngine', 'TAesSignature',
+# 'WSAEHOSTDOWN' (Parameter, Typen, Konstanten). Weggelassen, weil englisch:
+# oes (does), uer (query), ues (values), uen (sequence), uess (guess), uem
+# (uEmptyBlock), oeff mitten im Wort (coefficient), ueb/uef/ueg/ueh
+# (bluebar, valuefor, Bluegrass, valuehex), aend (metaend), aeb, oest.
+TRANSCRIPTION = re.compile(
+    r"[Aa]e(?:h|u|ng|ss|lt|rk|rt|gt|ch)|[Oo]e(?:ss|nn|sch|gl|pf|rt)"
+    r"|[Uu]e(?:lt|nf|rz|tz|ck)|\b[Uu]eber|\b[Oo]eff")
 UMLAUT = re.compile("[\u00e4\u00f6\u00fc\u00c4\u00d6\u00dc\u00df]")
 WORD3 = re.compile(r"[A-Za-z\u00c0-\u00ff]{3,}")
 CONST_NAME = re.compile(r"^[A-Z][A-Z0-9]*_[A-Z0-9_]*$")
@@ -100,11 +151,19 @@ KINDS = ("unit", "const", "text", "regex", "call", "name")
 
 
 def is_german(text):
-    """Die Heuristik des Inventars: ein Leerzeichen, ein Wort aus drei
-    Buchstaben, ein deutsches Wort oder ein Umlaut."""
-    return (" " in text and WORD3.search(text) is not None
-            and (GERMAN.search(text) is not None
-                 or UMLAUT.search(text) is not None))
+    """Ein Wort aus drei Buchstaben und ein deutsches Wort (GERMAN, auch als
+    Ende eines zusammengesetzten: GERMAN_TAIL), ein Umlaut, ein
+    umschriebener Umlaut (TRANSCRIPTION) oder eine Zahl mit grossem Nomen
+    (COUNT_NOUN). Das Leerzeichen der Inventar-Heuristik verlangt sie seit
+    FIX-C1 nicht mehr: 'unbekannt' und 'Formdateien' standen als einzelnes
+    Wort im Grund."""
+    if WORD3.search(text) is None:
+        return False
+    return (GERMAN.search(text) is not None
+            or GERMAN_TAIL.search(text) is not None
+            or UMLAUT.search(text) is not None
+            or TRANSCRIPTION.search(text) is not None
+            or COUNT_NOUN.search(text) is not None)
 
 
 # --------------------------------------------------------------------------
@@ -235,6 +294,23 @@ def first_arg_end(toks, k):
     return len(toks)
 
 
+def matching_close(toks, k):
+    """Index der Klammer, die die '(' bzw. '[' bei k schliesst; len(toks)
+    ohne."""
+    depth = 0
+    for j in range(k, len(toks)):
+        t = toks[j]
+        if t[0] != "sym":
+            continue
+        if t[1] in ("(", "["):
+            depth += 1
+        elif t[1] in (")", "]"):
+            depth -= 1
+            if depth == 0:
+                return j
+    return len(toks)
+
+
 def at_line_start(text, pos):
     line_start = text.rfind("\n", 0, pos) + 1
     return text[line_start:pos].strip() == ""
@@ -255,6 +331,7 @@ class Unit:
         self.const_uses = {}   # NAME -> 'scalar' / 'array' (in _())
         self.qualified = []    # Token-Index von '_' in X._(
         self.foreign = []      # (Token-Index, NAME) von _(NAME) ohne Wert
+        self.dynamic = []      # (Token-Index, Argument) von _(<Ausdruck>)
         self._read_consts()
         self._read_calls()
 
@@ -329,23 +406,40 @@ class Unit:
             self._read_msgid_arg(k, span)
 
     def _read_msgid_arg(self, k, span):
-        """_(NAME), _(NAME, [..]) bzw. _(NAME[i]): eine Konstante."""
+        """Das erste Argument von _(..) wie tools/i18n_extract.py: eine
+        Literal-Kette (die msgid selbst), _(NAME) bzw. _(NAME, [..]) mit
+        einer msgid-Konstante und _(NAME[i]) mit einem msgid-Array dieser
+        Unit (const_uses). Ein Konstanten-Name ohne reinen Wert hier ist
+        'fremd', jedes andere Argument 'dynamisch'."""
         first, last = span
-        if first > last or self.toks[first][0] != "id":
+        toks = self.toks
+        if any(c[0] == first and c[1] == last for c in self.chains):
             return
-        name = self.toks[first][1]
-        nxt = self.toks[first + 1] if first + 1 < len(self.toks) else ("sym", "", 0)
-        if first == last:
-            kind = "scalar"
-        elif is_sym(nxt, "["):
-            kind = "array"
-        else:
-            return                         # ein Ausdruck: dynamisch
-        const = self.consts.get(name)
-        if const and const[2] and const[3] == (kind == "array"):
-            self.const_uses[name] = kind
-        elif CONST_NAME.match(name):
-            self.foreign.append((k, name))
+        kind = None
+        if first <= last and toks[first][0] == "id":
+            if first == last:
+                kind = "scalar"
+            elif is_sym(toks[first + 1], "[") and matching_close(toks, first + 1) == last:
+                kind = "array"
+        if kind:
+            name = toks[first][1]
+            const = self.consts.get(name)
+            if const and const[2] and const[3] == (kind == "array"):
+                self.const_uses[name] = kind
+                return
+            if CONST_NAME.match(name):
+                self.foreign.append((k, name))
+                return
+        self.dynamic.append((k, self._source_of(first, last)))
+
+    def _source_of(self, first, last):
+        """Der Quelltext der Tokens first..last, Leerraum zu einem
+        Leerzeichen - so steht ein dynamisches Argument im Fund und in
+        einer Ausnahme 'name'."""
+        if first > last:
+            return ""
+        end = self.toks[last + 1][2] if last + 1 < len(self.toks) else len(self.text)
+        return " ".join(self.text[self.toks[first][2]:end].split())
 
 
 def in_spans(chain, spans):
@@ -427,8 +521,8 @@ def allowed(unit, chain, entries):
 
 
 def allowed_name(unit, value, entries):
-    """Ausnahme fuer einen Fund ohne Kette (qualif/fremd): Art 'name' mit
-    dem gemeldeten Namen."""
+    """Ausnahme fuer einen Fund ohne Kette (qualif/fremd/dynamisch): Art
+    'name' mit dem gemeldeten Namen bzw. Argument."""
     for e in entries:
         if e.unit in ("*", unit.name) and e.kind == "name" and e.value == value:
             e.hits += 1
@@ -461,6 +555,9 @@ def check_unit(unit, entries):
     for k, name in unit.foreign:
         if not allowed_name(unit, name, entries):
             found.append((unit.line_of(unit.toks[k][2]), "fremd", name))
+    for k, arg in unit.dynamic:
+        if not allowed_name(unit, arg, entries):
+            found.append((unit.line_of(unit.toks[k][2]), "dynamisch", arg))
     return sorted(found)
 
 
@@ -528,11 +625,12 @@ def report():
         return 2
     rows = sorted(result.items(), key=lambda x: (-len(x[1]), x[0]))
     total = sum(len(f) for f in result.values())
-    print("Stand je Unit (Funde: text / msgid / qualif / fremd):")
+    print("Stand je Unit (Funde: text / msgid / qualif / fremd / dynamisch):")
     for name, found in rows:
         if not found:
             continue
-        arts = [sum(1 for f in found if f[1] == a) for a in ("text", "msgid", "qualif", "fremd")]
+        arts = [sum(1 for f in found if f[1] == a)
+                for a in ("text", "msgid", "qualif", "fremd", "dynamisch")]
         print("  %4d  %-26s %s" % (len(found), name, " / ".join(str(a) for a in arts)))
     clean = [n for n, f in rows if not f]
     print("  ohne Fund: %d Unit(s)%s" % (len(clean), (" - " + ", ".join(clean)) if clean else ""))
@@ -580,6 +678,7 @@ end.
 ALLOW_BASE = "# Selbsttest\n* | call RdxLog | Protokoll\n"
 GERMAN_CONST = "'Ende der Anweisung ' + 'nicht gefunden'"
 ENGLISH_CONST = "'end of the statement ' + 'not found'"
+RAISE_LIT = "'raise ENotImplemented.Create(''x'');'"
 
 
 def _probe(unit_text, allow_text):
@@ -613,11 +712,32 @@ def _mutants():
          a, ["fremd", "text"], 0, False),
         ("Array ohne _()", b.replace("_(CAPTIONS[I])", "CAPTIONS[I]").replace("'Hide location'", "'Stelle nicht zeigen'"), a, ["text"], 0, False),
         ("Format ohne _()", b.replace("_('line %d to %d', [1, 2])", "Format('Zeile %d bis %d', [1, 2])"), a, ["text"], 0, False),
-        ("Umlaut", b.replace("'raise ENotImplemented.Create(''x'');'", "'Fehler \u00fcberall'"), a, ["text"], 0, False),
+        ("Umlaut", b.replace(RAISE_LIT, "'Fehler \u00fcberall'"), a, ["text"], 0, False),
         ("Kette ueber Zeilen", b.replace("_('no valid range')", "'kein ' +\n    'gueltiger Bereich'"), a, ["text"], 0, False),
         ("deutsch als Format-Argument", b.replace("[1, 2]", "[1, 'die Zeile']"), a, ["text"], 0, False),
         ("qualifizierter Aufruf", b.replace("_('no valid range')", "uRdxText._('no valid range')"), a, ["qualif"], 0, False),
         ("Konstante einer anderen Unit", b.replace("_(R_GOOD)", "_(R_ELSEWHERE)"), a, ["fremd"], 0, False),
+        # Nachpruefung FIX-C1, V-C1-1: Texte ohne Wort der Liste bzw. ohne
+        # Leerzeichen - und gutartige Code-Woerter, die still bleiben.
+        ("Zahl mit Kompositum", b.replace(RAISE_LIT, "'%d Routinenkoepfe'"), a, ["text"], 0, False),
+        ("Kompositum ohne Leerzeichen", b.replace(RAISE_LIT, "'Formdateien'"), a, ["text"], 0, False),
+        ("Kompositum mit Bindestrich", b.replace(RAISE_LIT, "'Ansi-Ergebnis'"), a, ["text"], 0, False),
+        ("ein Wort der Liste", b.replace(RAISE_LIT, "'unbekannt'"), a, ["text"], 0, False),
+        ("umschriebene Umlaute", b.replace(RAISE_LIT, "'Groesse ueberschritten'"), a, ["text"], 0, False),
+        ("Zahl mit grossem Nomen", b.replace(RAISE_LIT, "Format('%d Parameter', [I])"), a, ["text"], 0, False),
+        ("Code-Woerter bleiben still",
+         b.replace(RAISE_LIT, "'%d begin' + IntToStr(I) + 'Default()' + I.ToString + '%d declarations'"),
+         a, [], 0, False),
+        # V-C1-2: Argumente von _(), die der Extraktor still uebergeht.
+        ("Parameter als msgid", b.replace("_('no valid range')", "_(AWhat)"), a, ["dynamisch"], 0, False),
+        ("Format in _()", b.replace("_('no valid range')", "_(Format('no range in line %d', [I]))"),
+         a, ["dynamisch"], 0, False),
+        ("Kette mit Ausdruck in _()", b.replace("_('no valid range')", "_('no range ' + IntToStr(I))"),
+         a, ["dynamisch"], 0, False),
+        ("Array mit Ausdruck in _()", b.replace("_(CAPTIONS[I])", "_(CAPTIONS[I] + ' ')"),
+         a, ["dynamisch"], 0, False),
+        ("Ausnahme name fuer dynamisch", b.replace("_('no valid range')", "_(AWhat)"),
+         a + "uRdxProbe.pas | name AWhat | Probe\n", [], 0, False),
         ("Protokoll ohne Ausnahme", b, "# leer\n", ["text"], 0, False),
         ("tote Ausnahme", b, a + "uRdxProbe.pas | text gibt es nicht | Probe\n", [], 1, False),
         ("deutsch im Kommentar", b.replace("// die Zeile", "// die Zeile ist nicht 'kein Text' und"), a, [], 0, False),
@@ -648,8 +768,18 @@ def selftest():
             print("SELFTEST FEHLER: %s - Arten %r (erwartet %r), tote Ausnahmen %d "
                   "(erwartet %d), Listenfehler %s" % (name, got_arts, arts, got_dead, dead, got_err))
             ok = False
-    if not is_german("kein gueltiger Bereich") or is_german("Comment at column "):
-        print("SELFTEST FEHLER: Heuristik is_german")
+    german = ("kein gueltiger Bereich", "%d Routinenkoepfe", "Formdateien",
+              "Include-Dateien", "asm-Rumpf", "unbekannt", "%d Parameter",
+              "Groesse ueberschritten", "Rueckgabe")
+    english = ("Comment at column ", "%d begin", "unassigned", "Default()",
+               "%d declarations of %s in classes of this name - overload?",
+               "Remove the cast to %s before Free", "Parameter",
+               "the coefficient does not match the query values", "blueberry",
+               "AEngine", "TAesSignature")
+    wrong = ([t for t in german if not is_german(t)]
+             + [t for t in english if is_german(t)])
+    if wrong:
+        print("SELFTEST FEHLER: Heuristik is_german bei %r" % wrong)
         ok = False
     print("SELFTEST %s (%d Faelle)" % ("GRUEN" if ok else "ROT", len(_mutants())))
     return 0 if ok else 1
