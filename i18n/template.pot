@@ -49,6 +49,14 @@ msgstr ""
 msgid "\"%s\" already exists. Overwrite it?"
 msgstr ""
 
+#: reDelphix/source/uRdxBlocks.pas:725
+msgid "\"%s\" in the body - end of the routine not found"
+msgstr ""
+
+#: reDelphix/source/uRdxBlocks.pas:657
+msgid "\"%s\" in the declaration section - end of the routine not certain"
+msgstr ""
+
 #: SCA.Engine/sources/Common/uRuleCatalog.pas:1771
 msgid "\"%s\" is a built-in profile and cannot be changed."
 msgstr ""
@@ -59,6 +67,10 @@ msgstr ""
 
 #: SCA.SharedUI/sources/uProfileViewer.pas:805
 msgid "\"%s\" was not imported: %s"
+msgstr ""
+
+#: reDelphix/source/uRdxBlocks.pas:770
+msgid "\";\" is missing after the end of the body"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1945
@@ -116,6 +128,10 @@ msgstr ""
 
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:830
 msgid "%s (%d of %d findings)"
+msgstr ""
+
+#: reDelphix/source/uRdxBlocks.pas:1234
+msgid "%s (included from %s)"
 msgstr ""
 
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:825
@@ -1085,6 +1101,14 @@ msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:629
 msgid "Export findings: HTML / JSON / CSV / Jira / Clipboard / Sonar"
+msgstr ""
+
+#: reDelphix/source/uRdxBlocks.pas:596
+msgid "FPC directives \"[\" without \"]\""
+msgstr ""
+
+#: reDelphix/source/uRdxBlocks.pas:606
+msgid "FPC directives \"[..]\" without \";\""
 msgstr ""
 
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:328
@@ -2778,6 +2802,10 @@ msgstr ""
 msgid "delete by hand"
 msgstr ""
 
+#: reDelphix/source/uRdxBlocks.pas:565
+msgid "directive \"%s\" without \";\""
+msgstr ""
+
 #: reDelphix/source/uRdxProvider.pas:863
 msgid "editor buffer empty or not readable"
 msgstr ""
@@ -2852,6 +2880,42 @@ msgstr ""
 msgid "literal not readable: %s"
 msgstr ""
 
+#: reDelphix/source/uRdxBlocks.pas:655
+msgid "local class or object type - boundaries not certain"
+msgstr ""
+
+#: reDelphix/source/uRdxBlocks.pas:642
+msgid "local routine %s: %s"
+msgstr ""
+
+#: reDelphix/source/uRdxBlocks.pas:639
+msgid "local routines nested too deeply"
+msgstr ""
+
+#: reDelphix/source/uRdxBlocks.pas:913
+msgid "method resolution (IFoo.X = Y) - not a method of its own"
+msgstr ""
+
+#: reDelphix/source/uRdxBlocks.pas:514
+msgid "name with too many parts"
+msgstr ""
+
+#: reDelphix/source/uRdxBlocks.pas:1206
+msgid "nested too deeply"
+msgstr ""
+
+#: reDelphix/source/uRdxBlocks.pas:714
+msgid "no body found for the routine"
+msgstr ""
+
+#: reDelphix/source/uRdxBlocks.pas:748
+msgid "no end for the asm body"
+msgstr ""
+
+#: reDelphix/source/uRdxBlocks.pas:763
+msgid "no end found for the body"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:782
 msgid "no file open"
 msgstr ""
@@ -2864,8 +2928,16 @@ msgstr ""
 msgid "no header %s"
 msgstr ""
 
+#: reDelphix/source/uRdxBlocks.pas:499
+msgid "no name after \"%s\""
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:822
 msgid "no operand in the chain"
+msgstr ""
+
+#: reDelphix/source/uRdxBlocks.pas:795
+msgid "no routine header"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:767
@@ -2876,6 +2948,18 @@ msgstr ""
 msgid "noinspection marker in the range - it suppresses other findings"
 msgstr ""
 
+#: reDelphix/source/uRdxBlocks.pas:1214
+msgid "not found next to the unit"
+msgstr ""
+
+#: reDelphix/source/uRdxBlocks.pas:1220
+msgid "not readable"
+msgstr ""
+
+#: reDelphix/source/uRdxBlocks.pas:806
+msgid "nothing new begins after the routine - its end is not certain"
+msgstr ""
+
 #: reDelphix/source/uRdxProvider.pas:813
 #: reDelphix/source/uRdxProvider.pas:829
 msgid "nothing to offer"
@@ -2883,6 +2967,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2399
 msgid "on E: Exception catches everything - too broad"
+msgstr ""
+
+#: reDelphix/source/uRdxBlocks.pas:1209
+msgid "on a network path (%s) - not read, the menu is built in the main thread"
 msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2963
@@ -2901,6 +2989,10 @@ msgstr ""
 msgid "own unit %s in the project"
 msgstr ""
 
+#: reDelphix/source/uRdxBlocks.pas:728
+msgid "routine header in the body - end of the routine not certain"
+msgstr ""
+
 #: StaticCodeAnalyserIDE/uIDESonarOptions.pas:414
 msgid "sonar.projectKey not found in "
 msgstr ""
@@ -2914,8 +3006,16 @@ msgstr ""
 msgid "the clause would no longer be sorted (new SCA142)"
 msgstr ""
 
+#: reDelphix/source/uRdxBlocks.pas:1204
+msgid "the file of the unit is unknown"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:777
 msgid "the line starts inside a comment or string"
+msgstr ""
+
+#: reDelphix/source/uRdxBlocks.pas:849
+msgid "the marker \"%s\" in line %d targets the deleted line and would then silently apply to the next code line; %s"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:757

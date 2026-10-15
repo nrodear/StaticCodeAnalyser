@@ -2525,3 +2525,78 @@ msgstr "%s sur la ligne signalée"
 
 msgid "line %d carries %s - ambiguous"
 msgstr "la ligne %d porte %s - ambigu"
+
+msgid "on a network path (%s) - not read, the menu is built in the main thread"
+msgstr "sur un chemin réseau (%s) - non lu, le menu est construit dans le thread principal"
+
+msgid "the marker \"%s\" in line %d targets the deleted line and would then silently apply to the next code line; %s"
+msgstr "le marqueur « %s » à la ligne %d vise la ligne supprimée et s'appliquerait ensuite silencieusement à la ligne de code suivante ; %s"
+
+msgid "no name after \"%s\""
+msgstr "aucun nom après « %s »"
+
+msgid "name with too many parts"
+msgstr "nom avec trop de composants"
+
+msgid "directive \"%s\" without \";\""
+msgstr "directive « %s » sans « ; »"
+
+msgid "FPC directives \"[\" without \"]\""
+msgstr "directives FPC « [ » sans « ] »"
+
+msgid "FPC directives \"[..]\" without \";\""
+msgstr "directives FPC « [..] » sans « ; »"
+
+msgid "local routines nested too deeply"
+msgstr "routines locales imbriquées trop profondément"
+
+msgid "local routine %s: %s"
+msgstr "routine locale %s : %s"
+
+msgid "local class or object type - boundaries not certain"
+msgstr "type classe ou objet local - limites incertaines"
+
+msgid "\"%s\" in the declaration section - end of the routine not certain"
+msgstr "« %s » dans la partie déclarations - fin de la routine incertaine"
+
+msgid "no body found for the routine"
+msgstr "aucun corps trouvé pour la routine"
+
+msgid "\"%s\" in the body - end of the routine not found"
+msgstr "« %s » dans le corps - fin de la routine introuvable"
+
+msgid "routine header in the body - end of the routine not certain"
+msgstr "en-tête de routine dans le corps - fin de la routine incertaine"
+
+msgid "no end for the asm body"
+msgstr "aucun end pour le corps asm"
+
+msgid "no end found for the body"
+msgstr "aucun end trouvé pour le corps"
+
+msgid "\";\" is missing after the end of the body"
+msgstr "« ; » manque après le end du corps"
+
+msgid "no routine header"
+msgstr "aucun en-tête de routine"
+
+msgid "nothing new begins after the routine - its end is not certain"
+msgstr "rien de nouveau ne commence après la routine - sa fin est incertaine"
+
+msgid "method resolution (IFoo.X = Y) - not a method of its own"
+msgstr "résolution de méthode (IFoo.X = Y) - pas une méthode propre"
+
+msgid "the file of the unit is unknown"
+msgstr "le fichier de l'unité est inconnu"
+
+msgid "nested too deeply"
+msgstr "imbriqué trop profondément"
+
+msgid "not found next to the unit"
+msgstr "introuvable à côté de l'unité"
+
+msgid "not readable"
+msgstr "illisible"
+
+msgid "%s (included from %s)"
+msgstr "%s (inclus depuis %s)"

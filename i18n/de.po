@@ -2529,3 +2529,78 @@ msgstr "%s auf der gemeldeten Zeile"
 
 msgid "line %d carries %s - ambiguous"
 msgstr "Zeile %d trägt %s - mehrdeutig"
+
+msgid "on a network path (%s) - not read, the menu is built in the main thread"
+msgstr "auf einem Netzpfad (%s) - nicht gelesen, der Menüaufbau läuft im Hauptthread"
+
+msgid "the marker \"%s\" in line %d targets the deleted line and would then silently apply to the next code line; %s"
+msgstr "der Marker \"%s\" in Zeile %d zielt auf die gelöschte Zeile und gälte danach still der nächsten Code-Zeile; %s"
+
+msgid "no name after \"%s\""
+msgstr "kein Name hinter \"%s\""
+
+msgid "name with too many parts"
+msgstr "Name mit zu vielen Gliedern"
+
+msgid "directive \"%s\" without \";\""
+msgstr "Direktive \"%s\" ohne \";\""
+
+msgid "FPC directives \"[\" without \"]\""
+msgstr "FPC-Direktiven \"[\" ohne \"]\""
+
+msgid "FPC directives \"[..]\" without \";\""
+msgstr "FPC-Direktiven \"[..]\" ohne \";\""
+
+msgid "local routines nested too deeply"
+msgstr "lokale Routinen zu tief verschachtelt"
+
+msgid "local routine %s: %s"
+msgstr "lokale Routine %s: %s"
+
+msgid "local class or object type - boundaries not certain"
+msgstr "lokaler Klassen- oder Objekttyp - Grenzen nicht sicher"
+
+msgid "\"%s\" in the declaration section - end of the routine not certain"
+msgstr "\"%s\" im Deklarationsteil - Ende der Routine nicht sicher"
+
+msgid "no body found for the routine"
+msgstr "kein Rumpf zur Routine gefunden"
+
+msgid "\"%s\" in the body - end of the routine not found"
+msgstr "\"%s\" im Rumpf - Ende der Routine nicht gefunden"
+
+msgid "routine header in the body - end of the routine not certain"
+msgstr "Routinenkopf im Rumpf - Ende der Routine nicht sicher"
+
+msgid "no end for the asm body"
+msgstr "kein end zum asm-Rumpf"
+
+msgid "no end found for the body"
+msgstr "kein end zum Rumpf gefunden"
+
+msgid "\";\" is missing after the end of the body"
+msgstr "hinter dem end des Rumpfs fehlt \";\""
+
+msgid "no routine header"
+msgstr "kein Routinenkopf"
+
+msgid "nothing new begins after the routine - its end is not certain"
+msgstr "hinter der Routine beginnt nichts Neues - ihr Ende ist nicht sicher"
+
+msgid "method resolution (IFoo.X = Y) - not a method of its own"
+msgstr "Methodenauflösung (IFoo.X = Y) - keine eigene Methode"
+
+msgid "the file of the unit is unknown"
+msgstr "die Datei der Unit ist unbekannt"
+
+msgid "nested too deeply"
+msgstr "zu tief verschachtelt"
+
+msgid "not found next to the unit"
+msgstr "nicht neben der Unit gefunden"
+
+msgid "not readable"
+msgstr "nicht lesbar"
+
+msgid "%s (included from %s)"
+msgstr "%s (eingebunden von %s)"
