@@ -108,6 +108,9 @@ type
 implementation
 
 uses
+  // Vor System.SysUtils, damit deren Namen gelten (FindClose u. a.):
+  // GetDriveType fuer den Netzlaufwerk-Check von SCA014.
+  Winapi.Windows,
   System.SysUtils,
   uLocalization,     // _()
   uRdxRecipes,       // AsciiOnly (SCA085-Gegenprobe)
@@ -202,9 +205,15 @@ const
     + 'der Zielvariable des Aufrufers';
   // SCA014 (Charge Q14, E28): die Inline-Konstante haelt die Bedeutung des
   // Literals (E26); den vorlaeufigen Namen benennt der Benutzer selbst um -
-  // keine Sync-Edit-Sitzung der Hilfe.
+  // keine Sync-Edit-Sitzung der Hilfe, und auch kein Rat dazu: Esc
+  // zerstoert im Sync Edit Text (UI-Test 2026-10-11), Strg+Umschalt+J
+  // braucht eine Markierung (Gegen-Review Q14, Minor 13).
   R_MAGIC_HINT = 'gleiche Bedeutung - die Konstante %s haelt das Literal; '
-    + 'umbenennen mit Strg+Umschalt+J (Sync Edit) oder von Hand';
+    + 'umbenennen von Hand oder mit Refactor > Rename (Strg+Umschalt+E)';
+  // SCA014 auf einem Netzlaufwerk: die Hilfe liest dort keine Projekt- und
+  // Include-Dateien (Gegen-Review Q14, Verdacht e; UNC prueft FileReason).
+  R_MAGIC_REMOTE = 'Netzlaufwerk %s - die Hilfe liest dort keine Projekt- '
+    + 'und Include-Dateien (Menueaufbau im Hauptthread); von Hand';
   // SCA001: nur diese Variante bekommt die Hilfe (Feld TLeakFinding.
   // LeakVariant, das uLeakDetector2 setzt; properties.variant im SARIF).
   LEAK_VARIANT_FOF = 'freed-outside-finally';
@@ -362,12 +371,29 @@ begin
       APlan.Includes, APlan.Name);
 end;
 
-// SCA014: was nur die Platte weiss - Lazarus-Dateiart oder -Projekt neben
-// der Unit, die Compiler-Weichen ihrer Includes (TRdxMagicFixes).
+// SCA014: liegt die Datei auf einem Netzlaufwerk ('Z:' ueber
+// GetDriveType)? Dann liest die Hilfe nichts von der Platte - der
+// Menueaufbau laeuft im Hauptthread (Gegen-Review Q14, Verdacht e).
+function RemoteDriveReason(const AFileName: string): string;
+var
+  Drive : string;
+begin
+  Result := '';
+  Drive := ExtractFileDrive(AFileName);
+  if (Length(Drive) = 2) and (Drive[2] = ':')
+     and (GetDriveType(PChar(Drive + PathDelim)) = DRIVE_REMOTE) then
+    Result := Format(R_MAGIC_REMOTE, [Drive]);
+end;
+
+// SCA014: was nur die Platte weiss - Netzlaufwerk, Lazarus-Dateiart oder
+// -Projekt bzw. altes Delphi-Projekt neben der Unit, die Compiler-Weichen
+// ihrer Includes (TRdxMagicFixes).
 function MagicCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
   AFinding: TLeakFinding; const APlan: TRdxMagicPlan): string;
 begin
-  Result := TRdxMagicFixes.FileReason(AFinding.FileName);
+  Result := RemoteDriveReason(AFinding.FileName);
+  if Result = '' then
+    Result := TRdxMagicFixes.FileReason(AFinding.FileName);
   if Result = '' then
     Result := TRdxMagicFixes.IncludeReason(AFinding.FileName, AMap);
 end;

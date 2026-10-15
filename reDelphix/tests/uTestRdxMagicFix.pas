@@ -462,12 +462,44 @@ end;
 
 // ---- Platte (Check in uRdxFixTable) ----
 
-// Ein Verzeichnis unter TEMP (mit Trenner).
+// Ein frischer Baum TEMP\rdx_q14_<GUID>\ (mit Trenner) - eigen je Test,
+// damit nichts aus einem frueheren Lauf oder aus TEMP selbst im Fenster von
+// FileReason liegt (Gegen-Review Q14, Minor 14; RemoveTree raeumt ab).
 function FreshDir(const AName: string): string;
+var
+  G : TGUID;
 begin
+  CreateGUID(G);
   Result := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
-    + 'rdx_q14' + PathDelim + AName + PathDelim;
+    + 'rdx_q14_' + GUIDToString(G) + PathDelim + AName + PathDelim;
   ForceDirectories(Result);
+end;
+
+// Loescht den Baum ADir (mit Trenner) samt Inhalt.
+procedure RemoveTree(const ADir: string);
+var
+  SR : TSearchRec;
+begin
+  if FindFirst(ADir + '*', faAnyFile, SR) = 0 then
+  try
+    repeat
+      if (SR.Name = '.') or (SR.Name = '..') then
+        Continue;
+      if (SR.Attr and faDirectory) <> 0 then
+        RemoveTree(ADir + SR.Name + PathDelim)
+      else
+        DeleteFile(ADir + SR.Name);
+    until FindNext(SR) <> 0;
+  finally
+    FindClose(SR);
+  end;
+  RemoveDir(ADir);
+end;
+
+// Das Verzeichnis ueber ADir (mit Trenner) - die GUID-Wurzel von FreshDir.
+function ParentDir(const ADir: string): string;
+begin
+  Result := ExtractFilePath(ExcludeTrailingPathDelimiter(ADir));
 end;
 
 procedure WriteText(const APath, AText: string);
@@ -508,9 +540,7 @@ begin
     R := TRdxMagicFixes.FileReason(U);
     Assert.IsTrue(Pos('prog.lpr', R) > 0, R);
   finally
-    DeleteFile(ExtractFilePath(U) + 'prog.lpr');
-    DeleteFile(Sub + 'pkg.lpk');
-    DeleteFile(Root + 'top.lpi');
+    RemoveTree(ParentDir(Root));
   end;
 end;
 
@@ -523,7 +553,8 @@ var
   SL        : TStringList;
   Map       : TRdxCodeMap;
 begin
-  Dir := FreshDir('inc');
+  Dir := FreshDir('inc') + 'a' + PathDelim + 'b' + PathDelim;
+  ForceDirectories(Dir);
   U := Dir + 'u.pas';
   SL := TStringList.Create;
   Map := nil;
@@ -546,8 +577,7 @@ begin
   finally
     Map.Free;
     SL.Free;
-    DeleteFile(Dir + 'defs.inc');
-    DeleteFile(Dir + 'deeper.inc');
+    RemoveTree(ParentDir(ParentDir(ParentDir(Dir))));
   end;
 end;
 

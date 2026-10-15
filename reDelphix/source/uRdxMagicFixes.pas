@@ -12,9 +12,11 @@ unit uRdxMagicFixes;
 // VarNameProject): TargetAt mit dem Literal als Caret, IntroduceEdits.
 // Anders als im Labor (E28): KEINE Sync-Edit-Sitzung - die Hilfe schreibt
 // nur die Ersetzung, ueber den Schreibweg der Tabelle (PlanByteEdits, ein
-// Undo-Schritt); umbenennen kann man danach selbst (Strg+Umschalt+J oder
-// von Hand). Und nur DAS eine Literal des Funds, nicht alle gleichen der
-// Zeile (E28: "nur eines, sonst sperren").
+// Undo-Schritt); umbenennen kann man danach selbst, von Hand oder mit
+// Refactor > Rename (Strg+Umschalt+E) - nicht Sync Edit: Esc zerstoert
+// dort Text (UI-Test 2026-10-11), und Strg+Umschalt+J braucht eine
+// Markierung (Gegen-Review Q14, Minor 13). Und nur DAS eine Literal des
+// Funds, nicht alle gleichen der Zeile (E28: "nur eines, sonst sperren").
 //
 // WAS DER DETEKTOR MELDET (uMagicNumbers gelesen): nur in if-Bedingungen,
 // je if hoechstens EINEN Fund, auf der Zeile des 'if'. Er sucht im
@@ -44,17 +46,31 @@ unit uRdxMagicFixes;
 // was der Zeilen-Leser nicht sicher abgrenzt). Dazu, weil eine Inline-
 // Konstante erst ab Delphi 10.3 uebersetzt und FPC 3.2 sie gar nicht
 // kennt - eine Datei, die ein anderer Compiler baut, braeche:
-//   * Skript-Units ohne implementation-Teil (xEdit, JvInterpreter) und
+//   * Skript-Units ohne implementation-Teil (xEdit, JvInterpreter),
 //     Spuren von Compilern vor 10.3 in der Datei (uRdxCompilerTraces,
-//     FLOOR_INLINE_DECL) - hier im Planer;
+//     FLOOR_INLINE_DECL) und der Hauptblock eines Programms bzw. einer
+//     Bibliothek (ob dort eine Inline-Deklaration gilt, ist ohne Delphi
+//     nicht gemessen; Gegen-Review Q14, Verdacht d) - hier im Planer;
 //   * was nur die Platte weiss, im Check der Tabelle (MagicCheck): eine
-//     Lazarus-Dateiart bzw. ein Lazarus-Projekt oder -Paket neben der Unit
-//     (FileReason) und FPC-Weichen oder alte Spuren in den Includes, auch
-//     ein Include, das nicht neben der Unit liegt (IncludeReason).
+//     Lazarus-Dateiart bzw. ein Lazarus-Projekt oder -Paket neben der Unit,
+//     eine alte Delphi-Projektdatei (.dof, .bdsproj, .bpr, .bpg) oder eine
+//     .dproj vor 10.3 (ProjectVersion < 18.5) - Major 3: CnWizards, JVCL
+//     und GExperts tragen keine Versionsweiche in der Unit, die Version
+//     steht im Projekt (FileReason) - und FPC-Weichen oder alte Spuren in
+//     den Includes, auch ein Include, das nicht neben der Unit liegt
+//     (IncludeReason). Auf einem Netzpfad (UNC) bzw. Netzlaufwerk liest die
+//     Hilfe nichts von der Platte - der Menueaufbau laeuft im Hauptthread
+//     (Verdacht e): sie lehnt ab. Zwischengespeichert wird nichts: je
+//     Aufruf liest FileReason hoechstens drei Verzeichnisse und die Koepfe
+//     ihrer .dproj (Korpus-Harness, FPC: 1.010 Aufrufe in 231 ms, 0,2 ms
+//     je Fund; IncludeReason mit den Includes rund 7 ms) - ein Cache
+//     braechte veralteten Zustand, wenn eine Projektdatei dazukommt.
 // Korpus Q14 (5.036 Funde): FPC-Weiche in der Datei 1.724, alte Spur 1.275,
 // in einem Include 63 + 108, Include fehlt 55, Lazarus-Projekt 88, Skript
 // 18 - ohne Skript- und Plattenpruefung waeren es 1.024 statt 696
-// Angebote gewesen.
+// Angebote gewesen; die alten Delphi-Projekte (Charge SQc) nehmen davon
+// noch 120 weg (alte Projektdatei ohne .dproj 111 - CnWizards 72, JVCL
+// 37 -, .dproj vor 10.3 9): 576 Angebote.
 //
 // NAME: MagicNr01, MagicNr02 ... - der erste, der in der Datei nicht als
 // ganzes Wort vorkommt (uRdxIntroPlan.NextFreeName, wie im Labor; auch
@@ -111,9 +127,14 @@ type
     // Was nur die Platte weiss (der Check in uRdxFixTable, nach dem
     // Planer): eine Lazarus-/FPC-Dateiart (.pp, .lpr) oder ein Lazarus-
     // Projekt bzw. -Paket (.lpi, .lpk, .lpr) im Verzeichnis der Unit oder
-    // bis LAZARUS_LEVELS darueber - die Unit baut dann wohl auch mit FPC
+    // bis PROJECT_LEVELS darueber - die Unit baut dann wohl auch mit FPC
     // (Korpus: doublecmd ohne jede FPC-Weiche in der Unit, der Modus steht
-    // im Projekt). '' oder der Grund. Die FPC-Weiche IN der Datei prueft
+    // im Projekt); im selben Fenster das NAECHSTE Verzeichnis mit Delphi-
+    // Projektdateien: eine .dproj mit ProjectVersion unter
+    // FLOOR_INLINE_DECL.ProjectVersion (18.5 = Delphi 10.3; ohne lesbare
+    // Version zaehlt sie als alt) bzw. - ohne .dproj dort - eine alte
+    // Projektdatei (.dof, .bdsproj, .bpr, .bpg). Ein Netzpfad (UNC) wird
+    // nicht gelesen. '' oder der Grund. Die FPC-Weiche IN der Datei prueft
     // schon TargetAt.
     class function FileReason(const AFileName: string): string; static;
 
@@ -152,14 +173,40 @@ const
   FPC_EXTENSIONS: array[0..1] of string = ('.pp', '.lpr');
   // Lazarus-Projekt, -Paket, -Programm (FileReason) ...
   LAZARUS_EXTENSIONS: array[0..2] of string = ('.lpi', '.lpk', '.lpr');
+  // ... Projektdateien aelterer Delphi bzw. des C++Builder: Delphi 1-7,
+  // BDS 2005/2006, C++Builder-Projekt und -Projektgruppe (Major 3) ...
+  LEGACY_EXTENSIONS: array[0..3] of string = ('.dof', '.bdsproj', '.bpr',
+    '.bpg');
+  DPROJ_EXTENSION = '.dproj';
   // ... im Verzeichnis der Unit und so vielen darueber (Korpus: doublecmd-
   // Plugins eine Ebene, CnWizards_L4.lpk zwei Ebenen ueber den Units).
-  LAZARUS_LEVELS = 2;
+  PROJECT_LEVELS = 2;
+  // So viel einer .dproj liest die Hilfe - ProjectVersion steht in der
+  // ersten PropertyGroup.
+  DPROJ_HEAD_BYTES = 65536;
+  PROJECT_VERSION_TAG = '<ProjectVersion>';
+  // Programm und Bibliothek haben einen Hauptblock (MainBlockReason).
+  MAIN_BLOCK_WORDS: array[0..1] of string = ('program', 'library');
   // Was nur der Compiler kennt (ScriptReason).
   FEATURE_INLINE = 'eine Inline-Konstante';
   R_MOVED = 'Zeile verschoben? Datei neu pruefen';
   R_INC_UNSEEN = 'Include %s %s - seine Compiler-Weichen (FPC, aeltere '
     + 'Delphi) sieht die Hilfe nicht';
+  R_LAZARUS = 'Lazarus-Projekt/-Paket %s im Verzeichnis %s - die Unit baut '
+    + 'wohl auch mit FPC, und eine Inline-Konstante gibt es in FPC 3.2 nicht';
+  R_LEGACY = 'alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl '
+    + 'auch mit einem Delphi vor 10.3, und dort gibt es keine Inline-'
+    + 'Konstante; von Hand';
+  R_OLD_DPROJ = 'Projekt %s im Verzeichnis %s mit ProjectVersion %s (vor '
+    + 'Delphi 10.3 = 18.5) - dort gibt es keine Inline-Konstante; von Hand';
+  R_NO_VERSION = 'Projekt %s im Verzeichnis %s ohne lesbare ProjectVersion '
+    + '(Delphi 2007 schrieb keine) - die Unit baut wohl auch mit einem Delphi '
+    + 'vor 10.3, und dort gibt es keine Inline-Konstante; von Hand';
+  R_UNC = 'Netzpfad (%s) - die Hilfe liest dort keine Projekt- und Include-'
+    + 'Dateien (Menueaufbau im Hauptthread); von Hand';
+  R_MAIN_BLOCK = 'die Zeile liegt im Hauptblock des Programms (begin ab '
+    + 'Zeile %d) - ob dort eine Inline-Deklaration gilt, ist nicht gemessen; '
+    + 'von Hand';
 
 { ---- Ziel aus dem Fund ---- }
 
@@ -356,6 +403,48 @@ end;
 
 { ---- Der Planer ---- }
 
+// Das 'begin' des Hauptblocks einer Datei, die mit program bzw. library
+// beginnt: von ihrem letzten 'end.' rueckwaerts bis zu dem Oeffner, der
+// die end-Bilanz schliesst (END_OPENERS); Low = '' ohne.
+function MainBlockBegin(AMap: TRdxCodeMap): TRdxToken;
+var
+  T, P  : TRdxToken;
+  Depth : Integer;
+begin
+  Result := Default(TRdxToken);
+  if not InList(NextToken(AMap, 1, 1).Low, MAIN_BLOCK_WORDS) then Exit;
+  T := PrevToken(AMap, AMap.LineCount, Length(AMap.Raw(AMap.LineCount)) + 1);
+  if T.Low <> '.' then Exit;
+  T := Before(AMap, T);
+  if T.Low <> KW_END then Exit;
+  Depth := 1;
+  while Depth > 0 do
+  begin
+    T := Before(AMap, T);
+    if T.Low = '' then Exit;
+    P := Before(AMap, T);
+    if not IsKeywordAfter(T, P) then Continue;
+    if T.Low = KW_END then
+      Inc(Depth)
+    else if IsEndOpener(T.Low) then
+      Dec(Depth);
+  end;
+  if T.Low = 'begin' then
+    Result := T;
+end;
+
+// Die Zeile im Hauptblock eines Programms bzw. einer Bibliothek (Verdacht
+// d: m22 des Pruefers bot dort an)? '' oder der Grund.
+function MainBlockReason(AMap: TRdxCodeMap; ALine: Integer): string;
+var
+  B : TRdxToken;
+begin
+  Result := '';
+  B := MainBlockBegin(AMap);
+  if (B.Low <> '') and (ALine >= B.Line) then
+    Result := Format(R_MAIN_BLOCK, [B.Line]);
+end;
+
 // Was die Datei als Ganzes verbietet: Spuren von Compilern vor Delphi 10.3.
 function CompilerReason(AMap: TRdxCodeMap): string;
 var
@@ -400,6 +489,8 @@ begin
   else
     AReason := ScriptReason(AMap, FEATURE_INLINE);
   if AReason = '' then
+    AReason := MainBlockReason(AMap, ALine);
+  if AReason = '' then
     AReason := CompilerReason(AMap);
   if AReason <> '' then Exit;
   APlan.Name := Target.Name;
@@ -412,30 +503,139 @@ end;
 
 { ---- Was nur die Platte weiss ---- }
 
-// Eine Lazarus-Projekt- oder -Paketdatei (LAZARUS_EXTENSIONS) in ADir: ihr
-// Name, sonst ''.
-function LazarusFileIn(const ADir: string): string;
+type
+  // Die Projektdateien EINES Verzeichnisses (ProjectFilesIn): die erste
+  // Lazarus- und die erste alte Delphi-Projektdatei, die .dproj mit der
+  // kleinsten ProjectVersion (Zehntel; -1 ohne lesbare Version).
+  TRdxProjectFiles = record
+    Lazarus  : string;
+    Legacy   : string;
+    Dproj    : string;
+    DprojVer : Integer;
+  end;
+
+// Die ProjectVersion der .dproj APath in Zehnteln ('18.5' -> 185; nur die
+// erste Nachkommastelle); -1, wenn die Datei nicht lesbar ist oder keine
+// traegt (Delphi 2007 schrieb noch keine).
+function ProjectVersionOf(const APath: string): Integer;
+var
+  FS    : TFileStream;
+  Bytes : TBytes;
+  Text  : string;
+  P, i  : Integer;
+begin
+  Result := -1;
+  try
+    FS := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
+    try
+      SetLength(Bytes, DPROJ_HEAD_BYTES);
+      SetLength(Bytes, FS.Read(Bytes[0], DPROJ_HEAD_BYTES));
+    finally
+      FS.Free;
+    end;
+  except
+    on EStreamError do
+      Exit;
+  end;
+  Text := TEncoding.ANSI.GetString(Bytes);
+  P := Pos(PROJECT_VERSION_TAG, Text);
+  if P = 0 then Exit;
+  i := P + Length(PROJECT_VERSION_TAG);
+  P := i;
+  while (i <= Length(Text)) and CharInSet(Text[i], ['0'..'9']) do
+    Inc(i);
+  if i = P then Exit;
+  Result := StrToIntDef(Copy(Text, P, i - P), -1);
+  if Result < 0 then Exit;
+  Result := Result * 10;
+  if (i < Length(Text)) and (Text[i] = '.') and CharInSet(Text[i + 1], ['0'..'9']) then
+    Inc(Result, Ord(Text[i + 1]) - Ord('0'));
+end;
+
+// Die Datei AName des Verzeichnisses ADir in AFiles eintragen.
+procedure NoteProjectFile(const ADir, AName: string; var AFiles: TRdxProjectFiles);
+var
+  Ext : string;
+  Ver : Integer;
+begin
+  Ext := LowerCase(ExtractFileExt(AName));
+  if InList(Ext, LAZARUS_EXTENSIONS) then
+  begin
+    if AFiles.Lazarus = '' then
+      AFiles.Lazarus := AName;
+  end
+  else if InList(Ext, LEGACY_EXTENSIONS) then
+  begin
+    if AFiles.Legacy = '' then
+      AFiles.Legacy := AName;
+  end
+  else if Ext = DPROJ_EXTENSION then
+  begin
+    Ver := ProjectVersionOf(IncludeTrailingPathDelimiter(ADir) + AName);
+    if (AFiles.Dproj = '') or (Ver < AFiles.DprojVer) then
+    begin
+      AFiles.Dproj := AName;
+      AFiles.DprojVer := Ver;
+    end;
+  end;
+end;
+
+// Die Projektdateien in ADir (EIN Durchlauf ueber das Verzeichnis).
+function ProjectFilesIn(const ADir: string): TRdxProjectFiles;
 var
   SR : TSearchRec;
 begin
-  Result := '';
-  if FindFirst(IncludeTrailingPathDelimiter(ADir) + '*.lp?', faAnyFile, SR) <> 0
-  then
+  Result := Default(TRdxProjectFiles);
+  if FindFirst(IncludeTrailingPathDelimiter(ADir) + '*', faAnyFile, SR) <> 0 then
     Exit;
   try
     repeat
-      if InList(LowerCase(ExtractFileExt(SR.Name)), LAZARUS_EXTENSIONS) then
-        Exit(SR.Name);
+      if (SR.Attr and faDirectory) = 0 then
+        NoteProjectFile(ADir, SR.Name, Result);
     until FindNext(SR) <> 0;
   finally
     FindClose(SR);
   end;
 end;
 
+// Die ProjectVersion in Zehnteln als Text ('185' -> '18.5').
+function VersionText(AVersion: Integer): string;
+begin
+  Result := Format('%d.%d', [AVersion div 10, AVersion mod 10]);
+end;
+
+// Die Delphi-Projektdateien eines Verzeichnisses als Grund: eine .dproj
+// vor 10.3 bzw. - ohne .dproj - eine alte Projektdatei; '' sonst.
+function DelphiProjectReason(const AFiles: TRdxProjectFiles;
+  const ADir: string): string;
+begin
+  Result := '';
+  if AFiles.Dproj <> '' then
+  begin
+    if AFiles.DprojVer < 0 then
+      Result := Format(R_NO_VERSION, [AFiles.Dproj, ADir])
+    else if AFiles.DprojVer < FLOOR_INLINE_DECL.ProjectVersion then
+      Result := Format(R_OLD_DPROJ, [AFiles.Dproj, ADir,
+        VersionText(AFiles.DprojVer)]);
+  end
+  else if AFiles.Legacy <> '' then
+    Result := Format(R_LEGACY, [AFiles.Legacy, ADir]);
+end;
+
+// Ein Netzpfad ('\\server\share\..', auch mit '/')? Den liest die Hilfe
+// nicht (Verdacht e).
+function IsNetworkPath(const AFileName: string): Boolean;
+begin
+  Result := (Length(AFileName) > 2) and CharInSet(AFileName[1], ['\', '/'])
+    and CharInSet(AFileName[2], ['\', '/']);
+end;
+
 class function TRdxMagicFixes.FileReason(const AFileName: string): string;
 var
-  Ext, Dir, Up, Found : string;
-  Level               : Integer;
+  Ext, Dir, Up : string;
+  Level        : Integer;
+  Files        : TRdxProjectFiles;
+  DelphiSeen   : Boolean;
 begin
   Result := '';
   if AFileName = '' then Exit;
@@ -443,15 +643,24 @@ begin
   if InList(Ext, FPC_EXTENSIONS) then
     Exit(Format('Lazarus-/FPC-Datei (%s) - eine Inline-Konstante gibt es in '
       + 'FPC 3.2 nicht', [Ext]));
+  if IsNetworkPath(AFileName) then
+    Exit(Format(R_UNC, [ExtractFileDir(AFileName)]));
   Dir := ExtractFileDir(AFileName);
-  for Level := 0 to LAZARUS_LEVELS do
+  DelphiSeen := False;
+  for Level := 0 to PROJECT_LEVELS do
   begin
     if Dir = '' then Exit;
-    Found := LazarusFileIn(Dir);
-    if Found <> '' then
-      Exit(Format('Lazarus-Projekt/-Paket %s im Verzeichnis %s - die Unit '
-        + 'baut wohl auch mit FPC, und eine Inline-Konstante gibt es in FPC '
-        + '3.2 nicht', [Found, Dir]));
+    Files := ProjectFilesIn(Dir);
+    if Files.Lazarus <> '' then
+      Exit(Format(R_LAZARUS, [Files.Lazarus, Dir]));
+    // Das NAECHSTE Verzeichnis mit Delphi-Projektdateien entscheidet
+    // (eine .dproj ab 10.3 dort macht alte Dateien weiter oben stumm).
+    if not DelphiSeen then
+    begin
+      Result := DelphiProjectReason(Files, Dir);
+      if Result <> '' then Exit;
+      DelphiSeen := (Files.Dproj <> '') or (Files.Legacy <> '');
+    end;
     Up := ExtractFileDir(Dir);
     if Up = Dir then Exit;
     Dir := Up;

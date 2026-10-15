@@ -347,29 +347,38 @@ type
   end;
 
 // Die Zeile mit AMarker ueber den Anker AAnchor beschreiben (der Katalog
-// fuehrt SCA003 mit 'assign-or-call'), dann TRdxRecipeRunner.SqlTemplate.
+// fuehrt SCA003 mit 'assign-or-call'), dann TRdxRecipeRunner.SqlTemplate -
+// mit den Zeilen desselben Texts wie der Anbieter (TRdxRecipeContext.Lines).
 function RunSql(const ASource, AMarker, AAnchor: string): TSqlRun;
 var
   Path   : string;
   Places : TSourcePlaces;
   Info   : TRefactorInfo;
+  Lines  : TStringList;
+  Offer  : TRdxSqlOffer;
 begin
   Result := Default(TSqlRun);
+  Lines := TStringList.Create;
   Places := OpenTemp(ASource, Path);
   try
+    Lines.Text := ASource;
     Assert.IsTrue(Places.IsOpen, 'Temp-Datei nicht lesbar');
     Info := TRdxRecipeRunner.DescribeAnchor(Places, LineOf(ASource, AMarker),
       AAnchor, Result.IsCall, Result.Why);
     try
       Result.Described := Assigned(Info);
       if Result.Described then
-        Result.Built := TRdxRecipeRunner.SqlTemplate(Places, Info,
-          Result.IsCall, Result.Template, Result.Hint, Result.Reason);
+        Result.Built := TRdxRecipeRunner.SqlTemplate(Places, Lines, Info,
+          Result.IsCall, Offer);
+      Result.Template := Offer.Template;
+      Result.Hint     := Offer.Hint;
+      Result.Reason   := Offer.Reason;
     finally
       Info.Free;
     end;
   finally
     CloseTemp(Places, Path);
+    Lines.Free;
   end;
 end;
 
@@ -1297,17 +1306,17 @@ procedure TTestRdxSca044.Sql_FireDacExecSql_OverloadWithConstant;
 var
   R : TSqlRun;
 begin
-  // Die Konstante kommt in den Text, IntToStr(AId) bindet AId, FConn ist
-  // als TFDConnection mit FireDAC.Comp.Client nachgewiesen.
+  // Die Konstante wird mitgelesen, ihr Name bleibt (Charge SQc), IntToStr(AId)
+  // bindet AId, FConn ist als TFDConnection mit FireDAC.Comp.Client nachgewiesen.
   R := RunSql(EntGenUnit(
     '  FConn.ExecSQL(''DELETE FROM '' + TEST_TABLE_SOFTDEL + '' WHERE id = '' + IntToStr(AId));'),
     'FConn.ExecSQL', 'assign-or-call');
   Assert.IsTrue(R.Described, R.Why);
   Assert.IsTrue(R.Built, R.Reason);
   Assert.AreEqual(
-    '  FConn.ExecSQL(''DELETE FROM entgen_test_softdel WHERE id = :Id'', [AId]);',
+    '  FConn.ExecSQL(''DELETE FROM '' + TEST_TABLE_SOFTDEL + '' WHERE id = :Id'', [AId]);',
     R.Template);
-  Assert.AreEqual('1 Parameter, 1 Konstante(n) im Text, nichts wird geschrieben',
+  Assert.AreEqual('1 Parameter, 1 Konstante(n) mitgelesen, nichts wird geschrieben',
     R.Hint);
   // Ohne FireDAC.Comp.Client bindet ExecSQL nichts - abgelehnt.
   R := RunSql(StringReplace(EntGenUnit(

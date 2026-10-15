@@ -293,8 +293,9 @@ begin
   // Ein Kuerzel bleibt: ADOQuery1, FDQuery1.
   Assert.AreEqual('ADOQuery1Text', SqlParamName('ADOQuery1.Text'));
   Assert.AreEqual('FDQuery1Value', SqlParamName('FDQuery1.Value'));
-  // Nur Buchstaben, Ziffern, '_'; ein Umlaut faellt weg.
-  Assert.AreEqual('Gre', SqlParamName('Gr' + #$00F6 + 'e'));
+  // Nur Buchstaben, Ziffern, '_' - ein Umlaut macht den Namen leer (dann
+  // pN; Gegen-Review S1, Minor 3: bis Charge SQc 'Gre').
+  Assert.AreEqual('', SqlParamName('Gr' + #$00F6 + 'e'));
 end;
 
 procedure TTestRdxSqlFacts.ParamName_ReservedAndFallback;

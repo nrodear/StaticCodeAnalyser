@@ -7,7 +7,9 @@ unit uTestRdxSqlTemplate;
 //
 // Die ersten sechs Tests standen bis Charge S1 in uTestRdxRecipes
 // (SqlTemplate_*) mit ':p1'-Namen; die uebrigen waren gegen den Stand
-// e788e0c7 rot (Nicos Fall: DDL, Konstante, Ziel ohne Query-Objekt).
+// e788e0c7 rot (Nicos Fall: DDL, Konstante, Ziel ohne Query-Objekt). Die
+// Nacharbeit des Gegen-Reviews (Charge SQc) steht in uTestRdxSqlGuards;
+// hier drehte sie Constant_NameStaysValueRead (Major 1).
 
 interface
 
@@ -29,7 +31,7 @@ type
     [Test] procedure Nico_DdlWithConstant_Refused;
     [Test] procedure FromTable_Refused;
     [Test] procedure OrderByAndSelectList_Refused;
-    [Test] procedure Constant_InlinedOrKept;
+    [Test] procedure Constant_NameStaysValueRead;
     [Test] procedure OnlyConstantsOrNoSqlText_Refused;
     [Test] procedure LikePercent_WholeStringIsParam;
     [Test] procedure InList_ElementsAndWholeList;
@@ -240,21 +242,23 @@ begin
     Lit(''') FROM t''')]), 'steht hinter ''(''');
 end;
 
-procedure TTestRdxSqlTemplate.Constant_InlinedOrKept;
+procedure TTestRdxSqlTemplate.Constant_NameStaysValueRead;
 var
   R : TRdxSqlRequest;
 begin
-  // Eine Konstante mit einfachem Wert kommt in den Text - auch an einer
-  // Bezeichner-Position; nur der Wert wird Parameter.
+  // Eine Konstante mit einfachem Wert wird mitgelesen - auch an einer
+  // Bezeichner-Position -, ihr NAME bleibt in der Vorlage (Gegen-Review S1,
+  // Major 1: bis Charge SQc kam 'users' in den Text); nur der Wert wird
+  // Parameter.
   R := Req([Target('Q.SQL.Text'), Lit('''SELECT * FROM '''), Op('TBL_USERS'),
     Lit(''' WHERE id = '''), Op('Id')]);
   SetConst(R, 2, sckLiteral, 'users');
   Assert.AreEqual(
-    'Q.SQL.Text := ''SELECT * FROM users WHERE id = :Id'';' + sLineBreak +
-    'Q.ParamByName(''Id'').Value := Id;', Ok(R));
-  Assert.AreEqual('1 Parameter, 1 Konstante(n) im Text, nichts wird geschrieben',
-    SqlHintOf(Built(R)));
-  // Ohne einfachen Wert bleibt die Verkettung stehen.
+    'Q.SQL.Text := ''SELECT * FROM '' + TBL_USERS + '' WHERE id = :Id'';'
+    + sLineBreak + 'Q.ParamByName(''Id'').Value := Id;', Ok(R));
+  Assert.AreEqual('1 Parameter, 1 Konstante(n) mitgelesen, nichts wird '
+    + 'geschrieben', SqlHintOf(Built(R)));
+  // Ohne einfachen Wert bleibt die Verkettung ebenso stehen.
   SetConst(R, 2, sckKept, '');
   Assert.AreEqual(
     'Q.SQL.Text := ''SELECT * FROM '' + TBL_USERS + '' WHERE id = :Id'';'
