@@ -295,9 +295,13 @@ function OneTokenOnLine(AMap: TRdxCodeMap; ALine: Integer;
   const ASearch: TRdxLineSearch; out AHit: TRdxToken): string;
 // Der Grund zu ACount Treffern auf ALine: 0 -> '<AWhat> auf der
 // gemeldeten Zeile - Zeile verschoben? Datei neu pruefen'; mehr als 1 ->
-// 'Zeile N traegt <AManyFmt mit ACount> - mehrdeutig'; genau 1 -> ''.
+// 'Zeile N traegt <AManyFmt mit ACount fuer %d und AArg fuer %s> -
+// mehrdeutig'; genau 1 -> ''. AManyFmt ist ein Format-Muster: Text aus der
+// Meldung gehoert in AArg, nie in das Muster - ein '%' darin (Delphi-11-
+// Binaerliteral '%101') warf sonst EConvertError (Gegen-Review R5, missed 2:
+// uRdxTryFixes.LockPair setzte den Sperrtext der Meldung ins Muster).
 function OneTokenReason(ALine, ACount: Integer;
-  const AWhat, AManyFmt: string): string;
+  const AWhat, AManyFmt: string; const AArg: string = ''): string;
 
 // Die end-Bilanz vorwaerts ab hinter AFrom (dem Oeffner bzw. dem else einer
 // Anweisungsliste): END_OPENERS als Schluesselwort zaehlen hoch, 'end'
@@ -1025,7 +1029,7 @@ begin
 end;
 
 function OneTokenReason(ALine, ACount: Integer;
-  const AWhat, AManyFmt: string): string;
+  const AWhat, AManyFmt: string; const AArg: string): string;
 begin
   Result := '';
   if ACount = 0 then
@@ -1033,7 +1037,7 @@ begin
       + 'neu pruefen', [AWhat])
   else if ACount > 1 then
     Result := Format('Zeile %d traegt %s - mehrdeutig',
-      [ALine, Format(AManyFmt, [ACount])]);
+      [ALine, Format(AManyFmt, [ACount, AArg])]);
 end;
 
 function OneTokenOnLine(AMap: TRdxCodeMap; ALine: Integer;

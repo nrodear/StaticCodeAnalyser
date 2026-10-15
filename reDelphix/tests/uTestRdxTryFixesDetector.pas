@@ -16,7 +16,9 @@ unit uTestRdxTryFixesDetector;
 //
 // Ohne Delphi gegengeprueft (Charge H4): dieselben Quellen mit der CLI-Exe
 // gescannt und ueber den FPC-Planer (Korpus-Harness) behoben; ebenso der
-// Fall der Charge H4c (Suffix mit umschliessendem try/except).
+// Fall der Charge H4c (Suffix mit umschliessendem try/except) und das
+// SCA156-Katalogbeispiel der Charge B1-FE mit 'var P: Pointer;' (die Hilfe
+// verlangt seitdem einen lokalen Puffer - Gegen-Review R5, R5-02).
 
 interface
 
@@ -109,6 +111,16 @@ begin
   Result := Join(['unit t;', 'interface', 'implementation', '',
     'procedure P;', 'begin']) + #13#10 + AText + #13#10
     + Join(['end;', '', 'end.']);
+end;
+
+// Dasselbe mit dem lokalen Puffer P: SCA156 hilft seit Charge B1-FE nur bei
+// einer lokalen Variable (Gegen-Review R5, R5-02 - ein Feld oder eine
+// globale Variable kennte den Puffer nach finally weiter).
+function InBufferRoutine(const AText: string): string;
+begin
+  Result := Join(['unit t;', 'interface', 'implementation', '',
+    'procedure Run;', 'var', '  P: Pointer;', 'begin']) + #13#10 + AText
+    + #13#10 + Join(['end;', '', 'end.']);
 end;
 
 // AText ohne die '//'-Kommentare am Zeilenende (samt Leerraum davor): das
@@ -324,8 +336,9 @@ var
   Meta : TRuleMeta;
 begin
   Meta := TRuleCatalog.GetRuleCanonical(fkGetMemWithoutFreeMem);
-  Assert.AreEqual(InRoutine(CatalogText(Meta.GoodExample)),
-    FixAll(InRoutine(CatalogText(Meta.BadExample)), fkGetMemWithoutFreeMem));
+  Assert.AreEqual(InBufferRoutine(CatalogText(Meta.GoodExample)),
+    FixAll(InBufferRoutine(CatalogText(Meta.BadExample)),
+      fkGetMemWithoutFreeMem));
 end;
 
 procedure TTestRdxTryFixesDetector.Sca156_Realloc_NoHelp;

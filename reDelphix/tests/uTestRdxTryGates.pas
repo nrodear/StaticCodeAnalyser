@@ -20,6 +20,12 @@ unit uTestRdxTryGates;
 //   Minor 6 - 'X := nil; Foo;' hinter B;
 //   Minor 7 - die Gruende in der Schreibweise des Quelltexts;
 //   Verdacht 13 - Surrogatpaar am Ende der Zeile von A.
+// Dazu das Gegen-Review R5 (Charge B1-FE, je gegen 4358b769 rot): X in einer
+// Huelle (Cast, Klammern, 'as') bei Zuweisung und Speicher-Aufruf (R5-04),
+// 'System.Exit'/'System.Break' (R5-05), nur lokale Puffer und 'P := nil' mit
+// ins finally (R5-02), Puffer als Inline-var (R5-10), '%' im Sperrtext der
+// Meldung (missed 2); nach der Nachpruefung (gegen d840f1e5 rot) Huellen
+// beliebig tief.
 // Sperren und Puffer: uTestRdxTryLocks; die Form des Bausteins und die
 // Sperren der Charge H4: uTestRdxTryFixes.
 
@@ -45,6 +51,12 @@ type
     [Test] procedure NilWithCodeBehind;
     [Test] procedure Reasons_SourceSpelling;
     [Test] procedure Surrogate_AtLineEnd;
+    [Test] procedure HandOver_WrappedAssign;
+    [Test] procedure SystemQualified_Jumps;
+    [Test] procedure Buffer_LocalOnly;
+    [Test] procedure Buffer_InlineVar;
+    [Test] procedure Lock_PercentInMessage;
+    [Test] procedure HandOver_DeepWrap;
   end;
 
 implementation
@@ -57,6 +69,12 @@ const
   SUFFIX = ' (try/except instead of try/finally)';
   MSG_156 = 'GetMem without surrounding try/finally - exception leaks the '
     + 'buffer';
+  MSG_ALLOC_156 = 'AllocMem without surrounding try/finally - exception '
+    + 'leaks the buffer';
+  MSG_109 = 'Lock acquired (%s) but no enclosing try..finally - an exception '
+    + 'between Enter and Leave/Release leaves the lock permanently held.';
+  MSG_153 = 'Lock/Enter without surrounding try/finally - exception leaks the '
+    + 'lock (%s)';
 
 // ---- Helfer (dieselben wie in uTestRdxTryFixes - der Pruefstand baut
 // jede Testunit fuer sich) ----
@@ -180,6 +198,31 @@ begin
   Assert.AreNotEqual('', Fix(ASource, R), R);
 end;
 
+// SCA156 auf Zeile ALine mit der Meldung AMessage: neuer Text oder '' bei
+// Ablehnung (AReason).
+function BufFixAt(const ASource: string; ALine: Integer;
+  const AMessage: string; out AReason: string): string;
+var
+  P : TRdxTryPlan;
+begin
+  Result := '';
+  P := PlanOf(TRdxTryFixes.GetMemWithoutFree, ASource, ALine, AMessage,
+    AReason);
+  if AReason = '' then
+    Result := Apply(ASource, P.Edit);
+end;
+
+// Keine SCA156-Hilfe auf Zeile ALine, und APart steht im Grund.
+procedure AssertBufRefused(const ASource: string; ALine: Integer;
+  const AMessage, APart: string);
+var
+  R : string;
+begin
+  Assert.AreEqual('', BufFixAt(ASource, ALine, AMessage, R),
+    'keine Hilfe: ' + APart);
+  Assert.IsTrue(Pos(APart, R) > 0, R);
+end;
+
 // A, dann AMid und X.Free - die Form der Pruefer-Fixtures.
 function Around(const AMid: array of string): string;
 var
@@ -272,6 +315,13 @@ begin
   AssertRefused(Around(['List.Add(TObject(X));', 'DoWork;']),
     'an Add weitergegeben');
   AssertRefused(Around(['List.Add(Pointer(X));', 'DoWork;']),
+    'an Add weitergegeben');
+  // 'as' und Klammern im Argument (Gegen-Review R5, R5-04; bis Charge B1-FE
+  // angeboten).
+  AssertRefused(Around(['List.Add(X as TObject);', 'DoWork;']),
+    'an Add weitergegeben');
+  AssertRefused(Around(['List.Add((X));', 'DoWork;']), 'an Add weitergegeben');
+  AssertRefused(Around(['List.Add(TObject((X as TFoo)));', 'DoWork;']),
     'an Add weitergegeben');
 end;
 
@@ -442,6 +492,144 @@ begin
   CheckSurrogate;
 end;
 {$ENDIF}
+
+// ---- Gegen-Review R5 (Charge B1-FE) ----
+
+// X in einer Huelle als ganze rechte Seite (R5-04; Pruefer-Fixtures
+// w7/rv/R5/t1.txt, R5_verify/v04.txt): Cast, 'as', Klammern - bis Charge B1-FE
+// angeboten, im Fehlerfall ein Use-after-free wie bei 'FCurrent := X;'. Ein
+// lokales Ziel, ein Member-Zugriff und ein Argument bleiben angeboten.
+procedure TTestRdxTryGates.HandOver_WrappedAssign;
+var
+  R : string;
+begin
+  AssertRefused(Around(['FCurrent := TFoo(X);', 'DoWork;', 'FCurrent := nil;']),
+    'an FCurrent weitergegeben (kein lokaler Name');
+  AssertRefused(Around(['FCurrent := X as TFoo;', 'DoWork;']),
+    'an FCurrent weitergegeben');
+  AssertRefused(Around(['Holder.Obj := TObject(X);', 'DoWork;']),
+    'an Holder.Obj weitergegeben');
+  AssertRefused(Around(['FCurrent := (X);', 'DoWork;']),
+    'an FCurrent weitergegeben');
+  AssertRefused(Around(['FObj := Pointer(X);', 'DoWork;']),
+    'an FObj weitergegeben');
+  AssertRefused(Around(['FObj := System.TObject(X);', 'DoWork;']),
+    'an FObj weitergegeben');
+  AssertRefused(Around(['Btn.OnClick := TFoo(X).Handler;', 'DoWork;']),
+    'Methodenzeiger X.Handler an OnClick');
+  Assert.AreEqual(InProcWith('procedure P;', ['var', '  Y: TFoo;'],
+    ['  X := TFoo.Create;', '  try', '    Y := TFoo(X);', '    Y.Run;',
+    '  finally', '    X.Free;', '  end;']),
+    FixAt(InProcWith('procedure P;', ['var', '  Y: TFoo;'],
+      ['  X := TFoo.Create;', '  Y := TFoo(X);', '  Y.Run;', '  X.Free;']), 8,
+      'X', R), R);
+  AssertOffered(Around(['FCount := (X as TFoo).Count;', 'DoWork;']));
+  AssertOffered(Around(['Log(TFoo(X).Name);', 'DoWork;']));
+end;
+
+// 'System.Exit'/'System.Break' wie Exit/Break (R5-05; Pruefer-Fixtures
+// R5/t1.txt, t4.txt, R5_verify/v05.txt): hinter '.' war das Wort kein
+// Schluesselwort - bei einer Sperre, einem weitergegebenen Objekt und einer
+// Schleife um den Bereich wurde angeboten. Ohne Weitergabe laeuft Free jetzt
+// auch beim Ausstieg, wie bei Exit.
+procedure TTestRdxTryGates.SystemQualified_Jumps;
+var
+  R : string;
+begin
+  PlanOf(TRdxTryFixes.LockWithoutFinally, InProc(['  FLock.Enter;',
+    '  if C then System.Exit;', '  DoWork;', '  FLock.Leave;']), 6,
+    Format(MSG_109, ['FLock']), R);
+  Assert.IsTrue(Pos('Exit in Zeile 7 - mit finally', R) > 0, R);
+  AssertRefused(Around(['if Keep(X) then', '  System.Exit;']),
+    'Exit in Zeile 8, und X wird in Zeile 7 weitergegeben');
+  AssertRefusedAt(InProc(['  for I := 0 to 9 do', '  begin',
+    '    X := TFoo.Create;', '    if Done then', '      System.Break;',
+    '    X.Free;', '  end;']), 8, 'break in Zeile 10 verlaesst den Bereich');
+  Assert.AreEqual(InProc(['  X := TFoo.Create;', '  try', '    if X.Empty then',
+    '      System.Exit;', '    X.Run;', '  finally', '    X.Free;', '  end;']),
+    Fix(Around(['if X.Empty then', '  System.Exit;', 'X.Run;']), R), R);
+end;
+
+// Nur ein lokaler Puffer (R5-02; Pruefer-Fixtures R5/t3.txt,
+// R5_verify/v02.txt): eine globale Variable, ein Feld oder ein Parameter
+// kennt den Puffer weiter - im Fehlerfall gaebe finally ihn frei, das 'P :=
+// nil' dahinter liefe nicht, und die finalization bzw. der Destruktor gaebe
+// ihn ein zweites Mal frei (bis Charge B1-FE angeboten). Ein direkt folgendes
+// 'P := nil;' kommt seitdem mit ins finally.
+procedure TTestRdxTryGates.Buffer_LocalOnly;
+var
+  R : string;
+begin
+  AssertBufRefused(Join(['unit u;', 'interface', 'implementation', 'var',
+    '  Buffer: PByte;', 'procedure Run;', 'begin', '  GetMem(Buffer, 100);',
+    '  Fill(Buffer, 100);', '  FreeMem(Buffer);', '  Buffer := nil;', 'end;',
+    'end.']), 8, MSG_156, 'Buffer ist keine lokale Variable der Routine');
+  AssertBufRefused(Join(['unit u;', 'interface', 'implementation',
+    'procedure TCodec.Encode;', 'begin', '  Work := AllocMem(4096);',
+    '  DoEncode(Work);', '  FreeMem(Work);', 'end;', 'end.']), 6,
+    MSG_ALLOC_156, 'Work ist keine lokale Variable');
+  AssertBufRefused(Join(['unit u;', 'interface', 'implementation',
+    'procedure Alloc(var P: Pointer);', 'begin', '  GetMem(P, 10);',
+    '  Fill(P);', '  FreeMem(P);', 'end;', 'end.']), 6, MSG_156,
+    'P ist keine lokale Variable');
+  Assert.AreEqual(Join(['unit u;', 'interface', 'implementation',
+    'procedure Run;', 'var', '  Buffer: PByte;', 'begin',
+    '  GetMem(Buffer, 100);', '  try', '    Fill(Buffer, 100);', '  finally',
+    '    FreeMem(Buffer);', '    Buffer := nil;', '  end;', 'end;', 'end.']),
+    BufFixAt(Join(['unit u;', 'interface', 'implementation', 'procedure Run;',
+      'var', '  Buffer: PByte;', 'begin', '  GetMem(Buffer, 100);',
+      '  Fill(Buffer, 100);', '  FreeMem(Buffer);', '  Buffer := nil;', 'end;',
+      'end.']), 8, MSG_156, R), R);
+end;
+
+// Der Puffer als Inline-var (R5-10; Pruefer-Fixtures R5/t1.txt,
+// R5_verify/v10.txt): bis Charge B1-FE nahm der Planer das Token vor ':=' -
+// den Typ 'PAnsiChar' - als Puffer und lehnte mit falschem Grund ab
+// ('case-Zweig', '"var" davor'). Die Inline-Deklaration ist lokal.
+procedure TTestRdxTryGates.Buffer_InlineVar;
+var
+  R, Src : string;
+  P      : TRdxTryPlan;
+begin
+  Src := InProc(['  var Buf: PAnsiChar := AllocMem(64);', '  Fill(Buf);',
+    '  FreeMem(Buf);']);
+  P := PlanOf(TRdxTryFixes.GetMemWithoutFree, Src, 6, MSG_ALLOC_156, R);
+  Assert.AreEqual('', R);
+  Assert.AreEqual('Buf', P.Name, 'der Puffer, nicht sein Typ');
+  Assert.AreEqual(InProc(['  var Buf: PAnsiChar := AllocMem(64);', '  try',
+    '    Fill(Buf);', '  finally', '    FreeMem(Buf);', '  end;']),
+    Apply(Src, P.Edit));
+  Assert.AreEqual(InProc(['  var Buf := AllocMem(64);', '  try',
+    '    Fill(Buf);', '  finally', '    FreeMem(Buf);', '  end;']),
+    BufFixAt(InProc(['  var Buf := AllocMem(64);', '  Fill(Buf);',
+      '  FreeMem(Buf);']), 6, MSG_ALLOC_156, R), R);
+end;
+
+// '%' im Sperrtext der Meldung (missed 2; Delphi-11-Binaerliteral): zwei
+// passende Sperren auf der Zeile - der Grund 'mehrdeutig' setzte bis Charge
+// B1 den Text der Meldung in das Format-Muster, und Format warf
+// EConvertError. Jetzt geht er als Argument hinein (OneTokenReason).
+procedure TTestRdxTryGates.Lock_PercentInMessage;
+var
+  R : string;
+begin
+  PlanOf(TRdxTryFixes.UnpairedLock, InProc(['  Locks[%1].Lock; Locks[%1].Lock;',
+    '  DoWork;', '  Locks[%1].UnLock;']), 6,
+    Format(MSG_153, ['Locks[%1].Lock']), R);
+  Assert.IsTrue(Pos('Zeile 6 traegt 2 Sperren "Locks[%1].Lock" - mehrdeutig',
+    R) > 0, R);
+end;
+
+// Huellen beliebig tief (Nachpruefung R5-04, Nit; gegen d840f1e5 rot): bis
+// dahin las die Weitergabe-Sperre hoechstens vier - mit der fuenften (Cast,
+// Klammern, 'as') wurde wieder angeboten.
+procedure TTestRdxTryGates.HandOver_DeepWrap;
+begin
+  AssertRefused(Around(['FCurrent := TFoo(TFoo(TFoo(TFoo(TFoo(X)))));',
+    'DoWork;']), 'an FCurrent weitergegeben');
+  AssertRefused(Around(['List.Add(TObject((((X as TFoo)))));', 'DoWork;']),
+    'an Add weitergegeben');
+end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestRdxTryGates);

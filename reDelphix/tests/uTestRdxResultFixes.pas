@@ -16,8 +16,14 @@ unit uTestRdxResultFixes;
 //          umschliessende Routine von der Lese-Zeile aus (auch mit lokaler
 //          Routine davor), Typbeweise (RTL-DynArray, 'array of' und
 //          Interface der Unit); Sperren unbewiesener Typ, absolute Result,
-//          Typ anders als in der Meldung, Zeile ohne Result.
-// SCA096/SCA097: uTestRdxInheritedFixes; gegen die echten Detektoren:
+//          Typ anders als in der Meldung, Zeile ohne Result; seit Charge B1-FE
+//          ein Typname, den die Unit auch lokal bzw. geschachtelt definiert
+//          (Gegen-Review R5, R5-06).
+// Dazu die Laufzeit der Planer SCA096/SCA097 auf einer grossen Unit (R5-07,
+// ein Planerlauf statt je Frage ein Lauf ueber die ganze Datei) und seit der
+// Nachpruefung Klassenkoepfe 'TGen<T: class; U>' in dessen Index sowie
+// SCA196 in einem Include ohne Kopf (je gegen d840f1e5 rot).
+// SCA096/SCA097 sonst: uTestRdxInheritedFixes; gegen die echten Detektoren:
 // uTestRdxResultFixesDetector (nur Delphi).
 
 interface
@@ -46,6 +52,9 @@ type
     [Test] procedure Sca196_Enclosing;
     [Test] procedure Refuse196_TypeNotProven;
     [Test] procedure Refuse196_Stale;
+    [Test] procedure Refuse196_TypeScope;
+    [Test] procedure Planners_LargeUnitInTime;
+    [Test] procedure Planners_ConstraintGroupHeads;
   end;
 
 implementation
@@ -61,6 +70,10 @@ const
     + '%s, Result is a hidden var parameter aliasing the caller''s target '
     + 'variable and starts with its OLD content, not empty. Initialize Result '
     + 'first (e.g. Result := nil / Result := [] / Result := '''')';
+  MSG_CTOR = 'Constructor has no `inherited` call - parent class is not '
+    + 'initialized.';
+  MSG_DTOR = 'Destructor has no `inherited` call - parent class cleanup is '
+    + 'skipped.';
 
 // ---- Helfer ----
 
@@ -500,6 +513,150 @@ begin
   Assert.AreEqual('', PlanOf(TRdxResultFixes.ManagedResultInit, S,
     LineOf(S, 'Use(Result)'), 'Function F reads Result before', R).Name);
   Assert.IsTrue(Pos('fehlt in der Meldung', R) > 0, R);
+end;
+
+// Die Unit definiert den Typnamen auch lokal in einer anderen Routine bzw.
+// geschachtelt in einer Klasse (Gegen-Review R5, R5-06; Pruefer-Fixtures
+// R5/r4.txt, R5_verify/v06b.txt): welche Definition gilt, haengt am
+// Gueltigkeitsbereich - bis Charge B1-FE 'Result := nil;' fuer mORMots RawUtf8
+// (ein String) wegen eines lokalen 'RawUtf8 = array of Byte'. Ebenso in
+// einem Include ohne Kopf (Nachpruefung R5-06, FE_verify/fx/a99.txt; gegen
+// d840f1e5 rot): dort galten Routinen erst hinter 'implementation' als
+// Routinen, ihr lokaler Typ als Unit-Ebene.
+procedure TTestRdxResultFixes.Refuse196_TypeScope;
+const
+  HELPER: array[0..7] of string = ('procedure Helper;', 'type',
+    '  RawUtf8 = array of Byte;', 'var', '  X: RawUtf8;', 'begin',
+    '  SetLength(X, 1);', 'end;');
+  JOIN_FN: array[0..3] of string = ('function Join(const A: RawUtf8): RawUtf8;',
+    'begin', '  Result := Result + A;', 'end;');
+begin
+  AssertRefused196(InUnit([Join(HELPER), Join(JOIN_FN)]), 'Result := Result',
+    'Join', 'RawUtf8', 'Gueltigkeitsbereich');
+  AssertRefused196(Join([Join(HELPER), '', Join(JOIN_FN)]), 'Result := Result',
+    'Join', 'RawUtf8', 'Gueltigkeitsbereich');
+  AssertRefused196(Join(['unit u;', 'interface', 'type', '  TA = class',
+    '  public type', '    TItems = array of Integer;', '  end;',
+    'implementation', 'function GetItems: TItems;', 'begin',
+    '  Result := Result + [1];', 'end;', 'end.']), 'Result := Result',
+    'GetItems', 'TItems', 'Gueltigkeitsbereich');
+end;
+
+// Die Unit von Planers_LargeUnitInTime: TFoo erbt von TBase (in der Unit),
+// TBase von TComponent (nicht in der Unit); der Konstruktor ruft ACalls
+// verschiedene Prozeduren, AFillers Klassen fuellen die Datei.
+function LargeUnit(AFillers, ACalls: Integer): string;
+var
+  SB : TStringBuilder;
+  i  : Integer;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.Append('unit u;'#13#10'interface'#13#10'type'#13#10);
+    SB.Append('  TBase = class(TComponent)'#13#10'  public'#13#10);
+    SB.Append('    constructor Create(A: Integer); virtual;'#13#10'  end;'#13#10);
+    SB.Append('  TFoo = class(TBase)'#13#10'  public'#13#10);
+    SB.Append('    constructor Create(A: Integer); override;'#13#10);
+    SB.Append('    destructor Destroy; override;'#13#10'  end;'#13#10);
+    for i := 1 to AFillers do
+      SB.Append(Format('  TFiller%d = class'#13#10'    procedure M;'#13#10
+        + '  end;'#13#10, [i]));
+    SB.Append('implementation'#13#10);
+    SB.Append('constructor TFoo.Create(A: Integer);'#13#10'begin'#13#10);
+    for i := 1 to ACalls do
+      SB.Append(Format('  Init%d(A);'#13#10, [i]));
+    SB.Append('end;'#13#10'destructor TFoo.Destroy;'#13#10'begin'#13#10);
+    SB.Append('  Done;'#13#10'end;'#13#10);
+    for i := 1 to AFillers do
+      SB.Append(Format('procedure TFiller%d.M;'#13#10'begin'#13#10
+        + '  Work(%d);'#13#10'end;'#13#10, [i, i]));
+    SB.Append('end.');
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+// Laufzeit (Gegen-Review R5, R5-07): SCA096 und SCA097 auf einer Unit von
+// gut 20.000 Zeilen. Bis Charge B1-FE las jede Frage nach Klassenkopf bzw.
+// Methodendeklaration die ganze Datei - fuer SCA096 je Aufruf im Rumpf die
+// ganze Vorfahrenkette (gut 120 Laeufe, FPC-Pruefstand rund 5 s); jetzt ein
+// Index je Planerlauf (rund 0,1 s). Die Schranke laesst Rechner-
+// Schwankung mehr als Faktor 5 Luft.
+procedure TTestRdxResultFixes.Planners_LargeUnitInTime;
+const
+  MAX_MS = 1500;
+var
+  S, R : string;
+  P    : TRdxResultPlan;
+  T0   : TDateTime;
+  Ms   : Int64;
+begin
+  S := LargeUnit(3000, 20);
+  T0 := Now;
+  P := PlanOf(TRdxResultFixes.ConstructorInherited, S,
+    LineOf(S, 'constructor TFoo.Create'), MSG_CTOR, R);
+  Ms := Round((Now - T0) * MSecsPerDay);
+  Assert.AreEqual('', R, 'SCA096 angeboten');
+  Assert.AreEqual(STMT_INHERITED, P.Name);
+  Assert.IsTrue(Ms < MAX_MS, Format('SCA096: %d ms', [Ms]));
+  T0 := Now;
+  P := PlanOf(TRdxResultFixes.DestructorInherited, S,
+    LineOf(S, 'destructor TFoo.Destroy'), MSG_DTOR, R);
+  Ms := Round((Now - T0) * MSecsPerDay);
+  Assert.AreEqual('', R, 'SCA097 angeboten');
+  Assert.IsTrue(Ms < MAX_MS, Format('SCA097: %d ms', [Ms]));
+end;
+
+// Klassenkoepfe mit Gruppen von Einschraenkungen 'TGen<T: class; U> = class'
+// im Index des Planerlaufs (Nachpruefung R5-07; Pruefer-Fixtures
+// FE_verify/fx/a07.txt, a07b.txt; je gegen d840f1e5 rot, 4358b769 - noch
+// ohne Index - war richtig): der Index brach rueckwaerts am ';' ab, ein
+// solcher Vorfahr galt als nicht in der Unit - SCA096 bot 'inherited;' vor
+// der Delegation an seinen Konstruktor OpenEx an (doppelte
+// Initialisierung), SCA097 'inherited;' auf sein abstraktes Destroy, und
+// SCA097 an TMulti<T1: class; T2: class>.Destroy lehnte mit "Klasse TMulti
+// nicht in dieser Unit" ab.
+procedure TTestRdxResultFixes.Planners_ConstraintGroupHeads;
+const
+  GEN_CTOR: array[0..7] of string = ('  TGen<T: class; U> = class(TComponent)',
+    '  public', '    constructor OpenEx(AOwner: TComponent); virtual;',
+    '    constructor Create(AOwner: TComponent); override;', '  end;',
+    '  TBar = class(TGen<TObject, Integer>)', '  public',
+    '    constructor Create(AOwner: TComponent); override;');
+  GEN_DTOR: array[0..5] of string = ('  TGen<T: class; U> = class(TComponent)',
+    '  public', '    destructor Destroy; override; abstract;', '  end;',
+    '  TBar = class(TGen<TObject, Integer>)',
+    '    destructor Destroy; override;');
+  MULTI: array[0..4] of string = ('  TMulti<T1: class; T2: class> = class',
+    '  private', '    FItems: TObject;', '  public',
+    '    destructor Destroy; override;');
+var
+  S, R : string;
+  P    : TRdxResultPlan;
+begin
+  S := Join(['unit u;', 'interface', 'type', Join(GEN_CTOR), '  end;',
+    'implementation', 'constructor TBar.Create(AOwner: TComponent);', 'begin',
+    '  OpenEx(AOwner);', 'end;', 'end.']);
+  PlanOf(TRdxResultFixes.ConstructorInherited, S,
+    LineOf(S, 'constructor TBar.Create'), MSG_CTOR, R);
+  Assert.IsTrue(Pos('Aufruf OpenEx in Zeile 16 - ein Konstruktor der Klasse '
+    + '(Delegation)', R) > 0, R);
+  S := Join(['unit u;', 'interface', 'type', Join(GEN_DTOR), '  end;',
+    'implementation', 'destructor TBar.Destroy;', 'begin', '  FList.Free;',
+    'end;', 'end.']);
+  PlanOf(TRdxResultFixes.DestructorInherited, S,
+    LineOf(S, 'destructor TBar.Destroy'), MSG_DTOR, R);
+  Assert.IsTrue(Pos('TGen.Destroy ist abstrakt (Zeile 6)', R) > 0, R);
+  S := Join(['unit u;', 'interface', 'type', Join(MULTI), '  end;',
+    'implementation', 'destructor TMulti<T1, T2>.Destroy;', 'begin',
+    '  FItems.Free;', 'end;', 'end.']);
+  P := PlanOf(TRdxResultFixes.DestructorInherited, S,
+    LineOf(S, 'destructor TMulti'), MSG_DTOR, R);
+  Assert.AreEqual('', R, 'SCA097 an TMulti angeboten');
+  Assert.IsFalse(P.Changes, 'direkter TObject-Erbe');
+  Assert.AreEqual(StringReplace(S, '  FItems.Free;', '  FItems.Free;'#13#10
+    + '  inherited;', []), Apply(S, P.Edits));
 end;
 
 initialization

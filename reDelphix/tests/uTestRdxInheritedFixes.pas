@@ -18,7 +18,11 @@ unit uTestRdxInheritedFixes;
 //          fehlendes ';', inline, leerer Rumpf, Kommentare vor end, Tab;
 //          gekennzeichnet ausser bei direktem TObject-Erben; Sperren: kein
 //          override, letzte Anweisung Exit/raise, Direktive zwischen letzter
-//          Anweisung und end, inherited im Text, class destructor.
+//          Anweisung und end, inherited im Text, class destructor. Seit
+//          Charge B1-FE (Gegen-Review R5, je gegen 4358b769 rot): fehlendes ';'
+//          hinter einem String-Literal - eigene Zeile und inline (R5-01,
+//          missed 3) - und 'System.Exit', 'SysUtils.Abort' & Co. als Ende
+//          (R5-05, missed 4).
 // SCA121/SCA196: uTestRdxResultFixes.
 
 interface
@@ -47,6 +51,9 @@ type
     [Test] procedure Refuse097_DeadEnd;
     [Test] procedure Refuse097_DirectiveBeforeEnd;
     [Test] procedure Refuse097_InheritedOrClassDestructor;
+    [Test] procedure Sca097_StringLiteralLast;
+    [Test] procedure Sca097_StringLiteralInline;
+    [Test] procedure Refuse097_QualifiedDeadEnd;
   end;
 
 implementation
@@ -483,6 +490,91 @@ begin
   AssertDtorRefused(InUnit(['  TFoo = class', '    class destructor Destroy;',
     '  end;'], ['class destructor TFoo.Destroy;', 'begin', 'end;']),
     'class destructor TFoo', 'class destructor');
+end;
+
+// ---- Gegen-Review R5 (Charge B1-FE) ----
+
+// Die letzte Anweisung endet ohne ';' auf einem String-Literal (R5-01,
+// missed 3; Pruefer-Fixtures R5/r3.txt, R5_verify/v01.txt, v01b.txt): das
+// ';' kommt hinter das letzte Zeichen aus Code ODER String. Bis Charge B1-FE
+// setzte der Planer es hinter das letzte Code-Token - vor das Literal
+// ('FState :=; ''x''', als bedeutungsgleich gekennzeichnet).
+procedure TTestRdxInheritedFixes.Sca097_StringLiteralLast;
+const
+  LASTS: array[0..6] of string = ('FState := ''x''', 'S := S + ''x''',
+    'FName := #13''a''', 'FName := ''it''''s''', 'FName := ''a'' // c',
+    'FName := FName + ''x'' { c }', 'FName := ''a''#13#10');
+  FIXED: array[0..6] of string = ('FState := ''x'';', 'S := S + ''x'';',
+    'FName := #13''a'';', 'FName := ''it''''s'';', 'FName := ''a''; // c',
+    'FName := FName + ''x''; { c }', 'FName := ''a''#13#10;');
+var
+  R : string;
+  P : TRdxResultPlan;
+  i : Integer;
+begin
+  for i := 0 to High(LASTS) do
+  begin
+    Assert.AreEqual(DtorUnit('class', 'override;', ['destructor TFoo.Destroy;',
+      'begin', '  ' + FIXED[i], '  inherited;', 'end;']),
+      Dtor(DtorUnit('class', 'override;', ['destructor TFoo.Destroy;', 'begin',
+        '  ' + LASTS[i], 'end;']), 'destructor TFoo', R, P), LASTS[i] + ': ' + R);
+    Assert.IsFalse(P.Changes, LASTS[i] + ': TObject.Destroy ist leer');
+  end;
+  // Ein mehrzeiliges String-Literal (Delphi 12): das ';' hinter die
+  // schliessenden Quotes.
+  Assert.AreEqual(DtorUnit('class', 'override;', ['destructor TFoo.Destroy;',
+    'begin', '  FName := ''''''', '    multi', '    '''''';', '  inherited;',
+    'end;']),
+    Dtor(DtorUnit('class', 'override;', ['destructor TFoo.Destroy;', 'begin',
+      '  FName := ''''''', '    multi', '    ''''''', 'end;']),
+      'destructor TFoo', R, P), R);
+end;
+
+// Dasselbe inline - 'end' nicht am Zeilenanfang (R5-01): bis Charge B1-FE
+// 'FState :=; inherited; ''destroyed'' end;'.
+procedure TTestRdxInheritedFixes.Sca097_StringLiteralInline;
+var
+  R : string;
+  P : TRdxResultPlan;
+begin
+  Assert.AreEqual(DtorUnit('class', 'override;', ['destructor TFoo.Destroy;',
+    'begin', '  FBar.Free; FState := ''destroyed''; inherited; end;']),
+    Dtor(DtorUnit('class', 'override;', ['destructor TFoo.Destroy;', 'begin',
+      '  FBar.Free; FState := ''destroyed'' end;']), 'destructor TFoo', R, P), R);
+  Assert.AreEqual(DtorUnit('class(TObject)', 'override;',
+    ['destructor TFoo.Destroy;', 'begin',
+    '  FName := FName + '' (closed)''; inherited; end;']),
+    Dtor(DtorUnit('class(TObject)', 'override;', ['destructor TFoo.Destroy;',
+      'begin', '  FName := FName + '' (closed)'' end;']), 'destructor TFoo',
+      R, P), R);
+end;
+
+// Qualifizierte Spruenge und Abbrueche (R5-05, missed 4; Pruefer-Fixtures
+// R5/r2.txt, R5_verify/v05.txt): hinter '.' war das Wort kein
+// Schluesselwort, die letzte Anweisung begann mit 'system' bzw.
+// 'sysutils' - bis Charge B1-FE kam ein totes 'inherited;' dahinter bzw.
+// verliess 'System.Exit' den Destruktor vor dem Ende. Eine Methode 'Abort'
+// eines Objekts ist kein Abbruch.
+procedure TTestRdxInheritedFixes.Refuse097_QualifiedDeadEnd;
+const
+  ENDS: array[0..3] of string = ('System.Exit', 'System.Halt',
+    'SysUtils.Abort', 'System.SysUtils.Abort');
+var
+  E, R : string;
+  P    : TRdxResultPlan;
+begin
+  for E in ENDS do
+    AssertDtorRefused(DtorUnit('class(TComponent)', 'override;',
+      ['destructor TFoo.Destroy;', 'begin', '  FBar.Free;', '  ' + E + ';',
+      'end;']), 'destructor TFoo', 'die letzte Anweisung ist ' + E);
+  AssertDtorRefused(DtorUnit('class(TComponent)', 'override;',
+    ['destructor TFoo.Destroy;', 'begin', '  if FShared then System.Exit;',
+    '  FBar.Free;', 'end;']), 'destructor TFoo', 'Exit in Zeile 11');
+  Assert.AreEqual(DtorUnit('class(TComponent)', 'override;',
+    ['destructor TFoo.Destroy;', 'begin', '  FConn.Abort;', '  inherited;',
+    'end;']),
+    Dtor(DtorUnit('class(TComponent)', 'override;', ['destructor TFoo.Destroy;',
+      'begin', '  FConn.Abort;', 'end;']), 'destructor TFoo', R, P), R);
 end;
 
 initialization
