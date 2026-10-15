@@ -42,7 +42,8 @@ source\uRdxLineFixes.pas          Quick-Fixes an einer Zeile SCA082/SCA071/SCA08
 source\uRdxRaiseFixes.pas         Quick-Fixes an Ausnahmen und leeren Rumpfen SCA020/SCA120/SCA122, reine Textlogik
 source\uRdxDeclFixes.pas          Quick-Fixes an Deklarationen SCA117/SCA197/SCA149, reine Textlogik
 source\uRdxFlowFixes.pas          Quick-Fixes an ganzen Anweisungen SCA098/SCA080/SCA047 (Charge H2), reine Textlogik
-source\uRdxRoutineFixes.pas       Quick-Fixes SCA164/SCA147 (ungenutzte Routine / private Methode loeschen, Charge H3b) und die Bausteine Routinengrenzen, Decl/Impl-Finder und (seit Charge H5) Klassenkopf - Textlogik bis auf den Include-Leser (IncludeChainReason): er liest Includes von der Platte - fuer SCA164/SCA147 die vor implementation ohne die im Kopf der Unit (IncludesUpTo), fuer SCA014 alle (AllIncludes; eine Durchsicht, IncludesWhere) -, nie auf einem Netzpfad (uRdxPaths.IsNetworkPath), `{$I \datei.inc}` auf dem Laufwerk der Unit (IncludeSearchPath); eine eigene Unit dafuer folgt mit der Schichtung (R6-12)
+source\uRdxRoutineFixes.pas       Quick-Fixes SCA164/SCA147 (ungenutzte Routine / private Methode loeschen, Charge H3b): Loeschbereiche, Namen in der Datei, Interfaces der Klasse; die Include-Dateien vor implementation prueft IncludeReason ueber die Include-Kette in uRdxBlocks, reine Textlogik
+source\uRdxBlocks.pas             die Bausteine der Planer (Charge B2S-b, Review R6-12; bis dahin in uRdxRoutineFixes): Routinengrenzen (ReadRoutine), Decl/Impl-Finder (FindMethodDecls/FindMethodImpls), Klassenkopf (FindClassHeads, HeritageOf, MethodDecl, EnclosingClass, ClassEnd), Zeilen-Marker ueber einem Bereich (MarkerAboveReason) und die Include-Kette (IncludeChainReason) - Textlogik bis auf diese Kette: sie liest Includes von der Platte - fuer SCA164/SCA147 die vor implementation ohne die im Kopf der Unit (IncludesUpTo), fuer SCA014 alle (AllIncludes; eine Durchsicht, IncludesWhere) -, nie auf einem Netzpfad (uRdxPaths.IsNetworkPath), `{$I \datei.inc}` auf dem Laufwerk der Unit (IncludeSearchPath); keine Planer-Unit bindet fuer sie eine andere ein
 source\uRdxCleanupFixes.pas       Quick-Fixes "Aufraeumen" SCA070/SCA053 (Charge H3a) und der Baustein CutEdit (loeschen und aufraeumen), reine Textlogik
 source\uRdxTryFixes.pas           Quick-Fixes try/finally SCA009/SCA001/SCA109/SCA153/SCA156 (Charge H4) und der Baustein B5 (Anweisung und Freigabe in try/finally), reine Textlogik
 source\uRdxSqlTemplate.pas        SQL-Vorlage zu SCA003 (Rezept 5.2, Charge S1, Nacharbeit SQc): nur Werte werden Parameter (DDL - auch hinter ';' -, Namen, Join-Bedingung, unbekannte Anweisungsart lehnen ab), Konstanten mitgelesen, ihr Name bleibt, FireDAC-ExecSQL, ADO-Parameters, Kette Q.SQL.Add, Namen aus dem Operanden; Nachweise am Quelltext (Konstante mit Sichtbarkeit ueber Routinen/Klassen, FireDAC-/ADO-Objekt), reine Textlogik
@@ -659,7 +660,8 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   SCA066/SCA072/SCA084, SCA007/SCA168, SCA101/SCA099,
   SCA082/SCA071/SCA088/SCA123, SCA020/SCA120/SCA122, SCA117/SCA197/SCA149,
   SCA098/SCA080/SCA047 bzw. SCA164 (samt den Bausteinen Routinengrenzen
-  und Decl/Impl-Finder) und SCA147 auf Text, ohne Parser. Charge FC (Review
+  und Decl/Impl-Finder, seit Charge B2S-b in `uRdxBlocks`) und SCA147 auf
+  Text, ohne Parser. Charge FC (Review
   R3/R6, je Befund gegen 4358b769 rot belegt): SCA066 an einer Property mit
   Prozedurtyp, SCA168 im Variantenteil eines Records, SCA122 mit neu
   zugewiesener Variable, SCA075 mit einer Spalte hinter dem Zeilenende,
@@ -926,7 +928,7 @@ Der Pruefstand uebersetzt die Core-Units des Quellstellen-Dienstes
 des Moduls (`uRdxRecipes`, `uRdxPaths`, `uRdxScopeTable` samt `TRdxProjectUnits`, `uRdxBufferMath`,
 `uRdxSuppress`, `uRdxSimpleFixes`, `uRdxRtlTypes` samt der erzeugten
 `uRdxRtlTypes.inc`, `uRdxStructFixes`, `uRdxLineFixes`, `uRdxRaiseFixes`,
-`uRdxDeclFixes`, `uRdxFlowFixes`, `uRdxRoutineFixes`, `uRdxCleanupFixes`, `uRdxTryFixes`,
+`uRdxDeclFixes`, `uRdxFlowFixes`, `uRdxBlocks`, `uRdxRoutineFixes`, `uRdxCleanupFixes`, `uRdxTryFixes`,
 `uRdxResultFixes`, `uRdxSqlTemplate`, `uRdxCompilerTraces`, `uRdxMagicFixes`,
 `uRdxCodeMap`,
 `uRdxIntroPlan`, `uRdxIntroEdits`, `uRdxText`). Testunits kommen aus `reDelphix\tests`,

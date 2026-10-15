@@ -137,7 +137,7 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxRoutineFixes;  // ReadRoutine (SCA053: Ende des Gueltigkeitsbereichs),
+  uRdxBlocks;        // ReadRoutine (SCA053: Ende des Gueltigkeitsbereichs),
                      // MarkerAboveReason (Marker ueber der Deklaration)
 
 const
@@ -1171,7 +1171,8 @@ end;
 // ab dem Kopf, an dem die Rueckwaertssuche endete (ADecl.Stop); endet deren
 // Routine vor der Section (eine lokale Routine davor), weiter ab ihrem Kopf
 // rueckwaerts. Die Grenzen liest der Baustein ReadRoutine
-// (uRdxRoutineFixes) - bis Charge H3c hatte SCA053 einen eigenen Leser
+// (uRdxBlocks, bis Charge B2S-b in uRdxRoutineFixes) - bis Charge H3c
+// hatte SCA053 einen eigenen Leser
 // (BodyEnd mit BodyStep und RecordEnd, Gegen-Review H3, Major 2). Der
 // endete bei einem 'end' als Bezeichner ('Range(start := 0, End := 0)',
 // benanntes OLE-Argument) mitten im Rumpf, und eine Verwendung dahinter
@@ -1186,7 +1187,7 @@ begin
   H := ADecl.Stop;
   for n := 1 to MAX_OWNER_STEPS do
   begin
-    Result := TRdxRoutineFixes.ReadRoutine(AMap, H, R);
+    Result := TRdxBlocks.ReadRoutine(AMap, H, R);
     if Result <> '' then
       Exit('Rumpf der Routine nicht gefunden - ' + Result);
     if not TokAfter(ADecl.VarTok, R.Last) then
@@ -1539,7 +1540,7 @@ end;
 // Steht vor AFrom nur Leerraum, verliert die Zeile mit dem Schnitt ihren
 // Code (sie geht ganz, oder ein Rest rueckt an die Einrueckung): ein
 // Zeilen-Marker darueber, der auf sie zielt, gaelte danach anderem Code
-// (uRdxRoutineFixes.MarkerAboveReason; Nachpruefung B1-FD: der Marker
+// (uRdxBlocks.MarkerAboveReason; Nachpruefung B1-FD: der Marker
 // '// noinspection ShortVariableName' ueber 'X: Integer;' galt nach der
 // Hilfe 'Y: Integer;'). Bleibt Code davor ('A, X: T' -> 'A: T'), bleibt
 // auch das Ziel. '' oder der Grund.

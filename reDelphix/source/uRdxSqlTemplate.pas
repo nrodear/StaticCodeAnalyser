@@ -255,7 +255,7 @@ uses
   System.SysUtils,
   System.StrUtils,    // PosEx
   uRefactorInfo,      // ROLE_TARGET, ROLE_LITERAL, ROLE_OPERAND
-  uRdxRoutineFixes;   // ReadRoutine: Grenzen der Routinen (lokale Konstanten)
+  uRdxBlocks;         // ReadRoutine: Grenzen der Routinen (lokale Konstanten)
 
 const
   // Gruende - deutsch ohne Umlaute wie in den Nachbar-Units (Statustext).
@@ -2573,7 +2573,7 @@ end;
 
 // Hat der Typ ab AKind (class, object, interface ...) einen Rumpf mit end?
 // Nicht 'class;' (vorwaerts), 'class of' (Metaklasse), 'class(TBase);'
-// (Kurzform) - wie uRdxRoutineFixes.TypeHasBody.
+// (Kurzform) - wie uRdxBlocks.TypeHasBody.
 function HasTypeBody(AMap: TRdxCodeMap; const AKind: TRdxToken): Boolean;
 var
   N : TRdxToken;
@@ -2691,7 +2691,7 @@ var
   R : TRdxRoutine;
   n : Integer;
 begin
-  Result := (TRdxRoutineFixes.ReadRoutine(AMap, T, R) = '') and (R.Body.Low <> '');
+  Result := (TRdxBlocks.ReadRoutine(AMap, T, R) = '') and (R.Body.Low <> '');
   if not Result then Exit;
   n := Length(AScopes.Routines);
   SetLength(AScopes.Routines, n + 1);
@@ -2937,7 +2937,7 @@ begin
       Exit(True);
     if T.Low = KW_RECORD then
       Exit(False);
-    Names := TRdxRoutineFixes.HeritageOf(AMap, T);
+    Names := TRdxBlocks.HeritageOf(AMap, T);
     if Length(Names) = 0 then
       Exit(False);
     Key := LowerCase(Names[0]);

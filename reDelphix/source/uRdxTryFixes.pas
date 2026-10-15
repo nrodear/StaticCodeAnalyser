@@ -178,7 +178,7 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxRoutineFixes;  // ReadRoutine (lokale Variablen der Routine um A)
+  uRdxBlocks;        // ReadRoutine (lokale Variablen der Routine um A)
 
 const
   SPAN_TRY = 'try';
@@ -1002,7 +1002,7 @@ begin
   begin
     P := Before(AMap, T);
     if IsRoutineHeadAfter(T, P)
-       and (TRdxRoutineFixes.ReadRoutine(AMap, T, ARoutine) = '')
+       and (TRdxBlocks.ReadRoutine(AMap, T, ARoutine) = '')
        and (ARoutine.Body.Low <> '') and TokBefore(ARoutine.Body, AAt)
        and TokBefore(AAt, ARoutine.EndTok) then
       Exit(True);
@@ -1028,7 +1028,7 @@ function SkipLocalRoutine(AMap: TRdxCodeMap; var T: TRdxToken): Boolean;
 var
   Local : TRdxRoutine;
 begin
-  Result := TRdxRoutineFixes.ReadRoutine(AMap, T, Local) = '';
+  Result := TRdxBlocks.ReadRoutine(AMap, T, Local) = '';
   if Result then
     T := Local.Last;
 end;

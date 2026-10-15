@@ -74,7 +74,7 @@ unit uRdxResultFixes;
 //                   - hinter ihr letztes Zeichen aus Code oder String
 //                   (uRdxCodeMap.LastCharBefore).
 //                   Leerer Rumpf: wie FirstStatement.
-// Die Routinengrenzen liest uRdxRoutineFixes.ReadRoutine (Kopf, lokale
+// Die Routinengrenzen liest uRdxBlocks.ReadRoutine (Kopf, lokale
 // Abschnitte und Routinen, begin bzw. asm, passendes end), den Klassenkopf
 // HeritageOf, die Deklaration FindMethodDecls/MethodDecl. Typdeklarationen,
 // Klassenkoepfe (auch 'TGen<T: class; U> = class') und die Namen hinter
@@ -131,7 +131,8 @@ unit uRdxResultFixes;
 interface
 
 uses
-  uRdxBufferMath, uRdxCodeMap, uRdxRoutineFixes;
+  uRdxBufferMath, uRdxCodeMap,
+  uRdxBlocks;        // TRdxRoutine (bis Charge B2S-b uRdxRoutineFixes)
 
 const
   // SCA096/SCA097: die Anweisungen (ohne ';'), zugleich Name im Menuetext.
@@ -446,7 +447,7 @@ type
 { ---- Kleinkram ---- }
 
 // AddEdit (uRdxBufferMath), AddToken, TokText, LastPart, FirstOnLine und
-// DirectiveBetween (uRdxCodeMap) sowie HasDirective (uRdxRoutineFixes) sind
+// DirectiveBetween (uRdxCodeMap) sowie HasDirective (uRdxBlocks) sind
 // geteilt - bis Charge H5c standen hier Kopien, TokText verdeckte still die
 // geteilte Fassung (Gegen-Review H5, Minor 6).
 
@@ -697,7 +698,7 @@ end;
 
 // Hat der Typ ab AKind (class, object, interface ...) einen Rumpf mit end?
 // Nicht 'class;' (vorwaerts), 'class of' (Metaklasse), 'class(TBase);'
-// (Kurzform). Dieselbe Probe wie uRdxRoutineFixes.TypeHasBody und
+// (Kurzform). Dieselbe Probe wie uRdxBlocks.TypeHasBody und
 // uRdxSqlTemplate.HasTypeBody (beide privat) - der Routinen-/Typ-Index des
 // Gegen-Reviews R5 (R5-03) legt sie zusammen.
 function TypeHasBody(AMap: TRdxCodeMap; const AKind: TRdxToken): Boolean;
@@ -714,7 +715,7 @@ end;
 
 // Die Koepfe 'Name [<..>] = [packed] class' mit Rumpf, deren Name das
 // letzte Glied von AClassPath ist - je Treffer das Token 'class', aus dem
-// Index und gemerkt: dieselbe Probe wie TRdxRoutineFixes.FindClassHeads
+// Index und gemerkt: dieselbe Probe wie TRdxBlocks.FindClassHeads
 // (ClassHeadAt), das je Frage die ganze Datei liest.
 function ClassHeads(var AScan: TRdxScan;
   const AClassPath: string): TArray<TRdxToken>;
@@ -735,7 +736,7 @@ begin
   KeepMemo(AScan, Key, Result);
 end;
 
-// TRdxRoutineFixes.FindMethodDecls einmal je Klasse und Methode des Laufs -
+// TRdxBlocks.FindMethodDecls einmal je Klasse und Methode des Laufs -
 // und nicht ohne Klassenkopf (ClassHeads): ohne den findet es nichts.
 function MethodDecls(var AScan: TRdxScan;
   const AClassPath, AMethod: string): TArray<TRdxToken>;
@@ -745,7 +746,7 @@ begin
   Key := 'method:' + LowerCase(LastPart(AClassPath)) + '.' + LowerCase(AMethod);
   if FindMemo(AScan, Key, Result) then Exit;
   if Length(ClassHeads(AScan, AClassPath)) > 0 then
-    Result := TRdxRoutineFixes.FindMethodDecls(AScan.Map, AClassPath, AMethod);
+    Result := TRdxBlocks.FindMethodDecls(AScan.Map, AClassPath, AMethod);
   KeepMemo(AScan, Key, Result);
 end;
 
@@ -804,7 +805,7 @@ function SkipRoutine(AMap: TRdxCodeMap; var T: TRdxToken;
 var
   R : TRdxRoutine;
 begin
-  Result := TRdxRoutineFixes.ReadRoutine(AMap, T, R) = '';
+  Result := TRdxBlocks.ReadRoutine(AMap, T, R) = '';
   if not Result or (R.Body.Low = '') then Exit;
   Result := TokBefore(R.Last, ADecl);
   T := R.Last;
@@ -938,7 +939,7 @@ begin
   S.ManyFmt := '%d Koepfe ' + AWhat;
   Result := OneTokenOnLine(AMap, ALine, S, K);
   if Result = '' then
-    Result := TRdxRoutineFixes.ReadRoutine(AMap, K, R);
+    Result := TRdxBlocks.ReadRoutine(AMap, K, R);
 end;
 
 // Die Koepfe auf ALine (Kopfwort-Token, links nach rechts).
@@ -971,7 +972,7 @@ begin
     Heads := HeadsOnLine(AMap, Li);
     for i := High(Heads) downto 0 do
     begin
-      Result := TRdxRoutineFixes.ReadRoutine(AMap, Heads[i], R);
+      Result := TRdxBlocks.ReadRoutine(AMap, Heads[i], R);
       if Result <> '' then
         Exit(Format('Routine in Zeile %d: %s', [Li, Result]));
       if (R.Body.Low <> '') and (R.Body.Line <= ALine)
@@ -1203,7 +1204,7 @@ begin
   if Length(Heads) > 1 then
     Exit(Format('%d Deklarationen von %s in Klassen dieses Namens - '
       + 'Overload?', [Length(Heads), LastPart(R.Name)]));
-  Result := TRdxRoutineFixes.MethodDecl(AScan.Map, Heads[0], D);
+  Result := TRdxBlocks.MethodDecl(AScan.Map, Heads[0], D);
   if Result <> '' then
     Result := 'Deklaration: ' + Result;
 end;
@@ -1280,7 +1281,7 @@ begin
         Exit(True);
     Heads := ClassHeads(AScan, Cls);
     if Length(Heads) <> 1 then Exit;
-    Names := TRdxRoutineFixes.HeritageOf(AScan.Map, Heads[0]);
+    Names := TRdxBlocks.HeritageOf(AScan.Map, Heads[0]);
     if Length(Names) = 0 then Exit;
     Cls := Names[0];
   end;
@@ -1380,7 +1381,7 @@ begin
   begin
     if H.Low = KW_CLASS then Continue;
     AFound := True;
-    if TRdxRoutineFixes.MethodDecl(AScan.Map, H, D) <> '' then
+    if TRdxBlocks.MethodDecl(AScan.Map, H, D) <> '' then
       Exit(Format('die Deklaration von %s.%s in Zeile %d ist nicht zu lesen '
         + '- ob sie abstrakt ist, bleibt offen; %s',
         [ACls, AMethod, H.Line, R_BY_HAND]));

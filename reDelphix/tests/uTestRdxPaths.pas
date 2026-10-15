@@ -280,7 +280,7 @@ procedure TTestRdxPaths.RelativePath_NeverNetwork;
 begin
   // Auch wenn jedes Laufwerk ein Netzlaufwerk waere: ein relativer Pfad
   // nennt keines und liegt nirgends - wie bisher auch '\x.inc' (ab der
-  // Wurzel, ohne Laufwerk; uRdxRoutineFixes.IncludeSearchPath sucht es auf
+  // Wurzel, ohne Laufwerk; uRdxBlocks.IncludeSearchPath sucht es auf
   // dem Laufwerk der Unit, und deren Pfad wird geprueft).
   SetRdxRemoteDriveTest(FakeAllRemote);
   try

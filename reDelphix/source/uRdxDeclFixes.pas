@@ -11,7 +11,7 @@ unit uRdxDeclFixes;
 // namen, Rueckgabe und das ';' hinter dem Kopf - genutzt von SCA117 (das
 // Geruest) und SCA149 (die Form der Methode und ihrer Basis). Geplant war
 // er auch fuer SCA121/SCA135; SCA121 (Charge H5, uRdxResultFixes) liest den
-// Kopf aber ueber TRdxRoutine.HeaderEnd (uRdxRoutineFixes), nicht hierueber
+// Kopf aber ueber TRdxRoutine.HeaderEnd (uRdxBlocks), nicht hierueber
 // (Review R3-08, Charge FC: hier stand "geteilt mit SCA121, SCA135").
 // GRUNDSATZ wie in uRdxSimpleFixes: lieber keine Hilfe als eine falsche -
 // der Planer prueft den Fund am aktuellen Text nach.

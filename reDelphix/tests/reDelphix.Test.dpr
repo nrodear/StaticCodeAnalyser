@@ -152,6 +152,7 @@ uses
   uRdxScopeTable in '..\source\uRdxScopeTable.pas',
   uRdxBufferMath in '..\source\uRdxBufferMath.pas',
   uRdxCodeMap in '..\source\uRdxCodeMap.pas',
+  uRdxBlocks in '..\source\uRdxBlocks.pas',
   uRdxSuppress in '..\source\uRdxSuppress.pas',
   uRdxRtlTypes in '..\source\uRdxRtlTypes.pas',
   uRdxSimpleFixes in '..\source\uRdxSimpleFixes.pas',

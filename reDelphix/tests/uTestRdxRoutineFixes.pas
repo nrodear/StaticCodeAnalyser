@@ -2,8 +2,8 @@ unit uTestRdxRoutineFixes;
 
 // Ungenutzte freie Routine loeschen (uRdxRoutineFixes, Charge H3b, SCA164)
 // und die Bausteine Routinengrenzen (ReadRoutine) und Decl/Impl-Finder auf
-// Text - ohne Parser, ohne Detektor (laeuft in reDelphix.Test UND im FPC-
-// Pruefstand):
+// Text (seit Charge B2S-b in uRdxBlocks) - ohne Parser, ohne Detektor
+// (laeuft in reDelphix.Test UND im FPC-Pruefstand):
 //   Bausteine: lokale Abschnitte (Variantenrecord, Prozedurtypen),
 //          lokale Routinen, Direktiven auf Folgezeilen, generische Typen
 //          im Kopf, forward, asm mit '@@end'; Ablehnungen (lokaler
@@ -71,6 +71,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxBufferMath, uRdxCodeMap, uRdxRoutineFixes,
+  uRdxBlocks,  // ReadRoutine, Finder, IncludeSearchPath (seit Charge B2S-b)
   uRdxPaths;   // IsNetworkPath (seit Charge B2S-a dort, bis dahin hier)
 
 const
@@ -191,7 +192,7 @@ begin
   try
     SL.Text := ASource;
     Map := TRdxCodeMap.Create(SL);
-    Result := TRdxRoutineFixes.ReadRoutine(Map, LineHead(Map, ALine), R);
+    Result := TRdxBlocks.ReadRoutine(Map, LineHead(Map, ALine), R);
   finally
     Map.Free;
     SL.Free;
@@ -356,23 +357,23 @@ begin
       'begin end;',                                   // 26
       'end.']);
     Map := TRdxCodeMap.Create(SL);
-    Heads := TRdxRoutineFixes.FindMethodDecls(Map, 'TInner', 'Run');
+    Heads := TRdxBlocks.FindMethodDecls(Map, 'TInner', 'Run');
     Assert.AreEqual<Integer>(1, Integer(Length(Heads)), 'TInner.Run deklariert');
     Assert.AreEqual<Integer>(9, Heads[0].Line);
     // Tiefe 1: die Methode der inneren Klasse zaehlt fuer TOuter nicht.
-    Assert.AreEqual<Integer>(2, Integer(Length(TRdxRoutineFixes.FindMethodDecls(Map,
+    Assert.AreEqual<Integer>(2, Integer(Length(TRdxBlocks.FindMethodDecls(Map,
       'TOuter', 'Run'))), 'Overloads von TOuter.Run');
-    Heads := TRdxRoutineFixes.FindMethodImpls(Map, 'TInner', 'Run');
+    Heads := TRdxBlocks.FindMethodImpls(Map, 'TInner', 'Run');
     Assert.AreEqual<Integer>(1, Integer(Length(Heads)), 'TInner.Run implementiert');
     Assert.AreEqual<Integer>(19, Heads[0].Line);
-    Assert.AreEqual<Integer>(1, Integer(Length(TRdxRoutineFixes.FindMethodImpls(Map,
+    Assert.AreEqual<Integer>(1, Integer(Length(TRdxBlocks.FindMethodImpls(Map,
       'TOuter.TInner', 'Run'))), 'mit Pfad');
-    Assert.AreEqual<Integer>(2, Integer(Length(TRdxRoutineFixes.FindMethodImpls(Map,
+    Assert.AreEqual<Integer>(2, Integer(Length(TRdxBlocks.FindMethodImpls(Map,
       'TOuter', 'Run'))), 'Overloads implementiert');
-    Heads := TRdxRoutineFixes.FindMethodDecls(Map, 'TGen', 'Make');
+    Heads := TRdxBlocks.FindMethodDecls(Map, 'TGen', 'Make');
     Assert.AreEqual<Integer>(1, Integer(Length(Heads)), 'generisch deklariert');
     Assert.AreEqual('class', Heads[0].Low);
-    Heads := TRdxRoutineFixes.FindMethodImpls(Map, 'TGen', 'Make');
+    Heads := TRdxBlocks.FindMethodImpls(Map, 'TGen', 'Make');
     Assert.AreEqual<Integer>(1, Integer(Length(Heads)), 'generisch implementiert');
     Assert.AreEqual<Integer>(25, Heads[0].Line);
   finally

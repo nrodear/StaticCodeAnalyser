@@ -242,8 +242,9 @@ function LastPart(const S: string): string;
 // ist es dort ein Platzhalter)? '' oder der Grund. SCA070 prueft den
 // geloeschten Text, SCA164/SCA147 die Kommentare ueber dem Kopf (Gegen-
 // Review H3, Minor 3); bis Charge H3c in uRdxCleanupFixes - hier, weil
-// uRdxCleanupFixes seitdem uRdxRoutineFixes braucht (ReadRoutine) und
-// beide sich sonst gegenseitig einbanden.
+// uRdxCleanupFixes seitdem die Routinengrenzen braucht (ReadRoutine; bis
+// Charge B2S-b in uRdxRoutineFixes, seitdem in uRdxBlocks) und die Units
+// sich sonst gegenseitig einbanden.
 function MarkerReason(const AText: string): string;
 
 // Dieselbe Stelle (Zeile und Spalte)? Bis Charge H3c je eine Kopie in
@@ -260,6 +261,10 @@ function TokText(AMap: TRdxCodeMap; const T: TRdxToken): string;
 // Haengt T an AList an. Bis Charge H5c je eine Kopie in uRdxRoutineFixes
 // und uRdxResultFixes (Gegen-Review H5, Minor 6).
 procedure AddToken(var AList: TArray<TRdxToken>; const T: TRdxToken);
+// Haengt S an AList an. Bis Charge B2S-b in uRdxRoutineFixes - seitdem
+// brauchen es dort die Planer SCA164/SCA147 und uRdxBlocks die Bausteine
+// (Review R6-12).
+procedure AddText(var AList: TArray<string>; const S: string);
 // Steht T als erstes auf seiner Zeile - davor nur Leerraum? Ob die Zeile
 // in einem Kommentar oder mehrzeiligen String beginnt, prueft der
 // Aufrufer selbst (StartsInside). Bis Charge H5c in uRdxTryFixes, eine
@@ -1052,6 +1057,12 @@ procedure AddToken(var AList: TArray<TRdxToken>; const T: TRdxToken);
 begin
   SetLength(AList, Length(AList) + 1);
   AList[High(AList)] := T;
+end;
+
+procedure AddText(var AList: TArray<string>; const S: string);
+begin
+  SetLength(AList, Length(AList) + 1);
+  AList[High(AList)] := S;
 end;
 
 function FirstOnLine(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;

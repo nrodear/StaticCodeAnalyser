@@ -149,9 +149,9 @@ type
 
     // Die Include-Dateien der Unit AFileName (alle {$I} in AMap, auch die
     // im Kopf - dort stehen die Compiler-Weichen: jvcl.inc,
-    // mormot.defines.inc ...; uRdxRoutineFixes.AllIncludes, bis zur
+    // mormot.defines.inc ...; uRdxBlocks.AllIncludes, bis zur
     // Nachpruefung der Charge B1-FD hier kopiert) lesen, verschachtelte ebenso
-    // (uRdxRoutineFixes.IncludeChainReason): '' oder der Grund - eine
+    // (uRdxBlocks.IncludeChainReason): '' oder der Grund - eine
     // FPC-Weiche oder Spur aelterer Compiler darin, oder ein Include, das
     // nicht neben der Unit liegt oder auf einem Netzpfad (nicht gelesen) -
     // seine Weichen sieht die Hilfe dann nicht.
@@ -168,7 +168,7 @@ uses
   uRdxIntroPlan,        // CharColOfByte, LineLooksFpcAware
   uRdxIntroEdits,       // TextOf, TargetAt, IntroduceEdits, ApplyIntroEdits
   uRdxPaths,            // IsNetworkPath
-  uRdxRoutineFixes,     // IncludeChainReason, AllIncludes
+  uRdxBlocks,           // IncludeChainReason, AllIncludes
   uRdxCompilerTraces;   // OldCompilerTrace, ScriptReason, FLOOR_INLINE_DECL
 
 const
