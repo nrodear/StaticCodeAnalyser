@@ -100,11 +100,13 @@ type
   // Die Kurznamen, die das PROJEKT selbst fuehren kann - die Gegenprobe zur
   // Scope-Tabelle fuer 'uses: X -> Scope.X': eine Projekt-Unit 'Types' darf
   // nicht zu System.Types werden (Review nach Bereichen 2026-10-10, Minor
-  // 18). uRdxEditor.ProjectUnits fuellt den Index EINMAL je Menueaufbau
-  // (Verzeichnis der Datei, Module aller Projekte der Gruppe, deren Unit-
-  // Suchpfad); die Frage je uses-Eintrag ist danach ein Nachschlagen plus
-  // je Verzeichnis zwei FileExists. Bis Review R1-02 lief dafuer je Eintrag
-  // die ganze Projektgruppe ueber die ToolsAPI, auch fuer die Gluehbirne.
+  // 18). uRdxEditor.ProjectUnits fuellt den Index einmal je Aufruf der
+  // uses-Hilfe - je Fund auf einer uses-Zeile; ein Menue mit mehreren
+  // solchen Funden baut ihn je Fund neu (Verzeichnis der Datei, Module
+  // aller Projekte der Gruppe, deren Unit-Suchpfad). Die Frage je uses-
+  // Eintrag ist danach ein Nachschlagen plus je Verzeichnis zwei
+  // FileExists. Bis Review R1-02 lief dafuer je Eintrag die ganze
+  // Projektgruppe ueber die ToolsAPI, auch fuer die Gluehbirne.
   // NETZPFADE (UNC, mit IsRemote auch Netzlaufwerke) liest der Index nicht:
   // der Menueaufbau laeuft im Hauptthread, ein nicht erreichbarer Server
   // kostete je FileExists Sekunden (dieselbe Regel wie SCA014, R_UNC in

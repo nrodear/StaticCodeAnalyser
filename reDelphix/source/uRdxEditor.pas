@@ -72,13 +72,15 @@ type
     class function ReplaceSpans(const AFile: string;
       const AEdits: TArray<TRdxEdit>; out AError: string): Boolean; static;
 
-    // Die Units, die das Projekt selbst fuehren kann, als Index fuer EINEN
-    // Menueaufbau (Review R1-02 - bis dahin lief ProjectHasUnit je
-    // uses-Eintrag ueber die ganze Projektgruppe): das Verzeichnis von
-    // ANearFile, die Module ALLER Projekte der Gruppe (nicht nur des
-    // aktiven) und die Verzeichnisse ihres Unit-Suchpfads, aus der
-    // Konfiguration der aktiven Plattform (missed 3: 360 von 3.305 .dproj
-    // des Korpus setzen ihn dort). Hat das Projekt eine Unit des
+    // Die Units, die das Projekt selbst fuehren kann, als Index fuer die
+    // uses-Eintraege EINES Aufrufs (der Anbieter baut ihn je Fund auf einer
+    // uses-Zeile einmal, beim ersten Eintrag, der fragt - Review R1-02; bis
+    // dahin lief ProjectHasUnit je Eintrag ueber die ganze Projektgruppe):
+    // das Verzeichnis von ANearFile, die Module ALLER Projekte der Gruppe
+    // (nicht nur des aktiven) und die Verzeichnisse ihres Unit-Suchpfads
+    // in der aktiven Konfiguration und Plattform, jede Ebene einzeln
+    // (missed 3: 360 von 3.305 .dproj des Korpus setzen ihn auf Plattform-
+    // Ebene; s. AddSearchPaths). Hat das Projekt eine Unit des
     // Kurznamens (TRdxProjectUnits.Knows), darf ein uses-Eintrag NICHT auf
     // eine RTL-Unit expandiert werden (Review nach Bereichen 2026-10-10,
     // Minor 18). Netzpfade (UNC, Netzlaufwerk) liest der Index nicht -
@@ -555,31 +557,73 @@ begin
     and (GetDriveType(PChar(Drive + PathDelim)) = DRIVE_REMOTE);
 end;
 
-// Der Unit-Suchpfad des Projekts aus der Konfiguration der aktiven
-// Plattform: Cfg_1_Win32 erbt die Konfiguration UND die Plattform-Basis
-// Base_Win32 - dort setzen 360 von 3.305 .dproj des Korpus ihren Suchpfad
-// (Review R1, missed 3; ActiveConfiguration allein sah ihn nicht). Ohne
-// Plattform-Konfiguration die aktive Konfiguration wie bisher; '' ohne
-// Konfiguration.
-function SearchPathOf(const AProj: IOTAProject): string;
+const
+  UNIT_SEARCH_PATH = 'DCC_UnitSearchPath';
+  // Obergrenze fuer die Kette der Eltern-Konfigurationen (Debug -> Base
+  // sind zwei): eine Kette, die nie bei nil endet, haengte sonst den
+  // Hauptthread.
+  MAX_CFG_DEPTH = 16;
+
+// Die Konfiguration der Plattform APlatform unter ACfg (Cfg_1 -> Cfg_1_Win32,
+// Base -> Base_Win32); nil ohne. Gefragt wird nur mit einem Namen aus
+// ACfg.Platforms (wie CnWizards) - ob PlatformConfiguration fuer einen
+// fremden Namen nil liefert oder wirft, sagt die ToolsAPI nicht.
+function PlatformCfgOf(const ACfg: IOTABuildConfiguration;
+  const APlatform: string): IOTABuildConfiguration;
+var
+  Name : string;
+begin
+  Result := nil;
+  if APlatform = '' then Exit;
+  for Name in ACfg.Platforms do
+    if SameText(Name, APlatform) then
+      Exit(ACfg.PlatformConfiguration[Name]);
+end;
+
+// Der Unit-Suchpfad des Projekts AProj fuer die Gegenprobe (Review R1,
+// missed 3; 360 von 3.305 .dproj des Korpus setzen ihn auf Plattform-Ebene,
+// ActiveConfiguration allein sah ihn nicht): die VEREINIGUNG aus
+//   * dem Wert der aktiven Plattform-Konfiguration samt Geerbtem
+//     (GetValue(.., True); gibt es sie nicht, der aktiven Konfiguration)
+//     und
+//   * jeder Ebene einzeln ohne Geerbtes: die aktive Konfiguration und ihre
+//     Eltern bis Base, je fuer alle Plattformen und fuer die aktive
+//     (Cfg_1, Cfg_1_Win32, Base, Base_Win32).
+// Ob GetValue(.., True) auf Cfg_1_Win32 auch Base_Win32 einschliesst, ist in
+// der IDE NICHT geprueft (Nachbesserung, Pruefer missed 3) - die Vereinigung
+// haengt nicht daran. Eine Ebene, die den Suchpfad ersetzt statt erweitert,
+// bringt hoechstens ein Verzeichnis zu viel: dann sperrt die Gegenprobe
+// einen Eintrag mehr, qualifiziert aber keinen zu viel. Doppelte
+// Verzeichnisse fallen im Index zusammen.
+procedure AddSearchPaths(AUnits: TRdxProjectUnits; const AProj: IOTAProject);
 var
   Cfgs    : IOTAProjectOptionsConfigurations;
   Cfg     : IOTABuildConfiguration;
   PlatCfg : IOTABuildConfiguration;
+  BaseDir : string;
+  Plat    : string;
+  Level   : Integer;
 begin
-  Result := '';
   if not Supports(AProj.ProjectOptions, IOTAProjectOptionsConfigurations,
        Cfgs) then
     Exit;
   Cfg := Cfgs.ActiveConfiguration;
   if Cfg = nil then Exit;
-  if AProj.CurrentPlatform <> '' then
+  BaseDir := ExtractFilePath(AProj.FileName);
+  Plat    := AProj.CurrentPlatform;
+  PlatCfg := PlatformCfgOf(Cfg, Plat);
+  if PlatCfg = nil then
+    PlatCfg := Cfg;
+  AUnits.AddSearchPath(PlatCfg.GetValue(UNIT_SEARCH_PATH, True), BaseDir);
+  for Level := 1 to MAX_CFG_DEPTH do
   begin
-    PlatCfg := Cfg.PlatformConfiguration[AProj.CurrentPlatform];
+    AUnits.AddSearchPath(Cfg.GetValue(UNIT_SEARCH_PATH, False), BaseDir);
+    PlatCfg := PlatformCfgOf(Cfg, Plat);
     if PlatCfg <> nil then
-      Cfg := PlatCfg;
+      AUnits.AddSearchPath(PlatCfg.GetValue(UNIT_SEARCH_PATH, False), BaseDir);
+    Cfg := Cfg.Parent;
+    if Cfg = nil then Break;
   end;
-  Result := Cfg.GetValue('DCC_UnitSearchPath', True);
 end;
 
 // Module und Unit-Suchpfad des Projekts AProj in den Index; nil: nichts.
@@ -595,7 +639,7 @@ begin
     if Info <> nil then
       AUnits.AddModule(Info.FileName);
   end;
-  AUnits.AddSearchPath(SearchPathOf(AProj), ExtractFilePath(AProj.FileName));
+  AddSearchPaths(AUnits, AProj);
 end;
 
 class function TRdxEditor.ProjectUnits(

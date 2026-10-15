@@ -515,8 +515,8 @@ msgstr ""
 msgid "Cancelling analysis..."
 msgstr ""
 
-#: reDelphix/source/uRdxEditor.pas:412
-#: reDelphix/source/uRdxEditor.pas:421
+#: reDelphix/source/uRdxEditor.pas:414
+#: reDelphix/source/uRdxEditor.pas:423
 msgid "Cannot move the editor cursor to line %d, column %d"
 msgstr ""
 
@@ -1477,7 +1477,7 @@ msgstr ""
 msgid "Line ends with whitespace - diff hygiene"
 msgstr ""
 
-#: reDelphix/source/uRdxEditor.pas:395
+#: reDelphix/source/uRdxEditor.pas:397
 msgid "Line too long for the editor selection (the editor reaches at most column %d)"
 msgstr ""
 
@@ -1930,7 +1930,7 @@ msgstr ""
 msgid "Raise the exception"
 msgstr ""
 
-#: reDelphix/source/uRdxEditor.pas:389
+#: reDelphix/source/uRdxEditor.pas:391
 msgid "Range %d:%d to %d:%d lies behind the end of the editor buffer (%d lines) - rescan the file"
 msgstr ""
 
