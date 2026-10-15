@@ -78,7 +78,7 @@ implementation
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uRefactorInfo, uRdxBufferMath, uRdxCodeMap, uRdxCleanupFixes,
-  uTestRdxTextKit;   // Join
+  uTestRdxTextKit;   // Join, Apply
 
 // ---- Helfer ----
 
@@ -96,18 +96,15 @@ begin
     + 'written)', [AName]);
 end;
 
-// SCA053 fuer Zeile ALine: neuer Text oder '' bei Ablehnung (AReason).
+// SCA053 fuer Zeile ALine: neuer Text oder '' bei Ablehnung (AReason). Die
+// Ersetzung schreibt Apply aus uTestRdxTextKit, derselbe Weg wie der Editor.
 function Fix(const ASource: string; ALine: Integer; const AName: string;
   out AReason: string): string;
 var
-  SL    : TStringList;
-  Map   : TRdxCodeMap;
-  E     : TRdxEdit;
-  Ok    : Boolean;
-  Bytes : TBytes;
-  Edits : TArray<TRdxEdit>;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  E   : TRdxEdit;
+  Ok  : Boolean;
 begin
   Result := '';
   SL := TStringList.Create;
@@ -122,11 +119,7 @@ begin
     SL.Free;
   end;
   if not Ok then Exit;
-  SetLength(Edits, 1);
-  Edits[0] := E;
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, Edits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
+  Result := Apply(ASource, E);
 end;
 
 // Die Hilfe greift: der neue Text.

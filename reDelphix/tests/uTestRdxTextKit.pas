@@ -5,9 +5,11 @@ unit uTestRdxTextKit;
 // Testunit ihre eigene Kopie: Join 28-mal, Apply 22-mal (dazu ApplyEdits
 // und ApplyOne), LineOf 9-mal in zwei Vertraegen (dazu LineWith),
 // WriteText 4-mal (dazu SaveText), RemoveTree 4-mal und fuenf
-// Temp-Verzeichnis-Helfer. Eine Aenderung am Schreibweg (PlanByteEdits)
-// oder an den Zeilenenden musste in jeder Kopie nachgezogen werden - eine
-// vergessene prueft einen anderen Weg als den des Editors. Hier steht nur,
+// Temp-Verzeichnis-Helfer; Apply und LineOf standen zudem nachgebaut in
+// uTestRdxCleanupScope.Fix und uTestRdxMagicGuards.PlanReason. Eine
+// Aenderung am Schreibweg (PlanByteEdits) oder an den Zeilenenden musste in
+// jeder Kopie nachgezogen werden - eine vergessene prueft einen anderen Weg
+// als den des Editors. Hier steht nur,
 // was in ALLEN Kopien denselben Vertrag hatte (Trenner, letzte Zeile,
 // Fehlerverhalten); die Kopien sind ersetzt, kein Test und kein Assert
 // aendert sich.
@@ -30,7 +32,10 @@ unit uTestRdxTextKit;
 //   * uTestRdxFormatGuards.Joined - Verkettung ohne Trenner;
 //   * uTestRdxSca044.WriteTemp - Name aus Uhrzeit und Zufall;
 //   * uTestRdxMagicFixDetector.DeepDir/RemoveDeepDir - raeumt nur die drei
-//     leeren Ebenen ab, die Dateien loescht der Test.
+//     leeren Ebenen ab, die Dateien loescht der Test;
+//   * uTestRdxMagicGuards.FixText - plant und schreibt wie Apply, meldet
+//     ein Scheitern beim Schreiben aber als 'Schreiben: ', getrennt vom
+//     Grund des Planers ('Plan: ').
 // Die Temp-Verzeichnisse der Testunits (FreshDir, FreshRoot, TempDir)
 // binden nur noch ihren Vorsatz (rdx_fa_, rdx_q14_, ...) - die Pfade unter
 // TEMP bleiben, wie die Kopfkommentare der Testunits sie nennen.

@@ -98,7 +98,9 @@ end;
 
 // Der Plan fuer den Fund "AValue" auf der ersten Zeile mit AOnLine, gegen
 // die UTF-8-Bytes von ASource geprueft und angewendet wie der Editor
-// (PlanByteEdits, ApplyByteEdits): der neue Text.
+// (PlanByteEdits, ApplyByteEdits): der neue Text. Bewusst nicht Apply aus
+// uTestRdxTextKit: scheitert das Schreiben, meldet der Test 'Schreiben: '
+// mit dem Grund - getrennt vom Scheitern des Planers ('Plan: ').
 function FixText(const ASource, AOnLine, AValue: string): string;
 var
   SL     : TStringList;
@@ -137,20 +139,15 @@ var
   SL   : TStringList;
   Map  : TRdxCodeMap;
   Plan : TRdxMagicPlan;
-  i, L : Integer;
 begin
   Result := '';
   SL := TStringList.Create;
   Map := nil;
   try
     SL.Text := ASource;
-    L := 0;
-    for i := 0 to SL.Count - 1 do
-      if (L = 0) and (Pos(AOnLine, SL[i]) > 0) then
-        L := i + 1;
     Map := TRdxCodeMap.Create(SL);
-    if not TRdxMagicFixes.MagicNumber(Map, L, Format(MSG, [AValue]), Plan,
-         Result) then
+    if not TRdxMagicFixes.MagicNumber(Map, LineOf(ASource, AOnLine),
+         Format(MSG, [AValue]), Plan, Result) then
       Assert.IsTrue(Result <> '', 'Grund fehlt');
   finally
     Map.Free;
