@@ -69,6 +69,10 @@ msgstr ""
 msgid "\"%s\" was not imported: %s"
 msgstr ""
 
+#: reDelphix/source/uRdxRoutineFixes.pas:574
+msgid "\"// noinspection-file\" in line %d - the marker applies to the whole file and would be lost with it; %s"
+msgstr ""
+
 #: reDelphix/source/uRdxBlocks.pas:770
 msgid "\";\" is missing after the end of the body"
 msgstr ""
@@ -110,6 +114,10 @@ msgstr ""
 msgid "%d hidden by baseline"
 msgstr ""
 
+#: reDelphix/source/uRdxRoutineFixes.pas:1183
+msgid "%d implementations of %s.%s - overload?"
+msgstr ""
+
 #: StaticCodeAnalyserIDE/uIDEFindingActionMenu.pas:92
 msgid "%d more findings on this line are not listed"
 msgstr ""
@@ -142,6 +150,10 @@ msgstr ""
 msgid "%s - finding outdated? Analyse the file again"
 msgstr ""
 
+#: reDelphix/source/uRdxRoutineFixes.pas:988
+msgid "%s - hides inherited members or is called without a name; %s"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:747
 msgid "%s - line moved? Analyse the file again"
 msgstr ""
@@ -155,12 +167,32 @@ msgstr ""
 msgid "%s in the range - an intent comment stays"
 msgstr ""
 
+#: reDelphix/source/uRdxRoutineFixes.pas:1087
+msgid "%s is a member of %s - the method can implement it"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:740
+msgid "%s is in a string literal (line %d) - call by name (GetProcAddress, MethodAddress, RTTI, script)?"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:798
+msgid "%s is in the interface section (line %d) - exported, callers in other units possible"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:832
 msgid "%s is no longer at the reported place"
 msgstr ""
 
 #: SCA.Engine/sources/Common/uRuleCatalog.pas:1575
 msgid "%s is not a valid JSON object."
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:806
+msgid "%s is the accessor of a property (line %d)"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:809
+msgid "%s is used in line %d"
 msgstr ""
 
 #: reDelphix/source/uRdxCodeMap.pas:1178
@@ -2760,6 +2792,18 @@ msgstr ""
 msgid "You are a senior Delphi developer reviewing the output of a static code analyser. Target version: Delphi 12 Athens (RTL/VCL). Suggest minimal, idiomatic fixes - no sweeping refactors, no style overhauls, no new dependencies unless strictly required."
 msgstr ""
 
+#: reDelphix/source/uRdxRoutineFixes.pas:481
+msgid "a comment spanning several lines begins after the end"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:479
+msgid "a comment spanning several lines ends on the header line"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:744
+msgid "a directive names %s (line %d)"
+msgstr ""
+
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:496
 msgid "analyse only files changed in current branch"
 msgstr ""
@@ -2770,6 +2814,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2196
 msgid "asm..end block - platform-specific, hard to port"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:1155
+msgid "attribute on the class or method - RTTI can find the method by name"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:787
@@ -2788,8 +2836,24 @@ msgstr ""
 msgid "class(TObject) - TObject is the default base, drop it"
 msgstr ""
 
+#: reDelphix/source/uRdxRoutineFixes.pas:476
+msgid "code follows the end on the same line (two routines on one line?)"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:473
+msgid "code precedes the header on the same line (two routines on one line?)"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:624
+msgid "compiler directive {$%s} in line %d - it may act beyond the routine"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:802
 msgid "decide by hand"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:1239
+msgid "declaration and implementation overlap"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3821
@@ -2804,6 +2868,18 @@ msgstr ""
 
 #: reDelphix/source/uRdxBlocks.pas:565
 msgid "directive \"%s\" without \";\""
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:985
+msgid "directive %s - ancestors, descendants, messages or overload siblings reach the method without its name"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:908
+msgid "directive %s - the routine is reachable from outside or has no body"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:646
+msgid "directive without a counterpart in the range ($IF.. without $ENDIF or $REGION without $ENDREGION)"
 msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:863
@@ -2847,9 +2923,17 @@ msgstr ""
 msgid "for-loop range is reversed - the loop body never runs"
 msgstr ""
 
+#: reDelphix/source/uRdxRoutineFixes.pas:935
+msgid "forward declaration: %s"
+msgstr ""
+
 #: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:416
 #: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:725
 msgid "git not found. Install Git for Windows (git-scm.com) or set the path to git.exe in analyser.ini."
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:905
+msgid "global operator (FPC) - the compiler calls it through its symbol or the conversion, not through its name"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2084
@@ -2864,12 +2948,28 @@ msgstr ""
 msgid "if X then Y := True else Y := False - assign expression directly"
 msgstr ""
 
+#: reDelphix/source/uRdxRoutineFixes.pas:1187
+msgid "implementation: %s"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:522
 msgid "in"
 msgstr ""
 
+#: reDelphix/source/uRdxRoutineFixes.pas:1284
+msgid "include %s before implementation %s - it can declare the name, call it or name it as a property accessor, and the quick fix does not see it"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:1128
+msgid "interface chain too long - boundaries not certain"
+msgstr ""
+
 #: reDelphix/source/uRdxCodeMap.pas:1180
 msgid "line %d carries %s - ambiguous"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:583
+msgid "line %d ends with the comment \"%s\" - a marker after code applies to the line after it or stays; %s"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:742
@@ -2890,6 +2990,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxBlocks.pas:639
 msgid "local routines nested too deeply"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:900
+msgid "method of a class - SCA147 or SCA148 reports it"
 msgstr ""
 
 #: reDelphix/source/uRdxBlocks.pas:913
@@ -2926,6 +3030,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxText.pas:837
 msgid "no header %s"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:1180
+msgid "no implementation of %s.%s in the file (include file? abstract?)"
 msgstr ""
 
 #: reDelphix/source/uRdxBlocks.pas:499
@@ -2965,6 +3073,14 @@ msgstr ""
 msgid "nothing to offer"
 msgstr ""
 
+#: reDelphix/source/uRdxRoutineFixes.pas:1333
+msgid "of the method %s"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:1301
+msgid "of the routine %s"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2399
 msgid "on E: Exception catches everything - too broad"
 msgstr ""
@@ -2993,6 +3109,10 @@ msgstr ""
 msgid "routine header in the body - end of the routine not certain"
 msgstr ""
 
+#: reDelphix/source/uRdxRoutineFixes.pas:803
+msgid "second routine %s in line %d - overload, $IFDEF twin or declaration"
+msgstr ""
+
 #: StaticCodeAnalyserIDE/uIDESonarOptions.pas:414
 msgid "sonar.projectKey not found in "
 msgstr ""
@@ -3001,13 +3121,37 @@ msgstr ""
 msgid "svn not found. Install TortoiseSVN WITH the option \"command line client tools\" or set the path to svn.exe in analyser.ini."
 msgstr ""
 
+#: reDelphix/source/uRdxRoutineFixes.pas:1096
+msgid "the class implements %s (not declared in this file) - the method can be an interface member"
+msgstr ""
+
 #: reDelphix/source/uRdxProvider.pas:578
 #: reDelphix/source/uRdxProvider.pas:636
 msgid "the clause would no longer be sorted (new SCA142)"
 msgstr ""
 
+#: reDelphix/source/uRdxRoutineFixes.pas:1143
+msgid "the declaration is not in the body of class %s"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:801
+msgid "the exports clause names %s (line %d)"
+msgstr ""
+
 #: reDelphix/source/uRdxBlocks.pas:1204
 msgid "the file of the unit is unknown"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:950
+msgid "the header is not in the implementation section (interface or program) - reachable from outside"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:1224
+msgid "the implementation is not in the implementation section"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:1270
+msgid "the include %s names %s - as a declaration (E2065 after the deletion), call or property accessor (E2003), and the quick fix does not see it"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:777
@@ -3018,12 +3162,36 @@ msgstr ""
 msgid "the marker \"%s\" in line %d targets the deleted line and would then silently apply to the next code line; %s"
 msgstr ""
 
+#: reDelphix/source/uRdxRoutineFixes.pas:1331
+msgid "the message has no class or method"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:757
 msgid "the message has no column"
 msgstr ""
 
+#: reDelphix/source/uRdxRoutineFixes.pas:1299
+msgid "the message has no routine name"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:1150
+msgid "the method is in the default section without a visibility keyword, not under private"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:1152
+msgid "the method is under \"%s\", not under private"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:392
 msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:483
+msgid "the routine ends on the last line of the file"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:916
+msgid "the unit links an object file ({$L} in line %d) - the C code calls routines by name"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:812
@@ -3061,6 +3229,27 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:4379
 msgid "with statement names multiple targets - ambiguous member lookup"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:616
+msgid "{$%s} in line %d without $IF in the range"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:596
+msgid "{$%s} in line %d without a counterpart in the range"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:1165
+msgid "{$I} include in the class body (line %d) - the method can appear there (property accessor)"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:919
+#: reDelphix/source/uRdxRoutineFixes.pas:1210
+msgid "{$I} include in the implementation section (line %d) - a caller that the quick fix does not see may be there"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:1207
+msgid "{$RTTI} in line %d - extended RTTI can call private methods by name"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1276

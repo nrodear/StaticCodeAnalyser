@@ -450,9 +450,12 @@ begin
   // Ein Schalter im Bereich wirkt ueber die Routine hinaus.
   AssertRefused(InImpl(['procedure Dead;', 'begin', '{$R-}', '  Beep;',
     'end;']), 4, 'Dead', '{$R}');
-  // $IFDEF-geteilter Rumpf: das $ENDIF steht hinter dem Bereich.
+  // $IFDEF-geteilter Rumpf: das $ENDIF steht hinter dem Bereich. Teilstueck
+  // ohne 'Gegenstueck' - das bekommt in de.po seit der Umstellung E29 einen
+  // echten Umlaut, die Quelle bleibt ASCII.
   AssertRefused(InImpl(['procedure Dead;', 'begin', '{$IFDEF X}', '  Beep;',
-    'end;', '{$ELSE}', 'end;', '{$ENDIF}']), 4, 'Dead', 'Gegenstueck');
+    'end;', '{$ELSE}', 'end;', '{$ENDIF}']), 4, 'Dead',
+    '($IF.. ohne $ENDIF bzw. $REGION ohne $ENDREGION)');
 end;
 
 procedure TTestRdxRoutineFixes.Sca164_Reachable_NoHelp;
