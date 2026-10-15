@@ -535,8 +535,9 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
 * `uTestRdxProjectUnits` - der Index der Projekt-Units fuer "uses: X ->
   Scope.X" (`TRdxProjectUnits`, Review R1-02): Module (Pfad, Endung, gross/
   klein egal), Dateien `.pas`/`.pp` im Verzeichnis, Suchpfad relativ/absolut/
-  mit `..`, Makro-Eintraege aussen vor, UNC und Netzlaufwerk (Attrappe)
-  ungelesen - dann ist jede Antwort offen (6 Tests, FPC-Pruefstand).
+  mit `..` und ohne Projektverzeichnis, Makro-Eintraege aussen vor, UNC und
+  Netzlaufwerk (Attrappe) ungelesen - dann ist jede Antwort offen (7 Tests,
+  FPC-Pruefstand).
 * `uTestRdxQualifyUses` - die Planung von "uses: X -> Scope.X"
   (`TRdxRecipeRunner.QualifyUses`): Eintraege der Zeile, alle,
   Sortierung, FPC-Weiche, Direktiven, eigene Unit.
@@ -712,9 +713,9 @@ Ohne Delphi (FPC 3.2.2):
 bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText
 ```
 
-Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+B1-FA): `PASSED 564  FAILED 0` - 36 Testunits,
-davon 23 der Charge B1-FA (`uTestRdxSuppressTargets` 16, Review R1-01/R1-03;
-`uTestRdxBufferMath` 1, R1-04; `uTestRdxProjectUnits` 6, R1-02),
+Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+B1-FA): `PASSED 565  FAILED 0` - 36 Testunits,
+davon 24 der Charge B1-FA (`uTestRdxSuppressTargets` 16, Review R1-01/R1-03;
+`uTestRdxBufferMath` 1, R1-04; `uTestRdxProjectUnits` 7, R1-02),
 13 der Charge C0 (`uTestRdxText`, Sprache der Texte),
 davon 72 Tests fuer "Lokale Variable einfuehren", 12 fuer die Quick-Fixes der
 Charge H2, 25 der Charge H3b (SCA164 und Bausteine 13 in

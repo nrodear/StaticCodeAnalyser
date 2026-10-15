@@ -23,6 +23,7 @@ type
     [Test] procedure Knows_ModuleNames;
     [Test] procedure Knows_UnitFileInDir;
     [Test] procedure SearchPath_RelativeAbsoluteMacro;
+    [Test] procedure SearchPath_NoBaseDir_LikeExpandFileName;
     [Test] procedure UncDir_NotRead_AnswerOpen;
     [Test] procedure RemoteDir_NotRead_AnswerOpen;
     [Test] procedure NoNetwork_NoReason;
@@ -148,6 +149,29 @@ begin
     U.Free;
     RemoveTree(Base);
     RemoveTree(Abs);
+  end;
+end;
+
+procedure TTestRdxProjectUnits.SearchPath_NoBaseDir_LikeExpandFileName;
+var
+  D, Old : string;
+  U      : TRdxProjectUnits;
+begin
+  // Ohne Projektverzeichnis (ungespeichertes Projekt) bleibt ein relativer
+  // Eintrag relativ zum aktuellen Verzeichnis, wie bis R1-02 - nicht zur
+  // Wurzel des Laufwerks ('\lib').
+  D := FreshDir;
+  Old := GetCurrentDir;
+  U := TRdxProjectUnits.Create;
+  try
+    Touch(D + 'lib' + PathDelim + 'CwdUnit.pas');
+    SetCurrentDir(D);
+    U.AddSearchPath('lib', '');
+    Assert.IsTrue(U.Knows('CwdUnit'));
+  finally
+    SetCurrentDir(Old);
+    U.Free;
+    RemoveTree(D);
   end;
 end;
 

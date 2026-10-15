@@ -512,7 +512,8 @@ begin
     Rest := Copy(Rest, P + 1, MaxInt);
     if (Dir = '') or (Pos('$(', Dir) > 0) then Continue;
     // Relativ zum Projektverzeichnis, ausser mit Laufwerk oder UNC.
-    if not ((Length(Dir) >= 2) and ((Dir[2] = ':') or IsUncPath(Dir))) then
+    if (ABaseDir <> '')
+       and not ((Length(Dir) >= 2) and ((Dir[2] = ':') or IsUncPath(Dir))) then
       Dir := IncludeTrailingPathDelimiter(ABaseDir) + Dir;
     AddDir(ExpandFileName(Dir));
   end;
