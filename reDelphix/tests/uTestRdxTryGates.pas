@@ -25,7 +25,9 @@ unit uTestRdxTryGates;
 // 'System.Exit'/'System.Break' (R5-05), nur lokale Puffer und 'P := nil' mit
 // ins finally (R5-02), Puffer als Inline-var (R5-10), '%' im Sperrtext der
 // Meldung (missed 2); nach der Nachpruefung (gegen d840f1e5 rot) Huellen
-// beliebig tief.
+// beliebig tief. Dazu die zweite Gegenpruefung der Charge B2S (V2-B2S-1,
+// Review R3-05): X hinter einer geschlossenen Klammer-Gruppe im Aufruf
+// bzw. im Ziel (UnmatchedOpener mit ParenDelta).
 // Sperren und Puffer: uTestRdxTryLocks; die Form des Bausteins und die
 // Sperren der Charge H4: uTestRdxTryFixes.
 
@@ -57,6 +59,7 @@ type
     [Test] procedure Buffer_InlineVar;
     [Test] procedure Lock_PercentInMessage;
     [Test] procedure HandOver_DeepWrap;
+    [Test] procedure HandOver_ArgBehindClosedGroup;
   end;
 
 implementation
@@ -629,6 +632,25 @@ begin
     'DoWork;']), 'an FCurrent weitergegeben');
   AssertRefused(Around(['List.Add(TObject((((X as TFoo)))));', 'DoWork;']),
     'an Add weitergegeben');
+end;
+
+// X als Argument HINTER einer geschlossenen Gruppe (Korpus pyscripter
+// dlgSynPageSetup.pas:486: 'HeadFoot.Add(TrimRight(FRichEdit.Lines[Line]),
+// AFont, Align, Line + 1)'): rueckwaerts vom ',' oeffnet ')' bzw. ']' eine
+// Gruppe, erst die '(' auf Tiefe 0 ist die des Aufrufs (UnmatchedOpener,
+// seit Charge B2S-a mit ParenDelta, Review R3-05). Ebenso der Anfang des
+// Ziels 'Items[F(1)] := X' (TargetStart). Zaehlte auch eine schliessende
+// Klammer auf Tiefe 0 als Oeffner, boete SCA009 bei Add die Hilfe an, und
+// der Grund nennte beim Ziel nur ']' (Gegenpruefung V2-B2S-1: mit dieser
+// Mutante rot, auf HEAD und vor Charge B2S-a gruen).
+procedure TTestRdxTryGates.HandOver_ArgBehindClosedGroup;
+begin
+  AssertRefused(Around(['Holder.Add(Foo(1), X);', 'DoWork;']),
+    'X wird in Zeile 7 an Add weitergegeben');
+  AssertRefused(Around(['HeadFoot.Add(TrimRight(Lines[I]), X, Align);',
+    'DoWork;']), 'an Add weitergegeben');
+  AssertRefused(Around(['Items[F(1)] := X;', 'DoWork;']),
+    'an Items[F(1)] weitergegeben');
 end;
 
 initialization

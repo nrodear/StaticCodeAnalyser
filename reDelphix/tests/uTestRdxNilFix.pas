@@ -189,6 +189,17 @@ begin
   Assert.AreEqual(InUnit('  Foo(not Assigned(X));'),
     Fix126(InUnit('  Foo(X = nil);'), At(4, 3, naStatement, 'Foo(X = nil)'), R),
     'Aufrufklammer bleibt: ' + R);
+  // Ein bedingter Ausdruck (Delphi 13) in Klammern vor dem Vergleich: sein
+  // then bzw. else beendet den Bereich nicht (ScanStatement zaehlt die
+  // Klammertiefe mit ParenDelta; Gegenpruefung V2-B2S-1: ohne die Tiefe
+  // rot - der Bereich endete dort, '0 statt 1 Vergleiche').
+  Assert.AreEqual(
+    InUnit('  if (if C then A else B) and Assigned(X) then Exit;'),
+    Fix126(InUnit('  if (if C then A else B) and (X <> nil) then Exit;'),
+      At(4, 3, naCondition, '( if C then A else B ) and ( X <> nil )'), R), R);
+  Assert.AreEqual(InUnit('  Use(if C then A else B, Assigned(X));'),
+    Fix126(InUnit('  Use(if C then A else B, X <> nil);'), At(4, 3, naStatement,
+      'Use(if C then A else B, X <> nil)'), R), R);
 end;
 
 procedure TTestRdxNilFix.Sca126_MultiLineCondition;

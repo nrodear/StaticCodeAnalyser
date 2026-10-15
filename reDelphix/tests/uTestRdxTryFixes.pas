@@ -230,6 +230,18 @@ begin
     '    X.Run;', '  finally', '    X.Free;', '  end;']),
     Fix(InProc(['  X := TFoo.Create(A,', '    B);', '  X.Run;', '  X.Free;']),
       6, 'X', R), R);
+  // ... auch mit einer anonymen Methode im Argument, deren Parameterliste
+  // ';' traegt: dieses ';' steht in Klammern und beendet A nicht
+  // (StatementStop/StopStep mit ParenDelta; Gegenpruefung V2-B2S-1: mit
+  // falschem Vorzeichen der Klammertiefe rot - A endete am ';' der Liste).
+  Assert.AreEqual(InProc(['  X := TFoo.Create(',
+    '    function(const A: TItem; const B: TItem): Integer', '    begin',
+    '      Result := A.Id - B.Id;', '    end);', '  try', '    X.Run;',
+    '  finally', '    X.Free;', '  end;']),
+    Fix(InProc(['  X := TFoo.Create(',
+      '    function(const A: TItem; const B: TItem): Integer', '    begin',
+      '      Result := A.Id - B.Id;', '    end);', '  X.Run;', '  X.Free;']),
+      6, 'X', R), R);
   // Inline-Variable als A (ihr Gueltigkeitsbereich bleibt aussen).
   Assert.AreEqual(InProc(['  var L: TList<Integer> := TList<Integer>.Create;',
     '  try', '    L.Add(1);', '  finally', '    L.Free;', '  end;']),

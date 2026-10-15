@@ -14,7 +14,11 @@ unit uTestRdxBlocks;
 //          beide wie vor der Charge. Die Politik von SCA009 trennt erst ein
 //          unsicherer Kopf IM Rumpf der gesuchten Routine ('Operator :=
 //          ..', TryPolicy_UnsafeHeadSkipped; Gegenpruefung V-B2S-1: gegen
-//          die Mutante "der erste unsichere Kopf beendet" rot).
+//          die Mutante "der erste unsichere Kopf beendet" rot). Ein Kopf
+//          AUF der Fundzeile zaehlt fuer SCA196 mit - die Suche beginnt
+//          hinter dem Ende der Zeile (ResultPolicy_HeadOnFindingLine;
+//          Gegenpruefung V2-B2S-1: gegen die Mutante "Suche ab dem Anfang
+//          der Zeile" rot).
 //   MemberHeads und der Index der Klassenkoepfe in uRdxResultFixes (R5-07):
 //          zwei Koepfe einer Klasse in $IFDEF-Zweigen aus dem Index
 //          (Delegation SCA096); ein generischer Kopf, den der Index nicht
@@ -39,6 +43,7 @@ type
     [Test] procedure TryPolicy_LocalVarAroundUnsafeLocalRoutine;
     [Test] procedure TryPolicy_UnsafeHeadSkipped;
     [Test] procedure ResultPolicy_FirstUnsafeHeadEnds;
+    [Test] procedure ResultPolicy_HeadOnFindingLine;
     [Test] procedure MemberHeads_DepthOneOfOneClass;
     [Test] procedure Sca096_TwoClassHeadsFromIndex;
     [Test] procedure Sca096_GenericMissFallsBack;
@@ -351,6 +356,24 @@ begin
     LineOf(Src, 'Result := Result'), MSG_196);
   Assert.IsTrue(Pos(Format('Routine in Zeile %d: lokaler Klassen',
     [LineOf(Src, 'procedure Inner;')]), R) = 1, R);
+end;
+
+// SCA196 an einer Funktion in EINER Zeile: Kopf und Lesen von Result
+// stehen auf der Fundzeile. EnclosingRoutine sucht seit Charge B2S-b mit
+// HeadBefore ab dem Anfang der Zeile DAHINTER (R5-03) - so kommt der Kopf
+// auf der Fundzeile mit wie bis dahin in der Schleife ueber
+// HeadsOnLine(ALine): Hilfe. Begaenne die Suche am Anfang der Fundzeile,
+// fehlte F ('keine Routine um die gemeldete Zeile'; Gegenpruefung
+// V2-B2S-1: mit dieser Mutante rot, auf HEAD und vor der Charge gruen).
+procedure TTestRdxBlocks.ResultPolicy_HeadOnFindingLine;
+var
+  Src, R : string;
+begin
+  Src := Join(['unit u;', 'interface', 'implementation',
+    'function F: string; begin Result := Result + ''x''; end;', 'end.']);
+  R := ResultReason(TRdxResultFixes.ManagedResultInit, Src,
+    LineOf(Src, 'function F:'), MSG_196);
+  Assert.AreEqual('', R, 'Hilfe fuer F auf der Fundzeile');
 end;
 
 // ---- Klassenkoepfe (R5-07) ----

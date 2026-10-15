@@ -256,6 +256,14 @@ begin
   Assert.IsTrue(Pos('"procedure"', R) > 0, R);
   Assert.AreEqual('', FixBlock(InProc(['  if A then var I := 1;']), 5, 'then', R));
   Assert.IsTrue(Pos('"var"', R) > 0, R);
+  // Ein Stopper-Wort IN Klammern beendet die Anweisung nicht: das benannte
+  // Argument 'End := 5' (OLE-Automation) sperrt wie ein Wort der Struktur
+  // (StatementStep zaehlt die Klammertiefe mit ParenDelta; Gegenpruefung
+  // V2-B2S-1: ohne die Tiefe rot - die Hilfe schnitt die Anweisung am
+  // 'End' ab und setzte '; end' in die Klammer).
+  Assert.AreEqual('', FixBlock(InProc(['  if A then',
+    '    Doc.Range(Start := 0, End := 5).Select;']), 5, 'then', R));
+  Assert.IsTrue(Pos('"end" in der Anweisung', R) > 0, R);
   Assert.AreEqual('', FixBlock(InProc(['  case X of', '    1: A;', '  else',
     '    var I := 1;', '  end;']), 7, 'else', R));
   Assert.IsTrue(Pos('Inline-Deklaration', R) > 0, R);

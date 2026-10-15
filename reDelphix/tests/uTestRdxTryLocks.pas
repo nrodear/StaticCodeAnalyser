@@ -377,6 +377,15 @@ begin
     'LeaveCriticalSection(FCS);'),
     Fix(r109, Plain('EnterCriticalSection(FCS);', 'Foo;',
       'LeaveCriticalSection(FCS);'), 'EnterCriticalSection(...)', R), R);
+  // Ein Komma in einer Klammer des Arguments trennt keine Argumente: das
+  // EINE Argument 'FCS[Max(I, J)]' ist der Schluessel (ArgSite zaehlt die
+  // Klammertiefe mit ParenDelta; Gegenpruefung V2-B2S-1: ohne die Tiefe
+  // rot - 'keine Sperre').
+  Assert.AreEqual(Wrapped('EnterCriticalSection(FCS[Max(I, J)]);', 'Foo;',
+    'LeaveCriticalSection(FCS[Max(I, J)]);'),
+    Fix(r109, Plain('EnterCriticalSection(FCS[Max(I, J)]);', 'Foo;',
+      'LeaveCriticalSection(FCS[Max(I, J)]);'), 'EnterCriticalSection(...)',
+      R), R);
 end;
 
 procedure TTestRdxTryLocks.Sca109_HandlerReleases;

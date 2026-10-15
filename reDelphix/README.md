@@ -638,11 +638,13 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   unsichere lokale Routine ist Y kein lokaler Name, und ein unsicherer Kopf im Rumpf -
   `Operator := ..`, `operator` ist kein reserviertes Wort - wird uebergangen, Y bleibt
   lokal; gegen die Mutante "der erste unsichere Kopf beendet" rot, Gegenpruefung
-  V-B2S-1; SCA196: der erste unsichere Kopf beendet mit seiner Zeile); `MemberHeads`;
+  V-B2S-1; SCA196: der erste unsichere Kopf beendet mit seiner Zeile, und ein Kopf
+  auf der Fundzeile - eine Funktion in einer Zeile - zaehlt mit; gegen die Mutante
+  "Suche ab dem Anfang der Fundzeile" rot, Gegenpruefung V2-B2S-1); `MemberHeads`;
   der Index der Klassenkoepfe von SCA096 - zwei Koepfe einer Klasse in
   `$IFDEF`-Zweigen (Delegation) und der Rueckfall auf `FindMethodDecls` bei einem
   generischen Kopf, den der Index nicht liest (`TBase<T(X)>`; ohne den Rueckfall
-  rot); `TypeHasBody` (10 Tests, FPC-Pruefstand).
+  rot); `TypeHasBody` (11 Tests, FPC-Pruefstand).
 * `uTestRdxQualifyUses` - die Planung von "uses: X -> Scope.X"
   (`TRdxRecipeRunner.QualifyUses`): Eintraege der Zeile, alle,
   Sortierung, FPC-Weiche, Direktiven, eigene Unit.
@@ -696,7 +698,12 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   Include vor implementation im Plan von SCA147; seit der Nachpruefung
   B1-FD (gegen 64ab9869 rot) ein `// noinspection` ueber Kopf, forward-
   Deklaration bzw. Deklaration im Klassenrumpf (SCA164, SCA147) und der
-  Suchort von `{$I \datei.inc}` (IncludeSearchPath). Jede Ablehnung
+  Suchort von `{$I \datei.inc}` (IncludeSearchPath). Seit der zweiten
+  Gegenpruefung der Charge B2S (V2-B2S-1, Review R3-05; je gegen die Mutante
+  ohne Klammertiefe rot): ein Stopper-Wort in Klammern - das benannte Argument
+  `End := 5` - beendet die Anweisung von SCA101 nicht (`StatementStep`), ein
+  bedingter Ausdruck (Delphi 13) in Klammern nicht den Bereich von SCA126
+  (`ScanStatement`). Jede Ablehnung
   prueft auch ihren Grund (Review R6-04: ohne ihn blieb gruen, dass die
   SCA085-Sperre "Kommentar im Ausdruck" nie griff).
 * `uTestRdxRoutineFixesDetector` - SCA164/SCA147 gegen die echten
@@ -766,9 +773,15 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   Charge B1-FE (Gegen-Review R5, je gegen 4358b769 rot) X in einer Huelle aus Cast, Klammern
   und `as` bei Zuweisung und Speicher-Aufruf, `System.Exit`/`System.Break`, nur lokale
   Puffer samt `P := nil` im finally, Puffer als Inline-var, `%` im Sperrtext der
-  Meldung und (Nachpruefung, gegen d840f1e5 rot) Huellen beliebig tief - 20, 20 und 19
+  Meldung und (Nachpruefung, gegen d840f1e5 rot) Huellen beliebig tief - 20, 20 und 20
   Tests. `uTestRdxTryLocks` deklariert seitdem P und Buf als
-  lokale Variablen.
+  lokale Variablen. Die zweite Gegenpruefung der Charge B2S (V2-B2S-1, Review R3-05)
+  pinnt die Klammertiefe (`ParenDelta`) dreier Zaehlstellen, je gegen die Mutante rot
+  und auf 9713942b gruen: X hinter einer geschlossenen Gruppe im Aufruf bzw. im Ziel
+  (`Holder.Add(Foo(1), X)`, `Items[F(1)] := X` - `UnmatchedOpener`, eigener Test in
+  `uTestRdxTryGates`), das `;` in der Parameterliste einer anonymen Methode in A
+  (`StopStep`) und ein Komma in einer Klammer des Sperr-Arguments (`FCS[Max(I, J)]`,
+  `ArgSite`).
 * `uTestRdxTryFixesDetector` - dieselben Hilfen gegen die echten Detektoren (nur
   Delphi): Rundlauf SCA009 (auch mit Suffix - try/except im Bereich bzw. umschliessend),
   SCA001 freed-outside-finally (Variante
@@ -912,9 +925,9 @@ Ohne Delphi (FPC 3.2.2):
 bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths uTestRdxBlocks
 ```
 
-Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+B1-FA+FB+FC+B1-FD+B1-FE+FF+B2S-a+B2S-b): `PASSED 653  FAILED 0` - 42 Testunits,
-davon 10 der Charge B2S-b (`uTestRdxBlocks`, einer davon aus der Gegenpruefung), 12 der Charge B2S-a (`uTestRdxPaths` 10, `uTestRdxProjectUnits` 1,
-`uTestRdxCodeMap` 1),
+Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+B1-FA+FB+FC+B1-FD+B1-FE+FF+B2S-a+B2S-b): `PASSED 655  FAILED 0` - 42 Testunits,
+davon 11 der Charge B2S-b (`uTestRdxBlocks`, zwei davon aus den Gegenpruefungen), 13 der Charge B2S-a (`uTestRdxPaths` 10, `uTestRdxProjectUnits` 1,
+`uTestRdxCodeMap` 1, `uTestRdxTryGates` 1 aus der zweiten Gegenpruefung),
 28 der Charge B1-FA (`uTestRdxSuppressTargets` 20, Review R1-01/R1-03
 und Nachbesserung; `uTestRdxBufferMath` 1, R1-04; `uTestRdxProjectUnits` 7,
 R1-02),
