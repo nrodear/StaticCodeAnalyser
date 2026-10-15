@@ -173,7 +173,8 @@ begin
   O := PlanFixIn(Src, 't.pas', fkMagicNumber, Seen[0]);
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.IsFalse(O.ChangesBehavior, 'bedeutungsgleich (E26)');
-  Assert.AreEqual('Introduce local constant for 200',
+  // Deutsch: der Testlauf steht auf 'de' (reDelphix.Test.dpr, Charge C0).
+  Assert.AreEqual('Lokale Konstante f'#$00FC'r 200 einf'#$00FC'hren',
     TRdxFixTable.CaptionFor(fkMagicNumber, O));
   Assert.IsTrue(Pos('MagicNr01', O.Hint) > 0, O.Hint);
   // Umbenennen von Hand oder mit Refactor > Rename - nicht Sync Edit (Esc
@@ -235,7 +236,7 @@ begin
       Dir + 'u.pas');
     Assert.IsFalse(O.Enabled, 'keine Hilfe');
     Assert.IsTrue(Pos('pkg.lpk', O.Reason) > 0, O.Reason);
-    Assert.AreEqual('Introduce local constant for 300',
+    Assert.AreEqual('Lokale Konstante f'#$00FC'r 300 einf'#$00FC'hren',
       TRdxFixTable.CaptionFor(fkMagicNumber, O), 'gesperrt mit Menuetext');
   finally
     DeleteFile(Dir + 'pkg.lpk');

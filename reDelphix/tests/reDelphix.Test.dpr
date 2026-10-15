@@ -95,6 +95,15 @@ program reDelphix.Test;
 //                        Zusammenhang ueber Zeilen, Ende des Sync-Blocks
 //   * uTestRdxIntroEdits - dieselbe Aktion: Ersetzungen des Writers (C1h)
 //                        Ende zu Ende auf UTF-8-Pufferbytes
+//   * uTestRdxText     - die Sprache der reDelphix-Texte (uRdxText,
+//                        Entscheid E29): Override, redelphix.ini (Vorlage,
+//                        auto/fest), Sprache der SCA, analyser.ini
+//
+// SPRACHE: der Hauptblock setzt die reDelphix-Texte fuer ALLE Tests auf
+// Deutsch (SetRdxLanguageOverride('de'), wie der FPC-Pruefstand) - die
+// Erwartungen sind deutsch bzw. die deutschen Menuetexte aus i18n/de.po,
+// und mit Override liest und schreibt uRdxText keine redelphix.ini (kein
+// Testlauf fasst %APPDATA% an).
 //
 // Engine-Units kommen ueber den Suchpfad aus ..\..\SCA.Engine\sources
 // (wie StaticCodeAnalyserForm\tests\TestProject), die Modul-Units aus
@@ -116,6 +125,7 @@ uses
   DUnitX.Loggers.XML.NUnit,
   {$ENDIF }
   DUnitX.TestFramework,
+  uRdxText in '..\source\uRdxText.pas',
   uRdxRecipes in '..\source\uRdxRecipes.pas',
   uRdxScopeTable in '..\source\uRdxScopeTable.pas',
   uRdxBufferMath in '..\source\uRdxBufferMath.pas',
@@ -182,7 +192,8 @@ uses
   uTestRdxIntroRefuse in 'uTestRdxIntroRefuse.pas',
   uTestRdxIntroGuards in 'uTestRdxIntroGuards.pas',
   uTestRdxIntroEdits in 'uTestRdxIntroEdits.pas',
-  uTestRdxIntroContext in 'uTestRdxIntroContext.pas';
+  uTestRdxIntroContext in 'uTestRdxIntroContext.pas',
+  uTestRdxText in 'uTestRdxText.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}
@@ -195,6 +206,9 @@ var
 {$ENDIF}
 
 begin
+  // Deutsch fuer alle Tests (s. Kopf, SPRACHE) - vor jedem Lauf, auch
+  // unter TestInsight.
+  SetRdxLanguageOverride('de');
 {$IFDEF TESTINSIGHT}
   TestInsight.DUnitX.RunRegisteredTests;
   Halt(0);

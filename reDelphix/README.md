@@ -51,10 +51,11 @@ source\uRdxCodeMap.pas            Code-Sicht der Datei (Kommentare, Strings, meh
 source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung aller Ersetzungen, Spaltengrenze, Textwahl
 source\uRdxEditor.pas             ToolsAPI: Puffer lesen, Bereich markieren, Bereiche ersetzen (ein Undo-Schritt), Projekt-Units
 source\uRdxLog.pas                Protokoll %TEMP%\reDelphix.log + DebugView
+source\uRdxText.pas               Sprache der Texte: _() in die reDelphix-Sprache (wie die SCA-Oberflaeche oder redelphix.ini [UI] Language), redelphix.ini samt Vorlage (Entscheid E29, siehe "Sprache und redelphix.ini"); ohne ToolsAPI
 data\unitscopes.txt               die Scope-Tabelle (erzeugt), als RCDATA eingelinkt (data\unitscopes.rc)
-tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 41 Testunits und einer Hilfs-Unit (siehe "Pruefen")
+tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 44 Testunits und einer Hilfs-Unit (siehe "Pruefen")
 tools\gen_unitscopes.py           erzeugt data\unitscopes.txt aus der Delphi-Installation
-tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik unter FPC 3.2.2 und fuehrt Tests aus
+tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik unter FPC 3.2.2 und fuehrt Tests aus (Sprache 'de', Stub uLocalization.pas liest die echten i18n\*.po)
 tools\probe\RdxCorpusProbe.dpr    Korpus-Probe: Rezept 5.1 ueber eine Liste von Fundstellen, CSV
 tools\probe\sites_from_sarif.py   Fundstellen einer Regel aus einem SARIF-Lauf ziehen
 ```
@@ -299,6 +300,44 @@ frueheres `.1` entfaellt) und eine neue begonnen; beide zusammen bleiben
 so bei etwa 2 MB, auch wenn die Gluehbirne bei jeder Caret-Zeile fragt.
 Bei einer Fehlermeldung zuerst dort nachsehen.
 
+## Sprache und redelphix.ini
+
+Die Texte von reDelphix - Menuetexte, Hinweise, Gruende ausgegrauter
+Eintraege, Meldungen - erscheinen in der Sprache der SCA-Oberflaeche
+(Entscheid E29): englische msgids ueber `uRdxText._()`, Uebersetzungen in
+`i18n\de.po` und `i18n\fr.po` wie in der SCA. Uebersetzt sind bisher die
+Menuetexte und ein Teil der Meldungen (Diagnosen des Anbieters,
+Spaltengrenze und Pufferende im Editor); Hinweise und Gruende der Hilfen
+und die uebrigen Meldungen stehen noch deutsch im Quelltext (Umstellung in
+den Chargen C1..Cn).
+
+Eigene Einstellungen stehen in `%APPDATA%\StaticCodeAnalyser\redelphix.ini`,
+neben `analyser.ini`. Fehlt die Datei, legt reDelphix sie beim ersten Text
+mit einer kommentierten Vorlage an (UTF-8 mit BOM, englische Kommentare,
+Aufbau wie `analyser.ini`); misslingt das (Schreibschutz, Ordner nicht
+anlegbar), gilt die Vorgabe - nie eine Ausnahme im Menue. Aenderungen
+wirken beim naechsten Menue ohne Neustart: die Datei wird nur bei neuer
+Dateizeit neu gelesen.
+
+### `[UI]`
+
+| Schluessel | Typ | Vorgabe | Bedeutung |
+|---|---|---|---|
+| `Language` | String | `auto` | Sprache der reDelphix-Texte. `auto` (auch leer): wie die SCA - die Sprache, die die SCA-Oberflaeche gesetzt hat (ein Wechsel in den Optionen gilt beim naechsten Menue), vor dem ersten Analyser-Fenster `analyser.ini [UI] Language`, sonst Englisch. `en`, `de`, `fr` (jedes Kuerzel, `de-DE` -> `de`): fest; ein Kuerzel ohne Uebersetzung zeigt Englisch, Unsinn heisst Englisch. Auskommentierte Zeilen (`;Language=de`) zaehlen in beiden Dateien nie. |
+
+Technik: `uRdxText.RdxLanguage` entscheidet bei jedem Text,
+`uLocalization.TranslateTo` (SCA.Engine) uebersetzt in diese Sprache, ohne
+die Sprache der SCA umzustellen - beide teilen den .po-Cache. Eine
+reDelphix-Unit bindet `uRdxText` statt `uLocalization` (stuenden beide im
+uses, hinge `_` an der Reihenfolge; Tests, die beide brauchen, schreiben
+`uRdxText._` aus). Die Tests setzen
+`SetRdxLanguageOverride('de')` (reDelphix.Test.dpr und der Runner des
+FPC-Pruefstands): mit Override liest und schreibt reDelphix keine
+`redelphix.ini`. Eine neue Einstellung wird mit `RdxIniValue` gelesen, in
+`RDX_INI_TEMPLATE` (uRdxText) erklaert und hier in einer Tabelle unter
+`` ### `[Sektion]` `` eingetragen - `tools\config_doc_gate.py` gleicht die
+drei ab.
+
 ## Scope-Tabelle pflegen
 
 ```
@@ -482,7 +521,20 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
   und gleich `Handles`; Menuetexte mit Name, Variante und Kennzeichnung;
   Einstieg ohne Fund und ohne Zeile; einer der vier Hinweise, die es erst
   seit der Tabelle gibt (SCA075, SCA074, SCA087 und SCA066 hatten bis
-  Charge R8 keinen), woertlich (Charge R9).
+  Charge R8 keinen), woertlich (Charge R9). Seit Charge C0 erwarten die
+  Menuetext-Tests (auch in den Detektor-Rundlaeufen) die deutschen Texte
+  aus `i18n\de.po` - der Lauf steht auf `de`; `RawCaption` liefert die
+  englische msgid.
+* `uTestRdxText` - die Sprache der Texte (`uRdxText`, Charge C0, Entscheid
+  E29): Override (de/fr/en, Kuerzel ohne Uebersetzung, Normalisierung wie
+  in der SCA), `auto` ueber die gesetzte Sprache der SCA, ohne sie ueber
+  `analyser.ini`, sonst Englisch; fester Wert schlaegt die SCA;
+  Kommentarzeilen, Sektionen und Zeilenenden im ini-Text; die Vorlage beim
+  ersten Zugriff (Ordner, BOM, woertlich); neues Lesen nur bei neuer
+  Dateizeit; ein nicht anlegbarer Ordner ohne Ausnahme; mit Override bleibt
+  die Platte unberuehrt - 13 Tests, in reDelphix.Test (echte
+  `uLocalization`) und im FPC-Pruefstand (Stub). Die ini-Tests lenken das
+  Verzeichnis nach `TEMP\rdx_c0_<GUID>` um (`SetRdxConfigDir`).
 * `uTestRdxSimpleFixes` / `uTestRdxNilFix` / `uTestRdxExprFixes` /
   `uTestRdxStructFixes` / `uTestRdxBlockFixes` / `uTestRdxLineFixes` /
   `uTestRdxRaiseFixes` / `uTestRdxDeclFixes` / `uTestRdxFlowFixes` /
@@ -632,10 +684,11 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards
+bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText
 ```
 
-Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc): `PASSED 528  FAILED 0` - 33 Testunits,
+Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0): `PASSED 541  FAILED 0` - 34 Testunits,
+davon 13 der Charge C0 (`uTestRdxText`, Sprache der Texte),
 davon 72 Tests fuer "Lokale Variable einfuehren", 12 fuer die Quick-Fixes der
 Charge H2, 25 der Charge H3b (SCA164 und Bausteine 13 in
 `uTestRdxRoutineFixes`, SCA147 12 in `uTestRdxMethodFixes`), 18 der
@@ -663,9 +716,19 @@ des Moduls (`uRdxRecipes`, `uRdxScopeTable`, `uRdxBufferMath`,
 `uRdxDeclFixes`, `uRdxFlowFixes`, `uRdxRoutineFixes`, `uRdxCleanupFixes`, `uRdxTryFixes`,
 `uRdxResultFixes`, `uRdxSqlTemplate`, `uRdxCompilerTraces`, `uRdxMagicFixes`,
 `uRdxCodeMap`,
-`uRdxIntroPlan`, `uRdxIntroEdits`). Testunits kommen aus `reDelphix\tests`,
+`uRdxIntroPlan`, `uRdxIntroEdits`, `uRdxText`). Testunits kommen aus `reDelphix\tests`,
 sonst aus `StaticCodeAnalyserForm\tests` (Core-Tests wie
 `uTestSourcePlaces`, `uTestRefactorConcat`).
+
+* **Sprache (Charge C0):** der Runner setzt `SetRdxLanguageOverride('de')`
+  vor den Tests, wie `reDelphix.Test.dpr`. Die echte `uLocalization`
+  uebersetzt unter FPC 3.2.2 nicht (TMonitor fehlt, TStringBuilder ist dort
+  ein AnsiString-Bauer, kein `string.Split` fuer UnicodeString); an ihrer
+  Stelle steht der eingecheckte Stub `tools\fpc-pruefstand\uLocalization.pas`
+  (nur SetLanguage, CurrentLanguage, NormalizeLangCode, TranslateTo, eigener
+  kleiner .po-Leser, bewusst kein `_()`). Das Skript kopiert je Lauf die
+  echten `i18n\*.po` nach `out\i18n\` neben den Runner - eine deutsche
+  Erwartung prueft so zugleich, dass ihre msgid in `i18n\de.po` steht.
 
 * **Pfadregel:** die SCA-Wurzel ist der Checkout, in dem das Skript liegt
   (das Verzeichnis ueber `reDelphix`) - Core, Rezepte und Tests kommen so

@@ -23,7 +23,9 @@ unit uRdxFixTable;
 // (TRdxFixFrame, Charge H5c) und die Zeilen.
 //
 // MENUETEXTE: englische msgids, uebersetzt ueber i18n/*.po (Editorhilfen
-// E6). Sie stehen in FIX_CAPTIONS und FIX_ALT_CAPTIONS - zwei String-
+// E6) in die reDelphix-Sprache (uRdxText._, Entscheid E29 - wie die
+// SCA-Oberflaeche oder redelphix.ini [UI] Language; uRdxText nennt den
+// Weg). Sie stehen in FIX_CAPTIONS und FIX_ALT_CAPTIONS - zwei String-
 // Arrays parallel zu FIX_ROWS, nicht als Feld der Zeile: tools/
 // i18n_extract.py liest nur _('..'), _(KONSTANTE) und _(ARRAY[i]); ein
 // Record-Feld bliebe fuer template.pot unsichtbar, und msgmerge markierte
@@ -90,10 +92,11 @@ type
       AFinding: TLeakFinding;
       const AUsesNames: TArray<string>): TRdxFixOutcome; static;
 
-    // Menuetext einer Hilfe, uebersetzt: der Eintrag nach AOutcome.Variant,
-    // '%s' durch AOutcome.Name ('X', wenn der Planer abgelehnt hat, bevor
-    // der Name feststand), dahinter die Kennzeichnung bei ChangesBehavior.
-    // '' ohne Zeile - dann entsteht KEIN Eintrag (bis Charge R8 stand dann
+    // Menuetext einer Hilfe, uebersetzt in die reDelphix-Sprache
+    // (uRdxText): der Eintrag nach AOutcome.Variant, '%s' durch
+    // AOutcome.Name ('X', wenn der Planer abgelehnt hat, bevor der Name
+    // feststand), dahinter die Kennzeichnung bei ChangesBehavior. '' ohne
+    // Zeile - dann entsteht KEIN Eintrag (bis Charge R8 stand dann
     // KindName im Menue).
     class function CaptionFor(AKind: TFindingKind;
       const AOutcome: TRdxFixOutcome): string; static;
@@ -112,7 +115,7 @@ uses
   // GetDriveType fuer den Netzlaufwerk-Check von SCA014.
   Winapi.Windows,
   System.SysUtils,
-  uLocalization,     // _()
+  uRdxText,          // _(): in die reDelphix-Sprache (E29), nie uLocalization
   uRdxRecipes,       // AsciiOnly (SCA085-Gegenprobe)
   uRdxCodeMap,       // TRdxCodeMap (Adapter auf die Code-Sicht)
   uRdxBufferMath,    // TRdxEdit

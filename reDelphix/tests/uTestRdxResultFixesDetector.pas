@@ -176,7 +176,9 @@ begin
   O := OutcomeOf(Src, fkConstructorWithoutInherited);
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.IsTrue(O.ChangesBehavior, 'aendert Verhalten');
-  Assert.AreEqual('Call inherited first in the constructor (changes behavior)',
+  // Menuetexte deutsch: der Testlauf steht auf 'de' (Charge C0, E29).
+  Assert.AreEqual('inherited als Erstes im Konstruktor aufrufen ('#$00E4
+    + 'ndert Verhalten)',
     TRdxFixTable.CaptionFor(fkConstructorWithoutInherited, O));
   Assert.IsTrue(Pos('Elternkonstruktor', O.Hint) > 0, O.Hint);
   Assert.AreEqual(StringReplace(Src, '  Log(A);', '  inherited;'#13#10'  Log(A);',
@@ -197,7 +199,7 @@ begin
     fkConstructorWithoutInherited);
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.IsFalse(O.ChangesBehavior, 'TObject.Create ist leer');
-  Assert.AreEqual('Call inherited Create first in the constructor',
+  Assert.AreEqual('inherited Create als Erstes im Konstruktor aufrufen',
     TRdxFixTable.CaptionFor(fkConstructorWithoutInherited, O));
 end;
 
@@ -227,7 +229,7 @@ begin
     fkDestructorWithoutInherited);
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.IsFalse(O.ChangesBehavior, 'TObject.Destroy ist leer');
-  Assert.AreEqual('Call inherited last in the destructor',
+  Assert.AreEqual('inherited als Letztes im Destruktor aufrufen',
     TRdxFixTable.CaptionFor(fkDestructorWithoutInherited, O));
   Assert.IsTrue(Pos('TObject.Destroy ist leer', O.Hint) > 0, O.Hint);
 end;
@@ -265,7 +267,7 @@ begin
     '  Log(A);', 'end;'])), fkRoutineResultUnassigned);
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.IsTrue(O.ChangesBehavior, 'aendert Verhalten');
-  Assert.AreEqual('Initialize Result with 0 (changes behavior)',
+  Assert.AreEqual('Result mit 0 initialisieren ('#$00E4'ndert Verhalten)',
     TRdxFixTable.CaptionFor(fkRoutineResultUnassigned, O));
 end;
 
@@ -328,8 +330,8 @@ begin
   O := OutcomeOf(Collector('string', 'A[I]'), fkManagedResultUninit);
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.IsTrue(O.ChangesBehavior, 'aendert Verhalten');
-  Assert.AreEqual('Initialize Result first: Result := '''' (changes behavior)',
-    TRdxFixTable.CaptionFor(fkManagedResultUninit, O));
+  Assert.AreEqual('Result zuerst initialisieren: Result := '''' ('#$00E4
+    + 'ndert Verhalten)', TRdxFixTable.CaptionFor(fkManagedResultUninit, O));
   Assert.IsTrue(Pos('alten Inhalt', O.Hint) > 0, O.Hint);
 end;
 

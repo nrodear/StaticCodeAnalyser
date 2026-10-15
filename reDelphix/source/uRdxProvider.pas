@@ -225,7 +225,7 @@ uses
   uCrashDiag,       // EStackExhausted
   uSCAConsts,       // KindName, fkUnusedSuppression
   uFileTextCache,   // LoadFileSmart: dieselbe Dekodierung wie der Scan
-  uLocalization,
+  uRdxText,         // _(): in die reDelphix-Sprache, nie uLocalization (E29)
   uRuleCatalog,
   uRdxFixTable,     // Tabelle der einfachen Hilfen: Planer und Menuetexte
   uRdxSuppress,
@@ -234,9 +234,10 @@ uses
 
 const
   // Menuetexte ueber _() (Editorhilfen E6): englische msgids, de/fr in
-  // i18n/*.po. Die Gruende aus den reinen Rezept-Units (uRdxRecipes,
-  // uRdxRecipeRunner) sind noch deutsch - Pruefstand und Tests pruefen sie
-  // woertlich (Nacharbeit im Todo).
+  // i18n/*.po, angezeigt in der reDelphix-Sprache (uRdxText, Entscheid
+  // E29: wie die SCA-Oberflaeche oder redelphix.ini [UI] Language). Die
+  // Gruende aus den reinen Rezept-Units (uRdxRecipes, uRdxRecipeRunner)
+  // sind noch deutsch - sie stellen die Chargen C1..Cn um.
   CAP_SHOW     = 'Show location';
   CAP_FORMAT   = 'Build Format() from concatenation';
   CAP_SQL      = 'Copy parameterized template to clipboard';

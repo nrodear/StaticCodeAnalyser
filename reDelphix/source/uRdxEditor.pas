@@ -104,7 +104,7 @@ uses
   System.SysUtils, System.Classes,
   ToolsAPI,
   uCrashDiag,       // EStackExhausted
-  uLocalization,
+  uRdxText,         // _(): in die reDelphix-Sprache, nie uLocalization (E29)
   uRdxLog;
 
 const
