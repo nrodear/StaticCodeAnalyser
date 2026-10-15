@@ -88,6 +88,8 @@ program reDelphix.Test;
 //   * uTestRdxCodeMap  - Code-Sicht (uRdxCodeMap) gegen ScanCodeLine des
 //                        Cores (Drift-Waechter), StartsInside
 //   * uTestRdxQualifyUses - Planung von "uses: X -> Scope.X" (QualifyUses)
+//   * uTestRdxProjectUnits - Index der Projekt-Units fuer "uses: X ->
+//                        Scope.X" (TRdxProjectUnits, Review R1-02)
 //   * uTestRdxFixTable - die Tabelle der einfachen Hilfen (uRdxFixTable):
 //                        jede Zeile mit Planer, Hinweis und Menuetext
 //   * uTestRdxIntroPlan - Code-Aktion "Lokale Variable einfuehren": das
@@ -190,6 +192,7 @@ uses
   uTestRdxDetectorKit in 'uTestRdxDetectorKit.pas',
   uTestRdxCodeMap in 'uTestRdxCodeMap.pas',
   uTestRdxQualifyUses in 'uTestRdxQualifyUses.pas',
+  uTestRdxProjectUnits in 'uTestRdxProjectUnits.pas',
   uTestRdxFixTable in 'uTestRdxFixTable.pas',
   uTestRdxIntroPlan in 'uTestRdxIntroPlan.pas',
   uTestRdxIntroRefuse in 'uTestRdxIntroRefuse.pas',

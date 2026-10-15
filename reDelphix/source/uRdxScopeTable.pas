@@ -33,6 +33,12 @@ unit uRdxScopeTable;
 // 'skia' = FMX.Skia;System.Skia;Vcl.Skia), entscheidet allein die
 // DCC_Namespace des Projekts. Ausser in einer FMX-Datei (kein Vcl in der
 // Liste) wird dann nicht geraten (Review 2026-10-07, Minor 14).
+//
+// DIE GEGENPROBE
+//
+// Kennt das Projekt selbst eine Unit des Kurznamens, wird nicht
+// qualifiziert: TRdxProjectUnits (unten) ist der Index dafuer, gefuellt
+// von uRdxEditor.ProjectUnits (Review R1-02).
 
 interface
 
@@ -55,10 +61,15 @@ type
     constructor Create;
     destructor Destroy; override;
 
+    // Leert die Tabelle und vergisst die Quelle (Source = '').
     procedure Clear;
     // Zeilen 'kurzname=Qualifiziert1;Qualifiziert2', '#' = Kommentar.
     // Doppelte Namen (nur Gross/Klein verschieden) fallen zusammen.
     procedure LoadFromStrings(AStrings: TStrings);
+    // Liest die Datei AFileName (LoadFromStrings) und merkt sie als Source.
+    // False, wenn es sie nicht gibt, sie nicht lesbar oder falsch kodiert
+    // ist oder keinen Eintrag traegt - LoadDefault nimmt dann die naechste
+    // Quelle.
     function LoadFromFile(const AFileName: string): Boolean;
     // RCDATA-Ressource AResName aus dem eigenen Modul (HInstance).
     function LoadFromResource(const AResName: string): Boolean;
@@ -66,7 +77,11 @@ type
     // sonst die eingelinkte Ressource. False, wenn nichts davon da ist.
     function LoadDefault: Boolean;
 
+    // Zahl der Kurznamen in der Tabelle; 0 = nichts geladen.
     function Count: Integer;
+    // Die qualifizierten Namen zum Kurznamen (gross/klein und Leerraum
+    // egal) in der Reihenfolge der Datei; nil, wenn die Tabelle ihn nicht
+    // kennt.
     function Candidates(const AShortName: string): TArray<string>;
     // Aufloesung nach der Scope-Reihenfolge des Rahmenwerks (s. Kopf).
     // False mit Grund: schon qualifiziert, unbekannt, mehrdeutig ohne
@@ -76,6 +91,54 @@ type
 
     // Woher die Tabelle geladen wurde (Diagnose), leer = nichts geladen.
     property Source: string read FSource;
+  end;
+
+  // Prueft einen Pfad - uRdxEditor setzt hier den Netzlaufwerk-Test
+  // (GetDriveType), die Tests eine Attrappe.
+  TRdxPathTest = function(const APath: string): Boolean;
+
+  // Die Kurznamen, die das PROJEKT selbst fuehren kann - die Gegenprobe zur
+  // Scope-Tabelle fuer 'uses: X -> Scope.X': eine Projekt-Unit 'Types' darf
+  // nicht zu System.Types werden (Review nach Bereichen 2026-10-10, Minor
+  // 18). uRdxEditor.ProjectUnits fuellt den Index EINMAL je Menueaufbau
+  // (Verzeichnis der Datei, Module aller Projekte der Gruppe, deren Unit-
+  // Suchpfad); die Frage je uses-Eintrag ist danach ein Nachschlagen plus
+  // je Verzeichnis zwei FileExists. Bis Review R1-02 lief dafuer je Eintrag
+  // die ganze Projektgruppe ueber die ToolsAPI, auch fuer die Gluehbirne.
+  // NETZPFADE (UNC, mit IsRemote auch Netzlaufwerke) liest der Index nicht:
+  // der Menueaufbau laeuft im Hauptthread, ein nicht erreichbarer Server
+  // kostete je FileExists Sekunden (dieselbe Regel wie SCA014, R_UNC in
+  // uRdxMagicFixes). Liegt ein Verzeichnis dort, ist jede Antwort offen -
+  // Knows sagt dann immer True (kein Angebot), UnreadableReason den Grund.
+  TRdxProjectUnits = class
+  private
+    FModules    : TStringList;    // Kurznamen der Projektmodule, ohne Doppel
+    FDirs       : TStringList;    // gelesene Verzeichnisse, mit Trenner am Ende
+    FUnreadable : string;         // erstes nicht gelesenes Verzeichnis
+    FIsRemote   : TRdxPathTest;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    // Ein Modul eines Projekts (Dateiname, mit oder ohne Pfad und Endung).
+    procedure AddModule(const AFileName: string);
+    // Ein Verzeichnis, in dem eine Unit des Projekts liegen kann (absolut).
+    // Ein Netzpfad wird nicht gelesen, sondern als Unreadable gemerkt.
+    procedure AddDir(const ADir: string);
+    // Ein Unit-Suchpfad ('a;..\b;$(BDS)\lib') relativ zu ABaseDir: jedes
+    // Verzeichnis ueber AddDir. Eintraege mit Makros ($(..)) bleiben aussen
+    // vor (Grenze: s. uRdxEditor.ProjectUnits).
+    procedure AddSearchPath(const ASearchPath, ABaseDir: string);
+    // True: das Projekt kann eine Unit AShortName haben - ein Modul dieses
+    // Namens, AShortName.pas oder .pp in einem gelesenen Verzeichnis, oder
+    // ein Verzeichnis blieb ungelesen (dann offen, s. oben). '' = False.
+    function Knows(const AShortName: string): Boolean;
+    // Der Grund zu Unreadable (deutsch wie die Gruende der Scope-Tabelle);
+    // '' ohne ungelesenes Verzeichnis.
+    function UnreadableReason: string;
+    // Das erste ungelesene Verzeichnis (Netzpfad); '' = alles gelesen.
+    property Unreadable: string read FUnreadable;
+    // Zusaetzlicher Netzpfad-Test fuer AddDir (Netzlaufwerk); nil = nur UNC.
+    property IsRemote: TRdxPathTest read FIsRemote write FIsRemote;
   end;
 
 implementation
@@ -120,14 +183,65 @@ end;
 
 function JoinNames(const ANames: TArray<string>): string;
 var
-  i : Integer;
+  Sep : string;
+  i   : Integer;
 begin
   Result := '';
+  Sep := '';
   for i := 0 to High(ANames) do
   begin
-    if i > 0 then Result := Result + ', ';
-    Result := Result + ANames[i];
+    // Ein Grundtext aus den Kandidaten EINES Kurznamens - in
+    // unitscopes.txt hoechstens drei; ein TStringBuilder lohnte nicht.
+    // noinspection StringConcatInLoop
+    Result := Result + Sep + ANames[i];
+    Sep := ', ';
   end;
+end;
+
+// AName an ANames[0..ACount-1] anhaengen, wenn nicht leer und noch nicht
+// da (gross/klein egal); ANames ist gross genug angelegt.
+procedure AddUnique(var ANames: TArray<string>; var ACount: Integer;
+  const AName: string);
+var
+  j : Integer;
+begin
+  if AName = '' then Exit;
+  for j := 0 to ACount - 1 do
+    if SameText(ANames[j], AName) then Exit;
+  ANames[ACount] := AName;
+  Inc(ACount);
+end;
+
+// Eine Zeile 'kurzname=Qualifiziert1;Qualifiziert2' der Tabelle: True mit
+// dem Kurznamen (klein) und den Namen ohne Doppel; False fuer Leerzeile,
+// Kommentar ('#'), Zeile ohne '=' oder ohne Namen. AParts ist die
+// Trennliste des Aufrufers (';', StrictDelimiter). Bis Review R1-05 der
+// Rumpf der Schleife in LoadFromStrings (SCA176 27).
+function ParseScopeLine(const ALine: string; AParts: TStringList;
+  out AShort: string; out ANames: TArray<string>): Boolean;
+var
+  Line, Rest : string;
+  P, k, n    : Integer;
+begin
+  Result := False;
+  AShort := '';
+  ANames := nil;
+  Line := Trim(ALine);
+  if (Line = '') or (Line[1] = '#') then Exit;
+  P := Pos('=', Line);
+  if P <= 1 then Exit;
+  AShort := LowerCase(Trim(Copy(Line, 1, P - 1)));
+  Rest   := Trim(Copy(Line, P + 1, MaxInt));
+  if (AShort = '') or (Rest = '') then Exit;
+  AParts.DelimitedText := Rest;
+  // Hoechstens so viele Namen wie Teile: einmal anlegen, am Ende kuerzen
+  // (SCA157 - vorher wuchs das Feld je Name).
+  SetLength(ANames, AParts.Count);
+  n := 0;
+  for k := 0 to AParts.Count - 1 do
+    AddUnique(ANames, n, Trim(AParts[k]));
+  SetLength(ANames, n);
+  Result := n > 0;
 end;
 
 { TRdxScopeTable }
@@ -152,15 +266,10 @@ end;
 
 procedure TRdxScopeTable.LoadFromStrings(AStrings: TStrings);
 var
-  i, k  : Integer;
-  Line  : string;
-  P     : Integer;
+  i     : Integer;
   Short : string;
-  Rest  : string;
-  Parts : TStringList;
   Names : TArray<string>;
-  Known : Boolean;
-  j     : Integer;
+  Parts : TStringList;
 begin
   Clear;
   if not Assigned(AStrings) then Exit;
@@ -169,33 +278,8 @@ begin
     Parts.Delimiter       := ';';
     Parts.StrictDelimiter := True;
     for i := 0 to AStrings.Count - 1 do
-    begin
-      Line := Trim(AStrings[i]);
-      if (Line = '') or (Line[1] = '#') then Continue;
-      P := Pos('=', Line);
-      if P <= 1 then Continue;
-      Short := LowerCase(Trim(Copy(Line, 1, P - 1)));
-      Rest  := Trim(Copy(Line, P + 1, MaxInt));
-      if (Short = '') or (Rest = '') then Continue;
-      Parts.DelimitedText := Rest;
-      SetLength(Names, 0);
-      for k := 0 to Parts.Count - 1 do
-      begin
-        if Trim(Parts[k]) = '' then Continue;
-        Known := False;
-        for j := 0 to High(Names) do
-          if SameText(Names[j], Trim(Parts[k])) then
-          begin
-            Known := True;
-            Break;
-          end;
-        if Known then Continue;
-        SetLength(Names, Length(Names) + 1);
-        Names[High(Names)] := Trim(Parts[k]);
-      end;
-      if Length(Names) > 0 then
+      if ParseScopeLine(AStrings[i], Parts, Short, Names) then
         FMap.AddOrSetValue(Short, Names);
-    end;
   finally
     Parts.Free;
   end;
@@ -353,6 +437,106 @@ begin
     end;
   end;
   AReason := 'kein Scope-Praefix des Rahmenwerks passt: ' + JoinNames(Cands);
+end;
+
+{ TRdxProjectUnits }
+
+const
+  R_UNREADABLE = 'Netzpfad im Unit-Suchpfad oder neben der Datei (%s) - '
+    + 'reDelphix liest dort nicht (Menueaufbau im Hauptthread); ob das '
+    + 'Projekt eine Unit dieses Namens hat, ist offen - von Hand';
+
+// '\\server\share\..' (auch mit '/')? Zweite Kopie der Regel aus
+// uRdxMagicFixes.IsNetworkPath - zusammenlegen mit den geteilten Helfern.
+function IsUncPath(const APath: string): Boolean;
+begin
+  Result := (Length(APath) > 2) and CharInSet(APath[1], ['\', '/'])
+    and CharInSet(APath[2], ['\', '/']);
+end;
+
+constructor TRdxProjectUnits.Create;
+begin
+  inherited Create;
+  FModules := TStringList.Create;
+  FModules.CaseSensitive := False;
+  FModules.Sorted        := True;
+  FModules.Duplicates    := dupIgnore;
+  FDirs := TStringList.Create;
+  FDirs.CaseSensitive := False;
+  FDirs.Sorted        := True;
+  FDirs.Duplicates    := dupIgnore;
+end;
+
+destructor TRdxProjectUnits.Destroy;
+begin
+  FDirs.Free;
+  FModules.Free;
+  inherited;
+end;
+
+procedure TRdxProjectUnits.AddModule(const AFileName: string);
+var
+  Short : string;
+begin
+  Short := ChangeFileExt(ExtractFileName(AFileName), '');
+  if Short <> '' then
+    FModules.Add(Short);
+end;
+
+procedure TRdxProjectUnits.AddDir(const ADir: string);
+begin
+  if ADir = '' then Exit;
+  if IsUncPath(ADir) or (Assigned(FIsRemote) and FIsRemote(ADir)) then
+  begin
+    if FUnreadable = '' then
+      FUnreadable := ADir;
+    Exit;
+  end;
+  FDirs.Add(IncludeTrailingPathDelimiter(ADir));
+end;
+
+procedure TRdxProjectUnits.AddSearchPath(const ASearchPath, ABaseDir: string);
+var
+  Rest, Dir : string;
+  P         : Integer;
+begin
+  // Von Hand an ';' getrennt: ohne die Anfuehrungszeichen-Regel von
+  // TStrings.DelimitedText (wie bis R1-02 string.Split).
+  Rest := ASearchPath;
+  while Rest <> '' do
+  begin
+    P := Pos(';', Rest);
+    if P = 0 then
+      P := Length(Rest) + 1;
+    Dir  := Trim(Copy(Rest, 1, P - 1));
+    Rest := Copy(Rest, P + 1, MaxInt);
+    if (Dir = '') or (Pos('$(', Dir) > 0) then Continue;
+    // Relativ zum Projektverzeichnis, ausser mit Laufwerk oder UNC.
+    if not ((Length(Dir) >= 2) and ((Dir[2] = ':') or IsUncPath(Dir))) then
+      Dir := IncludeTrailingPathDelimiter(ABaseDir) + Dir;
+    AddDir(ExpandFileName(Dir));
+  end;
+end;
+
+function TRdxProjectUnits.Knows(const AShortName: string): Boolean;
+var
+  i : Integer;
+begin
+  if AShortName = '' then Exit(False);
+  if FUnreadable <> '' then Exit(True);
+  if FModules.IndexOf(AShortName) >= 0 then Exit(True);
+  for i := 0 to FDirs.Count - 1 do
+    if FileExists(FDirs[i] + AShortName + '.pas')
+       or FileExists(FDirs[i] + AShortName + '.pp') then
+      Exit(True);
+  Result := False;
+end;
+
+function TRdxProjectUnits.UnreadableReason: string;
+begin
+  Result := '';
+  if FUnreadable <> '' then
+    Result := Format(R_UNREADABLE, [FUnreadable]);
 end;
 
 end.

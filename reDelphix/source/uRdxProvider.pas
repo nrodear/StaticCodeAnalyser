@@ -560,14 +560,35 @@ begin
   end;
 end;
 
+// Warum ein Eintrag nicht qualifiziert wird (AItem.Why <> qwOk). Bei einer
+// Projekt-Unit sagt AUnits, ob es eine ist oder ein Netzpfad die Frage
+// offen liess (Review R1-02); AUnits = nil: nie gefragt.
+function QualifyItemReason(const AItem: TRdxQualifyItem;
+  AUnits: TRdxProjectUnits): string;
+begin
+  case AItem.Why of
+    qwOwnUnit:
+      begin
+        if (AUnits <> nil) and (AUnits.Unreadable <> '') then
+          Result := AUnits.UnreadableReason
+        else
+          Result := Format(_('own unit %s in the project'), [AItem.Short]);
+      end;
+    qwUnsorts:
+      Result := _('the clause would no longer be sorted (new SCA142)');
+  else
+    Result := AItem.ScopeReason;
+  end;
+end;
+
 procedure TRdxProvider.AddUsesActions(var AList: TArray<TFindingAction>;
   const ACtx: TRdxRecipeContext);
 var
   Plan     : TRdxQualifyPlan;
   Item     : TRdxQualifyItem;
   Act      : TRdxAction;
-  Reason   : string;
   FileName : string;
+  Units    : TRdxProjectUnits;
 begin
   // Die Planung liegt im Laeufer (testbar, ohne ToolsAPI); hier nur die
   // Menuetexte. Nichts ausserhalb einer uses-Klausel - sonst stuende
@@ -577,39 +598,39 @@ begin
   // der Regel schaltet auch den Umbau auf ihrem Signal ab (Minor 5).
   if ACtx.FixMode = FIX_NONE then Exit;
   FileName := ACtx.FileName;
-  Plan := TRdxRecipeRunner.QualifyUses(FSource.Places, FScopes, ACtx.Line,
-    function(const AShortName: string): Boolean
+  // Die Projekt-Units EINMAL je Aufruf und erst, wenn ein Eintrag sie
+  // braucht (Review R1-02): QualifyUses fragt fuer jeden aufloesbaren
+  // Eintrag aller Klauseln - bis dahin lief dafuer je Eintrag die ganze
+  // Projektgruppe ueber die ToolsAPI, auch fuer die Gluehbirne. Ausserhalb
+  // einer uses-Klausel fragt niemand, der Index entsteht dann nicht.
+  Units := nil;
+  try
+    Plan := TRdxRecipeRunner.QualifyUses(FSource.Places, FScopes, ACtx.Line,
+      function(const AShortName: string): Boolean
+      begin
+        if Units = nil then
+          Units := TRdxEditor.ProjectUnits(FileName);
+        Result := Units.Knows(AShortName);
+      end);
+    if not Plan.InClause then Exit;
+    if Plan.Block <> qbNone then
     begin
-      Result := TRdxEditor.ProjectHasUnit(AShortName, FileName);
-    end);
-  if not Plan.InClause then Exit;
-  if Plan.Block <> qbNone then
-  begin
-    AddRefactor(AList, _(CAP_USES), QualifyBlockReason(Plan), nil);
-    Exit;
-  end;
-  for Item in Plan.Items do
-  begin
-    if Item.Why = qwOk then
-    begin
-      Act := NewAction(akReplace, ACtx.FileName);
-      SetLength(Act.FEdits, 1);
-      Act.FEdits[0] := Item.Edit;
-      AddRefactor(AList, 'uses: ' + Item.Short + ' -> ' + Item.Qualified, '', Act);
-      Continue;
+      AddRefactor(AList, _(CAP_USES), QualifyBlockReason(Plan), nil);
+      Exit;
     end;
-    case Item.Why of
-      qwOwnUnit:
-        Reason := Format(_('own unit %s in the project'), [Item.Short]);
-      qwUnsorts:
-        Reason := _('the clause would no longer be sorted (new SCA142)');
-    else
-      Reason := Item.ScopeReason;
-    end;
-    AddRefactor(AList, Format(_('uses: qualify %s'), [Item.Short]), Reason, nil);
-  end;
-  if Length(Plan.All) >= 2 then
-  begin
+    for Item in Plan.Items do
+      if Item.Why = qwOk then
+      begin
+        Act := NewAction(akReplace, ACtx.FileName);
+        SetLength(Act.FEdits, 1);
+        Act.FEdits[0] := Item.Edit;
+        AddRefactor(AList, 'uses: ' + Item.Short + ' -> ' + Item.Qualified,
+          '', Act);
+      end
+      else
+        AddRefactor(AList, Format(_('uses: qualify %s'), [Item.Short]),
+          QualifyItemReason(Item, Units), nil);
+    if Length(Plan.All) < 2 then Exit;
     if Plan.AllUnsorts then
       AddRefactor(AList, Format(_(CAP_USES_ALL), [Length(Plan.All)]),
         _('the clause would no longer be sorted (new SCA142)'), nil)
@@ -620,6 +641,8 @@ begin
       AddRefactor(AList, Format(_(CAP_USES_ALL), [Length(Plan.All)]),
         Plan.AllPreview, Act);
     end;
+  finally
+    Units.Free;
   end;
 end;
 
@@ -790,6 +813,24 @@ begin
     Add(AList, DIAG_PREFIX + _('nothing to offer'), '', False, nil);
 end;
 
+// Warum es zum Fund nichts gibt, bevor eine Datei gelesen wird: kein
+// Dateiname, Datei fehlt, keine Zeile - oder kein Pascal-Quelltext (Review
+// R1-04, s. Kopf: fuer andere Dateien gibt es kein Rezept, auch kein
+// Text-Rezept, missed 1). '' = weiter. Bis R1-05 vier Zweige in Provide.
+function FindingDiagnosis(const AFinding: TLeakFinding): string;
+begin
+  if AFinding.FileName = '' then
+    Result := _('finding without file name')
+  else if not FileExists(AFinding.FileName) then
+    Result := Format(_('file not found: %s'), [AFinding.FileName])
+  else if AFinding.LineInt < 1 then
+    Result := _('finding without line')
+  else if not IsPascalSource(AFinding.FileName) then
+    Result := _('nothing to offer')
+  else
+    Result := '';
+end;
+
 function TRdxProvider.Provide(
   const AFinding: TLeakFinding): TArray<TFindingAction>;
 var
@@ -798,6 +839,7 @@ var
   Source : TRdxTextSource;
   Lines  : TStringList;
   R      : TRdxRecipe;
+  Why    : string;
 begin
   Result := nil;
   // Kein FActions.Clear mehr (Stufe B): die Objekte des vorigen Provide
@@ -806,27 +848,10 @@ begin
   FActions.BeginBatch;
   FUsesNames := nil;
   if not Assigned(AFinding) then Exit;
-  if AFinding.FileName = '' then
+  Why := FindingDiagnosis(AFinding);
+  if Why <> '' then
   begin
-    Add(Result, DIAG_PREFIX + _('finding without file name'), '', False, nil);
-    Exit;
-  end;
-  if not FileExists(AFinding.FileName) then
-  begin
-    Add(Result, DIAG_PREFIX + Format(_('file not found: %s'),
-      [AFinding.FileName]), '', False, nil);
-    Exit;
-  end;
-  if AFinding.LineInt < 1 then
-  begin
-    Add(Result, DIAG_PREFIX + _('finding without line'), '', False, nil);
-    Exit;
-  end;
-  // Nur Pascal-Quelltext wird gelesen (Review R1-04, s. Kopf): fuer andere
-  // Dateien gibt es kein Rezept - auch kein Text-Rezept (missed 1).
-  if not IsPascalSource(AFinding.FileName) then
-  begin
-    Add(Result, DIAG_PREFIX + _('nothing to offer'), '', False, nil);
+    Add(Result, DIAG_PREFIX + Why, '', False, nil);
     Exit;
   end;
   // Den Text EINMAL lesen - Puffer, sonst Platte wie der Scan. Offen, aber

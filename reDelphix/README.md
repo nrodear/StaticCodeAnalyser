@@ -34,7 +34,7 @@ source\uRdxProvider.pas           je Fund die Aktionen bauen (Anker/fixMode aus 
 source\uRdxRecipeRunner.pas       Rezept-Laeufer auf TSourcePlaces: Fund -> Beschreibung -> Ersetzung; ohne ToolsAPI, testbar
 source\uRdxFixTable.pas           Tabelle der einfachen Hilfen: je Fundart Planer, Hinweis, Kennzeichnung (E2), zweiter Eintrag, Menuetext (Charge R8); EIN Geruest fuer die Planer mit Plan-Record (TRdxFixFrame, generisch, Charge H5c); ohne ToolsAPI, nur Delphi
 source\uRdxRecipes.pas            reine Textlogik: Literal-Codec, Format() nach der Kompilat-Regel, Query-Objekt eines SQL-Ziels, uses-Schreibweise, Rahmenwerk
-source\uRdxScopeTable.pas         Kurzname -> qualifizierte Unit (Compiler-Reihenfolge der Scope-Liste)
+source\uRdxScopeTable.pas         Kurzname -> qualifizierte Unit (Compiler-Reihenfolge der Scope-Liste); Index der Projekt-Units TRdxProjectUnits (Gegenprobe, Netzpfade ungelesen)
 source\uRdxSimpleFixes.pas        Quick-Fixes SCA066/SCA072/SCA074/SCA075/SCA084/SCA085/SCA087/SCA126/SCA139 (reine Textlogik)
 source\uRdxRtlTypes.pas           Klassen und Interfaces der Delphi-Quellen (E27): Beweis fuer SCA084/SCA126 bei Fremdtypen; Liste uRdxRtlTypes.inc erzeugt von tools\gen-rtl-types.py (Repo-Wurzel)
 source\uRdxStructFixes.pas        Quick-Fixes SCA007 (uses-Eintrag), SCA168 (case-else), SCA101/SCA099 (begin..end), reine Textlogik
@@ -124,7 +124,7 @@ Details je Hilfe (Menuetexte en/de/fr, Sperren, Beispiel vorher/nachher):
 | Stelle zeigen | alle mit beschreibbarer Anweisung (Anker der Regel) | markiert den exakten Bereich im Editor. Nur Kontextmenue und Dock-Grid (`fakNavigate`), nicht die Gluehbirne. Ausgegraut, wenn der Bereich hinter Spalte 32767 bzw. hinter 32766 Bytes seiner Zeile liegt (die Editor-Markierung rechnet in SmallInt); liegt er beim Klick hinter dem Pufferende, meldet die Aktion das und markiert nichts |
 | Format() aus Verkettung bilden | SCA044 (`fixMode: auto`) | ersetzt die Terme durch `Format('...%s...', [..])` nach der Kompilat-Regel (unten). `IntToStr(n)` mit bekanntem Ganzzahltyp wird `%d`/`%u` mit `n`; `n.ToString` bleibt `%s`. Ein Char-Operand bekannten Typs geht als `string(c)` hinein, damit ein `#0` erhalten bleibt. `X := X + ...` wird `X := X + Format(...)`. Gesperrt bei SQL-Literalen, Kommentar oder Direktive im ersetzten Bereich, Variant-Anzeichen, Zahl-Operanden, Nicht-Unicode-Strings. Fehlt `System.SysUtils` (dort lebt `Format`), wird es als zweite Ersetzung in die uses-Klausel eingefuegt (unten) - der Menuetext sagt `+ uses System.SysUtils` bzw. `+ uses SysUtils` |
 | Parametrisierte Vorlage in die Zwischenablage | SCA003 (`fixMode: assisted`) | `uRdxSqlTemplate` (Charge S1, Nacharbeit SQc): ein Operand wird nur dort Parameter, wo SQL einen WERT erwartet - hinter `=`, `<>`, `<`, `>`, `LIKE`, `BETWEEN`/`AND`, als Element von `IN (..)`/`VALUES (..)`, hinter `LIMIT`/`OFFSET` nur `IntToStr(x)` (ein Text wird bei MySQL `'10'`; TOP/FIRST/SKIP nicht: dort nimmt SQL Server bzw. Access nur eine Zahl); ein Operand IN einem SQL-String macht den ganzen String zum Parameter (`LIKE ''%' + X + '%''` -> `LIKE :X`, Wert `'%' + X + '%'`; auch `N'..'`, ein `::typ` dahinter bleibt), `IntToStr(x)`/`QuotedStr(x)` binden `x`. Ausgegraut mit Grund: DDL/DCL (CREATE, ALTER, DROP, TRUNCATE, RENAME, COMMENT, GRANT, REVOKE) und prozedurale Bloecke (BEGIN, DECLARE, EXECUTE BLOCK) - fuer den REST des Texts, auch hinter `;` (Prozedur- und Triggerrumpf) -, Bezeichner-Positionen (FROM, INTO, UPDATE, ORDER BY, Spalten-/SELECT-Liste, Funktionsargument), ein nackter Operand in einer Join-Bedingung (`ON a.id = ' + X`), ein Operand, der an einem Bezeichner klebt oder in einem gequoteten Namen/Kommentar steht, ein Operand bzw. SQL-String allein in `IN (..)`/`VALUES (..)` (kann eine ganze Liste sein; `IntToStr`/`QuotedStr` sind EIN Wert), eine Anweisung, die nicht mit DML oder einer Klausel (WHERE, AND, ...) beginnt (`'ENGINE=' + X`, `PRAGMA`), ein `?` im Text, eine Kette ohne SQL-Literal (`FormatUtf8(..)`), "nur Konstanten". Konstanten (am Quelltext nachgewiesen: untypisiert, sichtbar - Unit ab der Deklaration, lokal bis zum Ende ihrer Routine, Klassenkonstante nur in den Methoden ihrer Klasse -, kein anderer Name gleich deklariert, auch keine Inline-Variable `var X := ..`/`for var X in ..`) werden mitgelesen, ihr NAME bleibt in der Vorlage (`'.. FROM ' + TBL + ' WHERE id = :Id'`); ebenso bleiben `sLineBreak` (beendet einen `--`-Kommentar) und bei `S := S + ..` der bisherige Text. Namen aus dem Operanden (`AColumnTypes` -> `:ColumnTypes`, `FId` -> `:Id`, `Edit1.Text` -> `:Edit1Text`, Kollision -> `2`, `3`, hoechstens 30 Zeichen; ein Oracle-/SQL-92-Wort bekommt ein `p` davor, z. B. `:pRows`; Umlaute -> `:p1`). Ziel Query-Objekt (`.SQL`, `.CommandText`): `ParamByName`-Zeilen - bei nachgewiesenem ADO-Objekt (`TADOQuery`/`TADOCommand`/`TADODataSet`/`TADOStoredProc`, `Data.Win.ADODB` in uses) `X.Parameters.ParamByName`; bei `Q.SQL.Add(..)` liest die Vorlage die frueheren `Q.SQL.Add`-Zeilen derselben Routine bis `Q.SQL.Clear`/`Q.SQL.Text :=` mit (Anweisungsart, DDL-Sperre; ihre und die spaeteren Platzhalter sind vergeben); String-Puffer: Zeilen `// Parameter binden: ParamByName(..).Value := ..;`; `X.ExecSQL(..)` nur mit FireDAC.Comp.Client in uses und X ueberall als TFDConnection deklariert: `X.ExecSQL('..:Id..', [Wert])`; jeder andere Aufruf bindet nichts - ausgegraut. Schreibt NIE in den Editor |
-| uses: X -> Scope.X | Fund in einer uses-Klausel, auch der Programm-Klausel einer .dpr/.lpr | qualifiziert den Eintrag, dazu "uses: alle n Eintraege qualifizieren". Mehrdeutiges (Forms: VCL/FMX) nur bei erkennbarem Rahmenwerk, nie bei gleichnamiger Projekt-Unit und nie, wenn die Reihenfolge System/Vcl der Projekt-Scopes entscheiden wuerde. Gesperrt, wenn eine uses-Klausel Compiler-Direktiven traegt oder in einem `$IFDEF`-Zweig liegt, und in einer Datei mit FPC-Weiche oder FPC-Modus (FPC 3.2 kennt keine Unit-Scopes). Macht der Eintrag (bzw. "alle") eine sortierte Klausel unsortiert, steht er gesperrt da (sonst kaeme ein neuer SCA142-Fund). Ein Umbau, keine Hilfe zum Fund (`fakRefactor`): nur Kontextmenue und Dock-Grid, nie die Gluehbirne, und je Menue nur einmal, auch wenn mehrere Funde auf der Zeile stehen |
+| uses: X -> Scope.X | Fund in einer uses-Klausel, auch der Programm-Klausel einer .dpr/.lpr | qualifiziert den Eintrag, dazu "uses: alle n Eintraege qualifizieren". Mehrdeutiges (Forms: VCL/FMX) nur bei erkennbarem Rahmenwerk, nie bei gleichnamiger Projekt-Unit und nie, wenn die Reihenfolge System/Vcl der Projekt-Scopes entscheiden wuerde. Projekt-Unit heisst: eine Datei des Namens neben der Unit, ein Modul eines Projekts der Gruppe oder eine Datei in einem Verzeichnis ihres Unit-Suchpfads (Konfiguration der aktiven Plattform) - nachgesehen EINMAL je Menueaufbau (`TRdxProjectUnits`, Review R1-02); liegt eines dieser Verzeichnisse auf einem Netzpfad (UNC, Netzlaufwerk), liest reDelphix dort nicht (Menueaufbau im Hauptthread) und sperrt jeden Eintrag mit Grund. Gesperrt, wenn eine uses-Klausel Compiler-Direktiven traegt oder in einem `$IFDEF`-Zweig liegt, und in einer Datei mit FPC-Weiche oder FPC-Modus (FPC 3.2 kennt keine Unit-Scopes). Macht der Eintrag (bzw. "alle") eine sortierte Klausel unsortiert, steht er gesperrt da (sonst kaeme ein neuer SCA142-Fund). Ein Umbau, keine Hilfe zum Fund (`fakRefactor`): nur Kontextmenue und Dock-Grid, nie die Gluehbirne, und je Menue nur einmal, auch wenn mehrere Funde auf der Zeile stehen |
 | FreeAndNil(X) verwenden | SCA085 | `X.Free;` + `X := nil;` -> `FreeAndNil(X);`. X muss in der Unit deklariert sein (keine Property, kein geerbtes Feld); gesperrt in einem `with`-Block. Fehlt `System.SysUtils`, kommt die uses-Einfuegung mit (unten) |
 | Assigned() statt Vergleich mit nil verwenden | SCA126 | schreibt ALLE nil-Vergleiche der einen Anweisung um, die auf der Fundzeile beginnt (`X = nil` -> `not Assigned(X)`). Zwei solche Anweisungen auf der Zeile heissen mehrdeutig; ein Operand vom Typ String, Variant, Menge, Array oder Prozedur/Ereignis sperrt, ebenso ein blosser Bezeichner ohne beweisbaren Typ (geerbt aus einer anderen Unit). Bewiesen ist ein Typ, den die Unit als Klasse, Interface oder Zeiger deklariert (auch ueber Alias) oder der eine Klasse/ein Interface der Delphi-Quellen ist (Entscheid E27, `uRdxRtlTypes`: RTL, VCL, FMX, Data, Winapi ... aus Delphi 12 und 13, erzeugt von `tools\gen-rtl-types.py`); ein Kundentyp aus einer anderen Unit sperrt - ein Funktionstyp dort riefe `= nil` auf, `Assigned()` nicht |
 | (TObject) aus der Klassendeklaration entfernen | SCA075 | `class(TObject)` -> `class` an der Spalte aus der Meldung (nur Zeilen, ohne Parser) |
@@ -532,6 +532,11 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
   geteilten Laeufe der Planer (Charge R8): Klammerabgleich (`MatchClose`,
   `AfterClose`), "genau ein Token auf der Zeile" (`OneTokenOnLine`),
   end-Bilanz (`BlockEnd`), `DirectiveInLines`.
+* `uTestRdxProjectUnits` - der Index der Projekt-Units fuer "uses: X ->
+  Scope.X" (`TRdxProjectUnits`, Review R1-02): Module (Pfad, Endung, gross/
+  klein egal), Dateien `.pas`/`.pp` im Verzeichnis, Suchpfad relativ/absolut/
+  mit `..`, Makro-Eintraege aussen vor, UNC und Netzlaufwerk (Attrappe)
+  ungelesen - dann ist jede Antwort offen (6 Tests, FPC-Pruefstand).
 * `uTestRdxQualifyUses` - die Planung von "uses: X -> Scope.X"
   (`TRdxRecipeRunner.QualifyUses`): Eintraege der Zeile, alle,
   Sortierung, FPC-Weiche, Direktiven, eigene Unit.
@@ -704,12 +709,12 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText
+bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText
 ```
 
-Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+B1-FA): `PASSED 558  FAILED 0` - 35 Testunits,
-davon 17 der Charge B1-FA (`uTestRdxSuppressTargets` 16, Review R1-01/R1-03;
-`uTestRdxBufferMath` 1, R1-04),
+Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+B1-FA): `PASSED 564  FAILED 0` - 36 Testunits,
+davon 23 der Charge B1-FA (`uTestRdxSuppressTargets` 16, Review R1-01/R1-03;
+`uTestRdxBufferMath` 1, R1-04; `uTestRdxProjectUnits` 6, R1-02),
 13 der Charge C0 (`uTestRdxText`, Sprache der Texte),
 davon 72 Tests fuer "Lokale Variable einfuehren", 12 fuer die Quick-Fixes der
 Charge H2, 25 der Charge H3b (SCA164 und Bausteine 13 in
@@ -732,7 +737,7 @@ umgezogen), 20 der Charge Q14 (`uTestRdxMagicFix`) und 25 der Charge SQc
 Der Pruefstand uebersetzt die Core-Units des Quellstellen-Dienstes
 (`uRefactor*`, `uSourcePlaces`, `uFindingActions`, `ScanCodeLine` aus
 `uDetectorUtils`) mit Stubs fuer Parser und Resolver sowie die Textlogik
-des Moduls (`uRdxRecipes`, `uRdxScopeTable`, `uRdxBufferMath`,
+des Moduls (`uRdxRecipes`, `uRdxScopeTable` samt `TRdxProjectUnits`, `uRdxBufferMath`,
 `uRdxSuppress`, `uRdxSimpleFixes`, `uRdxRtlTypes` samt der erzeugten
 `uRdxRtlTypes.inc`, `uRdxStructFixes`, `uRdxLineFixes`, `uRdxRaiseFixes`,
 `uRdxDeclFixes`, `uRdxFlowFixes`, `uRdxRoutineFixes`, `uRdxCleanupFixes`, `uRdxTryFixes`,
@@ -830,3 +835,19 @@ Probe.
   gibt dort also keine Umformung.
 * In einem `with`-Block gilt kein Name als bewiesen (Kompilat-Regel oben),
   und `FreeAndNil(X)` sowie die Assert-Meldung werden dort nicht angeboten.
+* "uses: X -> Scope.X" kennt nur die Units des PROJEKTS (Datei neben der
+  Unit, Module der Gruppe, Unit-Suchpfad ohne Makro-Eintraege). Bringt eine
+  Bibliothek im Bibliotheks- oder Browsing-Pfad der IDE oder hinter einem
+  `$(..)`-Eintrag des Projekts (`$(DMVC)`, `$(DUnitX)`, `$(Kastri)` ...) eine
+  Unit mit dem Kurznamen einer RTL-Unit mit (JEDI-DirectX `Direct3D9`,
+  `pngimage`, die alte Borland-`ZLib`; im Korpus 54 Dateien mit 45 solchen
+  Namen), wird der Eintrag trotzdem angeboten - der Compiler faende vorher
+  die Bibliothek. Offen (Review R1-07, ohne IDE nicht entscheidbar): ein
+  IDE-Test mit einer Bibliothek nur im Library Path und eine Uebersetzung
+  vor und nach dem Umbau; dann den Pfad der IDE in `TRdxProjectUnits`
+  aufnehmen (Netzpfade wie dort gesperrt).
+* "Stelle zeigen" nimmt Cursor, Block und Spaltenumrechnung seit Review
+  R1-06 aus EINER Ansicht (der obersten des Puffers, sonst der ersten);
+  bis dahin kam der Cursor aus der obersten, der Block aus der ersten. Mit
+  einem Editorfenster ist das dieselbe Ansicht wie vorher; mit zwei
+  Fenstern auf derselben Unit (View > New Edit Window) ist es ungetestet.

@@ -35,9 +35,11 @@ begin
   Result := TPath.Combine(TPath.GetTempPath, 'reDelphix.log');
 end;
 
-// Die eine Stelle, die an DebugView geht.
+// Die eine Stelle, die an DebugView geht - beabsichtigt (s. Kopf): ohne
+// Debugger und ohne Schreibrecht im TEMP bleibt nur dieser Kanal.
 procedure DebugOut(const AMsg: string);
 begin
+  // noinspection DebugOutput
   OutputDebugString(PChar('reDelphix: ' + AMsg));
 end;
 
@@ -61,7 +63,11 @@ var
   Line : string;
   Path : string;
 begin
-  Line := FormatDateTime('yyyy-mm-dd hh:nn:ss.zzz', Now) + '  ' + AMsg;
+  // Invariant: ':' im Muster ist sonst der Zeittrenner der Systemeinstellung
+  // - der Zeitstempel soll auf jedem Rechner gleich aussehen (Review R1-05,
+  // SCA128).
+  Line := FormatDateTime('yyyy-mm-dd hh:nn:ss.zzz', Now,
+    TFormatSettings.Invariant) + '  ' + AMsg;
   DebugOut(AMsg);
   try
     Path := RdxLogPath;

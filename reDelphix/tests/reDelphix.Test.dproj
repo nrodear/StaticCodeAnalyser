@@ -152,6 +152,7 @@
         <DCCReference Include="uTestRdxDetectorKit.pas"/>
         <DCCReference Include="uTestRdxCodeMap.pas"/>
         <DCCReference Include="uTestRdxQualifyUses.pas"/>
+        <DCCReference Include="uTestRdxProjectUnits.pas"/>
         <DCCReference Include="uTestRdxFixTable.pas"/>
         <DCCReference Include="uTestRdxIntroPlan.pas"/>
         <DCCReference Include="uTestRdxIntroRefuse.pas"/>
