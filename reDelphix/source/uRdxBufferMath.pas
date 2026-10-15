@@ -59,7 +59,7 @@ type
   // Die erste abweichende Stelle zweier Texte samt Umfeld in beiden - das
   // Detail einer Abweichung (FirstMismatch).
   TRdxMismatch = record
-    At       : Integer;   // 1-basiert
+    Position : Integer;   // 1-basiert
     Expected : string;    // Umfeld im erwarteten Text, sichtbar (Visible)
     Actual   : string;    // Umfeld im gefundenen Text, sichtbar (Visible)
   end;
@@ -314,7 +314,7 @@ begin
   while (i <= n) and (AExpected[i] = AActual[i]) do Inc(i);
   From := i - BEFORE;
   if From < 1 then From := 1;
-  Result.At       := i;
+  Result.Position := i;
   Result.Expected := Visible(Copy(AExpected, From, CTX));
   Result.Actual   := Visible(Copy(AActual, From, CTX));
 end;
@@ -363,7 +363,7 @@ begin
   if Actual <> AEdit.Expected then
   begin
     M := FirstMismatch(AEdit.Expected, Actual);
-    AError := _(S_DIFFERS_AT, [M.At, M.Expected, M.Actual]);
+    AError := _(S_DIFFERS_AT, [M.Position, M.Expected, M.Actual]);
     Exit;
   end;
   // 2) Byte-Offsets aus demselben Puffer; der Ausschnitt muss den
@@ -384,7 +384,7 @@ begin
   if Slice <> AEdit.Expected then
   begin
     M := FirstMismatch(AEdit.Expected, Slice);
-    AError := _(S_BYTES_DIFFER_AT, [M.At, M.Expected, M.Actual]);
+    AError := _(S_BYTES_DIFFER_AT, [M.Position, M.Expected, M.Actual]);
     Exit;
   end;
   AOut.NewText := StringReplace(AEdit.NewText, #10, AView.Eol, [rfReplaceAll]);

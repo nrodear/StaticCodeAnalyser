@@ -235,7 +235,7 @@ begin
       // fertigen deutschen DescribeMismatch).
       M := FirstMismatch(AEdit.Expected, Slice);
       Exit(Format('Byte-Bereich weicht ab (ab Zeichen %d: erwartet "%s", '
-        + 'Editor "%s")', [M.At, M.Expected, M.Actual]));
+        + 'Editor "%s")', [M.Position, M.Expected, M.Actual]));
     end;
   finally
     SL.Free;
