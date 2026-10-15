@@ -58,7 +58,8 @@ type
     // als zweite Ersetzung ein ';' dahinter - sonst bande das else an ein
     // offenes if ('1: if B then DoA' + 'else'). Keine Hilfe bei einer
     // Direktive zwischen case und end, bei einem else oder (FPC) otherwise
-    // hinter ';' und bei einem case ohne Zweige.
+    // hinter ';', bei einem case ohne Zweige und bei einem case, das keine
+    // Anweisung ist - im Variantenteil eines Records (CaseContextReason).
     class function CaseElse(AMap: TRdxCodeMap; ALine: Integer;
       const AStatement: string; out AEdits: TArray<TRdxEdit>;
       out AReason: string): Boolean; static;
@@ -177,6 +178,13 @@ const
   // Vor 'on' eines Handlers steht ';' oder except - sonst ist On ein
   // Bezeichner ('while not On do').
   HANDLER_PREV: array[0..1] of string = (';', 'except');
+  // Rueckwaerts vor einem case auf oberster Ebene: hier beginnt der
+  // Abschnitt einer Unit, in dem Anweisungen stehen (CaseContextReason;
+  // begin/try/repeat/asm/case zaehlen als Block).
+  STATEMENT_SECTIONS: array[0..1] of string = ('initialization',
+    'finalization');
+  R_CASE_IN_RECORD = 'das case steht im Variantenteil eines Records - kein '
+    + 'case-Statement (Fund verschoben? Datei neu pruefen)';
   R_BRANCH_MOVED = 'kein then/else/do an der gemeldeten Stelle - Zeile '
     + 'verschoben? Datei neu pruefen';
   R_NO_ELSE_OWNER = 'kein if, case oder except zum else gefunden';
@@ -580,6 +588,82 @@ begin
   AEdits[High(AEdits)] := E;
 end;
 
+// CaseContextReason, ein Schluesselwort rueckwaerts: rsFound - das case ist
+// eine Anweisung; rsStop - ein record (Variantenteil); sonst rsGoOn, ganze
+// Bloecke in ABlock gezaehlt.
+function CaseBlockStep(const T: TRdxToken; var ABlock: Integer): TRdxStep;
+begin
+  Result := rsGoOn;
+  if T.Low = 'record' then
+    Result := rsStop
+  else if (T.Low = 'end') or (T.Low = 'until') then
+    Inc(ABlock)
+  else if IsEndOpener(T.Low) or (T.Low = 'repeat') then
+  begin
+    if ABlock = 0 then
+      Result := rsFound
+    else
+      Dec(ABlock);
+  end
+  else if (ABlock = 0) and InList(T.Low, STATEMENT_SECTIONS) then
+    Result := rsFound;
+end;
+
+// CaseContextReason, ein Token rueckwaerts: eine offene '(' ist die
+// Feldliste eines Variantenzweigs (rsStop); Schluesselwoerter zaehlt
+// CaseBlockStep.
+function CaseScanStep(const T, APrev: TRdxToken; var ABlock,
+  AParen: Integer): TRdxStep;
+begin
+  Result := rsGoOn;
+  if T.Low = ')' then
+    Inc(AParen)
+  else if T.Low = '(' then
+  begin
+    Dec(AParen);
+    if AParen < 0 then
+      Result := rsStop;
+  end
+  else if IsKeywordAfter(T, APrev) then
+    Result := CaseBlockStep(T, ABlock);
+end;
+
+// Ist das case ACase eine Anweisung? Der Detektor meldet nur case-
+// Anweisungen; ein verschobener Fund (Zeilen eingefuegt, die Birne auf
+// einer alten Zeile) kann aber auf dem Variantenteil eines Records landen
+// - das else kaeme dann in die Typdeklaration und uebersetzte nicht
+// (Review R3-04, Charge FC). Rueckwaerts bis zum innersten offenen Block,
+// ganze Bloecke (end..begin/case/try/asm, until..repeat) uebersprungen: ein
+// offenes begin/try/repeat/asm/case oder initialization/finalization auf
+// oberster Ebene heisst Anweisung (''); ein 'record' - auf jeder Tiefe: ein
+// case in seinem Variantenteil hat kein eigenes end, die Bilanz stimmt dort
+// nicht (wie TRdxElseScan.StepWord) - oder eine offene '(' (Feldliste eines
+// Variantenzweigs, 'case Tag of 0: (case ..') heisst Variantenteil. Ohne
+// offenen Block bis zum Dateianfang (ein Fragment) ist die Lage unklar -
+// auch das sperrt. '' oder der Grund.
+function CaseContextReason(AMap: TRdxCodeMap; const ACase: TRdxToken): string;
+var
+  T, P         : TRdxToken;
+  Block, Paren : Integer;
+  Step         : TRdxStep;
+begin
+  Block := 0;
+  Paren := 0;
+  T := Before(AMap, ACase);
+  while T.Low <> '' do
+  begin
+    P := Before(AMap, T);
+    Step := CaseScanStep(T, P, Block, Paren);
+    if Step = rsFound then
+      Exit('');
+    if Step = rsStop then
+      Exit(R_CASE_IN_RECORD);
+    T := P;
+  end;
+  Result := 'kein Block um das case gefunden (Fragment?) - ob es eine '
+    + 'Anweisung ist, ist unklar';
+end;
+
 class function TRdxStructFixes.CaseElse(AMap: TRdxCodeMap; ALine: Integer;
   const AStatement: string; out AEdits: TArray<TRdxEdit>;
   out AReason: string): Boolean;
@@ -596,6 +680,8 @@ begin
     AReason := MatchingEnd(AMap, CaseTok, EndTok, LastTok);
   if (AReason = '') and (LastTok.Low = 'of') then
     AReason := 'das case hat keine Zweige';
+  if AReason = '' then
+    AReason := CaseContextReason(AMap, CaseTok);
   if (AReason = '') and DirectiveBefore(AMap, CaseTok.Line, EndTok) then
     AReason := 'Compiler-Direktive im case - ein Zweig koennte die '
       + 'end-Bilanz verschieben';

@@ -24,6 +24,9 @@ type
     [Test] procedure Sca066_OwnFunction_Refused;
     // Gegen-Review 2026-10-10: welche Namen der Laeufer pruefen muss.
     [Test] procedure Sca066_CalleeAndTarget;
+    // Review R3-02 (Charge FC): eine Property mit Prozedurtyp - auch hinter
+    // einem Pfad - bekommt keine Hilfe; Felder und Methoden schon.
+    [Test] procedure Sca066_PropertyCall_Refused;
     // ---- SCA072 ----
     [Test] procedure Sca072_Variants;
     [Test] procedure Sca072_Refusals;
@@ -372,6 +375,68 @@ begin
     Assert.IsTrue(F.Text <> '', CASES[i, 0] + ': ' + F.Reason);
     Assert.AreEqual(CASES[i, 1], F.Name, 'Callee: ' + CASES[i, 0]);
     Assert.AreEqual(CASES[i, 2], F.Target, 'Target: ' + CASES[i, 0]);
+  end;
+end;
+
+// Der Dialog des Pruefer-Falls R3-02 (Alcinoe.FMX.Dialogs.pas:1767/1768):
+// Properties mit 'reference to' bzw. 'of object' und ihre Felder; ARoutine
+// ist der Kopf der Routine, deren einzige Anweisung ALine ist (Zeile 18).
+function DialogUnit(const ARoutine, ALine: string): string;
+begin
+  Result := Join(['unit u;', 'interface', 'type',
+    '  TRefProc = reference to procedure;',
+    '  TObjProc = procedure of object;',
+    '  TDlg = class',
+    '  private',
+    '    FRefProc: TRefProc;',
+    '    FObjProc: TObjProc;',
+    '  public',
+    '    property RefProc: TRefProc read FRefProc write FRefProc;',
+    '    property ObjProc: TObjProc read FObjProc;',
+    '    procedure Run;',
+    '  end;',
+    'implementation',
+    ARoutine,
+    'begin',
+    ALine,
+    'end;',
+    'end.']);
+end;
+
+procedure TTestRdxExprFixes.Sca066_PropertyCall_Refused;
+const
+  SHOW = 'procedure Show(Dlg: TDlg);';
+  // Property hinter einem Pfad ('reference to', 'of object') bzw. als
+  // blosser Name in einer Methode der Klasse.
+  REFUSED: array[0..2, 0..1] of string = (
+    (SHOW, '  if Assigned(Dlg.RefProc) then Dlg.RefProc()'),
+    (SHOW, '  Dlg.ObjProc();'),
+    ('procedure TDlg.Run;', '  RefProc();'));
+  // Feld mit Prozedurtyp (Delphi ruft eine Variable ohne () auf - DocWiki,
+  // RTL 'FProc;') und Methode: weiter Hilfen.
+  OFFERED: array[0..1, 0..1] of string = (
+    ('  Dlg.FRefProc();', '  Dlg.FRefProc;'),
+    ('  Dlg.Run();', '  Dlg.Run;'));
+var
+  i : Integer;
+  F : TFixResult;
+begin
+  // Bis Charge FC lieferte der Planer hier 'OK callee= target=' - der
+  // Laeufer prueft dann nichts mehr (CallReason), die Zeile wurde
+  // '.. then Dlg.RefProc', und ob Delphi das aufruft, ist nicht belegt.
+  for i := 0 to High(REFUSED) do
+  begin
+    F := Fix('E', DialogUnit(REFUSED[i, 0], REFUSED[i, 1]), 18,
+      Pos('()', REFUSED[i, 1]));
+    Assert.AreEqual('', F.Text, REFUSED[i, 1]);
+    Assert.IsTrue(Pos('als Property deklariert', F.Reason) > 0,
+      REFUSED[i, 1] + ': ' + F.Reason);
+  end;
+  for i := 0 to High(OFFERED) do
+  begin
+    F := Fix('E', DialogUnit(SHOW, OFFERED[i, 0]), 18, Pos('()', OFFERED[i, 0]));
+    Assert.AreEqual(DialogUnit(SHOW, OFFERED[i, 1]), F.Text,
+      OFFERED[i, 0] + ': ' + F.Reason);
   end;
 end;
 

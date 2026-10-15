@@ -38,6 +38,9 @@ type
     [Test] procedure Sca168_LastArmWithoutSemicolon;
     [Test] procedure Sca168_IndentAndEscapedEnd;
     [Test] procedure Sca007_OwnLineAndSkippedEntry;
+    // Review R3-04 (Charge FC): ein verschobener Fund auf dem Variantenteil
+    // eines Records bekommt kein else.
+    [Test] procedure Sca168_VariantRecord_Refused;
   end;
 
 implementation
@@ -390,6 +393,59 @@ begin
   Assert.AreEqual('', FixUses(Src, Clause(3, [Entry(3, 6, 'A'), Entry(3, 12, 'C')]),
     0, R));
   Assert.IsTrue(Pos('mehr als dieser Eintrag', R) > 0, R);
+end;
+
+// Eine Unit, deren Typabschnitt ALines traegt (ab Zeile 4).
+function InTypes(const ALines: array of string): string;
+begin
+  Result := Join(['unit u;', 'interface', 'type']) + #13#10 + Join(ALines)
+    + #13#10 + Join(['implementation', 'end.']);
+end;
+
+procedure TTestRdxStructFixes.Sca168_VariantRecord_Refused;
+var
+  R, Src : string;
+begin
+  // Fixture a04 des Pruefers: bis Charge FC schloss das end des Records
+  // die Bilanz, und das else landete in der Typdeklaration ('1: (B: Byte);
+  // else end;' - uebersetzt nicht).
+  Assert.AreEqual('', FixCase(InTypes(['  TRec = record', '    case Integer of',
+    '      0: (A: Integer);', '      1: (B: Byte);', '  end;']), 5, '', R),
+    'Variantenteil');
+  Assert.IsTrue(Pos('Variantenteil', R) > 0, R);
+  // Mit Feld davor, Tag-Feld und packed - die raise-Variante ebenso.
+  Assert.AreEqual('', FixCase(InTypes(['  TRec = packed record', '    Kind: Byte;',
+    '    case Tag: Integer of', '      0: (A: Integer);', '  end;']), 6,
+    RAISE_UNHANDLED, R), 'packed, Tag-Feld, raise');
+  Assert.IsTrue(Pos('Variantenteil', R) > 0, R);
+  // Geschachtelter Variantenteil in der Feldliste eines Zweigs.
+  Assert.AreEqual('', FixCase(InTypes(['  TRec = record', '    case Integer of',
+    '      0: (A: Integer;', '        case B: Byte of', '          1: (C: Byte));',
+    '  end;']), 7, '', R), 'geschachtelt');
+  Assert.IsTrue(Pos('Variantenteil', R) > 0, R);
+  // Gegenproben: case-Anweisungen bleiben Hilfen - im initialization-
+  // Abschnitt, im Arm eines aeusseren case, im Rumpf einer anonymen
+  // Methode in einem Aufruf und hinter einem lokalen Record-Typ mit
+  // Variantenteil (dessen case bleibt gesperrt).
+  Assert.AreEqual(Join(['unit u;', 'interface', 'implementation',
+      'initialization', '  case X of', '    1: A;', '  else', '  end;', 'end.']),
+    FixCase(Join(['unit u;', 'interface', 'implementation', 'initialization',
+      '  case X of', '    1: A;', '  end;', 'end.']), 5, '', R), R);
+  Assert.AreEqual(InProc(['  case X of', '    1: case Y of', '         2: A;',
+      '       else', '       end;', '  end;']),
+    FixCase(InProc(['  case X of', '    1: case Y of', '         2: A;',
+      '       end;', '  end;']), 6, '', R), R);
+  Assert.AreEqual(InProc(['  Run(procedure', '    begin', '      case X of',
+      '        1: A;', '      else', '      end;', '    end);']),
+    FixCase(InProc(['  Run(procedure', '    begin', '      case X of',
+      '        1: A;', '      end;', '    end);']), 7, '', R), R);
+  Src := Join(['unit u;', 'implementation', 'procedure P;', 'type',
+    '  TR = record', '    case Integer of', '      0: (A: Integer);', '  end;',
+    'begin', '  case X of', '    1: A;', '  end;', 'end;', 'end.']);
+  Assert.AreEqual(StringReplace(Src, '    1: A;'#13#10'  end;',
+      '    1: A;'#13#10'  else'#13#10'  end;', []), FixCase(Src, 10, '', R), R);
+  Assert.AreEqual('', FixCase(Src, 6, '', R), 'lokaler Record');
+  Assert.IsTrue(Pos('Variantenteil', R) > 0, R);
 end;
 
 initialization

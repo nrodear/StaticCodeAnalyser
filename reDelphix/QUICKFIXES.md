@@ -448,6 +448,7 @@ end;
 
 - als Argument oder Teil eines Ausdrucks (etwa bei einer Überladung mit `TFunc`), bei `Arr[0]()` und `F()()`
 - der Name ist eine Variable (Prozedurvariable) oder heißt wie ein Ereignis (`OnIdle()`)
+- die Unit deklariert den Namen als Property, auch hinter einem Pfad (`Dlg.RefProc()`) – ob Delphi eine Property mit Prozedurtyp ohne () aufruft, ist ohne Delphi-12-Probe nicht belegt; eine Property einer anderen Unit mit unauffälligem Namen sieht die Sperre nicht
 - in der eigenen Funktion, im `with`-Block, in Dateien mit FPC-Weiche oder FPC-Modus
 
 **Beispiel**
@@ -1383,6 +1384,7 @@ end;
 
 - rückwärts kommt vor dem eigenen Handler `on E: T do` ein `except`/`finally` (im except eines inneren try würfe `raise;` die innere Exception)
 - der Handler einer anderen Variablen, eine anonyme Methode oder ein `with` dazwischen (der Name könnte ein Member sein)
+- E wird zwischen Handler und raise neu zugewiesen (`E := EWrapped.Create(..)`): `raise E` wirft dann das neue Objekt, `raise;` die ursprüngliche Exception
 
 **Beispiel**
 
@@ -1469,7 +1471,7 @@ Nachher:
 
 - zwei solche Anweisungen auf der Zeile (mehrdeutig)
 - ein Operand vom Typ String, Variant, Menge, Array oder Prozedur/Ereignis
-- ein Operand ohne beweisbaren Typ – bewiesen sind Klassen, Interfaces und Zeiger der Unit und Klassen/Interfaces der Delphi-Quellen (E27); ein Kundentyp aus einer anderen Unit sperrt
+- ein Operand ohne beweisbaren Typ – bewiesen sind Klassen, Interfaces und Zeiger der Unit und Klassen/Interfaces der Delphi-Quellen (E27); ein Kundentyp aus einer anderen Unit sperrt, ein Typ in einer generischen Klasse zählt mit seinem eigenen Namen (`TList<Integer>.TEmptyFunc` ist nicht TList)
 
 **Beispiel**
 
@@ -1859,6 +1861,7 @@ end;
 - eine Direktive zwischen `case` und `end`
 - schon ein `else` oder (FPC) `otherwise` hinter `;`
 - ein case ohne Zweige, zwei `case` auf der Zeile
+- ein case, das keine Anweisung ist: der Variantenteil eines Records (ein verschobener Fund) oder ein case ohne umschließenden Block (Fragment)
 - Eintrag 2: in Dateien mit FPC-Weiche oder FPC-Modus (FPC kennt EProgrammerError nicht)
 
 **Beispiel (Eintrag 1)**

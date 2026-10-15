@@ -33,6 +33,8 @@ type
     // einer Zeile, Kommentar im Rumpf, Kopf ueber zwei Zeilen.
     [Test] procedure Review_Refusals;
     [Test] procedure Review_Forms;
+    // Review R3, verpasst (Charge FC): 'E := ..' zwischen Handler und raise.
+    [Test] procedure Sca122_BoundReassigned_Refused;
   end;
 
 implementation
@@ -342,6 +344,32 @@ begin
   Assert.AreEqual(InImpl(['end; procedure P;', 'begin', '  ' + INTENT_LINE,
       'end;']),
     Fix(rkEmpty, InImpl(['end; procedure P;', 'begin', 'end;']), 4, '', R), R);
+end;
+
+procedure TTestRdxRaiseFixes.Sca122_BoundReassigned_Refused;
+var
+  R : string;
+begin
+  // Die Probe des Pruefers (onvar.pas, FPC 3.2.2 -Mdelphi): mit 'raise E'
+  // kommt aussen 'ersetzt' an, mit 'raise;' 'innen' - eine andere
+  // Exception, nicht nur ein anderer Stack-Trace. Bis Charge FC bot die
+  // Hilfe 'raise;' an (bedeutungsgleich gekennzeichnet).
+  Assert.AreEqual('', Fix(rkReRaise, InProc(['  try', '    X;', '  except',
+    '    on E: Exception do', '    begin',
+    '      E := Exception.Create(''ersetzt'');', '      raise E;', '    end;',
+    '  end;']), 12, ReRaiseMsg('E'), R));
+  Assert.IsTrue(Pos('neu zugewiesen', R) > 0, R);
+  // Auch in einem Block zwischen Handler und raise, Gross/klein egal.
+  Assert.AreEqual('', Fix(rkReRaise, InProc(['  try X; except on E: EFoo do '
+    + 'begin if A then begin e := EBar.Create(''x''); end; raise E; end; end;']),
+    6, ReRaiseMsg('E'), R));
+  Assert.IsTrue(Pos('neu zugewiesen', R) > 0, R);
+  // Gegenprobe: ein Member von E oder ein gleichnamiges Feld eines anderen
+  // Objekts aendert E nicht - die Hilfe bleibt.
+  Assert.AreEqual(InProc(['  try X; except on E: EFoo do begin E.Message := '
+      + '''x''; Self.E := nil; raise; end; end;']),
+    Fix(rkReRaise, InProc(['  try X; except on E: EFoo do begin E.Message := '
+      + '''x''; Self.E := nil; raise E; end; end;']), 6, ReRaiseMsg('E'), R), R);
 end;
 
 initialization

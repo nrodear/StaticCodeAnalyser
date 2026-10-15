@@ -159,7 +159,9 @@ type
     // Record- oder Objektrumpfs deklariert ('FOwner: TObject;' auf
     // Klammertiefe 0 - nicht Parameter, lokale Variable, Property, Methode
     // oder Konstante): der Typname klein ('tobject'; 'System.TObject' ->
-    // 'tobject', 'TList<T>' -> 'tlist'), '^' fuer einen Zeigertyp, bei
+    // 'tobject', 'TList<T>' -> 'tlist', ein Typ in einer generischen Klasse
+    // nach seinem eigenen Namen: 'TList<Integer>.TEnumerator' ->
+    // 'tenumerator'), '^' fuer einen Zeigertyp, bei
     // procedure/function/reference/array/set/string das Wort selbst. ''
     // ohne Feld oder bei Feldern dieses Namens mit VERSCHIEDENEN Typen
     // (mehrdeutig). Ein gleichnamiges Feld einer ANDEREN Klasse derselben
@@ -187,10 +189,19 @@ type
     // prueft der Aufrufer (APlan.Target): ist er prozedural, liest Delphi
     // 'Foo' als Zeiger. Dazu Deklarationen ('procedure Foo();'). Als
     // Argument (Ueberladung mit TFunc, Assigned(Foo())) koennte der Name
-    // als Zeiger gelten; ein Ereignisname ('OnIdle()') ist eine
-    // Methodenreferenz, die ohne () nicht aufgerufen wird - dort und in der
-    // eigenen Funktion keine Hilfe. Ob ein blosser Name eine Variable ist,
-    // prueft der Aufrufer (APlan.Callee).
+    // als Zeiger gelten - keine Hilfe, ebenso in der eigenen Funktion.
+    // PROPERTY MIT PROZEDURTYP (Review R3-02, Charge FC): dass Delphi eine
+    // VARIABLE mit Prozedurtyp ohne () aufruft, belegen DocWiki (Procedural
+    // Types) und RTL ('FProc;' in System.Threading); fuer eine Property -
+    // gelesen ueber ein Feld oder einen Getter, 'reference to' oder 'of
+    // object' - fehlt der Beleg (FPC -Mdelphi ruft sie auf, Delphi 12 ist
+    // ungeprueft). Darum keine Hilfe bei einem Namen, den die Unit als
+    // Property deklariert (auch hinter einem Pfad: 'Dlg.RefProc()') oder der
+    // wie ein Ereignis heisst ('OnIdle()', 'FOnIdle()' - meist eine Property
+    // einer anderen Unit). GRENZE: eine Property einer anderen Unit mit
+    // unauffaelligem Namen sieht das nicht; das klaert erst eine Delphi-12-
+    // Probe ('Obj.Prop;' je Feld/Getter und reference to/of object). Ob ein
+    // blosser Name eine Variable ist, prueft der Aufrufer (APlan.Callee).
     class function EmptyArgs(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out APlan: TRdxCallEdit;
       out AReason: string): Boolean; static;
@@ -434,11 +445,15 @@ begin
   AReason := '';
   Col := ColumnFromMessage(AMessage);
   L := AMap.Raw(ALine);
-  if (Col < 1) or (Col + 4 > Length(L)) then
+  if Col < 1 then
   begin
-    AReason := 'Spalte fehlt in der Meldung';
+    AReason := R_NO_COLUMN;
     Exit;
   end;
+  // Auch eine Spalte hinter dem Zeilenende: die Zeile hat sich seit dem
+  // Scan geaendert - die Meldung hat ihre Spalte (bis Charge FC hiess es
+  // dort 'Spalte fehlt in der Meldung', Review R3, verpasst).
+  // MatchClassTObject liest dort ein leeres Wort.
   if not MatchClassTObject(L, Col, CloseCol) then
   begin
     AReason := R_TOBJECT_MOVED;
@@ -1211,9 +1226,21 @@ begin
      or ((Next.Low <> '') and not InList(Next.Low, CALL_ENDS)) then
     Exit(R_IN_EXPRESSION);
   Name := Copy(AMap.Raw(AName.Line), AName.Col, AName.Len);
+  // Property mit Prozedurtyp: ob Delphi sie ohne () aufruft, ist nicht
+  // belegt (s. EmptyArgs; bis Charge FC hiess es hier, eine
+  // Methodenreferenz rufe Delphi ohne () nicht auf - fuer Variablen
+  // widerlegt die DocWiki das).
   if HasCapPrefix(Name, 'On') or HasCapPrefix(Name, 'FOn') then
-    Exit(Format('%s sieht nach Ereignis aus - eine Methodenreferenz ruft '
-      + 'Delphi ohne () nicht auf', [Name]));
+    Exit(Format('%s sieht nach Ereignis aus - ob Delphi eine Ereignis-'
+      + 'Property ohne () aufruft, ist nicht belegt', [Name]));
+  // Ueber den Namen, nicht den Typ: der Pfad davor ist ohne Parser
+  // unbekannt. Eine gleichnamige Methode einer anderen Klasse verliert so
+  // ihre Hilfe (Korpus ab8: 1 von 6080 Angeboten, 'Binarizer.BlackMatrix()'
+  // neben 'property BlackMatrix: TBitMatrix') - lieber keine Hilfe.
+  if TRdxSimpleFixes.DeclaresProperty(AMap, Name) then
+    Exit(Format('%s ist in dieser Unit als Property deklariert - meint der '
+      + 'Aufruf sie, ist nicht belegt, ob Delphi eine Property mit '
+      + 'Prozedurtyp ohne () aufruft', [Name]));
   if (Start.Col = AName.Col) and (Start.Line = AName.Line)
      and InsideOwnFunction(AMap, AName.Line, AName.Low) then
     Exit(Format('%s() in der Funktion %s - ohne Klammern haengt die Bedeutung '
@@ -2243,15 +2270,26 @@ end;
 
 // Der Typ hinter dem ':' AColon als Wort fuer die Typpruefungen (s.
 // FieldTypeOf): qualifiziert das letzte Glied, generisch der Name vor '<'.
-// Ein zweiter Treffer mit anderem Typ macht das Ergebnis mehrdeutig.
+// Ein Typ IN einer generischen Klasse ('TList<Integer>.TEmptyFunc') ist
+// das Glied hinter den Typargumenten - bis Charge FC kam hier der aeussere
+// Name heraus ('tlist'), und die Namensregel (NilOperandRisk) sah
+// 'temptyfunc' nie (Review R6-13, verpasst). Ein zweiter Treffer mit
+// anderem Typ macht das Ergebnis mehrdeutig.
 procedure TakeFieldType(AMap: TRdxCodeMap; const AColon: TRdxToken;
   var AScan: TFieldScan);
 var
-  K : TRdxToken;
+  K, N : TRdxToken;
 begin
   K := After(AMap, AColon);
-  while (K.Low <> '') and (After(AMap, K).Low = '.') do
-    K := After(AMap, After(AMap, K));
+  while K.Low <> '' do
+  begin
+    N := After(AMap, K);
+    if N.Low = '<' then
+      N := AfterClose(AMap, N);   // hinter den Typargumenten
+    if N.Low <> '.' then
+      Break;
+    K := After(AMap, N);
+  end;
   if K.Low = '' then Exit;
   if AScan.Found = '' then
     AScan.Found := K.Low
