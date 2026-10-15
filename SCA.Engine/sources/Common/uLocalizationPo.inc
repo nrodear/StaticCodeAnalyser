@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2517 Zeilen, 83843 Bytes
-  CPoLines_de: array[0..2516] of string = (
+  // i18n\de.po - 2558 Zeilen, 85321 Bytes
+  CPoLines_de: array[0..2557] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2531,7 +2531,48 @@ const
     'msgstr "kein Kopf %s"',
     '',
     'msgid "%d headers %s"',
-    'msgstr "%d K'#$00F6'pfe %s"'
+    'msgstr "%d K'#$00F6'pfe %s"',
+    '',
+    '# reDelphix G6 (uRdxFixRunner, uRdxRecipeRunner, uRdxRecipes)',
+    '',
+    'msgid "operand ''%s'': not a string (%s)"',
+    'msgstr "Operand ''%s'': kein String (%s)"',
+    '',
+    'msgid "operand ''%s'': not a string"',
+    'msgstr "Operand ''%s'': kein String"',
+    '',
+    'msgid "operand ''%s'': ansichar - Format converts without a code page"',
+    'msgstr "Operand ''%s'': ansichar - Format wandelt ohne Codepage"',
+    '',
+    'msgid "operand ''%s'': Ansi result - Format returns UnicodeString"',
+    'msgstr "Operand ''%s'': Ansi-Ergebnis - Format liefert UnicodeString"',
+    '',
+    'msgid "operand ''%s'': %s - Format returns UnicodeString"',
+    'msgstr "Operand ''%s'': %s - Format liefert UnicodeString"',
+    '',
+    'msgid "operand ''%s'': Variant possible (Null/number: the original raises, Format does not)"',
+    'msgstr "Operand ''%s'': Variant m'#$00F6'glich (Null/Zahl: Original wirft, Format nicht)"',
+    '',
+    'msgid "operand ''%s'': not a simple operand"',
+    'msgstr "Operand ''%s'': kein einfacher Operand"',
+    '',
+    'msgid "the chain already contains Format()"',
+    'msgstr "Kette enth'#$00E4'lt schon Format()"',
+    '',
+    'msgid "no literal in the chain"',
+    'msgstr "kein Literal in der Kette"',
+    '',
+    'msgid "SQL text: rewrite blocked (SCA003)"',
+    'msgstr "SQL-Text: Umformung gesperrt (SCA003)"',
+    '',
+    'msgid "operand ''%s'': pointer at the start of the chain - Delphi computes ''%s + %s'' as pointer arithmetic, Format does not"',
+    'msgstr "Operand ''%s'': Zeiger am Kettenanfang - ''%s + %s'' rechnet Delphi als Zeiger-Arithmetik, Format nicht"',
+    '',
+    'msgid "not a plain term: %s"',
+    'msgstr "kein reiner Term: %s"',
+    '',
+    'msgid "there are only literals behind %s"',
+    'msgstr "hinter %s stehen nur Literale"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -2806,8 +2847,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2513 Zeilen, 87809 Bytes
-  CPoLines_fr: array[0..2512] of string = (
+  // i18n\fr.po - 2554 Zeilen, 89419 Bytes
+  CPoLines_fr: array[0..2553] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -5320,7 +5361,48 @@ const
     'msgstr "aucun en-t'#$00EA'te %s"',
     '',
     'msgid "%d headers %s"',
-    'msgstr "%d en-t'#$00EA'tes %s"'
+    'msgstr "%d en-t'#$00EA'tes %s"',
+    '',
+    '# reDelphix G6 (uRdxFixRunner, uRdxRecipeRunner, uRdxRecipes)',
+    '',
+    'msgid "operand ''%s'': not a string (%s)"',
+    'msgstr "op'#$00E9'rande ''%s'' : pas une cha'#$00EE'ne (%s)"',
+    '',
+    'msgid "operand ''%s'': not a string"',
+    'msgstr "op'#$00E9'rande ''%s'' : pas une cha'#$00EE'ne"',
+    '',
+    'msgid "operand ''%s'': ansichar - Format converts without a code page"',
+    'msgstr "op'#$00E9'rande ''%s'' : ansichar - Format convertit sans page de codes"',
+    '',
+    'msgid "operand ''%s'': Ansi result - Format returns UnicodeString"',
+    'msgstr "op'#$00E9'rande ''%s'' : r'#$00E9'sultat Ansi - Format renvoie UnicodeString"',
+    '',
+    'msgid "operand ''%s'': %s - Format returns UnicodeString"',
+    'msgstr "op'#$00E9'rande ''%s'' : %s - Format renvoie UnicodeString"',
+    '',
+    'msgid "operand ''%s'': Variant possible (Null/number: the original raises, Format does not)"',
+    'msgstr "op'#$00E9'rande ''%s'' : Variant possible (Null/nombre : l''original l'#$00E8've une exception, Format non)"',
+    '',
+    'msgid "operand ''%s'': not a simple operand"',
+    'msgstr "op'#$00E9'rande ''%s'' : pas un op'#$00E9'rande simple"',
+    '',
+    'msgid "the chain already contains Format()"',
+    'msgstr "la concat'#$00E9'nation contient d'#$00E9'j'#$00E0' Format()"',
+    '',
+    'msgid "no literal in the chain"',
+    'msgstr "aucun litt'#$00E9'ral dans la concat'#$00E9'nation"',
+    '',
+    'msgid "SQL text: rewrite blocked (SCA003)"',
+    'msgstr "texte SQL : transformation bloqu'#$00E9'e (SCA003)"',
+    '',
+    'msgid "operand ''%s'': pointer at the start of the chain - Delphi computes ''%s + %s'' as pointer arithmetic, Format does not"',
+    'msgstr "op'#$00E9'rande ''%s'' : pointeur en t'#$00EA'te de la concat'#$00E9'nation - Delphi calcule ''%s + %s'' comme une arithm'#$00E9'tique de pointeurs, Format non"',
+    '',
+    'msgid "not a plain term: %s"',
+    'msgstr "pas un terme simple : %s"',
+    '',
+    'msgid "there are only literals behind %s"',
+    'msgstr "il n''y a que des litt'#$00E9'raux apr'#$00E8's %s"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

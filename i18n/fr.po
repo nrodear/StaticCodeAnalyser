@@ -2511,3 +2511,44 @@ msgstr "aucun en-tête %s"
 
 msgid "%d headers %s"
 msgstr "%d en-têtes %s"
+
+# reDelphix G6 (uRdxFixRunner, uRdxRecipeRunner, uRdxRecipes)
+
+msgid "operand '%s': not a string (%s)"
+msgstr "opérande '%s' : pas une chaîne (%s)"
+
+msgid "operand '%s': not a string"
+msgstr "opérande '%s' : pas une chaîne"
+
+msgid "operand '%s': ansichar - Format converts without a code page"
+msgstr "opérande '%s' : ansichar - Format convertit sans page de codes"
+
+msgid "operand '%s': Ansi result - Format returns UnicodeString"
+msgstr "opérande '%s' : résultat Ansi - Format renvoie UnicodeString"
+
+msgid "operand '%s': %s - Format returns UnicodeString"
+msgstr "opérande '%s' : %s - Format renvoie UnicodeString"
+
+msgid "operand '%s': Variant possible (Null/number: the original raises, Format does not)"
+msgstr "opérande '%s' : Variant possible (Null/nombre : l'original lève une exception, Format non)"
+
+msgid "operand '%s': not a simple operand"
+msgstr "opérande '%s' : pas un opérande simple"
+
+msgid "the chain already contains Format()"
+msgstr "la concaténation contient déjà Format()"
+
+msgid "no literal in the chain"
+msgstr "aucun littéral dans la concaténation"
+
+msgid "SQL text: rewrite blocked (SCA003)"
+msgstr "texte SQL : transformation bloquée (SCA003)"
+
+msgid "operand '%s': pointer at the start of the chain - Delphi computes '%s + %s' as pointer arithmetic, Format does not"
+msgstr "opérande '%s' : pointeur en tête de la concaténation - Delphi calcule '%s + %s' comme une arithmétique de pointeurs, Format non"
+
+msgid "not a plain term: %s"
+msgstr "pas un terme simple : %s"
+
+msgid "there are only literals behind %s"
+msgstr "il n'y a que des littéraux après %s"

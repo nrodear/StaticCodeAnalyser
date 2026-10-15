@@ -164,6 +164,7 @@ uses
   uUnsortedUses,   // SCA142 auf dem Ergebnis einer uses-Ergaenzung
   uEngineApi, uRefactorInfo, uRdxRecipes, uRdxRecipeRunner,
   uRdxBufferMath,   // TRdxEdit
+  uRdxText,         // SetRdxLanguageOverride (SelfAppend_OnlyLiterals_Disabled)
   uTestRdxTextKit;  // Apply (der Weg des Editors), LineOf, WriteText
 
 const
@@ -1124,13 +1125,25 @@ begin
 end;
 
 procedure TTestRdxSca044.SelfAppend_OnlyLiterals_Disabled;
+const
+  SELF_APPEND = '  Text := Text + ''a'' + #13#10 + ''b'' + ''c'';';
 var
-  O : TRdxFormatOutcome;
+  O   : TRdxFormatOutcome;
+  Old : string;
 begin
   // Hinter 'Text +' nur Literale: Format haette kein Argument.
-  Assert.IsFalse(RunRecipe(UnitWith(
-    '  Text := Text + ''a'' + #13#10 + ''b'' + ''c'';'), 'Text := Text', O));
+  Assert.IsFalse(RunRecipe(UnitWith(SELF_APPEND), 'Text := Text', O));
   Assert.IsTrue(Pos('nur Literale', O.Reason) > 0, O.Reason);
+  // Dasselbe in en (E29, c_groups 2.6): BuildReasonOf fragt die Kennung
+  // NoOperand - bis dahin Pos('kein Operand', Grund), in en still falsch.
+  Old := RdxLanguageOverride;
+  SetRdxLanguageOverride('en');
+  try
+    Assert.IsFalse(RunRecipe(UnitWith(SELF_APPEND), 'Text := Text', O));
+    Assert.AreEqual('there are only literals behind Text', O.Reason);
+  finally
+    SetRdxLanguageOverride(Old);
+  end;
 end;
 
 procedure TTestRdxSca044.SelfAppend_PointerCastFirst_Enabled;

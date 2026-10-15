@@ -361,7 +361,8 @@ uses
   // Rezept 5.2 (Charge S1): BuildSqlTemplate, AddSqlFacts - nur hier
   // gebraucht, nicht in der Schnittstelle (Gegen-Review S1, Minor 7).
   uRdxSqlTemplate,
-  uSourcePlaces;     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
+  uSourcePlaces,     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
+  uRdxText;          // _ (E29)
 
 // Dieser Laeufer ist gegen Version 1 des Quellstellen-Vertrags geschrieben
 // (uSourcePlaces, Abschnitt VERTRAGSVERSION). Steigt die Version, bricht
@@ -790,14 +791,15 @@ begin
 end;
 
 // Der Grund, wenn BuildFormatCall ablehnt: hinter 'X +' nur Literale heisst
-// anders als 'kein Operand'.
+// anders als 'kein Operand'. Entschieden an der Kennung NoOperand - bis E29
+// per Pos('kein Operand', Reason), das fiele mit dem uebersetzten Grund in
+// en/fr still aus (c_groups 2.6).
 function BuildReasonOf(const ABuild: TRdxFormatBuild;
   const ABehind: string): string;
 begin
   Result := ABuild.Reason;
-  if (ABehind <> '') and (ABuild.Operands = 0)
-     and (Pos('kein Operand', ABuild.Reason) > 0) then
-    Result := 'hinter ' + ABehind + ' stehen nur Literale';
+  if (ABehind <> '') and ABuild.NoOperand then
+    Result := _('there are only literals behind %s', [ABehind]);
 end;
 
 // Format() lebt in System.SysUtils: fehlt die Unit, kommt sie mit - nicht

@@ -2157,6 +2157,10 @@ msgstr ""
 msgid "SQL query is built from a UI input field - parameterize instead of concatenating"
 msgstr ""
 
+#: reDelphix/source/uRdxRecipes.pas:1902
+msgid "SQL text: rewrite blocked (SCA003)"
+msgstr ""
+
 #: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:603
 msgid "SVN call failed (exit code = %d)"
 msgstr ""
@@ -2851,12 +2855,20 @@ msgstr ""
 msgid "no header %s"
 msgstr ""
 
+#: reDelphix/source/uRdxRecipes.pas:1900
+msgid "no literal in the chain"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:822
 msgid "no operand in the chain"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:767
 msgid "no valid range"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipes.pas:1981
+msgid "not a plain term: %s"
 msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:813
@@ -2876,6 +2888,38 @@ msgstr ""
 msgid "only statement after %s - an empty block would remain (SCA077)"
 msgstr ""
 
+#: reDelphix/source/uRdxRecipes.pas:1748
+msgid "operand '%s': %s - Format returns UnicodeString"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipes.pas:1745
+msgid "operand '%s': Ansi result - Format returns UnicodeString"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipes.pas:1752
+msgid "operand '%s': Variant possible (Null/number: the original raises, Format does not)"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipes.pas:1742
+msgid "operand '%s': ansichar - Format converts without a code page"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipes.pas:1755
+msgid "operand '%s': not a simple operand"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipes.pas:1736
+msgid "operand '%s': not a string"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipes.pas:1733
+msgid "operand '%s': not a string (%s)"
+msgstr ""
+
+#: reDelphix/source/uRdxRecipes.pas:1951
+msgid "operand '%s': pointer at the start of the chain - Delphi computes '%s + %s' as pointer arithmetic, Format does not"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2562
 msgid "out parameter - prefer Result or var"
 msgstr ""
@@ -2890,6 +2934,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:595
 msgid "svn not found. Install TortoiseSVN WITH the option \"command line client tools\" or set the path to svn.exe in analyser.ini."
+msgstr ""
+
+#: reDelphix/source/uRdxRecipes.pas:1867
+msgid "the chain already contains Format()"
 msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:578
@@ -2907,6 +2955,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:392
 msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
+msgstr ""
+
+#: reDelphix/source/uRdxRecipeRunner.pas:802
+msgid "there are only literals behind %s"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:812
