@@ -2110,7 +2110,8 @@ In der Zwischenablage:
 
 - ausgegraut: Scope-Tabelle nicht geladen (`unitscopes.txt`)
 - ausgegraut: Compiler-Direktiven in der uses-Klausel oder die Klausel in einem `$IFDEF`-Zweig, eine Datei mit FPC-Weiche oder FPC-Modus (FPC 3.2 kennt keine Unit-Scopes)
-- eine gleichnamige Projekt-Unit, ein mehrdeutiger Name ohne erkennbares Rahmenwerk (Forms: VCL/FMX)
+- eine gleichnamige Projekt-Unit (Datei neben der Unit, Modul eines Projekts der Gruppe, Datei im Unit-Suchpfad der aktiven Konfiguration und Plattform, jede Ebene bis Base einzeln – `Base_Win32` eingeschlossen), ein mehrdeutiger Name ohne erkennbares Rahmenwerk (Forms: VCL/FMX)
+- ausgegraut: ein Verzeichnis neben der Unit oder im Unit-Suchpfad liegt auf einem Netzpfad (UNC, Netzlaufwerk) – reDelphix liest dort im Hauptthread nicht, ob das Projekt eine gleichnamige Unit hat, bleibt offen
 - ausgegraut: der Eintrag (bzw. „alle“) machte eine sortierte Klausel unsortiert – sonst käme ein neuer SCA142-Fund
 
 **Beispiel**
@@ -2160,7 +2161,9 @@ uses Winapi.Windows, System.Classes, Foo;
 **Nicht angeboten**
 
 - ausgegraut: der Marker nennt mehr als eine Art oder lautet `All` – SCA165 kommt auch, wenn nur die Arten des aktiven Scan-Profils nichts unterdrückt haben
+- ausgegraut: die nächste nicht-leere Zeile hinter dem Marker ist eine `//`-Kommentarzeile vor dem Code (etwa ein TODO, bei gestapelten Markern die Markerzeile darunter), und seine Art kann auf einer Kommentarzeile gemeldet werden (TodoComment, CommentedOutCode, NoSonarMarker, TabulationCharacter, TooLongLine, TrailingWhitespace, CustomRule, SCA185–SCA193, UnusedSuppression) – SCA165 prüft nur die Code-Zeile, auf der Kommentarzeile wirkt der Marker vielleicht doch; ein Marker einer Code-Art mit Warum-Kommentar darunter wird entfernt
 - der Marker liegt in einem Blockkommentar
+- ein `; noinspection`-Marker einer Konfigurationsdatei (.ini) – reDelphix liest nur Pascal-Quelltext
 
 **Beispiel**
 
@@ -2206,12 +2209,13 @@ Nachher:
 
 **Platzhalter:** `%s` = die Fundart (Kind-Name, etwa `MemoryLeak`).
 
-**Wirkung:** „Hier“ setzt `// noinspection <Art>` in eine eigene Zeile über die Fundzeile, eingerückt wie sie; „In dieser Datei“ setzt `// noinspection-file <Art>` hinter die Kopfanweisung der Unit. Ein vorhandener Marker bekommt die Art dazu, außer er lautet `All`/`*` (dann eine eigene Zeile).
+**Wirkung:** „Hier“ setzt `// noinspection <Art>` in eine eigene Zeile über die Fundzeile, eingerückt wie sie; „In dieser Datei“ setzt `// noinspection-file <Art>` hinter die Kopfanweisung der Unit. Ein vorhandener Marker bekommt die Art dazu, außer er lautet `All`/`*` (dann eine eigene Zeile). Auf einer `//`-Kommentarzeile (etwa einem TODO) bekommt der Marker, der sie schon trägt, die Art auch über Leerzeilen hinweg – eine neue Zeile dazwischen nähme ihm sein Ziel.
 
 **Nicht angeboten**
 
 - die Fundzeile liegt in einem Blockkommentar oder mehrzeiligen String
 - die Art steht schon im Marker
+- „Hier“ auf einer `//`-Kommentarzeile, die ein Marker trägt, der sich nicht erweitern lässt (`All`, Marker hinter Code) und eine Art nennt, die auf Kommentarzeilen gemeldet wird
 - SCA165 selbst – einen wirkungslosen Marker entfernt „Wirkungslosen Unterdrück-Marker entfernen“
 - Funde außerhalb von Pascal-Quelltext (.dfm, Konfiguration) – dort setzt das Plugin den Marker selbst (Strg+Alt+S)
 

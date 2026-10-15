@@ -13,11 +13,12 @@ unit uRdxBufferMath;
 // Bis Stufe 0 lagen diese Funktionen in der ToolsAPI-Unit uRdxEditor und
 // waren deshalb ungetestet; jetzt laufen sie in reDelphix.Test und im
 // FPC-Pruefstand (uTestRdxBufferMath) - mit Tabulator, Umlaut,
-// Surrogatpaar und kombinierendem Zeichen vor dem Bereich. Dazu zwei
+// Surrogatpaar und kombinierendem Zeichen vor dem Bereich. Dazu drei
 // Entscheidungen, die uRdxEditor/uRdxProvider ohne ToolsAPI treffen
 // koennen: passt eine Spalte in die SmallInt-Felder der Editor-Markierung
-// (EditorColumnFits, Review Nit 8), und welcher Text gilt fuer eine Datei
-// (ChooseTextSource, Review Nit 24).
+// (EditorColumnFits, Review Nit 8), liest der Anbieter eine Datei
+// ueberhaupt (IsPascalSource, Review R1-04), und welcher Text gilt fuer
+// sie (ChooseTextSource, Review Nit 24).
 
 interface
 
@@ -87,6 +88,15 @@ function EditorColumnFits(const ALine: string; ACol: Integer): Boolean;
 // Beide Enden von ASpan nach EditorColumnFits. False auch, wenn ein Ende
 // ausserhalb von ALines liegt.
 function SpanFitsEditor(ALines: TStrings; const ASpan: TRefactorSpan): Boolean;
+
+// True fuer Pascal-Quelltext (.pas, .dpr, .dpk, .inc, .lpr, .pp, gross/
+// klein egal) - nur dessen Text liest der Anbieter: die Baum-Rezepte
+// brauchen den Parser, Unterdruecken und Marker-Entfernen kennen nur
+// '//'-Marker. Fuer einen Fund in einer .dfm, .ini oder .dproj las Provide
+// bis Review R1-04 die ganze Datei (im Korpus bis 1,8 MB) im Hauptthread,
+// um danach nur "nichts anzubieten" zu melden; ein '; noinspection' einer
+// .ini bekam dabei den falschen Grund "kein Marker in der Zeile".
+function IsPascalSource(const AFileName: string): Boolean;
 
 // Welcher Text fuer eine Datei gilt: ist sie im Editor offen, NUR der
 // Puffer - leer oder nicht lesbar heisst dann txBlocked, nicht Platte.
@@ -210,6 +220,15 @@ begin
     and (ASpan.StartLine <= ALines.Count) and (ASpan.EndLine <= ALines.Count)
     and EditorColumnFits(ALines[ASpan.StartLine - 1], ASpan.StartCol)
     and EditorColumnFits(ALines[ASpan.EndLine - 1], ASpan.EndCol);
+end;
+
+function IsPascalSource(const AFileName: string): Boolean;
+var
+  Ext : string;
+begin
+  Ext := LowerCase(ExtractFileExt(AFileName));
+  Result := (Ext = '.pas') or (Ext = '.dpr') or (Ext = '.dpk')
+    or (Ext = '.inc') or (Ext = '.lpr') or (Ext = '.pp');
 end;
 
 function ChooseTextSource(AIsOpen, AReadOk: Boolean;

@@ -8,7 +8,32 @@ unit uRdxSuppress;
 // legt seine Grammatik nicht offen, darum steht sie hier nachgebaut)
 //   * '// noinspection A, B' gilt fuer ZWEI Ziele: die naechste nicht-leere
 //     Zeile (auch eine Kommentarzeile, etwa ein TODO) und die naechste
-//     Code-Zeile. Gestapelte Marker werden vereinigt.
+//     Code-Zeile; Leerzeilen zaehlen nicht (BuildMap). Kommentarzeile heisst
+//     dabei NUR eine Zeile, die ohne Leerraum davor mit '//' beginnt - eine
+//     Zeile mit '{' oder '(*' ist fuer den Core Code (IsCommentOnlyLine).
+//   * Gestapelte Marker vereinigt der Core nur fuer das CODE-Ziel. Eine
+//     Kommentarzeile erreicht allein der Marker, fuer den sie die naechste
+//     nicht-leere Zeile ist; fuer einen Marker weiter oben ist das schon
+//     die Markerzeile darunter (Review R1, Fixture f5). Darum erweitert
+//     LineMarker auf einer Kommentarzeile den Marker darueber auch ueber
+//     Leerzeilen hinweg, statt eine Zeile dazwischen zu schieben (R1-03).
+//   * SCA165 (UnusedSuppression) prueft nur das Code-Ziel (BuildMarkers):
+//     ein Marker, der auf seiner Kommentarzeile wirkt, gilt dem Core als
+//     wirkungslos. RemoveMarker lehnt deshalb einen Marker ab, dessen
+//     naechste nicht-leere Zeile eine Kommentarzeile vor dem Code ist -
+//     sonst entfernte die Hilfe einen Marker, den "Hier unterdruecken"
+//     eben gesetzt hat, und der Fund kaeme zurueck (Review R1-01).
+//   * Das Kommentar-Ziel zaehlt aber nur fuer eine Art, die auf einer
+//     reinen '//'-Zeile gemeldet werden kann (COMMENT_LINE_KINDS:
+//     TodoComment, CommentedOutCode, die Zeilen- und Kodierungsregeln).
+//     '// noinspection ExceptionTooGeneral' mit einem Warum-Kommentar
+//     darunter - die Form des Projekts, 45 von 116 Zeilen-Markern im
+//     eigenen Code - wirkt nur auf dem Code, SCA165 ist dort echt; die
+//     erste Fassung von R1-01 sperrte das Entfernen auch dann (Pruefer,
+//     new_issue 1). Dieselbe Regel gilt fuer die Sperre in LineMarker.
+//     Den Fehlalarm selbst behebt erst der Core (BuildMarkers muss auch
+//     das Kommentar-Ziel als verbraucht werten); dann entfallen beide
+//     Sperren.
 //   * '// noinspection-file A' gilt fuer die ganze Datei, egal wo er steht;
 //     mehrere Datei-Marker werden ebenfalls vereinigt.
 //   * Arten werden an Komma, Semikolon, Leerzeichen und Tab getrennt;
@@ -35,10 +60,14 @@ type
     // G1: '// noinspection <AKindName>' fuer die Fundzeile ALine. Ist die
     // Zeile direkt darueber schon ein reiner Zeilen-Marker (nicht 'All'),
     // kommt die Art dort hinzu; sonst eine neue Zeile mit der Einrueckung
-    // der Fundzeile. False + AReason, wenn es nichts zu tun gibt oder nicht
-    // geht - auch, wenn die Fundzeile in einem Block-Kommentar oder
-    // mehrzeiligen String liegt (dort wirkte der Marker nicht bzw. wuerde
-    // Teil des Strings).
+    // der Fundzeile. Ist die Fundzeile eine Kommentarzeile ('//'), gilt das
+    // auch ueber Leerzeilen hinweg, und ein Marker dort, der sich nicht
+    // erweitern laesst ('All', Marker hinter Code), sperrt, wenn eine seiner
+    // Arten auf der Kommentarzeile gemeldet werden kann: eine neue Zeile
+    // dazwischen naehme ihm sein Kommentar-Ziel (s. Kopf, Review R1-03).
+    // False + AReason, wenn es nichts zu tun gibt oder nicht geht - auch,
+    // wenn die Fundzeile in einem Block-Kommentar oder mehrzeiligen String
+    // liegt (dort wirkte der Marker nicht bzw. wuerde Teil des Strings).
     class function LineMarker(ALines: TStrings; ALine: Integer;
       const AKindName: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
@@ -55,7 +84,10 @@ type
     // samt Leerraum davor. NUR, wenn der Marker genau EINE Art nennt: der
     // Core meldet einen Marker schon dann, wenn nur seine Arten im
     // aktiven Scan-Profil nichts unterdrueckt haben - die uebrigen Arten
-    // (oder 'All') koennen unter dem vollen Profil noch wirken.
+    // (oder 'All') koennen unter dem vollen Profil noch wirken. Und nur,
+    // wenn vor seiner Code-Zeile keine Kommentarzeile sein Ziel ist, auf
+    // der seine Art gemeldet werden kann: dort wirkt er vielleicht, und
+    // SCA165 sieht das nicht (s. Kopf, R1-01).
     class function RemoveMarker(ALines: TStrings; AMarkerLine: Integer;
       out AEdit: TRdxEdit; out AReason: string): Boolean; static;
 
@@ -85,6 +117,40 @@ const
   R_MULTI_KIND = 'Marker nennt mehrere Arten - wirkungslos vielleicht nur '
     + 'unter dem aktuellen Scan-Profil, bitte von Hand pruefen';
   R_NO_KIND    = 'Marker nennt keine erkennbare Art';
+  // Review R1-01 (s. Kopf): SCA165 prueft nur das Code-Ziel.
+  R_COMMENT_TARGET = 'Marker zielt auch auf die Kommentarzeile %d, und seine '
+    + 'Art kann dort gemeldet werden - SCA165 prueft nur die Code-Zeile; '
+    + 'bitte von Hand pruefen';
+  // Review R1-03 (s. Kopf): der Marker darueber traegt die Kommentarzeile.
+  R_SPLITS_TARGET = 'Marker in Zeile %d gilt fuer diese Kommentarzeile und '
+    + 'laesst sich nicht erweitern (All oder hinter Code) - eine neue Zeile '
+    + 'dazwischen naehme ihm das Ziel; bitte von Hand ergaenzen';
+
+  // Die Arten, die der Core auf einer reinen '//'-Zeile melden kann - nur
+  // fuer sie wirkt das Kommentar-Ziel eines Markers (s. Kopf; Namen wie
+  // KIND_META in uSCAConsts). Bewusst eher zu viele: eine zu viel sperrt
+  // eine Hilfe, eine zu wenig entfernte einen wirksamen Marker.
+  //   * Kommentar-Detektoren: TodoComment (SCA019), CommentedOutCode
+  //     (SCA070, auch als Bereich ueber Kommentarzeilen), NoSonarMarker
+  //     (SCA065, der Sonar-Marker im Kommentar).
+  //   * Zeilen-Detektoren ohne Code-Sicht: TabulationCharacter (SCA061),
+  //     TooLongLine (SCA062), TrailingWhitespace (SCA063), CustomRule
+  //     (SCA023, Muster gegen die ganze Zeile) und die Kodierungsregeln
+  //     SCA185..SCA193 (Zeile des Zeichens).
+  //   * UnusedSuppression (SCA165) steht auf der Markerzeile selbst.
+  // Die Bereiche von DuplicateBlock (SCA021) beginnen und enden auf Code
+  // (Kommentarzeilen zaehlen dort nicht) - ein Kommentar-Ziel darin hat
+  // sein Code-Ziel im selben Bereich, der Marker gilt als verbraucht.
+  // Referenzlauf ab8: 5.441 Funde auf '//'-Zeilen, alle von SCA070,
+  // SCA019, SCA189, SCA185, SCA187, SCA186 und SCA092 (Zeile 1, kein
+  // Marker-Ziel) - bis auf 56 in einer Datei, die nach dem Lauf geaendert
+  // wurde (HeidiSQL main.pas, Zeilen um zwei verschoben).
+  COMMENT_LINE_KINDS: array[0..16] of string = (
+    'TodoComment', 'CommentedOutCode', 'NoSonarMarker',
+    'TabulationCharacter', 'TooLongLine', 'TrailingWhitespace', 'CustomRule',
+    'SourceUtf8NoBom', 'SourceInvalidUtf8', 'SourceControlChar',
+    'SourceBidiOverride', 'SourceAnsiNonAscii', 'SourceUtf16', 'SourceUtf32',
+    'SourceInvisibleChar', 'SourceNonAsciiIdentifier', 'UnusedSuppression');
 
 // Text hinter '//' einer reinen Kommentarzeile, sonst ''.
 function CommentBody(const AText: string): string;
@@ -97,10 +163,16 @@ begin
     Result := TrimLeft(Copy(T, 3, MaxInt));
 end;
 
+// Beginnt ein Kommentartext (hinter '//') mit dem Datei-Tag?
+function IsFileWideComment(const ACommentText: string): Boolean;
+begin
+  Result := SameText(Copy(TrimLeft(ACommentText), 1, Length(TAG_FILEWIDE)),
+    TAG_FILEWIDE);
+end;
+
 class function TRdxSuppress.IsFileMarker(const AText: string): Boolean;
 begin
-  Result := SameText(Copy(CommentBody(AText), 1, Length(TAG_FILEWIDE)),
-    TAG_FILEWIDE);
+  Result := IsFileWideComment(CommentBody(AText));
 end;
 
 class function TRdxSuppress.IsLineMarker(const AText: string): Boolean;
@@ -206,6 +278,37 @@ begin
   end;
 end;
 
+function IsCommentLineKind(const AKindName: string): Boolean;
+var
+  k : Integer;
+begin
+  Result := False;
+  for k := Low(COMMENT_LINE_KINDS) to High(COMMENT_LINE_KINDS) do
+    if SameText(AKindName, COMMENT_LINE_KINDS[k]) then
+      Exit(True);
+end;
+
+// Kann eine Art des Markers (ACommentText = Text hinter '//') auf einer
+// reinen Kommentarzeile gemeldet werden (COMMENT_LINE_KINDS)? 'All'/'*'
+// immer. Jedes Wort der Liste zaehlt, auch hinter einem Grund - der Core
+// nimmt jede bekannte Art (ParseCommentText); KindCount hoert dagegen beim
+// ersten Nicht-Bezeichner auf.
+function ReachesCommentLine(const ACommentText: string): Boolean;
+var
+  List, W : string;
+  i       : Integer;
+begin
+  Result := IsWildcard(ACommentText);
+  List := KindList(ACommentText);
+  i := 1;
+  W := NextKindWord(List, i);
+  while (W <> '') and not Result do
+  begin
+    Result := IsCommentLineKind(W);
+    W := NextKindWord(List, i);
+  end;
+end;
+
 // Marker-Zeile mit AKindName direkt hinter dem Tag (und einem ':').
 function WithKind(const AText, ATag, AKindName: string): string;
 var
@@ -247,6 +350,78 @@ begin
     and not IsWildcard(CommentBody(AMap.Raw(ALine)));
 end;
 
+// Ein reiner Zeilen-Marker in ALine, den man erweitern darf; False fuer
+// ALine < 1.
+function IsExtensibleLineMarker(AMap: TRdxCodeMap; ALine: Integer): Boolean;
+begin
+  Result := (ALine >= 1) and TRdxSuppress.IsLineMarker(AMap.Raw(ALine))
+    and IsExtensibleMarker(AMap, ALine);
+end;
+
+// Der Kommentartext (hinter '//') des Zeilen-Markers in ALine, wie der Core
+// ihn liest - ein echter '//'-Kommentar (auch hinter Code) mit dem Tag,
+// kein Datei-Marker; '' ohne. Ein Marker im Block-Kommentar oder String
+// zaehlt nicht (ParseMarkerLine).
+function LineMarkerText(AMap: TRdxCodeMap; ALine: Integer): string;
+var
+  Col  : Integer;
+  Body : string;
+begin
+  Result := '';
+  if ALine < 1 then Exit;
+  Col := AMap.LineCommentCol(ALine);
+  if Col = 0 then Exit;
+  Body := TrimLeft(Copy(AMap.Raw(ALine), Col + 2, MaxInt));
+  if SameText(Copy(Body, 1, Length(TAG)), TAG)
+     and not IsFileWideComment(Body) then
+    Result := Body;
+end;
+
+// Kommentarzeile nach der Regel des Cores (uSuppression.IsCommentOnlyLine):
+// ohne Leerraum davor beginnt die Zeile mit '//'. Bewusst NUR diese Regel -
+// eine Zeile mit '{' oder '(*' ist fuer den Core Code (Gegenpruefung R1:
+// dort verbraucht der Core den Marker).
+function IsCoreCommentLine(const AText: string): Boolean;
+begin
+  Result := Copy(TrimLeft(AText), 1, 2) = '//';
+end;
+
+// Die Ziele eines Zeilen-Markers in AMarkerLine, wie der Core sie bildet
+// (uSuppression.BuildMap): die naechste nicht-leere Zeile und die naechste
+// Code-Zeile, Leerzeilen zaehlen nicht; 0 = keine.
+procedure MarkerTargets(ALines: TStrings; AMarkerLine: Integer;
+  out ANextNonEmpty, ANextCode: Integer);
+var
+  j : Integer;
+begin
+  ANextNonEmpty := 0;
+  ANextCode     := 0;
+  for j := AMarkerLine + 1 to ALines.Count do
+  begin
+    if TrimLeft(ALines[j - 1]) = '' then Continue;
+    if ANextNonEmpty = 0 then
+      ANextNonEmpty := j;
+    if not IsCoreCommentLine(ALines[j - 1]) then
+    begin
+      ANextCode := j;
+      Exit;
+    end;
+  end;
+end;
+
+// Die Zeile, deren Marker die Fundzeile ALine traegt: bei einer Code-Zeile
+// die Zeile direkt darueber (gestapelte Marker vereinigt der Core dort),
+// bei einer Kommentarzeile die naechste nicht-leere Zeile darueber - nur
+// fuer deren Marker ist ALine die naechste nicht-leere Zeile (s. Kopf).
+// 0 = keine.
+function MarkerSlotAbove(ALines: TStrings; ALine: Integer): Integer;
+begin
+  Result := ALine - 1;
+  if IsCoreCommentLine(ALines[ALine - 1]) then
+    while (Result >= 1) and (TrimLeft(ALines[Result - 1]) = '') do
+      Dec(Result);
+end;
+
 // Die ganze Zeile ALine als verankerter Bereich.
 function WholeLine(ALines: TStrings; ALine: Integer; const ANewText: string): TRdxEdit;
 begin
@@ -256,12 +431,29 @@ begin
   Result.NewText  := ANewText;
 end;
 
+// AKindName in den Zeilen-Marker der Zeile ALine - False mit Grund, wenn
+// die Art dort schon steht.
+function ExtendMarker(ALines: TStrings; ALine: Integer; const AKindName: string;
+  out AEdit: TRdxEdit; out AReason: string): Boolean;
+var
+  Prev : string;
+begin
+  AEdit   := Default(TRdxEdit);
+  AReason := '';
+  Prev    := ALines[ALine - 1];
+  Result  := not KindListed(Prev, AKindName);
+  if Result then
+    AEdit := WholeLine(ALines, ALine, WithKind(Prev, TAG, AKindName))
+  else
+    AReason := 'Marker steht schon da';
+end;
+
 class function TRdxSuppress.LineMarker(ALines: TStrings; ALine: Integer;
   const AKindName: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
-  Map  : TRdxCodeMap;
-  Code : string;
-  Prev : string;
+  Map   : TRdxCodeMap;
+  Code  : string;
+  Above : Integer;
 begin
   Result := False;
   AEdit  := Default(TRdxEdit);
@@ -288,23 +480,24 @@ begin
       AReason := R_IN_COMMENT;
       Exit;
     end;
-    if (ALine > 1) and TRdxSuppress.IsLineMarker(ALines[ALine - 2])
-       and IsExtensibleMarker(Map, ALine - 1) then
+    Above := MarkerSlotAbove(ALines, ALine);
+    if IsExtensibleLineMarker(Map, Above) then
+      Exit(ExtendMarker(ALines, Above, AKindName, AEdit, AReason));
+    // Ein anderer Marker traegt die Kommentarzeile ('All', hinter Code):
+    // eine neue Zeile dazwischen naehme ihm das Ziel (Review R1-03) - wenn
+    // eine seiner Arten dort gemeldet werden kann (s. Kopf).
+    if IsCoreCommentLine(Code)
+       and ReachesCommentLine(LineMarkerText(Map, Above)) then
     begin
-      Prev := ALines[ALine - 2];
-      if KindListed(Prev, AKindName) then
-      begin
-        AReason := 'Marker steht schon da';
-        Exit;
-      end;
-      AEdit := WholeLine(ALines, ALine - 1, WithKind(Prev, TAG, AKindName));
-      Exit(True);
+      AReason := Format(R_SPLITS_TARGET, [Above]);
+      Exit;
     end;
   finally
     Map.Free;
   end;
-  // Eigene Zeile direkt ueber der Fundzeile; ueber einem 'All'-Marker
-  // darueber ist das ein gestapelter Marker, den der Core vereinigt.
+  // Eigene Zeile direkt ueber der Fundzeile; ueber einer Code-Zeile mit
+  // 'All'-Marker darueber ist das ein gestapelter Marker, den der Core
+  // vereinigt.
   AEdit := WholeLine(ALines, ALine,
     LeadingWhitespace(Code) + '// ' + TAG + ' ' + AKindName + #10 + Code);
   Result := True;
@@ -411,6 +604,26 @@ begin
   end;
 end;
 
+// Ein Zeilen-Marker in AMarkerLine (Kommentartext ACommentText hinter
+// '//'), dessen naechste nicht-leere Zeile eine Kommentarzeile vor dem
+// Code ist, wirkt dort vielleicht - SCA165 prueft nur das Code-Ziel (s.
+// Kopf, Review R1-01). Nur fuer eine Art, die dort gemeldet werden kann;
+// ein Datei-Marker hat kein Zeilenziel. '' oder der Grund.
+function CommentTargetReason(ALines: TStrings; AMarkerLine: Integer;
+  const ACommentText: string): string;
+var
+  NextNonEmpty : Integer;
+  NextCode     : Integer;
+begin
+  Result := '';
+  if IsFileWideComment(ACommentText)
+     or not ReachesCommentLine(ACommentText) then
+    Exit;
+  MarkerTargets(ALines, AMarkerLine, NextNonEmpty, NextCode);
+  if (NextNonEmpty > 0) and (NextNonEmpty <> NextCode) then
+    Result := Format(R_COMMENT_TARGET, [NextNonEmpty]);
+end;
+
 // Eine reine Kommentarzeile AMarkerLine (Text AText) ganz entfernen, samt
 // Zeilenende. Letzte Zeile: das Zeilenende DAVOR mitnehmen - ein Bereich
 // darf nicht HINTER dem letzten Zeichen beginnen (SpanFits), darum am
@@ -462,6 +675,9 @@ begin
     Exit;
   end;
   AReason := KindsReason(Copy(Text, Col + 2, MaxInt));
+  if AReason = '' then
+    AReason := CommentTargetReason(ALines, AMarkerLine,
+      Copy(Text, Col + 2, MaxInt));
   if AReason <> '' then Exit;
   if Trim(Copy(Text, 1, Col - 1)) = '' then
   begin

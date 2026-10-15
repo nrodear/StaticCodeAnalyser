@@ -45,7 +45,8 @@ unit uRdxEditor;
 interface
 
 uses
-  uRefactorInfo, uRdxBufferMath;
+  uRefactorInfo, uRdxBufferMath,
+  uRdxScopeTable;   // TRdxProjectUnits (Index der Projekt-Units)
 
 const
   // msgid zu EDITOR_MAX_COLUMN (Format-Argument: die Spalte), EINMAL fuer
@@ -71,16 +72,28 @@ type
     class function ReplaceSpans(const AFile: string;
       const AEdits: TArray<TRdxEdit>; out AError: string): Boolean; static;
 
-    // True, wenn eine Unit namens AShortName zum Projekt gehoeren kann -
-    // dann darf ein uses-Eintrag dieses Namens NICHT auf eine RTL-Unit
-    // expandiert werden: AShortName.pas/.pp neben ANearFile, ein Modul
-    // irgendeines Projekts der Gruppe (nicht nur des aktiven), oder
-    // AShortName.pas/.pp in einem Verzeichnis des Unit-Suchpfads eines
-    // dieser Projekte (aktive Konfiguration; Eintraege mit Makros wie
-    // $(BDS) bleiben aussen vor - dort liegt die Bibliothek, nicht das
-    // Projekt). Review reDelphiX nach Bereichen 2026-10-10, Minor 18.
-    class function ProjectHasUnit(const AShortName,
-      ANearFile: string): Boolean; static;
+    // Die Units, die das Projekt selbst fuehren kann, als Index fuer die
+    // uses-Eintraege EINES Aufrufs (der Anbieter baut ihn je Fund auf einer
+    // uses-Zeile einmal, beim ersten Eintrag, der fragt - Review R1-02; bis
+    // dahin lief ProjectHasUnit je Eintrag ueber die ganze Projektgruppe):
+    // das Verzeichnis von ANearFile, die Module ALLER Projekte der Gruppe
+    // (nicht nur des aktiven) und die Verzeichnisse ihres Unit-Suchpfads
+    // in der aktiven Konfiguration und Plattform, jede Ebene einzeln
+    // (missed 3: 360 von 3.305 .dproj des Korpus setzen ihn auf Plattform-
+    // Ebene; s. AddSearchPaths). Hat das Projekt eine Unit des
+    // Kurznamens (TRdxProjectUnits.Knows), darf ein uses-Eintrag NICHT auf
+    // eine RTL-Unit expandiert werden (Review nach Bereichen 2026-10-10,
+    // Minor 18). Netzpfade (UNC, Netzlaufwerk) liest der Index nicht -
+    // dann bleibt jede Antwort offen, der Eintrag gesperrt mit Grund.
+    // GRENZE (Review R1-07, offen): Eintraege mit Makros ($(BDS),
+    // $(DUnitX) ...) und der Bibliotheks-/Browsing-Pfad der IDE bleiben
+    // aussen vor. Bringt eine Drittbibliothek dort eine Unit mit dem
+    // Kurznamen einer RTL-Unit mit (JEDI-DirectX 'Direct3D9', 'pngimage',
+    // die alte Borland-'ZLib'), wird der Eintrag trotzdem angeboten - der
+    // Compiler faende vorher die Bibliothek. Gemessen ist das nicht (IDE-
+    // Test mit einer Bibliothek nur im Library Path fehlt), s. README
+    // "Grenzen". Der Aufrufer gibt den Index frei.
+    class function ProjectUnits(const ANearFile: string): TRdxProjectUnits; static;
 
     // Liest den aktuellen EDITOR-PUFFER der Datei (IOTAEditReader,
     // UTF-8 -> string); die Datei wird dafuer nicht geoeffnet. Ergebnis
@@ -101,6 +114,9 @@ type
 implementation
 
 uses
+  // Vor System.SysUtils, damit deren Namen gelten (FindClose u. a.):
+  // GetDriveType fuer den Netzlaufwerk-Test der Projekt-Units.
+  Winapi.Windows,
   System.SysUtils, System.Classes,
   ToolsAPI,
   uCrashDiag,       // EStackExhausted
@@ -113,7 +129,7 @@ const
   SNoBuffer   = 'Editor-Puffer nicht lesbar';
   SNoWriter   = 'Editor-Puffer nicht beschreibbar';
   SReadOnly   = 'Editor-Puffer ist schreibgeschuetzt - nicht geschrieben';
-  // Ueber _() (Editorhilfen E6); die vier oben folgen mit dem E6-Rest.
+  // Ueber _() (Editorhilfen E6); die fuenf oben folgen mit dem E6-Rest.
   S_PAST_END = 'Range %d:%d to %d:%d lies behind the end of the editor '
     + 'buffer (%d lines) - rescan the file';
   S_NO_MOVE  = 'Cannot move the editor cursor to line %d, column %d';
@@ -123,64 +139,93 @@ begin
   Result := AMsg + ' [Protokoll: ' + RdxLogPath + ']';
 end;
 
-function TryGetSourceEditor(const AFile: string; AOpen: Boolean;
-  out ASrc: IOTASourceEditor): Boolean;
-// Modul finden (oder oeffnen) -> der IOTASourceEditor DIESER Datei. Nicht
-// einfach der erste: bei einem Form-Modul kann dort der DFM-Editor stehen
-// (als Text angezeigt ist er auch ein IOTASourceEditor) - ein Marker
-// landete sonst im Formular. Erst der volle Pfad, dann derselbe
-// Dateiname in anderer Schreibweise; sonst keiner (Review nach Bereichen
-// 2026-10-10, Nit 35).
+// Der IOTASourceEditor DIESER Datei im Modul AModule. Nicht einfach der
+// erste: bei einem Form-Modul kann dort der DFM-Editor stehen (als Text
+// angezeigt ist er auch ein IOTASourceEditor) - ein Marker landete sonst
+// im Formular. Erst der volle Pfad, dann derselbe Dateiname in anderer
+// Schreibweise; sonst nil (Review nach Bereichen 2026-10-10, Nit 35). Bis
+// Review R1-05 Teil von TryGetSourceEditor (SCA176 18).
+function SourceEditorIn(const AModule: IOTAModule;
+  const AFile: string): IOTASourceEditor;
+var
+  Cand : IOTASourceEditor;
+  i    : Integer;
+begin
+  Result := nil;
+  for i := 0 to AModule.ModuleFileCount - 1 do
+    if Supports(AModule.ModuleFileEditors[i], IOTASourceEditor, Cand)
+       and SameFileName(Cand.FileName, AFile) then
+      Exit(Cand);
+  for i := 0 to AModule.ModuleFileCount - 1 do
+    if Supports(AModule.ModuleFileEditors[i], IOTASourceEditor, Cand)
+       and SameText(ExtractFileName(Cand.FileName), ExtractFileName(AFile)) then
+    begin
+      RdxLog('Editor fuer %s ueber den Dateinamen gefunden (%s)',
+        [ExtractFileName(AFile), Cand.FileName]);
+      Exit(Cand);
+    end;
+end;
+
+// Das Modul der Datei, wenn sie in der IDE offen ist; sonst nil.
+function FindModuleOf(const AFile: string): IOTAModule;
 var
   ModSvc : IOTAModuleServices;
-  ActSvc : IOTAActionServices;
-  Module : IOTAModule;
-  Cand   : IOTASourceEditor;
-  i      : Integer;
 begin
-  Result := False;
-  ASrc   := nil;
-  if AFile = '' then Exit;
-  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
-  Module := ModSvc.FindModule(AFile);
-  if (Module = nil) and AOpen then
-  begin
-    if Supports(BorlandIDEServices, IOTAActionServices, ActSvc) then
-      ActSvc.OpenFile(AFile);
-    Module := ModSvc.FindModule(AFile);
-  end;
-  if Module = nil then Exit;
-  for i := 0 to Module.ModuleFileCount - 1 do
-    if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, Cand)
-       and SameFileName(Cand.FileName, AFile) then
-    begin
-      ASrc := Cand;
-      Break;
-    end;
-  if ASrc = nil then
-    for i := 0 to Module.ModuleFileCount - 1 do
-      if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, Cand)
-         and SameText(ExtractFileName(Cand.FileName), ExtractFileName(AFile)) then
-      begin
-        RdxLog('Editor fuer %s ueber den Dateinamen gefunden (%s)',
-          [ExtractFileName(AFile), Cand.FileName]);
-        ASrc := Cand;
-        Break;
-      end;
+  Result := nil;
+  if (AFile <> '') and Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then
+    Result := ModSvc.FindModule(AFile);
+end;
+
+// Der Quelltext-Editor der Datei, nur wenn sie schon offen ist (ReadBuffer:
+// eine geschlossene Datei gilt von der Platte).
+function TryFindSourceEditor(const AFile: string;
+  out ASrc: IOTASourceEditor): Boolean;
+var
+  Module : IOTAModule;
+begin
+  ASrc := nil;
+  Module := FindModuleOf(AFile);
+  if Module <> nil then
+    ASrc := SourceEditorIn(Module, AFile);
   Result := ASrc <> nil;
+end;
+
+// Wie TryFindSourceEditor; ist die Datei nicht offen, wird sie vorher
+// geoeffnet (Markieren und Ersetzen). Bis Review R1-05 ein Boolean-Schalter
+// von TryGetSourceEditor (SCA146).
+function TryOpenSourceEditor(const AFile: string;
+  out ASrc: IOTASourceEditor): Boolean;
+var
+  ActSvc : IOTAActionServices;
+begin
+  if (AFile <> '') and (FindModuleOf(AFile) = nil)
+     and Supports(BorlandIDEServices, IOTAActionServices, ActSvc) then
+    ActSvc.OpenFile(AFile);
+  Result := TryFindSourceEditor(AFile, ASrc);
 end;
 
 function TryGetView(const ASrc: IOTASourceEditor; out AView: IOTAEditView;
   out APos: IOTAEditPosition): Boolean;
-// Erste Ansicht des Editors samt Cursor-API ihres Puffers.
+// EINE Ansicht des Editors samt IHRER Cursor-API: die oberste des Puffers
+// (nach Src.Show die gezeigte), sonst die erste. Block, ConvertPos und
+// Cursor kommen so aus derselben Ansicht - bis Review R1-06 kam der Cursor
+// aus Buffer.EditPosition (der obersten Ansicht), Block und ConvertPos aus
+// EditViews[0]; mit zwei Editorfenstern auf derselben Unit konnten das
+// verschiedene sein (das Labor nimmt View.Position aus demselben Grund,
+// uVnpIntroduce). Mit EINEM Fenster ist es dieselbe Ansicht wie vorher.
+var
+  Buffer : IOTAEditBuffer;
 begin
   Result := False;
   AView  := nil;
   APos   := nil;
   if (ASrc = nil) or (ASrc.EditViewCount = 0) then Exit;
-  AView := ASrc.EditViews[0];
-  if (AView = nil) or (AView.Buffer = nil) then Exit;
-  APos := AView.Buffer.EditPosition;
+  if Supports(ASrc, IOTAEditBuffer, Buffer) then
+    AView := Buffer.TopView;
+  if AView = nil then
+    AView := ASrc.EditViews[0];
+  if AView = nil then Exit;
+  APos := AView.Position;
   Result := APos <> nil;
 end;
 
@@ -260,7 +305,7 @@ var
   ReadOk : Boolean;
 begin
   AText := '';
-  if not TryGetSourceEditor(AFile, False, Src) then
+  if not TryFindSourceEditor(AFile, Src) then
     Exit(ChooseTextSource(False, False, ''));
   ReadOk := False;
   try
@@ -274,10 +319,14 @@ begin
   except
     on EStackExhausted do raise;
     on EAbort do raise;
+    // Grenze des Menueaufbaus (Review R1, missed 5): jeder andere Fehler
+    // des Readers - auch einer der UTF-8-Dekodierung - kostet nur die
+    // Hilfen dieser Datei. Er steht im Protokoll, und die Datei gilt als
+    // offen, aber nicht lesbar: gesperrt, nicht die Platte (Nit 24).
     on E: Exception do
     begin
-      // Offen, aber nicht lesbar: gesperrt, nicht die Platte (Nit 24).
-      RdxLog('ReadBuffer %s: %s', [ExtractFileName(AFile), E.Message]);
+      RdxLog('ReadBuffer %s: %s: %s', [ExtractFileName(AFile), E.ClassName,
+        E.Message]);
       AText := '';
       Exit(ChooseTextSource(True, False, ''));
     end;
@@ -318,7 +367,7 @@ begin
         AError := 'kein gueltiger Bereich';
         Exit;
       end;
-      if not TryGetSourceEditor(AFile, True, Src) then
+      if not TryOpenSourceEditor(AFile, Src) then
       begin
         AError := SNoEditor;
         Exit;
@@ -381,8 +430,10 @@ begin
     except
       on EStackExhausted do raise;
       on EAbort do raise;
-      // Jeder andere Fehler der IDE geht als AError an den Aufrufer, der
-      // ihn als Meldung zeigt - dasselbe Format wie ReplaceSpans (Nit 39).
+      // noinspection ExceptionTooGeneral
+      // Aktionsgrenze: jeder andere Fehler der IDE geht als AError an den
+      // Aufrufer, der ihn als Meldung zeigt - dasselbe Format wie
+      // ReplaceSpans (Nit 39).
       on E: Exception do
         AError := E.ClassName + ': ' + E.Message;
     end;
@@ -422,7 +473,7 @@ begin
   try
     try
       // Auch dieser Ausstieg laeuft durch das finally (Log + Hinweis, Nit 39).
-      if not TryGetSourceEditor(AFile, True, Src) then
+      if not TryOpenSourceEditor(AFile, Src) then
       begin
         AError := SNoEditor;
         Exit;
@@ -478,8 +529,9 @@ begin
     except
       on EStackExhausted do raise;
       on EAbort do raise;
-      // Jeder andere Fehler der IDE geht als AError an den Aufrufer, der
-      // ihn als Meldung zeigt (Nit 39).
+      // noinspection ExceptionTooGeneral
+      // Aktionsgrenze: jeder andere Fehler der IDE geht als AError an den
+      // Aufrufer, der ihn als Meldung zeigt (Nit 39).
       on E: Exception do
         AError := E.ClassName + ': ' + E.Message;
     end;
@@ -492,77 +544,134 @@ begin
   end;
 end;
 
-// Liegt AShortName.pas oder .pp im Verzeichnis ADir?
-function UnitFileIn(const ADir, AShortName: string): Boolean;
+// Ein Netzlaufwerk ('Z:' ueber GetDriveType)? Der Test fuer
+// TRdxProjectUnits.IsRemote - UNC prueft der Index selbst. Zweite Kopie
+// der Regel aus uRdxFixTable.RemoteDriveReason (SCA014); zusammenlegen mit
+// den geteilten Helfern.
+function IsRemoteDrive(const APath: string): Boolean;
 var
-  D : string;
+  Drive : string;
 begin
-  D := IncludeTrailingPathDelimiter(ADir);
-  Result := FileExists(D + AShortName + '.pas')
-    or FileExists(D + AShortName + '.pp');
+  Drive := ExtractFileDrive(APath);
+  Result := (Length(Drive) = 2) and (Drive[2] = ':')
+    and (GetDriveType(PChar(Drive + PathDelim)) = DRIVE_REMOTE);
 end;
 
-// Modul des Projekts oder Datei im Unit-Suchpfad seiner aktiven
-// Konfiguration (s. ProjectHasUnit).
-function ProjectKnowsUnit(AProj: IOTAProject; const AShortName: string): Boolean;
+const
+  UNIT_SEARCH_PATH = 'DCC_UnitSearchPath';
+  // Obergrenze fuer die Kette der Eltern-Konfigurationen (Debug -> Base
+  // sind zwei): eine Kette, die nie bei nil endet, haengte sonst den
+  // Hauptthread.
+  MAX_CFG_DEPTH = 16;
+
+// Die Konfiguration der Plattform APlatform unter ACfg (Cfg_1 -> Cfg_1_Win32,
+// Base -> Base_Win32); nil ohne. Gefragt wird nur mit einem Namen aus
+// ACfg.Platforms (wie CnWizards) - ob PlatformConfiguration fuer einen
+// fremden Namen nil liefert oder wirft, sagt die ToolsAPI nicht.
+function PlatformCfgOf(const ACfg: IOTABuildConfiguration;
+  const APlatform: string): IOTABuildConfiguration;
 var
-  Info  : IOTAModuleInfo;
-  Cfgs  : IOTAProjectOptionsConfigurations;
-  Cfg   : IOTABuildConfiguration;
-  Base  : string;
-  Dirs  : TArray<string>;
-  Dir   : string;
-  i     : Integer;
+  Name : string;
 begin
-  Result := False;
+  Result := nil;
+  if APlatform = '' then Exit;
+  for Name in ACfg.Platforms do
+    if SameText(Name, APlatform) then
+      Exit(ACfg.PlatformConfiguration[Name]);
+end;
+
+// Der Unit-Suchpfad des Projekts AProj fuer die Gegenprobe (Review R1,
+// missed 3; 360 von 3.305 .dproj des Korpus setzen ihn auf Plattform-Ebene,
+// ActiveConfiguration allein sah ihn nicht): die VEREINIGUNG aus
+//   * dem Wert der aktiven Plattform-Konfiguration samt Geerbtem
+//     (GetValue(.., True); gibt es sie nicht, der aktiven Konfiguration)
+//     und
+//   * jeder Ebene einzeln ohne Geerbtes: die aktive Konfiguration und ihre
+//     Eltern bis Base, je fuer alle Plattformen und fuer die aktive
+//     (Cfg_1, Cfg_1_Win32, Base, Base_Win32).
+// Ob GetValue(.., True) auf Cfg_1_Win32 auch Base_Win32 einschliesst, ist in
+// der IDE NICHT geprueft (Nachbesserung, Pruefer missed 3) - die Vereinigung
+// haengt nicht daran. Eine Ebene, die den Suchpfad ersetzt statt erweitert,
+// bringt hoechstens ein Verzeichnis zu viel: dann sperrt die Gegenprobe
+// einen Eintrag mehr, qualifiziert aber keinen zu viel. Doppelte
+// Verzeichnisse fallen im Index zusammen.
+procedure AddSearchPaths(AUnits: TRdxProjectUnits; const AProj: IOTAProject);
+var
+  Cfgs    : IOTAProjectOptionsConfigurations;
+  Cfg     : IOTABuildConfiguration;
+  PlatCfg : IOTABuildConfiguration;
+  BaseDir : string;
+  Plat    : string;
+  Level   : Integer;
+begin
+  if not Supports(AProj.ProjectOptions, IOTAProjectOptionsConfigurations,
+       Cfgs) then
+    Exit;
+  Cfg := Cfgs.ActiveConfiguration;
+  if Cfg = nil then Exit;
+  BaseDir := ExtractFilePath(AProj.FileName);
+  Plat    := AProj.CurrentPlatform;
+  PlatCfg := PlatformCfgOf(Cfg, Plat);
+  if PlatCfg = nil then
+    PlatCfg := Cfg;
+  AUnits.AddSearchPath(PlatCfg.GetValue(UNIT_SEARCH_PATH, True), BaseDir);
+  for Level := 1 to MAX_CFG_DEPTH do
+  begin
+    AUnits.AddSearchPath(Cfg.GetValue(UNIT_SEARCH_PATH, False), BaseDir);
+    PlatCfg := PlatformCfgOf(Cfg, Plat);
+    if PlatCfg <> nil then
+      AUnits.AddSearchPath(PlatCfg.GetValue(UNIT_SEARCH_PATH, False), BaseDir);
+    Cfg := Cfg.Parent;
+    if Cfg = nil then Break;
+  end;
+end;
+
+// Module und Unit-Suchpfad des Projekts AProj in den Index; nil: nichts.
+procedure AddProjectUnits(AUnits: TRdxProjectUnits; const AProj: IOTAProject);
+var
+  Info : IOTAModuleInfo;
+  i    : Integer;
+begin
   if AProj = nil then Exit;
   for i := 0 to AProj.GetModuleCount - 1 do
   begin
     Info := AProj.GetModule(i);
-    if Info = nil then Continue;
-    if SameText(ChangeFileExt(ExtractFileName(Info.FileName), ''), AShortName) then
-      Exit(True);
+    if Info <> nil then
+      AUnits.AddModule(Info.FileName);
   end;
-  if not Supports(AProj.ProjectOptions, IOTAProjectOptionsConfigurations, Cfgs) then
-    Exit;
-  Cfg := Cfgs.ActiveConfiguration;
-  if Cfg = nil then Exit;
-  Base := ExtractFilePath(AProj.FileName);
-  Dirs := Cfg.GetValue('DCC_UnitSearchPath', True).Split([';']);
-  for i := 0 to High(Dirs) do
-  begin
-    Dir := Trim(Dirs[i]);
-    if (Dir = '') or (Pos('$(', Dir) > 0) then Continue;
-    // Relativ zum Projektverzeichnis, ausser mit Laufwerk oder UNC.
-    if not ((Length(Dir) >= 2)
-            and ((Dir[2] = ':') or ((Dir[1] = '\') and (Dir[2] = '\')))) then
-      Dir := Base + Dir;
-    if UnitFileIn(ExpandFileName(Dir), AShortName) then
-      Exit(True);
-  end;
+  AddSearchPaths(AUnits, AProj);
 end;
 
-class function TRdxEditor.ProjectHasUnit(const AShortName,
-  ANearFile: string): Boolean;
+class function TRdxEditor.ProjectUnits(
+  const ANearFile: string): TRdxProjectUnits;
 var
   ModSvc : IOTAModuleServices;
   Group  : IOTAProjectGroup;
   j      : Integer;
 begin
-  Result := False;
-  if AShortName = '' then Exit;
-  // 1) Datei gleichen Namens neben der bearbeiteten Datei
-  if (ANearFile <> '') and UnitFileIn(ExtractFilePath(ANearFile), AShortName) then
-    Exit(True);
-  // 2) Module und Suchpfade aller Projekte der Gruppe - die bearbeitete
-  //    Datei kann zu einem anderen als dem aktiven gehoeren.
-  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
-  Group := ModSvc.MainProjectGroup;
-  if Group = nil then
-    Exit(ProjectKnowsUnit(ModSvc.GetActiveProject, AShortName));
-  for j := 0 to Group.ProjectCount - 1 do
-    if ProjectKnowsUnit(Group.Projects[j], AShortName) then
-      Exit(True);
+  Result := TRdxProjectUnits.Create;
+  try
+    Result.IsRemote := IsRemoteDrive;
+    // 1) Dateien neben der bearbeiteten Datei
+    if ANearFile <> '' then
+      Result.AddDir(ExtractFilePath(ANearFile));
+    // 2) Module und Suchpfade aller Projekte der Gruppe - die bearbeitete
+    //    Datei kann zu einem anderen als dem aktiven gehoeren.
+    if Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then
+    begin
+      Group := ModSvc.MainProjectGroup;
+      if Group = nil then
+        AddProjectUnits(Result, ModSvc.GetActiveProject)
+      else
+        for j := 0 to Group.ProjectCount - 1 do
+          AddProjectUnits(Result, Group.Projects[j]);
+    end;
+    if Result.Unreadable <> '' then
+      RdxLog('Projekt-Units: Netzpfad %s nicht gelesen', [Result.Unreadable]);
+  except
+    Result.Free;
+    raise;
+  end;
 end;
 
 end.
