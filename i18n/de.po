@@ -2685,3 +2685,66 @@ msgstr "die Allokation ist keine ganze Anweisung mit \";\""
 
 msgid "the message has no allocation"
 msgstr "Allokation fehlt in der Meldung"
+
+msgid "no matching declaration on the reported line"
+msgstr "keine passende Deklaration auf der gemeldeten Zeile"
+
+msgid "compiler directive in the header"
+msgstr "Compiler-Direktive im Kopf"
+
+msgid "a comment spanning several lines ends above - the detector sees its last line as code; check the documentation by hand"
+msgstr "darüber endet ein Kommentar über Zeilen - der Detektor sieht dessen Schlusszeile als Code; Doku von Hand prüfen"
+
+msgid "XMLDoc (///) already stands above the attributes - the detector stops at the attribute line and does not see it"
+msgstr "über den Attributen steht schon XMLDoc (///) - der Detektor bricht an der Attributzeile ab und sieht sie nicht"
+
+msgid "a comment precedes the header on its line - the skeleton belongs above it, insert it by hand"
+msgstr "vor dem Kopf steht auf seiner Zeile ein Kommentar - das Gerüst gehört darüber, von Hand setzen"
+
+msgid "generic interface - one GUID would apply to all instantiations (Supports would mix them up)"
+msgstr "generisches Interface - eine GUID gälte für alle Ausprägungen (Supports verwechselte sie)"
+
+msgid "forward declaration - it carries no GUID"
+msgstr "Vorwärtsdeklaration - sie trägt keine GUID"
+
+msgid "the header is already followed by '[' (GUID or attribute)"
+msgstr "hinter dem Kopf steht schon '[' (GUID oder Attribut)"
+
+msgid "no interface body begins after the header (header duplicated under {$IFDEF}?)"
+msgstr "hinter dem Kopf beginnt kein Interface-Rumpf (Kopf unter {$IFDEF} doppelt?)"
+
+msgid "{$INTERFACES CORBA} in the file"
+msgstr "{$INTERFACES CORBA} in der Datei"
+
+msgid "{$CALLING STDCALL} in the file - a COM import cannot be ruled out"
+msgstr "{$CALLING STDCALL} in der Datei - ein COM-Import ist nicht auszuschließen"
+
+msgid "stdcall/safecall/winapi/dispid in the body - a COM import needs the real IID, not a new GUID"
+msgstr "stdcall/safecall/winapi/dispid im Rumpf - ein COM-Import braucht die echte IID, keine neue GUID"
+
+msgid "compiler directive between the header and the first member"
+msgstr "Compiler-Direktive vom Kopf bis zum ersten Member"
+
+msgid "CreateGUID returned no GUID"
+msgstr "CreateGUID hat keine GUID geliefert"
+
+msgid "the declaration already carries %s"
+msgstr "die Deklaration trägt schon %s"
+
+msgid "the declaration carries %s - that does not fit override (virtual/dynamic introduce an entry of their own)"
+msgstr "die Deklaration trägt %s - das passt nicht zu override (virtual/dynamic führen einen eigenen Eintrag ein)"
+
+msgid "parent class %s not found in the text - override cannot be checked"
+msgstr "Elternklasse %s nicht im Text gefunden - override nicht prüfbar"
+
+msgid "%s.%s has a different shape (class, parameter modifiers, types, return type or calling convention) - override would not compile"
+msgstr "%s.%s hat eine andere Form (class, Parameter-Modifier, Typen, Rückgabe oder Aufrufkonvention) - override übersetzte nicht"
+
+msgid "class header %s not found in the text"
+msgstr "Klassenkopf %s nicht im Text gefunden"
+
+msgid "generic ancestor - the detector compares T with the substituted type; override might be the fix, %s"
+msgstr "generischer Vorfahr - der Detektor vergleicht T mit dem eingesetzten Typ; override wäre vielleicht der Fix, %s"
+
+msgid "unknown message - neither \"missing override\" nor \"hides all inherited\""
+msgstr "Meldung unbekannt - weder \"missing override\" noch \"hides all inherited\""

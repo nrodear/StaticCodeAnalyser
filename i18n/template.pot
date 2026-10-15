@@ -190,6 +190,10 @@ msgstr ""
 msgid "%s(%s) in line %d changes the pointer - FreeMem in the finally would free a different one"
 msgstr ""
 
+#: reDelphix/source/uRdxDeclFixes.pas:943
+msgid "%s.%s has a different shape (class, parameter modifiers, types, return type or calling convention) - override would not compile"
+msgstr ""
+
 #: reDelphix/source/uRdxTryFixes.pas:2206
 msgid "%s.Free or FreeAndNil(%s)"
 msgstr ""
@@ -858,6 +862,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:615
 msgid "Create without try/finally - exception path leaks the object"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:652
+msgid "CreateGUID returned no GUID"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3335
@@ -2807,8 +2815,20 @@ msgstr ""
 msgid "X.Free; X := nil; -> use FreeAndNil(X)"
 msgstr ""
 
+#: reDelphix/source/uRdxDeclFixes.pas:456
+msgid "XMLDoc (///) already stands above the attributes - the detector stops at the attribute line and does not see it"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:315
 msgid "You are a senior Delphi developer reviewing the output of a static code analyser. Target version: Delphi 12 Athens (RTL/VCL). Suggest minimal, idiomatic fixes - no sweeping refactors, no style overhauls, no new dependencies unless strictly required."
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:504
+msgid "a comment precedes the header on its line - the skeleton belongs above it, insert it by hand"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:453
+msgid "a comment spanning several lines ends above - the detector sees its last line as code; check the documentation by hand"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:496
@@ -2839,8 +2859,21 @@ msgstr ""
 msgid "check by hand"
 msgstr ""
 
+#: reDelphix/source/uRdxDeclFixes.pas:959
+msgid "class header %s not found in the text"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2334
 msgid "class(TObject) - TObject is the default base, drop it"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:650
+msgid "compiler directive between the header and the first member"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:459
+#: reDelphix/source/uRdxDeclFixes.pas:982
+msgid "compiler directive in the header"
 msgstr ""
 
 #: reDelphix/source/uRdxTryFixes.pas:1788
@@ -2900,6 +2933,18 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:1706
 msgid "for-loop range is reversed - the loop body never runs"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:555
+msgid "forward declaration - it carries no GUID"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:961
+msgid "generic ancestor - the detector compares T with the substituted type; override might be the fix, %s"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:529
+msgid "generic interface - one GUID would apply to all instantiations (Supports would mix them up)"
 msgstr ""
 
 #: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:416
@@ -2975,8 +3020,16 @@ msgstr ""
 msgid "no header %s"
 msgstr ""
 
+#: reDelphix/source/uRdxDeclFixes.pas:560
+msgid "no interface body begins after the header (header duplicated under {$IFDEF}?)"
+msgstr ""
+
 #: reDelphix/source/uRdxTryFixes.pas:2355
 msgid "no lock \"%s\""
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:172
+msgid "no matching declaration on the reported line"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:822
@@ -3036,6 +3089,10 @@ msgstr ""
 msgid "own unit %s in the project"
 msgstr ""
 
+#: reDelphix/source/uRdxDeclFixes.pas:938
+msgid "parent class %s not found in the text - override cannot be checked"
+msgstr ""
+
 #: reDelphix/source/uRdxTryFixes.pas:1478
 msgid "raise %s in line %d - %s is (part of) the exception; finally would free it before the handler"
 msgstr ""
@@ -3046,6 +3103,10 @@ msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDESonarOptions.pas:414
 msgid "sonar.projectKey not found in "
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:645
+msgid "stdcall/safecall/winapi/dispid in the body - a COM import needs the real IID, not a new GUID"
 msgstr ""
 
 #: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:595
@@ -3073,8 +3134,20 @@ msgstr ""
 msgid "the creation is the last statement of its list - no release after it"
 msgstr ""
 
+#: reDelphix/source/uRdxDeclFixes.pas:797
+msgid "the declaration already carries %s"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:799
+msgid "the declaration carries %s - that does not fit override (virtual/dynamic introduce an entry of their own)"
+msgstr ""
+
 #: reDelphix/source/uRdxTryFixes.pas:2420
 msgid "the first argument of GetMem is not a simple identifier"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:557
+msgid "the header is already followed by '[' (GUID or attribute)"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:777
@@ -3137,6 +3210,10 @@ msgstr ""
 msgid "unclear what the statement belongs to (\"%s\" before it)"
 msgstr ""
 
+#: reDelphix/source/uRdxDeclFixes.pas:973
+msgid "unknown message - neither \"missing override\" nor \"hides all inherited\""
+msgstr ""
+
 #: reDelphix/source/uRdxProvider.pas:553
 msgid "uses clause contains compiler directives (line %d)"
 msgstr ""
@@ -3168,6 +3245,14 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:4379
 msgid "with statement names multiple targets - ambiguous member lookup"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:626
+msgid "{$CALLING STDCALL} in the file - a COM import cannot be ruled out"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:624
+msgid "{$INTERFACES CORBA} in the file"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1276

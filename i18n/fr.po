@@ -2681,3 +2681,66 @@ msgstr "l'allocation n'est pas une instruction complète avec \";\""
 
 msgid "the message has no allocation"
 msgstr "l'allocation manque dans le message"
+
+msgid "no matching declaration on the reported line"
+msgstr "aucune déclaration correspondante sur la ligne signalée"
+
+msgid "compiler directive in the header"
+msgstr "directive de compilation dans l'en-tête"
+
+msgid "a comment spanning several lines ends above - the detector sees its last line as code; check the documentation by hand"
+msgstr "un commentaire sur plusieurs lignes se termine au-dessus - le détecteur prend sa dernière ligne pour du code ; vérifiez la documentation à la main"
+
+msgid "XMLDoc (///) already stands above the attributes - the detector stops at the attribute line and does not see it"
+msgstr "un XMLDoc (///) se trouve déjà au-dessus des attributs - le détecteur s'arrête à la ligne d'attribut et ne le voit pas"
+
+msgid "a comment precedes the header on its line - the skeleton belongs above it, insert it by hand"
+msgstr "un commentaire précède l'en-tête sur sa ligne - le squelette va au-dessus, à insérer à la main"
+
+msgid "generic interface - one GUID would apply to all instantiations (Supports would mix them up)"
+msgstr "interface générique - un GUID vaudrait pour toutes les instanciations (Supports les confondrait)"
+
+msgid "forward declaration - it carries no GUID"
+msgstr "déclaration anticipée - elle ne porte aucun GUID"
+
+msgid "the header is already followed by '[' (GUID or attribute)"
+msgstr "l'en-tête est déjà suivi de '[' (GUID ou attribut)"
+
+msgid "no interface body begins after the header (header duplicated under {$IFDEF}?)"
+msgstr "aucun corps d'interface ne commence après l'en-tête (en-tête dupliqué sous {$IFDEF} ?)"
+
+msgid "{$INTERFACES CORBA} in the file"
+msgstr "{$INTERFACES CORBA} dans le fichier"
+
+msgid "{$CALLING STDCALL} in the file - a COM import cannot be ruled out"
+msgstr "{$CALLING STDCALL} dans le fichier - un import COM n'est pas exclu"
+
+msgid "stdcall/safecall/winapi/dispid in the body - a COM import needs the real IID, not a new GUID"
+msgstr "stdcall/safecall/winapi/dispid dans le corps - un import COM a besoin du vrai IID, pas d'un nouveau GUID"
+
+msgid "compiler directive between the header and the first member"
+msgstr "directive de compilation entre l'en-tête et le premier membre"
+
+msgid "CreateGUID returned no GUID"
+msgstr "CreateGUID n'a renvoyé aucun GUID"
+
+msgid "the declaration already carries %s"
+msgstr "la déclaration porte déjà %s"
+
+msgid "the declaration carries %s - that does not fit override (virtual/dynamic introduce an entry of their own)"
+msgstr "la déclaration porte %s - cela ne va pas avec override (virtual/dynamic introduisent leur propre entrée)"
+
+msgid "parent class %s not found in the text - override cannot be checked"
+msgstr "classe parente %s introuvable dans le texte - override invérifiable"
+
+msgid "%s.%s has a different shape (class, parameter modifiers, types, return type or calling convention) - override would not compile"
+msgstr "%s.%s a une autre forme (class, modificateurs de paramètres, types, retour ou convention d'appel) - override ne compilerait pas"
+
+msgid "class header %s not found in the text"
+msgstr "en-tête de classe %s introuvable dans le texte"
+
+msgid "generic ancestor - the detector compares T with the substituted type; override might be the fix, %s"
+msgstr "ancêtre générique - le détecteur compare T au type substitué ; override serait peut-être la correction, %s"
+
+msgid "unknown message - neither \"missing override\" nor \"hides all inherited\""
+msgstr "message inconnu - ni \"missing override\" ni \"hides all inherited\""
