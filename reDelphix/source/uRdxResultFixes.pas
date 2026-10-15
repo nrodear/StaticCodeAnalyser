@@ -72,7 +72,7 @@ unit uRdxResultFixes;
 //                   end, wenn es seine Zeile beginnt, sonst inline hinter
 //                   der letzten Anweisung; fehlt ihr das ';', kommt es mit
 //                   - hinter ihr letztes Zeichen aus Code oder String
-//                   (uRdxStructFixes.LastCharBefore).
+//                   (uRdxCodeMap.LastCharBefore).
 //                   Leerer Rumpf: wie FirstStatement.
 // Die Routinengrenzen liest uRdxRoutineFixes.ReadRoutine (Kopf, lokale
 // Abschnitte und Routinen, begin bzw. asm, passendes end), den Klassenkopf
@@ -209,7 +209,6 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxStructFixes,   // LastCharBefore (SCA097: Ende der letzten Anweisung)
   uRdxRtlTypes,      // IsRtlClassOrInterface (SCA196: Interface aus der RTL)
   uRdxCompilerTraces;  // OldCompilerTrace (SCA121: Spuren alter Compiler)
 

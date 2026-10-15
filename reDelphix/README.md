@@ -52,7 +52,7 @@ source\uRdxMagicFixes.pas         Quick-Fix SCA014 "Lokale Konstante einfuehren"
 source\uRdxIntroPlan.pas          Code-Aktion "Lokale Variable einfuehren" (ohne Fund; seit Charge Q14 auch der Quick-Fix SCA014): Literal am Caret, Deklaration, Spalten, Ablehnungen (reine Textlogik)
 source\uRdxIntroEdits.pas         dieselbe Aktion: Puffertext, Ziel am Caret, Ersetzungen des Writers, Ende des Sync-Blocks (reine Textlogik; IDE-Teil folgt)
 source\uRdxSuppress.pas           Unterdrueck-Marker setzen und entfernen (reine Textlogik)
-source\uRdxCodeMap.pas            Code-Sicht der Datei (Kommentare, Strings, mehrzeilige Strings) und Token-Leser
+source\uRdxCodeMap.pas            Code-Sicht der Datei (Kommentare, Strings, mehrzeilige Strings), Token-Leser und die geteilten Bausteine der Planer: Bereiche (RangeText, CommentInRange, LastCharBefore/FirstCharAfter, CanAppendLine - bis Charge B2S-a in uRdxStructFixes), Fragen an die ganze Datei (NextTokenOnLineWith, DeclaresAfter/DeclaresRoutine - bis dahin in uRdxSimpleFixes), Klammertiefe (ParenDelta) und Meldungstext (QuotedText, ColumnFromMessage); die Planer-Units haengen fuer solche Helfer nicht mehr aneinander (Review R3-07)
 source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung aller Ersetzungen, Spaltengrenze, Textwahl
 source\uRdxPaths.pas              die EINE Netzpfad-Regel (Charge B2S-a): UNC, auch mit `/` und als `\\?\UNC\..`, und Netzlaufwerke (GetDriveType, selbst deklariert, mit Naht fuer Tests) - `\\?\C:\..` ist lokal; fuer Include-, Form- und Projektdateien und die Projekt-Units, ohne Winapi.Windows (FPC-Pruefstand)
 source\uRdxEditor.pas             ToolsAPI: Puffer lesen, Bereich markieren, Bereiche ersetzen (ein Undo-Schritt), Projekt-Units

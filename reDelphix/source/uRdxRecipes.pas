@@ -31,8 +31,7 @@ unit uRdxRecipes;
 interface
 
 uses
-  System.SysUtils, System.Classes,
-  uRefactorInfo;
+  uRefactorInfo;   // TRefactorValueType
 
 type
   // Ein Teilbereich mit seinem Quelltext - die Form, in der die Rezepte
@@ -408,6 +407,9 @@ function SplitLongLiteral(const ASource: string): string;
 implementation
 
 uses
+  // Bis Charge B2S-a im interface - die Schnittstelle braucht sie nicht
+  // (Review R3-07).
+  System.SysUtils, System.Classes,
   uRdxCodeMap;   // IsIdentStart, IsIdentChar (Charge R8: eine Regel statt drei)
 
 const

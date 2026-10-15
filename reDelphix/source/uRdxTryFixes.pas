@@ -178,7 +178,6 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxStructFixes,   // RangeText, CommentInRange, CanAppendLine
   uRdxRoutineFixes;  // ReadRoutine (lokale Variablen der Routine um A)
 
 const

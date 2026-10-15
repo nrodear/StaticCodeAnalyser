@@ -146,8 +146,6 @@ unit uRdxSqlTemplate;
 interface
 
 uses
-  System.SysUtils,
-  uRefactorInfo,   // ROLE_TARGET, ROLE_LITERAL, ROLE_OPERAND
   uRdxRecipes,     // TRdxPart(s), Literal-Codec, Query-Objekt des Ziels
   uRdxCodeMap;     // TRdxCodeMap: die Nachweise am Quelltext
 
@@ -252,7 +250,11 @@ function SqlPlaceholders(const ASql: string): TArray<string>;
 implementation
 
 uses
+  // Bis Charge B2S-a standen System.SysUtils und uRefactorInfo im
+  // interface - die Schnittstelle braucht sie nicht (Review R3-07).
+  System.SysUtils,
   System.StrUtils,    // PosEx
+  uRefactorInfo,      // ROLE_TARGET, ROLE_LITERAL, ROLE_OPERAND
   uRdxRoutineFixes;   // ReadRoutine: Grenzen der Routinen (lokale Konstanten)
 
 const

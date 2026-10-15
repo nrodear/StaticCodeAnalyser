@@ -294,8 +294,7 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxPaths,         // IsNetworkPath (Includes nie aus dem Netz)
-  uRdxStructFixes;   // RangeText
+  uRdxPaths;         // IsNetworkPath (Includes nie aus dem Netz)
 
 const
   SPAN_164 = 'sca164';

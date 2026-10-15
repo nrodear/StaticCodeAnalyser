@@ -137,7 +137,6 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxStructFixes,   // RangeText, CommentInRange
   uRdxRoutineFixes;  // ReadRoutine (SCA053: Ende des Gueltigkeitsbereichs),
                      // MarkerAboveReason (Marker ueber der Deklaration)
 

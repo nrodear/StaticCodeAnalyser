@@ -72,8 +72,7 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxStructFixes;   // StartsStatementAt (SCA120: kein bedingter Ausdruck),
-                     // CommentInRange
+  uRdxStructFixes;   // StartsStatementAt (SCA120: kein bedingter Ausdruck)
 
 const
   SPAN_020 = 'sca020';
@@ -126,8 +125,8 @@ end;
 // Der Name hinter dem Routinen-Wort bis vor '(' ':' ';' oder bis zum
 // Zeilenende (die Parameter auf der Folgezeile) - als TEXT, mit allen
 // Gliedern ('TFoo.Bar'). '' ohne Name. Bis Charge B2S-a hiess sie
-// NameAfter wie uRdxSimpleFixes.NameAfter, die das letzte Glied als TOKEN
-// liefert (Review R3-05).
+// NameAfter wie uRdxCodeMap.NameAfter (bis Charge B2S-a in
+// uRdxSimpleFixes), die das letzte Glied als TOKEN liefert (Review R3-05).
 function HeaderNameText(AMap: TRdxCodeMap; const AKeyword: TRdxToken): string;
 var
   First, T : TRdxToken;

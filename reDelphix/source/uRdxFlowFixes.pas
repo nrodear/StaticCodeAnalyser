@@ -44,8 +44,7 @@ unit uRdxFlowFixes;
 interface
 
 uses
-  System.SysUtils,
-  uRefactorInfo, uRdxBufferMath, uRdxCodeMap;
+  uRdxBufferMath, uRdxCodeMap;
 
 type
   // Ergebnis der Planer: die Ersetzung und was der Aufrufer mit dem
@@ -114,9 +113,13 @@ type
 implementation
 
 uses
-  uRdxSimpleFixes,   // DeclaresRoutine (eigene Routine Exit, Funktionsname),
-                     // NextTokenOnLineWith (class operator Assign)
-  uRdxStructFixes;   // StartsStatementAt, ElseBelongsToIf, Bereichshelfer
+  // Nur die Schnittstelle braucht uRdxBufferMath/uRdxCodeMap im interface;
+  // die Fragen an die ganze Datei (DeclaresRoutine, NextTokenOnLineWith) und
+  // die Bereichs-Helfer kommen seit Charge B2S-a aus uRdxCodeMap - bis
+  // dahin band die Unit dafuer uRdxSimpleFixes ein (Review R3-07).
+  System.SysUtils,
+  uRefactorInfo,     // TRefactorSpan.Make
+  uRdxStructFixes;   // StartsStatementAt, ElseBelongsToIf
 
 const
   SPAN_098 = 'sca098';
@@ -805,7 +808,7 @@ begin
   if InFinally(AMap, AJump) then
     Exit('Sprung im finally-Teil - Delphi (E2126) und FPC (06040) '
       + 'uebersetzen ihn nicht; von Hand pruefen');
-  if TRdxSimpleFixes.DeclaresRoutine(AMap, AJump.Low) then
+  if DeclaresRoutine(AMap, AJump.Low) then
     Result := Format('die Unit deklariert eine eigene Routine %s - der '
       + 'Sprung ruft vielleicht sie auf', [AJump.Low]);
 end;
@@ -1033,7 +1036,7 @@ begin
     Exit('Result := Result stillt vielleicht eine Compiler-Meldung (Delphi '
       + 'W1035, FPC "Function result does not seem to be set") - entfernt '
       + 'kaeme sie zurueck; von Hand entscheiden oder unterdruecken');
-  if (AKey = Root) and TRdxSimpleFixes.DeclaresRoutine(AMap, Root) then
+  if (AKey = Root) and DeclaresRoutine(AMap, Root) then
     Exit(Format('%s ist auch der Name einer Routine dieser Unit - rechts '
       + 'kann ein (rekursiver) Aufruf stehen', [Root]));
   if DeclaresAssignOperator(AMap) then
