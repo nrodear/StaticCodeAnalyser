@@ -10,6 +10,10 @@ unit uTestRdxProjectUnits;
 // Dateien in den Verzeichnissen, der Suchpfad (relativ, absolut, Makros
 // aussen vor) und dass ein Netzpfad nicht gelesen wird, sondern jede
 // Antwort offen laesst. Die Verzeichnisse liegen unter TEMP\rdx_fa_<GUID>.
+// Charge B2S-a: der Index fragt die eine Netzpfad-Regel uRdxPaths - das
+// Netzlaufwerk kommt ueber deren Naht (SetRdxRemoteDriveTest; bis dahin
+// eine eigene Naht IsRemote des Index), und ein lokales Verzeichnis im
+// Win32-Namensraum ('\\?\C:\..') wird gelesen (bis dahin "Netzpfad").
 
 interface
 
@@ -27,13 +31,19 @@ type
     [Test] procedure UncDir_NotRead_AnswerOpen;
     [Test] procedure RemoteDir_NotRead_AnswerOpen;
     [Test] procedure NoNetwork_NoReason;
+    [Test] procedure LongLocalDir_Read;
   end;
 
 implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxScopeTable;
+  uRdxScopeTable,
+  uRdxPaths;   // SetRdxRemoteDriveTest (Naht fuer das Netzlaufwerk)
+
+const
+  // Das Netzlaufwerk der Attrappe (FakeRemoteDrive).
+  DRIVE_Q = 'Q:';
 
 // Ein frisches Verzeichnis TEMP\rdx_fa_<GUID>\ (angelegt).
 function FreshDir: string;
@@ -74,10 +84,11 @@ begin
   TFileStream.Create(APath, fmCreate).Free;
 end;
 
-// Attrappe fuer den Netzlaufwerk-Test von uRdxEditor (GetDriveType).
-function FakeRemote(const APath: string): Boolean;
+// Attrappe fuer GetDriveType in der Netzpfad-Regel (uRdxPaths): nur Q: ist
+// ein Netzlaufwerk.
+function FakeRemoteDrive(const ADrive: string): Boolean;
 begin
-  Result := Pos('remote_drive', LowerCase(APath)) > 0;
+  Result := SameText(ADrive, DRIVE_Q);
 end;
 
 procedure TTestRdxProjectUnits.Knows_ModuleNames;
@@ -198,21 +209,26 @@ end;
 
 procedure TTestRdxProjectUnits.RemoteDir_NotRead_AnswerOpen;
 var
-  D : string;
-  U : TRdxProjectUnits;
+  D, Net : string;
+  U      : TRdxProjectUnits;
 begin
+  // Das Netzlaufwerk ueber die Naht der Regel (Q: gilt als Netzlaufwerk).
   D := FreshDir;
+  Net := DRIVE_Q + PathDelim + 'lib';
+  SetRdxRemoteDriveTest(FakeRemoteDrive);
   U := TRdxProjectUnits.Create;
   try
-    Touch(D + 'remote_drive' + PathDelim + 'Net.pas');
-    U.IsRemote := FakeRemote;
+    Touch(D + 'Local.pas');
     U.AddDir(D);
+    Assert.IsTrue(U.Knows('Local'), 'lokal: gelesen');
     Assert.IsFalse(U.Knows('Net'), 'lokal: nur was da liegt');
-    U.AddSearchPath('remote_drive', D);
-    Assert.AreEqual(D + 'remote_drive', U.Unreadable);
+    U.AddSearchPath(Net, D);
+    Assert.AreEqual(Net, U.Unreadable);
     Assert.IsTrue(U.Knows('Net'), 'Netzlaufwerk nicht gelesen');
     Assert.IsTrue(U.Knows('Elsewhere'), 'jede Antwort offen');
+    Assert.IsTrue(Pos(Net, U.UnreadableReason) > 0, U.UnreadableReason);
   finally
+    SetRdxRemoteDriveTest(nil);
     U.Free;
     RemoveTree(D);
   end;
@@ -229,6 +245,34 @@ begin
     Assert.IsFalse(U.Knows('Anything'), 'nichts bekannt');
   finally
     U.Free;
+  end;
+end;
+
+procedure TTestRdxProjectUnits.LongLocalDir_Read;
+var
+  D, Long : string;
+  U       : TRdxProjectUnits;
+begin
+  // Charge B2S-a: '\\?\C:\..' beginnt mit zwei Trennern und galt dem Index
+  // als UNC - ein lokales Verzeichnis, lang geschrieben, blieb ungelesen
+  // (jede Antwort offen, der uses-Eintrag gesperrt). Gegen 9713942b rot.
+  D := FreshDir;
+  Long := PathDelim + PathDelim + '?' + PathDelim + D;
+  U := TRdxProjectUnits.Create;
+  try
+    Touch(D + 'Mine.pas');
+    U.AddDir(Long);
+    Assert.AreEqual('', U.Unreadable, 'lokal, nur lang geschrieben');
+    Assert.IsTrue(U.Knows('Mine'), 'gelesen');
+    Assert.IsFalse(U.Knows('Absent'));
+    // Im Suchpfad bleibt die Form absolut - kein Projektverzeichnis davor.
+    Touch(D + 'sub' + PathDelim + 'Deep.pas');
+    U.AddSearchPath(Long + 'sub', PathDelim + 'elsewhere');
+    Assert.AreEqual('', U.Unreadable, 'Suchpfad lang geschrieben');
+    Assert.IsTrue(U.Knows('Deep'), 'absolut gelesen');
+  finally
+    U.Free;
+    RemoveTree(D);
   end;
 end;
 

@@ -16,9 +16,10 @@ unit uRdxFixTable;
 // Zeile hat Planer, Hinweis (oder der Planer setzt ihn) und Menuetext.
 //
 // OHNE ToolsAPI: in reDelphix.Test uebersetzbar. Nicht im FPC-Pruefstand -
-// die Unit braucht uRdxRecipeRunner, der den Quellstellen-Dienst braucht.
-// Die Rumpf-Routinen der Hilfen bleiben, wo sie sind (uRdxRecipeRunner,
-// die Planer-Units); hier stehen nur die Adapter auf eine gemeinsame Form
+// die Unit braucht uRdxRecipeRunner und uRdxFixRunner, die den
+// Quellstellen-Dienst brauchen. Die Rumpf-Routinen der Hilfen bleiben, wo
+// sie sind (uRdxFixRunner - bis Charge B2S-b in uRdxRecipeRunner -, die
+// Planer-Units); hier stehen nur die Adapter auf eine gemeinsame Form
 // (TRdxFixPlanner), das EINE Geruest der Planer mit Plan-Record
 // (TRdxFixFrame, Charge H5c) und die Zeilen.
 //
@@ -111,10 +112,13 @@ type
 implementation
 
 uses
-  // Vor System.SysUtils, damit deren Namen gelten (FindClose u. a.):
-  // GetDriveType fuer den Netzlaufwerk-Check von SCA014.
-  Winapi.Windows,
   System.SysUtils,
+  // Ruempfe der Hilfen mit Quellstellen-Dienst und Bausteine der Tabelle
+  // (TRdxFixRunner, MapFix, CastFreeFix, EmptyRaiseFix, AppendUses,
+  // CondAssignReason, SelfAssignReason) - bis Charge B2S-b in
+  // uRdxRecipeRunner (Review R6-12)
+  uRdxFixRunner,
+  uRdxPaths,         // IsNetworkPath, RemoteDriveOf, WithoutNamespacePrefix
   uRdxText,          // _(): in die reDelphix-Sprache (E29), nie uLocalization
   uRdxRecipes,       // AsciiOnly (SCA085-Gegenprobe)
   uRdxCodeMap,       // TRdxCodeMap (Adapter auf die Code-Sicht)
@@ -228,11 +232,6 @@ const
     + '(Menueaufbau im Hauptthread); von Hand';
   WHAT_FORMS    = 'Formdateien';
   WHAT_INCLUDES = 'Include-Dateien';
-  // Win32-Namensraum vor einem Pfad (WithoutNamespacePrefix): '\\?\' (lange
-  // Pfade) und '\\.\' (Geraete-Namensraum); dahinter 'UNC\' = Netzpfad.
-  WIN32_NS_PREFIXES: array[0..1] of string = ('\\?\', '\\.\');
-  WIN32_NS_UNC = 'UNC\';
-  UNC_LEAD     = '\\';
   // SCA001: nur diese Variante bekommt die Hilfe (Feld TLeakFinding.
   // LeakVariant, das uLeakDetector2 setzt; properties.variant im SARIF).
   LEAK_VARIANT_FOF = 'freed-outside-finally';
@@ -253,7 +252,7 @@ const
   offen sein muss (NeedsOpen). Generisch, weil die Planer-Units ihre
   Plan-Records behalten (sie laufen im FPC-Pruefstand); diese Unit
   uebersetzt nur Delphi (reDelphix.Test), nicht der Pruefstand. Bewusst
-  NICHT im Geruest: MapFix (uRdxRecipeRunner) - der Laeufer braucht es
+  NICHT im Geruest: MapFix (uRdxFixRunner) - der Laeufer braucht es
   selbst (ExplicitTObjectFix, EmptySectionFix), und seine Planer liefern
   genau eine Ersetzung ohne Plan-Record.
   Delphi-Regeln dazu: freie generische Funktionen gibt es nicht - Run ist
@@ -363,7 +362,7 @@ begin
 end;
 
 // SCA098: X und (in der Gegenrichtung) die Bedingung als Boolean bewiesen
-// (CondAssignReason, uRdxRecipeRunner).
+// (CondAssignReason, uRdxFixRunner).
 function CondCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
   AFinding: TLeakFinding; const APlan: TRdxFlowPlan): string;
 begin
@@ -377,71 +376,45 @@ begin
   Result := SelfAssignReason(APlaces, AMap, AFinding.LineInt, APlan.Target);
 end;
 
-// Liegt AFileName auf einem Netzlaufwerk ('Z:' ueber GetDriveType)?
-function IsRemoteDrive(const AFileName: string): Boolean;
+// SCA014: liegt die Datei auf einem Netzlaufwerk (uRdxPaths.RemoteDriveOf,
+// seit Charge B2S-a auch lang geschrieben: '\\?\Z:\..')? Dann liest die
+// Hilfe nichts von der Platte - der Menueaufbau laeuft im Hauptthread
+// (Gegen-Review Q14, Verdacht e; UNC prueft TRdxMagicFixes.FileReason).
+function RemoteDriveReason(const AFileName: string): string;
 var
   Drive : string;
 begin
-  Drive := ExtractFileDrive(AFileName);
-  Result := (Length(Drive) = 2) and (Drive[2] = ':')
-    and (GetDriveType(PChar(Drive + PathDelim)) = DRIVE_REMOTE);
-end;
-
-// SCA014: liegt die Datei auf einem Netzlaufwerk? Dann liest die Hilfe
-// nichts von der Platte - der Menueaufbau laeuft im Hauptthread
-// (Gegen-Review Q14, Verdacht e; UNC prueft TRdxMagicFixes.FileReason).
-function RemoteDriveReason(const AFileName: string): string;
-begin
   Result := '';
-  if IsRemoteDrive(AFileName) then
-    Result := Format(R_MAGIC_REMOTE, [ExtractFileDrive(AFileName)]);
+  Drive := RemoteDriveOf(AFileName);
+  if Drive <> '' then
+    Result := Format(R_MAGIC_REMOTE, [Drive]);
 end;
 
-// AFileName ohne den Vorsatz des Win32-Namensraums: '\\?\C:\src\t.pas' ->
-// 'C:\src\t.pas' (ein lokaler Pfad, lang geschrieben; ebenso '\\.\'),
-// '\\?\UNC\srv\share\t.pas' -> '\\srv\share\t.pas'. Ohne Vorsatz
-// unveraendert.
-function WithoutNamespacePrefix(const AFileName: string): string;
-var
-  i : Integer;
-begin
-  Result := AFileName;
-  for i := 0 to High(WIN32_NS_PREFIXES) do
-    if Copy(AFileName, 1, Length(WIN32_NS_PREFIXES[i])) = WIN32_NS_PREFIXES[i] then
-    begin
-      Result := Copy(AFileName, Length(WIN32_NS_PREFIXES[i]) + 1, MaxInt);
-      if SameText(Copy(Result, 1, Length(WIN32_NS_UNC)), WIN32_NS_UNC) then
-        Result := UNC_LEAD + Copy(Result, Length(WIN32_NS_UNC) + 1, MaxInt);
-      Exit;
-    end;
-end;
-
-// SCA147/SCA164 (Review FB, R2-07): liegt die Unit auf einem Netzpfad
-// ('\\server\share\..', auch mit '/') oder einem Netzlaufwerk? Dann liest
-// die Hilfe dort nichts (AWhat: was sie lesen wollte) - dieselbe Regel wie
-// SCA014; die UNC-Form ist die von uRdxMagicFixes.FileReason (dort
-// privat, zweite Kopie - die gemeinsamen Helfer legt eine spaetere Charge
-// zusammen). Der Win32-Namensraum zaehlt ohne Vorsatz
-// (WithoutNamespacePrefix; Nachpruefung FB: '\\?\C:\..' hiess bis dahin
-// "Netzpfad"). '' oder der Grund.
+// SCA147/SCA164 (Review FB, R2-07): liegt die Unit im Netz
+// (uRdxPaths.IsNetworkPath: UNC, auch mit '/' oder als '\\?\UNC\..', oder
+// ein Netzlaufwerk; '\\?\C:\..' ist lokal)? Dann liest die Hilfe dort
+// nichts (AWhat: was sie lesen wollte) - dieselbe Regel wie SCA014. Der
+// Grund nennt das Verzeichnis ohne Namensraum-Vorsatz bzw. das
+// Netzlaufwerk. '' oder der Grund.
 function NetworkPathReason(const AFileName, AWhat: string): string;
 var
-  Path : string;
+  Path, Drive : string;
 begin
   Result := '';
+  if not IsNetworkPath(AFileName) then Exit;
   Path := WithoutNamespacePrefix(AFileName);
-  if (Length(Path) > 2) and CharInSet(Path[1], ['\', '/'])
-     and CharInSet(Path[2], ['\', '/']) then
-    Result := Format(R_REMOTE_FILES, [ExtractFileDir(Path), AWhat])
-  else if IsRemoteDrive(Path) then
-    Result := Format(R_REMOTE_FILES, [ExtractFileDrive(Path), AWhat]);
+  Drive := RemoteDriveOf(Path);
+  if Drive <> '' then
+    Result := Format(R_REMOTE_FILES, [Drive, AWhat])
+  else
+    Result := Format(R_REMOTE_FILES, [ExtractFileDir(Path), AWhat]);
 end;
 
 // SCA164: die Include-Dateien vor implementation liest die Hilfe von der
 // Platte neben der Unit (Gegen-Review H3, Minor 4) - sie koennen die
 // Routine deklarieren oder rufen; nicht gefunden heisst keine Hilfe. Nur,
-// wenn der Plan welche nennt (SCA147 nennt keine), und nicht auf einem
-// Netzpfad (NetworkPathReason, R2-07).
+// wenn der Plan welche nennt (seit Charge B1-FD auch der von SCA147), und
+// nicht auf einem Netzpfad (NetworkPathReason, R2-07).
 function IncludeCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
   AFinding: TLeakFinding; const APlan: TRdxRoutinePlan): string;
 begin

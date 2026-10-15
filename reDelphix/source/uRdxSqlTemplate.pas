@@ -146,8 +146,6 @@ unit uRdxSqlTemplate;
 interface
 
 uses
-  System.SysUtils,
-  uRefactorInfo,   // ROLE_TARGET, ROLE_LITERAL, ROLE_OPERAND
   uRdxRecipes,     // TRdxPart(s), Literal-Codec, Query-Objekt des Ziels
   uRdxCodeMap;     // TRdxCodeMap: die Nachweise am Quelltext
 
@@ -252,8 +250,13 @@ function SqlPlaceholders(const ASql: string): TArray<string>;
 implementation
 
 uses
+  // Bis Charge B2S-a standen System.SysUtils und uRefactorInfo im
+  // interface - die Schnittstelle braucht sie nicht (Review R3-07).
+  System.SysUtils,
   System.StrUtils,    // PosEx
-  uRdxRoutineFixes;   // ReadRoutine: Grenzen der Routinen (lokale Konstanten)
+  uRefactorInfo,      // ROLE_TARGET, ROLE_LITERAL, ROLE_OPERAND
+  uRdxBlocks;         // ReadRoutine (lokale Konstanten), HeritageOf,
+                      // TypeHasBody, CLASS_MODIFIERS
 
 const
   // Gruende - deutsch ohne Umlaute wie in den Nachbar-Units (Statustext).
@@ -578,12 +581,6 @@ begin
     Result := #0;
 end;
 
-procedure AppendTo(var AList: TArray<string>; const S: string);
-begin
-  SetLength(AList, Length(AList) + 1);
-  AList[High(AList)] := S;
-end;
-
 function JoinWith(const AItems: TArray<string>; const ASep: string): string;
 var
   SB : TStringBuilder;
@@ -747,7 +744,7 @@ begin
       Dec(Depth)
     else if (AText[i] = ',') and (Depth = 1) then
     begin
-      AppendTo(AArgs, Trim(Copy(AText, Start, i - Start)));
+      AddText(AArgs, Trim(Copy(AText, Start, i - Start)));
       Start := i + 1;
     end;
     if Depth = 0 then
@@ -756,7 +753,7 @@ begin
   end;
   Result := i = Length(AText);
   if Result then
-    AppendTo(AArgs, Trim(Copy(AText, Start, i - Start)));
+    AddText(AArgs, Trim(Copy(AText, Start, i - Start)));
 end;
 
 // Die '(' der LETZTEN Klammergruppe auf oberster Ebene, wenn AText mit
@@ -1086,7 +1083,7 @@ function ReadPath(const AText: string; var i: Integer): TArray<string>;
 begin
   Result := nil;
   repeat
-    AppendTo(Result, ReadIdent(AText, i));
+    AddText(Result, ReadIdent(AText, i));
     while CharAt(AText, i) = '[' do
       SkipIndex(AText, i);
     if (CharAt(AText, i) <> '.') or not IsIdentStart(CharAt(AText, i + 1)) then
@@ -1161,9 +1158,9 @@ begin
   for i := 0 to High(AParts) do
     if not SameText(AParts[i], 'self') then
       if Length(Segs) = 0 then
-        AppendTo(Segs, WithoutPrefix(AParts[i]))
+        AddText(Segs, WithoutPrefix(AParts[i]))
       else
-        AppendTo(Segs, AParts[i]);
+        AddText(Segs, AParts[i]);
   Result := JoinWith(Segs, '');
   if HasNonAscii(Result) then
     Exit('');
@@ -1566,7 +1563,7 @@ begin
   P.Value := AValue;
   SetLength(S.Params, Length(S.Params) + 1);
   S.Params[High(S.Params)] := P;
-  AppendTo(S.Used, LowerCase(P.Name));
+  AddText(S.Used, LowerCase(P.Name));
   if IsIdentChar(OutLast(S)) then
     EmitText(S, ' ');
   EmitText(S, ':' + P.Name);
@@ -1693,7 +1690,7 @@ end;
 procedure FlushStrBuf(var S: TSqlScan);
 begin
   if S.StrBuf <> '' then
-    AppendTo(S.StrParts, SplitLongLiteral(
+    AddText(S.StrParts, SplitLongLiteral(
       TRdxRecipes.EncodeLiteral(S.StrBuf)));
   S.StrBuf := '';
 end;
@@ -1829,7 +1826,7 @@ begin
     Inc(Result);
   Nm := LowerCase(Copy(T, i + 1, Result - i - 1));
   if not (((Nm = 'new') or (Nm = 'old')) and (CharAt(T, Result) = '.')) then
-    AppendTo(S.Found, Nm);
+    AddText(S.Found, Nm);
   EmitText(S, Copy(T, i, Result - i));
   PushTok(S, 'v');
 end;
@@ -1846,7 +1843,7 @@ begin
   EmitText(S, Op);
   if Op = '(' then
   begin
-    AppendTo(S.Openers, S.Tok[0]);
+    AddText(S.Openers, S.Tok[0]);
     PushTok(S, Op);
   end
   else if Op = ')' then
@@ -1919,7 +1916,7 @@ begin
   j := i + 1;
   while IsIdentChar(CharAt(T, j)) do
     Inc(j);
-  AppendTo(S.Found, LowerCase(Copy(T, i + 1, j - i - 1)));
+  AddText(S.Found, LowerCase(Copy(T, i + 1, j - i - 1)));
 end;
 
 // Name, Zeilen- oder Block-Kommentar: Zeichen uebernehmen bis zum Ende.
@@ -1987,7 +1984,7 @@ begin
     Exit(UnwrapValue(S.Segs[AFirst].Text));
   Items := nil;
   for k := AFirst to ALast do
-    AppendTo(Items, S.Segs[k].Text);
+    AddText(Items, S.Segs[k].Text);
   Result := JoinWith(Items, ' + ');
 end;
 
@@ -2048,7 +2045,7 @@ begin
     if S.StrFirst = '' then
       S.StrFirst := Value;
   end;
-  AppendTo(S.StrParts, Value);
+  AddText(S.StrParts, Value);
   EmitExpr(S, ASeg.Text, #0);
 end;
 
@@ -2093,7 +2090,7 @@ begin
   if S.Mode = lmString then
   begin
     FlushStrBuf(S);
-    AppendTo(S.StrParts, Seg.Expr);
+    AddText(S.StrParts, Seg.Expr);
   end;
   EmitExpr(S, Seg.Expr, Seg.Text[Length(Seg.Text)]);
   ReadMuted(S, ASeg);
@@ -2156,9 +2153,9 @@ begin
   Items := nil;
   for i := 0 to High(APieces) do
     if APieces[i].IsExpr then
-      AppendTo(Items, APieces[i].Text)
+      AddText(Items, APieces[i].Text)
     else if APieces[i].Text <> '' then
-      AppendTo(Items, SplitLongLiteral(
+      AddText(Items, SplitLongLiteral(
         TRdxRecipes.EncodeLiteral(APieces[i].Text)));
   if Length(Items) = 0 then
     Result := ''''''
@@ -2192,7 +2189,7 @@ var
 begin
   Items := nil;
   for i := 0 to High(AParams) do
-    AppendTo(Items, AParams[i].Value);
+    AddText(Items, AParams[i].Value);
   Result := JoinWith(Items, ', ');
 end;
 
@@ -2270,7 +2267,7 @@ begin
   Existing := SqlPlaceholders(PlainSqlOf(S.Segs));
   S.Used := Copy(Existing, 0, Length(Existing));
   for Name in AReq.ChainNames do
-    AppendTo(S.Used, LowerCase(Name));
+    AddText(S.Used, LowerCase(Name));
   ScanSegs(S);
   AResult.Reason := S.Reason;
   if (AResult.Reason = '') and (S.QMarks > 0) then
@@ -2325,12 +2322,12 @@ begin
   Result := T.Low;
   if not T.IsWord then Exit;
   Parts := nil;
-  AppendTo(Parts, T.Low);
+  AddText(Parts, T.Low);
   D := After(AMap, T);
   while (D.Low = '.') and After(AMap, D).IsWord do
   begin
     T := After(AMap, D);
-    AppendTo(Parts, T.Low);
+    AddText(Parts, T.Low);
     D := After(AMap, T);
   end;
   Result := JoinWith(Parts, '.');
@@ -2401,10 +2398,10 @@ begin
   if ALine1 = ALine2 then
     Exit(Copy(AMap.Raw(ALine1), ACol1, ACol2 - ACol1));
   Lines := nil;
-  AppendTo(Lines, Copy(AMap.Raw(ALine1), ACol1, MaxInt));
+  AddText(Lines, Copy(AMap.Raw(ALine1), ACol1, MaxInt));
   for L := ALine1 + 1 to ALine2 - 1 do
-    AppendTo(Lines, AMap.Raw(L));
-  AppendTo(Lines, Copy(AMap.Raw(ALine2), 1, ACol2 - 1));
+    AddText(Lines, AMap.Raw(L));
+  AddText(Lines, Copy(AMap.Raw(ALine2), 1, ACol2 - 1));
   Result := JoinWith(Lines, sLineBreak);
 end;
 
@@ -2414,6 +2411,7 @@ function ValueTextAfter(AMap: TRdxCodeMap; const AEq: TRdxToken): string;
 var
   T     : TRdxToken;
   Depth : Integer;
+  Delta : Integer;
   n     : Integer;
 begin
   Result := '';
@@ -2422,10 +2420,9 @@ begin
   for n := 1 to MAX_WALK do
   begin
     if T.Low = '' then Exit;
-    if (T.Low = '(') or (T.Low = '[') then
-      Inc(Depth)
-    else if (T.Low = ')') or (T.Low = ']') then
-      Dec(Depth)
+    Delta := ParenDelta(T);
+    if Delta <> 0 then
+      Inc(Depth, Delta)
     else if (T.Low = ';') and (Depth = 0) then
       Exit(Trim(RawBetween(AMap, AEq.Line, AEq.EndCol, T.Line, T.Col)));
     T := After(AMap, T);
@@ -2556,7 +2553,9 @@ const
   TYPE_KINDS: array[0..3] of string = ('class', 'object', 'interface',
     'dispinterface');
   TYPE_LEADS: array[0..1] of string = ('=', 'packed');
-  TYPE_MODIFIERS: array[0..1] of string = ('abstract', 'sealed');
+  // Die Woerter zwischen 'class' und Vorfahrenliste ('class sealed') sind
+  // seit Charge B2S-b uRdxBlocks.CLASS_MODIFIERS (bis dahin hier als
+  // TYPE_MODIFIERS mit demselben Inhalt).
   // Hinter 'record' in einer Typ-Einschraenkung ('<T: record>').
   CONSTRAINT_FOLLOWERS: array[0..2] of string = ('>', ',', ';');
   KW_RECORD = 'record';
@@ -2569,20 +2568,10 @@ begin
   Result := not TokBefore(T, A) and not TokBefore(B, T);
 end;
 
-// Hat der Typ ab AKind (class, object, interface ...) einen Rumpf mit end?
-// Nicht 'class;' (vorwaerts), 'class of' (Metaklasse), 'class(TBase);'
-// (Kurzform) - wie uRdxRoutineFixes.TypeHasBody.
-function HasTypeBody(AMap: TRdxCodeMap; const AKind: TRdxToken): Boolean;
-var
-  N : TRdxToken;
-begin
-  N := After(AMap, AKind);
-  while InList(N.Low, TYPE_MODIFIERS) do
-    N := After(AMap, N);
-  if N.Low = '(' then
-    N := AfterClose(AMap, N);
-  Result := not InList(N.Low, [';', 'of', '']);
-end;
+// Hat der Typ ab AKind einen Rumpf mit end? Das fragt seit Charge B2S-b
+// uRdxBlocks.TypeHasBody - bis dahin stand die Probe hier als HasTypeBody
+// (dritte Kopie neben uRdxRoutineFixes und uRdxResultFixes; Gegen-Review
+// R5, R5-03).
 
 // Oeffnet T (Schluesselwort, APrev davor) einen Typ mit Rumpf? 'record'
 // immer, ausser als Einschraenkung ('<T: record>'); class, object,
@@ -2592,7 +2581,7 @@ begin
   if T.Low = KW_RECORD then
     Exit(not InList(After(AMap, T).Low, CONSTRAINT_FOLLOWERS));
   Result := InList(T.Low, TYPE_KINDS) and InList(APrev.Low, TYPE_LEADS)
-    and HasTypeBody(AMap, T);
+    and TypeHasBody(AMap, T);
 end;
 
 // Der Name des Typs, dessen Oeffner AKind ist ('TFoo = class', 'TFoo<T> =
@@ -2689,7 +2678,7 @@ var
   R : TRdxRoutine;
   n : Integer;
 begin
-  Result := (TRdxRoutineFixes.ReadRoutine(AMap, T, R) = '') and (R.Body.Low <> '');
+  Result := (TRdxBlocks.ReadRoutine(AMap, T, R) = '') and (R.Body.Low <> '');
   if not Result then Exit;
   n := Length(AScopes.Routines);
   SetLength(AScopes.Routines, n + 1);
@@ -2814,7 +2803,12 @@ begin
       Result := i;
 end;
 
-// Die innerste Routine bzw. der innerste Typrumpf um ATok; -1 ohne.
+// Die innerste Routine bzw. der innerste Typrumpf um ATok; -1 ohne. Eine
+// Frage an den Index des einen Laufs (BuildScopes), mit dem Vertrag der
+// Vorlage: die Routine umfasst ATok vom Kopf bis zum letzten ';' samt
+// Deklarationsteil (lokale Konstanten). Die Rueckwaertssuche der anderen
+// Planer (uRdxBlocks.TRdxBlocks.HeadBefore, Gegen-Review R5-03) fragt je
+// Frage neu - hier kommen viele Fragen auf einen Lauf.
 function InnermostRoutine(const AScopes: TSqlScopes; const ATok: TRdxToken): Integer;
 var
   i : Integer;
@@ -2929,13 +2923,13 @@ begin
       Exit(True);
     T := AScopes.Types[Ty].Open;
     Nx := After(AMap, T);
-    while InList(Nx.Low, TYPE_MODIFIERS) do
+    while InList(Nx.Low, CLASS_MODIFIERS) do
       Nx := After(AMap, Nx);
     if Nx.Low = KW_HELPER then
       Exit(True);
     if T.Low = KW_RECORD then
       Exit(False);
-    Names := TRdxRoutineFixes.HeritageOf(AMap, T);
+    Names := TRdxBlocks.HeritageOf(AMap, T);
     if Length(Names) = 0 then
       Exit(False);
     Key := LowerCase(Names[0]);
@@ -3001,7 +2995,7 @@ begin
       Exit;
     if ((Scope <> cvUnit) or not Shadowed)
        and VisibleAt(AScopes, ADecls[i], ALine) then
-      AppendTo(AValues, ADecls[i].Text);
+      AddText(AValues, ADecls[i].Text);
   end;
   Result := True;
 end;
@@ -3319,7 +3313,7 @@ begin
     begin
       Step := ChainStepOn(AMap, L, Cols[k], AChain.Key, Text);
       if Step in [chFragment, chFragmentStop] then
-        AppendTo(AChain.Frags, Text);
+        AddText(AChain.Frags, Text);
       if Step in [chFragmentStop, chStop] then
         Exit;
     end;
@@ -3350,7 +3344,7 @@ begin
         Exit;
       Found := SqlPlaceholders(Text);
       for Name in Found do
-        AppendTo(AChain.Names, Name);
+        AddText(AChain.Names, Name);
     end;
     Inc(L);
   end;
@@ -3384,7 +3378,7 @@ begin
       SB.Append(#13#10);
       Found := SqlPlaceholders(AChain.Frags[i]);
       for Name in Found do
-        AppendTo(AChain.Names, Name);
+        AddText(AChain.Names, Name);
     end;
     APrefix := SB.ToString;
   finally

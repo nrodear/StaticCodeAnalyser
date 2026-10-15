@@ -27,7 +27,7 @@ unit uRdxSimpleFixes;
 // ist KEIN ChangesBehavior-Fall: FreeAndNil ist genau die Form, die der
 // Detektor verlangt (sein 'good'-Beispiel), und der Unterschied ist ein
 // Gewinn (kein haengender Zeiger nach einer Exception im Destruktor). Der
-// Nutzer erfaehrt ihn trotzdem: der Hint der Hilfe (uRdxRecipeRunner,
+// Nutzer erfaehrt ihn trotzdem: der Hint der Hilfe (uRdxFixRunner,
 // R_FREENIL_HINT) nennt die Reihenfolge.
 
 interface
@@ -118,7 +118,8 @@ type
       out AReason: string): Boolean; static;
     // True, wenn die Datei eine Routine AName deklariert ('procedure
     // Assert' / 'function Assert', auch als Methode) - dann bindet der
-    // Name nicht an die RTL.
+    // Name nicht an die RTL. Ruft uRdxCodeMap.DeclaresRoutine (dort seit
+    // Charge B2S-a, Review R3-07).
     class function DeclaresRoutine(AMap: TRdxCodeMap;
       const AName: string): Boolean; static;
 
@@ -154,7 +155,7 @@ type
     // WEITER ALS DER NAME: Interface, Zeiger und eigener Typ sind keine
     // Werttypen, zaehlen hier aber mit - gemeint ist "kein Klassentyp, auf
     // dem FreeAndNil uebersetzt und das Richtige tut". Der Name bleibt, weil
-    // ihn uRdxRecipeRunner (SCA085, SCA139) ruft; umbenennen in einer
+    // ihn uRdxFixRunner (SCA085, SCA139) ruft; umbenennen in einer
     // Charge, die beide Units anfasst. Ein Typ aus einer anderen Unit (auch
     // ein Alias oder ein generischer Record 'TRec<T>') ist hier unbekannt
     // (False) - in Delphi ab 10.4 faellt ein Record dort als Fehler E2010
@@ -307,20 +308,6 @@ type
       const AOperand, ATypeLow: string): string; static;
   end;
 
-// Das naechste Token hinter ATok auf einer Zeile, deren Text ALow (klein)
-// als Wort nennt (HasWordNoCase) - Gross/klein egal, auch in einem
-// Kommentar oder String; ATok = Default(TRdxToken): ab Dateianfang, Low =
-// '' am Dateiende. Vorfilter der Fragen an die ganze Datei (Review R3-03,
-// Charge FC: bis dahin las jede Frage alle Token, ~0,1 s je Frage auf
-// 30.000 Zeilen im IDE-Hauptthread): ein Token mit Low = ALow steht nur auf
-// einer solchen Zeile (ein Token endet mit seiner Zeile, Low ist LowerCase
-// seines Textes, s. HasWordNoCase), die anderen Zeilen kosten einen
-// Textvergleich statt eines Laufs durch die Code-Sicht. Die Token kommen in
-// der Reihenfolge der Datei. Seit Charge FC auch fuer uRdxFlowFixes ('class
-// operator Assign').
-function NextTokenOnLineWith(AMap: TRdxCodeMap; const ATok: TRdxToken;
-  const ALow: string): TRdxToken;
-
 implementation
 
 uses
@@ -345,7 +332,8 @@ const
   SPAN_066 = 'sca066';
   SPAN_072 = 'sca072';
   SPAN_084 = 'sca084';
-  R_NO_COLUMN     = 'Spalte fehlt in der Meldung';
+  // R_NO_COLUMN ('Spalte fehlt in der Meldung') steht seit Charge B2S-a
+  // einmal in uRdxCodeMap, neben ColumnFromMessage (Review R3-05).
   R_ARGS_MOVED    = '() steht nicht mehr an der gemeldeten Stelle';
   R_BOOL_MOVED    = 'der Vergleich mit True/False steht nicht mehr an der '
     + 'gemeldeten Stelle';
@@ -728,163 +716,6 @@ begin
         Exit(True);
 end;
 
-// Das letzte Segment des Namens hinter ATok ('TFoo.Assert' -> 'Assert').
-function NameAfter(AMap: TRdxCodeMap; const ATok: TRdxToken): TRdxToken;
-begin
-  Result := After(AMap, ATok);
-  while (Result.Low <> '') and (After(AMap, Result).Low = '.') do
-    Result := After(AMap, After(AMap, Result));
-end;
-
-{ ---- Vorfilter der Fragen an die ganze Datei (Review R3-03) ---- }
-
-// Steht der Treffer S[AAt..AAt + Length(ALow) - 1] frei: kein
-// Bezeichnerzeichen davor, wenn ALow mit einem beginnt, und keines
-// dahinter, wenn ALow mit einem endet?
-function WordBounded(const S: string; AAt: Integer;
-  const ALow: string): Boolean;
-var
-  Behind : Integer;
-begin
-  Behind := AAt + Length(ALow);
-  Result := not (IsIdentChar(ALow[1]) and (AAt > 1)
-                 and IsIdentChar(S[AAt - 1]))
-    and not (IsIdentChar(ALow[Length(ALow)]) and (Behind <= Length(S))
-             and IsIdentChar(S[Behind]));
-end;
-
-// Nennt S das Wort ALow (klein)? Gross/klein egal wie LowerCase - Delphi
-// und FPC senken nur 'A'..'Z' (FPC-Probe Charge FC: #$C4, #$0130 bleiben)
-// -, ohne Kopie von S: bis zur Nachpruefung R3-03 legte der Vorfilter je
-// Zeile ein LowerCase an, und ein Name, der auf fast jeder Zeile als
-// Teilwort steht ('e', der Typparameter 'T'), kostete mehr als der Lauf
-// ueber alle Token (mscorlib_TLB: 98 -> 238 ms). Als WORT (WordBounded):
-// ein Bezeichner- oder Zahl-Token endet erst vor einem Zeichen, das kein
-// Bezeichnerzeichen ist, oder vor einem Kommentar-/String-Anfang ('{',
-// '(*', '//', '''' - keines ist eins), und das Token davor endet ebenso
-// (TokenAt) - ein Token mit Low = ALow steht darum in seiner Zeile frei;
-// ein Satzzeichen-Token (ALow ohne Bezeichnerzeichen am Rand) braucht
-// keine Grenze. '' kommt nie vor. Nicht uRdxCodeMap.HasIdentWord: das
-// verlangt den Text klein geschrieben, also wieder eine Kopie je Zeile.
-function HasWordNoCase(const S, ALow: string): Boolean;
-var
-  i, k : Integer;
-  C    : Char;
-begin
-  Result := False;
-  if ALow = '' then Exit;
-  for i := 1 to Length(S) - Length(ALow) + 1 do
-  begin
-    k := 0;
-    repeat
-      C := S[i + k];
-      if (C >= 'A') and (C <= 'Z') then
-        C := Char(Ord(C) + 32);
-      if C <> ALow[k + 1] then
-        Break;
-      Inc(k);
-    until k = Length(ALow);
-    if (k = Length(ALow)) and WordBounded(S, i, ALow) then
-      Exit(True);
-  end;
-end;
-
-// Nennt der Text der Zeile ALine ALow (klein) als Wort (HasWordNoCase) -
-// auch in einem Kommentar oder String? Ein Token mit Low = ALow liegt nur
-// auf einer solchen Zeile.
-function LineMentions(AMap: TRdxCodeMap; ALine: Integer;
-  const ALow: string): Boolean;
-begin
-  Result := HasWordNoCase(AMap.Raw(ALine), ALow);
-end;
-
-// Das erste Token ab Zeile ALine auf einer Zeile, die ALow nennt; Low = ''
-// ohne. Nennt eine Zeile ALow nur in einem Kommentar oder String, liegt das
-// naechste Token (NextToken) erst auf einer spaeteren Zeile, die Zeilen
-// dazwischen tragen keines - die Suche geht mit seiner Zeile weiter. Ein
-// Kommentarblock, dessen Zeilen ALow nennen, wird so einmal gelesen, nicht
-// je Zeile bis zu seinem Ende.
-function FirstTokenOnLineWith(AMap: TRdxCodeMap; ALine: Integer;
-  const ALow: string): TRdxToken;
-var
-  Li : Integer;
-begin
-  Li := ALine;
-  while Li <= AMap.LineCount do
-  begin
-    if LineMentions(AMap, Li, ALow) then
-    begin
-      Result := NextToken(AMap, Li, 1);
-      if (Result.Low = '') or (Result.Line = Li) then
-        Exit;
-      Li := Result.Line;
-      if LineMentions(AMap, Li, ALow) then
-        Exit;
-    end;
-    Inc(Li);
-  end;
-  Result := Default(TRdxToken);
-end;
-
-function NextTokenOnLineWith(AMap: TRdxCodeMap; const ATok: TRdxToken;
-  const ALow: string): TRdxToken;
-begin
-  if ATok.Low = '' then
-    Exit(FirstTokenOnLineWith(AMap, 1, ALow));
-  // Auf der Zeile von ATok weiter - sie nennt ALow schon. Liegt das naechste
-  // Token auf einer spaeteren Zeile, steht davor keines: nennt seine Zeile
-  // ALow, ist es selbst die Antwort (bis zur Nachpruefung R3-03 las die
-  // Suche diese Zeile ein zweites Mal ab Spalte 1), sonst geht es hinter
-  // ihr weiter.
-  Result := After(AMap, ATok);
-  if (Result.Low <> '') and (Result.Line <> ATok.Line)
-     and not LineMentions(AMap, Result.Line, ALow) then
-    Result := FirstTokenOnLineWith(AMap, Result.Line + 1, ALow);
-end;
-
-// Die letzte Zeile, deren Text ALow als Wort nennt (LineMentions); 0 ohne.
-function LastLineWith(AMap: TRdxCodeMap; const ALow: string): Integer;
-var
-  Li : Integer;
-begin
-  for Li := AMap.LineCount downto 1 do
-    if LineMentions(AMap, Li, ALow) then
-      Exit(Li);
-  Result := 0;
-end;
-
-// Steht im Code der Datei eines der Woerter AKeywords, gefolgt vom Namen
-// AName (letztes Segment: 'procedure TFoo.Bar' zaehlt fuer 'Bar')?
-// Gesucht wird vom Namen aus (Review R3-03, Charge FC): je Token AName auf
-// einer Zeile, die ihn nennt (NextTokenOnLineWith), rueckwaerts ueber die
-// Kette ('TFoo.') zum Wort davor - die Umkehrung von NameAfter, die
-// NameAfter danach bestaetigt. Dasselbe Ergebnis wie der Lauf ueber jedes
-// Token bis Charge FC: NameAfter(K) = N heisst K R1 . R2 . ... . N, und
-// von N fuehren die '.' rueckwaerts genau zu K (K ist ein Schluesselwort,
-// kein '.'). Ein leerer Name ist nie deklariert.
-function DeclaresAfter(AMap: TRdxCodeMap; const AKeywords: array of string;
-  const AName: string): Boolean;
-var
-  T, K    : TRdxToken;
-  NameLow : string;
-begin
-  Result := False;
-  NameLow := LowerCase(AName);
-  T := NextTokenOnLineWith(AMap, Default(TRdxToken), NameLow);
-  while T.Low <> '' do
-  begin
-    if T.Low = NameLow then
-    begin
-      K := Before(AMap, T);
-      while K.Low = '.' do
-        K := Before(AMap, Before(AMap, K));
-      if InList(K.Low, AKeywords) and (NameAfter(AMap, K).Low = NameLow) then
-        Exit(True);
-    end;
-    T := NextTokenOnLineWith(AMap, T, NameLow);
-  end;
-end;
-
 class function TRdxSimpleFixes.DeclaresProperty(AMap: TRdxCodeMap;
   const AName: string): Boolean;
 begin
@@ -926,10 +757,12 @@ end;
 
 { ---- SCA074, SCA087, SCA139 (Editorhilfen Stufe 2, Rest) ---- }
 
+// Die Regel steht seit Charge B2S-a in uRdxCodeMap (Review R3-07); der
+// Einstieg der Klasse bleibt fuer uRdxFixRunner und die Tests.
 class function TRdxSimpleFixes.DeclaresRoutine(AMap: TRdxCodeMap;
   const AName: string): Boolean;
 begin
-  Result := DeclaresAfter(AMap, ['procedure', 'function'], AName);
+  Result := uRdxCodeMap.DeclaresRoutine(AMap, AName);
 end;
 
 // Das Token hinter dem Typnamen ATok, generische Parameter uebersprungen
@@ -1150,18 +983,11 @@ begin
 end;
 
 // 'Empty `strict private` section ...' - der Abschnitt zwischen den
-// Backticks (uEmptyVisibilitySection.SektionsName), klein; '' ohne sie.
+// Backticks (uEmptyVisibilitySection.SektionsName), klein; '' ohne sie
+// (QuotedText, uRdxCodeMap - bis Charge B2S-a hier ausgeschrieben).
 function SectionNameOf(const AMessage: string): string;
-var
-  p, q : Integer;
 begin
-  Result := '';
-  p := Pos('`', AMessage);
-  q := 0;
-  if p > 0 then
-    q := Pos('`', AMessage, p + 1);
-  if q > 0 then
-    Result := LowerCase(Copy(AMessage, p + 1, q - p - 1));
+  Result := LowerCase(QuotedText(AMessage, '`'));
 end;
 
 // Traegt die Zeile ALine (Text L) genau den Abschnitt AName - ohne
@@ -2047,8 +1873,12 @@ type
   end;
 
 // Beginnt an ASite noch die gemeldete Anweisung (Code; bei einer
-// Bedingung das Schluesselwort if/while/case)?
-function StartsStatement(AMap: TRdxCodeMap; const ASite: TRdxNilSite): Boolean;
+// Bedingung das Schluesselwort if/while/case)? Ein Abgleich des Funds mit
+// dem Text (Zeile verschoben?), keine Frage nach der Syntax - die stellt
+// TRdxStructFixes.StartsStatementAt (beginnt an einem Token eine
+// Anweisung?), deren Kern in uRdxStructFixes ebenfalls StartsStatement
+// heisst; bis Charge B2S-a trug diese hier denselben Namen (Review R3-05).
+function StatementStillAt(AMap: TRdxCodeMap; const ASite: TRdxNilSite): Boolean;
 var
   KwLow : string;   // nicht 'Low': verdeckte System.Low (Review R3-06)
 begin
@@ -2066,16 +1896,6 @@ begin
     Result := IsConditionEnd(T)
   else
     Result := IsStatementEnd(T);
-end;
-
-function DepthDelta(const T: TRdxToken): Integer;
-begin
-  if (T.Low = '(') or (T.Low = '[') then
-    Result := 1
-  else if (T.Low = ')') or (T.Low = ']') then
-    Result := -1
-  else
-    Result := 0;
 end;
 
 // Ein 'nil' im Bereich: ein Vergleich (ACmp.OpTok gesetzt), keiner
@@ -2151,7 +1971,7 @@ begin
         AScan.EndTok := T;
         Break;
       end;
-      Inc(Depth, DepthDelta(T));
+      Inc(Depth, ParenDelta(T));
       Result := TakeToken(AMap, T, AScan);
       if Result <> '' then Exit;
       T := After(AMap, T);
@@ -2165,9 +1985,15 @@ begin
     Result := 'Ende der Anweisung nicht gefunden';
 end;
 
-// Kommentar oder Direktive im Bereich AFirst..ALast? Der Detektor sieht
-// sie nicht, eine Ersetzung koennte sie zerreissen.
-function RegionHasComment(AMap: TRdxCodeMap; const AFirst, ALast: TRdxToken): Boolean;
+// Kommentar oder Direktive bei der Anweisung AFirst..ALast? Der Detektor
+// sieht sie nicht, eine Ersetzung koennte sie zerreissen. Auf EINER Zeile
+// zaehlt der Bereich ab AFirst.Col bis ALast.Col; ueber mehrere Zeilen
+// zaehlt jede GANZE Zeile von AFirst.Line bis ALast.Line - auch ein
+// Kommentar vor AFirst oder hinter ALast. Bewusst breiter als
+// CommentInRange (zeichengenau im Bereich); bis Charge B2S-a hiess sie
+// RegionHasComment, wie ein Synonym von CommentInRange (Review R3-05).
+function CommentOnRegionLines(AMap: TRdxCodeMap;
+  const AFirst, ALast: TRdxToken): Boolean;
 var
   i : Integer;
 begin
@@ -2306,14 +2132,14 @@ begin
   Expected := TRdxNilFix.CountNilComparisons(ASite.NodeText);
   if Expected = 0 then
     Exit('kein nil-Vergleich im Fund');
-  if not StartsStatement(AMap, ASite) then
+  if not StatementStillAt(AMap, ASite) then
     Exit('Anweisung steht nicht mehr an der gemeldeten Stelle');
   Result := ScanStatement(AMap, ASite, AScan);
   if Result <> '' then Exit;
   if not CountMatches(Length(AScan.Cmps), Expected, ASite.NodeText) then
     Exit(Format('Code und Fund passen nicht zusammen (%d statt %d Vergleiche)',
       [Length(AScan.Cmps), Expected]));
-  if RegionHasComment(AMap, AScan.StartTok, AScan.EndTok) then
+  if CommentOnRegionLines(AMap, AScan.StartTok, AScan.EndTok) then
     Result := 'Kommentar oder Direktive in der Anweisung';
 end;
 
@@ -2535,8 +2361,8 @@ end;
 
 // Nennt der Text der Zeile ALine ein Wort, mit dem ein Typrumpf beginnt
 // (OpensTypeBody: 'record' und TYPE_BODY_WORDS)? Gross/klein egal, auch in
-// Kommentar oder String; als Wort und ohne Kopie der Zeile wie
-// LineMentions (HasWordNoCase).
+// Kommentar oder String; als Wort und ohne Kopie der Zeile wie die
+// Vorfilter in uRdxCodeMap (HasWordNoCase).
 function MentionsTypeBody(AMap: TRdxCodeMap; ALine: Integer): Boolean;
 var
   L, W : string;
@@ -2634,16 +2460,15 @@ begin
   end;
   if TRdxExprFixes.ProceduralType(AMap, TypeLow) then
     Exit(Format(R_PROC_IN_UNIT, [AOperand, TypeLow]));
-  // Der POSITIVE Beweis wie bei SCA084 (AssignedNilReason in
-  // uRdxRecipeRunner, der OperandReason-Pfad von TRdxFixRunner.OperandFix -
-  // nicht in dieser Unit): ein Typ aus
-  // einer anderen Unit mit unauffaelligem Namen ('uses uFactories; FMaker:
-  // TObjFactory' mit 'function: TObject' dort) ging bis Charge R8 durch -
-  // 'if FMaker = nil' wurde 'if not Assigned(FMaker)', ein anderer Sinn.
-  // Das kostet Angebote bei Fremdtypen und gewinnt Sicherheit (Semantik-
-  // Gegen-Review 2026-10-14, Major). Seit E27 (Charge R10) zaehlen die
-  // Klassen und Interfaces der Delphi-Quellen als bewiesen (uRdxRtlTypes,
-  // in PointerLikeType) - Kundentypen bleiben draussen.
+  // Der POSITIVE Beweis wie bei SCA084 (AssignedNilReason in uRdxFixRunner,
+  // der OperandReason-Pfad von TRdxFixRunner.OperandFix - nicht in dieser
+  // Unit): ein Typ aus einer anderen Unit mit unauffaelligem Namen ('uses
+  // uFactories; FMaker: TObjFactory' mit 'function: TObject' dort) ging bis
+  // Charge R8 durch - 'if FMaker = nil' wurde 'if not Assigned(FMaker)', ein
+  // anderer Sinn. Das kostet Angebote bei Fremdtypen und gewinnt Sicherheit
+  // (Semantik-Gegen-Review 2026-10-14, Major). Seit E27 (Charge R10) zaehlen
+  // die Klassen und Interfaces der Delphi-Quellen als bewiesen
+  // (uRdxRtlTypes, in PointerLikeType) - Kundentypen bleiben draussen.
   if not TRdxExprFixes.PointerLikeType(AMap, TypeLow) then
     Result := Format(R_NOT_PROVEN, [AOperand, TypeLow]);
 end;

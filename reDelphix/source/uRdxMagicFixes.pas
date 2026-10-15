@@ -68,7 +68,7 @@ unit uRdxMagicFixes;
 //     (Verdacht e): sie lehnt ab; seit Charge B1-FD gilt das auch fuer
 //     ein Include auf einem Netzpfad in einer lokalen Unit
 //     ('{$I \\server\share\defs.inc}' wartete 9 bis 16 s, Gegen-Review
-//     R4-03; Regel uRdxRoutineFixes.IsNetworkPath, geprueft vor jedem
+//     R4-03; Regel uRdxPaths.IsNetworkPath, geprueft vor jedem
 //     FileExists). Zwischengespeichert wird nichts: je
 //     Aufruf liest FileReason hoechstens drei Verzeichnisse und die Koepfe
 //     ihrer .dproj (Korpus-Harness, FPC: 1.010 Aufrufe in 231 ms, 0,2 ms
@@ -149,9 +149,9 @@ type
 
     // Die Include-Dateien der Unit AFileName (alle {$I} in AMap, auch die
     // im Kopf - dort stehen die Compiler-Weichen: jvcl.inc,
-    // mormot.defines.inc ...; uRdxRoutineFixes.AllIncludes, bis zur
+    // mormot.defines.inc ...; uRdxBlocks.AllIncludes, bis zur
     // Nachpruefung der Charge B1-FD hier kopiert) lesen, verschachtelte ebenso
-    // (uRdxRoutineFixes.IncludeChainReason): '' oder der Grund - eine
+    // (uRdxBlocks.IncludeChainReason): '' oder der Grund - eine
     // FPC-Weiche oder Spur aelterer Compiler darin, oder ein Include, das
     // nicht neben der Unit liegt oder auf einem Netzpfad (nicht gelesen) -
     // seine Weichen sieht die Hilfe dann nicht.
@@ -167,7 +167,8 @@ uses
   uRefactorInfo,        // TRefactorSpan.Make
   uRdxIntroPlan,        // CharColOfByte, LineLooksFpcAware
   uRdxIntroEdits,       // TextOf, TargetAt, IntroduceEdits, ApplyIntroEdits
-  uRdxRoutineFixes,     // IncludeChainReason, AllIncludes, IsNetworkPath
+  uRdxPaths,            // IsNetworkPath
+  uRdxBlocks,           // IncludeChainReason, AllIncludes
   uRdxCompilerTraces;   // OldCompilerTrace, ScriptReason, FLOOR_INLINE_DECL
 
 const
@@ -221,18 +222,15 @@ const
 
 { ---- Ziel aus dem Fund ---- }
 
+// Die Zahl zwischen den ersten beiden '"' (QuotedText, uRdxCodeMap; bis
+// Charge B2S-a hier ausgeschrieben), dann die Ziffern-Probe.
 class function TRdxMagicFixes.NumberOf(const AMessage: string): string;
 var
-  P, Q   : Integer;
   Digits : string;
   C      : Char;
 begin
-  Result := '';
-  P := Pos('"', AMessage);
-  if P = 0 then Exit;
-  Q := Pos('"', AMessage, P + 1);
-  if Q <= P + 1 then Exit;
-  Result := Copy(AMessage, P + 1, Q - P - 1);
+  Result := QuotedText(AMessage, '"');
+  if Result = '' then Exit;
   Digits := Result;
   if Digits[1] = '-' then
     Delete(Digits, 1, 1);
@@ -688,9 +686,9 @@ begin
     Result := Format(R_LEGACY, [AFiles.Legacy, ADir]);
 end;
 
-// Netzpfad: uRdxRoutineFixes.IsNetworkPath (UNC und Netzlaufwerk, seit
-// Charge B1-FD die eine Regel fuer Unit und Includes; bis dahin stand hier
-// eine eigene Kopie nur fuer UNC).
+// Netzpfad: uRdxPaths.IsNetworkPath (UNC und Netzlaufwerk, seit Charge
+// B1-FD die eine Regel fuer Unit und Includes - bis dahin stand hier eine
+// eigene Kopie nur fuer UNC; seit Charge B2S-a ist '\\?\C:\..' lokal).
 class function TRdxMagicFixes.FileReason(const AFileName: string): string;
 var
   Ext, Dir, Up : string;

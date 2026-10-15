@@ -178,8 +178,7 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxStructFixes,   // RangeText, CommentInRange, CanAppendLine
-  uRdxRoutineFixes;  // ReadRoutine (lokale Variablen der Routine um A)
+  uRdxBlocks;        // ReadRoutine (lokale Variablen der Routine um A)
 
 const
   SPAN_TRY = 'try';
@@ -505,20 +504,19 @@ function UnmatchedOpener(AMap: TRdxCodeMap; const AFrom: TRdxToken): TRdxToken;
 var
   T     : TRdxToken;
   Depth : Integer;
+  Delta : Integer;
 begin
   Result := Default(TRdxToken);
   Depth := 0;
   T := AFrom;
   while (T.Low <> '') and (T.Low <> ';') do
   begin
-    if (T.Low = ')') or (T.Low = ']') then
-      Inc(Depth)
-    else if (T.Low = '(') or (T.Low = '[') then
-    begin
-      if Depth = 0 then
-        Exit(T);
-      Dec(Depth);
-    end;
+    // Rueckwaerts: eine schliessende Klammer oeffnet eine Gruppe, eine
+    // oeffnende auf Tiefe 0 ist die gesuchte (ParenDelta, uRdxCodeMap).
+    Delta := ParenDelta(T);
+    if (Delta > 0) and (Depth = 0) then
+      Exit(T);
+    Dec(Depth, Delta);
     T := Before(AMap, T);
   end;
 end;
@@ -528,14 +526,14 @@ end;
 function StopStep(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
   var AParen, ADepth: Integer): Boolean;
 var
-  IsKw : Boolean;
+  IsKw  : Boolean;
+  Delta : Integer;
 begin
   Result := False;
   IsKw := IsKeywordAt(AMap, T, APrev);
-  if (T.Low = '(') or (T.Low = '[') then
-    Inc(AParen)
-  else if (T.Low = ')') or (T.Low = ']') then
-    Dec(AParen)
+  Delta := ParenDelta(T);
+  if Delta <> 0 then
+    Inc(AParen, Delta)
   else if IsKw and IsEndOpener(T.Low) then
     Inc(ADepth)
   else if (AParen > 0) or (ADepth > 0) then
@@ -650,9 +648,8 @@ begin
   T := A;
   while not SameTok(T, C) do
   begin
-    if (T.Low = '(') or (T.Low = '[') then Inc(Depth)
-    else if (T.Low = ')') or (T.Low = ']') then Dec(Depth)
-    else if (T.Low = ',') and (Depth = 0) then Exit;
+    Inc(Depth, ParenDelta(T));
+    if (T.Low = ',') and (Depth = 0) then Exit;
     T := After(AMap, T);
   end;
   S.Key := KeyText(AMap, A, Before(AMap, C));
@@ -991,28 +988,36 @@ end;
 
 { ---- Die Routine um A: lokale Variablen (Weitergabe-Sperre) ---- }
 
-// Die innerste Routine, deren Rumpf AAt enthaelt - rueckwaerts bis zu
-// ihrem Kopf, Grenzen per ReadRoutine (lokale Routinen davor enthalten AAt
-// nicht und werden uebergangen). False ohne.
+// Die innerste Routine, deren Rumpf AAt enthaelt (begin < AAt < end) -
+// rueckwaerts bis zu ihrem Kopf, Grenzen per ReadRoutine (lokale Routinen
+// davor enthalten AAt nicht und werden uebergangen). False ohne. Die Suche
+// ist der Baustein TRdxBlocks.HeadBefore (Gegen-Review R5-03, bis Charge
+// B2S-b hier ausgeschrieben); die Politik dieser Frage bleibt, wie sie war:
+// ein Kopf, dessen Grenzen nicht sicher sind, wird uebergangen - die Suche
+// geht davor weiter -, und ein Abschnittswort der Unit (UNIT_BOUNDS)
+// beendet sie. Den Unterschied zeigt ein unsicherer Kopf im Rumpf der
+// gesuchten Routine selbst - etwa die Zuweisung an eine Variable Operator
+// ('operator' steht in ROUTINE_WORDS, ist aber kein reserviertes Wort):
+// hier geht die Suche an ihm vorbei zur Routine davor (gepinnt in
+// uTestRdxBlocks.TryPolicy_UnsafeHeadSkipped, Gegenpruefung V-B2S-1).
+// (SCA196 in uRdxResultFixes fragt anders: Zeilen statt Token, und der
+// erste unsichere Kopf beendet dort die Suche mit seinem Grund.)
 function RoutineAround(AMap: TRdxCodeMap; const AAt: TRdxToken;
   out ARoutine: TRdxRoutine): Boolean;
 var
-  T, P : TRdxToken;
+  T : TRdxToken;
+  S : TRdxHeadStep;
 begin
   ARoutine := Default(TRdxRoutine);
-  T := Before(AMap, AAt);
-  while T.Low <> '' do
-  begin
-    P := Before(AMap, T);
-    if IsRoutineHeadAfter(T, P)
-       and (TRdxRoutineFixes.ReadRoutine(AMap, T, ARoutine) = '')
-       and (ARoutine.Body.Low <> '') and TokBefore(ARoutine.Body, AAt)
-       and TokBefore(AAt, ARoutine.EndTok) then
+  T := AAt;
+  while TRdxBlocks.HeadBefore(AMap, T, UNIT_BOUNDS, S) and not S.Stop do
+    if (S.Reason = '') and (S.Routine.Body.Low <> '')
+       and TokBefore(S.Routine.Body, AAt)
+       and TokBefore(AAt, S.Routine.EndTok) then
+    begin
+      ARoutine := S.Routine;
       Exit(True);
-    if IsKeywordAt(AMap, T, P) and InList(T.Low, UNIT_BOUNDS) then
-      Break;
-    T := P;
-  end;
+    end;
   Result := False;
 end;
 
@@ -1031,7 +1036,7 @@ function SkipLocalRoutine(AMap: TRdxCodeMap; var T: TRdxToken): Boolean;
 var
   Local : TRdxRoutine;
 begin
-  Result := TRdxRoutineFixes.ReadRoutine(AMap, T, Local) = '';
+  Result := TRdxBlocks.ReadRoutine(AMap, T, Local) = '';
   if Result then
     T := Local.Last;
 end;
@@ -1584,8 +1589,12 @@ begin
   Result := (Q.Low = SYSTEM_UNIT) and (Before(AMap, Q).Low <> '.');
 end;
 
-// Spruenge, asm und Inline-Deklarationen. '' oder der Grund.
-function JumpReason(const APair: TRdxPair; var S: TRdxSpan;
+// Spruenge, asm und Inline-Deklarationen im Bereich des try/finally. ''
+// oder der Grund. Bis zur Nachpruefung B2S hiess sie JumpReason wie zwei
+// andere Routinen mit anderem Vertrag (uRdxFlowFixes.RedundantJumpReason
+// fuer SCA080, uRdxResultFixes.LeavesDestructorReason fuer SCA097; Review
+// R3-05/R5-03).
+function SpanJumpReason(const APair: TRdxPair; var S: TRdxSpan;
   const T, APrev: TRdxToken): string;
 begin
   Result := '';
@@ -1634,17 +1643,19 @@ begin
   if IsKeywordAt(AMap, T, APrev) then
   begin
     HeadStep(S, T);
-    Result := JumpReason(APair, S, T, APrev);
+    Result := SpanJumpReason(APair, S, T, APrev);
     if Result = '' then
       Result := BlockReason(S, T);
   end
   else if InList(T.Low, SYSTEM_JUMPS) and SystemQualified(AMap, T, APrev) then
-    Result := JumpReason(APair, S, T, APrev);
+    Result := SpanJumpReason(APair, S, T, APrev);
 end;
 
 // Ein Token des Laufs (ScanSpan): rsFound an B, rsStop mit S.Reason.
 function SpanStep(AMap: TRdxCodeMap; const APair: TRdxPair; var S: TRdxSpan;
   const T, APrev: TRdxToken): TRdxStep;
+var
+  Delta : Integer;
 begin
   Result := rsStop;
   if TakeRelease(AMap, APair, S, T, APrev) then
@@ -1654,10 +1665,9 @@ begin
   if S.Reason = '' then
     S.Reason := LabelReason(AMap, S, T, APrev);
   if S.Reason <> '' then Exit;
-  if (T.Low = '(') or (T.Low = '[') then
-    Inc(S.Paren)
-  else if (T.Low = ')') or (T.Low = ']') then
-    Dec(S.Paren)
+  Delta := ParenDelta(T);
+  if Delta <> 0 then
+    Inc(S.Paren, Delta)
   else if (T.Low = ';') and (S.Paren = 0) then
     S.EndSingles
   else

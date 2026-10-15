@@ -2,9 +2,14 @@ unit uRdxCodeMap;
 
 // reDelphix - Code-Sicht einer Datei und Token-Leser darauf, OHNE ToolsAPI.
 // Gemeinsame Grundlage der Planer (uRdxSimpleFixes), der Unterdrueck-Hilfen
-// (uRdxSuppress) und des Laeufers (uRdxRecipeRunner); bis 2026-10-10 lag sie
-// in uRdxSimpleFixes, und uRdxSuppress zog dafuer die Planer mit (Review
-// reDelphiX nach Bereichen, Minor 7).
+// (uRdxSuppress) und der Laeufer (uRdxRecipeRunner, uRdxFixRunner); bis
+// 2026-10-10 lag sie in uRdxSimpleFixes, und uRdxSuppress zog dafuer die
+// Planer mit (Review reDelphiX nach Bereichen, Minor 7). Seit Charge B2S-a
+// stehen hier auch die geteilten Helfer der Planer, die bis dahin in einer
+// Planer-Unit lagen oder kopiert waren - Bereiche (uRdxStructFixes), Fragen
+// an die ganze Datei samt DeclaresRoutine (uRdxSimpleFixes), Klammertiefe
+// und Meldungstext (Review R3-05/R3-07): eine Planer-Unit bindet fuer
+// solche Helfer keine andere mehr ein.
 //
 // Verhaeltnis zum Core: TDetectorUtils.ScanCodeLine ist dieselbe Regel fuer
 // Kommentare und einzeilige Strings - uTestRdxCodeMap prueft beide an
@@ -16,7 +21,8 @@ unit uRdxCodeMap;
 interface
 
 uses
-  System.Classes;   // TStrings
+  System.Classes,   // TStrings
+  uRefactorInfo;    // TRefactorSpan (RangeText, CommentInRange)
 
 const
   MIN_MULTI_QUOTES = 3;   // ''' oeffnet einen mehrzeiligen String (Delphi 12)
@@ -52,8 +58,10 @@ type
   // LineCount lesen dagegen live aus ALines. ALines muss darum laenger
   // leben als die Map und darf waehrend ihrer Lebensdauer nicht veraendert
   // werden; sonst passen Klassen und Text nicht mehr zusammen, und die
-  // Planer lesen Code, wo ein Kommentar steht. Die Aufrufer (uRdxProvider,
-  // uRdxRecipeRunner, die Tests) bauen die Map je Lauf neu.
+  // Planer lesen Code, wo ein Kommentar steht. Die Aufrufer (uRdxFixRunner,
+  // uRdxFixTable, uRdxRecipeRunner und uRdxSuppress mit den Zeilen aus
+  // uRdxProvider, uRdxBlocks fuer Include-Dateien, die Tests) bauen die Map
+  // je Lauf neu.
   TRdxCodeMap = class
   private
     FLines   : TStrings;
@@ -236,8 +244,9 @@ function LastPart(const S: string): string;
 // ist es dort ein Platzhalter)? '' oder der Grund. SCA070 prueft den
 // geloeschten Text, SCA164/SCA147 die Kommentare ueber dem Kopf (Gegen-
 // Review H3, Minor 3); bis Charge H3c in uRdxCleanupFixes - hier, weil
-// uRdxCleanupFixes seitdem uRdxRoutineFixes braucht (ReadRoutine) und
-// beide sich sonst gegenseitig einbanden.
+// uRdxCleanupFixes seitdem die Routinengrenzen braucht (ReadRoutine; bis
+// Charge B2S-b in uRdxRoutineFixes, seitdem in uRdxBlocks) und die Units
+// sich sonst gegenseitig einbanden.
 function MarkerReason(const AText: string): string;
 
 // Dieselbe Stelle (Zeile und Spalte)? Bis Charge H3c je eine Kopie in
@@ -254,6 +263,11 @@ function TokText(AMap: TRdxCodeMap; const T: TRdxToken): string;
 // Haengt T an AList an. Bis Charge H5c je eine Kopie in uRdxRoutineFixes
 // und uRdxResultFixes (Gegen-Review H5, Minor 6).
 procedure AddToken(var AList: TArray<TRdxToken>; const T: TRdxToken);
+// Haengt S an AList an. Bis Charge B2S-b in uRdxRoutineFixes - seitdem
+// brauchen es dort die Planer SCA164/SCA147 und uRdxBlocks die Bausteine
+// (Review R6-12); seit der Nachpruefung B2S auch uRdxRecipes und
+// uRdxSqlTemplate (bis dahin je eine Kopie AppendTo).
+procedure AddText(var AList: TArray<string>; const S: string);
 // Steht T als erstes auf seiner Zeile - davor nur Leerraum? Ob die Zeile
 // in einem Kommentar oder mehrzeiligen String beginnt, prueft der
 // Aufrufer selbst (StartsInside). Bis Charge H5c in uRdxTryFixes, eine
@@ -286,6 +300,14 @@ function MatchClose(AMap: TRdxCodeMap; const AOpen: TRdxToken;
 // Das Token hinter der schliessenden Klammer zu AOpen (MatchClose); Low =
 // '' ohne Klammer oder am Dateiende.
 function AfterClose(AMap: TRdxCodeMap; const AOpen: TRdxToken): TRdxToken;
+// Klammertiefe eines Tokens: '(' und '[' +1, ')' und ']' -1, sonst 0 -
+// beide Klammerarten gemeinsam ('<' und '>' nicht: ob Vergleich oder
+// Typparameter, weiss erst der Aufrufer, s. MatchClose). Rueckwaerts
+// gelesen zieht der Aufrufer den Wert ab. Bis Charge B2S-a je eine Kopie
+// als ParenDelta in uRdxFlowFixes und uRdxCleanupFixes und als DepthDelta
+// in uRdxSimpleFixes, dazu ausgeschrieben in uRdxStructFixes, uRdxTryFixes
+// und uRdxSqlTemplate (Review R3-05).
+function ParenDelta(const T: TRdxToken): Integer;
 
 // Genau ein Code-Token auf ALine, auf das ASearch.Test passt: '' und das
 // Token in AHit; sonst der Grund (OneTokenReason; AHit ist dann der letzte
@@ -329,9 +351,95 @@ function IsEndOpener(const ALow: string): Boolean;
 // Eine Einrueckstufe: was ADeeperLine ueber AIndent hinaus einrueckt;
 // sonst ein Tab, wenn AIndent Tabs traegt, oder zwei Leerzeichen.
 function IndentStep(const AIndent, ADeeperLine: string): string;
+
+// ---- Bereiche (bis Charge B2S-a in uRdxStructFixes - uRdxFlowFixes,
+// uRdxTryFixes, uRdxCleanupFixes, uRdxResultFixes und uRdxRoutineFixes
+// banden die Planer-Unit nur fuer sie ein; Review R3-07) ----
+
+// Der Text des Bereichs ASpan, Zeilen mit #10 verbunden - so, wie
+// TRdxEdit.Expected ihn erwartet; eine leere erste Zeile traegt ihren Teil
+// leer bei (s. Rumpf).
+function RangeText(AMap: TRdxCodeMap; const ASpan: TRefactorSpan): string;
+// Kommentar oder Direktive im Bereich ASpan - zeichengenau, ab StartCol
+// der ersten bis vor EndCol der letzten Zeile? Die Frage der Planer "die
+// Ersetzung zerrisse einen Kommentar". Breitere Fragen stehen bei ihren
+// Nutzern (uRdxFlowFixes.LineHasComment: die ganze Zeile,
+// uRdxSimpleFixes.CommentOnRegionLines: ganze Zeilen); seit Charge B2S-a
+// auch fuer SCA020 (bis dahin als CommentBetween kopiert, Review R3-05).
+function CommentInRange(AMap: TRdxCodeMap; const ASpan: TRefactorSpan): Boolean;
+// Das letzte Zeichen aus Code oder String vor ATok (Kommentare und
+// Leerraum uebersprungen) in ALine/ACol. False am Dateianfang.
+function LastCharBefore(AMap: TRdxCodeMap; const ATok: TRdxToken;
+  out ALine, ACol: Integer): Boolean;
+// Das erste Zeichen aus Code oder String hinter ATok - Gegenstueck zu
+// LastCharBefore. False am Dateiende.
+function FirstCharAfter(AMap: TRdxCodeMap; const ATok: TRdxToken;
+  out ALine, ACol: Integer): Boolean;
+// Hinter (ALine, ACol) auf der Zeile nur Leerraum oder Kommentar?
+function TailIsComment(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
+// Darf hinter Zeile ALine eine Zeile hinein? Hinter ACol nur Leerraum oder
+// Kommentar (TailIsComment), und die Folgezeile beginnt nicht in einem
+// Kommentar oder mehrzeiligen String (die neue Zeile laege darin). Seit
+// Charge H4c auch fuer uRdxTryFixes (dort bis dahin als Kopie
+// LineEndsAfter).
+function CanAppendLine(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
+
+// ---- Fragen an die ganze Datei (bis Charge B2S-a in uRdxSimpleFixes -
+// uRdxFlowFixes band die Planer-Unit nur fuer DeclaresRoutine und
+// NextTokenOnLineWith ein; Review R3-07) ----
+
+// Das letzte Glied des Namens hinter ATok als TOKEN ('procedure TFoo.Bar'
+// an 'procedure' -> 'Bar'); Low = '' ohne. Anders als
+// uRdxRaiseFixes.HeaderNameText (der ganze Name als Text).
+function NameAfter(AMap: TRdxCodeMap; const ATok: TRdxToken): TRdxToken;
+// Nennt S das Wort ALow (klein geschrieben) - Gross/klein egal, als ganzes
+// Wort, ohne Kopie von S (s. Rumpf)? '' nie.
+function HasWordNoCase(const S, ALow: string): Boolean;
+// Das naechste Token hinter ATok auf einer Zeile, deren Text ALow (klein)
+// als Wort nennt (HasWordNoCase) - Gross/klein egal, auch in einem
+// Kommentar oder String; ATok = Default(TRdxToken): ab Dateianfang, Low =
+// '' am Dateiende. Vorfilter der Fragen an die ganze Datei (Review R3-03,
+// Charge FC: bis dahin las jede Frage alle Token, ~0,1 s je Frage auf
+// 30.000 Zeilen im IDE-Hauptthread): ein Token mit Low = ALow steht nur auf
+// einer solchen Zeile (ein Token endet mit seiner Zeile, Low ist LowerCase
+// seines Textes, s. HasWordNoCase), die anderen Zeilen kosten einen
+// Textvergleich statt eines Laufs durch die Code-Sicht. Die Token kommen in
+// der Reihenfolge der Datei. Seit Charge FC auch fuer uRdxFlowFixes ('class
+// operator Assign').
+function NextTokenOnLineWith(AMap: TRdxCodeMap; const ATok: TRdxToken;
+  const ALow: string): TRdxToken;
+// Die letzte Zeile, deren Text ALow (klein) als Wort nennt
+// (HasWordNoCase, auch in Kommentar oder String); 0 ohne.
+function LastLineWith(AMap: TRdxCodeMap; const ALow: string): Integer;
+// Steht im Code der Datei eines der Woerter AKeywords (klein), gefolgt vom
+// Namen AName (letztes Glied: 'procedure TFoo.Bar' zaehlt fuer 'Bar')?
+// Gross/klein egal; ein leerer Name ist nie deklariert.
+function DeclaresAfter(AMap: TRdxCodeMap; const AKeywords: array of string;
+  const AName: string): Boolean;
+// Deklariert die Datei eine Routine AName ('procedure AName' bzw.
+// 'function AName', auch als Methode)? Dann bindet der Name nicht an die
+// RTL. TRdxSimpleFixes.DeclaresRoutine bleibt als Einstieg der Klasse
+// (uRdxFixRunner, Tests) und ruft diese.
+function DeclaresRoutine(AMap: TRdxCodeMap; const AName: string): Boolean;
+
+const
+  // Der Grund, wenn eine Meldung keine Spalte nennt (ColumnFromMessage
+  // liefert 0). Bis Charge B2S-a je eine Konstante in uRdxSimpleFixes und
+  // uRdxLineFixes und ein Literal in uRdxStructFixes (Review R3-05).
+  R_NO_COLUMN = 'Spalte fehlt in der Meldung';
+
 // 'at column N' aus einer Meldung; 0 = nicht vorhanden. Bis 2026-10-10 in
 // uRdxSimpleFixes, seit SCA101 auch fuer uRdxStructFixes.
 function ColumnFromMessage(const AMessage: string): Integer;
+// Der Text zwischen den ersten beiden AQuote in AText ('Interface "IFoo"
+// has no GUID' mit '"' -> 'IFoo', 'Empty `strict private` section' mit
+// '`' -> 'strict private'); '' ohne zwei AQuote oder ohne Text
+// dazwischen. Wie geschrieben - klein schreibt der Aufrufer. Bis Charge
+// B2S-a als QuotedNameOf (uRdxDeclFixes) und BoundNameOf (uRdxRaiseFixes)
+// byte-gleich kopiert und in KeywordOf (uRdxLineFixes), SectionNameOf
+// (uRdxSimpleFixes) und TRdxMagicFixes.NumberOf ausgeschrieben (Review
+// R3-05).
+function QuotedText(const AText: string; AQuote: Char): string;
 
 implementation
 
@@ -954,6 +1062,12 @@ begin
   AList[High(AList)] := T;
 end;
 
+procedure AddText(var AList: TArray<string>; const S: string);
+begin
+  SetLength(AList, Length(AList) + 1);
+  AList[High(AList)] := S;
+end;
+
 function FirstOnLine(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
 begin
   Result := SkipBlanks(AMap.Raw(T.Line), 1) = T.Col;
@@ -1026,6 +1140,15 @@ begin
   Close := MatchClose(AMap, AOpen);
   if Close.Low <> '' then
     Result := After(AMap, Close);
+end;
+
+function ParenDelta(const T: TRdxToken): Integer;
+begin
+  Result := 0;
+  if (T.Low = '(') or (T.Low = '[') then
+    Result := 1
+  else if (T.Low = ')') or (T.Low = ']') then
+    Result := -1;
 end;
 
 function OneTokenReason(ALine, ACount: Integer;
@@ -1150,6 +1273,306 @@ begin
     Result := Result * 10 + Ord(AMessage[i]) - Ord('0');
     Inc(i);
   end;
+end;
+
+function QuotedText(const AText: string; AQuote: Char): string;
+var
+  P, Q : Integer;
+begin
+  Result := '';
+  P := Pos(AQuote, AText);
+  if P = 0 then Exit;
+  Q := Pos(AQuote, AText, P + 1);
+  if Q > P + 1 then
+    Result := Copy(AText, P + 1, Q - P - 1);
+end;
+
+{ ---- Bereiche (bis Charge B2S-a in uRdxStructFixes, Review R3-07) ---- }
+
+// Der Text des Bereichs, Zeilen mit #10 verbunden - so, wie
+// TRdxEdit.Expected ihn erwartet. Bewusst nicht TRefactorInfoBuilder.
+// SpanText (Review Quick-Fix-Units 2026-10-14): das verlangt SpanFits, also
+// StartCol <= Laenge der ersten Zeile - der Rumpf hinter 'if A then' und
+// einer LEEREN Zeile (OwnLinesEdit, Bereich ab Spalte 1 der Leerzeile)
+// ergaebe dort '' statt des Textes, und die Hilfe schriebe falschen Code.
+// AMap.Raw toleriert die leere Zeile.
+function RangeText(AMap: TRdxCodeMap; const ASpan: TRefactorSpan): string;
+var
+  SB : TStringBuilder;
+  Li : Integer;
+begin
+  if ASpan.StartLine = ASpan.EndLine then
+    Exit(Copy(AMap.Raw(ASpan.StartLine), ASpan.StartCol,
+      ASpan.EndCol - ASpan.StartCol));
+  SB := TStringBuilder.Create;
+  try
+    SB.Append(Copy(AMap.Raw(ASpan.StartLine), ASpan.StartCol, MaxInt));
+    for Li := ASpan.StartLine + 1 to ASpan.EndLine - 1 do
+      SB.Append(#10).Append(AMap.Raw(Li));
+    SB.Append(#10).Append(Copy(AMap.Raw(ASpan.EndLine), 1, ASpan.EndCol - 1));
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+// Kommentar oder Direktive im Bereich?
+function CommentInRange(AMap: TRdxCodeMap; const ASpan: TRefactorSpan): Boolean;
+var
+  Li, First, Last : Integer;
+begin
+  Result := False;
+  for Li := ASpan.StartLine to ASpan.EndLine do
+  begin
+    First := 1;
+    if Li = ASpan.StartLine then
+      First := ASpan.StartCol;
+    Last := Length(AMap.Raw(Li));
+    if Li = ASpan.EndLine then
+      Last := ASpan.EndCol - 1;
+    if AMap.HasComment(Li, First, Last) then
+      Exit(True);
+  end;
+end;
+
+// Das letzte Zeichen aus Code oder String vor ATok (Kommentare und
+// Leerraum uebersprungen) - bei SCA168 endet dort der letzte Arm. Der
+// Token-Leser genuegt nicht: er sieht Strings nicht ('1: S := ''x'''
+// endet auf dem Quote, nicht auf ':='). False am Dateianfang.
+function LastCharBefore(AMap: TRdxCodeMap; const ATok: TRdxToken;
+  out ALine, ACol: Integer): Boolean;
+var
+  Li, Co : Integer;
+  L      : string;
+begin
+  Result := False;
+  ALine := 0;
+  ACol := 0;
+  for Li := ATok.Line downto 1 do
+  begin
+    L := AMap.Raw(Li);
+    Co := Length(L);
+    if Li = ATok.Line then
+      Co := ATok.Col - 1;
+    while (Co >= 1) and ((AMap.ClassAt(Li, Co) = 'k') or IsBlank(L[Co])) do
+      Dec(Co);
+    if Co >= 1 then
+    begin
+      ALine := Li;
+      ACol := Co;
+      Exit(True);
+    end;
+  end;
+end;
+
+// Das erste Zeichen aus Code oder String hinter ATok (Kommentare und
+// Leerraum uebersprungen) - Gegenstueck zu LastCharBefore.
+function FirstCharAfter(AMap: TRdxCodeMap; const ATok: TRdxToken;
+  out ALine, ACol: Integer): Boolean;
+var
+  Li, Co : Integer;
+  L      : string;
+begin
+  Result := False;
+  ALine := 0;
+  ACol := 0;
+  for Li := ATok.Line to AMap.LineCount do
+  begin
+    L := AMap.Raw(Li);
+    Co := 1;
+    if Li = ATok.Line then
+      Co := ATok.EndCol;
+    while (Co <= Length(L)) and ((AMap.ClassAt(Li, Co) = 'k') or IsBlank(L[Co])) do
+      Inc(Co);
+    if Co <= Length(L) then
+    begin
+      ALine := Li;
+      ACol := Co;
+      Exit(True);
+    end;
+  end;
+end;
+
+// Hinter (ALine, ACol) auf der Zeile nur Leerraum oder Kommentar?
+function TailIsComment(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
+var
+  L  : string;
+  Co : Integer;
+begin
+  Result := True;
+  L := AMap.Raw(ALine);
+  for Co := ACol + 1 to Length(L) do
+    if (AMap.ClassAt(ALine, Co) <> 'k') and not IsBlank(L[Co]) then
+      Exit(False);
+end;
+
+function CanAppendLine(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
+begin
+  Result := TailIsComment(AMap, ALine, ACol)
+    and not AMap.StartsInside(ALine + 1);
+end;
+
+{ ---- Fragen an die ganze Datei (bis Charge B2S-a in uRdxSimpleFixes,
+  Review R3-07): Vorfilter (Review R3-03) und Deklarationen ---- }
+
+// Das letzte Segment des Namens hinter ATok ('TFoo.Assert' -> 'Assert').
+function NameAfter(AMap: TRdxCodeMap; const ATok: TRdxToken): TRdxToken;
+begin
+  Result := After(AMap, ATok);
+  while (Result.Low <> '') and (After(AMap, Result).Low = '.') do
+    Result := After(AMap, After(AMap, Result));
+end;
+
+// Steht der Treffer S[AAt..AAt + Length(ALow) - 1] frei: kein
+// Bezeichnerzeichen davor, wenn ALow mit einem beginnt, und keines
+// dahinter, wenn ALow mit einem endet?
+function WordBounded(const S: string; AAt: Integer;
+  const ALow: string): Boolean;
+var
+  Behind : Integer;
+begin
+  Behind := AAt + Length(ALow);
+  Result := not (IsIdentChar(ALow[1]) and (AAt > 1)
+                 and IsIdentChar(S[AAt - 1]))
+    and not (IsIdentChar(ALow[Length(ALow)]) and (Behind <= Length(S))
+             and IsIdentChar(S[Behind]));
+end;
+
+// Nennt S das Wort ALow (klein)? Gross/klein egal wie LowerCase - Delphi
+// und FPC senken nur 'A'..'Z' (FPC-Probe Charge FC: #$C4, #$0130 bleiben)
+// -, ohne Kopie von S: bis zur Nachpruefung R3-03 legte der Vorfilter je
+// Zeile ein LowerCase an, und ein Name, der auf fast jeder Zeile als
+// Teilwort steht ('e', der Typparameter 'T'), kostete mehr als der Lauf
+// ueber alle Token (mscorlib_TLB: 98 -> 238 ms). Als WORT (WordBounded):
+// ein Bezeichner- oder Zahl-Token endet erst vor einem Zeichen, das kein
+// Bezeichnerzeichen ist, oder vor einem Kommentar-/String-Anfang ('{',
+// '(*', '//', '''' - keines ist eins), und das Token davor endet ebenso
+// (TokenAt) - ein Token mit Low = ALow steht darum in seiner Zeile frei;
+// ein Satzzeichen-Token (ALow ohne Bezeichnerzeichen am Rand) braucht
+// keine Grenze. '' kommt nie vor. Nicht HasIdentWord (oben): das
+// verlangt den Text klein geschrieben, also wieder eine Kopie je Zeile.
+function HasWordNoCase(const S, ALow: string): Boolean;
+var
+  i, k : Integer;
+  C    : Char;
+begin
+  Result := False;
+  if ALow = '' then Exit;
+  for i := 1 to Length(S) - Length(ALow) + 1 do
+  begin
+    k := 0;
+    repeat
+      C := S[i + k];
+      if (C >= 'A') and (C <= 'Z') then
+        C := Char(Ord(C) + 32);
+      if C <> ALow[k + 1] then
+        Break;
+      Inc(k);
+    until k = Length(ALow);
+    if (k = Length(ALow)) and WordBounded(S, i, ALow) then
+      Exit(True);
+  end;
+end;
+
+// Nennt der Text der Zeile ALine ALow (klein) als Wort (HasWordNoCase) -
+// auch in einem Kommentar oder String? Ein Token mit Low = ALow liegt nur
+// auf einer solchen Zeile.
+function LineMentions(AMap: TRdxCodeMap; ALine: Integer;
+  const ALow: string): Boolean;
+begin
+  Result := HasWordNoCase(AMap.Raw(ALine), ALow);
+end;
+
+// Das erste Token ab Zeile ALine auf einer Zeile, die ALow nennt; Low = ''
+// ohne. Nennt eine Zeile ALow nur in einem Kommentar oder String, liegt das
+// naechste Token (NextToken) erst auf einer spaeteren Zeile, die Zeilen
+// dazwischen tragen keines - die Suche geht mit seiner Zeile weiter. Ein
+// Kommentarblock, dessen Zeilen ALow nennen, wird so einmal gelesen, nicht
+// je Zeile bis zu seinem Ende.
+function FirstTokenOnLineWith(AMap: TRdxCodeMap; ALine: Integer;
+  const ALow: string): TRdxToken;
+var
+  Li : Integer;
+begin
+  Li := ALine;
+  while Li <= AMap.LineCount do
+  begin
+    if LineMentions(AMap, Li, ALow) then
+    begin
+      Result := NextToken(AMap, Li, 1);
+      if (Result.Low = '') or (Result.Line = Li) then
+        Exit;
+      Li := Result.Line;
+      if LineMentions(AMap, Li, ALow) then
+        Exit;
+    end;
+    Inc(Li);
+  end;
+  Result := Default(TRdxToken);
+end;
+
+function NextTokenOnLineWith(AMap: TRdxCodeMap; const ATok: TRdxToken;
+  const ALow: string): TRdxToken;
+begin
+  if ATok.Low = '' then
+    Exit(FirstTokenOnLineWith(AMap, 1, ALow));
+  // Auf der Zeile von ATok weiter - sie nennt ALow schon. Liegt das naechste
+  // Token auf einer spaeteren Zeile, steht davor keines: nennt seine Zeile
+  // ALow, ist es selbst die Antwort (bis zur Nachpruefung R3-03 las die
+  // Suche diese Zeile ein zweites Mal ab Spalte 1), sonst geht es hinter
+  // ihr weiter.
+  Result := After(AMap, ATok);
+  if (Result.Low <> '') and (Result.Line <> ATok.Line)
+     and not LineMentions(AMap, Result.Line, ALow) then
+    Result := FirstTokenOnLineWith(AMap, Result.Line + 1, ALow);
+end;
+
+// Die letzte Zeile, deren Text ALow als Wort nennt (LineMentions); 0 ohne.
+function LastLineWith(AMap: TRdxCodeMap; const ALow: string): Integer;
+var
+  Li : Integer;
+begin
+  for Li := AMap.LineCount downto 1 do
+    if LineMentions(AMap, Li, ALow) then
+      Exit(Li);
+  Result := 0;
+end;
+
+// Steht im Code der Datei eines der Woerter AKeywords, gefolgt vom Namen
+// AName (letztes Segment: 'procedure TFoo.Bar' zaehlt fuer 'Bar')?
+// Gesucht wird vom Namen aus (Review R3-03, Charge FC): je Token AName auf
+// einer Zeile, die ihn nennt (NextTokenOnLineWith), rueckwaerts ueber die
+// Kette ('TFoo.') zum Wort davor - die Umkehrung von NameAfter, die
+// NameAfter danach bestaetigt. Dasselbe Ergebnis wie der Lauf ueber jedes
+// Token bis Charge FC: NameAfter(K) = N heisst K R1 . R2 . ... . N, und
+// von N fuehren die '.' rueckwaerts genau zu K (K ist ein Schluesselwort,
+// kein '.'). Ein leerer Name ist nie deklariert.
+function DeclaresAfter(AMap: TRdxCodeMap; const AKeywords: array of string;
+  const AName: string): Boolean;
+var
+  T, K    : TRdxToken;
+  NameLow : string;
+begin
+  Result := False;
+  NameLow := LowerCase(AName);
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), NameLow);
+  while T.Low <> '' do
+  begin
+    if T.Low = NameLow then
+    begin
+      K := Before(AMap, T);
+      while K.Low = '.' do
+        K := Before(AMap, Before(AMap, K));
+      if InList(K.Low, AKeywords) and (NameAfter(AMap, K).Low = NameLow) then
+        Exit(True);
+    end;
+    T := NextTokenOnLineWith(AMap, T, NameLow);
+  end;
+end;
+
+function DeclaresRoutine(AMap: TRdxCodeMap; const AName: string): Boolean;
+begin
+  Result := DeclaresAfter(AMap, ['procedure', 'function'], AName);
 end;
 
 end.

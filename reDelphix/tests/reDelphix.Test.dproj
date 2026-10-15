@@ -101,9 +101,11 @@
         </DelphiCompile>
         <DCCReference Include="..\source\uRdxText.pas"/>
         <DCCReference Include="..\source\uRdxRecipes.pas"/>
+        <DCCReference Include="..\source\uRdxPaths.pas"/>
         <DCCReference Include="..\source\uRdxScopeTable.pas"/>
         <DCCReference Include="..\source\uRdxBufferMath.pas"/>
         <DCCReference Include="..\source\uRdxCodeMap.pas"/>
+        <DCCReference Include="..\source\uRdxBlocks.pas"/>
         <DCCReference Include="..\source\uRdxSuppress.pas"/>
         <DCCReference Include="..\source\uRdxRtlTypes.pas"/>
         <DCCReference Include="..\source\uRdxSimpleFixes.pas"/>
@@ -119,6 +121,7 @@
         <DCCReference Include="..\source\uRdxResultFixes.pas"/>
         <DCCReference Include="..\source\uRdxSqlTemplate.pas"/>
         <DCCReference Include="..\source\uRdxRecipeRunner.pas"/>
+        <DCCReference Include="..\source\uRdxFixRunner.pas"/>
         <DCCReference Include="..\source\uRdxFixTable.pas"/>
         <DCCReference Include="..\source\uRdxIntroPlan.pas"/>
         <DCCReference Include="..\source\uRdxIntroEdits.pas"/>
@@ -169,6 +172,8 @@
         <DCCReference Include="uTestRdxCodeMap.pas"/>
         <DCCReference Include="uTestRdxQualifyUses.pas"/>
         <DCCReference Include="uTestRdxProjectUnits.pas"/>
+        <DCCReference Include="uTestRdxPaths.pas"/>
+        <DCCReference Include="uTestRdxBlocks.pas"/>
         <DCCReference Include="uTestRdxFixTable.pas"/>
         <DCCReference Include="uTestRdxIntroPlan.pas"/>
         <DCCReference Include="uTestRdxIntroRefuse.pas"/>

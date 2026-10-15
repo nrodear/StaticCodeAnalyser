@@ -94,6 +94,14 @@ program reDelphix.Test;
 //   * uTestRdxQualifyUses - Planung von "uses: X -> Scope.X" (QualifyUses)
 //   * uTestRdxProjectUnits - Index der Projekt-Units fuer "uses: X ->
 //                        Scope.X" (TRdxProjectUnits, Review R1-02)
+//   * uTestRdxPaths    - die eine Netzpfad-Regel (uRdxPaths, Charge
+//                        B2S-a): UNC, Win32-Namensraum, Netzlaufwerk ueber
+//                        die Naht; SCA164/SCA014 auf '\\?\C:\..'
+//   * uTestRdxBlocks   - Bausteine in uRdxBlocks (Charge B2S-b): die Suche
+//                        nach der Routine um eine Stelle (HeadBefore) mit
+//                        den Politiken von SCA009 und SCA196,
+//                        MemberHeads und der Index der Klassenkoepfe
+//                        (SCA096), TypeHasBody
 //   * uTestRdxFixTable - die Tabelle der einfachen Hilfen (uRdxFixTable):
 //                        jede Zeile mit Planer, Hinweis und Menuetext
 //   * uTestRdxIntroPlan - Code-Aktion "Lokale Variable einfuehren": das
@@ -145,9 +153,11 @@ uses
   DUnitX.TestFramework,
   uRdxText in '..\source\uRdxText.pas',
   uRdxRecipes in '..\source\uRdxRecipes.pas',
+  uRdxPaths in '..\source\uRdxPaths.pas',
   uRdxScopeTable in '..\source\uRdxScopeTable.pas',
   uRdxBufferMath in '..\source\uRdxBufferMath.pas',
   uRdxCodeMap in '..\source\uRdxCodeMap.pas',
+  uRdxBlocks in '..\source\uRdxBlocks.pas',
   uRdxSuppress in '..\source\uRdxSuppress.pas',
   uRdxRtlTypes in '..\source\uRdxRtlTypes.pas',
   uRdxSimpleFixes in '..\source\uRdxSimpleFixes.pas',
@@ -163,6 +173,7 @@ uses
   uRdxResultFixes in '..\source\uRdxResultFixes.pas',
   uRdxSqlTemplate in '..\source\uRdxSqlTemplate.pas',
   uRdxRecipeRunner in '..\source\uRdxRecipeRunner.pas',
+  uRdxFixRunner in '..\source\uRdxFixRunner.pas',
   uRdxFixTable in '..\source\uRdxFixTable.pas',
   uRdxIntroPlan in '..\source\uRdxIntroPlan.pas',
   uRdxIntroEdits in '..\source\uRdxIntroEdits.pas',
@@ -213,6 +224,8 @@ uses
   uTestRdxCodeMap in 'uTestRdxCodeMap.pas',
   uTestRdxQualifyUses in 'uTestRdxQualifyUses.pas',
   uTestRdxProjectUnits in 'uTestRdxProjectUnits.pas',
+  uTestRdxPaths in 'uTestRdxPaths.pas',
+  uTestRdxBlocks in 'uTestRdxBlocks.pas',
   uTestRdxFixTable in 'uTestRdxFixTable.pas',
   uTestRdxIntroPlan in 'uTestRdxIntroPlan.pas',
   uTestRdxIntroRefuse in 'uTestRdxIntroRefuse.pas',

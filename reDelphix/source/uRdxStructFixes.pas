@@ -39,7 +39,8 @@ type
   // SCA168, SCA101/SCA099) und ihre geteilten Bausteine (StartsStatementAt,
   // ElseBelongsToIf): reine Textlogik auf der Code-Sicht. Die uses-Eintraege,
   // die FPC-Weiche und die uses-Ergaenzung fuer EProgrammerError liefert
-  // bzw. prueft der Aufrufer (uRdxRecipeRunner).
+  // bzw. prueft der Aufrufer (uRdxFixRunner: TRdxFixRunner.UnusedUsesFix
+  // bzw. CaseRaiseFix).
   TRdxStructFixes = class
   public
     // SCA007: den Eintrag AIndex der Klausel loeschen. Vor dem letzten
@@ -111,26 +112,6 @@ type
     class function ElseBelongsToIf(AMap: TRdxCodeMap; const AElse: TRdxToken;
       out AReason: string): Boolean; static;
   end;
-
-// Helfer der Anweisungs-Planer, seit Charge H2 auch fuer uRdxFlowFixes.
-// Der Text des Bereichs, Zeilen mit #10 verbunden - so, wie
-// TRdxEdit.Expected ihn erwartet.
-function RangeText(AMap: TRdxCodeMap; const ASpan: TRefactorSpan): string;
-// Kommentar oder Direktive im Bereich?
-function CommentInRange(AMap: TRdxCodeMap; const ASpan: TRefactorSpan): Boolean;
-// Das letzte Zeichen aus Code oder String vor ATok (Kommentare und
-// Leerraum uebersprungen). False am Dateianfang.
-function LastCharBefore(AMap: TRdxCodeMap; const ATok: TRdxToken;
-  out ALine, ACol: Integer): Boolean;
-// Das erste Zeichen aus Code oder String hinter ATok - Gegenstueck zu
-// LastCharBefore. False am Dateiende.
-function FirstCharAfter(AMap: TRdxCodeMap; const ATok: TRdxToken;
-  out ALine, ACol: Integer): Boolean;
-// Darf hinter Zeile ALine eine Zeile hinein? Hinter ACol nur Leerraum oder
-// Kommentar, und die Folgezeile beginnt nicht in einem Kommentar oder
-// mehrzeiligen String (die neue Zeile laege darin). Seit Charge H4c auch
-// fuer uRdxTryFixes (dort bis dahin als Kopie LineEndsAfter).
-function CanAppendLine(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
 
 implementation
 
@@ -249,52 +230,6 @@ type
 // end-Bilanz von SCA168 (TopLevelReason) es braucht.
 function ElseOwner(AMap: TRdxCodeMap; const AElse: TRdxToken): TRdxElseScan;
   forward;
-
-// Der Text des Bereichs, Zeilen mit #10 verbunden - so, wie
-// TRdxEdit.Expected ihn erwartet. Bewusst nicht TRefactorInfoBuilder.
-// SpanText (Review Quick-Fix-Units 2026-10-14): das verlangt SpanFits, also
-// StartCol <= Laenge der ersten Zeile - der Rumpf hinter 'if A then' und
-// einer LEEREN Zeile (OwnLinesEdit, Bereich ab Spalte 1 der Leerzeile)
-// ergaebe dort '' statt des Textes, und die Hilfe schriebe falschen Code.
-// AMap.Raw toleriert die leere Zeile.
-function RangeText(AMap: TRdxCodeMap; const ASpan: TRefactorSpan): string;
-var
-  SB : TStringBuilder;
-  Li : Integer;
-begin
-  if ASpan.StartLine = ASpan.EndLine then
-    Exit(Copy(AMap.Raw(ASpan.StartLine), ASpan.StartCol,
-      ASpan.EndCol - ASpan.StartCol));
-  SB := TStringBuilder.Create;
-  try
-    SB.Append(Copy(AMap.Raw(ASpan.StartLine), ASpan.StartCol, MaxInt));
-    for Li := ASpan.StartLine + 1 to ASpan.EndLine - 1 do
-      SB.Append(#10).Append(AMap.Raw(Li));
-    SB.Append(#10).Append(Copy(AMap.Raw(ASpan.EndLine), 1, ASpan.EndCol - 1));
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
-// Kommentar oder Direktive im Bereich?
-function CommentInRange(AMap: TRdxCodeMap; const ASpan: TRefactorSpan): Boolean;
-var
-  Li, First, Last : Integer;
-begin
-  Result := False;
-  for Li := ASpan.StartLine to ASpan.EndLine do
-  begin
-    First := 1;
-    if Li = ASpan.StartLine then
-      First := ASpan.StartCol;
-    Last := Length(AMap.Raw(Li));
-    if Li = ASpan.EndLine then
-      Last := ASpan.EndCol - 1;
-    if AMap.HasComment(Li, First, Last) then
-      Exit(True);
-  end;
-end;
 
 { ---- SCA007 ---- }
 
@@ -547,36 +482,6 @@ begin
   Result := Result + Indent + EndText;
 end;
 
-// Das letzte Zeichen aus Code oder String vor ATok (Kommentare und
-// Leerraum uebersprungen) - dort endet der letzte Arm. Der Token-Leser
-// genuegt nicht: er sieht Strings nicht ('1: S := ''x''' endet auf dem
-// Quote, nicht auf ':='). False am Dateianfang.
-function LastCharBefore(AMap: TRdxCodeMap; const ATok: TRdxToken;
-  out ALine, ACol: Integer): Boolean;
-var
-  Li, Co : Integer;
-  L      : string;
-begin
-  Result := False;
-  ALine := 0;
-  ACol := 0;
-  for Li := ATok.Line downto 1 do
-  begin
-    L := AMap.Raw(Li);
-    Co := Length(L);
-    if Li = ATok.Line then
-      Co := ATok.Col - 1;
-    while (Co >= 1) and ((AMap.ClassAt(Li, Co) = 'k') or IsBlank(L[Co])) do
-      Dec(Co);
-    if Co >= 1 then
-    begin
-      ALine := Li;
-      ACol := Co;
-      Exit(True);
-    end;
-  end;
-end;
-
 // Endet der letzte Arm vor AEnd nicht auf ';' (im Code), ein ';' hinter
 // sein letztes Zeichen - als eigene Ersetzung (das Zeichen wird mit ';'
 // dahinter neu geschrieben, ein leerer Erwartungstext ist nicht erlaubt).
@@ -721,7 +626,7 @@ begin
   AReason := '';
   L := AMap.Raw(ALine);
   if ACol <= 0 then
-    AReason := 'Spalte fehlt in der Meldung'
+    AReason := R_NO_COLUMN
   else if not AMap.IsCode(ALine, ACol) or not IsIdentStart(L[ACol])
      or ((ACol > 1) and IsIdentChar(L[ACol - 1])) then
     AReason := R_BRANCH_MOVED
@@ -766,17 +671,15 @@ begin
     AKeyword := After(AMap, EndTok);
 end;
 
-// Klammertiefe rueckwaerts: ')' und ']' hoch, '(' und '[' herunter. True,
-// wenn T eine Klammer war.
+// Klammertiefe rueckwaerts: ')' und ']' hoch, '(' und '[' herunter
+// (ParenDelta, uRdxCodeMap, abgezogen). True, wenn T eine Klammer war.
 function ParenBack(const T: TRdxToken; var AParen: Integer): Boolean;
+var
+  Delta : Integer;
 begin
-  Result := True;
-  if (T.Low = ')') or (T.Low = ']') then
-    Inc(AParen)
-  else if (T.Low = '(') or (T.Low = '[') then
-    Dec(AParen)
-  else
-    Result := False;
+  Delta := ParenDelta(T);
+  Dec(AParen, Delta);
+  Result := Delta <> 0;
 end;
 
 // FindOwner, ein Token ausserhalb von Klammern: ';' oder ein Wort aus
@@ -1056,15 +959,15 @@ end;
 function StatementStep(const T, APrev: TRdxToken; var AParen: Integer;
   out AReason: string): TRdxStep;
 var
-  IsKw : Boolean;   // nicht 'Word': verdeckte System.Word (Review R3-06)
+  IsKw  : Boolean;   // nicht 'Word': verdeckte System.Word (Review R3-06)
+  Delta : Integer;
 begin
   Result := rsGoOn;
   AReason := '';
   IsKw := IsKeywordAfter(T, APrev);
-  if (T.Low = '(') or (T.Low = '[') then
-    Inc(AParen)
-  else if (T.Low = ')') or (T.Low = ']') then
-    Dec(AParen)
+  Delta := ParenDelta(T);
+  if Delta <> 0 then
+    Inc(AParen, Delta)
   else if (AParen = 0)
      and ((T.Low = ';') or (IsKw and InList(T.Low, BRANCH_STOPPERS))) then
     Result := rsFound
@@ -1135,34 +1038,6 @@ begin
   ABranch.LastCol := Last.Col;
 end;
 
-// Das erste Zeichen aus Code oder String hinter ATok (Kommentare und
-// Leerraum uebersprungen) - Gegenstueck zu LastCharBefore.
-function FirstCharAfter(AMap: TRdxCodeMap; const ATok: TRdxToken;
-  out ALine, ACol: Integer): Boolean;
-var
-  Li, Co : Integer;
-  L      : string;
-begin
-  Result := False;
-  ALine := 0;
-  ACol := 0;
-  for Li := ATok.Line to AMap.LineCount do
-  begin
-    L := AMap.Raw(Li);
-    Co := 1;
-    if Li = ATok.Line then
-      Co := ATok.EndCol;
-    while (Co <= Length(L)) and ((AMap.ClassAt(Li, Co) = 'k') or IsBlank(L[Co])) do
-      Inc(Co);
-    if Co <= Length(L) then
-    begin
-      ALine := Li;
-      ACol := Co;
-      Exit(True);
-    end;
-  end;
-end;
-
 // Erstes Token und Ende der Anweisung (bzw. Liste). '' oder der Grund.
 function BranchEnd(AMap: TRdxCodeMap; var ABranch: TRdxBranch): string;
 var
@@ -1206,25 +1081,6 @@ begin
   if B.Stop.Line > Last then
     Last := B.Stop.Line;
   Result := DirectiveInLines(AMap, B.CheckFrom, Last);
-end;
-
-// Hinter (ALine, ACol) auf der Zeile nur Leerraum oder Kommentar?
-function TailIsComment(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
-var
-  L  : string;
-  Co : Integer;
-begin
-  Result := True;
-  L := AMap.Raw(ALine);
-  for Co := ACol + 1 to Length(L) do
-    if (AMap.ClassAt(ALine, Co) <> 'k') and not IsBlank(L[Co]) then
-      Exit(False);
-end;
-
-function CanAppendLine(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
-begin
-  Result := TailIsComment(AMap, ALine, ACol)
-    and not AMap.StartsInside(ALine + 1);
 end;
 
 // begin und end als eigene Zeilen: hinter die Zeile des Schluesselworts

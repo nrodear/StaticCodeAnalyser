@@ -39,9 +39,6 @@ unit uRdxIntroPlan;
 
 interface
 
-uses
-  System.SysUtils;
-
 type
   TRdxIntroPlan = record
     Ok         : Boolean;
@@ -148,6 +145,11 @@ function CharColOfByte(const ALine: string; AByteIndex: Integer): Integer;
 function StringOpenAtEnd(const ALine: string; AState: Char = 'c'): Boolean;
 
 implementation
+
+uses
+  // Bis Charge B2S-a im interface - die Schnittstelle braucht sie nicht
+  // (Review R3-07).
+  System.SysUtils;
 
 type
   // Ein Zahl-Literal der Zeile: Spalten [First, Stop).

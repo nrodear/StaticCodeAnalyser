@@ -11,7 +11,7 @@ unit uRdxDeclFixes;
 // namen, Rueckgabe und das ';' hinter dem Kopf - genutzt von SCA117 (das
 // Geruest) und SCA149 (die Form der Methode und ihrer Basis). Geplant war
 // er auch fuer SCA121/SCA135; SCA121 (Charge H5, uRdxResultFixes) liest den
-// Kopf aber ueber TRdxRoutine.HeaderEnd (uRdxRoutineFixes), nicht hierueber
+// Kopf aber ueber TRdxRoutine.HeaderEnd (uRdxBlocks), nicht hierueber
 // (Review R3-08, Charge FC: hier stand "geteilt mit SCA121, SCA135").
 // GRUNDSATZ wie in uRdxSimpleFixes: lieber keine Hilfe als eine falsche -
 // der Planer prueft den Fund am aktuellen Text nach.
@@ -483,18 +483,6 @@ end;
 
 { ---- SCA197 ---- }
 
-// Den Namen aus 'Interface "IFoo" has no GUID ...'.
-function QuotedNameOf(const AMessage: string): string;
-var
-  P, Q : Integer;
-begin
-  Result := '';
-  P := Pos('"', AMessage);
-  Q := Pos('"', AMessage, P + 1);
-  if (P > 0) and (Q > P + 1) then
-    Result := Copy(AMessage, P + 1, Q - P - 1);
-end;
-
 // 'AName = interface' auf ALine: das Token 'interface'. '' oder der Grund.
 function InterfaceHeaderOn(AMap: TRdxCodeMap; ALine: Integer;
   const AName: string; out AKeyword: TRdxToken): string;
@@ -618,7 +606,9 @@ var
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  AReason := InterfaceHeaderOn(AMap, ALine, QuotedNameOf(AMessage), Kw);
+  // Der Name aus 'Interface "IFoo" has no GUID ...' (bis Charge B2S-a
+  // eine eigene Kopie QuotedNameOf).
+  AReason := InterfaceHeaderOn(AMap, ALine, QuotedText(AMessage, '"'), Kw);
   if AReason = '' then
     AReason := HeaderTail(AMap, Kw, Last, Next);
   if (AReason = '') and LooksLikeComImport(AMap, Next) then

@@ -73,7 +73,6 @@ const
   SPAN_071 = 'sca071';
   SPAN_088 = 'sca088';
   SPAN_123 = 'sca123';
-  R_NO_COLUMN    = 'Spalte fehlt in der Meldung';
   R_SEMI_MOVED   = 'kein ";;" an der gemeldeten Stelle - Zeile verschoben? '
     + 'Datei neu pruefen';
   R_KW_MOVED     = 'das Schluesselwort steht nicht an der gemeldeten Stelle '
@@ -120,19 +119,16 @@ end;
 
 { ---- SCA071 ---- }
 
-// Wort und Spalte aus '... "interface" ... currently at column 5'.
-// False, wenn eines fehlt.
+// Wort und Spalte aus '... "interface" ... currently at column 5' - das
+// Wort zwischen den ersten beiden '"' (QuotedText, uRdxCodeMap; bis
+// Charge B2S-a hier ausgeschrieben). False, wenn eines fehlt.
 function KeywordOf(const AMessage: string; out AWord: string;
   out ACol: Integer): Boolean;
 var
-  P, Q, i : Integer;
+  P, i : Integer;
 begin
-  AWord := '';
   ACol := 0;
-  P := Pos('"', AMessage);
-  Q := Pos('"', AMessage, P + 1);
-  if (P > 0) and (Q > P + 1) then
-    AWord := Copy(AMessage, P + 1, Q - P - 1);
+  AWord := QuotedText(AMessage, '"');
   P := Pos(KEY_CURRENTLY, AMessage);
   if P > 0 then
   begin

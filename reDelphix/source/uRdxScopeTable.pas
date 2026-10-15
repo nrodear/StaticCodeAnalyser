@@ -43,7 +43,7 @@ unit uRdxScopeTable;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections,
+  System.Classes, System.Generics.Collections,
   uRdxRecipes;
 
 const
@@ -93,10 +93,6 @@ type
     property Source: string read FSource;
   end;
 
-  // Prueft einen Pfad - uRdxEditor setzt hier den Netzlaufwerk-Test
-  // (GetDriveType), die Tests eine Attrappe.
-  TRdxPathTest = function(const APath: string): Boolean;
-
   // Die Kurznamen, die das PROJEKT selbst fuehren kann - die Gegenprobe zur
   // Scope-Tabelle fuer 'uses: X -> Scope.X': eine Projekt-Unit 'Types' darf
   // nicht zu System.Types werden (Review nach Bereichen 2026-10-10, Minor
@@ -107,17 +103,18 @@ type
   // Eintrag ist danach ein Nachschlagen plus je Verzeichnis zwei
   // FileExists. Bis Review R1-02 lief dafuer je Eintrag die ganze
   // Projektgruppe ueber die ToolsAPI, auch fuer die Gluehbirne.
-  // NETZPFADE (UNC, mit IsRemote auch Netzlaufwerke) liest der Index nicht:
-  // der Menueaufbau laeuft im Hauptthread, ein nicht erreichbarer Server
-  // kostete je FileExists Sekunden (dieselbe Regel wie SCA014, R_UNC in
-  // uRdxMagicFixes). Liegt ein Verzeichnis dort, ist jede Antwort offen -
-  // Knows sagt dann immer True (kein Angebot), UnreadableReason den Grund.
+  // NETZPFADE (UNC und Netzlaufwerke, uRdxPaths.IsNetworkPath - dieselbe
+  // Regel wie SCA014/SCA164/SCA147; bis Charge B2S-a prueften hier nur UNC
+  // und ein Netzlaufwerk ueber die Naht IsRemote, die uRdxEditor setzte)
+  // liest der Index nicht: der Menueaufbau laeuft im Hauptthread, ein nicht
+  // erreichbarer Server kostete je FileExists Sekunden. Liegt ein
+  // Verzeichnis dort, ist jede Antwort offen - Knows sagt dann immer True
+  // (kein Angebot), UnreadableReason den Grund.
   TRdxProjectUnits = class
   private
     FModules    : TStringList;    // Kurznamen der Projektmodule, ohne Doppel
     FDirs       : TStringList;    // gelesene Verzeichnisse, mit Trenner am Ende
     FUnreadable : string;         // erstes nicht gelesenes Verzeichnis
-    FIsRemote   : TRdxPathTest;
   public
     constructor Create;
     destructor Destroy; override;
@@ -139,11 +136,20 @@ type
     function UnreadableReason: string;
     // Das erste ungelesene Verzeichnis (Netzpfad); '' = alles gelesen.
     property Unreadable: string read FUnreadable;
-    // Zusaetzlicher Netzpfad-Test fuer AddDir (Netzlaufwerk); nil = nur UNC.
-    property IsRemote: TRdxPathTest read FIsRemote write FIsRemote;
   end;
 
 implementation
+
+uses
+  // System.SysUtils nur hier: die Schnittstelle braucht keinen seiner
+  // Namen (bis Charge B2S im interface-uses, Gegenpruefung V2-B2S-3). Vor
+  // uRdxPaths: ein gleicher Name kommt weiter von dort. Delphi: kein hier
+  // benutzter Name steht zugleich in SysUtils und in System.Classes,
+  // System.Generics.Collections oder uRdxRecipes - die Aufloesung bleibt.
+  // FPC (Pruefstand) deklariert TArray<T> auch in SysUtils: die
+  // Schnittstelle nimmt es dort jetzt aus ObjPas - derselbe Code.
+  System.SysUtils,
+  uRdxPaths;   // IsNetworkPath, HasUncLead
 
 const
   // Unit-Scope-Vorgabe eines Win32-Projekts, in Compiler-Reihenfolge.
@@ -448,14 +454,6 @@ const
     + 'reDelphix liest dort nicht (Menueaufbau im Hauptthread); ob das '
     + 'Projekt eine Unit dieses Namens hat, ist offen - von Hand';
 
-// '\\server\share\..' (auch mit '/')? Zweite Kopie der Regel aus
-// uRdxMagicFixes.IsNetworkPath - zusammenlegen mit den geteilten Helfern.
-function IsUncPath(const APath: string): Boolean;
-begin
-  Result := (Length(APath) > 2) and CharInSet(APath[1], ['\', '/'])
-    and CharInSet(APath[2], ['\', '/']);
-end;
-
 constructor TRdxProjectUnits.Create;
 begin
   inherited Create;
@@ -488,7 +486,7 @@ end;
 procedure TRdxProjectUnits.AddDir(const ADir: string);
 begin
   if ADir = '' then Exit;
-  if IsUncPath(ADir) or (Assigned(FIsRemote) and FIsRemote(ADir)) then
+  if IsNetworkPath(ADir) then
   begin
     if FUnreadable = '' then
       FUnreadable := ADir;
@@ -513,9 +511,11 @@ begin
     Dir  := Trim(Copy(Rest, 1, P - 1));
     Rest := Copy(Rest, P + 1, MaxInt);
     if (Dir = '') or (Pos('$(', Dir) > 0) then Continue;
-    // Relativ zum Projektverzeichnis, ausser mit Laufwerk oder UNC.
+    // Relativ zum Projektverzeichnis, ausser mit Laufwerk oder zwei
+    // Trennern vorn (UNC, auch der Win32-Namensraum '\\?\C:\..': absolut,
+    // ob im Netz oder nicht - das entscheidet AddDir).
     if (ABaseDir <> '')
-       and not ((Length(Dir) >= 2) and ((Dir[2] = ':') or IsUncPath(Dir))) then
+       and not ((Length(Dir) >= 2) and ((Dir[2] = ':') or HasUncLead(Dir))) then
       Dir := IncludeTrailingPathDelimiter(ABaseDir) + Dir;
     AddDir(ExpandFileName(Dir));
   end;

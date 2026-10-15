@@ -44,8 +44,7 @@ unit uRdxFlowFixes;
 interface
 
 uses
-  System.SysUtils,
-  uRefactorInfo, uRdxBufferMath, uRdxCodeMap;
+  uRdxBufferMath, uRdxCodeMap;
 
 type
   // Ergebnis der Planer: die Ersetzung und was der Aufrufer mit dem
@@ -114,9 +113,13 @@ type
 implementation
 
 uses
-  uRdxSimpleFixes,   // DeclaresRoutine (eigene Routine Exit, Funktionsname),
-                     // NextTokenOnLineWith (class operator Assign)
-  uRdxStructFixes;   // StartsStatementAt, ElseBelongsToIf, Bereichshelfer
+  // Nur die Schnittstelle braucht uRdxBufferMath/uRdxCodeMap im interface;
+  // die Fragen an die ganze Datei (DeclaresRoutine, NextTokenOnLineWith) und
+  // die Bereichs-Helfer kommen seit Charge B2S-a aus uRdxCodeMap - bis
+  // dahin band die Unit dafuer uRdxSimpleFixes ein (Review R3-07).
+  System.SysUtils,
+  uRefactorInfo,     // TRefactorSpan.Make
+  uRdxStructFixes;   // StartsStatementAt, ElseBelongsToIf
 
 const
   SPAN_098 = 'sca098';
@@ -222,17 +225,11 @@ type
 
 { ---- gemeinsam ---- }
 
-// Klammertiefe: '(' und '[' +1, ')' und ']' -1, sonst 0.
-function ParenDelta(const T: TRdxToken): Integer;
-begin
-  Result := 0;
-  if (T.Low = '(') or (T.Low = '[') then
-    Result := 1
-  else if (T.Low = ')') or (T.Low = ']') then
-    Result := -1;
-end;
-
-// Kommentar oder Direktive irgendwo auf ALine?
+// Kommentar oder Direktive irgendwo auf ALine - auf der GANZEN Zeile, auch
+// vor oder hinter der Anweisung? Anders als CommentInRange (nur der
+// Bereich, den die Ersetzung ueberschreibt, zeichengenau): SCA080 und
+// SCA047 loeschen eine Anweisung, die ein Kommentar daneben vielleicht
+// erklaert (R_LINE_COMMENT) - der Bereich allein saehe ihn nicht.
 function LineHasComment(AMap: TRdxCodeMap; ALine: Integer): Boolean;
 begin
   Result := AMap.HasComment(ALine, 1, Length(AMap.Raw(ALine)));
@@ -796,9 +793,13 @@ begin
   Result := False;
 end;
 
-// Gegenprobe wie der Detektor und die Sperren ohne Bezug zur Form der
-// Zeile. '' oder der Grund.
-function JumpReason(AMap: TRdxCodeMap; const AJump, ASemi: TRdxToken): string;
+// SCA080 (ueberfluessiger Sprung): Gegenprobe wie der Detektor und die
+// Sperren ohne Bezug zur Form der Zeile. '' oder der Grund. Nicht zu
+// verwechseln mit LeavesDestructorReason (uRdxResultFixes, SCA097: ein
+// Sprung verlaesst den Destruktor vor inherited) und SpanJumpReason
+// (uRdxTryFixes: ein Sprung im Bereich eines try/finally) - bis zur
+// Nachpruefung B2S hiessen alle drei JumpReason (Review R3-05/R5-03).
+function RedundantJumpReason(AMap: TRdxCodeMap; const AJump, ASemi: TRdxToken): string;
 begin
   Result := '';
   if LineHasComment(AMap, AJump.Line) then
@@ -811,7 +812,7 @@ begin
   if InFinally(AMap, AJump) then
     Exit('Sprung im finally-Teil - Delphi (E2126) und FPC (06040) '
       + 'uebersetzen ihn nicht; von Hand pruefen');
-  if TRdxSimpleFixes.DeclaresRoutine(AMap, AJump.Low) then
+  if DeclaresRoutine(AMap, AJump.Low) then
     Result := Format('die Unit deklariert eine eigene Routine %s - der '
       + 'Sprung ruft vielleicht sie auf', [AJump.Low]);
 end;
@@ -878,7 +879,7 @@ begin
     AReason := JumpOn(AMap, ALine, JumpWord, Jump, Semi);
   end;
   if AReason = '' then
-    AReason := JumpReason(AMap, Jump, Semi);
+    AReason := RedundantJumpReason(AMap, Jump, Semi);
   if AReason = '' then
   begin
     APlan.Target := Copy(AMap.Raw(Jump.Line), Jump.Col, Jump.Len);
@@ -1039,7 +1040,7 @@ begin
     Exit('Result := Result stillt vielleicht eine Compiler-Meldung (Delphi '
       + 'W1035, FPC "Function result does not seem to be set") - entfernt '
       + 'kaeme sie zurueck; von Hand entscheiden oder unterdruecken');
-  if (AKey = Root) and TRdxSimpleFixes.DeclaresRoutine(AMap, Root) then
+  if (AKey = Root) and DeclaresRoutine(AMap, Root) then
     Exit(Format('%s ist auch der Name einer Routine dieser Unit - rechts '
       + 'kann ein (rekursiver) Aufruf stehen', [Root]));
   if DeclaresAssignOperator(AMap) then
