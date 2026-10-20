@@ -556,7 +556,7 @@ const
       GoodEx   : 'for i := 10 downto 1 do DoStuff(i);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA047
     (
@@ -733,7 +733,7 @@ const
       GoodEx   : 'procedure Foo;' + #13#10 + 'begin' + #13#10 + '  DoStuff;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA062
     (
@@ -756,7 +756,7 @@ const
       GoodEx   : '  DoStuff;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA064
     (
@@ -767,7 +767,7 @@ const
       GoodEx   : 'procedure Foo;' + #13#10 + 'begin' + #13#10 + '  if X then DoStuff;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA065
     (
@@ -982,7 +982,7 @@ const
         #13#10 + '  Stream.Free;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA084
     (
@@ -1101,7 +1101,7 @@ const
         #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA094
     (
@@ -1112,7 +1112,7 @@ const
       GoodEx   : 'if Active then ...' + #13#10 + 'Result := 42;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA095
     (
@@ -1372,7 +1372,7 @@ const
       GoodEx   : 'Url := ''https://api.contoso-shop.de/v1/users'';';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA116
     (
@@ -2003,7 +2003,7 @@ const
       GoodEx   : 'Diff := PtrUInt(P1) - PtrUInt(P2);     // pointer-wide cast';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA162
     (
@@ -2296,7 +2296,7 @@ const
       GoodEx   : '[Test]' + #13#10 + 'procedure Foo;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA184
     (

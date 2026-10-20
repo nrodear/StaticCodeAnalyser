@@ -72,6 +72,12 @@ RDX = os.path.join(REPO, 'reDelphix')
 SRC_TABLE = os.path.join(RDX, 'source', 'uRdxFixTable.pas')
 SRC_RUNNER = os.path.join(RDX, 'source', 'uRdxFixRunner.pas')
 SRC_PROVIDER = os.path.join(RDX, 'source', 'uRdxProvider.pas')
+# Planer-Units mit eigenem Adapter PlanXxx (TRdxFixPlanner): FIX_ROWS nennt nur
+# den Namen, der Rumpf steht dort (Charge Q, zehn einfache Hilfen).
+SRC_PLANNER_UNITS = tuple(os.path.join(RDX, 'source', n + '.pas') for n in (
+    'uRdxHttpsFix', 'uRdxParensFix', 'uRdxAttrGapFix', 'uRdxTwiceInheritedFix',
+    'uRdxNativeIntFix', 'uRdxEmptyFinallyFix', 'uRdxForRangeFix', 'uRdxTabsFix',
+    'uRdxTrailingBlanksFix', 'uRdxKeywordCaseFix'))
 CATALOG = os.path.join(REPO, 'rules', 'sca-rules.json')
 PO_FILES = (('de', os.path.join(REPO, 'i18n', 'de.po')),
             ('fr', os.path.join(REPO, 'i18n', 'fr.po')))
@@ -458,6 +464,10 @@ def parse_table(table_text=None, runner_text=None):
     runner = routines(strip_comments(runner_text), SRC_RUNNER)
     for name, bodies in runner.items():
         index.setdefault(name, []).extend(bodies)
+    for unit_path in SRC_PLANNER_UNITS:
+        for name, bodies in routines(strip_comments(load_text(unit_path)),
+                                     unit_path).items():
+            index.setdefault(name, []).extend(bodies)
     for r in rows:
         for planner in (r['plan'], r['alt']):
             if planner and planner not in index:

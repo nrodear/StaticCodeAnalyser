@@ -3,7 +3,7 @@
 > **Erzeugte Datei – nicht von Hand bearbeiten.** Quelle: [`data/quickfixes-doc.json`](data/quickfixes-doc.json) (Titel, Beschreibung, Sperren, Beispiele) und der Quelltext: welche Hilfen es gibt, ihre Menütexte und ob sie das Verhalten ändern, stehen in [`source/uRdxFixTable.pas`](source/uRdxFixTable.pas) (`FIX_ROWS`, `FIX_CAPTIONS`, `FIX_ALT_CAPTIONS`) und [`source/uRdxProvider.pas`](source/uRdxProvider.pas) (Rezepte), die Übersetzungen in [`i18n/de.po`](../i18n/de.po) und [`i18n/fr.po`](../i18n/fr.po), Regel-IDs und Namen in [`rules/sca-rules.json`](../rules/sca-rules.json).
 > Erzeugen (Repo-Wurzel): `python tools/gen-quickfix-doc.py`, prüfen: `python tools/gen-quickfix-doc.py --check` (auch in der CI, `.github/workflows/quickfix-doc.yml`).
 
-reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 40 Quick-Fixes aus der Tabelle der einfachen Hilfen (2 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
+reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 50 Quick-Fixes aus der Tabelle der einfachen Hilfen (4 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
 
 ## Lesehilfe
 
@@ -25,8 +25,12 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 40 Qui
 | SCA009 MissingFinally | `%s in einem try/finally-Block freigeben` | Quick-Fix | ja | [SCA009](#sca009) |
 | SCA014 MagicNumber | `Lokale Konstante für %s einführen` | Quick-Fix | nein | [SCA014](#sca014) |
 | SCA020 EmptyMethod | `Leeren Rumpf als beabsichtigt kennzeichnen` / `ENotImplemented im leeren Rumpf auslösen` | Quick-Fix | nein / ja | [SCA020](#sca020) |
+| SCA046 ReversedForRange | `"to" durch "downto" ersetzen` / `Schleifengrenzen vertauschen` | Quick-Fix | ja / ja | [SCA046](#sca046) |
 | SCA047 SelfAssignment | `Selbstzuweisung von %s entfernen` | Quick-Fix | nein | [SCA047](#sca047) |
 | SCA053 UnusedLocalVar | `Ungenutzte Variable %s entfernen` | Quick-Fix | nein | [SCA053](#sca053) |
+| SCA061 TabulationCharacter | `Tabulatoren dieser Zeile durch Leerzeichen ersetzen` | Quick-Fix | nein | [SCA061](#sca061) |
+| SCA063 TrailingWhitespace | `Leerraum am Zeilenende entfernen` | Quick-Fix | nein | [SCA063](#sca063) |
+| SCA064 LowercaseKeyword | `%s klein schreiben` | Quick-Fix | nein | [SCA064](#sca064) |
 | SCA066 EmptyArgumentList | `Leere Klammern entfernen` | Quick-Fix | nein | [SCA066](#sca066) |
 | SCA070 CommentedOutCode | `Auskommentierten Code löschen` | Quick-Fix | nein | [SCA070](#sca070) |
 | SCA071 UnitLevelKeywordIndent | `Schlüsselwort an Spalte 1 setzen` | Quick-Fix | nein | [SCA071](#sca071) |
@@ -35,16 +39,20 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 40 Qui
 | SCA075 ExplicitTObjectInheritance | `(TObject) aus der Klassendeklaration entfernen` | Quick-Fix | nein | [SCA075](#sca075) |
 | SCA080 RedundantJump | `Überflüssiges %s entfernen` | Quick-Fix | nein | [SCA080](#sca080) |
 | SCA082 SuperfluousSemicolon | `Überzähliges Semikolon entfernen` | Quick-Fix | nein | [SCA082](#sca082) |
+| SCA083 EmptyFinallyBlock | `Leeres try/finally entfernen` | Quick-Fix | nein | [SCA083](#sca083) |
 | SCA084 AssignedAndAssignedNil | `Überflüssigen Vergleich mit nil entfernen` | Quick-Fix | nein | [SCA084](#sca084) |
 | SCA085 FreeAndNilHint | `FreeAndNil(%s) verwenden` | Quick-Fix | nein | [SCA085](#sca085) |
 | SCA087 EmptyVisibilitySection | `Leeren Sichtbarkeitsabschnitt entfernen` | Quick-Fix | nein | [SCA087](#sca087) |
 | SCA088 LegacyInitializationSection | `begin durch initialization ersetzen` | Quick-Fix | nein | [SCA088](#sca088) |
+| SCA093 TwiceInheritedCalls | `Zweiten doppelten inherited-Aufruf entfernen` / `Ersten doppelten inherited-Aufruf entfernen` | Quick-Fix | ja / ja | [SCA093](#sca093) |
+| SCA094 RedundantParentheses | `Das überflüssige innere Klammerpaar entfernen` | Quick-Fix | nein | [SCA094](#sca094) |
 | SCA096 ConstructorWithoutInherited | `%s als Erstes im Konstruktor aufrufen` | Quick-Fix | je nach Fund | [SCA096](#sca096) |
 | SCA097 DestructorWithoutInherited | `inherited als Letztes im Destruktor aufrufen` | Quick-Fix | je nach Fund | [SCA097](#sca097) |
 | SCA098 RedundantConditional | `Bedingung direkt an %s zuweisen` | Quick-Fix | nein | [SCA098](#sca098) |
 | SCA099 IfElseBegin | `Zweig in begin..end setzen` | Quick-Fix | nein | [SCA099](#sca099) |
 | SCA101 BeginEndRequired | `Zweig in begin..end setzen` | Quick-Fix | nein | [SCA101](#sca101) |
 | SCA109 LockWithoutTryFinally | `Sperre %s in einem try/finally-Block freigeben` | Quick-Fix | ja | [SCA109](#sca109) |
+| SCA115 HttpInsteadOfHttps | `https:// statt http:// verwenden` | Quick-Fix | ja | [SCA115](#sca115) |
 | SCA117 PublicMemberWithoutDoc | `Dokumentationsgerüst einfügen` | Quick-Fix | nein | [SCA117](#sca117) |
 | SCA120 MissingRaise | `Exception auslösen` | Quick-Fix | ja | [SCA120](#sca120) |
 | SCA121 RoutineResultUnassigned | `Result mit %s initialisieren` | Quick-Fix | ja | [SCA121](#sca121) |
@@ -56,8 +64,10 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 40 Qui
 | SCA149 MissingOverride | `"%s;" an die Deklaration anfügen` | Quick-Fix | je nach Fund | [SCA149](#sca149) |
 | SCA153 UnpairedLock | `Sperre %s in einem try/finally-Block freigeben` | Quick-Fix | ja | [SCA153](#sca153) |
 | SCA156 GetMemWithoutFreeMem | `Puffer %s in einem try/finally-Block freigeben` | Quick-Fix | ja | [SCA156](#sca156) |
+| SCA161 PointerSubtraction | `Die 32-Bit-Casts durch NativeInt/NativeUInt ersetzen` | Quick-Fix | ja | [SCA161](#sca161) |
 | SCA164 UnusedRoutine | `Ungenutzte Routine %s löschen` | Quick-Fix | nein | [SCA164](#sca164) |
 | SCA168 DefaultCaseInCaseStatement | `Leeren else-Zweig ergänzen` / `else-Zweig mit Exception ergänzen` | Quick-Fix | nein / ja | [SCA168](#sca168) |
+| SCA183 AttributeMisalignment | `Leerzeile nach dem Attribut entfernen` | Quick-Fix | nein | [SCA183](#sca183) |
 | SCA196 ManagedResultUninit | `Result zuerst initialisieren: %s` | Quick-Fix | ja | [SCA196](#sca196) |
 | SCA197 InterfaceWithoutGuid | `Neue GUID einfügen` | Quick-Fix | nein | [SCA197](#sca197) |
 | jede Regel mit Anker im Regelkatalog (Feld `anchor`), wenn sich die Anweisung des Funds beschreiben lässt | `Stelle zeigen` | Navigation | nein | [Details](#rezept-showspan) |
@@ -318,6 +328,59 @@ begin
 end;
 ```
 
+<a id="sca046"></a>
+
+### SCA046 – `to` durch `downto` ersetzen
+
+- **Regel:** SCA046 `ReversedForRange` – for i := High to Low - missing downto
+- **Art:** Quick-Fix
+- **Ändert Verhalten:**
+  - Eintrag 1: **ja** – die Schleife lief bisher nie und zählt danach abwärts; war sie absichtlich abgeschaltet, ist das ein Eingriff. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+  - Eintrag 2: **ja** – die Schleife lief bisher nie und zählt danach aufwärts; war sie absichtlich abgeschaltet, ist das ein Eingriff. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| Eintrag | en | de | fr |
+|---|---|---|---|
+| 1 | `Replace "to" with "downto"` | `"to" durch "downto" ersetzen` | `Remplacer "to" par "downto"` |
+| 2 | `Swap the loop bounds` | `Schleifengrenzen vertauschen` | `Échanger les bornes de la boucle` |
+
+**Wirkung (Eintrag 1):** Macht aus `for I := 10 to 1 do` ein `for I := 10 downto 1 do`. Der Detektor meldet nur Ganzzahl-Literale, die Meldung nennt keine Spalte: die Hilfe sucht den Kopf selbst und prüft die Werte gegen die Meldung.
+
+**Wirkung (Eintrag 2):** Vertauscht stattdessen Start- und Endwert: `for I := 1 to 10 do`.
+
+**Nicht angeboten**
+
+- mehrere umgekehrte Köpfe auf der Zeile, ein Kopf über mehrere Zeilen
+- ein Kommentar, eine Direktive oder ein String im Kopf, eine Typangabe an der Schleifenvariablen
+- die Zeile ist verschoben (die Werte passen nicht zur Meldung)
+- Eintrag 2: dieselben Sperren wie der erste Eintrag
+
+**Beispiel (Eintrag 1)**
+
+Vorher:
+
+```pascal
+  for I := 10 to 1 do
+    Process(I);
+```
+
+Nachher:
+
+```pascal
+  for I := 10 downto 1 do
+    Process(I);
+```
+
+**Beispiel (Eintrag 2)**
+
+Vorher wie bei Eintrag 1.
+
+Nachher:
+
+```pascal
+  for I := 1 to 10 do
+    Process(I);
+```
+
 <a id="sca047"></a>
 
 ### SCA047 – Selbstzuweisung entfernen
@@ -431,6 +494,95 @@ begin
   DoStuff;
 end;
 ```
+
+<a id="sca061"></a>
+
+### SCA061 – Tabulatoren der Zeile durch Leerzeichen ersetzen
+
+- **Regel:** SCA061 `TabulationCharacter` – Tab character in source
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Replace the tabs in this line with spaces` | `Tabulatoren dieser Zeile durch Leerzeichen ersetzen` | `Remplacer les tabulations de cette ligne par des espaces` |
+
+**Wirkung:** Ersetzt die Tabulatoren im Code der gemeldeten Zeile durch Leerzeichen bis zum nächsten Tabstopp (Tabweite 2, feste Annahme; Leerzeichen und Tab davor werden sauber zusammengezogen). Eine Ersetzung vom ersten bis zum letzten Code-Tab; Tabs in Strings und Kommentaren dazwischen bleiben. Nur die gemeldete Zeile.
+
+**Nicht angeboten**
+
+- der erste Tab der Zeile liegt in einem String, Kommentar oder mehrzeiligen String (der Detektor meldet ihn trotzdem, der Fund bliebe stehen)
+- die Zeile ist verschoben, oder die Meldung nennt keine Spalte
+
+**Beispiel:** nicht abbildbar – der Unterschied ist nur Leerraum (Tab gegen Leerzeichen).
+
+**Hinweis.** Bleibt hinter dem letzten Code-Tab ein Tab in einem String oder Kommentar, meldet der Detektor die Zeile nach der Hilfe weiter.
+
+<a id="sca063"></a>
+
+### SCA063 – Leerraum am Zeilenende entfernen
+
+- **Regel:** SCA063 `TrailingWhitespace` – Trailing whitespace
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Remove the trailing whitespace` | `Leerraum am Zeilenende entfernen` | `Supprimer les espaces en fin de ligne` |
+
+**Wirkung:** Löscht die Leerzeichen und Tabs am Zeilenende, ab der Spalte aus der Meldung. Eine reine Leerzeile aus Blanks wird leer. Kommentare, Direktiven und Code sind erlaubt. Bedeutungsgleich.
+
+**Nicht angeboten**
+
+- der Leerraum ist String-Inhalt: eine Zeile in einem mehrzeiligen String (`'''`), die Eröffnungszeile selbst oder ein nicht geschlossener String
+- die Endfolge beginnt nicht bei der Spalte aus der Meldung, oder sie reicht nicht bis zum Zeilenende
+
+**Beispiel:** nicht abbildbar – der Unterschied ist nur Leerraum am Zeilenende.
+
+<a id="sca064"></a>
+
+### SCA064 – Schlüsselwort kleinschreiben
+
+- **Regel:** SCA064 `LowercaseKeyword` – Pascal keyword not lowercase
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Write %s in lowercase` | `%s klein schreiben` | `Écrire %s en minuscules` |
+
+**Platzhalter:** `%s` = das Schlüsselwort wie gemeldet (etwa `Begin`).
+
+**Wirkung:** Schreibt das gemeldete Schlüsselwort an der gemeldeten Spalte klein (`Begin` → `begin`). Bedeutungsgleich: Delphi unterscheidet Groß- und Kleinschreibung nicht.
+
+**Nicht angeboten**
+
+- das Wort steht in einem Kommentar oder String, ist Teil eines Bezeichners oder schon klein geschrieben
+- das Wort ist ein Bezeichner: hinter `.`, `&` oder `@`, vor `:=`, als benanntes Argument
+- ein Wort, das auch Bezeichner sein kann (`on`, `out`, `contains`, `requires`, `implements`, `absolute`); Direktiven und Sichtbarkeitswörter nur im passenden Kontext
+- die Zeile ist verschoben, oder die Meldung nennt Wort oder Spalte nicht
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+procedure Run;
+Begin
+  DoWork;
+end;
+```
+
+Nachher:
+
+```pascal
+procedure Run;
+begin
+  DoWork;
+end;
+```
+
+**Hinweis.** Der Detektor meldet auch Member hinter einem Punkt (`Foo.End`); die Hilfe bietet dort nichts an.
 
 <a id="sca066"></a>
 
@@ -745,6 +897,44 @@ Nachher:
   DoStuff;
 ```
 
+<a id="sca083"></a>
+
+### SCA083 – Leeres try/finally auflösen
+
+- **Regel:** SCA083 `EmptyFinallyBlock` – Empty finally block
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Remove the empty try/finally` | `Leeres try/finally entfernen` | `Supprimer le try/finally vide` |
+
+**Wirkung:** Entfernt `try`, `finally` und `end` und rückt den Rumpf eine Stufe aus (Tab oder Leerzeichen des Umfelds bleiben). Fehlt dem Rumpf das `;` und stand eines hinter dem `end`, setzt die Hilfe es hinter die letzte Anweisung. Bedeutungsgleich: Ausnahmen laufen weiter nach außen.
+
+**Nicht angeboten**
+
+- ein Kommentar oder eine Direktive im `finally` (der Detektor meldet solche Fälle trotzdem, weil er Kommentare ausblendet)
+- `try` steht hinter `then`, `else`, `do` oder einer Marke (dort bräuchte es ein `begin`)
+- try, finally und end stehen nicht je allein auf ihrer Zeile, die Einrückung weicht ab, oder der Rumpf ist leer
+- im Rumpf stehen `var`, `const`, `label`, `goto` oder `asm`, oder im Bereich liegt eine Direktive oder ein Blockkommentar
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  try
+    DoWork;
+  finally
+  end;
+```
+
+Nachher:
+
+```pascal
+  DoWork;
+```
+
 <a id="sca084"></a>
 
 ### SCA084 – Überflüssigen nil-Vergleich entfernen
@@ -898,6 +1088,103 @@ procedure P; begin end;
 initialization
   P;
 end.
+```
+
+<a id="sca093"></a>
+
+### SCA093 – Zweiten doppelten inherited-Aufruf entfernen
+
+- **Regel:** SCA093 `TwiceInheritedCalls` – Multiple inherited calls in one method
+- **Art:** Quick-Fix
+- **Ändert Verhalten:**
+  - Eintrag 1: **ja** – die Elternmethode läuft nur noch einmal – Reihenfolge und Nebenwirkung prüfen. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+  - Eintrag 2: **ja** – die Elternmethode läuft nur noch einmal – Reihenfolge und Nebenwirkung prüfen. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| Eintrag | en | de | fr |
+|---|---|---|---|
+| 1 | `Remove the second duplicate inherited call` | `Zweiten doppelten inherited-Aufruf entfernen` | `Supprimer le deuxième appel inherited en double` |
+| 2 | `Remove the first duplicate inherited call` | `Ersten doppelten inherited-Aufruf entfernen` | `Supprimer le premier appel inherited en double` |
+
+**Wirkung (Eintrag 1):** Löscht den zweiten von zwei gleichen, direkt aufeinander folgenden `inherited`-Aufrufen im Rumpf. Der Detektor meldet auf der Zeile des Methodenkopfs; die Hilfe sucht die Aufrufe selbst, nur auf oberster Ebene des Rumpfs, und verlangt genau zwei.
+
+**Wirkung (Eintrag 2):** Löscht stattdessen den ersten der beiden Aufrufe.
+
+**Nicht angeboten**
+
+- eine Anweisung, ein Kommentar oder eine Direktive steht zwischen den Aufrufen (auch das Katalogbeispiel `inherited; DoStuff; inherited;`: ohne Datenfluss ist nicht zu beweisen, dass das Weglassen gleich bleibt)
+- die Aufrufe stehen in if, case, try oder einem verschachtelten Block; es sind nicht genau zwei; sie sind nicht textgleich oder nicht je allein auf ihrer Zeile
+- der letzte Aufruf hat vor dem `end` kein `;`, oder die Routine hat eine verschachtelte Routine, asm oder external
+- Eintrag 2: dieselben Sperren wie der erste Eintrag
+
+**Beispiel (Eintrag 1)**
+
+Vorher:
+
+```pascal
+procedure TFoo.Done;
+begin
+  inherited;
+  inherited;
+end;
+```
+
+Nachher:
+
+```pascal
+procedure TFoo.Done;
+begin
+  inherited;
+end;
+```
+
+**Beispiel (Eintrag 2)**
+
+Vorher wie bei Eintrag 1.
+
+Nachher:
+
+```pascal
+procedure TFoo.Done;
+begin
+  inherited;
+end;
+```
+
+<a id="sca094"></a>
+
+### SCA094 – Überflüssiges inneres Klammerpaar entfernen
+
+- **Regel:** SCA094 `RedundantParentheses` – Redundant double parentheses
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Remove the redundant inner parentheses` | `Das überflüssige innere Klammerpaar entfernen` | `Retirer la paire de parenthèses interne superflue` |
+
+**Wirkung:** Macht aus `((X))` ein `(X)`: das innere Paar fällt, das äußere bleibt. Bedeutung und Rangfolge bleiben gleich.
+
+**Nicht angeboten**
+
+- nur nach einem Operator (`:=`, `+`, `-`, `and`, `or` …) oder Schlüsselwort (`if`, `while`, `until` …) oder bei einem Literal als Inhalt hinter einem Bezeichner (`Foo((1))`) – sonst nicht
+- `Foo((X))` mit einer Variablen: das innere Paar könnte ein Ausdruck für einen var-Parameter, eine Überladung oder ein Cast sein (3 von 4 Funden im Korpus)
+- nach `=`, `:`, `,` oder `(` (Konstante, Vergleich, dreifache Klammer) und am Zeilenanfang
+- ein Kommentar im Klammerpaar, danach folgt `.`, `[` oder `(`, oder die Zeile ist verschoben
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  if ((Ready)) then
+    Run;
+```
+
+Nachher:
+
+```pascal
+  if (Ready) then
+    Run;
 ```
 
 <a id="sca096"></a>
@@ -1227,6 +1514,40 @@ Nachher:
   finally
     FLock.Leave;
   end;
+```
+
+<a id="sca115"></a>
+
+### SCA115 – http:// durch https:// ersetzen
+
+- **Regel:** SCA115 `HttpInsteadOfHttps` – Plaintext HTTP URL
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** **ja** – der Server muss https auf dem Standardport 443 mit gültigem Zertifikat anbieten. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| en | de | fr |
+|---|---|---|
+| `Use https:// instead of http://` | `https:// statt http:// verwenden` | `Utiliser https:// au lieu de http://` |
+
+**Wirkung:** Ersetzt im gemeldeten String-Literal nur das Schema `http://` durch `https://`. Die Hilfe sucht das Literal über die URL aus der Meldung (der Fund nennt nur die Zeile).
+
+**Nicht angeboten**
+
+- die URL kommt auf der Zeile zweimal vor, ist Teil eines längeren Strings oder steht in einem Kommentar oder mehrzeiligen String
+- Port, Benutzerangabe, IP-Adresse (auch private), IPv6, Platzhalter im Host, ein Host ohne Punkt, `localhost`, `*.local`, `*.internal`, `*.test`
+- Namespace-URIs (`xmlns`, `w3.org`, `schemas`, `tempuri.org`, `purl.org` und ähnliche) – die Hilfe ist enger als der Detektor
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  Url := 'http://api.example.org/v1/items';
+```
+
+Nachher:
+
+```pascal
+  Url := 'https://api.example.org/v1/items';
 ```
 
 <a id="sca117"></a>
@@ -1789,6 +2110,43 @@ begin
 end;
 ```
 
+<a id="sca161"></a>
+
+### SCA161 – 32-Bit-Casts durch NativeInt ersetzen
+
+- **Regel:** SCA161 `PointerSubtraction` – Pointer subtraction via 32-bit cast
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** **ja** – Win32 bleibt gleich, unter Win64 ist der Abstand der volle Adressabstand; bei {$R+} kann die Zuweisung an ein Integer-Ziel ERangeError auslösen. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| en | de | fr |
+|---|---|---|
+| `Replace the 32-bit casts with NativeInt/NativeUInt` | `Die 32-Bit-Casts durch NativeInt/NativeUInt ersetzen` | `Remplacer les casts 32 bits par NativeInt/NativeUInt` |
+
+**Wirkung:** Im Zeigerabzug `Cast(a) - Cast(b)` werden beide Cast-Wörter ersetzt: `Integer`/`LongInt` durch `NativeInt`, `Cardinal`/`LongWord` durch `NativeUInt`. Eine Ersetzung vom ersten Cast-Wort bis hinter den zweiten Cast; die Operanden bleiben. Die Meldung nennt keine Spalte: die Hilfe sucht das Muster auf den Code-Spalten der Zeile und hilft nur bei genau einem Treffer.
+
+**Nicht angeboten**
+
+- die beiden Casts haben verschiedene Vorzeichenart (`Cardinal` gegen `Integer`) – NativeInt oder NativeUInt wäre geraten
+- mehrere Treffer auf der Zeile (die Hilfe weiß nicht, welchen der Detektor meldete)
+- ein Operand ist eine Zahl oder kein einfacher Bezeichner, der Abzug geht mit einem weiteren 32-Bit-Cast weiter, oder ein Kommentar, String oder eine Direktive steht dazwischen
+- das Cast-Wort steht hinter `.`, `&` oder `@`
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  Len := Integer(PEnd) - Integer(PStart);
+```
+
+Nachher:
+
+```pascal
+  Len := NativeInt(PEnd) - NativeInt(PStart);
+```
+
+**Hinweis.** Die Hilfe prüft nicht, ob die Operanden Zeiger sind – das hat der Detektor entschieden.
+
 <a id="sca164"></a>
 
 ### SCA164 – Ungenutzte Routine löschen
@@ -1915,6 +2273,46 @@ Nachher:
   else
     raise EProgrammerError.Create('Unhandled case');
   end;
+```
+
+<a id="sca183"></a>
+
+### SCA183 – Leerzeile nach dem Attribut entfernen
+
+- **Regel:** SCA183 `AttributeMisalignment` – Attribute with blank line before target member
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Remove the blank line after the attribute` | `Leerzeile nach dem Attribut entfernen` | `Supprimer la ligne vide après l'attribut` |
+
+**Wirkung:** Löscht die Leerzeilen (nur Leerzeichen oder Tab) zwischen dem Attribut und der ersten Zeile mit Inhalt, einer Deklaration. Bedeutungsgleich.
+
+**Nicht angeboten**
+
+- ein Ziel-Attribut (`[assembly: …]`, `[Result: …]`) oder ein Attribut über mehrere Zeilen
+- hinter dem `]` steht Text oder ein Kommentar
+- hinter der Leerzeile folgt ein Kommentar, eine Direktive oder keine Deklaration (der Detektor prüft nur „irgendetwas“)
+- das `[` ist ein Set-Literal, nicht der Anfang eines Attributs (davor fehlt ein Deklarationsende)
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  public
+    [Test]
+
+    procedure Foo;
+```
+
+Nachher:
+
+```pascal
+  public
+    [Test]
+    procedure Foo;
 ```
 
 <a id="sca196"></a>

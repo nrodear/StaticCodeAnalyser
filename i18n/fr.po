@@ -2511,3 +2511,75 @@ msgstr "aucun en-tête %s"
 
 msgid "%d headers %s"
 msgstr "%d en-têtes %s"
+
+msgid "Remove the blank line after the attribute"
+msgstr "Supprimer la ligne vide après l'attribut"
+
+msgid "Remove the empty try/finally"
+msgstr "Supprimer le try/finally vide"
+
+msgid "Remove the first duplicate inherited call"
+msgstr "Supprimer le premier appel inherited en double"
+
+msgid "Remove the redundant inner parentheses"
+msgstr "Retirer la paire de parenthèses interne superflue"
+
+msgid "Remove the second duplicate inherited call"
+msgstr "Supprimer le deuxième appel inherited en double"
+
+msgid "Remove the trailing whitespace"
+msgstr "Supprimer les espaces en fin de ligne"
+
+msgid "Replace \"to\" with \"downto\""
+msgstr "Remplacer \"to\" par \"downto\""
+
+msgid "Replace the 32-bit casts with NativeInt/NativeUInt"
+msgstr "Remplacer les casts 32 bits par NativeInt/NativeUInt"
+
+msgid "Replace the tabs in this line with spaces"
+msgstr "Remplacer les tabulations de cette ligne par des espaces"
+
+msgid "Swap the loop bounds"
+msgstr "Échanger les bornes de la boucle"
+
+msgid "Use https:// instead of http://"
+msgstr "Utiliser https:// au lieu de http://"
+
+msgid "Write %s in lowercase"
+msgstr "Écrire %s en minuscules"
+
+msgid "a comment, string or directive stands between the two casts (Cast { } -)"
+msgstr "un commentaire, une chaîne ou une directive se trouve entre les deux casts (Cast { } -)"
+
+msgid "an operand is a number or no plain identifier (Cast(5))"
+msgstr "un opérande est un nombre ou n'est pas un identifiant simple (Cast(5))"
+
+msgid "comment inside the parentheses"
+msgstr "commentaire dans les parenthèses"
+
+msgid "followed by \".\", \"[\" or \"(\" - the parentheses belong to a chain"
+msgstr "suivi de \".\", \"[\" ou \"(\" - les parenthèses font partie d'une chaîne"
+
+msgid "line %d carries %d pointer subtractions (SCA161) - ambiguous"
+msgstr "la ligne %d contient %d soustractions de pointeurs (SCA161) - ambigu"
+
+msgid "no \"((X))\" at the reported place"
+msgstr "pas de \"((X))\" à l'endroit signalé"
+
+msgid "no \"Cast(x) - Cast(y)\" pair of 32-bit casts on the code columns of the reported line"
+msgstr "aucune paire \"Cast(x) - Cast(y)\" de casts 32 bits dans les colonnes de code de la ligne signalée"
+
+msgid "the outer parenthesis belongs to a call or cast - \"(X)\" is an expression, \"X\" a variable"
+msgstr "la parenthèse extérieure appartient à un appel ou à un cast - \"(X)\" est une expression, \"X\" une variable"
+
+msgid "the outer parenthesis could belong to a constant (array, record) or to a comparison"
+msgstr "la parenthèse extérieure pourrait appartenir à une constante (tableau, enregistrement) ou à une comparaison"
+
+msgid "the parentheses start the line - they could belong to a multi-line constant"
+msgstr "les parenthèses ouvrent la ligne - elles pourraient appartenir à une constante sur plusieurs lignes"
+
+msgid "the subtraction continues with another 32-bit cast (\"- Integer(c)\") - the chain would stay half converted"
+msgstr "la soustraction se poursuit avec un autre cast 32 bits (\"- Integer(c)\") - la chaîne resterait à moitié convertie"
+
+msgid "the two casts differ (Cardinal or LongWord against Integer or LongInt) - NativeInt or NativeUInt would be a guess"
+msgstr "les deux casts diffèrent (Cardinal ou LongWord contre Integer ou LongInt) - NativeInt ou NativeUInt serait une supposition"

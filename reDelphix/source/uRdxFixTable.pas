@@ -132,7 +132,17 @@ uses
   uRdxCleanupFixes,  // SCA070, SCA053
   uRdxTryFixes,      // SCA009, SCA001, SCA109, SCA153, SCA156
   uRdxResultFixes,   // SCA096, SCA097, SCA121, SCA196
-  uRdxMagicFixes;    // SCA014
+  uRdxMagicFixes,    // SCA014
+  uRdxHttpsFix,         // SCA115
+  uRdxParensFix,        // SCA094
+  uRdxAttrGapFix,       // SCA183
+  uRdxTwiceInheritedFix, // SCA093
+  uRdxNativeIntFix,     // SCA161
+  uRdxEmptyFinallyFix,  // SCA083
+  uRdxForRangeFix,      // SCA046 (Hinweise R_FORRANGE_* dort)
+  uRdxTabsFix,          // SCA061
+  uRdxTrailingBlanksFix, // SCA063
+  uRdxKeywordCaseFix;   // SCA064
 
 const
   // Hinweise der Hilfen (deutsch wie die Gruende; Pruefstand und Tests
@@ -177,6 +187,26 @@ const
     + 'gehen mit';
   R_METHOD_HINT  = 'gleiche Bedeutung - Deklaration und Implementierung '
     + 'gehen, der Name steht sonst nirgends im Code der Datei';
+  // Charge Q (zehn einfache Hilfen, UNGEBAUT): SCA115, SCA094, SCA183, SCA093,
+  // SCA161, SCA083, SCA061, SCA063, SCA064 (SCA046 traegt seine Hinweise in
+  // uRdxForRangeFix).
+  R_HTTPS_HINT    = 'nur das Schema; der Server muss https auf dem '
+    + 'Standardport koennen (Port 443, gueltiges Zertifikat)';
+  R_PARENS_HINT   = 'ein Klammerpaar bleibt - Bedeutung und Rangfolge gleich';
+  R_ATTRGAP_HINT  = 'nur Leerzeilen - das Attribut gehoert ohnehin zum '
+    + 'naechsten Element';
+  R_TWICE_HINT    = 'der zweite Aufruf entfaellt - die Elternmethode laeuft '
+    + 'nur noch einmal; Reihenfolge und Nebenwirkung pruefen';
+  R_NATIVEINT_HINT = 'Win64: der Abstand ist jetzt der volle Adressabstand; '
+    + 'unter Bereichspruefung (R+) kann die Zuweisung an ein Integer-Ziel '
+    + 'ERangeError ausloesen';
+  R_EMPTYFIN_HINT = 'gleiche Bedeutung - ein leeres finally tut nichts, '
+    + 'Ausnahmen laufen weiter nach aussen';
+  R_TABS_HINT     = 'Tabs im Code werden zu Leerzeichen (Tabweite 2); Tabs in '
+    + 'Strings und Kommentaren bleiben';
+  R_BLANKS_HINT   = 'nur Leerraum am Zeilenende';
+  R_LOWER_HINT    = 'gleiche Bedeutung - Delphi unterscheidet Gross- und '
+    + 'Kleinschreibung nicht';
   R_FORM_UNREADABLE = 'Formdatei %s nicht lesbar (%s) - eine Ereignis-'
     + 'Bindung ist nicht auszuschliessen';
   // SCA147: Formdateien, die eine Methode per Name an ein Ereignis binden.
@@ -981,7 +1011,7 @@ end;
 { ---- Die Tabelle ---- }
 
 const
-  FIX_ROW_HIGH = 39;
+  FIX_ROW_HIGH = 49;
 
   // Je Art eine Zeile; die Reihenfolge ist die der Chargen (Stufe 2a,
   // Stufe 2 Rest, uQuickFix-Umzug/Stufe 3, Zeilen, Ausnahmen, Deklarationen
@@ -1077,7 +1107,31 @@ const
     // Charge Q14: bedeutungsgleich (E26), den Hinweis setzt der Adapter
     // (Name der Konstante).
     (Kind: fkMagicNumber; Plan: PlanMagicNumber;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil)
+     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+    // Charge Q: zehn einfache Hilfen (UNGEBAUT).
+    // SCA115: aendert das Verhalten (E2) - der Server muss https koennen.
+    (Kind: fkHttpInsteadOfHttps; Plan: PlanHttps;
+     Hint: R_HTTPS_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+    (Kind: fkRedundantParentheses; Plan: PlanRedundantParens;
+     Hint: R_PARENS_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkAttributeMisalignment; Plan: PlanAttrGap;
+     Hint: R_ATTRGAP_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkTwiceInheritedCalls; Plan: PlanTwiceInherited;
+     Hint: R_TWICE_HINT; HintByPlanner: False; Changes: True;
+     Alt: PlanTwiceInheritedAlt),
+    (Kind: fkPointerSubtraction; Plan: PlanPointerSubtraction;
+     Hint: R_NATIVEINT_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+    (Kind: fkEmptyFinallyBlock; Plan: PlanEmptyFinally;
+     Hint: R_EMPTYFIN_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkReversedForRange; Plan: PlanReversedForRange;
+     Hint: R_FORRANGE_HINT; HintByPlanner: False; Changes: True;
+     Alt: PlanReversedForRangeAlt),
+    (Kind: fkTabulationCharacter; Plan: PlanTabs;
+     Hint: R_TABS_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkTrailingWhitespace; Plan: PlanTrailingBlanks;
+     Hint: R_BLANKS_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkLowercaseKeyword; Plan: PlanLowercaseKeyword;
+     Hint: R_LOWER_HINT; HintByPlanner: False; Changes: False; Alt: nil)
   );
 
   // Menuetexte (msgids) unter dem Index der Zeile; '%s' = Name der Hilfe
@@ -1127,7 +1181,17 @@ const
     'Call inherited last in the destructor',
     'Initialize Result with %s',
     'Initialize Result first: %s',
-    'Introduce local constant for %s'
+    'Introduce local constant for %s',
+    'Use https:// instead of http://',
+    'Remove the redundant inner parentheses',
+    'Remove the blank line after the attribute',
+    'Remove the second duplicate inherited call',
+    'Replace the 32-bit casts with NativeInt/NativeUInt',
+    'Remove the empty try/finally',
+    'Replace "to" with "downto"',
+    'Replace the tabs in this line with spaces',
+    'Remove the trailing whitespace',
+    'Write %s in lowercase'
   );
 
   // Menuetexte des zweiten Eintrags (Alt), '' ohne.
@@ -1137,7 +1201,12 @@ const
     '', '', '', '', '', '',
     'Raise ENotImplemented in the empty body',
     '', '', '', '', '', '', '', '', '', '', '', '',
-    '', '', '', '', '', '', '', '', '', ''
+    '', '', '', '', '', '', '', '', '', '',
+    '', '', '',
+    'Remove the first duplicate inherited call',
+    '', '',
+    'Swap the loop bounds',
+    '', '', ''
   );
 
 var
