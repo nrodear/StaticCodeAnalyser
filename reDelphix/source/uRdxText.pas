@@ -739,109 +739,109 @@ end;
 
 function MsgLineMoved: string;
 begin
-  Result := _(MSG_LINE_MOVED);
+  Result := uRdxText._(MSG_LINE_MOVED);
 end;
 
 function MsgMovedSuffix(const AReason: string): string;
 begin
-  Result := _(MSG_MOVED_SUFFIX, [AReason]);
+  Result := uRdxText._(MSG_MOVED_SUFFIX, [AReason]);
 end;
 
 function MsgStaleSuffix(const AReason: string): string;
 begin
-  Result := _(MSG_STALE_SUFFIX, [AReason]);
+  Result := uRdxText._(MSG_STALE_SUFFIX, [AReason]);
 end;
 
 function MsgNoColumn: string;
 begin
-  Result := _(MSG_NO_COLUMN);
+  Result := uRdxText._(MSG_NO_COLUMN);
 end;
 
 function MsgStatementEndNotFound: string;
 begin
-  Result := _(MSG_STMT_END);
+  Result := uRdxText._(MSG_STMT_END);
 end;
 
 function MsgNoValidRange: string;
 begin
-  Result := _(MSG_NO_RANGE);
+  Result := uRdxText._(MSG_NO_RANGE);
 end;
 
 function MsgHeaderEndNotFound: string;
 begin
-  Result := _(MSG_HEADER_END);
+  Result := uRdxText._(MSG_HEADER_END);
 end;
 
 function MsgLineStartsInCommentOrString: string;
 begin
-  Result := _(MSG_STARTS_INSIDE);
+  Result := uRdxText._(MSG_STARTS_INSIDE);
 end;
 
 function MsgNoFileOpen: string;
 begin
-  Result := _(MSG_NO_FILE);
+  Result := uRdxText._(MSG_NO_FILE);
 end;
 
 function MsgByHand: string;
 begin
-  Result := _(MSG_BY_HAND);
+  Result := uRdxText._(MSG_BY_HAND);
 end;
 
 function MsgCheckByHand: string;
 begin
-  Result := _(MSG_CHECK_BY_HAND);
+  Result := uRdxText._(MSG_CHECK_BY_HAND);
 end;
 
 function MsgDeleteByHand: string;
 begin
-  Result := _(MSG_DELETE_BY_HAND);
+  Result := uRdxText._(MSG_DELETE_BY_HAND);
 end;
 
 function MsgDecideByHand: string;
 begin
-  Result := _(MSG_DECIDE_BY_HAND);
+  Result := uRdxText._(MSG_DECIDE_BY_HAND);
 end;
 
 function MsgOnlyStatementEmptyBlock(const AKeyword: string): string;
 begin
-  Result := _(MSG_EMPTY_BLOCK, [AKeyword]);
+  Result := uRdxText._(MSG_EMPTY_BLOCK, [AKeyword]);
 end;
 
 function MsgUnclearStatementOwner(const APrevToken: string): string;
 begin
-  Result := _(MSG_UNCLEAR_OWNER, [APrevToken]);
+  Result := uRdxText._(MSG_UNCLEAR_OWNER, [APrevToken]);
 end;
 
 function MsgLiteralUnreadable(const ACode: string): string;
 begin
-  Result := _(MSG_LITERAL, [ACode]);
+  Result := uRdxText._(MSG_LITERAL, [ACode]);
 end;
 
 function MsgNoOperandInChain: string;
 begin
-  Result := _(MSG_NO_OPERAND);
+  Result := uRdxText._(MSG_NO_OPERAND);
 end;
 
 function MsgDeclsInClassesOfName(ACount: Integer; const AName: string): string;
 begin
-  Result := _(MSG_DECLS_IN_CLASS, [ACount, AName]);
+  Result := uRdxText._(MSG_DECLS_IN_CLASS, [ACount, AName]);
 end;
 
 function MsgNoLongerAtReportedPlace(const ACode: string): string;
 begin
-  Result := _(MSG_NOT_AT_PLACE, [ACode]);
+  Result := uRdxText._(MSG_NOT_AT_PLACE, [ACode]);
 end;
 
 function MsgNoHeader(const AWhose: string): string;
 begin
-  Result := _(MSG_NO_HEADER, [AWhose]);
+  Result := uRdxText._(MSG_NO_HEADER, [AWhose]);
 end;
 
 function MsgHeadersFmt: string;
 begin
   // _() ohne Argumente formatiert nicht: %d und %s bleiben fuer
   // OneTokenReason stehen.
-  Result := _(MSG_HEADERS_FMT);
+  Result := uRdxText._(MSG_HEADERS_FMT);
 end;
 
 initialization
