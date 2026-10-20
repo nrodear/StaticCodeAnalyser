@@ -209,8 +209,8 @@ end;
 
 procedure TTestRdxTrailingBlanksFix.ColumnOf_ReadsMessage;
 begin
-  Assert.AreEqual(12, TRdxTrailingBlanksFix.ColumnOf(BlanksMsg(12)));
-  Assert.AreEqual(0, TRdxTrailingBlanksFix.ColumnOf('Line ends with blanks'));
+  Assert.AreEqual<Integer>(12, TRdxTrailingBlanksFix.ColumnOf(BlanksMsg(12)));
+  Assert.AreEqual<Integer>(0, TRdxTrailingBlanksFix.ColumnOf('Line ends with blanks'));
 end;
 
 { ---- Gegenproben ---- }
@@ -303,7 +303,7 @@ begin
     '  e }', '    ' + #9, '  C;']));
   Assert.AreEqual(InUnit(['  A;', '  B; // c', '  { d', '  e }', '', '  C;']),
     Fixed);
-  Assert.AreEqual(0, Length(Detect(Fixed)), 'der Detektor schweigt');
+  Assert.AreEqual<Integer>(0, Length(Detect(Fixed)), 'der Detektor schweigt');
 end;
 
 procedure TTestRdxTrailingBlanksFix.Detector_CatalogExample;
@@ -318,5 +318,8 @@ begin
   Bad := StringReplace(Meta.BadExample, TAG_SPACES, '', []);
   Assert.AreEqual(InUnit([Meta.GoodExample]), FixAll(InUnit([Bad])));
 end;
+
+initialization
+  TDUnitX.RegisterTestFixture(TTestRdxTrailingBlanksFix);
 
 end.

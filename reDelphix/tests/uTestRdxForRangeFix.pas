@@ -134,8 +134,8 @@ begin
   Assert.AreEqual(InUnit(['  for i := 10 downto 1 do Foo(i);']),
     Fixed(InUnit(['  for i := 10 to 1 do Foo(i);']), BODY_LINE,
       RevMsg(10, 1, 'for i := 10 to 1 do'), False, O), O.Reason);
-  Assert.AreEqual(0, O.Variant);
-  Assert.AreEqual(1, Length(O.Edits));
+  Assert.AreEqual<Integer>(0, O.Variant);
+  Assert.AreEqual<Integer>(1, Length(O.Edits));
   // Der Kopf allein auf der Zeile, der Rumpf darunter.
   Assert.AreEqual(InUnit(['  for i := 3 downto 0 do', '    Foo(i);']),
     Fixed(InUnit(['  for i := 3 to 0 do', '    Foo(i);']), BODY_LINE,
@@ -229,15 +229,15 @@ begin
   Fixed(Src, BODY_LINE, RevMsg(10, 1, 'x'), False, Main);
   Fixed(Src, BODY_LINE, RevMsg(10, 1, 'x'), True, Alt);
   Assert.IsTrue(Main.Enabled and Alt.Enabled, Main.Reason + Alt.Reason);
-  Assert.AreEqual(0, Main.Variant);
-  Assert.AreEqual(1, Alt.Variant);
+  Assert.AreEqual<Integer>(0, Main.Variant);
+  Assert.AreEqual<Integer>(1, Alt.Variant);
   Assert.IsTrue(Alt.ChangesBehavior);
   Assert.AreEqual(R_FORRANGE_SWAP_HINT, Alt.Hint);
   // Beide Eintraege lehnen auch gemeinsam ab; der Alt-Planer bleibt Variant 1.
   Fixed(InUnit(['  Foo(1);']), BODY_LINE, RevMsg(10, 1, 'x'), True, Alt);
   Assert.IsFalse(Alt.Enabled);
-  Assert.AreEqual(1, Alt.Variant);
-  Assert.AreEqual(0, Length(Alt.Edits));
+  Assert.AreEqual<Integer>(1, Alt.Variant);
+  Assert.AreEqual<Integer>(0, Length(Alt.Edits));
 end;
 
 procedure TTestRdxForRangeFix.Refuse_CommentOrStringInHead;
@@ -374,7 +374,7 @@ var
 begin
   Meta := TRuleCatalog.GetRuleCanonical(fkReversedForRange);
   Bad := CatalogBody(Meta.BadExample);
-  Assert.AreEqual(1, Length(DetectSource('rdx_forrange_', Bad,
+  Assert.AreEqual<Integer>(1, Length(DetectSource('rdx_forrange_', Bad,
     fkReversedForRange, RunDetector)), 'der Detektor meldet das Beispiel');
   Assert.AreEqual(CatalogBody(Meta.GoodExample), FixAll(Bad, False));
 end;
@@ -428,7 +428,7 @@ var
 begin
   Src := InUnit(['  for i := 10 to 1 do Foo(i); for j := 20 to 2 do Bar(j);']);
   Seen := DetectSource('rdx_forrange_', Src, fkReversedForRange, RunDetector);
-  Assert.AreEqual(1, Length(Seen), 'der Detektor meldet nur den vorderen');
+  Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet nur den vorderen');
   Fixed(Src, Seen[0].Line, Seen[0].Msg, False, O);
   Assert.IsFalse(O.Enabled);
   Assert.IsTrue(Pos(Format(R_FORRANGE_MANY, [2]), O.Reason) > 0, O.Reason);

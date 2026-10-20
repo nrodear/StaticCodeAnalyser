@@ -407,4 +407,7 @@ begin
   end;
 end;
 
+initialization
+  TDUnitX.RegisterTestFixture(TTestRdxEmptyFinallyFix);
+
 end.

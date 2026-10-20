@@ -145,7 +145,7 @@ var
   O    : TRdxFixOutcome;
 begin
   Seen := Detect(ASource);
-  Assert.AreEqual(1, Length(Seen), 'der Detektor meldet genau einen Fund');
+  Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet genau einen Fund');
   SL := TStringList.Create;
   F := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
     fkTwiceInheritedCalls);
@@ -306,14 +306,14 @@ begin
     SL.Free;
   end;
   Assert.IsTrue(Main.Enabled, Main.Reason);
-  Assert.AreEqual(0, Main.Variant, 'Hauptweg ist Variant 0');
-  Assert.AreEqual(1, Length(Main.Edits), 'Hauptweg: eine Ersetzung');
-  Assert.AreEqual(7, Main.Edits[0].Span.StartLine, 'der zweite Aufruf');
+  Assert.AreEqual<Integer>(0, Main.Variant, 'Hauptweg ist Variant 0');
+  Assert.AreEqual<Integer>(1, Length(Main.Edits), 'Hauptweg: eine Ersetzung');
+  Assert.AreEqual<Integer>(7, Main.Edits[0].Span.StartLine, 'der zweite Aufruf');
   Assert.IsTrue(A.Enabled, A.Reason);
-  Assert.AreEqual(1, A.Variant, 'der zweite Eintrag ist Variant 1');
+  Assert.AreEqual<Integer>(1, A.Variant, 'der zweite Eintrag ist Variant 1');
   Assert.IsTrue(A.ChangesBehavior, 'gekennzeichnet (E2)');
   Assert.AreEqual(R_TWICE_ALT_HINT, A.Hint);
-  Assert.AreEqual(6, A.Edits[0].Span.StartLine, 'der erste Aufruf');
+  Assert.AreEqual<Integer>(6, A.Edits[0].Span.StartLine, 'der erste Aufruf');
 end;
 
 procedure TTestRdxTwiceInheritedFix.Adapter_StaleFinding_AltStaysMarked;
@@ -334,9 +334,9 @@ begin
   end;
   Assert.IsFalse(A.Enabled, 'gesperrt');
   Assert.AreEqual(R_TWICE_HEAD_MOVED, A.Reason);
-  Assert.AreEqual(1, A.Variant, 'der Eintrag bleibt der zweite');
+  Assert.AreEqual<Integer>(1, A.Variant, 'der Eintrag bleibt der zweite');
   Assert.IsTrue(A.ChangesBehavior, 'auch gesperrt gekennzeichnet');
-  Assert.AreEqual(0, Length(A.Edits), 'keine Ersetzung');
+  Assert.AreEqual<Integer>(0, Length(A.Edits), 'keine Ersetzung');
 end;
 
 // ---- echter Detektor ----
@@ -348,7 +348,7 @@ begin
   Src := Wrap(['  inherited;', '  Inherited;']);
   After := FixOnce(Src, False);
   Assert.AreEqual(Wrap(['  inherited;']), After);
-  Assert.AreEqual(0, Length(Detect(After)), 'der Detektor schweigt danach');
+  Assert.AreEqual<Integer>(0, Length(Detect(After)), 'der Detektor schweigt danach');
 end;
 
 procedure TTestRdxTwiceInheritedFix.Detector_AltRoundTrip_Method;
@@ -360,7 +360,7 @@ begin
   Src := WrapIn(HEAD, ['  Inherited Bar;', '  inherited bar;']);
   After := FixOnce(Src, True);
   Assert.AreEqual(WrapIn(HEAD, ['  inherited bar;']), After);
-  Assert.AreEqual(0, Length(Detect(After)), 'der Detektor schweigt danach');
+  Assert.AreEqual<Integer>(0, Length(Detect(After)), 'der Detektor schweigt danach');
 end;
 
 procedure TTestRdxTwiceInheritedFix.Detector_CatalogExample_NoHelp;
@@ -377,7 +377,7 @@ begin
   Src := Join(['unit t;', 'interface', 'implementation',
     CatalogText(Meta.BadExample), 'end.']);
   Seen := Detect(Src);
-  Assert.AreEqual(1, Length(Seen), 'der Detektor meldet das Beispiel');
+  Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet das Beispiel');
   SL := TStringList.Create;
   F := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
     fkTwiceInheritedCalls);

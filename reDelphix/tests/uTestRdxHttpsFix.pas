@@ -218,7 +218,7 @@ begin
     Assert.AreEqual('http://', E.Expected);
     Assert.AreEqual('https://', E.NewText);
     Assert.AreEqual(FIRST_LINE, E.Span.StartLine);
-    Assert.AreEqual(11, E.Span.StartCol);   // hinter dem Quote bei Spalte 10
+    Assert.AreEqual<Integer>(11, E.Span.StartCol);   // hinter dem Quote bei Spalte 10
   finally
     Map.Free;
     SL.Free;
@@ -361,11 +361,11 @@ var
 begin
   Src := Wrap(['  Url := ''http://a.contoso-shop.de/x'';',
     '  Url := ''http://b.contoso-shop.de/y'' + ''/z'';']);
-  Assert.AreEqual(2, Length(Detect(Src)), 'zwei Funde vorher');
+  Assert.AreEqual<Integer>(2, Length(Detect(Src)), 'zwei Funde vorher');
   Done := FixAll(Src);
   Assert.AreEqual(Wrap(['  Url := ''https://a.contoso-shop.de/x'';',
     '  Url := ''https://b.contoso-shop.de/y'' + ''/z'';']), Done);
-  Assert.AreEqual(0, Length(Detect(Done)), 'der Detektor schweigt');
+  Assert.AreEqual<Integer>(0, Length(Detect(Done)), 'der Detektor schweigt');
 end;
 
 procedure TTestRdxHttpsFix.Detector_SilentWhereHelpRefuses;
@@ -377,9 +377,9 @@ begin
   // Hilfe ablehnt.
   Src := Wrap(['  Url := ''http://localhost/x'';',
     '  Url := ''http://www.w3.org/2001/XMLSchema'';']);
-  Assert.AreEqual(0, Length(Detect(Src)), 'Detektor schweigt');
+  Assert.AreEqual<Integer>(0, Length(Detect(Src)), 'Detektor schweigt');
   Src := Wrap(['  Url := ''http://api.contoso-shop.de:8080/x'';']);
-  Assert.AreEqual(1, Length(Detect(Src)), 'Detektor meldet');
+  Assert.AreEqual<Integer>(1, Length(Detect(Src)), 'Detektor meldet');
   U := 'http://api.contoso-shop.de:8080/x';
   Assert.IsFalse(PlanSeen(Src, Detect(Src)[0]).Enabled, 'keine Hilfe');
   Assert.IsTrue(TRdxHttpsFix.UrlReason(U) <> '', 'Grund');
@@ -397,14 +397,14 @@ begin
     O := PlanHttps(nil, nil, Finding, nil);
     Assert.IsFalse(O.Enabled);
     Assert.IsTrue(O.Reason <> '');
-    Assert.AreEqual(0, Length(O.Edits));
+    Assert.AreEqual<Integer>(0, Length(O.Edits));
   finally
     Finding.Free;
   end;
   O := PlanSeen(Wrap(['  Url := ''' + EXAMPLE_URL + ''';']),
     Detect(Wrap(['  Url := ''' + EXAMPLE_URL + ''';']))[0]);
   Assert.IsTrue(O.Enabled, O.Reason);
-  Assert.AreEqual(1, Length(O.Edits));
+  Assert.AreEqual<Integer>(1, Length(O.Edits));
 end;
 
 initialization

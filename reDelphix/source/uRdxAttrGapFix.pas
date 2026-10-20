@@ -8,8 +8,8 @@ unit uRdxAttrGapFix;
 //
 // Was der Detektor meldet (uAttributeMisalignment): eine Zeile, die mit
 // '[' und einem Bezeichner beginnt, nichts hinter dem letzten ']' hat,
-// und deren NAECHSTE Zeile (nach Trim) leer ist, mit irgendeiner
-// nichtleeren Zeile dahinter. LineNumber ist die Attributzeile, die
+// und deren NAECHSTE Zeile (nach Trim) leer ist, mit einer Member-artigen
+// Zeile dahinter (IsLikelyAttributePosition). LineNumber ist die Attributzeile, die
 // Meldung nennt 'Attribute [Name] with blank line ...'. Der Kopf des
 // Detektors verspricht 'Member-Deklaration', der Code prueft das nicht
 // (Korpus: 2 von 5 Funden waren [assembly: ..]-Attribute) - das prueft
@@ -214,9 +214,9 @@ end;
 class function TRdxAttrGapFix.BlankGap(AMap: TRdxCodeMap; ALine: Integer;
   const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
-  First, N, i, Start : Integer;
-  Prev, Head         : TRdxToken;
-  Gone               : string;
+  First, N, Start, Col : Integer;
+  Prev, Head           : TRdxToken;
+  L                    : string;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -268,12 +268,17 @@ begin
     AReason := R_DIRECTIVE;
     Exit;
   end;
-  Gone := '';
-  for i := ALine + 1 to N - 1 do
-    Gone := Gone + AMap.Raw(i) + #10;
-  AEdit.Span := TRefactorSpan.Make(SPAN_183, ALine + 1, 1, N, 1);
-  AEdit.Expected := Gone;
-  AEdit.NewText := '';
+  // Ein Bereich beginnt auf einem Zeichen (SpanFits: nie auf einer leeren
+  // Zeile, siehe LinesCut in uRdxCleanupFixes): er beginnt AUF dem letzten
+  // Zeichen der Attributzeile, das neu geschrieben wird, und endet hinter
+  // der letzten Leerzeile, ohne deren Zeilenende - das bleibt und trennt
+  // die Attributzeile von der Zeile mit Inhalt.
+  L := AMap.Raw(ALine);
+  Col := Length(L);
+  AEdit.Span := TRefactorSpan.Make(SPAN_183, ALine, Col, N - 1,
+    Length(AMap.Raw(N - 1)) + 1);
+  AEdit.Expected := RangeText(AMap, AEdit.Span);
+  AEdit.NewText := Copy(L, Col, MaxInt);
   Result := True;
 end;
 

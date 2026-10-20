@@ -397,7 +397,7 @@ begin
   O := PlanOf(Src, Seen);
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.AreEqual('Begin', O.Name);
-  Assert.AreEqual(1, Integer(Length(O.Edits)));
+  Assert.AreEqual<Integer>(1, Integer(Length(O.Edits)));
   Assert.AreEqual('Begin', O.Edits[0].Expected);
   Assert.AreEqual('begin', O.Edits[0].NewText);
   Assert.AreEqual(Swapped(Src, 6, 3, 'Begin'), Apply(Src, O.Edits));
@@ -415,7 +415,7 @@ begin
   O := PlanOf(InBody(['  Foo.End := 1;']), Seen);
   Assert.IsFalse(O.Enabled);
   Assert.AreEqual(KC_IDENT, O.Reason);
-  Assert.AreEqual(0, Integer(Length(O.Edits)));
+  Assert.AreEqual<Integer>(0, Integer(Length(O.Edits)));
   Assert.AreEqual('End', O.Name);
   // Ohne Zeilen: keine Datei.
   Finding := TLeakFinding.New('t.pas', '', 6, Msg('End', 7),
@@ -440,9 +440,9 @@ begin
   Meta := TRuleCatalog.GetRuleCanonical(fkLowercaseKeyword);
   Bad := CatalogUnit(Meta.BadExample);
   // Procedure, Begin, If, End.
-  Assert.AreEqual(4, Integer(Length(Detect(Bad))), Meta.BadExample);
+  Assert.AreEqual<Integer>(4, Integer(Length(Detect(Bad))), Meta.BadExample);
   Done := FixPossible(Bad, Left);
-  Assert.AreEqual(0, Left);
+  Assert.AreEqual<Integer>(0, Left);
   Assert.AreEqual(CatalogUnit(Meta.GoodExample), Done);
 end;
 
@@ -463,9 +463,9 @@ begin
     '  S := ''End of Begin'';', 'end;', 'end.']);
   Assert.IsTrue(Length(Detect(Src)) >= 15, 'der Detektor meldet');
   Done := FixPossible(Src, Left);
-  Assert.AreEqual(0, Left);
+  Assert.AreEqual<Integer>(0, Left);
   Assert.AreEqual(Want, Done);
-  Assert.AreEqual(0, Integer(Length(Detect(Done))));
+  Assert.AreEqual<Integer>(0, Integer(Length(Detect(Done))));
 end;
 
 procedure TTestRdxKeywordCaseFix.Detector_Refused_Findings_Remain;
@@ -477,9 +477,9 @@ begin
   Src := Join(['unit t;', 'interface', 'implementation',
     'procedure P(Out A: Integer);', 'begin', '  X := Contains(1);',
     '  Register;', 'end;', 'end.']);
-  Assert.AreEqual(3, Integer(Length(Detect(Src))));
+  Assert.AreEqual<Integer>(3, Integer(Length(Detect(Src))));
   Done := FixPossible(Src, Left);
-  Assert.AreEqual(3, Left);
+  Assert.AreEqual<Integer>(3, Left);
   Assert.AreEqual(Src, Done);
 end;
 

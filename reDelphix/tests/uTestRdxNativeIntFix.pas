@@ -315,7 +315,7 @@ begin
     O := PlanPointerSubtraction(nil, nil, Finding, nil);
     Assert.IsFalse(O.Enabled);
     Assert.IsTrue(O.Reason <> '', 'ein Grund steht da');
-    Assert.AreEqual(0, Length(O.Edits));
+    Assert.AreEqual<Integer>(0, Length(O.Edits));
   finally
     Finding.Free;
   end;

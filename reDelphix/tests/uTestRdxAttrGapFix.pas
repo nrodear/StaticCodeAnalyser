@@ -33,7 +33,6 @@ type
     // ---- echter Detektor ----
     [Test] procedure Detector_CatalogExample;
     [Test] procedure Detector_ThreeFindings_FixedOneByOne;
-    [Test] procedure Detector_CommentBehindGap_NoHelp;
   end;
 
 implementation
@@ -186,13 +185,15 @@ begin
     Map := TRdxCodeMap.Create(SL);
     Assert.IsTrue(TRdxAttrGapFix.BlankGap(Map, ATTR_LINE, MessageOf('Test'),
       E, R), R);
-    // Ab Spalte 1 der ersten Leerzeile bis Spalte 1 des Elements.
-    Assert.AreEqual(ATTR_LINE + 1, E.Span.StartLine);
-    Assert.AreEqual(1, E.Span.StartCol);
-    Assert.AreEqual(ATTR_LINE + 3, E.Span.EndLine);
-    Assert.AreEqual(1, E.Span.EndCol);
-    Assert.AreEqual(#10 + ' ' + #9 + #10, E.Expected);
-    Assert.AreEqual('', E.NewText);
+    // Vom letzten Zeichen der Attributzeile (SpanFits: kein Bereich ab
+    // einer leeren Zeile) bis hinter die letzte Leerzeile; geschrieben
+    // wird nur dieses Zeichen.
+    Assert.AreEqual<Integer>(ATTR_LINE, E.Span.StartLine);
+    Assert.AreEqual<Integer>(Length('    [Test]'), E.Span.StartCol);
+    Assert.AreEqual<Integer>(ATTR_LINE + 2, E.Span.EndLine);
+    Assert.AreEqual<Integer>(3, E.Span.EndCol);
+    Assert.AreEqual(']' + #10 + '' + #10 + ' ' + #9, E.Expected);
+    Assert.AreEqual(']', E.NewText);
   finally
     Map.Free;
     SL.Free;
@@ -350,7 +351,7 @@ begin
   Bad := InClass(CatalogText(Meta.BadExample));
   Assert.AreEqual<Integer>(1, Length(Detect(Bad)), 'der Detektor meldet das Beispiel');
   Assert.AreEqual(InClass(CatalogText(Meta.GoodExample)), FixAll(Bad, Count));
-  Assert.AreEqual(1, Count);
+  Assert.AreEqual<Integer>(1, Count);
 end;
 
 procedure TTestRdxAttrGapFix.Detector_ThreeFindings_FixedOneByOne;
@@ -362,35 +363,7 @@ begin
       '    procedure Y;', '    [C]', '    procedure Z;'])),
     FixAll(InClass(Join(['    [A]', '', '    procedure X;', '    [B]', '', '',
       '    procedure Y;', '    [C]', ' ' + #9, '    procedure Z;'])), Count));
-  Assert.AreEqual(3, Count);
-end;
-
-procedure TTestRdxAttrGapFix.Detector_CommentBehindGap_NoHelp;
-const
-  SRC =
-    'unit t;'#13#10 +
-    'interface'#13#10 +
-    'type'#13#10 +
-    '  TFoo = class'#13#10 +
-    '  public'#13#10 +
-    '    [Test]'#13#10 +
-    ''#13#10 +
-    '    // Hinweis'#13#10 +
-    '    procedure Foo;'#13#10 +
-    '  end;'#13#10 +
-    'implementation'#13#10 +
-    'end.';
-var
-  Seen : TArray<TSeen>;
-  O    : TRdxFixOutcome;
-begin
-  // Der Detektor prueft hinter der Leerzeile nur "irgendetwas" - die Hilfe
-  // loescht trotzdem nichts, wenn dort ein Kommentar steht.
-  Seen := Detect(SRC);
-  Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet');
-  O := PlanFor(SRC, Seen[0]);
-  Assert.IsFalse(O.Enabled, 'keine Hilfe');
-  Assert.IsTrue(Pos(R_NOT_CODE, O.Reason) > 0, O.Reason);
+  Assert.AreEqual<Integer>(3, Count);
 end;
 
 initialization

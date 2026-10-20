@@ -273,7 +273,7 @@ begin
   Meta := TRuleCatalog.GetRuleCanonical(fkRedundantParentheses);
   Bad := StringReplace(CatalogText(Meta.BadExample), ' then ...',
     ' then Exit;', []);
-  Assert.AreEqual(2, Length(Detect(InFunction(Bad), fkRedundantParentheses)));
+  Assert.AreEqual<Integer>(2, Length(Detect(InFunction(Bad), fkRedundantParentheses)));
   Assert.AreEqual(
     InFunction('if (Active) then Exit;' + #13#10 + 'Result := (42);'),
     FixAllWith(InFunction(Bad), fkRedundantParentheses, Detect));
