@@ -141,6 +141,16 @@
         <DCCReference Include="source\uRdxIntroPlan.pas"/>
         <DCCReference Include="source\uRdxIntroEdits.pas"/>
         <DCCReference Include="source\uRdxMagicFixes.pas"/>
+        <DCCReference Include="source\uRdxHttpsFix.pas"/>
+        <DCCReference Include="source\uRdxParensFix.pas"/>
+        <DCCReference Include="source\uRdxAttrGapFix.pas"/>
+        <DCCReference Include="source\uRdxTwiceInheritedFix.pas"/>
+        <DCCReference Include="source\uRdxNativeIntFix.pas"/>
+        <DCCReference Include="source\uRdxEmptyFinallyFix.pas"/>
+        <DCCReference Include="source\uRdxForRangeFix.pas"/>
+        <DCCReference Include="source\uRdxTabsFix.pas"/>
+        <DCCReference Include="source\uRdxTrailingBlanksFix.pas"/>
+        <DCCReference Include="source\uRdxKeywordCaseFix.pas"/>
         <DCCReference Include="source\uRdxRecipeRunner.pas"/>
         <DCCReference Include="source\uRdxFixRunner.pas"/>
         <DCCReference Include="source\uRdxFixTable.pas"/>

@@ -1282,6 +1282,206 @@
           ]
         }
       ]
+    },
+    "HttpInsteadOfHttps": {
+      "titel": "http:// durch https:// ersetzen",
+      "was": "Ersetzt im gemeldeten String-Literal nur das Schema `http://` durch `https://`. Die Hilfe sucht das Literal über die URL aus der Meldung (der Fund nennt nur die Zeile).",
+      "kennzeichnung": "der Server muss https auf dem Standardport 443 mit gültigem Zertifikat anbieten",
+      "nichtAngeboten": [
+        "die URL kommt auf der Zeile zweimal vor, ist Teil eines längeren Strings oder steht in einem Kommentar oder mehrzeiligen String",
+        "Port, Benutzerangabe, IP-Adresse (auch private), IPv6, Platzhalter im Host, ein Host ohne Punkt, `localhost`, `*.local`, `*.internal`, `*.test`",
+        "Namespace-URIs (`xmlns`, `w3.org`, `schemas`, `tempuri.org`, `purl.org` und ähnliche) – die Hilfe ist enger als der Detektor"
+      ],
+      "beispielVorher": [
+        "  Url := 'http://api.example.org/v1/items';"
+      ],
+      "beispielNachher": [
+        "  Url := 'https://api.example.org/v1/items';"
+      ]
+    },
+    "RedundantParentheses": {
+      "titel": "Überflüssiges inneres Klammerpaar entfernen",
+      "was": "Macht aus `((X))` ein `(X)`: das innere Paar fällt, das äußere bleibt. Bedeutung und Rangfolge bleiben gleich.",
+      "nichtAngeboten": [
+        "nur nach einem Operator (`:=`, `+`, `-`, `and`, `or` …) oder Schlüsselwort (`if`, `while`, `until` …) oder bei einem Literal als Inhalt hinter einem Bezeichner (`Foo((1))`) – sonst nicht",
+        "`Foo((X))` mit einer Variablen: das innere Paar könnte ein Ausdruck für einen var-Parameter, eine Überladung oder ein Cast sein (3 von 4 Funden im Korpus)",
+        "nach `=`, `:`, `,` oder `(` (Konstante, Vergleich, dreifache Klammer) und am Zeilenanfang",
+        "ein Kommentar im Klammerpaar, danach folgt `.`, `[` oder `(`, oder die Zeile ist verschoben"
+      ],
+      "beispielVorher": [
+        "  if ((Ready)) then",
+        "    Run;"
+      ],
+      "beispielNachher": [
+        "  if (Ready) then",
+        "    Run;"
+      ]
+    },
+    "AttributeMisalignment": {
+      "titel": "Leerzeile nach dem Attribut entfernen",
+      "was": "Löscht die Leerzeilen (nur Leerzeichen oder Tab) zwischen dem Attribut und der ersten Zeile mit Inhalt, einer Deklaration. Bedeutungsgleich.",
+      "nichtAngeboten": [
+        "ein Ziel-Attribut (`[assembly: …]`, `[Result: …]`) oder ein Attribut über mehrere Zeilen",
+        "hinter dem `]` steht Text oder ein Kommentar",
+        "hinter der Leerzeile folgt ein Kommentar, eine Direktive oder keine Deklaration (der Detektor prüft nur „irgendetwas“)",
+        "das `[` ist ein Set-Literal, nicht der Anfang eines Attributs (davor fehlt ein Deklarationsende)"
+      ],
+      "beispielVorher": [
+        "  public",
+        "    [Test]",
+        "",
+        "    procedure Foo;"
+      ],
+      "beispielNachher": [
+        "  public",
+        "    [Test]",
+        "    procedure Foo;"
+      ]
+    },
+    "TwiceInheritedCalls": {
+      "titel": "Zweiten doppelten inherited-Aufruf entfernen",
+      "was": "Löscht den zweiten von zwei gleichen, direkt aufeinander folgenden `inherited`-Aufrufen im Rumpf. Der Detektor meldet auf der Zeile des Methodenkopfs; die Hilfe sucht die Aufrufe selbst, nur auf oberster Ebene des Rumpfs, und verlangt genau zwei.",
+      "kennzeichnung": "die Elternmethode läuft nur noch einmal – Reihenfolge und Nebenwirkung prüfen",
+      "nichtAngeboten": [
+        "eine Anweisung, ein Kommentar oder eine Direktive steht zwischen den Aufrufen (auch das Katalogbeispiel `inherited; DoStuff; inherited;`: ohne Datenfluss ist nicht zu beweisen, dass das Weglassen gleich bleibt)",
+        "die Aufrufe stehen in if, case, try oder einem verschachtelten Block; es sind nicht genau zwei; sie sind nicht textgleich oder nicht je allein auf ihrer Zeile",
+        "der letzte Aufruf hat vor dem `end` kein `;`, oder die Routine hat eine verschachtelte Routine, asm oder external"
+      ],
+      "beispielVorher": [
+        "procedure TFoo.Done;",
+        "begin",
+        "  inherited;",
+        "  inherited;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "procedure TFoo.Done;",
+        "begin",
+        "  inherited;",
+        "end;"
+      ],
+      "zweiterEintrag": {
+        "was": "Löscht stattdessen den ersten der beiden Aufrufe.",
+        "kennzeichnung": "die Elternmethode läuft nur noch einmal – Reihenfolge und Nebenwirkung prüfen",
+        "nichtAngeboten": [
+          "dieselben Sperren wie der erste Eintrag"
+        ],
+        "beispielNachher": [
+          "procedure TFoo.Done;",
+          "begin",
+          "  inherited;",
+          "end;"
+        ]
+      }
+    },
+    "PointerSubtraction": {
+      "titel": "32-Bit-Casts durch NativeInt ersetzen",
+      "was": "Im Zeigerabzug `Cast(a) - Cast(b)` werden beide Cast-Wörter ersetzt: `Integer`/`LongInt` durch `NativeInt`, `Cardinal`/`LongWord` durch `NativeUInt`. Eine Ersetzung vom ersten Cast-Wort bis hinter den zweiten Cast; die Operanden bleiben. Die Meldung nennt keine Spalte: die Hilfe sucht das Muster auf den Code-Spalten der Zeile und hilft nur bei genau einem Treffer.",
+      "kennzeichnung": "Win32 bleibt gleich, unter Win64 ist der Abstand der volle Adressabstand; bei {$R+} kann die Zuweisung an ein Integer-Ziel ERangeError auslösen",
+      "nichtAngeboten": [
+        "die beiden Casts haben verschiedene Vorzeichenart (`Cardinal` gegen `Integer`) – NativeInt oder NativeUInt wäre geraten",
+        "mehrere Treffer auf der Zeile (die Hilfe weiß nicht, welchen der Detektor meldete)",
+        "ein Operand ist eine Zahl oder kein einfacher Bezeichner, der Abzug geht mit einem weiteren 32-Bit-Cast weiter, oder ein Kommentar, String oder eine Direktive steht dazwischen",
+        "das Cast-Wort steht hinter `.`, `&` oder `@`"
+      ],
+      "beispielVorher": [
+        "  Len := Integer(PEnd) - Integer(PStart);"
+      ],
+      "beispielNachher": [
+        "  Len := NativeInt(PEnd) - NativeInt(PStart);"
+      ],
+      "hinweis": "Die Hilfe prüft nicht, ob die Operanden Zeiger sind – das hat der Detektor entschieden."
+    },
+    "EmptyFinallyBlock": {
+      "titel": "Leeres try/finally auflösen",
+      "was": "Entfernt `try`, `finally` und `end` und rückt den Rumpf eine Stufe aus (Tab oder Leerzeichen des Umfelds bleiben). Fehlt dem Rumpf das `;` und stand eines hinter dem `end`, setzt die Hilfe es hinter die letzte Anweisung. Bedeutungsgleich: Ausnahmen laufen weiter nach außen.",
+      "nichtAngeboten": [
+        "ein Kommentar oder eine Direktive im `finally` (der Detektor meldet solche Fälle trotzdem, weil er Kommentare ausblendet)",
+        "`try` steht hinter `then`, `else`, `do` oder einer Marke (dort bräuchte es ein `begin`)",
+        "try, finally und end stehen nicht je allein auf ihrer Zeile, die Einrückung weicht ab, oder der Rumpf ist leer",
+        "im Rumpf stehen `var`, `const`, `label`, `goto` oder `asm`, oder im Bereich liegt eine Direktive oder ein Blockkommentar"
+      ],
+      "beispielVorher": [
+        "  try",
+        "    DoWork;",
+        "  finally",
+        "  end;"
+      ],
+      "beispielNachher": [
+        "  DoWork;"
+      ]
+    },
+    "ReversedForRange": {
+      "titel": "`to` durch `downto` ersetzen",
+      "was": "Macht aus `for I := 10 to 1 do` ein `for I := 10 downto 1 do`. Der Detektor meldet nur Ganzzahl-Literale, die Meldung nennt keine Spalte: die Hilfe sucht den Kopf selbst und prüft die Werte gegen die Meldung.",
+      "kennzeichnung": "die Schleife lief bisher nie und zählt danach abwärts; war sie absichtlich abgeschaltet, ist das ein Eingriff",
+      "nichtAngeboten": [
+        "mehrere umgekehrte Köpfe auf der Zeile, ein Kopf über mehrere Zeilen",
+        "ein Kommentar, eine Direktive oder ein String im Kopf, eine Typangabe an der Schleifenvariablen",
+        "die Zeile ist verschoben (die Werte passen nicht zur Meldung)"
+      ],
+      "beispielVorher": [
+        "  for I := 10 to 1 do",
+        "    Process(I);"
+      ],
+      "beispielNachher": [
+        "  for I := 10 downto 1 do",
+        "    Process(I);"
+      ],
+      "zweiterEintrag": {
+        "was": "Vertauscht stattdessen Start- und Endwert: `for I := 1 to 10 do`.",
+        "kennzeichnung": "die Schleife lief bisher nie und zählt danach aufwärts; war sie absichtlich abgeschaltet, ist das ein Eingriff",
+        "nichtAngeboten": [
+          "dieselben Sperren wie der erste Eintrag"
+        ],
+        "beispielNachher": [
+          "  for I := 1 to 10 do",
+          "    Process(I);"
+        ]
+      }
+    },
+    "TabulationCharacter": {
+      "titel": "Tabulatoren der Zeile durch Leerzeichen ersetzen",
+      "was": "Ersetzt die Tabulatoren im Code der gemeldeten Zeile durch Leerzeichen bis zum nächsten Tabstopp (Tabweite 2, feste Annahme; Leerzeichen und Tab davor werden sauber zusammengezogen). Eine Ersetzung vom ersten bis zum letzten Code-Tab; Tabs in Strings und Kommentaren dazwischen bleiben. Nur die gemeldete Zeile.",
+      "nichtAngeboten": [
+        "der erste Tab der Zeile liegt in einem String, Kommentar oder mehrzeiligen String (der Detektor meldet ihn trotzdem, der Fund bliebe stehen)",
+        "die Zeile ist verschoben, oder die Meldung nennt keine Spalte"
+      ],
+      "ohneBeispiel": "nicht abbildbar – der Unterschied ist nur Leerraum (Tab gegen Leerzeichen).",
+      "hinweis": "Bleibt hinter dem letzten Code-Tab ein Tab in einem String oder Kommentar, meldet der Detektor die Zeile nach der Hilfe weiter."
+    },
+    "TrailingWhitespace": {
+      "titel": "Leerraum am Zeilenende entfernen",
+      "was": "Löscht die Leerzeichen und Tabs am Zeilenende, ab der Spalte aus der Meldung. Eine reine Leerzeile aus Blanks wird leer. Kommentare, Direktiven und Code sind erlaubt. Bedeutungsgleich.",
+      "nichtAngeboten": [
+        "der Leerraum ist String-Inhalt: eine Zeile in einem mehrzeiligen String (`'''`), die Eröffnungszeile selbst oder ein nicht geschlossener String",
+        "die Endfolge beginnt nicht bei der Spalte aus der Meldung, oder sie reicht nicht bis zum Zeilenende"
+      ],
+      "ohneBeispiel": "nicht abbildbar – der Unterschied ist nur Leerraum am Zeilenende."
+    },
+    "LowercaseKeyword": {
+      "titel": "Schlüsselwort kleinschreiben",
+      "was": "Schreibt das gemeldete Schlüsselwort an der gemeldeten Spalte klein (`Begin` → `begin`). Bedeutungsgleich: Delphi unterscheidet Groß- und Kleinschreibung nicht.",
+      "platzhalter": "`%s` = das Schlüsselwort wie gemeldet (etwa `Begin`).",
+      "nichtAngeboten": [
+        "das Wort steht in einem Kommentar oder String, ist Teil eines Bezeichners oder schon klein geschrieben",
+        "das Wort ist ein Bezeichner: hinter `.`, `&` oder `@`, vor `:=`, als benanntes Argument",
+        "ein Wort, das auch Bezeichner sein kann (`on`, `out`, `contains`, `requires`, `implements`, `absolute`); Direktiven und Sichtbarkeitswörter nur im passenden Kontext",
+        "die Zeile ist verschoben, oder die Meldung nennt Wort oder Spalte nicht"
+      ],
+      "beispielVorher": [
+        "procedure Run;",
+        "Begin",
+        "  DoWork;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "procedure Run;",
+        "begin",
+        "  DoWork;",
+        "end;"
+      ],
+      "hinweis": "Der Detektor meldet auch Member hinter einem Punkt (`Foo.End`); die Hilfe bietet dort nichts an."
     }
   }
 }

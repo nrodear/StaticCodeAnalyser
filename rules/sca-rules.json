@@ -989,6 +989,7 @@
       "type": "Bug",
       "tags": ["loop", "typo"],
       "detectorUnit": "uReversedForRange.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "for i := 10 to 1 do DoStuff(i);",
         "good": "for i := 10 downto 1 do DoStuff(i);"
@@ -1279,6 +1280,7 @@
       "type": "Code Smell",
       "tags": ["formatting", "style"],
       "detectorUnit": "uTabulationCharacter.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "procedure Foo;\nbegin\n<TAB>DoStuff;\nend;",
         "good": "procedure Foo;\nbegin\n  DoStuff;\nend;"
@@ -1318,6 +1320,7 @@
       "type": "Code Smell",
       "tags": ["formatting", "style"],
       "detectorUnit": "uTrailingWhitespace.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "  DoStuff;   <-- trailing spaces",
         "good": "  DoStuff;"
@@ -1337,6 +1340,7 @@
       "type": "Code Smell",
       "tags": ["formatting", "style", "convention"],
       "detectorUnit": "uLowercaseKeyword.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "Procedure Foo;\nBegin\n  If X then DoStuff;\nEnd;",
         "good": "procedure Foo;\nbegin\n  if X then DoStuff;\nend;"
@@ -1725,6 +1729,7 @@
       "type": "Bug",
       "tags": ["resource-leak", "refactor"],
       "detectorUnit": "uEmptyFinallyBlock.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "Stream := TFileStream.Create(P);\ntry\n  ...\nfinally\nend;",
         "good": "Stream := TFileStream.Create(P);\ntry\n  ...\nfinally\n  Stream.Free;\nend;"
@@ -1920,6 +1925,7 @@
       "type": "Bug",
       "tags": ["inheritance", "bug-risk"],
       "detectorUnit": "uTwiceInheritedCalls.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "procedure Foo;\nbegin\n  inherited;\n  DoStuff;\n  inherited;\nend;",
         "good": "procedure Foo;\nbegin\n  inherited;\n  DoStuff;\nend;"
@@ -1939,6 +1945,7 @@
       "type": "Code Smell",
       "tags": ["style", "redundancy"],
       "detectorUnit": "uRedundantParentheses.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "if ((Active)) then ...\nResult := ((42));",
         "good": "if Active then ...\nResult := 42;"
@@ -2349,6 +2356,7 @@
       "cwe": ["CWE-319"],
       "owasp": ["A02:2021-Cryptographic Failures"],
       "detectorUnit": "uRestHttpSecurity.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "Url := 'http://api.contoso-shop.de/v1/users';",
         "good": "Url := 'https://api.contoso-shop.de/v1/users';"
@@ -3272,6 +3280,7 @@
       "type": "Bug",
       "tags": ["pointer", "win64", "truncation", "mormot", "sonar50"],
       "detectorUnit": "uPointerSubtraction.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "Diff := Cardinal(P1) - Cardinal(P2);   // upper 32 bits lost on Win64",
         "good": "Diff := PtrUInt(P1) - PtrUInt(P2);     // pointer-wide cast"
@@ -3715,6 +3724,7 @@
       "tags": ["attribute", "readability"],
       "configKey": "",
       "detectorUnit": "uAttributeMisalignment.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "[Test]\n\nprocedure Foo;",
         "good": "[Test]\nprocedure Foo;"
