@@ -3,7 +3,7 @@
 > **Erzeugte Datei – nicht von Hand bearbeiten.** Quelle: [`data/quickfixes-doc.json`](data/quickfixes-doc.json) (Titel, Beschreibung, Sperren, Beispiele) und der Quelltext: welche Hilfen es gibt, ihre Menütexte und ob sie das Verhalten ändern, stehen in [`source/uRdxFixTable.pas`](source/uRdxFixTable.pas) (`FIX_ROWS`, `FIX_CAPTIONS`, `FIX_ALT_CAPTIONS`) und [`source/uRdxProvider.pas`](source/uRdxProvider.pas) (Rezepte), die Übersetzungen in [`i18n/de.po`](../i18n/de.po) und [`i18n/fr.po`](../i18n/fr.po), Regel-IDs und Namen in [`rules/sca-rules.json`](../rules/sca-rules.json).
 > Erzeugen (Repo-Wurzel): `python tools/gen-quickfix-doc.py`, prüfen: `python tools/gen-quickfix-doc.py --check` (auch in der CI, `.github/workflows/quickfix-doc.yml`).
 
-reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 50 Quick-Fixes aus der Tabelle der einfachen Hilfen (4 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
+reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 60 Quick-Fixes aus der Tabelle der einfachen Hilfen (4 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
 
 ## Lesehilfe
 
@@ -21,6 +21,7 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 50 Qui
 | Regel | Menütext (de) | Art | Ändert Verhalten | Abschnitt |
 |---|---|---|---|---|
 | SCA001 MemoryLeak | `%s in einem try/finally-Block freigeben` | Quick-Fix | ja | [SCA001](#sca001) |
+| SCA002 EmptyExcept | `raise; in den leeren except-Block einfügen` | Quick-Fix | ja | [SCA002](#sca002) |
 | SCA007 UnusedUses | `Unit %s aus uses entfernen` | Quick-Fix | ja | [SCA007](#sca007) |
 | SCA009 MissingFinally | `%s in einem try/finally-Block freigeben` | Quick-Fix | ja | [SCA009](#sca009) |
 | SCA014 MagicNumber | `Lokale Konstante für %s einführen` | Quick-Fix | nein | [SCA014](#sca014) |
@@ -28,15 +29,20 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 50 Qui
 | SCA046 ReversedForRange | `"to" durch "downto" ersetzen` / `Schleifengrenzen vertauschen` | Quick-Fix | ja / ja | [SCA046](#sca046) |
 | SCA047 SelfAssignment | `Selbstzuweisung von %s entfernen` | Quick-Fix | nein | [SCA047](#sca047) |
 | SCA053 UnusedLocalVar | `Ungenutzte Variable %s entfernen` | Quick-Fix | nein | [SCA053](#sca053) |
+| SCA060 GotoStatement | `"goto" durch Exit ersetzen` | Quick-Fix | nein | [SCA060](#sca060) |
 | SCA061 TabulationCharacter | `Tabulatoren dieser Zeile durch Leerzeichen ersetzen` | Quick-Fix | nein | [SCA061](#sca061) |
 | SCA063 TrailingWhitespace | `Leerraum am Zeilenende entfernen` | Quick-Fix | nein | [SCA063](#sca063) |
 | SCA064 LowercaseKeyword | `%s klein schreiben` | Quick-Fix | nein | [SCA064](#sca064) |
+| SCA065 NoSonarMarker | `NOSONAR durch einen Marker "noinspection All" ersetzen` | Quick-Fix | ja | [SCA065](#sca065) |
 | SCA066 EmptyArgumentList | `Leere Klammern entfernen` | Quick-Fix | nein | [SCA066](#sca066) |
+| SCA068 TrailingCommaArgList | `Überzähliges Komma entfernen` | Quick-Fix | nein | [SCA068](#sca068) |
 | SCA070 CommentedOutCode | `Auskommentierten Code löschen` | Quick-Fix | nein | [SCA070](#sca070) |
 | SCA071 UnitLevelKeywordIndent | `Schlüsselwort an Spalte 1 setzen` | Quick-Fix | nein | [SCA071](#sca071) |
 | SCA072 RedundantBoolean | `Überflüssigen Vergleich mit True/False entfernen` | Quick-Fix | nein | [SCA072](#sca072) |
 | SCA074 AssertMessage | `Bedingung als Assert-Meldung verwenden` | Quick-Fix | nein | [SCA074](#sca074) |
 | SCA075 ExplicitTObjectInheritance | `(TObject) aus der Klassendeklaration entfernen` | Quick-Fix | nein | [SCA075](#sca075) |
+| SCA076 GroupedDeclaration | `Gruppierte Deklaration aufteilen` | Quick-Fix | nein | [SCA076](#sca076) |
+| SCA077 EmptyBlock | `Leeres "with ... do begin end" durch den Aufruf ersetzen` | Quick-Fix | nein | [SCA077](#sca077) |
 | SCA080 RedundantJump | `Überflüssiges %s entfernen` | Quick-Fix | nein | [SCA080](#sca080) |
 | SCA082 SuperfluousSemicolon | `Überzähliges Semikolon entfernen` | Quick-Fix | nein | [SCA082](#sca082) |
 | SCA083 EmptyFinallyBlock | `Leeres try/finally entfernen` | Quick-Fix | nein | [SCA083](#sca083) |
@@ -64,9 +70,13 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 50 Qui
 | SCA149 MissingOverride | `"%s;" an die Deklaration anfügen` | Quick-Fix | je nach Fund | [SCA149](#sca149) |
 | SCA153 UnpairedLock | `Sperre %s in einem try/finally-Block freigeben` | Quick-Fix | ja | [SCA153](#sca153) |
 | SCA156 GetMemWithoutFreeMem | `Puffer %s in einem try/finally-Block freigeben` | Quick-Fix | ja | [SCA156](#sca156) |
+| SCA159 EmptyOnHandler | `Dem leeren Ausnahme-Handler "raise;" hinzufügen` | Quick-Fix | ja | [SCA159](#sca159) |
 | SCA161 PointerSubtraction | `Die 32-Bit-Casts durch NativeInt/NativeUInt ersetzen` | Quick-Fix | ja | [SCA161](#sca161) |
 | SCA164 UnusedRoutine | `Ungenutzte Routine %s löschen` | Quick-Fix | nein | [SCA164](#sca164) |
 | SCA168 DefaultCaseInCaseStatement | `Leeren else-Zweig ergänzen` / `else-Zweig mit Exception ergänzen` | Quick-Fix | nein / ja | [SCA168](#sca168) |
+| SCA179 AttributeIgnoreWithoutReason | `Grund zu [Ignore] hinzufügen` | Quick-Fix | nein | [SCA179](#sca179) |
+| SCA180 AttributeDuplicate | `Doppeltes Attribut entfernen` | Quick-Fix | nein | [SCA180](#sca180) |
+| SCA181 AttributeCategoryWithoutString | `Dem Attribut einen Kategorienamen geben` | Quick-Fix | nein | [SCA181](#sca181) |
 | SCA183 AttributeMisalignment | `Leerzeile nach dem Attribut entfernen` | Quick-Fix | nein | [SCA183](#sca183) |
 | SCA196 ManagedResultUninit | `Result zuerst initialisieren: %s` | Quick-Fix | ja | [SCA196](#sca196) |
 | SCA197 InterfaceWithoutGuid | `Neue GUID einfügen` | Quick-Fix | nein | [SCA197](#sca197) |
@@ -132,6 +142,63 @@ Nachher:
     X.Free;
   end;
 ```
+
+<a id="sca002"></a>
+
+### SCA002 – `raise;` in den leeren `except`-Block einfügen
+
+- **Regel:** SCA002 `EmptyExcept` – Empty except block
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** **ja** – eine bisher verschluckte Ausnahme läuft jetzt nach außen weiter – der Aufrufer muss sie behandeln; war das Verschlucken Absicht, ist das ein Eingriff. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| en | de | fr |
+|---|---|---|
+| `Add raise; to the empty except block` | `raise; in den leeren except-Block einfügen` | `Ajouter raise; au bloc except vide` |
+
+**Wirkung:** Macht aus `try Work except end;` ein `try Work except raise; end;`. Stehen `except` und `end` auf verschiedenen Zeilen, kommt das `raise;` in eine neue Zeile unter `except`, eine Stufe tiefer (die Stufe liest die Hilfe aus dem try-Rumpf davor, sonst zwei Leerzeichen bzw. ein Tab). Der Detektor meldet auf der Zeile des `except`; die Hilfe bedient nur die eindeutige Form: zwischen `except` und `end` steht nur Leerraum.
+
+**Nicht angeboten**
+
+- ein Kommentar oder eine Direktive steht im Block (ein Kommentar ist Absicht, etwa `// ignore errors`)
+- zwischen `except` und `end` steht etwas anderes als Leerraum: ein Handler (`on E: ... do`, auch der leere, das ist SCA159), eine Anweisung, ein einzelnes `;` (`except;`) oder ein `else`
+- die Zeile ist verschoben (kein `except` als Code auf der Zeile) oder trägt mehrere `except`
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  try
+    Work;
+  except
+  end;
+```
+
+Nachher:
+
+```pascal
+  try
+    Work;
+  except
+    raise;
+  end;
+```
+
+**Beispiel: In einer Zeile**
+
+Vorher:
+
+```pascal
+  try Work except end;
+```
+
+Nachher:
+
+```pascal
+  try Work except raise; end;
+```
+
+**Hinweis.** Die Hilfe macht den Fund still, indem sie die Ausnahme weiterreicht; ob stattdessen geloggt oder gezielt behandelt werden soll, entscheidet der Autor.
 
 <a id="sca007"></a>
 
@@ -495,6 +562,54 @@ begin
 end;
 ```
 
+<a id="sca060"></a>
+
+### SCA060 – goto durch Exit ersetzen
+
+- **Regel:** SCA060 `GotoStatement` – goto statement
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Replace "goto" with Exit` | `"goto" durch Exit ersetzen` | `Remplacer « goto » par Exit` |
+
+**Wirkung:** Ersetzt das gemeldete `goto Marke` durch `Exit`, wenn die Marke die letzte Anweisung der Routine ist (`Marke:` steht unmittelbar vor dem end des Rumpfs). Dann führt der Sprung ans Routinenende, genau wie Exit; ein try..finally dazwischen läuft in beiden Fällen ab, Result einer Funktion bleibt unverändert. Die Marke selbst bleibt stehen.
+
+**Nicht angeboten**
+
+- die Marke ist nicht die letzte Anweisung der Routine (Code dahinter, Marke in einem inneren Block, Rücksprung)
+- mehr als ein goto auf der Zeile, die Marke steht nicht auf derselben Zeile, ein Kommentar steht im goto, oder die Zeile ist verschoben
+- keine Routine mit begin..end-Rumpf um die Zeile (Hauptblock, initialization, asm) oder unsichere Routinengrenzen
+- der Rumpf enthält eine Compiler-Direktive oder eine anonyme Methode
+- die Datei deklariert einen eigenen Bezeichner Exit
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+label Fin;
+begin
+  if Failed then goto Fin;
+  Work;
+Fin:
+end;
+```
+
+Nachher:
+
+```pascal
+label Fin;
+begin
+  if Failed then Exit;
+  Work;
+Fin:
+end;
+```
+
+**Hinweis.** Die Marke bleibt stehen. Springt kein weiteres goto mehr zu ihr, meldet Delphi sie als ungenutzte Marke (Hinweis/Warnung, kein Fehler); Marke und label-Eintrag können dann von Hand entfallen.
+
 <a id="sca061"></a>
 
 ### SCA061 – Tabulatoren der Zeile durch Leerzeichen ersetzen
@@ -584,6 +699,43 @@ end;
 
 **Hinweis.** Der Detektor meldet auch Member hinter einem Punkt (`Foo.End`); die Hilfe bietet dort nichts an.
 
+<a id="sca065"></a>
+
+### SCA065 – NOSONAR durch einen noinspection-All-Marker über der Zeile ersetzen
+
+- **Regel:** SCA065 `NoSonarMarker` – NOSONAR suppression marker
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** **ja** – der Marker unterdrückt jetzt alle Regeln der Zeile (bisher unterdrückte NOSONAR nichts); kritische Arten (HardcodedSecret, SQLInjection u. a.) bleiben sichtbar. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| en | de | fr |
+|---|---|---|
+| `Replace NOSONAR with a "noinspection All" marker` | `NOSONAR durch einen Marker "noinspection All" ersetzen` | `Remplacer NOSONAR par un marqueur "noinspection All"` |
+
+**Wirkung:** Aus `X; // NOSONAR - Grund` wird eine eigene Zeile `// noinspection All` (mit dem Einzug der Zeile) über dem Code; der Rest des Kommentars bleibt hinter dem Code (`X; // Grund`). Ein führender `:` oder `-` hinter NOSONAR fällt weg, ohne Rest entfällt der Kommentar. Der Marker steht bewusst darüber: ein `noinspection` gilt für die folgende Zeile, und `All` zählt nur als ganze Artenliste – ein Grund dahinter machte ihn wirkungslos.
+
+**Nicht angeboten**
+
+- der Kommentar steht auf einer eigenen Zeile (unklar, welche Zeile gemeint ist), NOSONAR ist nicht das erste Wort oder steht mehrfach da
+- der Rest hinter NOSONAR beginnt mit `noinspection`, oder direkt darüber steht schon `// noinspection All`
+- das `//` steht in einem Block-Kommentar, String oder mehrzeiligen String, die Zeile ist verschoben, oder die Meldung nennt keine Spalte
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  Dispose(P); // NOSONAR - we know about this
+```
+
+Nachher:
+
+```pascal
+  // noinspection All
+  Dispose(P); // we know about this
+```
+
+**Hinweis.** Findet SCA auf der Zeile nichts zu unterdrücken, meldet SCA165 den neuen Marker als wirkungslos; dann den Kommentar ganz löschen.
+
 <a id="sca066"></a>
 
 ### SCA066 – Leere Klammern entfernen
@@ -618,6 +770,44 @@ Nachher:
 ```pascal
   DoStuff;
 ```
+
+<a id="sca068"></a>
+
+### SCA068 – Überzähliges Komma entfernen
+
+- **Regel:** SCA068 `TrailingCommaArgList` – Trailing comma in argument list
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Remove the trailing comma` | `Überzähliges Komma entfernen` | `Supprimer la virgule superflue` |
+
+**Wirkung:** Löscht das Komma vor der schließenden Klammer einer Argumentliste samt dem Leerraum bis zur `)`: `Foo(A, B,)` wird `Foo(A, B)`. Der Detektor meldet die Spalte des Kommas; die Hilfe sucht rückwärts die öffnende Klammer.
+
+**Nicht angeboten**
+
+- vor dem Komma steht kein Argument (`Foo(,)`, `Foo(A,,)`): dort fehlt ein Element, das Komma ist nicht überzählig
+- das Komma beendet eine Liste in `[...]` (Set- oder Array-Literal), oder die öffnende Klammer ist nicht zu finden
+- die Zeile ist verschoben: an der Spalte steht kein Komma im Code, oder dahinter folgt etwas anderes als Leerraum und `)` (Kommentar, String)
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  WriteLn('A', 'B', );
+  DoStuff(Param1, Param2,);
+```
+
+Nachher:
+
+```pascal
+  WriteLn('A', 'B');
+  DoStuff(Param1, Param2);
+```
+
+**Hinweis.** Bedeutungsgleich: das Komma trug nichts.
 
 <a id="sca070"></a>
 
@@ -818,6 +1008,83 @@ Nachher:
 
 ```pascal
   TFoo = class
+```
+
+<a id="sca076"></a>
+
+### SCA076 – Gruppierte Deklaration in Einzelzeilen teilen
+
+- **Regel:** SCA076 `GroupedDeclaration` – Grouped variable / field / parameter declaration
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Split the grouped declaration` | `Gruppierte Deklaration aufteilen` | `Scinder la déclaration groupée` |
+
+**Wirkung:** Macht aus `A, B, C: Integer;` je Name eine Zeile (`A: Integer;`, `B: Integer;`, `C: Integer;`) mit der Einrückung der Ursprungszeile. Nur eine einzeilige Variablen- oder Felddeklaration mit einem einfachen Typnamen; steht `var` davor, trägt jede neue Zeile das `var` wieder.
+
+**Nicht angeboten**
+
+- der Typ ist kein einfacher Typname: `record`, `class`, `array of`, `array[..] of`, `set of`, Aufzählung, `^T`, `string[N]`, Generics (je Name entstünde ein eigener Typ, `A := B` ginge nicht mehr)
+- Initialisierer (`= 5`), `absolute`, Direktive hinter dem Typ, Kommentar, String oder Direktive auf der Zeile
+- mehrzeilige Deklaration, mehrere Gruppen auf der Zeile
+- etwas anderes als Leerraum oder ein einzelnes `var` vor den Namen (Attribut, `private`, `class var`, `threadvar`)
+- Parameterlisten und case-Marken; die Zeile ist verschoben, oder die Meldung nennt keine Spalte
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+var
+  A, B, C: Integer;
+```
+
+Nachher:
+
+```pascal
+var
+  A: Integer;
+  B: Integer;
+  C: Integer;
+```
+
+**Hinweis.** Der Detektor meldet auch Gruppen mit anonymem Typ; dort bleibt der Fund stehen.
+
+<a id="sca077"></a>
+
+### SCA077 – Leeres `with ... do begin end` durch den Aufruf ersetzen
+
+- **Regel:** SCA077 `EmptyBlock` – Empty begin..end block
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Replace the empty "with ... do begin end" by the call` | `Leeres "with ... do begin end" durch den Aufruf ersetzen` | `Remplacer le « with ... do begin end » vide par l'appel` |
+
+**Wirkung:** Ersetzt `with <Aufrufkette> do begin end` durch die Aufrufkette als Anweisung (`with X.Add(T) do begin end;` wird `X.Add(T);`). `begin` und `end` dürfen auf eigenen Zeilen stehen; der Fund steht auf der Zeile des `begin`. Der Aufruf wird wie vorher genau einmal ausgeführt. Bedeutungsgleich. Andere leere Blöcke (`begin end;` allein, `if C then begin end;`, `else begin end`, `while C do begin end;`) bekommen keine Hilfe.
+
+**Nicht angeboten**
+
+- der leere Block gehört nicht zu einem `with ... do` (if, else, while, for, allein stehendes begin..end): ob eine Anweisung fehlt oder der Zweig weg kann, entscheidet nur der Mensch
+- der Ausdruck ist kein Aufruf (`with Foo do begin end;`: als Anweisung bliebe ein Bezeichner), mehrere Objekte im `with` (`with A, B do`), der Kopf geht über mehrere Zeilen, oder die Form ist keine Kette `A.B(...).C(...)` (Index, `as`, Generics)
+- der Ausdruck könnte ein Typecast sein (`with TButton(Sender) do`, `with Foo(X) do`: `Name(X);` ist keine Anweisung)
+- ein Kommentar oder eine Direktive steht zwischen `with` und `end`, hinter dem `end` folgt etwas anderes als `;` oder ein Blockende, die Zeile ist verschoben oder trägt mehrere `begin`
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  with Items.Add(T) do begin end;
+```
+
+Nachher:
+
+```pascal
+  Items.Add(T);
 ```
 
 <a id="sca080"></a>
@@ -2110,6 +2377,51 @@ begin
 end;
 ```
 
+<a id="sca159"></a>
+
+### SCA159 – Leeren Ausnahme-Handler mit raise; versehen
+
+- **Regel:** SCA159 `EmptyOnHandler` – Typed exception handler with empty body
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** **ja** – die Ausnahme wird nicht mehr verschluckt, sondern an den Aufrufer weitergereicht – Programmablauf und äußere Handler prüfen. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| en | de | fr |
+|---|---|---|
+| `Add "raise;" to the empty exception handler` | `Dem leeren Ausnahme-Handler "raise;" hinzufügen` | `Ajouter "raise;" au gestionnaire d'exception vide` |
+
+**Wirkung:** Ersetzt den leeren Rumpf eines `on E: T do`-Handlers durch `raise;`, die Ausnahme läuft dann weiter statt still verschluckt zu werden. Zwei Formen: `do ;` wird `do raise;`, `do begin end` wird `do begin raise; end` (begin und end auf eigenen Zeilen: `raise;` als eigene Zeile eine Stufe tiefer). Der Detektor bleibt unverändert und meldet auch Handler mit Kommentar; die Hilfe nicht.
+
+**Nicht angeboten**
+
+- Kommentar oder Direktive im Handler, davor oder dahinter auf der Zeile (ein Kommentar ist Absicht, auch wenn der Detektor ihn nicht sieht)
+- mehr als ein `on`-Handler auf der Zeile, oder die Zeile ist verschoben, der Rumpf nicht mehr leer oder der Typ ein anderer als in der Meldung
+- das `on` beginnt keinen Handler (davor weder `except` noch `;`), der Kopf steht nicht auf einer Zeile oder das `;` nicht auf der Zeile von `do`
+- der Typ ist EAbort (stilles Abbruchsignal der VCL)
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+try
+  DoStuff;
+except
+  on E: EDatabaseError do ;
+end;
+```
+
+Nachher:
+
+```pascal
+try
+  DoStuff;
+except
+  on E: EDatabaseError do raise;
+end;
+```
+
+**Hinweis.** Die Hilfe macht den Fund nicht „richtig“, sie macht das Verschlucken sichtbar: ob der Aufrufer die Ausnahme erwartet oder ein Log/Recovery gebraucht wird, entscheidet der Mensch.
+
 <a id="sca161"></a>
 
 ### SCA161 – 32-Bit-Casts durch NativeInt ersetzen
@@ -2274,6 +2586,123 @@ Nachher:
     raise EProgrammerError.Create('Unhandled case');
   end;
 ```
+
+<a id="sca179"></a>
+
+### SCA179 – Grund zu [Ignore] hinzufügen
+
+- **Regel:** SCA179 `AttributeIgnoreWithoutReason` – DUnitX [Ignore] attribute without reason argument
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Add a reason to [Ignore]` | `Grund zu [Ignore] hinzufügen` | `Ajouter une raison à [Ignore]` |
+
+**Wirkung:** Macht aus `[Ignore]` oder `[Ignore()]` ein `[Ignore('reason')]`. Der Platzhalter `reason` ist danach durch den echten Grund (Ticket, Abhängigkeit, bekannte Einschränkung) zu ersetzen. Der Test wird mit und ohne Text gleich übersprungen; Schreibweise des Namens und Einrückung bleiben.
+
+**Nicht angeboten**
+
+- das Attribut steht in einer Gruppe (`[Ignore, Test]`) oder neben einem anderen Attribut auf derselben Zeile (`[Test][Ignore]`)
+- die Klammern haben schon einen Inhalt (`[Ignore('kaputt')]`, `[Ignore(X)]`), oder das Attribut läuft über mehrere Zeilen
+- hinter dem `]` oder im Attribut steht ein Kommentar oder Text; die Zeile ist verschoben, auskommentiert oder kein Attribut
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+[Ignore]
+procedure SomeTest;
+```
+
+Nachher:
+
+```pascal
+[Ignore('reason')]
+procedure SomeTest;
+```
+
+**Hinweis.** Der Platzhalter `reason` muss durch den echten Grund ersetzt werden.
+
+<a id="sca180"></a>
+
+### SCA180 – Doppeltes Attribut entfernen
+
+- **Regel:** SCA180 `AttributeDuplicate` – Same attribute applied twice to one member
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Remove the duplicate attribute` | `Doppeltes Attribut entfernen` | `Supprimer l'attribut en double` |
+
+**Wirkung:** Löscht die Dublette eines Attributs: steht sie allein auf ihrer Zeile, die ganze Zeile; steht sie mit weiteren Attributen auf einer Zeile (`[A][A]`), nur die letzte gleiche Gruppe samt Trennzeichen. Gleich heißt: derselbe Name (Groß-/Kleinschreibung egal) und genau dieselben Argumente. Bedeutungsgleich.
+
+**Nicht angeboten**
+
+- die Argumente unterscheiden sich (`[Category('a')]` und `[Category('b')]`) – der Detektor meldet sie ohnehin nicht
+- zwischen den Attributen oder dahinter steht Code, ein Kommentar oder eine Direktive
+- ein Ziel-Attribut (`[Result: …]`, `[assembly: …]`), ein Attribut über mehrere Zeilen oder mit einer Klammer im String
+- die Zeile ist verschoben, steht in einem Kommentar oder ist die letzte der Datei
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  public
+    [Test]
+    [Test]
+    procedure Foo;
+```
+
+Nachher:
+
+```pascal
+  public
+    [Test]
+    procedure Foo;
+```
+
+<a id="sca181"></a>
+
+### SCA181 – Dem Attribut [Category] einen Kategorienamen geben
+
+- **Regel:** SCA181 `AttributeCategoryWithoutString` – DUnitX [Category] without category-name string
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Add a category name to the attribute` | `Dem Attribut einen Kategorienamen geben` | `Donner un nom de catégorie à l'attribut` |
+
+**Wirkung:** Macht aus `[Category]` ein `[Category('category')]`. Der Platzhalter `category` macht den Code übersetzbar; den echten Namen der Kategorie setzt du selbst (die Hilfe kann ihn nicht kennen). Schreibweise und Leerzeichen vor dem `]` bleiben, ein Kommentar dahinter auch.
+
+**Nicht angeboten**
+
+- das Attribut hat schon ein Argument oder eine Liste (`[Category('x')]`, `[Category(Name)]`, `[Category()]`, `[Category, Test]`) - der Detektor meldet diese Formen nie, und eine Konstante könnte ein String sein
+- hinter dem `]` steht weiterer Code (`[Category][Test]`) oder eine Compiler-Direktive
+- vor dem Attribut steht kein Deklarationsende (`;`, `public`, `class`, ein anderes Attribut ...) - etwa ein Array-Index - oder eine Direktive liegt dazwischen
+- die Zeile ist verschoben, auskommentiert oder liegt in einem Kommentar
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+    [Category]
+    procedure Foo;
+```
+
+Nachher:
+
+```pascal
+    [Category('category')]
+    procedure Foo;
+```
+
+**Hinweis.** Der Platzhalter `category` ist bewusst kein TODO (SCA019); ersetze ihn durch den Namen deiner Kategorie, etwa `Slow`.
 
 <a id="sca183"></a>
 

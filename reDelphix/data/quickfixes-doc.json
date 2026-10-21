@@ -1482,6 +1482,227 @@
         "end;"
       ],
       "hinweis": "Der Detektor meldet auch Member hinter einem Punkt (`Foo.End`); die Hilfe bietet dort nichts an."
+    },
+    "EmptyExcept": {
+      "titel": "`raise;` in den leeren `except`-Block einfügen",
+      "was": "Macht aus `try Work except end;` ein `try Work except raise; end;`. Stehen `except` und `end` auf verschiedenen Zeilen, kommt das `raise;` in eine neue Zeile unter `except`, eine Stufe tiefer (die Stufe liest die Hilfe aus dem try-Rumpf davor, sonst zwei Leerzeichen bzw. ein Tab). Der Detektor meldet auf der Zeile des `except`; die Hilfe bedient nur die eindeutige Form: zwischen `except` und `end` steht nur Leerraum.",
+      "kennzeichnung": "eine bisher verschluckte Ausnahme läuft jetzt nach außen weiter – der Aufrufer muss sie behandeln; war das Verschlucken Absicht, ist das ein Eingriff",
+      "nichtAngeboten": [
+        "ein Kommentar oder eine Direktive steht im Block (ein Kommentar ist Absicht, etwa `// ignore errors`)",
+        "zwischen `except` und `end` steht etwas anderes als Leerraum: ein Handler (`on E: ... do`, auch der leere, das ist SCA159), eine Anweisung, ein einzelnes `;` (`except;`) oder ein `else`",
+        "die Zeile ist verschoben (kein `except` als Code auf der Zeile) oder trägt mehrere `except`"
+      ],
+      "beispielVorher": [
+        "  try",
+        "    Work;",
+        "  except",
+        "  end;"
+      ],
+      "beispielNachher": [
+        "  try",
+        "    Work;",
+        "  except",
+        "    raise;",
+        "  end;"
+      ],
+      "weitereBeispiele": [
+        {
+          "titel": "In einer Zeile",
+          "vorher": [
+            "  try Work except end;"
+          ],
+          "nachher": [
+            "  try Work except raise; end;"
+          ]
+        }
+      ],
+      "hinweis": "Die Hilfe macht den Fund still, indem sie die Ausnahme weiterreicht; ob stattdessen geloggt oder gezielt behandelt werden soll, entscheidet der Autor."
+    },
+    "EmptyOnHandler": {
+      "titel": "Leeren Ausnahme-Handler mit raise; versehen",
+      "was": "Ersetzt den leeren Rumpf eines `on E: T do`-Handlers durch `raise;`, die Ausnahme läuft dann weiter statt still verschluckt zu werden. Zwei Formen: `do ;` wird `do raise;`, `do begin end` wird `do begin raise; end` (begin und end auf eigenen Zeilen: `raise;` als eigene Zeile eine Stufe tiefer). Der Detektor bleibt unverändert und meldet auch Handler mit Kommentar; die Hilfe nicht.",
+      "kennzeichnung": "die Ausnahme wird nicht mehr verschluckt, sondern an den Aufrufer weitergereicht – Programmablauf und äußere Handler prüfen",
+      "nichtAngeboten": [
+        "Kommentar oder Direktive im Handler, davor oder dahinter auf der Zeile (ein Kommentar ist Absicht, auch wenn der Detektor ihn nicht sieht)",
+        "mehr als ein `on`-Handler auf der Zeile, oder die Zeile ist verschoben, der Rumpf nicht mehr leer oder der Typ ein anderer als in der Meldung",
+        "das `on` beginnt keinen Handler (davor weder `except` noch `;`), der Kopf steht nicht auf einer Zeile oder das `;` nicht auf der Zeile von `do`",
+        "der Typ ist EAbort (stilles Abbruchsignal der VCL)"
+      ],
+      "beispielVorher": [
+        "try",
+        "  DoStuff;",
+        "except",
+        "  on E: EDatabaseError do ;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "try",
+        "  DoStuff;",
+        "except",
+        "  on E: EDatabaseError do raise;",
+        "end;"
+      ],
+      "hinweis": "Die Hilfe macht den Fund nicht „richtig“, sie macht das Verschlucken sichtbar: ob der Aufrufer die Ausnahme erwartet oder ein Log/Recovery gebraucht wird, entscheidet der Mensch."
+    },
+    "EmptyBlock": {
+      "titel": "Leeres `with ... do begin end` durch den Aufruf ersetzen",
+      "was": "Ersetzt `with <Aufrufkette> do begin end` durch die Aufrufkette als Anweisung (`with X.Add(T) do begin end;` wird `X.Add(T);`). `begin` und `end` dürfen auf eigenen Zeilen stehen; der Fund steht auf der Zeile des `begin`. Der Aufruf wird wie vorher genau einmal ausgeführt. Bedeutungsgleich. Andere leere Blöcke (`begin end;` allein, `if C then begin end;`, `else begin end`, `while C do begin end;`) bekommen keine Hilfe.",
+      "nichtAngeboten": [
+        "der leere Block gehört nicht zu einem `with ... do` (if, else, while, for, allein stehendes begin..end): ob eine Anweisung fehlt oder der Zweig weg kann, entscheidet nur der Mensch",
+        "der Ausdruck ist kein Aufruf (`with Foo do begin end;`: als Anweisung bliebe ein Bezeichner), mehrere Objekte im `with` (`with A, B do`), der Kopf geht über mehrere Zeilen, oder die Form ist keine Kette `A.B(...).C(...)` (Index, `as`, Generics)",
+        "der Ausdruck könnte ein Typecast sein (`with TButton(Sender) do`, `with Foo(X) do`: `Name(X);` ist keine Anweisung)",
+        "ein Kommentar oder eine Direktive steht zwischen `with` und `end`, hinter dem `end` folgt etwas anderes als `;` oder ein Blockende, die Zeile ist verschoben oder trägt mehrere `begin`"
+      ],
+      "beispielVorher": [
+        "  with Items.Add(T) do begin end;"
+      ],
+      "beispielNachher": [
+        "  Items.Add(T);"
+      ]
+    },
+    "NoSonarMarker": {
+      "titel": "NOSONAR durch einen noinspection-All-Marker über der Zeile ersetzen",
+      "was": "Aus `X; // NOSONAR - Grund` wird eine eigene Zeile `// noinspection All` (mit dem Einzug der Zeile) über dem Code; der Rest des Kommentars bleibt hinter dem Code (`X; // Grund`). Ein führender `:` oder `-` hinter NOSONAR fällt weg, ohne Rest entfällt der Kommentar. Der Marker steht bewusst darüber: ein `noinspection` gilt für die folgende Zeile, und `All` zählt nur als ganze Artenliste – ein Grund dahinter machte ihn wirkungslos.",
+      "kennzeichnung": "der Marker unterdrückt jetzt alle Regeln der Zeile (bisher unterdrückte NOSONAR nichts); kritische Arten (HardcodedSecret, SQLInjection u. a.) bleiben sichtbar",
+      "nichtAngeboten": [
+        "der Kommentar steht auf einer eigenen Zeile (unklar, welche Zeile gemeint ist), NOSONAR ist nicht das erste Wort oder steht mehrfach da",
+        "der Rest hinter NOSONAR beginnt mit `noinspection`, oder direkt darüber steht schon `// noinspection All`",
+        "das `//` steht in einem Block-Kommentar, String oder mehrzeiligen String, die Zeile ist verschoben, oder die Meldung nennt keine Spalte"
+      ],
+      "beispielVorher": [
+        "  Dispose(P); // NOSONAR - we know about this"
+      ],
+      "beispielNachher": [
+        "  // noinspection All",
+        "  Dispose(P); // we know about this"
+      ],
+      "hinweis": "Findet SCA auf der Zeile nichts zu unterdrücken, meldet SCA165 den neuen Marker als wirkungslos; dann den Kommentar ganz löschen."
+    },
+    "TrailingCommaArgList": {
+      "titel": "Überzähliges Komma entfernen",
+      "was": "Löscht das Komma vor der schließenden Klammer einer Argumentliste samt dem Leerraum bis zur `)`: `Foo(A, B,)` wird `Foo(A, B)`. Der Detektor meldet die Spalte des Kommas; die Hilfe sucht rückwärts die öffnende Klammer.",
+      "nichtAngeboten": [
+        "vor dem Komma steht kein Argument (`Foo(,)`, `Foo(A,,)`): dort fehlt ein Element, das Komma ist nicht überzählig",
+        "das Komma beendet eine Liste in `[...]` (Set- oder Array-Literal), oder die öffnende Klammer ist nicht zu finden",
+        "die Zeile ist verschoben: an der Spalte steht kein Komma im Code, oder dahinter folgt etwas anderes als Leerraum und `)` (Kommentar, String)"
+      ],
+      "beispielVorher": [
+        "  WriteLn('A', 'B', );",
+        "  DoStuff(Param1, Param2,);"
+      ],
+      "beispielNachher": [
+        "  WriteLn('A', 'B');",
+        "  DoStuff(Param1, Param2);"
+      ],
+      "hinweis": "Bedeutungsgleich: das Komma trug nichts."
+    },
+    "GroupedDeclaration": {
+      "titel": "Gruppierte Deklaration in Einzelzeilen teilen",
+      "was": "Macht aus `A, B, C: Integer;` je Name eine Zeile (`A: Integer;`, `B: Integer;`, `C: Integer;`) mit der Einrückung der Ursprungszeile. Nur eine einzeilige Variablen- oder Felddeklaration mit einem einfachen Typnamen; steht `var` davor, trägt jede neue Zeile das `var` wieder.",
+      "nichtAngeboten": [
+        "der Typ ist kein einfacher Typname: `record`, `class`, `array of`, `array[..] of`, `set of`, Aufzählung, `^T`, `string[N]`, Generics (je Name entstünde ein eigener Typ, `A := B` ginge nicht mehr)",
+        "Initialisierer (`= 5`), `absolute`, Direktive hinter dem Typ, Kommentar, String oder Direktive auf der Zeile",
+        "mehrzeilige Deklaration, mehrere Gruppen auf der Zeile",
+        "etwas anderes als Leerraum oder ein einzelnes `var` vor den Namen (Attribut, `private`, `class var`, `threadvar`)",
+        "Parameterlisten und case-Marken; die Zeile ist verschoben, oder die Meldung nennt keine Spalte"
+      ],
+      "beispielVorher": [
+        "var",
+        "  A, B, C: Integer;"
+      ],
+      "beispielNachher": [
+        "var",
+        "  A: Integer;",
+        "  B: Integer;",
+        "  C: Integer;"
+      ],
+      "hinweis": "Der Detektor meldet auch Gruppen mit anonymem Typ; dort bleibt der Fund stehen."
+    },
+    "AttributeIgnoreWithoutReason": {
+      "titel": "Grund zu [Ignore] hinzufügen",
+      "was": "Macht aus `[Ignore]` oder `[Ignore()]` ein `[Ignore('reason')]`. Der Platzhalter `reason` ist danach durch den echten Grund (Ticket, Abhängigkeit, bekannte Einschränkung) zu ersetzen. Der Test wird mit und ohne Text gleich übersprungen; Schreibweise des Namens und Einrückung bleiben.",
+      "nichtAngeboten": [
+        "das Attribut steht in einer Gruppe (`[Ignore, Test]`) oder neben einem anderen Attribut auf derselben Zeile (`[Test][Ignore]`)",
+        "die Klammern haben schon einen Inhalt (`[Ignore('kaputt')]`, `[Ignore(X)]`), oder das Attribut läuft über mehrere Zeilen",
+        "hinter dem `]` oder im Attribut steht ein Kommentar oder Text; die Zeile ist verschoben, auskommentiert oder kein Attribut"
+      ],
+      "beispielVorher": [
+        "[Ignore]",
+        "procedure SomeTest;"
+      ],
+      "beispielNachher": [
+        "[Ignore('reason')]",
+        "procedure SomeTest;"
+      ],
+      "hinweis": "Der Platzhalter `reason` muss durch den echten Grund ersetzt werden."
+    },
+    "AttributeDuplicate": {
+      "titel": "Doppeltes Attribut entfernen",
+      "was": "Löscht die Dublette eines Attributs: steht sie allein auf ihrer Zeile, die ganze Zeile; steht sie mit weiteren Attributen auf einer Zeile (`[A][A]`), nur die letzte gleiche Gruppe samt Trennzeichen. Gleich heißt: derselbe Name (Groß-/Kleinschreibung egal) und genau dieselben Argumente. Bedeutungsgleich.",
+      "nichtAngeboten": [
+        "die Argumente unterscheiden sich (`[Category('a')]` und `[Category('b')]`) – der Detektor meldet sie ohnehin nicht",
+        "zwischen den Attributen oder dahinter steht Code, ein Kommentar oder eine Direktive",
+        "ein Ziel-Attribut (`[Result: …]`, `[assembly: …]`), ein Attribut über mehrere Zeilen oder mit einer Klammer im String",
+        "die Zeile ist verschoben, steht in einem Kommentar oder ist die letzte der Datei"
+      ],
+      "beispielVorher": [
+        "  public",
+        "    [Test]",
+        "    [Test]",
+        "    procedure Foo;"
+      ],
+      "beispielNachher": [
+        "  public",
+        "    [Test]",
+        "    procedure Foo;"
+      ]
+    },
+    "AttributeCategoryWithoutString": {
+      "titel": "Dem Attribut [Category] einen Kategorienamen geben",
+      "was": "Macht aus `[Category]` ein `[Category('category')]`. Der Platzhalter `category` macht den Code übersetzbar; den echten Namen der Kategorie setzt du selbst (die Hilfe kann ihn nicht kennen). Schreibweise und Leerzeichen vor dem `]` bleiben, ein Kommentar dahinter auch.",
+      "nichtAngeboten": [
+        "das Attribut hat schon ein Argument oder eine Liste (`[Category('x')]`, `[Category(Name)]`, `[Category()]`, `[Category, Test]`) - der Detektor meldet diese Formen nie, und eine Konstante könnte ein String sein",
+        "hinter dem `]` steht weiterer Code (`[Category][Test]`) oder eine Compiler-Direktive",
+        "vor dem Attribut steht kein Deklarationsende (`;`, `public`, `class`, ein anderes Attribut ...) - etwa ein Array-Index - oder eine Direktive liegt dazwischen",
+        "die Zeile ist verschoben, auskommentiert oder liegt in einem Kommentar"
+      ],
+      "beispielVorher": [
+        "    [Category]",
+        "    procedure Foo;"
+      ],
+      "beispielNachher": [
+        "    [Category('category')]",
+        "    procedure Foo;"
+      ],
+      "hinweis": "Der Platzhalter `category` ist bewusst kein TODO (SCA019); ersetze ihn durch den Namen deiner Kategorie, etwa `Slow`."
+    },
+    "GotoStatement": {
+      "titel": "goto durch Exit ersetzen",
+      "was": "Ersetzt das gemeldete `goto Marke` durch `Exit`, wenn die Marke die letzte Anweisung der Routine ist (`Marke:` steht unmittelbar vor dem end des Rumpfs). Dann führt der Sprung ans Routinenende, genau wie Exit; ein try..finally dazwischen läuft in beiden Fällen ab, Result einer Funktion bleibt unverändert. Die Marke selbst bleibt stehen.",
+      "nichtAngeboten": [
+        "die Marke ist nicht die letzte Anweisung der Routine (Code dahinter, Marke in einem inneren Block, Rücksprung)",
+        "mehr als ein goto auf der Zeile, die Marke steht nicht auf derselben Zeile, ein Kommentar steht im goto, oder die Zeile ist verschoben",
+        "keine Routine mit begin..end-Rumpf um die Zeile (Hauptblock, initialization, asm) oder unsichere Routinengrenzen",
+        "der Rumpf enthält eine Compiler-Direktive oder eine anonyme Methode",
+        "die Datei deklariert einen eigenen Bezeichner Exit"
+      ],
+      "beispielVorher": [
+        "label Fin;",
+        "begin",
+        "  if Failed then goto Fin;",
+        "  Work;",
+        "Fin:",
+        "end;"
+      ],
+      "beispielNachher": [
+        "label Fin;",
+        "begin",
+        "  if Failed then Exit;",
+        "  Work;",
+        "Fin:",
+        "end;"
+      ],
+      "hinweis": "Die Marke bleibt stehen. Springt kein weiteres goto mehr zu ihr, meldet Delphi sie als ungenutzte Marke (Hinweis/Warnung, kein Fehler); Marke und label-Eintrag können dann von Hand entfallen."
     }
   }
 }

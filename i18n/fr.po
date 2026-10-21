@@ -2583,3 +2583,222 @@ msgstr "la soustraction se poursuit avec un autre cast 32 bits (\"- Integer(c)\"
 
 msgid "the two casts differ (Cardinal or LongWord against Integer or LongInt) - NativeInt or NativeUInt would be a guess"
 msgstr "les deux casts diffèrent (Cardinal ou LongWord contre Integer ou LongInt) - NativeInt ou NativeUInt serait une supposition"
+
+msgid "Add \"raise;\" to the empty exception handler"
+msgstr "Ajouter \"raise;\" au gestionnaire d'exception vide"
+
+msgid "Add a category name to the attribute"
+msgstr "Donner un nom de catégorie à l'attribut"
+
+msgid "Add a reason to [Ignore]"
+msgstr "Ajouter une raison à [Ignore]"
+
+msgid "Add raise; to the empty except block"
+msgstr "Ajouter raise; au bloc except vide"
+
+msgid "EAbort is swallowed on purpose - \"raise;\" would show the abort"
+msgstr "EAbort est avalée volontairement - \"raise;\" ferait apparaître l'abandon"
+
+msgid "NOSONAR is not the first word of the comment"
+msgstr "NOSONAR n'est pas le premier mot du commentaire"
+
+msgid "Remove the duplicate attribute"
+msgstr "Supprimer l'attribut en double"
+
+msgid "Remove the trailing comma"
+msgstr "Supprimer la virgule superflue"
+
+msgid "Replace \"goto\" with Exit"
+msgstr "Remplacer « goto » par Exit"
+
+msgid "Replace NOSONAR with a \"noinspection All\" marker"
+msgstr "Remplacer NOSONAR par un marqueur \"noinspection All\""
+
+msgid "Replace the empty \"with ... do begin end\" by the call"
+msgstr "Remplacer le « with ... do begin end » vide par l'appel"
+
+msgid "Split the grouped declaration"
+msgstr "Scinder la déclaration groupée"
+
+msgid "a \"// noinspection All\" marker already stands above - delete the NOSONAR comment by hand"
+msgstr "un marqueur \"// noinspection All\" figure déjà au-dessus - supprimer le commentaire NOSONAR à la main"
+
+msgid "a compiler directive is in the way"
+msgstr "une directive de compilation gêne"
+
+msgid "attribute over several lines, or with brackets or comment signs inside"
+msgstr "attribut sur plusieurs lignes, ou avec des crochets ou des signes de commentaire à l'intérieur"
+
+msgid "attribute with a target (assembly:, Result:)"
+msgstr "attribut avec cible (assembly:, Result:)"
+
+msgid "code, a comment or a directive lies between the two attributes"
+msgstr "du code, un commentaire ou une directive se trouve entre les deux attributs"
+
+msgid "comment inside \"goto <label>\""
+msgstr "commentaire à l'intérieur de « goto <étiquette> »"
+
+msgid "comment inside the except block - a comment is intent, no help"
+msgstr "commentaire dans le bloc except - un commentaire est intentionnel, pas d'aide"
+
+msgid "comment or directive between \"with\" and \"end\""
+msgstr "commentaire ou directive entre « with » et « end »"
+
+msgid "comment or directive in or beside the handler - intent, no help"
+msgstr "commentaire ou directive dans ou à côté du gestionnaire - intention, pas d'aide"
+
+msgid "comment, string or directive on the line"
+msgstr "commentaire, chaîne ou directive sur la ligne"
+
+msgid "compiler directive in the routine - conditional code could move the label"
+msgstr "directive de compilation dans la routine - le code conditionnel pourrait déplacer l'étiquette"
+
+msgid "compiler directive on the lines of the except block"
+msgstr "directive de compilation sur les lignes du bloc except"
+
+msgid "inside a case statement - the names are labels, not variables"
+msgstr "dans une instruction case - les noms sont des étiquettes, pas des variables"
+
+msgid "inside a parameter list - the grouping is the style of the signature"
+msgstr "dans une liste de paramètres - le regroupement fait partie du style de la signature"
+
+msgid "label \"%s\" is not the last statement of the routine - \"Exit\" would skip the code after it"
+msgstr "l'étiquette « %s » n'est pas la dernière instruction de la routine - « Exit » sauterait le code qui la suit"
+
+msgid "more code follows the attribute on the line"
+msgstr "du code suit l'attribut sur la ligne"
+
+msgid "no \"NOSONAR\" comment at the reported place"
+msgstr "aucun commentaire \"NOSONAR\" à l'endroit signalé"
+
+msgid "no \"[Category]\" at the reported place"
+msgstr "aucun \"[Category]\" à l'endroit signalé"
+
+msgid "no \"[Ignore]\" attribute at the reported place"
+msgstr "aucun attribut \"[Ignore]\" à l'endroit signalé"
+
+msgid "no \"begin\" at the reported place"
+msgstr "aucun « begin » à l'endroit signalé"
+
+msgid "no \"except\" at the reported place"
+msgstr "aucun \"except\" à l'endroit signalé"
+
+msgid "no \"goto\" at the reported place"
+msgstr "aucun « goto » à l'endroit signalé"
+
+msgid "no argument before the comma - the list is missing an element, the comma is not extra"
+msgstr "aucun argument avant la virgule - il manque un élément dans la liste, la virgule n'est pas superflue"
+
+msgid "no duplicate attribute at the reported place"
+msgstr "aucun attribut en double à l'endroit signalé"
+
+msgid "no empty \"on ... do\" handler at the reported place"
+msgstr "aucun gestionnaire \"on ... do\" vide à l'endroit signalé"
+
+msgid "no end of a declaration before the attribute - not a safe attribute context"
+msgstr "aucune fin de déclaration avant l'attribut - contexte d'attribut non sûr"
+
+msgid "no grouped declaration at the reported place"
+msgstr "aucune déclaration groupée à l'endroit signalé"
+
+msgid "no routine with a begin..end body around the \"goto\""
+msgstr "aucune routine avec un corps begin..end autour du « goto »"
+
+msgid "no trailing comma before \")\" at the reported place"
+msgstr "aucune virgule superflue avant \")\" à l'endroit signalé"
+
+msgid "not a single-line declaration with a plain type name (anonymous or generic type, initializer, \"absolute\", directive, several groups or no \";\" on the line)"
+msgstr "pas de déclaration sur une seule ligne avec un nom de type simple (type anonyme ou générique, initialiseur, \"absolute\", directive, plusieurs groupes ou pas de \";\" sur la ligne)"
+
+msgid "several \"begin\" on the reported line"
+msgstr "plusieurs « begin » sur la ligne signalée"
+
+msgid "several \"on ... do\" handlers on this line - the finding could mean any of them"
+msgstr "plusieurs gestionnaires \"on ... do\" sur cette ligne - le constat pourrait viser n'importe lequel"
+
+msgid "several objects in the \"with\" - by hand"
+msgstr "plusieurs objets dans le « with » - à la main"
+
+msgid "something other than blanks and a single \"var\" stands before the names (attribute, visibility, \"class var\", \"threadvar\", another declaration)"
+msgstr "avant les noms se trouve autre chose que des espaces et un seul \"var\" (attribut, visibilité, \"class var\", \"threadvar\", une autre déclaration)"
+
+msgid "something other than blanks stands between \"except\" and \"end\" (handler, statement, \";\" or \"else\")"
+msgstr "entre \"except\" et \"end\" se trouve autre chose que des espaces (gestionnaire, instruction, \";\" ou \"else\")"
+
+msgid "text or a comment follows the attribute"
+msgstr "du texte ou un commentaire suit l'attribut"
+
+msgid "text or a comment follows the attribute or sits inside it"
+msgstr "du texte ou un commentaire suit l'attribut ou se trouve à l'intérieur"
+
+msgid "the \"goto\" is not of the form \"goto Label;\" on one line"
+msgstr "le « goto » n'a pas la forme « goto Étiquette; » sur une seule ligne"
+
+msgid "the \"on\" does not start a handler of an except block"
+msgstr "le \"on\" ne commence pas un gestionnaire d'un bloc except"
+
+msgid "the \"with\" expression could be a type cast - \"Name(X);\" would not be a statement"
+msgstr "l'expression du « with » pourrait être un cast de type - « Name(X); » n'est pas une instruction"
+
+msgid "the \"with\" expression is no call - nothing valid would remain as a statement"
+msgstr "l'expression du « with » n'est pas un appel - il ne resterait aucune instruction valide"
+
+msgid "the \"with\" expression is not a plain call chain \"A.B(...)\""
+msgstr "l'expression du « with » n'est pas une simple chaîne d'appels « A.B(...) »"
+
+msgid "the \"with\" header spans several lines"
+msgstr "l'en-tête du « with » s'étend sur plusieurs lignes"
+
+msgid "the attribute already has an argument or a list - not touched"
+msgstr "l'attribut a déjà un argument ou une liste - non modifié"
+
+msgid "the attribute is not \"[Ignore]\" or \"[Ignore()]\" alone on its line - it is in a group, behind another attribute or has an argument"
+msgstr "l'attribut n'est pas seul sur sa ligne sous la forme \"[Ignore]\" ou \"[Ignore()]\" - il est dans un groupe, derrière un autre attribut ou a un argument"
+
+msgid "the block is not empty"
+msgstr "le bloc n'est pas vide"
+
+msgid "the bounds of the routine around the \"goto\" are not safe to read"
+msgstr "les limites de la routine autour du « goto » ne sont pas lisibles de façon sûre"
+
+msgid "the comma ends a list inside \"[...]\" (set or array literal)"
+msgstr "la virgule termine une liste dans \"[...]\" (littéral d'ensemble ou de tableau)"
+
+msgid "the comment names NOSONAR more than once"
+msgstr "le commentaire mentionne NOSONAR plusieurs fois"
+
+msgid "the comment stands on a line of its own - which line the marker belongs to is unclear"
+msgstr "le commentaire occupe une ligne à part - la ligne visée par le marqueur n'est pas claire"
+
+msgid "the duplicate is on the last line of the file"
+msgstr "le doublon se trouve sur la dernière ligne du fichier"
+
+msgid "the empty block does not belong to a \"with ... do\" - delete it or fill it by hand"
+msgstr "le bloc vide n'appartient pas à un « with ... do » - à supprimer ou remplir à la main"
+
+msgid "the file declares its own \"Exit\" - it is not the procedure of the RTL"
+msgstr "le fichier déclare son propre « Exit » - ce n'est pas la procédure de la RTL"
+
+msgid "the handler head is not on one line, or the \";\" is not on the line of \"do\""
+msgstr "l'en-tête du gestionnaire n'est pas sur une seule ligne, ou le \";\" n'est pas sur la ligne de \"do\""
+
+msgid "the line has more than one \"goto\""
+msgstr "la ligne contient plus d'un « goto »"
+
+msgid "the message names neither the attribute nor its first line"
+msgstr "le message ne nomme ni l'attribut ni sa première ligne"
+
+msgid "the opening parenthesis was not found"
+msgstr "la parenthèse ouvrante est introuvable"
+
+msgid "the reported line carries several \"except\" - ambiguous"
+msgstr "la ligne signalée porte plusieurs \"except\" - ambigu"
+
+msgid "the routine contains an anonymous method - \"Exit\" would leave only that method if the \"goto\" sits in it"
+msgstr "la routine contient une méthode anonyme - « Exit » ne quitterait que cette méthode si le « goto » s'y trouve"
+
+msgid "the text after NOSONAR starts with \"noinspection\" - it would become a marker of its own"
+msgstr "le texte après NOSONAR commence par \"noinspection\" - il deviendrait un marqueur à part entière"
+
+msgid "unexpected code after the empty block"
+msgstr "code inattendu après le bloc vide"

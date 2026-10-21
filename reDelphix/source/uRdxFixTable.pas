@@ -142,7 +142,17 @@ uses
   uRdxForRangeFix,      // SCA046 (Hinweise R_FORRANGE_* dort)
   uRdxTabsFix,          // SCA061
   uRdxTrailingBlanksFix, // SCA063
-  uRdxKeywordCaseFix;   // SCA064
+  uRdxKeywordCaseFix,   // SCA064
+  uRdxEmptyExceptFix,   // SCA002
+  uRdxEmptyOnHandlerFix, // SCA159
+  uRdxEmptyBlockFix,    // SCA077
+  uRdxNoSonarFix,       // SCA065
+  uRdxTrailingCommaFix, // SCA068
+  uRdxGroupedDeclFix,   // SCA076
+  uRdxIgnoreReasonFix,  // SCA179
+  uRdxAttrDuplicateFix, // SCA180
+  uRdxCategoryArgFix,   // SCA181
+  uRdxGotoExitFix;      // SCA060
 
 const
   // Hinweise der Hilfen (deutsch wie die Gruende; Pruefstand und Tests
@@ -207,6 +217,30 @@ const
   R_BLANKS_HINT   = 'nur Leerraum am Zeilenende';
   R_LOWER_HINT    = 'gleiche Bedeutung - Delphi unterscheidet Gross- und '
     + 'Kleinschreibung nicht';
+  // Charge R (zehn weitere Hilfen, UNGEBAUT): SCA002, SCA159, SCA077, SCA065,
+  // SCA068, SCA076, SCA179, SCA180, SCA181, SCA060.
+  R_EMPTYEXCEPT_HINT = 'eine bisher verschluckte Ausnahme laeuft jetzt nach '
+    + 'aussen weiter - der Aufrufer muss sie behandeln; war das Verschlucken '
+    + 'Absicht, ist das ein Eingriff';
+  R_EMPTYONHANDLER_HINT = 'die Ausnahme wird nicht mehr verschluckt, sondern '
+    + 'an den Aufrufer weitergereicht - Programmablauf und aeussere Handler '
+    + 'pruefen';
+  R_EMPTYBLOCK_HINT = 'gleiche Bedeutung - der Aufruf bleibt als Anweisung und '
+    + 'laeuft wie vorher genau einmal; with-Kopf und leerer Block entfallen';
+  R_NOSONAR_HINT = 'der Marker steht jetzt ueber der Zeile und unterdrueckt '
+    + 'alle Regeln der Zeile (bisher unterdrueckte NOSONAR nichts); kritische '
+    + 'Arten (HardcodedSecret, SQLInjection u. a.) bleiben sichtbar';
+  R_COMMA_HINT = 'gleiche Bedeutung - nur das ueberzaehlige Komma entfaellt';
+  R_GROUPED_HINT = 'gleiche Bedeutung - jeder Name behaelt seinen Typ; bei '
+    + '"var" traegt jede neue Zeile das "var" wieder';
+  R_IGNORE_HINT = 'der Platzhalter "reason" ist durch den echten Grund zu '
+    + 'ersetzen (Ticket, Abhaengigkeit, bekannte Einschraenkung)';
+  R_ATTRDUP_HINT = 'das Attribut stand zweimal - es gilt ohnehin nur einmal';
+  R_CATARG_HINT = 'der Platzhalter "category" muss noch durch den echten '
+    + 'Kategorienamen ersetzt werden';
+  R_GOTO_EXIT_HINT = 'gleiche Bedeutung - die Marke steht am Routinenende; '
+    + 'sie bleibt stehen und wird, wenn kein goto mehr zu ihr springt, als '
+    + 'ungenutzte Marke gemeldet (Hinweis/Warnung)';
   R_FORM_UNREADABLE = 'Formdatei %s nicht lesbar (%s) - eine Ereignis-'
     + 'Bindung ist nicht auszuschliessen';
   // SCA147: Formdateien, die eine Methode per Name an ein Ereignis binden.
@@ -1011,7 +1045,7 @@ end;
 { ---- Die Tabelle ---- }
 
 const
-  FIX_ROW_HIGH = 49;
+  FIX_ROW_HIGH = 59;
 
   // Je Art eine Zeile; die Reihenfolge ist die der Chargen (Stufe 2a,
   // Stufe 2 Rest, uQuickFix-Umzug/Stufe 3, Zeilen, Ausnahmen, Deklarationen
@@ -1131,7 +1165,29 @@ const
     (Kind: fkTrailingWhitespace; Plan: PlanTrailingBlanks;
      Hint: R_BLANKS_HINT; HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkLowercaseKeyword; Plan: PlanLowercaseKeyword;
-     Hint: R_LOWER_HINT; HintByPlanner: False; Changes: False; Alt: nil)
+     Hint: R_LOWER_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    // Charge R: zehn weitere Hilfen (UNGEBAUT).
+    (Kind: fkEmptyExcept; Plan: PlanEmptyExcept;
+     Hint: R_EMPTYEXCEPT_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+    (Kind: fkEmptyOnHandler; Plan: PlanEmptyOnHandler;
+     Hint: R_EMPTYONHANDLER_HINT; HintByPlanner: False; Changes: True;
+     Alt: nil),
+    (Kind: fkEmptyBlock; Plan: PlanEmptyBlock;
+     Hint: R_EMPTYBLOCK_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkNoSonarMarker; Plan: PlanNoSonar;
+     Hint: R_NOSONAR_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+    (Kind: fkTrailingCommaArgList; Plan: PlanTrailingComma;
+     Hint: R_COMMA_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkGroupedDeclaration; Plan: PlanGroupedDeclaration;
+     Hint: R_GROUPED_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkAttributeIgnoreWithoutReason; Plan: PlanIgnoreReason;
+     Hint: R_IGNORE_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkAttributeDuplicate; Plan: PlanAttrDuplicate;
+     Hint: R_ATTRDUP_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkAttributeCategoryWithoutString; Plan: PlanCategoryArg;
+     Hint: R_CATARG_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkGotoStatement; Plan: PlanGotoExit;
+     Hint: R_GOTO_EXIT_HINT; HintByPlanner: False; Changes: False; Alt: nil)
   );
 
   // Menuetexte (msgids) unter dem Index der Zeile; '%s' = Name der Hilfe
@@ -1191,7 +1247,17 @@ const
     'Replace "to" with "downto"',
     'Replace the tabs in this line with spaces',
     'Remove the trailing whitespace',
-    'Write %s in lowercase'
+    'Write %s in lowercase',
+    'Add raise; to the empty except block',
+    'Add "raise;" to the empty exception handler',
+    'Replace the empty "with ... do begin end" by the call',
+    'Replace NOSONAR with a "noinspection All" marker',
+    'Remove the trailing comma',
+    'Split the grouped declaration',
+    'Add a reason to [Ignore]',
+    'Remove the duplicate attribute',
+    'Add a category name to the attribute',
+    'Replace "goto" with Exit'
   );
 
   // Menuetexte des zweiten Eintrags (Alt), '' ohne.
@@ -1206,7 +1272,8 @@ const
     'Remove the first duplicate inherited call',
     '', '',
     'Swap the loop bounds',
-    '', '', ''
+    '', '', '',
+    '', '', '', '', '', '', '', '', '', ''
   );
 
 var

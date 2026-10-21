@@ -35,7 +35,7 @@ const
       GoodEx   : 'try DoStuff except on E: Exception do LogError(E.Message); end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA003
     (
@@ -722,7 +722,7 @@ const
       GoodEx   : 'if Failed then Exit;' + #13#10 + '...';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA061
     (
@@ -778,7 +778,7 @@ const
       GoodEx   : '// noinspection - covered by integration test' + #13#10 + 'Dispose(P);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA066
     (
@@ -813,7 +813,7 @@ const
       GoodEx   : 'WriteLn(''A'', ''B'');' + #13#10 + 'DoStuff(Param1, Param2);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA069
     (
@@ -901,7 +901,7 @@ const
       GoodEx   : 'var A: Integer;' + #13#10 + '    B: Integer;' + #13#10 + '    C: Integer;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA077
     (
@@ -912,7 +912,7 @@ const
       GoodEx   : 'if Active then Activate;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA078
     (
@@ -1981,7 +1981,7 @@ const
         '    Logger.Error(E.Message);' + #13#10 + '    raise;' + #13#10 + '  end;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA160
     (
@@ -2250,7 +2250,7 @@ const
       GoodEx   : '[Ignore(''TBD ticket #1234 - flaky on CI'')]' + #13#10 + 'procedure SomeTest;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA180
     (
@@ -2261,7 +2261,7 @@ const
       GoodEx   : '[Test]' + #13#10 + 'procedure Foo;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA181
     (
@@ -2272,7 +2272,7 @@ const
       GoodEx   : '[Category(''Slow'')]' + #13#10 + 'procedure Foo;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA182
     (
