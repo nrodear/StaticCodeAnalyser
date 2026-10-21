@@ -151,6 +151,16 @@
         <DCCReference Include="source\uRdxTabsFix.pas"/>
         <DCCReference Include="source\uRdxTrailingBlanksFix.pas"/>
         <DCCReference Include="source\uRdxKeywordCaseFix.pas"/>
+        <DCCReference Include="source\uRdxEmptyExceptFix.pas"/>
+        <DCCReference Include="source\uRdxEmptyOnHandlerFix.pas"/>
+        <DCCReference Include="source\uRdxEmptyBlockFix.pas"/>
+        <DCCReference Include="source\uRdxNoSonarFix.pas"/>
+        <DCCReference Include="source\uRdxTrailingCommaFix.pas"/>
+        <DCCReference Include="source\uRdxGroupedDeclFix.pas"/>
+        <DCCReference Include="source\uRdxIgnoreReasonFix.pas"/>
+        <DCCReference Include="source\uRdxAttrDuplicateFix.pas"/>
+        <DCCReference Include="source\uRdxCategoryArgFix.pas"/>
+        <DCCReference Include="source\uRdxGotoExitFix.pas"/>
         <DCCReference Include="source\uRdxRecipeRunner.pas"/>
         <DCCReference Include="source\uRdxFixRunner.pas"/>
         <DCCReference Include="source\uRdxFixTable.pas"/>

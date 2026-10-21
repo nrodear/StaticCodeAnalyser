@@ -77,7 +77,11 @@ SRC_PROVIDER = os.path.join(RDX, 'source', 'uRdxProvider.pas')
 SRC_PLANNER_UNITS = tuple(os.path.join(RDX, 'source', n + '.pas') for n in (
     'uRdxHttpsFix', 'uRdxParensFix', 'uRdxAttrGapFix', 'uRdxTwiceInheritedFix',
     'uRdxNativeIntFix', 'uRdxEmptyFinallyFix', 'uRdxForRangeFix', 'uRdxTabsFix',
-    'uRdxTrailingBlanksFix', 'uRdxKeywordCaseFix'))
+    'uRdxTrailingBlanksFix', 'uRdxKeywordCaseFix',
+    'uRdxEmptyExceptFix', 'uRdxEmptyOnHandlerFix', 'uRdxEmptyBlockFix',
+    'uRdxNoSonarFix', 'uRdxTrailingCommaFix', 'uRdxGroupedDeclFix',
+    'uRdxIgnoreReasonFix', 'uRdxAttrDuplicateFix', 'uRdxCategoryArgFix',
+    'uRdxGotoExitFix'))
 CATALOG = os.path.join(REPO, 'rules', 'sca-rules.json')
 PO_FILES = (('de', os.path.join(REPO, 'i18n', 'de.po')),
             ('fr', os.path.join(REPO, 'i18n', 'fr.po')))
