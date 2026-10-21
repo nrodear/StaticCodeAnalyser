@@ -53,6 +53,7 @@ uses
   {$IFNDEF FPC}
   System.Generics.Collections,
   uAstNode, uMethodd12, uRuleCatalog, uAttributeCategoryWithoutString,
+  uRdxRecipeRunner,      // TRdxFixOutcome
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
   {$ENDIF}
   uSCAConsts, uRdxBufferMath, uRdxCodeMap, uRdxCategoryArgFix,

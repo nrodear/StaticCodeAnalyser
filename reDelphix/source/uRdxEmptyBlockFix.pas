@@ -201,7 +201,6 @@ begin
   T := AFirst;
   Segs := 0;
   Name := '';
-  HasArgs := False;
   repeat
     if not T.IsWord or InList(T.Low, NOT_NAME) then
       Exit(_(R_EBL_SHAPE));
