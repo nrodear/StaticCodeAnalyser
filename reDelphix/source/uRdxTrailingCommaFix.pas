@@ -110,9 +110,12 @@ class function TRdxTrailingCommaFix.DropComma(AMap: TRdxCodeMap;
   ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
-  L          : string;
-  Col, J     : Integer;
-  Comma, Prv : TRdxToken;
+  L        : string;
+  Col, J   : Integer;
+  PL, PC   : Integer;
+  Comma    : TRdxToken;
+  NoArg    : Boolean;
+  PrevChar : Char;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -138,8 +141,17 @@ begin
     Exit;
   end;
   Comma := TokenAt(AMap, ALine, Col);
-  Prv := Before(AMap, Comma);
-  if (Prv.Low = '') or (Prv.Low = '(') or (Prv.Low = ',') or (Prv.Low = '[') then
+  // Das letzte Zeichen aus Code ODER String vor dem Komma (PrevToken
+  // uebersaehe einen String: nach 'x', stuende dort das Komma davor). Das
+  // letzte Zeichen eines Strings ist ein Quote, nie '(' ',' oder '['.
+  NoArg := not LastCharBefore(AMap, Comma, PL, PC);
+  if not NoArg then
+  begin
+    PrevChar := AMap.Raw(PL)[PC];
+    NoArg := AMap.IsCode(PL, PC)
+      and ((PrevChar = '(') or (PrevChar = ',') or (PrevChar = '['));
+  end;
+  if NoArg then
   begin
     AReason := _(R_COMMA_NOARG);
     Exit;

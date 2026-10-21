@@ -27,6 +27,7 @@ type
     [Test] procedure Sca159_BeginEnd_SpanContract;
     [Test] procedure Sca159_OtherHandlersStay;
     [Test] procedure Sca159_Comment_NoHelp;
+    [Test] procedure Sca159_PreviousLineComment_NoHelp;
     [Test] procedure Sca159_Many_NoHelp;
     [Test] procedure Sca159_Moved_NoHelp;
     [Test] procedure Sca159_NotCode_NoHelp;
@@ -247,6 +248,17 @@ begin
     '    end;'], _(R_EOH_COMMENT));
   // Direktive im Handler.
   AssertNoFix(['    on E: EFoo do {$IFDEF X} ; {$ENDIF}'], _(R_EOH_COMMENT));
+end;
+
+procedure TTestRdxEmptyOnHandlerFix.Sca159_PreviousLineComment_NoHelp;
+var
+  Reason : string;
+begin
+  // Ein Kommentar in der Zeile DAVOR nennt meist die Absicht (der Detektor
+  // sieht ihn nicht): keine Hilfe. Der Handler steht dann in Zeile 10.
+  Assert.AreEqual('', FixAt(InExcept(['    // Abbruch gewollt',
+    '    on E: EFoo do ;']), HANDLER_LINE + 1, Msg('EFoo'), Reason));
+  Assert.AreEqual(_(R_EOH_COMMENT), Reason);
 end;
 
 procedure TTestRdxEmptyOnHandlerFix.Sca159_Many_NoHelp;

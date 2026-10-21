@@ -227,7 +227,8 @@ begin
 end;
 
 // Kommentar oder Direktive von 'on' bis zum Ende des Handlers, vor dem 'on'
-// auf seiner Zeile oder hinter dem Ende auf der Zeile?
+// auf seiner Zeile, in der Zeile DAVOR (ein Kommentar dort nennt meist die
+// Absicht) oder hinter dem Ende auf der Zeile?
 function CommentReason(AMap: TRdxCodeMap; const AHead: TOnHead;
   const ABody: TEmptyBody): string;
 var
@@ -241,6 +242,9 @@ begin
   if CommentInRange(AMap, Span)
      or DirectiveInLines(AMap, AHead.OnTok.Line, Last.Line)
      or AMap.HasComment(AHead.OnTok.Line, 1, AHead.OnTok.Col - 1)
+     or ((AHead.OnTok.Line > 1)
+       and AMap.HasComment(AHead.OnTok.Line - 1, 1,
+         Length(AMap.Raw(AHead.OnTok.Line - 1))))
      or AMap.HasComment(Last.Line, Last.EndCol, Length(AMap.Raw(Last.Line))) then
     Result := _(R_EOH_COMMENT);
 end;
