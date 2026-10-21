@@ -224,7 +224,9 @@ begin
   until not More;
   if not SameTok(T, ADo) then
     Exit(_(R_EBL_SHAPE));
-  if (T.Line <> AWith.Line) or (ALast.Line <> AWith.Line) then
+  // ALast ist nur bei einem Aufruf mit Klammern gesetzt (sonst Zeile 0).
+  if (T.Line <> AWith.Line)
+     or ((ALast.Line <> 0) and (ALast.Line <> AWith.Line)) then
     Exit(_(R_EBL_MULTILINE));
   if not HasArgs then
     Exit(_(R_EBL_NO_CALL));
