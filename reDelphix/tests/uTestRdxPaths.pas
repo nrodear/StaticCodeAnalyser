@@ -43,7 +43,7 @@ uses
   System.SysUtils, System.Classes,
   uRdxCodeMap, uRdxRoutineFixes, uRdxMagicFixes,
   uRdxPaths,
-  uTestRdxTextKit;   // Join, JoinWith, WriteText, RemoveTree
+  uTestRdxTextKit;   // Join, JoinWith, WriteText, NewTempDir, RemoveTree
 
 const
   DRIVE_C = 'C:';
@@ -96,13 +96,11 @@ type
     Root, Dir, U : string;
   end;
 
+// Root ist TEMP\rdx_b2s_<GUID>\ aus uTestRdxTextKit.NewTempDir (Review
+// Woche G05-24; bis dahin hier eine eigene Kopie der Schleife).
 function NewTree: TTree;
-var
-  G : TGUID;
 begin
-  CreateGUID(G);
-  Result.Root := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
-    + 'rdx_b2s_' + GUIDToString(G) + PathDelim;
+  Result.Root := NewTempDir('rdx_b2s_');
   Result.Dir := Result.Root + PathOf(['a', 'b', 'c', ''], PathDelim);
   Result.U := Result.Dir + 'u.pas';
   ForceDirectories(Result.Dir);

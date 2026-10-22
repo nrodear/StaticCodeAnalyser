@@ -68,10 +68,15 @@ type
     FClass   : TArray<string>;
     FSlash   : TArray<Integer>;   // je Zeile: Spalte des '//'-Kommentars, 0 = keiner
     FInside  : TArray<Boolean>;   // je Zeile: beginnt in Block-Kommentar oder mehrzeiligem String
-    // Zustand nur waehrend des Aufbaus (Create): die Zeile, ihre Klassen
-    // und was gerade offen ist.
+    // Je Zeile: '$' an der Spalte, an der aus Code heraus eine Direktive
+    // beginnt ('{$', '(*$'), sonst Leerzeichen; '' fuer eine Zeile ohne
+    // Direktive (DirectiveStartsAt).
+    FDirs    : TArray<string>;
+    // Zustand nur waehrend des Aufbaus (Create): die Zeile, ihre Klassen,
+    // ihre Direktiven-Anfaenge und was gerade offen ist.
     FText    : string;
     FKinds   : string;
+    FDirKinds: string;
     FInBrace : Boolean;
     FInParen : Boolean;
     FInStr   : Boolean;
@@ -83,6 +88,8 @@ type
     function StepCode(ALineIdx, j: Integer): Integer;
     // Zeilenanfang in einem mehrzeiligen String.
     function StepMultiLine: Integer;
+    // An Spalte j der Zeile FText oeffnet aus Code heraus eine Direktive.
+    procedure NoteDirective(j: Integer);
   public
     // Liest ALines einmal und klassifiziert jedes Zeichen; ALines bleibt im
     // Besitz des Aufrufers (s. LEBENSDAUER oben).
@@ -106,6 +113,13 @@ type
     // mehrzeiligen String beginnt, der in einer frueheren Zeile anfing.
     // Eine Zeile, die man davor einfuegt, laege dann ebenfalls darin.
     function StartsInside(ALine: Integer): Boolean;
+    // Beginnt an (ALine, ACol) aus Code heraus eine Compiler-Direktive -
+    // '{$' bzw. '(*$', die einen Block oeffnen? Nicht '{$' in einem
+    // Kommentar ('//', '{ .. }', '(* .. *)') oder String: dort ist es Text
+    // (Review Woche G05-14; bis dahin las DirectiveAt den Rohtext und hielt
+    // '(* {$IFDEF VER150} *)' fuer eine Direktive). Grundlage von
+    // DirectiveAt.
+    function DirectiveStartsAt(ALine, ACol: Integer): Boolean;
   end;
 
   // Ein Schritt einer Token-Suche der Planer: weiter, gefunden, abbrechen.
@@ -171,14 +185,19 @@ function SkipBlanks(const S: string; AFrom: Integer): Integer;
 // Zahl der Quotes ab S[AAt] in Folge.
 function QuoteRun(const S: string; AAt: Integer): Integer;
 
-// Das Token, das an (ALine, ACol) beginnt (Code vorausgesetzt).
+// Das Token, das an (ALine, ACol) beginnt (Code vorausgesetzt). Liegt ACol
+// ausserhalb der Zeile (Spalte aus einer Meldung, leere Zeile), "kein
+// Token" (Low = '', Line/Col wie gefragt) - bis Review Woche G05-13 las
+// TokenAt dort hinter den String (leere Zeile: AV im IDE-Hauptthread), und
+// jeder Planer trug den Guard 'Col > Length(L)' selbst.
 function TokenAt(AMap: TRdxCodeMap; ALine, ACol: Integer): TRdxToken;
 // Naechstes Code-Token ab (ALine, ACol) einschliesslich - ueber Leerraum,
 // Strings, Kommentare und Zeilen hinweg; Low = '' am Dateiende.
 function NextToken(AMap: TRdxCodeMap; ALine, ACol: Integer): TRdxToken;
 // Token unmittelbar nach ATok.
 function After(AMap: TRdxCodeMap; const ATok: TRdxToken): TRdxToken;
-// Das Token, das an (ALine, ACol) ENDET (Code, kein Leerraum).
+// Das Token, das an (ALine, ACol) ENDET (Code, kein Leerraum); ausserhalb
+// der Zeile "kein Token" wie bei TokenAt.
 function TokenEndingAt(AMap: TRdxCodeMap; ALine, ACol: Integer): TRdxToken;
 // Vorheriges Code-Token vor (ALine, ACol) ausschliesslich.
 function PrevToken(AMap: TRdxCodeMap; ALine, ACol: Integer): TRdxToken;
@@ -186,8 +205,12 @@ function PrevToken(AMap: TRdxCodeMap; ALine, ACol: Integer): TRdxToken;
 function Before(AMap: TRdxCodeMap; const ATok: TRdxToken): TRdxToken;
 
 // Beginnt an (ALine, ACol) eine Compiler-Direktive ('{$' oder '(*$')? Die
-// Code-Sicht fuehrt Direktiven als Kommentar ('k'); '{$' in einem
-// '//'-Kommentar ist keine (Gegen-Review SCA101, Nit 6).
+// Code-Sicht fuehrt Direktiven als Kommentar ('k'). Nur eine, die aus Code
+// heraus oeffnet (TRdxCodeMap.DirectiveStartsAt): '{$' in einem
+// '//'-Kommentar (Gegen-Review SCA101, Nit 6) und - seit Review Woche
+// G05-14 - in einem '{ .. }'- oder '(* .. *)'-Kommentar ist keine; ein
+// auskommentierter Block '(* {$IFDEF VER150} .. *)' sperrt so nichts mehr
+// und '(* {$I alt.inc} *)' liest niemand.
 function DirectiveAt(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
 // Beginnt zwischen (AFromLine, 1) und dem Token ATo eine Direktive? Bis
 // Dateiende, wenn ATo leer ist.
@@ -205,7 +228,8 @@ function DirectiveInLines(AMap: TRdxCodeMap; AFrom, ATo: Integer): Boolean;
 function DirectiveBetween(AMap: TRdxCodeMap; const APrev: TRdxToken;
   ALine, ACol: Integer): Boolean;
 // DirectiveAt nur an '{' bzw. '(' - fuer Durchsichten ueber jedes Zeichen
-// einer Datei (DirectiveAt kopiert je Aufruf). Bis Charge H3c in
+// einer Datei (bis Review Woche G05-14 kopierte DirectiveAt je Aufruf;
+// seitdem gleich, der Vorfilter bleibt billig). Bis Charge H3c in
 // uRdxRoutineFixes.
 function OpensDirective(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
 // Das Wort einer Direktive an (ALine, ACol): '{$IFDEF X}' -> 'ifdef'; AArg:
@@ -304,6 +328,15 @@ function MatchClose(AMap: TRdxCodeMap; const AOpen: TRdxToken;
 // Das Token hinter der schliessenden Klammer zu AOpen (MatchClose); Low =
 // '' ohne Klammer oder am Dateiende.
 function AfterClose(AMap: TRdxCodeMap; const AOpen: TRdxToken): TRdxToken;
+// Rueckwaerts ab AClose ('>' der Typparameter 'TFoo<A, B>') die passende
+// '<'; Low = '' ohne (auch, wenn AClose kein '>' ist). Gelesen werden nur
+// Token, die in einer Typparameterliste stehen koennen - Woerter und
+// '<', '>', ',', ';', ':', '.', '&' ('TGen<T: class; U: IFoo<T>>'); jedes
+// andere Token und der Dateianfang beenden die Suche ohne Treffer. Das
+// Gegenstueck zu MatchClose fuer '<'. Seit Review Woche G05-17 hier
+// (DeclaresAfter); dieselbe Regel steht als eigene Kopie in
+// uRdxResultFixes (DeclAt).
+function OpenAngleBefore(AMap: TRdxCodeMap; const AClose: TRdxToken): TRdxToken;
 // Klammertiefe eines Tokens: '(' und '[' +1, ')' und ']' -1, sonst 0 -
 // beide Klammerarten gemeinsam ('<' und '>' nicht: ob Vergleich oder
 // Typparameter, weiss erst der Aufrufer, s. MatchClose). Rueckwaerts
@@ -336,6 +369,14 @@ function OneTokenReason(ALine, ACount: Integer;
 // ALast; beide leer, wenn keines kommt. AHook (nil = keiner) sieht jedes
 // andere Token und kann mit einem Grund abbrechen - der ist dann das
 // Ergebnis, sonst ''.
+// GRENZE (Review Woche G05-16): das benannte OLE-Argument 'End := 1'
+// zaehlt die Bilanz noch als end (IsKeywordAfter, nicht IsKeywordAt). Die
+// Aufrufer fangen es am Token dahinter ab (uRdxBlocks.ReadBody: hinter dem
+// end fehlt ';'; uRdxLineFixes.EndsUnit: kein Punkt) - sicher, aber jeder
+// neue Aufrufer braucht diese Gegenprobe. Die Umstellung auf IsKeywordAt
+// bewegt Angebote und gepinnte Gruende anderer Planer
+// (uTestRdxCleanupScope.Sca053_EndAsIdentifier_NoHelp) - eine eigene,
+// per A/B gemessene Charge.
 function BlockEnd(AMap: TRdxCodeMap; const AFrom: TRdxToken;
   AHook: TRdxBlockHook; out AEnd, ALast: TRdxToken): string;
 
@@ -371,21 +412,31 @@ function RangeText(AMap: TRdxCodeMap; const ASpan: TRefactorSpan): string;
 // uRdxSimpleFixes.CommentOnRegionLines: ganze Zeilen); seit Charge B2S-a
 // auch fuer SCA020 (bis dahin als CommentBetween kopiert, Review R3-05).
 function CommentInRange(AMap: TRdxCodeMap; const ASpan: TRefactorSpan): Boolean;
-// Das letzte Zeichen aus Code oder String vor ATok (Kommentare und
-// Leerraum uebersprungen) in ALine/ACol. False am Dateianfang.
+// Das letzte Zeichen aus Code oder String vor ATok (Kommentare,
+// Direktiven und Leerraum uebersprungen - die Code-Sicht fuehrt beide als
+// 'k') in ALine/ACol. False am Dateianfang.
 function LastCharBefore(AMap: TRdxCodeMap; const ATok: TRdxToken;
   out ALine, ACol: Integer): Boolean;
 // Das erste Zeichen aus Code oder String hinter ATok - Gegenstueck zu
-// LastCharBefore. False am Dateiende.
+// LastCharBefore (Direktiven ebenso uebersprungen). False am Dateiende.
 function FirstCharAfter(AMap: TRdxCodeMap; const ATok: TRdxToken;
   out ALine, ACol: Integer): Boolean;
-// Hinter (ALine, ACol) auf der Zeile nur Leerraum oder Kommentar?
+// Hinter (ALine, ACol) auf der Zeile nur Leerraum, Kommentar ODER
+// DIREKTIVE (Klasse 'k')? Eine Direktive dort laesst TailIsComment True
+// liefern - wer eine Zeile anhaengt und dabei nicht in einen
+// $IFDEF-Bereich geraten darf, fragt TailIsQuiet (Review Woche G05-12).
 function TailIsComment(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
-// Darf hinter Zeile ALine eine Zeile hinein? Hinter ACol nur Leerraum oder
-// Kommentar (TailIsComment), und die Folgezeile beginnt nicht in einem
-// Kommentar oder mehrzeiligen String (die neue Zeile laege darin). Seit
-// Charge H4c auch fuer uRdxTryFixes (dort bis dahin als Kopie
-// LineEndsAfter).
+// Hinter (ALine, ACol) auf der Zeile nur Leerraum oder Kommentar - eine
+// Direktive zaehlt hier wie Code (False). Die strikte Fassung von
+// TailIsComment (Review Woche G05-12; uRdxResultFixes.QuietAfter fragt
+// dasselbe als eigene Kopie, dort zaehlt ein String nicht als Code).
+function TailIsQuiet(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
+// Darf hinter Zeile ALine eine Zeile hinein? Hinter ACol nur Leerraum,
+// Kommentar oder Direktive (TailIsComment - eine Direktive pruefen die
+// Planer selbst, etwa uRdxStructFixes ueber DirectiveInRange), und die
+// Folgezeile beginnt nicht in einem Kommentar oder mehrzeiligen String
+// (die neue Zeile laege darin). Seit Charge H4c auch fuer uRdxTryFixes
+// (dort bis dahin als Kopie LineEndsAfter).
 function CanAppendLine(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
 
 // ---- Fragen an die ganze Datei (bis Charge B2S-a in uRdxSimpleFixes -
@@ -393,8 +444,11 @@ function CanAppendLine(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
 // NextTokenOnLineWith ein; Review R3-07) ----
 
 // Das letzte Glied des Namens hinter ATok als TOKEN ('procedure TFoo.Bar'
-// an 'procedure' -> 'Bar'); Low = '' ohne. Anders als
-// uRdxRaiseFixes.HeaderNameText (der ganze Name als Text).
+// an 'procedure' -> 'Bar'); Low = '' ohne. Typparameter eines Glieds
+// zaehlen nicht ('procedure TList<T>.Format' -> 'Format', 'function
+// Make<T>(..)' -> 'Make'; bis Review Woche G05-17 endete die Kette am '<'
+// und lieferte 'TList'). Anders als uRdxRaiseFixes.HeaderNameText (der
+// ganze Name als Text).
 function NameAfter(AMap: TRdxCodeMap; const ATok: TRdxToken): TRdxToken;
 // Nennt S das Wort ALow (klein geschrieben) - Gross/klein egal, als ganzes
 // Wort, ohne Kopie von S (s. Rumpf)? '' nie.
@@ -416,8 +470,9 @@ function NextTokenOnLineWith(AMap: TRdxCodeMap; const ATok: TRdxToken;
 // (HasWordNoCase, auch in Kommentar oder String); 0 ohne.
 function LastLineWith(AMap: TRdxCodeMap; const ALow: string): Integer;
 // Steht im Code der Datei eines der Woerter AKeywords (klein), gefolgt vom
-// Namen AName (letztes Glied: 'procedure TFoo.Bar' zaehlt fuer 'Bar')?
-// Gross/klein egal; ein leerer Name ist nie deklariert.
+// Namen AName (letztes Glied: 'procedure TFoo.Bar' zaehlt fuer 'Bar', seit
+// Review Woche G05-17 auch 'procedure TFoo<T>.Bar')? Gross/klein egal; ein
+// leerer Name ist nie deklariert.
 function DeclaresAfter(AMap: TRdxCodeMap; const AKeywords: array of string;
   const AName: string): Boolean;
 // Deklariert die Datei eine Routine AName ('procedure AName' bzw.
@@ -462,6 +517,11 @@ const
   INTENT_MARKERS: array[0..2] of string = ('todo', 'fixme', 'hack');
   MARKER_XXX      = 'XXX';
   MARKER_SUPPRESS = 'noinspection';
+  // Was ausser Woertern in einer Typparameterliste steht ('TFoo<A, B>',
+  // 'TGen<T: class; U: IFoo<T>>', '&Name') - OpenAngleBefore liest
+  // rueckwaerts nur diese Token (wie uRdxResultFixes.TYPE_PARAM_TOKENS).
+  TYPE_PARAM_TOKENS: array[0..6] of string = ('<', '>', ',', ';', ':', '.',
+    '&');
 
 // Zeichen > #127 wie der Core (uRefactorInfoBuilder) und uRdxRecipes:
 // Bezeichner mit Umlaut sind in Delphi erlaubt - sonst lehnten die Planer
@@ -507,6 +567,7 @@ begin
   SetLength(FClass, ALines.Count);
   SetLength(FSlash, ALines.Count);
   SetLength(FInside, ALines.Count);
+  SetLength(FDirs, ALines.Count);
   FInBrace := False;
   FInParen := False;
   FMulti   := 0;
@@ -516,6 +577,7 @@ begin
     FText  := ALines[i];
     FKinds := '';
     SetLength(FKinds, Length(FText));
+    FDirKinds := '';
     FInStr := False;
     j := 1;
     if FMulti > 0 then
@@ -528,9 +590,18 @@ begin
       else
         j := StepCode(i, j);
     FClass[i] := FKinds;
+    FDirs[i] := FDirKinds;
   end;
   FText  := '';
   FKinds := '';
+  FDirKinds := '';
+end;
+
+procedure TRdxCodeMap.NoteDirective(j: Integer);
+begin
+  if FDirKinds = '' then
+    FDirKinds := StringOfChar(' ', Length(FText));
+  FDirKinds[j] := '$';
 end;
 
 function TRdxCodeMap.StepComment(j: Integer): Integer;
@@ -621,6 +692,8 @@ begin
   begin
     FKinds[j] := 'k';
     FInBrace := True;
+    if (j < n) and (FText[j + 1] = '$') then
+      NoteDirective(j);
   end
   else if (FText[j] = '(') and (j < n) and (FText[j + 1] = '*') then
   begin
@@ -628,6 +701,8 @@ begin
     FKinds[j + 1] := 'k';
     FInParen := True;
     Result := j + 2;
+    if (j + 2 <= n) and (FText[j + 2] = '$') then
+      NoteDirective(j);
   end
   else
     FKinds[j] := 'c';
@@ -690,6 +765,15 @@ begin
   Result := (ALine >= 1) and (ALine <= Length(FInside)) and FInside[ALine - 1];
 end;
 
+// Ohne Kopie der Zeile: Durchsichten fragen jedes Zeichen einer Datei.
+function TRdxCodeMap.DirectiveStartsAt(ALine, ACol: Integer): Boolean;
+begin
+  Result := False;
+  if (ALine < 1) or (ALine > Length(FDirs)) then Exit;
+  Result := (ACol >= 1) and (ACol <= Length(FDirs[ALine - 1]))
+    and (FDirs[ALine - 1][ACol] = '$');
+end;
+
 { TRdxToken }
 
 function TRdxToken.IsWord: Boolean;
@@ -714,6 +798,8 @@ begin
   Result.Line := ALine;
   Result.Col  := ACol;
   L := AMap.Raw(ALine);
+  if (ACol < 1) or (ACol > Length(L)) then
+    Exit;   // ausserhalb der Zeile: kein Token (s. Interface)
   if IsIdentStart(L[ACol]) then
   begin
     j := ACol;
@@ -770,6 +856,13 @@ var
   S : Integer;
 begin
   L := AMap.Raw(ALine);
+  if (ACol < 1) or (ACol > Length(L)) then
+  begin
+    Result := Default(TRdxToken);
+    Result.Line := ALine;
+    Result.Col := ACol;
+    Exit;   // ausserhalb der Zeile: kein Token (wie TokenAt)
+  end;
   if IsIdentChar(L[ACol]) then
   begin
     S := ACol;
@@ -814,16 +907,12 @@ begin
   Result := PrevToken(AMap, ATok.Line, ATok.Col);
 end;
 
+// Die Code-Sicht merkt sich beim Aufbau, wo aus Code heraus '{$' bzw.
+// '(*$' einen Block oeffnet - innerhalb eines Kommentars (auch '//') oder
+// Strings sieht StepCode das Zeichen nie.
 function DirectiveAt(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
-var
-  L     : string;
-  Slash : Integer;
 begin
-  L := AMap.Raw(ALine);
-  Slash := AMap.LineCommentCol(ALine);
-  Result := (AMap.ClassAt(ALine, ACol) = 'k')
-    and ((Slash = 0) or (ACol < Slash))
-    and ((Copy(L, ACol, 2) = '{$') or (Copy(L, ACol, 3) = '(*$'));
+  Result := AMap.DirectiveStartsAt(ALine, ACol);
 end;
 
 function DirectiveBefore(AMap: TRdxCodeMap; AFromLine: Integer;
@@ -1146,6 +1235,29 @@ begin
     Result := After(AMap, Close);
 end;
 
+function OpenAngleBefore(AMap: TRdxCodeMap; const AClose: TRdxToken): TRdxToken;
+var
+  T     : TRdxToken;
+  Depth : Integer;
+begin
+  Result := Default(TRdxToken);
+  if AClose.Low <> '>' then Exit;
+  T := AClose;
+  Depth := 0;
+  while T.IsWord or InList(T.Low, TYPE_PARAM_TOKENS) do
+  begin
+    if T.Low = '>' then
+      Inc(Depth)
+    else if T.Low = '<' then
+    begin
+      Dec(Depth);
+      if Depth = 0 then
+        Exit(T);
+    end;
+    T := Before(AMap, T);
+  end;
+end;
+
 function ParenDelta(const T: TRdxToken): Integer;
 begin
   Result := 0;
@@ -1340,8 +1452,8 @@ begin
   end;
 end;
 
-// Das letzte Zeichen aus Code oder String vor ATok (Kommentare und
-// Leerraum uebersprungen) - bei SCA168 endet dort der letzte Arm. Der
+// Das letzte Zeichen aus Code oder String vor ATok (Kommentare, Direktiven
+// und Leerraum uebersprungen) - bei SCA168 endet dort der letzte Arm. Der
 // Token-Leser genuegt nicht: er sieht Strings nicht ('1: S := ''x'''
 // endet auf dem Quote, nicht auf ':='). False am Dateianfang.
 function LastCharBefore(AMap: TRdxCodeMap; const ATok: TRdxToken;
@@ -1370,8 +1482,8 @@ begin
   end;
 end;
 
-// Das erste Zeichen aus Code oder String hinter ATok (Kommentare und
-// Leerraum uebersprungen) - Gegenstueck zu LastCharBefore.
+// Das erste Zeichen aus Code oder String hinter ATok (Kommentare,
+// Direktiven und Leerraum uebersprungen) - Gegenstueck zu LastCharBefore.
 function FirstCharAfter(AMap: TRdxCodeMap; const ATok: TRdxToken;
   out ALine, ACol: Integer): Boolean;
 var
@@ -1398,7 +1510,8 @@ begin
   end;
 end;
 
-// Hinter (ALine, ACol) auf der Zeile nur Leerraum oder Kommentar?
+// Hinter (ALine, ACol) auf der Zeile nur Leerraum, Kommentar oder
+// Direktive (alles mit Klasse 'k')?
 function TailIsComment(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
 var
   L  : string;
@@ -1411,6 +1524,19 @@ begin
       Exit(False);
 end;
 
+function TailIsQuiet(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
+var
+  L  : string;
+  Co : Integer;
+begin
+  Result := True;
+  L := AMap.Raw(ALine);
+  for Co := ACol + 1 to Length(L) do
+    if OpensDirective(AMap, ALine, Co)
+       or ((AMap.ClassAt(ALine, Co) <> 'k') and not IsBlank(L[Co])) then
+      Exit(False);
+end;
+
 function CanAppendLine(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
 begin
   Result := TailIsComment(AMap, ALine, ACol)
@@ -1420,12 +1546,23 @@ end;
 { ---- Fragen an die ganze Datei (bis Charge B2S-a in uRdxSimpleFixes,
   Review R3-07): Vorfilter (Review R3-03) und Deklarationen ---- }
 
-// Das letzte Segment des Namens hinter ATok ('TFoo.Assert' -> 'Assert').
+// Das letzte Segment des Namens hinter ATok ('TFoo.Assert' -> 'Assert');
+// hinter einem Wort werden seine Typparameter '<..>' uebersprungen
+// (MatchClose), bevor der '.' zum naechsten Glied kommt.
 function NameAfter(AMap: TRdxCodeMap; const ATok: TRdxToken): TRdxToken;
+var
+  N : TRdxToken;
 begin
   Result := After(AMap, ATok);
-  while (Result.Low <> '') and (After(AMap, Result).Low = '.') do
-    Result := After(AMap, After(AMap, Result));
+  while Result.Low <> '' do
+  begin
+    N := After(AMap, Result);
+    if Result.IsWord and (N.Low = '<') then
+      N := AfterClose(AMap, N);
+    if N.Low <> '.' then
+      Exit;
+    Result := After(AMap, N);
+  end;
 end;
 
 // Steht der Treffer S[AAt..AAt + Length(ALow) - 1] frei: kein
@@ -1549,9 +1686,13 @@ end;
 // einer Zeile, die ihn nennt (NextTokenOnLineWith), rueckwaerts ueber die
 // Kette ('TFoo.') zum Wort davor - die Umkehrung von NameAfter, die
 // NameAfter danach bestaetigt. Dasselbe Ergebnis wie der Lauf ueber jedes
-// Token bis Charge FC: NameAfter(K) = N heisst K R1 . R2 . ... . N, und
-// von N fuehren die '.' rueckwaerts genau zu K (K ist ein Schluesselwort,
-// kein '.'). Ein leerer Name ist nie deklariert.
+// Token bis Charge FC: NameAfter(K) = N heisst K R1 . R2 . ... . N (jedes
+// Ri mit oder ohne Typparameter '<..>'), und von N fuehren die '.' - ueber
+// die '<..>' rueckwaerts mit OpenAngleBefore - genau zu K (K ist ein
+// Schluesselwort, kein '.'). Bis Review Woche G05-17 endeten beide Wege am
+// '<': 'procedure TFoo<T>.Check' galt nicht als Deklaration von Check, und
+// eine Hilfe, die damit die RTL-Routine Check vermutete, war falsch. Ein
+// leerer Name ist nie deklariert.
 function DeclaresAfter(AMap: TRdxCodeMap; const AKeywords: array of string;
   const AName: string): Boolean;
 var
@@ -1567,7 +1708,12 @@ begin
     begin
       K := Before(AMap, T);
       while K.Low = '.' do
-        K := Before(AMap, Before(AMap, K));
+      begin
+        K := Before(AMap, K);   // das Glied vor dem '.' - oder seine '>'
+        if K.Low = '>' then
+          K := Before(AMap, OpenAngleBefore(AMap, K));
+        K := Before(AMap, K);
+      end;
       if InList(K.Low, AKeywords) and (NameAfter(AMap, K).Low = NameLow) then
         Exit(True);
     end;

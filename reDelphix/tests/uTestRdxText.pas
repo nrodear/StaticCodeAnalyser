@@ -3,7 +3,8 @@ unit uTestRdxText;
 // Die Sprache der reDelphix-Texte (uRdxText, Entscheid E29, Charge C0):
 // Override, die drei Quellen (redelphix.ini, Sprache der SCA, analyser.ini),
 // Kommentarzeilen, die Vorlage beim ersten Zugriff, neues Lesen nur bei
-// neuer Dateizeit, ein nicht anlegbarer Ordner ohne Ausnahme. Ohne Parser -
+// neuer Dateizeit, ein nicht anlegbarer Ordner ohne Ausnahme und mit EINEM
+// Versuch, eine zu grosse ini, der Override 'auto'. Ohne Parser -
 // laeuft in reDelphix.Test (echte uLocalization, eingebettete .po) UND im
 // FPC-Pruefstand (Stub uLocalization, die echten i18n/*.po neben dem
 // Runner): dieselben Erwartungen pinnen so auch NormalizeLangCode des
@@ -35,6 +36,9 @@ type
     [Test] procedure Ini_FixedLanguage_BeatsSca;
     [Test] procedure Ini_ReadAgainOnlyOnNewFileTime;
     [Test] procedure Ini_FolderNotCreatable_NoException;
+    // Review Woche G05-26.
+    [Test] procedure Ini_TooLarge_CountsAsMissing;
+    [Test] procedure Override_Auto_FollowsSca;
   end;
 
 implementation
@@ -381,18 +385,68 @@ end;
 procedure TTestRdxText.Ini_FolderNotCreatable_NoException;
 // Ein Ordner, der sich nicht anlegen laesst (eine DATEI steht im Weg):
 // keine Ausnahme, keine Datei, die Vorgabe auto - und der zweite Aufruf
-// versucht es nicht erneut.
+// versucht es nicht erneut (GTemplateTried: je Verzeichnis EIN Versuch).
+// Beobachtet seit Review Woche G05-26: ist der Blocker weg, legt der zweite
+// Aufruf trotzdem nichts an; erst SetRdxConfigDir erlaubt den neuen
+// Versuch. Ohne die Sperre legte schon der zweite Aufruf die Vorlage an.
+var
+  Scope : TIniScope;
+  Dir   : string;
+begin
+  Scope := EnterIni('');
+  try
+    ForceDirectories(Scope.Dir);
+    WriteUtf8(Scope.Dir + 'blocker', 'Datei statt Ordner');
+    Dir := Scope.Dir + 'blocker' + PathDelim + 'sub' + PathDelim;
+    SetRdxConfigDir(Dir);
+    Assert.AreEqual('en', RdxLanguage, 'Vorgabe auto, keine Ausnahme');
+    Assert.IsFalse(FileExists(RdxIniPath), 'keine Datei');
+    Assert.IsTrue(DeleteFile(Scope.Dir + 'blocker'), 'Vorbedingung: Blocker weg');
+    Assert.AreEqual('en', RdxLanguage, 'zweiter Aufruf ebenso');
+    Assert.IsFalse(FileExists(RdxIniPath),
+      'der Versuch ist verbraucht - kein zweiter Plattenzugriff');
+    SetRdxConfigDir(Dir);
+    Assert.AreEqual('en', RdxLanguage);
+    Assert.IsTrue(FileExists(RdxIniPath),
+      'SetRdxConfigDir erlaubt einen neuen Versuch');
+  finally
+    LeaveIni(Scope);
+  end;
+end;
+
+procedure TTestRdxText.Ini_TooLarge_CountsAsMissing;
+// Eine redelphix.ini ueber MAX_INI_BYTES (1 MB) gilt als fehlend - ihr
+// Wert zaehlt nicht, die Vorgabe auto entscheidet (hier Englisch); die
+// Datei bleibt, wie sie ist (Review Woche G05-26).
 var
   Scope : TIniScope;
 begin
   Scope := EnterIni('');
   try
     ForceDirectories(Scope.Dir);
-    WriteUtf8(Scope.Dir + 'blocker', 'Datei statt Ordner');
-    SetRdxConfigDir(Scope.Dir + 'blocker' + PathDelim + 'sub' + PathDelim);
-    Assert.AreEqual('en', RdxLanguage, 'Vorgabe auto, keine Ausnahme');
-    Assert.IsFalse(FileExists(RdxIniPath), 'keine Datei');
-    Assert.AreEqual('en', RdxLanguage, 'zweiter Aufruf ebenso');
+    WriteUtf8(RdxIniPath, '[UI]'#13#10'Language=fr'#13#10';'
+      + StringOfChar('x', 1024 * 1024) + #13#10);
+    Assert.AreEqual('en', RdxLanguage, 'zu gross: wie fehlend');
+    Assert.IsTrue(FileExists(RdxIniPath), 'nicht ersetzt');
+  finally
+    LeaveIni(Scope);
+  end;
+end;
+
+procedure TTestRdxText.Override_Auto_FollowsSca;
+// Der Override 'auto' (Kopf: "'de', 'en', 'auto' ...") ersetzt den Wert der
+// ini wie jeder andere: die Sprache der SCA gilt, redelphix.ini wird weder
+// gelesen noch angelegt (Review Woche G05-26).
+var
+  Scope : TIniScope;
+begin
+  Scope := EnterIni('fr');
+  try
+    SetRdxLanguageOverride('auto');
+    Assert.AreEqual('fr', RdxLanguage, 'auto: die Sprache der SCA');
+    SetLanguage('');
+    Assert.AreEqual('en', RdxLanguage, 'SCA ohne Sprache, keine analyser.ini');
+    Assert.IsFalse(DirectoryExists(Scope.Dir), 'keine Vorlage angelegt');
   finally
     LeaveIni(Scope);
   end;

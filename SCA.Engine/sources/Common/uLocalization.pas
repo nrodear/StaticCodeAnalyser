@@ -66,6 +66,14 @@ function _(const FormatStr: string; const Args: array of const): string; overloa
 procedure SetLanguage(const Lang: string);
 
 // Liefert die zuletzt gesetzte Sprache unveraendert zurueck (oder '').
+// OHNE Sperre (anders als die Tabellen, s. TranslateTo): GCurrentLang ist
+// ein String, sein Schreiben in SetLanguage nicht atomar. Das traegt,
+// solange SetLanguage nicht parallel zu einem Leser laeuft: gesetzt wird
+// im Hauptthread (IDE-Optionen, Analyser-Fenster, Hauptfenster der
+// Anwendung), und
+// reDelphix (uRdxText.RdxLanguage) liest im Hauptthread (Review Woche
+// G05-02). Ein Leser in einem Hintergrund-Thread braucht vorher eine
+// Sperre um GCurrentLang.
 function CurrentLanguage: string;
 
 // Uebersetzt S in die Sprache ALang, OHNE die aktive Sprache anzufassen:
