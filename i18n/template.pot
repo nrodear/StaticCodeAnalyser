@@ -63,6 +63,10 @@ msgstr ""
 msgid "\"%s\" already occurs in line %d - the new name would clash with it or hide it"
 msgstr ""
 
+#: reDelphix/source/uRdxObjectListFix.pas:658
+msgid "\"%s\" also appears in the declaration part of the routine (line %d) - a nested routine or a second declaration"
+msgstr ""
+
 #: reDelphix/source/uRdxThreadResumeFix.pas:366
 #: reDelphix/source/uRdxThreadResumeFix.pas:413
 msgid "\"%s\" between Create(True) and Resume - Resume could run more than once or for another thread"
@@ -84,6 +88,29 @@ msgstr ""
 msgid "\"%s\" is a built-in profile."
 msgstr ""
 
+#: reDelphix/source/uRdxObjectListFix.pas:719
+msgid "\"%s\" is a parameter of the routine - the list comes from the caller"
+msgstr ""
+
+#: reDelphix/source/uRdxObjectListFix.pas:742
+msgid "\"%s\" is assigned %d times in the routine - the help needs exactly one \"TList<%s>.Create\""
+msgstr ""
+
+#: reDelphix/source/uRdxObjectListFix.pas:660
+#: reDelphix/source/uRdxObjectListFix.pas:681
+msgid "\"%s\" is declared more than once in the routine"
+msgstr ""
+
+#: reDelphix/source/uRdxObjectListFix.pas:664
+#: reDelphix/source/uRdxObjectListFix.pas:684
+msgid "\"%s\" is declared together with other variables - their type would change too"
+msgstr ""
+
+#: reDelphix/source/uRdxObjectListFix.pas:662
+#: reDelphix/source/uRdxObjectListFix.pas:740
+msgid "\"%s\" is not a local variable of the routine - a field or global list can be filled or freed elsewhere"
+msgstr ""
+
 #: reDelphix/source/uRdxMethodNameFix.pas:278
 msgid "\"%s\" is not declared in the body of a class of this file (free routine, record, interface, or the class sits in an include)"
 msgstr ""
@@ -102,6 +129,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxFloatEqualityFix.pas:446
 msgid "\"%s\" is part of a larger expression (\"%s\" before it) - only a whole condition or assignment is rewritten"
+msgstr ""
+
+#: reDelphix/source/uRdxObjectListFix.pas:533
+msgid "\"%s\" is used as a value on line %d (passed, assigned or returned) - the list or its items may get another owner"
 msgstr ""
 
 #: reDelphix/source/uRdxExceptionNameFix.pas:430
@@ -131,6 +162,10 @@ msgstr ""
 
 #: SCA.SharedUI/sources/uProfileViewer.pas:805
 msgid "\"%s\" was not imported: %s"
+msgstr ""
+
+#: reDelphix/source/uRdxObjectListFix.pas:512
+msgid "\"%s.%s\" (line %d) is not checked by the help - it could hand out or free items"
 msgstr ""
 
 #: reDelphix/source/uRdxAssertSideEffectFix.pas:189
@@ -165,6 +200,10 @@ msgstr ""
 msgid "%d / %d findings"
 msgstr ""
 
+#: reDelphix/source/uRdxClassMethodFix.pas:288
+msgid "%d classes named %s in this file"
+msgstr ""
+
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1862
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1934
 msgid "%d context hashes"
@@ -176,6 +215,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxText.pas:810
 msgid "%d declarations of %s in classes of this name - overload?"
+msgstr ""
+
+#: reDelphix/source/uRdxClassMethodFix.pas:341
+msgid "%d declarations of %s in the class - overload?"
 msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:691
@@ -203,6 +246,10 @@ msgstr ""
 msgid "%d implementations of %s - overload or $IFDEF twin?"
 msgstr ""
 
+#: reDelphix/source/uRdxClassMethodFix.pas:267
+msgid "%d implementations of %s - overload?"
+msgstr ""
+
 #: reDelphix/source/uRdxMethodNameFix.pas:314
 msgid "%d implementations of %s.%s in this file - overload or conditional twin?"
 msgstr ""
@@ -213,6 +260,10 @@ msgstr ""
 
 #: SCA.SharedUI/sources/uProfileViewer.pas:281
 msgid "%d of %d rules shown, %d selected"
+msgstr ""
+
+#: reDelphix/source/uRdxParamNameFix.pas:276
+msgid "%d placeholders are one typo away from \"%s\" - ambiguous"
 msgstr ""
 
 #: reDelphix/source/uRdxAvoidOutFix.pas:548
@@ -253,12 +304,32 @@ msgstr ""
 msgid "%s - line moved? Analyse the file again"
 msgstr ""
 
+#: reDelphix/source/uRdxClassMethodFix.pas:260
+msgid "%s - only a procedure or function can become a class method"
+msgstr ""
+
+#: reDelphix/source/uRdxLookupHoistFix.pas:800
+msgid "%s appears in line %d other than as \"%s.Member\" - assigned, passed on, declared or reached through another object"
+msgstr ""
+
 #: reDelphix/source/uRdxFormatSettingsFix.pas:381
 msgid "%s carries %d arguments here, the RTL form without TFormatSettings has %d"
 msgstr ""
 
 #: SCA.SharedUI/sources/uProfileViewer.pas:872
 msgid "%s contains no profiles."
+msgstr ""
+
+#: reDelphix/source/uRdxLookupHoistFix.pas:768
+msgid "%s in line %d can close %s or rebuild its fields - the reference fetched before the loop would point into the void"
+msgstr ""
+
+#: reDelphix/source/uRdxLookupHoistFix.pas:770
+msgid "%s in line %d can rebuild the parameters of %s - the reference fetched before the loop would point into the void"
+msgstr ""
+
+#: reDelphix/source/uRdxHomoglyphFix.pas:527
+msgid "%s in the name is no known look-alike of an ASCII letter - maybe an intended letter"
 msgstr ""
 
 #: reDelphix/source/uRdxAvoidOutFix.pas:449
@@ -271,6 +342,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxIfThenFix.pas:516
 msgid "%s is a Variant - a literal branch would give it another VarType than the result of IfThen"
+msgstr ""
+
+#: reDelphix/source/uRdxHomoglyphFix.pas:598
+msgid "%s is a reserved word"
 msgstr ""
 
 #: reDelphix/source/uRdxFormatSettingsFix.pas:367
@@ -286,6 +361,10 @@ msgstr ""
 msgid "%s is declared as %s, not as %s - the call does not copy exactly one element"
 msgstr ""
 
+#: reDelphix/source/uRdxLookupHoistFix.pas:429
+msgid "%s is declared as a property or routine in this file - it could return another object on each call"
+msgstr ""
+
 #: reDelphix/source/uRdxAvoidOutFix.pas:513
 #: reDelphix/source/uRdxAvoidOutFix.pas:538
 msgid "%s is declared inside a type - its signature is a contract"
@@ -293,6 +372,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxAvoidOutFix.pas:491
 msgid "%s is in the published or default section of %s - a form file may bind it to an event"
+msgstr ""
+
+#: reDelphix/source/uRdxClassMethodFix.pas:380
+msgid "%s is named again in the class declaration (line %d) - property accessor?"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:815
@@ -309,6 +392,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxAvoidOutFix.pas:489
 msgid "%s is not declared directly in class %s"
+msgstr ""
+
+#: reDelphix/source/uRdxLookupHoistFix.pas:983
+msgid "%s is not known here as a variable, parameter or field - it could be a function that returns another object on each call"
 msgstr ""
 
 #: reDelphix/source/uRdxThreadResumeFix.pas:659
@@ -335,6 +422,11 @@ msgstr ""
 
 #: reDelphix/source/uRdxThreadResumeFix.pas:422
 msgid "%s is used in line %d between Create(True) and Resume - the thread could already run there"
+msgstr ""
+
+#: reDelphix/source/uRdxClassMethodFix.pas:465
+#: reDelphix/source/uRdxClassMethodFix.pas:470
+msgid "%s is used in line %d not as a call - possibly as a method pointer (\"of object\")"
 msgstr ""
 
 #: reDelphix/source/uRdxConstStringParameterFix.pas:274
@@ -389,7 +481,7 @@ msgstr ""
 msgid "%s: no fixMode in the rule catalog"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2502
+#: reDelphix/source/uRdxFixTable.pas:2802
 msgid "(changes behavior)"
 msgstr ""
 
@@ -464,31 +556,31 @@ msgstr ""
 msgid "Add"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Add \"%s;\" to the declaration"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Add \"raise;\" to the empty exception handler"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Add a category name to the attribute"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Add a reason to [Ignore]"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2494
+#: reDelphix/source/uRdxFixTable.pas:2794
 msgid "Add an else branch that raises an exception"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Add an empty else branch"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Add raise; to the empty except block"
 msgstr ""
 
@@ -637,7 +729,7 @@ msgstr ""
 msgid "Assert(..) does not close on its line"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Assign the condition to %s directly"
 msgstr ""
 
@@ -781,15 +873,15 @@ msgstr ""
 msgid "CSV saved: %s (%d entries)"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Call %s first in the constructor"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Call Randomize in the initialization section"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Call inherited last in the destructor"
 msgstr ""
 
@@ -820,7 +912,7 @@ msgstr ""
 msgid "Cardinal/Integer subtraction on pointers truncates upper 32 bits on Win64"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Cast %s to Int64 before multiplying"
 msgstr ""
 
@@ -1153,11 +1245,11 @@ msgstr ""
 msgid "Debug output left in production code"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Declare parameter %s as const"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Delete commented-out code"
 msgstr ""
 
@@ -1169,19 +1261,19 @@ msgstr ""
 msgid "Delete profile \"%s\"?"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2494
+#: reDelphix/source/uRdxFixTable.pas:2794
 msgid "Delete the debug output"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Delete the unreachable code: %s line(s)"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Delete unused private method %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Delete unused routine %s"
 msgstr ""
 
@@ -1344,7 +1436,7 @@ msgstr ""
 msgid "Errors: %d, Warnings: %d, Hints: %d"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Evaluate the condition outside Assert"
 msgstr ""
 
@@ -1476,7 +1568,7 @@ msgstr ""
 msgid "Format() placeholder count does not match argument count"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Free %s in a try/finally block"
 msgstr ""
 
@@ -1484,7 +1576,7 @@ msgstr ""
 msgid "Free is outside the protecting finally block"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Free the buffer %s in a try/finally block"
 msgstr ""
 
@@ -1524,7 +1616,7 @@ msgstr ""
 msgid "Grade scale: A=0, B<=%d, C<=%d, D<=%d, E>%d"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Group the digits with \"_\""
 msgstr ""
 
@@ -1668,11 +1760,11 @@ msgstr ""
 msgid "Info"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Initialize Result first: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Initialize Result with %s"
 msgstr ""
 
@@ -1680,11 +1772,11 @@ msgstr ""
 msgid "Input control sits directly on the form - wrap it in a panel"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Insert a documentation skeleton"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Insert a new GUID"
 msgstr ""
 
@@ -1704,7 +1796,7 @@ msgstr ""
 msgid "Interface type without \"I\" prefix"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Introduce local constant for %s"
 msgstr ""
 
@@ -1860,11 +1952,15 @@ msgstr ""
 msgid "Magic number - replace literal with a named constant"
 msgstr ""
 
+#: reDelphix/source/uRdxFixTable.pas:2796
+msgid "Make %s a static class method"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2002
 msgid "Many DB components on one form - extract into a TDataModule"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Mark the empty body as intentional"
 msgstr ""
 
@@ -1876,7 +1972,7 @@ msgstr ""
 msgid "MasterSource set without MasterFields/IndexFieldNames - silent cross-join"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Merge with the previous %s section"
 msgstr ""
 
@@ -1947,11 +2043,15 @@ msgstr ""
 msgid "More than %d files found - scan stopped. Choose a subfolder, or exclude folders via the ignore list (hamburger menu)."
 msgstr ""
 
+#: reDelphix/source/uRdxFixTable.pas:2796
+msgid "Move %s before the loop"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:4035
 msgid "Move / FillChar uses SizeOf(pointer-type) - copies only 4/8 bytes, not the target buffer"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Move the keyword to column 1"
 msgstr ""
 
@@ -2133,11 +2233,11 @@ msgstr ""
 msgid "Pascal keyword not in lowercase"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Pass FormatSettings explicitly"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2494
+#: reDelphix/source/uRdxFixTable.pas:2794
 msgid "Pass TFormatSettings.Invariant"
 msgstr ""
 
@@ -2179,7 +2279,7 @@ msgstr ""
 msgid "Prefer Assigned() over \"= nil\" / \"<> nil\""
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Prefix parameter %s with \"_\" (intentionally unused)"
 msgstr ""
 
@@ -2253,11 +2353,11 @@ msgstr ""
 msgid "Published method looks like an event handler but no component binds it"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Put the branch in begin..end"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Put the debug output in {$IFDEF DEBUG}"
 msgstr ""
 
@@ -2280,15 +2380,15 @@ msgstr ""
 msgid "Quick-Fix: the reDelphix package is not loaded"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Raise EArgumentException instead (wrong argument)"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2494
+#: reDelphix/source/uRdxFixTable.pas:2794
 msgid "Raise EInvalidOpException instead (invalid state)"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2494
+#: reDelphix/source/uRdxFixTable.pas:2794
 msgid "Raise ENotImplemented in the empty body"
 msgstr ""
 
@@ -2300,7 +2400,7 @@ msgstr ""
 msgid "Raise inside destructor without try/except - cleanup is aborted"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Raise the exception"
 msgstr ""
 
@@ -2353,7 +2453,7 @@ msgstr ""
 msgid "Reference pattern (generic example for this rule, NOT the user's code)"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Release the lock %s in a try/finally block"
 msgstr ""
 
@@ -2361,11 +2461,11 @@ msgstr ""
 msgid "Reload"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Remove (TObject) from the class declaration"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Remove bidi control characters (as #$ code in strings)"
 msgstr ""
 
@@ -2374,7 +2474,7 @@ msgstr ""
 msgid "Remove ineffective suppression marker"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Remove invisible characters (as #$ code in strings)"
 msgstr ""
 
@@ -2384,119 +2484,123 @@ msgstr ""
 msgid "Remove rules"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
+msgid "Remove the always-true condition"
+msgstr ""
+
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Remove the blank line after the attribute"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Remove the cast to %s before Free"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Remove the duplicate attribute"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Remove the empty parentheses"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Remove the empty try/finally"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Remove the empty visibility section"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Remove the extra semicolon"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2494
+#: reDelphix/source/uRdxFixTable.pas:2794
 msgid "Remove the first duplicate inherited call"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Remove the redundant %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Remove the redundant comparison with True/False"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Remove the redundant comparison with nil"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Remove the redundant inner parentheses"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Remove the second duplicate inherited call"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Remove the self-assignment of %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Remove the trailing comma"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Remove the trailing whitespace"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Remove unit %s from uses"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Remove unused variable %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Rename the constant to %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Rename the exception class to %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Replace \"goto\" with Exit"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Replace \"out\" with \"var\" for %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Replace \"to\" with \"downto\""
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Replace IfThen with if..then..else"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Replace NOSONAR with a \"noinspection All\" marker"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Replace begin with initialization"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Replace the 32-bit casts with NativeInt/NativeUInt"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Replace the empty \"with ... do begin end\" by the call"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Replace the tabs in this line with spaces"
 msgstr ""
 
@@ -2816,7 +2920,7 @@ msgstr ""
 msgid "Source line exceeds 120 characters - wrap or extract"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Split the grouped declaration"
 msgstr ""
 
@@ -2903,7 +3007,7 @@ msgstr ""
 msgid "Suppression marker has no matching finding - probably stale after fix"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2494
+#: reDelphix/source/uRdxFixTable.pas:2794
 msgid "Swap the loop bounds"
 msgstr ""
 
@@ -2913,6 +3017,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxFormatSettingsFix.pas:580
 msgid "SysUtils is in no uses clause of the file - the call need not bind to the RTL"
+msgstr ""
+
+#: reDelphix/source/uRdxObjectListFix.pas:802
+msgid "System.Generics.Collections is not in a uses clause of the file - TObjectList<T> may not come from there"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:3212
@@ -2961,6 +3069,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2214
 msgid "Trailing comma in argument list"
+msgstr ""
+
+#: reDelphix/source/uRdxFixTable.pas:2796
+msgid "Turn the last if into a guard clause with Exit"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2424
@@ -3040,35 +3152,43 @@ msgstr ""
 msgid "Unit-level keyword not at column 1"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Use %s instead of the exact comparison"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Use %s.Start instead of Resume"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Use Assigned() instead of comparing with nil"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Use FreeAndNil(%s)"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Use SizeOf(%s) instead of the pointer size"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
+msgid "Use TObjectList<%s> so the list frees its items"
+msgstr ""
+
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Use https:// instead of http://"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
+msgid "Use parameter name \"%s\" from the SQL"
+msgstr ""
+
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Use raise; to keep the original stack trace"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Use the condition as the Assert message"
 msgstr ""
 
@@ -3180,7 +3300,7 @@ msgstr ""
 msgid "Will be overwritten: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Write %s in lowercase"
 msgstr ""
 
@@ -3199,8 +3319,12 @@ msgstr ""
 msgid "Write baseline from current scan..."
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:2496
+#: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Write the method name as %s"
+msgstr ""
+
+#: reDelphix/source/uRdxFixTable.pas:2796
+msgid "Write the name in ASCII letters: %s"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2548
@@ -3213,6 +3337,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxNoSonarFix.pas:193
 msgid "a \"// noinspection All\" marker already stands above - delete the NOSONAR comment by hand"
+msgstr ""
+
+#: reDelphix/source/uRdxHomoglyphFix.pas:596
+msgid "a \"with\" statement (line %d) could bind the new name %s to a member"
 msgstr ""
 
 #: reDelphix/source/uRdxNativeIntFix.pas:239
@@ -3231,6 +3359,11 @@ msgstr ""
 msgid "a compiler directive names \"%s\""
 msgstr ""
 
+#: reDelphix/source/uRdxHomoglyphFix.pas:486
+#: reDelphix/source/uRdxHomoglyphFix.pas:489
+msgid "a compiler directive names %s (line %d)"
+msgstr ""
+
 #: reDelphix/source/uRdxFormatSettingsFix.pas:700
 #: reDelphix/source/uRdxFormatSettingsFix.pas:764
 msgid "a compiler directive stands on the reported line"
@@ -3239,6 +3372,10 @@ msgstr ""
 #: reDelphix/source/uRdxDebugOutputFix.pas:334
 #: reDelphix/source/uRdxDebugOutputFix.pas:338
 msgid "a conditional directive already encloses the call (on the line before or after it)"
+msgstr ""
+
+#: reDelphix/source/uRdxDeepNestingFix.pas:462
+msgid "a line of the block starts inside a block comment or multi-line string - moving it left would change it"
 msgstr ""
 
 #: reDelphix/source/uRdxUnusedParameterFix.pas:638
@@ -3251,6 +3388,11 @@ msgstr ""
 
 #: reDelphix/source/uRdxMethodNameFix.pas:387
 msgid "a string literal names \"%s\" (line %d) - a lookup by name (RTTI, MethodAddress, script) may compare case-sensitively"
+msgstr ""
+
+#: reDelphix/source/uRdxHomoglyphFix.pas:480
+#: reDelphix/source/uRdxHomoglyphFix.pas:483
+msgid "a string literal names %s (line %d) - a lookup by name (RTTI, scripts) could change"
 msgstr ""
 
 #: reDelphix/source/uRdxFormatSettingsFix.pas:594
@@ -3294,6 +3436,15 @@ msgstr ""
 msgid "asm..end block - platform-specific, hard to port"
 msgstr ""
 
+#: reDelphix/source/uRdxClassMethodFix.pas:264
+msgid "assembler body - it can reach Self through a register"
+msgstr ""
+
+#: reDelphix/source/uRdxClassMethodFix.pas:297
+#: reDelphix/source/uRdxClassMethodFix.pas:351
+msgid "attribute on the class or the method - RTTI could call the method on an object"
+msgstr ""
+
 #: reDelphix/source/uRdxUnusedParameterFix.pas:680
 msgid "attribute on the routine or its class - RTTI-based code can bind parameters by their names"
 msgstr ""
@@ -3327,6 +3478,10 @@ msgstr ""
 msgid "class %s implements interfaces - %s could implement an interface method"
 msgstr ""
 
+#: reDelphix/source/uRdxClassMethodFix.pas:202
+msgid "class or method missing from the message"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2334
 msgid "class(TObject) - TObject is the default base, drop it"
 msgstr ""
@@ -3344,6 +3499,15 @@ msgstr ""
 msgid "comment between the two sections or on the line of the keyword"
 msgstr ""
 
+#: reDelphix/source/uRdxAlwaysTrueFix.pas:411
+msgid "comment in the condition or in the \"else\" branch - it would be lost"
+msgstr ""
+
+#: reDelphix/source/uRdxDeepNestingFix.pas:442
+#: reDelphix/source/uRdxDeepNestingFix.pas:456
+msgid "comment in the head of the if or beside its end"
+msgstr ""
+
 #: reDelphix/source/uRdxDeadCodeFix.pas:458
 msgid "comment in the unreachable code - it may document parked code; delete by hand"
 msgstr ""
@@ -3354,6 +3518,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxGotoExitFix.pas:176
 msgid "comment inside \"goto <label>\""
+msgstr ""
+
+#: reDelphix/source/uRdxLookupHoistFix.pas:811
+msgid "comment inside %s in line %d"
 msgstr ""
 
 #: reDelphix/source/uRdxEmptyExceptFix.pas:147
@@ -3416,8 +3584,28 @@ msgstr ""
 msgid "compiler directive between the two sections - conditional code could need both keywords"
 msgstr ""
 
+#: reDelphix/source/uRdxAlwaysTrueFix.pas:406
+msgid "compiler directive in the \"if\" statement"
+msgstr ""
+
+#: reDelphix/source/uRdxClassMethodFix.pas:311
+msgid "compiler directive in the class declaration"
+msgstr ""
+
+#: reDelphix/source/uRdxDeepNestingFix.pas:258
+msgid "compiler directive in the routine - conditional code could change its last statement"
+msgstr ""
+
+#: reDelphix/source/uRdxObjectListFix.pas:782
+msgid "compiler directive in the routine - conditional code could hide a use of the list"
+msgstr ""
+
 #: reDelphix/source/uRdxGotoExitFix.pas:216
 msgid "compiler directive in the routine - conditional code could move the label"
+msgstr ""
+
+#: reDelphix/source/uRdxLookupHoistFix.pas:470
+msgid "compiler directive in the routine - conditional code could reopen %s"
 msgstr ""
 
 #: reDelphix/source/uRdxDeadCodeFix.pas:453
@@ -3438,6 +3626,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxText.pas:785
 msgid "decide by hand"
+msgstr ""
+
+#: reDelphix/source/uRdxClassMethodFix.pas:347
+msgid "declaration and implementation of %s differ (procedure/function)"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3832
@@ -3462,6 +3654,10 @@ msgstr ""
 msgid "digit separators exist from Delphi 11 on and are unknown to FPC 3.2 - %s"
 msgstr ""
 
+#: reDelphix/source/uRdxClassMethodFix.pas:349
+msgid "directive \"%s\" on the declaration"
+msgstr ""
+
 #: reDelphix/source/uRdxConstStringParameterFix.pas:219
 #: reDelphix/source/uRdxConstStringParameterFix.pas:222
 msgid "directive %s - ancestors, descendants or the message dispatch share the signature"
@@ -3469,6 +3665,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxProvider.pas:874
 msgid "editor buffer empty or not readable"
+msgstr ""
+
+#: reDelphix/source/uRdxClassMethodFix.pas:309
+msgid "end of the class declaration not found"
 msgstr ""
 
 #: reDelphix/source/uRdxLocalConstantNameFix.pas:577
@@ -3541,6 +3741,13 @@ msgstr ""
 msgid "if X then Y := True else Y := False - assign expression directly"
 msgstr ""
 
+#: reDelphix/source/uRdxDeepNestingFix.pas:432
+#: reDelphix/source/uRdxDeepNestingFix.pas:445
+#: reDelphix/source/uRdxDeepNestingFix.pas:449
+#: reDelphix/source/uRdxDeepNestingFix.pas:457
+msgid "if, begin and end do not stand on their own lines as usual (code beside them)"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:522
 msgid "in"
 msgstr ""
@@ -3561,6 +3768,14 @@ msgstr ""
 msgid "inline declaration \"%s X := IfThen(..)\" - declare X first"
 msgstr ""
 
+#: reDelphix/source/uRdxDeepNestingFix.pas:487
+msgid "inline var or const at the top of the block - its scope would grow to the rest of the routine"
+msgstr ""
+
+#: reDelphix/source/uRdxLookupHoistFix.pas:870
+msgid "inline variables exist from Delphi 10.3 on - the file has traces of older compilers (%s, line %d)"
+msgstr ""
+
 #: reDelphix/source/uRdxGroupedDeclFix.pas:263
 msgid "inside a case statement - the names are labels, not variables"
 msgstr ""
@@ -3571,6 +3786,15 @@ msgstr ""
 
 #: reDelphix/source/uRdxGotoExitFix.pas:290
 msgid "label \"%s\" is not the last statement of the routine - \"Exit\" would skip the code after it"
+msgstr ""
+
+#: reDelphix/source/uRdxObjectListFix.pas:419
+msgid "line %d adds an object that is not created right there (or with a non-literal argument such as an owner) - it may have another owner"
+msgstr ""
+
+#: reDelphix/source/uRdxObjectListFix.pas:509
+#: reDelphix/source/uRdxObjectListFix.pas:518
+msgid "line %d assigns to a property of \"%s\" - an owning list frees the items it drops"
 msgstr ""
 
 #: reDelphix/source/uRdxRawExceptionFix.pas:213
@@ -3593,12 +3817,25 @@ msgstr ""
 msgid "line %d declares \"%s\" again or uses it as a name (parameter, field, nested declaration)"
 msgstr ""
 
+#: reDelphix/source/uRdxHomoglyphFix.pas:576
+msgid "line %d spells the name differently - the help renames one spelling only"
+msgstr ""
+
+#: reDelphix/source/uRdxObjectListFix.pas:504
+#: reDelphix/source/uRdxObjectListFix.pas:521
+msgid "line %d uses an item of the list as a value or frees it - after the change the list frees it, too"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:725
 msgid "line moved? Analyse the file again"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:800
 msgid "literal not readable: %s"
+msgstr ""
+
+#: reDelphix/source/uRdxClassMethodFix.pas:206
+msgid "method of a nested type (%s)"
 msgstr ""
 
 #: reDelphix/source/uRdxCategoryArgFix.pas:162
@@ -3609,8 +3846,20 @@ msgstr ""
 msgid "neither System.Math nor System.StrUtils is in uses - IfThen may be another routine"
 msgstr ""
 
+#: reDelphix/source/uRdxClassMethodFix.pas:377
+msgid "nested type in the class declaration"
+msgstr ""
+
 #: reDelphix/source/uRdxThreadResumeFix.pas:375
 msgid "no \"%s := T.Create(True)\" before Resume in this routine - that the thread was created suspended is not provable"
+msgstr ""
+
+#: reDelphix/source/uRdxDeepNestingFix.pas:202
+msgid "no \"%s\" on the reported line"
+msgstr ""
+
+#: reDelphix/source/uRdxObjectListFix.pas:774
+msgid "no \"%s.Add(\" on the reported line"
 msgstr ""
 
 #: reDelphix/source/uRdxParensFix.pas:173
@@ -3674,6 +3923,14 @@ msgstr ""
 msgid "no \"raise Exception\" in the code of the reported line"
 msgstr ""
 
+#: reDelphix/source/uRdxLookupHoistFix.pas:414
+msgid "no %s call with a receiver on the reported line"
+msgstr ""
+
+#: reDelphix/source/uRdxParamNameFix.pas:375
+msgid "no %s.ParamByName(\"%s\") with the name as a plain literal on the reported line"
+msgstr ""
+
 #: reDelphix/source/uRdxFormatSettingsFix.pas:754
 msgid "no Format call on the code columns of the reported line"
 msgstr ""
@@ -3707,6 +3964,14 @@ msgstr ""
 #: reDelphix/source/uRdxDebugOutputFix.pas:182
 #: reDelphix/source/uRdxDebugOutputFix.pas:288
 msgid "no call to %s on the reported line"
+msgstr ""
+
+#: reDelphix/source/uRdxClassMethodFix.pas:286
+msgid "no class %s with a body in this file (record, other unit?)"
+msgstr ""
+
+#: reDelphix/source/uRdxAlwaysTrueFix.pas:224
+msgid "no comparison %s on the reported line"
 msgstr ""
 
 #: reDelphix/source/uRdxExceptionNameFix.pas:246
@@ -3751,6 +4016,14 @@ msgstr ""
 msgid "no findings"
 msgstr ""
 
+#: reDelphix/source/uRdxLookupHoistFix.pas:707
+msgid "no for, while or repeat loop around the call"
+msgstr ""
+
+#: reDelphix/source/uRdxLookupHoistFix.pas:852
+msgid "no free name for the variable - %s and %s2 to %s9 already occur in the file"
+msgstr ""
+
 #: reDelphix/source/uRdxGroupedDeclFix.pas:278
 #: reDelphix/source/uRdxGroupedDeclFix.pas:280
 msgid "no grouped declaration at the reported place"
@@ -3758,6 +4031,15 @@ msgstr ""
 
 #: reDelphix/source/uRdxText.pas:820
 msgid "no header %s"
+msgstr ""
+
+#: reDelphix/source/uRdxClassMethodFix.pas:249
+#: reDelphix/source/uRdxClassMethodFix.pas:256
+msgid "no header of the method %s"
+msgstr ""
+
+#: reDelphix/source/uRdxHomoglyphFix.pas:560
+msgid "no identifier with a non-ASCII character in the code of the reported line"
 msgstr ""
 
 #: reDelphix/source/uRdxMethodNameFix.pas:312
@@ -3773,12 +4055,26 @@ msgstr ""
 msgid "no operand in the chain"
 msgstr ""
 
+#: reDelphix/source/uRdxParamNameFix.pas:274
+msgid "no placeholder of the SQL is one typo away from \"%s\" (%s)"
+msgstr ""
+
 #: reDelphix/source/uRdxConsecutiveSectionFix.pas:211
 msgid "no previous \"%s\" section found"
 msgstr ""
 
 #: reDelphix/source/uRdxGotoExitFix.pas:204
 msgid "no routine with a begin..end body around the \"goto\""
+msgstr ""
+
+#: reDelphix/source/uRdxLookupHoistFix.pas:457
+#: reDelphix/source/uRdxParamNameFix.pas:407
+msgid "no routine with a begin..end body around the call"
+msgstr ""
+
+#: reDelphix/source/uRdxDeepNestingFix.pas:229
+#: reDelphix/source/uRdxObjectListFix.pas:276
+msgid "no routine with a begin..end body around the reported line"
 msgstr ""
 
 #: reDelphix/source/uRdxUnusedParameterFix.pas:570
@@ -3854,6 +4150,11 @@ msgstr ""
 
 #: reDelphix/source/uRdxConsecutiveSectionFix.pas:276
 msgid "only \"const\" and \"var\" sections are merged, not \"%s\""
+msgstr ""
+
+#: reDelphix/source/uRdxParamNameFix.pas:231
+#: reDelphix/source/uRdxParamNameFix.pas:236
+msgid "only for ParamByName with a name the SQL does not have - a placeholder that is never set needs a value"
 msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2976
@@ -3953,6 +4254,10 @@ msgstr ""
 msgid "the \"goto\" is not of the form \"goto Label;\" on one line"
 msgstr ""
 
+#: reDelphix/source/uRdxAlwaysTrueFix.pas:276
+msgid "the \"if\" is not a statement (conditional expression?)"
+msgstr ""
+
 #: reDelphix/source/uRdxEmptyOnHandlerFix.pas:219
 msgid "the \"on\" does not start a handler of an except block"
 msgstr ""
@@ -3989,8 +4294,22 @@ msgstr ""
 msgid "the Format call on the line has another format string than the finding"
 msgstr ""
 
+#: reDelphix/source/uRdxParamNameFix.pas:246
+msgid "the SQL has no named placeholders - nothing to choose from"
+msgstr ""
+
 #: reDelphix/source/uRdxConstStringParameterFix.pas:343
 msgid "the address of parameter \"%s\" is taken in line %d"
+msgstr ""
+
+#: reDelphix/source/uRdxLookupHoistFix.pas:350
+#: reDelphix/source/uRdxLookupHoistFix.pas:356
+#: reDelphix/source/uRdxLookupHoistFix.pas:359
+msgid "the argument of %s is not a single string literal on the same line"
+msgstr ""
+
+#: reDelphix/source/uRdxAlwaysTrueFix.pas:238
+msgid "the argument of Length is not a plain name - its evaluation would be dropped"
 msgstr ""
 
 #: reDelphix/source/uRdxIfThenFix.pas:221
@@ -3999,6 +4318,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxIfThenFix.pas:226
 msgid "the assignment follows \"%s\" without begin..end - put it into begin..end first"
+msgstr ""
+
+#: reDelphix/source/uRdxObjectListFix.pas:789
+msgid "the assignment to \"%s\" (line %d) is not \"TList<%s>.Create\" without arguments"
 msgstr ""
 
 #: reDelphix/source/uRdxCategoryArgFix.pas:143
@@ -4019,6 +4342,19 @@ msgstr ""
 msgid "the block is not empty"
 msgstr ""
 
+#: reDelphix/source/uRdxClassMethodFix.pas:418
+msgid "the body names %s (line %d) - Self, inherited or a member of the class or of TObject"
+msgstr ""
+
+#: reDelphix/source/uRdxHomoglyphFix.pas:300
+msgid "the bounds of a routine before line %d are not safe to read"
+msgstr ""
+
+#: reDelphix/source/uRdxClassMethodFix.pas:253
+#: reDelphix/source/uRdxClassMethodFix.pas:262
+msgid "the bounds of the method %s are not safe to read"
+msgstr ""
+
 #: reDelphix/source/uRdxLocalConstantNameFix.pas:287
 #: reDelphix/source/uRdxLocalConstantNameFix.pas:452
 msgid "the bounds of the routine around \"%s\" are not safe to read"
@@ -4028,11 +4364,26 @@ msgstr ""
 msgid "the bounds of the routine around the \"goto\" are not safe to read"
 msgstr ""
 
+#: reDelphix/source/uRdxLookupHoistFix.pas:448
+#: reDelphix/source/uRdxParamNameFix.pas:398
+msgid "the bounds of the routine around the call are not safe to read"
+msgstr ""
+
+#: reDelphix/source/uRdxDeepNestingFix.pas:220
+#: reDelphix/source/uRdxObjectListFix.pas:267
+msgid "the bounds of the routine around the reported line are not safe to read"
+msgstr ""
+
 #: reDelphix/source/uRdxUnusedParameterFix.pas:541
 #: reDelphix/source/uRdxUnusedParameterFix.pas:600
 #: reDelphix/source/uRdxUnusedParameterFix.pas:644
 #: reDelphix/source/uRdxUnusedParameterFix.pas:805
 msgid "the bounds of the routine or its class are not safe to read"
+msgstr ""
+
+#: reDelphix/source/uRdxAlwaysTrueFix.pas:303
+#: reDelphix/source/uRdxAlwaysTrueFix.pas:314
+msgid "the branch after \"%s\" is no single statement or begin..end block"
 msgstr ""
 
 #: reDelphix/source/uRdxMoveSizeFix.pas:389
@@ -4074,6 +4425,10 @@ msgstr ""
 msgid "the class \"%s\" already carries the \"E\" prefix"
 msgstr ""
 
+#: reDelphix/source/uRdxClassMethodFix.pas:306
+msgid "the class has the ancestor list (%s) - only a direct descendant of TObject is checked"
+msgstr ""
+
 #: reDelphix/source/uRdxConstStringParameterFix.pas:245
 #: reDelphix/source/uRdxConstStringParameterFix.pas:247
 msgid "the class implements %s - the method can be one of its members"
@@ -4082,6 +4437,10 @@ msgstr ""
 #: reDelphix/source/uRdxExceptionNameFix.pas:496
 #: reDelphix/source/uRdxExceptionNameFix.pas:500
 msgid "the class is declared before \"implementation\" - other units may use its name"
+msgstr ""
+
+#: reDelphix/source/uRdxClassMethodFix.pas:295
+msgid "the class is generic"
 msgstr ""
 
 #: reDelphix/source/uRdxExceptionNameFix.pas:472
@@ -4105,8 +4464,21 @@ msgstr ""
 msgid "the comment stands on a line of its own - which line the marker belongs to is unclear"
 msgstr ""
 
+#: reDelphix/source/uRdxAlwaysTrueFix.pas:272
+msgid "the comparison is not the whole condition of an \"if\" (and/or, while, until, assignment)"
+msgstr ""
+
+#: reDelphix/source/uRdxDeepNestingFix.pas:325
+#: reDelphix/source/uRdxDeepNestingFix.pas:332
+msgid "the condition contains a conditional expression (if .. then .. else)"
+msgstr ""
+
 #: reDelphix/source/uRdxAssertSideEffectFix.pas:277
 msgid "the condition has more than 255 characters - it cannot become the message literal"
+msgstr ""
+
+#: reDelphix/source/uRdxAlwaysTrueFix.pas:381
+msgid "the condition is always False - the branch never ran; whether \"= 0\" was meant is for a human to decide"
 msgstr ""
 
 #: reDelphix/source/uRdxLocalConstantNameFix.pas:554
@@ -4125,6 +4497,11 @@ msgstr ""
 msgid "the declaration is spelled \"%s\", the finding names \"%s\""
 msgstr ""
 
+#: reDelphix/source/uRdxObjectListFix.pas:667
+#: reDelphix/source/uRdxObjectListFix.pas:696
+msgid "the declaration of \"%s\" (line %d) is not \"TList<%s>\""
+msgstr ""
+
 #: reDelphix/source/uRdxMethodNameFix.pas:280
 msgid "the declaration of \"%s\" cannot be read safely"
 msgstr ""
@@ -4136,6 +4513,11 @@ msgstr ""
 
 #: reDelphix/source/uRdxAvoidOutFix.pas:600
 msgid "the declaration of %s is not in this file"
+msgstr ""
+
+#: reDelphix/source/uRdxClassMethodFix.pas:343
+#: reDelphix/source/uRdxClassMethodFix.pas:353
+msgid "the declaration of %s is not safe to read"
 msgstr ""
 
 #: reDelphix/source/uRdxFloatEqualityFix.pas:543
@@ -4184,6 +4566,7 @@ msgstr ""
 msgid "the file declares its own \"%s\" - it may be a routine that returns"
 msgstr ""
 
+#: reDelphix/source/uRdxDeepNestingFix.pas:274
 #: reDelphix/source/uRdxGotoExitFix.pas:295
 msgid "the file declares its own \"Exit\" - it is not the procedure of the RTL"
 msgstr ""
@@ -4220,8 +4603,21 @@ msgstr ""
 msgid "the file declares its own routine IfThen"
 msgstr ""
 
+#: reDelphix/source/uRdxObjectListFix.pas:804
+#: reDelphix/source/uRdxObjectListFix.pas:806
+msgid "the file declares its own type %s"
+msgstr ""
+
 #: reDelphix/source/uRdxInsecureRandomFix.pas:344
 msgid "the file does not start with unit (include file or script?) - the help does not find its end"
+msgstr ""
+
+#: reDelphix/source/uRdxLookupHoistFix.pas:864
+msgid "the file does not start with unit/program/library or has no implementation part (include or script?) - only the Delphi compiler knows inline variables"
+msgstr ""
+
+#: reDelphix/source/uRdxLookupHoistFix.pas:867
+msgid "the file has an FPC switch (line %d) - FPC 3.2 has no inline variables"
 msgstr ""
 
 #: reDelphix/source/uRdxAvoidOutFix.pas:518
@@ -4230,6 +4626,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxFormatSettingsFix.pas:604
 msgid "the file is also written for FPC (line %d) - FPC 3.2 knows no TFormatSettings.Invariant"
+msgstr ""
+
+#: reDelphix/source/uRdxHomoglyphFix.pas:569
+msgid "the file is no unit with an implementation part, or it exports routines - the name may be used elsewhere"
 msgstr ""
 
 #: reDelphix/source/uRdxDigitGroupingFix.pas:285
@@ -4248,13 +4648,25 @@ msgstr ""
 msgid "the file uses FormatSettings as a member (line %d) - inside such a class the bare name binds to the member"
 msgstr ""
 
+#: reDelphix/source/uRdxHomoglyphFix.pas:381
+msgid "the first use of the name (line %d) is not its declaration - it may come from another unit"
+msgstr ""
+
 #: reDelphix/source/uRdxFormatSettingsFix.pas:778
 msgid "the format string has a currency spec (m) - TFormatSettings.Invariant writes the generic currency sign instead of the local one"
+msgstr ""
+
+#: reDelphix/source/uRdxDeepNestingFix.pas:636
+msgid "the function does not set Result by a plain statement before the if; by hand"
 msgstr ""
 
 #: reDelphix/source/uRdxEmptyOnHandlerFix.pas:189
 #: reDelphix/source/uRdxEmptyOnHandlerFix.pas:277
 msgid "the handler head is not on one line, or the \";\" is not on the line of \"do\""
+msgstr ""
+
+#: reDelphix/source/uRdxClassMethodFix.pas:269
+msgid "the header is not the one implementation of %s after \"implementation\""
 msgstr ""
 
 #: reDelphix/source/uRdxAvoidOutFix.pas:466
@@ -4282,6 +4694,19 @@ msgstr ""
 msgid "the last assignment to %s before Resume (line %d) is not \"T.Create(True);\""
 msgstr ""
 
+#: reDelphix/source/uRdxDeepNestingFix.pas:371
+msgid "the last if is not a statement of the routine body itself (\"%s\" before it)"
+msgstr ""
+
+#: reDelphix/source/uRdxDeepNestingFix.pas:321
+#: reDelphix/source/uRdxDeepNestingFix.pas:327
+#: reDelphix/source/uRdxDeepNestingFix.pas:339
+#: reDelphix/source/uRdxDeepNestingFix.pas:350
+#: reDelphix/source/uRdxDeepNestingFix.pas:368
+#: reDelphix/source/uRdxDeepNestingFix.pas:375
+msgid "the last statement of the routine is not \"if ... then begin ... end\" - a guard clause fits only there"
+msgstr ""
+
 #: reDelphix/source/uRdxMoveSizeFix.pas:416
 msgid "the length is not just SizeOf(%s)"
 msgstr ""
@@ -4290,9 +4715,17 @@ msgstr ""
 msgid "the line calls %s more than once"
 msgstr ""
 
+#: reDelphix/source/uRdxParamNameFix.pas:377
+msgid "the line calls ParamByName(\"%s\") more than once"
+msgstr ""
+
 #: reDelphix/source/uRdxExceptionNameFix.pas:248
 #: reDelphix/source/uRdxLocalConstantNameFix.pas:249
 msgid "the line declares \"%s\" more than once"
+msgstr ""
+
+#: reDelphix/source/uRdxLookupHoistFix.pas:416
+msgid "the line has %d different %s calls - which one the finding means is unclear"
 msgstr ""
 
 #: reDelphix/source/uRdxAssertSideEffectFix.pas:172
@@ -4311,6 +4744,14 @@ msgstr ""
 msgid "the line has more than one call %s(...) - ambiguous"
 msgstr ""
 
+#: reDelphix/source/uRdxAlwaysTrueFix.pas:226
+msgid "the line has more than one comparison %s"
+msgstr ""
+
+#: reDelphix/source/uRdxClassMethodFix.pas:251
+msgid "the line has more than one header of the method %s"
+msgstr ""
+
 #: reDelphix/source/uRdxFloatEqualityFix.pas:432
 msgid "the line has the comparison \"%s\" more than once - ambiguous"
 msgstr ""
@@ -4326,6 +4767,30 @@ msgstr ""
 
 #: reDelphix/source/uRdxDigitGroupingFix.pas:322
 msgid "the literal is inside an asm block"
+msgstr ""
+
+#: reDelphix/source/uRdxLookupHoistFix.pas:794
+msgid "the loop contains an anonymous method - it could run later, when %s has changed"
+msgstr ""
+
+#: reDelphix/source/uRdxLookupHoistFix.pas:751
+msgid "the loop in line %d does not start its own line and statement in a begin..end block - no place for the declaration"
+msgstr ""
+
+#: reDelphix/source/uRdxLookupHoistFix.pas:701
+msgid "the loop in line %d is not safe to read"
+msgstr ""
+
+#: reDelphix/source/uRdxObjectListFix.pas:551
+#: reDelphix/source/uRdxObjectListFix.pas:562
+msgid "the loop variable \"%s\" (line %d) is used as a value or freed - after the change the list frees its items"
+msgstr ""
+
+#: reDelphix/source/uRdxParamNameFix.pas:212
+#: reDelphix/source/uRdxParamNameFix.pas:218
+#: reDelphix/source/uRdxParamNameFix.pas:242
+#: reDelphix/source/uRdxParamNameFix.pas:248
+msgid "the message does not have the expected form"
 msgstr ""
 
 #: reDelphix/source/uRdxIntegerOverflowFix.pas:256
@@ -4356,6 +4821,10 @@ msgstr ""
 msgid "the message has no column"
 msgstr ""
 
+#: reDelphix/source/uRdxParamNameFix.pas:251
+msgid "the message lists only part of the placeholders - the right one could be missing"
+msgstr ""
+
 #: reDelphix/source/uRdxAttrDuplicateFix.pas:239
 msgid "the message names neither the attribute nor its first line"
 msgstr ""
@@ -4372,8 +4841,20 @@ msgstr ""
 msgid "the message names no call of Random, RandomRange or RandomFrom"
 msgstr ""
 
+#: reDelphix/source/uRdxAlwaysTrueFix.pas:379
+msgid "the message names no known always-true comparison"
+msgstr ""
+
+#: reDelphix/source/uRdxObjectListFix.pas:768
+msgid "the message names no list variable or no item type"
+msgstr ""
+
 #: reDelphix/source/uRdxMethodNameFix.pas:376
 msgid "the message names no method with a lowercase first letter"
+msgstr ""
+
+#: reDelphix/source/uRdxDeepNestingFix.pas:621
+msgid "the message names no nesting kind"
 msgstr ""
 
 #: reDelphix/source/uRdxUnusedParameterFix.pas:828
@@ -4396,8 +4877,21 @@ msgstr ""
 msgid "the message names none of the locale-dependent RTL functions of SCA128"
 msgstr ""
 
+#: reDelphix/source/uRdxClassMethodFix.pas:258
+#: reDelphix/source/uRdxClassMethodFix.pas:345
+msgid "the method is already a class method"
+msgstr ""
+
+#: reDelphix/source/uRdxClassMethodFix.pas:355
+msgid "the method is published - the form designer can bind it to an event"
+msgstr ""
+
 #: reDelphix/source/uRdxConstStringParameterFix.pas:242
 msgid "the method is visible outside the unit (not private, class in the interface section) - other units can use it as a method pointer"
+msgstr ""
+
+#: reDelphix/source/uRdxClassMethodFix.pas:357
+msgid "the method stands before any visibility section and the file switches type information on ({$M+}) - it could be published"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:394
@@ -4411,6 +4905,26 @@ msgstr ""
 
 #: reDelphix/source/uRdxLocalConstantNameFix.pas:552
 msgid "the name \"%s\" contains characters outside A-Z, a-z, 0-9 and \"_\" - UPPER_SNAKE_CASE cannot hold them"
+msgstr ""
+
+#: reDelphix/source/uRdxParamNameFix.pas:265
+msgid "the name \"%s\" is too short to tell a typo from another name"
+msgstr ""
+
+#: reDelphix/source/uRdxHomoglyphFix.pas:603
+msgid "the name %s is already used in the code (line %d)"
+msgstr ""
+
+#: reDelphix/source/uRdxHomoglyphFix.pas:578
+msgid "the name appears in the interface part (line %d) - other units can use it"
+msgstr ""
+
+#: reDelphix/source/uRdxHomoglyphFix.pas:535
+msgid "the name has no ASCII letter - a name written in another script is no look-alike"
+msgstr ""
+
+#: reDelphix/source/uRdxHomoglyphFix.pas:590
+msgid "the name is declared in a routine but used outside of it (line %d) - another declaration may be meant there"
 msgstr ""
 
 #: reDelphix/source/uRdxExceptionNameFix.pas:479
@@ -4467,6 +4981,10 @@ msgstr ""
 msgid "the previous section is \"class %s\""
 msgstr ""
 
+#: reDelphix/source/uRdxLookupHoistFix.pas:345
+msgid "the receiver of %s is not a plain variable name (Self, a qualified name or an expression)"
+msgstr ""
+
 #: reDelphix/source/uRdxEmptyExceptFix.pas:106
 msgid "the reported line carries several \"except\" - ambiguous"
 msgstr ""
@@ -4487,8 +5005,32 @@ msgstr ""
 msgid "the reported line holds the implementation of \"%s\", not its declaration - no class of this file declares it before"
 msgstr ""
 
+#: reDelphix/source/uRdxDeepNestingFix.pas:633
+msgid "the reported nesting is not inside the last if of the routine - a guard clause would not flatten it"
+msgstr ""
+
+#: reDelphix/source/uRdxParamNameFix.pas:520
+msgid "the routine already sets \"%s\" - a second assignment would overwrite its value; by hand"
+msgstr ""
+
+#: reDelphix/source/uRdxLookupHoistFix.pas:476
+msgid "the routine contains \"%s\" - the helper does not move code there"
+msgstr ""
+
+#: reDelphix/source/uRdxObjectListFix.pas:784
+msgid "the routine contains a \"with\" statement - a name in it could bind to a member"
+msgstr ""
+
+#: reDelphix/source/uRdxDeepNestingFix.pas:266
+msgid "the routine contains an anonymous method"
+msgstr ""
+
 #: reDelphix/source/uRdxGotoExitFix.pas:222
 msgid "the routine contains an anonymous method - \"Exit\" would leave only that method if the \"goto\" sits in it"
+msgstr ""
+
+#: reDelphix/source/uRdxDeepNestingFix.pas:268
+msgid "the routine contains goto or asm"
 msgstr ""
 
 #: reDelphix/source/uRdxConstStringParameterFix.pas:236
@@ -4532,6 +5074,10 @@ msgstr ""
 msgid "the two casts differ (Cardinal or LongWord against Integer or LongInt) - NativeInt or NativeUInt would be a guess"
 msgstr ""
 
+#: reDelphix/source/uRdxClassMethodFix.pas:302
+msgid "the type is a class helper"
+msgstr ""
+
 #: reDelphix/source/uRdxInsecureRandomFix.pas:365
 msgid "the unit ends with \"begin ... end.\" (SCA088) - turn the begin into initialization first"
 msgstr ""
@@ -4546,6 +5092,15 @@ msgstr ""
 
 #: reDelphix/source/uRdxText.pas:795
 msgid "unclear what the statement belongs to (\"%s\" before it)"
+msgstr ""
+
+#: reDelphix/source/uRdxDeepNestingFix.pas:573
+#: reDelphix/source/uRdxDeepNestingFix.pas:587
+msgid "uneven indentation in the block - line %d"
+msgstr ""
+
+#: reDelphix/source/uRdxAlwaysTrueFix.pas:336
+msgid "unexpected code after the \"if\" statement"
 msgstr ""
 
 #: reDelphix/source/uRdxEmptyBlockFix.pas:232

@@ -3,7 +3,7 @@
 > **Erzeugte Datei – nicht von Hand bearbeiten.** Quelle: [`data/quickfixes-doc.json`](data/quickfixes-doc.json) (Titel, Beschreibung, Sperren, Beispiele) und der Quelltext: welche Hilfen es gibt, ihre Menütexte und ob sie das Verhalten ändern, stehen in [`source/uRdxFixTable.pas`](source/uRdxFixTable.pas) (`FIX_ROWS`, `FIX_CAPTIONS`, `FIX_ALT_CAPTIONS`) und [`source/uRdxProvider.pas`](source/uRdxProvider.pas) (Rezepte), die Übersetzungen in [`i18n/de.po`](../i18n/de.po) und [`i18n/fr.po`](../i18n/fr.po), Regel-IDs und Namen in [`rules/sca-rules.json`](../rules/sca-rules.json).
 > Erzeugen (Repo-Wurzel): `python tools/gen-quickfix-doc.py`, prüfen: `python tools/gen-quickfix-doc.py --check` (auch in der CI, `.github/workflows/quickfix-doc.yml`).
 
-reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 82 Quick-Fixes aus der Tabelle der einfachen Hilfen (8 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
+reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 90 Quick-Fixes aus der Tabelle der einfachen Hilfen (8 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
 
 ## Lesehilfe
 
@@ -27,6 +27,7 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 82 Qui
 | SCA011 DeadCode | `Unerreichbaren Code löschen: %s Zeile(n)` | Quick-Fix | nein | [SCA011](#sca011) |
 | SCA014 MagicNumber | `Lokale Konstante für %s einführen` | Quick-Fix | nein | [SCA014](#sca014) |
 | SCA017 DebugOutput | `Debug-Ausgabe in {$IFDEF DEBUG} setzen` / `Debug-Ausgabe löschen` | Quick-Fix | ja / ja | [SCA017](#sca017) |
+| SCA018 DeepNesting | `Letztes if in eine Wächter-Klausel mit Exit umwandeln` | Quick-Fix | nein | [SCA018](#sca018) |
 | SCA020 EmptyMethod | `Leeren Rumpf als beabsichtigt kennzeichnen` / `ENotImplemented im leeren Rumpf auslösen` | Quick-Fix | nein / ja | [SCA020](#sca020) |
 | SCA046 ReversedForRange | `"to" durch "downto" ersetzen` / `Schleifengrenzen vertauschen` | Quick-Fix | ja / ja | [SCA046](#sca046) |
 | SCA047 SelfAssignment | `Selbstzuweisung von %s entfernen` | Quick-Fix | nein | [SCA047](#sca047) |
@@ -66,6 +67,8 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 82 Qui
 | SCA101 BeginEndRequired | `Zweig in begin..end setzen` | Quick-Fix | nein | [SCA101](#sca101) |
 | SCA106 MethodName | `Methodennamen als %s schreiben` | Quick-Fix | nein | [SCA106](#sca106) |
 | SCA109 LockWithoutTryFinally | `Sperre %s in einem try/finally-Block freigeben` | Quick-Fix | ja | [SCA109](#sca109) |
+| SCA111 ParamByNameInLoop | `%s vor die Schleife ziehen` | Quick-Fix | ja | [SCA111](#sca111) |
+| SCA112 FieldByNameInLoop | `%s vor die Schleife ziehen` | Quick-Fix | ja | [SCA112](#sca112) |
 | SCA113 ThreadResumeDeprecated | `%s.Start statt Resume verwenden` | Quick-Fix | nein | [SCA113](#sca113) |
 | SCA115 HttpInsteadOfHttps | `https:// statt http:// verwenden` | Quick-Fix | ja | [SCA115](#sca115) |
 | SCA117 PublicMemberWithoutDoc | `Dokumentationsgerüst einfügen` | Quick-Fix | nein | [SCA117](#sca117) |
@@ -83,7 +86,9 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 82 Qui
 | SCA139 FreeWithoutNil | `FreeAndNil(%s) verwenden` | Quick-Fix | nein | [SCA139](#sca139) |
 | SCA144 FloatEquality | `Statt des exakten Vergleichs %s verwenden` | Quick-Fix | ja | [SCA144](#sca144) |
 | SCA147 UnusedPrivateMethod | `Ungenutzte private Methode %s löschen` | Quick-Fix | nein | [SCA147](#sca147) |
+| SCA148 CanBeClassMethod | `%s zur statischen Klassenmethode machen` | Quick-Fix | nein | [SCA148](#sca148) |
 | SCA149 MissingOverride | `"%s;" an die Deklaration anfügen` | Quick-Fix | je nach Fund | [SCA149](#sca149) |
+| SCA150 BoolAlwaysTrue | `Immer wahre Bedingung entfernen` | Quick-Fix | nein | [SCA150](#sca150) |
 | SCA153 UnpairedLock | `Sperre %s in einem try/finally-Block freigeben` | Quick-Fix | ja | [SCA153](#sca153) |
 | SCA154 MoveSizeOfPointer | `SizeOf(%s) statt der Zeigergröße verwenden` | Quick-Fix | ja | [SCA154](#sca154) |
 | SCA156 GetMemWithoutFreeMem | `Puffer %s in einem try/finally-Block freigeben` | Quick-Fix | ja | [SCA156](#sca156) |
@@ -94,14 +99,17 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 82 Qui
 | SCA168 DefaultCaseInCaseStatement | `Leeren else-Zweig ergänzen` / `else-Zweig mit Exception ergänzen` | Quick-Fix | nein / ja | [SCA168](#sca168) |
 | SCA169 AssertWithSideEffect | `Bedingung außerhalb von Assert auswerten` | Quick-Fix | ja | [SCA169](#sca169) |
 | SCA170 ConstStringParameter | `Parameter %s als const deklarieren` | Quick-Fix | nein | [SCA170](#sca170) |
+| SCA174 TObjectListWithoutOwnership | `TObjectList<%s> verwenden, damit die Liste ihre Elemente freigibt` | Quick-Fix | ja | [SCA174](#sca174) |
 | SCA179 AttributeIgnoreWithoutReason | `Grund zu [Ignore] hinzufügen` | Quick-Fix | nein | [SCA179](#sca179) |
 | SCA180 AttributeDuplicate | `Doppeltes Attribut entfernen` | Quick-Fix | nein | [SCA180](#sca180) |
 | SCA181 AttributeCategoryWithoutString | `Dem Attribut einen Kategorienamen geben` | Quick-Fix | nein | [SCA181](#sca181) |
 | SCA183 AttributeMisalignment | `Leerzeile nach dem Attribut entfernen` | Quick-Fix | nein | [SCA183](#sca183) |
 | SCA188 SourceBidiOverride | `Bidi-Steuerzeichen entfernen (in Strings als #$-Code)` | Quick-Fix | nein | [SCA188](#sca188) |
 | SCA192 SourceInvisibleChar | `Unsichtbare Zeichen entfernen (in Strings als #$-Code)` | Quick-Fix | nein | [SCA192](#sca192) |
+| SCA193 SourceNonAsciiIdentifier | `Namen in ASCII-Buchstaben schreiben: %s` | Quick-Fix | nein | [SCA193](#sca193) |
 | SCA196 ManagedResultUninit | `Result zuerst initialisieren: %s` | Quick-Fix | ja | [SCA196](#sca196) |
 | SCA197 InterfaceWithoutGuid | `Neue GUID einfügen` | Quick-Fix | nein | [SCA197](#sca197) |
+| SCA199 ParamNameMismatch | `Parameternamen "%s" aus dem SQL verwenden` | Quick-Fix | ja | [SCA199](#sca199) |
 | jede Regel mit Anker im Regelkatalog (Feld `anchor`), wenn sich die Anweisung des Funds beschreiben lässt | `Stelle zeigen` | Navigation | nein | [Details](#rezept-showspan) |
 | SCA044 ConcatToFormat | `Format() aus Verkettung bilden` | Quick-Fix | nein | [Details](#rezept-formatcall) |
 | SCA003 SQLInjection | `Parametrisierte Vorlage in die Zwischenablage` | Quick-Fix | nein | [Details](#rezept-sqltemplate) |
@@ -463,6 +471,58 @@ Nachher:
 ```
 
 **Hinweis.** Einklammern lässt eine einzige Anweisung eines begin..end-Blocks stehen; im Release-Build ist der Block dann leer, im Quelltext nicht.
+
+<a id="sca018"></a>
+
+### SCA018 – Letztes if in eine Wächter-Klausel umwandeln
+
+- **Regel:** SCA018 `DeepNesting` – Block nesting exceeds threshold
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Turn the last if into a guard clause with Exit` | `Letztes if in eine Wächter-Klausel mit Exit umwandeln` | `Transformer le dernier if en clause de garde avec Exit` |
+
+**Wirkung:** Ist die letzte Anweisung der Routine ein `if A then begin … end` ohne else und liegt die gemeldete (tiefste) Stelle in diesem Block, wird daraus `if not A then Exit;`, und der Block rückt eine Stufe aus – alles darin liegt eine Ebene flacher. Gleiche Bedeutung: die Bedingung wird einmal ausgewertet, ist sie falsch, endet die Routine wie bisher. Die Negation bleibt lesbar: `not X` wird zu `X`, ein einfacher Operand zu `not X`, alles andere zu `not (A)`. Liegt die Tiefe mehr als eine Stufe über der Grenze, bleibt der Fund eine Ebene flacher stehen; endet der Block wieder mit einem solchen if, greift die Hilfe erneut.
+
+**Nicht angeboten**
+
+- die letzte Anweisung ist kein `if … then begin … end` (Code danach, ein else, try, Schleife) oder das if steht nicht selbst im Rumpf (hinter then/else/do, im try)
+- die gemeldete Stelle liegt nicht in diesem Block (die Wächter-Klausel flachte sie nicht ab), oder die Zeile ist verschoben
+- eine Funktion ohne `Result := …` als eigene Anweisung vor dem if
+- eine Compiler-Direktive, eine anonyme Methode, goto oder asm in der Routine; die Datei deklariert einen eigenen Bezeichner Exit; die Bedingung enthält einen bedingten Ausdruck (`if X then A else B`)
+- Code neben `begin` oder vor `end`, ein Kommentar im Kopf des if oder neben dem end, eine Blockzeile in einem Block-Kommentar oder mehrzeiligen String, ein Inline-`var`/`const` auf oberster Ebene des Blocks, ungleiche Einrückung
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+begin
+  Prepare;
+  if Ready then
+  begin
+    if B then
+      Work;
+    More;
+  end;
+end;
+```
+
+Nachher:
+
+```pascal
+begin
+  Prepare;
+  if not Ready then Exit;
+  if B then
+    Work;
+  More;
+end;
+```
+
+**Hinweis.** Kommentare im Block rücken mit ihrer Zeile aus. Die Hilfe nimmt an, dass die Bedingung ein Boolean-Ausdruck ist – für einen Variant mit Ganzzahlwert wäre `not` bitweise.
 
 <a id="sca020"></a>
 
@@ -2232,6 +2292,108 @@ Nachher:
   end;
 ```
 
+<a id="sca111"></a>
+
+### SCA111 – `ParamByName` vor die Schleife ziehen
+
+- **Regel:** SCA111 `ParamByNameInLoop` – ParamByName(...) called in loop
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** **ja** – fehlt der Parameter, kommt die Ausnahme jetzt auch, wenn die Schleife nie läuft; setzt ein Aufruf in der Schleife SQL oder Params indirekt neu, zeigt die Referenz ins Leere. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| en | de | fr |
+|---|---|---|
+| `Move %s before the loop` | `%s vor die Schleife ziehen` | `Déplacer %s avant la boucle` |
+
+**Platzhalter:** `%s` = der Aufruf, z. B. `Q.ParamByName('id')`; den neuen Namen nennt der Hinweis des Eintrags.
+
+**Wirkung:** Setzt `var PrmId := Q.ParamByName('id');` als eigene Zeile vor die Schleife (mit deren Einrückung) und ersetzt in der Schleife – Kopf, Rumpf, `until`-Bedingung – jedes `Q.ParamByName('id')` mit genau diesem Literal durch den Namen. Die Meldung nennt weder Empfänger noch Parameter: die Hilfe sucht den Aufruf auf der Fundzeile selbst. Der Name ist `Prm` plus der Parametername in Bezeichner-Teilen (`customer_id` → `PrmCustomerId`); kommt er in der Datei schon vor, `…2` bis `…9`. `Open`, `Close` und `ExecSQL` in der Schleife sind erlaubt – sie lassen die Parameter stehen. Die Inline-Variable braucht Delphi 10.3 oder neuer.
+
+**Nicht angeboten**
+
+- kein oder mehrere verschiedene `ParamByName`-Aufrufe auf der Fundzeile (Zeile verschoben bzw. mehrdeutig)
+- der Empfänger ist kein einfacher Name (`Self.Q`, `DM.Q`, `Q.Parameters` bei ADO), ist in der Datei als Property oder Routine deklariert oder dem Quellstellen-Dienst nicht als Variable, Parameter oder Feld bekannt; das Argument ist kein einzelnes String-Literal auf der Zeile, oder ein Kommentar steht im Aufruf
+- in der Schleife: `Q.SQL`, `Q.Params`, `Q.Prepare`/`Unprepare`/`Prepared`, `Q.Connection`, `Q.Command`, `Q.Free` u. a., `Q` wird zugewiesen, weitergereicht oder über ein anderes Objekt erreicht, oder eine anonyme Methode
+- die Schleife beginnt keine eigene Zeile und Anweisung in einem `begin..end` (nach `then`, `do`, `else`, im try-, except-, finally- oder case-Teil); `with`, `asm`, `goto` oder eine Direktive in der Routine; der Hauptblock eines Programms; eine Schleife davor, die die Hilfe nicht sicher liest
+- Dateien, die FPC oder ein Delphi vor 10.3 übersetzt (wie bei SCA014: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, Lazarus- oder alte Delphi-Projektdatei, `.pp`/`.lpr`), Skript-Units, ein Netzpfad
+- kein freier Name (`PrmX` bis `PrmX9` kommen in der Datei schon vor)
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  for i := 0 to High(Ids) do
+  begin
+    Q.ParamByName('id').AsInteger := Ids[i];
+    Q.ExecSQL;
+  end;
+```
+
+Nachher:
+
+```pascal
+  var PrmId := Q.ParamByName('id');
+  for i := 0 to High(Ids) do
+  begin
+    PrmId.AsInteger := Ids[i];
+    Q.ExecSQL;
+  end;
+```
+
+**Hinweis.** In geschachtelten Schleifen kommt der Lookup vor die innerste Schleife, deren Rumpf ihn trägt; der Detektor meldet die neue Zeile dann in der äußeren erneut, und ein zweiter Klick zieht sie weiter hinaus (`var PrmId := PrmId2;`), wenn die äußere Schleife es erlaubt.
+
+<a id="sca112"></a>
+
+### SCA112 – `FieldByName` vor die Schleife ziehen
+
+- **Regel:** SCA112 `FieldByNameInLoop` – FieldByName(...) called in loop
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** **ja** – fehlt das Feld, kommt die Ausnahme jetzt auch, wenn die Schleife nie läuft; schließt oder öffnet ein Aufruf in der Schleife die Datenmenge indirekt, zeigt die Referenz ins Leere. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| en | de | fr |
+|---|---|---|
+| `Move %s before the loop` | `%s vor die Schleife ziehen` | `Déplacer %s avant la boucle` |
+
+**Platzhalter:** `%s` = der Aufruf, z. B. `Q.FieldByName('Amount')`; den neuen Namen nennt der Hinweis des Eintrags.
+
+**Wirkung:** Setzt `var FldAmount := Q.FieldByName('Amount');` als eigene Zeile vor die Schleife (mit deren Einrückung) und ersetzt in der Schleife – Kopf, Rumpf, `until`-Bedingung – jedes `Q.FieldByName('Amount')` mit genau diesem Literal durch den Namen; ein anderes oder anders geschriebenes Literal (`'amount'`) bleibt stehen. Die Meldung nennt weder Empfänger noch Feld: die Hilfe sucht den Aufruf auf der Fundzeile selbst. Der Name ist `Fld` plus der Feldname in Bezeichner-Teilen (`customer_id` → `FldCustomerId`); kommt er in der Datei schon vor, `…2` bis `…9`. Die Inline-Variable braucht Delphi 10.3 oder neuer.
+
+**Nicht angeboten**
+
+- kein oder mehrere verschiedene `FieldByName`-Aufrufe auf der Fundzeile (Zeile verschoben bzw. mehrdeutig – etwa `Q.FieldByName('A').AsString + Q.FieldByName('B').AsString`)
+- der Empfänger ist kein einfacher Name (`Self.Q`, `DM.Q`, `Q.Fields`), ist in der Datei als Property oder Routine deklariert oder dem Quellstellen-Dienst nicht als Variable, Parameter oder Feld bekannt; das Argument ist kein einzelnes String-Literal auf der Zeile, oder ein Kommentar steht im Aufruf
+- in der Schleife: `Q.Open`, `Close`, `Active`, `SQL`, `Fields`, `FieldDefs`, `Refresh`, `Requery`, `ExecSQL`, `Prepare`/`Unprepare`, `NextRecordset`, `Connection`, `LoadFromFile`, `Free` u. a., `Q` wird zugewiesen, weitergereicht oder über ein anderes Objekt erreicht, oder eine anonyme Methode
+- die Schleife beginnt keine eigene Zeile und Anweisung in einem `begin..end` (nach `then`, `do`, `else`, im try-, except-, finally- oder case-Teil); `with`, `asm`, `goto` oder eine Direktive in der Routine; der Hauptblock eines Programms; eine Schleife davor, die die Hilfe nicht sicher liest
+- Dateien, die FPC oder ein Delphi vor 10.3 übersetzt (wie bei SCA014: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, Lazarus- oder alte Delphi-Projektdatei, `.pp`/`.lpr`), Skript-Units, ein Netzpfad
+- kein freier Name (`FldX` bis `FldX9` kommen in der Datei schon vor)
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  Total := 0;
+  while not Q.Eof do
+  begin
+    Total := Total + Q.FieldByName('Amount').AsCurrency;
+    Q.Next;
+  end;
+```
+
+Nachher:
+
+```pascal
+  Total := 0;
+  var FldAmount := Q.FieldByName('Amount');
+  while not Q.Eof do
+  begin
+    Total := Total + FldAmount.AsCurrency;
+    Q.Next;
+  end;
+```
+
+**Hinweis.** In geschachtelten Schleifen kommt der Lookup vor die innerste Schleife, deren Rumpf ihn trägt (dort, wo die Datenmenge in der äußeren Schleife neu geöffnet wird, ist das der richtige Platz); der Detektor meldet die neue Zeile dann in der äußeren erneut, und ein zweiter Klick zieht sie weiter hinaus (`var FldAmount := FldAmount2;`), wenn die äußere Schleife es erlaubt.
+
 <a id="sca113"></a>
 
 ### SCA113 – Resume durch Start ersetzen
@@ -3052,6 +3214,64 @@ end;
 
 **Hinweis.** Der leere `private`-Abschnitt, der danach bleiben kann, meldet SCA087 – mit eigener Hilfe.
 
+<a id="sca148"></a>
+
+### SCA148 – Methode zur statischen Klassenmethode machen
+
+- **Regel:** SCA148 `CanBeClassMethod` – Instance method never accesses Self - could be a class method
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Make %s a static class method` | `%s zur statischen Klassenmethode machen` | `Faire de %s une méthode de classe statique` |
+
+**Platzhalter:** `%s` = der Methodenname aus der Meldung.
+
+**Wirkung:** Macht eine Methode ohne Bezug auf ihr Objekt zur statischen Klassenmethode: an der Deklaration im Klassenrumpf kommt `class` davor und `static;` direkt hinter die Signatur (weitere Direktiven wie `inline` bleiben dahinter), am Kopf der Implementierung `class` davor – beides in einem Schritt. Eine statische Klassenmethode hat kein `Self`; Aufrufe mit Klammern (`Add(..)`, `Obj.Add(..)`, `TMath.Add(..)`) bleiben gültig. Die Hilfe prüft nur, was die Datei beweist: die Klasse steht dort und erbt direkt von TObject – dann kennt sie alle Member.
+
+**Nicht angeboten**
+
+- die Klasse steht nicht genau einmal in der Datei (etwa das Katalogbeispiel ohne Klasse, ein record), ist generisch, ein Helper oder hat eine andere Vorfahrenliste als `TObject`
+- der Rumpf nennt `Self`, `inherited` oder unqualifiziert einen Member der Klasse (Feld, Property, Konstante, Methode) bzw. von TObject (`ClassName`, `Free` …)
+- die Deklaration trägt virtual, dynamic, abstract, override, reintroduce, message, final, dispid, static, external oder overload, steht unter published (oder ohne Abschnitt in einer Datei mit `{$M+}`) oder hat ein Attribut; der Rumpf ist asm
+- der Methodenname steht noch einmal in der Klassendeklaration (Property-Accessor) oder in der Datei hinter `@`, als Wert einer Zuweisung bzw. als Argument ohne Klammern (möglicher Methodenzeiger `of object`)
+- mehrere Deklarationen oder Implementierungen, Konstruktor oder Destruktor, schon `class`, eine Compiler-Direktive oder ein geschachtelter Typ im Klassenrumpf, eine verschobene Zeile
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+type
+  TMath = class
+  public
+    function Add(A, B: Integer): Integer;
+  end;
+
+function TMath.Add(A, B: Integer): Integer;
+begin
+  Result := A + B;
+end;
+```
+
+Nachher:
+
+```pascal
+type
+  TMath = class
+  public
+    class function Add(A, B: Integer): Integer; static;
+  end;
+
+class function TMath.Add(A, B: Integer): Integer;
+begin
+  Result := A + B;
+end;
+```
+
+**Hinweis.** Andere Units sieht die Hilfe nicht: verwendet eine die Methode als Methodenzeiger (`of object`, etwa als Ereignis-Handler), übersetzt sie danach nicht mehr.
+
 <a id="sca149"></a>
 
 ### SCA149 – override bzw. reintroduce an die Deklaration anfügen
@@ -3126,6 +3346,47 @@ Nachher:
     procedure DoWork(A: Integer); reintroduce;
   end;
 ```
+
+<a id="sca150"></a>
+
+### SCA150 – Immer wahre Bedingung entfernen
+
+- **Regel:** SCA150 `BoolAlwaysTrue` – Boolean comparison is always true / always false
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Remove the always-true condition` | `Immer wahre Bedingung entfernen` | `Supprimer la condition toujours vraie` |
+
+**Wirkung:** Löst ein `if` auf, dessen ganze Bedingung immer wahr ist – `Length(X) >= 0` bzw. `0 <= Length(X)` (Length ist nie negativ): übrig bleibt der then-Zweig, ein else-Zweig lief nie und entfällt. Ein begin..end-Zweig bleibt als Block stehen, Kommentare darin und hinter dem `;` bleiben. Der Detektor meldet nur diese Length-Vergleiche, kein `if True then`.
+
+**Nicht angeboten**
+
+- die immer falsche Form (`Length(X) < 0`, `0 > Length(X)`): der Zweig lief nie – ob `= 0` gemeint war, entscheidet der Mensch
+- der Vergleich ist nicht die ganze Bedingung eines if als Anweisung (and/or, while, until, Zuweisung, bedingter Ausdruck) oder nicht immer wahr (`>= 0.5`, `1.0 <= Length(X)`)
+- das Argument von Length ist kein bloßer Name bzw. keine Kette `A.B` (Aufruf, Ausdruck, Literal, Index)
+- ein Zweig ist keine einfache Anweisung und kein begin..end (if, case, Schleife, try, with, anonyme Methode auf oberster Ebene, leer)
+- ein Kommentar in der Bedingung oder im else-Zweig, eine Compiler-Direktive im if, zwei Vergleiche auf der Zeile oder eine verschobene Zeile
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+if Length(S) >= 0 then
+  DoStuff
+else
+  DoOther;
+```
+
+Nachher:
+
+```pascal
+DoStuff;
+```
+
+**Hinweis.** Ein Name als Argument kann eine parameterlose Funktion sein – sie läuft danach nicht mehr. War ein anderer Vergleich gemeint (Tippfehler, etwa `> 0`), fehlt er weiterhin.
 
 <a id="sca153"></a>
 
@@ -3649,6 +3910,68 @@ end;
 
 **Hinweis.** Ändert die Routine selbst die Variable, die der Aufrufer übergibt (ein Feld, eine globale Variable), hängt ein const-Parameter danach an freigegebenem Text - diesen Fall sieht die Textprüfung nicht.
 
+<a id="sca174"></a>
+
+### SCA174 – TList<T> durch TObjectList<T> ersetzen
+
+- **Regel:** SCA174 `TObjectListWithoutOwnership` – TList<T> filled with T.Create - items leak when list is freed
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** **ja** – die Liste gibt ihre Elemente jetzt frei – bei Free, aber auch bei Clear und Delete. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| en | de | fr |
+|---|---|---|
+| `Use TObjectList<%s> so the list frees its items` | `TObjectList<%s> verwenden, damit die Liste ihre Elemente freigibt` | `Utiliser TObjectList<%s> pour que la liste libère ses éléments` |
+
+**Platzhalter:** `%s` = der Elementtyp aus der Meldung (etwa `TFoo`).
+
+**Wirkung:** Macht aus der lokalen Liste `L: TList<TFoo>`, die frisch erzeugte Objekte aufnimmt (`L.Add(TFoo.Create)`), eine `TObjectList<TFoo>` – in der Deklaration und im `TList<TFoo>.Create`, in einem Schritt (inline `var L: TList<TFoo> := …` ebenso, bei `var L := TList<TFoo>.Create` nur das Create). Die Liste besitzt ihre Elemente danach (`OwnsObjects` ist `True`) und gibt sie mit `Free` frei. Die Hilfe prüft vorher am Text, dass nichts doppelt freigegeben wird.
+
+**Nicht angeboten**
+
+- die Liste ist keine lokale Variable der Routine: Parameter, Feld (auch `FList` im Konstruktor), globale Variable, Variable einer äußeren Routine; mit anderen zusammen deklariert (`L, M: TList<TFoo>`), anders deklariert (`TList<TBar>`, qualifiziert, Alias) oder in einer verschachtelten Routine genutzt
+- die Variable wird nicht genau einmal zugewiesen, oder die Zuweisung ist kein `TList<TFoo>.Create` ohne Argumente (`Create(Andere)` übernähme fremde Objekte)
+- ein `Add`/`Insert` nimmt ein Objekt, das nicht genau dort entsteht (`L.Add(Item)`) oder dessen Konstruktor ein Argument bekommt, das kein Literal ist (`TFoo.Create(Self)` – ein TComponent-Besitzer gibt es selbst frei)
+- ein Element wird freigegeben (`L[i].Free`, `FreeAndNil(L[0])`, `for E in L do E.Free`) oder als Wert benutzt (`X := L[0]`, `Keep(L.First)`), die Liste selbst als Wert (`Result := L`, `Keep(L)`)
+- ein Member außerhalb einer festen Liste (`Extract`, `Remove`, `ToArray`, `List`, `AddRange`, `OnNotify` …) oder eine Zuweisung an ein Member (`L.Count := 0`, `L[0] := …`)
+- ein `with` oder eine Compiler-Direktive in der Routine; `System.Generics.Collections` fehlt in uses; die Datei deklariert selbst einen Typ `TList` bzw. `TObjectList`
+- auf der Zeile steht kein `L.Add(` (Zeile verschoben)
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+procedure Foo;
+var
+  L: TList<TFoo>;
+begin
+  L := TList<TFoo>.Create;
+  try
+    L.Add(TFoo.Create);
+  finally
+    L.Free;
+  end;
+end;
+```
+
+Nachher:
+
+```pascal
+procedure Foo;
+var
+  L: TObjectList<TFoo>;
+begin
+  L := TObjectList<TFoo>.Create;
+  try
+    L.Add(TFoo.Create);
+  finally
+    L.Free;
+  end;
+end;
+```
+
+**Hinweis.** Ob `TFoo` eine Klasse ist, prüft die Hilfe nicht – für einen Record übersetzt die Unit danach nicht (TObjectList<T> verlangt eine Klasse), es entsteht kein stiller Fehler. Ein Konstruktor, der das neue Objekt selbst irgendwo einträgt, ist am Text nicht zu sehen.
+
 <a id="sca179"></a>
 
 ### SCA179 – Grund zu [Ignore] hinzufügen
@@ -3881,6 +4204,59 @@ Nachher:
 
 **Hinweis.** ‹U+200B› und ‹U+200D› stehen im Beispiel für die unsichtbaren Zeichen. ZWSP, Word-Joiner und U+FEFF verbinden nichts und werden im Kommentar immer gelöscht, auch neben Nicht-ASCII-Text. Der Detektor meldet je Datei nur die erste betroffene Zeile; nach der Hilfe meldet er die nächste.
 
+<a id="sca193"></a>
+
+### SCA193 – Doppelgänger-Buchstaben im Namen durch ASCII ersetzen
+
+- **Regel:** SCA193 `SourceNonAsciiIdentifier` – Non-ASCII character in identifier
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Write the name in ASCII letters: %s` | `Namen in ASCII-Buchstaben schreiben: %s` | `Écrire le nom en lettres ASCII : %s` |
+
+**Platzhalter:** `%s` = der neue Name in ASCII (etwa `Login`); `X`, wenn die Hilfe vorher ablehnt.
+
+**Wirkung:** Schreibt den ersten Bezeichner der gemeldeten Zeile, in dem ein Buchstabe nur lateinisch aussieht (Homoglyph: kyrillisches `о` U+043E statt `o`, griechisches `Μ` U+039C statt `M`), in ASCII – an allen Vorkommen im Code der Unit, in einem Schritt. Bedeutungsgleich: der Name gilt nur in dieser Unit, und der neue Name ist dort noch frei. Kommentare bleiben, wie sie sind. Die Hilfe kennt nur eine feste Tabelle bekannter Doppelgänger (kyrillische und griechische Buchstaben).
+
+**Nicht angeboten**
+
+- ein Zeichen des Namens steht nicht in der Tabelle (Umlaut, ein Buchstabe ohne lateinischen Doppelgänger) oder der Name hat keinen einzigen ASCII-Buchstaben (Name in einer anderen Schrift)
+- der Name steht im interface-Teil, die Datei ist keine Unit (Programm, Bibliothek, Include-Datei) oder hat eine `exports`-Klausel
+- das erste Vorkommen ist nicht die Deklaration (der Name kommt dann aus einer anderen Unit: Nutzung im Rumpf, als Typ, in `uses`, in `initialization`), eine lokale Deklaration wird außerhalb ihrer Routine genutzt, oder ein Vorkommen ist anders geschrieben
+- der neue Name ist ein reserviertes Wort oder steht schon im Code der Datei; ein `with` liegt im Gültigkeitsbereich; ein String ohne Leerzeichen (`'Login'`, `'TUser.Login'`) oder eine Compiler-Direktive nennt den alten oder neuen Namen
+- vor der Deklaration steht ein Routinenkopf, dessen Grenzen nicht sicher lesbar sind (lokaler Klassentyp, Methoden einer Klasse im implementation-Teil)
+- auf der Zeile steht kein Bezeichner mit Nicht-ASCII-Zeichen im Code (Zeile verschoben)
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+procedure Foo;
+var
+  L‹U+043E›gin: string;
+begin
+  L‹U+043E›gin := 'x';
+  Show(L‹U+043E›gin);
+end;
+```
+
+Nachher:
+
+```pascal
+procedure Foo;
+var
+  Login: string;
+begin
+  Login := 'x';
+  Show(Login);
+end;
+```
+
+**Hinweis.** ‹U+043E› steht im Beispiel für das kyrillische o, das im Editor genau wie das lateinische aussieht. Der Detektor meldet je Datei nur die erste betroffene Zeile; nach der Hilfe meldet er den nächsten Namen. Ein String mit Leerzeichen (`'Login failed'`) gilt als Satz und sperrt nicht.
+
 <a id="sca196"></a>
 
 ### SCA196 – Result zuerst initialisieren
@@ -3973,6 +4349,54 @@ type
 ```
 
 **Hinweis.** Im Beispiel steht eine feste GUID wie im Test; die Hilfe erzeugt jedes Mal eine neue.
+
+<a id="sca199"></a>
+
+### SCA199 – Parameternamen mit Tippfehler durch den Platzhalter des SQL ersetzen
+
+- **Regel:** SCA199 `ParamNameMismatch` – ParamByName name does not match the SQL placeholders
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** **ja** – der Aufruf bindet danach einen anderen Parameter, statt zur Laufzeit mit „parameter not found“ abzubrechen – prüfen, dass der Wert zu diesem Platzhalter gehört. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| en | de | fr |
+|---|---|---|
+| `Use parameter name "%s" from the SQL` | `Parameternamen "%s" aus dem SQL verwenden` | `Utiliser le nom de paramètre « %s » du SQL` |
+
+**Platzhalter:** `%s` = der eingesetzte Platzhalter (ohne `:`).
+
+**Wirkung:** Ersetzt im gemeldeten `ParamByName('x')` den Namen durch den Platzhalter des SQL, der genau einen Tippfehler entfernt ist: ein Zeichen mehr, weniger oder anders, oder zwei Nachbarn vertauscht (`'Nmae'` → `'Name'`, `'custid'` → `'cust_id'`). Die Kandidaten nennt die Meldung (`(it has :Id, :Name)`); eingesetzt wird die Schreibweise des SQL. Nur der Text zwischen den Quotes ändert sich; auch `Q.Params.ParamByName`, `Q.Parameters.ParamByName` und `Self.Q`.
+
+**Nicht angeboten**
+
+- der andere Fund der Regel: ein Platzhalter, den die Routine nie setzt (kein Wert bekannt)
+- kein Platzhalter oder mehr als einer ist einen Tippfehler entfernt (das Katalogbeispiel `custid` → `customer_id` ist kein Tippfehler), einer der Namen ist kürzer als drei Zeichen, die Meldung nennt keine oder nur einen Teil der Platzhalter (mehr als sechs)
+- der Name ist kein einfaches Literal als ganzes Argument (`'Nm' + 'ae'`, `#`-Zeichen, Variable), steht zweimal auf der Zeile, oder die Zeile ist verschoben; Query hinter einem Cast oder Index
+- die Routine setzt den gewählten Namen schon (ParamByName, FindParam, ParamValues, SetVariable, CreateParam …) – ein zweiter Zugriff überschriebe einen Wert
+- keine Routine mit begin..end-Rumpf um den Aufruf (initialization) oder unsichere Routinengrenzen
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  Q.SQL.Clear;
+  Q.SQL.Add('select * from t where name = :Name and id = :Id');
+  Q.ParamByName('Nmae').AsString := 'x';
+  Q.ParamByName('Id').AsInteger := 1;
+  Q.Open;
+```
+
+Nachher:
+
+```pascal
+  Q.SQL.Clear;
+  Q.SQL.Add('select * from t where name = :Name and id = :Id');
+  Q.ParamByName('Name').AsString := 'x';
+  Q.ParamByName('Id').AsInteger := 1;
+  Q.Open;
+```
+
+**Hinweis.** Steht derselbe falsche Name zweimal in der Routine, gilt die Hilfe nur für das erste Vorkommen: danach setzt die Routine den Namen schon, und das zweite bleibt Handarbeit.
 
 ## Weitere Code-Aktionen
 

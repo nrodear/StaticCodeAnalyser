@@ -61,13 +61,15 @@ type
 const
   // Von Hand gegen FIX_ROWS, FIX_CAPTIONS und FIX_ALT_CAPTIONS geprueft
   // (Stand b2538e20, Chargen bis R; Charge QF bei der Integration
-  // 2026-10-22 gegen die Integrationsnotizen): jede Art mit ihrem Planer und
-  // ihrem Menuetext. Gekennzeichnet (Changes) sind SCA007, SCA120, die
-  // Hilfen der Charge H4, SCA121, SCA196, SCA115, SCA093, SCA161, SCA046,
-  // SCA002, SCA159 und SCA065 sowie SCA137, SCA167, SCA144, SCA154, SCA017,
-  // SCA131 und SCA169; SCA149, SCA096 und SCA097 kennzeichnet der Planer,
-  // die zweiten Eintraege von SCA128/SCA059 kennzeichnen sich selbst.
-  EXPECTED: array[0..81] of TExpectedRow = (
+  // 2026-10-22 gegen die Integrationsnotizen, ebenso QF8..QF11 und
+  // QF12..QF15): jede Art mit ihrem Planer und ihrem Menuetext.
+  // Gekennzeichnet (Changes) sind SCA007, SCA120, die Hilfen der Charge H4,
+  // SCA121, SCA196, SCA115, SCA093, SCA161, SCA046, SCA002, SCA159 und
+  // SCA065 sowie SCA137, SCA167, SCA144, SCA154, SCA017, SCA131, SCA169,
+  // SCA127, SCA174, SCA199, SCA111 und SCA112; SCA149, SCA096, SCA097 und
+  // SCA086 kennzeichnet der Planer, die zweiten Eintraege von SCA128/SCA059
+  // kennzeichnen sich selbst.
+  EXPECTED: array[0..89] of TExpectedRow = (
     (Kind: fkExplicitTObjectInheritance; Plan: 'PlanExplicitTObject';
      Caption: 'Remove (TObject) from the class declaration';
      Changes: False; Alt: ''; AltCaption: ''),
@@ -323,7 +325,32 @@ const
     (Kind: fkRaisingRawException; Plan: 'PlanRaisingRawException';
      Caption: 'Raise EArgumentException instead (wrong argument)';
      Changes: True; Alt: 'PlanRaisingRawExceptionAlt';
-     AltCaption: 'Raise EInvalidOpException instead (invalid state)')
+     AltCaption: 'Raise EInvalidOpException instead (invalid state)'),
+    // Chargen QF12..QF15 (8 weitere Hilfen).
+    (Kind: fkCanBeClassMethod; Plan: 'PlanCanBeClassMethod';
+     Caption: 'Make %s a static class method';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkBoolAlwaysTrue; Plan: 'PlanBoolAlwaysTrue';
+     Caption: 'Remove the always-true condition';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkTObjectListWithoutOwnership; Plan: 'PlanObjectList';
+     Caption: 'Use TObjectList<%s> so the list frees its items';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkSourceNonAsciiIdentifier; Plan: 'PlanHomoglyph';
+     Caption: 'Write the name in ASCII letters: %s';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkParamNameMismatch; Plan: 'PlanParamName';
+     Caption: 'Use parameter name "%s" from the SQL';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkDeepNesting; Plan: 'PlanDeepNesting';
+     Caption: 'Turn the last if into a guard clause with Exit';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkParamByNameInLoop; Plan: 'PlanParamByNameLoop';
+     Caption: 'Move %s before the loop';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkFieldByNameInLoop; Plan: 'PlanFieldByNameLoop';
+     Caption: 'Move %s before the loop';
+     Changes: True; Alt: ''; AltCaption: '')
   );
 
 procedure TTestRdxFixTable.EveryRow_HasPlanHintAndCaption;

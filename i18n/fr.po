@@ -3699,3 +3699,390 @@ msgstr "include {$I} à la ligne %d - il peut utiliser ou déclarer la routine"
 
 msgid "{$I} include in line %d - it can use the routine as a value"
 msgstr "include {$I} à la ligne %d - il peut utiliser la routine comme valeur"
+
+msgid "\"%s\" also appears in the declaration part of the routine (line %d) - a nested routine or a second declaration"
+msgstr "« %s » apparaît aussi dans la partie déclarative de la routine (ligne %d) - une routine imbriquée ou une seconde déclaration"
+
+msgid "\"%s\" is a parameter of the routine - the list comes from the caller"
+msgstr "« %s » est un paramètre de la routine - la liste vient de l'appelant"
+
+msgid "\"%s\" is assigned %d times in the routine - the help needs exactly one \"TList<%s>.Create\""
+msgstr "« %s » est affectée %d fois dans la routine - l'aide a besoin d'exactement un « TList<%s>.Create »"
+
+msgid "\"%s\" is declared more than once in the routine"
+msgstr "« %s » est déclarée plus d'une fois dans la routine"
+
+msgid "\"%s\" is declared together with other variables - their type would change too"
+msgstr "« %s » est déclarée avec d'autres variables - leur type changerait aussi"
+
+msgid "\"%s\" is not a local variable of the routine - a field or global list can be filled or freed elsewhere"
+msgstr "« %s » n'est pas une variable locale de la routine - une liste dans un champ ou une variable globale peut être remplie ou libérée ailleurs"
+
+msgid "\"%s\" is used as a value on line %d (passed, assigned or returned) - the list or its items may get another owner"
+msgstr "« %s » est utilisée comme valeur à la ligne %d (passée, affectée ou renvoyée) - la liste ou ses éléments peuvent obtenir un autre propriétaire"
+
+msgid "\"%s.%s\" (line %d) is not checked by the help - it could hand out or free items"
+msgstr "l'aide ne vérifie pas « %s.%s » (ligne %d) - cela pourrait céder ou libérer des éléments"
+
+msgid "%d classes named %s in this file"
+msgstr "%d classes nommées %s dans ce fichier"
+
+msgid "%d declarations of %s in the class - overload?"
+msgstr "%d déclarations de %s dans la classe - surcharge ?"
+
+msgid "%d implementations of %s - overload?"
+msgstr "%d implémentations de %s - surcharge ?"
+
+msgid "%d placeholders are one typo away from \"%s\" - ambiguous"
+msgstr "%d paramètres sont à une faute de frappe de « %s » - ambigu"
+
+msgid "%s - only a procedure or function can become a class method"
+msgstr "%s - seule une procedure ou une function peut devenir méthode de classe"
+
+msgid "%s appears in line %d other than as \"%s.Member\" - assigned, passed on, declared or reached through another object"
+msgstr "%s apparaît à la ligne %d autrement que \"%s.Member\" - affecté, transmis, déclaré ou atteint via un autre objet"
+
+msgid "%s in line %d can close %s or rebuild its fields - the reference fetched before the loop would point into the void"
+msgstr "%s à la ligne %d peut fermer %s ou recréer ses champs - la référence obtenue avant la boucle pointerait dans le vide"
+
+msgid "%s in line %d can rebuild the parameters of %s - the reference fetched before the loop would point into the void"
+msgstr "%s à la ligne %d peut recréer les paramètres de %s - la référence obtenue avant la boucle pointerait dans le vide"
+
+msgid "%s in the name is no known look-alike of an ASCII letter - maybe an intended letter"
+msgstr "%s dans le nom n'est pas un sosie connu d'une lettre ASCII - peut-être une lettre voulue"
+
+msgid "%s is a reserved word"
+msgstr "%s est un mot réservé"
+
+msgid "%s is declared as a property or routine in this file - it could return another object on each call"
+msgstr "%s est déclaré comme propriété ou routine dans ce fichier - il pourrait renvoyer un autre objet à chaque appel"
+
+msgid "%s is named again in the class declaration (line %d) - property accessor?"
+msgstr "%s est cité une autre fois dans la déclaration de classe (ligne %d) - accesseur de propriété ?"
+
+msgid "%s is not known here as a variable, parameter or field - it could be a function that returns another object on each call"
+msgstr "%s n'est pas connu ici comme variable, paramètre ou champ - ce pourrait être une fonction qui renvoie un autre objet à chaque appel"
+
+msgid "%s is used in line %d not as a call - possibly as a method pointer (\"of object\")"
+msgstr "%s est utilisé à la ligne %d autrement que comme appel - peut-être comme pointeur de méthode (« of object »)"
+
+msgid "Make %s a static class method"
+msgstr "Faire de %s une méthode de classe statique"
+
+msgid "Move %s before the loop"
+msgstr "Déplacer %s avant la boucle"
+
+msgid "Remove the always-true condition"
+msgstr "Supprimer la condition toujours vraie"
+
+msgid "System.Generics.Collections is not in a uses clause of the file - TObjectList<T> may not come from there"
+msgstr "System.Generics.Collections ne figure dans aucune clause uses du fichier - TObjectList<T> pourrait ne pas en provenir"
+
+msgid "Turn the last if into a guard clause with Exit"
+msgstr "Transformer le dernier if en clause de garde avec Exit"
+
+msgid "Use TObjectList<%s> so the list frees its items"
+msgstr "Utiliser TObjectList<%s> pour que la liste libère ses éléments"
+
+msgid "Use parameter name \"%s\" from the SQL"
+msgstr "Utiliser le nom de paramètre « %s » du SQL"
+
+msgid "Write the name in ASCII letters: %s"
+msgstr "Écrire le nom en lettres ASCII : %s"
+
+msgid "a \"with\" statement (line %d) could bind the new name %s to a member"
+msgstr "une instruction « with » (ligne %d) pourrait lier le nouveau nom %s à un membre"
+
+msgid "a compiler directive names %s (line %d)"
+msgstr "une directive de compilation nomme %s (ligne %d)"
+
+msgid "a line of the block starts inside a block comment or multi-line string - moving it left would change it"
+msgstr "une ligne du bloc commence dans un commentaire de bloc ou une chaîne multiligne - la décaler à gauche la modifierait"
+
+msgid "a string literal names %s (line %d) - a lookup by name (RTTI, scripts) could change"
+msgstr "une chaîne littérale nomme %s (ligne %d) - une recherche par nom (RTTI, scripts) pourrait changer"
+
+msgid "assembler body - it can reach Self through a register"
+msgstr "corps en assembleur - il peut atteindre Self par un registre"
+
+msgid "attribute on the class or the method - RTTI could call the method on an object"
+msgstr "attribut sur la classe ou la méthode - la RTTI pourrait appeler la méthode sur un objet"
+
+msgid "class or method missing from the message"
+msgstr "classe ou méthode absente du message"
+
+msgid "comment in the condition or in the \"else\" branch - it would be lost"
+msgstr "commentaire dans la condition ou dans la branche « else » - il serait perdu"
+
+msgid "comment in the head of the if or beside its end"
+msgstr "commentaire dans l'en-tête du if ou à côté de son end"
+
+msgid "comment inside %s in line %d"
+msgstr "commentaire dans %s à la ligne %d"
+
+msgid "compiler directive in the \"if\" statement"
+msgstr "directive de compilation dans l'instruction « if »"
+
+msgid "compiler directive in the class declaration"
+msgstr "directive de compilation dans la déclaration de classe"
+
+msgid "compiler directive in the routine - conditional code could change its last statement"
+msgstr "directive de compilation dans la routine - le code conditionnel pourrait changer sa dernière instruction"
+
+msgid "compiler directive in the routine - conditional code could hide a use of the list"
+msgstr "directive de compilation dans la routine - du code conditionnel pourrait masquer une utilisation de la liste"
+
+msgid "compiler directive in the routine - conditional code could reopen %s"
+msgstr "directive de compilation dans la routine - du code conditionnel pourrait rouvrir %s"
+
+msgid "declaration and implementation of %s differ (procedure/function)"
+msgstr "la déclaration et l'implémentation de %s diffèrent (procedure/function)"
+
+msgid "directive \"%s\" on the declaration"
+msgstr "directive « %s » sur la déclaration"
+
+msgid "end of the class declaration not found"
+msgstr "fin de la déclaration de classe introuvable"
+
+msgid "if, begin and end do not stand on their own lines as usual (code beside them)"
+msgstr "if, begin et end ne sont pas sur leurs propres lignes comme d'habitude (du code à côté)"
+
+msgid "inline var or const at the top of the block - its scope would grow to the rest of the routine"
+msgstr "var ou const en ligne au niveau supérieur du bloc - sa portée s'étendrait au reste de la routine"
+
+msgid "inline variables exist from Delphi 10.3 on - the file has traces of older compilers (%s, line %d)"
+msgstr "les variables inline existent à partir de Delphi 10.3 - le fichier porte des traces de compilateurs plus anciens (%s, ligne %d)"
+
+msgid "line %d adds an object that is not created right there (or with a non-literal argument such as an owner) - it may have another owner"
+msgstr "la ligne %d ajoute un objet qui n'est pas créé à cet endroit (ou avec un argument non littéral, par exemple un propriétaire) - il peut avoir un autre propriétaire"
+
+msgid "line %d assigns to a property of \"%s\" - an owning list frees the items it drops"
+msgstr "la ligne %d affecte une propriété de « %s » - une liste propriétaire libère les éléments qu'elle retire"
+
+msgid "line %d spells the name differently - the help renames one spelling only"
+msgstr "la ligne %d écrit le nom autrement - l'aide ne renomme qu'une seule graphie"
+
+msgid "line %d uses an item of the list as a value or frees it - after the change the list frees it, too"
+msgstr "la ligne %d utilise un élément de la liste comme valeur ou le libère - après la modification, la liste le libère aussi"
+
+msgid "method of a nested type (%s)"
+msgstr "méthode d'un type imbriqué (%s)"
+
+msgid "nested type in the class declaration"
+msgstr "type imbriqué dans la déclaration de classe"
+
+msgid "no \"%s\" on the reported line"
+msgstr "aucun « %s » sur la ligne signalée"
+
+msgid "no \"%s.Add(\" on the reported line"
+msgstr "aucun « %s.Add( » sur la ligne signalée"
+
+msgid "no %s call with a receiver on the reported line"
+msgstr "aucun appel %s avec récepteur sur la ligne signalée"
+
+msgid "no %s.ParamByName(\"%s\") with the name as a plain literal on the reported line"
+msgstr "aucun %s.ParamByName(\"%s\") avec le nom en littéral simple sur la ligne signalée"
+
+msgid "no class %s with a body in this file (record, other unit?)"
+msgstr "aucune classe %s avec corps dans ce fichier (record, autre unité ?)"
+
+msgid "no comparison %s on the reported line"
+msgstr "aucune comparaison %s sur la ligne signalée"
+
+msgid "no for, while or repeat loop around the call"
+msgstr "aucune boucle for, while ou repeat autour de l'appel"
+
+msgid "no free name for the variable - %s and %s2 to %s9 already occur in the file"
+msgstr "aucun nom libre pour la variable - %s et %s2 à %s9 figurent déjà dans le fichier"
+
+msgid "no header of the method %s"
+msgstr "aucun en-tête de la méthode %s"
+
+msgid "no identifier with a non-ASCII character in the code of the reported line"
+msgstr "aucun identificateur contenant un caractère non ASCII dans le code de la ligne signalée"
+
+msgid "no placeholder of the SQL is one typo away from \"%s\" (%s)"
+msgstr "aucun paramètre du SQL n'est à une faute de frappe de « %s » (%s)"
+
+msgid "no routine with a begin..end body around the call"
+msgstr "aucune routine avec un corps begin..end autour de l'appel"
+
+msgid "no routine with a begin..end body around the reported line"
+msgstr "aucune routine avec un corps begin..end autour de la ligne signalée"
+
+msgid "only for ParamByName with a name the SQL does not have - a placeholder that is never set needs a value"
+msgstr "uniquement pour ParamByName avec un nom que le SQL ne connaît pas - un paramètre jamais affecté a besoin d'une valeur"
+
+msgid "the \"if\" is not a statement (conditional expression?)"
+msgstr "le « if » n'est pas une instruction (expression conditionnelle ?)"
+
+msgid "the SQL has no named placeholders - nothing to choose from"
+msgstr "le SQL n'a aucun paramètre nommé - rien à choisir"
+
+msgid "the argument of %s is not a single string literal on the same line"
+msgstr "l'argument de %s n'est pas un littéral de chaîne unique sur la même ligne"
+
+msgid "the argument of Length is not a plain name - its evaluation would be dropped"
+msgstr "l'argument de Length n'est pas un simple nom - son évaluation disparaîtrait"
+
+msgid "the assignment to \"%s\" (line %d) is not \"TList<%s>.Create\" without arguments"
+msgstr "l'affectation à « %s » (ligne %d) n'est pas « TList<%s>.Create » sans arguments"
+
+msgid "the body names %s (line %d) - Self, inherited or a member of the class or of TObject"
+msgstr "le corps cite %s (ligne %d) - Self, inherited ou un membre de la classe ou de TObject"
+
+msgid "the bounds of a routine before line %d are not safe to read"
+msgstr "les limites d'une routine avant la ligne %d ne peuvent pas être lues de façon sûre"
+
+msgid "the bounds of the method %s are not safe to read"
+msgstr "les limites de la méthode %s ne se lisent pas de façon sûre"
+
+msgid "the bounds of the routine around the call are not safe to read"
+msgstr "les limites de la routine autour de l'appel ne sont pas lisibles de façon sûre"
+
+msgid "the bounds of the routine around the reported line are not safe to read"
+msgstr "les limites de la routine autour de la ligne signalée ne sont pas lisibles de façon sûre"
+
+msgid "the branch after \"%s\" is no single statement or begin..end block"
+msgstr "la branche après « %s » n'est ni une instruction simple ni un bloc begin..end"
+
+msgid "the class has the ancestor list (%s) - only a direct descendant of TObject is checked"
+msgstr "la classe a la liste d'ancêtres (%s) - seul un descendant direct de TObject est vérifié"
+
+msgid "the class is generic"
+msgstr "la classe est générique"
+
+msgid "the comparison is not the whole condition of an \"if\" (and/or, while, until, assignment)"
+msgstr "la comparaison n'est pas toute la condition d'un « if » (and/or, while, until, affectation)"
+
+msgid "the condition contains a conditional expression (if .. then .. else)"
+msgstr "la condition contient une expression conditionnelle (if .. then .. else)"
+
+msgid "the condition is always False - the branch never ran; whether \"= 0\" was meant is for a human to decide"
+msgstr "la condition est toujours False - la branche ne s'exécutait jamais ; si « = 0 » était voulu, c'est à un humain d'en décider"
+
+msgid "the declaration of \"%s\" (line %d) is not \"TList<%s>\""
+msgstr "la déclaration de « %s » (ligne %d) n'est pas « TList<%s> »"
+
+msgid "the declaration of %s is not safe to read"
+msgstr "la déclaration de %s ne se lit pas de façon sûre"
+
+msgid "the file declares its own type %s"
+msgstr "le fichier déclare son propre type %s"
+
+msgid "the file does not start with unit/program/library or has no implementation part (include or script?) - only the Delphi compiler knows inline variables"
+msgstr "le fichier ne commence pas par unit/program/library ou n'a pas de partie implementation (include ou script ?) - seul le compilateur Delphi connaît les variables inline"
+
+msgid "the file has an FPC switch (line %d) - FPC 3.2 has no inline variables"
+msgstr "le fichier contient un aiguillage FPC (ligne %d) - FPC 3.2 ne connaît pas les variables inline"
+
+msgid "the file is no unit with an implementation part, or it exports routines - the name may be used elsewhere"
+msgstr "le fichier n'est pas une unité avec une partie implementation, ou il exporte des routines - le nom peut être utilisé ailleurs"
+
+msgid "the first use of the name (line %d) is not its declaration - it may come from another unit"
+msgstr "la première occurrence du nom (ligne %d) n'est pas sa déclaration - il peut venir d'une autre unité"
+
+msgid "the function does not set Result by a plain statement before the if; by hand"
+msgstr "la fonction n'affecte pas Result par une instruction simple avant le if ; à la main"
+
+msgid "the header is not the one implementation of %s after \"implementation\""
+msgstr "l'en-tête n'est pas l'unique implémentation de %s après « implementation »"
+
+msgid "the last if is not a statement of the routine body itself (\"%s\" before it)"
+msgstr "le dernier if n'est pas une instruction du corps de la routine lui-même (« %s » avant lui)"
+
+msgid "the last statement of the routine is not \"if ... then begin ... end\" - a guard clause fits only there"
+msgstr "la dernière instruction de la routine n'est pas « if ... then begin ... end » - une clause de garde ne convient que là"
+
+msgid "the line calls ParamByName(\"%s\") more than once"
+msgstr "la ligne appelle ParamByName(\"%s\") plus d'une fois"
+
+msgid "the line has %d different %s calls - which one the finding means is unclear"
+msgstr "la ligne contient %d appels %s différents - on ne sait pas lequel le constat désigne"
+
+msgid "the line has more than one comparison %s"
+msgstr "la ligne porte plus d'une comparaison %s"
+
+msgid "the line has more than one header of the method %s"
+msgstr "la ligne porte plus d'un en-tête de la méthode %s"
+
+msgid "the loop contains an anonymous method - it could run later, when %s has changed"
+msgstr "la boucle contient une méthode anonyme - elle pourrait s'exécuter plus tard, quand %s aura changé"
+
+msgid "the loop in line %d does not start its own line and statement in a begin..end block - no place for the declaration"
+msgstr "la boucle de la ligne %d ne commence pas sa propre ligne et instruction dans un bloc begin..end - pas de place pour la déclaration"
+
+msgid "the loop in line %d is not safe to read"
+msgstr "la boucle de la ligne %d n'est pas lisible de façon sûre"
+
+msgid "the loop variable \"%s\" (line %d) is used as a value or freed - after the change the list frees its items"
+msgstr "la variable de boucle « %s » (ligne %d) est utilisée comme valeur ou libérée - après la modification, la liste libère ses éléments"
+
+msgid "the message does not have the expected form"
+msgstr "le message n'a pas la forme attendue"
+
+msgid "the message lists only part of the placeholders - the right one could be missing"
+msgstr "le message ne cite qu'une partie des paramètres - le bon pourrait manquer"
+
+msgid "the message names no known always-true comparison"
+msgstr "le message ne nomme aucune comparaison toujours vraie connue"
+
+msgid "the message names no list variable or no item type"
+msgstr "le message ne nomme aucune variable de liste ou aucun type d'élément"
+
+msgid "the message names no nesting kind"
+msgstr "le message ne nomme aucun type d'imbrication"
+
+msgid "the method is already a class method"
+msgstr "la méthode est déjà une méthode de classe"
+
+msgid "the method is published - the form designer can bind it to an event"
+msgstr "la méthode est published - le concepteur de fiches peut la lier à un événement"
+
+msgid "the method stands before any visibility section and the file switches type information on ({$M+}) - it could be published"
+msgstr "la méthode précède toute section de visibilité et le fichier active les informations de type ({$M+}) - elle pourrait être published"
+
+msgid "the name \"%s\" is too short to tell a typo from another name"
+msgstr "le nom « %s » est trop court pour distinguer une faute de frappe d'un autre nom"
+
+msgid "the name %s is already used in the code (line %d)"
+msgstr "le nom %s est déjà utilisé dans le code (ligne %d)"
+
+msgid "the name appears in the interface part (line %d) - other units can use it"
+msgstr "le nom apparaît dans la partie interface (ligne %d) - d'autres unités peuvent l'utiliser"
+
+msgid "the name has no ASCII letter - a name written in another script is no look-alike"
+msgstr "le nom ne contient aucune lettre ASCII - un nom écrit dans une autre écriture n'est pas un sosie"
+
+msgid "the name is declared in a routine but used outside of it (line %d) - another declaration may be meant there"
+msgstr "le nom est déclaré dans une routine mais utilisé en dehors (ligne %d) - une autre déclaration peut y être visée"
+
+msgid "the receiver of %s is not a plain variable name (Self, a qualified name or an expression)"
+msgstr "le récepteur de %s n'est pas un simple nom de variable (Self, un nom qualifié ou une expression)"
+
+msgid "the reported nesting is not inside the last if of the routine - a guard clause would not flatten it"
+msgstr "l'imbrication signalée n'est pas dans le dernier if de la routine - une clause de garde ne l'aplatirait pas"
+
+msgid "the routine already sets \"%s\" - a second assignment would overwrite its value; by hand"
+msgstr "la routine affecte déjà « %s » - une seconde affectation écraserait sa valeur ; à la main"
+
+msgid "the routine contains \"%s\" - the helper does not move code there"
+msgstr "la routine contient \"%s\" - l'aide n'y déplace pas de code"
+
+msgid "the routine contains a \"with\" statement - a name in it could bind to a member"
+msgstr "la routine contient une instruction « with » - un nom à l'intérieur pourrait se lier à un membre"
+
+msgid "the routine contains an anonymous method"
+msgstr "la routine contient une méthode anonyme"
+
+msgid "the routine contains goto or asm"
+msgstr "la routine contient goto ou asm"
+
+msgid "the type is a class helper"
+msgstr "le type est un class helper"
+
+msgid "uneven indentation in the block - line %d"
+msgstr "indentation irrégulière dans le bloc - ligne %d"
+
+msgid "unexpected code after the \"if\" statement"
+msgstr "code inattendu après l'instruction « if »"

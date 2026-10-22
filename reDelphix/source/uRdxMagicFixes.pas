@@ -80,6 +80,9 @@ unit uRdxMagicFixes;
 //     Sprachmittel (TRdxLateFeature) - es waehlt die Schwelle
 //     (FLOOR_INLINE_DECL bzw. FLOOR_DIGIT_SEP) und den Grundtext; fuer
 //     SCA014 (lfInlineConst) bleiben Schwelle und Texte, wie sie waren.
+//     Seit der Integration QFI3 auch SCA111/SCA112 (lfInlineVar: die
+//     Inline-Variable vor der Schleife - dieselbe Schwelle 10.3, ein
+//     eigener Grundtext).
 // Korpus Q14 (5.036 Funde): FPC-Weiche in der Datei 1.724, alte Spur 1.275,
 // in einem Include 63 + 108, Include fehlt 55, Lazarus-Projekt 88, Skript
 // 18 - ohne Skript- und Plattenpruefung waeren es 1.024 statt 696
@@ -107,8 +110,12 @@ type
   //                     (FLOOR_INLINE_DECL)
   //   lfDigitSeparator  SCA069 Zifferntrenner, ab Delphi 11
   //                     (FLOOR_DIGIT_SEP; Integration QFI2)
-  // FPC 3.2 kennt beide nicht.
-  TRdxLateFeature = (lfInlineConst, lfDigitSeparator);
+  //   lfInlineVar       SCA111/SCA112 Inline-Variable, ab Delphi 10.3
+  //                     wie die Inline-Konstante (FLOOR_INLINE_DECL;
+  //                     Integration QFI3 - bis dahin haetten ihre Gruende
+  //                     die Inline-Konstante genannt)
+  // FPC 3.2 kennt keines davon.
+  TRdxLateFeature = (lfInlineConst, lfDigitSeparator, lfInlineVar);
 
   // Ergebnis des Planers (uRdxFixTable: MagicForm im Geruest TRdxFixFrame).
   //   Value  die Zahl aus der Meldung - Name im Menuetext; schon gesetzt,
@@ -264,9 +271,12 @@ const
     (Since: '10.3'; Feature: FEATURE_INLINE;
      Missing: 'keine Inline-Konstante'),
     (Since: '11'; Feature: 'Zifferntrenner';
-     Missing: 'keine Zifferntrenner'));
+     Missing: 'keine Zifferntrenner'),
+    (Since: '10.3'; Feature: 'eine Inline-Variable';
+     Missing: 'keine Inline-Variable'));
 
-// Die Schwelle des Sprachmittels (uRdxCompilerTraces) - eine Funktion,
+// Die Schwelle des Sprachmittels (uRdxCompilerTraces; lfInlineConst und
+// lfInlineVar teilen FLOOR_INLINE_DECL) - eine Funktion,
 // weil ein typisierter Record nicht in einer typisierten Konstante stehen
 // kann.
 function FloorOf(AFeature: TRdxLateFeature): TRdxCompilerFloor;

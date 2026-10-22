@@ -186,6 +186,13 @@
         <DCCReference Include="source\uRdxConsecutiveSectionFix.pas"/>
         <DCCReference Include="source\uRdxAvoidOutFix.pas"/>
         <DCCReference Include="source\uRdxRawExceptionFix.pas"/>
+        <DCCReference Include="source\uRdxClassMethodFix.pas"/>
+        <DCCReference Include="source\uRdxAlwaysTrueFix.pas"/>
+        <DCCReference Include="source\uRdxObjectListFix.pas"/>
+        <DCCReference Include="source\uRdxHomoglyphFix.pas"/>
+        <DCCReference Include="source\uRdxParamNameFix.pas"/>
+        <DCCReference Include="source\uRdxDeepNestingFix.pas"/>
+        <DCCReference Include="source\uRdxLookupHoistFix.pas"/>
         <DCCReference Include="source\uRdxRecipeRunner.pas"/>
         <DCCReference Include="source\uRdxFixRunner.pas"/>
         <DCCReference Include="source\uRdxFixTable.pas"/>

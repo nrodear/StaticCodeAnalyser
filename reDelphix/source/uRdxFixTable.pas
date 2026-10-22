@@ -187,7 +187,14 @@ uses
   uRdxDigitGroupingFix, // SCA069
   uRdxConsecutiveSectionFix, // SCA079
   uRdxAvoidOutFix,      // SCA086
-  uRdxRawExceptionFix;  // SCA127
+  uRdxRawExceptionFix,  // SCA127
+  uRdxClassMethodFix,   // SCA148
+  uRdxAlwaysTrueFix,    // SCA150
+  uRdxObjectListFix,    // SCA174
+  uRdxHomoglyphFix,     // SCA193
+  uRdxParamNameFix,     // SCA199
+  uRdxDeepNestingFix,   // SCA018
+  uRdxLookupHoistFix;   // SCA111, SCA112
 
 const
   // Hinweise der Hilfen (deutsch wie die Gruende; Pruefstand und Tests
@@ -402,6 +409,47 @@ const
   R_RAWEXC_ALT_HINT = 'nur der Klassenname - on-Handler fuer '
     + 'EInvalidOpException fangen die Ausnahme jetzt, E.ClassName im Log '
     + 'wechselt; on E: Exception faengt weiter';
+  // Charge QF12..QF15 (8 weitere Hilfen): SCA148, SCA150, SCA174, SCA193,
+  // SCA199, SCA018, SCA111, SCA112.
+  // SCA148 (QF12): in DIESER Datei bedeutungsgleich; die Grenze "andere
+  // Units" nennt der Hinweis.
+  R_CLASSMETHOD_HINT = 'gleiche Bedeutung - die Methode braucht kein Objekt '
+    + '(kein Self); Aufrufe Obj.M(..) bleiben gueltig, eine Verwendung als '
+    + 'Methodenzeiger (of object) in einer anderen Unit uebersetzt danach nicht '
+    + 'mehr';
+  // SCA150 (QF12): der else-Zweig lief nie.
+  R_ALWAYSTRUE_HINT = 'gleiche Bedeutung - die Bedingung war immer wahr '
+    + '(Length ist nie negativ): der then-Zweig laeuft wie bisher, ein '
+    + 'else-Zweig lief nie und entfaellt; war ein anderer Vergleich gemeint '
+    + '(etwa > 0), fehlt er weiterhin';
+  // SCA174 (QF13): gekennzeichnet (E2) - die Liste gibt ihre Elemente frei.
+  R_OBJECTLIST_HINT = 'die Liste gibt ihre Elemente jetzt frei - bei Free, '
+    + 'Clear und Delete; geprueft ist, dass jedes Element dort entsteht, die '
+    + 'Liste nicht verlaesst und nicht von Hand freigegeben wird';
+  // SCA193 (QF13): bedeutungsgleich - der Name gilt nur in der Unit.
+  R_HOMOGLYPH_HINT = 'gleiche Bedeutung - ein Buchstabe sah nur lateinisch '
+    + 'aus; alle Vorkommen im Code der Unit werden umbenannt, Kommentare '
+    + 'bleiben';
+  // SCA199 (QF14): gekennzeichnet - bisher warf der Aufruf.
+  R_PARAMNAME_HINT = 'der Aufruf setzt jetzt den Platzhalter aus dem SQL, '
+    + 'statt zur Laufzeit mit "parameter not found" abzubrechen - pruefen, '
+    + 'dass der Wert zu diesem Platzhalter gehoert';
+  // SCA018 (QF14): bedeutungsgleich.
+  R_GUARD_HINT = 'gleiche Bedeutung - die Bedingung wird wie vorher einmal '
+    + 'ausgewertet, ist sie falsch, endet die Routine wie bisher; der Rumpf '
+    + 'rueckt eine Stufe aus';
+  // SCA111/SCA112 (QF15): gekennzeichnet (E2) - der Lookup laeuft jetzt
+  // auch ohne Durchlauf, und die Referenz wird nur einmal geholt. '%s'
+  // zweimal = der neue Name; den Hinweis setzt der Adapter
+  // (HintByPlanner).
+  R_PARAM_HOIST_HINT = 'die Parameter-Referenz %s wird einmal vor der '
+    + 'Schleife geholt - fehlt der Parameter, kommt die Ausnahme jetzt auch '
+    + 'ohne Durchlauf; setzt ein Aufruf in der Schleife SQL oder Params '
+    + 'indirekt neu, zeigt %s ins Leere';
+  R_FIELD_HOIST_HINT = 'die Feld-Referenz %s wird einmal vor der Schleife '
+    + 'geholt - fehlt das Feld, kommt die Ausnahme jetzt auch ohne Durchlauf; '
+    + 'schliesst oder oeffnet ein Aufruf in der Schleife die Datenmenge '
+    + 'indirekt, zeigt %s ins Leere';
   // Charge H4 (try/finally): alle gekennzeichnet (E2) - B laeuft danach
   // auch dort, wo es bisher uebersprungen wurde; das ist der Fix.
   R_TRY_OBJECT_HINT = 'Free laeuft jetzt auch bei einer Ausnahme und bei Exit '
@@ -843,6 +891,91 @@ begin
   Result.Parts := OutParts;
   Result.Check := nil;
   Result.NeedsOpen := False;
+end;
+
+// SCA174 (Charge QF13): Deklaration und Create in EINEM Undo-Schritt; Name
+// ist der Elementtyp aus der Meldung (auch wenn der Planer ablehnt).
+procedure ObjectListParts(const APlan: TRdxObjectListPlan;
+  var AOutcome: TRdxFixOutcome);
+begin
+  AOutcome.Name := APlan.Name;
+  AOutcome.Edits := APlan.Edits;
+end;
+
+// SCA174: reine Textlogik - kein Check, kein offener Quellstellen-Dienst.
+function ObjectListForm(
+  APlanner: TRdxPlannerOf<TRdxObjectListPlan>): TRdxPlanForm<TRdxObjectListPlan>;
+begin
+  Result.Planner := APlanner;
+  Result.Parts := ObjectListParts;
+  Result.Check := nil;
+  Result.NeedsOpen := False;
+end;
+
+// SCA193 (Charge QF13): alle Vorkommen in EINEM Undo-Schritt; Name ist der
+// neue ASCII-Name ('' solange er nicht feststeht - der Menuetext nennt dann
+// 'X').
+procedure HomoglyphParts(const APlan: TRdxHomoglyphPlan;
+  var AOutcome: TRdxFixOutcome);
+begin
+  AOutcome.Name := APlan.Name;
+  AOutcome.Edits := APlan.Edits;
+end;
+
+// SCA193: reine Textlogik - kein Check, kein offener Quellstellen-Dienst.
+function HomoglyphForm(
+  APlanner: TRdxPlannerOf<TRdxHomoglyphPlan>): TRdxPlanForm<TRdxHomoglyphPlan>;
+begin
+  Result.Planner := APlanner;
+  Result.Parts := HomoglyphParts;
+  Result.Check := nil;
+  Result.NeedsOpen := False;
+end;
+
+// SCA111/SCA112 (Charge QF15): die Einfuegung vor der Schleife und je
+// Vorkommen in der Schleife eine Ersetzung in EINEM Undo-Schritt; Name ist
+// der Aufruf ('Q.FieldByName(''Amount'')') - schon, wenn der Planer danach
+// ablehnt (sobald er den Aufruf gelesen hat).
+procedure LookupParts(const APlan: TRdxLookupPlan;
+  var AOutcome: TRdxFixOutcome);
+begin
+  AOutcome.Name := APlan.Lookup;
+  AOutcome.Edits := APlan.Edits;
+end;
+
+// SCA111/SCA112: was nur der Quellstellen-Dienst und die Platte wissen. Der
+// Empfaenger muss an der Schleifenzeile (Ankerzeile einer Anweisung) als
+// Variable, Parameter, Feld oder Inline-Variable bekannt sein - sonst
+// koennte er eine Funktion sein, die bei jedem Aufruf ein anderes Objekt
+// liefert, und der eine Aufruf vor der Schleife taete etwas anderes. Dann
+// wie SCA014 (MagicCheck) Netzpfad, Projektdateien und Includes - mit dem
+// Sprachmittel lfInlineVar: eine Inline-Variable gibt es wie die Inline-
+// Konstante erst ab Delphi 10.3 (dieselbe Schwelle), in FPC 3.2 gar nicht;
+// die Gruende nennen die Inline-Variable (Integration QFI3).
+function LookupCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  AFinding: TLeakFinding; const APlan: TRdxLookupPlan): string;
+begin
+  if (APlaces.DeclaredTypeOf(APlan.LoopLine, APlan.Receiver) = '')
+     and not TRdxSimpleFixes.DeclaresInlineVar(AMap, APlan.LoopLine,
+       APlan.Receiver) then
+    Exit(TRdxLookupHoistFix.UnknownReceiverReason(APlan.Receiver));
+  Result := NetworkPathReason(AFinding.FileName, WHAT_PROJECT_FILES);
+  if Result = '' then
+    Result := TRdxMagicFixes.FileReason(AFinding.FileName, lfInlineVar);
+  if Result = '' then
+    Result := TRdxMagicFixes.IncludeReason(AFinding.FileName, AMap,
+      lfInlineVar);
+end;
+
+// SCA111/SCA112 (Charge QF15): mit offenem Quellstellen-Dienst (der
+// Empfaenger als Variable, LookupCheck); Name der Aufruf.
+function LookupForm(
+  APlanner: TRdxPlannerOf<TRdxLookupPlan>): TRdxPlanForm<TRdxLookupPlan>;
+begin
+  Result.Planner := APlanner;
+  Result.Parts := LookupParts;
+  Result.Check := LookupCheck;
+  Result.NeedsOpen := True;
 end;
 
 { ---- Die Planer je Art: Adapter auf die Rumpf-Routinen, alle in der Form
@@ -1939,6 +2072,124 @@ begin
     'System.SysUtils', Result);
 end;
 
+{ ---- Chargen QF12..QF15: die Planer-Units (je Hilfe eine, SCA111/SCA112
+  teilen sich uRdxLookupHoistFix) tragen nur Textlogik; hier steht der
+  Adapter. SCA150, SCA199 und SCA018 ueber MapFix (eine Ersetzung); SCA148
+  mit zwei Ersetzungen in der Form von MapFix; SCA174, SCA193 und
+  SCA111/SCA112 ueber das Geruest TRdxFixFrame (mehrere Ersetzungen in
+  EINEM Undo-Schritt), SCA111/SCA112 dazu mit Quellstellen-Dienst und
+  Plattenblick (LookupCheck). ---- }
+
+// SCA148 (Charge QF12): 'class ... static;' an der Deklaration und 'class'
+// vor dem Kopf der Implementierung - ZWEI Ersetzungen in einem Schritt,
+// darum die Form von MapFix mit einer Liste. Name ist der Methodenname aus
+// der Meldung (Menuetext), auch wenn der Planer ablehnt.
+function PlanCanBeClassMethod(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Map : TRdxCodeMap;
+begin
+  Result := Default(TRdxFixOutcome);
+  Result.Name := TRdxClassMethodFix.MethodNameOf(AFinding.Message);
+  if not Assigned(ALines) then
+  begin
+    Result.Reason := R_NO_FILE;
+    Exit;
+  end;
+  Map := TRdxCodeMap.Create(ALines);
+  try
+    Result.Enabled := TRdxClassMethodFix.MakeStatic(Map, AFinding.LineInt,
+      AFinding.Message, Result.Edits, Result.Reason);
+  finally
+    Map.Free;
+  end;
+  if not Result.Enabled then
+    Result.Edits := nil;
+end;
+
+// SCA150 (Charge QF12): Zeile des Treffers, die Meldung nennt die Form.
+function PlanBoolAlwaysTrue(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxAlwaysTrueFix.ResolveIf);
+end;
+
+// SCA174 (Charge QF13): 'TList<T>' -> 'TObjectList<T>' in Deklaration und
+// Create der lokalen Liste; gekennzeichnet setzt die Zeile (Changes: True).
+function PlanObjectList(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxObjectListPlan;
+begin
+  Result := TRdxFixFrame.Run<TRdxObjectListPlan>(
+    ObjectListForm(TRdxObjectListFix.OwnItems),
+    APlaces, ALines, AFinding, P);
+end;
+
+// SCA193 (Charge QF13): der Homoglyph-Bezeichner der Zeile in ASCII, an
+// allen Vorkommen der Unit (die Meldung nennt weder Namen noch Spalte).
+function PlanHomoglyph(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxHomoglyphPlan;
+begin
+  Result := TRdxFixFrame.Run<TRdxHomoglyphPlan>(
+    HomoglyphForm(TRdxHomoglyphFix.ToAscii),
+    APlaces, ALines, AFinding, P);
+end;
+
+// SCA199 (Charge QF14): das Literal in ParamByName wird zum einen
+// Platzhalter der Meldung, der einen Tippfehler entfernt ist. Name = der
+// eingesetzte Platzhalter fuer den Menuetext ('%s'); Hinweis und
+// Kennzeichnung (Changes: True) setzt die Zeile.
+function PlanParamName(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxParamNameFix.UsePlaceholder);
+  if Result.Enabled then
+    Result.Name := Result.Edits[0].NewText;
+end;
+
+// SCA018 (Charge QF14): das letzte 'if A then begin B end' der Routine um
+// die gemeldete Stelle wird zu 'if not A then Exit;' mit B eine Stufe
+// flacher; Hinweis und Kennzeichnung setzt die Zeile.
+function PlanDeepNesting(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxDeepNestingFix.GuardClause);
+end;
+
+// SCA111 (Charge QF15): 'var PrmId := Q.ParamByName(''id'');' vor die
+// Schleife, die Aufrufe darin durch den Namen; der Hinweis nennt den Namen.
+function PlanParamByNameLoop(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxLookupPlan;
+begin
+  Result := TRdxFixFrame.Run<TRdxLookupPlan>(
+    LookupForm(TRdxLookupHoistFix.ParamByNameLoop),
+    APlaces, ALines, AFinding, P);
+  if Result.Enabled then
+    Result.Hint := Format(R_PARAM_HOIST_HINT, [P.Name, P.Name]);
+end;
+
+// SCA112 (Charge QF15): dasselbe fuer
+// 'var FldAmount := Q.FieldByName(''Amount'');'.
+function PlanFieldByNameLoop(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxLookupPlan;
+begin
+  Result := TRdxFixFrame.Run<TRdxLookupPlan>(
+    LookupForm(TRdxLookupHoistFix.FieldByNameLoop),
+    APlaces, ALines, AFinding, P);
+  if Result.Enabled then
+    Result.Hint := Format(R_FIELD_HOIST_HINT, [P.Name, P.Name]);
+end;
+
 { ---- Die Tabelle ---- }
 
 type
@@ -1949,13 +2200,13 @@ type
   end;
 
 const
-  FIX_ROW_HIGH = 81;
+  FIX_ROW_HIGH = 89;
 
   // Je Art eine Zeile; die Reihenfolge ist die der Chargen (Stufe 2a,
   // Stufe 2 Rest, uQuickFix-Umzug/Stufe 3, Zeilen, Ausnahmen, Deklarationen
   // H1, Anweisungen H2, Routinen H3b, Aufraeumen H3a, try/finally H4,
   // Ergebnis und Konstruktoren H5, Magic Number Q14, einfache Hilfen Q, R,
-  // QF und QF8..QF11). Der Menuetext steht
+  // QF, QF8..QF11 und QF12..QF15). Der Menuetext steht
   // unter demselben Index in FIX_CAPTIONS (s. Kopf).
   FIX_ROWS: array[0..FIX_ROW_HIGH] of TRdxFixRow = (
     (Kind: fkExplicitTObjectInheritance; Plan: PlanExplicitTObject;
@@ -2174,7 +2425,36 @@ const
     // AppendUses (SysUtils bei Bedarf).
     (Kind: fkRaisingRawException; Plan: PlanRaisingRawException;
      Hint: ''; HintByPlanner: True; Changes: True;
-     Alt: PlanRaisingRawExceptionAlt)
+     Alt: PlanRaisingRawExceptionAlt),
+    // Charge QF12..QF15: 8 weitere Hilfen.
+    // SCA148: Deklaration und Kopf in einem Schritt; bedeutungsgleich in
+    // dieser Datei (die Grenze "andere Units" nennt der Hinweis).
+    (Kind: fkCanBeClassMethod; Plan: PlanCanBeClassMethod;
+     Hint: R_CLASSMETHOD_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    // SCA150: immer wahres if aufloesen - der else-Zweig lief nie.
+    (Kind: fkBoolAlwaysTrue; Plan: PlanBoolAlwaysTrue;
+     Hint: R_ALWAYSTRUE_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    // SCA174: die Liste gibt ihre Elemente danach frei - gekennzeichnet (E2).
+    (Kind: fkTObjectListWithoutOwnership; Plan: PlanObjectList;
+     Hint: R_OBJECTLIST_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+    // SCA193: bedeutungsgleich - der Name gilt nur in der Unit und ist dort
+    // frei; alle Vorkommen in einem Schritt.
+    (Kind: fkSourceNonAsciiIdentifier; Plan: PlanHomoglyph;
+     Hint: R_HOMOGLYPH_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    // SCA199: der Aufruf bindet danach einen anderen Parameter (E2); Name =
+    // der eingesetzte Platzhalter (Menuetext).
+    (Kind: fkParamNameMismatch; Plan: PlanParamName;
+     Hint: R_PARAMNAME_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+    // SCA018: Waechter-Klausel fuer das letzte if der Routine
+    // (bedeutungsgleich).
+    (Kind: fkDeepNesting; Plan: PlanDeepNesting;
+     Hint: R_GUARD_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    // SCA111/SCA112: Lookup vor die Schleife, gekennzeichnet (E2); den
+    // Hinweis setzt der Adapter (Name der Variable).
+    (Kind: fkParamByNameInLoop; Plan: PlanParamByNameLoop;
+     Hint: ''; HintByPlanner: True; Changes: True; Alt: nil),
+    (Kind: fkFieldByNameInLoop; Plan: PlanFieldByNameLoop;
+     Hint: ''; HintByPlanner: True; Changes: True; Alt: nil)
   );
 
   // Menuetexte (msgids) unter dem Index der Zeile; '%s' = Name der Hilfe
@@ -2188,7 +2468,10 @@ const
   // SCA137, der Empfaenger bei SCA113, SameValue bzw. IsZero bei SCA144,
   // der Zieltyp bei SCA154, die Zahl der Zeilen bei SCA011 - Charge QF; der
   // Parameter bei SCA054/SCA170/SCA086, der neue Name bei SCA118/SCA119,
-  // const bzw. var bei SCA079 - Chargen QF8..QF11).
+  // const bzw. var bei SCA079 - Chargen QF8..QF11; der Methodenname bei
+  // SCA148, der Elementtyp bei SCA174, der neue ASCII-Name bei SCA193, der
+  // eingesetzte Platzhalter bei SCA199, der Aufruf bei SCA111/SCA112 -
+  // Chargen QF12..QF15).
   FIX_CAPTIONS: array[0..FIX_ROW_HIGH] of string = (
     'Remove (TObject) from the class declaration',
     'Use FreeAndNil(%s)',
@@ -2271,7 +2554,15 @@ const
     'Group the digits with "_"',
     'Merge with the previous %s section',
     'Replace "out" with "var" for %s',
-    'Raise EArgumentException instead (wrong argument)'
+    'Raise EArgumentException instead (wrong argument)',
+    'Make %s a static class method',
+    'Remove the always-true condition',
+    'Use TObjectList<%s> so the list frees its items',
+    'Write the name in ASCII letters: %s',
+    'Use parameter name "%s" from the SQL',
+    'Turn the last if into a guard clause with Exit',
+    'Move %s before the loop',
+    'Move %s before the loop'
   );
 
   // Menuetexte des zweiten Eintrags (Alt), '' ohne.
@@ -2294,7 +2585,8 @@ const
     'Delete the debug output',
     '', '', '',
     '', '', '', '', '', '', '',
-    'Raise EInvalidOpException instead (invalid state)'
+    'Raise EInvalidOpException instead (invalid state)',
+    '', '', '', '', '', '', '', ''
   );
 
   // Die Namen der Planer (PlannerName, fuer uTestRdxFixTable): eine eigene
@@ -2303,7 +2595,7 @@ const
   // faellt dort auf (Wochen-Review 2026-10-21, Major P03/P29: welcher Planer
   // an welcher Art haengt, band bis dahin kein Test). Ein neuer Planer
   // braucht hier eine Zeile, sonst nennt PlannerName '?'.
-  PLANNER_NAMES: array[0..87] of TRdxPlannerName = (
+  PLANNER_NAMES: array[0..95] of TRdxPlannerName = (
     (Name: 'PlanExplicitTObject'; Plan: PlanExplicitTObject),
     (Name: 'PlanFreeAndNil'; Plan: PlanFreeAndNil),
     (Name: 'PlanNilComparison'; Plan: PlanNilComparison),
@@ -2391,7 +2683,15 @@ const
     (Name: 'PlanConsecutiveSection'; Plan: PlanConsecutiveSection),
     (Name: 'PlanAvoidOut'; Plan: PlanAvoidOut),
     (Name: 'PlanRaisingRawException'; Plan: PlanRaisingRawException),
-    (Name: 'PlanRaisingRawExceptionAlt'; Plan: PlanRaisingRawExceptionAlt)
+    (Name: 'PlanRaisingRawExceptionAlt'; Plan: PlanRaisingRawExceptionAlt),
+    (Name: 'PlanCanBeClassMethod'; Plan: PlanCanBeClassMethod),
+    (Name: 'PlanBoolAlwaysTrue'; Plan: PlanBoolAlwaysTrue),
+    (Name: 'PlanObjectList'; Plan: PlanObjectList),
+    (Name: 'PlanHomoglyph'; Plan: PlanHomoglyph),
+    (Name: 'PlanParamName'; Plan: PlanParamName),
+    (Name: 'PlanDeepNesting'; Plan: PlanDeepNesting),
+    (Name: 'PlanParamByNameLoop'; Plan: PlanParamByNameLoop),
+    (Name: 'PlanFieldByNameLoop'; Plan: PlanFieldByNameLoop)
   );
 
 var

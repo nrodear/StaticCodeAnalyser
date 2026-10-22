@@ -440,6 +440,7 @@
       "tags": ["complexity"],
       "configKey": "[Detectors] DeepNestingMaxDepth",
       "detectorUnit": "uDeepNesting.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "if a then\n  if b then\n    if c then\n      if d then DoStuff;",
         "good": "if not a then Exit;\nif not b then Exit;\nif not c then Exit;\nif d then DoStuff;"
@@ -2291,6 +2292,7 @@
       "type": "Code Smell",
       "tags": ["performance", "database"],
       "detectorUnit": "uPerfHotspots.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "for i := 0 to High(Ids) do begin\n  Q.ParamByName('id').AsInteger := Ids[i];\n  Q.ExecSQL;\nend;",
         "good": "var P := Q.ParamByName('id');\nfor i := 0 to High(Ids) do begin\n  P.AsInteger := Ids[i];\n  Q.ExecSQL;\nend;"
@@ -2310,6 +2312,7 @@
       "type": "Code Smell",
       "tags": ["performance", "database"],
       "detectorUnit": "uPerfHotspots.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "while not Q.Eof do begin\n  Total := Total + Q.FieldByName('Amount').AsCurrency;\n  Q.Next;\nend;",
         "good": "var Amt := Q.FieldByName('Amount');\nwhile not Q.Eof do begin\n  Total := Total + Amt.AsCurrency;\n  Q.Next;\nend;"
@@ -3041,6 +3044,7 @@
       "type": "Code Smell",
       "tags": ["oop", "refactoring", "sonar50"],
       "detectorUnit": "uCanBeClassMethod.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "function TMath.Add(A, B: Integer): Integer;\nbegin\n  Result := A + B;          // only uses params, no Self\nend;",
         "good": "class function TMath.Add(A, B: Integer): Integer;\nbegin\n  Result := A + B;\nend;\n// Caller: TMath.Add(1, 2)   // no instance needed"
@@ -3080,6 +3084,7 @@
       "type": "Bug",
       "tags": ["control-flow", "dead-code", "sonar50"],
       "detectorUnit": "uBoolAlwaysTrue.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "if Length(s) >= 0 then DoStuff;   // <- always True\nif Length(s) < 0 then DoOther;    // <- always False",
         "good": "if Length(s) > 0 then DoStuff;    // non-empty check\nif Length(s) = 0 then DoOther;    // empty check"
@@ -3571,6 +3576,7 @@
       "tags": ["memory-safety", "leak", "container"],
       "configKey": "",
       "detectorUnit": "uTObjectListWithoutOwnership.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "L := TList<TFoo>.Create;\nL.Add(TFoo.Create);\nL.Free; // TFoo instance leaks",
         "good": "L := TObjectList<TFoo>.Create; // OwnsObjects=True default\nL.Add(TFoo.Create);\nL.Free; // item freed"
@@ -3950,6 +3956,7 @@
       "tags": ["security", "unicode", "trojan-source"],
       "cwe": ["CWE-1007"],
       "detectorUnit": "uSourceEncoding.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "var Login: string;  // one letter is a Cyrillic homoglyph (U+043E), not Latin 'o'",
         "good": "var Login: string;  // all-ASCII identifier"
@@ -4181,6 +4188,7 @@
         "runtime-error"
       ],
       "detectorUnit": "uParamNameMismatch.pas",
+      "editorHelp": true,
       "examples": {
         "bad": "Q := TFDQuery.Create(nil);\nQ.SQL.Add('SELECT name FROM customer');\nQ.SQL.Add('WHERE customer_id = :customer_id');\nQ.ParamByName('custid').AsInteger := Id;   // no :custid - raises at Open\nQ.Open;",
         "good": "Q := TFDQuery.Create(nil);\nQ.SQL.Add('SELECT name FROM customer');\nQ.SQL.Add('WHERE customer_id = :customer_id');\nQ.ParamByName('customer_id').AsInteger := Id;\nQ.Open;"
