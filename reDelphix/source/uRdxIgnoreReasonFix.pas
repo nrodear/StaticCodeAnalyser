@@ -25,7 +25,11 @@ unit uRdxIgnoreReasonFix;
 //   * die Klammern schon einen Inhalt haben ('[Ignore('')]', '[Ignore(X)]')
 //     - der Detektor meldet das ohnehin nicht, der Planer fasst es nicht an,
 //   * hinter dem ']' Text oder ein Kommentar steht, oder ein Kommentar im
-//     Attribut liegt.
+//     Attribut liegt. Anders als SCA181 (uRdxCategoryArgFix, dort stoert
+//     ein Kommentar dahinter nicht) mit Absicht: hinter '[Ignore]' nennt
+//     der Kommentar meist schon den Grund ('// flaky, Ticket 123') - der
+//     Platzhalter 'reason' stuende daneben doppelt; den Grund in die
+//     Klammer zu ziehen, ist Sache des Menschen.
 // Der Bereich ist nur der Teil hinter dem Namen: Schreibweise des Namens und
 // Einrueckung bleiben unberuehrt.
 
@@ -51,6 +55,7 @@ const
   IGN_PLACEHOLDER = 'reason';
 
 type
+  // Der Planer von SCA179 (Form TRdxMapPlanner, uRdxFixRunner).
   TRdxIgnoreReasonFix = class
   public
     // SCA179: ALine ist die Attributzeile aus dem Fund; die Meldung braucht

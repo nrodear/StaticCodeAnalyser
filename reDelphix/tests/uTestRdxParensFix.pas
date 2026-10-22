@@ -1,9 +1,11 @@
 unit uTestRdxParensFix;
 
 // Editorhilfe SCA094 RedundantParentheses (uRdxParensFix): '((X))' -> '(X)'.
-// Die Faelle auf Text laufen ohne Parser und ohne Detektor (auch im
-// FPC-Pruefstand); die Rundlaeufe mit dem echten Detektor (Katalog-
-// Beispiel, Aufruf mit Bezeichner) stehen hinter {$IFNDEF FPC}.
+// Die Faelle auf Text laufen ohne Parser und ohne Detektor; die Rundlaeufe
+// mit dem echten Detektor (Katalog-Beispiel, Aufruf mit Bezeichner) stehen
+// hinter {$IFNDEF FPC}. Nur Delphi (reDelphix.Test): der Planer bindet
+// uEngineApi/uRdxRecipeRunner und uRdxFixRunner, der FPC-Pruefstand
+// (build.sh) fuehrt ihn nicht - die Weichen sind heute ohne Wirkung.
 // Prueft: Operator oder Schluesselwort davor, Leerraum, Literale, Aufruf
 // mit Literal, und die Sperren - Aufruf/Cast mit Bezeichner, Struktur einer
 // Konstante, Kette, Kommentar, verschobene Zeile.

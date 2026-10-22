@@ -2,10 +2,13 @@ unit uTestRdxCategoryArgFix;
 
 // Editorhilfe SCA181 AttributeCategoryWithoutString (uRdxCategoryArgFix):
 // '[Category]' -> '[Category(''category'')]'. Die Faelle auf Text laufen ohne
-// Parser und ohne Detektor (auch im FPC-Pruefstand); die Rundlaeufe mit dem
-// ECHTEN Detektor (TAttributeCategoryWithoutStringDetector) und dem Planer
-// der Unit (PlanCategoryArg) stehen in einer eigenen Fixture hinter
-// {$IFNDEF FPC}.
+// Parser und ohne Detektor; die Rundlaeufe mit dem ECHTEN Detektor
+// (TAttributeCategoryWithoutStringDetector) und dem Planer der Unit
+// (PlanCategoryArg) stehen in einer eigenen Fixture hinter {$IFNDEF FPC}.
+// Nur Delphi (reDelphix.Test): der Planer bindet uEngineApi/
+// uRdxRecipeRunner und uRdxFixRunner, der FPC-Pruefstand (build.sh) fuehrt
+// ihn nicht, und sein Runner-Generator nimmt keine zwei Fixtures je Unit -
+// die Weichen sind heute ohne Wirkung.
 // Prueft: Hilfe mit Schreibweise und Blanks, gestapelte Attribute,
 // Kommentar dahinter, der Bereich, und die Sperren - verschobene Zeile,
 // Kommentar, Argument/Liste, weiterer Code auf der Zeile, kein Anker,
@@ -247,6 +250,11 @@ begin
   AssertRefused(
     InClass(Join(['    [Test, Category]', '    procedure Foo;'])),
     ATTR_LINE, Moved);
+  // '[Test][Category]' meldet der Detektor: die Form, die die Hilfe nicht
+  // anfasst - nicht "verschoben".
+  AssertRefused(
+    InClass(Join(['    [Test][Category]', '    procedure Foo;'])),
+    ATTR_LINE, _(R_CAT_SHAPE));
 end;
 
 procedure TTestRdxCategoryArgFix.Sca181_CodeAfterAttribute_NoHelp;

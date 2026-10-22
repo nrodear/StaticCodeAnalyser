@@ -47,6 +47,7 @@ const
     + '(array, record) or to a comparison';
 
 type
+  // Der Planer von SCA094 (Form TRdxMapPlanner, uRdxFixRunner).
   TRdxParensFix = class
   public
     // SCA094: an der Spalte aus der Meldung ('at column N') '((X))' mit X
@@ -181,6 +182,11 @@ begin
     AReason := MsgMovedSuffix(_(R_PAREN_MOVED));
     Exit;
   end;
+  // Heute unerreichbar (Test Sca094_Comment_NoHelp: diese Eingaben enden
+  // schon als "verschoben"): ScanOperand liest nur Bezeichner-, Zahl- oder
+  // String-Zeichen, jeder Kommentaroeffner bricht ihn ab oder verhindert
+  // das '))'. Die Wache bleibt fuer den Tag, an dem der Operand breiter
+  // wird (qualifizierte Namen, Ausdruecke).
   if (IsString and AMap.HasComment(ALine, J, OpEnd - 1))
      or (not IsString and AMap.HasNonCode(ALine, J, OpEnd - 1)) then
   begin

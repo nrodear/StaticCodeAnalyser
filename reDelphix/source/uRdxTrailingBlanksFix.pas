@@ -21,6 +21,7 @@ uses
   uRdxRecipeRunner;    // TRdxFixOutcome
 
 type
+  // Der Planer von SCA063 (Form TRdxMapPlanner, uRdxFixRunner).
   TRdxTrailingBlanksFix = class
   public
     // Die Spalte aus der Meldung ('from column N'); 0 = nicht vorhanden.

@@ -52,6 +52,7 @@ const
     + 'Bezeichner zulaessig)';
 
 type
+  // Der Planer von SCA064 (Form TRdxMapPlanner, uRdxFixRunner).
   TRdxKeywordCaseFix = class
   public
     // SCA064: Meldung 'Keyword "Begin" should be lowercase ("begin") at
@@ -103,8 +104,7 @@ const
     'do', 'else', 'var', 'const', 'type', 'uses', 'implementation',
     'interface', 'initialization', 'finalization', 'try', 'finally',
     'except');
-  HEADER_WORDS: array[0..4] of string = ('procedure', 'function',
-    'constructor', 'destructor', 'operator');
+  // Den Kopf einer Routine erkennt die Suche an uRdxCodeMap.ROUTINE_WORDS.
   MAX_BACK = 400;   // so viele Token rueckwaerts, laenger ist kein Kopf
 
 function IsReserved(const ALow: string): Boolean;
@@ -122,13 +122,17 @@ end;
 // rueckwaerts in einer Routine ('procedure', 'function', ...) endet, ohne
 // vorher auf ein ';', begin, ':=' ... zu stossen. Eine Anweisung 'Register;'
 // im Rumpf erfuellt das nicht (davor steht ';' oder 'begin' und eine
-// Anweisung).
+// Anweisung). DAHINTER steht bei einer Direktive ';': ein Member hinter
+// einem Prozedurtyp-Feld ('OnDone: procedure of object;' / 'Forward:
+// Boolean;') hat rueckwaerts dieselbe Form, aber ':' dahinter - er ist ein
+// Feld, sein Name ist RTTI-sichtbar (TRttiField.Name, JSON-Export).
 function IsDirectiveOfHeader(AMap: TRdxCodeMap; const ATok: TRdxToken): Boolean;
 var
   Cur, P, T : TRdxToken;
   Depth, N  : Integer;
 begin
   Result := False;
+  if After(AMap, ATok).Low <> ';' then Exit;
   Cur := ATok;
   repeat
     P := Before(AMap, Cur);
@@ -150,7 +154,7 @@ begin
     end
     else if Depth = 0 then
     begin
-      if InList(T.Low, HEADER_WORDS) then Exit(True);
+      if InList(T.Low, ROUTINE_WORDS) then Exit(True);
       if InList(T.Low, HEADER_STOPS) then Exit;
     end;
     T := Before(AMap, T);

@@ -2,9 +2,11 @@ unit uTestRdxTrailingCommaFix;
 
 // Editorhilfe SCA068 TrailingCommaArgList (uRdxTrailingCommaFix): das
 // ueberzaehlige Komma vor ')' faellt weg. Die Faelle auf Text laufen ohne
-// Parser und ohne Detektor (auch im FPC-Pruefstand); die Rundlaeufe mit dem
-// echten Detektor (Katalog-Beispiel, zwei Funde auf einer Zeile, fehlendes
-// Argument) stehen hinter {$IFNDEF FPC}.
+// Parser und ohne Detektor; die Rundlaeufe mit dem echten Detektor
+// (Katalog-Beispiel, zwei Funde auf einer Zeile, fehlendes Argument)
+// stehen hinter {$IFNDEF FPC}. Nur Delphi (reDelphix.Test): der Planer
+// bindet uEngineApi/uRdxRecipeRunner und uRdxFixRunner, der FPC-Pruefstand
+// (build.sh) fuehrt ihn nicht - die Weichen sind heute ohne Wirkung.
 // Prueft: Blank und Tab vor ')', verschachtelte und mehrzeilige Klammern,
 // Set-Literal als letztes Argument, Fund in Kommentar und String, und die
 // Sperren - fehlendes Argument, Komma in '[...]', keine oeffnende Klammer,
@@ -315,20 +317,22 @@ var
   S  : string;
 begin
   S := InProc('  DoStuff(A, B,);');
-  F := TLeakFinding.New('t.pas', '', LineOf(S, 'DoStuff'), Msg(15),
-    fkTrailingCommaArgList);
   SL := TStringList.Create;
+  F := nil;
   try
+    F := TLeakFinding.New('t.pas', '', LineOf(S, 'DoStuff'), Msg(15),
+      fkTrailingCommaArgList);
     // Ohne Zeilen: kein Puffer.
     O := PlanTrailingComma(nil, nil, F, nil);
     Assert.IsFalse(O.Enabled);
+    Assert.AreEqual(R_NO_FILE, O.Reason);
     SL.Text := S;
     O := PlanTrailingComma(nil, SL, F, nil);
     Assert.IsTrue(O.Enabled, O.Reason);
     Assert.AreEqual(InProc('  DoStuff(A, B);'), Apply(S, O.Edits));
   finally
-    SL.Free;
     F.Free;
+    SL.Free;
   end;
 end;
 

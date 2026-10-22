@@ -54,6 +54,9 @@ type
     [Test] procedure Detector_TwoGotos_BothFixed;
     [Test] procedure Detector_CatalogExample_Fixed;
     [Test] procedure Detector_LabelNotLast_NoHelp;
+    // ---- Sperren auf Text (die erste Fixture traegt schon 20 Tests) ----
+    [Test] procedure ShadowedExit_NoHelp;
+    [Test] procedure UnsafeRoutineBounds_NoHelp;
   end;
 {$ENDIF}
 
@@ -212,7 +215,9 @@ end;
 
 procedure TTestRdxGotoExitFix.InsideTryFinally_BecomesExit;
 begin
-  // Beide laufen durch das finally.
+  // Das 'goto' aus dem try heraus uebersetzt Delphi nicht (E2127); das
+  // 'Exit' der Hilfe uebersetzt und laeuft durch das finally - keine Sperre
+  // noetig (Kopf von uRdxGotoExitFix).
   Assert.AreEqual(
     Wrap(['  try', '    if A then Exit;', '    Work;', '  finally',
       '    Cleanup;', '  end;', 'Fin:']),
@@ -314,6 +319,9 @@ begin
   // Ohne Spalte in der Meldung.
   Assert.AreEqual('', PlanAt(Src, GOTO_LINE, 0, R));
   Assert.AreEqual(MsgNoColumn, R, 'keine Spalte');
+  // An der Spalte steht das Ende eines laengeren Bezeichners ('xgoto').
+  AssertRefused(Wrap(['  if A then xgoto Fin;', '  Work;', 'Fin:']),
+    GOTO_LINE, MsgMovedSuffix(_(R_GOTO_MOVED)));
 end;
 
 procedure TTestRdxGotoExitFix.CommentOrStringGoto_NoHelp;
@@ -437,12 +445,16 @@ var
 begin
   O := PlanFirst(Wrap(['  if A then goto Fin;', '  Work;', 'Fin:']), S);
   Assert.IsTrue(O.Enabled, O.Reason);
-  Assert.AreEqual<Integer>(0, O.Variant, 'Hauptweg');
-  Assert.IsFalse(O.ChangesBehavior, 'bedeutungsgleich');
   Assert.AreEqual<Integer>(1, Length(O.Edits), 'eine Ersetzung');
   Assert.AreEqual('goto Fin', O.Edits[0].Expected);
   Assert.AreEqual('Exit', O.Edits[0].NewText);
   Assert.AreEqual<Integer>(GOTO_LINE, O.Edits[0].Span.StartLine);
+  // Die Kennzeichnung setzt erst die Tabellenzeile (FixFor) - der Adapter
+  // laesst sie auf dem Default, ein Test am Adapter pruefte nur diesen.
+  O := PlanFixIn(Wrap(['  if A then goto Fin;', '  Work;', 'Fin:']), 't.pas',
+    fkGotoStatement, S);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsFalse(O.ChangesBehavior, 'bedeutungsgleich (Tabellenzeile)');
 end;
 
 procedure TTestRdxGotoExitDetector.Adapter_StaleFinding_NoHelp;
@@ -542,6 +554,51 @@ begin
   O := PlanFirst(Wrap(['  if A then goto Fin;', 'Fin:', '  Cleanup;']), S);
   Assert.IsFalse(O.Enabled, 'keine Hilfe');
   Assert.AreEqual(_(R_GOTO_NOT_LAST, ['Fin']), O.Reason);
+end;
+
+procedure TTestRdxGotoExitDetector.ShadowedExit_NoHelp;
+var
+  Src : string;
+begin
+  // Ein eigener Bezeichner 'Exit' in der Datei: 'Exit' waere danach nicht
+  // die RTL-Prozedur. Erst die Regel "':' dahinter" (Variable, Parameter,
+  // Marke), dann "Wort davor" (var-Liste, Routine).
+  AssertRefused(Join(['unit t;', 'interface', 'var', '  Exit: Integer;',
+    'implementation', 'procedure Foo;', 'label Fin;', 'begin',
+    '  if A then goto Fin;', '  Work;', 'Fin:', 'end;', 'end.']), 9,
+    _(R_GOTO_SHADOW));
+  AssertRefused(Join(['unit t;', 'interface', 'implementation',
+    'procedure Bar(Exit: Boolean);', 'begin', 'end;', 'procedure Foo;',
+    'label Fin;', 'begin', '  if A then goto Fin;', '  Work;', 'Fin:', 'end;',
+    'end.']), 10, _(R_GOTO_SHADOW));
+  AssertRefused(Join(['unit t;', 'interface', 'implementation',
+    'procedure Foo;', 'label Exit;', 'begin', '  if A then goto Exit;',
+    '  Work;', 'Exit:', 'end;', 'end.']), 7, _(R_GOTO_SHADOW));
+  AssertRefused(Join(['unit t;', 'interface', 'var Exit, Done: Boolean;',
+    'implementation', 'procedure Foo;', 'label Fin;', 'begin',
+    '  if A then goto Fin;', '  Work;', 'Fin:', 'end;', 'end.']), 8,
+    _(R_GOTO_SHADOW));
+  AssertRefused(Join(['unit t;', 'interface', 'procedure Exit;',
+    'implementation', 'procedure Foo;', 'label Fin;', 'begin',
+    '  if A then goto Fin;', '  Work;', 'Fin:', 'end;', 'end.']), 8,
+    _(R_GOTO_SHADOW));
+  // Gegenprobe: 'Exit' als Anweisung deklariert nichts.
+  Src := Join(['unit t;', 'interface', 'implementation', 'procedure Bar;',
+    'begin', '  if B then Exit;', '  Exit;', 'end;', 'procedure Foo;',
+    'label Fin;', 'begin', '  if A then goto Fin;', '  Work;', 'Fin:', 'end;',
+    'end.']);
+  Assert.AreEqual(StringReplace(Src, 'goto Fin', 'Exit', []),
+    Applied(Src, 12));
+end;
+
+procedure TTestRdxGotoExitDetector.UnsafeRoutineBounds_NoHelp;
+begin
+  // Ein lokaler Klassentyp im Deklarationsteil: uRdxBlocks liest die
+  // Grenzen der Routine nicht sicher - der Kopf koennte der gesuchte sein.
+  AssertRefused(Join(['unit t;', 'interface', 'implementation',
+    'procedure Foo;', 'type', '  TLocal = class', '  end;', 'label Fin;',
+    'begin', '  if A then goto Fin;', '  Work;', 'Fin:', 'end;', 'end.']), 10,
+    _(R_GOTO_BOUNDS));
 end;
 
 {$ENDIF}

@@ -10,11 +10,15 @@ unit uRdxTabsFix;
 // UMFORMUNG: jeder Tab im CODE (Code-Sicht der TRdxCodeMap: Einrueckung und
 // Leerraum zwischen Token) wird durch so viele Leerzeichen ersetzt, dass die
 // Anzeigespalte bis zum naechsten Tabstopp erhalten bleibt (Tabweite
-// TAB_WIDTH = 2, Delphi-Standard; die IDE-Einstellung wird NICHT gelesen).
-// Ein Tab nach Leerzeichen springt also auf den naechsten Stopp, nicht um
-// zwei weitere. Tabs in Strings und Kommentaren bleiben unangetastet (sie
-// sind Inhalt, nicht Layout); sie zaehlen in der Spaltenrechnung mit
-// derselben Tabweite. Der Planer meldet EINE Ersetzung vom ersten bis zum
+// TAB_WIDTH = 2 - eine ANNAHME: die Option 'Tab stops' der IDE ist je
+// Installation anders und wird NICHT gelesen; eine Datei, die mit Weite 4
+// oder 8 ausgerichtet wurde, verliert die Ausrichtung von Fortsetzungs-
+// zeilen und Kommentarspalten - nur Optik, keine Semantik; der Hinweis nennt
+// die 2). Ein Tab nach Leerzeichen springt also auf den naechsten Stopp,
+// nicht um zwei weitere. Tabs in Strings und Kommentaren bleiben
+// unangetastet (sie sind Inhalt, nicht Layout); zwischen dem ersten und dem
+// letzten Code-Tab zaehlen sie in der Spaltenrechnung mit derselben
+// Tabweite. Der Planer meldet EINE Ersetzung vom ersten bis zum
 // letzten Code-Tab der Zeile; der Text dazwischen bleibt wie er ist.
 //
 // SPERREN (lieber keine Hilfe als eine falsche): die Spalte der Meldung
@@ -36,10 +40,11 @@ uses
   uRdxRecipeRunner;  // TRdxFixOutcome
 
 const
-  // Tabweite der Umrechnung: Delphi-Standard, nicht die der IDE.
+  // Tabweite der Umrechnung: eine feste Annahme, nicht die der IDE (s. Kopf).
   TAB_WIDTH = 2;
 
 type
+  // Der Planer von SCA061 (Form TRdxMapPlanner, uRdxFixRunner).
   TRdxTabsFix = class
   public
     // SCA061: die Tabs im Code von ALine -> Leerzeichen bis zum naechsten
@@ -103,13 +108,9 @@ begin
   for i := Col to Length(L) do
     if (L[i] = TAB) and AMap.IsCode(ALine, i) then
       Last := i;
-  // Anzeigespalte (0-basiert) vor First.
-  V := 0;
-  for i := 1 to First - 1 do
-    if L[i] = TAB then
-      Inc(V, TAB_WIDTH - (V mod TAB_WIDTH))
-    else
-      Inc(V);
+  // Anzeigespalte (0-basiert) vor First: davor steht kein Tab (First ist
+  // der erste Tab der Zeile, s. oben), jedes Zeichen zaehlt eine Spalte.
+  V := First - 1;
   S := '';
   for i := First to Last do
     if L[i] <> TAB then

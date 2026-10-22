@@ -138,7 +138,7 @@ begin
 end;
 
 // Das with zum 'do' ADo, rueckwaerts gelesen. AMulti: ein ',' auf oberster
-// Klammerebene dazwischen; ACrossed: das with steht auf einer anderen Zeile
+// Klammerebene (runde und eckige) dazwischen; ACrossed: das with steht auf einer anderen Zeile
 // als das do. '' oder der Grund (kein with-Kopf).
 function FindWith(AMap: TRdxCodeMap; const ADo: TRdxToken;
   out AWith: TRdxToken; out AMulti, ACrossed: Boolean): string;
@@ -165,11 +165,10 @@ begin
     end;
     if InList(T.Low, STOP_BACK) then
       Exit;
-    if T.Low = ')' then
-      Inc(Depth)
-    else if T.Low = '(' then
-      Dec(Depth)
-    else if (T.Low = ',') and (Depth = 0) then
+    // Rueckwaerts: ein Schliesser oeffnet eine Ebene. Runde UND eckige
+    // Klammern - ein Komma im Index 'L[0, 1]' trennt keine with-Objekte.
+    Dec(Depth, ParenDelta(T));
+    if (T.Low = ',') and (Depth = 0) then
       AMulti := True;
     if Depth < 0 then
       Exit;

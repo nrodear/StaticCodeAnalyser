@@ -30,8 +30,9 @@ unit uRdxEmptyExceptFix;
 //   * zwischen except und end steht etwas anderes als Leerraum - ein
 //     Handler, eine Anweisung, ein ';', ein else (der Fund ist dann
 //     veraltet oder die Form nicht die eindeutige);
-//   * ein Kommentar oder eine Direktive zwischen except und end - ein
-//     Kommentar ist Absicht ('// ignore errors', 'TODO'), keine Hilfe;
+//   * ein Kommentar oder eine Direktive zwischen except und end oder hinter
+//     dem end auf seiner Zeile ('end; // darf scheitern') - ein Kommentar
+//     ist Absicht ('// ignore errors', 'TODO'), keine Hilfe (wie SCA159);
 //   * eine Compiler-Direktive auf den Zeilen von except bis end.
 // Zeilenenden und Einrueckungsart (Tab oder Leerzeichen) des Umfelds
 // bleiben; die neue Zeile ist LF und wird vom Editor ans Zeilenende des
@@ -54,8 +55,8 @@ const
   R_EXC_MANY      = 'the reported line carries several "except" - ambiguous';
   R_EXC_NOT_EMPTY = 'something other than blanks stands between "except" '
     + 'and "end" (handler, statement, ";" or "else")';
-  R_EXC_COMMENT   = 'comment inside the except block - a comment is intent, '
-    + 'no help';
+  R_EXC_COMMENT   = 'comment inside or behind the except block - a comment '
+    + 'is intent, no help';
   R_EXC_DIRECTIVE = 'compiler directive on the lines of the except block';
 
 type
@@ -160,7 +161,10 @@ begin
     Exit(_(R_EXC_NOT_EMPTY));
   if DirectiveInLines(AMap, AExc.Line, AEnd.Line) then
     Exit(_(R_EXC_DIRECTIVE));
-  if CommentBetween(AMap, AExc, AEnd) then
+  // Auch ein Kommentar hinter dem end auf seiner Zeile ('end; // darf
+  // scheitern') begruendet das Verschlucken - wie bei SCA159.
+  if CommentBetween(AMap, AExc, AEnd)
+     or AMap.HasComment(AEnd.Line, AEnd.EndCol, Length(AMap.Raw(AEnd.Line))) then
     Result := _(R_EXC_COMMENT);
 end;
 

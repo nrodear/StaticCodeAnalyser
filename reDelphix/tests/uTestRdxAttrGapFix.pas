@@ -53,6 +53,7 @@ const
   R_MOVED     = 'keine Attributzeile';
   R_TARGET    = 'Attribut mit Ziel';
   R_TAIL      = 'hinter dem Attribut steht noch Text';
+  R_MULTI     = 'Attribut ueber mehrere Zeilen';
   R_NO_GAP    = 'keine Leerzeile hinter dem Attribut';
   R_NOT_CODE  = 'Kommentar oder eine Direktive';
   R_NO_MEMBER = 'kein Code mehr';
@@ -229,7 +230,11 @@ begin
   // Ueber mehrere Zeilen.
   AssertRefused(
     InClass(Join(['    [Foo(1,', '', '    2)]', '    procedure Foo;'])),
-    ATTR_LINE, 'Foo', R_TAIL);
+    ATTR_LINE, 'Foo', R_MULTI);
+  // Auch mit einem Kommentar hinter dem offenen Teil.
+  AssertRefused(
+    InClass(Join(['    [Foo(1, // a', '', '    2)]', '    procedure Foo;'])),
+    ATTR_LINE, 'Foo', R_MULTI);
   // Kommentar hinter dem Attribut.
   AssertRefused(
     InClass(Join(['    [Test] // wichtig', '', '    procedure Foo;'])),
