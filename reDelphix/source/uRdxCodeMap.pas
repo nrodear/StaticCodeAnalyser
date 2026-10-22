@@ -392,6 +392,12 @@ function HasAsciiWord(const AText, AWord: string): Boolean;
 // Das letzte Glied eines Pfads ('TOuter.TInner' -> 'TInner'). Bis Charge
 // H5c in uRdxRoutineFixes und als ShortNameOf in uRdxResultFixes.
 function LastPart(const S: string): string;
+// 'IFoo' -> True, 'Item' -> False: die Delphi-Konvention I +
+// Grossbuchstabe (ASCII), in Original-Schreibung - wie der Detektor
+// (Sca147IsInterfaceStyleName). Bis zur Hygiene-Welle H1 byte-gleich als
+// InterfaceStyle in uRdxRoutineFixes und uRdxConstStringParameterFix und
+// als LooksLikeInterface in uRdxLineFixes und uRdxAvoidOutFix.
+function LooksLikeInterfaceName(const S: string): Boolean;
 // Steht in AText ein Unterdrueck- oder Absichtsmarker - 'noinspection'
 // bzw. die Marker von SCA019 in jeder Schreibweise, 'XXX' nur gross (klein
 // ist es dort ein Platzhalter)? '' oder der Grund. SCA070 prueft den
@@ -1444,6 +1450,11 @@ end;
 function LastPart(const S: string): string;
 begin
   Result := Copy(S, LastDelimiter('.', S) + 1, MaxInt);
+end;
+
+function LooksLikeInterfaceName(const S: string): Boolean;
+begin
+  Result := (Length(S) >= 2) and (S[1] = 'I') and CharInSet(S[2], ['A'..'Z']);
 end;
 
 function MarkerReason(const AText: string): string;

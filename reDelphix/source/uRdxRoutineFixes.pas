@@ -1027,14 +1027,6 @@ begin
   end;
 end;
 
-// 'IFoo' -> True, 'Item' -> False: die Delphi-Konvention I +
-// Grossbuchstabe, in Original-Schreibung (wie der Detektor,
-// Sca147IsInterfaceStyleName).
-function InterfaceStyle(const S: string): Boolean;
-begin
-  Result := (Length(S) >= 2) and (S[1] = 'I') and CharInSet(S[2], ['A'..'Z']);
-end;
-
 // Die Interfaces der Vorfahrenliste: ab dem zweiten Eintrag jeder (Delphi-
 // Grammatik), der erste nur, wenn er wie ein Interface heisst oder in der
 // Datei als Interface steht - 'class(IFremd)' hat die Basis TObject.
@@ -1048,7 +1040,7 @@ begin
   Dummy := nil;
   Names := TRdxBlocks.HeritageOf(AMap, AClass);
   for i := 0 to High(Names) do
-    if (i > 0) or InterfaceStyle(Names[i])
+    if (i > 0) or LooksLikeInterfaceName(Names[i])
        or InterfaceParents(AMap, LowerCase(Names[i]), Dummy) then
       AddText(Result, Names[i]);
 end;
