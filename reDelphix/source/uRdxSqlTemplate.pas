@@ -85,7 +85,10 @@ unit uRdxSqlTemplate;
 //    den Text, und die Vorlage verlor die Konstante). Oeffnet oder
 //    schliesst ihr Wert einen SQL-String, der Parameter wird, muesste die
 //    Vorlage die Konstante zerschneiden - abgelehnt. Ohne einfachen Wert
-//    bleibt sie als stehender Ausdruck. sLineBreak/LineEnding bleiben als
+//    bleibt sie als stehender Ausdruck; steht sie im Code direkt vor oder
+//    hinter einem Operanden, ist nicht sichtbar, wo der Wert beginnt bzw.
+//    endet - abgelehnt (sonst wanderte ' AND active = ' + '1' in den Wert
+//    des Parameters). sLineBreak/LineEnding bleiben als
 //    Verkettung und gelten als Leerraum, das Ziel selbst ('S := S + ..')
 //    bleibt stehen. Bleibt kein Operand: keine Vorlage, "nur Konstanten".
 //    Sichtbar (Minor 5) ist eine Konstante der Unit ab ihrer Deklaration -
@@ -289,6 +292,8 @@ const
     + 'ist, ist nicht sichtbar';
   R_AFTER_EXPR  = R_OPERAND + 'folgt direkt auf ''%s'' - ob dort ein Wert '
     + 'steht, ist nicht sichtbar';
+  R_BEFORE_EXPR = R_OPERAND + 'steht direkt vor ''%s'' - ob der Wert dort '
+    + 'endet, ist nicht sichtbar';
   R_NO_SQL_TEXT = 'kein SQL-Text in der Kette - die Anweisung entsteht '
     + 'anderswo (Format, Funktion, Editor-Inhalt), keine Vorlage';
   R_ONLY_CONST  = 'nur Konstanten - kein Injection-Risiko';
@@ -1964,15 +1969,25 @@ end;
 
 { ---- Operanden ---- }
 
-// Das letzte Segment des Laufs ab ASeg: Operanden und stehende Ausdruecke
-// ohne SQL-Text dazwischen sind EIN Wert (ein Leerraum-Ausdruck und der
-// Wert einer Konstante trennen).
+// Das letzte Segment des Laufs ab ASeg: Operanden ohne SQL-Text dazwischen
+// sind EIN Wert ('IntToStr(A) + B'). Ein stehender Ausdruck beendet den
+// Lauf - ein Leerraum-Ausdruck trennt, eine Konstante ohne lesbaren Wert
+// lehnt BareReason ab (KeptBehind): im Lauf wanderte sie aus dem SQL-Text
+// in die Daten des Parameters (Kopf der Unit, Punkt 2).
 function RunEnd(const S: TSqlScan; ASeg: Integer): Integer;
 begin
   Result := ASeg;
-  while (Result < High(S.Segs)) and not IsSqlSeg(S.Segs[Result + 1])
-    and not S.Segs[Result + 1].Blank do
+  while (Result < High(S.Segs)) and (S.Segs[Result + 1].Kind = skOperand) do
     Inc(Result);
+end;
+
+// Steht direkt hinter dem Lauf (bis ALast) ein stehender Ausdruck, der kein
+// Leerraum ist - eine Konstante ohne lesbaren Wert? Ob der Wert dort endet,
+// ist nicht sichtbar: ' AND active = ' + '1' gehoert in den SQL-Text.
+function KeptBehind(const S: TSqlScan; ALast: Integer): Boolean;
+begin
+  Result := (ALast < High(S.Segs)) and not IsSqlSeg(S.Segs[ALast + 1])
+    and not S.Segs[ALast + 1].Blank;
 end;
 
 function RunValue(const S: TSqlScan; AFirst, ALast: Integer): string;
@@ -2003,6 +2018,8 @@ begin
     Exit(Format(R_GLUED, [Shown(Op)]));
   Result := ValueReason(S.Tok, TopOpener(S), S.Head, Op);
   if Result <> '' then Exit;
+  if KeptBehind(S, ALast) then
+    Exit(Format(R_BEFORE_EXPR, [Shown(Op), Shown(S.Segs[ALast + 1].Text)]));
   if not FollowsValue(CharsFrom(S, ALast + 1, 2)) then
     Exit(Format(R_GLUED, [Shown(Op)]));
   if InList(S.Tok[0], NUMBER_AFTER)

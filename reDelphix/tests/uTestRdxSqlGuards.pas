@@ -30,6 +30,7 @@ type
     [Test] procedure Scope_ClassConst_OnlyInItsMethods;
     [Test] procedure Major1_ConstNameStays;
     [Test] procedure Major1_ConstCutOrGlued_Refused;
+    [Test] procedure Major1_KeptConstBehindOperand_Refused;
     [Test] procedure Major2_DdlLock_RestOfText;
     [Test] procedure Major2_Chain_PreviousAddLines;
     [Test] procedure VerdachtA_Chain_NamesReserved;
@@ -312,6 +313,29 @@ begin
     Op('PCT'), Op('X'), Lit('''%''''''')]);
   SetConst(R, 2, '%');
   Assert.IsTrue(Pos('ParamByName(''X'').Value := PCT + X + ''%'';', Ok(R)) > 0);
+end;
+
+procedure TTestRdxSqlGuards.Major1_KeptConstBehindOperand_Refused;
+var
+  R : TRdxSqlRequest;
+begin
+  // Review Woche G01-01: const WHERE_ACTIVE = ' AND active = ' + '1' hat
+  // keinen einfachen Wert (sckKept). Bis dahin zog der Lauf sie in den
+  // Parameter: 'WHERE id = :Id' mit '.Value := IntToStr(Id) + WHERE_ACTIVE'
+  // - der Filter fiel aus der Anweisung in die Daten.
+  R := Req([Target('Q.SQL.Text'), Lit('''SELECT * FROM t WHERE id = '''),
+    Op('IntToStr(Id)'), Op('WHERE_ACTIVE')]);
+  SetLength(R.Consts, Length(R.Parts));
+  R.Consts[3].Kind := sckKept;
+  AssertRefused(R, 'steht direkt vor ''WHERE_ACTIVE''');
+  // Zwei Operanden ohne SQL-Text dazwischen bleiben EIN Wert ...
+  Assert.IsTrue(Pos('ParamByName(''A'').Value := A + B;', Ok(Req([
+    Target('Q.SQL.Text'), Lit('''SELECT * FROM t WHERE a = '''), Op('A'),
+    Op('B')]))) > 0);
+  // ... und sLineBreak hinter dem Operanden ist Leerraum.
+  Assert.IsTrue(Pos('WHERE id = :Id', Ok(Req([Target('Q.SQL.Text'),
+    Lit('''SELECT * FROM t WHERE id = '''), Op('Id'), Op('sLineBreak'),
+    Lit('''ORDER BY id''')]))) > 0);
 end;
 
 { ---- Major 2: DDL-Sperre fuer den Rest, die Kette ---- }
