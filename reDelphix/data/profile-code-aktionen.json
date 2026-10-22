@@ -66,6 +66,20 @@
       "AttributeDuplicate",
       "AttributeCategoryWithoutString",
       "AttributeMisalignment",
+      "DateFormatSettings",
+      "FormatLocaleHint",
+      "MethodName",
+      "IntegerOverflow",
+      "SourceBidiOverride",
+      "SourceInvisibleChar",
+      "ThreadResumeDeprecated",
+      "InsecureRandom",
+      "FloatEquality",
+      "MoveSizeOfPointer",
+      "DebugOutput",
+      "DeadCode",
+      "IfThenShortCircuit",
+      "AssertWithSideEffect",
       "FileReadError"
     ]
   }

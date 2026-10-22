@@ -299,6 +299,7 @@
       "tags": ["dead-code"],
       "cwe": ["CWE-561"],
       "detectorUnit": "uDeadCode.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "Exit;\nWriteLn('never reached');",
         "good": "if Failed then\nbegin\n  WriteLn('failed');\n  Exit;\nend;\nWriteLn('reached');"
@@ -418,6 +419,7 @@
       "type": "Code Smell",
       "tags": ["debug-code"],
       "detectorUnit": "uDebugOutput.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "WriteLn('here #3');",
         "good": "Logger.Debug('reached step 3');"
@@ -1243,6 +1245,7 @@
       "type": "Bug",
       "tags": ["string-formatting", "i18n", "locale"],
       "detectorUnit": "uFormatMismatch.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "S := Format('%.2f', [Price]);",
         "good": "S := Format('%.2f', [Price], TFormatSettings.Invariant);"
@@ -2185,6 +2188,7 @@
       "type": "Code Smell",
       "tags": ["naming", "convention"],
       "detectorUnit": "uMethodName.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "procedure doStuff;",
         "good": "procedure DoStuff;"
@@ -2321,6 +2325,7 @@
       "type": "Code Smell",
       "tags": ["concurrency", "deprecated"],
       "detectorUnit": "uConcurrencyExt.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "MyThread := TWorker.Create(True);\nMyThread.Resume;",
         "good": "MyThread := TWorker.Create(True);\nMyThread.Start;"
@@ -2618,6 +2623,7 @@
       "type": "Bug",
       "tags": ["locale", "i18n", "sonardelphi"],
       "detectorUnit": "uDateFormatSettings.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "var d := StrToDate(UserInput);     // breaks under EN locale\nWriteLn(DateToStr(Now));",
         "good": "var FS := TFormatSettings.Invariant;\nvar d := StrToDate(UserInput, FS);\nWriteLn(DateToStr(Now, FS));"
@@ -2675,6 +2681,7 @@
       "type": "Bug",
       "tags": ["control-flow", "side-effects", "performance", "sonardelphi"],
       "detectorUnit": "uIfThenShortCircuit.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "x := Math.IfThen(IsCacheHit, FetchFromCache, FetchFromDb);\n//                            both calls run every time",
         "good": "if IsCacheHit then\n  x := FetchFromCache\nelse\n  x := FetchFromDb;"
@@ -2789,6 +2796,7 @@
       "type": "Bug",
       "tags": ["arithmetic", "integer-overflow", "sonar50"],
       "detectorUnit": "uIntegerOverflow.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "var\n  BytesTotal: Int64;\n  SectorCount, SectorSize: Integer;\nbegin\n  BytesTotal := SectorCount * SectorSize;   // <- 32-bit overflow, then widen",
         "good": "BytesTotal := Int64(SectorCount) * SectorSize;\n// Cast one operand; the other is auto-promoted; multiplication is 64-bit."
@@ -2923,6 +2931,7 @@
       "type": "Bug",
       "tags": ["floating-point", "precision", "sonar50"],
       "detectorUnit": "uFloatEquality.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "var Ratio: Double;\n...\nif Ratio = 0.5 then DoStuff;     // <- IEEE-754: almost never true after arithmetic",
         "good": "uses System.Math;\n...\nif SameValue(Ratio, 0.5, 1e-9) then DoStuff;"
@@ -3142,6 +3151,7 @@
       "type": "Bug",
       "tags": ["memory", "pointer", "mormot", "sonar50"],
       "detectorUnit": "uMoveSizeOfPointer.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "var Buf: array[0..255] of Byte; P: PByte;\nMove(Src^, P^, SizeOf(PByte));        // copies 8 bytes (pointer), not the buffer\nFillChar(P^, SizeOf(PInteger), 0);    // zeroes 8 bytes, not the integer",
         "good": "Move(Src^, P^, SizeOf(Byte) * Count);  // explicit element count\nFillChar(V, SizeOf(V), 0);             // matches the variable's size"
@@ -3410,6 +3420,7 @@
       "tags": ["reliability", "randomness", "seed"],
       "configKey": "",
       "detectorUnit": "uInsecureRandom.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "procedure DealCards;\nvar i: Integer;\nbegin\n  for i := 1 to 5 do\n    Players[i].Card := Random(52);\nend;",
         "good": "procedure DealCards;\nvar i: Integer;\nbegin\n  Randomize;   // once, at startup\n  for i := 1 to 5 do\n    Players[i].Card := Random(52);\nend;"
@@ -3451,6 +3462,7 @@
       "tags": ["reliability", "assert", "side-effect"],
       "configKey": "",
       "detectorUnit": "uAssertWithSideEffect.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "Assert(InitializeSubsystem);   // Release build skips Init entirely",
         "good": "var Ok := InitializeSubsystem;\nAssert(Ok, 'subsystem init failed');"
@@ -3831,6 +3843,7 @@
       "tags": ["security", "unicode", "trojan-source"],
       "cwe": ["CWE-1007"],
       "detectorUnit": "uSourceEncoding.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "// a comment containing U+202E can visually reorder the code that follows",
         "good": "// no bidirectional control characters anywhere in source"
@@ -3908,6 +3921,7 @@
       "tags": ["security", "unicode", "trojan-source"],
       "cwe": ["CWE-1007"],
       "detectorUnit": "uSourceEncoding.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "// an identifier or string with an embedded U+200B is not what it looks like",
         "good": "// no zero-width / invisible characters in source"

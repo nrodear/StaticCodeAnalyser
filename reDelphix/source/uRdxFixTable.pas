@@ -167,7 +167,19 @@ uses
   uRdxIgnoreReasonFix,  // SCA179
   uRdxAttrDuplicateFix, // SCA180
   uRdxCategoryArgFix,   // SCA181
-  uRdxGotoExitFix;      // SCA060
+  uRdxGotoExitFix,      // SCA060
+  uRdxFormatSettingsFix, // SCA128, SCA059
+  uRdxMethodNameFix,    // SCA106
+  uRdxIntegerOverflowFix, // SCA137
+  uRdxCharEscapeFix,    // SCA188, SCA192
+  uRdxThreadResumeFix,  // SCA113
+  uRdxInsecureRandomFix, // SCA167
+  uRdxFloatEqualityFix, // SCA144
+  uRdxMoveSizeFix,      // SCA154
+  uRdxDebugOutputFix,   // SCA017
+  uRdxDeadCodeFix,      // SCA011
+  uRdxIfThenFix,        // SCA131
+  uRdxAssertSideEffectFix; // SCA169
 
 const
   // Hinweise der Hilfen (deutsch wie die Gruende; Pruefstand und Tests
@@ -271,6 +283,75 @@ const
   R_GOTO_EXIT_HINT = 'gleiche Bedeutung - die Marke steht am Routinenende; '
     + 'sie bleibt stehen und wird, wenn kein goto mehr zu ihr springt, als '
     + 'ungenutzte Marke gemeldet (Hinweis/Warnung)';
+  // Charge QF (14 weitere Hilfen): SCA128, SCA059, SCA106, SCA137, SCA188,
+  // SCA192, SCA113, SCA167, SCA144, SCA154, SCA017, SCA011, SCA131, SCA169.
+  // SCA128 / SCA059 (QF1): der Hauptweg nennt die globale FormatSettings nur
+  // ausdruecklich - die Ueberladung ohne Settings liest dieselbe Variable
+  // (RTL 23.0/37.0, FPC 3.2.2 absolute DefaultFormatSettings). Der Alt-Weg
+  // aendert das Verhalten (Hinweis mit der Folge, Kennzeichnung ueber
+  // ChangesBehavior im Alt-Adapter).
+  R_FMTSET_HINT = 'gleiche Bedeutung - ohne das Argument liest die RTL '
+    + 'dieselbe globale FormatSettings; der Aufruf sagt es jetzt ausdruecklich';
+  R_FMTSET_INV_HINT = 'unabhaengig vom System: Punkt als Dezimaltrenner, '
+    + 'Datum MM/dd/yyyy, englische Monats- und Tagesnamen - fuer Dateien, SQL '
+    + 'und Protokolle, nicht fuer die Anzeige';
+  R_FMTLOC_HINT = 'gleiche Bedeutung - Format ohne drittes Argument liest '
+    + 'dieselbe globale FormatSettings; der Aufruf sagt es jetzt ausdruecklich';
+  R_FMTLOC_INV_HINT = 'unabhaengig vom System: Punkt als Dezimaltrenner, '
+    + 'Komma als Tausendertrenner - fuer Dateien, SQL und Protokolle, nicht '
+    + 'fuer die Anzeige';
+  // SCA106 (QF2): bedeutungsgleich (Delphi bindet ohne Gross/klein).
+  R_METHODNAME_HINT = 'gleiche Bedeutung - Delphi unterscheidet Gross- und '
+    + 'Kleinschreibung nicht; nur Deklaration und Implementierung werden '
+    + 'angepasst, Aufrufe behalten ihre Schreibweise (RTTI und MethodName '
+    + 'nennen danach den neuen Namen)';
+  // SCA137 (QF2): gekennzeichnet (E2) - das Ergebnis aendert sich, sobald
+  // das Produkt nicht in 32 Bit passt; das ist der Fix.
+  R_OVERFLOW_HINT = 'das Produkt wird jetzt in 64 Bit gerechnet - ein '
+    + 'Ergebnis ueber MaxInt bleibt erhalten statt still abgeschnitten; mit '
+    + 'Ueberlaufpruefung (Q+) entfaellt die Ausnahme EIntOverflow';
+  // SCA188 / SCA192 (QF3): bedeutungsgleich.
+  R_BIDI_HINT = 'gleiche Bedeutung - im Kommentar geloescht, im String als '
+    + '#$-Code (gleicher Wert); die Zeile zeigt jetzt, was der Compiler liest';
+  R_INVIS_HINT = 'gleiche Bedeutung - im Kommentar geloescht, im String als '
+    + '#$-Code (gleicher Wert, auch in Emoji-Folgen)';
+  // SCA113 (QF4): nur mit Beweis Create(True) - bedeutungsgleich.
+  R_THREAD_START_HINT = 'gleiche Bedeutung - der Thread wurde in dieser '
+    + 'Routine angehalten erzeugt (Create(True)) und noch nie gestartet; '
+    + 'Start laeuft dann wie Resume';
+  // SCA167 (QF4): gekennzeichnet (E2) - die Folge aendert sich.
+  R_RANDOMIZE_HINT = 'die Zufallsfolge ist danach bei jedem Lauf eine andere '
+    + '(Startwert aus der Uhr) - eine bisher wiederholbare Folge, etwa fuer '
+    + 'Tests, geht verloren; der Aufruf beim Laden der Unit wirkt fuer das '
+    + 'ganze Programm; fuer Passwoerter, Token und Schluessel bleibt Random '
+    + 'ungeeignet';
+  // SCA144 (QF5): der Adapter setzt ihn vor AppendUses (HintByPlanner).
+  R_FLOATEQ_HINT = 'vergleicht jetzt mit Toleranz (Standard-Epsilon von '
+    + 'System.Math) statt exakt - ein gewollt exakter Vergleich (Schalter- '
+    + 'oder Sentinelwert) aendert damit seine Bedeutung';
+  // SCA154 (QF5): gekennzeichnet (E2).
+  R_MOVESIZE_HINT = 'kopiert bzw. fuellt jetzt genau ein Element (SizeOf des '
+    + 'Zieltyps) statt 4/8 Byte - war ein ganzer Puffer gemeint, die Laenge '
+    + 'von Hand setzen';
+  // SCA017 (QF6): beide Eintraege gekennzeichnet.
+  R_DEBUGOUT_HINT = 'die Ausgabe laeuft nur noch, wenn DEBUG definiert ist '
+    + '(Delphi: Konfiguration Debug); im Release-Build entfaellt sie samt der '
+    + 'Auswertung ihrer Argumente - FPC/Lazarus definiert DEBUG nicht von '
+    + 'selbst';
+  R_DEBUGOUT_DELETE_HINT = 'die Ausgabe entfaellt in jedem Build, auch beim '
+    + 'Debuggen; ihre Argumente werden nicht mehr ausgewertet';
+  // SCA011 (QF6): bedeutungsgleich - der Code lief nie.
+  R_DEADCODE_HINT = 'gleiche Bedeutung - der Code lief nie; geparkter Code '
+    + 'steht danach nur noch in der Versionsverwaltung';
+  // SCA131 (QF7): gekennzeichnet (E2) - IfThen wertete beide Arme aus.
+  R_IFTHEN_HINT = 'nur noch der zutreffende Zweig laeuft - Nebenwirkungen, '
+    + 'Kosten und Ausnahmen des anderen entfallen; die Bedingung laeuft '
+    + 'weiter genau einmal';
+  // SCA169 (QF7): gekennzeichnet (E2) - der Aufruf lief ohne Assertions
+  // bisher nicht.
+  R_ASSERTSE_HINT = 'die Bedingung laeuft jetzt auch ohne Assertions '
+    + '(Release, $C-) - dort entfaellt nur die Pruefung; ohne Meldung wird '
+    + 'die Bedingung zum Meldungstext';
   // Charge H4 (try/finally): alle gekennzeichnet (E2) - B laeuft danach
   // auch dort, wo es bisher uebersprungen wurde; das ist der Fix.
   R_TRY_OBJECT_HINT = 'Free laeuft jetzt auch bei einer Ausnahme und bei Exit '
@@ -575,6 +656,67 @@ begin
   Result.Parts := MagicParts;
   Result.Check := MagicCheck;
   Result.NeedsOpen := False;
+end;
+
+// SCA106 (Charge QF2): Deklaration und Implementierung in EINEM
+// Undo-Schritt; Name ist der neue Methodenname (schon aus der Meldung, auch
+// wenn der Planer ablehnt).
+procedure MethodNameParts(const APlan: TRdxMethodNamePlan;
+  var AOutcome: TRdxFixOutcome);
+begin
+  AOutcome.Name := APlan.Name;
+  AOutcome.Edits := APlan.Edits;
+end;
+
+// SCA106: reine Textlogik - kein Check, kein offener Quellstellen-Dienst.
+// Eine Formdatei, die die Methode als Ereignis bindet, liest die Hilfe
+// bewusst nicht: TReader findet die Methode ueber TObject.MethodAddress,
+// und das vergleicht ohne Gross/klein (System.pas, UTF8IdentIdentCompare).
+function MethodNameForm(
+  APlanner: TRdxPlannerOf<TRdxMethodNamePlan>): TRdxPlanForm<TRdxMethodNamePlan>;
+begin
+  Result.Planner := APlanner;
+  Result.Parts := MethodNameParts;
+  Result.Check := nil;
+  Result.NeedsOpen := False;
+end;
+
+// SCA137 (Charge QF2): eine Ersetzung (der linke Operand), Name der
+// Operand - schon aus der Meldung, auch wenn der Planer ablehnt.
+procedure OverflowParts(const APlan: TRdxOverflowPlan;
+  var AOutcome: TRdxFixOutcome);
+begin
+  AOutcome.Name := APlan.Left;
+  AOutcome.Edits := TArray<TRdxEdit>.Create(APlan.Edit);
+end;
+
+// SCA137: der Typbeweis (Kopf von uRdxIntegerOverflowFix) - an der Zeile des
+// Ziels, der Ankerzeile der Anweisung: das Ziel Int64/UInt64/QWord, beide
+// Operanden Integer/Cardinal, kein with-Block (WithBefore vor der Zeile,
+// InWithBlock auch auf ihr). DeclaredTypeOf liefert '' fuer Properties,
+// Methoden, Vorfahren von ausserhalb - das sperrt.
+function OverflowCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  AFinding: TLeakFinding; const APlan: TRdxOverflowPlan): string;
+var
+  L : Integer;
+begin
+  L := AFinding.LineInt;
+  Result := TRdxIntegerOverflowFix.ProofReason(APlan,
+    TRdxSimpleFixes.WithBefore(AMap, L) or APlaces.InWithBlock(L),
+    APlaces.DeclaredTypeOf(L, APlan.Target),
+    APlaces.DeclaredTypeOf(L, APlan.Left),
+    APlaces.DeclaredTypeOf(L, APlan.Right));
+end;
+
+// SCA137: mit offenem Quellstellen-Dienst (der Typbeweis), danach
+// OverflowCheck.
+function OverflowForm(
+  APlanner: TRdxPlannerOf<TRdxOverflowPlan>): TRdxPlanForm<TRdxOverflowPlan>;
+begin
+  Result.Planner := APlanner;
+  Result.Parts := OverflowParts;
+  Result.Check := OverflowCheck;
+  Result.NeedsOpen := True;
 end;
 
 { ---- Die Planer je Art: Adapter auf die Rumpf-Routinen, alle in der Form
@@ -1229,6 +1371,294 @@ begin
     TRdxGotoExitFix.GotoToExit);
 end;
 
+{ ---- Die Adapter der Charge QF (14 weitere Hilfen) ----
+  Wie bei Q und R: die Textlogik in je einer Planer-Unit (FPC-Pruefstand),
+  hier nur der Adapter. Typfragen an den Quellstellen-Dienst (DeclaredTypeOf,
+  InWithBlock) stellen die Adapter von SCA137 (OverflowCheck), SCA144,
+  SCA154 und SCA131; die Antworten pruefen reine Funktionen der Units
+  (ProofReason, TypeReason, OperandReason, VariantReason - dort stehen die
+  msgids, tools/i18n_extract.py loest nur Konstanten derselben Unit auf). ---- }
+
+// SCA128 (Charge QF1): ', FormatSettings' an jeden Aufruf der Liste auf der
+// Fundzeile - die Textlogik in uRdxFormatSettingsFix.
+function PlanDateFormatSettings(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxFormatSettingsFix.DateFormatSettings);
+end;
+
+// SCA128, zweiter Eintrag: ', TFormatSettings.Invariant' (aendert Verhalten).
+function PlanDateFormatSettingsAlt(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxFormatSettingsFix.DateFormatInvariant);
+  Result.Variant := 1;
+  Result.ChangesBehavior := True;
+  if Result.Enabled then
+    Result.Hint := R_FMTSET_INV_HINT;
+end;
+
+// SCA059 (Charge QF1): drittes Argument ', FormatSettings' an das eine
+// Format der Fundzeile.
+function PlanFormatLocale(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxFormatSettingsFix.FormatLocale);
+end;
+
+// SCA059, zweiter Eintrag: ', TFormatSettings.Invariant' (aendert Verhalten).
+function PlanFormatLocaleAlt(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxFormatSettingsFix.FormatLocaleInvariant);
+  Result.Variant := 1;
+  Result.ChangesBehavior := True;
+  if Result.Enabled then
+    Result.Hint := R_FMTLOC_INV_HINT;
+end;
+
+// SCA106 (Charge QF2): 'doWork' -> 'DoWork' in Deklaration und
+// Implementierung; Aufrufe bleiben (der Hinweis sagt es).
+function PlanMethodName(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxMethodNamePlan;
+begin
+  Result := TRdxFixFrame.Run<TRdxMethodNamePlan>(
+    MethodNameForm(TRdxMethodNameFix.Capitalize),
+    APlaces, ALines, AFinding, P);
+end;
+
+// SCA137 (Charge QF2): 'Total := Count * Size;' ->
+// 'Total := Int64(Count) * Size;' - Textform in uRdxIntegerOverflowFix,
+// Typbeweis in OverflowCheck. Ohne offenen Quellstellen-Dienst R_NO_FILE.
+function PlanIntegerOverflow(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxOverflowPlan;
+begin
+  Result := TRdxFixFrame.Run<TRdxOverflowPlan>(
+    OverflowForm(TRdxIntegerOverflowFix.CastLeft),
+    APlaces, ALines, AFinding, P);
+end;
+
+// SCA188 (Charge QF3): die Bidi-Steuerzeichen der Zeile; die Meldung nennt
+// weder Spalte noch Zeichen, der Planer liest sie nicht.
+function PlanBidiOverride(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxCharEscapeFix.BidiOverride);
+end;
+
+// SCA192 (Charge QF3): die unsichtbaren Zeichen der Zeile.
+function PlanInvisibleChar(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxCharEscapeFix.InvisibleChar);
+end;
+
+// SCA113 (Charge QF4): 'X.Resume' -> 'X.Start', nur mit Beweis
+// 'X := T.Create(True)' davor (uRdxThreadResumeFix). Name ist der
+// Empfaenger aus der Meldung - auch, wenn der Planer ablehnt.
+function PlanThreadResume(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxThreadResumeFix.ResumeToStart);
+  Result.Name := TRdxThreadResumeFix.ReceiverOf(AFinding.Message);
+end;
+
+// SCA167 (Charge QF4): 'Randomize;' in den initialization-Abschnitt
+// (uRdxInsecureRandomFix) - eine Ersetzung, ohne Name.
+function PlanInsecureRandom(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxInsecureRandomFix.AddRandomize);
+end;
+
+// SCA144 (Charge QF5): der deklarierte Typ eines Operanden; '' fuer eine
+// Zahl (sie braucht keinen Beweis).
+function FloatOperandType(APlaces: TSourcePlaces; ALine: Integer;
+  const AOperand: string): string;
+begin
+  Result := '';
+  if not TRdxFloatEqualityFix.IsLiteral(AOperand) then
+    Result := APlaces.DeclaredTypeOf(ALine, AOperand);
+end;
+
+// SCA144: 'A = B' -> 'SameValue(A, B)', eine Null-Seite -> 'IsZero(A)', bei
+// '<>' mit 'not' davor - die Ersetzung rechnet
+// TRdxFloatEqualityFix.ToleranceCompare auf der Code-Sicht. Typbeweis hier
+// (Hausregel): beide Seiten als Single/Double/Extended/Real deklariert
+// (DeclaredTypeOf, TypeReason; eine Zahl braucht keinen), kein with-Block
+// (InWithBlock) und kein vom Detektor herabgestufter Fund (fcLow:
+// Waechter- bzw. Sentinel-Vergleich, exakt gewollt) - ContextReason. Name
+// (Menuetext) ist SameValue bzw. IsZero, auch gesperrt. Der Hinweis steht
+// vor AppendUses, das ' + uses ..' anhaengt und System.Math (FPC-Datei:
+// Math) einfuegt, wenn es fehlt.
+function PlanFloatEquality(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Map      : TRdxCodeMap;
+  L, Op, R : string;
+begin
+  Result := Default(TRdxFixOutcome);
+  Result.Name := TRdxFloatEqualityFix.CallName(AFinding.Message);
+  if not Assigned(ALines) or not Assigned(APlaces) or not APlaces.IsOpen then
+  begin
+    Result.Reason := R_NO_FILE;
+    Exit;
+  end;
+  SetLength(Result.Edits, 1);
+  Map := TRdxCodeMap.Create(ALines);
+  try
+    Result.Enabled := TRdxFloatEqualityFix.ToleranceCompare(Map,
+      AFinding.LineInt, AFinding.Message, Result.Edits[0], Result.Reason);
+  finally
+    Map.Free;
+  end;
+  if Result.Enabled then
+    Result.Reason := TRdxFloatEqualityFix.ContextReason(
+      AFinding.Confidence = fcLow, APlaces.InWithBlock(AFinding.LineInt),
+      AFinding.Message);
+  if Result.Enabled and (Result.Reason = '')
+     and TRdxFloatEqualityFix.Operands(AFinding.Message, L, Op, R) then
+    Result.Reason := TRdxFloatEqualityFix.TypeReason(
+      L, FloatOperandType(APlaces, AFinding.LineInt, L),
+      R, FloatOperandType(APlaces, AFinding.LineInt, R));
+  Result.Enabled := Result.Enabled and (Result.Reason = '');
+  if not Result.Enabled then
+  begin
+    Result.Edits := nil;
+    Exit;
+  end;
+  Result.Hint := R_FLOATEQ_HINT;
+  Result.Enabled := AppendUses(APlaces, AUsesNames, 'Math', 'System.Math',
+    Result);
+end;
+
+// SCA154 (Charge QF5): 'SizeOf(PTyp)' -> 'SizeOf(Zieltyp)' fuer einen
+// Aufruf, der genau EIN Element anfasst (TRdxMoveSizeFix.PointeeSize).
+// Typbeweis hier (Hausregel): jedes Puffer-Argument ist als PTyp ('X^',
+// bei CopyMemory/ZeroMemory 'X') bzw. als Zieltyp ('X', '@X') deklariert
+// (DeclaredTypeOf, OperandReason) - sonst ist die gemeinte Laenge offen
+// (ein Puffer, eine Zahl von Elementen, wirklich ein Zeiger); kein
+// with-Block (InWithBlock, ContextReason). Name (Menuetext) ist der
+// Zieltyp, auch gesperrt.
+function PlanMoveSizeOfPointer(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Map : TRdxCodeMap;
+  Ops : TArray<TRdxSizeOperand>;
+  i   : Integer;
+begin
+  Result := Default(TRdxFixOutcome);
+  Result.Name := TRdxMoveSizeFix.TargetTypeOf(AFinding.Message);
+  if not Assigned(ALines) or not Assigned(APlaces) or not APlaces.IsOpen then
+  begin
+    Result.Reason := R_NO_FILE;
+    Exit;
+  end;
+  SetLength(Result.Edits, 1);
+  Map := TRdxCodeMap.Create(ALines);
+  try
+    Result.Enabled := TRdxMoveSizeFix.PointeeSize(Map, AFinding.LineInt,
+      AFinding.Message, Result.Edits[0], Result.Reason)
+      and TRdxMoveSizeFix.Operands(Map, AFinding.LineInt, AFinding.Message,
+        Ops, Result.Reason);
+  finally
+    Map.Free;
+  end;
+  if Result.Enabled then
+    Result.Reason := TRdxMoveSizeFix.ContextReason(
+      APlaces.InWithBlock(AFinding.LineInt));
+  i := 0;
+  while Result.Enabled and (Result.Reason = '') and (i < Length(Ops)) do
+  begin
+    Result.Reason := TRdxMoveSizeFix.OperandReason(Ops[i],
+      APlaces.DeclaredTypeOf(AFinding.LineInt, Ops[i].Name));
+    Inc(i);
+  end;
+  Result.Enabled := Result.Enabled and (Result.Reason = '');
+  if not Result.Enabled then
+    Result.Edits := nil;
+end;
+
+// SCA017 (Charge QF6): die gemeldete Anweisung in '{$IFDEF DEBUG}' ..
+// '{$ENDIF}' (eigene Zeilen); Hinweis und Kennzeichnung setzt die Zeile.
+function PlanDebugOutput(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxDebugOutputFix.WrapInDebug);
+end;
+
+// SCA017, zweiter Eintrag: die Anweisung loeschen - setzt Variant, Hinweis
+// und Kennzeichnung selbst (wie PlanReversedForRangeAlt).
+function PlanDebugOutputAlt(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxDebugOutputFix.DeleteCall);
+  Result.Variant := 1;
+  Result.ChangesBehavior := True;
+  if Result.Enabled then
+    Result.Hint := R_DEBUGOUT_DELETE_HINT;
+end;
+
+// SCA011 (Charge QF6): die toten Zeilen bis vor das Listenende loeschen;
+// Name = Zahl der Zeilen (Menuetext 'Delete the unreachable code: %s
+// line(s)') - toter Code ist oft geparkter Code, der Eintrag sagt, wie viel
+// geht.
+function PlanDeadCode(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxDeadCodeFix.DeleteDeadCode);
+  if Result.Enabled then
+    Result.Name := IntToStr(TRdxDeadCodeFix.LineCountOf(Result.Edits[0]));
+end;
+
+// SCA131 (Charge QF7): die Textlogik in uRdxIfThenFix, hier die Typfrage -
+// ist das Ziel als Variant bzw. OleVariant deklariert, bekaeme es aus einem
+// Literal-Arm einen anderen VarType als aus dem IfThen-Ergebnis (ShortInt
+// statt Integer). Ohne offenen Quellstellen-Dienst und fuer ein Ziel, das
+// DeclaredTypeOf nicht kennt (Pfad, Property), keine Sperre.
+function PlanIfThenToIf(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Target, TypeLow : string;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxIfThenFix.IfThenToIf);
+  if not Result.Enabled or not Assigned(APlaces) or not APlaces.IsOpen then
+    Exit;
+  Target := TRdxIfThenFix.TargetOf(Result.Edits[0].Expected);
+  TypeLow := LowerCase(APlaces.DeclaredTypeOf(AFinding.LineInt, Target));
+  if (TypeLow = 'variant') or (TypeLow = 'olevariant') then
+  begin
+    Result.Enabled := False;
+    Result.Edits := nil;
+    Result.Reason := TRdxIfThenFix.VariantReason(Target);
+  end;
+end;
+
+// SCA169 (Charge QF7): reine Textlogik (uRdxAssertSideEffectFix); eine
+// eigene Routine Assert und ein with davor prueft der Planer selbst.
+function PlanAssertOutside(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxAssertSideEffectFix.AssertOutside);
+end;
+
 { ---- Die Tabelle ---- }
 
 type
@@ -1239,12 +1669,13 @@ type
   end;
 
 const
-  FIX_ROW_HIGH = 59;
+  FIX_ROW_HIGH = 73;
 
   // Je Art eine Zeile; die Reihenfolge ist die der Chargen (Stufe 2a,
   // Stufe 2 Rest, uQuickFix-Umzug/Stufe 3, Zeilen, Ausnahmen, Deklarationen
   // H1, Anweisungen H2, Routinen H3b, Aufraeumen H3a, try/finally H4,
-  // Ergebnis und Konstruktoren H5, Magic Number Q14). Der Menuetext steht
+  // Ergebnis und Konstruktoren H5, Magic Number Q14, einfache Hilfen Q, R
+  // und QF). Der Menuetext steht
   // unter demselben Index in FIX_CAPTIONS (s. Kopf).
   FIX_ROWS: array[0..FIX_ROW_HIGH] of TRdxFixRow = (
     (Kind: fkExplicitTObjectInheritance; Plan: PlanExplicitTObject;
@@ -1381,7 +1812,59 @@ const
     (Kind: fkAttributeCategoryWithoutString; Plan: PlanCategoryArg;
      Hint: R_CATARG_HINT; HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkGotoStatement; Plan: PlanGotoExit;
-     Hint: R_GOTO_EXIT_HINT; HintByPlanner: False; Changes: False; Alt: nil)
+     Hint: R_GOTO_EXIT_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    // Charge QF: 14 weitere Hilfen.
+    // SCA128/SCA059: bedeutungsgleich; der zweite Eintrag (Invariant)
+    // kennzeichnet sich selbst.
+    (Kind: fkDateFormatSettings; Plan: PlanDateFormatSettings;
+     Hint: R_FMTSET_HINT; HintByPlanner: False; Changes: False;
+     Alt: PlanDateFormatSettingsAlt),
+    (Kind: fkFormatLocaleHint; Plan: PlanFormatLocale;
+     Hint: R_FMTLOC_HINT; HintByPlanner: False; Changes: False;
+     Alt: PlanFormatLocaleAlt),
+    // SCA106: bedeutungsgleich (Delphi bindet ohne Gross/klein).
+    (Kind: fkMethodName; Plan: PlanMethodName;
+     Hint: R_METHODNAME_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    // SCA137: aendert das Ergebnis, sobald das Produkt nicht in 32 Bit
+    // passt - das ist der Fix (E2).
+    (Kind: fkIntegerOverflow; Plan: PlanIntegerOverflow;
+     Hint: R_OVERFLOW_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+    (Kind: fkSourceBidiOverride; Plan: PlanBidiOverride;
+     Hint: R_BIDI_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkSourceInvisibleChar; Plan: PlanInvisibleChar;
+     Hint: R_INVIS_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    // SCA113: bedeutungsgleich - nur mit Beweis Create(True)
+    // (uRdxThreadResumeFix); Name ist der Empfaenger.
+    (Kind: fkThreadResumeDeprecated; Plan: PlanThreadResume;
+     Hint: R_THREAD_START_HINT; HintByPlanner: False; Changes: False;
+     Alt: nil),
+    // SCA167: die Zufallsfolge ist danach bei jedem Lauf eine andere (E2).
+    (Kind: fkInsecureRandom; Plan: PlanInsecureRandom;
+     Hint: R_RANDOMIZE_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+    // SCA144: Toleranz statt exakt (E2); den Hinweis setzt der Adapter vor
+    // AppendUses (System.Math bei Bedarf).
+    (Kind: fkFloatEquality; Plan: PlanFloatEquality;
+     Hint: ''; HintByPlanner: True; Changes: True; Alt: nil),
+    // SCA154: die Laenge wird SizeOf(Zieltyp) statt 4/8 (E2).
+    (Kind: fkMoveSizeOfPointer; Plan: PlanMoveSizeOfPointer;
+     Hint: R_MOVESIZE_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+    // SCA017: der Release-Bau (bzw. beim Loeschen jeder Bau) verliert die
+    // Ausgabe (E2).
+    (Kind: fkDebugOutput; Plan: PlanDebugOutput;
+     Hint: R_DEBUGOUT_HINT; HintByPlanner: False; Changes: True;
+     Alt: PlanDebugOutputAlt),
+    // SCA011: bedeutungsgleich (der Code lief nie); der Menuetext nennt die
+    // Zahl der Zeilen (Name, Adapter).
+    (Kind: fkDeadCode; Plan: PlanDeadCode;
+     Hint: R_DEADCODE_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    // SCA131: nur noch der zutreffende Arm laeuft (E2); die Typfrage
+    // (Variant-Ziel) stellt der Adapter.
+    (Kind: fkIfThenShortCircuit; Plan: PlanIfThenToIf;
+     Hint: R_IFTHEN_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+    // SCA169: die Bedingung laeuft jetzt auch ohne Assertions (E2) - das
+    // ist der Fix.
+    (Kind: fkAssertWithSideEffect; Plan: PlanAssertOutside;
+     Hint: R_ASSERTSE_HINT; HintByPlanner: False; Changes: True; Alt: nil)
   );
 
   // Menuetexte (msgids) unter dem Index der Zeile; '%s' = Name der Hilfe
@@ -1390,7 +1873,10 @@ const
   // SCA080, die Routine bzw. Methode bei SCA164/SCA147, die Variable bei SCA053,
   // X bzw. die Sperre bzw. der Puffer bei SCA009/SCA001/SCA109/SCA153/SCA156,
   // die Anweisung bei SCA096/SCA196, der Wert bei SCA121 - ein Literal oder
-  // Default(T), Charge H5c; die Zahl bei SCA014, Charge Q14).
+  // Default(T), Charge H5c; die Zahl bei SCA014, Charge Q14; das Wort wie
+  // gemeldet bei SCA064; der neue Name bei SCA106, der linke Operand bei
+  // SCA137, der Empfaenger bei SCA113, SameValue bzw. IsZero bei SCA144,
+  // der Zieltyp bei SCA154, die Zahl der Zeilen bei SCA011 - Charge QF).
   FIX_CAPTIONS: array[0..FIX_ROW_HIGH] of string = (
     'Remove (TObject) from the class declaration',
     'Use FreeAndNil(%s)',
@@ -1451,7 +1937,21 @@ const
     'Add a reason to [Ignore]',
     'Remove the duplicate attribute',
     'Add a category name to the attribute',
-    'Replace "goto" with Exit'
+    'Replace "goto" with Exit',
+    'Pass FormatSettings explicitly',
+    'Pass FormatSettings explicitly',
+    'Write the method name as %s',
+    'Cast %s to Int64 before multiplying',
+    'Remove bidi control characters (as #$ code in strings)',
+    'Remove invisible characters (as #$ code in strings)',
+    'Use %s.Start instead of Resume',
+    'Call Randomize in the initialization section',
+    'Use %s instead of the exact comparison',
+    'Use SizeOf(%s) instead of the pointer size',
+    'Put the debug output in {$IFDEF DEBUG}',
+    'Delete the unreachable code: %s line(s)',
+    'Replace IfThen with if..then..else',
+    'Evaluate the condition outside Assert'
   );
 
   // Menuetexte des zweiten Eintrags (Alt), '' ohne.
@@ -1467,7 +1967,12 @@ const
     '', '',
     'Swap the loop bounds',
     '', '', '',
-    '', '', '', '', '', '', '', '', '', ''
+    '', '', '', '', '', '', '', '', '', '',
+    'Pass TFormatSettings.Invariant',
+    'Pass TFormatSettings.Invariant',
+    '', '', '', '', '', '', '', '',
+    'Delete the debug output',
+    '', '', ''
   );
 
   // Die Namen der Planer (PlannerName, fuer uTestRdxFixTable): eine eigene
@@ -1476,7 +1981,7 @@ const
   // faellt dort auf (Wochen-Review 2026-10-21, Major P03/P29: welcher Planer
   // an welcher Art haengt, band bis dahin kein Test). Ein neuer Planer
   // braucht hier eine Zeile, sonst nennt PlannerName '?'.
-  PLANNER_NAMES: array[0..61] of TRdxPlannerName = (
+  PLANNER_NAMES: array[0..78] of TRdxPlannerName = (
     (Name: 'PlanExplicitTObject'; Plan: PlanExplicitTObject),
     (Name: 'PlanFreeAndNil'; Plan: PlanFreeAndNil),
     (Name: 'PlanNilComparison'; Plan: PlanNilComparison),
@@ -1538,7 +2043,24 @@ const
     (Name: 'PlanIgnoreReason'; Plan: PlanIgnoreReason),
     (Name: 'PlanAttrDuplicate'; Plan: PlanAttrDuplicate),
     (Name: 'PlanCategoryArg'; Plan: PlanCategoryArg),
-    (Name: 'PlanGotoExit'; Plan: PlanGotoExit)
+    (Name: 'PlanGotoExit'; Plan: PlanGotoExit),
+    (Name: 'PlanDateFormatSettings'; Plan: PlanDateFormatSettings),
+    (Name: 'PlanDateFormatSettingsAlt'; Plan: PlanDateFormatSettingsAlt),
+    (Name: 'PlanFormatLocale'; Plan: PlanFormatLocale),
+    (Name: 'PlanFormatLocaleAlt'; Plan: PlanFormatLocaleAlt),
+    (Name: 'PlanMethodName'; Plan: PlanMethodName),
+    (Name: 'PlanIntegerOverflow'; Plan: PlanIntegerOverflow),
+    (Name: 'PlanBidiOverride'; Plan: PlanBidiOverride),
+    (Name: 'PlanInvisibleChar'; Plan: PlanInvisibleChar),
+    (Name: 'PlanThreadResume'; Plan: PlanThreadResume),
+    (Name: 'PlanInsecureRandom'; Plan: PlanInsecureRandom),
+    (Name: 'PlanFloatEquality'; Plan: PlanFloatEquality),
+    (Name: 'PlanMoveSizeOfPointer'; Plan: PlanMoveSizeOfPointer),
+    (Name: 'PlanDebugOutput'; Plan: PlanDebugOutput),
+    (Name: 'PlanDebugOutputAlt'; Plan: PlanDebugOutputAlt),
+    (Name: 'PlanDeadCode'; Plan: PlanDeadCode),
+    (Name: 'PlanIfThenToIf'; Plan: PlanIfThenToIf),
+    (Name: 'PlanAssertOutside'; Plan: PlanAssertOutside)
   );
 
 var

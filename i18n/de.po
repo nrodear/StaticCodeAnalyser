@@ -2815,3 +2815,561 @@ msgstr "Kommentar im oder hinter dem except-Block - ein Kommentar ist Absicht, k
 
 msgid "the attribute stands behind another attribute on its line"
 msgstr "das Attribut steht auf seiner Zeile hinter einem anderen Attribut"
+
+msgid "\"%s := T.Create(True)\" stands in a branch or block that Resume does not share - not provable that it ran"
+msgstr "\"%s := T.Create(True)\" steht in einem Zweig oder Block, den Resume nicht teilt - nicht beweisbar, dass es lief"
+
+msgid "\"%s\" between Create(True) and Resume - Resume could run more than once or for another thread"
+msgstr "\"%s\" zwischen Create(True) und Resume - Resume könnte mehrfach oder für einen anderen Thread laufen"
+
+msgid "\"%s\" does not stand at the start of its own line"
+msgstr "\"%s\" steht nicht am Anfang einer eigenen Zeile"
+
+msgid "\"%s\" guards a default value (if X = 0 then X := ...) - the exact comparison is intended there"
+msgstr "\"%s\" sichert einen Vorgabewert (if X = 0 then X := ...) - der exakte Vergleich ist dort gewollt"
+
+msgid "\"%s\" is not declared in the body of a class of this file (free routine, record, interface, or the class sits in an include)"
+msgstr "\"%s\" ist nicht im Rumpf einer Klasse dieser Datei deklariert (freie Routine, record, Interface oder die Klasse steht in einem Include)"
+
+msgid "\"%s\" is overloaded - the help does not pick one of the declarations"
+msgstr "\"%s\" ist überladen - die Hilfe wählt keine der Deklarationen aus"
+
+msgid "\"%s\" is part of a larger expression (\"%s\" after it) - only a whole condition or assignment is rewritten"
+msgstr "\"%s\" ist Teil eines größeren Ausdrucks (\"%s\" dahinter) - umgeschrieben wird nur eine ganze Bedingung oder Zuweisung"
+
+msgid "\"%s\" is part of a larger expression (\"%s\" before it) - only a whole condition or assignment is rewritten"
+msgstr "\"%s\" ist Teil eines größeren Ausdrucks (\"%s\" davor) - umgeschrieben wird nur eine ganze Bedingung oder Zuweisung"
+
+msgid "\"%s\" stands after \"%s\" - it is conditional, the code after it runs"
+msgstr "\"%s\" steht hinter \"%s\" - es ist bedingt, der Code danach läuft"
+
+msgid "\"%s\" stands in a list that is not a call argument (enumeration, set or declaration)"
+msgstr "\"%s\" steht in einer Liste, die kein Aufrufargument ist (Aufzählung, Menge oder Deklaration)"
+
+msgid "\"%s.Assert\" is not System.Assert"
+msgstr "\"%s.Assert\" ist nicht System.Assert"
+
+msgid "\"%s.IfThen\" is not the IfThen of System.Math or System.StrUtils"
+msgstr "\"%s.IfThen\" ist nicht das IfThen von System.Math oder System.StrUtils"
+
+msgid "\":\" in the unreachable code (a label or a typed declaration) - a goto could reach it"
+msgstr "\":\" im unerreichbaren Code (eine Marke oder eine typisierte Deklaration) - ein goto könnte ihn erreichen"
+
+msgid "\"<\" right after a name in the arguments (type arguments?) - their commas cannot be told apart safely"
+msgstr "\"<\" direkt hinter einem Namen in den Argumenten (Typargumente?) - ihre Kommas sind nicht sicher zu unterscheiden"
+
+msgid "\"else\" in the unreachable code without an \"if\" of its statement"
+msgstr "\"else\" im unerreichbaren Code ohne ein \"if\" seiner Anweisung"
+
+msgid "%d declarations of \"%s\" in classes named %s - overload or conditional twin?"
+msgstr "%d Deklarationen von \"%s\" in Klassen namens %s - Überladung oder bedingter Zwilling?"
+
+msgid "%d implementations of %s.%s in this file - overload or conditional twin?"
+msgstr "%d Implementierungen von %s.%s in dieser Datei - Überladung oder bedingter Zwilling?"
+
+msgid "%d sections \"%s\" - ambiguous"
+msgstr "%d Abschnitte \"%s\" - mehrdeutig"
+
+msgid "%s carries %d arguments here, the RTL form without TFormatSettings has %d"
+msgstr "%s trägt hier %d Argumente, die RTL-Form ohne TFormatSettings hat %d"
+
+msgid "%s is Currency - a fixed-point type compares exactly, SameValue would add a tolerance"
+msgstr "%s ist Currency - ein Festkommatyp vergleicht exakt, SameValue brächte eine Toleranz hinein"
+
+msgid "%s is a Variant - a literal branch would give it another VarType than the result of IfThen"
+msgstr "%s ist ein Variant - ein Literal-Zweig gäbe ihm einen anderen VarType als das Ergebnis von IfThen"
+
+msgid "%s is called as %s - another routine than the one of SysUtils"
+msgstr "%s wird als %s aufgerufen - eine andere Routine als die aus SysUtils"
+
+msgid "%s is declared as %s - not Single, Double, Extended or Real"
+msgstr "%s ist als %s deklariert - nicht Single, Double, Extended oder Real"
+
+msgid "%s is declared as %s, not as %s - the call does not copy exactly one element"
+msgstr "%s ist als %s deklariert, nicht als %s - der Aufruf kopiert nicht genau ein Element"
+
+msgid "%s is not a pointer type of the RTL with one target type"
+msgstr "%s ist kein Zeigertyp der RTL mit eindeutigem Zieltyp"
+
+msgid "%s is not provably a TThread descendant in this file"
+msgstr "%s ist in dieser Datei nicht beweisbar ein TThread-Nachfahre"
+
+msgid "%s is not proven Integer or Cardinal here (type: %s) - the cast could change the computation or not compile"
+msgstr "%s ist hier nicht als Integer oder Cardinal bewiesen (Typ: %s) - der Cast könnte die Rechnung ändern oder nicht übersetzen"
+
+msgid "%s is qualified or a member - not the routine of the RTL"
+msgstr "%s ist qualifiziert oder ein Member - nicht die Routine der RTL"
+
+msgid "%s is resumed or started more than once in this routine"
+msgstr "%s wird in dieser Routine mehr als einmal fortgesetzt oder gestartet"
+
+msgid "%s is used in line %d between Create(True) and Resume - the thread could already run there"
+msgstr "%s wird in Zeile %d zwischen Create(True) und Resume benutzt - der Thread könnte dort schon laufen"
+
+msgid "%s stands in a compiler directive - deleting it would change the directive; %s"
+msgstr "%s steht in einer Compiler-Direktive - Löschen änderte die Direktive; %s"
+
+msgid "%s stands in a multi-line string - it cannot be written as a character code there; %s"
+msgstr "%s steht in einem mehrzeiligen String - dort lässt es sich nicht als Zeichen-Code schreiben; %s"
+
+msgid "%s stands in a string followed by \".\" or \"[\" - splitting the string could change what that applies to; %s"
+msgstr "%s steht in einem String, hinter dem \".\" oder \"[\" folgt - das Aufbrechen könnte ändern, worauf sich das bezieht; %s"
+
+msgid "%s stands in a string that does not end on its line"
+msgstr "%s steht in einem String, der auf seiner Zeile nicht endet"
+
+msgid "%s stands in code, not in a string or comment - %s"
+msgstr "%s steht im Code, nicht in einem String oder Kommentar - %s"
+
+msgid "%s stands without an argument list - no call"
+msgstr "%s steht ohne Argumentliste - kein Aufruf"
+
+msgid "%s.Resume does not stand in the body of a routine"
+msgstr "%s.Resume steht nicht im Rumpf einer Routine"
+
+msgid "%s.Resume is not a statement of its own"
+msgstr "%s.Resume ist keine eigene Anweisung"
+
+msgid "%s.Resume is reached through a qualifier - the help proves only a plain variable"
+msgstr "%s.Resume wird über einen Qualifizierer erreicht - die Hilfe beweist nur eine einfache Variable"
+
+msgid "%s.Resume is the body of a loop or with statement (\"%s\" before it)"
+msgstr "%s.Resume ist der Rumpf einer Schleife oder einer with-Anweisung (\"%s\" davor)"
+
+msgid "Assert has %d arguments here, not one or two"
+msgstr "Assert hat hier %d Argumente statt einem oder zwei"
+
+msgid "Assert(..) does not close on its line"
+msgstr "Assert(..) schließt nicht auf seiner Zeile"
+
+msgid "Call Randomize in the initialization section"
+msgstr "Randomize im initialization-Abschnitt aufrufen"
+
+msgid "Cast %s to Int64 before multiplying"
+msgstr "%s vor der Multiplikation nach Int64 umwandeln"
+
+msgid "Delete the debug output"
+msgstr "Debug-Ausgabe löschen"
+
+msgid "Delete the unreachable code: %s line(s)"
+msgstr "Unerreichbaren Code löschen: %s Zeile(n)"
+
+msgid "Evaluate the condition outside Assert"
+msgstr "Bedingung außerhalb von Assert auswerten"
+
+msgid "IfThen has %d arguments here, not three"
+msgstr "IfThen hat hier %d Argumente statt drei"
+
+msgid "IfThen with two arguments - the default of the third depends on the overload (0 or an empty string)"
+msgstr "IfThen mit zwei Argumenten - die Vorgabe des dritten hängt an der Überladung (0 oder leerer String)"
+
+msgid "IfThen(..) does not close on its line"
+msgstr "IfThen(..) schließt nicht auf seiner Zeile"
+
+msgid "IfThen(..) is not the whole right-hand side of the assignment"
+msgstr "IfThen(..) ist nicht die ganze rechte Seite der Zuweisung"
+
+msgid "Pass FormatSettings explicitly"
+msgstr "FormatSettings ausdrücklich übergeben"
+
+msgid "Pass TFormatSettings.Invariant"
+msgstr "TFormatSettings.Invariant übergeben"
+
+msgid "Put the debug output in {$IFDEF DEBUG}"
+msgstr "Debug-Ausgabe in {$IFDEF DEBUG} setzen"
+
+msgid "Remove bidi control characters (as #$ code in strings)"
+msgstr "Bidi-Steuerzeichen entfernen (in Strings als #$-Code)"
+
+msgid "Remove invisible characters (as #$ code in strings)"
+msgstr "Unsichtbare Zeichen entfernen (in Strings als #$-Code)"
+
+msgid "Replace IfThen with if..then..else"
+msgstr "IfThen durch if..then..else ersetzen"
+
+msgid "Resume stands in a conditional compilation block - an older compiler may need it"
+msgstr "Resume steht in einem Block bedingter Übersetzung - ein älterer Compiler braucht es womöglich"
+
+msgid "Single %s compared with %s - the SameValue overloads could be ambiguous (E2251)"
+msgstr "Single %s mit %s verglichen - die Überladungen von SameValue könnten mehrdeutig sein (E2251)"
+
+msgid "SysUtils is in no uses clause of the file - the call need not bind to the RTL"
+msgstr "SysUtils steht in keiner uses-Klausel der Datei - der Aufruf bindet nicht sicher an die RTL"
+
+msgid "Use %s instead of the exact comparison"
+msgstr "Statt des exakten Vergleichs %s verwenden"
+
+msgid "Use %s.Start instead of Resume"
+msgstr "%s.Start statt Resume verwenden"
+
+msgid "Use SizeOf(%s) instead of the pointer size"
+msgstr "SizeOf(%s) statt der Zeigergröße verwenden"
+
+msgid "Write the method name as %s"
+msgstr "Methodennamen als %s schreiben"
+
+msgid "a compiler directive stands on the reported line"
+msgstr "auf der gemeldeten Zeile steht eine Compiler-Direktive"
+
+msgid "a conditional directive already encloses the call (on the line before or after it)"
+msgstr "eine Bedingungsdirektive umschließt den Aufruf schon (auf der Zeile davor oder dahinter)"
+
+msgid "a string literal names \"%s\" (line %d) - a lookup by name (RTTI, MethodAddress, script) may compare case-sensitively"
+msgstr "ein String-Literal nennt \"%s\" (Zeile %d) - eine Suche per Name (RTTI, MethodAddress, Skript) kann Groß- und Kleinschreibung unterscheiden"
+
+msgid "a with statement stands before the call in its routine (line %d) - the names could bind to a member"
+msgstr "vor dem Aufruf steht in seiner Routine ein with (Zeile %d) - die Namen könnten an einen Member binden"
+
+msgid "an \"else\" follows the Assert call - the new if would take it over"
+msgstr "hinter dem Assert-Aufruf folgt ein \"else\" - das neue if nähme es an sich"
+
+msgid "anonymous method in the arguments"
+msgstr "anonyme Methode in den Argumenten"
+
+msgid "argument \"%s\" is not one variable - whether one element is meant stays open"
+msgstr "Argument \"%s\" ist keine einzelne Variable - ob ein Element gemeint ist, bleibt offen"
+
+msgid "asm block in the unreachable code"
+msgstr "asm-Block im unerreichbaren Code"
+
+msgid "code or a compiler directive follows the statement on its line"
+msgstr "hinter der Anweisung folgt auf ihrer Zeile Code oder eine Compiler-Direktive"
+
+msgid "comment in the unreachable code - it may document parked code; delete by hand"
+msgstr "Kommentar im unerreichbaren Code - er dokumentiert vielleicht geparkten Code; von Hand löschen"
+
+msgid "comment inside \"%s\""
+msgstr "Kommentar in \"%s\""
+
+msgid "comment inside the call %s(...)"
+msgstr "Kommentar im Aufruf %s(...)"
+
+msgid "comment on the lines of the call - it may explain it; decide by hand"
+msgstr "Kommentar auf den Zeilen des Aufrufs - er erklärt ihn vielleicht; von Hand entscheiden"
+
+msgid "comment or compiler directive inside the statement"
+msgstr "Kommentar oder Compiler-Direktive in der Anweisung"
+
+msgid "comparison \"%s\" not on the reported line"
+msgstr "Vergleich \"%s\" nicht auf der gemeldeten Zeile"
+
+msgid "compiler directive between Create(True) and Resume"
+msgstr "Compiler-Direktive zwischen Create(True) und Resume"
+
+msgid "compiler directive in the unreachable code or at its jump"
+msgstr "Compiler-Direktive im unerreichbaren Code oder an seinem Sprung"
+
+msgid "compiler directive inside the statement"
+msgstr "Compiler-Direktive in der Anweisung"
+
+msgid "compiler directive on the lines of the call"
+msgstr "Compiler-Direktive auf den Zeilen des Aufrufs"
+
+msgid "deleting %s would change the comment (it would end earlier or turn into a directive)"
+msgstr "Löschen von %s änderte den Kommentar (er endete früher oder würde zur Direktive)"
+
+msgid "end of the statement list not found"
+msgstr "Ende der Anweisungsliste nicht gefunden"
+
+msgid "include directive in the class body (line %d) - it can declare more of the class"
+msgstr "Include-Direktive im Klassenrumpf (Zeile %d) - sie kann weitere Teile der Klasse deklarieren"
+
+msgid "inline declaration \"%s X := IfThen(..)\" - declare X first"
+msgstr "Inline-Deklaration \"%s X := IfThen(..)\" - X zuerst deklarieren"
+
+msgid "line %d carries %d calls \"%s.Resume\" - ambiguous"
+msgstr "Zeile %d trägt %d Aufrufe \"%s.Resume\" - mehrdeutig"
+
+msgid "line %d carries %d calls of Format - ambiguous"
+msgstr "Zeile %d trägt %d Aufrufe von Format - mehrdeutig"
+
+msgid "neither System.Math nor System.StrUtils is in uses - IfThen may be another routine"
+msgstr "weder System.Math noch System.StrUtils steht in uses - IfThen kann eine andere Routine sein"
+
+msgid "no \"%s := T.Create(True)\" before Resume in this routine - that the thread was created suspended is not provable"
+msgstr "kein \"%s := T.Create(True)\" vor Resume in dieser Routine - dass der Thread angehalten erzeugt wurde, ist nicht beweisbar"
+
+msgid "no \"Assert(\" on the reported line"
+msgstr "kein \"Assert(\" auf der gemeldeten Zeile"
+
+msgid "no \"IfThen\" on the reported line"
+msgstr "kein \"IfThen\" auf der gemeldeten Zeile"
+
+msgid "no \"end.\" at the end of the unit"
+msgstr "kein \"end.\" am Ende der Unit"
+
+msgid "no Format call on the code columns of the reported line"
+msgstr "kein Format-Aufruf auf den Code-Spalten der gemeldeten Zeile"
+
+msgid "no bidirectional control character on the reported line"
+msgstr "kein bidirektionales Steuerzeichen auf der gemeldeten Zeile"
+
+msgid "no call \"%s.Resume\" on the reported line"
+msgstr "kein Aufruf \"%s.Resume\" auf der gemeldeten Zeile"
+
+msgid "no call %s(...) on the reported line"
+msgstr "kein Aufruf %s(...) auf der gemeldeten Zeile"
+
+msgid "no call of %s on the code columns of the reported line"
+msgstr "kein Aufruf von %s auf den Code-Spalten der gemeldeten Zeile"
+
+msgid "no call of %s on the reported line"
+msgstr "kein Aufruf von %s auf der gemeldeten Zeile"
+
+msgid "no call to %s on the reported line"
+msgstr "kein Aufruf von %s auf der gemeldeten Zeile"
+
+msgid "no declaration of \"%s\" on the reported line"
+msgstr "keine Deklaration von \"%s\" auf der gemeldeten Zeile"
+
+msgid "no implementation %s.%s in this file (abstract, external or in an include)"
+msgstr "keine Implementierung %s.%s in dieser Datei (abstract, external oder in einem Include)"
+
+msgid "no invisible character on the reported line"
+msgstr "kein unsichtbares Zeichen auf der gemeldeten Zeile"
+
+msgid "no single implementation part - the end of the unit is not provable"
+msgstr "kein einzelner implementation-Teil - das Ende der Unit ist nicht beweisbar"
+
+msgid "no statement \"%s := %s * %s;\" starts on the reported line"
+msgstr "auf der gemeldeten Zeile beginnt keine Anweisung \"%s := %s * %s;\""
+
+msgid "no statement starts the reported line"
+msgstr "auf der gemeldeten Zeile beginnt keine Anweisung"
+
+msgid "no variable in \"%s\""
+msgstr "keine Variable in \"%s\""
+
+msgid "not a unit - in a program or library Randomize belongs at the start of the main block; %s"
+msgstr "keine Unit - in einem Programm oder einer Bibliothek gehört Randomize an den Anfang des Hauptblocks; %s"
+
+msgid "not of the form \"Assert(Cond);\" or \"Assert(Cond, Msg);\""
+msgstr "nicht von der Form \"Assert(Cond);\" oder \"Assert(Cond, Msg);\""
+
+msgid "not of the form \"X := IfThen(Cond, A, B);\""
+msgstr "nicht von der Form \"X := IfThen(Cond, A, B);\""
+
+msgid "own constructor %s.Create - not provable that True still means CreateSuspended"
+msgstr "eigener Konstruktor %s.Create - nicht beweisbar, dass True weiterhin CreateSuspended bedeutet"
+
+msgid "the Assert call does not stand alone on its line"
+msgstr "der Assert-Aufruf steht nicht allein auf seiner Zeile"
+
+msgid "the Assert call follows a case label or a goto label"
+msgstr "der Assert-Aufruf folgt auf eine case-Marke oder eine goto-Marke"
+
+msgid "the Format call on the line has another format string than the finding"
+msgstr "der Format-Aufruf der Zeile hat einen anderen Formatstring als der Fund"
+
+msgid "the assignment does not stand alone on its line"
+msgstr "die Zuweisung steht nicht allein auf ihrer Zeile"
+
+msgid "the assignment follows \"%s\" without begin..end - put it into begin..end first"
+msgstr "die Zuweisung folgt auf \"%s\" ohne begin..end - zuerst in begin..end setzen"
+
+msgid "the call %s(...) does not end on its line"
+msgstr "der Aufruf %s(...) endet nicht auf seiner Zeile"
+
+msgid "the call %s(...) does not have %d arguments"
+msgstr "der Aufruf %s(...) hat nicht %d Argumente"
+
+msgid "the call already sits in a conditional block that names DEBUG"
+msgstr "der Aufruf steht schon in einem Bedingungsblock, der DEBUG nennt"
+
+msgid "the call does not end with its own \";\""
+msgstr "der Aufruf endet nicht mit einem eigenen \";\""
+
+msgid "the call ends on the last line of the file"
+msgstr "der Aufruf endet auf der letzten Zeile der Datei"
+
+msgid "the call is the only statement after \"%s\" without begin - without it the next statement would belong to the branch"
+msgstr "der Aufruf ist die einzige Anweisung hinter \"%s\" ohne begin - ohne ihn gehörte die nächste Anweisung zum Zweig"
+
+msgid "the call of %s does not close on the reported line"
+msgstr "der Aufruf von %s schließt nicht auf der gemeldeten Zeile"
+
+msgid "the call stands on line %d, a following line of the statement - the help only handles calls on the reported line"
+msgstr "der Aufruf steht in Zeile %d, einer Folgezeile der Anweisung - die Hilfe bearbeitet nur Aufrufe auf der gemeldeten Zeile"
+
+msgid "the condition has more than 255 characters - it cannot become the message literal"
+msgstr "die Bedingung hat mehr als 255 Zeichen - sie kann nicht zum Meldungsliteral werden"
+
+msgid "the declaration is spelled \"%s\", the finding names \"%s\""
+msgstr "die Deklaration lautet \"%s\", der Fund nennt \"%s\""
+
+msgid "the declaration of \"%s\" cannot be read safely"
+msgstr "die Deklaration von \"%s\" ist nicht sicher lesbar"
+
+msgid "the detector rates the comparison as intended (guard or sentinel value) - the exact comparison is right there"
+msgstr "der Detektor stuft den Vergleich als gewollt ein (Wächter- oder Sentinelwert) - der exakte Vergleich ist dort richtig"
+
+msgid "the file already calls Randomize"
+msgstr "die Datei ruft Randomize schon auf"
+
+msgid "the file asks for compilers up to Delphi 10.3 (%s, line %d) - TFormatSettings.Invariant is only checked from there on"
+msgstr "die Datei fragt nach Compilern bis Delphi 10.3 (%s, Zeile %d) - TFormatSettings.Invariant ist erst ab dort geprüft"
+
+msgid "the file asks for old compilers (%s, line %d) - the global variable FormatSettings exists from Delphi XE on"
+msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - die globale Variable FormatSettings gibt es erst ab Delphi XE"
+
+msgid "the file calls %s.Suspend - Start after Suspend raises EThread"
+msgstr "die Datei ruft %s.Suspend - Start nach Suspend löst EThread aus"
+
+msgid "the file declares an identifier FormatSettings (line %d) - the name would bind there, not to SysUtils.FormatSettings"
+msgstr "die Datei deklariert einen Bezeichner FormatSettings (Zeile %d) - der Name bände dort, nicht an SysUtils.FormatSettings"
+
+msgid "the file declares its own \"%s\" - it may be a routine that returns"
+msgstr "die Datei deklariert ein eigenes \"%s\" - es kann eine Routine sein, die zurückkehrt"
+
+msgid "the file declares its own %s"
+msgstr "die Datei deklariert ein eigenes %s"
+
+msgid "the file declares its own %s - it is not the function of System.Math"
+msgstr "die Datei deklariert ein eigenes %s - es ist nicht die Funktion aus System.Math"
+
+msgid "the file declares its own %s - its target type is not that of the RTL"
+msgstr "die Datei deklariert ein eigenes %s - sein Zieltyp ist nicht der der RTL"
+
+msgid "the file declares its own TFormatSettings (line %d)"
+msgstr "die Datei deklariert ein eigenes TFormatSettings (Zeile %d)"
+
+msgid "the file declares its own identifier \"Int64\" - the cast would not mean the 64-bit integer of the RTL"
+msgstr "die Datei deklariert einen eigenen Bezeichner \"Int64\" - der Cast meinte nicht die 64-Bit-Ganzzahl der RTL"
+
+msgid "the file declares its own routine %s - the call need not bind to the RTL"
+msgstr "die Datei deklariert eine eigene Routine %s - der Aufruf bindet nicht sicher an die RTL"
+
+msgid "the file declares its own routine Assert"
+msgstr "die Datei deklariert eine eigene Routine Assert"
+
+msgid "the file declares its own routine IfThen"
+msgstr "die Datei deklariert eine eigene Routine IfThen"
+
+msgid "the file does not start with unit (include file or script?) - the help does not find its end"
+msgstr "die Datei beginnt nicht mit unit (Include-Datei oder Skript?) - die Hilfe findet ihr Ende nicht"
+
+msgid "the file is also written for FPC (line %d) - FPC 3.2 knows no TFormatSettings.Invariant"
+msgstr "die Datei ist auch für FPC geschrieben (Zeile %d) - FPC 3.2 kennt kein TFormatSettings.Invariant"
+
+msgid "the file sets RandSeed (line %d) - a fixed seed may be intended (reproducible sequence)"
+msgstr "die Datei setzt RandSeed (Zeile %d) - ein fester Startwert ist womöglich gewollt (wiederholbare Folge)"
+
+msgid "the file supports compilers without TThread.Start (%s, line %d) - Start exists from Delphi 2010 and FPC 2.6"
+msgstr "die Datei unterstützt Compiler ohne TThread.Start (%s, Zeile %d) - Start gibt es ab Delphi 2010 und FPC 2.6"
+
+msgid "the file uses FormatSettings as a member (line %d) - inside such a class the bare name binds to the member"
+msgstr "die Datei nutzt FormatSettings als Member (Zeile %d) - in einer solchen Klasse bindet der bloße Name an den Member"
+
+msgid "the format string has a currency spec (m) - TFormatSettings.Invariant writes the generic currency sign instead of the local one"
+msgstr "der Formatstring hat eine Währungs-Spec (m) - TFormatSettings.Invariant schreibt das allgemeine Währungszeichen statt des lokalen"
+
+msgid "the joiner %s in a comment stands next to a non-ASCII character - it may belong to an emoji or a script; %s"
+msgstr "der Joiner %s im Kommentar steht neben einem Nicht-ASCII-Zeichen - er kann zu einem Emoji oder einer Schrift gehören; %s"
+
+msgid "the last assignment to %s before Resume (line %d) is not \"T.Create(True);\""
+msgstr "die letzte Zuweisung an %s vor Resume (Zeile %d) ist nicht \"T.Create(True);\""
+
+msgid "the length is not just SizeOf(%s)"
+msgstr "die Länge ist nicht genau SizeOf(%s)"
+
+msgid "the line calls %s more than once"
+msgstr "die Zeile ruft %s mehr als einmal auf"
+
+msgid "the line has more than one \"Assert(\""
+msgstr "die Zeile enthält mehr als ein \"Assert(\""
+
+msgid "the line has more than one \"IfThen\""
+msgstr "die Zeile enthält mehr als ein \"IfThen\""
+
+msgid "the line has more than one call %s(...) - ambiguous"
+msgstr "die Zeile trägt mehr als einen Aufruf %s(...) - mehrdeutig"
+
+msgid "the line has the comparison \"%s\" more than once - ambiguous"
+msgstr "die Zeile trägt den Vergleich \"%s\" mehrfach - mehrdeutig"
+
+msgid "the lines of the call carry other code"
+msgstr "auf den Zeilen des Aufrufs steht weiterer Code"
+
+msgid "the message does not name an assignment \"X := A * B\" of plain identifiers"
+msgstr "die Meldung nennt keine Zuweisung \"X := A * B\" aus einfachen Bezeichnern"
+
+msgid "the message does not name the comparison"
+msgstr "die Meldung nennt den Vergleich nicht"
+
+msgid "the message does not name the format string - analyse the file again"
+msgstr "die Meldung nennt den Formatstring nicht - Datei neu prüfen"
+
+msgid "the message does not name the routine and the pointer type"
+msgstr "die Meldung nennt Routine und Zeigertyp nicht"
+
+msgid "the message names no Exit, raise, Break or Continue"
+msgstr "die Meldung nennt kein Exit, raise, Break oder Continue"
+
+msgid "the message names no call"
+msgstr "die Meldung nennt keinen Aufruf"
+
+msgid "the message names no call of Random, RandomRange or RandomFrom"
+msgstr "die Meldung nennt keinen Aufruf von Random, RandomRange oder RandomFrom"
+
+msgid "the message names no method with a lowercase first letter"
+msgstr "die Meldung nennt keine Methode mit kleinem Anfangsbuchstaben"
+
+msgid "the message names no receiver of Resume"
+msgstr "die Meldung nennt keinen Empfänger von Resume"
+
+msgid "the message names none of the locale-dependent RTL functions of SCA128"
+msgstr "die Meldung nennt keine der gebietsabhängigen RTL-Funktionen von SCA128"
+
+msgid "the place for Randomize lies in a conditional compilation block"
+msgstr "die Stelle für Randomize liegt in einem Block bedingter Übersetzung"
+
+msgid "the reported line declares \"%s\" more than once"
+msgstr "die gemeldete Zeile deklariert \"%s\" mehr als einmal"
+
+msgid "the reported line holds \"%s := %s * %s;\" more than once"
+msgstr "die gemeldete Zeile trägt \"%s := %s * %s;\" mehr als einmal"
+
+msgid "the reported line holds the implementation of \"%s\", not its declaration - no class of this file declares it before"
+msgstr "die gemeldete Zeile trägt die Implementierung von \"%s\", nicht ihre Deklaration - keine Klasse dieser Datei deklariert sie davor"
+
+msgid "the statement before the line is not \"%s\""
+msgstr "die Anweisung vor der Zeile ist nicht \"%s\""
+
+msgid "the statement continues on line %d with another such call - it would stay unchanged and unreported; by hand"
+msgstr "die Anweisung geht in Zeile %d mit einem weiteren solchen Aufruf weiter - er bliebe unverändert und ungemeldet; von Hand"
+
+msgid "the statement is inside a with block - its names can bind to members of the with expression"
+msgstr "die Anweisung steht in einem with-Block - ihre Namen können an Member des with-Ausdrucks binden"
+
+msgid "the statement list ends on the last line of the unreachable code - only whole lines are deleted"
+msgstr "die Anweisungsliste endet auf der letzten Zeile des unerreichbaren Codes - gelöscht werden nur ganze Zeilen"
+
+msgid "the target %s is not proven Int64, UInt64 or QWord here (type: %s)"
+msgstr "das Ziel %s ist hier nicht als Int64, UInt64 oder QWord bewiesen (Typ: %s)"
+
+msgid "the target %s is reached through a path - the help casts only for a plain variable"
+msgstr "das Ziel %s wird über einen Pfad erreicht - die Hilfe castet nur für eine einfache Variable"
+
+msgid "the unit ends with \"begin ... end.\" (SCA088) - turn the begin into initialization first"
+msgstr "die Unit endet mit \"begin ... end.\" (SCA088) - zuerst das begin zu initialization machen"
+
+msgid "type of %s not proven here - it must be declared as %s"
+msgstr "Typ von %s hier nicht bewiesen - er muss als %s deklariert sein"
+
+msgid "type of %s not proven here - only Single, Double, Extended and Real operands are rewritten"
+msgstr "Typ von %s hier nicht bewiesen - umgeschrieben werden nur Operanden vom Typ Single, Double, Extended und Real"
+
+msgid "unknown"
+msgstr "unbekannt"
+
+msgid "with statement in the routine - Assert could be a member of the with expression"
+msgstr "with-Anweisung in der Routine - Assert könnte ein Member des with-Ausdrucks sein"
+
+msgid "with statement in the routine - IfThen or the target could be a member of the with expression"
+msgstr "with-Anweisung in der Routine - IfThen oder das Ziel könnte ein Member des with-Ausdrucks sein"
+
+msgid "with statement in the routine - an argument could be a member"
+msgstr "with-Anweisung in der Routine - ein Argument könnte ein Member sein"
+
+msgid "with statement in the routine - an operand or %s could bind to a member"
+msgstr "with-Anweisung in der Routine - ein Operand oder %s könnte an ein Member binden"
