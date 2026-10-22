@@ -445,12 +445,16 @@ var
 begin
   O := PlanFirst(Wrap(['  if A then goto Fin;', '  Work;', 'Fin:']), S);
   Assert.IsTrue(O.Enabled, O.Reason);
-  Assert.AreEqual<Integer>(0, O.Variant, 'Hauptweg');
-  Assert.IsFalse(O.ChangesBehavior, 'bedeutungsgleich');
   Assert.AreEqual<Integer>(1, Length(O.Edits), 'eine Ersetzung');
   Assert.AreEqual('goto Fin', O.Edits[0].Expected);
   Assert.AreEqual('Exit', O.Edits[0].NewText);
   Assert.AreEqual<Integer>(GOTO_LINE, O.Edits[0].Span.StartLine);
+  // Die Kennzeichnung setzt erst die Tabellenzeile (FixFor) - der Adapter
+  // laesst sie auf dem Default, ein Test am Adapter pruefte nur diesen.
+  O := PlanFixIn(Wrap(['  if A then goto Fin;', '  Work;', 'Fin:']), 't.pas',
+    fkGotoStatement, S);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsFalse(O.ChangesBehavior, 'bedeutungsgleich (Tabellenzeile)');
 end;
 
 procedure TTestRdxGotoExitDetector.Adapter_StaleFinding_NoHelp;

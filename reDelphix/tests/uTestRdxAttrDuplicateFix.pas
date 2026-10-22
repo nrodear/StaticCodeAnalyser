@@ -286,6 +286,10 @@ begin
   // Der Schluessel stimmt nicht (anderer Name).
   AssertRefused(Src, FIRST + 1, Msg('slow', FIRST), Moved);
   AssertRefused(Src, FIRST + 1, 'something else', _(R_DUP_MSG));
+  // Die gemeldete erste Zeile ist keine Attributzeile (mehr): verschoben,
+  // nicht "etwas liegt dazwischen".
+  AssertRefused(Wrap(['  // [A]', '  [A]', '  [A]', '  procedure Foo;']),
+    FIRST + 2, Msg('a', FIRST), Moved);
 end;
 
 procedure TTestRdxAttrDuplicateFix.LastLineOfFile_NoHelp;
@@ -321,14 +325,17 @@ var
   SL      : TStringList;
   F, Old  : TLeakFinding;
   O, S    : TRdxFixOutcome;
+  Seen    : TSeen;
 begin
   SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', FIRST + 1, Msg('test', FIRST),
-    fkAttributeDuplicate);
-  // Der Fund zeigt auf den Routinenkopf, dort steht keine Attributzeile.
-  Old := TLeakFinding.New('t.pas', '', FIRST + 2, Msg('test', FIRST),
-    fkAttributeDuplicate);
+  F := nil;
+  Old := nil;
   try
+    F := TLeakFinding.New('t.pas', '', FIRST + 1, Msg('test', FIRST),
+      fkAttributeDuplicate);
+    // Der Fund zeigt auf den Routinenkopf, dort steht keine Attributzeile.
+    Old := TLeakFinding.New('t.pas', '', FIRST + 2, Msg('test', FIRST),
+      fkAttributeDuplicate);
     SL.Text := Wrap(['  [Test]', '  [Test]', '  procedure Foo;']);
     O := PlanAttrDuplicate(nil, SL, F, nil);
     S := PlanAttrDuplicate(nil, SL, Old, nil);
@@ -338,13 +345,20 @@ begin
     SL.Free;
   end;
   Assert.IsTrue(O.Enabled, O.Reason);
-  Assert.AreEqual<Integer>(0, O.Variant, 'Hauptweg ist Variant 0');
-  Assert.IsFalse(O.ChangesBehavior, 'ohne Kennzeichnung');
   Assert.AreEqual<Integer>(1, Length(O.Edits), 'eine Ersetzung');
   Assert.AreEqual<Integer>(FIRST + 1, O.Edits[0].Span.StartLine, 'die Dublette');
   Assert.IsFalse(S.Enabled, 'gesperrt');
   Assert.AreEqual(Moved, S.Reason);
   Assert.AreEqual<Integer>(0, Length(S.Edits), 'keine Ersetzung');
+  // Die Kennzeichnung setzt erst die Tabellenzeile (FixFor) - der Adapter
+  // laesst sie auf dem Default, ein Test am Adapter pruefte nur diesen.
+  Seen.Line := FIRST + 1;
+  Seen.Msg := Msg('test', FIRST);
+  Seen.Variant := '';
+  O := PlanFixIn(Wrap(['  [Test]', '  [Test]', '  procedure Foo;']), 't.pas',
+    fkAttributeDuplicate, Seen);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsFalse(O.ChangesBehavior, 'gleiche Bedeutung (Tabellenzeile)');
 end;
 
 // ---- echter Detektor ----
