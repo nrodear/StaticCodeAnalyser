@@ -49,6 +49,7 @@ uses
   uTwiceInheritedCalls,
   uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner,
   uRdxFixTable, uRdxTwiceInheritedFix,
+  uRdxText,              // _(), MsgMovedSuffix, MsgByHand (Gruende, E29)
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
   uTestRdxTextKit;       // Join, Apply
 
@@ -191,10 +192,10 @@ const
   HEAD = 'procedure TA.Bar(AOwner: TObject; N: Integer);';
 begin
   AssertRefused(WrapIn(HEAD, ['  inherited Bar(AOwner, 1);',
-    '  inherited Bar(AOwner, 2);']), HEAD_LINE, R_TWICE_DIFFERENT);
+    '  inherited Bar(AOwner, 2);']), HEAD_LINE, _(R_TWICE_DIFFERENT));
   // Ein String-Literal ist gross/klein genau.
   AssertRefused(WrapIn(HEAD, ['  inherited Bar(''a'');',
-    '  inherited Bar(''A'');']), HEAD_LINE, R_TWICE_DIFFERENT);
+    '  inherited Bar(''A'');']), HEAD_LINE, _(R_TWICE_DIFFERENT));
 end;
 
 procedure TTestRdxTwiceInheritedFix.CodeBetween_NoHelp;
@@ -202,39 +203,39 @@ begin
   // Die Form des Katalog-Beispiels: ob DoStuff vom ersten Aufruf abhaengt,
   // weiss die Hilfe nicht.
   AssertRefused(Wrap(['  inherited;', '  DoStuff;', '  inherited;']),
-    HEAD_LINE, R_TWICE_NOT_ADJACENT);
+    HEAD_LINE, _(R_TWICE_NOT_ADJACENT));
 end;
 
 procedure TTestRdxTwiceInheritedFix.CommentBetween_NoHelp;
 begin
   AssertRefused(Wrap(['  inherited;', '  // erst der Vorfahr', '  inherited;']),
-    HEAD_LINE, R_TWICE_BETWEEN);
+    HEAD_LINE, _(R_TWICE_BETWEEN));
   AssertRefused(Wrap(['  inherited;', '  {$IFDEF X}', '  inherited;']),
-    HEAD_LINE, R_TWICE_BETWEEN);
+    HEAD_LINE, _(R_TWICE_BETWEEN));
 end;
 
 procedure TTestRdxTwiceInheritedFix.SharedLine_NoHelp;
 begin
   AssertRefused(Wrap(['  inherited;', '  inherited; // zweiter']),
-    HEAD_LINE, R_TWICE_SHARED);
-  AssertRefused(Wrap(['  inherited; inherited;']), HEAD_LINE, R_TWICE_SHARED);
+    HEAD_LINE, _(R_TWICE_SHARED));
+  AssertRefused(Wrap(['  inherited; inherited;']), HEAD_LINE, _(R_TWICE_SHARED));
 end;
 
 procedure TTestRdxTwiceInheritedFix.CommentedOrStringCall_NotCounted;
 begin
   // Ein auskommentierter oder in einem String stehender Aufruf ist keiner.
   AssertRefused(Wrap(['  inherited;', '  // inherited;']), HEAD_LINE,
-    Format(R_TWICE_COUNT, [1]));
+    _(R_TWICE_COUNT, [1]));
   AssertRefused(Wrap(['  inherited;', '  { inherited; }']), HEAD_LINE,
-    Format(R_TWICE_COUNT, [1]));
+    _(R_TWICE_COUNT, [1]));
   AssertRefused(Wrap(['  inherited;', '  S := ''inherited;'';']), HEAD_LINE,
-    Format(R_TWICE_COUNT, [1]));
+    _(R_TWICE_COUNT, [1]));
 end;
 
 procedure TTestRdxTwiceInheritedFix.ThreeCalls_NoHelp;
 begin
   AssertRefused(Wrap(['  inherited;', '  inherited;', '  inherited;']),
-    HEAD_LINE, Format(R_TWICE_COUNT, [3]));
+    HEAD_LINE, _(R_TWICE_COUNT, [3]));
 end;
 
 procedure TTestRdxTwiceInheritedFix.MovedLine_NoHelp;
@@ -243,19 +244,19 @@ var
 begin
   Src := Wrap(['  inherited;', '  Inherited;']);
   // Zeile 5 ist das begin, Zeile 6 ein Aufruf: kein Routinenkopf.
-  AssertRefused(Src, HEAD_LINE + 1, R_TWICE_HEAD_MOVED);
-  AssertRefused(Src, HEAD_LINE + 2, R_TWICE_HEAD_MOVED);
-  AssertRefused(Src, 99, R_TWICE_HEAD_MOVED);
+  AssertRefused(Src, HEAD_LINE + 1, MsgMovedSuffix(_(R_TWICE_HEAD_MOVED)));
+  AssertRefused(Src, HEAD_LINE + 2, MsgMovedSuffix(_(R_TWICE_HEAD_MOVED)));
+  AssertRefused(Src, 99, MsgMovedSuffix(_(R_TWICE_HEAD_MOVED)));
 end;
 
 procedure TTestRdxTwiceInheritedFix.NestedBlock_NoHelp;
 begin
   // Die Hilfe beschraenkt sich auf die oberste Ebene des Rumpfs.
   AssertRefused(Wrap(['  if X then', '  begin', '    inherited;',
-    '    Inherited;', '  end;']), HEAD_LINE, Format(R_TWICE_COUNT, [0]));
+    '    Inherited;', '  end;']), HEAD_LINE, _(R_TWICE_COUNT, [0]));
   // Ein bedingter Aufruf zaehlt nicht mit.
   AssertRefused(Wrap(['  if X then', '    inherited;', '  Inherited;']),
-    HEAD_LINE, Format(R_TWICE_COUNT, [1]));
+    HEAD_LINE, _(R_TWICE_COUNT, [1]));
 end;
 
 procedure TTestRdxTwiceInheritedFix.NestedRoutine_NoHelp;
@@ -263,14 +264,14 @@ begin
   AssertRefused(Join(['unit t;', 'interface', 'implementation',
     'procedure Foo;', '  procedure Inner;', '  begin', '  end;', 'begin',
     '  inherited;', '  Inherited;', 'end;', 'end.']), HEAD_LINE,
-    R_TWICE_BODY);
+    _(R_TWICE_BODY, [MsgByHand]));
 end;
 
 procedure TTestRdxTwiceInheritedFix.MissingSemicolon_NoHelp;
 begin
   // Der letzte Aufruf vor dem end ohne ';' - die Hilfe liest ihn nicht.
   AssertRefused(Wrap(['  inherited;', '  Inherited']), HEAD_LINE,
-    R_TWICE_UNREADABLE);
+    _(R_TWICE_UNREADABLE, [MsgByHand]));
 end;
 
 procedure TTestRdxTwiceInheritedFix.OtherMember_NoHelp;
@@ -278,7 +279,7 @@ begin
   // 'inherited Lock' ruft eine andere Elternmethode als Foo - der Detektor
   // zaehlt es nicht, die Hilfe auch nicht.
   AssertRefused(Wrap(['  inherited Lock;', '  inherited Lock;']), HEAD_LINE,
-    Format(R_TWICE_COUNT, [0]));
+    _(R_TWICE_COUNT, [0]));
 end;
 
 // ---- Adapter der Tabelle ----
@@ -307,8 +308,10 @@ begin
   Assert.IsTrue(A.Enabled, A.Reason);
   Assert.AreEqual<Integer>(1, A.Variant, 'der zweite Eintrag ist Variant 1');
   Assert.IsTrue(A.ChangesBehavior, 'gekennzeichnet (E2)');
-  Assert.AreEqual('der erste Aufruf entfaellt - die Elternmethode '
-    + 'laeuft nur noch einmal; Reihenfolge und Nebenwirkung pruefen', A.Hint);
+  // de.po traegt echte Umlaute (Charge G7) - hier als #$-Code.
+  Assert.AreEqual('der erste Aufruf entf'#$00E4'llt - die Elternmethode '
+    + 'l'#$00E4'uft nur noch einmal; Reihenfolge und Nebenwirkung '
+    + 'pr'#$00FC'fen', A.Hint);
   Assert.AreEqual<Integer>(6, A.Edits[0].Span.StartLine, 'der erste Aufruf');
 end;
 
@@ -330,7 +333,7 @@ begin
     SL.Free;
   end;
   Assert.IsFalse(A.Enabled, 'gesperrt');
-  Assert.AreEqual(R_TWICE_HEAD_MOVED, A.Reason);
+  Assert.AreEqual(MsgMovedSuffix(_(R_TWICE_HEAD_MOVED)), A.Reason);
   Assert.AreEqual<Integer>(1, A.Variant, 'der Eintrag bleibt der zweite');
   Assert.IsTrue(A.ChangesBehavior, 'auch gesperrt gekennzeichnet');
   Assert.AreEqual<Integer>(0, Length(A.Edits), 'keine Ersetzung');
@@ -388,7 +391,7 @@ begin
   end;
   // Zwischen den Aufrufen steht DoStuff: keine Hilfe.
   Assert.IsFalse(O.Enabled, 'keine Hilfe fuer das Katalog-Beispiel');
-  Assert.AreEqual(R_TWICE_NOT_ADJACENT, O.Reason);
+  Assert.AreEqual(_(R_TWICE_NOT_ADJACENT), O.Reason);
 end;
 
 initialization

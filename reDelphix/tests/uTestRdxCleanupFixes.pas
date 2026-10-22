@@ -506,9 +506,11 @@ procedure TTestRdxCleanupFixes.Sca053_ShapeRefusals;
 begin
   AssertRefused(ckVar, InProc(['  for var I := 1 to 3 do', '    Foo;']), 6,
     VarMsg('I'), 'for var');
+  // Umlautfreies Teilstueck: de.po traegt 'Schluesselwort' seit der
+  // Umstellung (E29, Gruppe G4) mit echtem Umlaut, die Quelle bleibt ASCII.
   AssertRefused(ckVar, InImpl(['procedure P;', 'resourcestring',
     '  SX = ''x'';', 'begin', 'end;']), 5, VarMsg('resourcestring'),
-    'Schluesselwort');
+    'Parser las eine Section als Variable');
   AssertRefused(ckVar, InImpl(['procedure P;', 'const', '  C: Integer = 1;',
     '  X: Integer = 2;', 'begin', 'end;']), 7, VarMsg('X'), 'const-Section');
   AssertRefused(ckVar, InImpl(['procedure P;', 'var', '  X: Integer = 2;',
@@ -525,16 +527,19 @@ begin
     VarMsg('X'), 'stdcall');
   // Review Woche G07-25: der Name zweimal auf der Zeile (der Name aus der
   // Meldung als Argument des Musters, G07-09), class var, ein Typ ohne ';'
-  // bis zum Dateiende und eine Klammer ohne Gegenstueck.
+  // bis zum Dateiende und eine Klammer ohne Gegenstueck. Umlautfreie
+  // Teilstuecke: de.po traegt 'traegt' und 'Gegenstueck' seit der
+  // Umstellung (E29, Gruppe G4) mit echtem Umlaut, die Quelle bleibt ASCII
+  // (bis dahin 'Zeile 6 traegt 2-mal "x"' und 'Klammer ohne Gegenstueck').
   AssertRefused(ckVar, InImpl(['procedure P;', 'var', '  X: Integer; X: Integer;',
-    'begin', 'end;']), 6, VarMsg('X'), 'Zeile 6 traegt 2-mal "x"');
+    'begin', 'end;']), 6, VarMsg('X'), '2-mal "x" - mehrdeutig');
   AssertRefused(ckVar, InImpl(['type', '  TFoo = class', '  class var X: Integer;',
     '  end;', 'procedure P;', 'begin', 'end;']), 6, VarMsg('X'), 'class var');
   AssertRefused(ckVar, Join(['unit u;', 'interface', 'implementation',
     'procedure P;', 'var', '  X: Integer']), 6, VarMsg('X'),
     'kein ";" hinter dem Typ');
   AssertRefused(ckVar, InImpl(['procedure P;', 'var', '  X: Integer);', 'begin',
-    'end;']), 6, VarMsg('X'), 'Klammer ohne Gegenstueck');
+    'end;']), 6, VarMsg('X'), 'Klammer ohne Gegenst');
 end;
 
 procedure TTestRdxCleanupFixes.Sca053_ContextRefusals;

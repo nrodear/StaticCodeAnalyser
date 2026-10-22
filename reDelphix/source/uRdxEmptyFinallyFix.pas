@@ -51,25 +51,28 @@ uses
   uRdxCodeMap;       // TRdxCodeMap
 
 const
-  R_EFB_NOT_EMPTY = 'der finally-Block ist nicht leer';
-  R_EFB_COMMENT   = 'Kommentar oder Direktive im finally-Block - Absicht, '
-    + 'keine Hilfe';
-  R_EFB_NO_TRY    = 'das zugehoerige try ist nicht eindeutig zu finden';
-  R_EFB_BRANCH    = 'das try steht hinter then, else, do oder einer Marke - '
-    + 'ohne begin..end verlore der Zweig seinen Rumpf';
-  R_EFB_TRY_LINE  = 'try steht nicht allein auf seiner Zeile (Code oder '
-    + 'Kommentar daneben)';
-  R_EFB_FIN_LINE  = 'finally und end stehen nicht allein auf ihren Zeilen '
-    + '(Code oder Kommentar daneben)';
-  R_EFB_END_TAIL  = 'hinter end folgt weder ";" noch das Ende des '
-    + 'umgebenden Blocks';
-  R_EFB_SPECIAL   = 'der Rumpf enthaelt var, const, label, goto oder asm - '
-    + 'Gueltigkeitsbereich oder Sprungziel aendert sich';
-  R_EFB_DIRECTIVE = 'Compiler-Direktive im try..end';
-  R_EFB_MULTILINE = 'der Rumpf beginnt in einem Block-Kommentar oder '
-    + 'mehrzeiligen String';
-  R_EFB_EMPTY_BODY = 'der try-Rumpf ist leer';
-  R_EFB_INDENT    = 'Einrueckung des Rumpfs uneinheitlich - Zeile %d';
+  // Die Gruende als englische msgids (E29): der Planer gibt sie uebersetzt
+  // zurueck (_(), uRdxText), die Tests vergleichen mit _(R_EFB_...).
+  // Deutsch und Franzoesisch stehen in i18n/de.po und i18n/fr.po.
+  R_EFB_NOT_EMPTY = 'the finally block is not empty';
+  R_EFB_COMMENT   = 'comment or directive in the finally block - intent, '
+    + 'no help';
+  R_EFB_NO_TRY    = 'the matching try cannot be found unambiguously';
+  R_EFB_BRANCH    = 'the try follows then, else, do or a label - without '
+    + 'begin..end the branch would lose its body';
+  R_EFB_TRY_LINE  = 'try is not alone on its line (code or comment beside '
+    + 'it)';
+  R_EFB_FIN_LINE  = 'finally and end are not alone on their lines (code or '
+    + 'comment beside them)';
+  R_EFB_END_TAIL  = 'end is followed neither by ";" nor by the end of the '
+    + 'enclosing block';
+  R_EFB_SPECIAL   = 'the body contains var, const, label, goto or asm - '
+    + 'scope or jump target would change';
+  R_EFB_DIRECTIVE = 'compiler directive in the try..end';
+  R_EFB_MULTILINE = 'the body starts inside a block comment or multi-line '
+    + 'string';
+  R_EFB_EMPTY_BODY = 'the try body is empty';
+  R_EFB_INDENT    = 'indentation of the body is inconsistent - line %d';
 
 type
   // Der Planer von SCA083 (Form TRdxMapPlanner, uRdxFixRunner).
@@ -87,7 +90,8 @@ implementation
 
 uses
   System.SysUtils,
-  uRefactorInfo;     // TRefactorSpan.Make
+  uRefactorInfo,     // TRefactorSpan.Make
+  uRdxText;          // _(): in die reDelphix-Sprache, nie uLocalization (E29)
 
 const
   SPAN_083 = 'sca083';
@@ -132,7 +136,7 @@ var
 begin
   S := Default(TRdxLineSearch);
   S.Test    := IsFinallyKeyword;
-  S.What    := 'kein finally';
+  S.What    := _('no finally');
   S.ManyFmt := '%d finally';
   Result := OneTokenOnLine(AMap, ALine, S, AFin);
 end;
@@ -167,9 +171,9 @@ begin
   Result := '';
   AEnd := After(AMap, AFin);
   if (AEnd.Low <> KW_END) or not IsKeywordAfter(AEnd, AFin) then
-    Exit(R_EFB_NOT_EMPTY);
+    Exit(_(R_EFB_NOT_EMPTY));
   if not BlankBetween(AMap, AFin, AEnd) then
-    Result := R_EFB_COMMENT;
+    Result := _(R_EFB_COMMENT);
 end;
 
 // Das try zum finally: die end-Bilanz rueckwaerts (end +1, Oeffner -1; der
@@ -183,7 +187,7 @@ var
   Depth : Integer;
   Paren : Integer;
 begin
-  Result := R_EFB_NO_TRY;
+  Result := _(R_EFB_NO_TRY);
   ATry := Default(TRdxToken);
   Depth := 0;
   Paren := 0;
@@ -197,7 +201,7 @@ begin
     begin
       if InList(T.Low, BODY_BAD)
          and (((Depth = 0) and (Paren = 0)) or not InList(T.Low, SCOPE_WORDS)) then
-        Exit(R_EFB_SPECIAL);
+        Exit(_(R_EFB_SPECIAL));
       if T.Low = KW_END then
         Inc(Depth)
       else if IsEndOpener(T.Low) then
@@ -229,10 +233,10 @@ begin
   Result := '';
   BlockEnd(AMap, AParts.TryTok, nil, E2, Last);
   if not SameTok(E2, AParts.EndTok) then
-    Exit(R_EFB_NO_TRY);
+    Exit(_(R_EFB_NO_TRY));
   P := Before(AMap, AParts.TryTok);
   if not InList(P.Low, LIST_PREV) then
-    Result := R_EFB_BRANCH;
+    Result := _(R_EFB_BRANCH);
 end;
 
 // try, finally und end je allein auf ihren Zeilen ('finally end;' auf einer
@@ -248,7 +252,7 @@ begin
   Result := '';
   ASemi := False;
   if Squeezed(AMap.Raw(AParts.TryTok.Line)) <> KW_TRY then
-    Exit(R_EFB_TRY_LINE);
+    Exit(_(R_EFB_TRY_LINE));
   Joined := '';
   for Li := AParts.Fin.Line to AParts.EndTok.Line do
     Joined := Joined + Squeezed(AMap.Raw(Li));
@@ -258,10 +262,10 @@ begin
   begin
     Nx := After(AMap, AParts.EndTok);
     if not (IsKeywordAfter(Nx, AParts.EndTok) and InList(Nx.Low, LIST_ENDS)) then
-      Result := R_EFB_END_TAIL;
+      Result := _(R_EFB_END_TAIL);
   end
   else
-    Result := R_EFB_FIN_LINE;
+    Result := _(R_EFB_FIN_LINE);
 end;
 
 // Direktive im try..end, Rumpfzeile mitten in einem Kommentar oder String.
@@ -271,10 +275,10 @@ var
 begin
   Result := '';
   if DirectiveInLines(AMap, AParts.TryTok.Line, AParts.EndTok.Line) then
-    Exit(R_EFB_DIRECTIVE);
+    Exit(_(R_EFB_DIRECTIVE));
   for Li := AParts.TryTok.Line + 1 to AParts.EndTok.Line do
     if AMap.StartsInside(Li) then
-      Exit(R_EFB_MULTILINE);
+      Exit(_(R_EFB_MULTILINE));
 end;
 
 // Eine Stufe, um die der Rumpf unter dem try eingerueckt ist: die erste
@@ -300,10 +304,10 @@ begin
     if (Length(Deep) > Length(Tr)) and (Copy(Deep, 1, Length(Tr)) = Tr) then
       AStep := Copy(Deep, Length(Tr) + 1, MaxInt)
     else
-      Result := Format(R_EFB_INDENT, [Li]);
+      Result := _(R_EFB_INDENT, [Li]);
     Exit;
   end;
-  Result := R_EFB_EMPTY_BODY;
+  Result := _(R_EFB_EMPTY_BODY);
 end;
 
 // Die Rumpfzeilen ohne die Stufe AStep hinter der Einrueckung des try,
@@ -331,7 +335,7 @@ begin
       if SkipBlanks(L, 1) <= Length(L) then
       begin
         if Copy(L, 1, Length(Pref)) <> Pref then
-          Exit(Format(R_EFB_INDENT, [Li]));
+          Exit(_(R_EFB_INDENT, [Li]));
         L := Tr + Copy(L, Length(Pref) + 1, MaxInt);
       end;
       if Li > AParts.TryTok.Line + 1 then
@@ -358,7 +362,7 @@ begin
   // setzt der Planer dahinter, wenn das end eines traegt.
   if not LastCharBefore(AMap, AParts.Fin, SemiLine, SemiCol)
      or (SemiLine <= AParts.TryTok.Line) then
-    Exit(R_EFB_EMPTY_BODY);
+    Exit(_(R_EFB_EMPTY_BODY));
   AddLine := 0;
   if ASemi and not ((AMap.Raw(SemiLine)[SemiCol] = ';')
                     and AMap.IsCode(SemiLine, SemiCol)) then

@@ -203,10 +203,13 @@ end;
 procedure TTestRdxCleanupDetector.Sca053_Resourcestring_NoHelp;
 begin
   // Der Detektor liest eine resourcestring-Section hinter der var-Section
-  // als Variable 'resourcestring' (Korpus: 17 Funde, gexperts).
+  // als Variable 'resourcestring' (Korpus: 17 Funde, gexperts). Geprueft
+  // wird ein umlautfreies Teilstueck des Grunds: de.po traegt
+  // 'Schluesselwort' seit der Umstellung (E29, Gruppe G4) mit echtem
+  // Umlaut, die Quelle bleibt ASCII.
   AssertNoHelp(InImplementation(Join(['procedure P;', 'var', '  A: Integer;',
     'resourcestring', '  SFoo = ''foo'';', 'begin', '  A := 1;', '  Foo(SFoo);',
-    'end;'])), fkUnusedLocalVar, 'Schluesselwort');
+    'end;'])), fkUnusedLocalVar, 'Parser las eine Section als Variable');
 end;
 
 procedure TTestRdxCleanupDetector.Sca053_With_RoundTrip;

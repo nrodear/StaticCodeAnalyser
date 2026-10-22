@@ -440,13 +440,15 @@ end;
 
 procedure TTestRdxTryLocks.Sca156_PointerChanged;
 begin
+  // '... veraendert den Zeiger' traegt in der de.po einen echten Umlaut
+  // (Charge G3) - geprueft werden umlautfreie Teilstuecke.
   AssertRefused(r156, InProc(['  GetMem(P, N);', '  Inc(P, 4);',
-    '  FreeMem(P);']), 'GetMem', 'veraendert den Zeiger');
+    '  FreeMem(P);']), 'GetMem', 'den Zeiger - FreeMem');
   // Durch einen Cast hindurch (Gegen-Review H4, Minor 1; bis Charge H4c
   // angeboten - FreeMem gaebe den versetzten Zeiger frei).
   AssertRefused(r156, InProc(['  GetMem(P, 100);', '  Inc(PByte(P), 4);',
     '  Work(P);', '  Dec(PByte(P), 4);', '  FreeMem(P);']), 'GetMem',
-    'Inc(P) in Zeile 7 veraendert den Zeiger');
+    'Inc(P) in Zeile 7');
   // Eine frueh freigebende Typumwandlung vor einem raise.
   AssertRefused(r156, InProc(['  GetMem(P, N);', '  if Bad then', '  begin',
     '    FreeMem(PByte(P));', '    raise EFoo.Create(''x'');', '  end;',

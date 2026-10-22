@@ -53,7 +53,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uRefactorInfo, uRdxBufferMath;
+  uRefactorInfo, uRdxBufferMath,
+  uRdxText;   // MsgNoValidRange: der gemeinsame Text (Charge C1/G7)
 
 function Bytes(const S: string): TBytes;
 begin
@@ -174,7 +175,10 @@ begin
      Edit(2, 6, 11, 'x - y', 'z')], Plan, Err),
     'der zweite Bereich passt nicht');
   Assert.AreEqual<Integer>(0, Length(Plan), 'auch der erste wird nicht geplant');
-  Assert.IsTrue(Pos('weicht vom Stand beim Menueaufbau ab', Err) > 0, Err);
+  // de.po: '... beim Menueaufbau ...' mit echtem Umlaut (Charge G7) - der
+  // Anfang des Satzes und das Detail sind ohne.
+  Assert.IsTrue(Pos('Quelltext im Editor weicht vom Stand beim', Err) = 1, Err);
+  Assert.IsTrue(Pos('(ab Zeichen 3: erwartet', Err) > 0, Err);
 end;
 
 procedure TTestRdxBufferMath.Plan_Overlap_Rejected;
@@ -186,7 +190,10 @@ begin
   B := Bytes('s := x + y;');
   Assert.IsFalse(PlanByteEdits(B,
     [Edit(1, 6, 11, 'x + y', 'z'), Edit(1, 10, 11, 'y', 'w')], Plan, Err));
-  Assert.IsTrue(Pos('ueberlappen', Err) > 0, Err);
+  // de.po: 'Ersetzungen ueberlappen ...' mit echtem Umlaut (Charge G7) -
+  // die Bytes beider Bereiche sind ohne.
+  Assert.IsTrue(Pos('Ersetzungen ', Err) = 1, Err);
+  Assert.IsTrue(Pos('(Bytes 5..10 und 9..10)', Err) > 0, Err);
 end;
 
 procedure TTestRdxBufferMath.Plan_NewTextGetsBufferEol;
@@ -210,7 +217,8 @@ begin
   B := Bytes('a := 1;');
   Assert.IsFalse(PlanByteEdits(B, [Edit(1, 1, 2, '', 'x')], Plan, Err),
     'blind einfuegen ist nicht erlaubt - immer gegen Text pruefen');
-  Assert.IsTrue(Pos('kein gueltiger Bereich', Err) > 0, Err);
+  // Der gemeinsame Text aus uRdxText (de 'gueltiger' mit echtem Umlaut).
+  Assert.AreEqual(MsgNoValidRange, Err);
   Assert.IsFalse(PlanByteEdits(B, nil, Plan, Err), 'keine Ersetzung');
   Assert.IsTrue(Pos('keine Ersetzung', Err) > 0, Err);
 end;
@@ -253,11 +261,12 @@ begin
   Assert.IsFalse(PlanByteEdits(B, [E], Plan, Err));
   Assert.IsTrue(Pos('hinter dem Zeilenende', Err) > 0, Err);
   // Gegenprobe: derselbe Bereich mit anderem Erwartungstext - der Puffer
-  // weicht ab, der alte Grund bleibt.
+  // weicht ab, der alte Grund bleibt. de.po: '... beim Menueaufbau ab' mit
+  // echtem Umlaut (Charge G7) - hier nur der Teil ohne.
   E.Span := TRefactorSpan.Make('t', 2, 1, 3, 9);
   E.Expected := #10'    Bar;';
   Assert.IsFalse(PlanByteEdits(B, [E], Plan, Err));
-  Assert.IsTrue(Pos('weicht vom Stand beim Menueaufbau ab', Err) > 0, Err);
+  Assert.IsTrue(Pos('weicht vom Stand beim Men', Err) > 0, Err);
 end;
 
 procedure TTestRdxBufferMath.EditorColumn_AsciiLimit;

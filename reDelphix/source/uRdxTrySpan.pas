@@ -119,6 +119,7 @@ implementation
 
 uses
   System.SysUtils,
+  uRdxText,          // _(), MsgCheckByHand
   uRefactorInfo,     // TRefactorSpan.Make (KeyText)
   uRdxHandOver;      // HandOverReason, SourceText, QualifiedEnd, ARG_ENDS
 
@@ -148,7 +149,6 @@ const
   BLOCK_OTHER = 'B';
   HEAD_LOOP = 'L';
   HEAD_WITH = 'W';
-  R_BY_HAND = 'von Hand pruefen';
   // Familie je Index von LOCK_PAIRS: Enter/Leave und Acquire/Release sind
   // bei TCriticalSection dieselbe Sperre (SameLockLoose).
   LOCK_FAMILY: array[0..3] of Integer = (0, 1, 1, 2);
@@ -725,14 +725,14 @@ begin
     and ReleaseAt(AMap, APair, T, APrev, Hit);
   if not Result then Exit;
   if (APair.Kind <> pkLock) and (Hit.KeyTok.Low <> APair.Key) then
-    S.Reason := Format('die Freigabe in Zeile %d schreibt %s anders - %s',
-      [T.Line, TokText(AMap, Hit.KeyTok), R_BY_HAND]);
+    S.Reason := _('the release in line %d spells %s differently - %s',
+      [T.Line, TokText(AMap, Hit.KeyTok), MsgCheckByHand]);
   Last := Hit.Last;
   E := After(AMap, Last);
   if E.Low = ';' then
     Last := E
   else if not IsListEnd(AMap, E, Last) then
-    S.Reason := Format('die Freigabe in Zeile %d ist keine ganze Anweisung',
+    S.Reason := _('the release in line %d is not a whole statement',
       [T.Line]);
   S.B := T;
   S.BLast := Last;
@@ -755,8 +755,8 @@ begin
   if (O.Low = '(') and (MentionsKey(V, O, APair.Key)
      or (RefAt(AMap, V, O, APair.Key, Last)
        and InList(After(AMap, Last).Low, ARG_ENDS))) then
-    Result := Format('%s(%s) in Zeile %d veraendert den Zeiger - FreeMem gaebe '
-      + 'im finally einen anderen frei', [TokText(AMap, T), APair.Name,
+    Result := _('%s(%s) in line %d changes the pointer - FreeMem in the '
+      + 'finally would free a different one', [TokText(AMap, T), APair.Name,
       T.Line]);
 end;
 
@@ -779,8 +779,8 @@ begin
   begin
     if MentionsKey(U, P, APair.Key)
        and not InList(After(AMap, U).Low, MEMBER_SUFFIXES) then
-      Exit(Format('raise %s in Zeile %d - %s ist (Teil) der Ausnahme; finally '
-        + 'gaebe es vor dem Handler frei', [SourceText(AMap, After(AMap, T),
+      Exit(_('raise %s in line %d - %s is (part of) the exception; finally '
+        + 'would free it before the handler', [SourceText(AMap, After(AMap, T),
         Before(AMap, Stop)), T.Line, TokText(AMap, U)]));
     P := U;
     U := After(AMap, U);
@@ -800,10 +800,10 @@ begin
   if (Result <> '') or not MentionsKey(T, APrev, APair.Key) then Exit;
   N := After(AMap, T);
   if N.Low = ':=' then
-    Exit(Format('zweite Zuweisung an %s in Zeile %d - die Freigabe im '
-      + 'finally traefe ein anderes Objekt', [TokText(AMap, T), T.Line]));
+    Exit(_('second assignment to %s in line %d - the release in the finally '
+      + 'would hit a different object', [TokText(AMap, T), T.Line]));
   if (APrev.Low = '@') and (APair.Kind = pkBuffer) then
-    Exit(Format('@%s in Zeile %d - der Zeiger kann sich aendern',
+    Exit(_('@%s in line %d - the pointer can change',
       [TokText(AMap, T), T.Line]));
   Result := HandOverReason(AMap, T, APrev);
   if (Result = '') and not InList(N.Low, MEMBER_SUFFIXES)
@@ -821,13 +821,12 @@ var
   L   : TRdxLockSite;
 begin
   if ReleaseAt(AMap, APair, T, APrev, Hit) then
-    Exit(Format('%s in Zeile %d - eine bedingte, tiefer liegende oder zweite '
-      + 'Freigabe im Bereich; mit finally liefe sie doppelt',
-      [APair.What, T.Line]));
+    Exit(_('%s in line %d - a conditional, deeper or second release in the '
+      + 'range; with finally it would run twice', [APair.What, T.Line]));
   if AnyReleaseAt(AMap, APair, T, APrev) then
-    Exit(Format('die Freigabe in Zeile %d gibt %s in anderer Schreibweise '
-      + 'frei (Self., Typumwandlung, Leave/Release) - mit finally liefe sie '
-      + 'doppelt; %s', [T.Line, APair.Name, R_BY_HAND]));
+    Exit(_('the release in line %d frees %s in a different spelling (Self., '
+      + 'typecast, Leave/Release) - with finally it would run twice; %s',
+      [T.Line, APair.Name, MsgCheckByHand]));
   if APair.Kind <> pkLock then
   begin
     Result := RaiseReason(AMap, APair, T, APrev);
@@ -838,8 +837,8 @@ begin
   Result := '';
   if (APrev.Low <> '.') and LockSiteAt(AMap, T, sdAcquire, L)
      and SameLockLoose(L, APair.Lock) then
-    Result := Format('die Sperre wird in Zeile %d noch einmal genommen - %s',
-      [T.Line, R_BY_HAND]);
+    Result := _('the lock is taken again in line %d - %s',
+      [T.Line, MsgCheckByHand]);
 end;
 
 // Ein Schluesselwort, das Bloecke und Schleifen fortschreibt. '' oder der
@@ -912,25 +911,25 @@ function SpanJumpReason(const APair: TRdxPair; var S: TRdxSpan;
 begin
   Result := '';
   if (T.Low = 'exit') and (APair.Kind = pkLock) then
-    Result := Format('Exit in Zeile %d - mit finally gaebe der Ausstieg die '
-      + 'Sperre jetzt frei; %s', [T.Line, R_BY_HAND])
+    Result := _('Exit in line %d - with finally the exit would now release '
+      + 'the lock; %s', [T.Line, MsgCheckByHand])
   else if T.Low = 'exit' then
   begin
     if S.ExitLine = 0 then
       S.ExitLine := T.Line;
   end
   else if InList(T.Low, JUMP_OUT) and not S.InLoop then
-    Result := Format('%s in Zeile %d verlaesst den Bereich - die Freigabe '
-      + 'liefe dort jetzt mit; %s', [T.Low, T.Line, R_BY_HAND])
+    Result := _('%s in line %d leaves the range - the release would now run '
+      + 'there too; %s', [T.Low, T.Line, MsgCheckByHand])
   else if T.Low = 'goto' then
-    Result := Format('goto in Zeile %d - ein Sprung in bzw. aus einem '
-      + 'try-Block; %s', [T.Line, R_BY_HAND])
+    Result := _('goto in line %d - a jump into or out of a try block; %s',
+      [T.Line, MsgCheckByHand])
   else if T.Low = 'asm' then
-    Result := Format('asm in Zeile %d im Bereich', [T.Line])
+    Result := _('asm in line %d in the range', [T.Line])
   else if InList(T.Low, INLINE_DECLS) and (S.Depth = 0) and (S.Paren = 0)
      and InList(APrev.Low, LIST_PREV) then
-    Result := Format('Inline-Deklaration (%s) in Zeile %d - ihr '
-      + 'Gueltigkeitsbereich schrumpfte auf den try-Block', [T.Low, T.Line]);
+    Result := _('inline declaration (%s) in line %d - its scope would shrink '
+      + 'to the try block', [T.Low, T.Line]);
 end;
 
 // Eine Marke 'L:' am Anfang einer Anweisung (nicht in einem case, nicht in
@@ -948,8 +947,8 @@ begin
      and (S.InnerKind <> BLOCK_CASE)
      and (T.IsWord or CharInSet(T.Low[1], ['0'..'9']))
      and (After(AMap, T).Low = ':') then
-    Result := Format('Marke %s: in Zeile %d - ein goto in den try-Block '
-      + 'uebersetzt nicht', [TokText(AMap, T), T.Line]);
+    Result := _('label %s: in line %d - a goto into the try block does not '
+      + 'compile', [TokText(AMap, T), T.Line]);
 end;
 
 // Ein Wort des Laufs (SpanStep): als Schluesselwort Koepfe, Spruenge und
@@ -1019,10 +1018,9 @@ begin
   end;
   // '-': die Liste von A endete (BlockReason) - wie das Dateiende.
   if (S.Reason = '') or (S.Reason = '-') then
-    S.Reason := Format('keine Freigabe %s als ganze, unbedingte Anweisung in '
-      + 'derselben Anweisungsliste hinter der Zeile %d - sie steht tiefer, in '
-      + 'einem anderen Zweig oder fehlt; %s',
-      [APair.What, APair.Semi.Line, R_BY_HAND]);
+    S.Reason := _('no release %s as a whole, unconditional statement in the '
+      + 'same statement list after line %d - it is deeper, in another branch '
+      + 'or missing; %s', [APair.What, APair.Semi.Line, MsgCheckByHand]);
 end;
 
 // Hinter 'X.Free;' bzw. 'FreeMem(P);' ein 'X := nil;' als naechste
@@ -1089,24 +1087,23 @@ function SpanReason(AMap: TRdxCodeMap; const APair: TRdxPair;
 begin
   Result := '';
   if not S.HasCode then
-    Result := Format('%s folgt direkt auf die Zeile %d - nichts zu schuetzen',
+    Result := _('%s directly follows line %d - nothing to protect',
       [APair.What, APair.Semi.Line])
   else if not FirstOnLine(AMap, S.B) then
-    Result := Format('vor der Freigabe in Zeile %d steht weiterer Code - '
-      + 'try/finally/end stehen in eigenen Zeilen', [S.B.Line])
+    Result := _('other code precedes the release in line %d - '
+      + 'try/finally/end stand on lines of their own', [S.B.Line])
   else if not CanAppendLine(AMap, S.BLast.Line, S.BLast.EndCol - 1) then
-    Result := Format('hinter der Freigabe in Zeile %d steht weiterer Code',
-      [S.BLast.Line])
+    Result := _('other code follows the release in line %d', [S.BLast.Line])
   else if DirectiveInLines(AMap, APair.First.Line, S.BLast.Line) then
-    Result := 'Compiler-Direktive im Bereich - try oder finally stuende '
-      + 'womoeglich in nur einem Zweig'
+    Result := _('compiler directive in the range - try or finally might end '
+      + 'up in only one branch')
   else if MultiStringIn(AMap, APair.First.Line, S.BLast.Line) then
-    Result := 'mehrzeiliges String-Literal im Bereich - Einruecken aenderte '
-      + 'seinen Inhalt'
+    Result := _('multi-line string literal in the range - indenting would '
+      + 'change its content')
   else if (S.ExitLine > 0) and (S.Escape.Low <> '') then
-    Result := Format('Exit in Zeile %d, und %s wird in Zeile %d weitergegeben '
-      + '- der Ausstieg koennte den Besitz uebergeben haben; %s',
-      [S.ExitLine, TokText(AMap, S.Escape), S.Escape.Line, R_BY_HAND]);
+    Result := _('Exit in line %d, and %s is handed over in line %d - the exit '
+      + 'might have transferred ownership; %s', [S.ExitLine,
+      TokText(AMap, S.Escape), S.Escape.Line, MsgCheckByHand]);
 end;
 
 // Der Lauf von A nach B samt Gegenproben (s. Kopf): S beginnt leer,
@@ -1262,13 +1259,13 @@ begin
   for i := 0 to High(Tries) do
   begin
     if not HandlerOf(AMap, Tries[i], Start, Fin) then
-      Exit(Format('das try in Zeile %d um den Bereich ist nicht sicher zu '
-        + 'lesen - %s', [Tries[i].Line, R_BY_HAND]));
+      Exit(_('the try in line %d around the range cannot be read safely - %s',
+        [Tries[i].Line, MsgCheckByHand]));
     Hit := MentionIn(AMap, APair, Start, Fin);
     if Hit.Low <> '' then
-      Exit(Format('der %s-Teil des try in Zeile %d um den Bereich nennt %s '
-        + '(Zeile %d) - nach dem Fix liefe er hinter dem finally', [Start.Low,
-        Tries[i].Line, TokText(AMap, Hit), Hit.Line]));
+      Exit(_('the %s part of the try in line %d around the range names %s '
+        + '(line %d) - after the fix it would run after the finally',
+        [Start.Low, Tries[i].Line, TokText(AMap, Hit), Hit.Line]));
   end;
 end;
 

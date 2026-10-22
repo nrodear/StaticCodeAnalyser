@@ -1104,8 +1104,11 @@ Ohne Delphi (FPC 3.2.2):
 bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxTextMsgs uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths uTestRdxBlocks uTestRdxCategoryArgFix uTestRdxEmptyBlockFix uTestRdxEmptyExceptFix uTestRdxGotoExitFix uTestRdxNativeIntFix uTestRdxParensFix uTestRdxTrailingCommaFix
 ```
 
-Erwartet (Stand 2026-10-22, Folgewelle B3, gezaehlt ohne FPC-Lauf): `PASSED 788  FAILED 0` -
-50 Testunits. Die 43 Testunits bis zur Charge C1 tragen heute 690 FPC-sichtbare
+Erwartet (Stand 2026-10-22, nach den C-Gruppen der Text-Umstellung E29, gezaehlt ohne FPC-Lauf):
+`PASSED 791  FAILED 0` - 50 Testunits. Gegenueber der Folgewelle B3 (788) drei Tests der
+C-Gruppen: `uTestRdxCodeMap` 1 (G5, Gruende folgen der Sprache), `uTestRdxFormatGuards` 1
+(G6, NoOperand), `uTestRdxMagicGuards` 1 (G9, zusammengesetzte Gruende je Sprachmittel).
+Die 43 Testunits bis zur Charge C1 tragen 690 FPC-sichtbare
 `[Test]`-Attribute (die Zeile nannte 675 - spaetere Wellen haben Tests ergaenzt, ohne sie
 hier nachzutragen), dazu 98 aus den sieben Planer-Testunits der Chargen Q/R (Text-Fixtures,
 s. o.). Aufschluesselung Stand 2026-10-15 (Chargen

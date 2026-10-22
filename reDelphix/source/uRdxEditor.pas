@@ -121,19 +121,23 @@ uses
   uRdxLog;
 
 const
-  SNoEditor   = 'Datei liess sich im Editor nicht oeffnen oder finden';
-  SNoView     = 'Editor-Ansicht nicht verfuegbar';
-  SNoBuffer   = 'Editor-Puffer nicht lesbar';
-  SNoWriter   = 'Editor-Puffer nicht beschreibbar';
-  SReadOnly   = 'Editor-Puffer ist schreibgeschuetzt - nicht geschrieben';
-  // Ueber _() (Editorhilfen E6); die fuenf oben folgen mit dem E6-Rest.
+  // Die Meldungen an den Benutzer, alle ueber _() (Editorhilfen E6,
+  // Entscheid E29): englische msgids, de/fr in i18n/*.po. Das Protokoll
+  // (RdxLog) bleibt deutsch.
+  SNoEditor   = 'Cannot open or find the file in the editor';
+  SNoView     = 'Editor view not available';
+  SNoBuffer   = 'Editor buffer not readable';
+  SNoWriter   = 'Editor buffer not writable';
+  SReadOnly   = 'Editor buffer is read-only - nothing written';
   S_PAST_END = 'Range %d:%d to %d:%d lies behind the end of the editor '
     + 'buffer (%d lines) - rescan the file';
   S_NO_MOVE  = 'Cannot move the editor cursor to line %d, column %d';
+  // Die Meldung samt Pfad des Protokolls (%TEMP%\reDelphix.log).
+  S_LOG_HINT = '%s [log: %s]';
 
 function WithLogHint(const AMsg: string): string;
 begin
-  Result := AMsg + ' [Protokoll: ' + RdxLogPath + ']';
+  Result := _(S_LOG_HINT, [AMsg, RdxLogPath]);
 end;
 
 // Der IOTASourceEditor DIESER Datei im Modul AModule. Nicht einfach der
@@ -264,8 +268,9 @@ begin
   Result := True;
 end;
 
-// LineStartsOf, OffsetOf, NormalizeEol, BufferEol, Visible und
-// DescribeMismatch liegen seit Stufe 0 in uRdxBufferMath (getestet).
+// LineStartsOf, OffsetOf, NormalizeEol, BufferEol und Visible liegen seit
+// Stufe 0 in uRdxBufferMath (getestet); das Detail einer Abweichung
+// (bis Charge G7 DescribeMismatch) bildet dort PlanByteEdits selbst.
 
 function DisplayPosOf(const AView: IOTAEditView; ALines: TStrings;
   ALine, ACol: Integer): TOTAEditPos;
@@ -362,23 +367,23 @@ begin
       // Auch diese Ausstiege laufen durch das finally (Log + Hinweis).
       if not ASpan.IsValid then
       begin
-        AError := 'kein gueltiger Bereich';
+        AError := MsgNoValidRange;
         Exit;
       end;
       if not TryOpenSourceEditor(AFile, Src) then
       begin
-        AError := SNoEditor;
+        AError := _(SNoEditor);
         Exit;
       end;
       Src.Show;
       if not TryGetView(Src, View, EdPos) then
       begin
-        AError := SNoView;
+        AError := _(SNoView);
         Exit;
       end;
       if not TryReadBuffer(AFile, Text) then
       begin
-        AError := SNoBuffer;
+        AError := _(SNoBuffer);
         Exit;
       end;
       Lines.Text := Text;
@@ -398,7 +403,7 @@ begin
       Block := View.Block;
       if Block = nil then
       begin
-        AError := SNoView;
+        AError := _(SNoView);
         Exit;
       end;
       Block.Reset;
@@ -473,21 +478,21 @@ begin
       // Auch dieser Ausstieg laeuft durch das finally (Log + Hinweis, Nit 39).
       if not TryOpenSourceEditor(AFile, Src) then
       begin
-        AError := SNoEditor;
+        AError := _(SNoEditor);
         Exit;
       end;
       // Schreibgeschuetzt (Bibliotheksquelle, gesperrte Datei): nichts
       // schreiben, statt es dem Verhalten der IDE zu ueberlassen (Nit 40).
       if Supports(Src, IOTAEditBuffer, Buffer) and Buffer.IsReadOnly then
       begin
-        AError := SReadOnly;
+        AError := _(SReadOnly);
         Exit;
       end;
       // 1) Puffer als Bytes; ALLE Bereiche pruefen, bevor einer
       //    geschrieben wird.
       if not ReadBufferBytes(Src, Bytes) then
       begin
-        AError := SNoBuffer;
+        AError := _(SNoBuffer);
         Exit;
       end;
       if not PlanByteEdits(Bytes, AEdits, Plan, AError) then
@@ -500,7 +505,7 @@ begin
       Writer := Src.CreateUndoableWriter;
       if Writer = nil then
       begin
-        AError := SNoWriter;
+        AError := _(SNoWriter);
         Exit;
       end;
       Removed  := 0;

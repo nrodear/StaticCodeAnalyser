@@ -131,8 +131,8 @@ type
     // Namens, AShortName.pas oder .pp in einem gelesenen Verzeichnis, oder
     // ein Verzeichnis blieb ungelesen (dann offen, s. oben). '' = False.
     function Knows(const AShortName: string): Boolean;
-    // Der Grund zu Unreadable (deutsch wie die Gruende der Scope-Tabelle);
-    // '' ohne ungelesenes Verzeichnis.
+    // Der Grund zu Unreadable, in der reDelphix-Sprache wie die Gruende
+    // der Scope-Tabelle (uRdxText, E29); '' ohne ungelesenes Verzeichnis.
     function UnreadableReason: string;
     // Das erste ungelesene Verzeichnis (Netzpfad); '' = alles gelesen.
     property Unreadable: string read FUnreadable;
@@ -149,7 +149,8 @@ uses
   // FPC (Pruefstand) deklariert TArray<T> auch in SysUtils: die
   // Schnittstelle nimmt es dort jetzt aus ObjPas - derselbe Code.
   System.SysUtils,
-  uRdxPaths;   // IsNetworkPath, HasUncLead
+  uRdxPaths,   // IsNetworkPath, HasUncLead
+  uRdxText;    // _(), MsgByHand: Gruende in der reDelphix-Sprache (E29)
 
 const
   // Unit-Scope-Vorgabe eines Win32-Projekts, in Compiler-Reihenfolge.
@@ -399,13 +400,13 @@ begin
   AReason    := '';
   if Pos('.', AShortName) > 0 then
   begin
-    AReason := 'bereits qualifiziert';
+    AReason := _('already qualified');
     Exit;
   end;
   Cands := Candidates(AShortName);
   if Length(Cands) = 0 then
   begin
-    AReason := 'nicht in der Scope-Tabelle (Projekt- oder Fremd-Unit)';
+    AReason := _('not in the scope table (project or third-party unit)');
     Exit;
   end;
   // System.Skia oder Vcl.Skia: haengt an der Reihenfolge in DCC_Namespace
@@ -413,8 +414,8 @@ begin
   if (AFramework <> fwFmx) and HasPrefixIn(Cands, VCL_ORDER)
      and HasPrefixIn(Cands, SYSTEM_GROUP) then
   begin
-    AReason := 'Reihenfolge System/Vcl projektabhaengig (DCC_Namespace): '
-      + JoinNames(Cands);
+    AReason := _('order System/Vcl depends on the project (DCC_Namespace): %s',
+      [JoinNames(Cands)]);
     Exit;
   end;
   if TryOrder(Cands, COMMON_ORDER, AQualified) then Exit(True);
@@ -425,7 +426,7 @@ begin
       if TryOrder(Cands, FMX_ORDER, AQualified) then Exit(True);
     fwBoth:
       begin
-        AReason := 'Datei nutzt VCL und FMX: ' + JoinNames(Cands);
+        AReason := _('file uses VCL and FMX: %s', [JoinNames(Cands)]);
         Exit;
       end;
   else
@@ -439,20 +440,23 @@ begin
         AQualified := Cands[0];
         Exit(True);
       end;
-      AReason := 'Rahmenwerk (VCL/FMX) der Datei nicht erkennbar: '
-        + JoinNames(Cands);
+      AReason := _('framework (VCL/FMX) of the file not recognizable: %s',
+        [JoinNames(Cands)]);
       Exit;
     end;
   end;
-  AReason := 'kein Scope-Praefix des Rahmenwerks passt: ' + JoinNames(Cands);
+  AReason := _('no scope prefix of the framework fits: %s',
+    [JoinNames(Cands)]);
 end;
 
 { TRdxProjectUnits }
 
 const
-  R_UNREADABLE = 'Netzpfad im Unit-Suchpfad oder neben der Datei (%s) - '
-    + 'reDelphix liest dort nicht (Menueaufbau im Hauptthread); ob das '
-    + 'Projekt eine Unit dieses Namens hat, ist offen - von Hand';
+  // Englische msgid (E29); das Ende ('by hand') kommt als %s aus uRdxText
+  // (MsgByHand), der Trenner ' - ' davor bleibt im Satz.
+  R_UNREADABLE = 'network path in the unit search path or next to the file '
+    + '(%s) - reDelphix does not read there (the menu is built in the main '
+    + 'thread); whether the project has a unit of this name is open - %s';
 
 constructor TRdxProjectUnits.Create;
 begin
@@ -539,7 +543,7 @@ function TRdxProjectUnits.UnreadableReason: string;
 begin
   Result := '';
   if FUnreadable <> '' then
-    Result := Format(R_UNREADABLE, [FUnreadable]);
+    Result := _(R_UNREADABLE, [FUnreadable, MsgByHand]);
 end;
 
 end.

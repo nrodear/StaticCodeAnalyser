@@ -282,7 +282,8 @@ uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
   uRdxRtlTypes,      // IsRtlClassOrInterface (SCA196: Interface aus der RTL)
-  uRdxCompilerTraces;  // OldCompilerTrace (SCA121: Spuren alter Compiler)
+  uRdxCompilerTraces,  // OldCompilerTrace (SCA121: Spuren alter Compiler)
+  uRdxText;          // _() und die gemeinsamen Texte (MsgByHand ...), E29
 
 const
   SPAN_RESULT = 'result';
@@ -366,17 +367,40 @@ const
   STMT_EMPTY_STRING = 'Result := ''''';
   STMT_NIL          = 'Result := nil';
   STMT_VARCLEAR     = 'VarClear(Result)';
-  R_MOVED  = 'Zeile verschoben? Datei neu pruefen';
-  R_BY_HAND = 'von Hand';
-  // SCA121: was nur der Compiler kennt (ScriptReason, uRdxCompilerTraces).
+  // SCA121: was nur der Compiler kennt (ScriptReason, uRdxCompilerTraces) -
+  // Code, kein Text: bleibt unuebersetzt.
   FEATURE_DEFAULT = 'Default()';
   // SCA121: der Anfangswert einer schlichten Aufzaehlung T (EnumValue) -
   // qualifiziert, kein anderes Low verdeckt die Funktion.
   ENUM_FIRST_FMT = 'System.Low(%s)';
+  // Gruende als englische msgids (Entscheid E29), uebersetzt an der
+  // Verwendung mit _() - der i18n-Extraktor liest nur reine Literal-Ketten
+  // dieser Unit. Das gemeinsame Ende ('Zeile verschoben? ...', 'von Hand')
+  // kommt aus uRdxText (MsgMovedSuffix, MsgByHand).
   // SCA196: als Konstante - ein Literal mit dem Wort im Exit-Argument
   // haelt der Detektor SCA196 selbst fuer ein Lesen von Result (Selbstscan
-  // der Charge H5).
-  R_NO_READ = 'kein Result auf der gemeldeten Zeile - ' + R_MOVED;
+  // der Charge H5). Bis Charge C (G2) hing hier ' - ' + R_MOVED an; das
+  // Ende setzt jetzt MsgMovedSuffix (FuncCtxReason).
+  R_NO_READ = 'no Result on the reported line';
+  // SCA096/SCA097/SCA121 (DeclOf, CtorVariantReason): keine Deklaration der
+  // Methode im Klassenrumpf - zwei Stellen, ein Satz.
+  R_NO_DECL = 'no declaration of %s in the body of class %s';
+  // DeclOf: mehrere Klassen gleichen letzten Namens (wie OwnerOf in
+  // uRdxInheritedFixes, derselbe Satz).
+  R_CLASSES_NAMED = '%d classes named %s in the unit - ambiguous';
+  // SCA121/SCA196 (InitValueFor, OwnTypeStatement): $IFDEF-Zwillinge mit
+  // verschiedenem Ergebnis.
+  R_MULTI_DEF = '%s is defined several times differently in this unit '
+    + '($IFDEF branches?) - %s';
+  // SCA121/SCA196 (DirectiveResultReason): %s ist die Direktive als Code
+  // ('{$mode fpc}', '{$EXTENDEDSYNTAX OFF}', '{$X-}').
+  R_NO_RESULT = '%s in line %d - there is no Result there';
+  // FirstStatement, LastStatement: nur ein begin-Rumpf nimmt die Anweisung.
+  R_NO_BEGIN_BODY = 'no begin body';
+  // Die Direktiven ohne Result als Code fuer R_NO_RESULT.
+  DIRECTIVE_MODE_FMT = '{$mode %s}';
+  DIRECTIVE_EXT_OFF  = '{$EXTENDEDSYNTAX OFF}';
+  DIRECTIVE_X_OFF    = '{$X-}';
 
 type
   // SCA196: die Funktion um die Lese-Zeile und ihr Rueckgabetyp wie im
@@ -833,7 +857,11 @@ begin
 end;
 
 // Die eine Routine, deren Kopf (Kopfwort aus AWords) auf ALine steht,
-// gelesen bis zu ihrem Ende (ReadRoutine). '' oder der Grund.
+// gelesen bis zu ihrem Ende (ReadRoutine). '' oder der Grund. AWhat ist
+// die schon uebersetzte Ergaenzung des Aufrufers ('of a destructor' - de
+// 'eines Destruktors'); die Texte der Kopf-Suche kommen aus uRdxText
+// (MsgNoHeader, MsgHeadersFmt - dieselben wie in uRdxRoutineFixes), die
+// Ergaenzung steht im Muster nie, nur als ManyArg.
 function RoutineOnLine(AMap: TRdxCodeMap; ALine: Integer;
   const AWords, AWhat: string; out R: TRdxRoutine): string;
 var
@@ -844,8 +872,9 @@ begin
   S := Default(TRdxLineSearch);
   S.Test := IsHeadOf;
   S.Arg := AWords;
-  S.What := 'kein Kopf ' + AWhat;
-  S.ManyFmt := '%d Koepfe ' + AWhat;
+  S.What := MsgNoHeader(AWhat);
+  S.ManyFmt := MsgHeadersFmt;
+  S.ManyArg := AWhat;
   Result := OneTokenOnLine(AMap, ALine, S, K);
   if Result = '' then
     Result := TRdxBlocks.ReadRoutine(AMap, K, R);
@@ -879,8 +908,9 @@ begin
   T.Col := 1;
   while TRdxBlocks.HeadBefore(AMap, T, [], S) do
   begin
+    // S.Reason uebersetzt uRdxBlocks - hier nur das Praefix.
     if S.Reason <> '' then
-      Exit(Format('Routine in Zeile %d: %s', [S.Tok.Line, S.Reason]));
+      Exit(_('routine in line %d: %s', [S.Tok.Line, S.Reason]));
     if (S.Routine.Body.Low <> '') and (S.Routine.Body.Line <= ALine)
        and (ALine <= S.Routine.EndTok.Line) then
     begin
@@ -888,7 +918,7 @@ begin
       Exit('');
     end;
   end;
-  Result := 'keine Routine um die gemeldete Zeile - ' + R_MOVED;
+  Result := MsgMovedSuffix(_('no routine around the reported line'));
 end;
 
 // Ein begin-Rumpf ohne asm, ohne Direktive zwischen Kopf und begin? '' oder
@@ -898,19 +928,20 @@ var
   T, P : TRdxToken;
 begin
   if R.Body.Low = '' then
-    Exit('kein Rumpf (forward/external)');
+    Exit(_('no body (forward/external)'));
   if R.Body.Low <> KW_BEGIN then
-    Exit('asm-Rumpf - Register und Stapel sieht die Hilfe nicht; ' + R_BY_HAND);
+    Exit(_('asm body - the quick fix does not see registers and stack; %s',
+      [MsgByHand]));
   if DirectiveBefore(AMap, R.Head.Line, R.Body) then
-    Exit('Compiler-Direktive zwischen Kopf und begin - Kopf oder Rumpf '
-      + 'haengen an einem Zweig; ' + R_BY_HAND);
+    Exit(_('compiler directive between header and begin - header or body '
+      + 'depend on a branch; %s', [MsgByHand]));
   P := R.Body;
   T := After(AMap, R.Body);
   while (T.Low <> '') and not SameTok(T, R.EndTok) do
   begin
     if (T.Low = 'asm') and IsKeywordAfter(T, P) then
-      Exit(Format('asm im Rumpf (Zeile %d) - Register und Stapel sieht die '
-        + 'Hilfe nicht; %s', [T.Line, R_BY_HAND]));
+      Exit(_('asm in the body (line %d) - the quick fix does not see '
+        + 'registers and stack; %s', [T.Line, MsgByHand]));
     P := T;
     T := After(AMap, T);
   end;
@@ -971,18 +1002,17 @@ begin
   D := Default(TRdxRoutine);
   Heads := DeclHeadsOf(AScan, R);
   if Length(Heads) = 0 then
-    Exit(Format('keine Deklaration von %s im Rumpf der Klasse %s - %s',
-      [LastPart(R.Name), OwnerPathOf(R.Name), R_MOVED]));
+    Exit(MsgMovedSuffix(_(R_NO_DECL, [LastPart(R.Name),
+      OwnerPathOf(R.Name)])));
   NClass := Length(ClassHeads(AScan, OwnerPathOf(R.Name)));
   if (Length(Heads) > 1) and (NClass > 1) then
-    Exit(Format('%d Klassen namens %s in der Unit - mehrdeutig',
-      [NClass, LastPart(OwnerPathOf(R.Name))]));
+    Exit(_(R_CLASSES_NAMED, [NClass, LastPart(OwnerPathOf(R.Name))]));
   if Length(Heads) > 1 then
-    Exit(Format('%d Deklarationen von %s in Klassen dieses Namens - '
-      + 'Overload?', [Length(Heads), LastPart(R.Name)]));
+    Exit(MsgDeclsInClassesOfName(Length(Heads), LastPart(R.Name)));
+  // Den Grund von MethodDecl uebersetzt uRdxBlocks - hier nur das Praefix.
   Result := TRdxBlocks.MethodDecl(AScan.Map, Heads[0], D);
   if Result <> '' then
-    Result := 'Deklaration: ' + Result;
+    Result := _('declaration: %s', [Result]);
 end;
 
 // Steht das Wort T (APrev davor) hinter 'System.' - 'System.Exit', das Exit
@@ -1021,15 +1051,13 @@ begin
   W := DirectiveWord(AMap, ALine, ACol, Arg);
   Args := LowerCase(Trim(DirectiveArgs(AMap, ALine, ACol)));
   if (W = 'mode') and InList(Args, NO_RESULT_MODES) then
-    Exit(Format('{$mode %s} in Zeile %d - dort gibt es kein Result',
-      [Args, ALine]));
+    Exit(_(R_NO_RESULT, [Format(DIRECTIVE_MODE_FMT, [Args]), ALine]));
   if (W = 'extendedsyntax') and (Copy(Args, 1, 3) = 'off') then
-    Exit(Format('{$EXTENDEDSYNTAX OFF} in Zeile %d - dort gibt es kein '
-      + 'Result', [ALine]));
+    Exit(_(R_NO_RESULT, [DIRECTIVE_EXT_OFF, ALine]));
   if Length(W) <> 1 then Exit;
   Sw := ',' + StringReplace(W + Args, ' ', '', [rfReplaceAll]) + ',';
   if Pos(',x-,', Sw) > 0 then
-    Result := Format('{$X-} in Zeile %d - dort gibt es kein Result', [ALine]);
+    Result := _(R_NO_RESULT, [DIRECTIVE_X_OFF, ALine]);
 end;
 
 // Der Lauf ueber alle Direktiven: NextDirective (uRdxCodeMap; bis zur
@@ -1060,8 +1088,8 @@ begin
   if Pos('<', N) > 0 then
     N := Copy(N, 1, Pos('<', N) - 1);
   if not SameIdent(LowerCase(LastPart(R.Name)), LowerCase(N)) then
-    Result := Format('die Routine heisst %s, die Meldung nennt %s - %s',
-      [R.Name, AName, R_MOVED]);
+    Result := MsgMovedSuffix(_('the routine is called %s, the message names '
+      + '%s', [R.Name, AName]));
 end;
 
 // Der Rueckgabetyp hinter dem Namen von R: ':' hinter Typparametern und
@@ -1081,9 +1109,9 @@ begin
     T := AfterClose(AMap, T);
   if T.Low <> ':' then Exit;
   if T.Line <> R.HeaderEnd.Line then
-    Exit('Rueckgabetyp ueber mehrere Zeilen - ' + R_BY_HAND);
+    Exit(_('return type across several lines - %s', [MsgByHand]));
   if AMap.HasNonCode(T.Line, T.EndCol, R.HeaderEnd.Col - 1) then
-    Exit('Kommentar oder Direktive im Rueckgabetyp - ' + R_BY_HAND);
+    Exit(_('comment or directive in the return type - %s', [MsgByHand]));
   AType := Trim(Copy(AMap.Raw(T.Line), T.EndCol, R.HeaderEnd.Col - T.EndCol));
 end;
 
@@ -1097,13 +1125,13 @@ begin
   Result := TypeAfterHead(AScan.Map, R, AType);
   if (Result <> '') or (AType <> '') then Exit;
   if Length(R.Parts) < 2 then
-    Exit('Kopf ohne Rueckgabetyp, keine Methode - die Deklaration liest die '
-      + 'Hilfe nicht; ' + R_BY_HAND);
+    Exit(_('header without return type, not a method - the quick fix does '
+      + 'not read the declaration; %s', [MsgByHand]));
   Result := DeclOf(AScan, R, D);
   if Result = '' then
     Result := TypeAfterHead(AScan.Map, D, AType);
   if (Result = '') and (AType = '') then
-    Result := 'auch die Deklaration nennt keinen Rueckgabetyp';
+    Result := _('the declaration names no return type either');
 end;
 
 // SCA121: passt AType in Default()? Ein Typbezeichner, Glieder mit '.',
@@ -1114,12 +1142,15 @@ var
   i : Integer;
 begin
   Result := '';
+  // Eigene msgid, nicht MsgByHand: 'mit dem Typ von Hand' ist ein anderer
+  // Satz (Texte umstellen, Varianten behalten ihren Wortlaut).
   if HasAsciiWord(LowerCase(AType), 'specialize') then
-    Exit('FPC "specialize" im Rueckgabetyp - Default() mit dem Typ von Hand');
+    Exit(_('FPC "specialize" in the return type - Default() with the type by '
+      + 'hand'));
   for i := 1 to Length(AType) do
     if not (IsIdentChar(AType[i]) or CharInSet(AType[i], ['.', '<', '>', ',', ' '])) then
-      Exit(Format('Rueckgabetyp "%s" ist kein einfacher Typbezeichner - %s',
-        [AType, R_BY_HAND]));
+      Exit(_('return type "%s" is not a simple type identifier - %s',
+        [AType, MsgByHand]));
 end;
 
 // SCA121: steht hinter dem Namen T - ueber Selektoren '.X', '[..]', '^' -
@@ -1178,9 +1209,9 @@ begin
   while (T.Low <> '') and not SameTok(T, R.EndTok) do
   begin
     if WritesResult(AMap, T, P, Name) then
-      Exit(Format('%s in Zeile %d schreibt Result (inaktiver Zweig?) - der '
-        + 'Detektor sah es nicht, der Fund ist fraglich; %s',
-        [TokText(AMap, T), T.Line, R_BY_HAND]));
+      Exit(_('%s in line %d writes Result (inactive branch?) - the detector '
+        + 'did not see it, the finding is doubtful; %s',
+        [TokText(AMap, T), T.Line, MsgByHand]));
     P := T;
     T := After(AMap, T);
   end;
@@ -1278,9 +1309,9 @@ begin
   Result := '';
   for K in ADefs do
     if TokBefore(R.Head, K) and TokBefore(K, R.Body) then
-      Exit(Format('%s ist auch im Deklarationsteil der Funktion definiert '
-        + '(Zeile %d) - im Rumpf meint der Name diesen Typ, im Kopf den '
-        + 'aeusseren; %s', [AType, K.Line, R_BY_HAND]));
+      Exit(_('%s is also defined in the declaration part of the function '
+        + '(line %d) - in the body the name means this type, in the header '
+        + 'the outer one; %s', [AType, K.Line, MsgByHand]));
 end;
 
 // SCA121: der Anfangswert fuer den Rueckgabetyp AType (wie im Kopf) der
@@ -1319,8 +1350,7 @@ begin
   begin
     V := DefValue(AScan, K, AType);
     if V <> AValue then
-      Exit(Format('%s ist in dieser Unit mehrfach verschieden definiert '
-        + '($IFDEF-Zweige?) - %s', [AType, R_BY_HAND]));
+      Exit(_(R_MULTI_DEF, [AType, MsgByHand]));
   end;
   if AValue = '' then
     AValue := 'Default(' + AType + ')';
@@ -1340,9 +1370,9 @@ begin
   Result := '';
   S := OldCompilerTrace(AMap, FLOOR_DEFAULT_FN, Li);
   if S <> '' then
-    Result := Format('Default() gibt es erst ab Delphi 2009 bzw. FPC 3.0 - '
-      + 'die Datei traegt Spuren aelterer Compiler (%s, Zeile %d); %s',
-      [S, Li, R_BY_HAND]);
+    Result := _('Default() exists only from Delphi 2009 or FPC 3.0 on - the '
+      + 'file shows traces of older compilers (%s, line %d); %s',
+      [S, Li, MsgByHand]);
 end;
 
 // SCA121: der Wert fuer 'Result := <Wert>;' zur Funktion R in AValue
@@ -1389,8 +1419,8 @@ begin
   while (T.Low <> '') and not SameTok(T, R.Body) do
   begin
     if (T.Low = 'absolute') and (After(AMap, T).Low = KW_RESULT) then
-      Exit(Format('"absolute Result" in Zeile %d - Result wird ueber den '
-        + 'Alias geschrieben; %s', [T.Line, R_BY_HAND]));
+      Exit(_('"absolute Result" in line %d - Result is written through the '
+        + 'alias; %s', [T.Line, MsgByHand]));
     T := After(AMap, T);
   end;
 end;
@@ -1487,18 +1517,17 @@ begin
     // AtUnitLevel ist auch False, wenn eine Routine davor nicht sicher zu
     // lesen ist (Review Woche G08-03) - der Grund nennt beides.
     if not AtUnitLevel(AScan.Map, K) then
-      Exit(Format('%s ist in dieser Unit auch in einer Routine bzw. einem '
-        + 'Typ definiert (Zeile %d), oder eine Routine davor ist nicht '
-        + 'sicher zu lesen - welche Definition gilt, haengt am '
-        + 'Gueltigkeitsbereich; %s', [AType, K.Line, R_BY_HAND]));
+      Exit(_('%s is also defined in a routine or a type in this unit (line '
+        + '%d), or a routine before it cannot be read safely - which '
+        + 'definition applies depends on the scope; %s',
+        [AType, K.Line, MsgByHand]));
     S := DefStatement(AScan.Map, K);
     if S = '' then
-      Exit(Format('%s ist in dieser Unit als "%s ..." definiert (Zeile %d) - '
-        + 'kein dynamisches Array, Interface, String oder Variant; %s',
-        [AType, TokText(AScan.Map, K), K.Line, R_BY_HAND]));
+      Exit(_('%s is defined in this unit as "%s ..." (line %d) - not a '
+        + 'dynamic array, interface, string or variant; %s',
+        [AType, TokText(AScan.Map, K), K.Line, MsgByHand]));
     if not First and (S <> AStmt) then
-      Exit(Format('%s ist in dieser Unit mehrfach verschieden definiert '
-        + '($IFDEF-Zweige?) - %s', [AType, R_BY_HAND]));
+      Exit(_(R_MULTI_DEF, [AType, MsgByHand]));
     AStmt := S;
     First := False;
   end;
@@ -1541,8 +1570,8 @@ begin
   else if DynArrayProven(AScan, Low) or InterfaceProven(AScan, AType) then
     AStmt := STMT_NIL
   else
-    Result := Format('Rueckgabetyp %s ist nicht als String, dynamisches '
-      + 'Array, Interface oder Variant bewiesen - %s', [AType, R_BY_HAND]);
+    Result := _('return type %s is not proven as string, dynamic array, '
+      + 'interface or variant - %s', [AType, MsgByHand]);
 end;
 
 { ---- Gemeinsame Nachweise ---- }
@@ -1556,7 +1585,7 @@ function FuncCtxReason(var AScan: TRdxScan; ALine: Integer;
 begin
   ACtx := Default(TRdxFuncCtx);
   if not ReadsResultOn(AScan.Map, ALine) then
-    Exit(R_NO_READ);
+    Exit(MsgMovedSuffix(_(R_NO_READ)));
   Result := EnclosingRoutine(AScan.Map, ALine, ACtx.Routine);
   if Result = '' then
     Result := NameReason(ACtx.Routine, AName);
@@ -1567,8 +1596,8 @@ begin
   if Result = '' then
     Result := ResultTypeOf(AScan, ACtx.Routine, ACtx.TypeTx);
   if (Result = '') and not SameTypeText(ACtx.TypeTx, AMsgType) then
-    Result := Format('der Kopf nennt %s, die Meldung %s - %s',
-      [ACtx.TypeTx, AMsgType, R_MOVED]);
+    Result := MsgMovedSuffix(_('the header names %s, the message %s',
+      [ACtx.TypeTx, AMsgType]));
   if Result = '' then
     Result := AbsoluteReason(AScan.Map, ACtx.Routine);
 end;
@@ -1609,7 +1638,7 @@ begin
   AEdit := Default(TRdxEdit);
   B := R.Body;
   if B.Low <> KW_BEGIN then
-    Exit('kein begin-Rumpf');
+    Exit(_(R_NO_BEGIN_BODY));
   L := AMap.Raw(B.Line);
   if QuietAfter(AMap, B) then
   begin
@@ -1634,21 +1663,21 @@ var
 begin
   AEdits := nil;
   if R.Body.Low <> KW_BEGIN then
-    Exit('kein begin-Rumpf');
+    Exit(_(R_NO_BEGIN_BODY));
   En := R.EndTok;
   Last := Before(AMap, En);
   if SameTok(Last, R.Body) then
     Exit(FirstEdits(AMap, R, AStmt, AEdits));
   if DirectiveBetween(AMap, Last, En.Line, En.Col) then
-    Exit('Compiler-Direktive zwischen der letzten Anweisung und end - das '
-      + 'Ende kann je Zweig anders aussehen; ' + R_BY_HAND);
+    Exit(_('compiler directive between the last statement and end - the end '
+      + 'can look different in each branch; %s', [MsgByHand]));
   // Die letzte Anweisung endet am letzten Zeichen aus Code ODER String vor
   // end - der Token-Leser sieht keine Strings: 'FState := ''x''' endete
   // fuer ihn auf ':=', und das ';' bzw. 'inherited;' kam vor das Literal
   // (Gegen-Review R5, R5-01: 'FState :=; ''x''', bei TObject-Erben als
   // bedeutungsgleich gekennzeichnet).
   if not LastCharBefore(AMap, En, Li, Co) then
-    Exit('Ende der letzten Anweisung nicht gefunden');
+    Exit(_('end of the last statement not found'));
   Semi := '';
   if (Copy(AMap.Raw(Li), Co, 1) <> ';') or not AMap.IsCode(Li, Co) then
     Semi := ';';
@@ -1683,10 +1712,10 @@ begin
   Scan := NewScan(AMap);
   Name := TextBetween(AMessage, KEY_FUNC, KEY_NEVER);
   if Name = '' then
-    AReason := 'Name der Funktion fehlt in der Meldung';
+    AReason := _('the message has no function name');
   if AReason = '' then
     AReason := RoutineOnLine(AMap, ALine, 'function|operator',
-      'einer Funktion', R);
+      _('of a function'), R);
   if AReason = '' then
     AReason := NameReason(R, Name);
   if AReason = '' then
@@ -1724,7 +1753,7 @@ begin
   Name := TextBetween(AMessage, KEY_FUNC, KEY_READS);
   MsgType := TextBetween(AMessage, KEY_TYPE, KEY_TYPE_END);
   if (Name = '') or (MsgType = '') then
-    AReason := 'Funktion oder Rueckgabetyp fehlt in der Meldung'
+    AReason := _('the message has no function or return type')
   // Der Name im Menue schon aus der Meldung (der Beweis folgt).
   else if StatementFor(Scan, MsgType, Stmt, Vars) = '' then
     APlan.Name := Stmt;

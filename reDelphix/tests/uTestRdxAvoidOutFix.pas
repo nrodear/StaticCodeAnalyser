@@ -567,7 +567,9 @@ begin
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.AreEqual('N', O.Name, 'Name ist der Parameter');
   Assert.IsFalse(O.ChangesBehavior, 'bedeutungsgleich');
-  Assert.AreEqual('gleiche Bedeutung - fuer diesen einfachen Typ behandelt '
+  // de.po traegt echte Umlaute (Charge G7) - hier als #$-Code.
+  Assert.AreEqual('gleiche Bedeutung - f'#$00FC'r diesen einfachen '
+    + 'Typ behandelt '
     + 'Delphi out wie var; Deklaration und Implementierung zusammen', O.Hint);
   Assert.AreEqual<Integer>(2, Length(O.Edits), 'Deklaration und Rumpf');
 end;

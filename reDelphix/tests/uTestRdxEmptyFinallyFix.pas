@@ -49,6 +49,7 @@ uses
   uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner,
   uRdxFixTable, uRdxEmptyFinallyFix,
   uTestRdxDetectorKit,   // TSeen, CatalogText, DetectSource
+  uRdxText,              // MsgNoFileOpen (MapFix, E29)
   uTestRdxTextKit;       // Join, Apply, LineOf
 
 const
@@ -252,13 +253,13 @@ begin
   // meldet trotzdem.
   Assert.AreEqual('', Fix(InUnit(['  try', '    Work;', '  finally',
     '    // TODO: free', '  end;']), R));
-  Assert.AreEqual(R_EFB_COMMENT, R);
+  Assert.AreEqual(_(R_EFB_COMMENT), R);
   Assert.AreEqual('', Fix(InUnit(['  try', '    Work;', '  finally {keep}',
     '  end;']), R));
-  Assert.AreEqual(R_EFB_COMMENT, R);
+  Assert.AreEqual(_(R_EFB_COMMENT), R);
   Assert.AreEqual('', Fix(InUnit(['  try', '    Work;', '  finally',
     '  {$IFDEF X}', '  end;']), R));
-  Assert.AreEqual(R_EFB_COMMENT, R);
+  Assert.AreEqual(_(R_EFB_COMMENT), R);
 end;
 
 procedure TTestRdxEmptyFinallyFix.Refuse_NotEmpty;
@@ -267,7 +268,7 @@ var
 begin
   Assert.AreEqual('', Fix(InUnit(['  try', '    Work;', '  finally',
     '    Obj.Free;', '  end;']), R));
-  Assert.AreEqual(R_EFB_NOT_EMPTY, R);
+  Assert.AreEqual(_(R_EFB_NOT_EMPTY), R);
 end;
 
 procedure TTestRdxEmptyFinallyFix.Refuse_BranchWithoutBegin;
@@ -277,13 +278,13 @@ begin
   // then, else und eine case-Marke: ohne begin..end gaebe es keinen Rumpf.
   Assert.AreEqual('', Fix(InUnit(['  if C then', '    try', '      Work;',
     '    finally', '    end;']), R));
-  Assert.AreEqual(R_EFB_BRANCH, R);
+  Assert.AreEqual(_(R_EFB_BRANCH), R);
   Assert.AreEqual('', Fix(InUnit(['  if C then', '    Other', '  else',
     '    try', '      Work;', '    finally', '    end;']), R));
-  Assert.AreEqual(R_EFB_BRANCH, R);
+  Assert.AreEqual(_(R_EFB_BRANCH), R);
   Assert.AreEqual('', Fix(InUnit(['  case N of', '    1: try', '      Work;',
     '    finally', '    end;', '  end;']), R));
-  Assert.AreEqual(R_EFB_BRANCH, R);
+  Assert.AreEqual(_(R_EFB_BRANCH), R);
 end;
 
 procedure TTestRdxEmptyFinallyFix.Refuse_LineProblems;
@@ -306,7 +307,7 @@ begin
   // offenes begin im Rumpf): kein zugehoeriges try.
   Assert.AreEqual('', Fix(InUnit(['  try', '    begin', '    A;', '  finally',
     '  end;']), R));
-  Assert.AreEqual(R_EFB_NO_TRY, R);
+  Assert.AreEqual(_(R_EFB_NO_TRY), R);
 end;
 
 procedure TTestRdxEmptyFinallyFix.Refuse_BodyWords;
@@ -317,10 +318,10 @@ begin
   // seinen Block.
   Assert.AreEqual('', Fix(InUnit(['  try', '    var N := 1;', '    Use(N);',
     '  finally', '  end;']), R));
-  Assert.AreEqual(R_EFB_SPECIAL, R);
+  Assert.AreEqual(_(R_EFB_SPECIAL), R);
   Assert.AreEqual('', Fix(InUnit(['  try', '    goto Done;', '  finally',
     '  end;']), R));
-  Assert.AreEqual(R_EFB_SPECIAL, R);
+  Assert.AreEqual(_(R_EFB_SPECIAL), R);
 end;
 
 procedure TTestRdxEmptyFinallyFix.Refuse_DirectiveAndMultiLine;
@@ -329,10 +330,10 @@ var
 begin
   Assert.AreEqual('', Fix(InUnit(['  try', '  {$IFDEF DEBUG}', '    Log;',
     '  {$ENDIF}', '    Work;', '  finally', '  end;']), R));
-  Assert.AreEqual(R_EFB_DIRECTIVE, R);
+  Assert.AreEqual(_(R_EFB_DIRECTIVE), R);
   Assert.AreEqual('', Fix(InUnit(['  try', '    { a', '      b }', '    Work;',
     '  finally', '  end;']), R));
-  Assert.AreEqual(R_EFB_MULTILINE, R);
+  Assert.AreEqual(_(R_EFB_MULTILINE), R);
 end;
 
 procedure TTestRdxEmptyFinallyFix.Refuse_Layout;
@@ -342,16 +343,16 @@ begin
   // Alles auf einer Zeile, Kommentar hinter end, Kommentar hinter try, ';'
   // erst auf der Folgezeile.
   Assert.AreEqual('', Fix(InUnit(['  try Work; finally end;']), R));
-  Assert.AreEqual(R_EFB_TRY_LINE, R);
+  Assert.AreEqual(_(R_EFB_TRY_LINE), R);
   Assert.AreEqual('', Fix(InUnit(['  try', '    Work;', '  finally',
     '  end; // done']), R));
-  Assert.AreEqual(R_EFB_FIN_LINE, R);
+  Assert.AreEqual(_(R_EFB_FIN_LINE), R);
   Assert.AreEqual('', Fix(InUnit(['  try // guard', '    Work;', '  finally',
     '  end;']), R));
-  Assert.AreEqual(R_EFB_TRY_LINE, R);
+  Assert.AreEqual(_(R_EFB_TRY_LINE), R);
   Assert.AreEqual('', Fix(InUnit(['  begin', '    try', '      Work;',
     '    finally', '    end', '    ;', '  end;']), R));
-  Assert.AreEqual(R_EFB_END_TAIL, R);
+  Assert.AreEqual(_(R_EFB_END_TAIL), R);
 end;
 
 procedure TTestRdxEmptyFinallyFix.Refuse_IndentAndEmptyBody;
@@ -361,13 +362,13 @@ begin
   // Eine Randzeile im Rumpf liesse sich nicht gleich ausruecken.
   Assert.AreEqual('', Fix(InUnit(['  try', '    Work;', '// stray',
     '    More;', '  finally', '  end;']), R));
-  Assert.AreEqual(Format(R_EFB_INDENT, [BODY_LINE + 2]), R);
+  Assert.AreEqual(_(R_EFB_INDENT, [BODY_LINE + 2]), R);
   // Kein Rumpf, nur ein Kommentar: es bliebe nichts.
   Assert.AreEqual('', Fix(InUnit(['  try', '  finally', '  end;']), R));
-  Assert.AreEqual(R_EFB_EMPTY_BODY, R);
+  Assert.AreEqual(_(R_EFB_EMPTY_BODY), R);
   Assert.AreEqual('', Fix(InUnit(['  try', '    // nothing', '  finally',
     '  end;']), R));
-  Assert.AreEqual(R_EFB_EMPTY_BODY, R);
+  Assert.AreEqual(_(R_EFB_EMPTY_BODY), R);
 end;
 
 // ---- echter Detektor ----
@@ -423,7 +424,8 @@ begin
     // Ohne Zeilen: kein Puffer.
     O := TRdxFixTable.FixFor(nil, nil, F, nil);
     Assert.IsFalse(O.Enabled);
-    Assert.AreEqual(R_NO_FILE, O.Reason);
+    // MapFix (uRdxFixRunner): seit E29 (G6) MsgNoFileOpen, nicht R_NO_FILE.
+    Assert.AreEqual(MsgNoFileOpen, O.Reason);
     SL.Text := S;
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
     Assert.IsTrue(O.Enabled, O.Reason);

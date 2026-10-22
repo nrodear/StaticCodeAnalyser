@@ -89,6 +89,11 @@ type
     Proven     : Integer;          // davon beweisbar (String oder Ganzzahl mit %d/%u)
     Numeric    : Integer;          // davon als %d/%u statt IntToStr/ToString
     ByCompiler : TArray<string>;   // Operanden, fuer die nur das Kompilat buergt
+    // True, wenn die Kette keinen Operanden traegt (nur Literale) - der
+    // Grund ist dann uRdxText.MsgNoOperandInChain. Wer darauf verzweigt
+    // (uRdxRecipeRunner.BuildReasonOf), fragt diese Kennung, nie den Text:
+    // der ist in en/fr ein anderer (Entscheid E29, Gruppe G6).
+    NoOperand  : Boolean;
   end;
 
   // Wo die Terme fuer BuildFormatCall in der Kette stehen: am Anfang - dort
@@ -153,7 +158,8 @@ type
     // Gesperrt auch ein Zeiger am Kettenanfang (Review FB R2-04; nicht bei
     // AStart = csBehindTarget) und das Selbst-Anhaengen an ein Ziel vom Typ
     // Variant/OleVariant (dort verkettet '+' nicht). Der Formatstring geht
-    // durch SplitLongLiteral (kein Literal ueber 255 Elemente).
+    // durch SplitLongLiteral (kein Literal ueber 255 Elemente); "kein
+    // Operand" traegt ABuild.NoOperand.
     class function BuildFormatCall(const AParts: TRdxParts;
       out ABuild: TRdxFormatBuild; const ATargetType: string = '';
       AStart: TRdxChainStart = csChainHead): Boolean; overload; static;
@@ -415,8 +421,9 @@ implementation
 
 uses
   System.SysUtils,
-  uRdxCodeMap;   // IsIdentStart, IsIdentChar (Zeichen > #127 wie der Core),
+  uRdxCodeMap,   // IsIdentStart, IsIdentChar (Zeichen > #127 wie der Core),
                  // CharAt, JoinStrings, Surrogat-Haelften
+  uRdxText;      // _, MsgLiteralUnreadable, MsgNoOperandInChain (E29)
 
 const
   // Paar-Regel von LooksLikeSql (Review 2026-10-07, Nit 6): je Verb die
@@ -1667,14 +1674,17 @@ end;
 // Typname eines ovAnsi-Operanden fuer Grund und AnsiChar-Ausnahme: der
 // deklarierte Typ, sonst der Cast-Kopf ('AnsiString(A)' -> 'ansistring',
 // 'AnsiChar(b)' -> 'ansichar'), sonst - RTL-Aufruf mit Ansi-Ergebnis wie
-// UTF8Encode(S) - 'Ansi-Ergebnis' (Review 2026-10-07, Minor 12).
+// UTF8Encode(S) - '' (Review 2026-10-07, Minor 12). Nur Code-Namen: bis
+// E29 stand hier der Text 'Ansi-Ergebnis' als Typname und ging verkettet
+// in den Grund; jetzt waehlt OperandRejectReason fuer '' einen eigenen
+// Satz (der Vergleich mit 'ansichar' bleibt auf dem Code-Namen).
 function AnsiTypeOf(const APart: TRdxPart; const ATxt: string): string;
 begin
   if InList(APart.Resolved, NON_UNICODE_STRING_TYPES) then
     Exit(APart.Resolved);
   Result := CallHeadOf(ATxt);
   if not InList(Result, NON_UNICODE_STRING_TYPES) then
-    Result := 'Ansi-Ergebnis';
+    Result := '';
 end;
 
 // True fuer einen Operanden, den FormatBuf ohne Laenge anhaengt: Char/
@@ -1691,31 +1701,42 @@ begin
 end;
 
 // Grund, mit dem ein Operand die Umformung sperrt - fuer jedes Urteil
-// ausser ovString und ovByCompiler. ATxt ist der Operand wie im Aufruf.
+// ausser ovString und ovByCompiler. ATxt ist der Operand wie im Aufruf;
+// er steht als Format-Argument im Satz (ein '%' darin bleibt Text). Je
+// Form ein ganzer Satz (E29): mit und ohne deklarierten Typ, Typname oder
+// RTL-Aufruf mit Ansi-Ergebnis.
 function OperandRejectReason(AVerdict: TRdxOperandVerdict;
   const APart: TRdxPart; const ATxt: string): string;
+var
+  AnsiType : string;
 begin
   case AVerdict of
     ovNonString:
       begin
-        Result := 'Operand ''' + ATxt + ''': kein String';
         if APart.Resolved <> '' then
-          Result := Result + ' (' + APart.Resolved + ')';
+          Result := _('operand ''%s'': not a string (%s)',
+            [ATxt, APart.Resolved])
+        else
+          Result := _('operand ''%s'': not a string', [ATxt]);
       end;
     ovAnsi:
       begin
-        if AnsiTypeOf(APart, ATxt) = 'ansichar' then
-          Result := 'Operand ''' + ATxt
-            + ''': ansichar - Format wandelt ohne Codepage'
+        AnsiType := AnsiTypeOf(APart, ATxt);
+        if AnsiType = 'ansichar' then
+          Result := _('operand ''%s'': ansichar - Format converts without a '
+            + 'code page', [ATxt])
+        else if AnsiType = '' then
+          Result := _('operand ''%s'': Ansi result - Format returns '
+            + 'UnicodeString', [ATxt])
         else
-          Result := 'Operand ''' + ATxt + ''': '
-            + AnsiTypeOf(APart, ATxt) + ' - Format liefert UnicodeString';
+          Result := _('operand ''%s'': %s - Format returns UnicodeString',
+            [ATxt, AnsiType]);
       end;
     ovVariantRisk:
-      Result := 'Operand ''' + ATxt
-        + ''': Variant moeglich (Null/Zahl: Original wirft, Format nicht)';
+      Result := _('operand ''%s'': Variant possible (Null/number: the '
+        + 'original raises, Format does not)', [ATxt]);
   else
-    Result := 'Operand ''' + ATxt + ''': kein einfacher Operand';
+    Result := _('operand ''%s'': not a simple operand', [ATxt]);
   end;
 end;
 
@@ -1741,7 +1762,7 @@ begin
   Result := '';
   if not TRdxRecipes.DecodeLiteral(APart.Text, Value)
      or not AppendLiteralSource(AScan.Fmt, AScan.InQuote, APart.Text) then
-    Exit('Literal nicht lesbar: ' + TRdxRecipes.CollapseCode(APart.Text));
+    Exit(MsgLiteralUnreadable(TRdxRecipes.CollapseCode(APart.Text)));
   AddText(AScan.Literals, Value);
 end;
 
@@ -1808,7 +1829,7 @@ begin
   Result := '';
   Txt := TRdxRecipes.CollapseCode(APart.Text);
   if Pos('format(', LowerCase(Txt)) > 0 then
-    Exit('Kette enthaelt schon Format()');
+    Exit(_('the chain already contains Format()'));
   if TRdxRecipes.NumericArgument(APart, Arg, Spec) then
   begin
     AppendQuoted(AScan.Fmt, AScan.InQuote, Spec);
@@ -1828,17 +1849,22 @@ end;
 // Die Kette als Ganzes: mindestens ein Operand und ein Literal (ohne
 // Literal gibt es keinen Formatstring, nur '%s%s' - keine Verbesserung;
 // der Detektor verlangt Literal UND Nicht-Literal), kein SQL. '' oder der
-// Grund.
+// Grund. Ohne Operand setzt sie die Kennung ABuild.NoOperand zum Grund
+// MsgNoOperandInChain - beide aus derselben Bedingung (E29, c_groups 2.6).
+// Gerufen erst, wenn jeder Term ohne Grund durchlief: bricht ein Term
+// vorher ab, bleibt die Kennung False, auch bei Operands = 0. ABuild.Reason
+// liest sie nicht (der Aufrufer weist ihr Ergebnis dorthin zu).
 function ChainReason(const AScan: TRdxFormatScan;
-  const ABuild: TRdxFormatBuild): string;
+  var ABuild: TRdxFormatBuild): string;
 begin
   Result := '';
-  if ABuild.Operands = 0 then
-    Exit('kein Operand in der Kette');
+  ABuild.NoOperand := ABuild.Operands = 0;
+  if ABuild.NoOperand then
+    Exit(MsgNoOperandInChain);
   if Length(AScan.Literals) = 0 then
-    Exit('kein Literal in der Kette');
+    Exit(_('no literal in the chain'));
   if TRdxRecipes.LooksLikeSql(JoinStrings(AScan.Literals, '')) then
-    Result := 'SQL-Text: Umformung gesperrt (SCA003)';
+    Result := _('SQL text: rewrite blocked (SCA003)');
 end;
 
 const
@@ -1906,8 +1932,9 @@ begin
   if (n < 2) or not IsPointerTerm(Terms[0])
      or (Terms[1].Role <> ROLE_OPERAND) or IsStringTerm(Terms[1]) then
     Exit;
-  Result := Format('Operand ''%s'': Zeiger am Kettenanfang - ist ''%s'' kein '
-    + 'String, rechnet Delphi ''%s + %s'' als Zeiger-Arithmetik, Format nicht',
+  Result := _('operand ''%s'': pointer at the start of the chain - if ''%s'' '
+    + 'is not a string, Delphi computes ''%s + %s'' as pointer arithmetic, '
+    + 'Format does not',
     [TRdxRecipes.CollapseCode(Terms[0].Text),
      TRdxRecipes.CollapseCode(Terms[1].Text),
      TRdxRecipes.CollapseCode(Terms[0].Text),
@@ -1936,9 +1963,9 @@ begin
   if (AStart = csBehindTarget)
      and ((ATargetType = 'variant') or (ATargetType = 'olevariant')) then
   begin
-    ABuild.Reason := 'Ziel ist ein Variant - hinter ''X +'' rechnet Delphi '
-      + 'Variant-Arithmetik statt zu verketten, das Kompilat buergt fuer '
-      + 'keinen Operanden';
+    ABuild.Reason := _('the target is a Variant - behind ''X +'' Delphi '
+      + 'computes Variant arithmetic instead of concatenating, the compiler '
+      + 'vouches for no operand');
     Exit;
   end;
   for i := 0 to High(AParts) do
@@ -1950,7 +1977,7 @@ begin
     else if AParts[i].Role = ROLE_OPERAND then
       ABuild.Reason := TakeOperand(AParts[i], Scan, ABuild)
     else
-      ABuild.Reason := 'kein reiner Term: ' + AParts[i].Role;
+      ABuild.Reason := _('not a plain term: %s', [AParts[i].Role]);
     if ABuild.Reason <> '' then Exit;
   end;
   ABuild.Reason := ChainReason(Scan, ABuild);

@@ -546,7 +546,7 @@ begin
   // Tabellenzeile: bedeutungsgleich (Changes: False), Hinweis der Zeile,
   // Menuetext ohne Platzhalter.
   Assert.IsFalse(O.ChangesBehavior);
-  Assert.IsTrue(Pos('rueckt eine Stufe aus', O.Hint) > 0, O.Hint);
+  Assert.IsTrue(Pos('ckt eine Stufe aus', O.Hint) > 0, O.Hint);
   Assert.AreEqual(_('Turn the last if into a guard clause with Exit'),
     TRdxFixTable.CaptionFor(fkDeepNesting, O));
 end;

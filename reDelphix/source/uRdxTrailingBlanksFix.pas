@@ -35,15 +35,18 @@ implementation
 
 uses
   System.SysUtils,
-  uRefactorInfo;       // TRefactorSpan.Make
+  uRefactorInfo,       // TRefactorSpan.Make
+  uRdxText;            // _(), MsgNoColumn, MsgMovedSuffix (E29)
 
 const
   SPAN_063 = 'sca063';
   KEY_FROM = 'from column ';
-  R_BLANKS_MOVED = 'am Zeilenende steht kein Leerraum an der gemeldeten '
-    + 'Stelle - Zeile verschoben? Datei neu pruefen';
-  R_BLANKS_STRING = 'der Leerraum steht in einem mehrzeiligen oder offenen '
-    + 'String - er ist Inhalt, die Hilfe loescht ihn nicht';
+  // Die Gruende als englische msgids (E29), uebersetzt mit _() aus
+  // uRdxText; Deutsch und Franzoesisch in i18n/de.po und i18n/fr.po. Das
+  // Ende ' - Zeile verschoben? ...' haengt MsgMovedSuffix an.
+  R_BLANKS_MOVED = 'no whitespace at the line end at the reported place';
+  R_BLANKS_STRING = 'the whitespace is inside a multi-line or unclosed '
+    + 'string - it is content, the help does not delete it';
 
 // Der Zahlenleser ist NumberAfterKey (uRdxCodeMap) - bis zur Folgewelle
 // des Wochen-Reviews (G09-30) eine Kopie von ColumnFromMessage.
@@ -65,7 +68,7 @@ begin
   Col := ColumnOf(AMessage);
   if Col <= 0 then
   begin
-    AReason := R_NO_COLUMN;
+    AReason := MsgNoColumn;
     Exit;
   end;
   L := AMap.Raw(ALine);
@@ -73,20 +76,20 @@ begin
   // zum Zeilenende reichen.
   if (Col > Length(L)) or ((Col > 1) and IsBlank(L[Col - 1])) then
   begin
-    AReason := R_BLANKS_MOVED;
+    AReason := MsgMovedSuffix(_(R_BLANKS_MOVED));
     Exit;
   end;
   for i := Col to Length(L) do
     if not IsBlank(L[i]) then
     begin
-      AReason := R_BLANKS_MOVED;
+      AReason := MsgMovedSuffix(_(R_BLANKS_MOVED));
       Exit;
     end;
   // String-Inhalt (mehrzeilig oder nicht geschlossen) bleibt unberuehrt.
   for i := Col to Length(L) do
     if AMap.ClassAt(ALine, i) = 's' then
     begin
-      AReason := R_BLANKS_STRING;
+      AReason := _(R_BLANKS_STRING);
       Exit;
     end;
   AEdit.Span := TRefactorSpan.Make(SPAN_063, ALine, Col, ALine,

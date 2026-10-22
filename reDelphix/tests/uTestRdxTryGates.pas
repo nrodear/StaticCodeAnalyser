@@ -330,8 +330,12 @@ begin
     'raise TObject(X) in Zeile 8');
   AssertRefused(Around(['if C then', '  raise X at ReturnAddress;']),
     'raise X at ReturnAddress');
+  // 'uebergeben' traegt in der de.po einen echten Umlaut (Charge G3) -
+  // geprueft werden der Aufruf und das umlautfreie Ende.
   AssertRefused(Around(['if C then', '  Exception.RaiseOuterException(X);']),
-    'an RaiseOuterException uebergeben');
+    'an RaiseOuterException');
+  AssertRefused(Around(['if C then', '  Exception.RaiseOuterException(X);']),
+    'das Objekt ist die Ausnahme');
   // Ein Member von X im Ausdruck ist keine Weitergabe.
   AssertOffered(Around(['if C then', '  raise EFoo.Create(X.Name);']));
 end;
@@ -540,9 +544,11 @@ begin
   Assert.IsTrue(Pos('Exit in Zeile 7 - mit finally', R) > 0, R);
   AssertRefused(Around(['if Keep(X) then', '  System.Exit;']),
     'Exit in Zeile 8, und X wird in Zeile 7 weitergegeben');
+  // 'verlaesst' traegt in der de.po einen echten Umlaut (Charge G3) -
+  // geprueft wird das umlautfreie Teilstueck mit Sprung und Zeile.
   AssertRefusedAt(InProc(['  for I := 0 to 9 do', '  begin',
     '    X := TFoo.Create;', '    if Done then', '      System.Break;',
-    '    X.Free;', '  end;']), 8, 'break in Zeile 10 verlaesst den Bereich');
+    '    X.Free;', '  end;']), 8, 'break in Zeile 10');
   Assert.AreEqual(InProc(['  X := TFoo.Create;', '  try', '    if X.Empty then',
     '      System.Exit;', '    X.Run;', '  finally', '    X.Free;', '  end;']),
     Fix(Around(['if X.Empty then', '  System.Exit;', 'X.Run;']), R), R);
@@ -614,8 +620,11 @@ begin
   PlanOf(TRdxTryFixes.UnpairedLock, InProc(['  Locks[%1].Lock; Locks[%1].Lock;',
     '  DoWork;', '  Locks[%1].UnLock;']), 6,
     Format(MSG_153, ['Locks[%1].Lock']), R);
-  Assert.IsTrue(Pos('Zeile 6 traegt 2 Sperren "Locks[%1].Lock" - mehrdeutig',
-    R) > 0, R);
+  // 'traegt' im Rahmen von uRdxCodeMap.OneTokenReason bekommt seit der
+  // Umstellung E29 (Gruppe G5) in de.po einen echten Umlaut - die Quelle
+  // bleibt ASCII: Anfang und Ende ohne das Wort.
+  Assert.IsTrue(Pos('Zeile 6 tr', R) > 0, R);
+  Assert.IsTrue(Pos(' 2 Sperren "Locks[%1].Lock" - mehrdeutig', R) > 0, R);
 end;
 
 // Huellen beliebig tief (Nachpruefung R5-04, Nit; gegen d840f1e5 rot): bis

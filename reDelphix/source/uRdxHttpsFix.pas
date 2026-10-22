@@ -49,7 +49,8 @@ implementation
 
 uses
   System.SysUtils,
-  uRefactorInfo;     // TRefactorSpan.Make
+  uRefactorInfo,     // TRefactorSpan.Make
+  uRdxText;          // _(), MsgMovedSuffix, MsgLineStartsInCommentOrString (E29)
 
 const
   SPAN_115     = 'sca115';
@@ -69,23 +70,26 @@ const
   NAMESPACE_MARKERS: array[0..3] of string = ('xmlns', 'namespace',
     'schema', '/ns/');
   NOT_PLAIN_MARKERS: array[0..2] of string = ('@', ':', '[');
-  R_HTTPS_NO_URL    = 'keine "http://"-Adresse in der Meldung';
-  R_HTTPS_MOVED     = 'die Adresse steht nicht als eigenes Literal an der '
-    + 'gemeldeten Stelle - Zeile verschoben? Datei neu pruefen';
-  R_HTTPS_AMBIGUOUS = 'die Adresse steht mehrfach auf der Zeile - nicht '
-    + 'eindeutig';
-  R_HTTPS_INSIDE    = 'die Zeile beginnt in einem Kommentar oder String';
-  R_HTTPS_NO_HOST   = 'kein Rechnername in der Adresse';
-  R_HTTPS_USERINFO  = 'die Adresse enthaelt Zugangsdaten, einen Port oder '
-    + 'eine IPv6-Adresse - https lief dort nicht ohne Weiteres';
-  R_HTTPS_ODD_HOST  = 'der Rechnername ist kein fester Name (Platzhalter '
-    + 'oder Sonderzeichen)';
-  R_HTTPS_IP        = 'eine IP-Adresse hat selten ein passendes Zertifikat';
-  R_HTTPS_LOCAL     = 'ein lokaler oder interner Rechner - kein sicheres '
-    + 'Fernziel fuer https';
-  R_HTTPS_NAMESPACE = 'Namespace- oder Schema-Kennzeichen in der Adresse '
-    + 'oder davor - koennte eine Kennung statt eines Netzaufrufs sein, aus '
-    + 'Vorsicht keine Hilfe';
+  // Die Gruende als englische msgids (E29), uebersetzt mit _() aus uRdxText;
+  // Deutsch und Franzoesisch in i18n/de.po und i18n/fr.po. Das Ende
+  // ' - Zeile verschoben? ...' haengt MsgMovedSuffix an, 'die Zeile beginnt
+  // in einem Kommentar oder String' ist MsgLineStartsInCommentOrString.
+  R_HTTPS_NO_URL    = 'no "http://" address in the message';
+  R_HTTPS_MOVED     = 'the address is not a literal of its own at the '
+    + 'reported place';
+  R_HTTPS_AMBIGUOUS = 'the address appears more than once on the line - '
+    + 'ambiguous';
+  R_HTTPS_NO_HOST   = 'no host name in the address';
+  R_HTTPS_USERINFO  = 'the address contains credentials, a port or an IPv6 '
+    + 'address - https would not simply work there';
+  R_HTTPS_ODD_HOST  = 'the host name is not a fixed name (placeholder or '
+    + 'special characters)';
+  R_HTTPS_IP        = 'an IP address rarely has a matching certificate';
+  R_HTTPS_LOCAL     = 'a local or internal host - not a safe remote target '
+    + 'for https';
+  R_HTTPS_NAMESPACE = 'namespace or schema marker in or before the address - '
+    + 'could be an identifier rather than a network call, no help out of '
+    + 'caution';
 
 type
   THttpsKind = (hkOk, hkNoHost, hkUserInfo, hkOdd, hkIp, hkLocal, hkNamespace);
@@ -224,14 +228,14 @@ class function TRdxHttpsFix.UrlReason(const AUrl: string): string;
 begin
   Result := '';
   if not AUrl.StartsWith(SCHEME_HTTP) then
-    Exit(R_HTTPS_NO_URL);
+    Exit(_(R_HTTPS_NO_URL));
   case ClassifyUrl(AUrl) of
-    hkNoHost:    Result := R_HTTPS_NO_HOST;
-    hkUserInfo:  Result := R_HTTPS_USERINFO;
-    hkOdd:       Result := R_HTTPS_ODD_HOST;
-    hkIp:        Result := R_HTTPS_IP;
-    hkLocal:     Result := R_HTTPS_LOCAL;
-    hkNamespace: Result := R_HTTPS_NAMESPACE;
+    hkNoHost:    Result := _(R_HTTPS_NO_HOST);
+    hkUserInfo:  Result := _(R_HTTPS_USERINFO);
+    hkOdd:       Result := _(R_HTTPS_ODD_HOST);
+    hkIp:        Result := _(R_HTTPS_IP);
+    hkLocal:     Result := _(R_HTTPS_LOCAL);
+    hkNamespace: Result := _(R_HTTPS_NAMESPACE);
   end;
 end;
 
@@ -248,17 +252,17 @@ begin
   if AReason <> '' then Exit;
   if AMap.StartsInside(ALine) then
   begin
-    AReason := R_HTTPS_INSIDE;
+    AReason := MsgLineStartsInCommentOrString;
     Exit;
   end;
   L := AMap.Raw(ALine);
   N := CountLiterals(AMap, ALine, L, Url, P);
   if N = 0 then
-    AReason := R_HTTPS_MOVED
+    AReason := MsgMovedSuffix(_(R_HTTPS_MOVED))
   else if N > 1 then
-    AReason := R_HTTPS_AMBIGUOUS
+    AReason := _(R_HTTPS_AMBIGUOUS)
   else if HasAny(LowerCase(Copy(L, 1, P - 1)), NAMESPACE_MARKERS) then
-    AReason := R_HTTPS_NAMESPACE;
+    AReason := _(R_HTTPS_NAMESPACE);
   if AReason <> '' then Exit;
   AEdit.Span := TRefactorSpan.Make(SPAN_115, ALine, P + 1, ALine,
     P + 1 + Length(SCHEME_HTTP));

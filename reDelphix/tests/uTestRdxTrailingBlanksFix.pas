@@ -46,6 +46,7 @@ uses
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uTrailingWhitespace,
   uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner,
   uRdxFixTable, uRdxTrailingBlanksFix,
+  uRdxText,             // MsgNoColumn (E29)
   uTestRdxTextKit,      // Join, Apply
   uTestRdxDetectorKit;  // DetectSource, TSeen
 
@@ -265,7 +266,7 @@ var
   R : string;
 begin
   Assert.AreEqual('', Fix(InUnit(['  DoStuff;   ']), 6, 'Trailing blanks', R));
-  Assert.AreEqual(R_NO_COLUMN, R);
+  Assert.AreEqual(MsgNoColumn, R);
 end;
 
 procedure TTestRdxTrailingBlanksFix.NoFile_NoHelp;

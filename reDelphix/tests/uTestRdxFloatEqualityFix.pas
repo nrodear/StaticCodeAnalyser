@@ -69,7 +69,7 @@ uses
   {$IFNDEF FPC}
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uEngineApi, uRuleCatalog, uFloatEquality,
-  uRdxRecipeRunner,      // TRdxFixOutcome, R_NO_FILE, UsesNamesOf
+  uRdxRecipeRunner,      // TRdxFixOutcome, UsesNamesOf
   uRdxFixTable,          // TRdxFixTable.FixFor
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, FixAllWith
   {$ENDIF}
@@ -438,10 +438,11 @@ end;
 
 const
   // Der Hinweis woertlich (R_FLOATEQ_HINT ist tabellen-intern in
-  // uRdxFixTable; der Adapter PlanFloatEquality setzt ihn vor AppendUses).
+  // uRdxFixTable; der Adapter PlanFloatEquality setzt ihn vor AppendUses)
+  // - seit Charge G7 die deutsche Fassung aus de.po, mit echtem Umlaut.
   R_FLOATEQ_HINT = 'vergleicht jetzt mit Toleranz (Standard-Epsilon von '
     + 'System.Math) statt exakt - ein gewollt exakter Vergleich (Schalter- '
-    + 'oder Sentinelwert) aendert damit seine Bedeutung';
+    + 'oder Sentinelwert) '#$00E4'ndert damit seine Bedeutung';
   // Wie Wrap, mit 'uses System.Math;' - der Rumpf beginnt auf Zeile 7.
   DLINE = 7;
 
@@ -687,7 +688,7 @@ begin
   Assert.AreEqual<Integer>(1, Length(Seen));
   O := PlanSeen(Src, Seen[0], fcHigh, False);
   Assert.IsFalse(O.Enabled);
-  Assert.AreEqual(R_NO_FILE, O.Reason);
+  Assert.AreEqual(MsgNoFileOpen, O.Reason);
   Assert.AreEqual(CALL_SAME_VALUE, O.Name, 'Name auch ohne Datei');
 end;
 

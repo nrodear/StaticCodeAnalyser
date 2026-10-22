@@ -164,6 +164,7 @@ uses
   uUnsortedUses,   // SCA142 auf dem Ergebnis einer uses-Ergaenzung
   uEngineApi, uRefactorInfo, uRdxRecipes, uRdxRecipeRunner,
   uRdxBufferMath,   // TRdxEdit
+  uRdxText,         // SetRdxLanguageOverride (SelfAppend_OnlyLiterals_Disabled)
   uTestRdxTextKit;  // Apply (der Weg des Editors), LineOf, WriteText
 
 const
@@ -1128,13 +1129,25 @@ begin
 end;
 
 procedure TTestRdxSca044.SelfAppend_OnlyLiterals_Disabled;
+const
+  SELF_APPEND = '  Text := Text + ''a'' + #13#10 + ''b'' + ''c'';';
 var
-  O : TRdxFormatOutcome;
+  O   : TRdxFormatOutcome;
+  Old : string;
 begin
   // Hinter 'Text +' nur Literale: Format haette kein Argument.
-  Assert.IsFalse(RunRecipe(UnitWith(
-    '  Text := Text + ''a'' + #13#10 + ''b'' + ''c'';'), 'Text := Text', O));
+  Assert.IsFalse(RunRecipe(UnitWith(SELF_APPEND), 'Text := Text', O));
   Assert.IsTrue(Pos('nur Literale', O.Reason) > 0, O.Reason);
+  // Dasselbe in en (E29, c_groups 2.6): BuildReasonOf fragt die Kennung
+  // NoOperand - bis dahin Pos('kein Operand', Grund), in en still falsch.
+  Old := RdxLanguageOverride;
+  SetRdxLanguageOverride('en');
+  try
+    Assert.IsFalse(RunRecipe(UnitWith(SELF_APPEND), 'Text := Text', O));
+    Assert.AreEqual('there are only literals behind Text', O.Reason);
+  finally
+    SetRdxLanguageOverride(Old);
+  end;
 end;
 
 procedure TTestRdxSca044.SelfAppend_PointerCastFirst_Enabled;
@@ -1203,7 +1216,7 @@ begin
     'Obj.SQL.Text', 'assign-or-call');
   Assert.IsTrue(R.Described, R.Why);
   Assert.IsFalse(R.Built, R.Template);
-  Assert.IsTrue(Pos('Namen pruefen/Whitelist', R.Reason) > 0, R.Reason);
+  Assert.IsTrue(Pos('nicht parametrisieren', R.Reason) > 0, R.Reason); // umlautfrei (de.po, G8)
 end;
 
 procedure TTestRdxSca044.Sql_TwoCallsOnLine_Ambiguous;
@@ -1284,7 +1297,7 @@ begin
   Assert.IsTrue(R.IsCall, 'Aufruf-Knoten');
   Assert.IsFalse(R.Built, R.Template);
   Assert.IsTrue(Pos('DDL/DCL (CREATE ...)', R.Reason) > 0, R.Reason);
-  Assert.IsTrue(Pos('Namen pruefen/Whitelist', R.Reason) > 0, R.Reason);
+  Assert.IsTrue(Pos('nicht parametrisieren', R.Reason) > 0, R.Reason); // umlautfrei (de.po, G8)
 end;
 
 procedure TTestRdxSca044.Sql_FireDacExecSql_OverloadWithConstant;
@@ -1376,7 +1389,10 @@ begin
   Assert.AreEqual<Integer>(1, FindingsOf(Src, fkConcatToFormat, Msg));
   Assert.IsFalse(DescribeForFinding(UnitWith('  Text := Marker + ''a'' + Tag;'),
     fkConcatToFormat, Msg, 'Text := Marker', Why));
-  Assert.IsTrue(Pos('veraendert', Why) > 0, Why);
+  // Der Grund 'Zeile veraendert?' (MismatchOf, '+'-Zahl). Umlautfreies
+  // Teilstueck: 'veraendert' steht in de.po mit echtem Umlaut (E29, Gruppe
+  // G6); "x '+', der Fund nennt" traegt nur dieser Grund.
+  Assert.IsTrue(Pos('x ''+'', der Fund nennt', Why) > 0, Why);
 end;
 
 procedure TTestRdxSca044.Describe_Sca003Finding_CallTarget;

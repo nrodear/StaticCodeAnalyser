@@ -50,6 +50,7 @@ uses
   uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner,
   uRdxFixTable, uRdxKeywordCaseFix,
   uTestRdxDetectorKit,   // TSeen, DetectSource
+  uRdxText,              // MsgNoFileOpen (MapFix, E29)
   uTestRdxTextKit;       // Join, Apply
 
 const
@@ -242,12 +243,12 @@ end;
 
 procedure TTestRdxKeywordCaseFix.Comment_And_String_Refused;
 begin
-  CheckRefused(InBody(['  S := ''Begin'';']), 6, 'Begin', KC_MOVED);
-  CheckRefused(InBody(['  // Begin']), 6, 'Begin', KC_MOVED);
-  CheckRefused(InBody(['  { End }']), 6, 'End', KC_MOVED);
-  CheckRefused(InBody(['  (* End *)']), 6, 'End', KC_MOVED);
+  CheckRefused(InBody(['  S := ''Begin'';']), 6, 'Begin', MsgMovedSuffix(_(KC_MOVED)));
+  CheckRefused(InBody(['  // Begin']), 6, 'Begin', MsgMovedSuffix(_(KC_MOVED)));
+  CheckRefused(InBody(['  { End }']), 6, 'End', MsgMovedSuffix(_(KC_MOVED)));
+  CheckRefused(InBody(['  (* End *)']), 6, 'End', MsgMovedSuffix(_(KC_MOVED)));
   // Zeile mitten in einem Block-Kommentar.
-  CheckRefused(InBody(['  {', '  Begin', '  }']), 7, 'Begin', KC_MOVED);
+  CheckRefused(InBody(['  {', '  Begin', '  }']), 7, 'Begin', MsgMovedSuffix(_(KC_MOVED)));
 end;
 
 procedure TTestRdxKeywordCaseFix.Moved_Or_Part_Of_Identifier_Refused;
@@ -255,36 +256,36 @@ var
   Reason : string;
 begin
   // Teil eines Bezeichners.
-  CheckRefused(InBody(['Beginner := 1;']), 6, 'Begin', KC_MOVED);
-  CheckRefused(InBody(['  MyEnd := 1;']), 6, 'End', KC_MOVED);
-  CheckRefused(InBody(['  EndX := 1;']), 6, 'End', KC_MOVED);
+  CheckRefused(InBody(['Beginner := 1;']), 6, 'Begin', MsgMovedSuffix(_(KC_MOVED)));
+  CheckRefused(InBody(['  MyEnd := 1;']), 6, 'End', MsgMovedSuffix(_(KC_MOVED)));
+  CheckRefused(InBody(['  EndX := 1;']), 6, 'End', MsgMovedSuffix(_(KC_MOVED)));
   // Spalte verschoben, Schreibweise anders, Zeile gibt es nicht.
   Assert.AreEqual('', TryFix(InBody(['  If X then Y;']), 6, 'If', 5, Reason));
-  Assert.AreEqual(KC_MOVED, Reason);
+  Assert.AreEqual(MsgMovedSuffix(_(KC_MOVED)), Reason);
   Assert.AreEqual('', TryFix(InBody(['  If X then Y;']), 6, 'IF', 3, Reason));
-  Assert.AreEqual(KC_MOVED, Reason);
+  Assert.AreEqual(MsgMovedSuffix(_(KC_MOVED)), Reason);
   Assert.AreEqual('', TryFix(InBody(['  If X then Y;']), 99, 'If', 3, Reason));
-  Assert.AreEqual(KC_MOVED, Reason);
+  Assert.AreEqual(MsgMovedSuffix(_(KC_MOVED)), Reason);
   // Schon klein; Meldung ohne Spalte; Meldung ohne Wort.
   Assert.AreEqual('', TryFix(InBody(['  if X then Y;']), 6, 'if', 3, Reason));
-  Assert.AreEqual(KC_LOWER, Reason);
+  Assert.AreEqual(_(KC_LOWER), Reason);
   Assert.AreEqual('', TryFixMsg(InBody(['  If X then Y;']), 6,
     'Keyword "If" should be lowercase.', Reason));
-  Assert.AreEqual(KC_NO_WORD, Reason);
+  Assert.AreEqual(_(KC_NO_WORD), Reason);
   Assert.AreEqual('', TryFixMsg(InBody(['  If X then Y;']), 6,
     'at column 3', Reason));
-  Assert.AreEqual(KC_NO_WORD, Reason);
+  Assert.AreEqual(_(KC_NO_WORD), Reason);
 end;
 
 procedure TTestRdxKeywordCaseFix.Member_Escape_NamedArgument_Refused;
 begin
-  CheckRefused(InBody(['  Foo.End := 1;']), 6, 'End', KC_IDENT);
-  CheckRefused(InBody(['  Foo. End := 1;']), 6, 'End', KC_IDENT);
-  CheckRefused(InBody(['  X := Y.Type;']), 6, 'Type', KC_IDENT);
-  CheckRefused(InBody(['  &Begin := 1;']), 6, 'Begin', KC_IDENT);
-  CheckRefused(InBody(['  @@End:']), 6, 'End', KC_IDENT);
+  CheckRefused(InBody(['  Foo.End := 1;']), 6, 'End', _(KC_IDENT));
+  CheckRefused(InBody(['  Foo. End := 1;']), 6, 'End', _(KC_IDENT));
+  CheckRefused(InBody(['  X := Y.Type;']), 6, 'Type', _(KC_IDENT));
+  CheckRefused(InBody(['  &Begin := 1;']), 6, 'Begin', _(KC_IDENT));
+  CheckRefused(InBody(['  @@End:']), 6, 'End', _(KC_IDENT));
   CheckRefused(InBody(['  R.Range(Start := 0, End := 1);']), 6, 'End',
-    KC_IDENT);
+    _(KC_IDENT));
 end;
 
 procedure TTestRdxKeywordCaseFix.Context_Words_Refused;
@@ -292,11 +293,11 @@ var
   W : string;
 begin
   CheckRefused(InBody(['  On E: Exception do Y;']), 6, 'On',
-    Format(KC_CONTEXT, ['On']));
+    _(KC_CONTEXT, ['On']));
   CheckRefused(InBody(['  X := Contains(Y);']), 6, 'Contains',
-    Format(KC_CONTEXT, ['Contains']));
+    _(KC_CONTEXT, ['Contains']));
   for W in ['Out', 'Requires', 'Implements', 'Absolute'] do
-    CheckRefused(InBody(['  ' + W + ' Y;']), 6, W, Format(KC_CONTEXT, [W]));
+    CheckRefused(InBody(['  ' + W + ' Y;']), 6, W, _(KC_CONTEXT, [W]));
 end;
 
 { ---- Sichtbarkeit, Direktiven, Modifikatoren ---- }
@@ -325,13 +326,13 @@ begin
   // Ein Feld heisst Public: dahinter steht ':'.
   CheckRefused(Join(['unit u;', 'interface', 'type', '  TFoo = class',
     '    Public: Integer;', '  end;', 'implementation', 'end.']), 5,
-    'Public', Format(KC_CONTEXT, ['Public']));
+    'Public', _(KC_CONTEXT, ['Public']));
   // Als Anweisung und als Parametername.
   CheckRefused(InBody(['  Private;']), 6, 'Private',
-    Format(KC_CONTEXT, ['Private']));
+    _(KC_CONTEXT, ['Private']));
   CheckRefused(Join(['unit u;', 'interface', 'implementation',
     'procedure Q(Private: Integer);', 'begin', 'end;', 'end.']), 4,
-    'Private', Format(KC_CONTEXT, ['Private']));
+    'Private', _(KC_CONTEXT, ['Private']));
 end;
 
 const
@@ -356,12 +357,12 @@ procedure TTestRdxKeywordCaseFix.Directives_As_Statement_Refused;
 begin
   // Ein Aufruf 'Register;' im Rumpf ist keine Direktive.
   CheckRefused(InBody(['  Foo;', '  Register;']), 7, 'Register',
-    Format(KC_CONTEXT, ['Register']));
+    _(KC_CONTEXT, ['Register']));
   CheckRefused(InBody(['  Override;']), 6, 'Override',
-    Format(KC_CONTEXT, ['Override']));
+    _(KC_CONTEXT, ['Override']));
   CheckRefused(Join(['unit u;', 'interface', 'implementation', 'var',
     '  Virtual: Integer;', 'end.']), 5, 'Virtual',
-    Format(KC_CONTEXT, ['Virtual']));
+    _(KC_CONTEXT, ['Virtual']));
 end;
 
 procedure TTestRdxKeywordCaseFix.Directives_FieldAfterProcType_Refused;
@@ -375,8 +376,8 @@ begin
     '    OnDone: procedure of object;', '    Forward: Boolean;',
     '    Cb: procedure; Register: Integer;', '  end;', 'implementation',
     'end.']);
-  CheckRefused(Src, 6, 'Forward', Format(KC_CONTEXT, ['Forward']));
-  CheckRefused(Src, 7, 'Register', Format(KC_CONTEXT, ['Register']));
+  CheckRefused(Src, 6, 'Forward', _(KC_CONTEXT, ['Forward']));
+  CheckRefused(Src, 7, 'Register', _(KC_CONTEXT, ['Register']));
 end;
 
 procedure TTestRdxKeywordCaseFix.Operator_And_Strict;
@@ -387,7 +388,7 @@ begin
     'implementation', 'end.']), 5, 'Operator');
   // 'Strict' ausserhalb eines Klassenkoerpers ist ein Bezeichner.
   CheckRefused(InBody(['  X := Strict;']), 6, 'Strict',
-    Format(KC_CONTEXT, ['Strict']));
+    _(KC_CONTEXT, ['Strict']));
 end;
 
 procedure TTestRdxKeywordCaseFix.Class_Modifiers;
@@ -434,7 +435,7 @@ begin
   Seen.Variant := '';
   O := PlanOf(InBody(['  Foo.End := 1;']), Seen);
   Assert.IsFalse(O.Enabled);
-  Assert.AreEqual(KC_IDENT, O.Reason);
+  Assert.AreEqual(_(KC_IDENT), O.Reason);
   Assert.AreEqual<Integer>(0, Integer(Length(O.Edits)));
   Assert.AreEqual('End', O.Name);
   // Ohne Zeilen: keine Datei.
@@ -446,7 +447,8 @@ begin
     Finding.Free;
   end;
   Assert.IsFalse(O.Enabled);
-  Assert.AreEqual(R_NO_FILE, O.Reason);
+  // MapFix (uRdxFixRunner): seit E29 (G6) MsgNoFileOpen, nicht R_NO_FILE.
+  Assert.AreEqual(MsgNoFileOpen, O.Reason);
 end;
 
 { ---- echter Detektor ---- }

@@ -35,6 +35,13 @@ unit uRdxSimpleFixes;
 // Gewinn (kein haengender Zeiger nach einer Exception im Destruktor). Der
 // Nutzer erfaehrt ihn trotzdem: der Hint der Hilfe (uRdxFixRunner,
 // R_FREENIL_HINT) nennt die Reihenfolge.
+//
+// TEXTE (Entscheid E29, Charge G1): jeder Grund ist eine englische msgid,
+// uebersetzt mit uRdxText._ in die Sprache der SCA-Oberflaeche; die
+// deutsche Fassung (der bisherige Wortlaut) steht in i18n/de.po. Gemeinsame
+// Texte kommen aus uRdxText - "<Code> steht nicht mehr an der gemeldeten
+// Stelle" ist MsgNoLongerAtReportedPlace mit dem Code-Stueck ('Assert(',
+// 'X.Free;') als Argument. Code-Token und Typnamen stehen als %s im Satz.
 
 interface
 
@@ -248,7 +255,8 @@ implementation
 uses
   System.SysUtils, System.StrUtils,   // PosEx, ContainsText
   uRefactorInfo,
-  uRdxTypeProof;   // der Typbeweis (SCA066 DeclaresProperty, SCA126)
+  uRdxTypeProof,   // der Typbeweis (SCA066 DeclaresProperty, SCA126)
+  uRdxText;        // _(), Msg...: in die reDelphix-Sprache, nie uLocalization (E29)
 
 const
   MAX_REGION_LINES = 25;
@@ -258,24 +266,39 @@ const
   SPAN_074 = 'sca074';
   SPAN_087 = 'sca087';
   SPAN_139 = 'sca139';
-  R_ASSERT_MOVED  = 'Assert( steht nicht mehr an der gemeldeten Stelle';
+  // Die Code-Stuecke der Gruende "<Code> steht nicht mehr an der gemeldeten
+  // Stelle" (MsgNoLongerAtReportedPlace, uRdxText) - Quelltext, keine
+  // Uebersetzung.
+  CODE_ASSERT   = 'Assert(';
+  CODE_TOBJECT  = 'class(TObject)';
+  CODE_ARGS     = '()';
+  CODE_FREE     = 'X.Free;';
+  CODE_ASSIGNED = 'Assigned(X)';
   // Ein String-Literal traegt bis Delphi 11 hoechstens 255 Zeichen (E2056;
   // Delphi 12 erlaubt mehr) - die Unit kann auch aelter uebersetzt werden.
   // Die Quotes und verdoppelten Apostrophe zaehlen hier mit - vorsichtig.
   MAX_ASSERT_LITERAL = 255;
-  R_TOBJECT_MOVED = 'class(TObject) steht nicht mehr an der gemeldeten Stelle';
   NOT_PREFIX = 'not ';
   SPAN_066 = 'sca066';
   SPAN_072 = 'sca072';
   SPAN_084 = 'sca084';
-  // R_NO_COLUMN ('Spalte fehlt in der Meldung') steht seit Charge B2S-a
-  // einmal in uRdxCodeMap, neben ColumnFromMessage (Review R3-05).
-  R_ARGS_MOVED    = '() steht nicht mehr an der gemeldeten Stelle';
-  R_BOOL_MOVED    = 'der Vergleich mit True/False steht nicht mehr an der '
-    + 'gemeldeten Stelle';
-  R_IN_EXPRESSION = 'der Aufruf ist Teil eines Ausdrucks - ohne Klammern '
-    + 'koennte der Name als Zeiger gelten';
-  R_BINDS_OTHER   = '%s - der Vergleich bindet dort anders';
+  // R_NO_COLUMN ('Spalte fehlt in der Meldung') stand seit Charge B2S-a
+  // einmal in uRdxCodeMap, neben ColumnFromMessage (Review R3-05); die
+  // Planer hier nehmen seit Charge G1 MsgNoColumn (uRdxText, E29), die
+  // Konstante entfiel mit Gruppe G10.
+  // Eigener Satz statt MsgNoLongerAtReportedPlace: das Subjekt ist kein
+  // Code-Stueck.
+  R_BOOL_MOVED    = 'the comparison with True/False is no longer at the '
+    + 'reported place';
+  R_IN_EXPRESSION = 'the call is part of an expression - without parentheses '
+    + 'the name could be taken as a pointer';
+  // SCA072: der Vergleich bindet anders, je Seite ein ganzer Satz (bis
+  // Charge G1 ein Muster '%s - der Vergleich bindet dort anders' mit
+  // eingesetztem Satzteil).
+  R_BINDS_LEFT    = '"%s" is left of the name - the comparison binds '
+    + 'differently there';
+  R_BINDS_RIGHT   = 'the expression continues after %s - the comparison '
+    + 'binds differently there';
   // Token, nach denen eine Anweisung beginnt (SCA066; ':' hinter einer
   // case-Marke): STATEMENT_PREV aus uRdxCodeMap - bis Charge R8 eine
   // eigene Liste ohne initialization/finalization.
@@ -304,9 +327,8 @@ const
   // Wo eine Deklaration beginnt ('procedure Foo();', SCA066).
   DECL_STARTS: array[0..3] of string = ('procedure', 'function',
     'constructor', 'destructor');
-  R_FREE_MOVED    = 'X.Free; steht nicht mehr an der gemeldeten Stelle';
-  R_FREE_COMMENT  = 'Kommentar im Ausdruck X.Free;';
-  R_NOT_NIL_LINE  = 'die naechste Zeile ist nicht "X := nil;"';
+  R_FREE_COMMENT  = 'comment in the expression X.Free;';
+  R_NOT_NIL_LINE  = 'the next line is not "X := nil;"';
 
 // Steht ab S[AAt] das Wort AWord (Gross/Klein egal, rechts kein
 // Bezeichnerzeichen)?
@@ -364,7 +386,7 @@ begin
   L := AMap.Raw(ALine);
   if Col < 1 then
   begin
-    AReason := R_NO_COLUMN;
+    AReason := MsgNoColumn;
     Exit;
   end;
   // Auch eine Spalte hinter dem Zeilenende: die Zeile hat sich seit dem
@@ -373,12 +395,12 @@ begin
   // MatchClassTObject liest dort ein leeres Wort.
   if not MatchClassTObject(L, Col, CloseCol) then
   begin
-    AReason := R_TOBJECT_MOVED;
+    AReason := MsgNoLongerAtReportedPlace(CODE_TOBJECT);
     Exit;
   end;
   if AMap.HasNonCode(ALine, Col, CloseCol) then
   begin
-    AReason := 'class(TObject) liegt in einem Kommentar oder String';
+    AReason := _('class(TObject) is inside a comment or string');
     Exit;
   end;
   // Was folgt auf die Klammer? 'class' bleibt in der Schreibweise des Puffers.
@@ -396,7 +418,7 @@ begin
   begin
     // 'class(TObject) procedure P; end;' wuerde zu 'class procedure ...' -
     // liest sich als Klassenmethode. Lieber keine Hilfe.
-    AReason := 'Klassenrumpf beginnt in derselben Zeile';
+    AReason := _('the class body starts on the same line');
     Exit;
   end;
   AEdit.Span := TRefactorSpan.Make(SPAN_075, ALine, Col, ALine, CloseCol + 1);
@@ -486,26 +508,27 @@ begin
   if not MatchFreeCall(L, AColX, ANameEnd, AFreeEnd, SemiCol) then
   begin
     if FreeCallAroundComment(AMap, ALine, AColX) then
-      Exit(R_FREE_COMMENT);
-    Exit(R_FREE_MOVED);
+      Exit(_(R_FREE_COMMENT));
+    Exit(MsgNoLongerAtReportedPlace(CODE_FREE));
   end;
   // Hinter dem ';' nur noch Leerraum oder ein //-Kommentar: weiterer Code
   // liefe sonst NACH dem nil (Reihenfolge), ein {-Kommentar oder eine
   // Direktive koennte die nil-Zeile umschliessen.
   Rest := Trim(Copy(L, SemiCol + 1, MaxInt));
   if (Rest <> '') and (Copy(Rest, 1, 2) <> '//') then
-    Exit('hinter X.Free; steht noch etwas');
+    Exit(_('something else follows X.Free;'));
   // X.Free; als einzige Anweisung hinter then/else/do/case-Marke: dann
   // wuerde das bisher unbedingte ':= nil' bedingt.
   Prev := PrevToken(AMap, ALine, AColX);
   if (Prev.Low = 'then') or (Prev.Low = 'else') or (Prev.Low = 'do')
      or (Prev.Low = ':') then
-    Exit(Format('X.Free; ist die Anweisung hinter "%s" - das nil wuerde bedingt',
-      [Prev.Low]));
+    Exit(_('X.Free; is the statement after "%s" - the nil would become '
+      + 'conditional', [Prev.Low]));
   // 'if A then {$IFDEF LOG}Log;{$ENDIF} X.Free;': ohne LOG steht X.Free;
   // allein hinter 'then' - die Sperre oben saehe nur das ';' von Log.
   if DirectiveBetween(AMap, Prev, ALine, AColX) then
-    Result := 'Compiler-Direktive vor X.Free; - die Anweisung davor gilt nicht immer';
+    Result := _('compiler directive before X.Free; - the statement before '
+      + 'it does not always apply');
 end;
 
 // Die nil-Zeile N: genau 'X := nil;' (';' optional) mit X = AName.
@@ -515,16 +538,16 @@ var
   k : Integer;
 begin
   k := SkipBlanks(N, 1);
-  if not WordAt(N, k, AName) then Exit(R_NOT_NIL_LINE);
+  if not WordAt(N, k, AName) then Exit(_(R_NOT_NIL_LINE));
   k := SkipBlanks(N, k + Length(AName));
-  if Copy(N, k, 2) <> ':=' then Exit(R_NOT_NIL_LINE);
+  if Copy(N, k, 2) <> ':=' then Exit(_(R_NOT_NIL_LINE));
   k := SkipBlanks(N, k + 2);
-  if not WordAt(N, k, 'nil') then Exit(R_NOT_NIL_LINE);
+  if not WordAt(N, k, 'nil') then Exit(_(R_NOT_NIL_LINE));
   k := SkipBlanks(N, k + 3);
   if (k <= Length(N)) and (N[k] = ';') then
     k := SkipBlanks(N, k + 1);
   if k <= Length(N) then
-    Exit('hinter X := nil steht noch etwas');
+    Exit(_('something else follows X := nil'));
   Result := '';
 end;
 
@@ -542,7 +565,7 @@ begin
   // Zeile stehen (in einer Unit immer, mindestens 'end.').
   if (ALine < 1) or (ALine + 2 > AMap.LineCount) then
   begin
-    AReason := 'keine Zeile hinter der nil-Zuweisung';
+    AReason := _('no line after the nil assignment');
     Exit;
   end;
   AReason := CheckFreeLine(AMap, ALine, ColX, NameEnd, FreeEnd);
@@ -552,7 +575,7 @@ begin
   N := AMap.Raw(ALine + 1);
   if AMap.HasNonCode(ALine + 1, 1, Length(N)) then
   begin
-    AReason := 'Kommentar oder String in der nil-Zeile';
+    AReason := _('comment or string in the nil line');
     Exit;
   end;
   AReason := CheckNilLine(N, Copy(L, ColX, NameEnd - ColX));
@@ -653,26 +676,25 @@ begin
   Result := '';
   AOpenCol := 0;
   if ACol < 1 then
-    Exit(R_NO_COLUMN);
+    Exit(MsgNoColumn);
   L := AMap.Raw(ALine);
   if not WordAt(L, ACol, 'Assert') or not AMap.IsCode(ALine, ACol)
      or ((ACol > 1) and IsIdentChar(L[ACol - 1])) then
-    Exit(R_ASSERT_MOVED);
+    Exit(MsgNoLongerAtReportedPlace(CODE_ASSERT));
   // 'Obj.Assert(x)' / 'Unit.Assert(x)' ist nicht die RTL - nur
   // 'System.Assert'. 'inherited Assert' bindet immer an einen Vorfahren,
   // 'procedure Assert(' ist die Deklaration selbst (der Detektor meldet
   // auch sie).
   Prev := PrevToken(AMap, ALine, ACol);
   if (Prev.Low = '.') and (Before(AMap, Prev).Low <> 'system') then
-    Exit('Assert ist hier qualifiziert - nicht System.Assert');
+    Exit(_('Assert is qualified here - not System.Assert'));
   if (Prev.Low = 'inherited') or (Prev.Low = 'procedure')
      or (Prev.Low = 'function') then
-    Exit(Format('"%s Assert" ist nicht der Aufruf von System.Assert',
-      [Prev.Low]));
+    Exit(_('"%s Assert" is not a call to System.Assert', [Prev.Low]));
   AOpenCol := SkipBlanks(L, ACol + 6);
   if (AOpenCol > Length(L)) or (L[AOpenCol] <> '(')
      or not AMap.IsCode(ALine, AOpenCol) then
-    Exit(R_ASSERT_MOVED);
+    Exit(MsgNoLongerAtReportedPlace(CODE_ASSERT));
 end;
 
 // Die ')' zur '(' an AOpenCol auf DERSELBEN Zeile, Tiefe nur ueber
@@ -708,10 +730,10 @@ begin
     else
       // Ein Komma auf oberster Ebene trennt ein zweites Argument ab.
       if (L[j] = ',') and (Depth = 1) then
-        Exit('Assert hat schon eine Meldung');
+        Exit(_('Assert already has a message'));
     end;
   end;
-  Result := 'Assert endet nicht auf dieser Zeile';
+  Result := _('Assert does not end on this line');
 end;
 
 class function TRdxSimpleFixes.AssertMessage(AMap: TRdxCodeMap;
@@ -735,20 +757,20 @@ begin
   // Ein Kommentar ginge sonst als Text in die Meldung.
   if AMap.HasComment(ALine, OpenCol, CloseCol) then
   begin
-    AReason := 'Kommentar in der Bedingung';
+    AReason := _('comment in the condition');
     Exit;
   end;
   L := AMap.Raw(ALine);
   Inner := TrimRight(Copy(L, OpenCol + 1, CloseCol - OpenCol - 1));
   if Trim(Inner) = '' then
   begin
-    AReason := 'Assert ohne Bedingung';
+    AReason := _('Assert without a condition');
     Exit;
   end;
   Lit := '''' + StringReplace(Trim(Inner), '''', '''''', [rfReplaceAll]) + '''';
   if Length(Lit) > MAX_ASSERT_LITERAL then
   begin
-    AReason := 'Bedingung zu lang fuer ein String-Literal (255 Zeichen)';
+    AReason := _('condition too long for a string literal (255 characters)');
     Exit;
   end;
   AEdit.Span := TRefactorSpan.Make(SPAN_074, ALine, Col, ALine, CloseCol + 1);
@@ -805,21 +827,19 @@ function SectionLineReason(AMap: TRdxCodeMap; ALine: Integer;
   const AName, L: string): string;
 begin
   if AMap.StartsInside(ALine) or AMap.HasNonCode(ALine, 1, Length(L)) then
-    Exit('Kommentar oder String auf der Zeile - er ginge beim Loeschen '
-      + 'verloren');
+    Exit(_('comment or string on the line - it would be lost on deletion'));
   // 'strict' ohne 'private'/'protected' auf derselben Zeile: das Wort
   // gehoert zum Abschnitt der naechsten Zeile - weg damit wuerde aus
   // 'strict private' ein 'private'.
   if AName = 'strict' then
-    Exit('strict steht allein - es gehoert zur naechsten Zeile');
+    Exit(_('strict stands alone - it belongs to the next line'));
   // Umgekehrt: 'strict' allein auf der Zeile davor gehoert zu DIESEM
   // Abschnitt - ohne ihn wuerde aus 'strict' + 'protected' ein 'strict
   // protected'.
   if PrevToken(AMap, ALine, 1).Low = 'strict' then
-    Exit('strict auf der Zeile davor gehoert zu diesem Abschnitt');
+    Exit(_('strict on the line before belongs to this section'));
   if LowerCase(CollapseBlanks(L)) <> AName then
-    Exit(Format('Zeile %d traegt nicht nur "%s" - Zeile verschoben? '
-      + 'Datei neu pruefen', [ALine, AName]));
+    Exit(MsgMovedSuffix(_('line %d carries more than "%s"', [ALine, AName])));
   Result := '';
 end;
 
@@ -834,11 +854,10 @@ var
 begin
   Next := NextToken(AMap, ALine + 1, 1);
   if not IsSectionWord(Next.Low) then
-    Exit(Format('nach dem Abschnitt folgt "%s" - er ist nicht leer',
-      [Next.Low]));
+    Exit(_('"%s" follows the section - it is not empty', [Next.Low]));
   if DirectiveBefore(AMap, ALine + 1, Next) then
-    Exit('Compiler-Direktive bis zum naechsten Abschnitt - der leere '
-      + 'Abschnitt gilt evtl. nur in einem Zweig');
+    Exit(_('compiler directive up to the next section - the empty section '
+      + 'may apply only in one branch'));
   Result := '';
 end;
 
@@ -854,11 +873,11 @@ begin
   L := '';
   Name := SectionNameOf(AMessage);
   if Name = '' then
-    AReason := 'Abschnitt fehlt in der Meldung'
+    AReason := _('the message has no section')
   // Die Zeile wird samt Zeilenende geloescht - dahinter steht in einer
   // Klasse immer noch eine Zeile (mindestens 'end').
   else if (ALine < 1) or (ALine >= AMap.LineCount) then
-    AReason := 'keine Zeile hinter dem Abschnitt'
+    AReason := _('no line after the section')
   else
   begin
     L := AMap.Raw(ALine);
@@ -910,13 +929,13 @@ function FreeCountReason(const ALineText, AReceiver: string;
   AFound: Integer): string;
 begin
   if AFound > 1 then
-    Result := Format('%s.Free steht mehrmals auf der Zeile', [AReceiver])
+    Result := _('%s.Free appears more than once on the line', [AReceiver])
   else if ContainsText(ALineText, AReceiver + '.Destroy') then
-    Result := Format('%s.Destroy statt %s.Free - FreeAndNil ersetzt nur Free',
-      [AReceiver, AReceiver])
+    Result := _('%s.Destroy instead of %s.Free - FreeAndNil replaces only '
+      + 'Free', [AReceiver, AReceiver])
   else
-    Result := Format('%s.Free steht nicht mehr auf der Zeile - Zeile '
-      + 'verschoben? Datei neu pruefen', [AReceiver]);
+    Result := MsgMovedSuffix(_('%s.Free is no longer on the line',
+      [AReceiver]));
 end;
 
 class function TRdxSimpleFixes.FreeOnly(AMap: TRdxCodeMap; ALine: Integer;
@@ -932,7 +951,7 @@ begin
   AReason := '';
   if AReceiver = '' then
   begin
-    AReason := 'Empfaenger fehlt in der Meldung';
+    AReason := _('the message has no receiver');
     Exit;
   end;
   L := AMap.Raw(ALine);
@@ -948,14 +967,14 @@ begin
     Dec(k);
   if (k >= 1) and (L[k] = '.') then
   begin
-    AReason := Format('%s.Free haengt an einem Pfad - FreeAndNil braucht '
-      + 'eine Variable', [AReceiver]);
+    AReason := _('%s.Free is attached to a path - FreeAndNil needs a '
+      + 'variable', [AReceiver]);
     Exit;
   end;
   k := SkipBlanks(L, FreeEnd);
   if (k <= Length(L)) and (L[k] = '(') then
   begin
-    AReason := 'X.Free() mit Klammern';
+    AReason := _('X.Free() with parentheses');
     Exit;
   end;
   AEdit.Span := TRefactorSpan.Make(SPAN_139, ALine, Col, ALine, FreeEnd);
@@ -1019,8 +1038,8 @@ begin
   Lhs := Before(AMap, AAssign);
   if not Lhs.IsWord or IsKeyword(Lhs.Low)
      or not InList(Before(AMap, Lhs).Low, STATEMENT_PREV) then
-    Exit('links von := steht keine einfache Variable (Pfad, Index oder '
-      + 'var-Deklaration) - ihr Typ entscheidet ueber die Bedeutung');
+    Exit(_('no simple variable left of := (path, index or var declaration) '
+      + '- its type decides the meaning'));
   ATarget := Copy(AMap.Raw(Lhs.Line), Lhs.Col, Lhs.Len);
 end;
 
@@ -1030,7 +1049,7 @@ function DeclArgsReason(const ANext: TRdxToken): string;
 begin
   Result := '';
   if (ANext.Low <> ';') and (ANext.Low <> ':') then
-    Result := 'Deklaration: hinter () steht weder ";" noch ":"';
+    Result := _('declaration: neither ";" nor ":" follows ()');
 end;
 
 // Darf 'Name()' hier ohne Klammern stehen (s. EmptyArgs)? '' oder der Grund;
@@ -1045,7 +1064,7 @@ begin
   ATarget := '';
   Start := ChainStart(AMap, AName);
   if Start.Low = '' then
-    Exit('ein Glied der Aufrufkette ist kein blosser Name');
+    Exit(_('a link of the call chain is not a plain name'));
   Prev := Before(AMap, Start);
   Next := After(AMap, AClose);
   if InList(Prev.Low, DECL_STARTS) then
@@ -1053,7 +1072,7 @@ begin
   if (not InList(Prev.Low, STATEMENT_PREV)
       and not InList(Prev.Low, WHOLE_EXPR_STARTS))
      or ((Next.Low <> '') and not InList(Next.Low, CALL_ENDS)) then
-    Exit(R_IN_EXPRESSION);
+    Exit(_(R_IN_EXPRESSION));
   Name := Copy(AMap.Raw(AName.Line), AName.Col, AName.Len);
   // Ein Ereignisname ist eine Property - ob Delphi eine Property mit
   // Prozedurtyp ohne () aufruft, ist nicht belegt (s. EmptyArgs) - oder
@@ -1063,21 +1082,21 @@ begin
   // ohne () nicht auf - fuer Variablen widerlegt die DocWiki das; bis zur
   // Nachpruefung FC nannte der Grund jede Sperre eine Ereignis-Property.
   if HasCapPrefix(Name, 'On') or HasCapPrefix(Name, 'FOn') then
-    Exit(Format('%s sieht nach Ereignis aus - als Feld ruft Delphi es ohne '
-      + '() auf, als Property ist das nicht belegt; welches gemeint ist, '
-      + 'bleibt ohne Typ offen', [Name]));
+    Exit(_('%s looks like an event - as a field Delphi calls it without (), '
+      + 'as a property that is not proven; which one is meant stays open '
+      + 'without the type', [Name]));
   // Ueber den Namen, nicht den Typ: der Pfad davor ist ohne Parser
   // unbekannt. Eine gleichnamige Methode einer anderen Klasse verliert so
   // ihre Hilfe (Korpus ab8: 1 von 6080 Angeboten, 'Binarizer.BlackMatrix()'
   // neben 'property BlackMatrix: TBitMatrix') - lieber keine Hilfe.
   if TRdxTypeProof.DeclaresProperty(AMap, Name) then
-    Exit(Format('%s ist in dieser Unit als Property deklariert - meint der '
-      + 'Aufruf sie, ist nicht belegt, ob Delphi eine Property mit '
-      + 'Prozedurtyp ohne () aufruft', [Name]));
+    Exit(_('%s is declared as a property in this unit - if the call means '
+      + 'it, it is not proven whether Delphi calls a property of procedural '
+      + 'type without ()', [Name]));
   if (Start.Col = AName.Col) and (Start.Line = AName.Line)
      and InsideOwnFunction(AMap, AName.Line, AName.Low) then
-    Exit(Format('%s() in der Funktion %s - ohne Klammern haengt die Bedeutung '
-      + 'vom Dialekt ab (Rekursion oder Ergebnis)', [Name, Name]));
+    Exit(_('%s() in the function %s - without parentheses the meaning '
+      + 'depends on the dialect (recursion or result)', [Name, Name]));
   if Prev.Low = ':=' then
     Result := AssignTargetReason(AMap, Prev, ATarget);
 end;
@@ -1118,13 +1137,13 @@ begin
   Col := ColumnFromMessage(AMessage);
   if Col < 1 then
   begin
-    AReason := R_NO_COLUMN;
+    AReason := MsgNoColumn;
     Exit;
   end;
   L := AMap.Raw(ALine);
   if (Col > Length(L)) or (L[Col] <> '(') or not AMap.IsCode(ALine, Col) then
   begin
-    AReason := R_ARGS_MOVED;
+    AReason := MsgNoLongerAtReportedPlace(CODE_ARGS);
     Exit;
   end;
   // Zwischen Name und '(' sowie in den Klammern nur Leerraum - kein
@@ -1133,12 +1152,12 @@ begin
   NameTok := PrevToken(AMap, ALine, Col);
   if (Close.Low <> ')') or (Close.Line <> ALine)
      or (SkipBlanks(L, Col + 1) <> Close.Col) then
-    AReason := 'in den Klammern steht nicht nur Leerraum'
+    AReason := _('the parentheses contain more than whitespace')
   else if not NameTok.IsWord or IsKeyword(NameTok.Low)
           or (NameTok.Line <> ALine) then
-    AReason := 'vor () steht kein blosser Name (Element- oder Ergebnisaufruf)'
+    AReason := _('no plain name before () (member or result call)')
   else if SkipBlanks(L, NameTok.EndCol) <> Col then
-    AReason := 'zwischen Name und () steht nicht nur Leerraum'
+    AReason := _('more than whitespace between the name and ()')
   else
     AReason := EmptyArgsContext(AMap, NameTok, Close, APlan.Target);
   if AReason <> '' then Exit;
@@ -1156,16 +1175,16 @@ begin
   if ((AOp.Low <> '=') and (AOp.Low <> '<>'))
      or ((ARhs.Low <> 'true') and (ARhs.Low <> 'false'))
      or (ARhs.Line <> AOp.Line) then
-    Exit(R_BOOL_MOVED);
+    Exit(_(R_BOOL_MOVED));
   if not ALhs.IsWord or IsKeyword(ALhs.Low) or (ALhs.Line <> AOp.Line) then
-    Exit('links vom Vergleich steht kein blosser Name');
+    Exit(_('no plain name left of the comparison'));
   Prev := Before(AMap, ALhs);
   if Prev.Low = '.' then
-    Exit('links steht ein Pfad - sein Typ ist hier nicht beweisbar');
+    Exit(_('a path is on the left - its type cannot be proven here'));
   if not InList(Prev.Low, OPERAND_STARTS) then
-    Exit(Format(R_BINDS_OTHER, ['links vom Namen steht "' + Prev.Low + '"']));
+    Exit(_(R_BINDS_LEFT, [Prev.Low]));
   if not InList(After(AMap, ARhs).Low, EXPR_ENDS) then
-    Exit(Format(R_BINDS_OTHER, ['hinter ' + ARhs.Low + ' geht der Ausdruck weiter']));
+    Exit(_(R_BINDS_RIGHT, [ARhs.Low]));
 end;
 
 class function TRdxExprFixes.RedundantBool(AMap: TRdxCodeMap; ALine: Integer;
@@ -1181,7 +1200,7 @@ begin
   Col := ColumnFromMessage(AMessage);
   if Col < 1 then
   begin
-    AReason := R_NO_COLUMN;
+    AReason := MsgNoColumn;
     Exit;
   end;
   L := AMap.Raw(ALine);
@@ -1189,7 +1208,7 @@ begin
   if (Col > Length(L)) or not AMap.IsCode(ALine, Col)
      or ((Col > 1) and CharInSet(L[Col - 1], [':', '<', '>'])) then
   begin
-    AReason := R_BOOL_MOVED;
+    AReason := _(R_BOOL_MOVED);
     Exit;
   end;
   Op := TokenAt(AMap, ALine, Col);
@@ -1199,7 +1218,7 @@ begin
   if AReason <> '' then Exit;
   if AMap.HasComment(ALine, Lhs.Col, Rhs.EndCol - 1) then
   begin
-    AReason := 'Kommentar im Vergleich';
+    AReason := _('comment in the comparison');
     Exit;
   end;
   APlan.Name := Copy(L, Lhs.Col, Lhs.Len);
@@ -1261,17 +1280,17 @@ begin
   Result := '';
   Prev := Before(AMap, AFirst);
   if Prev.Low = '.' then
-    Exit('Assigned ist hier qualifiziert - nicht die Systemroutine');
+    Exit(_('Assigned is qualified here - not the system routine'));
   if (Prev.Low = 'not') or (Prev.Low = '@') then
-    Exit(Format('"%s" vor dem Ausdruck bindet nur an seinen ersten Teil',
+    Exit(_('"%s" before the expression binds only to its first part',
       [Prev.Low]));
   if (Prev.IsWord and not IsKeyword(Prev.Low))
      or InList(Prev.Low, [')', ']', '>', '^']) then
-    Exit(Format('"%s" vor dem Ausdruck - die Klammer gehoert zu einem Aufruf '
-      + 'oder Cast', [Prev.Low]));
+    Exit(_('"%s" before the expression - the parenthesis belongs to a call '
+      + 'or cast', [Prev.Low]));
   Next := After(AMap, ALast).Low;
   if (Next = '.') or (Next = '[') or (Next = '^') then
-    Exit(Format('"%s" hinter dem Ausdruck bindet nur an seinen letzten Teil', [Next]));
+    Exit(_('"%s" after the expression binds only to its last part', [Next]));
 end;
 
 class function TRdxExprFixes.AssignedNil(AMap: TRdxCodeMap; ALine: Integer;
@@ -1289,13 +1308,13 @@ begin
   Col := ColumnFromMessage(AMessage);
   if Col < 1 then
   begin
-    AReason := R_NO_COLUMN;
+    AReason := MsgNoColumn;
     Exit;
   end;
   L := AMap.Raw(ALine);
   if (Col > Length(L)) or not AMap.IsCode(ALine, Col) then
   begin
-    AReason := 'Assigned(X) steht nicht mehr an der gemeldeten Stelle';
+    AReason := MsgNoLongerAtReportedPlace(CODE_ASSIGNED);
     Exit;
   end;
   First := TokenAt(AMap, ALine, Col);
@@ -1305,15 +1324,15 @@ begin
     Keep := 6
   else
   begin
-    AReason := 'kein "Assigned(X) and (X <> nil)" auf einer Zeile an der '
-      + 'Stelle (ohne Klammern um den Vergleich keine Hilfe)';
+    AReason := _('no "Assigned(X) and (X <> nil)" on one line here (no quick '
+      + 'fix without parentheses around the comparison)');
     Exit;
   end;
   AReason := AssignedNilContext(AMap, First, Toks[9]);
   if AReason <> '' then Exit;
   if AMap.HasComment(ALine, First.Col, Toks[9].EndCol - 1) then
   begin
-    AReason := 'Kommentar im Ausdruck';
+    AReason := _('comment in the expression');
     Exit;
   end;
   APlan.Name := Copy(L, Toks[Keep + 2].Col, Toks[Keep + 2].Len);
@@ -1654,7 +1673,7 @@ begin
   begin
     ACmp.OpTok := Prev;
     if not OperandBefore(AMap, Prev, ACmp.First, ACmp.Last) then
-      Result := 'Operand vor dem Vergleich nicht eindeutig';
+      Result := _('operand before the comparison is ambiguous');
     Exit;
   end;
   ACmp.OpTok := After(AMap, ANil);
@@ -1665,7 +1684,7 @@ begin
   end;
   ACmp.Yoda := True;
   if not OperandAfter(AMap, ACmp.OpTok, ACmp.First, ACmp.Last) then
-    Result := 'Operand hinter dem Vergleich nicht eindeutig';
+    Result := _('operand after the comparison is ambiguous');
 end;
 
 // Ein Token des Bereichs aufnehmen: Vergleiche sammeln, anonyme Methoden
@@ -1677,7 +1696,7 @@ var
 begin
   Result := '';
   if T.Low = 'begin' then
-    Exit('anonyme Methode in der Anweisung');
+    Exit(_('anonymous method in the statement'));
   if T.Low <> 'nil' then Exit;
   Result := ReadComparison(AMap, T, C);
   if (Result <> '') or (C.OpTok.Low = '') then Exit;
@@ -1723,7 +1742,7 @@ begin
   end;
   SetLength(AScan.Cmps, AScan.Count);
   if AScan.EndTok.Low = '' then
-    Result := 'Ende der Anweisung nicht gefunden';
+    Result := MsgStatementEndNotFound;
 end;
 
 // Kommentar oder Direktive bei der Anweisung AFirst..ALast? Der Detektor
@@ -1804,12 +1823,12 @@ begin
   AEdit := Default(TRdxEdit);
   AOperand := '';
   if ACmp.First.Line <> ACmp.Last.Line then
-    Exit('Operand ueber mehrere Zeilen');
+    Exit(_('operand spans several lines'));
   AOperand := TextBetween(AMap, ACmp.First, ACmp.Last);
   // Schon Assigned(X) in derselben Anweisung: das ist SCA084
   // (AssignedAndAssignedNil) - dessen Hilfe statt 'Assigned(X) and Assigned(X)'.
   if Pos('assigned(' + Squeezed(AOperand) + ')', ARegion) > 0 then
-    Exit('Assigned(X) steht schon in der Anweisung (SCA084)');
+    Exit(_('Assigned(X) is already in the statement (SCA084)'));
   Positive := ACmp.OpTok.Low = '<>';
   Span := Default(TNilSpan);
   if ACmp.Yoda then
@@ -1823,10 +1842,10 @@ begin
     Span.Last  := ACmp.NilTok;
   end;
   if Span.First.Line <> Span.Last.Line then
-    Exit('Vergleich ueber mehrere Zeilen');
+    Exit(_('comparison spans several lines'));
   if not IsLeftBoundary(Before(AMap, Span.First))
      or not IsRightBoundary(After(AMap, Span.Last)) then
-    Exit(Format('Grenze des Vergleichs unklar ("%s %s ... %s")',
+    Exit(_('boundary of the comparison unclear ("%s %s ... %s")',
       [Before(AMap, Span.First).Low, Span.First.Low, After(AMap, Span.Last).Low]));
   // '<>' -> Assigned(X), '=' -> not Assigned(X); Flipped ist das Gegenteil.
   Span.NewText := 'Assigned(' + AOperand + ')';
@@ -1872,16 +1891,18 @@ begin
   AScan := Default(TNilScan);
   Expected := TRdxNilFix.CountNilComparisons(ASite.NodeText);
   if Expected = 0 then
-    Exit('kein nil-Vergleich im Fund');
+    Exit(_('no nil comparison in the finding'));
+  // Eigener Satz statt MsgNoLongerAtReportedPlace: das Subjekt ist kein
+  // Code-Stueck.
   if not StatementStillAt(AMap, ASite) then
-    Exit('Anweisung steht nicht mehr an der gemeldeten Stelle');
+    Exit(_('the statement is no longer at the reported place'));
   Result := ScanStatement(AMap, ASite, AScan);
   if Result <> '' then Exit;
   if not CountMatches(Length(AScan.Cmps), Expected, ASite.NodeText) then
-    Exit(Format('Code und Fund passen nicht zusammen (%d statt %d Vergleiche)',
+    Exit(_('code and finding do not match (%d instead of %d comparisons)',
       [Length(AScan.Cmps), Expected]));
   if CommentOnRegionLines(AMap, AScan.StartTok, AScan.EndTok) then
-    Result := 'Kommentar oder Direktive in der Anweisung';
+    Result := _('comment or directive in the statement');
 end;
 
 // Zwei einzeilige Bereiche ueberschneiden sich?
@@ -1908,7 +1929,7 @@ begin
     if Result <> '' then Exit;
     for k := 0 to i - 1 do
       if SpansOverlap(APlan.Edits[k].Span, APlan.Edits[i].Span) then
-        Exit('verschachtelte nil-Vergleiche');
+        Exit(_('nested nil comparisons'));
   end;
   Result := '';
 end;
@@ -1957,7 +1978,8 @@ const
   RISKY_TYPES: array[0..10] of string = (
     'string', 'ansistring', 'unicodestring', 'widestring', 'shortstring',
     'rawbytestring', 'utf8string', 'variant', 'olevariant', 'array', 'set');
-  TYPE_RISK = '%s ist vom Typ %s - Assigned() ist dafuer nicht sicher gleichwertig';
+  TYPE_RISK = '%s is of type %s - Assigned() is not reliably equivalent for '
+    + 'it';
 var
   Ident : string;
 begin
@@ -1965,27 +1987,28 @@ begin
   Ident := TrailingIdent(AOperand);
   if (Ident <> '') and (HasCapPrefix(Ident, 'On') or HasCapPrefix(Ident, 'FOn')
      or HasCapPrefix(Ident, 'Get')) then
-    Exit(Format('%s sieht nach Ereignis oder Funktion aus - Assigned() prueft '
-      + 'dann den Zeiger, nicht das Ergebnis', [Ident]));
+    Exit(_('%s looks like an event or function - Assigned() then checks the '
+      + 'pointer, not the result', [Ident]));
   if ATypeLow = '' then Exit;
   if InList(ATypeLow, RISKY_TYPES)
      or TRdxTypeProof.NamesProcType(ATypeLow) then
-    Result := Format(TYPE_RISK, [AOperand, ATypeLow]);
+    Result := _(TYPE_RISK, [AOperand, ATypeLow]);
 end;
 
 class function TRdxNilFix.NilOperandReason(AMap: TRdxCodeMap;
   const AOperand, ATypeLow: string): string;
 const
-  R_TYPE_UNKNOWN = 'Typ von %s nicht bewiesen - einen Funktions- oder '
-    + 'Methodenzeiger riefe "= nil" auf, Assigned() nicht';
-  R_PATH_END     = '%s endet auf %s - in dieser Unit nicht als Feld bewiesen: '
-    + 'eine Methode ohne Argumente riefe "= nil" auf, Assigned() pruefte nur '
-    + 'den Methodenzeiger';
-  R_PROC_IN_UNIT = '%s hat den Prozedurtyp %s (in dieser Unit deklariert) - '
-    + '"= nil" ruft ihn auf, Assigned() nicht';
-  R_NOT_PROVEN   = '%s: Typ %s ist in dieser Unit nicht als Klasse, Interface '
-    + 'oder Zeiger bewiesen und keine Klasse der Delphi-Quellen - einen '
-    + 'Funktionstyp einer anderen Unit riefe "= nil" auf, Assigned() nicht';
+  R_TYPE_UNKNOWN = 'type of %s not proven - "= nil" would call a function or '
+    + 'method pointer, Assigned() would not';
+  R_PATH_END     = '%s ends in %s - not proven as a field in this unit: '
+    + '"= nil" would call a method without arguments, Assigned() would only '
+    + 'check the method pointer';
+  R_PROC_IN_UNIT = '%s has the procedural type %s (declared in this unit) - '
+    + '"= nil" calls it, Assigned() does not';
+  R_NOT_PROVEN   = '%s: type %s is not proven in this unit as a class, '
+    + 'interface or pointer and is not a class of the Delphi sources - '
+    + '"= nil" would call a function type of another unit, Assigned() would '
+    + 'not';
 var
   TypeLow : string;
   Ident   : string;
@@ -2005,15 +2028,15 @@ begin
     // R9). uTestRdxNilFix.Sca126_PathOperands pinnt den Bestand.
     if Ident = '' then Exit;
     if Ident = Trim(AOperand) then
-      Exit(Format(R_TYPE_UNKNOWN, [AOperand]));
+      Exit(_(R_TYPE_UNKNOWN, [AOperand]));
     TypeLow := TRdxTypeProof.FieldTypeOf(AMap, Ident);
     if TypeLow = '' then
-      Exit(Format(R_PATH_END, [AOperand, Ident]));
+      Exit(_(R_PATH_END, [AOperand, Ident]));
     Result := NilOperandRisk(AOperand, TypeLow);
     if Result <> '' then Exit;
   end;
   if TRdxTypeProof.ProceduralType(AMap, TypeLow) then
-    Exit(Format(R_PROC_IN_UNIT, [AOperand, TypeLow]));
+    Exit(_(R_PROC_IN_UNIT, [AOperand, TypeLow]));
   // Der POSITIVE Beweis wie bei SCA084 (AssignedNilReason in uRdxFixRunner,
   // der OperandReason-Pfad von TRdxFixRunner.OperandFix - nicht in dieser
   // Unit): ein Typ aus einer anderen Unit mit unauffaelligem Namen ('uses
@@ -2024,7 +2047,7 @@ begin
   // die Klassen und Interfaces der Delphi-Quellen als bewiesen
   // (uRdxRtlTypes, in PointerLikeType) - Kundentypen bleiben draussen.
   if not TRdxTypeProof.PointerLikeType(AMap, TypeLow) then
-    Result := Format(R_NOT_PROVEN, [AOperand, TypeLow]);
+    Result := _(R_NOT_PROVEN, [AOperand, TypeLow]);
 end;
 
 end.

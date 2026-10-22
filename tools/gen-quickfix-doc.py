@@ -8,7 +8,9 @@ WOHER WAS KOMMT - je Angabe EINE Quelle:
 
   welche Hilfen es gibt,     reDelphix/source/uRdxFixTable.pas: FIX_ROWS,
   ihre Menuetexte (msgids)   FIX_CAPTIONS und FIX_ALT_CAPTIONS (parallele
-  und die Kennzeichnung (E2) Arrays, Index fuer Index) und die Planer;
+  und die Kennzeichnung (E2) Arrays, Index fuer Index; dazu FIX_HINTS, die
+                             festen Hinweise - nur fuer die Konsistenz,
+                             nicht in der Doku) und die Planer;
                              reDelphix/source/uRdxFixRunner.pas (Rumpf-
                              Routinen, die die Kennzeichnung setzen; bis
                              Charge B2S-b in uRdxRecipeRunner.pas);
@@ -35,7 +37,10 @@ AUFRUF (Repo-Wurzel):
               quickfixes-doc.json, jeder Eintrag dort gehoert zu einer Art
               bzw. einem Rezept; jede Art mit editorHelp im Katalog hat eine
               Zeile in FIX_ROWS oder ein Rezept, das sie bindet, und jede
-              Zeile traegt editorHelp; die drei Arrays sind gleich lang; die
+              Zeile traegt editorHelp; die vier Arrays (FIX_ROWS,
+              FIX_CAPTIONS, FIX_ALT_CAPTIONS, FIX_HINTS) sind gleich lang,
+              ein fester Hinweis steht in FIX_HINTS genau bei HintByPlanner =
+              False (wie uTestRdxFixTable, das nur der IDE-Bau laeuft); die
               Pflichtfelder sind da (Platzhalter erklaert, Kennzeichnung "je
               nach Fund" erklaert, zweiter Eintrag beschrieben); jede Art
               mit Hilfe steht im Profil code-aktionen
@@ -443,17 +448,20 @@ def parse_row(item, i):
         if not sep:
             raise SourceError('%s: Feld ohne ":": %r' % (where, part))
         fields[key.strip()] = val.strip()
-    missing = [k for k in ('Kind', 'Plan', 'Changes') if k not in fields]
+    missing = [k for k in ('Kind', 'Plan', 'HintByPlanner', 'Changes')
+               if k not in fields]
     if missing:
         raise SourceError('%s: Feld(er) %s fehlen' % (where, ', '.join(missing)))
     alt = fields.get('Alt', 'nil')
     if (not re.fullmatch(r'fk\w+', fields['Kind'])
             or not re.fullmatch(r'[A-Za-z_]\w*', fields['Plan'])
             or not re.fullmatch(r'[A-Za-z_]\w*', alt)
-            or fields['Changes'] not in ('True', 'False')):
+            or fields['Changes'] not in ('True', 'False')
+            or fields['HintByPlanner'] not in ('True', 'False')):
         raise SourceError('%s: unbekannte Form: %r' % (where, item[:120]))
     return {'index': i, 'kind': fields['Kind'][2:], 'plan': fields['Plan'],
             'changes': fields['Changes'] == 'True',
+            'hint_by_planner': fields['HintByPlanner'] == 'True',
             'alt': None if alt.lower() == 'nil' else alt}
 
 
@@ -484,7 +492,7 @@ def parse_table(table_text=None, runner_text=None):
     st = strip_comments(table_text)
     resolve = make_resolver(st)
     arrays = {}
-    for name in ('FIX_ROWS', 'FIX_CAPTIONS', 'FIX_ALT_CAPTIONS'):
+    for name in ('FIX_ROWS', 'FIX_CAPTIONS', 'FIX_ALT_CAPTIONS', 'FIX_HINTS'):
         high, typ, items = parse_array(st, name)
         arrays[name] = (array_size(st, high), typ, items)
     if arrays['FIX_ROWS'][1] != 'TRdxFixRow':
@@ -493,6 +501,7 @@ def parse_table(table_text=None, runner_text=None):
     captions = [eval_str(it, resolve) for it in arrays['FIX_CAPTIONS'][2]]
     alt_captions = [eval_str(it, resolve)
                     for it in arrays['FIX_ALT_CAPTIONS'][2]]
+    hints = [eval_str(it, resolve) for it in arrays['FIX_HINTS'][2]]
     cap_changes = resolve('CAP_CHANGES')
     if not cap_changes:
         raise SourceError('%s: CAP_CHANGES nicht gefunden' % rel(SRC_TABLE))
@@ -522,6 +531,7 @@ def parse_table(table_text=None, runner_text=None):
             "hier aufnehmen"
             % ', '.join(outside))
     return {'rows': rows, 'captions': captions, 'alt_captions': alt_captions,
+            'hints': hints,
             'sizes': {k: (v[0], len(v[2])) for k, v in arrays.items()},
             'cap_changes': cap_changes}
 
@@ -918,17 +928,18 @@ def build(inputs):
     docs = data['eintraege']
     errors, notes = [], []
     rows, caps, alts = table['rows'], table['captions'], table['alt_captions']
+    hints = table['hints']
 
-    # Die drei parallelen Arrays (Index fuer Index).
+    # Die vier parallelen Arrays (Index fuer Index).
     lengths = {'FIX_ROWS': len(rows), 'FIX_CAPTIONS': len(caps),
-               'FIX_ALT_CAPTIONS': len(alts)}
+               'FIX_ALT_CAPTIONS': len(alts), 'FIX_HINTS': len(hints)}
     for name, (declared, _found) in sorted(table['sizes'].items()):
         if lengths[name] != declared:
             errors.append('%s: %d Elemente, deklariert sind %d'
                           % (name, lengths[name], declared))
     if len(set(lengths.values())) > 1:
-        errors.append('FIX_ROWS, FIX_CAPTIONS und FIX_ALT_CAPTIONS sind nicht '
-                      'gleich lang (%s) - die Arrays sind parallel'
+        errors.append('FIX_ROWS, FIX_CAPTIONS, FIX_ALT_CAPTIONS und FIX_HINTS '
+                      'sind nicht gleich lang (%s) - die Arrays sind parallel'
                       % ', '.join('%s %d' % kv for kv in sorted(lengths.items())))
 
     entries, seen = [], {}
@@ -956,6 +967,13 @@ def build(inputs):
             errors.append('FIX_ROWS[%d] (%s): zweiter Eintrag %s, Menuetext in '
                           'FIX_ALT_CAPTIONS %s - genau zusammen'
                           % (i, kind, r['alt'] or 'nil', repr(alt_cap)))
+        # Wie TRdxFixTable.FixFor: den Hinweis setzt der Planer ODER die
+        # Zeile (FIX_HINTS, seit Charge G7 statt des Felds Hint).
+        hint = hints[i] if i < len(hints) else ''
+        if bool(hint) == r['hint_by_planner']:
+            errors.append('FIX_ROWS[%d] (%s): HintByPlanner %s, Hinweis in '
+                          'FIX_HINTS %s - genau eines von beiden'
+                          % (i, kind, r['hint_by_planner'], repr(hint)))
         captions = [{'msgid': cap, 'translatable': True, 'active': True,
                      'changes': r['changes_main']}]
         if r['alt'] and alt_cap:
@@ -1442,6 +1460,7 @@ def selftest():
         i['table']['rows'].append(r)
         i['table']['captions'].append('Probe')
         i['table']['alt_captions'].append('')
+        i['table']['hints'].append('' if r['hint_by_planner'] else 'Probe')
         for k in i['table']['sizes']:
             n, found = i['table']['sizes'][k]
             i['table']['sizes'][k] = (n + 1, found)
@@ -1449,6 +1468,8 @@ def selftest():
     never = next(e for e in model['entries']
                  if not e['is_recipe'] and not e['alt']
                  and e['captions'][0]['changes'] == 'nein')
+    fixed_hint = next(r for r in rows if not r['hint_by_planner'])
+    planner_hint = next(r for r in rows if r['hint_by_planner'])
     shown = next(e for e in model['entries']
                  if e['is_recipe'] and not e['rules'] and not e['exc_rules'])
 
@@ -1474,6 +1495,15 @@ def selftest():
         ('FIX_CAPTIONS kuerzer als FIX_ROWS',
          lambda i: i['table']['captions'].pop(),
          ('FIX_CAPTIONS', 'nicht gleich lang')),
+        ('FIX_HINTS kuerzer als FIX_ROWS',
+         lambda i: i['table']['hints'].pop(),
+         ('FIX_HINTS', 'nicht gleich lang')),
+        ('fester Hinweis fehlt',
+         set_field(['table', 'hints', fixed_hint['index']], ''),
+         (fixed_hint['kind'], 'genau eines von beiden')),
+        ('fester Hinweis neben HintByPlanner',
+         set_field(['table', 'hints', planner_hint['index']], 'Probe'),
+         (planner_hint['kind'], 'genau eines von beiden')),
         ('zweiter Eintrag ohne Menuetext',
          set_field(['table', 'alt_captions', with_alt['index']], ''),
          (with_alt['kind'], 'FIX_ALT_CAPTIONS')),
@@ -1515,8 +1545,9 @@ def selftest():
     table_text = load_text(SRC_TABLE)
     grown = insert_before_close(table_text, 'FIX_ALT_CAPTIONS', ", ''")
     grown = insert_before_close(grown, 'FIX_CAPTIONS', ", 'Probe'")
+    grown = insert_before_close(grown, 'FIX_HINTS', ", ''")
     grown = insert_before_close(
-        grown, 'FIX_ROWS', ",\n    (Kind: fk%s; Plan: %s; Hint: ''; "
+        grown, 'FIX_ROWS', ",\n    (Kind: fk%s; Plan: %s; "
         "HintByPlanner: True; Changes: False; Alt: nil)"
         % (free_kind, rows[0]['plan']))
     grown = sub_code(grown, r'(?m)^([ \t]*FIX_ROW_HIGH[ \t]*=[ \t]*)(\d+)',

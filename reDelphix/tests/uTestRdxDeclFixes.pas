@@ -260,10 +260,12 @@ begin
   Assert.AreEqual('', Fix(dkDoc, InClass(['    procedure Run;']), 6, DocMsg('Stop'),
     R));
   Assert.IsTrue(Pos('verschoben', R) > 0, R);
-  // Darueber endet ein Kommentar ueber Zeilen - Doku steht schon da.
+  // Darueber endet ein Kommentar ueber Zeilen - Doku steht schon da. Der
+  // Grund kommt aus der de.po ('ueber' mit echtem Umlaut, Charge G3):
+  // geprueft wird ein umlautfreies Teilstueck.
   Assert.AreEqual('', Fix(dkDoc, InClass(['    { Startet', '      den Lauf }',
     '    procedure Run;']), 8, DocMsg('Run'), R));
-  Assert.IsTrue(Pos('Kommentar ueber Zeilen', R) > 0, R);
+  Assert.IsTrue(Pos('endet ein Kommentar', R) > 0, R);
   // Direktive im Kopf; hinter dessen ';' sperrt sie nicht.
   Assert.AreEqual('', Fix(dkDoc, InClass(['    procedure Run({$IFDEF X}A: '
     + 'Integer{$ENDIF});']), 6, DocMsg('Run'), R));
@@ -333,9 +335,11 @@ begin
   Assert.AreEqual('', Fix(dkGuid, Join(['type', '  IList<T> = interface',
     '    function Get: T;', '  end;']), 2, GuidMsg('IList'), R));
   Assert.IsTrue(Pos('generisch', R) > 0, R);
+  // Vorwaertsdeklaration: 'Vorwaerts' traegt in der de.po einen echten
+  // Umlaut (Charge G3) - geprueft wird das umlautfreie Ende.
   Assert.AreEqual('', Fix(dkGuid, Join(['type', '  IFoo = interface;']), 2,
     GuidMsg('IFoo'), R));
-  Assert.IsTrue(Pos('Vorwaerts', R) > 0, R);
+  Assert.IsTrue(Pos('deklaration - sie', R) > 0, R);
   Assert.AreEqual('', Fix(dkGuid, Join(['type', '  IFoo = interface',
     '    [''' + GUID_1 + ''']', '  end;']), 2, GuidMsg('IFoo'), R));
   Assert.IsTrue(Pos('GUID oder Attribut', R) > 0, R);

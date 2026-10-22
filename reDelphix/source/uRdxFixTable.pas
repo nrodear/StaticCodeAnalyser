@@ -30,19 +30,23 @@ unit uRdxFixTable;
 // braucht (uRdxCodeMap, uRdxBufferMath, uRdxText, uRefactorInfo); ihr
 // Adapter steht hier.
 //
-// MENUETEXTE: englische msgids, uebersetzt ueber i18n/*.po (Editorhilfen
-// E6) in die reDelphix-Sprache (uRdxText._, Entscheid E29 - wie die
+// TEXTE: englische msgids, uebersetzt ueber i18n/*.po (Editorhilfen E6)
+// in die reDelphix-Sprache (uRdxText._, Entscheid E29 - wie die
 // SCA-Oberflaeche oder redelphix.ini [UI] Language; uRdxText nennt den
-// Weg). Sie stehen in FIX_CAPTIONS und FIX_ALT_CAPTIONS - zwei String-
+// Weg): Menuetexte, Hinweise und Gruende. Menuetexte und feste Hinweise
+// stehen in FIX_CAPTIONS, FIX_ALT_CAPTIONS und FIX_HINTS - drei String-
 // Arrays parallel zu FIX_ROWS, nicht als Feld der Zeile: tools/
-// i18n_extract.py liest nur _('..'), _(KONSTANTE) und _(ARRAY[i]); ein
-// Record-Feld bliebe fuer template.pot unsichtbar, und msgmerge markierte
-// die Uebersetzungen als obsolet. uTestRdxFixTable haelt die drei Arrays
-// zusammen: eine Erwartungstabelle pinnt je Zeile Art, Planer (Name ueber
-// PLANNER_NAMES), Menuetext, Kennzeichnung und zweiten Eintrag samt
-// Menuetext - ein vertauschtes 'Plan:' oder ein verschobener Menuetext
-// wird dort rot (Wochen-Review 2026-10-21; bis dahin pruefte der Test nur
-// "nicht leer" und "nicht KindName").
+// i18n_extract.py liest nur _('..'), _(KONSTANTE) und _(ARRAY[i]) mit
+// Literalen im Array; ein Record-Feld (oder ein Array aus Konstanten-
+// Namen) bliebe fuer template.pot unsichtbar, und msgmerge markierte die
+// Uebersetzungen als obsolet (bis Charge G7 stand der Hinweis als
+// deutsche Konstante im Feld Hint der Zeile). uTestRdxFixTable haelt die
+// vier Arrays zusammen: eine Erwartungstabelle pinnt je Zeile Art, Planer
+// (Name ueber PLANNER_NAMES), Menuetext, Kennzeichnung und zweiten Eintrag
+// samt Menuetext - ein vertauschtes 'Plan:' oder ein verschobener
+// Menuetext wird dort rot (Wochen-Review 2026-10-21; bis dahin pruefte der
+// Test nur "nicht leer" und "nicht KindName"); fester Hinweis genau ohne
+// HintByPlanner prueft er wie tools/gen-quickfix-doc.py --check.
 
 interface
 
@@ -61,10 +65,11 @@ type
     AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 
   // Eine Zeile der Tabelle (FIX_ROWS).
-  //   Hint           Hinweis des aktiven Eintrags (deutsch, wie die
-  //                  Gruende); '' nur mit HintByPlanner: der Planer setzt
-  //                  ihn selbst (aus Name oder Ersetzung, bei SCA085/SCA139
-  //                  vor dem ' + uses ...'). Genau eines von beiden.
+  //   HintByPlanner  True: der Planer setzt den Hinweis des aktiven
+  //                  Eintrags selbst (aus Name oder Ersetzung, bei SCA085/
+  //                  SCA139 vor dem ' + uses ...'); False: der feste Hinweis
+  //                  unter demselben Index in FIX_HINTS (msgid, RawHint).
+  //                  Genau eines von beiden.
   //   Changes        Kennzeichnung '(aendert Verhalten)' (E2), soweit sie
   //                  nicht vom Fund abhaengt - SCA149 (override oder
   //                  reintroduce) entscheidet der Planer.
@@ -75,15 +80,14 @@ type
   TRdxFixRow = record
     Kind          : TFindingKind;
     Plan          : TRdxFixPlanner;
-    Hint          : string;
     HintByPlanner : Boolean;
     Changes       : Boolean;
     Alt           : TRdxFixPlanner;
   end;
 
   // Der Einstieg des Anbieters und der Tests. Eine weitere Regel ist eine
-  // Zeile mehr in FIX_ROWS samt Menuetext in FIX_CAPTIONS - kein Zweig
-  // mehr in einem Verteiler.
+  // Zeile mehr in FIX_ROWS samt Menuetext in FIX_CAPTIONS und Hinweis in
+  // FIX_HINTS - kein Zweig mehr in einem Verteiler.
   TRdxFixTable = class
   public
     // True, wenn die Tabelle fuer diese Art eine Hilfe kennt.
@@ -91,8 +95,9 @@ type
 
     // Die Hilfe fuer einen Fund: der Planer seiner Art, danach der Hinweis
     // der Zeile (wenn der Planer keinen setzte) und die Kennzeichnung.
-    // Ohne Fund: Reason 'kein Fund'; ohne Zeile: 'keine einfache Hilfe
-    // fuer diese Regel'.
+    // Hinweis und Grund in der reDelphix-Sprache (uRdxText). Ohne Fund:
+    // Reason 'no finding' (de 'kein Fund'); ohne Zeile: 'no simple quick
+    // fix for this rule'.
     class function FixFor(APlaces: TSourcePlaces; ALines: TStrings;
       AFinding: TLeakFinding;
       const AUsesNames: TArray<string>): TRdxFixOutcome; static;
@@ -112,11 +117,13 @@ type
     class function CaptionFor(AKind: TFindingKind;
       const AOutcome: TRdxFixOutcome): string; static;
 
-    // Fuer uTestRdxFixTable: die Zeilen und ihre Menuetexte (msgids,
-    // unuebersetzt; AVariant 0 oder 1).
+    // Fuer uTestRdxFixTable: die Zeilen, ihre Menuetexte (msgids,
+    // unuebersetzt; AVariant 0 oder 1) und ihre festen Hinweise (msgid aus
+    // FIX_HINTS, unuebersetzt; '' bei HintByPlanner).
     class function RowCount: Integer; static;
     class function Row(AIndex: Integer): TRdxFixRow; static;
     class function RawCaption(AIndex, AVariant: Integer): string; static;
+    class function RawHint(AIndex: Integer): string; static;
     // Fuer uTestRdxFixTable: der Name des Planers der Zeile AIndex (AVariant
     // 0) bzw. ihres zweiten Eintrags (1) - '' ohne, '?' fuer einen Planer,
     // der in PLANNER_NAMES fehlt.
@@ -196,317 +203,125 @@ uses
   uRdxDeepNestingFix,   // SCA018
   uRdxLookupHoistFix;   // SCA111, SCA112
 
+type
+  // Was die Hilfe auf einem Netzpfad nicht liest (NetworkPathReason): je
+  // Dateiart ein ganzer Satz in R_REMOTE_READS (E29: kein Nomen als %s -
+  // bis Charge G7 'liest dort keine %s' mit WHAT_FORMS, WHAT_INCLUDES und
+  // WHAT_PROJECT_FILES).
+  TRdxRemoteRead = (rrForms, rrIncludes, rrProjectFiles);
+
 const
-  // Hinweise der Hilfen (deutsch wie die Gruende; Pruefstand und Tests
-  // pruefen sie woertlich). Bis Charge R8 in uRdxRecipeRunner (LineHint,
-  // DeclHint, FlowHint und je Rumpf) - bis auf die ersten vier: SCA075,
-  // SCA074, SCA087 und SCA066 bekommen mit der Tabelle ERSTMALS einen
-  // festen Hinweis; bis dahin blieb ihr Hint leer, und der Eintrag stand
-  // ohne Erklaerung im Menue (Gegen-Review R8, Major 1; uTestRdxFixTable
-  // pinnt R_TOBJECT_HINT woertlich).
-  R_TOBJECT_HINT  = 'TObject ist ohnehin der Vorfahr - gleiche Bedeutung';
-  R_ASSERT_HINT   = 'die Bedingung als Text - so nennt die Meldung, was '
-    + 'fehlschlug';
-  R_EMPTYSEC_HINT = 'der Abschnitt war leer - gleiche Bedeutung';
-  R_NOARGS_HINT   = 'gleiche Bedeutung - Delphi ruft die Routine auch ohne '
-    + 'Klammern auf';
-  R_CASE_ELSE_HINT = 'alle anderen Werte: nichts tun (wie bisher)';
-  R_BLOCK_HINT     = 'gleiche Bedeutung - nur die Form; eine weitere '
-    + 'Anweisung gehoert danach sichtbar in den Zweig';
-  R_SEMI_HINT   = 'das zweite ";" war eine leere Anweisung';
-  R_INDENT_HINT = 'nur Leerraum';
-  R_INIT_HINT   = 'gleiche Bedeutung - der Abschnitt kann danach ein '
-    + 'finalization bekommen';
-  R_EMPTY_HINT  = 'die Absicht steht im Rumpf - ein Grund dahinter hilft dem '
-    + 'naechsten Leser';
-  R_MISSING_RAISE_HINT = 'die Exception wird jetzt ausgeloest - der Code '
-    + 'dahinter laeuft im Fehlerfall nicht mehr';
-  R_RERAISE_HINT = 'dieselbe Exception - der Original-Stack-Trace bleibt '
-    + 'erhalten';
-  R_DOC_HINT     = 'das Geruest ist leer - summary, param und returns '
-    + 'ausfuellen';
-  R_GUID_HINT    = 'eine neue GUID - nur fuer eigene Interfaces, nie fuer '
-    + 'COM-Importe';
-  R_OVERRIDE_HINT = 'der virtuelle Aufruf landet danach in dieser Methode';
-  R_REINTRODUCE_HINT = 'nur die Warnung W1010 entfaellt - die Methode '
-    + 'verdeckt die geerbten weiterhin';
-  R_COND_HINT = 'gleiche Bedeutung - eine Zuweisung statt zweier Zweige';
-  R_JUMP_HINT = 'gleiche Bedeutung - der Ablauf verlaesst den Block ohnehin';
-  R_SELF_HINT = 'die Zuweisung bewirkt nichts - war ein anderer Wert gemeint '
-    + '(Tippfehler), fehlt er weiterhin';
-  R_ROUTINE_HINT = 'gleiche Bedeutung - der Name steht sonst nirgends im '
-    + 'Code der Datei; Doku und ein Kommentar darueber, der die Routine nennt, '
-    + 'gehen mit';
-  R_METHOD_HINT  = 'gleiche Bedeutung - Deklaration und Implementierung '
-    + 'gehen, der Name steht sonst nirgends im Code der Datei';
-  // Charge H3a (Aufraeumen): SCA070, SCA053.
-  R_COMMENTED_HINT = 'gleiche Bedeutung - nur Kommentar faellt weg; die '
-    + 'Versionsverwaltung kennt ihn noch';
-  R_UNUSED_VAR_HINT = 'gleiche Bedeutung - die Variable kommt nirgends sonst '
-    + 'vor';
-  // Charge Q (zehn einfache Hilfen): SCA115, SCA094, SCA183, SCA093,
-  // SCA161, SCA083, SCA046, SCA061, SCA063, SCA064. Die Hinweise der zweiten
-  // Eintraege (SCA093, SCA046) setzen ihre Adapter (PlanTwiceInheritedAlt,
-  // PlanReversedForRangeAlt) - bis G09-20 standen sie in den Planer-Units.
-  R_HTTPS_HINT    = 'nur das Schema; der Server muss https auf dem '
-    + 'Standardport koennen (Port 443, gueltiges Zertifikat)';
-  R_PARENS_HINT   = 'ein Klammerpaar bleibt - Bedeutung und Rangfolge gleich';
-  R_ATTRGAP_HINT  = 'nur Leerzeilen - das Attribut gehoert ohnehin zum '
-    + 'naechsten Element';
-  R_TWICE_HINT    = 'der zweite Aufruf entfaellt - die Elternmethode laeuft '
-    + 'nur noch einmal; Reihenfolge und Nebenwirkung pruefen';
-  R_TWICE_ALT_HINT = 'der erste Aufruf entfaellt - die Elternmethode laeuft '
-    + 'nur noch einmal; Reihenfolge und Nebenwirkung pruefen';
-  R_NATIVEINT_HINT = 'Win64: der Abstand ist jetzt der volle Adressabstand; '
-    + 'unter Bereichspruefung (R+) kann die Zuweisung an ein Integer-Ziel '
-    + 'ERangeError ausloesen';
-  R_EMPTYFIN_HINT = 'gleiche Bedeutung - ein leeres finally tut nichts, '
-    + 'Ausnahmen laufen weiter nach aussen';
-  R_FORRANGE_HINT = 'die Schleife lief bisher nie und zaehlt danach '
-    + 'abwaerts; war sie absichtlich abgeschaltet, ist das ein Eingriff';
-  R_FORRANGE_SWAP_HINT = 'die Schleife lief bisher nie und zaehlt danach '
-    + 'aufwaerts; war sie absichtlich abgeschaltet, ist das ein Eingriff';
-  // SCA061: die Tabweite ist eine feste Annahme (uRdxTabsFix.TAB_WIDTH),
-  // nicht die Einstellung der IDE - der Hinweis sagt es (Wochen-Review
-  // 2026-10-21, P17: bis dahin klang sie wie ein Standard).
-  R_TABS_HINT     = 'Tabs im Code werden zu Leerzeichen - Tabweite 2 '
-    + '(Annahme); Tabs in Strings und Kommentaren bleiben';
-  R_BLANKS_HINT   = 'nur Leerraum am Zeilenende';
-  R_LOWER_HINT    = 'gleiche Bedeutung - Delphi unterscheidet Gross- und '
-    + 'Kleinschreibung nicht';
-  // Charge R (zehn weitere Hilfen): SCA002, SCA159, SCA077, SCA065,
-  // SCA068, SCA076, SCA179, SCA180, SCA181, SCA060.
-  R_EMPTYEXCEPT_HINT = 'eine bisher verschluckte Ausnahme laeuft jetzt nach '
-    + 'aussen weiter - der Aufrufer muss sie behandeln; war das Verschlucken '
-    + 'Absicht, ist das ein Eingriff';
-  R_EMPTYONHANDLER_HINT = 'die Ausnahme wird nicht mehr verschluckt, sondern '
-    + 'an den Aufrufer weitergereicht - Programmablauf und aeussere Handler '
-    + 'pruefen';
-  R_EMPTYBLOCK_HINT = 'gleiche Bedeutung - der Aufruf bleibt als Anweisung und '
-    + 'laeuft wie vorher genau einmal; with-Kopf und leerer Block entfallen';
-  R_NOSONAR_HINT = 'der Marker steht jetzt ueber der Zeile und unterdrueckt '
-    + 'alle Regeln der Zeile (bisher unterdrueckte NOSONAR nichts); kritische '
-    + 'Arten (HardcodedSecret, SQLInjection u. a.) bleiben sichtbar';
-  R_COMMA_HINT = 'gleiche Bedeutung - nur das ueberzaehlige Komma entfaellt';
-  R_GROUPED_HINT = 'gleiche Bedeutung - jeder Name behaelt seinen Typ; bei '
-    + '"var" traegt jede neue Zeile das "var" wieder';
-  R_IGNORE_HINT = 'der Platzhalter "reason" ist durch den echten Grund zu '
-    + 'ersetzen (Ticket, Abhaengigkeit, bekannte Einschraenkung)';
-  R_ATTRDUP_HINT = 'das Attribut stand zweimal - es gilt ohnehin nur einmal';
-  R_CATARG_HINT = 'der Platzhalter "category" muss noch durch den echten '
-    + 'Kategorienamen ersetzt werden';
-  R_GOTO_EXIT_HINT = 'gleiche Bedeutung - die Marke steht am Routinenende; '
-    + 'sie bleibt stehen und wird, wenn kein goto mehr zu ihr springt, als '
-    + 'ungenutzte Marke gemeldet (Hinweis/Warnung)';
-  // Charge QF (14 weitere Hilfen): SCA128, SCA059, SCA106, SCA137, SCA188,
-  // SCA192, SCA113, SCA167, SCA144, SCA154, SCA017, SCA011, SCA131, SCA169.
-  // SCA128 / SCA059 (QF1): der Hauptweg nennt die globale FormatSettings nur
-  // ausdruecklich - die Ueberladung ohne Settings liest dieselbe Variable
-  // (RTL 23.0/37.0, FPC 3.2.2 absolute DefaultFormatSettings). Der Alt-Weg
-  // aendert das Verhalten (Hinweis mit der Folge, Kennzeichnung ueber
-  // ChangesBehavior im Alt-Adapter).
-  R_FMTSET_HINT = 'gleiche Bedeutung - ohne das Argument liest die RTL '
-    + 'dieselbe globale FormatSettings; der Aufruf sagt es jetzt ausdruecklich';
-  R_FMTSET_INV_HINT = 'unabhaengig vom System: Punkt als Dezimaltrenner, '
-    + 'Datum MM/dd/yyyy, englische Monats- und Tagesnamen - fuer Dateien, SQL '
-    + 'und Protokolle, nicht fuer die Anzeige';
-  R_FMTLOC_HINT = 'gleiche Bedeutung - Format ohne drittes Argument liest '
-    + 'dieselbe globale FormatSettings; der Aufruf sagt es jetzt ausdruecklich';
-  R_FMTLOC_INV_HINT = 'unabhaengig vom System: Punkt als Dezimaltrenner, '
-    + 'Komma als Tausendertrenner - fuer Dateien, SQL und Protokolle, nicht '
-    + 'fuer die Anzeige';
-  // SCA106 (QF2): bedeutungsgleich (Delphi bindet ohne Gross/klein).
-  R_METHODNAME_HINT = 'gleiche Bedeutung - Delphi unterscheidet Gross- und '
-    + 'Kleinschreibung nicht; nur Deklaration und Implementierung werden '
-    + 'angepasst, Aufrufe behalten ihre Schreibweise (RTTI und MethodName '
-    + 'nennen danach den neuen Namen)';
-  // SCA137 (QF2): gekennzeichnet (E2) - das Ergebnis aendert sich, sobald
-  // das Produkt nicht in 32 Bit passt; das ist der Fix.
-  R_OVERFLOW_HINT = 'das Produkt wird jetzt in 64 Bit gerechnet - ein '
-    + 'Ergebnis ueber MaxInt bleibt erhalten statt still abgeschnitten; mit '
-    + 'Ueberlaufpruefung (Q+) entfaellt die Ausnahme EIntOverflow';
-  // SCA188 / SCA192 (QF3): bedeutungsgleich.
-  R_BIDI_HINT = 'gleiche Bedeutung - im Kommentar geloescht, im String als '
-    + '#$-Code (gleicher Wert); die Zeile zeigt jetzt, was der Compiler liest';
-  R_INVIS_HINT = 'gleiche Bedeutung - im Kommentar geloescht, im String als '
-    + '#$-Code (gleicher Wert, auch in Emoji-Folgen)';
-  // SCA113 (QF4): nur mit Beweis Create(True) - bedeutungsgleich.
-  R_THREAD_START_HINT = 'gleiche Bedeutung - der Thread wurde in dieser '
-    + 'Routine angehalten erzeugt (Create(True)) und noch nie gestartet; '
-    + 'Start laeuft dann wie Resume';
-  // SCA167 (QF4): gekennzeichnet (E2) - die Folge aendert sich.
-  R_RANDOMIZE_HINT = 'die Zufallsfolge ist danach bei jedem Lauf eine andere '
-    + '(Startwert aus der Uhr) - eine bisher wiederholbare Folge, etwa fuer '
-    + 'Tests, geht verloren; der Aufruf beim Laden der Unit wirkt fuer das '
-    + 'ganze Programm; fuer Passwoerter, Token und Schluessel bleibt Random '
-    + 'ungeeignet';
+  // Hinweise, die ein Planer-Adapter setzt (HintByPlanner bzw. zweiter
+  // Eintrag): englische msgids, uebersetzt mit _() an der Verwendung
+  // (Entscheid E29; de/fr in i18n/*.po - Pruefstand und Tests pruefen die
+  // deutsche Fassung). Die FESTEN Hinweise der Zeilen stehen in FIX_HINTS
+  // (unten, parallel zu FIX_ROWS): bis Charge G7 standen sie hier als
+  // deutsche Konstanten und als Feld Hint in der Zeile - fuer tools/
+  // i18n_extract.py unsichtbar (s. Kopf). Bis Charge R8 standen alle
+  // Hinweise in uRdxRecipeRunner (LineHint, DeclHint, FlowHint und je
+  // Rumpf).
+  // SCA149: override (gekennzeichnet) bzw. reintroduce.
+  R_OVERRIDE_HINT = 'the virtual call then ends up in this method';
+  R_REINTRODUCE_HINT = 'only the warning W1010 goes away - the method still '
+    + 'hides the inherited ones';
+  // Charge Q: die Hinweise der zweiten Eintraege (SCA093, SCA046) setzen
+  // ihre Adapter (PlanTwiceInheritedAlt, PlanReversedForRangeAlt) - bis
+  // G09-20 standen sie in den Planer-Units.
+  R_TWICE_ALT_HINT = 'the first call goes away - the parent method runs only '
+    + 'once; check order and side effects';
+  R_FORRANGE_SWAP_HINT = 'the loop never ran so far and then counts up; if '
+    + 'it was switched off on purpose, this is an intervention';
+  // SCA128 / SCA059 (QF1), zweiter Eintrag: aendert das Verhalten
+  // (Kennzeichnung ueber ChangesBehavior im Alt-Adapter).
+  R_FMTSET_INV_HINT = 'independent of the system: period as decimal '
+    + 'separator, date MM/dd/yyyy, English month and day names - for files, '
+    + 'SQL and logs, not for display';
+  R_FMTLOC_INV_HINT = 'independent of the system: period as decimal '
+    + 'separator, comma as thousands separator - for files, SQL and logs, '
+    + 'not for display';
   // SCA144 (QF5): der Adapter setzt ihn vor AppendUses (HintByPlanner).
-  R_FLOATEQ_HINT = 'vergleicht jetzt mit Toleranz (Standard-Epsilon von '
-    + 'System.Math) statt exakt - ein gewollt exakter Vergleich (Schalter- '
-    + 'oder Sentinelwert) aendert damit seine Bedeutung';
-  // SCA154 (QF5): gekennzeichnet (E2).
-  R_MOVESIZE_HINT = 'kopiert bzw. fuellt jetzt genau ein Element (SizeOf des '
-    + 'Zieltyps) statt 4/8 Byte - war ein ganzer Puffer gemeint, die Laenge '
-    + 'von Hand setzen';
-  // SCA017 (QF6): beide Eintraege gekennzeichnet.
-  R_DEBUGOUT_HINT = 'die Ausgabe laeuft nur noch, wenn DEBUG definiert ist '
-    + '(Delphi: Konfiguration Debug); im Release-Build entfaellt sie samt der '
-    + 'Auswertung ihrer Argumente - FPC/Lazarus definiert DEBUG nicht von '
-    + 'selbst';
-  R_DEBUGOUT_DELETE_HINT = 'die Ausgabe entfaellt in jedem Build, auch beim '
-    + 'Debuggen; ihre Argumente werden nicht mehr ausgewertet';
-  // SCA011 (QF6): bedeutungsgleich - der Code lief nie.
-  R_DEADCODE_HINT = 'gleiche Bedeutung - der Code lief nie; geparkter Code '
-    + 'steht danach nur noch in der Versionsverwaltung';
-  // SCA131 (QF7): gekennzeichnet (E2) - IfThen wertete beide Arme aus.
-  R_IFTHEN_HINT = 'nur noch der zutreffende Zweig laeuft - Nebenwirkungen, '
-    + 'Kosten und Ausnahmen des anderen entfallen; die Bedingung laeuft '
-    + 'weiter genau einmal';
-  // SCA169 (QF7): gekennzeichnet (E2) - der Aufruf lief ohne Assertions
-  // bisher nicht.
-  R_ASSERTSE_HINT = 'die Bedingung laeuft jetzt auch ohne Assertions '
-    + '(Release, $C-) - dort entfaellt nur die Pruefung; ohne Meldung wird '
-    + 'die Bedingung zum Meldungstext';
-  // Charge QF8..QF11 (8 weitere Hilfen): SCA054, SCA170, SCA118, SCA119,
-  // SCA069, SCA079, SCA086, SCA127.
-  // SCA054 / SCA170 (QF8): Deklaration und Implementierung in EINEM
-  // Undo-Schritt. SCA170 bleibt ungekennzeichnet (Integrationsnotiz (h) 1:
-  // das const-Aliasing nennt der Hinweis).
-  R_UNUSEDPARAM_HINT = 'gleiche Bedeutung - ein Parametername ist nicht '
-    + 'Teil des Aufrufs; Deklaration, Implementierung und <param name> der '
-    + 'Doku heissen danach "_Name", der Detektor uebergeht solche Namen';
-  R_CONSTSTR_HINT = 'gleiche Bedeutung - der Rumpf beschreibt den '
-    + 'Parameter nicht, niemand nutzt die Routine als Wert; Deklaration und '
-    + 'Implementierung bekommen das const. Ausnahme: aendert die Routine '
-    + 'selbst die Variable, die der Aufrufer uebergibt (Feld, globale '
-    + 'Variable), haengt der const-Parameter danach an freigegebenem Text';
-  // SCA118 / SCA119 (QF9): Umbenennungen, bedeutungsgleich.
-  R_EXC_NAME_HINT = 'gleiche Bedeutung - die Klasse steht im implementation-'
-    + 'Teil und ist nur in dieser Datei sichtbar; jeder Verweis im Code wird '
-    + 'mit umbenannt, Kommentare behalten den alten Namen';
-  R_CONST_NAME_HINT = 'gleiche Bedeutung - jeder Verweis in der Routine wird '
-    + 'mit umbenannt (auch in lokalen Routinen dahinter), Kommentare behalten '
-    + 'den alten Namen';
-  // SCA069 / SCA079 (QF10): bedeutungsgleich; SCA069 nur ab Delphi 11.
-  R_DIGITS_HINT = 'gleiche Bedeutung - der Compiler liest "_" in Zahlen nicht; '
-    + 'Zifferntrenner gibt es erst ab Delphi 11, FPC kennt sie nicht';
-  R_SECTION_HINT = 'gleiche Bedeutung - ein Schluesselwort deklariert beide '
-    + 'Abschnitte';
+  R_FLOATEQ_HINT = 'now compares with a tolerance (default epsilon of '
+    + 'System.Math) instead of exactly - an intentionally exact comparison '
+    + '(flag or sentinel value) changes its meaning';
+  // SCA017 (QF6), zweiter Eintrag: gekennzeichnet wie der erste.
+  R_DEBUGOUT_DELETE_HINT = 'the output goes away in every build, also when '
+    + 'debugging; its arguments are no longer evaluated';
   // SCA086 (QF10): je nach Typ des Parameters (TRdxOutPlan.Changes) - der
   // Adapter setzt den Hinweis (HintByPlanner).
-  R_OUT_PLAIN_HINT = 'gleiche Bedeutung - fuer diesen einfachen Typ behandelt '
-    + 'Delphi out wie var; Deklaration und Implementierung zusammen';
-  R_OUT_MANAGED_HINT = 'out gab den Wert des Aufrufers beim Aufruf frei '
-    + '(verwalteter oder unbekannter Typ) - mit var bleibt er erhalten; liest '
-    + 'die Routine den Parameter vor dem Setzen, sieht sie jetzt den alten '
-    + 'Wert';
+  R_OUT_PLAIN_HINT = 'same meaning - for this simple type Delphi treats out '
+    + 'like var; declaration and implementation together';
+  R_OUT_MANAGED_HINT = 'out released the caller''s value on the call '
+    + '(managed or unknown type) - with var it is kept; if the routine reads '
+    + 'the parameter before setting it, it now sees the old value';
   // SCA127 (QF11): nur der Klassenname wechselt; welche Klasse passt,
   // entscheidet der Benutzer (zwei Eintraege, je eine Absicht). Der Adapter
   // setzt den Hinweis vor AppendUses (HintByPlanner).
-  R_RAWEXC_HINT = 'nur der Klassenname - on-Handler fuer EArgumentException '
-    + 'fangen die Ausnahme jetzt, E.ClassName im Log wechselt; on E: Exception '
-    + 'faengt weiter';
-  R_RAWEXC_ALT_HINT = 'nur der Klassenname - on-Handler fuer '
-    + 'EInvalidOpException fangen die Ausnahme jetzt, E.ClassName im Log '
-    + 'wechselt; on E: Exception faengt weiter';
-  // Charge QF12..QF15 (8 weitere Hilfen): SCA148, SCA150, SCA174, SCA193,
-  // SCA199, SCA018, SCA111, SCA112.
-  // SCA148 (QF12): in DIESER Datei bedeutungsgleich; die Grenze "andere
-  // Units" nennt der Hinweis.
-  R_CLASSMETHOD_HINT = 'gleiche Bedeutung - die Methode braucht kein Objekt '
-    + '(kein Self); Aufrufe Obj.M(..) bleiben gueltig, eine Verwendung als '
-    + 'Methodenzeiger (of object) in einer anderen Unit uebersetzt danach nicht '
-    + 'mehr';
-  // SCA150 (QF12): der else-Zweig lief nie.
-  R_ALWAYSTRUE_HINT = 'gleiche Bedeutung - die Bedingung war immer wahr '
-    + '(Length ist nie negativ): der then-Zweig laeuft wie bisher, ein '
-    + 'else-Zweig lief nie und entfaellt; war ein anderer Vergleich gemeint '
-    + '(etwa > 0), fehlt er weiterhin';
-  // SCA174 (QF13): gekennzeichnet (E2) - die Liste gibt ihre Elemente frei.
-  R_OBJECTLIST_HINT = 'die Liste gibt ihre Elemente jetzt frei - bei Free, '
-    + 'Clear und Delete; geprueft ist, dass jedes Element dort entsteht, die '
-    + 'Liste nicht verlaesst und nicht von Hand freigegeben wird';
-  // SCA193 (QF13): bedeutungsgleich - der Name gilt nur in der Unit.
-  R_HOMOGLYPH_HINT = 'gleiche Bedeutung - ein Buchstabe sah nur lateinisch '
-    + 'aus; alle Vorkommen im Code der Unit werden umbenannt, Kommentare '
-    + 'bleiben';
-  // SCA199 (QF14): gekennzeichnet - bisher warf der Aufruf.
-  R_PARAMNAME_HINT = 'der Aufruf setzt jetzt den Platzhalter aus dem SQL, '
-    + 'statt zur Laufzeit mit "parameter not found" abzubrechen - pruefen, '
-    + 'dass der Wert zu diesem Platzhalter gehoert';
-  // SCA018 (QF14): bedeutungsgleich.
-  R_GUARD_HINT = 'gleiche Bedeutung - die Bedingung wird wie vorher einmal '
-    + 'ausgewertet, ist sie falsch, endet die Routine wie bisher; der Rumpf '
-    + 'rueckt eine Stufe aus';
+  R_RAWEXC_HINT = 'only the class name - on handlers for EArgumentException '
+    + 'now catch the exception, E.ClassName in the log changes; on E: '
+    + 'Exception still catches it';
+  R_RAWEXC_ALT_HINT = 'only the class name - on handlers for '
+    + 'EInvalidOpException now catch the exception, E.ClassName in the log '
+    + 'changes; on E: Exception still catches it';
   // SCA111/SCA112 (QF15): gekennzeichnet (E2) - der Lookup laeuft jetzt
   // auch ohne Durchlauf, und die Referenz wird nur einmal geholt. '%s'
   // zweimal = der neue Name; den Hinweis setzt der Adapter
   // (HintByPlanner).
-  R_PARAM_HOIST_HINT = 'die Parameter-Referenz %s wird einmal vor der '
-    + 'Schleife geholt - fehlt der Parameter, kommt die Ausnahme jetzt auch '
-    + 'ohne Durchlauf; setzt ein Aufruf in der Schleife SQL oder Params '
-    + 'indirekt neu, zeigt %s ins Leere';
-  R_FIELD_HOIST_HINT = 'die Feld-Referenz %s wird einmal vor der Schleife '
-    + 'geholt - fehlt das Feld, kommt die Ausnahme jetzt auch ohne Durchlauf; '
-    + 'schliesst oder oeffnet ein Aufruf in der Schleife die Datenmenge '
-    + 'indirekt, zeigt %s ins Leere';
-  // Charge H4 (try/finally): alle gekennzeichnet (E2) - B laeuft danach
-  // auch dort, wo es bisher uebersprungen wurde; das ist der Fix.
-  R_TRY_OBJECT_HINT = 'Free laeuft jetzt auch bei einer Ausnahme und bei Exit '
-    + '- die Zeilen dazwischen ruecken in den try-Teil';
-  R_TRY_LOCK_HINT   = 'die Sperre wird jetzt auch bei einer Ausnahme '
-    + 'freigegeben - die Zeilen dazwischen ruecken in den try-Teil';
-  R_TRY_BUFFER_HINT = 'FreeMem laeuft jetzt auch bei einer Ausnahme und bei '
-    + 'Exit - die Zeilen dazwischen ruecken in den try-Teil';
+  R_PARAM_HOIST_HINT = 'the parameter reference %s is fetched once before '
+    + 'the loop - if the parameter is missing, the exception now comes even '
+    + 'without an iteration; if a call in the loop resets SQL or Params '
+    + 'indirectly, %s points to nothing';
+  R_FIELD_HOIST_HINT = 'the field reference %s is fetched once before the '
+    + 'loop - if the field is missing, the exception now comes even without '
+    + 'an iteration; if a call in the loop closes or opens the dataset '
+    + 'indirectly, %s points to nothing';
   // Charge H5 (Ergebnis und Konstruktoren): SCA096/SCA097 je nach Fund -
   // direkter TObject-Erbe bedeutungsgleich, sonst gekennzeichnet; SCA121/
   // SCA196 immer gekennzeichnet (Result ist danach definiert).
-  R_CTOR_TOBJECT_HINT = 'TObject.Create ist leer - gleiche Bedeutung; der '
-    + 'Konstruktor folgt danach der Konvention';
-  R_CTOR_OVERRIDE_HINT = 'der ueberschriebene Elternkonstruktor laeuft jetzt '
-    + 'zuerst, mit denselben Argumenten';
-  R_DTOR_TOBJECT_HINT = 'TObject.Destroy ist leer - gleiche Bedeutung; der '
-    + 'Destruktor folgt danach der Konvention';
-  R_DTOR_HINT = 'der Elterndestruktor laeuft jetzt am Ende und gibt die '
-    + 'geerbten Felder frei';
-  // SCA121: der Wert ist ein Literal (0, False, '''', nil ...) oder
-  // Default(T) (Charge H5c); der Menuetext nennt ihn. Bis Charge FB hiess es
-  // '(wie Default(T))' - das stimmt nicht, wenn ein Member wie der erste
-  // Aufzaehlungswert heisst (Gegen-Review R5-06, Fall 2; Absprache mit FE:
-  // der Text muss fuer Literal UND Default(T) stimmen).
-  R_RESULT_DEFAULT_HINT = 'Result beginnt jetzt mit dem genannten Wert statt '
-    + 'zufaellig - spaetere Zuweisungen gelten weiter';
-  R_RESULT_INIT_HINT = 'Result beginnt jetzt leer statt mit dem alten Inhalt '
-    + 'der Zielvariable des Aufrufers';
+  R_CTOR_TOBJECT_HINT = 'TObject.Create is empty - same meaning; the '
+    + 'constructor then follows the convention';
+  R_CTOR_OVERRIDE_HINT = 'the overridden parent constructor now runs first, '
+    + 'with the same arguments';
+  R_DTOR_TOBJECT_HINT = 'TObject.Destroy is empty - same meaning; the '
+    + 'destructor then follows the convention';
+  R_DTOR_HINT = 'the parent destructor now runs at the end and frees the '
+    + 'inherited fields';
+  R_RESULT_INIT_HINT = 'Result now starts empty instead of with the old '
+    + 'content of the caller''s target variable';
   // SCA014 (Charge Q14, E28): die Inline-Konstante haelt die Bedeutung des
   // Literals (E26); den vorlaeufigen Namen benennt der Benutzer selbst um -
   // keine Sync-Edit-Sitzung der Hilfe, und auch kein Rat dazu: Esc
   // zerstoert im Sync Edit Text (UI-Test 2026-10-11), Strg+Umschalt+J
-  // braucht eine Markierung (Gegen-Review Q14, Minor 13).
-  R_MAGIC_HINT = 'gleiche Bedeutung - die Konstante %s haelt das Literal; '
-    + 'umbenennen von Hand oder mit Refactor > Rename (Strg+Umschalt+E)';
+  // braucht eine Markierung (Gegen-Review Q14, Minor 13). Die Taste nennt
+  // die Uebersetzung so, wie die IDE ihrer Sprache sie beschriftet (de
+  // 'Strg+Umschalt+E').
+  R_MAGIC_HINT = 'same meaning - the constant %s holds the literal; rename '
+    + 'it by hand or with Refactor > Rename (Ctrl+Shift+E)';
 
   // ---- Gruende, Dateiarten und Menuetext-Bausteine (keine Hinweise) ----
   // SCA147: Formdateien, die eine Methode per Name an ein Ereignis binden.
   FORM_EXTENSIONS: array[0..2] of string = ('.dfm', '.fmx', '.lfm');
-  R_FORM_UNREADABLE = 'Formdatei %s nicht lesbar (%s) - eine Ereignis-'
-    + 'Bindung ist nicht auszuschliessen';
+  R_FORM_UNREADABLE = 'form file %s not readable (%s) - an event binding '
+    + 'cannot be ruled out';
   // SCA014, SCA147 und SCA164 auf einem Netzpfad bzw. Netzlaufwerk (Review
   // FB, R2-07; SCA014 Gegen-Review Q14, Verdacht e): FileExists auf einer
   // nicht erreichbaren Freigabe blockierte den IDE-Hauptthread (Gegen-Review
-  // R4-03: 2,5 bis 16 s je Aufruf). EIN Text fuer die eine Regel - bis zum
-  // Wochen-Review 2026-10-21 hatte SCA014 einen eigenen fuer das
-  // Netzlaufwerk (RemoteDriveReason, R_MAGIC_REMOTE).
-  R_REMOTE_FILES = 'Netzpfad %s - die Hilfe liest dort keine %s '
-    + '(Menueaufbau im Hauptthread); von Hand';
-  WHAT_FORMS    = 'Formdateien';
-  WHAT_INCLUDES = 'Include-Dateien';
-  WHAT_PROJECT_FILES = 'Projekt- und Include-Dateien';
+  // R4-03: 2,5 bis 16 s je Aufruf). EINE Regel fuer alle drei - bis zum
+  // Wochen-Review 2026-10-21 hatte SCA014 einen eigenen Text fuer das
+  // Netzlaufwerk (RemoteDriveReason, R_MAGIC_REMOTE). Je Dateiart ein
+  // ganzer Satz (TRdxRemoteRead); das Ende ('by hand') kommt als %s aus
+  // uRdxText (MsgByHand), der Trenner '; ' davor bleibt im Satz.
+  R_REMOTE_READS: array[TRdxRemoteRead] of string = (
+    'network path %s - the quick fix reads no form files there (the menu is '
+      + 'built in the main thread); %s',
+    'network path %s - the quick fix reads no include files there (the menu '
+      + 'is built in the main thread); %s',
+    'network path %s - the quick fix reads no project or include files '
+      + 'there (the menu is built in the main thread); %s');
   // SCA001: nur diese Variante bekommt die Hilfe (Feld TLeakFinding.
   // LeakVariant, das uLeakDetector2 setzt; properties.variant im SARIF).
   LEAK_VARIANT_FOF = 'freed-outside-finally';
-  R_NO_FINDING = 'kein Fund';
-  R_NO_ROW     = 'keine einfache Hilfe fuer diese Regel';
+  R_NO_FINDING = 'no finding';
+  R_NO_ROW     = 'no simple quick fix for this rule';
   // Entscheid E2: eine Hilfe, die das Verhalten aendern kann, sagt es.
   CAP_CHANGES  = '(changes behavior)';
   NAME_UNKNOWN = 'X';
@@ -560,9 +375,10 @@ type
   TRdxFixFrame = class
   public
     // Ohne Zeilen bzw. (NeedsOpen) ohne offenen Quellstellen-Dienst:
-    // R_NO_FILE. Sonst der Planer auf der Code-Sicht, Name und Ersetzungen
-    // per Parts, nach einem Angebot der Check; gesperrt ohne Ersetzungen.
-    // Den Plan bekommt der Aufrufer in APlan (Kennzeichnung, Variants).
+    // MsgNoFileOpen (uRdxText; bis Charge G7 R_NO_FILE). Sonst der Planer
+    // auf der Code-Sicht, Name und Ersetzungen per Parts, nach einem
+    // Angebot der Check; gesperrt ohne Ersetzungen. Den Plan bekommt der
+    // Aufrufer in APlan (Kennzeichnung, Variants).
     class function Run<TPlan>(const AForm: TRdxPlanForm<TPlan>;
       APlaces: TSourcePlaces; ALines: TStrings; AFinding: TLeakFinding;
       out APlan: TPlan): TRdxFixOutcome; static;
@@ -576,7 +392,7 @@ var
 begin
   Result := Default(TRdxFixOutcome);
   APlan := Default(TPlan);
-  Result.Reason := R_NO_FILE;
+  Result.Reason := MsgNoFileOpen;
   if not Assigned(ALines) then Exit;
   if AForm.NeedsOpen and not (Assigned(APlaces) and APlaces.IsOpen) then
     Exit;
@@ -649,21 +465,21 @@ end;
 // SCA014, SCA147, SCA164 (Review FB, R2-07): liegt die Unit im Netz
 // (uRdxPaths.IsNetworkPath: UNC, auch mit '/' oder als '\\?\UNC\..', oder
 // ein Netzlaufwerk; '\\?\C:\..' ist lokal)? Dann liest die Hilfe dort
-// nichts (AWhat: was sie lesen wollte). Der
-// Grund nennt das Verzeichnis ohne Namensraum-Vorsatz bzw. das
-// Netzlaufwerk. '' oder der Grund.
-function NetworkPathReason(const AFileName, AWhat: string): string;
+// nichts (AWhat: was sie lesen wollte - je Art ein eigener Satz in
+// R_REMOTE_READS, E29). Der Grund nennt das Verzeichnis ohne
+// Namensraum-Vorsatz bzw. das Netzlaufwerk. '' oder der Grund.
+function NetworkPathReason(const AFileName: string;
+  AWhat: TRdxRemoteRead): string;
 var
-  Path, Drive : string;
+  Path, Place : string;
 begin
   Result := '';
   if not IsNetworkPath(AFileName) then Exit;
   Path := WithoutNamespacePrefix(AFileName);
-  Drive := RemoteDriveOf(Path);
-  if Drive <> '' then
-    Result := Format(R_REMOTE_FILES, [Drive, AWhat])
-  else
-    Result := Format(R_REMOTE_FILES, [ExtractFileDir(Path), AWhat]);
+  Place := RemoteDriveOf(Path);
+  if Place = '' then
+    Place := ExtractFileDir(Path);
+  Result := _(R_REMOTE_READS[AWhat], [Place, MsgByHand]);
 end;
 
 // SCA164: die Include-Dateien vor implementation liest die Hilfe von der
@@ -676,7 +492,7 @@ function IncludeCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
 begin
   Result := '';
   if Length(APlan.Includes) = 0 then Exit;
-  Result := NetworkPathReason(AFinding.FileName, WHAT_INCLUDES);
+  Result := NetworkPathReason(AFinding.FileName, rrIncludes);
   if Result = '' then
     Result := TRdxRoutineFixes.IncludeReason(AFinding.FileName,
       APlan.Includes, APlan.Name);
@@ -689,7 +505,7 @@ end;
 function MagicCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
   AFinding: TLeakFinding; const APlan: TRdxMagicPlan): string;
 begin
-  Result := NetworkPathReason(AFinding.FileName, WHAT_PROJECT_FILES);
+  Result := NetworkPathReason(AFinding.FileName, rrProjectFiles);
   if Result = '' then
     Result := TRdxMagicFixes.FileReason(AFinding.FileName, lfInlineConst);
   if Result = '' then
@@ -959,7 +775,7 @@ begin
      and not TRdxSimpleFixes.DeclaresInlineVar(AMap, APlan.LoopLine,
        APlan.Receiver) then
     Exit(TRdxLookupHoistFix.UnknownReceiverReason(APlan.Receiver));
-  Result := NetworkPathReason(AFinding.FileName, WHAT_PROJECT_FILES);
+  Result := NetworkPathReason(AFinding.FileName, rrProjectFiles);
   if Result = '' then
     Result := TRdxMagicFixes.FileReason(AFinding.FileName, lfInlineVar);
   if Result = '' then
@@ -1019,8 +835,8 @@ begin
   begin
     Result.Enabled := False;
     Result.Edits   := nil;
-    Result.Reason  := MsgMovedSuffix(Format('Zeile %d traegt %s.Free, der '
-      + 'Fund nennt %s', [AFinding.LineInt, Result.Name, Named]));
+    Result.Reason  := MsgMovedSuffix(_('line %d carries %s.Free, the '
+      + 'finding names %s', [AFinding.LineInt, Result.Name, Named]));
   end;
 end;
 
@@ -1188,9 +1004,9 @@ begin
   Result.ChangesBehavior := Result.Name = DIRECTIVE_OVERRIDE;
   if not Result.Enabled then Exit;
   if Result.ChangesBehavior then
-    Result.Hint := R_OVERRIDE_HINT
+    Result.Hint := _(R_OVERRIDE_HINT)
   else
-    Result.Hint := R_REINTRODUCE_HINT;
+    Result.Hint := _(R_REINTRODUCE_HINT);
 end;
 
 function PlanRedundantConditional(APlaces: TSourcePlaces; ALines: TStrings;
@@ -1259,13 +1075,13 @@ begin
         SL.LoadFromFile(Form);
       except
         on E: EStreamError do
-          Exit(Format(R_FORM_UNREADABLE, [ExtractFileName(Form), E.Message]));
+          Exit(_(R_FORM_UNREADABLE, [ExtractFileName(Form), E.Message]));
         on E: EEncodingError do
-          Exit(Format(R_FORM_UNREADABLE, [ExtractFileName(Form), E.Message]));
+          Exit(_(R_FORM_UNREADABLE, [ExtractFileName(Form), E.Message]));
       end;
       if TRdxRoutineFixes.FormNamesMethod(SL.Text, AName) then
-        Exit(Format('die Formdatei %s nennt %s - per Name an ein Ereignis '
-          + 'gebunden', [ExtractFileName(Form), AName]));
+        Exit(_('the form file %s names %s - bound to an event by name',
+          [ExtractFileName(Form), AName]));
     finally
       SL.Free;
     end;
@@ -1281,7 +1097,7 @@ begin
     RoutineForm(TRdxRoutineFixes.UnusedPrivateMethod),
     APlaces, ALines, AFinding, P);
   if not Result.Enabled then Exit;
-  Result.Reason := NetworkPathReason(AFinding.FileName, WHAT_FORMS);
+  Result.Reason := NetworkPathReason(AFinding.FileName, rrForms);
   if Result.Reason = '' then
     Result.Reason := FormReason(AFinding.FileName, Result.Name);
   if Result.Reason = '' then Exit;
@@ -1337,8 +1153,8 @@ begin
   LeakVar := AFinding.MemoryLeakVariant;
   Result := Default(TRdxFixOutcome);
   Result.Name := TRdxTryFixes.NameOf(AFinding.Message);
-  Result.Reason := Format('keine Hilfe fuer die Variante %s - nur fuer %s '
-    + '(Free vorhanden, aber neben dem finally)', [LeakVar, LEAK_VARIANT_FOF]);
+  Result.Reason := _('no quick fix for the variant %s - only for %s (Free '
+    + 'present, but beside the finally)', [LeakVar, LEAK_VARIANT_FOF]);
 end;
 
 function PlanLockWithoutFinally(APlaces: TSourcePlaces; ALines: TStrings;
@@ -1385,9 +1201,9 @@ begin
   Result.ChangesBehavior := P.Changes;
   if not Result.Enabled then Exit;
   if P.Changes then
-    Result.Hint := R_CTOR_OVERRIDE_HINT
+    Result.Hint := _(R_CTOR_OVERRIDE_HINT)
   else
-    Result.Hint := R_CTOR_TOBJECT_HINT;
+    Result.Hint := _(R_CTOR_TOBJECT_HINT);
 end;
 
 // SCA097: 'inherited;' am Ende - gekennzeichnet, ausser bei direktem
@@ -1403,9 +1219,9 @@ begin
   Result.ChangesBehavior := P.Changes;
   if not Result.Enabled then Exit;
   if P.Changes then
-    Result.Hint := R_DTOR_HINT
+    Result.Hint := _(R_DTOR_HINT)
   else
-    Result.Hint := R_DTOR_TOBJECT_HINT;
+    Result.Hint := _(R_DTOR_TOBJECT_HINT);
 end;
 
 // SCA121: 'Result := <Wert>;' als erste Anweisung - ein Literal oder
@@ -1436,7 +1252,7 @@ begin
     ResultForm(TRdxResultFixes.ManagedResultInit),
     APlaces, ALines, AFinding, P);
   if not Result.Enabled then Exit;
-  Result.Hint := R_RESULT_INIT_HINT;
+  Result.Hint := _(R_RESULT_INIT_HINT);
   if P.NeedsVariants then
     Result.Enabled := AppendUses(APlaces, AUsesNames, 'Variants',
       'System.Variants', Result);
@@ -1453,7 +1269,7 @@ begin
     MagicForm(TRdxMagicFixes.MagicNumber),
     APlaces, ALines, AFinding, P);
   if Result.Enabled then
-    Result.Hint := Format(R_MAGIC_HINT, [P.Name]);
+    Result.Hint := _(R_MAGIC_HINT, [P.Name]);
 end;
 
 { ---- Die Adapter der Chargen Q und R (Folgewelle G09-07) ----
@@ -1501,7 +1317,7 @@ begin
   Result.Variant := 1;
   Result.ChangesBehavior := True;
   if Result.Enabled then
-    Result.Hint := R_TWICE_ALT_HINT;
+    Result.Hint := _(R_TWICE_ALT_HINT);
 end;
 
 function PlanPointerSubtraction(APlaces: TSourcePlaces; ALines: TStrings;
@@ -1533,7 +1349,7 @@ begin
   Result.Variant := 1;
   Result.ChangesBehavior := True;
   if Result.Enabled then
-    Result.Hint := R_FORRANGE_SWAP_HINT;
+    Result.Hint := _(R_FORRANGE_SWAP_HINT);
 end;
 
 function PlanTabs(APlaces: TSourcePlaces; ALines: TStrings;
@@ -1656,7 +1472,7 @@ begin
   Result.Variant := 1;
   Result.ChangesBehavior := True;
   if Result.Enabled then
-    Result.Hint := R_FMTSET_INV_HINT;
+    Result.Hint := _(R_FMTSET_INV_HINT);
 end;
 
 // SCA059 (Charge QF1): drittes Argument ', FormatSettings' an das eine
@@ -1677,7 +1493,7 @@ begin
   Result.Variant := 1;
   Result.ChangesBehavior := True;
   if Result.Enabled then
-    Result.Hint := R_FMTLOC_INV_HINT;
+    Result.Hint := _(R_FMTLOC_INV_HINT);
 end;
 
 // SCA106 (Charge QF2): 'doWork' -> 'DoWork' in Deklaration und
@@ -1694,7 +1510,8 @@ end;
 
 // SCA137 (Charge QF2): 'Total := Count * Size;' ->
 // 'Total := Int64(Count) * Size;' - Textform in uRdxIntegerOverflowFix,
-// Typbeweis in OverflowCheck. Ohne offenen Quellstellen-Dienst R_NO_FILE.
+// Typbeweis in OverflowCheck. Ohne offenen Quellstellen-Dienst
+// MsgNoFileOpen.
 function PlanIntegerOverflow(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
@@ -1772,7 +1589,7 @@ begin
   Result.Name := TRdxFloatEqualityFix.CallName(AFinding.Message);
   if not Assigned(ALines) or not Assigned(APlaces) or not APlaces.IsOpen then
   begin
-    Result.Reason := R_NO_FILE;
+    Result.Reason := MsgNoFileOpen;
     Exit;
   end;
   SetLength(Result.Edits, 1);
@@ -1798,7 +1615,7 @@ begin
     Result.Edits := nil;
     Exit;
   end;
-  Result.Hint := R_FLOATEQ_HINT;
+  Result.Hint := _(R_FLOATEQ_HINT);
   Result.Enabled := AppendUses(APlaces, AUsesNames, 'Math', 'System.Math',
     Result);
 end;
@@ -1822,7 +1639,7 @@ begin
   Result.Name := TRdxMoveSizeFix.TargetTypeOf(AFinding.Message);
   if not Assigned(ALines) or not Assigned(APlaces) or not APlaces.IsOpen then
   begin
-    Result.Reason := R_NO_FILE;
+    Result.Reason := MsgNoFileOpen;
     Exit;
   end;
   SetLength(Result.Edits, 1);
@@ -1869,7 +1686,7 @@ begin
   Result.Variant := 1;
   Result.ChangesBehavior := True;
   if Result.Enabled then
-    Result.Hint := R_DEBUGOUT_DELETE_HINT;
+    Result.Hint := _(R_DEBUGOUT_DELETE_HINT);
 end;
 
 // SCA011 (Charge QF6): die toten Zeilen bis vor das Listenende loeschen;
@@ -1992,7 +1809,7 @@ begin
   if not Result.Enabled then Exit;
   Result.Reason := TRdxDigitGroupingFix.FileNameReason(AFinding.FileName);
   if Result.Reason = '' then
-    Result.Reason := NetworkPathReason(AFinding.FileName, WHAT_PROJECT_FILES);
+    Result.Reason := NetworkPathReason(AFinding.FileName, rrProjectFiles);
   if Result.Reason = '' then
   begin
     Detail := TRdxMagicFixes.FileReason(AFinding.FileName, lfDigitSeparator);
@@ -2037,9 +1854,9 @@ begin
   Result.ChangesBehavior := P.Changes;
   if not Result.Enabled then Exit;
   if P.Changes then
-    Result.Hint := R_OUT_MANAGED_HINT
+    Result.Hint := _(R_OUT_MANAGED_HINT)
   else
-    Result.Hint := R_OUT_PLAIN_HINT;
+    Result.Hint := _(R_OUT_PLAIN_HINT);
 end;
 
 // SCA127 (Charge QF11): nur der Klassenname wechselt (uRdxRawExceptionFix).
@@ -2052,7 +1869,7 @@ begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxRawExceptionFix.ToArgumentException);
   if not Result.Enabled then Exit;
-  Result.Hint := R_RAWEXC_HINT;
+  Result.Hint := _(R_RAWEXC_HINT);
   Result.Enabled := AppendUses(APlaces, AUsesNames, 'SysUtils',
     'System.SysUtils', Result);
 end;
@@ -2067,7 +1884,7 @@ begin
   Result.Variant := 1;
   Result.ChangesBehavior := True;
   if not Result.Enabled then Exit;
-  Result.Hint := R_RAWEXC_ALT_HINT;
+  Result.Hint := _(R_RAWEXC_ALT_HINT);
   Result.Enabled := AppendUses(APlaces, AUsesNames, 'SysUtils',
     'System.SysUtils', Result);
 end;
@@ -2093,7 +1910,7 @@ begin
   Result.Name := TRdxClassMethodFix.MethodNameOf(AFinding.Message);
   if not Assigned(ALines) then
   begin
-    Result.Reason := R_NO_FILE;
+    Result.Reason := MsgNoFileOpen;
     Exit;
   end;
   Map := TRdxCodeMap.Create(ALines);
@@ -2173,7 +1990,7 @@ begin
     LookupForm(TRdxLookupHoistFix.ParamByNameLoop),
     APlaces, ALines, AFinding, P);
   if Result.Enabled then
-    Result.Hint := Format(R_PARAM_HOIST_HINT, [P.Name, P.Name]);
+    Result.Hint := _(R_PARAM_HOIST_HINT, [P.Name, P.Name]);
 end;
 
 // SCA112 (Charge QF15): dasselbe fuer
@@ -2187,7 +2004,7 @@ begin
     LookupForm(TRdxLookupHoistFix.FieldByNameLoop),
     APlaces, ALines, AFinding, P);
   if Result.Enabled then
-    Result.Hint := Format(R_FIELD_HOIST_HINT, [P.Name, P.Name]);
+    Result.Hint := _(R_FIELD_HOIST_HINT, [P.Name, P.Name]);
 end;
 
 { ---- Die Tabelle ---- }
@@ -2206,255 +2023,569 @@ const
   // Stufe 2 Rest, uQuickFix-Umzug/Stufe 3, Zeilen, Ausnahmen, Deklarationen
   // H1, Anweisungen H2, Routinen H3b, Aufraeumen H3a, try/finally H4,
   // Ergebnis und Konstruktoren H5, Magic Number Q14, einfache Hilfen Q, R,
-  // QF, QF8..QF11 und QF12..QF15). Der Menuetext steht
-  // unter demselben Index in FIX_CAPTIONS (s. Kopf).
+  // QF, QF8..QF11 und QF12..QF15). Der feste Hinweis steht unter demselben
+  // Index in FIX_HINTS, der Menuetext in FIX_CAPTIONS (s. Kopf).
   FIX_ROWS: array[0..FIX_ROW_HIGH] of TRdxFixRow = (
     (Kind: fkExplicitTObjectInheritance; Plan: PlanExplicitTObject;
-     Hint: R_TOBJECT_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkFreeAndNilHint; Plan: PlanFreeAndNil;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     (Kind: fkNilComparison; Plan: PlanNilComparison;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     (Kind: fkAssertMessage; Plan: PlanAssertMessage;
-     Hint: R_ASSERT_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkEmptyVisibilitySection; Plan: PlanEmptySection;
-     Hint: R_EMPTYSEC_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkFreeWithoutNil; Plan: PlanFreeWithoutNil;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     (Kind: fkEmptyArgumentList; Plan: PlanEmptyArgs;
-     Hint: R_NOARGS_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkRedundantBoolean; Plan: PlanOperand;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     (Kind: fkAssignedAndAssignedNil; Plan: PlanOperand;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     // SCA007: der initialization-Abschnitt der Unit laeuft nicht mehr (E2).
     (Kind: fkUnusedUses; Plan: PlanUnusedUses;
-     Hint: ''; HintByPlanner: True; Changes: True; Alt: nil),
+     HintByPlanner: True; Changes: True; Alt: nil),
     (Kind: fkDefaultCaseInCaseStatement; Plan: PlanCaseElse;
-     Hint: R_CASE_ELSE_HINT; HintByPlanner: False; Changes: False;
+     HintByPlanner: False; Changes: False;
      Alt: PlanCaseRaise),
     (Kind: fkBeginEndRequired; Plan: PlanBlock;
-     Hint: R_BLOCK_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkIfElseBegin; Plan: PlanBlock;
-     Hint: R_BLOCK_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkSuperfluousSemicolon; Plan: PlanDoubleSemicolon;
-     Hint: R_SEMI_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkUnitLevelKeywordIndent; Plan: PlanKeywordIndent;
-     Hint: R_INDENT_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkLegacyInitializationSection; Plan: PlanLegacyInit;
-     Hint: R_INIT_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkCastAndFree; Plan: PlanCastFree;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     (Kind: fkEmptyMethod; Plan: PlanEmptyIntent;
-     Hint: R_EMPTY_HINT; HintByPlanner: False; Changes: False;
+     HintByPlanner: False; Changes: False;
      Alt: PlanEmptyRaise),
     // SCA120: die Exception wird jetzt ausgeloest - das ist der Fix (E2).
     (Kind: fkMissingRaise; Plan: PlanMissingRaise;
-     Hint: R_MISSING_RAISE_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     (Kind: fkReRaiseException; Plan: PlanReRaise;
-     Hint: R_RERAISE_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkPublicMemberWithoutDoc; Plan: PlanDocSkeleton;
-     Hint: R_DOC_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkInterfaceWithoutGuid; Plan: PlanInterfaceGuid;
-     Hint: R_GUID_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkMissingOverride; Plan: PlanMissingOverride;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     (Kind: fkRedundantConditional; Plan: PlanRedundantConditional;
-     Hint: R_COND_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkRedundantJump; Plan: PlanRedundantJump;
-     Hint: R_JUMP_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkSelfAssignment; Plan: PlanSelfAssignment;
-     Hint: R_SELF_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkUnusedRoutine; Plan: PlanUnusedRoutine;
-     Hint: R_ROUTINE_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkUnusedPrivateMethod; Plan: PlanUnusedPrivateMethod;
-     Hint: R_METHOD_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkCommentedOutCode; Plan: PlanCommentedOut;
-     Hint: R_COMMENTED_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkUnusedLocalVar; Plan: PlanUnusedVar;
-     Hint: R_UNUSED_VAR_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     // Charge H4: alle gekennzeichnet (E2) - Strg+Alt+F laesst sie aus.
     (Kind: fkMissingFinally; Plan: PlanMissingFinally;
-     Hint: R_TRY_OBJECT_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     (Kind: fkMemoryLeak; Plan: PlanMemoryLeak;
-     Hint: R_TRY_OBJECT_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     (Kind: fkLockWithoutTryFinally; Plan: PlanLockWithoutFinally;
-     Hint: R_TRY_LOCK_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     (Kind: fkUnpairedLock; Plan: PlanUnpairedLock;
-     Hint: R_TRY_LOCK_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     (Kind: fkGetMemWithoutFreeMem; Plan: PlanGetMemWithoutFree;
-     Hint: R_TRY_BUFFER_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     // Charge H5: SCA096/SCA097 kennzeichnet der Planer nach dem Fund (wie
     // SCA149), SCA121/SCA196 immer.
     (Kind: fkConstructorWithoutInherited; Plan: PlanCtorInherited;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     (Kind: fkDestructorWithoutInherited; Plan: PlanDtorInherited;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     (Kind: fkRoutineResultUnassigned; Plan: PlanResultDefault;
-     Hint: R_RESULT_DEFAULT_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     (Kind: fkManagedResultUninit; Plan: PlanManagedResult;
-     Hint: ''; HintByPlanner: True; Changes: True; Alt: nil),
+     HintByPlanner: True; Changes: True; Alt: nil),
     // Charge Q14: bedeutungsgleich (E26), den Hinweis setzt der Adapter
     // (Name der Konstante).
     (Kind: fkMagicNumber; Plan: PlanMagicNumber;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     // Charge Q: zehn einfache Hilfen.
     // SCA115: aendert das Verhalten (E2) - der Server muss https koennen.
     (Kind: fkHttpInsteadOfHttps; Plan: PlanHttps;
-     Hint: R_HTTPS_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     (Kind: fkRedundantParentheses; Plan: PlanRedundantParens;
-     Hint: R_PARENS_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkAttributeMisalignment; Plan: PlanAttrGap;
-     Hint: R_ATTRGAP_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkTwiceInheritedCalls; Plan: PlanTwiceInherited;
-     Hint: R_TWICE_HINT; HintByPlanner: False; Changes: True;
+     HintByPlanner: False; Changes: True;
      Alt: PlanTwiceInheritedAlt),
     (Kind: fkPointerSubtraction; Plan: PlanPointerSubtraction;
-     Hint: R_NATIVEINT_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     (Kind: fkEmptyFinallyBlock; Plan: PlanEmptyFinally;
-     Hint: R_EMPTYFIN_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkReversedForRange; Plan: PlanReversedForRange;
-     Hint: R_FORRANGE_HINT; HintByPlanner: False; Changes: True;
+     HintByPlanner: False; Changes: True;
      Alt: PlanReversedForRangeAlt),
     (Kind: fkTabulationCharacter; Plan: PlanTabs;
-     Hint: R_TABS_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkTrailingWhitespace; Plan: PlanTrailingBlanks;
-     Hint: R_BLANKS_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkLowercaseKeyword; Plan: PlanLowercaseKeyword;
-     Hint: R_LOWER_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     // Charge R: zehn weitere Hilfen.
     (Kind: fkEmptyExcept; Plan: PlanEmptyExcept;
-     Hint: R_EMPTYEXCEPT_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     (Kind: fkEmptyOnHandler; Plan: PlanEmptyOnHandler;
-     Hint: R_EMPTYONHANDLER_HINT; HintByPlanner: False; Changes: True;
+     HintByPlanner: False; Changes: True;
      Alt: nil),
     (Kind: fkEmptyBlock; Plan: PlanEmptyBlock;
-     Hint: R_EMPTYBLOCK_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkNoSonarMarker; Plan: PlanNoSonar;
-     Hint: R_NOSONAR_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     (Kind: fkTrailingCommaArgList; Plan: PlanTrailingComma;
-     Hint: R_COMMA_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkGroupedDeclaration; Plan: PlanGroupedDeclaration;
-     Hint: R_GROUPED_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkAttributeIgnoreWithoutReason; Plan: PlanIgnoreReason;
-     Hint: R_IGNORE_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkAttributeDuplicate; Plan: PlanAttrDuplicate;
-     Hint: R_ATTRDUP_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkAttributeCategoryWithoutString; Plan: PlanCategoryArg;
-     Hint: R_CATARG_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkGotoStatement; Plan: PlanGotoExit;
-     Hint: R_GOTO_EXIT_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     // Charge QF: 14 weitere Hilfen.
     // SCA128/SCA059: bedeutungsgleich; der zweite Eintrag (Invariant)
     // kennzeichnet sich selbst.
     (Kind: fkDateFormatSettings; Plan: PlanDateFormatSettings;
-     Hint: R_FMTSET_HINT; HintByPlanner: False; Changes: False;
+     HintByPlanner: False; Changes: False;
      Alt: PlanDateFormatSettingsAlt),
     (Kind: fkFormatLocaleHint; Plan: PlanFormatLocale;
-     Hint: R_FMTLOC_HINT; HintByPlanner: False; Changes: False;
+     HintByPlanner: False; Changes: False;
      Alt: PlanFormatLocaleAlt),
     // SCA106: bedeutungsgleich (Delphi bindet ohne Gross/klein).
     (Kind: fkMethodName; Plan: PlanMethodName;
-     Hint: R_METHODNAME_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     // SCA137: aendert das Ergebnis, sobald das Produkt nicht in 32 Bit
     // passt - das ist der Fix (E2).
     (Kind: fkIntegerOverflow; Plan: PlanIntegerOverflow;
-     Hint: R_OVERFLOW_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     (Kind: fkSourceBidiOverride; Plan: PlanBidiOverride;
-     Hint: R_BIDI_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkSourceInvisibleChar; Plan: PlanInvisibleChar;
-     Hint: R_INVIS_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     // SCA113: bedeutungsgleich - nur mit Beweis Create(True)
     // (uRdxThreadResumeFix); Name ist der Empfaenger.
     (Kind: fkThreadResumeDeprecated; Plan: PlanThreadResume;
-     Hint: R_THREAD_START_HINT; HintByPlanner: False; Changes: False;
+     HintByPlanner: False; Changes: False;
      Alt: nil),
     // SCA167: die Zufallsfolge ist danach bei jedem Lauf eine andere (E2).
     (Kind: fkInsecureRandom; Plan: PlanInsecureRandom;
-     Hint: R_RANDOMIZE_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     // SCA144: Toleranz statt exakt (E2); den Hinweis setzt der Adapter vor
     // AppendUses (System.Math bei Bedarf).
     (Kind: fkFloatEquality; Plan: PlanFloatEquality;
-     Hint: ''; HintByPlanner: True; Changes: True; Alt: nil),
+     HintByPlanner: True; Changes: True; Alt: nil),
     // SCA154: die Laenge wird SizeOf(Zieltyp) statt 4/8 (E2).
     (Kind: fkMoveSizeOfPointer; Plan: PlanMoveSizeOfPointer;
-     Hint: R_MOVESIZE_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     // SCA017: der Release-Bau (bzw. beim Loeschen jeder Bau) verliert die
     // Ausgabe (E2).
     (Kind: fkDebugOutput; Plan: PlanDebugOutput;
-     Hint: R_DEBUGOUT_HINT; HintByPlanner: False; Changes: True;
+     HintByPlanner: False; Changes: True;
      Alt: PlanDebugOutputAlt),
     // SCA011: bedeutungsgleich (der Code lief nie); der Menuetext nennt die
     // Zahl der Zeilen (Name, Adapter).
     (Kind: fkDeadCode; Plan: PlanDeadCode;
-     Hint: R_DEADCODE_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     // SCA131: nur noch der zutreffende Arm laeuft (E2); die Typfrage
     // (Variant-Ziel) stellt der Adapter.
     (Kind: fkIfThenShortCircuit; Plan: PlanIfThenToIf;
-     Hint: R_IFTHEN_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     // SCA169: die Bedingung laeuft jetzt auch ohne Assertions (E2) - das
     // ist der Fix.
     (Kind: fkAssertWithSideEffect; Plan: PlanAssertOutside;
-     Hint: R_ASSERTSE_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     // Charge QF8..QF11: 8 weitere Hilfen.
     // SCA054/SCA170: Parameter-Hilfen (Deklaration und Implementierung in
     // EINEM Undo-Schritt); SCA170 ungekennzeichnet, der Hinweis nennt das
     // const-Aliasing.
     (Kind: fkUnusedParameter; Plan: PlanUnusedParameter;
-     Hint: R_UNUSEDPARAM_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkConstStringParameter; Plan: PlanConstStringParameter;
-     Hint: R_CONSTSTR_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     // SCA118/SCA119: Umbenennungen, bedeutungsgleich.
     (Kind: fkExceptionName; Plan: PlanExceptionName;
-     Hint: R_EXC_NAME_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkLocalConstantName; Plan: PlanLocalConstantName;
-     Hint: R_CONST_NAME_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     // SCA069: bedeutungsgleich; nur ab Delphi 11 (Planer und Adapter
     // sperren FPC und alte Compiler).
     (Kind: fkDigitGrouping; Plan: PlanDigitGrouping;
-     Hint: R_DIGITS_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     // SCA079: bedeutungsgleich; Name ist die Art aus der Meldung.
     (Kind: fkConsecutiveSection; Plan: PlanConsecutiveSection;
-     Hint: R_SECTION_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     // SCA086: Kennzeichnung je nach Typ, Hinweis setzt der Adapter (wie
     // SCA096/SCA097).
     (Kind: fkAvoidOut; Plan: PlanAvoidOut;
-     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     // SCA127: nur der Klassenname (E2 - Handler fangen anders); zwei
     // Eintraege, je eine Absicht; den Hinweis setzt der Adapter vor
     // AppendUses (SysUtils bei Bedarf).
     (Kind: fkRaisingRawException; Plan: PlanRaisingRawException;
-     Hint: ''; HintByPlanner: True; Changes: True;
+     HintByPlanner: True; Changes: True;
      Alt: PlanRaisingRawExceptionAlt),
     // Charge QF12..QF15: 8 weitere Hilfen.
     // SCA148: Deklaration und Kopf in einem Schritt; bedeutungsgleich in
     // dieser Datei (die Grenze "andere Units" nennt der Hinweis).
     (Kind: fkCanBeClassMethod; Plan: PlanCanBeClassMethod;
-     Hint: R_CLASSMETHOD_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     // SCA150: immer wahres if aufloesen - der else-Zweig lief nie.
     (Kind: fkBoolAlwaysTrue; Plan: PlanBoolAlwaysTrue;
-     Hint: R_ALWAYSTRUE_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     // SCA174: die Liste gibt ihre Elemente danach frei - gekennzeichnet (E2).
     (Kind: fkTObjectListWithoutOwnership; Plan: PlanObjectList;
-     Hint: R_OBJECTLIST_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     // SCA193: bedeutungsgleich - der Name gilt nur in der Unit und ist dort
     // frei; alle Vorkommen in einem Schritt.
     (Kind: fkSourceNonAsciiIdentifier; Plan: PlanHomoglyph;
-     Hint: R_HOMOGLYPH_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     // SCA199: der Aufruf bindet danach einen anderen Parameter (E2); Name =
     // der eingesetzte Platzhalter (Menuetext).
     (Kind: fkParamNameMismatch; Plan: PlanParamName;
-     Hint: R_PARAMNAME_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+     HintByPlanner: False; Changes: True; Alt: nil),
     // SCA018: Waechter-Klausel fuer das letzte if der Routine
     // (bedeutungsgleich).
     (Kind: fkDeepNesting; Plan: PlanDeepNesting;
-     Hint: R_GUARD_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: False; Changes: False; Alt: nil),
     // SCA111/SCA112: Lookup vor die Schleife, gekennzeichnet (E2); den
     // Hinweis setzt der Adapter (Name der Variable).
     (Kind: fkParamByNameInLoop; Plan: PlanParamByNameLoop;
-     Hint: ''; HintByPlanner: True; Changes: True; Alt: nil),
+     HintByPlanner: True; Changes: True; Alt: nil),
     (Kind: fkFieldByNameInLoop; Plan: PlanFieldByNameLoop;
-     Hint: ''; HintByPlanner: True; Changes: True; Alt: nil)
+     HintByPlanner: True; Changes: True; Alt: nil)
+  );
+
+  // Die festen Hinweise (englische msgids) unter dem Index der Zeile, je
+  // Eintrag mit der Art als Kommentar; '' genau bei HintByPlanner -
+  // FixFor uebersetzt mit _(FIX_HINTS[i]), nie _('') (die msgid '' ist der
+  // Kopf der .po). Bis Charge G7 als deutsche Konstanten R_..._HINT und
+  // Feld Hint der Zeile - fuer tools/i18n_extract.py unsichtbar (s. Kopf);
+  // der Extraktor liest nur Literale im Array, keine Konstanten-Namen.
+  // uTestRdxFixTable (RawHint) und tools/gen-quickfix-doc.py --check
+  // halten FIX_HINTS und HintByPlanner zusammen.
+  FIX_HINTS: array[0..FIX_ROW_HIGH] of string = (
+    // SCA075, SCA074, SCA087 und SCA066 haben ihren festen Hinweis seit der
+    // Tabelle (Charge R8; bis dahin leer, der Eintrag stand ohne Erklaerung
+    // im Menue - Gegen-Review R8, Major 1; uTestRdxFixTable pinnt den
+    // ersten woertlich).
+    // ExplicitTObjectInheritance
+    'TObject is the ancestor anyway - same meaning',
+    // FreeAndNilHint
+    '',
+    // NilComparison
+    '',
+    // AssertMessage
+    'the condition as text - so the message names what failed',
+    // EmptyVisibilitySection
+    'the section was empty - same meaning',
+    // FreeWithoutNil
+    '',
+    // EmptyArgumentList
+    'same meaning - Delphi calls the routine without parentheses too',
+    // RedundantBoolean
+    '',
+    // AssignedAndAssignedNil
+    '',
+    // UnusedUses
+    '',
+    // DefaultCaseInCaseStatement
+    'all other values: do nothing (as before)',
+    // BeginEndRequired
+    'same meaning - only the form; a further statement then visibly belongs '
+      + 'to the branch',
+    // IfElseBegin
+    'same meaning - only the form; a further statement then visibly belongs '
+      + 'to the branch',
+    // SuperfluousSemicolon
+    'the second ";" was an empty statement',
+    // UnitLevelKeywordIndent
+    'whitespace only',
+    // LegacyInitializationSection
+    'same meaning - the section can then get a finalization',
+    // CastAndFree
+    '',
+    // EmptyMethod
+    'the intent is in the body - a reason after it helps the next reader',
+    // MissingRaise
+    'the exception is now raised - the code after it no longer runs in the '
+      + 'error case',
+    // ReRaiseException
+    'the same exception - the original stack trace is kept',
+    // PublicMemberWithoutDoc
+    'the skeleton is empty - fill in summary, param and returns',
+    // InterfaceWithoutGuid
+    'a new GUID - only for your own interfaces, never for COM imports',
+    // MissingOverride
+    '',
+    // RedundantConditional
+    'same meaning - one assignment instead of two branches',
+    // RedundantJump
+    'same meaning - the control flow leaves the block anyway',
+    // SelfAssignment
+    'the assignment has no effect - if another value was meant (typo), it is '
+      + 'still missing',
+    // UnusedRoutine
+    'same meaning - the name appears nowhere else in the code of the file; '
+      + 'documentation and a comment above it that names the routine go with '
+      + 'it',
+    // UnusedPrivateMethod
+    'same meaning - declaration and implementation go, the name appears '
+      + 'nowhere else in the code of the file',
+    // Charge H3a (Aufraeumen): SCA070, SCA053.
+    // CommentedOutCode
+    'same meaning - only a comment is removed; version control still knows it',
+    // UnusedLocalVar
+    'same meaning - the variable appears nowhere else',
+    // Charge H4 (try/finally): alle gekennzeichnet (E2) - B laeuft danach
+    // auch dort, wo es bisher uebersprungen wurde; das ist der Fix.
+    // MissingFinally
+    'Free now also runs on an exception and on Exit - the lines in between '
+      + 'move into the try part',
+    // MemoryLeak
+    'Free now also runs on an exception and on Exit - the lines in between '
+      + 'move into the try part',
+    // LockWithoutTryFinally
+    'the lock is now also released on an exception - the lines in between '
+      + 'move into the try part',
+    // UnpairedLock
+    'the lock is now also released on an exception - the lines in between '
+      + 'move into the try part',
+    // GetMemWithoutFreeMem
+    'FreeMem now also runs on an exception and on Exit - the lines in '
+      + 'between move into the try part',
+    // ConstructorWithoutInherited
+    '',
+    // DestructorWithoutInherited
+    '',
+    // SCA121: der Wert ist ein Literal (0, False, '''', nil ...) oder
+    // Default(T) (Charge H5c); der Menuetext nennt ihn. Bis Charge FB
+    // hiess es '(wie Default(T))' - das stimmt nicht, wenn ein Member wie
+    // der erste Aufzaehlungswert heisst (Gegen-Review R5-06, Fall 2;
+    // Absprache mit FE: der Text muss fuer Literal UND Default(T) stimmen).
+    // RoutineResultUnassigned
+    'Result now starts with the named value instead of a random one - later '
+      + 'assignments still apply',
+    // ManagedResultUninit
+    '',
+    // MagicNumber
+    '',
+    // Charge Q (zehn einfache Hilfen): SCA115, SCA094, SCA183, SCA093,
+    // SCA161, SCA083, SCA046, SCA061, SCA063, SCA064.
+    // HttpInsteadOfHttps
+    'only the scheme; the server must support https on the default port '
+      + '(port 443, valid certificate)',
+    // RedundantParentheses
+    'one pair of parentheses remains - meaning and precedence unchanged',
+    // AttributeMisalignment
+    'blank lines only - the attribute belongs to the next element anyway',
+    // TwiceInheritedCalls
+    'the second call goes away - the parent method runs only once; check '
+      + 'order and side effects',
+    // PointerSubtraction
+    'Win64: the difference is now the full address difference; under range '
+      + 'checking (R+) the assignment to an Integer target can raise '
+      + 'ERangeError',
+    // EmptyFinallyBlock
+    'same meaning - an empty finally does nothing, exceptions keep '
+      + 'propagating outward',
+    // ReversedForRange
+    'the loop never ran so far and then counts down; if it was switched off '
+      + 'on purpose, this is an intervention',
+    // SCA061: die Tabweite ist eine feste Annahme (uRdxTabsFix.TAB_WIDTH),
+    // nicht die Einstellung der IDE - der Hinweis sagt es (Wochen-Review
+    // 2026-10-21, P17: bis dahin klang sie wie ein Standard).
+    // TabulationCharacter
+    'tabs in code become spaces - tab width 2 (assumption); tabs in strings '
+      + 'and comments stay',
+    // TrailingWhitespace
+    'whitespace at the end of the line only',
+    // LowercaseKeyword
+    'same meaning - Delphi does not distinguish upper and lower case',
+    // Charge R (zehn weitere Hilfen): SCA002, SCA159, SCA077, SCA065,
+    // SCA068, SCA076, SCA179, SCA180, SCA181, SCA060.
+    // EmptyExcept
+    'an exception swallowed so far now propagates outward - the caller must '
+      + 'handle it; if the swallowing was intended, this is an intervention',
+    // EmptyOnHandler
+    'the exception is no longer swallowed but passed on to the caller - '
+      + 'check program flow and outer handlers',
+    // EmptyBlock
+    'same meaning - the call stays as a statement and runs exactly once as '
+      + 'before; the with header and the empty block go away',
+    // NoSonarMarker
+    'the marker now stands above the line and suppresses all rules of the '
+      + 'line (so far NOSONAR suppressed nothing); critical kinds '
+      + '(HardcodedSecret, SQLInjection etc.) stay visible',
+    // TrailingCommaArgList
+    'same meaning - only the superfluous comma goes away',
+    // GroupedDeclaration
+    'same meaning - each name keeps its type; with "var" each new line '
+      + 'carries the "var" again',
+    // AttributeIgnoreWithoutReason
+    'replace the placeholder "reason" with the real reason (ticket, '
+      + 'dependency, known limitation)',
+    // AttributeDuplicate
+    'the attribute was there twice - it applies only once anyway',
+    // AttributeCategoryWithoutString
+    'the placeholder "category" still has to be replaced with the real '
+      + 'category name',
+    // GotoStatement
+    'same meaning - the label is at the end of the routine; it stays and, '
+      + 'once no goto jumps to it any more, is reported as an unused label '
+      + '(hint/warning)',
+    // Charge QF (14 weitere Hilfen). SCA128 / SCA059 (QF1): der Hauptweg
+    // nennt die globale FormatSettings nur ausdruecklich - die Ueberladung
+    // ohne Settings liest dieselbe Variable (RTL 23.0/37.0, FPC 3.2.2
+    // absolute DefaultFormatSettings).
+    // DateFormatSettings
+    'same meaning - without the argument the RTL reads the same global '
+      + 'FormatSettings; the call now says so explicitly',
+    // FormatLocaleHint
+    'same meaning - Format without a third argument reads the same global '
+      + 'FormatSettings; the call now says so explicitly',
+    // SCA106 (QF2): bedeutungsgleich (Delphi bindet ohne Gross/klein).
+    // MethodName
+    'same meaning - Delphi does not distinguish upper and lower case; only '
+      + 'declaration and implementation are adjusted, calls keep their '
+      + 'spelling (RTTI and MethodName then give the new name)',
+    // SCA137 (QF2): gekennzeichnet (E2) - das Ergebnis aendert sich, sobald
+    // das Produkt nicht in 32 Bit passt; das ist der Fix.
+    // IntegerOverflow
+    'the product is now computed in 64 bits - a result above MaxInt is kept '
+      + 'instead of silently truncated; with overflow checking (Q+) the '
+      + 'exception EIntOverflow goes away',
+    // SCA188 / SCA192 (QF3): bedeutungsgleich.
+    // SourceBidiOverride
+    'same meaning - deleted in comments, as #$ code in strings (same value); '
+      + 'the line now shows what the compiler reads',
+    // SourceInvisibleChar
+    'same meaning - deleted in comments, as #$ code in strings (same value, '
+      + 'also in emoji sequences)',
+    // SCA113 (QF4): nur mit Beweis Create(True) - bedeutungsgleich.
+    // ThreadResumeDeprecated
+    'same meaning - the thread was created suspended in this routine '
+      + '(Create(True)) and never started; Start then works like Resume',
+    // SCA167 (QF4): gekennzeichnet (E2) - die Folge aendert sich.
+    // InsecureRandom
+    'the random sequence then differs on every run (seed from the clock) - a '
+      + 'sequence that was repeatable so far, e.g. for tests, is lost; the '
+      + 'call when the unit is loaded affects the whole program; Random '
+      + 'stays unsuitable for passwords, tokens and keys',
+    // SCA144 (QF5): den Hinweis setzt der Adapter (R_FLOATEQ_HINT).
+    // FloatEquality
+    '',
+    // SCA154 (QF5): gekennzeichnet (E2).
+    // MoveSizeOfPointer
+    'now copies or fills exactly one element (SizeOf of the target type) '
+      + 'instead of 4/8 bytes - if a whole buffer was meant, set the length '
+      + 'by hand',
+    // SCA017 (QF6): beide Eintraege gekennzeichnet.
+    // DebugOutput
+    'the output only runs when DEBUG is defined (Delphi: configuration '
+      + 'Debug); in the release build it goes away together with the '
+      + 'evaluation of its arguments - FPC/Lazarus does not define DEBUG by '
+      + 'itself',
+    // SCA011 (QF6): bedeutungsgleich - der Code lief nie.
+    // DeadCode
+    'same meaning - the code never ran; parked code then only lives in '
+      + 'version control',
+    // SCA131 (QF7): gekennzeichnet (E2) - IfThen wertete beide Arme aus.
+    // IfThenShortCircuit
+    'only the applicable branch runs now - side effects, costs and '
+      + 'exceptions of the other go away; the condition still runs exactly '
+      + 'once',
+    // SCA169 (QF7): gekennzeichnet (E2) - der Aufruf lief ohne Assertions
+    // bisher nicht.
+    // AssertWithSideEffect
+    'the condition now also runs without assertions (release, $C-) - there '
+      + 'only the check goes away; without a message the condition becomes '
+      + 'the message text',
+    // Charge QF8..QF11. SCA054 / SCA170 (QF8): Deklaration und
+    // Implementierung in EINEM Undo-Schritt. SCA170 bleibt ungekennzeichnet
+    // (Integrationsnotiz (h) 1: das const-Aliasing nennt der Hinweis).
+    // UnusedParameter
+    'same meaning - a parameter name is not part of the call; declaration, '
+      + 'implementation and <param name> of the documentation are then '
+      + 'called "_Name", the detector skips such names',
+    // ConstStringParameter
+    'same meaning - the body does not write the parameter, nobody uses the '
+      + 'routine as a value; declaration and implementation get the const. '
+      + 'Exception: if the routine itself changes the variable the caller '
+      + 'passes (field, global variable), the const parameter then hangs on '
+      + 'freed text',
+    // SCA118 / SCA119 (QF9): Umbenennungen, bedeutungsgleich.
+    // ExceptionName
+    'same meaning - the class is in the implementation part and only visible '
+      + 'in this file; every reference in the code is renamed too, comments '
+      + 'keep the old name',
+    // LocalConstantName
+    'same meaning - every reference in the routine is renamed too (also in '
+      + 'local routines after it), comments keep the old name',
+    // SCA069 / SCA079 (QF10): bedeutungsgleich; SCA069 nur ab Delphi 11.
+    // DigitGrouping
+    'same meaning - the compiler does not read "_" in numbers; digit '
+      + 'separators exist only from Delphi 11 on, FPC does not know them',
+    // ConsecutiveSection
+    'same meaning - one keyword declares both sections',
+    // SCA086 (QF10) und SCA127 (QF11): den Hinweis setzt der Adapter.
+    // AvoidOut
+    '',
+    // RaisingRawException
+    '',
+    // Charge QF12..QF15. SCA148 (QF12): in DIESER Datei bedeutungsgleich;
+    // die Grenze "andere Units" nennt der Hinweis.
+    // CanBeClassMethod
+    'same meaning - the method needs no object (no Self); calls Obj.M(..) '
+      + 'stay valid, a use as method pointer (of object) in another unit '
+      + 'then no longer compiles',
+    // SCA150 (QF12): der else-Zweig lief nie.
+    // BoolAlwaysTrue
+    'same meaning - the condition was always true (Length is never '
+      + 'negative): the then branch runs as before, an else branch never ran '
+      + 'and goes away; if another comparison was meant (e.g. > 0), it is '
+      + 'still missing',
+    // SCA174 (QF13): gekennzeichnet (E2) - die Liste gibt ihre Elemente frei.
+    // TObjectListWithoutOwnership
+    'the list now frees its items - on Free, Clear and Delete; checked: '
+      + 'every item is created there, does not leave the list and is not '
+      + 'freed by hand',
+    // SCA193 (QF13): bedeutungsgleich - der Name gilt nur in der Unit.
+    // SourceNonAsciiIdentifier
+    'same meaning - a letter only looked Latin; all occurrences in the code '
+      + 'of the unit are renamed, comments stay',
+    // SCA199 (QF14): gekennzeichnet - bisher warf der Aufruf.
+    // ParamNameMismatch
+    'the call now sets the placeholder from the SQL instead of aborting at '
+      + 'run time with "parameter not found" - check that the value belongs '
+      + 'to this placeholder',
+    // SCA018 (QF14): bedeutungsgleich.
+    // DeepNesting
+    'same meaning - the condition is evaluated once as before; if it is '
+      + 'false, the routine ends as before; the body moves out one level',
+    // SCA111/SCA112 (QF15): den Hinweis setzt der Adapter.
+    // ParamByNameInLoop
+    '',
+    // FieldByNameInLoop
+    ''
   );
 
   // Menuetexte (msgids) unter dem Index der Zeile; '%s' = Name der Hilfe
@@ -2723,6 +2854,11 @@ begin
     Result := FIX_CAPTIONS[AIndex];
 end;
 
+class function TRdxFixTable.RawHint(AIndex: Integer): string;
+begin
+  Result := FIX_HINTS[AIndex];
+end;
+
 class function TRdxFixTable.PlannerName(AIndex, AVariant: Integer): string;
 var
   P : TRdxFixPlanner;
@@ -2749,18 +2885,19 @@ begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(AFinding) then
   begin
-    Result.Reason := R_NO_FINDING;
+    Result.Reason := _(R_NO_FINDING);
     Exit;
   end;
   Idx := GRowIndex[AFinding.Kind];
   if Idx < 0 then
   begin
-    Result.Reason := R_NO_ROW;
+    Result.Reason := _(R_NO_ROW);
     Exit;
   end;
   Result := FIX_ROWS[Idx].Plan(APlaces, ALines, AFinding, AUsesNames);
-  if Result.Enabled and (Result.Hint = '') then
-    Result.Hint := FIX_ROWS[Idx].Hint;
+  // Nie _('') - die msgid '' ist der Kopf der .po (HintByPlanner: '').
+  if Result.Enabled and (Result.Hint = '') and (FIX_HINTS[Idx] <> '') then
+    Result.Hint := _(FIX_HINTS[Idx]);
   // Auch gesperrt gekennzeichnet (wie bisher): der Eintrag steht mit Grund
   // im Menue und sagt, was er taete.
   Result.ChangesBehavior := Result.ChangesBehavior or FIX_ROWS[Idx].Changes;

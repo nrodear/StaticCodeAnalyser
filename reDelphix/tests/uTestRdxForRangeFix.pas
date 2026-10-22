@@ -45,6 +45,7 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uReversedForRange,
   uRdxForRangeFix, uRdxRecipeRunner, uRdxFixTable,
+  uRdxText,              // _(), MsgMovedSuffix (Gruende, E29)
   uTestRdxDetectorKit,   // TSeen, DetectSource
   uTestRdxTextKit;       // Join, Apply
 
@@ -227,8 +228,9 @@ begin
   Assert.AreEqual<Integer>(0, Main.Variant);
   Assert.AreEqual<Integer>(1, Alt.Variant);
   Assert.IsTrue(Alt.ChangesBehavior);
-  Assert.AreEqual('die Schleife lief bisher nie und zaehlt danach '
-    + 'aufwaerts; war sie absichtlich abgeschaltet, ist das ein '
+  // de.po traegt echte Umlaute (Charge G7) - hier als #$-Code.
+  Assert.AreEqual('die Schleife lief bisher nie und z'#$00E4'hlt danach '
+    + 'aufw'#$00E4'rts; war sie absichtlich abgeschaltet, ist das ein '
     + 'Eingriff', Alt.Hint);
   // Beide Eintraege lehnen auch gemeinsam ab; der Alt-Planer bleibt Variant 1.
   Fixed(InUnit(['  Foo(1);']), BODY_LINE, RevMsg(10, 1, 'x'), True, Alt);
@@ -250,20 +252,20 @@ begin
     // mehr sauber planbar).
     Assert.AreEqual('', Fixed(InUnit(['  for i := 10 {c} to 1 do Foo(i);']),
       BODY_LINE, Msg, Alt, O));
-    Assert.IsTrue(Pos(R_FORRANGE_NONCODE, O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos(_(R_FORRANGE_NONCODE), O.Reason) > 0, O.Reason);
     Assert.AreEqual('', Fixed(InUnit(['  for i := 10 to (* c *) 1 do Foo(i);']),
       BODY_LINE, Msg, Alt, O));
-    Assert.IsTrue(Pos(R_FORRANGE_NONCODE, O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos(_(R_FORRANGE_NONCODE), O.Reason) > 0, O.Reason);
     // Der Kopf steht nur in einem Kommentar bzw. String.
     Assert.AreEqual('', Fixed(InUnit(['  // for i := 10 to 1 do']), BODY_LINE,
       Msg, Alt, O));
-    Assert.IsTrue(Pos(R_FORRANGE_WHAT, O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos(_(R_FORRANGE_WHAT), O.Reason) > 0, O.Reason);
     Assert.AreEqual('', Fixed(InUnit(['  S := ''for i := 10 to 1 do'';']),
       BODY_LINE, Msg, Alt, O));
-    Assert.IsTrue(Pos(R_FORRANGE_WHAT, O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos(_(R_FORRANGE_WHAT), O.Reason) > 0, O.Reason);
     Assert.AreEqual('', Fixed(InUnit(['  { for i := 10 to 1 do }']), BODY_LINE,
       Msg, Alt, O));
-    Assert.IsTrue(Pos(R_FORRANGE_WHAT, O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos(_(R_FORRANGE_WHAT), O.Reason) > 0, O.Reason);
   end;
 end;
 
@@ -276,21 +278,21 @@ begin
   // Zeile verschoben: der Fund zeigt auf eine andere Zeile.
   Assert.AreEqual('', Fixed(InUnit(['  Foo(1);', '  for i := 10 to 1 do Foo(i);']),
     BODY_LINE, Msg, False, O));
-  Assert.IsTrue(Pos(R_FORRANGE_WHAT, O.Reason) > 0, O.Reason);
+  Assert.IsTrue(Pos(_(R_FORRANGE_WHAT), O.Reason) > 0, O.Reason);
   // Grenzen, die nicht umgekehrt sind, und Nicht-Literale.
   Assert.AreEqual('', Fixed(InUnit(['  for i := 1 to 10 do Foo(i);']),
     BODY_LINE, Msg, False, O));
-  Assert.IsTrue(Pos(R_FORRANGE_WHAT, O.Reason) > 0, O.Reason);
+  Assert.IsTrue(Pos(_(R_FORRANGE_WHAT), O.Reason) > 0, O.Reason);
   Assert.AreEqual('', Fixed(InUnit(['  for i := N to 1 do Foo(i);']),
     BODY_LINE, Msg, True, O));
-  Assert.IsTrue(Pos(R_FORRANGE_WHAT, O.Reason) > 0, O.Reason);
+  Assert.IsTrue(Pos(_(R_FORRANGE_WHAT), O.Reason) > 0, O.Reason);
   Assert.AreEqual('', Fixed(InUnit(['  for i := 10 to M do Foo(i);']),
     BODY_LINE, Msg, True, O));
-  Assert.IsTrue(Pos(R_FORRANGE_WHAT, O.Reason) > 0, O.Reason);
+  Assert.IsTrue(Pos(_(R_FORRANGE_WHAT), O.Reason) > 0, O.Reason);
   // Ein anderes Wort 'for' (Bezeichner) ist kein Kopf.
   Assert.AreEqual('', Fixed(InUnit(['  X.for := 10; Y := 1;']), BODY_LINE, Msg,
     False, O));
-  Assert.IsTrue(Pos(R_FORRANGE_WHAT, O.Reason) > 0, O.Reason);
+  Assert.IsTrue(Pos(_(R_FORRANGE_WHAT), O.Reason) > 0, O.Reason);
 end;
 
 procedure TTestRdxForRangeFix.Refuse_OtherBoundsThanFinding;
@@ -301,10 +303,10 @@ begin
   // Werten als die Meldung nennt.
   Assert.AreEqual('', Fixed(InUnit(['  for i := 20 to 2 do Foo(i);']),
     BODY_LINE, RevMsg(10, 1, 'for i := 10 to 1 do'), False, O));
-  Assert.AreEqual(R_FORRANGE_OTHER, O.Reason);
+  Assert.AreEqual(MsgMovedSuffix(_(R_FORRANGE_OTHER)), O.Reason);
   Assert.AreEqual('', Fixed(InUnit(['  for i := 20 to 2 do Foo(i);']),
     BODY_LINE, RevMsg(10, 1, 'for i := 10 to 1 do'), True, O));
-  Assert.AreEqual(R_FORRANGE_OTHER, O.Reason);
+  Assert.AreEqual(MsgMovedSuffix(_(R_FORRANGE_OTHER)), O.Reason);
 end;
 
 procedure TTestRdxForRangeFix.Refuse_TwoHeadsOnLine;
@@ -315,7 +317,7 @@ begin
   Assert.AreEqual('', Fixed(
     InUnit(['  for i := 10 to 1 do Foo(i); for j := 20 to 2 do Bar(j);']),
     BODY_LINE, RevMsg(10, 1, 'for i := 10 to 1 do'), False, O));
-  Assert.IsTrue(Pos(Format(R_FORRANGE_MANY, [2]), O.Reason) > 0, O.Reason);
+  Assert.IsTrue(Pos(_(R_FORRANGE_MANY, [2]), O.Reason) > 0, O.Reason);
 end;
 
 procedure TTestRdxForRangeFix.Refuse_MessageWithoutBounds;
@@ -325,15 +327,15 @@ var
 begin
   Src := InUnit(['  for i := 10 to 1 do Foo(i);']);
   Assert.AreEqual('', Fixed(Src, BODY_LINE, 'etwas anderes', False, O));
-  Assert.AreEqual(R_FORRANGE_BOUNDS, O.Reason);
+  Assert.AreEqual(_(R_FORRANGE_BOUNDS), O.Reason);
   Assert.AreEqual('', Fixed(Src, BODY_LINE, 'Reversed for-range: x > y', True,
     O));
-  Assert.AreEqual(R_FORRANGE_BOUNDS, O.Reason);
+  Assert.AreEqual(_(R_FORRANGE_BOUNDS), O.Reason);
   Assert.AreEqual('', Fixed(Src, BODY_LINE, 'Reversed for-range: 10 > ', False,
     O));
-  Assert.AreEqual(R_FORRANGE_BOUNDS, O.Reason);
+  Assert.AreEqual(_(R_FORRANGE_BOUNDS), O.Reason);
   Assert.AreEqual('', Fixed(Src, BODY_LINE, 'Reversed for-range: 10', False, O));
-  Assert.AreEqual(R_FORRANGE_BOUNDS, O.Reason);
+  Assert.AreEqual(_(R_FORRANGE_BOUNDS), O.Reason);
 end;
 
 procedure TTestRdxForRangeFix.Refuse_HeadOverTwoLinesOrTyped;
@@ -345,14 +347,14 @@ begin
   // Der Kopf geht ueber zwei Zeilen (der Detektor meldet das nicht).
   Assert.AreEqual('', Fixed(InUnit(['  for i := 10 to 1', '    do Foo(i);']),
     BODY_LINE, Msg, False, O));
-  Assert.IsTrue(Pos(R_FORRANGE_WHAT, O.Reason) > 0, O.Reason);
+  Assert.IsTrue(Pos(_(R_FORRANGE_WHAT), O.Reason) > 0, O.Reason);
   Assert.AreEqual('', Fixed(InUnit(['  for i := 10', '    to 1 do Foo(i);']),
     BODY_LINE, Msg, True, O));
-  Assert.IsTrue(Pos(R_FORRANGE_WHAT, O.Reason) > 0, O.Reason);
+  Assert.IsTrue(Pos(_(R_FORRANGE_WHAT), O.Reason) > 0, O.Reason);
   // Mit Typangabe plant der Planer nicht.
   Assert.AreEqual('', Fixed(InUnit(['  for var k: Integer := 10 to 1 do Foo(k);']),
     BODY_LINE, Msg, False, O));
-  Assert.IsTrue(Pos(R_FORRANGE_WHAT, O.Reason) > 0, O.Reason);
+  Assert.IsTrue(Pos(_(R_FORRANGE_WHAT), O.Reason) > 0, O.Reason);
 end;
 
 { ---- gegen den echten Detektor ---- }
@@ -428,7 +430,7 @@ begin
   Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet nur den vorderen');
   Fixed(Src, Seen[0].Line, Seen[0].Msg, False, O);
   Assert.IsFalse(O.Enabled);
-  Assert.IsTrue(Pos(Format(R_FORRANGE_MANY, [2]), O.Reason) > 0, O.Reason);
+  Assert.IsTrue(Pos(_(R_FORRANGE_MANY, [2]), O.Reason) > 0, O.Reason);
 end;
 
 initialization
