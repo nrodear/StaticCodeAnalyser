@@ -186,8 +186,6 @@ const
   DECL_PREV: array[0..14] of string = ('var', 'const', 'threadvar', 'type',
     'resourcestring', ';', '(', 'out', 'private', 'protected', 'public',
     'published', 'class', ')', ']');
-  // Dahinter steht im Rumpf eine inline-Deklaration.
-  INLINE_DECL: array[0..1] of string = ('var', 'const');
   // Die reservierten Woerter von Delphi, dazu Result, Self und operator: so
   // darf der neue Name nicht heissen. Eigener Name, weil uRdxCodeMap seit
   // der Folgewelle B1 RESERVED (ohne die drei) fuehrt.
@@ -368,7 +366,7 @@ begin
     begin
       // Im Rumpf: nur inline 'var X' bzw. 'const X' (auch 'for var X').
       P := Before(AMap, AFirst);
-      Ok := InList(P.Low, INLINE_DECL) and IsKeywordAfter(P, Before(AMap, P));
+      Ok := InList(P.Low, INLINE_DECLS) and IsKeywordAfter(P, Before(AMap, P));
     end
     else
       Ok := DeclShape(AMap, AFirst);

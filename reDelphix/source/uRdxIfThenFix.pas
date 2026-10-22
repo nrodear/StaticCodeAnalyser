@@ -147,8 +147,6 @@ const
   // Davor ist die Anweisung ein Zweig ohne begin..end, ein case-Zweig oder
   // markiert.
   BRANCH_PREV: array[0..3] of string = ('then', 'else', 'do', ':');
-  // Inline-Deklaration statt Zuweisung.
-  DECL_WORDS: array[0..1] of string = ('var', 'const');
   // Woerter, die in einem einfachen Zuweisungsziel nicht stehen.
   NOT_IN_TARGET: array[0..37] of string = ('if', 'then', 'else', 'do',
     'while', 'for', 'to', 'downto', 'case', 'of', 'with', 'repeat', 'until',
@@ -215,7 +213,7 @@ begin
   AStart := NextToken(AMap, ALine, 1);
   if Semi or not FirstOnLine(AMap, AStart) then
     Exit(_(R_IFTHEN_NOT_ALONE));
-  if InList(AStart.Low, DECL_WORDS) then
+  if InList(AStart.Low, INLINE_DECLS) then
     Exit(_(R_IFTHEN_INLINE, [TokText(AMap, AStart)]));
   P := Before(AMap, AStart);
   if InList(P.Low, BRANCH_PREV) then

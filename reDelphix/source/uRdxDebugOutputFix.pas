@@ -109,10 +109,10 @@ const
   BRANCH_PREV: array[0..3] of string = ('then', 'else', 'do', ':');
   // Davor ist ein Wort kein Aufruf ('@WriteLn', '&WriteLn').
   NOT_CALL_PREV: array[0..1] of string = ('@', '&');
-  // Bedingungsbloecke (InDebugCondition).
-  COND_OPEN: array[0..3] of string = ('ifdef', 'ifndef', 'if', 'ifopt');
+  // Bedingungsbloecke (InDebugCondition): oeffnen und schliessen wie
+  // uRdxCodeMap.COND_OPENERS/COND_CLOSERS (bis zur Hygiene-Welle H1
+  // hier kopiert), dazwischen:
   COND_ELSE: array[0..1] of string = ('else', 'elseif');
-  COND_CLOSE: array[0..1] of string = ('endif', 'ifend');
 
 type
   // Die gemeldete Anweisung: erstes Token (System bzw. der Aufruf), der
@@ -251,7 +251,7 @@ begin
       W := DirectiveWord(AMap, Li, Co, Arg);
       Names := HasIdentWord(LowerCase(DirectiveArgs(AMap, Li, Co)),
         DEBUG_WORD);
-      if InList(W, COND_OPEN) then
+      if InList(W, COND_OPENERS) then
       begin
         if N >= Length(Stack) then
           SetLength(Stack, N + 8);
@@ -260,7 +260,7 @@ begin
       end
       else if InList(W, COND_ELSE) and (N > 0) then
         Stack[N - 1] := Stack[N - 1] or Names
-      else if InList(W, COND_CLOSE) and (N > 0) then
+      else if InList(W, COND_CLOSERS) and (N > 0) then
         Dec(N);
     end;
   end;
@@ -328,11 +328,11 @@ begin
   // ein ELSE-Zweig), dahinter schliesst einer. Ein '{$ENDIF}' davor (etwa
   // der Hilfe an der Anweisung darueber) und '{$R+}' sperren nicht.
   Nb := NonBlankLine(AMap, ALine - 1, -1);
-  if (Nb > 0) and (CondOnLine(AMap, Nb, COND_OPEN)
+  if (Nb > 0) and (CondOnLine(AMap, Nb, COND_OPENERS)
                    or CondOnLine(AMap, Nb, COND_ELSE)) then
     Exit(_(R_DBG_AROUND));
   Nb := NonBlankLine(AMap, ASite.Semi.Line + 1, 1);
-  if (Nb > 0) and (CondOnLine(AMap, Nb, COND_CLOSE)
+  if (Nb > 0) and (CondOnLine(AMap, Nb, COND_CLOSERS)
                    or CondOnLine(AMap, Nb, COND_ELSE)) then
     Exit(_(R_DBG_AROUND));
   if InDebugCondition(AMap, ALine) then

@@ -138,7 +138,6 @@ const
   SELF_DOT  = 'self.';
   // Schleifenkoepfe bis zum do.
   LOOP_HEADS: array[0..1] of string = ('for', 'while');
-  INLINE_DECLS: array[0..1] of string = ('var', 'const');
   JUMP_OUT: array[0..1] of string = ('break', 'continue');
   // Die Spruenge, die auch qualifiziert stehen ('System.Exit', SpanStep).
   SYSTEM_UNIT = 'system';

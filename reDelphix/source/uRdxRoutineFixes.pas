@@ -186,9 +186,7 @@ const
   DISPATCH_MEMBERS: array[0..3] of string = ('gettypeinfocount',
     'gettypeinfo', 'getidsofnames', 'invoke');
   MAX_INTERFACES = 64;
-  COND_OPEN: array[0..3] of string = ('if', 'ifdef', 'ifndef', 'ifopt');
   COND_MID: array[0..1] of string = ('else', 'elseif');
-  COND_CLOSE: array[0..1] of string = ('endif', 'ifend');
   LINK_WORDS: array[0..1] of string = ('l', 'link');
   // Property-Teile, hinter denen ein Methodenname Accessor ist.
   ACCESSOR_WORDS: array[0..4] of string = ('read', 'write', 'stored', 'add',
@@ -599,7 +597,7 @@ function BalanceStep(var AStack: string; const AWord: string;
   ALine: Integer): string;
 begin
   Result := '';
-  if InList(AWord, COND_OPEN) then
+  if InList(AWord, COND_OPENERS) then
     AStack := AStack + STACK_COND
   else if AWord = 'region' then
     AStack := AStack + STACK_REGION
@@ -611,7 +609,7 @@ begin
   end
   else if AWord = 'endregion' then
     Result := PopDirective(AStack, STACK_REGION, AWord, ALine)
-  else if InList(AWord, COND_CLOSE) then
+  else if InList(AWord, COND_CLOSERS) then
     Result := PopDirective(AStack, STACK_COND, AWord, ALine)
   else
     Result := Format('Compiler-Direktive {$%s} in Zeile %d - sie wirkt '

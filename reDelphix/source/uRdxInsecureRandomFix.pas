@@ -111,9 +111,6 @@ const
   CALL_LOOKAHEAD = 4;
   // Woerter, mit denen eine Datei beginnt, die keine Unit ist.
   PROGRAM_WORDS: array[0..2] of string = ('program', 'library', 'package');
-  // Bedingte Uebersetzung: oeffnet bzw. schliesst einen Block.
-  COND_OPEN: array[0..3] of string = ('if', 'ifdef', 'ifndef', 'ifopt');
-  COND_CLOSE: array[0..1] of string = ('endif', 'ifend');
 
 // Den Leerraum am Zeilenanfang liefert uRdxCodeMap.IndentOf (bis zur
 // Hygiene-Welle H1 hier byte-gleich kopiert).
@@ -148,9 +145,9 @@ begin
       if OpensDirective(AMap, Li, Co) then
       begin
         W := DirectiveWord(AMap, Li, Co, Arg);
-        if InList(W, COND_OPEN) then
+        if InList(W, COND_OPENERS) then
           Inc(Result)
-        else if InList(W, COND_CLOSE) and (Result > 0) then
+        else if InList(W, COND_CLOSERS) and (Result > 0) then
           Dec(Result);
       end;
   end;

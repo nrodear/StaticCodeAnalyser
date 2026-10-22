@@ -147,8 +147,6 @@ const
   COND_EXPR_WORDS: array[0..1] of string = ('then', 'else');
   // Routinen mit Rueckgabewert.
   RESULT_HEADS: array[0..1] of string = ('function', 'operator');
-  // Inline-Deklarationen, die an ihrem Block haengen.
-  INLINE_WORDS: array[0..1] of string = ('var', 'const');
   // Kein einfacher Operand: Operatoren und 'inherited'.
   NOT_OPERAND: array[0..11] of string = ('and', 'or', 'xor', 'not', 'div',
     'mod', 'shl', 'shr', 'in', 'is', 'as', 'inherited');
@@ -470,7 +468,7 @@ begin
         Inc(Depth)
       else if (T.Low = KW_END) or (T.Low = 'until') then
         Dec(Depth)
-      else if (Depth = 0) and (Paren = 0) and InList(T.Low, INLINE_WORDS)
+      else if (Depth = 0) and (Paren = 0) and InList(T.Low, INLINE_DECLS)
          and (P.Low <> KW_FOR) then
         Exit(_(R_DN_INLINE));
     end;

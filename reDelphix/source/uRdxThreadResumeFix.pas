@@ -154,9 +154,6 @@ const
   LOOP_PREV: array[0..1] of string = ('do', 'repeat');
   // Die Suche nach der Routine um das Resume endet an
   // uRdxCodeMap.UNIT_BOUNDS (bis zur Hygiene-Welle H1 hier kopiert).
-  // Bedingte Uebersetzung: oeffnet bzw. schliesst einen Block.
-  COND_OPEN: array[0..3] of string = ('if', 'ifdef', 'ifndef', 'ifopt');
-  COND_CLOSE: array[0..1] of string = ('endif', 'ifend');
   // Parameter-Vorsaetze im Konstruktorkopf.
   PARAM_MODIFIERS: array[0..3] of string = ('const', 'var', 'out', 'constref');
   // TThread.Start: ab Delphi 2010 (VER210, CompilerVersion 21, COMPILER14,
@@ -217,9 +214,9 @@ begin
       if OpensDirective(AMap, Li, Co) then
       begin
         W := DirectiveWord(AMap, Li, Co, Arg);
-        if InList(W, COND_OPEN) then
+        if InList(W, COND_OPENERS) then
           Inc(Result)
-        else if InList(W, COND_CLOSE) and (Result > 0) then
+        else if InList(W, COND_CLOSERS) and (Result > 0) then
           Dec(Result);
       end;
   end;

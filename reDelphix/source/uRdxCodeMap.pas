@@ -77,6 +77,21 @@ const
   // initialization/finalization) ist eine andere Menge.
   UNIT_BOUNDS: array[0..6] of string = ('implementation', 'interface',
     'initialization', 'finalization', 'unit', 'program', 'library');
+  // Damit beginnt im Rumpf einer Routine eine Inline-Deklaration ('var X',
+  // 'const X'). Bis zur Hygiene-Welle H1 je eine Kopie in uRdxStructFixes,
+  // uRdxTrySpan, uRdxDeepNestingFix, uRdxLocalConstantNameFix (als
+  // INLINE_WORDS), uRdxHomoglyphFix (INLINE_DECL) und uRdxIfThenFix
+  // (DECL_WORDS); uRdxIntroPlan.INLINE_DECL_WORDS nimmt 'for' dazu.
+  INLINE_DECLS: array[0..1] of string = ('var', 'const');
+  // Bedingte Uebersetzung: diese Direktivenwoerter oeffnen bzw. schliessen
+  // einen Block ({$IF}, {$IFDEF}, {$IFNDEF}, {$IFOPT} / {$ENDIF},
+  // {$IFEND}). Bis zur Hygiene-Welle H1 je eine Kopie (COND_OPEN,
+  // COND_CLOSE) in uRdxRoutineFixes, uRdxDebugOutputFix,
+  // uRdxInsecureRandomFix und uRdxThreadResumeFix; die Zwischenwoerter
+  // (else, elseif) fuehren uRdxRoutineFixes und uRdxDebugOutputFix selbst,
+  // uRdxCompilerTraces.CONDITION_WORDS ist eine andere Menge.
+  COND_OPENERS: array[0..3] of string = ('if', 'ifdef', 'ifndef', 'ifopt');
+  COND_CLOSERS: array[0..1] of string = ('endif', 'ifend');
   // Die reservierten Woerter von Delphi: als Bezeichner nur mit '&'. Bis
   // dahin byte-gleich in uRdxCleanupFixes (SCA053: kein Variablenname) und
   // uRdxKeywordCaseFix (SCA064).
