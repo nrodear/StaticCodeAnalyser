@@ -71,9 +71,11 @@ type
 implementation
 
 uses
+  // StartsStatement (SCA120: kein bedingter Ausdruck) kommt seit der
+  // Folgewelle des Wochen-Reviews (G07-13) aus uRdxCodeMap - bis dahin band
+  // die Unit dafuer uRdxStructFixes ein.
   System.SysUtils,
-  uRefactorInfo,     // TRefactorSpan.Make
-  uRdxStructFixes;   // StartsStatementAt (SCA120: kein bedingter Ausdruck)
+  uRefactorInfo;     // TRefactorSpan.Make
 
 const
   SPAN_020 = 'sca020';
@@ -317,7 +319,7 @@ begin
   // in 'Foo(if C then EFoo.Create(..) else nil)' waere raise E2029
   // (Gegen-Review Ausnahme-Hilfen, Major 2).
   AWhole := InList(N.Low, STATEMENT_ENDS)
-    and TRdxStructFixes.StartsStatementAt(AMap, T);
+    and StartsStatement(AMap, T);
 end;
 
 // 'AArg.Create..' an T (OneTokenOnLine, MissingRaise) - ob als ganze

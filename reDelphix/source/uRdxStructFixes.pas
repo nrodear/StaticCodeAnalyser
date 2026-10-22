@@ -36,8 +36,12 @@ type
   end;
 
   // Die Planer an Strukturen ueber mehrere Token oder Zeilen (SCA007,
-  // SCA168, SCA101/SCA099) und ihre geteilten Bausteine (StartsStatementAt,
-  // ElseBelongsToIf): reine Textlogik auf der Code-Sicht. Die uses-Eintraege,
+  // SCA168, SCA101/SCA099): reine Textlogik auf der Code-Sicht. Ihre
+  // geteilten Bausteine - beginnt an einem Token eine Anweisung, wem gehoert
+  // ein else (StartsStatement, ElseBelongsToIf, ElseOwner, FindOwner) -
+  // stehen seit der Folgewelle des Wochen-Reviews (G07-13) in uRdxCodeMap;
+  // bis dahin banden uRdxFlowFixes und uRdxRaiseFixes dafuer diese Unit
+  // ein (StartsStatementAt, ElseBelongsToIf). Die uses-Eintraege,
   // die FPC-Weiche und die uses-Ergaenzung fuer EProgrammerError liefert
   // bzw. prueft der Aufrufer (uRdxFixRunner: TRdxFixRunner.UnusedUsesFix
   // bzw. CaseRaiseFix).
@@ -96,21 +100,6 @@ type
     // einer leeren Anweisung.
     class function WrapInBlock(AMap: TRdxCodeMap; const AKeyword: TRdxToken;
       out AEdits: TArray<TRdxEdit>; out AReason: string): Boolean; static;
-
-    // Beginnt an ATok eine Anweisung? Davor ein Anweisungsanfang
-    // (STATEMENT_PREV); ist es then oder else, muss auch das if davor eine
-    // beginnen (kein bedingter Ausdruck, Delphi 13), ein ':' darf nicht in
-    // Klammern stehen ('Write(X: ...)'). Geteilt mit SCA120 (uRdxRaiseFixes).
-    class function StartsStatementAt(AMap: TRdxCodeMap;
-      const ATok: TRdxToken): Boolean; static;
-
-    // Gehoert das else AElse zu einem if? Dieselbe Rueckwaerts-Suche wie
-    // WrapInBlock (dangling else, Bloecke uebersprungen). False mit Grund,
-    // wenn es zu case/except gehoert (dahinter steht eine Anweisungsliste)
-    // oder der Besitzer unklar ist. Geteilt mit SCA080 (uRdxFlowFixes:
-    // 'else Exit;').
-    class function ElseBelongsToIf(AMap: TRdxCodeMap; const AElse: TRdxToken;
-      out AReason: string): Boolean; static;
   end;
 
 implementation
@@ -135,35 +124,13 @@ const
     'with', 'procedure', 'function', 'var', 'const');
   // In einer Anweisungsliste (else eines case/except) gesperrt.
   INLINE_DECLS: array[0..1] of string = ('var', 'const');
-  // Rueckwaerts ohne Besitzer bis zu diesem Wort (oder ';'): die Suche endet.
-  OWNER_STOPS: array[0..9] of string = ('begin', 'end', 'then', 'else',
-    'do', 'of', 'try', 'repeat', 'except', 'finally');
-  IF_OWNERS: array[0..0] of string = ('if');
+  // Die Besitzer eines do (StatementOwner); die eines then (IF_OWNERS) und
+  // die Listen der Rueckwaerts-Suchen stehen bei FindOwner/ElseOwner in
+  // uRdxCodeMap.
   DO_OWNERS: array[0..3] of string = ('for', 'while', 'with', 'on');
-  // Ein else hinter ';' oder diesen Woertern (oberste Ebene) gehoert zu
-  // case/except.
-  LIST_ELSE_OWNERS: array[0..2] of string = ('of', 'case', 'except');
-  // Obergrenze fuer then/else-Spruenge rueckwaerts (StartsStatement) - eine
-  // else-if-Kette ist so lang wie ihre Zweige.
-  MAX_HOPS = 10000;
-  // Hier endet die Suche nach dem Besitzer eines else ohne Fund (auf
-  // oberster Ebene; repeat..until wird wie begin..end uebersprungen).
-  ELSE_STOPS: array[0..4] of string = ('begin', 'try', 'asm', 'repeat',
-    'finally');
-  // Deklarationen: rueckwaerts hinter einem ';' der Kopf einer anonymen
-  // Methode (Gegen-Review SCA101, Blocker 1).
-  DECL_WORDS: array[0..5] of string = ('procedure', 'function', 'var',
-    'const', 'type', 'label');
   // Hinter 'end else' meldet uIfElseBegin diese Woerter nicht.
   SCA099_ALLOWED: array[0..7] of string = ('begin', 'if', 'case', 'try',
     'for', 'while', 'repeat', 'with');
-  // Rueckwaerts vor einem ':' auf oberster Ebene: Anfang einer Anweisung -
-  // der ':' ist eine case-Marke oder ein Label (ColonInParens).
-  COLON_STOPS: array[0..9] of string = ('begin', 'of', 'then', 'else', 'do',
-    'try', 'except', 'finally', 'repeat', 'end');
-  // Vor 'on' eines Handlers steht ';' oder except - sonst ist On ein
-  // Bezeichner ('while not On do').
-  HANDLER_PREV: array[0..1] of string = (';', 'except');
   // Rueckwaerts vor einem case auf oberster Ebene: hier beginnt der
   // Abschnitt einer Unit, in dem Anweisungen stehen (CaseContextReason;
   // begin/try/repeat/asm/case zaehlen als Block).
@@ -176,7 +143,6 @@ const
     + 'case eine Anweisung ist, ist unklar';
   R_BRANCH_MOVED = 'kein then/else/do an der gemeldeten Stelle - Zeile '
     + 'verschoben? Datei neu pruefen';
-  R_NO_ELSE_OWNER = 'kein if, case oder except zum else gefunden';
 
 type
   // Code-Token eines Bereichs nach Art (CountRangeTokens).
@@ -202,34 +168,6 @@ type
     // else die des Tokens, das seinen Besitzer entschied (then, of, except).
     CheckFrom : Integer;
   end;
-
-  // Wem ein else gehoert (ElseOwner).
-  TRdxElseOwner = (eoUnknown, eoIf, eoList);
-
-  // Die Rueckwaerts-Suche nach dem Besitzer eines else: offene Bloecke
-  // (end bzw. until ohne Anfang), else ohne then und ob schon ein ';' auf
-  // oberster Ebene dahinter liegt; das Ergebnis in Owner und Decider (das
-  // then bzw. of/case/except) oder Reason. Die Schritte liefern True, wenn
-  // die Suche endet.
-  TRdxElseScan = record
-    Block     : Integer;
-    Pending   : Integer;
-    AfterSemi : Boolean;
-    Owner     : TRdxElseOwner;
-    Decider   : TRdxToken;
-    Reason    : string;
-    function StepWord(const T: TRdxToken): Boolean;     // ein Schluesselwort
-    function StepTopWord(const T: TRdxToken): Boolean;  // ... auf oberster Ebene
-    function StepSymbol(const T: TRdxToken): Boolean;   // ein Satzzeichen
-    function TakeThen(const T: TRdxToken): Boolean;
-    function TakeList(const T: TRdxToken): Boolean;
-    function Fail(const AReason: string): Boolean;
-  end;
-
-// Wem ein else gehoert (Rumpf unten bei TRdxElseScan) - vorab, weil die
-// end-Bilanz von SCA168 (TopLevelReason) es braucht.
-function ElseOwner(AMap: TRdxCodeMap; const AElse: TRdxToken): TRdxElseScan;
-  forward;
 
 { ---- SCA007 ---- }
 
@@ -725,249 +663,6 @@ begin
     AKeyword := After(AMap, EndTok);
 end;
 
-// Klammertiefe rueckwaerts: ')' und ']' hoch, '(' und '[' herunter
-// (ParenDelta, uRdxCodeMap, abgezogen). True, wenn T eine Klammer war.
-function ParenBack(const T: TRdxToken; var AParen: Integer): Boolean;
-var
-  Delta : Integer;
-begin
-  Delta := ParenDelta(T);
-  Dec(AParen, Delta);
-  Result := Delta <> 0;
-end;
-
-// FindOwner, ein Token ausserhalb von Klammern: ';' oder ein Wort aus
-// OWNER_STOPS beendet die Suche, ein Wort aus AOwners ist der Besitzer.
-function OwnerStep(const T, APrev: TRdxToken;
-  const AOwners: array of string): TRdxStep;
-begin
-  Result := rsGoOn;
-  if T.Low = ';' then
-    Result := rsStop
-  else if not IsKeywordAfter(T, APrev) then
-    Exit
-  else if (T.Low = 'on') and not InList(APrev.Low, HANDLER_PREV) then
-    Exit
-  else if InList(T.Low, AOwners) then
-    Result := rsFound
-  else if InList(T.Low, OWNER_STOPS) then
-    Result := rsStop;
-end;
-
-// Rueckwaerts ab AKeyword ausserhalb von Klammern das erste Wort aus
-// AOwners (if zu then; for/while/with/on zu do). '' oder der Grund.
-function FindOwner(AMap: TRdxCodeMap; const AKeyword: TRdxToken;
-  const AOwners: array of string; out AOwner: TRdxToken): string;
-var
-  T, P  : TRdxToken;
-  Paren : Integer;
-  Step  : TRdxStep;
-begin
-  AOwner := Default(TRdxToken);
-  Paren := 0;
-  T := Before(AMap, AKeyword);
-  while (T.Low <> '') and (Paren >= 0) do
-  begin
-    P := Before(AMap, T);
-    // Klammern und was in ihnen steht, zaehlen nicht.
-    Step := rsGoOn;
-    if not ParenBack(T, Paren) and (Paren = 0) then
-      Step := OwnerStep(T, P, AOwners);
-    if Step = rsFound then
-    begin
-      AOwner := T;
-      Exit('');
-    end;
-    if Step = rsStop then
-      Break;
-    T := P;
-  end;
-  if Paren < 0 then
-    Exit(Format('das %s steht in Klammern', [AKeyword.Low]));
-  Result := Format('keinen Anfang der Anweisung zum %s gefunden',
-    [AKeyword.Low]);
-end;
-
-{ TRdxElseScan }
-
-function TRdxElseScan.Fail(const AReason: string): Boolean;
-begin
-  Owner := eoUnknown;
-  Reason := AReason;
-  Result := True;
-end;
-
-function TRdxElseScan.TakeThen(const T: TRdxToken): Boolean;
-begin
-  Result := Pending = 0;
-  if not Result then
-    Dec(Pending)
-  else
-  begin
-    Owner := eoIf;
-    Decider := T;
-  end;
-end;
-
-function TRdxElseScan.TakeList(const T: TRdxToken): Boolean;
-begin
-  if Pending > 0 then
-    Exit(Fail('das else passt zu keinem if'));
-  Owner := eoList;
-  Decider := T;
-  Result := True;
-end;
-
-// Bloecke rueckwaerts ueberspringen (end..begin/case/try/asm, until..repeat).
-// Ein record bricht ab: ein case in seinem Variantenteil hat kein eigenes
-// end, die Bilanz stimmte nicht mehr.
-function TRdxElseScan.StepWord(const T: TRdxToken): Boolean;
-begin
-  Result := False;
-  if T.Low = 'record' then
-    Result := Fail('record vor dem else - die end-Bilanz ist unsicher')
-  else if (T.Low = 'end') or (T.Low = 'until') then
-    Inc(Block)
-  else if (IsEndOpener(T.Low) or (T.Low = 'repeat')) and (Block > 0) then
-    Dec(Block)
-  else if Block = 0 then
-    Result := StepTopWord(T);
-end;
-
-// Ein Schluesselwort auf oberster Ebene. Liegt schon ein ';' dahinter
-// (AfterSemi), kommt nur noch ein case oder except in Frage - then und else
-// gehoeren dann zu dessen Armen. Eine Deklaration zeigt, dass das ';' im
-// Kopf einer anonymen Methode stand ('H := procedure var S: string; begin
-// ... end else'): abbrechen, sonst zoege die Hilfe den Rest des Blocks in
-// den else-Zweig (Gegen-Review SCA101, Blocker 1).
-function TRdxElseScan.StepTopWord(const T: TRdxToken): Boolean;
-begin
-  Result := False;
-  if InList(T.Low, LIST_ELSE_OWNERS) then
-    Result := TakeList(T)
-  else if InList(T.Low, ELSE_STOPS) then
-    Result := Fail(R_NO_ELSE_OWNER)
-  else if AfterSemi and InList(T.Low, DECL_WORDS) then
-    Result := Fail(Format('"%s" hinter einem ";" vor dem else - Kopf einer '
-      + 'anonymen Methode? Wem das else gehoert, ist unklar', [T.Low]))
-  else if AfterSemi then
-    Exit
-  else if T.Low = 'else' then
-    Inc(Pending)
-  else if T.Low = 'then' then
-    Result := TakeThen(T);
-end;
-
-// Ein ';' auf oberster Ebene: ein if-else kann es nicht mehr sein - aber
-// erst ein of oder except entscheidet (StepTopWord).
-function TRdxElseScan.StepSymbol(const T: TRdxToken): Boolean;
-begin
-  if (Block = 0) and (T.Low = ';') then
-    AfterSemi := True;
-  Result := False;
-end;
-
-// Wem gehoert das else? Rueckwaerts ausserhalb von Klammern und Bloecken:
-// das erste then ohne eigenes else -> eoIf; of, case oder except davor ->
-// eoList (else eines case oder except: dahinter steht eine
-// Anweisungsliste bis zum end); Decider ist das entscheidende Token. Sonst
-// Reason.
-function ElseOwner(AMap: TRdxCodeMap; const AElse: TRdxToken): TRdxElseScan;
-var
-  T, P  : TRdxToken;
-  Paren : Integer;
-  Done  : Boolean;
-begin
-  Result := Default(TRdxElseScan);
-  Paren := 0;
-  T := Before(AMap, AElse);
-  while (T.Low <> '') and (Paren >= 0) do
-  begin
-    P := Before(AMap, T);
-    if ParenBack(T, Paren) or (Paren > 0) then
-      Done := False
-    else if IsKeywordAfter(T, P) then
-      Done := Result.StepWord(T)
-    else
-      Done := Result.StepSymbol(T);
-    if Done then Exit;
-    T := P;
-  end;
-  Result.Owner := eoUnknown;
-  if Paren < 0 then
-    Result.Reason := 'das else steht in Klammern'
-  else
-    Result.Reason := R_NO_ELSE_OWNER;
-end;
-
-// Steht der ':' vor einem if in Klammern ('Write(X: if A then 1 else 2)')?
-// Dann ist das if ein Ausdruck - keine case-Marke, kein Label.
-function ColonInParens(AMap: TRdxCodeMap; const AColon: TRdxToken): Boolean;
-var
-  T     : TRdxToken;
-  Paren : Integer;
-begin
-  Result := False;
-  Paren := 0;
-  T := Before(AMap, AColon);
-  while (T.Low <> '') and (T.Low <> ';') do
-  begin
-    if ParenBack(T, Paren) and (Paren < 0) then
-      Exit(True);
-    if (Paren = 0) and IsKeywordAfter(T, Before(AMap, T))
-       and InList(T.Low, COLON_STOPS) then
-      Exit;
-    T := Before(AMap, T);
-  end;
-end;
-
-// Ein Sprung von StartsStatement - AThenOrElse ist then oder else: rsGoOn
-// mit dem if davor (AIf), dessen Anfang weiter zu pruefen ist; rsFound,
-// wenn das else zu case/except gehoert (eine Anweisungsliste); rsStop ohne
-// Besitzer.
-function HopToIf(AMap: TRdxCodeMap; const AThenOrElse: TRdxToken;
-  out AIf: TRdxToken): TRdxStep;
-var
-  ThenTok : TRdxToken;
-  Scan    : TRdxElseScan;
-begin
-  AIf := Default(TRdxToken);
-  ThenTok := AThenOrElse;
-  if AThenOrElse.Low = 'else' then
-  begin
-    Scan := ElseOwner(AMap, AThenOrElse);
-    if Scan.Reason <> '' then Exit(rsStop);
-    if Scan.Owner = eoList then Exit(rsFound);
-    ThenTok := Scan.Decider;
-  end;
-  Result := rsGoOn;
-  if FindOwner(AMap, ThenTok, IF_OWNERS, AIf) <> '' then
-    Result := rsStop;
-end;
-
-// Beginnt AOwner (if, for, while, with, on) eine Anweisung? Davor steht
-// ein Token aus STATEMENT_PREV; ist es then oder else, muss auch das if
-// davor eine beginnen - sonst ist es ein verschachtelter bedingter
-// Ausdruck ('X := if A then if B then C else D else E').
-function StartsStatement(AMap: TRdxCodeMap; const AOwner: TRdxToken): Boolean;
-var
-  P, IfTok : TRdxToken;
-  Hop      : Integer;
-  Step     : TRdxStep;
-begin
-  Result := False;
-  P := Before(AMap, AOwner);
-  for Hop := 1 to MAX_HOPS do
-  begin
-    if not InList(P.Low, STATEMENT_PREV) then Exit;
-    if (P.Low = ':') and ColonInParens(AMap, P) then Exit;
-    if (P.Low <> 'then') and (P.Low <> 'else') then Exit(True);
-    Step := HopToIf(AMap, P, IfTok);
-    if Step <> rsGoOn then Exit(Step = rsFound);
-    P := Before(AMap, IfTok);
-  end;
-end;
-
 // Der Besitzer muss eine Anweisung beginnen (StartsStatement).
 function StatementOwner(AMap: TRdxCodeMap; const AKeyword: TRdxToken;
   const AOwners: array of string; out AOwner: TRdxToken): string;
@@ -1274,25 +969,6 @@ begin
   if AReason <> '' then Exit;
   AEdits := BlockEdits(AMap, B);
   Result := True;
-end;
-
-class function TRdxStructFixes.StartsStatementAt(AMap: TRdxCodeMap;
-  const ATok: TRdxToken): Boolean;
-begin
-  Result := StartsStatement(AMap, ATok);
-end;
-
-class function TRdxStructFixes.ElseBelongsToIf(AMap: TRdxCodeMap;
-  const AElse: TRdxToken; out AReason: string): Boolean;
-var
-  Scan : TRdxElseScan;
-begin
-  Scan := ElseOwner(AMap, AElse);
-  AReason := Scan.Reason;
-  if (AReason = '') and (Scan.Owner <> eoIf) then
-    AReason := 'das else gehoert zu einem case bzw. except - dahinter steht '
-      + 'eine Anweisungsliste';
-  Result := AReason = '';
 end;
 
 end.

@@ -1616,9 +1616,9 @@ type
 // Beginnt an ASite noch die gemeldete Anweisung (Code; bei einer
 // Bedingung das Schluesselwort if/while/case)? Ein Abgleich des Funds mit
 // dem Text (Zeile verschoben?), keine Frage nach der Syntax - die stellt
-// TRdxStructFixes.StartsStatementAt (beginnt an einem Token eine
-// Anweisung?), deren Kern in uRdxStructFixes ebenfalls StartsStatement
-// heisst; bis Charge B2S-a trug diese hier denselben Namen (Review R3-05).
+// uRdxCodeMap.StartsStatement (beginnt an einem Token eine Anweisung?; bis
+// zur Folgewelle des Wochen-Reviews in uRdxStructFixes); bis Charge B2S-a
+// trug diese hier denselben Namen (Review R3-05).
 function StatementStillAt(AMap: TRdxCodeMap; const ASite: TRdxNilSite): Boolean;
 var
   KwLow : string;   // nicht 'Low': verdeckte System.Low (Review R3-06)

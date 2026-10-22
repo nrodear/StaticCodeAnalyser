@@ -120,9 +120,10 @@ uses
   // die Fragen an die ganze Datei (DeclaresRoutine, NextTokenOnLineWith) und
   // die Bereichs-Helfer kommen seit Charge B2S-a aus uRdxCodeMap - bis
   // dahin band die Unit dafuer uRdxSimpleFixes ein (Review R3-07).
+  // StartsStatement und ElseBelongsToIf ebenso seit der Folgewelle des
+  // Wochen-Reviews (G07-13) - bis dahin aus uRdxStructFixes.
   System.SysUtils,
-  uRefactorInfo,     // TRefactorSpan.Make
-  uRdxStructFixes;   // StartsStatementAt, ElseBelongsToIf
+  uRefactorInfo;     // TRefactorSpan.Make
 
 const
   SPAN_098 = 'sca098';
@@ -413,7 +414,7 @@ begin
     Exit('Kommentar oder Direktive in der Anweisung - er ginge verloren');
   if SameTok(After(AMap, ASite.IfTok), ASite.ThenTok) then
     Exit('leere Bedingung');
-  if not TRdxStructFixes.StartsStatementAt(AMap, ASite.IfTok) then
+  if not StartsStatement(AMap, ASite.IfTok) then
     Result := 'das if steht in einem Ausdruck (bedingter Ausdruck, Delphi '
       + '13) - keine Anweisung';
 end;
@@ -840,7 +841,7 @@ var
   Span   : TRefactorSpan;
 begin
   AEdit := Default(TRdxEdit);
-  if not TRdxStructFixes.ElseBelongsToIf(AMap, AElse, Result) then
+  if not ElseBelongsToIf(AMap, AElse, Result) then
     Exit(Result + ' - der Sprung ist dort die einzige Anweisung');
   if not LastCharBefore(AMap, AElse, Li, Co) then
     Exit('kein then-Zweig vor dem else');
