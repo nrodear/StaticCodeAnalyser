@@ -14,9 +14,14 @@ unit uRdxGotoExitFix;
 //   - die Marke L die LETZTE Anweisung der innersten Routine um das 'goto'
 //     ist: 'L:' (optional ';' dahinter) steht unmittelbar vor dem 'end' des
 //     Rumpfs, davor ein ';' oder das 'begin'. Dann fuehrt 'goto L' ans
-//     Routinenende, genau wie 'Exit'. try..finally-Bloecke zwischen Sprung
-//     und Ende laufen in beiden Faellen ab; Result einer Funktion bleibt in
-//     beiden Faellen wie es ist. Das bleibt also KEINE Sperre.
+//     Routinenende, genau wie 'Exit'; Result einer Funktion bleibt in
+//     beiden Faellen wie es ist. Ein try-Block zwischen Sprung und Marke
+//     braucht keine Sperre: ein 'goto' aus try- oder finally-Teil heraus
+//     uebersetzt Delphi nicht (E2127 "'GOTO %s' leads into or out of TRY
+//     statement", Meldungstext in dcc32370.dll) - die Marke als letzte
+//     Anweisung steht immer ausserhalb jedes try. Damit kann die Hilfe auch
+//     kein 'Exit' in einen finally-Teil schreiben (E2126), das vorher
+//     uebersetzt haette.
 //   - die Zeile genau ein 'goto' traegt und die Marke dahinter auf derselben
 //     Zeile steht.
 //
@@ -170,7 +175,10 @@ begin
   AGoto := Default(TRdxToken);
   ALabel := Default(TRdxToken);
   L := AMap.Raw(ALine);
-  if (ACol > Length(L)) or not AMap.IsCode(ALine, ACol) then
+  // An der Spalte beginnt ein ganzes Wort: TokenAt liest ab ACol, in
+  // 'xgoto' laese es sonst 'goto' (und GotosOnLine faende keines).
+  if (ACol > Length(L)) or not AMap.IsCode(ALine, ACol)
+     or ((ACol > 1) and IsIdentChar(L[ACol - 1])) then
     Exit(MsgMovedSuffix(_(R_GOTO_MOVED)));
   AGoto := TokenAt(AMap, ALine, ACol);
   if (AGoto.Low <> 'goto') or (AGoto.Col <> ACol)
