@@ -123,7 +123,9 @@ uses
   // StartsStatement und ElseBelongsToIf ebenso seit der Folgewelle des
   // Wochen-Reviews (G07-13) - bis dahin aus uRdxStructFixes.
   System.SysUtils,
-  uRefactorInfo;     // TRefactorSpan.Make
+  uRefactorInfo,     // TRefactorSpan.Make
+  uRdxText;          // _() und die gemeinsamen Texte (Msg...): Gruende in der
+                     // reDelphix-Sprache (E29), nie uLocalization
 
 const
   SPAN_098 = 'sca098';
@@ -168,9 +170,9 @@ const
   PATH_JOINERS: array[0..3] of string = ('.', '^', '&', '@');
   KEY_SELF   = 'Self-assignment: ';
   KEY_ASSIGN = ' := ';
-  R_MOVED = 'Zeile verschoben? Datei neu pruefen';
-  R_LINE_COMMENT = 'Kommentar auf der Zeile - er erklaert die Stelle '
-    + 'vielleicht; von Hand entscheiden';
+  // msgid (E29) fuer SCA080 und SCA047 - %s = MsgDecideByHand; der Trenner
+  // '; ' bleibt im Satz (deutsch bisher '...; von Hand entscheiden').
+  R_LINE_COMMENT = 'comment on the line - it may explain the place; %s';
 
 type
   // Eine ganze Anweisung (DeleteEdit): ihr erstes Token, das Token davor
@@ -244,17 +246,17 @@ function ContextReason(const APrev, ANext: TRdxToken): string;
 begin
   Result := '';
   if APrev.Low = ';' then Exit;
+  // Der Zweig ist eine eigene msgid, nicht MsgOnlyStatementEmptyBlock: der
+  // Wortlaut ('Zweig stehen', ohne SCA077) bleibt (c_groups Abschnitt 3).
   if InList(APrev.Low, BRANCH_WORDS) then
-    Result := Format('einzige Anweisung hinter %s - es bliebe ein leerer '
-      + 'Zweig stehen', [APrev.Low])
-  else if APrev.Low = ':' then
-    Result := 'einzige Anweisung eines case-Zweigs bzw. hinter einer Marke'
-  else if not InList(APrev.Low, LIST_OPENERS) then
-    Result := Format('unklar, wozu die Anweisung gehoert ("%s" davor)',
+    Result := _('only statement after %s - an empty branch would remain',
       [APrev.Low])
+  else if APrev.Low = ':' then
+    Result := _('only statement of a case branch or after a label')
+  else if not InList(APrev.Low, LIST_OPENERS) then
+    Result := MsgUnclearStatementOwner(APrev.Low)
   else if (ANext.Low = '') or InList(ANext.Low, LIST_ENDS) then
-    Result := Format('einzige Anweisung hinter %s - es bliebe ein leerer '
-      + 'Block (SCA077)', [APrev.Low]);
+    Result := MsgOnlyStatementEmptyBlock(APrev.Low);
 end;
 
 // Die Anweisung ASite loeschen: steht sie allein auf ihrer Zeile, die
@@ -271,7 +273,7 @@ begin
   AEdit := Default(TRdxEdit);
   Li := ASite.First.Line;
   if ASite.EndLine <> Li then
-    Exit('die Anweisung geht ueber mehrere Zeilen');
+    Exit(_('the statement spans several lines'));
   L := AMap.Raw(Li);
   if (SkipBlanks(L, 1) = ASite.First.Col)
      and (SkipBlanks(L, ASite.EndCol) > Length(L))
@@ -391,11 +393,11 @@ begin
     T := After(AMap, T);
   end;
   if n = 0 then
-    Result := Format('kein "if .. then %s := .. else %s := .." auf der '
-      + 'gemeldeten Zeile - %s', [AMsg.Target, AMsg.Target, R_MOVED])
+    Result := MsgMovedSuffix(_('no "if .. then %s := .. else %s := .." on '
+      + 'the reported line', [AMsg.Target, AMsg.Target]))
   else if n > 1 then
-    Result := Format('Zeile %d traegt %d solche if-Anweisungen - mehrdeutig '
-      + '(die Meldung nennt keine Spalte)', [ALine, n]);
+    Result := _('line %d carries %d such if statements - ambiguous (the '
+      + 'message names no column)', [ALine, n]);
 end;
 
 // Endet die Anweisung hinter W2, steht nichts zwischen if und W2, was
@@ -407,16 +409,16 @@ begin
   Result := '';
   S := ASite.Stop;
   if (S.Low <> ';') and (S.Low <> '') and not InList(S.Low, STATEMENT_STOPS) then
-    Exit(Format('hinter "%s" geht der Ausdruck weiter - kein reines '
-      + 'if..else', [ASite.SecondVal.Low]));
+    Exit(_('the expression continues after "%s" - not a plain if..else',
+      [ASite.SecondVal.Low]));
   if CommentInRange(AMap, TRefactorSpan.Make(SPAN_098, ASite.IfTok.Line,
        ASite.IfTok.Col, ASite.SecondVal.Line, ASite.SecondVal.EndCol)) then
-    Exit('Kommentar oder Direktive in der Anweisung - er ginge verloren');
+    Exit(_('comment or directive in the statement - it would be lost'));
   if SameTok(After(AMap, ASite.IfTok), ASite.ThenTok) then
-    Exit('leere Bedingung');
+    Exit(_('empty condition'));
   if not StartsStatement(AMap, ASite.IfTok) then
-    Result := 'das if steht in einem Ausdruck (bedingter Ausdruck, Delphi '
-      + '13) - keine Anweisung';
+    Result := _('the if is inside an expression (conditional expression, '
+      + 'Delphi 13) - not a statement');
 end;
 
 // Der Text von hinter AFrom (das if, beim gestrichenen 'not' dieses) bis
@@ -613,7 +615,7 @@ begin
   APlan := Default(TRdxFlowPlan);
   Site := Default(TRdxCondSite);
   if not CondMessageOf(AMessage, Msg) then
-    AReason := 'Ziel oder Werte fehlen in der Meldung'
+    AReason := _('the message has no target or values')
   else
   begin
     APlan.Target := Msg.Target;
@@ -675,13 +677,15 @@ begin
     T := N;
   end;
   // Die Gruende wie bei jeder Token-Suche (OneTokenReason) - die Zaehlung
-  // bleibt eigen: jeder Sprung zaehlt, nicht nur der gemeldete.
+  // bleibt eigen: jeder Sprung zaehlt, nicht nur der gemeldete. What und
+  // das Muster uebersetzt der Aufrufer (Texte umstellen): What als ganze
+  // Nominalphrase, das Muster unformatiert (%d = Zahl der Spruenge).
   if Hits = 0 then
-    Result := OneTokenReason(ALine, 0, 'kein "' + AWord + ';"', '')
+    Result := OneTokenReason(ALine, 0, _('no "%s;"', [AWord]), '')
   else if Jumps > 1 then
-    Result := OneTokenReason(ALine, Jumps, '', '%d Sprunganweisungen')
+    Result := OneTokenReason(ALine, Jumps, '', _('%d jump statements'))
   else if ASemi.Line <> AJump.Line then
-    Result := 'Sprung und ";" auf verschiedenen Zeilen';
+    Result := _('jump and ";" on different lines');
 end;
 
 // Folgt hinter ASemi nur die end-Kette bis zum Routinenende, 'end.' oder
@@ -809,18 +813,19 @@ function RedundantJumpReason(AMap: TRdxCodeMap; const AJump, ASemi: TRdxToken): 
 begin
   Result := '';
   if LineHasComment(AMap, AJump.Line) then
-    Exit(R_LINE_COMMENT);
+    Exit(_(R_LINE_COMMENT, [MsgDecideByHand]));
+  // Hinter '; ' steht das gemeinsame Ende als %s (MsgLineMoved) - der
+  // Trenner ist kein ' - ', MsgMovedSuffix passt nicht.
   if not ChainEnds(AMap, ASemi) then
-    Exit('hinter dem Sprung folgt noch Code - kein ueberfluessiger Sprung; '
-      + R_MOVED);
+    Exit(_('code follows the jump - no redundant jump; %s', [MsgLineMoved]));
   if (AJump.Low = 'exit') and JumpInsideLoop(AMap, AJump) then
-    Exit('Exit in einer Schleife ist eine Frueh-Rueckkehr, kein No-Op');
+    Exit(_('Exit in a loop is an early return, not a no-op'));
   if InFinally(AMap, AJump) then
-    Exit('Sprung im finally-Teil - Delphi (E2126) und FPC (06040) '
-      + 'uebersetzen ihn nicht; von Hand pruefen');
+    Exit(_('jump in the finally part - Delphi (E2126) and FPC (06040) do not '
+      + 'compile it; %s', [MsgCheckByHand]));
   if DeclaresRoutine(AMap, AJump.Low) then
-    Result := Format('die Unit deklariert eine eigene Routine %s - der '
-      + 'Sprung ruft vielleicht sie auf', [AJump.Low]);
+    Result := _('the unit declares its own routine %s - the jump may call it',
+      [AJump.Low]);
 end;
 
 // 'else Exit;' am Ende eines if: ab hinter dem then-Zweig bis hinter den
@@ -834,13 +839,16 @@ var
   Span   : TRefactorSpan;
 begin
   AEdit := Default(TRdxEdit);
+  // Den Grund von ElseBelongsToIf uebersetzt uRdxCodeMap; hier steht er
+  // als %s im eigenen Satz (Texte umstellen: der Aufrufer uebersetzt).
   if not ElseBelongsToIf(AMap, AElse, Result) then
-    Exit(Result + ' - der Sprung ist dort die einzige Anweisung');
+    Exit(_('%s - the jump is the only statement there', [Result]));
   if not LastCharBefore(AMap, AElse, Li, Co) then
-    Exit('kein then-Zweig vor dem else');
+    Exit(_('no then branch before the else'));
   Span := TRefactorSpan.Make(SPAN_080, Li, Co, AJump.Line, AJump.EndCol);
   if CommentInRange(AMap, Span) then
-    Exit('Kommentar zwischen then-Zweig und Sprung - er ginge verloren');
+    Exit(_('comment between the then branch and the jump - it would be '
+      + 'lost'));
   AEdit.Span := Span;
   AEdit.Expected := RangeText(AMap, Span);
   AEdit.NewText := Copy(AMap.Raw(Li), Co, 1);
@@ -878,7 +886,7 @@ begin
   Semi := Default(TRdxToken);
   JumpWord := JumpOf(AMessage);
   if JumpWord = '' then
-    AReason := 'Sprunganweisung fehlt in der Meldung'
+    AReason := _('the message has no jump statement')
   else
   begin
     APlan.Target := UpperCase(Copy(JumpWord, 1, 1)) + Copy(JumpWord, 2, MaxInt);
@@ -1004,10 +1012,12 @@ begin
   S := Default(TRdxLineSearch);
   S.Test    := IsSelfAssignOf;
   S.Arg     := AKey;
-  S.What    := 'keine Selbstzuweisung "' + AKey + ' := ' + AKey + '"';
-  // Der Pfad aus der Meldung als Argument, nie im Muster (Vertrag von
-  // TRdxLineSearch; bis zur Review Woche G07-16 stand er im Muster).
-  S.ManyFmt := '%d Selbstzuweisungen von %s';
+  // What als ganze uebersetzte Nominalphrase; ManyFmt ist ein MUSTER
+  // (%d = Zahl der Treffer, %s = ManyArg) - der Pfad aus der Meldung steht
+  // als Argument in ManyArg, nie im Muster (Vertrag von TRdxLineSearch; bis
+  // zur Review Woche G07-16 stand er im Muster).
+  S.What    := _('no self-assignment "%s := %s"', [AKey, AKey]);
+  S.ManyFmt := _('%d self-assignments of %s');
   S.ManyArg := AKey;
   Result := OneTokenOnLine(AMap, ALine, S, Hit);
   if Result = '' then
@@ -1043,18 +1053,20 @@ begin
   Result := '';
   Root := ASite.First.Low;
   if LineHasComment(AMap, ASite.First.Line) then
-    Exit(R_LINE_COMMENT);
+    Exit(_(R_LINE_COMMENT, [MsgDecideByHand]));
   // Der Katalog empfiehlt dort das Unterdruecken (sca-rules.json SCA047).
+  // Eigene msgid: 'von Hand entscheiden oder unterdruecken' ist ein anderer
+  // Satz als MsgDecideByHand (c_groups Abschnitt 3).
   if Root = 'result' then
-    Exit('Result := Result stillt vielleicht eine Compiler-Meldung (Delphi '
-      + 'W1035, FPC "Function result does not seem to be set") - entfernt '
-      + 'kaeme sie zurueck; von Hand entscheiden oder unterdruecken');
+    Exit(_('Result := Result may silence a compiler message (Delphi W1035, '
+      + 'FPC "Function result does not seem to be set") - removed, it would '
+      + 'come back; decide by hand or suppress'));
   if (AKey = Root) and DeclaresRoutine(AMap, Root) then
-    Exit(Format('%s ist auch der Name einer Routine dieser Unit - rechts '
-      + 'kann ein (rekursiver) Aufruf stehen', [Root]));
+    Exit(_('%s is also the name of a routine of this unit - the right side '
+      + 'may be a (recursive) call', [Root]));
   if DeclaresAssignOperator(AMap) then
-    Exit('die Unit deklariert einen class operator Assign - eine Zuweisung '
-      + 'kann dort Code ausfuehren');
+    Exit(_('the unit declares a class operator Assign - an assignment can '
+      + 'run code there'));
   Result := ContextReason(ASite.Prev, ASite.Next);
 end;
 
@@ -1083,7 +1095,7 @@ begin
   APlan.Target := SelfTargetOf(AMessage);
   Key := PathKey(APlan.Target);
   if Key = '' then
-    AReason := 'Ziel fehlt in der Meldung'
+    AReason := _('the message has no target')
   else
     AReason := SelfOn(AMap, ALine, Key, Site);
   if AReason = '' then
