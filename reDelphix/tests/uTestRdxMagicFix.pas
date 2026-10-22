@@ -380,7 +380,9 @@ end;
 // nicht); mit der Schwelle 10.3 ist es alt.
 procedure TTestRdxMagicFix.Floors_DefaultStaysAt2009;
 const
-  NEWER_THAN_2009: array[0..5] of string = ('{$IFDEF DELPHI12_UP}{$ENDIF}',
+  // '{$IFDEF DELPHI12_UP}' zaehlt seit G05-18 als Spur (FLOOR_DEFAULT_FN:
+  // DELPHI-Nummer 8..12 ist ein Kit-Name alter Compiler).
+  NEWER_THAN_2009: array[0..4] of string = (
     '{$IF CompilerVersion >= 23}{$IFEND}', '{$IFDEF VER210}{$ENDIF}',
     '{$IFDEF DELPHIXE_UP}{$ENDIF}', '{$IFDEF CONDITIONALEXPRESSIONS}{$ENDIF}',
     '{$IFDEF COMPILER14_UP}{$ENDIF}');

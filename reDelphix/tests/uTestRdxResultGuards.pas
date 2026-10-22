@@ -432,11 +432,11 @@ end;
 
 procedure TTestRdxResultGuards.Refuse121_OldCompilerDefault;
 const
-  TRACES: array[0..4] of string = ('{$I jvcl.inc}', '{$I ..\Source\CnWizards.inc}',
+  // '{$IFDEF DELPHI12_UP}' ist seit G05-18 eine Spur (FLOOR_DEFAULT_FN).
+  TRACES: array[0..5] of string = ('{$I jvcl.inc}', '{$I ..\Source\CnWizards.inc}',
     '{$IFDEF DELPHI2007_UP}{$ENDIF}', '{$IF CompilerVersion < 20}{$IFEND}',
-    '{$IFNDEF VER150}{$ENDIF}');
-  NEW_ONLY: array[0..1] of string = ('{$IF CompilerVersion >= 23}{$IFEND}',
-    '{$IFDEF DELPHI12_UP}{$ENDIF}');
+    '{$IFNDEF VER150}{$ENDIF}', '{$IFDEF DELPHI12_UP}{$ENDIF}');
+  NEW_ONLY: array[0..0] of string = ('{$IF CompilerVersion >= 23}{$IFEND}');
 var
   R, T : string;
 begin
