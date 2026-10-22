@@ -42,7 +42,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxBufferMath, uRdxCodeMap, uRdxRaiseFixes,
-  uTestRdxTextKit;   // Join, Apply
+  uTestRdxTextKit;   // Join, Apply, InProc
 
 type
   TRdxRaiseKind = (rkEmpty, rkMissing, rkReRaise);
@@ -102,13 +102,6 @@ function InImpl(const ALines: array of string): string;
 begin
   Result := Join(['unit u;', 'interface', 'implementation']) + #13#10
     + Join(ALines) + #13#10 + 'end.';
-end;
-
-// Eine Unit mit Routine P; ALines ist ihr Rumpf (ab Zeile 6).
-function InProc(const ALines: array of string): string;
-begin
-  Result := Join(['unit u;', 'interface', 'implementation', 'procedure P;',
-    'begin']) + #13#10 + Join(ALines) + #13#10 + Join(['end;', 'end.']);
 end;
 
 // ---- SCA020 ----

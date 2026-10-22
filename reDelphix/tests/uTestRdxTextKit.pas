@@ -35,6 +35,12 @@ unit uTestRdxTextKit;
 //   * uTestRdxMagicGuards.FixText - plant und schreibt wie Apply, meldet
 //     ein Scheitern beim Schreiben aber als 'Schreiben: ', getrennt vom
 //     Grund des Planers ('Plan: ').
+// Seit der Review Woche G08-14 kommen InProc (die Unit u mit Routine P)
+// und NewMap (die Code-Sicht samt ihren Zeilen) dazu. Was einen Planertyp
+// oder die SQL-Vorlage im Kopf nennt (PlanOf der try-Tests, Lit/Req/Ok/
+// AssertRefused der SQL-Tests), bleibt in seiner Testunit: das Kit bindet
+// nur, was uRdxBufferMath ohnehin mitbringt - der Pruefstand uebersetzt es
+// fuer JEDE Testunit, die es nennt.
 // Die Temp-Verzeichnisse der Testunits (FreshDir, FreshRoot, TempDir)
 // binden nur noch ihren Vorsatz (rdx_fa_, rdx_q14_, ...) - die Pfade unter
 // TEMP bleiben, wie die Kopfkommentare der Testunits sie nennen.
@@ -42,6 +48,7 @@ unit uTestRdxTextKit;
 interface
 
 uses
+  uRdxCodeMap,      // TRdxCodeMap (NewMap; ohnehin ueber uRdxBufferMath gebunden)
   uRdxBufferMath;   // TRdxEdit
 
 // Zeilen mit CRLF verbunden, ohne Zeilenende hinter der letzten; [] gibt
@@ -64,6 +71,19 @@ function Apply(const ASource: string;
   const AEdits: array of TRdxEdit): string; overload;
 // Dasselbe fuer eine einzelne Ersetzung.
 function Apply(const ASource: string; const AEdit: TRdxEdit): string; overload;
+// Eine Unit u mit Routine P; ALines ist ihr Rumpf (ab Zeile 6: 'unit u;',
+// 'interface', 'implementation', 'procedure P;', 'begin' davor, 'end;',
+// 'end.' dahinter). Bis zur Review Woche G08-14 stand sie gleichlautend in
+// uTestRdxTryFixes, uTestRdxTryGates, uTestRdxCleanupFixes,
+// uTestRdxFlowFixes und uTestRdxRaiseFixes; andere Formen (Unit t,
+// Variablenteil, ohne interface) bleiben in ihrer Testunit.
+function InProc(const ALines: array of string): string;
+// Die Code-Sicht auf ASource, die ihre Zeilen selbst haelt: Free gibt
+// beide frei. Die Map LEIHT ihre Zeilen (uRdxCodeMap, LEBENSDAUER) - die
+// Huelle 'TStringList, dann TRdxCodeMap, beide im finally' stand bis zur
+// Review Woche G08-14 in jeder Testunit, die einen Planer auf Text ruft.
+// Ein einziges Objekt: kein zweites vor dem try (G01-17).
+function NewMap(const ASource: string): TRdxCodeMap;
 // Die erste Zeile (1-basiert), die AText enthaelt; 0 ohne Treffer. Zeilen
 // wie TStringList.Text (CRLF, LF, CR).
 function LineOf(const ASource, AText: string): Integer;
@@ -140,6 +160,43 @@ end;
 function Apply(const ASource: string; const AEdit: TRdxEdit): string;
 begin
   Result := Apply(ASource, [AEdit]);
+end;
+
+function InProc(const ALines: array of string): string;
+begin
+  Result := Join(['unit u;', 'interface', 'implementation', 'procedure P;',
+    'begin']) + #13#10 + Join(ALines) + #13#10 + Join(['end;', 'end.']);
+end;
+
+type
+  // Die Map aus NewMap: haelt ihre Zeilen selbst.
+  TOwnLinesMap = class(TRdxCodeMap)
+  private
+    FOwnLines : TStringList;
+  public
+    constructor CreateFor(const ASource: string);
+    destructor Destroy; override;
+  end;
+
+constructor TOwnLinesMap.CreateFor(const ASource: string);
+begin
+  // Scheitert hier etwas, ruft der Konstruktor Destroy - das gibt die
+  // Zeilen frei.
+  FOwnLines := TStringList.Create;
+  FOwnLines.Text := ASource;
+  inherited Create(FOwnLines);
+end;
+
+destructor TOwnLinesMap.Destroy;
+begin
+  inherited Destroy;
+  // Erst nach der Map: sie leiht die Zeilen.
+  FOwnLines.Free;
+end;
+
+function NewMap(const ASource: string): TRdxCodeMap;
+begin
+  Result := TOwnLinesMap.CreateFor(ASource);
 end;
 
 function LineOf(const ASource, AText: string): Integer;

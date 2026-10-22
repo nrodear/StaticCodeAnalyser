@@ -55,7 +55,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxBufferMath, uRdxCodeMap, uRdxCleanupFixes,
-  uTestRdxTextKit;   // Join, Apply
+  uTestRdxTextKit;   // Join, Apply, InProc
 
 type
   TCleanKind = (ckComment, ckVar);
@@ -118,13 +118,6 @@ function VarMsg(const AName: string): string;
 begin
   Result := Format('Unused local variable: %s (declared but never read or '
     + 'written)', [AName]);
-end;
-
-// Eine Unit mit Routine P; ALines ist ihr Rumpf (ab Zeile 6).
-function InProc(const ALines: array of string): string;
-begin
-  Result := Join(['unit u;', 'interface', 'implementation', 'procedure P;',
-    'begin']) + #13#10 + Join(ALines) + #13#10 + Join(['end;', 'end.']);
 end;
 
 // Eine Unit, deren implementation ALines traegt (ab Zeile 4).

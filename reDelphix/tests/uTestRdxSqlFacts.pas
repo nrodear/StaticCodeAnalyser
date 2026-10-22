@@ -41,30 +41,24 @@ uses
   System.SysUtils, System.Classes,
   uRefactorInfo, uRdxRecipes, uRdxCodeMap, uRdxSqlTemplate,
   uRdxSqlFacts,      // SqlConstOf, FireDacConnectionProven, AddSqlFacts ...
-  uTestRdxTextKit;   // Join, LineOf
+  uTestRdxTextKit;   // Join, LineOf, NewMap
 
 // SqlConstOf(AName) an der Zeile mit AUse.
 function ConstIn(const ASource, AName, AUse: string): TRdxSqlConst;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
 begin
-  SL := TStringList.Create;
-  Map := nil;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
     Result := SqlConstOf(Map, AName, LineOf(ASource, AUse));
   finally
     Map.Free;
-    SL.Free;
   end;
 end;
 
 function FireDacIn(const ASource, AReceiver: string;
   const AUses: array of string): Boolean;
 var
-  SL    : TStringList;
   Map   : TRdxCodeMap;
   Names : TArray<string>;
   i     : Integer;
@@ -72,15 +66,11 @@ begin
   SetLength(Names, Length(AUses));
   for i := 0 to High(AUses) do
     Names[i] := AUses[i];
-  SL := TStringList.Create;
-  Map := nil;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
     Result := FireDacConnectionProven(Map, Names, AReceiver);
   finally
     Map.Free;
-    SL.Free;
   end;
 end;
 
@@ -304,7 +294,6 @@ end;
 procedure TTestRdxSqlFacts.AddSqlFacts_ConstsAndBinding;
 var
   Src : string;
-  SL  : TStringList;
   Map : TRdxCodeMap;
   R   : TRdxSqlRequest;
   L   : Integer;
@@ -320,11 +309,8 @@ begin
     TRdxRecipes.MakePart(ROLE_OPERAND, 'AColumnTypes')];
   R.PartLines := [L, L, L, L];
   R.UsesNames := ['FireDAC.Comp.Client'];
-  SL := TStringList.Create;
-  Map := nil;
+  Map := NewMap(Src);
   try
-    SL.Text := Src;
-    Map := TRdxCodeMap.Create(SL);
     AddSqlFacts(Map, R);
     Assert.IsTrue(R.Consts[2].Kind = sckLiteral);
     Assert.AreEqual('entgen_test_softdel', R.Consts[2].Value);
@@ -339,7 +325,6 @@ begin
     Assert.IsTrue(R.Binding = sbByTarget, 'with');
   finally
     Map.Free;
-    SL.Free;
   end;
 end;
 

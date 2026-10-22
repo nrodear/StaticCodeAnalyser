@@ -36,25 +36,20 @@ implementation
 uses
   System.Classes,
   uRdxCodeMap, uRdxTypeProof,
-  uTestRdxTextKit;   // Join
+  uTestRdxTextKit;   // Join, NewMap
 
 // DeclaresNonClassType(ATypeName) in einer Unit mit den Typen ATypes.
 function NonClassTypeIn(const ATypes: array of string;
   const ATypeName: string): Boolean;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
 begin
-  SL := TStringList.Create;
-  Map := nil;
+  Map := NewMap(Join(['unit u;', 'interface', 'type']) + #13#10
+    + Join(ATypes) + #13#10 + Join(['implementation', 'end.']));
   try
-    SL.Text := Join(['unit u;', 'interface', 'type']) + #13#10 + Join(ATypes)
-      + #13#10 + Join(['implementation', 'end.']);
-    Map := TRdxCodeMap.Create(SL);
     Result := TRdxTypeProof.DeclaresNonClassType(Map, ATypeName);
   finally
     Map.Free;
-    SL.Free;
   end;
 end;
 

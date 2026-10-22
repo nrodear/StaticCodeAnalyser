@@ -60,7 +60,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxCodeMap, uRdxTryFixes,
-  uTestRdxTextKit;   // Join, Apply
+  uTestRdxTextKit;   // Join, Apply, NewMap
 
 const
   MSG_109 = 'Lock acquired (%s) but no enclosing try..finally - an exception '
@@ -89,14 +89,10 @@ end;
 function PlanAt(ARule: TRule; const ASource: string; ALine: Integer;
   const AText: string; out AReason: string): TRdxTryPlan;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
 begin
-  SL := TStringList.Create;
-  Map := nil;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
     case ARule of
       r109: TRdxTryFixes.LockWithoutFinally(Map, ALine,
         Format(MSG_109, [AText]), Result, AReason);
@@ -108,7 +104,6 @@ begin
     end;
   finally
     Map.Free;
-    SL.Free;
   end;
 end;
 

@@ -69,7 +69,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxCodeMap, uRdxTryFixes,
-  uTestRdxTextKit;   // Join, Apply
+  uTestRdxTextKit;   // Join, Apply, InProc, NewMap
 
 const
   SUFFIX = ' (try/except instead of try/finally)';
@@ -82,9 +82,11 @@ const
   MSG_153 = 'Lock/Enter without surrounding try/finally - exception leaks the '
     + 'lock (%s)';
 
-// ---- Helfer (InProc und PlanOf wie in uTestRdxTryFixes; Join und Apply
-// kommen seit Review R6-08 aus uTestRdxTextKit, die der Pruefstand
-// mitkopiert) ----
+// ---- Helfer (Join und Apply kommen seit Review R6-08, InProc und NewMap
+// seit der Review Woche G08-14 aus uTestRdxTextKit, die der Pruefstand
+// mitkopiert. PlanOf steht wie in uTestRdxTryFixes hier: sein Kopf nennt
+// TRdxTryPlanner aus uRdxTryFixes, und das Kit bindet keine Planer-Unit -
+// der Pruefstand uebersetzt es fuer jede Testunit mit) ----
 
 // Ein Surrogatpaar (Emoji), zur Laufzeit gebaut: FPC 3.2 wertet ein
 // konstantes '...' + #$D83D#$DE00 als ANSI-Ausdruck aus ('?').
@@ -93,13 +95,6 @@ begin
   SetLength(Result, 2);
   Result[1] := Char($D83D);
   Result[2] := Char($DE00);
-end;
-
-// Eine Unit mit Routine P; ALines ist ihr Rumpf (ab Zeile 6).
-function InProc(const ALines: array of string): string;
-begin
-  Result := Join(['unit u;', 'interface', 'implementation', 'procedure P;',
-    'begin']) + #13#10 + Join(ALines) + #13#10 + Join(['end;', 'end.']);
 end;
 
 // Eine Unit mit Routine P und den Deklarationszeilen ADecls (Zeilen 5 ..);
@@ -116,18 +111,13 @@ end;
 function PlanOf(APlanner: TRdxTryPlanner; const ASource: string;
   ALine: Integer; const AMessage: string; out AReason: string): TRdxTryPlan;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
 begin
-  SL := TStringList.Create;
-  Map := nil;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
     APlanner(Map, ALine, AMessage, Result, AReason);
   finally
     Map.Free;
-    SL.Free;
   end;
 end;
 

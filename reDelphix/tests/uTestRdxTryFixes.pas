@@ -59,36 +59,24 @@ implementation
 uses
   System.Classes,
   uRdxCodeMap, uRdxTryFixes,
-  uTestRdxTextKit;   // Join, Apply
+  uTestRdxTextKit;   // Join, Apply, InProc, NewMap
 
 const
   SUFFIX = ' (try/except instead of try/finally)';
 
 // ---- Helfer ----
 
-// Eine Unit mit Routine P; ALines ist ihr Rumpf (ab Zeile 6).
-function InProc(const ALines: array of string): string;
-begin
-  Result := Join(['unit u;', 'interface', 'implementation', 'procedure P;',
-    'begin']) + #13#10 + Join(ALines) + #13#10 + Join(['end;', 'end.']);
-end;
-
 // Der Plan des Planers APlanner fuer Zeile ALine; AReason = '' heisst Hilfe.
 function PlanOf(APlanner: TRdxTryPlanner; const ASource: string;
   ALine: Integer; const AMessage: string; out AReason: string): TRdxTryPlan;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
 begin
-  SL := TStringList.Create;
-  Map := nil;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
     APlanner(Map, ALine, AMessage, Result, AReason);
   finally
     Map.Free;
-    SL.Free;
   end;
 end;
 
