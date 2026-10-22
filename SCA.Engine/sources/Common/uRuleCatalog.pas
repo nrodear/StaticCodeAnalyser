@@ -328,7 +328,8 @@ uses
                                    // (E2003-Falle, s. OverlayFromJson)
   System.Generics.Defaults,        // TIStringComparer - Profilnamen (G5-4)
   uJsonFormat,                     // JsonFormatEscaped (WriteUserProfiles)
-  uLocalization;                   // NormalizeLangCode - EINE Normalisierung
+  uAtomicFile,                     // TAtomicFile.Swap (WriteUserProfiles)
+  uLocalization;               // NormalizeLangCode - EINE Normalisierung
                                    // fuer SetLanguage und Overlay-Lookup
 
 // Werte eines JSON-Arrays als Strings. Zwei Aufrufer: der ausgelieferte
@@ -1720,7 +1721,8 @@ end;
 class function TRuleCatalog.WriteUserProfiles(out AError: string): Boolean;
 // Schreibt ALLE eigenen Profile neu - die Datei ist klein, und ein
 // Voll-Schreiben laesst keinen Teil-Update-Zustand zurueck. ATOMAR ueber
-// eine Nachbardatei + MoveFileEx(REPLACE_EXISTING): WriteAllText direkt
+// eine Nachbardatei + TAtomicFile.Swap (MoveFileEx mit REPLACE_EXISTING,
+// uAtomicFile): WriteAllText direkt
 // auf das Ziel haette die Datei zuerst geleert - ein Absturz oder
 // Stromausfall dazwischen liess alle eigenen Profile verschwinden (der
 // Kommentar behauptete bis 2026-10-14 das Gegenteil; Review Bereich C,
@@ -1772,9 +1774,9 @@ begin
       TmpName := Format('%s.%d.tmp', [FileName, GetCurrentProcessId]);
       TFile.WriteAllText(TmpName, JsonFormatEscaped(Root, 2),
         TEncoding.UTF8);
-      if not MoveFileEx(PChar(TmpName), PChar(FileName),
-           MOVEFILE_REPLACE_EXISTING or MOVEFILE_WRITE_THROUGH) then
-        RaiseLastOSError;
+      // Derselbe Tausch wie fuer Reports und Quelldateien (uAtomicFile);
+      // die Nachbardatei bleibt je Prozess benannt (s. oben).
+      TAtomicFile.Swap(TmpName, FileName);
       Result := True;
     except
       // noinspection ExceptionTooGeneral (Lade-Robustheitsgrenze: defekte Konfig darf den Lauf nicht stoppen; Diagnose via DebugOutput-Kanal)
