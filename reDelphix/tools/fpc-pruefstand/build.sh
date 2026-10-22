@@ -141,7 +141,7 @@ STUBS=()
 for f in "$HERE"/*.pas "$HERE"/*.inc; do
   [ -e "$f" ] || continue
   case "${f##*/}" in
-    uDetectorUtils.pas|uRefactor*.pas|uSourcePlaces.pas|uFindingActions.pas|uScaConfigDir.pas|uSCAConsts.pas|uRdx*.pas|uRdx*.inc|uTest*.pas|runner.pas)
+    uDetectorUtils.pas|uRefactor*.pas|uSourcePlaces.pas|uFindingActions.pas|uScaConfigDir.pas|uRdx*.pas|uRdx*.inc|uTest*.pas|runner.pas)
       OLD+=("$f") ;;
     *) STUBS+=("$f") ;;
   esac
@@ -174,10 +174,10 @@ adapt() {
   FPC_ADAPT_EXTRA='System.Hash=HashStub' fpc_adapt "$@"
 }
 UNITS=()
-# uSCAConsts (Folgewelle B3): die Planer-Testunits der Chargen Q/R binden
-# sie im FPC-sichtbaren uses (die Detektor-Fixture dahinter nutzt sie);
-# nur RTL-uses, FPC uebersetzt sie nur, wenn eine Testunit sie bindet.
-for u in uRefactorInfo uRefactorInfoBuilder uRefactorConcat uFindingActions uScaConfigDir uSCAConsts; do
+# uSCAConsts gehoert NICHT hierher: die Planer-Testunits der Chargen Q/R
+# binden sie nur hinter {$IFNDEF FPC} (Hygiene H2) - FPC hat sie nie
+# uebersetzt, ein Lauf haengt so nicht an einer ungeprueften Unit.
+for u in uRefactorInfo uRefactorInfoBuilder uRefactorConcat uFindingActions uScaConfigDir; do
   need "$SCA/SCA.Engine/sources/Common/$u.pas"
   UNITS+=("$SCA/SCA.Engine/sources/Common/$u.pas")
 done

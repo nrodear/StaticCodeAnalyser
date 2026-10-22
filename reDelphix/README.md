@@ -1156,8 +1156,8 @@ des Moduls (`uRdxRecipes`, `uRdxPaths`, `uRdxScopeTable` samt `TRdxProjectUnits`
 `uRdxCodeMap`,
 `uRdxIntroPlan`, `uRdxIntroEdits`, `uRdxText`, seit der Folgewelle B3 die Planer
 `uRdxCategoryArgFix`, `uRdxEmptyBlockFix`, `uRdxEmptyExceptFix`, `uRdxGotoExitFix`,
-`uRdxNativeIntFix`, `uRdxParensFix`, `uRdxTrailingCommaFix` und aus dem Core `uSCAConsts`,
-die deren Testunits im FPC-sichtbaren uses binden). Testunits kommen aus `reDelphix\tests`,
+`uRdxNativeIntFix`, `uRdxParensFix`, `uRdxTrailingCommaFix`; deren Testunits binden
+`uSCAConsts` nur hinter `{$IFNDEF FPC}`). Testunits kommen aus `reDelphix\tests`,
 sonst aus `StaticCodeAnalyserForm\tests` (Core-Tests wie
 `uTestSourcePlaces`, `uTestRefactorConcat`). Die Hilfs-Unit
 `tests\uTestRdxTextKit` kopiert und passt jeder Lauf mit an, gleich welche
