@@ -37,7 +37,13 @@ AUFRUF (Repo-Wurzel):
               Zeile in FIX_ROWS oder ein Rezept, das sie bindet, und jede
               Zeile traegt editorHelp; die drei Arrays sind gleich lang; die
               Pflichtfelder sind da (Platzhalter erklaert, Kennzeichnung "je
-              nach Fund" erklaert, zweiter Eintrag beschrieben).
+              nach Fund" erklaert, zweiter Eintrag beschrieben); jede Art
+              mit Hilfe steht im Profil code-aktionen
+              (reDelphix/data/profile-code-aktionen.json), keine ohne Hilfe
+              ausser PROFILE_EXTRA. Quellfehler (Exit 2) ist eine Unit in
+              reDelphix/source, die 'ChangesBehavior :=' setzt, ohne dass
+              der Generator sie liest (Tabelle, Laeufer, Anbieter,
+              uRdx*Fix.pas).
   DRIFT       QUICKFIXES.md ist byte-gleich mit dem, was der Generator jetzt
               schreiben wuerde (UTF-8 mit BOM, CRLF - so liegt jede .md im
               Checkout, .gitattributes: *.md eol=crlf); gemeldet wird die
@@ -48,7 +54,8 @@ msgid): sie steht sichtbar als '(fehlt)' in der Datei, --check nennt sie
 als Hinweis.
 
 Neue Hilfe: Zeile in FIX_ROWS (bzw. Rezept im Konstruktor des Anbieters)
--> Eintrag in quickfixes-doc.json -> python tools/gen-quickfix-doc.py.
+-> Eintrag in quickfixes-doc.json -> Art ins Profil code-aktionen
+-> python tools/gen-quickfix-doc.py.
 
 EXIT: 0 gruen, 1 Konsistenz oder Drift (Selbsttest: ein Mutant blieb
 unentdeckt), 2 Aufruf- oder Quellfehler (Datei fehlt, Quelltext in einer
@@ -57,6 +64,7 @@ falsch dokumentieren).
 """
 import argparse
 import copy
+import glob
 import json
 import os
 import re
@@ -73,15 +81,26 @@ SRC_TABLE = os.path.join(RDX, 'source', 'uRdxFixTable.pas')
 SRC_RUNNER = os.path.join(RDX, 'source', 'uRdxFixRunner.pas')
 SRC_PROVIDER = os.path.join(RDX, 'source', 'uRdxProvider.pas')
 # Planer-Units mit eigenem Adapter PlanXxx (TRdxFixPlanner): FIX_ROWS nennt nur
-# den Namen, der Rumpf steht dort (Charge Q, zehn einfache Hilfen).
-SRC_PLANNER_UNITS = tuple(os.path.join(RDX, 'source', n + '.pas') for n in (
-    'uRdxHttpsFix', 'uRdxParensFix', 'uRdxAttrGapFix', 'uRdxTwiceInheritedFix',
-    'uRdxNativeIntFix', 'uRdxEmptyFinallyFix', 'uRdxForRangeFix', 'uRdxTabsFix',
-    'uRdxTrailingBlanksFix', 'uRdxKeywordCaseFix',
-    'uRdxEmptyExceptFix', 'uRdxEmptyOnHandlerFix', 'uRdxEmptyBlockFix',
-    'uRdxNoSonarFix', 'uRdxTrailingCommaFix', 'uRdxGroupedDeclFix',
-    'uRdxIgnoreReasonFix', 'uRdxAttrDuplicateFix', 'uRdxCategoryArgFix',
-    'uRdxGotoExitFix'))
+# den Namen, der Rumpf steht dort (Chargen Q und R, je einfache Hilfe eine
+# Unit). Gelesen per Namensmuster uRdx*Fix.pas statt einer Handliste: eine
+# neue Planer-Unit, die in der Liste fehlte, liess ihre Kennzeichnung still
+# auf 'nein' fallen (Review Woche 2026-10-21, G10-25). Dass keine ANDERE
+# Unit 'ChangesBehavior :=' setzt, prueft unmarked_units().
+SRC_DIR = os.path.join(RDX, 'source')
+SRC_PLANNER_UNITS = tuple(sorted(glob.glob(os.path.join(SRC_DIR,
+                                                        'uRdx*Fix.pas'))))
+# Profil code-aktionen (README 'Code-Aktionen in der IDE ausprobieren'): jede
+# Art mit Hilfe steht darin, sonst gibt es nach dem Import keinen Fund und
+# keine Gluehbirne (Review Woche 2026-10-21, G10-05). Arten im Profil OHNE
+# Hilfe nur mit Grund:
+PROFILE = os.path.join(RDX, 'data', 'profile-code-aktionen.json')
+PROFILE_NAME = 'code-aktionen'
+PROFILE_EXTRA = {
+    'FileReadError': 'Lesefehler bleiben sichtbar (README)',
+    'UnsortedUses': "ihr Fund auf der uses-Zeile traegt das Refactoring "
+                    "'uses: Eintraege qualifizieren' (README-Tabelle); das "
+                    "Rezept bindet keine Fundart",
+}
 CATALOG = os.path.join(REPO, 'rules', 'sca-rules.json')
 PO_FILES = (('de', os.path.join(REPO, 'i18n', 'de.po')),
             ('fr', os.path.join(REPO, 'i18n', 'fr.po')))
@@ -442,6 +461,23 @@ def parse_row(item, i):
             'alt': None if alt.lower() == 'nil' else alt}
 
 
+def unmarked_units(read=None):
+    """Units in reDelphix/source, die die Kennzeichnung setzen ('Changes-
+    Behavior :=' im Code), deren Ruempfe der Generator aber nicht liest -
+    Tabelle, Laeufer, Anbieter (Rezepte) und die Planer-Units. read: die
+    gelesenen Pfade (nur der Selbsttest gibt sie vor)."""
+    if read is None:
+        read = (SRC_TABLE, SRC_RUNNER, SRC_PROVIDER) + SRC_PLANNER_UNITS
+    read = {os.path.normcase(os.path.abspath(p)) for p in read}
+    out = []
+    for path in sorted(glob.glob(os.path.join(SRC_DIR, '*.pas'))):
+        if os.path.normcase(os.path.abspath(path)) in read:
+            continue
+        if CB_RE.search(strip_comments(load_text(path))):
+            out.append(rel(path))
+    return out
+
+
 def parse_table(table_text=None, runner_text=None):
     """uRdxFixTable: Zeilen, Menuetexte, Kennzeichnung je Eintrag (die Texte
     der beiden Units gibt nur der Selbsttest vor)."""
@@ -475,14 +511,26 @@ def parse_table(table_text=None, runner_text=None):
     for r in rows:
         for planner in (r['plan'], r['alt']):
             if planner and planner not in index:
-                raise SourceError('FIX_ROWS[%d]: Planer %s ohne Rumpf in %s'
-                                  % (r['index'], planner, rel(SRC_TABLE)))
+                raise SourceError(
+                    'FIX_ROWS[%d]: Planer %s ohne Rumpf in %s, %s und den %d '
+                    'Planer-Units %s' % (r['index'], planner, rel(SRC_TABLE),
+                                         rel(SRC_RUNNER),
+                                         len(SRC_PLANNER_UNITS),
+                                         rel(os.path.join(SRC_DIR,
+                                                          'uRdx*Fix.pas'))))
         # Wie TRdxFixTable.FixFor: die Zeile ODER der Planer kennzeichnet;
         # den zweiten Eintrag kennzeichnet nur sein Planer.
         r['changes_main'] = ('ja' if r['changes']
                              else changes_of(r['plan'], index) or 'nein')
         r['changes_alt'] = (changes_of(r['alt'], index) or 'nein'
                             if r['alt'] else None)
+    outside = unmarked_units()
+    if outside:
+        raise SourceError(
+            "'ChangesBehavior :=' in %s - der Generator liest dort nicht, "
+            "QUICKFIXES.md nennte die Hilfe still 'Aendert Verhalten: nein'. "
+            "Die Unit als uRdx<Name>Fix.pas benennen oder hier aufnehmen"
+            % ', '.join(outside))
     return {'rows': rows, 'captions': captions, 'alt_captions': alt_captions,
             'sizes': {k: (v[0], len(v[2])) for k, v in arrays.items()},
             'cap_changes': cap_changes}
@@ -700,6 +748,20 @@ def load_data():
     return data
 
 
+def load_profile():
+    """Die Arten des Profils code-aktionen (Liste, Reihenfolge der Datei)."""
+    try:
+        data = json.loads(load_text(PROFILE))
+    except ValueError as e:
+        raise SourceError('%s: kein JSON: %s' % (rel(PROFILE), e))
+    kinds = (data.get('profiles') or {}).get(PROFILE_NAME) \
+        if isinstance(data, dict) else None
+    if not isinstance(kinds, list) or not all(isinstance(k, str) for k in kinds):
+        raise SourceError('%s: erwartet {"profiles": {"%s": ["Art", ..]}}'
+                          % (rel(PROFILE), PROFILE_NAME))
+    return kinds
+
+
 def load_inputs():
     return {
         'table': parse_table(),
@@ -707,6 +769,7 @@ def load_inputs():
         'catalog': load_catalog(),
         'po': {lang: parse_po(path) for lang, path in PO_FILES},
         'data': load_data(),
+        'profile': load_profile(),
     }
 
 
@@ -980,6 +1043,23 @@ def build(inputs):
             errors.append('%s %s: "editorHelp": true im Katalog, aber keine '
                           'Zeile in FIX_ROWS und kein Rezept, das sie bindet'
                           % (rule.get('id', '?'), kind))
+    # Profil code-aktionen: jede Art mit Hilfe darin, keine ohne Hilfe ausser
+    # PROFILE_EXTRA, keine doppelt.
+    profile = inputs['profile']
+    helped = set(seen) | recipe_kinds
+    for kind in sorted(helped - set(profile),
+                       key=lambda k: rule_number(catalog.get(k, {}))):
+        errors.append('%s %s: hat eine Hilfe, fehlt aber im Profil %s in %s'
+                      % (catalog.get(kind, {}).get('id', '?'), kind,
+                         PROFILE_NAME, rel(PROFILE)))
+    for kind in sorted(set(profile) - helped - set(PROFILE_EXTRA)):
+        errors.append('Profil %s: Art %s hat keine Hilfe - streichen oder mit '
+                      'Grund in PROFILE_EXTRA aufnehmen' % (PROFILE_NAME, kind))
+    for kind in sorted({k for k in profile if profile.count(k) > 1}):
+        errors.append('Profil %s: Art %s steht mehrfach' % (PROFILE_NAME, kind))
+    for kind in sorted(set(PROFILE_EXTRA) - set(profile)):
+        errors.append('PROFILE_EXTRA: %s steht nicht (mehr) im Profil %s - '
+                      'Eintrag streichen' % (kind, PROFILE_NAME))
     for e in entries:
         for c in e['captions']:
             if not c['translatable']:
@@ -1482,6 +1562,30 @@ def selftest():
         guarded = 'Plaetze (SetLength)' in str(e)
     expect(guarded, 'Quelltext-Mutant erkannt: Rezept ohne Platz in '
                     'SetLength (Form unbekannt)')
+
+    # Profil code-aktionen (G10-05): eine Art mit Hilfe fehlt, eine Art ohne
+    # Hilfe steht drin, eine steht doppelt.
+    errs = build(dict(inputs, profile=[k for k in inputs['profile']
+                                       if k != rows[0]['kind']]))['errors']
+    expect(any(rows[0]['kind'] in e and 'fehlt aber im Profil' in e
+               for e in errs),
+           'Profil-Mutant erkannt: Art mit Hilfe fehlt im Profil')
+    errs = build(dict(inputs, profile=inputs['profile'] + [free_kind]))['errors']
+    expect(any('Art %s hat keine Hilfe' % free_kind in e for e in errs),
+           'Profil-Mutant erkannt: Art ohne Hilfe im Profil')
+    errs = build(dict(inputs, profile=inputs['profile']
+                      + [rows[0]['kind']]))['errors']
+    expect(any('steht mehrfach' in e for e in errs),
+           'Profil-Mutant erkannt: Art doppelt im Profil')
+    # Kennzeichnung ausserhalb der gelesenen Units (G10-25): ohne die
+    # Planer-Units faellt die, die heute 'ChangesBehavior :=' setzt, auf.
+    marking = [p for p in SRC_PLANNER_UNITS
+               if CB_RE.search(strip_comments(load_text(p)))]
+    outside = unmarked_units(read=(SRC_TABLE, SRC_RUNNER, SRC_PROVIDER))
+    expect(bool(marking) and all(rel(p) in outside for p in marking)
+           and not unmarked_units(),
+           'Kennzeichnung ausserhalb erkannt (%s)'
+           % ', '.join(os.path.basename(p) for p in marking))
 
     text = render(model, inputs['po'])
     lines = text.split('\n')

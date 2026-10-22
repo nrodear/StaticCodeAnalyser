@@ -565,6 +565,13 @@ Projekt scannen. Gluehbirne oder Editor-Kontextmenue auf der Fundzeile:
 | SCA142 UnsortedUses, SCA007 UnusedUses | Fund auf einer uses-Zeile | uses: Eintraege qualifizieren (Winapi.Windows, System.SysUtils ...) - nur im Kontextmenue, nicht in der Gluehbirne: es behebt den Fund nicht |
 | jede Regel ausser SCA165 | beliebig | Hier / in dieser Datei unterdruecken; Stelle zeigen (Kontextmenue) |
 
+Die einfachen Hilfen der Chargen Q und R (SCA002, SCA046, SCA060, SCA061,
+SCA063, SCA064, SCA065, SCA068, SCA076, SCA077, SCA083, SCA093, SCA094,
+SCA115, SCA159, SCA161, SCA179, SCA180, SCA181, SCA183) stehen im Profil,
+aber nicht in dieser Tabelle: Fund und Hilfe je Regel mit Beispiel nennt
+`QUICKFIXES.md`. Dass jede Regel mit Hilfe im Profil steht, prueft
+`python tools\gen-quickfix-doc.py --check` (Konsistenz).
+
 SCA007 laeuft nur mit eingeschaltetem uses-Check (Optionen bzw.
 `[Detectors] UsesCheck=1`); SCA142 reicht fuer die uses-Hilfe. Den
 Ablauf je Aktion protokolliert `%TEMP%\reDelphix.log` (`Provide ...`,
