@@ -9,6 +9,12 @@ unit uRdxRecipes;
 // WAS HIER ENTSTEHT
 //
 //   BuildFormatCall   'a' + X + 'b'      ->  Format('a%sb', [X])
+//                     mit dem Urteil je Operand (JudgeOperand)
+//   SplitLongLiteral  ein Literal ueber 255 Elemente -> 'a..' + '..'
+//   Fund-Abgleich     Ziel und '+'-Zahl aus der Meldung von SCA044/SCA003
+//                     (ConcatFindingTarget, SqlFindingTarget, TargetKey)
+//   uses-Helfer       UsesNameFor, LineLooksFpcAware, UsesTailLength,
+//                     SortedInsertIndex - wo System.SysUtils hinkommt
 //   DetectFramework   VCL oder FMX, aus den qualifizierten uses-Eintraegen
 //
 // Die SQL-Vorlage (Rezept 5.2, SCA003) steht seit Charge S1 (2026-10-15)
@@ -145,8 +151,9 @@ type
     // bei einem Unicode-Ziel (string/unicodestring/widestring) duerfen
     // Nicht-Unicode-Operanden mit, Format wandelt sie wie die Zuweisung.
     // Gesperrt auch ein Zeiger am Kettenanfang (Review FB R2-04; nicht bei
-    // AStart = csBehindTarget). Der Formatstring geht durch SplitLongLiteral
-    // (kein Literal ueber 255 Elemente).
+    // AStart = csBehindTarget) und das Selbst-Anhaengen an ein Ziel vom Typ
+    // Variant/OleVariant (dort verkettet '+' nicht). Der Formatstring geht
+    // durch SplitLongLiteral (kein Literal ueber 255 Elemente).
     class function BuildFormatCall(const AParts: TRdxParts;
       out ABuild: TRdxFormatBuild; const ATargetType: string = '';
       AStart: TRdxChainStart = csChainHead): Boolean; overload; static;
@@ -407,10 +414,8 @@ function SplitLongLiteral(const ASource: string): string;
 implementation
 
 uses
-  // Bis Charge B2S-a im interface - die Schnittstelle braucht sie nicht
-  // (Review R3-07).
-  System.SysUtils, System.Classes,
-  uRdxCodeMap;   // IsIdentStart, IsIdentChar (Charge R8: eine Regel statt drei)
+  System.SysUtils,
+  uRdxCodeMap;   // IsIdentStart, IsIdentChar (Zeichen > #127 wie der Core)
 
 const
   // Paar-Regel von LooksLikeSql (Review 2026-10-07, Nit 6): je Verb die
@@ -811,19 +816,6 @@ const
     'value', 'asvariant', 'fieldvalues', 'null', 'unassigned', 'true',
     'false', 'nil');
 
-// Bezeichner-Zeichen: IsIdentStart/IsIdentChar aus uRdxCodeMap (Zeichen >
-// #127 wie der Core, uRefactorInfoBuilder) - bis Charge R8 eine eigene
-// Kopie. Die kurzen Namen bleiben fuer die Leser dieser Unit.
-function IsIdentStartCh(C: Char): Boolean;
-begin
-  Result := IsIdentStart(C);
-end;
-
-function IsIdentCh(C: Char): Boolean;
-begin
-  Result := IsIdentChar(C);
-end;
-
 // Erste Stelle hinter den Ziffern eines Zeichencodes ab AFrom (hinter dem
 // '#'): ein '$' und dann Ziffern und Hex-Buchstaben - ohne Pruefung der
 // Basis, wie BlankLiterals den Code nur ueberspringt.
@@ -904,9 +896,9 @@ class function TRdxRecipes.IsPlainIdent(const AText: string): Boolean;
 var
   i : Integer;
 begin
-  Result := (AText <> '') and IsIdentStartCh(AText[1]);
+  Result := (AText <> '') and IsIdentStart(AText[1]);
   for i := 2 to Length(AText) do
-    if not IsIdentCh(AText[i]) then Exit(False);
+    if not IsIdentChar(AText[i]) then Exit(False);
 end;
 
 // Die Klammergruppe ab S[AAt] ('(' oder '[', beide Arten in einer Bilanz)
@@ -932,8 +924,8 @@ function SkipIdent(const S: string; var AAt: Integer): Boolean;
 begin
   if (AAt <= Length(S)) and (S[AAt] = '&') then
     Inc(AAt);
-  Result := (AAt <= Length(S)) and IsIdentStartCh(S[AAt]);
-  while (AAt <= Length(S)) and IsIdentCh(S[AAt]) do
+  Result := (AAt <= Length(S)) and IsIdentStart(S[AAt]);
+  while (AAt <= Length(S)) and IsIdentChar(S[AAt]) do
     Inc(AAt);
 end;
 
@@ -1012,8 +1004,8 @@ begin
   Result := False;
   n := Length(S);
   i := 1;
-  if (n = 0) or not IsIdentStartCh(S[1]) then Exit;
-  while (i <= n) and IsIdentCh(S[i]) do Inc(i);
+  if (n = 0) or not IsIdentStart(S[1]) then Exit;
+  while (i <= n) and IsIdentChar(S[i]) do Inc(i);
   while (i <= n) and (S[i] <= ' ') do Inc(i);
   if (i > n) or (S[i] <> '[') or (S[n] <> ']') then Exit;
   Inner := Trim(Copy(S, i + 1, n - i - 1));
@@ -1039,10 +1031,10 @@ begin
   i := 1;
   while i <= n do
   begin
-    if (Depth = 0) and IsIdentStartCh(S[i]) then
+    if (Depth = 0) and IsIdentStart(S[i]) then
     begin
       Start := i;
-      while (i <= n) and IsIdentCh(S[i]) do
+      while (i <= n) and IsIdentChar(S[i]) do
         Inc(i);
       Last := Copy(S, Start, i - Start);
       if Head = '' then Head := Last;
@@ -1067,9 +1059,9 @@ begin
   S := Trim(AText);
   i := 1;
   if (i <= Length(S)) and (S[i] = '&') then Inc(i);
-  if (i > Length(S)) or not IsIdentStartCh(S[i]) then Exit;
+  if (i > Length(S)) or not IsIdentStart(S[i]) then Exit;
   Start := i;
-  while (i <= Length(S)) and IsIdentCh(S[i]) do
+  while (i <= Length(S)) and IsIdentChar(S[i]) do
     Inc(i);
   Result := Copy(S, Start, i - Start);
 end;
@@ -1889,14 +1881,34 @@ begin
     or InList(CallHeadOf(Trim(APart.Text)), PCHAR_TYPES));
 end;
 
+// Ist der Term als String bewiesen, verkettet Delphi 'P + T' - auch ein
+// Nicht-Unicode-String (AnsiString, UTF8String, ShortString, UTF8Encode(..);
+// Review Woche G01-07: bis dahin sperrte ovAnsi als 'Zeiger-Arithmetik').
+// Ein AnsiChar bzw. PAnsiChar ist kein String - die Sperre bleibt. Ob der
+// Operand in den Format-Aufruf darf, urteilt danach TakeJudged.
+function IsStringTerm(const APart: TRdxPart): Boolean;
+var
+  Verdict : TRdxOperandVerdict;
+  Ansi    : string;
+begin
+  Verdict := TRdxRecipes.JudgeOperand(APart);
+  if Verdict = ovString then
+    Exit(True);
+  if Verdict <> ovAnsi then
+    Exit(False);
+  Ansi := AnsiTypeOf(APart, TRdxRecipes.CollapseCode(APart.Text));
+  Result := (Ansi <> 'ansichar') and (Ansi <> 'pansichar');
+end;
+
 // Zeiger am Kettenanfang (Kompilat-Regel, Nachtrag Review FB R2-04): das
 // Kompilat buergt hier NICHT. 'P + FOffset + ''x''' mit P: PChar rechnet
 // zuerst P + FOffset als Zeiger-Arithmetik und verkettet erst dann - die
 // Kette uebersetzt, auch wenn FOffset eine Zahl ist, und Format('%s%sx',
 // [P, FOffset]) wirft EConvertError. Gesperrt, wenn der erste Term als
 // PChar/PWideChar/PAnsiChar deklariert oder ein Cast darauf ist und der
-// zweite weder Literal noch bewiesener String. Nicht beim Selbst-Anhaengen
-// (AStart = csBehindTarget): dort beginnt die Kette mit dem Ziel X, einem
+// zweite weder Literal noch bewiesener String (IsStringTerm). Nicht beim
+// Selbst-Anhaengen (AStart = csBehindTarget): dort beginnt die Kette mit
+// dem Ziel X, einem
 // String - 'X + P' verkettet (Nachpruefung FB). Bekannte Grenze: ein PChar
 // UNBEKANNTEN Typs am Anfang (Feld oder Funktion einer anderen Unit) bleibt
 // unsichtbar - dann wirft Format zur Laufzeit, statt still falsch zu
@@ -1920,12 +1932,12 @@ begin
       Break;
   end;
   if (n < 2) or not IsPointerTerm(Terms[0])
-     or (Terms[1].Role <> ROLE_OPERAND)
-     or (TRdxRecipes.JudgeOperand(Terms[1]) = ovString) then
+     or (Terms[1].Role <> ROLE_OPERAND) or IsStringTerm(Terms[1]) then
     Exit;
-  Result := Format('Operand ''%s'': Zeiger am Kettenanfang - ''%s + %s'' '
-    + 'rechnet Delphi als Zeiger-Arithmetik, Format nicht',
+  Result := Format('Operand ''%s'': Zeiger am Kettenanfang - ist ''%s'' kein '
+    + 'String, rechnet Delphi ''%s + %s'' als Zeiger-Arithmetik, Format nicht',
     [TRdxRecipes.CollapseCode(Terms[0].Text),
+     TRdxRecipes.CollapseCode(Terms[1].Text),
      TRdxRecipes.CollapseCode(Terms[0].Text),
      TRdxRecipes.CollapseCode(Terms[1].Text)]);
 end;
@@ -1944,6 +1956,19 @@ begin
     or (ATargetType = 'widestring');
   ABuild.Reason := PointerStartReason(AParts, AStart);
   if ABuild.Reason <> '' then Exit;
+  // Selbst-Anhaengen an einen Variant ('V := V + ''x'' + N'): jedes '+'
+  // ist Variant-Arithmetik - die Kette uebersetzt fuer JEDEN Typ von N, das
+  // Kompilat buergt fuer keinen Operanden, und Format aendert die
+  // Klammerung (V = 5: 5 + '1' + '2' ergibt 8, 5 + '12' ergibt 17; Review
+  // Woche G01-05).
+  if (AStart = csBehindTarget)
+     and ((ATargetType = 'variant') or (ATargetType = 'olevariant')) then
+  begin
+    ABuild.Reason := 'Ziel ist ein Variant - hinter ''X +'' rechnet Delphi '
+      + 'Variant-Arithmetik statt zu verketten, das Kompilat buergt fuer '
+      + 'keinen Operanden';
+    Exit;
+  end;
   for i := 0 to High(AParts) do
   begin
     if AParts[i].Role = ROLE_TARGET then
@@ -2128,7 +2153,7 @@ var
 begin
   Result := 0;
   if not SameText(Copy(S, AFrom, Length(USES_IN_WORD)), USES_IN_WORD)
-     or IsIdentCh(CharAt(S, AFrom + Length(USES_IN_WORD))) then Exit;
+     or IsIdentChar(CharAt(S, AFrom + Length(USES_IN_WORD))) then Exit;
   Result := -1;
   i := SkipBlanksFrom(S, AFrom + Length(USES_IN_WORD));
   if CharAt(S, i) <> '''' then Exit;
