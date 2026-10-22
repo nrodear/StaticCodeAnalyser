@@ -226,6 +226,15 @@ begin
   // ganz (eine halbe Vorlage liesse die Injection stehen).
   AssertRefused(Req([Target('Q.SQL.Text'), Lit('''SELECT * FROM '''),
     Op('Tbl'), Lit(''' WHERE id = '''), Op('Id')]), 'Namen pruefen/Whitelist');
+  // Hinter einem Wert nennt der Grund ihn in Worten (Review Woche G01-09:
+  // bis dahin die Token-Kuerzel 'n', 's', 'v').
+  AssertRefused(Req([Target('Q.SQL.Text'), Lit('''SELECT * FROM t WHERE a = 1 '''),
+    Op('X')]), 'steht hinter einer Zahl');
+  AssertRefused(Req([Target('Q.SQL.Text'),
+    Lit('''SELECT * FROM t WHERE a = ''''x'''' '''), Op('X')]),
+    'steht hinter einem SQL-String');
+  AssertRefused(Req([Target('Q.SQL.Text'), Lit('''SELECT * FROM t WHERE a = :b '''),
+    Op('X')]), 'steht hinter einem Platzhalter');
 end;
 
 procedure TTestRdxSqlTemplate.OrderByAndSelectList_Refused;

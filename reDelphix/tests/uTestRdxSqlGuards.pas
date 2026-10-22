@@ -384,6 +384,15 @@ begin
     Lit('''SET a = '''), Op('X')]), T), T.Reason);
   Assert.AreEqual('Q.SQL.Add(''SET a = :X'');' + sLineBreak
     + 'Q.ParamByName(''X'').Value := X;', T.Text);
+  // Endet die Zeile davor auf einen Ausdruck, folgt X direkt auf ihn - wie
+  // innerhalb einer Anweisung abgelehnt (Review Woche G01-11: bis dahin
+  // las der Leser die Marke als Leerraum, ':X' landete hinter Ys Text).
+  Src := UnitWithBody(['  X0 = 0;'], ['  Q.SQL.Add(''SELECT * FROM t WHERE a = '' + Y);',
+    '  Q.SQL.Add(X + '' AND b = 1''); // here']);
+  Assert.IsFalse(FactsBuilt(Src, '// here', CallReq([Target('Q.SQL.Add'),
+    Op('X'), Lit(''' AND b = 1''')]), T), T.Text);
+  Assert.IsTrue(Pos('folgt direkt auf einem Ausdruck einer frueheren Zeile',
+    T.Reason) > 0, T.Reason);
 end;
 
 procedure TTestRdxSqlGuards.VerdachtA_Chain_NamesReserved;
@@ -400,6 +409,15 @@ begin
     Lit('''AND b = '''), Op('IntToStr(FId)')]), T), T.Reason);
   Assert.AreEqual('Q.SQL.Add(''AND b = :Id3'');' + sLineBreak
     + 'Q.ParamByName(''Id3'').Value := FId;', T.Text);
+  // Ein lesendes Glied dazwischen beendet die Kette nach vorn nicht
+  // (Review Woche G01-12: bis dahin ':X' ein zweites Mal vergeben).
+  Src := UnitWithBody(['  X0 = 0;'], ['  Q.SQL.Add(''SELECT * FROM t WHERE a = 1'');',
+    '  Q.SQL.Add(''AND b = '' + X); // here', '  Q.SQL.BeginUpdate;',
+    '  Q.SQL.Add(''AND c = :X'');']);
+  Assert.IsTrue(FactsBuilt(Src, '// here', CallReq([Target('Q.SQL.Add'),
+    Lit('''AND b = '''), Op('X')]), T), T.Reason);
+  Assert.AreEqual('Q.SQL.Add(''AND b = :X2'');' + sLineBreak
+    + 'Q.ParamByName(''X2'').Value := X;', T.Text);
 end;
 
 { ---- Minor 1: ganze Liste in Quotes, Join-Bedingung ---- }

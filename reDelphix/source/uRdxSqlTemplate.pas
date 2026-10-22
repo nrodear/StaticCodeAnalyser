@@ -280,7 +280,9 @@ const
     + 'Vorlage muesste sie zerschneiden; von Hand';
   R_QMARK       = 'der SQL-Text traegt einen positionalen Platzhalter ''?'' - '
     + 'benannte Parameter mischen sich damit nicht; von Hand';
-  R_NOT_VALUE   = R_OPERAND + 'steht hinter ''%s'' - dort erwartet SQL '
+  // R_NOT_VALUE, R_AFTER_EXPR: das zweite %s ist TokShown (ein Wort in
+  // Quotes oder 'einer Zahl', 'einem Ausdruck ..').
+  R_NOT_VALUE   = R_OPERAND + 'steht hinter %s - dort erwartet SQL '
     + 'keinen Wert. ' + R_NAMES;
   R_AT_START    = R_OPERAND + 'steht am Anfang des SQL-Texts - kein Wert. '
     + R_NAMES;
@@ -291,7 +293,7 @@ const
     + 'EIN Wert, keine Liste';
   R_HEAD        = 'Anweisungsart unbekannt (''%s'') - ob ''%s'' ein Wert '
     + 'ist, ist nicht sichtbar';
-  R_AFTER_EXPR  = R_OPERAND + 'folgt direkt auf ''%s'' - ob dort ein Wert '
+  R_AFTER_EXPR  = R_OPERAND + 'folgt direkt auf %s - ob dort ein Wert '
     + 'steht, ist nicht sichtbar';
   R_BEFORE_EXPR = R_OPERAND + 'steht direkt vor ''%s'' - ob der Wert dort '
     + 'endet, ist nicht sichtbar';
@@ -394,8 +396,20 @@ const
   // Kommentarzeile vor ParamByName, wenn das Ziel ein String-Puffer ist.
   BIND_COMMENT = '// Parameter binden: ';
   // Vor dem Token eines stehenden Ausdrucks (TakeKept): kein SQL-Wort
-  // trifft es, der Grund zeigt den Ausdruck (R_AFTER_EXPR).
+  // trifft es, der Grund zeigt den Ausdruck (R_AFTER_EXPR). Allein steht es
+  // im Text der Kette fuer einen Ausdruck einer frueheren Zeile (AppendTerm,
+  // StepCode) - dessen Text kennt der Leser nicht.
   KEPT_MARK = #1;
+  // Die Token eines Werts (PushTok): eine Zahl, ein SQL-String, ein
+  // Platzhalter. Mit #2 davor trifft sie kein SQL-Wort ('WHERE n = ..'),
+  // der Grund nennt sie in Worten (TokShown).
+  TOK_NUMBER      = #2'n';
+  TOK_STRING      = #2's';
+  TOK_PLACEHOLDER = #2'v';
+  SHOWN_NUMBER      = 'einer Zahl';
+  SHOWN_STRING      = 'einem SQL-String';
+  SHOWN_PLACEHOLDER = 'einem Platzhalter';
+  SHOWN_CHAIN_EXPR  = 'einem Ausdruck einer frueheren Zeile';
   // Head einer Anweisung, die nicht mit einem Wort beginnt.
   HEAD_UNKNOWN = '?';
   MAX_NAME  = 30;    // Zeichen eines Parameternamens (Oracle: 30)
@@ -444,9 +458,6 @@ const
   CHAIN_TEXT  = 'text';
   // ... und so viele Zeilen weit sucht sie je Richtung.
   MAX_CHAIN_LINES = 200;
-  // Ein Ausdruck in einer frueheren Zeile (kein Literal): fuer das Lesen
-  // ein Wert-Wort - klebt wie der Ausdruck ('col_' + X -> 'col_x').
-  CHAIN_VALUE = 'x';
 
 type
   // ---- die Kette als Segmente ----
@@ -1536,6 +1547,26 @@ begin
   end;
 end;
 
+// Ein Token, wie ihn ein Grund zeigt: ein Wort bzw. Zeichen in Quotes
+// (''from''), ein stehender Ausdruck mit seinem Text, die Marken eines
+// Werts und der Ausdruck einer frueheren Zeile der Kette in Worten - die
+// Marken selbst sind fuer den Leser bedeutungslos.
+function TokShown(const ATok: string): string;
+begin
+  if ATok = TOK_NUMBER then
+    Result := SHOWN_NUMBER
+  else if ATok = TOK_STRING then
+    Result := SHOWN_STRING
+  else if ATok = TOK_PLACEHOLDER then
+    Result := SHOWN_PLACEHOLDER
+  else if ATok = KEPT_MARK then
+    Result := SHOWN_CHAIN_EXPR
+  else if Copy(ATok, 1, 1) = KEPT_MARK then
+    Result := '''' + Shown(Copy(ATok, 2, MaxInt)) + ''''
+  else
+    Result := '''' + ATok + '''';
+end;
+
 // Die Urteile ueber die Position eines Werts: Anfang, Wert-Kontext,
 // Anweisungsart (die Sperre fuer DDL prueft LockReason davor). '' oder der
 // Grund.
@@ -1548,10 +1579,9 @@ begin
   if ATok[0] = '' then
     Exit(Format(R_AT_START, [Shown(AOperand)]));
   if Copy(ATok[0], 1, 1) = KEPT_MARK then
-    Exit(Format(R_AFTER_EXPR, [Shown(AOperand),
-      Shown(Copy(ATok[0], 2, MaxInt))]));
+    Exit(Format(R_AFTER_EXPR, [Shown(AOperand), TokShown(ATok[0])]));
   if not IsValueContext(ATok, AOpener) then
-    Exit(Format(R_NOT_VALUE, [Shown(AOperand), ATok[0]]));
+    Exit(Format(R_NOT_VALUE, [Shown(AOperand), TokShown(ATok[0])]));
   if InList(AHead, DML_HEADS) or InList(AHead, CLAUSE_HEADS) then Exit;
   Head := AHead;
   if Head = '' then
@@ -1573,7 +1603,7 @@ begin
   if IsIdentChar(OutLast(S)) then
     EmitText(S, ' ');
   EmitText(S, ':' + P.Name);
-  PushTok(S, 'v');
+  PushTok(S, TOK_PLACEHOLDER);
   S.LastCh := 'v';
 end;
 
@@ -1742,7 +1772,7 @@ begin
   if S.StrFirst = '' then
   begin
     EmitText(S, '''');
-    PushTok(S, 's');
+    PushTok(S, TOK_STRING);
     Exit;
   end;
   FlushStrBuf(S);
@@ -1786,7 +1816,7 @@ begin
     while CharInSet(CharAt(T, Result), ['0'..'9', '.']) or IsIdentChar(CharAt(T, Result)) do
       Inc(Result);
     EmitText(S, Copy(T, i, Result - i));
-    PushTok(S, 'n');   // eine Zahl ist ein Wert
+    PushTok(S, TOK_NUMBER);   // eine Zahl ist ein Wert
     Exit;
   end;
   while IsIdentChar(CharAt(T, Result)) or (CharAt(T, Result) = '$') do
@@ -1834,7 +1864,7 @@ begin
   if not (((Nm = 'new') or (Nm = 'old')) and (CharAt(T, Result) = '.')) then
     AddText(S.Found, Nm);
   EmitText(S, Copy(T, i, Result - i));
-  PushTok(S, 'v');
+  PushTok(S, TOK_PLACEHOLDER);
 end;
 
 function TakePunct(var S: TSqlScan; const T: string; i: Integer): Integer;
@@ -1884,7 +1914,12 @@ var
 begin
   C := T[i];
   Result := i + 1;
-  if C <= ' ' then
+  // Der Ausdruck einer frueheren Zeile der Kette (AppendTerm): ein Token
+  // wie ein stehender Ausdruck - ein Operand direkt dahinter lehnt
+  // ValueReason ab (R_AFTER_EXPR), statt hinter dem Wort davor zu landen.
+  if C = KEPT_MARK then
+    PushTok(S, KEPT_MARK)
+  else if C <= ' ' then
     EmitText(S, C)
   else if Copy(T, i, 2) = '--' then
     Result := OpenMode(S, lmLineComment, '--', i)
@@ -3237,10 +3272,6 @@ begin
   Result := P;
 end;
 
-// Der SQL-Text einer Pascal-Verkettung ARaw (Argument von Q.SQL.Add, Wert
-// von Q.SQL.Text :=): Literale dekodiert, sLineBreak als Zeilenende,
-// jeder andere Term als KEPT_MARK - ein Ausdruck, der stehen bleibt (der
-// Leser kennt seinen Text nicht; am Anfang setzt er keine Anweisungsart).
 // Der SQL-Text eines Terms ab ARaw[i] in ASB; liefert die Stelle dahinter.
 function AppendTerm(ASB: TStringBuilder; const ARaw: string; i: Integer): Integer;
 var
@@ -3262,6 +3293,11 @@ begin
     ASB.Append(KEPT_MARK);
 end;
 
+// Der SQL-Text einer Pascal-Verkettung ARaw (Argument von Q.SQL.Add, Wert
+// von Q.SQL.Text :=): Literale dekodiert, sLineBreak als Zeilenende,
+// jeder andere Term als KEPT_MARK - ein Ausdruck, der stehen bleibt (der
+// Leser kennt seinen Text nicht; StepCode liest ihn als Token, am Anfang
+// setzt er keine Anweisungsart).
 function ChainTextOf(const ARaw: string): string;
 var
   SB   : TStringBuilder;
@@ -3397,6 +3433,10 @@ begin
     for k := 0 to High(Cols) do
     begin
       Step := ChainStepOn(AMap, L, Cols[k], AChain.Key, Text);
+      // Ein lesendes Glied (BeginUpdate, Log(Q.SQL.Text)) aendert nichts -
+      // wie in ChainBack laeuft die Kette weiter (Review Woche G01-12).
+      if Step = chIgnore then
+        Continue;
       if Step <> chFragment then
         Exit;
       Found := SqlPlaceholders(Text);
