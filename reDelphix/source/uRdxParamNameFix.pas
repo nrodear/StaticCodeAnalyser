@@ -379,32 +379,19 @@ begin
     Result := '';
 end;
 
-// Die innerste Routine mit begin..end-Rumpf um AAt (wie uRdxGotoExitFix):
-// von AAt rueckwaerts der erste Kopf, dessen Rumpf AAt umfasst. Ein Kopf mit
-// unsicheren Grenzen beendet die Suche. '' oder der Grund.
+// Die innerste Routine mit begin..end-Rumpf um AAt mit den Gruenden
+// dieser Unit; '' oder der Grund. Die Suche ist der Baustein
+// uRdxBlocks.BeginBodyAround (bis zur Hygiene-Welle H1 hier als Kopie
+// ausgeschrieben): ein Kopf mit unsicheren Grenzen beendet sie.
 function EnclosingRoutine(AMap: TRdxCodeMap; const AAt: TRdxToken;
   out ARoutine: TRdxRoutine): string;
-var
-  T : TRdxToken;
-  S : TRdxHeadStep;
 begin
-  ARoutine := Default(TRdxRoutine);
-  T := AAt;
-  while TRdxBlocks.HeadBefore(AMap, T, UNIT_BOUNDS, S) do
-  begin
-    if S.Stop then
-      Break;
-    if S.Reason <> '' then
-      Exit(_(R_PN_BOUNDS));
-    if (S.Routine.Body.Low = 'begin')
-       and TokBefore(S.Routine.Body, AAt)
-       and TokBefore(AAt, S.Routine.EndTok) then
-    begin
-      ARoutine := S.Routine;
-      Exit('');
-    end;
+  case BeginBodyAround(AMap, AAt, ARoutine) of
+    rbfUnsure: Result := _(R_PN_BOUNDS);
+    rbfNone:   Result := _(R_PN_NO_ROUTINE);
+  else
+    Result := '';
   end;
-  Result := _(R_PN_NO_ROUTINE);
 end;
 
 // Steht das Literal an (ALine, ACol) als Argument eines Aufrufs aus
