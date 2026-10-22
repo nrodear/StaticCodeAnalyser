@@ -4364,13 +4364,14 @@ begin
         'procedure Foo(P1, P2: Pointer);'#13#10 +
         'var Diff: NativeInt;            // 32 on Win32, 64 on Win64'#13#10 +
         'begin'#13#10 +
-        '  Diff := PtrUInt(P1) - PtrUInt(P2);     // pointer-wide cast'#13#10 +
+        '  Diff := NativeInt(P1) - NativeInt(P2); // pointer-wide cast'#13#10 +
         '  // or NativeUInt for an unsigned result'#13#10 +
         'end;'#13#10 +
         ''#13#10 +
         '// Pointer-width integer types in Delphi:'#13#10 +
-        '//   NativeInt / PtrInt   - signed, pointer-sized'#13#10 +
-        '//   NativeUInt / PtrUInt - unsigned, pointer-sized'#13#10 +
+        '//   NativeInt  - signed, pointer-sized'#13#10 +
+        '//   NativeUInt - unsigned, pointer-sized'#13#10 +
+        '// (PtrInt / PtrUInt are the FPC and mORMot names.)'#13#10 +
         '// Always use these for arithmetic on pointer addresses.';
     end;
 

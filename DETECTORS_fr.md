@@ -273,7 +273,7 @@ avant/après et une fixture de test DUnitX.
 | SCA158 | **PointerArithmeticOnString** | `PChar(s) +/- offset` (ou `PAnsiChar` / `PWideChar`) sans vérification préalable que `s` n'est pas vide — `PChar('')` est NIL, l'arithmétique sur nil déclenche une Access Violation | Warning | Bug | `uPointerArithmeticOnString` |
 | SCA159 | **EmptyOnHandler** | `on E: SomeException do ;` (ou `begin end` vide) — un handler d'exception typé avale en silence une classe d'exception précise ; pire qu'un `except end` nu car l'annotation de type semble intentionnelle | Warning | Bug | `uEmptyOnHandler` |
 | SCA160 | **StringFromPointer** | Le cast `string(P)` / `AnsiString(P)` / `UTF8String(P)` depuis un pointeur préfixé P suppose un terminateur nul — lit au-delà de la fin du tampon si le terminateur manque ; sur-lecture du tas | Warning | Bug | `uStringFromPointer` |
-| SCA161 | **PointerSubtraction** | `Cardinal(P1) - Cardinal(P2)` (ou variantes Integer / LongWord / LongInt) tronque les 32 bits supérieurs d'un pointeur 64 bits sous Win64 ; utiliser `PtrUInt` / `NativeInt` | Warning | Bug | `uPointerSubtraction` |
+| SCA161 | **PointerSubtraction** | `Cardinal(P1) - Cardinal(P2)` (ou variantes Integer / LongWord / LongInt) tronque les 32 bits supérieurs d'un pointeur 64 bits sous Win64 ; utiliser `NativeInt` / `NativeUInt` | Warning | Bug | `uPointerSubtraction` |
 
 ---
 
