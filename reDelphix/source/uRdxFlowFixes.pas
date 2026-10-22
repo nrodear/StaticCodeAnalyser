@@ -52,8 +52,11 @@ type
   TRdxFlowPlan = record
     Edit         : TRdxEdit;
     // Name fuer Menuetext und Pruefung - schon aus der Meldung, auch wenn
-    // der Planer ablehnt; nach einem Treffer wie im Quelltext. SCA098 und
-    // SCA047: das Ziel X ('FActive', 'Pt.Y'); SCA080: Exit bzw. Continue.
+    // der Planer ablehnt; nach einem Treffer wie im Quelltext. SCA098: das
+    // Ziel X als EIN Bezeichner ('FActive' - so meldet es uRedundant-
+    // Conditional, und CondAt vergleicht ein Wort); SCA047: auch ein Pfad
+    // ('Pt.Y'); SCA080: Exit bzw. Continue. Bis zur Review Woche G07-12
+    // nannte der Kommentar 'Pt.Y' auch fuer SCA098.
     Target       : string;
     // SCA098: 'then False else True' - der neue Wert ist 'not C'.
     Negated      : Boolean;
@@ -206,7 +209,7 @@ type
     Second : string;
   end;
 
-  // SCA098: CondIsOperand - offene Klammern und ob ein Operand(-Teil)
+  // SCA098: IsOperand - offene Klammern und ob ein Operand(-Teil)
   // folgen muss (am Anfang und hinter '.').
   TRdxOperandScan = record
     Depth : Integer;
@@ -418,22 +421,23 @@ begin
       + '13) - keine Anweisung';
 end;
 
-// C von hinter dem if bis vor das then - mit Strings und Zeilenumbruechen.
-function CondText(AMap: TRdxCodeMap; const ASite: TRdxCondSite): string;
+// Der Text von hinter AFrom (das if, beim gestrichenen 'not' dieses) bis
+// vor das then - mit Strings und Zeilenumbruechen.
+function CondText(AMap: TRdxCodeMap; const AFrom, AThen: TRdxToken): string;
 var
   L1, C1, L2, C2 : Integer;
 begin
   Result := '';
-  if FirstCharAfter(AMap, ASite.IfTok, L1, C1)
-     and LastCharBefore(AMap, ASite.ThenTok, L2, C2) then
+  if FirstCharAfter(AMap, AFrom, L1, C1)
+     and LastCharBefore(AMap, AThen, L2, C2) then
     Result := RangeText(AMap, TRefactorSpan.Make(SPAN_098, L1, C1, L2,
       C2 + 1));
 end;
 
 { TRdxOperandScan }
 
-// Ein Token von CondIsOperand: in Klammern zaehlt nur die Tiefe; sonst
-// False, wenn C mit T zusammengesetzt ist.
+// Ein Token von IsOperand: in Klammern zaehlt nur die Tiefe; sonst
+// False, wenn das Stueck mit T zusammengesetzt ist.
 function TRdxOperandScan.Step(const T: TRdxToken): Boolean;
 begin
   Result := True;
@@ -451,18 +455,19 @@ begin
     Inc(Depth);
 end;
 
-// Ist C ein einzelner Operand - ein Bezeichnerpfad mit Aufruf-, Index-
-// oder '^'-Anhaengen oder ein ganzer Klammerausdruck? Dann bindet 'not'
-// an das ganze C, Klammern braucht es nicht.
-function CondIsOperand(AMap: TRdxCodeMap; const ASite: TRdxCondSite): Boolean;
+// Sind die Token ab AFirst bis vor AThen ein einzelner Operand - ein
+// Bezeichnerpfad mit Aufruf-, Index- oder '^'-Anhaengen oder ein ganzer
+// Klammerausdruck? Dann bindet 'not' an das ganze Stueck, Klammern braucht
+// es nicht. Leer: False.
+function IsOperand(AMap: TRdxCodeMap; const AFirst, AThen: TRdxToken): Boolean;
 var
   T    : TRdxToken;
   Scan : TRdxOperandScan;
 begin
   Scan := Default(TRdxOperandScan);
   Scan.Want := True;
-  T := After(AMap, ASite.IfTok);
-  while (T.Low <> '') and not SameTok(T, ASite.ThenTok) do
+  T := AFirst;
+  while (T.Low <> '') and not SameTok(T, AThen) do
   begin
     if not Scan.Step(T) then
       Exit(False);
@@ -574,16 +579,26 @@ begin
     Prefix := Copy(L, ASite.Target.Col, ASite.FirstVal.Col - ASite.Target.Col)
   else
     Prefix := APlan.Target + KEY_ASSIGN;
-  Cond := CondText(AMap, ASite);
+  Cond := CondText(AMap, ASite.IfTok, ASite.ThenTok);
   APlan.Negated := ASite.FirstVal.Low = 'false';
   C.First := After(AMap, ASite.IfTok);
   C.Stop := ASite.ThenTok;
   APlan.CondIdents := nil;
   APlan.CondBoolean := BoolForm(AMap, C, APlan.CondIdents, 0);
-  if APlan.Negated and not CondIsOperand(AMap, ASite) then
-    Cond := '(' + Cond + ')';
-  if APlan.Negated then
+  // Gegenrichtung: ist C 'not R' mit einem Operanden R, faellt das not weg
+  // ('if not Ready then Done := False else Done := True' -> 'Done :=
+  // Ready'); bis zur Review Woche G07-15 hiess es 'not (not Ready)'. 'not
+  // A = B' ist '(not A) = B' - R waere kein Operand, es bleibt beim
+  // geklammerten 'not (..)'.
+  if APlan.Negated and (C.First.Low = 'not')
+     and IsOperand(AMap, After(AMap, C.First), ASite.ThenTok) then
+    Cond := CondText(AMap, C.First, ASite.ThenTok)
+  else if APlan.Negated then
+  begin
+    if not IsOperand(AMap, C.First, ASite.ThenTok) then
+      Cond := '(' + Cond + ')';
     Cond := 'not ' + Cond;
+  end;
   APlan.Edit.Span := TRefactorSpan.Make(SPAN_098, ASite.IfTok.Line,
     ASite.IfTok.Col, ASite.SecondVal.Line, ASite.SecondVal.EndCol);
   APlan.Edit.Expected := RangeText(AMap, APlan.Edit.Span);
@@ -999,7 +1014,10 @@ begin
   S.Test    := IsSelfAssignOf;
   S.Arg     := AKey;
   S.What    := 'keine Selbstzuweisung "' + AKey + ' := ' + AKey + '"';
-  S.ManyFmt := '%d Selbstzuweisungen von ' + AKey;
+  // Der Pfad aus der Meldung als Argument, nie im Muster (Vertrag von
+  // TRdxLineSearch; bis zur Review Woche G07-16 stand er im Muster).
+  S.ManyFmt := '%d Selbstzuweisungen von %s';
+  S.ManyArg := AKey;
   Result := OneTokenOnLine(AMap, ALine, S, Hit);
   if Result = '' then
     SelfAt(AMap, Hit, Before(AMap, Hit), AKey, ASite);

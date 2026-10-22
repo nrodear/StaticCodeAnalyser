@@ -60,8 +60,9 @@ type
     // innere Exception weiter. Und nicht, wenn E dazwischen neu zugewiesen
     // wird ('E := EWrapped.Create(..)'): 'raise E' wirft dann das neue
     // Objekt, 'raise;' die urspruengliche Exception (Review R3, Charge FC).
-    // GRENZE: eine Uebergabe als var-/out-Argument ('Wrap(E)') aendert E
-    // ebenso - die sieht der Planer nicht.
+    // Ebenso nicht, wenn E dazwischen als ganzes Argument uebergeben wird
+    // ('Wrap(E)'): ein var-/out-Parameter aendert E ebenso, und ob er es
+    // ist, sieht der Planer nicht (Review Woche G07-19).
     class function ReRaise(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
@@ -99,11 +100,16 @@ type
     EndTok   : TRdxToken;
   end;
 
-// Ein Routinen-Wort als Schluesselwort (OneTokenOnLine, HeaderOn).
+// Ein Routinenkopf (OneTokenOnLine, HeaderOn) - die eine Kopferkennung
+// uRdxCodeMap.IsRoutineHeadAfter: ein Prozedurtyp ('TCb = procedure of
+// object;', 'var Cb: procedure;', 'reference to procedure') ist keiner.
+// Bis zur Review Woche G07-18 eine eigene Fassung ohne den Blick auf das
+// Token davor - ein veralteter Fund auf einer Typzeile lief dann bis zum
+// naechsten Routinenwort und nannte 'lokale Routine' als Grund.
 function IsRoutineWord(AMap: TRdxCodeMap; const T: TRdxToken;
   const AArg: string): Boolean;
 begin
-  Result := IsKeywordAfter(T, Before(AMap, T)) and InList(T.Low, ROUTINE_WORDS);
+  Result := IsRoutineHeadAfter(T, Before(AMap, T));
 end;
 
 // Das eine Routinen-Wort auf ALine. Zwei Koepfe auf einer Zeile
@@ -127,26 +133,28 @@ end;
 // Gliedern ('TFoo.Bar'). '' ohne Name. Bis Charge B2S-a hiess sie
 // NameAfter wie uRdxCodeMap.NameAfter (bis Charge B2S-a in
 // uRdxSimpleFixes), die das letzte Glied als TOKEN liefert (Review R3-05).
+// Der Text endet hinter dem LETZTEN Token des Namens: ein Kommentar
+// dahinter ('procedure TFoo.Bar { alt }' bzw. '// alt') bleibt draussen -
+// bis zur Review Woche G07-11 endete er am Zeilenende bzw. am '//' und
+// nahm einen Blockkommentar in den ENotImplemented-Text.
 function HeaderNameText(AMap: TRdxCodeMap; const AKeyword: TRdxToken): string;
 var
-  First, T : TRdxToken;
-  L        : string;
-  Stop     : Integer;
+  First, T, Last : TRdxToken;
+  L              : string;
 begin
   Result := '';
   First := After(AMap, AKeyword);
   if (First.Line <> AKeyword.Line) or not First.IsWord then Exit;
   L := AMap.Raw(AKeyword.Line);
-  T := First;
+  Last := First;
+  T := After(AMap, First);
   while (T.Low <> '') and (T.Line = AKeyword.Line)
      and not InList(T.Low, ['(', ':', ';']) do
+  begin
+    Last := T;
     T := After(AMap, T);
-  Stop := Length(L) + 1;
-  if T.Line = AKeyword.Line then
-    Stop := T.Col
-  else if AMap.LineCommentCol(AKeyword.Line) > 0 then
-    Stop := AMap.LineCommentCol(AKeyword.Line);
-  Result := Trim(Copy(L, First.Col, Stop - First.Col));
+  end;
+  Result := Trim(Copy(L, First.Col, Last.EndCol - First.Col));
 end;
 
 // Ab dem Kopf das begin des Rumpfs - ohne lokale Routine dazwischen
@@ -343,7 +351,10 @@ begin
   S.Test    := IsCreateOf;
   S.Arg     := Target;
   S.What    := 'kein ' + Target + '.Create';
-  S.ManyFmt := '%d-mal ' + Target + '.Create';
+  // Der Name aus der Meldung als Argument, nie im Muster (Vertrag von
+  // TRdxLineSearch; bis zur Review Woche G07-16 stand er im Muster).
+  S.ManyFmt := '%d-mal %s.Create';
+  S.ManyArg := Target;
   AReason := OneTokenOnLine(AMap, ALine, S, Hit);
   if (AReason = '') and CreateAt(AMap, Hit, Before(AMap, Hit), Target, Whole)
      and not Whole then
@@ -397,6 +408,15 @@ begin
       + 'wuerde dort eine andere Exception weiterwerfen';
     Exit(rsStop);
   end;
+  // Ein Routinenkopf: die Suche hat die umschliessende Routine verlassen,
+  // ohne einen Handler zu treffen (ein veralteter Fund) - bis zur Review
+  // Woche G07-11 hiess das 'anonyme Methode im Handler'.
+  if IsRoutineHead(AMap, T) then
+  begin
+    AReason := Format('kein Handler "on %s: ... do" vor dem raise in dieser '
+      + 'Routine', [AName]);
+    Exit(rsStop);
+  end;
   if InList(T.Low, ['procedure', 'function']) then
   begin
     AReason := 'anonyme Methode im Handler (das raise darin oder eine davor) '
@@ -440,6 +460,19 @@ begin
   begin
     AReason := Format('%s wird zwischen Handler und raise neu zugewiesen - '
       + '"raise %s;" wirft dann ein anderes Objekt als "raise;"', [AName, AName]);
+    Exit(rsStop);
+  end;
+  // Als ganzes Argument ('Wrap(E)', 'Replace(A, E)'): ein var-/out-
+  // Parameter kann E ersetzen - dieselbe Lage wie 'E := ..'. Ob der
+  // Parameter var ist, sieht der Planer nicht; die Hilfe gilt als
+  // bedeutungsgleich und laeuft mit Strg+Alt+F unbesehen - also lieber
+  // keine (Review Woche G07-19; bis dahin nur als GRENZE im Kopf).
+  if SameText(T.Low, AName) and ((P.Low = '(') or (P.Low = ','))
+     and InList(After(AMap, T).Low, [')', ',']) then
+  begin
+    AReason := Format('%s wird zwischen Handler und raise als Argument '
+      + 'uebergeben - ein var-Parameter kann es ersetzen, "raise %s;" wuerfe '
+      + 'dann ein anderes Objekt als "raise;"', [AName, AName]);
     Exit(rsStop);
   end;
   // Satzzeichen und Bezeichner zaehlen nicht.
@@ -494,7 +527,8 @@ begin
   S.Test    := IsRaiseOf;
   S.Arg     := AName;
   S.What    := 'kein "raise ' + AName + '"';
-  S.ManyFmt := '%d-mal "raise ' + AName + '"';
+  S.ManyFmt := '%d-mal "raise %s"';   // AName als Argument (G07-16)
+  S.ManyArg := AName;
   Result := OneTokenOnLine(AMap, ALine, S, AHit);
   if Result <> '' then Exit;
   AVar := After(AMap, AHit);

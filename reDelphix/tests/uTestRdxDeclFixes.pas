@@ -469,6 +469,13 @@ begin
     + 'virtual;'], DERIVED, ['    procedure DoWork; stdcall;']), 10,
     ShadowMsg('DoWork'), R));
   Assert.IsTrue(Pos('andere Form', R) > 0, R);
+  // Nur anders gruppiert: dieselbe Signatur fuer den Compiler - die Hilfe
+  // lehnt ab, der Grund nennt die Gruppierung (Review Woche G07-11 (1):
+  // bis dahin 'override uebersetzte nicht').
+  Assert.AreEqual('', Fix(dkDirective, Hierarchy(['    procedure DoWork(A, B: '
+    + 'Integer); virtual;'], DERIVED, ['    procedure DoWork(A: Integer; B: '
+    + 'Integer);']), 10, ShadowMsg('DoWork'), R));
+  Assert.IsTrue(Pos('gruppiert nur die Parameter anders', R) > 0, R);
   // Ohne Basis im Text kein override.
   Assert.AreEqual('', Fix(dkDirective, InClass(['    procedure DoWork;']), 6,
     ShadowMsg('DoWork'), R));

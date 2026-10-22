@@ -359,6 +359,16 @@ begin
   end;
 end;
 
+// Die Hilfe (FixFor) fuer EINEN Fund als ganzes Ergebnis - mit
+// ChangesBehavior und Hinweis. Der Lauf des Kits (PlanFixIn) fuer 't.pas'
+// - bis zur Review Woche G07-27 stand er hier Zeile fuer Zeile kopiert
+// (ohne den Handles-Assert des Kits).
+function PlanMain(const ASource: string; AKind: TFindingKind;
+  const ASeen: TSeen): TRdxFixOutcome;
+begin
+  Result := PlanFixIn(ASource, 't.pas', AKind, ASeen);
+end;
+
 // Fund fuer Fund, bis der Detektor schweigt (uTestRdxDetectorKit).
 function FixAll(const ASource: string; AKind: TFindingKind): string;
 begin
@@ -1222,31 +1232,17 @@ end;
 
 procedure TTestRdxSimpleFixesDetector4.Sca007_MarkedAsBehaviorChange;
 var
-  Src     : string;
-  Seen    : TArray<TSeen>;
-  SL      : TStringList;
-  Places  : TSourcePlaces;
-  Finding : TLeakFinding;
-  O       : TRdxFixOutcome;
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
 begin
   // Entscheid E2: eine Unit kann im initialization-Abschnitt registrieren.
   Src := Format(UNIT_007, ['uses System.Classes, System.SysUtils;']);
   Seen := Detect(Src, fkUnusedUses);
   Assert.AreEqual<Integer>(1, Length(Seen), 'nur System.Classes');
-  SL := TStringList.Create;
-  Places := TSourcePlaces.Create;
-  Finding := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
-    fkUnusedUses);
-  try
-    SL.Text := Src;
-    Assert.IsTrue(Places.OpenSource('t.pas', Src), 'OpenSource');
-    O := TRdxFixTable.FixFor(Places, SL, Finding,
-      TRdxRecipeRunner.UsesNamesOf(Places));
-  finally
-    Finding.Free;
-    Places.Free;
-    SL.Free;
-  end;
+  // Ueber den Einstieg des Anbieters wie PlanMain (bis zur Review Woche
+  // G07-27 eine vierte Hand-Kopie des Laufs).
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.IsTrue(O.ChangesBehavior, 'Kennzeichnung (aendert Verhalten)');
   Assert.AreEqual('System.Classes', O.Name);
@@ -1613,30 +1609,6 @@ end;
 
 { ---- SCA020 / SCA120 / SCA122 ---- }
 
-// Die Hilfe (FixFor) fuer EINEN Fund als ganzes Ergebnis - mit
-// ChangesBehavior und Hinweis.
-function PlanMain(const ASource: string; AKind: TFindingKind;
-  const ASeen: TSeen): TRdxFixOutcome;
-var
-  SL      : TStringList;
-  Places  : TSourcePlaces;
-  Finding : TLeakFinding;
-begin
-  SL := TStringList.Create;
-  Places := TSourcePlaces.Create;
-  Finding := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, AKind);
-  try
-    SL.Text := ASource;
-    Assert.IsTrue(Places.OpenSource('t.pas', ASource), 'OpenSource');
-    Result := TRdxFixTable.FixFor(Places, SL, Finding,
-      TRdxRecipeRunner.UsesNamesOf(Places));
-  finally
-    Finding.Free;
-    Places.Free;
-    SL.Free;
-  end;
-end;
-
 procedure TTestRdxSimpleFixesDetector7.Sca020_RoundTrip;
 begin
   // Der Absichtskommentar: danach schweigt der Detektor.
@@ -1644,6 +1616,12 @@ begin
       '  ' + INTENT_LINE, 'end;'])),
     FixAll(InImplementation(Join(['procedure P;', 'begin', 'end;'])),
       fkEmptyMethod));
+  // Die Inline-Form auf einer Zeile: uEmptyMethod.BodyHasIntentComment
+  // nimmt '{ intentionally empty }' hinter dem begin als Absicht (Review
+  // Woche G07-28 - bis dahin nur ohne Detektor geprueft).
+  Assert.AreEqual(InImplementation('procedure P; begin ' + INTENT_INLINE
+      + ' end;'),
+    FixAll(InImplementation('procedure P; begin end;'), fkEmptyMethod));
 end;
 
 procedure TTestRdxSimpleFixesDetector7.Sca020_Raise_AddsUses;

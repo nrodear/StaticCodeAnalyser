@@ -288,6 +288,12 @@ begin
   // Vor dem ersten Code der Datei: Lizenz- oder Kopfkommentar.
   AssertRefused(ckComment, Join(['{ Beispiel:', '  X := 1;', '}', 'unit u;',
     'interface', 'implementation', 'end.']), 2, OneMsg(1), 'Kopfkommentar');
+  // PasDoc '(**' (Review Woche G07-25: bis dahin nur '///', '{*', '{**').
+  AssertRefused(ckComment, InProc(['  (** X := 1; *)', '  Foo;']), 6,
+    OneMsg(3), 'Doku-Kommentar');
+  // Ein Kommentar ohne Schliesser bis zum Dateiende.
+  AssertRefused(ckComment, InProc(['  { X := 1;', '  Foo;']), 6, OneMsg(3),
+    'Kommentar ohne Ende');
 end;
 
 procedure TTestRdxCleanupFixes.Sca070_MarkerRefusals;
@@ -321,6 +327,18 @@ begin
   // ihn nicht und meldet '{ ... }' darin).
   AssertRefused(ckComment, InProc(['  S := ''''''', '    { c = 1; }', '    ''''''',
     '  ;']), 7, OneMsg(5), 'steht kein Kommentar');
+  // Review Woche G07-25 - die Zweige ohne Test bis dahin: eine Meldung ohne
+  // Spalte bzw. Zeilenzahl, eine Region ueber das Dateiende hinaus, Code in
+  // Backticks (Doku zitiert ihn - kein Merkmal, wie im Detektor) und die
+  // LETZTE Zeile einer Region ohne Code-Merkmal.
+  AssertRefused(ckComment, InProc(['  // X := 1;', '  Foo;']), 6,
+    'kaputte Meldung', 'Spalte oder Zeilenzahl fehlt');
+  AssertRefused(ckComment, InProc(['  // X := 1;', '  Foo;']), 6,
+    BlockMsg(50, 3), 'der Fund reicht bis Zeile 55');
+  AssertRefused(ckComment, InProc(['  // siehe `X := 1;` oben', '  Foo;']), 6,
+    OneMsg(3), 'nicht nach Code');
+  AssertRefused(ckComment, InProc(['  // X := 1;', '  // Prosa', '  Foo;']), 6,
+    BlockMsg(2, 3), 'Zeile 7 sieht nicht nach Code aus');
 end;
 
 // ---- SCA053 ----
@@ -357,6 +375,18 @@ begin
     '    Clear;', 'end;']),
     Fix(ckVar, InImpl(['procedure P(L: TList);', 'var', '  X: Integer;',
       'begin', '  with L do', '    Clear;', 'end;']), 6, VarMsg('X'), R), R);
+  // 'procedure of object' und 'class of' auf einer Zeile: kein Typ ueber
+  // mehrere Zeilen (Review Woche G07-10 (a) - bis dahin abgelehnt).
+  Assert.AreEqual(InImpl(['procedure P;', 'var', '  A: Integer;', 'begin',
+    '  A := 1;', 'end;']),
+    Fix(ckVar, InImpl(['procedure P;', 'var', '  A: Integer;',
+      '  Ev: procedure of object;', 'begin', '  A := 1;', 'end;']), 7,
+      VarMsg('Ev'), R), R);
+  Assert.AreEqual(InImpl(['procedure P;', 'var', '  A: Integer;', 'begin',
+    '  A := 1;', 'end;']),
+    Fix(ckVar, InImpl(['procedure P;', 'var', '  A: Integer;',
+      '  C: class of TObject;', 'begin', '  A := 1;', 'end;']), 7,
+      VarMsg('C'), R), R);
 end;
 
 procedure TTestRdxCleanupFixes.Sca053_SectionBecomesEmpty;
@@ -380,6 +410,16 @@ begin
     '  Y := 1;', 'end;']),
     Fix(ckVar, InImpl(['procedure P;', 'var X: Integer;', '  Y: Integer;',
       'begin', '  Y := 1;', 'end;']), 5, VarMsg('X'), R), R);
+  // Ein weiterer Eintrag mit Attribut bzw. '&'-Namen dahinter: var bleibt
+  // (MoreItems; Review Woche G07-25).
+  Assert.AreEqual(InImpl(['procedure P;', 'var', '  [Weak] Y: IFoo;', 'begin',
+    '  Y := nil;', 'end;']),
+    Fix(ckVar, InImpl(['procedure P;', 'var X: Integer;', '  [Weak] Y: IFoo;',
+      'begin', '  Y := nil;', 'end;']), 5, VarMsg('X'), R), R);
+  Assert.AreEqual(InImpl(['procedure P;', 'var', '  &Type: Integer;', 'begin',
+    '  &Type := 1;', 'end;']),
+    Fix(ckVar, InImpl(['procedure P;', 'var X: Integer;', '  &Type: Integer;',
+      'begin', '  &Type := 1;', 'end;']), 5, VarMsg('X'), R), R);
 end;
 
 procedure TTestRdxCleanupFixes.Sca053_Groups;
@@ -490,6 +530,18 @@ begin
   AssertRefused(ckVar, InImpl(['procedure P;', 'var',
     '  X: procedure(A: Integer);', '  stdcall;', 'begin', 'end;']), 6,
     VarMsg('X'), 'stdcall');
+  // Review Woche G07-25: der Name zweimal auf der Zeile (der Name aus der
+  // Meldung als Argument des Musters, G07-09), class var, ein Typ ohne ';'
+  // bis zum Dateiende und eine Klammer ohne Gegenstueck.
+  AssertRefused(ckVar, InImpl(['procedure P;', 'var', '  X: Integer; X: Integer;',
+    'begin', 'end;']), 6, VarMsg('X'), 'Zeile 6 traegt 2-mal "x"');
+  AssertRefused(ckVar, InImpl(['type', '  TFoo = class', '  class var X: Integer;',
+    '  end;', 'procedure P;', 'begin', 'end;']), 6, VarMsg('X'), 'class var');
+  AssertRefused(ckVar, Join(['unit u;', 'interface', 'implementation',
+    'procedure P;', 'var', '  X: Integer']), 6, VarMsg('X'),
+    'kein ";" hinter dem Typ');
+  AssertRefused(ckVar, InImpl(['procedure P;', 'var', '  X: Integer);', 'begin',
+    'end;']), 6, VarMsg('X'), 'Klammer ohne Gegenstueck');
 end;
 
 procedure TTestRdxCleanupFixes.Sca053_ContextRefusals;
@@ -510,6 +562,17 @@ begin
     'keine Routine');
   AssertRefused(ckVar, InImpl(['procedure P;', 'var', '  A: Integer;',
     'begin', 'end;']), 6, VarMsg('X'), 'Zeile verschoben');
+  // Review Woche G07-25: ein FPC-Makro '{$DEFINEC M := X}' vor der Routine
+  // (zweites Wort aus MACRO_WORDS - der Vorfilter je Zeile, G07-02, sucht
+  // beide).
+  AssertRefused(ckVar, InImpl(['{$DEFINEC M := X}', 'procedure P;', 'var',
+    '  X: Integer;', 'begin', '  M;', 'end;']), 7, VarMsg('X'), 'Makro');
+  // Review Woche G07-10 (b): ein lokaler Record mit Variantenteil vor der
+  // var-Section - sein case hat kein eigenes end; die Hilfe lehnt ab, nennt
+  // aber nicht mehr 'globale Variable?'.
+  AssertRefused(ckVar, InImpl(['procedure P;', 'type',
+    '  TR = record case B: Boolean of True: (A: Integer); end;', 'var',
+    '  X: Integer;', 'begin', 'end;']), 8, VarMsg('X'), 'Variantenteil');
 end;
 
 // ---- CutEdit ----
