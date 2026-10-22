@@ -2,7 +2,9 @@ unit uTestRdxExceptionNameFix;
 
 // Editorhilfe SCA118 ExceptionName (uRdxExceptionNameFix): der Planer auf
 // Text (erste Fixture, FPC-tauglich) und der ECHTE Detektor (uNamingExt)
-// auf dem echten AST (zweite Fixture, nur Delphi). Die Fixtures stehen in
+// auf dem echten AST ueber den Einstieg der Tabelle (TRdxFixTable.FixFor
+// via PlanFixIn/FixAllWith, Adapter PlanExceptionName; zweite Fixture, nur
+// Delphi). Die Fixtures stehen in
 // einer Unit mit implementation-Teil ab Zeile 4 ('type' auf Zeile 5); die
 // Klasse ist auf Zeile 6 deklariert (DECL_LINE).
 
@@ -49,6 +51,8 @@ type
     [Test] procedure Detector_LowercaseName_Silenced;
     [Test] procedure Detector_TPrefix_Silenced;
     [Test] procedure Detector_InterfaceClass_NoHelp;
+    // ---- Tabellenzeile ----
+    [Test] procedure Table_NameIsNewName;
   end;
 {$ENDIF}
 
@@ -59,7 +63,9 @@ uses
   {$IFNDEF FPC}
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uNamingExt,
-  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
+  uRdxRecipeRunner,      // TRdxFixOutcome
+  uRdxFixTable,          // TRdxFixTable.CaptionFor
+  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxExceptionNameFix,
   uRdxText,              // _() und die gemeinsamen Gruende
@@ -359,7 +365,7 @@ end;
 
 {$IFNDEF FPC}
 
-{ ---- Detektor ---- }
+{ ---- Detektor und Tabelle ---- }
 
 // Die Funde der Art SCA118 - der echte Detektor auf dem echten AST.
 procedure RunDetector(AKind: TFindingKind; Root: TAstNode;
@@ -374,35 +380,28 @@ begin
     RunDetector);
 end;
 
-// Die Hilfe fuer den ersten Fund des Detektors.
-function PlanFirst(const ASource: string; out AReason: string): string;
+// Dasselbe in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := DetectSource('rdx_excname_', ASource, AKind, RunDetector);
+end;
+
+// Die Hilfe fuer den ersten Fund des Detektors ueber den Einstieg der
+// Tabelle (PlanFixIn: TRdxFixTable.FixFor, Adapter PlanExceptionName).
+function PlanFirst(const ASource: string): TRdxFixOutcome;
 var
   Seen : TArray<TSeen>;
-  P    : TRdxExceptionNamePlan;
 begin
   Seen := Detect(ASource);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet einen Fund');
-  Result := PlanWith(ASource, Seen[0].Line, Seen[0].Msg, AReason, P);
+  Result := PlanFixIn(ASource, 't.pas', fkExceptionName, Seen[0]);
 end;
 
-// Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt.
+// Fund fuer Fund ueber die Tabelle, nach jeder Ersetzung neu gemeldet, bis
+// der Detektor schweigt (FixAllWith).
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass : Integer;
-  R    : string;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    if Length(Detect(Result)) = 0 then
-      Exit;
-    Result := PlanFirst(Result, R);
-    Assert.IsTrue(Result <> '', R);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Result := FixAllWith(ASource, fkExceptionName, DetectKind);
 end;
 
 procedure TTestRdxExceptionNameDetector.Detector_ReportsDeclarationLine;
@@ -466,11 +465,30 @@ end;
 
 procedure TTestRdxExceptionNameDetector.Detector_InterfaceClass_NoHelp;
 var
-  R : string;
+  O : TRdxFixOutcome;
 begin
-  Assert.AreEqual('', PlanFirst(Join(['unit t;', 'interface', 'uses SysUtils;',
-    'type', '  MyError = class(Exception);', 'implementation', 'end.']), R));
-  Assert.AreEqual(_(R_EXC_NOT_LOCAL), R);
+  O := PlanFirst(Join(['unit t;', 'interface', 'uses SysUtils;',
+    'type', '  MyError = class(Exception);', 'implementation', 'end.']));
+  Assert.IsFalse(O.Enabled, 'keine Hilfe');
+  Assert.AreEqual(_(R_EXC_NOT_LOCAL), O.Reason);
+  Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+  // Der Menuetext nennt den neuen Namen auch gesperrt.
+  Assert.AreEqual('EMyError', O.Name);
+end;
+
+procedure TTestRdxExceptionNameDetector.Table_NameIsNewName;
+var
+  O : TRdxFixOutcome;
+begin
+  // Name = der neue Name (Menuetext 'Rename the exception class to %s'),
+  // Hinweis der Zeile, bedeutungsgleich (nicht gekennzeichnet).
+  O := PlanFirst(UnitWith(['type', '  MyError = class(Exception);']));
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual('EMyError', O.Name);
+  Assert.IsFalse(O.ChangesBehavior, 'bedeutungsgleich');
+  Assert.IsTrue(Pos('implementation', O.Hint) > 0, O.Hint);
+  Assert.IsTrue(Pos('EMyError', TRdxFixTable.CaptionFor(fkExceptionName, O)) > 0,
+    'der Menuetext nennt den neuen Namen');
 end;
 
 {$ENDIF}

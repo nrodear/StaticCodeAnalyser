@@ -2,10 +2,11 @@ unit uTestRdxConsecutiveSectionFix;
 
 // Editorhilfe SCA079 ConsecutiveSection (uRdxConsecutiveSectionFix): der
 // Planer auf Text (erste Fixture, FPC-tauglich) und der ECHTE Detektor
-// (uConsecutiveSection) auf dem echten AST mit dem Planer ueber MapFix
-// (zweite Fixture, nur Delphi). Die Tabelle (uRdxFixTable) kennt die Hilfe
-// erst nach der Integration - die Tests rufen den Planer ohne sie. InIntf
-// legt die Zeilen in den interface-Teil; die erste ist Zeile 3.
+// (uConsecutiveSection) auf dem echten AST ueber den Einstieg der Tabelle
+// (TRdxFixTable.FixFor via PlanFixIn/FixAllWith, Adapter
+// PlanConsecutiveSection - er setzt Name auch bei Ablehnung; zweite
+// Fixture, nur Delphi). InIntf legt die Zeilen in den interface-Teil; die
+// erste ist Zeile 3.
 
 interface
 
@@ -48,7 +49,8 @@ type
     [Test] procedure Detector_CatalogExample_Fixed;
     [Test] procedure Detector_InlineVars_NoHelp;
     [Test] procedure Detector_VisibilityBetween_NoHelp;
-    [Test] procedure MapFix_StaleFinding_NoHelp;
+    [Test] procedure Table_StaleFinding_NoHelp;
+    [Test] procedure Table_NameAndHint;
   end;
 {$ENDIF}
 
@@ -60,8 +62,8 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uConsecutiveSection,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uRdxFixRunner,         // MapFix
-  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
+  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn,
+                         // FixAllWith
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxConsecutiveSectionFix,
   uRdxText,              // _() und die gemeinsamen Gruende
@@ -319,42 +321,24 @@ begin
     RunDetector);
 end;
 
-// Die Hilfe fuer einen Fund ueber MapFix - wie der Adapter der Tabelle.
-function PlanSeen(const ASource: string; const ASeen: TSeen): TRdxFixOutcome;
-var
-  SL : TStringList;
+// Detect in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
 begin
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    Result := MapFix(SL, ASeen.Line, ASeen.Msg,
-      TRdxConsecutiveSectionFix.Merge);
-  finally
-    SL.Free;
-  end;
+  Result := DetectSource('rdx_sec_', ASource, AKind, RunDetector);
+end;
+
+// Die Hilfe fuer einen Fund ueber den Einstieg der Tabelle (PlanFixIn:
+// TRdxFixTable.FixFor, Adapter PlanConsecutiveSection).
+function PlanSeen(const ASource: string; const ASeen: TSeen): TRdxFixOutcome;
+begin
+  Result := PlanFixIn(ASource, 't.pas', fkConsecutiveSection, ASeen);
 end;
 
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt.
+// schweigt (FixAllWith: ueber den Einstieg der Tabelle).
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass : Integer;
-  Seen : TArray<TSeen>;
-  O    : TRdxFixOutcome;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    Seen := Detect(Result);
-    if Length(Seen) = 0 then
-      Exit;
-    O := PlanSeen(Result, Seen[0]);
-    Assert.IsTrue(O.Enabled, Format('Zeile %d: %s', [Seen[0].Line, O.Reason]));
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Result := FixAllWith(ASource, fkConsecutiveSection, DetectKind);
 end;
 
 // Die Hilfe fuer den ersten Fund des Detektors.
@@ -432,7 +416,7 @@ begin
   Assert.AreEqual(_(R_CS_BETWEEN, ['public']), O.Reason);
 end;
 
-procedure TTestRdxConsecutiveSectionDetector.MapFix_StaleFinding_NoHelp;
+procedure TTestRdxConsecutiveSectionDetector.Table_StaleFinding_NoHelp;
 var
   S : TSeen;
   O : TRdxFixOutcome;
@@ -444,6 +428,28 @@ begin
   Assert.IsFalse(O.Enabled, 'gesperrt');
   Assert.AreEqual(MsgMovedSuffix(_(R_CS_MOVED, ['var'])), O.Reason);
   Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+  // Der Menuetext nennt die Art auch bei Ablehnung (Adapter).
+  Assert.AreEqual('var', O.Name, 'Name gesperrt');
+end;
+
+procedure TTestRdxConsecutiveSectionDetector.Table_NameAndHint;
+var
+  O : TRdxFixOutcome;
+begin
+  // Angebot: Name = die Art aus der Meldung, Hinweis der Zeile,
+  // bedeutungsgleich.
+  O := PlanFirst(InIntf(['const', '  A = 1;', 'const', '  B = 2;']));
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual('const', O.Name, 'Name');
+  Assert.AreEqual('gleiche Bedeutung - ein Schluesselwort deklariert beide '
+    + 'Abschnitte', O.Hint);
+  Assert.IsFalse(O.ChangesBehavior, 'bedeutungsgleich');
+  // Abgelehnt (Inline-Deklarationen): Name trotzdem gesetzt.
+  O := PlanFirst(Join(['unit t;', 'interface', 'implementation',
+    'procedure Foo;', 'begin', '  var A: Integer;', '  var B: Integer;',
+    '  A := 1;', '  B := A;', 'end;', 'end.']));
+  Assert.IsFalse(O.Enabled, 'keine Hilfe');
+  Assert.AreEqual('var', O.Name, 'Name gesperrt');
 end;
 
 {$ENDIF}

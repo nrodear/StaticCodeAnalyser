@@ -28,8 +28,11 @@ unit uRdxDigitGroupingFix;
 //   * die Dateiart .pp/.lpr (FileNameReason - der Adapter fragt sie, der
 //     Planer kennt den Dateinamen nicht).
 // Was nur die Platte weiss (Lazarus-Projekt neben der Unit, alte .dproj,
-// Weichen in den Includes), prueft der Adapter in uRdxFixTable (s.
-// Integrationsnotiz); ProjectReason liefert ihm den Grund dazu.
+// Weichen in den Includes), prueft der Adapter in uRdxFixTable mit dem
+// Plattenblick von SCA014 (uRdxMagicFixes.FileReason/IncludeReason, seit
+// der Integration QFI2 mit der Schwelle FLOOR_DIGIT_SEP und dem Grundtext
+// der Zifferntrenner - lfDigitSeparator); ProjectReason liefert ihm den
+// Grund dazu.
 //
 // GESPERRT ausserdem (lieber keine Hilfe als eine falsche):
 //   * an der Spalte beginnt kein solches Literal (Zeile verschoben,
@@ -47,21 +50,16 @@ interface
 
 uses
   uRdxBufferMath,        // TRdxEdit
-  uRdxCodeMap,           // TRdxCodeMap
-  uRdxCompilerTraces;    // TRdxCompilerFloor
+  uRdxCodeMap;           // TRdxCodeMap
 
 const
   // Ab so vielen Ziffern meldet der Detektor (uDigitGrouping.MIN_GROUP_LEN).
   MIN_DIGITS = 5;
 
-  // Zifferntrenner: Delphi 11 Alexandria (VER350, CompilerVersion 35,
-  // COMPILER28 und DELPHI28 der JEDI-Zaehlung - DELPHI27 ist dort 10.4 -,
-  // RTL350, ProjectVersion 19.3); FPC kennt sie nicht. Die Spuren zaehlen
-  // wie bei FLOOR_INLINE_DECL bis einschliesslich der Schwelle, VERnnn
-  // darunter (s. uRdxCompilerTraces).
-  FLOOR_DIGIT_SEP: TRdxCompilerFloor = (Ver: 350; Version: 35; Compiler: 28;
-    DelphiNumber: 28; DelphiYear: 2010; Rtl: 350; FpcFull: MaxInt;
-    XeNames: True; ProjectVersion: 193);
+  // Die Schwelle (Delphi 11 Alexandria, FPC nie) ist FLOOR_DIGIT_SEP in
+  // uRdxCompilerTraces - bis zur Integration QFI2 stand sie hier; der
+  // Plattenblick im Adapter (uRdxMagicFixes.FileReason/IncludeReason mit
+  // lfDigitSeparator) liest sie jetzt auch.
 
   // Die Gruende der Ablehnung als englische msgids (die Tests pruefen sie
   // mit _()).
@@ -110,6 +108,7 @@ uses
   System.SysUtils,
   uRefactorInfo,    // TRefactorSpan.Make
   uRdxIntroPlan,    // LineLooksFpcAware
+  uRdxCompilerTraces, // OldCompilerTrace, FLOOR_DIGIT_SEP
   uRdxText;         // _(): in die reDelphix-Sprache, nie uLocalization
 
 const

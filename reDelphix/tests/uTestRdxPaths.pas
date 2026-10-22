@@ -304,19 +304,21 @@ begin
   Map := nil;
   try
     SL := TStringList.Create;
-    Assert.AreEqual('', TRdxMagicFixes.FileReason(LongPrefix + T.U),
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(LongPrefix + T.U, lfInlineConst),
       'kein Projekt im Fenster, kein Netzpfad');
     SL.Text := Join(['unit u;', 'interface', '{$I defs.inc}',
       'implementation', 'end.']);
     Map := TRdxCodeMap.Create(SL);
     WriteText(T.Dir + 'defs.inc', '{$DEFINE RDX_B2S}');
-    Assert.AreEqual('', TRdxMagicFixes.IncludeReason(LongPrefix + T.U, Map),
+    Assert.AreEqual('', TRdxMagicFixes.IncludeReason(LongPrefix + T.U, Map,
+      lfInlineConst),
       'Include ohne Weiche, lang geschrieben');
     // Gegenprobe: die Weiche im Include liest die Hilfe ueber den langen
     // Pfad - und nur deshalb lehnt sie jetzt ab.
     WriteText(T.Dir + 'defs.inc', Join(['{$IFDEF FPC}', '{$MODE DELPHI}',
       '{$ENDIF}']));
-    R := TRdxMagicFixes.IncludeReason(LongPrefix + T.U, Map);
+    R := TRdxMagicFixes.IncludeReason(LongPrefix + T.U, Map,
+      lfInlineConst);
     Assert.IsTrue(Pos('FPC-Weiche', R) > 0, R);
     Assert.IsTrue(Pos('Netzpfad', R) = 0, R);
   finally

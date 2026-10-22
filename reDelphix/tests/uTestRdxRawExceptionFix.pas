@@ -5,10 +5,12 @@ unit uTestRdxRawExceptionFix;
 // (erster Eintrag) bzw. EInvalidOpException (zweiter Eintrag). Die erste
 // Fixture prueft den Planer auf Text (ohne Parser, ohne Detektor), die
 // zweite - nur Delphi, hinter {$IFNDEF FPC} - den ECHTEN Detektor
-// (uRaisingRawException) auf dem echten AST und den Planer in der Form des
-// Adapters (MapFix, ohne Tabelle: die Zeile in uRdxFixTable traegt die
-// Integration nach). Die Quellen stehen in einer Routine Foo; ihre erste
-// Rumpfzeile ist Zeile 7 (BODY_LINE).
+// (uRaisingRawException) auf dem echten AST ueber den Einstieg der Tabelle
+// (TRdxFixTable.FixFor bzw. AlternativeFixFor via PlanFixIn/PlanAltFixIn
+// mit geoeffnetem Quellstellen-Dienst - die Adapter
+// PlanRaisingRawException/PlanRaisingRawExceptionAlt ergaenzen SysUtils in
+// uses ueber AppendUses). Die Quellen stehen in einer Routine Foo; ihre
+// erste Rumpfzeile ist Zeile 7 (BODY_LINE).
 
 interface
 
@@ -56,6 +58,9 @@ type
     [Test] procedure Detector_TwoOnOneLine_NoHelp;
     [Test] procedure Detector_Bare_NoHelp;
     [Test] procedure Detector_LowerCaseAndQualified;
+    // ---- Tabellenzeile ----
+    [Test] procedure Table_BothEntriesMarked;
+    [Test] procedure Table_MissingSysUtils_AddsUses;
   end;
 {$ENDIF}
 
@@ -67,8 +72,8 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uRaisingRawException,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uRdxFixRunner,         // MapFix (die Form des Adapters)
-  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
+  uRdxFixTable,          // TRdxFixTable.CaptionFor
+  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxRawExceptionFix,
   uRdxText,              // _() und die gemeinsamen Gruende (E29)
@@ -392,7 +397,7 @@ end;
 
 {$IFNDEF FPC}
 
-{ ---- Mit dem echten Detektor ---- }
+{ ---- Mit dem echten Detektor und der Tabelle ---- }
 
 procedure RunDetector(AKind: TFindingKind; Root: TAstNode;
   const Path: string; Results: TObjectList<TLeakFinding>);
@@ -406,51 +411,34 @@ begin
     RunDetector);
 end;
 
-// Die Hilfe fuer den ersten Fund des Detektors, wie der Adapter sie plant
-// (MapFix mit der Meldung des Funds).
+// Dasselbe in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := DetectSource('rdx_s127_', ASource, AKind, RunDetector);
+end;
+
+// Die Hilfe fuer den ersten Fund des Detektors ueber den Einstieg der
+// Tabelle - der erste Eintrag (FixFor) bzw. mit AAlt der zweite
+// (AlternativeFixFor), mit geoeffnetem Quellstellen-Dienst (AppendUses).
 function PlanFirst(const ASource: string; AAlt: Boolean;
   out ASeen: TSeen): TRdxFixOutcome;
 var
   Seen : TArray<TSeen>;
-  SL   : TStringList;
 begin
   Seen := Detect(ASource);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet einen Fund');
   ASeen := Seen[0];
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    if AAlt then
-      Result := MapFix(SL, ASeen.Line, ASeen.Msg,
-        TRdxRawExceptionFix.ToInvalidOpException)
-    else
-      Result := MapFix(SL, ASeen.Line, ASeen.Msg,
-        TRdxRawExceptionFix.ToArgumentException);
-  finally
-    SL.Free;
-  end;
+  if AAlt then
+    Result := PlanAltFixIn(ASource, 't.pas', fkRaisingRawException, ASeen)
+  else
+    Result := PlanFixIn(ASource, 't.pas', fkRaisingRawException, ASeen);
 end;
 
-// Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt.
+// Fund fuer Fund ueber die Tabelle, nach jeder Ersetzung neu gemeldet, bis
+// der Detektor schweigt (FixAllWith; AAlt: der zweite Eintrag).
 function FixAll(const ASource: string; AAlt: Boolean = False): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass : Integer;
-  O    : TRdxFixOutcome;
-  S    : TSeen;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    if Length(Detect(Result)) = 0 then
-      Exit;
-    O := PlanFirst(Result, AAlt, S);
-    Assert.IsTrue(O.Enabled, O.Reason);
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Result := FixAllWith(ASource, fkRaisingRawException, DetectKind, AAlt);
 end;
 
 procedure TTestRdxRawExceptionDetector.Detector_ReportsRaiseLine;
@@ -572,6 +560,55 @@ begin
   // (MovedLine/SpecificClass der ersten Fixture).
   Assert.AreEqual<Integer>(0,
     Length(Detect(Wrap(['  raise SysUtils.Exception.Create(''x'');']))));
+end;
+
+procedure TTestRdxRawExceptionDetector.Table_BothEntriesMarked;
+var
+  Src : string;
+  S   : TSeen;
+  O   : TRdxFixOutcome;
+begin
+  // Beide Eintraege gekennzeichnet (E2): EArgumentException (Variant 0,
+  // Hinweis des Adapters) und EInvalidOpException (Variant 1); SysUtils
+  // steht schon in uses - eine Ersetzung, kein ' + uses'.
+  Src := Wrap(['  raise Exception.Create(''x'');']);
+  O := PlanFirst(Src, False, S);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual<Integer>(0, O.Variant, 'erster Eintrag');
+  Assert.IsTrue(O.ChangesBehavior, 'gekennzeichnet');
+  Assert.AreEqual<Integer>(1, Length(O.Edits), 'nur der Klassenname');
+  Assert.IsTrue(Pos('EArgumentException', O.Hint) > 0, O.Hint);
+  Assert.AreEqual<Integer>(0, Pos(' + uses', O.Hint), O.Hint);
+  Assert.IsTrue(TRdxFixTable.CaptionFor(fkRaisingRawException, O) <> '',
+    'Menuetext');
+  O := PlanFirst(Src, True, S);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual<Integer>(1, O.Variant, 'zweiter Eintrag');
+  Assert.IsTrue(O.ChangesBehavior, 'gekennzeichnet');
+  Assert.IsTrue(Pos('EInvalidOpException', O.Hint) > 0, O.Hint);
+  Assert.AreEqual(Retyped(Src, 'EInvalidOpException'), Apply(Src, O.Edits));
+end;
+
+procedure TTestRdxRawExceptionDetector.Table_MissingSysUtils_AddsUses;
+var
+  Src, Done : string;
+  S         : TSeen;
+  O         : TRdxFixOutcome;
+begin
+  // Ohne SysUtils in uses (Exception kam ueber eine andere Unit) haengt
+  // der Adapter die Einfuegung an (AppendUses) - zwei Ersetzungen, der
+  // Hinweis nennt sie.
+  Src := Join(['unit t;', 'interface', 'implementation',
+    'uses System.Classes;', 'procedure Foo(X: Integer);', 'begin',
+    '  raise Exception.Create(''x'');', 'end;', 'end.']);
+  O := PlanFirst(Src, False, S);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual<Integer>(2, Length(O.Edits), 'Klassenname und uses');
+  Assert.IsTrue(Pos(' + uses ', O.Hint) > 0, O.Hint);
+  Done := Apply(Src, O.Edits);
+  Assert.IsTrue(Pos('raise EArgumentException.Create(''x'');', Done) > 0, Done);
+  Assert.IsTrue(Pos('SysUtils', Done) > 0, Done);
+  Assert.AreEqual<Integer>(0, Length(Detect(Done)), 'der Detektor schweigt');
 end;
 
 {$ENDIF}

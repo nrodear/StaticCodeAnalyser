@@ -75,6 +75,11 @@ unit uRdxMagicFixes;
 //     ihrer .dproj (Korpus-Harness, FPC: 1.010 Aufrufe in 231 ms, 0,2 ms
 //     je Fund; IncludeReason mit den Includes rund 7 ms) - ein Cache
 //     braechte veralteten Zustand, wenn eine Projektdatei dazukommt.
+//   Den Plattenblick nutzt auch SCA069 (Zifferntrenner, ab Delphi 11):
+//     FileReason und IncludeReason nehmen seit der Integration QFI2 das
+//     Sprachmittel (TRdxLateFeature) - es waehlt die Schwelle
+//     (FLOOR_INLINE_DECL bzw. FLOOR_DIGIT_SEP) und den Grundtext; fuer
+//     SCA014 (lfInlineConst) bleiben Schwelle und Texte, wie sie waren.
 // Korpus Q14 (5.036 Funde): FPC-Weiche in der Datei 1.724, alte Spur 1.275,
 // in einem Include 63 + 108, Include fehlt 55, Lazarus-Projekt 88, Skript
 // 18 - ohne Skript- und Plattenpruefung waeren es 1.024 statt 696
@@ -96,6 +101,15 @@ const
   MAGIC_NAME_BASE = 'MagicNr';
 
 type
+  // Was die Hilfe schreibt, die den Plattenblick braucht (FileReason,
+  // IncludeReason): es waehlt die Schwelle und den Grundtext.
+  //   lfInlineConst     SCA014 Inline-Konstante, ab Delphi 10.3
+  //                     (FLOOR_INLINE_DECL)
+  //   lfDigitSeparator  SCA069 Zifferntrenner, ab Delphi 11
+  //                     (FLOOR_DIGIT_SEP; Integration QFI2)
+  // FPC 3.2 kennt beide nicht.
+  TRdxLateFeature = (lfInlineConst, lfDigitSeparator);
+
   // Ergebnis des Planers (uRdxFixTable: MagicForm im Geruest TRdxFixFrame).
   //   Value  die Zahl aus der Meldung - Name im Menuetext; schon gesetzt,
   //          wenn der Planer danach ablehnt
@@ -140,24 +154,27 @@ type
     // bis PROJECT_LEVELS darueber - die Unit baut dann wohl auch mit FPC
     // (Korpus: doublecmd ohne jede FPC-Weiche in der Unit, der Modus steht
     // im Projekt); im selben Fenster das NAECHSTE Verzeichnis mit Delphi-
-    // Projektdateien: eine .dproj mit ProjectVersion unter
-    // FLOOR_INLINE_DECL.ProjectVersion (18.5 = Delphi 10.3; ohne lesbare
-    // Version zaehlt sie als alt) bzw. - ohne .dproj dort - eine alte
-    // Projektdatei (.dof, .bdsproj, .bpr, .bpg). Ein Netzpfad (UNC oder
-    // Netzlaufwerk, IsNetworkPath) wird nicht gelesen. '' oder der Grund.
-    // Die FPC-Weiche IN der Datei prueft schon TargetAt.
-    class function FileReason(const AFileName: string): string; static;
+    // Projektdateien: eine .dproj mit ProjectVersion unter der Schwelle
+    // von AFeature (FLOOR_INLINE_DECL.ProjectVersion 18.5 = Delphi 10.3,
+    // FLOOR_DIGIT_SEP 19.3 = Delphi 11; ohne lesbare Version zaehlt sie
+    // als alt) bzw. - ohne .dproj dort - eine alte Projektdatei (.dof,
+    // .bdsproj, .bpr, .bpg). Ein Netzpfad (UNC oder Netzlaufwerk,
+    // IsNetworkPath) wird nicht gelesen. '' oder der Grund - er nennt
+    // AFeature. Die FPC-Weiche IN der Datei prueft schon TargetAt.
+    class function FileReason(const AFileName: string;
+      AFeature: TRdxLateFeature): string; static;
 
     // Die Include-Dateien der Unit AFileName (alle {$I} in AMap, auch die
     // im Kopf - dort stehen die Compiler-Weichen: jvcl.inc,
     // mormot.defines.inc ...; uRdxBlocks.AllIncludes, bis zur
     // Nachpruefung der Charge B1-FD hier kopiert) lesen, verschachtelte ebenso
     // (uRdxBlocks.IncludeChainReason): '' oder der Grund - eine
-    // FPC-Weiche oder Spur aelterer Compiler darin, oder ein Include, das
-    // nicht neben der Unit liegt oder auf einem Netzpfad (nicht gelesen) -
-    // seine Weichen sieht die Hilfe dann nicht.
-    class function IncludeReason(const AFileName: string;
-      AMap: TRdxCodeMap): string; static;
+    // FPC-Weiche oder Spur aelterer Compiler (bis zur Schwelle von
+    // AFeature) darin, oder ein Include, das nicht neben der Unit liegt
+    // oder auf einem Netzpfad (nicht gelesen) - seine Weichen sieht die
+    // Hilfe dann nicht.
+    class function IncludeReason(const AFileName: string; AMap: TRdxCodeMap;
+      AFeature: TRdxLateFeature): string; static;
   end;
 
 implementation
@@ -170,7 +187,8 @@ uses
   uRdxIntroEdits,       // TextOf, TargetAt, IntroduceEdits, ApplyIntroEdits
   uRdxPaths,            // IsNetworkPath
   uRdxBlocks,           // IncludeChainReason, AllIncludes
-  uRdxCompilerTraces;   // OldCompilerTrace, ScriptReason, FLOOR_INLINE_DECL
+  uRdxCompilerTraces;   // OldCompilerTrace, ScriptReason, FLOOR_INLINE_DECL,
+                        // FLOOR_DIGIT_SEP
 
 const
   SPAN_MAGIC = 'magic';
@@ -205,16 +223,23 @@ const
   R_MOVED = 'Zeile verschoben? Datei neu pruefen';
   R_INC_UNSEEN = 'Include %s %s - seine Compiler-Weichen (FPC, aeltere '
     + 'Delphi) sieht die Hilfe nicht';
+  // Die Gruende des Plattenblicks nennen das Sprachmittel (TRdxLateFeature,
+  // FEATURE_TEXTS): bis zur Integration QFI2 stand dort fest die Inline-
+  // Konstante und Delphi 10.3 - fuer SCA014 ergibt sich derselbe Text.
+  R_FPC_FILE = 'Lazarus-/FPC-Datei (%s) - %s gibt es in FPC 3.2 nicht';
   R_LAZARUS = 'Lazarus-Projekt/-Paket %s im Verzeichnis %s - die Unit baut '
-    + 'wohl auch mit FPC, und eine Inline-Konstante gibt es in FPC 3.2 nicht';
+    + 'wohl auch mit FPC, und %s gibt es in FPC 3.2 nicht';
   R_LEGACY = 'alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl '
-    + 'auch mit einem Delphi vor 10.3, und dort gibt es keine Inline-'
-    + 'Konstante; von Hand';
+    + 'auch mit einem Delphi vor %s, und dort gibt es %s; von Hand';
   R_OLD_DPROJ = 'Projekt %s im Verzeichnis %s mit ProjectVersion %s (vor '
-    + 'Delphi 10.3 = 18.5) - dort gibt es keine Inline-Konstante; von Hand';
+    + 'Delphi %s = %s) - dort gibt es %s; von Hand';
   R_NO_VERSION = 'Projekt %s im Verzeichnis %s ohne lesbare ProjectVersion '
     + '(Delphi 2007 schrieb keine) - die Unit baut wohl auch mit einem Delphi '
-    + 'vor 10.3, und dort gibt es keine Inline-Konstante; von Hand';
+    + 'vor %s, und dort gibt es %s; von Hand';
+  R_INC_FPC = 'das Include %s traegt eine FPC-Weiche (Zeile %d) - %s gibt es '
+    + 'in FPC 3.2 nicht';
+  R_INC_OLD = 'das Include %s traegt Spuren aelterer Compiler (%s, Zeile %d) '
+    + '- %s gibt es erst ab Delphi %s; von Hand';
   // UNC und Netzlaufwerk (uRdxPaths.IsNetworkPath, seit Charge B1-FD).
   R_NETWORK = 'Netzpfad %s - die Hilfe liest dort keine Projekt- und Include-'
     + 'Dateien (Menueaufbau im Hauptthread); von Hand';
@@ -222,6 +247,35 @@ const
     + 'Bibliothek (begin ab '
     + 'Zeile %d) - ob dort eine Inline-Deklaration gilt, ist nicht gemessen; '
     + 'von Hand';
+
+type
+  // Die Bausteine der Gruende je Sprachmittel (R_FPC_FILE .. R_INC_OLD):
+  //   Since    ab welcher Delphi-Version es das gibt ('10.3')
+  //   Feature  als Subjekt ('%s gibt es in FPC 3.2 nicht')
+  //   Missing  verneint ('dort gibt es %s')
+  TRdxFeatureTexts = record
+    Since   : string;
+    Feature : string;
+    Missing : string;
+  end;
+
+const
+  FEATURE_TEXTS: array[TRdxLateFeature] of TRdxFeatureTexts = (
+    (Since: '10.3'; Feature: FEATURE_INLINE;
+     Missing: 'keine Inline-Konstante'),
+    (Since: '11'; Feature: 'Zifferntrenner';
+     Missing: 'keine Zifferntrenner'));
+
+// Die Schwelle des Sprachmittels (uRdxCompilerTraces) - eine Funktion,
+// weil ein typisierter Record nicht in einer typisierten Konstante stehen
+// kann.
+function FloorOf(AFeature: TRdxLateFeature): TRdxCompilerFloor;
+begin
+  if AFeature = lfDigitSeparator then
+    Result := FLOOR_DIGIT_SEP
+  else
+    Result := FLOOR_INLINE_DECL;
+end;
 
 { ---- Ziel aus dem Fund ---- }
 
@@ -636,8 +690,10 @@ begin
     Inc(Result, Ord(Text[i + 1]) - Ord('0'));
 end;
 
-// Die Datei AName des Verzeichnisses ADir in AFiles eintragen.
-procedure NoteProjectFile(const ADir, AName: string; var AFiles: TRdxProjectFiles);
+// Die Datei AName des Verzeichnisses ADir in AFiles eintragen; AMinVersion
+// die ProjectVersion der Schwelle (TRdxCompilerFloor.ProjectVersion).
+procedure NoteProjectFile(const ADir, AName: string; AMinVersion: Integer;
+  var AFiles: TRdxProjectFiles);
 var
   Ext : string;
   Ver : Integer;
@@ -655,12 +711,11 @@ begin
   end
   else if Ext = DPROJ_EXTENSION then
   begin
-    // Eine .dproj vor 10.3 (oder ohne Version) steht schon fest: sie sperrt
-    // ohnehin, weitere Koepfe zu lesen kostete im Hauptthread je Datei 64 KB
-    // (Paketordner mit vielen .dproj; Wochen-Review 2026-10-21). Der Grund
-    // nennt dann die erste alte statt der aeltesten.
-    if (AFiles.Dproj <> '')
-       and (AFiles.DprojVer < FLOOR_INLINE_DECL.ProjectVersion) then
+    // Eine .dproj vor der Schwelle (oder ohne Version) steht schon fest:
+    // sie sperrt ohnehin, weitere Koepfe zu lesen kostete im Hauptthread je
+    // Datei 64 KB (Paketordner mit vielen .dproj; Wochen-Review
+    // 2026-10-21). Der Grund nennt dann die erste alte statt der aeltesten.
+    if (AFiles.Dproj <> '') and (AFiles.DprojVer < AMinVersion) then
       Exit;
     Ver := ProjectVersionOf(IncludeTrailingPathDelimiter(ADir) + AName);
     if (AFiles.Dproj = '') or (Ver < AFiles.DprojVer) then
@@ -672,7 +727,8 @@ begin
 end;
 
 // Die Projektdateien in ADir (EIN Durchlauf ueber das Verzeichnis).
-function ProjectFilesIn(const ADir: string): TRdxProjectFiles;
+function ProjectFilesIn(const ADir: string;
+  AMinVersion: Integer): TRdxProjectFiles;
 var
   SR : TSearchRec;
 begin
@@ -682,7 +738,7 @@ begin
   try
     repeat
       if (SR.Attr and faDirectory) = 0 then
-        NoteProjectFile(ADir, SR.Name, Result);
+        NoteProjectFile(ADir, SR.Name, AMinVersion, Result);
     until FindNext(SR) <> 0;
   finally
     FindClose(SR);
@@ -696,27 +752,35 @@ begin
 end;
 
 // Die Delphi-Projektdateien eines Verzeichnisses als Grund: eine .dproj
-// vor 10.3 bzw. - ohne .dproj - eine alte Projektdatei; '' sonst.
+// vor der Schwelle von AFeature bzw. - ohne .dproj - eine alte
+// Projektdatei; '' sonst.
 function DelphiProjectReason(const AFiles: TRdxProjectFiles;
-  const ADir: string): string;
+  const ADir: string; AFeature: TRdxLateFeature): string;
+var
+  T      : TRdxFeatureTexts;
+  MinVer : Integer;
 begin
   Result := '';
+  T := FEATURE_TEXTS[AFeature];
+  MinVer := FloorOf(AFeature).ProjectVersion;
   if AFiles.Dproj <> '' then
   begin
     if AFiles.DprojVer < 0 then
-      Result := Format(R_NO_VERSION, [AFiles.Dproj, ADir])
-    else if AFiles.DprojVer < FLOOR_INLINE_DECL.ProjectVersion then
+      Result := Format(R_NO_VERSION, [AFiles.Dproj, ADir, T.Since,
+        T.Missing])
+    else if AFiles.DprojVer < MinVer then
       Result := Format(R_OLD_DPROJ, [AFiles.Dproj, ADir,
-        VersionText(AFiles.DprojVer)]);
+        VersionText(AFiles.DprojVer), T.Since, VersionText(MinVer), T.Missing]);
   end
   else if AFiles.Legacy <> '' then
-    Result := Format(R_LEGACY, [AFiles.Legacy, ADir]);
+    Result := Format(R_LEGACY, [AFiles.Legacy, ADir, T.Since, T.Missing]);
 end;
 
 // Netzpfad: uRdxPaths.IsNetworkPath (UNC und Netzlaufwerk, seit Charge
 // B1-FD die eine Regel fuer Unit und Includes - bis dahin stand hier eine
 // eigene Kopie nur fuer UNC; seit Charge B2S-a ist '\\?\C:\..' lokal).
-class function TRdxMagicFixes.FileReason(const AFileName: string): string;
+class function TRdxMagicFixes.FileReason(const AFileName: string;
+  AFeature: TRdxLateFeature): string;
 var
   Ext, Dir, Up : string;
   Level        : Integer;
@@ -727,8 +791,7 @@ begin
   if AFileName = '' then Exit;
   Ext := LowerCase(ExtractFileExt(AFileName));
   if InList(Ext, FPC_EXTENSIONS) then
-    Exit(Format('Lazarus-/FPC-Datei (%s) - eine Inline-Konstante gibt es in '
-      + 'FPC 3.2 nicht', [Ext]));
+    Exit(Format(R_FPC_FILE, [Ext, FEATURE_TEXTS[AFeature].Feature]));
   if IsNetworkPath(AFileName) then
     Exit(Format(R_NETWORK, [ExtractFileDir(AFileName)]));
   Dir := ExtractFileDir(AFileName);
@@ -736,14 +799,16 @@ begin
   for Level := 0 to PROJECT_LEVELS do
   begin
     if Dir = '' then Exit;
-    Files := ProjectFilesIn(Dir);
+    Files := ProjectFilesIn(Dir, FloorOf(AFeature).ProjectVersion);
     if Files.Lazarus <> '' then
-      Exit(Format(R_LAZARUS, [Files.Lazarus, Dir]));
+      Exit(Format(R_LAZARUS, [Files.Lazarus, Dir,
+        FEATURE_TEXTS[AFeature].Feature]));
     // Das NAECHSTE Verzeichnis mit Delphi-Projektdateien entscheidet
-    // (eine .dproj ab 10.3 dort macht alte Dateien weiter oben stumm).
+    // (eine .dproj ab der Schwelle dort macht alte Dateien weiter oben
+    // stumm).
     if not DelphiSeen then
     begin
-      Result := DelphiProjectReason(Files, Dir);
+      Result := DelphiProjectReason(Files, Dir, AFeature);
       if Result <> '' then Exit;
       DelphiSeen := (Files.Dproj <> '') or (Files.Legacy <> '');
     end;
@@ -754,32 +819,35 @@ begin
 end;
 
 // Die Pruefung eines Includes (TRdxIncludeTest): eine FPC-Weiche oder eine
-// Spur aelterer Compiler darin - '' oder der Grund.
+// Spur aelterer Compiler darin - '' oder der Grund. AArg ist das
+// Sprachmittel als Zahl (Ord(TRdxLateFeature), IncludeReason) - der Test
+// ist ein schlichter Funktionszeiger mit Text-Argument.
 function CompilerInInclude(const AFile: string; ALines: TStrings;
   AMap: TRdxCodeMap; const AArg: string): string;
 var
-  Li : Integer;
-  S  : string;
+  Li      : Integer;
+  S       : string;
+  Feature : TRdxLateFeature;
 begin
   Result := '';
+  Feature := TRdxLateFeature(StrToIntDef(AArg, Ord(lfInlineConst)));
   for Li := 0 to ALines.Count - 1 do
     if LineLooksFpcAware(ALines[Li]) then
-      Exit(Format('das Include %s traegt eine FPC-Weiche (Zeile %d) - eine '
-        + 'Inline-Konstante gibt es in FPC 3.2 nicht', [AFile, Li + 1]));
-  S := OldCompilerTrace(AMap, FLOOR_INLINE_DECL, Li);
+      Exit(Format(R_INC_FPC, [AFile, Li + 1,
+        FEATURE_TEXTS[Feature].Feature]));
+  S := OldCompilerTrace(AMap, FloorOf(Feature), Li);
   if S <> '' then
-    Result := Format('das Include %s traegt Spuren aelterer Compiler (%s, '
-      + 'Zeile %d) - eine Inline-Konstante gibt es erst ab Delphi 10.3; von '
-      + 'Hand', [AFile, S, Li]);
+    Result := Format(R_INC_OLD, [AFile, S, Li, FEATURE_TEXTS[Feature].Feature,
+      FEATURE_TEXTS[Feature].Since]);
 end;
 
 class function TRdxMagicFixes.IncludeReason(const AFileName: string;
-  AMap: TRdxCodeMap): string;
+  AMap: TRdxCodeMap; AFeature: TRdxLateFeature): string;
 var
   Check : TRdxIncludeCheck;
 begin
   Check.Test := CompilerInInclude;
-  Check.Arg := '';
+  Check.Arg := IntToStr(Ord(AFeature));
   Check.MissingFmt := R_INC_UNSEEN;
   Result := IncludeChainReason(AFileName, AllIncludes(AMap), Check);
 end;

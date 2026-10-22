@@ -2086,6 +2086,264 @@
         }
       ],
       "hinweis": "Liefert die Bedingung einen Variant, wäre `not` bitweise (`Assert(V)` mit V = 1 hält, `if not (V)` löst aus) – die Hilfe kennt die Ergebnistypen der Aufrufe nicht. Die neue Form trägt einen Zweig ohne begin..end; SCA101 (BeginEndRequired, Hinweis) meldet ihn, wo die Regel eingeschaltet ist."
+    },
+    "UnusedParameter": {
+      "titel": "Ungenutzten Parameter mit `_` kennzeichnen",
+      "was": "Benennt den Parameter der Meldung in `_Name` um - im Kopf der Implementierung, in jeder Deklaration derselben Routine (Klassenrumpf, interface-Teil, `forward`) und in `<param name=\"...\">` der `///`-Doku direkt darüber. Bedeutungsgleich: ein Parametername ist nicht Teil des Aufrufs (Delphi kennt keine benannten Argumente), Overrides und Interface-Implementierungen dürfen andere Namen tragen, eine Formdatei bindet nur den Methodennamen. Der Unterstrich dokumentiert die Absicht; der Detektor übergeht solche Namen.",
+      "platzhalter": "`%s` = der Parameter.",
+      "nichtAngeboten": [
+        "der Name kommt im Bereich der Routine sonst als Code vor - im Rumpf, in lokalen Routinen, in inaktiven `$IFDEF`-Zweigen, hinter `.` oder in `with` (Kommentare und Strings zählen nicht); `asm` in der Routine (Parameter über Register)",
+        "`_Name` steht schon als Code in der Datei (doppelter Bezeichner bzw. verdeckt danach ein Feld oder eine Variable)",
+        "ein Kommentar, eine Direktive oder ein Attribut in der Parameterliste (auch FPC `{%H-}`), `&Name`",
+        "Deklaration und Implementierung nicht eindeutig zu paaren: `overload`, mehr als eine Deklaration oder Implementierung, ein `$IFDEF`-Zwilling oder eine gleichnamige lokale Routine, verschiedene Namenslisten, Record-Methoden (die Hilfe findet nur Klassenköpfe)",
+        "ein `{$I}` in der Routine, bei freien Routinen in der Datei (es kann die Deklaration tragen)",
+        "ein Attribut an Routine, Deklaration oder Klasse - RTTI-gestützte Frameworks binden Parameter auch per Namen",
+        "die Zeile ist verschoben, oder auf ihr beginnen zwei Routinen mit diesem Parameter"
+      ],
+      "beispielVorher": [
+        "type",
+        "  TFoo = class",
+        "  public",
+        "    procedure Run(A: Integer; Mode: Integer);",
+        "  end;",
+        "implementation",
+        "procedure TFoo.Run(A: Integer; Mode: Integer);",
+        "begin",
+        "  A := A + 1;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "type",
+        "  TFoo = class",
+        "  public",
+        "    procedure Run(A: Integer; _Mode: Integer);",
+        "  end;",
+        "implementation",
+        "procedure TFoo.Run(A: Integer; _Mode: Integer);",
+        "begin",
+        "  A := A + 1;",
+        "end;"
+      ],
+      "hinweis": "Das Projektprofil wertet UnusedParameter bewusst ab (Ereignishandler erben Sender); die Hilfe ist für Funde in eigenen Routinen gedacht. Den Parameter zu streichen (samt Argument an allen Aufrufstellen) ist eine andere, größere Umformung."
+    },
+    "ConstStringParameter": {
+      "titel": "`const` vor den string-Parameter",
+      "was": "Macht aus `S: string` ein `const S: string` - in der Implementierung und in jeder Deklaration derselben Routine (`forward`, Klassenrumpf); bei einer Gruppe `A, B: string` steht das `const` vor der Gruppe und gilt für alle Namen. Nur für unit-lokale Routinen und nur, wenn der Rumpf keinen Namen der Gruppe beschreibt: dann ist es bedeutungsgleich und spart den Referenzzähler je Aufruf.",
+      "platzhalter": "`%s` = der Parameter.",
+      "nichtAngeboten": [
+        "die Routine ist im interface-Teil deklariert; die Methode steht nicht unter `private`/`strict private` einer Klasse des interface-Teils; `virtual`/`dynamic`/`override`/`abstract`/`reintroduce`/`message`/`dispid`; die Klasse implementiert ein Interface",
+        "der Name der Routine steht in der Datei ohne Aufruf oder mit `@` (Methodenzeiger, Ereignis, Rückruf, `exports`, Property-Accessor) - der Typ passte danach nicht mehr; ein `{$I}` in der Datei",
+        "ein Name der Gruppe wird beschrieben: `S :=`, `S[i] :=`, `@S`, als Laufvariable, oder als ganzes Argument an eine Routine, die nicht als nur lesend bekannt ist (`Delete`, `Insert`, `SetLength`, `ReadLn`, eigene Routinen) - auch in lokalen Routinen und inaktiven Zweigen",
+        "die Gruppe trägt schon `const`/`var`/`out`, ein anderer Typ als in der Meldung, eine Deklaration gruppiert anders",
+        "dieselben Sperren des Kopfs wie bei UnusedParameter: Kommentar, Direktive oder Attribut in der Liste, `overload`, `asm`, Deklaration und Implementierung nicht eindeutig zu paaren, verschobene Zeile"
+      ],
+      "beispielVorher": [
+        "function Hash(s: string): Integer;",
+        "begin",
+        "  Result := Length(s);",
+        "end;"
+      ],
+      "beispielNachher": [
+        "function Hash(const s: string): Integer;",
+        "begin",
+        "  Result := Length(s);",
+        "end;"
+      ],
+      "hinweis": "Ändert die Routine selbst die Variable, die der Aufrufer übergibt (ein Feld, eine globale Variable), hängt ein const-Parameter danach an freigegebenem Text - diesen Fall sieht die Textprüfung nicht."
+    },
+    "ExceptionName": {
+      "titel": "Exception-Klasse mit E-Präfix umbenennen",
+      "was": "Benennt die gemeldete Exception-Klasse `MyError = class(Exception)` in `EMyError` um – „E“ und der Name mit großem Anfangsbuchstaben (`myError` → `EMyError`, `error` → `EError`; ein Klassen-`T` vor einem Wort wird ersetzt: `TMyError` → `EMyError`, ein Akronym bleibt: `TCPError` → `ETCPError`) – und mit ihr jeden Verweis im Code der Datei (`raise`, `on E:`, Vorfahrenliste, `class of`). Bedeutungsgleich: die Klasse steht im implementation-Teil (oder in einem Programm) und ist nur in dieser Datei sichtbar; je Verweis eine Ersetzung, ein Rückgängig-Schritt. Kommentare behalten den alten Namen.",
+      "platzhalter": "`%s` = der neue Name.",
+      "nichtAngeboten": [
+        "die Klasse steht im interface-Teil (andere Units können sie nennen) oder in einer Datei ohne `implementation`, die kein Programm bzw. keine Bibliothek ist (Include-Datei)",
+        "der neue Name steht schon im Code der Datei (Groß/klein egal), eine Direktive nennt den alten oder neuen Namen, ein String-Literal nennt den alten (ClassName, FindClass, RTTI)",
+        "ein Verweis vor der Deklaration (er meint einen anderen Typ), ein Verweis mit Punkt davor (`X.MyError`), `MyError :=` oder ein `with` davor in derselben Routine",
+        "ein `{$I}` im implementation-Teil, ein Kommentar oder eine Direktive in der Deklaration, die Zeile ist verschoben",
+        "Zeichen außerhalb A-Z, a-z, 0-9, `_` im Namen, ein Name, der schon das Präfix trägt"
+      ],
+      "beispielVorher": [
+        "implementation",
+        "",
+        "type",
+        "  MyError = class(Exception);",
+        "",
+        "procedure Check(A: Integer);",
+        "begin",
+        "  if A < 0 then",
+        "    raise MyError.Create('negative');",
+        "end;"
+      ],
+      "beispielNachher": [
+        "implementation",
+        "",
+        "type",
+        "  EMyError = class(Exception);",
+        "",
+        "procedure Check(A: Integer);",
+        "begin",
+        "  if A < 0 then",
+        "    raise EMyError.Create('negative');",
+        "end;"
+      ],
+      "hinweis": "Nicht prüfbar ohne Projektwissen: trägt ein Vorfahr aus einer anderen Unit ein Member gleichen Namens, sieht eine Methode dort unter dem alten Namen das Member, nach der Umbenennung die Klasse – selten, der Compiler meldet es meist."
+    },
+    "LocalConstantName": {
+      "titel": "Lokale Konstante in UPPER_SNAKE_CASE umbenennen",
+      "was": "Benennt die gemeldete Konstante im const-Abschnitt einer Routine in UPPER_SNAKE_CASE um (`MaxRetries` → `MAX_RETRIES`, `HTTPPort` → `HTTP_PORT`, `cMax` → `C_MAX`, `Base64Len` → `BASE64_LEN`) und mit ihr jeden Verweis hinter der Deklaration bis zum Ende der Routine – auch in lokalen Routinen dahinter. Bedeutungsgleich: die lokale Konstante verschattet in ihrer Routine jeden gleichen Namen, und der neue Name steht nirgends im Code der Datei; je Verweis eine Ersetzung, ein Rückgängig-Schritt. Außerhalb der Routine, in Kommentaren und bei `X.Name` (Member) bleibt der alte Name.",
+      "platzhalter": "`%s` = der neue Name.",
+      "nichtAngeboten": [
+        "der neue Name steht schon im Code der Datei (Groß/klein egal; ändert sich nur Groß/klein, entfällt die Frage) oder in einer Direktive",
+        "ein `with` oder ein `{$I}` in der Routine, eine Direktive in der Routine nennt den Namen (`{$IF MaxRetries > 2}`)",
+        "der Name steht in der Routine vor der Deklaration oder wird dahinter neu deklariert bzw. als Name benutzt: Parameter, Variable, Konstante, Typ oder Marke einer lokalen Routine bzw. anonymen Methode, Feld, Feldname einer Record-Konstante, Inline-`var`/`const`, `Name :=`, `@@Name`; vorsichtig auch `(Name)` und `(.., Name)` im Deklarationsteil",
+        "ein Kommentar oder eine Direktive in der Deklaration, die Zeile ist verschoben, die Meldung nennt eine andere Routine, unsichere Routinengrenzen",
+        "Zeichen außerhalb A-Z, a-z, 0-9, `_` im Namen, ein Name schon in UPPER_SNAKE_CASE"
+      ],
+      "beispielVorher": [
+        "procedure Retry;",
+        "const",
+        "  MaxRetries = 3;",
+        "var",
+        "  I: Integer;",
+        "begin",
+        "  for I := 1 to MaxRetries do",
+        "    if TryOnce then",
+        "      Exit;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "procedure Retry;",
+        "const",
+        "  MAX_RETRIES = 3;",
+        "var",
+        "  I: Integer;",
+        "begin",
+        "  for I := 1 to MAX_RETRIES do",
+        "    if TryOnce then",
+        "      Exit;",
+        "end;"
+      ],
+      "hinweis": "Ein Präfix wie `c` bleibt im Namen (`cMax` → `C_MAX`) – kürzen von Hand oder mit Refactor > Rename."
+    },
+    "DigitGrouping": {
+      "titel": "Ziffern mit `_` gruppieren",
+      "was": "Setzt in das gemeldete Ganzzahl-Literal Zifferntrenner in Dreiergruppen von rechts (`1800000` → `1_800_000`). Bedeutungsgleich: der Compiler liest `_` in einem Zahl-Literal nicht. Nur das Literal an der gemeldeten Spalte.",
+      "nichtAngeboten": [
+        "die Datei baut wohl auch mit einem anderen Compiler: FPC-Weiche oder FPC-Modus in der Datei, Dateiart `.pp`/`.lpr`, Lazarus-Projekt oder alte Delphi-Projektdatei neben der Unit, Spuren von Compilern vor Delphi 11 in der Datei oder ihren Includes (`{$IF CompilerVersion >= 35}`, `DELPHI27_UP`, `jedi.inc` …) – Zifferntrenner gibt es erst ab Delphi 11",
+        "ein Include oder eine Skript-Unit ohne implementation-Teil",
+        "ein Zeichencode (`#65279` – der Detektor meldet ihn mit), eine Sprungmarke (label-Abschnitt, `goto`), ein Literal in einem asm-Block",
+        "die Zeile ist verschoben, an der Spalte steht kein ungruppiertes Literal (Hex, Binär, Float, schon gruppiert, Teil eines Bezeichners, Kommentar, String), oder die Meldung nennt keine Spalte",
+        "die Unit liegt auf einem Netzpfad (die Hilfe liest dort keine Projekt- und Include-Dateien)"
+      ],
+      "beispielVorher": [
+        "const",
+        "  TIMEOUT_MS = 1800000;"
+      ],
+      "beispielNachher": [
+        "const",
+        "  TIMEOUT_MS = 1_800_000;"
+      ],
+      "hinweis": "Je Zeile meldet der Detektor nur das erste Literal – das nächste derselben Zeile danach."
+    },
+    "ConsecutiveSection": {
+      "titel": "Mit dem vorigen const- bzw. var-Abschnitt zusammenlegen",
+      "was": "Streicht das Schlüsselwort des zweiten von zwei gleichen Abschnitten (`const` nach `const`, `var` nach `var`); seine Deklarationen gehören danach zum ersten. Steht das Schlüsselwort allein auf seiner Zeile, geht die Zeile; steht dahinter schon die erste Deklaration (`const B = 2;`), rückt sie auf die Einrückung der ersten Deklaration des ersten Abschnitts. Bedeutungsgleich.",
+      "platzhalter": "`%s` = die Art aus der Meldung (`const` bzw. `var`).",
+      "nichtAngeboten": [
+        "`type`-Abschnitte (nur `const` und `var`)",
+        "Inline-Deklarationen in einem Anweisungsblock (`begin … end`, `initialization`) – der Detektor meldet zwei `var X: T;` ohne `:=` mit; Streichen bräche den Compiler",
+        "zwischen den Schlüsselwörtern steht etwas anderes als Deklarationen: Sichtbarkeit (`public` …), `threadvar`, `resourcestring`, `label`, ein Routinenkopf, ein Typ mit Rumpf (`record … end`), ein anderer Abschnitt; der erste Abschnitt ist `class var`/`class const`",
+        "eine Compiler-Direktive zwischen den Schlüsselwörtern, ein Kommentar zwischen den Abschnitten oder auf der Zeile des Schlüsselworts",
+        "die Zeile beginnt nicht mit dem gemeldeten Schlüsselwort (verschoben), oder dahinter folgt keine Deklaration"
+      ],
+      "beispielVorher": [
+        "const",
+        "  A = 1;",
+        "const",
+        "  B = 2;"
+      ],
+      "beispielNachher": [
+        "const",
+        "  A = 1;",
+        "  B = 2;"
+      ],
+      "weitereBeispiele": [
+        {
+          "titel": "Schlüsselwort mit Deklaration auf einer Zeile",
+          "vorher": [
+            "const A = 1;",
+            "const B = 2;"
+          ],
+          "nachher": [
+            "const A = 1;",
+            "      B = 2;"
+          ]
+        }
+      ],
+      "hinweis": "Ein Kommentar hinter der letzten Deklaration des ersten Abschnitts bleibt stehen."
+    },
+    "AvoidOut": {
+      "titel": "`out` durch `var` ersetzen",
+      "was": "Macht aus dem gemeldeten `out`-Parameter einen `var`-Parameter – in Deklaration und Implementierung in einem Schritt (wiederholt die Implementierung die Parameterliste nicht, nur in der Deklaration). Für einfache Typen (Integer, Boolean, Double, Pointer, TObject …) behandelt Delphi `out` wie `var`: bedeutungsgleich.",
+      "kennzeichnung": "nur bei einem verwalteten oder unbekannten Typ (string, Interface, dynamisches Array, Variant, Record, eigener Typ): `out` gab den Wert des Aufrufers beim Aufruf frei, `var` nicht – liest die Routine den Parameter vor dem Setzen, sieht sie danach den alten Wert",
+      "platzhalter": "`%s` = der Parameter (der erste Name hinter `out`).",
+      "nichtAngeboten": [
+        "untypisiertes `out` (`out Obj`), ein Prozedur- oder Methodentyp, eine anonyme Methode, `reference to`, ein Operator",
+        "die Köpfe dieses Namens in der Datei sind nicht genau ein Paar Deklaration + Implementierung (Overload, gleichnamige Methode einer anderen Klasse, Deklaration oder Implementierung fehlt; nur ein Rumpf in einer Datei mit Include)",
+        "der Name steht im Code ohne Aufruf (`@Load`, `OnX := Load`) – als Methodenzeiger änderte sich sein Typ",
+        "`virtual`, `dynamic`, `abstract`, `override`, `final`, `message`, `dispid`, `overload`, eine Aufrufkonvention oder `external`",
+        "die Methode steht unter `published` oder ohne Sichtbarkeitswort (eine Formdatei kann sie an ein Ereignis binden), ihre Klasse implementiert Interfaces, oder sie ist die Methode eines interface-Typs",
+        "der andere Kopf trägt das `out` nicht genauso (`out A, B: T` gegen `out A: T; out B: T`), die Zeile ist verschoben, oder die Meldung nennt keine Spalte"
+      ],
+      "beispielVorher": [
+        "type",
+        "  TFoo = class",
+        "  public",
+        "    procedure Get(out S: string);",
+        "  end;",
+        "implementation",
+        "procedure TFoo.Get(out S: string);"
+      ],
+      "beispielNachher": [
+        "type",
+        "  TFoo = class",
+        "  public",
+        "    procedure Get(var S: string);",
+        "  end;",
+        "implementation",
+        "procedure TFoo.Get(var S: string);"
+      ],
+      "hinweis": "Aufrufer in anderen Units bleiben übersetzbar (out und var verlangen beide eine Variable); nimmt eine andere Unit die Routine als Methodenzeiger, passt dort der Typ nicht mehr – das sieht die Hilfe nicht."
+    },
+    "RaisingRawException": {
+      "titel": "Spezifische Exception-Klasse statt `Exception` auslösen",
+      "was": "Ersetzt in `raise Exception.Create(..)` nur den Klassennamen durch `EArgumentException` – für ein falsches Argument des Aufrufers. Konstruktor und Argumente bleiben (`CreateFmt`, `CreateRes`, `CreateHelp` …). Welche Klasse passt, entscheidet der Benutzer: der zweite Eintrag bietet `EInvalidOpException`. Fehlt `System.SysUtils` in uses, kommt es mit.",
+      "kennzeichnung": "on-Handler für EArgumentException fangen die Ausnahme jetzt, E.ClassName im Log wechselt; on E: Exception fängt weiter",
+      "nichtAngeboten": [
+        "kein oder mehr als ein `raise Exception` im Code der Zeile (Zeile verschoben, nur in Kommentar oder String, schon eine andere Klasse)",
+        "`raise Exception;` ohne Konstruktor, eine Compiler-Direktive zwischen `raise` und dem Konstruktor",
+        "die Datei deklariert selbst `Exception` oder die Zielklasse (Typ, Variable, Parameter, Routine)"
+      ],
+      "beispielVorher": [
+        "if X < 0 then",
+        "  raise Exception.Create('x is negative');"
+      ],
+      "beispielNachher": [
+        "if X < 0 then",
+        "  raise EArgumentException.Create('x is negative');"
+      ],
+      "zweiterEintrag": {
+        "was": "Setzt stattdessen `EInvalidOpException` ein – für einen unzulässigen Zustand bzw. einen Aufruf zur falschen Zeit.",
+        "kennzeichnung": "on-Handler für EInvalidOpException fangen die Ausnahme jetzt, E.ClassName im Log wechselt; on E: Exception fängt weiter",
+        "nichtAngeboten": [
+          "dieselben Sperren wie der erste Eintrag"
+        ],
+        "beispielNachher": [
+          "if X < 0 then",
+          "  raise EInvalidOpException.Create('x is negative');"
+        ]
+      },
+      "hinweis": "Passt keine der beiden Klassen (Datei fehlt, Netz, Fachfehler), keinen Eintrag wählen und eine eigene Klasse schreiben. EArgumentOutOfRangeException ist eine Unterklasse von EArgumentException – ein Handler darauf fängt die neue Ausnahme nicht."
     }
   }
 }

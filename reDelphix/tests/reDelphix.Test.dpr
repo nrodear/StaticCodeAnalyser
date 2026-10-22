@@ -184,6 +184,19 @@ program reDelphix.Test;
 //   * uTestRdxIfThenFix         - SCA131 IfThen -> if..then..else
 //   * uTestRdxAssertSideEffectFix - SCA169 'Assert(C)' ->
 //                                   'if not (C) then Assert(False, ..)'
+//   * uTestRdxUnusedParameterFix - SCA054 Parameter -> _Parameter in
+//                                  Deklaration und Implementierung
+//   * uTestRdxConstStringParameterFix - SCA170 const vor den string-
+//                                       Parameter
+//   * uTestRdxExceptionNameFix  - SCA118 MyError -> EMyError
+//   * uTestRdxLocalConstantNameFix - SCA119 lokale Konstante in
+//                                    UPPER_SNAKE_CASE
+//   * uTestRdxDigitGroupingFix  - SCA069 1800000 -> 1_800_000
+//   * uTestRdxConsecutiveSectionFix - SCA079 doppeltes const/var
+//                                     zusammenlegen
+//   * uTestRdxAvoidOutFix       - SCA086 out -> var
+//   * uTestRdxRawExceptionFix   - SCA127 Exception -> EArgumentException
+//                                 bzw. EInvalidOpException
 //
 // SPRACHE: der Hauptblock setzt die reDelphix-Texte fuer ALLE Tests auf
 // Deutsch (SetRdxLanguageOverride('de'), wie der FPC-Pruefstand) - die
@@ -282,6 +295,14 @@ uses
   uRdxDeadCodeFix in '..\source\uRdxDeadCodeFix.pas',
   uRdxIfThenFix in '..\source\uRdxIfThenFix.pas',
   uRdxAssertSideEffectFix in '..\source\uRdxAssertSideEffectFix.pas',
+  uRdxUnusedParameterFix in '..\source\uRdxUnusedParameterFix.pas',
+  uRdxConstStringParameterFix in '..\source\uRdxConstStringParameterFix.pas',
+  uRdxExceptionNameFix in '..\source\uRdxExceptionNameFix.pas',
+  uRdxLocalConstantNameFix in '..\source\uRdxLocalConstantNameFix.pas',
+  uRdxDigitGroupingFix in '..\source\uRdxDigitGroupingFix.pas',
+  uRdxConsecutiveSectionFix in '..\source\uRdxConsecutiveSectionFix.pas',
+  uRdxAvoidOutFix in '..\source\uRdxAvoidOutFix.pas',
+  uRdxRawExceptionFix in '..\source\uRdxRawExceptionFix.pas',
   uTestRdxRecipes in 'uTestRdxRecipes.pas',
   uTestRdxBench in 'uTestRdxBench.pas',
   uTestRdxSca044 in 'uTestRdxSca044.pas',
@@ -352,6 +373,14 @@ uses
   uTestRdxDeadCodeFix in 'uTestRdxDeadCodeFix.pas',
   uTestRdxIfThenFix in 'uTestRdxIfThenFix.pas',
   uTestRdxAssertSideEffectFix in 'uTestRdxAssertSideEffectFix.pas',
+  uTestRdxUnusedParameterFix in 'uTestRdxUnusedParameterFix.pas',
+  uTestRdxConstStringParameterFix in 'uTestRdxConstStringParameterFix.pas',
+  uTestRdxExceptionNameFix in 'uTestRdxExceptionNameFix.pas',
+  uTestRdxLocalConstantNameFix in 'uTestRdxLocalConstantNameFix.pas',
+  uTestRdxDigitGroupingFix in 'uTestRdxDigitGroupingFix.pas',
+  uTestRdxConsecutiveSectionFix in 'uTestRdxConsecutiveSectionFix.pas',
+  uTestRdxAvoidOutFix in 'uTestRdxAvoidOutFix.pas',
+  uTestRdxRawExceptionFix in 'uTestRdxRawExceptionFix.pas',
   uTestRdxMagicGuards in 'uTestRdxMagicGuards.pas',
   uTestRdxMagicFixDetector in 'uTestRdxMagicFixDetector.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',

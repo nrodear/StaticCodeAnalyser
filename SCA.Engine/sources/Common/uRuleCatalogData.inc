@@ -655,7 +655,7 @@ const
       GoodEx   : 'procedure Process(const Data: TData);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA055
     (
@@ -824,7 +824,7 @@ const
       GoodEx   : 'const TIMEOUT_MS = 1_800_000;' + #13#10 + 'const MAX_BYTES = 10_485_760;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA070
     (
@@ -934,7 +934,7 @@ const
       GoodEx   : 'const' + #13#10 + '  A = 1;' + #13#10 + '  B = 2;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA080
     (
@@ -1015,7 +1015,7 @@ const
       GoodEx   : 'procedure Foo(var S: string);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA087
     (
@@ -1409,7 +1409,7 @@ const
       GoodEx   : 'type' + #13#10 + '  EMyError = class(Exception);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA119
     (
@@ -1422,7 +1422,7 @@ const
         'begin ... end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA120
     (
@@ -1532,7 +1532,7 @@ const
         '  raise EArgumentOutOfRangeException.CreateFmt(''x = %d'', [x]);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA128
     (
@@ -2117,7 +2117,7 @@ const
       GoodEx   : 'function Hash(const s: string): Integer;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA171
     (

@@ -360,12 +360,16 @@ end;
 // Direktive.
 procedure TTestRdxMagicFix.Sca014_NewCompilerTracesOk;
 const
-  NEW_ONLY: array[0..4] of string = ('{$IFDEF VER330}{$ENDIF}',
+  NEW_ONLY: array[0..5] of string = ('{$IFDEF VER330}{$ENDIF}',
     '{$IF CompilerVersion >= 34}{$IFEND}', '{$IFDEF DELPHI27_UP}{$ENDIF}',
-    '{$IFDEF RTL340_UP}{$ENDIF}', '// {$IFDEF VER150}');
+    '{$IFDEF RTL340_UP}{$ENDIF}', '// {$IFDEF VER150}',
+    '{$IFDEF DELPHIX_SYDNEY_UP}{$ENDIF}');
 var
-  T : string;
-  F : TFixRun;
+  T  : string;
+  F  : TFixRun;
+  SL : TStringList;
+  M  : TRdxCodeMap;
+  Li : Integer;
 begin
   for T in NEW_ONLY do
   begin
@@ -373,6 +377,21 @@ begin
       '300');
     Assert.AreEqual('', F.Reason, T);
     Assert.IsTrue(F.Text <> '', T);
+  end;
+  // 10.4 Sydney (Integration QFI2): fuer die Inline-Konstante neu genug
+  // (oben), fuer Zifferntrenner (Delphi 11, FLOOR_DIGIT_SEP) eine Spur.
+  SL := TStringList.Create;
+  M := nil;
+  try
+    SL.Text := UnitWith(['{$IFDEF DELPHIX_SYDNEY_UP}{$ENDIF}'], ['  Foo;']);
+    M := TRdxCodeMap.Create(SL);
+    Assert.AreEqual('', OldCompilerTrace(M, FLOOR_INLINE_DECL, Li),
+      'SYDNEY, Schwelle 10.3');
+    Assert.AreEqual('DELPHIX_SYDNEY_UP', OldCompilerTrace(M, FLOOR_DIGIT_SEP,
+      Li), 'SYDNEY, Schwelle 11');
+  finally
+    M.Free;
+    SL.Free;
   end;
 end;
 
@@ -463,22 +482,22 @@ procedure TTestRdxMagicFix.Disk_LazarusProjectNearUnit;
 var
   Tmp, Root, Sub, U, R : string;
 begin
-  Assert.IsTrue(Pos('FPC 3.2', TRdxMagicFixes.FileReason('C:\x\unit1.pp')) > 0);
-  Assert.IsTrue(Pos('.lpr', TRdxMagicFixes.FileReason('project1.LPR')) > 0);
-  Assert.AreEqual('', TRdxMagicFixes.FileReason(''));
+  Assert.IsTrue(Pos('FPC 3.2', TRdxMagicFixes.FileReason('C:\x\unit1.pp', lfInlineConst)) > 0);
+  Assert.IsTrue(Pos('.lpr', TRdxMagicFixes.FileReason('project1.LPR', lfInlineConst)) > 0);
+  Assert.AreEqual('', TRdxMagicFixes.FileReason('', lfInlineConst));
   Root := FreshDir('laz', Tmp);
   try
     Sub := Root + 'a' + PathDelim;
     U := Sub + 'b' + PathDelim + 'c' + PathDelim + 'u.pas';
     ForceDirectories(ExtractFilePath(U));
     WriteText(Root + 'top.lpi', '<?xml?>');
-    Assert.AreEqual('', TRdxMagicFixes.FileReason(U), 'drei Ebenen hoeher');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(U, lfInlineConst), 'drei Ebenen hoeher');
     WriteText(Sub + 'pkg.lpk', '<?xml?>');
-    R := TRdxMagicFixes.FileReason(U);
+    R := TRdxMagicFixes.FileReason(U, lfInlineConst);
     Assert.IsTrue(Pos('pkg.lpk', R) > 0, R);
     DeleteFile(Sub + 'pkg.lpk');
     WriteText(ExtractFilePath(U) + 'prog.lpr', 'program prog; begin end.');
-    R := TRdxMagicFixes.FileReason(U);
+    R := TRdxMagicFixes.FileReason(U, lfInlineConst);
     Assert.IsTrue(Pos('prog.lpr', R) > 0, R);
   finally
     RemoveTree(Tmp);
@@ -501,18 +520,18 @@ begin
     Map := NewMap(UnitWith(['{$I defs.inc}'],
       ['  Foo;', '  if X > 300 then Bar;']));
     DeleteFile(Dir + 'defs.inc');
-    R := TRdxMagicFixes.IncludeReason(U, Map);
+    R := TRdxMagicFixes.IncludeReason(U, Map, lfInlineConst);
     Assert.IsTrue(Pos('Include defs.inc nicht neben der Unit', R) > 0, R);
     WriteText(Dir + 'defs.inc', '{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}');
-    R := TRdxMagicFixes.IncludeReason(U, Map);
+    R := TRdxMagicFixes.IncludeReason(U, Map, lfInlineConst);
     Assert.IsTrue(Pos('das Include defs.inc traegt eine FPC-Weiche', R) > 0, R);
     WriteText(Dir + 'defs.inc', Join(['{$DEFINE FAST}', '{$I deeper.inc}']));
     WriteText(Dir + 'deeper.inc', '{$IF CompilerVersion < 30}{$IFEND}');
-    R := TRdxMagicFixes.IncludeReason(U, Map);
+    R := TRdxMagicFixes.IncludeReason(U, Map, lfInlineConst);
     Assert.IsTrue(Pos('Spuren aelterer Compiler (COMPILERVERSION < 30', R) > 0, R);
     Assert.IsTrue(Pos('eingebunden von defs.inc', R) > 0, R);
     WriteText(Dir + 'deeper.inc', '{$IF CompilerVersion >= 35}{$IFEND}');
-    Assert.AreEqual('', TRdxMagicFixes.IncludeReason(U, Map));
+    Assert.AreEqual('', TRdxMagicFixes.IncludeReason(U, Map, lfInlineConst));
   finally
     Map.Free;
     RemoveTree(Tmp);

@@ -179,7 +179,15 @@ uses
   uRdxDebugOutputFix,   // SCA017
   uRdxDeadCodeFix,      // SCA011
   uRdxIfThenFix,        // SCA131
-  uRdxAssertSideEffectFix; // SCA169
+  uRdxAssertSideEffectFix, // SCA169
+  uRdxUnusedParameterFix, // SCA054 (+ TRdxParamPlan fuer SCA170)
+  uRdxConstStringParameterFix, // SCA170
+  uRdxExceptionNameFix, // SCA118
+  uRdxLocalConstantNameFix, // SCA119
+  uRdxDigitGroupingFix, // SCA069
+  uRdxConsecutiveSectionFix, // SCA079
+  uRdxAvoidOutFix,      // SCA086
+  uRdxRawExceptionFix;  // SCA127
 
 const
   // Hinweise der Hilfen (deutsch wie die Gruende; Pruefstand und Tests
@@ -352,6 +360,48 @@ const
   R_ASSERTSE_HINT = 'die Bedingung laeuft jetzt auch ohne Assertions '
     + '(Release, $C-) - dort entfaellt nur die Pruefung; ohne Meldung wird '
     + 'die Bedingung zum Meldungstext';
+  // Charge QF8..QF11 (8 weitere Hilfen): SCA054, SCA170, SCA118, SCA119,
+  // SCA069, SCA079, SCA086, SCA127.
+  // SCA054 / SCA170 (QF8): Deklaration und Implementierung in EINEM
+  // Undo-Schritt. SCA170 bleibt ungekennzeichnet (Integrationsnotiz (h) 1:
+  // das const-Aliasing nennt der Hinweis).
+  R_UNUSEDPARAM_HINT = 'gleiche Bedeutung - ein Parametername ist nicht '
+    + 'Teil des Aufrufs; Deklaration, Implementierung und <param name> der '
+    + 'Doku heissen danach "_Name", der Detektor uebergeht solche Namen';
+  R_CONSTSTR_HINT = 'gleiche Bedeutung - der Rumpf beschreibt den '
+    + 'Parameter nicht, niemand nutzt die Routine als Wert; Deklaration und '
+    + 'Implementierung bekommen das const. Ausnahme: aendert die Routine '
+    + 'selbst die Variable, die der Aufrufer uebergibt (Feld, globale '
+    + 'Variable), haengt der const-Parameter danach an freigegebenem Text';
+  // SCA118 / SCA119 (QF9): Umbenennungen, bedeutungsgleich.
+  R_EXC_NAME_HINT = 'gleiche Bedeutung - die Klasse steht im implementation-'
+    + 'Teil und ist nur in dieser Datei sichtbar; jeder Verweis im Code wird '
+    + 'mit umbenannt, Kommentare behalten den alten Namen';
+  R_CONST_NAME_HINT = 'gleiche Bedeutung - jeder Verweis in der Routine wird '
+    + 'mit umbenannt (auch in lokalen Routinen dahinter), Kommentare behalten '
+    + 'den alten Namen';
+  // SCA069 / SCA079 (QF10): bedeutungsgleich; SCA069 nur ab Delphi 11.
+  R_DIGITS_HINT = 'gleiche Bedeutung - der Compiler liest "_" in Zahlen nicht; '
+    + 'Zifferntrenner gibt es erst ab Delphi 11, FPC kennt sie nicht';
+  R_SECTION_HINT = 'gleiche Bedeutung - ein Schluesselwort deklariert beide '
+    + 'Abschnitte';
+  // SCA086 (QF10): je nach Typ des Parameters (TRdxOutPlan.Changes) - der
+  // Adapter setzt den Hinweis (HintByPlanner).
+  R_OUT_PLAIN_HINT = 'gleiche Bedeutung - fuer diesen einfachen Typ behandelt '
+    + 'Delphi out wie var; Deklaration und Implementierung zusammen';
+  R_OUT_MANAGED_HINT = 'out gab den Wert des Aufrufers beim Aufruf frei '
+    + '(verwalteter oder unbekannter Typ) - mit var bleibt er erhalten; liest '
+    + 'die Routine den Parameter vor dem Setzen, sieht sie jetzt den alten '
+    + 'Wert';
+  // SCA127 (QF11): nur der Klassenname wechselt; welche Klasse passt,
+  // entscheidet der Benutzer (zwei Eintraege, je eine Absicht). Der Adapter
+  // setzt den Hinweis vor AppendUses (HintByPlanner).
+  R_RAWEXC_HINT = 'nur der Klassenname - on-Handler fuer EArgumentException '
+    + 'fangen die Ausnahme jetzt, E.ClassName im Log wechselt; on E: Exception '
+    + 'faengt weiter';
+  R_RAWEXC_ALT_HINT = 'nur der Klassenname - on-Handler fuer '
+    + 'EInvalidOpException fangen die Ausnahme jetzt, E.ClassName im Log '
+    + 'wechselt; on E: Exception faengt weiter';
   // Charge H4 (try/finally): alle gekennzeichnet (E2) - B laeuft danach
   // auch dort, wo es bisher uebersprungen wurde; das ist der Fix.
   R_TRY_OBJECT_HINT = 'Free laeuft jetzt auch bei einer Ausnahme und bei Exit '
@@ -593,9 +643,10 @@ function MagicCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
 begin
   Result := NetworkPathReason(AFinding.FileName, WHAT_PROJECT_FILES);
   if Result = '' then
-    Result := TRdxMagicFixes.FileReason(AFinding.FileName);
+    Result := TRdxMagicFixes.FileReason(AFinding.FileName, lfInlineConst);
   if Result = '' then
-    Result := TRdxMagicFixes.IncludeReason(AFinding.FileName, AMap);
+    Result := TRdxMagicFixes.IncludeReason(AFinding.FileName, AMap,
+      lfInlineConst);
 end;
 
 // Die Plan-Formen der Tabelle.
@@ -717,6 +768,81 @@ begin
   Result.Parts := OverflowParts;
   Result.Check := OverflowCheck;
   Result.NeedsOpen := True;
+end;
+
+// SCA054, SCA170 (Charge QF8): alle Ersetzungen (Deklarationen,
+// Implementierung, bei SCA054 auch '<param name>' der Doku) in EINEM
+// Undo-Schritt; Name der Parameter.
+procedure ParamParts(const APlan: TRdxParamPlan; var AOutcome: TRdxFixOutcome);
+begin
+  AOutcome.Name := APlan.Name;
+  AOutcome.Edits := APlan.Edits;
+end;
+
+// SCA054, SCA170: reine Textlogik - kein Check, kein offener
+// Quellstellen-Dienst.
+function ParamForm(
+  APlanner: TRdxPlannerOf<TRdxParamPlan>): TRdxPlanForm<TRdxParamPlan>;
+begin
+  Result.Planner := APlanner;
+  Result.Parts := ParamParts;
+  Result.Check := nil;
+  Result.NeedsOpen := False;
+end;
+
+// SCA118 (Charge QF9): alle Ersetzungen der Umbenennung in EINEM
+// Undo-Schritt; Name der neue Name ('Rename the exception class to %s') -
+// schon gesetzt, wenn der Planer ablehnt.
+procedure ExceptionNameParts(const APlan: TRdxExceptionNamePlan;
+  var AOutcome: TRdxFixOutcome);
+begin
+  AOutcome.Name := APlan.Name;
+  AOutcome.Edits := APlan.Edits;
+end;
+
+// SCA118: nur die Zeilen - kein Quellstellen-Dienst, kein Check.
+function ExceptionNameForm: TRdxPlanForm<TRdxExceptionNamePlan>;
+begin
+  Result.Planner := TRdxExceptionNameFix.RenameClass;
+  Result.Parts := ExceptionNameParts;
+  Result.Check := nil;
+  Result.NeedsOpen := False;
+end;
+
+// SCA119 (Charge QF9): alle Ersetzungen der Umbenennung in EINEM
+// Undo-Schritt; Name der neue Name ('Rename the constant to %s').
+procedure LocalConstantNameParts(const APlan: TRdxLocalConstantNamePlan;
+  var AOutcome: TRdxFixOutcome);
+begin
+  AOutcome.Name := APlan.Name;
+  AOutcome.Edits := APlan.Edits;
+end;
+
+// SCA119: nur die Zeilen - kein Quellstellen-Dienst, kein Check.
+function LocalConstantNameForm: TRdxPlanForm<TRdxLocalConstantNamePlan>;
+begin
+  Result.Planner := TRdxLocalConstantNameFix.RenameConstant;
+  Result.Parts := LocalConstantNameParts;
+  Result.Check := nil;
+  Result.NeedsOpen := False;
+end;
+
+// SCA086 (Charge QF10): Name ist der Parameter, die Ersetzungen 'out' ->
+// 'var' in Deklaration und Implementierung (EIN Undo-Schritt).
+procedure OutParts(const APlan: TRdxOutPlan; var AOutcome: TRdxFixOutcome);
+begin
+  AOutcome.Name := APlan.Name;
+  AOutcome.Edits := APlan.Edits;
+end;
+
+// SCA086: ohne Check, ohne Quellstellen-Dienst.
+function OutForm(
+  APlanner: TRdxPlannerOf<TRdxOutPlan>): TRdxPlanForm<TRdxOutPlan>;
+begin
+  Result.Planner := APlanner;
+  Result.Parts := OutParts;
+  Result.Check := nil;
+  Result.NeedsOpen := False;
 end;
 
 { ---- Die Planer je Art: Adapter auf die Rumpf-Routinen, alle in der Form
@@ -1659,6 +1785,160 @@ begin
     TRdxAssertSideEffectFix.AssertOutside);
 end;
 
+{ ---- Die Adapter der Chargen QF8..QF11 (8 weitere Hilfen) ----
+  Wie bei QF: die Textlogik in je einer Planer-Unit (FPC-tauglich), hier
+  nur der Adapter. SCA054/SCA170, SCA118, SCA119 und SCA086 ueber das
+  Geruest TRdxFixFrame (mehrere Ersetzungen in EINEM Undo-Schritt); SCA069
+  fragt zusaetzlich die Platte (Plattenblick von SCA014 mit der Schwelle
+  der Zifferntrenner), SCA127 ergaenzt SysUtils in uses. ---- }
+
+// SCA054 (Charge QF8): Mode -> _Mode in Implementierung, Deklarationen
+// und Doku. Kein Typwissen noetig - reine Textlogik.
+function PlanUnusedParameter(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxParamPlan;
+begin
+  Result := TRdxFixFrame.Run<TRdxParamPlan>(
+    ParamForm(TRdxUnusedParameterFix.MarkUnused),
+    APlaces, ALines, AFinding, P);
+end;
+
+// SCA170 (Charge QF8): const vor den string-Parameter unit-lokaler
+// Routinen, Implementierung und Deklarationen in EINEM Undo-Schritt. Kein
+// Typwissen noetig - die Textpruefung sperrt jede Schreibstelle und jede
+// Nutzung der Routine als Wert.
+function PlanConstStringParameter(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxParamPlan;
+begin
+  Result := TRdxFixFrame.Run<TRdxParamPlan>(
+    ParamForm(TRdxConstStringParameterFix.MakeConst),
+    APlaces, ALines, AFinding, P);
+end;
+
+// SCA118 (Charge QF9): MyError -> EMyError, jeder Verweis der Datei.
+function PlanExceptionName(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxExceptionNamePlan;
+begin
+  Result := TRdxFixFrame.Run<TRdxExceptionNamePlan>(ExceptionNameForm,
+    APlaces, ALines, AFinding, P);
+end;
+
+// SCA119 (Charge QF9): lokale Konstante in UPPER_SNAKE_CASE, jeder Verweis
+// der Routine.
+function PlanLocalConstantName(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxLocalConstantNamePlan;
+begin
+  Result := TRdxFixFrame.Run<TRdxLocalConstantNamePlan>(
+    LocalConstantNameForm, APlaces, ALines, AFinding, P);
+end;
+
+// SCA069 (Charge QF10): Zifferntrenner gibt es erst ab Delphi 11, FPC 3.2
+// kennt sie nicht. Der Planer prueft den Text (FPC-Weiche, Spuren alter
+// Compiler, Skript); hier, was nur Dateiname und Platte wissen: Dateiart
+// .pp/.lpr, Netzpfad, Lazarus-Projekt bzw. alte Projektdatei neben der
+// Unit, Weichen in den Includes - der Plattenblick von SCA014
+// (TRdxMagicFixes) mit lfDigitSeparator: Schwelle FLOOR_DIGIT_SEP
+// (ProjectVersion 19.3, Spuren bis Delphi 11) und ein Grund, der die
+// Zifferntrenner nennt (bis zur Integration QFI2 vorlaeufig mit der
+// Schwelle 10.3 und dem Text der Inline-Konstante, Notiz QF10 (h) 1).
+function PlanDigitGrouping(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Map    : TRdxCodeMap;
+  Detail : string;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxDigitGroupingFix.Group);
+  if not Result.Enabled then Exit;
+  Result.Reason := TRdxDigitGroupingFix.FileNameReason(AFinding.FileName);
+  if Result.Reason = '' then
+    Result.Reason := NetworkPathReason(AFinding.FileName, WHAT_PROJECT_FILES);
+  if Result.Reason = '' then
+  begin
+    Detail := TRdxMagicFixes.FileReason(AFinding.FileName, lfDigitSeparator);
+    if Detail = '' then
+    begin
+      Map := TRdxCodeMap.Create(ALines);
+      try
+        Detail := TRdxMagicFixes.IncludeReason(AFinding.FileName, Map,
+          lfDigitSeparator);
+      finally
+        Map.Free;
+      end;
+    end;
+    if Detail <> '' then
+      Result.Reason := TRdxDigitGroupingFix.ProjectReason(Detail);
+  end;
+  if Result.Reason = '' then Exit;
+  Result.Enabled := False;
+  Result.Edits := nil;
+end;
+
+// SCA079 (Charge QF10): Name = die Art aus der Meldung ('const', 'var')
+// fuer den Menuetext - auch, wenn der Planer ablehnt.
+function PlanConsecutiveSection(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxConsecutiveSectionFix.Merge);
+  Result.Name := LowerCase(QuotedText(AFinding.Message, '`'));
+end;
+
+// SCA086 (Charge QF10): gekennzeichnet nach dem Typ des Parameters (der
+// Plan sagt es, auch gesperrt) - einfache Typen bedeutungsgleich, alle
+// anderen gelten als verwaltet: out gab den Wert beim Aufruf frei.
+function PlanAvoidOut(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxOutPlan;
+begin
+  Result := TRdxFixFrame.Run<TRdxOutPlan>(OutForm(TRdxAvoidOutFix.OutToVar),
+    APlaces, ALines, AFinding, P);
+  Result.ChangesBehavior := P.Changes;
+  if not Result.Enabled then Exit;
+  if P.Changes then
+    Result.Hint := R_OUT_MANAGED_HINT
+  else
+    Result.Hint := R_OUT_PLAIN_HINT;
+end;
+
+// SCA127 (Charge QF11): nur der Klassenname wechselt (uRdxRawExceptionFix).
+// Beide Klassen stehen in SysUtils wie Exception; fehlt die Unit in uses
+// (Exception kam dann ueber einen Alias), kommt sie mit (AppendUses, wie
+// SCA020/SCA168). Der Hinweis steht vor AppendUses (HintByPlanner).
+function PlanRaisingRawException(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxRawExceptionFix.ToArgumentException);
+  if not Result.Enabled then Exit;
+  Result.Hint := R_RAWEXC_HINT;
+  Result.Enabled := AppendUses(APlaces, AUsesNames, 'SysUtils',
+    'System.SysUtils', Result);
+end;
+
+// SCA127, zweiter Eintrag: EInvalidOpException (unzulaessiger Zustand) -
+// setzt Variant, Hinweis und Kennzeichnung selbst.
+function PlanRaisingRawExceptionAlt(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxRawExceptionFix.ToInvalidOpException);
+  Result.Variant := 1;
+  Result.ChangesBehavior := True;
+  if not Result.Enabled then Exit;
+  Result.Hint := R_RAWEXC_ALT_HINT;
+  Result.Enabled := AppendUses(APlaces, AUsesNames, 'SysUtils',
+    'System.SysUtils', Result);
+end;
+
 { ---- Die Tabelle ---- }
 
 type
@@ -1669,13 +1949,13 @@ type
   end;
 
 const
-  FIX_ROW_HIGH = 73;
+  FIX_ROW_HIGH = 81;
 
   // Je Art eine Zeile; die Reihenfolge ist die der Chargen (Stufe 2a,
   // Stufe 2 Rest, uQuickFix-Umzug/Stufe 3, Zeilen, Ausnahmen, Deklarationen
   // H1, Anweisungen H2, Routinen H3b, Aufraeumen H3a, try/finally H4,
-  // Ergebnis und Konstruktoren H5, Magic Number Q14, einfache Hilfen Q, R
-  // und QF). Der Menuetext steht
+  // Ergebnis und Konstruktoren H5, Magic Number Q14, einfache Hilfen Q, R,
+  // QF und QF8..QF11). Der Menuetext steht
   // unter demselben Index in FIX_CAPTIONS (s. Kopf).
   FIX_ROWS: array[0..FIX_ROW_HIGH] of TRdxFixRow = (
     (Kind: fkExplicitTObjectInheritance; Plan: PlanExplicitTObject;
@@ -1864,7 +2144,37 @@ const
     // SCA169: die Bedingung laeuft jetzt auch ohne Assertions (E2) - das
     // ist der Fix.
     (Kind: fkAssertWithSideEffect; Plan: PlanAssertOutside;
-     Hint: R_ASSERTSE_HINT; HintByPlanner: False; Changes: True; Alt: nil)
+     Hint: R_ASSERTSE_HINT; HintByPlanner: False; Changes: True; Alt: nil),
+    // Charge QF8..QF11: 8 weitere Hilfen.
+    // SCA054/SCA170: Parameter-Hilfen (Deklaration und Implementierung in
+    // EINEM Undo-Schritt); SCA170 ungekennzeichnet, der Hinweis nennt das
+    // const-Aliasing.
+    (Kind: fkUnusedParameter; Plan: PlanUnusedParameter;
+     Hint: R_UNUSEDPARAM_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkConstStringParameter; Plan: PlanConstStringParameter;
+     Hint: R_CONSTSTR_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    // SCA118/SCA119: Umbenennungen, bedeutungsgleich.
+    (Kind: fkExceptionName; Plan: PlanExceptionName;
+     Hint: R_EXC_NAME_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkLocalConstantName; Plan: PlanLocalConstantName;
+     Hint: R_CONST_NAME_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    // SCA069: bedeutungsgleich; nur ab Delphi 11 (Planer und Adapter
+    // sperren FPC und alte Compiler).
+    (Kind: fkDigitGrouping; Plan: PlanDigitGrouping;
+     Hint: R_DIGITS_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    // SCA079: bedeutungsgleich; Name ist die Art aus der Meldung.
+    (Kind: fkConsecutiveSection; Plan: PlanConsecutiveSection;
+     Hint: R_SECTION_HINT; HintByPlanner: False; Changes: False; Alt: nil),
+    // SCA086: Kennzeichnung je nach Typ, Hinweis setzt der Adapter (wie
+    // SCA096/SCA097).
+    (Kind: fkAvoidOut; Plan: PlanAvoidOut;
+     Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
+    // SCA127: nur der Klassenname (E2 - Handler fangen anders); zwei
+    // Eintraege, je eine Absicht; den Hinweis setzt der Adapter vor
+    // AppendUses (SysUtils bei Bedarf).
+    (Kind: fkRaisingRawException; Plan: PlanRaisingRawException;
+     Hint: ''; HintByPlanner: True; Changes: True;
+     Alt: PlanRaisingRawExceptionAlt)
   );
 
   // Menuetexte (msgids) unter dem Index der Zeile; '%s' = Name der Hilfe
@@ -1876,7 +2186,9 @@ const
   // Default(T), Charge H5c; die Zahl bei SCA014, Charge Q14; das Wort wie
   // gemeldet bei SCA064; der neue Name bei SCA106, der linke Operand bei
   // SCA137, der Empfaenger bei SCA113, SameValue bzw. IsZero bei SCA144,
-  // der Zieltyp bei SCA154, die Zahl der Zeilen bei SCA011 - Charge QF).
+  // der Zieltyp bei SCA154, die Zahl der Zeilen bei SCA011 - Charge QF; der
+  // Parameter bei SCA054/SCA170/SCA086, der neue Name bei SCA118/SCA119,
+  // const bzw. var bei SCA079 - Chargen QF8..QF11).
   FIX_CAPTIONS: array[0..FIX_ROW_HIGH] of string = (
     'Remove (TObject) from the class declaration',
     'Use FreeAndNil(%s)',
@@ -1951,7 +2263,15 @@ const
     'Put the debug output in {$IFDEF DEBUG}',
     'Delete the unreachable code: %s line(s)',
     'Replace IfThen with if..then..else',
-    'Evaluate the condition outside Assert'
+    'Evaluate the condition outside Assert',
+    'Prefix parameter %s with "_" (intentionally unused)',
+    'Declare parameter %s as const',
+    'Rename the exception class to %s',
+    'Rename the constant to %s',
+    'Group the digits with "_"',
+    'Merge with the previous %s section',
+    'Replace "out" with "var" for %s',
+    'Raise EArgumentException instead (wrong argument)'
   );
 
   // Menuetexte des zweiten Eintrags (Alt), '' ohne.
@@ -1972,7 +2292,9 @@ const
     'Pass TFormatSettings.Invariant',
     '', '', '', '', '', '', '', '',
     'Delete the debug output',
-    '', '', ''
+    '', '', '',
+    '', '', '', '', '', '', '',
+    'Raise EInvalidOpException instead (invalid state)'
   );
 
   // Die Namen der Planer (PlannerName, fuer uTestRdxFixTable): eine eigene
@@ -1981,7 +2303,7 @@ const
   // faellt dort auf (Wochen-Review 2026-10-21, Major P03/P29: welcher Planer
   // an welcher Art haengt, band bis dahin kein Test). Ein neuer Planer
   // braucht hier eine Zeile, sonst nennt PlannerName '?'.
-  PLANNER_NAMES: array[0..78] of TRdxPlannerName = (
+  PLANNER_NAMES: array[0..87] of TRdxPlannerName = (
     (Name: 'PlanExplicitTObject'; Plan: PlanExplicitTObject),
     (Name: 'PlanFreeAndNil'; Plan: PlanFreeAndNil),
     (Name: 'PlanNilComparison'; Plan: PlanNilComparison),
@@ -2060,7 +2382,16 @@ const
     (Name: 'PlanDebugOutputAlt'; Plan: PlanDebugOutputAlt),
     (Name: 'PlanDeadCode'; Plan: PlanDeadCode),
     (Name: 'PlanIfThenToIf'; Plan: PlanIfThenToIf),
-    (Name: 'PlanAssertOutside'; Plan: PlanAssertOutside)
+    (Name: 'PlanAssertOutside'; Plan: PlanAssertOutside),
+    (Name: 'PlanUnusedParameter'; Plan: PlanUnusedParameter),
+    (Name: 'PlanConstStringParameter'; Plan: PlanConstStringParameter),
+    (Name: 'PlanExceptionName'; Plan: PlanExceptionName),
+    (Name: 'PlanLocalConstantName'; Plan: PlanLocalConstantName),
+    (Name: 'PlanDigitGrouping'; Plan: PlanDigitGrouping),
+    (Name: 'PlanConsecutiveSection'; Plan: PlanConsecutiveSection),
+    (Name: 'PlanAvoidOut'; Plan: PlanAvoidOut),
+    (Name: 'PlanRaisingRawException'; Plan: PlanRaisingRawException),
+    (Name: 'PlanRaisingRawExceptionAlt'; Plan: PlanRaisingRawExceptionAlt)
   );
 
 var

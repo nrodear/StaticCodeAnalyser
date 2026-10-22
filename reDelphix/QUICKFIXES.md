@@ -3,7 +3,7 @@
 > **Erzeugte Datei – nicht von Hand bearbeiten.** Quelle: [`data/quickfixes-doc.json`](data/quickfixes-doc.json) (Titel, Beschreibung, Sperren, Beispiele) und der Quelltext: welche Hilfen es gibt, ihre Menütexte und ob sie das Verhalten ändern, stehen in [`source/uRdxFixTable.pas`](source/uRdxFixTable.pas) (`FIX_ROWS`, `FIX_CAPTIONS`, `FIX_ALT_CAPTIONS`) und [`source/uRdxProvider.pas`](source/uRdxProvider.pas) (Rezepte), die Übersetzungen in [`i18n/de.po`](../i18n/de.po) und [`i18n/fr.po`](../i18n/fr.po), Regel-IDs und Namen in [`rules/sca-rules.json`](../rules/sca-rules.json).
 > Erzeugen (Repo-Wurzel): `python tools/gen-quickfix-doc.py`, prüfen: `python tools/gen-quickfix-doc.py --check` (auch in der CI, `.github/workflows/quickfix-doc.yml`).
 
-reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 74 Quick-Fixes aus der Tabelle der einfachen Hilfen (7 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
+reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 82 Quick-Fixes aus der Tabelle der einfachen Hilfen (8 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
 
 ## Lesehilfe
 
@@ -31,6 +31,7 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 74 Qui
 | SCA046 ReversedForRange | `"to" durch "downto" ersetzen` / `Schleifengrenzen vertauschen` | Quick-Fix | ja / ja | [SCA046](#sca046) |
 | SCA047 SelfAssignment | `Selbstzuweisung von %s entfernen` | Quick-Fix | nein | [SCA047](#sca047) |
 | SCA053 UnusedLocalVar | `Ungenutzte Variable %s entfernen` | Quick-Fix | nein | [SCA053](#sca053) |
+| SCA054 UnusedParameter | `Parameter %s mit "_" als absichtlich ungenutzt kennzeichnen` | Quick-Fix | nein | [SCA054](#sca054) |
 | SCA059 FormatLocaleHint | `FormatSettings ausdrücklich übergeben` / `TFormatSettings.Invariant übergeben` | Quick-Fix | nein / ja | [SCA059](#sca059) |
 | SCA060 GotoStatement | `"goto" durch Exit ersetzen` | Quick-Fix | nein | [SCA060](#sca060) |
 | SCA061 TabulationCharacter | `Tabulatoren dieser Zeile durch Leerzeichen ersetzen` | Quick-Fix | nein | [SCA061](#sca061) |
@@ -39,6 +40,7 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 74 Qui
 | SCA065 NoSonarMarker | `NOSONAR durch einen Marker "noinspection All" ersetzen` | Quick-Fix | ja | [SCA065](#sca065) |
 | SCA066 EmptyArgumentList | `Leere Klammern entfernen` | Quick-Fix | nein | [SCA066](#sca066) |
 | SCA068 TrailingCommaArgList | `Überzähliges Komma entfernen` | Quick-Fix | nein | [SCA068](#sca068) |
+| SCA069 DigitGrouping | `Ziffern mit "_" gruppieren` | Quick-Fix | nein | [SCA069](#sca069) |
 | SCA070 CommentedOutCode | `Auskommentierten Code löschen` | Quick-Fix | nein | [SCA070](#sca070) |
 | SCA071 UnitLevelKeywordIndent | `Schlüsselwort an Spalte 1 setzen` | Quick-Fix | nein | [SCA071](#sca071) |
 | SCA072 RedundantBoolean | `Überflüssigen Vergleich mit True/False entfernen` | Quick-Fix | nein | [SCA072](#sca072) |
@@ -46,11 +48,13 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 74 Qui
 | SCA075 ExplicitTObjectInheritance | `(TObject) aus der Klassendeklaration entfernen` | Quick-Fix | nein | [SCA075](#sca075) |
 | SCA076 GroupedDeclaration | `Gruppierte Deklaration aufteilen` | Quick-Fix | nein | [SCA076](#sca076) |
 | SCA077 EmptyBlock | `Leeres "with ... do begin end" durch den Aufruf ersetzen` | Quick-Fix | nein | [SCA077](#sca077) |
+| SCA079 ConsecutiveSection | `Mit dem vorigen %s-Abschnitt zusammenlegen` | Quick-Fix | nein | [SCA079](#sca079) |
 | SCA080 RedundantJump | `Überflüssiges %s entfernen` | Quick-Fix | nein | [SCA080](#sca080) |
 | SCA082 SuperfluousSemicolon | `Überzähliges Semikolon entfernen` | Quick-Fix | nein | [SCA082](#sca082) |
 | SCA083 EmptyFinallyBlock | `Leeres try/finally entfernen` | Quick-Fix | nein | [SCA083](#sca083) |
 | SCA084 AssignedAndAssignedNil | `Überflüssigen Vergleich mit nil entfernen` | Quick-Fix | nein | [SCA084](#sca084) |
 | SCA085 FreeAndNilHint | `FreeAndNil(%s) verwenden` | Quick-Fix | nein | [SCA085](#sca085) |
+| SCA086 AvoidOut | `"out" für %s durch "var" ersetzen` | Quick-Fix | je nach Fund | [SCA086](#sca086) |
 | SCA087 EmptyVisibilitySection | `Leeren Sichtbarkeitsabschnitt entfernen` | Quick-Fix | nein | [SCA087](#sca087) |
 | SCA088 LegacyInitializationSection | `begin durch initialization ersetzen` | Quick-Fix | nein | [SCA088](#sca088) |
 | SCA093 TwiceInheritedCalls | `Zweiten doppelten inherited-Aufruf entfernen` / `Ersten doppelten inherited-Aufruf entfernen` | Quick-Fix | ja / ja | [SCA093](#sca093) |
@@ -65,11 +69,14 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 74 Qui
 | SCA113 ThreadResumeDeprecated | `%s.Start statt Resume verwenden` | Quick-Fix | nein | [SCA113](#sca113) |
 | SCA115 HttpInsteadOfHttps | `https:// statt http:// verwenden` | Quick-Fix | ja | [SCA115](#sca115) |
 | SCA117 PublicMemberWithoutDoc | `Dokumentationsgerüst einfügen` | Quick-Fix | nein | [SCA117](#sca117) |
+| SCA118 ExceptionName | `Exception-Klasse in %s umbenennen` | Quick-Fix | nein | [SCA118](#sca118) |
+| SCA119 LocalConstantName | `Konstante in %s umbenennen` | Quick-Fix | nein | [SCA119](#sca119) |
 | SCA120 MissingRaise | `Exception auslösen` | Quick-Fix | ja | [SCA120](#sca120) |
 | SCA121 RoutineResultUnassigned | `Result mit %s initialisieren` | Quick-Fix | ja | [SCA121](#sca121) |
 | SCA122 ReRaiseException | `raise; verwenden (Original-Stack-Trace bleibt)` | Quick-Fix | nein | [SCA122](#sca122) |
 | SCA123 CastAndFree | `Cast nach %s vor Free entfernen` | Quick-Fix | nein | [SCA123](#sca123) |
 | SCA126 NilComparison | `Assigned() statt Vergleich mit nil verwenden` | Quick-Fix | nein | [SCA126](#sca126) |
+| SCA127 RaisingRawException | `Stattdessen EArgumentException auslösen (falsches Argument)` / `Stattdessen EInvalidOpException auslösen (unzulässiger Zustand)` | Quick-Fix | ja / ja | [SCA127](#sca127) |
 | SCA128 DateFormatSettings | `FormatSettings ausdrücklich übergeben` / `TFormatSettings.Invariant übergeben` | Quick-Fix | nein / ja | [SCA128](#sca128) |
 | SCA131 IfThenShortCircuit | `IfThen durch if..then..else ersetzen` | Quick-Fix | ja | [SCA131](#sca131) |
 | SCA137 IntegerOverflow | `%s vor der Multiplikation nach Int64 umwandeln` | Quick-Fix | ja | [SCA137](#sca137) |
@@ -86,6 +93,7 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 74 Qui
 | SCA167 InsecureRandom | `Randomize im initialization-Abschnitt aufrufen` | Quick-Fix | ja | [SCA167](#sca167) |
 | SCA168 DefaultCaseInCaseStatement | `Leeren else-Zweig ergänzen` / `else-Zweig mit Exception ergänzen` | Quick-Fix | nein / ja | [SCA168](#sca168) |
 | SCA169 AssertWithSideEffect | `Bedingung außerhalb von Assert auswerten` | Quick-Fix | ja | [SCA169](#sca169) |
+| SCA170 ConstStringParameter | `Parameter %s als const deklarieren` | Quick-Fix | nein | [SCA170](#sca170) |
 | SCA179 AttributeIgnoreWithoutReason | `Grund zu [Ignore] hinzufügen` | Quick-Fix | nein | [SCA179](#sca179) |
 | SCA180 AttributeDuplicate | `Doppeltes Attribut entfernen` | Quick-Fix | nein | [SCA180](#sca180) |
 | SCA181 AttributeCategoryWithoutString | `Dem Attribut einen Kategorienamen geben` | Quick-Fix | nein | [SCA181](#sca181) |
@@ -681,6 +689,66 @@ begin
 end;
 ```
 
+<a id="sca054"></a>
+
+### SCA054 – Ungenutzten Parameter mit `_` kennzeichnen
+
+- **Regel:** SCA054 `UnusedParameter` – Unused method parameter
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Prefix parameter %s with "_" (intentionally unused)` | `Parameter %s mit "_" als absichtlich ungenutzt kennzeichnen` | `Préfixer le paramètre %s par « _ » (inutilisé exprès)` |
+
+**Platzhalter:** `%s` = der Parameter.
+
+**Wirkung:** Benennt den Parameter der Meldung in `_Name` um - im Kopf der Implementierung, in jeder Deklaration derselben Routine (Klassenrumpf, interface-Teil, `forward`) und in `<param name="...">` der `///`-Doku direkt darüber. Bedeutungsgleich: ein Parametername ist nicht Teil des Aufrufs (Delphi kennt keine benannten Argumente), Overrides und Interface-Implementierungen dürfen andere Namen tragen, eine Formdatei bindet nur den Methodennamen. Der Unterstrich dokumentiert die Absicht; der Detektor übergeht solche Namen.
+
+**Nicht angeboten**
+
+- der Name kommt im Bereich der Routine sonst als Code vor - im Rumpf, in lokalen Routinen, in inaktiven `$IFDEF`-Zweigen, hinter `.` oder in `with` (Kommentare und Strings zählen nicht); `asm` in der Routine (Parameter über Register)
+- `_Name` steht schon als Code in der Datei (doppelter Bezeichner bzw. verdeckt danach ein Feld oder eine Variable)
+- ein Kommentar, eine Direktive oder ein Attribut in der Parameterliste (auch FPC `{%H-}`), `&Name`
+- Deklaration und Implementierung nicht eindeutig zu paaren: `overload`, mehr als eine Deklaration oder Implementierung, ein `$IFDEF`-Zwilling oder eine gleichnamige lokale Routine, verschiedene Namenslisten, Record-Methoden (die Hilfe findet nur Klassenköpfe)
+- ein `{$I}` in der Routine, bei freien Routinen in der Datei (es kann die Deklaration tragen)
+- ein Attribut an Routine, Deklaration oder Klasse - RTTI-gestützte Frameworks binden Parameter auch per Namen
+- die Zeile ist verschoben, oder auf ihr beginnen zwei Routinen mit diesem Parameter
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+type
+  TFoo = class
+  public
+    procedure Run(A: Integer; Mode: Integer);
+  end;
+implementation
+procedure TFoo.Run(A: Integer; Mode: Integer);
+begin
+  A := A + 1;
+end;
+```
+
+Nachher:
+
+```pascal
+type
+  TFoo = class
+  public
+    procedure Run(A: Integer; _Mode: Integer);
+  end;
+implementation
+procedure TFoo.Run(A: Integer; _Mode: Integer);
+begin
+  A := A + 1;
+end;
+```
+
+**Hinweis.** Das Projektprofil wertet UnusedParameter bewusst ab (Ereignishandler erben Sender); die Hilfe ist für Funde in eigenen Routinen gedacht. Den Parameter zu streichen (samt Argument an allen Aufrufstellen) ist eine andere, größere Umformung.
+
 <a id="sca059"></a>
 
 ### SCA059 – FormatSettings an Format übergeben
@@ -980,6 +1048,46 @@ Nachher:
 
 **Hinweis.** Bedeutungsgleich: das Komma trug nichts.
 
+<a id="sca069"></a>
+
+### SCA069 – Ziffern mit `_` gruppieren
+
+- **Regel:** SCA069 `DigitGrouping` – Integer literal without digit grouping
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Group the digits with "_"` | `Ziffern mit "_" gruppieren` | `Grouper les chiffres avec « _ »` |
+
+**Wirkung:** Setzt in das gemeldete Ganzzahl-Literal Zifferntrenner in Dreiergruppen von rechts (`1800000` → `1_800_000`). Bedeutungsgleich: der Compiler liest `_` in einem Zahl-Literal nicht. Nur das Literal an der gemeldeten Spalte.
+
+**Nicht angeboten**
+
+- die Datei baut wohl auch mit einem anderen Compiler: FPC-Weiche oder FPC-Modus in der Datei, Dateiart `.pp`/`.lpr`, Lazarus-Projekt oder alte Delphi-Projektdatei neben der Unit, Spuren von Compilern vor Delphi 11 in der Datei oder ihren Includes (`{$IF CompilerVersion >= 35}`, `DELPHI27_UP`, `jedi.inc` …) – Zifferntrenner gibt es erst ab Delphi 11
+- ein Include oder eine Skript-Unit ohne implementation-Teil
+- ein Zeichencode (`#65279` – der Detektor meldet ihn mit), eine Sprungmarke (label-Abschnitt, `goto`), ein Literal in einem asm-Block
+- die Zeile ist verschoben, an der Spalte steht kein ungruppiertes Literal (Hex, Binär, Float, schon gruppiert, Teil eines Bezeichners, Kommentar, String), oder die Meldung nennt keine Spalte
+- die Unit liegt auf einem Netzpfad (die Hilfe liest dort keine Projekt- und Include-Dateien)
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+const
+  TIMEOUT_MS = 1800000;
+```
+
+Nachher:
+
+```pascal
+const
+  TIMEOUT_MS = 1_800_000;
+```
+
+**Hinweis.** Je Zeile meldet der Detektor nur das erste Literal – das nächste derselben Zeile danach.
+
 <a id="sca070"></a>
 
 ### SCA070 – Auskommentierten Code löschen
@@ -1259,6 +1367,67 @@ Nachher:
   Items.Add(T);
 ```
 
+<a id="sca079"></a>
+
+### SCA079 – Mit dem vorigen const- bzw. var-Abschnitt zusammenlegen
+
+- **Regel:** SCA079 `ConsecutiveSection` – Consecutive const/type/var section
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Merge with the previous %s section` | `Mit dem vorigen %s-Abschnitt zusammenlegen` | `Fusionner avec la section %s précédente` |
+
+**Platzhalter:** `%s` = die Art aus der Meldung (`const` bzw. `var`).
+
+**Wirkung:** Streicht das Schlüsselwort des zweiten von zwei gleichen Abschnitten (`const` nach `const`, `var` nach `var`); seine Deklarationen gehören danach zum ersten. Steht das Schlüsselwort allein auf seiner Zeile, geht die Zeile; steht dahinter schon die erste Deklaration (`const B = 2;`), rückt sie auf die Einrückung der ersten Deklaration des ersten Abschnitts. Bedeutungsgleich.
+
+**Nicht angeboten**
+
+- `type`-Abschnitte (nur `const` und `var`)
+- Inline-Deklarationen in einem Anweisungsblock (`begin … end`, `initialization`) – der Detektor meldet zwei `var X: T;` ohne `:=` mit; Streichen bräche den Compiler
+- zwischen den Schlüsselwörtern steht etwas anderes als Deklarationen: Sichtbarkeit (`public` …), `threadvar`, `resourcestring`, `label`, ein Routinenkopf, ein Typ mit Rumpf (`record … end`), ein anderer Abschnitt; der erste Abschnitt ist `class var`/`class const`
+- eine Compiler-Direktive zwischen den Schlüsselwörtern, ein Kommentar zwischen den Abschnitten oder auf der Zeile des Schlüsselworts
+- die Zeile beginnt nicht mit dem gemeldeten Schlüsselwort (verschoben), oder dahinter folgt keine Deklaration
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+const
+  A = 1;
+const
+  B = 2;
+```
+
+Nachher:
+
+```pascal
+const
+  A = 1;
+  B = 2;
+```
+
+**Beispiel: Schlüsselwort mit Deklaration auf einer Zeile**
+
+Vorher:
+
+```pascal
+const A = 1;
+const B = 2;
+```
+
+Nachher:
+
+```pascal
+const A = 1;
+      B = 2;
+```
+
+**Hinweis.** Ein Kommentar hinter der letzten Deklaration des ersten Abschnitts bleibt stehen.
+
 <a id="sca080"></a>
 
 ### SCA080 – Überflüssiges Exit/Continue entfernen
@@ -1447,6 +1616,59 @@ Nachher:
 ```pascal
   FreeAndNil(L);
 ```
+
+<a id="sca086"></a>
+
+### SCA086 – `out` durch `var` ersetzen
+
+- **Regel:** SCA086 `AvoidOut` – Avoid out parameter modifier
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** **je nach Fund** – gekennzeichnet nur bei einem verwalteten oder unbekannten Typ (string, Interface, dynamisches Array, Variant, Record, eigener Typ): `out` gab den Wert des Aufrufers beim Aufruf frei, `var` nicht – liest die Routine den Parameter vor dem Setzen, sieht sie danach den alten Wert. Dann nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| en | de | fr |
+|---|---|---|
+| `Replace "out" with "var" for %s` | `"out" für %s durch "var" ersetzen` | `Remplacer « out » par « var » pour %s` |
+
+**Platzhalter:** `%s` = der Parameter (der erste Name hinter `out`).
+
+**Wirkung:** Macht aus dem gemeldeten `out`-Parameter einen `var`-Parameter – in Deklaration und Implementierung in einem Schritt (wiederholt die Implementierung die Parameterliste nicht, nur in der Deklaration). Für einfache Typen (Integer, Boolean, Double, Pointer, TObject …) behandelt Delphi `out` wie `var`: bedeutungsgleich.
+
+**Nicht angeboten**
+
+- untypisiertes `out` (`out Obj`), ein Prozedur- oder Methodentyp, eine anonyme Methode, `reference to`, ein Operator
+- die Köpfe dieses Namens in der Datei sind nicht genau ein Paar Deklaration + Implementierung (Overload, gleichnamige Methode einer anderen Klasse, Deklaration oder Implementierung fehlt; nur ein Rumpf in einer Datei mit Include)
+- der Name steht im Code ohne Aufruf (`@Load`, `OnX := Load`) – als Methodenzeiger änderte sich sein Typ
+- `virtual`, `dynamic`, `abstract`, `override`, `final`, `message`, `dispid`, `overload`, eine Aufrufkonvention oder `external`
+- die Methode steht unter `published` oder ohne Sichtbarkeitswort (eine Formdatei kann sie an ein Ereignis binden), ihre Klasse implementiert Interfaces, oder sie ist die Methode eines interface-Typs
+- der andere Kopf trägt das `out` nicht genauso (`out A, B: T` gegen `out A: T; out B: T`), die Zeile ist verschoben, oder die Meldung nennt keine Spalte
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+type
+  TFoo = class
+  public
+    procedure Get(out S: string);
+  end;
+implementation
+procedure TFoo.Get(out S: string);
+```
+
+Nachher:
+
+```pascal
+type
+  TFoo = class
+  public
+    procedure Get(var S: string);
+  end;
+implementation
+procedure TFoo.Get(var S: string);
+```
+
+**Hinweis.** Aufrufer in anderen Units bleiben übersetzbar (out und var verlangen beide eine Variable); nimmt eine andere Unit die Routine als Methodenzeiger, passt dort der Typ nicht mehr – das sieht die Hilfe nicht.
 
 <a id="sca087"></a>
 
@@ -2150,6 +2372,122 @@ Nachher:
     function Find(const AId: Integer; out AUser: TUser): Boolean;
 ```
 
+<a id="sca118"></a>
+
+### SCA118 – Exception-Klasse mit E-Präfix umbenennen
+
+- **Regel:** SCA118 `ExceptionName` – Exception class without `E` prefix
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Rename the exception class to %s` | `Exception-Klasse in %s umbenennen` | `Renommer la classe d'exception en %s` |
+
+**Platzhalter:** `%s` = der neue Name.
+
+**Wirkung:** Benennt die gemeldete Exception-Klasse `MyError = class(Exception)` in `EMyError` um – „E“ und der Name mit großem Anfangsbuchstaben (`myError` → `EMyError`, `error` → `EError`; ein Klassen-`T` vor einem Wort wird ersetzt: `TMyError` → `EMyError`, ein Akronym bleibt: `TCPError` → `ETCPError`) – und mit ihr jeden Verweis im Code der Datei (`raise`, `on E:`, Vorfahrenliste, `class of`). Bedeutungsgleich: die Klasse steht im implementation-Teil (oder in einem Programm) und ist nur in dieser Datei sichtbar; je Verweis eine Ersetzung, ein Rückgängig-Schritt. Kommentare behalten den alten Namen.
+
+**Nicht angeboten**
+
+- die Klasse steht im interface-Teil (andere Units können sie nennen) oder in einer Datei ohne `implementation`, die kein Programm bzw. keine Bibliothek ist (Include-Datei)
+- der neue Name steht schon im Code der Datei (Groß/klein egal), eine Direktive nennt den alten oder neuen Namen, ein String-Literal nennt den alten (ClassName, FindClass, RTTI)
+- ein Verweis vor der Deklaration (er meint einen anderen Typ), ein Verweis mit Punkt davor (`X.MyError`), `MyError :=` oder ein `with` davor in derselben Routine
+- ein `{$I}` im implementation-Teil, ein Kommentar oder eine Direktive in der Deklaration, die Zeile ist verschoben
+- Zeichen außerhalb A-Z, a-z, 0-9, `_` im Namen, ein Name, der schon das Präfix trägt
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+implementation
+
+type
+  MyError = class(Exception);
+
+procedure Check(A: Integer);
+begin
+  if A < 0 then
+    raise MyError.Create('negative');
+end;
+```
+
+Nachher:
+
+```pascal
+implementation
+
+type
+  EMyError = class(Exception);
+
+procedure Check(A: Integer);
+begin
+  if A < 0 then
+    raise EMyError.Create('negative');
+end;
+```
+
+**Hinweis.** Nicht prüfbar ohne Projektwissen: trägt ein Vorfahr aus einer anderen Unit ein Member gleichen Namens, sieht eine Methode dort unter dem alten Namen das Member, nach der Umbenennung die Klasse – selten, der Compiler meldet es meist.
+
+<a id="sca119"></a>
+
+### SCA119 – Lokale Konstante in UPPER_SNAKE_CASE umbenennen
+
+- **Regel:** SCA119 `LocalConstantName` – Local constant not in UPPER_SNAKE_CASE
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Rename the constant to %s` | `Konstante in %s umbenennen` | `Renommer la constante en %s` |
+
+**Platzhalter:** `%s` = der neue Name.
+
+**Wirkung:** Benennt die gemeldete Konstante im const-Abschnitt einer Routine in UPPER_SNAKE_CASE um (`MaxRetries` → `MAX_RETRIES`, `HTTPPort` → `HTTP_PORT`, `cMax` → `C_MAX`, `Base64Len` → `BASE64_LEN`) und mit ihr jeden Verweis hinter der Deklaration bis zum Ende der Routine – auch in lokalen Routinen dahinter. Bedeutungsgleich: die lokale Konstante verschattet in ihrer Routine jeden gleichen Namen, und der neue Name steht nirgends im Code der Datei; je Verweis eine Ersetzung, ein Rückgängig-Schritt. Außerhalb der Routine, in Kommentaren und bei `X.Name` (Member) bleibt der alte Name.
+
+**Nicht angeboten**
+
+- der neue Name steht schon im Code der Datei (Groß/klein egal; ändert sich nur Groß/klein, entfällt die Frage) oder in einer Direktive
+- ein `with` oder ein `{$I}` in der Routine, eine Direktive in der Routine nennt den Namen (`{$IF MaxRetries > 2}`)
+- der Name steht in der Routine vor der Deklaration oder wird dahinter neu deklariert bzw. als Name benutzt: Parameter, Variable, Konstante, Typ oder Marke einer lokalen Routine bzw. anonymen Methode, Feld, Feldname einer Record-Konstante, Inline-`var`/`const`, `Name :=`, `@@Name`; vorsichtig auch `(Name)` und `(.., Name)` im Deklarationsteil
+- ein Kommentar oder eine Direktive in der Deklaration, die Zeile ist verschoben, die Meldung nennt eine andere Routine, unsichere Routinengrenzen
+- Zeichen außerhalb A-Z, a-z, 0-9, `_` im Namen, ein Name schon in UPPER_SNAKE_CASE
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+procedure Retry;
+const
+  MaxRetries = 3;
+var
+  I: Integer;
+begin
+  for I := 1 to MaxRetries do
+    if TryOnce then
+      Exit;
+end;
+```
+
+Nachher:
+
+```pascal
+procedure Retry;
+const
+  MAX_RETRIES = 3;
+var
+  I: Integer;
+begin
+  for I := 1 to MAX_RETRIES do
+    if TryOnce then
+      Exit;
+end;
+```
+
+**Hinweis.** Ein Präfix wie `c` bleibt im Namen (`cMax` → `C_MAX`) – kürzen von Hand oder mit Refactor > Rename.
+
 <a id="sca120"></a>
 
 ### SCA120 – Exception auslösen
@@ -2365,6 +2703,61 @@ Nachher:
 ```pascal
   while Assigned(x) do x := x.Next;
 ```
+
+<a id="sca127"></a>
+
+### SCA127 – Spezifische Exception-Klasse statt `Exception` auslösen
+
+- **Regel:** SCA127 `RaisingRawException` – Raise the bare `Exception` base class instead of a specific subclass
+- **Art:** Quick-Fix
+- **Ändert Verhalten:**
+  - Eintrag 1: **ja** – on-Handler für EArgumentException fangen die Ausnahme jetzt, E.ClassName im Log wechselt; on E: Exception fängt weiter. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+  - Eintrag 2: **ja** – on-Handler für EInvalidOpException fangen die Ausnahme jetzt, E.ClassName im Log wechselt; on E: Exception fängt weiter. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| Eintrag | en | de | fr |
+|---|---|---|---|
+| 1 | `Raise EArgumentException instead (wrong argument)` | `Stattdessen EArgumentException auslösen (falsches Argument)` | `Lever EArgumentException à la place (argument incorrect)` |
+| 2 | `Raise EInvalidOpException instead (invalid state)` | `Stattdessen EInvalidOpException auslösen (unzulässiger Zustand)` | `Lever EInvalidOpException à la place (état non valide)` |
+
+**Wirkung (Eintrag 1):** Ersetzt in `raise Exception.Create(..)` nur den Klassennamen durch `EArgumentException` – für ein falsches Argument des Aufrufers. Konstruktor und Argumente bleiben (`CreateFmt`, `CreateRes`, `CreateHelp` …). Welche Klasse passt, entscheidet der Benutzer: der zweite Eintrag bietet `EInvalidOpException`. Fehlt `System.SysUtils` in uses, kommt es mit.
+
+**Wirkung (Eintrag 2):** Setzt stattdessen `EInvalidOpException` ein – für einen unzulässigen Zustand bzw. einen Aufruf zur falschen Zeit.
+
+**Nicht angeboten**
+
+- kein oder mehr als ein `raise Exception` im Code der Zeile (Zeile verschoben, nur in Kommentar oder String, schon eine andere Klasse)
+- `raise Exception;` ohne Konstruktor, eine Compiler-Direktive zwischen `raise` und dem Konstruktor
+- die Datei deklariert selbst `Exception` oder die Zielklasse (Typ, Variable, Parameter, Routine)
+- Eintrag 2: dieselben Sperren wie der erste Eintrag
+
+**Beispiel (Eintrag 1)**
+
+Vorher:
+
+```pascal
+if X < 0 then
+  raise Exception.Create('x is negative');
+```
+
+Nachher:
+
+```pascal
+if X < 0 then
+  raise EArgumentException.Create('x is negative');
+```
+
+**Beispiel (Eintrag 2)**
+
+Vorher wie bei Eintrag 1.
+
+Nachher:
+
+```pascal
+if X < 0 then
+  raise EInvalidOpException.Create('x is negative');
+```
+
+**Hinweis.** Passt keine der beiden Klassen (Datei fehlt, Netz, Fachfehler), keinen Eintrag wählen und eine eigene Klasse schreiben. EArgumentOutOfRangeException ist eine Unterklasse von EArgumentException – ein Handler darauf fängt die neue Ausnahme nicht.
 
 <a id="sca128"></a>
 
@@ -3209,6 +3602,52 @@ Nachher:
 ```
 
 **Hinweis.** Liefert die Bedingung einen Variant, wäre `not` bitweise (`Assert(V)` mit V = 1 hält, `if not (V)` löst aus) – die Hilfe kennt die Ergebnistypen der Aufrufe nicht. Die neue Form trägt einen Zweig ohne begin..end; SCA101 (BeginEndRequired, Hinweis) meldet ihn, wo die Regel eingeschaltet ist.
+
+<a id="sca170"></a>
+
+### SCA170 – `const` vor den string-Parameter
+
+- **Regel:** SCA170 `ConstStringParameter` – string parameter without const modifier
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Declare parameter %s as const` | `Parameter %s als const deklarieren` | `Déclarer le paramètre %s comme const` |
+
+**Platzhalter:** `%s` = der Parameter.
+
+**Wirkung:** Macht aus `S: string` ein `const S: string` - in der Implementierung und in jeder Deklaration derselben Routine (`forward`, Klassenrumpf); bei einer Gruppe `A, B: string` steht das `const` vor der Gruppe und gilt für alle Namen. Nur für unit-lokale Routinen und nur, wenn der Rumpf keinen Namen der Gruppe beschreibt: dann ist es bedeutungsgleich und spart den Referenzzähler je Aufruf.
+
+**Nicht angeboten**
+
+- die Routine ist im interface-Teil deklariert; die Methode steht nicht unter `private`/`strict private` einer Klasse des interface-Teils; `virtual`/`dynamic`/`override`/`abstract`/`reintroduce`/`message`/`dispid`; die Klasse implementiert ein Interface
+- der Name der Routine steht in der Datei ohne Aufruf oder mit `@` (Methodenzeiger, Ereignis, Rückruf, `exports`, Property-Accessor) - der Typ passte danach nicht mehr; ein `{$I}` in der Datei
+- ein Name der Gruppe wird beschrieben: `S :=`, `S[i] :=`, `@S`, als Laufvariable, oder als ganzes Argument an eine Routine, die nicht als nur lesend bekannt ist (`Delete`, `Insert`, `SetLength`, `ReadLn`, eigene Routinen) - auch in lokalen Routinen und inaktiven Zweigen
+- die Gruppe trägt schon `const`/`var`/`out`, ein anderer Typ als in der Meldung, eine Deklaration gruppiert anders
+- dieselben Sperren des Kopfs wie bei UnusedParameter: Kommentar, Direktive oder Attribut in der Liste, `overload`, `asm`, Deklaration und Implementierung nicht eindeutig zu paaren, verschobene Zeile
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+function Hash(s: string): Integer;
+begin
+  Result := Length(s);
+end;
+```
+
+Nachher:
+
+```pascal
+function Hash(const s: string): Integer;
+begin
+  Result := Length(s);
+end;
+```
+
+**Hinweis.** Ändert die Routine selbst die Variable, die der Aufrufer übergibt (ein Feld, eine globale Variable), hängt ein const-Parameter danach an freigegebenem Text - diesen Fall sieht die Textprüfung nicht.
 
 <a id="sca179"></a>
 

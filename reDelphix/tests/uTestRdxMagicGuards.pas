@@ -92,7 +92,7 @@ procedure AssertReason(const AFile, APart: string);
 var
   R : string;
 begin
-  R := TRdxMagicFixes.FileReason(AFile);
+  R := TRdxMagicFixes.FileReason(AFile, lfInlineConst);
   Assert.IsTrue(Pos(APart, R) > 0, APart + ' <> ' + R);
 end;
 
@@ -168,7 +168,7 @@ begin
   // Unit, die Version steht im Projekt - im Fenster bis zwei Ebenen.
   T := NewTree;
   try
-    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U), 'leer');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfInlineConst), 'leer');
     for Ext in EXTS do
     begin
       WriteText(T.C + 'Prj' + Ext, '[x]');
@@ -180,7 +180,7 @@ begin
     DeleteFile(T.A + 'Old.dof');
     // Drei Ebenen hoeher zaehlt nicht mehr.
     WriteText(T.Root + 'Far.dof', '[x]');
-    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U), 'drei Ebenen');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfInlineConst), 'drei Ebenen');
   finally
     RemoveTree(T.Root);
   end;
@@ -197,9 +197,9 @@ begin
     AssertReason(T.U, 'Projekt P.dproj im Verzeichnis');
     AssertReason(T.U, 'ProjectVersion 18.4');
     WriteDproj(T.C + 'P.dproj', '18.5');
-    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U), '18.5 = 10.3');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfInlineConst), '18.5 = 10.3');
     WriteDproj(T.C + 'P.dproj', '20.1');
-    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U), '20.1');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfInlineConst), '20.1');
     // Die kleinste Version im Verzeichnis zaehlt.
     WriteDproj(T.C + 'Q.dproj', '12.3');
     AssertReason(T.U, 'Projekt Q.dproj im Verzeichnis');
@@ -222,10 +222,10 @@ begin
     // stumm ...
     WriteDproj(T.C + 'New.dproj', '19.5');
     WriteText(T.B + 'Old.dof', '[x]');
-    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U), 'naechstes Projekt neu');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfInlineConst), 'naechstes Projekt neu');
     // ... und auch eine alte im selben Verzeichnis (die .dproj zaehlt).
     WriteText(T.C + 'Old.dof', '[x]');
-    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U), 'dproj vor dof');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfInlineConst), 'dproj vor dof');
     // Ohne Projekt neben der Unit entscheidet das darueber.
     DeleteFile(T.C + 'New.dproj');
     DeleteFile(T.C + 'Old.dof');
@@ -399,12 +399,12 @@ begin
         'implementation', 'end.']);
       Map.Free;
       Map := TRdxCodeMap.Create(SL);
-      Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U), 'die Unit ist lokal');
+      Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfInlineConst), 'die Unit ist lokal');
       // Der Grund ist die Probe: IncludeFileReason (uRdxBlocks) prueft den
       // Netzpfad VOR FindInclude. Die Wanduhr (bis zum Wochen-Review
       // 2026-10-21: < 2000 ms) bewies keinen fehlenden Plattenzugriff und
       // wurde unter Last rot.
-      R := TRdxMagicFixes.IncludeReason(T.U, Map);
+      R := TRdxMagicFixes.IncludeReason(T.U, Map, lfInlineConst);
       Assert.IsTrue(Pos('auf einem Netzpfad', R) > 0, R);
     end;
   finally

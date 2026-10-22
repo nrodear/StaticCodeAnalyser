@@ -136,9 +136,8 @@ const
   KEY_HEAD = 'Local const ';
   KEY_IN   = ' in ';
   KEY_TAIL = ' - consider';
-  // Hier endet die Suche nach der Routine um die Deklaration.
-  UNIT_BOUNDS: array[0..6] of string = ('implementation', 'interface',
-    'initialization', 'finalization', 'unit', 'program', 'library');
+  // Die Suche nach der Routine um die Deklaration endet an UNIT_BOUNDS
+  // (uRdxCodeMap; bis zur Integration QFI2 hier byte-gleich kopiert).
   // Rueckwaerts ab der Deklaration: das erste dieser Woerter nennt den
   // Abschnitt (nur 'const' ist richtig).
   SECTION_WORDS: array[0..14] of string = ('const', 'var', 'type', 'label',

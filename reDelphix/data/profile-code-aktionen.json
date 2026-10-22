@@ -80,6 +80,14 @@
       "DeadCode",
       "IfThenShortCircuit",
       "AssertWithSideEffect",
+      "UnusedParameter",
+      "ConstStringParameter",
+      "ExceptionName",
+      "LocalConstantName",
+      "DigitGrouping",
+      "ConsecutiveSection",
+      "AvoidOut",
+      "RaisingRawException",
       "FileReadError"
     ]
   }

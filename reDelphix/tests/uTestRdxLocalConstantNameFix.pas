@@ -2,7 +2,9 @@ unit uTestRdxLocalConstantNameFix;
 
 // Editorhilfe SCA119 LocalConstantName (uRdxLocalConstantNameFix): der
 // Planer auf Text (erste Fixture, FPC-tauglich) und der ECHTE Detektor
-// (uNamingExt) auf dem echten AST (zweite Fixture, nur Delphi). Die
+// (uNamingExt) auf dem echten AST ueber den Einstieg der Tabelle
+// (TRdxFixTable.FixFor via PlanFixIn/FixAllWith, Adapter
+// PlanLocalConstantName; zweite Fixture, nur Delphi). Die
 // Fixtures stehen in einer Unit mit implementation-Teil auf Zeile 3; die
 // Routine 'Foo' beginnt auf Zeile 4, 'const' steht auf Zeile 5, die
 // Konstante auf Zeile 6 (DECL_LINE).
@@ -50,6 +52,8 @@ type
     [Test] procedure Detector_TypedConst_Renamed;
     [Test] procedure Detector_MethodOfClass_Renamed;
     [Test] procedure Detector_ShadowedInNested_NoHelp;
+    // ---- Tabellenzeile ----
+    [Test] procedure Table_NameIsNewName;
   end;
 {$ENDIF}
 
@@ -60,7 +64,9 @@ uses
   {$IFNDEF FPC}
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uNamingExt,
-  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
+  uRdxRecipeRunner,      // TRdxFixOutcome
+  uRdxFixTable,          // TRdxFixTable.CaptionFor
+  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxLocalConstantNameFix,
   uRdxText,              // _() und die gemeinsamen Gruende
@@ -378,7 +384,7 @@ end;
 
 {$IFNDEF FPC}
 
-{ ---- Detektor ---- }
+{ ---- Detektor und Tabelle ---- }
 
 // Die Funde der Art SCA119 - der echte Detektor auf dem echten AST.
 procedure RunDetector(AKind: TFindingKind; Root: TAstNode;
@@ -393,35 +399,28 @@ begin
     RunDetector);
 end;
 
-// Die Hilfe fuer den ersten Fund des Detektors.
-function PlanFirst(const ASource: string; out AReason: string): string;
+// Dasselbe in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := DetectSource('rdx_constname_', ASource, AKind, RunDetector);
+end;
+
+// Die Hilfe fuer den ersten Fund des Detektors ueber den Einstieg der
+// Tabelle (PlanFixIn: TRdxFixTable.FixFor, Adapter PlanLocalConstantName).
+function PlanFirst(const ASource: string): TRdxFixOutcome;
 var
   Seen : TArray<TSeen>;
-  P    : TRdxLocalConstantNamePlan;
 begin
   Seen := Detect(ASource);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet einen Fund');
-  Result := PlanWith(ASource, Seen[0].Line, Seen[0].Msg, AReason, P);
+  Result := PlanFixIn(ASource, 't.pas', fkLocalConstantName, Seen[0]);
 end;
 
-// Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt.
+// Fund fuer Fund ueber die Tabelle, nach jeder Ersetzung neu gemeldet, bis
+// der Detektor schweigt (FixAllWith).
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass : Integer;
-  R    : string;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    if Length(Detect(Result)) = 0 then
-      Exit;
-    Result := PlanFirst(Result, R);
-    Assert.IsTrue(Result <> '', R);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Result := FixAllWith(ASource, fkLocalConstantName, DetectKind);
 end;
 
 procedure TTestRdxLocalConstantNameDetector.Detector_ReportsLineAndRoutine;
@@ -495,12 +494,31 @@ end;
 
 procedure TTestRdxLocalConstantNameDetector.Detector_ShadowedInNested_NoHelp;
 var
-  R : string;
+  O : TRdxFixOutcome;
 begin
-  Assert.AreEqual('', PlanFirst(UnitWith(['procedure Foo;', 'const',
+  O := PlanFirst(UnitWith(['procedure Foo;', 'const',
     '  MaxRetries = 3;', '  procedure Inner(MaxRetries: Integer);',
-    '  begin', '  end;', 'begin', '  Inner(MaxRetries);', 'end;']), R));
-  Assert.AreEqual(_(R_LCN_SHADOW, [7, 'MaxRetries']), R);
+    '  begin', '  end;', 'begin', '  Inner(MaxRetries);', 'end;']));
+  Assert.IsFalse(O.Enabled, 'keine Hilfe');
+  Assert.AreEqual(_(R_LCN_SHADOW, [7, 'MaxRetries']), O.Reason);
+  Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+end;
+
+procedure TTestRdxLocalConstantNameDetector.Table_NameIsNewName;
+var
+  O : TRdxFixOutcome;
+begin
+  // Name = der neue Name (Menuetext 'Rename the constant to %s'), Hinweis
+  // der Zeile, bedeutungsgleich (nicht gekennzeichnet).
+  O := PlanFirst(UnitWith(['procedure Foo;', 'const', '  MaxRetries = 3;',
+    'begin', '  Work(MaxRetries);', 'end;']));
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual('MAX_RETRIES', O.Name);
+  Assert.IsFalse(O.ChangesBehavior, 'bedeutungsgleich');
+  Assert.IsTrue(Pos('Routine', O.Hint) > 0, O.Hint);
+  Assert.IsTrue(Pos('MAX_RETRIES',
+    TRdxFixTable.CaptionFor(fkLocalConstantName, O)) > 0,
+    'der Menuetext nennt den neuen Namen');
 end;
 
 {$ENDIF}

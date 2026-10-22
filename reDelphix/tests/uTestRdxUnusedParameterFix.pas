@@ -5,7 +5,8 @@ unit uTestRdxUnusedParameterFix;
 // Faelle auf Text laufen ohne Parser und ohne Detektor (FPC-tauglich: der
 // Planer bindet nur uRdxCodeMap, uRdxBlocks, uRdxBufferMath, uRdxText);
 // die Rundlaeufe mit dem ECHTEN Detektor stehen in der zweiten Fixture
-// (nur Delphi).
+// (nur Delphi) und laufen ueber den Einstieg der Tabelle
+// (TRdxFixTable.FixFor, Adapter PlanUnusedParameter - wie der Anbieter).
 
 interface
 
@@ -44,6 +45,8 @@ type
     [Test] procedure Detector_RoundTrip;
     [Test] procedure Detector_CommentOnly_Help;
     [Test] procedure Detector_Overload_NoHelp;
+    // ---- Tabellenzeile ----
+    [Test] procedure Table_HintAndName;
   end;
 {$ENDIF}
 
@@ -56,7 +59,9 @@ uses
   uTestRdxTextKit   // Join, Apply
 {$IFNDEF FPC}
   , System.Generics.Collections,
-  uAstNode, uMethodd12, uSCAConsts, uUnusedParameter, uTestRdxDetectorKit
+  uAstNode, uMethodd12, uSCAConsts, uUnusedParameter,
+  uRdxRecipeRunner,      // TRdxFixOutcome
+  uTestRdxDetectorKit    // TSeen, DetectSource, PlanFixIn, FixAllWith
 {$ENDIF}
   ;
 
@@ -380,32 +385,23 @@ begin
   TUnusedParameterDetector.AnalyzeUnit(Root, Path, Results);
 end;
 
-function Detect(const ASource: string): TArray<TSeen>;
+// Die Form TDetectFunc (uTestRdxDetectorKit) fuer FixAllWith.
+function DetectKind(const ASource: string;
+  AKind: TFindingKind): TArray<TSeen>;
 begin
-  Result := DetectSource('sca054', ASource, fkUnusedParameter, RunUnusedParam);
+  Result := DetectSource('sca054', ASource, AKind, RunUnusedParam);
 end;
 
-// Fund fuer Fund ueber den Planer (MarkUnused auf der Code-Sicht, wie das
-// Geruest der Tabelle ihn ruft), bis der Detektor schweigt.
-function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Seen : TArray<TSeen>;
-  P    : TRdxParamPlan;
-  R    : string;
-  Pass : Integer;
+function Detect(const ASource: string): TArray<TSeen>;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    Seen := Detect(Result);
-    if Length(Seen) = 0 then Exit;
-    Assert.IsTrue(PlanOf(Result, Seen[0].Line, Seen[0].Msg, P, R),
-      Format('Zeile %d: %s', [Seen[0].Line, R]));
-    Result := Apply(Result, P.Edits);
-  end;
-  Assert.Fail('der Detektor meldet nach 10 Runden noch');
+  Result := DetectKind(ASource, fkUnusedParameter);
+end;
+
+// Fund fuer Fund ueber den Einstieg der Tabelle (PlanFixIn ->
+// TRdxFixTable.FixFor -> PlanUnusedParameter), bis der Detektor schweigt.
+function FixAll(const ASource: string): string;
+begin
+  Result := FixAllWith(ASource, fkUnusedParameter, DetectKind);
 end;
 
 procedure TTestRdxUnusedParameterFixDetector.Detector_RoundTrip;
@@ -448,8 +444,7 @@ procedure TTestRdxUnusedParameterFixDetector.Detector_Overload_NoHelp;
 var
   Src  : string;
   Seen : TArray<TSeen>;
-  P    : TRdxParamPlan;
-  R    : string;
+  O    : TRdxFixOutcome;
 begin
   // Der Detektor meldet Mode der ersten Ueberladung; die Hilfe lehnt ab.
   Src := ImplUnit(['procedure Work(Mode: Integer); overload;', 'begin',
@@ -458,8 +453,31 @@ begin
   Seen := Detect(Src);
   Assert.AreEqual<Integer>(1, Length(Seen));
   Assert.AreEqual<Integer>(4, Seen[0].Line);
-  Assert.IsFalse(PlanOf(Src, Seen[0].Line, Seen[0].Msg, P, R), 'keine Hilfe');
-  Assert.AreEqual(_(R_UP_OVERLOAD, ['Work']), R);
+  O := PlanFixIn(Src, 't.pas', fkUnusedParameter, Seen[0]);
+  Assert.IsFalse(O.Enabled, 'keine Hilfe');
+  Assert.AreEqual(_(R_UP_OVERLOAD, ['Work']), O.Reason);
+  Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+end;
+
+procedure TTestRdxUnusedParameterFixDetector.Table_HintAndName;
+var
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  // Die Zeile der Tabelle: Name = der Parameter (Menuetext), der feste
+  // Hinweis der Zeile, nicht gekennzeichnet (bedeutungsgleich).
+  Src := ImplUnit(['procedure Work(Mode: Integer);', 'begin', 'end;']);
+  Seen := Detect(Src);
+  Assert.AreEqual<Integer>(1, Length(Seen));
+  O := PlanFixIn(Src, 't.pas', fkUnusedParameter, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual('Mode', O.Name);
+  Assert.IsTrue(O.Hint <> '', 'Hinweis der Zeile');
+  Assert.IsFalse(O.ChangesBehavior, 'nicht gekennzeichnet');
+  Assert.AreEqual(
+    ImplUnit(['procedure Work(_Mode: Integer);', 'begin', 'end;']),
+    Apply(Src, O.Edits));
 end;
 
 {$ENDIF}

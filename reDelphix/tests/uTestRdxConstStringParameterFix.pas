@@ -4,7 +4,9 @@ unit uTestRdxConstStringParameterFix;
 // 'const' vor den string-Parameter in Implementierung und Deklarationen.
 // Die Faelle auf Text laufen ohne Parser und ohne Detektor (FPC-tauglich:
 // der Planer bindet nur Textlogik); die Rundlaeufe mit dem ECHTEN Detektor
-// stehen in der zweiten Fixture (nur Delphi). Die Sperren des Kopfs
+// stehen in der zweiten Fixture (nur Delphi) und laufen ueber den Einstieg
+// der Tabelle (TRdxFixTable.FixFor, Adapter PlanConstStringParameter - wie
+// der Anbieter). Die Sperren des Kopfs
 // (overload, asm, Kommentar in der Liste ...) prueft
 // uTestRdxUnusedParameterFix - beide Hilfen teilen ReadSite.
 
@@ -46,6 +48,8 @@ type
     [Test] procedure Detector_RoundTrip;
     [Test] procedure Detector_Interface_NoHelp;
     [Test] procedure Detector_Written_NoHelp;
+    // ---- Tabellenzeile ----
+    [Test] procedure Table_HintAndName;
   end;
 {$ENDIF}
 
@@ -59,7 +63,9 @@ uses
   uTestRdxTextKit   // Join, Apply
 {$IFNDEF FPC}
   , System.Generics.Collections,
-  uAstNode, uMethodd12, uSCAConsts, uConstStringParameter, uTestRdxDetectorKit
+  uAstNode, uMethodd12, uSCAConsts, uConstStringParameter,
+  uRdxRecipeRunner,      // TRdxFixOutcome
+  uTestRdxDetectorKit    // TSeen, DetectSource, PlanFixIn, FixAllWith
 {$ENDIF}
   ;
 
@@ -379,33 +385,30 @@ begin
   TConstStringParameterDetector.AnalyzeUnit(Root, Path, Results);
 end;
 
-function Detect(const ASource: string): TArray<TSeen>;
+// Die Form TDetectFunc (uTestRdxDetectorKit) fuer FixAllWith.
+function DetectKind(const ASource: string;
+  AKind: TFindingKind): TArray<TSeen>;
 begin
-  Result := DetectSource('sca170', ASource, fkConstStringParameter,
-    RunConstString);
+  Result := DetectSource('sca170', ASource, AKind, RunConstString);
 end;
 
-// Fund fuer Fund ueber den Planer (MakeConst auf der Code-Sicht, wie das
-// Geruest der Tabelle ihn ruft), bis der Detektor schweigt.
-function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Seen : TArray<TSeen>;
-  P    : TRdxParamPlan;
-  R    : string;
-  Pass : Integer;
+function Detect(const ASource: string): TArray<TSeen>;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    Seen := Detect(Result);
-    if Length(Seen) = 0 then Exit;
-    Assert.IsTrue(PlanOf(Result, Seen[0].Line, Seen[0].Msg, P, R),
-      Format('Zeile %d: %s', [Seen[0].Line, R]));
-    Result := Apply(Result, P.Edits);
-  end;
-  Assert.Fail('der Detektor meldet nach 10 Runden noch');
+  Result := DetectKind(ASource, fkConstStringParameter);
+end;
+
+// Fund fuer Fund ueber den Einstieg der Tabelle (PlanFixIn ->
+// TRdxFixTable.FixFor -> PlanConstStringParameter), bis der Detektor
+// schweigt.
+function FixAll(const ASource: string): string;
+begin
+  Result := FixAllWith(ASource, fkConstStringParameter, DetectKind);
+end;
+
+// Die Hilfe fuer den Fund ASeen ueber den Einstieg der Tabelle.
+function PlanSeen(const ASource: string; const ASeen: TSeen): TRdxFixOutcome;
+begin
+  Result := PlanFixIn(ASource, 't.pas', fkConstStringParameter, ASeen);
 end;
 
 procedure TTestRdxConstStringParameterFixDetector.Detector_RoundTrip;
@@ -435,8 +438,7 @@ procedure TTestRdxConstStringParameterFixDetector.Detector_Interface_NoHelp;
 var
   Src  : string;
   Seen : TArray<TSeen>;
-  P    : TRdxParamPlan;
-  R    : string;
+  O    : TRdxFixOutcome;
 begin
   // Der Detektor meldet die Implementierung; die Routine steht im
   // interface-Teil - andere Units koennen sie als Wert nutzen.
@@ -446,16 +448,16 @@ begin
   Seen := Detect(Src);
   Assert.AreEqual<Integer>(1, Length(Seen));
   Assert.AreEqual<Integer>(5, Seen[0].Line);
-  Assert.IsFalse(PlanOf(Src, Seen[0].Line, Seen[0].Msg, P, R), 'keine Hilfe');
-  Assert.AreEqual(_(R_CS_INTERFACE, [3]), R);
+  O := PlanSeen(Src, Seen[0]);
+  Assert.IsFalse(O.Enabled, 'keine Hilfe');
+  Assert.AreEqual(_(R_CS_INTERFACE, [3]), O.Reason);
 end;
 
 procedure TTestRdxConstStringParameterFixDetector.Detector_Written_NoHelp;
 var
   Src  : string;
   Seen : TArray<TSeen>;
-  P    : TRdxParamPlan;
-  R    : string;
+  O    : TRdxFixOutcome;
 begin
   // Der Detektor fragt nicht, ob der Rumpf den Parameter beschreibt - die
   // Hilfe schon (danach E2064).
@@ -463,8 +465,31 @@ begin
     '  s := Trim(s);', '  Result := s;', 'end;']);
   Seen := Detect(Src);
   Assert.AreEqual<Integer>(1, Length(Seen));
-  Assert.IsFalse(PlanOf(Src, Seen[0].Line, Seen[0].Msg, P, R), 'keine Hilfe');
-  Assert.AreEqual(_(R_CS_WRITTEN, ['s', 6]), R);
+  O := PlanSeen(Src, Seen[0]);
+  Assert.IsFalse(O.Enabled, 'keine Hilfe');
+  Assert.AreEqual(_(R_CS_WRITTEN, ['s', 6]), O.Reason);
+  Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+end;
+
+procedure TTestRdxConstStringParameterFixDetector.Table_HintAndName;
+var
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  // Die Zeile der Tabelle: Name = der Parameter (Menuetext), der feste
+  // Hinweis der Zeile (nennt das const-Aliasing), nicht gekennzeichnet.
+  Src := ImplUnit(['function Hash(s: string): Integer;', 'begin',
+    '  Result := Length(s);', 'end;']);
+  Seen := Detect(Src);
+  Assert.AreEqual<Integer>(1, Length(Seen));
+  O := PlanSeen(Src, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual('s', O.Name);
+  Assert.IsTrue(Pos('const', O.Hint) > 0, O.Hint);
+  Assert.IsFalse(O.ChangesBehavior, 'nicht gekennzeichnet');
+  Assert.AreEqual(ImplUnit(['function Hash(const s: string): Integer;',
+    'begin', '  Result := Length(s);', 'end;']), Apply(Src, O.Edits));
 end;
 
 {$ENDIF}

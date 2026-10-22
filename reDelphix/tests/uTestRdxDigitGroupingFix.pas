@@ -2,9 +2,11 @@ unit uTestRdxDigitGroupingFix;
 
 // Editorhilfe SCA069 DigitGrouping (uRdxDigitGroupingFix): der Planer auf
 // Text (erste Fixture, FPC-tauglich) und der ECHTE Detektor (uDigitGrouping)
-// auf dem echten AST mit dem Planer ueber MapFix (zweite Fixture, nur
-// Delphi). Die Tabelle (uRdxFixTable) kennt die Hilfe erst nach der
-// Integration - die Tests rufen den Planer deshalb ohne sie.
+// auf dem echten AST ueber den Einstieg der Tabelle (TRdxFixTable.FixFor
+// via PlanFixIn/FixAllWith, Adapter PlanDigitGrouping samt Plattenblick;
+// zweite Fixture, nur Delphi). Die Rundlaeufe planen fuer 't.pas' ohne
+// Verzeichnis - der Plattenblick liest dann nichts; die Tabellen-Tests
+// legen Dateiart bzw. Projektdateien in einen eigenen Baum im TEMP.
 
 interface
 
@@ -49,7 +51,11 @@ type
     [Test] procedure Detector_CatalogExample_Fixed;
     [Test] procedure Detector_RangeBound_Fixed;
     [Test] procedure Detector_CharCode_NoHelp;
-    [Test] procedure MapFix_StaleFinding_NoHelp;
+    [Test] procedure Table_StaleFinding_NoHelp;
+    // ---- Plattenblick des Adapters (Schwelle Delphi 11) ----
+    [Test] procedure Table_PpFile_NoHelp;
+    [Test] procedure Table_LazarusProject_NoHelp;
+    [Test] procedure Table_DprojVersion_Threshold;
   end;
 {$ENDIF}
 
@@ -61,8 +67,9 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uDigitGrouping,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uRdxFixRunner,         // MapFix
-  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
+  uRdxMagicFixes,        // FileReason (der erwartete Grund des Adapters)
+  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn,
+                         // FixAllWith
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxDigitGroupingFix,
   uRdxText,              // _() und die gemeinsamen Gruende
@@ -390,42 +397,60 @@ begin
   Result := DetectSource('rdx_dig_', ASource, fkDigitGrouping, RunDetector);
 end;
 
-// Die Hilfe fuer einen Fund ueber MapFix - wie der Adapter der Tabelle ohne
-// seinen Plattenblick.
-function PlanSeen(const ASource: string; const ASeen: TSeen): TRdxFixOutcome;
-var
-  SL : TStringList;
+// Detect in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
 begin
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    Result := MapFix(SL, ASeen.Line, ASeen.Msg, TRdxDigitGroupingFix.Group);
-  finally
-    SL.Free;
-  end;
+  Result := DetectSource('rdx_dig_', ASource, AKind, RunDetector);
+end;
+
+// Die Hilfe fuer einen Fund ueber den Einstieg der Tabelle (PlanFixIn:
+// TRdxFixTable.FixFor, Adapter PlanDigitGrouping) fuer die Datei AFile.
+function PlanSeenIn(const ASource, AFile: string;
+  const ASeen: TSeen): TRdxFixOutcome;
+begin
+  Result := PlanFixIn(ASource, AFile, fkDigitGrouping, ASeen);
+end;
+
+// Dasselbe fuer 't.pas' ohne Verzeichnis - der Plattenblick liest nichts.
+function PlanSeen(const ASource: string; const ASeen: TSeen): TRdxFixOutcome;
+begin
+  Result := PlanSeenIn(ASource, 't.pas', ASeen);
 end;
 
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt.
+// schweigt (FixAllWith: ueber den Einstieg der Tabelle).
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass : Integer;
-  Seen : TArray<TSeen>;
-  O    : TRdxFixOutcome;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    Seen := Detect(Result);
-    if Length(Seen) = 0 then
-      Exit;
-    O := PlanSeen(Result, Seen[0]);
-    Assert.IsTrue(O.Enabled, Format('Zeile %d: %s', [Seen[0].Line, O.Reason]));
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Result := FixAllWith(ASource, fkDigitGrouping, DetectKind);
+end;
+
+// Der erste Fund in InBody(['  X := Y * 1048576;']).
+function FirstSeen(out ASource: string): TSeen;
+var
+  Seen : TArray<TSeen>;
+begin
+  ASource := InBody(['  X := Y * 1048576;']);
+  Seen := Detect(ASource);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
+  Result := Seen[0];
+end;
+
+// Ein Baum TEMP\rdx_dig_<GUID>\a\b\c\ - die Unit in C; die Projektdateien
+// liest der Plattenblick in C, B und A (Root liegt ausserhalb).
+function NewUnitDir(out ARoot: string): string;
+begin
+  ARoot := NewTempDir('rdx_dig_');
+  Result := ARoot + 'a' + PathDelim + 'b' + PathDelim + 'c' + PathDelim;
+  ForceDirectories(Result);
+end;
+
+procedure WriteDproj(const APath, AVersion: string);
+begin
+  WriteText(APath, '<?xml version="1.0" encoding="utf-8"?>' + #13#10
+    + '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">'
+    + #13#10 + '  <PropertyGroup>' + #13#10
+    + '    <ProjectVersion>' + AVersion + '</ProjectVersion>' + #13#10
+    + '  </PropertyGroup>' + #13#10 + '</Project>');
 end;
 
 procedure TTestRdxDigitGroupingDetector.Detector_ReportsLineAndColumn;
@@ -504,7 +529,7 @@ begin
   Assert.AreEqual(_(R_DIG_CHAR), O.Reason);
 end;
 
-procedure TTestRdxDigitGroupingDetector.MapFix_StaleFinding_NoHelp;
+procedure TTestRdxDigitGroupingDetector.Table_StaleFinding_NoHelp;
 var
   S : TSeen;
   O : TRdxFixOutcome;
@@ -517,6 +542,76 @@ begin
   Assert.IsFalse(O.Enabled, 'gesperrt');
   Assert.AreEqual(Moved, O.Reason);
   Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+end;
+
+procedure TTestRdxDigitGroupingDetector.Table_PpFile_NoHelp;
+var
+  Src : string;
+  S   : TSeen;
+  O   : TRdxFixOutcome;
+begin
+  // Die Dateiart allein (FileNameReason, ohne Plattenzugriff).
+  S := FirstSeen(Src);
+  O := PlanSeenIn(Src, 'C:\src\unit1.pp', S);
+  Assert.IsFalse(O.Enabled, 'keine Hilfe');
+  Assert.AreEqual(_(R_DIG_FILE, ['.pp']), O.Reason);
+  Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+  // Dieselbe Zeile in 't.pas': Angebot, bedeutungsgleich.
+  O := PlanSeen(Src, S);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsFalse(O.ChangesBehavior, 'bedeutungsgleich');
+end;
+
+procedure TTestRdxDigitGroupingDetector.Table_LazarusProject_NoHelp;
+var
+  Root, Dir, U, Src : string;
+  S                 : TSeen;
+  O                 : TRdxFixOutcome;
+begin
+  // Ein Lazarus-Projekt eine Ebene ueber der Unit: sie baut wohl auch mit
+  // FPC 3.2 - der Grund des Adapters (ProjectReason) traegt den Befund des
+  // Plattenblicks mit dem Text der Zifferntrenner.
+  S := FirstSeen(Src);
+  Dir := NewUnitDir(Root);
+  try
+    U := Dir + 'u.pas';
+    WriteText(ExtractFilePath(ExcludeTrailingPathDelimiter(Dir)) + 'x.lpi',
+      '<CONFIG/>');
+    O := PlanSeenIn(Src, U, S);
+    Assert.IsFalse(O.Enabled, 'keine Hilfe');
+    Assert.AreEqual(TRdxDigitGroupingFix.ProjectReason(
+      TRdxMagicFixes.FileReason(U, lfDigitSeparator)), O.Reason);
+    Assert.IsTrue(Pos('x.lpi', O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos('Zifferntrenner', O.Reason) > 0, O.Reason);
+  finally
+    RemoveTree(Root);
+  end;
+end;
+
+procedure TTestRdxDigitGroupingDetector.Table_DprojVersion_Threshold;
+var
+  Root, Dir, U, Src : string;
+  S                 : TSeen;
+  O                 : TRdxFixOutcome;
+begin
+  // Zifferntrenner gibt es ab Delphi 11 (ProjectVersion 19.3): eine .dproj
+  // mit 19.2 (Delphi 10.4) neben der Unit sperrt, 19.3 nicht - anders als
+  // bei SCA014 (Schwelle 18.5).
+  S := FirstSeen(Src);
+  Dir := NewUnitDir(Root);
+  try
+    U := Dir + 'u.pas';
+    WriteDproj(Dir + 'P.dproj', '19.2');
+    O := PlanSeenIn(Src, U, S);
+    Assert.IsFalse(O.Enabled, '19.2 = Delphi 10.4');
+    Assert.IsTrue(Pos('ProjectVersion 19.2', O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos('Delphi 11 = 19.3', O.Reason) > 0, O.Reason);
+    WriteDproj(Dir + 'P.dproj', '19.3');
+    O := PlanSeenIn(Src, U, S);
+    Assert.IsTrue(O.Enabled, '19.3 = Delphi 11: ' + O.Reason);
+  finally
+    RemoveTree(Root);
+  end;
 end;
 
 {$ENDIF}

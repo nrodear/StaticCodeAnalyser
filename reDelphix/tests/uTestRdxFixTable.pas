@@ -67,7 +67,7 @@ const
   // SCA002, SCA159 und SCA065 sowie SCA137, SCA167, SCA144, SCA154, SCA017,
   // SCA131 und SCA169; SCA149, SCA096 und SCA097 kennzeichnet der Planer,
   // die zweiten Eintraege von SCA128/SCA059 kennzeichnen sich selbst.
-  EXPECTED: array[0..73] of TExpectedRow = (
+  EXPECTED: array[0..81] of TExpectedRow = (
     (Kind: fkExplicitTObjectInheritance; Plan: 'PlanExplicitTObject';
      Caption: 'Remove (TObject) from the class declaration';
      Changes: False; Alt: ''; AltCaption: ''),
@@ -297,7 +297,33 @@ const
      Changes: True; Alt: ''; AltCaption: ''),
     (Kind: fkAssertWithSideEffect; Plan: 'PlanAssertOutside';
      Caption: 'Evaluate the condition outside Assert';
-     Changes: True; Alt: ''; AltCaption: '')
+     Changes: True; Alt: ''; AltCaption: ''),
+    // Chargen QF8..QF11 (8 weitere Hilfen).
+    (Kind: fkUnusedParameter; Plan: 'PlanUnusedParameter';
+     Caption: 'Prefix parameter %s with "_" (intentionally unused)';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkConstStringParameter; Plan: 'PlanConstStringParameter';
+     Caption: 'Declare parameter %s as const';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkExceptionName; Plan: 'PlanExceptionName';
+     Caption: 'Rename the exception class to %s';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkLocalConstantName; Plan: 'PlanLocalConstantName';
+     Caption: 'Rename the constant to %s';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkDigitGrouping; Plan: 'PlanDigitGrouping';
+     Caption: 'Group the digits with "_"';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkConsecutiveSection; Plan: 'PlanConsecutiveSection';
+     Caption: 'Merge with the previous %s section';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkAvoidOut; Plan: 'PlanAvoidOut';
+     Caption: 'Replace "out" with "var" for %s';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkRaisingRawException; Plan: 'PlanRaisingRawException';
+     Caption: 'Raise EArgumentException instead (wrong argument)';
+     Changes: True; Alt: 'PlanRaisingRawExceptionAlt';
+     AltCaption: 'Raise EInvalidOpException instead (invalid state)')
   );
 
 procedure TTestRdxFixTable.EveryRow_HasPlanHintAndCaption;
@@ -548,8 +574,8 @@ begin
       F.Free;
     end;
   end;
-  Assert.AreEqual<Integer>(7, n,
-    'SCA168, SCA020, SCA093, SCA046, SCA128, SCA059, SCA017');
+  Assert.AreEqual<Integer>(8, n,
+    'SCA168, SCA020, SCA093, SCA046, SCA128, SCA059, SCA017, SCA127');
 end;
 
 initialization

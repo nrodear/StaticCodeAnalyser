@@ -1148,6 +1148,7 @@
       "type": "Code Smell",
       "tags": ["dead-code", "api-design"],
       "detectorUnit": "uUnusedParameter.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "procedure Process(const Data: TData; Mode: Integer);  // Mode never referenced",
         "good": "procedure Process(const Data: TData);"
@@ -1444,6 +1445,7 @@
       "type": "Code Smell",
       "tags": ["readability", "modern-delphi"],
       "detectorUnit": "uDigitGrouping.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "const TIMEOUT_MS = 1800000;\nconst MAX_BYTES = 10485760;",
         "good": "const TIMEOUT_MS = 1_800_000;\nconst MAX_BYTES = 10_485_760;"
@@ -1648,6 +1650,7 @@
       "type": "Code Smell",
       "tags": ["style", "structure"],
       "detectorUnit": "uConsecutiveSection.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "const A = 1;\nconst B = 2;",
         "good": "const\n  A = 1;\n  B = 2;"
@@ -1798,6 +1801,7 @@
       "type": "Code Smell",
       "tags": ["api-design", "bug-risk"],
       "detectorUnit": "uAvoidOut.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "procedure Foo(out S: string);",
         "good": "procedure Foo(var S: string);"
@@ -2428,6 +2432,7 @@
       "type": "Code Smell",
       "tags": ["naming", "convention"],
       "detectorUnit": "uNamingExt.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "type\n  MyError = class(Exception);",
         "good": "type\n  EMyError = class(Exception);"
@@ -2447,6 +2452,7 @@
       "type": "Code Smell",
       "tags": ["naming", "convention"],
       "detectorUnit": "uNamingExt.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "procedure Foo;\nconst\n  MaxRetries = 3;\nbegin ... end;",
         "good": "procedure Foo;\nconst\n  MAX_RETRIES = 3;\nbegin ... end;"
@@ -2604,6 +2610,7 @@
       "type": "Code Smell",
       "tags": ["exception", "error-handling", "sonardelphi"],
       "detectorUnit": "uRaisingRawException.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "if x < 0 then\n  raise Exception.Create('x is negative');",
         "good": "if x < 0 then\n  raise EArgumentOutOfRangeException.CreateFmt('x = %d', [x]);"
@@ -3483,6 +3490,7 @@
       "tags": ["performance", "string", "refcount"],
       "configKey": "",
       "detectorUnit": "uConstStringParameter.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "function Hash(s: string): Integer;",
         "good": "function Hash(const s: string): Integer;"

@@ -178,6 +178,14 @@
         <DCCReference Include="source\uRdxDeadCodeFix.pas"/>
         <DCCReference Include="source\uRdxIfThenFix.pas"/>
         <DCCReference Include="source\uRdxAssertSideEffectFix.pas"/>
+        <DCCReference Include="source\uRdxUnusedParameterFix.pas"/>
+        <DCCReference Include="source\uRdxConstStringParameterFix.pas"/>
+        <DCCReference Include="source\uRdxExceptionNameFix.pas"/>
+        <DCCReference Include="source\uRdxLocalConstantNameFix.pas"/>
+        <DCCReference Include="source\uRdxDigitGroupingFix.pas"/>
+        <DCCReference Include="source\uRdxConsecutiveSectionFix.pas"/>
+        <DCCReference Include="source\uRdxAvoidOutFix.pas"/>
+        <DCCReference Include="source\uRdxRawExceptionFix.pas"/>
         <DCCReference Include="source\uRdxRecipeRunner.pas"/>
         <DCCReference Include="source\uRdxFixRunner.pas"/>
         <DCCReference Include="source\uRdxFixTable.pas"/>

@@ -3369,3 +3369,333 @@ msgstr "instruction with dans la routine - un argument pourrait être un membre"
 
 msgid "with statement in the routine - an operand or %s could bind to a member"
 msgstr "instruction with dans la routine - un opérande ou %s pourrait se lier à un membre"
+
+msgid "\"%s :=\" on line %d - a named argument or an assignment"
+msgstr "« %s := » à la ligne %d - un argument nommé ou une affectation"
+
+msgid "\"%s\" already occurs in line %d - the new name would clash with it or hide it"
+msgstr "« %s » figure déjà à la ligne %d - le nouveau nom entrerait en conflit avec lui ou le masquerait"
+
+msgid "\"%s\" is not declared in the declaration part of a routine"
+msgstr "« %s » n'est pas déclaré dans la partie déclarative d'une routine"
+
+msgid "\"%s\" is used on line %d before its declaration - there it means another type"
+msgstr "« %s » est utilisé à la ligne %d avant sa déclaration - il y désigne un autre type"
+
+msgid "\"%s\" occurs on line %d before its declaration - there it means something else"
+msgstr "« %s » apparaît à la ligne %d avant sa déclaration - il y désigne autre chose"
+
+msgid "\"%s\" on the reported line is not declared in a const section"
+msgstr "« %s » n'est pas déclaré dans une section const sur la ligne signalée"
+
+msgid "\"%s\" stands between the two sections - the declarations of the second one would belong to it"
+msgstr "« %s » se trouve entre les deux sections - les déclarations de la seconde lui appartiendraient"
+
+msgid "\"raise Exception\" without a constructor call (Create, CreateFmt ...) - there is no object whose class could change"
+msgstr "\"raise Exception\" sans appel de constructeur (Create, CreateFmt ...) - il n'y a aucun objet dont la classe pourrait changer"
+
+msgid "%d implementations of %s - overload or $IFDEF twin?"
+msgstr "%d implémentations de %s - overload ou jumeau $IFDEF ?"
+
+msgid "%d routine headers named %s in this file - overload or ambiguous"
+msgstr "%d en-têtes de routine nommés %s dans ce fichier - surcharge ou ambiguïté"
+
+msgid "%d routines with the parameter \"%s\" begin on the reported line"
+msgstr "%d routines avec le paramètre « %s » commencent sur la ligne signalée"
+
+msgid "%s is \"%s\" - other code depends on its exact signature"
+msgstr "%s est « %s » - un autre code dépend de sa signature exacte"
+
+msgid "%s is declared inside a type - its signature is a contract"
+msgstr "%s est déclarée dans un type - sa signature est un contrat"
+
+msgid "%s is in the published or default section of %s - a form file may bind it to an event"
+msgstr "%s se trouve dans la section published ou par défaut de %s - un fichier de fiche peut la lier à un événement"
+
+msgid "%s is not declared directly in class %s"
+msgstr "%s n'est pas déclarée directement dans la classe %s"
+
+msgid "%s is overloaded - declaration and implementation cannot be paired safely"
+msgstr "%s est surchargé - déclaration et implémentation ne peuvent pas être appariées de façon sûre"
+
+msgid "%s is used without a call in line %d (method pointer, event, callback, property) - its type would no longer match"
+msgstr "%s est utilisé sans appel à la ligne %d (pointeur de méthode, événement, rappel, propriété) - son type ne correspondrait plus"
+
+msgid "%s is used without a call in line %d (method pointer?) - its type would change"
+msgstr "%s est utilisée sans appel à la ligne %d (pointeur de méthode ?) - son type changerait"
+
+msgid "Declare parameter %s as const"
+msgstr "Déclarer le paramètre %s comme const"
+
+msgid "Group the digits with \"_\""
+msgstr "Grouper les chiffres avec « _ »"
+
+msgid "Lazarus/FPC file (%s) - FPC 3.2 does not know digit separators"
+msgstr "fichier Lazarus/FPC (%s) - FPC 3.2 ne connaît pas les séparateurs de chiffres"
+
+msgid "Merge with the previous %s section"
+msgstr "Fusionner avec la section %s précédente"
+
+msgid "Prefix parameter %s with \"_\" (intentionally unused)"
+msgstr "Préfixer le paramètre %s par « _ » (inutilisé exprès)"
+
+msgid "Raise EArgumentException instead (wrong argument)"
+msgstr "Lever EArgumentException à la place (argument incorrect)"
+
+msgid "Raise EInvalidOpException instead (invalid state)"
+msgstr "Lever EInvalidOpException à la place (état non valide)"
+
+msgid "Rename the constant to %s"
+msgstr "Renommer la constante en %s"
+
+msgid "Rename the exception class to %s"
+msgstr "Renommer la classe d'exception en %s"
+
+msgid "Replace \"out\" with \"var\" for %s"
+msgstr "Remplacer « out » par « var » pour %s"
+
+msgid "a compiler directive names \"%s\""
+msgstr "une directive de compilation nomme « %s »"
+
+msgid "a second routine %s in line %d - overload, $IFDEF twin or local routine"
+msgstr "une deuxième routine %s à la ligne %d - overload, jumeau $IFDEF ou routine locale"
+
+msgid "a string literal names \"%s\" (ClassName, FindClass, RTTI)"
+msgstr "un littéral de chaîne nomme « %s » (ClassName, FindClass, RTTI)"
+
+msgid "asm in the routine - it can read parameters through registers without their names"
+msgstr "asm dans la routine - il peut lire les paramètres par les registres, sans leur nom"
+
+msgid "attribute on the routine or its class - RTTI-based code can bind parameters by their names"
+msgstr "attribut sur la routine ou sa classe - du code basé sur la RTTI peut lier les paramètres par leur nom"
+
+msgid "character code (#...) - digit separators are not allowed there"
+msgstr "code de caractère (#...) - les séparateurs de chiffres n'y sont pas autorisés"
+
+msgid "class %s implements interfaces - %s could implement an interface method"
+msgstr "la classe %s implémente des interfaces - %s pourrait implémenter une méthode d'interface"
+
+msgid "comment between the two sections or on the line of the keyword"
+msgstr "commentaire entre les deux sections ou sur la ligne du mot-clé"
+
+msgid "comment or compiler directive in the declaration of \"%s\""
+msgstr "commentaire ou directive de compilation dans la déclaration de « %s »"
+
+msgid "comment, compiler directive or attribute in the parameter list"
+msgstr "commentaire, directive de compilation ou attribut dans la liste des paramètres"
+
+msgid "compiler directive between \"raise\" and the constructor"
+msgstr "directive de compilation entre \"raise\" et le constructeur"
+
+msgid "compiler directive between the two sections - conditional code could need both keywords"
+msgstr "directive de compilation entre les deux sections - du code conditionnel peut avoir besoin des deux mots-clés"
+
+msgid "digit separators exist from Delphi 11 on - the file carries traces of older compilers (%s, line %d); by hand"
+msgstr "les séparateurs de chiffres n'existent qu'à partir de Delphi 11 - le fichier porte des traces de compilateurs plus anciens (%s, ligne %d) ; à la main"
+
+msgid "digit separators exist from Delphi 11 on and are unknown to FPC 3.2 - %s"
+msgstr "les séparateurs de chiffres n'existent qu'à partir de Delphi 11 et FPC 3.2 ne les connaît pas - %s"
+
+msgid "directive %s - ancestors, descendants or the message dispatch share the signature"
+msgstr "directive %s - ancêtres, descendants ou la distribution des messages partagent la signature"
+
+msgid "end of the declaration of \"%s\" not found"
+msgstr "fin de la déclaration de « %s » introuvable"
+
+msgid "include file in the implementation part (line %d) - it may use the class name"
+msgstr "fichier include dans la partie implementation (ligne %d) - il peut utiliser le nom de la classe"
+
+msgid "include file in the routine (line %d) - it may use \"%s\""
+msgstr "fichier include dans la routine (ligne %d) - il peut utiliser « %s »"
+
+msgid "line %d carries %d \"raise Exception\" statements - ambiguous"
+msgstr "la ligne %d contient %d instructions \"raise Exception\" - ambigu"
+
+msgid "line %d declares \"%s\" again or uses it as a name (parameter, field, nested declaration)"
+msgstr "la ligne %d déclare à nouveau « %s » ou l'utilise comme nom (paramètre, champ, déclaration imbriquée)"
+
+msgid "no \"out\" parameter at the reported column"
+msgstr "aucun paramètre « out » à la colonne signalée"
+
+msgid "no \"raise Exception\" in the code of the reported line"
+msgstr "aucun \"raise Exception\" dans le code de la ligne signalée"
+
+msgid "no declaration \"%s = class\" on the reported line"
+msgstr "aucune déclaration « %s = class » sur la ligne signalée"
+
+msgid "no declaration follows the keyword"
+msgstr "aucune déclaration ne suit le mot-clé"
+
+msgid "no declaration of %s in a class of this file (record method, include?)"
+msgstr "aucune déclaration de %s dans une classe de ce fichier (méthode de record, include ?)"
+
+msgid "no declaration of the constant \"%s\" on the reported line"
+msgstr "aucune déclaration de la constante « %s » sur la ligne signalée"
+
+msgid "no previous \"%s\" section found"
+msgstr "aucune section « %s » précédente trouvée"
+
+msgid "no routine with the parameter \"%s\" begins on the reported line"
+msgstr "aucune routine avec le paramètre « %s » ne commence sur la ligne signalée"
+
+msgid "no ungrouped integer literal at the reported column"
+msgstr "aucun littéral entier non groupé à la colonne signalée"
+
+msgid "only \"const\" and \"var\" sections are merged, not \"%s\""
+msgstr "seules les sections « const » et « var » sont fusionnées, pas « %s »"
+
+msgid "operator - its signature is fixed"
+msgstr "opérateur - sa signature est imposée"
+
+msgid "parameter \"%s\" already carries \"%s\""
+msgstr "le paramètre « %s » porte déjà « %s »"
+
+msgid "parameter \"%s\" already starts with \"_\""
+msgstr "le paramètre « %s » commence déjà par « _ »"
+
+msgid "parameter \"%s\" is not declared as %s"
+msgstr "le paramètre « %s » n'est pas déclaré comme %s"
+
+msgid "parameter \"%s\" is passed to %s in line %d - it can be a var or out parameter there"
+msgstr "le paramètre « %s » est passé à %s à la ligne %d - il peut y être un paramètre var ou out"
+
+msgid "parameter \"%s\" is written in line %d"
+msgstr "le paramètre « %s » est modifié à la ligne %d"
+
+msgid "parameter \"%s\" occurs in the routine in line %d"
+msgstr "le paramètre « %s » apparaît dans la routine à la ligne %d"
+
+msgid "qualified use \".%s\" on line %d - it may name a member of another type"
+msgstr "utilisation qualifiée « .%s » à la ligne %d - elle peut désigner un membre d'un autre type"
+
+msgid "the address of parameter \"%s\" is taken in line %d"
+msgstr "l'adresse du paramètre « %s » est prise à la ligne %d"
+
+msgid "the bounds of the routine around \"%s\" are not safe to read"
+msgstr "les limites de la routine autour de « %s » ne sont pas lisibles de façon sûre"
+
+msgid "the bounds of the routine or its class are not safe to read"
+msgstr "les limites de la routine ou de sa classe ne sont pas lisibles de façon sûre"
+
+msgid "the class \"%s\" already carries the \"E\" prefix"
+msgstr "la classe « %s » porte déjà le préfixe « E »"
+
+msgid "the class implements %s - the method can be one of its members"
+msgstr "la classe implémente %s - la méthode peut être l'un de ses membres"
+
+msgid "the class is declared before \"implementation\" - other units may use its name"
+msgstr "la classe est déclarée avant « implementation » - d'autres unités peuvent utiliser son nom"
+
+msgid "the class name \"%s\" contains characters outside A-Z, a-z, 0-9 and \"_\" - the help cannot find every spelling of it"
+msgstr "le nom de classe « %s » contient des caractères hors de A-Z, a-z, 0-9 et « _ » - l'aide ne peut pas en trouver toutes les graphies"
+
+msgid "the constant \"%s\" is already written in UPPER_SNAKE_CASE"
+msgstr "la constante « %s » est déjà écrite en UPPER_SNAKE_CASE"
+
+msgid "the constant stands in the routine %s, the finding names %s"
+msgstr "la constante se trouve dans la routine %s, le résultat nomme %s"
+
+msgid "the declaration in line %d groups the parameter differently"
+msgstr "la déclaration à la ligne %d regroupe le paramètre autrement"
+
+msgid "the declaration of %s in line %d is not readable"
+msgstr "la déclaration de %s à la ligne %d n'est pas lisible"
+
+msgid "the declaration of %s is not in this file"
+msgstr "la déclaration de %s n'est pas dans ce fichier"
+
+msgid "the file carries an FPC switch or mode (line %d) - FPC 3.2 does not know digit separators"
+msgstr "le fichier contient un aiguillage ou un mode FPC (ligne %d) - FPC 3.2 ne connaît pas les séparateurs de chiffres"
+
+msgid "the file declares its own \"%s\" - it is not the class from SysUtils"
+msgstr "le fichier déclare son propre \"%s\" - ce n'est pas la classe de SysUtils"
+
+msgid "the file includes other files - they could declare %s"
+msgstr "le fichier inclut d'autres fichiers - ils pourraient déclarer %s"
+
+msgid "the file is no unit with an implementation part, program or library (include or script?) - only the compiler knows digit separators"
+msgstr "le fichier n'est ni une unité avec partie implementation, ni un programme, ni une bibliothèque (include ou script ?) - seul le compilateur connaît les séparateurs de chiffres"
+
+msgid "the header of %s is not safe to read"
+msgstr "l'en-tête de %s n'est pas lisible de façon sûre"
+
+msgid "the implementation of %s is not in this file"
+msgstr "l'implémentation de %s n'est pas dans ce fichier"
+
+msgid "the keyword stands in a statement block - an inline declaration, not a section"
+msgstr "le mot-clé se trouve dans un bloc d'instructions - une déclaration inline, pas une section"
+
+msgid "the line declares \"%s\" more than once"
+msgstr "la ligne déclare « %s » plus d'une fois"
+
+msgid "the literal is inside an asm block"
+msgstr "le littéral se trouve dans un bloc asm"
+
+msgid "the message does not name the constant and its routine"
+msgstr "le message ne nomme pas la constante et sa routine"
+
+msgid "the message does not name the exception class"
+msgstr "le message ne nomme pas la classe d'exception"
+
+msgid "the message names no parameter"
+msgstr "le message ne nomme aucun paramètre"
+
+msgid "the message names no parameter and type"
+msgstr "le message ne nomme ni paramètre ni type"
+
+msgid "the message names no section"
+msgstr "le message ne nomme aucune section"
+
+msgid "the method is visible outside the unit (not private, class in the interface section) - other units can use it as a method pointer"
+msgstr "la méthode est visible hors de l'unité (pas private, classe dans la section interface) - d'autres unités peuvent l'utiliser comme pointeur de méthode"
+
+msgid "the name \"%s\" already occurs in the code of the file"
+msgstr "le nom « %s » apparaît déjà dans le code du fichier"
+
+msgid "the name \"%s\" contains characters outside A-Z, a-z, 0-9 and \"_\" - UPPER_SNAKE_CASE cannot hold them"
+msgstr "le nom « %s » contient des caractères hors de A-Z, a-z, 0-9 et « _ » - UPPER_SNAKE_CASE ne peut pas les contenir"
+
+msgid "the new name \"%s\" is a reserved word"
+msgstr "le nouveau nom « %s » est un mot réservé"
+
+msgid "the new name \"%s\" would still not start with \"E\" and a capital letter"
+msgstr "le nouveau nom « %s » ne commencerait toujours pas par « E » suivi d'une majuscule"
+
+msgid "the number %s is a label (label section or goto)"
+msgstr "le nombre %s est une étiquette (section label ou goto)"
+
+msgid "the other header of %s has no matching \"out %s\""
+msgstr "l'autre en-tête de %s n'a pas de « out %s » correspondant"
+
+msgid "the parameter list belongs to a procedural type or an anonymous method - its signature is a contract"
+msgstr "la liste de paramètres appartient à un type procédural ou à une méthode anonyme - sa signature est un contrat"
+
+msgid "the parameter list is not readable"
+msgstr "la liste des paramètres n'est pas lisible"
+
+msgid "the parameter lists of the declaration in line %d and of the implementation differ"
+msgstr "les listes de paramètres de la déclaration à la ligne %d et de l'implémentation diffèrent"
+
+msgid "the previous section is \"class %s\""
+msgstr "la section précédente est « class %s »"
+
+msgid "the reported line does not start with \"%s\""
+msgstr "la ligne signalée ne commence pas par « %s »"
+
+msgid "the routine is declared in the interface section (line %d) - other units can use it as a procedure value"
+msgstr "la routine est déclarée dans la section interface (ligne %d) - d'autres unités peuvent l'utiliser comme valeur procédurale"
+
+msgid "untyped \"out\" parameter - \"var\" would mean something else"
+msgstr "paramètre « out » non typé - « var » signifierait autre chose"
+
+msgid "with statement before the use on line %d - \"%s\" could be a member of the with expression"
+msgstr "instruction with avant l'utilisation à la ligne %d - « %s » pourrait être un membre de l'expression with"
+
+msgid "with statement in the routine - a use of \"%s\" could be a member of the with expression"
+msgstr "instruction with dans la routine - une utilisation de « %s » pourrait être un membre de l'expression with"
+
+msgid "{$I} include in line %d - it can use or declare the routine"
+msgstr "include {$I} à la ligne %d - il peut utiliser ou déclarer la routine"
+
+msgid "{$I} include in line %d - it can use the routine as a value"
+msgstr "include {$I} à la ligne %d - il peut utiliser la routine comme valeur"

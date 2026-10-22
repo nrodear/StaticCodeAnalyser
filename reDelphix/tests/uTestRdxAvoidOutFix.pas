@@ -2,9 +2,10 @@ unit uTestRdxAvoidOutFix;
 
 // Editorhilfe SCA086 AvoidOut (uRdxAvoidOutFix): der Planer auf Text (erste
 // Fixture, FPC-tauglich) und der ECHTE Detektor (uAvoidOut) auf dem echten
-// AST mit dem Planer (zweite Fixture, nur Delphi). Die Tabelle
-// (uRdxFixTable) kennt die Hilfe erst nach der Integration - die Tests rufen
-// den Planer ohne sie. Die Spalte ist die des ersten 'out ' der Zeile.
+// AST ueber den Einstieg der Tabelle (TRdxFixTable.FixFor via PlanFixIn/
+// FixAllWith, Adapter PlanAvoidOut - Kennzeichnung und Hinweis nach dem Typ;
+// zweite Fixture, nur Delphi). Die Spalte ist die des ersten 'out ' der
+// Zeile.
 
 interface
 
@@ -49,6 +50,9 @@ type
     [Test] procedure Detector_Virtual_NoHelp;
     [Test] procedure Detector_InterfaceMethod_NoHelp;
     [Test] procedure Detector_StaleFinding_NoHelp;
+    // ---- Tabellenzeile (Kennzeichnung nach dem Typ) ----
+    [Test] procedure Table_PlainType_SameMeaning;
+    [Test] procedure Table_ManagedType_Marked;
   end;
 {$ENDIF}
 
@@ -59,7 +63,9 @@ uses
   {$IFNDEF FPC}
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uAvoidOut,
-  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
+  uRdxRecipeRunner,      // TRdxFixOutcome
+  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn,
+                         // FixAllWith
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxAvoidOutFix,
   uRdxText,              // _() und die gemeinsamen Gruende
@@ -420,50 +426,25 @@ begin
   Result := DetectSource('rdx_out_', ASource, fkAvoidOut, RunDetector);
 end;
 
-// Der Planer fuer einen Fund (Zeile und Meldung wie vom Detektor).
-function PlanSeen(const ASource: string; const ASeen: TSeen;
-  out APlan: TRdxOutPlan; out AReason: string): Boolean;
-var
-  SL  : TStringList;
-  Map : TRdxCodeMap;
+// Detect in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
 begin
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Result := TRdxAvoidOutFix.OutToVar(Map, ASeen.Line, ASeen.Msg, APlan,
-        AReason);
-    finally
-      Map.Free;
-    end;
-  finally
-    SL.Free;
-  end;
+  Result := DetectSource('rdx_out_', ASource, AKind, RunDetector);
+end;
+
+// Die Hilfe fuer einen Fund (Zeile und Meldung wie vom Detektor) ueber den
+// Einstieg der Tabelle (PlanFixIn: TRdxFixTable.FixFor, Adapter
+// PlanAvoidOut).
+function PlanSeen(const ASource: string; const ASeen: TSeen): TRdxFixOutcome;
+begin
+  Result := PlanFixIn(ASource, 't.pas', fkAvoidOut, ASeen);
 end;
 
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt.
+// schweigt (FixAllWith: ueber den Einstieg der Tabelle).
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass : Integer;
-  Seen : TArray<TSeen>;
-  P    : TRdxOutPlan;
-  R    : string;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    Seen := Detect(Result);
-    if Length(Seen) = 0 then
-      Exit;
-    Assert.IsTrue(PlanSeen(Result, Seen[0], P, R),
-      Format('Zeile %d: %s', [Seen[0].Line, R]));
-    Result := Apply(Result, P.Edits);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Result := FixAllWith(ASource, fkAvoidOut, DetectKind);
 end;
 
 procedure TTestRdxAvoidOutDetector.Detector_ReportsDeclAndImpl;
@@ -494,15 +475,15 @@ procedure TTestRdxAvoidOutDetector.Detector_ImplFinding_FixesBoth;
 var
   Src  : string;
   Seen : TArray<TSeen>;
-  P    : TRdxOutPlan;
-  R    : string;
+  O    : TRdxFixOutcome;
 begin
   Src := GetUnit('class', ['  public', '    procedure Get(out S: string);']);
   Seen := Detect(Src);
   Assert.AreEqual<Integer>(2, Length(Seen));
-  Assert.IsTrue(PlanSeen(Src, Seen[1], P, R), R);
+  O := PlanSeen(Src, Seen[1]);
+  Assert.IsTrue(O.Enabled, O.Reason);
   Assert.AreEqual(StringReplace(Src, 'out S', 'var S', [rfReplaceAll]),
-    Apply(Src, P.Edits));
+    Apply(Src, O.Edits));
 end;
 
 procedure TTestRdxAvoidOutDetector.Detector_CatalogExample_Fixed;
@@ -526,8 +507,7 @@ procedure TTestRdxAvoidOutDetector.Detector_Virtual_NoHelp;
 var
   Src  : string;
   Seen : TArray<TSeen>;
-  P    : TRdxOutPlan;
-  R    : string;
+  O    : TRdxFixOutcome;
 begin
   // virtual meldet der Detektor (nur override nimmt er aus) - die Hilfe
   // sperrt: Erben ueberschreiben die Signatur mit out.
@@ -535,40 +515,83 @@ begin
     '    procedure Get(out S: string); virtual;']);
   Seen := Detect(Src);
   Assert.AreEqual<Integer>(2, Length(Seen), 'der Detektor meldet');
-  Assert.IsFalse(PlanSeen(Src, Seen[0], P, R), 'keine Hilfe');
-  Assert.AreEqual(_(R_OUT_DIRECTIVE, ['Get', 'virtual']), R);
+  O := PlanSeen(Src, Seen[0]);
+  Assert.IsFalse(O.Enabled, 'keine Hilfe');
+  Assert.AreEqual(_(R_OUT_DIRECTIVE, ['Get', 'virtual']), O.Reason);
 end;
 
 procedure TTestRdxAvoidOutDetector.Detector_InterfaceMethod_NoHelp;
 var
   Src  : string;
   Seen : TArray<TSeen>;
-  P    : TRdxOutPlan;
-  R    : string;
+  O    : TRdxFixOutcome;
 begin
   Src := Join(['unit t;', 'interface', 'type', '  IFoo = interface',
     '    procedure Get(out S: string);', '  end;', 'implementation', 'end.']);
   Seen := Detect(Src);
   Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet');
-  Assert.IsFalse(PlanSeen(Src, Seen[0], P, R), 'keine Hilfe');
-  Assert.AreEqual(_(R_OUT_IN_TYPE, ['Get']), R);
+  O := PlanSeen(Src, Seen[0]);
+  Assert.IsFalse(O.Enabled, 'keine Hilfe');
+  Assert.AreEqual(_(R_OUT_IN_TYPE, ['Get']), O.Reason);
 end;
 
 procedure TTestRdxAvoidOutDetector.Detector_StaleFinding_NoHelp;
 var
   Src  : string;
   Seen : TArray<TSeen>;
-  P    : TRdxOutPlan;
-  R    : string;
+  O    : TRdxFixOutcome;
 begin
   // Der Fund stammt aus dem Text vor einer eingefuegten Zeile.
   Src := GetUnit('class', ['  public', '    procedure Get(out S: string);']);
   Seen := Detect(Src);
   Assert.IsTrue(Length(Seen) > 0);
   Src := StringReplace(Src, 'interface', 'interface'#13#10, []);
-  Assert.IsFalse(PlanSeen(Src, Seen[0], P, R), 'gesperrt');
-  Assert.AreEqual(MsgMovedSuffix(_(R_OUT_MOVED)), R);
-  Assert.AreEqual<Integer>(0, Length(P.Edits), 'keine Ersetzung');
+  O := PlanSeen(Src, Seen[0]);
+  Assert.IsFalse(O.Enabled, 'gesperrt');
+  Assert.AreEqual(MsgMovedSuffix(_(R_OUT_MOVED)), O.Reason);
+  Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+end;
+
+// Die Hilfe fuer den ersten Fund (die Deklaration) in ASource.
+function PlanFirst(const ASource: string): TRdxFixOutcome;
+var
+  Seen : TArray<TSeen>;
+begin
+  Seen := Detect(ASource);
+  Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet');
+  Result := PlanSeen(ASource, Seen[0]);
+end;
+
+procedure TTestRdxAvoidOutDetector.Table_PlainType_SameMeaning;
+var
+  O : TRdxFixOutcome;
+begin
+  // Integer: Delphi behandelt out wie var - bedeutungsgleich, der Hinweis
+  // des einfachen Typs (Adapter, HintByPlanner).
+  O := PlanFirst(ClassUnit('class', ['  public',
+    '    procedure Get(out N: Integer);'], ['procedure TFoo.Get(out N: Integer);',
+    'begin', '  N := 1;', 'end;']));
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual('N', O.Name, 'Name ist der Parameter');
+  Assert.IsFalse(O.ChangesBehavior, 'bedeutungsgleich');
+  Assert.AreEqual('gleiche Bedeutung - fuer diesen einfachen Typ behandelt '
+    + 'Delphi out wie var; Deklaration und Implementierung zusammen', O.Hint);
+  Assert.AreEqual<Integer>(2, Length(O.Edits), 'Deklaration und Rumpf');
+end;
+
+procedure TTestRdxAvoidOutDetector.Table_ManagedType_Marked;
+var
+  O : TRdxFixOutcome;
+begin
+  // string: out gab den Wert beim Aufruf frei - gekennzeichnet (E2), der
+  // Hinweis des verwalteten Typs.
+  O := PlanFirst(GetUnit('class', ['  public',
+    '    procedure Get(out S: string);']));
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual('S', O.Name, 'Name ist der Parameter');
+  Assert.IsTrue(O.ChangesBehavior, 'gekennzeichnet');
+  Assert.AreEqual<Integer>(1, Pos('out gab den Wert des Aufrufers beim '
+    + 'Aufruf frei', O.Hint), O.Hint);
 end;
 
 {$ENDIF}
