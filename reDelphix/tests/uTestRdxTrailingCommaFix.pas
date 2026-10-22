@@ -4,8 +4,8 @@ unit uTestRdxTrailingCommaFix;
 // ueberzaehlige Komma vor ')' faellt weg. Die Faelle auf Text laufen ohne
 // Parser und ohne Detektor; die Rundlaeufe mit dem echten Detektor
 // (Katalog-Beispiel, zwei Funde auf einer Zeile, fehlendes Argument)
-// stehen hinter {$IFNDEF FPC} (ueber TRdxFixTable.FixFor) und laufen nur
-// in reDelphix.Test.
+// stehen samt Adapter in einer eigenen Fixture hinter {$IFNDEF FPC}
+// (ueber TRdxFixTable.FixFor) und laufen nur in reDelphix.Test.
 // Die Text-Fixture laeuft auch im FPC-Pruefstand (build.sh): der Planer
 // ist seit der Folgewelle G09-07 ohne Delphi-only-uses (den Adapter traegt
 // uRdxFixTable), und der Pruefstand blendet seit der Folgewelle B3 die
@@ -36,13 +36,19 @@ type
     [Test] procedure Sca068_NoOpener_NoHelp;
     [Test] procedure Sca068_InCommentOrString_NoHelp;
     [Test] procedure Sca068_Moved_NoHelp;
-    {$IFNDEF FPC}
+  end;
+
+{$IFNDEF FPC}
+  // Rundlaeufe mit dem ECHTEN Detektor und der Adapter (nur Delphi).
+  [TestFixture]
+  TTestRdxTrailingCommaFixDetector = class
+  public
     [Test] procedure Sca068_Detector_CatalogExample;
     [Test] procedure Sca068_Detector_TwoOnOneLine;
     [Test] procedure Sca068_Detector_MissingArgument_NoHelp;
     [Test] procedure Sca068_Adapter_Outcome;
-    {$ENDIF}
   end;
+{$ENDIF}
 
 implementation
 
@@ -279,7 +285,7 @@ begin
     + Join(['end;', '', 'end.']);
 end;
 
-procedure TTestRdxTrailingCommaFix.Sca068_Detector_CatalogExample;
+procedure TTestRdxTrailingCommaFixDetector.Sca068_Detector_CatalogExample;
 var
   Meta : TRuleMeta;
 begin
@@ -293,7 +299,7 @@ begin
       Detect));
 end;
 
-procedure TTestRdxTrailingCommaFix.Sca068_Detector_TwoOnOneLine;
+procedure TTestRdxTrailingCommaFixDetector.Sca068_Detector_TwoOnOneLine;
 begin
   // Der Detektor meldet je Zeile nur das erste Komma; nach der Hilfe zeigt
   // er das zweite, und die Hilfe laeuft ein zweites Mal.
@@ -303,7 +309,7 @@ begin
     FixAllWith(InProc('  Foo(A,); Bar(B,);'), fkTrailingCommaArgList, Detect));
 end;
 
-procedure TTestRdxTrailingCommaFix.Sca068_Detector_MissingArgument_NoHelp;
+procedure TTestRdxTrailingCommaFixDetector.Sca068_Detector_MissingArgument_NoHelp;
 begin
   // Der Detektor meldet auch 'Foo(,)' - die Hilfe lehnt es ab.
   Assert.AreEqual<Integer>(1,
@@ -312,7 +318,7 @@ begin
     _(R_COMMA_NOARG), Detect);
 end;
 
-procedure TTestRdxTrailingCommaFix.Sca068_Adapter_Outcome;
+procedure TTestRdxTrailingCommaFixDetector.Sca068_Adapter_Outcome;
 var
   F  : TLeakFinding;
   O  : TRdxFixOutcome;
@@ -343,5 +349,8 @@ end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestRdxTrailingCommaFix);
+  {$IFNDEF FPC}
+  TDUnitX.RegisterTestFixture(TTestRdxTrailingCommaFixDetector);
+  {$ENDIF}
 
 end.
