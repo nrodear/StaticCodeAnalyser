@@ -74,7 +74,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxFormatSettingsFix,
   uRdxText,              // _() und die gemeinsamen Gruende (E29)
-  uTestRdxTextKit;       // Apply
+  uTestRdxTextKit;       // Apply, NewMap
 
 const
   CRLF = #13#10;
@@ -122,14 +122,10 @@ end;
 function PlanOn(const ASource: string; ALine: Integer; const AMessage: string;
   AAlt: Boolean; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
 begin
-  SL := TStringList.Create;
-  Map := nil;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
     if AAlt then
       Result := TRdxFormatSettingsFix.DateFormatInvariant(Map, ALine, AMessage,
         AEdit, AReason)
@@ -138,7 +134,6 @@ begin
         AEdit, AReason);
   finally
     Map.Free;
-    SL.Free;
   end;
 end;
 

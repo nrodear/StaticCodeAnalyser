@@ -75,7 +75,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxFloatEqualityFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply
+  uTestRdxTextKit;       // Join, Apply, NewMap
 
 const
   LINE = 6;   // erste Rumpfzeile von Wrap
@@ -101,25 +101,18 @@ end;
 function PlanAt(const ASource: string; ALine: Integer; const AMessage: string;
   out AReason: string): string;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
   E   : TRdxEdit;
   Ok  : Boolean;
 begin
   Result := '';
   AReason := '';
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Ok := TRdxFloatEqualityFix.ToleranceCompare(Map, ALine, AMessage, E,
-        AReason);
-    finally
-      Map.Free;
-    end;
+    Ok := TRdxFloatEqualityFix.ToleranceCompare(Map, ALine, AMessage, E,
+      AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
   if Ok then
     Result := Apply(ASource, E);
@@ -149,7 +142,6 @@ end;
 
 procedure TTestRdxFloatEqualityFix.Equal_BecomesSameValue;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
   E   : TRdxEdit;
   R   : string;
@@ -162,18 +154,12 @@ begin
     Applied(Wrap(['  if Ratio = Other then Work;']), LINE, 'Ratio', '=',
       'Other'));
   // Die Ersetzung reicht genau ueber den Vergleich.
-  SL := TStringList.Create;
+  Map := NewMap(Wrap(['  if Ratio = 0.5 then Work;']));
   try
-    SL.Text := Wrap(['  if Ratio = 0.5 then Work;']);
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Assert.IsTrue(TRdxFloatEqualityFix.ToleranceCompare(Map, LINE,
-        Msg('Ratio', '=', '0.5'), E, R), R);
-    finally
-      Map.Free;
-    end;
+    Assert.IsTrue(TRdxFloatEqualityFix.ToleranceCompare(Map, LINE,
+      Msg('Ratio', '=', '0.5'), E, R), R);
   finally
-    SL.Free;
+    Map.Free;
   end;
   Assert.AreEqual('Ratio = 0.5', E.Expected);
   Assert.AreEqual('SameValue(Ratio, 0.5)', E.NewText);

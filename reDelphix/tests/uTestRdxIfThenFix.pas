@@ -69,7 +69,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxIfThenFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply
+  uTestRdxTextKit;       // Join, Apply, NewMap
 
 const
   STMT_LINE = 8;   // erste Rumpfzeile von Wrap
@@ -97,24 +97,17 @@ end;
 function Plan(const ASource: string; ALine: Integer;
   out AReason: string): string;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
   E   : TRdxEdit;
   Ok  : Boolean;
 begin
   Result := '';
   AReason := '';
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Ok := TRdxIfThenFix.IfThenToIf(Map, ALine, MSG_131, E, AReason);
-    finally
-      Map.Free;
-    end;
+    Ok := TRdxIfThenFix.IfThenToIf(Map, ALine, MSG_131, E, AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
   if Ok then
     Result := Apply(ASource, E);

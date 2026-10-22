@@ -72,7 +72,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxDebugOutputFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply
+  uTestRdxTextKit;       // Join, Apply, NewMap
 
 const
   BODY = 6;   // erste Rumpfzeile von Wrap
@@ -97,7 +97,6 @@ end;
 function PlanWith(const ASource: string; ALine: Integer;
   const AMessage: string; ADelete: Boolean; out AReason: string): string;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
   E   : TRdxEdit;
   Ok  : Boolean;
@@ -105,21 +104,15 @@ begin
   Result := '';
   AReason := '';
   Ok := False;
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      if ADelete then
-        Ok := TRdxDebugOutputFix.DeleteCall(Map, ALine, AMessage, E, AReason)
-      else
-        Ok := TRdxDebugOutputFix.WrapInDebug(Map, ALine, AMessage, E,
-          AReason);
-    finally
-      Map.Free;
-    end;
+    if ADelete then
+      Ok := TRdxDebugOutputFix.DeleteCall(Map, ALine, AMessage, E, AReason)
+    else
+      Ok := TRdxDebugOutputFix.WrapInDebug(Map, ALine, AMessage, E,
+        AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
   if Ok then
     Result := Apply(ASource, E);

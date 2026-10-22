@@ -70,7 +70,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxMethodNameFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply, LineOf
+  uTestRdxTextKit;       // Join, Apply, LineOf, NewMap
 
 const
   // Die Meldung des Detektors (uMethodName), Name als Argument.
@@ -101,21 +101,14 @@ end;
 function PlanOf(const ASource: string; ALine: Integer; const AMessage: string;
   out APlan: TRdxMethodNamePlan; out AReason: string): Boolean;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
 begin
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Result := TRdxMethodNameFix.Capitalize(Map, ALine, AMessage, APlan,
-        AReason);
-    finally
-      Map.Free;
-    end;
+    Result := TRdxMethodNameFix.Capitalize(Map, ALine, AMessage, APlan,
+      AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
 end;
 

@@ -68,7 +68,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxDeepNestingFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply
+  uTestRdxTextKit;       // Join, Apply, NewMap
 
 const
   IF_LINE = 6;   // erste Rumpfzeile von Wrap
@@ -112,7 +112,6 @@ end;
 function PlanMsg(const ASource: string; ALine: Integer;
   const AMessage: string; out AReason: string): string;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
   E   : TRdxEdit;
   Ok  : Boolean;
@@ -120,17 +119,11 @@ begin
   Result := '';
   AReason := '';
   Ok := False;
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Ok := TRdxDeepNestingFix.GuardClause(Map, ALine, AMessage, E, AReason);
-    finally
-      Map.Free;
-    end;
+    Ok := TRdxDeepNestingFix.GuardClause(Map, ALine, AMessage, E, AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
   if Ok then
     Result := Apply(ASource, E);

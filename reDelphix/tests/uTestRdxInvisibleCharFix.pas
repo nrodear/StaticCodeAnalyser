@@ -64,7 +64,7 @@ uses
   System.SysUtils, System.Classes,
   uRdxBufferMath, uRdxCodeMap, uRdxCharEscapeFix,
   uRdxText,          // _(), MsgMovedSuffix, MsgCheckByHand (E29)
-  uTestRdxTextKit    // Apply
+  uTestRdxTextKit    // Apply, NewMap
 {$IFNDEF FPC}
   , System.IOUtils, System.Generics.Collections,
   uMethodd12, uSCAConsts, uSourceEncoding,
@@ -131,20 +131,16 @@ end;
 function PlanEdit(const ASource: string; ALine: Integer; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
-  SL    : TStringList;
   Map   : TRdxCodeMap;
   OldCp : Integer;
 begin
   OldCp := Utf8CodePage;
-  SL := TStringList.Create;
   Map := nil;
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
+    Map := NewMap(ASource);
     Result := TRdxCharEscapeFix.InvisibleChar(Map, ALine, '', AEdit, AReason);
   finally
     Map.Free;
-    SL.Free;
     RestoreCodePage(OldCp);
   end;
 end;

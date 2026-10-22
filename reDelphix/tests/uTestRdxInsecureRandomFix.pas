@@ -72,7 +72,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxInsecureRandomFix,
   uRdxText,              // _() und die gemeinsamen Gruende (E29)
-  uTestRdxTextKit;       // Join, Apply, LineOf
+  uTestRdxTextKit;       // Join, Apply, LineOf, NewMap
 
 const
   // Kopf und eine Routine mit Random - die meisten Faelle haengen an.
@@ -102,22 +102,17 @@ end;
 function FixAt(const ASource: string; ALine: Integer; const ACall: string;
   out AReason: string): string;
 var
-  SL   : TStringList;
   Map  : TRdxCodeMap;
   Edit : TRdxEdit;
 begin
   Result := '';
-  SL := TStringList.Create;
-  Map := nil;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
     if TRdxInsecureRandomFix.AddRandomize(Map, ALine, MsgFor(ACall), Edit,
          AReason) then
       Result := Apply(ASource, Edit);
   finally
     Map.Free;
-    SL.Free;
   end;
 end;
 

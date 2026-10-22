@@ -69,7 +69,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxAvoidOutFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply, LineOf
+  uTestRdxTextKit;       // Join, Apply, LineOf, NewMap
 
 // ---- Helfer ----
 
@@ -121,21 +121,14 @@ end;
 function PlanAt(const ASource: string; ALine, ACol: Integer;
   out APlan: TRdxOutPlan; out AReason: string): Boolean;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
 begin
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Result := TRdxAvoidOutFix.OutToVar(Map, ALine, MessageAt(ACol), APlan,
-        AReason);
-    finally
-      Map.Free;
-    end;
+    Result := TRdxAvoidOutFix.OutToVar(Map, ALine, MessageAt(ACol), APlan,
+      AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
 end;
 

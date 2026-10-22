@@ -73,7 +73,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxIntegerOverflowFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply
+  uTestRdxTextKit;       // Join, Apply, NewMap
 
 const
   // Die Meldung des Detektors (uIntegerOverflow): Ziel, linker, rechter
@@ -103,21 +103,14 @@ end;
 function PlanOf(const ASource: string; ALine: Integer; const AMessage: string;
   out APlan: TRdxOverflowPlan; out AReason: string): Boolean;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
 begin
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Result := TRdxIntegerOverflowFix.CastLeft(Map, ALine, AMessage, APlan,
-        AReason);
-    finally
-      Map.Free;
-    end;
+    Result := TRdxIntegerOverflowFix.CastLeft(Map, ALine, AMessage, APlan,
+      AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
 end;
 

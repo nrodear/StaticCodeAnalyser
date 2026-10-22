@@ -73,7 +73,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxMoveSizeFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply
+  uTestRdxTextKit;       // Join, Apply, NewMap
 
 const
   LINE = 6;   // erste Rumpfzeile von Wrap
@@ -97,24 +97,17 @@ end;
 function PlanAt(const ASource: string; ALine: Integer; const AMessage: string;
   out AReason: string): string;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
   E   : TRdxEdit;
   Ok  : Boolean;
 begin
   Result := '';
   AReason := '';
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Ok := TRdxMoveSizeFix.PointeeSize(Map, ALine, AMessage, E, AReason);
-    finally
-      Map.Free;
-    end;
+    Ok := TRdxMoveSizeFix.PointeeSize(Map, ALine, AMessage, E, AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
   if Ok then
     Result := Apply(ASource, E);
@@ -143,22 +136,15 @@ end;
 function OperandsAt(const ASource: string; ALine: Integer;
   const ARoutine, APtr: string): TArray<TRdxSizeOperand>;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
   R   : string;
 begin
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Assert.IsTrue(TRdxMoveSizeFix.Operands(Map, ALine, Msg(ARoutine, APtr),
-        Result, R), R);
-    finally
-      Map.Free;
-    end;
+    Assert.IsTrue(TRdxMoveSizeFix.Operands(Map, ALine, Msg(ARoutine, APtr),
+      Result, R), R);
   finally
-    SL.Free;
+    Map.Free;
   end;
 end;
 
@@ -166,7 +152,6 @@ end;
 
 procedure TTestRdxMoveSizeFix.Move_BecomesTargetSize;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
   E   : TRdxEdit;
   R   : string;
@@ -178,18 +163,12 @@ begin
     Applied(Wrap(['  Move(Src^, V, SizeOf(PByte));']), LINE, 'Move',
       'PByte'));
   // Die Ersetzung ist genau der Zeigertyp.
-  SL := TStringList.Create;
+  Map := NewMap(Wrap(['  Move(Src^, Dst^, SizeOf(PInteger));']));
   try
-    SL.Text := Wrap(['  Move(Src^, Dst^, SizeOf(PInteger));']);
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Assert.IsTrue(TRdxMoveSizeFix.PointeeSize(Map, LINE,
-        Msg('Move', 'PInteger'), E, R), R);
-    finally
-      Map.Free;
-    end;
+    Assert.IsTrue(TRdxMoveSizeFix.PointeeSize(Map, LINE,
+      Msg('Move', 'PInteger'), E, R), R);
   finally
-    SL.Free;
+    Map.Free;
   end;
   Assert.AreEqual('PInteger', E.Expected);
   Assert.AreEqual('Integer', E.NewText);

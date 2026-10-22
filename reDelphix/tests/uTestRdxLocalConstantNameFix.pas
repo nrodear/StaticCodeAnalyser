@@ -70,7 +70,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxLocalConstantNameFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply
+  uTestRdxTextKit;       // Join, Apply, NewMap
 
 const
   DECL_LINE = 6;   // Zeile der Konstante in den Fixtures
@@ -99,24 +99,17 @@ function PlanWith(const ASource: string; ALine: Integer;
   const AMessage: string; out AReason: string;
   out APlan: TRdxLocalConstantNamePlan): string;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
   Ok  : Boolean;
 begin
   Result := '';
   AReason := '';
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Ok := TRdxLocalConstantNameFix.RenameConstant(Map, ALine, AMessage,
-        APlan, AReason);
-    finally
-      Map.Free;
-    end;
+    Ok := TRdxLocalConstantNameFix.RenameConstant(Map, ALine, AMessage,
+      APlan, AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
   if Ok then
     Result := Apply(ASource, APlan.Edits);

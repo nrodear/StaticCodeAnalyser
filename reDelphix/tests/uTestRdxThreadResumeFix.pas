@@ -72,7 +72,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxThreadResumeFix,
   uRdxText,              // _() und die gemeinsamen Gruende (E29)
-  uTestRdxTextKit;       // Join, Apply, LineOf
+  uTestRdxTextKit;       // Join, Apply, LineOf, NewMap
 
 // ---- Helfer ----
 
@@ -123,22 +123,17 @@ end;
 function FixAt(const ASource: string; ALine: Integer; const AName: string;
   out AReason: string): string;
 var
-  SL   : TStringList;
   Map  : TRdxCodeMap;
   Edit : TRdxEdit;
 begin
   Result := '';
-  SL := TStringList.Create;
-  Map := nil;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
     if TRdxThreadResumeFix.ResumeToStart(Map, ALine, MsgFor(AName), Edit,
          AReason) then
       Result := Apply(ASource, Edit);
   finally
     Map.Free;
-    SL.Free;
   end;
 end;
 
