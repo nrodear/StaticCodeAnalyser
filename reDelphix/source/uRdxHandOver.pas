@@ -394,7 +394,11 @@ end;
 // ('TList<TFoo>', 'TDictionary<string, TList<TFoo>>'): dazwischen nur
 // Woerter, '.', ',' und weitere spitze Klammern, hoechstens
 // MAX_TARGET_TOKENS Token; Low = '' sonst - ein Vergleich 'A > (X)' hat
-// keine solche '<' davor. MatchClose zaehlt nur vorwaerts.
+// keine solche '<' davor. MatchClose zaehlt nur vorwaerts. Bewusst nicht
+// uRdxCodeMap.OpenAngleBefore (Folgewelle des Wochen-Reviews geprueft):
+// die Fassung fuer Deklarationen liest auch ';', ':' und '&'
+// ('TGen<T: class; U>') und hat keine Obergrenze - in einem Ausdruck liefe
+// sie ueber das ';' in die Anweisung davor.
 function GenericOpener(AMap: TRdxCodeMap; const AClose: TRdxToken): TRdxToken;
 var
   T     : TRdxToken;

@@ -299,11 +299,6 @@ const
   // Die Unit der Spruenge Exit/Break/Continue ('System.Exit'; in Klassen mit
   // einem eigenen Exit - TMonitor - steht es so in den Delphi-Quellen).
   SYSTEM_UNIT = 'system';
-  // Was ausser Woertern in einer Typparameterliste steht ('TFoo<A, B>',
-  // 'TGen<T: class; U: IFoo<T>>', '&Name') - DeclAt liest rueckwaerts nur
-  // diese Token (OpenAngleBefore).
-  TYPE_PARAM_TOKENS: array[0..6] of string = ('<', '>', ',', ';', ':', '.',
-    '&');
   // Der Lauf von AtUnitLevel (R5-06, nach dem Muster
   // uRdxSqlTemplate.BuildScopes): offene Bloecke je ein Zeichen - Typ mit
   // Rumpf, Record (sein 'case' hat kein eigenes end), Code (begin, try,
@@ -472,37 +467,14 @@ begin
   Result.Map := AMap;
 end;
 
-// Rueckwaerts ab AClose ('>' der Typparameter 'TFoo<A, B>') die passende
-// '<'; Low = '' ohne. Gelesen werden nur Token, die in einer
-// Typparameterliste stehen koennen - Woerter und TYPE_PARAM_TOKENS, auch das
-// ';' zwischen Gruppen mit Einschraenkung ('TGen<T: class; U>'); jedes andere
-// Token und der Dateianfang beenden die Suche ohne Treffer. Bis zur
-// Nachpruefung R5-07 brach sie an jedem ';' ab: ein Kopf 'TGen<T: class; U>
-// = class' fehlte im Index, ein solcher Vorfahr galt als nicht in der Unit -
-// die Sperren Delegation (SCA096) und abstrakt (SCA097) sahen ihn nicht, und
-// seine Methoden lehnte die Hilfe mit "nicht in dieser Unit" ab.
-function OpenAngleBefore(AMap: TRdxCodeMap; const AClose: TRdxToken): TRdxToken;
-var
-  T     : TRdxToken;
-  Depth : Integer;
-begin
-  Result := Default(TRdxToken);
-  if AClose.Low <> '>' then Exit;
-  T := AClose;
-  Depth := 0;
-  while T.IsWord or InList(T.Low, TYPE_PARAM_TOKENS) do
-  begin
-    if T.Low = '>' then
-      Inc(Depth)
-    else if T.Low = '<' then
-    begin
-      Dec(Depth);
-      if Depth = 0 then
-        Exit(T);
-    end;
-    T := Before(AMap, T);
-  end;
-end;
+// OpenAngleBefore (uRdxCodeMap) liest rueckwaerts zur '<' der
+// Typparameter - auch ueber das ';' zwischen Gruppen mit Einschraenkung
+// ('TGen<T: class; U>'). Bis zur Nachpruefung R5-07 brach die Suche an
+// jedem ';' ab: ein Kopf 'TGen<T: class; U> = class' fehlte im Index, ein
+// solcher Vorfahr galt als nicht in der Unit - die Sperren Delegation
+// (SCA096) und abstrakt (SCA097) sahen ihn nicht, und seine Methoden lehnte
+// die Hilfe mit "nicht in dieser Unit" ab. Bis zur Folgewelle des
+// Wochen-Reviews stand hier eine gleiche Kopie samt TYPE_PARAM_TOKENS.
 
 // Die Deklaration, deren '=' AEq ist: der Name davor - hinter '<..>' der
 // Name vor der '<' -, das Token davor und die Art (KindAfterName prueft

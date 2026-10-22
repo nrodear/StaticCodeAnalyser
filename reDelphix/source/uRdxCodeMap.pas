@@ -376,8 +376,11 @@ function AfterClose(AMap: TRdxCodeMap; const AOpen: TRdxToken): TRdxToken;
 // '<', '>', ',', ';', ':', '.', '&' ('TGen<T: class; U: IFoo<T>>'); jedes
 // andere Token und der Dateianfang beenden die Suche ohne Treffer. Das
 // Gegenstueck zu MatchClose fuer '<'. Seit Review Woche G05-17 hier
-// (DeclaresAfter); dieselbe Regel steht als eigene Kopie in
-// uRdxResultFixes (DeclAt).
+// (DeclaresAfter), seit der Folgewelle des Wochen-Reviews auch fuer
+// uRdxResultFixes.DeclAt (bis dahin eine gleiche Kopie). Fuer Ausdruecke
+// gilt uRdxHandOver.GenericOpener: dort beenden ';', ':' und '&' die Suche
+// (ein ';' trennt Anweisungen, keine Typparameter-Gruppen), und sie liest
+// hoechstens MAX_TARGET_TOKENS Token.
 function OpenAngleBefore(AMap: TRdxCodeMap; const AClose: TRdxToken): TRdxToken;
 // Klammertiefe eines Tokens: '(' und '[' +1, ')' und ']' -1, sonst 0 -
 // beide Klammerarten gemeinsam ('<' und '>' nicht: ob Vergleich oder
@@ -577,7 +580,7 @@ const
   MARKER_SUPPRESS = 'noinspection';
   // Was ausser Woertern in einer Typparameterliste steht ('TFoo<A, B>',
   // 'TGen<T: class; U: IFoo<T>>', '&Name') - OpenAngleBefore liest
-  // rueckwaerts nur diese Token (wie uRdxResultFixes.TYPE_PARAM_TOKENS).
+  // rueckwaerts nur diese Token.
   TYPE_PARAM_TOKENS: array[0..6] of string = ('<', '>', ',', ';', ':', '.',
     '&');
 
