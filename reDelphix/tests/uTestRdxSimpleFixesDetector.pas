@@ -126,8 +126,10 @@ type
     // ---- SCA168 ----
     [Test] procedure Sca168_RoundTrip;
     [Test] procedure Sca168_Raise_AddsUses;
-    [Test] procedure Sca168_FpcFile_NoRaise;
+    [Test] procedure Sca168_FpcFile_Raise_ShortUses;
     [Test] procedure Sca168_CatalogExample;
+    // 2026-10-22: die Klasse, die eine Hilfe schreibt, gibt es in der RTL.
+    [Test] procedure RaisedClasses_ExistInRtl;
     // Gegen-Review 2026-10-10.
     [Test] procedure Sca168_LastArmIf_RoundTrip;
     [Test] procedure Sca007_StaleFinding_NoHelp;
@@ -217,6 +219,7 @@ uses
   uUnusedUses, uDefaultCaseInCaseStatement, uBeginEndRequired, uIfElseBegin,
   uSuperfluousSemicolon, uUnitLevelKeywordIndent, uLegacyInitializationSection,
   uCastAndFree, uEmptyMethod, uMissingRaise, uReRaiseException, uRdxRaiseFixes,
+  uRdxStructFixes,   // RAISE_UNHANDLED (RaisedClasses_ExistInRtl)
   uPublicMemberWithoutDoc, uInterfaceGuid, uMissingOverride, uRdxDeclFixes,
   uRedundantConditional, uRedundantJump, uSelfAssignment,
   uEngineApi, uRdxBufferMath, uRdxRecipeRunner,
@@ -1239,7 +1242,7 @@ var
   Seen       : TArray<TSeen>;
   O          : TRdxFixOutcome;
 begin
-  // Ohne SysUtils: die uses-Ergaenzung kommt mit (EProgrammerError).
+  // Ohne SysUtils: die uses-Ergaenzung kommt mit (EInvalidOpException).
   Src := Join(['unit t;', 'interface', 'implementation', 'procedure P(X: Integer);',
     'begin', '  case X of', '    1: Exit;', '  end;', 'end;', 'end.']);
   Seen := Detect(Src, fkDefaultCaseInCaseStatement);
@@ -1249,29 +1252,37 @@ begin
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.IsTrue(O.ChangesBehavior, 'Kennzeichnung (aendert Verhalten)');
   After := Apply(Src, O.Edits);
-  Assert.IsTrue(Pos('raise EProgrammerError.Create(', After) > 0, After);
+  Assert.IsTrue(Pos('raise EInvalidOpException.Create(', After) > 0, After);
   Assert.AreEqual<Integer>(1, CountOf('SysUtils', After), After);
   Assert.AreEqual<Integer>(0, Length(Detect(After, fkDefaultCaseInCaseStatement)),
     'der Detektor schweigt');
 end;
 
-procedure TTestRdxSimpleFixesDetector4.Sca168_FpcFile_NoRaise;
+procedure TTestRdxSimpleFixesDetector4.Sca168_FpcFile_Raise_ShortUses;
 var
   Src    : string;
+  After  : string;
   Seen   : TArray<TSeen>;
   O      : TRdxFixOutcome;
   Edits  : TArray<TRdxEdit>;
   Reason : string;
 begin
+  // EInvalidOpException steht auch in SysUtils von FPC 3.2.2: die
+  // raise-Variante gilt in FPC-Dateien, die uses-Ergaenzung nimmt den
+  // Kurznamen (FPC 3.2 kennt keine Unit-Scopes). Bis 2026-10-22 sperrte
+  // EProgrammerError (gibt es in keiner RTL) die Variante hier.
   Src := Join(['unit t;', '{$mode delphi}', 'interface', 'implementation',
     'procedure P(X: Integer);', 'begin', '  case X of', '    1: Exit;', '  end;',
     'end;', 'end.']);
   Seen := Detect(Src, fkDefaultCaseInCaseStatement);
   Assert.AreEqual<Integer>(1, Length(Seen));
   O := PlanAltFix(Src, fkDefaultCaseInCaseStatement, Seen[0]);
-  Assert.AreEqual<Integer>(1, O.Variant, 'der Eintrag steht da - gesperrt');
-  Assert.IsFalse(O.Enabled);
-  Assert.IsTrue(Pos('EProgrammerError', O.Reason) > 0, O.Reason);
+  Assert.AreEqual<Integer>(1, O.Variant, 'zweiter Eintrag');
+  Assert.IsTrue(O.Enabled, O.Reason);
+  After := Apply(Src, O.Edits);
+  Assert.IsTrue(Pos('raise EInvalidOpException.Create(', After) > 0, After);
+  Assert.AreEqual<Integer>(1, CountOf('SysUtils', After), After);
+  Assert.AreEqual<Integer>(0, Pos('System.SysUtils', After), After);
   // Das leere else bleibt auch in FPC-Dateien verfuegbar.
   Assert.IsTrue(PlanFix(Src, fkDefaultCaseInCaseStatement, Seen[0], Edits,
     Reason), Reason);
@@ -1288,7 +1299,7 @@ begin
   // leere Hilfe schreibt das else, die zweite das raise; danach schweigt
   // der Detektor.
   Meta := TRuleCatalog.GetRuleCanonical(fkDefaultCaseInCaseStatement);
-  Assert.IsTrue(Pos('raise EProgrammerError.Create(', Meta.GoodExample) > 0,
+  Assert.IsTrue(Pos('raise EInvalidOpException.Create(', Meta.GoodExample) > 0,
     Meta.GoodExample);
   Bad := InRoutine(Snip(Meta.BadExample));
   Assert.AreEqual(StringReplace(Bad, #13#10'  end;', #13#10'  else'#13#10'  end;',
@@ -1365,6 +1376,48 @@ begin
   Assert.AreEqual<Integer>(0, PlanAltFix(Format(UNIT_007,
     ['uses System.Classes;']), fkUnusedUses, Seen).Variant,
     'nur SCA168 und SCA020 haben einen zweiten Eintrag');
+end;
+
+// Die Klasse hinter 'raise ' bis zum ersten Punkt; '' ohne beides.
+function RaisedClass(const ATemplate: string): string;
+var
+  P, Q : Integer;
+begin
+  Result := '';
+  P := Pos('raise ', ATemplate);
+  Q := Pos('.', ATemplate);
+  if (P > 0) and (Q > P + Length('raise ')) then
+    Result := Copy(ATemplate, P + Length('raise '),
+      Q - P - Length('raise '));
+end;
+
+// Die Klassen, die eine Hilfe in Nutzercode schreibt, gibt es in
+// System.SysUtils von Delphi 12 und 13 und in SysUtils von FPC 3.2.2
+// (2026-10-22: SCA168 schrieb EProgrammerError - die Klasse gibt es in
+// keiner RTL, nach dem Klick kompilierte der Code nicht, E2003). Die
+// Positivliste ist aus den RTL-Quellen abgeschrieben (System.SysUtils.pas
+// Zeilen 468-597, FPC sysutilh.inc); eine neue Klasse erst dort
+// nachsehen, dann hier eintragen.
+procedure TTestRdxSimpleFixesDetector4.RaisedClasses_ExistInRtl;
+const
+  RTL_CLASSES: array[0..4] of string = ('EArgumentException',
+    'EArgumentOutOfRangeException', 'EInvalidOpException', 'ENotImplemented',
+    'ENotSupportedException');
+  TEMPLATES: array[0..1] of string = (RAISE_UNHANDLED, RAISE_NOT_IMPLEMENTED);
+var
+  Template, Cls, Known : string;
+  Found                : Boolean;
+begin
+  for Template in TEMPLATES do
+  begin
+    Cls := RaisedClass(Template);
+    Found := False;
+    for Known in RTL_CLASSES do
+      if SameText(Known, Cls) then
+        Found := True;
+    Assert.IsTrue(Found, Format('%s schreibt "%s" - nicht in der Positivliste',
+      [Template, Cls]));
+  end;
 end;
 
 { ---- SCA101 / SCA099 ---- }

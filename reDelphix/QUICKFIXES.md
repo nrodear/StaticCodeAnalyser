@@ -2545,7 +2545,7 @@ end;
 
 **Wirkung (Eintrag 1):** Setzt ein leeres `else` vor das `end` des case – bedeutungsgleich (alle anderen Werte: nichts tun, wie bisher). Steht das `end` allein auf der Zeile, kommt das `else` in eine eigene Zeile mit derselben Einrückung; endet der letzte Arm nicht auf `;`, setzt die Hilfe es mit.
 
-**Wirkung (Eintrag 2):** Setzt `else raise EProgrammerError.Create('Unhandled case');` vor das `end`, die raise-Zeile eingerückt wie die Arme; fehlt `System.SysUtils`, kommt es in uses.
+**Wirkung (Eintrag 2):** Setzt `else raise EInvalidOpException.Create('Unhandled case');` vor das `end`, die raise-Zeile eingerückt wie die Arme; fehlt `System.SysUtils`, kommt es in uses (in Dateien mit FPC-Weiche oder FPC-Modus als `SysUtils` – FPC 3.2.2 kennt die Klasse ebenfalls).
 
 **Nicht angeboten**
 
@@ -2554,7 +2554,7 @@ end;
 - ein case ohne Zweige, zwei `case` auf der Zeile
 - ein case, das keine Anweisung ist: der Variantenteil eines Records (ein verschobener Fund) oder ein case ohne umschließenden Block (Fragment)
 - eine offene `(` vor dem case mit einer Direktive dazwischen – ein Zweig kann sie offen lassen, die Lage ist unklar
-- Eintrag 2: in Dateien mit FPC-Weiche oder FPC-Modus (FPC kennt EProgrammerError nicht)
+- Eintrag 2: dieselben Sperren wie der erste Eintrag
 
 **Beispiel (Eintrag 1)**
 
@@ -2585,7 +2585,7 @@ Nachher:
   case X of
     1: A;
   else
-    raise EProgrammerError.Create('Unhandled case');
+    raise EInvalidOpException.Create('Unhandled case');
   end;
 ```
 

@@ -2091,8 +2091,8 @@ const
       BadEx    : 'case Status of' + #13#10 + '  stNew    : DoNew;' + #13#10 + '  stActive : DoActive;' +
         #13#10 + 'end;';
       GoodEx   : 'case Status of' + #13#10 + '  stNew    : DoNew;' + #13#10 + '  stActive : DoActive;' +
-        #13#10 + 'else' + #13#10 + '  raise EProgrammerError.Create(''Unhandled status'');' + #13#10 +
-        'end;';
+        #13#10 + 'else' + #13#10 + '  raise EInvalidOpException.Create(''Unhandled status'');' +
+        #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: True

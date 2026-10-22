@@ -3433,7 +3433,7 @@
       "editorHelp": true,
       "examples": {
         "bad":  "case Status of\n  stNew    : DoNew;\n  stActive : DoActive;\nend;",
-        "good": "case Status of\n  stNew    : DoNew;\n  stActive : DoActive;\nelse\n  raise EProgrammerError.Create('Unhandled status');\nend;"
+        "good": "case Status of\n  stNew    : DoNew;\n  stActive : DoActive;\nelse\n  raise EInvalidOpException.Create('Unhandled status');\nend;"
       },
       "cleanCodeAttribute": "COMPLETE",
       "impacts": [

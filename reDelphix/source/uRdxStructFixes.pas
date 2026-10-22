@@ -22,10 +22,16 @@ uses
   uRdxBufferMath, uRdxCodeMap;
 
 const
-  // Die raise-Variante von SCA168 (Katalog-Beispiel). EProgrammerError
-  // steht in System.SysUtils; FPC kennt die Klasse nicht - der Aufrufer
-  // sperrt die Variante dort.
-  RAISE_UNHANDLED = 'raise EProgrammerError.Create(''Unhandled case'');';
+  // Die raise-Variante von SCA168 (Katalog-Beispiel). EInvalidOpException
+  // steht in System.SysUtils (Delphi 12 und 13 Zeile 476) und in SysUtils
+  // von FPC 3.2.2 (sysutilh.inc) - die Hilfe gilt deshalb auch in Dateien
+  // mit FPC-Weiche. Bis 2026-10-22 stand hier
+  // EProgrammerError: die Klasse gibt es in keiner RTL (nur
+  // EProgrammerNotFound), der Klick brach den Bau (E2003). Eine
+  // EArgumentException-Unterklasse waere enger und finge sich in
+  // 'on E: EArgumentException' - ein unbehandelter Wert ist aber kein
+  // falsches Argument, sondern ein Zustand, den das case nicht vorsieht.
+  RAISE_UNHANDLED = 'raise EInvalidOpException.Create(''Unhandled case'');';
 
 type
   // Eine uses-Klausel: die Eintraege (TSourcePlaces.UsesEntries, in
@@ -38,7 +44,7 @@ type
   // Die Planer an Strukturen ueber mehrere Token oder Zeilen (SCA007,
   // SCA168, SCA101/SCA099) und ihre geteilten Bausteine (StartsStatementAt,
   // ElseBelongsToIf): reine Textlogik auf der Code-Sicht. Die uses-Eintraege,
-  // die FPC-Weiche und die uses-Ergaenzung fuer EProgrammerError liefert
+  // die FPC-Weiche und die uses-Ergaenzung fuer EInvalidOpException liefert
   // bzw. prueft der Aufrufer (uRdxFixRunner: TRdxFixRunner.UnusedUsesFix
   // bzw. CaseRaiseFix).
   TRdxStructFixes = class
