@@ -13,6 +13,10 @@ unit uTestRdxFreeGatesDetector;
 //     (Pool), ein fremder Zeigertyp nach Namenskonvention (PEVP_PKEY).
 //   * SCA139: Zeiger-Alias der Unit (missed R2(4)/R3(2)), fremder
 //     P-Typ, const-Parameter (R2-03) - ein var-Parameter bleibt Hilfe.
+//     Einen const-Parameter meldet der Detektor seit 2026-10-22 nicht mehr
+//     (lokale Kopie wie ohne Modifier); die Sperre der Hilfe bleibt fuer
+//     Funde aus aelteren Laeufen (Baseline, SARIF) und wird mit einem
+//     nachgebildeten Fund geprueft (AssertConstParamNoHelp).
 //   * SCA147/SCA164 auf einem Netzpfad lesen keine Form-/Include-Dateien
 //     (R2-07).
 //   * Pin (missed R2(3)): ein Unit-Global, das wie ein geerbtes Member
@@ -149,6 +153,26 @@ begin
   Assert.Fail('Zeile fehlt: ' + AText);
 end;
 
+// SCA139 auf 'ABucket.Free;' eines const-Parameters: der Detektor meldet ihn
+// nicht (mehr), die Hilfe lehnt einen Fund aus einem aelteren Lauf ab - der
+// Fund wird deshalb nachgebildet (Zeile und Meldung wie der Detektor sie
+// bis 2026-10-22 schrieb).
+procedure AssertConstParamNoHelp(const ASource: string);
+var
+  S : TSeen;
+  O : TRdxFixOutcome;
+begin
+  Assert.AreEqual<Integer>(0, Length(Detect(ASource, fkFreeWithoutNil)),
+    'der Detektor meldet einen const-Parameter nicht');
+  S := Default(TSeen);
+  S.Line := LineOfOrFail(ASource, 'ABucket.Free;');
+  S.Msg := 'ABucket.Free without subsequent ABucket := nil - prefer ' +
+    'FreeAndNil(ABucket)';
+  O := PlanFixIn(ASource, 't.pas', fkFreeWithoutNil, S);
+  Assert.IsFalse(O.Enabled, 'keine Hilfe');
+  Assert.IsTrue(Pos('const-Parameter', O.Reason) > 0, O.Reason);
+end;
+
 // Attrappe fuer GetDriveType in der Netzpfad-Regel (uRdxPaths): nur Q: ist
 // ein Netzlaufwerk.
 function FakeRemoteDrive(const ADrive: string): Boolean;
@@ -251,8 +275,7 @@ begin
   // doublecmd us3client.pas:616 ('procedure TS3Buckets.add(const bucket:
   // TS3Bucket); .. bucket.Free;'): FPC 'Can''t assign values to const
   // variable', Delphi bis 10.3 E2197; ab 10.4 nur die lokale Kopie nil.
-  AssertNoHelp(BucketsUnit('const ABucket'), fkFreeWithoutNil,
-    'const-Parameter');
+  AssertConstParamNoHelp(BucketsUnit('const ABucket'));
 end;
 
 procedure TTestRdxFreeGatesDetector.Sca139_VarParam_Helps;
@@ -359,9 +382,8 @@ procedure TTestRdxFreeGatesDetector.Sca139_ConstParam_AttributeOnHeadLine_NoHelp
 begin
   // gprobe C21: ein Attribut vor dem Kopf auf DERSELBEN Zeile - die Zeile
   // galt nicht als Kopf, FreeAndNil(ABucket) blieb die Hilfe.
-  AssertNoHelp(StringReplace(BucketsUnit('const ABucket'),
-    'procedure TBuckets.Add(', '[Weak] procedure TBuckets.Add(', []),
-    fkFreeWithoutNil, 'const-Parameter');
+  AssertConstParamNoHelp(StringReplace(BucketsUnit('const ABucket'),
+    'procedure TBuckets.Add(', '[Weak] procedure TBuckets.Add(', []));
 end;
 
 procedure TTestRdxFreeGatesDetector.Sca147_Win32NamespacePaths;

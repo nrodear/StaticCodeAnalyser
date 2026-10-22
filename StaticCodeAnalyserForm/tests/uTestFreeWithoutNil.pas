@@ -65,6 +65,13 @@ type
     [Test] procedure Methode_FreeVorRaise_Gemeldet;
     [Test] procedure TearDown_BeideFelder_Gemeldet;
     [Test] procedure TearDown_LocalAmEnde_NichtGemeldet;
+    // Korpus-Stichprobe 2026-10-22: die vier FP-Klassen der Erweiterung
+    [Test] procedure FreieRoutine_GlobalAmEnde_NichtGemeldet;
+    [Test] procedure FreieRoutine_GlobalVorRaise_Gemeldet;
+    [Test] procedure ConstParam_NichtGemeldet;
+    [Test] procedure VarUndOutParam_Gemeldet;
+    [Test] procedure InlineConst_NichtGemeldet;
+    [Test] procedure BeforeDestruction_NichtGemeldet;
   end;
 
 implementation
@@ -1243,6 +1250,131 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
     'eine lokale Variable faellt mit der Methode aus dem Scope');
+  finally F.Free; end;
+end;
+
+{ ---- Korpus-Stichprobe 2026-10-22: FP-Klassen der Erweiterung ---------- }
+//
+// 30 zufaellige Adds aus realworld+Lazarus: 15 echt, 13 FP. Je Klasse ein
+// Fall; ohne die zugehoerige Aenderung jeweils rot (1 bzw. 2 statt 0).
+// Die beiden Waechter (GlobalVorRaise, VarUndOutParam) sind es nicht.
+
+procedure TTestFreeWithoutNilLetzterAufruf.FreieRoutine_GlobalAmEnde_NichtGemeldet;
+// Finalisierungs-Helfer (Alcinoe ALRttiFinalization, doublecmd Finish,
+// xEdit-Skripte 'Finalize'): ein globales Objekt am Ende einer freien
+// Routine - die Ausnahme "letzter Aufruf" gilt dort weiter.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Finish;'#13#10 +
+  'begin'#13#10 +
+  '  GCache.Clear;'#13#10 +
+  '  GCodecs.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'freie Routine, globales Objekt am Ende - kein Feld, kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.FreieRoutine_GlobalVorRaise_Gemeldet;
+// WAECHTER: vor einem raise schuetzt "letzter Aufruf" auch in der freien
+// Routine nicht - das Programm laeuft weiter, das Global haengt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure LoadAll;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    DoLoad;'#13#10 +
+  '  except'#13#10 +
+  '    GCache.Free;'#13#10 +
+  '    raise;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'Free vor raise - das Global bleibt haengend');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.ConstParam_NichtGemeldet;
+// delphimvcframework Render(const ACollection ..): der Parser legt
+// 'const ACollection' als Namen ab - der Parameter-Skip griff nie. Ein
+// const-Parameter ist eine lokale Kopie wie einer ohne Modifier.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Fill(const AList: TList; constref ARef: TList);'#13#10 +
+  'begin'#13#10 +
+  '  AList.Free;'#13#10 +
+  '  ARef.Free;'#13#10 +
+  '  DoLog;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'const/constref-Parameter sind lokale Kopien');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.VarUndOutParam_Gemeldet;
+// WAECHTER: var/out sind die Variable des Aufrufers - sie haengt nach dem
+// Free, FreeAndNil hilft dort wirklich.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Fill(var AObj: TObject; out AOut: TObject);'#13#10 +
+  'begin'#13#10 +
+  '  AObj.Free;'#13#10 +
+  '  AOut.Free;'#13#10 +
+  '  DoLog;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'var/out bleiben Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.InlineConst_NichtGemeldet;
+// Inno Setup Setup.ScriptRunner: 'const ProcNos = TPSList.Create;' - eine
+// Inline-Konstante faellt mit der Methode aus dem Scope.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Run;'#13#10 +
+  'begin'#13#10 +
+  '  const ProcNos = TList.Create;'#13#10 +
+  '  try'#13#10 +
+  '    DoRun(ProcNos);'#13#10 +
+  '  finally'#13#10 +
+  '    ProcNos.Free;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'Inline-Konstante ist lokal');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.BeforeDestruction_NichtGemeldet;
+// JVCL JvID3v2Base: BeforeDestruction laeuft direkt vor dem Destruktor.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFrame.BeforeDestruction;'#13#10 +
+  'begin'#13#10 +
+  '  inherited BeforeDestruction;'#13#10 +
+  '  FList.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'die Instanz stirbt wie im Destruktor');
   finally F.Free; end;
 end;
 
