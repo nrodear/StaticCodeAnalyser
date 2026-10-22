@@ -50,6 +50,7 @@ uses
   uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner,
   uRdxFixTable, uRdxKeywordCaseFix,
   uTestRdxDetectorKit,   // TSeen, DetectSource
+  uRdxText,              // MsgNoFileOpen (MapFix, E29)
   uTestRdxTextKit;       // Join, Apply
 
 const
@@ -446,7 +447,8 @@ begin
     Finding.Free;
   end;
   Assert.IsFalse(O.Enabled);
-  Assert.AreEqual(R_NO_FILE, O.Reason);
+  // MapFix (uRdxFixRunner): seit E29 (G6) MsgNoFileOpen, nicht R_NO_FILE.
+  Assert.AreEqual(MsgNoFileOpen, O.Reason);
 end;
 
 { ---- echter Detektor ---- }

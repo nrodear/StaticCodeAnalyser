@@ -10,7 +10,10 @@ unit uTestRdxFormatGuards;
 // gegen BuildFormatCall waren gegen den Stand 4358b769 rot (402 Zeichen in
 // einem Literal; P + FOffset angeboten), die Split_*-Tests pruefen den neuen
 // Baustein. Gezaehlt wird hier unabhaengig von ihm: zerlegt an ' + '
-// ausserhalb von Quotes, dekodiert mit DecodeLiteral.
+// ausserhalb von Quotes, dekodiert mit DecodeLiteral. Dazu die Kennung
+// TRdxFormatBuild.NoOperand (E29, Gruppe G6): auf sie verzweigt
+// uRdxRecipeRunner.BuildReasonOf statt auf den deutschen Grund - geprueft
+// in en und de.
 
 interface
 
@@ -40,6 +43,10 @@ type
     // die Laenge zaehlt vorsichtig nach UTF-8.
     [Test] procedure Format_SelfAppend_PointerFirst_Allowed;
     [Test] procedure Split_Utf8Widths;
+    // E29 (c_groups 2.6): eine Kette nur aus Literalen traegt NoOperand und
+    // den Grund MsgNoOperandInChain - in en wie in de; scheitert der einzige
+    // Operand vorher, bleibt die Kennung aus (der Grund ist ein anderer).
+    [Test] procedure Format_OnlyLiterals_NoOperandFlag;
   end;
 
 implementation
@@ -47,6 +54,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRefactorInfo, uRdxRecipes,
+  uRdxText,            // SetRdxLanguageOverride, MsgNoOperandInChain
   uTestRdxTextKit;     // JoinWith (Joined)
 
 const
@@ -368,6 +376,47 @@ begin
   Assert.AreEqual('''' + StringOfChar('a', 253) + ''' + #$4E2D',
     SplitLongLiteral('''' + StringOfChar('a', 253) + '''#$4E2D'),
     '#-Code nach seinem Wert');
+end;
+
+{ ---- E29: Kennung statt Text (c_groups 2.6) ---- }
+
+procedure TTestRdxFormatGuards.Format_OnlyLiterals_NoOperandFlag;
+const
+  LANGS: array[0..1] of string = ('en', 'de');
+var
+  B        : TRdxFormatBuild;
+  Old      : string;
+  Expected : string;
+  i        : Integer;
+begin
+  // Bis E29 fragte BuildReasonOf Pos('kein Operand', Grund) - mit dem
+  // uebersetzten Grund fiele das in en/fr still aus. Die Kennung haengt an
+  // derselben Bedingung wie der Grund, in jeder Sprache.
+  Old := RdxLanguageOverride;
+  try
+    for i := 0 to High(LANGS) do
+    begin
+      SetRdxLanguageOverride(LANGS[i]);
+      Expected := MsgNoOperandInChain;
+      Assert.IsFalse(TRdxRecipes.BuildFormatCall([Lit('''a'''), Lit('''b''')],
+        B, '', csChainHead), LANGS[i] + ': nur Literale');
+      Assert.IsTrue(B.NoOperand, LANGS[i] + ': ' + B.Reason);
+      Assert.AreEqual(Expected, B.Reason, LANGS[i]);
+      // Der einzige Operand hat keine Operandenform: Operands bleibt 0, der
+      // Grund ist "kein einfacher Operand" - keine Kennung.
+      Assert.IsFalse(TRdxRecipes.BuildFormatCall([Lit('''a'''),
+        Op('(x + 1)', rvUnknown)], B, '', csChainHead), LANGS[i]);
+      Assert.AreEqual<Integer>(0, B.Operands, LANGS[i] + ': Operands');
+      Assert.IsFalse(B.NoOperand, LANGS[i] + ': ' + B.Reason);
+      // Angeboten: keine Kennung.
+      Assert.IsTrue(TRdxRecipes.BuildFormatCall([Lit('''a'''),
+        Op('S', rvString, 'string')], B, '', csChainHead),
+        LANGS[i] + ': ' + B.Reason);
+      Assert.IsFalse(B.NoOperand, LANGS[i] + ': angeboten');
+    end;
+  finally
+    SetRdxLanguageOverride(Old);
+  end;
 end;
 
 initialization
