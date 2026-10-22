@@ -113,7 +113,12 @@ type
 // Die Stelle (ALine, ACol) als TRdxTextPos.
 function TextPos(ALine, ACol: Integer): TRdxTextPos;
 
-// Gemeinsamer Baustein (Charge H3, "loeschen und aufraeumen"): den Text von
+// Der Baustein der beiden Planer dieser Unit (Charge H3, "loeschen und
+// aufraeumen"); oeffentlich nur fuer die Tests (uTestRdxCleanupFixes) -
+// ein anderer Planer bindet diese Unit nicht ein (Kopf von uRdxBlocks).
+// Braucht ihn ein zweiter, gehoert er samt LinesCut/IndentCut/TailCut/
+// JoinCut nach uRdxBlocks (Review Woche G07-07; bis dahin hiess er hier
+// "gemeinsamer Baustein"). Den Text von
 // AFrom bis vor ATo loeschen und die Zeilen aufraeumen -
 //   * vor AFrom und hinter ATo nur Leerraum: die ganzen Zeilen samt
 //     Zeilenende (endet ATo am Zeilenanfang, bleibt dessen Zeile ganz);
@@ -211,15 +216,18 @@ type
   end;
 
   // Ein Kommentar der Datei.
+  // Die Namen der Schliesser-Felder unterscheiden sich nicht nur im Suffix
+  // (bis zur Review Woche G07-08 Close/Closer/Closed - 'Close' las sich
+  // wie ein Verb, 'G.Close.Line > R2' wie eine Flag-Pruefung).
   TRdxComment = record
-    Open      : TRdxTextPos;   // erstes Zeichen des Oeffners
-    Body      : TRdxTextPos;   // erstes Zeichen hinter dem Oeffner
-    Close     : TRdxTextPos;   // erstes Zeichen des Schliessers ('//': Zeilenende)
-    Stop      : TRdxTextPos;   // hinter dem Schliesser
-    Closer    : string;        // '}' bzw. '*)', '' bei '//'
-    Directive : Boolean;       // '{$' bzw. '(*$'
-    Doc       : Boolean;       // '///', '{*', '(**' - Dokumentation
-    Closed    : Boolean;       // False: offen bis zum Dateiende
+    Open       : TRdxTextPos;   // erstes Zeichen des Oeffners
+    Body       : TRdxTextPos;   // erstes Zeichen hinter dem Oeffner
+    CloseAt    : TRdxTextPos;   // erstes Zeichen des Schliessers ('//': Zeilenende)
+    Stop       : TRdxTextPos;   // hinter dem Schliesser
+    CloserText : string;        // '}' bzw. '*)', '' bei '//'
+    Directive  : Boolean;       // '{$' bzw. '(*$'
+    Doc        : Boolean;       // '///', '{*', '(**' - Dokumentation
+    IsClosed   : Boolean;       // False: offen bis zum Dateiende
   end;
 
   TRdxCommentList = array of TRdxComment;
@@ -298,9 +306,12 @@ end;
 
 { ---- CutEdit: loeschen und aufraeumen ---- }
 
-// Die zweite Haelfte eines UTF-16-Surrogatpaars? (Zweite Kopie neben
-// uRdxTryFixes.IsSecondHalf - die Zusammenlegung der geteilten Helfer ist
-// eine eigene Charge.)
+// Die zweite Haelfte eines UTF-16-Surrogatpaars? Dieselbe Frage steht noch
+// als uRdxTryFixes.IsSecondHalf und uRdxRecipes.IsLowSurrogateCh (die
+// Bereiche dazu in uTestRdxCleanupScope.SplitsPair) - drei Kopien; die
+// Zusammenlegung nach uRdxCodeMap fasst Units anderer Planer an und ist
+// eine eigene Charge (Review Woche G07-01; bis dahin nannte dieser
+// Kommentar nur die Kopie in uRdxTryFixes).
 function IsLowSurrogate(C: Char): Boolean;
 begin
   Result := (Ord(C) >= LOW_SURROGATE_FIRST) and (Ord(C) <= LOW_SURROGATE_LAST);
@@ -528,21 +539,21 @@ var
   Li, P : Integer;
 begin
   Li := AComment.Body.Line;
-  P := Pos(AComment.Closer, AMap.Raw(Li), AComment.Body.Col);
+  P := Pos(AComment.CloserText, AMap.Raw(Li), AComment.Body.Col);
   while (P = 0) and (Li < AMap.LineCount) do
   begin
     Inc(Li);
-    P := Pos(AComment.Closer, AMap.Raw(Li));
+    P := Pos(AComment.CloserText, AMap.Raw(Li));
   end;
   if P = 0 then
   begin
-    AComment.Close := TextPos(Li, Length(AMap.Raw(Li)) + 1);
-    AComment.Stop := AComment.Close;
+    AComment.CloseAt := TextPos(Li, Length(AMap.Raw(Li)) + 1);
+    AComment.Stop := AComment.CloseAt;
     Exit;
   end;
-  AComment.Close := TextPos(Li, P);
-  AComment.Stop := TextPos(Li, P + Length(AComment.Closer));
-  AComment.Closed := True;
+  AComment.CloseAt := TextPos(Li, P);
+  AComment.Stop := TextPos(Li, P + Length(AComment.CloserText));
+  AComment.IsClosed := True;
 end;
 
 // Der Kommentar, der an (ALine, ACol) beginnt; False, wenn dort kein
@@ -559,29 +570,29 @@ begin
   if Copy(L, ACol, 2) = '//' then
   begin
     AComment.Body := TextPos(ALine, ACol + 2);
-    AComment.Close := TextPos(ALine, Length(L) + 1);
-    AComment.Stop := AComment.Close;
-    AComment.Closed := True;
+    AComment.CloseAt := TextPos(ALine, Length(L) + 1);
+    AComment.Stop := AComment.CloseAt;
+    AComment.IsClosed := True;
     AComment.Doc := Copy(L, ACol, 3) = '///';
     Exit;
   end;
   if Copy(L, ACol, 1) = '{' then
-    AComment.Closer := '}'
+    AComment.CloserText := '}'
   else if Copy(L, ACol, 2) = '(*' then
-    AComment.Closer := '*)'
+    AComment.CloserText := '*)'
   else
     Exit(False);
-  AComment.Body := TextPos(ALine, ACol + Length(AComment.Closer));
+  AComment.Body := TextPos(ALine, ACol + Length(AComment.CloserText));
   AComment.Directive := Copy(L, AComment.Body.Col, 1) = '$';
   FindCloser(AMap, AComment);
   // '{*' ist die Doku der CnPack-Quellen ('{* Kommentar zur Deklaration
   // darueber }' - Korpus: 24 Funde in cnwizards, Prosa mit 'function' und
   // 'begin' darin); '(**' ohne '(**)' ist PasDoc.
-  if AComment.Closer = '}' then
+  if AComment.CloserText = '}' then
     AComment.Doc := Copy(L, AComment.Body.Col, 1) = '*'
   else
     AComment.Doc := (Copy(L, AComment.Body.Col, 1) = '*')
-      and PosBefore(AComment.Body, AComment.Close);
+      and PosBefore(AComment.Body, AComment.CloseAt);
 end;
 
 procedure AddComment(var AList: TRdxCommentList; const AComment: TRdxComment);
@@ -622,7 +633,7 @@ begin
         Exit(Format('Kommentar an Zeile %d Spalte %d nicht lesbar', [Li, Co]));
       if PosBefore(From, C.Stop) then
         AddComment(AList, C);
-      if not C.Closed then
+      if not C.IsClosed then
         Exit;
       Li := C.Stop.Line;
       Co := C.Stop.Col;
@@ -659,7 +670,7 @@ begin
     if C.Doc then
       Exit(Format('Doku-Kommentar (///, {* bzw. (**, Zeile %d) - sein '
         + 'Beispielcode bleibt', [C.Open.Line]));
-    if not C.Closed then
+    if not C.IsClosed then
       Exit('Kommentar ohne Ende bis zum Dateiende');
   end;
   if PrevToken(AMap, AList[0].Open.Line, AList[0].Open.Col).Low = '' then
@@ -712,7 +723,7 @@ var
   A, B : Integer;
 begin
   Result := '';
-  if (ALine < AComment.Body.Line) or (ALine > AComment.Close.Line) then
+  if (ALine < AComment.Body.Line) or (ALine > AComment.CloseAt.Line) then
     Exit;
   A := 1;
   if ALine = AComment.Body.Line then
@@ -720,8 +731,8 @@ begin
   if A < AFrom then
     A := AFrom;
   B := Length(AMap.Raw(ALine)) + 1;
-  if ALine = AComment.Close.Line then
-    B := AComment.Close.Col;
+  if ALine = AComment.CloseAt.Line then
+    B := AComment.CloseAt.Col;
   Result := Copy(AMap.Raw(ALine), A, B - A);
 end;
 
@@ -767,7 +778,7 @@ end;
 // Leerraum, der Zeilenanfang (die Zeile bleibt ganz).
 function CloserStart(AMap: TRdxCodeMap; const AComment: TRdxComment): TRdxTextPos;
 begin
-  Result := AComment.Close;
+  Result := AComment.CloseAt;
   if SkipBlanks(AMap.Raw(Result.Line), 1) >= Result.Col then
     Result.Col := 1;
 end;
@@ -788,8 +799,8 @@ begin
   G := AList[High(AList)];
   KeepFront := (F.Open.Line < ARegion.First)
     and not BlankText(AMap, F.Body, TextPos(ARegion.First, 1));
-  KeepBack := (G.Close.Line > ARegion.Last)
-    and not BlankText(AMap, TextPos(ARegion.Last + 1, 1), G.Close);
+  KeepBack := (G.CloseAt.Line > ARegion.Last)
+    and not BlankText(AMap, TextPos(ARegion.Last + 1, 1), G.CloseAt);
   AFrom := F.Open;
   ATo := G.Stop;
   if (Length(AList) > 1) and (KeepFront or KeepBack) then
@@ -881,8 +892,11 @@ begin
     Prev := T;
     T := After(AMap, T);
   end;
+  // Der Name aus der Meldung kommt als Argument, nicht ins Muster - so
+  // bleibt '%d-mal "%s"' eine msgid (Vertrag von OneTokenReason; bis zur
+  // Review Woche G07-09 stand er im Muster).
   Result := OneTokenReason(ALine, n, Format('kein "%s"', [AKey]),
-    Format('%%d-mal "%s"', [AKey]));
+    '%d-mal "%s"', AKey);
 end;
 
 // Die Namensgruppe um ADecl.Name ('A, X, B'): erster und letzter Name,
@@ -921,8 +935,11 @@ end;
 
 // Ein Token des Typs auf oberster Klammerebene: Initialisierer, absolute,
 // Typ ueber mehrere Zeilen oder ein Wort, das in keinem Typ steht? '' oder
-// der Grund.
-function TypeTokenReason(const T, APrev: TRdxToken): string;
+// der Grund. 'procedure of object' und 'class of TFoo' stehen auf einer
+// Zeile - 'object' hinter 'of' und 'class' vor 'of' oeffnen keinen
+// Typrumpf (bis zur Review Woche G07-10 lehnte die Hilfe beide mit 'Typ
+// ueber mehrere Zeilen' ab).
+function TypeTokenReason(AMap: TRdxCodeMap; const T, APrev: TRdxToken): string;
 begin
   Result := '';
   if (T.Low = '=') or (T.Low = ':=') then
@@ -931,6 +948,9 @@ begin
     Exit
   else if T.Low = 'absolute' then
     Result := 'absolute-Variable - sie liegt auf dem Speicher einer anderen'
+  else if ((T.Low = 'object') and (APrev.Low = 'of'))
+     or ((T.Low = 'class') and (After(AMap, T).Low = 'of')) then
+    Exit
   else if InList(T.Low, MULTI_LINE_TYPES) then
     Result := Format('Typ mit "%s" (ueber mehrere Zeilen) - von Hand loeschen',
       [T.Low])
@@ -957,7 +977,7 @@ begin
       Exit('Klammer ohne Gegenstueck im Typ');
     if Depth = 0 then
     begin
-      Result := TypeTokenReason(T, Prev);
+      Result := TypeTokenReason(AMap, T, Prev);
       if Result <> '' then
         Exit;
       if T.Low = ';' then
@@ -1160,8 +1180,19 @@ begin
   if Before(AMap, ADecl.VarTok).Low = 'class' then
     Exit('class var - ein Klassenfeld, keine lokale Variable');
   ADecl.InBlock := InsideBlock(AMap, ADecl.VarTok, ADecl.Stop);
+  // Endet die Suche an case, asm oder record (BlockStep, rsStop), steht
+  // davor meist der Variantenteil eines lokalen Records: sein case hat
+  // kein eigenes end, die Bilanz zaehlt das end des Records zum case und
+  // trifft das record auf Tiefe 0 (SectionStep kennt case darum nicht).
+  // Das sperrt - mit diesem Grund; bis zur Review Woche G07-10 hiess es
+  // 'globale Variable?', obwohl die Variable lokal war.
   if ADecl.InBlock and (ADecl.Lead.Low <> 'var') then
     Result := 'Deklaration hinter ";" in einem Anweisungsblock - unklar'
+  else if not ADecl.InBlock and InList(ADecl.Stop.Low, BLOCK_PAIRS) then
+    Result := Format('die Suche nach der Routine endet an "%s" (Zeile %d) - '
+      + 'etwa der Variantenteil eines lokalen Records, dessen case kein '
+      + 'eigenes end hat; wozu die Deklaration gehoert, ist unklar - keine '
+      + 'Hilfe', [ADecl.Stop.Low, ADecl.Stop.Line])
   else if not ADecl.InBlock and not InList(ADecl.Stop.Low, ROUTINE_WORDS) then
     Result := 'keine Routine um die Deklaration (globale Variable?) - keine '
       + 'Hilfe';
@@ -1353,7 +1384,12 @@ end;
 
 // Ein FPC-Makro irgendwo in der Datei, das den Namen einsetzt ('{$DEFINE M
 // := X}' vor der Routine, M im Rumpf)? Die Durchsicht des
-// Gueltigkeitsbereichs sieht nur M. '' oder der Grund.
+// Gueltigkeitsbereichs sieht nur M. '' oder der Grund. Die Spalten liest
+// nur eine Zeile, die ein Wort aus MACRO_WORDS nennt (HasWordNoCase, wie
+// die Vorfilter aus Review R3-03): '{$DEFINE' traegt es als Wort ('$'
+// davor ist kein Bezeichnerzeichen). Bis zur Review Woche G07-02 lief die
+// Frage je SCA053-Fund ueber jedes Zeichen der Datei - im IDE-Hauptthread,
+// beim Aufbau des Menues.
 function MacroReason(AMap: TRdxCodeMap; const AKey: string): string;
 var
   Li, Co : Integer;
@@ -1362,6 +1398,10 @@ var
 begin
   Result := '';
   for Li := 1 to AMap.LineCount do
+  begin
+    if not HasWordNoCase(AMap.Raw(Li), MACRO_WORDS[0])
+       and not HasWordNoCase(AMap.Raw(Li), MACRO_WORDS[1]) then
+      Continue;
     for Co := 1 to Length(AMap.Raw(Li)) do
       if OpensDirective(AMap, Li, Co)
          and InList(DirectiveWord(AMap, Li, Co, Arg), MACRO_WORDS) then
@@ -1371,6 +1411,7 @@ begin
           Exit(Format('ein Makro setzt "%s" ein ({$DEFINE ... := ...} in Zeile '
             + '%d) - die Hilfe sieht seine Verwendung nicht', [AKey, Li]));
       end;
+  end;
 end;
 
 // Der Gueltigkeitsbereich: inline vom var bis zum end seines Blocks, sonst
@@ -1409,23 +1450,29 @@ end;
 // Ein 'class operator Initialize/Finalize' in der Unit (Delphi 10.4:
 // verwaltete Records)? Dann fuehrt eine Variable dieses Typs Code aus,
 // auch ungenutzt (Waechter-Idiom). Ein solcher Typ aus einer anderen Unit
-// ist im Text nicht erkennbar - Restrisiko. '' oder der Grund.
+// ist im Text nicht erkennbar - Restrisiko. '' oder der Grund. Nur die
+// Token der Zeilen, die 'operator' nennen (NextTokenOnLineWith, wie
+// uRdxFlowFixes.DeclaresAssignOperator seit Charge FC) - der Name dahinter
+// darf auf der Folgezeile stehen, After liest ihn dort. Bis zur Review
+// Woche G07-02 las die Frage je SCA053-Fund jedes Token der Datei.
 function ManagedRecordReason(AMap: TRdxCodeMap): string;
+const
+  KW_OPERATOR = 'operator';
 var
   T, N : TRdxToken;
 begin
   Result := '';
-  T := NextToken(AMap, 1, 1);
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), KW_OPERATOR);
   while T.Low <> '' do
   begin
-    if T.Low = 'operator' then
+    if T.Low = KW_OPERATOR then
     begin
       N := After(AMap, T);
       if (N.Low = 'initialize') or (N.Low = 'finalize') then
         Exit('die Unit deklariert einen class operator Initialize/Finalize '
           + '(verwalteter Record) - eine Variable kann Code ausfuehren');
     end;
-    T := After(AMap, T);
+    T := NextTokenOnLineWith(AMap, T, KW_OPERATOR);
   end;
 end;
 
