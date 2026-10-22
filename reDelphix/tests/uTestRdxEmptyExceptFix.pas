@@ -3,12 +3,12 @@ unit uTestRdxEmptyExceptFix;
 // Editorhilfe SCA002 EmptyExcept (uRdxEmptyExceptFix): ein leerer except-
 // Block bekommt ein 'raise;'. Die Faelle auf Text laufen ohne Parser und ohne
 // Detektor; der Adapter und die Rundlaeufe mit dem echten Detektor
-// (uCodeSmells2, ueber TRdxFixTable.FixFor) stehen hinter {$IFNDEF FPC}.
-// Nur Delphi (reDelphix.Test).
-// Der Planer ist seit der Folgewelle G09-07 ohne Delphi-only-uses (den
-// Adapter traegt uRdxFixTable); die Unit steht trotzdem nicht im
-// FPC-Pruefstand (build.sh) - dessen Runner kennt die {$IFNDEF FPC}-
-// Weichen nicht, sie sind heute ohne Wirkung.
+// (uCodeSmells2, ueber TRdxFixTable.FixFor) stehen hinter {$IFNDEF FPC}
+// und laufen nur in reDelphix.Test.
+// Die Text-Fixture laeuft auch im FPC-Pruefstand (build.sh): der Planer
+// ist seit der Folgewelle G09-07 ohne Delphi-only-uses (den Adapter traegt
+// uRdxFixTable), und der Pruefstand blendet seit der Folgewelle B3 die
+// {$IFNDEF FPC}-Teile aus.
 // Prueft: neue Zeile unter except (Einrueckstufe aus dem try-Rumpf, Tabs,
 // Fallback), inline hinter except, Gross-/Kleinschreibung, Leerzeilen - und
 // die Sperren: Kommentar, Direktive, Handler/Anweisung/';' im Block,
@@ -57,8 +57,9 @@ uses
   uAstNode, uMethodd12, uRuleCatalog, uCodeSmells2, uRdxRecipeRunner,
   uRdxFixTable,
   uTestRdxDetectorKit,   // TSeen, CatalogText, DetectSource
+  uSCAConsts,            // TFindingKind, fk* (nur die Detektor-Fixture)
   {$ENDIF}
-  uSCAConsts, uRdxBufferMath, uRdxCodeMap, uRdxEmptyExceptFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxEmptyExceptFix,
   uRdxText,              // _() und die gemeinsamen Gruende (E29)
   uTestRdxTextKit;       // Join, Apply, LineOf
 

@@ -5,11 +5,11 @@ unit uTestRdxCategoryArgFix;
 // Parser und ohne Detektor; die Rundlaeufe mit dem ECHTEN Detektor
 // (TAttributeCategoryWithoutStringDetector) ueber die Tabelle
 // (TRdxFixTable.FixFor, Adapter PlanCategoryArg) stehen in einer
-// eigenen Fixture hinter {$IFNDEF FPC}. Nur Delphi (reDelphix.Test): der
-// Planer ist seit der Folgewelle G09-07 ohne Delphi-only-uses, die Unit
-// steht trotzdem nicht im FPC-Pruefstand (build.sh) - dessen Runner kennt
-// die Weichen nicht und nimmt keine zwei Fixtures je Unit; sie sind heute
-// ohne Wirkung.
+// eigenen Fixture hinter {$IFNDEF FPC}. Die Text-Fixture laeuft auch im
+// FPC-Pruefstand (build.sh): der Planer ist seit der Folgewelle G09-07
+// ohne Delphi-only-uses, und der Pruefstand blendet seit der Folgewelle B3
+// die {$IFNDEF FPC}-Teile aus - die Detektor-Fixture laeuft nur in
+// reDelphix.Test.
 // Prueft: Hilfe mit Schreibweise und Blanks, gestapelte Attribute,
 // Kommentar dahinter, der Bereich, und die Sperren - verschobene Zeile,
 // Kommentar, Argument/Liste, weiterer Code auf der Zeile, kein Anker,
@@ -60,8 +60,9 @@ uses
   uRdxRecipeRunner,      // TRdxFixOutcome
   uRdxFixTable,          // TRdxFixTable.FixFor
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
+  uSCAConsts,            // TFindingKind, fk* (nur die Detektor-Fixture)
   {$ENDIF}
-  uSCAConsts, uRdxBufferMath, uRdxCodeMap, uRdxCategoryArgFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxCategoryArgFix,
   uRdxText,              // _() und die gemeinsamen Gruende (E29)
   uTestRdxTextKit;       // Join, Apply
 

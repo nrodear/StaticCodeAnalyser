@@ -3,12 +3,12 @@ unit uTestRdxParensFix;
 // Editorhilfe SCA094 RedundantParentheses (uRdxParensFix): '((X))' -> '(X)'.
 // Die Faelle auf Text laufen ohne Parser und ohne Detektor; die Rundlaeufe
 // mit dem echten Detektor (Katalog-Beispiel, Aufruf mit Bezeichner) stehen
-// hinter {$IFNDEF FPC} (ueber TRdxFixTable.FixFor). Nur Delphi
-// (reDelphix.Test).
-// Der Planer ist seit der Folgewelle G09-07 ohne Delphi-only-uses (den
-// Adapter traegt uRdxFixTable); die Unit steht trotzdem nicht im
-// FPC-Pruefstand (build.sh) - dessen Runner kennt die {$IFNDEF FPC}-
-// Weichen nicht, sie sind heute ohne Wirkung.
+// hinter {$IFNDEF FPC} (ueber TRdxFixTable.FixFor) und laufen nur in
+// reDelphix.Test.
+// Die Text-Fixture laeuft auch im FPC-Pruefstand (build.sh): der Planer
+// ist seit der Folgewelle G09-07 ohne Delphi-only-uses (den Adapter traegt
+// uRdxFixTable), und der Pruefstand blendet seit der Folgewelle B3 die
+// {$IFNDEF FPC}-Teile aus.
 // Prueft: Operator oder Schluesselwort davor, Leerraum, Literale, Aufruf
 // mit Literal, und die Sperren - Aufruf/Cast mit Bezeichner, Struktur einer
 // Konstante, Kette, Kommentar, verschobene Zeile.
@@ -48,8 +48,9 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uRuleCatalog, uRedundantParentheses,
   uTestRdxDetectorKit,   // TSeen, DetectSource, FixAllWith, AssertNoHelpWith
+  uSCAConsts,            // TFindingKind, fk* (nur die Detektor-Fixture)
   {$ENDIF}
-  uSCAConsts, uRdxBufferMath, uRdxCodeMap, uRdxParensFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxParensFix,
   uRdxText,              // _() und die gemeinsamen Gruende (E29)
   uTestRdxTextKit;       // Join, Apply
 

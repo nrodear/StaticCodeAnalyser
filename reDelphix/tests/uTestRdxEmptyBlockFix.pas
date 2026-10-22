@@ -3,12 +3,11 @@ unit uTestRdxEmptyBlockFix;
 // Editorhilfe SCA077 EmptyBlock (uRdxEmptyBlockFix): die Planer auf Text
 // (TTestRdxEmptyBlockFix) und der ECHTE Detektor (uEmptyBlock) mit dem
 // Einstieg der Tabelle (TRdxFixTable.FixFor, Adapter PlanEmptyBlock;
-// TTestRdxEmptyBlockDetector). Die ganze Unit ist nur Delphi
-// (reDelphix.Test).
-// Der Planer ist seit der Folgewelle G09-07 ohne Delphi-only-uses (den
-// Adapter traegt uRdxFixTable); die Unit steht trotzdem nicht im
-// FPC-Pruefstand (build.sh) - dessen Runner kennt die {$IFNDEF FPC}-
-// Weichen nicht, sie sind heute ohne Wirkung.
+// TTestRdxEmptyBlockDetector, hinter {$IFNDEF FPC}, nur reDelphix.Test).
+// Die Text-Fixture laeuft auch im FPC-Pruefstand (build.sh): der Planer
+// ist seit der Folgewelle G09-07 ohne Delphi-only-uses (den Adapter traegt
+// uRdxFixTable), und der Pruefstand blendet seit der Folgewelle B3 die
+// {$IFNDEF FPC}-Teile aus.
 // Der Fund zeigt auf die Zeile des BEGIN; die Fixtures stehen in einer
 // Routine ('procedure Foo;' auf Zeile 4, begin auf Zeile 5, der Rumpf ab
 // Zeile 6).
