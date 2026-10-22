@@ -123,24 +123,14 @@ end;
 
 // Wort und Spalte aus '... "interface" ... currently at column 5' - das
 // Wort zwischen den ersten beiden '"' (QuotedText, uRdxCodeMap; bis
-// Charge B2S-a hier ausgeschrieben). False, wenn eines fehlt.
+// Charge B2S-a hier ausgeschrieben), die Spalte ueber NumberAfterKey
+// (uRdxCodeMap; bis zur Folgewelle des Wochen-Reviews, G09-08, hier
+// ausgeschrieben). False, wenn eines fehlt.
 function KeywordOf(const AMessage: string; out AWord: string;
   out ACol: Integer): Boolean;
-var
-  P, i : Integer;
 begin
-  ACol := 0;
   AWord := QuotedText(AMessage, '"');
-  P := Pos(KEY_CURRENTLY, AMessage);
-  if P > 0 then
-  begin
-    i := P + Length(KEY_CURRENTLY);
-    while (i <= Length(AMessage)) and CharInSet(AMessage[i], ['0'..'9']) do
-    begin
-      ACol := ACol * 10 + Ord(AMessage[i]) - Ord('0');
-      Inc(i);
-    end;
-  end;
+  ACol := NumberAfterKey(AMessage, KEY_CURRENTLY);
   Result := (AWord <> '') and (ACol > 1);
 end;
 

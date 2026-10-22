@@ -517,7 +517,23 @@ const
   // liefert 0). Bis Charge B2S-a je eine Konstante in uRdxSimpleFixes und
   // uRdxLineFixes und ein Literal in uRdxStructFixes (Review R3-05).
   R_NO_COLUMN = 'Spalte fehlt in der Meldung';
+  // Obergrenze einer Zahl aus einer Meldung (NumberAt): eine Zeile oder
+  // Spalte darueber ist kaputt - so laeuft keine Ziffernfolge ueber.
+  MAX_NUMBER = 10000000;
 
+// Die Ziffern ab S[AAt] als Zahl; 0 ohne Ziffer. Sobald die Zahl
+// MAX_NUMBER erreicht, endet das Lesen (kein Ueberlauf - der Aufrufer
+// sieht eine Zahl >= MAX_NUMBER und lehnt ab). Bis zur Folgewelle des
+// Wochen-Reviews (G09-08) in uRdxCleanupFixes; die anderen Zahlenleser der
+// Meldungen hatten keine Grenze.
+function NumberAt(const S: string; AAt: Integer): Integer;
+// Die Zahl direkt hinter dem ersten AKey in AText (NumberAt); 0, wenn AKey
+// fehlt. Der eine Leser fuer 'at column N' (ColumnFromMessage), 'from
+// column N' (uRdxTrailingBlanksFix), '(col N)' (uRdxGotoExitFix) und
+// 'currently at column N' (uRdxLineFixes) - bis zur Folgewelle des
+// Wochen-Reviews (G09-08/G09-30) je eine Kopie der Ziffernschleife. Nicht
+// uRdxCompilerTraces.NumberAfter (Praefix am Wortanfang, -1 ohne Zahl).
+function NumberAfterKey(const AText, AKey: string): Integer;
 // 'at column N' aus einer Meldung; 0 = nicht vorhanden. Bis 2026-10-10 in
 // uRdxSimpleFixes, seit SCA101 auch fuer uRdxStructFixes.
 function ColumnFromMessage(const AMessage: string): Integer;
@@ -1472,21 +1488,30 @@ begin
     Result := #9;
 end;
 
-function ColumnFromMessage(const AMessage: string): Integer;
-const
-  KEY = 'at column ';
-var
-  p, i : Integer;
+function NumberAt(const S: string; AAt: Integer): Integer;
 begin
   Result := 0;
-  p := Pos(KEY, AMessage);
-  if p = 0 then Exit;
-  i := p + Length(KEY);
-  while (i <= Length(AMessage)) and CharInSet(AMessage[i], ['0'..'9']) do
+  while (AAt <= Length(S)) and CharInSet(S[AAt], ['0'..'9'])
+        and (Result < MAX_NUMBER) do
   begin
-    Result := Result * 10 + Ord(AMessage[i]) - Ord('0');
-    Inc(i);
+    Result := Result * 10 + Ord(S[AAt]) - Ord('0');
+    Inc(AAt);
   end;
+end;
+
+function NumberAfterKey(const AText, AKey: string): Integer;
+var
+  P : Integer;
+begin
+  Result := 0;
+  P := Pos(AKey, AText);
+  if P > 0 then
+    Result := NumberAt(AText, P + Length(AKey));
+end;
+
+function ColumnFromMessage(const AMessage: string): Integer;
+begin
+  Result := NumberAfterKey(AMessage, 'at column ');
 end;
 
 function QuotedText(const AText: string; AQuote: Char): string;

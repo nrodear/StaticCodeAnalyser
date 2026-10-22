@@ -154,8 +154,6 @@ const
   KEY_VAR     = 'Unused local variable: ';
   KEY_VAR_END = ' (';
   R_MOVED = 'Zeile verschoben? Datei neu pruefen';
-  // Zahlen aus einer Meldung - darueber ist sie kaputt (kein Ueberlauf).
-  MAX_NUMBER = 10000000;
   // SCA053: Schluesselwoerter von Delphi - kein Variablenname (17
   // Korpusfunde nennen 'resourcestring': der Parser las die Section als
   // Variable).
@@ -280,18 +278,6 @@ function SpanOf(const AFrom, ATo: TRdxTextPos;
 begin
   Result := TRefactorSpan.Make(ARole, AFrom.Line, AFrom.Col, ATo.Line,
     ATo.Col);
-end;
-
-// Die Zahl ab S[AAt] (Ziffern); 0 ohne.
-function NumberAt(const S: string; AAt: Integer): Integer;
-begin
-  Result := 0;
-  while (AAt <= Length(S)) and CharInSet(S[AAt], ['0'..'9'])
-        and (Result < MAX_NUMBER) do
-  begin
-    Result := Result * 10 + Ord(S[AAt]) - Ord('0');
-    Inc(AAt);
-  end;
 end;
 
 // Steht von AFrom bis vor ATo nur Leerraum (Zeilenenden eingeschlossen)?
