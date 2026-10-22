@@ -319,26 +319,9 @@ begin
     and ((AAt + n > Length(S)) or not IsIdentChar(S[AAt + n]));
 end;
 
-function IsKeyword(const ALow: string): Boolean;
-const
-  // Reservierte Woerter, die keinen Operanden beginnen koennen. NICHT
-  // darin: Exit, Assert, Free ... - das sind Routinen; 'Exit(' ist eine
-  // Aufrufklammer, keine Gruppe. DIESELBE Liste steht seit der Folgewelle
-  // A4 in uRdxTypeProof.IsKeyword (Halt der Alias-Aufloesung) - beide
-  // gleich halten, bis sie nach uRdxCodeMap zieht.
-  KEYWORDS: array[0..37] of string = (
-    'and', 'or', 'xor', 'not', 'div', 'mod', 'shl', 'shr', 'in', 'is', 'as',
-    'if', 'then', 'else', 'while', 'do', 'for', 'to', 'downto', 'repeat',
-    'until', 'case', 'of', 'begin', 'end', 'with', 'try', 'except',
-    'finally', 'raise', 'nil', 'var', 'const', 'procedure', 'function',
-    'inherited', 'out', 'type');
-var
-  K : string;
-begin
-  for K in KEYWORDS do
-    if ALow = K then Exit(True);
-  Result := False;
-end;
+// IsKeyword (Woerter, die keinen Operanden beginnen) steht seit der
+// Folgewelle des Wochen-Reviews in uRdxCodeMap - die Liste teilt sich
+// diese Unit mit uRdxTypeProof.
 
 { ---- SCA075 ---- }
 

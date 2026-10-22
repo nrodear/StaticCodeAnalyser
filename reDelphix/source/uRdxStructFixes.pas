@@ -122,10 +122,10 @@ const
   SPAN_007 = 'sca007';
   SPAN_168 = 'sca168';
   SPAN_101 = 'sca101';
-  BRANCH_KEYWORDS: array[0..2] of string = ('then', 'else', 'do');
-  // Vor diesen Token endet eine Anweisung ohne ';'.
-  BRANCH_STOPPERS: array[0..4] of string = ('else', 'end', 'until',
-    'except', 'finally');
+  // Die Zweigwoerter (BRANCH_WORDS) und die Token, vor denen eine
+  // Anweisung ohne ';' endet (STATEMENT_STOPS), stehen in uRdxCodeMap - bis
+  // zur Folgewelle des Wochen-Reviews hier als BRANCH_KEYWORDS und
+  // BRANCH_STOPPERS.
   // In der einfachen Anweisung hinter then/else/do gesperrt: eine Struktur
   // (ihr Ende sucht die Hilfe nicht), ein bedingter Ausdruck (Delphi 13),
   // eine anonyme Methode (ihr Rumpf traegt ';') und eine Inline-
@@ -687,7 +687,7 @@ begin
   else
   begin
     AKeyword := TokenAt(AMap, ALine, ACol);
-    if not InList(AKeyword.Low, BRANCH_KEYWORDS)
+    if not InList(AKeyword.Low, BRANCH_WORDS)
        or InList(Before(AMap, AKeyword).Low, IDENT_PREFIXES) then
       AReason := R_BRANCH_MOVED;
   end;
@@ -1023,10 +1023,10 @@ begin
   if Delta <> 0 then
     Inc(AParen, Delta)
   else if (AParen = 0)
-     and ((T.Low = ';') or (IsKw and InList(T.Low, BRANCH_STOPPERS))) then
+     and ((T.Low = ';') or (IsKw and InList(T.Low, STATEMENT_STOPS))) then
     Result := rsFound
   else if IsKw and (InList(T.Low, NOT_IN_BRANCH)
-     or InList(T.Low, BRANCH_STOPPERS)) then
+     or InList(T.Low, STATEMENT_STOPS)) then
   begin
     AReason := Format('"%s" in der Anweisung - Struktur, bedingter '
       + 'Ausdruck, anonyme Methode oder Inline-Deklaration', [T.Low]);
@@ -1105,7 +1105,7 @@ begin
   if F.Low = 'begin' then
     Exit('die Anweisung steht schon in begin..end - Fund veraltet? Datei neu '
       + 'pruefen');
-  if (F.Low = ';') or InList(F.Low, BRANCH_STOPPERS) then
+  if (F.Low = ';') or InList(F.Low, STATEMENT_STOPS) then
     Exit('leere Anweisung hinter dem ' + ABranch.Keyword.Low);
   // Der Token-Leser sieht keine Strings: begaenne die Anweisung mit einem,
   // waere F nicht ihr Anfang.
@@ -1262,7 +1262,7 @@ begin
   AEdits := nil;
   B := Default(TRdxBranch);
   B.Keyword := AKeyword;
-  if not InList(AKeyword.Low, BRANCH_KEYWORDS) then
+  if not InList(AKeyword.Low, BRANCH_WORDS) then
     AReason := R_BRANCH_MOVED
   else
     AReason := BranchOwner(AMap, B);

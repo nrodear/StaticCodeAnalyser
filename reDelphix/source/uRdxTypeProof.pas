@@ -192,27 +192,11 @@ const
   MAX_ANCESTOR_LINES = 25;
 
 // Reservierte Woerter, die kein Typname sind - hier nur der Halt der
-// Alias-Aufloesung (ResolvedTypeKind). DIESELBE Liste wie
-// uRdxSimpleFixes.IsKeyword (dort: Woerter, die keinen Operanden beginnen);
-// bis zur Folgewelle A4 teilten beide eine Funktion. Der Platz fuer die
-// eine Liste ist uRdxCodeMap (Folgewunsch) - bis dahin beide gleich halten.
-// Fuer uebersetzbaren Code aendert der Halt kein Ergebnis (ein reserviertes
-// Wort wird nie als 'K =' deklariert), er spart die Suche.
-function IsKeyword(const ALow: string): Boolean;
-const
-  KEYWORDS: array[0..37] of string = (
-    'and', 'or', 'xor', 'not', 'div', 'mod', 'shl', 'shr', 'in', 'is', 'as',
-    'if', 'then', 'else', 'while', 'do', 'for', 'to', 'downto', 'repeat',
-    'until', 'case', 'of', 'begin', 'end', 'with', 'try', 'except',
-    'finally', 'raise', 'nil', 'var', 'const', 'procedure', 'function',
-    'inherited', 'out', 'type');
-var
-  K : string;
-begin
-  for K in KEYWORDS do
-    if ALow = K then Exit(True);
-  Result := False;
-end;
+// Alias-Aufloesung (ResolvedTypeKind): IsKeyword aus uRdxCodeMap, dieselbe
+// Liste wie fuer uRdxSimpleFixes (bis zur Folgewelle des Wochen-Reviews je
+// eine Kopie hier und dort). Fuer uebersetzbaren Code aendert der Halt kein
+// Ergebnis (ein reserviertes Wort wird nie als 'K =' deklariert), er spart
+// die Suche.
 
 { ---- Deklarationen der Datei ---- }
 

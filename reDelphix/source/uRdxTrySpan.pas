@@ -120,7 +120,7 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make (KeyText)
-  uRdxHandOver;      // HandOverReason, SourceText, QualifiedEnd, LIST_*
+  uRdxHandOver;      // HandOverReason, SourceText, QualifiedEnd, ARG_ENDS
 
 const
   SPAN_TRY = 'try';

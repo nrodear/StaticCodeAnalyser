@@ -128,9 +128,8 @@ const
   SPAN_098 = 'sca098';
   SPAN_080 = 'sca080';
   SPAN_047 = 'sca047';
-  // Hier endet eine Anweisung ohne ';'.
-  STMT_STOPS: array[0..4] of string = ('end', 'else', 'until', 'except',
-    'finally');
+  // Hier endet eine Anweisung ohne ';': STATEMENT_STOPS (uRdxCodeMap; bis
+  // zur Folgewelle des Wochen-Reviews hier als STMT_STOPS).
   BOOL_WORDS: array[0..1] of string = ('true', 'false');
   // Steht einer davon auf oberster Ebene von C, ist C Boolean.
   COMPARE_OPS: array[0..7] of string = ('=', '<>', '<', '>', '<=', '>=',
@@ -162,10 +161,8 @@ const
   // Vor der ersten Anweisung einer Anweisungsliste.
   LIST_OPENERS: array[0..7] of string = ('begin', 'try', 'finally',
     'except', 'repeat', 'initialization', 'finalization', 'otherwise');
-  // Hier endet eine Anweisungsliste.
-  LIST_ENDS: array[0..3] of string = ('end', 'until', 'except', 'finally');
-  // Zweige ohne begin: dahinter steht genau eine Anweisung.
-  BRANCH_WORDS: array[0..2] of string = ('then', 'else', 'do');
+  // Das Ende einer Anweisungsliste (LIST_ENDS) und die Zweige ohne begin
+  // (BRANCH_WORDS) stehen in uRdxCodeMap.
   // Davor beginnt kein Pfad ('A.B', 'R^.F', '&X', '@X').
   PATH_JOINERS: array[0..3] of string = ('.', '^', '&', '@');
   KEY_SELF   = 'Self-assignment: ';
@@ -408,7 +405,7 @@ var
 begin
   Result := '';
   S := ASite.Stop;
-  if (S.Low <> ';') and (S.Low <> '') and not InList(S.Low, STMT_STOPS) then
+  if (S.Low <> ';') and (S.Low <> '') and not InList(S.Low, STATEMENT_STOPS) then
     Exit(Format('hinter "%s" geht der Ausdruck weiter - kein reines '
       + 'if..else', [ASite.SecondVal.Low]));
   if CommentInRange(AMap, TRefactorSpan.Make(SPAN_098, ASite.IfTok.Line,
@@ -990,7 +987,7 @@ begin
     ASite.EndLine := Cur.Line;
     ASite.EndCol := Cur.EndCol;
   end;
-  Result := (Cur.Low = ';') or (Cur.Low = '') or InList(Cur.Low, STMT_STOPS);
+  Result := (Cur.Low = ';') or (Cur.Low = '') or InList(Cur.Low, STATEMENT_STOPS);
 end;
 
 // 'AArg := AArg' an T (OneTokenOnLine, SelfOn).

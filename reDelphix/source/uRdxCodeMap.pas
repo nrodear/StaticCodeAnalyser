@@ -48,6 +48,56 @@ const
   ROUTINE_WORDS: array[0..4] of string = ('procedure', 'function',
     'constructor', 'destructor', 'operator');
 
+  // ---- Wortlisten der Anweisungsgrenzen (Folgewelle des Wochen-Reviews,
+  // G07-14/G09-26: bis dahin je Planer eine Kopie) ----
+
+  // Davor beginnt eine Anweisung IN einer Anweisungsliste. Bis dahin in
+  // uRdxHandOver (fuer uRdxTrySpan/uRdxTryFixes) und uRdxEmptyFinallyFix.
+  // Die Listenoeffner von uRdxCleanupFixes und uRdxFlowFixes (LIST_OPENERS,
+  // ohne ';') bleiben dort: die von uRdxFlowFixes kennt 'otherwise', die
+  // von uRdxCleanupFixes nicht - eine Zusammenlegung bewegte Angebote.
+  LIST_PREV: array[0..7] of string = (';', 'begin', 'try', 'finally',
+    'except', 'repeat', 'initialization', 'finalization');
+  // Hier endet eine Anweisungsliste. Bis dahin in uRdxHandOver,
+  // uRdxCleanupFixes, uRdxFlowFixes und (als FOLLOW_OK) uRdxEmptyFinallyFix.
+  LIST_ENDS: array[0..3] of string = ('end', 'until', 'except', 'finally');
+  // Hier endet eine Anweisung ohne ';'. Bis dahin als STMT_STOPS in
+  // uRdxFlowFixes und BRANCH_STOPPERS in uRdxStructFixes.
+  STATEMENT_STOPS: array[0..4] of string = ('end', 'else', 'until',
+    'except', 'finally');
+  // Zweige ohne begin: dahinter steht genau eine Anweisung. Bis dahin in
+  // uRdxHandOver, uRdxFlowFixes und (als BRANCH_KEYWORDS) uRdxStructFixes.
+  BRANCH_WORDS: array[0..2] of string = ('then', 'else', 'do');
+  // Hier endet eine Rueckwaerts-Suche nach dem umschliessenden try bzw. der
+  // Routine um eine Stelle: ein Abschnitt der Unit. Bis dahin in
+  // uRdxHandOver und uRdxGotoExitFix; uRdxCleanupFixes.UNIT_PARTS (ohne
+  // initialization/finalization) ist eine andere Menge.
+  UNIT_BOUNDS: array[0..6] of string = ('implementation', 'interface',
+    'initialization', 'finalization', 'unit', 'program', 'library');
+  // Die reservierten Woerter von Delphi: als Bezeichner nur mit '&'. Bis
+  // dahin byte-gleich in uRdxCleanupFixes (SCA053: kein Variablenname) und
+  // uRdxKeywordCaseFix (SCA064).
+  RESERVED: array[0..63] of string = ('and', 'array', 'as', 'asm', 'begin',
+    'case', 'class', 'const', 'constructor', 'destructor', 'dispinterface',
+    'div', 'do', 'downto', 'else', 'end', 'except', 'exports', 'file',
+    'finalization', 'finally', 'for', 'function', 'goto', 'if',
+    'implementation', 'in', 'inherited', 'initialization', 'inline',
+    'interface', 'is', 'label', 'library', 'mod', 'nil', 'not', 'object',
+    'of', 'or', 'packed', 'procedure', 'program', 'property', 'raise',
+    'record', 'repeat', 'resourcestring', 'set', 'shl', 'shr', 'string',
+    'then', 'threadvar', 'to', 'try', 'type', 'unit', 'until', 'uses', 'var',
+    'while', 'with', 'xor');
+  // Schluesselwoerter, die keinen Operanden beginnen koennen (IsKeyword).
+  // NICHT darin: Exit, Assert, Free ... - das sind Routinen; 'Exit(' ist
+  // eine Aufrufklammer, keine Gruppe. Bis dahin byte-gleich in
+  // uRdxSimpleFixes und uRdxTypeProof (Halt der Alias-Aufloesung).
+  KEYWORDS: array[0..37] of string = (
+    'and', 'or', 'xor', 'not', 'div', 'mod', 'shl', 'shr', 'in', 'is', 'as',
+    'if', 'then', 'else', 'while', 'do', 'for', 'to', 'downto', 'repeat',
+    'until', 'case', 'of', 'begin', 'end', 'with', 'try', 'except',
+    'finally', 'raise', 'nil', 'var', 'const', 'procedure', 'function',
+    'inherited', 'out', 'type');
+
 type
   // Zeichenklassen einer Datei, spaltentreu: 'c' Code, 's' String-Literal,
   // 'k' Kommentar oder Direktive ({...}, (*...*), //...). Block-Kommentare
@@ -427,6 +477,10 @@ function BlockEnd(AMap: TRdxCodeMap; const AFrom: TRdxToken;
 
 // ALow ist eines der Woerter in AList (gleich geschrieben).
 function InList(const ALow: string; const AList: array of string): Boolean;
+// ALow (klein) ist eines der KEYWORDS - ein Wort, das keinen Operanden
+// beginnt. Bis zur Folgewelle des Wochen-Reviews je eine Kopie in
+// uRdxSimpleFixes und uRdxTypeProof.
+function IsKeyword(const ALow: string): Boolean;
 // Ein Wort als Schluesselwort - nicht hinter '&', '@' oder '.' (APrev).
 function IsKeywordAfter(const T, APrev: TRdxToken): Boolean;
 // Dasselbe, und dahinter steht kein ':=' - ein benanntes OLE-Argument
@@ -1494,6 +1548,11 @@ begin
   for S in AList do
     if ALow = S then
       Exit(True);
+end;
+
+function IsKeyword(const ALow: string): Boolean;
+begin
+  Result := InList(ALow, KEYWORDS);
 end;
 
 function IsKeywordAfter(const T, APrev: TRdxToken): Boolean;

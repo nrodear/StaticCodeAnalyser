@@ -97,9 +97,8 @@ uses
 const
   SPAN_060 = 'sca060';
   KEY_COL = '(col ';
-  // Hier endet die Suche nach der Routine um das 'goto'.
-  UNIT_BOUNDS: array[0..6] of string = ('implementation', 'interface',
-    'initialization', 'finalization', 'unit', 'program', 'library');
+  // Hier endet die Suche nach der Routine um das 'goto': UNIT_BOUNDS
+  // (uRdxCodeMap; bis zur Folgewelle des Wochen-Reviews eine Kopie hier).
   // Dahinter endet die Anweisung 'goto L'.
   GOTO_FOLLOW: array[0..5] of string = (';', 'end', 'else', 'until',
     'finally', 'except');

@@ -269,8 +269,10 @@ begin
     and (NumberEnd(AMap, T) = T.EndCol);
 end;
 
-// Ein Schluesselwort AWord an T (nicht '&If', 'X.Then')?
-function IsKeyword(AMap: TRdxCodeMap; const T: TRdxToken;
+// Ein Schluesselwort AWord an T (nicht '&If', 'X.Then')? Bis zur Folgewelle
+// des Wochen-Reviews IsKeyword - der Name gehoert seitdem der Wortliste
+// KEYWORDS in uRdxCodeMap.
+function IsKeywordToken(AMap: TRdxCodeMap; const T: TRdxToken;
   const AWord: string): Boolean;
 begin
   Result := (T.Low = AWord) and IsKeywordAfter(T, Before(AMap, T));
@@ -310,7 +312,7 @@ begin
   Result := 0;
   T := After(AMap, AIf);
   while (T.Low <> '') and (T.Line <= AIf.Line + MAX_COND_LINES)
-     and not IsKeyword(AMap, T, KW_THEN) and not IsKeyword(AMap, T, KW_END) do
+     and not IsKeywordToken(AMap, T, KW_THEN) and not IsKeywordToken(AMap, T, KW_END) do
   begin
     if (T.Low = AValue) and IsComparedValue(AMap, T) then
     begin
@@ -338,7 +340,7 @@ begin
   T := NextToken(AMap, ALine, 1);
   while (T.Low <> '') and (T.Line = ALine) do
   begin
-    if IsKeyword(AMap, T, KW_IF) then
+    if IsKeywordToken(AMap, T, KW_IF) then
     begin
       Inc(Ifs);
       Inc(N, CountInCondition(AMap, T, AValue, Hit, Sep));

@@ -26,10 +26,11 @@ unit uRdxHandOver;
 // Abschnittswort der Unit beendet die Suche), ihr var-Abschnitt und ein
 // Inline-var davor. Parameter zaehlen nicht.
 //
-// GETEILT (interface) mit uRdxTrySpan und uRdxTryFixes: die Woerter der
-// Anweisungslisten (LIST_PREV, BRANCH_WORDS, LIST_ENDS, ARG_ENDS,
-// UNIT_BOUNDS), SourceText, QualifiedEnd und das Satzende R_HELD - EINE
-// Fassung fuer die drei Units, die bis G08-08 eine waren.
+// GETEILT (interface) mit uRdxTrySpan und uRdxTryFixes: ARG_ENDS,
+// SourceText, QualifiedEnd und das Satzende R_HELD - EINE Fassung fuer die
+// drei Units, die bis G08-08 eine waren. Die Woerter der Anweisungslisten
+// (LIST_PREV, BRANCH_WORDS, LIST_ENDS, UNIT_BOUNDS) stehen seit der
+// Folgewelle des Wochen-Reviews in uRdxCodeMap (G07-14).
 
 interface
 
@@ -37,17 +38,6 @@ uses
   uRdxCodeMap;
 
 const
-  // Davor beginnt eine Anweisung IN einer Anweisungsliste.
-  LIST_PREV: array[0..7] of string = (';', 'begin', 'try', 'finally',
-    'except', 'repeat', 'initialization', 'finalization');
-  // Zweige ohne begin: dahinter steht genau eine Anweisung.
-  BRANCH_WORDS: array[0..2] of string = ('then', 'else', 'do');
-  // Hier endet eine Anweisungsliste.
-  LIST_ENDS: array[0..3] of string = ('end', 'until', 'except', 'finally');
-  // Hier endet die Rueckwaerts-Suche nach umschliessenden try-Bloecken
-  // (uRdxTrySpan) bzw. nach der Routine um eine Stelle (RoutineAround).
-  UNIT_BOUNDS: array[0..6] of string = ('implementation', 'interface',
-    'initialization', 'finalization', 'unit', 'program', 'library');
   // Dahinter: ein direktes Argument ('F(X)', 'F(A, X, B)'; davor
   // ARG_STARTS).
   ARG_ENDS: array[0..1] of string = (',', ')');

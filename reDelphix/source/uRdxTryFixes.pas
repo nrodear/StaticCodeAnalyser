@@ -194,7 +194,7 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxHandOver,      // IsLocalVar, InlineVarOf, LIST_PREV, BRANCH_WORDS, R_HELD
+  uRdxHandOver,      // IsLocalVar, InlineVarOf, R_HELD
   uRdxTrySpan;       // TRdxPair, TRdxSpan, ScanPair, EnclosingReason, Sperren
 
 const

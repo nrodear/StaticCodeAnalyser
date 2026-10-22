@@ -154,23 +154,16 @@ const
   KEY_VAR     = 'Unused local variable: ';
   KEY_VAR_END = ' (';
   R_MOVED = 'Zeile verschoben? Datei neu pruefen';
-  // SCA053: Schluesselwoerter von Delphi - kein Variablenname (17
-  // Korpusfunde nennen 'resourcestring': der Parser las die Section als
-  // Variable).
-  RESERVED: array[0..63] of string = ('and', 'array', 'as', 'asm', 'begin',
-    'case', 'class', 'const', 'constructor', 'destructor', 'dispinterface',
-    'div', 'do', 'downto', 'else', 'end', 'except', 'exports', 'file',
-    'finalization', 'finally', 'for', 'function', 'goto', 'if',
-    'implementation', 'in', 'inherited', 'initialization', 'inline',
-    'interface', 'is', 'label', 'library', 'mod', 'nil', 'not', 'object',
-    'of', 'or', 'packed', 'procedure', 'program', 'property', 'raise',
-    'record', 'repeat', 'resourcestring', 'set', 'shl', 'shr', 'string',
-    'then', 'threadvar', 'to', 'try', 'type', 'unit', 'until', 'uses', 'var',
-    'while', 'with', 'xor');
+  // SCA053: Schluesselwoerter von Delphi (RESERVED, uRdxCodeMap) sind kein
+  // Variablenname (17 Korpusfunde nennen 'resourcestring': der Parser las
+  // die Section als Variable).
   // Abschnitte eines Deklarationsteils.
   SECTION_WORDS: array[0..5] of string = ('var', 'const', 'type',
     'resourcestring', 'label', 'threadvar');
-  UNIT_BOUNDS: array[0..4] of string = ('implementation', 'interface',
+  // Teile einer Unit, an denen die Suche endet - ohne initialization und
+  // finalization (anders als uRdxCodeMap.UNIT_BOUNDS; bis zur Folgewelle
+  // des Wochen-Reviews hiess die Liste hier ebenfalls UNIT_BOUNDS).
+  UNIT_PARTS: array[0..4] of string = ('implementation', 'interface',
     'program', 'library', 'unit');
   // Rueckwaerts: Paare mit 'end' bzw. 'until'.
   BLOCK_PAIRS: array[0..5] of string = ('begin', 'try', 'case', 'asm',
@@ -178,7 +171,7 @@ const
   // Vor der ersten Anweisung einer Anweisungsliste.
   LIST_OPENERS: array[0..6] of string = ('begin', 'try', 'finally', 'except',
     'repeat', 'initialization', 'finalization');
-  LIST_ENDS: array[0..3] of string = ('end', 'until', 'except', 'finally');
+  // Das Ende einer Anweisungsliste: LIST_ENDS (uRdxCodeMap).
   // Typen ueber mehrere Zeilen ('X: record ... end;') - ihr ';' ist nicht
   // das Ende der Deklaration.
   MULTI_LINE_TYPES: array[0..5] of string = ('record', 'object', 'class',
@@ -1004,7 +997,7 @@ begin
   else if T.Low = 'begin' then
     Result := True
   else if ADepth = 0 then
-    Result := InList(T.Low, SECTION_WORDS) or InList(T.Low, UNIT_BOUNDS)
+    Result := InList(T.Low, SECTION_WORDS) or InList(T.Low, UNIT_PARTS)
       or IsRoutineHeadAfter(T, APrev);
 end;
 
@@ -1045,7 +1038,7 @@ begin
   else if InList(T.Low, LIST_OPENERS) then
     Result := rsFound
   else if InList(T.Low, BLOCK_PAIRS) or IsRoutineHeadAfter(T, APrev)
-     or InList(T.Low, UNIT_BOUNDS) then
+     or InList(T.Low, UNIT_PARTS) then
     Result := rsStop;
 end;
 
