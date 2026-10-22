@@ -242,8 +242,10 @@ function AcquireLines(const FileName: string;
 // Gibt die Zeilen aus AcquireLines zurueck: OwnedByCache=False -> Free;
 // OwnedByCache=True -> Nutzerzaehler des Cache-Eintrags um eins senken
 // (der Eintrag wird frei, wenn er ausgehaengt ist und niemand ihn mehr
-// haelt). nil ist erlaubt, ein zweiter Aufruf fuer dieselben Zeilen
-// wird abgefangen (der Zaehler faellt nie unter 0).
+// haelt). nil ist erlaubt. Vertrag: GENAU EINMAL je AcquireLines
+// zurueckgeben - der Zaehler faellt nie unter 0, mehr Schutz gibt es
+// nicht: ein doppeltes ReleaseLines nimmt bei einem zweiten Halter
+// DESSEN Halt (Details s. ReleaseEntry).
 procedure ReleaseLines(Lines: TStringList; OwnedByCache: Boolean);
 
 // Laedt eine Datei mit der Encoding-Erkennung des Caches (BOM, dann
@@ -279,7 +281,8 @@ function LoadFileSmart(const FileName: string; SL: TStringList;
 /// Details und Zahlen: Todo_Review_G2_EngineInfra_2026-08-25 (lokal).</remarks>
 procedure ReleaseTransientCaches;
 
-/// <summary>Zahl der gehaltenen Cache-Eintraege - fuer die Messbarkeit
+/// <summary>Zahl der eingehaengten Cache-Eintraege (ausgehaengte, die
+/// ein Leser noch haelt, zaehlen nicht) - fuer die Messbarkeit
 /// des Hooks (Test + Diagnose), nicht fuer Ablauflogik.</summary>
 function TransientCacheCount: Integer;
 
@@ -673,7 +676,7 @@ begin
   end;
 end;
 
-function LadeCacheZeilen(const FileName: string;
+function LoadCacheLines(const FileName: string;
   out AEncInfo: TFileEncodingInfo): TCacheOwnedLines;
 // Zeilen fuer einen neuen Eintrag; nil bei Lesefehler (LoadFileSmart
 // faengt jeden selbst). Eigene Funktion: der Aufrufer uebernimmt das
@@ -786,7 +789,7 @@ begin
   // Pfad einen KOMPLETTEN Zweit-Read pro Quelldatei spart. Falls die
   // Timings-Messung das je kippt: Phase-Flag am Cache (Walk nur waehrend
   // der Detektor-Phase) statt hier zu raten.
-  SL := LadeCacheZeilen(FileName, EncInfo);
+  SL := LoadCacheLines(FileName, EncInfo);
   if SL = nil then Exit;
   SafeGetFileStat(FileName, CurrMTime, CurrSize);
   FLock.Enter;

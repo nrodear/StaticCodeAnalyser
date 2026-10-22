@@ -985,7 +985,7 @@
       "kind": "ReversedForRange",
       "name": "for i := High to Low - missing downto",
       "shortDescription": "for i := 10 to 1 do - loop body never executes",
-      "fullDescription": "`for i := 10 to 1 do` is a downto-vs-to typo: in Pascal a `to`-loop with start > end iterates zero times, so the body silently never runs and the bug shows up as missing side-effects with no compiler warning. The detector evaluates compile-time integer expressions on both sides (literals, simple negations, and `Length(arr)-1` for constant-length declarations) so `for i := Length(L)-1 to 0` is flagged. Variable-bounded loops are excluded - they may legitimately do nothing depending on runtime data. To iterate descending, write `downto`; to express 'maybe empty' explicitly, guard with an `if From <= To`.",
+      "fullDescription": "`for i := 10 to 1 do` is a downto-vs-to typo: in Pascal a `to`-loop with start > end iterates zero times, so the body silently never runs and the bug shows up as missing side-effects with no compiler warning. The detector compares integer literals on both sides, an optional leading minus included (`for i := 5 to -1` is flagged); expressions and constants such as `Length(L)-1` or `High(A)` are not evaluated. Variable-bounded loops are excluded - they may legitimately do nothing depending on runtime data. To iterate descending, write `downto`; to express 'maybe empty' explicitly, guard with an `if From <= To`.",
       "defaultSeverity": "Error",
       "type": "Bug",
       "tags": ["loop", "typo"],
@@ -1945,7 +1945,7 @@
       "id": "SCA094",
       "kind": "RedundantParentheses",
       "name": "Redundant double parentheses",
-      "shortDescription": "`((Ident))` - drop the outer parens",
+      "shortDescription": "`((Ident))` - drop the inner parens",
       "fullDescription": "Double parentheses around a single identifier, literal or simple expression add nothing - a single pair is sufficient (often none). Matches SonarDelphi communitydelphi:RedundantParentheses. Only the simple-expression case is flagged; complex `((A + B))` may still benefit from inner parens for precedence and is not reported.",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
@@ -3282,7 +3282,7 @@
       "kind": "PointerSubtraction",
       "name": "Pointer subtraction via 32-bit cast",
       "shortDescription": "`Cardinal(P1) - Cardinal(P2)` (or Integer / LongWord / LongInt variants) truncates the upper 32 bits of a 64-bit pointer on Win64 - difference is intermittently wrong",
-      "fullDescription": "Lexical scan for `(Cardinal|LongWord|Integer|LongInt)(<id>) - (Cardinal|...)(<id>)` - two 32-bit casts joined by minus. On Win64 a Pointer is 64-bit while Cardinal/Integer/LongWord/LongInt are 32-bit, so the cast drops the upper four bytes of the address. The resulting difference is wrong whenever the allocator hands out high addresses - the code works on Win32 and breaks intermittently on Win64. Common porting bug from Delphi-7 / Delphi-2007 examples that pre-date Win64. Fix: use `PtrUInt(P1) - PtrUInt(P2)` or `NativeInt(P1) - NativeInt(P2)` - pointer-width integer types that match the platform pointer size.",
+      "fullDescription": "Lexical scan for `(Cardinal|LongWord|Integer|LongInt)(<id>) - (Cardinal|...)(<id>)` - two 32-bit casts joined by minus. On Win64 a Pointer is 64-bit while Cardinal/Integer/LongWord/LongInt are 32-bit, so the cast drops the upper four bytes of the address. The resulting difference is wrong whenever the allocator hands out high addresses - the code works on Win32 and breaks intermittently on Win64. Common porting bug from Delphi-7 / Delphi-2007 examples that pre-date Win64. Fix: use `NativeUInt(P1) - NativeUInt(P2)` or `NativeInt(P1) - NativeInt(P2)` - pointer-width integer types that match the platform pointer size (`PtrUInt`/`PtrInt` are the FPC and mORMot names; the Delphi RTL does not declare them).",
       "defaultSeverity": "Warning",
       "type": "Bug",
       "tags": ["pointer", "win64", "truncation", "mormot", "sonar50"],
@@ -3290,7 +3290,7 @@
       "editorHelp": true,
       "examples": {
         "bad":  "Diff := Cardinal(P1) - Cardinal(P2);   // upper 32 bits lost on Win64",
-        "good": "Diff := PtrUInt(P1) - PtrUInt(P2);     // pointer-wide cast"
+        "good": "Diff := NativeUInt(P1) - NativeUInt(P2);   // pointer-wide cast"
       },
       "cleanCodeAttribute": "LOGICAL",
       "impacts": [

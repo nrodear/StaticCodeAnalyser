@@ -1107,7 +1107,7 @@ const
     (
       RuleID   : 'SCA094';
       Name     : 'Redundant double parentheses';
-      ShortDesc: '`((Ident))` - drop the outer parens';
+      ShortDesc: '`((Ident))` - drop the inner parens';
       BadEx    : 'if ((Active)) then ...' + #13#10 + 'Result := ((42));';
       GoodEx   : 'if Active then ...' + #13#10 + 'Result := 42;';
       Anchor   : '';
@@ -2000,7 +2000,7 @@ const
       Name     : 'Pointer subtraction via 32-bit cast';
       ShortDesc: '`Cardinal(P1) - Cardinal(P2)` (or Integer / LongWord / LongInt variants) truncates the upper 32 bits of a 64-bit pointer on Win64 - difference is intermittently wrong';
       BadEx    : 'Diff := Cardinal(P1) - Cardinal(P2);   // upper 32 bits lost on Win64';
-      GoodEx   : 'Diff := PtrUInt(P1) - PtrUInt(P2);     // pointer-wide cast';
+      GoodEx   : 'Diff := NativeUInt(P1) - NativeUInt(P2);   // pointer-wide cast';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: True

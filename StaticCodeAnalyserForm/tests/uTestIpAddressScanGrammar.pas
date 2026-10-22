@@ -133,17 +133,25 @@ begin
 end;
 
 procedure TTestIpAddressScanGrammar.Flags_UrlPortCidr;
+// Je Flag eine eigene Zusicherung (Review Woche G03-24): kippt eines, nennt
+// die Meldung genau dieses statt eines Sammel-'Flags URL+Port'.
 var
   H : TArray<TIpHit>;
 begin
   H := TIpAddressScan.FindAll('http://10.1.2.3:8080/api');
-  Assert.IsTrue((Length(H) = 1) and H[0].InUrl and H[0].HasPort and not H[0].HasCidr,
-    'Flags URL+Port');
+  Assert.AreEqual<Integer>(1, Length(H), 'URL+Port: ein Treffer');
+  Assert.AreEqual<Boolean>(True,  H[0].InUrl,   'URL+Port: InUrl');
+  Assert.AreEqual<Boolean>(True,  H[0].HasPort, 'URL+Port: HasPort');
+  Assert.AreEqual<Boolean>(False, H[0].HasCidr, 'URL+Port: HasCidr');
   H := TIpAddressScan.FindAll('10.0.0.0/8');
-  Assert.IsTrue((Length(H) = 1) and H[0].HasCidr and not H[0].HasPort, 'Flags CIDR');
+  Assert.AreEqual<Integer>(1, Length(H), 'CIDR: ein Treffer');
+  Assert.AreEqual<Boolean>(True,  H[0].HasCidr, 'CIDR: HasCidr');
+  Assert.AreEqual<Boolean>(False, H[0].HasPort, 'CIDR: HasPort');
   H := TIpAddressScan.FindAll('http://[2001:db8::1]:8080/');
-  Assert.IsTrue((Length(H) = 1) and H[0].InUrl and H[0].HasPort and (H[0].Family = ifV6),
-    'Flags v6 URL+Port');
+  Assert.AreEqual<Integer>(1, Length(H), 'v6 URL+Port: ein Treffer');
+  Assert.AreEqual<Boolean>(True, H[0].InUrl,   'v6 URL+Port: InUrl');
+  Assert.AreEqual<Boolean>(True, H[0].HasPort, 'v6 URL+Port: HasPort');
+  Assert.AreEqual<TIpFamily>(ifV6, H[0].Family, 'v6 URL+Port: Family');
 end;
 
 procedure TTestIpAddressScanGrammar.Hit_StartAndLen;

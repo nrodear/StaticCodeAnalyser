@@ -30,8 +30,12 @@ unit uIpAddressScan;
 // GATES (aus der Korpusmessung, Konzept 4.3) arbeiten auf WORTTEILEN
 // (CamelCase/Unterstrich getrennt), nicht auf Teilstrings: 'VERS' in
 // 'SERVERS' oder 'dll' in einem URL-Pfad unterdrueckten in der Messung
-// echte Funde. 'IPv4'/'IPv6' in jeder Schreibweise ist das Host-Wort
-// 'ip' (die Camel-Regel zerlegte es in 'i' und 'pv').
+// echte Funde. 'IPv4'/'IPv6' (gross/klein egal) am Wortanfang oder hinter
+// einem Camel-Bruch ist das Host-Wort 'ip' (die Camel-Regel zerlegte es in
+// 'i' und 'pv'). Nicht erkannt: direkt hinter einem Grossbuchstaben-Lauf
+// ('DNSIPv4', 'TCPIPv6' - der Bruch faellt dort erst vor 'P', s.
+// IsIpvToken) - dort fehlt das Host-Wort, und eine Kleinzahlform wie
+// '8.8.8.8' bleibt ungemeldet (FN, kein FP).
 
 interface
 
@@ -357,7 +361,6 @@ begin
   end;
 end;
 
-// Teil vor der eingebetteten IPv4 (ohne deren ':'), oder S selbst.
 // Teil vor der eingebetteten IPv4 (ohne deren ':'); AV4 = die IPv4.
 // Nur fuer Texte mit '.'.
 function SplitV4Tail(const S: string; out AHead: string; out AV4: Cardinal): Boolean;
@@ -1160,27 +1163,36 @@ begin
   TGrow.Add<TJudgedHit>(A, N, J);
 end;
 
-// Alle Adressen in AText beurteilt in die Zeilenliste gemischt; die
-// Zahlenkolonne (Fractions) gilt je Text.
-procedure JudgeInto(const AText: string; const ACtx: TGateContext;
-  ASource: Integer; var A: TArray<TJudgedHit>; var N: Integer);
+// Die schon gefundenen Adressen AHits (nicht leer) in AText beurteilt in
+// die Zeilenliste gemischt; die Zahlenkolonne (Fractions) gilt je Text.
+procedure JudgeHitsInto(const AText: string; const AHits: TArray<TIpHit>;
+  const ACtx: TGateContext; ASource: Integer;
+  var A: TArray<TJudgedHit>; var N: Integer);
 var
-  Hits : TArray<TIpHit>;
   Ctx  : TGateContext;
   H    : TIpHit;
   J    : TJudgedHit;
 begin
-  Hits := TIpAddressScan.FindAll(AText);
-  if Hits = nil then Exit;
   Ctx := ACtx;
-  Ctx.Fractions := CountOtherFractions(AText, Hits);
+  Ctx.Fractions := CountOtherFractions(AText, AHits);
   J.Source := ASource;
-  for H in Hits do
+  for H in AHits do
   begin
     J.Hit := H;
     J.Reason := Judge(H, AText, Ctx);
     MergeJudged(A, N, J);
   end;
+end;
+
+// Alle Adressen in AText beurteilt in die Zeilenliste gemischt.
+procedure JudgeInto(const AText: string; const ACtx: TGateContext;
+  ASource: Integer; var A: TArray<TJudgedHit>; var N: Integer);
+var
+  Hits : TArray<TIpHit>;
+begin
+  Hits := TIpAddressScan.FindAll(AText);
+  if Hits <> nil then
+    JudgeHitsInto(AText, Hits, ACtx, ASource, A, N);
 end;
 
 { ---- Pascal-Literale ---- }
@@ -1334,6 +1346,7 @@ var
   i, N, NJ, k : Integer;
   Section, Key, Value : string;
   Line     : TArray<TJudgedHit>;   // Treffer der aktuellen Zeile, wiederverwendet
+  Hits     : TArray<TIpHit>;
   IH       : TIniIpHit;
 begin
   Result := nil;
@@ -1344,8 +1357,13 @@ begin
   for i := 0 to ALines.Count - 1 do
   begin
     if not SplitIniLine(ALines[i], Section, Key, Value) then Continue;
+    // Erst die Kandidaten, dann der Kontext (Review Woche G03-16):
+    // IniContext zerlegt Schluessel und Abschnitt in Wortteile - je Zeile
+    // OHNE Adresse (der Normalfall einer INI) ist das Arbeit ohne Nutzen.
+    Hits := FindAll(Value);
+    if Hits = nil then Continue;
     NJ := 0;
-    JudgeInto(Value, IniContext(Key, Section), 0, Line, NJ);
+    JudgeHitsInto(Value, Hits, IniContext(Key, Section), 0, Line, NJ);
     for k := 0 to NJ - 1 do
     begin
       IH.Line := i + 1;

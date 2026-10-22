@@ -26,6 +26,9 @@ type
     [Test] procedure ParseFile_Utf8BomWithInvalidByte_NotEmptyTree;
     [Test] procedure InlineVarConst_TypeAndInitializer_Unchanged;
     [Test] procedure RecordFieldType_Balanced_Unchanged;
+    // Review Woche G03-20/G03-22
+    [Test] procedure ForHeader_RangeOperator_SpacedBothSides;
+    [Test] procedure ArgumentScanner_LocalRecordTypeInAnonMethod_Continues;
   end;
 
 implementation
@@ -402,6 +405,88 @@ begin
     Assert.IsNotNull(N, 'lokale Variable mit verschachteltem record-Typ');
     Assert.IsTrue(N.TypeRef.StartsWith('record'), N.TypeRef);
     Assert.IsNotNull(NodeNamed(Root, nkCall, 'W'), 'der Rumpf ist nicht verloren');
+  finally
+    Root.Free;
+  end;
+end;
+
+procedure TTestParserReviewC.ForHeader_RangeOperator_SpacedBothSides;
+// Die Punkt-Regel des for-Kopfs entschied ueber das letzte Zeichen: der
+// Bereichsoperator '..' endet auf '.', das Folgetoken klebte daran
+// ('..High'). Jetzt zaehlt die Tokenart - '..' steht wie vor Major 14
+// beidseitig mit Leerzeichen, der Member-Punkt bleibt ohne.
+const
+  SRC =
+    'unit r; interface implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var x: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  for x in [Low(A)..High(A)] do'#13#10 +
+    '    X;'#13#10 +
+    '  for x := Low(A) to List.Count - 1 do'#13#10 +
+    '    Y;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  Root : TAstNode;
+  L    : TList<TAstNode>;
+begin
+  Root := Parse(SRC);
+  try
+    L := Root.FindAll(nkForStmt);
+    try
+      Assert.AreEqual<Integer>(2, L.Count);
+      Assert.AreEqual('x in [ Low ( A ) .. High ( A ) ]', L[0].TypeRef);
+      Assert.AreEqual('x := Low ( A ) to List.Count - 1', L[1].TypeRef);
+    finally
+      L.Free;
+    end;
+  finally
+    Root.Free;
+  end;
+end;
+
+procedure TTestParserReviewC.ArgumentScanner_LocalRecordTypeInAnonMethod_Continues;
+// Eine anonyme Methode als Argument mit lokalem record-Typ: das 'end' des
+// record kam vor dem ersten 'begin', die Notbremse brach den Scan dort
+// ab - der Rumpf der anonymen Methode lief als eigene Anweisungen in P,
+// und der Aufrufname endete beim record. Jetzt oeffnet 'record' wie
+// begin, der Rumpf bleibt im Argument.
+const
+  SRC =
+    'unit q; interface implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'begin'#13#10 +
+    '  List.ForEach(procedure(const X: Integer)'#13#10 +
+    '    type TPair = record A, B: Integer; end;'#13#10 +
+    '    var Pr: TPair;'#13#10 +
+    '    begin'#13#10 +
+    '      Pr.A := X;'#13#10 +
+    '    end);'#13#10 +
+    '  After;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  Root    : TAstNode;
+  L       : TList<TAstNode>;
+  N       : TAstNode;
+  ForEach : TAstNode;
+begin
+  Root := Parse(SRC);
+  try
+    ForEach := nil;
+    L := Root.FindAll(nkCall);
+    try
+      for N in L do
+        if N.Name.StartsWith('List.ForEach(') then ForEach := N;
+    finally
+      L.Free;
+    end;
+    Assert.IsNotNull(ForEach, 'der ForEach-Aufruf');
+    Assert.IsTrue(Pos('Pr.A', ForEach.Name) > 0,
+      'der Rumpf der anonymen Methode gehoert zum Argument: ' + ForEach.Name);
+    Assert.IsNotNull(NodeNamed(Root, nkCall, 'After'),
+      'der Aufruf dahinter ist ein eigener Knoten');
   finally
     Root.Free;
   end;

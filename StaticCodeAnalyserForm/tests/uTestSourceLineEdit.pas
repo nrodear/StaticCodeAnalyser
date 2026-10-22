@@ -30,6 +30,13 @@ type
     [Test] procedure Insert_MixedEols_UsesTargetLineEol;
     [Test] procedure Insert_Ansi_Umlauts_Preserved;
     [Test] procedure Insert_LineOutOfRange_FailsUntouched;
+    // Review Woche G03-11: UTF-32 (BOM FF FE 00 00) wird abgelehnt, nicht
+    // als UTF-16 gelesen und mit einer UTF-16-Zeile beschaedigt.
+    [Test] procedure Insert_Utf32LeBom_FailsUntouched;
+    // Review Woche G03-02: der Fehlerpfad des atomaren Schreibens -
+    // schreibgeschuetztes Ziel: False, Datei unveraendert, keine
+    // .sca-tmp-Leiche im Verzeichnis.
+    [Test] procedure Insert_ReadOnlyTarget_FailsUntouchedNoTempLeft;
 
     // ---- Ersetzen / Lesen ----
   end;
@@ -105,6 +112,9 @@ begin
   Assert.AreEqual(Length(Want), Length(B), SByteLen);
   Assert.IsTrue(CompareMem(@Want[0], @B[0], Length(Want)),
     'Bytes weichen ab - mehr als die Zielzeile veraendert');
+  // Atomarer Weg (G03-02): die Nachbardatei ist getauscht, nicht liegen
+  // geblieben.
+  Assert.IsFalse(TFile.Exists(P + '.sca-tmp'), 'Temp-Datei getauscht');
 end;
 
 procedure TTestSourceLineEdit.Insert_LfOnly_KeepsLf_Everywhere;
@@ -211,6 +221,52 @@ begin
   After := ReadBytes(P);
   Assert.AreEqual(Length(Before), Length(After),
     'Fehlschlag darf die Datei nicht anfassen');
+end;
+
+procedure TTestSourceLineEdit.Insert_Utf32LeBom_FailsUntouched;
+var
+  P, Err : string;
+  Before : TBytes;
+  After  : TBytes;
+begin
+  // 'a' CRLF 'b' CRLF als UTF-32LE. Vorher griff die UTF-16LE-Probe
+  // (FF FE) zuerst; als UTF-16 gelesen bestand die Datei die Byte-Probe,
+  // und InsertLineAbove lieferte True mit einer UTF-16-Zeile darin.
+  P := WriteBytes('u32.pas', [$FF, $FE, 0, 0,
+    Ord('a'), 0, 0, 0, 13, 0, 0, 0, 10, 0, 0, 0,
+    Ord('b'), 0, 0, 0, 13, 0, 0, 0, 10, 0, 0, 0]);
+  Before := ReadBytes(P);
+  Assert.IsFalse(TSourceLineEdit.InsertLineAbove(P, 2, 'x', Err),
+    'UTF-32 darf nicht als UTF-16 beschrieben werden');
+  Assert.IsTrue(Err <> '', 'Fehlertext muss den Grund nennen');
+  After := ReadBytes(P);
+  Assert.AreEqual(Integer(Length(Before)), Integer(Length(After)), SByteLen);
+  Assert.IsTrue(CompareMem(@Before[0], @After[0], Length(Before)),
+    'Fehlschlag darf die Datei nicht anfassen');
+end;
+
+procedure TTestSourceLineEdit.Insert_ReadOnlyTarget_FailsUntouchedNoTempLeft;
+var
+  P, Err : string;
+  Before : TBytes;
+  After  : TBytes;
+begin
+  P := WriteBytes('ro.pas', [Ord('a'), 13, 10, Ord('b'), 13, 10]);
+  Before := ReadBytes(P);
+  Assert.IsTrue(FileSetReadOnly(P, True), 'Schreibschutz setzen');
+  try
+    Assert.IsFalse(TSourceLineEdit.InsertLineAbove(P, 2, 'x', Err),
+      'schreibgeschuetztes Ziel');
+    Assert.IsTrue(Err <> '', 'Fehlertext fuer die Statuszeile');
+    After := ReadBytes(P);
+    Assert.AreEqual(Integer(Length(Before)), Integer(Length(After)), SByteLen);
+    Assert.IsTrue(CompareMem(@Before[0], @After[0], Length(Before)),
+      'Fehlschlag darf die Datei nicht anfassen');
+    Assert.IsFalse(TFile.Exists(P + '.sca-tmp'), 'keine Temp-Leiche');
+  finally
+    // Sonst scheitert TearDown am Loeschen des Verzeichnisses.
+    FileSetReadOnly(P, False);
+  end;
 end;
 
 { ---- Ersetzen / Lesen ---- }

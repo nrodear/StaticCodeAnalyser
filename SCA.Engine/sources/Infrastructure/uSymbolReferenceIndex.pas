@@ -254,6 +254,13 @@ var
   // Trade-off: kann zu Under-Reporting bei Visibility-Detektoren
   // fuehren wenn ein TP-Member zufaellig denselben Namen hat wie ein
   // bare 'Obj.Field' irgendwo - bewusst akzeptiert (A.3-Audit).
+  //
+  // Links vom Punkt zaehlt auch das Ende eines AUSDRUCKS: ']' (A[i].Count),
+  // ')' (Foo(x).Count, TFoo(P).Next) und '^' (P^.Next). Vorher stand dort
+  // nur ein Bezeichner-Ende; die drei Formen fehlten in Bedingungen und
+  // RHS, und SCA050-052/107/184 hielten einen extern benutzten Member fuer
+  // unbenutzt (FP; Review Woche G03-18). Registriert wird wie immer nur
+  // der Member rechts.
   var
     i, L, StartSecond : Integer;
     MemberName : string;
@@ -262,13 +269,16 @@ var
     i := 1;
     while i <= L do
     begin
-      if not IsIdentCharLocal(Expr[i]) then
+      if CharInSet(Expr[i], [']', ')', '^']) then
+        Inc(i)   // Ausdrucksende: weiter wie hinter einem Bezeichner
+      else if not IsIdentCharLocal(Expr[i]) then
       begin
         Inc(i);
         Continue;
-      end;
-      // Erstes Ident (potentielles 'Obj')
-      while (i <= L) and IsIdentCharLocal(Expr[i]) do Inc(i);
+      end
+      else
+        // Erstes Ident (potentielles 'Obj')
+        while (i <= L) and IsIdentCharLocal(Expr[i]) do Inc(i);
       // Leerraum um den Punkt ueberspringen: die if-Bedingung steht mit
       // einem Leerzeichen nach jedem Token im AST ('Obj . Member'), while/
       // case/for kompakt - beide Formen muessen den Member melden (sonst FP
@@ -378,7 +388,7 @@ procedure TSymbolReferenceIndex.CollectPublicMembersFrom(RootNode: TAstNode);
 // FPublicMembers eintragen. Struktur im AST:
 //   nkClass -> nkVisibilitySection (Name='published'/'public'/...)
 //             -> nkMethod / nkField / nkProperty
-// Default-Visibility ist 'published' (siehe uParser2 Zeile 740).
+// Default-Visibility ist 'published' (siehe TParser2.ParseClassBody).
 var
   ClassNodes : TList<TAstNode>;
   CN, VisSection, Member : TAstNode;
@@ -395,10 +405,12 @@ begin
         VisSection := CN.Children[i];
         if VisSection.Kind <> nkVisibilitySection then Continue;
         VisLow := LowerCase(VisSection.Name);
-        // Nur 'public' und 'published' interessieren. 'private',
-        // 'protected', 'strictprivate', 'strictprotected' sind per
-        // Definition nicht extern aufrufbar -> kein bare-Call von
-        // ausserhalb der eigenen Unit moeglich.
+        // Nur 'public' und 'published' interessieren. 'private' und
+        // 'protected' sind per Definition nicht extern aufrufbar -> kein
+        // bare-Call von ausserhalb der eigenen Unit moeglich. 'strict'
+        // verwirft der Parser: 'strict private' heisst im AST 'private'
+        // (T.Value in ParseClassBody), einen Sektionsnamen 'strictprivate'
+        // gibt es nicht.
         if (VisLow <> 'public') and (VisLow <> 'published') then Continue;
         for j := 0 to VisSection.Children.Count - 1 do
         begin

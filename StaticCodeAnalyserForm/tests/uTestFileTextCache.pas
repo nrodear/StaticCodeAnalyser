@@ -317,7 +317,13 @@ begin
   try
     Assert.IsTrue(LoadFileSmart(F, SL), 'nicht blind');
     Assert.AreEqual<Integer>(1, SL.Count);
-    Assert.AreEqual<Integer>(6, Length(SL[0]), 'sechs Bytes, sechs Zeichen');
+    // Erwartung ueber TEncoding.Default selbst, nicht als feste Laenge
+    // (Review Woche G03-23): 'sechs Zeichen' gilt nur fuer eine
+    // Einzelbyte-ACP; auf 932/936 oder mit der UTF-8-Systemcodepage fasst
+    // Windows C0 80 anders zusammen - der Test pruefte die Codepage des
+    // Rechners statt der Rueckfall-Politik.
+    Assert.AreEqual('ab' + TEncoding.Default.GetString(TBytes.Create($C0, $80)) +
+      'cd', SL[0], 'als Default-Codepage gelesen');
     Assert.IsTrue(SL[0].StartsWith('ab') and SL[0].EndsWith('cd'));
   finally
     SL.Free;
