@@ -9,8 +9,9 @@ unit uRdxSuppress;
 //   * '// noinspection A, B' gilt fuer ZWEI Ziele: die naechste nicht-leere
 //     Zeile (auch eine Kommentarzeile, etwa ein TODO) und die naechste
 //     Code-Zeile; Leerzeilen zaehlen nicht (BuildMap). Kommentarzeile heisst
-//     dabei NUR eine Zeile, die ohne Leerraum davor mit '//' beginnt - eine
-//     Zeile mit '{' oder '(*' ist fuer den Core Code (IsCommentOnlyLine).
+//     dabei NUR eine Zeile, die nach dem fuehrenden Leerraum mit '//'
+//     beginnt (TrimLeft, wie IsCommentOnlyLine - eingerueckt zaehlt) - eine
+//     Zeile mit '{' oder '(*' ist fuer den Core Code.
 //   * Gestapelte Marker vereinigt der Core nur fuer das CODE-Ziel. Eine
 //     Kommentarzeile erreicht allein der Marker, fuer den sie die naechste
 //     nicht-leere Zeile ist; fuer einen Marker weiter oben ist das schon
@@ -378,7 +379,8 @@ begin
 end;
 
 // Kommentarzeile nach der Regel des Cores (uSuppression.IsCommentOnlyLine):
-// ohne Leerraum davor beginnt die Zeile mit '//'. Bewusst NUR diese Regel -
+// nach dem fuehrenden Leerraum (TrimLeft) beginnt die Zeile mit '//' - auch
+// eingerueckt. Bewusst NUR diese Regel -
 // eine Zeile mit '{' oder '(*' ist fuer den Core Code (Gegenpruefung R1:
 // dort verbraucht der Core den Marker).
 function IsCoreCommentLine(const AText: string): Boolean;

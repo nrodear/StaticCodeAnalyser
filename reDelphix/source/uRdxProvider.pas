@@ -76,7 +76,7 @@ interface
 uses
   System.SysUtils, System.Classes,
   uEngineApi, uRefactorInfo, uMethodd12, uFindingActions,
-  uRdxRecipes, uRdxScopeTable,
+  uRdxScopeTable,
   uRdxBufferMath,   // TRdxTextSource, SpanFitsEditor
   uRdxRecipeRunner;
 
@@ -215,9 +215,15 @@ type
     // Der Einstieg des Hosts (TFindingActionProvider).
     function Provide(const AFinding: TLeakFinding): TArray<TFindingAction>;
   public
+    // Create baut die Rezeptlisten und den Quellstellen-Dienst; Destroy
+    // meldet ab (UnregisterAtHost) und gibt beides frei. Von aussen nur
+    // ueber Instance/Shutdown - die Tests erzeugen eigene Anbieter.
     constructor Create;
     destructor Destroy; override;
 
+    // Der eine Anbieter des Pakets: beim ersten Aufruf erzeugt (lazy),
+    // danach derselbe; Shutdown gibt ihn frei, ein spaeterer Aufruf erzeugte
+    // einen neuen. Einziger Einstieg fuer uRdxRegister.
     class function Instance: TRdxProvider; static;
     // Abmelden und freigeben - aus der finalization von uRdxRegister.
     class procedure Shutdown; static;
@@ -652,7 +658,7 @@ procedure TRdxProvider.AddSimpleFix(var AList: TArray<TFindingAction>;
   // Ein Eintrag zu AOutcome: mit seinen Ersetzungen oder gesperrt mit Grund.
   // Menuetext, Variante und Kennzeichnung (E2) kommen aus der Tabelle;
   // ohne Menuetext kein Eintrag - bis Charge R8 stand dann der interne
-  // Name der Art im Menue (uTestRdxFixTable haelt jede Zeile vollstaendig).
+  // Name der Art im Menue (uTestRdxFixTable pinnt jede Zeile).
   procedure AddOutcome(const AOutcome: TRdxFixOutcome);
   var
     Caption : string;
@@ -675,8 +681,10 @@ procedure TRdxProvider.AddSimpleFix(var AList: TArray<TFindingAction>;
 var
   Alt : TRdxFixOutcome;
 begin
+  // Nur Pascal-Quelltext kommt bis hierher (FindingDiagnosis) - die
+  // Gates IsPascalSource in den Rezepten waren seit R1-04 unerreichbar
+  // (Wochen-Review 2026-10-21).
   if not TRdxFixTable.Handles(ACtx.Finding.Kind)
-     or not IsPascalSource(ACtx.FileName)
      or (ACtx.FixMode = FIX_NONE) then Exit;
   AddOutcome(TRdxFixTable.FixFor(FSource.Places, ACtx.Lines, ACtx.Finding,
     FUsesNames));
@@ -694,8 +702,7 @@ var
   Why : string;
 begin
   // Ein wirkungsloser Marker wird entfernt, nicht seinerseits unterdrueckt.
-  if (ACtx.Finding.Kind = fkUnusedSuppression)
-     or not IsPascalSource(ACtx.FileName) then Exit;
+  if ACtx.Finding.Kind = fkUnusedSuppression then Exit;
   if TRdxSuppress.LineMarker(ACtx.Lines, ACtx.Line, ACtx.KindName, E, Why) then
     AddReplace(AList, Format(_('Suppress here (// noinspection %s)'),
       [ACtx.KindName]), ACtx.FileName, E, fakSuppress);
@@ -716,9 +723,9 @@ begin
   // SCA165 nicht prueft), steht der Eintrag gesperrt mit dem Grund da -
   // die Birne zaehlt nur verfuegbare Hilfen. Nur '//'-Marker in Pascal-
   // Quelltext: ein '; noinspection' einer .ini kennt RemoveMarker nicht
-  // (Review R1, missed 1; Provide liest solche Dateien gar nicht mehr).
+  // (Review R1, missed 1) - Provide liest solche Dateien gar nicht
+  // (FindingDiagnosis).
   if (ACtx.Finding.Kind <> fkUnusedSuppression)
-     or not IsPascalSource(ACtx.FileName)
      or (ACtx.FixMode = FIX_NONE) then Exit;
   if not TRdxSuppress.RemoveMarker(ACtx.Lines, ACtx.Line, E, Why) then
   begin
@@ -770,9 +777,10 @@ begin
   try
     FUsesNames := TRdxRecipeRunner.UsesNamesOf(FSource.Places);
 
-    Meta         := TRuleCatalog.GetRuleCanonical(ACtx.Finding.Kind);
-    Anchor       := LowerCase(Meta.Anchor);
-    ACtx.FixMode := LowerCase(Meta.FixMode);
+    // fixMode steht schon im Kontext (Provide, vor allen Rezepten); hier
+    // nur noch der Anker der Regel.
+    Meta   := TRuleCatalog.GetRuleCanonical(ACtx.Finding.Kind);
+    Anchor := LowerCase(Meta.Anchor);
     RdxLog('Provide %s %s:%d anchor=%s fixMode=%s quelle=%s%s',
       [ACtx.Finding.ResolvedRuleId, ExtractFileName(ACtx.FileName), ACtx.Line,
        Anchor, ACtx.FixMode, SOURCE_NAMES[ASource], OPEN_NAMES[Opened]]);
@@ -814,15 +822,18 @@ begin
 end;
 
 // Warum es zum Fund nichts gibt, bevor eine Datei gelesen wird: kein
-// Dateiname, Datei fehlt, keine Zeile - oder kein Pascal-Quelltext (Review
-// R1-04, s. Kopf: fuer andere Dateien gibt es kein Rezept, auch kein
-// Text-Rezept, missed 1). '' = weiter. Bis R1-05 vier Zweige in Provide.
+// Dateiname, keine Zeile - oder kein Pascal-Quelltext (Review R1-04, s.
+// Kopf: fuer andere Dateien gibt es kein Rezept, auch kein Text-Rezept,
+// missed 1). '' = weiter. Bis R1-05 vier Zweige in Provide. Ob die Datei
+// auf der Platte liegt, fragt Provide erst, wenn sie nicht im Editor offen
+// ist: FileExists auf einer getrennten Freigabe blockierte sonst JEDEN
+// Provide (Gluehbirne je Caret-Zeile, Hauptthread) fuer den SMB-Timeout -
+// auch fuer eine offene Datei, deren Puffer die Wahrheit ist
+// (Wochen-Review 2026-10-21; gemessen 2,5 bis 16 s, uRdxPaths).
 function FindingDiagnosis(const AFinding: TLeakFinding): string;
 begin
   if AFinding.FileName = '' then
     Result := _('finding without file name')
-  else if not FileExists(AFinding.FileName) then
-    Result := Format(_('file not found: %s'), [AFinding.FileName])
   else if AFinding.LineInt < 1 then
     Result := _('finding without line')
   else if not IsPascalSource(AFinding.FileName) then
@@ -862,6 +873,12 @@ begin
   begin
     Add(Result, DIAG_PREFIX + _('editor buffer empty or not readable'), '',
       False, nil);
+    Exit;
+  end;
+  if (Source = txDisk) and not FileExists(AFinding.FileName) then
+  begin
+    Add(Result, DIAG_PREFIX + Format(_('file not found: %s'),
+      [AFinding.FileName]), '', False, nil);
     Exit;
   end;
   Lines := TStringList.Create;

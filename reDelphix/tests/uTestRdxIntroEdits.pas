@@ -40,7 +40,7 @@ type
     // TextOf: Zeilen, Byte-Anfaenge, Zeilenende
     [Test] procedure TextOfCrLfFinalEol;
     [Test] procedure TextOfLfNoFinalEolAndEmpty;
-    [Test] procedure TextOfMixedCrLfWins;
+    [Test] procedure TextOfMixedFirstEolWins;
     [Test] procedure TextOfBomStartsInBytes;
     // PrevCodeRow
     [Test] procedure PrevCodeRowSkipsBlankAndComments;
@@ -546,7 +546,7 @@ end;
 // Ein CR am Pufferende ohne LF gehoert laut Interface zum Zeilenende der
 // letzten Zeile (sie endet mit 'x'); Ends traegt dafuer '', RowEol den
 // Rueckfall.
-procedure TTestRdxIntroEdits.TextOfMixedCrLfWins;
+procedure TTestRdxIntroEdits.TextOfMixedFirstEolWins;
 var
   T : TRdxIntroText;
 begin

@@ -249,6 +249,13 @@ begin
   // geaendert (diese Form meldet er nicht).
   AssertRefused(UnitWith([], ['  Foo;', '  if Foo(200_000) > X then Bar;']),
     'Foo(200_000) > X', '200', 'Zeile verschoben?');
+  // Trennerwert UND exakter Wert in derselben Bedingung: der Detektor
+  // meinte vielleicht das '200_000' (sein erster Vergleich in
+  // Op-Reihenfolge) - die Hilfe ersetzte sonst das '200' von Y, und der
+  // Fund blieb (Wochen-Review 2026-10-21). Gesperrt als mehrdeutig.
+  AssertRefused(UnitWith([], ['  Foo;',
+    '  if (X > 200_000) or (Y > 200) then Bar;']), 'X > 200_000', '200',
+    'vergleicht mit 200_000 und mit 200 - mehrdeutig');
 end;
 
 // '200.5' daneben zaehlt nicht - das eine "200" ist eindeutig.
@@ -433,19 +440,17 @@ end;
 
 // ---- Platte (Check in uRdxFixTable) ----
 
-// Ein frischer Baum TEMP\rdx_q14_<GUID>\ (mit Trenner) - eigen je Test,
-// damit nichts aus einem frueheren Lauf oder aus TEMP selbst im Fenster von
-// FileReason liegt (Gegen-Review Q14, Minor 14; RemoveTree raeumt ab).
-function FreshDir(const AName: string): string;
+// Ein frischer Baum TEMP\rdx_q14_<GUID>\AName\ (mit Trenner) - eigen je
+// Test, damit nichts aus einem frueheren Lauf oder aus TEMP selbst im
+// Fenster von FileReason liegt (Gegen-Review Q14, Minor 14). Die
+// GUID-Wurzel kommt in ARoot: RemoveTree(ARoot) raeumt ab. Bis zum
+// Wochen-Review 2026-10-21 leiteten die Tests sie per ParentDir-Kette ab -
+// eine Ebene weniger, und RemoveTree loeschte TEMP selbst.
+function FreshDir(const AName: string; out ARoot: string): string;
 begin
-  Result := NewTempDir('rdx_q14_') + AName + PathDelim;
+  ARoot := NewTempDir('rdx_q14_');
+  Result := ARoot + AName + PathDelim;
   ForceDirectories(Result);
-end;
-
-// Das Verzeichnis ueber ADir (mit Trenner) - die GUID-Wurzel von FreshDir.
-function ParentDir(const ADir: string): string;
-begin
-  Result := ExtractFilePath(ExcludeTrailingPathDelimiter(ADir));
 end;
 
 // Die Dateiart (.pp, .lpr) und ein Lazarus-Projekt bzw. -Paket im
@@ -453,12 +458,12 @@ end;
 // eine Ebene ueber den Units); drei darueber zaehlt nicht mehr.
 procedure TTestRdxMagicFix.Disk_LazarusProjectNearUnit;
 var
-  Root, Sub, U, R : string;
+  Tmp, Root, Sub, U, R : string;
 begin
   Assert.IsTrue(Pos('FPC 3.2', TRdxMagicFixes.FileReason('C:\x\unit1.pp')) > 0);
   Assert.IsTrue(Pos('.lpr', TRdxMagicFixes.FileReason('project1.LPR')) > 0);
   Assert.AreEqual('', TRdxMagicFixes.FileReason(''));
-  Root := FreshDir('laz');
+  Root := FreshDir('laz', Tmp);
   Sub := Root + 'a' + PathDelim;
   U := Sub + 'b' + PathDelim + 'c' + PathDelim + 'u.pas';
   ForceDirectories(ExtractFilePath(U));
@@ -473,7 +478,7 @@ begin
     R := TRdxMagicFixes.FileReason(U);
     Assert.IsTrue(Pos('prog.lpr', R) > 0, R);
   finally
-    RemoveTree(ParentDir(Root));
+    RemoveTree(Tmp);
   end;
 end;
 
@@ -482,11 +487,11 @@ end;
 // Include ohne beides nicht.
 procedure TTestRdxMagicFix.Disk_IncludeTraces;
 var
-  Dir, U, R : string;
-  SL        : TStringList;
-  Map       : TRdxCodeMap;
+  Tmp, Dir, U, R : string;
+  SL             : TStringList;
+  Map            : TRdxCodeMap;
 begin
-  Dir := FreshDir('inc') + 'a' + PathDelim + 'b' + PathDelim;
+  Dir := FreshDir('inc', Tmp) + 'a' + PathDelim + 'b' + PathDelim;
   ForceDirectories(Dir);
   U := Dir + 'u.pas';
   SL := TStringList.Create;
@@ -510,7 +515,7 @@ begin
   finally
     Map.Free;
     SL.Free;
-    RemoveTree(ParentDir(ParentDir(ParentDir(Dir))));
+    RemoveTree(Tmp);
   end;
 end;
 

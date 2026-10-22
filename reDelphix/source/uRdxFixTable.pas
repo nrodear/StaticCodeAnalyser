@@ -31,8 +31,11 @@ unit uRdxFixTable;
 // i18n_extract.py liest nur _('..'), _(KONSTANTE) und _(ARRAY[i]); ein
 // Record-Feld bliebe fuer template.pot unsichtbar, und msgmerge markierte
 // die Uebersetzungen als obsolet. uTestRdxFixTable haelt die drei Arrays
-// zusammen (gleicher Index, kein leerer Menuetext, zweiter Menuetext genau
-// mit zweitem Planer).
+// zusammen: eine Erwartungstabelle pinnt je Zeile Art, Planer (Name ueber
+// PLANNER_NAMES), Menuetext, Kennzeichnung und zweiten Eintrag samt
+// Menuetext - ein vertauschtes 'Plan:' oder ein verschobener Menuetext
+// wird dort rot (Wochen-Review 2026-10-21; bis dahin pruefte der Test nur
+// "nicht leer" und "nicht KindName").
 
 interface
 
@@ -107,6 +110,10 @@ type
     class function RowCount: Integer; static;
     class function Row(AIndex: Integer): TRdxFixRow; static;
     class function RawCaption(AIndex, AVariant: Integer): string; static;
+    // Fuer uTestRdxFixTable: der Name des Planers der Zeile AIndex (AVariant
+    // 0) bzw. ihres zweiten Eintrags (1) - '' ohne, '?' fuer einen Planer,
+    // der in PLANNER_NAMES fehlt.
+    class function PlannerName(AIndex, AVariant: Integer): string; static;
   end;
 
 implementation
@@ -197,7 +204,12 @@ const
     + 'gehen mit';
   R_METHOD_HINT  = 'gleiche Bedeutung - Deklaration und Implementierung '
     + 'gehen, der Name steht sonst nirgends im Code der Datei';
-  // Charge Q (zehn einfache Hilfen, UNGEBAUT): SCA115, SCA094, SCA183, SCA093,
+  // Charge H3a (Aufraeumen): SCA070, SCA053.
+  R_COMMENTED_HINT = 'gleiche Bedeutung - nur Kommentar faellt weg; die '
+    + 'Versionsverwaltung kennt ihn noch';
+  R_UNUSED_VAR_HINT = 'gleiche Bedeutung - die Variable kommt nirgends sonst '
+    + 'vor';
+  // Charge Q (zehn einfache Hilfen): SCA115, SCA094, SCA183, SCA093,
   // SCA161, SCA083, SCA061, SCA063, SCA064 (SCA046 traegt seine Hinweise in
   // uRdxForRangeFix).
   R_HTTPS_HINT    = 'nur das Schema; der Server muss https auf dem '
@@ -217,7 +229,7 @@ const
   R_BLANKS_HINT   = 'nur Leerraum am Zeilenende';
   R_LOWER_HINT    = 'gleiche Bedeutung - Delphi unterscheidet Gross- und '
     + 'Kleinschreibung nicht';
-  // Charge R (zehn weitere Hilfen, UNGEBAUT): SCA002, SCA159, SCA077, SCA065,
+  // Charge R (zehn weitere Hilfen): SCA002, SCA159, SCA077, SCA065,
   // SCA068, SCA076, SCA179, SCA180, SCA181, SCA060.
   R_EMPTYEXCEPT_HINT = 'eine bisher verschluckte Ausnahme laeuft jetzt nach '
     + 'aussen weiter - der Aufrufer muss sie behandeln; war das Verschlucken '
@@ -241,14 +253,6 @@ const
   R_GOTO_EXIT_HINT = 'gleiche Bedeutung - die Marke steht am Routinenende; '
     + 'sie bleibt stehen und wird, wenn kein goto mehr zu ihr springt, als '
     + 'ungenutzte Marke gemeldet (Hinweis/Warnung)';
-  R_FORM_UNREADABLE = 'Formdatei %s nicht lesbar (%s) - eine Ereignis-'
-    + 'Bindung ist nicht auszuschliessen';
-  // SCA147: Formdateien, die eine Methode per Name an ein Ereignis binden.
-  FORM_EXTENSIONS: array[0..2] of string = ('.dfm', '.fmx', '.lfm');
-  R_COMMENTED_HINT = 'gleiche Bedeutung - nur Kommentar faellt weg; die '
-    + 'Versionsverwaltung kennt ihn noch';
-  R_UNUSED_VAR_HINT = 'gleiche Bedeutung - die Variable kommt nirgends sonst '
-    + 'vor';
   // Charge H4 (try/finally): alle gekennzeichnet (E2) - B laeuft danach
   // auch dort, wo es bisher uebersprungen wurde; das ist der Fix.
   R_TRY_OBJECT_HINT = 'Free laeuft jetzt auch bei einer Ausnahme und bei Exit '
@@ -284,18 +288,23 @@ const
   // braucht eine Markierung (Gegen-Review Q14, Minor 13).
   R_MAGIC_HINT = 'gleiche Bedeutung - die Konstante %s haelt das Literal; '
     + 'umbenennen von Hand oder mit Refactor > Rename (Strg+Umschalt+E)';
-  // SCA014 auf einem Netzlaufwerk: die Hilfe liest dort keine Projekt- und
-  // Include-Dateien (Gegen-Review Q14, Verdacht e; UNC prueft FileReason).
-  R_MAGIC_REMOTE = 'Netzlaufwerk %s - die Hilfe liest dort keine Projekt- '
-    + 'und Include-Dateien (Menueaufbau im Hauptthread); von Hand';
-  // SCA147/SCA164 auf einem Netzpfad bzw. Netzlaufwerk (Review FB, R2-07):
-  // dieselbe Regel wie SCA014 - FileExists auf einer nicht erreichbaren
-  // Freigabe blockierte den IDE-Hauptthread (Gegen-Review R4-03: 2,5 bis
-  // 16 s je Aufruf).
+
+  // ---- Gruende, Dateiarten und Menuetext-Bausteine (keine Hinweise) ----
+  // SCA147: Formdateien, die eine Methode per Name an ein Ereignis binden.
+  FORM_EXTENSIONS: array[0..2] of string = ('.dfm', '.fmx', '.lfm');
+  R_FORM_UNREADABLE = 'Formdatei %s nicht lesbar (%s) - eine Ereignis-'
+    + 'Bindung ist nicht auszuschliessen';
+  // SCA014, SCA147 und SCA164 auf einem Netzpfad bzw. Netzlaufwerk (Review
+  // FB, R2-07; SCA014 Gegen-Review Q14, Verdacht e): FileExists auf einer
+  // nicht erreichbaren Freigabe blockierte den IDE-Hauptthread (Gegen-Review
+  // R4-03: 2,5 bis 16 s je Aufruf). EIN Text fuer die eine Regel - bis zum
+  // Wochen-Review 2026-10-21 hatte SCA014 einen eigenen fuer das
+  // Netzlaufwerk (RemoteDriveReason, R_MAGIC_REMOTE).
   R_REMOTE_FILES = 'Netzpfad %s - die Hilfe liest dort keine %s '
     + '(Menueaufbau im Hauptthread); von Hand';
   WHAT_FORMS    = 'Formdateien';
   WHAT_INCLUDES = 'Include-Dateien';
+  WHAT_PROJECT_FILES = 'Projekt- und Include-Dateien';
   // SCA001: nur diese Variante bekommt die Hilfe (Feld TLeakFinding.
   // LeakVariant, das uLeakDetector2 setzt; properties.variant im SARIF).
   LEAK_VARIANT_FOF = 'freed-outside-finally';
@@ -440,24 +449,10 @@ begin
   Result := SelfAssignReason(APlaces, AMap, AFinding.LineInt, APlan.Target);
 end;
 
-// SCA014: liegt die Datei auf einem Netzlaufwerk (uRdxPaths.RemoteDriveOf,
-// seit Charge B2S-a auch lang geschrieben: '\\?\Z:\..')? Dann liest die
-// Hilfe nichts von der Platte - der Menueaufbau laeuft im Hauptthread
-// (Gegen-Review Q14, Verdacht e; UNC prueft TRdxMagicFixes.FileReason).
-function RemoteDriveReason(const AFileName: string): string;
-var
-  Drive : string;
-begin
-  Result := '';
-  Drive := RemoteDriveOf(AFileName);
-  if Drive <> '' then
-    Result := Format(R_MAGIC_REMOTE, [Drive]);
-end;
-
-// SCA147/SCA164 (Review FB, R2-07): liegt die Unit im Netz
+// SCA014, SCA147, SCA164 (Review FB, R2-07): liegt die Unit im Netz
 // (uRdxPaths.IsNetworkPath: UNC, auch mit '/' oder als '\\?\UNC\..', oder
 // ein Netzlaufwerk; '\\?\C:\..' ist lokal)? Dann liest die Hilfe dort
-// nichts (AWhat: was sie lesen wollte) - dieselbe Regel wie SCA014. Der
+// nichts (AWhat: was sie lesen wollte). Der
 // Grund nennt das Verzeichnis ohne Namensraum-Vorsatz bzw. das
 // Netzlaufwerk. '' oder der Grund.
 function NetworkPathReason(const AFileName, AWhat: string): string;
@@ -490,13 +485,14 @@ begin
       APlan.Includes, APlan.Name);
 end;
 
-// SCA014: was nur die Platte weiss - Netzlaufwerk, Lazarus-Dateiart oder
-// -Projekt bzw. altes Delphi-Projekt neben der Unit, die Compiler-Weichen
-// ihrer Includes (TRdxMagicFixes).
+// SCA014: was nur die Platte weiss - Netzpfad (NetworkPathReason, vor
+// jedem Plattenzugriff), Lazarus-Dateiart oder -Projekt bzw. altes
+// Delphi-Projekt neben der Unit, die Compiler-Weichen ihrer Includes
+// (TRdxMagicFixes).
 function MagicCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
   AFinding: TLeakFinding; const APlan: TRdxMagicPlan): string;
 begin
-  Result := RemoteDriveReason(AFinding.FileName);
+  Result := NetworkPathReason(AFinding.FileName, WHAT_PROJECT_FILES);
   if Result = '' then
     Result := TRdxMagicFixes.FileReason(AFinding.FileName);
   if Result = '' then
@@ -604,9 +600,8 @@ begin
   begin
     Result.Enabled := False;
     Result.Edits   := nil;
-    Result.Reason  := Format('Zeile %d traegt %s.Free, der Fund nennt %s - '
-      + 'Zeile verschoben? Datei neu pruefen',
-      [AFinding.LineInt, Result.Name, Named]);
+    Result.Reason  := MsgMovedSuffix(Format('Zeile %d traegt %s.Free, der '
+      + 'Fund nennt %s', [AFinding.LineInt, Result.Name, Named]));
   end;
 end;
 
@@ -1044,6 +1039,13 @@ end;
 
 { ---- Die Tabelle ---- }
 
+type
+  // Ein Eintrag von PLANNER_NAMES.
+  TRdxPlannerName = record
+    Name : string;
+    Plan : TRdxFixPlanner;
+  end;
+
 const
   FIX_ROW_HIGH = 59;
 
@@ -1142,7 +1144,7 @@ const
     // (Name der Konstante).
     (Kind: fkMagicNumber; Plan: PlanMagicNumber;
      Hint: ''; HintByPlanner: True; Changes: False; Alt: nil),
-    // Charge Q: zehn einfache Hilfen (UNGEBAUT).
+    // Charge Q: zehn einfache Hilfen.
     // SCA115: aendert das Verhalten (E2) - der Server muss https koennen.
     (Kind: fkHttpInsteadOfHttps; Plan: PlanHttps;
      Hint: R_HTTPS_HINT; HintByPlanner: False; Changes: True; Alt: nil),
@@ -1166,7 +1168,7 @@ const
      Hint: R_BLANKS_HINT; HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkLowercaseKeyword; Plan: PlanLowercaseKeyword;
      Hint: R_LOWER_HINT; HintByPlanner: False; Changes: False; Alt: nil),
-    // Charge R: zehn weitere Hilfen (UNGEBAUT).
+    // Charge R: zehn weitere Hilfen.
     (Kind: fkEmptyExcept; Plan: PlanEmptyExcept;
      Hint: R_EMPTYEXCEPT_HINT; HintByPlanner: False; Changes: True; Alt: nil),
     (Kind: fkEmptyOnHandler; Plan: PlanEmptyOnHandler;
@@ -1276,6 +1278,77 @@ const
     '', '', '', '', '', '', '', '', '', ''
   );
 
+  // Die Namen der Planer (PlannerName, fuer uTestRdxFixTable): eine eigene
+  // Liste Name -> Planer, unabhaengig von der Reihenfolge in FIX_ROWS. So
+  // pinnt der Test je Art den Planer - ein vertauschtes 'Plan:' in FIX_ROWS
+  // faellt dort auf (Wochen-Review 2026-10-21, Major P03/P29: welcher Planer
+  // an welcher Art haengt, band bis dahin kein Test). Ein neuer Planer
+  // braucht hier eine Zeile, sonst nennt PlannerName '?'.
+  PLANNER_NAMES: array[0..61] of TRdxPlannerName = (
+    (Name: 'PlanExplicitTObject'; Plan: PlanExplicitTObject),
+    (Name: 'PlanFreeAndNil'; Plan: PlanFreeAndNil),
+    (Name: 'PlanNilComparison'; Plan: PlanNilComparison),
+    (Name: 'PlanAssertMessage'; Plan: PlanAssertMessage),
+    (Name: 'PlanEmptySection'; Plan: PlanEmptySection),
+    (Name: 'PlanFreeWithoutNil'; Plan: PlanFreeWithoutNil),
+    (Name: 'PlanEmptyArgs'; Plan: PlanEmptyArgs),
+    (Name: 'PlanOperand'; Plan: PlanOperand),
+    (Name: 'PlanUnusedUses'; Plan: PlanUnusedUses),
+    (Name: 'PlanCaseElse'; Plan: PlanCaseElse),
+    (Name: 'PlanCaseRaise'; Plan: PlanCaseRaise),
+    (Name: 'PlanBlock'; Plan: PlanBlock),
+    (Name: 'PlanDoubleSemicolon'; Plan: PlanDoubleSemicolon),
+    (Name: 'PlanKeywordIndent'; Plan: PlanKeywordIndent),
+    (Name: 'PlanLegacyInit'; Plan: PlanLegacyInit),
+    (Name: 'PlanCastFree'; Plan: PlanCastFree),
+    (Name: 'PlanEmptyIntent'; Plan: PlanEmptyIntent),
+    (Name: 'PlanEmptyRaise'; Plan: PlanEmptyRaise),
+    (Name: 'PlanMissingRaise'; Plan: PlanMissingRaise),
+    (Name: 'PlanReRaise'; Plan: PlanReRaise),
+    (Name: 'PlanDocSkeleton'; Plan: PlanDocSkeleton),
+    (Name: 'PlanInterfaceGuid'; Plan: PlanInterfaceGuid),
+    (Name: 'PlanMissingOverride'; Plan: PlanMissingOverride),
+    (Name: 'PlanRedundantConditional'; Plan: PlanRedundantConditional),
+    (Name: 'PlanRedundantJump'; Plan: PlanRedundantJump),
+    (Name: 'PlanSelfAssignment'; Plan: PlanSelfAssignment),
+    (Name: 'PlanUnusedRoutine'; Plan: PlanUnusedRoutine),
+    (Name: 'PlanUnusedPrivateMethod'; Plan: PlanUnusedPrivateMethod),
+    (Name: 'PlanCommentedOut'; Plan: PlanCommentedOut),
+    (Name: 'PlanUnusedVar'; Plan: PlanUnusedVar),
+    (Name: 'PlanMissingFinally'; Plan: PlanMissingFinally),
+    (Name: 'PlanMemoryLeak'; Plan: PlanMemoryLeak),
+    (Name: 'PlanLockWithoutFinally'; Plan: PlanLockWithoutFinally),
+    (Name: 'PlanUnpairedLock'; Plan: PlanUnpairedLock),
+    (Name: 'PlanGetMemWithoutFree'; Plan: PlanGetMemWithoutFree),
+    (Name: 'PlanCtorInherited'; Plan: PlanCtorInherited),
+    (Name: 'PlanDtorInherited'; Plan: PlanDtorInherited),
+    (Name: 'PlanResultDefault'; Plan: PlanResultDefault),
+    (Name: 'PlanManagedResult'; Plan: PlanManagedResult),
+    (Name: 'PlanMagicNumber'; Plan: PlanMagicNumber),
+    (Name: 'PlanHttps'; Plan: PlanHttps),
+    (Name: 'PlanRedundantParens'; Plan: PlanRedundantParens),
+    (Name: 'PlanAttrGap'; Plan: PlanAttrGap),
+    (Name: 'PlanTwiceInherited'; Plan: PlanTwiceInherited),
+    (Name: 'PlanTwiceInheritedAlt'; Plan: PlanTwiceInheritedAlt),
+    (Name: 'PlanPointerSubtraction'; Plan: PlanPointerSubtraction),
+    (Name: 'PlanEmptyFinally'; Plan: PlanEmptyFinally),
+    (Name: 'PlanReversedForRange'; Plan: PlanReversedForRange),
+    (Name: 'PlanReversedForRangeAlt'; Plan: PlanReversedForRangeAlt),
+    (Name: 'PlanTabs'; Plan: PlanTabs),
+    (Name: 'PlanTrailingBlanks'; Plan: PlanTrailingBlanks),
+    (Name: 'PlanLowercaseKeyword'; Plan: PlanLowercaseKeyword),
+    (Name: 'PlanEmptyExcept'; Plan: PlanEmptyExcept),
+    (Name: 'PlanEmptyOnHandler'; Plan: PlanEmptyOnHandler),
+    (Name: 'PlanEmptyBlock'; Plan: PlanEmptyBlock),
+    (Name: 'PlanNoSonar'; Plan: PlanNoSonar),
+    (Name: 'PlanTrailingComma'; Plan: PlanTrailingComma),
+    (Name: 'PlanGroupedDeclaration'; Plan: PlanGroupedDeclaration),
+    (Name: 'PlanIgnoreReason'; Plan: PlanIgnoreReason),
+    (Name: 'PlanAttrDuplicate'; Plan: PlanAttrDuplicate),
+    (Name: 'PlanCategoryArg'; Plan: PlanCategoryArg),
+    (Name: 'PlanGotoExit'; Plan: PlanGotoExit)
+  );
+
 var
   // Index der Zeile je Art, -1 ohne - einmal in der initialization gebaut.
   GRowIndex : array[TFindingKind] of Integer;
@@ -1303,6 +1376,24 @@ begin
     Result := FIX_ALT_CAPTIONS[AIndex]
   else
     Result := FIX_CAPTIONS[AIndex];
+end;
+
+class function TRdxFixTable.PlannerName(AIndex, AVariant: Integer): string;
+var
+  P : TRdxFixPlanner;
+  N : TRdxPlannerName;
+begin
+  if AVariant = 1 then
+    P := FIX_ROWS[AIndex].Alt
+  else
+    P := FIX_ROWS[AIndex].Plan;
+  Result := '';
+  if not Assigned(P) then Exit;
+  // '@' vergleicht die Adressen - ohne riefe Delphi die Planer auf.
+  for N in PLANNER_NAMES do
+    if @N.Plan = @P then
+      Exit(N.Name);
+  Result := '?';
 end;
 
 class function TRdxFixTable.FixFor(APlaces: TSourcePlaces; ALines: TStrings;

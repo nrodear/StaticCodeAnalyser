@@ -184,6 +184,7 @@ uses
   uRdxLineFixes,     // Planer SCA123 (CastFreeFix)
   uRdxRaiseFixes,    // Planer SCA020 mit raise (EmptyRaiseFix)
   uRdxRtlTypes,      // IsRtlClassOrInterface: Klasse 'PDFDocument' ist kein Zeiger
+  uRdxText,          // MsgMovedSuffix, MsgStaleSuffix (gemeinsame Texte, C1)
   uUnusedUses,       // KnownIdents: SCA007-Fund am Puffer nachpruefen
   uSourcePlaces;     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
 
@@ -818,12 +819,16 @@ end;
 // aus einem aelteren Scan stammen (Gegen-Review 2026-10-10). Dieselben
 // Spuren wie uUnusedUses: ein qualifizierter Bezug ('Classes.TList') und
 // einer der bekannten Bezeichner der Unit als Code-Wort (KnownIdents, mit
-// demselben Kurznamen-Rueckfall fuer RTL-Namespaces).
+// demselben Kurznamen-Rueckfall fuer RTL-Namespaces). Die uses-Klauseln
+// selbst zaehlen nicht: 'uses mormot.core.os, mormot.core.os.security;'
+// las das 'os' '.' des Geschwister-Eintrags als Bezug und sperrte die
+// Hilfe mit "wird im Text benutzt" (Wochen-Review 2026-10-21).
 function UnitStillUsed(AMap: TRdxCodeMap; const AUnit: string): Boolean;
 var
   Low, Short : string;
   Idents     : TArray<string>;
-  T, N       : TRdxToken;
+  T, N, P    : TRdxToken;
+  InUses     : Boolean;
 begin
   Result := False;
   Low := LowerCase(AUnit);
@@ -831,13 +836,20 @@ begin
   Idents := TUnusedUsesDetector.KnownIdents(Low);
   if (Length(Idents) = 0) and TUnusedUsesDetector.IstRtlNamespace(Low) then
     Idents := TUnusedUsesDetector.KnownIdents(Short);
+  P := Default(TRdxToken);
+  InUses := False;
   T := NextToken(AMap, 1, 1);
   while T.Low <> '' do
   begin
     N := After(AMap, T);
-    if ((T.Low = Short) and (N.Low = '.'))
+    if InUses then
+      InUses := T.Low <> ';'
+    else if (T.Low = 'uses') and IsKeywordAfter(T, P) then
+      InUses := True
+    else if ((T.Low = Short) and (N.Low = '.'))
        or (IndexText(T.Low, Idents) >= 0) then
       Exit(True);
+    P := T;
     T := N;
   end;
 end;
@@ -866,8 +878,8 @@ begin
         AIndex := k;
       end;
   if n = 0 then
-    Result := Format('%s steht nicht mehr auf Zeile %d einer uses-Klausel - '
-      + 'Zeile verschoben? Datei neu pruefen', [AUnit, ALine])
+    Result := MsgMovedSuffix(Format('%s steht nicht mehr auf Zeile %d einer '
+      + 'uses-Klausel', [AUnit, ALine]))
   else if n > 1 then
     Result := Format('%s steht mehrmals auf Zeile %d', [AUnit, ALine]);
 end;
@@ -894,8 +906,8 @@ begin
   Map := TRdxCodeMap.Create(ALines);
   try
     if UnitStillUsed(Map, Result.Name) then
-      Result.Reason := Format('%s wird im Text benutzt - der Fund ist aelter '
-        + 'als der Text; Datei neu pruefen', [Result.Name])
+      Result.Reason := MsgStaleSuffix(Format('%s wird im Text benutzt',
+        [Result.Name]))
     else
       Result.Enabled := TRdxStructFixes.RemoveUsesEntry(Map, Clause, Index,
         Result.Edits[0], Result.Reason);

@@ -94,8 +94,10 @@ function PrevCodeRow(const AText: TRdxIntroText; ARow: Integer): Integer;
 // gibt. Ueber die Zeile hinaus prueft TargetAt den Zusammenhang: kein
 // mehrzeiliger String oder Kommentar, kein asm-Block, kein
 // initialization-Abschnitt, keine FPC-Weiche in der Datei, keine
-// Direktive zwischen der Zeile darueber und der Anweisung, und bei
-// begin..end keine offene Kommentargrenze und kein Bedingungsausdruck.
+// Direktive zwischen der Zeile darueber und der Anweisung und keine auf
+// der Anweisungszeile vor dem Literal (mit Block: auf der ganzen Zeile),
+// und bei begin..end keine offene Kommentargrenze und kein
+// Bedingungsausdruck.
 function TargetAt(const AText: TRdxIntroText; ARow, ACol: Integer;
   const ANameBase: string): TRdxIntroTarget;
 
@@ -110,8 +112,8 @@ function IntroduceEdits(const AText: TRdxIntroText;
   const ATarget: TRdxIntroTarget): TRdxIntroByteEdits;
 
 // C1h: wo der Sync-Block endet - Zeile und Zeichenspalte (exklusiv) im
-// Puffer NACH dem Schreiben (Vorbedingung wie IntroduceEdits: Plan.Ok).
-// Normal direkt hinter der letzten Verwendung:
+// Puffer NACH dem Schreiben (Vorbedingung wie IntroduceEdits: Plan.Ok -
+// sonst 0 und 0). Normal direkt hinter der letzten Verwendung:
 // so koppelt die IDE moeglichst wenige andere Bezeichner. Steht davor in
 // der Zeile Nicht-ASCII, endet er am Anfang der Folgezeile, wo Zeichen und
 // Bytes gleich zaehlen: SyncEditBlock liest das Blockende als UTF-8-Bytes
@@ -165,10 +167,22 @@ begin
   Result := Default(TRdxIntroText);
   if Length(ABytes) > 0 then
     Result.Text := TEncoding.UTF8.GetString(ABytes);
-  Result.Starts := [0];
+  // Erst die LFs zaehlen, dann EIN SetLength: die Verkettung je LF kopierte
+  // das Array jedes Mal (quadratisch; der SCA014-Quick-Fix baut den Text je
+  // Fund neu - Wochen-Review 2026-10-21).
+  n := 1;
   for i := 0 to High(ABytes) do
     if ABytes[i] = BYTE_LF then
-      Result.Starts := Result.Starts + [i + 1];
+      Inc(n);
+  SetLength(Result.Starts, n);
+  Result.Starts[0] := 0;
+  n := 1;
+  for i := 0 to High(ABytes) do
+    if ABytes[i] = BYTE_LF then
+    begin
+      Result.Starts[n] := i + 1;
+      Inc(n);
+    end;
   SetLength(Result.Lines, Length(Result.Starts));
   SetLength(Result.Ends, Length(Result.Starts));
   Result.Eol := '';
@@ -322,6 +336,12 @@ begin
     Result := AText.Lines[ARow - 1];
 end;
 
+// Traegt der Text S eine Compiler-Direktive ('{$' oder '(*$')?
+function LineHasDirective(const S: string): Boolean;
+begin
+  Result := (Pos('{$', S) > 0) or (Pos('(*$', S) > 0);
+end;
+
 // Steht auf der Zeile darueber AFromRow oder zwischen ihr und der
 // Anweisung AToRow eine Compiler-Direktive ({$IFDEF ...})? Dann gilt die
 // Zeile darueber nur in einem Zweig der bedingten Uebersetzung: begin und
@@ -338,10 +358,33 @@ var
   i : Integer;
 begin
   for i := AFromRow - 1 to AToRow - 2 do
-    if (i >= 0) and ((Pos('{$', AText.Lines[i]) > 0)
-       or (Pos('(*$', AText.Lines[i]) > 0)) then
+    if (i >= 0) and LineHasDirective(AText.Lines[i]) then
       Exit(True);
   Result := False;
+end;
+
+// Steht auf der Anweisungszeile selbst eine Direktive, die zaehlt? Die
+// Deklaration kommt an den ANFANG der Zeile: eine Direktive vor dem
+// (letzten) ersetzten Literal - '{$ENDIF} X := 42;' - stellte sie in
+// den anderen Zweig der bedingten Uebersetzung (Wochen-Review 2026-10-21:
+// die Spanne von DirectiveBetween endete vor der Anweisungszeile). Mit
+// Block (Plan.Wrap) zaehlt die ganze Zeile: 'end;' kommt hinter ihr Ende,
+// eine Direktive dahinter ('X := 42; {$ENDIF}') laege zwischen begin und
+// end. Geprueft wird die rohe Zeile wie in DirectiveBetween. Vorbedingung:
+// ATarget.Plan.Ok (OldCols hat dann mindestens das Literal am Caret).
+function DirectiveOnStatementRow(const AText: TRdxIntroText;
+  const ATarget: TRdxIntroTarget): Boolean;
+var
+  Line : string;
+  Last : Integer;
+begin
+  Line := AText.Lines[ATarget.SourceRow - 1];
+  if not ATarget.Plan.Wrap then
+  begin
+    Last := ATarget.Plan.OldCols[High(ATarget.Plan.OldCols)];
+    Line := Copy(Line, 1, Last - 1);
+  end;
+  Result := LineHasDirective(Line);
 end;
 
 // Der Abschnitt, in dem Zeile ARow liegt ('c' Code, 'a' asm-Block, 'i'
@@ -412,17 +455,47 @@ begin
   end;
 end;
 
-// Der Code der Zeile AFromRow und der Code-Zeilen darueber, von unten nach
-// oben (0: leer) - fuer uRdxIntroPlan.IfExpressionAbove.
-function CodeFromRowUp(const ARows: TRdxIntroRows; AFromRow: Integer): TArray<string>;
+// Die Einrueckung fuer begin..end um den Zweig der Zweigzeile APrevRow: die
+// ihrer rohen Zeile - schliesst sie einen mehrzeiligen String, die der
+// Zeile, auf der die Anweisung beginnt (aufwaerts ueber die String-Zeilen
+// bis zum Oeffner). PrevForPlan gibt dem Plan dort nur den Code hinter dem
+// Schliesser (' then'), und begin..end bekam EIN Leerzeichen Einrueckung
+// (Wochen-Review 2026-10-21).
+function BranchIndent(const AText: TRdxIntroText; const ARows: TRdxIntroRows;
+  APrevRow: Integer): string;
 var
   Row : Integer;
+  L   : string;
 begin
-  Result := nil;
+  Row := APrevRow;
+  while (Row > 1) and (Row <= Length(ARows)) and (ARows[Row - 1].State = 's') do
+    Dec(Row);
+  L := LineOrEmpty(AText, Row);
+  Result := Copy(L, 1, Length(L) - Length(TrimLeft(L)));
+end;
+
+// Der Code der Zeile AFromRow und der Code-Zeilen darueber, von unten nach
+// oben (0: leer) - fuer uRdxIntroPlan.IfExpressionAbove.
+// Erst zaehlen, dann EIN SetLength (die Verkettung je Zeile war
+// quadratisch, Wochen-Review 2026-10-21).
+function CodeFromRowUp(const ARows: TRdxIntroRows; AFromRow: Integer): TArray<string>;
+var
+  Row, n : Integer;
+begin
+  n := 0;
   Row := AFromRow;
   while Row > 0 do
   begin
-    Result := Result + [ARows[Row - 1].Code];
+    Inc(n);
+    Row := PrevCodeRowIn(ARows, Row);
+  end;
+  SetLength(Result, n);
+  n := 0;
+  Row := AFromRow;
+  while Row > 0 do
+  begin
+    Result[n] := ARows[Row - 1].Code;
+    Inc(n);
     Row := PrevCodeRowIn(ARows, Row);
   end;
 end;
@@ -473,8 +546,10 @@ end;
 
 // Was die Zeilen um einen (fuer sich gueltigen) Plan verbieten: eine
 // Direktive auf oder unter der Zeile darueber bis zur Anweisung - fuer
-// JEDEN Plan, nicht nur mit Block (Pruefer 2026-10-13, Major 4) - und bei
-// begin..end die Grenzen des Blocks (BlockReason). '' oder der Grund.
+// JEDEN Plan, nicht nur mit Block (Pruefer 2026-10-13, Major 4) -, eine
+// Direktive auf der Anweisungszeile vor dem Literal (mit Block: auf der
+// ganzen Zeile; DirectiveOnStatementRow) und bei begin..end die Grenzen
+// des Blocks (BlockReason). '' oder der Grund.
 function PlacementReason(const AText: TRdxIntroText; const ATarget: TRdxIntroTarget;
   const ARows: TRdxIntroRows): string;
 begin
@@ -482,6 +557,10 @@ begin
     Result := 'auf der Zeile darueber oder zwischen ihr und der Anweisung '
       + 'steht eine Direktive - in einem anderen Zweig der bedingten '
       + 'Uebersetzung stuende die Deklaration woanders'
+  else if DirectiveOnStatementRow(AText, ATarget) then
+    Result := 'auf der Anweisungszeile steht vor dem Literal (mit Block: '
+      + 'irgendwo) eine Direktive - die Deklaration bzw. begin..end landete '
+      + 'in einem anderen Zweig der bedingten Uebersetzung'
   else if ATarget.Plan.Wrap then
     Result := BlockReason(AText, ATarget, ARows)
   else
@@ -522,6 +601,8 @@ begin
     Result.Name, PrevState);
   if not Result.Plan.Ok then
     Exit;
+  if Result.Plan.Wrap then
+    Result.Plan.BlockIndent := BranchIndent(AText, Rows, Result.PrevRow);
   Why := PlacementReason(AText, Result, Rows);
   if Why <> '' then
   begin
@@ -578,6 +659,14 @@ var
   Stop  : Integer;   // Spalte hinter der letzten Verwendung
   Extra : Integer;   // Mehrbytes davor in der Zeile
 begin
+  // Wie IntroduceEdits: ein abgelehntes Ziel hat keine Spalten (NewCols
+  // leer) - (0, 0) statt eines Bereichsfehlers (Wochen-Review 2026-10-21).
+  if not ATarget.Plan.Ok or (Length(ATarget.Plan.NewCols) = 0) then
+  begin
+    ARow := 0;
+    ACol := 0;
+    Exit;
+  end;
   Stop := ATarget.Plan.NewCols[High(ATarget.Plan.NewCols)]
     + Length(ATarget.Name);
   Extra := Utf8Len(Copy(ATarget.Plan.NewUseLine, 1, Stop - 1)) - (Stop - 1);
