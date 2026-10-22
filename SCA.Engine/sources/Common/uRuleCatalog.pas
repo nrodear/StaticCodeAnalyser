@@ -329,6 +329,8 @@ uses
   System.Generics.Defaults,        // TIStringComparer - Profilnamen (G5-4)
   uJsonFormat,                     // JsonFormatEscaped (WriteUserProfiles)
   uAtomicFile,                     // TAtomicFile.Swap (WriteUserProfiles)
+  uScaConfigDir,                   // ScaConfigDir - EINE Ablage fuer
+                                   // profiles.json und den Regelkatalog
   uLocalization;               // NormalizeLangCode - EINE Normalisierung
                                    // fuer SetLanguage und Overlay-Lookup
 
@@ -850,14 +852,12 @@ var
   end;
 
   function AppDataDir: string;
-  // %APPDATA%\StaticCodeAnalyser\rules\ - duplizierbarer Pfad statt
-  // uIgnoreList.ConfigDir Import (das wuerde Common-Cycle einfuehren).
-  var
-    AppData : array[0..MAX_PATH] of Char;
+  // %APPDATA%\StaticCodeAnalyser\<ARelName> - die Ablage aus uScaConfigDir
+  // (Review Woche G05-21). Nur MIT APPDATA ein Kandidat: der Temp-
+  // Rueckfall von ScaConfigDir war hier nie ein Suchort.
   begin
-    if GetEnvironmentVariable('APPDATA', AppData, Length(AppData)) > 0 then
-      Result := IncludeTrailingPathDelimiter(AppData) +
-                'StaticCodeAnalyser\' + ARelName
+    if GetEnvironmentVariable('APPDATA') <> '' then
+      Result := ScaConfigDir + ARelName
     else
       Result := '';
   end;
@@ -1558,19 +1558,12 @@ begin
 end;
 
 class function TRuleCatalog.UserProfilesFilePath: string;
-// ZWILLING von TIgnoreList.ConfigDir (uIgnoreList, Infrastructure):
-// dasselbe Verzeichnis, hier absichtlich nachgebildet statt importiert -
-// uRuleCatalog liegt in Common und darf nicht nach Infrastructure
-// greifen. Wer die Ablage verschiebt, muss BEIDE Stellen anfassen.
-var
-  AppData : string;
+// Dasselbe Verzeichnis wie TIgnoreList.ConfigDir: beide nehmen es aus
+// uScaConfigDir (Common-Blatt-Unit, Review Woche G05-21) - uRuleCatalog
+// liegt in Common und darf nicht nach Infrastructure greifen.
 begin
   if FUserProfPath <> '' then Exit(FUserProfPath);
-  AppData := GetEnvironmentVariable('APPDATA');
-  if AppData = '' then
-    AppData := TPath.GetTempPath;
-  Result := IncludeTrailingPathDelimiter(AppData) + 'StaticCodeAnalyser' +
-            PathDelim + 'profiles.json';
+  Result := ScaConfigDir + 'profiles.json';
 end;
 
 class function TRuleCatalog.IsBuiltInProfile(const AName: string): Boolean;

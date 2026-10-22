@@ -119,9 +119,9 @@ function RdxLanguageOverride: string;
 
 // Das Verzeichnis von redelphix.ini UND analyser.ini, mit Trenner. '' =
 // Vorgabe %APPDATA%\StaticCodeAnalyser\ (ohne APPDATA das Temp-
-// Verzeichnis, wie TIgnoreList.ConfigDir). Tests lenken es in ein eigenes
-// Temp-Verzeichnis um; jeder Aufruf verwirft den ini-Cache und erlaubt
-// einen neuen Versuch, die Vorlage anzulegen.
+// Verzeichnis; uScaConfigDir, wie TIgnoreList.ConfigDir). Tests lenken es
+// in ein eigenes Temp-Verzeichnis um; jeder Aufruf verwirft den ini-Cache
+// und erlaubt einen neuen Versuch, die Vorlage anzulegen.
 procedure SetRdxConfigDir(const ADir: string);
 function RdxConfigDir: string;
 
@@ -252,15 +252,13 @@ uses
   System.SysUtils,
   System.Classes,       // TFileStream
   System.SyncObjs,      // TCriticalSection
-  {$IFNDEF FPC}
-  System.IOUtils,       // TPath.GetTempPath (wie TIgnoreList.ConfigDir)
-  {$ENDIF}
+  uScaConfigDir,        // ScaConfigDir - dieselbe Ablage wie
+                        // TIgnoreList.ConfigDir (Review Woche G05-21)
   uLocalization;        // TranslateTo, CurrentLanguage, NormalizeLangCode
 
 const
   RDX_INI_NAME      = 'redelphix.ini';
   ANALYSER_INI_NAME = 'analyser.ini';
-  CONFIG_SUBDIR     = 'StaticCodeAnalyser';
   SECTION_UI        = 'UI';
   KEY_LANGUAGE      = 'Language';
   LANG_AUTO         = 'auto';
@@ -363,46 +361,24 @@ type
 var
   GLock          : TCriticalSection = nil;
   GOverride      : string = '';
-  GConfigDir     : string = '';      // '' = DefaultConfigDir
+  GConfigDir     : string = '';      // '' = ScaConfigDir
   GRdxIni        : TRdxIniFile;
   GAnalyserIni   : TRdxIniFile;
   GTemplateTried : Boolean = False;
 
 { ---- Pfade ---- }
 
-// Das Temp-Verzeichnis wie TPath.GetTempPath in TIgnoreList.ConfigDir -
-// FPC 3.2 kennt System.IOUtils nicht.
-function TempDir: string;
-begin
-  {$IFDEF FPC}
-  Result := GetTempDir;
-  {$ELSE}
-  Result := TPath.GetTempPath;
-  {$ENDIF}
-end;
-
-// %APPDATA%\StaticCodeAnalyser\ - DRILLING von TIgnoreList.ConfigDir
-// (uIgnoreList) und TRuleCatalog.UserProfilesFilePath (uRuleCatalog):
-// nachgebildet statt importiert, weil uIgnoreList die Infrastruktur der
-// Engine nachzieht und im FPC-Pruefstand nicht uebersetzt. Wer die Ablage
-// verschiebt, muss alle drei Stellen anfassen.
-function DefaultConfigDir: string;
-var
-  Base : string;
-begin
-  Base := GetEnvironmentVariable('APPDATA');
-  if Base = '' then
-    Base := TempDir;
-  Result := IncludeTrailingPathDelimiter(Base) + CONFIG_SUBDIR + PathDelim;
-end;
-
-// Nur unter GLock.
+// Nur unter GLock. Die Vorgabe %APPDATA%\StaticCodeAnalyser\ kommt aus
+// uScaConfigDir - bis zur Folgewelle des Wochen-Reviews (G05-21) stand
+// hier die dritte Kopie der Formel neben TIgnoreList.ConfigDir und
+// TRuleCatalog.UserProfilesFilePath. uScaConfigDir bindet nur SysUtils
+// und uebersetzt im FPC-Pruefstand.
 function ConfigDirLocked: string;
 begin
   if GConfigDir <> '' then
     Result := IncludeTrailingPathDelimiter(GConfigDir)
   else
-    Result := DefaultConfigDir;
+    Result := ScaConfigDir;
 end;
 
 { ---- ini lesen ---- }
