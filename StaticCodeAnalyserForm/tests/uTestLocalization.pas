@@ -118,7 +118,12 @@ end;
 
 procedure TTestLocalization.ParsePo_BrokenInput_DoesNotRaise;
 // Auflage des Cutovers: bei kaputter Datei NIE crashen, sondern still auf
-// Englisch zurueckfallen.
+// Englisch zurueckfallen. Dazu der Vertrag des Ergebnisses (Review Woche
+// G05-05: bis dahin nur "keine Exception"): ein Literal ohne
+// schliessendes Quote ist strukturell kaputt (False - LoadLanguage
+// verwirft die Tabelle), Leeres und Text ohne Schluesselwort sind
+// tolerant leer (True, kein Eintrag). Die Ergebnisse erst hinter dem
+// try/except: ein Assert darin waere eine Exception, die der Block schluckt.
 var
   D  : TDictionary<string, string>;
   Ok : Boolean;
@@ -134,6 +139,12 @@ begin
       Ok := False;
     end;
     Assert.IsTrue(Ok, 'kaputte .po darf keine Exception werfen');
+    Assert.IsFalse(ParsePo('msgid "unterminiert', D),
+      'Literal ohne schliessendes Quote: kaputt');
+    Assert.IsTrue(ParsePo('', D), 'leerer Text: tolerant');
+    Assert.IsTrue(ParsePo('voelliger Unsinn ohne Struktur', D),
+      'Text ohne Schluesselwort: tolerant');
+    Assert.AreEqual<Integer>(0, Integer(D.Count), 'kein Eintrag');
   finally D.Free; end;
 end;
 

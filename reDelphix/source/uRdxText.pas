@@ -61,7 +61,14 @@ unit uRdxText;
 // Sprache 'de' (SetRdxLanguageOverride).
 //
 // Threadsicher: Override, Verzeichnis und ini-Cache liegen hinter GLock;
-// TranslateTo laeuft ausserhalb (eigene Sperre in uLocalization).
+// TranslateTo laeuft ausserhalb (eigene Sperre in uLocalization). NICHT
+// gedeckt ist uLocalization.CurrentLanguage: GCurrentLang liest und
+// schreibt die SCA ohne Sperre (ein String, nicht atomar), GLock bindet
+// SetLanguage nicht. Das traegt, weil beide Seiten im IDE-Hauptthread
+// laufen - SetLanguage (uIDESCAOptions, uIDEAnalyserForm) wie die Texte
+// von reDelphix (Gluehbirne, Kontextmenue, Raster); reDelphix startet
+// keinen Thread (Review Woche G05-02). Wer _() aus einem Hintergrund-Thread
+// ruft, braucht vorher eine Sperre um GCurrentLang in uLocalization.
 //
 // GEMEINSAME TEXTE (Charge C1, Msg...)
 //
