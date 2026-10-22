@@ -518,8 +518,10 @@ type
     // Bietet kein Anbieter einen fuer diesen Fund an (kein Anbieter geladen;
     // Config-/DFM-Funde - reDelphix kennt nur Pascal-Quelltext), schreibt
     // das Plugin selbst: die Marker-Zeile an das Ziel aus
-    // TSuppression.MarkerTargetFor (bei .dfm der dateiweite Marker in die
-    // .pas) ueber TIDEEditor.InsertLineAbove.
+    // TSuppression.MarkerTargetFor (bei .dfm/.lfm der dateiweite Marker in
+    // die Unit, .pas bzw. bei .lfm auch .pp) ueber TIDEEditor.InsertLineAbove.
+    // Liegt der Marker in einer anderen Datei als der Fund, nennt die
+    // Status-Bar sie (wie die EXE).
     procedure ApplySuppressForRow(RowIdx: Integer);
     procedure UpdateHelp(Row: Integer);
     // Sammelt alle Befunde aus FDisplayedFindings die zur gleichen Datei
@@ -672,7 +674,7 @@ uses
   uCrashDiag,                   // EStackExhausted - nie verschlucken
   uHintTextLayout,              // FormatRelatedLines - geteilt mit dem Nur-Text-Hint
   uAppTheme,                    // ApplyTitleBarTheme - Titelzeile des Profil-Fensters
-  uSuppression,                 // MarkerTargetFor - Marker-Host und -Zeile (bei .dfm die .pas)
+  uSuppression,                 // MarkerTargetFor - Marker-Host und -Zeile (bei .dfm/.lfm die .pas/.pp)
   uProfileViewer,               // ShowProfileViewer - Hamburger-Item
   // Nur hier gebraucht (Review nach Bereichen 2026-10-10, Nit 42):
   uFindingActionMenu,           // das eine Menue-Modell zu den Aktionen (Stufe C), FirstRunnable
@@ -3074,8 +3076,9 @@ procedure TAnalyserFrame.ApplySuppressForRow(RowIdx: Integer);
 // reDelphix kennt nur Pascal-Quelltext, bis 2026-10-14 war Ctrl+Alt+S
 // dafuer tot, sobald reDelphix geladen war - Review MAJOR 1), schreibt
 // das Plugin die Marker-Zeile selbst: `// noinspection <KindName>` bzw.
-// `; noinspection` in einer Konfigurationsdatei, bei einem .dfm-Fund der
-// DATEIWEITE Marker `// noinspection-file <KindName>` in die .pas - Host
+// `; noinspection` in einer Konfigurationsdatei, bei einem .dfm-/.lfm-Fund
+// der DATEIWEITE Marker `// noinspection-file <KindName>` in die Unit
+// (.pas, bei .lfm auch .pp - dialektfrei, Review Woche G02-01) - Host
 // und Zeile aus TSuppression.MarkerTargetFor, das ablehnt, wenn der Marker
 // dort nicht wirken kann oder schon da ist. Schreibt das Ergebnis in die
 // Status-Bar.
@@ -3118,8 +3121,19 @@ begin
   end;
   if TIDEEditor.InsertLineAbove(Target.HostFile, Target.Line,
        Target.MarkerLine) then
-    StatusMode(StatusWithErrors(
-      Format(_('Suppress inserted: %s'), [Target.MarkerLine]), Errs))
+  begin
+    // Ging der Marker in eine ANDERE Datei als die des Funds (Formdatei ->
+    // Schwester-Unit), nennt die Meldung sie - wer sonst die .dfm oeffnet,
+    // sieht keinen Marker. Dieselbe Meldung wie die EXE (uMainForm.
+    // SuppressSelectedFinding, Review Woche G02-09).
+    if SameText(Target.HostFile, F.FileName) then
+      StatusMode(StatusWithErrors(
+        Format(_('Suppress inserted: %s'), [Target.MarkerLine]), Errs))
+    else
+      StatusMode(StatusWithErrors(
+        Format(_('Suppress inserted in %s: %s'),
+          [ExtractFileName(Target.HostFile), Target.MarkerLine]), Errs));
+  end
   else
     StatusMode(StatusWithErrors(
       _('Suppress: editor write failed (file not in IDE?)'), Errs));
