@@ -138,7 +138,7 @@ end;
 
 procedure TTestRdxExprFixes.Sca066_Variants;
 const
-  CASES: array[0..17, 0..2] of string = (
+  CASES: array[0..18, 0..2] of string = (
     ('  DoStuff();', '10', '  DoStuff;'),
     ('  Obj.Refresh();', '14', '  Obj.Refresh;'),
     ('  Self.Obj.Refresh ( ) ;', '20', '  Self.Obj.Refresh ;'),
@@ -160,7 +160,10 @@ const
     // dort galten bis dahin als "Teil eines Ausdrucks" bzw. "keine
     // einfache Variable" (Gegen-Review R8, Major 3).
     ('initialization Foo();', '19', 'initialization Foo;'),
-    ('initialization B := Foo();', '24', 'initialization B := Foo;'));
+    ('initialization B := Foo();', '24', 'initialization B := Foo;'),
+    // Der Selektor eines case ist ordinal - wie if/while (Review Woche
+    // G07-21; bis dahin 'Teil eines Ausdrucks ... als Zeiger').
+    ('  case GetKind() of', '15', '  case GetKind of'));
 var
   i : Integer;
 begin
@@ -444,11 +447,15 @@ begin
       '  TFactory<T> = reference to function: T;',
       '  TLookup = TFn;',
       '  // TGone = record',
+      '  [Attr] TAttr = class end;',
+      '  generic TGen<T> = class end;',
       'var',
       '  GBmp: TBitmap = nil;',
       'implementation',
       'procedure P(X: TControl = nil; Y: Vcl.Graphics.TCanvas = nil);',
       'begin',
+      '  if TImage = Sender.ClassType then Exit;',
+      '  Ok := TPanel = AClass;',
       'end;',
       'end.']);
     Map := TRdxCodeMap.Create(SL);
@@ -468,6 +475,17 @@ begin
     Assert.AreEqual('reference', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tfactory'),
       'generische Parameter uebersprungen');
     Assert.AreEqual('tfn', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tlookup'), 'Alias');
+    // Review Woche G07-21: eine Deklaration nur hinter ';', 'type', einem
+    // Attribut oder FPC-'generic' - ein Yoda-Vergleich ist keine (bis dahin
+    // 'sender' bzw. 'aclass').
+    Assert.AreEqual('class', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tattr'),
+      'hinter einem Attribut');
+    Assert.AreEqual('class', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tgen'),
+      'FPC generic');
+    Assert.AreEqual('', TRdxSimpleFixes.DeclaredTypeKind(Map, 'timage'),
+      'Yoda-Vergleich hinter if');
+    Assert.AreEqual('', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tpanel'),
+      'Yoda-Vergleich hinter :=');
   finally
     Map.Free;
     SL.Free;
