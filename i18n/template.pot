@@ -185,8 +185,16 @@ msgstr ""
 msgid "\"<\" right after a name in the arguments (type arguments?) - their commas cannot be told apart safely"
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:1422
+msgid "\"absolute Result\" in line %d - Result is written through the alias; %s"
+msgstr ""
+
 #: reDelphix/source/uRdxDeadCodeFix.pas:338
 msgid "\"else\" in the unreachable code without an \"if\" of its statement"
+msgstr ""
+
+#: reDelphix/source/uRdxInheritedFixes.pas:256
+msgid "\"inherited\" already appears in line %d (inactive branch, comment, string literal or local routine) - %s"
 msgstr ""
 
 #: reDelphix/source/uRdxRawExceptionFix.pas:215
@@ -198,6 +206,11 @@ msgstr ""
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1970
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1943
 msgid "%d / %d findings"
+msgstr ""
+
+#: reDelphix/source/uRdxInheritedFixes.pas:365
+#: reDelphix/source/uRdxResultFixes.pas:1009
+msgid "%d classes named %s in the unit - ambiguous"
 msgstr ""
 
 #: reDelphix/source/uRdxClassMethodFix.pas:288
@@ -266,6 +279,10 @@ msgstr ""
 msgid "%d placeholders are one typo away from \"%s\" - ambiguous"
 msgstr ""
 
+#: reDelphix/source/uRdxRaiseFixes.pas:132
+msgid "%d routine headers"
+msgstr ""
+
 #: reDelphix/source/uRdxAvoidOutFix.pas:540
 #: reDelphix/source/uRdxAvoidOutFix.pas:594
 msgid "%d routine headers named %s in this file - overload or ambiguous"
@@ -284,6 +301,14 @@ msgstr ""
 msgid "%d sections \"%s\" - ambiguous"
 msgstr ""
 
+#: reDelphix/source/uRdxRaiseFixes.pas:540
+msgid "%d times \"raise %s\""
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:366
+msgid "%d times %s.Create"
+msgstr ""
+
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:827
 msgid "%s (%d findings)"
 msgstr ""
@@ -294,6 +319,10 @@ msgstr ""
 
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:825
 msgid "%s (no findings)"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:273
+msgid "%s - an exception there would leave a half-built object or no destructor"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:735
@@ -320,12 +349,26 @@ msgstr ""
 msgid "%s contains no profiles."
 msgstr ""
 
+#: reDelphix/source/uRdxInheritedFixes.pas:655
+msgid "%s in line %d - the control flow leaves the destructor there before the end, an inherited at the end would never run on this path; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1054
+#: reDelphix/source/uRdxResultFixes.pas:1056
+#: reDelphix/source/uRdxResultFixes.pas:1060
+msgid "%s in line %d - there is no Result there"
+msgstr ""
+
 #: reDelphix/source/uRdxLookupHoistFix.pas:755
 msgid "%s in line %d can close %s or rebuild its fields - the reference fetched before the loop would point into the void"
 msgstr ""
 
 #: reDelphix/source/uRdxLookupHoistFix.pas:757
 msgid "%s in line %d can rebuild the parameters of %s - the reference fetched before the loop would point into the void"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1212
+msgid "%s in line %d writes Result (inactive branch?) - the detector did not see it, the finding is doubtful; %s"
 msgstr ""
 
 #: reDelphix/source/uRdxHomoglyphFix.pas:525
@@ -348,6 +391,14 @@ msgstr ""
 msgid "%s is a reserved word"
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:1520
+msgid "%s is also defined in a routine or a type in this unit (line %d), or a routine before it cannot be read safely - which definition applies depends on the scope; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1312
+msgid "%s is also defined in the declaration part of the function (line %d) - in the body the name means this type, in the header the outer one; %s"
+msgstr ""
+
 #: reDelphix/source/uRdxFormatSettingsFix.pas:364
 #: reDelphix/source/uRdxFormatSettingsFix.pas:366
 msgid "%s is called as %s - another routine than the one of SysUtils"
@@ -368,6 +419,15 @@ msgstr ""
 #: reDelphix/source/uRdxAvoidOutFix.pas:505
 #: reDelphix/source/uRdxAvoidOutFix.pas:530
 msgid "%s is declared inside a type - its signature is a contract"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1526
+msgid "%s is defined in this unit as \"%s ...\" (line %d) - not a dynamic array, interface, string or variant; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1353
+#: reDelphix/source/uRdxResultFixes.pas:1530
+msgid "%s is defined several times differently in this unit ($IFDEF branches?) - %s"
 msgstr ""
 
 #: reDelphix/source/uRdxAvoidOutFix.pas:483
@@ -412,8 +472,16 @@ msgstr ""
 msgid "%s is overloaded - declaration and implementation cannot be paired safely"
 msgstr ""
 
+#: reDelphix/source/uRdxRaiseFixes.pas:483
+msgid "%s is passed as an argument between handler and raise - a var parameter can replace it, \"raise %s;\" would then raise a different object than \"raise;\""
+msgstr ""
+
 #: reDelphix/source/uRdxMoveSizeFix.pas:384
 msgid "%s is qualified or a member - not the routine of the RTL"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:471
+msgid "%s is reassigned between handler and raise - \"raise %s;\" then raises a different object than \"raise;\""
 msgstr ""
 
 #: reDelphix/source/uRdxThreadResumeFix.pas:455
@@ -459,6 +527,18 @@ msgstr ""
 
 #: reDelphix/source/uRdxFormatSettingsFix.pas:370
 msgid "%s stands without an argument list - no call"
+msgstr ""
+
+#: reDelphix/source/uRdxInheritedFixes.pas:239
+msgid "%s without a class (no TClass.Name) - %s"
+msgstr ""
+
+#: reDelphix/source/uRdxInheritedFixes.pas:558
+msgid "%s.%s is abstract (line %d) - inherited calls nothing there or does not compile under FPC objfpc; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:371
+msgid "%s.Create(..) is not a whole statement - part of an expression?"
 msgstr ""
 
 #: reDelphix/source/uRdxThreadResumeFix.pas:644
@@ -1249,6 +1329,10 @@ msgstr ""
 msgid "Declare parameter %s as const"
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:1373
+msgid "Default() exists only from Delphi 2009 or FPC 3.0 on - the file shows traces of older compilers (%s, line %d); %s"
+msgstr ""
+
 #: reDelphix/source/uRdxFixTable.pas:2796
 msgid "Delete commented-out code"
 msgstr ""
@@ -1464,6 +1548,10 @@ msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:629
 msgid "Export findings: HTML / JSON / CSV / Jira / Clipboard / Sonar"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1148
+msgid "FPC \"specialize\" in the return type - Default() with the type by hand"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:330
@@ -3343,6 +3431,10 @@ msgstr ""
 msgid "a \"with\" statement (line %d) could bind the new name %s to a member"
 msgstr ""
 
+#: reDelphix/source/uRdxRaiseFixes.pas:252
+msgid "a comment spanning several lines starts after the begin"
+msgstr ""
+
 #: reDelphix/source/uRdxNativeIntFix.pas:239
 msgid "a comment, string or directive stands between the two casts (Cast { } -)"
 msgstr ""
@@ -3415,9 +3507,17 @@ msgstr ""
 msgid "analyser.ini is not writable - dialect unchanged."
 msgstr ""
 
+#: reDelphix/source/uRdxInheritedFixes.pas:319
+msgid "ancestor list without \")\" (line %d) - %s"
+msgstr ""
+
 #: reDelphix/source/uRdxAssertSideEffectFix.pas:244
 #: reDelphix/source/uRdxIfThenFix.pas:337
 msgid "anonymous method in the arguments"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:432
+msgid "anonymous method in the handler (the raise inside it or one before it) - cannot be checked safely"
 msgstr ""
 
 #: reDelphix/source/uRdxMoveSizeFix.pas:427
@@ -3426,6 +3526,18 @@ msgstr ""
 
 #: reDelphix/source/uRdxDeadCodeFix.pas:312
 msgid "asm block in the unreachable code"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:192
+msgid "asm body"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:933
+msgid "asm body - the quick fix does not see registers and stack; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:943
+msgid "asm in the body (line %d) - the quick fix does not see registers and stack; %s"
 msgstr ""
 
 #: reDelphix/source/uRdxUnusedParameterFix.pas:792
@@ -3462,6 +3574,14 @@ msgstr ""
 msgid "by hand"
 msgstr ""
 
+#: reDelphix/source/uRdxInheritedFixes.pas:485
+msgid "call %s in line %d - a constructor of the class (delegation) that already initializes the parent class; inherited before it would run twice; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxInheritedFixes.pas:479
+msgid "call %s in line %d - maybe another constructor of the class (delegation) that already initializes the parent class; inherited before it would run twice; %s"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2696
 msgid "case statement has many branches - consider dispatch table"
 msgstr ""
@@ -3474,8 +3594,20 @@ msgstr ""
 msgid "check by hand"
 msgstr ""
 
+#: reDelphix/source/uRdxInheritedFixes.pas:236
+msgid "class %s - without an inheritance chain, inherited does not belong there"
+msgstr ""
+
 #: reDelphix/source/uRdxAvoidOutFix.pas:487
 msgid "class %s implements interfaces - %s could implement an interface method"
+msgstr ""
+
+#: reDelphix/source/uRdxInheritedFixes.pas:361
+msgid "class %s not in this unit - the ancestor cannot be proven"
+msgstr ""
+
+#: reDelphix/source/uRdxInheritedFixes.pas:369
+msgid "class helper - inherited means the extended class there"
 msgstr ""
 
 #: reDelphix/source/uRdxClassMethodFix.pas:202
@@ -3558,6 +3690,14 @@ msgstr ""
 msgid "comment or directive in or beside the handler - intent, no help"
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:1114
+msgid "comment or directive in the return type - %s"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:547
+msgid "comment or line break between raise and name"
+msgstr ""
+
 #: reDelphix/source/uRdxUnusedParameterFix.pas:657
 #: reDelphix/source/uRdxUnusedParameterFix.pas:788
 msgid "comment, compiler directive or attribute in the parameter list"
@@ -3580,12 +3720,24 @@ msgstr ""
 msgid "compiler directive between Create(True) and Resume"
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:936
+msgid "compiler directive between header and begin - header or body depend on a branch; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1672
+msgid "compiler directive between the last statement and end - the end can look different in each branch; %s"
+msgstr ""
+
 #: reDelphix/source/uRdxConsecutiveSectionFix.pas:307
 msgid "compiler directive between the two sections - conditional code could need both keywords"
 msgstr ""
 
 #: reDelphix/source/uRdxAlwaysTrueFix.pas:406
 msgid "compiler directive in the \"if\" statement"
+msgstr ""
+
+#: reDelphix/source/uRdxInheritedFixes.pas:326
+msgid "compiler directive in the ancestor list (line %d) - the ancestor depends on a branch; %s"
 msgstr ""
 
 #: reDelphix/source/uRdxClassMethodFix.pas:311
@@ -3630,6 +3782,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxClassMethodFix.pas:347
 msgid "declaration and implementation of %s differ (procedure/function)"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1015
+msgid "declaration: %s"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3832
@@ -3677,6 +3833,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxText.pas:755
 msgid "end of the header not found"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1680
+msgid "end of the last statement not found"
 msgstr ""
 
 #: reDelphix/source/uRdxDeadCodeFix.pas:288
@@ -3735,6 +3895,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:326
 msgid "h2. Code analysis: "
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1128
+msgid "header without return type, not a method - the quick fix does not read the declaration; %s"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2843
@@ -3834,12 +3998,20 @@ msgstr ""
 msgid "literal not readable: %s"
 msgstr ""
 
+#: reDelphix/source/uRdxRaiseFixes.pas:189
+msgid "local routine between header and body - which begin is meant is not certain"
+msgstr ""
+
 #: reDelphix/source/uRdxClassMethodFix.pas:206
 msgid "method of a nested type (%s)"
 msgstr ""
 
 #: reDelphix/source/uRdxCategoryArgFix.pas:162
 msgid "more code follows the attribute on the line"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:276
+msgid "name of the method not on the header line"
 msgstr ""
 
 #: reDelphix/source/uRdxIfThenFix.pas:459
@@ -3919,12 +4091,20 @@ msgstr ""
 msgid "no \"out\" parameter at the reported column"
 msgstr ""
 
+#: reDelphix/source/uRdxRaiseFixes.pas:539
+msgid "no \"raise %s\""
+msgstr ""
+
 #: reDelphix/source/uRdxRawExceptionFix.pas:211
 msgid "no \"raise Exception\" in the code of the reported line"
 msgstr ""
 
 #: reDelphix/source/uRdxLookupHoistFix.pas:414
 msgid "no %s call with a receiver on the reported line"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:363
+msgid "no %s.Create"
 msgstr ""
 
 #: reDelphix/source/uRdxParamNameFix.pas:375
@@ -3935,12 +4115,29 @@ msgstr ""
 msgid "no Format call on the code columns of the reported line"
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:1588
+msgid "no Result on the reported line"
+msgstr ""
+
 #: reDelphix/source/uRdxTrailingCommaFix.pas:148
 msgid "no argument before the comma - the list is missing an element, the comma is not extra"
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:1641
+#: reDelphix/source/uRdxResultFixes.pas:1666
+msgid "no begin body"
+msgstr ""
+
 #: reDelphix/source/uRdxCharEscapeFix.pas:504
 msgid "no bidirectional control character on the reported line"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:931
+msgid "no body (forward/external)"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:196
+msgid "no body found for the method"
 msgstr ""
 
 #: reDelphix/source/uRdxThreadResumeFix.pas:277
@@ -3990,6 +4187,11 @@ msgstr ""
 msgid "no declaration of %s in a class of this file (record method, include?)"
 msgstr ""
 
+#: reDelphix/source/uRdxInheritedFixes.pas:760
+#: reDelphix/source/uRdxResultFixes.pas:1005
+msgid "no declaration of %s in the body of class %s"
+msgstr ""
+
 #: reDelphix/source/uRdxLocalConstantNameFix.pas:245
 msgid "no declaration of the constant \"%s\" on the reported line"
 msgstr ""
@@ -4029,6 +4231,14 @@ msgstr ""
 msgid "no grouped declaration at the reported place"
 msgstr ""
 
+#: reDelphix/source/uRdxRaiseFixes.pas:426
+msgid "no handler \"on %s: ... do\" before the raise in this routine"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:513
+msgid "no handler \"on %s: ... do\" found before the raise"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:820
 msgid "no header %s"
 msgstr ""
@@ -4051,6 +4261,10 @@ msgstr ""
 msgid "no invisible character on the reported line"
 msgstr ""
 
+#: reDelphix/source/uRdxRaiseFixes.pas:131
+msgid "no method header"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:805
 msgid "no operand in the chain"
 msgstr ""
@@ -4061,6 +4275,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxConsecutiveSectionFix.pas:211
 msgid "no previous \"%s\" section found"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:921
+msgid "no routine around the reported line"
 msgstr ""
 
 #: reDelphix/source/uRdxGotoExitFix.pas:188
@@ -4144,6 +4362,22 @@ msgstr ""
 msgid "nothing to offer"
 msgstr ""
 
+#: reDelphix/source/uRdxInheritedFixes.pas:358
+msgid "object type (old object model) - %s"
+msgstr ""
+
+#: reDelphix/source/uRdxInheritedFixes.pas:731
+msgid "of a constructor"
+msgstr ""
+
+#: reDelphix/source/uRdxInheritedFixes.pas:727
+msgid "of a destructor"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1718
+msgid "of a function"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2399
 msgid "on E: Exception catches everything - too broad"
 msgstr ""
@@ -4171,6 +4405,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2562
 msgid "out parameter - prefer Result or var"
+msgstr ""
+
+#: reDelphix/source/uRdxInheritedFixes.pas:390
+msgid "override with overload - which inherited constructor is meant is not certain; %s"
 msgstr ""
 
 #: reDelphix/source/uRdxThreadResumeFix.pas:591
@@ -4208,8 +4446,40 @@ msgstr ""
 msgid "parameter \"%s\" occurs in the routine in line %d"
 msgstr ""
 
+#: reDelphix/source/uRdxInheritedFixes.pas:386
+msgid "parent class %s and no override declaration - which parent constructor should run with which arguments is a design decision; %s"
+msgstr ""
+
 #: reDelphix/source/uRdxExceptionNameFix.pas:432
 msgid "qualified use \".%s\" on line %d - it may name a member of another type"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:417
+msgid "raise is in the except/finally of an inner try - \"raise;\" would re-raise a different exception there"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:447
+msgid "raise is in the handler of \"%s\", not of \"%s\""
+msgstr ""
+
+#: reDelphix/source/uRdxInheritedFixes.pas:360
+msgid "record - no inheritance"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1152
+msgid "return type \"%s\" is not a simple type identifier - %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1573
+msgid "return type %s is not proven as string, dynamic array, interface or variant - %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1112
+msgid "return type across several lines - %s"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:913
+msgid "routine in line %d: %s"
 msgstr ""
 
 #: reDelphix/source/uRdxEmptyBlockFix.pas:120
@@ -4222,6 +4492,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxEmptyBlockFix.pas:271
 msgid "several objects in the \"with\" - by hand"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:249
+msgid "something else follows the begin - a line of its own would not fit"
 msgstr ""
 
 #: reDelphix/source/uRdxGroupedDeclFix.pas:285
@@ -4340,6 +4614,14 @@ msgstr ""
 
 #: reDelphix/source/uRdxEmptyBlockFix.pas:258
 msgid "the block is not empty"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:224
+msgid "the body already holds a comment without intent - commented-out code (SCA070)? Decide by hand"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:211
+msgid "the body is not empty - code under a directive or an asm block (the detector sees only the active branch) or finding outdated"
 msgstr ""
 
 #: reDelphix/source/uRdxClassMethodFix.pas:418
@@ -4489,12 +4771,24 @@ msgstr ""
 msgid "the constant stands in the routine %s, the finding names %s"
 msgstr ""
 
+#: reDelphix/source/uRdxInheritedFixes.pas:421
+msgid "the constructor aborts with its first statement (line %d, blocked constructor) - inherited before it would run in vain; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxInheritedFixes.pas:533
+msgid "the declaration carries no override - then the destructor hides the virtual method (SCA149); %s"
+msgstr ""
+
 #: reDelphix/source/uRdxConstStringParameterFix.pas:404
 msgid "the declaration in line %d groups the parameter differently"
 msgstr ""
 
 #: reDelphix/source/uRdxMethodNameFix.pas:283
 msgid "the declaration is spelled \"%s\", the finding names \"%s\""
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1134
+msgid "the declaration names no return type either"
 msgstr ""
 
 #: reDelphix/source/uRdxObjectListFix.pas:654
@@ -4518,6 +4812,10 @@ msgstr ""
 #: reDelphix/source/uRdxClassMethodFix.pas:343
 #: reDelphix/source/uRdxClassMethodFix.pas:353
 msgid "the declaration of %s is not safe to read"
+msgstr ""
+
+#: reDelphix/source/uRdxInheritedFixes.pas:554
+msgid "the declaration of %s.%s in line %d cannot be read - whether it is abstract remains open; %s"
 msgstr ""
 
 #: reDelphix/source/uRdxFloatEqualityFix.pas:543
@@ -4669,6 +4967,10 @@ msgstr ""
 msgid "the header is not the one implementation of %s after \"implementation\""
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:1599
+msgid "the header names %s, the message %s"
+msgstr ""
+
 #: reDelphix/source/uRdxAvoidOutFix.pas:458
 #: reDelphix/source/uRdxAvoidOutFix.pas:476
 #: reDelphix/source/uRdxAvoidOutFix.pas:489
@@ -4696,6 +4998,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxDeepNestingFix.pas:357
 msgid "the last if is not a statement of the routine body itself (\"%s\" before it)"
+msgstr ""
+
+#: reDelphix/source/uRdxInheritedFixes.pas:705
+msgid "the last statement is %s (line %d) - inherited after it would never run; %s"
 msgstr ""
 
 #: reDelphix/source/uRdxDeepNestingFix.pas:307
@@ -4819,6 +5125,22 @@ msgstr ""
 
 #: reDelphix/source/uRdxText.pas:740
 msgid "the message has no column"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:355
+msgid "the message has no exception class"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1715
+msgid "the message has no function name"
+msgstr ""
+
+#: reDelphix/source/uRdxResultFixes.pas:1756
+msgid "the message has no function or return type"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:565
+msgid "the message has no name of the variable"
 msgstr ""
 
 #: reDelphix/source/uRdxParamNameFix.pas:251
@@ -5033,6 +5355,10 @@ msgstr ""
 msgid "the routine contains goto or asm"
 msgstr ""
 
+#: reDelphix/source/uRdxResultFixes.pas:1091
+msgid "the routine is called %s, the message names %s"
+msgstr ""
+
 #: reDelphix/source/uRdxConstStringParameterFix.pas:229
 msgid "the routine is declared in the interface section (line %d) - other units can use it as a procedure value"
 msgstr ""
@@ -5111,6 +5437,10 @@ msgstr ""
 msgid "unknown"
 msgstr ""
 
+#: reDelphix/source/uRdxInheritedFixes.pas:734
+msgid "unknown message - no \"%s\""
+msgstr ""
+
 #: reDelphix/source/uRdxAvoidOutFix.pas:654
 msgid "untyped \"out\" parameter - \"var\" would mean something else"
 msgstr ""
@@ -5142,6 +5472,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxExceptionNameFix.pas:420
 msgid "with statement before the use on line %d - \"%s\" could be a member of the with expression"
+msgstr ""
+
+#: reDelphix/source/uRdxRaiseFixes.pas:440
+msgid "with statement between handler and raise - the name could be a member"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:1682
@@ -5180,6 +5514,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxConstStringParameterFix.pas:411
 msgid "{$I} include in line %d - it can use the routine as a value"
+msgstr ""
+
+#: reDelphix/source/uRdxInheritedFixes.pas:597
+msgid "{$mode objfpc/fpc} in line %d, and from %s on the inherited method is not visible in this unit - if it is abstract, FPC does not compile the inherited; not provable, %s"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1276

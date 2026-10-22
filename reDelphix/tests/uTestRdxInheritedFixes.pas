@@ -326,7 +326,9 @@ begin
   S := InUnit(['  TFoo = class', '    constructor Create;',
     '    constructor Make;', '  end;'],
     ['constructor TFoo.Create; begin end; constructor TFoo.Make; begin end;']);
-  AssertCtorRefused(S, 'constructor TFoo', 'Koepfe');
+  // Zwei Koepfe auf der Zeile: 'Koepfe' traegt in de einen echten Umlaut
+  // (uRdxText.MsgHeadersFmt) - geprueft wird das umlautfreie Ende des Grunds.
+  AssertCtorRefused(S, 'constructor TFoo', 'eines Konstruktors - mehrdeutig');
   AssertCtorRefused(InUnit(['  TX = Integer;'], ['constructor Create;',
     'begin', 'end;']), 'constructor Create', 'ohne Klasse');
   S := InUnit(['  TFoo = class', '    constructor Create;', '  end;'],
