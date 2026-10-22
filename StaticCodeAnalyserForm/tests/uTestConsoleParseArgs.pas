@@ -53,6 +53,16 @@ type
     [Test] procedure AutoV2_TieEbene_GewinntDelphi;
   end;
 
+  // BaselineConfigDir (Review Woche G02-07): gegen welches Verzeichnis die
+  // CLI [Baseline] File= aufloest. Eigene Klasse - TTestConsoleParseArgs
+  // steht schon ueber der 20-Methoden-Schwelle.
+  [TestFixture]
+  TTestBaselineConfigDir = class
+  public
+    // Projekt bzw. Gruppe vor der Scan-Wurzel, ohne beides leer.
+    [Test] procedure ProjektVorScanWurzel_SonstScanWurzel_SonstLeer;
+  end;
+
 implementation
 
 // noinspection-file HardcodedPath, GodClass
@@ -429,7 +439,26 @@ begin
   end;
 end;
 
+{ TTestBaselineConfigDir }
+
+procedure TTestBaselineConfigDir.ProjektVorScanWurzel_SonstScanWurzel_SonstLeer;
+var
+  A : TCliArgs;
+begin
+  A := Default(TCliArgs);
+  A.Path := 'D:\src';
+  // Projekt gewinnt - auch wenn ein Path daneben stuende.
+  Assert.AreEqual('D:\proj', BaselineConfigDir(A, 'D:\proj\App.dproj'),
+    'das Verzeichnis des Projekts');
+  // --path ohne Projekt: die Scan-Wurzel.
+  Assert.AreEqual('D:\src', BaselineConfigDir(A, ''), 'die Scan-Wurzel');
+  // Weder noch (Datei-Modus): leer - der Pfad bleibt relativ wie bisher.
+  A.Path := '';
+  Assert.AreEqual('', BaselineConfigDir(A, ''), 'ohne Projekt und Pfad leer');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestConsoleParseArgs);
+  TDUnitX.RegisterTestFixture(TTestBaselineConfigDir);
 
 end.

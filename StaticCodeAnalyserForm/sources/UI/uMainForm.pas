@@ -2260,7 +2260,8 @@ end;
 procedure TForm2.SuppressSelectedFinding;
 // Ctrl+Alt+S, wie im Plugin: die Marker-Zeile UEBER die Fundzeile -
 // '// noinspection <RuleName>', in einer Konfigurationsdatei
-// '; noinspection', bei einem .dfm-Fund der DATEIWEITE Marker in die .pas
+// '; noinspection', bei einem .dfm-/.lfm-Fund der DATEIWEITE Marker in die
+// Unit (.pas, bei .lfm auch .pp - dialektfrei, Review Woche G02-01)
 // (Host und Zeile aus TSuppression.MarkerTargetFor; bis 2026-10-14 ging
 // die '//'-Zeile in die .dfm, und das Formular lud nicht mehr - Review
 // MAJOR 2; die Zeilenform in der .pas hing an der Zeilennummer, Gegen-
@@ -2292,8 +2293,18 @@ begin
   end;
   if TSourceLineEdit.InsertLineAbove(Target.HostFile, Target.Line,
        Target.MarkerLine, Err) then
-    StatusBar1.Panels[2].Text :=
-      Format(_('Suppress inserted: %s'), [Target.MarkerLine])
+  begin
+    // Ging der Marker in eine ANDERE Datei als die des Funds (Formdatei ->
+    // Schwester-Unit), nennt die Meldung sie - wer sonst die .dfm oeffnet,
+    // sieht keinen Marker (Review Woche G02-09).
+    if SameText(Target.HostFile, absPath) then
+      StatusBar1.Panels[2].Text :=
+        Format(_('Suppress inserted: %s'), [Target.MarkerLine])
+    else
+      StatusBar1.Panels[2].Text :=
+        Format(_('Suppress inserted in %s: %s'),
+          [ExtractFileName(Target.HostFile), Target.MarkerLine]);
+  end
   else
     StatusBar1.Panels[2].Text :=
       Format(_('Suppress: could not write file: %s'), [Err]);

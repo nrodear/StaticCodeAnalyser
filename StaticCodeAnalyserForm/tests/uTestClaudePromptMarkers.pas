@@ -26,6 +26,9 @@ type
     [TearDown] procedure TearDown;
     [Test] procedure FormFile_SuggestsFileWideMarkerInPairedUnit;
     [Test] procedure FormFile_WithoutUnit_NamesPasBeside;
+    // Lazarus-Form NACH dem Scan (ScanDialect wieder dlDelphi): bleibt
+    // Formdatei, die .pp-Unit wird genannt (Review Woche G02-02).
+    [Test] procedure LfmFile_DelphiDialect_SuggestsFileWideMarkerInPp;
     [Test] procedure PascalFile_KeepsLineMarker;
     [Test] procedure Snippet_WithBackticks_UsesLongerFence;
     [Test] procedure Snippet_Plain_UsesThreeBackticks;
@@ -33,6 +36,9 @@ type
   end;
 
 implementation
+
+uses
+  uStaticFiles;   // ScanDialect - der nach dem Scan zurueckgesetzte Dialekt
 
 const
   // DFM-Fund: eine Kind-Konstante, die es gibt; der Hinweis haengt nur
@@ -104,6 +110,30 @@ begin
   Prompt := PromptFor(Dfm, 1, FORM_KIND, Default(TFixHint));
   Assert.IsTrue(Pos('`Lonely.pas`', Prompt) > 0, Prompt);
   Assert.IsTrue(Pos('`// noinspection-file DfmHardcodedCaption`', Prompt) > 0, Prompt);
+end;
+
+procedure TTestClaudePromptMarkers.LfmFile_DelphiDialect_SuggestsFileWideMarkerInPp;
+var
+  Lfm, Prompt : string;
+  Alt         : TSourceDialect;
+begin
+  // Der Prompt entsteht nach dem Scan; Run hat ScanDialect dann auf den
+  // Vorzustand dlDelphi zurueckgesetzt. Die .lfm ist trotzdem eine
+  // Formdatei, ihre Unit hier die .pp (ohne .pas daneben).
+  WriteFile('Form5.pp', 'unit Form5;'#13#10'interface'#13#10'implementation'#13#10'end.');
+  Lfm := WriteFile('Form5.lfm', 'object Form5: TForm5'#13#10'  Caption = ''Hallo'''#13#10'end');
+  Alt := TStaticFiles.ScanDialect;
+  TStaticFiles.ScanDialect := dlDelphi;
+  try
+    Prompt := PromptFor(Lfm, 2, FORM_KIND, Default(TFixHint));
+  finally
+    TStaticFiles.ScanDialect := Alt;
+  end;
+  Assert.IsTrue(Pos('`// noinspection-file DfmHardcodedCaption`', Prompt) > 0,
+    'dateiweiter Marker auch fuer die .lfm: ' + Prompt);
+  Assert.IsTrue(Pos('`Form5.pp`', Prompt) > 0, '.pp-Unit genannt: ' + Prompt);
+  Assert.AreEqual<Integer>(0, Pos('`// noinspection DfmHardcodedCaption`', Prompt),
+    'keine Zeilenform fuer die Lazarus-Form');
 end;
 
 procedure TTestClaudePromptMarkers.PascalFile_KeepsLineMarker;

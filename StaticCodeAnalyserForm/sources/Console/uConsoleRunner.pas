@@ -200,6 +200,14 @@ function ApplyFailOnPolicy(Raw: Integer; const FailOn: string;
 // testbar ohne Run-Seiteneffekt.
 function FixtureFilterAnker(const Args: TCliArgs): string;
 
+// Verzeichnis, gegen das [Baseline] File= aufgeloest wird (Vertrag an der
+// Implementierung). AProjOrGroup ist die Gruppe, sonst das Projekt des
+// Laufs. In der interface-Sektion aus demselben Grund wie
+// ApplyFailOnPolicy: die Wirts-Regel "Projekt, sonst Scan-Wurzel, sonst
+// leer" ist testbar ohne Run (Review Woche G02-07).
+function BaselineConfigDir(const Args: TCliArgs;
+  const AProjOrGroup: string): string;
+
 // Stack-Reserve aus dem PE-Header von AExePath in MB; 0 wenn die Datei
 // kein lesbarer PE ist. Steht im Interface, damit der Wachposten
 // testbar bleibt (gleiche Begruendung wie bei ApplyFailOnPolicy) - der
@@ -1872,25 +1880,47 @@ begin
     begin
       var Probed := TStringList.Create;
       try
+        // Der ebenfalls gepruefte CWD-Kandidat des Rueckfalls - die
+        // Fehlerliste unten nennt ihn mit, sonst saehe ein CI-Autor, der bis
+        // 2026-10-14 CWD-relativ arbeitete, nicht, dass auch sein alter Ort
+        // leer war (Review Woche G02-08).
+        var CwdCandidate := '';
         if EffBaseline = '' then
         begin
           // Projektrelativ wie EXE und Plugin; existiert die Datei dort
           // nicht, der alte CLI-Weg (relativ zum Arbeitsverzeichnis) -
           // CI-Aufrufe aus einem anderen CWD brachen sonst still
-          // (Gegen-Review Welle 1, Major 4). Der Rueckfall wird genannt.
+          // (Gegen-Review Welle 1, Major 4). Der Rueckfall wird genannt -
+          // mit dem Ort des ersten Versuchs: ohne Projekt (--path) ist das
+          // die Scan-Wurzel, nicht "das Projekt" (BaselineConfigDir).
           var UsedCwd: Boolean;
           EffBaseline := TBaseline.ResolveConfiguredWithFallback(
             Settings.BaselineFile, BaselineConfigDir(Args, BlProjOrGroup),
             GetCurrentDir, UsedCwd);
+          if not UsedCwd then
+            CwdCandidate := TBaseline.ResolveConfigured(Settings.BaselineFile,
+              GetCurrentDir);
           if UsedCwd and not Args.Quiet then
-            WriteLn('Baseline: [Baseline] File= not found beside the ' +
-              'project - using the working directory: ', EffBaseline);
+          begin
+            if BlProjOrGroup <> '' then
+              WriteLn('Baseline: [Baseline] File= not found beside the ' +
+                'project - using the working directory: ', EffBaseline)
+            else
+              WriteLn('Baseline: [Baseline] File= not found under the ' +
+                'scan root - using the working directory: ', EffBaseline);
+          end;
         end;
         if EffBaseline = '' then
           EffBaseline := TBaseline.ResolveBaselinePath(
             BlProjOrGroup, Args.Path, Probed)
         else
+        begin
           Probed.Add(EffBaseline);
+          // Derselbe Ort (absoluter Eintrag, kein Projekt) steht nur einmal.
+          if (CwdCandidate <> '') and not SameText(
+               ExpandFileName(CwdCandidate), ExpandFileName(EffBaseline)) then
+            Probed.Add(CwdCandidate);
+        end;
         if (EffBaseline = '') or not FileExists(EffBaseline) then
         begin
           WriteLn(ErrOutput, 'Error: baseline scan requested but no ' +

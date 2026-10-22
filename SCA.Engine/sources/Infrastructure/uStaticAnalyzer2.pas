@@ -48,17 +48,18 @@ type
       AIncludeUsesCheck: Boolean = False;
       AIgnore: TIgnoreList = nil): TObjectList<TLeakFinding>;
 
+    // SCA201 in Profil UND Mindestschwere des Prozess-Zustands aktiv? Das
+    // eine Gate fuer Aufrufer, die Konfigurationsdateien vorab sammeln
+    // (uEngineApi.AnalyzeProjectFiles) - dieselbe Entscheidung wie im
+    // Konfigurations-Durchlauf selbst (Review Bereich C, Minor).
+    class function ConfigPassActive: Boolean; static;
+
     // Analysiert eine bereits ermittelte Datei-Liste (z.B. aus VCS-Diff).
     // Nimmt KEINE Ownership der Liste, kopiert sie intern.
     // AIndexRoot (Scan-Scope-Konzept 2026-07-20, optional): Verzeichnis fuer
     // den Cross-Unit-Index (SymbolRef/Typ/DFM) - Analyse bleibt auf AFiles,
     // der Index sieht das Superset (gleiche Mechanik wie ssSingleFile+
     // ProjectRoot). Leer/ungueltig -> Index ueber AFiles wie bisher.
-    // SCA201 in Profil UND Mindestschwere des Prozess-Zustands aktiv? Das
-    // eine Gate fuer Aufrufer, die Konfigurationsdateien vorab sammeln
-    // (uEngineApi.AnalyzeProjectFiles) - dieselbe Entscheidung wie im
-    // Konfigurations-Durchlauf selbst (Review Bereich C, Minor).
-    class function ConfigPassActive: Boolean; static;
     class function AnalyzeLeaksFromList(AFiles: TStringList;
       AProgress: TProc<Integer, Integer> = nil;
       AIncludeUsesCheck: Boolean = False;
@@ -2518,8 +2519,15 @@ begin
     except
       // Erschoepfter Stapel geht durch - uIDEAnalyseRunner verlaesst sich
       // darauf (Review Bereich C, Major 10); die Schutzseite ist nach
-      // einem Ueberlauf unwiederbringlich weg.
-      on EStackExhausted do raise;
+      // einem Ueberlauf unwiederbringlich weg. Result geht wie beim
+      // EAbort-Zweig frei: der residente Wirt (IDE) lebt weiter, die
+      // Liste mit allen bis dahin gesammelten Funden bliebe sonst liegen
+      // (Review Woche G02-05).
+      on EStackExhausted do
+      begin
+        FreeAndNil(Result);
+        raise;
+      end;
       on E: Exception do
         AddError('Analyseabbruch: ' + DescribeException(E));
     end;
@@ -2595,8 +2603,15 @@ begin
     except
       // Erschoepfter Stapel geht durch - uIDEAnalyseRunner verlaesst sich
       // darauf (Review Bereich C, Major 10); die Schutzseite ist nach
-      // einem Ueberlauf unwiederbringlich weg.
-      on EStackExhausted do raise;
+      // einem Ueberlauf unwiederbringlich weg. Result geht wie beim
+      // EAbort-Zweig frei: der residente Wirt (IDE) lebt weiter, die
+      // Liste mit allen bis dahin gesammelten Funden bliebe sonst liegen
+      // (Review Woche G02-05).
+      on EStackExhausted do
+      begin
+        FreeAndNil(Result);
+        raise;
+      end;
       on E: Exception do
         AddError('Analyseabbruch: ' + DescribeException(E));
     end;
@@ -2701,8 +2716,15 @@ begin
       end;
       // Erschoepfter Stapel geht durch - uIDEAnalyseRunner verlaesst sich
       // darauf (Review Bereich C, Major 10); die Schutzseite ist nach
-      // einem Ueberlauf unwiederbringlich weg.
-      on EStackExhausted do raise;
+      // einem Ueberlauf unwiederbringlich weg. Result geht wie beim
+      // EAbort-Zweig frei: der residente Wirt (IDE) lebt weiter, die
+      // Liste mit allen bis dahin gesammelten Funden bliebe sonst liegen
+      // (Review Woche G02-05).
+      on EStackExhausted do
+      begin
+        FreeAndNil(Result);
+        raise;
+      end;
       on E: Exception do
         AddError('Analyseabbruch: ' + DescribeException(E));
     end;
@@ -2775,8 +2797,15 @@ begin
       end;
       // Erschoepfter Stapel geht durch - uIDEAnalyseRunner verlaesst sich
       // darauf (Review Bereich C, Major 10); die Schutzseite ist nach
-      // einem Ueberlauf unwiederbringlich weg.
-      on EStackExhausted do raise;
+      // einem Ueberlauf unwiederbringlich weg. Result geht wie beim
+      // EAbort-Zweig frei: der residente Wirt (IDE) lebt weiter, die
+      // Liste mit allen bis dahin gesammelten Funden bliebe sonst liegen
+      // (Review Woche G02-05).
+      on EStackExhausted do
+      begin
+        FreeAndNil(Result);
+        raise;
+      end;
       on E: Exception do
         AddError('Analyseabbruch: ' + DescribeException(E));
     end;
