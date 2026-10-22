@@ -2,9 +2,9 @@ unit uRdxCharEscapeFix;
 
 // reDelphix - Editorhilfen fuer die Trojan-Source-Familie, OHNE ToolsAPI
 // und ohne Parser:
-//   SCA188 SourceBidiOverride - Bidi-Steuerzeichen (BidiOverride).
-// Die Umformung der gemeldeten Zeile (allgemein gehalten, die Zeichen der
-// Regel als Praedikat - SCA192 SourceInvisibleChar folgt):
+//   SCA188 SourceBidiOverride - Bidi-Steuerzeichen (BidiOverride),
+//   SCA192 SourceInvisibleChar - unsichtbare Zeichen (InvisibleChar).
+// Beide teilen dieselbe Umformung der gemeldeten Zeile:
 //   * im KOMMENTAR wird das Zeichen geloescht - Kommentare verwirft der
 //     Compiler, das Programm bleibt dasselbe; die Zeile zeigt danach, was
 //     der Compiler liest;
@@ -14,16 +14,21 @@ unit uRdxCharEscapeFix;
 //     und Zeichen-Codes sind EIN Zeichen-String, auch in Konstanten,
 //     case-Marken und Attributen). Gleicher Wert, gleicher Typ - ein
 //     Literal nur aus dem Zeichen wird #$202E (beides Char-Konstanten).
+// Nie geloescht wird im String: U+200D (ZWJ) gehoert dort oft zu einer
+// Emoji-Folge, und auch ein ZWSP ist Teil des Werts.
 //
-// DETEKTOR (uSourceEncoding, S1 ueber uFileTextCache.ComputeFileEncoding-
-// Info, Rohbytes der Datei): JE DATEI EIN Fund, auf der Zeile des
+// DETEKTOR (uSourceEncoding, S1/S2 ueber uFileTextCache.ComputeFileEncoding-
+// Info, Rohbytes der Datei): JE DATEI EIN Fund je Regel, auf der Zeile des
 // ERSTEN Zeichens (Zeilen zaehlt der Detektor an LF, 1-basiert), ohne
 // Spalte; die Meldung nennt das Zeichen nicht. Kommentare und Strings zaehlen
 // fuer ihn mit (datei-global). Die Hilfe behandelt darum ALLE Zeichen der
 // gemeldeten Zeile in EINER Ersetzung; danach meldet der Detektor die
-// naechste Zeile. Zeichenmenge genau wie im Detektor:
+// naechste Zeile. Zeichenmengen genau wie im Detektor:
 //   SCA188: U+061C, U+202A..U+202E, U+2066..U+2069 (NICHT U+200E/U+200F -
-//           die meldet der Detektor nicht).
+//           die meldet der Detektor nicht);
+//   SCA192: U+200B..U+200D, U+2060, U+FEFF (ein U+FEFF ganz am Dateianfang
+//           ist die BOM, die der Detektor ueberspringt - im Editor-Puffer
+//           steht sie nicht; NBSP U+00A0 zaehlt nicht).
 // Alle diese Zeichen liegen in der BMP: ein Zeichen ist genau eine UTF-16-
 // Einheit der Zeile (die Spalten der Code-Sicht und von TRdxEdit zaehlen
 // UTF-16-Einheiten). Ein Surrogatpaar daneben (Emoji) wird nie geteilt -
@@ -48,6 +53,12 @@ unit uRdxCharEscapeFix;
 //     Gegenprobe: die Code-Sicht der geaenderten Datei muss jedes
 //     verbliebene Zeichen gleich einordnen (Code/String/Kommentar,
 //     Direktiven-Anfang) - auf der Zeile und in allen Zeilen danach;
+//   * nur SCA192: ein Joiner (U+200C ZWNJ, U+200D ZWJ) im Kommentar neben
+//     einem Nicht-ASCII-Zeichen - Teil einer Emoji-Folge (auch hinter
+//     U+FE0F) oder einer Schrift (ZWNJ im Persischen, ZWJ in indischen
+//     Schriften). Loeschen aenderte nicht das Programm, aber den Text des
+//     Autors; das entscheidet er selbst. U+200B, U+2060 und U+FEFF im
+//     Kommentar loescht die Hilfe immer (sie verbinden nichts).
 // Sperrt ein Zeichen, gibt es fuer die ganze Zeile keine Hilfe - eine
 // Teilhilfe liesse den Fund auf derselben Zeile stehen.
 // Steht auf der Zeile kein Zeichen der Regel: Zeile verschoben.
@@ -57,8 +68,8 @@ unit uRdxCharEscapeFix;
 // Leerzeichen dazwischen, sonst laese der Compiler 'then' als Teil der
 // Hex-Zahl (E und e sind Hex-Ziffern).
 //
-// FORM: der Planer hat die Form TRdxMapPlanner (uRdxFixRunner);
-// der Adapter der Tabelle (MapFix) steht in uRdxFixTable. Diese Unit
+// FORM: die beiden Planer haben die Form TRdxMapPlanner (uRdxFixRunner);
+// die Adapter der Tabelle (MapFix) stehen in uRdxFixTable. Diese Unit
 // bindet nur uRdxCodeMap, uRdxBufferMath, uRdxText, uRefactorInfo und
 // System.* - FPC-tauglich. Unter FPC 3.2 haelt TStringList AnsiString: die
 // Gegenprobe (eine Kopie der Zeilen) verliert Zeichen ausserhalb der
@@ -73,8 +84,9 @@ uses
 const
   // Gruende der Ablehnung als englische msgids (uRdxText._, E29); die Tests
   // vergleichen mit _(). %s vorn ist der Code des Zeichens ('U+202E'), %s
-  // am Ende ein Satzende aus uRdxText (MsgCheckByHand).
+  // am Ende ein Satzende aus uRdxText (MsgCheckByHand, MsgDecideByHand).
   R_BIDI_NONE = 'no bidirectional control character on the reported line';
+  R_INVIS_NONE = 'no invisible character on the reported line';
   R_ESC_IN_CODE = '%s stands in code, not in a string or comment - %s';
   R_ESC_DIRECTIVE = '%s stands in a compiler directive - deleting it would '
     + 'change the directive; %s';
@@ -85,9 +97,11 @@ const
     + 'the string could change what that applies to; %s';
   R_ESC_SHAPE = 'deleting %s would change the comment (it would end '
     + 'earlier or turn into a directive)';
+  R_INVIS_JOINER = 'the joiner %s in a comment stands next to a non-ASCII '
+    + 'character - it may belong to an emoji or a script; %s';
 
 type
-  // Der Planer von SCA188 (Form TRdxMapPlanner, uRdxFixRunner).
+  // Die Planer von SCA188 und SCA192 (Form TRdxMapPlanner, uRdxFixRunner).
   // AMessage bleibt ungenutzt: die Meldung nennt weder Spalte noch Zeichen.
   TRdxCharEscapeFix = class
   public
@@ -96,8 +110,14 @@ type
     class function BidiOverride(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
-    // Zeichen der Regel SCA188 - die Menge des Detektors.
+    // SCA192: die unsichtbaren Zeichen von ALine - im String als #$xxxx,
+    // im Kommentar geloescht (Joiner neben Nicht-ASCII: keine Hilfe).
+    class function InvisibleChar(AMap: TRdxCodeMap; ALine: Integer;
+      const AMessage: string; out AEdit: TRdxEdit;
+      out AReason: string): Boolean; static;
+    // Zeichen der Regel SCA188 bzw. SCA192 - die Mengen des Detektors.
     class function IsBidiControl(C: Char): Boolean; static;
+    class function IsInvisible(C: Char): Boolean; static;
     // Der Zeichen-Code, den die Hilfe schreibt: '#$202E' (vier Hex-Ziffern,
     // gross).
     class function CharCode(C: Char): string; static;
@@ -109,13 +129,16 @@ uses
   System.SysUtils,   // IntToHex
   System.Classes,    // TStringList (Gegenprobe der Kommentar-Form)
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxText;          // _(), MsgMovedSuffix, MsgCheckByHand
+  uRdxText;          // _(), MsgMovedSuffix, MsgCheckByHand, MsgDecideByHand
 
 const
   SPAN_188 = 'sca188';
+  SPAN_192 = 'sca192';
   QUOTE = '''';
   CODE_PREFIX = '#$';
   CODE_POINT_PREFIX = 'U+';
+  ZWNJ = #$200C;
+  ZWJ = #$200D;
 
 type
   // Ein Zeichen der Regel? (plain function - FPC 3.2 kennt keine
@@ -125,13 +148,19 @@ type
 
   // Ergebnis der Planung einer Zeile.
   TEscapeStop = (esOk, esNoTarget, esCode, esDirective, esMultiLine,
-    esUnclosed, esMember, esShape);
+    esUnclosed, esMember, esShape, esJoiner);
 
 function IsBidiCode(C: Char): Boolean;
 begin
   Result := (Ord(C) = $061C)
     or ((Ord(C) >= $202A) and (Ord(C) <= $202E))
     or ((Ord(C) >= $2066) and (Ord(C) <= $2069));
+end;
+
+function IsInvisibleCode(C: Char): Boolean;
+begin
+  Result := ((Ord(C) >= $200B) and (Ord(C) <= $200D))
+    or (Ord(C) = $2060) or (Ord(C) = $FEFF);
 end;
 
 function CodePointText(C: Char): string;
@@ -165,6 +194,15 @@ begin
     if AMap.DirectiveStartsAt(L, C) then Exit(True);
     Dec(C);
   end;
+end;
+
+// Ein Joiner (ZWNJ, ZWJ) an AL[ACol] mit einem Nicht-ASCII-Nachbarn.
+function JoinerNextToNonAscii(const AL: string; ACol: Integer): Boolean;
+begin
+  Result := False;
+  if (AL[ACol] <> ZWNJ) and (AL[ACol] <> ZWJ) then Exit;
+  Result := ((ACol > 1) and (Ord(AL[ACol - 1]) > 127))
+    or ((ACol < Length(AL)) and (Ord(AL[ACol + 1]) > 127));
 end;
 
 // Die Grenzen des einzeiligen String-Literals um (ALine, ACol): AStart das
@@ -294,8 +332,8 @@ end;
 // Ersetzung (erste bis letzte geaenderte Spalte), sonst AStop und das
 // Zeichen, an dem es scheiterte (AStopChar).
 function PlanLine(AMap: TRdxCodeMap; ALine: Integer; AIsTarget: TCharTest;
-  const ARole: string; out AEdit: TRdxEdit; out AStop: TEscapeStop;
-  out AStopChar: Char): Boolean;
+  AGuardJoiners: Boolean; const ARole: string; out AEdit: TRdxEdit;
+  out AStop: TEscapeStop; out AStopChar: Char): Boolean;
 var
   L, NewLine, Piece : string;
   Drop              : TArray<Boolean>;
@@ -344,6 +382,11 @@ begin
           if InDirective(AMap, ALine, i) then
           begin
             AStop := esDirective;
+            Exit;
+          end;
+          if AGuardJoiners and JoinerNextToNonAscii(L, i) then
+          begin
+            AStop := esJoiner;
             Exit;
           end;
           Drop[i] := True;
@@ -425,6 +468,7 @@ begin
     esUnclosed:  Result := _(R_ESC_UNCLOSED, [CodePointText(AChar)]);
     esMember:    Result := _(R_ESC_MEMBER, [CodePointText(AChar), MsgCheckByHand]);
     esShape:     Result := _(R_ESC_SHAPE, [CodePointText(AChar)]);
+    esJoiner:    Result := _(R_INVIS_JOINER, [CodePointText(AChar), MsgDecideByHand]);
   else
     Result := MsgMovedSuffix(ANone);
   end;
@@ -435,6 +479,11 @@ end;
 class function TRdxCharEscapeFix.IsBidiControl(C: Char): Boolean;
 begin
   Result := IsBidiCode(C);
+end;
+
+class function TRdxCharEscapeFix.IsInvisible(C: Char): Boolean;
+begin
+  Result := IsInvisibleCode(C);
 end;
 
 class function TRdxCharEscapeFix.CharCode(C: Char): string;
@@ -450,9 +499,23 @@ var
   C    : Char;
 begin
   AReason := '';
-  Result := PlanLine(AMap, ALine, IsBidiCode, SPAN_188, AEdit, Stop, C);
+  Result := PlanLine(AMap, ALine, IsBidiCode, False, SPAN_188, AEdit, Stop, C);
   if not Result then
     AReason := StopReason(Stop, C, _(R_BIDI_NONE));
+end;
+
+class function TRdxCharEscapeFix.InvisibleChar(AMap: TRdxCodeMap;
+  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  out AReason: string): Boolean;
+var
+  Stop : TEscapeStop;
+  C    : Char;
+begin
+  AReason := '';
+  Result := PlanLine(AMap, ALine, IsInvisibleCode, True, SPAN_192, AEdit,
+    Stop, C);
+  if not Result then
+    AReason := StopReason(Stop, C, _(R_INVIS_NONE));
 end;
 
 end.
