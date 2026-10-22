@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2808 Zeilen, 97280 Bytes
-  CPoLines_de: array[0..2807] of string = (
+  // i18n\de.po - 2817 Zeilen, 97678 Bytes
+  CPoLines_de: array[0..2816] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2822,7 +2822,16 @@ const
     'msgstr "der Text hinter NOSONAR beginnt mit \"noinspection\" - er w'#$00FC'rde ein eigener Marker"',
     '',
     'msgid "unexpected code after the empty block"',
-    'msgstr "unerwarteter Code hinter dem leeren Block"'
+    'msgstr "unerwarteter Code hinter dem leeren Block"',
+    '',
+    'msgid "Suppress inserted in %s: %s"',
+    'msgstr "Unterdr'#$00FC'ckung eingef'#$00FC'gt in %s: %s"',
+    '',
+    'msgid "comment inside or behind the except block - a comment is intent, no help"',
+    'msgstr "Kommentar im oder hinter dem except-Block - ein Kommentar ist Absicht, keine Hilfe"',
+    '',
+    'msgid "the attribute stands behind another attribute on its line"',
+    'msgstr "das Attribut steht auf seiner Zeile hinter einem anderen Attribut"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -3097,8 +3106,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2804 Zeilen, 101627 Bytes
-  CPoLines_fr: array[0..2803] of string = (
+  // i18n\fr.po - 2813 Zeilen, 102014 Bytes
+  CPoLines_fr: array[0..2812] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -5902,7 +5911,16 @@ const
     'msgstr "le texte apr'#$00E8's NOSONAR commence par \"noinspection\" - il deviendrait un marqueur '#$00E0' part enti'#$00E8're"',
     '',
     'msgid "unexpected code after the empty block"',
-    'msgstr "code inattendu apr'#$00E8's le bloc vide"'
+    'msgstr "code inattendu apr'#$00E8's le bloc vide"',
+    '',
+    'msgid "Suppress inserted in %s: %s"',
+    'msgstr "Suppression ins'#$00E9'r'#$00E9'e dans %s : %s"',
+    '',
+    'msgid "comment inside or behind the except block - a comment is intent, no help"',
+    'msgstr "commentaire dans le bloc except ou apr'#$00E8's lui - un commentaire est intentionnel, pas d''aide"',
+    '',
+    'msgid "the attribute stands behind another attribute on its line"',
+    'msgstr "l''attribut suit un autre attribut sur sa ligne"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

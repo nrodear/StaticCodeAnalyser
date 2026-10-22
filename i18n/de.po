@@ -2806,3 +2806,12 @@ msgstr "der Text hinter NOSONAR beginnt mit \"noinspection\" - er würde ein eig
 
 msgid "unexpected code after the empty block"
 msgstr "unerwarteter Code hinter dem leeren Block"
+
+msgid "Suppress inserted in %s: %s"
+msgstr "Unterdrückung eingefügt in %s: %s"
+
+msgid "comment inside or behind the except block - a comment is intent, no help"
+msgstr "Kommentar im oder hinter dem except-Block - ein Kommentar ist Absicht, keine Hilfe"
+
+msgid "the attribute stands behind another attribute on its line"
+msgstr "das Attribut steht auf seiner Zeile hinter einem anderen Attribut"
