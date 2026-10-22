@@ -55,27 +55,32 @@ implementation
 
 uses
   System.SysUtils,
-  uRefactorInfo;       // TRefactorSpan.Make
+  uRefactorInfo,       // TRefactorSpan.Make
+  uRdxText;            // _(), MsgMovedSuffix (E29)
 
 const
   SPAN_183 = 'sca183';
   KEY_ATTR = 'Attribute [';
-  R_ATTR_MOVED = 'keine Attributzeile an der gemeldeten Stelle - Zeile '
-    + 'verschoben? Datei neu pruefen';
-  R_ATTR_TARGET = 'Attribut mit Ziel (assembly:, Result:) - es haengt an '
-    + 'keinem Element';
-  R_ATTR_MULTI = 'Attribut ueber mehrere Zeilen - keine Hilfe';
-  R_ATTR_TAIL = 'hinter dem Attribut steht noch Text oder ein Kommentar';
-  R_NO_GAP = 'keine Leerzeile hinter dem Attribut - Zeile verschoben? Datei '
-    + 'neu pruefen';
-  R_NO_MEMBER = 'hinter der Leerzeile steht kein Code mehr';
-  R_NEXT_NOT_CODE = 'hinter der Leerzeile folgt ein Kommentar oder eine '
-    + 'Direktive - die Zeilen bleiben';
-  R_NOT_MEMBER = 'hinter der Leerzeile steht keine Deklaration, die das '
-    + 'Attribut tragen kann';
-  R_NO_ANCHOR = 'vor dem Attribut steht kein Deklarationsende - kein '
-    + 'sicherer Attributkontext';
-  R_DIRECTIVE = 'zwischen Attribut und Element liegt eine Compiler-Direktive';
+  // Die Gruende als englische msgids (E29), uebersetzt mit _() aus uRdxText;
+  // Deutsch und Franzoesisch in i18n/de.po und i18n/fr.po. Das Ende
+  // ' - Zeile verschoben? ...' haengt MsgMovedSuffix an.
+  R_ATTR_MOVED = 'no attribute line at the reported place';
+  R_ATTR_TARGET = 'attribute with a target (assembly:, Result:) - it is '
+    + 'attached to no element';
+  R_ATTR_MULTI = 'attribute spans several lines - no help';
+  // Nicht die msgid von uRdxAttrDuplicateFix ('text or a comment follows
+  // the attribute'): deren de-Fassung hat kein 'noch'.
+  R_ATTR_TAIL = 'text or a comment still follows the attribute';
+  R_NO_GAP = 'no blank line after the attribute';
+  R_NO_MEMBER = 'no more code follows the blank line';
+  R_NEXT_NOT_CODE = 'a comment or a directive follows the blank line - the '
+    + 'lines stay';
+  R_NOT_MEMBER = 'no declaration that can carry the attribute follows the '
+    + 'blank line';
+  R_NO_ANCHOR = 'no end of a declaration before the attribute - not a safe '
+    + 'attribute context';
+  R_DIRECTIVE = 'a compiler directive lies between the attribute and the '
+    + 'element';
   // Davor darf eine Attributzeile beginnen: AttrAnchorOk (uRdxCodeMap; bis
   // zur Folgewelle des Wochen-Reviews hier ANCHOR_WORDS, G09-02).
   // Elemente, die ein Attribut tragen (Kopf der Routine, property).
@@ -139,7 +144,7 @@ begin
   // Wochen-Reviews hier ausgeschrieben, G09-02).
   if not AttrHeadAt(AMap, ALine, AFirstCol, P, Q)
      or (AName = '') or not SameText(AName, Copy(L, P, Q - P)) then
-    Exit(R_ATTR_MOVED);
+    Exit(MsgMovedSuffix(_(R_ATTR_MOVED)));
   // Hinter dem letzten Zeichen der Zeile muss der Schliesser eines
   // Attributs stehen, als Code - kein Kommentar, kein Text.
   Last := Length(L);
@@ -149,8 +154,8 @@ begin
   begin
     // '[Foo(1,': das Attribut laeuft auf der naechsten Zeile weiter.
     if OpenBrackets(AMap, ALine, AFirstCol, Last) > 0 then
-      Exit(R_ATTR_MULTI);
-    Exit(R_ATTR_TAIL);
+      Exit(_(R_ATTR_MULTI));
+    Exit(_(R_ATTR_TAIL));
   end;
   Depth := 0;
   Paren := 0;
@@ -161,7 +166,7 @@ begin
     C := L[j];
     if IsBlank(C) then Continue;
     // Nach dem Schliesser darf nur noch ein weiteres Attribut folgen.
-    if Closed and (C <> '[') then Exit(R_ATTR_TAIL);
+    if Closed and (C <> '[') then Exit(_(R_ATTR_TAIL));
     if C = '[' then
     begin
       Inc(Depth);
@@ -170,7 +175,7 @@ begin
     else if C = ']' then
     begin
       Dec(Depth);
-      if Depth < 0 then Exit(R_ATTR_MULTI);
+      if Depth < 0 then Exit(_(R_ATTR_MULTI));
       Closed := Depth = 0;
     end
     else if C = '(' then
@@ -178,10 +183,10 @@ begin
     else if C = ')' then
       Dec(Paren)
     else if (C = ':') and (Depth = 1) and (Paren = 0) then
-      Exit(R_ATTR_TARGET);
+      Exit(_(R_ATTR_TARGET));
   end;
   if (Depth <> 0) or not Closed then
-    Result := R_ATTR_MULTI;
+    Result := _(R_ATTR_MULTI);
 end;
 
 // Kann das Token T (erstes Code-Token der Zeile hinter der Leerzeile) ein
@@ -222,7 +227,7 @@ begin
   N := ALine + 1;
   if (N > AMap.LineCount) or not IsBlankLine(AMap.Raw(N)) then
   begin
-    AReason := R_NO_GAP;
+    AReason := MsgMovedSuffix(_(R_NO_GAP));
     Exit;
   end;
   // Keine Leerzeile beginnt in einem Kommentar oder String: die
@@ -232,31 +237,31 @@ begin
     Inc(N);
   if N > AMap.LineCount then
   begin
-    AReason := R_NO_MEMBER;
+    AReason := _(R_NO_MEMBER);
     Exit;
   end;
   // Die Zeile mit Inhalt: Code, kein Kommentar, eine tragende Deklaration.
   Start := SkipBlanks(AMap.Raw(N), 1);
   if AMap.StartsInside(N) or not AMap.IsCode(N, Start) then
   begin
-    AReason := R_NEXT_NOT_CODE;
+    AReason := _(R_NEXT_NOT_CODE);
     Exit;
   end;
   Head := TokenAt(AMap, N, Start);
   if not CarriesAttribute(AMap, Head) then
   begin
-    AReason := R_NOT_MEMBER;
+    AReason := _(R_NOT_MEMBER);
     Exit;
   end;
   // Das Token vor dem Attribut: eine Deklaration ist zu Ende oder beginnt.
   if not AttrAnchorOk(AMap, ALine, First, Prev) then
   begin
-    AReason := R_NO_ANCHOR;
+    AReason := _(R_NO_ANCHOR);
     Exit;
   end;
   if DirectiveInLines(AMap, Prev.Line, N) then
   begin
-    AReason := R_DIRECTIVE;
+    AReason := _(R_DIRECTIVE);
     Exit;
   end;
   // Ein Bereich beginnt auf einem Zeichen (SpanFits: nie auf einer leeren

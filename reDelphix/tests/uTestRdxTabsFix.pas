@@ -38,6 +38,7 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uTabulationCharacter,
   uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner, uRdxFixTable, uRdxTabsFix,
+  uRdxText,              // MsgNoColumn (E29)
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
   uTestRdxTextKit;       // Join, Apply
 
@@ -203,7 +204,7 @@ var
   R : string;
 begin
   Assert.AreEqual('', Fix(TAB + 'X;', 1, 'Tab character', R));
-  Assert.AreEqual(R_NO_COLUMN, R);
+  Assert.AreEqual(MsgNoColumn, R);
 end;
 
 procedure TTestRdxTabsFix.OnlyReportedLine_Changes;

@@ -37,15 +37,18 @@ uses
   uRdxCodeMap;          // TRdxCodeMap
 
 const
-  // Gruende der Ablehnung (deutsch, ASCII, wie die Nachbarn).
-  KC_NO_WORD = 'Schluesselwort oder Spalte fehlt in der Meldung';
-  KC_LOWER   = 'das Wort ist schon klein geschrieben';
-  KC_MOVED   = 'das Schluesselwort steht nicht an der gemeldeten Stelle - '
-    + 'Zeile verschoben? Datei neu pruefen';
-  KC_IDENT   = 'hinter ".", "&" oder "@" und vor ":=" ist das Wort ein '
-    + 'Bezeichner, kein Schluesselwort';
-  KC_CONTEXT = '%s ist hier nicht sicher ein Schluesselwort (auch als '
-    + 'Bezeichner zulaessig)';
+  // Gruende der Ablehnung als englische msgids (E29), uebersetzt mit _()
+  // aus uRdxText; Deutsch und Franzoesisch in i18n/de.po und i18n/fr.po.
+  // KC_NO_WORD und KC_MOVED sind dieselben msgids wie in uRdxLineFixes;
+  // KC_MOVED bekommt sein Ende ' - Zeile verschoben? ...' von
+  // MsgMovedSuffix.
+  KC_NO_WORD = 'the message has no keyword or column';
+  KC_LOWER   = 'the word is already lower case';
+  KC_MOVED   = 'the keyword is not at the reported place';
+  KC_IDENT   = 'after ".", "&" or "@" and before ":=" the word is an '
+    + 'identifier, not a keyword';
+  KC_CONTEXT = '%s is not certainly a keyword here (also allowed as an '
+    + 'identifier)';
 
 type
   // Der Planer von SCA064 (Form TRdxMapPlanner, uRdxFixRunner).
@@ -62,7 +65,8 @@ implementation
 
 uses
   System.SysUtils,
-  uRefactorInfo;     // TRefactorSpan.Make
+  uRefactorInfo,     // TRefactorSpan.Make
+  uRdxText;          // _(), MsgMovedSuffix (E29)
 
 const
   SPAN_064 = 'sca064';
@@ -181,12 +185,12 @@ begin
   Prev := Before(AMap, ATok);
   Next := After(AMap, ATok);
   if not IsKeywordAt(AMap, ATok, Prev) then
-    Result := KC_IDENT
+    Result := _(KC_IDENT)
   else if IsReserved(Low) or IsVisibility(Low, Prev, Next)
      or IsClassModifier(Low, Prev, Next) then
     Result := ''
   else if not (IsRoutineDirective(Low) and IsDirectiveOfHeader(AMap, ATok)) then
-    Result := Format(KC_CONTEXT, [AKw]);
+    Result := _(KC_CONTEXT, [AKw]);
 end;
 
 class function TRdxKeywordCaseFix.LowercaseKeyword(AMap: TRdxCodeMap;
@@ -205,12 +209,12 @@ begin
   Lower := LowerCase(Kw);
   if (Kw = '') or (Col <= 0) then
   begin
-    AReason := KC_NO_WORD;
+    AReason := _(KC_NO_WORD);
     Exit;
   end;
   if Kw = Lower then
   begin
-    AReason := KC_LOWER;
+    AReason := _(KC_LOWER);
     Exit;
   end;
   L := AMap.Raw(ALine);
@@ -221,7 +225,7 @@ begin
     and ((Col = 1) or not IsIdentChar(L[Col - 1]))
     and ((Last = Length(L)) or not IsIdentChar(L[Last + 1]));
   if not Whole then
-    AReason := KC_MOVED
+    AReason := MsgMovedSuffix(_(KC_MOVED))
   else
     AReason := KeywordReason(AMap, TokenAt(AMap, ALine, Col), Kw);
   if AReason <> '' then Exit;

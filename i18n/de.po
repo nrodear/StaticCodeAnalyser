@@ -5959,3 +5959,158 @@ msgstr "einer Funktion"
 
 msgid "the message has no function or return type"
 msgstr "Funktion oder Rückgabetyp fehlt in der Meldung"
+
+# reDelphix G10 (Quick-Fix-Units der Q-Charge: EmptyFinally, Https, AttrGap, TwiceInherited, KeywordCase, ForRange, TrailingBlanks, Tabs)
+
+msgid "the finally block is not empty"
+msgstr "der finally-Block ist nicht leer"
+
+msgid "comment or directive in the finally block - intent, no help"
+msgstr "Kommentar oder Direktive im finally-Block - Absicht, keine Hilfe"
+
+msgid "the matching try cannot be found unambiguously"
+msgstr "das zugehörige try ist nicht eindeutig zu finden"
+
+msgid "the try follows then, else, do or a label - without begin..end the branch would lose its body"
+msgstr "das try steht hinter then, else, do oder einer Marke - ohne begin..end verlöre der Zweig seinen Rumpf"
+
+msgid "try is not alone on its line (code or comment beside it)"
+msgstr "try steht nicht allein auf seiner Zeile (Code oder Kommentar daneben)"
+
+msgid "finally and end are not alone on their lines (code or comment beside them)"
+msgstr "finally und end stehen nicht allein auf ihren Zeilen (Code oder Kommentar daneben)"
+
+msgid "end is followed neither by \";\" nor by the end of the enclosing block"
+msgstr "hinter end folgt weder \";\" noch das Ende des umgebenden Blocks"
+
+msgid "the body contains var, const, label, goto or asm - scope or jump target would change"
+msgstr "der Rumpf enthält var, const, label, goto oder asm - Gültigkeitsbereich oder Sprungziel ändert sich"
+
+msgid "compiler directive in the try..end"
+msgstr "Compiler-Direktive im try..end"
+
+msgid "the body starts inside a block comment or multi-line string"
+msgstr "der Rumpf beginnt in einem Block-Kommentar oder mehrzeiligen String"
+
+msgid "the try body is empty"
+msgstr "der try-Rumpf ist leer"
+
+msgid "indentation of the body is inconsistent - line %d"
+msgstr "Einrückung des Rumpfs uneinheitlich - Zeile %d"
+
+msgid "no finally"
+msgstr "kein finally"
+
+msgid "no \"http://\" address in the message"
+msgstr "keine \"http://\"-Adresse in der Meldung"
+
+msgid "the address is not a literal of its own at the reported place"
+msgstr "die Adresse steht nicht als eigenes Literal an der gemeldeten Stelle"
+
+msgid "the address appears more than once on the line - ambiguous"
+msgstr "die Adresse steht mehrfach auf der Zeile - nicht eindeutig"
+
+msgid "no host name in the address"
+msgstr "kein Rechnername in der Adresse"
+
+msgid "the address contains credentials, a port or an IPv6 address - https would not simply work there"
+msgstr "die Adresse enthält Zugangsdaten, einen Port oder eine IPv6-Adresse - https lief dort nicht ohne Weiteres"
+
+msgid "the host name is not a fixed name (placeholder or special characters)"
+msgstr "der Rechnername ist kein fester Name (Platzhalter oder Sonderzeichen)"
+
+msgid "an IP address rarely has a matching certificate"
+msgstr "eine IP-Adresse hat selten ein passendes Zertifikat"
+
+msgid "a local or internal host - not a safe remote target for https"
+msgstr "ein lokaler oder interner Rechner - kein sicheres Fernziel für https"
+
+msgid "namespace or schema marker in or before the address - could be an identifier rather than a network call, no help out of caution"
+msgstr "Namespace- oder Schema-Kennzeichen in der Adresse oder davor - könnte eine Kennung statt eines Netzaufrufs sein, aus Vorsicht keine Hilfe"
+
+msgid "no attribute line at the reported place"
+msgstr "keine Attributzeile an der gemeldeten Stelle"
+
+msgid "attribute with a target (assembly:, Result:) - it is attached to no element"
+msgstr "Attribut mit Ziel (assembly:, Result:) - es hängt an keinem Element"
+
+msgid "attribute spans several lines - no help"
+msgstr "Attribut über mehrere Zeilen - keine Hilfe"
+
+msgid "text or a comment still follows the attribute"
+msgstr "hinter dem Attribut steht noch Text oder ein Kommentar"
+
+msgid "no blank line after the attribute"
+msgstr "keine Leerzeile hinter dem Attribut"
+
+msgid "no more code follows the blank line"
+msgstr "hinter der Leerzeile steht kein Code mehr"
+
+msgid "a comment or a directive follows the blank line - the lines stay"
+msgstr "hinter der Leerzeile folgt ein Kommentar oder eine Direktive - die Zeilen bleiben"
+
+msgid "no declaration that can carry the attribute follows the blank line"
+msgstr "hinter der Leerzeile steht keine Deklaration, die das Attribut tragen kann"
+
+msgid "a compiler directive lies between the attribute and the element"
+msgstr "zwischen Attribut und Element liegt eine Compiler-Direktive"
+
+msgid "no routine header on the reported line"
+msgstr "kein Routinenkopf auf der gemeldeten Zeile"
+
+msgid "no simple body for the routine header (nested routine, asm, external or type before the begin) - %s"
+msgstr "kein einfacher Rumpf zum Routinenkopf (verschachtelte Routine, asm, external oder Typ vor dem begin) - %s"
+
+msgid "the top level of the body has %d inherited calls of the same kind instead of two - the help deletes neither calls in if, case or try nor more than two"
+msgstr "auf oberster Ebene des Rumpfs stehen %d gleichartige inherited-Aufrufe statt zwei - Aufrufe in if, case oder try und mehr als zwei löscht die Hilfe nicht"
+
+msgid "an inherited call is not of the form \"inherited;\" or \"inherited Name(...);\" on one line - %s"
+msgstr "ein inherited-Aufruf ist nicht von der Form \"inherited;\" oder \"inherited Name(...);\" auf einer Zeile - %s"
+
+msgid "other code stands between the two calls - only a human can decide whether it depends on the first call"
+msgstr "zwischen den beiden Aufrufen steht anderer Code - ob er vom ersten Aufruf abhängt, entscheidet nur der Mensch"
+
+msgid "a comment or a directive stands between the two calls"
+msgstr "zwischen den beiden Aufrufen steht ein Kommentar oder eine Direktive"
+
+msgid "the two calls are not textually identical"
+msgstr "die beiden Aufrufe sind nicht textgleich"
+
+msgid "a call shares its line with other code or a comment - the help deletes whole lines"
+msgstr "ein Aufruf teilt die Zeile mit anderem Code oder einem Kommentar - die Hilfe löscht ganze Zeilen"
+
+msgid "the word is already lower case"
+msgstr "das Wort ist schon klein geschrieben"
+
+msgid "after \".\", \"&\" or \"@\" and before \":=\" the word is an identifier, not a keyword"
+msgstr "hinter \".\", \"&\" oder \"@\" und vor \":=\" ist das Wort ein Bezeichner, kein Schlüsselwort"
+
+msgid "%s is not certainly a keyword here (also allowed as an identifier)"
+msgstr "%s ist hier nicht sicher ein Schlüsselwort (auch als Bezeichner zulässig)"
+
+msgid "the message does not name the bounds - analyse the file again"
+msgstr "die Meldung nennt die Grenzen nicht - Datei neu prüfen"
+
+msgid "no reversed for header with literal bounds"
+msgstr "kein umgekehrter for-Kopf mit Literalgrenzen"
+
+msgid "%d reversed for headers"
+msgstr "%d umgekehrte for-Köpfe"
+
+msgid "the for header on the line has other bounds than the finding"
+msgstr "der for-Kopf auf der Zeile hat andere Grenzen als der Fund"
+
+msgid "comment, directive or string in the for header"
+msgstr "Kommentar, Direktive oder String im for-Kopf"
+
+msgid "no whitespace at the line end at the reported place"
+msgstr "am Zeilenende steht kein Leerraum an der gemeldeten Stelle"
+
+msgid "the whitespace is inside a multi-line or unclosed string - it is content, the help does not delete it"
+msgstr "der Leerraum steht in einem mehrzeiligen oder offenen String - er ist Inhalt, die Hilfe löscht ihn nicht"
+
+msgid "no tab at the reported place"
+msgstr "kein Tab an der gemeldeten Stelle"
+
+msgid "the first tab of the line is inside a string or comment - it stays untouched, the help would leave the finding in place"
+msgstr "der erste Tab der Zeile steht in einem String oder Kommentar - der bleibt unangetastet, die Hilfe ließe den Fund stehen"

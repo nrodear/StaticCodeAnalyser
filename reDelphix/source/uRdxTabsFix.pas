@@ -54,15 +54,18 @@ implementation
 
 uses
   System.SysUtils,
-  uRefactorInfo;   // TRefactorSpan.Make
+  uRefactorInfo,   // TRefactorSpan.Make
+  uRdxText;        // _(), MsgNoColumn, MsgMovedSuffix (E29)
 
 const
   TAB = #9;
   SPAN_061 = 'sca061';
-  R_TAB_MOVED = 'kein Tab an der gemeldeten Stelle - Zeile verschoben? '
-    + 'Datei neu pruefen';
-  R_TAB_NOT_CODE = 'der erste Tab der Zeile steht in einem String oder '
-    + 'Kommentar - der bleibt unangetastet, die Hilfe liesse den Fund stehen';
+  // Die Gruende als englische msgids (E29), uebersetzt mit _() aus
+  // uRdxText; Deutsch und Franzoesisch in i18n/de.po und i18n/fr.po. Das
+  // Ende ' - Zeile verschoben? ...' haengt MsgMovedSuffix an.
+  R_TAB_MOVED = 'no tab at the reported place';
+  R_TAB_NOT_CODE = 'the first tab of the line is inside a string or comment '
+    + '- it stays untouched, the help would leave the finding in place';
 
 class function TRdxTabsFix.Tabs(AMap: TRdxCodeMap; ALine: Integer;
   const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
@@ -78,18 +81,18 @@ begin
   Col := ColumnFromMessage(AMessage);
   if Col <= 0 then
   begin
-    AReason := R_NO_COLUMN;
+    AReason := MsgNoColumn;
     Exit;
   end;
   L := AMap.Raw(ALine);
   if (Col > Length(L)) or (L[Col] <> TAB) or (Pos(TAB, L) <> Col) then
   begin
-    AReason := R_TAB_MOVED;
+    AReason := MsgMovedSuffix(_(R_TAB_MOVED));
     Exit;
   end;
   if not AMap.IsCode(ALine, Col) then
   begin
-    AReason := R_TAB_NOT_CODE;
+    AReason := _(R_TAB_NOT_CODE);
     Exit;
   end;
   // Erster und letzter Code-Tab; der Text dazwischen wird mitgefuehrt.

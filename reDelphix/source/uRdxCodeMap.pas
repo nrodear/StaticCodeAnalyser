@@ -713,13 +713,10 @@ function ElseBelongsToIf(AMap: TRdxCodeMap; const AElse: TRdxToken;
 
 const
   // Der Grund, wenn eine Meldung keine Spalte nennt (ColumnFromMessage
-  // liefert 0). Bis Charge B2S-a je eine Konstante in uRdxSimpleFixes und
-  // uRdxLineFixes und ein Literal in uRdxStructFixes (Review R3-05). Der
-  // uebersetzte Text ist uRdxText.MsgNoColumn (Entscheid E29); die Konstante
-  // bleibt nur, bis die Gruppen der drei Planer-Units ihre Verwendungen auf
-  // MsgNoColumn umgestellt haben - der Merge entfernt sie samt Eintrag in
-  // tools/rdx_i18n_gate.allow (Texte umstellen, Querschnitt R_NO_COLUMN).
-  R_NO_COLUMN = 'Spalte fehlt in der Meldung';
+  // liefert 0), ist uRdxText.MsgNoColumn (Entscheid E29). Die deutsche
+  // Konstante R_NO_COLUMN, die bis dahin hier stand, entfiel mit ihren
+  // letzten Verwendungen (uRdxTabsFix, uRdxTrailingBlanksFix; Gruppe G10).
+
   // Obergrenze einer Zahl aus einer Meldung (NumberAt): eine Zeile oder
   // Spalte darueber ist kaputt - so laeuft keine Ziffernfolge ueber.
   MAX_NUMBER = 10000000;

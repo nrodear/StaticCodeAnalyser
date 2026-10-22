@@ -24,16 +24,20 @@ uses
   uRdxCodeMap;        // TRdxCodeMap
 
 const
-  // Die Gruende (deutsch, ASCII). Die Hinweise beider Eintraege
+  // Die Gruende als englische msgids (E29), uebersetzt mit _() aus
+  // uRdxText; Deutsch und Franzoesisch in i18n/de.po und i18n/fr.po.
+  // R_FORRANGE_OTHER bekommt sein Ende ' - Zeile verschoben? ...' von
+  // MsgMovedSuffix; R_FORRANGE_MANY geht unformatiert (_() ohne Argumente)
+  // als Muster an OneTokenOnLine. Die Hinweise beider Eintraege
   // (R_FORRANGE_HINT, R_FORRANGE_SWAP_HINT) stehen mit den Adaptern in der
   // Tabelle (uRdxFixTable).
-  R_FORRANGE_BOUNDS = 'die Meldung nennt die Grenzen nicht - Datei neu '
-    + 'pruefen';
-  R_FORRANGE_WHAT   = 'kein umgekehrter for-Kopf mit Literalgrenzen';
-  R_FORRANGE_MANY   = '%d umgekehrte for-Koepfe';
-  R_FORRANGE_OTHER  = 'der for-Kopf auf der Zeile hat andere Grenzen als der '
-    + 'Fund - Zeile verschoben? Datei neu pruefen';
-  R_FORRANGE_NONCODE = 'Kommentar, Direktive oder String im for-Kopf';
+  R_FORRANGE_BOUNDS = 'the message does not name the bounds - analyse the '
+    + 'file again';
+  R_FORRANGE_WHAT   = 'no reversed for header with literal bounds';
+  R_FORRANGE_MANY   = '%d reversed for headers';
+  R_FORRANGE_OTHER  = 'the for header on the line has other bounds than the '
+    + 'finding';
+  R_FORRANGE_NONCODE = 'comment, directive or string in the for header';
 
 type
   // Die Planer an einer Zeile (TRdxMapPlanner-Form, MapFix oeffnet die
@@ -62,7 +66,8 @@ implementation
 
 uses
   System.SysUtils,
-  uRefactorInfo;     // TRefactorSpan.Make
+  uRefactorInfo,     // TRefactorSpan.Make
+  uRdxText;          // _(), MsgMovedSuffix (E29)
 
 const
   SPAN_046   = 'sca046';
@@ -169,19 +174,19 @@ var
 begin
   ASite := Default(TRdxForSite);
   if not TRdxForRangeFix.BoundsOf(AMessage, BFrom, BTo) then
-    Exit(R_FORRANGE_BOUNDS);
+    Exit(_(R_FORRANGE_BOUNDS));
   Search := Default(TRdxLineSearch);
   Search.Test    := IsReversedHead;
-  Search.What    := R_FORRANGE_WHAT;
-  Search.ManyFmt := R_FORRANGE_MANY;
+  Search.What    := _(R_FORRANGE_WHAT);
+  Search.ManyFmt := _(R_FORRANGE_MANY);
   Result := OneTokenOnLine(AMap, ALine, Search, Hit);
   if Hit.Low <> '' then
     ReadHead(AMap, Hit, ASite);
   if Result <> '' then Exit;
   if (ASite.FromVal <> BFrom) or (ASite.ToVal <> BTo) then
-    Result := R_FORRANGE_OTHER
+    Result := MsgMovedSuffix(_(R_FORRANGE_OTHER))
   else if AMap.HasNonCode(ALine, ASite.ForTok.Col, ASite.DoTok.EndCol - 1) then
-    Result := R_FORRANGE_NONCODE;
+    Result := _(R_FORRANGE_NONCODE);
 end;
 
 // 'downto' in der Schreibweise von AModel ('TO' -> 'DOWNTO', 'To' ->
