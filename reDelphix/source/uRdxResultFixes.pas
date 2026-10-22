@@ -300,7 +300,7 @@ const
   // einem eigenen Exit - TMonitor - steht es so in den Delphi-Quellen).
   SYSTEM_UNIT = 'system';
   // Der Lauf von AtUnitLevel (R5-06, nach dem Muster
-  // uRdxSqlTemplate.BuildScopes): offene Bloecke je ein Zeichen - Typ mit
+  // uRdxSqlFacts.BuildScopes): offene Bloecke je ein Zeichen - Typ mit
   // Rumpf, Record (sein 'case' hat kein eigenes end), Code (begin, try,
   // asm, case).
   FRAME_TYPE   = 'T';
@@ -748,7 +748,8 @@ end;
 // bzw. ein lokaler Typ einer anderen Routine ist es nicht (Gegen-Review R5:
 // 'type TPoint = ^Integer' in einer Routine machte 'Result := nil;' fuer
 // System.Types.TPoint). Ein Lauf vom Dateianfang bis ADecl nach dem Muster
-// uRdxSqlTemplate.BuildScopes: Bloecke mit end auf einem Stapel, eine
+// uRdxSqlFacts.BuildScopes (bis Folgewelle Phase A in uRdxSqlTemplate):
+// Bloecke mit end auf einem Stapel, eine
 // Routine mit Rumpf (in einer Unit hinter 'implementation', in jeder anderen
 // Datei ab Dateianfang - program, library und seit der Nachpruefung R5-06
 // auch ein Include ohne Kopf, dort galt der lokale Typ einer Routine als

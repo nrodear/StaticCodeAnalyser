@@ -618,7 +618,8 @@ function DeclaresAfter(AMap: TRdxCodeMap; const AKeywords: array of string;
   const AName: string): Boolean;
 // Deklariert die Datei eine Routine AName ('procedure AName' bzw.
 // 'function AName', auch als Methode)? Dann bindet der Name nicht an die
-// RTL. TRdxSimpleFixes.DeclaresRoutine bleibt als Einstieg der Klasse
+// RTL. TRdxTypeProof.DeclaresRoutine (bis zur Folgewelle A4
+// TRdxSimpleFixes.DeclaresRoutine) bleibt als Einstieg der Klasse
 // (uRdxFixRunner, Tests) und ruft diese.
 function DeclaresRoutine(AMap: TRdxCodeMap; const AName: string): Boolean;
 
