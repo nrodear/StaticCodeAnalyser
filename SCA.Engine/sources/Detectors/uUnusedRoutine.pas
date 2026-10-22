@@ -54,6 +54,14 @@ unit uUnusedRoutine;
 //     - dieses Detektor flaggt sie also gar nicht erst).
 //   * Interface-Implementierungen sind ebenfalls Klassen-Methoden und werden
 //     daher in v1 nicht beruehrt.
+//   * Include-Direktiven zaehlen nur im CODE des implementation-Teils: ein
+//     '{$I x.inc}' in einem Kommentar oder Stringliteral wird nicht gelesen
+//     (bis 2026-10-22 schon - ein '{$I \\server\share\defs.inc}' in einem
+//     '//'-Kommentar von uRdxBlocks.pas lief in FileExists und hielt jeden
+//     Scan der Datei 21 s auf; --time-detectors: 20.959 ms von 21.302 ms des
+//     Selbstscans). Ein ABSOLUTES Ziel im Netz (UNC, Netzlaufwerk) liest der
+//     Detektor nie - "nicht auffindbar = kein Beleg", der Fund bleibt
+//     (IsNetworkIncludePath, dieselbe Regel wie uRdxPaths).
 
 interface
 
@@ -66,6 +74,13 @@ type
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
+    // Zeigt ein ABSOLUTES Include-Ziel ins Netz: UNC ('\\server\share\..',
+    // '//..', '\\?\UNC\..') oder ein Laufwerk, das Windows als Netzlaufwerk
+    // fuehrt (GetDriveType - fragt die Laufwerkstabelle, nicht den Server)?
+    // Dieselbe Regel wie uRdxPaths.IsNetworkPath, hier ohne die Naht fuer
+    // Tests; '\\?\C:\..' ist lokal, ein relatives Ziel liegt nirgends.
+    // Oeffentlich nur fuer den Test.
+    class function IsNetworkIncludePath(const APath: string): Boolean; static;
   private
     // True wenn der Methoden-Direktiven-String einen der Modifier enthaelt
     // die Routine "von aussen referenziert" implizieren (override, abstract,
@@ -251,6 +266,49 @@ begin
   Result := (Length(APfad) >= 2) and (APfad[2] = ':');
 end;
 
+const
+  // Vorsaetze des Win32-Namensraums: '\\?\' (lange Pfade) und '\\.\'
+  // (Geraete); dahinter 'UNC\' = Netzpfad. Dieselben Werte wie uRdxPaths.
+  WIN32_NS_PREFIXES: array[0..1] of string = ('\\?\', '\\.\');
+  WIN32_NS_UNC      = 'UNC\';
+  UNC_LEAD          = '\\';
+  // GetDriveType: ein Netzlaufwerk (DRIVE_REMOTE, WinBase.h).
+  DRIVE_KIND_REMOTE = 4;
+
+{$IFDEF MSWINDOWS}
+// Selbst deklariert statt Winapi.Windows (wie uRdxPaths): die Unit braechte
+// Tausende Namen in den Detektor und verdeckt hinter System.SysUtils u. a.
+// FindClose.
+function GetDriveTypeW(lpRootPathName: PWideChar): Cardinal; stdcall;
+  external 'kernel32.dll' name 'GetDriveTypeW';
+{$ENDIF}
+
+class function TUnusedRoutineDetector.IsNetworkIncludePath(
+  const APath: string): Boolean;
+var
+  P : string;
+  i : Integer;
+begin
+  P := APath;
+  for i := 0 to High(WIN32_NS_PREFIXES) do
+    if Copy(P, 1, Length(WIN32_NS_PREFIXES[i])) = WIN32_NS_PREFIXES[i] then
+    begin
+      P := Copy(P, Length(WIN32_NS_PREFIXES[i]) + 1, MaxInt);
+      if SameText(Copy(P, 1, Length(WIN32_NS_UNC)), WIN32_NS_UNC) then
+        P := UNC_LEAD + Copy(P, Length(WIN32_NS_UNC) + 1, MaxInt);
+      Break;
+    end;
+  if (Length(P) > 2) and CharInSet(P[1], ['\', '/'])
+     and CharInSet(P[2], ['\', '/']) then
+    Exit(True);
+  Result := False;
+  {$IFDEF MSWINDOWS}
+  if (Length(P) >= 2) and (P[2] = ':')
+     and CharInSet(P[1], ['A'..'Z', 'a'..'z']) then
+    Result := GetDriveTypeW(PWideChar(Copy(P, 1, 2) + '\')) = DRIVE_KIND_REMOTE;
+  {$ENDIF}
+end;
+
 procedure HaengeIncludeDatei(const ABasisDatei, AZiel: string;
   AContext: TAnalyzeContext; SB: TStringBuilder);
 var
@@ -271,7 +329,15 @@ begin
   // Die Frage 'absolut?' ist ohne Validierung entscheidbar: Laufwerk
   // ('c:...'), UNC bzw. Wurzel ('\...' / '/...').
   if IstAbsoluterPfad(AZiel) then
-    Voll := AZiel
+  begin
+    // Ein absolutes Ziel im Netz liest der Detektor nie: FileExists auf
+    // einen nicht erreichbaren Server wartet Sekunden (gemessen 21 s je
+    // Datei, 2026-10-22 - s. Kopf). Nicht gelesen = kein Beleg, der Fund
+    // bleibt. Ein RELATIVES Ziel liegt neben der Unit, die gerade gelesen
+    // wurde - auch auf einer Netzfreigabe erreichbar -, darum ungeprueft.
+    if TUnusedRoutineDetector.IsNetworkIncludePath(AZiel) then Exit;
+    Voll := AZiel;
+  end
   else
     // Bewusst nur zusammengesetzt, NICHT ueber TPath.GetFullPath
     // normalisiert: das wirft bei ungueltigen Zeichen, und der
@@ -291,22 +357,96 @@ begin
   end;
 end;
 
-// Alle '{$...}' einer Zeile durchgehen und die Include-Ziele anhaengen.
+type
+  // Zustand des Zeilenlesers ueber Zeilengrenzen: steht der Leser in einem
+  // '{ }'- bzw. '(* *)'-Kommentar? Ein Stringliteral endet an der Zeile.
+  TIncludeScanState = record
+    InBrace : Boolean;
+    InParen : Boolean;
+  end;
+
+// Alle '{$...}' einer Zeile durchgehen, die im CODE stehen, und die
+// Include-Ziele anhaengen. Kommentare ('//', '{ }', '(* *)' - auch ueber
+// Zeilen) und Stringliterale werden uebersprungen: bis 2026-10-22 lief die
+// Suche ueber die ROHZEILE, und ein '{$I \\server\share\defs.inc}' in einem
+// Kommentar (uRdxBlocks.pas:1232) ging in FileExists - 21 s je Scan der
+// Datei (s. Kopf). Ein '{$' bleibt der Beginn einer Direktive: '{ }'
+// schachtelt nicht, eine Direktive IN einem '{ }'-Kommentar gibt es also
+// nicht. 'it''s' schliesst den String und oeffnet ihn neu - dasselbe
+// Ergebnis wie ein Escape.
 procedure HaengeIncludesDerZeile(const AZeile, ABasisDatei: string;
-  AContext: TAnalyzeContext; SB: TStringBuilder);
+  AContext: TAnalyzeContext; SB: TStringBuilder;
+  var AState: TIncludeScanState);
 var
-  Low  : string;
-  p    : Integer;
-  Ziel : string;
+  Low    : string;
+  i, n   : Integer;
+  pClose : Integer;
+  Ziel   : string;
 begin
   Low := LowerCase(AZeile);
-  p   := Pos('{$', Low);
-  while p > 0 do
+  n := Length(Low);
+  i := 1;
+  while i <= n do
   begin
-    Ziel := IncludeTargetAt(Low, AZeile, p);
-    if Ziel <> '' then
-      HaengeIncludeDatei(ABasisDatei, Ziel, AContext, SB);
-    p := Pos('{$', Low, p + 2);
+    if AState.InBrace then
+    begin
+      pClose := PosEx('}', Low, i);
+      if pClose = 0 then Exit;
+      AState.InBrace := False;
+      i := pClose + 1;
+    end
+    else if AState.InParen then
+    begin
+      pClose := PosEx('*)', Low, i);
+      if pClose = 0 then Exit;
+      AState.InParen := False;
+      i := pClose + 2;
+    end
+    else
+      case Low[i] of
+        '''':
+          begin
+            pClose := PosEx('''', Low, i + 1);
+            if pClose = 0 then Exit;   // offen bis zum Zeilenende
+            i := pClose + 1;
+          end;
+        '/':
+          if (i < n) and (Low[i + 1] = '/') then
+            Exit
+          else
+            Inc(i);
+        '(':
+          if (i < n) and (Low[i + 1] = '*') then
+          begin
+            pClose := PosEx('*)', Low, i + 2);
+            if pClose = 0 then
+            begin
+              AState.InParen := True;
+              Exit;
+            end;
+            i := pClose + 2;
+          end
+          else
+            Inc(i);
+        '{':
+          begin
+            if (i < n) and (Low[i + 1] = '$') then
+            begin
+              Ziel := IncludeTargetAt(Low, AZeile, i);
+              if Ziel <> '' then
+                HaengeIncludeDatei(ABasisDatei, Ziel, AContext, SB);
+            end;
+            pClose := PosEx('}', Low, i + 1);
+            if pClose = 0 then
+            begin
+              AState.InBrace := True;
+              Exit;
+            end;
+            i := pClose + 1;
+          end;
+      else
+        Inc(i);
+      end;
   end;
 end;
 
@@ -338,6 +478,7 @@ var
   i        : Integer;
   ImplZeile: Integer;
   SB       : TStringBuilder;
+  State    : TIncludeScanState;
 begin
   Result := '';
   if not Assigned(Lines) then Exit;
@@ -346,8 +487,13 @@ begin
 
   SB := TStringBuilder.Create;
   try
+    // Der Leser beginnt auf der Zeile NACH 'implementation' ausserhalb
+    // jedes Kommentars - ein '{ }' oder '(* *)', das davor beginnt und
+    // dahinter endet, laese er als Code (ImplementationZeile verlangt das
+    // Wort allein auf der Zeile; im Korpus nicht belegt).
+    State := Default(TIncludeScanState);
     for i := ImplZeile + 1 to Lines.Count - 1 do
-      HaengeIncludesDerZeile(Lines[i], FileName, AContext, SB);
+      HaengeIncludesDerZeile(Lines[i], FileName, AContext, SB, State);
     Result := SB.ToString;
   finally
     SB.Free;
