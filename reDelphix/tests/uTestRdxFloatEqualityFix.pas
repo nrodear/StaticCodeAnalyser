@@ -483,9 +483,11 @@ var
   F      : TLeakFinding;
 begin
   SL := TStringList.Create;
-  Places := TSourcePlaces.Create;
-  F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, fkFloatEquality);
+  Places := nil;
+  F := nil;
   try
+    Places := TSourcePlaces.Create;
+    F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, fkFloatEquality);
     F.Confidence := AConfidence;
     SL.Text := ASource;
     if AOpen then

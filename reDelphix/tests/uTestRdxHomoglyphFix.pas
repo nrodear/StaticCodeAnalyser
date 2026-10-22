@@ -474,8 +474,9 @@ begin
   ALine := 0;
   AMsg := '';
   Path := WriteUtf8(ASource);
-  Results := TObjectList<TLeakFinding>.Create(True);
+  Results := nil;
   try
+    Results := TObjectList<TLeakFinding>.Create(True);
     TSourceEncodingDetector.AnalyzeUnit(nil, Path, Results);
     for F in Results do
       if F.Kind = fkSourceNonAsciiIdentifier then

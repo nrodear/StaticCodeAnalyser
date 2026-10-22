@@ -431,8 +431,9 @@ begin
   ALine := 0;
   AMsg := '';
   Path := WriteUtf8(ASource);
-  Results := TObjectList<TLeakFinding>.Create(True);
+  Results := nil;
   try
+    Results := TObjectList<TLeakFinding>.Create(True);
     TSourceEncodingDetector.AnalyzeUnit(nil, Path, Results);
     for F in Results do
       if F.Kind = fkSourceInvisibleChar then
@@ -463,8 +464,9 @@ begin
   AFound := Detect(ASource, Line, Msg);
   Assert.IsTrue(AFound > 0, 'der Detektor meldet');
   SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', Line, Msg, fkSourceInvisibleChar);
+  F := nil;
   try
+    F := TLeakFinding.New('t.pas', '', Line, Msg, fkSourceInvisibleChar);
     SL.Text := ASource;
     Result := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally

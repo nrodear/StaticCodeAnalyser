@@ -437,10 +437,12 @@ var
   F      : TLeakFinding;
 begin
   SL := TStringList.Create;
-  Places := TSourcePlaces.Create;
-  F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg,
-    fkMoveSizeOfPointer);
+  Places := nil;
+  F := nil;
   try
+    Places := TSourcePlaces.Create;
+    F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg,
+      fkMoveSizeOfPointer);
     SL.Text := ASource;
     if AOpen then
     begin

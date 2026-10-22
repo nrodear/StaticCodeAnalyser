@@ -448,10 +448,11 @@ var
   O  : TRdxFixOutcome;
 begin
   SL := TStringList.Create;
-  // Der Fund zeigt auf Zeile 9, doch dort steht 'end;'.
-  F := TLeakFinding.New('t.pas', '', STMT_LINE + 1, MSG_131,
-    fkIfThenShortCircuit);
+  F := nil;
   try
+    // Der Fund zeigt auf Zeile 9, doch dort steht 'end;'.
+    F := TLeakFinding.New('t.pas', '', STMT_LINE + 1, MSG_131,
+      fkIfThenShortCircuit);
     SL.Text := Src(['  x := IfThen(b, A(), B());']);
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
