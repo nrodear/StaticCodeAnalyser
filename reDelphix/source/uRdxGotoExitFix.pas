@@ -45,18 +45,14 @@ unit uRdxGotoExitFix;
 // Marke samt 'label'-Eintrag kann von Hand entfallen. Die Hilfe aendert nur
 // das gemeldete 'goto'.
 //
-// OHNE ToolsAPI. Der Adapter PlanGotoExit hat die Form von TRdxFixPlanner
-// (uRdxFixTable); die Unit bindet uRdxFixTable bewusst nicht ein.
+// OHNE ToolsAPI und ohne Delphi-only-Unit (FPC-Pruefstand): den Adapter
+// PlanGotoExit (Form TRdxFixPlanner) traegt die Tabelle uRdxFixTable.
 
 interface
 
 uses
-  System.Classes,        // TStrings
-  uEngineApi,            // TSourcePlaces
-  uMethodd12,            // TLeakFinding
   uRdxBufferMath,        // TRdxEdit
-  uRdxCodeMap,           // TRdxCodeMap
-  uRdxRecipeRunner;      // TRdxFixOutcome
+  uRdxCodeMap;           // TRdxCodeMap
 
 const
   // Die Gruende der Ablehnung als englische msgids (die Tests pruefen sie
@@ -90,19 +86,13 @@ type
 // Die '(col N)' einer Meldung des Detektors; 0 = nicht vorhanden.
 function GotoColumn(const AMessage: string): Integer;
 
-// Der Adapter fuer FIX_ROWS (Form TRdxFixPlanner); APlaces und AUsesNames
-// braucht die Hilfe nicht.
-function PlanGotoExit(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-
 implementation
 
 uses
   System.SysUtils,
   uRefactorInfo,    // TRefactorSpan.Make
   uRdxText,         // _(): in die reDelphix-Sprache, nie uLocalization
-  uRdxBlocks,       // TRdxBlocks.HeadBefore, TRdxRoutine
-  uRdxFixRunner;    // MapFix
+  uRdxBlocks;       // TRdxBlocks.HeadBefore, TRdxRoutine
 
 const
   SPAN_060 = 'sca060';
@@ -320,13 +310,6 @@ begin
   AEdit.Expected := Copy(L, G.Col, Lab.EndCol - G.Col);
   AEdit.NewText := 'Exit';
   Result := True;
-end;
-
-function PlanGotoExit(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
-    TRdxGotoExitFix.GotoToExit);
 end;
 
 end.

@@ -52,12 +52,8 @@ unit uRdxGroupedDeclFix;
 interface
 
 uses
-  System.Classes,    // TStrings
-  uEngineApi,        // TSourcePlaces
-  uMethodd12,        // TLeakFinding
   uRdxBufferMath,    // TRdxEdit
-  uRdxCodeMap,       // TRdxCodeMap
-  uRdxRecipeRunner;  // TRdxFixOutcome
+  uRdxCodeMap;       // TRdxCodeMap
 
 const
   // Die Gruende der Ablehnung als englische msgids (die Tests pruefen sie
@@ -86,19 +82,12 @@ type
       out AReason: string): Boolean; static;
   end;
 
-// Der Adapter der Tabelle (uRdxFixTable.TRdxFixPlanner): Zeile und Meldung
-// aus dem Fund, der Planer ueber MapFix. APlaces und AUsesNames braucht die
-// Hilfe nicht.
-function PlanGroupedDeclaration(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-
 implementation
 
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxText,          // _(), MsgNoColumn, MsgMovedSuffix (nie uLocalization)
-  uRdxFixRunner;     // MapFix
+  uRdxText;          // _(), MsgNoColumn, MsgMovedSuffix (nie uLocalization)
 
 const
   SPAN_076 = 'sca076';
@@ -351,13 +340,6 @@ begin
   AEdit.Span := TRefactorSpan.Make(SPAN_076, ALine, 1, ALine, Length(L) + 1);
   AEdit.Expected := L;
   AEdit.NewText := NewLines(Parts);
-end;
-
-function PlanGroupedDeclaration(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
-    TRdxGroupedDeclFix.Split);
 end;
 
 end.

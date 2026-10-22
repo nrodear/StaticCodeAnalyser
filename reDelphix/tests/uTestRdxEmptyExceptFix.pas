@@ -4,9 +4,11 @@ unit uTestRdxEmptyExceptFix;
 // Block bekommt ein 'raise;'. Die Faelle auf Text laufen ohne Parser und ohne
 // Detektor; der Adapter und die Rundlaeufe mit dem echten Detektor
 // (uCodeSmells2, ueber TRdxFixTable.FixFor) stehen hinter {$IFNDEF FPC}.
-// Nur Delphi (reDelphix.Test): der Planer bindet uEngineApi/
-// uRdxRecipeRunner und uRdxFixRunner, der FPC-Pruefstand (build.sh) fuehrt
-// ihn nicht - die Weichen sind heute ohne Wirkung.
+// Nur Delphi (reDelphix.Test).
+// Der Planer ist seit der Folgewelle G09-07 ohne Delphi-only-uses (den
+// Adapter traegt uRdxFixTable); die Unit steht trotzdem nicht im
+// FPC-Pruefstand (build.sh) - dessen Runner kennt die {$IFNDEF FPC}-
+// Weichen nicht, sie sind heute ohne Wirkung.
 // Prueft: neue Zeile unter except (Einrueckstufe aus dem try-Rumpf, Tabs,
 // Fallback), inline hinter except, Gross-/Kleinschreibung, Leerzeilen - und
 // die Sperren: Kommentar, Direktive, Handler/Anweisung/';' im Block,
@@ -53,6 +55,7 @@ uses
   {$IFNDEF FPC}
   System.Generics.Collections,
   uAstNode, uMethodd12, uRuleCatalog, uCodeSmells2, uRdxRecipeRunner,
+  uRdxFixTable,
   uTestRdxDetectorKit,   // TSeen, CatalogText, DetectSource
   {$ENDIF}
   uSCAConsts, uRdxBufferMath, uRdxCodeMap, uRdxEmptyExceptFix,
@@ -326,11 +329,11 @@ begin
     F := TLeakFinding.New('t.pas', '', LineOf(S, 'except'),
       'Empty except block', fkEmptyExcept);
     // Ohne Zeilen: kein Puffer.
-    O := PlanEmptyExcept(nil, nil, F, nil);
+    O := TRdxFixTable.FixFor(nil, nil, F, nil);
     Assert.IsFalse(O.Enabled);
     Assert.AreEqual(R_NO_FILE, O.Reason);
     SL.Text := S;
-    O := PlanEmptyExcept(nil, SL, F, nil);
+    O := TRdxFixTable.FixFor(nil, SL, F, nil);
     Assert.IsTrue(O.Enabled, O.Reason);
     Assert.AreEqual(InProc(['  try', '    Work;', '  except', '    raise;',
       '  end;']), Apply(S, O.Edits));

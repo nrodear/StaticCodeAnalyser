@@ -20,17 +20,13 @@ unit uRdxForRangeFix;
 interface
 
 uses
-  System.Classes,
-  uEngineApi,         // TSourcePlaces
-  uMethodd12,         // TLeakFinding
   uRdxBufferMath,     // TRdxEdit
-  uRdxCodeMap,        // TRdxCodeMap
-  uRdxRecipeRunner;   // TRdxFixOutcome
+  uRdxCodeMap;        // TRdxCodeMap
 
 const
-  // Die Gruende (deutsch, ASCII) und die Hinweise der Hilfen. Die Zeile der
-  // Tabelle (uRdxFixTable) nimmt R_FORRANGE_HINT, der Alt-Planer setzt
-  // R_FORRANGE_SWAP_HINT selbst.
+  // Die Gruende (deutsch, ASCII). Die Hinweise beider Eintraege
+  // (R_FORRANGE_HINT, R_FORRANGE_SWAP_HINT) stehen mit den Adaptern in der
+  // Tabelle (uRdxFixTable).
   R_FORRANGE_BOUNDS = 'die Meldung nennt die Grenzen nicht - Datei neu '
     + 'pruefen';
   R_FORRANGE_WHAT   = 'kein umgekehrter for-Kopf mit Literalgrenzen';
@@ -38,10 +34,6 @@ const
   R_FORRANGE_OTHER  = 'der for-Kopf auf der Zeile hat andere Grenzen als der '
     + 'Fund - Zeile verschoben? Datei neu pruefen';
   R_FORRANGE_NONCODE = 'Kommentar, Direktive oder String im for-Kopf';
-  R_FORRANGE_HINT   = 'die Schleife lief bisher nie und zaehlt danach '
-    + 'abwaerts; war sie absichtlich abgeschaltet, ist das ein Eingriff';
-  R_FORRANGE_SWAP_HINT = 'die Schleife lief bisher nie und zaehlt danach '
-    + 'aufwaerts; war sie absichtlich abgeschaltet, ist das ein Eingriff';
 
 type
   // Die Planer an einer Zeile (TRdxMapPlanner-Form, MapFix oeffnet die
@@ -66,19 +58,11 @@ type
       out AReason: string): Boolean; static;
   end;
 
-// Die Planer der Tabelle (Form TRdxFixPlanner, uRdxFixTable): der Hauptweg
-// und der zweite Eintrag (Variant = 1, Hinweis und Kennzeichnung gesetzt).
-function PlanReversedForRange(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-function PlanReversedForRangeAlt(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-
 implementation
 
 uses
   System.SysUtils,
-  uRefactorInfo,     // TRefactorSpan.Make
-  uRdxFixRunner;     // MapFix
+  uRefactorInfo;     // TRefactorSpan.Make
 
 const
   SPAN_046   = 'sca046';
@@ -274,26 +258,6 @@ begin
   AEdit.Expected := A + Mid + B;
   AEdit.NewText := B + Mid + A;
   Result := True;
-end;
-
-{ Planer der Tabelle }
-
-function PlanReversedForRange(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
-    TRdxForRangeFix.ToDownto);
-end;
-
-function PlanReversedForRangeAlt(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
-    TRdxForRangeFix.SwapBounds);
-  Result.Variant := 1;
-  Result.ChangesBehavior := True;
-  if Result.Enabled then
-    Result.Hint := R_FORRANGE_SWAP_HINT;
 end;
 
 end.

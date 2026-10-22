@@ -44,7 +44,7 @@ implementation
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uReversedForRange,
-  uRdxForRangeFix, uRdxRecipeRunner,
+  uRdxForRangeFix, uRdxRecipeRunner, uRdxFixTable,
   uTestRdxDetectorKit,   // TSeen, DetectSource
   uTestRdxTextKit;       // Join, Apply
 
@@ -84,9 +84,9 @@ begin
   try
     SL.Text := ASource;
     if AAlt then
-      Result := PlanReversedForRangeAlt(nil, SL, F, nil)
+      Result := TRdxFixTable.AlternativeFixFor(nil, SL, F, nil)
     else
-      Result := PlanReversedForRange(nil, SL, F, nil);
+      Result := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
     F.Free;
     SL.Free;
@@ -232,7 +232,9 @@ begin
   Assert.AreEqual<Integer>(0, Main.Variant);
   Assert.AreEqual<Integer>(1, Alt.Variant);
   Assert.IsTrue(Alt.ChangesBehavior);
-  Assert.AreEqual(R_FORRANGE_SWAP_HINT, Alt.Hint);
+  Assert.AreEqual('die Schleife lief bisher nie und zaehlt danach '
+    + 'aufwaerts; war sie absichtlich abgeschaltet, ist das ein '
+    + 'Eingriff', Alt.Hint);
   // Beide Eintraege lehnen auch gemeinsam ab; der Alt-Planer bleibt Variant 1.
   Fixed(InUnit(['  Foo(1);']), BODY_LINE, RevMsg(10, 1, 'x'), True, Alt);
   Assert.IsFalse(Alt.Enabled);

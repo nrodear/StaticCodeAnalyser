@@ -4,10 +4,13 @@ unit uTestRdxEmptyOnHandlerFix;
 // Handler 'on E: T do ;' bzw. 'do begin end;' bekommt 'raise;'. Die Faelle
 // auf Text laufen ohne Parser und ohne Detektor; die Rundlaeufe mit dem
 // echten Detektor (Katalog-Beispiel, Blockform, Kommentar - ueber
-// TRdxFixTable.FixFor) stehen hinter {$IFNDEF FPC}. Nur Delphi
-// (reDelphix.Test): der Planer bindet uEngineApi/uRdxRecipeRunner und
-// uRdxFixRunner, der FPC-Pruefstand (build.sh) fuehrt ihn nicht - die
-// Weichen sind heute ohne Wirkung.
+// TRdxFixTable.FixFor) stehen hinter {$IFNDEF FPC}, der Adapter-Test
+// (Sca159_Adapter_Outcome, auch ueber FixFor) davor. Nur Delphi
+// (reDelphix.Test).
+// Der Planer ist seit der Folgewelle G09-07 ohne Delphi-only-uses (den
+// Adapter traegt uRdxFixTable); die Unit steht trotzdem nicht im
+// FPC-Pruefstand (build.sh) - dessen Runner kennt die {$IFNDEF FPC}-
+// Weichen nicht, sie sind heute ohne Wirkung.
 // Prueft: beide Formen (auch ueber Zeilen, mit Tabs, grossgeschrieben,
 // anonymer Typ), den Bereich der Ersetzung, und die Sperren - Kommentar und
 // Direktive, mehrere Handler auf der Zeile, verschobene Zeile, Typ der
@@ -55,6 +58,7 @@ uses
   uTestRdxDetectorKit,   // TSeen, CatalogText, DetectSource
   {$ENDIF}
   uMethodd12, uSCAConsts, uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner,
+  uRdxFixTable,
   uRdxEmptyOnHandlerFix,
   uRdxText,              // _() und die gemeinsamen Gruende
   uTestRdxTextKit;       // Join, Apply
@@ -341,11 +345,11 @@ begin
     F := TLeakFinding.New('t.pas', '', HANDLER_LINE, Msg('EFoo'),
       fkEmptyOnHandler);
     // Ohne Zeilen: kein Puffer.
-    O := PlanEmptyOnHandler(nil, nil, F, nil);
+    O := TRdxFixTable.FixFor(nil, nil, F, nil);
     Assert.IsFalse(O.Enabled);
     Assert.AreEqual(R_NO_FILE, O.Reason);
     SL.Text := S;
-    O := PlanEmptyOnHandler(nil, SL, F, nil);
+    O := TRdxFixTable.FixFor(nil, SL, F, nil);
     Assert.IsTrue(O.Enabled, O.Reason);
     Assert.AreEqual(InExcept(['    on E: EFoo do raise;']),
       Apply(S, O.Edits));

@@ -46,12 +46,8 @@ unit uRdxNoSonarFix;
 interface
 
 uses
-  System.Classes,        // TStrings
-  uEngineApi,            // TSourcePlaces
-  uMethodd12,            // TLeakFinding
   uRdxBufferMath,        // TRdxEdit
-  uRdxCodeMap,           // TRdxCodeMap
-  uRdxRecipeRunner;      // TRdxFixOutcome
+  uRdxCodeMap;           // TRdxCodeMap
 
 const
   // Gruende der Ablehnung als englische msgids (die Tests pruefen sie mit
@@ -77,19 +73,12 @@ type
       out AReason: string): Boolean; static;
   end;
 
-// Der Adapter fuer FIX_ROWS (Form TRdxFixPlanner, uRdxFixTable); APlaces und
-// AUsesNames braucht die Hilfe nicht. Hinweis und Kennzeichnung setzt die
-// Zeile der Tabelle.
-function PlanNoSonar(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-
 implementation
 
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxText,          // _(): in die reDelphix-Sprache, nie uLocalization
-  uRdxFixRunner;     // MapFix
+  uRdxText;          // _(): in die reDelphix-Sprache, nie uLocalization
 
 const
   SPAN_065     = 'sca065';
@@ -229,13 +218,6 @@ begin
     AEdit.NewText := AEdit.NewText + Copy(Lead, Length(Code) + 1, MaxInt)
       + '// ' + Rest;
   Result := True;
-end;
-
-function PlanNoSonar(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
-    TRdxNoSonarFix.ToNoinspection);
 end;
 
 end.

@@ -41,12 +41,8 @@ unit uRdxEmptyExceptFix;
 interface
 
 uses
-  System.Classes,    // TStrings
-  uEngineApi,        // TSourcePlaces
-  uMethodd12,        // TLeakFinding
   uRdxBufferMath,    // TRdxEdit
-  uRdxCodeMap,       // TRdxCodeMap
-  uRdxRecipeRunner;  // TRdxFixOutcome
+  uRdxCodeMap;       // TRdxCodeMap
 
 const
   // Die Gruende der Ablehnung als englische msgids (die Tests pruefen sie
@@ -72,19 +68,12 @@ type
       out AReason: string): Boolean; static;
   end;
 
-// Der Adapter der Tabelle (uRdxFixTable.TRdxFixPlanner): Zeile und Meldung
-// aus dem Fund, der Planer ueber MapFix. APlaces und AUsesNames braucht die
-// Hilfe nicht.
-function PlanEmptyExcept(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-
 implementation
 
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxText,          // _(): in die reDelphix-Sprache (E29), nie uLocalization
-  uRdxFixRunner;     // MapFix
+  uRdxText;          // _(): in die reDelphix-Sprache (E29), nie uLocalization
 
 const
   SPAN_002 = 'sca002';
@@ -236,13 +225,6 @@ begin
     AEdit.NewText := Kw + #10 + Indent + StepBelow(AMap, Exc, Indent)
       + RAISE_STMT;
   end;
-end;
-
-function PlanEmptyExcept(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
-    TRdxEmptyExceptFix.AddRaise);
 end;
 
 end.

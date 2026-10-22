@@ -3,12 +3,13 @@ unit uTestRdxCategoryArgFix;
 // Editorhilfe SCA181 AttributeCategoryWithoutString (uRdxCategoryArgFix):
 // '[Category]' -> '[Category(''category'')]'. Die Faelle auf Text laufen ohne
 // Parser und ohne Detektor; die Rundlaeufe mit dem ECHTEN Detektor
-// (TAttributeCategoryWithoutStringDetector) und dem Planer der Unit
-// (PlanCategoryArg) stehen in einer eigenen Fixture hinter {$IFNDEF FPC}.
-// Nur Delphi (reDelphix.Test): der Planer bindet uEngineApi/
-// uRdxRecipeRunner und uRdxFixRunner, der FPC-Pruefstand (build.sh) fuehrt
-// ihn nicht, und sein Runner-Generator nimmt keine zwei Fixtures je Unit -
-// die Weichen sind heute ohne Wirkung.
+// (TAttributeCategoryWithoutStringDetector) ueber die Tabelle
+// (TRdxFixTable.FixFor, Adapter PlanCategoryArg) stehen in einer
+// eigenen Fixture hinter {$IFNDEF FPC}. Nur Delphi (reDelphix.Test): der
+// Planer ist seit der Folgewelle G09-07 ohne Delphi-only-uses, die Unit
+// steht trotzdem nicht im FPC-Pruefstand (build.sh) - dessen Runner kennt
+// die Weichen nicht und nimmt keine zwei Fixtures je Unit; sie sind heute
+// ohne Wirkung.
 // Prueft: Hilfe mit Schreibweise und Blanks, gestapelte Attribute,
 // Kommentar dahinter, der Bereich, und die Sperren - verschobene Zeile,
 // Kommentar, Argument/Liste, weiterer Code auf der Zeile, kein Anker,
@@ -57,6 +58,7 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uRuleCatalog, uAttributeCategoryWithoutString,
   uRdxRecipeRunner,      // TRdxFixOutcome
+  uRdxFixTable,          // TRdxFixTable.FixFor
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
   {$ENDIF}
   uSCAConsts, uRdxBufferMath, uRdxCodeMap, uRdxCategoryArgFix,
@@ -308,7 +310,7 @@ begin
     fkAttributeCategoryWithoutString, RunDetector);
 end;
 
-// Die Hilfe fuer den Fund ASeen ueber den Planer der Unit.
+// Die Hilfe fuer den Fund ASeen ueber den Einstieg der Tabelle.
 function PlanFor(const ASource: string; const ASeen: TSeen): TRdxFixOutcome;
 var
   SL      : TStringList;
@@ -319,7 +321,7 @@ begin
     fkAttributeCategoryWithoutString);
   try
     SL.Text := ASource;
-    Result := PlanCategoryArg(nil, SL, Finding, nil);
+    Result := TRdxFixTable.FixFor(nil, SL, Finding, nil);
   finally
     Finding.Free;
     SL.Free;

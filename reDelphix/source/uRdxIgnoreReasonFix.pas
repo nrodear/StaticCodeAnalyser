@@ -36,12 +36,8 @@ unit uRdxIgnoreReasonFix;
 interface
 
 uses
-  System.Classes,       // TStrings
-  uEngineApi,           // TSourcePlaces
-  uMethodd12,           // TLeakFinding
   uRdxBufferMath,       // TRdxEdit
-  uRdxCodeMap,          // TRdxCodeMap
-  uRdxRecipeRunner;     // TRdxFixOutcome
+  uRdxCodeMap;          // TRdxCodeMap
 
 const
   // Die Gruende der Ablehnung als englische msgids (die Tests pruefen sie
@@ -66,17 +62,12 @@ type
       out AReason: string): Boolean; static;
   end;
 
-// Der Planer der Tabelle (Form TRdxFixPlanner aus uRdxFixTable) fuer SCA179.
-function PlanIgnoreReason(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-
 implementation
 
 uses
   System.SysUtils,
   uRefactorInfo,        // TRefactorSpan.Make
-  uRdxText,             // _() und MsgMovedSuffix (E29), nie uLocalization
-  uRdxFixRunner;        // MapFix
+  uRdxText;             // _() und MsgMovedSuffix (E29), nie uLocalization
 
 const
   SPAN_179 = 'sca179';
@@ -155,13 +146,6 @@ begin
   AEdit.Expected := RangeText(AMap, AEdit.Span);
   AEdit.NewText := '(''' + IGN_PLACEHOLDER + ''')]';
   Result := True;
-end;
-
-function PlanIgnoreReason(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
-    TRdxIgnoreReasonFix.AddReason);
 end;
 
 end.

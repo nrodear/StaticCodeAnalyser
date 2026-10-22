@@ -25,12 +25,8 @@ unit uRdxParensFix;
 interface
 
 uses
-  System.Classes,       // TStrings
-  uEngineApi,           // TSourcePlaces
-  uMethodd12,           // TLeakFinding
   uRdxBufferMath,       // TRdxEdit
-  uRdxCodeMap,          // TRdxCodeMap
-  uRdxRecipeRunner;     // TRdxFixOutcome
+  uRdxCodeMap;          // TRdxCodeMap
 
 const
   // Die Gruende der Ablehnung als englische msgids (die Tests pruefen sie
@@ -57,17 +53,12 @@ type
       out AReason: string): Boolean; static;
   end;
 
-// Der Planer der Tabelle (TRdxFixPlanner, uRdxFixTable) fuer SCA094.
-function PlanRedundantParens(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-
 implementation
 
 uses
   System.SysUtils,
   uRefactorInfo,    // TRefactorSpan.Make
-  uRdxText,         // _(): in die reDelphix-Sprache (E29), nie uLocalization
-  uRdxFixRunner;    // MapFix
+  uRdxText;         // _(): in die reDelphix-Sprache (E29), nie uLocalization
 
 const
   SPAN_094 = 'sca094';
@@ -205,13 +196,6 @@ begin
   AEdit.Expected := Copy(L, Col, K - Col);
   AEdit.NewText := '(' + Copy(L, J, OpEnd - J) + ')';
   Result := True;
-end;
-
-function PlanRedundantParens(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
-    TRdxParensFix.DoubleParens);
 end;
 
 end.
