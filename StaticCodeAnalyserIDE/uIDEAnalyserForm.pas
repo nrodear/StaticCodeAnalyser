@@ -679,6 +679,7 @@ uses
   uIDEFindingActionMenu,        // Modell -> TMenuItems
   uIDEFindingBulb,              // Gluehbirne an der Caret-Zeile (Element EditorBulb)
   uFindingSourcePick,           // PickFindingSource - Dock oder Silent-Kopien je Datei
+  uEditorFindingStore,          // TEditorFindingStore - die Silent-Kopien je Datei
   uPathNormalize;               // NormalizePathForKey - Pfade wie der Highlighter
 
 // noinspection-file BeginEndRequired, BooleanParam, ClassPerFile, ConsecutiveSection, EmptyExcept, ExceptOnException, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, NestedRoutine, NestedTry, PublicField, PublicMemberWithoutDoc, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedPublicMember, UnusedRoutine
@@ -4844,114 +4845,26 @@ end;
 //   1. das Dock-Fenster, falls offen (FAllFindings des Frames);
 //   2. Kopien der Funde der letzten Silent-Laeufe (KeepEditorFindings) -
 //      der Silent-Lauf gibt seine Liste nach dem Markieren frei.
-// Die Kopien tragen nur die Felder, die ein Anbieter liest. Sie liegen JE
-// DATEI vor (Review 2026-10-14, MAJOR 3): mit nur einem Platz nahmen Birne
-// und Kontextmenue nach einem Tab-Wechsel A->B->A fuer A wieder die alten
-// Dock-Zeilen, waehrend die Marken den neuen Stand zeigten. Hoechstens
-// MAX_EDITOR_FINDING_FILES Dateien - die aelteste Generation faellt weg
-// (der naechste Tab-Wechsel auf sie scannt ohnehin neu).
-
-type
-  TEditorFindingsCopy = class
-  public
-    Gen   : UInt64;                       // Generation des Silent-Laufs
-    Items : TObjectList<TLeakFinding>;    // die Kopien (Eigentum)
-    constructor Create;
-    destructor Destroy; override;
-  end;
+// Die Kopien liegen JE DATEI vor (Review 2026-10-14, MAJOR 3) in einem
+// TEditorFindingStore (uEditorFindingStore, getestet; Review Woche
+// 2026-10-21, G04-06): Kopieren, Ersetzen, Verdraengen der aeltesten
+// Generation und Eigentum regelt der Speicher. Hier stehen nur Schluessel
+// (NormalizePathForKey, wie der Highlighter) und Generation
+// (NextFindingsGeneration, derselbe Zaehler wie Dock und Watch-Lauf).
 
 const
   MAX_EDITOR_FINDING_FILES = 8;
 
 var
-  // Schluessel: NormalizePathForKey der Datei (wie der Highlighter).
-  GEditorFindings : TObjectDictionary<string, TEditorFindingsCopy> = nil;
-
-constructor TEditorFindingsCopy.Create;
-begin
-  inherited Create;
-  Items := TObjectList<TLeakFinding>.Create(True);
-end;
-
-destructor TEditorFindingsCopy.Destroy;
-begin
-  FreeAndNil(Items);
-  inherited;
-end;
-
-// Die aelteste Kopie weicht, wenn eine NEUE Datei dazukommt und der Platz
-// voll ist.
-procedure DropOldestEditorFindings;
-var
-  Pair   : TPair<string, TEditorFindingsCopy>;
-  Oldest : string;
-  Gen    : UInt64;
-begin
-  Oldest := '';
-  Gen    := High(UInt64);
-  for Pair in GEditorFindings do
-    if Pair.Value.Gen < Gen then
-    begin
-      Gen    := Pair.Value.Gen;
-      Oldest := Pair.Key;
-    end;
-  if Oldest <> '' then
-    GEditorFindings.Remove(Oldest);
-end;
+  GEditorFindings : TEditorFindingStore = nil;
 
 procedure KeepEditorFindings(const AFileName: string;
   AFindings: TObjectList<TLeakFinding>);
-var
-  F, C   : TLeakFinding;
-  Key    : string;
-  Kept   : TEditorFindingsCopy;
-  Stored : TEditorFindingsCopy;
 begin
   if GEditorFindings = nil then
-    GEditorFindings := TObjectDictionary<string, TEditorFindingsCopy>.Create(
-      [doOwnsValues]);
-  Key := NormalizePathForKey(AFileName);
-  if not GEditorFindings.ContainsKey(Key)
-     and (GEditorFindings.Count >= MAX_EDITOR_FINDING_FILES) then
-    DropOldestEditorFindings;
-  Kept := TEditorFindingsCopy.Create;
-  // Kept gehoert bis zum AddOrSetValue niemandem: wirft das Kopieren
-  // (EOutOfMemory), gaebe sonst niemand Kept samt der schon kopierten Funde
-  // frei (Review Woche G04-07). Steht Kept schon im Dictionary (beim
-  // Ersetzen wirft erst die Freigabe der alten Kopie), besitzt es Kept -
-  // dann kein Free. Kept lebt beim Vergleich noch: keine
-  // Adress-Wiederverwendung.
-  try
-    Kept.Gen := NextFindingsGeneration;
-    if Assigned(AFindings) then
-      for F in AFindings do
-      begin
-        if not Assigned(F) then Continue;
-        // C geht SOFORT in die Liste: wirft danach eine Zuweisung, gibt
-        // das Free von Kept auch C frei.
-        C := TLeakFinding.Create;
-        try
-          Kept.Items.Add(C);
-        except
-          C.Free;
-          raise;
-        end;
-        C.FileName   := F.FileName;
-        C.MethodName := F.MethodName;
-        C.LineNumber := F.LineNumber;
-        C.EndLine    := F.EndLine;
-        C.MissingVar := F.MissingVar;
-        C.Severity   := F.Severity;
-        C.Kind       := F.Kind;
-        C.Confidence := F.Confidence;
-        C.RuleID     := F.RuleID;
-      end;
-    GEditorFindings.AddOrSetValue(Key, Kept);
-  except
-    if not GEditorFindings.TryGetValue(Key, Stored) or (Stored <> Kept) then
-      Kept.Free;
-    raise;
-  end;
+    GEditorFindings := TEditorFindingStore.Create(MAX_EDITOR_FINDING_FILES);
+  GEditorFindings.Keep(NormalizePathForKey(AFileName), AFindings,
+    NextFindingsGeneration);
 end;
 
 function FindingsAtEditorLine(const AFile: string;
@@ -5038,7 +4951,7 @@ begin
     State.DockGen := DockGenerationFor(Frame.FFindingsGen, FileGen);
   end;
   Silent := nil;
-  if Assigned(GEditorFindings) and GEditorFindings.TryGetValue(FileKey, Silent) then
+  if Assigned(GEditorFindings) and GEditorFindings.TryGet(FileKey, Silent) then
   begin
     State.SilentHasFile := True;
     State.SilentGen     := Silent.Gen;
