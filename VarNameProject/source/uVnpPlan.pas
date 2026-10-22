@@ -100,11 +100,16 @@ function ContinuesIfExpression(const ACode: string): Boolean;
 // (ContinuesIfExpression) ein Ausdruck; als erstes Wort einer Zeile ein
 // Ausdruck, wenn die Zeile darueber keine Anweisung beendet und keinen
 // Zweig oder Block oeffnet ('X :=' / 'if C then' / 'A' / 'else'); eine
-// Zeile, die vorher eine Anweisung beendet (';' am Ende) oder einen Zweig
-// oder Block oeffnet, heisst: das then/else gehoert zu einer if-ANWEISUNG.
-// Ohne 'if' darueber ebenso. Vorher zaehlte nur EINE Zeile ueber dem
-// else, und 'X := if C then' / 'A' / 'else' / 'Foo(42);' bekam begin..end
-// mitten im Ausdruck (Pruefer 2026-10-14, a).
+// Zeile, die vorher eine Anweisung beendet (';' am Ende) oder einen Block
+// bzw. einen do-/of-Zweig oeffnet, heisst: das then/else gehoert zu einer
+// if-ANWEISUNG. Ohne 'if' darueber ebenso. Eine Zeile, die mit then/else
+// endet, entscheidet nicht selbst - das 'if' dazu steht weiter oben
+// ('X := if A then 1 else' / 'if B then', 'X := if A then 1' / 'else if B
+// then'; Wochen-Review 2026-10-21, in reDelphix uRdxIntroPlan G06-18, hier
+// nachgezogen in der Folgewelle A7) -, ausser sie beginnt mitten in der
+// Zeile eine if-Anweisung ('Z := 1; if C then'). Vorher zaehlte nur EINE
+// Zeile ueber dem else, und 'X := if C then' / 'A' / 'else' / 'Foo(42);'
+// bekam begin..end mitten im Ausdruck (Pruefer 2026-10-14, a).
 function IfExpressionAbove(const ACodeAbove: array of string): Boolean;
 
 // Traegt die Zeile eine FPC-Weiche oder einen FPC-Modus ('{$IFDEF FPC}',
@@ -1184,6 +1189,30 @@ begin
   Result := (Length(T) = 0) or InList(T[High(T)].Text, IF_STATEMENT_AFTER);
 end;
 
+// Endet der Code mit 'then' oder 'else' - einem Arm, dessen 'if' auf
+// dieser Zeile oder weiter oben steht?
+function EndsWithArm(const ATokens: TArray<TVnpToken>): Boolean;
+begin
+  Result := (Length(ATokens) > 0)
+    and ((ATokens[High(ATokens)].Text = 'then')
+         or (ATokens[High(ATokens)].Text = 'else'));
+end;
+
+// Steht mitten in der Zeile ein 'if', das eine ANWEISUNG beginnt ('Z := 1;
+// if C then', '1: if C then') - nicht hinter 'else' ('else if B then' kann
+// die Kette eines Ausdrucks fortsetzen)? Vorbedingung: ContinuesIfExpression
+// ist False, jedes 'if' mitten in der Zeile steht also hinter einem Wort
+// aus IF_STATEMENT_AFTER.
+function HasStatementIf(const ATokens: TArray<TVnpToken>): Boolean;
+var
+  k : Integer;
+begin
+  for k := 1 to High(ATokens) do
+    if (ATokens[k].Text = 'if') and (ATokens[k - 1].Text <> 'else') then
+      Exit(True);
+  Result := False;
+end;
+
 function IfExpressionAbove(const ACodeAbove: array of string): Boolean;
 var
   k    : Integer;
@@ -1200,12 +1229,24 @@ begin
     begin
       // 'if' als erstes Wort: Ausdruck nur, wenn die Zeile darueber offen
       // endet ('X :=', 'Foo(', 'A +'); ohne Zeile darueber eine Anweisung.
+      // Endet sie mit then/else, ist dieses if selbst ein Arm - ob eines
+      // Ausdrucks ('X := if A then 1 else' / 'if B then'), entscheidet die
+      // Zeile weiter oben (Wochen-Review 2026-10-21: vorher hielt die
+      // Suche dort an, und begin..end landete mitten im Ausdruck).
       Next := '';
       if k < High(ACodeAbove) then
         Next := ACodeAbove[k + 1];
-      Exit(not EndsStatementOrBranch(Next));
-    end;
-    if EndsStatementOrBranch(ACodeAbove[k]) then
+      if not EndsWithArm(TokensOf(Next)) then
+        Exit(not EndsStatementOrBranch(Next));
+    end
+    else if EndsWithArm(T) then
+    begin
+      // 'else', 'A else', 'else if B then': das if steht weiter oben -
+      // ausser die Zeile beginnt selbst eine if-Anweisung.
+      if HasStatementIf(T) then
+        Exit;
+    end
+    else if EndsStatementOrBranch(ACodeAbove[k]) then
       Exit;
   end;
 end;

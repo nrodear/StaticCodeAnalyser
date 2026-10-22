@@ -395,6 +395,37 @@ begin
   B := Buf(['procedure P;', 'begin', '  1:', '    if C then', '      Foo(42);',
     'end;']);
   AssertAccepted(TargetIn(B, 5, 11), True, 4, 'if hinter einer case-Marke');
+  // Der Ausdruck geht ueber eine then/else-Zeile weiter (Wochen-Review
+  // 2026-10-21, in reDelphix G06-18; Folgewelle A7): ein geschachteltes
+  // 'if B then' als else-Arm und die else-if-Kette - vorher hielt die
+  // Suche an der Zeile mit then/else an, und begin..end landete mitten im
+  // Ausdruck. Zeile 5, die 42 in Spalte 11 bzw. 9.
+  B := Buf(['procedure P;', 'begin', '  X := if A then 1 else', '    if B then',
+    '      Foo(42);', 'end;']);
+  AssertRefusedWith(TargetIn(B, 5, 11), 'Bedingungsausdruck',
+    'geschachteltes if als else-Arm');
+  B := Buf(['procedure P;', 'begin', '  X := if A then 1', '  else if B then',
+    '    Foo(42);', 'end;']);
+  AssertRefusedWith(TargetIn(B, 5, 9), 'Bedingungsausdruck',
+    'else-if-Kette des Ausdrucks');
+  // Die Bedingung des Ausdrucks ueber zwei Zeilen: der Gang endet nicht
+  // mehr an 'B) then' (README, Grenze bis zur Folgewelle A7). Zeile 7, die
+  // 42 in Spalte 9.
+  B := Buf(['procedure P;', 'begin', '  X := if (A and', '    B) then',
+    '    Foo(1)', '  else', '    Bar(42);', 'end;']);
+  AssertRefusedWith(TargetIn(B, 7, 9), 'Bedingungsausdruck',
+    'Bedingung ueber zwei Zeilen');
+  // Dieselben Formen als Anweisung bleiben Zweige.
+  B := Buf(['procedure P;', 'begin', '  if A then Z := 1', '  else if B then',
+    '    Foo(42);', 'end;']);
+  AssertAccepted(TargetIn(B, 5, 9), True, 4, 'else-if-Kette der Anweisung');
+  B := Buf(['procedure P;', 'begin', '  if A then', '    if B then',
+    '      Foo(42);', 'end;']);
+  AssertAccepted(TargetIn(B, 5, 11), True, 4, 'geschachtelte if-Anweisung');
+  B := Buf(['procedure P;', 'begin', '  Z := 1; if B then', '    Foo(42);',
+    'end;']);
+  AssertAccepted(TargetIn(B, 4, 9), True, 3,
+    'if-Anweisung mitten in der Zeile');
 end;
 
 // Die Direktive AUF der Zeile darueber zaehlt wie eine dazwischen:
@@ -444,12 +475,14 @@ begin
     '    X := 42;', 'end;']);
   AssertAccepted(TargetIn(B, 5, 10), True, 4,
     'Schliesser mit then dahinter: Zweig');
-  // begin..end ruecken wie die rohe Zweigzeile ein (vier Leerzeichen), nicht
-  // wie der Code ' then' hinter dem Schliesser (Review Woche 2026-10-21,
-  // G10-13: vorher ' begin' und ' end;').
+  // begin..end bekommt die Einrueckung der Zeile, auf der die Anweisung
+  // beginnt ('  if S = ...'), nicht die des Codes hinter dem Schliesser
+  // (' then': EIN Leerzeichen - Review Woche 2026-10-21, G10-13) und nicht
+  // die der rohen Schliesser-Zeile (vier Leerzeichen, so weit wie der
+  // Zweig-Inhalt - Folgewelle A7, wie reDelphix uTestRdxIntroContext).
   Assert.AreEqual(Buf(['begin', '  if S = ' + Q(3), '    a',
-    '    ' + Q(3) + ' then', '    begin', '    const MagicNr01 = 42;',
-    '    X := MagicNr01;', '    end;', 'end;']), RunC1h(B, 5, 10),
+    '    ' + Q(3) + ' then', '  begin', '    const MagicNr01 = 42;',
+    '    X := MagicNr01;', '  end;', 'end;']), RunC1h(B, 5, 10),
     'Schliesser mit then dahinter: Text danach');
 end;
 
@@ -561,6 +594,12 @@ begin
   // Zeile 4, die 42 in Spalte 14.
   AssertRefusedWith(TargetIn(B, 4, 14), 'Direktive',
     'ELSE am Anfang der Anweisungszeile');
+  // Auch HINTER dem Literal ohne Block: die ganze Zeile zaehlt (lieber
+  // ablehnen; reDelphix zieht seit der Folgewelle A7 gleich, vorher nahm
+  // es diese Zeile an).
+  B := Buf(['begin', '  Foo;', '  X := 42; {$IFDEF D} Log; {$ENDIF}', 'end;']);
+  AssertRefusedWith(TargetIn(B, 3, 8), 'Direktive',
+    'Direktive hinter dem Literal ohne Block');
   B := Buf(['begin', '  Foo;', '  X := 42; { ohne Dollar }', 'end;']);
   AssertAccepted(TargetIn(B, 3, 8), False, 2,
     'Kommentar ohne Direktive auf der Anweisungszeile');
