@@ -61,7 +61,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxCodeMap, uRdxBlocks, uRdxTryFixes, uRdxResultFixes,
+  uRdxCodeMap, uRdxBlocks, uRdxTryFixes, uRdxResultFixes, uRdxInheritedFixes,
   uTestRdxTextKit;   // Join, LineStartingWith
 
 const
@@ -399,7 +399,7 @@ begin
     '  end;', '  {$ELSE}', '  TBase = class', '    procedure Run;', '  end;',
     '  {$ENDIF}', '  TFoo = class(TBase)', '    constructor Create; override;',
     '  end;'], ['constructor TFoo.Create;', 'begin', '  Init;', 'end;']);
-  R := ResultReason(TRdxResultFixes.ConstructorInherited, Src,
+  R := ResultReason(TRdxInheritedFixes.ConstructorInherited, Src,
     LineStartingWith(Src, 'constructor TFoo.Create;'), MSG_CTOR);
   Assert.IsTrue(Pos('Aufruf Init in Zeile', R) = 1, R);
   Assert.IsTrue(Pos('(Delegation)', R) > 0, R);
@@ -419,7 +419,7 @@ begin
     '  TBase = class', '    constructor Create; virtual;', '  end;',
     '  {$ENDIF}', '  TFoo = class(TBase)', '    constructor Create; override;',
     '  end;'], ['constructor TFoo.Create;', 'begin', '  Run;', 'end;']);
-  R := ResultReason(TRdxResultFixes.ConstructorInherited, Src,
+  R := ResultReason(TRdxInheritedFixes.ConstructorInherited, Src,
     LineStartingWith(Src, 'constructor TFoo.Create;'), MSG_CTOR);
   Assert.IsTrue(Pos('TBase.Create ist abstrakt', R) = 1, R);
 end;

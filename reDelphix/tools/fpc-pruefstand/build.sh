@@ -120,7 +120,7 @@ STUBS=()
 for f in "$HERE"/*.pas "$HERE"/*.inc; do
   [ -e "$f" ] || continue
   case "${f##*/}" in
-    uDetectorUtils.pas|uRefactor*.pas|uSourcePlaces.pas|uFindingActions.pas|uRdx*.pas|uRdx*.inc|uTest*.pas|runner.pas)
+    uDetectorUtils.pas|uRefactor*.pas|uSourcePlaces.pas|uFindingActions.pas|uScaConfigDir.pas|uRdx*.pas|uRdx*.inc|uTest*.pas|runner.pas)
       OLD+=("$f") ;;
     *) STUBS+=("$f") ;;
   esac
@@ -183,7 +183,7 @@ adapt() {
     END { if (out != "") close(out) }' "$@"
 }
 UNITS=()
-for u in uRefactorInfo uRefactorInfoBuilder uRefactorConcat uFindingActions; do
+for u in uRefactorInfo uRefactorInfoBuilder uRefactorConcat uFindingActions uScaConfigDir; do
   need "$SCA/SCA.Engine/sources/Common/$u.pas"
   UNITS+=("$SCA/SCA.Engine/sources/Common/$u.pas")
 done
@@ -193,7 +193,7 @@ UNITS+=("$SCA/SCA.Engine/sources/Infrastructure/uSourcePlaces.pas")
 # Fehlt eine, scheitern nur die Tests, die sie brauchen - deshalb Warnung.
 # FPC sucht Units nur im Arbeitsverzeichnis - eine neue Unit muss in diese
 # Liste.
-for u in uRdxText uRdxRecipes uRdxPaths uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxBlocks uRdxSuppress uRdxSimpleFixes uRdxStructFixes uRdxLineFixes uRdxRaiseFixes uRdxDeclFixes uRdxFlowFixes uRdxRoutineFixes uRdxCleanupFixes uRdxTryFixes uRdxResultFixes uRdxSqlTemplate uRdxIntroPlan uRdxIntroEdits uRdxRtlTypes uRdxCompilerTraces uRdxMagicFixes; do
+for u in uRdxText uRdxRecipes uRdxPaths uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxBlocks uRdxSuppress uRdxSimpleFixes uRdxStructFixes uRdxLineFixes uRdxRaiseFixes uRdxDeclFixes uRdxFlowFixes uRdxRoutineFixes uRdxCleanupFixes uRdxTryFixes uRdxResultFixes uRdxSqlTemplate uRdxIntroPlan uRdxIntroEdits uRdxRtlTypes uRdxCompilerTraces uRdxMagicFixes uRdxTypeProof uRdxTrySpan uRdxHandOver uRdxInheritedFixes uRdxSqlFacts; do
   if [ -f "$RDX/source/$u.pas" ]; then
     UNITS+=("$RDX/source/$u.pas")
   else

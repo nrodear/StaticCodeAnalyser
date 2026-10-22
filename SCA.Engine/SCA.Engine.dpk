@@ -106,6 +106,8 @@ contains
   uRuleCatalog in 'sources\Common\uRuleCatalog.pas',
   uSCAConsts in 'sources\Common\uSCAConsts.pas',
   uSourceLineEdit in 'sources\Common\uSourceLineEdit.pas',
+  uAtomicFile in 'sources\Common\uAtomicFile.pas',
+  uScaConfigDir in 'sources\Common\uScaConfigDir.pas',
   uYamlSubsetParser in 'sources\Common\uYamlSubsetParser.pas',
   uAbstractNotImpl in 'sources\Detectors\uAbstractNotImpl.pas',
   uAnonMethodCaptureLoopVar in 'sources\Detectors\uAnonMethodCaptureLoopVar.pas',

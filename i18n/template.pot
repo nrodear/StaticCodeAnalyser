@@ -40,8 +40,8 @@ msgstr ""
 msgid " - no changed .pas files"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4238
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4819
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4253
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4834
 msgid " · "
 msgstr ""
 
@@ -49,11 +49,11 @@ msgstr ""
 msgid "\"%s\" already exists. Overwrite it?"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1833
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1828
 msgid "\"%s\" is a built-in profile and cannot be changed."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1873
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1868
 msgid "\"%s\" is a built-in profile."
 msgstr ""
 
@@ -64,16 +64,16 @@ msgstr ""
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1945
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1951
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1970
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1940
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1943
 msgid "%d / %d findings"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1862
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1931
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1934
 msgid "%d context hashes"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:834
+#: reDelphix/source/uRdxText.pas:810
 msgid "%d declarations of %s in classes of this name - overload?"
 msgstr ""
 
@@ -89,12 +89,12 @@ msgstr ""
 msgid "%d findings on this line"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:851
+#: reDelphix/source/uRdxText.pas:827
 msgid "%d headers %s"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1852
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1921
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1924
 msgid "%d hidden by baseline"
 msgstr ""
 
@@ -122,11 +122,11 @@ msgstr ""
 msgid "%s (no findings)"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:759
+#: reDelphix/source/uRdxText.pas:735
 msgid "%s - finding outdated? Analyse the file again"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:754
+#: reDelphix/source/uRdxText.pas:730
 msgid "%s - line moved? Analyse the file again"
 msgstr ""
 
@@ -134,11 +134,11 @@ msgstr ""
 msgid "%s contains no profiles."
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:839
+#: reDelphix/source/uRdxText.pas:815
 msgid "%s is no longer at the reported place"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1626
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1620
 msgid "%s is not a valid JSON object."
 msgstr ""
 
@@ -146,7 +146,7 @@ msgstr ""
 msgid "%s: no fixMode in the rule catalog"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1457
+#: reDelphix/source/uRdxFixTable.pas:1649
 msgid "(changes behavior)"
 msgstr ""
 
@@ -186,7 +186,7 @@ msgstr ""
 msgid "8-bit string cast silently drops non-codepage characters"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1824
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1819
 #: SCA.SharedUI/sources/uProfileViewer.pas:679
 msgid "A profile without rules would find nothing."
 msgstr ""
@@ -197,11 +197,11 @@ msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2390
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3278
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2958
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2961
 msgid "AI prompt copied to clipboard: %s, line %s (%s)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4524
+#: SCA.Engine/sources/Output/uFixHint.pas:4525
 msgid "ANSI source (no BOM, not UTF-8) - code-page-dependent, non-portable"
 msgstr ""
 
@@ -209,7 +209,7 @@ msgstr ""
 msgid "Accept self-signed TLS certificates"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1204
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1207
 msgid "Actions menu: Branch-Changes, Cancel, Export, Settings, Ignore"
 msgstr ""
 
@@ -221,31 +221,31 @@ msgstr ""
 msgid "Add"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Add \"%s;\" to the declaration"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Add \"raise;\" to the empty exception handler"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Add a category name to the attribute"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Add a reason to [Ignore]"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1449
+#: reDelphix/source/uRdxFixTable.pas:1641
 msgid "Add an else branch that raises an exception"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Add an empty else branch"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Add raise; to the empty except block"
 msgstr ""
 
@@ -278,7 +278,7 @@ msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:534
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:572
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1475
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1478
 msgid "All"
 msgstr ""
 
@@ -287,11 +287,11 @@ msgstr ""
 msgid "All files"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3417
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3432
 msgid "All findings reset."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3346
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3361
 msgid "All markers cleared."
 msgstr ""
 
@@ -299,7 +299,7 @@ msgstr ""
 msgid "All severities"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1819
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1814
 msgid "Allowed characters: letters, digits, hyphen, underscore and dot."
 msgstr ""
 
@@ -312,11 +312,11 @@ msgstr ""
 msgid "An analysis is already running."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3640
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3655
 msgid "Analyse Branch-Changes"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5713
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5640
 msgid "Analyse current file (silent)"
 msgstr ""
 
@@ -385,7 +385,7 @@ msgstr ""
 msgid "Assert() without explanatory message"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Assign the condition to %s directly"
 msgstr ""
 
@@ -413,7 +413,7 @@ msgstr ""
 msgid "Baseline (show only new findings)"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3988
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4003
 #: StaticCodeAnalyserIDE/uIDESCAOptions.pas:657
 msgid "Baseline JSON"
 msgstr ""
@@ -427,14 +427,14 @@ msgid "Baseline file:"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2982
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3870
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3885
 msgid "Baseline is enabled but no baseline file was found."
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3007
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3097
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3895
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4015
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3910
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4030
 msgid "Baseline written: %s (%d findings)"
 msgstr ""
 
@@ -455,7 +455,7 @@ msgstr ""
 msgid "Before:"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4509
+#: SCA.Engine/sources/Output/uFixHint.pas:4510
 msgid "Bidirectional override char (Trojan Source) - code reads differently than it compiles"
 msgstr ""
 
@@ -479,7 +479,7 @@ msgstr ""
 msgid "Branch body without begin..end - add explicit block"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3300
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3315
 msgid "Branch changes: please provide a valid project path (for repo detection)."
 msgstr ""
 
@@ -494,13 +494,13 @@ msgstr ""
 #: SCA.Engine/sources/Common/uMethodd12.pas:421
 #: SCA.SharedUI/sources/uRuleListBox.pas:140
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:573
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1476
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1479
 msgid "Bug"
 msgstr ""
 
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:462
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3344
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1730
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1733
 msgid "Bugs"
 msgstr ""
 
@@ -529,11 +529,11 @@ msgstr ""
 msgid "CSV saved: %s (%d entries)"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Call %s first in the constructor"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Call inherited last in the destructor"
 msgstr ""
 
@@ -543,11 +543,11 @@ msgid "Cancel"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2717
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3650
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3665
 msgid "Cancel Analysis"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3328
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3343
 msgid "Cancelling analysis..."
 msgstr ""
 
@@ -556,7 +556,7 @@ msgstr ""
 msgid "Cannot move the editor cursor to line %d, column %d"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1618
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1612
 msgid "Cannot read %s: %s"
 msgstr ""
 
@@ -597,57 +597,57 @@ msgid "Clean - minor smells only"
 msgstr ""
 
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:404
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1179
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1182
 msgid "Clear all editor markers in all files (grids stay)"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3656
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3671
 msgid "Clear all markers"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3347
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1733
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1736
 msgid "Click: filter grid to Bug type"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3340
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1725
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1728
 msgid "Click: filter grid to Cyclomatic"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3355
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1743
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1746
 msgid "Click: filter grid to Duplicate type"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3320
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1697
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1700
 msgid "Click: filter grid to Errors"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3328
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1707
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1710
 msgid "Click: filter grid to Hints"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3351
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1738
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1741
 msgid "Click: filter grid to Vulnerability type"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3324
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1702
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1705
 msgid "Click: filter grid to Warnings"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3335
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1717
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1720
 msgid "Click: filter grid to read errors"
 msgstr ""
 
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:514
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3364
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1751
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1754
 msgid "Click: reset filters (show everything)"
 msgstr ""
 
@@ -675,7 +675,7 @@ msgstr ""
 #: SCA.Engine/sources/Common/uMethodd12.pas:425
 #: SCA.SharedUI/sources/uRuleListBox.pas:144
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:577
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1480
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1483
 msgid "Code Duplication"
 msgstr ""
 
@@ -686,7 +686,7 @@ msgstr ""
 #: SCA.Engine/sources/Common/uMethodd12.pas:422
 #: SCA.SharedUI/sources/uRuleListBox.pas:141
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:574
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1477
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1480
 msgid "Code Smell"
 msgstr ""
 
@@ -703,7 +703,7 @@ msgid "Code review request - Delphi static analysis finding"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3327
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1706
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1709
 msgid "Code smells / style. Refactoring candidates."
 msgstr ""
 
@@ -752,17 +752,17 @@ msgid "Constructor invoked on instance - no allocation, fields re-initialised ov
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3354
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1742
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1745
 msgid "Copied code (strings, blocks). Extract Method/Constant candidates."
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3149
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1644
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1647
 msgid "Copy AI prompt"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3154
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1648
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1651
 msgid "Copy Jira issue"
 msgstr ""
 
@@ -788,8 +788,8 @@ msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3810
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3893
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3469
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3495
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3484
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3510
 msgid "Could not open editor. File: "
 msgstr ""
 
@@ -799,8 +799,8 @@ msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3015
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3105
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3903
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4019
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3918
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4034
 msgid "Could not write baseline: %s"
 msgstr ""
 
@@ -813,11 +813,11 @@ msgid "Create without try/finally - exception path leaks the object"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3346
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1732
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1735
 msgid "Crosses severities - Bugs can be Errors OR Warnings."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3273
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3288
 msgid "Current file is not a Pascal file."
 msgstr ""
 
@@ -830,7 +830,7 @@ msgid "Cyclomatic"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3337
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1722
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1725
 msgid "Cyclomatic Complexity"
 msgstr ""
 
@@ -846,7 +846,7 @@ msgstr ""
 msgid "DFM Viewer"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4185
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4200
 msgid "DFM as text: %s  Line: %d"
 msgstr ""
 
@@ -893,7 +893,7 @@ msgstr ""
 msgid "Debug output left in production code"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Delete commented-out code"
 msgstr ""
 
@@ -905,11 +905,11 @@ msgstr ""
 msgid "Delete profile \"%s\"?"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Delete unused private method %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Delete unused routine %s"
 msgstr ""
 
@@ -993,11 +993,11 @@ msgstr ""
 
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:464
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3353
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1741
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1744
 msgid "Duplicates"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:224
+#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:213
 msgid "EAbort is swallowed on purpose - \"raise;\" would show the abort"
 msgstr ""
 
@@ -1048,7 +1048,7 @@ msgstr ""
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:378
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:458
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3318
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1695
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1698
 msgid "Errors"
 msgstr ""
 
@@ -1090,7 +1090,7 @@ msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:628
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2722
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3675
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3690
 msgid "Export"
 msgstr ""
 
@@ -1109,7 +1109,7 @@ msgstr ""
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:332
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:265
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2666
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1616
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1619
 msgid "File"
 msgstr ""
 
@@ -1123,7 +1123,7 @@ msgid "File %d / %d (%d%%)"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3334
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1716
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1719
 msgid "File could not be read / parsed. Check path/encoding."
 msgstr ""
 
@@ -1138,21 +1138,21 @@ msgstr ""
 #: StaticCodeAnalyserForm/sources/UI/uDfmTextViewer.pas:42
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1394
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2229
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3279
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4150
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3294
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4165
 msgid "File not found: "
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1601
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1595
 msgid "File not found: %s"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2663
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1238
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1241
 msgid "Filter file / method / finding..."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1942
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1945
 msgid "Filter: %s%s"
 msgstr ""
 
@@ -1160,14 +1160,14 @@ msgstr ""
 msgid "Finding"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2894
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5785
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2897
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5712
 #: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:825
 msgid "Finding action failed: %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2860
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3016
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2863
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3019
 msgid "Finding actions: provider failed - %s"
 msgstr ""
 
@@ -1176,7 +1176,7 @@ msgid "Findings in detail"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3345
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1731
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1734
 msgid "Findings of type Bug (wrong behaviour, crash, wrong result)."
 msgstr ""
 
@@ -1200,7 +1200,7 @@ msgstr ""
 msgid "Format() placeholder count does not match argument count"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Free %s in a try/finally block"
 msgstr ""
 
@@ -1208,7 +1208,7 @@ msgstr ""
 msgid "Free is outside the protecting finally block"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Free the buffer %s in a try/finally block"
 msgstr ""
 
@@ -1274,7 +1274,7 @@ msgid "HTML report saved: %s"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3339
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1724
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1727
 msgid "Hard to test - refactor into smaller methods."
 msgstr ""
 
@@ -1301,7 +1301,7 @@ msgstr ""
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:381
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:460
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3326
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1705
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1708
 msgid "Hints"
 msgstr ""
 
@@ -1321,7 +1321,7 @@ msgstr ""
 msgid "IDE Profile:"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3269
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3284
 msgid "IDE editor service not available."
 msgstr ""
 
@@ -1342,7 +1342,7 @@ msgid "Ignore list opened: %s"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2733
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3702
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3717
 msgid "Ignore list..."
 msgstr ""
 
@@ -1370,11 +1370,11 @@ msgstr ""
 msgid "Info"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Initialize Result first: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Initialize Result with %s"
 msgstr ""
 
@@ -1382,11 +1382,11 @@ msgstr ""
 msgid "Input control sits directly on the form - wrap it in a panel"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Insert a documentation skeleton"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Insert a new GUID"
 msgstr ""
 
@@ -1406,15 +1406,15 @@ msgstr ""
 msgid "Interface type without \"I\" prefix"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Introduce local constant for %s"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4481
+#: SCA.Engine/sources/Output/uFixHint.pas:4482
 msgid "Invalid UTF-8 sequence - compiler substitutes U+FFFD (data corruption)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4557
+#: SCA.Engine/sources/Output/uFixHint.pas:4558
 msgid "Invisible / zero-width character in source - hidden-text abuse"
 msgstr ""
 
@@ -1452,7 +1452,7 @@ msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2386
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3305
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2934
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2937
 msgid "Jira mini issue copied to clipboard: %s, line %s (%s)"
 msgstr ""
 
@@ -1495,7 +1495,7 @@ msgid "Like Windows"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3323
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1701
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1704
 msgid "Likely bugs / risky patterns. Review before merge."
 msgstr ""
 
@@ -1505,7 +1505,7 @@ msgstr ""
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:458
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:967
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2668
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1618
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1621
 msgid "Line"
 msgstr ""
 
@@ -1529,7 +1529,7 @@ msgstr ""
 msgid "Local variable declared but never read or written"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4407
+#: SCA.Engine/sources/Output/uFixHint.pas:4408
 msgid "Local variable read before its first assignment - undefined value (garbage / AV)"
 msgstr ""
 
@@ -1550,7 +1550,7 @@ msgid "Long string concatenation - prefer Format() for readability"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2983
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3871
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3886
 msgid "Looked for:"
 msgstr ""
 
@@ -1562,7 +1562,7 @@ msgstr ""
 msgid "Many DB components on one form - extract into a TDataModule"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Mark the empty body as intentional"
 msgstr ""
 
@@ -1584,7 +1584,7 @@ msgstr ""
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:457
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:966
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2667
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1617
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1620
 msgid "Method"
 msgstr ""
 
@@ -1617,7 +1617,7 @@ msgid "Method too long - splitting it improves readability and testability"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3338
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1723
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1726
 msgid "Methods with McCabe complexity > threshold (default 10)."
 msgstr ""
 
@@ -1645,7 +1645,7 @@ msgstr ""
 msgid "Move / FillChar uses SizeOf(pointer-type) - copies only 4/8 bytes, not the target buffer"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Move the keyword to column 1"
 msgstr ""
 
@@ -1665,11 +1665,11 @@ msgstr ""
 msgid "Multiple identical code blocks - extract a method (DRY)"
 msgstr ""
 
-#: reDelphix/source/uRdxNoSonarFix.pas:203
+#: reDelphix/source/uRdxNoSonarFix.pas:192
 msgid "NOSONAR is not the first word of the comment"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4495
+#: SCA.Engine/sources/Output/uFixHint.pas:4496
 msgid "NUL / control byte in source - binary file or mis-detected encoding"
 msgstr ""
 
@@ -1701,11 +1701,11 @@ msgstr ""
 msgid "No actions for this line"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1896
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1899
 msgid "No entries for this filter."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3271
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3286
 msgid "No file opened."
 msgstr ""
 
@@ -1715,8 +1715,8 @@ msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2990
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3068
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3877
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3978
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3892
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3993
 msgid "No findings to write. Run an analysis first."
 msgstr ""
 
@@ -1737,7 +1737,7 @@ msgid "No rule catalogue found - profiles unavailable."
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2997
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3885
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3900
 msgid "No scan target selected - pick a path or project first."
 msgstr ""
 
@@ -1745,7 +1745,7 @@ msgstr ""
 msgid "No sonar-project.properties found in "
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4571
+#: SCA.Engine/sources/Output/uFixHint.pas:4572
 msgid "Non-ASCII character in identifier - homoglyph / confusable risk"
 msgstr ""
 
@@ -1794,8 +1794,8 @@ msgstr ""
 msgid "Opened in external editor: %s  Line: %d"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4166
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4188
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4181
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4203
 msgid "Opened: %s  Line: %d"
 msgstr ""
 
@@ -1832,7 +1832,7 @@ msgid "Password / token literal in source code"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2661
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1093
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1096
 msgid "Path:"
 msgstr ""
 
@@ -1845,7 +1845,7 @@ msgid "Plaintext HTTP URL - prefer https:// for remote endpoints"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1142
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3213
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3228
 msgid "Please provide a valid project path."
 msgstr ""
 
@@ -1870,7 +1870,7 @@ msgid "Private method has no caller in the unit - dead code"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2488
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1856
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1859
 msgid "Profile \"%s\" - active on next analysis run"
 msgstr ""
 
@@ -1895,7 +1895,7 @@ msgid "Profile files (*.json)|*.json|All files (*.*)|*.*"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2655
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1188
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1191
 msgid "Profile:"
 msgstr ""
 
@@ -1935,30 +1935,30 @@ msgstr ""
 msgid "Published method looks like an event handler but no component binds it"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Put the branch in begin..end"
 msgstr ""
 
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:474
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3361
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1748
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1751
 msgid "Quality"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3052
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3055
 msgid "Quick-Fix applied: %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3053
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3063
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3056
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3066
 msgid "Quick-Fix not available: %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3051
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3054
 msgid "Quick-Fix: the reDelphix package is not loaded"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1449
+#: reDelphix/source/uRdxFixTable.pas:1641
 msgid "Raise ENotImplemented in the empty body"
 msgstr ""
 
@@ -1970,7 +1970,7 @@ msgstr ""
 msgid "Raise inside destructor without try/except - cleanup is aborted"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Raise the exception"
 msgstr ""
 
@@ -1998,16 +1998,16 @@ msgstr ""
 
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:461
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3333
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1715
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1718
 msgid "Read errors"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1052
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1055
 msgid "Ready."
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3319
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1696
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1699
 msgid "Real bugs / security holes (severity Error). Fix immediately."
 msgstr ""
 
@@ -2023,7 +2023,7 @@ msgstr ""
 msgid "Reference pattern (generic example for this rule, NOT the user's code)"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Release the lock %s in a try/finally block"
 msgstr ""
 
@@ -2031,7 +2031,7 @@ msgstr ""
 msgid "Reload"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Remove (TObject) from the class declaration"
 msgstr ""
 
@@ -2046,103 +2046,103 @@ msgstr ""
 msgid "Remove rules"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Remove the blank line after the attribute"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Remove the cast to %s before Free"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Remove the duplicate attribute"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Remove the empty parentheses"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Remove the empty try/finally"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Remove the empty visibility section"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Remove the extra semicolon"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1449
+#: reDelphix/source/uRdxFixTable.pas:1641
 msgid "Remove the first duplicate inherited call"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Remove the redundant %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Remove the redundant comparison with True/False"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Remove the redundant comparison with nil"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Remove the redundant inner parentheses"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Remove the second duplicate inherited call"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Remove the self-assignment of %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Remove the trailing comma"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Remove the trailing whitespace"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Remove unit %s from uses"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Remove unused variable %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Replace \"goto\" with Exit"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Replace \"to\" with \"downto\""
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Replace NOSONAR with a \"noinspection All\" marker"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Replace begin with initialization"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Replace the 32-bit casts with NativeInt/NativeUInt"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Replace the empty \"with ... do begin end\" by the call"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Replace the tabs in this line with spaces"
 msgstr ""
 
@@ -2154,7 +2154,7 @@ msgstr ""
 msgid "Required field is bound only to invisible controls"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3665
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3680
 msgid "Reset all findings (clear panels + markers)"
 msgstr ""
 
@@ -2172,7 +2172,7 @@ msgstr ""
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:460
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:969
 #: SCA.SharedUI/sources/uRuleListBox.pas:215
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1620
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1623
 msgid "Rule"
 msgstr ""
 
@@ -2184,7 +2184,7 @@ msgstr ""
 msgid "Rule-Set (analyser.ini [Rules])"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1190
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1193
 msgid "Rule-set profile (ide-fast / default / strict). Takes effect at the next analysis run."
 msgstr ""
 
@@ -2197,7 +2197,7 @@ msgid "Rule-set profiles"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2734
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3710
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3725
 msgid "Rule-set profiles..."
 msgstr ""
 
@@ -2278,25 +2278,25 @@ msgstr ""
 msgid "Search ID, kind, rule text, severity or type..."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1944
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1947
 msgid "Search: "
 msgstr ""
 
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:463
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3349
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1736
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1739
 msgid "Security"
 msgstr ""
 
 #: SCA.Engine/sources/Common/uMethodd12.pas:424
 #: SCA.SharedUI/sources/uRuleListBox.pas:143
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:576
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1479
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1482
 msgid "Security Hotspot"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3350
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1737
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1740
 msgid "Security holes (SQL injection, hardcoded secrets ...)."
 msgstr ""
 
@@ -2333,7 +2333,7 @@ msgstr ""
 msgid "SetLength growing by 1 inside a loop - O(n^2) reallocation; grow once before the loop"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3960
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3975
 msgid "Settings could not be reloaded - baseline filter unchanged."
 msgstr ""
 
@@ -2345,12 +2345,12 @@ msgid "Settings could not be reloaded - nothing was saved."
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2732
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3697
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3712
 msgid "Settings..."
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3813
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3499
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3514
 msgid "Settings: %s - changes take effect on the next analysis run."
 msgstr ""
 
@@ -2360,12 +2360,12 @@ msgstr ""
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:970
 #: SCA.SharedUI/sources/uRuleListBox.pas:216
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2670
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1621
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1624
 msgid "Severity"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2652
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1132
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1135
 msgid "Severity:"
 msgstr ""
 
@@ -2392,12 +2392,12 @@ msgid "Show only findings new since the baseline (hide the legacy backlog)"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2724
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3687
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3702
 msgid "Show only new findings (baseline)"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1966
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1936
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1939
 msgid "Showing first %d of %d findings - refine the filter to see more"
 msgstr ""
 
@@ -2453,7 +2453,7 @@ msgstr ""
 msgid "Source line exceeds 120 characters - wrap or extract"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Split the grouped declaration"
 msgstr ""
 
@@ -2461,11 +2461,11 @@ msgstr ""
 msgid "Static Code Analyser: actions for this line"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5714
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5641
 msgid "Static Code Analyser: analyse this file, no dock opens"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:6134
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:6061
 msgid "Static Code Analysis"
 msgstr ""
 
@@ -2504,26 +2504,27 @@ msgid "Suppress in this file (// noinspection-file %s)"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2305
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3134
 msgid "Suppress inserted in %s: %s"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2302
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3095
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3121
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3099
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3131
 msgid "Suppress inserted: %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3096
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3100
 msgid "Suppress not available: %s"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2285
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3107
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3111
 msgid "Suppress: cannot locate source line"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2291
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3115
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3119
 msgid "Suppress: cannot place the marker: %s"
 msgstr ""
 
@@ -2531,15 +2532,15 @@ msgstr ""
 msgid "Suppress: could not write file: %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3124
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3139
 msgid "Suppress: editor write failed (file not in IDE?)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4445
+#: SCA.Engine/sources/Output/uFixHint.pas:4446
 msgid "Suppression marker has no matching finding - probably stale after fix"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1449
+#: reDelphix/source/uRdxFixTable.pas:1641
 msgid "Swap the loop bounds"
 msgstr ""
 
@@ -2571,11 +2572,11 @@ msgstr ""
 msgid "Text (one-line hint, no window)"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1810
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1805
 msgid "The profile name must not be empty."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1878
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1873
 msgid "There is no profile \"%s\"."
 msgstr ""
 
@@ -2611,7 +2612,7 @@ msgstr ""
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:459
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:968
 #: SCA.SharedUI/sources/uRuleListBox.pas:217
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1619
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1622
 msgid "Type"
 msgstr ""
 
@@ -2620,7 +2621,7 @@ msgid "Type-cast before Free / Destroy has no effect (Destroy is virtual)"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2653
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1145
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1148
 msgid "Type:"
 msgstr ""
 
@@ -2644,15 +2645,15 @@ msgstr ""
 msgid "UPDATE/DELETE/TRUNCATE without WHERE - affects ALL rows"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4537
+#: SCA.Engine/sources/Output/uFixHint.pas:4538
 msgid "UTF-16 source - compiles, but unusual and text-tool-unfriendly"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4547
+#: SCA.Engine/sources/Output/uFixHint.pas:4548
 msgid "UTF-32 source - compiler rejects it with fatal error F2438"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4464
+#: SCA.Engine/sources/Output/uFixHint.pas:4465
 msgid "UTF-8 source without BOM - Delphi reads it as ANSI, FPC as UTF-8 (mojibake on Delphi)"
 msgstr ""
 
@@ -2672,23 +2673,23 @@ msgstr ""
 msgid "Unit-level keyword not at column 1"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Use Assigned() instead of comparing with nil"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Use FreeAndNil(%s)"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Use https:// instead of http://"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Use raise; to keep the original stack trace"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Use the condition as the Assert message"
 msgstr ""
 
@@ -2731,7 +2732,7 @@ msgstr ""
 #: SCA.Engine/sources/Common/uMethodd12.pas:423
 #: SCA.SharedUI/sources/uRuleListBox.pas:142
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:575
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1478
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1481
 msgid "Vulnerability"
 msgstr ""
 
@@ -2754,7 +2755,7 @@ msgstr ""
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:379
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:459
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3322
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1700
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1703
 msgid "Warnings"
 msgstr ""
 
@@ -2775,7 +2776,7 @@ msgid "Weak/deprecated crypto algorithm in use"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3362
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1749
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1752
 msgid "Weighted quality score (lower = better)."
 msgstr ""
 
@@ -2784,7 +2785,7 @@ msgid "Weights: Vuln 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3363
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1750
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1753
 msgid "Weights: Vulnerability 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2."
 msgstr ""
 
@@ -2800,12 +2801,12 @@ msgstr ""
 msgid "Will be overwritten: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixTable.pas:1451
+#: reDelphix/source/uRdxFixTable.pas:1643
 msgid "Write %s in lowercase"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2984
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3872
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3887
 msgid "Write a new baseline with the current findings now?"
 msgstr ""
 
@@ -2815,7 +2816,7 @@ msgid "Write baseline"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2723
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3681
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3696
 msgid "Write baseline from current scan..."
 msgstr ""
 
@@ -2827,20 +2828,20 @@ msgstr ""
 msgid "You are a senior Delphi developer reviewing the output of a static code analyser. Target version: Delphi 12 Athens (RTL/VCL). Suggest minimal, idiomatic fixes - no sweeping refactors, no style overhauls, no new dependencies unless strictly required."
 msgstr ""
 
-#: reDelphix/source/uRdxNoSonarFix.pas:222
+#: reDelphix/source/uRdxNoSonarFix.pas:211
 msgid "a \"// noinspection All\" marker already stands above - delete the NOSONAR comment by hand"
 msgstr ""
 
-#: reDelphix/source/uRdxNativeIntFix.pas:248
+#: reDelphix/source/uRdxNativeIntFix.pas:239
 msgid "a comment, string or directive stands between the two casts (Cast { } -)"
 msgstr ""
 
-#: reDelphix/source/uRdxCategoryArgFix.pas:168
-#: reDelphix/source/uRdxCategoryArgFix.pas:186
+#: reDelphix/source/uRdxCategoryArgFix.pas:158
+#: reDelphix/source/uRdxCategoryArgFix.pas:176
 msgid "a compiler directive is in the way"
 msgstr ""
 
-#: reDelphix/source/uRdxNativeIntFix.pas:233
+#: reDelphix/source/uRdxNativeIntFix.pas:224
 msgid "an operand is a number or no plain identifier (Cast(5))"
 msgstr ""
 
@@ -2856,16 +2857,16 @@ msgstr ""
 msgid "asm..end block - platform-specific, hard to port"
 msgstr ""
 
-#: reDelphix/source/uRdxAttrDuplicateFix.pas:124
-#: reDelphix/source/uRdxAttrDuplicateFix.pas:128
+#: reDelphix/source/uRdxAttrDuplicateFix.pas:114
+#: reDelphix/source/uRdxAttrDuplicateFix.pas:118
 msgid "attribute over several lines, or with brackets or comment signs inside"
 msgstr ""
 
-#: reDelphix/source/uRdxAttrDuplicateFix.pas:122
+#: reDelphix/source/uRdxAttrDuplicateFix.pas:112
 msgid "attribute with a target (assembly:, Result:)"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:794
+#: reDelphix/source/uRdxText.pas:770
 msgid "by hand"
 msgstr ""
 
@@ -2873,7 +2874,7 @@ msgstr ""
 msgid "case statement has many branches - consider dispatch table"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:799
+#: reDelphix/source/uRdxText.pas:775
 msgid "check by hand"
 msgstr ""
 
@@ -2881,53 +2882,53 @@ msgstr ""
 msgid "class(TObject) - TObject is the default base, drop it"
 msgstr ""
 
-#: reDelphix/source/uRdxAttrDuplicateFix.pas:118
+#: reDelphix/source/uRdxAttrDuplicateFix.pas:108
 msgid "code, a comment or a directive lies between the two attributes"
 msgstr ""
 
-#: reDelphix/source/uRdxGotoExitFix.pas:196
+#: reDelphix/source/uRdxGotoExitFix.pas:186
 msgid "comment inside \"goto <label>\""
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyExceptFix.pas:168
+#: reDelphix/source/uRdxEmptyExceptFix.pas:157
 msgid "comment inside or behind the except block - a comment is intent, no help"
 msgstr ""
 
-#: reDelphix/source/uRdxParensFix.pas:193
+#: reDelphix/source/uRdxParensFix.pas:184
 msgid "comment inside the parentheses"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyBlockFix.pas:298
+#: reDelphix/source/uRdxEmptyBlockFix.pas:287
 msgid "comment or directive between \"with\" and \"end\""
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:249
+#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:238
 msgid "comment or directive in or beside the handler - intent, no help"
 msgstr ""
 
-#: reDelphix/source/uRdxGroupedDeclFix.pas:293
+#: reDelphix/source/uRdxGroupedDeclFix.pas:282
 msgid "comment, string or directive on the line"
 msgstr ""
 
-#: reDelphix/source/uRdxGotoExitFix.pas:236
+#: reDelphix/source/uRdxGotoExitFix.pas:226
 msgid "compiler directive in the routine - conditional code could move the label"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyExceptFix.pas:163
+#: reDelphix/source/uRdxEmptyExceptFix.pas:152
 msgid "compiler directive on the lines of the except block"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:809
+#: reDelphix/source/uRdxText.pas:785
 msgid "decide by hand"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3832
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3842
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1506
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1509
 msgid "default"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:804
+#: reDelphix/source/uRdxText.pas:780
 msgid "delete by hand"
 msgstr ""
 
@@ -2935,11 +2936,11 @@ msgstr ""
 msgid "editor buffer empty or not readable"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:779
+#: reDelphix/source/uRdxText.pas:755
 msgid "end of the header not found"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:769
+#: reDelphix/source/uRdxText.pas:745
 msgid "end of the statement not found"
 msgstr ""
 
@@ -2968,7 +2969,7 @@ msgstr ""
 msgid "finding without line"
 msgstr ""
 
-#: reDelphix/source/uRdxParensFix.pas:199
+#: reDelphix/source/uRdxParensFix.pas:190
 msgid "followed by \".\", \"[\" or \"(\" - the parentheses belong to a chain"
 msgstr ""
 
@@ -2997,93 +2998,93 @@ msgstr ""
 msgid "in"
 msgstr ""
 
-#: reDelphix/source/uRdxGroupedDeclFix.pas:274
+#: reDelphix/source/uRdxGroupedDeclFix.pas:263
 msgid "inside a case statement - the names are labels, not variables"
 msgstr ""
 
-#: reDelphix/source/uRdxGroupedDeclFix.pas:272
+#: reDelphix/source/uRdxGroupedDeclFix.pas:261
 msgid "inside a parameter list - the grouping is the style of the signature"
 msgstr ""
 
-#: reDelphix/source/uRdxGotoExitFix.pas:310
+#: reDelphix/source/uRdxGotoExitFix.pas:300
 msgid "label \"%s\" is not the last statement of the routine - \"Exit\" would skip the code after it"
 msgstr ""
 
-#: reDelphix/source/uRdxNativeIntFix.pas:227
+#: reDelphix/source/uRdxNativeIntFix.pas:218
 msgid "line %d carries %d pointer subtractions (SCA161) - ambiguous"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:749
+#: reDelphix/source/uRdxText.pas:725
 msgid "line moved? Analyse the file again"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:824
+#: reDelphix/source/uRdxText.pas:800
 msgid "literal not readable: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxCategoryArgFix.pas:173
+#: reDelphix/source/uRdxCategoryArgFix.pas:163
 msgid "more code follows the attribute on the line"
 msgstr ""
 
-#: reDelphix/source/uRdxParensFix.pas:182
+#: reDelphix/source/uRdxParensFix.pas:173
 msgid "no \"((X))\" at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxNativeIntFix.pas:222
+#: reDelphix/source/uRdxNativeIntFix.pas:213
 msgid "no \"Cast(x) - Cast(y)\" pair of 32-bit casts on the code columns of the reported line"
 msgstr ""
 
-#: reDelphix/source/uRdxNoSonarFix.pas:185
-#: reDelphix/source/uRdxNoSonarFix.pas:193
+#: reDelphix/source/uRdxNoSonarFix.pas:174
+#: reDelphix/source/uRdxNoSonarFix.pas:182
 msgid "no \"NOSONAR\" comment at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxCategoryArgFix.pas:119
-#: reDelphix/source/uRdxCategoryArgFix.pas:136
-#: reDelphix/source/uRdxCategoryArgFix.pas:142
+#: reDelphix/source/uRdxCategoryArgFix.pas:109
+#: reDelphix/source/uRdxCategoryArgFix.pas:126
+#: reDelphix/source/uRdxCategoryArgFix.pas:132
+#: reDelphix/source/uRdxCategoryArgFix.pas:139
 #: reDelphix/source/uRdxCategoryArgFix.pas:149
-#: reDelphix/source/uRdxCategoryArgFix.pas:159
 msgid "no \"[Category]\" at the reported place"
 msgstr ""
 
+#: reDelphix/source/uRdxIgnoreReasonFix.pas:88
 #: reDelphix/source/uRdxIgnoreReasonFix.pas:97
-#: reDelphix/source/uRdxIgnoreReasonFix.pas:106
-#: reDelphix/source/uRdxIgnoreReasonFix.pas:122
+#: reDelphix/source/uRdxIgnoreReasonFix.pas:113
 msgid "no \"[Ignore]\" attribute at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyBlockFix.pas:133
+#: reDelphix/source/uRdxEmptyBlockFix.pas:122
 msgid "no \"begin\" at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyExceptFix.pas:125
+#: reDelphix/source/uRdxEmptyExceptFix.pas:114
 msgid "no \"except\" at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxGotoExitFix.pas:182
-#: reDelphix/source/uRdxGotoExitFix.pas:186
+#: reDelphix/source/uRdxGotoExitFix.pas:172
+#: reDelphix/source/uRdxGotoExitFix.pas:176
 msgid "no \"goto\" at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxTrailingCommaFix.pas:157
+#: reDelphix/source/uRdxTrailingCommaFix.pas:148
 msgid "no argument before the comma - the list is missing an element, the comma is not extra"
 msgstr ""
 
-#: reDelphix/source/uRdxAttrDuplicateFix.pas:116
+#: reDelphix/source/uRdxAttrDuplicateFix.pas:106
 msgid "no duplicate attribute at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:179
-#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:210
-#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:222
+#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:168
+#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:199
+#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:211
 msgid "no empty \"on ... do\" handler at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxCategoryArgFix.pas:181
+#: reDelphix/source/uRdxCategoryArgFix.pas:171
 msgid "no end of a declaration before the attribute - not a safe attribute context"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:789
+#: reDelphix/source/uRdxText.pas:765
 msgid "no file open"
 msgstr ""
 
@@ -3091,33 +3092,33 @@ msgstr ""
 msgid "no findings"
 msgstr ""
 
-#: reDelphix/source/uRdxGroupedDeclFix.pas:289
-#: reDelphix/source/uRdxGroupedDeclFix.pas:291
+#: reDelphix/source/uRdxGroupedDeclFix.pas:278
+#: reDelphix/source/uRdxGroupedDeclFix.pas:280
 msgid "no grouped declaration at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:844
+#: reDelphix/source/uRdxText.pas:820
 msgid "no header %s"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:829
+#: reDelphix/source/uRdxText.pas:805
 msgid "no operand in the chain"
 msgstr ""
 
-#: reDelphix/source/uRdxGotoExitFix.pas:224
+#: reDelphix/source/uRdxGotoExitFix.pas:214
 msgid "no routine with a begin..end body around the \"goto\""
 msgstr ""
 
+#: reDelphix/source/uRdxTrailingCommaFix.pas:123
 #: reDelphix/source/uRdxTrailingCommaFix.pas:132
-#: reDelphix/source/uRdxTrailingCommaFix.pas:141
 msgid "no trailing comma before \")\" at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:774
+#: reDelphix/source/uRdxText.pas:750
 msgid "no valid range"
 msgstr ""
 
-#: reDelphix/source/uRdxGroupedDeclFix.pas:305
+#: reDelphix/source/uRdxGroupedDeclFix.pas:294
 msgid "not a single-line declaration with a plain type name (anonymous or generic type, initializer, \"absolute\", directive, several groups or no \";\" on the line)"
 msgstr ""
 
@@ -3130,11 +3131,11 @@ msgstr ""
 msgid "on E: Exception catches everything - too broad"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2973
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2976
 msgid "only from the menu or the light bulb"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:814
+#: reDelphix/source/uRdxText.pas:790
 msgid "only statement after %s - an empty block would remain (SCA077)"
 msgstr ""
 
@@ -3146,24 +3147,24 @@ msgstr ""
 msgid "own unit %s in the project"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyBlockFix.pas:135
+#: reDelphix/source/uRdxEmptyBlockFix.pas:124
 msgid "several \"begin\" on the reported line"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:181
+#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:170
 msgid "several \"on ... do\" handlers on this line - the finding could mean any of them"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyBlockFix.pas:286
+#: reDelphix/source/uRdxEmptyBlockFix.pas:275
 msgid "several objects in the \"with\" - by hand"
 msgstr ""
 
-#: reDelphix/source/uRdxGroupedDeclFix.pas:296
-#: reDelphix/source/uRdxGroupedDeclFix.pas:303
+#: reDelphix/source/uRdxGroupedDeclFix.pas:285
+#: reDelphix/source/uRdxGroupedDeclFix.pas:292
 msgid "something other than blanks and a single \"var\" stands before the names (attribute, visibility, \"class var\", \"threadvar\", another declaration)"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyExceptFix.pas:161
+#: reDelphix/source/uRdxEmptyExceptFix.pas:150
 msgid "something other than blanks stands between \"except\" and \"end\" (handler, statement, \";\" or \"else\")"
 msgstr ""
 
@@ -3175,61 +3176,61 @@ msgstr ""
 msgid "svn not found. Install TortoiseSVN WITH the option \"command line client tools\" or set the path to svn.exe in analyser.ini."
 msgstr ""
 
-#: reDelphix/source/uRdxAttrDuplicateFix.pas:120
+#: reDelphix/source/uRdxAttrDuplicateFix.pas:110
 msgid "text or a comment follows the attribute"
 msgstr ""
 
-#: reDelphix/source/uRdxIgnoreReasonFix.pas:149
+#: reDelphix/source/uRdxIgnoreReasonFix.pas:140
 msgid "text or a comment follows the attribute or sits inside it"
 msgstr ""
 
-#: reDelphix/source/uRdxGotoExitFix.pas:191
-#: reDelphix/source/uRdxGotoExitFix.pas:194
+#: reDelphix/source/uRdxGotoExitFix.pas:181
+#: reDelphix/source/uRdxGotoExitFix.pas:184
 msgid "the \"goto\" is not of the form \"goto Label;\" on one line"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:226
+#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:215
 msgid "the \"on\" does not start a handler of an except block"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyBlockFix.pas:233
+#: reDelphix/source/uRdxEmptyBlockFix.pas:222
 msgid "the \"with\" expression could be a type cast - \"Name(X);\" would not be a statement"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyBlockFix.pas:231
+#: reDelphix/source/uRdxEmptyBlockFix.pas:220
 msgid "the \"with\" expression is no call - nothing valid would remain as a statement"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyBlockFix.pas:205
-#: reDelphix/source/uRdxEmptyBlockFix.pas:215
-#: reDelphix/source/uRdxEmptyBlockFix.pas:225
+#: reDelphix/source/uRdxEmptyBlockFix.pas:194
+#: reDelphix/source/uRdxEmptyBlockFix.pas:204
+#: reDelphix/source/uRdxEmptyBlockFix.pas:214
 msgid "the \"with\" expression is not a plain call chain \"A.B(...)\""
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyBlockFix.pas:229
-#: reDelphix/source/uRdxEmptyBlockFix.pas:288
+#: reDelphix/source/uRdxEmptyBlockFix.pas:218
+#: reDelphix/source/uRdxEmptyBlockFix.pas:277
 msgid "the \"with\" header spans several lines"
 msgstr ""
 
-#: reDelphix/source/uRdxCategoryArgFix.pas:154
+#: reDelphix/source/uRdxCategoryArgFix.pas:144
 msgid "the attribute already has an argument or a list - not touched"
 msgstr ""
 
-#: reDelphix/source/uRdxIgnoreReasonFix.pas:120
-#: reDelphix/source/uRdxIgnoreReasonFix.pas:133
-#: reDelphix/source/uRdxIgnoreReasonFix.pas:140
+#: reDelphix/source/uRdxIgnoreReasonFix.pas:111
+#: reDelphix/source/uRdxIgnoreReasonFix.pas:124
+#: reDelphix/source/uRdxIgnoreReasonFix.pas:131
 msgid "the attribute is not \"[Ignore]\" or \"[Ignore()]\" alone on its line - it is in a group, behind another attribute or has an argument"
 msgstr ""
 
-#: reDelphix/source/uRdxCategoryArgFix.pas:134
+#: reDelphix/source/uRdxCategoryArgFix.pas:124
 msgid "the attribute stands behind another attribute on its line"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyBlockFix.pas:273
+#: reDelphix/source/uRdxEmptyBlockFix.pas:262
 msgid "the block is not empty"
 msgstr ""
 
-#: reDelphix/source/uRdxGotoExitFix.pas:215
+#: reDelphix/source/uRdxGotoExitFix.pas:205
 msgid "the bounds of the routine around the \"goto\" are not safe to read"
 msgstr ""
 
@@ -3238,49 +3239,49 @@ msgstr ""
 msgid "the clause would no longer be sorted (new SCA142)"
 msgstr ""
 
-#: reDelphix/source/uRdxTrailingCommaFix.pas:100
+#: reDelphix/source/uRdxTrailingCommaFix.pas:91
 msgid "the comma ends a list inside \"[...]\" (set or array literal)"
 msgstr ""
 
-#: reDelphix/source/uRdxNoSonarFix.pas:198
+#: reDelphix/source/uRdxNoSonarFix.pas:187
 msgid "the comment names NOSONAR more than once"
 msgstr ""
 
-#: reDelphix/source/uRdxNoSonarFix.pas:210
+#: reDelphix/source/uRdxNoSonarFix.pas:199
 msgid "the comment stands on a line of its own - which line the marker belongs to is unclear"
 msgstr ""
 
-#: reDelphix/source/uRdxAttrDuplicateFix.pas:308
+#: reDelphix/source/uRdxAttrDuplicateFix.pas:298
 msgid "the duplicate is on the last line of the file"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyBlockFix.pas:150
-#: reDelphix/source/uRdxEmptyBlockFix.pas:279
+#: reDelphix/source/uRdxEmptyBlockFix.pas:139
+#: reDelphix/source/uRdxEmptyBlockFix.pas:268
 msgid "the empty block does not belong to a \"with ... do\" - delete it or fill it by hand"
 msgstr ""
 
-#: reDelphix/source/uRdxGotoExitFix.pas:315
+#: reDelphix/source/uRdxGotoExitFix.pas:305
 msgid "the file declares its own \"Exit\" - it is not the procedure of the RTL"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:196
-#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:284
+#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:185
+#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:273
 msgid "the handler head is not on one line, or the \";\" is not on the line of \"do\""
 msgstr ""
 
-#: reDelphix/source/uRdxGotoExitFix.pas:188
+#: reDelphix/source/uRdxGotoExitFix.pas:178
 msgid "the line has more than one \"goto\""
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:784
+#: reDelphix/source/uRdxText.pas:760
 msgid "the line starts inside a comment or string"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:764
+#: reDelphix/source/uRdxText.pas:740
 msgid "the message has no column"
 msgstr ""
 
-#: reDelphix/source/uRdxAttrDuplicateFix.pas:249
+#: reDelphix/source/uRdxAttrDuplicateFix.pas:239
 msgid "the message names neither the attribute nor its first line"
 msgstr ""
 
@@ -3288,47 +3289,47 @@ msgstr ""
 msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
 msgstr ""
 
-#: reDelphix/source/uRdxTrailingCommaFix.pas:85
+#: reDelphix/source/uRdxTrailingCommaFix.pas:76
 msgid "the opening parenthesis was not found"
 msgstr ""
 
-#: reDelphix/source/uRdxParensFix.pas:146
+#: reDelphix/source/uRdxParensFix.pas:137
 msgid "the outer parenthesis belongs to a call or cast - \"(X)\" is an expression, \"X\" a variable"
 msgstr ""
 
-#: reDelphix/source/uRdxParensFix.pas:149
+#: reDelphix/source/uRdxParensFix.pas:140
 msgid "the outer parenthesis could belong to a constant (array, record) or to a comparison"
 msgstr ""
 
-#: reDelphix/source/uRdxParensFix.pas:138
+#: reDelphix/source/uRdxParensFix.pas:129
 msgid "the parentheses start the line - they could belong to a multi-line constant"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyExceptFix.pas:127
+#: reDelphix/source/uRdxEmptyExceptFix.pas:116
 msgid "the reported line carries several \"except\" - ambiguous"
 msgstr ""
 
-#: reDelphix/source/uRdxGotoExitFix.pas:242
+#: reDelphix/source/uRdxGotoExitFix.pas:232
 msgid "the routine contains an anonymous method - \"Exit\" would leave only that method if the \"goto\" sits in it"
 msgstr ""
 
-#: reDelphix/source/uRdxNativeIntFix.pas:243
+#: reDelphix/source/uRdxNativeIntFix.pas:234
 msgid "the subtraction continues with another 32-bit cast (\"- Integer(c)\") - the chain would stay half converted"
 msgstr ""
 
-#: reDelphix/source/uRdxNoSonarFix.pas:216
+#: reDelphix/source/uRdxNoSonarFix.pas:205
 msgid "the text after NOSONAR starts with \"noinspection\" - it would become a marker of its own"
 msgstr ""
 
-#: reDelphix/source/uRdxNativeIntFix.pas:238
+#: reDelphix/source/uRdxNativeIntFix.pas:229
 msgid "the two casts differ (Cardinal or LongWord against Integer or LongInt) - NativeInt or NativeUInt would be a guess"
 msgstr ""
 
-#: reDelphix/source/uRdxText.pas:819
+#: reDelphix/source/uRdxText.pas:795
 msgid "unclear what the statement belongs to (\"%s\" before it)"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyBlockFix.pas:247
+#: reDelphix/source/uRdxEmptyBlockFix.pas:236
 msgid "unexpected code after the empty block"
 msgstr ""
 
@@ -3361,16 +3362,16 @@ msgstr ""
 msgid "with statement can silently rebind identifiers - avoid it"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4379
+#: SCA.Engine/sources/Output/uFixHint.pas:4380
 msgid "with statement names multiple targets - ambiguous member lookup"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1276
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1166
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1169
 msgid "▶ Analyse"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2662
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1170
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1173
 msgid "📄 File"
 msgstr ""

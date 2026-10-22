@@ -116,6 +116,8 @@
         <DCCReference Include="..\SCA.Engine\sources\Common\uRuleCatalog.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uSCAConsts.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uSourceLineEdit.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uAtomicFile.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uScaConfigDir.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uYamlSubsetParser.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uAbstractNotImpl.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uAssertMessage.pas"/>
@@ -360,6 +362,7 @@
         <DCCReference Include="..\SCA.SharedUI\sources\uBulbDecision.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uEditorBulbButton.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uEditorBulbGeometry.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uEditorFindingStore.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uFindingGridRenderer.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uFindingsPropertiesFrame.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uFindingFilter.pas"/>

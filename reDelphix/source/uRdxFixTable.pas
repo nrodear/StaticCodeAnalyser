@@ -145,7 +145,8 @@ uses
   uRdxRoutineFixes,  // SCA164, SCA147
   uRdxCleanupFixes,  // SCA070, SCA053
   uRdxTryFixes,      // SCA009, SCA001, SCA109, SCA153, SCA156
-  uRdxResultFixes,   // SCA096, SCA097, SCA121, SCA196
+  uRdxResultFixes,   // SCA121, SCA196
+  uRdxInheritedFixes, // SCA096, SCA097
   uRdxMagicFixes,    // SCA014
   uRdxHttpsFix,         // SCA115
   uRdxParensFix,        // SCA094
@@ -978,7 +979,7 @@ var
   P : TRdxResultPlan;
 begin
   Result := TRdxFixFrame.Run<TRdxResultPlan>(
-    ResultForm(TRdxResultFixes.ConstructorInherited),
+    ResultForm(TRdxInheritedFixes.ConstructorInherited),
     APlaces, ALines, AFinding, P);
   Result.ChangesBehavior := P.Changes;
   if not Result.Enabled then Exit;
@@ -996,7 +997,7 @@ var
   P : TRdxResultPlan;
 begin
   Result := TRdxFixFrame.Run<TRdxResultPlan>(
-    ResultForm(TRdxResultFixes.DestructorInherited),
+    ResultForm(TRdxInheritedFixes.DestructorInherited),
     APlaces, ALines, AFinding, P);
   Result.ChangesBehavior := P.Changes;
   if not Result.Enabled then Exit;
