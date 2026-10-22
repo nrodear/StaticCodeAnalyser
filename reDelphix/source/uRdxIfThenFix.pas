@@ -139,17 +139,14 @@ const
     'system.strutils');
   IFTHEN_QUALIFIERS: array[0..3] of string = ('math.', 'system.math.',
     'strutils.', 'system.strutils.');
-  // Davor steht eine Anweisung fuer sich (keine Zweig-Anweisung).
-  STMT_PREV: array[0..7] of string = (';', 'begin', 'try', 'finally',
-    'except', 'repeat', 'initialization', 'finalization');
+  // Davor steht eine Anweisung fuer sich (keine Zweig-Anweisung):
+  // uRdxCodeMap.LIST_PREV; dahinter endet eine Anweisung ohne ';':
+  // uRdxCodeMap.LIST_ENDS; die Suche nach einem with davor endet an
+  // uRdxCodeMap.UNIT_BOUNDS. Bis zur Hygiene-Welle H1 standen hier
+  // byte-gleiche Kopien (STMT_PREV, STMT_END_WORDS, UNIT_BOUNDS).
   // Davor ist die Anweisung ein Zweig ohne begin..end, ein case-Zweig oder
   // markiert.
   BRANCH_PREV: array[0..3] of string = ('then', 'else', 'do', ':');
-  // Dahinter endet eine Anweisung ohne ';'.
-  STMT_END_WORDS: array[0..3] of string = ('end', 'until', 'except',
-    'finally');
-  // Inline-Deklaration statt Zuweisung.
-  DECL_WORDS: array[0..1] of string = ('var', 'const');
   // Woerter, die in einem einfachen Zuweisungsziel nicht stehen.
   NOT_IN_TARGET: array[0..37] of string = ('if', 'then', 'else', 'do',
     'while', 'for', 'to', 'downto', 'case', 'of', 'with', 'repeat', 'until',
@@ -162,9 +159,6 @@ const
     '@');
   // Damit beginnt eine anonyme Methode (in einem Argument).
   ANON_WORDS: array[0..2] of string = ('function', 'procedure', 'begin');
-  // Hier endet die Suche nach einem with davor.
-  UNIT_BOUNDS: array[0..6] of string = ('implementation', 'interface',
-    'initialization', 'finalization', 'unit', 'program', 'library');
 
 type
   // Die Token einer Fundstelle.
@@ -219,12 +213,12 @@ begin
   AStart := NextToken(AMap, ALine, 1);
   if Semi or not FirstOnLine(AMap, AStart) then
     Exit(_(R_IFTHEN_NOT_ALONE));
-  if InList(AStart.Low, DECL_WORDS) then
+  if InList(AStart.Low, INLINE_DECLS) then
     Exit(_(R_IFTHEN_INLINE, [TokText(AMap, AStart)]));
   P := Before(AMap, AStart);
   if InList(P.Low, BRANCH_PREV) then
     Exit(_(R_IFTHEN_BRANCH, [TokText(AMap, P)]));
-  if not InList(P.Low, STMT_PREV) then
+  if not InList(P.Low, LIST_PREV) then
     Exit(MsgUnclearStatementOwner(TokText(AMap, P)));
   Result := '';
 end;
@@ -313,7 +307,7 @@ begin
     ALast := N;
     ASemi := ';';
   end
-  else if not InList(N.Low, STMT_END_WORDS) then
+  else if not InList(N.Low, LIST_ENDS) then
     Exit(_(R_IFTHEN_NOT_WHOLE));
   if not TailIsQuiet(AMap, ALast.Line, ALast.EndCol - 1) then
     Exit(_(R_IFTHEN_TAIL));

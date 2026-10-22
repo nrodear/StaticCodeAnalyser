@@ -161,13 +161,6 @@ begin
   Result := (AName <> '') and (AType <> '');
 end;
 
-// 'IFoo' -> True, 'TBase' -> False: die Delphi-Konvention I +
-// Grossbuchstabe (wie uRdxRoutineFixes.InterfaceStyle).
-function InterfaceStyle(const S: string): Boolean;
-begin
-  Result := (Length(S) >= 2) and (S[1] = 'I') and CharInSet(S[2], ['A'..'Z']);
-end;
-
 // Die Gruppe der Implementierung: ohne Modifizierer, genau ein Typ-Token,
 // der Typ der Meldung. '' oder der Grund.
 function GroupReason(AMap: TRdxCodeMap; const ASite: TRdxParamSite;
@@ -243,7 +236,7 @@ begin
   Names := TRdxBlocks.HeritageOf(AMap, ASite.ClassHead.ClassTok);
   if Length(Names) > 1 then
     Result := _(R_CS_IFACE, [Names[1]])
-  else if (Length(Names) = 1) and InterfaceStyle(Names[0]) then
+  else if (Length(Names) = 1) and LooksLikeInterfaceName(Names[0]) then
     Result := _(R_CS_IFACE, [Names[0]]);
 end;
 

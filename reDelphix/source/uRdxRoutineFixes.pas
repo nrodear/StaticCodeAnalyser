@@ -186,9 +186,7 @@ const
   DISPATCH_MEMBERS: array[0..3] of string = ('gettypeinfocount',
     'gettypeinfo', 'getidsofnames', 'invoke');
   MAX_INTERFACES = 64;
-  COND_OPEN: array[0..3] of string = ('if', 'ifdef', 'ifndef', 'ifopt');
   COND_MID: array[0..1] of string = ('else', 'elseif');
-  COND_CLOSE: array[0..1] of string = ('endif', 'ifend');
   LINK_WORDS: array[0..1] of string = ('l', 'link');
   // Property-Teile, hinter denen ein Methodenname Accessor ist.
   ACCESSOR_WORDS: array[0..4] of string = ('read', 'write', 'stored', 'add',
@@ -599,7 +597,7 @@ function BalanceStep(var AStack: string; const AWord: string;
   ALine: Integer): string;
 begin
   Result := '';
-  if InList(AWord, COND_OPEN) then
+  if InList(AWord, COND_OPENERS) then
     AStack := AStack + STACK_COND
   else if AWord = 'region' then
     AStack := AStack + STACK_REGION
@@ -611,7 +609,7 @@ begin
   end
   else if AWord = 'endregion' then
     Result := PopDirective(AStack, STACK_REGION, AWord, ALine)
-  else if InList(AWord, COND_CLOSE) then
+  else if InList(AWord, COND_CLOSERS) then
     Result := PopDirective(AStack, STACK_COND, AWord, ALine)
   else
     Result := Format('Compiler-Direktive {$%s} in Zeile %d - sie wirkt '
@@ -1027,14 +1025,6 @@ begin
   end;
 end;
 
-// 'IFoo' -> True, 'Item' -> False: die Delphi-Konvention I +
-// Grossbuchstabe, in Original-Schreibung (wie der Detektor,
-// Sca147IsInterfaceStyleName).
-function InterfaceStyle(const S: string): Boolean;
-begin
-  Result := (Length(S) >= 2) and (S[1] = 'I') and CharInSet(S[2], ['A'..'Z']);
-end;
-
 // Die Interfaces der Vorfahrenliste: ab dem zweiten Eintrag jeder (Delphi-
 // Grammatik), der erste nur, wenn er wie ein Interface heisst oder in der
 // Datei als Interface steht - 'class(IFremd)' hat die Basis TObject.
@@ -1048,7 +1038,7 @@ begin
   Dummy := nil;
   Names := TRdxBlocks.HeritageOf(AMap, AClass);
   for i := 0 to High(Names) do
-    if (i > 0) or InterfaceStyle(Names[i])
+    if (i > 0) or LooksLikeInterfaceName(Names[i])
        or InterfaceParents(AMap, LowerCase(Names[i]), Dummy) then
       AddText(Result, Names[i]);
 end;

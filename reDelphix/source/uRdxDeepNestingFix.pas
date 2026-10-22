@@ -147,8 +147,6 @@ const
   COND_EXPR_WORDS: array[0..1] of string = ('then', 'else');
   // Routinen mit Rueckgabewert.
   RESULT_HEADS: array[0..1] of string = ('function', 'operator');
-  // Inline-Deklarationen, die an ihrem Block haengen.
-  INLINE_WORDS: array[0..1] of string = ('var', 'const');
   // Kein einfacher Operand: Operatoren und 'inherited'.
   NOT_OPERAND: array[0..11] of string = ('and', 'or', 'xor', 'not', 'div',
     'mod', 'shl', 'shr', 'in', 'is', 'as', 'inherited');
@@ -202,31 +200,19 @@ begin
   Result := MsgMovedSuffix(_(R_DN_MOVED, [AKind]));
 end;
 
-// Die innerste Routine mit begin..end-Rumpf um AAt (wie uRdxGotoExitFix).
-// '' oder der Grund.
+// Die innerste Routine mit begin..end-Rumpf um AAt mit den Gruenden
+// dieser Unit; '' oder der Grund. Die Suche ist der Baustein
+// uRdxBlocks.BeginBodyAround (bis zur Hygiene-Welle H1 hier als Kopie
+// ausgeschrieben): ein Kopf mit unsicheren Grenzen beendet sie.
 function EnclosingRoutine(AMap: TRdxCodeMap; const AAt: TRdxToken;
   out ARoutine: TRdxRoutine): string;
-var
-  T : TRdxToken;
-  S : TRdxHeadStep;
 begin
-  ARoutine := Default(TRdxRoutine);
-  T := AAt;
-  while TRdxBlocks.HeadBefore(AMap, T, UNIT_BOUNDS, S) do
-  begin
-    if S.Stop then
-      Break;
-    if S.Reason <> '' then
-      Exit(_(R_DN_BOUNDS));
-    if (S.Routine.Body.Low = KW_BEGIN)
-       and TokBefore(S.Routine.Body, AAt)
-       and TokBefore(AAt, S.Routine.EndTok) then
-    begin
-      ARoutine := S.Routine;
-      Exit('');
-    end;
+  case BeginBodyAround(AMap, AAt, ARoutine) of
+    rbfUnsure: Result := _(R_DN_BOUNDS);
+    rbfNone:   Result := _(R_DN_NO_ROUTINE);
+  else
+    Result := '';
   end;
-  Result := _(R_DN_NO_ROUTINE);
 end;
 
 // Deklariert die Datei einen eigenen Bezeichner 'Exit' (wie
@@ -482,7 +468,7 @@ begin
         Inc(Depth)
       else if (T.Low = KW_END) or (T.Low = 'until') then
         Dec(Depth)
-      else if (Depth = 0) and (Paren = 0) and InList(T.Low, INLINE_WORDS)
+      else if (Depth = 0) and (Paren = 0) and InList(T.Low, INLINE_DECLS)
          and (P.Low <> KW_FOR) then
         Exit(_(R_DN_INLINE));
     end;

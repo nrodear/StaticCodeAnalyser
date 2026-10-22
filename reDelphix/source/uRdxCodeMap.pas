@@ -77,6 +77,21 @@ const
   // initialization/finalization) ist eine andere Menge.
   UNIT_BOUNDS: array[0..6] of string = ('implementation', 'interface',
     'initialization', 'finalization', 'unit', 'program', 'library');
+  // Damit beginnt im Rumpf einer Routine eine Inline-Deklaration ('var X',
+  // 'const X'). Bis zur Hygiene-Welle H1 je eine Kopie in uRdxStructFixes,
+  // uRdxTrySpan, uRdxDeepNestingFix, uRdxLocalConstantNameFix (als
+  // INLINE_WORDS), uRdxHomoglyphFix (INLINE_DECL) und uRdxIfThenFix
+  // (DECL_WORDS); uRdxIntroPlan.INLINE_DECL_WORDS nimmt 'for' dazu.
+  INLINE_DECLS: array[0..1] of string = ('var', 'const');
+  // Bedingte Uebersetzung: diese Direktivenwoerter oeffnen bzw. schliessen
+  // einen Block ({$IF}, {$IFDEF}, {$IFNDEF}, {$IFOPT} / {$ENDIF},
+  // {$IFEND}). Bis zur Hygiene-Welle H1 je eine Kopie (COND_OPEN,
+  // COND_CLOSE) in uRdxRoutineFixes, uRdxDebugOutputFix,
+  // uRdxInsecureRandomFix und uRdxThreadResumeFix; die Zwischenwoerter
+  // (else, elseif) fuehren uRdxRoutineFixes und uRdxDebugOutputFix selbst,
+  // uRdxCompilerTraces.CONDITION_WORDS ist eine andere Menge.
+  COND_OPENERS: array[0..3] of string = ('if', 'ifdef', 'ifndef', 'ifopt');
+  COND_CLOSERS: array[0..1] of string = ('endif', 'ifend');
   // Die reservierten Woerter von Delphi: als Bezeichner nur mit '&'. Bis
   // dahin byte-gleich in uRdxCleanupFixes (SCA053: kein Variablenname) und
   // uRdxKeywordCaseFix (SCA064).
@@ -392,6 +407,12 @@ function HasAsciiWord(const AText, AWord: string): Boolean;
 // Das letzte Glied eines Pfads ('TOuter.TInner' -> 'TInner'). Bis Charge
 // H5c in uRdxRoutineFixes und als ShortNameOf in uRdxResultFixes.
 function LastPart(const S: string): string;
+// 'IFoo' -> True, 'Item' -> False: die Delphi-Konvention I +
+// Grossbuchstabe (ASCII), in Original-Schreibung - wie der Detektor
+// (Sca147IsInterfaceStyleName). Bis zur Hygiene-Welle H1 byte-gleich als
+// InterfaceStyle in uRdxRoutineFixes und uRdxConstStringParameterFix und
+// als LooksLikeInterface in uRdxLineFixes und uRdxAvoidOutFix.
+function LooksLikeInterfaceName(const S: string): Boolean;
 // Steht in AText ein Unterdrueck- oder Absichtsmarker - 'noinspection'
 // bzw. die Marker von SCA019 in jeder Schreibweise, 'XXX' nur gross (klein
 // ist es dort ein Platzhalter)? '' oder der Grund. SCA070 prueft den
@@ -695,14 +716,20 @@ const
 // MAX_NUMBER erreicht, endet das Lesen (kein Ueberlauf - der Aufrufer
 // sieht eine Zahl >= MAX_NUMBER und lehnt ab). Bis zur Folgewelle des
 // Wochen-Reviews (G09-08) in uRdxCleanupFixes; die anderen Zahlenleser der
-// Meldungen hatten keine Grenze.
+// Meldungen hatten keine Grenze. Seit der Folgewelle gilt sie ueber
+// NumberAfterKey auch fuer ColumnFromMessage und alle frueheren Kopien
+// (uRdxTrailingBlanksFix, uRdxGotoExitFix, uRdxLineFixes): statt einer
+// uebergelaufenen Zahl sehen sie eine >= MAX_NUMBER, die auf keine Zeile
+// passt.
 function NumberAt(const S: string; AAt: Integer): Integer;
 // Die Zahl direkt hinter dem ersten AKey in AText (NumberAt); 0, wenn AKey
 // fehlt. Der eine Leser fuer 'at column N' (ColumnFromMessage), 'from
 // column N' (uRdxTrailingBlanksFix), '(col N)' (uRdxGotoExitFix) und
 // 'currently at column N' (uRdxLineFixes) - bis zur Folgewelle des
-// Wochen-Reviews (G09-08/G09-30) je eine Kopie der Ziffernschleife. Nicht
-// uRdxCompilerTraces.NumberAfter (Praefix am Wortanfang, -1 ohne Zahl).
+// Wochen-Reviews (G09-08/G09-30) je eine Kopie der Ziffernschleife, ohne
+// Grenze; seitdem endet das Lesen fuer alle diese Leser bei MAX_NUMBER
+// (NumberAt). Nicht uRdxCompilerTraces.NumberAfter (Praefix am
+// Wortanfang, -1 ohne Zahl).
 function NumberAfterKey(const AText, AKey: string): Integer;
 // 'at column N' aus einer Meldung; 0 = nicht vorhanden. Bis 2026-10-10 in
 // uRdxSimpleFixes, seit SCA101 auch fuer uRdxStructFixes.
@@ -1444,6 +1471,11 @@ end;
 function LastPart(const S: string): string;
 begin
   Result := Copy(S, LastDelimiter('.', S) + 1, MaxInt);
+end;
+
+function LooksLikeInterfaceName(const S: string): Boolean;
+begin
+  Result := (Length(S) >= 2) and (S[1] = 'I') and CharInSet(S[2], ['A'..'Z']);
 end;
 
 function MarkerReason(const AText: string): string;

@@ -117,14 +117,11 @@ const
   STMT_PREV: array[0..10] of string = (';', 'begin', 'try', 'finally',
     'except', 'repeat', 'initialization', 'finalization', 'then', 'else',
     'do');
-  // Dahinter endet eine Anweisung ohne ';'.
-  STMT_END_WORDS: array[0..3] of string = ('end', 'until', 'except',
-    'finally');
+  // Dahinter endet eine Anweisung ohne ';': uRdxCodeMap.LIST_ENDS (bis zur
+  // Hygiene-Welle H1 hier als STMT_END_WORDS kopiert). Die Suche nach
+  // einem with davor endet an uRdxCodeMap.UNIT_BOUNDS.
   // Damit beginnt eine anonyme Methode (in einem Argument).
   ANON_WORDS: array[0..2] of string = ('function', 'procedure', 'begin');
-  // Hier endet die Suche nach einem with davor.
-  UNIT_BOUNDS: array[0..6] of string = ('implementation', 'interface',
-    'initialization', 'finalization', 'unit', 'program', 'library');
 
 type
   // Die Token einer Fundstelle.
@@ -217,7 +214,7 @@ begin
   end
   else if N.Low = 'else' then
     Exit(_(R_ASSERTSE_DANGLING))
-  else if not InList(N.Low, STMT_END_WORDS) then
+  else if not InList(N.Low, LIST_ENDS) then
     Exit(_(R_ASSERTSE_FORM));
   if not TailIsQuiet(AMap, ALast.Line, ALast.EndCol - 1) then
     Exit(_(R_ASSERTSE_TAIL));

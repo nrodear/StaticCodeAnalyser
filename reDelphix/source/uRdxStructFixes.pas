@@ -128,8 +128,8 @@ const
   NOT_IN_BRANCH: array[0..16] of string = ('if', 'then', 'do', 'of',
     'begin', 'case', 'try', 'asm', 'record', 'repeat', 'while', 'for',
     'with', 'procedure', 'function', 'var', 'const');
-  // In einer Anweisungsliste (else eines case/except) gesperrt.
-  INLINE_DECLS: array[0..1] of string = ('var', 'const');
+  // In einer Anweisungsliste (else eines case/except) gesperrt:
+  // uRdxCodeMap.INLINE_DECLS (bis zur Hygiene-Welle H1 hier kopiert).
   // Die Besitzer eines do (StatementOwner); die eines then (IF_OWNERS) und
   // die Listen der Rueckwaerts-Suchen stehen bei FindOwner/ElseOwner in
   // uRdxCodeMap.

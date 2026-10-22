@@ -168,7 +168,9 @@ type
     // heisst, entscheidet die Frage des Aufrufers - seine Politik, eine
     // kleine Huelle: uRdxHandOver.RoutineAround (Rumpf um ein Token,
     // unsichere Koepfe uebergangen, ein Abschnittswort der Unit beendet die
-    // Suche) und uRdxResultFixes.EnclosingRoutine (SCA196: Rumpf um eine
+    // Suche), BeginBodyAround (begin..end-Rumpf um ein Token, der erste
+    // unsichere Kopf beendet die Suche; fuer die Quick-Fix-Units) und
+    // uRdxResultFixes.EnclosingRoutine (SCA196: Rumpf um eine
     // Zeile, der erste unsichere Kopf beendet die Suche mit seinem Grund).
     // Bis Charge B2S-b lief die Suche in beiden als eigene Kopie, Token fuer
     // Token bzw. Zeile fuer Zeile. Die SQL-Vorlage fragt statt dessen ihren
@@ -244,6 +246,25 @@ function EnclosingClass(AMap: TRdxCodeMap; const AHead: TRdxToken;
 // Das end des Klassenrumpfs ab AClass (dem Token 'class'); Low = ''
 // ohne. Seit Charge B2S-b oeffentlich (SCA147: Include im Klassenrumpf).
 function ClassEnd(AMap: TRdxCodeMap; const AClass: TRdxToken): TRdxToken;
+
+type
+  // Ergebnis von BeginBodyAround: gefunden, ein Kopf mit unsicheren
+  // Grenzen davor, keine Routine um die Stelle.
+  TRdxBodyFind = (rbfFound, rbfUnsure, rbfNone);
+
+// Die innerste Routine mit begin..end-Rumpf um AAt: von AAt rueckwaerts
+// (TRdxBlocks.HeadBefore bis UNIT_BOUNDS) der erste Kopf, dessen Rumpf
+// 'begin' AAt umfasst (Body < AAt < EndTok) -> rbfFound mit ARoutine. Ein
+// Kopf mit unsicheren Grenzen beendet die Suche - er koennte der gesuchte
+// sein (rbfUnsure); ein Abschnittswort der Unit oder der Dateianfang:
+// rbfNone. Die Gruende dazu nennt der Aufrufer in seinen msgids. Bis zur
+// Hygiene-Welle H1 je eine Kopie EnclosingRoutine, gleich bis auf die
+// Gruende, in uRdxGotoExitFix, uRdxDeepNestingFix, uRdxLookupHoistFix,
+// uRdxObjectListFix und uRdxParamNameFix. Andere Politik:
+// uRdxHandOver.RoutineAround (unsichere Koepfe uebergangen, jeder Rumpf)
+// und uRdxResultFixes.EnclosingRoutine (Zeilen statt Token).
+function BeginBodyAround(AMap: TRdxCodeMap; const AAt: TRdxToken;
+  out ARoutine: TRdxRoutine): TRdxBodyFind;
 
 type
   // Die Pruefung eines gelesenen Includes AFile (Zeilen und Code-Sicht):
@@ -1328,6 +1349,31 @@ begin
     T := P;
   end;
   Result := False;
+end;
+
+function BeginBodyAround(AMap: TRdxCodeMap; const AAt: TRdxToken;
+  out ARoutine: TRdxRoutine): TRdxBodyFind;
+var
+  T : TRdxToken;
+  S : TRdxHeadStep;
+begin
+  ARoutine := Default(TRdxRoutine);
+  T := AAt;
+  while TRdxBlocks.HeadBefore(AMap, T, UNIT_BOUNDS, S) do
+  begin
+    if S.Stop then
+      Break;
+    if S.Reason <> '' then
+      Exit(rbfUnsure);
+    if (S.Routine.Body.Low = 'begin')
+       and TokBefore(S.Routine.Body, AAt)
+       and TokBefore(AAt, S.Routine.EndTok) then
+    begin
+      ARoutine := S.Routine;
+      Exit(rbfFound);
+    end;
+  end;
+  Result := rbfNone;
 end;
 
 class function TRdxBlocks.FindMethodDecls(AMap: TRdxCodeMap;

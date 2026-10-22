@@ -166,8 +166,7 @@ class function TRdxAvoidOutFix.IsManagedType(const ATypeText: string): Boolean;
 var
   T : string;
 begin
-  T := LowerCase(StringReplace(StringReplace(ATypeText, ' ', '',
-    [rfReplaceAll]), #9, '', [rfReplaceAll]));
+  T := Squeezed(ATypeText);   // uRdxCodeMap: ohne Leerzeichen und Tabs, klein
   if Copy(T, 1, Length(SYSTEM_PREFIX)) = SYSTEM_PREFIX then
     Delete(T, 1, Length(SYSTEM_PREFIX));
   Result := not InList(T, PLAIN_TYPES);
@@ -449,13 +448,6 @@ begin
     Result := _(R_OUT_DIRECTIVE, [AName, W]);
 end;
 
-// Sieht der Name aus wie ein Interface ('IFoo')?
-function LooksLikeInterface(const AName: string): Boolean;
-begin
-  Result := (Length(AName) >= 2) and (AName[1] = 'I')
-    and CharInSet(AName[2], ['A'..'Z']);
-end;
-
 // Die Implementierung AImpl mit Rumpf: '' oder der Grund; ihre Grenzen in
 // AR.
 function ImplReason(AMap: TRdxCodeMap; const AImpl: TRdxOutHead;
@@ -491,7 +483,7 @@ begin
     Exit(_(R_OUT_PUBLISHED, [AName, Disp]));
   Heritage := TRdxBlocks.HeritageOf(AMap, CH.ClassTok);
   if (Length(Heritage) > 1)
-     or ((Length(Heritage) = 1) and LooksLikeInterface(Heritage[0])) then
+     or ((Length(Heritage) = 1) and LooksLikeInterfaceName(Heritage[0])) then
     Exit(_(R_OUT_INTERFACES, [Disp, AName]));
   if TRdxBlocks.MethodDecl(AMap, HeadStart(AMap, ADecl.Kw), DR) <> '' then
     Exit(_(R_OUT_HEAD_UNSAFE, [AName]));

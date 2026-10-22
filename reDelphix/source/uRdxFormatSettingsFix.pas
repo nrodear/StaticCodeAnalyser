@@ -158,6 +158,7 @@ uses
   System.SysUtils,
   uRefactorInfo,        // TRefactorSpan.Make
   uRdxText,             // _(), MsgMovedSuffix (E29, nie uLocalization)
+  uRdxRecipes,          // TRdxRecipes.LineLooksFpcAware (FpcTellLine)
   uRdxCompilerTraces;   // OldCompilerTrace, TRdxCompilerFloor, FLOOR_INLINE_DECL
 
 const
@@ -195,10 +196,6 @@ const
   SCOPE_STOPS: array[0..3] of string = ('implementation', 'initialization',
     'finalization', 'interface');
   MAX_FOLLOW_LINES = 30;
-  // Spuren einer FPC-Weiche, ohne Leerraum und klein - dieselbe Liste wie
-  // TRdxRecipes.FPC_TELLS (uRdxRecipes darf diese Unit nicht binden).
-  FPC_TELLS: array[0..5] of string = ('{$mode', '(*$mode', '$ifdeffpc',
-    '$ifndeffpc', 'defined(fpc', 'fpc_fullversion');
   // Die globale Variable FormatSettings: Delphi XE (VER220, CompilerVersion
   // 22, COMPILER15/DELPHI15 der JEDI-Zaehlung, RTL220); FPC ab 2.6. Wer nach
   // XE fragt, baut auch davor (s. uRdxCompilerTraces). ProjectVersion liest
@@ -546,26 +543,19 @@ begin
 end;
 
 // Die erste Zeile mit FPC-Weiche oder FPC-Modus ('{$IFDEF FPC}',
-// '{$mode objfpc}', '{$IF FPC_FULLVERSION ..}'); 0 ohne. Dieselbe Regel wie
-// TRdxRecipes.LineLooksFpcAware - ein Treffer im Kommentar macht nur
-// vorsichtig.
+// '{$mode objfpc}', '{$IF FPC_FULLVERSION ..}'); 0 ohne. Die eine Regel von
+// reDelphix: TRdxRecipes.LineLooksFpcAware - ein Treffer im Kommentar macht
+// nur vorsichtig. Bis zur Hygiene-Welle H1 stand hier eine Kopie der Liste
+// mit der alten Bedingung "ein '$' auf der Zeile"; seitdem zaehlt auch die
+// Folgezeile einer mehrzeiligen Direktive ('  or Defined(FPC)}').
 function FpcTellLine(AMap: TRdxCodeMap): Integer;
 var
-  Li, i : Integer;
-  S     : string;
+  Li : Integer;
 begin
   Result := 0;
   for Li := 1 to AMap.LineCount do
-  begin
-    S := AMap.Raw(Li);
-    if Pos('$', S) = 0 then
-      Continue;
-    S := LowerCase(StringReplace(StringReplace(S, ' ', '', [rfReplaceAll]),
-      #9, '', [rfReplaceAll]));
-    for i := Low(FPC_TELLS) to High(FPC_TELLS) do
-      if Pos(FPC_TELLS[i], S) > 0 then
-        Exit(Li);
-  end;
+    if TRdxRecipes.LineLooksFpcAware(AMap.Raw(Li)) then
+      Exit(Li);
 end;
 
 // Die Fragen an die ganze Datei (s. Kopf); '' oder der Grund. ANames: die

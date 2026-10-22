@@ -150,8 +150,6 @@ const
   // einer Liste: Parameter, Aufzaehlung, Variablen ('(A, B: T)', '(X)').
   DECL_PREV: array[0..2] of string = (';', '(', ',');
   DECL_NEXT: array[0..3] of string = (',', ')', ';', '=');
-  // Inline-Deklarationen im Rumpf.
-  INLINE_WORDS: array[0..1] of string = ('var', 'const');
 
 class function TRdxLocalConstantNameFix.UpperSnakeOf(
   const AName: string): string;
@@ -395,7 +393,7 @@ begin
       Exit(False);
     Q := Before(AMap, W);
   end;
-  Result := InList(Q.Low, INLINE_WORDS) and IsKeywordAfter(Q, Before(AMap, Q));
+  Result := InList(Q.Low, INLINE_DECLS) and IsKeywordAfter(Q, Before(AMap, Q));
 end;
 
 // Im Rumpf: steht T im Kopf oder Deklarationsteil einer anonymen Methode

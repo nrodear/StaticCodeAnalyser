@@ -371,13 +371,6 @@ begin
       + 'ein Index; der Cast koennte zum Uebersetzen noetig sein';
 end;
 
-// Ein Interface-Cast ('IFoo(X)')? I und ein Grossbuchstabe.
-function LooksLikeInterface(const AType: string): Boolean;
-begin
-  Result := (Length(AType) >= 2) and (AType[1] = 'I')
-    and CharInSet(AType[2], ['A'..'Z']);
-end;
-
 class function TRdxLineFixes.CastFree(AMap: TRdxCodeMap; ALine: Integer;
   const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
@@ -390,7 +383,7 @@ begin
   Target := CastTargetOf(AMessage);
   if Target = '' then
     AReason := 'Typname fehlt in der Meldung'
-  else if LooksLikeInterface(Target) then
+  else if LooksLikeInterfaceName(Target) then
     AReason := Format('%s ist ein Interface - %s(X).Free riefe dessen '
       + 'Methode Free, X.Free die von TObject', [Target, Target])
   else

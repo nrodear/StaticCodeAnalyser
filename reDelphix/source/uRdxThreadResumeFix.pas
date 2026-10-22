@@ -138,10 +138,13 @@ const
   // ... hinter Resume endet sie.
   STMT_NEXT: array[0..2] of string = (';', 'end', 'else');
   // Vor 'X := T.Create(True)': die Anweisung steht in einer
-  // Anweisungsliste, nicht als Zweig.
-  LIST_PREV: array[0..2] of string = (';', 'begin', 'try');
-  // Davor steht X nicht als blosser Bezeichner.
-  QUALIFIERS: array[0..2] of string = ('.', '@', '&');
+  // Anweisungsliste, nicht als Zweig. Bewusst enger als
+  // uRdxCodeMap.LIST_PREV (ohne finally/except/repeat/initialization/
+  // finalization) - bis zur Hygiene-Welle H1 hiess die Liste LIST_PREV und
+  // verdeckte den zentralen Namen.
+  STMT_LIST_PREV: array[0..2] of string = (';', 'begin', 'try');
+  // Davor steht X nicht als blosser Bezeichner: uRdxCodeMap.IDENT_PREFIXES
+  // (bis zur Hygiene-Welle H1 hier als QUALIFIERS mengengleich kopiert).
   // Zwischen Create(True) und Resume - Schleifen, Spruenge, with und
   // anonyme Methoden ('procedure'/'function' als Wert; ein asm-Block zaehlt
   // als Oeffner der end-Bilanz).
@@ -149,12 +152,8 @@ const
     'goto', 'with', 'procedure', 'function');
   // Vor Resume: eine Schleife bzw. ein with-Rumpf.
   LOOP_PREV: array[0..1] of string = ('do', 'repeat');
-  // Grenzen der Suche nach der Routine um das Resume (wie uRdxTryFixes).
-  UNIT_BOUNDS: array[0..6] of string = ('implementation', 'interface',
-    'initialization', 'finalization', 'unit', 'program', 'library');
-  // Bedingte Uebersetzung: oeffnet bzw. schliesst einen Block.
-  COND_OPEN: array[0..3] of string = ('if', 'ifdef', 'ifndef', 'ifopt');
-  COND_CLOSE: array[0..1] of string = ('endif', 'ifend');
+  // Die Suche nach der Routine um das Resume endet an
+  // uRdxCodeMap.UNIT_BOUNDS (bis zur Hygiene-Welle H1 hier kopiert).
   // Parameter-Vorsaetze im Konstruktorkopf.
   PARAM_MODIFIERS: array[0..3] of string = ('const', 'var', 'out', 'constref');
   // TThread.Start: ab Delphi 2010 (VER210, CompilerVersion 21, COMPILER14,
@@ -193,7 +192,7 @@ function IsPlainName(AMap: TRdxCodeMap; const T: TRdxToken;
   const ALowName: string): Boolean;
 begin
   Result := SameIdent(T.Low, ALowName)
-    and not InList(Before(AMap, T).Low, QUALIFIERS);
+    and not InList(Before(AMap, T).Low, IDENT_PREFIXES);
 end;
 
 // Die Tiefe der bedingten Uebersetzung vor (ALine, ACol): {$IF}, {$IFDEF},
@@ -215,9 +214,9 @@ begin
       if OpensDirective(AMap, Li, Co) then
       begin
         W := DirectiveWord(AMap, Li, Co, Arg);
-        if InList(W, COND_OPEN) then
+        if InList(W, COND_OPENERS) then
           Inc(Result)
-        else if InList(W, COND_CLOSE) and (Result > 0) then
+        else if InList(W, COND_CLOSERS) and (Result > 0) then
           Dec(Result);
       end;
   end;
@@ -279,7 +278,7 @@ begin
   if n > 1 then
     Exit(_(R_TR_MANY, [ALine, n, AName]));
   Prev := Before(AMap, ARecv);
-  if InList(Prev.Low, QUALIFIERS) then
+  if InList(Prev.Low, IDENT_PREFIXES) then
     Exit(_(R_TR_QUALIFIED, [AName]));
   if InList(Prev.Low, LOOP_PREV) then
     Exit(_(R_TR_LOOP, [AName, Prev.Low]));
@@ -378,7 +377,7 @@ begin
   Start := ASite.Target;
   if Before(AMap, Start).Low = 'var' then
     Start := Before(AMap, Start);
-  if not InList(Before(AMap, Start).Low, LIST_PREV) then
+  if not InList(Before(AMap, Start).Low, STMT_LIST_PREV) then
     Exit(_(R_TR_BRANCH, [AName]));
   Result := '';
 end;
