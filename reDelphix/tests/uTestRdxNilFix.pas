@@ -53,6 +53,7 @@ implementation
 uses
   System.Classes,
   uRdxCodeMap, uRdxSimpleFixes, uRdxRtlTypes,
+  uRdxTypeProof,     // FieldTypeOf (Folgewelle A4)
   uTestRdxTextKit;   // Join, Apply
 
 // ---- Helfer ----
@@ -341,7 +342,7 @@ begin
   try
     SL.Text := ASource;
     Map := TRdxCodeMap.Create(SL);
-    Result := TRdxSimpleFixes.FieldTypeOf(Map, AName);
+    Result := TRdxTypeProof.FieldTypeOf(Map, AName);
   finally
     Map.Free;
     SL.Free;
