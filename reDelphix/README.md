@@ -67,7 +67,7 @@ QUICKFIXES.md                     alle Quick-Fixes mit Menuetext en/de/fr, Kennz
 tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt: Testunits und die zwei Hilfs-Units uTestRdxDetectorKit/uTestRdxTextKit, je Unit mit Zweck im Kopf der .dpr (siehe "Pruefen"); Konfigurationen Debug/Release (TestInsight) und CI (Konsole, Exit-Code)
 tools\gen_unitscopes.py           erzeugt data\unitscopes.txt aus der Delphi-Installation
 tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik (dazu die Hilfs-Unit tests\uTestRdxTextKit) unter FPC 3.2.2 in einem eigenen Arbeitsverzeichnis je Lauf und fuehrt Tests aus (Sprache 'de', Stub uLocalization.pas liest die echten i18n\*.po); neben dem Skript nur Grabsteine der Kopien (siehe "Pruefen")
-tools\fpc-pruefstand\selftest.sh  Selbsttest von build.sh (zwei Laeufe zugleich, FPC-Exit, Testzahl, Registrierung, Test ohne Assert, PRUEFSTAND_DIR, Grabsteine, TMPDIR mit Backslashes, Hilfs-Unit)
+tools\fpc-pruefstand\selftest.sh  Selbsttest von build.sh (zwei Laeufe zugleich, FPC-Exit, Testzahl, Registrierung, Test ohne Assert, PRUEFSTAND_DIR, Grabsteine, TMPDIR mit Backslashes, Hilfs-Unit, mehrere Fixtures und {$IFNDEF FPC}-Teile)
 tools\probe\RdxCorpusProbe.dpr    Korpus-Probe: Rezept 5.1 ueber eine Liste von Fundstellen, CSV
 tools\probe\sites_from_sarif.py   Fundstellen einer Regel aus einem SARIF-Lauf ziehen
 ```
@@ -1085,17 +1085,30 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   (SCA065, 20), `uTestRdxTrailingCommaFix` (SCA068, 16), `uTestRdxGroupedDeclFix`
   (SCA076, 20), `uTestRdxIgnoreReasonFix` (SCA179, 23), `uTestRdxAttrDuplicateFix`
   (SCA180, 30), `uTestRdxCategoryArgFix` (SCA181, 20), `uTestRdxGotoExitFix`
-  (SCA060, 28) - zusammen 408 Tests (gezaehlt an den `[Test]`-Attributen), nur in
-  reDelphix.Test: die Planer-Units ziehen fuer ihren Adapter `uEngineApi` und
-  `uRdxFixRunner` herein und stehen deshalb nicht im FPC-Pruefstand.
+  (SCA060, 28) - zusammen 408 Tests (gezaehlt an den `[Test]`-Attributen) in
+  reDelphix.Test. Die Planer-Units sind seit der Folgewelle G09-07 ohne
+  Delphi-only-uses (den Adapter traegt `uRdxFixTable`), und der FPC-Pruefstand
+  blendet seit der Folgewelle B3 `{$IFNDEF FPC}`-Teile aus: die Text-Fixtures
+  von sieben Testunits laufen dort mit (98 Tests, Kommando unten) -
+  `uTestRdxCategoryArgFix` 11, `uTestRdxEmptyBlockFix` 17,
+  `uTestRdxEmptyExceptFix` 13, `uTestRdxGotoExitFix` 20, `uTestRdxNativeIntFix`
+  13, `uTestRdxParensFix` 12, `uTestRdxTrailingCommaFix` 12. Die uebrigen
+  dreizehn binden auch im FPC-sichtbaren Teil `uRdxFixTable`/`uRdxRecipeRunner`
+  (ueber `uEngineApi` und `uRdxFixRunner` Delphi-only), den Detektor oder
+  `uTestRdxDetectorKit` und bleiben nur in reDelphix.Test.
 
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxTextMsgs uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths uTestRdxBlocks
+bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxTextMsgs uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths uTestRdxBlocks uTestRdxCategoryArgFix uTestRdxEmptyBlockFix uTestRdxEmptyExceptFix uTestRdxGotoExitFix uTestRdxNativeIntFix uTestRdxParensFix uTestRdxTrailingCommaFix
 ```
 
-Erwartet (Stand 2026-10-15, Chargen H5+H4c+H5c+S1+Q14+SQc+C0+B1-FA+FB+FC+B1-FD+B1-FE+FF+B2S-a+B2S-b+C1): `PASSED 675  FAILED 0` - 43 Testunits,
+Erwartet (Stand 2026-10-22, Folgewelle B3, gezaehlt ohne FPC-Lauf): `PASSED 788  FAILED 0` -
+50 Testunits. Die 43 Testunits bis zur Charge C1 tragen heute 690 FPC-sichtbare
+`[Test]`-Attribute (die Zeile nannte 675 - spaetere Wellen haben Tests ergaenzt, ohne sie
+hier nachzutragen), dazu 98 aus den sieben Planer-Testunits der Chargen Q/R (Text-Fixtures,
+s. o.). Aufschluesselung Stand 2026-10-15 (Chargen
+H5+H4c+H5c+S1+Q14+SQc+C0+B1-FA+FB+FC+B1-FD+B1-FE+FF+B2S-a+B2S-b+C1): `PASSED 675  FAILED 0` - 43 Testunits,
 davon 11 der Charge B2S-b (`uTestRdxBlocks`, zwei davon aus den Gegenpruefungen), 13 der Charge B2S-a (`uTestRdxPaths` 10, `uTestRdxProjectUnits` 1,
 `uTestRdxCodeMap` 1, `uTestRdxTryGates` 1 aus der zweiten Gegenpruefung),
 28 der Charge B1-FA (`uTestRdxSuppressTargets` 20, Review R1-01/R1-03
@@ -1140,7 +1153,10 @@ des Moduls (`uRdxRecipes`, `uRdxPaths`, `uRdxScopeTable` samt `TRdxProjectUnits`
 `uRdxDeclFixes`, `uRdxFlowFixes`, `uRdxBlocks`, `uRdxRoutineFixes`, `uRdxCleanupFixes`, `uRdxTryFixes`,
 `uRdxResultFixes`, `uRdxSqlTemplate`, `uRdxCompilerTraces`, `uRdxMagicFixes`,
 `uRdxCodeMap`,
-`uRdxIntroPlan`, `uRdxIntroEdits`, `uRdxText`). Testunits kommen aus `reDelphix\tests`,
+`uRdxIntroPlan`, `uRdxIntroEdits`, `uRdxText`, seit der Folgewelle B3 die Planer
+`uRdxCategoryArgFix`, `uRdxEmptyBlockFix`, `uRdxEmptyExceptFix`, `uRdxGotoExitFix`,
+`uRdxNativeIntFix`, `uRdxParensFix`, `uRdxTrailingCommaFix` und aus dem Core `uSCAConsts`,
+die deren Testunits im FPC-sichtbaren uses binden). Testunits kommen aus `reDelphix\tests`,
 sonst aus `StaticCodeAnalyserForm\tests` (Core-Tests wie
 `uTestSourcePlaces`, `uTestRefactorConcat`). Die Hilfs-Unit
 `tests\uTestRdxTextKit` kopiert und passt jeder Lauf mit an, gleich welche
@@ -1199,7 +1215,19 @@ ab (keine Fixture).
   Unitnamen oder ein Attribut als Text prueft, sieht unter FPC dieselben
   Daten wie unter Delphi (bis dahin wurde aus `'System.Classes'` im Literal
   `'Classes'` und aus `'    [Test]'` eine Leerzeile; `uTestRdxBench` haelt
-  das fest).
+  das fest). Anpassung, Fixture-Erkennung, Runner, Bau und Abgleich kommen
+  aus `tools\fpc_runner_lib.sh` (gemeinsam mit SharedUI und VarNameProject,
+  Folgewelle A7/B3).
+* **Fixtures (Folgewelle B3):** der Runner ruft jede FPC-sichtbare Fixture
+  einer Testunit auf (je Fixture eine `RunSuite`). Unsichtbar ist, was in
+  `{$IFNDEF FPC}..{$ENDIF}` oder im `{$ELSE}`-Teil von `{$IFDEF FPC}` steht
+  - etwa die Detektor-Fixture neben der Text-Fixture einer Planer-Testunit
+  samt Registrierung und Implementierung, oder ein einzelner Test im
+  Klassenrumpf. Zaehlung und Abgleich der `[Test]`-Attribute sehen dieselbe
+  Ausblendung. Direktiven in String-Literalen und Kommentaren schalten
+  nichts; jede andere Bedingung (`{$IF ..}`, `{$IFDEF X}`, verschachtelt,
+  `(*$IFDEF*)`, ueber mehrere Zeilen) bricht mit Exit 2 ab - lieber laut
+  als falsch gezaehlt.
 * Eine fehlende Pflichtquelle oder Testunit bricht ab, statt still eine
   alte Kopie zu uebersetzen.
 * **Exit:** 0 alle Tests gruen; 1 Test rot (auch ein Test ohne Assert),
@@ -1213,10 +1241,15 @@ ab (keine Fixture).
   FPC-Exit, fehlende Suite, Registrierung, Test ohne Assert,
   `PRUEFSTAND_DIR`, Harness nach altem Muster mit und ohne `-B`, `TMPDIR`
   mit Backslashes, die Hilfs-Unit `uTestRdxTextKit` mitkopiert bzw. als
-  Aufrufargument abgelehnt); das build.sh vor Charge FF besteht keine der
+  Aufrufargument abgelehnt, zwei Fixtures neben einer in `{$IFNDEF FPC}`,
+  `{$IFDEF FPC}`/`{$ELSE}`, verschachtelte Bedingung und `{$IF DEFINED(FPC)}`
+  mit Exit 2); das build.sh vor Charge FF besteht keine der
   elf Pruefungen der Faelle 1 bis 8, das des ersten Durchgangs der Charge
   die letzten drei davon nicht, das vor Review R6-08 die Pruefung 9a nicht
-  (mit den Testunits von R6-08 dazu 1a und 3):
+  (mit den Testunits von R6-08 dazu 1a und 3), das vor Folgewelle B3 die
+  Faelle 10 bis 12 nicht (mit einem Fake-FPC, `FPC=<skript>`, das nur
+  `runner.pas` auswertet, laufen alle Faelle ausser 5 und 7, die den
+  echten Compiler und Runner brauchen):
 
   ```
   bash reDelphix/tools/fpc-pruefstand/selftest.sh
