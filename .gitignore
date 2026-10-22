@@ -44,6 +44,12 @@ reDelphix/tools/probe/RdxCorpusProbe.res
 # Oeffnen der .dpr selbst an (wie bei tools/ResultProbe) - nicht einchecken.
 VarNameProject/probe/VnpTypeProbe.dproj
 VarNameProject/probe/VnpTypeProbe.res
+# Projekt-.res des VarNameProject-Testprojekts (die IDE regeneriert sie).
+VarNameProject/tests/VarNameProject.Test.res
+# Lokale Werkzeug-Konfiguration, kein Projektinhalt: Continue.dev (MCP-
+# Server) und Assistenten-Skills unter .github/skills (2026-10-22).
+.continue/
+.github/skills/
 # FPC-Pruefstand: out/ und die je Lauf kopierten Units haelt die lokale
 # reDelphix/tools/fpc-pruefstand/.gitignore heraus - EINE Liste, gleich
 # den Mustern, die build.sh vor jedem Lauf loescht (Review reDelphiX nach
