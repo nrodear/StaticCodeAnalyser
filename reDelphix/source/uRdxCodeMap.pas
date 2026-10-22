@@ -223,6 +223,36 @@ type
   TRdxBlockHook = function(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
     ADepth: Integer): string;
 
+  // Die end-Bilanz RUECKWAERTS - das Gegenstueck zu BlockEnd (Review Woche
+  // G07-03, dort als BlockStart vorgeschlagen). Bis zur Folgewelle des
+  // Wochen-Reviews trugen vier Rueckwaerts-Laeufe je eine eigene Bilanz
+  // samt Treiberschleife: uRdxFlowFixes.JumpInsideLoop (TRdxLoopScan) und
+  // InFinally, uRdxStructFixes.CaseContextReason und ElseOwner (hier). Ein
+  // Iterator statt eines Hakens: die Laeufe tragen Zustand (';' gekreuzt,
+  // Klammertiefe, offene else), und FPC 3.2 kennt keine Closures. Der Lauf:
+  //   W.Start(AMap, AFrom);
+  //   while W.Next do begin <Schritt an W.Tok/W.Prev/W.Depth>; W.Balance; end;
+  // Next liefert die Token vor AFrom rueckwaerts (Tok, davor Prev - je
+  // Token ein Before), False am Dateianfang. Balance verbucht Tok: als
+  // Schluesselwort (IsKeywordAfter) zaehlen 'end' und 'until' hoch, ein
+  // END_OPENERS-Wort oder 'repeat' auf Tiefe > 0 herunter - auf Tiefe 0
+  // ist es der Oeffner eines umschliessenden Blocks, den der Schritt davor
+  // gesehen hat. Was ein Lauf an 'record' tut, entscheidet er selbst: die
+  // Schleifensuche (Bestand) laesst Balance dort aus, die anderen brechen
+  // vorher ab bzw. zaehlen es als Oeffner (InFinally).
+  TRdxBackBalance = record
+  private
+    FMap  : TRdxCodeMap;
+    FNext : TRdxToken;
+  public
+    Tok   : TRdxToken;   // das aktuelle Token
+    Prev  : TRdxToken;   // das Token davor (Before)
+    Depth : Integer;     // offene Bloecke zwischen Tok und AFrom
+    procedure Start(AMap: TRdxCodeMap; const AFrom: TRdxToken);
+    function Next: Boolean;
+    procedure Balance;
+  end;
+
 // Bezeichner-Zeichen wie im Core (TRefactorInfoBuilder): Buchstabe, '_'
 // oder ein Zeichen ueber #127 (Umlaute sind in Delphi-Bezeichnern erlaubt)
 // beginnt einen Bezeichner, dazu Ziffern darin. Zahlen beginnen NICHT mit
@@ -591,21 +621,21 @@ type
   // Wem ein else gehoert (ElseOwner).
   TRdxElseOwner = (eoUnknown, eoIf, eoList);
 
-  // Die Rueckwaerts-Suche nach dem Besitzer eines else: offene Bloecke
-  // (end bzw. until ohne Anfang), else ohne then und ob schon ein ';' auf
-  // oberster Ebene dahinter liegt; das Ergebnis in Owner und Decider (das
-  // then bzw. of/case/except) oder Reason. Die Schritte liefern True, wenn
-  // die Suche endet.
+  // Die Rueckwaerts-Suche nach dem Besitzer eines else: else ohne then und
+  // ob schon ein ';' auf oberster Ebene dahinter liegt - die offenen Bloecke
+  // (end bzw. until ohne Anfang) zaehlt TRdxBackBalance (ADepth; bis zur
+  // Folgewelle des Wochen-Reviews das Feld Block); das Ergebnis in Owner
+  // und Decider (das then bzw. of/case/except) oder Reason. Die Schritte
+  // liefern True, wenn die Suche endet.
   TRdxElseScan = record
-    Block     : Integer;
     Pending   : Integer;
     AfterSemi : Boolean;
     Owner     : TRdxElseOwner;
     Decider   : TRdxToken;
     Reason    : string;
-    function StepWord(const T: TRdxToken): Boolean;     // ein Schluesselwort
+    function StepWord(const T: TRdxToken; ADepth: Integer): Boolean;     // ein Schluesselwort
     function StepTopWord(const T: TRdxToken): Boolean;  // ... auf oberster Ebene
-    function StepSymbol(const T: TRdxToken): Boolean;   // ein Satzzeichen
+    function StepSymbol(const T: TRdxToken; ADepth: Integer): Boolean;   // ein Satzzeichen
     function TakeThen(const T: TRdxToken): Boolean;
     function TakeList(const T: TRdxToken): Boolean;
     function Fail(const AReason: string): Boolean;
@@ -1566,6 +1596,35 @@ begin
     ASearch.ManyArg);
 end;
 
+{ TRdxBackBalance }
+
+procedure TRdxBackBalance.Start(AMap: TRdxCodeMap; const AFrom: TRdxToken);
+begin
+  FMap := AMap;
+  FNext := Before(AMap, AFrom);
+  Tok := Default(TRdxToken);
+  Prev := Default(TRdxToken);
+  Depth := 0;
+end;
+
+function TRdxBackBalance.Next: Boolean;
+begin
+  Tok := FNext;
+  Result := Tok.Low <> '';
+  if not Result then Exit;
+  Prev := Before(FMap, Tok);
+  FNext := Prev;
+end;
+
+procedure TRdxBackBalance.Balance;
+begin
+  if not IsKeywordAfter(Tok, Prev) then Exit;
+  if (Tok.Low = 'end') or (Tok.Low = 'until') then
+    Inc(Depth)
+  else if (IsEndOpener(Tok.Low) or (Tok.Low = 'repeat')) and (Depth > 0) then
+    Dec(Depth);
+end;
+
 function BlockEnd(AMap: TRdxCodeMap; const AFrom: TRdxToken;
   AHook: TRdxBlockHook; out AEnd, ALast: TRdxToken): string;
 var
@@ -2128,19 +2187,18 @@ begin
   Result := True;
 end;
 
-// Bloecke rueckwaerts ueberspringen (end..begin/case/try/asm, until..repeat).
-// Ein record bricht ab: ein case in seinem Variantenteil hat kein eigenes
-// end, die Bilanz stimmte nicht mehr.
-function TRdxElseScan.StepWord(const T: TRdxToken): Boolean;
+// Bloecke rueckwaerts ueberspringen (end..begin/case/try/asm, until..repeat)
+// - die Bilanz fuehrt TRdxBackBalance.Balance, der Schritt sieht ihre Tiefe
+// ADepth. Ein record bricht ab: ein case in seinem Variantenteil hat kein
+// eigenes end, die Bilanz stimmte nicht mehr. Auf oberster Ebene entscheidet
+// jedes Wort ausser end/until (StepTopWord) - auch ein Oeffner: dort ist es
+// der eines umschliessenden Blocks.
+function TRdxElseScan.StepWord(const T: TRdxToken; ADepth: Integer): Boolean;
 begin
   Result := False;
   if T.Low = 'record' then
     Result := Fail('record vor dem else - die end-Bilanz ist unsicher')
-  else if (T.Low = 'end') or (T.Low = 'until') then
-    Inc(Block)
-  else if (IsEndOpener(T.Low) or (T.Low = 'repeat')) and (Block > 0) then
-    Dec(Block)
-  else if Block = 0 then
+  else if (ADepth = 0) and (T.Low <> 'end') and (T.Low <> 'until') then
     Result := StepTopWord(T);
 end;
 
@@ -2170,9 +2228,9 @@ end;
 
 // Ein ';' auf oberster Ebene: ein if-else kann es nicht mehr sein - aber
 // erst ein of oder except entscheidet (StepTopWord).
-function TRdxElseScan.StepSymbol(const T: TRdxToken): Boolean;
+function TRdxElseScan.StepSymbol(const T: TRdxToken; ADepth: Integer): Boolean;
 begin
-  if (Block = 0) and (T.Low = ';') then
+  if (ADepth = 0) and (T.Low = ';') then
     AfterSemi := True;
   Result := False;
 end;
@@ -2182,26 +2240,27 @@ end;
 // eoList (else eines case oder except: dahinter steht eine
 // Anweisungsliste bis zum end); Decider ist das entscheidende Token. Sonst
 // Reason.
+// Klammern samt Inhalt zaehlen weder fuer die Schritte noch fuer die
+// Bilanz (ein 'begin..end' einer anonymen Methode als Argument).
 function ElseOwner(AMap: TRdxCodeMap; const AElse: TRdxToken): TRdxElseScan;
 var
-  T, P  : TRdxToken;
+  W     : TRdxBackBalance;
   Paren : Integer;
   Done  : Boolean;
 begin
   Result := Default(TRdxElseScan);
   Paren := 0;
-  T := Before(AMap, AElse);
-  while (T.Low <> '') and (Paren >= 0) do
+  W.Start(AMap, AElse);
+  while (Paren >= 0) and W.Next do
   begin
-    P := Before(AMap, T);
-    if ParenBack(T, Paren) or (Paren > 0) then
-      Done := False
-    else if IsKeywordAfter(T, P) then
-      Done := Result.StepWord(T)
+    if ParenBack(W.Tok, Paren) or (Paren > 0) then
+      Continue;
+    if IsKeywordAfter(W.Tok, W.Prev) then
+      Done := Result.StepWord(W.Tok, W.Depth)
     else
-      Done := Result.StepSymbol(T);
+      Done := Result.StepSymbol(W.Tok, W.Depth);
     if Done then Exit;
-    T := P;
+    W.Balance;
   end;
   Result.Owner := eoUnknown;
   if Paren < 0 then

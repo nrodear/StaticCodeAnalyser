@@ -493,32 +493,26 @@ begin
   AEdits[High(AEdits)] := E;
 end;
 
-// CaseContextReason, ein Schluesselwort rueckwaerts: rsFound - das case ist
-// eine Anweisung; rsStop - ein record (Variantenteil); sonst rsGoOn, ganze
-// Bloecke in ABlock gezaehlt.
-function CaseBlockStep(const T: TRdxToken; var ABlock: Integer): TRdxStep;
+// CaseContextReason, ein Schluesselwort rueckwaerts (ADepth: offene
+// Bloecke, TRdxBackBalance - sie zaehlt end/until und die Oeffner darin):
+// rsFound - das case ist eine Anweisung (ein Oeffner auf oberster Ebene);
+// rsStop - ein record (Variantenteil, auf jeder Tiefe); sonst rsGoOn.
+function CaseBlockStep(const T: TRdxToken; ADepth: Integer): TRdxStep;
 begin
   Result := rsGoOn;
   if T.Low = 'record' then
     Result := rsStop
-  else if (T.Low = 'end') or (T.Low = 'until') then
-    Inc(ABlock)
-  else if IsEndOpener(T.Low) or (T.Low = 'repeat') then
-  begin
-    if ABlock = 0 then
-      Result := rsFound
-    else
-      Dec(ABlock);
-  end
-  else if (ABlock = 0) and InList(T.Low, STATEMENT_SECTIONS) then
+  else if (ADepth = 0) and (IsEndOpener(T.Low) or (T.Low = 'repeat')) then
+    Result := rsFound
+  else if (ADepth = 0) and InList(T.Low, STATEMENT_SECTIONS) then
     Result := rsFound;
 end;
 
 // CaseContextReason, ein Token rueckwaerts: eine offene '(' ist die
-// Feldliste eines Variantenzweigs (rsStop); Schluesselwoerter zaehlt
-// CaseBlockStep.
-function CaseScanStep(const T, APrev: TRdxToken; var ABlock,
-  AParen: Integer): TRdxStep;
+// Feldliste eines Variantenzweigs (rsStop); Schluesselwoerter fragt
+// CaseBlockStep (auch in Klammern).
+function CaseScanStep(const T, APrev: TRdxToken; ADepth: Integer;
+  var AParen: Integer): TRdxStep;
 begin
   Result := rsGoOn;
   if T.Low = ')' then
@@ -530,7 +524,7 @@ begin
       Result := rsStop;
   end
   else if IsKeywordAfter(T, APrev) then
-    Result := CaseBlockStep(T, ABlock);
+    Result := CaseBlockStep(T, ADepth);
 end;
 
 // Ist das case ACase eine Anweisung? Der Detektor meldet nur case-
@@ -551,25 +545,23 @@ end;
 // Fragment) ist die Lage ebenso unklar. Alles das sperrt. '' oder der Grund.
 function CaseContextReason(AMap: TRdxCodeMap; const ACase: TRdxToken): string;
 var
-  T, P         : TRdxToken;
-  Block, Paren : Integer;
-  Step         : TRdxStep;
+  W     : TRdxBackBalance;
+  Paren : Integer;
+  Step  : TRdxStep;
 begin
-  Block := 0;
   Paren := 0;
-  T := Before(AMap, ACase);
-  while T.Low <> '' do
+  W.Start(AMap, ACase);
+  while W.Next do
   begin
-    P := Before(AMap, T);
-    Step := CaseScanStep(T, P, Block, Paren);
+    Step := CaseScanStep(W.Tok, W.Prev, W.Depth, Paren);
     if Step = rsFound then
       Exit('');
-    if (Step = rsStop) and (T.Low = '(')
-       and DirectiveBetween(AMap, T, ACase.Line, ACase.Col) then
+    if (Step = rsStop) and (W.Tok.Low = '(')
+       and DirectiveBetween(AMap, W.Tok, ACase.Line, ACase.Col) then
       Exit(R_CASE_OPEN_PAREN);
     if Step = rsStop then
       Exit(R_CASE_IN_RECORD);
-    T := P;
+    W.Balance;
   end;
   Result := 'kein Block um das case gefunden (Fragment?) - ob es eine '
     + 'Anweisung ist, ist unklar';

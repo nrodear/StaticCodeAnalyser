@@ -216,12 +216,12 @@ type
   end;
 
   // SCA080: Rueckwaerts-Suche nach einer Schleife um den Sprung (wie
-  // uRedundantJump.JumpInsideLoop): offene Bloecke und ob auf der
-  // aktuellen Ebene schon ein ';' gekreuzt wurde.
+  // uRedundantJump.JumpInsideLoop): ob auf der aktuellen Ebene schon ein
+  // ';' gekreuzt wurde - die offenen Bloecke zaehlt TRdxBackBalance
+  // (uRdxCodeMap; bis zur Folgewelle des Wochen-Reviews das Feld Depth).
   TRdxLoopScan = record
-    Depth   : Integer;
     SawSemi : Boolean;
-    function StepWord(const T: TRdxToken): TRdxStep;
+    function StepWord(const T: TRdxToken; ADepth: Integer): TRdxStep;
   end;
 
 { ---- gemeinsam ---- }
@@ -708,31 +708,29 @@ end;
 
 { TRdxLoopScan }
 
-// Ein Schluesselwort rueckwaerts: rsFound im Rumpf einer Schleife, rsStop
-// an einer Routinengrenze.
-function TRdxLoopScan.StepWord(const T: TRdxToken): TRdxStep;
+// Ein Schluesselwort rueckwaerts (ADepth: offene Bloecke, TRdxBackBalance):
+// rsFound im Rumpf einer Schleife, rsStop an einer Routinengrenze. Ein
+// begin/case/try/asm auf oberster Ebene ist der Anfang des umschliessenden
+// Blocks - dort beginnt eine neue Anweisungsfolge (SawSemi zurueck); die
+// Bloecke darin zaehlt die Bilanz.
+function TRdxLoopScan.StepWord(const T: TRdxToken; ADepth: Integer): TRdxStep;
 begin
   Result := rsGoOn;
-  if (T.Low = 'end') or (T.Low = 'until') then
-    Inc(Depth)
-  else if T.Low = 'repeat' then
+  if T.Low = 'repeat' then
   begin
-    if Depth = 0 then
-      Exit(rsFound);
-    Dec(Depth);
+    if ADepth = 0 then
+      Result := rsFound;
   end
   else if (T.Low = 'for') or (T.Low = 'while') then
   begin
     // Ein schon gekreuztes ';' heisst: die einanweisige Schleife ist zu
     // Ende, der Sprung steht dahinter ('while .. do Inc(Run); Exit;').
-    if (Depth = 0) and not SawSemi then
+    if (ADepth = 0) and not SawSemi then
       Result := rsFound;
   end
   else if InList(T.Low, ['begin', 'case', 'try', 'asm']) then
   begin
-    if Depth > 0 then
-      Dec(Depth)
-    else
+    if ADepth = 0 then
       SawSemi := False;
   end
   else if InList(T.Low, ROUTINE_BOUNDS) then
@@ -740,44 +738,42 @@ begin
 end;
 
 // Steht der Sprung im Rumpf einer Schleife? Dann ist Exit eine
-// Frueh-Rueckkehr, kein No-Op (uRedundantJump: Schleifen-Gate).
+// Frueh-Rueckkehr, kein No-Op (uRedundantJump: Schleifen-Gate). Die
+// Bilanz fuehrt TRdxBackBalance - nur 'record' laesst diese Suche aus: sie
+// zaehlte es nie als Oeffner (Bestand seit uRedundantJump; Review Woche
+// G07-03 nennt die Luecke, die Folgewelle zieht nur die Bilanz zusammen
+// und aendert kein Ergebnis).
 function JumpInsideLoop(AMap: TRdxCodeMap; const AJump: TRdxToken): Boolean;
 var
   Scan : TRdxLoopScan;
-  T, P : TRdxToken;
+  W    : TRdxBackBalance;
   Step : TRdxStep;
 begin
   Scan := Default(TRdxLoopScan);
-  T := Before(AMap, AJump);
-  while T.Low <> '' do
+  W.Start(AMap, AJump);
+  while W.Next do
   begin
-    P := Before(AMap, T);
     Step := rsGoOn;
-    if (T.Low = ';') and (Scan.Depth = 0) then
+    if (W.Tok.Low = ';') and (W.Depth = 0) then
       Scan.SawSemi := True
-    else if IsKeywordAfter(T, P) then
-      Step := Scan.StepWord(T);
+    else if IsKeywordAfter(W.Tok, W.Prev) then
+      Step := Scan.StepWord(W.Tok, W.Depth);
     if Step <> rsGoOn then
       Exit(Step = rsFound);
-    T := P;
+    if W.Tok.Low <> 'record' then
+      W.Balance;
   end;
   Result := False;
 end;
 
-// InFinally, ein Schluesselwort rueckwaerts: Bloecke ueberspringen, die
-// umschliessenden verlassen; rsFound im finally-Teil, rsStop an einer
-// Routinengrenze (auch einer anonymen Methode).
-function FinallyStep(const T: TRdxToken; var ABlock: Integer): TRdxStep;
+// InFinally, ein Schluesselwort rueckwaerts (ADepth: offene Bloecke,
+// TRdxBackBalance - die umschliessenden verlassen sie auf Tiefe 0):
+// rsFound im finally-Teil, rsStop an einer Routinengrenze (auch einer
+// anonymen Methode).
+function FinallyStep(const T: TRdxToken; ADepth: Integer): TRdxStep;
 begin
   Result := rsGoOn;
-  if (T.Low = 'end') or (T.Low = 'until') then
-    Inc(ABlock)
-  else if IsEndOpener(T.Low) or (T.Low = 'repeat') then
-  begin
-    if ABlock > 0 then
-      Dec(ABlock);
-  end
-  else if (ABlock = 0) and (T.Low = 'finally') then
+  if (ADepth = 0) and (T.Low = 'finally') then
     Result := rsFound
   else if InList(T.Low, ROUTINE_BOUNDS) then
     Result := rsStop;
@@ -786,22 +782,19 @@ end;
 // Steht der Sprung (auch in einem Block darin) im finally-Teil eines try?
 function InFinally(AMap: TRdxCodeMap; const AJump: TRdxToken): Boolean;
 var
-  T, P  : TRdxToken;
-  Block : Integer;
-  Step  : TRdxStep;
+  W    : TRdxBackBalance;
+  Step : TRdxStep;
 begin
-  Block := 0;
-  T := Before(AMap, AJump);
-  while T.Low <> '' do
+  W.Start(AMap, AJump);
+  while W.Next do
   begin
-    P := Before(AMap, T);
-    if IsKeywordAfter(T, P) then
+    if IsKeywordAfter(W.Tok, W.Prev) then
     begin
-      Step := FinallyStep(T, Block);
+      Step := FinallyStep(W.Tok, W.Depth);
       if Step <> rsGoOn then
         Exit(Step = rsFound);
     end;
-    T := P;
+    W.Balance;
   end;
   Result := False;
 end;
