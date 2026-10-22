@@ -716,14 +716,20 @@ const
 // MAX_NUMBER erreicht, endet das Lesen (kein Ueberlauf - der Aufrufer
 // sieht eine Zahl >= MAX_NUMBER und lehnt ab). Bis zur Folgewelle des
 // Wochen-Reviews (G09-08) in uRdxCleanupFixes; die anderen Zahlenleser der
-// Meldungen hatten keine Grenze.
+// Meldungen hatten keine Grenze. Seit der Folgewelle gilt sie ueber
+// NumberAfterKey auch fuer ColumnFromMessage und alle frueheren Kopien
+// (uRdxTrailingBlanksFix, uRdxGotoExitFix, uRdxLineFixes): statt einer
+// uebergelaufenen Zahl sehen sie eine >= MAX_NUMBER, die auf keine Zeile
+// passt.
 function NumberAt(const S: string; AAt: Integer): Integer;
 // Die Zahl direkt hinter dem ersten AKey in AText (NumberAt); 0, wenn AKey
 // fehlt. Der eine Leser fuer 'at column N' (ColumnFromMessage), 'from
 // column N' (uRdxTrailingBlanksFix), '(col N)' (uRdxGotoExitFix) und
 // 'currently at column N' (uRdxLineFixes) - bis zur Folgewelle des
-// Wochen-Reviews (G09-08/G09-30) je eine Kopie der Ziffernschleife. Nicht
-// uRdxCompilerTraces.NumberAfter (Praefix am Wortanfang, -1 ohne Zahl).
+// Wochen-Reviews (G09-08/G09-30) je eine Kopie der Ziffernschleife, ohne
+// Grenze; seitdem endet das Lesen fuer alle diese Leser bei MAX_NUMBER
+// (NumberAt). Nicht uRdxCompilerTraces.NumberAfter (Praefix am
+// Wortanfang, -1 ohne Zahl).
 function NumberAfterKey(const AText, AKey: string): Integer;
 // 'at column N' aus einer Meldung; 0 = nicht vorhanden. Bis 2026-10-10 in
 // uRdxSimpleFixes, seit SCA101 auch fuer uRdxStructFixes.
