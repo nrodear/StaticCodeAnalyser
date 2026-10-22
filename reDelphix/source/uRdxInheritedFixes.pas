@@ -197,22 +197,23 @@ type
 // Die Zeile der ersten Direktive '{$AWord ...}' der Datei, deren Text
 // dahinter (klein, ohne Leerraum am Rand) in AArgs steht - bei leerem AArgs
 // jede; 0 ohne. '{$mode objfpc}' -> AWord 'mode', AArgs ['objfpc'].
+// Der Lauf ueber alle Direktiven: NextDirective (uRdxCodeMap; bis zur
+// Folgewelle des Wochen-Reviews, G08-01, hier ausgeschrieben).
 function DirectiveLine(AMap: TRdxCodeMap; const AWord: string;
   const AArgs: array of string): Integer;
 var
   Li, Co : Integer;
-  L      : string;
   Arg    : Boolean;
 begin
-  for Li := 1 to AMap.LineCount do
+  Li := 1;
+  Co := 1;
+  while NextDirective(AMap, Li, Co) do
   begin
-    L := AMap.Raw(Li);
-    for Co := 1 to Length(L) do
-      if CharInSet(L[Co], ['{', '(']) and OpensDirective(AMap, Li, Co)
-         and (DirectiveWord(AMap, Li, Co, Arg) = AWord)
-         and ((Length(AArgs) = 0)
-              or InList(LowerCase(Trim(DirectiveArgs(AMap, Li, Co))), AArgs)) then
-        Exit(Li);
+    if (DirectiveWord(AMap, Li, Co, Arg) = AWord)
+       and ((Length(AArgs) = 0)
+            or InList(LowerCase(Trim(DirectiveArgs(AMap, Li, Co))), AArgs)) then
+      Exit(Li);
+    Inc(Co);
   end;
   Result := 0;
 end;

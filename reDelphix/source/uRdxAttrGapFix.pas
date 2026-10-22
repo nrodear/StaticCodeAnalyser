@@ -76,11 +76,8 @@ const
   R_NO_ANCHOR = 'vor dem Attribut steht kein Deklarationsende - kein '
     + 'sicherer Attributkontext';
   R_DIRECTIVE = 'zwischen Attribut und Element liegt eine Compiler-Direktive';
-  // Davor darf eine Attributzeile beginnen: Ende der Deklaration davor,
-  // Abschnittswort, Beginn eines Typs (class, record, ...), anderes Attribut.
-  ANCHOR_WORDS: array[0..13] of string = (';', ']', 'public', 'private',
-    'protected', 'published', 'automated', 'class', 'record', 'interface',
-    'object', 'type', 'implementation', 'dispinterface');
+  // Davor darf eine Attributzeile beginnen: AttrAnchorOk (uRdxCodeMap; bis
+  // zur Folgewelle des Wochen-Reviews hier ANCHOR_WORDS, G09-02).
   // Elemente, die ein Attribut tragen (Kopf der Routine, property).
   HEAD_WORDS: array[0..6] of string = ('procedure', 'function', 'constructor',
     'destructor', 'property', 'class', 'operator');
@@ -105,12 +102,6 @@ begin
     Inc(Q);
   if Q <= Length(AMessage) then
     Result := Copy(AMessage, P, Q - P);
-end;
-
-// Nur Leerzeichen und Tabulatoren (oder nichts).
-function IsBlankLine(const S: string): Boolean;
-begin
-  Result := SkipBlanks(S, 1) > Length(S);
 end;
 
 // Die Klammerbilanz ('[' und '(' gegen ']' und ')') der Code-Zeichen von
@@ -144,17 +135,10 @@ var
 begin
   Result := '';
   L := AMap.Raw(ALine);
-  AFirstCol := SkipBlanks(L, 1);
-  if AMap.StartsInside(ALine) or (AFirstCol > Length(L))
-     or (L[AFirstCol] <> '[') or not AMap.IsCode(ALine, AFirstCol) then
-    Exit(R_ATTR_MOVED);
-  P := SkipBlanks(L, AFirstCol + 1);
-  if (P > Length(L)) or not IsIdentStart(L[P]) or not AMap.IsCode(ALine, P) then
-    Exit(R_ATTR_MOVED);
-  Q := P;
-  while (Q <= Length(L)) and IsIdentChar(L[Q]) do
-    Inc(Q);
-  if (AName = '') or not SameText(AName, Copy(L, P, Q - P)) then
+  // Der Kopf '[Name' (AttrHeadAt, uRdxCodeMap; bis zur Folgewelle des
+  // Wochen-Reviews hier ausgeschrieben, G09-02).
+  if not AttrHeadAt(AMap, ALine, AFirstCol, P, Q)
+     or (AName = '') or not SameText(AName, Copy(L, P, Q - P)) then
     Exit(R_ATTR_MOVED);
   // Hinter dem letzten Zeichen der Zeile muss der Schliesser eines
   // Attributs stehen, als Code - kein Kommentar, kein Text.
@@ -265,8 +249,7 @@ begin
     Exit;
   end;
   // Das Token vor dem Attribut: eine Deklaration ist zu Ende oder beginnt.
-  Prev := PrevToken(AMap, ALine, First);
-  if (Prev.Low = '') or not InList(Prev.Low, ANCHOR_WORDS) then
+  if not AttrAnchorOk(AMap, ALine, First, Prev) then
   begin
     AReason := R_NO_ANCHOR;
     Exit;
@@ -277,7 +260,7 @@ begin
     Exit;
   end;
   // Ein Bereich beginnt auf einem Zeichen (SpanFits: nie auf einer leeren
-  // Zeile, siehe LinesCut in uRdxCleanupFixes): er beginnt AUF dem letzten
+  // Zeile, siehe WholeLinesEdit in uRdxBufferMath): er beginnt AUF dem letzten
   // Zeichen der Attributzeile, das neu geschrieben wird, und endet hinter
   // der letzten Leerzeile, ohne deren Zeilenende - das bleibt und trennt
   // die Attributzeile von der Zeile mit Inhalt.

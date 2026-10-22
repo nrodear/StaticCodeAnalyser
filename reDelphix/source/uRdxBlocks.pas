@@ -166,13 +166,13 @@ type
     // seinen Grenzen (ReadRoutine) bzw. dem Grund, warum sie nicht sicher
     // sind. Ob die Routine die Stelle umfasst und was ein unsicherer Kopf
     // heisst, entscheidet die Frage des Aufrufers - seine Politik, eine
-    // kleine Huelle: uRdxTryFixes.RoutineAround (Rumpf um ein Token,
+    // kleine Huelle: uRdxHandOver.RoutineAround (Rumpf um ein Token,
     // unsichere Koepfe uebergangen, ein Abschnittswort der Unit beendet die
     // Suche) und uRdxResultFixes.EnclosingRoutine (SCA196: Rumpf um eine
     // Zeile, der erste unsichere Kopf beendet die Suche mit seinem Grund).
     // Bis Charge B2S-b lief die Suche in beiden als eigene Kopie, Token fuer
     // Token bzw. Zeile fuer Zeile. Die SQL-Vorlage fragt statt dessen ihren
-    // Index aus EINEM Lauf (uRdxSqlTemplate.BuildScopes): sie hat viele
+    // Index aus EINEM Lauf (uRdxSqlFacts.BuildScopes): sie hat viele
     // Fragen je Lauf und einen anderen Vertrag (Kopf bis letztes ';').
     class function HeadBefore(AMap: TRdxCodeMap; var T: TRdxToken;
       const AStops: array of string; out AStep: TRdxHeadStep): Boolean;
@@ -416,26 +416,6 @@ type
       const APrev: TRdxToken): TRdxStep;
   end;
 
-// Glieder zu 'A.B.C' (TStringBuilder - keine Verkettung in der Schleife).
-function JoinDotted(const AParts: TArray<string>): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(AParts) do
-    begin
-      if i > 0 then
-        SB.Append('.');
-      SB.Append(AParts[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
 // 'TOuter.TInner' -> ['touter', 'tinner'].
 function SplitDotted(const S: string): TArray<string>;
 var
@@ -543,7 +523,7 @@ begin
       T := AfterClose(AMap, T);
     if T.Low <> '.' then
     begin
-      R.Name := JoinDotted(Raw);
+      R.Name := JoinStrings(Raw, '.');   // Glieder zu 'A.B.C'
       AAfter := T;
       Exit('');
     end;
@@ -1318,8 +1298,9 @@ begin
   Result := ReadRoutineAt(AMap, H, 0, ARoutine);
 end;
 
-// Rueckwaerts Token fuer Token wie bis Charge B2S-b uRdxTryFixes.
-// RoutineAround: das Token davor (P) entscheidet, ob T ein Kopf ist
+// Rueckwaerts Token fuer Token wie bis Charge B2S-b RoutineAround (damals
+// in uRdxTryFixes, seit Review Woche G08-08 in uRdxHandOver): das Token
+// davor (P) entscheidet, ob T ein Kopf ist
 // (IsRoutineHeadAfter, ohne Zuweisung 'Operator := ..' - AssignsTo) bzw.
 // ein Schluesselwort (IsKeywordAt).
 class function TRdxBlocks.HeadBefore(AMap: TRdxCodeMap; var T: TRdxToken;

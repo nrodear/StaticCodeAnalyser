@@ -7,7 +7,8 @@ unit uRdxRtlTypes;
 // WARUM: 'X = nil' -> 'not Assigned(X)' ist nur dann dieselbe Aussage,
 // wenn X eine Klasse, ein Interface oder ein Zeiger ist - bei einem
 // Funktionstyp ruft '= nil' die Funktion auf, Assigned() nicht. Darum
-// verlangt TRdxExprFixes.PointerLikeType einen POSITIVEN Beweis. Bis
+// verlangt TRdxTypeProof.PointerLikeType (bis zur Folgewelle A4
+// TRdxExprFixes) einen POSITIVEN Beweis. Bis
 // Charge R8 zaehlte nur die Deklaration in derselben Unit; ein 'FList:
 // TStringList' aus System.Classes blieb ohne Hilfe - im Realwelt-Korpus
 // 58,8 % aller SCA126-Angebote (Messung R9). Die Liste RDX_RTL_TYPES

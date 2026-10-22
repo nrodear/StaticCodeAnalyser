@@ -97,9 +97,8 @@ uses
 const
   SPAN_060 = 'sca060';
   KEY_COL = '(col ';
-  // Hier endet die Suche nach der Routine um das 'goto'.
-  UNIT_BOUNDS: array[0..6] of string = ('implementation', 'interface',
-    'initialization', 'finalization', 'unit', 'program', 'library');
+  // Hier endet die Suche nach der Routine um das 'goto': UNIT_BOUNDS
+  // (uRdxCodeMap; bis zur Folgewelle des Wochen-Reviews eine Kopie hier).
   // Dahinter endet die Anweisung 'goto L'.
   GOTO_FOLLOW: array[0..5] of string = (';', 'end', 'else', 'until',
     'finally', 'except');
@@ -109,20 +108,11 @@ const
   EXIT_DECL_PREV: array[0..5] of string = ('var', 'const', 'property',
     'procedure', 'function', ',');
 
+// NumberAfterKey (uRdxCodeMap) - bis zur Folgewelle des Wochen-Reviews
+// (G09-08) eine eigene Ziffernschleife.
 function GotoColumn(const AMessage: string): Integer;
-var
-  p, i : Integer;
 begin
-  Result := 0;
-  p := Pos(KEY_COL, AMessage);
-  if p = 0 then
-    Exit;
-  i := p + Length(KEY_COL);
-  while (i <= Length(AMessage)) and CharInSet(AMessage[i], ['0'..'9']) do
-  begin
-    Result := Result * 10 + Ord(AMessage[i]) - Ord('0');
-    Inc(i);
-  end;
+  Result := NumberAfterKey(AMessage, KEY_COL);
 end;
 
 // Wie viele 'goto' stehen im Code von ALine?

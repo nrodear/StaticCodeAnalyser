@@ -124,8 +124,8 @@ function IfExpressionAbove(const ACodeAbove: array of string): Boolean;
 
 // Traegt die Zeile eine FPC-Weiche oder einen FPC-Modus ('{$IFDEF FPC}',
 // '{$IFNDEF FPC}', '{$IF DEFINED(FPC)}', '{$IF FPC_FULLVERSION ...}',
-// '{$MODE ...}', auch als '(*$..*)')? Dieselben Spuren wie reDelphix (TRdxRecipes.
-// LineLooksFpcAware): eine Inline-Konstante gibt es in FPC 3.2 nicht, in
+// '{$MODE ...}', auch als '(*$..*)')? Die Pruefung von reDelphix (ruft
+// TRdxRecipes.LineLooksFpcAware): eine Inline-Konstante gibt es in FPC 3.2 nicht, in
 // so einer Datei lehnt TargetAt ab. Ein Treffer in einem Kommentar macht
 // nur vorsichtig, nie falsch.
 function LineLooksFpcAware(const ALine: string): Boolean;
@@ -154,7 +154,9 @@ implementation
 uses
   // Bis Charge B2S-a im interface - die Schnittstelle braucht sie nicht
   // (Review R3-07).
-  System.SysUtils;
+  System.SysUtils,
+  uRdxCodeMap,   // CharAt, IsIdentChar (Folgewelle des Wochen-Reviews)
+  uRdxRecipes;   // TRdxRecipes.LineLooksFpcAware (eine Liste FPC_TELLS)
 
 type
   // Ein Zahl-Literal der Zeile: Spalten [First, Stop).
@@ -218,17 +220,16 @@ const
   // Unit-Abschnitt, in dem eine Inline-Deklaration nicht gemessen ist.
   SECTION_STARTS: array[0..1] of string = ('initialization',
     'finalization');
-  // Spuren einer FPC-Weiche, ohne Leerraum und klein geschrieben (wie
-  // TRdxRecipes.FPC_TELLS in reDelphix).
-  FPC_TELLS: array[0..5] of string = ('{$mode', '(*$mode', '$ifdeffpc',
-    '$ifndeffpc', 'defined(fpc', 'fpc_fullversion');
   // Bloecke einer Zeile: diese Woerter oeffnen ...
   BLOCK_OPENERS: array[0..4] of string = ('begin', 'try', 'case', 'repeat',
     'asm');
   // ... und diese schliessen sie.
   BLOCK_CLOSERS: array[0..1] of string = ('end', 'until');
 
-function InList(const AWord: string; const AList: array of string): Boolean;
+// AWord ist eines der Woerter in AList, Gross/klein egal (SameText) - nicht
+// uRdxCodeMap.InList, das gleich geschrieben verlangt (bis zur Folgewelle
+// des Wochen-Reviews hiess diese Fassung ebenfalls InList).
+function InListText(const AWord: string; const AList: array of string): Boolean;
 var
   S : string;
 begin
@@ -238,16 +239,12 @@ begin
       Exit(True);
 end;
 
-// Bezeichner-Zeichen: ASCII-Buchstaben, Ziffern, '_' und jedes
+// IsIdentChar (uRdxCodeMap): ASCII-Buchstaben, Ziffern, '_' und jedes
 // Nicht-ASCII-Zeichen - Delphi erlaubt Unicode-Buchstaben in Bezeichnern,
 // und im Code (ausserhalb von Strings und Kommentaren) steht Nicht-ASCII
 // nur dort. Pruefstand 2026-10-11: sonst galt die 2 in 'Ma'#$00DF'2' als
-// Literal, und die Hilfe zerstoerte den Bezeichner.
-function IsIdentChar(C: Char): Boolean;
-begin
-  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_'])
-    or (Ord(C) > $7F);
-end;
+// Literal, und die Hilfe zerstoerte den Bezeichner. Bis zur Folgewelle des
+// Wochen-Reviews stand hier eine gleiche Kopie.
 
 function IsDigit(C: Char): Boolean;
 begin
@@ -257,14 +254,6 @@ end;
 function IsHexDigit(C: Char): Boolean;
 begin
   Result := CharInSet(C, ['0'..'9', 'A'..'F', 'a'..'f']);
-end;
-
-// Das Zeichen an Stelle i, #0 ausserhalb der Zeile.
-function CharAt(const S: string; i: Integer): Char;
-begin
-  Result := #0;
-  if (i >= 1) and (i <= Length(S)) then
-    Result := S[i];
 end;
 
 // Zustand nach Zeichen i, wenn bisher Code war: Beginn eines Strings oder
@@ -601,9 +590,9 @@ end;
 function BlockStep(const AText: string): Integer;
 begin
   Result := 0;
-  if InList(AText, BLOCK_OPENERS) then
+  if InListText(AText, BLOCK_OPENERS) then
     Result := 1
-  else if InList(AText, BLOCK_CLOSERS) then
+  else if InListText(AText, BLOCK_CLOSERS) then
     Result := -1;
 end;
 
@@ -702,7 +691,7 @@ end;
 function PrevEndsStatement(const APrevCode: string): Boolean;
 begin
   Result := EndsWithSemicolon(APrevCode)
-    or InList(LastWord(APrevCode), STATEMENT_OPENERS);
+    or InListText(LastWord(APrevCode), STATEMENT_OPENERS);
 end;
 
 // Ist die Zeile ein case-Zweig, eine Sprungmarke oder ein on-Handler ('1: X
@@ -747,8 +736,7 @@ begin
   W := FirstCodeWord(ALine);
   if (W <> 'var') and (W <> 'const') then
     Exit;
-  S := LowerCase(StringReplace(StringReplace(Trim(CodePart(ALine)), ' ', '',
-    [rfReplaceAll]), #9, '', [rfReplaceAll]));
+  S := Squeezed(Trim(CodePart(ALine)));   // uRdxCodeMap
   if W = 'var' then
     P := Pos(':=', S) + 2
   else
@@ -960,11 +948,11 @@ end;
 // Pruefer 2026-10-14, d).
 function StartsHeadDirective(const ATokens: TArray<TRdxIntroToken>): Boolean;
 begin
-  Result := (Length(ATokens) > 0) and InList(ATokens[0].Text, HEAD_DIRECTIVES)
+  Result := (Length(ATokens) > 0) and InListText(ATokens[0].Text, HEAD_DIRECTIVES)
     and ((Length(ATokens) = 1)
-         or not InList(ATokens[1].Text, STATEMENT_AFTER_WORD));
+         or not InListText(ATokens[1].Text, STATEMENT_AFTER_WORD));
   if Result and (Length(ATokens) > 2) and (ATokens[1].Text = ';') then
-    Result := InList(ATokens[2].Text, HEAD_DIRECTIVES);
+    Result := InListText(ATokens[2].Text, HEAD_DIRECTIVES);
 end;
 
 // Ist die Zeile eine typisierte Konstante oder eine initialisierte
@@ -993,7 +981,7 @@ begin
     Inc(Depth, ParenStep(ATokens[i].Text));
     if Depth <> 0 then
       Continue;
-    if (ATokens[i].Text = ':=') or InList(ATokens[i].Text, STATEMENT_WORDS) then
+    if (ATokens[i].Text = ':=') or InListText(ATokens[i].Text, STATEMENT_WORDS) then
       Exit;
     if ATokens[i].Text = '=' then
       HasEqual := True;
@@ -1022,7 +1010,7 @@ begin
   if (Length(ATokens) < 4) or IsDigit(ATokens[0].Text[1])
      or not IsIdentChar(ATokens[0].Text[1])
      or (ATokens[High(ATokens)].Text <> ';')
-     or InList(ATokens[0].Text, INLINE_DECL_WORDS) then
+     or InListText(ATokens[0].Text, INLINE_DECL_WORDS) then
     Exit;
   Colon := 1;
   while (Colon < High(ATokens)) and (ATokens[Colon].Text <> ':') do
@@ -1037,7 +1025,7 @@ begin
   for i := Colon + 1 to High(ATokens) do
     if (ATokens[i].Text = ':=') or (ATokens[i].Text = '=')
        or (ATokens[i].Text = '(')
-       or InList(ATokens[i].Text, STATEMENT_WORDS) then
+       or InListText(ATokens[i].Text, STATEMENT_WORDS) then
       Exit;
   Result := True;
 end;
@@ -1056,7 +1044,7 @@ begin
   else if W = 'const' then
     Result := 'die Zeile deklariert eine Konstante - ihr Wert bleibt, wie '
       + 'er ist (Konstanten-Deklarationen aendert die Aktion nicht)'
-  else if InList(W, DECL_STARTS) then
+  else if InListText(W, DECL_STARTS) then
     Result := Format('die Zeile beginnt mit "%s" - eine Deklaration, '
       + 'Sprungmarke oder asm-Zeile; dort ist keine Deklaration erlaubt', [W])
   else if StartsHeadDirective(ATokens) then
@@ -1069,7 +1057,7 @@ begin
   else if IsDeclarationLine(ATokens) then
     Result := 'die Zeile ist eine Deklaration "Name = ..." (const- oder '
       + 'type-Abschnitt) - dort ist keine Inline-Deklaration erlaubt'
-  else if InList(W, NOT_A_START) then
+  else if InListText(W, NOT_A_START) then
     Result := Format('die Zeile beginnt mit "%s" - davor darf keine '
       + 'Deklaration', [W])
   else if IsTypedConstDecl(ATokens) then
@@ -1133,11 +1121,11 @@ begin
   Prev := CodePartFrom(APrevCode, APrevState);
   if PrevEndsStatement(Prev) then
     Exit;
-  if InList(LastWord(Prev), SECTION_STARTS) then
+  if InListText(LastWord(Prev), SECTION_STARTS) then
     Exit('die Zeile darueber beginnt den initialization-/finalization-'
       + 'Abschnitt - ob dort eine Inline-Deklaration gilt, ist nicht '
       + 'gemessen');
-  APlan.Wrap := InList(LastWord(Prev), BRANCH_ENDS);
+  APlan.Wrap := InListText(LastWord(Prev), BRANCH_ENDS);
   if not APlan.Wrap then
     Exit('die Zeile darueber endet weder eine Anweisung noch mit then/do/'
       + 'else - unklar, wohin die Deklaration gehoert');
@@ -1213,7 +1201,7 @@ begin
     else
       if T.Text = 'asm' then
         Result := 'a'
-      else if InList(T.Text, SECTION_STARTS) then
+      else if InListText(T.Text, SECTION_STARTS) then
         Result := 'i';
     end;
 end;
@@ -1225,7 +1213,7 @@ var
 begin
   T := TokensOf(ACode);
   for k := 1 to High(T) do
-    if (T[k].Text = 'if') and not InList(T[k - 1].Text, IF_STATEMENT_AFTER) then
+    if (T[k].Text = 'if') and not InListText(T[k - 1].Text, IF_STATEMENT_AFTER) then
       Exit(True);
   Result := False;
 end;
@@ -1238,7 +1226,7 @@ var
   T : TArray<TRdxIntroToken>;
 begin
   T := TokensOf(ACode);
-  Result := (Length(T) = 0) or InList(T[High(T)].Text, IF_STATEMENT_AFTER);
+  Result := (Length(T) = 0) or InListText(T[High(T)].Text, IF_STATEMENT_AFTER);
 end;
 
 // Endet der Code mit 'then' oder 'else' - einem Arm, dessen 'if' auf
@@ -1303,17 +1291,13 @@ begin
   end;
 end;
 
+// Die Spuren (FPC_TELLS) und ihre Pruefung stehen einmal in reDelphix:
+// TRdxRecipes.LineLooksFpcAware (Folgewelle des Wochen-Reviews, G01-08;
+// bis dahin eine Kopie hier, die anders als die in uRdxRecipes kein '$'
+// verlangte - diese vorsichtigere Fassung gilt seitdem fuer beide).
 function LineLooksFpcAware(const ALine: string): Boolean;
-var
-  S    : string;
-  Tell : string;
 begin
-  S := LowerCase(StringReplace(StringReplace(ALine, ' ', '', [rfReplaceAll]),
-    #9, '', [rfReplaceAll]));
-  for Tell in FPC_TELLS do
-    if Pos(Tell, S) > 0 then
-      Exit(True);
-  Result := False;
+  Result := TRdxRecipes.LineLooksFpcAware(ALine);
 end;
 
 function NextFreeName(const AText, ABase: string): string;

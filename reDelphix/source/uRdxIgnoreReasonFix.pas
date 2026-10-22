@@ -79,6 +79,7 @@ class function TRdxIgnoreReasonFix.AddReason(AMap: TRdxCodeMap;
 var
   L                         : string;
   First, P, Q, Close, Tail : Integer;
+  NameOk                    : Boolean;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -89,20 +90,17 @@ begin
     Exit;
   end;
   L := AMap.Raw(ALine);
-  First := SkipBlanks(L, 1);
-  // '[' als Code am Zeilenanfang, dahinter der Name 'Ignore' (ganzes Wort).
-  if AMap.StartsInside(ALine) or (First > Length(L)) or (L[First] <> '[')
-     or not AMap.IsCode(ALine, First) then
+  // '[' als Code am Zeilenanfang, dahinter der Name 'Ignore' (ganzes Wort)
+  // - AttrHeadAt (uRdxCodeMap; bis zur Folgewelle des Wochen-Reviews hier
+  // ausgeschrieben, G09-02). Ein Name, der mit einer Ziffer beginnt, ist
+  // dort keiner, hier hiess er bisher nur nicht 'Ignore' - derselbe Zweig.
+  NameOk := AttrHeadAt(AMap, ALine, First, P, Q);
+  if First = 0 then
   begin
     AReason := MsgMovedSuffix(_(R_IGN_MOVED));
     Exit;
   end;
-  P := SkipBlanks(L, First + 1);
-  Q := P;
-  while (Q <= Length(L)) and IsIdentChar(L[Q]) do
-    Inc(Q);
-  if (P > Length(L)) or (Q = P) or not SameText(Copy(L, P, Q - P), ATTR_NAME)
-     or not AMap.IsCode(ALine, P) then
+  if not NameOk or not SameText(Copy(L, P, Q - P), ATTR_NAME) then
   begin
     // Steht 'Ignore' woanders auf der Zeile ('[Test][Ignore]', '[Test,
     // Ignore]', '[IgnoreAttribute]'), ist es keine verschobene Zeile,

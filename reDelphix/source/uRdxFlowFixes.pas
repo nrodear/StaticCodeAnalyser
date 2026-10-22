@@ -120,17 +120,17 @@ uses
   // die Fragen an die ganze Datei (DeclaresRoutine, NextTokenOnLineWith) und
   // die Bereichs-Helfer kommen seit Charge B2S-a aus uRdxCodeMap - bis
   // dahin band die Unit dafuer uRdxSimpleFixes ein (Review R3-07).
+  // StartsStatement und ElseBelongsToIf ebenso seit der Folgewelle des
+  // Wochen-Reviews (G07-13) - bis dahin aus uRdxStructFixes.
   System.SysUtils,
-  uRefactorInfo,     // TRefactorSpan.Make
-  uRdxStructFixes;   // StartsStatementAt, ElseBelongsToIf
+  uRefactorInfo;     // TRefactorSpan.Make
 
 const
   SPAN_098 = 'sca098';
   SPAN_080 = 'sca080';
   SPAN_047 = 'sca047';
-  // Hier endet eine Anweisung ohne ';'.
-  STMT_STOPS: array[0..4] of string = ('end', 'else', 'until', 'except',
-    'finally');
+  // Hier endet eine Anweisung ohne ';': STATEMENT_STOPS (uRdxCodeMap; bis
+  // zur Folgewelle des Wochen-Reviews hier als STMT_STOPS).
   BOOL_WORDS: array[0..1] of string = ('true', 'false');
   // Steht einer davon auf oberster Ebene von C, ist C Boolean.
   COMPARE_OPS: array[0..7] of string = ('=', '<>', '<', '>', '<=', '>=',
@@ -162,10 +162,8 @@ const
   // Vor der ersten Anweisung einer Anweisungsliste.
   LIST_OPENERS: array[0..7] of string = ('begin', 'try', 'finally',
     'except', 'repeat', 'initialization', 'finalization', 'otherwise');
-  // Hier endet eine Anweisungsliste.
-  LIST_ENDS: array[0..3] of string = ('end', 'until', 'except', 'finally');
-  // Zweige ohne begin: dahinter steht genau eine Anweisung.
-  BRANCH_WORDS: array[0..2] of string = ('then', 'else', 'do');
+  // Das Ende einer Anweisungsliste (LIST_ENDS) und die Zweige ohne begin
+  // (BRANCH_WORDS) stehen in uRdxCodeMap.
   // Davor beginnt kein Pfad ('A.B', 'R^.F', '&X', '@X').
   PATH_JOINERS: array[0..3] of string = ('.', '^', '&', '@');
   KEY_SELF   = 'Self-assignment: ';
@@ -218,12 +216,12 @@ type
   end;
 
   // SCA080: Rueckwaerts-Suche nach einer Schleife um den Sprung (wie
-  // uRedundantJump.JumpInsideLoop): offene Bloecke und ob auf der
-  // aktuellen Ebene schon ein ';' gekreuzt wurde.
+  // uRedundantJump.JumpInsideLoop): ob auf der aktuellen Ebene schon ein
+  // ';' gekreuzt wurde - die offenen Bloecke zaehlt TRdxBackBalance
+  // (uRdxCodeMap; bis zur Folgewelle des Wochen-Reviews das Feld Depth).
   TRdxLoopScan = record
-    Depth   : Integer;
     SawSemi : Boolean;
-    function StepWord(const T: TRdxToken): TRdxStep;
+    function StepWord(const T: TRdxToken; ADepth: Integer): TRdxStep;
   end;
 
 { ---- gemeinsam ---- }
@@ -408,7 +406,7 @@ var
 begin
   Result := '';
   S := ASite.Stop;
-  if (S.Low <> ';') and (S.Low <> '') and not InList(S.Low, STMT_STOPS) then
+  if (S.Low <> ';') and (S.Low <> '') and not InList(S.Low, STATEMENT_STOPS) then
     Exit(Format('hinter "%s" geht der Ausdruck weiter - kein reines '
       + 'if..else', [ASite.SecondVal.Low]));
   if CommentInRange(AMap, TRefactorSpan.Make(SPAN_098, ASite.IfTok.Line,
@@ -416,7 +414,7 @@ begin
     Exit('Kommentar oder Direktive in der Anweisung - er ginge verloren');
   if SameTok(After(AMap, ASite.IfTok), ASite.ThenTok) then
     Exit('leere Bedingung');
-  if not TRdxStructFixes.StartsStatementAt(AMap, ASite.IfTok) then
+  if not StartsStatement(AMap, ASite.IfTok) then
     Result := 'das if steht in einem Ausdruck (bedingter Ausdruck, Delphi '
       + '13) - keine Anweisung';
 end;
@@ -710,31 +708,29 @@ end;
 
 { TRdxLoopScan }
 
-// Ein Schluesselwort rueckwaerts: rsFound im Rumpf einer Schleife, rsStop
-// an einer Routinengrenze.
-function TRdxLoopScan.StepWord(const T: TRdxToken): TRdxStep;
+// Ein Schluesselwort rueckwaerts (ADepth: offene Bloecke, TRdxBackBalance):
+// rsFound im Rumpf einer Schleife, rsStop an einer Routinengrenze. Ein
+// begin/case/try/asm auf oberster Ebene ist der Anfang des umschliessenden
+// Blocks - dort beginnt eine neue Anweisungsfolge (SawSemi zurueck); die
+// Bloecke darin zaehlt die Bilanz.
+function TRdxLoopScan.StepWord(const T: TRdxToken; ADepth: Integer): TRdxStep;
 begin
   Result := rsGoOn;
-  if (T.Low = 'end') or (T.Low = 'until') then
-    Inc(Depth)
-  else if T.Low = 'repeat' then
+  if T.Low = 'repeat' then
   begin
-    if Depth = 0 then
-      Exit(rsFound);
-    Dec(Depth);
+    if ADepth = 0 then
+      Result := rsFound;
   end
   else if (T.Low = 'for') or (T.Low = 'while') then
   begin
     // Ein schon gekreuztes ';' heisst: die einanweisige Schleife ist zu
     // Ende, der Sprung steht dahinter ('while .. do Inc(Run); Exit;').
-    if (Depth = 0) and not SawSemi then
+    if (ADepth = 0) and not SawSemi then
       Result := rsFound;
   end
   else if InList(T.Low, ['begin', 'case', 'try', 'asm']) then
   begin
-    if Depth > 0 then
-      Dec(Depth)
-    else
+    if ADepth = 0 then
       SawSemi := False;
   end
   else if InList(T.Low, ROUTINE_BOUNDS) then
@@ -742,44 +738,42 @@ begin
 end;
 
 // Steht der Sprung im Rumpf einer Schleife? Dann ist Exit eine
-// Frueh-Rueckkehr, kein No-Op (uRedundantJump: Schleifen-Gate).
+// Frueh-Rueckkehr, kein No-Op (uRedundantJump: Schleifen-Gate). Die
+// Bilanz fuehrt TRdxBackBalance - nur 'record' laesst diese Suche aus: sie
+// zaehlte es nie als Oeffner (Bestand seit uRedundantJump; Review Woche
+// G07-03 nennt die Luecke, die Folgewelle zieht nur die Bilanz zusammen
+// und aendert kein Ergebnis).
 function JumpInsideLoop(AMap: TRdxCodeMap; const AJump: TRdxToken): Boolean;
 var
   Scan : TRdxLoopScan;
-  T, P : TRdxToken;
+  W    : TRdxBackBalance;
   Step : TRdxStep;
 begin
   Scan := Default(TRdxLoopScan);
-  T := Before(AMap, AJump);
-  while T.Low <> '' do
+  W.Start(AMap, AJump);
+  while W.Next do
   begin
-    P := Before(AMap, T);
     Step := rsGoOn;
-    if (T.Low = ';') and (Scan.Depth = 0) then
+    if (W.Tok.Low = ';') and (W.Depth = 0) then
       Scan.SawSemi := True
-    else if IsKeywordAfter(T, P) then
-      Step := Scan.StepWord(T);
+    else if IsKeywordAfter(W.Tok, W.Prev) then
+      Step := Scan.StepWord(W.Tok, W.Depth);
     if Step <> rsGoOn then
       Exit(Step = rsFound);
-    T := P;
+    if W.Tok.Low <> 'record' then
+      W.Balance;
   end;
   Result := False;
 end;
 
-// InFinally, ein Schluesselwort rueckwaerts: Bloecke ueberspringen, die
-// umschliessenden verlassen; rsFound im finally-Teil, rsStop an einer
-// Routinengrenze (auch einer anonymen Methode).
-function FinallyStep(const T: TRdxToken; var ABlock: Integer): TRdxStep;
+// InFinally, ein Schluesselwort rueckwaerts (ADepth: offene Bloecke,
+// TRdxBackBalance - die umschliessenden verlassen sie auf Tiefe 0):
+// rsFound im finally-Teil, rsStop an einer Routinengrenze (auch einer
+// anonymen Methode).
+function FinallyStep(const T: TRdxToken; ADepth: Integer): TRdxStep;
 begin
   Result := rsGoOn;
-  if (T.Low = 'end') or (T.Low = 'until') then
-    Inc(ABlock)
-  else if IsEndOpener(T.Low) or (T.Low = 'repeat') then
-  begin
-    if ABlock > 0 then
-      Dec(ABlock);
-  end
-  else if (ABlock = 0) and (T.Low = 'finally') then
+  if (ADepth = 0) and (T.Low = 'finally') then
     Result := rsFound
   else if InList(T.Low, ROUTINE_BOUNDS) then
     Result := rsStop;
@@ -788,22 +782,19 @@ end;
 // Steht der Sprung (auch in einem Block darin) im finally-Teil eines try?
 function InFinally(AMap: TRdxCodeMap; const AJump: TRdxToken): Boolean;
 var
-  T, P  : TRdxToken;
-  Block : Integer;
-  Step  : TRdxStep;
+  W    : TRdxBackBalance;
+  Step : TRdxStep;
 begin
-  Block := 0;
-  T := Before(AMap, AJump);
-  while T.Low <> '' do
+  W.Start(AMap, AJump);
+  while W.Next do
   begin
-    P := Before(AMap, T);
-    if IsKeywordAfter(T, P) then
+    if IsKeywordAfter(W.Tok, W.Prev) then
     begin
-      Step := FinallyStep(T, Block);
+      Step := FinallyStep(W.Tok, W.Depth);
       if Step <> rsGoOn then
         Exit(Step = rsFound);
     end;
-    T := P;
+    W.Balance;
   end;
   Result := False;
 end;
@@ -843,7 +834,7 @@ var
   Span   : TRefactorSpan;
 begin
   AEdit := Default(TRdxEdit);
-  if not TRdxStructFixes.ElseBelongsToIf(AMap, AElse, Result) then
+  if not ElseBelongsToIf(AMap, AElse, Result) then
     Exit(Result + ' - der Sprung ist dort die einzige Anweisung');
   if not LastCharBefore(AMap, AElse, Li, Co) then
     Exit('kein then-Zweig vor dem else');
@@ -990,7 +981,7 @@ begin
     ASite.EndLine := Cur.Line;
     ASite.EndCol := Cur.EndCol;
   end;
-  Result := (Cur.Low = ';') or (Cur.Low = '') or InList(Cur.Low, STMT_STOPS);
+  Result := (Cur.Low = ';') or (Cur.Low = '') or InList(Cur.Low, STATEMENT_STOPS);
 end;
 
 // 'AArg := AArg' an T (OneTokenOnLine, SelfOn).

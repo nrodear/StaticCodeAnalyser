@@ -143,26 +143,30 @@ begin
   Result := (AHead.DoTok.Low = 'do') and (AHead.DoTok.Line = T.Line);
 end;
 
-// Genau ein Handler-Kopf auf ALine. '' oder der Grund.
+// Beginnt an T ein Handler-Kopf (ReadHead; das Praedikat fuer
+// CountTokensOnLine)?
+function IsHandlerHead(AMap: TRdxCodeMap; const T: TRdxToken;
+  const AArg: string): Boolean;
+var
+  H : TOnHead;
+begin
+  Result := ReadHead(AMap, T, H);
+end;
+
+// Genau ein Handler-Kopf auf ALine. '' oder der Grund. Der Lauf ist
+// CountTokensOnLine (uRdxCodeMap; bis zur Folgewelle des Wochen-Reviews,
+// G09-16, hier ausgeschrieben); den Kopf des letzten Treffers liest
+// ReadHead noch einmal - wie bisher steht in AHead der letzte.
 function FindHead(AMap: TRdxCodeMap; ALine: Integer;
   out AHead: TOnHead): string;
 var
-  T    : TRdxToken;
-  H    : TOnHead;
-  n    : Integer;
+  Hit : TRdxToken;
+  n   : Integer;
 begin
   AHead := Default(TOnHead);
-  n := 0;
-  T := NextToken(AMap, ALine, 1);
-  while (T.Low <> '') and (T.Line = ALine) do
-  begin
-    if ReadHead(AMap, T, H) then
-    begin
-      Inc(n);
-      AHead := H;
-    end;
-    T := After(AMap, T);
-  end;
+  n := CountTokensOnLine(AMap, ALine, IsHandlerHead, '', Hit);
+  if n > 0 then
+    ReadHead(AMap, Hit, AHead);
   Result := '';
   if n = 0 then
     Result := MsgMovedSuffix(_(R_EOH_MOVED))

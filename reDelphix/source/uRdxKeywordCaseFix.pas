@@ -66,18 +66,9 @@ uses
 
 const
   SPAN_064 = 'sca064';
-  // Reservierte Woerter: als Bezeichner nur mit '&' - hinter '.', '&', '@'
-  // und vor ':=' prueft der Planer vorher.
-  RESERVED: array[0..63] of string = ('and', 'array', 'as', 'asm', 'begin',
-    'case', 'class', 'const', 'constructor', 'destructor', 'dispinterface',
-    'div', 'do', 'downto', 'else', 'end', 'except', 'exports', 'file',
-    'finalization', 'finally', 'for', 'function', 'goto', 'if',
-    'implementation', 'in', 'inherited', 'initialization', 'inline',
-    'interface', 'is', 'label', 'library', 'mod', 'nil', 'not', 'object',
-    'of', 'or', 'packed', 'procedure', 'program', 'property', 'raise',
-    'record', 'repeat', 'resourcestring', 'set', 'shl', 'shr', 'string',
-    'then', 'threadvar', 'to', 'try', 'type', 'unit', 'until', 'uses',
-    'var', 'while', 'with', 'xor');
+  // Reservierte Woerter (RESERVED, uRdxCodeMap - bis zur Folgewelle des
+  // Wochen-Reviews eine Kopie hier): als Bezeichner nur mit '&' - hinter
+  // '.', '&', '@' und vor ':=' prueft der Planer vorher.
   VISIBILITY: array[0..3] of string = ('private', 'protected', 'public',
     'published');
   // Davor steht eine Sichtbarkeit im Klassenkoerper.

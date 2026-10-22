@@ -24,7 +24,9 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uRefactorInfo;
+  uRefactorInfo,
+  uRdxCodeMap;   // TRdxCodeMap (WholeLinesEdit), RangeText; bis zur Folgewelle
+                 // des Wochen-Reviews nur im implementation-Teil
 
 const
   // TOTAEditPos.Col und TOTACharPos.CharIndex der ToolsAPI sind SmallInt
@@ -142,11 +144,31 @@ function ApplyByteEdits(const ABytes: TBytes;
 // Minor 6).
 procedure AddEdit(var AList: TArray<TRdxEdit>; const AEdit: TRdxEdit);
 
+// Die ganzen Zeilen AFirst..ALast samt Zeilenende loeschen. Bis zur
+// Folgewelle des Wochen-Reviews (G09-09) als LinesCut in uRdxCleanupFixes
+// (bis Charge H3c LinesEdit - gleich benannt wie die Ersetzung ganzer
+// Zeilen in uRdxRoutineFixes, mit anderem Vertrag; Minor 5); hier, weil
+// TRdxEdit hier steht und die Planer einander nicht einbinden. Ein Bereich
+// beginnt auf einem Zeichen (SpanFits: weder hinter einem Zeilenende noch
+// auf einer leeren Zeile). Ist AFirst leer oder steht hinter ALast (letzte
+// Zeile der Datei) kein Zeilenende, beginnt er deshalb AUF dem letzten
+// Zeichen der naechsten nicht leeren Zeile P davor, das neu geschrieben
+// wird - samt den Zeilenenden der Leerzeilen zwischen P und AFirst, die
+// bleiben. Ist dieses Zeichen die zweite Haelfte eines Surrogatpaars
+// (Emoji in einem Kommentar), beginnt er auf der ersten: sonst schnitte er
+// mitten im Zeichen, und PlanByteEdits lehnte jeden Klick ab (Gegen-Review
+// R4-09; wie uRdxTryFixes.TryEdit). '' oder der Grund. Die anderen
+// Loeschungen ganzer Zeilen (uRdxSuppress, uRdxFlowFixes, uRdxStructFixes,
+// uRdxSimpleFixes, uRdxAttrDuplicateFix, uRdxTwiceInheritedFix) sperren
+// am Dateiende oder rechnen anders - sie hierauf umzustellen bewegt
+// Angebote und ist eine eigene Charge.
+function WholeLinesEdit(AMap: TRdxCodeMap; AFirst, ALast: Integer;
+  const ARole: string; out AEdit: TRdxEdit): string;
+
 implementation
 
 uses
-  uRefactorInfoBuilder,   // SpanText: derselbe Bereichstext wie beim Scan
-  uRdxCodeMap;            // RangeText: der Bereichstext ohne SpanFits
+  uRefactorInfoBuilder;   // SpanText: derselbe Bereichstext wie beim Scan
 
 const
   SDiffers = 'Quelltext im Editor weicht vom Stand beim Menueaufbau ab - '
@@ -478,6 +500,48 @@ procedure AddEdit(var AList: TArray<TRdxEdit>; const AEdit: TRdxEdit);
 begin
   SetLength(AList, Length(AList) + 1);
   AList[High(AList)] := AEdit;
+end;
+
+function WholeLinesEdit(AMap: TRdxCodeMap; AFirst, ALast: Integer;
+  const ARole: string; out AEdit: TRdxEdit): string;
+var
+  P, Col : Integer;
+  L      : string;
+begin
+  Result := '';
+  AEdit := Default(TRdxEdit);
+  if (AMap.Raw(AFirst) <> '') and (ALast < AMap.LineCount) then
+  begin
+    AEdit.Span := TRefactorSpan.Make(ARole, AFirst, 1, ALast + 1, 1);
+    AEdit.Expected := RangeText(AMap, AEdit.Span);
+    Exit;
+  end;
+  P := AFirst - 1;
+  while (P >= 1) and (AMap.Raw(P) = '') do
+    Dec(P);
+  if P < 1 then
+    Exit('vor dem Bereich steht nichts, und er reicht bis zum Dateiende - '
+      + 'von Hand loeschen');
+  L := AMap.Raw(P);
+  Col := Length(L);
+  if (Col > 1) and IsLowSurrogateCh(L[Col]) then
+    Dec(Col);
+  // Es bleiben die Zeilenenden von P bis AFirst - 1; hinter der letzten
+  // Zeile der Datei liegt das von ALast ausserhalb des Bereichs und
+  // uebernimmt das von AFirst - 1.
+  if ALast < AMap.LineCount then
+  begin
+    AEdit.Span := TRefactorSpan.Make(ARole, P, Col, ALast + 1, 1);
+    AEdit.NewText := Copy(L, Col, MaxInt) + StringOfChar(#10, AFirst - P);
+  end
+  else
+  begin
+    AEdit.Span := TRefactorSpan.Make(ARole, P, Col, ALast,
+      Length(AMap.Raw(ALast)) + 1);
+    AEdit.NewText := Copy(L, Col, MaxInt)
+      + StringOfChar(#10, AFirst - 1 - P);
+  end;
+  AEdit.Expected := RangeText(AMap, AEdit.Span);
 end;
 
 end.

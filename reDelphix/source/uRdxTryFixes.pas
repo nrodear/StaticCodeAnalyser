@@ -194,7 +194,7 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxHandOver,      // IsLocalVar, InlineVarOf, LIST_PREV, BRANCH_WORDS, R_HELD
+  uRdxHandOver,      // IsLocalVar, InlineVarOf, R_HELD
   uRdxTrySpan;       // TRdxPair, TRdxSpan, ScanPair, EnclosingReason, Sperren
 
 const
@@ -208,9 +208,6 @@ const
   // (IndentStep): eine ausgerichtete Zeile ('1: begin' und darunter weit
   // eingerueckt) ist keine Stufe.
   MAX_STEP = 4;
-  // Die zweite Haelfte eines UTF-16-Surrogatpaars (TryEdit).
-  LOW_SURROGATE_FIRST = $DC00;
-  LOW_SURROGATE_LAST  = $DFFF;
   R_MOVED = 'Zeile verschoben? Datei neu pruefen';
   R_BY_HAND = 'von Hand pruefen';
   // Die Freigaben von LOCK_PAIRS (uRdxTrySpan) fuer die Gruende, wie Delphi
@@ -358,7 +355,7 @@ begin
   if O.Low <> '' then
   begin
     L := AMap.Raw(O.Line);
-    OInd := Copy(L, 1, SkipBlanks(L, 1) - 1);
+    OInd := IndentOf(L);
     Result := Copy(AIndent, Length(OInd) + 1, MaxInt);
     if (Copy(AIndent, 1, Length(OInd)) = OInd) and PlainStep(Result) then
       Exit;
@@ -384,12 +381,6 @@ begin
   Result := Copy(ALine, 1, k) + AStep + Copy(ALine, k + 1, MaxInt);
 end;
 
-// Die zweite Haelfte eines UTF-16-Surrogatpaars?
-function IsSecondHalf(C: Char): Boolean;
-begin
-  Result := (Ord(C) >= LOW_SURROGATE_FIRST) and (Ord(C) <= LOW_SURROGATE_LAST);
-end;
-
 // Die Ersetzung: vom letzten Zeichen der Zeile von A bis zum Ende der
 // letzten Zeile von B - try, die Zeilen dazwischen eine Stufe tiefer,
 // finally, B eine Stufe tiefer, end;. Der Bereich beginnt AUF einem Zeichen
@@ -408,11 +399,11 @@ begin
   Result := Default(TRdxEdit);
   ALine := APair.Semi.Line;
   L := AMap.Raw(APair.First.Line);
-  Ind := Copy(L, 1, SkipBlanks(L, 1) - 1);
+  Ind := IndentOf(L);
   Step := ListStep(AMap, APair.First, Ind);
   Text := AMap.Raw(ALine);
   First := Length(Text);
-  if (First > 1) and IsSecondHalf(Text[First]) then
+  if (First > 1) and IsLowSurrogateCh(Text[First]) then   // uRdxCodeMap
     Dec(First);
   SB := TStringBuilder.Create;
   try

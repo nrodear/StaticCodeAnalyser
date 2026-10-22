@@ -45,19 +45,11 @@ const
   R_BLANKS_STRING = 'der Leerraum steht in einem mehrzeiligen oder offenen '
     + 'String - er ist Inhalt, die Hilfe loescht ihn nicht';
 
+// Der Zahlenleser ist NumberAfterKey (uRdxCodeMap) - bis zur Folgewelle
+// des Wochen-Reviews (G09-30) eine Kopie von ColumnFromMessage.
 class function TRdxTrailingBlanksFix.ColumnOf(const AMessage: string): Integer;
-var
-  p, i : Integer;
 begin
-  Result := 0;
-  p := Pos(KEY_FROM, AMessage);
-  if p = 0 then Exit;
-  i := p + Length(KEY_FROM);
-  while (i <= Length(AMessage)) and CharInSet(AMessage[i], ['0'..'9']) do
-  begin
-    Result := Result * 10 + Ord(AMessage[i]) - Ord('0');
-    Inc(i);
-  end;
+  Result := NumberAfterKey(AMessage, KEY_FROM);
 end;
 
 class function TRdxTrailingBlanksFix.TrimEnd(AMap: TRdxCodeMap;

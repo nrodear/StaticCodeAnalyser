@@ -83,11 +83,8 @@ uses
 const
   SPAN_181 = 'sca181';
   ATTR_NAME = 'Category';
-  // Davor darf eine Attributzeile beginnen: Ende der Deklaration davor,
-  // Abschnittswort, Beginn eines Typs (class, record, ...), anderes Attribut.
-  ANCHOR_WORDS: array[0..13] of string = (';', ']', 'public', 'private',
-    'protected', 'published', 'automated', 'class', 'record', 'interface',
-    'object', 'type', 'implementation', 'dispinterface');
+  // Davor darf eine Attributzeile beginnen: AttrAnchorOk (uRdxCodeMap; bis
+  // zur Folgewelle des Wochen-Reviews hier ANCHOR_WORDS, G09-02).
 
 class function TRdxCategoryArgFix.AddArgument(AMap: TRdxCodeMap;
   ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
@@ -95,16 +92,18 @@ class function TRdxCategoryArgFix.AddArgument(AMap: TRdxCodeMap;
 var
   L                    : string;
   First, P, Q, R, T, j : Integer;
+  NameAt, NameEnd      : Integer;   // AttrHeadAt - hier nicht gefragt
   Prev                 : TRdxToken;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
   L := AMap.Raw(ALine);
-  First := SkipBlanks(L, 1);
-  // '[' als erstes Zeichen der Zeile, als Code.
-  if AMap.StartsInside(ALine) or (First > Length(L)) or (L[First] <> '[')
-     or not AMap.IsCode(ALine, First) then
+  // '[' als erstes Zeichen der Zeile, als Code (AttrHeadAt, uRdxCodeMap;
+  // bis zur Folgewelle des Wochen-Reviews hier ausgeschrieben, G09-02). Den
+  // Namen liest die Hilfe selbst: er steht OHNE Leerraum hinter dem '['.
+  AttrHeadAt(AMap, ALine, First, NameAt, NameEnd);
+  if First = 0 then
   begin
     AReason := MsgMovedSuffix(_(R_CAT_MOVED));
     Exit;
@@ -165,8 +164,7 @@ begin
     end;
   end;
   // Das Token vor dem Attribut: eine Deklaration ist zu Ende oder beginnt.
-  Prev := PrevToken(AMap, ALine, First);
-  if (Prev.Low = '') or not InList(Prev.Low, ANCHOR_WORDS) then
+  if not AttrAnchorOk(AMap, ALine, First, Prev) then
   begin
     AReason := _(R_CAT_ANCHOR);
     Exit;

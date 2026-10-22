@@ -415,7 +415,8 @@ implementation
 
 uses
   System.SysUtils,
-  uRdxCodeMap;   // IsIdentStart, IsIdentChar (Zeichen > #127 wie der Core)
+  uRdxCodeMap;   // IsIdentStart, IsIdentChar (Zeichen > #127 wie der Core),
+                 // CharAt, JoinStrings, Surrogat-Haelften
 
 const
   // Paar-Regel von LooksLikeSql (Review 2026-10-07, Nit 6): je Verb die
@@ -1394,16 +1395,6 @@ type
     BlankRun  : Integer;
   end;
 
-function IsHighSurrogateCh(C: Char): Boolean;
-begin
-  Result := (C >= #$D800) and (C <= #$DBFF);
-end;
-
-function IsLowSurrogateCh(C: Char): Boolean;
-begin
-  Result := (C >= #$DC00) and (C <= #$DFFF);
-end;
-
 // Elemente eines Zeichens bzw. Codes: vorsichtig seine Laenge in UTF-8 -
 // ASCII eins, bis U+07FF zwei, sonst drei (ein einzelnes Surrogat auch).
 // Bis zur Nachpruefung FB zaehlte alles ueber ASCII zwei; ein CJK-Zeichen
@@ -1741,25 +1732,6 @@ type
     TargetU  : Boolean;
   end;
 
-// Die Strings mit ASep verbunden (string.Join kennt FPC nicht).
-function JoinStrings(const AItems: TArray<string>; const ASep: string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(AItems) do
-    begin
-      if i > 0 then SB.Append(ASep);
-      SB.Append(AItems[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
 // Ein Literal-Term: sein Quelltext in den Formatstring (AppendLiteralSource)
 // und sein Wert zu den Literalen. '' oder der Grund.
 function TakeLiteral(const APart: TRdxPart; var AScan: TRdxFormatScan): string;
@@ -2083,8 +2055,9 @@ const
     'firedac', 'ibx', 'bde');
   // Spuren einer FPC-Weiche, ohne Leerraum und klein (LineLooksFpcAware).
   // 'fpc_fullversion' allein ist eine Weiche ('{$IF FPC_FULLVERSION >=
-  // 30200}'; Pruefer 2026-10-14, d) - dieselbe Liste wie im Labor
-  // (uRdxIntroPlan/uVnpPlan FPC_TELLS), seit Charge R8 nachgezogen.
+  // 30200}'; Pruefer 2026-10-14, d). Die einzige Liste in reDelphix: bis
+  // zur Folgewelle des Wochen-Reviews (G01-08) trug uRdxIntroPlan eine
+  // Kopie; das Labor (VarNameProject.uVnpPlan) fuehrt seine eigene.
   FPC_TELLS: array[0..5] of string = (
     '{$mode', '(*$mode', '$ifdeffpc', '$ifndeffpc', 'defined(fpc',
     'fpc_fullversion');
@@ -2113,27 +2086,26 @@ begin
     and InList(LowerCase(Copy(AName, 1, P - 1)), RTL_SCOPE_PREFIXES);
 end;
 
+// Bis zur Folgewelle des Wochen-Reviews (G01-08) verlangte diese Fassung
+// ein '$' auf der Zeile, die Kopie in uRdxIntroPlan nicht; seitdem gilt
+// die vorsichtigere: auch eine Zeile ohne '$' zaehlt - die Folgezeile einer
+// mehrzeiligen Direktive ('{$IF Defined(A)' / '  or Defined(FPC)}') ist
+// eine Weiche, ein Kommentar '// defined(FPC)' macht nur vorsichtig
+// (Kurzname bzw. keine Hilfe), nie falsch. Schnelltest: jede Spur traegt
+// ein '$' oder ein 'f' (defined(fpc, fpc_fullversion).
 class function TRdxRecipes.LineLooksFpcAware(const ALine: string): Boolean;
 var
   S : string;
   i : Integer;
 begin
   Result := False;
-  if Pos('$', ALine) = 0 then Exit;   // jede Spur ist eine Direktive
-  S := LowerCase(StringReplace(StringReplace(ALine, ' ', '', [rfReplaceAll]),
-    #9, '', [rfReplaceAll]));
+  if (Pos('$', ALine) = 0) and (Pos('f', ALine) = 0)
+     and (Pos('F', ALine) = 0) then
+    Exit;
+  S := Squeezed(ALine);   // uRdxCodeMap: ohne Leerzeichen und Tabs, klein
   for i := Low(FPC_TELLS) to High(FPC_TELLS) do
     if Pos(FPC_TELLS[i], S) > 0 then
       Exit(True);
-end;
-
-// Zeichen an AIndex, #0 ausserhalb von S.
-function CharAt(const S: string; AIndex: Integer): Char;
-begin
-  if (AIndex >= 1) and (AIndex <= Length(S)) then
-    Result := S[AIndex]
-  else
-    Result := #0;
 end;
 
 // Erste Stelle ab AFrom, die kein Leerraum ist (Length + 1 am Ende).

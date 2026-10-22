@@ -91,11 +91,10 @@ uses
 
 const
   SPAN_083 = 'sca083';
-  // Davor beginnt eine Anweisung IN einer Anweisungsliste.
-  LIST_PREV: array[0..7] of string = (';', 'begin', 'try', 'finally',
-    'except', 'repeat', 'initialization', 'finalization');
-  // Hinter 'end' ohne ';' darf nur das Ende des umgebenden Blocks folgen.
-  FOLLOW_OK: array[0..3] of string = ('end', 'until', 'finally', 'except');
+  // Davor beginnt eine Anweisung IN einer Anweisungsliste: LIST_PREV;
+  // hinter 'end' ohne ';' darf nur das Ende des umgebenden Blocks folgen:
+  // LIST_ENDS (beide uRdxCodeMap - bis zur Folgewelle des Wochen-Reviews
+  // hier kopiert, LIST_ENDS als FOLLOW_OK).
   // Im Rumpf gesperrt (s. Kopf).
   BODY_BAD: array[0..4] of string = ('var', 'const', 'label', 'goto', 'asm');
   // Davon nur auf der obersten Ebene des Rumpfs: ein Inline-var in einem
@@ -117,29 +116,6 @@ type
     Fin    : TRdxToken;
     EndTok : TRdxToken;
   end;
-
-// Die Zeile ohne Leerraum, klein geschrieben - 'finally end;' -> 'finallyend;'.
-function Squeezed(const S: string): string;
-var
-  SB : TStringBuilder;
-  C  : Char;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for C in S do
-      if not IsBlank(C) then
-        SB.Append(C);
-    Result := LowerCase(SB.ToString);
-  finally
-    SB.Free;
-  end;
-end;
-
-// Der Leerraum am Zeilenanfang.
-function IndentOf(const ALine: string): string;
-begin
-  Result := Copy(ALine, 1, SkipBlanks(ALine, 1) - 1);
-end;
 
 // Ist T das Schluesselwort finally (kein 'X.Finally', kein '&Finally')?
 function IsFinallyKeyword(AMap: TRdxCodeMap; const T: TRdxToken;
@@ -281,7 +257,7 @@ begin
   else if Joined = SQUEEZED_FINALLY_END then
   begin
     Nx := After(AMap, AParts.EndTok);
-    if not (IsKeywordAfter(Nx, AParts.EndTok) and InList(Nx.Low, FOLLOW_OK)) then
+    if not (IsKeywordAfter(Nx, AParts.EndTok) and InList(Nx.Low, LIST_ENDS)) then
       Result := R_EFB_END_TAIL;
   end
   else

@@ -114,24 +114,6 @@ begin
   end;
 end;
 
-// AText ohne Leerzeichen und Tabs, klein.
-function Squeezed(const AText: string): string;
-var
-  i : Integer;
-begin
-  Result := '';
-  for i := 1 to Length(AText) do
-    if not IsBlank(AText[i]) then
-      Result := Result + AText[i];
-  Result := LowerCase(Result);
-end;
-
-// Der Einzug der Zeile (Leerzeichen und Tabs am Anfang).
-function IndentOf(const AText: string): string;
-begin
-  Result := Copy(AText, 1, SkipBlanks(AText, 1) - 1);
-end;
-
 // Der Kommentarrest hinter dem Wort NOSONAR: getrimmt, ein fuehrender ':'
 // oder ein alleinstehendes '-' (Trenner vor der Begruendung) entfallen.
 function ReasonAfter(const ABody: string; AWordCol: Integer): string;
