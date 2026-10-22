@@ -56,7 +56,8 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxCodeMap, uRdxCompilerTraces, uRdxMagicFixes,
-  uTestRdxTextKit;   // Join, Apply, LineOf, WriteText, NewTempDir, RemoveTree
+  uTestRdxTextKit;   // Join, Apply, LineOf, WriteText, NewTempDir, RemoveTree,
+                     // NewMap
 
 const
   MSG = 'Magic number "%s" in if condition - use a constant';
@@ -466,10 +467,10 @@ begin
   Assert.IsTrue(Pos('.lpr', TRdxMagicFixes.FileReason('project1.LPR')) > 0);
   Assert.AreEqual('', TRdxMagicFixes.FileReason(''));
   Root := FreshDir('laz', Tmp);
-  Sub := Root + 'a' + PathDelim;
-  U := Sub + 'b' + PathDelim + 'c' + PathDelim + 'u.pas';
-  ForceDirectories(ExtractFilePath(U));
   try
+    Sub := Root + 'a' + PathDelim;
+    U := Sub + 'b' + PathDelim + 'c' + PathDelim + 'u.pas';
+    ForceDirectories(ExtractFilePath(U));
     WriteText(Root + 'top.lpi', '<?xml?>');
     Assert.AreEqual('', TRdxMagicFixes.FileReason(U), 'drei Ebenen hoeher');
     WriteText(Sub + 'pkg.lpk', '<?xml?>');
@@ -490,17 +491,15 @@ end;
 procedure TTestRdxMagicFix.Disk_IncludeTraces;
 var
   Tmp, Dir, U, R : string;
-  SL             : TStringList;
   Map            : TRdxCodeMap;
 begin
   Dir := FreshDir('inc', Tmp) + 'a' + PathDelim + 'b' + PathDelim;
-  ForceDirectories(Dir);
-  U := Dir + 'u.pas';
-  SL := TStringList.Create;
   Map := nil;
   try
-    SL.Text := UnitWith(['{$I defs.inc}'], ['  Foo;', '  if X > 300 then Bar;']);
-    Map := TRdxCodeMap.Create(SL);
+    ForceDirectories(Dir);
+    U := Dir + 'u.pas';
+    Map := NewMap(UnitWith(['{$I defs.inc}'],
+      ['  Foo;', '  if X > 300 then Bar;']));
     DeleteFile(Dir + 'defs.inc');
     R := TRdxMagicFixes.IncludeReason(U, Map);
     Assert.IsTrue(Pos('Include defs.inc nicht neben der Unit', R) > 0, R);
@@ -516,7 +515,6 @@ begin
     Assert.AreEqual('', TRdxMagicFixes.IncludeReason(U, Map));
   finally
     Map.Free;
-    SL.Free;
     RemoveTree(Tmp);
   end;
 end;

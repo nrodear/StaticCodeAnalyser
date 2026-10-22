@@ -104,7 +104,13 @@ function TempName(const APrefix, ASuffix: string): string;
 // eigen je Aufruf: parallele oder abgebrochene Laeufe teilen keine Dateien
 // (Review R6-07). Abraeumen mit RemoveTree.
 function NewTempDir(const APrefix: string): string;
-// Loescht den Baum ADir (mit Trenner) samt Inhalt.
+// Loescht den Baum ADir (mit Trenner) samt Inhalt - nur ein eigenes
+// Verzeichnis der Tests: ADir muss unter TEMP liegen und sein erster Teil
+// darunter mit 'rdx_' beginnen (wie jeder Vorsatz von NewTempDir/
+// TempName); sonst scheitert der Test, und nichts wird geloescht. Bis zur
+// Review Woche G06-31 loeschte RemoveTree jeden Pfad - eine falsch
+// abgeleitete Wurzel (ParentDir-Kette in uTestRdxMagicFix) haette TEMP
+// selbst geleert, ein leerer Pfad das aktuelle Verzeichnis.
 procedure RemoveTree(const ADir: string);
 
 implementation
@@ -261,7 +267,24 @@ begin
   ForceDirectories(Result);
 end;
 
-procedure RemoveTree(const ADir: string);
+// True, wenn ADir ein eigenes Verzeichnis der Tests ist: TEMP\rdx_..\
+// (TEMP gesetzt, kein '..' im Rest).
+function IsOwnTempDir(const ADir: string): Boolean;
+var
+  Temp, Rest : string;
+begin
+  Result := False;
+  Temp := GetEnvironmentVariable('TEMP');
+  if Temp = '' then Exit;
+  Temp := IncludeTrailingPathDelimiter(Temp);
+  if not SameText(Copy(ADir, 1, Length(Temp)), Temp) then Exit;
+  Rest := Copy(ADir, Length(Temp) + 1, MaxInt);
+  Result := (Length(Rest) > 4) and SameText(Copy(Rest, 1, 4), 'rdx_')
+    and (Pos('..', Rest) = 0);
+end;
+
+// Der Lauf von RemoveTree, nach der Pruefung.
+procedure RemoveTreeBelow(const ADir: string);
 var
   SR : TSearchRec;
 begin
@@ -271,7 +294,7 @@ begin
       if (SR.Name = '.') or (SR.Name = '..') then
         Continue;
       if (SR.Attr and faDirectory) <> 0 then
-        RemoveTree(ADir + SR.Name + PathDelim)
+        RemoveTreeBelow(ADir + SR.Name + PathDelim)
       else
         DeleteFile(ADir + SR.Name);
     until FindNext(SR) <> 0;
@@ -279,6 +302,13 @@ begin
     FindClose(SR);
   end;
   RemoveDir(ADir);
+end;
+
+procedure RemoveTree(const ADir: string);
+begin
+  Assert.IsTrue(IsOwnTempDir(ADir),
+    'RemoveTree loescht nur unter TEMP' + PathDelim + 'rdx_*: ' + ADir);
+  RemoveTreeBelow(ADir);
 end;
 
 end.
