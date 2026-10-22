@@ -95,23 +95,13 @@ begin
 end;
 
 function IsCastWord(const ALow: string): Boolean;
-var
-  C : string;
 begin
-  Result := False;
-  for C in CAST_SIGNED do
-    if ALow = C then Exit(True);
-  for C in CAST_UNSIGNED do
-    if ALow = C then Exit(True);
+  Result := InList(ALow, CAST_SIGNED) or InList(ALow, CAST_UNSIGNED);
 end;
 
 function IsSignedCast(const ALow: string): Boolean;
-var
-  C : string;
 begin
-  Result := False;
-  for C in CAST_SIGNED do
-    if ALow = C then Exit(True);
+  Result := InList(ALow, CAST_SIGNED);
 end;
 
 // Das Bezeichnerwort ab S[P] (P wird dahinter gesetzt); '' ohne.

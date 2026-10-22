@@ -342,6 +342,10 @@ begin
   if AFirst then
     Target := 0;
   Line := Calls[Target].Start.Line;
+  // Heute unerreichbar: CollectCalls sammelt nur Aufrufe VOR dem end des
+  // Rumpfs, und der Aufruf steht allein auf seiner Zeile - das end folgt
+  // also auf einer spaeteren. Die Wache bleibt, weil der Bereich die
+  // Zeile Line + 1 braucht.
   if Line >= AMap.LineCount then
   begin
     AReason := R_TWICE_BODY;

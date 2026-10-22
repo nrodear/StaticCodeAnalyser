@@ -1,13 +1,17 @@
 unit uTestRdxNativeIntFix;
 
 // Editorhilfe SCA161 PointerSubtraction (uRdxNativeIntFix):
-//   Fixture 1 (Text, ohne Parser und Detektor - laeuft auch im FPC-
-//   Pruefstand): 'Integer(P1) - Integer(P2)' -> NativeInt, 'Cardinal(..)'
+//   Fixture 1 (Text, ohne Parser und Detektor): 'Integer(P1) -
+//   Integer(P2)' -> NativeInt, 'Cardinal(..)'
 //   -> NativeUInt; Gegenproben Kommentar, String, verschobene Zeile,
 //   gemischte Casts, mehrere Treffer, Zahl als Operand, Kette, Kommentar
 //   zwischen den Casts.
-//   Fixture 2 (nur Delphi): der ECHTE Detektor meldet, der Adapter plant
-//   aus dem Fund, die Ersetzung wird angewandt - und der Detektor schweigt.
+//   Fixture 2: der ECHTE Detektor meldet, der Adapter plant aus dem Fund,
+//   die Ersetzung wird angewandt - und der Detektor schweigt.
+// Die ganze Unit ist nur Delphi (reDelphix.Test): der Planer bindet
+// uEngineApi/uRdxRecipeRunner und uRdxFixRunner, der FPC-Pruefstand
+// (build.sh) fuehrt ihn nicht - die {$IFNDEF FPC}-Weichen sind heute ohne
+// Wirkung.
 
 interface
 
@@ -281,6 +285,8 @@ begin
 end;
 
 procedure TTestRdxNativeIntFixDetector.Detector_CatalogExample;
+const
+  CAT_CASTS = 'Cardinal(P1) - Cardinal(P2)';
 var
   Meta : TRuleMeta;
   Bad, Fixed, R : string;
@@ -288,9 +294,12 @@ begin
   // Katalog-Beispiel 'bad': Cardinal(P1) - Cardinal(P2) samt Kommentar.
   Meta := TRuleCatalog.GetRuleCanonical(fkPointerSubtraction);
   Bad := WithPointers(CatalogText(Meta.BadExample));
+  // Erwartet: genau die beiden Casts aendern sich - ein 'Cardinal' im
+  // Kommentar oder in einer Deklaration der Huelle bliebe stehen.
+  Assert.IsTrue(Pos(CAT_CASTS, Bad) > 0, Bad);
   Fixed := FixFirst(Bad, R);
-  Assert.AreEqual(StringReplace(Bad, 'Cardinal', 'NativeUInt', [rfReplaceAll]),
-    Fixed, R);
+  Assert.AreEqual(StringReplace(Bad, CAT_CASTS,
+    'NativeUInt(P1) - NativeUInt(P2)', []), Fixed, R);
   Assert.IsFalse(StillReported(Fixed), 'der Detektor schweigt danach');
 end;
 
