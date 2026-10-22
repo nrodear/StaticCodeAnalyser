@@ -29,23 +29,40 @@ implementation
 uses
   System.SysUtils, CodeTemplateAPI, uVnpPlan, uVnpLog;
 
-// Die Zeile ab der Pufferposition AStart (bis vor CR/LF), UTF-8 gelesen.
+// Die Zeile ab der Pufferposition AStart (bis vor CR/LF), UTF-8 gelesen -
+// in Bloecken bis zum Zeilenende oder Pufferende (wie uVnpIntroduce.
+// ReadEditor). Vorher las die Sonde genau einen Block von 4096 Bytes: eine
+// laengere Zeile war abgeschnitten, auch mitten in einer UTF-8-Folge, und
+// der Abgleich meldete eine ABWEICHUNG, die es im Puffer nicht gab (Review
+// Woche 2026-10-21, G10-17).
 function ReadLineAt(const ABuffer: IOTAEditBuffer; AStart: Integer): string;
 const
-  MAX_LINE = 4096;
+  BLOCK = 4096;
 var
   Reader : IOTAEditReader;
   Bytes  : TBytes;
+  Chunk  : TBytes;
   Got, n : Integer;
+  Done   : Boolean;
 begin
   Reader := ABuffer.CreateReader;
-  SetLength(Bytes, MAX_LINE);
-  Got := Reader.GetText(AStart, PAnsiChar(@Bytes[0]), MAX_LINE);
+  SetLength(Bytes, 0);
+  SetLength(Chunk, BLOCK);
+  repeat
+    Got := Reader.GetText(AStart + Length(Bytes), PAnsiChar(@Chunk[0]), BLOCK);
+    n := 0;
+    while (n < Got) and not (Chunk[n] in [10, 13]) do
+      Inc(n);
+    // Fertig am Zeilenende im Block oder am Pufferende (kurzer Block).
+    Done := (n < Got) or (Got < BLOCK);
+    if n > 0 then
+    begin
+      SetLength(Bytes, Length(Bytes) + n);
+      Move(Chunk[0], Bytes[Length(Bytes) - n], n);
+    end;
+  until Done;
   Reader := nil;
-  n := 0;
-  while (n < Got) and not (Bytes[n] in [10, 13]) do
-    Inc(n);
-  Result := TEncoding.UTF8.GetString(Bytes, 0, n);
+  Result := TEncoding.UTF8.GetString(Bytes);
 end;
 
 function ReadRow(const AView: IOTAEditView; ARow: Integer): string;

@@ -2,8 +2,12 @@ program VnpTypeProbe;
 
 {$APPTYPE CONSOLE}
 
-// VarNameProject - Kompilierprobe zu Entscheid E26 (Nico 2026-10-11): die
-// Code-Aktion "Lokale Variable einfuehren" soll die Deklaration TYPISIERT
+// VarNameProject - Kompilierprobe zu Entscheid E26 (Nico 2026-10-11).
+// GESCHICHTE bis P5: seit E26 (Nico 2026-10-13) schreibt die Aktion eine
+// Inline-KONSTANTE und heisst "Lokale Konstante einfuehren" - das Ziel
+// der Aktion steht unter P6, der Rest dieses Absatzes beschreibt den
+// verworfenen Entwurf. Die Code-Aktion "Lokale Variable einfuehren"
+// sollte die Deklaration TYPISIERT
 // schreiben ('var MagicNr01: <Typ> := 42;'), damit die Variable zur
 // Laufzeit so rechnet, wie der Compiler das Literal zur Kompilierzeit
 // gerechnet hat. Entwurf der Typregel (lokales Konzept

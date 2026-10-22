@@ -1,7 +1,7 @@
 unit uTestVnpPlan;
 
 // DUnitX-Tests fuer uVnpPlan (VarNameProject, Code-Aktion "Lokale
-// Variable einfuehren"): das Literal am Caret, alle gleichen Literale der
+// Konstante einfuehren"): das Literal am Caret, alle gleichen Literale der
 // Zeile (nur Code - nicht in Strings und Kommentaren), die
 // Deklarationszeile, die Spalten vor und nach dem Ersetzen, CodePart,
 // NextFreeName, Utf8Len und CharColOfByte. Den Zweig ohne begin und die

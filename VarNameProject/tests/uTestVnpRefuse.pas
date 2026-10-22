@@ -1,7 +1,7 @@
 unit uTestVnpRefuse;
 
 // DUnitX-Tests fuer uVnpPlan (VarNameProject, Code-Aktion "Lokale
-// Variable einfuehren"): der Zweig ohne begin (begin..end, Einrueckung) und
+// Konstante einfuehren"): der Zweig ohne begin (begin..end, Einrueckung) und
 // alle Ablehnungen - case-Zweig, Sprungmarke, on-Handler, Zeilenanfang,
 // schon benannt, Konstanten-Kontexte, Deklarationszeilen, die Zeile
 // darueber. Aus uTestVnpPlan abgeteilt (SCA141: Klasse ueber 500 Zeilen),
@@ -227,6 +227,7 @@ var
 begin
   P := PlanIntroduce('  else Result := 7;', 'X := 1;', 18, 'N01');
   Assert.IsFalse(P.Ok, 'else');
+  Assert.IsTrue(Pos('"else"', P.Reason) > 0, 'Grund else: ' + P.Reason);
   // Neu:
   P := PlanIntroduce('  end else Y := 42;', '    X := 1;', 18, 'N01');
   Assert.IsFalse(P.Ok, 'end');
@@ -243,6 +244,7 @@ begin
   Assert.IsTrue(Pos('"except"', P.Reason) > 0, 'Grund except: ' + P.Reason);
   P := PlanIntroduce('  UNTIL I > 10;', '    Inc(I);', 14, 'N01');
   Assert.IsFalse(P.Ok, 'UNTIL gross geschrieben');
+  Assert.IsTrue(Pos('"until"', P.Reason) > 0, 'Grund UNTIL: ' + P.Reason);
 end;
 
 // Schon benannt: ist das Literal ALLEIN der Wert einer var/const-
@@ -307,6 +309,8 @@ begin
   Assert.IsTrue(Pos('Konstante', P.Reason) > 0, 'Grund const: ' + P.Reason);
   P := PlanIntroduce('  CONST C = 42 * 2;', 'begin', 18, 'N01');
   Assert.IsFalse(P.Ok, 'CONST, die 2 - Plan "' + P.NewUseLine + '"');
+  Assert.IsTrue(Pos('Konstanten-Deklarationen', P.Reason) > 0,
+    'Grund CONST: ' + P.Reason);
   // array[0..9]: die 0 in Spalte 16, die 9 in Spalte 19.
   P := PlanIntroduce('  var A: array[0..9] of Byte;', 'begin', 16, 'N01');
   Assert.IsFalse(P.Ok, 'Typ, untere Grenze - Plan "' + P.NewUseLine + '"');
@@ -391,6 +395,8 @@ begin
   // Ohne Leerzeichen um '=': die 42 in Spalte 5.
   P := PlanIntroduce('  C=42;', 'begin', 5, 'N01');
   Assert.IsFalse(P.Ok, 'C=42 - Plan "' + P.NewUseLine + '"');
+  Assert.IsTrue(Pos('type-Abschnitt', P.Reason) > 0,
+    'Grund C=42: ' + P.Reason);
   // '=' als Vergleich: die 42 in Spalte 10 bzw. 13.
   P := PlanIntroduce('  if X = 42 then', '  Y := 1;', 10, 'N01');
   Assert.IsTrue(P.Ok, 'Vergleich im if: ' + P.Reason);

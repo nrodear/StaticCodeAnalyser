@@ -1,6 +1,6 @@
 unit uTestVnpGuards;
 
-// DUnitX-Tests fuer die Schutzregeln der Code-Aktion "Lokale Variable
+// DUnitX-Tests fuer die Schutzregeln der Code-Aktion "Lokale Konstante
 // einfuehren" (uVnpPlan, uVnpEdits.TargetAt), die der Korpus-A/B
 // vom 2026-10-11 verlangt hat: der alte und der neue Plan ueber 8 Mio.
 // Zeilen von D:\git-sca-realworld, dazu ein Gegenpruefer mit eigenen
@@ -213,8 +213,11 @@ begin
     'N01');
   AssertRefusedWith(P, 'Konstante', 'const hinter Direktive');
   // Die 42 in Spalte 19.
+  // Der Grund zeigt, dass 'const' hinter dem Kommentar gelesen wurde: nur
+  // dann ist das Literal "schon allein der Wert" (AlreadyNamed liest
+  // FirstCodeWord) - mit 'x' als erstem Wort lehnte eine andere Regel ab.
   P := PlanIntroduce('  (*x*) const C = 42;', 'begin', 19, 'N01');
-  Assert.IsFalse(P.Ok, 'const hinter (* *) - Plan "' + P.NewUseLine + '"');
+  AssertRefusedWith(P, 'bereits einen Namen', 'const hinter (* *)');
   // Die 42 in Spalte 21.
   P := PlanIntroduce('  {x} end else Y := 42;', '    X := 1;', 21, 'N01');
   AssertRefusedWith(P, '"end"', 'end hinter Kommentar');
