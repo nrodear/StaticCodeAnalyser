@@ -48,6 +48,7 @@ uses
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uEmptyFinallyBlock,
   uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner,
   uRdxFixTable, uRdxEmptyFinallyFix,
+  uRdxText,              // MsgNoFileOpen (Charge G7)
   uTestRdxDetectorKit,   // TSeen, CatalogText, DetectSource
   uRdxText,              // MsgNoFileOpen (MapFix, E29)
   uTestRdxTextKit;       // Join, Apply, LineOf

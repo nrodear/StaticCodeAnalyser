@@ -434,7 +434,9 @@ begin
   O := PlanFirst(InIntf(['const', '  A = 1;', 'const', '  B = 2;']));
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.AreEqual('const', O.Name, 'Name');
-  Assert.AreEqual('gleiche Bedeutung - ein Schluesselwort deklariert beide '
+  // de.po traegt echte Umlaute (Charge G7) - hier als #$-Code.
+  Assert.AreEqual('gleiche Bedeutung - ein Schl'#$00FC'sselwort '
+    + 'deklariert beide '
     + 'Abschnitte', O.Hint);
   Assert.IsFalse(O.ChangesBehavior, 'bedeutungsgleich');
   // Abgelehnt (Inline-Deklarationen): Name trotzdem gesetzt.

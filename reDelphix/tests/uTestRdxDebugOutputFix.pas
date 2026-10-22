@@ -587,7 +587,8 @@ begin
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.AreEqual<Integer>(1, O.Variant, 'zweiter Eintrag');
   Assert.IsTrue(O.ChangesBehavior, 'gekennzeichnet');
-  Assert.AreEqual('die Ausgabe entfaellt in jedem Build, auch beim '
+  // de.po traegt echte Umlaute (Charge G7) - hier als #$-Code.
+  Assert.AreEqual('die Ausgabe entf'#$00E4'llt in jedem Build, auch beim '
     + 'Debuggen; ihre Argumente werden nicht mehr ausgewertet', O.Hint);
 end;
 

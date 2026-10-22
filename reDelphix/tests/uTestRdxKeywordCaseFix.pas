@@ -49,6 +49,7 @@ uses
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uLowercaseKeyword,
   uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner,
   uRdxFixTable, uRdxKeywordCaseFix,
+  uRdxText,              // MsgNoFileOpen (Charge G7)
   uTestRdxDetectorKit,   // TSeen, DetectSource
   uRdxText,              // MsgNoFileOpen (MapFix, E29)
   uTestRdxTextKit;       // Join, Apply

@@ -45,7 +45,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uMethodd12, uSCAConsts, uRdxRecipeRunner, uRdxFixTable,
-  uRdxText,          // MsgNoFileOpen
+  uRdxText,          // MsgNoFileOpen, _: Texte in der Sprache des Laufs (de)
   uTestRdxTextKit;   // Join
 
 type
@@ -366,7 +366,9 @@ begin
     R := TRdxFixTable.Row(i);
     K := KindName(R.Kind);
     Assert.IsTrue(Assigned(R.Plan), K + ': Planer');
-    Assert.IsTrue((R.Hint <> '') <> R.HintByPlanner,
+    // Seit Charge G7 steht der feste Hinweis in FIX_HINTS (RawHint), nicht
+    // mehr als Feld der Zeile.
+    Assert.IsTrue((TRdxFixTable.RawHint(i) <> '') <> R.HintByPlanner,
       K + ': Hinweis fest ODER vom Planer, nicht beides und nicht keins');
     Assert.AreNotEqual('', TRdxFixTable.RawCaption(i, 0), K + ': Menuetext');
     Assert.AreNotEqual(K, TRdxFixTable.RawCaption(i, 0),
@@ -451,7 +453,10 @@ begin
   try
     O := TRdxFixTable.FixFor(nil, nil, F, nil);
     Assert.IsFalse(O.Enabled);
-    Assert.AreEqual('keine einfache Hilfe fuer diese Regel', O.Reason);
+    // de.po: 'keine einfache Hilfe fuer diese Regel' mit echtem Umlaut
+    // (Charge G7) - die Quelle bleibt ASCII, also die Teile ohne ihn.
+    Assert.IsTrue(Pos('keine einfache Hilfe f', O.Reason) = 1, O.Reason);
+    Assert.IsTrue(Pos(' diese Regel', O.Reason) > 0, O.Reason);
     Assert.AreEqual<Integer>(0, TRdxFixTable.AlternativeFixFor(nil, nil, F, nil).Variant);
   finally
     F.Free;
@@ -540,14 +545,23 @@ begin
   // Der Menuetext nennt den Wert (ein Literal oder Default(T)); bis Charge
   // FB versprach der Hinweis '(wie Default(T))' - falsch, wenn ein Member
   // wie der erste Aufzaehlungswert heisst (Gegen-Review R5-06, Fall 2).
+  // Seit Charge G7 die msgid in FIX_HINTS (RawHint) und ihre deutsche
+  // Fassung aus de.po - dort mit echten Umlauten ('zufaellig',
+  // 'spaetere'), also hier nur die Teile ohne.
   for i := 0 to TRdxFixTable.RowCount - 1 do
   begin
     R := TRdxFixTable.Row(i);
     if R.Kind <> fkRoutineResultUnassigned then
       Continue;
     Assert.IsFalse(R.HintByPlanner, 'SCA121: fester Hinweis der Zeile');
-    Assert.AreEqual('Result beginnt jetzt mit dem genannten Wert statt '
-      + 'zufaellig - spaetere Zuweisungen gelten weiter', R.Hint);
+    Assert.AreEqual('Result now starts with the named value instead of a '
+      + 'random one - later assignments still apply', TRdxFixTable.RawHint(i));
+    Assert.IsTrue(Pos('Result beginnt jetzt mit dem genannten Wert statt',
+      uRdxText._(TRdxFixTable.RawHint(i))) = 1,
+      uRdxText._(TRdxFixTable.RawHint(i)));
+    Assert.IsTrue(Pos('Zuweisungen gelten weiter',
+      uRdxText._(TRdxFixTable.RawHint(i))) > 0,
+      uRdxText._(TRdxFixTable.RawHint(i)));
     Exit;
   end;
   Assert.Fail('keine Zeile fuer SCA121');

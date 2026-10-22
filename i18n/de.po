@@ -5959,3 +5959,402 @@ msgstr "einer Funktion"
 
 msgid "the message has no function or return type"
 msgstr "Funktion oder Rückgabetyp fehlt in der Meldung"
+
+msgid "Source in the editor differs from the state when the menu was built - nothing written (reopen the menu) (line %d, the buffer has %d lines)"
+msgstr "Quelltext im Editor weicht vom Stand beim Menüaufbau ab - nicht geschrieben (Menü neu öffnen) (Zeile %d, der Puffer hat %d Zeilen)"
+
+msgid "Source in the editor differs from the state when the menu was built - nothing written (reopen the menu) (from character %d: expected \"%s\", editor \"%s\")"
+msgstr "Quelltext im Editor weicht vom Stand beim Menüaufbau ab - nicht geschrieben (Menü neu öffnen) (ab Zeichen %d: erwartet \"%s\", Editor \"%s\")"
+
+msgid "Position in the buffer cannot be computed (%d..%d of %d)"
+msgstr "Position im Puffer nicht berechenbar (%d..%d von %d)"
+
+msgid "Byte range differs from the state when the menu was built - nothing written (from character %d: expected \"%s\", editor \"%s\")"
+msgstr "Byte-Bereich weicht vom Stand beim Menüaufbau ab - nicht geschrieben (ab Zeichen %d: erwartet \"%s\", Editor \"%s\")"
+
+msgid "No replacement"
+msgstr "keine Ersetzung"
+
+msgid "Replacements overlap (bytes %d..%d and %d..%d)"
+msgstr "Ersetzungen überlappen (Bytes %d..%d und %d..%d)"
+
+msgid "Cannot open or find the file in the editor"
+msgstr "Datei ließ sich im Editor nicht öffnen oder finden"
+
+msgid "Editor view not available"
+msgstr "Editor-Ansicht nicht verfügbar"
+
+msgid "Editor buffer not readable"
+msgstr "Editor-Puffer nicht lesbar"
+
+msgid "Editor buffer not writable"
+msgstr "Editor-Puffer nicht beschreibbar"
+
+msgid "Editor buffer is read-only - nothing written"
+msgstr "Editor-Puffer ist schreibgeschützt - nicht geschrieben"
+
+msgid "%s [log: %s]"
+msgstr "%s [Protokoll: %s]"
+
+msgid "action kind %d without execution"
+msgstr "Aktionsart %d ohne Ausführung"
+
+msgid "the finding line lies in a block comment or multi-line string - a marker would have no effect there or would become part of the string"
+msgstr "Fundzeile liegt in einem Block-Kommentar oder mehrzeiligen String - ein Marker wirkte dort nicht bzw. würde Teil des Strings"
+
+msgid "the marker applies to all kinds (All) - perhaps ineffective only under the current scan profile, please check by hand"
+msgstr "Marker gilt für alle Arten (All) - wirkungslos vielleicht nur unter dem aktuellen Scan-Profil, bitte von Hand prüfen"
+
+msgid "the marker names several kinds - perhaps ineffective only under the current scan profile, please check by hand"
+msgstr "Marker nennt mehrere Arten - wirkungslos vielleicht nur unter dem aktuellen Scan-Profil, bitte von Hand prüfen"
+
+msgid "the marker names no recognizable kind"
+msgstr "Marker nennt keine erkennbare Art"
+
+msgid "the marker also targets the comment line %d, and its kind can be reported there - SCA165 checks only the code line; please check by hand"
+msgstr "Marker zielt auch auf die Kommentarzeile %d, und seine Art kann dort gemeldet werden - SCA165 prüft nur die Code-Zeile; bitte von Hand prüfen"
+
+msgid "the marker in line %d applies to this comment line and cannot be extended (All or behind code) - a new line in between would take its target away; please add by hand"
+msgstr "Marker in Zeile %d gilt für diese Kommentarzeile und lässt sich nicht erweitern (All oder hinter Code) - eine neue Zeile dazwischen nähme ihm das Ziel; bitte von Hand ergänzen"
+
+msgid "the marker is already there"
+msgstr "Marker steht schon da"
+
+msgid "no unit line found"
+msgstr "keine unit-Zeile gefunden"
+
+msgid "no finding line"
+msgstr "keine Fundzeile"
+
+msgid "the finding line is empty"
+msgstr "Fundzeile ist leer"
+
+msgid "a block comment starts after the unit line"
+msgstr "hinter der unit-Zeile beginnt ein Block-Kommentar"
+
+msgid "no file"
+msgstr "keine Datei"
+
+msgid "no marker line"
+msgstr "keine Markerzeile"
+
+msgid "no marker in the line"
+msgstr "kein Marker in der Zeile"
+
+msgid "already qualified"
+msgstr "bereits qualifiziert"
+
+msgid "not in the scope table (project or third-party unit)"
+msgstr "nicht in der Scope-Tabelle (Projekt- oder Fremd-Unit)"
+
+msgid "order System/Vcl depends on the project (DCC_Namespace): %s"
+msgstr "Reihenfolge System/Vcl projektabhängig (DCC_Namespace): %s"
+
+msgid "file uses VCL and FMX: %s"
+msgstr "Datei nutzt VCL und FMX: %s"
+
+msgid "framework (VCL/FMX) of the file not recognizable: %s"
+msgstr "Rahmenwerk (VCL/FMX) der Datei nicht erkennbar: %s"
+
+msgid "no scope prefix of the framework fits: %s"
+msgstr "kein Scope-Präfix des Rahmenwerks passt: %s"
+
+msgid "network path in the unit search path or next to the file (%s) - reDelphix does not read there (the menu is built in the main thread); whether the project has a unit of this name is open - %s"
+msgstr "Netzpfad im Unit-Suchpfad oder neben der Datei (%s) - reDelphix liest dort nicht (Menüaufbau im Hauptthread); ob das Projekt eine Unit dieses Namens hat, ist offen - %s"
+
+msgid "the virtual call then ends up in this method"
+msgstr "der virtuelle Aufruf landet danach in dieser Methode"
+
+msgid "only the warning W1010 goes away - the method still hides the inherited ones"
+msgstr "nur die Warnung W1010 entfällt - die Methode verdeckt die geerbten weiterhin"
+
+msgid "form file %s not readable (%s) - an event binding cannot be ruled out"
+msgstr "Formdatei %s nicht lesbar (%s) - eine Ereignis-Bindung ist nicht auszuschließen"
+
+msgid "TObject.Create is empty - same meaning; the constructor then follows the convention"
+msgstr "TObject.Create ist leer - gleiche Bedeutung; der Konstruktor folgt danach der Konvention"
+
+msgid "the overridden parent constructor now runs first, with the same arguments"
+msgstr "der überschriebene Elternkonstruktor läuft jetzt zuerst, mit denselben Argumenten"
+
+msgid "TObject.Destroy is empty - same meaning; the destructor then follows the convention"
+msgstr "TObject.Destroy ist leer - gleiche Bedeutung; der Destruktor folgt danach der Konvention"
+
+msgid "the parent destructor now runs at the end and frees the inherited fields"
+msgstr "der Elterndestruktor läuft jetzt am Ende und gibt die geerbten Felder frei"
+
+msgid "Result now starts empty instead of with the old content of the caller's target variable"
+msgstr "Result beginnt jetzt leer statt mit dem alten Inhalt der Zielvariable des Aufrufers"
+
+msgid "same meaning - the constant %s holds the literal; rename it by hand or with Refactor > Rename (Ctrl+Shift+E)"
+msgstr "gleiche Bedeutung - die Konstante %s hält das Literal; umbenennen von Hand oder mit Refactor > Rename (Strg+Umschalt+E)"
+
+msgid "network path %s - the quick fix reads no form files there (the menu is built in the main thread); %s"
+msgstr "Netzpfad %s - die Hilfe liest dort keine Formdateien (Menüaufbau im Hauptthread); %s"
+
+msgid "network path %s - the quick fix reads no include files there (the menu is built in the main thread); %s"
+msgstr "Netzpfad %s - die Hilfe liest dort keine Include-Dateien (Menüaufbau im Hauptthread); %s"
+
+msgid "no finding"
+msgstr "kein Fund"
+
+msgid "no simple quick fix for this rule"
+msgstr "keine einfache Hilfe für diese Regel"
+
+msgid "line %d carries %s.Free, the finding names %s"
+msgstr "Zeile %d trägt %s.Free, der Fund nennt %s"
+
+msgid "the form file %s names %s - bound to an event by name"
+msgstr "die Formdatei %s nennt %s - per Name an ein Ereignis gebunden"
+
+msgid "no quick fix for the variant %s - only for %s (Free present, but beside the finally)"
+msgstr "keine Hilfe für die Variante %s - nur für %s (Free vorhanden, aber neben dem finally)"
+
+msgid "TObject is the ancestor anyway - same meaning"
+msgstr "TObject ist ohnehin der Vorfahr - gleiche Bedeutung"
+
+msgid "the condition as text - so the message names what failed"
+msgstr "die Bedingung als Text - so nennt die Meldung, was fehlschlug"
+
+msgid "the section was empty - same meaning"
+msgstr "der Abschnitt war leer - gleiche Bedeutung"
+
+msgid "same meaning - Delphi calls the routine without parentheses too"
+msgstr "gleiche Bedeutung - Delphi ruft die Routine auch ohne Klammern auf"
+
+msgid "all other values: do nothing (as before)"
+msgstr "alle anderen Werte: nichts tun (wie bisher)"
+
+msgid "same meaning - only the form; a further statement then visibly belongs to the branch"
+msgstr "gleiche Bedeutung - nur die Form; eine weitere Anweisung gehört danach sichtbar in den Zweig"
+
+msgid "the second \";\" was an empty statement"
+msgstr "das zweite \";\" war eine leere Anweisung"
+
+msgid "whitespace only"
+msgstr "nur Leerraum"
+
+msgid "same meaning - the section can then get a finalization"
+msgstr "gleiche Bedeutung - der Abschnitt kann danach ein finalization bekommen"
+
+msgid "the intent is in the body - a reason after it helps the next reader"
+msgstr "die Absicht steht im Rumpf - ein Grund dahinter hilft dem nächsten Leser"
+
+msgid "the exception is now raised - the code after it no longer runs in the error case"
+msgstr "die Exception wird jetzt ausgelöst - der Code dahinter läuft im Fehlerfall nicht mehr"
+
+msgid "the same exception - the original stack trace is kept"
+msgstr "dieselbe Exception - der Original-Stack-Trace bleibt erhalten"
+
+msgid "the skeleton is empty - fill in summary, param and returns"
+msgstr "das Gerüst ist leer - summary, param und returns ausfüllen"
+
+msgid "a new GUID - only for your own interfaces, never for COM imports"
+msgstr "eine neue GUID - nur für eigene Interfaces, nie für COM-Importe"
+
+msgid "same meaning - one assignment instead of two branches"
+msgstr "gleiche Bedeutung - eine Zuweisung statt zweier Zweige"
+
+msgid "same meaning - the control flow leaves the block anyway"
+msgstr "gleiche Bedeutung - der Ablauf verlässt den Block ohnehin"
+
+msgid "the assignment has no effect - if another value was meant (typo), it is still missing"
+msgstr "die Zuweisung bewirkt nichts - war ein anderer Wert gemeint (Tippfehler), fehlt er weiterhin"
+
+msgid "same meaning - the name appears nowhere else in the code of the file; documentation and a comment above it that names the routine go with it"
+msgstr "gleiche Bedeutung - der Name steht sonst nirgends im Code der Datei; Doku und ein Kommentar darüber, der die Routine nennt, gehen mit"
+
+msgid "same meaning - declaration and implementation go, the name appears nowhere else in the code of the file"
+msgstr "gleiche Bedeutung - Deklaration und Implementierung gehen, der Name steht sonst nirgends im Code der Datei"
+
+msgid "same meaning - only a comment is removed; version control still knows it"
+msgstr "gleiche Bedeutung - nur Kommentar fällt weg; die Versionsverwaltung kennt ihn noch"
+
+msgid "same meaning - the variable appears nowhere else"
+msgstr "gleiche Bedeutung - die Variable kommt nirgends sonst vor"
+
+msgid "Free now also runs on an exception and on Exit - the lines in between move into the try part"
+msgstr "Free läuft jetzt auch bei einer Ausnahme und bei Exit - die Zeilen dazwischen rücken in den try-Teil"
+
+msgid "the lock is now also released on an exception - the lines in between move into the try part"
+msgstr "die Sperre wird jetzt auch bei einer Ausnahme freigegeben - die Zeilen dazwischen rücken in den try-Teil"
+
+msgid "FreeMem now also runs on an exception and on Exit - the lines in between move into the try part"
+msgstr "FreeMem läuft jetzt auch bei einer Ausnahme und bei Exit - die Zeilen dazwischen rücken in den try-Teil"
+
+msgid "Result now starts with the named value instead of a random one - later assignments still apply"
+msgstr "Result beginnt jetzt mit dem genannten Wert statt zufällig - spätere Zuweisungen gelten weiter"
+
+msgid "only the scheme; the server must support https on the default port (port 443, valid certificate)"
+msgstr "nur das Schema; der Server muss https auf dem Standardport können (Port 443, gültiges Zertifikat)"
+
+msgid "one pair of parentheses remains - meaning and precedence unchanged"
+msgstr "ein Klammerpaar bleibt - Bedeutung und Rangfolge gleich"
+
+msgid "blank lines only - the attribute belongs to the next element anyway"
+msgstr "nur Leerzeilen - das Attribut gehört ohnehin zum nächsten Element"
+
+msgid "the second call goes away - the parent method runs only once; check order and side effects"
+msgstr "der zweite Aufruf entfällt - die Elternmethode läuft nur noch einmal; Reihenfolge und Nebenwirkung prüfen"
+
+msgid "the first call goes away - the parent method runs only once; check order and side effects"
+msgstr "der erste Aufruf entfällt - die Elternmethode läuft nur noch einmal; Reihenfolge und Nebenwirkung prüfen"
+
+msgid "Win64: the difference is now the full address difference; under range checking (R+) the assignment to an Integer target can raise ERangeError"
+msgstr "Win64: der Abstand ist jetzt der volle Adressabstand; unter Bereichsprüfung (R+) kann die Zuweisung an ein Integer-Ziel ERangeError auslösen"
+
+msgid "same meaning - an empty finally does nothing, exceptions keep propagating outward"
+msgstr "gleiche Bedeutung - ein leeres finally tut nichts, Ausnahmen laufen weiter nach außen"
+
+msgid "the loop never ran so far and then counts down; if it was switched off on purpose, this is an intervention"
+msgstr "die Schleife lief bisher nie und zählt danach abwärts; war sie absichtlich abgeschaltet, ist das ein Eingriff"
+
+msgid "the loop never ran so far and then counts up; if it was switched off on purpose, this is an intervention"
+msgstr "die Schleife lief bisher nie und zählt danach aufwärts; war sie absichtlich abgeschaltet, ist das ein Eingriff"
+
+msgid "tabs in code become spaces - tab width 2 (assumption); tabs in strings and comments stay"
+msgstr "Tabs im Code werden zu Leerzeichen - Tabweite 2 (Annahme); Tabs in Strings und Kommentaren bleiben"
+
+msgid "whitespace at the end of the line only"
+msgstr "nur Leerraum am Zeilenende"
+
+msgid "same meaning - Delphi does not distinguish upper and lower case"
+msgstr "gleiche Bedeutung - Delphi unterscheidet Groß- und Kleinschreibung nicht"
+
+msgid "an exception swallowed so far now propagates outward - the caller must handle it; if the swallowing was intended, this is an intervention"
+msgstr "eine bisher verschluckte Ausnahme läuft jetzt nach außen weiter - der Aufrufer muss sie behandeln; war das Verschlucken Absicht, ist das ein Eingriff"
+
+msgid "the exception is no longer swallowed but passed on to the caller - check program flow and outer handlers"
+msgstr "die Ausnahme wird nicht mehr verschluckt, sondern an den Aufrufer weitergereicht - Programmablauf und äußere Handler prüfen"
+
+msgid "same meaning - the call stays as a statement and runs exactly once as before; the with header and the empty block go away"
+msgstr "gleiche Bedeutung - der Aufruf bleibt als Anweisung und läuft wie vorher genau einmal; with-Kopf und leerer Block entfallen"
+
+msgid "the marker now stands above the line and suppresses all rules of the line (so far NOSONAR suppressed nothing); critical kinds (HardcodedSecret, SQLInjection etc.) stay visible"
+msgstr "der Marker steht jetzt über der Zeile und unterdrückt alle Regeln der Zeile (bisher unterdrückte NOSONAR nichts); kritische Arten (HardcodedSecret, SQLInjection u. a.) bleiben sichtbar"
+
+msgid "same meaning - only the superfluous comma goes away"
+msgstr "gleiche Bedeutung - nur das überzählige Komma entfällt"
+
+msgid "same meaning - each name keeps its type; with \"var\" each new line carries the \"var\" again"
+msgstr "gleiche Bedeutung - jeder Name behält seinen Typ; bei \"var\" trägt jede neue Zeile das \"var\" wieder"
+
+msgid "replace the placeholder \"reason\" with the real reason (ticket, dependency, known limitation)"
+msgstr "der Platzhalter \"reason\" ist durch den echten Grund zu ersetzen (Ticket, Abhängigkeit, bekannte Einschränkung)"
+
+msgid "the attribute was there twice - it applies only once anyway"
+msgstr "das Attribut stand zweimal - es gilt ohnehin nur einmal"
+
+msgid "the placeholder \"category\" still has to be replaced with the real category name"
+msgstr "der Platzhalter \"category\" muss noch durch den echten Kategorienamen ersetzt werden"
+
+msgid "same meaning - the label is at the end of the routine; it stays and, once no goto jumps to it any more, is reported as an unused label (hint/warning)"
+msgstr "gleiche Bedeutung - die Marke steht am Routinenende; sie bleibt stehen und wird, wenn kein goto mehr zu ihr springt, als ungenutzte Marke gemeldet (Hinweis/Warnung)"
+
+msgid "same meaning - without the argument the RTL reads the same global FormatSettings; the call now says so explicitly"
+msgstr "gleiche Bedeutung - ohne das Argument liest die RTL dieselbe globale FormatSettings; der Aufruf sagt es jetzt ausdrücklich"
+
+msgid "independent of the system: period as decimal separator, date MM/dd/yyyy, English month and day names - for files, SQL and logs, not for display"
+msgstr "unabhängig vom System: Punkt als Dezimaltrenner, Datum MM/dd/yyyy, englische Monats- und Tagesnamen - für Dateien, SQL und Protokolle, nicht für die Anzeige"
+
+msgid "same meaning - Format without a third argument reads the same global FormatSettings; the call now says so explicitly"
+msgstr "gleiche Bedeutung - Format ohne drittes Argument liest dieselbe globale FormatSettings; der Aufruf sagt es jetzt ausdrücklich"
+
+msgid "independent of the system: period as decimal separator, comma as thousands separator - for files, SQL and logs, not for display"
+msgstr "unabhängig vom System: Punkt als Dezimaltrenner, Komma als Tausendertrenner - für Dateien, SQL und Protokolle, nicht für die Anzeige"
+
+msgid "same meaning - Delphi does not distinguish upper and lower case; only declaration and implementation are adjusted, calls keep their spelling (RTTI and MethodName then give the new name)"
+msgstr "gleiche Bedeutung - Delphi unterscheidet Groß- und Kleinschreibung nicht; nur Deklaration und Implementierung werden angepasst, Aufrufe behalten ihre Schreibweise (RTTI und MethodName nennen danach den neuen Namen)"
+
+msgid "the product is now computed in 64 bits - a result above MaxInt is kept instead of silently truncated; with overflow checking (Q+) the exception EIntOverflow goes away"
+msgstr "das Produkt wird jetzt in 64 Bit gerechnet - ein Ergebnis über MaxInt bleibt erhalten statt still abgeschnitten; mit Überlaufprüfung (Q+) entfällt die Ausnahme EIntOverflow"
+
+msgid "same meaning - deleted in comments, as #$ code in strings (same value); the line now shows what the compiler reads"
+msgstr "gleiche Bedeutung - im Kommentar gelöscht, im String als #$-Code (gleicher Wert); die Zeile zeigt jetzt, was der Compiler liest"
+
+msgid "same meaning - deleted in comments, as #$ code in strings (same value, also in emoji sequences)"
+msgstr "gleiche Bedeutung - im Kommentar gelöscht, im String als #$-Code (gleicher Wert, auch in Emoji-Folgen)"
+
+msgid "same meaning - the thread was created suspended in this routine (Create(True)) and never started; Start then works like Resume"
+msgstr "gleiche Bedeutung - der Thread wurde in dieser Routine angehalten erzeugt (Create(True)) und noch nie gestartet; Start läuft dann wie Resume"
+
+msgid "the random sequence then differs on every run (seed from the clock) - a sequence that was repeatable so far, e.g. for tests, is lost; the call when the unit is loaded affects the whole program; Random stays unsuitable for passwords, tokens and keys"
+msgstr "die Zufallsfolge ist danach bei jedem Lauf eine andere (Startwert aus der Uhr) - eine bisher wiederholbare Folge, etwa für Tests, geht verloren; der Aufruf beim Laden der Unit wirkt für das ganze Programm; für Passwörter, Token und Schlüssel bleibt Random ungeeignet"
+
+msgid "now compares with a tolerance (default epsilon of System.Math) instead of exactly - an intentionally exact comparison (flag or sentinel value) changes its meaning"
+msgstr "vergleicht jetzt mit Toleranz (Standard-Epsilon von System.Math) statt exakt - ein gewollt exakter Vergleich (Schalter- oder Sentinelwert) ändert damit seine Bedeutung"
+
+msgid "now copies or fills exactly one element (SizeOf of the target type) instead of 4/8 bytes - if a whole buffer was meant, set the length by hand"
+msgstr "kopiert bzw. füllt jetzt genau ein Element (SizeOf des Zieltyps) statt 4/8 Byte - war ein ganzer Puffer gemeint, die Länge von Hand setzen"
+
+msgid "the output only runs when DEBUG is defined (Delphi: configuration Debug); in the release build it goes away together with the evaluation of its arguments - FPC/Lazarus does not define DEBUG by itself"
+msgstr "die Ausgabe läuft nur noch, wenn DEBUG definiert ist (Delphi: Konfiguration Debug); im Release-Build entfällt sie samt der Auswertung ihrer Argumente - FPC/Lazarus definiert DEBUG nicht von selbst"
+
+msgid "the output goes away in every build, also when debugging; its arguments are no longer evaluated"
+msgstr "die Ausgabe entfällt in jedem Build, auch beim Debuggen; ihre Argumente werden nicht mehr ausgewertet"
+
+msgid "same meaning - the code never ran; parked code then only lives in version control"
+msgstr "gleiche Bedeutung - der Code lief nie; geparkter Code steht danach nur noch in der Versionsverwaltung"
+
+msgid "only the applicable branch runs now - side effects, costs and exceptions of the other go away; the condition still runs exactly once"
+msgstr "nur noch der zutreffende Zweig läuft - Nebenwirkungen, Kosten und Ausnahmen des anderen entfallen; die Bedingung läuft weiter genau einmal"
+
+msgid "the condition now also runs without assertions (release, $C-) - there only the check goes away; without a message the condition becomes the message text"
+msgstr "die Bedingung läuft jetzt auch ohne Assertions (Release, $C-) - dort entfällt nur die Prüfung; ohne Meldung wird die Bedingung zum Meldungstext"
+
+msgid "same meaning - a parameter name is not part of the call; declaration, implementation and <param name> of the documentation are then called \"_Name\", the detector skips such names"
+msgstr "gleiche Bedeutung - ein Parametername ist nicht Teil des Aufrufs; Deklaration, Implementierung und <param name> der Doku heißen danach \"_Name\", der Detektor übergeht solche Namen"
+
+msgid "same meaning - the body does not write the parameter, nobody uses the routine as a value; declaration and implementation get the const. Exception: if the routine itself changes the variable the caller passes (field, global variable), the const parameter then hangs on freed text"
+msgstr "gleiche Bedeutung - der Rumpf beschreibt den Parameter nicht, niemand nutzt die Routine als Wert; Deklaration und Implementierung bekommen das const. Ausnahme: ändert die Routine selbst die Variable, die der Aufrufer übergibt (Feld, globale Variable), hängt der const-Parameter danach an freigegebenem Text"
+
+msgid "same meaning - the class is in the implementation part and only visible in this file; every reference in the code is renamed too, comments keep the old name"
+msgstr "gleiche Bedeutung - die Klasse steht im implementation-Teil und ist nur in dieser Datei sichtbar; jeder Verweis im Code wird mit umbenannt, Kommentare behalten den alten Namen"
+
+msgid "same meaning - every reference in the routine is renamed too (also in local routines after it), comments keep the old name"
+msgstr "gleiche Bedeutung - jeder Verweis in der Routine wird mit umbenannt (auch in lokalen Routinen dahinter), Kommentare behalten den alten Namen"
+
+msgid "same meaning - the compiler does not read \"_\" in numbers; digit separators exist only from Delphi 11 on, FPC does not know them"
+msgstr "gleiche Bedeutung - der Compiler liest \"_\" in Zahlen nicht; Zifferntrenner gibt es erst ab Delphi 11, FPC kennt sie nicht"
+
+msgid "same meaning - one keyword declares both sections"
+msgstr "gleiche Bedeutung - ein Schlüsselwort deklariert beide Abschnitte"
+
+msgid "same meaning - for this simple type Delphi treats out like var; declaration and implementation together"
+msgstr "gleiche Bedeutung - für diesen einfachen Typ behandelt Delphi out wie var; Deklaration und Implementierung zusammen"
+
+msgid "out released the caller's value on the call (managed or unknown type) - with var it is kept; if the routine reads the parameter before setting it, it now sees the old value"
+msgstr "out gab den Wert des Aufrufers beim Aufruf frei (verwalteter oder unbekannter Typ) - mit var bleibt er erhalten; liest die Routine den Parameter vor dem Setzen, sieht sie jetzt den alten Wert"
+
+msgid "only the class name - on handlers for EArgumentException now catch the exception, E.ClassName in the log changes; on E: Exception still catches it"
+msgstr "nur der Klassenname - on-Handler für EArgumentException fangen die Ausnahme jetzt, E.ClassName im Log wechselt; on E: Exception fängt weiter"
+
+msgid "only the class name - on handlers for EInvalidOpException now catch the exception, E.ClassName in the log changes; on E: Exception still catches it"
+msgstr "nur der Klassenname - on-Handler für EInvalidOpException fangen die Ausnahme jetzt, E.ClassName im Log wechselt; on E: Exception fängt weiter"
+
+msgid "same meaning - the method needs no object (no Self); calls Obj.M(..) stay valid, a use as method pointer (of object) in another unit then no longer compiles"
+msgstr "gleiche Bedeutung - die Methode braucht kein Objekt (kein Self); Aufrufe Obj.M(..) bleiben gültig, eine Verwendung als Methodenzeiger (of object) in einer anderen Unit übersetzt danach nicht mehr"
+
+msgid "same meaning - the condition was always true (Length is never negative): the then branch runs as before, an else branch never ran and goes away; if another comparison was meant (e.g. > 0), it is still missing"
+msgstr "gleiche Bedeutung - die Bedingung war immer wahr (Length ist nie negativ): der then-Zweig läuft wie bisher, ein else-Zweig lief nie und entfällt; war ein anderer Vergleich gemeint (etwa > 0), fehlt er weiterhin"
+
+msgid "the list now frees its items - on Free, Clear and Delete; checked: every item is created there, does not leave the list and is not freed by hand"
+msgstr "die Liste gibt ihre Elemente jetzt frei - bei Free, Clear und Delete; geprüft ist, dass jedes Element dort entsteht, die Liste nicht verlässt und nicht von Hand freigegeben wird"
+
+msgid "same meaning - a letter only looked Latin; all occurrences in the code of the unit are renamed, comments stay"
+msgstr "gleiche Bedeutung - ein Buchstabe sah nur lateinisch aus; alle Vorkommen im Code der Unit werden umbenannt, Kommentare bleiben"
+
+msgid "the call now sets the placeholder from the SQL instead of aborting at run time with \"parameter not found\" - check that the value belongs to this placeholder"
+msgstr "der Aufruf setzt jetzt den Platzhalter aus dem SQL, statt zur Laufzeit mit \"parameter not found\" abzubrechen - prüfen, dass der Wert zu diesem Platzhalter gehört"
+
+msgid "same meaning - the condition is evaluated once as before; if it is false, the routine ends as before; the body moves out one level"
+msgstr "gleiche Bedeutung - die Bedingung wird wie vorher einmal ausgewertet, ist sie falsch, endet die Routine wie bisher; der Rumpf rückt eine Stufe aus"
+
+msgid "the parameter reference %s is fetched once before the loop - if the parameter is missing, the exception now comes even without an iteration; if a call in the loop resets SQL or Params indirectly, %s points to nothing"
+msgstr "die Parameter-Referenz %s wird einmal vor der Schleife geholt - fehlt der Parameter, kommt die Ausnahme jetzt auch ohne Durchlauf; setzt ein Aufruf in der Schleife SQL oder Params indirekt neu, zeigt %s ins Leere"
+
+msgid "the field reference %s is fetched once before the loop - if the field is missing, the exception now comes even without an iteration; if a call in the loop closes or opens the dataset indirectly, %s points to nothing"
+msgstr "die Feld-Referenz %s wird einmal vor der Schleife geholt - fehlt das Feld, kommt die Ausnahme jetzt auch ohne Durchlauf; schließt oder öffnet ein Aufruf in der Schleife die Datenmenge indirekt, zeigt %s ins Leere"
+
+msgid "Range (line %d, column %d to line %d, column %d) starts or ends beyond the end of the line - error of the quick fix, nothing written"
+msgstr "Bereich (Zeile %d, Spalte %d bis Zeile %d, Spalte %d) beginnt oder endet hinter dem Zeilenende - Fehler der Hilfe, nicht geschrieben"
