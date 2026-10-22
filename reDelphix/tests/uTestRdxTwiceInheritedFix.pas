@@ -136,30 +136,23 @@ begin
     RunDetector);
 end;
 
-// Die Hilfe (Hauptweg oder AAlt) fuer den EINEN Fund des Detektors, so wie
-// die Tabelle sie ruft (Adapter), angewendet wie der Editor.
+// Die Hilfe (Hauptweg oder AAlt) fuer den EINEN Fund des Detektors ueber
+// den Einstieg des Anbieters (uTestRdxDetectorKit.PlanFixIn bzw.
+// PlanAltFixIn: TRdxFixTable.FixFor/AlternativeFixFor mit dem
+// Quellstellen-Dienst; bis zur Review Woche G06 eine eigene Kopie mit
+// APlaces = nil - der Adapter braucht ihn nicht), angewendet wie der
+// Editor.
 function FixOnce(const ASource: string; AAlt: Boolean): string;
 var
   Seen : TArray<TSeen>;
-  SL   : TStringList;
-  F    : TLeakFinding;
   O    : TRdxFixOutcome;
 begin
   Seen := Detect(ASource);
   Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet genau einen Fund');
-  SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
-    fkTwiceInheritedCalls);
-  try
-    SL.Text := ASource;
-    if AAlt then
-      O := TRdxFixTable.AlternativeFixFor(nil, SL, F, nil)
-    else
-      O := TRdxFixTable.FixFor(nil, SL, F, nil);
-  finally
-    F.Free;
-    SL.Free;
-  end;
+  if AAlt then
+    O := PlanAltFixIn(ASource, 't.pas', fkTwiceInheritedCalls, Seen[0])
+  else
+    O := PlanFixIn(ASource, 't.pas', fkTwiceInheritedCalls, Seen[0]);
   Assert.IsTrue(O.Enabled, O.Reason);
   Result := Apply(ASource, O.Edits);
 end;

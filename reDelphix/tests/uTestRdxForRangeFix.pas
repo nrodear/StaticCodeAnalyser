@@ -103,26 +103,20 @@ begin
     Result := Apply(ASource, AOutcome.Edits);
 end;
 
-// Wie der Benutzer: Fund fuer Fund melden, die Hilfe anwenden, bis der
-// Detektor schweigt.
-function FixAll(const ASource: string; AAlt: Boolean): string;
-const
-  MAX_PASSES = 10;
-var
-  Seen : TArray<TSeen>;
-  O    : TRdxFixOutcome;
-  Pass : Integer;
+// Dasselbe wie Detect einer Q/R-Unit in der Form von TDetectFunc
+// (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    Seen := DetectSource('rdx_forrange_', Result, fkReversedForRange,
-      RunDetector);
-    if Length(Seen) = 0 then Exit;
-    Result := Fixed(Result, Seen[0].Line, Seen[0].Msg, AAlt, O);
-    Assert.IsTrue(O.Enabled, O.Reason);
-  end;
-  Assert.Fail('der Detektor schweigt nach ' + IntToStr(MAX_PASSES) + ' Laeufen nicht');
+  Result := DetectSource('rdx_forrange_', ASource, AKind, RunDetector);
+end;
+
+// Wie der Benutzer: Fund fuer Fund melden, die Hilfe (AAlt: den zweiten
+// Eintrag) anwenden, bis der Detektor schweigt - ueber den Einstieg des
+// Anbieters (uTestRdxDetectorKit.FixAllWith; bis zur Review Woche G06
+// eine eigene Schleife).
+function FixAll(const ASource: string; AAlt: Boolean): string;
+begin
+  Result := FixAllWith(ASource, fkReversedForRange, DetectKind, AAlt);
 end;
 
 { ---- Planer auf Text ---- }

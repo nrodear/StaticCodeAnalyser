@@ -331,45 +331,29 @@ begin
     RunDetector);
 end;
 
-// Die Hilfe fuer den Fund ASeen ueber den Planer der Tabelle.
+// Die Hilfe fuer den Fund ASeen ueber den Einstieg des Anbieters
+// (uTestRdxDetectorKit.PlanFixIn: TRdxFixTable.FixFor mit dem
+// Quellstellen-Dienst; bis zur Review Woche G06 eine eigene Kopie mit
+// APlaces = nil - der Adapter braucht ihn nicht).
 function PlanFor(const ASource: string; const ASeen: TSeen): TRdxFixOutcome;
-var
-  SL      : TStringList;
-  Finding : TLeakFinding;
 begin
-  SL := TStringList.Create;
-  Finding := TLeakFinding.New(FILE_NAME, '', ASeen.Line, ASeen.Msg,
-    fkAttributeIgnoreWithoutReason);
-  try
-    SL.Text := ASource;
-    Result := TRdxFixTable.FixFor(nil, SL, Finding, nil);
-  finally
-    Finding.Free;
-    SL.Free;
-  end;
+  Result := PlanFixIn(ASource, FILE_NAME, fkAttributeIgnoreWithoutReason, ASeen);
 end;
 
-// Fund fuer Fund beheben, bis der Detektor schweigt; Zahl der Funde am
+// Dasselbe in der Form von TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := Detect(ASource);
+end;
+
+// Fund fuer Fund beheben, bis der Detektor schweigt - ueber den Einstieg
+// des Anbieters (uTestRdxDetectorKit.FixAllWith, TRdxFixTable.FixFor;
+// bis zur Review Woche G06 eine eigene Schleife); Zahl der Funde am
 // Anfang in ACount.
 function FixAll(const ASource: string; out ACount: Integer): string;
-const
-  MAX_PASSES = 10;
-var
-  Seen : TArray<TSeen>;
-  O    : TRdxFixOutcome;
-  Pass : Integer;
 begin
-  Result := ASource;
   ACount := Length(Detect(ASource));
-  for Pass := 1 to MAX_PASSES do
-  begin
-    Seen := Detect(Result);
-    if Length(Seen) = 0 then Exit;
-    O := PlanFor(Result, Seen[0]);
-    Assert.IsTrue(O.Enabled, Format('Zeile %d: %s', [Seen[0].Line, O.Reason]));
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail('der Detektor meldet nach 10 Runden noch');
+  Result := FixAllWith(ASource, fkAttributeIgnoreWithoutReason, DetectKind);
 end;
 
 procedure TTestRdxIgnoreReasonDetector.Detector_CatalogExample;

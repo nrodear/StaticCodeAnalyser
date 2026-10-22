@@ -139,27 +139,19 @@ begin
     RunDetector);
 end;
 
-// Die Hilfe fuer den ERSTEN Fund des Detektors, so wie die Tabelle sie ruft
-// (Adapter), angewendet wie der Editor.
+// Die Hilfe fuer den ERSTEN Fund des Detektors ueber den Einstieg des
+// Anbieters (uTestRdxDetectorKit.PlanFixIn: TRdxFixTable.FixFor mit dem
+// Quellstellen-Dienst; bis zur Review Woche G06 eine eigene Kopie mit
+// APlaces = nil - der Adapter braucht ihn nicht), angewendet wie der
+// Editor.
 function FixOnce(const ASource: string): string;
 var
   Seen : TArray<TSeen>;
-  SL   : TStringList;
-  F    : TLeakFinding;
   O    : TRdxFixOutcome;
 begin
   Seen := Detect(ASource);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet');
-  SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
-    fkAttributeDuplicate);
-  try
-    SL.Text := ASource;
-    O := TRdxFixTable.FixFor(nil, SL, F, nil);
-  finally
-    F.Free;
-    SL.Free;
-  end;
+  O := PlanFixIn(ASource, 't.pas', fkAttributeDuplicate, Seen[0]);
   Assert.IsTrue(O.Enabled, O.Reason);
   Result := Apply(ASource, O.Edits);
 end;

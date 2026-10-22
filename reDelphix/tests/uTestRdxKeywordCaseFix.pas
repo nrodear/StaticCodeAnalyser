@@ -168,22 +168,13 @@ begin
   Result := DetectSource(KW_PREFIX, ASource, fkLowercaseKeyword, RunKeyword);
 end;
 
-// Die Hilfe fuer EINEN gemeldeten Fund ueber den Planer der Tabelle.
+// Die Hilfe fuer den Fund ASeen ueber den Einstieg des Anbieters
+// (uTestRdxDetectorKit.PlanFixIn: TRdxFixTable.FixFor mit dem
+// Quellstellen-Dienst; bis zur Review Woche G06 eine eigene Kopie mit
+// APlaces = nil - der Adapter braucht ihn nicht).
 function PlanOf(const ASource: string; const ASeen: TSeen): TRdxFixOutcome;
-var
-  SL      : TStringList;
-  Finding : TLeakFinding;
 begin
-  SL := TStringList.Create;
-  Finding := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg,
-    fkLowercaseKeyword);
-  try
-    SL.Text := ASource;
-    Result := TRdxFixTable.FixFor(nil, SL, Finding, nil);
-  finally
-    Finding.Free;
-    SL.Free;
-  end;
+  Result := PlanFixIn(ASource, 't.pas', fkLowercaseKeyword, ASeen);
 end;
 
 // Fund fuer Fund, wo eine Hilfe da ist; nach jeder Ersetzung neu gemeldet.

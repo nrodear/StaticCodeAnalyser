@@ -233,31 +233,23 @@ begin
   TPointerSubtractionDetector.AnalyzeUnit(Root, Path, Results);
 end;
 
-// Der erste Fund des echten Detektors, geplant ueber den Adapter und
-// angewandt; bei Ablehnung '' und der Grund in AReason.
+// Der erste Fund des echten Detektors, geplant ueber den Einstieg des
+// Anbieters und angewandt; bei Ablehnung '' und der Grund in AReason
+// (uTestRdxDetectorKit.PlanFixIn: TRdxFixTable.FixFor mit dem
+// Quellstellen-Dienst; bis zur Review Woche G06 eine eigene Kopie mit
+// APlaces = nil - der Adapter braucht ihn nicht).
 function FixFirst(const ASource: string; out AReason: string): string;
 var
-  Seen    : TArray<TSeen>;
-  SL      : TStringList;
-  Finding : TLeakFinding;
-  O       : TRdxFixOutcome;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
 begin
   Result := '';
   Seen := DetectSource('rdx_q5_', ASource, fkPointerSubtraction, RunDetector);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet');
-  SL := TStringList.Create;
-  Finding := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
-    fkPointerSubtraction);
-  try
-    SL.Text := ASource;
-    O := TRdxFixTable.FixFor(nil, SL, Finding, nil);
-    AReason := O.Reason;
-    if O.Enabled then
-      Result := Apply(ASource, O.Edits);
-  finally
-    Finding.Free;
-    SL.Free;
-  end;
+  O := PlanFixIn(ASource, 't.pas', fkPointerSubtraction, Seen[0]);
+  AReason := O.Reason;
+  if O.Enabled then
+    Result := Apply(ASource, O.Edits);
 end;
 
 // Meldet der Detektor in ASource noch etwas?
