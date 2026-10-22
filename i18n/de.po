@@ -4090,3 +4090,255 @@ msgstr "uneinheitliche Einrückung im Block - Zeile %d"
 
 msgid "unexpected code after the \"if\" statement"
 msgstr "unerwarteter Code hinter der if-Anweisung"
+
+msgid "noinspection marker in the range - it suppresses other findings"
+msgstr "noinspection-Marker im Bereich - er unterdrückt andere Funde"
+
+msgid "%s in the range - an intent comment stays"
+msgstr "%s im Bereich - ein Absichtskommentar bleibt stehen"
+
+msgid "%s on the reported line"
+msgstr "%s auf der gemeldeten Zeile"
+
+msgid "line %d carries %s - ambiguous"
+msgstr "Zeile %d trägt %s - mehrdeutig"
+
+msgid "on a network path (%s) - not read, the menu is built in the main thread"
+msgstr "auf einem Netzpfad (%s) - nicht gelesen, der Menüaufbau läuft im Hauptthread"
+
+msgid "the marker \"%s\" in line %d targets the deleted line and would then silently apply to the next code line; %s"
+msgstr "der Marker \"%s\" in Zeile %d zielt auf die gelöschte Zeile und gälte danach still der nächsten Code-Zeile; %s"
+
+msgid "no name after \"%s\""
+msgstr "kein Name hinter \"%s\""
+
+msgid "name with too many parts"
+msgstr "Name mit zu vielen Gliedern"
+
+msgid "directive \"%s\" without \";\""
+msgstr "Direktive \"%s\" ohne \";\""
+
+msgid "FPC directives \"[\" without \"]\""
+msgstr "FPC-Direktiven \"[\" ohne \"]\""
+
+msgid "FPC directives \"[..]\" without \";\""
+msgstr "FPC-Direktiven \"[..]\" ohne \";\""
+
+msgid "local routines nested too deeply"
+msgstr "lokale Routinen zu tief verschachtelt"
+
+msgid "local routine %s: %s"
+msgstr "lokale Routine %s: %s"
+
+msgid "local class or object type - boundaries not certain"
+msgstr "lokaler Klassen- oder Objekttyp - Grenzen nicht sicher"
+
+msgid "\"%s\" in the declaration section - end of the routine not certain"
+msgstr "\"%s\" im Deklarationsteil - Ende der Routine nicht sicher"
+
+msgid "no body found for the routine"
+msgstr "kein Rumpf zur Routine gefunden"
+
+msgid "\"%s\" in the body - end of the routine not found"
+msgstr "\"%s\" im Rumpf - Ende der Routine nicht gefunden"
+
+msgid "routine header in the body - end of the routine not certain"
+msgstr "Routinenkopf im Rumpf - Ende der Routine nicht sicher"
+
+msgid "no end for the asm body"
+msgstr "kein end zum asm-Rumpf"
+
+msgid "no end found for the body"
+msgstr "kein end zum Rumpf gefunden"
+
+msgid "\";\" is missing after the end of the body"
+msgstr "hinter dem end des Rumpfs fehlt \";\""
+
+msgid "no routine header"
+msgstr "kein Routinenkopf"
+
+msgid "nothing new begins after the routine - its end is not certain"
+msgstr "hinter der Routine beginnt nichts Neues - ihr Ende ist nicht sicher"
+
+msgid "method resolution (IFoo.X = Y) - not a method of its own"
+msgstr "Methodenauflösung (IFoo.X = Y) - keine eigene Methode"
+
+msgid "the file of the unit is unknown"
+msgstr "die Datei der Unit ist unbekannt"
+
+msgid "nested too deeply"
+msgstr "zu tief verschachtelt"
+
+msgid "not found next to the unit"
+msgstr "nicht neben der Unit gefunden"
+
+msgid "not readable"
+msgstr "nicht lesbar"
+
+msgid "%s (included from %s)"
+msgstr "%s (eingebunden von %s)"
+
+msgid "{$I} include in the implementation section (line %d) - a caller that the quick fix does not see may be there"
+msgstr "{$I}-Include im implementation-Teil (Zeile %d) - dort kann ein Aufrufer stehen, den die Hilfe nicht sieht"
+
+msgid "the routine ends on the last line of the file"
+msgstr "die Routine endet auf der letzten Zeile der Datei"
+
+msgid "include %s before implementation %s - it can declare the name, call it or name it as a property accessor, and the quick fix does not see it"
+msgstr "Include %s vor implementation %s - es kann den Namen deklarieren, rufen oder als Property-Accessor nennen, die Hilfe sieht es nicht"
+
+msgid "\"// noinspection-file\" in line %d - the marker applies to the whole file and would be lost with it; %s"
+msgstr "\"// noinspection-file\" in Zeile %d - der Marker gilt der ganzen Datei und ginge mit verloren; %s"
+
+msgid "line %d ends with the comment \"%s\" - a marker after code applies to the line after it or stays; %s"
+msgstr "Zeile %d endet mit dem Kommentar \"%s\" - ein Marker hinter Code gilt der Zeile dahinter bzw. bleibt stehen; %s"
+
+msgid "code precedes the header on the same line (two routines on one line?)"
+msgstr "vor dem Kopf steht Code auf derselben Zeile (zwei Routinen auf einer Zeile?)"
+
+msgid "code follows the end on the same line (two routines on one line?)"
+msgstr "hinter dem Ende steht Code auf derselben Zeile (zwei Routinen auf einer Zeile?)"
+
+msgid "a comment spanning several lines ends on the header line"
+msgstr "auf der Kopfzeile endet ein Kommentar über Zeilen"
+
+msgid "a comment spanning several lines begins after the end"
+msgstr "hinter dem Ende beginnt ein Kommentar über Zeilen"
+
+msgid "{$%s} in line %d without a counterpart in the range"
+msgstr "{$%s} in Zeile %d ohne Gegenstück im Bereich"
+
+msgid "{$%s} in line %d without $IF in the range"
+msgstr "{$%s} in Zeile %d ohne $IF im Bereich"
+
+msgid "compiler directive {$%s} in line %d - it may act beyond the routine"
+msgstr "Compiler-Direktive {$%s} in Zeile %d - sie wirkt vielleicht über die Routine hinaus"
+
+msgid "directive without a counterpart in the range ($IF.. without $ENDIF or $REGION without $ENDREGION)"
+msgstr "Direktive ohne Gegenstück im Bereich ($IF.. ohne $ENDIF bzw. $REGION ohne $ENDREGION)"
+
+msgid "%s is in a string literal (line %d) - call by name (GetProcAddress, MethodAddress, RTTI, script)?"
+msgstr "%s steht in einem String-Literal (Zeile %d) - Aufruf per Name (GetProcAddress, MethodAddress, RTTI, Skript)?"
+
+msgid "a directive names %s (line %d)"
+msgstr "eine Direktive nennt %s (Zeile %d)"
+
+msgid "%s is in the interface section (line %d) - exported, callers in other units possible"
+msgstr "%s steht im interface-Teil (Zeile %d) - exportiert, Aufrufer in anderen Units möglich"
+
+msgid "the exports clause names %s (line %d)"
+msgstr "die exports-Klausel nennt %s (Zeile %d)"
+
+msgid "second routine %s in line %d - overload, $IFDEF twin or declaration"
+msgstr "zweite Routine %s in Zeile %d - Overload, $IFDEF-Zwilling oder Deklaration"
+
+msgid "%s is the accessor of a property (line %d)"
+msgstr "%s ist Accessor einer Property (Zeile %d)"
+
+msgid "%s is used in line %d"
+msgstr "%s wird in Zeile %d verwendet"
+
+msgid "method of a class - SCA147 or SCA148 reports it"
+msgstr "Methode einer Klasse - die meldet SCA147 bzw. SCA148"
+
+msgid "global operator (FPC) - the compiler calls it through its symbol or the conversion, not through its name"
+msgstr "globaler Operator (FPC) - der Compiler ruft ihn über sein Zeichen bzw. die Umwandlung, nicht über den Namen"
+
+msgid "directive %s - the routine is reachable from outside or has no body"
+msgstr "Direktive %s - die Routine ist von außen erreichbar oder hat keinen Rumpf"
+
+msgid "the unit links an object file ({$L} in line %d) - the C code calls routines by name"
+msgstr "die Unit linkt eine Objektdatei ({$L} in Zeile %d) - der C-Code ruft Routinen per Name"
+
+msgid "forward declaration: %s"
+msgstr "forward-Deklaration: %s"
+
+msgid "the header is not in the implementation section (interface or program) - reachable from outside"
+msgstr "der Kopf steht nicht im implementation-Teil (interface oder Programm) - von außen erreichbar"
+
+msgid "directive %s - ancestors, descendants, messages or overload siblings reach the method without its name"
+msgstr "Direktive %s - Vorfahren, Nachfahren, Nachrichten oder Overload-Geschwister erreichen die Methode ohne ihren Namen"
+
+msgid "%s - hides inherited members or is called without a name; %s"
+msgstr "%s - verdeckt Geerbtes bzw. wird ohne Namen gerufen; %s"
+
+msgid "%s is a member of %s - the method can implement it"
+msgstr "%s ist ein Member von %s - die Methode kann es implementieren"
+
+msgid "the class implements %s (not declared in this file) - the method can be an interface member"
+msgstr "die Klasse implementiert %s (nicht in dieser Datei deklariert) - die Methode kann ein Interface-Member sein"
+
+msgid "interface chain too long - boundaries not certain"
+msgstr "Interface-Kette zu lang - Grenzen nicht sicher"
+
+msgid "the declaration is not in the body of class %s"
+msgstr "die Deklaration steht nicht im Rumpf der Klasse %s"
+
+msgid "the method is in the default section without a visibility keyword, not under private"
+msgstr "die Methode steht unter \"Vorgabe ohne Abschnitt\", nicht unter private"
+
+msgid "the method is under \"%s\", not under private"
+msgstr "die Methode steht unter \"%s\", nicht unter private"
+
+msgid "attribute on the class or method - RTTI can find the method by name"
+msgstr "Attribut an Klasse oder Methode - RTTI kann die Methode per Name finden"
+
+msgid "{$I} include in the class body (line %d) - the method can appear there (property accessor)"
+msgstr "{$I}-Include im Klassenrumpf (Zeile %d) - dort kann die Methode stehen (Property-Accessor)"
+
+msgid "no implementation of %s.%s in the file (include file? abstract?)"
+msgstr "keine Implementierung von %s.%s in der Datei (include-Datei? abstract?)"
+
+msgid "%d implementations of %s.%s - overload?"
+msgstr "%d Implementierungen von %s.%s - Overload?"
+
+msgid "implementation: %s"
+msgstr "Implementierung: %s"
+
+msgid "{$RTTI} in line %d - extended RTTI can call private methods by name"
+msgstr "{$RTTI} in Zeile %d - erweiterte RTTI kann private Methoden per Name aufrufen"
+
+msgid "the implementation is not in the implementation section"
+msgstr "die Implementierung steht nicht im implementation-Teil"
+
+msgid "declaration and implementation overlap"
+msgstr "Deklaration und Implementierung überlappen"
+
+msgid "the include %s names %s - as a declaration (E2065 after the deletion), call or property accessor (E2003), and the quick fix does not see it"
+msgstr "das Include %s nennt %s - als Deklaration (nach dem Löschen E2065), Aufruf oder Property-Accessor (E2003), die Hilfe sieht es nicht"
+
+msgid "the message has no routine name"
+msgstr "Name der Routine fehlt in der Meldung"
+
+msgid "of the routine %s"
+msgstr "der Routine %s"
+
+msgid "the message has no class or method"
+msgstr "Klasse oder Methode fehlt in der Meldung"
+
+msgid "of the method %s"
+msgstr "der Methode %s"
+
+msgid "no if, case or except found for the else"
+msgstr "kein if, case oder except zum else gefunden"
+
+msgid "the %s is in parentheses"
+msgstr "das %s steht in Klammern"
+
+msgid "no start of the statement found for the %s"
+msgstr "keinen Anfang der Anweisung zum %s gefunden"
+
+msgid "the else matches no if"
+msgstr "das else passt zu keinem if"
+
+msgid "record before the else - the end count is uncertain"
+msgstr "record vor dem else - die end-Bilanz ist unsicher"
+
+msgid "\"%s\" after a \";\" before the else - header of an anonymous method? It is unclear what the else belongs to"
+msgstr "\"%s\" hinter einem \";\" vor dem else - Kopf einer anonymen Methode? Wem das else gehört, ist unklar"
+
+msgid "the else is in parentheses"
+msgstr "das else steht in Klammern"
+
+msgid "the else belongs to a case or except - a statement list follows it"
+msgstr "das else gehört zu einem case bzw. except - dahinter steht eine Anweisungsliste"

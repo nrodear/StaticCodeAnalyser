@@ -222,8 +222,11 @@ type
   // Mehrdeutigkeit mit %d fuer die Zahl der Treffer und %s fuer ManyArg
   // ('%d begin', '%d-mal "end else"'). Text aus der Meldung (ein Name, ein
   // Ziel) gehoert in ManyArg, nie in das Muster (OneTokenReason) - so wird
-  // das Muster eine msgid (Texte umstellen, Nachpruefung C1). Bis Charge R8
-  // (2026-10-14) stand diese Suche siebenmal in den Planern.
+  // das Muster eine msgid (Texte umstellen, Nachpruefung C1). What und
+  // ManyFmt kommen SCHON UEBERSETZT vom Aufrufer (uRdxText._: What als ganze
+  // Nominalphrase, ManyFmt als unformatiertes Muster); OneTokenReason setzt
+  // sie nur in seinen Satz (Entscheid E29). Bis Charge R8 (2026-10-14) stand
+  // diese Suche siebenmal in den Planern.
   TRdxLineSearch = record
     Test    : TRdxTokenTest;
     Arg     : string;
@@ -503,20 +506,25 @@ function OneTokenOnLine(AMap: TRdxCodeMap; ALine: Integer;
   const ASearch: TRdxLineSearch; out AHit: TRdxToken): string;
 // Der Lauf von OneTokenOnLine ohne Grundtext: die Zahl der Code-Token auf
 // ALine, auf die ATest (mit AArg) passt; AHit ist der letzte Treffer oder
-// leer. Fuer Planer, die ihre Gruende selbst als msgids schreiben (E29) -
-// OneTokenReason formatiert deutsch. Bis zur Folgewelle des Wochen-Reviews
-// (G09-03/G09-16) schrieben uRdxEmptyExceptFix.FindExcept,
-// uRdxEmptyBlockFix.FindBegin, uRdxEmptyOnHandlerFix.FindHead und
-// uRdxForRangeFix.FindSite den Lauf deshalb je neu aus.
+// leer. Fuer Planer, die ihre Gruende ganz selbst als msgids schreiben
+// (E29) - OneTokenReason setzt AWhat/AManyFmt in seine festen Saetze. Bis
+// zur Folgewelle des Wochen-Reviews (G09-03/G09-16) schrieben
+// uRdxEmptyExceptFix.FindExcept, uRdxEmptyBlockFix.FindBegin,
+// uRdxEmptyOnHandlerFix.FindHead und uRdxForRangeFix.FindSite den Lauf
+// deshalb je neu aus.
 function CountTokensOnLine(AMap: TRdxCodeMap; ALine: Integer;
   ATest: TRdxTokenTest; const AArg: string; out AHit: TRdxToken): Integer;
-// Der Grund zu ACount Treffern auf ALine: 0 -> '<AWhat> auf der
-// gemeldeten Zeile - Zeile verschoben? Datei neu pruefen'; mehr als 1 ->
-// 'Zeile N traegt <AManyFmt mit ACount fuer %d und AArg fuer %s> -
-// mehrdeutig'; genau 1 -> ''. AManyFmt ist ein Format-Muster: Text aus der
-// Meldung gehoert in AArg, nie in das Muster - ein '%' darin (Delphi-11-
-// Binaerliteral '%101') warf sonst EConvertError (Gegen-Review R5, missed 2:
-// uRdxTryFixes.LockPair setzte den Sperrtext der Meldung ins Muster).
+// Der Grund zu ACount Treffern auf ALine: 0 -> '<AWhat> on the reported
+// line - line moved? Analyse the file again' (de: '<AWhat> auf der
+// gemeldeten Zeile - Zeile verschoben? Datei neu pruefen'); mehr als 1 ->
+// 'line N carries <AManyFmt mit ACount fuer %d und AArg fuer %s> -
+// ambiguous' (de: 'Zeile N traegt ... - mehrdeutig'); genau 1 -> ''. Die
+// Saetze sind msgids (uRdxText._); AWhat und AManyFmt uebersetzt der
+// Aufrufer, AArg ist Text aus der Meldung und bleibt. AManyFmt ist ein
+// Format-Muster: Text aus der Meldung gehoert in AArg, nie in das Muster -
+// ein '%' darin (Delphi-11-Binaerliteral '%101') warf sonst EConvertError
+// (Gegen-Review R5, missed 2: uRdxTryFixes.LockPair setzte den Sperrtext
+// der Meldung ins Muster).
 function OneTokenReason(ALine, ACount: Integer;
   const AWhat, AManyFmt: string; const AArg: string = ''): string;
 
@@ -706,7 +714,11 @@ function ElseBelongsToIf(AMap: TRdxCodeMap; const AElse: TRdxToken;
 const
   // Der Grund, wenn eine Meldung keine Spalte nennt (ColumnFromMessage
   // liefert 0). Bis Charge B2S-a je eine Konstante in uRdxSimpleFixes und
-  // uRdxLineFixes und ein Literal in uRdxStructFixes (Review R3-05).
+  // uRdxLineFixes und ein Literal in uRdxStructFixes (Review R3-05). Der
+  // uebersetzte Text ist uRdxText.MsgNoColumn (Entscheid E29); die Konstante
+  // bleibt nur, bis die Gruppen der drei Planer-Units ihre Verwendungen auf
+  // MsgNoColumn umgestellt haben - der Merge entfernt sie samt Eintrag in
+  // tools/rdx_i18n_gate.allow (Texte umstellen, Querschnitt R_NO_COLUMN).
   R_NO_COLUMN = 'Spalte fehlt in der Meldung';
   // Obergrenze einer Zahl aus einer Meldung (NumberAt): eine Zeile oder
   // Spalte darueber ist kaputt - so laeuft keine Ziffernfolge ueber.
@@ -770,7 +782,8 @@ function AttrAnchorOk(AMap: TRdxCodeMap; ALine, AOpenCol: Integer;
 implementation
 
 uses
-  System.SysUtils;   // CharInSet, LowerCase, Format
+  System.SysUtils,   // CharInSet, LowerCase, Format
+  uRdxText;          // _, MsgMovedSuffix (Texte in der Sprache der SCA, E29)
 
 const
   // Davor beginnt ein Routinenwort KEINEN Kopf: Typ einer Variablen oder
@@ -789,6 +802,10 @@ const
   // rueckwaerts nur diese Token.
   TYPE_PARAM_TOKENS: array[0..6] of string = ('<', '>', ',', ';', ':', '.',
     '&');
+  // Der Grund zu einem Absichtsmarker (MarkerReason, msgid; %s der Marker in
+  // Grossbuchstaben). Bis zur Umstellung E29 stand der Satz fuer MARKER_XXX
+  // ein zweites Mal ausgeschrieben, mit demselben Wortlaut.
+  R_INTENT_KEPT = '%s in the range - an intent comment stays';
 
 // Zeichen > #127 wie der Core (uRefactorInfoBuilder) und uRdxRecipes:
 // Bezeichner mit Umlaut sind in Delphi erlaubt - sonst lehnten die Planer
@@ -1485,13 +1502,12 @@ begin
   Result := '';
   Low := LowerCase(AText);
   if Pos(MARKER_SUPPRESS, Low) > 0 then
-    Exit('noinspection-Marker im Bereich - er unterdrueckt andere Funde');
+    Exit(_('noinspection marker in the range - it suppresses other findings'));
   for M in INTENT_MARKERS do
     if HasAsciiWord(Low, M) then
-      Exit(Format('%s im Bereich - ein Absichtskommentar bleibt stehen',
-        [UpperCase(M)]));
+      Exit(_(R_INTENT_KEPT, [UpperCase(M)]));
   if HasAsciiWord(AText, MARKER_XXX) then
-    Result := 'XXX im Bereich - ein Absichtskommentar bleibt stehen';
+    Result := _(R_INTENT_KEPT, [MARKER_XXX]);
 end;
 
 function SameTok(const A, B: TRdxToken): Boolean;
@@ -1632,10 +1648,9 @@ function OneTokenReason(ALine, ACount: Integer;
 begin
   Result := '';
   if ACount = 0 then
-    Result := Format('%s auf der gemeldeten Zeile - Zeile verschoben? Datei '
-      + 'neu pruefen', [AWhat])
+    Result := MsgMovedSuffix(_('%s on the reported line', [AWhat]))
   else if ACount > 1 then
-    Result := Format('Zeile %d traegt %s - mehrdeutig',
+    Result := _('line %d carries %s - ambiguous',
       [ALine, Format(AManyFmt, [ACount, AArg])]);
 end;
 
@@ -2207,7 +2222,10 @@ const
   // Vor 'on' eines Handlers steht ';' oder except - sonst ist On ein
   // Bezeichner ('while not On do').
   HANDLER_PREV: array[0..1] of string = (';', 'except');
-  R_NO_ELSE_OWNER = 'kein if, case oder except zum else gefunden';
+  // msgid (Entscheid E29), uebersetzt mit _() an beiden Verwendungen; die
+  // Gruende dieses Abschnitts tragen dieselben msgids wie bis zur
+  // Abspaltung in uRdxStructFixes (Gruppe G8) - de.po/fr.po je einmal.
+  R_NO_ELSE_OWNER = 'no if, case or except found for the else';
 
 // Klammertiefe rueckwaerts: ')' und ']' hoch, '(' und '[' herunter
 // (ParenDelta, uRdxCodeMap, abgezogen). True, wenn T eine Klammer war.
@@ -2267,8 +2285,8 @@ begin
     T := P;
   end;
   if Paren < 0 then
-    Exit(Format('das %s steht in Klammern', [AKeyword.Low]));
-  Result := Format('keinen Anfang der Anweisung zum %s gefunden',
+    Exit(_('the %s is in parentheses', [AKeyword.Low]));
+  Result := _('no start of the statement found for the %s',
     [AKeyword.Low]);
 end;
 
@@ -2296,7 +2314,7 @@ end;
 function TRdxElseScan.TakeList(const T: TRdxToken): Boolean;
 begin
   if Pending > 0 then
-    Exit(Fail('das else passt zu keinem if'));
+    Exit(Fail(_('the else matches no if')));
   Owner := eoList;
   Decider := T;
   Result := True;
@@ -2312,7 +2330,7 @@ function TRdxElseScan.StepWord(const T: TRdxToken; ADepth: Integer): Boolean;
 begin
   Result := False;
   if T.Low = 'record' then
-    Result := Fail('record vor dem else - die end-Bilanz ist unsicher')
+    Result := Fail(_('record before the else - the end count is uncertain'))
   else if (ADepth = 0) and (T.Low <> 'end') and (T.Low <> 'until') then
     Result := StepTopWord(T);
 end;
@@ -2329,10 +2347,10 @@ begin
   if InList(T.Low, LIST_ELSE_OWNERS) then
     Result := TakeList(T)
   else if InList(T.Low, ELSE_STOPS) then
-    Result := Fail(R_NO_ELSE_OWNER)
+    Result := Fail(_(R_NO_ELSE_OWNER))
   else if AfterSemi and InList(T.Low, DECL_WORDS) then
-    Result := Fail(Format('"%s" hinter einem ";" vor dem else - Kopf einer '
-      + 'anonymen Methode? Wem das else gehoert, ist unklar', [T.Low]))
+    Result := Fail(_('"%s" after a ";" before the else - header of an '
+      + 'anonymous method? It is unclear what the else belongs to', [T.Low]))
   else if AfterSemi then
     Exit
   else if T.Low = 'else' then
@@ -2379,9 +2397,9 @@ begin
   end;
   Result.Owner := eoUnknown;
   if Paren < 0 then
-    Result.Reason := 'das else steht in Klammern'
+    Result.Reason := _('the else is in parentheses')
   else
-    Result.Reason := R_NO_ELSE_OWNER;
+    Result.Reason := _(R_NO_ELSE_OWNER);
 end;
 
 // Steht der ':' vor einem if in Klammern ('Write(X: if A then 1 else 2)')?
@@ -2460,8 +2478,8 @@ begin
   Scan := ElseOwner(AMap, AElse);
   AReason := Scan.Reason;
   if (AReason = '') and (Scan.Owner <> eoIf) then
-    AReason := 'das else gehoert zu einem case bzw. except - dahinter steht '
-      + 'eine Anweisungsliste';
+    AReason := _('the else belongs to a case or except - a statement list '
+      + 'follows it');
   Result := AReason = '';
 end;
 

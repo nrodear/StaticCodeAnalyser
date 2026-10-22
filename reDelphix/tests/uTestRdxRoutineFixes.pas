@@ -502,18 +502,22 @@ begin
   // Ein Schalter im Bereich wirkt ueber die Routine hinaus.
   AssertRefused(InImpl(['procedure Dead;', 'begin', '{$R-}', '  Beep;',
     'end;']), 4, 'Dead', '{$R}');
-  // $IFDEF-geteilter Rumpf: das $ENDIF steht hinter dem Bereich.
+  // $IFDEF-geteilter Rumpf: das $ENDIF steht hinter dem Bereich. Teilstueck
+  // ohne 'Gegenstueck' - das bekommt in de.po seit der Umstellung E29 einen
+  // echten Umlaut, die Quelle bleibt ASCII.
   AssertRefused(InImpl(['procedure Dead;', 'begin', '{$IFDEF X}', '  Beep;',
-    'end;', '{$ELSE}', 'end;', '{$ENDIF}']), 4, 'Dead', 'Gegenstueck');
+    'end;', '{$ELSE}', 'end;', '{$ENDIF}']), 4, 'Dead',
+    '($IF.. ohne $ENDIF bzw. $REGION ohne $ENDREGION)');
   // Review Woche G05-25: $ENDREGION ohne $REGION, $ELSE ohne $IF und ein
-  // $ENDIF, dessen offenes Gegenstueck eine $REGION ist.
+  // $ENDIF, dessen offenes Gegenstueck eine $REGION ist. Teilstuecke enden
+  // vor dem Umlaut von 'Gegenstueck' (de.po, Umstellung E29).
   AssertRefused(InImpl(['procedure Dead;', 'begin', '{$ENDREGION}', 'end;']),
-    4, 'Dead', '{$ENDREGION} in Zeile 6 ohne Gegenstueck');
+    4, 'Dead', '{$ENDREGION} in Zeile 6 ohne Gegenst');
   AssertRefused(InImpl(['procedure Dead;', 'begin', '{$ELSE}', 'end;']), 4,
     'Dead', '{$ELSE} in Zeile 6 ohne $IF');
   AssertRefused(InImpl(['procedure Dead;', 'begin', '{$IFDEF X}',
     '{$REGION ''r''}', '{$ENDIF}', '{$ENDREGION}', 'end;']), 4, 'Dead',
-    '{$ENDIF} in Zeile 8 ohne Gegenstueck');
+    '{$ENDIF} in Zeile 8 ohne Gegenst');
 end;
 
 procedure TTestRdxRoutineFixes.Sca164_Reachable_NoHelp;

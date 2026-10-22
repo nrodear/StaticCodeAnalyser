@@ -525,9 +525,11 @@ begin
     VarMsg('X'), 'stdcall');
   // Review Woche G07-25: der Name zweimal auf der Zeile (der Name aus der
   // Meldung als Argument des Musters, G07-09), class var, ein Typ ohne ';'
-  // bis zum Dateiende und eine Klammer ohne Gegenstueck.
+  // bis zum Dateiende und eine Klammer ohne Gegenstueck. 'traegt' im Rahmen
+  // von uRdxCodeMap.OneTokenReason bekommt seit der Umstellung E29 (Gruppe
+  // G5) in de.po einen echten Umlaut - das Teilstueck beginnt dahinter.
   AssertRefused(ckVar, InImpl(['procedure P;', 'var', '  X: Integer; X: Integer;',
-    'begin', 'end;']), 6, VarMsg('X'), 'Zeile 6 traegt 2-mal "x"');
+    'begin', 'end;']), 6, VarMsg('X'), ' 2-mal "x" - mehrdeutig');
   AssertRefused(ckVar, InImpl(['type', '  TFoo = class', '  class var X: Integer;',
     '  end;', 'procedure P;', 'begin', 'end;']), 6, VarMsg('X'), 'class var');
   AssertRefused(ckVar, Join(['unit u;', 'interface', 'implementation',
