@@ -87,7 +87,7 @@ const
   SPAN_159 = 'sca159';
   // Davor beginnt ein Handler.
   HANDLER_PREV: array[0..1] of string = ('except', ';');
-  KEY_ON   = 'on';
+  KW_ON    = 'on';
   KEY_HAND = 'handler on ';
   KEY_HAS  = ' has empty body';
   RAISE_INLINE = ' raise;';
@@ -133,7 +133,7 @@ var
 begin
   Result := False;
   AHead := Default(TOnHead);
-  if (T.Low <> KEY_ON) or not IsKeywordAfter(T, Before(AMap, T)) then Exit;
+  if (T.Low <> KW_ON) or not IsKeywordAfter(T, Before(AMap, T)) then Exit;
   N1 := After(AMap, T);
   if not N1.IsWord or (N1.Line <> T.Line) then Exit;
   N2 := After(AMap, N1);

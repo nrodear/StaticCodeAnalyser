@@ -2,9 +2,12 @@ unit uTestRdxEmptyOnHandlerFix;
 
 // Editorhilfe SCA159 EmptyOnHandler (uRdxEmptyOnHandlerFix): der leere
 // Handler 'on E: T do ;' bzw. 'do begin end;' bekommt 'raise;'. Die Faelle
-// auf Text laufen ohne Parser und ohne Detektor (auch im FPC-Pruefstand);
-// die Rundlaeufe mit dem echten Detektor (Katalog-Beispiel, Blockform,
-// Kommentar) stehen hinter {$IFNDEF FPC}.
+// auf Text laufen ohne Parser und ohne Detektor; die Rundlaeufe mit dem
+// echten Detektor (Katalog-Beispiel, Blockform, Kommentar - ueber
+// TRdxFixTable.FixFor) stehen hinter {$IFNDEF FPC}. Nur Delphi
+// (reDelphix.Test): der Planer bindet uEngineApi/uRdxRecipeRunner und
+// uRdxFixRunner, der FPC-Pruefstand (build.sh) fuehrt ihn nicht - die
+// Weichen sind heute ohne Wirkung.
 // Prueft: beide Formen (auch ueber Zeilen, mit Tabs, grossgeschrieben,
 // anonymer Typ), den Bereich der Ersetzung, und die Sperren - Kommentar und
 // Direktive, mehrere Handler auf der Zeile, verschobene Zeile, Typ der
@@ -332,10 +335,11 @@ var
   S  : string;
 begin
   S := InExcept(['    on E: EFoo do ;']);
-  F := TLeakFinding.New('t.pas', '', HANDLER_LINE, Msg('EFoo'),
-    fkEmptyOnHandler);
   SL := TStringList.Create;
+  F := nil;
   try
+    F := TLeakFinding.New('t.pas', '', HANDLER_LINE, Msg('EFoo'),
+      fkEmptyOnHandler);
     // Ohne Zeilen: kein Puffer.
     O := PlanEmptyOnHandler(nil, nil, F, nil);
     Assert.IsFalse(O.Enabled);
@@ -346,8 +350,8 @@ begin
     Assert.AreEqual(InExcept(['    on E: EFoo do raise;']),
       Apply(S, O.Edits));
   finally
-    SL.Free;
     F.Free;
+    SL.Free;
   end;
 end;
 
@@ -366,50 +370,38 @@ begin
   Result := DetectSource('rdx_s159_', ASource, fkEmptyOnHandler, RunDetector);
 end;
 
-// Fund fuer Fund ueber den Adapter, nach jeder Ersetzung neu gemeldet, bis
-// der Detektor schweigt.
-function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Seen : TArray<TSeen>;
-  Pass : Integer;
-  SL   : TStringList;
-  F    : TLeakFinding;
-  O    : TRdxFixOutcome;
+// Dasselbe in der Form von TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    Seen := Detect(Result);
-    if Length(Seen) = 0 then Exit;
-    SL := TStringList.Create;
-    F := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
-      fkEmptyOnHandler);
-    try
-      SL.Text := Result;
-      O := PlanEmptyOnHandler(nil, SL, F, nil);
-      Assert.IsTrue(O.Enabled, Format('Zeile %d: %s', [Seen[0].Line, O.Reason]));
-      Result := Apply(Result, O.Edits);
-    finally
-      F.Free;
-      SL.Free;
-    end;
-  end;
-  Assert.Fail('der Detektor meldet nach 10 Runden noch');
+  Result := DetectSource('rdx_s159_', ASource, AKind, RunDetector);
+end;
+
+// Fund fuer Fund ueber den Einstieg der Tabelle (TRdxFixTable.FixFor), nach
+// jeder Ersetzung neu gemeldet, bis der Detektor schweigt.
+function FixAll(const ASource: string): string;
+begin
+  Result := FixAllWith(ASource, fkEmptyOnHandler, DetectKind);
 end;
 
 procedure TTestRdxEmptyOnHandlerFix.Sca159_Detector_CatalogExample;
 var
   Meta : TRuleMeta;
   Bad  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
 begin
   // Das Beispiel 'bad' des Katalogs in einer Routine: nach der Hilfe
   // meldet der Detektor nichts mehr.
   Meta := TRuleCatalog.GetRuleCanonical(fkEmptyOnHandler);
   Bad := CatalogText(Meta.BadExample);
   Assert.IsTrue(Pos('on E: EDatabaseError do ;', Bad) > 0, Bad);
-  Assert.AreEqual<Integer>(1, Length(Detect(InExcept([Bad]))));
+  Seen := Detect(InExcept([Bad]));
+  Assert.AreEqual<Integer>(1, Length(Seen));
+  // Die Kennzeichnung "aendert das Verhalten" setzt erst die Tabellenzeile
+  // (FixFor) - der Adapter laesst sie auf dem Default.
+  O := PlanFixIn(InExcept([Bad]), 't.pas', fkEmptyOnHandler, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.ChangesBehavior, 'raise aendert das Verhalten');
   Assert.AreEqual(
     StringReplace(InExcept([Bad]), 'EDatabaseError do ;',
       'EDatabaseError do raise;', []),

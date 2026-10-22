@@ -59,7 +59,6 @@ uses
   uTestRdxDetectorKit;  // DetectSource, TSeen, WriteTemp
 
 const
-  REASON_NOFILE = 'keine Datei';
   QUOTE3        = #39#39#39;
   FILE_NAME     = 't.pas';
   MARKER        = '// noinspection All';
@@ -212,9 +211,10 @@ begin
   Assert.AreEqual<Integer>(Length(AKinds), Length(ALines), 'Arten und Zeilen');
   Path := WriteTemp('rdx_nscore_', ASource);
   Findings := TObjectList<TLeakFinding>.Create(True);
-  Pre := TObjectDictionary<string, TList<TSuppressionMarker>>.Create(
-    [doOwnsValues]);
+  Pre := nil;
   try
+    Pre := TObjectDictionary<string, TList<TSuppressionMarker>>.Create(
+      [doOwnsValues]);
     for i := 0 to High(AKinds) do
       Findings.Add(TLeakFinding.New(Path, '', ALines[i], 'gesetzt', AKinds[i]));
     TSuppression.CollectMarkersForScan(Path, Pre);
@@ -396,15 +396,17 @@ end;
 
 procedure TTestRdxNoSonarFix.Adapter_PlansOneEdit;
 var
-  SL : TStringList;
-  F  : TLeakFinding;
-  O  : TRdxFixOutcome;
-  Src: string;
+  SL   : TStringList;
+  F    : TLeakFinding;
+  O    : TRdxFixOutcome;
+  Src  : string;
+  Seen : TSeen;
 begin
   Src := InUnit(['  Go; // NOSONAR']);
   SL := TStringList.Create;
-  F := TLeakFinding.New(FILE_NAME, '', 6, NsMsg(7), fkNoSonarMarker);
+  F := nil;
   try
+    F := TLeakFinding.New(FILE_NAME, '', 6, NsMsg(7), fkNoSonarMarker);
     SL.Text := Src;
     O := PlanNoSonar(nil, SL, F, nil);
   finally
@@ -413,8 +415,16 @@ begin
   end;
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.AreEqual<Integer>(1, Integer(Length(O.Edits)));
-  Assert.AreEqual<Integer>(0, O.Variant);
   Assert.AreEqual(InUnit(['  ' + MARKER, '  Go;']), Apply(Src, O.Edits[0]));
+  // Die Kennzeichnung "aendert das Verhalten" (der Marker unterdrueckt
+  // danach die Regeln der Zeile, NOSONAR tat das nicht) setzt erst die
+  // Tabellenzeile (FixFor) - der Adapter laesst sie auf dem Default.
+  Seen.Line := 6;
+  Seen.Msg := NsMsg(7);
+  Seen.Variant := '';
+  O := PlanFixIn(Src, FILE_NAME, fkNoSonarMarker, Seen);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.ChangesBehavior, 'gekennzeichnet');
 end;
 
 procedure TTestRdxNoSonarFix.Adapter_NoFile_NoHelp;
@@ -429,7 +439,7 @@ begin
     F.Free;
   end;
   Assert.IsFalse(O.Enabled);
-  Assert.IsTrue(Pos(REASON_NOFILE, O.Reason) > 0, O.Reason);
+  Assert.AreEqual(R_NO_FILE, O.Reason);
 end;
 
 { ---- echter Detektor und Core ---- }

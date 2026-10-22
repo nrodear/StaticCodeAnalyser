@@ -2,8 +2,11 @@ unit uTestRdxEmptyExceptFix;
 
 // Editorhilfe SCA002 EmptyExcept (uRdxEmptyExceptFix): ein leerer except-
 // Block bekommt ein 'raise;'. Die Faelle auf Text laufen ohne Parser und ohne
-// Detektor (auch im FPC-Pruefstand); der Adapter und die Rundlaeufe mit dem
-// echten Detektor (uCodeSmells2) stehen hinter {$IFNDEF FPC}.
+// Detektor; der Adapter und die Rundlaeufe mit dem echten Detektor
+// (uCodeSmells2, ueber TRdxFixTable.FixFor) stehen hinter {$IFNDEF FPC}.
+// Nur Delphi (reDelphix.Test): der Planer bindet uEngineApi/
+// uRdxRecipeRunner und uRdxFixRunner, der FPC-Pruefstand (build.sh) fuehrt
+// ihn nicht - die Weichen sind heute ohne Wirkung.
 // Prueft: neue Zeile unter except (Einrueckstufe aus dem try-Rumpf, Tabs,
 // Fallback), inline hinter except, Gross-/Kleinschreibung, Leerzeilen - und
 // die Sperren: Kommentar, Direktive, Handler/Anweisung/';' im Block,
@@ -214,6 +217,11 @@ begin
     '  end;']), _(R_EXC_COMMENT));
   AssertRefused(InProc(['  try', '    Work;', '  except // fine', '  end;']),
     _(R_EXC_COMMENT));
+  // Hinter dem end auf seiner Zeile: der Kommentar begruendet das
+  // Verschlucken (wie bei SCA159).
+  AssertRefused(InProc(['  try', '    DeleteFile(Tmp);', '  except',
+    '  end; // Aufraeumen darf scheitern']), _(R_EXC_COMMENT));
+  AssertRefused(InProc(['  try Work except end; { egal }']), _(R_EXC_COMMENT));
 end;
 
 procedure TTestRdxEmptyExceptFix.Sca002_Directive_NoHelp;
@@ -277,46 +285,20 @@ begin
   Result := DetectSource('rdx_s002_', ASource, fkEmptyExcept, RunDetector);
 end;
 
-// Der Adapter an einem Fund; AOut ist sein Ergebnis.
-function PlanVia(const ASource: string; const ASeen: TSeen): TRdxFixOutcome;
-var
-  SL : TStringList;
-  F  : TLeakFinding;
+// Dasselbe in der Form von TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
 begin
-  SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, fkEmptyExcept);
-  try
-    SL.Text := ASource;
-    Result := PlanEmptyExcept(nil, SL, F, nil);
-  finally
-    F.Free;
-    SL.Free;
-  end;
+  Result := DetectSource('rdx_s002_', ASource, AKind, RunDetector);
 end;
 
-// Fund fuer Fund ueber den Adapter, nach jeder Ersetzung neu gemeldet, bis
-// der Detektor schweigt.
+// Fund fuer Fund ueber den Einstieg der Tabelle (TRdxFixTable.FixFor), nach
+// jeder Ersetzung neu gemeldet, bis der Detektor schweigt.
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Seen : TArray<TSeen>;
-  Pass : Integer;
-  O    : TRdxFixOutcome;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    Seen := Detect(Result);
-    if Length(Seen) = 0 then Exit;
-    O := PlanVia(Result, Seen[0]);
-    Assert.IsTrue(O.Enabled, Format('Zeile %d: %s', [Seen[0].Line, O.Reason]));
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail(Format('der Detektor meldet nach %d Runden noch', [MAX_PASSES]));
+  Result := FixAllWith(ASource, fkEmptyExcept, DetectKind);
 end;
 
-// Der erste Fund wird vom Adapter abgelehnt, mit AReason.
+// Der erste Fund wird ueber die Tabelle abgelehnt, mit AReason.
 procedure AssertDetectorNoHelp(const ASource, AReason: string);
 var
   Seen : TArray<TSeen>;
@@ -324,23 +306,25 @@ var
 begin
   Seen := Detect(ASource);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet');
-  O := PlanVia(ASource, Seen[0]);
+  O := PlanFixIn(ASource, 't.pas', fkEmptyExcept, Seen[0]);
   Assert.IsFalse(O.Enabled, 'keine Hilfe');
   Assert.AreEqual(AReason, O.Reason);
 end;
 
 procedure TTestRdxEmptyExceptFix.Sca002_Adapter_Outcome;
 var
-  S  : string;
-  F  : TLeakFinding;
-  O  : TRdxFixOutcome;
-  SL : TStringList;
+  S    : string;
+  F    : TLeakFinding;
+  O    : TRdxFixOutcome;
+  SL   : TStringList;
+  Seen : TSeen;
 begin
   S := InProc(['  try', '    Work;', '  except', '  end;']);
-  F := TLeakFinding.New('t.pas', '', LineOf(S, 'except'), 'Empty except block',
-    fkEmptyExcept);
   SL := TStringList.Create;
+  F := nil;
   try
+    F := TLeakFinding.New('t.pas', '', LineOf(S, 'except'),
+      'Empty except block', fkEmptyExcept);
     // Ohne Zeilen: kein Puffer.
     O := PlanEmptyExcept(nil, nil, F, nil);
     Assert.IsFalse(O.Enabled);
@@ -351,9 +335,17 @@ begin
     Assert.AreEqual(InProc(['  try', '    Work;', '  except', '    raise;',
       '  end;']), Apply(S, O.Edits));
   finally
-    SL.Free;
     F.Free;
+    SL.Free;
   end;
+  // Die Kennzeichnung "aendert das Verhalten" setzt erst die Tabellenzeile
+  // (FixFor) - der Adapter laesst sie auf dem Default.
+  Seen.Line := LineOf(S, 'except');
+  Seen.Msg := 'Empty except block';
+  Seen.Variant := '';
+  O := PlanFixIn(S, 't.pas', fkEmptyExcept, Seen);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.ChangesBehavior, 'raise aendert das Verhalten');
 end;
 
 procedure TTestRdxEmptyExceptFix.Sca002_Detector_RoundTrip;
