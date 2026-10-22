@@ -45,6 +45,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uMethodd12, uSCAConsts, uRdxRecipeRunner, uRdxFixTable,
+  uRdxText,          // MsgNoFileOpen
   uTestRdxTextKit;   // Join
 
 type
@@ -487,7 +488,10 @@ begin
   try
     O := TRdxFixTable.FixFor(nil, nil, F, nil);
     Assert.IsFalse(O.Enabled);
-    Assert.AreEqual('keine Datei geoeffnet', O.Reason);
+    // Der Grund kommt aus uRdxFixRunner.MapFix - seit E29 (Gruppe G6) die
+    // uebersetzte Fassung; in de traegt sie einen echten Umlaut, darum der
+    // Vergleich mit der Funktion statt mit dem Text.
+    Assert.AreEqual(MsgNoFileOpen, O.Reason);
     Assert.IsTrue(O.ChangesBehavior, 'SCA120 aendert das Verhalten');
   finally
     F.Free;

@@ -5092,3 +5092,225 @@ msgstr "das else steht in Klammern"
 
 msgid "the else belongs to a case or except - a statement list follows it"
 msgstr "das else gehört zu einem case bzw. except - dahinter steht eine Anweisungsliste"
+
+msgid "operand '%s': not a string (%s)"
+msgstr "Operand '%s': kein String (%s)"
+
+msgid "operand '%s': not a string"
+msgstr "Operand '%s': kein String"
+
+msgid "operand '%s': ansichar - Format converts without a code page"
+msgstr "Operand '%s': ansichar - Format wandelt ohne Codepage"
+
+msgid "operand '%s': Ansi result - Format returns UnicodeString"
+msgstr "Operand '%s': Ansi-Ergebnis - Format liefert UnicodeString"
+
+msgid "operand '%s': %s - Format returns UnicodeString"
+msgstr "Operand '%s': %s - Format liefert UnicodeString"
+
+msgid "operand '%s': Variant possible (Null/number: the original raises, Format does not)"
+msgstr "Operand '%s': Variant möglich (Null/Zahl: Original wirft, Format nicht)"
+
+msgid "operand '%s': not a simple operand"
+msgstr "Operand '%s': kein einfacher Operand"
+
+msgid "the chain already contains Format()"
+msgstr "Kette enthält schon Format()"
+
+msgid "no literal in the chain"
+msgstr "kein Literal in der Kette"
+
+msgid "SQL text: rewrite blocked (SCA003)"
+msgstr "SQL-Text: Umformung gesperrt (SCA003)"
+
+msgid "operand '%s': pointer at the start of the chain - if '%s' is not a string, Delphi computes '%s + %s' as pointer arithmetic, Format does not"
+msgstr "Operand '%s': Zeiger am Kettenanfang - ist '%s' kein String, rechnet Delphi '%s + %s' als Zeiger-Arithmetik, Format nicht"
+
+msgid "not a plain term: %s"
+msgstr "kein reiner Term: %s"
+
+msgid "there are only literals behind %s"
+msgstr "hinter %s stehen nur Literale"
+
+msgid "no statement found on line %d"
+msgstr "keine Anweisung auf Zeile %d gefunden"
+
+msgid "line %d is ambiguous (%d statements)"
+msgstr "Zeile %d ist mehrdeutig (%d Anweisungen)"
+
+msgid "line %d carries %s, the finding names %s"
+msgstr "Zeile %d trägt %s, der Fund nennt %s"
+
+msgid "chain on line %d has %d x '+', the finding names %d - line changed? Analyse the file again"
+msgstr "Kette auf Zeile %d hat %d x '+', der Fund nennt %d - Zeile verändert? Datei neu prüfen"
+
+msgid "chain on line %d: the source text splits differently than the parser sees it (%d x '+')"
+msgstr "Kette auf Zeile %d: der Quelltext zerfällt anders als der Parser sie sieht (%d x '+')"
+
+msgid "the statement cannot be described"
+msgstr "Anweisung lässt sich nicht beschreiben"
+
+msgid "%d terms, %s"
+msgstr "%d Terme, %s"
+
+msgid "%d terms behind %s, %s"
+msgstr "%d Terme hinter %s, %s"
+
+msgid "all proven"
+msgstr "alle bewiesen"
+
+msgid "%d according to the compiler (%s)"
+msgstr "%d laut Kompilat (%s)"
+
+msgid "%s, %d numeric (%%d/%%u)"
+msgstr "%s, %d numerisch (%%d/%%u)"
+
+msgid "no description"
+msgstr "keine Beschreibung"
+
+msgid "no assignment with a chain"
+msgstr "keine Zuweisung mit Kette"
+
+msgid "no assignment with a chain: %s"
+msgstr "keine Zuweisung mit Kette: %s"
+
+msgid "%s is missing in uses: %s"
+msgstr "%s fehlt in uses: %s"
+
+msgid "target '%s' is %s - Format returns UnicodeString"
+msgstr "Ziel '%s' ist %s - Format liefert UnicodeString"
+
+msgid "range not readable"
+msgstr "Bereich nicht lesbar"
+
+msgid "comment in the range"
+msgstr "Kommentar im Bereich"
+
+msgid "uses entry in line %d not readable"
+msgstr "uses-Eintrag in Zeile %d nicht lesbar"
+
+msgid "no uses clause and no interface/implementation"
+msgstr "keine uses-Klausel und kein interface/implementation"
+
+msgid "line %d of the section not readable"
+msgstr "Zeile %d des Abschnitts nicht lesbar"
+
+msgid "no target recognized"
+msgstr "kein Ziel erkannt"
+
+msgid "type of %s unknown - for a function or method pointer '= nil' calls it, Assigned() does not"
+msgstr "Typ von %s unbekannt - bei einem Funktions- oder Methodenzeiger ruft '= nil' ihn auf, Assigned() nicht"
+
+msgid "with statement - an operand could be a member of the with expression"
+msgstr "with-Anweisung - ein Operand könnte ein Member des with-Ausdrucks sein"
+
+msgid "FreeAndNil sets %s to nil before the destructor runs"
+msgstr "FreeAndNil setzt %s auf nil, bevor der Destruktor läuft"
+
+msgid "%s is not an object (%s: record, object, interface, pointer or own type of this unit) - Free is a method of its own, FreeAndNil takes only a TObject"
+msgstr "%s ist kein Objekt (%s: record, object, interface, Zeiger oder eigener Typ dieser Unit) - Free ist eine eigene Methode, FreeAndNil nimmt nur ein TObject"
+
+msgid "the unit declares its own method Free - FreeAndNil would not call it"
+msgstr "die Unit deklariert eine eigene Methode Free - FreeAndNil riefe sie nicht auf"
+
+msgid "%s has the type %s - by Delphi convention a pointer from another unit (Free is then the one of the target, FreeAndNil takes only a TObject)"
+msgstr "%s hat den Typ %s - nach Delphi-Konvention ein Zeiger aus einer anderen Unit (Free ist dann die des Ziels, FreeAndNil nimmt nur ein TObject)"
+
+msgid "%s is a const parameter - FreeAndNil does not reach the caller's variable (FPC: error, Delphi up to 10.3: E2197)"
+msgstr "%s ist ein const-Parameter - FreeAndNil erreicht die Variable des Aufrufers nicht (FPC: Fehler, Delphi bis 10.3: E2197)"
+
+msgid "with statement in the routine - %s could be a member"
+msgstr "with-Anweisung in der Routine - %s könnte ein Member sein"
+
+msgid "no quick fix at this place"
+msgstr "keine Hilfe an dieser Stelle"
+
+msgid "unhandled values raise EInvalidOpException"
+msgstr "unbehandelte Werte lösen EInvalidOpException aus"
+
+msgid "%s is already declared as %s - the cast changes nothing"
+msgstr "%s ist schon als %s deklariert - der Cast ändert nichts"
+
+msgid "a call raises ENotImplemented instead of doing nothing"
+msgstr "ein Aufruf löst ENotImplemented aus statt nichts zu tun"
+
+msgid "%s has a procedural type - \"%s <> nil\" calls it, Assigned() does not"
+msgstr "%s hat einen Prozedurtyp - \"%s <> nil\" ruft ihn auf, Assigned() nicht"
+
+msgid "%s is not known as a variable here (property or field from another unit?)"
+msgstr "%s ist hier nicht als Variable bekannt (Property oder Feld aus einer anderen Unit?)"
+
+msgid "the unit declares its own routine %s"
+msgstr "die Unit deklariert eine eigene Routine %s"
+
+msgid "%s is declared as a property in this unit - FreeAndNil needs a variable"
+msgstr "%s ist in dieser Unit als Property deklariert - FreeAndNil braucht eine Variable"
+
+msgid "%s is a variable (procedural type) - only () calls it safely"
+msgstr "%s ist eine Variable (Prozedurtyp) - erst () ruft sie sicher auf"
+
+msgid "type of %s unknown - if it is procedural, Delphi reads the name without () as a pointer"
+msgstr "Typ von %s unbekannt - ist er prozedural, liest Delphi den Namen ohne () als Zeiger"
+
+msgid "%s has a procedural type (%s) - without () Delphi reads the name as a pointer"
+msgstr "%s hat einen Prozedurtyp (%s) - ohne () liest Delphi den Namen als Zeiger"
+
+msgid "file with an FPC switch or FPC mode - in objfpc only Foo() calls a procedure variable"
+msgstr "Datei mit FPC-Weiche oder FPC-Modus - in objfpc ruft erst Foo() eine Prozedurvariable auf"
+
+msgid "type of %s unknown - for a function type \"%s <> nil\" calls it, Assigned() does not"
+msgstr "Typ von %s unbekannt - bei einem Funktionstyp ruft \"%s <> nil\" ihn auf, Assigned() nicht"
+
+msgid "%s: type %s is not proven in this unit as a class, interface or pointer and is not a class of the Delphi sources - a function type would call \"%s <> nil\""
+msgstr "%s: Typ %s ist in dieser Unit nicht als Klasse, Interface oder Zeiger bewiesen und keine Klasse der Delphi-Quellen - ein Funktionstyp riefe \"%s <> nil\" auf"
+
+msgid "%s is not proven as Boolean here (type: %s) - with Variant or LongBool \"= True\" is not the same"
+msgstr "%s ist hier nicht als Boolean bewiesen (Typ: %s) - bei Variant oder LongBool ist \"= True\" nicht dasselbe"
+
+msgid "%s is no longer on line %d of a uses clause"
+msgstr "%s steht nicht mehr auf Zeile %d einer uses-Klausel"
+
+msgid "%s appears more than once on line %d"
+msgstr "%s steht mehrmals auf Zeile %d"
+
+msgid "directive in a uses clause - an entry may apply only in one branch"
+msgstr "Direktive in einer uses-Klausel - ein Eintrag gilt evtl. nur in einem Zweig"
+
+msgid "%s is used in the text"
+msgstr "%s wird im Text benutzt"
+
+msgid "heuristic finding - compile afterwards; if %s has an initialization section (registration), it no longer runs"
+msgstr "heuristischer Fund - danach kompilieren; hat %s einen initialization-Abschnitt (Registrierung), läuft er nicht mehr"
+
+msgid "the target is a Variant - behind 'X +' Delphi computes Variant arithmetic instead of concatenating, the compiler vouches for no operand"
+msgstr "Ziel ist ein Variant - hinter 'X +' rechnet Delphi Variant-Arithmetik statt zu verketten, das Kompilat bürgt für keinen Operanden"
+
+msgid "%s is not a plain identifier - its type cannot be checked"
+msgstr "%s ist kein bloßer Bezeichner - sein Typ ist nicht prüfbar"
+
+msgid "type of %s unknown - only a cast to its own type is provably without effect"
+msgstr "Typ von %s unbekannt - nur ein Cast auf den eigenen Typ ist beweisbar ohne Wirkung"
+
+msgid "%s is declared as %s, not as %s - another type can hide Free, or the cast is needed to compile"
+msgstr "%s ist als %s deklariert, nicht als %s - ein anderer Typ kann Free verdecken, oder der Cast ist zum Übersetzen nötig"
+
+msgid "%s is not proven as Boolean here (type: %s) - with Variant %s would get the value of the condition instead of True/False"
+msgstr "%s ist hier nicht als Boolean bewiesen (Typ: %s) - bei Variant bekäme %s den Wert der Bedingung statt True/False"
+
+msgid "the condition is not proven as Boolean (a call, a path or arithmetic as operand) - with a Variant \"not\" would be bitwise"
+msgstr "die Bedingung ist nicht als Boolean bewiesen (ein Aufruf, ein Pfad oder Arithmetik als Operand) - bei einem Variant wäre \"not\" bitweise"
+
+msgid "%s in the condition is not proven as Boolean here - with a Variant \"not\" would be bitwise"
+msgstr "%s in der Bedingung ist hier nicht als Boolean bewiesen - bei einem Variant wäre \"not\" bitweise"
+
+msgid "the target is missing"
+msgstr "Ziel fehlt"
+
+msgid "%s is declared as a property in this unit - the assignment may call a setter"
+msgstr "%s ist in dieser Unit als Property deklariert - die Zuweisung ruft vielleicht einen Setter"
+
+msgid "no statement with a nil comparison starts on line %d"
+msgstr "keine Anweisung mit nil-Vergleich beginnt auf Zeile %d"
+
+msgid "line %d is ambiguous (%d statements with a nil comparison)"
+msgstr "Zeile %d ist mehrdeutig (%d Anweisungen mit nil-Vergleich)"

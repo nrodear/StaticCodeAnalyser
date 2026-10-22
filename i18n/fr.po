@@ -5088,3 +5088,225 @@ msgstr "le else se trouve entre parenthèses"
 
 msgid "the else belongs to a case or except - a statement list follows it"
 msgstr "le else appartient à un case ou à un except - une liste d'instructions le suit"
+
+msgid "operand '%s': not a string (%s)"
+msgstr "opérande '%s' : pas une chaîne (%s)"
+
+msgid "operand '%s': not a string"
+msgstr "opérande '%s' : pas une chaîne"
+
+msgid "operand '%s': ansichar - Format converts without a code page"
+msgstr "opérande '%s' : ansichar - Format convertit sans page de codes"
+
+msgid "operand '%s': Ansi result - Format returns UnicodeString"
+msgstr "opérande '%s' : résultat Ansi - Format renvoie UnicodeString"
+
+msgid "operand '%s': %s - Format returns UnicodeString"
+msgstr "opérande '%s' : %s - Format renvoie UnicodeString"
+
+msgid "operand '%s': Variant possible (Null/number: the original raises, Format does not)"
+msgstr "opérande '%s' : Variant possible (Null/nombre : l'original lève une exception, Format non)"
+
+msgid "operand '%s': not a simple operand"
+msgstr "opérande '%s' : pas un opérande simple"
+
+msgid "the chain already contains Format()"
+msgstr "la concaténation contient déjà Format()"
+
+msgid "no literal in the chain"
+msgstr "aucun littéral dans la concaténation"
+
+msgid "SQL text: rewrite blocked (SCA003)"
+msgstr "texte SQL : transformation bloquée (SCA003)"
+
+msgid "operand '%s': pointer at the start of the chain - if '%s' is not a string, Delphi computes '%s + %s' as pointer arithmetic, Format does not"
+msgstr "opérande '%s' : pointeur en tête de la concaténation - si '%s' n'est pas une chaîne, Delphi calcule '%s + %s' comme une arithmétique de pointeurs, Format non"
+
+msgid "not a plain term: %s"
+msgstr "pas un terme simple : %s"
+
+msgid "there are only literals behind %s"
+msgstr "il n'y a que des littéraux après %s"
+
+msgid "no statement found on line %d"
+msgstr "aucune instruction trouvée à la ligne %d"
+
+msgid "line %d is ambiguous (%d statements)"
+msgstr "la ligne %d est ambiguë (%d instructions)"
+
+msgid "line %d carries %s, the finding names %s"
+msgstr "la ligne %d porte %s, le résultat nomme %s"
+
+msgid "chain on line %d has %d x '+', the finding names %d - line changed? Analyse the file again"
+msgstr "la concaténation à la ligne %d a %d x '+', le résultat en nomme %d - ligne modifiée ? Analysez à nouveau le fichier"
+
+msgid "chain on line %d: the source text splits differently than the parser sees it (%d x '+')"
+msgstr "concaténation à la ligne %d : le texte source se découpe autrement que l'analyseur ne la voit (%d x '+')"
+
+msgid "the statement cannot be described"
+msgstr "l'instruction ne peut pas être décrite"
+
+msgid "%d terms, %s"
+msgstr "%d termes, %s"
+
+msgid "%d terms behind %s, %s"
+msgstr "%d termes après %s, %s"
+
+msgid "all proven"
+msgstr "tous prouvés"
+
+msgid "%d according to the compiler (%s)"
+msgstr "%d selon le compilateur (%s)"
+
+msgid "%s, %d numeric (%%d/%%u)"
+msgstr "%s, %d numérique(s) (%%d/%%u)"
+
+msgid "no description"
+msgstr "aucune description"
+
+msgid "no assignment with a chain"
+msgstr "aucune affectation avec concaténation"
+
+msgid "no assignment with a chain: %s"
+msgstr "aucune affectation avec concaténation : %s"
+
+msgid "%s is missing in uses: %s"
+msgstr "%s manque dans uses : %s"
+
+msgid "target '%s' is %s - Format returns UnicodeString"
+msgstr "la cible '%s' est %s - Format renvoie UnicodeString"
+
+msgid "range not readable"
+msgstr "plage illisible"
+
+msgid "comment in the range"
+msgstr "commentaire dans la plage"
+
+msgid "uses entry in line %d not readable"
+msgstr "entrée uses à la ligne %d illisible"
+
+msgid "no uses clause and no interface/implementation"
+msgstr "aucune clause uses et aucun interface/implementation"
+
+msgid "line %d of the section not readable"
+msgstr "ligne %d de la section illisible"
+
+msgid "no target recognized"
+msgstr "aucune cible reconnue"
+
+msgid "type of %s unknown - for a function or method pointer '= nil' calls it, Assigned() does not"
+msgstr "type de %s inconnu - pour un pointeur de fonction ou de méthode, '= nil' l'appelle, Assigned() non"
+
+msgid "with statement - an operand could be a member of the with expression"
+msgstr "instruction with - un opérande pourrait être un membre de l'expression with"
+
+msgid "FreeAndNil sets %s to nil before the destructor runs"
+msgstr "FreeAndNil met %s à nil avant que le destructeur ne s'exécute"
+
+msgid "%s is not an object (%s: record, object, interface, pointer or own type of this unit) - Free is a method of its own, FreeAndNil takes only a TObject"
+msgstr "%s n'est pas un objet (%s : record, object, interface, pointeur ou type propre à cette unité) - Free est une méthode propre, FreeAndNil n'accepte qu'un TObject"
+
+msgid "the unit declares its own method Free - FreeAndNil would not call it"
+msgstr "l'unité déclare sa propre méthode Free - FreeAndNil ne l'appellerait pas"
+
+msgid "%s has the type %s - by Delphi convention a pointer from another unit (Free is then the one of the target, FreeAndNil takes only a TObject)"
+msgstr "%s a le type %s - selon la convention Delphi, un pointeur d'une autre unité (Free est alors celle de la cible, FreeAndNil n'accepte qu'un TObject)"
+
+msgid "%s is a const parameter - FreeAndNil does not reach the caller's variable (FPC: error, Delphi up to 10.3: E2197)"
+msgstr "%s est un paramètre const - FreeAndNil n'atteint pas la variable de l'appelant (FPC : erreur, Delphi jusqu'à 10.3 : E2197)"
+
+msgid "with statement in the routine - %s could be a member"
+msgstr "instruction with dans la routine - %s pourrait être un membre"
+
+msgid "no quick fix at this place"
+msgstr "pas de Quick-Fix à cet endroit"
+
+msgid "unhandled values raise EInvalidOpException"
+msgstr "les valeurs non traitées lèvent EInvalidOpException"
+
+msgid "%s is already declared as %s - the cast changes nothing"
+msgstr "%s est déjà déclaré comme %s - le transtypage ne change rien"
+
+msgid "a call raises ENotImplemented instead of doing nothing"
+msgstr "un appel lève ENotImplemented au lieu de ne rien faire"
+
+msgid "%s has a procedural type - \"%s <> nil\" calls it, Assigned() does not"
+msgstr "%s a un type procédural - « %s <> nil » l'appelle, Assigned() non"
+
+msgid "%s is not known as a variable here (property or field from another unit?)"
+msgstr "%s n'est pas connu ici comme variable (propriété ou champ d'une autre unité ?)"
+
+msgid "the unit declares its own routine %s"
+msgstr "l'unité déclare sa propre routine %s"
+
+msgid "%s is declared as a property in this unit - FreeAndNil needs a variable"
+msgstr "%s est déclaré comme propriété dans cette unité - FreeAndNil exige une variable"
+
+msgid "%s is a variable (procedural type) - only () calls it safely"
+msgstr "%s est une variable (type procédural) - seul () l'appelle de façon sûre"
+
+msgid "type of %s unknown - if it is procedural, Delphi reads the name without () as a pointer"
+msgstr "type de %s inconnu - s'il est procédural, Delphi lit le nom sans () comme un pointeur"
+
+msgid "%s has a procedural type (%s) - without () Delphi reads the name as a pointer"
+msgstr "%s a un type procédural (%s) - sans (), Delphi lit le nom comme un pointeur"
+
+msgid "file with an FPC switch or FPC mode - in objfpc only Foo() calls a procedure variable"
+msgstr "fichier avec aiguillage ou mode FPC - en objfpc, seul Foo() appelle une variable procédurale"
+
+msgid "type of %s unknown - for a function type \"%s <> nil\" calls it, Assigned() does not"
+msgstr "type de %s inconnu - pour un type fonction, « %s <> nil » l'appelle, Assigned() non"
+
+msgid "%s: type %s is not proven in this unit as a class, interface or pointer and is not a class of the Delphi sources - a function type would call \"%s <> nil\""
+msgstr "%s : le type %s n'est prouvé dans cette unité ni comme classe, ni comme interface, ni comme pointeur, et ce n'est pas une classe des sources Delphi - un type fonction appellerait « %s <> nil »"
+
+msgid "%s is not proven as Boolean here (type: %s) - with Variant or LongBool \"= True\" is not the same"
+msgstr "%s n'est pas prouvé ici comme Boolean (type : %s) - avec Variant ou LongBool, « = True » n'est pas équivalent"
+
+msgid "%s is no longer on line %d of a uses clause"
+msgstr "%s n'est plus à la ligne %d d'une clause uses"
+
+msgid "%s appears more than once on line %d"
+msgstr "%s figure plusieurs fois à la ligne %d"
+
+msgid "directive in a uses clause - an entry may apply only in one branch"
+msgstr "directive dans une clause uses - une entrée ne s'applique peut-être que dans une branche"
+
+msgid "%s is used in the text"
+msgstr "%s est utilisé dans le texte"
+
+msgid "heuristic finding - compile afterwards; if %s has an initialization section (registration), it no longer runs"
+msgstr "résultat heuristique - compilez ensuite ; si %s a une section initialization (enregistrement), elle ne s'exécute plus"
+
+msgid "the target is a Variant - behind 'X +' Delphi computes Variant arithmetic instead of concatenating, the compiler vouches for no operand"
+msgstr "la cible est un Variant - après 'X +' Delphi calcule une arithmétique Variant au lieu de concaténer, le compilateur ne garantit aucun opérande"
+
+msgid "%s is not a plain identifier - its type cannot be checked"
+msgstr "%s n'est pas un simple identificateur - son type n'est pas vérifiable"
+
+msgid "type of %s unknown - only a cast to its own type is provably without effect"
+msgstr "type de %s inconnu - seul un transtypage vers son propre type est prouvé sans effet"
+
+msgid "%s is declared as %s, not as %s - another type can hide Free, or the cast is needed to compile"
+msgstr "%s est déclaré comme %s, pas comme %s - un autre type peut masquer Free, ou le transtypage est nécessaire à la compilation"
+
+msgid "%s is not proven as Boolean here (type: %s) - with Variant %s would get the value of the condition instead of True/False"
+msgstr "%s n'est pas prouvé ici comme Boolean (type : %s) - avec Variant, %s recevrait la valeur de la condition au lieu de True/False"
+
+msgid "the condition is not proven as Boolean (a call, a path or arithmetic as operand) - with a Variant \"not\" would be bitwise"
+msgstr "la condition n'est pas prouvée comme Boolean (un appel, un chemin ou de l'arithmétique comme opérande) - avec un Variant, « not » serait bit à bit"
+
+msgid "%s in the condition is not proven as Boolean here - with a Variant \"not\" would be bitwise"
+msgstr "%s dans la condition n'est pas prouvé ici comme Boolean - avec un Variant, « not » serait bit à bit"
+
+msgid "the target is missing"
+msgstr "la cible manque"
+
+msgid "%s is declared as a property in this unit - the assignment may call a setter"
+msgstr "%s est déclaré comme propriété dans cette unité - l'affectation appelle peut-être un setter"
+
+msgid "no statement with a nil comparison starts on line %d"
+msgstr "aucune instruction avec comparaison à nil ne commence à la ligne %d"
+
+msgid "line %d is ambiguous (%d statements with a nil comparison)"
+msgstr "la ligne %d est ambiguë (%d instructions avec comparaison à nil)"
