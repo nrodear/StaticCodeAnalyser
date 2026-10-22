@@ -424,14 +424,17 @@ procedure TTestRdxUnusedParameterFixDetector.Detector_CommentOnly_Help;
 var
   Bad : string;
 begin
-  // Kommentar und String nennen den Namen: der Detektor meldet, die Hilfe
-  // greift, Kommentar und String bleiben.
+  // Ein Kommentar nennt den Namen: der Detektor meldet, die Hilfe greift,
+  // der Kommentar bleibt. Ein String mit dem Namen gehoert NICHT hierher -
+  // der Detektor zaehlt den String-Inhalt im AST-Flachtext als Lesen und
+  // meldet dann nicht (Grenze des Detektors); Kommentar UND String deckt
+  // der Planer-Test CommentAndString_AreNoUse.
   Bad := ImplUnit(['procedure Work(Mode: Integer);', 'begin',
-    '  // Mode is ignored on purpose', '  Writeln(''Mode'');', 'end;']);
+    '  // Mode is ignored on purpose', '  Writeln(''-'');', 'end;']);
   Assert.AreEqual<Integer>(1, Length(Detect(Bad)));
   Assert.AreEqual(
     ImplUnit(['procedure Work(_Mode: Integer);', 'begin',
-      '  // Mode is ignored on purpose', '  Writeln(''Mode'');', 'end;']),
+      '  // Mode is ignored on purpose', '  Writeln(''-'');', 'end;']),
     FixAll(Bad));
 end;
 

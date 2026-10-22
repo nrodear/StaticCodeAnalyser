@@ -207,7 +207,8 @@ begin
   Assert.AreEqual('', Reason);
   S := InRun(['  worker := TWorkerThread.Create(true);', '  worker.resume;']);
   Assert.AreEqual(StringReplace(S, 'worker.resume', 'worker.start', []),
-    Fixed(S, 'worker'));
+    FixAt(S, LineOf(S, 'worker.resume'), 'worker', Reason));
+  Assert.AreEqual('', Reason);
 end;
 
 procedure TTestRdxThreadResumeFix.Sca113_OwnCtorPassesOn_ToStart;

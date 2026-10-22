@@ -302,7 +302,6 @@ begin
   Result := False;
   AOperand := Default(TRdxSizeOperand);
   NameTok := Default(TRdxToken);
-  ToPtr := False;
   case Length(AToks) of
     1:
       begin

@@ -103,7 +103,6 @@ var
 begin
   Result := '';
   AReason := '';
-  Ok := False;
   Map := NewMap(ASource);
   try
     if ADelete then

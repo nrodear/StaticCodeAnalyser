@@ -357,7 +357,7 @@ msgstr ""
 msgid "%s is declared as %s - not Single, Double, Extended or Real"
 msgstr ""
 
-#: reDelphix/source/uRdxMoveSizeFix.pas:483
+#: reDelphix/source/uRdxMoveSizeFix.pas:482
 msgid "%s is declared as %s, not as %s - the call does not copy exactly one element"
 msgstr ""
 
@@ -382,7 +382,7 @@ msgstr ""
 msgid "%s is no longer at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxMoveSizeFix.pas:360
+#: reDelphix/source/uRdxMoveSizeFix.pas:359
 msgid "%s is not a pointer type of the RTL with one target type"
 msgstr ""
 
@@ -412,7 +412,7 @@ msgstr ""
 msgid "%s is overloaded - declaration and implementation cannot be paired safely"
 msgstr ""
 
-#: reDelphix/source/uRdxMoveSizeFix.pas:385
+#: reDelphix/source/uRdxMoveSizeFix.pas:384
 msgid "%s is qualified or a member - not the routine of the RTL"
 msgstr ""
 
@@ -3420,7 +3420,7 @@ msgstr ""
 msgid "anonymous method in the arguments"
 msgstr ""
 
-#: reDelphix/source/uRdxMoveSizeFix.pas:428
+#: reDelphix/source/uRdxMoveSizeFix.pas:427
 msgid "argument \"%s\" is not one variable - whether one element is meant stays open"
 msgstr ""
 
@@ -3528,7 +3528,7 @@ msgstr ""
 msgid "comment inside or behind the except block - a comment is intent, no help"
 msgstr ""
 
-#: reDelphix/source/uRdxMoveSizeFix.pas:391
+#: reDelphix/source/uRdxMoveSizeFix.pas:390
 msgid "comment inside the call %s(...)"
 msgstr ""
 
@@ -3947,8 +3947,8 @@ msgstr ""
 msgid "no call \"%s.Resume\" on the reported line"
 msgstr ""
 
-#: reDelphix/source/uRdxMoveSizeFix.pas:364
-#: reDelphix/source/uRdxMoveSizeFix.pas:381
+#: reDelphix/source/uRdxMoveSizeFix.pas:363
+#: reDelphix/source/uRdxMoveSizeFix.pas:380
 msgid "no call %s(...) on the reported line"
 msgstr ""
 
@@ -4386,12 +4386,12 @@ msgstr ""
 msgid "the branch after \"%s\" is no single statement or begin..end block"
 msgstr ""
 
-#: reDelphix/source/uRdxMoveSizeFix.pas:389
+#: reDelphix/source/uRdxMoveSizeFix.pas:388
 msgid "the call %s(...) does not end on its line"
 msgstr ""
 
-#: reDelphix/source/uRdxMoveSizeFix.pas:410
-#: reDelphix/source/uRdxMoveSizeFix.pas:427
+#: reDelphix/source/uRdxMoveSizeFix.pas:409
+#: reDelphix/source/uRdxMoveSizeFix.pas:426
 msgid "the call %s(...) does not have %d arguments"
 msgstr ""
 
@@ -4571,7 +4571,7 @@ msgstr ""
 msgid "the file declares its own \"Exit\" - it is not the procedure of the RTL"
 msgstr ""
 
-#: reDelphix/source/uRdxMoveSizeFix.pas:437
+#: reDelphix/source/uRdxMoveSizeFix.pas:436
 msgid "the file declares its own %s"
 msgstr ""
 
@@ -4579,7 +4579,7 @@ msgstr ""
 msgid "the file declares its own %s - it is not the function of System.Math"
 msgstr ""
 
-#: reDelphix/source/uRdxMoveSizeFix.pas:439
+#: reDelphix/source/uRdxMoveSizeFix.pas:438
 msgid "the file declares its own %s - its target type is not that of the RTL"
 msgstr ""
 
@@ -4707,7 +4707,7 @@ msgstr ""
 msgid "the last statement of the routine is not \"if ... then begin ... end\" - a guard clause fits only there"
 msgstr ""
 
-#: reDelphix/source/uRdxMoveSizeFix.pas:416
+#: reDelphix/source/uRdxMoveSizeFix.pas:415
 msgid "the length is not just SizeOf(%s)"
 msgstr ""
 
@@ -4740,7 +4740,7 @@ msgstr ""
 msgid "the line has more than one \"goto\""
 msgstr ""
 
-#: reDelphix/source/uRdxMoveSizeFix.pas:383
+#: reDelphix/source/uRdxMoveSizeFix.pas:382
 msgid "the line has more than one call %s(...) - ambiguous"
 msgstr ""
 
@@ -4813,7 +4813,7 @@ msgstr ""
 msgid "the message does not name the format string - analyse the file again"
 msgstr ""
 
-#: reDelphix/source/uRdxMoveSizeFix.pas:357
+#: reDelphix/source/uRdxMoveSizeFix.pas:356
 msgid "the message does not name the routine and the pointer type"
 msgstr ""
 
@@ -5082,7 +5082,7 @@ msgstr ""
 msgid "the unit ends with \"begin ... end.\" (SCA088) - turn the begin into initialization first"
 msgstr ""
 
-#: reDelphix/source/uRdxMoveSizeFix.pas:481
+#: reDelphix/source/uRdxMoveSizeFix.pas:480
 msgid "type of %s not proven here - it must be declared as %s"
 msgstr ""
 
@@ -5160,8 +5160,8 @@ msgstr ""
 msgid "with statement in the routine - a use of \"%s\" could be a member of the with expression"
 msgstr ""
 
-#: reDelphix/source/uRdxMoveSizeFix.pas:441
-#: reDelphix/source/uRdxMoveSizeFix.pas:491
+#: reDelphix/source/uRdxMoveSizeFix.pas:440
+#: reDelphix/source/uRdxMoveSizeFix.pas:490
 msgid "with statement in the routine - an argument could be a member"
 msgstr ""
 

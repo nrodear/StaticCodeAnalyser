@@ -120,7 +120,6 @@ var
 begin
   Result := '';
   AReason := '';
-  Ok := False;
   Map := NewMap(ASource);
   try
     Ok := TRdxClassMethodFix.MakeStatic(Map, ALine, AMsg, Edits, AReason);
