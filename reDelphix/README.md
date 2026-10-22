@@ -453,7 +453,9 @@ deutsche Endung wie `-ieren`, `-iert`, `-heit` oder ein grossgeschriebenes
 Nomen auf `-ung`, ein Umlaut, ein umschriebener Umlaut in einer Folge, die
 es englisch nicht gibt, oder `%d` mit grossgeschriebenem Nomen - auch ein
 einzelnes Wort; verkettete Literale zaehlen als ein Text), dazu deutsche
-msgids, qualifizierte Aufrufe `X._()`, `_(KONSTANTE)` mit einer Konstante,
+msgids, qualifizierte Aufrufe `X._()` (ausser `uRdxText._()`: so ruft
+`uRdxText.pas` wegen E2251 sein eigenes `_`, der Extraktor liest es wie
+`_()`, und das Gate prueft es ebenso), `_(KONSTANTE)` mit einer Konstante,
 die in der Unit keine reine Literal-Kette ist, und dynamische Argumente
 (`_(AWhat)`, `_(Format(..))`, `_('a ' + X)` - der Extraktor uebergeht sie
 still). Die Heuristik kennt Woerter und Endungen, keine Sprache: still
