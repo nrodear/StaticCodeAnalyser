@@ -67,7 +67,7 @@ uses
   {$IFNDEF FPC}
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uGotoStatement,
-  uRdxRecipeRunner,
+  uRdxRecipeRunner, uRdxFixTable,
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxGotoExitFix,
@@ -409,7 +409,7 @@ begin
   F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, fkGotoStatement);
   try
     SL.Text := ASource;
-    Result := PlanGotoExit(nil, SL, F, nil);
+    Result := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
     F.Free;
     SL.Free;
@@ -469,7 +469,7 @@ begin
     fkGotoStatement);
   try
     SL.Text := Wrap(['  if A then goto Fin;', '  Work;', 'Fin:']);
-    O := PlanGotoExit(nil, SL, F, nil);
+    O := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
     F.Free;
     SL.Free;
@@ -489,7 +489,7 @@ begin
   F := TLeakFinding.New('t.pas', '', GOTO_LINE, 'goto', fkGotoStatement);
   try
     SL.Text := Wrap(['  if A then goto Fin;', '  Work;', 'Fin:']);
-    O := PlanGotoExit(nil, SL, F, nil);
+    O := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
     F.Free;
     SL.Free;

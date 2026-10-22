@@ -13,12 +13,8 @@ unit uRdxTrailingBlanksFix;
 interface
 
 uses
-  System.Classes,
-  uEngineApi,          // TSourcePlaces
-  uMethodd12,          // TLeakFinding
-  uRdxCodeMap,         // TRdxCodeMap
   uRdxBufferMath,      // TRdxEdit
-  uRdxRecipeRunner;    // TRdxFixOutcome
+  uRdxCodeMap;         // TRdxCodeMap
 
 type
   // Der Planer von SCA063 (Form TRdxMapPlanner, uRdxFixRunner).
@@ -35,16 +31,10 @@ type
       out AReason: string): Boolean; static;
   end;
 
-// Der Planer der Tabelle (TRdxFixPlanner in uRdxFixTable): braucht den
-// Quellstellen-Dienst und die uses-Namen nicht.
-function PlanTrailingBlanks(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-
 implementation
 
 uses
   System.SysUtils,
-  uRdxFixRunner,       // MapFix
   uRefactorInfo;       // TRefactorSpan.Make
 
 const
@@ -112,13 +102,6 @@ begin
   AEdit.Expected := Copy(L, Col, Length(L) - Col + 1);
   AEdit.NewText := '';
   Result := True;
-end;
-
-function PlanTrailingBlanks(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
-    TRdxTrailingBlanksFix.TrimEnd);
 end;
 
 end.

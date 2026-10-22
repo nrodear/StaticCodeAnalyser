@@ -33,12 +33,8 @@ unit uRdxKeywordCaseFix;
 interface
 
 uses
-  System.Classes,       // TStrings
-  uEngineApi,           // TSourcePlaces
-  uMethodd12,           // TLeakFinding
   uRdxBufferMath,       // TRdxEdit
-  uRdxCodeMap,          // TRdxCodeMap
-  uRdxRecipeRunner;     // TRdxFixOutcome
+  uRdxCodeMap;          // TRdxCodeMap
 
 const
   // Gruende der Ablehnung (deutsch, ASCII, wie die Nachbarn).
@@ -62,18 +58,11 @@ type
       out AReason: string): Boolean; static;
   end;
 
-// Der Planer in der Form von TRdxFixPlanner (uRdxFixTable): Zeile und
-// Meldung aus AFinding; Name = das Wort wie gemeldet ('Begin') fuer den
-// Menuetext. APlaces und AUsesNames braucht die Hilfe nicht.
-function PlanLowercaseKeyword(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-
 implementation
 
 uses
   System.SysUtils,
-  uRefactorInfo,     // TRefactorSpan.Make
-  uRdxFixRunner;     // MapFix
+  uRefactorInfo;     // TRefactorSpan.Make
 
 const
   SPAN_064 = 'sca064';
@@ -249,14 +238,6 @@ begin
   AEdit.Expected := Kw;
   AEdit.NewText := Lower;
   Result := True;
-end;
-
-function PlanLowercaseKeyword(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
-    TRdxKeywordCaseFix.LowercaseKeyword);
-  Result.Name := QuotedText(AFinding.Message, '"');
 end;
 
 end.

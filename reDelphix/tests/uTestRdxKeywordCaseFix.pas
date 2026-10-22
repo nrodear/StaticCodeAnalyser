@@ -47,7 +47,8 @@ implementation
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uLowercaseKeyword,
-  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner, uRdxKeywordCaseFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner,
+  uRdxFixTable, uRdxKeywordCaseFix,
   uTestRdxDetectorKit,   // TSeen, DetectSource
   uTestRdxTextKit;       // Join, Apply
 
@@ -178,7 +179,7 @@ begin
     fkLowercaseKeyword);
   try
     SL.Text := ASource;
-    Result := PlanLowercaseKeyword(nil, SL, Finding, nil);
+    Result := TRdxFixTable.FixFor(nil, SL, Finding, nil);
   finally
     Finding.Free;
     SL.Free;
@@ -449,7 +450,7 @@ begin
   Finding := TLeakFinding.New('t.pas', '', 6, Msg('End', 7),
     fkLowercaseKeyword);
   try
-    O := PlanLowercaseKeyword(nil, nil, Finding, nil);
+    O := TRdxFixTable.FixFor(nil, nil, Finding, nil);
   finally
     Finding.Free;
   end;

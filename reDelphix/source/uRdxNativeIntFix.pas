@@ -16,12 +16,8 @@ unit uRdxNativeIntFix;
 interface
 
 uses
-  System.Classes,
-  uEngineApi,          // TSourcePlaces
-  uMethodd12,          // TLeakFinding
   uRdxBufferMath,      // TRdxEdit
-  uRdxCodeMap,         // TRdxCodeMap
-  uRdxRecipeRunner;    // TRdxFixOutcome
+  uRdxCodeMap;         // TRdxCodeMap
 
 type
   TRdxNativeIntFix = class
@@ -38,15 +34,10 @@ type
       out AReason: string): Boolean; static;
   end;
 
-// Planer-Adapter der Tabelle (Form TRdxFixPlanner aus uRdxFixTable).
-function PlanPointerSubtraction(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-
 implementation
 
 uses
   System.SysUtils,
-  uRdxFixRunner,   // MapFix
   uRdxText,        // _(), MsgMovedSuffix (E29, nie uLocalization)
   uRefactorInfo;   // TRefactorSpan.Make
 
@@ -260,13 +251,6 @@ begin
   AEdit.NewText := NewWord + Mid + NewWord
     + Copy(L, M.Start2 + M.Len2, M.EndCol - (M.Start2 + M.Len2));
   Result := True;
-end;
-
-function PlanPointerSubtraction(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
-    TRdxNativeIntFix.PointerSubtraction);
 end;
 
 end.

@@ -47,12 +47,8 @@ unit uRdxEmptyFinallyFix;
 interface
 
 uses
-  System.Classes,    // TStrings
-  uEngineApi,        // TSourcePlaces
-  uMethodd12,        // TLeakFinding
   uRdxBufferMath,    // TRdxEdit
-  uRdxCodeMap,       // TRdxCodeMap
-  uRdxRecipeRunner;  // TRdxFixOutcome
+  uRdxCodeMap;       // TRdxCodeMap
 
 const
   R_EFB_NOT_EMPTY = 'der finally-Block ist nicht leer';
@@ -87,18 +83,11 @@ type
       out AReason: string): Boolean; static;
   end;
 
-// Der Adapter der Tabelle (uRdxFixTable.TRdxFixPlanner): Zeile und Meldung
-// aus dem Fund, der Planer ueber MapFix. APlaces und AUsesNames braucht die
-// Hilfe nicht.
-function PlanEmptyFinally(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-
 implementation
 
 uses
   System.SysUtils,
-  uRefactorInfo,     // TRefactorSpan.Make
-  uRdxFixRunner;     // MapFix
+  uRefactorInfo;     // TRefactorSpan.Make
 
 const
   SPAN_083 = 'sca083';
@@ -433,13 +422,6 @@ begin
   Result := AReason = '';
   if not Result then
     AEdit := Default(TRdxEdit);
-end;
-
-function PlanEmptyFinally(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
-    TRdxEmptyFinallyFix.Unwrap);
 end;
 
 end.

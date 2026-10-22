@@ -2,13 +2,16 @@ unit uTestRdxEmptyBlockFix;
 
 // Editorhilfe SCA077 EmptyBlock (uRdxEmptyBlockFix): die Planer auf Text
 // (TTestRdxEmptyBlockFix) und der ECHTE Detektor (uEmptyBlock) mit dem
-// Adapter PlanEmptyBlock (TTestRdxEmptyBlockDetector). Die ganze Unit ist
-// nur Delphi (reDelphix.Test): der Planer bindet uEngineApi/
-// uRdxRecipeRunner und uRdxFixRunner, der FPC-Pruefstand (build.sh) fuehrt
-// ihn nicht - die {$IFNDEF FPC}-Weichen sind heute ohne Wirkung. Der Fund
-// zeigt auf die Zeile des BEGIN; die
-// Fixtures stehen in einer Routine ('procedure Foo;' auf Zeile 4, begin auf
-// Zeile 5, der Rumpf ab Zeile 6).
+// Einstieg der Tabelle (TRdxFixTable.FixFor, Adapter PlanEmptyBlock;
+// TTestRdxEmptyBlockDetector). Die ganze Unit ist nur Delphi
+// (reDelphix.Test).
+// Der Planer ist seit der Folgewelle G09-07 ohne Delphi-only-uses (den
+// Adapter traegt uRdxFixTable); die Unit steht trotzdem nicht im
+// FPC-Pruefstand (build.sh) - dessen Runner kennt die {$IFNDEF FPC}-
+// Weichen nicht, sie sind heute ohne Wirkung.
+// Der Fund zeigt auf die Zeile des BEGIN; die Fixtures stehen in einer
+// Routine ('procedure Foo;' auf Zeile 4, begin auf Zeile 5, der Rumpf ab
+// Zeile 6).
 
 interface
 
@@ -60,6 +63,7 @@ uses
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uEmptyBlock,
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
   uRdxRecipeRunner,      // TRdxFixOutcome
+  uRdxFixTable,          // TRdxFixTable.FixFor
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxEmptyBlockFix,
   uRdxText,              // _() und die gemeinsamen Gruende (E29)
@@ -361,7 +365,7 @@ begin
   try
     F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, fkEmptyBlock);
     SL.Text := ASource;
-    Result := PlanEmptyBlock(nil, SL, F, nil);
+    Result := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
     F.Free;
     SL.Free;

@@ -29,12 +29,8 @@ unit uRdxTrailingCommaFix;
 interface
 
 uses
-  System.Classes,       // TStrings
-  uEngineApi,           // TSourcePlaces
-  uMethodd12,           // TLeakFinding
   uRdxBufferMath,       // TRdxEdit
-  uRdxCodeMap,          // TRdxCodeMap
-  uRdxRecipeRunner;     // TRdxFixOutcome
+  uRdxCodeMap;          // TRdxCodeMap
 
 const
   // Die Gruende der Ablehnung als englische msgids (die Tests pruefen sie
@@ -57,17 +53,12 @@ type
       out AReason: string): Boolean; static;
   end;
 
-// Der Planer der Tabelle (TRdxFixPlanner, uRdxFixTable) fuer SCA068.
-function PlanTrailingComma(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-
 implementation
 
 uses
   System.SysUtils,
   uRefactorInfo,    // TRefactorSpan.Make
-  uRdxText,         // _(): in die reDelphix-Sprache (E29), nie uLocalization
-  uRdxFixRunner;    // MapFix
+  uRdxText;         // _(): in die reDelphix-Sprache (E29), nie uLocalization
 
 const
   SPAN_068 = 'sca068';
@@ -164,13 +155,6 @@ begin
   AEdit.Expected := Copy(L, Col, J - Col);
   AEdit.NewText := '';
   Result := True;
-end;
-
-function PlanTrailingComma(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
-    TRdxTrailingCommaFix.DropComma);
 end;
 
 end.

@@ -44,12 +44,8 @@ unit uRdxCategoryArgFix;
 interface
 
 uses
-  System.Classes,       // TStrings
-  uEngineApi,           // TSourcePlaces
-  uMethodd12,           // TLeakFinding
   uRdxBufferMath,       // TRdxEdit
-  uRdxCodeMap,          // TRdxCodeMap
-  uRdxRecipeRunner;     // TRdxFixOutcome
+  uRdxCodeMap;          // TRdxCodeMap
 
 const
   // Die Gruende der Ablehnung als englische msgids (die Tests pruefen sie
@@ -77,18 +73,12 @@ type
       out AReason: string): Boolean; static;
   end;
 
-// Der Planer der Tabelle (Form TRdxFixPlanner aus uRdxFixTable): Zeile und
-// Meldung aus dem Fund, die Hilfe ueber MapFix.
-function PlanCategoryArg(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-
 implementation
 
 uses
   System.SysUtils,
   uRefactorInfo,       // TRefactorSpan.Make
-  uRdxText,            // _(): in die reDelphix-Sprache (E29), nie uLocalization
-  uRdxFixRunner;       // MapFix
+  uRdxText;            // _(): in die reDelphix-Sprache (E29), nie uLocalization
 
 const
   SPAN_181 = 'sca181';
@@ -193,13 +183,6 @@ begin
   AEdit.NewText := Copy(L, P, Length(ATTR_NAME)) + '(''' + CATEGORY_PLACEHOLDER
     + ''')' + Copy(L, Q, R - Q);
   Result := True;
-end;
-
-function PlanCategoryArg(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
-    TRdxCategoryArgFix.AddArgument);
 end;
 
 end.

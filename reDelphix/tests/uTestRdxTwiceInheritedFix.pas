@@ -47,7 +47,8 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog,
   uTwiceInheritedCalls,
-  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner, uRdxTwiceInheritedFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner,
+  uRdxFixTable, uRdxTwiceInheritedFix,
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
   uTestRdxTextKit;       // Join, Apply
 
@@ -152,9 +153,9 @@ begin
   try
     SL.Text := ASource;
     if AAlt then
-      O := PlanTwiceInheritedAlt(nil, SL, F, nil)
+      O := TRdxFixTable.AlternativeFixFor(nil, SL, F, nil)
     else
-      O := PlanTwiceInherited(nil, SL, F, nil);
+      O := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
     F.Free;
     SL.Free;
@@ -299,8 +300,8 @@ begin
   F := TLeakFinding.New('t.pas', '', HEAD_LINE, 'x', fkTwiceInheritedCalls);
   try
     SL.Text := Wrap(['  inherited;', '  Inherited;']);
-    Main := PlanTwiceInherited(nil, SL, F, nil);
-    A := PlanTwiceInheritedAlt(nil, SL, F, nil);
+    Main := TRdxFixTable.FixFor(nil, SL, F, nil);
+    A := TRdxFixTable.AlternativeFixFor(nil, SL, F, nil);
   finally
     F.Free;
     SL.Free;
@@ -312,7 +313,8 @@ begin
   Assert.IsTrue(A.Enabled, A.Reason);
   Assert.AreEqual<Integer>(1, A.Variant, 'der zweite Eintrag ist Variant 1');
   Assert.IsTrue(A.ChangesBehavior, 'gekennzeichnet (E2)');
-  Assert.AreEqual(R_TWICE_ALT_HINT, A.Hint);
+  Assert.AreEqual('der erste Aufruf entfaellt - die Elternmethode '
+    + 'laeuft nur noch einmal; Reihenfolge und Nebenwirkung pruefen', A.Hint);
   Assert.AreEqual<Integer>(6, A.Edits[0].Span.StartLine, 'der erste Aufruf');
 end;
 
@@ -327,7 +329,7 @@ begin
   F := TLeakFinding.New('t.pas', '', HEAD_LINE + 1, 'x', fkTwiceInheritedCalls);
   try
     SL.Text := Wrap(['  inherited;', '  Inherited;']);
-    A := PlanTwiceInheritedAlt(nil, SL, F, nil);
+    A := TRdxFixTable.AlternativeFixFor(nil, SL, F, nil);
   finally
     F.Free;
     SL.Free;
@@ -383,7 +385,7 @@ begin
     fkTwiceInheritedCalls);
   try
     SL.Text := Src;
-    O := PlanTwiceInherited(nil, SL, F, nil);
+    O := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
     F.Free;
     SL.Free;

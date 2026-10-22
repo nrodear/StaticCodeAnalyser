@@ -2,9 +2,10 @@ unit uTestRdxEmptyFinallyFix;
 
 // Editorhilfe SCA083 EmptyFinallyBlock (uRdxEmptyFinallyFix) - nur Delphi,
 // reDelphix.Test: die Faelle auf Text (Planer ueber die Code-Sicht), dazu
-// der echte Detektor (uEmptyFinallyBlock) mit dem Adapter PlanEmptyFinally
-// und das Katalog-Beispiel. Die Unit braucht den Quellstellen-Dienst des
-// Cores (Adapter) und den Detektor - sie gehoert nicht in den FPC-Pruefstand.
+// der echte Detektor (uEmptyFinallyBlock) ueber die Tabelle
+// (TRdxFixTable.FixFor, Adapter PlanEmptyFinally) und das Katalog-
+// Beispiel. Die Unit braucht Tabelle und Detektor (Core) - sie gehoert
+// nicht in den FPC-Pruefstand.
 
 interface
 
@@ -45,7 +46,8 @@ implementation
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uEmptyFinallyBlock,
-  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner, uRdxEmptyFinallyFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner,
+  uRdxFixTable, uRdxEmptyFinallyFix,
   uTestRdxDetectorKit,   // TSeen, CatalogText, DetectSource
   uTestRdxTextKit;       // Join, Apply, LineOf
 
@@ -134,7 +136,7 @@ begin
       fkEmptyFinallyBlock);
     try
       SL.Text := Result;
-      O := PlanEmptyFinally(nil, SL, F, nil);
+      O := TRdxFixTable.FixFor(nil, SL, F, nil);
       Assert.IsTrue(O.Enabled, Format('Zeile %d: %s', [Seen[0].Line, O.Reason]));
       Result := Apply(Result, O.Edits);
     finally
@@ -437,11 +439,11 @@ begin
     F := TLeakFinding.New('t.pas', '', LineOf(S, 'finally'), 'Empty finally',
       fkEmptyFinallyBlock);
     // Ohne Zeilen: kein Puffer.
-    O := PlanEmptyFinally(nil, nil, F, nil);
+    O := TRdxFixTable.FixFor(nil, nil, F, nil);
     Assert.IsFalse(O.Enabled);
     Assert.AreEqual(R_NO_FILE, O.Reason);
     SL.Text := S;
-    O := PlanEmptyFinally(nil, SL, F, nil);
+    O := TRdxFixTable.FixFor(nil, SL, F, nil);
     Assert.IsTrue(O.Enabled, O.Reason);
     Assert.AreEqual(InUnit(['  Work;']), Apply(S, O.Edits));
   finally
