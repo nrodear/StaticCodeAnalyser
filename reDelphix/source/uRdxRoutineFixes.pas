@@ -15,7 +15,9 @@ unit uRdxRoutineFixes;
 // ueber die ganze Datei, also auch in inaktiven $IFDEF-Zweigen, die der
 // Parser des Scans nicht sieht -, in keinem String-Literal (GetProcAddress,
 // MethodAddress, RTTI, Skript-Registrierung per Name) und in keiner
-// Direktive ($EXTERNALSYM). Kommentare zaehlen nicht als Verwendung.
+// Direktive ($EXTERNALSYM). Kommentare zaehlen nicht als Verwendung - im
+// Puffer; in einem Include vor implementation sperrt jede Nennung, auch im
+// Kommentar (NameInInclude liest den Rohtext).
 //
 // BAUSTEINE: die Routinengrenzen (ReadRoutine), der Decl/Impl-Finder
 // (FindMethodDecls/FindMethodImpls), der Klassenkopf (FindClassHeads,
@@ -816,7 +818,10 @@ begin
 end;
 
 // Der eine Kopf mit dem Namen AName auf ALine (AWhat: was gesucht wird,
-// fuer den Grund). '' oder der Grund; AHead ist der Kopfanfang.
+// fuer den Grund). '' oder der Grund; AHead ist der Kopfanfang. Der Name
+// aus der Meldung steht als Argument im Text, nie im Muster ManyFmt
+// (Vertrag von TRdxLineSearch; bis Review Woche G05-19 stand er dort - je
+// Routinenname ein anderes Muster, keine msgid). Wortlaut unveraendert.
 function HeadOn(AMap: TRdxCodeMap; ALine: Integer; const AName,
   AWhat: string; out AHead: TRdxToken): string;
 var
@@ -828,7 +833,8 @@ begin
   S.Test := IsHeadNamed;
   S.Arg := LowerCase(AName);
   S.What := Format('kein Kopf %s %s', [AWhat, AName]);
-  S.ManyFmt := '%d Koepfe ' + AWhat + ' ' + AName;
+  S.ManyFmt := '%d Koepfe ' + AWhat + ' %s';
+  S.ManyArg := AName;
   Result := OneTokenOnLine(AMap, ALine, S, K);
   if Result = '' then
     AHead := HeadStart(AMap, K);
@@ -1247,6 +1253,12 @@ end;
 // Deklaration im interface-Teil (nach dem Loeschen E2065), ein Aufruf oder
 // ein Property-Accessor einer Nachfahrenklasse (nach dem Loeschen E2003;
 // bis zur Nachpruefung der Charge B1-FD nannte der Text nur SCA164).
+// Gesucht wird im ROHTEXT, mit Absicht anders als im Puffer (Kopf der Unit:
+// "Kommentare zaehlen nicht"): im Include zaehlt jedes Wort, auch in einem
+// Kommentar - eine Sperre zu viel, nie eine zu wenig - und in einem
+// String-Literal (dort ist es wie im Puffer ein Aufruf per Name). AMap
+// bleibt fuer diesen Test ungenutzt; die Form von TRdxIncludeTest teilen
+// sich SCA164/SCA147 und SCA014 (Review Woche G05-20).
 function NameInInclude(const AFile: string; ALines: TStrings;
   AMap: TRdxCodeMap; const AArg: string): string;
 begin
