@@ -1,4 +1,4 @@
-﻿# Static Code Analysis Tool for Delphi
+﻿# Static Code Analysis Tool for Delphi and Lazarus / Free Pascal
 
 [![Spendier mir einen Kaffee](https://img.shields.io/badge/%E2%98%95_Spendier_mir_einen_Kaffee-paypal.me%2Fnrodear-0070BA?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/nrodear)
 
@@ -13,7 +13,10 @@
 **13 (Florence)** — als **IDE-Plugin** mit dockbarem Tool-Fenster plus
 **eigenständige Windows-Anwendung**. Der Installer bedient die 32-Bit-IDE von
 Delphi 12 und **beide** IDEs von Delphi 13, 32- und 64-Bit; die eigenständige
-Anwendung gibt es als 32- und als 64-Bit-Build.
+Anwendung gibt es als 32- und als 64-Bit-Build. **Lazarus-/Free-Pascal**-Projekte
+scannen die eigenständige Anwendung und das CLI nativ — dieselbe Engine, dieselben
+Regeln, dialektbewusst: `.lpi`/`.lpk`-Projekte, `.pp`/`.lpr`-Units und
+`.lfm`-Formulare ([Details](#lazarus--free-pascal-fpc)).
 AST-basierte Analyse mit **201 Regeln**: 177 Pascal-Checks für
 Speicherlecks, SQL-Injection, Code-Smells, Sicherheitslücken und Code-Duplikate
 (inklusive einer **Sonar-Delphi-kompatiblen** Teilmenge SCA060+),
