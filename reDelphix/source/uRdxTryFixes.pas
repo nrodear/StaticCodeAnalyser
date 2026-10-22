@@ -193,8 +193,9 @@ implementation
 
 uses
   System.SysUtils,
+  uRdxText,          // _(), gemeinsame Texte (MsgCheckByHand, MsgLineMoved ...)
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxHandOver,      // IsLocalVar, InlineVarOf, R_HELD
+  uRdxHandOver,      // IsLocalVar, InlineVarOf, HeldReason
   uRdxTrySpan;       // TRdxPair, TRdxSpan, ScanPair, EnclosingReason, Sperren
 
 const
@@ -208,8 +209,6 @@ const
   // (IndentStep): eine ausgerichtete Zeile ('1: begin' und darunter weit
   // eingerueckt) ist keine Stufe.
   MAX_STEP = 4;
-  R_MOVED = 'Zeile verschoben? Datei neu pruefen';
-  R_BY_HAND = 'von Hand pruefen';
   // Die Freigaben von LOCK_PAIRS (uRdxTrySpan) fuer die Gruende, wie Delphi
   // sie schreibt.
   RELEASE_CAPS: array[0..3] of string = ('UnLock', 'Leave', 'Release',
@@ -285,13 +284,12 @@ begin
   P := Before(AMap, AFirst);
   if InList(P.Low, LIST_PREV) then Exit;
   if InList(P.Low, BRANCH_WORDS) then
-    Result := Format('die Anweisung steht allein hinter %s ohne begin - sie '
-      + 'gehoert zu keiner Anweisungsliste', [P.Low])
+    Result := _('the statement stands alone after %s without begin - it '
+      + 'belongs to no statement list', [P.Low])
   else if P.Low = ':' then
-    Result := 'die Anweisung ist ein case-Zweig bzw. steht hinter einer Marke'
+    Result := _('the statement is a case branch or follows a label')
   else
-    Result := Format('unklar, wozu die Anweisung gehoert ("%s" davor)',
-      [P.Low]);
+    Result := MsgUnclearStatementOwner(P.Low);
 end;
 
 // A als ganze Zeile: davor nur Leerraum, dahinter nur Kommentar. '' oder
@@ -301,10 +299,10 @@ begin
   Result := ContextReason(AMap, APair.First);
   if Result <> '' then Exit;
   if not FirstOnLine(AMap, APair.First) then
-    Result := 'vor der Anweisung steht auf ihrer Zeile weiterer Code - '
-      + 'try/finally/end stehen in eigenen Zeilen'
+    Result := _('other code precedes the statement on its line - '
+      + 'try/finally/end stand on lines of their own')
   else if not CanAppendLine(AMap, APair.Semi.Line, APair.Semi.EndCol - 1) then
-    Result := 'hinter der Anweisung steht auf ihrer Zeile weiterer Code';
+    Result := _('other code follows the statement on its line');
 end;
 
 // Das Token, das die Anweisungsliste um AFirst eroeffnet (begin, try,
@@ -439,8 +437,8 @@ begin
   if (APair.Kind <> pkBuffer) or (APair.First.Low = 'var')
      or IsLocalVar(AMap, APair.First, APair.Key) then
     Exit;
-  Result := Format('%s ist keine lokale Variable der Routine (Feld, globale '
-    + 'Variable, Parameter) - %s', [APair.Name, R_HELD]);
+  Result := _('%s is not a local variable of the routine (field, global '
+    + 'variable, parameter) - %s', [APair.Name, HeldReason]);
 end;
 
 // Baustein B5 (s. Kopf): A (APair.First..APair.Semi) und seine Freigabe in
@@ -526,9 +524,9 @@ begin
   APair.Kind := pkObject;
   APair.Key := LowerCase(AName);
   APair.Name := AName;
-  APair.What := Format('%s.Free bzw. FreeAndNil(%s)', [AName, AName]);
+  APair.What := _('%s.Free or FreeAndNil(%s)', [AName, AName]);
   if AName = '' then
-    Exit('Variable fehlt in der Meldung');
+    Exit(_('the message has no variable'));
   Hit := Default(TRdxCreateSite);
   n := 0;
   Prev := PrevToken(AMap, ALine, 1);
@@ -543,17 +541,19 @@ begin
     Prev := T;
     T := After(AMap, T);
   end;
-  Result := OneTokenReason(ALine, n, 'keine Zuweisung "' + AName + ' := .."',
-    '%d Zuweisungen an %s', AName);
+  // What als ganze Phrase uebersetzt, ManyFmt als Muster, der Name aus der
+  // Meldung als Argument (OneTokenReason, Texte umstellen).
+  Result := OneTokenReason(ALine, n, _('no assignment "%s := .."', [AName]),
+    _('%d assignments to %s'), AName);
   if Result <> '' then Exit;
   APair.First := Hit.First;
   APair.Semi := StatementStop(AMap, After(AMap, Hit.Assign));
   if APair.Semi.Low <> ';' then
-    Result := 'die Erzeugung ist die letzte Anweisung ihrer Liste - keine '
-      + 'Freigabe dahinter'
+    Result := _('the creation is the last statement of its list - no release '
+      + 'after it')
   else if not CreatesIn(AMap, Hit.Assign, APair.Semi) then
-    Result := 'keine Erzeugung (".Create..") in der Zuweisung - Fund veraltet? '
-      + R_MOVED;
+    Result := _('no creation (".Create..") in the assignment - finding '
+      + 'outdated? %s', [MsgLineMoved]);
 end;
 
 // SCA109/SCA153: passt die Sperre S zum Text der Meldung? (je Regel)
@@ -651,7 +651,7 @@ var
 begin
   APair.Kind := pkLock;
   if AText = '' then
-    Exit('Sperre fehlt in der Meldung');
+    Exit(_('the message has no lock'));
   Hit := Default(TRdxLockSite);
   n := 0;
   Prev := PrevToken(AMap, ALine, 1);
@@ -668,12 +668,13 @@ begin
     T := After(AMap, T);
   end;
   if (n = 0) and MonitorConditionOn(AMap, ALine) then
-    Exit('TMonitor.Enter mit Timeout bzw. TMonitor.TryEnter ist eine '
-      + 'Bedingung, keine Sperre - ob sie gilt, sagt erst das Ergebnis; '
-      + R_BY_HAND);
-  // Der Sperrtext der Meldung als Argument, nicht im Muster (OneTokenReason).
-  Result := OneTokenReason(ALine, n, 'keine Sperre "' + AText + '"',
-    '%d Sperren "%s"', AText);
+    Exit(_('TMonitor.Enter with a timeout or TMonitor.TryEnter is a '
+      + 'condition, not a lock - only the result tells whether it holds; %s',
+      [MsgCheckByHand]));
+  // Der Sperrtext der Meldung als Argument, nie im Muster (OneTokenReason):
+  // ein '%' darin warf sonst EConvertError.
+  Result := OneTokenReason(ALine, n, _('no lock "%s"', [AText]),
+    _('%d locks "%s"'), AText);
   if Result <> '' then Exit;
   APair.Lock := Hit;
   APair.First := Hit.First;
@@ -682,8 +683,8 @@ begin
   E := After(AMap, Hit.Last);
   APair.Semi := E;
   if E.Low <> ';' then
-    Result := 'die Sperre ist keine ganze Anweisung mit ";" (letzte der Liste '
-      + 'oder Teil eines Ausdrucks)';
+    Result := _('the lock is not a whole statement with ";" (last of the list '
+      + 'or part of an expression)');
 end;
 
 // SCA156: der Anfang des Aufrufs T - T selbst bzw. 'System' vor
@@ -728,20 +729,20 @@ begin
       APair.First := V;
     end;
     if not V.IsWord or (Before(AMap, V).Low = '.') then
-      Exit('die Zuweisung geht an einen Ausdruck, nicht an eine Variable');
+      Exit(_('the assignment goes to an expression, not to a variable'));
     if V.Low = 'result' then
-      Exit('Result - der Puffer verlaesst die Routine');
+      Exit(_('Result - the buffer leaves the routine'));
   end
   else if T.Low = 'getmem' then
   begin
     V := After(AMap, After(AMap, T));
     C := After(AMap, V);
     if not V.IsWord or (C.Low <> ',') then
-      Exit('das erste Argument von GetMem ist kein einfacher Bezeichner');
+      Exit(_('the first argument of GetMem is not a simple identifier'));
     APair.First := AStart;
   end
   else
-    Exit('AllocMem ohne Zuweisung - der Puffer ist nicht zu fassen');
+    Exit(_('AllocMem without assignment - the buffer cannot be tracked'));
   APair.Key := V.Low;
   APair.Name := TokText(AMap, V);
   APair.What := 'FreeMem(' + APair.Name + ')';
@@ -758,8 +759,8 @@ begin
   APair.Kind := pkBuffer;
   Func := LowerCase(AFunc);
   if Func = 'reallocmem' then
-    Exit('ReallocMem - der Puffer bestand schon vorher (fremder bzw. '
-      + 'vorhandener Speicher); ' + R_BY_HAND);
+    Exit(_('ReallocMem - the buffer existed before (foreign or existing '
+      + 'memory); %s', [MsgCheckByHand]));
   Hit := Default(TRdxToken);
   Start := Hit;
   n := 0;
@@ -784,17 +785,17 @@ begin
     T := After(AMap, T);
   end;
   if (n = 0) and (Qualified > 0) then
-    Exit(Format('%s eines eigenen Speichermanagers (qualifiziert) - %s',
-      [AFunc, R_BY_HAND]));
-  Result := OneTokenReason(ALine, n, 'kein Aufruf ' + AFunc + '(',
-    '%d Aufrufe %s(', AFunc);
+    Exit(_('%s of a custom memory manager (qualified) - %s',
+      [AFunc, MsgCheckByHand]));
+  Result := OneTokenReason(ALine, n, _('no call %s(', [AFunc]),
+    _('%d calls %s('), AFunc);
   if Result = '' then
     Result := BufferAt(AMap, Hit, Start, APair);
   if Result <> '' then Exit;
   C := MatchClose(AMap, After(AMap, Hit));
   APair.Semi := After(AMap, C);
   if (C.Low = '') or (APair.Semi.Low <> ';') then
-    Result := 'die Allokation ist keine ganze Anweisung mit ";"';
+    Result := _('the allocation is not a whole statement with ";"');
 end;
 
 { TRdxTryFixes }
@@ -880,7 +881,7 @@ begin
   Pair := Default(TRdxPair);
   Func := FirstWordOf(AMessage);
   if Func = '' then
-    AReason := 'Allokation fehlt in der Meldung'
+    AReason := _('the message has no allocation')
   else
     AReason := BufferPair(AMap, ALine, Func, Pair);
   APlan.Name := Pair.Name;

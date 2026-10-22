@@ -330,8 +330,12 @@ begin
     'raise TObject(X) in Zeile 8');
   AssertRefused(Around(['if C then', '  raise X at ReturnAddress;']),
     'raise X at ReturnAddress');
+  // 'uebergeben' traegt in der de.po einen echten Umlaut (Charge G3) -
+  // geprueft werden der Aufruf und das umlautfreie Ende.
   AssertRefused(Around(['if C then', '  Exception.RaiseOuterException(X);']),
-    'an RaiseOuterException uebergeben');
+    'an RaiseOuterException');
+  AssertRefused(Around(['if C then', '  Exception.RaiseOuterException(X);']),
+    'das Objekt ist die Ausnahme');
   // Ein Member von X im Ausdruck ist keine Weitergabe.
   AssertOffered(Around(['if C then', '  raise EFoo.Create(X.Name);']));
 end;
@@ -540,9 +544,11 @@ begin
   Assert.IsTrue(Pos('Exit in Zeile 7 - mit finally', R) > 0, R);
   AssertRefused(Around(['if Keep(X) then', '  System.Exit;']),
     'Exit in Zeile 8, und X wird in Zeile 7 weitergegeben');
+  // 'verlaesst' traegt in der de.po einen echten Umlaut (Charge G3) -
+  // geprueft wird das umlautfreie Teilstueck mit Sprung und Zeile.
   AssertRefusedAt(InProc(['  for I := 0 to 9 do', '  begin',
     '    X := TFoo.Create;', '    if Done then', '      System.Break;',
-    '    X.Free;', '  end;']), 8, 'break in Zeile 10 verlaesst den Bereich');
+    '    X.Free;', '  end;']), 8, 'break in Zeile 10');
   Assert.AreEqual(InProc(['  X := TFoo.Create;', '  try', '    if X.Empty then',
     '      System.Exit;', '    X.Run;', '  finally', '    X.Free;', '  end;']),
     Fix(Around(['if X.Empty then', '  System.Exit;', 'X.Run;']), R), R);

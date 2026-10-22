@@ -200,6 +200,14 @@ msgstr ""
 msgid "%d / %d findings"
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:547
+msgid "%d assignments to %s"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:791
+msgid "%d calls %s("
+msgstr ""
+
 #: reDelphix/source/uRdxClassMethodFix.pas:288
 msgid "%d classes named %s in this file"
 msgstr ""
@@ -252,6 +260,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxMethodNameFix.pas:314
 msgid "%d implementations of %s.%s in this file - overload or conditional twin?"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:677
+msgid "%d locks \"%s\""
 msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDEFindingActionMenu.pas:92
@@ -320,12 +332,24 @@ msgstr ""
 msgid "%s contains no profiles."
 msgstr ""
 
+#: reDelphix/source/uRdxTrySpan.pas:1090
+msgid "%s directly follows line %d - nothing to protect"
+msgstr ""
+
+#: reDelphix/source/uRdxTrySpan.pas:824
+msgid "%s in line %d - a conditional, deeper or second release in the range; with finally it would run twice"
+msgstr ""
+
 #: reDelphix/source/uRdxLookupHoistFix.pas:755
 msgid "%s in line %d can close %s or rebuild its fields - the reference fetched before the loop would point into the void"
 msgstr ""
 
 #: reDelphix/source/uRdxLookupHoistFix.pas:757
 msgid "%s in line %d can rebuild the parameters of %s - the reference fetched before the loop would point into the void"
+msgstr ""
+
+#: reDelphix/source/uRdxTrySpan.pas:922
+msgid "%s in line %d leaves the range - the release would now run there too; %s"
 msgstr ""
 
 #: reDelphix/source/uRdxHomoglyphFix.pas:525
@@ -370,6 +394,14 @@ msgstr ""
 msgid "%s is declared inside a type - its signature is a contract"
 msgstr ""
 
+#: reDelphix/source/uRdxHandOver.pas:647
+msgid "%s is handed over in line %d to %s (not a local name of the routine) - %s"
+msgstr ""
+
+#: reDelphix/source/uRdxHandOver.pas:608
+msgid "%s is handed over in line %d to %s - %s"
+msgstr ""
+
 #: reDelphix/source/uRdxAvoidOutFix.pas:483
 msgid "%s is in the published or default section of %s - a form file may bind it to an event"
 msgstr ""
@@ -380,6 +412,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxText.pas:815
 msgid "%s is no longer at the reported place"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:440
+msgid "%s is not a local variable of the routine (field, global variable, parameter) - %s"
 msgstr ""
 
 #: reDelphix/source/uRdxMoveSizeFix.pas:359
@@ -412,6 +448,10 @@ msgstr ""
 msgid "%s is overloaded - declaration and implementation cannot be paired safely"
 msgstr ""
 
+#: reDelphix/source/uRdxHandOver.pas:604
+msgid "%s is passed in line %d to %s - the object is the exception; finally would free it before the handler"
+msgstr ""
+
 #: reDelphix/source/uRdxMoveSizeFix.pas:384
 msgid "%s is qualified or a member - not the routine of the RTL"
 msgstr ""
@@ -437,6 +477,10 @@ msgstr ""
 msgid "%s is used without a call in line %d (method pointer?) - its type would change"
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:788
+msgid "%s of a custom memory manager (qualified) - %s"
+msgstr ""
+
 #: reDelphix/source/uRdxCharEscapeFix.pas:466
 msgid "%s stands in a compiler directive - deleting it would change the directive; %s"
 msgstr ""
@@ -459,6 +503,18 @@ msgstr ""
 
 #: reDelphix/source/uRdxFormatSettingsFix.pas:370
 msgid "%s stands without an argument list - no call"
+msgstr ""
+
+#: reDelphix/source/uRdxTrySpan.pas:758
+msgid "%s(%s) in line %d changes the pointer - FreeMem in the finally would free a different one"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:948
+msgid "%s.%s has a different shape (class, parameter modifiers, types, return type or calling convention) or only groups the parameters differently (\"A, B: T\" against \"A: T; B: T\") - check override by hand"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:527
+msgid "%s.Free or FreeAndNil(%s)"
 msgstr ""
 
 #: reDelphix/source/uRdxThreadResumeFix.pas:644
@@ -519,6 +575,14 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:3491
 msgid "8-bit string cast silently drops non-codepage characters"
+msgstr ""
+
+#: reDelphix/source/uRdxHandOver.pas:661
+msgid "@%s in line %d - a pointer or method pointer to the object leaves the range; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxTrySpan.pas:806
+msgid "@%s in line %d - the pointer can change"
 msgstr ""
 
 #: SCA.Engine/sources/Common/uRuleCatalog.pas:1819
@@ -632,6 +696,10 @@ msgstr ""
 
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:703
 msgid "All severities"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:745
+msgid "AllocMem without assignment - the buffer cannot be tracked"
 msgstr ""
 
 #: SCA.Engine/sources/Common/uRuleCatalog.pas:1814
@@ -1164,6 +1232,10 @@ msgstr ""
 msgid "Create without try/finally - exception path leaks the object"
 msgstr ""
 
+#: reDelphix/source/uRdxDeclFixes.pas:652
+msgid "CreateGUID returned no GUID"
+msgstr ""
+
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3346
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1735
 msgid "Crosses severities - Bugs can be Errors OR Warnings."
@@ -1450,6 +1522,14 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:3295
 msgid "Exception is constructed but never raised"
+msgstr ""
+
+#: reDelphix/source/uRdxTrySpan.pas:914
+msgid "Exit in line %d - with finally the exit would now release the lock; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxTrySpan.pas:1104
+msgid "Exit in line %d, and %s is handed over in line %d - the exit might have transferred ownership; %s"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2452
@@ -2441,6 +2521,10 @@ msgstr ""
 msgid "Real bugs / security holes (severity Error). Fix immediately."
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:762
+msgid "ReallocMem - the buffer existed before (foreign or existing memory); %s"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:378
 msgid "Recommended fix"
 msgstr ""
@@ -2618,6 +2702,10 @@ msgstr ""
 
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:369
 msgid "Reset panel + clear editor markers (main grid stays)"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:734
+msgid "Result - the buffer leaves the routine"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:3330
@@ -3027,6 +3115,10 @@ msgstr ""
 msgid "TLS verification disabled - MITM-attack surface"
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:671
+msgid "TMonitor.Enter with a timeout or TMonitor.TryEnter is a condition, not a lock - only the result tells whether it holds; %s"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:3176
 msgid "TThread destroyed without Terminate+WaitFor - worker may still be running"
 msgstr ""
@@ -3331,6 +3423,10 @@ msgstr ""
 msgid "X.Free; X := nil; -> use FreeAndNil(X)"
 msgstr ""
 
+#: reDelphix/source/uRdxDeclFixes.pas:456
+msgid "XMLDoc (///) already stands above the attributes - the detector stops at the attribute line and does not see it"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:317
 msgid "You are a senior Delphi developer reviewing the output of a static code analyser. Target version: Delphi 12 Athens (RTL/VCL). Suggest minimal, idiomatic fixes - no sweeping refactors, no style overhauls, no new dependencies unless strictly required."
 msgstr ""
@@ -3341,6 +3437,14 @@ msgstr ""
 
 #: reDelphix/source/uRdxHomoglyphFix.pas:594
 msgid "a \"with\" statement (line %d) could bind the new name %s to a member"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:504
+msgid "a comment precedes the header on its line - the skeleton belongs above it, insert it by hand"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:453
+msgid "a comment spanning several lines ends above - the detector sees its last line as code; check the documentation by hand"
 msgstr ""
 
 #: reDelphix/source/uRdxNativeIntFix.pas:239
@@ -3428,6 +3532,10 @@ msgstr ""
 msgid "asm block in the unreachable code"
 msgstr ""
 
+#: reDelphix/source/uRdxTrySpan.pas:928
+msgid "asm in line %d in the range"
+msgstr ""
+
 #: reDelphix/source/uRdxUnusedParameterFix.pas:792
 msgid "asm in the routine - it can read parameters through registers without their names"
 msgstr ""
@@ -3476,6 +3584,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxAvoidOutFix.pas:487
 msgid "class %s implements interfaces - %s could implement an interface method"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:965
+msgid "class header %s not found in the text"
 msgstr ""
 
 #: reDelphix/source/uRdxClassMethodFix.pas:202
@@ -3580,6 +3692,10 @@ msgstr ""
 msgid "compiler directive between Create(True) and Resume"
 msgstr ""
 
+#: reDelphix/source/uRdxDeclFixes.pas:650
+msgid "compiler directive between the header and the first member"
+msgstr ""
+
 #: reDelphix/source/uRdxConsecutiveSectionFix.pas:307
 msgid "compiler directive between the two sections - conditional code could need both keywords"
 msgstr ""
@@ -3590,6 +3706,15 @@ msgstr ""
 
 #: reDelphix/source/uRdxClassMethodFix.pas:311
 msgid "compiler directive in the class declaration"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:459
+#: reDelphix/source/uRdxDeclFixes.pas:988
+msgid "compiler directive in the header"
+msgstr ""
+
+#: reDelphix/source/uRdxTrySpan.pas:1098
+msgid "compiler directive in the range - try or finally might end up in only one branch"
 msgstr ""
 
 #: reDelphix/source/uRdxDeepNestingFix.pas:244
@@ -3724,9 +3849,25 @@ msgstr ""
 msgid "for-loop range is reversed - the loop body never runs"
 msgstr ""
 
+#: reDelphix/source/uRdxDeclFixes.pas:555
+msgid "forward declaration - it carries no GUID"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:967
+msgid "generic ancestor - the detector compares T with the substituted type; override might be the fix, %s"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:529
+msgid "generic interface - one GUID would apply to all instantiations (Supports would mix them up)"
+msgstr ""
+
 #: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:416
 #: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:725
 msgid "git not found. Install Git for Windows (git-scm.com) or set the path to git.exe in analyser.ini."
+msgstr ""
+
+#: reDelphix/source/uRdxTrySpan.pas:925
+msgid "goto in line %d - a jump into or out of a try block; %s"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2084
@@ -3768,6 +3909,10 @@ msgstr ""
 msgid "inline declaration \"%s X := IfThen(..)\" - declare X first"
 msgstr ""
 
+#: reDelphix/source/uRdxTrySpan.pas:931
+msgid "inline declaration (%s) in line %d - its scope would shrink to the try block"
+msgstr ""
+
 #: reDelphix/source/uRdxDeepNestingFix.pas:473
 msgid "inline var or const at the top of the block - its scope would grow to the rest of the routine"
 msgstr ""
@@ -3786,6 +3931,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxGotoExitFix.pas:277
 msgid "label \"%s\" is not the last statement of the routine - \"Exit\" would skip the code after it"
+msgstr ""
+
+#: reDelphix/source/uRdxTrySpan.pas:950
+msgid "label %s: in line %d - a goto into the try block does not compile"
 msgstr ""
 
 #: reDelphix/source/uRdxObjectListFix.pas:406
@@ -3838,8 +3987,16 @@ msgstr ""
 msgid "method of a nested type (%s)"
 msgstr ""
 
+#: reDelphix/source/uRdxHandOver.pas:639
+msgid "method pointer %s.%s to %s in line %d - %s"
+msgstr ""
+
 #: reDelphix/source/uRdxCategoryArgFix.pas:162
 msgid "more code follows the attribute on the line"
+msgstr ""
+
+#: reDelphix/source/uRdxTrySpan.pas:1101
+msgid "multi-line string literal in the range - indenting would change its content"
 msgstr ""
 
 #: reDelphix/source/uRdxIfThenFix.pas:459
@@ -3939,12 +4096,20 @@ msgstr ""
 msgid "no argument before the comma - the list is missing an element, the comma is not extra"
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:546
+msgid "no assignment \"%s := ..\""
+msgstr ""
+
 #: reDelphix/source/uRdxCharEscapeFix.pas:504
 msgid "no bidirectional control character on the reported line"
 msgstr ""
 
 #: reDelphix/source/uRdxThreadResumeFix.pas:277
 msgid "no call \"%s.Resume\" on the reported line"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:790
+msgid "no call %s("
 msgstr ""
 
 #: reDelphix/source/uRdxMoveSizeFix.pas:363
@@ -3972,6 +4137,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxAlwaysTrueFix.pas:224
 msgid "no comparison %s on the reported line"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:555
+msgid "no creation (\".Create..\") in the assignment - finding outdated? %s"
 msgstr ""
 
 #: reDelphix/source/uRdxExceptionNameFix.pas:246
@@ -4047,8 +4216,20 @@ msgstr ""
 msgid "no implementation %s.%s in this file (abstract, external or in an include)"
 msgstr ""
 
+#: reDelphix/source/uRdxDeclFixes.pas:560
+msgid "no interface body begins after the header (header duplicated under {$IFDEF}?)"
+msgstr ""
+
 #: reDelphix/source/uRdxCharEscapeFix.pas:518
 msgid "no invisible character on the reported line"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:676
+msgid "no lock \"%s\""
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:172
+msgid "no matching declaration on the reported line"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:805
@@ -4061,6 +4242,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxConsecutiveSectionFix.pas:211
 msgid "no previous \"%s\" section found"
+msgstr ""
+
+#: reDelphix/source/uRdxTrySpan.pas:1021
+msgid "no release %s as a whole, unconditional statement in the same statement list after line %d - it is deeper, in another branch or missing; %s"
 msgstr ""
 
 #: reDelphix/source/uRdxGotoExitFix.pas:188
@@ -4148,6 +4333,10 @@ msgstr ""
 msgid "on E: Exception catches everything - too broad"
 msgstr ""
 
+#: reDelphix/source/uRdxHandOver.pas:127
+msgid "on an exception, finally would free it while the holder still refers to it; %s"
+msgstr ""
+
 #: reDelphix/source/uRdxConsecutiveSectionFix.pas:276
 msgid "only \"const\" and \"var\" sections are merged, not \"%s\""
 msgstr ""
@@ -4167,6 +4356,22 @@ msgstr ""
 
 #: reDelphix/source/uRdxAvoidOutFix.pas:672
 msgid "operator - its signature is fixed"
+msgstr ""
+
+#: reDelphix/source/uRdxTrySpan.pas:1096
+msgid "other code follows the release in line %d"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:305
+msgid "other code follows the statement on its line"
+msgstr ""
+
+#: reDelphix/source/uRdxTrySpan.pas:1093
+msgid "other code precedes the release in line %d - try/finally/end stand on lines of their own"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:302
+msgid "other code precedes the statement on its line - try/finally/end stand on lines of their own"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2562
@@ -4208,8 +4413,20 @@ msgstr ""
 msgid "parameter \"%s\" occurs in the routine in line %d"
 msgstr ""
 
+#: reDelphix/source/uRdxDeclFixes.pas:938
+msgid "parent class %s not found in the text - override cannot be checked"
+msgstr ""
+
 #: reDelphix/source/uRdxExceptionNameFix.pas:432
 msgid "qualified use \".%s\" on line %d - it may name a member of another type"
+msgstr ""
+
+#: reDelphix/source/uRdxTrySpan.pas:782
+msgid "raise %s in line %d - %s is (part of) the exception; finally would free it before the handler"
+msgstr ""
+
+#: reDelphix/source/uRdxTrySpan.pas:803
+msgid "second assignment to %s in line %d - the release in the finally would hit a different object"
 msgstr ""
 
 #: reDelphix/source/uRdxEmptyBlockFix.pas:120
@@ -4235,6 +4452,10 @@ msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDESonarOptions.pas:414
 msgid "sonar.projectKey not found in "
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:645
+msgid "stdcall/safecall/winapi/dispid in the body - a COM import needs the real IID, not a new GUID"
 msgstr ""
 
 #: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:595
@@ -4281,6 +4502,10 @@ msgstr ""
 msgid "the \"with\" header spans several lines"
 msgstr ""
 
+#: reDelphix/source/uRdxTrySpan.pas:1266
+msgid "the %s part of the try in line %d around the range names %s (line %d) - after the fix it would run after the finally"
+msgstr ""
+
 #: reDelphix/source/uRdxAssertSideEffectFix.pas:174
 #: reDelphix/source/uRdxAssertSideEffectFix.pas:184
 msgid "the Assert call does not stand alone on its line"
@@ -4302,6 +4527,10 @@ msgstr ""
 msgid "the address of parameter \"%s\" is taken in line %d"
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:798
+msgid "the allocation is not a whole statement with \";\""
+msgstr ""
+
 #: reDelphix/source/uRdxLookupHoistFix.pas:350
 #: reDelphix/source/uRdxLookupHoistFix.pas:356
 #: reDelphix/source/uRdxLookupHoistFix.pas:359
@@ -4318,6 +4547,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxIfThenFix.pas:220
 msgid "the assignment follows \"%s\" without begin..end - put it into begin..end first"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:732
+msgid "the assignment goes to an expression, not to a variable"
 msgstr ""
 
 #: reDelphix/source/uRdxObjectListFix.pas:776
@@ -4489,6 +4722,18 @@ msgstr ""
 msgid "the constant stands in the routine %s, the finding names %s"
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:552
+msgid "the creation is the last statement of its list - no release after it"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:797
+msgid "the declaration already carries %s"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:799
+msgid "the declaration carries %s - that does not fit override (virtual/dynamic introduce an entry of their own)"
+msgstr ""
+
 #: reDelphix/source/uRdxConstStringParameterFix.pas:404
 msgid "the declaration in line %d groups the parameter differently"
 msgstr ""
@@ -4648,6 +4893,10 @@ msgstr ""
 msgid "the file uses FormatSettings as a member (line %d) - inside such a class the bare name binds to the member"
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:741
+msgid "the first argument of GetMem is not a simple identifier"
+msgstr ""
+
 #: reDelphix/source/uRdxHomoglyphFix.pas:379
 msgid "the first use of the name (line %d) is not its declaration - it may come from another unit"
 msgstr ""
@@ -4663,6 +4912,10 @@ msgstr ""
 #: reDelphix/source/uRdxEmptyOnHandlerFix.pas:189
 #: reDelphix/source/uRdxEmptyOnHandlerFix.pas:277
 msgid "the handler head is not on one line, or the \";\" is not on the line of \"do\""
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:557
+msgid "the header is already followed by '[' (GUID or attribute)"
 msgstr ""
 
 #: reDelphix/source/uRdxClassMethodFix.pas:269
@@ -4769,6 +5022,14 @@ msgstr ""
 msgid "the literal is inside an asm block"
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:686
+msgid "the lock is not a whole statement with \";\" (last of the list or part of an expression)"
+msgstr ""
+
+#: reDelphix/source/uRdxTrySpan.pas:840
+msgid "the lock is taken again in line %d - %s"
+msgstr ""
+
 #: reDelphix/source/uRdxLookupHoistFix.pas:781
 msgid "the loop contains an anonymous method - it could run later, when %s has changed"
 msgstr ""
@@ -4817,8 +5078,20 @@ msgstr ""
 msgid "the message does not name the routine and the pointer type"
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:884
+msgid "the message has no allocation"
+msgstr ""
+
 #: reDelphix/source/uRdxText.pas:740
 msgid "the message has no column"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:654
+msgid "the message has no lock"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:529
+msgid "the message has no variable"
 msgstr ""
 
 #: reDelphix/source/uRdxParamNameFix.pas:251
@@ -4985,6 +5258,18 @@ msgstr ""
 msgid "the receiver of %s is not a plain variable name (Self, a qualified name or an expression)"
 msgstr ""
 
+#: reDelphix/source/uRdxTrySpan.pas:827
+msgid "the release in line %d frees %s in a different spelling (Self., typecast, Leave/Release) - with finally it would run twice; %s"
+msgstr ""
+
+#: reDelphix/source/uRdxTrySpan.pas:735
+msgid "the release in line %d is not a whole statement"
+msgstr ""
+
+#: reDelphix/source/uRdxTrySpan.pas:728
+msgid "the release in line %d spells %s differently - %s"
+msgstr ""
+
 #: reDelphix/source/uRdxEmptyExceptFix.pas:106
 msgid "the reported line carries several \"except\" - ambiguous"
 msgstr ""
@@ -5046,12 +5331,20 @@ msgstr ""
 msgid "the statement continues on line %d with another such call - it would stay unchanged and unreported; by hand"
 msgstr ""
 
+#: reDelphix/source/uRdxTryFixes.pas:290
+msgid "the statement is a case branch or follows a label"
+msgstr ""
+
 #: reDelphix/source/uRdxIntegerOverflowFix.pas:308
 msgid "the statement is inside a with block - its names can bind to members of the with expression"
 msgstr ""
 
 #: reDelphix/source/uRdxDeadCodeFix.pas:471
 msgid "the statement list ends on the last line of the unreachable code - only whole lines are deleted"
+msgstr ""
+
+#: reDelphix/source/uRdxTryFixes.pas:287
+msgid "the statement stands alone after %s without begin - it belongs to no statement list"
 msgstr ""
 
 #: reDelphix/source/uRdxNativeIntFix.pas:234
@@ -5068,6 +5361,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxNoSonarFix.pas:187
 msgid "the text after NOSONAR starts with \"noinspection\" - it would become a marker of its own"
+msgstr ""
+
+#: reDelphix/source/uRdxTrySpan.pas:1262
+msgid "the try in line %d around the range cannot be read safely - %s"
 msgstr ""
 
 #: reDelphix/source/uRdxNativeIntFix.pas:229
@@ -5109,6 +5406,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxIntegerOverflowFix.pas:231
 msgid "unknown"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:979
+msgid "unknown message - neither \"missing override\" nor \"hides all inherited\""
 msgstr ""
 
 #: reDelphix/source/uRdxAvoidOutFix.pas:654
@@ -5172,6 +5473,14 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:4380
 msgid "with statement names multiple targets - ambiguous member lookup"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:626
+msgid "{$CALLING STDCALL} in the file - a COM import cannot be ruled out"
+msgstr ""
+
+#: reDelphix/source/uRdxDeclFixes.pas:624
+msgid "{$INTERFACES CORBA} in the file"
 msgstr ""
 
 #: reDelphix/source/uRdxUnusedParameterFix.pas:801

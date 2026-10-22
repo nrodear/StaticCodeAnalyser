@@ -27,7 +27,7 @@ unit uRdxHandOver;
 // Inline-var davor. Parameter zaehlen nicht.
 //
 // GETEILT (interface) mit uRdxTrySpan und uRdxTryFixes: ARG_ENDS,
-// SourceText, QualifiedEnd und das Satzende R_HELD - EINE Fassung fuer die
+// SourceText, QualifiedEnd und das Satzende HeldReason - EINE Fassung fuer die
 // drei Units, die bis G08-08 eine waren. Die Woerter der Anweisungslisten
 // (LIST_PREV, BRANCH_WORDS, LIST_ENDS, UNIT_BOUNDS) stehen seit der
 // Folgewelle des Wochen-Reviews in uRdxCodeMap (G07-14).
@@ -41,9 +41,13 @@ const
   // Dahinter: ein direktes Argument ('F(X)', 'F(A, X, B)'; davor
   // ARG_STARTS).
   ARG_ENDS: array[0..1] of string = (',', ')');
-  // Satzende der Weitergabe-Gruende (auch uRdxTryFixes.HolderReason).
-  R_HELD = 'bei einer Ausnahme gaebe finally es frei, waehrend der Halter '
-    + 'es noch kennt; von Hand pruefen';
+
+// Satzende der Weitergabe-Gruende (auch uRdxTryFixes.HolderReason): bei
+// einer Ausnahme gaebe finally X frei, waehrend ein Halter es noch kennt -
+// von Hand pruefen. Uebersetzt (Entscheid E29); steht per %s hinter dem
+// Satz der Stelle. Eine Funktion statt der Konstanten R_HELD:
+// tools/i18n_extract.py loest nur Konstanten derselben Unit auf.
+function HeldReason: string;
 
 // Derselbe Text wie im Quelltext (Menuetext), Zeilen mit Leerzeichen.
 function SourceText(AMap: TRdxCodeMap; const AFrom, ATo: TRdxToken): string;
@@ -69,11 +73,16 @@ implementation
 
 uses
   System.SysUtils,
+  uRdxText,          // _(), MsgCheckByHand
   uRefactorInfo,     // TRefactorSpan.Make (SourceText)
   uRdxBlocks;        // ReadRoutine, HeadBefore (die Routine um eine Stelle)
 
 const
   SPAN_TRY = 'try';
+  // Der Schluss der Weitergabe-Gruende (HeldReason) - englische msgid
+  // (Entscheid E29), %s = MsgCheckByHand.
+  R_HELD = 'on an exception, finally would free it while the holder still '
+    + 'refers to it; %s';
   // Davor: ein direktes Argument ('F(X)', 'F(A, X, B)'; dahinter ARG_ENDS).
   ARG_STARTS: array[0..1] of string = ('(', ',');
   // Dahinter: ein Element eines Array-Konstruktors ('[X]', '[A, X]').
@@ -112,6 +121,11 @@ const
   EVENT_FIELD  = 'FOn';
 
 { ---- kleine Helfer ---- }
+
+function HeldReason: string;
+begin
+  Result := _(R_HELD, [MsgCheckByHand]);
+end;
 
 // Derselbe Text wie im Quelltext (Menuetext), Zeilen mit Leerzeichen.
 function SourceText(AMap: TRdxCodeMap; const AFrom, ATo: TRdxToken): string;
@@ -587,12 +601,12 @@ begin
   Call := CallOfArg(AMap, AFirst, ALast);
   if Call.Low = '' then Exit;
   if InList(Call.Low, RAISE_CALLS) then
-    Exit(Format('%s wird in Zeile %d an %s uebergeben - das Objekt ist die '
-      + 'Ausnahme; finally gaebe es vor dem Handler frei',
+    Exit(_('%s is passed in line %d to %s - the object is the exception; '
+      + 'finally would free it before the handler',
       [TokText(AMap, T), T.Line, TokText(AMap, Call)]));
   if IsStoreCall(Call.Low) then
-    Result := Format('%s wird in Zeile %d an %s weitergegeben - %s',
-      [TokText(AMap, T), T.Line, TokText(AMap, Call), R_HELD]);
+    Result := _('%s is handed over in line %d to %s - %s',
+      [TokText(AMap, T), T.Line, TokText(AMap, Call), HeldReason]);
 end;
 
 // Heisst AName wie ein Ereignis - 'On..' (Gross/klein egal, ein 'Online'
@@ -622,16 +636,16 @@ begin
   begin
     Target := Before(AMap, A);
     if Target.IsWord and IsEventName(TokText(AMap, Target)) then
-      Result := Format('Methodenzeiger %s.%s an %s in Zeile %d - %s',
+      Result := _('method pointer %s.%s to %s in line %d - %s',
         [TokText(AMap, T), TokText(AMap, M), TokText(AMap, Target), T.Line,
-        R_HELD]);
+        HeldReason]);
     Exit;
   end;
   if not EndsStatement(AMap, N, ALast) then Exit;
   Result := NonLocalTarget(AMap, A, T);
   if Result <> '' then
-    Result := Format('%s wird in Zeile %d an %s weitergegeben (kein lokaler '
-      + 'Name der Routine) - %s', [TokText(AMap, T), T.Line, Result, R_HELD]);
+    Result := _('%s is handed over in line %d to %s (not a local name of the '
+      + 'routine) - %s', [TokText(AMap, T), T.Line, Result, HeldReason]);
 end;
 
 // Weitergabe ohne Ausstieg (s. Kopf): X an T wird festgehalten - '@X',
@@ -644,9 +658,8 @@ var
   First, Last : TRdxToken;
 begin
   if APrev.Low = '@' then
-    Exit(Format('@%s in Zeile %d - ein Zeiger bzw. Methodenzeiger auf das '
-      + 'Objekt verlaesst den Bereich; %s', [TokText(AMap, T), T.Line,
-      R_HELD]));
+    Exit(_('@%s in line %d - a pointer or method pointer to the object leaves '
+      + 'the range; %s', [TokText(AMap, T), T.Line, HeldReason]));
   WrappedAt(AMap, T, First, Last);
   Result := CallArgReason(AMap, T, First, Last);
   if Result = '' then
