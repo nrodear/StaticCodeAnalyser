@@ -896,7 +896,7 @@ end;
 // eine Variable Operator ('operator' steht in ROUTINE_WORDS, ist aber kein
 // reserviertes Wort) - beendet sie mit seinem Grund; lieber keine Hilfe
 // als die falsche Routine (Gegenpruefung V-B2S-1).
-// (uRdxTryFixes.RoutineAround fragt anders: Token, unsichere Koepfe
+// (uRdxHandOver.RoutineAround fragt anders: Token, unsichere Koepfe
 // uebergangen, ein Abschnittswort der Unit beendet die Suche.)
 function EnclosingRoutine(AMap: TRdxCodeMap; ALine: Integer;
   out R: TRdxRoutine): string;
@@ -1022,7 +1022,7 @@ end;
 // der RTL? Hinter '.' ist ein Wort kein Schluesselwort (IsKeywordAfter),
 // der Sprung blieb so ungesehen (Gegen-Review R5, R5-05). 'TMonitor.Exit'
 // bzw. 'Foo.System.Exit' zaehlen nicht. Dieselbe Probe steht in
-// uRdxTryFixes (SystemQualified).
+// uRdxTrySpan (SystemQualified).
 function SystemQualified(AMap: TRdxCodeMap; const T, APrev: TRdxToken): Boolean;
 var
   Q : TRdxToken;

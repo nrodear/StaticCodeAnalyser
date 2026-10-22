@@ -632,7 +632,7 @@ end;
 // endet mit 'Curr.Free; exit;' in einer Schleife). '' oder der Grund. Bis
 // zur Nachpruefung B2S hiess sie JumpReason wie zwei andere Routinen mit
 // anderem Vertrag (uRdxFlowFixes.RedundantJumpReason fuer SCA080,
-// uRdxTryFixes.SpanJumpReason fuer den try-Bereich; Review R3-05/R5-03).
+// uRdxTrySpan.SpanJumpReason fuer den try-Bereich; Review R3-05/R5-03).
 function LeavesDestructorReason(AMap: TRdxCodeMap; const R: TRdxRoutine): string;
 var
   T, P : TRdxToken;
