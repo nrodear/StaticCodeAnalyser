@@ -1020,6 +1020,16 @@ end;
 
 // SCA123: ist der Operand AOperand ein blosser Bezeichner, ausserhalb eines
 // with-Blocks und als genau ATarget deklariert? '' oder der Grund.
+// PFADE (A.B, Self.F) lernt die Pruefung NICHT (Folgewelle A4, geprueft):
+// der Weg von SCA126 - das letzte Glied als Feld der Datei
+// (TRdxTypeProof.FieldTypeOf) - beweist nur den NAMEN, gleichnamige Felder
+// aller Klassen der Unit zaehlen mit, und der Typ des Pfads davor ist
+// unbekannt. SCA126 fragt dort nur "Feld oder Methode", hier ist der GENAUE
+// Typ der ganze Beweis: 'TStringList(Other.FList).Free' mit einem
+// fremden Other, dessen FList ein TRefCountedObject ist (eigenes Free),
+// verlore den Cast, wenn nur ein FList dieser Unit TStringList heisst.
+// Den Pfad sperrt darum schon der Planer (uRdxLineFixes.OperandReason,
+// Review Woche G07-17); die Pruefung hier bleibt als zweite Wand.
 function CastTypeReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
   ALine: Integer; const AOperand, ATarget: string): string;
 var
