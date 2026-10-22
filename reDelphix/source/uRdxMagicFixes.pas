@@ -194,8 +194,9 @@ uses
   uRdxIntroEdits,       // TextOf, TargetAt, IntroduceEdits, ApplyIntroEdits
   uRdxPaths,            // IsNetworkPath
   uRdxBlocks,           // IncludeChainReason, AllIncludes
-  uRdxCompilerTraces;   // OldCompilerTrace, ScriptReason, FLOOR_INLINE_DECL,
+  uRdxCompilerTraces,   // OldCompilerTrace, ScriptReason, FLOOR_INLINE_DECL,
                         // FLOOR_DIGIT_SEP
+  uRdxText;             // _, MsgMovedSuffix, MsgByHand (E29)
 
 const
   SPAN_MAGIC = 'magic';
@@ -225,55 +226,85 @@ const
   PROJECT_VERSION_TAG = '<ProjectVersion>';
   // Programm und Bibliothek haben einen Hauptblock (MainBlockReason).
   MAIN_BLOCK_WORDS: array[0..1] of string = ('program', 'library');
-  // Was nur der Compiler kennt (ScriptReason).
-  FEATURE_INLINE = 'eine Inline-Konstante';
-  R_MOVED = 'Zeile verschoben? Datei neu pruefen';
-  R_INC_UNSEEN = 'Include %s %s - seine Compiler-Weichen (FPC, aeltere '
-    + 'Delphi) sieht die Hilfe nicht';
-  // Die Gruende des Plattenblicks nennen das Sprachmittel (TRdxLateFeature,
-  // FEATURE_TEXTS): bis zur Integration QFI2 stand dort fest die Inline-
-  // Konstante und Delphi 10.3 - fuer SCA014 ergibt sich derselbe Text.
-  R_FPC_FILE = 'Lazarus-/FPC-Datei (%s) - %s gibt es in FPC 3.2 nicht';
-  R_LAZARUS = 'Lazarus-Projekt/-Paket %s im Verzeichnis %s - die Unit baut '
-    + 'wohl auch mit FPC, und %s gibt es in FPC 3.2 nicht';
-  R_LEGACY = 'alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl '
-    + 'auch mit einem Delphi vor %s, und dort gibt es %s; von Hand';
-  R_OLD_DPROJ = 'Projekt %s im Verzeichnis %s mit ProjectVersion %s (vor '
-    + 'Delphi %s = %s) - dort gibt es %s; von Hand';
-  R_NO_VERSION = 'Projekt %s im Verzeichnis %s ohne lesbare ProjectVersion '
-    + '(Delphi 2007 schrieb keine) - die Unit baut wohl auch mit einem Delphi '
-    + 'vor %s, und dort gibt es %s; von Hand';
-  R_INC_FPC = 'das Include %s traegt eine FPC-Weiche (Zeile %d) - %s gibt es '
-    + 'in FPC 3.2 nicht';
-  R_INC_OLD = 'das Include %s traegt Spuren aelterer Compiler (%s, Zeile %d) '
-    + '- %s gibt es erst ab Delphi %s; von Hand';
+  // Die Gruende sind englische msgids, uebersetzt mit _() in DIESER Unit
+  // (Entscheid E29; tools/i18n_extract.py loest nur Konstanten und
+  // String-Array-Konstanten derselben Unit auf). Jede msgid ist ein GANZER
+  // Satz: ein %s am Satzende hinter '; ' ist MsgByHand (uRdxText) - der
+  // Trenner bleibt im Satz.
+  // Was nur der Compiler kennt (ScriptReason): uebersetzt uebergeben - der
+  // Aufrufer uebersetzt, ScriptReason setzt es als %s in seinen Satz.
+  FEATURE_INLINE = 'an inline constant';
+  // MissingFmt fuer IncludeChainReason (uRdxBlocks): %s das Include, %s die
+  // Ursache ('nicht neben der Unit gefunden' ...). Geht als uebersetztes
+  // MUSTER hinaus (_() ohne Argumente formatiert nicht), Include und
+  // Ursache setzt uRdxBlocks ein.
+  R_INC_UNSEEN = 'include %s %s - the quick fix does not see its compiler '
+    + 'switches (FPC, older Delphi)';
+  // Die Gruende des Plattenblicks nennen das Sprachmittel (TRdxLateFeature):
+  // bis zur Integration QFI2 stand dort fest die Inline-Konstante und
+  // Delphi 10.3 - fuer SCA014 ergibt sich derselbe Text. Je Sprachmittel
+  // EIN ganzer Satz (Charge G9, Entscheid E29): Geschlecht, Zahl und
+  // Verneinung ('keine Inline-Konstante', 'keine Zifferntrenner') stellt
+  // jede Sprache selbst - ein Satz aus Stuecken ('%s gibt es in FPC 3.2
+  // nicht' mit 'Zifferntrenner') liesse sich nicht uebersetzen. Die
+  // Versionsnummer des Sprachmittels (10.3, 11) steht im Satz; die
+  // ProjectVersion der Schwelle kommt aus FloorOf (%s).
+  // Reihenfolge je Array: lfInlineConst, lfDigitSeparator, lfInlineVar.
+  R_FPC_FILE: array[TRdxLateFeature] of string = (
+    'Lazarus/FPC file (%s) - FPC 3.2 has no inline constants',
+    'Lazarus/FPC file (%s) - FPC 3.2 has no digit separators',
+    'Lazarus/FPC file (%s) - FPC 3.2 has no inline variables');
+  R_LAZARUS: array[TRdxLateFeature] of string = (
+    'Lazarus project/package %s in the directory %s - the unit probably also '
+      + 'builds with FPC, and FPC 3.2 has no inline constants',
+    'Lazarus project/package %s in the directory %s - the unit probably also '
+      + 'builds with FPC, and FPC 3.2 has no digit separators',
+    'Lazarus project/package %s in the directory %s - the unit probably also '
+      + 'builds with FPC, and FPC 3.2 has no inline variables');
+  R_LEGACY: array[TRdxLateFeature] of string = (
+    'old project file %s in the directory %s - the unit probably also builds '
+      + 'with a Delphi before 10.3, which has no inline constants; %s',
+    'old project file %s in the directory %s - the unit probably also builds '
+      + 'with a Delphi before 11, which has no digit separators; %s',
+    'old project file %s in the directory %s - the unit probably also builds '
+      + 'with a Delphi before 10.3, which has no inline variables; %s');
+  R_OLD_DPROJ: array[TRdxLateFeature] of string = (
+    'project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 '
+      + '= %s) - there are no inline constants there; %s',
+    'project %s in the directory %s with ProjectVersion %s (before Delphi 11 '
+      + '= %s) - there are no digit separators there; %s',
+    'project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 '
+      + '= %s) - there are no inline variables there; %s');
+  R_NO_VERSION: array[TRdxLateFeature] of string = (
+    'project %s in the directory %s without a readable ProjectVersion (Delphi '
+      + '2007 wrote none) - the unit probably also builds with a Delphi before '
+      + '10.3, which has no inline constants; %s',
+    'project %s in the directory %s without a readable ProjectVersion (Delphi '
+      + '2007 wrote none) - the unit probably also builds with a Delphi before '
+      + '11, which has no digit separators; %s',
+    'project %s in the directory %s without a readable ProjectVersion (Delphi '
+      + '2007 wrote none) - the unit probably also builds with a Delphi before '
+      + '10.3, which has no inline variables; %s');
+  R_INC_FPC: array[TRdxLateFeature] of string = (
+    'the include %s carries an FPC switch (line %d) - FPC 3.2 has no inline '
+      + 'constants',
+    'the include %s carries an FPC switch (line %d) - FPC 3.2 has no digit '
+      + 'separators',
+    'the include %s carries an FPC switch (line %d) - FPC 3.2 has no inline '
+      + 'variables');
+  R_INC_OLD: array[TRdxLateFeature] of string = (
+    'the include %s shows traces of older compilers (%s, line %d) - an inline '
+      + 'constant exists only from Delphi 10.3 on; %s',
+    'the include %s shows traces of older compilers (%s, line %d) - digit '
+      + 'separators exist only from Delphi 11 on; %s',
+    'the include %s shows traces of older compilers (%s, line %d) - an inline '
+      + 'variable exists only from Delphi 10.3 on; %s');
   // UNC und Netzlaufwerk (uRdxPaths.IsNetworkPath, seit Charge B1-FD).
-  R_NETWORK = 'Netzpfad %s - die Hilfe liest dort keine Projekt- und Include-'
-    + 'Dateien (Menueaufbau im Hauptthread); von Hand';
-  R_MAIN_BLOCK = 'die Zeile liegt im Hauptblock des Programms bzw. der '
-    + 'Bibliothek (begin ab '
-    + 'Zeile %d) - ob dort eine Inline-Deklaration gilt, ist nicht gemessen; '
-    + 'von Hand';
-
-type
-  // Die Bausteine der Gruende je Sprachmittel (R_FPC_FILE .. R_INC_OLD):
-  //   Since    ab welcher Delphi-Version es das gibt ('10.3')
-  //   Feature  als Subjekt ('%s gibt es in FPC 3.2 nicht')
-  //   Missing  verneint ('dort gibt es %s')
-  TRdxFeatureTexts = record
-    Since   : string;
-    Feature : string;
-    Missing : string;
-  end;
-
-const
-  FEATURE_TEXTS: array[TRdxLateFeature] of TRdxFeatureTexts = (
-    (Since: '10.3'; Feature: FEATURE_INLINE;
-     Missing: 'keine Inline-Konstante'),
-    (Since: '11'; Feature: 'Zifferntrenner';
-     Missing: 'keine Zifferntrenner'),
-    (Since: '10.3'; Feature: 'eine Inline-Variable';
-     Missing: 'keine Inline-Variable'));
+  R_NETWORK = 'network path %s - the quick fix reads no project or include '
+    + 'files there (the menu is built in the main thread); %s';
+  R_MAIN_BLOCK = 'the line is in the main block of the program or library '
+    + '(begin from line %d) - whether an inline declaration is valid there '
+    + 'has not been measured; %s';
 
 // Die Schwelle des Sprachmittels (uRdxCompilerTraces; lfInlineConst und
 // lfInlineVar teilen FLOOR_INLINE_DECL) - eine Funktion,
@@ -412,31 +443,32 @@ begin
     T := After(AMap, T);
   end;
   if Ifs = 0 then
-    Result := Format('Zeile %d traegt kein if - %s', [ALine, R_MOVED])
+    Result := MsgMovedSuffix(_('line %d carries no if', [ALine]))
   else if (N > 0) and (Sep <> '') then
     // Beides in einer Bedingung ('(X > 200_000) or (Y > 200)'): die Meldung
     // "200" passt auf beide, und der Detektor nimmt den ersten Vergleich in
     // Op-Reihenfolge - vorher ersetzte die Hilfe das exakte Literal, und
     // der Fund blieb (Wochen-Review 2026-10-21).
-    Result := Format('die if-Bedingung auf Zeile %d vergleicht mit %s und mit '
-      + '%s - mehrdeutig (der Detektor liest bei Zifferntrennern nur den '
-      + 'ersten Block); die Hilfe ersetzt genau ein Literal',
+    Result := _('the if condition on line %d compares with %s and with %s - '
+      + 'ambiguous (with digit separators the detector reads only the first '
+      + 'block); the quick fix replaces exactly one literal',
       [ALine, Sep, AValue])
   else if (N = 0) and (Sep <> '') then
     // Der Fund ist frisch, nur falsch gelesen - 'Zeile verschoben?' liesse
     // den Nutzer neu scannen und denselben Fund wiederfinden.
-    Result := Format('die if-Bedingung auf Zeile %d vergleicht mit %s - der '
-      + 'Detektor liest bei Zifferntrennern nur den ersten Block %s '
-      + '(Fehlalarm); kein Literal zu ersetzen', [ALine, Sep, AValue])
+    Result := _('the if condition on line %d compares with %s - with digit '
+      + 'separators the detector reads only the first block %s (false '
+      + 'alarm); no literal to replace', [ALine, Sep, AValue])
   else if N = 0 then
-    Result := Format('keine if-Bedingung auf Zeile %d vergleicht mit %s - %s',
-      [ALine, AValue, R_MOVED])
+    Result := MsgMovedSuffix(_('no if condition on line %d compares with %s',
+      [ALine, AValue]))
   else if N > 1 then
-    Result := Format('die if-Bedingung auf Zeile %d vergleicht %d-mal mit %s '
-      + '- mehrdeutig; die Hilfe ersetzt genau ein Literal', [ALine, N, AValue])
+    Result := _('the if condition on line %d compares %d times with %s - '
+      + 'ambiguous; the quick fix replaces exactly one literal',
+      [ALine, N, AValue])
   else if Hit.Line <> ALine then
-    Result := Format('%s steht in Zeile %d, einer Folgezeile der if-Bedingung '
-      + '- die Konstante gehoerte vor die if-Zeile (nicht unterstuetzt)',
+    Result := _('%s is in line %d, a continuation line of the if condition - '
+      + 'the constant would belong before the if line (not supported)',
       [AValue, Hit.Line])
   else
   begin
@@ -589,7 +621,7 @@ begin
   Result := '';
   B := MainBlockBegin(AMap);
   if (B.Low <> '') and (ALine >= B.Line) then
-    Result := Format(R_MAIN_BLOCK, [B.Line]);
+    Result := _(R_MAIN_BLOCK, [B.Line, MsgByHand]);
 end;
 
 // Was die Datei als Ganzes verbietet: Spuren von Compilern vor Delphi 10.3.
@@ -601,8 +633,9 @@ begin
   Result := '';
   S := OldCompilerTrace(AMap, FLOOR_INLINE_DECL, Li);
   if S <> '' then
-    Result := Format('eine Inline-Konstante gibt es erst ab Delphi 10.3 - die '
-      + 'Datei traegt Spuren aelterer Compiler (%s, Zeile %d); von Hand', [S, Li]);
+    Result := _('an inline constant exists only from Delphi 10.3 on - the '
+      + 'file shows traces of older compilers (%s, line %d); %s',
+      [S, Li, MsgByHand]);
 end;
 
 class function TRdxMagicFixes.MagicNumber(AMap: TRdxCodeMap; ALine: Integer;
@@ -618,10 +651,10 @@ begin
   APlan := Default(TRdxMagicPlan);
   APlan.Value := NumberOf(AMessage);
   if APlan.Value = '' then
-    AReason := 'die Meldung nennt keine Zahl ("Magic number "N" ...")'
+    AReason := _('the message names no number ("Magic number "N" ...")')
   else if APlan.Value[1] = '-' then
-    AReason := Format('die Meldung nennt %s - mit Vorzeichen meldet der '
-      + 'Detektor nicht, das Literal ist ohne; nicht unterstuetzt', [APlan.Value])
+    AReason := _('the message names %s - the detector does not report signed '
+      + 'numbers, the literal has no sign; not supported', [APlan.Value])
   else
     AReason := LiteralAt(AMap, ALine, APlan.Value, Col);
   if AReason <> '' then Exit;
@@ -631,10 +664,10 @@ begin
     AReason := Target.Plan.Reason
   else if (Target.Plan.Literal <> APlan.Value)
      or not KeepOnlyLiteral(Text, Target, Col) then
-    AReason := Format('am Literal in Spalte %d liest die Code-Aktion "%s" '
-      + 'statt %s - %s', [Col, Target.Plan.Literal, APlan.Value, R_MOVED])
+    AReason := MsgMovedSuffix(_('at the literal in column %d the code action '
+      + 'reads "%s" instead of %s', [Col, Target.Plan.Literal, APlan.Value]))
   else
-    AReason := ScriptReason(AMap, FEATURE_INLINE);
+    AReason := ScriptReason(AMap, _(FEATURE_INLINE));
   if AReason = '' then
     AReason := MainBlockReason(AMap, ALine);
   if AReason = '' then
@@ -767,23 +800,20 @@ end;
 function DelphiProjectReason(const AFiles: TRdxProjectFiles;
   const ADir: string; AFeature: TRdxLateFeature): string;
 var
-  T      : TRdxFeatureTexts;
   MinVer : Integer;
 begin
   Result := '';
-  T := FEATURE_TEXTS[AFeature];
   MinVer := FloorOf(AFeature).ProjectVersion;
   if AFiles.Dproj <> '' then
   begin
     if AFiles.DprojVer < 0 then
-      Result := Format(R_NO_VERSION, [AFiles.Dproj, ADir, T.Since,
-        T.Missing])
+      Result := _(R_NO_VERSION[AFeature], [AFiles.Dproj, ADir, MsgByHand])
     else if AFiles.DprojVer < MinVer then
-      Result := Format(R_OLD_DPROJ, [AFiles.Dproj, ADir,
-        VersionText(AFiles.DprojVer), T.Since, VersionText(MinVer), T.Missing]);
+      Result := _(R_OLD_DPROJ[AFeature], [AFiles.Dproj, ADir,
+        VersionText(AFiles.DprojVer), VersionText(MinVer), MsgByHand]);
   end
   else if AFiles.Legacy <> '' then
-    Result := Format(R_LEGACY, [AFiles.Legacy, ADir, T.Since, T.Missing]);
+    Result := _(R_LEGACY[AFeature], [AFiles.Legacy, ADir, MsgByHand]);
 end;
 
 // Netzpfad: uRdxPaths.IsNetworkPath (UNC und Netzlaufwerk, seit Charge
@@ -801,9 +831,9 @@ begin
   if AFileName = '' then Exit;
   Ext := LowerCase(ExtractFileExt(AFileName));
   if InList(Ext, FPC_EXTENSIONS) then
-    Exit(Format(R_FPC_FILE, [Ext, FEATURE_TEXTS[AFeature].Feature]));
+    Exit(_(R_FPC_FILE[AFeature], [Ext]));
   if IsNetworkPath(AFileName) then
-    Exit(Format(R_NETWORK, [ExtractFileDir(AFileName)]));
+    Exit(_(R_NETWORK, [ExtractFileDir(AFileName), MsgByHand]));
   Dir := ExtractFileDir(AFileName);
   DelphiSeen := False;
   for Level := 0 to PROJECT_LEVELS do
@@ -811,8 +841,7 @@ begin
     if Dir = '' then Exit;
     Files := ProjectFilesIn(Dir, FloorOf(AFeature).ProjectVersion);
     if Files.Lazarus <> '' then
-      Exit(Format(R_LAZARUS, [Files.Lazarus, Dir,
-        FEATURE_TEXTS[AFeature].Feature]));
+      Exit(_(R_LAZARUS[AFeature], [Files.Lazarus, Dir]));
     // Das NAECHSTE Verzeichnis mit Delphi-Projektdateien entscheidet
     // (eine .dproj ab der Schwelle dort macht alte Dateien weiter oben
     // stumm).
@@ -843,12 +872,10 @@ begin
   Feature := TRdxLateFeature(StrToIntDef(AArg, Ord(lfInlineConst)));
   for Li := 0 to ALines.Count - 1 do
     if LineLooksFpcAware(ALines[Li]) then
-      Exit(Format(R_INC_FPC, [AFile, Li + 1,
-        FEATURE_TEXTS[Feature].Feature]));
+      Exit(_(R_INC_FPC[Feature], [AFile, Li + 1]));
   S := OldCompilerTrace(AMap, FloorOf(Feature), Li);
   if S <> '' then
-    Result := Format(R_INC_OLD, [AFile, S, Li, FEATURE_TEXTS[Feature].Feature,
-      FEATURE_TEXTS[Feature].Since]);
+    Result := _(R_INC_OLD[Feature], [AFile, S, Li, MsgByHand]);
 end;
 
 class function TRdxMagicFixes.IncludeReason(const AFileName: string;
@@ -858,7 +885,7 @@ var
 begin
   Check.Test := CompilerInInclude;
   Check.Arg := IntToStr(Ord(AFeature));
-  Check.MissingFmt := R_INC_UNSEEN;
+  Check.MissingFmt := _(R_INC_UNSEEN);
   Result := IncludeChainReason(AFileName, AllIncludes(AMap), Check);
 end;
 

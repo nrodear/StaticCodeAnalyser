@@ -5500,3 +5500,213 @@ msgstr "einem Platzhalter"
 
 msgid "an expression of an earlier line"
 msgstr "einem Ausdruck einer früheren Zeile"
+
+msgid "line %d carries no if"
+msgstr "Zeile %d trägt kein if"
+
+msgid "the if condition on line %d compares with %s - with digit separators the detector reads only the first block %s (false alarm); no literal to replace"
+msgstr "die if-Bedingung auf Zeile %d vergleicht mit %s - der Detektor liest bei Zifferntrennern nur den ersten Block %s (Fehlalarm); kein Literal zu ersetzen"
+
+msgid "no if condition on line %d compares with %s"
+msgstr "keine if-Bedingung auf Zeile %d vergleicht mit %s"
+
+msgid "the if condition on line %d compares %d times with %s - ambiguous; the quick fix replaces exactly one literal"
+msgstr "die if-Bedingung auf Zeile %d vergleicht %d-mal mit %s - mehrdeutig; die Hilfe ersetzt genau ein Literal"
+
+msgid "%s is in line %d, a continuation line of the if condition - the constant would belong before the if line (not supported)"
+msgstr "%s steht in Zeile %d, einer Folgezeile der if-Bedingung - die Konstante gehörte vor die if-Zeile (nicht unterstützt)"
+
+msgid "an inline constant exists only from Delphi 10.3 on - the file shows traces of older compilers (%s, line %d); %s"
+msgstr "eine Inline-Konstante gibt es erst ab Delphi 10.3 - die Datei trägt Spuren älterer Compiler (%s, Zeile %d); %s"
+
+msgid "the message names no number (\"Magic number \"N\" ...\")"
+msgstr "die Meldung nennt keine Zahl (\"Magic number \"N\" ...\")"
+
+msgid "the message names %s - the detector does not report signed numbers, the literal has no sign; not supported"
+msgstr "die Meldung nennt %s - mit Vorzeichen meldet der Detektor nicht, das Literal ist ohne; nicht unterstützt"
+
+msgid "at the literal in column %d the code action reads \"%s\" instead of %s"
+msgstr "am Literal in Spalte %d liest die Code-Aktion \"%s\" statt %s"
+
+msgid "an inline constant"
+msgstr "eine Inline-Konstante"
+
+msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 10.3, which has no inline constants; %s"
+msgstr "Projekt %s im Verzeichnis %s ohne lesbare ProjectVersion (Delphi 2007 schrieb keine) - die Unit baut wohl auch mit einem Delphi vor 10.3, und dort gibt es keine Inline-Konstante; %s"
+
+msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 10.3, which has no inline constants; %s"
+msgstr "alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl auch mit einem Delphi vor 10.3, und dort gibt es keine Inline-Konstante; %s"
+
+msgid "Lazarus/FPC file (%s) - FPC 3.2 has no inline constants"
+msgstr "Lazarus-/FPC-Datei (%s) - eine Inline-Konstante gibt es in FPC 3.2 nicht"
+
+msgid "Lazarus project/package %s in the directory %s - the unit probably also builds with FPC, and FPC 3.2 has no inline constants"
+msgstr "Lazarus-Projekt/-Paket %s im Verzeichnis %s - die Unit baut wohl auch mit FPC, und eine Inline-Konstante gibt es in FPC 3.2 nicht"
+
+msgid "the include %s carries an FPC switch (line %d) - FPC 3.2 has no inline constants"
+msgstr "das Include %s trägt eine FPC-Weiche (Zeile %d) - eine Inline-Konstante gibt es in FPC 3.2 nicht"
+
+msgid "the include %s shows traces of older compilers (%s, line %d) - an inline constant exists only from Delphi 10.3 on; %s"
+msgstr "das Include %s trägt Spuren älterer Compiler (%s, Zeile %d) - eine Inline-Konstante gibt es erst ab Delphi 10.3; %s"
+
+msgid "include %s %s - the quick fix does not see its compiler switches (FPC, older Delphi)"
+msgstr "Include %s %s - seine Compiler-Weichen (FPC, ältere Delphi) sieht die Hilfe nicht"
+
+msgid "the literal is in the declaration before \":=\" (type, default value or dispid) - the action changes nothing there"
+msgstr "das Literal steht in der Deklaration vor \":=\" (Typ, Vorgabewert oder dispid) - dort ändert die Aktion nichts"
+
+msgid "the line declares a constant after the statement (\"const ...\") - its value stays as it is"
+msgstr "die Zeile deklariert hinter der Anweisung eine Konstante (\"const ...\") - ihr Wert bleibt, wie er ist"
+
+msgid "the literal alone is already the value of a declaration - it already has a name"
+msgstr "das Literal ist schon allein der Wert einer Deklaration - es hat bereits einen Namen"
+
+msgid "the line declares a constant - its value stays as it is (the action does not change constant declarations)"
+msgstr "die Zeile deklariert eine Konstante - ihr Wert bleibt, wie er ist (Konstanten-Deklarationen ändert die Aktion nicht)"
+
+msgid "the line starts with \"%s\" - a declaration, label or asm line; no declaration is allowed there"
+msgstr "die Zeile beginnt mit \"%s\" - eine Deklaration, Sprungmarke oder asm-Zeile; dort ist keine Deklaration erlaubt"
+
+msgid "the line starts with \"%s\" - the continuation of a routine header or a property (message, dispid, external ...); no declaration is allowed there"
+msgstr "die Zeile beginnt mit \"%s\" - die Fortsetzung eines Routinen-Kopfs oder einer Eigenschaft (message, dispid, external ...); dort ist keine Deklaration erlaubt"
+
+msgid "the line is an attribute (\"[...]\") - only constants are allowed there"
+msgstr "die Zeile ist ein Attribut (\"[...]\") - dort sind nur Konstanten erlaubt"
+
+msgid "the line is a declaration \"Name = ...\" (const or type section) - no inline declaration is allowed there"
+msgstr "die Zeile ist eine Deklaration \"Name = ...\" (const- oder type-Abschnitt) - dort ist keine Inline-Deklaration erlaubt"
+
+msgid "the line starts with \"%s\" - no declaration may precede it"
+msgstr "die Zeile beginnt mit \"%s\" - davor darf keine Deklaration"
+
+msgid "the line is a typed constant or initialized variable \"Name: Type = Value\" (const/var section) - its value stays as it is"
+msgstr "die Zeile ist eine typisierte Konstante oder initialisierte Variable \"Name: Typ = Wert\" (const-/var-Abschnitt) - ihr Wert bleibt, wie er ist"
+
+msgid "the line is a case branch, a label or an on handler - no declaration may precede it"
+msgstr "die Zeile ist ein case-Zweig, eine Sprungmarke oder ein on-Handler - davor darf keine Deklaration"
+
+msgid "the line starts with a value - it continues an expression and is not a statement"
+msgstr "die Zeile beginnt mit einem Wert - sie setzt einen Ausdruck fort und ist keine Anweisung"
+
+msgid "the line ends with \",\" - a list (e.g. case labels) that continues in the next line"
+msgstr "die Zeile endet mit \",\" - eine Liste (z. B. case-Marken), die in der nächsten Zeile weitergeht"
+
+msgid "the line above belongs to a conditional expression (Delphi 13: \"X := if C then ...\") - a begin..end in the middle of the expression is not code"
+msgstr "die Zeile darüber gehört zu einem Bedingungsausdruck (Delphi 13: \"X := if C then ...\") - ein begin..end mitten im Ausdruck ist kein Code"
+
+msgid "the statement in the branch does not end on this line with \";\" (multi-line or before else) - not supported"
+msgstr "die Anweisung im Zweig endet nicht auf dieser Zeile mit \";\" (mehrzeilig oder vor else) - nicht unterstützt"
+
+msgid "the line holds more than the one statement of the branch (a second \";\", an else without its own if, an open block) - begin..end around the line would change what runs in the branch"
+msgstr "auf der Zeile steht mehr als die eine Anweisung des Zweigs (ein zweites \";\", ein else ohne eigenes if, ein offener Block) - begin..end um die Zeile änderte, was im Zweig läuft"
+
+msgid "the line above starts the initialization/finalization section - whether an inline declaration is valid there has not been measured"
+msgstr "die Zeile darüber beginnt den initialization-/finalization-Abschnitt - ob dort eine Inline-Deklaration gilt, ist nicht gemessen"
+
+msgid "the line above neither ends a statement nor ends with then/do/else - unclear where the declaration belongs"
+msgstr "die Zeile darüber endet weder eine Anweisung noch mit then/do/else - unklar, wohin die Deklaration gehört"
+
+msgid "no number literal at the caret"
+msgstr "kein Zahl-Literal am Caret"
+
+msgid "the line is inside a multi-line string - there is no code there"
+msgstr "die Zeile liegt in einem mehrzeiligen String - dort ist kein Code"
+
+msgid "the line is inside a multi-line comment - there is no code there"
+msgstr "die Zeile liegt in einem mehrzeiligen Kommentar - dort ist kein Code"
+
+msgid "the line is inside an asm block - there is no Pascal code there"
+msgstr "die Zeile liegt in einem asm-Block - dort ist kein Pascal-Code"
+
+msgid "the line is in the initialization/finalization section - whether an inline declaration is valid there has not been measured"
+msgstr "die Zeile liegt im initialization-/finalization-Abschnitt - ob dort eine Inline-Deklaration gilt, ist nicht gemessen"
+
+msgid "the file carries an FPC switch ({$IFDEF FPC}, {$MODE ...}) - FPC 3.2 has no inline constants"
+msgstr "die Datei trägt eine FPC-Weiche ({$IFDEF FPC}, {$MODE ...}) - eine Inline-Konstante gibt es in FPC 3.2 nicht"
+
+msgid "the statement is the last line without a line end - no room for end;"
+msgstr "die Anweisung ist die letzte Zeile ohne Zeilenende - kein Platz für end;"
+
+msgid "the branch line ends in an open comment or string - \"begin\" would end up inside it"
+msgstr "die Zweigzeile endet in einem offenen Kommentar oder String - \"begin\" landete darin"
+
+msgid "the statement ends in an open comment or string - \"end;\" would end up inside it"
+msgstr "die Anweisung endet in einem offenen Kommentar oder String - \"end;\" landete darin"
+
+msgid "the then/else above belongs to a conditional expression (Delphi 13: \"X := if C then A\" / \"else\" / ...) - a begin..end in the middle of the expression is not code"
+msgstr "das then/else darüber gehört zu einem Bedingungsausdruck (Delphi 13: \"X := if C then A\" / \"else\" / ...) - ein begin..end mitten im Ausdruck ist kein Code"
+
+msgid "there is a directive on the line above or between it and the statement - in another branch of the conditional compilation the declaration would be somewhere else"
+msgstr "auf der Zeile darüber oder zwischen ihr und der Anweisung steht eine Direktive - in einem anderen Zweig der bedingten Übersetzung stünde die Deklaration woanders"
+
+msgid "the caret line %d is not in the buffer"
+msgstr "die Caret-Zeile %d liegt nicht im Puffer"
+
+msgid "replacement at byte %d (length %d) does not ascend or reaches beyond the buffer (position %d, buffer %d)"
+msgstr "Ersetzung bei Byte %d (Länge %d) steigt nicht auf oder ragt aus dem Puffer (Stand %d, Puffer %d)"
+
+msgid "the file does not start with unit/program/library (include or script?) - only the compiler knows %s"
+msgstr "die Datei beginnt nicht mit unit/program/library (Include oder Skript?) - %s kennt nur der Compiler"
+
+msgid "unit without an implementation part (script?) - only the compiler knows %s"
+msgstr "unit ohne implementation-Teil (Skript?) - %s kennt nur der Compiler"
+
+msgid "Lazarus/FPC file (%s) - FPC 3.2 has no digit separators"
+msgstr "Lazarus-/FPC-Datei (%s) - Zifferntrenner gibt es in FPC 3.2 nicht"
+
+msgid "Lazarus/FPC file (%s) - FPC 3.2 has no inline variables"
+msgstr "Lazarus-/FPC-Datei (%s) - eine Inline-Variable gibt es in FPC 3.2 nicht"
+
+msgid "Lazarus project/package %s in the directory %s - the unit probably also builds with FPC, and FPC 3.2 has no digit separators"
+msgstr "Lazarus-Projekt/-Paket %s im Verzeichnis %s - die Unit baut wohl auch mit FPC, und Zifferntrenner gibt es in FPC 3.2 nicht"
+
+msgid "Lazarus project/package %s in the directory %s - the unit probably also builds with FPC, and FPC 3.2 has no inline variables"
+msgstr "Lazarus-Projekt/-Paket %s im Verzeichnis %s - die Unit baut wohl auch mit FPC, und eine Inline-Variable gibt es in FPC 3.2 nicht"
+
+msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 11, which has no digit separators; %s"
+msgstr "alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl auch mit einem Delphi vor 11, und dort gibt es keine Zifferntrenner; %s"
+
+msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 10.3, which has no inline variables; %s"
+msgstr "alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl auch mit einem Delphi vor 10.3, und dort gibt es keine Inline-Variable; %s"
+
+msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 = %s) - there are no inline constants there; %s"
+msgstr "Projekt %s im Verzeichnis %s mit ProjectVersion %s (vor Delphi 10.3 = %s) - dort gibt es keine Inline-Konstante; %s"
+
+msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 11 = %s) - there are no digit separators there; %s"
+msgstr "Projekt %s im Verzeichnis %s mit ProjectVersion %s (vor Delphi 11 = %s) - dort gibt es keine Zifferntrenner; %s"
+
+msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 = %s) - there are no inline variables there; %s"
+msgstr "Projekt %s im Verzeichnis %s mit ProjectVersion %s (vor Delphi 10.3 = %s) - dort gibt es keine Inline-Variable; %s"
+
+msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 11, which has no digit separators; %s"
+msgstr "Projekt %s im Verzeichnis %s ohne lesbare ProjectVersion (Delphi 2007 schrieb keine) - die Unit baut wohl auch mit einem Delphi vor 11, und dort gibt es keine Zifferntrenner; %s"
+
+msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 10.3, which has no inline variables; %s"
+msgstr "Projekt %s im Verzeichnis %s ohne lesbare ProjectVersion (Delphi 2007 schrieb keine) - die Unit baut wohl auch mit einem Delphi vor 10.3, und dort gibt es keine Inline-Variable; %s"
+
+msgid "the include %s carries an FPC switch (line %d) - FPC 3.2 has no digit separators"
+msgstr "das Include %s trägt eine FPC-Weiche (Zeile %d) - Zifferntrenner gibt es in FPC 3.2 nicht"
+
+msgid "the include %s carries an FPC switch (line %d) - FPC 3.2 has no inline variables"
+msgstr "das Include %s trägt eine FPC-Weiche (Zeile %d) - eine Inline-Variable gibt es in FPC 3.2 nicht"
+
+msgid "the include %s shows traces of older compilers (%s, line %d) - digit separators exist only from Delphi 11 on; %s"
+msgstr "das Include %s trägt Spuren älterer Compiler (%s, Zeile %d) - Zifferntrenner gibt es erst ab Delphi 11; %s"
+
+msgid "the include %s shows traces of older compilers (%s, line %d) - an inline variable exists only from Delphi 10.3 on; %s"
+msgstr "das Include %s trägt Spuren älterer Compiler (%s, Zeile %d) - eine Inline-Variable gibt es erst ab Delphi 10.3; %s"
+
+msgid "network path %s - the quick fix reads no project or include files there (the menu is built in the main thread); %s"
+msgstr "Netzpfad %s - die Hilfe liest dort keine Projekt- und Include-Dateien (Menüaufbau im Hauptthread); %s"
+
+msgid "the line is in the main block of the program or library (begin from line %d) - whether an inline declaration is valid there has not been measured; %s"
+msgstr "die Zeile liegt im Hauptblock des Programms bzw. der Bibliothek (begin ab Zeile %d) - ob dort eine Inline-Deklaration gilt, ist nicht gemessen; %s"
+
+msgid "the if condition on line %d compares with %s and with %s - ambiguous (with digit separators the detector reads only the first block); the quick fix replaces exactly one literal"
+msgstr "die if-Bedingung auf Zeile %d vergleicht mit %s und mit %s - mehrdeutig (der Detektor liest bei Zifferntrennern nur den ersten Block); die Hilfe ersetzt genau ein Literal"
+
+msgid "there is a directive on the statement line - the declaration or begin..end could end up in another branch of the conditional compilation"
+msgstr "auf der Anweisungszeile steht eine Direktive - die Deklaration bzw. begin..end könnte in einem anderen Zweig der bedingten Übersetzung landen"
+
+msgid "the line is a field or a variable \"Name: Type;\" (class or var section) - no inline declaration is allowed there"
+msgstr "die Zeile ist ein Feld oder eine Variable \"Name: Typ;\" (Klassen- oder var-Abschnitt) - dort ist keine Inline-Deklaration erlaubt"

@@ -137,20 +137,26 @@ end;
 // else in Strings und Kommentaren und 'Else' als Teil eines Bezeichners
 // lassen den Wrap zu.
 procedure TTestRdxIntroRefuse.Wrap_ExactlyOneCompleteStatement;
+const
+  // Aus dem Grund '... endet nicht auf dieser Zeile mit ";" (mehrzeilig
+  // oder vor else) - nicht unterstuetzt' ein umlautfreies Teilstueck: in
+  // i18n/de.po steht 'nicht unterstuetzt' mit echtem Umlaut (Entscheid
+  // E29), die Testquellen bleiben ASCII.
+  NO_SEMI = '(mehrzeilig oder vor else)';
 var
   P : TRdxIntroPlan;
 begin
   P := PlanIntroduce('    Result := 999', '  if X then', 15, 'N01');
   Assert.IsFalse(P.Ok, 'ohne ;');
-  Assert.IsTrue(Pos('nicht unterstuetzt', P.Reason) > 0,
+  Assert.IsTrue(Pos(NO_SEMI, P.Reason) > 0,
     'Grund ohne ;: ' + P.Reason);
   P := PlanIntroduce('    Result := 42 +', '  if Done then', 15, 'N01');
   Assert.IsFalse(P.Ok, 'Ausdruck geht in der naechsten Zeile weiter');
-  Assert.IsTrue(Pos('nicht unterstuetzt', P.Reason) > 0,
+  Assert.IsTrue(Pos(NO_SEMI, P.Reason) > 0,
     'Grund Ausdruck: ' + P.Reason);
   P := PlanIntroduce('    Foo(42,', '  for I := 1 to 3 do', 9, 'N01');
   Assert.IsFalse(P.Ok, 'Argumentliste geht in der naechsten Zeile weiter');
-  Assert.IsTrue(Pos('nicht unterstuetzt', P.Reason) > 0,
+  Assert.IsTrue(Pos(NO_SEMI, P.Reason) > 0,
     'Grund Argumentliste: ' + P.Reason);
   // Neu: die ZEILE endet mit ';', die Zweig-Anweisung aber vor dem else
   // bzw. vor der zweiten Anweisung.

@@ -33,6 +33,9 @@ unit uRdxIntroPlan;
 // Code des Live Templates fuer D1 (TemplateCode, LoneLfCount) bleibt im
 // Labor. Der IDE-Teil folgt, wenn das Labor Enter und Esc geklaert hat
 // (E25: Esc zerstoert im Sync Edit der IDE Text, UI-Test 2026-10-11).
+// Abweichung vom Labor (Entscheid E29): die Gruende (Plan.Reason) sind
+// englische msgids, uebersetzt mit uRdxText._ in die Sprache der
+// SCA-Oberflaeche (deutscher Wortlaut in i18n/de.po).
 //
 // Spalten sind 1-basierte Zeichenspalten der Zeile (UTF-16), Bytes
 // rechnen erst uRdxIntroEdits und der IDE-Teil (Utf8Len).
@@ -156,7 +159,8 @@ uses
   // (Review R3-07).
   System.SysUtils,
   uRdxCodeMap,   // CharAt, IsIdentChar (Folgewelle des Wochen-Reviews)
-  uRdxRecipes;   // TRdxRecipes.LineLooksFpcAware (eine Liste FPC_TELLS)
+  uRdxRecipes,   // TRdxRecipes.LineLooksFpcAware (eine Liste FPC_TELLS)
+  uRdxText;      // _ (Gruende in der Sprache der SCA, E29)
 
 type
   // Ein Zahl-Literal der Zeile: Spalten [First, Stop).
@@ -870,11 +874,11 @@ begin
     if Depth <> 0 then
       Continue;
     if (ATokens[k].Text = 'var') and LiteralInTypePart(ATokens, ACols, k) then
-      Exit('das Literal steht in der Deklaration vor ":=" (Typ, '
-        + 'Vorgabewert oder dispid) - dort aendert die Aktion nichts');
+      Exit(_('the literal is in the declaration before ":=" (type, default '
+        + 'value or dispid) - the action changes nothing there'));
     if (ATokens[k].Text = 'const') and LiteralAfterConst(ATokens, ACols, k) then
-      Exit('die Zeile deklariert hinter der Anweisung eine Konstante '
-        + '("const ...") - ihr Wert bleibt, wie er ist');
+      Exit(_('the line declares a constant after the statement ("const ...") '
+        + '- its value stays as it is'));
   end;
 end;
 
@@ -1039,44 +1043,42 @@ var
 begin
   W := FirstCodeWord(ALine);
   if AlreadyNamed(ALine, ALiteral) then
-    Result := 'das Literal ist schon allein der Wert einer Deklaration - '
-      + 'es hat bereits einen Namen'
+    Result := _('the literal alone is already the value of a declaration - '
+      + 'it already has a name')
   else if W = 'const' then
-    Result := 'die Zeile deklariert eine Konstante - ihr Wert bleibt, wie '
-      + 'er ist (Konstanten-Deklarationen aendert die Aktion nicht)'
+    Result := _('the line declares a constant - its value stays as it is '
+      + '(the action does not change constant declarations)')
   else if InListText(W, DECL_STARTS) then
-    Result := Format('die Zeile beginnt mit "%s" - eine Deklaration, '
-      + 'Sprungmarke oder asm-Zeile; dort ist keine Deklaration erlaubt', [W])
+    Result := _('the line starts with "%s" - a declaration, label or asm '
+      + 'line; no declaration is allowed there', [W])
   else if StartsHeadDirective(ATokens) then
-    Result := Format('die Zeile beginnt mit "%s" - die Fortsetzung eines '
-      + 'Routinen-Kopfs oder einer Eigenschaft (message, dispid, external '
-      + '...); dort ist keine Deklaration erlaubt', [W])
+    Result := _('the line starts with "%s" - the continuation of a routine '
+      + 'header or a property (message, dispid, external ...); no '
+      + 'declaration is allowed there', [W])
   else if (Length(ATokens) > 0) and (ATokens[0].Text = '[') then
-    Result := 'die Zeile ist ein Attribut ("[...]") - dort sind nur '
-      + 'Konstanten erlaubt'
+    Result := _('the line is an attribute ("[...]") - only constants are '
+      + 'allowed there')
   else if IsDeclarationLine(ATokens) then
-    Result := 'die Zeile ist eine Deklaration "Name = ..." (const- oder '
-      + 'type-Abschnitt) - dort ist keine Inline-Deklaration erlaubt'
+    Result := _('the line is a declaration "Name = ..." (const or type '
+      + 'section) - no inline declaration is allowed there')
   else if InListText(W, NOT_A_START) then
-    Result := Format('die Zeile beginnt mit "%s" - davor darf keine '
-      + 'Deklaration', [W])
+    Result := _('the line starts with "%s" - no declaration may precede it',
+      [W])
   else if IsTypedConstDecl(ATokens) then
-    Result := 'die Zeile ist eine typisierte Konstante oder initialisierte '
-      + 'Variable "Name: Typ = Wert" (const-/var-Abschnitt) - ihr Wert '
-      + 'bleibt, wie er ist'
+    Result := _('the line is a typed constant or initialized variable "Name: '
+      + 'Type = Value" (const/var section) - its value stays as it is')
   else if IsFieldDecl(ATokens) then
-    Result := 'die Zeile ist ein Feld oder eine Variable "Name: Typ;" '
-      + '(Klassen- oder var-Abschnitt) - dort ist keine Inline-Deklaration '
-      + 'erlaubt'
+    Result := _('the line is a field or a variable "Name: Type;" (class or '
+      + 'var section) - no inline declaration is allowed there')
   else if IsLabeled(ATokens) then
-    Result := 'die Zeile ist ein case-Zweig, eine Sprungmarke oder ein '
-      + 'on-Handler - davor darf keine Deklaration'
+    Result := _('the line is a case branch, a label or an on handler - no '
+      + 'declaration may precede it')
   else if StartsWithValue(ATokens) then
-    Result := 'die Zeile beginnt mit einem Wert - sie setzt einen Ausdruck '
-      + 'fort und ist keine Anweisung'
+    Result := _('the line starts with a value - it continues an expression '
+      + 'and is not a statement')
   else if EndsWithListComma(ATokens) then
-    Result := 'die Zeile endet mit "," - eine Liste (z. B. case-Marken), '
-      + 'die in der naechsten Zeile weitergeht'
+    Result := _('the line ends with "," - a list (e.g. case labels) that '
+      + 'continues in the next line')
   else
     Result := '';
 end;
@@ -1091,16 +1093,16 @@ function WrapReason(const ALine, APrevCode: string;
   const ATokens: TArray<TRdxIntroToken>): string;
 begin
   if ContinuesIfExpression(APrevCode) then
-    Exit('die Zeile darueber gehoert zu einem Bedingungsausdruck (Delphi '
-      + '13: "X := if C then ...") - ein begin..end mitten im Ausdruck ist '
-      + 'kein Code');
+    Exit(_('the line above belongs to a conditional expression (Delphi 13: '
+      + '"X := if C then ...") - a begin..end in the middle of the '
+      + 'expression is not code'));
   if not EndsWithSemicolon(ALine) then
-    Exit('die Anweisung im Zweig endet nicht auf dieser Zeile mit ";" '
-      + '(mehrzeilig oder vor else) - nicht unterstuetzt');
+    Exit(_('the statement in the branch does not end on this line with ";" '
+      + '(multi-line or before else) - not supported'));
   if not SingleStatement(ATokens) then
-    Exit('auf der Zeile steht mehr als die eine Anweisung des Zweigs (ein '
-      + 'zweites ";", ein else ohne eigenes if, ein offener Block) - '
-      + 'begin..end um die Zeile aenderte, was im Zweig laeuft');
+    Exit(_('the line holds more than the one statement of the branch (a '
+      + 'second ";", an else without its own if, an open block) - '
+      + 'begin..end around the line would change what runs in the branch'));
   Result := '';
 end;
 
@@ -1122,13 +1124,13 @@ begin
   if PrevEndsStatement(Prev) then
     Exit;
   if InListText(LastWord(Prev), SECTION_STARTS) then
-    Exit('die Zeile darueber beginnt den initialization-/finalization-'
-      + 'Abschnitt - ob dort eine Inline-Deklaration gilt, ist nicht '
-      + 'gemessen');
+    Exit(_('the line above starts the initialization/finalization section - '
+      + 'whether an inline declaration is valid there has not been '
+      + 'measured'));
   APlan.Wrap := InListText(LastWord(Prev), BRANCH_ENDS);
   if not APlan.Wrap then
-    Exit('die Zeile darueber endet weder eine Anweisung noch mit then/do/'
-      + 'else - unklar, wohin die Deklaration gehoert');
+    Exit(_('the line above neither ends a statement nor ends with '
+      + 'then/do/else - unclear where the declaration belongs'));
   Result := WrapReason(ALine, Prev, T);
 end;
 
@@ -1146,7 +1148,7 @@ begin
       Result.Literal := Copy(ALine, N.First, N.Stop - N.First);
   if Result.Literal = '' then
   begin
-    Result.Reason := 'kein Zahl-Literal am Caret';
+    Result.Reason := _('no number literal at the caret');
     Exit;
   end;
   Result.Reason := PlanReason(ALine, APrevCode, APrevState, Result);

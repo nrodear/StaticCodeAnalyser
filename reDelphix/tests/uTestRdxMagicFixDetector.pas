@@ -226,11 +226,13 @@ begin
 end;
 
 // Eine Unit, die nach Delphi XE2 fragt, baut auch dort - ohne
-// Inline-Konstante.
+// Inline-Konstante. Umlautfreies Teilstueck des Grunds: '... - die Datei
+// traegt Spuren aelterer Compiler' hat in i18n/de.po echte Umlaute
+// (Entscheid E29), die Testquellen bleiben ASCII.
 procedure TTestRdxMagicFixDetector.Sca014_OldCompiler_NoHelp;
 begin
   AssertNoHelp(InUnit(['{$IF CompilerVersion >= 23}{$IFEND}'], ['  Foo;',
-    '  if X > 300 then Bar;']), 'Spuren aelterer Compiler');
+    '  if X > 300 then Bar;']), 'gibt es erst ab Delphi 10.3 - die Datei');
 end;
 
 // Ein Verzeichnis TEMP\<APrefix><GUID>\a\b\ (mit Trenner): das Fenster
@@ -280,7 +282,10 @@ begin
   end;
 end;
 
-// Der Check der Tabelle: ein Include mit FPC-Weiche neben der Unit.
+// Der Check der Tabelle: ein Include mit FPC-Weiche neben der Unit. Der
+// Grund 'das Include defs.inc traegt eine FPC-Weiche (Zeile 1) ...' hat in
+// i18n/de.po einen echten Umlaut (Entscheid E29) - geprueft werden die
+// umlautfreien Teilstuecke davor und dahinter.
 procedure TTestRdxMagicFixDetector.Sca014_FpcInclude_NoHelp;
 var
   Dir : string;
@@ -292,8 +297,8 @@ begin
     O := OutcomeIn(InUnit(['{$I defs.inc}'], ['  Foo;',
       '  if X > 300 then Bar;']), Dir + 'u.pas');
     Assert.IsFalse(O.Enabled, 'keine Hilfe');
-    Assert.IsTrue(Pos('das Include defs.inc traegt eine FPC-Weiche', O.Reason) > 0,
-      O.Reason);
+    Assert.IsTrue(Pos('das Include defs.inc ', O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos(' eine FPC-Weiche (Zeile 1)', O.Reason) > 0, O.Reason);
   finally
     DeleteFile(Dir + 'defs.inc');
     DeleteFile(Dir + 'u.pas');
