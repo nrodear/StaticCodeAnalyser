@@ -65,7 +65,7 @@ uses
   uAstNode, uMethodd12, uSCAConsts, uIfThenShortCircuit,
   uRdxRecipeRunner,      // TRdxFixOutcome
   uRdxFixTable,          // TRdxFixTable.FixFor
-  uTestRdxDetectorKit,   // TSeen, DetectSource, PlanFixIn
+  uTestRdxDetectorKit,   // TSeen, DetectSource, PlanFixIn, FixAllWith
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxIfThenFix,
   uRdxText,              // _() und die gemeinsamen Gruende
@@ -356,10 +356,15 @@ begin
   TIfThenShortCircuitDetector.AnalyzeUnit(Root, Path, Results);
 end;
 
+// Dasselbe in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := DetectSource('rdx_ifthen_', ASource, AKind, RunDetector);
+end;
+
 function Detect(const ASource: string): TArray<TSeen>;
 begin
-  Result := DetectSource('rdx_ifthen_', ASource, fkIfThenShortCircuit,
-    RunDetector);
+  Result := DetectKind(ASource, fkIfThenShortCircuit);
 end;
 
 // Die Hilfe fuer den ersten Fund des Detektors ueber den Einstieg der
@@ -376,25 +381,10 @@ begin
 end;
 
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt.
+// schweigt (FixAllWith - derselbe Einstieg wie PlanFirst).
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass : Integer;
-  O    : TRdxFixOutcome;
-  S    : TSeen;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    if Length(Detect(Result)) = 0 then
-      Exit;
-    O := PlanFirst(Result, S);
-    Assert.IsTrue(O.Enabled, O.Reason);
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Result := FixAllWith(ASource, fkIfThenShortCircuit, DetectKind);
 end;
 
 procedure TTestRdxIfThenDetector.Detector_ReportsStatementLine;

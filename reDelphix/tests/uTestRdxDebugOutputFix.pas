@@ -67,8 +67,8 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uDebugOutput,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uRdxFixTable,          // TRdxFixTable.FixFor, AlternativeFixFor
-  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
+  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn,
+                         // PlanAltFixIn, FixAllWith
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxDebugOutputFix,
   uRdxText,              // _() und die gemeinsamen Gruende
@@ -441,58 +441,40 @@ begin
   TDebugOutputDetector.AnalyzeUnit(Root, Path, Results);
 end;
 
+// Dasselbe in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := DetectSource('rdx_dbg_', ASource, AKind, RunDetector);
+end;
+
 function Detect(const ASource: string): TArray<TSeen>;
 begin
-  Result := DetectSource('rdx_dbg_', ASource, fkDebugOutput, RunDetector);
+  Result := DetectKind(ASource, fkDebugOutput);
 end;
 
 // Die Hilfe fuer den ersten Fund des Detektors ueber den Einstieg der
-// Tabelle - der erste Eintrag (FixFor, einklammern) bzw. mit ADelete der
-// zweite (AlternativeFixFor, loeschen), wie der Anbieter sie ruft.
+// Tabelle - der erste Eintrag (PlanFixIn, einklammern) bzw. mit ADelete
+// der zweite (PlanAltFixIn, loeschen), wie der Anbieter sie ruft; der
+// Adapter liest nur den Text.
 function PlanFirst(const ASource: string; ADelete: Boolean;
   out ASeen: TSeen): TRdxFixOutcome;
 var
   Seen : TArray<TSeen>;
-  SL   : TStringList;
-  F    : TLeakFinding;
 begin
   Seen := Detect(ASource);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet einen Fund');
   ASeen := Seen[0];
-  SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, fkDebugOutput);
-  try
-    SL.Text := ASource;
-    if ADelete then
-      Result := TRdxFixTable.AlternativeFixFor(nil, SL, F, nil)
-    else
-      Result := TRdxFixTable.FixFor(nil, SL, F, nil);
-  finally
-    F.Free;
-    SL.Free;
-  end;
+  if ADelete then
+    Result := PlanAltFixIn(ASource, 't.pas', fkDebugOutput, ASeen)
+  else
+    Result := PlanFixIn(ASource, 't.pas', fkDebugOutput, ASeen);
 end;
 
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt.
+// schweigt (FixAllWith; ADelete: der zweite Eintrag).
 function FixAll(const ASource: string; ADelete: Boolean): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass : Integer;
-  O    : TRdxFixOutcome;
-  S    : TSeen;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    if Length(Detect(Result)) = 0 then
-      Exit;
-    O := PlanFirst(Result, ADelete, S);
-    Assert.IsTrue(O.Enabled, O.Reason);
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Result := FixAllWith(ASource, fkDebugOutput, DetectKind, ADelete);
 end;
 
 procedure TTestRdxDebugOutputDetector.Detector_ReportsCallLineAndName;

@@ -65,8 +65,8 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uMethodName,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uRdxFixTable,          // TRdxFixTable.FixFor
-  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
+  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn,
+                         // FixAllWith
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxMethodNameFix,
   uRdxText,              // _() und die gemeinsamen Gruende
@@ -411,50 +411,30 @@ begin
   TMethodNameDetector.AnalyzeUnit(Root, Path, Results);
 end;
 
+// Dasselbe in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := DetectSource('rdx_mn_', ASource, AKind, RunDetector);
+end;
+
 function Detect(const ASource: string): TArray<TSeen>;
 begin
-  Result := DetectSource('rdx_mn_', ASource, fkMethodName, RunDetector);
+  Result := DetectKind(ASource, fkMethodName);
 end;
 
 // Die Hilfe fuer einen Fund ueber den Einstieg der Tabelle - wie der
-// Anbieter; der Adapter braucht keinen Quellstellen-Dienst.
+// Anbieter (PlanFixIn); der Adapter fragt den Quellstellen-Dienst nicht.
 function TablePlan(const ASource: string; const ASeen: TSeen): TRdxFixOutcome;
-var
-  SL : TStringList;
-  F  : TLeakFinding;
 begin
-  SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, fkMethodName);
-  try
-    SL.Text := ASource;
-    Result := TRdxFixTable.FixFor(nil, SL, F, nil);
-  finally
-    F.Free;
-    SL.Free;
-  end;
+  Result := PlanFixIn(ASource, 't.pas', fkMethodName, ASeen);
 end;
 
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt - ueber die Tabelle (Zeile und Meldung aus dem Fund).
+// schweigt - ueber die Tabelle (FixAllWith, Zeile und Meldung aus dem
+// Fund).
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass : Integer;
-  Seen : TArray<TSeen>;
-  O    : TRdxFixOutcome;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    Seen := Detect(Result);
-    if Length(Seen) = 0 then
-      Exit;
-    O := TablePlan(Result, Seen[0]);
-    Assert.IsTrue(O.Enabled, Format('Zeile %d: %s', [Seen[0].Line, O.Reason]));
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Result := FixAllWith(ASource, fkMethodName, DetectKind);
 end;
 
 // Der erste Fund des Detektors bekommt keine Hilfe, Grund AReason.

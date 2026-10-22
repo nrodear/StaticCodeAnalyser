@@ -64,8 +64,7 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uAssertWithSideEffect,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uRdxFixTable,          // TRdxFixTable.FixFor
-  uTestRdxDetectorKit,   // TSeen, DetectSource
+  uTestRdxDetectorKit,   // TSeen, DetectSource, PlanFixIn, FixAllWith
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxAssertSideEffectFix,
   uRdxText,              // _() und die gemeinsamen Gruende
@@ -344,29 +343,29 @@ begin
   TAssertWithSideEffectDetector.AnalyzeUnit(Root, Path, Results);
 end;
 
+// Dasselbe in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := DetectSource('rdx_assertse_', ASource, AKind, RunDetector);
+end;
+
 function Detect(const ASource: string): TArray<TSeen>;
 begin
-  Result := DetectSource('rdx_assertse_', ASource, fkAssertWithSideEffect,
-    RunDetector);
+  Result := DetectKind(ASource, fkAssertWithSideEffect);
 end;
 
 // Die Fundzeile ALine mit AMessage ueber den Einstieg der Tabelle
-// (TRdxFixTable.FixFor) - wie der Anbieter sie ruft.
+// (PlanFixIn: TRdxFixTable.FixFor) - wie der Anbieter sie ruft; der
+// Adapter liest nur den Text.
 function PlanAt(const ASource: string; ALine: Integer;
   const AMessage: string): TRdxFixOutcome;
 var
-  SL : TStringList;
-  F  : TLeakFinding;
+  S : TSeen;
 begin
-  SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', ALine, AMessage, fkAssertWithSideEffect);
-  try
-    SL.Text := ASource;
-    Result := TRdxFixTable.FixFor(nil, SL, F, nil);
-  finally
-    F.Free;
-    SL.Free;
-  end;
+  S := Default(TSeen);
+  S.Line := ALine;
+  S.Msg := AMessage;
+  Result := PlanFixIn(ASource, 't.pas', fkAssertWithSideEffect, S);
 end;
 
 // Die Hilfe fuer den ersten Fund des Detektors (Zeile und Meldung aus dem
@@ -382,25 +381,10 @@ begin
 end;
 
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt.
+// schweigt (FixAllWith).
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass : Integer;
-  O    : TRdxFixOutcome;
-  S    : TSeen;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    if Length(Detect(Result)) = 0 then
-      Exit;
-    O := PlanFirst(Result, S);
-    Assert.IsTrue(O.Enabled, O.Reason);
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Result := FixAllWith(ASource, fkAssertWithSideEffect, DetectKind);
 end;
 
 procedure TTestRdxAssertSideEffectDetector.Detector_ReportsAssertLine;
