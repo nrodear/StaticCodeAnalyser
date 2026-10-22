@@ -282,9 +282,10 @@ const
   SPAN_066 = 'sca066';
   SPAN_072 = 'sca072';
   SPAN_084 = 'sca084';
-  // R_NO_COLUMN ('Spalte fehlt in der Meldung') steht seit Charge B2S-a
+  // R_NO_COLUMN ('Spalte fehlt in der Meldung') stand seit Charge B2S-a
   // einmal in uRdxCodeMap, neben ColumnFromMessage (Review R3-05); die
-  // Planer hier nehmen seit Charge G1 MsgNoColumn (uRdxText, E29).
+  // Planer hier nehmen seit Charge G1 MsgNoColumn (uRdxText, E29), die
+  // Konstante entfiel mit Gruppe G10.
   // Eigener Satz statt MsgNoLongerAtReportedPlace: das Subjekt ist kein
   // Code-Stueck.
   R_BOOL_MOVED    = 'the comparison with True/False is no longer at the '

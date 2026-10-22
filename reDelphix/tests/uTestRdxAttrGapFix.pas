@@ -50,10 +50,13 @@ const
   ATTR_LINE = 6;
   FILE_NAME = 't.pas';
   // Teile der Gruende (uRdxAttrGapFix) - nur der Kern, nicht der ganze Text.
+  // Seit E29 (Gruppe G10) kommen die Gruende aus der de.po mit echten
+  // Umlauten (u-Umlaut in 'Attribut ueber mehrere Zeilen'): R_MULTI ist ein
+  // umlautfreies Teilstueck.
   R_MOVED     = 'keine Attributzeile';
   R_TARGET    = 'Attribut mit Ziel';
   R_TAIL      = 'hinter dem Attribut steht noch Text';
-  R_MULTI     = 'Attribut ueber mehrere Zeilen';
+  R_MULTI     = 'mehrere Zeilen - keine Hilfe';
   R_NO_GAP    = 'keine Leerzeile hinter dem Attribut';
   R_NOT_CODE  = 'Kommentar oder eine Direktive';
   R_NO_MEMBER = 'kein Code mehr';

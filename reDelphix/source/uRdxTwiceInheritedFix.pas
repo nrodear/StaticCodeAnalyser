@@ -39,24 +39,25 @@ uses
   uRdxCodeMap;           // TRdxCodeMap
 
 const
-  // Gruende (deutsch wie die der Nachbarn; Tests pinnen sie ueber diese
-  // Konstanten).
-  R_TWICE_HEAD_MOVED = 'kein Routinenkopf auf der gemeldeten Zeile - Zeile '
-    + 'verschoben? Datei neu pruefen';
-  R_TWICE_BODY = 'kein einfacher Rumpf zum Routinenkopf (verschachtelte '
-    + 'Routine, asm, external oder Typ vor dem begin) - von Hand';
-  R_TWICE_COUNT = 'auf oberster Ebene des Rumpfs stehen %d gleichartige '
-    + 'inherited-Aufrufe statt zwei - Aufrufe in if, case oder try und mehr '
-    + 'als zwei loescht die Hilfe nicht';
-  R_TWICE_UNREADABLE = 'ein inherited-Aufruf ist nicht von der Form '
-    + '"inherited;" oder "inherited Name(...);" auf einer Zeile - von Hand';
-  R_TWICE_NOT_ADJACENT = 'zwischen den beiden Aufrufen steht anderer Code - '
-    + 'ob er vom ersten Aufruf abhaengt, entscheidet nur der Mensch';
-  R_TWICE_BETWEEN = 'zwischen den beiden Aufrufen steht ein Kommentar oder '
-    + 'eine Direktive';
-  R_TWICE_DIFFERENT = 'die beiden Aufrufe sind nicht textgleich';
-  R_TWICE_SHARED = 'ein Aufruf teilt die Zeile mit anderem Code oder einem '
-    + 'Kommentar - die Hilfe loescht ganze Zeilen';
+  // Gruende als englische msgids (E29); der Planer gibt sie uebersetzt
+  // zurueck (_() aus uRdxText), Deutsch und Franzoesisch stehen in
+  // i18n/de.po und i18n/fr.po. Tests pinnen sie ueber diese Konstanten:
+  // MsgMovedSuffix(_(R_TWICE_HEAD_MOVED)), _(R_TWICE_BODY, [MsgByHand]),
+  // _(R_TWICE_COUNT, [N]) usw.
+  R_TWICE_HEAD_MOVED = 'no routine header on the reported line';
+  R_TWICE_BODY = 'no simple body for the routine header (nested routine, '
+    + 'asm, external or type before the begin) - %s';
+  R_TWICE_COUNT = 'the top level of the body has %d inherited calls of the '
+    + 'same kind instead of two - the help deletes neither calls in if, case '
+    + 'or try nor more than two';
+  R_TWICE_UNREADABLE = 'an inherited call is not of the form "inherited;" '
+    + 'or "inherited Name(...);" on one line - %s';
+  R_TWICE_NOT_ADJACENT = 'other code stands between the two calls - only a '
+    + 'human can decide whether it depends on the first call';
+  R_TWICE_BETWEEN = 'a comment or a directive stands between the two calls';
+  R_TWICE_DIFFERENT = 'the two calls are not textually identical';
+  R_TWICE_SHARED = 'a call shares its line with other code or a comment - '
+    + 'the help deletes whole lines';
   // Die Hinweise beider Eintraege (R_TWICE_HINT, R_TWICE_ALT_HINT) stehen
   // mit den Adaptern in der Tabelle (uRdxFixTable).
 
@@ -80,7 +81,8 @@ implementation
 
 uses
   System.SysUtils,
-  uRefactorInfo;     // TRefactorSpan.Make
+  uRefactorInfo,     // TRefactorSpan.Make
+  uRdxText;          // _(), MsgMovedSuffix, MsgByHand (E29)
 
 const
   SPAN_093 = 'sca093';
@@ -123,10 +125,10 @@ begin
     T := After(AMap, T);
   if (T.Line <> ALine) or not InList(T.Low, ROUTINE_WORDS)
      or (T.Low = 'operator') or not IsKeywordAfter(T, Before(AMap, T)) then
-    Exit(R_TWICE_HEAD_MOVED);
+    Exit(MsgMovedSuffix(_(R_TWICE_HEAD_MOVED)));
   N := NameAfter(AMap, T);
   if not N.IsWord then
-    Exit(R_TWICE_HEAD_MOVED);
+    Exit(MsgMovedSuffix(_(R_TWICE_HEAD_MOVED)));
   AHead := T;
   AName := N.Low;
 end;
@@ -139,7 +141,7 @@ function BodyBegin(AMap: TRdxCodeMap; const AHead: TRdxToken;
 var
   T, Prev : TRdxToken;
 begin
-  Result := R_TWICE_BODY;
+  Result := _(R_TWICE_BODY, [MsgByHand]);
   ABegin := Default(TRdxToken);
   Prev := AHead;
   T := After(AMap, AHead);
@@ -231,7 +233,7 @@ begin
       begin
         Form := CallForm(AMap, T, AName, Stop);
         if Form = cfUnreadable then
-          Exit(R_TWICE_UNREADABLE);
+          Exit(_(R_TWICE_UNREADABLE, [MsgByHand]));
         if Form = cfPlain then
         begin
           C.Start := T;
@@ -248,7 +250,7 @@ begin
     T := After(AMap, T);
   end;
   if Depth > 0 then
-    Result := R_TWICE_BODY;
+    Result := _(R_TWICE_BODY, [MsgByHand]);
 end;
 
 // Steht der Aufruf allein auf seiner Zeile - davor nur Leerraum, dahinter
@@ -263,7 +265,7 @@ begin
      or (SkipBlanks(L, 1) <> C.Start.Col)
      or (SkipBlanks(L, C.Stop.EndCol) <= Length(L))
      or AMap.HasComment(C.Start.Line, 1, Length(L)) then
-    Result := R_TWICE_SHARED;
+    Result := _(R_TWICE_SHARED);
 end;
 
 // Sind die beiden Aufrufe textgleich? Gross/klein egal, solange kein String
@@ -283,13 +285,13 @@ var
 begin
   Result := '';
   if Length(ACalls) <> 2 then
-    Exit(Format(R_TWICE_COUNT, [Length(ACalls)]));
+    Exit(_(R_TWICE_COUNT, [Length(ACalls)]));
   if (ACalls[0].Text = '') or (ACalls[1].Text = '') then
-    Exit(R_TWICE_UNREADABLE);
+    Exit(_(R_TWICE_UNREADABLE, [MsgByHand]));
   if not SameTok(Before(AMap, ACalls[1].Start), ACalls[0].Stop) then
-    Exit(R_TWICE_NOT_ADJACENT);
+    Exit(_(R_TWICE_NOT_ADJACENT));
   if not SameCall(ACalls[0], ACalls[1]) then
-    Exit(R_TWICE_DIFFERENT);
+    Exit(_(R_TWICE_DIFFERENT));
   Result := AloneReason(AMap, ACalls[0]);
   if Result = '' then
     Result := AloneReason(AMap, ACalls[1]);
@@ -297,7 +299,7 @@ begin
     Exit;
   for i := ACalls[0].Stop.Line + 1 to ACalls[1].Start.Line - 1 do
     if Trim(AMap.Raw(i)) <> '' then
-      Exit(R_TWICE_BETWEEN);
+      Exit(_(R_TWICE_BETWEEN));
 end;
 
 { ---- Die Planer ---- }
@@ -333,7 +335,7 @@ begin
   // Zeile Line + 1 braucht.
   if Line >= AMap.LineCount then
   begin
-    AReason := R_TWICE_BODY;
+    AReason := _(R_TWICE_BODY, [MsgByHand]);
     Exit;
   end;
   AEdit.Span := TRefactorSpan.Make(SPAN_093, Line, 1, Line + 1, 1);
