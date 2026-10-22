@@ -22,7 +22,10 @@ unit uRdxCategoryArgFix;
 // GRUNDSATZ wie in uRdxLineFixes: lieber keine Hilfe als eine falsche. Keine
 // Hilfe, wenn
 //   * die Zeile nicht mit '[Category' + optionalen Blanks + ']' als Code
-//     beginnt (verschoben; in einem Kommentar oder mehrzeiligen String),
+//     beginnt (verschoben; in einem Kommentar oder mehrzeiligen String) -
+//     steht '[Category' weiter hinten ('[Test][Category]', das meldet der
+//     Detektor), ist es die Form, die die Hilfe nicht anfasst (R_CAT_SHAPE),
+//     keine verschobene Zeile,
 //   * das Attribut ein Argument oder eine Liste traegt ('(' oder ',' statt
 //     ']'),
 //   * hinter dem ']' noch Code steht (weiteres Attribut, Gruppe auf einer
@@ -30,8 +33,13 @@ unit uRdxCategoryArgFix;
 //   * vor dem Attribut kein Deklarationsende steht (';', ein Abschnitts-
 //     wort, 'class'/'record'/'interface'/'object', ein weiteres Attribut) -
 //     das schliesst einen Array-Index 'Foo[Category]' aus - oder eine
-//     Direktive zwischen dem Anker und der Zeile liegt.
-// Ein Kommentar hinter dem ']' stoert nicht.
+//     Direktive zwischen dem Anker und der Zeile liegt. Ein Attribut direkt
+//     hinter dem Kopf 'TMyTests = class(TObject)' ohne Sichtbarkeitswort
+//     (das Token davor ist ')') bekommt darum KEINE Hilfe - ein Entscheid
+//     wie in uRdxAttrGapFix, kein Fehler: ')' beendet auch Ausdruecke.
+// Ein Kommentar hinter dem ']' stoert nicht: er nennt keinen Kategorie-
+// namen, der Platzhalter verdoppelt nichts. SCA179 (uRdxIgnoreReasonFix)
+// entscheidet dort bewusst anders - siehe deren Kopf.
 
 interface
 
@@ -53,11 +61,13 @@ const
   R_CAT_ANCHOR = 'no end of a declaration before the attribute - not a safe '
     + 'attribute context';
   R_CAT_DIRECTIVE = 'a compiler directive is in the way';
+  R_CAT_SHAPE = 'the attribute stands behind another attribute on its line';
 
   // Der Platzhalter im Argument.
   CATEGORY_PLACEHOLDER = 'category';
 
 type
+  // Der Planer von SCA181 (Form TRdxMapPlanner, uRdxFixRunner).
   TRdxCategoryArgFix = class
   public
     // SCA181: auf der Zeile ALine aus '[Category]' '[Category(''category'')]'
@@ -116,7 +126,14 @@ begin
   if (Q - 1 > Length(L)) or not SameText(Copy(L, P, Length(ATTR_NAME)), ATTR_NAME)
      or ((Q <= Length(L)) and IsIdentChar(L[Q])) then
   begin
-    AReason := MsgMovedSuffix(_(R_CAT_MOVED));
+    // '[Test][Category]': das Attribut steht weiter hinten - eine Form, die
+    // die Hilfe nicht anfasst, keine verschobene Zeile ('Datei neu pruefen'
+    // aenderte nichts).
+    j := Pos('[' + LowerCase(ATTR_NAME), LowerCase(L));
+    if (j > First) and AMap.IsCode(ALine, j) then
+      AReason := _(R_CAT_SHAPE)
+    else
+      AReason := MsgMovedSuffix(_(R_CAT_MOVED));
     Exit;
   end;
   for j := P to Q - 1 do

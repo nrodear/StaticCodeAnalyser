@@ -193,6 +193,17 @@ begin
   OutputDebugString(PChar('SCA Bulb: ' + AText));
 end;
 
+// Meldungen werfender Anbieter (Model.Errors) an DebugView, je eine Zeile.
+// Eine Stelle fuer Birne (HasAvailableFixes) und Menue (BulbBeforeMenu),
+// damit beide im selben Format loggen (Review Woche G04-08).
+procedure LogProviderErrors(const AErrors: TArray<string>);
+var
+  i : Integer;
+begin
+  for i := 0 to High(AErrors) do
+    BulbLog('finding action provider failed - ' + AErrors[i]);
+end;
+
 { TFindingBulbManager }
 
 constructor TFindingBulbManager.Create(const AFindingsAt: TBulbFindingsAt);
@@ -546,7 +557,7 @@ begin
       Found := FFindingsAt(AFile, ALine);
     D.NoteFindings(AFile, ALine, FindingsSignature(Found), NowMs);
   end;
-  if D.WantsProviderCheck(ALineText, NowMs) then
+  if D.BeginProviderCheck(ALineText, NowMs) then
   begin
     // ERST als gefragt speichern, dann fragen: wirft ein Anbieter (etwa
     // ein Stapelueberlauf im Parse), fragte PollCaret dieselbe Zeile sonst
@@ -565,13 +576,11 @@ function TFindingBulbManager.HasAvailableFixes(
   const AFound: TArray<TLeakFinding>): Boolean;
 var
   Model : TFindingMenuModel;
-  i     : Integer;
 begin
   Result := False;
   if Length(AFound) = 0 then Exit;
   Model := BuildFindingMenuModel(AFound, [moAvailableFixesOnly]);
-  for i := 0 to High(Model.Errors) do
-    BulbLog('finding action provider failed - ' + Model.Errors[i]);
+  LogProviderErrors(Model.Errors);
   Result := not Model.IsEmpty;
 end;
 
@@ -719,8 +728,10 @@ end;
 
 { ---- Menue ---- }
 
-// Die drei Helfer halten BulbBeforeMenu unter der SCA176-Grenze; keine
-// Methoden, weil der Manager an der Methodengrenze steht (SCA138).
+// Die Helfer halten BulbBeforeMenu unter der SCA176-Grenze; keine
+// Methoden, weil der Manager an der Methodengrenze steht (SCA138). Der
+// dritte, LogProviderErrors, steht oben bei BulbLog - die Birne braucht
+// ihn schon in HasAvailableFixes.
 
 // Schluessel (Editorfenster) der Birne ABulb in ABulbs; 0, wenn sie dort
 // nicht steht - EditorOf(0) liefert dann nil.
@@ -733,15 +744,6 @@ begin
   for Pair in ABulbs do
     if Pair.Value = ABulb then
       Exit(Pair.Key);
-end;
-
-// Meldungen werfender Anbieter (Model.Errors) an DebugView, je eine Zeile.
-procedure LogProviderErrors(const AErrors: TArray<string>);
-var
-  i : Integer;
-begin
-  for i := 0 to High(AErrors) do
-    BulbLog('finding action provider failed - ' + AErrors[i]);
 end;
 
 // Die frische Antwort der Anbieter (AHasActions) in die gemerkte

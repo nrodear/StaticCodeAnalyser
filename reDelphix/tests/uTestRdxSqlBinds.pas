@@ -88,6 +88,8 @@ var
   R : TRdxSqlTemplate;
 begin
   Assert.IsFalse(BuildSqlTemplate(AReq, R), R.Text);
+  // Abgelehnt heisst auch: keine Vorlage (wie uTestRdxSqlTemplate).
+  Assert.AreEqual('', R.Text, 'Vorlage trotz Ablehnung');
   Assert.IsTrue(Pos(APart, R.Reason) > 0, R.Reason);
 end;
 

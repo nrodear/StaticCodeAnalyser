@@ -219,8 +219,8 @@ type
     // Notbremse des Argument-Scanners in ParsePrimary: False, wenn der
     // Scan enden muss - Dateiende, ein 'end' ohne offenen Block in den
     // Argumenten oder ein Sektions-Schluesselwort; zaehlt begin/case/try/
-    // asm und ihr 'end' in ABlockTiefe mit.
-    function ArgScanLaeuft(var ABlockTiefe: Integer): Boolean;
+    // asm/record und ihr 'end' in ABlockDepth mit.
+    function ArgScanContinues(var ABlockDepth: Integer): Boolean;
   end;
 
 implementation
@@ -345,7 +345,7 @@ end;
 const
   UTF8_BOM_LEN = 3;   // EF BB BF
 
-function LadeAnsiOhneBom(const FileName: string; SL: TStringList): Boolean;
+function LoadAnsiWithoutBom(const FileName: string; SL: TStringList): Boolean;
 var
   FS    : TFileStream;
   Bytes : TBytes;
@@ -386,7 +386,7 @@ begin
     except
       try SL.LoadFromFile(FileName, TEncoding.UTF8);
       except
-        if not LadeAnsiOhneBom(FileName, SL) then
+        if not LoadAnsiWithoutBom(FileName, SL) then
           raise Exception.CreateFmt('Datei nicht lesbar: %s', [FileName]);
       end;
     end;
@@ -3138,9 +3138,10 @@ end;
 
 procedure TParser2.ParseForStmt(Parent: TAstNode);
 var
-  T       : TToken;
-  ForNode : TAstNode;
-  Header  : string;
+  T        : TToken;
+  ForNode  : TAstNode;
+  Header   : string;
+  PrevKind : TTokenKind;   // Art des zuletzt angehaengten Kopf-Tokens
 begin
   T       := Next; // 'for'
   ForNode := Parent.Add(nkForStmt, 'for', T.Line, T.Col);
@@ -3168,13 +3169,21 @@ begin
   // 'x := ' / 'x in '), nur um einen Punkt kommt keines mehr: 'List.Count'
   // stand als 'List . Count' im Kopf, und uSymbolReferenceIndex sah den
   // Member-Zugriff nicht (Review Bereich C, Major 14).
+  // Entschieden wird ueber die TOKENART beider Seiten, nicht ueber das
+  // letzte Zeichen des Kopfs (Review Woche G03-20): sonst klebte alles,
+  // was auf '.' endet, am Folgetoken - der Bereichsoperator '..'
+  // (tkDotDot) stand als 'Low ( A ) ..High ( A )', ein Stringliteral '.'
+  // ebenso. Jetzt traegt '..' wie vor Major 14 beidseitig ein Leerzeichen.
+  // Bestand und bewusst unveraendert: Stringliterale stehen roh (ohne
+  // QuoteStrLit) im Kopf - eine Umstellung bewegt Funde (A/B).
   Header := '';
+  PrevKind := tkEof;
   while not (Tok.Kind in [tkKwDo, tkEof]) do
   begin
-    if (Header <> '') and (Tok.Kind <> tkDot) and
-       (Header[Length(Header)] <> '.') then
+    if (Header <> '') and (Tok.Kind <> tkDot) and (PrevKind <> tkDot) then
       Header := Header + ' ';
     Header := Header + Tok.Value;
+    PrevKind := Tok.Kind;
     Next;
   end;
   ForNode.TypeRef := Header;
@@ -3474,17 +3483,26 @@ begin
   end;
 end;
 
-function TParser2.ArgScanLaeuft(var ABlockTiefe: Integer): Boolean;
+function TParser2.ArgScanContinues(var ABlockDepth: Integer): Boolean;
+// 'record' oeffnet wie begin (Review Woche G03-22): eine anonyme Methode
+// als Argument darf eine lokale type-Sektion tragen ('procedure type
+// TPair = record A: Integer; end; begin .. end') - das 'end' des record
+// kam vor dem ersten 'begin', die Tiefe stand auf 0, und der Scan brach
+// mitten im Argument ab. Im Argument-Kontext kommt ein nacktes 'record'
+// nur als Typ vor; 'class' bewusst nicht (wie ConsumeRecordTypeInto: es
+// steht auch als Modifier 'class function'). Grenze: ein varianter
+// record ('case .. of' ohne eigenes 'end') zaehlt eins zu viel - die
+// Notbremse greift dann ein 'end' spaeter, gueltiger Code bleibt gleich.
 begin
   Result := False;
   if FLex.AtEnd then Exit;
   case Tok.Kind of
     tkKwImplementation, tkKwInitialization, tkKwFinalization:
       Exit;
-    tkKwBegin, tkKwCase, tkKwTry, tkKwAsm:
-      Inc(ABlockTiefe);
+    tkKwBegin, tkKwCase, tkKwTry, tkKwAsm, tkKwRecord:
+      Inc(ABlockDepth);
     tkKwEnd:
-      if ABlockTiefe = 0 then Exit else Dec(ABlockTiefe);
+      if ABlockDepth = 0 then Exit else Dec(ABlockDepth);
   else
     ;   // jedes andere Token gehoert zu den Argumenten
   end;
@@ -3863,14 +3881,14 @@ begin
           // Notbremse (Review Bereich C, Major 14): eine Klammer, die nie
           // schliesst, liess den Scanner bis zum Dateiende laufen - der
           // Rest der Unit wurde ein einziger nkCall-Name, jeder Fund
-          // dahinter war weg. Ein 'end' ohne offenes begin/case/try/asm
-          // in den Argumenten (BlockTiefe 0) und jedes Sektions-
+          // dahinter war weg. Ein 'end' ohne offenes begin/case/try/asm/record
+          // in den Argumenten (BlockDepth 0) und jedes Sektions-
           // Schluesselwort kommen in einer gueltigen Argumentliste nicht
           // vor; dort endet der Scan, das Token bleibt fuer den Aufrufer
           // liegen. Anonyme Methoden (begin..end, auch mit case/try) und
           // ';' in deren Parameterlisten bleiben wie bisher erlaubt.
-          var BlockTiefe := 0;
-          while ArgScanLaeuft(BlockTiefe) do
+          var BlockDepth := 0;
+          while ArgScanContinues(BlockDepth) do
           begin
             var ArgTok := Tok;
             if ArgTok.Kind = tkLParen then

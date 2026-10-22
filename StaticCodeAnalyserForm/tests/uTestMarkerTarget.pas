@@ -11,17 +11,26 @@ unit uTestMarkerTarget;
 // abgelehnt. Eigene Fixture: MarkerLineFor wird in
 // uTestHardcodedIpInConfig geprueft, die ist aber mit 16 Tests und Helfern
 // schon an der Klassen-Grenze.
+//
+// Die Fixture setzt je Test einen EIGENEN gFileTextCache (Review Woche
+// G02-03/10): MarkerTargetFor liest mit Stat-Zwang, und den beweist ein
+// Test nur, wenn ein Cache den Schnappschuss halten KANN - ohne Cache
+// laedt AcquireLines ohnehin frisch, und der Test waere auch ohne den
+// Zwang gruen. Vorher hing das daran, ob zufaellig vorher ein Scan den
+// Prozess-Cache angelegt hatte (Einzellauf der Fixture: nein).
 
 interface
 
 uses
-  DUnitX.TestFramework;
+  DUnitX.TestFramework,
+  uFileTextCache;   // TFileTextCache/gFileTextCache - eigener Cache je Test
 
 type
   [TestFixture]
   TTestMarkerTarget = class
   private
-    FDir : string;
+    FDir      : string;
+    FOldCache : TFileTextCache;   // der Prozess-Cache vor dem Test
     function WriteFile(const ARelPath, AText: string): string;
   public
     [Setup]    procedure Setup;
@@ -34,6 +43,10 @@ type
     // Platz des Markers: vor dem ersten vorhandenen dateiweiten Marker,
     // sonst vor 'interface', sonst Zeile 1; ohne Schwester-Unit Ablehnung.
     [Test] procedure Dfm_Slot_ExistingMarker_Interface_Line1_NoUnit;
+    // Lazarus-Form NACH dem Scan (Review Woche G02-01): ScanDialect ist
+    // wieder dlDelphi, die .lfm bleibt Formdatei - Marker in die .pas bzw.
+    // .pp, nie in die .lfm; der naechste FPC-Scan liest ihn.
+    [Test] procedure Lfm_DelphiDialect_FileWideMarkerInPasOrPp_NeverInForm;
   end;
 
 implementation
@@ -42,7 +55,7 @@ uses
   System.SysUtils, System.Classes, System.IOUtils,
   System.Generics.Collections,
   uSCAConsts, uMethodd12, uSuppression,
-  uFileTextCache;   // RemoveFile - ApplyToFindings liest wie ein Scan (ohne Stat)
+  uStaticFiles;     // ScanDialect - der nach dem Scan zurueckgesetzte Dialekt
 
 const
   UNIT_SRC =
@@ -75,10 +88,14 @@ procedure TTestMarkerTarget.Setup;
 begin
   FDir := TPath.Combine(TPath.GetTempPath, 'sca_mt_' + TGuid.NewGuid.ToString);
   TDirectory.CreateDirectory(FDir);
+  FOldCache := gFileTextCache;
+  gFileTextCache := TFileTextCache.Create;
 end;
 
 procedure TTestMarkerTarget.TearDown;
 begin
+  gFileTextCache.Free;
+  gFileTextCache := FOldCache;
   if TDirectory.Exists(FDir) then
     TDirectory.Delete(FDir, True);
 end;
@@ -137,7 +154,9 @@ begin
     Lines.Free;
   end;
   // Der zweite Marker derselben Sitzung liest mit Stat-Zwang (Major 2) -
-  // ohne RemoveFile - und sieht den Marker: kein zweiter.
+  // ohne RemoveFile - und sieht den Marker: kein zweiter. Der Cache der
+  // Fixture haelt die Unit seit dem ersten Aufruf; ohne den Zwang kaeme
+  // der Schnappschuss ohne Marker zurueck.
   Assert.IsFalse(TSuppression.MarkerTargetFor(Dfm, 3, fkDfmHardcodedCaption,
     T, Why), 'schon vorhanden: kein zweiter Marker');
   Assert.IsTrue(Pos('already', Why) > 0, Why);
@@ -147,9 +166,8 @@ begin
   Assert.AreEqual<Integer>(2, T.Line, 'vor den vorhandenen Marker');
 
   // ... und wie der naechste Scan lesen. Der Scan startet mit Clear; hier
-  // ersetzt RemoveFile das (gFileTextCache ist nil, bis ein Scan lief).
-  if Assigned(gFileTextCache) then
-    gFileTextCache.RemoveFile(Pas);
+  // ersetzt RemoveFile das (ApplyToFindings liest ohne Stat).
+  gFileTextCache.RemoveFile(Pas);
   List := TObjectList<TLeakFinding>.Create(True);
   try
     List.Add(TLeakFinding.New(Dfm, '', 3, 'Caption ''Hallo''',
@@ -213,6 +231,70 @@ begin
   Assert.IsTrue(TSuppression.MarkerTargetFor(Dfm, 3, fkDfmHardcodedCaption,
     T, Why), Why);
   Assert.AreEqual<Integer>(6, T.Line, 'interface im Blockkommentar zaehlt nicht');
+end;
+
+procedure TTestMarkerTarget.Lfm_DelphiDialect_FileWideMarkerInPasOrPp_NeverInForm;
+var
+  Pas, Pp, Lfm, Why : string;
+  T                 : TMarkerTarget;
+  Alt               : TSourceDialect;
+  Lines             : TStringList;
+  List              : TObjectList<TLeakFinding>;
+begin
+  Alt := TStaticFiles.ScanDialect;
+  // Der Zustand nach dem Scan: Run hat den Dialekt auf dlDelphi
+  // zurueckgesetzt, auch wenn der Scan unter dlFpc lief.
+  TStaticFiles.ScanDialect := dlDelphi;
+  try
+    Pas := WriteFile('Form1.pas', FORM_UNIT_SRC);
+    Lfm := WriteFile('Form1.lfm', FORM_DFM_SRC);
+    Assert.IsTrue(TSuppression.MarkerTargetFor(Lfm, 3, fkDfmHardcodedCaption,
+      T, Why), Why);
+    Assert.AreEqual(Pas, T.HostFile, '.lfm: Marker in die Schwester-Unit');
+    Assert.AreEqual<Integer>(2, T.Line, 'vor die interface-Zeile');
+    Assert.AreEqual(MARKER_CAPTION, T.MarkerLine, 'der dateiweite Marker');
+
+    // .pp-Unit ohne .pas (149 der 1.010 Lazarus-Formen).
+    Pp := WriteFile('Form6.pp', FORM_UNIT_SRC);
+    Assert.IsTrue(TSuppression.MarkerTargetFor(WriteFile('Form6.lfm',
+      FORM_DFM_SRC), 3, fkDfmHardcodedCaption, T, Why), Why);
+    Assert.AreEqual(Pp, T.HostFile, '.lfm: die .pp, wenn keine .pas da ist');
+
+    // Keine Unit daneben: ablehnen, nie in die .lfm schreiben.
+    Assert.IsFalse(TSuppression.MarkerTargetFor(WriteFile('Lonely.lfm',
+      FORM_DFM_SRC), 2, fkDfmHardcodedCaption, T, Why));
+    Assert.IsTrue(Pos('no unit', Why) > 0, Why);
+    // Eine .dfm nimmt keine .pp: der Delphi-Scan liest dort nicht.
+    WriteFile('Form7.pp', FORM_UNIT_SRC);
+    Assert.IsFalse(TSuppression.MarkerTargetFor(WriteFile('Form7.dfm',
+      FORM_DFM_SRC), 3, fkDfmHardcodedCaption, T, Why), '.dfm neben .pp');
+    Assert.IsTrue(Pos('no unit', Why) > 0, Why);
+
+    // Der Leser: an das Ziel in Form1.pas geschrieben, unterdrueckt der
+    // naechste FPC-Scan (BuildMap loest die .lfm auf die .pas auf) den Fund.
+    Lines := TStringList.Create;
+    try
+      Lines.LoadFromFile(Pas, TEncoding.UTF8);
+      Lines.Insert(1, MARKER_CAPTION);
+      Lines.SaveToFile(Pas, TEncoding.UTF8);
+    finally
+      Lines.Free;
+    end;
+    gFileTextCache.RemoveFile(Pas);
+    TStaticFiles.ScanDialect := dlFpc;
+    List := TObjectList<TLeakFinding>.Create(True);
+    try
+      List.Add(TLeakFinding.New(Lfm, '', 3, 'Caption ''Hallo''',
+        fkDfmHardcodedCaption));
+      TSuppression.ApplyToFindings(List);
+      Assert.AreEqual<Integer>(0, List.Count,
+        'der .lfm-Fund ist unter dlFpc durch den Marker in der .pas unterdrueckt');
+    finally
+      List.Free;
+    end;
+  finally
+    TStaticFiles.ScanDialect := Alt;
+  end;
 end;
 
 initialization

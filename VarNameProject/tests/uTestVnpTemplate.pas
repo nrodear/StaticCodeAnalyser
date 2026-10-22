@@ -651,7 +651,8 @@ end;
 // Anweisungszeile mit LF allein. StatementDeleteEdit laesst die Einrueckung
 // und GENAU dieses LF stehen - die Laenge kommt aus der Zeile, nicht aus
 // dem Zeilenende des Puffers. Der Template-Code nimmt das Zeilenende des
-// Puffers (TVnpText.Eol: CR LF, sobald eines vorkommt).
+// Puffers (TVnpText.Eol: das Ende der ERSTEN Zeile, die eines hat - hier
+// CR LF, weil die erste Zeile mit CR LF endet).
 procedure TTestVnpTemplate.Delete_LfLineInCrLfFile;
 var
   C      : TTplCase;

@@ -170,10 +170,23 @@ begin
     'implementation', 'end.']);
   Assert.AreEqual(Join(['unit u;', 'interface', 'implementation', 'end.']),
     FixUses(Src, Clause(3, [Entry(4, 3, 'System.Classes')]), 0, R), R);
-  // Hinter 'interface' auf derselben Zeile: nur der Text.
+  // Hinter 'interface' auf derselben Zeile: nur der Text, samt Leerraum
+  // davor (Review Woche G07-23 b: bis dahin blieb 'interface ').
   Src := Join(['unit u;', 'interface uses A;', 'implementation', 'end.']);
-  Assert.AreEqual(Join(['unit u;', 'interface ', 'implementation', 'end.']),
+  Assert.AreEqual(Join(['unit u;', 'interface', 'implementation', 'end.']),
     FixUses(Src, Clause(2, [Entry(2, 16, 'A')]), 0, R), R);
+  // Ein '//'-Kommentar hinter dem ';' beschrieb den Eintrag: er geht mit
+  // den Zeilen (Review Woche G07-23 a: bis dahin blieb ' // TStringList').
+  Src := Join(['unit u;', 'interface', 'uses', '  System.Classes; // TStringList',
+    'implementation', 'end.']);
+  Assert.AreEqual(Join(['unit u;', 'interface', 'implementation', 'end.']),
+    FixUses(Src, Clause(3, [Entry(4, 3, 'System.Classes')]), 0, R), R);
+  // Ein Marker dahinter bleibt (er gilt der naechsten Zeile).
+  Src := Join(['unit u;', 'interface', 'uses', '  System.Classes; // noinspection X',
+    'implementation', 'end.']);
+  Assert.AreEqual(Join(['unit u;', 'interface', ' // noinspection X',
+    'implementation', 'end.']),
+    FixUses(Src, Clause(3, [Entry(4, 3, 'System.Classes')]), 0, R), R);
 end;
 
 procedure TTestRdxStructFixes.Sca007_InPath;
@@ -295,6 +308,17 @@ begin
   Assert.AreEqual('', FixCase(InProc(['  case X of', '    1: A;', '  otherwise',
     '    B;', '  end;']), 5, '', R), 'FPC otherwise');
   Assert.IsTrue(Pos('otherwise', R) > 0, R);
+  // Auch OHNE ';' davor (Review Woche G07-06): FPC liest es wie die
+  // else-Form - sonst kaeme 'otherwise B; else end', zwei Default-Zweige.
+  Assert.AreEqual('', FixCase(InProc(['  case X of', '    1: A', '  otherwise',
+    '    B;', '  end;']), 5, '', R), 'FPC otherwise ohne ;');
+  Assert.IsTrue(Pos('otherwise', R) > 0, R);
+  // 'Obj.&Case(1)' ist ein Bezeichner, keine case-Anweisung (Review Woche
+  // G07-24: ein verschobener Fund schrieb sonst ein else vor das end der
+  // Routine).
+  Assert.AreEqual('', FixCase(InProc(['  Obj.&Case(1);']), 5, '', R),
+    '&Case als Bezeichner');
+  Assert.IsTrue(Pos('kein case', R) > 0, R);
   Assert.AreEqual('', FixCase(InProc(['  case X of', '  end;']), 5, '', R),
     'ohne Zweige');
   Assert.IsTrue(Pos('keine Zweige', R) > 0, R);

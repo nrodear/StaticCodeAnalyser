@@ -32,6 +32,10 @@ unit uTestRdxRoutineFixes;
 //          hinter dem 'end;' davor) zielt auf die Routine - keine Hilfe
 //          (neu 1); '{$I \datei.inc}' liegt auf dem Laufwerk der Unit,
 //          nicht dem aktuellen (neu 5, IncludeSearchPath).
+//   Review Woche (G05-03, G05-25): ein UTF-8-Include ohne BOM mit Umlaut-
+//          Namen wird gelesen; die Ablehnungszweige von OwnLinesReason, die
+//          Direktiven-Bilanz mit $REGION, FPC-Klammern ohne ']' bzw. ';'
+//          und MAX_NESTING (in den bestehenden Tests - die Fixture hat 20).
 // Die Gegenprobe mit dem echten Detektor steht in
 // uTestRdxRoutineFixesDetector (nur Delphi).
 
@@ -178,6 +182,24 @@ begin
   Result := NewTempDir('rdx_h3c_');
 end;
 
+// Schreibt AText als UTF-8 OHNE BOM (Review Woche G05-03) - dieselbe Form
+// wie uTestRdxText.WriteUtf8; uTestRdxTextKit.WriteText schreibt ueber
+// TStringList, ohne Umstellung der Systemcodepage ANSI.
+procedure WriteUtf8NoBom(const APath, AText: string);
+var
+  Bytes : TBytes;
+  FS    : TFileStream;
+begin
+  Bytes := TEncoding.UTF8.GetBytes(AText);
+  FS := TFileStream.Create(APath, fmCreate);
+  try
+    if Length(Bytes) > 0 then
+      FS.WriteBuffer(Bytes[0], Length(Bytes));
+  finally
+    FS.Free;
+  end;
+end;
+
 procedure AssertReadRefused(const ASource: string; ALine: Integer;
   const APart: string);
 var
@@ -259,6 +281,10 @@ begin
 end;
 
 procedure TTestRdxRoutineFixes.Block_ReadRoutine_Refusals;
+var
+  Nested  : TArray<string>;
+  i       : Integer;
+  R       : TRdxRoutine;
 begin
   AssertReadRefused(InImpl(['procedure P;', 'type', '  TC = class',
     '  end;', 'begin', 'end;']), 4, 'lokaler Klassen');
@@ -269,6 +295,27 @@ begin
     'procedure Q;', 'begin', 'end;']), 4, 'Routinenkopf im Rumpf');
   AssertReadRefused(InImpl(['procedure P;', 'begin', 'end']), 4,
     'fehlt ";"');
+  // Review Woche G05-25: FPC-Direktiven in Klammern ohne ']' bzw. ohne ';'
+  // dahinter.
+  AssertReadRefused(InImpl(['procedure P; [public', 'begin', 'end;']), 4,
+    '"[" ohne "]"');
+  AssertReadRefused(InImpl(['procedure P; [public]', 'begin', 'end;']), 4,
+    '"[..]" ohne ";"');
+  // ... und MAX_NESTING: acht lokale Routinen ineinander liest ReadRoutine
+  // noch, die neunte nicht mehr. P0 bis P9 je auf einer Zeile, dann je ein
+  // 'begin end;' von innen nach aussen.
+  Nested := nil;
+  for i := 0 to 9 do
+    AddText(Nested, Format('procedure P%d;', [i]));
+  for i := 0 to 9 do
+    AddText(Nested, 'begin end;');
+  AssertReadRefused(InImpl(Nested), 4, 'zu tief verschachtelt');
+  Nested := nil;
+  for i := 0 to 8 do
+    AddText(Nested, Format('procedure P%d;', [i]));
+  for i := 0 to 8 do
+    AddText(Nested, 'begin end;');
+  Assert.AreEqual('', ReadAt(InImpl(Nested), 4, R), 'acht Ebenen');
 end;
 
 procedure TTestRdxRoutineFixes.Block_Finder;
@@ -411,6 +458,11 @@ begin
     FixOk(InImpl(['procedure Dead;', 'begin', '{$IFDEF DEBUG}', '  Beep;',
       '{$ELSE}', '  Sleep(1);', '{$ENDIF}', 'end;', '', 'procedure Keep;',
       'begin', 'end;']), 4, 'Dead'));
+  // Ebenso $REGION mit $ENDREGION (Review Woche G05-25: der Stapel 'r').
+  Assert.AreEqual(InImpl(['procedure Keep;', 'begin', 'end;']),
+    FixOk(InImpl(['procedure Dead;', 'begin', '{$REGION ''Teil''}', '  Beep;',
+      '{$ENDREGION}', 'end;', '', 'procedure Keep;', 'begin', 'end;']), 4,
+      'Dead'));
 end;
 
 procedure TTestRdxRoutineFixes.Sca164_Used_NoHelp;
@@ -453,6 +505,15 @@ begin
   // $IFDEF-geteilter Rumpf: das $ENDIF steht hinter dem Bereich.
   AssertRefused(InImpl(['procedure Dead;', 'begin', '{$IFDEF X}', '  Beep;',
     'end;', '{$ELSE}', 'end;', '{$ENDIF}']), 4, 'Dead', 'Gegenstueck');
+  // Review Woche G05-25: $ENDREGION ohne $REGION, $ELSE ohne $IF und ein
+  // $ENDIF, dessen offenes Gegenstueck eine $REGION ist.
+  AssertRefused(InImpl(['procedure Dead;', 'begin', '{$ENDREGION}', 'end;']),
+    4, 'Dead', '{$ENDREGION} in Zeile 6 ohne Gegenstueck');
+  AssertRefused(InImpl(['procedure Dead;', 'begin', '{$ELSE}', 'end;']), 4,
+    'Dead', '{$ELSE} in Zeile 6 ohne $IF');
+  AssertRefused(InImpl(['procedure Dead;', 'begin', '{$IFDEF X}',
+    '{$REGION ''r''}', '{$ENDIF}', '{$ENDREGION}', 'end;']), 4, 'Dead',
+    '{$ENDIF} in Zeile 8 ohne Gegenstueck');
 end;
 
 procedure TTestRdxRoutineFixes.Sca164_Reachable_NoHelp;
@@ -467,6 +528,21 @@ begin
     4, 'Dead', 'vor dem Kopf');
   AssertRefused(Join(['program p;', 'procedure Dead;', 'begin', 'end;',
     'begin', 'end.']), 2, 'Dead', 'implementation-Teil');
+  // Review Woche G05-25: die anderen Zweige von OwnLinesReason - Code
+  // hinter dem Ende, ein Block-Kommentar, der auf der Kopfzeile endet bzw.
+  // hinter dem Ende beginnt, und das Ende auf der letzten Zeile der Datei
+  // (InImpl haengt immer 'end.' an, deshalb hier ohne).
+  AssertRefused(InImpl(['procedure Dead; begin end; procedure B; begin end;']),
+    4, 'Dead', 'hinter dem Ende steht Code');
+  AssertRefused(InImpl(['{ Kommentar', '  ueber Zeilen } procedure Dead;',
+    'begin', 'end;', 'procedure B;', 'begin', 'end;']), 5, 'Dead',
+    'auf der Kopfzeile endet ein Kommentar');
+  AssertRefused(InImpl(['procedure Dead;', 'begin', 'end; { Kommentar',
+    '  ueber Zeilen }', 'procedure B;', 'begin', 'end;']), 4, 'Dead',
+    'hinter dem Ende beginnt ein Kommentar');
+  AssertRefused(Join(['unit u;', 'interface', 'implementation',
+    'procedure Dead;', 'begin', 'end;']), 4, 'Dead',
+    'letzten Zeile der Datei');
 end;
 
 procedure TTestRdxRoutineFixes.Sca164_Moved_NoHelp;
@@ -510,6 +586,13 @@ begin
     Assert.IsTrue(Pos('eingebunden von decls.inc', R) > 0, R);
     WriteText(Dir + 'deeper.inc', '{$R-}');
     Assert.AreEqual('', TRdxRoutineFixes.IncludeReason(U, P.Includes, 'Foo'));
+    // Review Woche G05-03: ein UTF-8-Include OHNE BOM mit einem Namen mit
+    // Umlaut. LoadFromFile las es als ANSI, der Name kam ein Zeichen
+    // laenger an, und IncludeReason fand ihn nicht (gegen b2538e20 rot) -
+    // die Hilfe loeschte die Implementierung, die Deklaration blieb.
+    WriteUtf8NoBom(Dir + 'decls.inc', 'procedure Pr' + #$00FC + 'fe;'#13#10);
+    R := TRdxRoutineFixes.IncludeReason(U, P.Includes, 'Pr' + #$00FC + 'fe');
+    Assert.IsTrue(Pos('nennt Pr', R) > 0, R);
     // Nicht neben der Unit bzw. ohne Datei der Unit: keine Hilfe.
     DeleteFile(Dir + 'decls.inc');
     R := TRdxRoutineFixes.IncludeReason(U, P.Includes, 'Foo');

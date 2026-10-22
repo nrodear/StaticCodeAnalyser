@@ -26,7 +26,10 @@ unit uRdxEmptyFinallyFix;
 //   * try, finally und end stehen nicht je allein auf ihren Zeilen (nur
 //     'finally end;' auf EINER Zeile geht), Kommentar oder Code dahinter;
 //   * var, const, label, goto oder asm im Rumpf (ein Inline-var gilt dann
-//     im umgebenden Block, ein Sprungziel verliert seinen Block), eine
+//     im umgebenden Block, ein Sprungziel verliert seinen Block; var und
+//     const nur auf der obersten Ebene - in einem geschachtelten
+//     begin..end bleibt der Block, in Klammern sind sie Parameter-
+//     modifikatoren einer anonymen Methode), eine
 //     Direktive in den Zeilen, ein Block-Kommentar oder mehrzeiliger String,
 //     der eine Rumpfzeile beginnt (Einruecken aendert ihn);
 //   * eine Rumpfzeile, die nicht mit der Einrueckung der ersten
@@ -106,8 +109,12 @@ const
   FOLLOW_OK: array[0..3] of string = ('end', 'until', 'finally', 'except');
   // Im Rumpf gesperrt (s. Kopf).
   BODY_BAD: array[0..4] of string = ('var', 'const', 'label', 'goto', 'asm');
+  // Davon nur auf der obersten Ebene des Rumpfs: ein Inline-var in einem
+  // geschachtelten begin..end behaelt seinen Block, ein 'const'/'var' in
+  // Klammern ist ein Parametermodifikator (anonyme Methode).
+  SCOPE_WORDS: array[0..1] of string = ('var', 'const');
   // Hier beginnt der zweite Teil eines try - gehoert nicht in den Rumpf.
-  SECTION_WORDS: array[0..1] of string = ('finally', 'except');
+  TRY_PART_WORDS: array[0..1] of string = ('finally', 'except');
   KW_FINALLY = 'finally';
   KW_TRY     = 'try';
   KW_END     = 'end';
@@ -202,23 +209,29 @@ end;
 
 // Das try zum finally: die end-Bilanz rueckwaerts (end +1, Oeffner -1; der
 // Oeffner auf Tiefe 0 muss ein try sein). Dabei ein Wort aus BODY_BAD im
-// Rumpf -> Sperre.
+// Rumpf -> Sperre; var/const nur auf Block- und Klammertiefe 0
+// (SCOPE_WORDS).
 function FindTry(AMap: TRdxCodeMap; const AFin: TRdxToken;
   out ATry: TRdxToken): string;
 var
   T, P  : TRdxToken;
   Depth : Integer;
+  Paren : Integer;
 begin
   Result := R_EFB_NO_TRY;
   ATry := Default(TRdxToken);
   Depth := 0;
+  Paren := 0;
   T := Before(AMap, AFin);
   while T.Low <> '' do
   begin
     P := Before(AMap, T);
+    // Rueckwaerts oeffnet ein Schliesser die Klammerebene.
+    Dec(Paren, ParenDelta(T));
     if IsKeywordAfter(T, P) then
     begin
-      if InList(T.Low, BODY_BAD) then
+      if InList(T.Low, BODY_BAD)
+         and (((Depth = 0) and (Paren = 0)) or not InList(T.Low, SCOPE_WORDS)) then
         Exit(R_EFB_SPECIAL);
       if T.Low = KW_END then
         Inc(Depth)
@@ -235,7 +248,7 @@ begin
         end;
         Dec(Depth);
       end
-      else if (Depth = 0) and InList(T.Low, SECTION_WORDS) then
+      else if (Depth = 0) and InList(T.Low, TRY_PART_WORDS) then
         Exit;
     end;
     T := P;

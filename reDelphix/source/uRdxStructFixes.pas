@@ -243,44 +243,84 @@ begin
     Result := After(AMap, Result);
 end;
 
-// Der einzige Eintrag: die ganze Klausel ab 'uses' (auf Zeile AUsesLine)
-// bis hinter ASemi; stehen 'uses' am Zeilenanfang und hinter ';' nur
-// Leerraum, ganze Zeilen. '' oder der Grund.
-function WholeClauseSpan(AMap: TRdxCodeMap; AUsesLine: Integer;
-  const ASemi: TRdxToken; out ASpan: TRefactorSpan): string;
+// Steht hinter ASemi auf seiner Zeile nur Leerraum oder ein '//'-Kommentar
+// ohne Marker (MarkerReason: noinspection, Absichtsmarker - ein
+// '// noinspection X' hinter Code gilt der naechsten Zeile und bleibt)?
+function TailFreeAfter(AMap: TRdxCodeMap; const ASemi: TRdxToken): Boolean;
 var
-  T : TRdxToken;
+  L    : string;
+  Rest : Integer;
+begin
+  L := AMap.Raw(ASemi.Line);
+  Rest := SkipBlanks(L, ASemi.EndCol);
+  Result := (Rest > Length(L))
+    or ((Rest = AMap.LineCommentCol(ASemi.Line))
+        and (MarkerReason(Copy(L, Rest, MaxInt)) = ''));
+end;
+
+// Der einzige Eintrag: die ganze Klausel ab 'uses' (auf Zeile AUsesLine)
+// bis hinter ASemi; ACheck ist der Teil, in dem kein Kommentar stehen darf
+// ('uses' bis ';'). Folgt ';' nur Leerraum oder ein '//'-Kommentar ohne
+// Marker (TailFreeAfter): steht 'uses' am Zeilenanfang, ganze Zeilen - der
+// Kommentar beschrieb den Eintrag (bis zur Review Woche G07-23 blieb er
+// als Zeile ' // x' stehen); steht davor Code, geht der Leerraum vor
+// 'uses' mit ('interface uses A;' -> 'interface', bis dahin 'interface ').
+// '' oder der Grund.
+function WholeClauseSpan(AMap: TRdxCodeMap; AUsesLine: Integer;
+  const ASemi: TRdxToken; out ASpan, ACheck: TRefactorSpan): string;
+var
+  T   : TRdxToken;
+  L   : string;
+  Col : Integer;
 begin
   Result := '';
   ASpan := Default(TRefactorSpan);
+  ACheck := Default(TRefactorSpan);
   T := NextToken(AMap, AUsesLine, 1);
   while (T.Low <> '') and (T.Line = AUsesLine) and (T.Low <> 'uses') do
     T := After(AMap, T);
   if (T.Low <> 'uses') or (T.Line <> AUsesLine) then
     Exit('Schluesselwort uses nicht auf der erwarteten Zeile');
-  ASpan := TRefactorSpan.Make(SPAN_007, T.Line, T.Col, ASemi.Line, ASemi.EndCol);
-  if (SkipBlanks(AMap.Raw(T.Line), 1) = T.Col)
-     and (Trim(Copy(AMap.Raw(ASemi.Line), ASemi.EndCol, MaxInt)) = '')
-     and (ASemi.Line < AMap.LineCount) then
-    ASpan := TRefactorSpan.Make(SPAN_007, T.Line, 1, ASemi.Line + 1, 1);
+  ACheck := TRefactorSpan.Make(SPAN_007, T.Line, T.Col, ASemi.Line,
+    ASemi.EndCol);
+  ASpan := ACheck;
+  if not TailFreeAfter(AMap, ASemi) then Exit;
+  L := AMap.Raw(T.Line);
+  if SkipBlanks(L, 1) = T.Col then
+  begin
+    if ASemi.Line < AMap.LineCount then
+      ASpan := TRefactorSpan.Make(SPAN_007, T.Line, 1, ASemi.Line + 1, 1);
+    Exit;
+  end;
+  Col := T.Col;
+  while (Col > 1) and IsBlank(L[Col - 1]) do
+    Dec(Col);
+  ASpan := TRefactorSpan.Make(SPAN_007, T.Line, Col, ASemi.Line, ASemi.EndCol);
 end;
 
-// Der zu loeschende Bereich des Eintrags AIndex (s. RemoveUsesEntry);
-// ASep ist das Token hinter ihm. '' oder der Grund.
+// Der zu loeschende Bereich des Eintrags AIndex (s. RemoveUsesEntry) und
+// der Teil davon, in dem kein Kommentar stehen darf (ACheck - nur beim
+// einzigen Eintrag kleiner, WholeClauseSpan); ASep ist das Token hinter
+// ihm. '' oder der Grund. GRENZE (Review Woche G07-23 c): im Stil 'Komma
+// voran' ('  A' / '  , C;') bleibt beim letzten Eintrag '  ;' als eigene
+// Zeile - der Schnitt muesste auf dem letzten Zeichen von A beginnen
+// (SpanFits) und es neu schreiben; uebersetzt, nur ein Schoenheitsfehler.
 function EntrySpan(AMap: TRdxCodeMap; const AClause: TRdxUsesClause;
-  AIndex: Integer; const ASep: TRdxToken; out ASpan: TRefactorSpan): string;
+  AIndex: Integer; const ASep: TRdxToken;
+  out ASpan, ACheck: TRefactorSpan): string;
 var
   E    : TArray<TRefactorSpan>;
   Prev : TRdxToken;
 begin
   Result := '';
   ASpan := Default(TRefactorSpan);
+  ACheck := Default(TRefactorSpan);
   E := AClause.Entries;
   if Length(E) = 1 then
   begin
     if ASep.Low <> ';' then
       Exit('hinter dem einzigen Eintrag steht kein ";"');
-    Exit(WholeClauseSpan(AMap, AClause.UsesLine, ASep, ASpan));
+    Exit(WholeClauseSpan(AMap, AClause.UsesLine, ASep, ASpan, ACheck));
   end;
   if AIndex < High(E) then
   begin
@@ -288,12 +328,14 @@ begin
       Exit('hinter dem Eintrag steht kein ","');
     ASpan := TRefactorSpan.Make(SPAN_007, E[AIndex].StartLine,
       E[AIndex].StartCol, E[AIndex + 1].StartLine, E[AIndex + 1].StartCol);
+    ACheck := ASpan;
     Exit;
   end;
   Prev := SeparatorAfter(AMap, E[AIndex - 1]);
   if (Prev.Low <> ',') or (ASep.Low <> ';') then
     Exit('Komma vor bzw. Semikolon hinter dem letzten Eintrag nicht gefunden');
   ASpan := TRefactorSpan.Make(SPAN_007, Prev.Line, Prev.Col, ASep.Line, ASep.Col);
+  ACheck := ASpan;
 end;
 
 // Steht der Eintrag allein auf seiner Zeile - davor nur Leerraum, dahinter
@@ -378,9 +420,8 @@ begin
   end;
   E := AClause.Entries[AIndex];
   Sep := SeparatorAfter(AMap, E);
-  AReason := EntrySpan(AMap, AClause, AIndex, Sep, Span);
+  AReason := EntrySpan(AMap, AClause, AIndex, Sep, Span, Check);
   if AReason <> '' then Exit;
-  Check := Span;
   if (AIndex < High(AClause.Entries)) and OwnLine(AMap, E, Sep) then
   begin
     Span := TRefactorSpan.Make(SPAN_007, E.StartLine, 1, E.StartLine + 1, 1);
@@ -397,11 +438,15 @@ end;
 
 { ---- SCA168 ---- }
 
-// Das Wort 'case' (OneTokenOnLine, CaseTokenOn).
+// Das Wort 'case' als Schluesselwort (OneTokenOnLine, CaseTokenOn) -
+// 'Obj.&Case(1)' und 'X.Case' sind Bezeichner (IsKeywordAfter, wie die
+// Haken der Bilanz; bis zur Review Woche G07-24 zaehlte jedes 'case', und
+// ein verschobener Fund auf 'Obj.&Case(1);' schrieb ein else vor das end
+// der Routine).
 function IsCaseWord(AMap: TRdxCodeMap; const T: TRdxToken;
   const AArg: string): Boolean;
 begin
-  Result := T.Low = 'case';
+  Result := (T.Low = 'case') and IsKeywordAfter(T, Before(AMap, T));
 end;
 
 // Das eine 'case' im Code der Zeile ALine. '' oder der Grund.
@@ -421,7 +466,15 @@ end;
 // eoList - auch OHNE ';' davor, 'case K of 1: Foo else Bar end'; Review
 // Quick-Fix-Units 2026-10-14), ist schon sein Zweig; ein else zu einem if
 // in einem Arm (eoIf) nicht; ist der Besitzer unklar, keine Hilfe.
-// 'otherwise' hinter ';' ist der FPC-Zweig. '' oder der Grund.
+// 'otherwise' auf oberster Ebene ist der FPC-Zweig - auch OHNE ';' davor:
+// FPC liest 'case K of 1: Foo otherwise Bar end' wie die else-Form (nach
+// der Grammatik des FPC-Handbuchs: ohne ';' hinter dem Arm endet die
+// Armliste, dann else bzw. otherwise; eine FPC-Mikroprobe steht aus), und
+// uDefaultCaseInCaseStatement kennt otherwise nicht, meldet
+// also auch solche case. Bis zur Review Woche G07-06 sperrte nur '; otherwise'
+// - sonst kaeme 'otherwise Bar; else end', zwei Default-Zweige. Ein
+// Bezeichner Otherwise als Arm-Anweisung (Delphi) sperrt so mit - die
+// sichere Richtung. '' oder der Grund.
 function TopLevelReason(AMap: TRdxCodeMap; const T, APrev: TRdxToken): string;
 var
   Scan : TRdxElseScan;
@@ -435,8 +488,9 @@ begin
     else if Scan.Owner = eoUnknown then
       Result := 'else im case, Besitzer unklar: ' + Scan.Reason;
   end
-  else if (T.Low = 'otherwise') and (APrev.Low = ';') then
-    Result := 'das case hat einen otherwise-Zweig (FPC)';
+  else if T.Low = 'otherwise' then
+    Result := 'das case hat einen otherwise-Zweig (FPC) - oder ein Arm ruft '
+      + 'einen Bezeichner Otherwise; von Hand pruefen';
 end;
 
 // Der Haken der end-Bilanz von SCA168 (BlockEnd, MatchingEnd): auf der

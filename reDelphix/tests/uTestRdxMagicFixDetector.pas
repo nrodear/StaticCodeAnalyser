@@ -36,7 +36,7 @@ type
     [Test] procedure Sca014_OldCompiler_NoHelp;
     [Test] procedure Sca014_LazarusProject_NoHelp;
     [Test] procedure Sca014_FpcInclude_NoHelp;
-    // Gegenpruefung V-B2S-3: das Netzlaufwerk (RemoteDriveReason).
+    // Gegenpruefung V-B2S-3: das Netzlaufwerk (NetworkPathReason).
     [Test] procedure Sca014_RemoteDrive_NoHelp;
   end;
 
@@ -301,7 +301,9 @@ begin
   end;
 end;
 
-// Der Check der Tabelle (MagicCheck fragt zuerst RemoteDriveReason): die
+// Der Check der Tabelle (MagicCheck fragt zuerst NetworkPathReason - seit
+// dem Wochen-Review 2026-10-21 dieselbe Regel und derselbe Text wie
+// SCA147/SCA164, vorher "Netzlaufwerk Q: - ..."): die
 // Unit auf einem Netzlaufwerk - dort liest die Hilfe weder Projekt- noch
 // Include-Dateien. Q: ist eines nur ueber die Naht (SetRdxRemoteDriveTest),
 // die Hilfe sieht die Platte nicht an; die Pfade bestehen aus Teilen (ein
@@ -326,11 +328,13 @@ begin
   try
     O := PlanFixIn(Src, UnitPath, fkMagicNumber, Seen[0]);
     Assert.IsFalse(O.Enabled, 'keine Hilfe auf dem Netzlaufwerk');
-    Assert.IsTrue(Pos('Netzlaufwerk Q: - ', O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos('Netzpfad Q: - die Hilfe liest dort keine Projekt- und '
+      + 'Include-Dateien', O.Reason) > 0, O.Reason);
     O := PlanFixIn(Src, PathDelim + PathDelim + '?' + PathDelim + UnitPath,
       fkMagicNumber, Seen[0]);
     Assert.IsFalse(O.Enabled, 'keine Hilfe, auch lang geschrieben');
-    Assert.IsTrue(Pos('Netzlaufwerk Q: - ', O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos('Netzpfad Q: - die Hilfe liest dort keine Projekt- und '
+      + 'Include-Dateien', O.Reason) > 0, O.Reason);
   finally
     SetRdxRemoteDriveTest(nil);
   end;

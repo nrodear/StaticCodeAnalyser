@@ -156,6 +156,12 @@ begin
     '  finally', '    X.Destroy;', '  end;']),
     Fix(InProc(['  X := TFoo.Create;', '  X.Run;', '  X.Destroy;']), 6, 'X',
       R), R);
+  // Das nil geht bei einem Objekt nur hinter 'X.Free' mit (TakeNil) - hinter
+  // Destroy bleibt es hinter dem end stehen.
+  Assert.AreEqual(InProc(['  X := TFoo.Create;', '  try', '    X.Run;',
+    '  finally', '    X.Destroy;', '  end;', '  X := nil;']),
+    Fix(InProc(['  X := TFoo.Create;', '  X.Run;', '  X.Destroy;',
+      '  X := nil;']), 6, 'X', R), R);
 end;
 
 procedure TTestRdxTryFixes.Sca009_IndentStep;
@@ -210,6 +216,24 @@ begin
       '    function(const A: TItem; const B: TItem): Integer', '    begin',
       '      Result := A.Id - B.Id;', '    end);', '  X.Run;', '  X.Free;']),
       6, 'X', R), R);
+  // ... und IM Bereich (Review Woche G08-10): 'const' bzw. 'B:' hinter dem
+  // ';' der Parameterliste stehen in Klammern - keine Inline-Deklaration,
+  // keine Marke (bis dahin abgelehnt mit genau diesen Gruenden).
+  Assert.AreEqual(InProc(['  X := TFoo.Create;', '  try',
+    '    L.Sort(function(const A: TItem; const B: TItem): Integer',
+    '      begin', '        Result := A.Id - B.Id;', '      end);',
+    '  finally', '    X.Free;', '  end;']),
+    Fix(InProc(['  X := TFoo.Create;',
+      '  L.Sort(function(const A: TItem; const B: TItem): Integer',
+      '    begin', '      Result := A.Id - B.Id;', '    end);', '  X.Free;']),
+      6, 'X', R), R);
+  Assert.AreEqual(InProc(['  X := TFoo.Create;', '  try',
+    '    Run(procedure(A: Integer; B: Integer)', '      begin',
+    '        Log(A + B);', '      end);', '  finally', '    X.Free;',
+    '  end;']),
+    Fix(InProc(['  X := TFoo.Create;', '  Run(procedure(A: Integer; B: Integer)',
+      '    begin', '      Log(A + B);', '    end);', '  X.Free;']), 6, 'X', R),
+    R);
   // Inline-Variable als A (ihr Gueltigkeitsbereich bleibt aussen).
   Assert.AreEqual(InProc(['  var L: TList<Integer> := TList<Integer>.Create;',
     '  try', '    L.Add(1);', '  finally', '    L.Free;', '  end;']),
@@ -449,6 +473,11 @@ begin
   AssertRefused(InProc(['  try', '    X := TFoo.Create;', '    X.Run;',
     '    X.Free;', '  finally', '    Log(X.Name);', '  end;']), 7, 'X',
     'finally-Teil');
+  // Ein umschliessendes try ohne except/finally (halb getippt): sein
+  // Handler ist nicht zu lesen.
+  AssertRefused(InProc(['  try', '    X := TFoo.Create;', '    X.Run;',
+    '    X.Free;', '  end;']), 7, 'X', 'try in Zeile 6 um den Bereich ist nicht '
+    + 'sicher zu lesen');
 end;
 
 procedure TTestRdxTryFixes.Refuse_Stale;

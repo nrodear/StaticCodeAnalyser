@@ -419,9 +419,13 @@ echo "runner exit=$rc"
 # Ergebnis (anderer runner.exe, Absturz vor der Zusammenfassung) ist nie
 # gruen (Review R6-02).
 summary="$(tr -d '\r' < "$WORK/run.log" | grep -E '^PASSED [0-9]+  FAILED [0-9]+$' | tail -1)"
+# Jeder Exit des Runners ungleich 0 wird 1 (Vertrag im Kopf: 0/1/2): ein
+# Absturz endet sonst mit FPCs Laufzeitfehler-Code (216 Zugriffsverletzung,
+# 217 unbehandelte Ausnahme), und ein Aufrufer, der 1 = rot von 2 =
+# Aufruffehler trennt, ordnete den Lauf falsch ein (Review Woche
+# 2026-10-21, G10-21). Der Code selbst steht oben in 'runner exit='.
 if [ -z "$summary" ]; then
   echo "Lauf ohne Zusammenfassung 'PASSED n  FAILED m' - abgebrochen?" >&2
-  [ $rc -ne 0 ] && exit $rc
   exit 1
 fi
 read -r _ passed _ failed <<< "$summary"
@@ -429,4 +433,5 @@ if [ $((passed + failed)) -ne "$total" ]; then
   echo "Der Lauf zaehlt $((passed + failed)) Tests, die Testunits tragen $total [Test]-Attribute - das Ergebnis gehoert nicht zu diesem Aufruf" >&2
   exit 1
 fi
-exit $rc
+[ $rc -ne 0 ] && exit 1
+exit 0

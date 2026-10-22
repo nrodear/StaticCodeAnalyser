@@ -9,6 +9,14 @@ unit uTestRdxFixTable;
 // Namen, und kein Test fiel (Wochen-Review 2026-10-13, Bereich B, Major 4).
 // Nur in reDelphix.Test (die Tabelle braucht den Laeufer, nicht im
 // FPC-Pruefstand).
+//
+// Seit dem Wochen-Review 2026-10-21 (Major P03/P29) pinnt EXPECTED jede
+// Zeile: Art, Planer (Name ueber TRdxFixTable.PlannerName), Menuetext
+// (msgid aus FIX_CAPTIONS), Kennzeichnung und zweiten Eintrag samt
+// Menuetext. Vorher prueften die Tests nur "nicht leer" und "nicht
+// KindName": ein vertauschtes 'Plan:' (PlanTabs/PlanTrailingBlanks) oder
+// ein am Ende angehaengter Menuetext blieb gruen. Eine neue Zeile in
+// FIX_ROWS braucht hier ihre Zeile - an derselben Stelle.
 
 interface
 
@@ -27,14 +35,221 @@ type
     // Charge FB (missed R5(5), Absprache mit FE zu R5-06): der feste
     // Hinweis von SCA121 stimmt fuer jeden eingesetzten Wert.
     [Test] procedure ResultDefaultHint_NamesShownValue;
+    // Wochen-Review 2026-10-21: die Zeilen fest gepinnt
+    [Test] procedure Table_PinsPlannerCaptionChangesAlt;
+    [Test] procedure AltRows_SetVariantOne;
   end;
 
 implementation
 
 uses
-  System.Classes,
+  System.SysUtils, System.Classes,
   uMethodd12, uSCAConsts, uRdxRecipeRunner, uRdxFixTable,
   uTestRdxTextKit;   // Join
+
+type
+  // Eine erwartete Zeile der Tabelle (Index = Index in FIX_ROWS).
+  TExpectedRow = record
+    Kind       : TFindingKind;
+    Plan       : string;    // Name des Planers (PLANNER_NAMES)
+    Caption    : string;    // msgid aus FIX_CAPTIONS
+    Changes    : Boolean;   // Kennzeichnung der Zeile (E2)
+    Alt        : string;    // zweiter Planer, '' ohne
+    AltCaption : string;    // msgid aus FIX_ALT_CAPTIONS, '' ohne
+  end;
+
+const
+  // Von Hand gegen FIX_ROWS, FIX_CAPTIONS und FIX_ALT_CAPTIONS geprueft
+  // (Stand b2538e20, Chargen bis R): jede Art mit ihrem Planer und ihrem
+  // Menuetext. Gekennzeichnet (Changes) sind SCA007, SCA120, die Hilfen der
+  // Charge H4, SCA121, SCA196, SCA115, SCA093, SCA161, SCA046 sowie SCA002,
+  // SCA159 und SCA065; SCA149, SCA096 und SCA097 kennzeichnet der Planer.
+  EXPECTED: array[0..59] of TExpectedRow = (
+    (Kind: fkExplicitTObjectInheritance; Plan: 'PlanExplicitTObject';
+     Caption: 'Remove (TObject) from the class declaration';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkFreeAndNilHint; Plan: 'PlanFreeAndNil';
+     Caption: 'Use FreeAndNil(%s)';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkNilComparison; Plan: 'PlanNilComparison';
+     Caption: 'Use Assigned() instead of comparing with nil';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkAssertMessage; Plan: 'PlanAssertMessage';
+     Caption: 'Use the condition as the Assert message';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkEmptyVisibilitySection; Plan: 'PlanEmptySection';
+     Caption: 'Remove the empty visibility section';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkFreeWithoutNil; Plan: 'PlanFreeWithoutNil';
+     Caption: 'Use FreeAndNil(%s)';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkEmptyArgumentList; Plan: 'PlanEmptyArgs';
+     Caption: 'Remove the empty parentheses';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkRedundantBoolean; Plan: 'PlanOperand';
+     Caption: 'Remove the redundant comparison with True/False';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkAssignedAndAssignedNil; Plan: 'PlanOperand';
+     Caption: 'Remove the redundant comparison with nil';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkUnusedUses; Plan: 'PlanUnusedUses';
+     Caption: 'Remove unit %s from uses';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkDefaultCaseInCaseStatement; Plan: 'PlanCaseElse';
+     Caption: 'Add an empty else branch';
+     Changes: False; Alt: 'PlanCaseRaise';
+     AltCaption: 'Add an else branch that raises an exception'),
+    (Kind: fkBeginEndRequired; Plan: 'PlanBlock';
+     Caption: 'Put the branch in begin..end';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkIfElseBegin; Plan: 'PlanBlock';
+     Caption: 'Put the branch in begin..end';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkSuperfluousSemicolon; Plan: 'PlanDoubleSemicolon';
+     Caption: 'Remove the extra semicolon';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkUnitLevelKeywordIndent; Plan: 'PlanKeywordIndent';
+     Caption: 'Move the keyword to column 1';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkLegacyInitializationSection; Plan: 'PlanLegacyInit';
+     Caption: 'Replace begin with initialization';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkCastAndFree; Plan: 'PlanCastFree';
+     Caption: 'Remove the cast to %s before Free';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkEmptyMethod; Plan: 'PlanEmptyIntent';
+     Caption: 'Mark the empty body as intentional';
+     Changes: False; Alt: 'PlanEmptyRaise';
+     AltCaption: 'Raise ENotImplemented in the empty body'),
+    (Kind: fkMissingRaise; Plan: 'PlanMissingRaise';
+     Caption: 'Raise the exception';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkReRaiseException; Plan: 'PlanReRaise';
+     Caption: 'Use raise; to keep the original stack trace';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkPublicMemberWithoutDoc; Plan: 'PlanDocSkeleton';
+     Caption: 'Insert a documentation skeleton';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkInterfaceWithoutGuid; Plan: 'PlanInterfaceGuid';
+     Caption: 'Insert a new GUID';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkMissingOverride; Plan: 'PlanMissingOverride';
+     Caption: 'Add "%s;" to the declaration';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkRedundantConditional; Plan: 'PlanRedundantConditional';
+     Caption: 'Assign the condition to %s directly';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkRedundantJump; Plan: 'PlanRedundantJump';
+     Caption: 'Remove the redundant %s';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkSelfAssignment; Plan: 'PlanSelfAssignment';
+     Caption: 'Remove the self-assignment of %s';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkUnusedRoutine; Plan: 'PlanUnusedRoutine';
+     Caption: 'Delete unused routine %s';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkUnusedPrivateMethod; Plan: 'PlanUnusedPrivateMethod';
+     Caption: 'Delete unused private method %s';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkCommentedOutCode; Plan: 'PlanCommentedOut';
+     Caption: 'Delete commented-out code';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkUnusedLocalVar; Plan: 'PlanUnusedVar';
+     Caption: 'Remove unused variable %s';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkMissingFinally; Plan: 'PlanMissingFinally';
+     Caption: 'Free %s in a try/finally block';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkMemoryLeak; Plan: 'PlanMemoryLeak';
+     Caption: 'Free %s in a try/finally block';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkLockWithoutTryFinally; Plan: 'PlanLockWithoutFinally';
+     Caption: 'Release the lock %s in a try/finally block';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkUnpairedLock; Plan: 'PlanUnpairedLock';
+     Caption: 'Release the lock %s in a try/finally block';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkGetMemWithoutFreeMem; Plan: 'PlanGetMemWithoutFree';
+     Caption: 'Free the buffer %s in a try/finally block';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkConstructorWithoutInherited; Plan: 'PlanCtorInherited';
+     Caption: 'Call %s first in the constructor';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkDestructorWithoutInherited; Plan: 'PlanDtorInherited';
+     Caption: 'Call inherited last in the destructor';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkRoutineResultUnassigned; Plan: 'PlanResultDefault';
+     Caption: 'Initialize Result with %s';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkManagedResultUninit; Plan: 'PlanManagedResult';
+     Caption: 'Initialize Result first: %s';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkMagicNumber; Plan: 'PlanMagicNumber';
+     Caption: 'Introduce local constant for %s';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkHttpInsteadOfHttps; Plan: 'PlanHttps';
+     Caption: 'Use https:// instead of http://';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkRedundantParentheses; Plan: 'PlanRedundantParens';
+     Caption: 'Remove the redundant inner parentheses';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkAttributeMisalignment; Plan: 'PlanAttrGap';
+     Caption: 'Remove the blank line after the attribute';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkTwiceInheritedCalls; Plan: 'PlanTwiceInherited';
+     Caption: 'Remove the second duplicate inherited call';
+     Changes: True; Alt: 'PlanTwiceInheritedAlt';
+     AltCaption: 'Remove the first duplicate inherited call'),
+    (Kind: fkPointerSubtraction; Plan: 'PlanPointerSubtraction';
+     Caption: 'Replace the 32-bit casts with NativeInt/NativeUInt';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkEmptyFinallyBlock; Plan: 'PlanEmptyFinally';
+     Caption: 'Remove the empty try/finally';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkReversedForRange; Plan: 'PlanReversedForRange';
+     Caption: 'Replace "to" with "downto"';
+     Changes: True; Alt: 'PlanReversedForRangeAlt';
+     AltCaption: 'Swap the loop bounds'),
+    (Kind: fkTabulationCharacter; Plan: 'PlanTabs';
+     Caption: 'Replace the tabs in this line with spaces';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkTrailingWhitespace; Plan: 'PlanTrailingBlanks';
+     Caption: 'Remove the trailing whitespace';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkLowercaseKeyword; Plan: 'PlanLowercaseKeyword';
+     Caption: 'Write %s in lowercase';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkEmptyExcept; Plan: 'PlanEmptyExcept';
+     Caption: 'Add raise; to the empty except block';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkEmptyOnHandler; Plan: 'PlanEmptyOnHandler';
+     Caption: 'Add "raise;" to the empty exception handler';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkEmptyBlock; Plan: 'PlanEmptyBlock';
+     Caption: 'Replace the empty "with ... do begin end" by the call';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkNoSonarMarker; Plan: 'PlanNoSonar';
+     Caption: 'Replace NOSONAR with a "noinspection All" marker';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkTrailingCommaArgList; Plan: 'PlanTrailingComma';
+     Caption: 'Remove the trailing comma';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkGroupedDeclaration; Plan: 'PlanGroupedDeclaration';
+     Caption: 'Split the grouped declaration';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkAttributeIgnoreWithoutReason; Plan: 'PlanIgnoreReason';
+     Caption: 'Add a reason to [Ignore]';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkAttributeDuplicate; Plan: 'PlanAttrDuplicate';
+     Caption: 'Remove the duplicate attribute';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkAttributeCategoryWithoutString; Plan: 'PlanCategoryArg';
+     Caption: 'Add a category name to the attribute';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkGotoStatement; Plan: 'PlanGotoExit';
+     Caption: 'Replace "goto" with Exit';
+     Changes: False; Alt: ''; AltCaption: '')
+  );
 
 procedure TTestRdxFixTable.EveryRow_HasPlanHintAndCaption;
 var
@@ -149,8 +364,9 @@ begin
   // SCA082 plant nur auf den Zeilen (kein Dienst noetig): aktiv, und den
   // Hinweis setzt die Zeile der Tabelle.
   SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', 4, 'Superfluous semicolon at column 7',
-    fkSuperfluousSemicolon);
+  // Die Meldung wie der Detektor sie schreibt (uSuperfluousSemicolon).
+  F := TLeakFinding.New('t.pas', '', 4, 'Double semicolon at column 7 '
+    + '(`;;`) - drop the extra one.', fkSuperfluousSemicolon);
   try
     SL.Text := Join(['unit u;', 'implementation', 'procedure P;',
       'begin ; ;', 'end;', 'end.']);
@@ -175,8 +391,9 @@ begin
   end;
   // SCA149: der Planer setzt Name und Kennzeichnung nach dem Rat der
   // Meldung - override im Menuetext und gekennzeichnet.
+  // Die Meldung wie der Detektor sie schreibt (uMissingOverride).
   F := TLeakFinding.New('t.pas', '', 1, 'Method TD.X shadows virtual TB.X - '
-    + 'missing `override`', fkMissingOverride);
+    + 'missing `override` (W1010)', fkMissingOverride);
   try
     O := TRdxFixTable.FixFor(nil, nil, F, nil);
     Assert.AreEqual('override', O.Name);
@@ -226,6 +443,61 @@ begin
     Exit;
   end;
   Assert.Fail('keine Zeile fuer SCA121');
+end;
+
+procedure TTestRdxFixTable.Table_PinsPlannerCaptionChangesAlt;
+var
+  i : Integer;
+  E : TExpectedRow;
+  R : TRdxFixRow;
+  K : string;
+begin
+  Assert.AreEqual<Integer>(Length(EXPECTED), TRdxFixTable.RowCount,
+    'Zeilenzahl - eine neue Zeile gehoert auch in EXPECTED');
+  for i := 0 to High(EXPECTED) do
+  begin
+    E := EXPECTED[i];
+    R := TRdxFixTable.Row(i);
+    K := Format('Zeile %d (%s)', [i, KindName(E.Kind)]);
+    Assert.AreEqual(KindName(E.Kind), KindName(R.Kind), K + ': Art');
+    Assert.AreEqual(E.Plan, TRdxFixTable.PlannerName(i, 0), K + ': Planer');
+    Assert.AreEqual(E.Caption, TRdxFixTable.RawCaption(i, 0),
+      K + ': Menuetext (FIX_CAPTIONS)');
+    Assert.AreEqual(E.Changes, R.Changes, K + ': Kennzeichnung (E2)');
+    Assert.AreEqual(E.Alt, TRdxFixTable.PlannerName(i, 1),
+      K + ': zweiter Planer');
+    Assert.AreEqual(E.AltCaption, TRdxFixTable.RawCaption(i, 1),
+      K + ': zweiter Menuetext (FIX_ALT_CAPTIONS)');
+  end;
+end;
+
+// Jeder zweite Eintrag setzt Variant = 1 - auch ohne Zeilen (gesperrt):
+// der Anbieter nimmt ihn nur mit Variant > 0 (uRdxProvider), sonst
+// verschwaende er still aus dem Menue.
+procedure TTestRdxFixTable.AltRows_SetVariantOne;
+var
+  i, n : Integer;
+  R    : TRdxFixRow;
+  F    : TLeakFinding;
+  O    : TRdxFixOutcome;
+begin
+  n := 0;
+  for i := 0 to TRdxFixTable.RowCount - 1 do
+  begin
+    R := TRdxFixTable.Row(i);
+    if not Assigned(R.Alt) then
+      Continue;
+    Inc(n);
+    F := TLeakFinding.New('t.pas', '', 1, 'x', R.Kind);
+    try
+      O := TRdxFixTable.AlternativeFixFor(nil, nil, F, nil);
+      Assert.AreEqual<Integer>(1, O.Variant,
+        KindName(F.Kind) + ': Variant des zweiten Eintrags');
+    finally
+      F.Free;
+    end;
+  end;
+  Assert.AreEqual<Integer>(4, n, 'SCA168, SCA020, SCA093, SCA046');
 end;
 
 initialization

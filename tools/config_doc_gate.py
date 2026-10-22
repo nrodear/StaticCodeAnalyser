@@ -274,7 +274,11 @@ def pruefe(name, code, vorlage_paar, doku, ausnahmen, liste):
     """Die vier Richtungen EINER ini; Rueckgabe: Zahl der Abweichungen."""
     aktiv, beispiel = vorlage_paar
     vorlage = {normiere(k) for k in (aktiv | beispiel)}
-    beispiel = {normiere(k) for k in beispiel}
+    # 'nur als Beispiel': eine ';Key='-Zeile OHNE aktive Zeile daneben. Die
+    # Vorlage traegt oft beides ('Language=auto' aktiv, ';Language=de' als
+    # Beispiel) - vorher zaehlte die Ausgabe auch diese mit und meldete
+    # '56 (davon 56 nur als Beispiel)' (Review Woche 2026-10-21, G10-24).
+    beispiel = {normiere(k) for k in beispiel} - {normiere(k) for k in aktiv}
     code_keys = {normiere(k) for k in code} - ausnahmen
     doku = {normiere(k) for k in doku}
 

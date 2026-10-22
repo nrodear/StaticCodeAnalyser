@@ -23,7 +23,8 @@ unit uTestRdxMethodFixes;
 //   Nachpruefung B1-FD (neu 1): ein '// noinspection' ueber der
 //   Deklaration bzw. der Implementierung zielt auf sie - keine Hilfe; einer
 //   ueber dem Member dahinter bleibt dessen Marker. Das Include-Verzeichnis
-//   ist je Lauf frisch (wie TempDir in uTestRdxRoutineFixes, Review R6-07).
+//   ist je Lauf frisch (uTestRdxTextKit.NewTempDir wie TempDir in
+//   uTestRdxRoutineFixes, Review R6-07).
 // Die Gegenprobe mit dem echten Detektor steht in
 // uTestRdxRoutineFixesDetector (nur Delphi).
 
@@ -62,7 +63,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxCodeMap, uRdxRoutineFixes,
-  uTestRdxTextKit;   // Join, Apply, WriteText
+  uTestRdxTextKit;   // Join, Apply, WriteText, NewTempDir, RemoveTree
 
 // ---- Helfer ----
 
@@ -445,7 +446,6 @@ procedure TTestRdxMethodFixes.Sca147_IncludeBeforeImplementation_Read;
 var
   P         : TRdxRoutinePlan;
   R, Dir, U : string;
-  G         : TGUID;
 begin
   // R4-05, Pruefer-Fall r405 (1): ein Include zwischen Klasse und
   // implementation kann eine Nachfahrenklasse tragen ('TBar = class(TFoo)
@@ -462,11 +462,9 @@ begin
   Assert.AreEqual<Integer>(1, Integer(Length(P.Includes)), 'Includes');
   Assert.AreEqual('derived.inc', P.Includes[0]);
   // Der Check liest es neben der Unit: nennt es GetX, keine Hilfe; fehlt
-  // es, ebenso; ohne den Namen bleibt die Hilfe.
-  CreateGUID(G);
-  Dir := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
-    + 'rdx_b1fd_' + GUIDToString(G) + PathDelim;
-  ForceDirectories(Dir);
+  // es, ebenso; ohne den Namen bleibt die Hilfe. Das Verzeichnis aus
+  // uTestRdxTextKit.NewTempDir (Review Woche G05-23; bis dahin von Hand).
+  Dir := NewTempDir('rdx_b1fd_');
   U := Dir + 'u.pas';
   try
     WriteText(Dir + 'derived.inc', Join(['type', '  TBar = class(TFoo)',
@@ -479,8 +477,7 @@ begin
     R := TRdxRoutineFixes.IncludeReason(U, P.Includes, P.Name);
     Assert.IsTrue(Pos('nicht neben der Unit', R) > 0, R);
   finally
-    DeleteFile(Dir + 'derived.inc');
-    RemoveDir(Dir);
+    RemoveTree(Dir);
   end;
   // Ein Include im Kopf der Unit (vor interface) traegt nur Direktiven -
   // es steht nicht im Plan.

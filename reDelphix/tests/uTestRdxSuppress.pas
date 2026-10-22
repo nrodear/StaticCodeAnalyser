@@ -236,6 +236,18 @@ begin
   finally
     L.Free;
   end;
+  // Letzte Zeile hinter einer LEEREN Vorzeile (WholeLineRemoval, dritter
+  // Zweig - bis zum Wochen-Review 2026-10-21 ohne Test): die Markerzeile
+  // wird geleert, die Leerzeile bleibt.
+  Src := BASE_SRC + #13#10#13#10'// noinspection-file X';
+  L := LinesOf(Src);
+  try
+    Assert.IsTrue(TRdxSuppress.RemoveMarker(L, 10, E, R), R);
+    Assert.AreEqual(BASE_SRC + #13#10#13#10, Apply(Src, E),
+      'Vorzeile leer: nur der Marker geht');
+  finally
+    L.Free;
+  end;
 end;
 
 procedure TTestRdxSuppress.RemoveMarker_TrailingCommentKeepsCode;
@@ -445,6 +457,33 @@ begin
   finally
     L.Free;
   end;
+  // Die beiden Ablehnungen von HeadLineReason (bis zum Wochen-Review
+  // 2026-10-21 ohne Test): kein Kopf (Include) bzw. kein ';' dahinter, und
+  // ein Block-Kommentar, der hinter der Kopfzeile beginnt - die neue Zeile
+  // laege darin.
+  L := LinesOf('procedure P;'#13#10'begin'#13#10'end;');
+  try
+    Assert.IsFalse(TRdxSuppress.FileMarker(L, 'MagicNumber', E, R));
+    Assert.IsTrue(Pos('keine unit-Zeile gefunden', R) > 0, 'Include: ' + R);
+  finally
+    L.Free;
+  end;
+  L := LinesOf('unit u');
+  try
+    Assert.IsFalse(TRdxSuppress.FileMarker(L, 'MagicNumber', E, R));
+    Assert.IsTrue(Pos('keine unit-Zeile gefunden', R) > 0, 'ohne ;: ' + R);
+  finally
+    L.Free;
+  end;
+  L := LinesOf('unit u; { Lizenz'#13#10'  Text }'#13#10'interface'#13#10
+    + 'implementation'#13#10'end.');
+  try
+    Assert.IsFalse(TRdxSuppress.FileMarker(L, 'MagicNumber', E, R));
+    Assert.IsTrue(Pos('Block-Kommentar', R) > 0, 'Kommentar hinter dem Kopf: '
+      + R);
+  finally
+    L.Free;
+  end;
 end;
 
 procedure TTestRdxSuppress.RemoveMarker_MultiKind_Refused;
@@ -462,6 +501,16 @@ begin
   try
     Assert.IsFalse(TRdxSuppress.RemoveMarker(L, 6, E, R));
     Assert.IsTrue(Pos('mehrere Arten', R) > 0, R);
+  finally
+    L.Free;
+  end;
+  // Ein Marker ohne Art (R_NO_KIND, bis zum Wochen-Review 2026-10-21 ohne
+  // Test).
+  Src := StringReplace(BASE_SRC, CODE, '  // noinspection'#13#10 + CODE, []);
+  L := LinesOf(Src);
+  try
+    Assert.IsFalse(TRdxSuppress.RemoveMarker(L, 6, E, R));
+    Assert.IsTrue(Pos('keine erkennbare Art', R) > 0, R);
   finally
     L.Free;
   end;

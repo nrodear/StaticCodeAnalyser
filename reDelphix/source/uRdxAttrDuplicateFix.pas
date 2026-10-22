@@ -106,6 +106,10 @@ const
   KEY_CLOSE = '] (first seen at line ';
 
 // Der Grund in der Sprache des Benutzers; 'verschoben' mit dem Zusatz.
+// Jeder Grund von ReadLine hat seinen Zweig mit der Konstante im _() (der
+// Extraktor liest msgids nur so, ein _(AMsgId) waere dynamisch). Ein
+// neuer Grund ohne Zweig faellt im Testlauf am Assert auf, statt still den
+// Text von R_DUP_COMPLEX zu bekommen.
 function ReasonText(const AMsgId: string): string;
 begin
   if AMsgId = R_DUP_MOVED then
@@ -116,8 +120,13 @@ begin
     Result := _(R_DUP_TAIL)
   else if AMsgId = R_DUP_TARGET then
     Result := _(R_DUP_TARGET)
+  else if AMsgId = R_DUP_COMPLEX then
+    Result := _(R_DUP_COMPLEX)
   else
+  begin
+    Assert(False, 'ReasonText: reason without a branch - ' + AMsgId);
     Result := _(R_DUP_COMPLEX);
+  end;
 end;
 
 // Zaehlt die Gruppen mit dem Schluessel AKey; ALast: Index der letzten.
@@ -227,7 +236,8 @@ class function TRdxAttrDuplicateFix.DeleteDuplicate(AMap: TRdxCodeMap;
   out AReason: string): Boolean;
 var
   Key, R, L             : string;
-  First, i, Cnt, Idx, N : Integer;
+  First, i, Cnt, Idx    : Integer;
+  FirstIdx              : Integer;   // nur fuer CountKey, ungenutzt
   Groups, Other         : TRdxAttrGroups;
   FirstHas              : Boolean;
   StartCol, EndCol      : Integer;
@@ -262,14 +272,16 @@ begin
       Continue;
     end;
     R := ReadLine(AMap, i, Other);
-    if R = R_DUP_MOVED then
+    // Keine Attributzeile ZWISCHEN den Treffern trennt sie; ist schon die
+    // gemeldete erste Zeile keine, ist der Fund verschoben.
+    if (R = R_DUP_MOVED) and (i > First) then
       R := R_DUP_BETWEEN;
     if R <> '' then
     begin
       AReason := ReasonText(R);
       Exit;
     end;
-    if (i = First) and (CountKey(Other, Key, N) > 0) then
+    if (i = First) and (CountKey(Other, Key, FirstIdx) > 0) then
       FirstHas := True;
   end;
   Cnt := CountKey(Groups, Key, Idx);

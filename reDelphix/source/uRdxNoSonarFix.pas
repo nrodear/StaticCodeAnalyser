@@ -67,6 +67,7 @@ const
     + 'delete the NOSONAR comment by hand';
 
 type
+  // Der Planer von SCA065 (Form TRdxMapPlanner, uRdxFixRunner).
   TRdxNoSonarFix = class
   public
     // SCA065: NOSONAR in ALine (Spalte des '//' aus der Meldung 'at column

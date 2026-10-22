@@ -47,6 +47,7 @@ const
   R_COMMA_NO_OPEN = 'the opening parenthesis was not found';
 
 type
+  // Der Planer von SCA068 (Form TRdxMapPlanner, uRdxFixRunner).
   TRdxTrailingCommaFix = class
   public
     // SCA068: an der Spalte aus der Meldung ('at column N') das Komma samt

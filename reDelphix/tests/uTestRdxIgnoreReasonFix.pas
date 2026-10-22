@@ -5,6 +5,9 @@ unit uTestRdxIgnoreReasonFix;
 // Parser und ohne Detektor (TTestRdxIgnoreReasonFix); die Rundlaeufe mit dem
 // ECHTEN Detektor und dem Planer der Tabelle (PlanIgnoreReason) stehen in
 // einer eigenen Fixture hinter {$IFNDEF FPC} (TTestRdxIgnoreReasonDetector).
+// Die ganze Unit ist nur Delphi (reDelphix.Test): der Planer bindet
+// uEngineApi/uRdxRecipeRunner und uRdxFixRunner, der FPC-Pruefstand
+// (build.sh) fuehrt ihn nicht - die Weichen sind heute ohne Wirkung.
 // Prueft: die Formen '[Ignore]', '[Ignore()]', Schreibweise und Leerraum, den
 // Bereich (nur der Teil hinter dem Namen), und die Sperren - Gruppe, anderes
 // Attribut davor, Argument, Kommentar, verschobene Zeile.

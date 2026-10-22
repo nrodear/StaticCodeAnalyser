@@ -912,9 +912,15 @@ begin
   for S in MemberShapes(AMap, Cls, ASig.Name) do
     if S = ShapeOf(AMap, ASig) then
       Exit('');
+  // Die Form vergleicht auch die Gruppierung: '(A, B: Integer)' und '(A:
+  // Integer; B: Integer)' sind fuer den Compiler dieselbe Signatur, hier
+  // zwei Formen. Die Ablehnung bleibt (lieber keine Hilfe), der Grund sagt
+  // es - bis zur Review Woche G07-11 hiess es 'override uebersetzte
+  // nicht', auch wenn es uebersetzte.
   Result := Format('%s.%s hat eine andere Form (class, Parameter-Modifier, '
-    + 'Typen, Rueckgabe oder Aufrufkonvention) - override uebersetzte nicht',
-    [Base, ASig.Name]);
+    + 'Typen, Rueckgabe oder Aufrufkonvention) oder gruppiert nur die '
+    + 'Parameter anders ("A, B: T" gegen "A: T; B: T") - override von Hand '
+    + 'pruefen', [Base, ASig.Name]);
 end;
 
 // reintroduce: nicht bei generischem Vorfahren der eigenen Klasse

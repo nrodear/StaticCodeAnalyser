@@ -14,10 +14,15 @@ unit uRdxHttpsFix;
 //   * Port, Zugangsdaten, IP-Adresse, IPv6, Platzhalter im Host und ein
 //     Host ohne Punkt (Intranet): https auf dem selben Port oder mit dem
 //     selben Zertifikat ist dort nicht zu erwarten - keine Hilfe;
-//   * localhost/Loopback, reservierte Doku-Hosts und Namespace-/Schema-URIs
-//     (xmlns, w3.org, schemas, ...) sind Identitaeten oder lokal, nie ein
-//     Fund fuer diese Hilfe - der Detektor meldet sie meist gar nicht, die
-//     Hilfe prueft es am aktuellen Text noch einmal.
+//   * localhost/Loopback und reservierte Doku-Hosts sind lokal, Namespace-
+//     Hosts (w3.org, xmlsoap.org, ...) Identitaeten - keine Hilfe;
+//   * ein Namespace-/Schema-Marker ('xmlns', 'namespace', 'schema', '/ns/')
+//     irgendwo in der Adresse oder vor ihr auf der Zeile sperrt AUS
+//     VORSICHT: der Detektor (uRestHttpSecurity, Voll-Review 2026-09-13)
+//     meldet solche Adressen absichtlich als echte Endpunkte
+//     ('.../schemas/v1/users', 'FSchemaEndpoint := ...'), die Hilfe kann
+//     eine Kennung davon nicht unterscheiden. Der Grund sagt darum
+//     "koennte", nicht "ist kein Netzaufruf".
 
 interface
 
@@ -29,6 +34,7 @@ uses
   uRdxRecipeRunner;  // TRdxFixOutcome, TRdxEdit
 
 type
+  // Der Planer von SCA115 (Form TRdxMapPlanner, uRdxFixRunner).
   TRdxHttpsFix = class
   public
     // Das Schema des Literals aus der Meldung auf ALine: 'http://' ->
@@ -79,15 +85,16 @@ const
     + 'eindeutig';
   R_HTTPS_INSIDE    = 'die Zeile beginnt in einem Kommentar oder String';
   R_HTTPS_NO_HOST   = 'kein Rechnername in der Adresse';
-  R_HTTPS_USERINFO  = 'die Adresse enthaelt Zugangsdaten oder einen Port - '
-    + 'https lief dort nicht ohne Weiteres';
+  R_HTTPS_USERINFO  = 'die Adresse enthaelt Zugangsdaten, einen Port oder '
+    + 'eine IPv6-Adresse - https lief dort nicht ohne Weiteres';
   R_HTTPS_ODD_HOST  = 'der Rechnername ist kein fester Name (Platzhalter '
     + 'oder Sonderzeichen)';
   R_HTTPS_IP        = 'eine IP-Adresse hat selten ein passendes Zertifikat';
   R_HTTPS_LOCAL     = 'ein lokaler oder interner Rechner - kein sicheres '
     + 'Fernziel fuer https';
-  R_HTTPS_NAMESPACE = 'eine Namespace- oder Schema-Kennung, kein '
-    + 'Netzaufruf';
+  R_HTTPS_NAMESPACE = 'Namespace- oder Schema-Kennzeichen in der Adresse '
+    + 'oder davor - koennte eine Kennung statt eines Netzaufrufs sein, aus '
+    + 'Vorsicht keine Hilfe';
 
 type
   THttpsKind = (hkOk, hkNoHost, hkUserInfo, hkOdd, hkIp, hkLocal, hkNamespace);
@@ -103,16 +110,6 @@ begin
   while (p <= Length(Rest)) and not CharInSet(Rest[p], ['/', '?', '#']) do
     Inc(p);
   Result := Copy(Rest, 1, p - 1);
-end;
-
-function InNames(const AName: string; const AList: array of string): Boolean;
-var
-  S : string;
-begin
-  Result := False;
-  for S in AList do
-    if AName = S then
-      Exit(True);
 end;
 
 // AHost ist ein Name der Liste oder eine Subdomain davon ('a.example.com').
@@ -186,7 +183,7 @@ begin
     Result := hkNamespace
   else if LooksLikeIp(Host) then
     Result := hkIp
-  else if (Pos('.', Host) = 0) or InNames(Host, LOCAL_HOSTS)
+  else if (Pos('.', Host) = 0) or InList(Host, LOCAL_HOSTS)
      or EndsWithAny(Host, LOCAL_SUFFIXES) or UnderAny(Host, RESERVED_HOSTS) then
     Result := hkLocal
   else

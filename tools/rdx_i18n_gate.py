@@ -32,8 +32,11 @@ Was es meldet (je Fund Unit, Zeile, Art, Text):
             'a'#13) zaehlen als EIN Text; ein Bezeichner dazwischen trennt.
   msgid     ein deutscher Text IN _() bzw. in einer msgid-Konstante - die
             msgid ist englisch (E29), die deutsche Fassung steht in de.po.
-  qualif    ein qualifizierter Aufruf X._(..): tools/i18n_extract.py sieht
-            ihn nicht, die msgid fehlte in template.pot.
+  qualif    ein qualifizierter Aufruf X._(..) ausser uRdxText._(..):
+            tools/i18n_extract.py sieht ihn nicht, die msgid fehlte in
+            template.pot. 'uRdxText._(' (so ruft uRdxText.pas sein eigenes
+            _ wegen E2251) liest der Extraktor wie _(..) - das Gate prueft
+            es deshalb wie _(..): msgid, fremd, dynamisch.
   fremd     _(NAME) mit einem Konstanten-Namen (GROSS_MIT_UNTERSTRICH),
             der in DIESER Unit keine reine Literal-Konstante ist - der
             Extraktor loest nur Konstanten derselben Unit auf; die msgid
@@ -96,6 +99,12 @@ import tempfile
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 SRC_DIR = REPO / "reDelphix" / "source"
+
+# Die eine Qualifizierung, die der Extraktor als _() liest ('uRdxText.') -
+# aus i18n_extract selbst, damit beide Werkzeuge dieselbe Form gleich
+# bewerten (sonst die Drift, vor der tools/i18n_audit.sh warnt).
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from i18n_extract import QUALIFIED_OWN  # noqa: E402
 ALLOW_FILE = REPO / "tools" / "rdx_i18n_gate.allow"
 
 # Typisch deutsche Woerter: die Liste des Inventars (w7/i18n_inventory.py)
@@ -495,11 +504,23 @@ class Unit:
                 continue
             if prev[0] == "id" and prev[1].lower() in ("function", "procedure"):
                 continue
-            if is_sym(prev, "."):
+            if is_sym(prev, ".") and not self._own_qualified(k):
                 self.qualified.append(k)
                 continue
             self.msgid_calls.append(span)
             self._read_msgid_arg(k, span)
+
+    def _own_qualified(self, k):
+        """'uRdxText._(' wie der Extraktor (i18n_extract._is_own_qualified,
+        dieselbe Konstante QUALIFIED_OWN, ohne Leerraum dazwischen):
+        uRdxText.pas sieht zwei _ (das eigene und das aus uLocalization,
+        E2251) und qualifiziert deshalb das eigene. Der Aufruf wird wie
+        _(..) geprueft - msgid, fremd, dynamisch. Vorher galt er als
+        'qualif', 21 Scheinfunde in uRdxText.pas (Review Woche 2026-10-21,
+        G10-09)."""
+        if k < 2 or self.toks[k - 2][0] != "id":
+            return False
+        return self.text[self.toks[k - 2][2]:self.toks[k][2]] == QUALIFIED_OWN
 
     def _read_msgid_arg(self, k, span):
         """Das erste Argument von _(..) wie tools/i18n_extract.py: eine
@@ -811,7 +832,14 @@ def _mutants():
         ("Umlaut", b.replace(RAISE_LIT, "'Fehler \u00fcberall'"), a, ["text"], 0, False),
         ("Kette ueber Zeilen", b.replace("_('no valid range')", "'kein ' +\n    'gueltiger Bereich'"), a, ["text"], 0, False),
         ("deutsch als Format-Argument", b.replace("[1, 2]", "[1, 'die Zeile']"), a, ["text"], 0, False),
-        ("qualifizierter Aufruf", b.replace("_('no valid range')", "uRdxText._('no valid range')"), a, ["qualif"], 0, False),
+        ("qualifizierter Aufruf", b.replace("_('no valid range')", "uRdxFoo._('no valid range')"), a, ["qualif"], 0, False),
+        # G10-09: uRdxText._(..) liest der Extraktor wie _(..) - kein
+        # qualif, aber dieselben Pruefungen wie bei _(..).
+        ("eigener qualifizierter Aufruf", b.replace("_('no valid range')", "uRdxText._('no valid range')"), a, [], 0, False),
+        ("eigener qualifizierter Aufruf, fremde Konstante",
+         b.replace("_(R_GOOD)", "uRdxText._(R_ELSEWHERE)"), a, ["fremd"], 0, False),
+        ("eigener qualifizierter Aufruf, deutsche msgid",
+         b.replace("_('no valid range')", "uRdxText._('kein gueltiger Bereich')"), a, ["msgid"], 0, False),
         ("Konstante einer anderen Unit", b.replace("_(R_GOOD)", "_(R_ELSEWHERE)"), a, ["fremd"], 0, False),
         # Nachpruefung FIX-C1, V-C1-1: Texte ohne Wort der Liste bzw. ohne
         # Leerzeichen - und gutartige Code-Woerter, die still bleiben.

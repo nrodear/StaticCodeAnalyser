@@ -58,14 +58,30 @@ unit uRdxBlocks;
 //                   Bereich, der seinen Code verliert (SCA053, SCA164,
 //                   SCA147).
 //
+// ZWEI SCHREIBWEISEN (Review Woche G05-06): TRdxBlocks.X sind die
+// Bausteine, die bis Charge B2S-b als TRdxRoutineFixes.X oeffentlich waren
+// (ReadRoutine, die Finder, MethodDecl, FindClassHeads, HeritageOf), dazu
+// die beiden Laeufe derselben Charge (HeadBefore, MemberHeads) - ihre
+// Aufrufer schreiben den Praefix seitdem so. Freie Funktionen sind die
+// Helfer, die dort privat waren und erst mit B2S-b oeffentlich wurden
+// (HasDirective, HeadStart, IsHeadNamed, TypeHasBody, EnclosingClass,
+// ClassEnd), und die Include- und Marker-Bausteine. Ein NEUER Baustein ist
+// eine freie Funktion wie in uRdxCodeMap; die Klassenmethoden umzubenennen
+// aenderte die Aufrufer in sechs Planer-Units und bleibt einer eigenen
+// Charge.
+//
 // PLATTE: alles hier ist Textlogik auf der Code-Sicht, bis auf die
 // Include-Kette (Gegen-Review R4-08): IncludeChainReason liest Include-
-// Dateien von der Platte, auf einem Netzpfad (UNC oder Netzlaufwerk,
+// Dateien von der Platte (dekodiert wie der Scan, uFileTextCache.
+// LoadFileSmart), auf einem Netzpfad (UNC oder Netzlaufwerk,
 // uRdxPaths.IsNetworkPath) nichts - der Menueaufbau laeuft im Hauptthread
 // (R4-03). Bis Charge B2S-b sollte der Leser eine eigene Unit uRdxIncludes
 // bekommen (Kopf von uRdxRoutineFixes); er steht jetzt bei den anderen
 // Bausteinen, und jeder Plattenzugriff dieser Unit im Abschnitt
-// "Include-Dateien".
+// "Include-Dateien". Von den sieben einbindenden Units brauchen ihn nur
+// uRdxRoutineFixes und uRdxMagicFixes; die Grenze "Platte nur ueber den
+// Check der Tabelle" haelt deshalb nur der Kommentar (Review Woche G05-09:
+// uRdxIncludes bleibt der Vorschlag fuer eine eigene Charge).
 //
 // GRUNDSATZ wie in uRdxSimpleFixes: lieber keine Hilfe als eine falsche -
 // ein Baustein nennt den Grund, warum er nicht sicher liest.
@@ -299,6 +315,7 @@ implementation
 
 uses
   System.SysUtils,
+  uFileTextCache,    // LoadFileSmart: Includes dekodiert wie der Scan
   uRdxPaths;         // IsNetworkPath (Includes nie aus dem Netz)
 
 const
@@ -370,9 +387,22 @@ const
 type
   // Tiefe und Sichtbarkeit beim Lauf durch einen Klassenrumpf (Tiefe 1 =
   // die Member der Klasse; geschachtelte Typen und records zaehlen hoch).
+  // Das Geruest des Laufs (Start, Active, Advance) steht hier EINMAL - bis
+  // Review Woche G05-08 schrieben ClassEnd, VisibilityAt und AddMemberHeads
+  // Vorbelegung, Abbruch und Vorruecken je selbst aus:
+  //   Scan.Start(AMap, AClass, T, P);
+  //   while Scan.Active(T) do begin <Aktion an T>; Scan.Advance(AMap, T, P); end;
   TRdxClassScan = record
     Depth : Integer;
     Vis   : string;      // Sichtbarkeit auf Tiefe 1, '' = Vorgabe
+    // Tiefe 1 ohne Sichtbarkeit; T das erste Token hinter AClass (dem
+    // Token 'class'), P das davor (AClass).
+    procedure Start(AMap: TRdxCodeMap; const AClass: TRdxToken;
+      out T, P: TRdxToken);
+    // Noch im Rumpf: T ist ein Token und die Tiefe nicht 0.
+    function Active(const T: TRdxToken): Boolean;
+    // T verarbeiten (Step) und vorruecken: P wird T, T das Token dahinter.
+    procedure Advance(AMap: TRdxCodeMap; var T, P: TRdxToken);
     procedure Step(AMap: TRdxCodeMap; const T, APrev: TRdxToken);
   end;
 
@@ -467,6 +497,21 @@ begin
   if (Result.Low <> KW_CLASS)
      or InList(Before(AMap, Result).Low, ['=', 'packed']) then
     Result := T;
+end;
+
+// Steht hinter dem Routinenwort T ein ':=' - eine Zuweisung an eine
+// Variable 'Operator' (kein reserviertes Wort; uUnusedRoutine kennt den
+// Bezeichner aus dem Korpus), kein Kopf? Wie IsKeywordAt, mit einer
+// Ausnahme: FPC kennt den Kopf 'operator := (A: T) R: U;' (der
+// Zuweisungsoperator) - vor einer '(' bleibt es ein Kopf. Bis Review Woche
+// G05-07 galt jede Zuweisung 'Operator := ..' hinter ';' als Routinenkopf
+// im Rumpf, und ReadRoutine sperrte die ganze Routine.
+function AssignsTo(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
+var
+  N : TRdxToken;
+begin
+  N := After(AMap, T);
+  Result := (N.Low = ':=') and (After(AMap, N).Low <> '(');
 end;
 
 { ---- Baustein Routinengrenzen ---- }
@@ -708,7 +753,8 @@ begin
 end;
 
 // Haken der end-Bilanz im Rumpf: Abschnittswoerter der Unit und ein
-// Routinenkopf hinter ';' heissen, das passende end wurde verfehlt.
+// Routinenkopf hinter ';' heissen, das passende end wurde verfehlt. Eine
+// Zuweisung 'Operator := ..' ist kein Kopf (AssignsTo).
 function BodyHook(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
   ADepth: Integer): string;
 begin
@@ -718,7 +764,8 @@ begin
     Result := Format('"%s" im Rumpf - Ende der Routine nicht gefunden',
       [T.Low])
   else if (APrev.Low = KW_SEMI)
-     and (InList(T.Low, ROUTINE_WORDS) or (T.Low = KW_CLASS)) then
+     and (InList(T.Low, ROUTINE_WORDS) or (T.Low = KW_CLASS))
+     and not AssignsTo(AMap, T) then
     Result := 'Routinenkopf im Rumpf - Ende der Routine nicht sicher';
 end;
 
@@ -970,23 +1017,42 @@ begin
   end;
 end;
 
-// Das end des Klassenrumpfs ab AClass; Low = '' ohne.
+procedure TRdxClassScan.Start(AMap: TRdxCodeMap; const AClass: TRdxToken;
+  out T, P: TRdxToken);
+begin
+  Depth := 1;
+  Vis := '';
+  P := AClass;
+  T := After(AMap, AClass);
+end;
+
+function TRdxClassScan.Active(const T: TRdxToken): Boolean;
+begin
+  Result := (T.Low <> '') and (Depth > 0);
+end;
+
+procedure TRdxClassScan.Advance(AMap: TRdxCodeMap; var T, P: TRdxToken);
+begin
+  Step(AMap, T, P);
+  P := T;
+  T := After(AMap, T);
+end;
+
+// Das end des Klassenrumpfs ab AClass; Low = '' ohne. Das end ist das
+// Token, das die Tiefe auf 0 brachte - nach dem letzten Advance steht es
+// in P.
 function ClassEnd(AMap: TRdxCodeMap; const AClass: TRdxToken): TRdxToken;
 var
   Scan : TRdxClassScan;
-  P    : TRdxToken;
+  T, P : TRdxToken;
 begin
+  Result := Default(TRdxToken);
   Scan := Default(TRdxClassScan);
-  Scan.Depth := 1;
-  P := AClass;
-  Result := After(AMap, AClass);
-  while Result.Low <> '' do
-  begin
-    Scan.Step(AMap, Result, P);
-    if Scan.Depth = 0 then Exit;
-    P := Result;
-    Result := After(AMap, Result);
-  end;
+  Scan.Start(AMap, AClass, T, P);
+  while Scan.Active(T) do
+    Scan.Advance(AMap, T, P);
+  if Scan.Depth = 0 then
+    Result := P;
 end;
 
 // Die Sichtbarkeit, unter der AHead im Rumpf ab AClass auf Tiefe 1 steht;
@@ -1000,19 +1066,15 @@ begin
   Result := False;
   AVis := '';
   Scan := Default(TRdxClassScan);
-  Scan.Depth := 1;
-  P := AClass;
-  T := After(AMap, AClass);
-  while (T.Low <> '') and (Scan.Depth > 0) do
+  Scan.Start(AMap, AClass, T, P);
+  while Scan.Active(T) do
   begin
     if SameTok(T, AHead) then
     begin
       AVis := Scan.Vis;
       Exit(Scan.Depth = 1);
     end;
-    Scan.Step(AMap, T, P);
-    P := T;
-    T := After(AMap, T);
+    Scan.Advance(AMap, T, P);
   end;
 end;
 
@@ -1024,16 +1086,12 @@ var
   T, P : TRdxToken;
 begin
   Scan := Default(TRdxClassScan);
-  Scan.Depth := 1;
-  P := AClass;
-  T := After(AMap, AClass);
-  while (T.Low <> '') and (Scan.Depth > 0) do
+  Scan.Start(AMap, AClass, T, P);
+  while Scan.Active(T) do
   begin
     if (Scan.Depth = 1) and IsHeadNamed(AMap, T, ALowName) then
       AddToken(AHeads, HeadStart(AMap, T));
-    Scan.Step(AMap, T, P);
-    P := T;
-    T := After(AMap, T);
+    Scan.Advance(AMap, T, P);
   end;
 end;
 
@@ -1149,12 +1207,18 @@ begin
 end;
 
 // Die Datei APath nach ALines; False, wenn sie nicht zu lesen ist (Oeffnen,
-// Lesen, Kodierung - wie die Formdatei in uRdxFixTable).
+// Lesen, Kodierung). Dekodiert wie der Scan (uFileTextCache.LoadFileSmart:
+// BOM, dann wohlgeformtes UTF-8, sonst Default-Codepage) - bis Review Woche
+// G05-03 las TStringList.LoadFromFile ein UTF-8-Include ohne BOM als ANSI,
+// ein Name mit Umlaut kam je Umlaut ein Zeichen laenger an (das UTF-8-Paar
+// als zwei ANSI-Zeichen), und SameIdent (gleiche Laenge) fand ihn nicht
+// (SCA164/SCA147: die Hilfe loeschte die Implementierung, die Deklaration
+// im Include blieb - E2065). ANSI- und
+// BOM-Dateien liest LoadFileSmart wie LoadFromFile.
 function ReadIncludeText(const APath: string; ALines: TStringList): Boolean;
 begin
-  Result := True;
   try
-    ALines.LoadFromFile(APath);
+    Result := LoadFileSmart(APath, ALines);
   except
     on EStreamError do
       Result := False;
@@ -1256,7 +1320,8 @@ end;
 
 // Rueckwaerts Token fuer Token wie bis Charge B2S-b uRdxTryFixes.
 // RoutineAround: das Token davor (P) entscheidet, ob T ein Kopf ist
-// (IsRoutineHeadAfter) bzw. ein Schluesselwort (IsKeywordAt).
+// (IsRoutineHeadAfter, ohne Zuweisung 'Operator := ..' - AssignsTo) bzw.
+// ein Schluesselwort (IsKeywordAt).
 class function TRdxBlocks.HeadBefore(AMap: TRdxCodeMap; var T: TRdxToken;
   const AStops: array of string; out AStep: TRdxHeadStep): Boolean;
 var
@@ -1267,7 +1332,7 @@ begin
   while T.Low <> '' do
   begin
     P := Before(AMap, T);
-    if IsRoutineHeadAfter(T, P) then
+    if IsRoutineHeadAfter(T, P) and not AssignsTo(AMap, T) then
     begin
       AStep.Tok := T;
       AStep.Reason := ReadRoutine(AMap, T, AStep.Routine);

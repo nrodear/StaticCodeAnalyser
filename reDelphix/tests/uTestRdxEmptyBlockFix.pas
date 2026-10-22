@@ -1,9 +1,12 @@
 unit uTestRdxEmptyBlockFix;
 
 // Editorhilfe SCA077 EmptyBlock (uRdxEmptyBlockFix): die Planer auf Text
-// (TTestRdxEmptyBlockFix, auch im FPC-Pruefstand lesbar) und der ECHTE
-// Detektor (uEmptyBlock) mit dem Adapter PlanEmptyBlock (nur Delphi,
-// TTestRdxEmptyBlockDetector). Der Fund zeigt auf die Zeile des BEGIN; die
+// (TTestRdxEmptyBlockFix) und der ECHTE Detektor (uEmptyBlock) mit dem
+// Adapter PlanEmptyBlock (TTestRdxEmptyBlockDetector). Die ganze Unit ist
+// nur Delphi (reDelphix.Test): der Planer bindet uEngineApi/
+// uRdxRecipeRunner und uRdxFixRunner, der FPC-Pruefstand (build.sh) fuehrt
+// ihn nicht - die {$IFNDEF FPC}-Weichen sind heute ohne Wirkung. Der Fund
+// zeigt auf die Zeile des BEGIN; die
 // Fixtures stehen in einer Routine ('procedure Foo;' auf Zeile 4, begin auf
 // Zeile 5, der Rumpf ab Zeile 6).
 
@@ -304,6 +307,9 @@ procedure TTestRdxEmptyBlockFix.UnreadableExpression_NoHelp;
 begin
   AssertRefused(Wrap(['  with L[0].Add(1) do begin end;']), FIRST_LINE,
     _(R_EBL_SHAPE));
+  // Das Komma im Index trennt keine with-Objekte (nicht R_EBL_MULTI).
+  AssertRefused(Wrap(['  with L[0, 1].Add(1) do begin end;']), FIRST_LINE,
+    _(R_EBL_SHAPE));
   AssertRefused(Wrap(['  with (A as B).C(1) do begin end;']), FIRST_LINE,
     _(R_EBL_SHAPE));
   AssertRefused(Wrap(['  with Sender as TFoo do begin end;']), FIRST_LINE,
@@ -351,8 +357,9 @@ var
   F  : TLeakFinding;
 begin
   SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, fkEmptyBlock);
+  F := nil;
   try
+    F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, fkEmptyBlock);
     SL.Text := ASource;
     Result := PlanEmptyBlock(nil, SL, F, nil);
   finally
@@ -463,8 +470,6 @@ begin
   Assert.AreEqual<Integer>(1, Length(Seen));
   O := OutcomeFor(Src, Seen[0]);
   Assert.IsTrue(O.Enabled, O.Reason);
-  Assert.AreEqual<Integer>(0, O.Variant, 'Hauptweg');
-  Assert.IsFalse(O.ChangesBehavior, 'gleiche Bedeutung');
   Assert.AreEqual<Integer>(1, Length(O.Edits), 'eine Ersetzung');
   Assert.AreEqual<Integer>(FIRST_LINE, O.Edits[0].Span.StartLine);
   // Der Fund zeigt auf eine Zeile ohne begin.
@@ -474,6 +479,11 @@ begin
   Assert.IsFalse(O.Enabled, 'gesperrt');
   Assert.AreEqual(NoBeginReason, O.Reason);
   Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+  // Die Kennzeichnung setzt erst die Tabellenzeile (FixFor) - der Adapter
+  // laesst sie auf dem Default, ein Test am Adapter pruefte nur diesen.
+  O := PlanFixIn(Src, 't.pas', fkEmptyBlock, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsFalse(O.ChangesBehavior, 'gleiche Bedeutung (Tabellenzeile)');
 end;
 
 {$ENDIF}

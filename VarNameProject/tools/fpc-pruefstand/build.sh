@@ -39,16 +39,26 @@ rm -f "$WORK"/*.pas "$WORK"/out/*
 
 # Fuer FPC 3.2.2 anpassen: Namensraeume, DUnitX-Attribute, generisches
 # AreEqual<Integer> (der Shim kennt AreEqualInt).
+# Nur AUSSERHALB von String-Literalen (Felder mit -F"'": ungerade = Code),
+# ein Attribut nur am Zeilenanfang - wie adapt in reDelphix/tools/
+# fpc-pruefstand/build.sh (Review R6-03). Vorher ersetzte sed auch in
+# Literalen: ein Test mit 'System.SysUtils' oder '[Test] ' im Text sah
+# unter FPC andere Daten als unter Delphi (Review Woche 2026-10-21, G10-01).
 adapt() {
-  tr -d '\r' < "$1" \
-  | sed -e 's/System\.SysUtils/SysUtils/g' \
-        -e 's/System\.Classes/Classes/g' \
-        -e 's/System\.StrUtils/StrUtils/g' \
-        -e 's/System\.Generics\.Collections/Generics.Collections/g' \
-        -e 's/\[TestFixture\]//' \
-        -e 's/\[Test\] *//' \
-        -e 's/Assert\.AreEqual<Integer>(/Assert.AreEqualInt(/g' \
-  > "$2"
+  awk -F"'" -v OFS="'" '
+    {
+      sub(/\r$/, "")
+      if ($1 ~ /^[[:space:]]*\[TestFixture\]/) sub(/\[TestFixture\]/, "", $1)
+      if ($1 ~ /^[[:space:]]*\[Test\]/) sub(/\[Test\] */, "", $1)
+      for (i = 1; i <= NF; i += 2) {
+        gsub(/System\.SysUtils/, "SysUtils", $i)
+        gsub(/System\.Classes/, "Classes", $i)
+        gsub(/System\.StrUtils/, "StrUtils", $i)
+        gsub(/System\.Generics\.Collections/, "Generics.Collections", $i)
+        gsub(/Assert\.AreEqual<Integer>\(/, "Assert.AreEqualInt(", $i)
+      }
+      print
+    }' "$1" > "$2"
 }
 
 for u in uVnpPlan uVnpEdits; do
@@ -109,15 +119,22 @@ cp "$HERE/DUnitX.TestFramework.pas" "$WORK/" || exit 2
   printf "  Writeln('PASSED ', Passed, '  FAILED ', Failed);\n  if Failed > 0 then Halt(1);\nend.\n"
 } > "$WORK/runner.pas"
 
+# FPC schreibt erst in eine Datei: sein Exit zaehlt (das Pipe-Ende verdeckte
+# ihn), angezeigt werden die ersten 60 Zeilen ohne Kopfzeilen. Jeder Exit
+# des Runners ungleich 0 wird 1 (Vertrag oben: 0/1/2) - ein Absturz endete
+# sonst mit FPCs Laufzeitfehler-Code 216/217. Wie reDelphix/tools/
+# fpc-pruefstand/build.sh (Review Woche 2026-10-21, G10-01/G10-21).
 cd "$WORK" || exit 2
-"$FPC" -Mdelphiunicode -Sh -gl -vew -FEout -FUout runner.pas 2>&1 \
+"$FPC" -Mdelphiunicode -Sh -gl -vew -FEout -FUout runner.pas > fpc.log 2>&1
+frc=$?
+tr -d '\r' < fpc.log \
   | grep -vE '^(Free Pascal|Copyright|Target OS|Compiling|Linking|[0-9]+ lines compiled)' | head -60
-if [ -f "$WORK/out/runner.exe" ]; then
-  "$WORK/out/runner.exe"
-  rc=$?
-  echo "runner exit=$rc"
-  exit $rc
-else
-  echo "KEIN runner.exe - Bau gescheitert"
+if [ $frc -ne 0 ] || [ ! -f "$WORK/out/runner.exe" ]; then
+  echo "KEIN runner.exe - Bau gescheitert (FPC-Exit $frc)"
   exit 1
 fi
+"$WORK/out/runner.exe"
+rc=$?
+echo "runner exit=$rc"
+[ $rc -ne 0 ] && exit 1
+exit 0

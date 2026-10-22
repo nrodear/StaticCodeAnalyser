@@ -12,8 +12,8 @@ unit uTestRdxBlocks;
 //          davor weiter) und uRdxResultFixes.EnclosingRoutine (SCA196: der
 //          ERSTE unsichere Kopf beendet mit seinem Grund und seiner Zeile) -
 //          beide wie vor der Charge. Die Politik von SCA009 trennt erst ein
-//          unsicherer Kopf IM Rumpf der gesuchten Routine ('Operator :=
-//          ..', TryPolicy_UnsafeHeadSkipped; Gegenpruefung V-B2S-1: gegen
+//          unsicherer Kopf IM Rumpf der gesuchten Routine ('Operator.Reset',
+//          TryPolicy_UnsafeHeadSkipped; Gegenpruefung V-B2S-1: gegen
 //          die Mutante "der erste unsichere Kopf beendet" rot). Ein Kopf
 //          AUF der Fundzeile zaehlt fuer SCA196 mit - die Suche beginnt
 //          hinter dem Ende der Zeile (ResultPolicy_HeadOnFindingLine;
@@ -26,6 +26,10 @@ unit uTestRdxBlocks;
 //          ohne diesen Rueckfall sah SCA096 den abstrakten Konstruktor
 //          nicht (gegen die Charge ohne GenericMiss rot).
 //   TypeHasBody: die eine Probe (bis Charge B2S-b drei Kopien).
+//   Review Woche: 'Operator := ..' ist kein Routinenkopf (G05-07, weder im
+//          Rumpf fuer ReadRoutine noch fuer HeadBefore); HeadBefore an einem
+//          'class procedure'-Kopf liefert das Kopfwort, die Grenzen ab
+//          'class' (G05-25).
 // Laeuft in reDelphix.Test UND im FPC-Pruefstand.
 
 interface
@@ -48,6 +52,9 @@ type
     [Test] procedure Sca096_TwoClassHeadsFromIndex;
     [Test] procedure Sca096_GenericMissFallsBack;
     [Test] procedure TypeHasBody_Forms;
+    // Review Woche.
+    [Test] procedure Body_OperatorAssignIsNoHead;
+    [Test] procedure HeadBefore_ClassProcedureHead;
   end;
 
 implementation
@@ -269,9 +276,9 @@ begin
 end;
 
 // SCA009 (RoutineAround: ein unsicherer Kopf wird uebergangen, die Suche
-// geht davor weiter): 'Operator := ..' im Rumpf von P. 'operator' steht in
-// ROUTINE_WORDS, ist aber kein reserviertes Wort - HeadBefore haelt die
-// Zuweisung fuer einen Kopf, dessen Grenzen ReadRoutine nicht liest (der
+// geht davor weiter): 'Operator.Reset' im Rumpf von P. 'operator' steht in
+// ROUTINE_WORDS, ist aber kein reserviertes Wort - HeadBefore haelt den
+// Zugriff fuer einen Kopf, dessen Grenzen ReadRoutine nicht liest (der
 // erste Schritt rueckwaerts von X kommt mit Grund; die Vorbedingung prueft
 // der Test mit). RoutineAround geht davor weiter zu P: Y ist lokal, die
 // Hilfe bleibt - wie vor der Charge. Beendete der erste unsichere Kopf die
@@ -279,7 +286,9 @@ end;
 // lehnte mit 'kein lokaler Name' ab (Gegenpruefung V-B2S-1: mit dieser
 // Mutante rot, ohne sie gruen). Bestand: SCA196 (EnclosingRoutine) endet
 // an demselben Pseudo-Kopf mit dessen Grund - dort gewollt, lieber keine
-// Hilfe als die falsche Routine.
+// Hilfe als die falsche Routine. Bis Review Woche G05-07 stand hier
+// 'Operator := ..' - die Zuweisung ist seitdem kein Kopf mehr
+// (Body_OperatorAssignIsNoHead); der Zugriff '.Reset' bleibt einer.
 procedure TTestRdxBlocks.TryPolicy_UnsafeHeadSkipped;
 var
   SL  : TStringList;
@@ -289,7 +298,7 @@ var
   Src : string;
 begin
   Src := Join(['unit u;', 'interface', 'implementation', 'procedure P;',
-    'var', '  Y: TFoo;', 'begin', '  Operator := ''+'';',
+    'var', '  Y: TFoo;', 'begin', '  Operator.Reset;',
     '  X := TFoo.Create;', '  Y := X;', '  Y.Run;', '  X.Free;', 'end;',
     'end.']);
   SL := TStringList.Create;
@@ -441,8 +450,94 @@ begin
     for i := 0 to High(FORMS) do
     begin
       Kind := TokOn(Map, LineStartingWith(Src, FORMS[i]), 'class');
+      // Vorbedingung (Review Woche G05-25): mit leerem Token liefert
+      // TypeHasBody True, die True-Faelle gingen sonst leer gruen.
+      Assert.AreEqual('class', Kind.Low, FORMS[i] + ': Token class');
       Assert.IsTrue(TypeHasBody(Map, Kind) = BODY[i], FORMS[i]);
     end;
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+// ---- Review Woche ----
+
+// G05-07: 'Operator' ist kein reserviertes Wort - die Zuweisung
+// 'Operator := ..' hinter ';' hielt BodyHook fuer einen Routinenkopf im
+// Rumpf (ReadRoutine sperrte P fuer alle Bausteine: SCA053, SCA164, SCA009
+// ...), HeadBefore fuer den ersten Kopf vor Foo. Beides gegen b2538e20 rot.
+// FPC kennt den Kopf 'operator := (A: T) R: U;' - vor '(' bleibt es einer.
+procedure TTestRdxBlocks.Body_OperatorAssignIsNoHead;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  T   : TRdxToken;
+  S   : TRdxHeadStep;
+  R   : TRdxRoutine;
+  Src : string;
+begin
+  Src := Join(['unit u;', 'interface', 'implementation', 'procedure P;',
+    'begin', '  X := 1;', '  Operator := ''+'';', '  Foo;', 'end;', 'end.']);
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Src;
+    Map := TRdxCodeMap.Create(SL);
+    Assert.AreEqual('', TRdxBlocks.ReadRoutine(Map,
+      TokOn(Map, LineStartingWith(Src, 'procedure P;'), 'procedure'), R),
+      'die Zuweisung ist kein Kopf im Rumpf');
+    Assert.AreEqual<Integer>(LineStartingWith(Src, 'end;'), R.EndTok.Line);
+    T := TokOn(Map, LineStartingWith(Src, 'Foo;'), 'foo');
+    Assert.IsTrue(TRdxBlocks.HeadBefore(Map, T, [], S), 'ein Kopf vor Foo');
+    Assert.AreEqual('procedure', S.Tok.Low, 'P, nicht die Zuweisung');
+    Assert.AreEqual('', S.Reason);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+  Src := Join(['unit u;', 'interface', 'implementation', 'procedure P;',
+    'begin', '  X := 1;', '  Operator := (A + B);', 'end;', 'end.']);
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Src;
+    Map := TRdxCodeMap.Create(SL);
+    Assert.IsTrue(Pos('Routinenkopf im Rumpf', TRdxBlocks.ReadRoutine(Map,
+      TokOn(Map, LineStartingWith(Src, 'procedure P;'), 'procedure'), R)) > 0,
+      'vor "(" bleibt es ein Kopf (FPC-Zuweisungsoperator)');
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+// G05-25: HeadBefore an einem 'class procedure'-Kopf: Tok ist das Kopfwort
+// (die Pruefung IsRoutineHeadAfter sieht 'class' davor), die Grenzen
+// beginnen bei 'class' (ReadRoutine zieht den Kopf darauf).
+procedure TTestRdxBlocks.HeadBefore_ClassProcedureHead;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  T   : TRdxToken;
+  S   : TRdxHeadStep;
+  Src : string;
+begin
+  Src := InUnit(['  TFoo = class', '    class procedure Run;', '  end;'],
+    ['class procedure TFoo.Run;', 'begin', '  Go;', 'end;']);
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Src;
+    Map := TRdxCodeMap.Create(SL);
+    T := TokOn(Map, LineStartingWith(Src, 'Go;'), 'go');
+    Assert.IsTrue(TRdxBlocks.HeadBefore(Map, T, [], S));
+    Assert.AreEqual('', S.Reason);
+    Assert.AreEqual('procedure', S.Tok.Low, 'Tok: das Kopfwort');
+    Assert.AreEqual('class', S.Routine.Head.Low, 'Grenzen ab class');
+    Assert.AreEqual('TFoo.Run', S.Routine.Name);
+    Assert.AreEqual<Integer>(LineStartingWith(Src, 'class procedure TFoo.Run;'),
+      S.Tok.Line);
   finally
     Map.Free;
     SL.Free;

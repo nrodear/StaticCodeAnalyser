@@ -10,11 +10,14 @@ unit uVnpPlan;
 // geschrieben wird und WO der Name danach steht.
 //
 // Die Deklaration ist eine Inline-KONSTANTE, keine Variable (Nico
-// 2026-10-13, E26): eine Konstante behaelt Faltung, Ueberladungswahl und
-// die vorzeichenlose Rechnung des Literals. Die Kompilierprobe
-// probe\VnpTypeProbe.dpr (Win32, D12) zeigte fuer 'var X := 1': 'C - X'
-// mit C: Cardinal ergab -1 statt 4294967295 (P2.33/34), und Integer-
-// statt ShortInt-/Byte-Ueberladungen wurden gewaehlt (P4.9-16). Eine
+// 2026-10-13, E26). Gemessen ist nur der Mangel der Variablen: die
+// Kompilierprobe probe\VnpTypeProbe.dpr (Win32, D12) zeigte fuer 'var X
+// := 1': 'C - X' mit C: Cardinal ergab -1 statt 4294967295 (P2.33/34), und
+// Integer- statt ShortInt-/Byte-Ueberladungen wurden gewaehlt (P4.9-16).
+// Dass die untypisierte Konstante Faltung, Ueberladungswahl und die
+// vorzeichenlose Rechnung des Literals BEHAELT, ist die Praemisse von E26 -
+// ihr Beleg, Teil P6 der Probe, ist noch nicht gebaut (README, Abschnitt
+// Kompilierprobe E26; Wortlaut wie uRdxIntroPlan in reDelphix). Eine
 // Inline-Konstante gibt es in FPC 3.2 nicht - Dateien mit FPC-Weiche
 // lehnt uVnpEdits.TargetAt ab (LineLooksFpcAware).
 //
@@ -210,7 +213,10 @@ const
   SECTION_STARTS: array[0..1] of string = ('initialization',
     'finalization');
   // Spuren einer FPC-Weiche, ohne Leerraum und klein geschrieben (wie
-  // TRdxRecipes.FPC_TELLS in reDelphix).
+  // TRdxRecipes.FPC_TELLS in reDelphix). KOPIE: die Liste ist Wissen, die
+  // Quelle ist TRdxRecipes - eine neue Spur kommt dort zuerst hinein und
+  // wird hier gleich nachgezogen ('fpc_fullversion' lief schon einmal
+  // auseinander, Charge R8; Review Woche 2026-10-21, G10-16).
   FPC_TELLS: array[0..5] of string = ('{$mode', '(*$mode', '$ifdeffpc',
     '$ifndeffpc', 'defined(fpc', 'fpc_fullversion');
   // Bloecke einer Zeile: diese Woerter oeffnen ...

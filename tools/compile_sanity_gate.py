@@ -30,7 +30,8 @@ AUFRUF
 ======
   python tools/compile_sanity_gate.py                 # geaenderte Dateien (main..HEAD + Arbeitsbaum)
   python tools/compile_sanity_gate.py <datei> [...]   # gezielt
-  python tools/compile_sanity_gate.py --all           # ganzer Baum
+  python tools/compile_sanity_gate.py --all           # alle Pascal-Baeume (ALL_TEILE)
+  python tools/compile_sanity_gate.py --selftest      # Mutanten der Pruefungen 3c/3d
 
 Exit 0 = gruen, 1 = Befunde.
 """
@@ -669,9 +670,10 @@ def pruefe_harness(pfad, kind2cls, helfer, befunde, warnungen):
 # 'Inline' als Feldname in uTypeResolver: FPC-Pruefstand und alle Gates
 # gruen, dcc32 bricht ab ("'END' erwartet, aber 'INLINE' gefunden") -
 # 'inline' ist in Delphi ein reserviertes Wort (Turbo-Pascal-Erbe), kein
-# Direktiv. Geprueft werden Deklarationen (Name vor ':' oder ',') und
-# Member-Zugriffe ('.Name'); ein '&'-Praefix macht den Namen zulaessig und
-# zaehlt nicht. Kommentare und Literale sind vorher entfernt.
+# Direktiv. Geprueft werden Deklarationen (Name vor ':', auch hinter
+# const/var/out/constref, und Inline-'var'/'const') und Member-Zugriffe
+# ('.Name'); ein '&'-Praefix macht den Namen zulaessig und zaehlt nicht.
+# Kommentare und Literale sind vorher entfernt. Selbsttest: --selftest.
 RESERVIERT = set(('and array as asm begin case class const constructor '
                   'destructor dispinterface div do downto else end except '
                   'exports file finalization finally for function goto if '
@@ -683,14 +685,60 @@ RESERVIERT = set(('and array as asm begin case class const constructor '
 
 
 def _nur_code(text):
-    """Blockkommentare (auch Direktiven), //-Kommentare und Literale raus."""
-    text = re.sub(r'\{.*?\}', ' ', text, flags=re.S)
-    text = re.sub(r'\(\*.*?\*\)', ' ', text, flags=re.S)
+    """Blockkommentare (auch Direktiven), //-Kommentare und Literale raus.
+
+    EIN Lauf von links, wie strip_comments in gen-quickfix-doc.py: was
+    zuerst kommt, gilt. Vorher fielen erst die {...}-Kommentare und dann
+    die Literale - ein Literal '{' frass den Code bis zum naechsten '}'
+    (Review Woche 2026-10-21, G10-06). Literale werden zu '', Kommentare
+    zu einem Leerzeichen; Zeilenumbrueche IN einem Kommentar bleiben
+    stehen, damit die Zeilennummern der Befunde stimmen. Ein Literal endet
+    spaetestens am Zeilenende (Pascal-Strings gehen nicht ueber Zeilen).
+    """
     out = []
-    for ln in text.split('\n'):
-        ln = _codeteil(ln)
-        out.append(re.sub(r"'(?:[^']|'')*'", "''", ln))
-    return '\n'.join(out)
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if c == "'":
+            j = i + 1
+            while j < n and text[j] != '\n':
+                if text[j] == "'":
+                    if j + 1 < n and text[j + 1] == "'":
+                        j += 2
+                        continue
+                    j += 1
+                    break
+                j += 1
+            out.append("''")
+            i = j
+            continue
+        if text.startswith('//', i):
+            j = text.find('\n', i)
+            i = n if j < 0 else j
+            continue
+        if c == '{' or text.startswith('(*', i):
+            ende, start = ('}', i + 1) if c == '{' else ('*)', i + 2)
+            j = text.find(ende, start)
+            j = n if j < 0 else j + len(ende)
+            out.append(' ' + '\n' * text.count('\n', i, j))
+            i = j
+            continue
+        out.append(c)
+        i += 1
+    return ''.join(out)
+
+
+# Name vor ':' an einer Stelle, an der eine Deklaration beginnt: Zeilen-
+# anfang, '(', ';' oder ',' - mit optionalem Parameter-Modifizierer
+# ('const AName: T', 'var', 'out', 'constref'). Dazu die Inline-
+# Deklaration 'var Name:' / 'var Name :=' / 'const Name =' an beliebiger
+# Stelle der Zeile ('begin var Type := 1;'). Vorher verlangte das Muster
+# den Namen DIREKT hinter dem Trenner, und die Projektform 'const AName: T'
+# fiel heraus (Review Woche 2026-10-21, G10-06).
+RE_DECL_NAME = re.compile(r'(?:^|[(;,])\s*(?:(?:const|var|out|constref)\s+)?'
+                          r'([A-Za-z_][A-Za-z0-9_]*)\s*:(?!=)', re.I)
+RE_INLINE_DECL = re.compile(r'\b(?:var|const)\s+([A-Za-z_][A-Za-z0-9_]*)'
+                            r'\s*(?::|=)', re.I)
 
 
 def pruefe_reservierte_bezeichner(pfad, befunde):
@@ -700,9 +748,12 @@ def pruefe_reservierte_bezeichner(pfad, befunde):
         # Nur 'Name :' (nicht 'Name ,'): Argument-Fortsetzungen wie 'nil,' und
         # 'end,' (anonyme Methode) sind sonst Fehlalarme; 'function:'/'procedure:'
         # ist eine anonyme Methode ohne Parameter, keine Deklaration.
-        for m in re.finditer(r'(?:^|[(;,])\s*([A-Za-z_][A-Za-z0-9_]*)\s*:(?!=)', ln):
+        for m in RE_DECL_NAME.finditer(ln):
             if m.group(1).lower() in ('function', 'procedure'):
                 continue
+            if m.group(1).lower() in RESERVIERT:
+                treffer.add(m.group(1))
+        for m in RE_INLINE_DECL.finditer(ln):
             if m.group(1).lower() in RESERVIERT:
                 treffer.add(m.group(1))
         for m in re.finditer(r'\.([A-Za-z_][A-Za-z0-9_]*)\b', ln):
@@ -720,8 +771,9 @@ def pruefe_reservierte_bezeichner(pfad, befunde):
 # der Konstruktor erzeugte weiter TList<TSCABulbButton> - FPC-Pruefstand
 # uebersetzt IDE-Units nicht, erst dcc32 meldete E2010. Je Unit werden die
 # Deklarationen 'Name : TGen<Args>' gesammelt und gegen jedes
-# 'Name := TGen<Args>.Create' derselben Unit gehalten; Argumente werden
-# ohne Leerraum und in Kleinschreibung verglichen.
+# 'Name := TGen<Args>.Create' derselben Unit mit GLEICHEM Kopf TGen
+# gehalten; Argumente werden ohne Leerraum und in Kleinschreibung
+# verglichen.
 def pruefe_generische_create(pfad, befunde):
     """'F := TList<A>.Create' bei 'F : TList<B>' -> E2010."""
     code = _nur_code(lies(pfad))
@@ -740,7 +792,15 @@ def pruefe_generische_create(pfad, befunde):
                              r'(T[A-Za-z0-9_]*<' + args + r'>)\.Create\b', ln):
             name = m.group(1).lower()
             typ = re.sub(r'\s+', '', m.group(2)).lower()
-            if name in decl and typ not in decl[name]:
+            # Nur bei GLEICHEM generischem Kopf: 'TList<A>' gegen 'TList<B>'.
+            # Ein anderer Kopf ist meist eine Unterklasse und gueltig
+            # ('F: TList<T>' bekommt 'TObjectList<T>.Create', ebenso
+            # TDictionary/TObjectDictionary) - die Klassenhierarchie kennt
+            # das Gate nicht, also schweigt es dort (Review Woche
+            # 2026-10-21, G10-07: zwei Fehlalarme an gueltigem Code).
+            kopf = typ.split('<', 1)[0]
+            if name in decl and typ not in decl[name] \
+               and any(t.split('<', 1)[0] == kopf for t in decl[name]):
                 befunde.append("%s:%d  %s := %s.Create, deklariert als %s "
                                "(E2010)"
                                % (os.path.basename(pfad), nr, m.group(1),
@@ -748,12 +808,21 @@ def pruefe_generische_create(pfad, befunde):
 
 
 # --------------------------------------------------------------------------
+# --all: alle Pascal-Baeume des Repos. reDelphix und VarNameProject fehlten
+# bis 2026-10-21, obwohl dort der Grossteil des neuen Codes entsteht
+# (Review Woche, G10-23). IDE-Sicherungen (__history, __recovery) zaehlen
+# nicht.
+ALL_TEILE = ('SCA.Engine', 'SCA.SharedUI', 'StaticCodeAnalyserForm',
+             'StaticCodeAnalyserIDE', 'reDelphix', 'VarNameProject')
+ALL_OHNE = ('__history', '__recovery')
+
+
 def dateien_bestimmen(argv):
     if argv and argv[0] == '--all':
         out = []
-        for teil in ('SCA.Engine', 'SCA.SharedUI', 'StaticCodeAnalyserForm',
-                     'StaticCodeAnalyserIDE'):
-            for root, _d, fn in os.walk(os.path.join(REPO, teil)):
+        for teil in ALL_TEILE:
+            for root, dirs, fn in os.walk(os.path.join(REPO, teil)):
+                dirs[:] = [d for d in dirs if d not in ALL_OHNE]
                 out += [os.path.join(root, f) for f in fn if f.endswith('.pas')]
         return out
     if argv:
@@ -767,7 +836,86 @@ def dateien_bestimmen(argv):
     return [os.path.join(REPO, p) for p in sorted(aus)]
 
 
+# --------------------------------------------------------------------------
+# Selbsttest der Pruefungen 3c und 3d - ein Gate kann STILL kaputt sein.
+# Je Fall: Quelltext und die erwarteten Befunde als (Zeile, Wort) bzw. die
+# Zeilen der E2010-Befunde; [] heisst: kein Befund.
+# --------------------------------------------------------------------------
+SELFTEST_3C = [
+    ('Feld', 'type\n  T = record\n    Inline: Boolean;\n  end;',
+     [(3, 'Inline')]),
+    ('const-Parameter', 'procedure A(const Inline: Integer);', [(1, 'Inline')]),
+    ('var-Parameter', 'procedure B(var Label: Integer);', [(1, 'Label')]),
+    ('out-Parameter', 'procedure C(X: Integer; out Set: Integer);',
+     [(1, 'Set')]),
+    ('Inline-var mit Typ', 'begin\n  var Type: Integer := 1;\nend;',
+     [(2, 'Type')]),
+    ('Inline-var ohne Typ', 'begin var Object := 1; end;', [(1, 'Object')]),
+    ("Code zwischen Literalen '{' und '}'",
+     "begin\n  S := '{';\n  Self.Object := 1;\n  T := '}';\nend;",
+     [(3, 'Object')]),
+    ('Zeilennummer hinter mehrzeiligem Kommentar',
+     '{ a\n  b }\n(* c\n d *)\n  Inline: Boolean;', [(5, 'Inline')]),
+    ('&-Praefix', 'procedure D(const &Type: Integer);\n  &Inline: Boolean;',
+     []),
+    ('im Literal', "S := 'Inline: x'; T := 'var Type: Integer';", []),
+    ('im Kommentar', '{ Inline: Boolean } // var Type: Integer\n(* Set: *)',
+     []),
+    ('anonyme Methode', 'F := function: Integer begin end;', []),
+    ('gewoehnliche Namen', 'procedure E(const AName: string; var B: Integer);'
+     '\nbegin var Count := 1; end;', []),
+]
+
+SELFTEST_3D = [
+    ('gleicher Kopf, anderes Argument',
+     'FItems: TList<TFoo>;\nFItems := TList<TBar>.Create;', [2]),
+    ('gleicher Kopf, gleiches Argument',
+     'FItems: TList<TFoo>;\nFItems := TList<TFoo>.Create;', []),
+    ('Unterklasse TObjectList',
+     'FItems: TList<TObject>;\nFItems := TObjectList<TObject>.Create;', []),
+    ('Unterklasse TObjectDictionary',
+     'FMap: TDictionary<string, TObject>;\n'
+     'FMap := TObjectDictionary<string, TObject>.Create;', []),
+]
+
+
+def selbsttest():
+    import tempfile
+    fehler = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        pfad = os.path.join(tmp, 'uSelftest.pas')
+        for name, src, soll in SELFTEST_3C:
+            with io.open(pfad, 'w', encoding='utf-8', newline='\n') as f:
+                f.write(src)
+            befunde = []
+            pruefe_reservierte_bezeichner(pfad, befunde)
+            ist = sorted((int(b.split(':')[1].split()[0]), b.split("'")[1])
+                         for b in befunde)
+            if ist != sorted(soll):
+                fehler += 1
+                print('SELBSTTEST ROT 3c  %s: erwartet %s, gefunden %s'
+                      % (name, sorted(soll), ist))
+        for name, src, soll in SELFTEST_3D:
+            with io.open(pfad, 'w', encoding='utf-8', newline='\n') as f:
+                f.write(src)
+            befunde = []
+            pruefe_generische_create(pfad, befunde)
+            ist = sorted(int(b.split(':')[1].split()[0]) for b in befunde)
+            if ist != sorted(soll):
+                fehler += 1
+                print('SELBSTTEST ROT 3d  %s: erwartet Zeilen %s, gefunden %s'
+                      % (name, sorted(soll), ist))
+    anzahl = len(SELFTEST_3C) + len(SELFTEST_3D)
+    if fehler:
+        print('SELBSTTEST ROT: %d von %d Faellen falsch.' % (fehler, anzahl))
+        return 1
+    print('SELBSTTEST GRUEN: %d Faelle (3c, 3d).' % anzahl)
+    return 0
+
+
 def main():
+    if sys.argv[1:] == ['--selftest']:
+        return selbsttest()
     dateien = [d for d in dateien_bestimmen(sys.argv[1:]) if os.path.exists(d)]
     if not dateien:
         print('compile_sanity_gate: keine .pas-Dateien zu pruefen.')

@@ -2802,3 +2802,12 @@ msgstr "le texte après NOSONAR commence par \"noinspection\" - il deviendrait u
 
 msgid "unexpected code after the empty block"
 msgstr "code inattendu après le bloc vide"
+
+msgid "Suppress inserted in %s: %s"
+msgstr "Suppression insérée dans %s : %s"
+
+msgid "comment inside or behind the except block - a comment is intent, no help"
+msgstr "commentaire dans le bloc except ou après lui - un commentaire est intentionnel, pas d'aide"
+
+msgid "the attribute stands behind another attribute on its line"
+msgstr "l'attribut suit un autre attribut sur sa ligne"

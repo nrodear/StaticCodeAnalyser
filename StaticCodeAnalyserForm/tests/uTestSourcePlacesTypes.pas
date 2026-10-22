@@ -75,6 +75,13 @@ type
     // Variable gilt nur in ihrem Block - davor und danach ist Count das
     // Feld (Cardinal), ein %u bleibt richtig.
     [Test] procedure DeclaredTypeOf_InlineVarOnlyInsideItsBlock;
+    // Review Woche G03-04: eine Inline-Variable im try-Rumpf gilt nicht
+    // im finally-/except-Teil - dort ist Count wieder das Feld.
+    [Test] procedure DeclaredTypeOf_InlineVarInTryBody_NotInFinallyExcept;
+    // Review Woche G03-05: Inline-Konstanten haben eine Blockspanne
+    // (typisiert und untypisiert), und zwei {$IFDEF}-Zweige im selben
+    // Block bleiben '' - auf einer Zeile wie auf eigenen Zeilen.
+    [Test] procedure DeclaredTypeOf_InlineConstSpan_IfdefTieAmbiguous;
   end;
 
 implementation
@@ -827,6 +834,133 @@ begin
       'nach dem if-Block: das Feld');
     Assert.AreEqual('string', P.DeclaredTypeOf(LFor, 'S'),
       'die lokale Variable der Routine gilt ueberall');
+  finally
+    P.Free;
+  end;
+end;
+
+procedure TTestSourcePlacesViews.DeclaredTypeOf_InlineVarInTryBody_NotInFinallyExcept;
+// ParseTryStmt haengt die Anweisungen des try-Rumpfs direkt unter
+// nkTryFinally/nkTryExcept, der finally-/except-Teil ist ein Geschwister.
+// Vorher reichte die Spanne von 'var Count' deshalb bis zum 'end' des
+// try - im finally kam 'int64' statt 'cardinal' (reDelphix: %d statt %u).
+const
+  SRC =
+    'unit m; interface'#13#10 +
+    'type'#13#10 +
+    '  TBuffer = class'#13#10 +
+    '  public'#13#10 +
+    '    Count: Cardinal;'#13#10 +
+    '    procedure Describe;'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'procedure TBuffer.Describe;'#13#10 +
+    'var S: string;'#13#10 +
+    'begin'#13#10 +
+    '  try'#13#10 +
+    '    var Count: Int64 := 1;'#13#10 +
+    '    S := IntToStr(Count) + ''a'';'#13#10 +
+    '  finally'#13#10 +
+    '    S := IntToStr(Count) + ''b'';'#13#10 +
+    '  end;'#13#10 +
+    '  try'#13#10 +
+    '    var Count: Int64 := 2;'#13#10 +
+    '    S := IntToStr(Count) + ''c'';'#13#10 +
+    '  except'#13#10 +
+    '    S := IntToStr(Count) + ''d'';'#13#10 +
+    '  end;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  P : TSourcePlaces;
+begin
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.OpenSource('m.pas', SRC));
+    Assert.AreEqual('int64', P.DeclaredTypeOf(LineOf(SRC, '+ ''a'''), 'Count'),
+      'im try-Rumpf: die Inline-Variable');
+    Assert.AreEqual('cardinal', P.DeclaredTypeOf(LineOf(SRC, '+ ''b'''), 'Count'),
+      'im finally: wieder das Feld');
+    Assert.AreEqual('int64', P.DeclaredTypeOf(LineOf(SRC, '+ ''c'''), 'Count'),
+      'im zweiten try-Rumpf: dessen Inline-Variable');
+    Assert.AreEqual('cardinal', P.DeclaredTypeOf(LineOf(SRC, '+ ''d'''), 'Count'),
+      'im except: wieder das Feld');
+  finally
+    P.Free;
+  end;
+end;
+
+procedure TTestSourcePlacesViews.DeclaredTypeOf_InlineConstSpan_IfdefTieAmbiguous;
+// Inline-Konstanten tragen seit 2026-10-14 die Spanne ihres Blocks; vorher
+// verdeckte eine untypisierte '=5' die GANZE Routine mit ''. Der
+// Gleichstand zweier {$IFDEF}-Zweige im selben Block muss '' liefern -
+// auch wenn die Zweige auf eigenen Zeilen stehen (dann beginnt der
+// ELSE-Zweig spaeter, und die alte Regel 'engste Spanne' gab seinen Typ
+// als bewiesen aus). Das Feld N: Word zeigt: '' kommt aus dem
+// Gleichstand, nicht aus einem Durchfallen auf die Klasse.
+const
+  SRC =
+    'unit c; interface'#13#10 +
+    'type'#13#10 +
+    '  TBuffer = class'#13#10 +
+    '  public'#13#10 +
+    '    Max: Integer;'#13#10 +
+    '    N: Word;'#13#10 +
+    '    procedure Describe;'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'procedure TBuffer.Describe;'#13#10 +
+    'var S: string;'#13#10 +
+    'begin'#13#10 +
+    '  S := IntToStr(Max) + ''v'';'#13#10 +
+    '  if S <> '''' then'#13#10 +
+    '  begin'#13#10 +
+    '    const Max: Word = 1;'#13#10 +
+    '    S := IntToStr(Max) + ''w'';'#13#10 +
+    '  end;'#13#10 +
+    '  S := IntToStr(Max) + ''n'';'#13#10 +
+    '  if S = '''' then'#13#10 +
+    '  begin'#13#10 +
+    '    const Max = 5;'#13#10 +
+    '    S := IntToStr(Max) + ''u'';'#13#10 +
+    '  end;'#13#10 +
+    '  if S <> ''x'' then'#13#10 +
+    '  begin'#13#10 +
+    '    {$IFDEF A} var N: Int64 := 1; {$ELSE} var N: Cardinal := 2; {$ENDIF}'#13#10 +
+    '    S := IntToStr(N) + ''e'';'#13#10 +
+    '  end;'#13#10 +
+    '  if S <> ''y'' then'#13#10 +
+    '  begin'#13#10 +
+    '    {$IFDEF A}'#13#10 +
+    '    var N: Int64 := 1;'#13#10 +
+    '    {$ELSE}'#13#10 +
+    '    var N: Cardinal := 2;'#13#10 +
+    '    {$ENDIF}'#13#10 +
+    '    S := IntToStr(N) + ''z'';'#13#10 +
+    '  end;'#13#10 +
+    '  S := IntToStr(N) + ''t'';'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  P : TSourcePlaces;
+begin
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.OpenSource('c.pas', SRC));
+    Assert.AreEqual('integer', P.DeclaredTypeOf(LineOf(SRC, '+ ''v'''), 'Max'),
+      'vor dem Block: das Feld');
+    Assert.AreEqual('word', P.DeclaredTypeOf(LineOf(SRC, '+ ''w'''), 'Max'),
+      'im Block: die typisierte Inline-Konstante');
+    Assert.AreEqual('integer', P.DeclaredTypeOf(LineOf(SRC, '+ ''n'''), 'Max'),
+      'nach dem Block: wieder das Feld');
+    Assert.AreEqual('', P.DeclaredTypeOf(LineOf(SRC, '+ ''u'''), 'Max'),
+      'untypisierte Inline-Konstante: Typ unbekannt, nur in ihrem Block');
+    Assert.AreEqual('', P.DeclaredTypeOf(LineOf(SRC, '+ ''e'''), 'N'),
+      'zwei IFDEF-Zweige auf einer Zeile');
+    Assert.AreEqual('', P.DeclaredTypeOf(LineOf(SRC, '+ ''z'''), 'N'),
+      'zwei IFDEF-Zweige auf eigenen Zeilen');
+    Assert.AreEqual('word', P.DeclaredTypeOf(LineOf(SRC, '+ ''t'''), 'N'),
+      'nach den Bloecken: das Feld');
   finally
     P.Free;
   end;

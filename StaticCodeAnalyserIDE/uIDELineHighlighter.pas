@@ -376,7 +376,12 @@ type
     procedure NoteFullRepaintRequested;
     // Stellt den Stand vor dem letzten NoteFullRepaintRequested wieder her
     // (kein Repaint gekommen - die Anforderung darf nicht stehen bleiben).
+    // Wirkt nur zwischen Note und Commit; sonst nichts.
     procedure RetractFullRepaintRequest;
+    // Der Aufruf nach NoteFullRepaintRequested lief durch: die gemerkte
+    // Kopie ist ab hier veraltet, ein spaeteres Retract darf sie nicht mehr
+    // zurueckspielen (Review Woche G04-09).
+    procedure CommitFullRepaintRequest;
     // PUBLIC fuer TFindingHighlighter.OnLineMoved: Marken sind gewandert,
     // die gecachten Rechtecke koennen an falschen Zeilen haengen.
     procedure NoteMarksMoved;
@@ -1678,6 +1683,8 @@ begin
       FEditorEventsObj.NoteFullRepaintRequested;
     try
       Svc.InvalidateTopEditor;
+      if Assigned(FEditorEventsObj) then
+        FEditorEventsObj.CommitFullRepaintRequest;
     except
       if Assigned(FEditorEventsObj) then
         FEditorEventsObj.RetractFullRepaintRequest;
@@ -2696,6 +2703,13 @@ begin
   FRequestNoted := False;
 end;
 
+procedure TFindingEditorEvents.CommitFullRepaintRequest;
+// Vorher blieb FRequestNoted nach dem ersten Note fuer immer True, und der
+// Guard in RetractFullRepaintRequest war wirkungslos.
+begin
+  FRequestNoted := False;
+end;
+
 function TFindingEditorEvents.RepaintReachesSavedEditor: Boolean;
 // Vertrag an der Deklaration. InvalidateTopEditor malt nur den OBERSTEN
 // Editor (geteilte Ansicht, zweites Editorfenster: nicht FSavedEditor).
@@ -3155,7 +3169,10 @@ procedure TFindingEditorEvents.RepairEmptyHitCache(const Editor: TWinControl);
 // (Welle 1). Gate auf die Marken DIESER Datei (FLastPaintedFile), nicht
 // auf irgendwelche: Marken in einer anderen Datei fuellten den Speicher
 // dieses Editors nie, der Voll-Repaint waere umsonst (Gegen-Review
-// Welle 1, Minor 7).
+// Welle 1, Minor 7). FLastPaintedFile folgt JEDER gemalten Zeile, nicht nur
+// markierten: PaintLine setzt es vor dem ShouldHighlight-Filter. Ein
+// partieller Paint der neuen Datei ohne markierte Zeile stellt es also
+// schon um (Review Woche G04-02, Verdacht nicht bestaetigt).
 begin
   if (Editor = FSavedEditor) and Assigned(GHighlighter)
      and GHighlighter.HasMarksForFile(FLastPaintedFile)

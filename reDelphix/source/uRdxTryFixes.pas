@@ -94,9 +94,11 @@ unit uRdxTryFixes;
 //     anderes als eine lokale Variable der Routine (Feld, Property,
 //     Element, Result, globale Variable, Parameter); ein Methodenzeiger
 //     'X.M' an ein Ereignis (Ziel 'On..'/'FOn..'); '@X' bzw. '@X.M'. X
-//     auch in Huellen - Typumwandlung, Klammern, 'as', beliebig tief
+//     auch in Huellen - Typumwandlung (auch generisch 'TList<TFoo>(X)'),
+//     Klammern, 'as', ein Array-Konstruktor '[X]', beliebig tief
 //     geschachtelt ('List.Add(TObject(X))', 'FCurrent := X as TFoo', seit
-//     Charge B1-FE WrappedAt).
+//     Charge B1-FE WrappedAt) - und als Element eines Array-Konstruktors im
+//     Aufruf ('FList.AddRange([A, X])'; beides seit Review Woche G08-02).
 //     Bewusst eng (Entscheid H4c): die breite Fassung - jedes Argument,
 //     jede Zuweisung - kostete im Referenzkorpus 372 von 909
 //     Objekt-Angeboten;
@@ -110,8 +112,15 @@ unit uRdxTryFixes;
 //     den freien Puffer, Gegen-Review R5, R5-02).
 // Was bleibt (README, Restrisiken): eine Weitergabe ueber einen Alias
 // ('Y := X; List.Add(Y)'), an einen Konstruktor, der den Besitz uebernimmt
-// ('TReader.Create(X)'), an einen Aufruf anderen Namens ('Store(X)') oder
-// als Methodenzeiger im Argument ('Subscribe(X.Handler)').
+// ('TReader.Create(X)'), an einen Aufruf anderen Namens ('Store(X)'), als
+// Methodenzeiger im Argument ('Subscribe(X.Handler)') oder durch einen
+// klein geschriebenen Cast ('tobject(X)' - IsCastName folgt der
+// Delphi-Konvention, Review Woche G08-09: wie oft das im FPC-Korpus an
+// einer Weitergabe steht, ist nicht gemessen).
+// Bekannte Scheinsperre: ein else im Rumpf einer Schleife ohne begin
+// ('for .. do if A then B else Continue;') beendet fuer den Lauf den Rumpf
+// (HeadStep) - das Continue gilt dann als Sprung nach aussen; die Hilfe
+// fehlt mit falschem Grund, ein falscher Edit entsteht nicht.
 
 interface
 
@@ -210,6 +219,11 @@ const
   // Davor bzw. dahinter: ein direktes Argument ('F(X)', 'F(A, X, B)').
   ARG_STARTS: array[0..1] of string = ('(', ',');
   ARG_ENDS: array[0..1] of string = (',', ')');
+  // Dahinter: ein Element eines Array-Konstruktors ('[X]', '[A, X]').
+  ELEM_ENDS: array[0..1] of string = (',', ']');
+  // Davor steht bei einem Index ('Items[X]', 'F(1)[X]', 'P^[X]') - sonst
+  // ist '[' ein Array-Konstruktor bzw. eine Menge (WrapOnce).
+  INDEX_PREV: array[0..2] of string = (')', ']', '^');
   // Weitergabe ohne Ausstieg (Blocker 1, s. Kopf): ein Aufruf, dessen Name
   // so beginnt, haelt ein direktes Argument fest ...
   STORE_PREFIXES: array[0..7] of string = ('add', 'insert', 'push',
@@ -718,13 +732,16 @@ begin
 end;
 
 // Eine Sperre (ASide = sdAcquire) bzw. Freigabe ab T - T beginnt den
-// Ausdruck (davor kein '.').
+// Ausdruck (davor kein '.'). Bei False ist S leer: MonitorAt, CallAt und
+// MethodAt setzen Felder, bevor ihre letzte Probe scheitern kann.
 function LockSiteAt(AMap: TRdxCodeMap; const T: TRdxToken;
   ASide: TRdxLockSide; out S: TRdxLockSite): Boolean;
 begin
   S := Default(TRdxLockSite);
   Result := T.IsWord and (MonitorAt(AMap, T, ASide, S)
     or CallAt(AMap, T, ASide, S) or MethodAt(AMap, T, ASide, S));
+  if not Result then
+    S := Default(TRdxLockSite);
 end;
 
 // Dieselbe Sperre wie A (Form, Schluessel, Methode)? So genau muss B zu A
@@ -808,7 +825,9 @@ begin
 end;
 
 // Wie PlainRefAt, auch in einer Typumwandlung 'TFoo(X)' bzw.
-// 'TFoo(Self.X)'; ALast = das Token mit dem Namen bzw. die ')'.
+// 'TFoo(Self.X)', auch generisch 'TList<TFoo>(X)' (Typparameter auf der
+// Zeile des Namens; Review Woche G08-02: 'TList<TFoo>(X).Free' im Bereich
+// lief nach dem Fix doppelt); ALast = das Token mit dem Namen bzw. die ')'.
 function RefAt(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
   const AKey: string; out ALast: TRdxToken): Boolean;
 var
@@ -819,6 +838,12 @@ begin
   Result := PlainRefAt(AMap, T, APrev, AKey, ALast);
   if Result or not T.IsWord then Exit;
   O := After(AMap, T);
+  if O.Low = '<' then
+  begin
+    C := MatchClose(AMap, O, 0);
+    if C.Low = '' then Exit;
+    O := After(AMap, C);
+  end;
   V := After(AMap, O);
   if (O.Low <> '(') or not PlainRefAt(AMap, V, O, AKey, C) then Exit;
   ALast := After(AMap, C);
@@ -892,7 +917,8 @@ begin
   else
     Result := (APrev.Low <> '.') and LockSiteAt(AMap, T, sdRelease, S)
       and SameLock(S, APair.Lock);
-    AHit.Last := S.Last;
+    if Result then
+      AHit.Last := S.Last;
   end;
 end;
 
@@ -1197,21 +1223,78 @@ begin
       Exit(True);
 end;
 
+// Rueckwaerts ab dem '>' AClose die passende '<' einer Typparameterliste
+// ('TList<TFoo>', 'TDictionary<string, TList<TFoo>>'): dazwischen nur
+// Woerter, '.', ',' und weitere spitze Klammern, hoechstens
+// MAX_TARGET_TOKENS Token; Low = '' sonst - ein Vergleich 'A > (X)' hat
+// keine solche '<' davor. MatchClose zaehlt nur vorwaerts.
+function GenericOpener(AMap: TRdxCodeMap; const AClose: TRdxToken): TRdxToken;
+var
+  T     : TRdxToken;
+  Depth : Integer;
+  n     : Integer;
+begin
+  Result := Default(TRdxToken);
+  Depth := 0;
+  T := AClose;
+  for n := 1 to MAX_TARGET_TOKENS do
+  begin
+    if T.Low = '>' then
+      Inc(Depth)
+    else if T.Low = '<' then
+    begin
+      Dec(Depth);
+      if Depth = 0 then
+        Exit(T);
+    end
+    else if not T.IsWord and (T.Low <> '.') and (T.Low <> ',') then
+      Exit;
+    T := Before(AMap, T);
+  end;
+end;
+
+// Das Token vor der Klammer AOpen, ueber eine Typparameterliste hinweg:
+// 'TList<TFoo>(' -> 'TList', 'Reg.Add<TFoo>(' -> 'Add'; sonst das Token
+// davor. Bis Review Woche G08-02 sahen WrapStart und CallOfArg dort nur
+// '>' - 'FItems := TList<TFoo>(X)' galt als blosse Klammer, die Zuweisung
+// an das Feld blieb unsichtbar.
+function NameBeforeOpen(AMap: TRdxCodeMap; const AOpen: TRdxToken): TRdxToken;
+var
+  L : TRdxToken;
+begin
+  Result := Before(AMap, AOpen);
+  if Result.Low <> '>' then Exit;
+  L := GenericOpener(AMap, Result);
+  if L.Low <> '' then
+    Result := Before(AMap, L);
+end;
+
 // Der Name des Aufrufs, dessen direktes Argument AFirst..ALast ist (davor
-// '(' bzw. ',', dahinter ',' bzw. ')'); Low = '' ohne - auch fuer ein
-// Element bzw. eine Menge ('[').
+// '(' bzw. ',', dahinter ',' bzw. ')'); Low = '' ohne. Ein Element eines
+// Array-Konstruktors ('[X]', '[A, X]') zaehlt wie der ganze Konstruktor -
+// ist der ein direktes Argument, ist es der Aufruf ('FList.AddRange([X])';
+// bis Review Woche G08-02 ohne Aufruf, im Fehlerfall gab finally X frei,
+// waehrend die Liste es noch kannte). Ein Index ('Arr[X]') hat davor kein
+// '(' bzw. ',' und bleibt ohne.
 function CallOfArg(AMap: TRdxCodeMap; const AFirst, ALast: TRdxToken): TRdxToken;
 var
-  P, O : TRdxToken;
+  P, O, C : TRdxToken;
 begin
   Result := Default(TRdxToken);
   P := Before(AMap, AFirst);
-  if not InList(P.Low, ARG_STARTS)
-     or not InList(After(AMap, ALast).Low, ARG_ENDS) then
-    Exit;
+  if not InList(P.Low, ARG_STARTS) and (P.Low <> '[') then Exit;
   O := UnmatchedOpener(AMap, P);
-  if O.Low <> '(' then Exit;
-  P := Before(AMap, O);
+  if O.Low = '[' then
+  begin
+    if not InList(After(AMap, ALast).Low, ELEM_ENDS) then Exit;
+    C := MatchClose(AMap, O);
+    if C.Low <> '' then
+      Result := CallOfArg(AMap, O, C);
+    Exit;
+  end;
+  if (O.Low <> '(') or not InList(After(AMap, ALast).Low, ARG_ENDS) then
+    Exit;
+  P := NameBeforeOpen(AMap, O);
   if P.IsWord then
     Result := P;
 end;
@@ -1253,15 +1336,16 @@ begin
 end;
 
 // Das erste Token der Klammer AOpen samt Typumwandlung davor: 'TFoo(' bzw.
-// 'System.TObject(' ab dem ersten Glied, '(' allein bei blossen Klammern;
-// Low = '' hinter einem Namen, der kein Cast ist (ein Aufruf 'F(X)' - X ist
-// dort sein Argument, CallOfArg).
+// 'System.TObject(' ab dem ersten Glied, auch generisch 'TList<TFoo>('
+// (NameBeforeOpen), '(' allein bei blossen Klammern; Low = '' hinter einem
+// Namen, der kein Cast ist (ein Aufruf 'F(X)' bzw. 'F<T>(X)' - X ist dort
+// sein Argument, CallOfArg).
 function WrapStart(AMap: TRdxCodeMap; const AOpen: TRdxToken): TRdxToken;
 var
   W, D : TRdxToken;
 begin
   Result := AOpen;
-  W := Before(AMap, AOpen);
+  W := NameBeforeOpen(AMap, AOpen);
   if not W.IsWord then Exit;
   if not IsCastWord(AMap, W) then
     Exit(Default(TRdxToken));
@@ -1272,9 +1356,10 @@ begin
   until (D.Low <> '.') or not W.IsWord;
 end;
 
-// Eine Huelle mehr um AFirst..ALast (s. WrappedAt): ' as TFoo' dahinter bzw.
-// eine Klammer drumherum - davor nichts oder eine Typumwandlung. True, wenn
-// der Bereich gewachsen ist.
+// Eine Huelle mehr um AFirst..ALast (s. WrappedAt): ' as TFoo' dahinter, ein
+// Array-Konstruktor '[..]' mit nur diesem Element ('FArr := [X]') bzw. eine
+// Klammer drumherum - davor nichts oder eine Typumwandlung. True, wenn der
+// Bereich gewachsen ist.
 function WrapOnce(AMap: TRdxCodeMap; var AFirst, ALast: TRdxToken): Boolean;
 var
   P, N, S : TRdxToken;
@@ -1289,6 +1374,16 @@ begin
     Exit(True);
   end;
   P := Before(AMap, AFirst);
+  if (P.Low = '[') and (N.Low = ']') then
+  begin
+    // Vor einem Index steht ein Name, ')', ']' bzw. '^' - der ist keine
+    // Huelle ('Items[X]').
+    S := Before(AMap, P);
+    if S.IsWord or InList(S.Low, INDEX_PREV) then Exit;
+    AFirst := P;
+    ALast := N;
+    Exit(True);
+  end;
   if (P.Low <> '(') or (N.Low <> ')') then Exit;
   S := WrapStart(AMap, P);
   if S.Low = '' then Exit;
@@ -1614,19 +1709,25 @@ begin
       + 'try-Block; %s', [T.Line, R_BY_HAND])
   else if T.Low = 'asm' then
     Result := Format('asm in Zeile %d im Bereich', [T.Line])
-  else if InList(T.Low, INLINE_DECLS) and (S.Depth = 0)
+  else if InList(T.Low, INLINE_DECLS) and (S.Depth = 0) and (S.Paren = 0)
      and InList(APrev.Low, LIST_PREV) then
     Result := Format('Inline-Deklaration (%s) in Zeile %d - ihr '
       + 'Gueltigkeitsbereich schrumpfte auf den try-Block', [T.Low, T.Line]);
 end;
 
-// Eine Marke 'L:' am Anfang einer Anweisung (nicht in einem case)? Ein
-// goto von aussen in den try-Block uebersetzt nicht. '' oder der Grund.
+// Eine Marke 'L:' am Anfang einer Anweisung (nicht in einem case, nicht in
+// Klammern)? Ein goto von aussen in den try-Block uebersetzt nicht. '' oder
+// der Grund. In Klammern steht hinter ';' ein Parameter einer anonymen
+// Methode ('procedure(A: Integer; B: Integer)') - bis Review Woche G08-10
+// die "Marke B:", wie das 'const' dort die "Inline-Deklaration"
+// (SpanJumpReason); eine Marke im Rumpf einer anonymen Methode gehoert zu
+// ihr, ein goto von aussen erreicht sie ohnehin nicht.
 function LabelReason(AMap: TRdxCodeMap; const S: TRdxSpan;
   const T, APrev: TRdxToken): string;
 begin
   Result := '';
-  if InList(APrev.Low, LIST_PREV) and (S.InnerKind <> BLOCK_CASE)
+  if (S.Paren = 0) and InList(APrev.Low, LIST_PREV)
+     and (S.InnerKind <> BLOCK_CASE)
      and (T.IsWord or CharInSet(T.Low[1], ['0'..'9']))
      and (After(AMap, T).Low = ':') then
     Result := Format('Marke %s: in Zeile %d - ein goto in den try-Block '
@@ -1966,7 +2067,7 @@ begin
   if not FirstOnLine(AMap, APair.First) then
     Result := 'vor der Anweisung steht auf ihrer Zeile weiterer Code - '
       + 'try/finally/end stehen in eigenen Zeilen'
-  else if not CanAppendLine(AMap, APair.Semi.Line, APair.Semi.Col) then
+  else if not CanAppendLine(AMap, APair.Semi.Line, APair.Semi.EndCol - 1) then
     Result := 'hinter der Anweisung steht auf ihrer Zeile weiterer Code';
 end;
 

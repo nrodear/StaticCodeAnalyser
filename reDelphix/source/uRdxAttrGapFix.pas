@@ -23,7 +23,8 @@ unit uRdxAttrGapFix;
 //     (verschoben; in einem Kommentar oder mehrzeiligen String),
 //   * das Attribut ein Ziel hat ([assembly: ..], [Result: ..]) oder ueber
 //     mehrere Zeilen laeuft oder hinter dem ']' Text/Kommentar steht,
-//   * eine der Leerzeilen in einem Block-Kommentar liegt,
+//   * (eine Leerzeile in einem Block-Kommentar kann nicht vorkommen: die
+//     Attributzeile endet auf ']' als Code, also ist danach nichts offen),
 //   * die erste Zeile mit Inhalt ein Kommentar, eine Direktive oder keine
 //     Deklaration ist, die ein Attribut tragen kann (Routine, property,
 //     Feld, Typ, weiteres Attribut) oder
@@ -77,7 +78,6 @@ const
   R_ATTR_TAIL = 'hinter dem Attribut steht noch Text oder ein Kommentar';
   R_NO_GAP = 'keine Leerzeile hinter dem Attribut - Zeile verschoben? Datei '
     + 'neu pruefen';
-  R_GAP_COMMENT = 'die Leerzeile liegt in einem Kommentar';
   R_NO_MEMBER = 'hinter der Leerzeile steht kein Code mehr';
   R_NEXT_NOT_CODE = 'hinter der Leerzeile folgt ein Kommentar oder eine '
     + 'Direktive - die Zeilen bleiben';
@@ -123,6 +123,23 @@ begin
   Result := SkipBlanks(S, 1) > Length(S);
 end;
 
+// Die Klammerbilanz ('[' und '(' gegen ']' und ')') der Code-Zeichen von
+// ALine zwischen AFrom und ATo; > 0 heisst, das Attribut laeuft weiter.
+function OpenBrackets(AMap: TRdxCodeMap; ALine, AFrom, ATo: Integer): Integer;
+var
+  L : string;
+  j : Integer;
+begin
+  Result := 0;
+  L := AMap.Raw(ALine);
+  for j := AFrom to ATo do
+    if AMap.IsCode(ALine, j) then
+      case L[j] of
+        '[', '(': Inc(Result);
+        ']', ')': Dec(Result);
+      end;
+end;
+
 // Ist ALine eine einzeilige Attributzeile (Code-Sicht) mit dem Namen aus
 // der Meldung, ohne Ziel und ohne Text hinter dem letzten ']'? '' oder der
 // Grund; AFirstCol: Spalte des '['.
@@ -155,7 +172,12 @@ begin
   while (Last >= 1) and IsBlank(L[Last]) do
     Dec(Last);
   if (L[Last] <> ']') or not AMap.IsCode(ALine, Last) then
+  begin
+    // '[Foo(1,': das Attribut laeuft auf der naechsten Zeile weiter.
+    if OpenBrackets(AMap, ALine, AFirstCol, Last) > 0 then
+      Exit(R_ATTR_MULTI);
     Exit(R_ATTR_TAIL);
+  end;
   Depth := 0;
   Paren := 0;
   Closed := False;
@@ -229,15 +251,11 @@ begin
     AReason := R_NO_GAP;
     Exit;
   end;
+  // Keine Leerzeile beginnt in einem Kommentar oder String: die
+  // Attributzeile endet auf ']' als Code (AttrLineReason), eine Leerzeile
+  // oeffnet nichts.
   while (N <= AMap.LineCount) and IsBlankLine(AMap.Raw(N)) do
-  begin
-    if AMap.StartsInside(N) then
-    begin
-      AReason := R_GAP_COMMENT;
-      Exit;
-    end;
     Inc(N);
-  end;
   if N > AMap.LineCount then
   begin
     AReason := R_NO_MEMBER;

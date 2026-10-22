@@ -2,8 +2,11 @@ unit uTestRdxGroupedDeclFix;
 
 // Editorhilfe SCA076 GroupedDeclaration (uRdxGroupedDeclFix): 'A, B: T;' ->
 // eine Zeile je Name. Die Faelle auf Text laufen ohne Parser und ohne
-// Detektor (auch im FPC-Pruefstand); die Rundlaeufe mit dem ECHTEN Detektor
-// stehen in der zweiten Fixture, nur Delphi (reDelphix.Test).
+// Detektor; die Rundlaeufe mit dem ECHTEN Detektor stehen in der zweiten
+// Fixture. Die ganze Unit ist nur Delphi (reDelphix.Test): der Planer
+// bindet uEngineApi/uRdxRecipeRunner im interface und uRdxFixRunner, der
+// FPC-Pruefstand (build.sh) fuehrt ihn nicht. Die {$IFNDEF FPC}-Weichen
+// sind darum heute ohne Wirkung.
 
 interface
 
@@ -26,6 +29,7 @@ type
     [Test] procedure Refuse_Comment_String_Directive;
     [Test] procedure Refuse_MultiLine_And_TwoGroups;
     [Test] procedure Refuse_Prefix;
+    [Test] procedure Refuse_AttributeAbove;
     [Test] procedure Refuse_ParameterList;
     [Test] procedure Refuse_CaseLabels;
     [Test] procedure Refuse_MovedLine_NoColumn;
@@ -239,10 +243,12 @@ begin
   AssertRefused('  A, B: Integer; { zwei }', 3, Want);
   AssertRefused('  A, B: Integer; (* zwei *)', 3, Want);
   AssertRefused('  {$IFDEF X} A, B: Integer; {$ENDIF}', 14, Want);
-  // Die Zeile beginnt in einem Block-Kommentar: der Fund ist keiner.
+  // Die Zeile beginnt in einem Block-Kommentar: der Fund ist keiner - an
+  // der Spalte steht kein Code, also "verschoben" (IsCode greift vor
+  // StartsInside).
   Assert.AreEqual('', Fix(Join(['{ Kommentar', '  A, B: Integer;', '}']), 2,
     GMsg(3), R));
-  Assert.AreNotEqual('', R);
+  Assert.AreEqual(MsgMovedSuffix(_(R_GD_MOVED)), R);
 end;
 
 procedure TTestRdxGroupedDeclFix.Refuse_MultiLine_And_TwoGroups;
@@ -265,6 +271,27 @@ begin
   AssertRefused('  class var A, B: TFoo;', 13, Want);
   AssertRefused('  threadvar A, B: TFoo;', 13, Want);
   AssertRefused('procedure P; var A, B: Integer;', 18, Want);
+end;
+
+procedure TTestRdxGroupedDeclFix.Refuse_AttributeAbove;
+var
+  R : string;
+begin
+  // Das Attribut auf der Zeile darueber gilt fuer beide Namen; nach dem
+  // Teilen stuende '[Weak]' nur ueber FA, FB waere eine starke Referenz.
+  Assert.AreEqual('', Fix(Join(['type', '  TFoo = class', '  private',
+    '    [Weak]', '    FA, FB: IFoo;', '  end;']), 5, GMsg(5), R));
+  Assert.AreEqual(_(R_GD_PREFIX), R);
+  // Auch mit einem Kommentar zwischen Attribut und Gruppe.
+  Assert.AreEqual('', Fix(Join(['type', '  TFoo = class', '    [Weak]',
+    '    // der Besitzer', '    FA, FB: IFoo;', '  end;']), 5, GMsg(5), R));
+  Assert.AreEqual(_(R_GD_PREFIX), R);
+  // Gegenprobe: ein Feld mit Attribut DARUEBER sperrt die Gruppe danach
+  // nicht (das Token davor ist ';').
+  Assert.AreEqual(Join(['type', '  TFoo = class', '    [Weak]',
+    '    FO: IFoo;', '    FA: IFoo;', '    FB: IFoo;', '  end;']),
+    Fix(Join(['type', '  TFoo = class', '    [Weak]', '    FO: IFoo;',
+      '    FA, FB: IFoo;', '  end;']), 5, GMsg(5), R), R);
 end;
 
 procedure TTestRdxGroupedDeclFix.Refuse_ParameterList;

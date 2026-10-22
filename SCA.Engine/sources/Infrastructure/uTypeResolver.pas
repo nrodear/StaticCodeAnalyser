@@ -117,8 +117,9 @@ type
     //   * eine Inline-Variable ('var x: T' im Rumpf, 'for var i: T')
     //     gilt nur von ihrer Deklaration bis zum Ende ihres Blocks und
     //     verdeckt dort Routine, Klasse und Unit; davor und danach zaehlt
-    //     sie nicht. Zwei Inline-Variablen gleichen Namens mit gleicher
-    //     Spanne und verschiedenem Typ ({$IFDEF}) liefern '';
+    //     sie nicht (eine im try-Rumpf endet vor except/finally). Zwei
+    //     Inline-Variablen gleichen Namens im selben Block (gleiches
+    //     Blockende) mit verschiedenem Typ ({$IFDEF}-Zweige) liefern '';
     //   * Felder, Properties und Methoden nur der Klasse aus dem
     //     qualifizierten Methodennamen ('TFoo.Bar'), dann ihre in dieser
     //     Unit deklarierten Vorfahren; ein Vorfahr von ausserhalb (TForm)
@@ -559,44 +560,68 @@ end;
 // Inline-Variable mit der Spanne ihres Blocks APar eintragen: ab der
 // Deklarationszeile bis zur letzten Knotenzeile des Blocks ('for var i'
 // haengt am nkForStmt, 'var x' am umschliessenden nkBlock/Zweig).
+//
+// Ausnahme try-Rumpf (Review Woche G03-04): ParseTryStmt legt dessen
+// Anweisungen OHNE eigenen nkBlock direkt unter nkTryExcept/nkTryFinally,
+// der except-/finally-Teil ist ein Geschwister dahinter. In Delphi endet
+// der Geltungsbereich einer Inline-Variablen aber mit dem try-Rumpf - im
+// except/finally bindet der Name wieder an Feld oder Global. Die Spanne
+// endet deshalb vor der Zeile des except-/finally-Schluesselworts; teilt
+// sich die Deklaration diese Zeile mit ihm, bleibt es bei der einen Zeile.
 procedure AddInlineVar(Sc: TTypeResolver.TMethodScope; N, APar: TAstNode;
   const AId, AType: string);
 var
   V : TTypeResolver.TInlineVar;
+  i : Integer;
 begin
   if AId = '' then Exit;
   V.Id        := AId;
   V.TypeLow   := AType;
   V.LineStart := N.Line;
   V.LineEnd   := TAstSpans.SubtreeMaxLine(APar);
+  if APar.Kind in [nkTryExcept, nkTryFinally] then
+    for i := 0 to APar.Children.Count - 1 do
+      if APar.Children[i].Kind in [nkExceptBlock, nkFinallyBlock] then
+      begin
+        V.LineEnd := APar.Children[i].Line - 1;
+        Break;
+      end;
   if V.LineEnd < V.LineStart then V.LineEnd := V.LineStart;
   Sc.InlineVars := Sc.InlineVars + [V];
 end;
 
-// Typ der Inline-Variablen IdentLow an Line: die engste Spanne gewinnt;
-// zwei gleich enge Spannen mit verschiedenem Typ sind mehrdeutig (AType
-// ''). False: keine Inline-Variable dieses Namens deckt die Zeile.
+// Typ der Inline-Variablen IdentLow an Line: der innerste Block gewinnt,
+// erkannt am FRUEHESTEN Blockende (ein innerer Block endet nie nach dem
+// aeusseren). Zwei Kandidaten mit demselben Blockende und verschiedenem
+// Typ sind mehrdeutig (AType ''): im selben Block gibt es denselben Namen
+// zweimal nur in zwei {$IFDEF}-Zweigen der Doppelzweig-Sicht.
+//
+// Vorher entschied die engste Spanne (Ende minus Anfang). Stehen die
+// Zweige auf eigenen Zeilen, beginnt der ELSE-Zweig spaeter, seine Spanne
+// ist enger - und sein Typ galt als bewiesen, obwohl der andere Zweig ihn
+// nicht teilt (Review Woche G03-05, gefunden beim Test des Gleichstands).
+// False: keine Inline-Variable dieses Namens deckt die Zeile.
 function TryInlineTypeAt(Sc: TTypeResolver.TMethodScope;
   const IdentLow: string; Line: Integer; out AType: string): Boolean;
 var
-  i, BestSpan, Span : Integer;
+  i, BestEnd : Integer;
 begin
   AType  := '';
   Result := False;
-  BestSpan := MaxInt;
+  BestEnd := MaxInt;
   for i := 0 to High(Sc.InlineVars) do
   begin
     if Sc.InlineVars[i].Id <> IdentLow then Continue;
     if (Line < Sc.InlineVars[i].LineStart) or (Line > Sc.InlineVars[i].LineEnd) then
       Continue;
-    Span := Sc.InlineVars[i].LineEnd - Sc.InlineVars[i].LineStart;
-    if (not Result) or (Span < BestSpan) then
+    if (not Result) or (Sc.InlineVars[i].LineEnd < BestEnd) then
     begin
-      Result   := True;
-      BestSpan := Span;
-      AType    := Sc.InlineVars[i].TypeLow;
+      Result  := True;
+      BestEnd := Sc.InlineVars[i].LineEnd;
+      AType   := Sc.InlineVars[i].TypeLow;
     end
-    else if (Span = BestSpan) and (AType <> Sc.InlineVars[i].TypeLow) then
+    else if (Sc.InlineVars[i].LineEnd = BestEnd) and
+            (AType <> Sc.InlineVars[i].TypeLow) then
       AType := '';
   end;
 end;

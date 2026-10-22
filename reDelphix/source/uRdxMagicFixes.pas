@@ -39,8 +39,9 @@ unit uRdxMagicFixes;
 // mit Zifferntrennern, dessen erster Block die Zahl ist (auch mit
 // Bruchteil): dann nennt der Grund den Fehlalarm (Review R6-05;
 // Korpus: 1 von 5.036, ISSigFunc.pas).
-// Mehrere: mehrdeutig (gesperrt - der Detektor meldete danach den
-// naechsten, und welches er meinte, sagt die Meldung nicht). Steht der
+// Mehrere - oder einer neben einem solchen Trennerwert: mehrdeutig
+// (gesperrt - der Detektor meldete danach den naechsten, und welches er
+// meinte, sagt die Meldung nicht). Steht der
 // eine in einer Folgezeile der Bedingung: die
 // Konstante gehoerte vor die if-Zeile, die Code-Aktion setzt sie vor die
 // Zeile des Literals - gesperrt.
@@ -214,9 +215,11 @@ const
   R_NO_VERSION = 'Projekt %s im Verzeichnis %s ohne lesbare ProjectVersion '
     + '(Delphi 2007 schrieb keine) - die Unit baut wohl auch mit einem Delphi '
     + 'vor 10.3, und dort gibt es keine Inline-Konstante; von Hand';
-  R_UNC = 'Netzpfad (%s) - die Hilfe liest dort keine Projekt- und Include-'
+  // UNC und Netzlaufwerk (uRdxPaths.IsNetworkPath, seit Charge B1-FD).
+  R_NETWORK = 'Netzpfad %s - die Hilfe liest dort keine Projekt- und Include-'
     + 'Dateien (Menueaufbau im Hauptthread); von Hand';
-  R_MAIN_BLOCK = 'die Zeile liegt im Hauptblock des Programms (begin ab '
+  R_MAIN_BLOCK = 'die Zeile liegt im Hauptblock des Programms bzw. der '
+    + 'Bibliothek (begin ab '
     + 'Zeile %d) - ob dort eine Inline-Deklaration gilt, ist nicht gemessen; '
     + 'von Hand';
 
@@ -344,6 +347,15 @@ begin
   end;
   if Ifs = 0 then
     Result := Format('Zeile %d traegt kein if - %s', [ALine, R_MOVED])
+  else if (N > 0) and (Sep <> '') then
+    // Beides in einer Bedingung ('(X > 200_000) or (Y > 200)'): die Meldung
+    // "200" passt auf beide, und der Detektor nimmt den ersten Vergleich in
+    // Op-Reihenfolge - vorher ersetzte die Hilfe das exakte Literal, und
+    // der Fund blieb (Wochen-Review 2026-10-21).
+    Result := Format('die if-Bedingung auf Zeile %d vergleicht mit %s und mit '
+      + '%s - mehrdeutig (der Detektor liest bei Zifferntrennern nur den '
+      + 'ersten Block); die Hilfe ersetzt genau ein Literal',
+      [ALine, Sep, AValue])
   else if (N = 0) and (Sep <> '') then
     // Der Fund ist frisch, nur falsch gelesen - 'Zeile verschoben?' liesse
     // den Nutzer neu scannen und denselben Fund wiederfinden.
@@ -469,7 +481,10 @@ end;
 // Oeffner mit ':=' dahinter ist ein benanntes Argument ('Doc.Range(Start
 // := 0, End := 1)') und zaehlt nicht (IsKeywordAt) - bis Charge B1-FD
 // verdeckte es den Hauptblock, und die Hilfe bot dort an (Gegen-Review R4,
-// missed 3; wie H4c).
+// missed 3; wie H4c). Das 'end.' ist das ERSTE Schluesselwort-'end' mit
+// '.' dahinter: Delphi liest hinter ihm nichts mehr, und Text dort (alte
+// Notizen ohne Kommentarklammern) liess die Suche vom letzten Token aus
+// still ohne Hauptblock enden (Wochen-Review 2026-10-21).
 function MainBlockBegin(AMap: TRdxCodeMap): TRdxToken;
 var
   T, P  : TRdxToken;
@@ -477,10 +492,12 @@ var
 begin
   Result := Default(TRdxToken);
   if not InList(NextToken(AMap, 1, 1).Low, MAIN_BLOCK_WORDS) then Exit;
-  T := PrevToken(AMap, AMap.LineCount, Length(AMap.Raw(AMap.LineCount)) + 1);
-  if T.Low <> '.' then Exit;
-  T := Before(AMap, T);
-  if T.Low <> KW_END then Exit;
+  T := NextToken(AMap, 1, 1);
+  while (T.Low <> '')
+     and not ((T.Low = KW_END) and (After(AMap, T).Low = '.')
+              and IsKeywordAt(AMap, T, Before(AMap, T))) do
+    T := After(AMap, T);
+  if T.Low = '' then Exit;
   Depth := 1;
   while Depth > 0 do
   begin
@@ -570,7 +587,8 @@ end;
 type
   // Die Projektdateien EINES Verzeichnisses (ProjectFilesIn): die erste
   // Lazarus- und die erste alte Delphi-Projektdatei, die .dproj mit der
-  // kleinsten ProjectVersion (Zehntel; -1 ohne lesbare Version).
+  // kleinsten ProjectVersion (Zehntel; -1 ohne lesbare Version) - bzw.
+  // die erste vor 10.3, danach liest NoteProjectFile keine .dproj mehr.
   TRdxProjectFiles = record
     Lazarus  : string;
     Legacy   : string;
@@ -635,6 +653,13 @@ begin
   end
   else if Ext = DPROJ_EXTENSION then
   begin
+    // Eine .dproj vor 10.3 (oder ohne Version) steht schon fest: sie sperrt
+    // ohnehin, weitere Koepfe zu lesen kostete im Hauptthread je Datei 64 KB
+    // (Paketordner mit vielen .dproj; Wochen-Review 2026-10-21). Der Grund
+    // nennt dann die erste alte statt der aeltesten.
+    if (AFiles.Dproj <> '')
+       and (AFiles.DprojVer < FLOOR_INLINE_DECL.ProjectVersion) then
+      Exit;
     Ver := ProjectVersionOf(IncludeTrailingPathDelimiter(ADir) + AName);
     if (AFiles.Dproj = '') or (Ver < AFiles.DprojVer) then
     begin
@@ -703,7 +728,7 @@ begin
     Exit(Format('Lazarus-/FPC-Datei (%s) - eine Inline-Konstante gibt es in '
       + 'FPC 3.2 nicht', [Ext]));
   if IsNetworkPath(AFileName) then
-    Exit(Format(R_UNC, [ExtractFileDir(AFileName)]));
+    Exit(Format(R_NETWORK, [ExtractFileDir(AFileName)]));
   Dir := ExtractFileDir(AFileName);
   DelphiSeen := False;
   for Level := 0 to PROJECT_LEVELS do

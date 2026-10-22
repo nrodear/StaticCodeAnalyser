@@ -35,6 +35,7 @@ type
     [Test] procedure Sca080_OwnLine;
     [Test] procedure Sca080_Inline;
     [Test] procedure Sca080_ElseExit;
+    [Test] procedure Sca080_ChainTerminators;
     [Test] procedure Sca080_ContextRefusals;
     [Test] procedure Sca080_DetectorRefusals;
     [Test] procedure Sca047_Delete;
@@ -160,6 +161,11 @@ begin
   Assert.AreEqual('', R);
   Assert.AreEqual('Flag', P.Target);
   Assert.IsFalse(P.Negated, 'vorwaerts');
+  // Ohne ';' vor dem end eines Blocks: das end beendet die Anweisung
+  // (STMT_STOPS; Review Woche G07-26 - bis dahin ohne Test).
+  Assert.AreEqual(InProc(['  begin Ok := A end;']),
+    Fix(wkCond, InProc(['  begin if A then Ok := True else Ok := False end;']),
+      6, CondMsg('Ok', 'True', 'False'), R), R);
 end;
 
 procedure TTestRdxFlowFixes.Sca098_Negated;
@@ -204,6 +210,18 @@ begin
   Assert.AreEqual(InProc(['  Done := not (A and B);']),
     Fix(wkCond, InProc(['  if A and B then Done := False else Done := True;']),
       6, CondMsg('Done', 'False', 'True'), R), R);
+  // Review Woche G07-15: 'not R' mit einem Operanden R verliert das not,
+  // statt 'not (not R)' zu werden; 'not A = B' ist '(not A) = B' und bleibt
+  // geklammert.
+  Assert.AreEqual(InProc(['  Done := Ready;']),
+    Fix(wkCond, InProc(['  if not Ready then Done := False else Done := '
+      + 'True;']), 6, CondMsg('Done', 'False', 'True'), R), R);
+  Assert.AreEqual(InProc(['  Done := (A or B);']),
+    Fix(wkCond, InProc(['  if not (A or B) then Done := False else Done := '
+      + 'True;']), 6, CondMsg('Done', 'False', 'True'), R), R);
+  Assert.AreEqual(InProc(['  Done := not (not A = B);']),
+    Fix(wkCond, InProc(['  if not A = B then Done := False else Done := '
+      + 'True;']), 6, CondMsg('Done', 'False', 'True'), R), R);
 end;
 
 procedure TTestRdxFlowFixes.Sca098_LinesAndNesting;
@@ -303,6 +321,35 @@ begin
   // else eines case: der Sprung ist dort die einzige Anweisung der Liste.
   AssertRefused(wkJump, InProc(['  case K of 1: Foo; else Exit; end;']), 6,
     JumpMsg('exit'), 'case bzw. except');
+  // Ein Kommentar zwischen then-Zweig und else auf der Zeile davor ginge
+  // mit (Review Woche G07-26 - bis dahin ohne Test; auf der Zeile des
+  // Sprungs sperrt schon R_LINE_COMMENT).
+  AssertRefused(wkJump, InProc(['  if A then Foo {x}', '  else Exit;']), 7,
+    JumpMsg('exit'), 'Kommentar zwischen then-Zweig und Sprung');
+end;
+
+procedure TTestRdxFlowFixes.Sca080_ChainTerminators;
+var
+  R : string;
+begin
+  // Review Woche G07-26: die Terminatoren der end-Kette (ChainEnds, wie
+  // uRedundantJump) ausser Dateiende und 'end.'. Continue am Ende eines
+  // Blocks direkt vor 'until'.
+  Assert.AreEqual(InProc(['  repeat', '    if A then', '    begin', '      Foo;',
+      '    end;', '  until B;']),
+    Fix(wkJump, InProc(['  repeat', '    if A then', '    begin', '      Foo;',
+      '      Continue;', '    end;', '  until B;']), 10, JumpMsg('continue'),
+      R), R);
+  // Zwei end vor dem Kopf der naechsten Routine.
+  Assert.AreEqual(InImpl(['procedure P;', 'begin', '  if A then', '  begin',
+      '    Foo;', '  end;', 'end;', 'procedure Q;', 'begin', 'end;']),
+    Fix(wkJump, InImpl(['procedure P;', 'begin', '  if A then', '  begin',
+      '    Foo;', '    Exit;', '  end;', 'end;', 'procedure Q;', 'begin',
+      'end;']), 9, JumpMsg('exit'), R), R);
+  // Ein end allein vor einem Routinenkopf genuegt nicht (wie der Detektor).
+  AssertRefused(wkJump, InImpl(['procedure P;', 'begin', '  Foo;', '  Exit;',
+    'end;', 'procedure Q;', 'begin', 'end;']), 7, JumpMsg('exit'),
+    'folgt noch Code');
 end;
 
 procedure TTestRdxFlowFixes.Sca080_ContextRefusals;

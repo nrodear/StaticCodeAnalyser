@@ -54,11 +54,11 @@ const
   WHY_AMBIGUOUS = 'mehrfach';
   WHY_INSIDE    = 'Kommentar oder String';
   WHY_NO_URL    = 'keine "http://"-Adresse';
-  WHY_USERINFO  = 'Zugangsdaten oder einen Port';
+  WHY_USERINFO  = 'Zugangsdaten, einen Port oder eine IPv6-Adresse';
   WHY_ODD       = 'kein fester Name';
   WHY_IP        = 'IP-Adresse';
   WHY_LOCAL     = 'lokaler oder interner Rechner';
-  WHY_NAMESPACE = 'Namespace- oder Schema-Kennung';
+  WHY_NAMESPACE = 'Namespace- oder Schema-Kennzeichen';
   EXAMPLE_URL   = 'http://api.contoso-shop.de/v1/users';
   EXAMPLE_HTTPS = 'https://api.contoso-shop.de/v1/users';
   FIRST_LINE    = 8;   // erste Anweisung in Wrap

@@ -27,7 +27,9 @@ unit uTestRdxTryGates;
 // Meldung (missed 2); nach der Nachpruefung (gegen d840f1e5 rot) Huellen
 // beliebig tief. Dazu die zweite Gegenpruefung der Charge B2S (V2-B2S-1,
 // Review R3-05): X hinter einer geschlossenen Klammer-Gruppe im Aufruf
-// bzw. im Ziel (UnmatchedOpener mit ParenDelta).
+// bzw. im Ziel (UnmatchedOpener mit ParenDelta). Dazu das Wochen-Review
+// 2026-10-21 (G08-02): X durch einen generischen Cast 'TList<TFoo>(X)' und
+// in einem Array-Konstruktor '[X]' bzw. '[A, X]'.
 // Sperren und Puffer: uTestRdxTryLocks; die Form des Bausteins und die
 // Sperren der Charge H4: uTestRdxTryFixes.
 
@@ -230,6 +232,9 @@ begin
     'FOwnedList.Extract(X);']), 'an Add weitergegeben');
   AssertRefused(Around(['FQueue.Enqueue(X);', 'DoWork;', 'FQueue.Dequeue;']),
     'an Enqueue weitergegeben');
+  // Das Ereignis als Feld 'FOn..' (EVENT_FIELD).
+  AssertRefused(Around(['FOnClick := X.Handler;', 'DoWork;',
+    'FOnClick := nil;']), 'Methodenzeiger X.Handler an FOnClick');
 end;
 
 // Die harmlosen Formen bleiben angeboten: InsertComponent (der Destruktor
@@ -275,6 +280,16 @@ begin
     'an Cropper.InStream weitergegeben');
   // Ein Property-Lesen 'Y := X.Count' ist keine Weitergabe.
   AssertOffered(Around(['FCount := X.Count;', 'DoWork;']));
+  // Lokale Routinen im Deklarationsteil (VarInSections/SkipLocalRoutine):
+  // ein var-Abschnitt dahinter zaehlt, die Variablen der lokalen Routine
+  // nicht.
+  Assert.AreNotEqual('', FixAt(InProcWith('procedure P;', ['var',
+    '  A: Integer;', '  procedure Inner;', '  begin', '  end;', 'var',
+    '  Y: TFoo;'], ['  X := TFoo.Create;', '  Y := X;', '  Y.Run;',
+    '  X.Free;']), 13, 'X', R), R);
+  AssertRefusedAt(InProcWith('procedure P;', ['  procedure Inner;', '  var',
+    '    Y: TFoo;', '  begin', '  end;'], ['  X := TFoo.Create;', '  Y := X;',
+    '  Y.Run;', '  X.Free;']), 11, 'an Y weitergegeben (kein lokaler Name');
 end;
 
 // '@X' und '@X.M' (FPC-Methodenzeiger; doublecmd udarwinapplication.pas:218)
@@ -295,6 +310,24 @@ begin
   AssertRefused(Around(['List.Add((X));', 'DoWork;']), 'an Add weitergegeben');
   AssertRefused(Around(['List.Add(TObject((X as TFoo)));', 'DoWork;']),
     'an Add weitergegeben');
+  // Generischer Cast und Array-Konstruktor (Review Woche G08-02; bis dahin
+  // angeboten): vor '(' steht das '>' von 'TList<TFoo>', vor X ein '[' -
+  // die Sperre sah keine Zuweisung bzw. keinen Aufruf, nach dem Fix gaebe
+  // finally X frei, waehrend FItems bzw. FList es noch kennt.
+  AssertRefused(Around(['FItems := TList<TFoo>(X);', 'DoWork;',
+    'FItems := nil;']), 'X wird in Zeile 7 an FItems weitergegeben (kein '
+    + 'lokaler Name');
+  AssertRefused(Around(['FList.AddRange([X]);', 'DoWork;', 'FList.Remove(X);']),
+    'X wird in Zeile 7 an AddRange weitergegeben');
+  AssertRefused(Around(['FList.AddRange([Y, X]);', 'DoWork;']),
+    'an AddRange weitergegeben');
+  AssertRefused(Around(['FArr := [X];', 'DoWork;']), 'an FArr weitergegeben');
+  AssertRefused(Around(['Reg.Register<TFoo>(X);', 'DoWork;']),
+    'an Register weitergegeben');
+  // Ein Member durch den generischen Cast und X als Index bleiben
+  // angeboten.
+  AssertOffered(Around(['Log(TList<TFoo>(X).Count);', 'DoWork;']));
+  AssertOffered(Around(['List.Add(Items[X]);', 'DoWork;']));
 end;
 
 // ---- Minor 1: raise-Ausdruck und Freigaben in anderer Schreibweise ----
@@ -322,6 +355,9 @@ begin
   AssertRefused(Around(['if Bad then', 'begin', '  Self.X.Free;',
     '  raise EFoo.Create(''x'');', 'end;']), 'in anderer Schreibweise');
   AssertRefused(Around(['if Bad then', 'begin', '  FreeAndNil(Self.X);',
+    '  raise EFoo.Create(''x'');', 'end;']), 'in anderer Schreibweise');
+  // Durch einen generischen Cast (Review Woche G08-02; bis dahin angeboten).
+  AssertRefused(Around(['if Bad then', 'begin', '  TList<TFoo>(X).Free;',
     '  raise EFoo.Create(''x'');', 'end;']), 'in anderer Schreibweise');
 end;
 

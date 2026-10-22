@@ -159,7 +159,7 @@ Nachher:
 
 **Nicht angeboten**
 
-- ein Kommentar oder eine Direktive steht im Block (ein Kommentar ist Absicht, etwa `// ignore errors`)
+- ein Kommentar oder eine Direktive steht im Block oder ein Kommentar hinter dem `end` auf seiner Zeile (ein Kommentar ist Absicht, etwa `// ignore errors`, `end; // darf scheitern`)
 - zwischen `except` und `end` steht etwas anderes als Leerraum: ein Handler (`on E: ... do`, auch der leere, das ist SCA159), eine Anweisung, ein einzelnes `;` (`except;`) oder ein `else`
 - die Zeile ist verschoben (kein `except` als Code auf der Zeile) oder trägt mehrere `except`
 
@@ -264,7 +264,7 @@ uses
 
 - keine unbedingte Freigabe von X in derselben Anweisungsliste (sie fehlt, steht tiefer oder in einem Zweig), eine zweite Freigabe oder eine zweite Zuweisung an X im Bereich
 - Erzeugung oder Freigabe nicht allein auf ihrer Zeile, die Erzeugung hinter then/else/do oder in einem case-Zweig, nichts zwischen Erzeugung und Freigabe
-- X wird im Bereich weitergegeben: direktes Argument eines Add-/Insert-/Push-/Register-…-Aufrufs, ganze rechte Seite einer Zuweisung an Feld, Property, `Result` oder Parameter – auch durch Cast, Klammern oder `as` (`FCurrent := TFoo(X)`, `List.Add(X as TObject)`) –, Methodenzeiger an ein Ereignis, `@X`; X in einem raise-Ausdruck
+- X wird im Bereich weitergegeben: direktes Argument eines Add-/Insert-/Push-/Register-…-Aufrufs, ganze rechte Seite einer Zuweisung an Feld, Property, `Result` oder Parameter – auch durch Cast, Klammern oder `as` (`FCurrent := TFoo(X)`, `List.Add(X as TObject)`) –, Methodenzeiger an ein Ereignis, `@X`; X in einem raise-Ausdruck; auch über einen generischen Cast (`TList<TFoo>(X)`), einen generischen Aufruf (`Register<TFoo>(X)`) oder einen Array-Konstruktor (`AddRange([X])`, `FArr := [X]`)
 - Exit bei weitergegebenem X, Break/Continue, deren Schleife den Bereich umschließt – auch als `System.Exit`/`System.Break`/`System.Continue`
 - Direktive, Marke/goto, asm, Inline-`var`/`const` auf der Ebene der Erzeugung, mehrzeiliges `'''`-Literal, ein umschließendes try, dessen except- bzw. finally-Teil X nennt
 
@@ -574,7 +574,7 @@ end;
 |---|---|---|
 | `Replace "goto" with Exit` | `"goto" durch Exit ersetzen` | `Remplacer « goto » par Exit` |
 
-**Wirkung:** Ersetzt das gemeldete `goto Marke` durch `Exit`, wenn die Marke die letzte Anweisung der Routine ist (`Marke:` steht unmittelbar vor dem end des Rumpfs). Dann führt der Sprung ans Routinenende, genau wie Exit; ein try..finally dazwischen läuft in beiden Fällen ab, Result einer Funktion bleibt unverändert. Die Marke selbst bleibt stehen.
+**Wirkung:** Ersetzt das gemeldete `goto Marke` durch `Exit`, wenn die Marke die letzte Anweisung der Routine ist (`Marke:` steht unmittelbar vor dem end des Rumpfs). Dann führt der Sprung ans Routinenende, genau wie Exit; ein goto aus einem try heraus übersetzt Delphi nicht (E2127) – das Exit der Hilfe übersetzt und läuft durch das finally, Result einer Funktion bleibt unverändert. Die Marke selbst bleibt stehen.
 
 **Nicht angeboten**
 
@@ -676,6 +676,7 @@ end;
 - das Wort ist ein Bezeichner: hinter `.`, `&` oder `@`, vor `:=`, als benanntes Argument
 - ein Wort, das auch Bezeichner sein kann (`on`, `out`, `contains`, `requires`, `implements`, `absolute`); Direktiven und Sichtbarkeitswörter nur im passenden Kontext
 - die Zeile ist verschoben, oder die Meldung nennt Wort oder Spalte nicht
+- ein Feld, das wie eine Direktive heißt und hinter einem Prozedurtyp-Feld steht (`OnDone: procedure of object;` / `Forward: Boolean;`) – Feldnamen sind über RTTI sichtbar
 
 **Beispiel**
 
@@ -1026,11 +1027,12 @@ Nachher:
 
 **Nicht angeboten**
 
-- der Typ ist kein einfacher Typname: `record`, `class`, `array of`, `array[..] of`, `set of`, Aufzählung, `^T`, `string[N]`, Generics (je Name entstünde ein eigener Typ, `A := B` ginge nicht mehr)
+- der Typ ist kein einfacher Typname: `record`, `class`, `array of`, `array[..] of`, `set of`, Aufzählung, `^T`, `string[N]` (je Name entstünde ein eigener Typ, `A := B` ginge nicht mehr); Generics aus Vorsicht
 - Initialisierer (`= 5`), `absolute`, Direktive hinter dem Typ, Kommentar, String oder Direktive auf der Zeile
 - mehrzeilige Deklaration, mehrere Gruppen auf der Zeile
 - etwas anderes als Leerraum oder ein einzelnes `var` vor den Namen (Attribut, `private`, `class var`, `threadvar`)
 - Parameterlisten und case-Marken; die Zeile ist verschoben, oder die Meldung nennt keine Spalte
+- vor der Gruppe steht ein Attribut, auch auf der Zeile darüber (`[Weak]` über `FA, FB: IFoo;`) – es gilt für alle Namen, nach dem Teilen stünde es nur über dem ersten
 
 **Beispiel**
 
@@ -1183,7 +1185,7 @@ Nachher:
 - ein Kommentar oder eine Direktive im `finally` (der Detektor meldet solche Fälle trotzdem, weil er Kommentare ausblendet)
 - `try` steht hinter `then`, `else`, `do` oder einer Marke (dort bräuchte es ein `begin`)
 - try, finally und end stehen nicht je allein auf ihrer Zeile, die Einrückung weicht ab, oder der Rumpf ist leer
-- im Rumpf stehen `var`, `const`, `label`, `goto` oder `asm`, oder im Bereich liegt eine Direktive oder ein Blockkommentar
+- im Rumpf stehen `label`, `goto` oder `asm`, oder `var`/`const` auf seiner obersten Ebene (ein `const`-Parameter einer anonymen Methode oder ein Inline-`var` in einem inneren begin..end stört nicht), oder im Bereich liegt eine Direktive oder ein Blockkommentar
 
 **Beispiel**
 
@@ -1801,7 +1803,7 @@ Nachher:
 
 - die URL kommt auf der Zeile zweimal vor, ist Teil eines längeren Strings oder steht in einem Kommentar oder mehrzeiligen String
 - Port, Benutzerangabe, IP-Adresse (auch private), IPv6, Platzhalter im Host, ein Host ohne Punkt, `localhost`, `*.local`, `*.internal`, `*.test`
-- Namespace-URIs (`xmlns`, `w3.org`, `schemas`, `tempuri.org`, `purl.org` und ähnliche) – die Hilfe ist enger als der Detektor
+- ein Namespace- oder Schema-Kennzeichen in der Adresse oder davor (`xmlns`, `schema`, `/ns/`, `w3.org`, `tempuri.org`, `purl.org` und ähnliche) – aus Vorsicht, auch wenn der Detektor solche Adressen als echte Endpunkte meldet
 
 **Beispiel**
 
@@ -1931,7 +1933,7 @@ Nachher:
 
 - `Default(T)` in Dateien mit Spuren von Compilern vor Delphi 2009 (`jvcl.inc`, `VER150`, `CompilerVersion < 20` …)
 - eine Zuweisung an Result bzw. den Funktionsnamen oder `Exit(Wert)` (auch `System.Exit(Wert)`) im Rumpf – auch im inaktiven `$IFDEF`-Zweig
-- eine Datei ohne `implementation`-Teil bzw. ohne unit/program/library-Kopf (Skripte, Includes)
+- `Default(T)` in einer Datei ohne `implementation`-Teil bzw. ohne unit/program/library-Kopf (Skripte, Includes) – ein Literal (`False`, `0`, `''`, `nil` …) bietet die Hilfe dort an
 - ein FPC-Modus ohne Result, `{$X-}`, asm, eine Direktive zwischen Kopf und `begin`
 - ein Rückgabetyp, der kein einfacher Typbezeichner ist oder den die Funktion in ihrem Deklarationsteil selbst definiert (im Rumpf meinte der Name den lokalen Typ), eine freie Funktion ohne Signatur im Kopf, mehrere Deklarationen
 
@@ -2685,6 +2687,7 @@ Nachher:
 - hinter dem `]` steht weiterer Code (`[Category][Test]`) oder eine Compiler-Direktive
 - vor dem Attribut steht kein Deklarationsende (`;`, `public`, `class`, ein anderes Attribut ...) - etwa ein Array-Index - oder eine Direktive liegt dazwischen
 - die Zeile ist verschoben, auskommentiert oder liegt in einem Kommentar
+- das Attribut steht auf seiner Zeile hinter einem anderen (`[Test][Category]`)
 
 **Beispiel**
 

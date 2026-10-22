@@ -32,6 +32,8 @@ type
     [Test] procedure Visibility_Refused;
     [Test] procedure Directives_Positive;
     [Test] procedure Directives_As_Statement_Refused;
+    [Test] procedure Directives_FieldAfterProcType_Refused;
+    [Test] procedure Operator_And_Strict;
     [Test] procedure Class_Modifiers;
     [Test] procedure Adapter_Name_And_Edit;
     [Test] procedure Adapter_Refusal_And_NoFile;
@@ -368,6 +370,32 @@ begin
   CheckRefused(Join(['unit u;', 'interface', 'implementation', 'var',
     '  Virtual: Integer;', 'end.']), 5, 'Virtual',
     Format(KC_CONTEXT, ['Virtual']));
+end;
+
+procedure TTestRdxKeywordCaseFix.Directives_FieldAfterProcType_Refused;
+var
+  Src : string;
+begin
+  // Rueckwaerts sieht das Feld hinter einem Prozedurtyp-Member aus wie eine
+  // Direktive im Kopf ('; ... procedure'); dahinter steht aber ':' - ein
+  // Feldname, RTTI-sichtbar.
+  Src := Join(['unit u;', 'interface', 'type', '  TJob = class',
+    '    OnDone: procedure of object;', '    Forward: Boolean;',
+    '    Cb: procedure; Register: Integer;', '  end;', 'implementation',
+    'end.']);
+  CheckRefused(Src, 6, 'Forward', Format(KC_CONTEXT, ['Forward']));
+  CheckRefused(Src, 7, 'Register', Format(KC_CONTEXT, ['Register']));
+end;
+
+procedure TTestRdxKeywordCaseFix.Operator_And_Strict;
+begin
+  // 'operator' hinter 'class' im Record (IsClassModifier).
+  CheckFix(Join(['unit u;', 'interface', 'type', '  TR = record',
+    '    class Operator Add(const A, B: TR): TR;', '  end;',
+    'implementation', 'end.']), 5, 'Operator');
+  // 'Strict' ausserhalb eines Klassenkoerpers ist ein Bezeichner.
+  CheckRefused(InBody(['  X := Strict;']), 6, 'Strict',
+    Format(KC_CONTEXT, ['Strict']));
 end;
 
 procedure TTestRdxKeywordCaseFix.Class_Modifiers;

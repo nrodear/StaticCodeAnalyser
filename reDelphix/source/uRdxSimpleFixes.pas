@@ -6,8 +6,18 @@ unit uRdxSimpleFixes;
 // -> not Assigned(X); Stufe 2, Rest (2026-10-10): SCA074 Assert-Meldung,
 // SCA087 leerer Sichtbarkeitsabschnitt, SCA139 X.Free -> FreeAndNil(X);
 // uQuickFix-Umzug (2026-10-10, TRdxExprFixes): SCA066 leere Klammern,
-// SCA072 Vergleich mit True/False, SCA084 Assigned + nil. OHNE ToolsAPI: aus den Zeilen der Datei werden gepruefte Ersetzungen
-// (TRdxEdit), die uRdxEditor.ReplaceSpans in EINEM Undo-Schritt schreibt.
+// SCA072 Vergleich mit True/False, SCA084 Assigned + nil. OHNE ToolsAPI:
+// aus den Zeilen der Datei werden gepruefte Ersetzungen (TRdxEdit), die
+// uRdxEditor.ReplaceSpans in EINEM Undo-Schritt schreibt.
+//
+// TYPBEWEIS (Review Woche G07-04): neben den Planern traegt die Unit den
+// Typbeweis auf dem Text, den die Planer und der Laeufer (uRdxFixRunner:
+// SCA085/SCA139/SCA126/SCA084/SCA066) fragen - TRdxSimpleFixes.
+// DeclaredTypeKind/DeclaresValueType/FieldTypeOf (samt FieldScan) und
+// TRdxExprFixes.ResolvedTypeKind/ProceduralType/PointerLikeType mit den
+// Typnamen-Listen. Er liegt hier, weil er mit SCA085/SCA126 entstand; die
+// beiden Klassen rufen sich dafuer gegenseitig. Eine eigene Unit
+// (uRdxTypeProof) fasst uRdxFixRunner an und ist eine Folgecharge.
 //
 // GRUNDSATZ: lieber keine Hilfe als eine falsche. Jeder Planer prueft die
 // Fundstelle mit derselben Grammatik wie der Detektor und lehnt mit einem
@@ -92,9 +102,12 @@ type
       out AEdits: TArray<TRdxEdit>; out AName: string;
       out AReason: string): Boolean; static;
 
-    // SCA085-Kontext fuer den Aufrufer - FreeAndNil braucht eine Variable:
     // True, wenn AName irgendwo in der Datei als Property deklariert ist
-    // ('property AName'; eine Property uebersetzt als Argument nicht).
+    // ('property AName'). SCA085 (Aufrufer uRdxFixRunner): FreeAndNil
+    // braucht eine Variable, eine Property uebersetzt als Argument nicht;
+    // seit Charge FC auch SCA066 (EmptyArgsContext): ob Delphi eine
+    // Property mit Prozedurtyp ohne () aufruft, ist nicht belegt (bis zur
+    // Review Woche G07-04 nannte die Doku nur SCA085).
     class function DeclaresProperty(AMap: TRdxCodeMap;
       const AName: string): Boolean; static;
     // True, wenn in der Routine um ALine vor dieser Zeile ein 'with' steht -
@@ -343,11 +356,18 @@ const
   // Token, nach denen eine Anweisung beginnt (SCA066; ':' hinter einer
   // case-Marke): STATEMENT_PREV aus uRdxCodeMap - bis Charge R8 eine
   // eigene Liste ohne initialization/finalization.
-  // Token, hinter denen die ganze rechte Seite bzw. Bedingung beginnt.
-  WHOLE_EXPR_STARTS: array[0..3] of string = (':=', 'if', 'while', 'until');
-  // Token, hinter denen ein Aufruf als ganze Anweisung/Bedingung endet.
-  CALL_ENDS: array[0..7] of string = (';', 'end', 'else', 'until', 'then',
-    'do', 'except', 'finally');
+  // Token, hinter denen die ganze rechte Seite bzw. Bedingung beginnt -
+  // auch der Selektor eines case ('case GetKind() of'): er ist ordinal, die
+  // Lesart als Zeiger gibt es dort nicht (Review Woche G07-21, wie if und
+  // while; bis dahin 'Teil eines Ausdrucks').
+  WHOLE_EXPR_STARTS: array[0..4] of string = (':=', 'if', 'while', 'until',
+    'case');
+  // Token, hinter denen ein Aufruf als ganze Anweisung/Bedingung endet
+  // ('of': hinter dem case-Selektor).
+  CALL_ENDS: array[0..8] of string = (';', 'end', 'else', 'until', 'then',
+    'do', 'except', 'finally', 'of');
+  // Davor beginnt die Deklaration eines Typs 'TName = ..' (DeclaredTypeKind).
+  TYPE_DECL_PREV: array[0..3] of string = (';', 'type', ']', 'generic');
   // Token, hinter denen ein Teilausdruck beginnt - kein Operator bindet von
   // links her (SCA072).
   OPERAND_STARTS: array[0..9] of string = ('(', ',', '[', ':=', 'if',
@@ -804,9 +824,13 @@ begin
     // Typs. Bis Charge R10 kam hier 'nil' heraus, und eine RTL-Klasse wie
     // TBitmap galt in der ganzen Unit als unbewiesen (Messung R10: 431
     // SCA126-Angebote mehr, die die Liste aus E27 sonst nicht erreicht).
-    // Ein Typ wird nie hinter ':' oder '.' deklariert.
+    // Seit der Review Woche G07-21 eine Positivliste (TYPE_DECL_PREV): ein
+    // Typ wird nur hinter ';', 'type', einem Attribut (']') bzw. FPC-
+    // 'generic' deklariert - die Negativliste ':'/'.' las einen Yoda-
+    // Vergleich 'if TBitmap = Sender.ClassType' als Deklaration ('sender'),
+    // und die RTL-Liste (E27) wurde dann mit 'sender' gefragt.
     if (T.Low = TypeLow) and (AfterTypeParams(AMap, T).Low = '=')
-       and not InList(Before(AMap, T).Low, [':', '.']) then
+       and InList(Before(AMap, T).Low, TYPE_DECL_PREV) then
     begin
       K := After(AMap, AfterTypeParams(AMap, T));
       if K.Low = 'packed' then

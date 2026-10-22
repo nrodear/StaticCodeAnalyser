@@ -53,10 +53,11 @@ type
   //   Ver          VERnnn            (200 = Delphi 2009, 330 = 10.3)
   //   Version      CompilerVersion/RTLVersion (20 bzw. 33)
   //   Compiler     COMPILERn und BCBn der JEDI-Zaehlung (12 bzw. 26)
-  //   DelphiNumber DELPHIn der JEDI-Zaehlung, ab 1 (8 bzw. 26 - JEDI
-  //                zaehlt nach DELPHI8 als DELPHI9 = 2005 weiter, andere
-  //                Bibliotheken nennen Delphi 10/11/12 so; bis 26 ist
-  //                beides aelter als 10.3 oder sperrt nur vorsichtig)
+  //   DelphiNumber DELPHIn der JEDI-Zaehlung, ab 1 (12 bzw. 26 - JEDI
+  //                zaehlt nach DELPHI8 als DELPHI9 = 2005 weiter, DELPHI12
+  //                ist Delphi 2009 wie COMPILER12; andere Bibliotheken
+  //                nennen Delphi 10/11/12 so - dort sperrt die Zahl nur
+  //                vorsichtig)
   //   DelphiYear   DELPHI2005..DELPHIn (2009 bzw. 2010)
   //   Rtl          RTLnnn            (200 bzw. 330)
   //   FpcFull      FPC_FULLVERSION UNTER diesem Wert (30000; MaxInt: jede
@@ -85,10 +86,15 @@ type
 
 const
   // SCA121 Default(T): Delphi 2009 (VER200, CompilerVersion 20, COMPILER12,
-  // RTL200), FPC 3.0 - genau die Zahlen, die bis Charge Q14 fest in
-  // uRdxResultFixes standen.
+  // DELPHI12, RTL200), FPC 3.0 - die Zahlen, die bis Charge Q14 fest in
+  // uRdxResultFixes standen, bis auf DelphiNumber: dort stand 8, und
+  // '{$IFDEF DELPHI12_UP}' (JEDI: ab Delphi 2009) sperrte nicht, obwohl
+  // COMPILER12_UP aus demselben jedi.inc sperrt - eine Datei, die so nach
+  // 2009 fragt, baut auch mit 2007, und Default(T) braeche dort den Bau
+  // (Review Woche G05-18; Angebotsverlust in Dateien mit DELPHI9..DELPHI12
+  // ohne Kit-Include, am Korpus zu messen).
   FLOOR_DEFAULT_FN: TRdxCompilerFloor = (Ver: 200; Version: 20; Compiler: 12;
-    DelphiNumber: 8; DelphiYear: 2009; Rtl: 200; FpcFull: 30000;
+    DelphiNumber: 12; DelphiYear: 2009; Rtl: 200; FpcFull: 30000;
     XeNames: False; ProjectVersion: 120);
   // SCA014 Inline-Konstante: Delphi 10.3 Rio (VER330, CompilerVersion 33,
   // COMPILER26/DELPHI26 der JEDI-Zaehlung, RTL330); FPC kennt keine.

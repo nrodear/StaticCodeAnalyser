@@ -86,12 +86,14 @@ type
     [Test] procedure Detector_DeclaredLocalQuery_UnassignedReported;
   end;
 
-  // Review 2026-10-14 (Bericht D, Bereich A): Zugriffe vor dem ersten
-  // SQL-Beitrag der Routine, angelegte Parameter, nq-Quote, var-Abschnitt
-  // hinter geschachtelten Routinen, gemeinsame Vorfilterliste. Zweite
-  // Fixture, damit keine ueber 20 Tests waechst.
+  // Woher ein Name kommt und ob er zaehlt: Zugriffe vor dem ersten
+  // SQL-Beitrag der Routine, ersetztes SQL, angelegte Parameter, nq-Quote,
+  // var-Abschnitt hinter geschachtelten Routinen, gemeinsame
+  // Vorfilterliste (Anlass: Review 2026-10-14, Bericht D, Bereich A; der
+  // Name nennt seit der Review Woche G03-24 das Verhalten, nicht den
+  // Anlass). Zweite Fixture, damit keine ueber 20 Tests waechst.
   [TestFixture]
-  TTestParamNameMismatchReview = class
+  TTestParamNameMismatchNameOrigin = class
   public
     // --- (a) nur gegen das SQL, das die Routine selbst zuweist ----------
     // Blocker: ParamByName auf das DFM-SQL, dann SQL.Text := ... - der
@@ -101,6 +103,8 @@ type
     [Test] procedure Scan_CreatedQuery_AccessBeforeSql_Kept;
     [Test] procedure Scan_ReassignedQuery_AccessBeforeSql_Discarded;
     [Test] procedure Scan_RecreatedQuery_OldSqlForgotten;
+    // ersetztes SQL: gegen die Vereinigung beurteilt (bewusstes FN)
+    [Test] procedure Scan_SqlReplaced_OldPlaceholderAccepted;
     // --- angelegte Parameter (CreateParam/Add/CreateParameter) ----------
     [Test] procedure Scan_CreateParamLiteral_KnownName;
     [Test] procedure Scan_ParamsAddAndCreateParameter_KnownNames;
@@ -847,7 +851,7 @@ end;
 
 { --- (a) nur gegen das SQL, das die Routine selbst zuweist ----------------- }
 
-procedure TTestParamNameMismatchReview.Scan_AccessBeforeFirstSqlOp_NotJudged;
+procedure TTestParamNameMismatchNameOrigin.Scan_AccessBeforeFirstSqlOp_NotJudged;
 begin
   // Reproduktion des Blockers (review1w/sca199/uFx.pas): 'id' gilt dem
   // DFM-SQL, das SQL.Text danach ersetzt es ganz
@@ -872,7 +876,7 @@ begin
     'end;'])), 'SQL.Clear + Add');
 end;
 
-procedure TTestParamNameMismatchReview.Scan_AccessBeforeFirstSqlOp_LaterTypoReported;
+procedure TTestParamNameMismatchNameOrigin.Scan_AccessBeforeFirstSqlOp_LaterTypoReported;
 begin
   // verworfen, nicht Incomplete: was NACH dem Ersetzen kommt, bleibt pruefbar
   Assert.AreEqual('A:Q.id@16', Scan(L([
@@ -886,7 +890,7 @@ begin
     'end;'])));
 end;
 
-procedure TTestParamNameMismatchReview.Scan_CreatedQuery_AccessBeforeSql_Kept;
+procedure TTestParamNameMismatchNameOrigin.Scan_CreatedQuery_AccessBeforeSql_Kept;
 begin
   // eine hier erzeugte Query hat vor ihrem SQL keine Parameter - der
   // Zugriff trifft das SQL dieser Routine oder gar keines
@@ -900,7 +904,7 @@ begin
     'end;'])));
 end;
 
-procedure TTestParamNameMismatchReview.Scan_ReassignedQuery_AccessBeforeSql_Discarded;
+procedure TTestParamNameMismatchNameOrigin.Scan_ReassignedQuery_AccessBeforeSql_Discarded;
 begin
   // nach Q := DM.qryOther gilt der Zugriff dem SQL der fremden Query -
   // vorher wurde 'x' gegen das SQL der ersten Query gemeldet
@@ -915,7 +919,7 @@ begin
     'end;'])));
 end;
 
-procedure TTestParamNameMismatchReview.Scan_RecreatedQuery_OldSqlForgotten;
+procedure TTestParamNameMismatchNameOrigin.Scan_RecreatedQuery_OldSqlForgotten;
 begin
   // Gegen-Review Welle 1, Minor 11: dieselbe Variable ein zweites Mal
   // erzeugt - das SQL und die Zugriffe der ersten Instanz gelten fuer die
@@ -964,9 +968,30 @@ begin
     'end;'])), 'unvollstaendige erste Instanz macht die zweite nicht stumm');
 end;
 
+procedure TTestParamNameMismatchNameOrigin.Scan_SqlReplaced_OldPlaceholderAccepted;
+begin
+  // Review Woche G03-03 (strittig, Einwand: docs/rules/SCA199.md,
+  // 'Alternative SQL texts'): SQL.Text := ... ersetzt das SQL, die Parts
+  // der Routine werden aber VEREINIGT beurteilt. Das zweite
+  // ParamByName('a') ist zur Laufzeit 'parameter not found', bleibt hier
+  // still, weil ':a' im ersten SQL steht. Gepinnt, damit eine Aenderung
+  // dieser Semantik bewusst geschieht (dann auch die Doku).
+  Assert.AreEqual('', Scan(L([
+    'procedure P;',
+    'begin',
+    '  Q := TFDQuery.Create(nil);',
+    '  Q.SQL.Text := ''select * from t where a = :a'';',
+    '  Q.ParamByName(''a'').AsInteger := 1;',
+    '  Q.Open;',
+    '  Q.SQL.Text := ''select * from t where b = :b'';',
+    '  Q.ParamByName(''a'').AsInteger := 1;',
+    '  Q.ParamByName(''b'').AsInteger := 2;',
+    'end;'])), 'Vereinigung: alter Platzhalter gilt (FN mit Absicht)');
+end;
+
 { --- angelegte Parameter --------------------------------------------------- }
 
-procedure TTestParamNameMismatchReview.Scan_CreateParamLiteral_KnownName;
+procedure TTestParamNameMismatchNameOrigin.Scan_CreateParamLiteral_KnownName;
 begin
   // 'x' ist angelegt, auch ohne :x im SQL - 'zz' bleibt ein Tippfehler
   Assert.AreEqual('A:Q.zz@16', Scan(L([
@@ -980,7 +1005,7 @@ begin
     'end;'])));
 end;
 
-procedure TTestParamNameMismatchReview.Scan_ParamsAddAndCreateParameter_KnownNames;
+procedure TTestParamNameMismatchNameOrigin.Scan_ParamsAddAndCreateParameter_KnownNames;
 begin
   Assert.AreEqual('', Scan(L([
     'procedure P;',
@@ -998,7 +1023,7 @@ begin
     'end;'])), 'ADO CreateParameter');
 end;
 
-procedure TTestParamNameMismatchReview.Scan_CreateParamVariable_Silent;
+procedure TTestParamNameMismatchNameOrigin.Scan_CreateParamVariable_Silent;
 begin
   // ohne Literalnamen kann jeder Name entstehen: kein Urteil
   Assert.AreEqual('', Scan(L([
@@ -1024,7 +1049,7 @@ begin
     'end;'])), 'Ausdruck');
 end;
 
-procedure TTestParamNameMismatchReview.Scan_CreateParam_NoUnassigned;
+procedure TTestParamNameMismatchNameOrigin.Scan_CreateParam_NoUnassigned;
 begin
   // (b) bleibt ausgesetzt, sobald Params angefasst wird (wie bisher)
   Assert.AreEqual('', Scan(L([
@@ -1039,7 +1064,7 @@ end;
 
 { --- Platzhalter ----------------------------------------------------------- }
 
-procedure TTestParamNameMismatchReview.Placeholders_OracleNqQuote;
+procedure TTestParamNameMismatchNameOrigin.Placeholders_OracleNqQuote;
 begin
   // nq'[...]' schliesst erst mit ]' - das Apostroph in it's zaehlt nicht
   Assert.AreEqual('x', Ph('select nq''[it''s :b]'' from t where x = :x'), 'nq');
@@ -1051,7 +1076,7 @@ end;
 
 { --- Vorfilter ------------------------------------------------------------- }
 
-procedure TTestParamNameMismatchReview.AccessWords_OneListCoversDoaVariants;
+procedure TTestParamNameMismatchNameOrigin.AccessWords_OneListCoversDoaVariants;
 var
   Alle, W : string;
 begin
@@ -1063,7 +1088,7 @@ begin
   Assert.IsTrue(Pos(',setlongvariable,', Alle) > 0, 'DOA SetLongVariable: ' + Alle);
 end;
 
-procedure TTestParamNameMismatchReview.Detector_SetComplexVariableOnly_Judged;
+procedure TTestParamNameMismatchNameOrigin.Detector_SetComplexVariableOnly_Judged;
 var
   F : TObjectList<TLeakFinding>;
   B : TLeakFinding;
@@ -1096,7 +1121,7 @@ end;
 
 { --- Detektor: geschachtelte Routinen -------------------------------------- }
 
-procedure TTestParamNameMismatchReview.Detector_VarSectionAfterNestedRoutine_Judged;
+procedure TTestParamNameMismatchNameOrigin.Detector_VarSectionAfterNestedRoutine_Judged;
 var
   F : TObjectList<TLeakFinding>;
   B : TLeakFinding;
@@ -1136,7 +1161,7 @@ begin
   end;
 end;
 
-procedure TTestParamNameMismatchReview.Detector_VarSectionBetweenNestedRoutines_Judged;
+procedure TTestParamNameMismatchNameOrigin.Detector_VarSectionBetweenNestedRoutines_Judged;
 var
   F : TObjectList<TLeakFinding>;
   B : TLeakFinding;
@@ -1181,6 +1206,6 @@ end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestParamNameMismatch);
-  TDUnitX.RegisterTestFixture(TTestParamNameMismatchReview);
+  TDUnitX.RegisterTestFixture(TTestParamNameMismatchNameOrigin);
 
 end.

@@ -30,6 +30,7 @@ type
     [Test] procedure Scope_ClassConst_OnlyInItsMethods;
     [Test] procedure Major1_ConstNameStays;
     [Test] procedure Major1_ConstCutOrGlued_Refused;
+    [Test] procedure Major1_KeptConstBehindOperand_Refused;
     [Test] procedure Major2_DdlLock_RestOfText;
     [Test] procedure Major2_Chain_PreviousAddLines;
     [Test] procedure VerdachtA_Chain_NamesReserved;
@@ -100,6 +101,8 @@ var
   R : TRdxSqlTemplate;
 begin
   Assert.IsFalse(BuildSqlTemplate(AReq, R), R.Text);
+  // Abgelehnt heisst auch: keine Vorlage (wie uTestRdxSqlTemplate).
+  Assert.AreEqual('', R.Text, 'Vorlage trotz Ablehnung');
   Assert.IsTrue(Pos(APart, R.Reason) > 0, R.Reason);
 end;
 
@@ -314,6 +317,29 @@ begin
   Assert.IsTrue(Pos('ParamByName(''X'').Value := PCT + X + ''%'';', Ok(R)) > 0);
 end;
 
+procedure TTestRdxSqlGuards.Major1_KeptConstBehindOperand_Refused;
+var
+  R : TRdxSqlRequest;
+begin
+  // Review Woche G01-01: const WHERE_ACTIVE = ' AND active = ' + '1' hat
+  // keinen einfachen Wert (sckKept). Bis dahin zog der Lauf sie in den
+  // Parameter: 'WHERE id = :Id' mit '.Value := IntToStr(Id) + WHERE_ACTIVE'
+  // - der Filter fiel aus der Anweisung in die Daten.
+  R := Req([Target('Q.SQL.Text'), Lit('''SELECT * FROM t WHERE id = '''),
+    Op('IntToStr(Id)'), Op('WHERE_ACTIVE')]);
+  SetLength(R.Consts, Length(R.Parts));
+  R.Consts[3].Kind := sckKept;
+  AssertRefused(R, 'steht direkt vor ''WHERE_ACTIVE''');
+  // Zwei Operanden ohne SQL-Text dazwischen bleiben EIN Wert ...
+  Assert.IsTrue(Pos('ParamByName(''A'').Value := A + B;', Ok(Req([
+    Target('Q.SQL.Text'), Lit('''SELECT * FROM t WHERE a = '''), Op('A'),
+    Op('B')]))) > 0);
+  // ... und sLineBreak hinter dem Operanden ist Leerraum.
+  Assert.IsTrue(Pos('WHERE id = :Id', Ok(Req([Target('Q.SQL.Text'),
+    Lit('''SELECT * FROM t WHERE id = '''), Op('Id'), Op('sLineBreak'),
+    Lit('''ORDER BY id''')]))) > 0);
+end;
+
 { ---- Major 2: DDL-Sperre fuer den Rest, die Kette ---- }
 
 procedure TTestRdxSqlGuards.Major2_DdlLock_RestOfText;
@@ -360,6 +386,15 @@ begin
     Lit('''SET a = '''), Op('X')]), T), T.Reason);
   Assert.AreEqual('Q.SQL.Add(''SET a = :X'');' + sLineBreak
     + 'Q.ParamByName(''X'').Value := X;', T.Text);
+  // Endet die Zeile davor auf einen Ausdruck, folgt X direkt auf ihn - wie
+  // innerhalb einer Anweisung abgelehnt (Review Woche G01-11: bis dahin
+  // las der Leser die Marke als Leerraum, ':X' landete hinter Ys Text).
+  Src := UnitWithBody(['  X0 = 0;'], ['  Q.SQL.Add(''SELECT * FROM t WHERE a = '' + Y);',
+    '  Q.SQL.Add(X + '' AND b = 1''); // here']);
+  Assert.IsFalse(FactsBuilt(Src, '// here', CallReq([Target('Q.SQL.Add'),
+    Op('X'), Lit(''' AND b = 1''')]), T), T.Text);
+  Assert.IsTrue(Pos('folgt direkt auf einem Ausdruck einer frueheren Zeile',
+    T.Reason) > 0, T.Reason);
 end;
 
 procedure TTestRdxSqlGuards.VerdachtA_Chain_NamesReserved;
@@ -376,6 +411,15 @@ begin
     Lit('''AND b = '''), Op('IntToStr(FId)')]), T), T.Reason);
   Assert.AreEqual('Q.SQL.Add(''AND b = :Id3'');' + sLineBreak
     + 'Q.ParamByName(''Id3'').Value := FId;', T.Text);
+  // Ein lesendes Glied dazwischen beendet die Kette nach vorn nicht
+  // (Review Woche G01-12: bis dahin ':X' ein zweites Mal vergeben).
+  Src := UnitWithBody(['  X0 = 0;'], ['  Q.SQL.Add(''SELECT * FROM t WHERE a = 1'');',
+    '  Q.SQL.Add(''AND b = '' + X); // here', '  Q.SQL.BeginUpdate;',
+    '  Q.SQL.Add(''AND c = :X'');']);
+  Assert.IsTrue(FactsBuilt(Src, '// here', CallReq([Target('Q.SQL.Add'),
+    Lit('''AND b = '''), Op('X')]), T), T.Reason);
+  Assert.AreEqual('Q.SQL.Add(''AND b = :X2'');' + sLineBreak
+    + 'Q.ParamByName(''X2'').Value := X;', T.Text);
 end;
 
 { ---- Minor 1: ganze Liste in Quotes, Join-Bedingung ---- }

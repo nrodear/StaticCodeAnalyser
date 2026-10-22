@@ -34,7 +34,10 @@ implementation
 
 uses
   System.SysUtils, System.Classes, System.IOUtils,
-  System.Generics.Collections;   // TList<TSrcLine> (SplitKeepEol)
+  System.Generics.Collections,   // TList<TSrcLine> (SplitKeepEol)
+  uReportFileWriter;             // BeginAtomic/CommitAtomic (WriteBack) -
+                                 // derselbe Temp+MoveFileEx-Tausch wie fuer
+                                 // die Reports, keine zweite Kopie
 
 const
   // Heute nur noch von InsertLineAbove gebraucht - ReplaceLine/ReadLine
@@ -172,6 +175,18 @@ begin
     end;
   end;
 
+  // UTF-32 VOR UTF-16 (Review Woche G03-11): die UTF-32LE-BOM FF FE 00 00
+  // beginnt mit der UTF-16LE-BOM. Als UTF-16 gelesen besteht die Datei
+  // die Byte-Probe (TUnicodeEncoding kopiert jedes Bytepaar verlustfrei),
+  // und die neue Zeile landete als UTF-16 zwischen UTF-32-Zeilen.
+  // TEncoding kennt kein UTF-32 - ablehnen statt beschaedigen.
+  // Dieselbe Reihenfolge wie uFileTextCache.ComputeFileEncodingInfo.
+  if TakeBom(Raw, [$FF, $FE, $00, $00], F.Bom, Body) or
+     TakeBom(Raw, [$00, $00, $FE, $FF], F.Bom, Body) then
+  begin
+    AError := 'UTF-32 files are not supported - file left untouched';
+    Exit;
+  end;
   if TakeBom(Raw, [$EF, $BB, $BF], F.Bom, Body) then
     F.Enc := TEncoding.UTF8
   else if TakeBom(Raw, [$FF, $FE], F.Bom, Body) then
@@ -219,13 +234,40 @@ begin
   Result := True;
 end;
 
+procedure SchreibeAtomar(const AFileName: string; const ABytes: TBytes);
+// ATOMAR (Review Woche G03-02): erst <Datei>.sca-tmp schreiben, dann per
+// MoveFileEx auf den Namen tauschen (TReportFileWriter, Output). Vorher
+// schrieb TFile.WriteAllBytes direkt - fmCreate kuerzt die Datei zuerst,
+// ein Abbruch danach (Platte voll, Netzlaufwerk weg, Sperre mitten im
+// Schreiben) liess eine leere oder abgeschnittene Quelldatei zurueck,
+// und hier gibt es kein Undo. Jetzt bleibt bei jedem Fehler die alte
+// Datei stehen. Grenze: der Tausch ersetzt den Verzeichniseintrag - eine
+// harte Verknuepfung auf die alte Datei sieht den neuen Inhalt nicht.
+// Eigene Routine statt zweitem try in WriteBack (NestedTry).
+var
+  Stream : TFileStream;
+begin
+  Stream := TReportFileWriter.BeginAtomic(AFileName);
+  try
+    if Length(ABytes) > 0 then
+      Stream.WriteBuffer(ABytes[0], Length(ABytes));
+    TReportFileWriter.CommitAtomic(Stream, AFileName);
+  except
+    // Schreibfehler: Temp weg, Ziel unberuehrt. Scheitert erst der
+    // Tausch, hat CommitAtomic den Stream schon freigegeben (nil) und
+    // AtomicSwap die Temp-Datei entfernt - Rollback ist dann ein No-Op.
+    TReportFileWriter.RollbackAtomic(Stream, AFileName);
+    raise;
+  end;
+end;
+
 function WriteBack(const AFileName: string; const F: TSrcFile;
   var AError: string): Boolean;
 begin
   Result := False;
   AError := '';
   try
-    TFile.WriteAllBytes(AFileName, EncodeFile(F));
+    SchreibeAtomar(AFileName, EncodeFile(F));
     Result := True;
   except
     // noinspection ExceptionTooGeneral

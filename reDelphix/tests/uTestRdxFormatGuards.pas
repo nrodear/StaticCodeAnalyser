@@ -27,7 +27,8 @@ type
     // Eine kurze Kette bleibt EIN Literal (keine Teilung ohne Not).
     [Test] procedure Format_ShortChain_OneLiteral;
     // Der Baustein: Wert gleich, Teilung hinter einem Leerzeichen, #-Codes
-    // und '' zaehlen mit, nie im Surrogat-Paar, Nicht-ASCII zaehlt zwei.
+    // und '' zaehlen mit, nie im Surrogat-Paar, Nicht-ASCII zaehlt wie in
+    // UTF-8 (zwei bis vier, Split_Utf8Widths).
     [Test] procedure Split_KeepsValue_PrefersBlank;
     [Test] procedure Split_CodesAndQuotesCount;
     [Test] procedure Split_SurrogatesAndNonAscii;
@@ -192,6 +193,12 @@ begin
   Assert.AreEqual(' ', Copy(Values[0], Length(Values[0]), 1),
     'geteilt hinter einem Leerzeichen: ' + Res);
   Assert.AreEqual(V, Joined(Values));
+  // Das Leerzeichen steht unter der Haelfte (101 von 255): geteilt wird
+  // an der Grenze, nicht dort (Review Woche G01-14).
+  Assert.AreEqual('''' + StringOfChar('a', 100) + ' ' + StringOfChar('b', 154)
+    + ''' + ''' + StringOfChar('b', 46) + '''', SplitLongLiteral('''' +
+    StringOfChar('a', 100) + ' ' + StringOfChar('b', 200) + ''''),
+    'Leerzeichen unter halb');
 end;
 
 procedure TTestRdxFormatGuards.Split_CodesAndQuotesCount;
@@ -214,6 +221,12 @@ begin
   Assert.AreEqual<Integer>(2, Length(Values));
   Assert.AreEqual<Integer>(LIMIT, Length(Values[0]));
   Assert.AreEqual(V, Joined(Values));
+  // Der '..'-Teil oeffnet genau an der Grenze (254 + #13 = 255): ' + '
+  // kommt VOR sein Quote, nicht als leeres Literal dahinter (Review Woche
+  // G01-14).
+  Assert.AreEqual('''' + StringOfChar('a', 254) + '''#13 + ''b''',
+    SplitLongLiteral('''' + StringOfChar('a', 254) + '''#13''b'''),
+    'Quote-Teil an der Grenze');
 end;
 
 procedure TTestRdxFormatGuards.Split_SurrogatesAndNonAscii;
@@ -268,7 +281,19 @@ procedure TTestRdxFormatGuards.Format_PointerThenString_Allowed;
 var
   NewText : string;
   Reason  : string;
+  B       : TRdxFormatBuild;
 begin
+  // Ein AnsiString hinter dem Zeiger verkettet ebenso; bei Unicode-Ziel
+  // darf er in den Aufruf (Review Woche G01-07: bis dahin 'Zeiger-
+  // Arithmetik'). Ein AnsiChar bleibt gesperrt.
+  Assert.IsTrue(TRdxRecipes.BuildFormatCall([Target('S'),
+    Op('P', rvString, 'pchar'), Op('A', rvString, 'ansistring'), Lit('''x''')],
+    B, 'string'), B.Reason);
+  Assert.AreEqual('Format(''%s%sx'', [P, A])', B.NewText);
+  Assert.IsFalse(TRdxRecipes.BuildFormatCall([Target('S'),
+    Op('P', rvString, 'pchar'), Op('C', rvString, 'ansichar'), Lit('''x''')],
+    B, 'string'), B.NewText);
+  Assert.IsTrue(Pos('Zeiger am Kettenanfang', B.Reason) > 0, B.Reason);
   // Hinter dem Zeiger ein Literal bzw. ein bewiesener String: Delphi
   // verkettet - die Umformung bleibt.
   Assert.IsTrue(TRdxRecipes.BuildFormatCall([Target('S'),
@@ -301,6 +326,18 @@ begin
   Assert.IsFalse(TRdxRecipes.BuildFormatCall([Op('P', rvString, 'pchar'),
     Op('N', rvUnknown), Lit('''.txt''')], B), B.NewText);
   Assert.IsTrue(Pos('Zeiger', B.Reason) > 0, B.Reason);
+  // Hinter 'V +' mit V: Variant verkettet nichts - 'V := V + ''Count: '' +
+  // Obj.Count' uebersetzt auch mit einer Zahl (Review Woche G01-05: bis
+  // dahin 'Format(''Count: %s'', [Obj.Count])', EConvertError).
+  Assert.IsFalse(TRdxRecipes.BuildFormatCall([Lit('''Count: '''),
+    Op('Obj.Count', rvUnknown)], B, 'variant', csBehindTarget), B.NewText);
+  Assert.IsTrue(Pos('Variant-Arithmetik', B.Reason) > 0, B.Reason);
+  Assert.IsFalse(TRdxRecipes.BuildFormatCall([Lit('''Count: '''),
+    Op('Obj.Count', rvUnknown)], B, 'olevariant', csBehindTarget), B.NewText);
+  // Hinter 'S +' mit S: string bleibt die Umformung.
+  Assert.IsTrue(TRdxRecipes.BuildFormatCall([Lit('''Count: '''),
+    Op('Obj.Count', rvUnknown)], B, 'string', csBehindTarget), B.Reason);
+  Assert.AreEqual('Format(''Count: %s'', [Obj.Count])', B.NewText);
 end;
 
 // ACount-mal AChar - ohne StringOfChar und TStringBuilder: unter FPC 3.2.2

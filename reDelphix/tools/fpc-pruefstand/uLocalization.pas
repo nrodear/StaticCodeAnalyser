@@ -15,8 +15,15 @@ unit uLocalization;
 // msgid in i18n\de.po steht.
 //
 // Der .po-Leser folgt ParsePo: msgid/msgstr mit Fortsetzungszeilen und
-// Escapes; Kommentare, #~, msgctxt-Eintraege und Pluralformen fallen weg,
-// ein leerer msgstr heisst unuebersetzt, die erste msgid gewinnt.
+// Escapes (\n \t \r \a \b \f \v \0, sonst das Zeichen); Kommentare, #~,
+// msgctxt-Eintraege und Pluralformen fallen weg, eine Zeile mit
+// unbekanntem Schluesselwort beendet den Eintrag, ein leerer msgstr heisst
+// unuebersetzt, die erste msgid gewinnt; eine nicht lesbare .po ist wie
+// eine fehlende. Gleich fuer WOHLGEFORMTE .po - eine kaputte (Literal ohne
+// schliessendes Quote, Fortsetzung ohne msgid) verwirft die echte Unit
+// ganz (ParsePo False), der Stub behaelt, was er lesen konnte (Review
+// Woche G05-27: bis dahin wichen Escapes, Fremdzeilen und der Lesefehler
+// ab; die i18n/*.po haben keinen dieser Faelle).
 // NormalizeLangCode ist eine Kopie der echten - uTestRdxText pinnt ihr
 // Verhalten in reDelphix.Test (echte Unit) UND hier, eine Drift faellt auf.
 //
@@ -73,13 +80,19 @@ begin
   Result := S;
 end;
 
-// Das Zeichen hinter einem Backslash.
+// Das Zeichen hinter einem Backslash - dieselben Escapes wie
+// PoExtractLiteral der echten Unit.
 function Unescape(C: Char): Char;
 begin
   case C of
     'n': Result := #10;
     't': Result := #9;
     'r': Result := #13;
+    'a': Result := #7;
+    'b': Result := #8;
+    'f': Result := #12;
+    'v': Result := #11;
+    '0': Result := #0;
   else
     Result := C;                  // \" \\ und Unbekanntes: das Zeichen
   end;
@@ -175,7 +188,8 @@ end;
 
 // Eine Zeile mit Schluesselwort: msgctxt und Pluralformen verwerfen den
 // Eintrag (die Section bleibt gesetzt, damit ihre Fortsetzungszeilen
-// keine Fehler sind), msgid/msgstr setzen die Texte.
+// keine Fehler sind), msgid/msgstr setzen die Texte; ein unbekanntes
+// Wort beendet den Eintrag wie EndEntry in ParsePo.
 procedure KeywordLine(var AState: TPoState; const ALine: string;
   AMap: TPoMap);
 begin
@@ -202,6 +216,11 @@ begin
   begin
     PoLiteral(ALine, AState.MsgStr);
     AState.Section := psStr;
+  end
+  else
+  begin
+    FlushEntry(AState, AMap);
+    AState.Skip := False;
   end;
 end;
 
@@ -230,7 +249,9 @@ begin
   FlushEntry(State, AMap);
 end;
 
-// out\i18n\<ALang>.po neben dem Runner; nil, wenn sie fehlt.
+// out\i18n\<ALang>.po neben dem Runner; nil, wenn sie fehlt oder nicht zu
+// lesen ist (gesperrt) - wie ReadExternalPo der echten Unit, die dann
+// still Englisch zeigt.
 function LoadPo(const ALang: string): TPoMap;
 var
   Path  : string;
@@ -242,13 +263,18 @@ begin
   Path := ExtractFilePath(ParamStr(0)) + 'i18n' + PathDelim + ALang + '.po';
   if not FileExists(Path) then
     Exit;
-  FS := TFileStream.Create(Path, fmOpenRead or fmShareDenyNone);
   try
-    SetLength(Bytes, FS.Size);
-    if Length(Bytes) > 0 then
-      FS.ReadBuffer(Bytes[0], Length(Bytes));
-  finally
-    FS.Free;
+    FS := TFileStream.Create(Path, fmOpenRead or fmShareDenyNone);
+    try
+      SetLength(Bytes, FS.Size);
+      if Length(Bytes) > 0 then
+        FS.ReadBuffer(Bytes[0], Length(Bytes));
+    finally
+      FS.Free;
+    end;
+  except
+    on EStreamError do
+      Exit;
   end;
   Text := TEncoding.UTF8.GetString(Bytes);
   if (Text <> '') and (Text[1] = #$FEFF) then

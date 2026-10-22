@@ -5,9 +5,10 @@ unit uTestVnpContext;
 // Gegenbeispielen): mehrzeilige Strings mit mehr als drei Quotes, die
 // Kommentargrenzen eines begin..end, asm-Block und initialization-
 // Abschnitt, Direktiven zwischen der Zeile darueber und der Anweisung auch
-// ohne Block, die Zeile darueber ab ihrem Kommentar-Zustand, '*)' in
-// Spalte 1, der else-Arm eines Bedingungsausdrucks (Delphi 13), die
-// FPC-Weiche, Zeilenenden je Zeile und die Vorbedingung von
+// ohne Block (und am Anfang der Anweisungszeile), die Zeile darueber ab
+// ihrem Kommentar-Zustand, '*)' in Spalte 1, der else-Arm eines
+// Bedingungsausdrucks (Delphi 13), die FPC-Weiche, Zeilenenden je Zeile
+// und die Vorbedingung von
 // IntroduceEdits. Jeder Fall hier ist eine Stelle, an der die Hilfe sonst
 // Code erzeugt haette, der nicht uebersetzt - oder still anders laeuft
 // (Deklaration IM String, 'end;' im Kommentar, Zeile im asm-Block).
@@ -48,6 +49,8 @@ type
     [Test] procedure MultiLineString_ReopenedAfterCloser;
     [Test] procedure CommentAndStringStates_Combined;
     [Test] procedure AsmLabel_DoesNotEndAsm;
+    // Review Woche 2026-10-21 (G10-02)
+    [Test] procedure DirectiveOnStatementLine;
   end;
 
 implementation
@@ -441,6 +444,13 @@ begin
     '    X := 42;', 'end;']);
   AssertAccepted(TargetIn(B, 5, 10), True, 4,
     'Schliesser mit then dahinter: Zweig');
+  // begin..end ruecken wie die rohe Zweigzeile ein (vier Leerzeichen), nicht
+  // wie der Code ' then' hinter dem Schliesser (Review Woche 2026-10-21,
+  // G10-13: vorher ' begin' und ' end;').
+  Assert.AreEqual(Buf(['begin', '  if S = ' + Q(3), '    a',
+    '    ' + Q(3) + ' then', '    begin', '    const MagicNr01 = 42;',
+    '    X := MagicNr01;', '    end;', 'end;']), RunC1h(B, 5, 10),
+    'Schliesser mit then dahinter: Text danach');
 end;
 
 // Kommentar- und String-Zustand laufen in EINEM Lauf (Pruefer 2026-10-14,
@@ -529,6 +539,31 @@ begin
   G := Default(TVnpTarget);
   Assert.AreEqual<Integer>(0, Length(IntroduceEdits(T, G)),
     'leeres Ziel (SourceRow 0): keine Ersetzungen');
+end;
+
+// Eine Direktive AM ANFANG der Anweisungszeile ('{$ENDIF} X := 42;'): die
+// Deklaration kaeme an den Zeilenanfang, also vor das '{$ENDIF}' in den
+// Zweig darueber, und ohne A fehlte der Name (E2003). Ebenso '{$ELSE}'.
+// Vorher pruefte DirectiveBetween nur die Zeile darueber und die Zeilen
+// dazwischen (Review Woche 2026-10-21, G10-02). Ein Kommentar ohne '$'
+// auf der Anweisungszeile stoert nicht.
+procedure TTestVnpContext.DirectiveOnStatementLine;
+var
+  B : string;
+begin
+  B := Buf(['procedure P;', 'begin', '{$IFDEF A}', '  Y := 1;',
+    '{$ENDIF} X := 42;', 'end;']);
+  // Zeile 5, die 42 in Spalte 15.
+  AssertRefusedWith(TargetIn(B, 5, 15), 'Direktive',
+    'ENDIF am Anfang der Anweisungszeile');
+  B := Buf(['begin', '{$IFDEF A}', '  Y := 1;', '{$ELSE} X := 42;',
+    '{$ENDIF}', 'end;']);
+  // Zeile 4, die 42 in Spalte 14.
+  AssertRefusedWith(TargetIn(B, 4, 14), 'Direktive',
+    'ELSE am Anfang der Anweisungszeile');
+  B := Buf(['begin', '  Foo;', '  X := 42; { ohne Dollar }', 'end;']);
+  AssertAccepted(TargetIn(B, 3, 8), False, 2,
+    'Kommentar ohne Direktive auf der Anweisungszeile');
 end;
 
 initialization

@@ -68,6 +68,16 @@ type
     [Test] procedure G4_ConstructorZuweisung_NichtGemeldet;
   end;
 
+  // G4-Routinenkoepfe (Review Woche G03-12). Eigene Fixture: die erste
+  // liegt mit 36 Tests schon ueber der Grenze je Fixture.
+  [TestFixture]
+  TTestDfmHardcodedCaptionInitHead = class
+  public
+    // 'class procedure' beendet den Init-Kontext von FormCreate - ihre
+    // Aufrufe sind keine Init-Aufrufe.
+    [Test] procedure G4_KlassenmethodeNachFormCreate_WirdGemeldet;
+  end;
+
 implementation
 
 uses
@@ -884,7 +894,44 @@ begin
   finally F.Free; end;
 end;
 
+{ --- G4-Routinenkoepfe ------------------------------------------------ }
+
+procedure TTestDfmHardcodedCaptionInitHead.G4_KlassenmethodeNachFormCreate_WirdGemeldet;
+// 'class procedure' war kein Routinenkopf (erstes Wort 'class'): direkt
+// hinter FormCreate blieb der Init-Kontext stehen, 'SetzeTexte;' galt
+// als Init-Aufruf, und die Caption-Zuweisung darin skippte den Fund,
+// obwohl SetzeTexte nie aus einem Init-Kontext laeuft. Vor dem Fix: 0.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOnFiles(
+    'object FormG: TFormG'#13#10 +
+    '  object LblG: TLabel'#13#10 +
+    '    Caption = ''Platzhalter'''#13#10 +
+    '  end'#13#10 +
+    'end',
+    'unit g4probe;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure TFormG.FormCreate(Sender: TObject);'#13#10 +
+    'begin'#13#10 +
+    'end;'#13#10 +
+    'class procedure TFormG.Setup;'#13#10 +
+    'begin'#13#10 +
+    '  SetzeTexte;'#13#10 +
+    'end;'#13#10 +
+    'procedure TFormG.SetzeTexte;'#13#10 +
+    'begin'#13#10 +
+    '  LblG.Caption := HoleText;'#13#10 +
+    'end;'#13#10 +
+    'end.');
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption),
+      'Aufruf aus einer Klassenmethode ist kein Init-Kontext');
+  finally F.Free; end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestDfmHardcodedCaption);
+  TDUnitX.RegisterTestFixture(TTestDfmHardcodedCaptionInitHead);
 
 end.

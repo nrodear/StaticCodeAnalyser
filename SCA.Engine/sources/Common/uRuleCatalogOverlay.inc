@@ -589,7 +589,7 @@ const
     (
       RuleID   : 'SCA094';
       Name     : #$00DC + 'berfl' + #$00FC + 'ssige doppelte Klammern';
-      ShortDesc: '`((Ident))` - die ' + #$00E4 + 'u' + #$00DF + 'eren Klammern weglassen'
+      ShortDesc: '`((Ident))` - die inneren Klammern weglassen'
     ),
     // SCA095
     (
@@ -1938,7 +1938,7 @@ const
     (
       RuleID   : 'SCA094';
       Name     : 'Doubles parenth' + #$00E8 + 'ses redondantes';
-      ShortDesc: '`((Ident))` - supprimer les parenth' + #$00E8 + 'ses ext' + #$00E9 + 'rieures'
+      ShortDesc: '`((Ident))` - supprimer les parenth' + #$00E8 + 'ses int' + #$00E9 + 'rieures'
     ),
     // SCA095
     (

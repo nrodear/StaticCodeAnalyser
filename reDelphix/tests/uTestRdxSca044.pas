@@ -192,12 +192,10 @@ begin
 end;
 
 // Schreibt ASource in eine Temp-Datei und liefert deren Pfad (eigener
-// Name aus Uhrzeit und Zufall, geschrieben wie uTestRdxTextKit.WriteText).
+// Name je Aufruf ueber TempName mit GUID, geschrieben mit WriteText).
 function WriteTemp(const ASource: string): string;
 begin
-  Result := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
-    + 'rdx_sca044_' + FormatDateTime('hhnnsszzz', Now)
-    + IntToStr(Random(1000000)) + '.pas';
+  Result := TempName('rdx_sca044_', '.pas');
   WriteText(Result, ASource);
 end;
 
@@ -293,11 +291,11 @@ var
   IsCall : Boolean;
   Why    : string;
 begin
-  Result   := False;
-  AOutcome := Default(TRdxFormatOutcome);
   Places := OpenTemp(ASource, Path);
   try
-    if not Places.IsOpen then Exit;
+    // Wie RunSql: ohne lesbare Datei liefe kein Rezept - ein IsFalse-Test
+    // waere dann leer gruen (Review Woche G01-16).
+    Assert.IsTrue(Places.IsOpen, 'Temp-Datei nicht lesbar');
     Info := TRdxRecipeRunner.DescribeAnchor(Places, LineOf(ASource, AMarker),
       'assign', IsCall, Why);
     try
@@ -337,9 +335,12 @@ var
   Offer  : TRdxSqlOffer;
 begin
   Result := Default(TSqlRun);
-  Lines := TStringList.Create;
+  // OpenTemp wirft bei einem Parser-Watchdog weiter - Lines erst danach
+  // anlegen, sonst bliebe sie liegen (Review Woche G01-17).
   Places := OpenTemp(ASource, Path);
+  Lines := nil;
   try
+    Lines := TStringList.Create;
     Lines.Text := ASource;
     Assert.IsTrue(Places.IsOpen, 'Temp-Datei nicht lesbar');
     Info := TRdxRecipeRunner.DescribeAnchor(Places, LineOf(ASource, AMarker),

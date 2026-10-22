@@ -21,8 +21,11 @@ unit uRdxGroupedDeclFix;
 //     Wort): anonyme Typen ('record', 'class', 'set of', Aufzaehlung,
 //     'array[..] of', 'array of', '^T', 'string[N]') wuerden beim Teilen
 //     je Name ein EIGENER Typ - Zuweisungen 'A := B' scheiterten danach
-//     mit E2010. Ebenso Generics ('TDictionary<K, V>'), Initialisierer
-//     ('= 5'), 'absolute', Direktiven hinter dem Typ ('platform').
+//     mit E2010. Ebenso Initialisierer ('= 5'), 'absolute', Direktiven
+//     hinter dem Typ ('platform'). Generics ('TDictionary<K, V>') sperrt
+//     der Planer nur aus Vorsicht: eine Instanziierung ist ein benannter
+//     Typ, das Teilen waere bedeutungsgleich - aber der Typleser kennt
+//     keine spitzen Klammern (Kommas darin, geschachtelte Argumente).
 //   * Die Zeile enthaelt Kommentar, String oder Direktive, beginnt in einem
 //     Block-Kommentar oder mehrzeiligen String.
 //   * Mehrzeilige Deklaration (kein ';' hinter dem Typ auf der Zeile),
@@ -31,6 +34,10 @@ unit uRdxGroupedDeclFix;
 //     (Attribut, 'private', 'class var', 'threadvar', 'procedure P; var').
 //     Bei 'var' traegt jede neue Zeile das 'var' wieder - ein Inline-var
 //     im Rumpf braucht es je Variable, ein var-Abschnitt verkraftet es.
+//   * Vor der Gruppe steht ein Attribut, auch auf einer Zeile darueber
+//     (das Code-Token davor ist ']'): es gilt fuer ALLE Namen, nach dem
+//     Teilen stuende es nur ueber dem ersten ('[Weak]', '[Unsafe]',
+//     '[Volatile]', RTTI-Attribute wie '[Inject]' oder JSON-Namen).
 //   * Die Zeile liegt in einer Klammer (Parameterliste ueber mehrere
 //     Zeilen) oder in einem case (Marken statt Variablen); beides wie im
 //     Detektor ueber alle Zeilen davor gezaehlt.
@@ -286,6 +293,13 @@ begin
     Exit(_(R_GD_COMMENT));
   AParts.Prefix := Copy(L, 1, ACol - 1);
   if not PrefixOk(AParts.Prefix) then
+    Exit(_(R_GD_PREFIX));
+  // Ein Attribut haengt an der ganzen Deklaration, also an JEDEM Namen der
+  // Gruppe; nach dem Teilen stuende es nur noch ueber dem ersten ('[Weak]'
+  // ueber 'FA, FB: IFoo;' machte FB zur starken Referenz). Das Code-Token
+  // vor den Namen ist dann ']' - auf derselben Zeile (das faengt schon
+  // PrefixOk) wie auf einer Zeile darueber, auch ueber Kommentare hinweg.
+  if PrevToken(AMap, ALine, ACol).Low = ']' then
     Exit(_(R_GD_PREFIX));
   if not PlainTypeTail(L, Colon + 1) then
     Exit(_(R_GD_TYPE));

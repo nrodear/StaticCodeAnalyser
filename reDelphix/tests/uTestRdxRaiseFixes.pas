@@ -294,6 +294,17 @@ begin
   Assert.AreEqual('', Fix(rkEmpty, InImpl(['constructor TFoo.Create;', 'begin',
     'end;']), 4, RAISE_NOT_IMPLEMENTED, R));
   Assert.IsTrue(Pos('constructor', R) > 0, R);
+  // SCA020: ein veralteter Fund auf einer Prozedurtyp-Zeile ist kein
+  // Methodenkopf (IsRoutineHeadAfter; Review Woche G07-18 - bis dahin
+  // 'lokale Routine zwischen Kopf und Rumpf').
+  Assert.AreEqual('', Fix(rkEmpty, InImpl(['type', '  TCb = procedure of object;',
+    'procedure P;', 'begin', 'end;']), 5, '', R));
+  Assert.IsTrue(Pos('kein Methodenkopf', R) > 0, R);
+  // SCA122: ein veralteter Fund ohne Handler - die Suche erreicht den Kopf
+  // der Routine (Review Woche G07-11 (2) - bis dahin 'anonyme Methode').
+  Assert.AreEqual('', Fix(rkReRaise, InProc(['  raise E;']), 6, ReRaiseMsg('E'),
+    R));
+  Assert.IsTrue(Pos('in dieser Routine', R) > 0, R);
 end;
 
 procedure TTestRdxRaiseFixes.Review_Forms;
@@ -312,6 +323,12 @@ begin
   Assert.AreEqual(InImpl(['end; procedure P;', 'begin', '  ' + INTENT_LINE,
       'end;']),
     Fix(rkEmpty, InImpl(['end; procedure P;', 'begin', 'end;']), 4, '', R), R);
+  // Ein Blockkommentar hinter dem Namen bleibt aus dem Text (Review Woche
+  // G07-11 (3): bis dahin 'TFoo.Bar { alt }').
+  Assert.AreEqual(InImpl(['procedure TFoo.Bar { alt }', '  (A: Integer);', 'begin',
+      '  raise ENotImplemented.Create(''TFoo.Bar'');', 'end;']),
+    Fix(rkEmpty, InImpl(['procedure TFoo.Bar { alt }', '  (A: Integer);', 'begin',
+      'end;']), 4, RAISE_NOT_IMPLEMENTED, R), R);
 end;
 
 procedure TTestRdxRaiseFixes.Sca122_BoundReassigned_Refused;
@@ -338,6 +355,16 @@ begin
       + '''x''; Self.E := nil; raise; end; end;']),
     Fix(rkReRaise, InProc(['  try X; except on E: EFoo do begin E.Message := '
       + '''x''; Self.E := nil; raise E; end; end;']), 6, ReRaiseMsg('E'), R), R);
+  // Review Woche G07-19: E als ganzes Argument - ein var-Parameter kann es
+  // ersetzen ('procedure Wrap(var AErr: Exception)'); bis dahin bot die
+  // Hilfe 'raise;' als bedeutungsgleich an. Ein Member als Argument
+  // ('Log(E.Message)', Sca122_ReRaise) bleibt erlaubt.
+  Assert.AreEqual('', Fix(rkReRaise, InProc(['  try X; except on E: EFoo do '
+    + 'begin Wrap(E); raise E; end; end;']), 6, ReRaiseMsg('E'), R));
+  Assert.IsTrue(Pos('als Argument', R) > 0, R);
+  Assert.AreEqual('', Fix(rkReRaise, InProc(['  try X; except on E: EFoo do '
+    + 'begin Replace(A, E, B); raise E; end; end;']), 6, ReRaiseMsg('E'), R));
+  Assert.IsTrue(Pos('als Argument', R) > 0, R);
 end;
 
 initialization

@@ -67,7 +67,8 @@ type
 // Kommentar-Zustand am Anfang von APrevCode ('c' Code, 'b' in { }, 'p' in
 // (* *)): beginnt die Zeile darueber in einem Kommentar, zaehlt nur ihr
 // Code hinter dessen Ende ('Foo; // } if A then' hinter '{ Bsp:' ist ein
-// Zweig, kein ';'); TargetAt liefert den Zustand aus StartStates.
+// Zweig, kein ';'); TargetAt liefert den Zustand aus RowsUpTo
+// (TRdxIntroRow.State, uRdxIntroEdits).
 function PlanIntroduce(const ALine, APrevCode: string; ACaretCol: Integer;
   const AName: string; APrevState: Char = 'c'): TRdxIntroPlan;
 
@@ -110,11 +111,15 @@ function ContinuesIfExpression(const ACode: string): Boolean;
 // (ContinuesIfExpression) ein Ausdruck; als erstes Wort einer Zeile ein
 // Ausdruck, wenn die Zeile darueber keine Anweisung beendet und keinen
 // Zweig oder Block oeffnet ('X :=' / 'if C then' / 'A' / 'else'); eine
-// Zeile, die vorher eine Anweisung beendet (';' am Ende) oder einen Zweig
-// oder Block oeffnet, heisst: das then/else gehoert zu einer if-ANWEISUNG.
-// Ohne 'if' darueber ebenso. Vorher zaehlte nur EINE Zeile ueber dem
-// else, und 'X := if C then' / 'A' / 'else' / 'Foo(42);' bekam begin..end
-// mitten im Ausdruck (Pruefer 2026-10-14, a).
+// Zeile, die vorher eine Anweisung beendet (';' am Ende) oder einen Block
+// bzw. einen do-/of-Zweig oeffnet, heisst: das then/else gehoert zu einer
+// if-ANWEISUNG. Ohne 'if' darueber ebenso. Eine Zeile, die mit then/else
+// endet, entscheidet nicht selbst - das 'if' dazu steht weiter oben
+// ('X := if A then 1 else' / 'if B then', 'X := if A then 1' / 'else if B
+// then'; Wochen-Review 2026-10-21) -, ausser sie beginnt mitten in der
+// Zeile eine if-Anweisung ('Z := 1; if C then'). Vorher zaehlte nur EINE
+// Zeile ueber dem else, und 'X := if C then' / 'A' / 'else' / 'Foo(42);'
+// bekam begin..end mitten im Ausdruck (Pruefer 2026-10-14, a).
 function IfExpressionAbove(const ACodeAbove: array of string): Boolean;
 
 // Traegt die Zeile eine FPC-Weiche oder einen FPC-Modus ('{$IFDEF FPC}',
@@ -648,17 +653,26 @@ begin
     Result := i;
 end;
 
-// Spalte, an der der Typ hinter dem ':' bei AColon endet: das erste ':='
-// oder 'in' ('for var I: T in ...'; in einer var-Zeile steht 'in' nie vor
-// dem ':='); ohne beides das Zeilenende (MaxInt).
+// Spalte, an der der Typ hinter dem ':' bei AColon endet: das erste ':=',
+// 'in' ('for var I: T in ...'; in einer var-Zeile steht 'in' nie vor dem
+// ':=') oder ';' auf oberster Ebene - 'var I: Integer; Foo(42);' hat die
+// 42 HINTER der Deklaration (vorher bis zum Zeilenende gezaehlt und als
+// "in der Deklaration" abgelehnt, Wochen-Review 2026-10-21); ohne alles
+// das Zeilenende (MaxInt). Ein Vorgabewert 'var X: Integer = 5;' steht
+// vor dem ';' und bleibt im Teil.
 function TypeEndCol(const ATokens: TArray<TRdxIntroToken>;
   AColon: Integer): Integer;
 var
-  i : Integer;
+  i, Depth : Integer;
 begin
+  Depth := 0;
   for i := AColon + 1 to High(ATokens) do
-    if (ATokens[i].Text = ':=') or (ATokens[i].Text = 'in') then
+  begin
+    Inc(Depth, ParenStep(ATokens[i].Text));
+    if (ATokens[i].Text = ':=') or (ATokens[i].Text = 'in')
+       or ((ATokens[i].Text = ';') and (Depth = 0)) then
       Exit(ATokens[i].Pos);
+  end;
   Result := MaxInt;
 end;
 
@@ -987,6 +1001,47 @@ begin
   Result := HasEqual;
 end;
 
+// Ist die Zeile ein Feld oder eine Variable eines Abschnitts 'Name: Typ;'
+// bzw. 'A, B: Typ;' ('FBuf: array[0..255] of Byte;' unter private)?
+// Namen und Kommata bis zum ':', dahinter kein ':=', '=', '(' und kein
+// Anweisungswort, am Ende ';'. Eine Inline-Deklaration ('var A: ...',
+// 'for var I: ...') prueft InlineDeclReason mit eigenem Grund. Abgelehnt
+// wurde die Zeile schon vorher (IsLabeled) - der Grund nannte aber
+// "case-Zweig, Sprungmarke oder on-Handler", die haeufigste Caret-Stelle
+// einer Klassendeklaration (Wochen-Review 2026-10-21). 'lbl: Foo(42);'
+// bleibt eine Sprungmarke ('(').
+function IsFieldDecl(const ATokens: TArray<TRdxIntroToken>): Boolean;
+const
+  STATEMENT_WORDS: array[0..6] of string = ('if', 'while', 'for', 'case',
+    'repeat', 'begin', 'with');
+  INLINE_DECL_WORDS: array[0..2] of string = ('var', 'const', 'for');
+var
+  i, Colon : Integer;
+begin
+  Result := False;
+  if (Length(ATokens) < 4) or IsDigit(ATokens[0].Text[1])
+     or not IsIdentChar(ATokens[0].Text[1])
+     or (ATokens[High(ATokens)].Text <> ';')
+     or InList(ATokens[0].Text, INLINE_DECL_WORDS) then
+    Exit;
+  Colon := 1;
+  while (Colon < High(ATokens)) and (ATokens[Colon].Text <> ':') do
+  begin
+    if (ATokens[Colon].Text <> ',')
+       and not IsIdentChar(ATokens[Colon].Text[1]) then
+      Exit;
+    Inc(Colon);
+  end;
+  if ATokens[Colon].Text <> ':' then
+    Exit;
+  for i := Colon + 1 to High(ATokens) do
+    if (ATokens[i].Text = ':=') or (ATokens[i].Text = '=')
+       or (ATokens[i].Text = '(')
+       or InList(ATokens[i].Text, STATEMENT_WORDS) then
+      Exit;
+  Result := True;
+end;
+
 // Die Pruefungen, die nur die Zeile selbst brauchen: '' oder der Grund.
 // Die Woerter am Zeilenanfang zaehlen hinter Kommentaren und Direktiven.
 function LineReason(const ALine, ALiteral: string;
@@ -1021,6 +1076,10 @@ begin
     Result := 'die Zeile ist eine typisierte Konstante oder initialisierte '
       + 'Variable "Name: Typ = Wert" (const-/var-Abschnitt) - ihr Wert '
       + 'bleibt, wie er ist'
+  else if IsFieldDecl(ATokens) then
+    Result := 'die Zeile ist ein Feld oder eine Variable "Name: Typ;" '
+      + '(Klassen- oder var-Abschnitt) - dort ist keine Inline-Deklaration '
+      + 'erlaubt'
   else if IsLabeled(ATokens) then
     Result := 'die Zeile ist ein case-Zweig, eine Sprungmarke oder ein '
       + 'on-Handler - davor darf keine Deklaration'
@@ -1182,6 +1241,30 @@ begin
   Result := (Length(T) = 0) or InList(T[High(T)].Text, IF_STATEMENT_AFTER);
 end;
 
+// Endet der Code mit 'then' oder 'else' - einem Arm, dessen 'if' auf
+// dieser Zeile oder weiter oben steht?
+function EndsWithArm(const ATokens: TArray<TRdxIntroToken>): Boolean;
+begin
+  Result := (Length(ATokens) > 0)
+    and ((ATokens[High(ATokens)].Text = 'then')
+         or (ATokens[High(ATokens)].Text = 'else'));
+end;
+
+// Steht mitten in der Zeile ein 'if', das eine ANWEISUNG beginnt ('Z := 1;
+// if C then', '1: if C then') - nicht hinter 'else' ('else if B then' kann
+// die Kette eines Ausdrucks fortsetzen)? Vorbedingung: ContinuesIfExpression
+// ist False, jedes 'if' mitten in der Zeile steht also hinter einem Wort
+// aus IF_STATEMENT_AFTER.
+function HasStatementIf(const ATokens: TArray<TRdxIntroToken>): Boolean;
+var
+  k : Integer;
+begin
+  for k := 1 to High(ATokens) do
+    if (ATokens[k].Text = 'if') and (ATokens[k - 1].Text <> 'else') then
+      Exit(True);
+  Result := False;
+end;
+
 function IfExpressionAbove(const ACodeAbove: array of string): Boolean;
 var
   k    : Integer;
@@ -1198,12 +1281,24 @@ begin
     begin
       // 'if' als erstes Wort: Ausdruck nur, wenn die Zeile darueber offen
       // endet ('X :=', 'Foo(', 'A +'); ohne Zeile darueber eine Anweisung.
+      // Endet sie mit then/else, ist dieses if selbst ein Arm - ob eines
+      // Ausdrucks ('X := if A then 1 else' / 'if B then'), entscheidet die
+      // Zeile weiter oben (Wochen-Review 2026-10-21: vorher hielt die
+      // Suche dort an, und begin..end landete mitten im Ausdruck).
       Next := '';
       if k < High(ACodeAbove) then
         Next := ACodeAbove[k + 1];
-      Exit(not EndsStatementOrBranch(Next));
-    end;
-    if EndsStatementOrBranch(ACodeAbove[k]) then
+      if not EndsWithArm(TokensOf(Next)) then
+        Exit(not EndsStatementOrBranch(Next));
+    end
+    else if EndsWithArm(T) then
+    begin
+      // 'else', 'A else', 'else if B then': das if steht weiter oben -
+      // ausser die Zeile beginnt selbst eine if-Anweisung.
+      if HasStatementIf(T) then
+        Exit;
+    end
+    else if EndsStatementOrBranch(ACodeAbove[k]) then
       Exit;
   end;
 end;

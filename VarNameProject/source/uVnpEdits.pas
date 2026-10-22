@@ -340,14 +340,17 @@ end;
 // ('{$IFDEF A} if B then {$ELSE} Foo; {$ENDIF}' - Pruefer 2026-10-13,
 // Harness 7). Die Direktive AUF der Zeile darueber zaehlt mit: die
 // Spanne lag strikt dazwischen, und genau dieser Fall stand still hinter
-// dem then (Pruefer 2026-10-14, b). Geprueft wird die rohe Zeile - ein
-// '{$' in einem String zaehlt auch (lieber ablehnen).
+// dem then (Pruefer 2026-10-14, b). Die Anweisungszeile AToRow zaehlt
+// ebenso: '{$ENDIF} X := 42;' bekaeme die Deklaration an den Zeilenanfang,
+// also VOR das '{$ENDIF}' in den Zweig darueber, und ohne A fehlte der
+// Name (Review Woche 2026-10-21, G10-02). Geprueft wird die rohe Zeile -
+// ein '{$' in einem String zaehlt auch (lieber ablehnen).
 function DirectiveBetween(const AText: TVnpText;
   AFromRow, AToRow: Integer): Boolean;
 var
   i : Integer;
 begin
-  for i := AFromRow - 1 to AToRow - 2 do
+  for i := AFromRow - 1 to AToRow - 1 do
     if (i >= 0) and ((Pos('{$', AText.Lines[i]) > 0)
        or (Pos('(*$', AText.Lines[i]) > 0)) then
       Exit(True);
@@ -482,16 +485,17 @@ begin
 end;
 
 // Was die Zeilen um einen (fuer sich gueltigen) Plan verbieten: eine
-// Direktive auf oder unter der Zeile darueber bis zur Anweisung - fuer
+// Direktive auf oder unter der Zeile darueber bis einschliesslich der
+// Anweisungszeile - fuer
 // JEDEN Plan, nicht nur mit Block (Pruefer 2026-10-13, Major 4) - und bei
 // begin..end die Grenzen des Blocks (BlockReason). '' oder der Grund.
 function PlacementReason(const AText: TVnpText; const ATarget: TVnpTarget;
   const ARows: TVnpRows): string;
 begin
   if DirectiveBetween(AText, ATarget.PrevRow, ATarget.SourceRow) then
-    Result := 'auf der Zeile darueber oder zwischen ihr und der Anweisung '
-      + 'steht eine Direktive - in einem anderen Zweig der bedingten '
-      + 'Uebersetzung stuende die Deklaration woanders'
+    Result := 'auf der Zeile darueber, zwischen ihr und der Anweisung oder '
+      + 'auf der Anweisungszeile steht eine Direktive - in einem anderen '
+      + 'Zweig der bedingten Uebersetzung stuende die Deklaration woanders'
   else if ATarget.Plan.Wrap then
     Result := BlockReason(AText, ATarget, ARows)
   else
@@ -539,6 +543,16 @@ begin
     Result.Plan.Wrap := False;
     Result.Plan.Reason := Why;
     Exit;
+  end;
+  // begin..end ruecken wie die ROHE Zweigzeile ein: schliesst sie einen
+  // mehrzeiligen String, bekam der Plan nur den getrimmten Code hinter dem
+  // Schliesser (' then'), und der Block stuende eine Spalte tief (Review
+  // Woche 2026-10-21, G10-13). Sonst ist es dieselbe Einrueckung.
+  if Result.Plan.Wrap then
+  begin
+    PrevLine := LineOrEmpty(AText, Result.PrevRow);
+    Result.Plan.BlockIndent := Copy(PrevLine, 1,
+      Length(PrevLine) - Length(TrimLeft(PrevLine)));
   end;
   // Mit Block steht 'begin' ueber der Deklaration: beide eine Zeile tiefer.
   Result.DeclRow := ARow + Ord(Result.Plan.Wrap);

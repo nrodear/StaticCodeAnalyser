@@ -34,7 +34,7 @@ type
     [Test] procedure Sca097_NoOverride_NoHelp;
     [Test] procedure Sca121_CatalogExample;
     [Test] procedure Sca121_Outcome_MarkedWithCaption;
-    [Test] procedure Sca121_Script_NoHelp;
+    [Test] procedure Sca121_Script_LiteralOnly;
     [Test] procedure Sca196_String_RoundTrip;
     [Test] procedure Sca196_TArray_RoundTrip;
     [Test] procedure Sca196_Variant_AddsUses;
@@ -66,8 +66,12 @@ begin
       TDestructorWithoutInheritedDetector.AnalyzeUnit(Root, Path, Results);
     fkRoutineResultUnassigned:
       TRoutineResultAssignedDetector.AnalyzeUnit(Root, Path, Results);
+    fkManagedResultUninit:
+      TManagedResultUninitDetector.AnalyzeUnit(Root, Path, Results);
   else
-    TManagedResultUninitDetector.AnalyzeUnit(Root, Path, Results);
+    // Eine fremde Art liefe sonst still gegen den SCA196-Detektor und
+    // faende "nichts" (Review Woche G08-12).
+    Assert.Fail(Format('RunDetector: keine Hilfe-Art %d', [Ord(AKind)]));
   end;
 end;
 
@@ -272,13 +276,17 @@ begin
     TRdxFixTable.CaptionFor(fkRoutineResultUnassigned, O));
 end;
 
-procedure TTestRdxResultFixesDetector.Sca121_Script_NoHelp;
+procedure TTestRdxResultFixesDetector.Sca121_Script_LiteralOnly;
+var
+  O : TRdxFixOutcome;
 begin
   // xEdit-Skript ('unit' ohne implementation): Default() kennt der
-  // Interpreter nicht.
-  AssertNoHelp(Join(['unit UserScript;', '', 'function Initialize: integer;',
-    'begin', '  Log(''x'');', 'end;', '', 'end.']), fkRoutineResultUnassigned,
-    'ohne implementation-Teil');
+  // Interpreter nicht, das Literal 'Result := 0;' schon - seit Review Woche
+  // G08-07 angeboten (bis dahin keine Hilfe). Die Ablehnung fuer Default()
+  // pinnt uTestRdxResultFixes.Refuse121_ScriptOrInclude.
+  O := OutcomeOf(Join(['unit UserScript;', '', 'function Initialize: integer;',
+    'begin', '  Log(''x'');', 'end;', '', 'end.']), fkRoutineResultUnassigned);
+  Assert.IsTrue(O.Enabled, O.Reason);
 end;
 
 { ---- SCA196 ---- }
