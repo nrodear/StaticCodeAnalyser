@@ -37,8 +37,6 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  System.JSON,                     // TJSONObject in den Lader-Helfern
-                                   // (strict private; E2003 sonst)
   uSCAConsts;
 
 type
@@ -129,8 +127,8 @@ type
   end;
 
   // Rule-ID ('SCA001') -> uebersetzte Felder EINER Sprache. Jeder
-  // Zugriff auf den Cache UND seine Maps laeuft unter
-  // TMonitor(FOverlays) - Vertrag und Begruendung s. EnsureOverlay.
+  // Zugriff auf den Cache UND seine Maps laeuft unter dem Katalog-
+  // Monitor FGuard - Vertrag und Begruendung s. EnsureOverlay.
   TOverlayMap = TDictionary<string, TRuleTextOverlay>;
 
   TRuleCatalog = class
@@ -174,28 +172,25 @@ type
     // einziger Monitor statt zweier: so gibt es keine Sperr-Reihenfolge,
     // die Reload (Katalog, dann Overlays) und ApplyOverlayTo (Overlays,
     // dann Katalog) gegeneinander verklemmen koennte. Unkontent kostet
-    // Enter/Exit wenige Nanosekunden - auch auf dem SetKind-Pfad je Fund.
+    // Enter/Exit wenige Nanosekunden; je Fund laeuft er nur in den
+    // Exportern (ResolvedRuleId) und in der HTML-Fundzeile (GetRule) -
+    // die Detektoren selbst (TLeakFinding.SetKind liest KIND_META)
+    // beruehren den Katalog nicht.
+    // Lebensdauer: Init bis Done (initialization/finalization). Danach
+    // ist FGuard nil, und JEDER Zugriff - Reload eingeschlossen - ist ein
+    // Programmierfehler wie der Zugriff auf ein freigegebenes Objekt;
+    // keine Methode faengt das ab (vorher tat es nur Reload, still).
     class var FGuard            : TObject;
     class procedure EnsureLoaded; static;
     class procedure LoadFromJsonFile(const FileName: string); static;
-    // Die Abschnitte der Katalogdatei liest je ein Helfer des Laders
-    // (SCA176; alle brauchen die strict-privaten Parse*-Funktionen):
-    // eine Regel aus ihrem JSON-Objekt - K/KindName hat der Lader schon
-    // aufgeloest - samt Fix-Metadaten und Rueckfall auf die
-    // einkompilierte Tabelle ...
-    class function ParseRule(RObj: TJSONObject; K: TFindingKind;
-      const KindName: string): TRuleMeta; static;
-    // ... ihre Sonar-Impacts (nil ohne 'impacts'-Array; ein Eintrag, der
-    // kein Objekt ist, bleibt leer statt zu werfen) ...
-    class function ParseImpacts(RObj: TJSONObject): TArray<TSonarImpact>; static;
-    // ... und der Profile-Block samt 'default'-Garantie.
-    class procedure LoadProfiles(Root: TJSONObject); static;
+    // Der Profile-Block der Katalogdatei samt 'default'-Garantie. Nimmt
+    // Name -> Token-Liste als Strings (die JSON-Seite liest die
+    // Unit-Funktion ProfileListenVon), aus demselben Grund wie
+    // ParseProfileTokens: kein JSON-Typ in der Klassendeklaration.
+    class procedure LoadProfiles(
+      const AProfiles: TArray<TPair<string, TArray<string>>>); static;
     class procedure LoadFallback; static;
     class function FindJsonFile: string; static;
-    class function ParseSeverity(const S: string): TLeakSeverity; static;
-    class function ParseFindingType(const S: string): TFindingType; static;
-    class function ParseSoftwareQuality(const S: string): TSonarSoftwareQuality; static;
-    class function ParseImpactSeverity(const S: string): TSonarImpactSeverity; static;
     class function AllKinds: TFindingKinds; static;
     class function MakeFallbackMeta(K: TFindingKind): TRuleMeta; static;
     class function ParseProfileTokens(const ATokens: TArray<string>): TFindingKinds; static;
@@ -308,7 +303,11 @@ type
     // nicht noetig - der erste GetRule-Call laed lazy. Aufrufer: die
     // Tests (Setup) und das Profil-Fenster ('Neu laden'); laeuft wie
     // jeder Zugriff unter dem Katalog-Monitor, ein paralleler Leser
-    // sieht den alten oder den neuen Stand, nie einen halben.
+    // sieht den alten oder den neuen Stand, nie einen halben. Die Zusage
+    // gilt der NEBENLAEUFIGKEIT, nicht dem Lesefehler: wirft das Lesen
+    // der Datei (gesperrt, keine Rechte), ist der alte Stand schon
+    // verworfen - die Exception geht an den Aufrufer, und jeder weitere
+    // Zugriff versucht das Laden erneut, bis die Datei wieder lesbar ist.
     class procedure Reload; static;
 
     // Setup / Teardown (im initialization / finalization gerufen).
@@ -323,7 +322,10 @@ implementation
 
 uses
   Winapi.Windows,                  // OutputDebugString
-  System.IOUtils,                  // System.JSON steht im Interface (Lader-Helfer)
+  System.IOUtils,
+  System.JSON,                     // nur hier, nie im Interface: die
+                                   // Lader-Helfer sind Unit-Funktionen
+                                   // (E2003-Falle, s. OverlayFromJson)
   System.Generics.Defaults,        // TIStringComparer - Profilnamen (G5-4)
   uJsonFormat,                     // JsonFormatEscaped (WriteUserProfiles)
   uLocalization;                   // NormalizeLangCode - EINE Normalisierung
@@ -529,6 +531,186 @@ begin
     'TRuleCatalog: %s %s=%s ungueltig - ignoriert', [ARuleID, AName, Roh])));
 end;
 
+// Lader-Helfer als UNIT-Funktionen (Review Woche G03-07): ihre
+// Signaturen tragen JSON-Typen, und eine Deklaration in der Klasse
+// zoege System.JSON in die interface-uses (E2003-Falle) - dieselbe
+// Regel wie bei OverlayFromJson und ParseProfileTokens. Erst die
+// Wert-Mapper (triviale String-Switches), dann die Impacts, eine
+// Regel, zuletzt die Token-Listen des Profile-Blocks - jede steht
+// vor ihrem ersten Aufrufer (keine forward-Deklaration).
+
+function ParseSeverity(const S: string): TLeakSeverity;
+var
+  L : string;
+begin
+  L := LowerCase(S);
+  if L = 'error'   then Exit(lsError);
+  if L = 'warning' then Exit(lsWarning);
+  if L = 'hint'    then Exit(lsHint);
+  Result := lsWarning; // default
+end;
+
+function ParseFindingType(const S: string): TFindingType;
+var
+  L : string;
+begin
+  L := LowerCase(S);
+  if L = 'bug'                then Exit(ftBug);
+  if L = 'code smell'         then Exit(ftCodeSmell);
+  if L = 'vulnerability'      then Exit(ftVulnerability);
+  if L = 'security hotspot'   then Exit(ftSecurityHotspot);
+  if L = 'code duplication'   then Exit(ftCodeDuplication);
+  if L = 'file error'         then Exit(ftFileError);
+  Result := ftCodeSmell;
+end;
+
+function ParseSoftwareQuality(const S: string): TSonarSoftwareQuality;
+// Case-insensitive Match auf den 3 SonarQube-MQR-Software-Quality-Werten.
+// Default bei unbekanntem/leeren Wert: sqMaintainability (am breitesten
+// anwendbar; Sonar wirft Unbekanntes ohnehin spaeter bei Import zurueck).
+var
+  L : string;
+begin
+  L := LowerCase(S);
+  if L = 'security'         then Exit(sqSecurity);
+  if L = 'reliability'      then Exit(sqReliability);
+  if L = 'maintainability'  then Exit(sqMaintainability);
+  Result := sqMaintainability;
+end;
+
+function ParseImpactSeverity(const S: string): TSonarImpactSeverity;
+// Case-insensitive Match auf den 5 SonarQube-MQR-Severity-Werten. Default
+// bei unbekanntem Wert: isMedium (entspricht Sonar-Default im MQR-Mode).
+var
+  L : string;
+begin
+  L := LowerCase(S);
+  if L = 'blocker' then Exit(isBlocker);
+  if L = 'high'    then Exit(isHigh);
+  if L = 'medium'  then Exit(isMedium);
+  if L = 'low'     then Exit(isLow);
+  if L = 'info'    then Exit(isInfo);
+  Result := isMedium;
+end;
+
+function ParseImpacts(RObj: TJSONObject): TArray<TSonarImpact>;
+// Die Sonar-Impacts einer Regel: nil ohne 'impacts'-Array; ein Eintrag,
+// der kein Objekt ist, bleibt leer statt zu werfen.
+var
+  ArrVal : TJSONArray;
+  IxImp  : Integer;
+  IObj   : TJSONObject;
+begin
+  Result := nil;   // ohne 'impacts'-Array bleibt das Feld leer (nil)
+  ArrVal := FindArray(RObj, 'impacts');
+  if ArrVal = nil then Exit;
+  SetLength(Result, ArrVal.Count);
+  for IxImp := 0 to ArrVal.Count - 1 do
+  begin
+    // UPSTREAM-BEFUND 5 (GITLAK): 'as' liefert nie nil, es wirft
+    // EInvalidCast - der Guard darunter konnte also nie greifen.
+    // Ein handgepflegtes "impacts": ["high"] in sca-rules.json riss
+    // damit EnsureLoaded auf, ueber GetRule und ResolvedRuleId bis in
+    // jeden Exporter: der Lauf starb beim EXPORT, nach getaner
+    // Analyse. Jede andere Umwandlung im Lader ist is-gepruefft; das
+    // hier war die einzige Ausnahme.
+    if not (ArrVal.Items[IxImp] is TJSONObject) then Continue;
+    IObj := ArrVal.Items[IxImp] as TJSONObject;
+    Result[IxImp].SoftwareQuality :=
+      ParseSoftwareQuality(IObj.GetValue<string>('softwareQuality', ''));
+    Result[IxImp].Severity :=
+      ParseImpactSeverity(IObj.GetValue<string>('severity', ''));
+  end;
+end;
+
+function ParseRule(RObj: TJSONObject; K: TFindingKind;
+  const KindName: string): TRuleMeta;
+// Eine Regel aus ihrem JSON-Objekt - K/KindName hat der Lader schon
+// aufgeloest - samt Fix-Metadaten und Rueckfall auf die
+// einkompilierte Tabelle.
+var
+  Examples : TJSONObject;
+  Idx      : Integer;
+begin
+  Result := Default(TRuleMeta);
+  Result.ID               := RObj.GetValue<string>('id', '');
+  Result.Kind             := K;
+  Result.Name             := RObj.GetValue<string>(JSON_FLD_NAME, KindName);
+  Result.ShortDescription := RObj.GetValue<string>('shortDescription', '');
+  Result.FullDescription  := RObj.GetValue<string>('fullDescription', '');
+  Result.DefaultSeverity  := ParseSeverity(RObj.GetValue<string>('defaultSeverity', ''));
+  Result.FindingType      := ParseFindingType(RObj.GetValue<string>('type', ''));
+  Result.ConfigKey        := RObj.GetValue<string>('configKey', '');
+  Result.DetectorUnit     := RObj.GetValue<string>('detectorUnit', '');
+
+  // Arrays (tags / cwe / owasp) - JsonStringsVon ist nil-safe, GetValue<T>
+  // wuerde EJSONPathException werfen wenn der Key fehlt (z.B. die
+  // meisten Rules haben kein owasp-Feld).
+  Result.Tags  := JsonStringsVon(RObj, 'tags');
+  Result.CWE   := JsonStringsVon(RObj, 'cwe');
+  Result.OWASP := JsonStringsVon(RObj, 'owasp');
+
+  // Examples (optional - Rules ohne examples haben kein 'examples'-Feld)
+  Examples := FindObject(RObj, 'examples');
+  if Examples <> nil then
+  begin
+    Result.BadExample  := Examples.GetValue<string>('bad', '');
+    Result.GoodExample := Examples.GetValue<string>('good', '');
+  end;
+
+  // Quellstellen-Dienst: Anker und Fix-Politik, optional. Nur ein
+  // bekannter String zaehlt (BekannterWert) - ein Objekt oder Array
+  // riss mit GetValue<string> das Laden auf. Test
+  // AnchorAndFixModeUseKnownValues haelt die Wertemenge der Datei.
+  Result.Anchor  := BekannterWert(RObj, 'anchor', Result.ID, KNOWN_ANCHORS);
+  Result.FixMode := BekannterWert(RObj, 'fixMode', Result.ID, KNOWN_FIX_MODES);
+  // Leer -> einkompilierter Wert (Minor 40). Eine aeltere oder von
+  // Hand gekuerzte sca-rules.json ohne die zwei Felder (gefunden ueber
+  // den Exe-/Modul-Aufwaertswalk oder %APPDATA%) schaltete reDelphix
+  // sonst still ab: kein Fund bot mehr eine Umformung an. Abschalten
+  // geht ausdruecklich mit fixMode 'none' - das ist nicht leer.
+  if FallbackZeileVon(K, Idx) then
+  begin
+    if Result.Anchor = '' then
+      Result.Anchor := RULE_CATALOG_DATA[Idx].Anchor;
+    if Result.FixMode = '' then
+      Result.FixMode := RULE_CATALOG_DATA[Idx].FixMode;
+  end;
+  Result.EditorHelp := EditorHelpVon(RObj, K, Result.ID, Result.FixMode);
+
+  // SonarQube MQR-Felder (cleanCodeAttribute + impacts). Optional in der
+  // JSON - Rules ohne diese Felder bekommen leere Werte. Test
+  // EveryFindingKindHasMqrMapping schreit wenn welche fehlen.
+  Result.CleanCodeAttribute := RObj.GetValue<string>('cleanCodeAttribute', '');
+  Result.Impacts := ParseImpacts(RObj);
+end;
+
+function ProfileListenVon(Root: TJSONObject): TArray<TPair<string, TArray<string>>>;
+// Der Profile-Block als Name -> Token-Liste, in Datei-Reihenfolge; ein
+// Eintrag, der kein Array ist, faellt weg. Die Token-Semantik und die
+// 'default'-Garantie liegen in TRuleCatalog.LoadProfiles.
+var
+  Profiles : TJSONObject;
+  ProfPair : TJSONPair;
+  i, n     : Integer;
+begin
+  Result := nil;
+  Profiles := FindObject(Root, 'profiles');
+  if Profiles = nil then Exit;
+  SetLength(Result, Profiles.Count);
+  n := 0;
+  for i := 0 to Profiles.Count - 1 do
+  begin
+    ProfPair := Profiles.Pairs[i];
+    if not (ProfPair.JsonValue is TJSONArray) then Continue;
+    Result[n] := TPair<string, TArray<string>>.Create(
+      ProfPair.JsonString.Value,
+      JsonArrayToStrings(TJSONArray(ProfPair.JsonValue)));
+    Inc(n);
+  end;
+  SetLength(Result, n);
+end;
+
 { ---- Setup ---- }
 
 class procedure TRuleCatalog.Init;
@@ -570,8 +752,11 @@ begin
   // wuerde Katalog und Uebersetzung aus zwei Staenden mischen. Clear gibt
   // die Maps frei (doOwnsValues); der Leser (ApplyOverlayTo) haelt
   // denselben Monitor ueber Lookup UND Anwendung - so zieht Reload keine
-  // Map unter einem laufenden Zugriff weg (Use-after-free).
-  if not Assigned(FGuard) then Exit;   // nach Done (Prozessende)
+  // Map unter einem laufenden Zugriff weg (Use-after-free). Wirft
+  // EnsureLoaded (Datei gesperrt), bleibt der Katalog leer mit FLoaded =
+  // False - der naechste Zugriff laedt neu (s. Deklaration). Kein
+  // Nil-Guard fuer FGuard: nach Done ist jeder Zugriff ein Fehler (s.
+  // FGuard), Reload wird nicht still anders behandelt als der Rest.
   TMonitor.Enter(FGuard);
   try
     if Assigned(FRules)     then FRules.Clear;
@@ -732,10 +917,28 @@ begin
   FLoaded := True;
 end;
 
+function KatalogTextVon(const AFileName: string): string;
+// Der Katalog als UTF-8, wie die Overlays (LoadOverlayFile): ReadAllText
+// ohne Encoding nimmt bei fehlender BOM ANSI an - eine ohne BOM
+// gespeicherte Datei lieferte dann Mojibake in den Nicht-ASCII-Feldern,
+// und der SARIF-rules[]-Block saehe anders aus als beim Kollegen.
+// TEncoding.UTF8 ist strikt und wirft bei ungueltigen Sequenzen; eine von
+// Hand als ANSI gespeicherte Datei liest dann wie bisher der
+// ANSI-Rueckfall, statt jeden Katalogzugriff mit einer Exception
+// abzubrechen (s. Reload).
+begin
+  try
+    Result := TFile.ReadAllText(AFileName, TEncoding.UTF8);
+  except
+    on EEncodingError do
+      Result := TFile.ReadAllText(AFileName);
+  end;
+end;
+
 class procedure TRuleCatalog.LoadFromJsonFile(const FileName: string);
 // Rahmen des Laders: Datei, Tool-Block, Regelschleife, Profile. Die Felder
 // einer Regel liest ParseRule (mit ParseImpacts), den Profile-Block
-// LoadProfiles - in derselben Reihenfolge wie vorher in dieser Routine,
+// ProfileListenVon und LoadProfiles - in derselben Reihenfolge wie vorher in dieser Routine,
 // damit auch die Diagnosen (BekannterWert, EditorHelpVon) in derselben
 // Folge kommen. Laeuft unter dem Katalog-Monitor des Aufrufers (s. FGuard).
 var
@@ -750,7 +953,7 @@ var
   KindName : string;
   i        : Integer;
 begin
-  Json := TJSONObject.ParseJSONValue(TFile.ReadAllText(FileName));
+  Json := TJSONObject.ParseJSONValue(KatalogTextVon(FileName));
   if not (Json is TJSONObject) then
   begin
     // Gueltiges JSON, aber kein Objekt (Array/Skalar - z.B. versehentlich
@@ -795,101 +998,15 @@ begin
         FRulesByID.AddOrSetValue(Meta.ID, Meta);
     end;
 
-    LoadProfiles(Root);
+    LoadProfiles(ProfileListenVon(Root));
   finally
     Json.Free;
   end;
 end;
 
-class function TRuleCatalog.ParseRule(RObj: TJSONObject; K: TFindingKind;
-  const KindName: string): TRuleMeta;
-var
-  Examples : TJSONObject;
-  Idx      : Integer;
-begin
-  Result := Default(TRuleMeta);
-  Result.ID               := RObj.GetValue<string>('id', '');
-  Result.Kind             := K;
-  Result.Name             := RObj.GetValue<string>(JSON_FLD_NAME, KindName);
-  Result.ShortDescription := RObj.GetValue<string>('shortDescription', '');
-  Result.FullDescription  := RObj.GetValue<string>('fullDescription', '');
-  Result.DefaultSeverity  := ParseSeverity(RObj.GetValue<string>('defaultSeverity', ''));
-  Result.FindingType      := ParseFindingType(RObj.GetValue<string>('type', ''));
-  Result.ConfigKey        := RObj.GetValue<string>('configKey', '');
-  Result.DetectorUnit     := RObj.GetValue<string>('detectorUnit', '');
-
-  // Arrays (tags / cwe / owasp) - JsonStringsVon ist nil-safe, GetValue<T>
-  // wuerde EJSONPathException werfen wenn der Key fehlt (z.B. die
-  // meisten Rules haben kein owasp-Feld).
-  Result.Tags  := JsonStringsVon(RObj, 'tags');
-  Result.CWE   := JsonStringsVon(RObj, 'cwe');
-  Result.OWASP := JsonStringsVon(RObj, 'owasp');
-
-  // Examples (optional - Rules ohne examples haben kein 'examples'-Feld)
-  Examples := FindObject(RObj, 'examples');
-  if Examples <> nil then
-  begin
-    Result.BadExample  := Examples.GetValue<string>('bad', '');
-    Result.GoodExample := Examples.GetValue<string>('good', '');
-  end;
-
-  // Quellstellen-Dienst: Anker und Fix-Politik, optional. Nur ein
-  // bekannter String zaehlt (BekannterWert) - ein Objekt oder Array
-  // riss mit GetValue<string> das Laden auf. Test
-  // AnchorAndFixModeUseKnownValues haelt die Wertemenge der Datei.
-  Result.Anchor  := BekannterWert(RObj, 'anchor', Result.ID, KNOWN_ANCHORS);
-  Result.FixMode := BekannterWert(RObj, 'fixMode', Result.ID, KNOWN_FIX_MODES);
-  // Leer -> einkompilierter Wert (Minor 40). Eine aeltere oder von
-  // Hand gekuerzte sca-rules.json ohne die zwei Felder (gefunden ueber
-  // den Exe-/Modul-Aufwaertswalk oder %APPDATA%) schaltete reDelphix
-  // sonst still ab: kein Fund bot mehr eine Umformung an. Abschalten
-  // geht ausdruecklich mit fixMode 'none' - das ist nicht leer.
-  if FallbackZeileVon(K, Idx) then
-  begin
-    if Result.Anchor = '' then
-      Result.Anchor := RULE_CATALOG_DATA[Idx].Anchor;
-    if Result.FixMode = '' then
-      Result.FixMode := RULE_CATALOG_DATA[Idx].FixMode;
-  end;
-  Result.EditorHelp := EditorHelpVon(RObj, K, Result.ID, Result.FixMode);
-
-  // SonarQube MQR-Felder (cleanCodeAttribute + impacts). Optional in der
-  // JSON - Rules ohne diese Felder bekommen leere Werte. Test
-  // EveryFindingKindHasMqrMapping schreit wenn welche fehlen.
-  Result.CleanCodeAttribute := RObj.GetValue<string>('cleanCodeAttribute', '');
-  Result.Impacts := ParseImpacts(RObj);
-end;
-
-class function TRuleCatalog.ParseImpacts(RObj: TJSONObject): TArray<TSonarImpact>;
-var
-  ArrVal : TJSONArray;
-  IxImp  : Integer;
-  IObj   : TJSONObject;
-begin
-  Result := nil;   // ohne 'impacts'-Array bleibt das Feld leer (nil)
-  ArrVal := FindArray(RObj, 'impacts');
-  if ArrVal = nil then Exit;
-  SetLength(Result, ArrVal.Count);
-  for IxImp := 0 to ArrVal.Count - 1 do
-  begin
-    // UPSTREAM-BEFUND 5 (GITLAK): 'as' liefert nie nil, es wirft
-    // EInvalidCast - der Guard darunter konnte also nie greifen.
-    // Ein handgepflegtes "impacts": ["high"] in sca-rules.json riss
-    // damit EnsureLoaded auf, ueber GetRule und ResolvedRuleId bis in
-    // jeden Exporter: der Lauf starb beim EXPORT, nach getaner
-    // Analyse. Jede andere Umwandlung im Lader ist is-gepruefft; das
-    // hier war die einzige Ausnahme.
-    if not (ArrVal.Items[IxImp] is TJSONObject) then Continue;
-    IObj := ArrVal.Items[IxImp] as TJSONObject;
-    Result[IxImp].SoftwareQuality :=
-      ParseSoftwareQuality(IObj.GetValue<string>('softwareQuality', ''));
-    Result[IxImp].Severity :=
-      ParseImpactSeverity(IObj.GetValue<string>('severity', ''));
-  end;
-end;
-
-class procedure TRuleCatalog.LoadProfiles(Root: TJSONObject);
-// ---- Profile-Block (optional) ----
+class procedure TRuleCatalog.LoadProfiles(
+  const AProfiles: TArray<TPair<string, TArray<string>>>);
+// ---- Profile-Block (optional; AProfiles liefert ProfileListenVon) ----
 // Format: "profiles": { "<name>": ["Kind1","Kind2","*","!Style", ...], ... }
 // Token-Semantik (Reihenfolge zaehlt - links nach rechts angewandt):
 //   * '*'                  expandiert zu allen Kinds
@@ -900,23 +1017,11 @@ class procedure TRuleCatalog.LoadProfiles(Root: TJSONObject);
 // Unbekannte Kind-Tokens werden still ignoriert - kein Crash, der
 // Rest des Profils greift weiter. (Aelteres Tool, neueres JSON.)
 var
-  Profiles : TJSONObject;
-  ProfPair : TJSONPair;
-  ProfArr  : TJSONArray;
-  i        : Integer;
+  i : Integer;
 begin
-  Profiles := FindObject(Root, 'profiles');
-  if Profiles <> nil then
-  begin
-    for i := 0 to Profiles.Count - 1 do
-    begin
-      ProfPair := Profiles.Pairs[i];
-      if not (ProfPair.JsonValue is TJSONArray) then Continue;
-      ProfArr := ProfPair.JsonValue as TJSONArray;
-      FProfiles.AddOrSetValue(ProfPair.JsonString.Value,
-                              ParseProfileTokens(JsonArrayToStrings(ProfArr)));
-    end;
-  end;
+  for i := 0 to High(AProfiles) do
+    FProfiles.AddOrSetValue(AProfiles[i].Key,
+                            ParseProfileTokens(AProfiles[i].Value));
   // 'default' garantieren - falls die JSON ihn nicht hat, immer AllKinds.
   if not FProfiles.ContainsKey('default') then
     FProfiles.AddOrSetValue('default', AllKinds);
@@ -1076,60 +1181,6 @@ begin
      fkDfmTabOrderConflict, fkDfmForbiddenClass, fkDfmDbInUiForm,
      fkDfmCrossFormCoupling, fkDfmLayerViolation, fkDfmGodHandler,
      fkDfmActionMismatch]);
-end;
-
-class function TRuleCatalog.ParseSeverity(const S: string): TLeakSeverity;
-var
-  L : string;
-begin
-  L := LowerCase(S);
-  if L = 'error'   then Exit(lsError);
-  if L = 'warning' then Exit(lsWarning);
-  if L = 'hint'    then Exit(lsHint);
-  Result := lsWarning; // default
-end;
-
-class function TRuleCatalog.ParseFindingType(const S: string): TFindingType;
-var
-  L : string;
-begin
-  L := LowerCase(S);
-  if L = 'bug'                then Exit(ftBug);
-  if L = 'code smell'         then Exit(ftCodeSmell);
-  if L = 'vulnerability'      then Exit(ftVulnerability);
-  if L = 'security hotspot'   then Exit(ftSecurityHotspot);
-  if L = 'code duplication'   then Exit(ftCodeDuplication);
-  if L = 'file error'         then Exit(ftFileError);
-  Result := ftCodeSmell;
-end;
-
-class function TRuleCatalog.ParseSoftwareQuality(const S: string): TSonarSoftwareQuality;
-// Case-insensitive Match auf den 3 SonarQube-MQR-Software-Quality-Werten.
-// Default bei unbekanntem/leeren Wert: sqMaintainability (am breitesten
-// anwendbar; Sonar wirft Unbekanntes ohnehin spaeter bei Import zurueck).
-var
-  L : string;
-begin
-  L := LowerCase(S);
-  if L = 'security'         then Exit(sqSecurity);
-  if L = 'reliability'      then Exit(sqReliability);
-  if L = 'maintainability'  then Exit(sqMaintainability);
-  Result := sqMaintainability;
-end;
-
-class function TRuleCatalog.ParseImpactSeverity(const S: string): TSonarImpactSeverity;
-// Case-insensitive Match auf den 5 SonarQube-MQR-Severity-Werten. Default
-// bei unbekanntem Wert: isMedium (entspricht Sonar-Default im MQR-Mode).
-var
-  L : string;
-begin
-  L := LowerCase(S);
-  if L = 'blocker' then Exit(isBlocker);
-  if L = 'high'    then Exit(isHigh);
-  if L = 'medium'  then Exit(isMedium);
-  if L = 'low'     then Exit(isLow);
-  if L = 'info'    then Exit(isInfo);
-  Result := isMedium;
 end;
 
 { ---- Public API ---- }
@@ -1714,7 +1765,11 @@ begin
       // belegter Fall: der belegte Fall stand im Baseline-Writer
       // (2026-08-28), und dies ist sein Schwesterpfad - die letzte
       // verbliebene Format(2)-Stelle im Repo.
-      TmpName := FileName + '.tmp';
+      // Nachbardatei je PROZESS: IDE-Plugin, GUI und CLI speichern
+      // unabhaengig voneinander (FGuard sperrt nur im eigenen Prozess) -
+      // ein fester Name liesse den zweiten Schreiber in die Datei des
+      // ersten schreiben oder dessen Inhalt verschieben.
+      TmpName := Format('%s.%d.tmp', [FileName, GetCurrentProcessId]);
       TFile.WriteAllText(TmpName, JsonFormatEscaped(Root, 2),
         TEncoding.UTF8);
       if not MoveFileEx(PChar(TmpName), PChar(FileName),
@@ -1724,7 +1779,14 @@ begin
     except
       // noinspection ExceptionTooGeneral (Lade-Robustheitsgrenze: defekte Konfig darf den Lauf nicht stoppen; Diagnose via DebugOutput-Kanal)
       on E: Exception do
+      begin
         AError := E.Message;
+        // Schreib- oder Tauschfehler: die Nachbardatei darf nicht im
+        // Konfigverzeichnis liegen bleiben (Ziel schreibgeschuetzt,
+        // gesperrt). DeleteFile wirft nicht; fehlt sie, ist es False.
+        if TmpName <> '' then
+          System.SysUtils.DeleteFile(TmpName);
+      end;
     end;
   finally
     Root.Free;

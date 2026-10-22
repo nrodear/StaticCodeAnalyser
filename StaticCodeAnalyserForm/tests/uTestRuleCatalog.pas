@@ -152,6 +152,10 @@ type
     [Test] procedure Reload_WhileWorkersRead_EveryAnswerConsistent;
     [Test] procedure FixModeNone_TurnsEditorHelpOff;
     [Test] procedure SaveUserProfile_WritesAtomically_NoTempFileLeft;
+    // Der Tausch scheitert (Ziel schreibgeschuetzt): False mit Text, der
+    // alte Dateiinhalt und das Profil im Speicher bleiben, und keine
+    // Nachbardatei bleibt liegen (Review Woche G03-10/G03-26).
+    [Test] procedure SaveUserProfile_TargetReadOnly_KeepsOldFileNoTempLeft;
   end;
 
 
@@ -175,6 +179,24 @@ const
   PROF_DEFAULT = 'default';
   PROF_STRICT  = 'strict';
   PROF_STYLE   = 'style';
+
+function NachbarDateienVon(const APfad: string): Integer;
+// Zahl der liegengebliebenen Nachbardateien von APfad ('<Datei>*.tmp'):
+// trifft den alten festen Namen '<Datei>.tmp' ebenso wie den je Prozess
+// ('<Datei>.<pid>.tmp') - der Test haengt nicht an der Namensbildung.
+begin
+  Result := Length(TDirectory.GetFiles(ExtractFilePath(APfad),
+    ExtractFileName(APfad) + '*.tmp'));
+end;
+
+procedure LoescheNachbarDateien(const APfad: string);
+var
+  Datei : string;
+begin
+  for Datei in TDirectory.GetFiles(ExtractFilePath(APfad),
+                 ExtractFileName(APfad) + '*.tmp') do
+    System.SysUtils.DeleteFile(Datei);
+end;
 
 procedure TTestRuleCatalog.Setup;
 begin
@@ -248,7 +270,7 @@ procedure TTestRuleCatalog.JsonTypeMatchesKindMeta;
 // JSON type == KIND_META.FindingType. Die Kategorie steuert den
 // Sonar-/SARIF-Export und die UI-Gruppierung; driftet sie, sehen User
 // denselben Befund in der IDE als Bug und im CI-Report als Code Smell.
-// Zusatznutzen: TRuleCatalog.ParseFindingType faellt bei unbekannter
+// Zusatznutzen: ParseFindingType (uRuleCatalog) faellt bei unbekannter
 // Schreibweise still auf ftCodeSmell zurueck - ein Tippfehler im
 // type-Feld einer Bug-/Vulnerability-Rule wird damit hier sichtbar,
 // statt lautlos zum Code Smell zu werden.
@@ -1391,6 +1413,11 @@ procedure TTestRuleCatalogGuard.Reload_WhileWorkersRead_EveryAnswerConsistent;
 // passend, 'default'-Profil nie leer, lokalisierter Name nie leer. Vor
 // dem Monitor las ein Worker in ein halb geleertes Dictionary. Gezaehlt
 // statt assertiert: DUnitX-Assertions gehoeren auf den Testthread.
+//
+// Auch eine EXCEPTION im Worker zaehlt (Review Woche G03-06): das ist das
+// Hauptsymptom ohne Monitor (EListError/AV beim Lesen waehrend Clear).
+// TThread faengt sie sonst still in FatalException, der Worker endet,
+// WaitFor kehrt normal zurueck - und der Zaehler bliebe 0.
 var
   Threads : array[0..3] of TThread;
   Fehler  : Integer;
@@ -1406,17 +1433,23 @@ begin
         Meta  : TRuleMeta;
         Runde : Integer;
       begin
-        for Runde := 1 to 40 do
-          for K := Low(TFindingKind) to High(TFindingKind) do
-          begin
-            Meta := TRuleCatalog.GetRuleCanonical(K);
-            if (Meta.ID = '') or (Meta.Kind <> K) then
-              AtomicIncrement(Fehler);
-            if TRuleCatalog.GetProfile(PROF_DEFAULT) = [] then
-              AtomicIncrement(Fehler);
-            if TRuleCatalog.GetRule(K, 'de').Name = '' then
-              AtomicIncrement(Fehler);
-          end;
+        try
+          for Runde := 1 to 40 do
+            for K := Low(TFindingKind) to High(TFindingKind) do
+            begin
+              Meta := TRuleCatalog.GetRuleCanonical(K);
+              if (Meta.ID = '') or (Meta.Kind <> K) then
+                AtomicIncrement(Fehler);
+              if TRuleCatalog.GetProfile(PROF_DEFAULT) = [] then
+                AtomicIncrement(Fehler);
+              if TRuleCatalog.GetRule(K, 'de').Name = '' then
+                AtomicIncrement(Fehler);
+            end;
+        except
+          // Jede Exception ist ein Befund dieses Tests, keine zu
+          // verschluckende Stoerung - sie landet im Zaehler.
+          AtomicIncrement(Fehler);
+        end;
       end);
     Threads[i].FreeOnTerminate := False;
   end;
@@ -1427,6 +1460,11 @@ begin
       TRuleCatalog.Reload;
     for i := Low(Threads) to High(Threads) do
       Threads[i].WaitFor;
+    // Zweiter Riegel: was am except oben vorbeikaeme (nichts sollte),
+    // stuende hier.
+    for i := Low(Threads) to High(Threads) do
+      Assert.IsNull(Threads[i].FatalException,
+        Format('Worker %d endete mit einer Exception', [i]));
   finally
     for i := Low(Threads) to High(Threads) do
       Threads[i].Free;
@@ -1486,7 +1524,7 @@ begin
     Assert.IsTrue(TRuleCatalog.SaveUserProfile('atomic-probe',
       [fkMemoryLeak], Err), 'Anlegen: ' + Err);
     Assert.IsTrue(TFile.Exists(TmpPfad), 'Zieldatei steht');
-    Assert.IsFalse(TFile.Exists(TmpPfad + '.tmp'),
+    Assert.AreEqual<Integer>(0, NachbarDateienVon(TmpPfad),
       'die Nachbardatei ist umbenannt, nicht liegengeblieben');
     Ziel := TDictionary<string, TFindingKinds>.Create;
     try
@@ -1498,14 +1536,62 @@ begin
     end;
     Assert.IsTrue(TRuleCatalog.SaveUserProfile('atomic-probe',
       [fkSQLInjection], Err), 'Aendern: ' + Err);
-    Assert.IsFalse(TFile.Exists(TmpPfad + '.tmp'));
+    Assert.AreEqual<Integer>(0, NachbarDateienVon(TmpPfad));
     Assert.IsTrue(fkSQLInjection in TRuleCatalog.GetProfile('atomic-probe'));
   finally
     TRuleCatalog.DeleteUserProfile('atomic-probe', Err);
     TRuleCatalog.UserProfilesPath := AltPfad;
     if TFile.Exists(TmpPfad) then TFile.Delete(TmpPfad);
-    if TFile.Exists(TmpPfad + '.tmp') then TFile.Delete(TmpPfad + '.tmp');
+    LoescheNachbarDateien(TmpPfad);
   end;
 end;
+
+procedure TTestRuleCatalogGuard.SaveUserProfile_TargetReadOnly_KeepsOldFileNoTempLeft;
+// Ein schreibgeschuetztes Ziel laesst MoveFileEx(REPLACE_EXISTING) mit
+// ERROR_ACCESS_DENIED scheitern - die Nachbardatei ist da schon
+// geschrieben. Ohne das Aufraeumen im except blieb sie im
+// Konfigverzeichnis liegen; der alte Inhalt muss in jedem Fall stehen.
+var
+  AltPfad : string;
+  TmpPfad : string;
+  Err     : string;
+  Vorher  : string;
+begin
+  AltPfad := TRuleCatalog.UserProfilesPath;
+  TmpPfad := TPath.Combine(TPath.GetTempPath, 'sca_test_profiles_ro_' +
+    TGuid.NewGuid.ToString.Replace('{', '').Replace('}', '') + '.json');
+  TRuleCatalog.UserProfilesPath := TmpPfad;
+  try
+    Assert.IsTrue(TRuleCatalog.SaveUserProfile('ro-probe',
+      [fkMemoryLeak], Err), 'Anlegen: ' + Err);
+    Vorher := TFile.ReadAllText(TmpPfad);
+    Assert.IsTrue(FileSetReadOnly(TmpPfad, True), 'Schreibschutz setzen');
+
+    Assert.IsFalse(TRuleCatalog.SaveUserProfile('ro-probe',
+      [fkSQLInjection], Err), 'Tausch auf ein schreibgeschuetztes Ziel');
+    Assert.IsTrue(Err <> '', 'Fehlertext fuer die Oberflaeche');
+    Assert.AreEqual(Vorher, TFile.ReadAllText(TmpPfad),
+      'alter Dateiinhalt unveraendert');
+    Assert.AreEqual<Integer>(0, NachbarDateienVon(TmpPfad),
+      'keine Nachbardatei-Leiche');
+    Assert.IsTrue(fkMemoryLeak in TRuleCatalog.GetProfile('ro-probe'),
+      'der Speicher bleibt beim gespeicherten Stand');
+    Assert.IsFalse(fkSQLInjection in TRuleCatalog.GetProfile('ro-probe'));
+  finally
+    if TFile.Exists(TmpPfad) then
+      FileSetReadOnly(TmpPfad, False);
+    TRuleCatalog.DeleteUserProfile('ro-probe', Err);
+    TRuleCatalog.UserProfilesPath := AltPfad;
+    if TFile.Exists(TmpPfad) then TFile.Delete(TmpPfad);
+    LoescheNachbarDateien(TmpPfad);
+  end;
+end;
+
+initialization
+  // Anmeldung ausdruecklich, nicht nur ueber UseRTTI des Runners (Review
+  // Woche G03-25): ein Runner ohne RTTI-Suche liesse die Waechter sonst
+  // still aus.
+  TDUnitX.RegisterTestFixture(TTestRuleCatalog);
+  TDUnitX.RegisterTestFixture(TTestRuleCatalogGuard);
 
 end.
