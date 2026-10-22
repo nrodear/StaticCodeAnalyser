@@ -282,10 +282,19 @@ begin
   // m22 des Pruefers: im Hauptblock eines Programms bot die Hilfe an.
   R := PlanReason(Join(['program p;', 'begin', '  if ParamCount > 200 then Halt;',
     'end.']), 'ParamCount', '200');
-  Assert.IsTrue(Pos('Hauptblock des Programms (begin ab Zeile 2)', R) > 0, R);
+  Assert.IsTrue(Pos('Hauptblock des Programms bzw. der Bibliothek (begin ab '
+    + 'Zeile 2)', R) > 0, R);
   R := PlanReason(Join(['library l;', 'uses SysUtils;', 'begin', '  try',
     '    if X > 200 then Y;', '  finally', '  end;', 'end.']), 'X > 200', '200');
-  Assert.IsTrue(Pos('Hauptblock des Programms (begin ab Zeile 3)', R) > 0, R);
+  Assert.IsTrue(Pos('Hauptblock des Programms bzw. der Bibliothek (begin ab '
+    + 'Zeile 3)', R) > 0, R);
+  // Text hinter 'end.' (Delphi liest ihn nicht): der Hauptblock endet am
+  // ersten 'end.', nicht am letzten Token - vorher fiel die Sperre still
+  // weg (Wochen-Review 2026-10-21).
+  R := PlanReason(Join(['program p;', 'begin', '  if ParamCount > 200 then Halt;',
+    'end.', 'Altes Zeug ohne Kommentarklammern']), 'ParamCount', '200');
+  Assert.IsTrue(Pos('Hauptblock des Programms bzw. der Bibliothek (begin ab '
+    + 'Zeile 2)', R) > 0, 'Text hinter end.: ' + R);
   // In einer Routine des Programms gilt die Inline-Konstante.
   Assert.AreEqual('', PlanReason(Join(['program p;', 'procedure Q;', 'begin',
     '  if ParamCount > 200 then Halt;', 'end;', 'begin', '  Q;', 'end.']),
@@ -352,11 +361,13 @@ begin
   R := PlanReason(Join(['program p;', 'var', '  Doc: Variant;', '  X: Integer;',
     'begin', '  Doc.Range(Start := 0, End := 1);',
     '  if X > 200 then Writeln(''a'');', 'end.']), 'X > 200', '200');
-  Assert.IsTrue(Pos('Hauptblock des Programms (begin ab Zeile 5)', R) > 0, R);
+  Assert.IsTrue(Pos('Hauptblock des Programms bzw. der Bibliothek (begin ab '
+    + 'Zeile 5)', R) > 0, R);
   // 'Begin' als Name schloss die Bilanz zu frueh (Zeile 3 statt 2).
   R := PlanReason(Join(['library l;', 'begin', '  Foo(Begin := 1);',
     '  if X > 200 then Y;', 'end.']), 'X > 200', '200');
-  Assert.IsTrue(Pos('Hauptblock des Programms (begin ab Zeile 2)', R) > 0, R);
+  Assert.IsTrue(Pos('Hauptblock des Programms bzw. der Bibliothek (begin ab '
+    + 'Zeile 2)', R) > 0, R);
 end;
 
 procedure TTestRdxMagicGuards.Disk_IncludeOnNetworkPath_NoDiskAccess;
@@ -365,8 +376,6 @@ var
   Unc, R   : string;
   SL       : TStringList;
   Map      : TRdxCodeMap;
-  T0       : TDateTime;
-  Ms       : Integer;
   i        : Integer;
 begin
   // R4-03, Pruefer-Fall vunc: eine LOKALE Unit bindet ein Include auf einem
@@ -390,11 +399,12 @@ begin
       Map.Free;
       Map := TRdxCodeMap.Create(SL);
       Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U), 'die Unit ist lokal');
-      T0 := Now;
+      // Der Grund ist die Probe: IncludeFileReason (uRdxBlocks) prueft den
+      // Netzpfad VOR FindInclude. Die Wanduhr (bis zum Wochen-Review
+      // 2026-10-21: < 2000 ms) bewies keinen fehlenden Plattenzugriff und
+      // wurde unter Last rot.
       R := TRdxMagicFixes.IncludeReason(T.U, Map);
-      Ms := Round((Now - T0) * MSecsPerDay);
       Assert.IsTrue(Pos('auf einem Netzpfad', R) > 0, R);
-      Assert.IsTrue(Ms < 2000, Format('ohne Plattenzugriff: %d ms', [Ms]));
     end;
   finally
     Map.Free;

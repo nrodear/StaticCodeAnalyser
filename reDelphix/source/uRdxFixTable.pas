@@ -284,18 +284,17 @@ const
   // braucht eine Markierung (Gegen-Review Q14, Minor 13).
   R_MAGIC_HINT = 'gleiche Bedeutung - die Konstante %s haelt das Literal; '
     + 'umbenennen von Hand oder mit Refactor > Rename (Strg+Umschalt+E)';
-  // SCA014 auf einem Netzlaufwerk: die Hilfe liest dort keine Projekt- und
-  // Include-Dateien (Gegen-Review Q14, Verdacht e; UNC prueft FileReason).
-  R_MAGIC_REMOTE = 'Netzlaufwerk %s - die Hilfe liest dort keine Projekt- '
-    + 'und Include-Dateien (Menueaufbau im Hauptthread); von Hand';
-  // SCA147/SCA164 auf einem Netzpfad bzw. Netzlaufwerk (Review FB, R2-07):
-  // dieselbe Regel wie SCA014 - FileExists auf einer nicht erreichbaren
-  // Freigabe blockierte den IDE-Hauptthread (Gegen-Review R4-03: 2,5 bis
-  // 16 s je Aufruf).
+  // SCA014, SCA147 und SCA164 auf einem Netzpfad bzw. Netzlaufwerk (Review
+  // FB, R2-07; SCA014 Gegen-Review Q14, Verdacht e): FileExists auf einer
+  // nicht erreichbaren Freigabe blockierte den IDE-Hauptthread (Gegen-Review
+  // R4-03: 2,5 bis 16 s je Aufruf). EIN Text fuer die eine Regel - bis zum
+  // Wochen-Review 2026-10-21 hatte SCA014 einen eigenen fuer das
+  // Netzlaufwerk (RemoteDriveReason, R_MAGIC_REMOTE).
   R_REMOTE_FILES = 'Netzpfad %s - die Hilfe liest dort keine %s '
     + '(Menueaufbau im Hauptthread); von Hand';
   WHAT_FORMS    = 'Formdateien';
   WHAT_INCLUDES = 'Include-Dateien';
+  WHAT_PROJECT_FILES = 'Projekt- und Include-Dateien';
   // SCA001: nur diese Variante bekommt die Hilfe (Feld TLeakFinding.
   // LeakVariant, das uLeakDetector2 setzt; properties.variant im SARIF).
   LEAK_VARIANT_FOF = 'freed-outside-finally';
@@ -440,24 +439,10 @@ begin
   Result := SelfAssignReason(APlaces, AMap, AFinding.LineInt, APlan.Target);
 end;
 
-// SCA014: liegt die Datei auf einem Netzlaufwerk (uRdxPaths.RemoteDriveOf,
-// seit Charge B2S-a auch lang geschrieben: '\\?\Z:\..')? Dann liest die
-// Hilfe nichts von der Platte - der Menueaufbau laeuft im Hauptthread
-// (Gegen-Review Q14, Verdacht e; UNC prueft TRdxMagicFixes.FileReason).
-function RemoteDriveReason(const AFileName: string): string;
-var
-  Drive : string;
-begin
-  Result := '';
-  Drive := RemoteDriveOf(AFileName);
-  if Drive <> '' then
-    Result := Format(R_MAGIC_REMOTE, [Drive]);
-end;
-
-// SCA147/SCA164 (Review FB, R2-07): liegt die Unit im Netz
+// SCA014, SCA147, SCA164 (Review FB, R2-07): liegt die Unit im Netz
 // (uRdxPaths.IsNetworkPath: UNC, auch mit '/' oder als '\\?\UNC\..', oder
 // ein Netzlaufwerk; '\\?\C:\..' ist lokal)? Dann liest die Hilfe dort
-// nichts (AWhat: was sie lesen wollte) - dieselbe Regel wie SCA014. Der
+// nichts (AWhat: was sie lesen wollte). Der
 // Grund nennt das Verzeichnis ohne Namensraum-Vorsatz bzw. das
 // Netzlaufwerk. '' oder der Grund.
 function NetworkPathReason(const AFileName, AWhat: string): string;
@@ -490,13 +475,14 @@ begin
       APlan.Includes, APlan.Name);
 end;
 
-// SCA014: was nur die Platte weiss - Netzlaufwerk, Lazarus-Dateiart oder
-// -Projekt bzw. altes Delphi-Projekt neben der Unit, die Compiler-Weichen
-// ihrer Includes (TRdxMagicFixes).
+// SCA014: was nur die Platte weiss - Netzpfad (NetworkPathReason, vor
+// jedem Plattenzugriff), Lazarus-Dateiart oder -Projekt bzw. altes
+// Delphi-Projekt neben der Unit, die Compiler-Weichen ihrer Includes
+// (TRdxMagicFixes).
 function MagicCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
   AFinding: TLeakFinding; const APlan: TRdxMagicPlan): string;
 begin
-  Result := RemoteDriveReason(AFinding.FileName);
+  Result := NetworkPathReason(AFinding.FileName, WHAT_PROJECT_FILES);
   if Result = '' then
     Result := TRdxMagicFixes.FileReason(AFinding.FileName);
   if Result = '' then
