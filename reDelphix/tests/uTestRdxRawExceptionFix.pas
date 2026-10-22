@@ -77,7 +77,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxRawExceptionFix,
   uRdxText,              // _() und die gemeinsamen Gruende (E29)
-  uTestRdxTextKit;       // Join, Apply, LineOf
+  uTestRdxTextKit;       // Join, Apply, LineOf, NewMap
 
 const
   BODY_LINE = 7;   // erste Rumpfzeile von Wrap
@@ -108,25 +108,18 @@ end;
 function PlanAt(const ASource: string; ALine: Integer; AAlt: Boolean;
   out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
 begin
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      if AAlt then
-        Result := TRdxRawExceptionFix.ToInvalidOpException(Map, ALine,
-          DETECTOR_MSG, AEdit, AReason)
-      else
-        Result := TRdxRawExceptionFix.ToArgumentException(Map, ALine,
-          DETECTOR_MSG, AEdit, AReason);
-    finally
-      Map.Free;
-    end;
+    if AAlt then
+      Result := TRdxRawExceptionFix.ToInvalidOpException(Map, ALine,
+        DETECTOR_MSG, AEdit, AReason)
+    else
+      Result := TRdxRawExceptionFix.ToArgumentException(Map, ALine,
+        DETECTOR_MSG, AEdit, AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
 end;
 

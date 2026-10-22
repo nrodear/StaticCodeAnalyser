@@ -1,7 +1,7 @@
 unit uTestRdxIfThenFix;
 
 // Editorhilfe SCA131 IfThenShortCircuit (uRdxIfThenFix): der Planer auf Text
-// (erste Fixture, auch im FPC-Pruefstand) und - nur Delphi - der ECHTE
+// (erste Fixture, FPC-tauglich) und - nur Delphi - der ECHTE
 // Detektor (uIfThenShortCircuit) auf dem echten AST ueber den Einstieg der
 // Tabelle (TRdxFixTable.FixFor mit geoeffnetem Quellstellen-Dienst, Adapter
 // PlanIfThenToIf samt Variant-Sperre; zweite Fixture). Die Fixtures stehen
@@ -65,11 +65,11 @@ uses
   uAstNode, uMethodd12, uSCAConsts, uIfThenShortCircuit,
   uRdxRecipeRunner,      // TRdxFixOutcome
   uRdxFixTable,          // TRdxFixTable.FixFor
-  uTestRdxDetectorKit,   // TSeen, DetectSource, PlanFixIn
+  uTestRdxDetectorKit,   // TSeen, DetectSource, PlanFixIn, FixAllWith
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxIfThenFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply
+  uTestRdxTextKit;       // Join, Apply, NewMap
 
 const
   STMT_LINE = 8;   // erste Rumpfzeile von Wrap
@@ -97,24 +97,17 @@ end;
 function Plan(const ASource: string; ALine: Integer;
   out AReason: string): string;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
   E   : TRdxEdit;
   Ok  : Boolean;
 begin
   Result := '';
   AReason := '';
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Ok := TRdxIfThenFix.IfThenToIf(Map, ALine, MSG_131, E, AReason);
-    finally
-      Map.Free;
-    end;
+    Ok := TRdxIfThenFix.IfThenToIf(Map, ALine, MSG_131, E, AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
   if Ok then
     Result := Apply(ASource, E);
@@ -363,10 +356,15 @@ begin
   TIfThenShortCircuitDetector.AnalyzeUnit(Root, Path, Results);
 end;
 
+// Dasselbe in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := DetectSource('rdx_ifthen_', ASource, AKind, RunDetector);
+end;
+
 function Detect(const ASource: string): TArray<TSeen>;
 begin
-  Result := DetectSource('rdx_ifthen_', ASource, fkIfThenShortCircuit,
-    RunDetector);
+  Result := DetectKind(ASource, fkIfThenShortCircuit);
 end;
 
 // Die Hilfe fuer den ersten Fund des Detektors ueber den Einstieg der
@@ -383,25 +381,10 @@ begin
 end;
 
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt.
+// schweigt (FixAllWith - derselbe Einstieg wie PlanFirst).
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass : Integer;
-  O    : TRdxFixOutcome;
-  S    : TSeen;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    if Length(Detect(Result)) = 0 then
-      Exit;
-    O := PlanFirst(Result, S);
-    Assert.IsTrue(O.Enabled, O.Reason);
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Result := FixAllWith(ASource, fkIfThenShortCircuit, DetectKind);
 end;
 
 procedure TTestRdxIfThenDetector.Detector_ReportsStatementLine;
@@ -465,10 +448,11 @@ var
   O  : TRdxFixOutcome;
 begin
   SL := TStringList.Create;
-  // Der Fund zeigt auf Zeile 9, doch dort steht 'end;'.
-  F := TLeakFinding.New('t.pas', '', STMT_LINE + 1, MSG_131,
-    fkIfThenShortCircuit);
+  F := nil;
   try
+    // Der Fund zeigt auf Zeile 9, doch dort steht 'end;'.
+    F := TLeakFinding.New('t.pas', '', STMT_LINE + 1, MSG_131,
+      fkIfThenShortCircuit);
     SL.Text := Src(['  x := IfThen(b, A(), B());']);
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally

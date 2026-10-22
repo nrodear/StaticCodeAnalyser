@@ -56,7 +56,7 @@ uses
   System.SysUtils, System.Classes,
   uRdxBufferMath, uRdxCodeMap, uRdxText,
   uRdxUnusedParameterFix,
-  uTestRdxTextKit   // Join, Apply
+  uTestRdxTextKit   // Join, Apply, NewMap
 {$IFNDEF FPC}
   , System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uUnusedParameter,
@@ -78,19 +78,14 @@ end;
 function PlanOf(const ASource: string; ALine: Integer; const AMessage: string;
   out APlan: TRdxParamPlan; out AReason: string): Boolean;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
 begin
-  SL := TStringList.Create;
-  Map := nil;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
     Result := TRdxUnusedParameterFix.MarkUnused(Map, ALine, AMessage, APlan,
       AReason);
   finally
     Map.Free;
-    SL.Free;
   end;
 end;
 

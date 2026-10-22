@@ -70,7 +70,7 @@ uses
   System.SysUtils, System.Classes,
   uRdxBufferMath, uRdxCodeMap, uRdxHomoglyphFix,
   uRdxText,          // _(), MsgMovedSuffix
-  uTestRdxTextKit    // Apply
+  uTestRdxTextKit    // Apply, NewMap
 {$IFNDEF FPC}
   , System.IOUtils, System.Generics.Collections,
   uMethodd12, uSCAConsts, uSourceEncoding,
@@ -145,20 +145,16 @@ end;
 function PlanOf(const ASource: string; ALine: Integer;
   out APlan: TRdxHomoglyphPlan; out AReason: string): Boolean;
 var
-  SL    : TStringList;
   Map   : TRdxCodeMap;
   OldCp : Integer;
 begin
   OldCp := Utf8CodePage;
-  SL := TStringList.Create;
   Map := nil;
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
+    Map := NewMap(ASource);
     Result := TRdxHomoglyphFix.ToAscii(Map, ALine, '', APlan, AReason);
   finally
     Map.Free;
-    SL.Free;
     RestoreCodePage(OldCp);
   end;
 end;
@@ -478,8 +474,9 @@ begin
   ALine := 0;
   AMsg := '';
   Path := WriteUtf8(ASource);
-  Results := TObjectList<TLeakFinding>.Create(True);
+  Results := nil;
   try
+    Results := TObjectList<TLeakFinding>.Create(True);
     TSourceEncodingDetector.AnalyzeUnit(nil, Path, Results);
     for F in Results do
       if F.Kind = fkSourceNonAsciiIdentifier then

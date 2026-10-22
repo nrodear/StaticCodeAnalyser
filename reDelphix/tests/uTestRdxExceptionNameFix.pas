@@ -69,7 +69,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxExceptionNameFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply
+  uTestRdxTextKit;       // Join, Apply, NewMap
 
 const
   DECL_LINE = 6;   // Zeile der Klasse in UnitWith(['type', '  X = ...'])
@@ -98,24 +98,17 @@ function PlanWith(const ASource: string; ALine: Integer;
   const AMessage: string; out AReason: string;
   out APlan: TRdxExceptionNamePlan): string;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
   Ok  : Boolean;
 begin
   Result := '';
   AReason := '';
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Ok := TRdxExceptionNameFix.RenameClass(Map, ALine, AMessage, APlan,
-        AReason);
-    finally
-      Map.Free;
-    end;
+    Ok := TRdxExceptionNameFix.RenameClass(Map, ALine, AMessage, APlan,
+      AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
   if Ok then
     Result := Apply(ASource, APlan.Edits);

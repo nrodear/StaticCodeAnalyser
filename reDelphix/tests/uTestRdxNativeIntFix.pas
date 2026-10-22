@@ -6,14 +6,14 @@ unit uTestRdxNativeIntFix;
 //   -> NativeUInt; Gegenproben Kommentar, String, verschobene Zeile,
 //   gemischte Casts, mehrere Treffer, Zahl als Operand, Kette, Kommentar
 //   zwischen den Casts.
-//   Fixture 2: der ECHTE Detektor meldet, die Tabelle plant aus dem Fund
-//   (TRdxFixTable.FixFor, Adapter PlanPointerSubtraction),
-//   die Ersetzung wird angewandt - und der Detektor schweigt.
-// Die ganze Unit ist nur Delphi (reDelphix.Test).
-// Der Planer ist seit der Folgewelle G09-07 ohne Delphi-only-uses (den
-// Adapter traegt uRdxFixTable); die Unit steht trotzdem nicht im
-// FPC-Pruefstand (build.sh) - dessen Runner kennt die {$IFNDEF FPC}-
-// Weichen nicht, sie sind heute ohne Wirkung.
+//   Fixture 2 (hinter {$IFNDEF FPC}, nur reDelphix.Test): der ECHTE
+//   Detektor meldet, die Tabelle plant aus dem Fund (TRdxFixTable.FixFor,
+//   Adapter PlanPointerSubtraction), die Ersetzung wird angewandt - und
+//   der Detektor schweigt.
+// Fixture 1 laeuft auch im FPC-Pruefstand (build.sh): der Planer ist seit
+// der Folgewelle G09-07 ohne Delphi-only-uses (den Adapter traegt
+// uRdxFixTable), und der Pruefstand blendet seit der Folgewelle B3 die
+// {$IFNDEF FPC}-Teile aus.
 
 interface
 

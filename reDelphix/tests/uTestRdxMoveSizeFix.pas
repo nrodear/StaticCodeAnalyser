@@ -69,11 +69,11 @@ uses
   uMoveSizeOfPointer,
   uRdxRecipeRunner,      // TRdxFixOutcome, R_NO_FILE, UsesNamesOf
   uRdxFixTable,          // TRdxFixTable.FixFor
-  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
+  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, FixAllWith
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxMoveSizeFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply
+  uTestRdxTextKit;       // Join, Apply, NewMap
 
 const
   LINE = 6;   // erste Rumpfzeile von Wrap
@@ -97,24 +97,17 @@ end;
 function PlanAt(const ASource: string; ALine: Integer; const AMessage: string;
   out AReason: string): string;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
   E   : TRdxEdit;
   Ok  : Boolean;
 begin
   Result := '';
   AReason := '';
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Ok := TRdxMoveSizeFix.PointeeSize(Map, ALine, AMessage, E, AReason);
-    finally
-      Map.Free;
-    end;
+    Ok := TRdxMoveSizeFix.PointeeSize(Map, ALine, AMessage, E, AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
   if Ok then
     Result := Apply(ASource, E);
@@ -143,22 +136,15 @@ end;
 function OperandsAt(const ASource: string; ALine: Integer;
   const ARoutine, APtr: string): TArray<TRdxSizeOperand>;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
   R   : string;
 begin
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Assert.IsTrue(TRdxMoveSizeFix.Operands(Map, ALine, Msg(ARoutine, APtr),
-        Result, R), R);
-    finally
-      Map.Free;
-    end;
+    Assert.IsTrue(TRdxMoveSizeFix.Operands(Map, ALine, Msg(ARoutine, APtr),
+      Result, R), R);
   finally
-    SL.Free;
+    Map.Free;
   end;
 end;
 
@@ -166,7 +152,6 @@ end;
 
 procedure TTestRdxMoveSizeFix.Move_BecomesTargetSize;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
   E   : TRdxEdit;
   R   : string;
@@ -178,18 +163,12 @@ begin
     Applied(Wrap(['  Move(Src^, V, SizeOf(PByte));']), LINE, 'Move',
       'PByte'));
   // Die Ersetzung ist genau der Zeigertyp.
-  SL := TStringList.Create;
+  Map := NewMap(Wrap(['  Move(Src^, Dst^, SizeOf(PInteger));']));
   try
-    SL.Text := Wrap(['  Move(Src^, Dst^, SizeOf(PInteger));']);
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Assert.IsTrue(TRdxMoveSizeFix.PointeeSize(Map, LINE,
-        Msg('Move', 'PInteger'), E, R), R);
-    finally
-      Map.Free;
-    end;
+    Assert.IsTrue(TRdxMoveSizeFix.PointeeSize(Map, LINE,
+      Msg('Move', 'PInteger'), E, R), R);
   finally
-    SL.Free;
+    Map.Free;
   end;
   Assert.AreEqual('PInteger', E.Expected);
   Assert.AreEqual('Integer', E.NewText);
@@ -434,10 +413,15 @@ begin
   TMoveSizeOfPointerDetector.AnalyzeUnit(Root, Path, Results);
 end;
 
+// Dasselbe in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := DetectSource('rdx_movesize_', ASource, AKind, RunDetector);
+end;
+
 function Detect(const ASource: string): TArray<TSeen>;
 begin
-  Result := DetectSource('rdx_movesize_', ASource, fkMoveSizeOfPointer,
-    RunDetector);
+  Result := DetectKind(ASource, fkMoveSizeOfPointer);
 end;
 
 // Die Hilfe fuer einen Fund ueber den Einstieg der Tabelle
@@ -453,10 +437,12 @@ var
   F      : TLeakFinding;
 begin
   SL := TStringList.Create;
-  Places := TSourcePlaces.Create;
-  F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg,
-    fkMoveSizeOfPointer);
+  Places := nil;
+  F := nil;
   try
+    Places := TSourcePlaces.Create;
+    F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg,
+      fkMoveSizeOfPointer);
     SL.Text := ASource;
     if AOpen then
     begin
@@ -482,23 +468,12 @@ begin
   Result := PlanSeen(ASource, Seen[0], True);
 end;
 
+// Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
+// schweigt (FixAllWith: PlanFixIn mit geoeffnetem Quellstellen-Dienst -
+// wie PlanFirst).
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass : Integer;
-  O    : TRdxFixOutcome;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    if Length(Detect(Result)) = 0 then
-      Exit;
-    O := PlanFirst(Result);
-    Assert.IsTrue(O.Enabled, O.Reason);
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Result := FixAllWith(ASource, fkMoveSizeOfPointer, DetectKind);
 end;
 
 // Eine Unit mit EINER Routine AHead; deren Rumpf beginnt auf Zeile 6.

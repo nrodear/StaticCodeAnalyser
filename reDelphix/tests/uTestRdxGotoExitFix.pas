@@ -1,11 +1,13 @@
 unit uTestRdxGotoExitFix;
 
-// Editorhilfe SCA060 GotoStatement (uRdxGotoExitFix), nur Delphi
-// (reDelphix.Test): der Planer auf Text (erste Fixture), der Adapter in der
-// Form der Tabelle und der ECHTE Detektor (uGotoStatement) auf dem echten
-// AST (zweite Fixture). Die Fixtures stehen in einer Routine 'Foo', deren
-// Kopf auf Zeile 4 steht; der Rumpf beginnt auf Zeile 6, seine erste
-// Anweisung steht auf Zeile 7 (GOTO_LINE).
+// Editorhilfe SCA060 GotoStatement (uRdxGotoExitFix): der Planer auf Text
+// (erste Fixture), der Adapter in der Form der Tabelle und der ECHTE
+// Detektor (uGotoStatement) auf dem echten AST (zweite Fixture, hinter
+// {$IFNDEF FPC}). Die erste Fixture laeuft auch im FPC-Pruefstand
+// (build.sh; seit der Folgewelle B3 blendet er die {$IFNDEF FPC}-Teile
+// aus), die zweite nur in reDelphix.Test. Die Fixtures stehen in einer
+// Routine 'Foo', deren Kopf auf Zeile 4 steht; der Rumpf beginnt auf
+// Zeile 6, seine erste Anweisung steht auf Zeile 7 (GOTO_LINE).
 
 interface
 

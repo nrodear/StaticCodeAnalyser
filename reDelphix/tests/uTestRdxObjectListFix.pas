@@ -82,7 +82,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxObjectListFix,
   uRdxText,              // _() und MsgMovedSuffix
-  uTestRdxTextKit;       // Join, Apply, LineOf
+  uTestRdxTextKit;       // Join, Apply, LineOf, NewMap
 
 const
   // Die Meldung des Detektors (uTObjectListWithoutOwnership): Typ der
@@ -136,20 +136,13 @@ end;
 function PlanOf(const ASource: string; ALine: Integer; const AMsg: string;
   out APlan: TRdxObjectListPlan; out AReason: string): Boolean;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
 begin
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Result := TRdxObjectListFix.OwnItems(Map, ALine, AMsg, APlan, AReason);
-    finally
-      Map.Free;
-    end;
+    Result := TRdxObjectListFix.OwnItems(Map, ALine, AMsg, APlan, AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
 end;
 

@@ -69,11 +69,12 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uIntegerOverflow,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn
+  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn,
+                         // FixAllWith
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxIntegerOverflowFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply
+  uTestRdxTextKit;       // Join, Apply, NewMap
 
 const
   // Die Meldung des Detektors (uIntegerOverflow): Ziel, linker, rechter
@@ -103,21 +104,14 @@ end;
 function PlanOf(const ASource: string; ALine: Integer; const AMessage: string;
   out APlan: TRdxOverflowPlan; out AReason: string): Boolean;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
 begin
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Result := TRdxIntegerOverflowFix.CastLeft(Map, ALine, AMessage, APlan,
-        AReason);
-    finally
-      Map.Free;
-    end;
+    Result := TRdxIntegerOverflowFix.CastLeft(Map, ALine, AMessage, APlan,
+      AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
 end;
 
@@ -397,34 +391,25 @@ begin
   TIntegerOverflowDetector.AnalyzeUnit(Root, Path, Results);
 end;
 
+// Dasselbe in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := DetectSource('rdx_io_', ASource, AKind, RunDetector);
+end;
+
 function Detect(const ASource: string): TArray<TSeen>;
 begin
-  Result := DetectSource('rdx_io_', ASource, fkIntegerOverflow, RunDetector);
+  Result := DetectKind(ASource, fkIntegerOverflow);
 end;
 
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
 // schweigt - ueber den Einstieg der Tabelle mit geoeffnetem
-// Quellstellen-Dienst (PlanFixIn): den Typbeweis tragen die Deklarationen
-// der Fixtures (Integer-Operanden, Int64-Ziel; lokal, gruppiert, Feld).
+// Quellstellen-Dienst (FixAllWith -> PlanFixIn): den Typbeweis tragen die
+// Deklarationen der Fixtures (Integer-Operanden, Int64-Ziel; lokal,
+// gruppiert, Feld).
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass : Integer;
-  Seen : TArray<TSeen>;
-  O    : TRdxFixOutcome;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    Seen := Detect(Result);
-    if Length(Seen) = 0 then
-      Exit;
-    O := PlanFixIn(Result, 't.pas', fkIntegerOverflow, Seen[0]);
-    Assert.IsTrue(O.Enabled, Format('Zeile %d: %s', [Seen[0].Line, O.Reason]));
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Result := FixAllWith(ASource, fkIntegerOverflow, DetectKind);
 end;
 
 procedure TTestRdxIntegerOverflowDetector.Detector_ReportsLineAndMessage;

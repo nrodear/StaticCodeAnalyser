@@ -1,7 +1,7 @@
 unit uTestRdxClassMethodFix;
 
 // Editorhilfe SCA148 CanBeClassMethod (uRdxClassMethodFix): der Planer auf
-// Text (erste Fixture, auch im FPC-Pruefstand) und - nur Delphi - der
+// Text (erste Fixture, FPC-tauglich) und - nur Delphi - der
 // Einstieg der Tabelle (TRdxFixTable.FixFor via PlanFixIn/FixAllWith,
 // Adapter PlanCanBeClassMethod: zwei Ersetzungen) mit dem ECHTEN Detektor
 // (uCanBeClassMethod) auf dem echten AST (zweite Fixture).
@@ -71,7 +71,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxClassMethodFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply, LineOf, LineStartingWith
+  uTestRdxTextKit;       // Join, Apply, LineOf, LineStartingWith, NewMap
 
 const
   HEAD = '  TMath = class';
@@ -114,7 +114,6 @@ end;
 function PlanAt(const ASource: string; ALine: Integer; const AMsg: string;
   out AReason: string): string;
 var
-  SL    : TStringList;
   Map   : TRdxCodeMap;
   Edits : TArray<TRdxEdit>;
   Ok    : Boolean;
@@ -122,17 +121,11 @@ begin
   Result := '';
   AReason := '';
   Ok := False;
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Ok := TRdxClassMethodFix.MakeStatic(Map, ALine, AMsg, Edits, AReason);
-    finally
-      Map.Free;
-    end;
+    Ok := TRdxClassMethodFix.MakeStatic(Map, ALine, AMsg, Edits, AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
   if Ok then
     Result := Apply(ASource, Edits);

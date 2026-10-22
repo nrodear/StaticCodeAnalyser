@@ -60,7 +60,7 @@ uses
   uRdxBufferMath, uRdxCodeMap, uRdxText,
   uRdxUnusedParameterFix,       // TRdxParamPlan, R_UP_* (geteilte Gruende)
   uRdxConstStringParameterFix,
-  uTestRdxTextKit   // Join, Apply
+  uTestRdxTextKit   // Join, Apply, NewMap
 {$IFNDEF FPC}
   , System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uConstStringParameter,
@@ -83,19 +83,14 @@ end;
 function PlanOf(const ASource: string; ALine: Integer; const AMessage: string;
   out APlan: TRdxParamPlan; out AReason: string): Boolean;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
 begin
-  SL := TStringList.Create;
-  Map := nil;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
     Result := TRdxConstStringParameterFix.MakeConst(Map, ALine, AMessage,
       APlan, AReason);
   finally
     Map.Free;
-    SL.Free;
   end;
 end;
 

@@ -67,12 +67,12 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uConcurrencyExt,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uRdxFixTable,          // TRdxFixTable.FixFor
-  uTestRdxDetectorKit,   // TSeen, CatalogText, DetectSource
+  uTestRdxDetectorKit,   // TSeen, CatalogText, DetectSource, PlanFixIn,
+                         // FixAllWith
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxThreadResumeFix,
   uRdxText,              // _() und die gemeinsamen Gruende (E29)
-  uTestRdxTextKit;       // Join, Apply, LineOf
+  uTestRdxTextKit;       // Join, Apply, LineOf, NewMap
 
 // ---- Helfer ----
 
@@ -123,22 +123,17 @@ end;
 function FixAt(const ASource: string; ALine: Integer; const AName: string;
   out AReason: string): string;
 var
-  SL   : TStringList;
   Map  : TRdxCodeMap;
   Edit : TRdxEdit;
 begin
   Result := '';
-  SL := TStringList.Create;
-  Map := nil;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
     if TRdxThreadResumeFix.ResumeToStart(Map, ALine, MsgFor(AName), Edit,
          AReason) then
       Result := Apply(ASource, Edit);
   finally
     Map.Free;
-    SL.Free;
   end;
 end;
 
@@ -439,52 +434,30 @@ begin
   TConcurrencyExtDetector.AnalyzeUnit(Root, Path, Results);
 end;
 
+// Dasselbe in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := DetectSource('rdx_s113_', ASource, AKind, RunDetector);
+end;
+
 function Detect(const ASource: string): TArray<TSeen>;
 begin
-  Result := DetectSource('rdx_s113_', ASource, fkThreadResumeDeprecated,
-    RunDetector);
+  Result := DetectKind(ASource, fkThreadResumeDeprecated);
 end;
 
 // Die Hilfe fuer einen Fund des Detektors ueber den Einstieg der Tabelle
-// (TRdxFixTable.FixFor, Adapter PlanThreadResume) - ohne Quellstellen-
-// Dienst, den die Hilfe nicht braucht.
+// (PlanFixIn: TRdxFixTable.FixFor, Adapter PlanThreadResume) - der Adapter
+// liest nur den Text, den Quellstellen-Dienst des Kits fragt er nicht.
 function PlanSeen(const ASource: string; const ASeen: TSeen): TRdxFixOutcome;
-var
-  SL : TStringList;
-  F  : TLeakFinding;
 begin
-  SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg,
-    fkThreadResumeDeprecated);
-  try
-    SL.Text := ASource;
-    Result := TRdxFixTable.FixFor(nil, SL, F, nil);
-  finally
-    F.Free;
-    SL.Free;
-  end;
+  Result := PlanFixIn(ASource, 't.pas', fkThreadResumeDeprecated, ASeen);
 end;
 
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt.
+// schweigt (FixAllWith).
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Seen : TArray<TSeen>;
-  O    : TRdxFixOutcome;
-  Pass : Integer;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    Seen := Detect(Result);
-    if Length(Seen) = 0 then Exit;
-    O := PlanSeen(Result, Seen[0]);
-    Assert.IsTrue(O.Enabled, Format('Zeile %d: %s', [Seen[0].Line, O.Reason]));
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail(Format('der Detektor meldet nach %d Runden noch', [MAX_PASSES]));
+  Result := FixAllWith(ASource, fkThreadResumeDeprecated, DetectKind);
 end;
 
 // Der Detektor meldet, die Hilfe lehnt den ersten Fund mit AReason ab.

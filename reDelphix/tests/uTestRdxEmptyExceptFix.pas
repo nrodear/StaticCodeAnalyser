@@ -3,12 +3,12 @@ unit uTestRdxEmptyExceptFix;
 // Editorhilfe SCA002 EmptyExcept (uRdxEmptyExceptFix): ein leerer except-
 // Block bekommt ein 'raise;'. Die Faelle auf Text laufen ohne Parser und ohne
 // Detektor; der Adapter und die Rundlaeufe mit dem echten Detektor
-// (uCodeSmells2, ueber TRdxFixTable.FixFor) stehen hinter {$IFNDEF FPC}.
-// Nur Delphi (reDelphix.Test).
-// Der Planer ist seit der Folgewelle G09-07 ohne Delphi-only-uses (den
-// Adapter traegt uRdxFixTable); die Unit steht trotzdem nicht im
-// FPC-Pruefstand (build.sh) - dessen Runner kennt die {$IFNDEF FPC}-
-// Weichen nicht, sie sind heute ohne Wirkung.
+// (uCodeSmells2, ueber TRdxFixTable.FixFor) stehen in einer eigenen
+// Fixture hinter {$IFNDEF FPC} und laufen nur in reDelphix.Test.
+// Die Text-Fixture laeuft auch im FPC-Pruefstand (build.sh): der Planer
+// ist seit der Folgewelle G09-07 ohne Delphi-only-uses (den Adapter traegt
+// uRdxFixTable), und der Pruefstand blendet seit der Folgewelle B3 die
+// {$IFNDEF FPC}-Teile aus.
 // Prueft: neue Zeile unter except (Einrueckstufe aus dem try-Rumpf, Tabs,
 // Fallback), inline hinter except, Gross-/Kleinschreibung, Leerzeilen - und
 // die Sperren: Kommentar, Direktive, Handler/Anweisung/';' im Block,
@@ -38,15 +38,20 @@ type
     [Test] procedure Sca002_NotEmpty_NoHelp;
     [Test] procedure Sca002_Moved_NoHelp;
     [Test] procedure Sca002_SeveralOnLine_NoHelp;
-    {$IFNDEF FPC}
-    // ---- Adapter und echter Detektor ----
+  end;
+
+{$IFNDEF FPC}
+  // Adapter und echter Detektor (nur Delphi).
+  [TestFixture]
+  TTestRdxEmptyExceptFixDetector = class
+  public
     [Test] procedure Sca002_Adapter_Outcome;
     [Test] procedure Sca002_Detector_RoundTrip;
     [Test] procedure Sca002_Detector_CatalogExample;
     [Test] procedure Sca002_Detector_Comment_NoHelp;
     [Test] procedure Sca002_Detector_StraySemicolon_NoHelp;
-    {$ENDIF}
   end;
+{$ENDIF}
 
 implementation
 
@@ -57,8 +62,9 @@ uses
   uAstNode, uMethodd12, uRuleCatalog, uCodeSmells2, uRdxRecipeRunner,
   uRdxFixTable,
   uTestRdxDetectorKit,   // TSeen, CatalogText, DetectSource
+  uSCAConsts,            // TFindingKind, fk* (nur die Detektor-Fixture)
   {$ENDIF}
-  uSCAConsts, uRdxBufferMath, uRdxCodeMap, uRdxEmptyExceptFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxEmptyExceptFix,
   uRdxText,              // _() und die gemeinsamen Gruende (E29)
   uTestRdxTextKit;       // Join, Apply, LineOf
 
@@ -314,7 +320,7 @@ begin
   Assert.AreEqual(AReason, O.Reason);
 end;
 
-procedure TTestRdxEmptyExceptFix.Sca002_Adapter_Outcome;
+procedure TTestRdxEmptyExceptFixDetector.Sca002_Adapter_Outcome;
 var
   S    : string;
   F    : TLeakFinding;
@@ -351,7 +357,7 @@ begin
   Assert.IsTrue(O.ChangesBehavior, 'raise aendert das Verhalten');
 end;
 
-procedure TTestRdxEmptyExceptFix.Sca002_Detector_RoundTrip;
+procedure TTestRdxEmptyExceptFixDetector.Sca002_Detector_RoundTrip;
 var
   Source : string;
 begin
@@ -367,7 +373,7 @@ begin
     FixAll(Source));
 end;
 
-procedure TTestRdxEmptyExceptFix.Sca002_Detector_CatalogExample;
+procedure TTestRdxEmptyExceptFixDetector.Sca002_Detector_CatalogExample;
 var
   Meta   : TRuleMeta;
   Bad    : string;
@@ -384,7 +390,7 @@ begin
     FixAll(Source));
 end;
 
-procedure TTestRdxEmptyExceptFix.Sca002_Detector_Comment_NoHelp;
+procedure TTestRdxEmptyExceptFixDetector.Sca002_Detector_Comment_NoHelp;
 begin
   // Der Detektor meldet auch einen Block mit nur einem Kommentar - die Hilfe
   // nicht: der Kommentar ist Absicht.
@@ -393,7 +399,7 @@ begin
     _(R_EXC_COMMENT));
 end;
 
-procedure TTestRdxEmptyExceptFix.Sca002_Detector_StraySemicolon_NoHelp;
+procedure TTestRdxEmptyExceptFixDetector.Sca002_Detector_StraySemicolon_NoHelp;
 begin
   // 'except;' meldet der Detektor ebenfalls (leerer Handler), die Hilfe
   // bedient nur die eindeutige Form.
@@ -406,5 +412,8 @@ end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestRdxEmptyExceptFix);
+  {$IFNDEF FPC}
+  TDUnitX.RegisterTestFixture(TTestRdxEmptyExceptFixDetector);
+  {$ENDIF}
 
 end.

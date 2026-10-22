@@ -67,7 +67,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxConsecutiveSectionFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply
+  uTestRdxTextKit;       // Join, Apply, NewMap
 
 // ---- Helfer ----
 
@@ -91,24 +91,17 @@ end;
 function PlanMsg(const ASource: string; ALine: Integer;
   const AMessage: string; out AReason: string): string;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
   E   : TRdxEdit;
   Ok  : Boolean;
 begin
   Result := '';
   AReason := '';
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Ok := TRdxConsecutiveSectionFix.Merge(Map, ALine, AMessage, E, AReason);
-    finally
-      Map.Free;
-    end;
+    Ok := TRdxConsecutiveSectionFix.Merge(Map, ALine, AMessage, E, AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
   if Ok then
     Result := Apply(ASource, E);

@@ -73,7 +73,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxDigitGroupingFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply, LineOf
+  uTestRdxTextKit;       // Join, Apply, LineOf, NewMap
 
 const
   BODY_LINE = 6;   // erste Rumpfzeile von InBody
@@ -104,24 +104,17 @@ end;
 function PlanAt(const ASource: string; ALine, ACol: Integer;
   out AReason: string): string;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
   E   : TRdxEdit;
   Ok  : Boolean;
 begin
   Result := '';
   AReason := '';
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Ok := TRdxDigitGroupingFix.Group(Map, ALine, MessageAt(ACol), E, AReason);
-    finally
-      Map.Free;
-    end;
+    Ok := TRdxDigitGroupingFix.Group(Map, ALine, MessageAt(ACol), E, AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
   if Ok then
     Result := Apply(ASource, E);

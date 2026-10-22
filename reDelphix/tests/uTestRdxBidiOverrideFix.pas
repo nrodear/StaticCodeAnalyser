@@ -61,7 +61,7 @@ uses
   System.SysUtils, System.Classes,
   uRdxBufferMath, uRdxCodeMap, uRdxCharEscapeFix,
   uRdxText,          // _(), MsgMovedSuffix, MsgCheckByHand (E29)
-  uTestRdxTextKit    // Apply
+  uTestRdxTextKit    // Apply, NewMap
 {$IFNDEF FPC}
   , System.IOUtils, System.Generics.Collections,
   uMethodd12, uSCAConsts, uSourceEncoding,
@@ -121,20 +121,16 @@ end;
 function PlanEdit(const ASource: string; ALine: Integer; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
-  SL    : TStringList;
   Map   : TRdxCodeMap;
   OldCp : Integer;
 begin
   OldCp := Utf8CodePage;
-  SL := TStringList.Create;
   Map := nil;
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
+    Map := NewMap(ASource);
     Result := TRdxCharEscapeFix.BidiOverride(Map, ALine, '', AEdit, AReason);
   finally
     Map.Free;
-    SL.Free;
     RestoreCodePage(OldCp);
   end;
 end;
@@ -483,8 +479,9 @@ begin
   ALine := 0;
   AMsg := '';
   Path := WriteUtf8(ASource);
-  Results := TObjectList<TLeakFinding>.Create(True);
+  Results := nil;
   try
+    Results := TObjectList<TLeakFinding>.Create(True);
     TSourceEncodingDetector.AnalyzeUnit(nil, Path, Results);
     for F in Results do
       if F.Kind = fkSourceBidiOverride then
@@ -515,8 +512,9 @@ begin
   AFound := Detect(ASource, Line, Msg);
   Assert.IsTrue(AFound > 0, 'der Detektor meldet');
   SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', Line, Msg, fkSourceBidiOverride);
+  F := nil;
   try
+    F := TLeakFinding.New('t.pas', '', Line, Msg, fkSourceBidiOverride);
     SL.Text := ASource;
     Result := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
@@ -548,7 +546,11 @@ begin
   Assert.Fail(Format('der Detektor meldet nach %d Runden noch', [MAX_PASSES]));
 end;
 
-function InProc(const ABody: array of string): string;
+// Eine Unit t mit Routine P und lokaler Variable S; ABody ist ihr Rumpf
+// (ab Zeile 7). Selbst verkettet (Lines, s. dort). Eigener Name: als
+// InProc verdeckte sie das gleichnamige aus uTestRdxTextKit (Unit u, ohne
+// S, Join) - mit anderer Quelle.
+function InProcWithS(const ABody: array of string): string;
 begin
   Result := Lines(['unit t;', 'interface', 'implementation', 'procedure P;',
     'var S: string;', 'begin']) + #13#10 + Lines(ABody) + #13#10
@@ -560,12 +562,12 @@ var
   Src, Msg : string;
   Line     : Integer;
 begin
-  Src := InProc(['  // check' + RLO + ' admin',
+  Src := InProcWithS(['  // check' + RLO + ' admin',
     '  S := ' + Q + 'a' + RLO + 'b' + Q + ';']);
   // Ein Fund je Datei, auf der ersten Zeile mit dem Zeichen.
   Assert.AreEqual<Integer>(1, Detect(Src, Line, Msg));
   Assert.AreEqual<Integer>(7, Line);
-  Assert.AreEqual(InProc(['  // check admin',
+  Assert.AreEqual(InProcWithS(['  // check admin',
     '  S := ' + Q + 'a' + Q + '#$202E' + Q + 'b' + Q + ';']), FixAll(Src));
 end;
 
@@ -576,13 +578,13 @@ var
 begin
   // Trojan Source, "stretched string": im Editor scheint der Vergleich
   // hinter einem Kommentar zu enden, der Compiler liest einen String.
-  Src := InProc(['  if S <> ' + Q + 'user' + RLO + ' ' + LRI
+  Src := InProcWithS(['  if S <> ' + Q + 'user' + RLO + ' ' + LRI
     + '// Check if admin' + PDI + ' ' + LRI + Q + ' then', '    Exit;']);
   Fixed := FixAll(Src);
   Assert.AreEqual<Integer>(0, Detect(Fixed, Line, Msg), 'der Detektor schweigt');
-  Assert.AreEqual(InProc(['  if S <> ' + Q + 'user' + Q + '#$202E' + Q + ' '
-    + Q + '#$2066' + Q + '// Check if admin' + Q + '#$2069' + Q + ' ' + Q
-    + '#$2066 then', '    Exit;']), Fixed);
+  Assert.AreEqual(InProcWithS(['  if S <> ' + Q + 'user' + Q + '#$202E' + Q
+    + ' ' + Q + '#$2066' + Q + '// Check if admin' + Q + '#$2069' + Q + ' '
+    + Q + '#$2066 then', '    Exit;']), Fixed);
 end;
 
 procedure TTestRdxBidiOverrideFixDetector.Detector_Code_NoHelp;
@@ -591,7 +593,8 @@ var
   Found : Integer;
 begin
   // Der Detektor meldet auch das Zeichen im Code - die Hilfe lehnt ab.
-  O := PlanFirst(InProc(['  S' + RLO + ' := ' + Q + 'a' + Q + ';']), Found);
+  O := PlanFirst(InProcWithS(['  S' + RLO + ' := ' + Q + 'a' + Q + ';']),
+    Found);
   Assert.AreEqual<Integer>(1, Found);
   Assert.IsFalse(O.Enabled, 'keine Hilfe');
   Assert.AreEqual(InCode, O.Reason);

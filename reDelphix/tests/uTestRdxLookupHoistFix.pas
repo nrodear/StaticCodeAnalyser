@@ -1,8 +1,8 @@
 unit uTestRdxLookupHoistFix;
 
 // Editorhilfe SCA111 ParamByNameInLoop und SCA112 FieldByNameInLoop
-// (uRdxLookupHoistFix): der Planer auf Text (erste Fixture, auch im
-// FPC-Pruefstand) und der ECHTE Detektor (uPerfHotspots) auf dem echten AST
+// (uRdxLookupHoistFix): der Planer auf Text (erste Fixture,
+// FPC-tauglich) und der ECHTE Detektor (uPerfHotspots) auf dem echten AST
 // ueber den Einstieg der Tabelle (TRdxFixTable.FixFor via PlanFixIn/
 // FixAllWith, Adapter PlanParamByNameLoop/PlanFieldByNameLoop; zweite
 // Fixture, nur Delphi). Der Adapter verlangt den Empfaenger als Variable
@@ -74,7 +74,7 @@ uses
   {$ENDIF}
   uRdxCodeMap, uRdxLookupHoistFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply
+  uTestRdxTextKit;       // Join, Apply, NewMap
 
 const
   BODY = 8;   // erste Rumpfzeile von Wrap
@@ -116,25 +116,18 @@ end;
 function PlanOf(const ASource: string; ALine: Integer; AParam: Boolean;
   out APlan: TRdxLookupPlan; out AReason: string): Boolean;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
 begin
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      if AParam then
-        Result := TRdxLookupHoistFix.ParamByNameLoop(Map, ALine, MSG_PARAM,
-          APlan, AReason)
-      else
-        Result := TRdxLookupHoistFix.FieldByNameLoop(Map, ALine, MSG_FIELD,
-          APlan, AReason);
-    finally
-      Map.Free;
-    end;
+    if AParam then
+      Result := TRdxLookupHoistFix.ParamByNameLoop(Map, ALine, MSG_PARAM,
+        APlan, AReason)
+    else
+      Result := TRdxLookupHoistFix.FieldByNameLoop(Map, ALine, MSG_FIELD,
+        APlan, AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
 end;
 

@@ -67,12 +67,11 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uInsecureRandom,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uRdxFixTable,          // TRdxFixTable.FixFor
-  uTestRdxDetectorKit,   // TSeen, CatalogText, DetectSource
+  uTestRdxDetectorKit,   // TSeen, CatalogText, DetectSource, PlanFixIn
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxInsecureRandomFix,
   uRdxText,              // _() und die gemeinsamen Gruende (E29)
-  uTestRdxTextKit;       // Join, Apply, LineOf
+  uTestRdxTextKit;       // Join, Apply, LineOf, NewMap
 
 const
   // Kopf und eine Routine mit Random - die meisten Faelle haengen an.
@@ -102,22 +101,17 @@ end;
 function FixAt(const ASource: string; ALine: Integer; const ACall: string;
   out AReason: string): string;
 var
-  SL   : TStringList;
   Map  : TRdxCodeMap;
   Edit : TRdxEdit;
 begin
   Result := '';
-  SL := TStringList.Create;
-  Map := nil;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
     if TRdxInsecureRandomFix.AddRandomize(Map, ALine, MsgFor(ACall), Edit,
          AReason) then
       Result := Apply(ASource, Edit);
   finally
     Map.Free;
-    SL.Free;
   end;
 end;
 
@@ -355,26 +349,17 @@ begin
 end;
 
 // Die Hilfe fuer einen Fund des Detektors ueber den Einstieg der Tabelle
-// (TRdxFixTable.FixFor, Adapter PlanInsecureRandom) - ohne Quellstellen-
-// Dienst, den die Hilfe nicht braucht.
+// (PlanFixIn: TRdxFixTable.FixFor, Adapter PlanInsecureRandom) - der
+// Adapter liest nur den Text, den Quellstellen-Dienst des Kits fragt er
+// nicht.
 function PlanSeen(const ASource: string; const ASeen: TSeen): TRdxFixOutcome;
-var
-  SL : TStringList;
-  F  : TLeakFinding;
 begin
-  SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, fkInsecureRandom);
-  try
-    SL.Text := ASource;
-    Result := TRdxFixTable.FixFor(nil, SL, F, nil);
-  finally
-    F.Free;
-    SL.Free;
-  end;
+  Result := PlanFixIn(ASource, 't.pas', fkInsecureRandom, ASeen);
 end;
 
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt. Jede Anwendung ist gekennzeichnet (E2, Zeile der Tabelle).
+// schweigt. Jede Anwendung ist gekennzeichnet (E2, Zeile der Tabelle) -
+// darum eine eigene Schleife statt FixAllWith (die prueft das nicht).
 function FixAll(const ASource: string): string;
 const
   MAX_PASSES = 10;

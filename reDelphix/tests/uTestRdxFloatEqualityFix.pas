@@ -71,11 +71,11 @@ uses
   uAstNode, uMethodd12, uSCAConsts, uEngineApi, uRuleCatalog, uFloatEquality,
   uRdxRecipeRunner,      // TRdxFixOutcome, R_NO_FILE, UsesNamesOf
   uRdxFixTable,          // TRdxFixTable.FixFor
-  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
+  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, FixAllWith
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxFloatEqualityFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply
+  uTestRdxTextKit;       // Join, Apply, NewMap
 
 const
   LINE = 6;   // erste Rumpfzeile von Wrap
@@ -101,25 +101,18 @@ end;
 function PlanAt(const ASource: string; ALine: Integer; const AMessage: string;
   out AReason: string): string;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
   E   : TRdxEdit;
   Ok  : Boolean;
 begin
   Result := '';
   AReason := '';
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Ok := TRdxFloatEqualityFix.ToleranceCompare(Map, ALine, AMessage, E,
-        AReason);
-    finally
-      Map.Free;
-    end;
+    Ok := TRdxFloatEqualityFix.ToleranceCompare(Map, ALine, AMessage, E,
+      AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
   if Ok then
     Result := Apply(ASource, E);
@@ -149,7 +142,6 @@ end;
 
 procedure TTestRdxFloatEqualityFix.Equal_BecomesSameValue;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
   E   : TRdxEdit;
   R   : string;
@@ -162,18 +154,12 @@ begin
     Applied(Wrap(['  if Ratio = Other then Work;']), LINE, 'Ratio', '=',
       'Other'));
   // Die Ersetzung reicht genau ueber den Vergleich.
-  SL := TStringList.Create;
+  Map := NewMap(Wrap(['  if Ratio = 0.5 then Work;']));
   try
-    SL.Text := Wrap(['  if Ratio = 0.5 then Work;']);
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Assert.IsTrue(TRdxFloatEqualityFix.ToleranceCompare(Map, LINE,
-        Msg('Ratio', '=', '0.5'), E, R), R);
-    finally
-      Map.Free;
-    end;
+    Assert.IsTrue(TRdxFloatEqualityFix.ToleranceCompare(Map, LINE,
+      Msg('Ratio', '=', '0.5'), E, R), R);
   finally
-    SL.Free;
+    Map.Free;
   end;
   Assert.AreEqual('Ratio = 0.5', E.Expected);
   Assert.AreEqual('SameValue(Ratio, 0.5)', E.NewText);
@@ -473,9 +459,15 @@ begin
   TFloatEqualityDetector.AnalyzeUnit(Root, Path, Results);
 end;
 
+// Dasselbe in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := DetectSource('rdx_floateq_', ASource, AKind, RunDetector);
+end;
+
 function Detect(const ASource: string): TArray<TSeen>;
 begin
-  Result := DetectSource('rdx_floateq_', ASource, fkFloatEquality, RunDetector);
+  Result := DetectKind(ASource, fkFloatEquality);
 end;
 
 // Die Hilfe fuer einen Fund ueber den Einstieg der Tabelle
@@ -491,9 +483,11 @@ var
   F      : TLeakFinding;
 begin
   SL := TStringList.Create;
-  Places := TSourcePlaces.Create;
-  F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, fkFloatEquality);
+  Places := nil;
+  F := nil;
   try
+    Places := TSourcePlaces.Create;
+    F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, fkFloatEquality);
     F.Confidence := AConfidence;
     SL.Text := ASource;
     if AOpen then
@@ -522,24 +516,11 @@ begin
 end;
 
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt.
+// schweigt (FixAllWith: PlanFixIn mit geoeffnetem Quellstellen-Dienst und
+// der Konfidenz der Art, fcHigh - wie PlanFirst).
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass : Integer;
-  O    : TRdxFixOutcome;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    if Length(Detect(Result)) = 0 then
-      Exit;
-    O := PlanFirst(Result);
-    Assert.IsTrue(O.Enabled, O.Reason);
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Result := FixAllWith(ASource, fkFloatEquality, DetectKind);
 end;
 
 procedure TTestRdxFloatEqualityDetector.Detector_ReportsLineAndOperands;

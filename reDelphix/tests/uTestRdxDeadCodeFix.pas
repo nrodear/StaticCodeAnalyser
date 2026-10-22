@@ -64,12 +64,12 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uDeadCode,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uRdxFixTable,          // TRdxFixTable.FixFor
-  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
+  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn,
+                         // FixAllWith
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxDeadCodeFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply
+  uTestRdxTextKit;       // Join, Apply, NewMap
 
 const
   BODY = 6;   // erste Rumpfzeile von Wrap
@@ -93,21 +93,14 @@ end;
 function PlanEdit(const ASource: string; ALine: Integer;
   const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
 begin
-  SL := TStringList.Create;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Result := TRdxDeadCodeFix.DeleteDeadCode(Map, ALine, AMessage, AEdit,
-        AReason);
-    finally
-      Map.Free;
-    end;
+    Result := TRdxDeadCodeFix.DeleteDeadCode(Map, ALine, AMessage, AEdit,
+      AReason);
   finally
-    SL.Free;
+    Map.Free;
   end;
 end;
 
@@ -361,53 +354,35 @@ begin
   TDeadCodeDetector.AnalyzeUnit(Root, Path, Results);
 end;
 
+// Dasselbe in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := DetectSource('rdx_dead_', ASource, AKind, RunDetector);
+end;
+
 function Detect(const ASource: string): TArray<TSeen>;
 begin
-  Result := DetectSource('rdx_dead_', ASource, fkDeadCode, RunDetector);
+  Result := DetectKind(ASource, fkDeadCode);
 end;
 
 // Die Hilfe fuer den ersten Fund des Detektors ueber den Einstieg der
-// Tabelle (TRdxFixTable.FixFor) - wie der Anbieter sie ruft.
+// Tabelle (PlanFixIn: TRdxFixTable.FixFor) - wie der Anbieter sie ruft;
+// der Adapter liest nur den Text.
 function PlanFirst(const ASource: string; out ASeen: TSeen): TRdxFixOutcome;
 var
   Seen : TArray<TSeen>;
-  SL   : TStringList;
-  F    : TLeakFinding;
 begin
   Seen := Detect(ASource);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet einen Fund');
   ASeen := Seen[0];
-  SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, fkDeadCode);
-  try
-    SL.Text := ASource;
-    Result := TRdxFixTable.FixFor(nil, SL, F, nil);
-  finally
-    F.Free;
-    SL.Free;
-  end;
+  Result := PlanFixIn(ASource, 't.pas', fkDeadCode, ASeen);
 end;
 
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt.
+// schweigt (FixAllWith).
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass : Integer;
-  O    : TRdxFixOutcome;
-  S    : TSeen;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    if Length(Detect(Result)) = 0 then
-      Exit;
-    O := PlanFirst(Result, S);
-    Assert.IsTrue(O.Enabled, O.Reason);
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Result := FixAllWith(ASource, fkDeadCode, DetectKind);
 end;
 
 procedure TTestRdxDeadCodeDetector.Detector_ReportsFirstDeadLine;

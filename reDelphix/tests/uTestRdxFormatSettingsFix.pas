@@ -7,9 +7,9 @@ unit uTestRdxFormatSettingsFix;
 // ECHTEN Detektor (TDateFormatSettingsDetector) laufen ueber den Einstieg
 // der Tabelle (TRdxFixTable.FixFor bzw. AlternativeFixFor, Adapter
 // PlanDateFormatSettings/PlanDateFormatSettingsAlt) und stehen in einer
-// eigenen Fixture hinter {$IFNDEF FPC}. Der Pruefstand-Runner nimmt nur
-// eine Fixture je Unit - die Weiche ist heute ohne Wirkung (wie
-// uTestRdxCategoryArgFix).
+// eigenen Fixture hinter {$IFNDEF FPC} - die Text-Fixture bleibt
+// FPC-tauglich. Im FPC-Pruefstand steht die Unit nicht
+// (uRdxFormatSettingsFix fehlt in der Unit-Liste von build.sh).
 // Prueft: Hilfe fuer ein und zwei Argumente, Schreibweise und Leerraum,
 // alle Aufrufe der Zeile in einer Ersetzung, verschachtelt, RTL-qualifiziert,
 // der Bereich, der Alt-Weg; die Sperren - verschoben, Folgezeile, Anweisung
@@ -69,12 +69,12 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uDateFormatSettings,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uRdxFixTable,          // TRdxFixTable.FixFor, AlternativeFixFor
-  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
+  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn,
+                         // PlanAltFixIn, FixAllWith
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxFormatSettingsFix,
   uRdxText,              // _() und die gemeinsamen Gruende (E29)
-  uTestRdxTextKit;       // Apply
+  uTestRdxTextKit;       // Apply, NewMap
 
 const
   CRLF = #13#10;
@@ -122,14 +122,10 @@ end;
 function PlanOn(const ASource: string; ALine: Integer; const AMessage: string;
   AAlt: Boolean; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
 begin
-  SL := TStringList.Create;
-  Map := nil;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
     if AAlt then
       Result := TRdxFormatSettingsFix.DateFormatInvariant(Map, ALine, AMessage,
         AEdit, AReason)
@@ -138,7 +134,6 @@ begin
         AEdit, AReason);
   finally
     Map.Free;
-    SL.Free;
   end;
 end;
 
@@ -474,55 +469,34 @@ begin
   TDateFormatSettingsDetector.AnalyzeUnit(Root, Path, Results);
 end;
 
+// Dasselbe in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := DetectSource(FILE_PREFIX, ASource, AKind, RunDetector);
+end;
+
 function Detect(const ASource: string): TArray<TSeen>;
 begin
-  Result := DetectSource(FILE_PREFIX, ASource, fkDateFormatSettings,
-    RunDetector);
+  Result := DetectKind(ASource, fkDateFormatSettings);
 end;
 
 // Die Hilfe fuer einen Fund ueber den Einstieg der Tabelle (AAlt: der
-// zweite Eintrag) - wie der Anbieter, ohne Quellstellen-Dienst (der Adapter
-// liest nur den Text).
+// zweite Eintrag) - wie der Anbieter (PlanFixIn/PlanAltFixIn). Der Adapter
+// liest nur den Text; den Quellstellen-Dienst des Kits fragt er nicht.
 function TablePlan(const ASource: string; const ASeen: TSeen;
   AAlt: Boolean): TRdxFixOutcome;
-var
-  SL : TStringList;
-  F  : TLeakFinding;
 begin
-  SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg,
-    fkDateFormatSettings);
-  try
-    SL.Text := ASource;
-    if AAlt then
-      Result := TRdxFixTable.AlternativeFixFor(nil, SL, F, nil)
-    else
-      Result := TRdxFixTable.FixFor(nil, SL, F, nil);
-  finally
-    F.Free;
-    SL.Free;
-  end;
+  if AAlt then
+    Result := PlanAltFixIn(ASource, 't.pas', fkDateFormatSettings, ASeen)
+  else
+    Result := PlanFixIn(ASource, 't.pas', fkDateFormatSettings, ASeen);
 end;
 
-// Fund fuer Fund ueber die Tabelle beheben, bis der Detektor schweigt.
+// Fund fuer Fund ueber die Tabelle beheben, bis der Detektor schweigt
+// (FixAllWith; AAlt: der zweite Eintrag).
 function FixAll(const ASource: string; AAlt: Boolean): string;
-const
-  MAX_PASSES = 10;
-var
-  Seen : TArray<TSeen>;
-  O    : TRdxFixOutcome;
-  Pass : Integer;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    Seen := Detect(Result);
-    if Length(Seen) = 0 then Exit;
-    O := TablePlan(Result, Seen[0], AAlt);
-    Assert.IsTrue(O.Enabled, Format('Zeile %d: %s', [Seen[0].Line, O.Reason]));
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail('der Detektor meldet nach 10 Runden noch');
+  Result := FixAllWith(ASource, fkDateFormatSettings, DetectKind, AAlt);
 end;
 
 // Das Katalog-Beispiel als Rumpf von P (Zeilenenden CRLF).
