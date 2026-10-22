@@ -115,11 +115,8 @@ const
   COND_OPEN: array[0..3] of string = ('if', 'ifdef', 'ifndef', 'ifopt');
   COND_CLOSE: array[0..1] of string = ('endif', 'ifend');
 
-// Der Leerraum am Zeilenanfang.
-function IndentOf(const ALine: string): string;
-begin
-  Result := Copy(ALine, 1, SkipBlanks(ALine, 1) - 1);
-end;
+// Den Leerraum am Zeilenanfang liefert uRdxCodeMap.IndentOf (bis zur
+// Hygiene-Welle H1 hier byte-gleich kopiert).
 
 // AWord in der Schreibweise von AModel: ganz gross, gross am Anfang oder
 // klein.

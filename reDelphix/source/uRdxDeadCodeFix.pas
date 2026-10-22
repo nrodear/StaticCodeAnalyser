@@ -120,8 +120,8 @@ const
   KW_CASE = 'case';
   // Mitten in einer try-Anweisung; auf oberster Ebene ein Listenende.
   TRY_PARTS: array[0..1] of string = ('except', 'finally');
-  // Hier endet eine Anweisungsliste.
-  LIST_ENDS: array[0..3] of string = ('end', 'until', 'except', 'finally');
+  // Wo eine Anweisungsliste endet, sagt uRdxCodeMap.LIST_ENDS (bis zur
+  // Hygiene-Welle H1 hier byte-gleich kopiert).
   // Damit beginnt keine Anweisung - die gemeldete Zeile ist verschoben.
   NOT_FIRST: array[0..10] of string = ('end', 'until', 'except', 'finally',
     'else', 'then', 'do', 'of', 'on', 'initialization', 'finalization');

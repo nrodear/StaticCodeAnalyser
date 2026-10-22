@@ -166,8 +166,7 @@ class function TRdxAvoidOutFix.IsManagedType(const ATypeText: string): Boolean;
 var
   T : string;
 begin
-  T := LowerCase(StringReplace(StringReplace(ATypeText, ' ', '',
-    [rfReplaceAll]), #9, '', [rfReplaceAll]));
+  T := Squeezed(ATypeText);   // uRdxCodeMap: ohne Leerzeichen und Tabs, klein
   if Copy(T, 1, Length(SYSTEM_PREFIX)) = SYSTEM_PREFIX then
     Delete(T, 1, Length(SYSTEM_PREFIX));
   Result := not InList(T, PLAIN_TYPES);

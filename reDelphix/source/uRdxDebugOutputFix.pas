@@ -100,14 +100,13 @@ const
   DEBUG_WORD = 'debug';
   DIR_OPEN = '{$IFDEF DEBUG}';
   DIR_CLOSE = '{$ENDIF}';
-  // Davor steht eine Anweisung in einer Anweisungsliste.
-  LIST_PREV: array[0..7] of string = (';', 'begin', 'try', 'repeat',
-    'finally', 'except', 'initialization', 'finalization');
+  // Davor steht eine Anweisung in einer Anweisungsliste: uRdxCodeMap.
+  // LIST_PREV; dort endet eine Anweisungsliste (DeleteCall: einzige
+  // Anweisung?): uRdxCodeMap.LIST_ENDS. Bis zur Hygiene-Welle H1 standen
+  // hier mengengleiche Kopien.
   // Davor steht die Anweisung allein in einem Zweig (oder hinter einer
   // Marke bzw. einem case-Wert).
   BRANCH_PREV: array[0..3] of string = ('then', 'else', 'do', ':');
-  // Hier endet eine Anweisungsliste (DeleteCall: einzige Anweisung?).
-  LIST_ENDS: array[0..3] of string = ('end', 'until', 'except', 'finally');
   // Davor ist ein Wort kein Aufruf ('@WriteLn', '&WriteLn').
   NOT_CALL_PREV: array[0..1] of string = ('@', '&');
   // Bedingungsbloecke (InDebugCondition).
