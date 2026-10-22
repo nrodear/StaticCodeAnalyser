@@ -23,6 +23,8 @@ type
     [Test] procedure MissingSemicolon_AddedBeforeComment;
     [Test] procedure EndWithoutSemicolon_BeforeEnd;
     [Test] procedure FlatBody;
+    [Test] procedure ScopeWords_NestedOrParameter_Helps;
+    [Test] procedure Followers_And_StringEnd;
     // ---- Gegenproben: keine Hilfe ----
     [Test] procedure Refuse_Comment;
     [Test] procedure Refuse_NotEmpty;
@@ -221,6 +223,41 @@ begin
     Fix(InUnit(['  try', '  Work;', '  finally', '  end;']), R), R);
 end;
 
+procedure TTestRdxEmptyFinallyFix.ScopeWords_NestedOrParameter_Helps;
+var
+  R : string;
+begin
+  // 'const' als Parametermodifikator einer anonymen Methode ist weder
+  // Inline-Deklaration noch Sprungziel.
+  Assert.AreEqual(
+    InUnit(['  Foo(procedure(const A: Integer) begin Use(A); end);']),
+    Fix(InUnit(['  try', '    Foo(procedure(const A: Integer) begin Use(A); end);',
+      '  finally', '  end;']), R), R);
+  // Ein Inline-var in einem geschachtelten begin..end behaelt seinen Block.
+  Assert.AreEqual(
+    InUnit(['  if C then', '  begin', '    var N := 1;', '    Use(N);',
+      '  end;']),
+    Fix(InUnit(['  try', '    if C then', '    begin', '      var N := 1;',
+      '      Use(N);', '    end;', '  finally', '  end;']), R), R);
+end;
+
+procedure TTestRdxEmptyFinallyFix.Followers_And_StringEnd;
+var
+  R : string;
+begin
+  // 'end' ohne ';' vor until und vor except (FOLLOW_OK).
+  Assert.AreEqual(InUnit(['  repeat', '    A;', '  until X;']),
+    Fix(InUnit(['  repeat', '    try', '      A;', '    finally', '    end',
+      '  until X;']), R), R);
+  Assert.AreEqual(InUnit(['  try', '    A;', '  except', '    B;', '  end;']),
+    Fix(InUnit(['  try', '    try', '      A;', '    finally', '    end',
+      '  except', '    B;', '  end;']), R), R);
+  // Das letzte Rumpfzeichen ist das Ende eines Strings (mit ';' darin): das
+  // fehlende ';' kommt hinter das Quote.
+  Assert.AreEqual(InUnit(['  S := ''a;'';']),
+    Fix(InUnit(['  try', '    S := ''a;''', '  finally', '  end;']), R), R);
+end;
+
 // ---- Gegenproben ----
 
 procedure TTestRdxEmptyFinallyFix.Refuse_Comment;
@@ -281,6 +318,11 @@ begin
   Assert.AreEqual('', FixAt(InUnit(['  try try A; finally end; finally end;']),
     BODY_LINE, R));
   Assert.IsTrue(Pos('mehrdeutig', R) > 0, R);
+  // Die Bilanz rueckwaerts trifft vor dem try auf einen anderen Oeffner (ein
+  // offenes begin im Rumpf): kein zugehoeriges try.
+  Assert.AreEqual('', Fix(InUnit(['  try', '    begin', '    A;', '  finally',
+    '  end;']), R));
+  Assert.AreEqual(R_EFB_NO_TRY, R);
 end;
 
 procedure TTestRdxEmptyFinallyFix.Refuse_BodyWords;
@@ -389,10 +431,11 @@ var
   S  : string;
 begin
   S := InUnit(['  try', '    Work;', '  finally', '  end;']);
-  F := TLeakFinding.New('t.pas', '', LineOf(S, 'finally'), 'Empty finally',
-    fkEmptyFinallyBlock);
   SL := TStringList.Create;
+  F := nil;
   try
+    F := TLeakFinding.New('t.pas', '', LineOf(S, 'finally'), 'Empty finally',
+      fkEmptyFinallyBlock);
     // Ohne Zeilen: kein Puffer.
     O := PlanEmptyFinally(nil, nil, F, nil);
     Assert.IsFalse(O.Enabled);
@@ -402,8 +445,8 @@ begin
     Assert.IsTrue(O.Enabled, O.Reason);
     Assert.AreEqual(InUnit(['  Work;']), Apply(S, O.Edits));
   finally
-    SL.Free;
     F.Free;
+    SL.Free;
   end;
 end;
 
