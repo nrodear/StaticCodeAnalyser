@@ -260,7 +260,7 @@ begin
     Exit;
   end;
   // Ein Bereich beginnt auf einem Zeichen (SpanFits: nie auf einer leeren
-  // Zeile, siehe LinesCut in uRdxCleanupFixes): er beginnt AUF dem letzten
+  // Zeile, siehe WholeLinesEdit in uRdxBufferMath): er beginnt AUF dem letzten
   // Zeichen der Attributzeile, das neu geschrieben wird, und endet hinter
   // der letzten Leerzeile, ohne deren Zeilenende - das bleibt und trennt
   // die Attributzeile von der Zeile mit Inhalt.

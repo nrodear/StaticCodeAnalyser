@@ -116,9 +116,11 @@ function TextPos(ALine, ACol: Integer): TRdxTextPos;
 // Der Baustein der beiden Planer dieser Unit (Charge H3, "loeschen und
 // aufraeumen"); oeffentlich nur fuer die Tests (uTestRdxCleanupFixes) -
 // ein anderer Planer bindet diese Unit nicht ein (Kopf von uRdxBlocks).
-// Braucht ihn ein zweiter, gehoert er samt LinesCut/IndentCut/TailCut/
-// JoinCut nach uRdxBlocks (Review Woche G07-07; bis dahin hiess er hier
-// "gemeinsamer Baustein"). Den Text von
+// Braucht ihn ein zweiter, gehoert er samt IndentCut/TailCut/JoinCut nach
+// uRdxBlocks (Review Woche G07-07; bis dahin hiess er hier "gemeinsamer
+// Baustein"); die Loeschung ganzer Zeilen (LinesCut) steht seit der
+// Folgewelle des Wochen-Reviews als WholeLinesEdit in uRdxBufferMath. Den
+// Text von
 // AFrom bis vor ATo loeschen und die Zeilen aufraeumen -
 //   * vor AFrom und hinter ATo nur Leerraum: die ganzen Zeilen samt
 //     Zeilenende (endet ATo am Zeilenanfang, bleibt dessen Zeile ganz);
@@ -282,60 +284,6 @@ end;
 
 { ---- CutEdit: loeschen und aufraeumen ---- }
 
-// Die ganzen Zeilen AFirst..ALast samt Zeilenende loeschen (bis Charge
-// H3c LinesEdit - gleich benannt wie die Ersetzung ganzer Zeilen in
-// uRdxRoutineFixes, mit anderem Vertrag; Minor 5). Ein Bereich
-// beginnt auf einem Zeichen (SpanFits: weder hinter einem Zeilenende noch
-// auf einer leeren Zeile). Ist AFirst leer oder steht hinter ALast (letzte
-// Zeile der Datei) kein Zeilenende, beginnt er deshalb AUF dem letzten
-// Zeichen der naechsten nicht leeren Zeile P davor, das neu geschrieben
-// wird - samt den Zeilenenden der Leerzeilen zwischen P und AFirst, die
-// bleiben. Ist dieses Zeichen die zweite Haelfte eines Surrogatpaars
-// (Emoji in einem Kommentar), beginnt er auf der ersten: sonst schnitte er
-// mitten im Zeichen, und PlanByteEdits lehnte jeden Klick ab (Gegen-Review
-// R4-09; wie uRdxTryFixes.TryEdit). '' oder der Grund.
-function LinesCut(AMap: TRdxCodeMap; AFirst, ALast: Integer;
-  const ARole: string; out AEdit: TRdxEdit): string;
-var
-  P, Col : Integer;
-  L      : string;
-begin
-  Result := '';
-  AEdit := Default(TRdxEdit);
-  if (AMap.Raw(AFirst) <> '') and (ALast < AMap.LineCount) then
-  begin
-    AEdit.Span := TRefactorSpan.Make(ARole, AFirst, 1, ALast + 1, 1);
-    AEdit.Expected := RangeText(AMap, AEdit.Span);
-    Exit;
-  end;
-  P := AFirst - 1;
-  while (P >= 1) and (AMap.Raw(P) = '') do
-    Dec(P);
-  if P < 1 then
-    Exit('vor dem Bereich steht nichts, und er reicht bis zum Dateiende - '
-      + 'von Hand loeschen');
-  L := AMap.Raw(P);
-  Col := Length(L);
-  if (Col > 1) and IsLowSurrogateCh(L[Col]) then   // uRdxCodeMap
-    Dec(Col);
-  // Es bleiben die Zeilenenden von P bis AFirst - 1; hinter der letzten
-  // Zeile der Datei liegt das von ALast ausserhalb des Bereichs und
-  // uebernimmt das von AFirst - 1.
-  if ALast < AMap.LineCount then
-  begin
-    AEdit.Span := TRefactorSpan.Make(ARole, P, Col, ALast + 1, 1);
-    AEdit.NewText := Copy(L, Col, MaxInt) + StringOfChar(#10, AFirst - P);
-  end
-  else
-  begin
-    AEdit.Span := TRefactorSpan.Make(ARole, P, Col, ALast,
-      Length(AMap.Raw(ALast)) + 1);
-    AEdit.NewText := Copy(L, Col, MaxInt)
-      + StringOfChar(#10, AFirst - 1 - P);
-  end;
-  AEdit.Expected := RangeText(AMap, AEdit.Span);
-end;
-
 // Vor AFrom nur Leerraum, hinter ATo Text: der Text rueckt an die
 // Einrueckung (sie bleibt), der Leerraum vor ihm geht mit.
 function IndentCut(AMap: TRdxCodeMap; const AFrom, ATo: TRdxTextPos;
@@ -416,9 +364,9 @@ begin
   TailBlank := SkipBlanks(AMap.Raw(ATo.Line), ATo.Col)
     > Length(AMap.Raw(ATo.Line));
   if LeadBlank and (ATo.Col = 1) then
-    Result := LinesCut(AMap, AFrom.Line, ATo.Line - 1, ARole, AEdit)
+    Result := WholeLinesEdit(AMap, AFrom.Line, ATo.Line - 1, ARole, AEdit)
   else if LeadBlank and TailBlank then
-    Result := LinesCut(AMap, AFrom.Line, ATo.Line, ARole, AEdit)
+    Result := WholeLinesEdit(AMap, AFrom.Line, ATo.Line, ARole, AEdit)
   else if LeadBlank then
     AEdit := IndentCut(AMap, AFrom, ATo, ARole)
   else if TailBlank then
