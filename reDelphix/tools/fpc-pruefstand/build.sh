@@ -141,7 +141,7 @@ STUBS=()
 for f in "$HERE"/*.pas "$HERE"/*.inc; do
   [ -e "$f" ] || continue
   case "${f##*/}" in
-    uDetectorUtils.pas|uRefactor*.pas|uSourcePlaces.pas|uFindingActions.pas|uScaConfigDir.pas|uRdx*.pas|uRdx*.inc|uTest*.pas|runner.pas)
+    uDetectorUtils.pas|uRefactor*.pas|uSourcePlaces.pas|uFindingActions.pas|uScaConfigDir.pas|uSCAConsts.pas|uRdx*.pas|uRdx*.inc|uTest*.pas|runner.pas)
       OLD+=("$f") ;;
     *) STUBS+=("$f") ;;
   esac

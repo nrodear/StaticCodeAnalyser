@@ -147,7 +147,7 @@ uses
   uRdxTryFixes,      // SCA009, SCA001, SCA109, SCA153, SCA156
   uRdxResultFixes,   // SCA121, SCA196
   uRdxInheritedFixes, // SCA096, SCA097
-  uRdxMagicFixes,    // SCA014
+  uRdxMagicFixes,    // SCA014; FileReason/IncludeReason fuer SCA069, SCA111/SCA112
   uRdxHttpsFix,         // SCA115
   uRdxParensFix,        // SCA094
   uRdxAttrGapFix,       // SCA183

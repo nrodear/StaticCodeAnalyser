@@ -149,7 +149,7 @@ uses
   System.SysUtils,
   uRefactorInfo,    // TRefactorSpan.Make
   uRdxText,         // _(): in die reDelphix-Sprache, nie uLocalization
-  uRdxBlocks;       // TRdxBlocks.HeadBefore, TRdxRoutine, TRdxHeadStep
+  uRdxBlocks;       // TRdxBlocks.BeginBodyAround, TRdxRoutine
 
 const
   SPAN_174 = 'sca174';

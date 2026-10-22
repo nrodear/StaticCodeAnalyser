@@ -193,7 +193,7 @@ uses
   System.SysUtils,
   uRefactorInfo,        // TRefactorSpan.Make
   uRdxText,             // _(), MsgMovedSuffix, MsgStaleSuffix
-  uRdxBlocks,           // TRdxBlocks.HeadBefore, TRdxRoutine, TRdxHeadStep
+  uRdxBlocks,           // TRdxBlocks.BeginBodyAround, TRdxRoutine
   uRdxTypeProof,        // TRdxTypeProof.DeclaresProperty
   uRdxIntroPlan,        // LineLooksFpcAware
   uRdxCompilerTraces;   // OldCompilerTrace, ScriptReason, FLOOR_INLINE_DECL

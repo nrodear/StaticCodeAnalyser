@@ -97,7 +97,7 @@ uses
   System.SysUtils,
   uRefactorInfo,    // TRefactorSpan.Make
   uRdxText,         // _(): in die reDelphix-Sprache, nie uLocalization
-  uRdxBlocks;       // TRdxBlocks.HeadBefore, TRdxRoutine
+  uRdxBlocks;       // TRdxBlocks.BeginBodyAround, TRdxRoutine
 
 const
   SPAN_199 = 'sca199';

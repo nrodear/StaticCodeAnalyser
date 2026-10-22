@@ -384,7 +384,7 @@ end;
 function DetectKind(const ASource: string;
   AKind: TFindingKind): TArray<TSeen>;
 begin
-  Result := DetectSource('sca054', ASource, AKind, RunUnusedParam);
+  Result := DetectSource('rdx_unp_', ASource, AKind, RunUnusedParam);
 end;
 
 function Detect(const ASource: string): TArray<TSeen>;
