@@ -139,7 +139,7 @@ const
         #13#10 + 'end;' + #13#10 + 'WriteLn(''reached'');';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA012
     (
@@ -207,7 +207,7 @@ const
       GoodEx   : 'Logger.Debug(''reached step 3'');';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA018
     (
@@ -710,7 +710,7 @@ const
       GoodEx   : 'S := Format(''%.2f'', [Price], TFormatSettings.Invariant);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA060
     (
@@ -1255,7 +1255,7 @@ const
       GoodEx   : 'procedure DoStuff;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA107
     (
@@ -1350,7 +1350,7 @@ const
       GoodEx   : 'MyThread := TWorker.Create(True);' + #13#10 + 'MyThread.Start;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA114
     (
@@ -1545,7 +1545,7 @@ const
         #13#10 + 'WriteLn(DateToStr(Now, FS));';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA129
     (
@@ -1584,7 +1584,7 @@ const
         '  x := FetchFromDb;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA132
     (
@@ -1672,7 +1672,7 @@ const
         '// Cast one operand; the other is auto-promoted; multiplication is 64-bit.';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA138
     (
@@ -1780,7 +1780,7 @@ const
         'if SameValue(Ratio, 0.5, 1e-9) then DoStuff;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA145
     (
@@ -1921,7 +1921,7 @@ const
         'FillChar(V, SizeOf(V), 0);             // matches the variable''s size';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA155
     (
@@ -2081,7 +2081,7 @@ const
         '    Players[i].Card := Random(52);' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA168
     (
@@ -2106,7 +2106,7 @@ const
       GoodEx   : 'var Ok := InitializeSubsystem;' + #13#10 + 'Assert(Ok, ''subsystem init failed'');';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA170
     (
@@ -2355,7 +2355,7 @@ const
       GoodEx   : '// no bidirectional control characters anywhere in source';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA189
     (
@@ -2399,7 +2399,7 @@ const
       GoodEx   : '// no zero-width / invisible characters in source';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA193
     (

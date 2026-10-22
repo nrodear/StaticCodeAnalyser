@@ -2,8 +2,9 @@ unit uTestRdxAssertSideEffectFix;
 
 // Editorhilfe SCA169 AssertWithSideEffect (uRdxAssertSideEffectFix): der
 // Planer auf Text (erste Fixture, auch im FPC-Pruefstand) und - nur Delphi -
-// der ECHTE Detektor (uAssertWithSideEffect) auf dem echten AST mit MapFix
-// wie der Adapter der Tabelle (zweite Fixture). Die Fixtures stehen in einer
+// der ECHTE Detektor (uAssertWithSideEffect) auf dem echten AST ueber den
+// Einstieg der Tabelle (TRdxFixTable.FixFor, Adapter PlanAssertOutside;
+// zweite Fixture). Die Fixtures stehen in einer
 // Routine 'Foo'; die erste Rumpfzeile ist Zeile 6 (STMT_LINE).
 
 interface
@@ -50,7 +51,8 @@ type
     [Test] procedure Detector_TwoAsserts_BothFixed;
     [Test] procedure Detector_ForeignQualifier_NoHelp;
     [Test] procedure Detector_DanglingElse_NoHelp;
-    [Test] procedure MapFix_StaleLine_NoHelp;
+    [Test] procedure Table_StaleLine_NoHelp;
+    [Test] procedure Table_Marked;
   end;
 {$ENDIF}
 
@@ -62,7 +64,7 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uAssertWithSideEffect,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uRdxFixRunner,         // MapFix - wie der Adapter in uRdxFixTable
+  uRdxFixTable,          // TRdxFixTable.FixFor
   uTestRdxDetectorKit,   // TSeen, DetectSource
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxAssertSideEffectFix,
@@ -340,7 +342,7 @@ end;
 
 {$IFNDEF FPC}
 
-{ ---- Detektor und MapFix ---- }
+{ ---- Detektor und Tabelle ---- }
 
 // Die Funde der Art SCA169 - der echte Detektor auf dem echten AST.
 procedure RunDetector(AKind: TFindingKind; Root: TAstNode;
@@ -355,24 +357,35 @@ begin
     RunDetector);
 end;
 
-// Die Hilfe fuer den ersten Fund des Detektors - MapFix wie der Adapter der
-// Tabelle (Zeile und Meldung aus dem Fund).
+// Die Fundzeile ALine mit AMessage ueber den Einstieg der Tabelle
+// (TRdxFixTable.FixFor) - wie der Anbieter sie ruft.
+function PlanAt(const ASource: string; ALine: Integer;
+  const AMessage: string): TRdxFixOutcome;
+var
+  SL : TStringList;
+  F  : TLeakFinding;
+begin
+  SL := TStringList.Create;
+  F := TLeakFinding.New('t.pas', '', ALine, AMessage, fkAssertWithSideEffect);
+  try
+    SL.Text := ASource;
+    Result := TRdxFixTable.FixFor(nil, SL, F, nil);
+  finally
+    F.Free;
+    SL.Free;
+  end;
+end;
+
+// Die Hilfe fuer den ersten Fund des Detektors (Zeile und Meldung aus dem
+// Fund).
 function PlanFirst(const ASource: string; out ASeen: TSeen): TRdxFixOutcome;
 var
   Seen : TArray<TSeen>;
-  SL   : TStringList;
 begin
   Seen := Detect(ASource);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet einen Fund');
   ASeen := Seen[0];
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    Result := MapFix(SL, ASeen.Line, ASeen.Msg,
-      TRdxAssertSideEffectFix.AssertOutside);
-  finally
-    SL.Free;
-  end;
+  Result := PlanAt(ASource, ASeen.Line, ASeen.Msg);
 end;
 
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
@@ -472,23 +485,27 @@ begin
   Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
 end;
 
-procedure TTestRdxAssertSideEffectDetector.MapFix_StaleLine_NoHelp;
+procedure TTestRdxAssertSideEffectDetector.Table_StaleLine_NoHelp;
 var
-  SL : TStringList;
-  O  : TRdxFixOutcome;
+  O : TRdxFixOutcome;
 begin
-  SL := TStringList.Create;
-  try
-    // Der Fund zeigt auf Zeile 7, doch dort steht 'end;'.
-    SL.Text := Wrap(['  Assert(UpdateCache(X));']);
-    O := MapFix(SL, STMT_LINE + 1, MSG_169,
-      TRdxAssertSideEffectFix.AssertOutside);
-  finally
-    SL.Free;
-  end;
+  // Der Fund zeigt auf Zeile 7, doch dort steht 'end;'.
+  O := PlanAt(Wrap(['  Assert(UpdateCache(X));']), STMT_LINE + 1, MSG_169);
   Assert.IsFalse(O.Enabled, 'gesperrt');
   Assert.AreEqual(MsgMovedSuffix(_(R_ASSERTSE_MOVED)), O.Reason);
   Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+end;
+
+procedure TTestRdxAssertSideEffectDetector.Table_Marked;
+var
+  S : TSeen;
+  O : TRdxFixOutcome;
+begin
+  // Die Zeile kennzeichnet (E2) und setzt ihren Hinweis.
+  O := PlanFirst(Wrap(['  Assert(UpdateCache(X));']), S);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.ChangesBehavior, 'gekennzeichnet');
+  Assert.IsTrue(Pos('Assertions', O.Hint) > 0, O.Hint);
 end;
 
 {$ENDIF}

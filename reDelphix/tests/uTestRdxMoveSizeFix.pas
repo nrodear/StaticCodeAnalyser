@@ -3,9 +3,11 @@ unit uTestRdxMoveSizeFix;
 // Editorhilfe SCA154 MoveSizeOfPointer (uRdxMoveSizeFix): der Planer auf
 // Text, die Puffer-Argumente und ihr Typbeweis als reine Funktionen (erste
 // Fixture, auch FPC), dazu der ECHTE Detektor (uMoveSizeOfPointer) auf dem
-// echten AST mit dem Adapter, wie ihn die Integrationsnotiz fuer
-// uRdxFixTable vorsieht (zweite Fixture, nur Delphi). Die Fixtures der
-// ersten stehen in 'procedure Foo', der Rumpf beginnt auf Zeile 6 (LINE).
+// echten AST ueber den Einstieg der Tabelle (TRdxFixTable.FixFor, Adapter
+// PlanMoveSizeOfPointer; zweite Fixture, nur Delphi - bis zur Integration
+// der Charge QF stand hier eine woertliche Kopie des Adapters). Die
+// Fixtures der ersten stehen in 'procedure Foo', der Rumpf beginnt auf
+// Zeile 6 (LINE).
 
 interface
 
@@ -65,7 +67,8 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uEngineApi, uRuleCatalog,
   uMoveSizeOfPointer,
-  uRdxRecipeRunner,      // TRdxFixOutcome, R_NO_FILE
+  uRdxRecipeRunner,      // TRdxFixOutcome, R_NO_FILE, UsesNamesOf
+  uRdxFixTable,          // TRdxFixTable.FixFor
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxMoveSizeFix,
@@ -424,47 +427,6 @@ end;
 
 { ---- Adapter und Detektor ---- }
 
-// Der Adapter genau wie in der Integrationsnotiz (uRdxFixTable,
-// PlanMoveSizeOfPointer).
-function PlanMoveSizeOfPointer(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-var
-  Map : TRdxCodeMap;
-  Ops : TArray<TRdxSizeOperand>;
-  i   : Integer;
-begin
-  Result := Default(TRdxFixOutcome);
-  Result.Name := TRdxMoveSizeFix.TargetTypeOf(AFinding.Message);
-  if not Assigned(ALines) or not Assigned(APlaces) or not APlaces.IsOpen then
-  begin
-    Result.Reason := R_NO_FILE;
-    Exit;
-  end;
-  SetLength(Result.Edits, 1);
-  Map := TRdxCodeMap.Create(ALines);
-  try
-    Result.Enabled := TRdxMoveSizeFix.PointeeSize(Map, AFinding.LineInt,
-      AFinding.Message, Result.Edits[0], Result.Reason)
-      and TRdxMoveSizeFix.Operands(Map, AFinding.LineInt, AFinding.Message,
-        Ops, Result.Reason);
-  finally
-    Map.Free;
-  end;
-  if Result.Enabled then
-    Result.Reason := TRdxMoveSizeFix.ContextReason(
-      APlaces.InWithBlock(AFinding.LineInt));
-  i := 0;
-  while Result.Enabled and (Result.Reason = '') and (i < Length(Ops)) do
-  begin
-    Result.Reason := TRdxMoveSizeFix.OperandReason(Ops[i],
-      APlaces.DeclaredTypeOf(AFinding.LineInt, Ops[i].Name));
-    Inc(i);
-  end;
-  Result.Enabled := Result.Enabled and (Result.Reason = '');
-  if not Result.Enabled then
-    Result.Edits := nil;
-end;
-
 // Die Funde der Art SCA154 - der echte Detektor auf dem echten AST.
 procedure RunDetector(AKind: TFindingKind; Root: TAstNode;
   const Path: string; Results: TObjectList<TLeakFinding>);
@@ -478,7 +440,11 @@ begin
     RunDetector);
 end;
 
-// Der Adapter fuer einen Fund; AOpen: mit geoeffnetem Quellstellen-Dienst.
+// Die Hilfe fuer einen Fund ueber den Einstieg der Tabelle
+// (TRdxFixTable.FixFor, Adapter PlanMoveSizeOfPointer); AOpen: mit
+// geoeffnetem Quellstellen-Dienst. Eigener Lauf statt PlanFixIn
+// (uTestRdxDetectorKit): Adapter_NoFile_NoHelp braucht einen Lauf ohne
+// Datei.
 function PlanSeen(const ASource: string; const ASeen: TSeen;
   AOpen: Boolean): TRdxFixOutcome;
 var
@@ -495,11 +461,11 @@ begin
     if AOpen then
     begin
       Assert.IsTrue(Places.OpenSource('t.pas', ASource), 'OpenSource');
-      Result := PlanMoveSizeOfPointer(Places, SL, F,
+      Result := TRdxFixTable.FixFor(Places, SL, F,
         TRdxRecipeRunner.UsesNamesOf(Places));
     end
     else
-      Result := PlanMoveSizeOfPointer(nil, SL, F, nil);
+      Result := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
     F.Free;
     Places.Free;

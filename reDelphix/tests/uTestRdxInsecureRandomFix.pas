@@ -6,8 +6,10 @@ unit uTestRdxInsecureRandomFix;
 //                                      einer TStringList), ohne Parser und
 //                                      Detektor - FPC-tauglich;
 //   TTestRdxInsecureRandomFixDetector  Rundlaeufe mit dem ECHTEN Detektor
-//                                      (uInsecureRandom) ueber den Planer
-//                                      selbst (ohne Tabelle) - nur Delphi.
+//                                      (uInsecureRandom) ueber den Einstieg
+//                                      der Tabelle (TRdxFixTable.FixFor,
+//                                      Adapter PlanInsecureRandom) - nur
+//                                      Delphi.
 // Prueft: neuer Abschnitt vor 'end.' (auch hinter Deklarationen, auch
 // gross geschrieben), vor einem finalization ohne initialization, erste
 // Anweisung eines vorhandenen Abschnitts (neue Zeile mit der Stufe der
@@ -64,6 +66,8 @@ uses
   {$IFNDEF FPC}
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uInsecureRandom,
+  uRdxRecipeRunner,      // TRdxFixOutcome
+  uRdxFixTable,          // TRdxFixTable.FixFor
   uTestRdxDetectorKit,   // TSeen, CatalogText, DetectSource
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxInsecureRandomFix,
@@ -350,60 +354,60 @@ begin
   Result := DetectSource('rdx_s167_', ASource, fkInsecureRandom, RunDetector);
 end;
 
-// Der Planer fuer einen Fund des Detektors (ohne Tabelle).
-function PlanSeen(const ASource: string; const ASeen: TSeen;
-  out AEdit: TRdxEdit; out AReason: string): Boolean;
+// Die Hilfe fuer einen Fund des Detektors ueber den Einstieg der Tabelle
+// (TRdxFixTable.FixFor, Adapter PlanInsecureRandom) - ohne Quellstellen-
+// Dienst, den die Hilfe nicht braucht.
+function PlanSeen(const ASource: string; const ASeen: TSeen): TRdxFixOutcome;
 var
-  SL  : TStringList;
-  Map : TRdxCodeMap;
+  SL : TStringList;
+  F  : TLeakFinding;
 begin
   SL := TStringList.Create;
-  Map := nil;
+  F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, fkInsecureRandom);
   try
     SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    Result := TRdxInsecureRandomFix.AddRandomize(Map, ASeen.Line, ASeen.Msg,
-      AEdit, AReason);
+    Result := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
-    Map.Free;
+    F.Free;
     SL.Free;
   end;
 end;
 
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt.
+// schweigt. Jede Anwendung ist gekennzeichnet (E2, Zeile der Tabelle).
 function FixAll(const ASource: string): string;
 const
   MAX_PASSES = 10;
 var
-  Seen   : TArray<TSeen>;
-  Edit   : TRdxEdit;
-  Reason : string;
-  Pass   : Integer;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+  Pass : Integer;
 begin
   Result := ASource;
   for Pass := 1 to MAX_PASSES do
   begin
     Seen := Detect(Result);
     if Length(Seen) = 0 then Exit;
-    Assert.IsTrue(PlanSeen(Result, Seen[0], Edit, Reason),
-      Format('Zeile %d: %s', [Seen[0].Line, Reason]));
-    Result := Apply(Result, Edit);
+    O := PlanSeen(Result, Seen[0]);
+    Assert.IsTrue(O.Enabled, Format('Zeile %d: %s', [Seen[0].Line, O.Reason]));
+    Assert.IsTrue(O.ChangesBehavior, 'gekennzeichnet (E2)');
+    Result := Apply(Result, O.Edits);
   end;
   Assert.Fail(Format('der Detektor meldet nach %d Runden noch', [MAX_PASSES]));
 end;
 
-// Der Detektor meldet, der Planer lehnt den ersten Fund mit AReason ab.
+// Der Detektor meldet, die Hilfe lehnt den ersten Fund mit AReason ab.
 procedure AssertDetectorNoHelp(const ASource, AReason: string);
 var
-  Seen   : TArray<TSeen>;
-  Edit   : TRdxEdit;
-  Reason : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
 begin
   Seen := Detect(ASource);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet');
-  Assert.IsFalse(PlanSeen(ASource, Seen[0], Edit, Reason), 'keine Hilfe');
-  Assert.AreEqual(AReason, Reason);
+  O := PlanSeen(ASource, Seen[0]);
+  Assert.IsFalse(O.Enabled, 'keine Hilfe');
+  Assert.AreEqual(AReason, O.Reason);
+  Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
 end;
 
 procedure TTestRdxInsecureRandomFixDetector.Sca167_Detector_RoundTrip;

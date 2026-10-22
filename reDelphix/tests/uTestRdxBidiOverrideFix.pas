@@ -11,8 +11,8 @@ unit uTestRdxBidiOverrideFix;
 //   offener String, '.'/'[' hinter dem Literal, verschobene Zeile, Zeichen
 //   ausserhalb der Detektor-Menge (U+200E/U+200F).
 //   Fixture 2 (nur Delphi): der ECHTE Detektor (uSourceEncoding) meldet
-//   die erste Zeile, die Hilfe (ueber MapFix wie der Adapter der Tabelle)
-//   behebt sie, bis der Detektor schweigt.
+//   die erste Zeile, die Hilfe (ueber den Einstieg der Tabelle,
+//   TRdxFixTable.FixFor) behebt sie, bis der Detektor schweigt.
 // Quelltext reines ASCII: die Steuerzeichen entstehen ueber #$xxxx.
 
 interface
@@ -65,8 +65,8 @@ uses
 {$IFNDEF FPC}
   , System.IOUtils, System.Generics.Collections,
   uMethodd12, uSCAConsts, uSourceEncoding,
-  uRdxFixRunner,     // MapFix, TRdxMapPlanner
-  uRdxRecipeRunner   // TRdxFixOutcome
+  uRdxRecipeRunner,  // TRdxFixOutcome
+  uRdxFixTable       // TRdxFixTable.FixFor
 {$ENDIF}
   ;
 
@@ -502,20 +502,25 @@ begin
   end;
 end;
 
-// Die Hilfe zum ersten Fund ueber MapFix (wie der Adapter der Tabelle).
+// Die Hilfe zum ersten Fund ueber den Einstieg der Tabelle
+// (TRdxFixTable.FixFor, Adapter PlanBidiOverride) - ohne Quellstellen-
+// Dienst, den die Hilfe nicht braucht.
 function PlanFirst(const ASource: string; out AFound: Integer): TRdxFixOutcome;
 var
   SL   : TStringList;
+  F    : TLeakFinding;
   Line : Integer;
   Msg  : string;
 begin
   AFound := Detect(ASource, Line, Msg);
   Assert.IsTrue(AFound > 0, 'der Detektor meldet');
   SL := TStringList.Create;
+  F := TLeakFinding.New('t.pas', '', Line, Msg, fkSourceBidiOverride);
   try
     SL.Text := ASource;
-    Result := MapFix(SL, Line, Msg, TRdxCharEscapeFix.BidiOverride);
+    Result := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
+    F.Free;
     SL.Free;
   end;
 end;

@@ -2,9 +2,10 @@ unit uTestRdxDeadCodeFix;
 
 // Editorhilfe SCA011 DeadCode (uRdxDeadCodeFix): der Planer auf Text
 // (erste Fixture, FPC-tauglich) und der ECHTE Detektor (uDeadCode) auf dem
-// echten AST mit MapFix wie der Adapter der Tabelle (zweite Fixture, nur
-// Delphi). Die Fixtures stehen in einer Routine 'Foo', deren Rumpf auf
-// Zeile 5 beginnt; seine erste Anweisung steht auf Zeile 6 (BODY).
+// echten AST ueber den Einstieg der Tabelle (TRdxFixTable.FixFor, Adapter
+// PlanDeadCode; zweite Fixture, nur Delphi). Die Fixtures stehen in einer
+// Routine 'Foo', deren Rumpf auf Zeile 5 beginnt; seine erste Anweisung
+// steht auf Zeile 6 (BODY).
 
 interface
 
@@ -50,6 +51,8 @@ type
     [Test] procedure Detector_CatalogExample_Fixed;
     [Test] procedure Detector_ParkedWithComment_NoHelp;
     [Test] procedure Detector_TwoBlocks_BothFixed;
+    // ---- Tabellenzeile ----
+    [Test] procedure Table_NameIsLineCount;
   end;
 {$ENDIF}
 
@@ -61,7 +64,7 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uDeadCode,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uRdxFixRunner,         // MapFix (wie der Adapter der Tabelle)
+  uRdxFixTable,          // TRdxFixTable.FixFor
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxDeadCodeFix,
@@ -363,22 +366,24 @@ begin
   Result := DetectSource('rdx_dead_', ASource, fkDeadCode, RunDetector);
 end;
 
-// Die Hilfe fuer den ersten Fund des Detektors ueber MapFix - so ruft sie
-// der Adapter der Tabelle.
+// Die Hilfe fuer den ersten Fund des Detektors ueber den Einstieg der
+// Tabelle (TRdxFixTable.FixFor) - wie der Anbieter sie ruft.
 function PlanFirst(const ASource: string; out ASeen: TSeen): TRdxFixOutcome;
 var
   Seen : TArray<TSeen>;
   SL   : TStringList;
+  F    : TLeakFinding;
 begin
   Seen := Detect(ASource);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet einen Fund');
   ASeen := Seen[0];
   SL := TStringList.Create;
+  F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, fkDeadCode);
   try
     SL.Text := ASource;
-    Result := MapFix(SL, ASeen.Line, ASeen.Msg,
-      TRdxDeadCodeFix.DeleteDeadCode);
+    Result := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
+    F.Free;
     SL.Free;
   end;
 end;
@@ -493,6 +498,21 @@ begin
   Assert.AreEqual<Integer>(2, Length(Detect(Src)), 'zwei Funde');
   Assert.AreEqual(Wrap(['  if A then', '  begin', '    Exit;', '  end;',
     '  raise E;']), FixAll(Src));
+end;
+
+procedure TTestRdxDeadCodeDetector.Table_NameIsLineCount;
+var
+  S : TSeen;
+  O : TRdxFixOutcome;
+begin
+  // Der Adapter setzt die Zahl der Zeilen als Name (Menuetext
+  // 'Delete the unreachable code: %s line(s)'); bedeutungsgleich.
+  O := PlanFirst(Wrap(['  Exit;', '  WriteLn(''never reached'');',
+    '  Foo;']), S);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual('2', O.Name, 'zwei tote Zeilen');
+  Assert.IsFalse(O.ChangesBehavior, 'nicht gekennzeichnet');
+  Assert.IsTrue(O.Hint <> '', 'Hinweis der Zeile');
 end;
 
 {$ENDIF}

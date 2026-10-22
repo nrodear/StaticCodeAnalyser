@@ -2,9 +2,11 @@ unit uTestRdxDebugOutputFix;
 
 // Editorhilfe SCA017 DebugOutput (uRdxDebugOutputFix): der Planer auf Text
 // (erste Fixture, FPC-tauglich) und der ECHTE Detektor (uDebugOutput) auf
-// dem echten AST mit MapFix wie der Adapter der Tabelle (zweite Fixture,
-// nur Delphi). Die Fixtures stehen in einer Routine 'Foo', deren Rumpf auf
-// Zeile 5 beginnt; seine erste Anweisung steht auf Zeile 6 (BODY).
+// dem echten AST ueber den Einstieg der Tabelle (TRdxFixTable.FixFor bzw.
+// AlternativeFixFor, Adapter PlanDebugOutput/PlanDebugOutputAlt; zweite
+// Fixture, nur Delphi). Die Fixtures stehen in einer Routine 'Foo', deren
+// Rumpf auf Zeile 5 beginnt; seine erste Anweisung steht auf Zeile 6
+// (BODY).
 // WrapInDebug ist der erste Eintrag ('{$IFDEF DEBUG}'), DeleteCall der
 // zweite (loeschen).
 
@@ -52,6 +54,8 @@ type
     [Test] procedure Detector_MultiLineCall_Deleted;
     [Test] procedure Detector_BranchFinding_NoHelp;
     [Test] procedure Detector_AnonymousMethod_NoHelp;
+    // ---- Tabellenzeile ----
+    [Test] procedure Table_BothEntriesMarked;
   end;
 {$ENDIF}
 
@@ -63,7 +67,7 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uDebugOutput,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uRdxFixRunner,         // MapFix (wie der Adapter der Tabelle)
+  uRdxFixTable,          // TRdxFixTable.FixFor, AlternativeFixFor
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxDebugOutputFix,
@@ -449,26 +453,29 @@ begin
   Result := DetectSource('rdx_dbg_', ASource, fkDebugOutput, RunDetector);
 end;
 
-// Die Hilfe fuer den ersten Fund des Detektors ueber MapFix - so ruft sie
-// der Adapter der Tabelle.
+// Die Hilfe fuer den ersten Fund des Detektors ueber den Einstieg der
+// Tabelle - der erste Eintrag (FixFor, einklammern) bzw. mit ADelete der
+// zweite (AlternativeFixFor, loeschen), wie der Anbieter sie ruft.
 function PlanFirst(const ASource: string; ADelete: Boolean;
   out ASeen: TSeen): TRdxFixOutcome;
 var
   Seen : TArray<TSeen>;
   SL   : TStringList;
+  F    : TLeakFinding;
 begin
   Seen := Detect(ASource);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet einen Fund');
   ASeen := Seen[0];
   SL := TStringList.Create;
+  F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, fkDebugOutput);
   try
     SL.Text := ASource;
     if ADelete then
-      Result := MapFix(SL, ASeen.Line, ASeen.Msg, TRdxDebugOutputFix.DeleteCall)
+      Result := TRdxFixTable.AlternativeFixFor(nil, SL, F, nil)
     else
-      Result := MapFix(SL, ASeen.Line, ASeen.Msg,
-        TRdxDebugOutputFix.WrapInDebug);
+      Result := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
+    F.Free;
     SL.Free;
   end;
 end;
@@ -586,6 +593,28 @@ begin
   Assert.AreEqual<Integer>(BODY + 1, S.Line, 'Zeile der Zuweisung');
   Assert.IsFalse(O.Enabled, 'keine Hilfe');
   Assert.AreEqual(_(R_DBG_SHARED), O.Reason);
+end;
+
+procedure TTestRdxDebugOutputDetector.Table_BothEntriesMarked;
+var
+  Src : string;
+  S   : TSeen;
+  O   : TRdxFixOutcome;
+begin
+  // Beide Eintraege gekennzeichnet (E2): einklammern (Variant 0, Hinweis der
+  // Zeile) und loeschen (Variant 1, Hinweis des Alt-Adapters).
+  Src := Wrap(['  Foo;', '  WriteLn(''here #3'');', '  Bar;']);
+  O := PlanFirst(Src, False, S);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual<Integer>(0, O.Variant, 'erster Eintrag');
+  Assert.IsTrue(O.ChangesBehavior, 'gekennzeichnet');
+  Assert.IsTrue(Pos('DEBUG', O.Hint) > 0, O.Hint);
+  O := PlanFirst(Src, True, S);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual<Integer>(1, O.Variant, 'zweiter Eintrag');
+  Assert.IsTrue(O.ChangesBehavior, 'gekennzeichnet');
+  Assert.AreEqual('die Ausgabe entfaellt in jedem Build, auch beim '
+    + 'Debuggen; ihre Argumente werden nicht mehr ausgewertet', O.Hint);
 end;
 
 {$ENDIF}

@@ -14,8 +14,8 @@ unit uTestRdxInvisibleCharFix;
 //   Zeilenanfang, Direktive, Kommentar-Form, mehrzeiliger String,
 //   verschobene Zeile, Zeichen ausserhalb der Detektor-Menge (NBSP, U+202E).
 //   Fixture 2 (nur Delphi): der ECHTE Detektor (uSourceEncoding) meldet,
-//   die Hilfe (ueber MapFix wie der Adapter der Tabelle) behebt, bis der
-//   Detektor schweigt - bzw. lehnt ab.
+//   die Hilfe (ueber den Einstieg der Tabelle, TRdxFixTable.FixFor) behebt,
+//   bis der Detektor schweigt - bzw. lehnt ab.
 // Quelltext reines ASCII: die Zeichen entstehen ueber #$xxxx.
 
 interface
@@ -68,8 +68,8 @@ uses
 {$IFNDEF FPC}
   , System.IOUtils, System.Generics.Collections,
   uMethodd12, uSCAConsts, uSourceEncoding,
-  uRdxFixRunner,     // MapFix, TRdxMapPlanner
-  uRdxRecipeRunner   // TRdxFixOutcome
+  uRdxRecipeRunner,  // TRdxFixOutcome
+  uRdxFixTable       // TRdxFixTable.FixFor
 {$ENDIF}
   ;
 
@@ -454,20 +454,25 @@ begin
   end;
 end;
 
-// Die Hilfe zum ersten Fund ueber MapFix (wie der Adapter der Tabelle).
+// Die Hilfe zum ersten Fund ueber den Einstieg der Tabelle
+// (TRdxFixTable.FixFor, Adapter PlanInvisibleChar) - ohne Quellstellen-
+// Dienst, den die Hilfe nicht braucht.
 function PlanFirst(const ASource: string; out AFound: Integer): TRdxFixOutcome;
 var
   SL   : TStringList;
+  F    : TLeakFinding;
   Line : Integer;
   Msg  : string;
 begin
   AFound := Detect(ASource, Line, Msg);
   Assert.IsTrue(AFound > 0, 'der Detektor meldet');
   SL := TStringList.Create;
+  F := TLeakFinding.New('t.pas', '', Line, Msg, fkSourceInvisibleChar);
   try
     SL.Text := ASource;
-    Result := MapFix(SL, Line, Msg, TRdxCharEscapeFix.InvisibleChar);
+    Result := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
+    F.Free;
     SL.Free;
   end;
 end;

@@ -5,8 +5,10 @@ unit uTestRdxIntegerOverflowFix;
 // (ProofReason) auf Text (erste Fixture), der ECHTE Detektor
 // (uIntegerOverflow) auf dem echten AST (zweite Fixture, nur Delphi). Den
 // Adapter der Tabelle (PlanIntegerOverflow, fragt DeclaredTypeOf und
-// InWithBlock) traegt uRdxFixTable - die Rundlaeufe hier rufen den Planer
-// selbst. Die Routine 'Foo' von Wrap deklariert Total: Int64 und Count,
+// InWithBlock) traegt uRdxFixTable - die Rundlaeufe hier gehen ueber ihren
+// Einstieg mit geoeffnetem Quellstellen-Dienst (uTestRdxDetectorKit.
+// PlanFixIn), der Typbeweis kommt also aus den Deklarationen der Quelle.
+// Die Routine 'Foo' von Wrap deklariert Total: Int64 und Count,
 // Size: Integer; die erste Rumpfzeile ist Zeile 9 (STMT_LINE).
 
 interface
@@ -53,6 +55,9 @@ type
     [Test] procedure Detector_FieldTarget_Fixed;
     [Test] procedure Detector_CatalogExample_Fixed;
     [Test] procedure Detector_PathTarget_NoHelp;
+    // ---- Typbeweis ueber die Tabelle ----
+    [Test] procedure Table_Proven_EnabledAndMarked;
+    [Test] procedure Table_DoubleOperand_NoHelp;
   end;
 {$ENDIF}
 
@@ -63,7 +68,8 @@ uses
   {$IFNDEF FPC}
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uIntegerOverflow,
-  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
+  uRdxRecipeRunner,      // TRdxFixOutcome
+  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxIntegerOverflowFix,
   uRdxText,              // _() und die gemeinsamen Gruende
@@ -397,16 +403,16 @@ begin
 end;
 
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt - die Textform wie der Adapter sie ruft (den Typbeweis tragen
-// die Fixtures selbst: Integer-Operanden, Int64-Ziel).
+// schweigt - ueber den Einstieg der Tabelle mit geoeffnetem
+// Quellstellen-Dienst (PlanFixIn): den Typbeweis tragen die Deklarationen
+// der Fixtures (Integer-Operanden, Int64-Ziel; lokal, gruppiert, Feld).
 function FixAll(const ASource: string): string;
 const
   MAX_PASSES = 10;
 var
   Pass : Integer;
   Seen : TArray<TSeen>;
-  P    : TRdxOverflowPlan;
-  R    : string;
+  O    : TRdxFixOutcome;
 begin
   Result := ASource;
   for Pass := 1 to MAX_PASSES do
@@ -414,9 +420,9 @@ begin
     Seen := Detect(Result);
     if Length(Seen) = 0 then
       Exit;
-    Assert.IsTrue(PlanOf(Result, Seen[0].Line, Seen[0].Msg, P, R),
-      Format('Zeile %d: %s', [Seen[0].Line, R]));
-    Result := Apply(Result, P.Edit);
+    O := PlanFixIn(Result, 't.pas', fkIntegerOverflow, Seen[0]);
+    Assert.IsTrue(O.Enabled, Format('Zeile %d: %s', [Seen[0].Line, O.Reason]));
+    Result := Apply(Result, O.Edits);
   end;
   Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
 end;
@@ -498,8 +504,7 @@ procedure TTestRdxIntegerOverflowDetector.Detector_PathTarget_NoHelp;
 var
   Src  : string;
   Seen : TArray<TSeen>;
-  P    : TRdxOverflowPlan;
-  R    : string;
+  O    : TRdxFixOutcome;
 begin
   // Der Detektor meldet auch 'Self.FTotal' (Wortgrenze hinter dem '.') -
   // die Hilfe castet nur fuer ein einfaches Ziel.
@@ -509,8 +514,51 @@ begin
     '  Self.FTotal := FCount * FSize;', 'end;', 'end.']);
   Seen := Detect(Src);
   Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
-  Assert.IsFalse(PlanOf(Src, Seen[0].Line, Seen[0].Msg, P, R), 'keine Hilfe');
-  Assert.AreEqual(_(R_IO_PATH, ['FTotal']), R);
+  O := PlanFixIn(Src, 't.pas', fkIntegerOverflow, Seen[0]);
+  Assert.IsFalse(O.Enabled, 'keine Hilfe');
+  Assert.AreEqual(_(R_IO_PATH, ['FTotal']), O.Reason);
+end;
+
+// Der Fund 'Total := Count * Size' auf STMT_LINE von Wrap (ohne Detektor -
+// der Typbeweis ist Sache des Adapters).
+function WrapSeen: TSeen;
+begin
+  Result.Line := STMT_LINE;
+  Result.Msg := Msg('Total', 'Count', 'Size');
+  Result.Variant := '';
+end;
+
+procedure TTestRdxIntegerOverflowDetector.Table_Proven_EnabledAndMarked;
+var
+  O : TRdxFixOutcome;
+begin
+  // Total: Int64, Count/Size: Integer (gruppiert) - bewiesen, angeboten,
+  // gekennzeichnet (E2), Name der linke Operand.
+  O := PlanFixIn(Wrap(['  Total := Count * Size;']), 't.pas',
+    fkIntegerOverflow, WrapSeen);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.ChangesBehavior, 'gekennzeichnet');
+  Assert.AreEqual('Count', O.Name);
+  Assert.AreEqual<Integer>(1, Length(O.Edits));
+end;
+
+procedure TTestRdxIntegerOverflowDetector.Table_DoubleOperand_NoHelp;
+var
+  Src  : string;
+  Seen : TSeen;
+  O    : TRdxFixOutcome;
+begin
+  // Size: Double - der Cast aenderte die Rechnung; DeclaredTypeOf liefert
+  // den Typ klein. Die Anweisung steht eine Zeile tiefer als in Wrap.
+  Src := Join(['unit t;', 'interface', 'implementation', 'procedure Foo;',
+    'var', '  Total: Int64;', '  Count: Integer;', '  Size: Double;',
+    'begin', '  Total := Count * Size;', 'end;', 'end.']);
+  Seen := WrapSeen;
+  Seen.Line := STMT_LINE + 1;
+  O := PlanFixIn(Src, 't.pas', fkIntegerOverflow, Seen);
+  Assert.IsFalse(O.Enabled, 'keine Hilfe');
+  Assert.AreEqual(_(R_IO_OPERAND_TYPE, ['Size', 'double']), O.Reason);
+  Assert.IsTrue(O.ChangesBehavior, 'auch gesperrt gekennzeichnet');
 end;
 
 {$ENDIF}

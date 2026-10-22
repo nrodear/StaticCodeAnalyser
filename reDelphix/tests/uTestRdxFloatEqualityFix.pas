@@ -3,8 +3,9 @@ unit uTestRdxFloatEqualityFix;
 // Editorhilfe SCA144 FloatEquality (uRdxFloatEqualityFix): der Planer auf
 // Text und die Typ- und Kontextpruefungen als reine Funktionen (erste
 // Fixture, auch FPC), dazu der ECHTE Detektor (uFloatEquality) auf dem
-// echten AST mit dem Adapter, wie ihn die Integrationsnotiz fuer
-// uRdxFixTable vorsieht (zweite Fixture, nur Delphi). Die Fixtures der
+// echten AST ueber den Einstieg der Tabelle (TRdxFixTable.FixFor, Adapter
+// PlanFloatEquality; zweite Fixture, nur Delphi - bis zur Integration der
+// Charge QF stand hier eine woertliche Kopie des Adapters). Die Fixtures der
 // ersten stehen in 'procedure Foo(Ratio: Double; Other: Double)', der Rumpf
 // beginnt auf Zeile 6 (LINE).
 
@@ -69,7 +70,7 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uEngineApi, uRuleCatalog, uFloatEquality,
   uRdxRecipeRunner,      // TRdxFixOutcome, R_NO_FILE, UsesNamesOf
-  uRdxFixRunner,         // AppendUses
+  uRdxFixTable,          // TRdxFixTable.FixFor
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxFloatEqualityFix,
@@ -450,8 +451,8 @@ end;
 { ---- Adapter und Detektor ---- }
 
 const
-  // Kopie des Hinweises der Tabellenzeile (Integrationsnotiz, R_FLOATEQ_HINT
-  // in uRdxFixTable) - der Adapter unten setzt ihn wie dort.
+  // Der Hinweis woertlich (R_FLOATEQ_HINT ist tabellen-intern in
+  // uRdxFixTable; der Adapter PlanFloatEquality setzt ihn vor AppendUses).
   R_FLOATEQ_HINT = 'vergleicht jetzt mit Toleranz (Standard-Epsilon von '
     + 'System.Math) statt exakt - ein gewollt exakter Vergleich (Schalter- '
     + 'oder Sentinelwert) aendert damit seine Bedeutung';
@@ -463,57 +464,6 @@ begin
   Result := Join(['unit t;', 'interface', 'implementation',
     'uses System.Math;', 'procedure Foo(Ratio: Double; Other: Double);',
     'begin']) + #13#10 + Join(ABody) + #13#10 + Join(['end;', 'end.']);
-end;
-
-// Der Adapter genau wie in der Integrationsnotiz (uRdxFixTable,
-// PlanFloatEquality samt FloatOperandType).
-function FloatOperandType(APlaces: TSourcePlaces; ALine: Integer;
-  const AOperand: string): string;
-begin
-  Result := '';
-  if not TRdxFloatEqualityFix.IsLiteral(AOperand) then
-    Result := APlaces.DeclaredTypeOf(ALine, AOperand);
-end;
-
-function PlanFloatEquality(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-var
-  Map      : TRdxCodeMap;
-  L, Op, R : string;
-begin
-  Result := Default(TRdxFixOutcome);
-  Result.Name := TRdxFloatEqualityFix.CallName(AFinding.Message);
-  if not Assigned(ALines) or not Assigned(APlaces) or not APlaces.IsOpen then
-  begin
-    Result.Reason := R_NO_FILE;
-    Exit;
-  end;
-  SetLength(Result.Edits, 1);
-  Map := TRdxCodeMap.Create(ALines);
-  try
-    Result.Enabled := TRdxFloatEqualityFix.ToleranceCompare(Map,
-      AFinding.LineInt, AFinding.Message, Result.Edits[0], Result.Reason);
-  finally
-    Map.Free;
-  end;
-  if Result.Enabled then
-    Result.Reason := TRdxFloatEqualityFix.ContextReason(
-      AFinding.Confidence = fcLow, APlaces.InWithBlock(AFinding.LineInt),
-      AFinding.Message);
-  if Result.Enabled and (Result.Reason = '')
-     and TRdxFloatEqualityFix.Operands(AFinding.Message, L, Op, R) then
-    Result.Reason := TRdxFloatEqualityFix.TypeReason(
-      L, FloatOperandType(APlaces, AFinding.LineInt, L),
-      R, FloatOperandType(APlaces, AFinding.LineInt, R));
-  Result.Enabled := Result.Enabled and (Result.Reason = '');
-  if not Result.Enabled then
-  begin
-    Result.Edits := nil;
-    Exit;
-  end;
-  Result.Hint := R_FLOATEQ_HINT;
-  Result.Enabled := AppendUses(APlaces, AUsesNames, 'Math', 'System.Math',
-    Result);
 end;
 
 // Die Funde der Art SCA144 - der echte Detektor auf dem echten AST.
@@ -528,7 +478,11 @@ begin
   Result := DetectSource('rdx_floateq_', ASource, fkFloatEquality, RunDetector);
 end;
 
-// Der Adapter fuer einen Fund; AOpen: mit geoeffnetem Quellstellen-Dienst.
+// Die Hilfe fuer einen Fund ueber den Einstieg der Tabelle
+// (TRdxFixTable.FixFor, Adapter PlanFloatEquality); AOpen: mit
+// geoeffnetem Quellstellen-Dienst. Eigener Lauf statt PlanFixIn
+// (uTestRdxDetectorKit): der Fund braucht die Konfidenz (fcLow) und einen
+// Lauf ohne Datei.
 function PlanSeen(const ASource: string; const ASeen: TSeen;
   AConfidence: TFindingConfidence; AOpen: Boolean): TRdxFixOutcome;
 var
@@ -545,11 +499,11 @@ begin
     if AOpen then
     begin
       Assert.IsTrue(Places.OpenSource('t.pas', ASource), 'OpenSource');
-      Result := PlanFloatEquality(Places, SL, F,
+      Result := TRdxFixTable.FixFor(Places, SL, F,
         TRdxRecipeRunner.UsesNamesOf(Places));
     end
     else
-      Result := PlanFloatEquality(nil, SL, F, nil);
+      Result := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
     F.Free;
     Places.Free;

@@ -60,11 +60,14 @@ type
 
 const
   // Von Hand gegen FIX_ROWS, FIX_CAPTIONS und FIX_ALT_CAPTIONS geprueft
-  // (Stand b2538e20, Chargen bis R): jede Art mit ihrem Planer und ihrem
-  // Menuetext. Gekennzeichnet (Changes) sind SCA007, SCA120, die Hilfen der
-  // Charge H4, SCA121, SCA196, SCA115, SCA093, SCA161, SCA046 sowie SCA002,
-  // SCA159 und SCA065; SCA149, SCA096 und SCA097 kennzeichnet der Planer.
-  EXPECTED: array[0..59] of TExpectedRow = (
+  // (Stand b2538e20, Chargen bis R; Charge QF bei der Integration
+  // 2026-10-22 gegen die Integrationsnotizen): jede Art mit ihrem Planer und
+  // ihrem Menuetext. Gekennzeichnet (Changes) sind SCA007, SCA120, die
+  // Hilfen der Charge H4, SCA121, SCA196, SCA115, SCA093, SCA161, SCA046,
+  // SCA002, SCA159 und SCA065 sowie SCA137, SCA167, SCA144, SCA154, SCA017,
+  // SCA131 und SCA169; SCA149, SCA096 und SCA097 kennzeichnet der Planer,
+  // die zweiten Eintraege von SCA128/SCA059 kennzeichnen sich selbst.
+  EXPECTED: array[0..73] of TExpectedRow = (
     (Kind: fkExplicitTObjectInheritance; Plan: 'PlanExplicitTObject';
      Caption: 'Remove (TObject) from the class declaration';
      Changes: False; Alt: ''; AltCaption: ''),
@@ -248,7 +251,53 @@ const
      Changes: False; Alt: ''; AltCaption: ''),
     (Kind: fkGotoStatement; Plan: 'PlanGotoExit';
      Caption: 'Replace "goto" with Exit';
-     Changes: False; Alt: ''; AltCaption: '')
+     Changes: False; Alt: ''; AltCaption: ''),
+    // Charge QF (14 weitere Hilfen).
+    (Kind: fkDateFormatSettings; Plan: 'PlanDateFormatSettings';
+     Caption: 'Pass FormatSettings explicitly';
+     Changes: False; Alt: 'PlanDateFormatSettingsAlt';
+     AltCaption: 'Pass TFormatSettings.Invariant'),
+    (Kind: fkFormatLocaleHint; Plan: 'PlanFormatLocale';
+     Caption: 'Pass FormatSettings explicitly';
+     Changes: False; Alt: 'PlanFormatLocaleAlt';
+     AltCaption: 'Pass TFormatSettings.Invariant'),
+    (Kind: fkMethodName; Plan: 'PlanMethodName';
+     Caption: 'Write the method name as %s';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkIntegerOverflow; Plan: 'PlanIntegerOverflow';
+     Caption: 'Cast %s to Int64 before multiplying';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkSourceBidiOverride; Plan: 'PlanBidiOverride';
+     Caption: 'Remove bidi control characters (as #$ code in strings)';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkSourceInvisibleChar; Plan: 'PlanInvisibleChar';
+     Caption: 'Remove invisible characters (as #$ code in strings)';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkThreadResumeDeprecated; Plan: 'PlanThreadResume';
+     Caption: 'Use %s.Start instead of Resume';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkInsecureRandom; Plan: 'PlanInsecureRandom';
+     Caption: 'Call Randomize in the initialization section';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkFloatEquality; Plan: 'PlanFloatEquality';
+     Caption: 'Use %s instead of the exact comparison';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkMoveSizeOfPointer; Plan: 'PlanMoveSizeOfPointer';
+     Caption: 'Use SizeOf(%s) instead of the pointer size';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkDebugOutput; Plan: 'PlanDebugOutput';
+     Caption: 'Put the debug output in {$IFDEF DEBUG}';
+     Changes: True; Alt: 'PlanDebugOutputAlt';
+     AltCaption: 'Delete the debug output'),
+    (Kind: fkDeadCode; Plan: 'PlanDeadCode';
+     Caption: 'Delete the unreachable code: %s line(s)';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkIfThenShortCircuit; Plan: 'PlanIfThenToIf';
+     Caption: 'Replace IfThen with if..then..else';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkAssertWithSideEffect; Plan: 'PlanAssertOutside';
+     Caption: 'Evaluate the condition outside Assert';
+     Changes: True; Alt: ''; AltCaption: '')
   );
 
 procedure TTestRdxFixTable.EveryRow_HasPlanHintAndCaption;
@@ -499,7 +548,8 @@ begin
       F.Free;
     end;
   end;
-  Assert.AreEqual<Integer>(4, n, 'SCA168, SCA020, SCA093, SCA046');
+  Assert.AreEqual<Integer>(7, n,
+    'SCA168, SCA020, SCA093, SCA046, SCA128, SCA059, SCA017');
 end;
 
 initialization

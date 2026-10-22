@@ -3,7 +3,7 @@
 > **Erzeugte Datei – nicht von Hand bearbeiten.** Quelle: [`data/quickfixes-doc.json`](data/quickfixes-doc.json) (Titel, Beschreibung, Sperren, Beispiele) und der Quelltext: welche Hilfen es gibt, ihre Menütexte und ob sie das Verhalten ändern, stehen in [`source/uRdxFixTable.pas`](source/uRdxFixTable.pas) (`FIX_ROWS`, `FIX_CAPTIONS`, `FIX_ALT_CAPTIONS`) und [`source/uRdxProvider.pas`](source/uRdxProvider.pas) (Rezepte), die Übersetzungen in [`i18n/de.po`](../i18n/de.po) und [`i18n/fr.po`](../i18n/fr.po), Regel-IDs und Namen in [`rules/sca-rules.json`](../rules/sca-rules.json).
 > Erzeugen (Repo-Wurzel): `python tools/gen-quickfix-doc.py`, prüfen: `python tools/gen-quickfix-doc.py --check` (auch in der CI, `.github/workflows/quickfix-doc.yml`).
 
-reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 60 Quick-Fixes aus der Tabelle der einfachen Hilfen (4 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
+reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 74 Quick-Fixes aus der Tabelle der einfachen Hilfen (7 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
 
 ## Lesehilfe
 
@@ -24,11 +24,14 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 60 Qui
 | SCA002 EmptyExcept | `raise; in den leeren except-Block einfügen` | Quick-Fix | ja | [SCA002](#sca002) |
 | SCA007 UnusedUses | `Unit %s aus uses entfernen` | Quick-Fix | ja | [SCA007](#sca007) |
 | SCA009 MissingFinally | `%s in einem try/finally-Block freigeben` | Quick-Fix | ja | [SCA009](#sca009) |
+| SCA011 DeadCode | `Unerreichbaren Code löschen: %s Zeile(n)` | Quick-Fix | nein | [SCA011](#sca011) |
 | SCA014 MagicNumber | `Lokale Konstante für %s einführen` | Quick-Fix | nein | [SCA014](#sca014) |
+| SCA017 DebugOutput | `Debug-Ausgabe in {$IFDEF DEBUG} setzen` / `Debug-Ausgabe löschen` | Quick-Fix | ja / ja | [SCA017](#sca017) |
 | SCA020 EmptyMethod | `Leeren Rumpf als beabsichtigt kennzeichnen` / `ENotImplemented im leeren Rumpf auslösen` | Quick-Fix | nein / ja | [SCA020](#sca020) |
 | SCA046 ReversedForRange | `"to" durch "downto" ersetzen` / `Schleifengrenzen vertauschen` | Quick-Fix | ja / ja | [SCA046](#sca046) |
 | SCA047 SelfAssignment | `Selbstzuweisung von %s entfernen` | Quick-Fix | nein | [SCA047](#sca047) |
 | SCA053 UnusedLocalVar | `Ungenutzte Variable %s entfernen` | Quick-Fix | nein | [SCA053](#sca053) |
+| SCA059 FormatLocaleHint | `FormatSettings ausdrücklich übergeben` / `TFormatSettings.Invariant übergeben` | Quick-Fix | nein / ja | [SCA059](#sca059) |
 | SCA060 GotoStatement | `"goto" durch Exit ersetzen` | Quick-Fix | nein | [SCA060](#sca060) |
 | SCA061 TabulationCharacter | `Tabulatoren dieser Zeile durch Leerzeichen ersetzen` | Quick-Fix | nein | [SCA061](#sca061) |
 | SCA063 TrailingWhitespace | `Leerraum am Zeilenende entfernen` | Quick-Fix | nein | [SCA063](#sca063) |
@@ -57,7 +60,9 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 60 Qui
 | SCA098 RedundantConditional | `Bedingung direkt an %s zuweisen` | Quick-Fix | nein | [SCA098](#sca098) |
 | SCA099 IfElseBegin | `Zweig in begin..end setzen` | Quick-Fix | nein | [SCA099](#sca099) |
 | SCA101 BeginEndRequired | `Zweig in begin..end setzen` | Quick-Fix | nein | [SCA101](#sca101) |
+| SCA106 MethodName | `Methodennamen als %s schreiben` | Quick-Fix | nein | [SCA106](#sca106) |
 | SCA109 LockWithoutTryFinally | `Sperre %s in einem try/finally-Block freigeben` | Quick-Fix | ja | [SCA109](#sca109) |
+| SCA113 ThreadResumeDeprecated | `%s.Start statt Resume verwenden` | Quick-Fix | nein | [SCA113](#sca113) |
 | SCA115 HttpInsteadOfHttps | `https:// statt http:// verwenden` | Quick-Fix | ja | [SCA115](#sca115) |
 | SCA117 PublicMemberWithoutDoc | `Dokumentationsgerüst einfügen` | Quick-Fix | nein | [SCA117](#sca117) |
 | SCA120 MissingRaise | `Exception auslösen` | Quick-Fix | ja | [SCA120](#sca120) |
@@ -65,19 +70,28 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 60 Qui
 | SCA122 ReRaiseException | `raise; verwenden (Original-Stack-Trace bleibt)` | Quick-Fix | nein | [SCA122](#sca122) |
 | SCA123 CastAndFree | `Cast nach %s vor Free entfernen` | Quick-Fix | nein | [SCA123](#sca123) |
 | SCA126 NilComparison | `Assigned() statt Vergleich mit nil verwenden` | Quick-Fix | nein | [SCA126](#sca126) |
+| SCA128 DateFormatSettings | `FormatSettings ausdrücklich übergeben` / `TFormatSettings.Invariant übergeben` | Quick-Fix | nein / ja | [SCA128](#sca128) |
+| SCA131 IfThenShortCircuit | `IfThen durch if..then..else ersetzen` | Quick-Fix | ja | [SCA131](#sca131) |
+| SCA137 IntegerOverflow | `%s vor der Multiplikation nach Int64 umwandeln` | Quick-Fix | ja | [SCA137](#sca137) |
 | SCA139 FreeWithoutNil | `FreeAndNil(%s) verwenden` | Quick-Fix | nein | [SCA139](#sca139) |
+| SCA144 FloatEquality | `Statt des exakten Vergleichs %s verwenden` | Quick-Fix | ja | [SCA144](#sca144) |
 | SCA147 UnusedPrivateMethod | `Ungenutzte private Methode %s löschen` | Quick-Fix | nein | [SCA147](#sca147) |
 | SCA149 MissingOverride | `"%s;" an die Deklaration anfügen` | Quick-Fix | je nach Fund | [SCA149](#sca149) |
 | SCA153 UnpairedLock | `Sperre %s in einem try/finally-Block freigeben` | Quick-Fix | ja | [SCA153](#sca153) |
+| SCA154 MoveSizeOfPointer | `SizeOf(%s) statt der Zeigergröße verwenden` | Quick-Fix | ja | [SCA154](#sca154) |
 | SCA156 GetMemWithoutFreeMem | `Puffer %s in einem try/finally-Block freigeben` | Quick-Fix | ja | [SCA156](#sca156) |
 | SCA159 EmptyOnHandler | `Dem leeren Ausnahme-Handler "raise;" hinzufügen` | Quick-Fix | ja | [SCA159](#sca159) |
 | SCA161 PointerSubtraction | `Die 32-Bit-Casts durch NativeInt/NativeUInt ersetzen` | Quick-Fix | ja | [SCA161](#sca161) |
 | SCA164 UnusedRoutine | `Ungenutzte Routine %s löschen` | Quick-Fix | nein | [SCA164](#sca164) |
+| SCA167 InsecureRandom | `Randomize im initialization-Abschnitt aufrufen` | Quick-Fix | ja | [SCA167](#sca167) |
 | SCA168 DefaultCaseInCaseStatement | `Leeren else-Zweig ergänzen` / `else-Zweig mit Exception ergänzen` | Quick-Fix | nein / ja | [SCA168](#sca168) |
+| SCA169 AssertWithSideEffect | `Bedingung außerhalb von Assert auswerten` | Quick-Fix | ja | [SCA169](#sca169) |
 | SCA179 AttributeIgnoreWithoutReason | `Grund zu [Ignore] hinzufügen` | Quick-Fix | nein | [SCA179](#sca179) |
 | SCA180 AttributeDuplicate | `Doppeltes Attribut entfernen` | Quick-Fix | nein | [SCA180](#sca180) |
 | SCA181 AttributeCategoryWithoutString | `Dem Attribut einen Kategorienamen geben` | Quick-Fix | nein | [SCA181](#sca181) |
 | SCA183 AttributeMisalignment | `Leerzeile nach dem Attribut entfernen` | Quick-Fix | nein | [SCA183](#sca183) |
+| SCA188 SourceBidiOverride | `Bidi-Steuerzeichen entfernen (in Strings als #$-Code)` | Quick-Fix | nein | [SCA188](#sca188) |
+| SCA192 SourceInvisibleChar | `Unsichtbare Zeichen entfernen (in Strings als #$-Code)` | Quick-Fix | nein | [SCA192](#sca192) |
 | SCA196 ManagedResultUninit | `Result zuerst initialisieren: %s` | Quick-Fix | ja | [SCA196](#sca196) |
 | SCA197 InterfaceWithoutGuid | `Neue GUID einfügen` | Quick-Fix | nein | [SCA197](#sca197) |
 | jede Regel mit Anker im Regelkatalog (Feld `anchor`), wenn sich die Anweisung des Funds beschreiben lässt | `Stelle zeigen` | Navigation | nein | [Details](#rezept-showspan) |
@@ -293,6 +307,50 @@ Nachher:
 
 **Hinweis.** Das Meldungs-Suffix „(try/except instead of try/finally)“ schränkt die Hilfe nicht ein – es sagt nur, dass die Methode irgendwo ein try/except hat.
 
+<a id="sca011"></a>
+
+### SCA011 – Unerreichbaren Code löschen
+
+- **Regel:** SCA011 `DeadCode` – Code after Exit/Raise is unreachable
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Delete the unreachable code: %s line(s)` | `Unerreichbaren Code löschen: %s Zeile(n)` | `Supprimer le code inaccessible : %s ligne(s)` |
+
+**Platzhalter:** `%s` = die Zahl der Zeilen, die die Hilfe löscht (Leerzeilen dazwischen zählen mit).
+
+**Wirkung:** Löscht die Anweisungen hinter einem unbedingten `Exit`, `Exit(..)`, `raise`, `Break` oder `Continue` bis vor das `end`, `until`, `except` bzw. `finally`, das ihre Anweisungsliste schließt - ganze Zeilen. Bedeutungsgleich: der Code lief nie. Die Hilfe prüft am Text nach, dass vor der gemeldeten Zeile genau der Terminator der Meldung steht, und zwar unbedingt (nicht hinter then/else/do); verschachtelte Blöcke, if/else, case und try im toten Bereich gehen mit.
+
+**Nicht angeboten**
+
+- ein Kommentar im Bereich, auch hinter dem Terminator auf seiner Zeile (`Exit; // alt:`) - er dokumentiert oft geparkten Code
+- eine Marke (ein goto macht den Rest erreichbar) oder eine typisierte Inline-Deklaration im Bereich, ein asm-Block, eine Direktive vom Terminator bis zum Listenende
+- der Terminator steht hinter then/else/do oder einer Marke, ist ein anderer als in der Meldung, oder die Datei deklariert einen eigenen Bezeichner Exit, Break bzw. Continue
+- das Listenende steht auf der letzten Zeile des toten Codes (`Foo; end;`) - die Hilfe löscht nur ganze Zeilen
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+begin
+  Exit;
+  WriteLn('never reached');
+end;
+```
+
+Nachher:
+
+```pascal
+begin
+  Exit;
+end;
+```
+
+**Hinweis.** Toter Code ist oft bewusst geparkter Code oder ein vertauschtes Paar (`Exit(False); Error := ..`) - der Menüeintrag nennt deshalb die Zahl der Zeilen. Geparkter Code steht danach nur noch in der Versionsverwaltung.
+
 <a id="sca014"></a>
 
 ### SCA014 – Lokale Konstante einführen
@@ -336,6 +394,67 @@ Nachher:
 ```
 
 **Hinweis.** Keine Sync-Edit-Sitzung zum Umbenennen: dort zerstört Esc Text.
+
+<a id="sca017"></a>
+
+### SCA017 – Debug-Ausgabe in {$IFDEF DEBUG} setzen
+
+- **Regel:** SCA017 `DebugOutput` – WriteLn/ShowMessage in production code
+- **Art:** Quick-Fix
+- **Ändert Verhalten:**
+  - Eintrag 1: **ja** – im Release-Build entfällt die Ausgabe samt der Auswertung ihrer Argumente; FPC/Lazarus definiert DEBUG nicht von selbst - dort wirkt die Hilfe wie Löschen. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+  - Eintrag 2: **ja** – die Ausgabe entfällt in jedem Build, auch beim Debuggen; ihre Argumente werden nicht mehr ausgewertet. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| Eintrag | en | de | fr |
+|---|---|---|---|
+| 1 | `Put the debug output in {$IFDEF DEBUG}` | `Debug-Ausgabe in {$IFDEF DEBUG} setzen` | `Placer la sortie de débogage dans {$IFDEF DEBUG}` |
+| 2 | `Delete the debug output` | `Debug-Ausgabe löschen` | `Supprimer la sortie de débogage` |
+
+**Wirkung (Eintrag 1):** Setzt die gemeldete Anweisung (WriteLn, ShowMessage, ShowMessagePos, OutputDebugString, auch `System.WriteLn`) in `{$IFDEF DEBUG}` .. `{$ENDIF}`, je auf einer eigenen Zeile mit der Einrückung der Anweisung; eine Anweisung über mehrere Zeilen kommt bis zu ihrem `;` ganz hinein. Der Debug-Build gibt weiter aus, der Release-Build nicht mehr; der Detektor wertet einen DEBUG-Bereich als Absicht. Die Meldung nennt keine Spalte: die Hilfe sucht den Aufruf auf der Zeile selbst.
+
+**Wirkung (Eintrag 2):** Löscht stattdessen die Anweisung (ihre ganzen Zeilen).
+
+**Nicht angeboten**
+
+- die einzige Anweisung hinter then/else/do ohne begin, eines case-Zweigs oder hinter einer Marke (ohne sie gehörte die nächste Anweisung zum Zweig)
+- der Aufruf steht in einem Ausdruck, mit weiterem Code auf seinen Zeilen, zweimal auf der Zeile oder ohne eigenes `;`; ein Member-Aufruf wie `Log.WriteLn`
+- ein Kommentar oder eine Direktive auf den Zeilen der Anweisung, ein Bedingungsblock, der direkt davor öffnet oder dahinter schließt, oder ein offener Bedingungsblock, der DEBUG nennt (`{$IFNDEF DEBUG}`, ELSE-Zweig von `{$IFDEF DEBUG}`)
+- ein Aufruf in einer anonymen Methode rechts in einer Zuweisung (der Detektor meldet dort die Zeile der Zuweisung)
+- Eintrag 2: dieselben Sperren wie der erste Eintrag
+- Eintrag 2: die Anweisung ist die einzige ihres Blocks (es bliebe ein leerer Block, SCA077) oder endet auf der letzten Zeile der Datei
+
+**Beispiel (Eintrag 1)**
+
+Vorher:
+
+```pascal
+  Foo;
+  WriteLn('here #3');
+  Bar;
+```
+
+Nachher:
+
+```pascal
+  Foo;
+  {$IFDEF DEBUG}
+  WriteLn('here #3');
+  {$ENDIF}
+  Bar;
+```
+
+**Beispiel (Eintrag 2)**
+
+Vorher wie bei Eintrag 1.
+
+Nachher:
+
+```pascal
+  Foo;
+  Bar;
+```
+
+**Hinweis.** Einklammern lässt eine einzige Anweisung eines begin..end-Blocks stehen; im Release-Build ist der Block dann leer, im Quelltext nicht.
 
 <a id="sca020"></a>
 
@@ -560,6 +679,57 @@ procedure P;
 begin
   DoStuff;
 end;
+```
+
+<a id="sca059"></a>
+
+### SCA059 – FormatSettings an Format übergeben
+
+- **Regel:** SCA059 `FormatLocaleHint` – Format() float spec without TFormatSettings
+- **Art:** Quick-Fix
+- **Ändert Verhalten:**
+  - Eintrag 1: nein
+  - Eintrag 2: **ja** – unabhängig vom System: Punkt als Dezimaltrenner, Komma als Tausendertrenner - für Dateien, SQL und Protokolle, nicht für die Anzeige. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| Eintrag | en | de | fr |
+|---|---|---|---|
+| 1 | `Pass FormatSettings explicitly` | `FormatSettings ausdrücklich übergeben` | `Passer FormatSettings explicitement` |
+| 2 | `Pass TFormatSettings.Invariant` | `TFormatSettings.Invariant übergeben` | `Passer TFormatSettings.Invariant` |
+
+**Wirkung (Eintrag 1):** Hängt an das eine `Format` der Fundzeile das dritte Argument `FormatSettings` an. Gleiche Bedeutung: `Format` ohne drittes Argument liest dieselbe globale Variable. Ist das erste Argument ein Literal, muss es zum Formatstring der Meldung passen.
+
+**Wirkung (Eintrag 2):** Übergibt stattdessen `TFormatSettings.Invariant` - das gute Beispiel des Katalogs: Punkt als Dezimaltrenner, unabhängig vom System.
+
+**Nicht angeboten**
+
+- kein oder mehr als ein `Format` auf der Zeile (auch verschachtelt); mORMot-Funktionen wie `FormatUtf8` sind keine RTL-Format
+- das Literal auf der Zeile passt nicht zur Meldung (Zeile verschoben), der Aufruf ist qualifiziert (`string.Format`, `Self.Format`), hat nicht genau zwei Argumente oder schließt nicht auf der Zeile, steht erst auf einer Folgezeile, oder die Anweisung geht mit einem weiteren `Format` weiter
+- eine Direktive auf der Zeile, und dieselben Fragen an die Datei wie bei SCA128 (SysUtils, eigene Routine `Format`, `FormatSettings` deklariert oder als Member, `with`, Compiler vor Delphi XE)
+- Eintrag 2: dieselben Sperren wie der erste Eintrag, ohne die zu `FormatSettings`
+- Eintrag 2: eine Währungs-Spec `%m` im Formatstring (Invariant schreibt das allgemeine Währungszeichen ¤), eine FPC-Weiche oder ein FPC-Modus, Spuren von Compilern bis Delphi 10.3, ein eigenes `TFormatSettings`
+
+**Beispiel (Eintrag 1)**
+
+Vorher:
+
+```pascal
+S := Format('%.2f', [Price]);
+```
+
+Nachher:
+
+```pascal
+S := Format('%.2f', [Price], FormatSettings);
+```
+
+**Beispiel (Eintrag 2)**
+
+Vorher wie bei Eintrag 1.
+
+Nachher:
+
+```pascal
+S := Format('%.2f', [Price], TFormatSettings.Invariant);
 ```
 
 <a id="sca060"></a>
@@ -1741,6 +1911,61 @@ Nachher:
   end;
 ```
 
+<a id="sca106"></a>
+
+### SCA106 – Methodennamen mit Großbuchstaben beginnen
+
+- **Regel:** SCA106 `MethodName` – Method not in PascalCase
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Write the method name as %s` | `Methodennamen als %s schreiben` | `Écrire le nom de la méthode sous la forme %s` |
+
+**Platzhalter:** `%s` = der neue Name (etwa `DoWork`).
+
+**Wirkung:** Schreibt den ersten Buchstaben der gemeldeten Methode groß (`doWork` → `DoWork`) – im Kopf der Deklaration im Klassenrumpf und im Kopf `TKlasse.doWork` der Implementierung derselben Datei, in einem Schritt. Bedeutungsgleich: Delphi unterscheidet Groß- und Kleinschreibung nicht. Aufrufe, Property-Accessoren und Kommentare bleiben, wie sie sind; eine published Methode bleibt an ihre Formdatei gebunden (`TObject.MethodAddress` vergleicht ohne Groß/klein).
+
+**Nicht angeboten**
+
+- die Methode steht nicht im Rumpf einer Klasse dieser Datei: freie Routine (auch das Katalogbeispiel `procedure doStuff;`), record, Interface, Klasse in einem Include oder eine gemeldete Implementierung ohne Deklaration davor
+- `overload`, mehr als eine Deklaration in Klassen dieses Namens (`{$IFDEF}`-Zwillinge), keine oder mehr als eine Implementierung in der Datei (abstract, external, Include)
+- ein `{$I}`-Include im Klassenrumpf, ein String-Literal der Datei nennt den Namen (Aufruf per Name über RTTI oder `MethodAddress`)
+- kein oder mehr als ein Kopf der Methode auf der Zeile, die Zeile ist verschoben oder die Deklaration schon anders geschrieben
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+type
+  TFoo = class
+  public
+    procedure doWork;
+  end;
+implementation
+procedure TFoo.doWork;
+begin
+end;
+```
+
+Nachher:
+
+```pascal
+type
+  TFoo = class
+  public
+    procedure DoWork;
+  end;
+implementation
+procedure TFoo.DoWork;
+begin
+end;
+```
+
+**Hinweis.** Aufrufe wie `doWork;` bleiben stehen und binden weiter; RTTI (`TRttiMethod.Name`) und `TObject.MethodName` nennen danach den neuen Namen.
+
 <a id="sca109"></a>
 
 ### SCA109 – Sperre in try/finally freigeben
@@ -1784,6 +2009,52 @@ Nachher:
     FLock.Leave;
   end;
 ```
+
+<a id="sca113"></a>
+
+### SCA113 – Resume durch Start ersetzen
+
+- **Regel:** SCA113 `ThreadResumeDeprecated` – TThread.Resume is deprecated
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Use %s.Start instead of Resume` | `%s.Start statt Resume verwenden` | `Utiliser %s.Start au lieu de Resume` |
+
+**Platzhalter:** `%s` = der Empfänger aus der Meldung (`Worker`).
+
+**Wirkung:** Ersetzt im gemeldeten `X.Resume;` nur das Wort `Resume` durch `Start` (Schreibweise wie im Text). Nur, wenn X in derselben Routine unmittelbar davor mit `X := T.Create(True);` angehalten erzeugt und seitdem nicht gestartet wurde – dann tun Resume und Start dasselbe; Start löst EThread nur bei einem schon laufenden Thread aus. Der Detektor meldet die Zeile des Empfängers; die Hilfe prüft den Beweis am aktuellen Text.
+
+**Nicht angeboten**
+
+- die letzte Zuweisung an X vor dem Resume in dieser Routine ist nicht `T.Create(True);` (etwa `Create(False)`, ein Parameter, ein anderer Wert), oder es gibt keine – das Objekt kam von woanders
+- die Erzeugung steht in einem Zweig oder Block, den das Resume nicht teilt (`if A then X := ...`, `begin ... end` davor)
+- zwischen Erzeugung und Resume steht eine Schleife, `goto`, `with`, eine anonyme Methode oder eine Direktive, oder X kommt dort anders vor als in `X.Feld := ...` (auch `X.Suspended := False`, `Register(X)`); das Resume ist selbst Rumpf einer Schleife oder eines `with`
+- X wird in der Routine mehr als einmal fortgesetzt oder gestartet, oder die Datei ruft `X.Suspend` (Start nach Suspend löst EThread aus)
+- der erzeugte Typ ist in der Datei nicht als TThread-Nachfahre zu sehen (Name endet nicht auf `Thread`, keine Vorfahrenkette in der Datei), oder er hat einen eigenen Konstruktor `Create`, der seinen ersten Parameter nicht an `inherited Create(..)` weiterreicht
+- die Datei unterstützt Compiler ohne `TThread.Start` – eine Spur in einer Direktive: `CompilerVersion` bis 21, `VER200` und älter, `DELPHI14`/`COMPILER14`/`RTL210` und älter, `FPC_FULLVERSION` bis 20600, `jedi.inc`, `jvcl.inc`, `cnpack.inc` u. a. –, oder das Resume steht in einem offenen `{$IF}`/`{$IFDEF}`-Block (die Altzweige `{$IF CompilerVersion >= 21} Start {$ELSE} Resume`)
+- X ist qualifiziert (`Self.FWorker.Resume`, `Pool.Worker.Resume`), das Resume steht nicht in einer Routine (etwa im initialization-Teil), oder die Zeile ist verschoben bzw. trägt zwei Aufrufe
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  Worker := TWorkerThread.Create(True);
+  Worker.FreeOnTerminate := True;
+  Worker.Resume;
+```
+
+Nachher:
+
+```pascal
+  Worker := TWorkerThread.Create(True);
+  Worker.FreeOnTerminate := True;
+  Worker.Start;
+```
+
+**Hinweis.** Die zweite Lösung der Meldung – mit `Create(False)` erzeugen und Resume streichen – bietet die Hilfe nicht an: Eigenschaften, die zwischen Erzeugung und Start gesetzt werden, liefen dann gegen den schon laufenden Thread.
 
 <a id="sca115"></a>
 
@@ -2095,6 +2366,150 @@ Nachher:
   while Assigned(x) do x := x.Next;
 ```
 
+<a id="sca128"></a>
+
+### SCA128 – FormatSettings ausdrücklich übergeben
+
+- **Regel:** SCA128 `DateFormatSettings` – Locale-dependent format call without explicit TFormatSettings
+- **Art:** Quick-Fix
+- **Ändert Verhalten:**
+  - Eintrag 1: nein
+  - Eintrag 2: **ja** – unabhängig vom System: Punkt als Dezimaltrenner, Datum MM/dd/yyyy, englische Monats- und Tagesnamen - für Dateien, SQL und Protokolle, nicht für die Anzeige. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| Eintrag | en | de | fr |
+|---|---|---|---|
+| 1 | `Pass FormatSettings explicitly` | `FormatSettings ausdrücklich übergeben` | `Passer FormatSettings explicitement` |
+| 2 | `Pass TFormatSettings.Invariant` | `TFormatSettings.Invariant übergeben` | `Passer TFormatSettings.Invariant` |
+
+**Wirkung (Eintrag 1):** Hängt an jeden gebietsabhängigen RTL-Aufruf der Fundzeile (`StrToDate`, `StrToTime`, `StrToDateTime`, `DateToStr`, `TimeToStr`, `DateTimeToStr`, `StrToFloat`, `StrToCurr`, `FloatToStr`, `CurrToStr`, `FormatDateTime`, `FormatFloat`, `FormatCurr`) das Argument `FormatSettings` an. Gleiche Bedeutung: die Überladung ohne Settings liest dieselbe globale Variable `SysUtils.FormatSettings` (in FPC `absolute DefaultFormatSettings`). Alle Aufrufe der Zeile in einer Ersetzung - der Detektor schweigt nach dem ersten Settings-Argument für die ganze Anweisung.
+
+**Wirkung (Eintrag 2):** Übergibt stattdessen `TFormatSettings.Invariant`: Punkt als Dezimaltrenner, Datum `MM/dd/yyyy`, englische Monats- und Tagesnamen - unabhängig vom System, für Dateien, SQL und Protokolle.
+
+**Nicht angeboten**
+
+- der gemeldete Aufruf steht nicht (mehr) auf den Code-Spalten der Zeile, erst auf einer Folgezeile der Anweisung, oder die Anweisung geht auf einer Folgezeile mit einem weiteren solchen Aufruf weiter
+- ein Aufruf ist qualifiziert (außer `SysUtils.` und `System.SysUtils.`), hat eine andere Zahl von Argumenten (auch FPC-Überladungen wie `StrToDate(S, '/')`), schließt nicht auf der Zeile oder ist kein Aufruf; eine Direktive auf der Zeile
+- SysUtils steht in keiner uses-Klausel, die Datei deklariert eine eigene Routine des Namens, oder vor dem Aufruf steht in seiner Routine ein `with`
+- die Datei deklariert einen Bezeichner `FormatSettings` (Feld, Variable, Parameter, Property) oder nutzt ihn als Member (`X.FormatSettings`) - der bloße Name bände dort
+- die Datei fragt nach Compilern vor Delphi XE (die globale `FormatSettings` gibt es erst seit XE), etwa über `jedi.inc` oder `{$IFDEF VER210}`
+- Eintrag 2: dieselben Sperren wie der erste Eintrag, ohne die zu `FormatSettings`
+- Eintrag 2: eine FPC-Weiche oder ein FPC-Modus in der Datei (FPC 3.2 kennt kein `TFormatSettings.Invariant`), Spuren von Compilern bis Delphi 10.3, ein eigenes `TFormatSettings`
+
+**Beispiel (Eintrag 1)**
+
+Vorher:
+
+```pascal
+  r := DateToStr(d) + ' ' + TimeToStr(d);
+```
+
+Nachher:
+
+```pascal
+  r := DateToStr(d, FormatSettings) + ' ' + TimeToStr(d, FormatSettings);
+```
+
+**Beispiel (Eintrag 2)**
+
+Vorher wie bei Eintrag 1.
+
+Nachher:
+
+```pascal
+  r := DateToStr(d, TFormatSettings.Invariant) + ' ' + TimeToStr(d, TFormatSettings.Invariant);
+```
+
+**Hinweis.** Aufrufe über mehrere Zeilen bleiben ohne Hilfe.
+
+<a id="sca131"></a>
+
+### SCA131 – IfThen durch if..then..else ersetzen
+
+- **Regel:** SCA131 `IfThenShortCircuit` – IfThen() evaluates both branches - no short-circuit
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** **ja** – nur noch der zutreffende Zweig läuft – Nebenwirkungen, Kosten und Ausnahmen des anderen entfallen; die Bedingung läuft weiter genau einmal. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| en | de | fr |
+|---|---|---|
+| `Replace IfThen with if..then..else` | `IfThen durch if..then..else ersetzen` | `Remplacer IfThen par if..then..else` |
+
+**Wirkung:** Macht aus `X := IfThen(C, A, B);` die mehrzeilige Form `if C then X := A else X := B;` aus dem Katalog; die Zweige rücken eine Stufe tiefer (zwei Leerzeichen bzw. ein Tab, wenn die Zeile mit Tabs einrückt). IfThen aus System.Math bzw. System.StrUtils ist eine gewöhnliche Funktion: beide Arme laufen vor dem Aufruf, danach läuft nur noch der zutreffende. Der Detektor meldet auf der Zeile der Anweisung, ohne Spalte; die Hilfe bedient nur die Zuweisung, deren ganze rechte Seite das IfThen ist, allein auf ihrer Zeile.
+
+**Nicht angeboten**
+
+- kein oder mehr als ein IfThen im Code der Zeile (verschoben, verschachtelt), eine andere Anweisung oder ein Kommentar davor, Code oder eine Direktive dahinter, ein Aufruf über mehrere Zeilen
+- IfThen ist nicht die ganze rechte Seite (`Trim(IfThen(..))`, `IfThen(..) + 1`, `ShowMessage(IfThen(..))`) oder die Zuweisung ist eine Inline-Deklaration (`var X := IfThen(..)`)
+- die Zuweisung ist Zweig eines `then`, `else` oder `do` ohne `begin..end`, ein case-Zweig oder trägt eine Marke
+- nicht genau drei Argumente (mit zwei hängt der dritte an der Überladung: 0 oder ''), eine anonyme Methode, ein Kommentar oder Typargumente (`TFoo<T>`) in den Argumenten
+- IfThen ist womöglich nicht das der RTL: fremder Qualifizierer, eigene Routine IfThen in der Datei, weder System.Math noch System.StrUtils in uses, ein `with` davor in der Routine
+- das Ziel ist als Variant bzw. OleVariant deklariert (ein Literal-Zweig gäbe einen anderen VarType)
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  x := IfThen(b, A(), B());
+```
+
+Nachher:
+
+```pascal
+  if b then
+    x := A()
+  else
+    x := B();
+```
+
+**Hinweis.** Die neue Form trägt Zweige ohne begin..end – wie das GoodExample des Katalogs meldet SCA101 (BeginEndRequired, Hinweis) sie, wo die Regel eingeschaltet ist.
+
+<a id="sca137"></a>
+
+### SCA137 – Linken Operanden nach Int64 umwandeln
+
+- **Regel:** SCA137 `IntegerOverflow` – Int64 target receives product of two 32-bit operands
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** **ja** – das Produkt wird in 64 Bit gerechnet – ein Ergebnis über MaxInt bleibt erhalten statt still abgeschnitten; mit Überlaufprüfung (Q+) entfällt die Ausnahme EIntOverflow. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| en | de | fr |
+|---|---|---|
+| `Cast %s to Int64 before multiplying` | `%s vor der Multiplikation nach Int64 umwandeln` | `Convertir %s en Int64 avant la multiplication` |
+
+**Platzhalter:** `%s` = der linke Operand (etwa `Count`).
+
+**Wirkung:** Macht aus `Total := Count * Size;` ein `Total := Int64(Count) * Size;` – der Cast des linken Operanden stuft die Multiplikation auf 64 Bit hoch. Die Hilfe sucht die Anweisung über Ziel und Operanden aus der Meldung (der Fund nennt nur die Zeile des Ziels) und prüft die Typen über den Quellstellen-Dienst: das Ziel als Int64, UInt64 oder QWord, beide Operanden als Integer oder Cardinal deklariert.
+
+**Nicht angeboten**
+
+- ein Operand ist nicht als Integer oder Cardinal bewiesen (unbekannt, Property, Funktion ohne Klammern, Gleitkomma, Variant, Word/Byte/SmallInt, schon 64 Bit) oder das Ziel nicht als Int64/UInt64/QWord
+- das Ziel ist ein Pfad (`Self.Total`, `R.Total`) oder die Zeile liegt in einem with-Block
+- die Anweisung steht nicht oder mehrfach auf der Zeile (verschoben, schon gecastet, ein weiterer Operator dahinter), oder eine Direktive steht darin
+- die Datei deklariert einen eigenen Bezeichner `Int64`
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+var
+  BytesTotal: Int64;
+  SectorCount, SectorSize: Integer;
+begin
+  BytesTotal := SectorCount * SectorSize;
+```
+
+Nachher:
+
+```pascal
+var
+  BytesTotal: Int64;
+  SectorCount, SectorSize: Integer;
+begin
+  BytesTotal := Int64(SectorCount) * SectorSize;
+```
+
+**Hinweis.** Der Detektor beweist keine Typen; die Hilfe bietet nur an, wenn der Quellstellen-Dienst Ziel und Operanden beweist.
+
 <a id="sca139"></a>
 
 ### SCA139 – FreeAndNil statt Free
@@ -2130,6 +2545,47 @@ Nachher:
 
 ```pascal
     FreeAndNil(FList);
+```
+
+<a id="sca144"></a>
+
+### SCA144 – Gleitkommavergleich mit Toleranz (SameValue/IsZero)
+
+- **Regel:** SCA144 `FloatEquality` – Float equality / inequality comparison
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** **ja** – vergleicht mit dem Standard-Epsilon von System.Math statt exakt – ein gewollt exakter Vergleich (Schalter- oder Sentinelwert) ändert seine Bedeutung. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| en | de | fr |
+|---|---|---|
+| `Use %s instead of the exact comparison` | `Statt des exakten Vergleichs %s verwenden` | `Utiliser %s au lieu de la comparaison exacte` |
+
+**Platzhalter:** `%s` = `SameValue` bzw. `IsZero` (bei einer Null-Seite).
+
+**Wirkung:** Macht aus `A = B` ein `SameValue(A, B)`, aus einem Vergleich mit einer Null (`0`, `0.0`) ein `IsZero(A)` und aus `<>` dasselbe mit `not` davor. Der Detektor meldet nur die Zeile, die Meldung nennt den Vergleich: die Hilfe sucht genau diese drei Token auf der Zeile. Fehlt `Math` in uses, kommt `System.Math` (in einer Datei mit FPC-Weiche `Math`) als zweite Ersetzung mit, in der Schreibweise der Datei.
+
+**Nicht angeboten**
+
+- der Vergleich ist nicht der ganze Ausdruck einer Bedingung, Zuweisung oder eines Arguments: davor steht nicht `if`, `while`, `until`, `(`, `:=` oder `,`, dahinter nicht `then`, `do`, `)`, `;`, `,`, `else` oder `end` – der Operatorrang: `if A = B and C` heißt `A = (B and C)`, `not A = B` heißt `(not A) = B`, und bei `a + b = c` meldet der Detektor den Teil `b = c`
+- ein Operand ist nicht als Single, Double, Extended oder Real bewiesen – Currency vergleicht als Festkommatyp exakt; ein unbekannter Typ (auch in einer verschachtelten Routine) oder ein eigener Alias wie `TFloat`; Single gegen etwas anderes als Single (die Überladungen von SameValue wären mehrdeutig)
+- das Wächter-Idiom `if X = 0 then X := ...` und jeder Fund, den der Detektor als gewollt herabstuft
+- eine `with`-Anweisung in der Routine, ein eigenes `SameValue` bzw. `IsZero` in der Datei
+- der Vergleich steht nicht oder mehrfach auf der Zeile, trägt einen Kommentar oder steht in einer Aufzählung `(A = 1, B = 2)`
+- `Math` fehlt und die uses-Klausel trägt Direktiven oder liegt in einem `$IFDEF`-Zweig
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  if Ratio = 0.5 then Work;
+  while Ratio <> 0 do Work;
+```
+
+Nachher:
+
+```pascal
+  if SameValue(Ratio, 0.5) then Work;
+  while not IsZero(Ratio) do Work;
 ```
 
 <a id="sca147"></a>
@@ -2323,6 +2779,52 @@ Nachher:
 ```
 
 **Hinweis.** Ein Fund an SCA109 und SCA153 zugleich verschwindet mit der einen Hilfe aus beiden.
+
+<a id="sca154"></a>
+
+### SCA154 – SizeOf des Zieltyps statt der Zeigergröße
+
+- **Regel:** SCA154 `MoveSizeOfPointer` – Move/FillChar with SizeOf(pointer-type)
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** **ja** – kopiert bzw. füllt jetzt SizeOf(Zieltyp) Bytes statt 4/8 – war ein ganzer Puffer gemeint, die Länge von Hand setzen. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| en | de | fr |
+|---|---|---|
+| `Use SizeOf(%s) instead of the pointer size` | `SizeOf(%s) statt der Zeigergröße verwenden` | `Utiliser SizeOf(%s) au lieu de la taille du pointeur` |
+
+**Platzhalter:** `%s` = der Zieltyp (`Integer` zu `PInteger`).
+
+**Wirkung:** Ersetzt in `Move`, `FillChar`, `CopyMemory` oder `ZeroMemory` die Länge `SizeOf(PInteger)` durch `SizeOf(Integer)` – nur, wenn der Aufruf beweisbar genau ein Element anfasst: jedes Puffer-Argument ist `X^` (bei `CopyMemory`/`ZeroMemory` `X`) mit `X` vom gemeldeten Zeigertyp oder `X` (bzw. `@X`) mit `X` vom Zieltyp. Der Zeigertyp muss ein Paar der RTL sein (PByte, PWord, PInteger, PCardinal, PInt64, PDouble, PChar …). Der Detektor meldet nur die Zeile; die Hilfe sucht den Aufruf selbst.
+
+**Nicht angeboten**
+
+- ein Puffer-Argument ist keine einzelne Variable (`Buf[0]`, `R.Feld`) oder sein Typ ist nicht bewiesen bzw. passt nicht – so auch das Katalogbeispiel `FillChar(P^, SizeOf(PInteger), 0)` mit `P: PByte`; `Move(Src, Dst, SizeOf(PInteger))` kopiert den Zeiger selbst, dort ist die Zeigergröße richtig
+- ein Zeigertyp ohne Paar der RTL (eigene Typen) oder ohne eigene Elementgröße (`PPointer`, `PString`), ein in der Datei selbst deklarierter `PInteger`, eine eigene Routine `Move` usw.
+- die Länge ist nicht genau `SizeOf(PTyp)` (`SizeOf(PInteger) + 1`, `Count * SizeOf(PInteger)`)
+- der Aufruf ist qualifiziert (`System.Move`, `List.Move`), steht nicht oder mehrfach auf der Zeile, reicht über die Zeile, trägt einen Kommentar oder eine andere Zahl Argumente
+- eine `with`-Anweisung in der Routine
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+procedure Foo(Src: PInteger; Dst: PInteger);
+begin
+  Move(Src^, Dst^, SizeOf(PInteger));
+end;
+```
+
+Nachher:
+
+```pascal
+procedure Foo(Src: PInteger; Dst: PInteger);
+begin
+  Move(Src^, Dst^, SizeOf(Integer));
+end;
+```
+
+**Hinweis.** Im Referenzkorpus meldet der Detektor keine Stelle; die Hilfe deckt bewusst nur den Einzelelement-Fall ab.
 
 <a id="sca156"></a>
 
@@ -2528,6 +3030,74 @@ begin
 end;
 ```
 
+<a id="sca167"></a>
+
+### SCA167 – Randomize im initialization-Abschnitt aufrufen
+
+- **Regel:** SCA167 `InsecureRandom` – Random call without prior Randomize
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** **ja** – die Zufallsfolge ist danach bei jedem Lauf eine andere – eine bisher wiederholbare Folge, etwa für Tests, geht verloren; der Aufruf beim Laden der Unit wirkt für das ganze Programm. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| en | de | fr |
+|---|---|---|
+| `Call Randomize in the initialization section` | `Randomize im initialization-Abschnitt aufrufen` | `Appeler Randomize dans la section initialization` |
+
+**Wirkung:** Setzt `Randomize;` als erste Anweisung in den initialization-Abschnitt der Unit – in eine neue Zeile unter `initialization` (Stufe der Folgezeile), hinter einen Kommentar am Zeilenende, oder direkt dahinter, wenn auf der Zeile Code oder eine Direktive folgt. Hat die Unit keinen, entsteht vor `end.` (bzw. vor einem `finalization` ohne `initialization`) ein neuer Abschnitt. Eine Anwendung erledigt alle Funde der Datei. Der Detektor meint die wiederholbare Folge (Startwert 0 ohne Randomize), keine kryptographische Sicherheit.
+
+**Nicht angeboten**
+
+- die Datei ruft `Randomize` schon (auch `System.Randomize`; der Fund ist veraltet) oder setzt `RandSeed` – ein fester Startwert ist womöglich gewollt, der Detektor sieht das nicht
+- `program`, `library` oder `package` (dort gehört Randomize an den Anfang des Hauptblocks – von Hand), eine Datei ohne `unit` (Include, Skript) oder ohne bzw. mit mehreren `implementation`
+- die Unit endet mit `begin ... end.` (SCA088 – erst dessen Hilfe) oder trägt mehrere `initialization` bzw. `finalization` (etwa in `{$IFDEF}`-Zweigen)
+- die Einfügestelle liegt in einem offenen `{$IF}`/`{$IFDEF}`-Block, oder `end.` bzw. `finalization` steht nicht allein am Zeilenanfang
+- auf der gemeldeten Zeile (und den Folgezeilen ihrer Anweisung) steht kein Aufruf von Random, RandomRange oder RandomFrom als Code – Zeile verschoben, String, Kommentar oder ein eigenes Zufallsobjekt (`FRng.Random`)
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+function Dice: Integer;
+begin
+  Result := Random(6) + 1;
+end;
+end.
+```
+
+Nachher:
+
+```pascal
+function Dice: Integer;
+begin
+  Result := Random(6) + 1;
+end;
+initialization
+  Randomize;
+
+end.
+```
+
+**Beispiel: Vorhandener initialization-Abschnitt**
+
+Vorher:
+
+```pascal
+initialization
+  Foo;
+end.
+```
+
+Nachher:
+
+```pascal
+initialization
+  Randomize;
+  Foo;
+end.
+```
+
+**Hinweis.** Für Passwörter, Token, Salze und Schlüssel bleibt Random auch nach Randomize ungeeignet – dort gehört ein kryptographischer Zufallsgenerator hin (BCryptGenRandom unter Windows, /dev/urandom unter POSIX).
+
 <a id="sca168"></a>
 
 ### SCA168 – else-Zweig im case ergänzen
@@ -2588,6 +3158,57 @@ Nachher:
     raise EProgrammerError.Create('Unhandled case');
   end;
 ```
+
+<a id="sca169"></a>
+
+### SCA169 – Bedingung außerhalb von Assert auswerten
+
+- **Regel:** SCA169 `AssertWithSideEffect` – Assert argument contains a function call with side effects
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** **ja** – die Bedingung läuft jetzt auch ohne Assertions (Release, $C-) – dort entfällt nur die Prüfung; ohne Meldung wird die Bedingung zum Meldungstext. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| en | de | fr |
+|---|---|---|
+| `Evaluate the condition outside Assert` | `Bedingung außerhalb von Assert auswerten` | `Évaluer la condition hors de Assert` |
+
+**Wirkung:** Macht aus `Assert(C, M);` ein `if not (C) then Assert(False, M);` auf derselben Zeile. Ohne Assertions (`$C-`, der übliche Release-Bau) übersetzt Delphi `Assert(..)` samt Argument nicht – die Nebenwirkung des Aufrufs fiel dort weg. Danach läuft die Bedingung immer; ohne Assertions entfällt nur die Prüfung, mit Assertions bleibt alles wie vorher (auch Datei und Zeile der Meldung). Ohne Meldung wird die Bedingung zum Meldungstext wie bei SCA074. Ein Klammerpaar um die ganze Bedingung wird nicht verdoppelt.
+
+**Nicht angeboten**
+
+- kein oder mehr als ein `Assert(` im Code der Zeile (verschoben, Kommentar, String, `Assert.IsTrue` von DUnitX), eine andere Anweisung oder ein Kommentar davor, Code oder eine Direktive dahinter, ein Aufruf über mehrere Zeilen
+- hinter dem Aufruf folgt `else` (das neue if nähme es an sich), oder der Aufruf ist ein case-Zweig bzw. trägt eine Marke
+- nicht ein oder zwei Argumente, eine anonyme Methode, ein Kommentar oder Typargumente im Argument; eine Bedingung über 255 Zeichen ohne Meldung (das Literal ginge nicht)
+- Assert ist womöglich nicht System.Assert: ein fremder Qualifizierer (`Obj.Assert`), eine eigene Routine Assert in der Datei, ein `with` davor in der Routine
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  Assert(UpdateCache(X));
+```
+
+Nachher:
+
+```pascal
+  if not (UpdateCache(X)) then Assert(False, 'UpdateCache(X)');
+```
+
+**Beispiel: Mit Meldung**
+
+Vorher:
+
+```pascal
+  Assert(InitCache(X), 'cache ready');
+```
+
+Nachher:
+
+```pascal
+  if not (InitCache(X)) then Assert(False, 'cache ready');
+```
+
+**Hinweis.** Liefert die Bedingung einen Variant, wäre `not` bitweise (`Assert(V)` mit V = 1 hält, `if not (V)` löst aus) – die Hilfe kennt die Ergebnistypen der Aufrufe nicht. Die neue Form trägt einen Zweig ohne begin..end; SCA101 (BeginEndRequired, Hinweis) meldet ihn, wo die Regel eingeschaltet ist.
 
 <a id="sca179"></a>
 
@@ -2746,6 +3367,80 @@ Nachher:
     [Test]
     procedure Foo;
 ```
+
+<a id="sca188"></a>
+
+### SCA188 – Bidi-Steuerzeichen entfernen, in Strings als #$-Code
+
+- **Regel:** SCA188 `SourceBidiOverride` – Bidirectional override control character (Trojan Source)
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Remove bidi control characters (as #$ code in strings)` | `Bidi-Steuerzeichen entfernen (in Strings als #$-Code)` | `Supprimer les caractères de contrôle bidi (en code #$ dans les chaînes)` |
+
+**Wirkung:** Behandelt alle Bidi-Steuerzeichen der gemeldeten Zeile (U+061C, U+202A–U+202E, U+2066–U+2069) in einer Ersetzung: im Kommentar wird das Zeichen gelöscht, im String-Literal als Zeichen-Code geschrieben und das Literal an der Stelle aufgebrochen (`'abc'#$202E'def'` – Delphi-Form ohne `+`, gleicher Wert). Danach zeigt die Zeile, was der Compiler liest. Bedeutungsgleich.
+
+**Nicht angeboten**
+
+- ein Zeichen der Zeile steht im Code (außerhalb von String und Kommentar) oder in einer Compiler-Direktive (`{$I …}`, `{$MESSAGE '…'}`) – dann für die ganze Zeile nicht
+- ein Zeichen steht in einem mehrzeiligen String (`'''…'''`), in einem String, der auf der Zeile nicht endet, oder in einem String mit `.` oder `[` dahinter
+- das Löschen änderte die Form des Kommentars (aus `{‹U+202E›$I x}` würde eine Direktive, `*‹U+202E›)` beendete einen `(* *)`-Kommentar früher)
+- auf der Zeile steht kein Zeichen der Regel (Zeile verschoben); U+200E/U+200F meldet der Detektor nicht
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  S := 'abc‹U+202E›def'; // check‹U+2066› admin
+```
+
+Nachher:
+
+```pascal
+  S := 'abc'#$202E'def'; // check admin
+```
+
+**Hinweis.** ‹U+202E› steht im Beispiel für das unsichtbare Steuerzeichen. Der Detektor meldet je Datei nur die erste betroffene Zeile; nach der Hilfe meldet er die nächste. Folgt dem letzten Zeichen-Code ein Bezeichner (`'‹U+202E›'then`), setzt die Hilfe ein Leerzeichen dazwischen.
+
+<a id="sca192"></a>
+
+### SCA192 – Unsichtbare Zeichen entfernen, in Strings als #$-Code
+
+- **Regel:** SCA192 `SourceInvisibleChar` – Invisible / zero-width character in source
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Remove invisible characters (as #$ code in strings)` | `Unsichtbare Zeichen entfernen (in Strings als #$-Code)` | `Supprimer les caractères invisibles (en code #$ dans les chaînes)` |
+
+**Wirkung:** Behandelt alle unsichtbaren Zeichen der gemeldeten Zeile (U+200B ZWSP, U+200C ZWNJ, U+200D ZWJ, U+2060 Word-Joiner, U+FEFF mitten in der Datei) in einer Ersetzung: im String-Literal immer als Zeichen-Code, nie gelöscht – ein ZWJ gehört dort oft zu einer Emoji-Folge, der Wert bleibt gleich (`'👨'#$200D'💻'`); im Kommentar wird das Zeichen gelöscht. Bedeutungsgleich.
+
+**Nicht angeboten**
+
+- ein Joiner (U+200C/U+200D) im Kommentar steht neben einem Nicht-ASCII-Zeichen – Teil einer Emoji-Folge (auch hinter U+FE0F) oder einer Schrift (ZWNJ im Persischen); dann für die ganze Zeile nicht
+- ein Zeichen der Zeile steht im Code (in einem Bezeichner, auch ein U+FEFF vor `unit`) oder in einer Compiler-Direktive
+- ein Zeichen steht in einem mehrzeiligen String, in einem String, der auf der Zeile nicht endet, oder in einem String mit `.` oder `[` dahinter; das Löschen änderte die Form des Kommentars
+- auf der Zeile steht kein Zeichen der Regel (Zeile verschoben); NBSP (U+00A0) meldet der Detektor nicht
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  S := 'ab‹U+200B›c'; // hidden‹U+200D› text
+```
+
+Nachher:
+
+```pascal
+  S := 'ab'#$200B'c'; // hidden text
+```
+
+**Hinweis.** ‹U+200B› und ‹U+200D› stehen im Beispiel für die unsichtbaren Zeichen. ZWSP, Word-Joiner und U+FEFF verbinden nichts und werden im Kommentar immer gelöscht, auch neben Nicht-ASCII-Text. Der Detektor meldet je Datei nur die erste betroffene Zeile; nach der Hilfe meldet er die nächste.
 
 <a id="sca196"></a>
 

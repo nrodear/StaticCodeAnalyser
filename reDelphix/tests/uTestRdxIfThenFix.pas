@@ -2,10 +2,11 @@ unit uTestRdxIfThenFix;
 
 // Editorhilfe SCA131 IfThenShortCircuit (uRdxIfThenFix): der Planer auf Text
 // (erste Fixture, auch im FPC-Pruefstand) und - nur Delphi - der ECHTE
-// Detektor (uIfThenShortCircuit) auf dem echten AST mit MapFix wie der
-// Adapter der Tabelle (zweite Fixture). Die Fixtures stehen in einer
-// Routine 'Foo' hinter 'uses <Unit>;'; die erste Rumpfzeile ist Zeile 8
-// (STMT_LINE).
+// Detektor (uIfThenShortCircuit) auf dem echten AST ueber den Einstieg der
+// Tabelle (TRdxFixTable.FixFor mit geoeffnetem Quellstellen-Dienst, Adapter
+// PlanIfThenToIf samt Variant-Sperre; zweite Fixture). Die Fixtures stehen
+// in einer Routine 'Foo' hinter 'uses <Unit>;'; die erste Rumpfzeile ist
+// Zeile 8 (STMT_LINE).
 
 interface
 
@@ -48,9 +49,10 @@ type
     [Test] procedure Detector_Qualified_RoundTrip;
     [Test] procedure Detector_TwoStatements_BothFixed;
     [Test] procedure Detector_EmbeddedInWrapper_NoHelp;
-    [Test] procedure MapFix_StaleLine_NoHelp;
+    [Test] procedure Table_StaleLine_NoHelp;
     [Test] procedure TargetOf_ReadsTarget;
     [Test] procedure VariantReason_NamesTarget;
+    [Test] procedure Adapter_VariantTarget_NoHelp;
   end;
 {$ENDIF}
 
@@ -62,8 +64,8 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uIfThenShortCircuit,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uRdxFixRunner,         // MapFix - wie der Adapter in uRdxFixTable
-  uTestRdxDetectorKit,   // TSeen, DetectSource
+  uRdxFixTable,          // TRdxFixTable.FixFor
+  uTestRdxDetectorKit,   // TSeen, DetectSource, PlanFixIn
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxIfThenFix,
   uRdxText,              // _() und die gemeinsamen Gruende
@@ -352,7 +354,7 @@ end;
 
 {$IFNDEF FPC}
 
-{ ---- Detektor und MapFix ---- }
+{ ---- Detektor und Tabelle ---- }
 
 // Die Funde der Art SCA131 - der echte Detektor auf dem echten AST.
 procedure RunDetector(AKind: TFindingKind; Root: TAstNode;
@@ -367,23 +369,17 @@ begin
     RunDetector);
 end;
 
-// Die Hilfe fuer den ersten Fund des Detektors - MapFix wie der Adapter der
-// Tabelle (Zeile und Meldung aus dem Fund).
+// Die Hilfe fuer den ersten Fund des Detektors ueber den Einstieg der
+// Tabelle (PlanFixIn: TRdxFixTable.FixFor mit geoeffnetem
+// Quellstellen-Dienst - so fragt der Adapter auch den Typ des Ziels).
 function PlanFirst(const ASource: string; out ASeen: TSeen): TRdxFixOutcome;
 var
   Seen : TArray<TSeen>;
-  SL   : TStringList;
 begin
   Seen := Detect(ASource);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet einen Fund');
   ASeen := Seen[0];
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    Result := MapFix(SL, ASeen.Line, ASeen.Msg, TRdxIfThenFix.IfThenToIf);
-  finally
-    SL.Free;
-  end;
+  Result := PlanFixIn(ASource, 't.pas', fkIfThenShortCircuit, ASeen);
 end;
 
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
@@ -462,17 +458,21 @@ begin
   Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
 end;
 
-procedure TTestRdxIfThenDetector.MapFix_StaleLine_NoHelp;
+procedure TTestRdxIfThenDetector.Table_StaleLine_NoHelp;
 var
   SL : TStringList;
+  F  : TLeakFinding;
   O  : TRdxFixOutcome;
 begin
   SL := TStringList.Create;
+  // Der Fund zeigt auf Zeile 9, doch dort steht 'end;'.
+  F := TLeakFinding.New('t.pas', '', STMT_LINE + 1, MSG_131,
+    fkIfThenShortCircuit);
   try
-    // Der Fund zeigt auf Zeile 9, doch dort steht 'end;'.
     SL.Text := Src(['  x := IfThen(b, A(), B());']);
-    O := MapFix(SL, STMT_LINE + 1, MSG_131, TRdxIfThenFix.IfThenToIf);
+    O := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
+    F.Free;
     SL.Free;
   end;
   Assert.IsFalse(O.Enabled, 'gesperrt');
@@ -498,6 +498,32 @@ begin
     TRdxIfThenFix.VariantReason('V'));
   Assert.IsTrue(Pos('V', TRdxIfThenFix.VariantReason('V')) > 0,
     'der Grund nennt das Ziel');
+end;
+
+// Eine Unit mit lokaler Variable ADecl; die Anweisung steht auf Zeile 10.
+function WithVar(const ADecl, AStmt: string): string;
+begin
+  Result := Join(['unit t;', 'interface', 'implementation', 'uses',
+    '  System.Math;', 'procedure Foo(b: Boolean);', 'var', '  ' + ADecl,
+    'begin', AStmt, 'end;', 'end.']);
+end;
+
+procedure TTestRdxIfThenDetector.Adapter_VariantTarget_NoHelp;
+var
+  S : TSeen;
+  O : TRdxFixOutcome;
+begin
+  // Ein Variant-Ziel bekaeme aus dem Literal-Arm einen anderen VarType - der
+  // Adapter fragt DeclaredTypeOf und sperrt.
+  O := PlanFirst(WithVar('V: Variant;', '  V := IfThen(b, A(), 0);'), S);
+  Assert.AreEqual<Integer>(10, S.Line, 'Zeile der Anweisung');
+  Assert.IsFalse(O.Enabled, 'keine Hilfe');
+  Assert.AreEqual(TRdxIfThenFix.VariantReason('V'), O.Reason);
+  Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+  // Ein Integer-Ziel: Angebot, gekennzeichnet (E2).
+  O := PlanFirst(WithVar('X: Integer;', '  X := IfThen(b, A(), 0);'), S);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.ChangesBehavior, 'gekennzeichnet');
 end;
 
 {$ENDIF}

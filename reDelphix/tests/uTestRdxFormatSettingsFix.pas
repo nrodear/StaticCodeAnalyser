@@ -3,11 +3,13 @@ unit uTestRdxFormatSettingsFix;
 // Editorhilfe SCA128 DateFormatSettings (uRdxFormatSettingsFix): an jeden
 // Aufruf der Detektor-Liste auf der Fundzeile ', FormatSettings' (Hauptweg)
 // bzw. ', TFormatSettings.Invariant' (Alt-Weg) anhaengen. Die Faelle auf Text
-// rufen die Planer direkt auf einer TRdxCodeMap (ohne Tabelle - der Adapter
-// kommt mit der Integration); die Rundlaeufe mit dem ECHTEN Detektor
-// (TDateFormatSettingsDetector) stehen in einer eigenen Fixture hinter
-// {$IFNDEF FPC}. Der Pruefstand-Runner nimmt nur eine Fixture je Unit - die
-// Weiche ist heute ohne Wirkung (wie uTestRdxCategoryArgFix).
+// rufen die Planer direkt auf einer TRdxCodeMap; die Rundlaeufe mit dem
+// ECHTEN Detektor (TDateFormatSettingsDetector) laufen ueber den Einstieg
+// der Tabelle (TRdxFixTable.FixFor bzw. AlternativeFixFor, Adapter
+// PlanDateFormatSettings/PlanDateFormatSettingsAlt) und stehen in einer
+// eigenen Fixture hinter {$IFNDEF FPC}. Der Pruefstand-Runner nimmt nur
+// eine Fixture je Unit - die Weiche ist heute ohne Wirkung (wie
+// uTestRdxCategoryArgFix).
 // Prueft: Hilfe fuer ein und zwei Argumente, Schreibweise und Leerraum,
 // alle Aufrufe der Zeile in einer Ersetzung, verschachtelt, RTL-qualifiziert,
 // der Bereich, der Alt-Weg; die Sperren - verschoben, Folgezeile, Anweisung
@@ -66,6 +68,8 @@ uses
   {$IFNDEF FPC}
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uDateFormatSettings,
+  uRdxRecipeRunner,      // TRdxFixOutcome
+  uRdxFixTable,          // TRdxFixTable.FixFor, AlternativeFixFor
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxFormatSettingsFix,
@@ -476,24 +480,47 @@ begin
     RunDetector);
 end;
 
-// Fund fuer Fund ueber den Planer beheben, bis der Detektor schweigt.
+// Die Hilfe fuer einen Fund ueber den Einstieg der Tabelle (AAlt: der
+// zweite Eintrag) - wie der Anbieter, ohne Quellstellen-Dienst (der Adapter
+// liest nur den Text).
+function TablePlan(const ASource: string; const ASeen: TSeen;
+  AAlt: Boolean): TRdxFixOutcome;
+var
+  SL : TStringList;
+  F  : TLeakFinding;
+begin
+  SL := TStringList.Create;
+  F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg,
+    fkDateFormatSettings);
+  try
+    SL.Text := ASource;
+    if AAlt then
+      Result := TRdxFixTable.AlternativeFixFor(nil, SL, F, nil)
+    else
+      Result := TRdxFixTable.FixFor(nil, SL, F, nil);
+  finally
+    F.Free;
+    SL.Free;
+  end;
+end;
+
+// Fund fuer Fund ueber die Tabelle beheben, bis der Detektor schweigt.
 function FixAll(const ASource: string; AAlt: Boolean): string;
 const
   MAX_PASSES = 10;
 var
-  Seen   : TArray<TSeen>;
-  E      : TRdxEdit;
-  Reason : string;
-  Pass   : Integer;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+  Pass : Integer;
 begin
   Result := ASource;
   for Pass := 1 to MAX_PASSES do
   begin
     Seen := Detect(Result);
     if Length(Seen) = 0 then Exit;
-    Assert.IsTrue(PlanOn(Result, Seen[0].Line, Seen[0].Msg, AAlt, E, Reason),
-      Format('Zeile %d: %s', [Seen[0].Line, Reason]));
-    Result := Apply(Result, E);
+    O := TablePlan(Result, Seen[0], AAlt);
+    Assert.IsTrue(O.Enabled, Format('Zeile %d: %s', [Seen[0].Line, O.Reason]));
+    Result := Apply(Result, O.Edits);
   end;
   Assert.Fail('der Detektor meldet nach 10 Runden noch');
 end;
@@ -567,17 +594,17 @@ end;
 
 procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_ContinuedStatement_NoHelp;
 var
-  Src    : string;
-  Seen   : TArray<TSeen>;
-  E      : TRdxEdit;
-  Reason : string;
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
 begin
   Src := InUnit(['  r := DateToStr(d) + '' '' +', '    TimeToStr(d);']);
   Seen := Detect(Src);
   Assert.IsTrue(Length(Seen) >= 1, 'der Detektor meldet die Anweisung');
   Assert.AreEqual<Integer>(BODY_LINE, Seen[0].Line, 'Zeile der Anweisung');
-  Assert.IsFalse(PlanOn(Src, Seen[0].Line, Seen[0].Msg, False, E, Reason));
-  Assert.AreEqual(_(R_FS_CONTINUES, [BODY_LINE + 1]), Reason);
+  O := TablePlan(Src, Seen[0], False);
+  Assert.IsFalse(O.Enabled);
+  Assert.AreEqual(_(R_FS_CONTINUES, [BODY_LINE + 1]), O.Reason);
 end;
 
 {$ENDIF}

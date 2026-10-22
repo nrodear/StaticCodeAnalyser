@@ -160,6 +160,30 @@ program reDelphix.Test;
 //   * uTestRdxAttrDuplicateFix  - SCA180 doppeltes Attribut loeschen
 //   * uTestRdxCategoryArgFix    - SCA181 '[Category]' mit Argument
 //   * uTestRdxGotoExitFix       - SCA060 goto zum Routinen-Ende -> Exit
+//   * uTestRdxFormatSettingsFix - SCA128 ', FormatSettings' bzw.
+//                                 ', TFormatSettings.Invariant'
+//   * uTestRdxFormatLocaleFix   - SCA059 Format mit drittem Argument
+//                                 FormatSettings bzw. Invariant
+//   * uTestRdxMethodNameFix     - SCA106 Methodenname gross in
+//                                 Deklaration und Implementierung
+//   * uTestRdxIntegerOverflowFix - SCA137 'A * B' -> 'Int64(A) * B'
+//   * uTestRdxBidiOverrideFix   - SCA188 Bidi-Steuerzeichen loeschen
+//                                 bzw. als #$-Code
+//   * uTestRdxInvisibleCharFix  - SCA192 unsichtbare Zeichen loeschen
+//                                 bzw. als #$-Code
+//   * uTestRdxThreadResumeFix   - SCA113 Resume -> Start nach
+//                                 Create(True)
+//   * uTestRdxInsecureRandomFix - SCA167 Randomize in die
+//                                 initialization
+//   * uTestRdxFloatEqualityFix  - SCA144 '=' -> SameValue/IsZero
+//   * uTestRdxMoveSizeFix       - SCA154 SizeOf(PTyp) -> SizeOf(Typ)
+//   * uTestRdxDebugOutputFix    - SCA017 Ausgabe in {$IFDEF DEBUG}
+//                                 bzw. loeschen
+//   * uTestRdxDeadCodeFix       - SCA011 toten Code hinter Exit/raise
+//                                 loeschen
+//   * uTestRdxIfThenFix         - SCA131 IfThen -> if..then..else
+//   * uTestRdxAssertSideEffectFix - SCA169 'Assert(C)' ->
+//                                   'if not (C) then Assert(False, ..)'
 //
 // SPRACHE: der Hauptblock setzt die reDelphix-Texte fuer ALLE Tests auf
 // Deutsch (SetRdxLanguageOverride('de'), wie der FPC-Pruefstand) - die
@@ -246,6 +270,18 @@ uses
   uRdxAttrDuplicateFix in '..\source\uRdxAttrDuplicateFix.pas',
   uRdxCategoryArgFix in '..\source\uRdxCategoryArgFix.pas',
   uRdxGotoExitFix in '..\source\uRdxGotoExitFix.pas',
+  uRdxFormatSettingsFix in '..\source\uRdxFormatSettingsFix.pas',
+  uRdxMethodNameFix in '..\source\uRdxMethodNameFix.pas',
+  uRdxIntegerOverflowFix in '..\source\uRdxIntegerOverflowFix.pas',
+  uRdxCharEscapeFix in '..\source\uRdxCharEscapeFix.pas',
+  uRdxThreadResumeFix in '..\source\uRdxThreadResumeFix.pas',
+  uRdxInsecureRandomFix in '..\source\uRdxInsecureRandomFix.pas',
+  uRdxFloatEqualityFix in '..\source\uRdxFloatEqualityFix.pas',
+  uRdxMoveSizeFix in '..\source\uRdxMoveSizeFix.pas',
+  uRdxDebugOutputFix in '..\source\uRdxDebugOutputFix.pas',
+  uRdxDeadCodeFix in '..\source\uRdxDeadCodeFix.pas',
+  uRdxIfThenFix in '..\source\uRdxIfThenFix.pas',
+  uRdxAssertSideEffectFix in '..\source\uRdxAssertSideEffectFix.pas',
   uTestRdxRecipes in 'uTestRdxRecipes.pas',
   uTestRdxBench in 'uTestRdxBench.pas',
   uTestRdxSca044 in 'uTestRdxSca044.pas',
@@ -302,6 +338,20 @@ uses
   uTestRdxAttrDuplicateFix in 'uTestRdxAttrDuplicateFix.pas',
   uTestRdxCategoryArgFix in 'uTestRdxCategoryArgFix.pas',
   uTestRdxGotoExitFix in 'uTestRdxGotoExitFix.pas',
+  uTestRdxFormatSettingsFix in 'uTestRdxFormatSettingsFix.pas',
+  uTestRdxFormatLocaleFix in 'uTestRdxFormatLocaleFix.pas',
+  uTestRdxMethodNameFix in 'uTestRdxMethodNameFix.pas',
+  uTestRdxIntegerOverflowFix in 'uTestRdxIntegerOverflowFix.pas',
+  uTestRdxBidiOverrideFix in 'uTestRdxBidiOverrideFix.pas',
+  uTestRdxInvisibleCharFix in 'uTestRdxInvisibleCharFix.pas',
+  uTestRdxThreadResumeFix in 'uTestRdxThreadResumeFix.pas',
+  uTestRdxInsecureRandomFix in 'uTestRdxInsecureRandomFix.pas',
+  uTestRdxFloatEqualityFix in 'uTestRdxFloatEqualityFix.pas',
+  uTestRdxMoveSizeFix in 'uTestRdxMoveSizeFix.pas',
+  uTestRdxDebugOutputFix in 'uTestRdxDebugOutputFix.pas',
+  uTestRdxDeadCodeFix in 'uTestRdxDeadCodeFix.pas',
+  uTestRdxIfThenFix in 'uTestRdxIfThenFix.pas',
+  uTestRdxAssertSideEffectFix in 'uTestRdxAssertSideEffectFix.pas',
   uTestRdxMagicGuards in 'uTestRdxMagicGuards.pas',
   uTestRdxMagicFixDetector in 'uTestRdxMagicFixDetector.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',

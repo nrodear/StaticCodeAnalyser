@@ -2,9 +2,9 @@ unit uTestRdxMethodNameFix;
 
 // Editorhilfe SCA106 MethodName (uRdxMethodNameFix): der Planer auf Text
 // (erste Fixture) und der ECHTE Detektor (uMethodName) auf dem echten AST
-// (zweite Fixture, nur Delphi). Den Adapter der Tabelle (PlanMethodName)
-// traegt uRdxFixTable - die Rundlaeufe hier rufen den Planer selbst, wie
-// der Adapter es ueber TRdxFixFrame taete.
+// (zweite Fixture, nur Delphi). Den Adapter der Tabelle (PlanMethodName
+// ueber TRdxFixFrame) traegt uRdxFixTable - die Rundlaeufe hier gehen ueber
+// ihren Einstieg (TRdxFixTable.FixFor), wie der Anbieter.
 // Die Standard-Unit (StdUnit) hat die Klasse TFoo ab Zeile 4, 'public' auf
 // Zeile 5, die Deklaration auf Zeile 6 (DECL_LINE) und den Kopf der
 // Implementierung auf Zeile 9 (IMPL_LINE).
@@ -53,6 +53,7 @@ type
     [Test] procedure Detector_CatalogExample_InClass_Fixed;
     [Test] procedure Detector_CatalogExample_FreeRoutine_NoHelp;
     [Test] procedure Detector_Overload_NoHelp;
+    [Test] procedure Table_NameAndTwoEdits;
   end;
 {$ENDIF}
 
@@ -63,6 +64,8 @@ uses
   {$IFNDEF FPC}
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uMethodName,
+  uRdxRecipeRunner,      // TRdxFixOutcome
+  uRdxFixTable,          // TRdxFixTable.FixFor
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxMethodNameFix,
@@ -420,16 +423,33 @@ begin
   Result := DetectSource('rdx_mn_', ASource, fkMethodName, RunDetector);
 end;
 
+// Die Hilfe fuer einen Fund ueber den Einstieg der Tabelle - wie der
+// Anbieter; der Adapter braucht keinen Quellstellen-Dienst.
+function TablePlan(const ASource: string; const ASeen: TSeen): TRdxFixOutcome;
+var
+  SL : TStringList;
+  F  : TLeakFinding;
+begin
+  SL := TStringList.Create;
+  F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, fkMethodName);
+  try
+    SL.Text := ASource;
+    Result := TRdxFixTable.FixFor(nil, SL, F, nil);
+  finally
+    F.Free;
+    SL.Free;
+  end;
+end;
+
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt - der Planer wie der Adapter ihn ruft (Zeile und Meldung).
+// schweigt - ueber die Tabelle (Zeile und Meldung aus dem Fund).
 function FixAll(const ASource: string): string;
 const
   MAX_PASSES = 10;
 var
   Pass : Integer;
   Seen : TArray<TSeen>;
-  P    : TRdxMethodNamePlan;
-  R    : string;
+  O    : TRdxFixOutcome;
 begin
   Result := ASource;
   for Pass := 1 to MAX_PASSES do
@@ -437,9 +457,9 @@ begin
     Seen := Detect(Result);
     if Length(Seen) = 0 then
       Exit;
-    Assert.IsTrue(PlanOf(Result, Seen[0].Line, Seen[0].Msg, P, R),
-      Format('Zeile %d: %s', [Seen[0].Line, R]));
-    Result := Apply(Result, P.Edits);
+    O := TablePlan(Result, Seen[0]);
+    Assert.IsTrue(O.Enabled, Format('Zeile %d: %s', [Seen[0].Line, O.Reason]));
+    Result := Apply(Result, O.Edits);
   end;
   Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
 end;
@@ -448,14 +468,13 @@ end;
 procedure AssertDetectorRefused(const ASource, AReason: string);
 var
   Seen : TArray<TSeen>;
-  P    : TRdxMethodNamePlan;
-  R    : string;
+  O    : TRdxFixOutcome;
 begin
   Seen := Detect(ASource);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet');
-  Assert.IsFalse(PlanOf(ASource, Seen[0].Line, Seen[0].Msg, P, R),
-    'keine Hilfe');
-  Assert.AreEqual(AReason, R, 'Grund');
+  O := TablePlan(ASource, Seen[0]);
+  Assert.IsFalse(O.Enabled, 'keine Hilfe');
+  Assert.AreEqual(AReason, O.Reason, 'Grund');
 end;
 
 procedure TTestRdxMethodNameDetector.Detector_ReportsDeclarationLine;
@@ -548,6 +567,23 @@ begin
     ['procedure TFoo.doWork;', 'begin', 'end;',
      'procedure TFoo.doWork(A: Integer);', 'begin', 'end;']),
     _(R_MN_OVERLOAD, ['doWork']));
+end;
+
+procedure TTestRdxMethodNameDetector.Table_NameAndTwoEdits;
+var
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  // Der Eintrag ueber die Tabelle: Name ist der neue Name (Menuetext),
+  // Deklaration und Implementierung in einem Schritt, bedeutungsgleich.
+  Seen := Detect(StdUnit('doWork', 'doWork'));
+  Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
+  O := TablePlan(StdUnit('doWork', 'doWork'), Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual('DoWork', O.Name);
+  Assert.AreEqual<Integer>(2, Length(O.Edits), 'Deklaration und Implementierung');
+  Assert.IsFalse(O.ChangesBehavior, 'nicht gekennzeichnet');
+  Assert.IsTrue(O.Hint <> '', 'Hinweis der Zeile');
 end;
 
 {$ENDIF}
