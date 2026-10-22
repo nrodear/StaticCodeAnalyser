@@ -14,7 +14,14 @@ unit uTestRdxCodeMap;
 // Schluesselwort vor ':=' - benanntes OLE-Argument 'End := 1'). Seit
 // Charge B2S-a die geteilten Helfer der Fix-Units QuotedText und
 // ParenDelta (Review R3-05: bis dahin fuenf Kopien bzw. drei Kopien und
-// sieben ausgeschriebene Zaehlungen).
+// sieben ausgeschriebene Zaehlungen). Seit dem Review der Woche
+// (2026-10-21) der einzige Unterschied von RangeText zu SpanText, TokenAt
+// ausserhalb der Zeile, Direktiven nur aus Code heraus, Methoden
+// generischer Klassen in DeclaresRoutine und die Helfer mit eigener Regel,
+// die bis dahin nur Planer-Fixtures zufaellig beruehrten (SameIdent,
+// HasIdentWord, MarkerReason, IncludeFileAt, IsRoutineHeadAfter,
+// DirectiveBetween, TailIsComment/TailIsQuiet, CanAppendLine,
+// LastCharBefore).
 
 interface
 
@@ -39,6 +46,14 @@ type
     [Test] procedure TokHelpers_AndKeywordAt;
     // Charge B2S-a.
     [Test] procedure SharedHelpers_QuotedTextAndParenDelta;
+    // Review Woche (G05-01, -13, -14, -17, -12/-22).
+    [Test] procedure RangeText_ToleratesWhatSpanTextRefuses;
+    [Test] procedure TokenAt_OutsideTheLine_NoToken;
+    [Test] procedure Directives_NotInBlockComments_IncludeForms;
+    [Test] procedure DeclaresRoutine_GenericClassMethod;
+    [Test] procedure TextHelpers_IdentAndMarker;
+    [Test] procedure RoutineHeadAfter_Predecessors;
+    [Test] procedure LineHelpers_TailBetweenAndLastChar;
   end;
 
 implementation
@@ -46,6 +61,8 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uDetectorUtils, uRdxCodeMap,
+  uRefactorInfo,          // TRefactorSpan.Make
+  uRefactorInfoBuilder,   // SpanText (die Gegenprobe zu RangeText)
   uTestRdxTextKit;   // Join
 
 // Zeile und Spalte eines Tokens als 'Z:S' - fuer kurze Vergleiche.
@@ -415,6 +432,314 @@ begin
   Assert.AreEqual<Integer>(0, ParenDelta(T), '< zaehlt nicht');
   T.Low := '';
   Assert.AreEqual<Integer>(0, ParenDelta(T), 'kein Token');
+end;
+
+// ---- Review Woche (2026-10-21) ----
+
+// Das erste Token AWord (klein) auf der Zeile ALine; Low = '' ohne.
+function WordOn(AMap: TRdxCodeMap; ALine: Integer; const AWord: string): TRdxToken;
+begin
+  Result := NextToken(AMap, ALine, 1);
+  while (Result.Low <> '') and (Result.Line = ALine) and (Result.Low <> AWord) do
+    Result := After(AMap, Result);
+  if (Result.Line <> ALine) or (Result.Low <> AWord) then
+    Result := Default(TRdxToken);
+end;
+
+// G05-01: RangeText existiert nur, weil TRefactorInfoBuilder.SpanText ueber
+// SpanFits einen Bereich ab einer LEEREN Zeile (der Rumpf hinter 'if A
+// then' und einer Leerzeile, uRdxStructFixes.OwnLinesEdit) bzw. mit EndCol
+// hinter dem Zeilenende als '' liefert. Dieser Unterschied war ungetestet:
+// RangeText durch SpanText ersetzt, waere hier rot.
+procedure TTestRdxCodeMap.RangeText_ToleratesWhatSpanTextRefuses;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  S   : TRefactorSpan;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Join(['  if A then', '', '    Foo;']);
+    Map := TRdxCodeMap.Create(SL);
+    S := TRefactorSpan.Make('t', 2, 1, 3, 9);
+    Assert.AreEqual(#10'    Foo;', RangeText(Map, S),
+      'die leere erste Zeile traegt ihren Teil leer bei');
+    Assert.AreEqual('', TRefactorInfoBuilder.SpanText(SL, S),
+      'Gegenprobe: SpanText verlangt StartCol <= Laenge der ersten Zeile');
+    S := TRefactorSpan.Make('t', 1, 3, 3, 20);
+    Assert.AreEqual('if A then'#10#10'    Foo;', RangeText(Map, S),
+      'EndCol hinter dem Zeilenende: der Rest der Zeile');
+    Assert.AreEqual('', TRefactorInfoBuilder.SpanText(SL, S),
+      'Gegenprobe: SpanText verlangt EndCol - 1 <= Laenge der letzten Zeile');
+    S := TRefactorSpan.Make('t', 1, 3, 3, 9);
+    Assert.AreEqual('if A then'#10#10'    Foo;', RangeText(Map, S));
+    Assert.AreEqual(TRefactorInfoBuilder.SpanText(SL, S), RangeText(Map, S),
+      'passt der Bereich, liefern beide dasselbe');
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+// G05-13: TokenAt/TokenEndingAt ausserhalb der Zeile - eine Spalte aus der
+// Meldung hinter dem Zeilenende, eine leere Zeile (gegen b2538e20: AV).
+procedure TTestRdxCodeMap.TokenAt_OutsideTheLine_NoToken;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  T   : TRdxToken;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Join(['ab;', '', 'c']);
+    Map := TRdxCodeMap.Create(SL);
+    Assert.AreEqual('ab', TokenAt(Map, 1, 1).Low);
+    T := TokenAt(Map, 1, 4);
+    Assert.AreEqual('', T.Low, 'hinter dem Zeilenende');
+    Assert.AreEqual<Integer>(1, T.Line, 'Zeile wie gefragt');
+    Assert.AreEqual<Integer>(4, T.Col, 'Spalte wie gefragt');
+    Assert.AreEqual('', TokenAt(Map, 1, 0).Low, 'vor dem Zeilenanfang');
+    Assert.AreEqual('', TokenAt(Map, 2, 1).Low, 'leere Zeile');
+    Assert.AreEqual('', TokenAt(Map, 9, 1).Low, 'hinter dem Dateiende');
+    Assert.AreEqual('', TokenEndingAt(Map, 2, 1).Low, 'leere Zeile');
+    Assert.AreEqual('', TokenEndingAt(Map, 1, 9).Low, 'hinter dem Zeilenende');
+    Assert.AreEqual('ab', TokenEndingAt(Map, 1, 2).Low);
+    Assert.AreEqual(';', TokenEndingAt(Map, 1, 3).Low);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+// G05-14: eine Direktive beginnt nur aus Code heraus - '{$' in '(* .. *)'
+// und '(*$' in '{ .. }' sind Kommentartext (gegen b2538e20 rot: beide
+// zaehlten, IncludeInLines fand das auskommentierte defs.inc). Dazu die
+// Formen von IncludeFileAt (G05-22).
+procedure TTestRdxCodeMap.Directives_NotInBlockComments_IncludeForms;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Join([
+      '(* {$IFDEF VER150} *) a;',        // 1
+      '{ alt: (*$I defs.inc*) } b;',     // 2
+      '{$IFDEF X} c; {$ENDIF}',          // 3
+      '(*$I y.inc*) d;',                 // 4
+      '{$I ''a b.inc''}',                // 5
+      '{$INCLUDE x.inc extra}',          // 6
+      '{$I+} e;',                        // 7
+      '// {$I z.inc}']);                 // 8
+    Map := TRdxCodeMap.Create(SL);
+    Assert.IsFalse(DirectiveInLines(Map, 1, 1), '{$ in (* *) ist Text');
+    Assert.IsFalse(DirectiveInLines(Map, 2, 2), '(*$ in { } ist Text');
+    Assert.AreEqual<Integer>(4, IncludeInLines(Map, 1, 8),
+      'das erste Include aus Code heraus');
+    Assert.IsTrue(DirectiveAt(Map, 3, 1));
+    Assert.IsFalse(DirectiveAt(Map, 3, 2), 'nur am Oeffner');
+    Assert.IsTrue(DirectiveAt(Map, 3, 15), 'die zweite auf der Zeile');
+    Assert.IsFalse(DirectiveAt(Map, 8, 4), '{$ im //-Kommentar');
+    Assert.AreEqual('y.inc', IncludeFileAt(Map, 4, 1), '(*$I x*)');
+    Assert.AreEqual('a b.inc', IncludeFileAt(Map, 5, 1),
+      'in Quotes, mit Leerzeichen');
+    Assert.AreEqual('x.inc', IncludeFileAt(Map, 6, 1),
+      '{$INCLUDE}, Text dahinter');
+    Assert.AreEqual('', IncludeFileAt(Map, 7, 1), '{$I+} ist ein Schalter');
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+// G05-17: NameAfter/DeclaresAfter ueber Typparameter - 'procedure
+// TValidator<T>.Format' deklariert Format, nicht TValidator (gegen
+// b2538e20 rot: Format und Run fehlten, TValidator galt als Routine).
+procedure TTestRdxCodeMap.DeclaresRoutine_GenericClassMethod;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Join([
+      'unit u;',                                           // 1
+      'interface',                                         // 2
+      'type',                                              // 3
+      '  TValidator<T> = class',                           // 4
+      '    procedure Check(const S: string);',             // 5
+      '  end;',                                            // 6
+      'implementation',                                    // 7
+      'procedure TValidator<T>.Format(const S: string);',  // 8
+      'begin',                                             // 9
+      'end;',                                              // 10
+      'function Make<T>(X: T): T;',                        // 11
+      'begin',                                             // 12
+      'end;',                                              // 13
+      'procedure TOuter<T>.TInner<U>.Run;',                // 14
+      'begin',                                             // 15
+      'end;',                                              // 16
+      'end.']);
+    Map := TRdxCodeMap.Create(SL);
+    Assert.AreEqual('format', NameAfter(Map, NextToken(Map, 8, 1)).Low);
+    Assert.AreEqual('make', NameAfter(Map, NextToken(Map, 11, 1)).Low,
+      'Typparameter der Routine selbst');
+    Assert.AreEqual('run', NameAfter(Map, NextToken(Map, 14, 1)).Low,
+      'zwei generische Glieder');
+    Assert.IsTrue(DeclaresRoutine(Map, 'Format'), 'Methode einer generischen Klasse');
+    Assert.IsTrue(DeclaresRoutine(Map, 'Run'), 'zwei generische Glieder');
+    Assert.IsTrue(DeclaresRoutine(Map, 'Make'));
+    Assert.IsTrue(DeclaresRoutine(Map, 'Check'));
+    Assert.IsFalse(DeclaresRoutine(Map, 'TValidator'), 'nur Qualifizierer');
+    Assert.IsFalse(DeclaresRoutine(Map, 'TInner'), 'nur Qualifizierer');
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+// G05-22: SameIdent/HasIdentWord (Zeichen ueber #127 gelten als gleich,
+// wenn beide darueber liegen) und MarkerReason ('XXX' nur gross, die
+// Absichtsmarker in jeder Schreibweise und nur als Wort).
+procedure TTestRdxCodeMap.TextHelpers_IdentAndMarker;
+const
+  UE    = #$00FC;
+  UE_UP = #$00DC;
+begin
+  Assert.IsTrue(SameIdent('pr' + UE + 'fe', 'pr' + UE_UP + 'fe'),
+    'ueber #127: gleich');
+  Assert.IsFalse(SameIdent('pr' + UE + 'fe', 'prufe'), 'Umlaut gegen ASCII');
+  Assert.IsFalse(SameIdent('pruefe', 'pr' + UE + 'fe'), 'andere Laenge');
+  Assert.IsFalse(SameIdent('abc', 'abd'));
+  Assert.IsTrue(HasIdentWord('x := pr' + UE_UP + 'fe(1);', 'pr' + UE + 'fe'),
+    'als Wort, der Umlaut ohne Gross/klein');
+  Assert.IsFalse(HasIdentWord('x := pr' + UE + 'fen;', 'pr' + UE + 'fe'),
+    'Teil eines laengeren Worts');
+  Assert.IsFalse(HasIdentWord('abc', ''), 'leerer Name');
+  Assert.AreEqual('', MarkerReason('// nur ein Kommentar'));
+  Assert.IsTrue(Pos('noinspection-Marker', MarkerReason('// noinspection X')) = 1);
+  Assert.IsTrue(Pos('TODO im Bereich', MarkerReason('// todo: spaeter')) = 1,
+    'jede Schreibweise');
+  Assert.IsTrue(Pos('HACK im Bereich', MarkerReason('{ Hack: weg }')) = 1);
+  Assert.AreEqual('', MarkerReason('// hackathon'), 'nur als Wort');
+  Assert.IsTrue(Pos('XXX im Bereich', MarkerReason('// XXX pruefen')) = 1,
+    'XXX gross');
+  Assert.AreEqual('', MarkerReason('// xxx als Platzhalter'), 'xxx klein');
+end;
+
+// G05-22: die Negativliste NOT_HEAD_AFTER von IsRoutineHeadAfter mit allen
+// acht Vorgaengern, die Bezeichner-Praefixe und die Positivfaelle; dazu
+// dieselben Formen im Quelltext ueber IsRoutineHead.
+procedure TTestRdxCodeMap.RoutineHeadAfter_Predecessors;
+const
+  NO_HEAD: array[0..10] of string = (':', '=', 'to', '(', ',', ':=', 'of',
+    '[', '.', '&', '@');
+  HEAD: array[0..4] of string = (';', 'class', ']', 'implementation', '');
+var
+  T, P : TRdxToken;
+  S    : string;
+  SL   : TStringList;
+  Map  : TRdxCodeMap;
+begin
+  T := Default(TRdxToken);
+  T.Low := 'procedure';
+  P := Default(TRdxToken);
+  for S in NO_HEAD do
+  begin
+    P.Low := S;
+    Assert.IsFalse(IsRoutineHeadAfter(T, P), 'kein Kopf hinter ' + S);
+  end;
+  for S in HEAD do
+  begin
+    P.Low := S;
+    Assert.IsTrue(IsRoutineHeadAfter(T, P), 'Kopf hinter "' + S + '"');
+  end;
+  T.Low := 'begin';
+  P.Low := ';';
+  Assert.IsFalse(IsRoutineHeadAfter(T, P), 'kein Routinenwort');
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Join([
+      'type TRef = reference to procedure;',   // 1
+      '  TArr = array of procedure;',          // 2
+      'var P: procedure;',                     // 3
+      'X := procedure begin end;',             // 4
+      'Run(procedure begin end);',             // 5
+      '[Weak] procedure Go;',                  // 6
+      'class procedure Go2;']);                // 7
+    Map := TRdxCodeMap.Create(SL);
+    Assert.IsFalse(IsRoutineHead(Map, WordOn(Map, 1, 'procedure')), 'reference to');
+    Assert.IsFalse(IsRoutineHead(Map, WordOn(Map, 2, 'procedure')), 'array of');
+    Assert.IsFalse(IsRoutineHead(Map, WordOn(Map, 3, 'procedure')), 'Typ einer Variablen');
+    Assert.IsFalse(IsRoutineHead(Map, WordOn(Map, 4, 'procedure')), 'anonym hinter :=');
+    Assert.IsFalse(IsRoutineHead(Map, WordOn(Map, 5, 'procedure')), 'anonym in Klammern');
+    Assert.IsTrue(IsRoutineHead(Map, WordOn(Map, 6, 'procedure')), 'hinter einem Attribut');
+    Assert.IsTrue(IsRoutineHead(Map, WordOn(Map, 7, 'procedure')), 'class procedure');
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+// G05-12/G05-22: TailIsComment zaehlt eine Direktive wie einen Kommentar,
+// TailIsQuiet wie Code; CanAppendLine mit einer Folgezeile im Kommentar;
+// DirectiveBetween ab dem Ende eines Tokens bzw. ab Dateianfang;
+// LastCharBefore/FirstCharAfter ueber Zeilen, Direktiven und Kommentare
+// hinweg, ein String zaehlt.
+procedure TTestRdxCodeMap.LineHelpers_TailBetweenAndLastChar;
+var
+  SL     : TStringList;
+  Map    : TRdxCodeMap;
+  Li, Co : Integer;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Join([
+      'if A then {$IFDEF X}',         // 1: then 6..9, Direktive ab 11
+      '  B;',                         // 2: B 3
+      '{$ENDIF} C := ''x''; // k',    // 3: C 10, Quote 15/17, ; 18
+      'D; { offen',                   // 4
+      '  zu } E;',                    // 5: E 8
+      'F; (* k *)',                   // 6
+      '',                             // 7
+      'G;']);                         // 8
+    Map := TRdxCodeMap.Create(SL);
+    Assert.IsTrue(TailIsComment(Map, 1, 9), 'die Direktive zaehlt wie Kommentar');
+    Assert.IsFalse(TailIsQuiet(Map, 1, 9), 'TailIsQuiet: die Direktive ist Code');
+    Assert.IsTrue(TailIsQuiet(Map, 6, 2), 'nur ein Kommentar dahinter');
+    Assert.IsTrue(TailIsQuiet(Map, 3, 18), 'Leerraum und //-Kommentar');
+    Assert.IsFalse(TailIsQuiet(Map, 3, 9), 'Code dahinter');
+    Assert.IsTrue(CanAppendLine(Map, 6, 2));
+    Assert.IsFalse(CanAppendLine(Map, 4, 2), 'die Folgezeile beginnt im Kommentar');
+    Assert.IsTrue(DirectiveBetween(Map, TokenAt(Map, 1, 6), 2, 3), 'hinter then');
+    Assert.IsFalse(DirectiveBetween(Map, Default(TRdxToken), 1, 11),
+      'ab Dateianfang bis vor die Direktive');
+    Assert.IsTrue(DirectiveBetween(Map, Default(TRdxToken), 1, 12));
+    Assert.IsTrue(DirectiveBetween(Map, TokenAt(Map, 2, 3), 3, 10),
+      'am Anfang der naechsten Zeile');
+    Assert.IsFalse(DirectiveBetween(Map, TokenAt(Map, 3, 10), 4, 1),
+      'der //-Kommentar ist keine');
+    Assert.IsTrue(LastCharBefore(Map, TokenAt(Map, 2, 3), Li, Co));
+    Assert.AreEqual('1:9', Format('%d:%d', [Li, Co]),
+      'ueber die Direktive auf das n von then');
+    Assert.IsTrue(LastCharBefore(Map, TokenAt(Map, 5, 8), Li, Co));
+    Assert.AreEqual('4:2', Format('%d:%d', [Li, Co]), 'ueber den Kommentar');
+    Assert.IsTrue(LastCharBefore(Map, TokenAt(Map, 3, 18), Li, Co));
+    Assert.AreEqual('3:17', Format('%d:%d', [Li, Co]), 'ein String zaehlt');
+    Assert.IsTrue(FirstCharAfter(Map, TokenAt(Map, 1, 6), Li, Co));
+    Assert.AreEqual('2:3', Format('%d:%d', [Li, Co]));
+    Assert.IsTrue(FirstCharAfter(Map, TokenAt(Map, 6, 2), Li, Co));
+    Assert.AreEqual('8:1', Format('%d:%d', [Li, Co]), 'ueber die leere Zeile');
+  finally
+    Map.Free;
+    SL.Free;
+  end;
 end;
 
 initialization
