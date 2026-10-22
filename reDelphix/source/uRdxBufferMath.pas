@@ -145,11 +145,18 @@ procedure AddEdit(var AList: TArray<TRdxEdit>; const AEdit: TRdxEdit);
 implementation
 
 uses
-  uRefactorInfoBuilder;   // SpanText: derselbe Bereichstext wie beim Scan
+  uRefactorInfoBuilder,   // SpanText: derselbe Bereichstext wie beim Scan
+  uRdxCodeMap;            // RangeText: der Bereichstext ohne SpanFits
 
 const
   SDiffers = 'Quelltext im Editor weicht vom Stand beim Menueaufbau ab - '
     + 'nicht geschrieben (Menue neu oeffnen)';
+  // Der Bereich passt nicht in seine Zeilen (beginnt hinter dem Ende der
+  // ersten, etwa auf einer leeren, oder endet hinter dem der letzten), der
+  // Puffer ist aber unveraendert: ein Fehler der Hilfe, kein veralteter
+  // Stand (Review Woche G05-10).
+  SOffLine = 'Bereich (Zeile %d, Spalte %d bis Zeile %d, Spalte %d) beginnt '
+    + 'oder endet hinter dem Zeilenende - Fehler der Hilfe, nicht geschrieben';
   BYTE_CR  = 13;
   BYTE_LF  = 10;
 
@@ -307,6 +314,38 @@ begin
   end;
 end;
 
+// Der Grund, wenn SpanText nicht den erwarteten Text liefert (AActual).
+// SpanText verlangt SpanFits (StartCol <= Laenge der ersten Zeile, EndCol -
+// 1 <= Laenge der letzten) und liefert sonst still '' - ein Bereich, der so
+// nicht passt, hiess bis Review Woche G05-10 immer "weicht ab ... Menue neu
+// oeffnen", auch wenn der Planer ihn falsch gebaut hatte (Gegen-Review
+// R4-02: jeder Klick scheiterte so). Liest der Bereich tolerant
+// (uRdxCodeMap.RangeText, wie die Planer Expected bauen) genau den
+// erwarteten Text, ist der Puffer unveraendert und der Bereich der Fehler:
+// SOffLine. Sonst weicht der Puffer ab: SDiffers samt Stelle.
+function MismatchReason(const AView: TBufferView; const AEdit: TRdxEdit;
+  const AActual: string): string;
+var
+  Map   : TRdxCodeMap;
+  Loose : string;
+  S     : TRefactorSpan;
+begin
+  S := AEdit.Span;
+  if (S.StartCol > Length(AView.Lines[S.StartLine - 1]))
+     or (S.EndCol - 1 > Length(AView.Lines[S.EndLine - 1])) then
+  begin
+    Map := TRdxCodeMap.Create(AView.Lines);
+    try
+      Loose := RangeText(Map, S);
+    finally
+      Map.Free;
+    end;
+    if Loose = AEdit.Expected then
+      Exit(Format(SOffLine, [S.StartLine, S.StartCol, S.EndLine, S.EndCol]));
+  end;
+  Result := SDiffers + DescribeMismatch(AEdit.Expected, AActual);
+end;
+
 // Eine Ersetzung pruefen und in Bytes umrechnen.
 function PlanOne(const AView: TBufferView; const AEdit: TRdxEdit;
   out AOut: TRdxByteEdit; out AError: string): Boolean;
@@ -331,7 +370,7 @@ begin
   Actual := TRefactorInfoBuilder.SpanText(AView.Lines, AEdit.Span);
   if Actual <> AEdit.Expected then
   begin
-    AError := SDiffers + DescribeMismatch(AEdit.Expected, Actual);
+    AError := MismatchReason(AView, AEdit, Actual);
     Exit;
   end;
   // 2) Byte-Offsets aus demselben Puffer; der Ausschnitt muss den

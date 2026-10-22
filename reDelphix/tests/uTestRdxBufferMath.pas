@@ -36,6 +36,9 @@ type
     [Test] procedure Plan_NewTextGetsBufferEol;
     [Test] procedure Plan_EmptyExpected_Rejected;
     [Test] procedure Plan_EmptyBuffer_Rejected;
+    // Review Woche G05-10: ein Bereich hinter dem Zeilenende ist ein
+    // Fehler der Hilfe, kein veralteter Puffer
+    [Test] procedure Plan_SpanOffLine_NamesPlannerError;
     // Nit 8: SmallInt-Spalten der Editor-Markierung
     [Test] procedure EditorColumn_AsciiLimit;
     [Test] procedure EditorColumn_MultiByteLimit;
@@ -222,6 +225,39 @@ begin
   Assert.IsFalse(PlanByteEdits(nil, [Edit(1, 1, 2, 'a', 'b')], Plan, Err));
   Assert.IsTrue(Pos('0 Zeilen', Err) > 0, Err);
   Assert.AreEqual<Integer>(0, Length(Plan));
+end;
+
+procedure TTestRdxBufferMath.Plan_SpanOffLine_NamesPlannerError;
+var
+  B    : TBytes;
+  E    : TRdxEdit;
+  Plan : TArray<TRdxByteEdit>;
+  Err  : string;
+begin
+  // Der Rumpf hinter 'if A then' und einer LEEREN Zeile, gebaut wie die
+  // Planer Expected bauen (RangeText): SpanText verlangt StartCol <= Laenge
+  // der ersten Zeile und liefert hier ''. Der Puffer ist unveraendert - der
+  // Grund nennt den Bereich, nicht "weicht ab ... Menue neu oeffnen" (bis
+  // Review Woche G05-10 hiess es immer so, Gegen-Review R4-02).
+  B := Bytes('  if A then'#13#10#13#10'    Foo;');
+  E.Span := TRefactorSpan.Make('t', 2, 1, 3, 9);
+  E.Expected := #10'    Foo;';
+  E.NewText := 'x';
+  Assert.IsFalse(PlanByteEdits(B, [E], Plan, Err), 'nicht geschrieben');
+  Assert.IsTrue(Pos('hinter dem Zeilenende', Err) > 0, Err);
+  Assert.IsTrue(Pos('Fehler der Hilfe', Err) > 0, Err);
+  Assert.IsTrue(Pos('weicht vom Stand', Err) = 0, Err);
+  // Hinter dem Ende der letzten Zeile ebenso.
+  E.Span := TRefactorSpan.Make('t', 1, 3, 3, 20);
+  E.Expected := 'if A then'#10#10'    Foo;';
+  Assert.IsFalse(PlanByteEdits(B, [E], Plan, Err));
+  Assert.IsTrue(Pos('hinter dem Zeilenende', Err) > 0, Err);
+  // Gegenprobe: derselbe Bereich mit anderem Erwartungstext - der Puffer
+  // weicht ab, der alte Grund bleibt.
+  E.Span := TRefactorSpan.Make('t', 2, 1, 3, 9);
+  E.Expected := #10'    Bar;';
+  Assert.IsFalse(PlanByteEdits(B, [E], Plan, Err));
+  Assert.IsTrue(Pos('weicht vom Stand beim Menueaufbau ab', Err) > 0, Err);
 end;
 
 procedure TTestRdxBufferMath.EditorColumn_AsciiLimit;
