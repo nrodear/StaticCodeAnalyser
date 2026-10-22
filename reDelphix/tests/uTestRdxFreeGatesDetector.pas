@@ -5,7 +5,8 @@ unit uTestRdxFreeGatesDetector;
 // Sperren, die im Laeufer bzw. in der Tabelle sitzen und den Quellstellen-
 // Dienst (Resolver) brauchen - deshalb nur Delphi (reDelphix.Test), nicht
 // im FPC-Pruefstand (dort loest der Stub-Resolver nichts auf). Die reinen
-// Textteile pruefen uTestRdxFreeTypes (DeclaresValueType mit Zeiger) und
+// Textteile pruefen uTestRdxFreeTypes (TRdxTypeProof.DeclaresNonClassType
+// mit Zeiger; bis zur Folgewelle A4 TRdxSimpleFixes.DeclaresValueType) und
 // die Korpus-Harness der Charge (die Sperr-Funktionen woertlich unter FPC).
 //   * SCA085 bekommt die Typ-Sperre von SCA139 (R2-01/R3-01): Zeiger auf
 //     ein object mit eigenem Free (mORMot), eine Klasse mit eigener Free
@@ -231,8 +232,9 @@ end;
 procedure TTestRdxFreeGatesDetector.Sca139_PointerAlias_NoHelp;
 begin
   // 'PFoo = ^TFoo' in dieser Unit, TFoo aus einer anderen: bis Charge FB
-  // wertete DeclaresValueType den Zeiger nicht (keine eigene Free in der
-  // Unit) - FreeAndNil(FFoo) haette angeboten werden.
+  // wertete die Typ-Sperre (damals DeclaresValueType, heute
+  // TRdxTypeProof.DeclaresNonClassType) den Zeiger nicht (keine eigene Free
+  // in der Unit) - FreeAndNil(FFoo) haette angeboten werden.
   AssertNoHelp(HolderUnit('  PFoo = ^TFoo;', 'FFoo: PFoo;', 'FFoo.Free;'),
     fkFreeWithoutNil, 'kein Objekt');
 end;

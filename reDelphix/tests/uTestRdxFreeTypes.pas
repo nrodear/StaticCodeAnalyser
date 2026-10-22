@@ -82,8 +82,9 @@ const
     '  PMy = PFoo;', '  PFoo = ^TFoo;', '  PDist = type ^TFoo;',
     '  TOwn = TObj;', '  TObj = class', '  end;');
 begin
-  // Gegen den ersten Stand der Charge (3d753de6) rot: DeclaresValueType las
-  // nur das erste Wort hinter '=' - 'tb', 'pfoo', 'type'.
+  // Gegen den ersten Stand der Charge (3d753de6) rot: die Sperre (damals
+  // DeclaresValueType) las nur das erste Wort hinter '=' - 'tb', 'pfoo',
+  // 'type'.
   Assert.IsTrue(NonClassTypeIn(TYPES, 'ta'), 'Alias auf einen Record der Unit');
   Assert.IsTrue(NonClassTypeIn(TYPES, 'pmy'), 'Alias auf einen Zeiger der Unit');
   Assert.IsTrue(NonClassTypeIn(TYPES, 'pdist'), 'eigener Zeigertyp (type ^)');
