@@ -35,6 +35,12 @@ unit uTestRdxTextKit;
 //   * uTestRdxMagicGuards.FixText - plant und schreibt wie Apply, meldet
 //     ein Scheitern beim Schreiben aber als 'Schreiben: ', getrennt vom
 //     Grund des Planers ('Plan: ').
+// Seit der Review Woche G08-14 kommen InProc (die Unit u mit Routine P)
+// und NewMap (die Code-Sicht samt ihren Zeilen) dazu. Was einen Planertyp
+// oder die SQL-Vorlage im Kopf nennt (PlanOf der try-Tests, Lit/Req/Ok/
+// AssertRefused der SQL-Tests), bleibt in seiner Testunit: das Kit bindet
+// nur, was uRdxBufferMath ohnehin mitbringt - der Pruefstand uebersetzt es
+// fuer JEDE Testunit, die es nennt.
 // Die Temp-Verzeichnisse der Testunits (FreshDir, FreshRoot, TempDir)
 // binden nur noch ihren Vorsatz (rdx_fa_, rdx_q14_, ...) - die Pfade unter
 // TEMP bleiben, wie die Kopfkommentare der Testunits sie nennen.
@@ -42,6 +48,7 @@ unit uTestRdxTextKit;
 interface
 
 uses
+  uRdxCodeMap,      // TRdxCodeMap (NewMap; ohnehin ueber uRdxBufferMath gebunden)
   uRdxBufferMath;   // TRdxEdit
 
 // Zeilen mit CRLF verbunden, ohne Zeilenende hinter der letzten; [] gibt
@@ -64,6 +71,19 @@ function Apply(const ASource: string;
   const AEdits: array of TRdxEdit): string; overload;
 // Dasselbe fuer eine einzelne Ersetzung.
 function Apply(const ASource: string; const AEdit: TRdxEdit): string; overload;
+// Eine Unit u mit Routine P; ALines ist ihr Rumpf (ab Zeile 6: 'unit u;',
+// 'interface', 'implementation', 'procedure P;', 'begin' davor, 'end;',
+// 'end.' dahinter). Bis zur Review Woche G08-14 stand sie gleichlautend in
+// uTestRdxTryFixes, uTestRdxTryGates, uTestRdxCleanupFixes,
+// uTestRdxFlowFixes und uTestRdxRaiseFixes; andere Formen (Unit t,
+// Variablenteil, ohne interface) bleiben in ihrer Testunit.
+function InProc(const ALines: array of string): string;
+// Die Code-Sicht auf ASource, die ihre Zeilen selbst haelt: Free gibt
+// beide frei. Die Map LEIHT ihre Zeilen (uRdxCodeMap, LEBENSDAUER) - die
+// Huelle 'TStringList, dann TRdxCodeMap, beide im finally' stand bis zur
+// Review Woche G08-14 in jeder Testunit, die einen Planer auf Text ruft.
+// Ein einziges Objekt: kein zweites vor dem try (G01-17).
+function NewMap(const ASource: string): TRdxCodeMap;
 // Die erste Zeile (1-basiert), die AText enthaelt; 0 ohne Treffer. Zeilen
 // wie TStringList.Text (CRLF, LF, CR).
 function LineOf(const ASource, AText: string): Integer;
@@ -84,7 +104,13 @@ function TempName(const APrefix, ASuffix: string): string;
 // eigen je Aufruf: parallele oder abgebrochene Laeufe teilen keine Dateien
 // (Review R6-07). Abraeumen mit RemoveTree.
 function NewTempDir(const APrefix: string): string;
-// Loescht den Baum ADir (mit Trenner) samt Inhalt.
+// Loescht den Baum ADir (mit Trenner) samt Inhalt - nur ein eigenes
+// Verzeichnis der Tests: ADir muss unter TEMP liegen und sein erster Teil
+// darunter mit 'rdx_' beginnen (wie jeder Vorsatz von NewTempDir/
+// TempName); sonst scheitert der Test, und nichts wird geloescht. Bis zur
+// Review Woche G06-31 loeschte RemoveTree jeden Pfad - eine falsch
+// abgeleitete Wurzel (ParentDir-Kette in uTestRdxMagicFix) haette TEMP
+// selbst geleert, ein leerer Pfad das aktuelle Verzeichnis.
 procedure RemoveTree(const ADir: string);
 
 implementation
@@ -140,6 +166,43 @@ end;
 function Apply(const ASource: string; const AEdit: TRdxEdit): string;
 begin
   Result := Apply(ASource, [AEdit]);
+end;
+
+function InProc(const ALines: array of string): string;
+begin
+  Result := Join(['unit u;', 'interface', 'implementation', 'procedure P;',
+    'begin']) + #13#10 + Join(ALines) + #13#10 + Join(['end;', 'end.']);
+end;
+
+type
+  // Die Map aus NewMap: haelt ihre Zeilen selbst.
+  TOwnLinesMap = class(TRdxCodeMap)
+  private
+    FOwnLines : TStringList;
+  public
+    constructor CreateFor(const ASource: string);
+    destructor Destroy; override;
+  end;
+
+constructor TOwnLinesMap.CreateFor(const ASource: string);
+begin
+  // Scheitert hier etwas, ruft der Konstruktor Destroy - das gibt die
+  // Zeilen frei.
+  FOwnLines := TStringList.Create;
+  FOwnLines.Text := ASource;
+  inherited Create(FOwnLines);
+end;
+
+destructor TOwnLinesMap.Destroy;
+begin
+  inherited Destroy;
+  // Erst nach der Map: sie leiht die Zeilen.
+  FOwnLines.Free;
+end;
+
+function NewMap(const ASource: string): TRdxCodeMap;
+begin
+  Result := TOwnLinesMap.CreateFor(ASource);
 end;
 
 function LineOf(const ASource, AText: string): Integer;
@@ -204,7 +267,24 @@ begin
   ForceDirectories(Result);
 end;
 
-procedure RemoveTree(const ADir: string);
+// True, wenn ADir ein eigenes Verzeichnis der Tests ist: TEMP\rdx_..\
+// (TEMP gesetzt, kein '..' im Rest).
+function IsOwnTempDir(const ADir: string): Boolean;
+var
+  Temp, Rest : string;
+begin
+  Result := False;
+  Temp := GetEnvironmentVariable('TEMP');
+  if Temp = '' then Exit;
+  Temp := IncludeTrailingPathDelimiter(Temp);
+  if not SameText(Copy(ADir, 1, Length(Temp)), Temp) then Exit;
+  Rest := Copy(ADir, Length(Temp) + 1, MaxInt);
+  Result := (Length(Rest) > 4) and SameText(Copy(Rest, 1, 4), 'rdx_')
+    and (Pos('..', Rest) = 0);
+end;
+
+// Der Lauf von RemoveTree, nach der Pruefung.
+procedure RemoveTreeBelow(const ADir: string);
 var
   SR : TSearchRec;
 begin
@@ -214,7 +294,7 @@ begin
       if (SR.Name = '.') or (SR.Name = '..') then
         Continue;
       if (SR.Attr and faDirectory) <> 0 then
-        RemoveTree(ADir + SR.Name + PathDelim)
+        RemoveTreeBelow(ADir + SR.Name + PathDelim)
       else
         DeleteFile(ADir + SR.Name);
     until FindNext(SR) <> 0;
@@ -222,6 +302,13 @@ begin
     FindClose(SR);
   end;
   RemoveDir(ADir);
+end;
+
+procedure RemoveTree(const ADir: string);
+begin
+  Assert.IsTrue(IsOwnTempDir(ADir),
+    'RemoveTree loescht nur unter TEMP' + PathDelim + 'rdx_*: ' + ADir);
+  RemoveTreeBelow(ADir);
 end;
 
 end.

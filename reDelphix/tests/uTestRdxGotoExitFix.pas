@@ -394,48 +394,33 @@ begin
   Result := DetectSource('rdx_goto_', ASource, fkGotoStatement, RunDetector);
 end;
 
-// Die Hilfe fuer den ersten Fund des Detektors, so wie die Tabelle sie ruft
-// (Adapter).
+// Die Hilfe fuer den ersten Fund des Detektors ueber den Einstieg des
+// Anbieters (uTestRdxDetectorKit.PlanFixIn: TRdxFixTable.FixFor mit dem
+// Quellstellen-Dienst; bis zur Review Woche G06 eine eigene Kopie mit
+// APlaces = nil - der Adapter braucht ihn nicht).
 function PlanFirst(const ASource: string; out ASeen: TSeen): TRdxFixOutcome;
 var
   Seen : TArray<TSeen>;
-  SL   : TStringList;
-  F    : TLeakFinding;
 begin
   Seen := Detect(ASource);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet einen Fund');
   ASeen := Seen[0];
-  SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, fkGotoStatement);
-  try
-    SL.Text := ASource;
-    Result := TRdxFixTable.FixFor(nil, SL, F, nil);
-  finally
-    F.Free;
-    SL.Free;
-  end;
+  Result := PlanFixIn(ASource, 't.pas', fkGotoStatement, ASeen);
+end;
+
+// Dasselbe in der Form von TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := Detect(ASource);
 end;
 
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt.
+// schweigt - ueber den Einstieg des Anbieters
+// (uTestRdxDetectorKit.FixAllWith, TRdxFixTable.FixFor; bis zur Review
+// Woche G06 eine eigene Schleife).
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass : Integer;
-  O    : TRdxFixOutcome;
-  S    : TSeen;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    if Length(Detect(Result)) = 0 then
-      Exit;
-    O := PlanFirst(Result, S);
-    Assert.IsTrue(O.Enabled, O.Reason);
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Result := FixAllWith(ASource, fkGotoStatement, DetectKind);
 end;
 
 procedure TTestRdxGotoExitDetector.Adapter_PlansExitWithoutBehaviorChange;
@@ -464,10 +449,11 @@ var
   O  : TRdxFixOutcome;
 begin
   SL := TStringList.Create;
-  // Der Fund zeigt auf Zeile 8, doch dort steht kein 'goto'.
-  F := TLeakFinding.New('t.pas', '', GOTO_LINE + 1, 'x (col 3).',
-    fkGotoStatement);
+  F := nil;
   try
+    // Der Fund zeigt auf Zeile 8, doch dort steht kein 'goto'.
+    F := TLeakFinding.New('t.pas', '', GOTO_LINE + 1, 'x (col 3).',
+      fkGotoStatement);
     SL.Text := Wrap(['  if A then goto Fin;', '  Work;', 'Fin:']);
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
@@ -486,8 +472,9 @@ var
   O  : TRdxFixOutcome;
 begin
   SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', GOTO_LINE, 'goto', fkGotoStatement);
+  F := nil;
   try
+    F := TLeakFinding.New('t.pas', '', GOTO_LINE, 'goto', fkGotoStatement);
     SL.Text := Wrap(['  if A then goto Fin;', '  Work;', 'Fin:']);
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally

@@ -214,8 +214,9 @@ begin
   Result := 0;
   AFirst := '';
   Path := WriteTemp(ASource);
-  Results := TObjectList<TLeakFinding>.Create(True);
+  Results := nil;
   try
+    Results := TObjectList<TLeakFinding>.Create(True);
     Parser := TParser2.Create;
     try
       Root := Parser.ParseFile(Path);
@@ -1071,8 +1072,9 @@ var
 begin
   Src  := WithUses(CHAIN, FPC_USES);
   Path := WriteTemp(Src);
-  Places := TSourcePlaces.Create;
+  Places := nil;
   try
+    Places := TSourcePlaces.Create;
     Assert.IsTrue(Places.Open(Path));
     Assert.AreEqual<Integer>(LineOf(Src, '{$IFDEF FPC}'),
       TRdxRecipeRunner.UsesDirectiveLine(Places));
@@ -1082,8 +1084,9 @@ begin
   end;
   Src  := UnitWith(CHAIN);
   Path := WriteTemp(Src);
-  Places := TSourcePlaces.Create;
+  Places := nil;
   try
+    Places := TSourcePlaces.Create;
     Assert.IsTrue(Places.Open(Path));
     Assert.AreEqual<Integer>(0, TRdxRecipeRunner.UsesDirectiveLine(Places),
       'ohne Direktive keine Sperre');

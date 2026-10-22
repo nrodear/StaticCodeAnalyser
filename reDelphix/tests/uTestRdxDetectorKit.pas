@@ -59,18 +59,30 @@ function DetectSource(const APrefix, ASource: string; AKind: TFindingKind;
 // TLeakFinding der Datei AFile, der Quellstellen-Dienst auf demselben Text.
 function PlanFixIn(const ASource, AFile: string; AKind: TFindingKind;
   const ASeen: TSeen): TRdxFixOutcome;
+// Der zweite Eintrag (TRdxFixTable.AlternativeFixFor) fuer EINEN Fund - der
+// Lauf wie PlanFixIn, ohne dessen Handles-Assert (eine Art ohne Zeile gibt
+// den leeren Ausgang, wie der Anbieter). Bis zur Review Woche G07-27 stand
+// er in uTestRdxSimpleFixesDetector (PlanAltFix) kopiert.
+function PlanAltFixIn(const ASource, AFile: string; AKind: TFindingKind;
+  const ASeen: TSeen): TRdxFixOutcome;
 // Dasselbe fuer 't.pas': True mit den Ersetzungen bzw. False mit dem Grund.
 function PlanFix(const ASource: string; AKind: TFindingKind;
   const ASeen: TSeen; out AEdits: TArray<TRdxEdit>;
   out AReason: string): Boolean;
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet (wie der Benutzer es
 // taete) und angewendet wie der Editor (uTestRdxTextKit.Apply), bis der
-// Detektor (ADetect) schweigt.
+// Detektor (ADetect) schweigt. AAlt nimmt statt der Hilfe den zweiten
+// Eintrag (PlanAltFixIn) - fuer die Rundlaeufe der Ausweichwege.
 function FixAllWith(const ASource: string; AKind: TFindingKind;
-  ADetect: TDetectFunc): string;
+  ADetect: TDetectFunc; AAlt: Boolean = False): string;
 // Der erste Fund muss abgelehnt werden, mit AReasonPart im Grund.
 procedure AssertNoHelpWith(const ASource: string; AKind: TFindingKind;
   const AReasonPart: string; ADetect: TDetectFunc);
+// Wie AssertNoHelpWith, aber fuer den Fund auf Zeile ALine; ohne Fund dort
+// scheitert der Test (bis zur Review Woche G07-27 in
+// uTestRdxSimpleFixesDetector).
+procedure AssertNoHelpAt(const ASource: string; AKind: TFindingKind;
+  ALine: Integer; const AReasonPart: string; ADetect: TDetectFunc);
 
 implementation
 
@@ -146,28 +158,51 @@ begin
   end;
 end;
 
-function PlanFixIn(const ASource, AFile: string; AKind: TFindingKind;
-  const ASeen: TSeen): TRdxFixOutcome;
+// Der Lauf beider Einstiege: der Fund als TLeakFinding der Datei AFile, der
+// Quellstellen-Dienst auf demselben Text; AAlt waehlt AlternativeFixFor.
+// Alle drei Objekte entstehen im try (Review Woche G01-17: scheitert ein
+// spaeteres Create, raeumt das finally die frueheren ab).
+function PlanEntry(const ASource, AFile: string; AKind: TFindingKind;
+  const ASeen: TSeen; AAlt: Boolean): TRdxFixOutcome;
 var
   SL      : TStringList;
   Places  : TSourcePlaces;
   Finding : TLeakFinding;
 begin
-  Assert.IsTrue(TRdxFixTable.Handles(AKind), 'FixFor kennt die Art');
-  SL := TStringList.Create;
-  Places := TSourcePlaces.Create;
-  Finding := TLeakFinding.New(AFile, '', ASeen.Line, ASeen.Msg, AKind);
+  SL := nil;
+  Places := nil;
+  Finding := nil;
   try
+    SL := TStringList.Create;
+    Places := TSourcePlaces.Create;
+    Finding := TLeakFinding.New(AFile, '', ASeen.Line, ASeen.Msg, AKind);
     Finding.LeakVariant := ASeen.Variant;
     SL.Text := ASource;
     Assert.IsTrue(Places.OpenSource(AFile, ASource), 'OpenSource');
-    Result := TRdxFixTable.FixFor(Places, SL, Finding,
-      TRdxRecipeRunner.UsesNamesOf(Places));
+    if AAlt then
+      Result := TRdxFixTable.AlternativeFixFor(Places, SL, Finding,
+        TRdxRecipeRunner.UsesNamesOf(Places))
+    else
+      Result := TRdxFixTable.FixFor(Places, SL, Finding,
+        TRdxRecipeRunner.UsesNamesOf(Places));
   finally
     Finding.Free;
     Places.Free;
     SL.Free;
   end;
+end;
+
+function PlanFixIn(const ASource, AFile: string; AKind: TFindingKind;
+  const ASeen: TSeen): TRdxFixOutcome;
+begin
+  Assert.IsTrue(TRdxFixTable.Handles(AKind), 'FixFor kennt die Art');
+  Result := PlanEntry(ASource, AFile, AKind, ASeen, False);
+end;
+
+function PlanAltFixIn(const ASource, AFile: string; AKind: TFindingKind;
+  const ASeen: TSeen): TRdxFixOutcome;
+begin
+  Result := PlanEntry(ASource, AFile, AKind, ASeen, True);
 end;
 
 function PlanFix(const ASource: string; AKind: TFindingKind;
@@ -183,13 +218,14 @@ begin
 end;
 
 function FixAllWith(const ASource: string; AKind: TFindingKind;
-  ADetect: TDetectFunc): string;
+  ADetect: TDetectFunc; AAlt: Boolean): string;
 const
   MAX_PASSES = 10;
 var
   Seen   : TArray<TSeen>;
   Edits  : TArray<TRdxEdit>;
   Reason : string;
+  O      : TRdxFixOutcome;
   Pass   : Integer;
 begin
   Result := ASource;
@@ -197,8 +233,15 @@ begin
   begin
     Seen := ADetect(Result, AKind);
     if Length(Seen) = 0 then Exit;
-    Assert.IsTrue(PlanFix(Result, AKind, Seen[0], Edits, Reason),
-      Format('Zeile %d: %s', [Seen[0].Line, Reason]));
+    if AAlt then
+    begin
+      O := PlanAltFixIn(Result, 't.pas', AKind, Seen[0]);
+      Assert.IsTrue(O.Enabled, Format('Zeile %d: %s', [Seen[0].Line, O.Reason]));
+      Edits := O.Edits;
+    end
+    else
+      Assert.IsTrue(PlanFix(Result, AKind, Seen[0], Edits, Reason),
+        Format('Zeile %d: %s', [Seen[0].Line, Reason]));
     Result := Apply(Result, Edits);
   end;
   Assert.Fail(Format('der Detektor meldet nach %d Runden noch', [MAX_PASSES]));
@@ -215,6 +258,25 @@ begin
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet');
   Assert.IsFalse(PlanFix(ASource, AKind, Seen[0], Edits, Reason), 'keine Hilfe');
   Assert.IsTrue(Pos(AReasonPart, Reason) > 0, Reason);
+end;
+
+procedure AssertNoHelpAt(const ASource: string; AKind: TFindingKind;
+  ALine: Integer; const AReasonPart: string; ADetect: TDetectFunc);
+var
+  Seen   : TArray<TSeen>;
+  S      : TSeen;
+  Edits  : TArray<TRdxEdit>;
+  Reason : string;
+begin
+  Seen := ADetect(ASource, AKind);
+  for S in Seen do
+    if S.Line = ALine then
+    begin
+      Assert.IsFalse(PlanFix(ASource, AKind, S, Edits, Reason), 'keine Hilfe');
+      Assert.IsTrue(Pos(AReasonPart, Reason) > 0, Reason);
+      Exit;
+    end;
+  Assert.Fail(Format('kein Fund auf Zeile %d', [ALine]));
 end;
 
 end.

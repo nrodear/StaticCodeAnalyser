@@ -261,9 +261,10 @@ begin
   // lehnte ab - "Include defs.inc ... auf einem Netzpfad (\\?\C:)", obwohl
   // uRdxFixTable.NetworkPathReason den Pfad (Charge FB) lokal nannte.
   T := NewTree;
-  SL := TStringList.Create;
+  SL := nil;
   Map := nil;
   try
+    SL := TStringList.Create;
     SL.Text := Join(['unit u;', 'interface', 'uses Classes;',
       '{$I defs.inc}', 'implementation', '', 'procedure Dead;', 'begin',
       'end;', '', 'end.']);
@@ -299,9 +300,10 @@ begin
   // Bis Charge B2S-a: FileReason lehnte '\\?\C:\..' als "Netzpfad" ab
   // (uRdxRoutineFixes.IsNetworkPath), IncludeReason ebenso.
   T := NewTree;
-  SL := TStringList.Create;
+  SL := nil;
   Map := nil;
   try
+    SL := TStringList.Create;
     Assert.AreEqual('', TRdxMagicFixes.FileReason(LongPrefix + T.U),
       'kein Projekt im Fenster, kein Netzpfad');
     SL.Text := Join(['unit u;', 'interface', '{$I defs.inc}',

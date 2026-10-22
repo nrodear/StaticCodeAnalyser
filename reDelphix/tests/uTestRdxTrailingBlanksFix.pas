@@ -85,9 +85,10 @@ var
 begin
   Result := '';
   SL := TStringList.Create;
-  Finding := TLeakFinding.New(FILE_NAME, '', ALine, AMessage,
-    fkTrailingWhitespace);
+  Finding := nil;
   try
+    Finding := TLeakFinding.New(FILE_NAME, '', ALine, AMessage,
+      fkTrailingWhitespace);
     SL.Text := ASource;
     O := TRdxFixTable.FixFor(nil, SL, Finding, nil);
     AReason := O.Reason;
@@ -111,37 +112,25 @@ begin
 end;
 
 // Alle Funde des echten Detektors, jede Hilfe auf dem Ausgangstext geplant
-// und zusammen angewendet (die Zeilen ueberlappen nicht). Die Hilfe muss
-// jeden Fund annehmen.
+// (ueber den Einstieg des Anbieters, uTestRdxDetectorKit.PlanFixIn - bis
+// zur Review Woche G06 eine eigene Kopie mit APlaces = nil) und zusammen
+// angewendet (die Zeilen ueberlappen nicht). Die Hilfe muss jeden Fund
+// annehmen.
 function FixAll(const ASource: string): string;
 var
   Seen  : TArray<TSeen>;
   Edits : TArray<TRdxEdit>;
-  SL    : TStringList;
-  F     : TLeakFinding;
   O     : TRdxFixOutcome;
   i     : Integer;
 begin
   Seen := Detect(ASource);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet');
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    SetLength(Edits, Length(Seen));
-    for i := 0 to High(Seen) do
-    begin
-      F := TLeakFinding.New(FILE_NAME, '', Seen[i].Line, Seen[i].Msg,
-        fkTrailingWhitespace);
-      try
-        O := TRdxFixTable.FixFor(nil, SL, F, nil);
-      finally
-        F.Free;
-      end;
-      Assert.IsTrue(O.Enabled, Seen[i].Msg + ' / ' + O.Reason);
-      Edits[i] := O.Edits[0];
-    end;
-  finally
-    SL.Free;
+  SetLength(Edits, Length(Seen));
+  for i := 0 to High(Seen) do
+  begin
+    O := PlanFixIn(ASource, FILE_NAME, fkTrailingWhitespace, Seen[i]);
+    Assert.IsTrue(O.Enabled, Seen[i].Msg + ' / ' + O.Reason);
+    Edits[i] := O.Edits[0];
   end;
   Result := Apply(ASource, Edits);
 end;

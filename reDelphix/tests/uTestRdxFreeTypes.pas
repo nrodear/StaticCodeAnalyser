@@ -36,25 +36,20 @@ implementation
 uses
   System.Classes,
   uRdxCodeMap, uRdxTypeProof,
-  uTestRdxTextKit;   // Join
+  uTestRdxTextKit;   // Join, NewMap
 
 // DeclaresNonClassType(ATypeName) in einer Unit mit den Typen ATypes.
 function NonClassTypeIn(const ATypes: array of string;
   const ATypeName: string): Boolean;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
 begin
-  SL := TStringList.Create;
-  Map := nil;
+  Map := NewMap(Join(['unit u;', 'interface', 'type']) + #13#10
+    + Join(ATypes) + #13#10 + Join(['implementation', 'end.']));
   try
-    SL.Text := Join(['unit u;', 'interface', 'type']) + #13#10 + Join(ATypes)
-      + #13#10 + Join(['implementation', 'end.']);
-    Map := TRdxCodeMap.Create(SL);
     Result := TRdxTypeProof.DeclaresNonClassType(Map, ATypeName);
   finally
     Map.Free;
-    SL.Free;
   end;
 end;
 
@@ -87,8 +82,9 @@ const
     '  PMy = PFoo;', '  PFoo = ^TFoo;', '  PDist = type ^TFoo;',
     '  TOwn = TObj;', '  TObj = class', '  end;');
 begin
-  // Gegen den ersten Stand der Charge (3d753de6) rot: DeclaresValueType las
-  // nur das erste Wort hinter '=' - 'tb', 'pfoo', 'type'.
+  // Gegen den ersten Stand der Charge (3d753de6) rot: die Sperre (damals
+  // DeclaresValueType) las nur das erste Wort hinter '=' - 'tb', 'pfoo',
+  // 'type'.
   Assert.IsTrue(NonClassTypeIn(TYPES, 'ta'), 'Alias auf einen Record der Unit');
   Assert.IsTrue(NonClassTypeIn(TYPES, 'pmy'), 'Alias auf einen Zeiger der Unit');
   Assert.IsTrue(NonClassTypeIn(TYPES, 'pdist'), 'eigener Zeigertyp (type ^)');

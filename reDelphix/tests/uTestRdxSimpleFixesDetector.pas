@@ -336,27 +336,13 @@ begin
 end;
 
 // Der zweite Eintrag (TRdxFixTable.AlternativeFixFor) fuer EINEN Fund -
-// SCA168 (else mit raise) und SCA020 (raise ENotImplemented).
+// SCA168 (else mit raise) und SCA020 (raise ENotImplemented). Der Lauf des
+// Kits (PlanAltFixIn) fuer 't.pas' - bis zur Review Woche G07-27 stand er
+// hier kopiert.
 function PlanAltFix(const ASource: string; AKind: TFindingKind;
   const ASeen: TSeen): TRdxFixOutcome;
-var
-  SL      : TStringList;
-  Places  : TSourcePlaces;
-  Finding : TLeakFinding;
 begin
-  SL := TStringList.Create;
-  Places := TSourcePlaces.Create;
-  Finding := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, AKind);
-  try
-    SL.Text := ASource;
-    Assert.IsTrue(Places.OpenSource('t.pas', ASource), 'OpenSource');
-    Result := TRdxFixTable.AlternativeFixFor(Places, SL, Finding,
-      TRdxRecipeRunner.UsesNamesOf(Places));
-  finally
-    Finding.Free;
-    Places.Free;
-    SL.Free;
-  end;
+  Result := PlanAltFixIn(ASource, 't.pas', AKind, ASeen);
 end;
 
 // Die Hilfe (FixFor) fuer EINEN Fund als ganzes Ergebnis - mit
@@ -382,24 +368,13 @@ begin
   AssertNoHelpWith(ASource, AKind, AReasonPart, Detect);
 end;
 
-// Wie AssertNoHelp, aber fuer den Fund auf Zeile ALine.
+// Wie AssertNoHelp, aber fuer den Fund auf Zeile ALine (Kit seit der
+// Review Woche G07-27).
 procedure AssertNoHelpAt(const ASource: string; AKind: TFindingKind;
   ALine: Integer; const AReasonPart: string);
-var
-  Seen   : TArray<TSeen>;
-  S      : TSeen;
-  Edits  : TArray<TRdxEdit>;
-  Reason : string;
 begin
-  Seen := Detect(ASource, AKind);
-  for S in Seen do
-    if S.Line = ALine then
-    begin
-      Assert.IsFalse(PlanFix(ASource, AKind, S, Edits, Reason), 'keine Hilfe');
-      Assert.IsTrue(Pos(AReasonPart, Reason) > 0, Reason);
-      Exit;
-    end;
-  Assert.Fail(Format('kein Fund auf Zeile %d', [ALine]));
+  uTestRdxDetectorKit.AssertNoHelpAt(ASource, AKind, ALine, AReasonPart,
+    Detect);
 end;
 
 function CountOf(const APart, AText: string): Integer;
@@ -1454,9 +1429,10 @@ begin
   Seen := Detect(Src, fkBeginEndRequired);
   Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet');
   SL := TStringList.Create;
-  Finding := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
-    fkBeginEndRequired);
+  Finding := nil;
   try
+    Finding := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
+      fkBeginEndRequired);
     SL.Text := Src;
     O := TRdxFixTable.FixFor(nil, SL, Finding, nil);
   finally

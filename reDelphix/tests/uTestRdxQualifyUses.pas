@@ -45,12 +45,19 @@ var
   SL : TStringList;
   S  : string;
 begin
-  Result := TRdxScopeTable.Create;
+  // Die Tabelle erst nach der Liste und mit eigenem Schutz: scheitert
+  // LoadFromStrings, gibt der except-Zweig sie frei (Review Woche G01-17).
   SL := TStringList.Create;
   try
     for S in SCOPES do
       SL.Add(S);
-    Result.LoadFromStrings(SL);
+    Result := TRdxScopeTable.Create;
+    try
+      Result.LoadFromStrings(SL);
+    except
+      Result.Free;
+      raise;
+    end;
   finally
     SL.Free;
   end;

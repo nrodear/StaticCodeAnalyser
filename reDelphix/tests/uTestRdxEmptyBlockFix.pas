@@ -354,22 +354,13 @@ begin
   Result := DetectSource('rdx_s077_', ASource, fkEmptyBlock, RunDetector);
 end;
 
-// Die Hilfe des Adapters fuer den Fund ASeen, so wie die Tabelle sie ruft.
+// Die Hilfe fuer den Fund ASeen ueber den Einstieg des Anbieters
+// (uTestRdxDetectorKit.PlanFixIn: TRdxFixTable.FixFor mit dem
+// Quellstellen-Dienst; bis zur Review Woche G06 eine eigene Kopie mit
+// APlaces = nil - der Adapter braucht ihn nicht).
 function OutcomeFor(const ASource: string; const ASeen: TSeen): TRdxFixOutcome;
-var
-  SL : TStringList;
-  F  : TLeakFinding;
 begin
-  SL := TStringList.Create;
-  F := nil;
-  try
-    F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, fkEmptyBlock);
-    SL.Text := ASource;
-    Result := TRdxFixTable.FixFor(nil, SL, F, nil);
-  finally
-    F.Free;
-    SL.Free;
-  end;
+  Result := PlanFixIn(ASource, 't.pas', fkEmptyBlock, ASeen);
 end;
 
 // Die Hilfe fuer den ERSTEN Fund des Detektors, angewendet wie der Editor.

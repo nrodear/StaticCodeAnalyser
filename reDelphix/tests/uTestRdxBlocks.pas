@@ -7,7 +7,7 @@ unit uTestRdxBlocks;
 //   HeadBefore: Koepfe rueckwaerts (die lokale Routine vor der aeusseren),
 //          ein Wort aus AStops beendet, ein unsicherer Kopf kommt mit
 //          seinem Grund, am Dateianfang False.
-//   Politik uRdxTryFixes.RoutineAround (SCA009, Weitergabe an eine lokale
+//   Politik uRdxHandOver.RoutineAround (SCA009, Weitergabe an eine lokale
 //          Variable: ein unsicherer Kopf wird uebergangen, die Suche geht
 //          davor weiter) und uRdxResultFixes.EnclosingRoutine (SCA196: der
 //          ERSTE unsichere Kopf beendet mit seinem Grund und seiner Zeile) -

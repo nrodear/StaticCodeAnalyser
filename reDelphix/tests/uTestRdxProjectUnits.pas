@@ -92,8 +92,9 @@ var
   U : TRdxProjectUnits;
 begin
   D := FreshDir;
-  U := TRdxProjectUnits.Create;
+  U := nil;
   try
+    U := TRdxProjectUnits.Create;
     Touch(D + 'Mine.pas');
     Touch(D + 'Other.pp');
     Touch(D + 'Form.dfm');
@@ -116,8 +117,9 @@ var
 begin
   Base := FreshDir;
   Abs  := FreshDir;
-  U := TRdxProjectUnits.Create;
+  U := nil;
   try
+    U := TRdxProjectUnits.Create;
     Touch(Base + 'lib' + PathDelim + 'LibUnit.pas');
     Touch(Base + 'deep' + PathDelim + 'x' + PathDelim + 'DeepUnit.pas');
     Touch(Abs + 'AbsUnit.pas');
@@ -148,8 +150,9 @@ begin
   // Wurzel des Laufwerks ('\lib').
   D := FreshDir;
   Old := GetCurrentDir;
-  U := TRdxProjectUnits.Create;
+  U := nil;
   try
+    U := TRdxProjectUnits.Create;
     Touch(D + 'lib' + PathDelim + 'CwdUnit.pas');
     SetCurrentDir(D);
     U.AddSearchPath('lib', '');
@@ -237,8 +240,9 @@ begin
   // (jede Antwort offen, der uses-Eintrag gesperrt). Gegen 9713942b rot.
   D := FreshDir;
   Long := PathDelim + PathDelim + '?' + PathDelim + D;
-  U := TRdxProjectUnits.Create;
+  U := nil;
   try
+    U := TRdxProjectUnits.Create;
     Touch(D + 'Mine.pas');
     U.AddDir(Long);
     Assert.AreEqual('', U.Unreadable, 'lokal, nur lang geschrieben');

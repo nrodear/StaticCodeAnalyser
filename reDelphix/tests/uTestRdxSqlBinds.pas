@@ -43,7 +43,7 @@ uses
   System.SysUtils, System.Classes,
   uRefactorInfo, uRdxRecipes, uRdxCodeMap, uRdxSqlTemplate,
   uRdxSqlFacts,      // SqlConstOf, AddSqlFacts (Review Woche G01-03)
-  uTestRdxTextKit;   // Join, LineOf
+  uTestRdxTextKit;   // Join, LineOf, NewMap
 
 const
   // Elemente eines String-Literals bis Delphi 11 (E2056).
@@ -97,18 +97,13 @@ end;
 // SqlConstOf(AName) an der Zeile mit AUse.
 function ConstIn(const ASource, AName, AUse: string): TRdxSqlConst;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
 begin
-  SL := TStringList.Create;
-  Map := nil;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
     Result := SqlConstOf(Map, AName, LineOf(ASource, AUse));
   finally
     Map.Free;
-    SL.Free;
   end;
 end;
 
@@ -117,7 +112,6 @@ end;
 function FactsBuilt(const ASource, AMarker: string; const AReq: TRdxSqlRequest;
   out ATemplate: TRdxSqlTemplate): Boolean;
 var
-  SL  : TStringList;
   Map : TRdxCodeMap;
   R   : TRdxSqlRequest;
   i   : Integer;
@@ -126,16 +120,12 @@ begin
   SetLength(R.PartLines, Length(R.Parts));
   for i := 0 to High(R.Parts) do
     R.PartLines[i] := LineOf(ASource, AMarker);
-  SL := TStringList.Create;
-  Map := nil;
+  Map := NewMap(ASource);
   try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
     AddSqlFacts(Map, R);
     Result := BuildSqlTemplate(R, ATemplate);
   finally
     Map.Free;
-    SL.Free;
   end;
 end;
 

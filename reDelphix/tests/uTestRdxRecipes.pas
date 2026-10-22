@@ -169,12 +169,19 @@ var
   SL : TStringList;
   i  : Integer;
 begin
-  Result := TRdxScopeTable.Create;
+  // Die Tabelle erst nach der Liste und mit eigenem Schutz: scheitert
+  // LoadFromStrings, gibt der except-Zweig sie frei (Review Woche G01-17).
   SL := TStringList.Create;
   try
     for i := Low(ALines) to High(ALines) do
       SL.Add(ALines[i]);
-    Result.LoadFromStrings(SL);
+    Result := TRdxScopeTable.Create;
+    try
+      Result.LoadFromStrings(SL);
+    except
+      Result.Free;
+      raise;
+    end;
   finally
     SL.Free;
   end;
@@ -1218,8 +1225,9 @@ begin
   Path := FindScopeFile;
   Assert.IsTrue(Path <> '', 'data\unitscopes.txt nicht gefunden');
   T  := TRdxScopeTable.Create;
-  SL := TStringList.Create;
+  SL := nil;
   try
+    SL := TStringList.Create;
     Assert.IsTrue(T.LoadFromFile(Path), Path);
     Assert.IsTrue(T.Resolve('Foundation', fwVcl, Q, Why), Why);
     Assert.AreEqual('Winapi.Foundation', Q);

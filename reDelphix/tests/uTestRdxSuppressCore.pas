@@ -104,10 +104,12 @@ var
 begin
   Assert.AreEqual<Integer>(Length(AKinds), Length(ALines), 'Arten und Zeilen');
   Path := WriteTemp('rdx_supcore_', ASource);
-  Findings := TObjectList<TLeakFinding>.Create(True);
-  Pre := TObjectDictionary<string, TList<TSuppressionMarker>>.Create(
-    [doOwnsValues]);
+  Findings := nil;
+  Pre := nil;
   try
+    Findings := TObjectList<TLeakFinding>.Create(True);
+    Pre := TObjectDictionary<string, TList<TSuppressionMarker>>.Create(
+      [doOwnsValues]);
     for i := 0 to High(AKinds) do
       Findings.Add(TLeakFinding.New(Path, '', ALines[i], 'gesetzt', AKinds[i]));
     TSuppression.CollectMarkersForScan(Path, Pre);

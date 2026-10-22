@@ -364,10 +364,11 @@ begin
   // SCA082 plant nur auf den Zeilen (kein Dienst noetig): aktiv, und den
   // Hinweis setzt die Zeile der Tabelle.
   SL := TStringList.Create;
-  // Die Meldung wie der Detektor sie schreibt (uSuperfluousSemicolon).
-  F := TLeakFinding.New('t.pas', '', 4, 'Double semicolon at column 7 '
-    + '(`;;`) - drop the extra one.', fkSuperfluousSemicolon);
+  F := nil;
   try
+    // Die Meldung wie der Detektor sie schreibt (uSuperfluousSemicolon).
+    F := TLeakFinding.New('t.pas', '', 4, 'Double semicolon at column 7 '
+      + '(`;;`) - drop the extra one.', fkSuperfluousSemicolon);
     SL.Text := Join(['unit u;', 'implementation', 'procedure P;',
       'begin ; ;', 'end;', 'end.']);
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
@@ -407,10 +408,11 @@ begin
   // SCA074, SCA087 und SCA066 (bis Charge R8 leer; Gegen-Review R8,
   // Major 1): woertlich gepinnt. Der Planer plant nur auf den Zeilen.
   SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', 3, '`class(TObject)` at column 10 - drop '
-    + 'the parens (TObject is the implicit base class).',
-    fkExplicitTObjectInheritance);
+  F := nil;
   try
+    F := TLeakFinding.New('t.pas', '', 3, '`class(TObject)` at column 10 - drop '
+      + 'the parens (TObject is the implicit base class).',
+      fkExplicitTObjectInheritance);
     SL.Text := Join(['unit u;', 'type', '  TFoo = class(TObject)', '  end;',
       'implementation', 'end.']);
     O := TRdxFixTable.FixFor(nil, SL, F, nil);

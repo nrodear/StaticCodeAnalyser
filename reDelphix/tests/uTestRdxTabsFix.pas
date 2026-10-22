@@ -95,37 +95,19 @@ begin
   Result := DetectSource('tabs', ASource, fkTabulationCharacter, RunTabs);
 end;
 
-// Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt (ueber TRdxFixTable.FixFor, Adapter PlanTabs).
-function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Seen : TArray<TSeen>;
-  SL   : TStringList;
-  F    : TLeakFinding;
-  O    : TRdxFixOutcome;
-  Pass : Integer;
+// Dasselbe in der Form von TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    Seen := Detect(Result);
-    if Length(Seen) = 0 then Exit;
-    SL := TStringList.Create;
-    F := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
-      fkTabulationCharacter);
-    try
-      SL.Text := Result;
-      O := TRdxFixTable.FixFor(nil, SL, F, nil);
-      Assert.IsTrue(O.Enabled, Format('Zeile %d: %s', [Seen[0].Line, O.Reason]));
-      Result := Apply(Result, O.Edits);
-    finally
-      F.Free;
-      SL.Free;
-    end;
-  end;
-  Assert.Fail('der Detektor meldet nach 10 Runden noch');
+  Result := Detect(ASource);
+end;
+
+// Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
+// schweigt - ueber den Einstieg des Anbieters
+// (uTestRdxDetectorKit.FixAllWith, TRdxFixTable.FixFor; bis zur Review
+// Woche G06 eine eigene Schleife).
+function FixAll(const ASource: string): string;
+begin
+  Result := FixAllWith(ASource, fkTabulationCharacter, DetectKind);
 end;
 
 function InUnit(const ABody: string): string;
@@ -239,8 +221,9 @@ var
   O  : TRdxFixOutcome;
 begin
   SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', 2, TabMsg(1), fkTabulationCharacter);
+  F := nil;
   try
+    F := TLeakFinding.New('t.pas', '', 2, TabMsg(1), fkTabulationCharacter);
     SL.Text := Join(['begin', TAB + 'A;', 'end;']);
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
     Assert.IsTrue(O.Enabled, O.Reason);
@@ -286,9 +269,10 @@ begin
   Seen := Detect(Src);
   Assert.AreEqual<Integer>(1, Length(Seen));
   SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
-    fkTabulationCharacter);
+  F := nil;
   try
+    F := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
+      fkTabulationCharacter);
     SL.Text := Src;
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
     Assert.IsFalse(O.Enabled);

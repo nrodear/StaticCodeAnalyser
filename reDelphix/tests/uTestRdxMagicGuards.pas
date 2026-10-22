@@ -385,9 +385,10 @@ begin
   // ohne Plattenzugriff ab. Den Pfad setzt der Test aus Teilen zusammen (ein
   // Pfad als Literal waere ein SCA016-Fund im Selbstscan).
   T := NewTree;
-  SL := TStringList.Create;
+  SL := nil;
   Map := nil;
   try
+    SL := TStringList.Create;
     for i := 0 to 1 do
     begin
       Unc := PathDelim + PathDelim + 'rdx-b1fd-gibt-es-nicht' + PathDelim
