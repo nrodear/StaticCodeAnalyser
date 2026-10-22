@@ -95,9 +95,8 @@ function PrevCodeRow(const AText: TRdxIntroText; ARow: Integer): Integer;
 // mehrzeiliger String oder Kommentar, kein asm-Block, kein
 // initialization-Abschnitt, keine FPC-Weiche in der Datei, keine
 // Direktive zwischen der Zeile darueber und der Anweisung und keine auf
-// der Anweisungszeile vor dem Literal (mit Block: auf der ganzen Zeile),
-// und bei begin..end keine offene Kommentargrenze und kein
-// Bedingungsausdruck.
+// der Anweisungszeile, und bei begin..end keine offene Kommentargrenze
+// und kein Bedingungsausdruck.
 function TargetAt(const AText: TRdxIntroText; ARow, ACol: Integer;
   const ANameBase: string): TRdxIntroTarget;
 
@@ -363,28 +362,22 @@ begin
   Result := False;
 end;
 
-// Steht auf der Anweisungszeile selbst eine Direktive, die zaehlt? Die
-// Deklaration kommt an den ANFANG der Zeile: eine Direktive vor dem
-// (letzten) ersetzten Literal - '{$ENDIF} X := 42;' - stellte sie in
-// den anderen Zweig der bedingten Uebersetzung (Wochen-Review 2026-10-21:
-// die Spanne von DirectiveBetween endete vor der Anweisungszeile). Mit
-// Block (Plan.Wrap) zaehlt die ganze Zeile: 'end;' kommt hinter ihr Ende,
-// eine Direktive dahinter ('X := 42; {$ENDIF}') laege zwischen begin und
-// end. Geprueft wird die rohe Zeile wie in DirectiveBetween. Vorbedingung:
-// ATarget.Plan.Ok (OldCols hat dann mindestens das Literal am Caret).
+// Steht auf der Anweisungszeile selbst eine Direktive? Die Deklaration
+// kommt an den ANFANG der Zeile: eine Direktive davor - '{$ENDIF} X :=
+// 42;' - stellte sie in den anderen Zweig der bedingten Uebersetzung
+// (Wochen-Review 2026-10-21: die Spanne von DirectiveBetween endete vor
+// der Anweisungszeile); mit Block (Plan.Wrap) kommt 'end;' hinter das
+// Zeilenende, eine Direktive dahinter ('X := 42; {$ENDIF}') laege
+// zwischen begin und end. Es zaehlt die GANZE rohe Zeile, auch ohne Block
+// und hinter dem Literal ('X := 42; {$IFDEF D} Log; {$ENDIF}'): so streng
+// wie das Labor (uVnpEdits.DirectiveBetween bis einschliesslich der
+// Anweisungszeile, Review Woche G10-02) - lieber ablehnen, und die Regel
+// haengt nicht davon ab, wo die Deklaration genau hinkommt (Folgewelle
+// A7, Gleichschritt Labor/Produkt).
 function DirectiveOnStatementRow(const AText: TRdxIntroText;
   const ATarget: TRdxIntroTarget): Boolean;
-var
-  Line : string;
-  Last : Integer;
 begin
-  Line := AText.Lines[ATarget.SourceRow - 1];
-  if not ATarget.Plan.Wrap then
-  begin
-    Last := ATarget.Plan.OldCols[High(ATarget.Plan.OldCols)];
-    Line := Copy(Line, 1, Last - 1);
-  end;
-  Result := LineHasDirective(Line);
+  Result := LineHasDirective(AText.Lines[ATarget.SourceRow - 1]);
 end;
 
 // Der Abschnitt, in dem Zeile ARow liegt ('c' Code, 'a' asm-Block, 'i'
@@ -547,9 +540,9 @@ end;
 // Was die Zeilen um einen (fuer sich gueltigen) Plan verbieten: eine
 // Direktive auf oder unter der Zeile darueber bis zur Anweisung - fuer
 // JEDEN Plan, nicht nur mit Block (Pruefer 2026-10-13, Major 4) -, eine
-// Direktive auf der Anweisungszeile vor dem Literal (mit Block: auf der
-// ganzen Zeile; DirectiveOnStatementRow) und bei begin..end die Grenzen
-// des Blocks (BlockReason). '' oder der Grund.
+// Direktive irgendwo auf der Anweisungszeile (DirectiveOnStatementRow)
+// und bei begin..end die Grenzen des Blocks (BlockReason). '' oder der
+// Grund.
 function PlacementReason(const AText: TRdxIntroText; const ATarget: TRdxIntroTarget;
   const ARows: TRdxIntroRows): string;
 begin
@@ -558,9 +551,9 @@ begin
       + 'steht eine Direktive - in einem anderen Zweig der bedingten '
       + 'Uebersetzung stuende die Deklaration woanders'
   else if DirectiveOnStatementRow(AText, ATarget) then
-    Result := 'auf der Anweisungszeile steht vor dem Literal (mit Block: '
-      + 'irgendwo) eine Direktive - die Deklaration bzw. begin..end landete '
-      + 'in einem anderen Zweig der bedingten Uebersetzung'
+    Result := 'auf der Anweisungszeile steht eine Direktive - die '
+      + 'Deklaration bzw. begin..end koennte in einem anderen Zweig der '
+      + 'bedingten Uebersetzung landen'
   else if ATarget.Plan.Wrap then
     Result := BlockReason(AText, ATarget, ARows)
   else

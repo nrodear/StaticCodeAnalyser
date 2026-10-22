@@ -175,7 +175,7 @@ IOTAEditWriter nach -, nicht nur Offsets.
 | `uTestVnpRefuse` | 9 | begin..end fuer den Zweig, alle Ablehnungen (case-Zweig, Sprungmarke, on-Handler, Zeilenanfang, schon benannt - `var X := 42;` wie `const X = 42;`, Konstanten, Deklarationszeilen, Zeile darueber) |
 | `uTestVnpGuards` | 18 | Schutzregeln aus dem Korpus-A/B und dem Review vom 2026-10-13: Routinen-Koepfe und Eigenschaften (auch Fortsetzungen `message`/`dispid`/`external`/`stdcall` auf der Folgezeile; `Register<Integer>(42)` und `Register; X := 42` sind Anweisungen), Typ-/Sprungmarken-/asm-/exports-/Attribut-Zeilen, typisierte Konstanten, generische Deklarationen, case-Marken hinter `for`, on-Handler ohne Variable, zweite `var`/`const` hinter einer Anweisung, Zeilen, die einen Ausdruck oder eine Liste fortsetzen, Schluesselwoerter hinter Kommentaren, `initialization` darueber, `else` des eigenen `if`, offene Bloecke, Bedingungsausdruck in der Zeile darueber, Direktiven zwischen Zweig und Anweisung, mehrzeilige Strings, Ende des Sync-Blocks |
 | `uTestVnpEdits` | 20 | C1h Ende zu Ende: Demo-Faelle 1-6 (CR LF, LF, BOM, Umlaute und Euro VOR dem Literal), Text-Schnappschuss (Zeilenende je Zeile, BOM in Zeile 1), Zeile darueber, Ziel am Caret, Writer-Vertrag |
-| `uTestVnpContext` | 18 | Zusammenhang ueber Zeilen in `TargetAt` (Review 2026-10-13, Gegen-Review 2026-10-14, Review Woche 2026-10-21): mehrzeilige Strings mit fuenf Quotes und `''' + '''` (Einrueckung des Blocks hinter einem Schliesser), Kommentar- und String-Zustand in einem Lauf, asm-Block (auch Sprungmarke `@end:`), initialization-Abschnitt, FPC-Weiche, Direktive auch ohne Block, auf der Zeile darueber und am Anfang der Anweisungszeile, Zeile darueber ab ihrem Kommentar-Zustand, `*)` in Spalte 1, Kommentargrenzen eines begin..end, Bedingungsausdruck mit Armen auf eigenen Zeilen, Zeilenenden je Zeile, Vorbedingung von `IntroduceEdits` |
+| `uTestVnpContext` | 18 | Zusammenhang ueber Zeilen in `TargetAt` (Review 2026-10-13, Gegen-Review 2026-10-14, Review Woche 2026-10-21): mehrzeilige Strings mit fuenf Quotes und `''' + '''` (Einrueckung des Blocks hinter einem Schliesser), Kommentar- und String-Zustand in einem Lauf, asm-Block (auch Sprungmarke `@end:`), initialization-Abschnitt, FPC-Weiche, Direktive auch ohne Block, auf der Zeile darueber und auf der Anweisungszeile (auch hinter dem Literal), Zeile darueber ab ihrem Kommentar-Zustand, `*)` in Spalte 1, Kommentargrenzen eines begin..end, Bedingungsausdruck mit Armen auf eigenen Zeilen (auch geschachtelt, else-if-Kette, Bedingung ueber Zeilen), Zeilenenden je Zeile, Vorbedingung von `IntroduceEdits` |
 | `uTestVnpTemplate` | 20 | D1: Template-Code, Template-XML (wie `ifnil.xml`), eigenes Template erkennen, Anweisung loeschen/zurueckschreiben, Modell der Template-Expansion (Annahme D-M3 - in der IDE zu bestaetigen) |
 
 Ohne IDE: `bash VarNameProject/tools/fpc-pruefstand/build.sh` (alle
@@ -501,12 +501,13 @@ abgrenzen kann, lehnt er ab (lieber nichts tun als falschen Code schreiben).
   eigenen Zeilen - `X := if C then` / `A` / `else`, auch `X :=` / `if C
   then` / ...), Abbruch: der Leser geht von der Zweigzeile aufwaerts bis
   zum `if` oder bis eine Zeile eine Anweisung beendet (`;`) bzw. einen
-  Zweig oder Block oeffnet - dann ist das `if` eine Anweisung. Grenze:
-  verteilt sich die Bedingung des Ausdrucks selbst ueber Zeilen (`X := if
-  (A and` / `B) then` / `Foo(1)` / `else` / `Bar(42);`), endet der Gang an
-  `B) then`, das `if` darueber wird nicht erreicht und der Arm wird wie
-  bei einer if-Anweisung umschlossen - das Ergebnis uebersetzt nicht (kein
-  stiller Fehler). In
+  Block oder einen do-/of-Zweig oeffnet - dann ist das `if` eine
+  Anweisung. Eine Zeile, die mit `then`/`else` endet, haelt den Gang nicht
+  an (`X := if A then 1 else` / `if B then`, die else-if-Kette `X := if A
+  then 1` / `else if B then`, auch eine Bedingung ueber Zeilen `X := if
+  (A and` / `B) then` / `Foo(1)` / `else`), ausser sie beginnt mitten in
+  der Zeile eine if-Anweisung (`Z := 1; if C then`) - Folgewelle A7, wie
+  reDelphix. In
   reDelphix soll der vorhandene
   Block-Planer (SCA101, WrapInBlock) einspringen. D1 lehnt Zweige ohne
   begin ganz ab, ebenso Zeilen mit `|` (Trennzeichen des Templates) und
