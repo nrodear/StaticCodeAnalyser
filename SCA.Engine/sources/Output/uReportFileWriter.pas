@@ -19,7 +19,10 @@ unit uReportFileWriter;
 // Ein Abbruch waehrend des Schreibens laesst das Ziel unangetastet
 // (alter Report oder gar keiner - nie ein halber); zurueck bleibt
 // hoechstens eine .sca-tmp, die der naechste erfolgreiche Lauf
-// ueberschreibt.
+// ueberschreibt. Der Tausch selbst (Temp-Name, MoveFileEx, Stream-Trio)
+// liegt seit der Folgewelle des Wochen-Reviews 2026-10-21 in der
+// Common-Blatt-Unit uAtomicFile - auch Quelldateien und profiles.json
+// gehen diesen Weg, und Common darf Output nicht binden.
 //
 // SCHICHTUNG: Output-Unit mit Absicht - Output darf Infrastructure
 // nicht nutzen (Kommentar in uFindingCopyText.BuildJiraMini), also
@@ -91,38 +94,8 @@ type
 implementation
 
 uses
-  Winapi.Windows;   // MoveFileEx - der atomare Tausch
-
-// Fester Temp-Name statt GUID: zwei gleichzeitige Schreiber auf
-// DASSELBE Ziel sind so oder so ein Konflikt, und der feste Name macht
-// Reste eines abgebrochenen Laufs deterministisch - der naechste
-// erfolgreiche Save desselben Ziels ueberschreibt sie.
-function TempNameFor(const FileName: string): string;
-begin
-  Result := FileName + '.sca-tmp';
-end;
-
-procedure AtomicSwap(const ATemp, AZiel: string);
-// MOVEFILE_REPLACE_EXISTING ersetzt ein vorhandenes Ziel in einem
-// Schritt; MOVEFILE_WRITE_THROUGH laesst den Aufruf erst nach dem
-// physischen Abschluss zurueckkehren. Schlaegt der Tausch fehl, wird
-// die Temp-Datei entfernt und der Fehler gemeldet - ein STILLER
-// Fehlschlag hiesse "Report geschrieben", waehrend auf der Platte der
-// alte liegt (dasselbe Argument, mit dem der BaseDir-Vertrag verworfen
-// wurde).
-var
-  Fehler : DWORD;
-begin
-  if not MoveFileEx(PChar(ATemp), PChar(AZiel),
-       MOVEFILE_REPLACE_EXISTING or MOVEFILE_WRITE_THROUGH) then
-  begin
-    Fehler := GetLastError;
-    System.SysUtils.DeleteFile(ATemp);
-    raise EInOutError.CreateFmt(
-      'Report konnte nicht nach "%s" getauscht werden: %s',
-      [AZiel, SysErrorMessage(Fehler)]);
-  end;
-end;
+  uAtomicFile;   // TempNameFor/Swap - der atomare Tausch (Common-Blatt-
+                 // Unit, auch fuer Quelldateien und profiles.json)
 
 { TReportFileWriter }
 
@@ -162,7 +135,7 @@ begin
     Total := ABuilder.Length
   else
     Total := 0;
-  Temp := TempNameFor(FileName);
+  Temp := TAtomicFile.TempNameFor(FileName);
   Stream := TFileStream.Create(Temp, fmCreate);
   try
     try
@@ -197,7 +170,7 @@ begin
   finally
     Stream.Free;
   end;
-  AtomicSwap(Temp, FileName);
+  TAtomicFile.Swap(Temp, FileName);
 end;
 
 class procedure TReportFileWriter.SaveUtf8WithBom(SL: TStringList;
@@ -209,7 +182,7 @@ begin
   // (Vorher TUTF8Encoding.Create(True) - der Bool-Konstruktor existiert
   // erst seit Delphi 12; TStrings.WriteBOM ist D11-kompatibel und
   // byte-identisch im Output.)
-  Temp := TempNameFor(FileName);
+  Temp := TAtomicFile.TempNameFor(FileName);
   SL.WriteBOM := True;
   try
     SL.SaveToFile(Temp, TEncoding.UTF8);
@@ -217,27 +190,25 @@ begin
     System.SysUtils.DeleteFile(Temp);
     raise;
   end;
-  AtomicSwap(Temp, FileName);
+  TAtomicFile.Swap(Temp, FileName);
 end;
 
 class function TReportFileWriter.BeginAtomic(
   const FileName: string): TFileStream;
 begin
-  Result := TFileStream.Create(TempNameFor(FileName), fmCreate);
+  Result := TAtomicFile.BeginWrite(FileName);
 end;
 
 class procedure TReportFileWriter.CommitAtomic(var AStream: TFileStream;
   const FileName: string);
 begin
-  FreeAndNil(AStream);
-  AtomicSwap(TempNameFor(FileName), FileName);
+  TAtomicFile.Commit(AStream, FileName);
 end;
 
 class procedure TReportFileWriter.RollbackAtomic(var AStream: TFileStream;
   const FileName: string);
 begin
-  FreeAndNil(AStream);
-  System.SysUtils.DeleteFile(TempNameFor(FileName));
+  TAtomicFile.Rollback(AStream, FileName);
 end;
 
 end.

@@ -35,7 +35,7 @@ implementation
 uses
   System.SysUtils, System.Classes, System.IOUtils,
   System.Generics.Collections,   // TList<TSrcLine> (SplitKeepEol)
-  uReportFileWriter;             // BeginAtomic/CommitAtomic (WriteBack) -
+  uAtomicFile;                   // BeginWrite/Commit/Rollback (WriteBack) -
                                  // derselbe Temp+MoveFileEx-Tausch wie fuer
                                  // die Reports, keine zweite Kopie
 
@@ -236,7 +236,7 @@ end;
 
 procedure SchreibeAtomar(const AFileName: string; const ABytes: TBytes);
 // ATOMAR (Review Woche G03-02): erst <Datei>.sca-tmp schreiben, dann per
-// MoveFileEx auf den Namen tauschen (TReportFileWriter, Output). Vorher
+// MoveFileEx auf den Namen tauschen (TAtomicFile, Common). Vorher
 // schrieb TFile.WriteAllBytes direkt - fmCreate kuerzt die Datei zuerst,
 // ein Abbruch danach (Platte voll, Netzlaufwerk weg, Sperre mitten im
 // Schreiben) liess eine leere oder abgeschnittene Quelldatei zurueck,
@@ -247,16 +247,16 @@ procedure SchreibeAtomar(const AFileName: string; const ABytes: TBytes);
 var
   Stream : TFileStream;
 begin
-  Stream := TReportFileWriter.BeginAtomic(AFileName);
+  Stream := TAtomicFile.BeginWrite(AFileName);
   try
     if Length(ABytes) > 0 then
       Stream.WriteBuffer(ABytes[0], Length(ABytes));
-    TReportFileWriter.CommitAtomic(Stream, AFileName);
+    TAtomicFile.Commit(Stream, AFileName);
   except
     // Schreibfehler: Temp weg, Ziel unberuehrt. Scheitert erst der
-    // Tausch, hat CommitAtomic den Stream schon freigegeben (nil) und
-    // AtomicSwap die Temp-Datei entfernt - Rollback ist dann ein No-Op.
-    TReportFileWriter.RollbackAtomic(Stream, AFileName);
+    // Tausch, hat Commit den Stream schon freigegeben (nil) und Swap
+    // die Temp-Datei entfernt - Rollback ist dann ein No-Op.
+    TAtomicFile.Rollback(Stream, AFileName);
     raise;
   end;
 end;

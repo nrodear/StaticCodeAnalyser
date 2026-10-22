@@ -15,7 +15,7 @@ unit uIgnoreList;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Masks, System.IOUtils;
+  System.SysUtils, System.Classes, System.Masks;
 
 type
   TIgnoreList = class
@@ -67,6 +67,9 @@ implementation
 
 // noinspection-file CanBeClassMethod, CanBeStrictPrivate, ConcatToFormat, EmptyExcept, FreeWithoutNil, GroupedDeclaration, IfElseBegin, MultipleExit, NestedTry, PublicMemberWithoutDoc, RedundantJump, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
+uses
+  uScaConfigDir;   // ScaConfigDir - die EINE Formel fuer die Ablage (G05-21)
 
 function MatchesMaskSafe(const AName, APattern: string): Boolean;
 // MatchesMask mit dem Schutz, den die Schwesterunit uPathOverrides
@@ -128,14 +131,10 @@ end;
 class function TIgnoreList.ConfigDir: string;
 // Gemeinsames Verzeichnis fuer Ignore-Liste UND Log-Datei.
 // %APPDATA%\StaticCodeAnalyser\  (Fallback: %TEMP%\StaticCodeAnalyser\)
-var
-  AppData: string;
+// Die Formel steht in uScaConfigDir - dieselbe fuer uRuleCatalog und
+// uRdxText (Review Woche G05-21).
 begin
-  AppData := GetEnvironmentVariable('APPDATA');
-  if AppData = '' then
-    AppData := TPath.GetTempPath;
-  Result := IncludeTrailingPathDelimiter(AppData) + 'StaticCodeAnalyser' +
-            PathDelim;
+  Result := ScaConfigDir;
 end;
 
 class function TIgnoreList.LogFilePath: string;
