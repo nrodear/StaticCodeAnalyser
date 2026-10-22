@@ -449,10 +449,11 @@ var
   O  : TRdxFixOutcome;
 begin
   SL := TStringList.Create;
-  // Der Fund zeigt auf Zeile 8, doch dort steht kein 'goto'.
-  F := TLeakFinding.New('t.pas', '', GOTO_LINE + 1, 'x (col 3).',
-    fkGotoStatement);
+  F := nil;
   try
+    // Der Fund zeigt auf Zeile 8, doch dort steht kein 'goto'.
+    F := TLeakFinding.New('t.pas', '', GOTO_LINE + 1, 'x (col 3).',
+      fkGotoStatement);
     SL.Text := Wrap(['  if A then goto Fin;', '  Work;', 'Fin:']);
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
@@ -471,8 +472,9 @@ var
   O  : TRdxFixOutcome;
 begin
   SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', GOTO_LINE, 'goto', fkGotoStatement);
+  F := nil;
   try
+    F := TLeakFinding.New('t.pas', '', GOTO_LINE, 'goto', fkGotoStatement);
     SL.Text := Wrap(['  if A then goto Fin;', '  Work;', 'Fin:']);
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally

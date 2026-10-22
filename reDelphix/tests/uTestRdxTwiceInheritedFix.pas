@@ -290,8 +290,9 @@ var
   Main, A : TRdxFixOutcome;
 begin
   SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', HEAD_LINE, 'x', fkTwiceInheritedCalls);
+  F := nil;
   try
+    F := TLeakFinding.New('t.pas', '', HEAD_LINE, 'x', fkTwiceInheritedCalls);
     SL.Text := Wrap(['  inherited;', '  Inherited;']);
     Main := TRdxFixTable.FixFor(nil, SL, F, nil);
     A := TRdxFixTable.AlternativeFixFor(nil, SL, F, nil);
@@ -318,9 +319,10 @@ var
   A  : TRdxFixOutcome;
 begin
   SL := TStringList.Create;
-  // Der Fund zeigt auf Zeile 5, doch dort steht das begin.
-  F := TLeakFinding.New('t.pas', '', HEAD_LINE + 1, 'x', fkTwiceInheritedCalls);
+  F := nil;
   try
+    // Der Fund zeigt auf Zeile 5, doch dort steht das begin.
+    F := TLeakFinding.New('t.pas', '', HEAD_LINE + 1, 'x', fkTwiceInheritedCalls);
     SL.Text := Wrap(['  inherited;', '  Inherited;']);
     A := TRdxFixTable.AlternativeFixFor(nil, SL, F, nil);
   finally
@@ -374,9 +376,10 @@ begin
   Seen := Detect(Src);
   Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet das Beispiel');
   SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
-    fkTwiceInheritedCalls);
+  F := nil;
   try
+    F := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
+      fkTwiceInheritedCalls);
     SL.Text := Src;
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally

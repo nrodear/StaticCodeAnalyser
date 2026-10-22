@@ -80,8 +80,9 @@ var
   F  : TLeakFinding;
 begin
   SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', ALine, AMessage, fkReversedForRange);
+  F := nil;
   try
+    F := TLeakFinding.New('t.pas', '', ALine, AMessage, fkReversedForRange);
     SL.Text := ASource;
     if AAlt then
       Result := TRdxFixTable.AlternativeFixFor(nil, SL, F, nil)

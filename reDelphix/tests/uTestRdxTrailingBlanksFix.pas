@@ -85,9 +85,10 @@ var
 begin
   Result := '';
   SL := TStringList.Create;
-  Finding := TLeakFinding.New(FILE_NAME, '', ALine, AMessage,
-    fkTrailingWhitespace);
+  Finding := nil;
   try
+    Finding := TLeakFinding.New(FILE_NAME, '', ALine, AMessage,
+      fkTrailingWhitespace);
     SL.Text := ASource;
     O := TRdxFixTable.FixFor(nil, SL, Finding, nil);
     AReason := O.Reason;

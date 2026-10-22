@@ -289,9 +289,10 @@ var
   Src     : string;
 begin
   SL := TStringList.Create;
-  Finding := TLeakFinding.New(FILE_NAME, '', ATTR_LINE,
-    '[Ignore] without reason message', fkAttributeIgnoreWithoutReason);
+  Finding := nil;
   try
+    Finding := TLeakFinding.New(FILE_NAME, '', ATTR_LINE,
+      '[Ignore] without reason message', fkAttributeIgnoreWithoutReason);
     Src := InClass(Join(['    [Ignore]', '    procedure Foo;']));
     SL.Text := Src;
     O := TRdxFixTable.FixFor(nil, SL, Finding, nil);

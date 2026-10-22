@@ -221,8 +221,9 @@ var
   O  : TRdxFixOutcome;
 begin
   SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', 2, TabMsg(1), fkTabulationCharacter);
+  F := nil;
   try
+    F := TLeakFinding.New('t.pas', '', 2, TabMsg(1), fkTabulationCharacter);
     SL.Text := Join(['begin', TAB + 'A;', 'end;']);
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
     Assert.IsTrue(O.Enabled, O.Reason);
@@ -268,9 +269,10 @@ begin
   Seen := Detect(Src);
   Assert.AreEqual<Integer>(1, Length(Seen));
   SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
-    fkTabulationCharacter);
+  F := nil;
   try
+    F := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
+      fkTabulationCharacter);
     SL.Text := Src;
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
     Assert.IsFalse(O.Enabled);

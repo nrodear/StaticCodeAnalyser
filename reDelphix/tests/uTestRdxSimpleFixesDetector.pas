@@ -1429,9 +1429,10 @@ begin
   Seen := Detect(Src, fkBeginEndRequired);
   Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet');
   SL := TStringList.Create;
-  Finding := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
-    fkBeginEndRequired);
+  Finding := nil;
   try
+    Finding := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
+      fkBeginEndRequired);
     SL.Text := Src;
     O := TRdxFixTable.FixFor(nil, SL, Finding, nil);
   finally

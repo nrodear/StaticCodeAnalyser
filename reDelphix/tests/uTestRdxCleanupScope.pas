@@ -216,8 +216,9 @@ begin
   AResult := '';
   Bytes := TEncoding.UTF8.GetBytes(ASource);
   Starts := TList<Integer>.Create;
-  SL := TStringList.Create;
+  SL := nil;
   try
+    SL := TStringList.Create;
     SL.Text := ASource;
     LineStartsOf(Bytes, Starts);
     if SplitsPair(LineAt(SL, AEdit.Span.StartLine), AEdit.Span.StartCol)

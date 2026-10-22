@@ -198,9 +198,10 @@ var
 begin
   Assert.AreEqual<Integer>(Length(AKinds), Length(ALines), 'Arten und Zeilen');
   Path := WriteTemp('rdx_nscore_', ASource);
-  Findings := TObjectList<TLeakFinding>.Create(True);
+  Findings := nil;
   Pre := nil;
   try
+    Findings := TObjectList<TLeakFinding>.Create(True);
     Pre := TObjectDictionary<string, TList<TSuppressionMarker>>.Create(
       [doOwnsValues]);
     for i := 0 to High(AKinds) do

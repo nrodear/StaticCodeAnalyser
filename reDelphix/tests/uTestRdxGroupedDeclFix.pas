@@ -181,8 +181,9 @@ var
   O   : TRdxFixOutcome;
 begin
   SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', 2, GMsg(3), fkGroupedDeclaration);
+  F := nil;
   try
+    F := TLeakFinding.New('t.pas', '', 2, GMsg(3), fkGroupedDeclaration);
     SL.Text := Join(['var', '  A, B: Integer;', 'begin']);
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
     Assert.IsTrue(O.Enabled, O.Reason);
@@ -358,8 +359,9 @@ var
   O  : TRdxFixOutcome;
 begin
   SL := TStringList.Create;
-  F := TLeakFinding.New('t.pas', '', 2, GMsg(3), fkGroupedDeclaration);
+  F := nil;
   try
+    F := TLeakFinding.New('t.pas', '', 2, GMsg(3), fkGroupedDeclaration);
     SL.Text := Join(['var', '  A, B: Integer;', 'begin']);
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
     Assert.IsTrue(O.Enabled, O.Reason);
