@@ -1,9 +1,9 @@
 ﻿unit uTestSymbolReferenceIndex;
 
 // Tests fuer TSymbolReferenceIndex - der Cross-Unit-Reference-Index.
-// HINWEIS: seit dem Visibility-Detektor-Refactor liest uVisibilityCheck
-// den Index NICHT mehr (single-file-only). Die Tests bleiben fuer
-// kuenftige Konsumenten und Backwards-Compat erhalten.
+// Konsumenten: uVisibilityCheck (HasExternalRefs winkt extern benutzte
+// Member durch, SCA050-052/107) und uDfmComponentUnused (SCA184) - ein
+// fehlender Eintrag hier ist dort ein FP.
 
 interface
 
@@ -31,6 +31,8 @@ type
     // Bau 2026-10-14: die if-Bedingung steht als 'Obj . Count' im AST
     // (Leerzeichen nach jedem Token) - der Member muss trotzdem zaehlen.
     [Test] procedure Build_IfConditionDottedMember_Indexed;
+    // Review Woche G03-18: ']' / '^' / ')' vor dem Punkt
+    [Test] procedure Build_ExpressionEndBeforeDot_Indexed;
 
     // ---- Case-Insensitivity --------------------------------------------
     [Test] procedure Lookup_IsCaseInsensitive;
@@ -169,6 +171,38 @@ begin
       'Count aus der if-Bedingung muss als Member-Referenz zaehlen');
     Assert.IsFalse(Idx.HasExternalRefs('limit', 'other.pas'),
       'Limit steht ohne Punkt - kein Member');
+  finally
+    Idx.Free;
+    if TFile.Exists(Tmp) then TFile.Delete(Tmp);
+  end;
+end;
+
+procedure TTestSymbolReferenceIndex.Build_ExpressionEndBeforeDot_Indexed;
+// Vor dem Punkt stand nur ein Bezeichner-Ende: 'A[0].Alpha', 'P^.Beta'
+// und 'Make(1).Gamma' fehlten im Index - SCA050-052/107/184 hielten
+// solche Member fuer extern unbenutzt (FP). Gegenprobe: der Bereichs-
+// operator '..' hinter ')' ist kein Member-Zugriff.
+const SRC =
+  'unit u; implementation'#13#10 +
+  'procedure Run;'#13#10 +
+  'var A: TArr; P: PItem; S: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if A[0].Alpha > 1 then Exit;'#13#10 +
+  '  while P^.Beta <> nil do Exit;'#13#10 +
+  '  S := Make(1).Gamma;'#13#10 +
+  '  for S in [Low(A)..Delta] do Exit;'#13#10 +
+  'end;';
+var
+  Idx : TSymbolReferenceIndex;
+  Tmp : string;
+begin
+  Idx := BuildIndexOver(SRC, Tmp);
+  try
+    Assert.IsTrue(Idx.HasExternalRefs('alpha', 'other.pas'), 'A[0].Alpha');
+    Assert.IsTrue(Idx.HasExternalRefs('beta', 'other.pas'), 'P^.Beta');
+    Assert.IsTrue(Idx.HasExternalRefs('gamma', 'other.pas'), 'Make(1).Gamma');
+    Assert.IsFalse(Idx.HasExternalRefs('delta', 'other.pas'),
+      'Low(A)..Delta ist ein Bereich, kein Member');
   finally
     Idx.Free;
     if TFile.Exists(Tmp) then TFile.Delete(Tmp);
