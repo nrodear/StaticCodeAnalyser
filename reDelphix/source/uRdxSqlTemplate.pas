@@ -254,8 +254,6 @@ function SqlPlaceholders(const ASql: string): TArray<string>;
 implementation
 
 uses
-  // Bis Charge B2S-a standen System.SysUtils und uRefactorInfo im
-  // interface - die Schnittstelle braucht sie nicht (Review R3-07).
   System.SysUtils,
   System.StrUtils,    // PosEx
   uRefactorInfo,      // ROLE_TARGET, ROLE_LITERAL, ROLE_OPERAND
@@ -712,7 +710,6 @@ begin
 end;
 
 // Hinter das String-Literal ab AText[i] (ein Quote; '' sind zwei Literale).
-// Seit Charge FB hier oben - CallParts und EscapeCallIn brauchen es.
 procedure SkipLiteral(const AText: string; var i: Integer);
 begin
   Inc(i);
@@ -2645,9 +2642,6 @@ const
   TYPE_KINDS: array[0..3] of string = ('class', 'object', 'interface',
     'dispinterface');
   TYPE_LEADS: array[0..1] of string = ('=', 'packed');
-  // Die Woerter zwischen 'class' und Vorfahrenliste ('class sealed') sind
-  // seit Charge B2S-b uRdxBlocks.CLASS_MODIFIERS (bis dahin hier als
-  // TYPE_MODIFIERS mit demselben Inhalt).
   // Hinter 'record' in einer Typ-Einschraenkung ('<T: record>').
   CONSTRAINT_FOLLOWERS: array[0..2] of string = ('>', ',', ';');
   KW_RECORD = 'record';
@@ -2659,11 +2653,6 @@ function TokWithin(const T, A, B: TRdxToken): Boolean;
 begin
   Result := not TokBefore(T, A) and not TokBefore(B, T);
 end;
-
-// Hat der Typ ab AKind einen Rumpf mit end? Das fragt seit Charge B2S-b
-// uRdxBlocks.TypeHasBody - bis dahin stand die Probe hier als HasTypeBody
-// (dritte Kopie neben uRdxRoutineFixes und uRdxResultFixes; Gegen-Review
-// R5, R5-03).
 
 // Oeffnet T (Schluesselwort, APrev davor) einen Typ mit Rumpf? 'record'
 // immer, ausser als Einschraenkung ('<T: record>'); class, object,
