@@ -716,6 +716,29 @@ function ColumnFromMessage(const AMessage: string): Integer;
 // R3-05).
 function QuotedText(const AText: string; AQuote: Char): string;
 
+// ---- Attributzeilen (Folgewelle des Wochen-Reviews, G09-02: bis dahin
+// las jeder Attribut-Planer den Kopf selbst) ----
+
+// Der Kopf einer Attributzeile ALine: das erste Zeichen hinter dem Einzug
+// ist ein '[' als Code (AOpenCol; 0, wenn nicht - auch, wenn die Zeile in
+// einem Kommentar oder mehrzeiligen String beginnt), dahinter nach
+// Leerraum ein Bezeichner, dessen erstes Zeichen Code ist
+// (ANameFirst..ANameEnd - 1). True, wenn beides steht. Fuer
+// uRdxAttrGapFix (SCA183), uRdxIgnoreReasonFix (SCA179) und - nur das '['
+// - uRdxCategoryArgFix (SCA181: dort steht der Name ohne Leerraum direkt
+// hinter dem '[', wie die Regex des Detektors). uRdxAttrDuplicateFix liest
+// mehrere Gruppen je Zeile mit eigenen Gruenden und bleibt bei seinem Lauf.
+function AttrHeadAt(AMap: TRdxCodeMap; ALine: Integer;
+  out AOpenCol, ANameFirst, ANameEnd: Integer): Boolean;
+// Steht vor dem Attribut ab (ALine, AOpenCol) ein Anker - das Ende der
+// Deklaration davor, ein Abschnittswort, der Beginn eines Typs oder ein
+// anderes Attribut (ATTR_ANCHOR_WORDS)? AAnchor ist das Token davor (Low =
+// '' am Dateianfang). Eine Direktive zwischen AAnchor und dem Element
+// prueft der Aufrufer (DirectiveInLines ab AAnchor.Line). Bis dahin je
+// eine Kopie samt Wortliste in uRdxAttrGapFix und uRdxCategoryArgFix.
+function AttrAnchorOk(AMap: TRdxCodeMap; ALine, AOpenCol: Integer;
+  out AAnchor: TRdxToken): Boolean;
+
 implementation
 
 uses
@@ -1744,6 +1767,49 @@ end;
 function ColumnFromMessage(const AMessage: string): Integer;
 begin
   Result := NumberAfterKey(AMessage, 'at column ');
+end;
+
+{ ---- Attributzeilen ---- }
+
+const
+  // Davor darf eine Attributzeile beginnen: Ende der Deklaration davor,
+  // Abschnittswort, Beginn eines Typs (class, record, ...), anderes
+  // Attribut (AttrAnchorOk).
+  ATTR_ANCHOR_WORDS: array[0..13] of string = (';', ']', 'public', 'private',
+    'protected', 'published', 'automated', 'class', 'record', 'interface',
+    'object', 'type', 'implementation', 'dispinterface');
+
+function AttrHeadAt(AMap: TRdxCodeMap; ALine: Integer;
+  out AOpenCol, ANameFirst, ANameEnd: Integer): Boolean;
+var
+  L     : string;
+  First : Integer;
+begin
+  Result := False;
+  AOpenCol := 0;
+  ANameFirst := 0;
+  ANameEnd := 0;
+  L := AMap.Raw(ALine);
+  First := SkipBlanks(L, 1);
+  if AMap.StartsInside(ALine) or (First > Length(L)) or (L[First] <> '[')
+     or not AMap.IsCode(ALine, First) then
+    Exit;
+  AOpenCol := First;
+  ANameFirst := SkipBlanks(L, First + 1);
+  ANameEnd := ANameFirst;
+  if (ANameFirst > Length(L)) or not IsIdentStart(L[ANameFirst])
+     or not AMap.IsCode(ALine, ANameFirst) then
+    Exit;
+  while (ANameEnd <= Length(L)) and IsIdentChar(L[ANameEnd]) do
+    Inc(ANameEnd);
+  Result := True;
+end;
+
+function AttrAnchorOk(AMap: TRdxCodeMap; ALine, AOpenCol: Integer;
+  out AAnchor: TRdxToken): Boolean;
+begin
+  AAnchor := PrevToken(AMap, ALine, AOpenCol);
+  Result := (AAnchor.Low <> '') and InList(AAnchor.Low, ATTR_ANCHOR_WORDS);
 end;
 
 function QuotedText(const AText: string; AQuote: Char): string;
