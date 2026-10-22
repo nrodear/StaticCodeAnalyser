@@ -316,6 +316,7 @@ begin
   except
     on EStackExhausted do raise;
     on EAbort do raise;
+    // noinspection ExceptionTooGeneral
     // Grenze des Menueaufbaus (Review R1, missed 5): jeder andere Fehler
     // des Readers - auch einer der UTF-8-Dekodierung - kostet nur die
     // Hilfen dieser Datei. Er steht im Protokoll, und die Datei gilt als
