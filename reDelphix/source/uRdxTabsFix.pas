@@ -26,18 +26,14 @@ unit uRdxTabsFix;
 // Tab der Zeile liegt in einem String oder Kommentar (der Fund bliebe
 // stehen). Nur die gemeldete Zeile - der Massenmodus kommt spaeter.
 //
-// OHNE ToolsAPI. Der Adapter PlanTabs hat die Form von TRdxFixPlanner
-// (uRdxFixTable); die Unit bindet uRdxFixTable bewusst nicht ein.
+// OHNE ToolsAPI und ohne Delphi-only-Unit (FPC-Pruefstand): den Adapter
+// PlanTabs (Form TRdxFixPlanner) traegt die Tabelle uRdxFixTable.
 
 interface
 
 uses
-  System.Classes,    // TStrings
-  uEngineApi,        // TSourcePlaces
-  uMethodd12,        // TLeakFinding
   uRdxBufferMath,    // TRdxEdit
-  uRdxCodeMap,       // TRdxCodeMap
-  uRdxRecipeRunner;  // TRdxFixOutcome
+  uRdxCodeMap;       // TRdxCodeMap
 
 const
   // Tabweite der Umrechnung: eine feste Annahme, nicht die der IDE (s. Kopf).
@@ -54,17 +50,11 @@ type
       out AReason: string): Boolean; static;
   end;
 
-// Der Adapter fuer FIX_ROWS (Form TRdxFixPlanner); APlaces und AUsesNames
-// braucht die Hilfe nicht.
-function PlanTabs(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-
 implementation
 
 uses
   System.SysUtils,
-  uRefactorInfo,   // TRefactorSpan.Make
-  uRdxFixRunner;   // MapFix
+  uRefactorInfo;   // TRefactorSpan.Make
 
 const
   TAB = #9;
@@ -131,13 +121,6 @@ begin
   AEdit.Expected := Copy(L, First, Last + 1 - First);
   AEdit.NewText := S;
   Result := True;
-end;
-
-function PlanTabs(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
-    TRdxTabsFix.Tabs);
 end;
 
 end.

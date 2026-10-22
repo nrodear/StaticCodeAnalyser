@@ -37,7 +37,7 @@ implementation
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uTabulationCharacter,
-  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner, uRdxTabsFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner, uRdxFixTable, uRdxTabsFix,
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
   uTestRdxTextKit;       // Join, Apply
 
@@ -96,7 +96,7 @@ begin
 end;
 
 // Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt (PlanTabs, wie die Tabelle es aufrufen wird).
+// schweigt (ueber TRdxFixTable.FixFor, Adapter PlanTabs).
 function FixAll(const ASource: string): string;
 const
   MAX_PASSES = 10;
@@ -117,7 +117,7 @@ begin
       fkTabulationCharacter);
     try
       SL.Text := Result;
-      O := PlanTabs(nil, SL, F, nil);
+      O := TRdxFixTable.FixFor(nil, SL, F, nil);
       Assert.IsTrue(O.Enabled, Format('Zeile %d: %s', [Seen[0].Line, O.Reason]));
       Result := Apply(Result, O.Edits);
     finally
@@ -242,13 +242,13 @@ begin
   F := TLeakFinding.New('t.pas', '', 2, TabMsg(1), fkTabulationCharacter);
   try
     SL.Text := Join(['begin', TAB + 'A;', 'end;']);
-    O := PlanTabs(nil, SL, F, nil);
+    O := TRdxFixTable.FixFor(nil, SL, F, nil);
     Assert.IsTrue(O.Enabled, O.Reason);
     Assert.AreEqual<Integer>(1, Length(O.Edits));
     Assert.AreEqual(TAB, O.Edits[0].Expected);
     Assert.AreEqual('  ', O.Edits[0].NewText);
     // Ohne Datei keine Hilfe.
-    O := PlanTabs(nil, nil, F, nil);
+    O := TRdxFixTable.FixFor(nil, nil, F, nil);
     Assert.IsFalse(O.Enabled);
     Assert.AreEqual<Integer>(0, Length(O.Edits));
     Assert.AreNotEqual('', O.Reason);
@@ -290,7 +290,7 @@ begin
     fkTabulationCharacter);
   try
     SL.Text := Src;
-    O := PlanTabs(nil, SL, F, nil);
+    O := TRdxFixTable.FixFor(nil, SL, F, nil);
     Assert.IsFalse(O.Enabled);
     Assert.IsTrue(Pos(RS_NOT_CODE, O.Reason) > 0, O.Reason);
   finally

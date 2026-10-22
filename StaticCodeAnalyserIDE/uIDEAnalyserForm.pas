@@ -518,8 +518,10 @@ type
     // Bietet kein Anbieter einen fuer diesen Fund an (kein Anbieter geladen;
     // Config-/DFM-Funde - reDelphix kennt nur Pascal-Quelltext), schreibt
     // das Plugin selbst: die Marker-Zeile an das Ziel aus
-    // TSuppression.MarkerTargetFor (bei .dfm der dateiweite Marker in die
-    // .pas) ueber TIDEEditor.InsertLineAbove.
+    // TSuppression.MarkerTargetFor (bei .dfm/.lfm der dateiweite Marker in
+    // die Unit, .pas bzw. bei .lfm auch .pp) ueber TIDEEditor.InsertLineAbove.
+    // Liegt der Marker in einer anderen Datei als der Fund, nennt die
+    // Status-Bar sie (wie die EXE).
     procedure ApplySuppressForRow(RowIdx: Integer);
     procedure UpdateHelp(Row: Integer);
     // Sammelt alle Befunde aus FDisplayedFindings die zur gleichen Datei
@@ -672,13 +674,14 @@ uses
   uCrashDiag,                   // EStackExhausted - nie verschlucken
   uHintTextLayout,              // FormatRelatedLines - geteilt mit dem Nur-Text-Hint
   uAppTheme,                    // ApplyTitleBarTheme - Titelzeile des Profil-Fensters
-  uSuppression,                 // MarkerTargetFor - Marker-Host und -Zeile (bei .dfm die .pas)
+  uSuppression,                 // MarkerTargetFor - Marker-Host und -Zeile (bei .dfm/.lfm die .pas/.pp)
   uProfileViewer,               // ShowProfileViewer - Hamburger-Item
   // Nur hier gebraucht (Review nach Bereichen 2026-10-10, Nit 42):
   uFindingActionMenu,           // das eine Menue-Modell zu den Aktionen (Stufe C), FirstRunnable
   uIDEFindingActionMenu,        // Modell -> TMenuItems
   uIDEFindingBulb,              // Gluehbirne an der Caret-Zeile (Element EditorBulb)
   uFindingSourcePick,           // PickFindingSource - Dock oder Silent-Kopien je Datei
+  uEditorFindingStore,          // TEditorFindingStore - die Silent-Kopien je Datei
   uPathNormalize;               // NormalizePathForKey - Pfade wie der Highlighter
 
 // noinspection-file BeginEndRequired, BooleanParam, ClassPerFile, ConsecutiveSection, EmptyExcept, ExceptOnException, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, NestedRoutine, NestedTry, PublicField, PublicMemberWithoutDoc, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedPublicMember, UnusedRoutine
@@ -3073,8 +3076,9 @@ procedure TAnalyserFrame.ApplySuppressForRow(RowIdx: Integer);
 // reDelphix kennt nur Pascal-Quelltext, bis 2026-10-14 war Ctrl+Alt+S
 // dafuer tot, sobald reDelphix geladen war - Review MAJOR 1), schreibt
 // das Plugin die Marker-Zeile selbst: `// noinspection <KindName>` bzw.
-// `; noinspection` in einer Konfigurationsdatei, bei einem .dfm-Fund der
-// DATEIWEITE Marker `// noinspection-file <KindName>` in die .pas - Host
+// `; noinspection` in einer Konfigurationsdatei, bei einem .dfm-/.lfm-Fund
+// der DATEIWEITE Marker `// noinspection-file <KindName>` in die Unit
+// (.pas, bei .lfm auch .pp - dialektfrei, Review Woche G02-01) - Host
 // und Zeile aus TSuppression.MarkerTargetFor, das ablehnt, wenn der Marker
 // dort nicht wirken kann oder schon da ist. Schreibt das Ergebnis in die
 // Status-Bar.
@@ -3117,8 +3121,19 @@ begin
   end;
   if TIDEEditor.InsertLineAbove(Target.HostFile, Target.Line,
        Target.MarkerLine) then
-    StatusMode(StatusWithErrors(
-      Format(_('Suppress inserted: %s'), [Target.MarkerLine]), Errs))
+  begin
+    // Ging der Marker in eine ANDERE Datei als die des Funds (Formdatei ->
+    // Schwester-Unit), nennt die Meldung sie - wer sonst die .dfm oeffnet,
+    // sieht keinen Marker. Dieselbe Meldung wie die EXE (uMainForm.
+    // SuppressSelectedFinding, Review Woche G02-09).
+    if SameText(Target.HostFile, F.FileName) then
+      StatusMode(StatusWithErrors(
+        Format(_('Suppress inserted: %s'), [Target.MarkerLine]), Errs))
+    else
+      StatusMode(StatusWithErrors(
+        Format(_('Suppress inserted in %s: %s'),
+          [ExtractFileName(Target.HostFile), Target.MarkerLine]), Errs));
+  end
   else
     StatusMode(StatusWithErrors(
       _('Suppress: editor write failed (file not in IDE?)'), Errs));
@@ -4844,114 +4859,26 @@ end;
 //   1. das Dock-Fenster, falls offen (FAllFindings des Frames);
 //   2. Kopien der Funde der letzten Silent-Laeufe (KeepEditorFindings) -
 //      der Silent-Lauf gibt seine Liste nach dem Markieren frei.
-// Die Kopien tragen nur die Felder, die ein Anbieter liest. Sie liegen JE
-// DATEI vor (Review 2026-10-14, MAJOR 3): mit nur einem Platz nahmen Birne
-// und Kontextmenue nach einem Tab-Wechsel A->B->A fuer A wieder die alten
-// Dock-Zeilen, waehrend die Marken den neuen Stand zeigten. Hoechstens
-// MAX_EDITOR_FINDING_FILES Dateien - die aelteste Generation faellt weg
-// (der naechste Tab-Wechsel auf sie scannt ohnehin neu).
-
-type
-  TEditorFindingsCopy = class
-  public
-    Gen   : UInt64;                       // Generation des Silent-Laufs
-    Items : TObjectList<TLeakFinding>;    // die Kopien (Eigentum)
-    constructor Create;
-    destructor Destroy; override;
-  end;
+// Die Kopien liegen JE DATEI vor (Review 2026-10-14, MAJOR 3) in einem
+// TEditorFindingStore (uEditorFindingStore, getestet; Review Woche
+// 2026-10-21, G04-06): Kopieren, Ersetzen, Verdraengen der aeltesten
+// Generation und Eigentum regelt der Speicher. Hier stehen nur Schluessel
+// (NormalizePathForKey, wie der Highlighter) und Generation
+// (NextFindingsGeneration, derselbe Zaehler wie Dock und Watch-Lauf).
 
 const
   MAX_EDITOR_FINDING_FILES = 8;
 
 var
-  // Schluessel: NormalizePathForKey der Datei (wie der Highlighter).
-  GEditorFindings : TObjectDictionary<string, TEditorFindingsCopy> = nil;
-
-constructor TEditorFindingsCopy.Create;
-begin
-  inherited Create;
-  Items := TObjectList<TLeakFinding>.Create(True);
-end;
-
-destructor TEditorFindingsCopy.Destroy;
-begin
-  FreeAndNil(Items);
-  inherited;
-end;
-
-// Die aelteste Kopie weicht, wenn eine NEUE Datei dazukommt und der Platz
-// voll ist.
-procedure DropOldestEditorFindings;
-var
-  Pair   : TPair<string, TEditorFindingsCopy>;
-  Oldest : string;
-  Gen    : UInt64;
-begin
-  Oldest := '';
-  Gen    := High(UInt64);
-  for Pair in GEditorFindings do
-    if Pair.Value.Gen < Gen then
-    begin
-      Gen    := Pair.Value.Gen;
-      Oldest := Pair.Key;
-    end;
-  if Oldest <> '' then
-    GEditorFindings.Remove(Oldest);
-end;
+  GEditorFindings : TEditorFindingStore = nil;
 
 procedure KeepEditorFindings(const AFileName: string;
   AFindings: TObjectList<TLeakFinding>);
-var
-  F, C   : TLeakFinding;
-  Key    : string;
-  Kept   : TEditorFindingsCopy;
-  Stored : TEditorFindingsCopy;
 begin
   if GEditorFindings = nil then
-    GEditorFindings := TObjectDictionary<string, TEditorFindingsCopy>.Create(
-      [doOwnsValues]);
-  Key := NormalizePathForKey(AFileName);
-  if not GEditorFindings.ContainsKey(Key)
-     and (GEditorFindings.Count >= MAX_EDITOR_FINDING_FILES) then
-    DropOldestEditorFindings;
-  Kept := TEditorFindingsCopy.Create;
-  // Kept gehoert bis zum AddOrSetValue niemandem: wirft das Kopieren
-  // (EOutOfMemory), gaebe sonst niemand Kept samt der schon kopierten Funde
-  // frei (Review Woche G04-07). Steht Kept schon im Dictionary (beim
-  // Ersetzen wirft erst die Freigabe der alten Kopie), besitzt es Kept -
-  // dann kein Free. Kept lebt beim Vergleich noch: keine
-  // Adress-Wiederverwendung.
-  try
-    Kept.Gen := NextFindingsGeneration;
-    if Assigned(AFindings) then
-      for F in AFindings do
-      begin
-        if not Assigned(F) then Continue;
-        // C geht SOFORT in die Liste: wirft danach eine Zuweisung, gibt
-        // das Free von Kept auch C frei.
-        C := TLeakFinding.Create;
-        try
-          Kept.Items.Add(C);
-        except
-          C.Free;
-          raise;
-        end;
-        C.FileName   := F.FileName;
-        C.MethodName := F.MethodName;
-        C.LineNumber := F.LineNumber;
-        C.EndLine    := F.EndLine;
-        C.MissingVar := F.MissingVar;
-        C.Severity   := F.Severity;
-        C.Kind       := F.Kind;
-        C.Confidence := F.Confidence;
-        C.RuleID     := F.RuleID;
-      end;
-    GEditorFindings.AddOrSetValue(Key, Kept);
-  except
-    if not GEditorFindings.TryGetValue(Key, Stored) or (Stored <> Kept) then
-      Kept.Free;
-    raise;
-  end;
+    GEditorFindings := TEditorFindingStore.Create(MAX_EDITOR_FINDING_FILES);
+  GEditorFindings.Keep(NormalizePathForKey(AFileName), AFindings,
+    NextFindingsGeneration);
 end;
 
 function FindingsAtEditorLine(const AFile: string;
@@ -5038,7 +4965,7 @@ begin
     State.DockGen := DockGenerationFor(Frame.FFindingsGen, FileGen);
   end;
   Silent := nil;
-  if Assigned(GEditorFindings) and GEditorFindings.TryGetValue(FileKey, Silent) then
+  if Assigned(GEditorFindings) and GEditorFindings.TryGet(FileKey, Silent) then
   begin
     State.SilentHasFile := True;
     State.SilentGen     := Silent.Gen;

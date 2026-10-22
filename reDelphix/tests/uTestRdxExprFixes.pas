@@ -46,6 +46,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxCodeMap, uRdxSimpleFixes,
+  uRdxTypeProof,     // DeclaredTypeKind, ResolvedTypeKind ... (Folgewelle A4)
   uTestRdxTextKit;   // Join, Apply
 
 // ---- Helfer ----
@@ -461,30 +462,30 @@ begin
     Map := TRdxCodeMap.Create(SL);
     // Variable bzw. Parameter mit Anfangswert: keine Deklaration des Typs
     // (Charge R10 - vorher kam 'nil' heraus).
-    Assert.AreEqual('', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tbitmap'), 'var mit nil');
-    Assert.AreEqual('', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tcontrol'), 'Default-Parameter');
-    Assert.AreEqual('', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tcanvas'), 'qualifiziert');
-    Assert.AreEqual('record', TRdxSimpleFixes.DeclaredTypeKind(Map, 'TRec'));
-    Assert.AreEqual('record', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tpk'), 'packed');
-    Assert.AreEqual('procedure', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tcb'));
-    Assert.AreEqual('function', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tfn'));
-    Assert.AreEqual('reference', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tref'));
-    Assert.AreEqual('class', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tcls'));
-    Assert.AreEqual('', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tgone'), 'Kommentar');
-    Assert.AreEqual('', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tlist'), 'andere Unit');
-    Assert.AreEqual('reference', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tfactory'),
+    Assert.AreEqual('', TRdxTypeProof.DeclaredTypeKind(Map, 'tbitmap'), 'var mit nil');
+    Assert.AreEqual('', TRdxTypeProof.DeclaredTypeKind(Map, 'tcontrol'), 'Default-Parameter');
+    Assert.AreEqual('', TRdxTypeProof.DeclaredTypeKind(Map, 'tcanvas'), 'qualifiziert');
+    Assert.AreEqual('record', TRdxTypeProof.DeclaredTypeKind(Map, 'TRec'));
+    Assert.AreEqual('record', TRdxTypeProof.DeclaredTypeKind(Map, 'tpk'), 'packed');
+    Assert.AreEqual('procedure', TRdxTypeProof.DeclaredTypeKind(Map, 'tcb'));
+    Assert.AreEqual('function', TRdxTypeProof.DeclaredTypeKind(Map, 'tfn'));
+    Assert.AreEqual('reference', TRdxTypeProof.DeclaredTypeKind(Map, 'tref'));
+    Assert.AreEqual('class', TRdxTypeProof.DeclaredTypeKind(Map, 'tcls'));
+    Assert.AreEqual('', TRdxTypeProof.DeclaredTypeKind(Map, 'tgone'), 'Kommentar');
+    Assert.AreEqual('', TRdxTypeProof.DeclaredTypeKind(Map, 'tlist'), 'andere Unit');
+    Assert.AreEqual('reference', TRdxTypeProof.DeclaredTypeKind(Map, 'tfactory'),
       'generische Parameter uebersprungen');
-    Assert.AreEqual('tfn', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tlookup'), 'Alias');
+    Assert.AreEqual('tfn', TRdxTypeProof.DeclaredTypeKind(Map, 'tlookup'), 'Alias');
     // Review Woche G07-21: eine Deklaration nur hinter ';', 'type', einem
     // Attribut oder FPC-'generic' - ein Yoda-Vergleich ist keine (bis dahin
     // 'sender' bzw. 'aclass').
-    Assert.AreEqual('class', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tattr'),
+    Assert.AreEqual('class', TRdxTypeProof.DeclaredTypeKind(Map, 'tattr'),
       'hinter einem Attribut');
-    Assert.AreEqual('class', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tgen'),
+    Assert.AreEqual('class', TRdxTypeProof.DeclaredTypeKind(Map, 'tgen'),
       'FPC generic');
-    Assert.AreEqual('', TRdxSimpleFixes.DeclaredTypeKind(Map, 'timage'),
+    Assert.AreEqual('', TRdxTypeProof.DeclaredTypeKind(Map, 'timage'),
       'Yoda-Vergleich hinter if');
-    Assert.AreEqual('', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tpanel'),
+    Assert.AreEqual('', TRdxTypeProof.DeclaredTypeKind(Map, 'tpanel'),
       'Yoda-Vergleich hinter :=');
   finally
     Map.Free;
@@ -515,33 +516,33 @@ begin
       'implementation',
       'end.']);
     Map := TRdxCodeMap.Create(SL);
-    Assert.AreEqual('function', TRdxExprFixes.ResolvedTypeKind(Map, 'tlookup'),
+    Assert.AreEqual('function', TRdxTypeProof.ResolvedTypeKind(Map, 'tlookup'),
       'Alias auf Funktionstyp');
-    Assert.AreEqual('class', TRdxExprFixes.ResolvedTypeKind(Map, 'tclsalias'));
-    Assert.AreEqual('string', TRdxExprFixes.ResolvedTypeKind(Map, 'tname'));
-    Assert.AreEqual('tstringlist', TRdxExprFixes.ResolvedTypeKind(Map, 'tmylist'),
+    Assert.AreEqual('class', TRdxTypeProof.ResolvedTypeKind(Map, 'tclsalias'));
+    Assert.AreEqual('string', TRdxTypeProof.ResolvedTypeKind(Map, 'tname'));
+    Assert.AreEqual('tstringlist', TRdxTypeProof.ResolvedTypeKind(Map, 'tmylist'),
       'Alias auf einen Typ einer anderen Unit: dessen Name');
-    Assert.IsTrue(TRdxExprFixes.ProceduralType(Map, 'tlookup'), 'Alias');
-    Assert.IsTrue(TRdxExprFixes.ProceduralType(Map, 'tfactory'), 'generisch');
-    Assert.IsTrue(TRdxExprFixes.ProceduralType(Map, 'func'), 'Spring4D Func<T>');
-    Assert.IsTrue(TRdxExprFixes.ProceduralType(Map, 'tnotifyevent'), 'nach Name');
-    Assert.IsFalse(TRdxExprFixes.ProceduralType(Map, 'tcls'));
-    Assert.IsFalse(TRdxExprFixes.ProceduralType(Map, 'integer'));
-    Assert.IsTrue(TRdxExprFixes.PointerLikeType(Map, 'tclsalias'), 'Klasse ueber Alias');
-    Assert.IsTrue(TRdxExprFixes.PointerLikeType(Map, 'prec'), 'Zeigertyp');
-    Assert.IsTrue(TRdxExprFixes.PointerLikeType(Map, 'tobject'));
-    Assert.IsFalse(TRdxExprFixes.PointerLikeType(Map, 'trec'), 'Record');
-    Assert.IsFalse(TRdxExprFixes.PointerLikeType(Map, 'tlookup'), 'Funktionstyp');
+    Assert.IsTrue(TRdxTypeProof.ProceduralType(Map, 'tlookup'), 'Alias');
+    Assert.IsTrue(TRdxTypeProof.ProceduralType(Map, 'tfactory'), 'generisch');
+    Assert.IsTrue(TRdxTypeProof.ProceduralType(Map, 'func'), 'Spring4D Func<T>');
+    Assert.IsTrue(TRdxTypeProof.ProceduralType(Map, 'tnotifyevent'), 'nach Name');
+    Assert.IsFalse(TRdxTypeProof.ProceduralType(Map, 'tcls'));
+    Assert.IsFalse(TRdxTypeProof.ProceduralType(Map, 'integer'));
+    Assert.IsTrue(TRdxTypeProof.PointerLikeType(Map, 'tclsalias'), 'Klasse ueber Alias');
+    Assert.IsTrue(TRdxTypeProof.PointerLikeType(Map, 'prec'), 'Zeigertyp');
+    Assert.IsTrue(TRdxTypeProof.PointerLikeType(Map, 'tobject'));
+    Assert.IsFalse(TRdxTypeProof.PointerLikeType(Map, 'trec'), 'Record');
+    Assert.IsFalse(TRdxTypeProof.PointerLikeType(Map, 'tlookup'), 'Funktionstyp');
     // E27 (Charge R10): TStringList steht in der Liste der Delphi-Quellen
     // (uRdxRtlTypes) - bewiesen, auch ueber den Alias TMyList dieser Unit;
     // ein Kundentyp einer anderen Unit bleibt unbewiesen.
-    Assert.IsTrue(TRdxExprFixes.PointerLikeType(Map, 'tstringlist'),
+    Assert.IsTrue(TRdxTypeProof.PointerLikeType(Map, 'tstringlist'),
       'andere Unit, RTL-Klasse (E27)');
-    Assert.IsTrue(TRdxExprFixes.PointerLikeType(Map, 'tmylist'),
+    Assert.IsTrue(TRdxTypeProof.PointerLikeType(Map, 'tmylist'),
       'Alias auf eine RTL-Klasse (E27)');
-    Assert.IsFalse(TRdxExprFixes.PointerLikeType(Map, 'tchromium'),
+    Assert.IsFalse(TRdxTypeProof.PointerLikeType(Map, 'tchromium'),
       'Kundentyp einer anderen Unit: nicht bewiesen');
-    Assert.IsFalse(TRdxExprFixes.PointerLikeType(Map, 'tname'), 'string-Alias');
+    Assert.IsFalse(TRdxTypeProof.PointerLikeType(Map, 'tname'), 'string-Alias');
   finally
     Map.Free;
     SL.Free;
@@ -595,23 +596,23 @@ begin
       'procedure(*c*)Glued;',
       'end.']);
     Map := TRdxCodeMap.Create(SL);
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Spread'),
+    Assert.IsTrue(TRdxTypeProof.DeclaresRoutine(Map, 'Spread'),
       'Name auf der Zeile hinter dem Schluesselwort');
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'SPREAD'), 'Gross/klein');
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Chained'),
+    Assert.IsTrue(TRdxTypeProof.DeclaresRoutine(Map, 'SPREAD'), 'Gross/klein');
+    Assert.IsTrue(TRdxTypeProof.DeclaresRoutine(Map, 'Chained'),
       'Kette ueber zwei Zeilen');
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Go'),
+    Assert.IsTrue(TRdxTypeProof.DeclaresRoutine(Map, 'Go'),
       'zweite Nennung auf der Zeile');
-    Assert.IsFalse(TRdxSimpleFixes.DeclaresRoutine(Map, 'Sheet'),
+    Assert.IsFalse(TRdxTypeProof.DeclaresRoutine(Map, 'Sheet'),
       'nur Teil eines laengeren Namens');
-    Assert.IsFalse(TRdxSimpleFixes.DeclaresRoutine(Map, 'Two'), 'Aufruf-Pfad');
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresProperty(Map, 'Items'));
-    Assert.IsFalse(TRdxSimpleFixes.DeclaresProperty(Map, 'Ghost'),
+    Assert.IsFalse(TRdxTypeProof.DeclaresRoutine(Map, 'Two'), 'Aufruf-Pfad');
+    Assert.IsTrue(TRdxTypeProof.DeclaresProperty(Map, 'Items'));
+    Assert.IsFalse(TRdxTypeProof.DeclaresProperty(Map, 'Ghost'),
       'nur im Kommentar');
-    Assert.IsFalse(TRdxSimpleFixes.DeclaresProperty(Map, ''), 'leerer Name');
-    Assert.AreEqual('class', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tsplit'),
+    Assert.IsFalse(TRdxTypeProof.DeclaresProperty(Map, ''), 'leerer Name');
+    Assert.AreEqual('class', TRdxTypeProof.DeclaredTypeKind(Map, 'tsplit'),
       '"=" auf der Folgezeile');
-    Assert.AreEqual('record', TRdxSimpleFixes.DeclaredTypeKind(Map, 'TLate'),
+    Assert.AreEqual('record', TRdxTypeProof.DeclaredTypeKind(Map, 'TLate'),
       'Variable mit Anfangswert davor, Typ dahinter');
     // Nachpruefung R3-03: der Vorfilter sucht den Namen als WORT, ohne
     // Kopie der Zeile, und springt ueber Zeilen ohne Token. Die Grenze
@@ -619,15 +620,15 @@ begin
     // Leerraum ('=' dahinter, Kommentar-Ende davor) -, und die Zeile, auf
     // der das naechste Token liegt, zaehlt selbst (Kopf auf der Folgezeile
     // eines Aufrufs, Typ hinter einer Zeile ohne den Namen).
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Hop'),
+    Assert.IsTrue(TRdxTypeProof.DeclaresRoutine(Map, 'Hop'),
       'Kopf auf der Zeile des naechsten Tokens');
-    Assert.AreEqual('record', TRdxSimpleFixes.DeclaredTypeKind(Map, 'Later'),
+    Assert.AreEqual('record', TRdxTypeProof.DeclaredTypeKind(Map, 'Later'),
       'Name erst im Kommentar, dann eine Zeile ohne ihn');
-    Assert.AreEqual('class', TRdxSimpleFixes.DeclaredTypeKind(Map, 'TEq'),
+    Assert.AreEqual('class', TRdxTypeProof.DeclaredTypeKind(Map, 'TEq'),
       '"=" direkt hinter dem Namen');
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Glued'),
+    Assert.IsTrue(TRdxTypeProof.DeclaresRoutine(Map, 'Glued'),
       'Kommentar-Ende direkt vor dem Namen');
-    Assert.IsFalse(TRdxSimpleFixes.DeclaresRoutine(Map, 'Glue'),
+    Assert.IsFalse(TRdxTypeProof.DeclaresRoutine(Map, 'Glue'),
       'Teil eines Namens');
   finally
     Map.Free;

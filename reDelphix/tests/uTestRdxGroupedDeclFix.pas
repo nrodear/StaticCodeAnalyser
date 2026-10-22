@@ -3,10 +3,13 @@ unit uTestRdxGroupedDeclFix;
 // Editorhilfe SCA076 GroupedDeclaration (uRdxGroupedDeclFix): 'A, B: T;' ->
 // eine Zeile je Name. Die Faelle auf Text laufen ohne Parser und ohne
 // Detektor; die Rundlaeufe mit dem ECHTEN Detektor stehen in der zweiten
-// Fixture. Die ganze Unit ist nur Delphi (reDelphix.Test): der Planer
-// bindet uEngineApi/uRdxRecipeRunner im interface und uRdxFixRunner, der
-// FPC-Pruefstand (build.sh) fuehrt ihn nicht. Die {$IFNDEF FPC}-Weichen
-// sind darum heute ohne Wirkung.
+// Fixture (ueber TRdxFixTable.FixFor). Die ganze Unit ist nur Delphi
+// (reDelphix.Test): die Adapter-Tests der ersten Fixture rufen die
+// Tabelle (TLeakFinding, uRdxFixTable).
+// Der Planer ist seit der Folgewelle G09-07 ohne Delphi-only-uses (den
+// Adapter traegt uRdxFixTable); die Unit steht trotzdem nicht im
+// FPC-Pruefstand (build.sh) - dessen Runner kennt die {$IFNDEF FPC}-
+// Weichen nicht, sie sind heute ohne Wirkung.
 
 interface
 
@@ -52,7 +55,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uMethodd12, uSCAConsts,
-  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner, uRdxText,
+  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner, uRdxFixTable, uRdxText,
   uRdxGroupedDeclFix,
   uTestRdxTextKit   // Join, Apply
 {$IFNDEF FPC}
@@ -181,7 +184,7 @@ begin
   F := TLeakFinding.New('t.pas', '', 2, GMsg(3), fkGroupedDeclaration);
   try
     SL.Text := Join(['var', '  A, B: Integer;', 'begin']);
-    O := PlanGroupedDeclaration(nil, SL, F, nil);
+    O := TRdxFixTable.FixFor(nil, SL, F, nil);
     Assert.IsTrue(O.Enabled, O.Reason);
     Assert.AreEqual<Integer>(1, Length(O.Edits));
     Assert.AreEqual('  A, B: Integer;', O.Edits[0].Expected);
@@ -358,10 +361,10 @@ begin
   F := TLeakFinding.New('t.pas', '', 2, GMsg(3), fkGroupedDeclaration);
   try
     SL.Text := Join(['var', '  A, B: Integer;', 'begin']);
-    O := PlanGroupedDeclaration(nil, SL, F, nil);
+    O := TRdxFixTable.FixFor(nil, SL, F, nil);
     Assert.IsTrue(O.Enabled, O.Reason);
     // Ohne Datei keine Hilfe.
-    O := PlanGroupedDeclaration(nil, nil, F, nil);
+    O := TRdxFixTable.FixFor(nil, nil, F, nil);
     Assert.IsFalse(O.Enabled);
     Assert.AreEqual<Integer>(0, Length(O.Edits));
     Assert.AreNotEqual('', O.Reason);
@@ -386,7 +389,7 @@ begin
   Result := DetectSource('grp', ASource, fkGroupedDeclaration, RunGrouped);
 end;
 
-// Der Plan fuer einen Fund ueber den Adapter der Hilfe (PlanGroupedDeclaration,
+// Der Plan fuer einen Fund ueber die Tabelle (Adapter PlanGroupedDeclaration,
 // wie die Tabelle ihn aufruft).
 function PlanFor(const ASource: string; const ASeen: TSeen): TRdxFixOutcome;
 var
@@ -398,7 +401,7 @@ begin
     fkGroupedDeclaration);
   try
     SL.Text := ASource;
-    Result := PlanGroupedDeclaration(nil, SL, F, nil);
+    Result := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
     F.Free;
     SL.Free;

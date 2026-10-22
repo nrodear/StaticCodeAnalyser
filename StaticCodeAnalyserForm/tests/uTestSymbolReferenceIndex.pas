@@ -47,7 +47,6 @@ implementation
 
 uses
   System.SysUtils, System.Classes, System.IOUtils,
-  uAstNode, uParser2,
   uSymbolReferenceIndex;
 
 procedure TTestSymbolReferenceIndex.AddReference_SingleEntry_FoundExternally;

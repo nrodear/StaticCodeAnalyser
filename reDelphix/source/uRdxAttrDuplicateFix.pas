@@ -37,12 +37,8 @@ unit uRdxAttrDuplicateFix;
 interface
 
 uses
-  System.Classes,        // TStrings
-  uEngineApi,            // TSourcePlaces
-  uMethodd12,            // TLeakFinding
   uRdxBufferMath,        // TRdxEdit
-  uRdxCodeMap,           // TRdxCodeMap
-  uRdxRecipeRunner;      // TRdxFixOutcome
+  uRdxCodeMap;           // TRdxCodeMap
 
 const
   // Die Gruende der Ablehnung als englische msgids (die Tests pruefen sie
@@ -87,18 +83,12 @@ type
       out AGroups: TRdxAttrGroups): string; static;
   end;
 
-// Der Planer der Tabelle (Form TRdxFixPlanner aus uRdxFixTable): Zeile und
-// Meldung aus dem Fund, die Hilfe ueber MapFix.
-function PlanAttrDuplicate(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-
 implementation
 
 uses
   System.SysUtils,
   uRefactorInfo,         // TRefactorSpan.Make
-  uRdxText,              // _(): in die reDelphix-Sprache, nie uLocalization
-  uRdxFixRunner;         // MapFix
+  uRdxText;              // _(): in die reDelphix-Sprache, nie uLocalization
 
 const
   SPAN_180 = 'sca180';
@@ -333,13 +323,6 @@ begin
   AEdit.Expected := RangeText(AMap, AEdit.Span);
   AEdit.NewText := '';
   Result := True;
-end;
-
-function PlanAttrDuplicate(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
-    TRdxAttrDuplicateFix.DeleteDuplicate);
 end;
 
 end.

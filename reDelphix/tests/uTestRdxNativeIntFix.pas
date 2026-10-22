@@ -6,12 +6,14 @@ unit uTestRdxNativeIntFix;
 //   -> NativeUInt; Gegenproben Kommentar, String, verschobene Zeile,
 //   gemischte Casts, mehrere Treffer, Zahl als Operand, Kette, Kommentar
 //   zwischen den Casts.
-//   Fixture 2: der ECHTE Detektor meldet, der Adapter plant aus dem Fund,
+//   Fixture 2: der ECHTE Detektor meldet, die Tabelle plant aus dem Fund
+//   (TRdxFixTable.FixFor, Adapter PlanPointerSubtraction),
 //   die Ersetzung wird angewandt - und der Detektor schweigt.
-// Die ganze Unit ist nur Delphi (reDelphix.Test): der Planer bindet
-// uEngineApi/uRdxRecipeRunner und uRdxFixRunner, der FPC-Pruefstand
-// (build.sh) fuehrt ihn nicht - die {$IFNDEF FPC}-Weichen sind heute ohne
-// Wirkung.
+// Die ganze Unit ist nur Delphi (reDelphix.Test).
+// Der Planer ist seit der Folgewelle G09-07 ohne Delphi-only-uses (den
+// Adapter traegt uRdxFixTable); die Unit steht trotzdem nicht im
+// FPC-Pruefstand (build.sh) - dessen Runner kennt die {$IFNDEF FPC}-
+// Weichen nicht, sie sind heute ohne Wirkung.
 
 interface
 
@@ -57,7 +59,7 @@ uses
 {$IFNDEF FPC}
   , System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uPointerSubtraction,
-  uRdxRecipeRunner, uTestRdxDetectorKit
+  uRdxRecipeRunner, uRdxFixTable, uTestRdxDetectorKit
 {$ENDIF}
   ;
 
@@ -248,7 +250,7 @@ begin
     fkPointerSubtraction);
   try
     SL.Text := ASource;
-    O := PlanPointerSubtraction(nil, SL, Finding, nil);
+    O := TRdxFixTable.FixFor(nil, SL, Finding, nil);
     AReason := O.Reason;
     if O.Enabled then
       Result := Apply(ASource, O.Edits);
@@ -321,7 +323,7 @@ var
 begin
   Finding := TLeakFinding.New('t.pas', '', 1, MSG_161, fkPointerSubtraction);
   try
-    O := PlanPointerSubtraction(nil, nil, Finding, nil);
+    O := TRdxFixTable.FixFor(nil, nil, Finding, nil);
     Assert.IsFalse(O.Enabled);
     Assert.IsTrue(O.Reason <> '', 'ein Grund steht da');
     Assert.AreEqual<Integer>(0, Length(O.Edits));

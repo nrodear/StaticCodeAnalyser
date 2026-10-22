@@ -1879,4 +1879,16 @@ begin
   finally F.Free; end;
 end;
 
+// Angemeldet wie in den uebrigen Testunits (Review Woche G03-25): ohne
+// RegisterTestFixture liefen die Fixtures nur, weil TestProject.dpr
+// UseRTTI := True setzt - ein Runner ohne RTTI liesse sie still aus.
+// Doppelt laufen sie nicht: der FixtureProvider nimmt eine per RTTI
+// gefundene Klasse kein zweites Mal auf.
+initialization
+  TDUnitX.RegisterTestFixture(TTestNilDerefExt);
+  TDUnitX.RegisterTestFixture(TTestMissingFinallyExt);
+  TDUnitX.RegisterTestFixture(TTestDivByZeroExt);
+  TDUnitX.RegisterTestFixture(TTestDivByZeroCompactGuards);
+  TDUnitX.RegisterTestFixture(TTestDeadCodeExt);
+
 end.

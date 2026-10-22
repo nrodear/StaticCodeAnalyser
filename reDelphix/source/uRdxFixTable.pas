@@ -21,7 +21,14 @@ unit uRdxFixTable;
 // sie sind (uRdxFixRunner - bis Charge B2S-b in uRdxRecipeRunner -, die
 // Planer-Units); hier stehen nur die Adapter auf eine gemeinsame Form
 // (TRdxFixPlanner), das EINE Geruest der Planer mit Plan-Record
-// (TRdxFixFrame, Charge H5c) und die Zeilen.
+// (TRdxFixFrame, Charge H5c) und die Zeilen. Das gilt auch fuer die
+// Planer-Units der Chargen Q und R (je einfache Hilfe eine Unit
+// uRdx<Name>Fix): bis zur Folgewelle des Wochen-Reviews 2026-10-21
+// (G09-07) trug jede ihren Adapter selbst, band dafuer uEngineApi,
+// uRdxRecipeRunner und uRdxFixRunner ein und fiel so aus dem
+// FPC-Pruefstand. Eine neue Planer-Unit bindet nur, was ihre Textlogik
+// braucht (uRdxCodeMap, uRdxBufferMath, uRdxText, uRefactorInfo); ihr
+// Adapter steht hier.
 //
 // MENUETEXTE: englische msgids, uebersetzt ueber i18n/*.po (Editorhilfen
 // E6) in die reDelphix-Sprache (uRdxText._, Entscheid E29 - wie die
@@ -138,7 +145,8 @@ uses
   uRdxRoutineFixes,  // SCA164, SCA147
   uRdxCleanupFixes,  // SCA070, SCA053
   uRdxTryFixes,      // SCA009, SCA001, SCA109, SCA153, SCA156
-  uRdxResultFixes,   // SCA096, SCA097, SCA121, SCA196
+  uRdxResultFixes,   // SCA121, SCA196
+  uRdxInheritedFixes, // SCA096, SCA097
   uRdxMagicFixes,    // SCA014
   uRdxHttpsFix,         // SCA115
   uRdxParensFix,        // SCA094
@@ -146,7 +154,7 @@ uses
   uRdxTwiceInheritedFix, // SCA093
   uRdxNativeIntFix,     // SCA161
   uRdxEmptyFinallyFix,  // SCA083
-  uRdxForRangeFix,      // SCA046 (Hinweise R_FORRANGE_* dort)
+  uRdxForRangeFix,      // SCA046
   uRdxTabsFix,          // SCA061
   uRdxTrailingBlanksFix, // SCA063
   uRdxKeywordCaseFix,   // SCA064
@@ -210,8 +218,9 @@ const
   R_UNUSED_VAR_HINT = 'gleiche Bedeutung - die Variable kommt nirgends sonst '
     + 'vor';
   // Charge Q (zehn einfache Hilfen): SCA115, SCA094, SCA183, SCA093,
-  // SCA161, SCA083, SCA061, SCA063, SCA064 (SCA046 traegt seine Hinweise in
-  // uRdxForRangeFix).
+  // SCA161, SCA083, SCA046, SCA061, SCA063, SCA064. Die Hinweise der zweiten
+  // Eintraege (SCA093, SCA046) setzen ihre Adapter (PlanTwiceInheritedAlt,
+  // PlanReversedForRangeAlt) - bis G09-20 standen sie in den Planer-Units.
   R_HTTPS_HINT    = 'nur das Schema; der Server muss https auf dem '
     + 'Standardport koennen (Port 443, gueltiges Zertifikat)';
   R_PARENS_HINT   = 'ein Klammerpaar bleibt - Bedeutung und Rangfolge gleich';
@@ -219,13 +228,22 @@ const
     + 'naechsten Element';
   R_TWICE_HINT    = 'der zweite Aufruf entfaellt - die Elternmethode laeuft '
     + 'nur noch einmal; Reihenfolge und Nebenwirkung pruefen';
+  R_TWICE_ALT_HINT = 'der erste Aufruf entfaellt - die Elternmethode laeuft '
+    + 'nur noch einmal; Reihenfolge und Nebenwirkung pruefen';
   R_NATIVEINT_HINT = 'Win64: der Abstand ist jetzt der volle Adressabstand; '
     + 'unter Bereichspruefung (R+) kann die Zuweisung an ein Integer-Ziel '
     + 'ERangeError ausloesen';
   R_EMPTYFIN_HINT = 'gleiche Bedeutung - ein leeres finally tut nichts, '
     + 'Ausnahmen laufen weiter nach aussen';
-  R_TABS_HINT     = 'Tabs im Code werden zu Leerzeichen (Tabweite 2); Tabs in '
-    + 'Strings und Kommentaren bleiben';
+  R_FORRANGE_HINT = 'die Schleife lief bisher nie und zaehlt danach '
+    + 'abwaerts; war sie absichtlich abgeschaltet, ist das ein Eingriff';
+  R_FORRANGE_SWAP_HINT = 'die Schleife lief bisher nie und zaehlt danach '
+    + 'aufwaerts; war sie absichtlich abgeschaltet, ist das ein Eingriff';
+  // SCA061: die Tabweite ist eine feste Annahme (uRdxTabsFix.TAB_WIDTH),
+  // nicht die Einstellung der IDE - der Hinweis sagt es (Wochen-Review
+  // 2026-10-21, P17: bis dahin klang sie wie ein Standard).
+  R_TABS_HINT     = 'Tabs im Code werden zu Leerzeichen - Tabweite 2 '
+    + '(Annahme); Tabs in Strings und Kommentaren bleiben';
   R_BLANKS_HINT   = 'nur Leerraum am Zeilenende';
   R_LOWER_HINT    = 'gleiche Bedeutung - Delphi unterscheidet Gross- und '
     + 'Kleinschreibung nicht';
@@ -961,7 +979,7 @@ var
   P : TRdxResultPlan;
 begin
   Result := TRdxFixFrame.Run<TRdxResultPlan>(
-    ResultForm(TRdxResultFixes.ConstructorInherited),
+    ResultForm(TRdxInheritedFixes.ConstructorInherited),
     APlaces, ALines, AFinding, P);
   Result.ChangesBehavior := P.Changes;
   if not Result.Enabled then Exit;
@@ -979,7 +997,7 @@ var
   P : TRdxResultPlan;
 begin
   Result := TRdxFixFrame.Run<TRdxResultPlan>(
-    ResultForm(TRdxResultFixes.DestructorInherited),
+    ResultForm(TRdxInheritedFixes.DestructorInherited),
     APlaces, ALines, AFinding, P);
   Result.ChangesBehavior := P.Changes;
   if not Result.Enabled then Exit;
@@ -1035,6 +1053,180 @@ begin
     APlaces, ALines, AFinding, P);
   if Result.Enabled then
     Result.Hint := Format(R_MAGIC_HINT, [P.Name]);
+end;
+
+{ ---- Die Adapter der Chargen Q und R (Folgewelle G09-07) ----
+  Je einfache Hilfe eine Planer-Unit mit der reinen Textlogik in der Form
+  TRdxMapPlanner (FPC-Pruefstand); hier oeffnet MapFix ihr die Code-Sicht,
+  Zeile und Meldung kommen aus dem Fund. APlaces und AUsesNames braucht
+  keine dieser Hilfen. Hinweis und Kennzeichnung des Hauptwegs setzt die
+  Zeile (FixFor); die zweiten Eintraege (SCA093, SCA046) setzen Variant,
+  Hinweis und Kennzeichnung selbst - auch gesperrt gekennzeichnet: der
+  Eintrag steht mit Grund im Menue und sagt, was er taete (wie SCA168). ---- }
+
+function PlanHttps(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxHttpsFix.Https);
+end;
+
+function PlanRedundantParens(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxParensFix.DoubleParens);
+end;
+
+function PlanAttrGap(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxAttrGapFix.BlankGap);
+end;
+
+function PlanTwiceInherited(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxTwiceInheritedFix.DeleteSecond);
+end;
+
+function PlanTwiceInheritedAlt(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxTwiceInheritedFix.DeleteFirst);
+  Result.Variant := 1;
+  Result.ChangesBehavior := True;
+  if Result.Enabled then
+    Result.Hint := R_TWICE_ALT_HINT;
+end;
+
+function PlanPointerSubtraction(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxNativeIntFix.PointerSubtraction);
+end;
+
+function PlanEmptyFinally(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxEmptyFinallyFix.Unwrap);
+end;
+
+function PlanReversedForRange(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxForRangeFix.ToDownto);
+end;
+
+function PlanReversedForRangeAlt(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxForRangeFix.SwapBounds);
+  Result.Variant := 1;
+  Result.ChangesBehavior := True;
+  if Result.Enabled then
+    Result.Hint := R_FORRANGE_SWAP_HINT;
+end;
+
+function PlanTabs(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxTabsFix.Tabs);
+end;
+
+function PlanTrailingBlanks(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxTrailingBlanksFix.TrimEnd);
+end;
+
+// SCA064: Name = das Wort wie gemeldet ('Begin') fuer den Menuetext - auch,
+// wenn der Planer ablehnt.
+function PlanLowercaseKeyword(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxKeywordCaseFix.LowercaseKeyword);
+  Result.Name := QuotedText(AFinding.Message, '"');
+end;
+
+function PlanEmptyExcept(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxEmptyExceptFix.AddRaise);
+end;
+
+function PlanEmptyOnHandler(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxEmptyOnHandlerFix.Reraise);
+end;
+
+function PlanEmptyBlock(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxEmptyBlockFix.WithToCall);
+end;
+
+function PlanNoSonar(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxNoSonarFix.ToNoinspection);
+end;
+
+function PlanTrailingComma(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxTrailingCommaFix.DropComma);
+end;
+
+function PlanGroupedDeclaration(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxGroupedDeclFix.Split);
+end;
+
+function PlanIgnoreReason(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxIgnoreReasonFix.AddReason);
+end;
+
+function PlanAttrDuplicate(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxAttrDuplicateFix.DeleteDuplicate);
+end;
+
+function PlanCategoryArg(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxCategoryArgFix.AddArgument);
+end;
+
+function PlanGotoExit(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxGotoExitFix.GotoToExit);
 end;
 
 { ---- Die Tabelle ---- }

@@ -53,7 +53,7 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uNoSonarMarker,
   uSuppression, uFileTextCache,
-  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner, uRdxNoSonarFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner, uRdxFixTable, uRdxNoSonarFix,
   uRdxText,             // _() und die gemeinsamen Gruende
   uTestRdxTextKit,      // Join, Apply
   uTestRdxDetectorKit;  // DetectSource, TSeen, WriteTemp
@@ -182,7 +182,7 @@ begin
       F := TLeakFinding.New(FILE_NAME, '', Seen[i].Line, Seen[i].Msg,
         fkNoSonarMarker);
       try
-        O := PlanNoSonar(nil, SL, F, nil);
+        O := TRdxFixTable.FixFor(nil, SL, F, nil);
       finally
         F.Free;
       end;
@@ -408,7 +408,7 @@ begin
   try
     F := TLeakFinding.New(FILE_NAME, '', 6, NsMsg(7), fkNoSonarMarker);
     SL.Text := Src;
-    O := PlanNoSonar(nil, SL, F, nil);
+    O := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
     F.Free;
     SL.Free;
@@ -434,7 +434,7 @@ var
 begin
   F := TLeakFinding.New(FILE_NAME, '', 6, NsMsg(7), fkNoSonarMarker);
   try
-    O := PlanNoSonar(nil, nil, F, nil);
+    O := TRdxFixTable.FixFor(nil, nil, F, nil);
   finally
     F.Free;
   end;

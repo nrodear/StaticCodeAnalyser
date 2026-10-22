@@ -2517,6 +2517,17 @@ begin
       ParseLeaks(FileList, Result, nil, AIncludeUsesCheck,
         TParseSideLists.Make(nil, Configs, AConfigRoot));
     except
+      // Abbruch geht durch wie in AnalyzeLeaksRecursive/FromList, statt
+      // als 'Analyseabbruch'-Fund zu enden (Review Woche G02-05). Heute
+      // unerreichbar: ohne Progress-Callback wirft ParseLeaks kein
+      // EAbort (einzige Quelle sind SafeProgress und der nachgereichte
+      // Progress des Parallelpfads). Der Zweig haelt den Vertrag gleich,
+      // falls hier einmal ein Callback ankommt.
+      on EAbort do
+      begin
+        FreeAndNil(Result);
+        raise;
+      end;
       // Erschoepfter Stapel geht durch - uIDEAnalyseRunner verlaesst sich
       // darauf (Review Bereich C, Major 10); die Schutzseite ist nach
       // einem Ueberlauf unwiederbringlich weg. Result geht wie beim
@@ -2601,6 +2612,13 @@ begin
       ParseLeaks(AnalyzeList, Result, nil, AIncludeUsesCheck,
         TParseSideLists.Make(IndexList));
     except
+      // Abbruch geht durch - wie in AnalyzeOne (dort die Begruendung,
+      // warum der Zweig heute unerreichbar ist; Review Woche G02-05).
+      on EAbort do
+      begin
+        FreeAndNil(Result);
+        raise;
+      end;
       // Erschoepfter Stapel geht durch - uIDEAnalyseRunner verlaesst sich
       // darauf (Review Bereich C, Major 10); die Schutzseite ist nach
       // einem Ueberlauf unwiederbringlich weg. Result geht wie beim

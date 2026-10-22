@@ -328,7 +328,10 @@ uses
                                    // (E2003-Falle, s. OverlayFromJson)
   System.Generics.Defaults,        // TIStringComparer - Profilnamen (G5-4)
   uJsonFormat,                     // JsonFormatEscaped (WriteUserProfiles)
-  uLocalization;                   // NormalizeLangCode - EINE Normalisierung
+  uAtomicFile,                     // TAtomicFile.Swap (WriteUserProfiles)
+  uScaConfigDir,                   // ScaConfigDir - EINE Ablage fuer
+                                   // profiles.json und den Regelkatalog
+  uLocalization;               // NormalizeLangCode - EINE Normalisierung
                                    // fuer SetLanguage und Overlay-Lookup
 
 // Werte eines JSON-Arrays als Strings. Zwei Aufrufer: der ausgelieferte
@@ -849,14 +852,12 @@ var
   end;
 
   function AppDataDir: string;
-  // %APPDATA%\StaticCodeAnalyser\rules\ - duplizierbarer Pfad statt
-  // uIgnoreList.ConfigDir Import (das wuerde Common-Cycle einfuehren).
-  var
-    AppData : array[0..MAX_PATH] of Char;
+  // %APPDATA%\StaticCodeAnalyser\<ARelName> - die Ablage aus uScaConfigDir
+  // (Review Woche G05-21). Nur MIT APPDATA ein Kandidat: der Temp-
+  // Rueckfall von ScaConfigDir war hier nie ein Suchort.
   begin
-    if GetEnvironmentVariable('APPDATA', AppData, Length(AppData)) > 0 then
-      Result := IncludeTrailingPathDelimiter(AppData) +
-                'StaticCodeAnalyser\' + ARelName
+    if GetEnvironmentVariable('APPDATA') <> '' then
+      Result := ScaConfigDir + ARelName
     else
       Result := '';
   end;
@@ -1557,19 +1558,12 @@ begin
 end;
 
 class function TRuleCatalog.UserProfilesFilePath: string;
-// ZWILLING von TIgnoreList.ConfigDir (uIgnoreList, Infrastructure):
-// dasselbe Verzeichnis, hier absichtlich nachgebildet statt importiert -
-// uRuleCatalog liegt in Common und darf nicht nach Infrastructure
-// greifen. Wer die Ablage verschiebt, muss BEIDE Stellen anfassen.
-var
-  AppData : string;
+// Dasselbe Verzeichnis wie TIgnoreList.ConfigDir: beide nehmen es aus
+// uScaConfigDir (Common-Blatt-Unit, Review Woche G05-21) - uRuleCatalog
+// liegt in Common und darf nicht nach Infrastructure greifen.
 begin
   if FUserProfPath <> '' then Exit(FUserProfPath);
-  AppData := GetEnvironmentVariable('APPDATA');
-  if AppData = '' then
-    AppData := TPath.GetTempPath;
-  Result := IncludeTrailingPathDelimiter(AppData) + 'StaticCodeAnalyser' +
-            PathDelim + 'profiles.json';
+  Result := ScaConfigDir + 'profiles.json';
 end;
 
 class function TRuleCatalog.IsBuiltInProfile(const AName: string): Boolean;
@@ -1720,7 +1714,8 @@ end;
 class function TRuleCatalog.WriteUserProfiles(out AError: string): Boolean;
 // Schreibt ALLE eigenen Profile neu - die Datei ist klein, und ein
 // Voll-Schreiben laesst keinen Teil-Update-Zustand zurueck. ATOMAR ueber
-// eine Nachbardatei + MoveFileEx(REPLACE_EXISTING): WriteAllText direkt
+// eine Nachbardatei + TAtomicFile.Swap (MoveFileEx mit REPLACE_EXISTING,
+// uAtomicFile): WriteAllText direkt
 // auf das Ziel haette die Datei zuerst geleert - ein Absturz oder
 // Stromausfall dazwischen liess alle eigenen Profile verschwinden (der
 // Kommentar behauptete bis 2026-10-14 das Gegenteil; Review Bereich C,
@@ -1772,9 +1767,9 @@ begin
       TmpName := Format('%s.%d.tmp', [FileName, GetCurrentProcessId]);
       TFile.WriteAllText(TmpName, JsonFormatEscaped(Root, 2),
         TEncoding.UTF8);
-      if not MoveFileEx(PChar(TmpName), PChar(FileName),
-           MOVEFILE_REPLACE_EXISTING or MOVEFILE_WRITE_THROUGH) then
-        RaiseLastOSError;
+      // Derselbe Tausch wie fuer Reports und Quelldateien (uAtomicFile);
+      // die Nachbardatei bleibt je Prozess benannt (s. oben).
+      TAtomicFile.Swap(TmpName, FileName);
       Result := True;
     except
       // noinspection ExceptionTooGeneral (Lade-Robustheitsgrenze: defekte Konfig darf den Lauf nicht stoppen; Diagnose via DebugOutput-Kanal)

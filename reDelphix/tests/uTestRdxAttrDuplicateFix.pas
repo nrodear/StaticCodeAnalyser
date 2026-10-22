@@ -46,7 +46,8 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog,
   uAttributeDuplicate,
-  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner, uRdxAttrDuplicateFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner,
+  uRdxFixTable, uRdxAttrDuplicateFix,
   uRdxText,              // _() und die gemeinsamen Gruende
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
   uTestRdxTextKit;       // Join, Apply
@@ -154,7 +155,7 @@ begin
     fkAttributeDuplicate);
   try
     SL.Text := ASource;
-    O := PlanAttrDuplicate(nil, SL, F, nil);
+    O := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
     F.Free;
     SL.Free;
@@ -337,8 +338,8 @@ begin
     Old := TLeakFinding.New('t.pas', '', FIRST + 2, Msg('test', FIRST),
       fkAttributeDuplicate);
     SL.Text := Wrap(['  [Test]', '  [Test]', '  procedure Foo;']);
-    O := PlanAttrDuplicate(nil, SL, F, nil);
-    S := PlanAttrDuplicate(nil, SL, Old, nil);
+    O := TRdxFixTable.FixFor(nil, SL, F, nil);
+    S := TRdxFixTable.FixFor(nil, SL, Old, nil);
   finally
     Old.Free;
     F.Free;

@@ -49,6 +49,7 @@ implementation
 uses
   System.Classes,
   uRefactorInfo, uRdxRecipes, uRdxCodeMap, uRdxSqlTemplate,
+  uRdxSqlFacts,      // SqlConstOf, AddSqlFacts (Review Woche G01-03)
   uTestRdxTextKit;   // Join, LineOf
 
 // ---- Helfer ----

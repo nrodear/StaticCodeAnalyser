@@ -6,7 +6,8 @@ unit uTestRdxIntroContext;
 // Gegenbeispielen): mehrzeilige Strings mit mehr als drei Quotes, die
 // Kommentargrenzen eines begin..end, asm-Block und initialization-
 // Abschnitt, Direktiven zwischen der Zeile darueber und der Anweisung auch
-// ohne Block, die Zeile darueber ab ihrem Kommentar-Zustand, '*)' in
+// ohne Block (und auf der Anweisungszeile), die Zeile darueber ab ihrem
+// Kommentar-Zustand, '*)' in
 // Spalte 1, der else-Arm eines Bedingungsausdrucks (Delphi 13), die
 // FPC-Weiche, Zeilenenden je Zeile und die Vorbedingung von
 // IntroduceEdits. Jeder Fall hier ist eine Stelle, an der die Hilfe sonst
@@ -575,8 +576,9 @@ end;
 // kommt an den Zeilenanfang, vor das '{$ENDIF}' - in den Zweig A
 // (Wochen-Review 2026-10-21; DirectiveBetween endete vor der
 // Anweisungszeile). Mit Block zaehlt die ganze Zeile: 'end;' kaeme hinter
-// das '{$ENDIF}'. Eine Direktive HINTER dem Literal ohne Block stoert
-// nicht.
+// das '{$ENDIF}'. Auch eine Direktive HINTER dem Literal ohne Block sperrt
+// (Folgewelle A7: so streng wie das Labor, uTestVnpContext.
+// DirectiveOnStatementLine - vorher hier angenommen).
 procedure TTestRdxIntroContext.DirectiveOnStatementRow;
 var
   B : string;
@@ -596,10 +598,13 @@ begin
     'ENDIF hinter der Anweisung im Zweig');
   B := Buf(['begin', '  Foo;', '  X := 42; {$IFDEF D} Log; {$ENDIF}', 'end;']);
   // Zeile 3, die 42 in Spalte 8: ohne Block hinter dem Literal.
-  AssertAccepted(TargetIn(B, 3, 8), False, 2, 'Direktive hinter dem Literal');
-  Assert.AreEqual('  X := MagicNr01; {$IFDEF D} Log; {$ENDIF}',
-    TargetIn(B, 3, 8).Plan.NewUseLine, 'Direktive hinter dem Literal, '
-    + 'NewUseLine');
+  AssertRefusedWith(TargetIn(B, 3, 8), 'Anweisungszeile',
+    'Direktive hinter dem Literal ohne Block');
+  // Gegenprobe: ein Kommentar ohne '$' auf der Anweisungszeile stoert
+  // nicht.
+  B := Buf(['begin', '  Foo;', '  X := 42; { ohne Dollar }', 'end;']);
+  AssertAccepted(TargetIn(B, 3, 8), False, 2,
+    'Kommentar ohne Direktive auf der Anweisungszeile');
 end;
 
 initialization

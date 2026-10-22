@@ -37,12 +37,8 @@ unit uRdxAttrGapFix;
 interface
 
 uses
-  System.Classes,
-  uEngineApi,          // TSourcePlaces
-  uMethodd12,          // TLeakFinding
   uRdxBufferMath,      // TRdxEdit
-  uRdxCodeMap,         // TRdxCodeMap
-  uRdxRecipeRunner;    // TRdxFixOutcome
+  uRdxCodeMap;         // TRdxCodeMap
 
 type
   TRdxAttrGapFix = class
@@ -55,17 +51,11 @@ type
       out AReason: string): Boolean; static;
   end;
 
-// Der Planer der Tabelle (Form TRdxFixPlanner aus uRdxFixTable): Zeile und
-// Meldung aus dem Fund, die Hilfe ueber MapFix.
-function PlanAttrGap(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-
 implementation
 
 uses
   System.SysUtils,
-  uRefactorInfo,       // TRefactorSpan.Make
-  uRdxFixRunner;       // MapFix
+  uRefactorInfo;       // TRefactorSpan.Make
 
 const
   SPAN_183 = 'sca183';
@@ -298,13 +288,6 @@ begin
   AEdit.Expected := RangeText(AMap, AEdit.Span);
   AEdit.NewText := Copy(L, Col, MaxInt);
   Result := True;
-end;
-
-function PlanAttrGap(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
-    TRdxAttrGapFix.BlankGap);
 end;
 
 end.

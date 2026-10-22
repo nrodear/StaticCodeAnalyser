@@ -1,9 +1,10 @@
 unit uTestRdxSqlFacts;
 
-// Tests fuer die Nachweise der SQL-Vorlage (uRdxSqlTemplate, Charge S1):
-// Konstanten am Quelltext (SqlConstOf), FireDAC-Verbindung
-// (FireDacConnectionProven), Parameternamen (SqlParamName), vorhandene
-// Platzhalter (SqlPlaceholders) und AddSqlFacts. Ohne Parser - laeuft in
+// Tests fuer die Nachweise der SQL-Vorlage (Charge S1; seit Review Woche
+// G01-03 in uRdxSqlFacts): Konstanten am Quelltext (SqlConstOf),
+// FireDAC-Verbindung (FireDacConnectionProven) und AddSqlFacts - dazu aus
+// uRdxSqlTemplate Parameternamen (SqlParamName) und vorhandene
+// Platzhalter (SqlPlaceholders). Ohne Parser - laeuft in
 // reDelphix.Test UND im FPC-Pruefstand. Alles war gegen den Stand e788e0c7
 // rot (die Nachweise gab es nicht, jeder Operand wurde ':pN').
 
@@ -39,6 +40,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRefactorInfo, uRdxRecipes, uRdxCodeMap, uRdxSqlTemplate,
+  uRdxSqlFacts,      // SqlConstOf, FireDacConnectionProven, AddSqlFacts ...
   uTestRdxTextKit;   // Join, LineOf
 
 // SqlConstOf(AName) an der Zeile mit AUse.

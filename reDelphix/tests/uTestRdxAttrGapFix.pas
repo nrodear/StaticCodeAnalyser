@@ -3,9 +3,9 @@ unit uTestRdxAttrGapFix;
 // Editorhilfe SCA183 AttributeMisalignment (uRdxAttrGapFix): die Leerzeilen
 // zwischen einer Attributzeile und dem Element dahinter loeschen. Faelle
 // auf Text (TRdxAttrGapFix.BlankGap) und drei Rundlaeufe mit dem ECHTEN
-// Detektor (TAttributeMisalignmentDetector) und dem Planer der Tabelle
-// (PlanAttrGap) - nur Delphi, reDelphix.Test (die Unit haengt am
-// Quellstellen-Dienst des Cores wie uRdxFixTable).
+// Detektor (TAttributeMisalignmentDetector) ueber den Einstieg der
+// Tabelle (TRdxFixTable.FixFor, Adapter PlanAttrGap) - nur Delphi,
+// reDelphix.Test (Detektor und Tabelle haengen am Core).
 
 interface
 
@@ -41,7 +41,7 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog,
   uAttributeMisalignment,
-  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner, uRdxAttrGapFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner, uRdxFixTable, uRdxAttrGapFix,
   uTestRdxTextKit,       // Join, Apply
   uTestRdxDetectorKit;   // TSeen, DetectSource, CatalogText
 
@@ -316,7 +316,7 @@ begin
     fkAttributeMisalignment);
   try
     SL.Text := ASource;
-    Result := PlanAttrGap(nil, SL, Finding, nil);
+    Result := TRdxFixTable.FixFor(nil, SL, Finding, nil);
   finally
     Finding.Free;
     SL.Free;

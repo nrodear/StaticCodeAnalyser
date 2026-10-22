@@ -358,8 +358,10 @@ end;
 // (uRdxFixRunner.CastTypeReason ueber DeclaredTypeOf) nur fuer einen
 // blossen Bezeichner und lehnt jeden Pfad ab. Bis zur Review Woche G07-17
 // plante der Planer Pfade trotzdem - Doku und Test versprachen eine Hilfe,
-// die der Nutzer nie bekam. Lernt der Aufrufer Pfade (wie SCA126: das
-// letzte Glied eines Feldpfads), faellt die Sperre hier mit.
+// die der Nutzer nie bekam. Der Weg von SCA126 (das letzte Glied als Feld
+// der Datei) beweist nur den Namen, nicht den genauen Typ, den SCA123
+// braucht - die Sperre bleibt (Folgewelle A4, Begruendung bei
+// uRdxFixRunner.CastTypeReason).
 function OperandReason(AMap: TRdxCodeMap; const ASite: TRdxCastSite): string;
 var
   T, N : TRdxToken;

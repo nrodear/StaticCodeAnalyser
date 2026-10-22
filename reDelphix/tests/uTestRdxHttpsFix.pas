@@ -44,7 +44,7 @@ implementation
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uRestHttpSecurity,
-  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner, uRdxHttpsFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner, uRdxFixTable, uRdxHttpsFix,
   uTestRdxDetectorKit,   // TSeen, DetectSource
   uTestRdxTextKit;       // Join, Apply
 
@@ -138,7 +138,7 @@ begin
     fkHttpInsteadOfHttps);
   try
     SL.Text := ASource;
-    Result := PlanHttps(nil, SL, Finding, nil);
+    Result := TRdxFixTable.FixFor(nil, SL, Finding, nil);
   finally
     Finding.Free;
     SL.Free;
@@ -394,7 +394,7 @@ begin
     fkHttpInsteadOfHttps);
   try
     // Ohne Zeilen (keine Datei geoeffnet): keine Hilfe mit Grund.
-    O := PlanHttps(nil, nil, Finding, nil);
+    O := TRdxFixTable.FixFor(nil, nil, Finding, nil);
     Assert.IsFalse(O.Enabled);
     Assert.IsTrue(O.Reason <> '');
     Assert.AreEqual<Integer>(0, Length(O.Edits));

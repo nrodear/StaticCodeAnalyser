@@ -42,7 +42,7 @@ type
     [Test] procedure Sca087_Refusals;
     [Test] procedure Sca139_Variants;
     [Test] procedure Sca139_Refusals;
-    [Test] procedure Sca139_DeclaresValueType;
+    [Test] procedure Sca139_DeclaresNonClassType;
   end;
 
 implementation
@@ -50,6 +50,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxBufferMath, uRdxCodeMap, uRdxSimpleFixes,
+  uRdxTypeProof,     // DeclaresProperty, DeclaresRoutine ... (Folgewelle A4)
   uTestRdxTextKit;   // Join, Apply
 
 // ---- Helfer ----
@@ -404,9 +405,9 @@ begin
       'end;',                                             // 30
       'end.']);
     Map := TRdxCodeMap.Create(SL);
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresProperty(Map, 'Items'));
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresProperty(Map, 'ITEMS'), 'ohne Gross/Klein');
-    Assert.IsFalse(TRdxSimpleFixes.DeclaresProperty(Map, 'FList'));
+    Assert.IsTrue(TRdxTypeProof.DeclaresProperty(Map, 'Items'));
+    Assert.IsTrue(TRdxTypeProof.DeclaresProperty(Map, 'ITEMS'), 'ohne Gross/Klein');
+    Assert.IsFalse(TRdxTypeProof.DeclaresProperty(Map, 'FList'));
     Assert.IsTrue(TRdxSimpleFixes.DeclaresInlineVar(Map, 10, 'L'));
     Assert.IsFalse(TRdxSimpleFixes.DeclaresInlineVar(Map, 10, 'M'));
     Assert.IsFalse(TRdxSimpleFixes.DeclaresInlineVar(Map, 24, 'L'),
@@ -558,12 +559,12 @@ begin
       'end;',
       'end.']);
     Map := TRdxCodeMap.Create(SL);
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Assert'),
+    Assert.IsTrue(TRdxTypeProof.DeclaresRoutine(Map, 'Assert'),
       'qualifiziert: letztes Segment');
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Check'));
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'VALUE'), 'ohne Gross/Klein');
-    Assert.IsFalse(TRdxSimpleFixes.DeclaresRoutine(Map, 'Gone'), 'nur im Kommentar');
-    Assert.IsFalse(TRdxSimpleFixes.DeclaresRoutine(Map, 'TFoo'), 'nur Qualifizierer');
+    Assert.IsTrue(TRdxTypeProof.DeclaresRoutine(Map, 'Check'));
+    Assert.IsTrue(TRdxTypeProof.DeclaresRoutine(Map, 'VALUE'), 'ohne Gross/Klein');
+    Assert.IsFalse(TRdxTypeProof.DeclaresRoutine(Map, 'Gone'), 'nur im Kommentar');
+    Assert.IsFalse(TRdxTypeProof.DeclaresRoutine(Map, 'TFoo'), 'nur Qualifizierer');
   finally
     Map.Free;
     SL.Free;
@@ -692,7 +693,7 @@ begin
   Assert.IsTrue(Pos('fehlt', R) > 0, R);
 end;
 
-procedure TTestRdxSimpleFixes.Sca139_DeclaresValueType;
+procedure TTestRdxSimpleFixes.Sca139_DeclaresNonClassType;
 var
   SL  : TStringList;
   Map : TRdxCodeMap;
@@ -714,15 +715,15 @@ begin
       'implementation',
       'end.']);
     Map := TRdxCodeMap.Create(SL);
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresValueType(Map, 'trec'));
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresValueType(Map, 'TPacked'), 'packed');
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresValueType(Map, 'ifoo'));
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresValueType(Map, 'told'));
-    Assert.IsFalse(TRdxSimpleFixes.DeclaresValueType(Map, 'tfoo'), 'Klasse');
-    Assert.IsFalse(TRdxSimpleFixes.DeclaresValueType(Map, 'tgone'), 'nur im Kommentar');
-    Assert.IsFalse(TRdxSimpleFixes.DeclaresValueType(Map, 'tstringlist'),
+    Assert.IsTrue(TRdxTypeProof.DeclaresNonClassType(Map, 'trec'));
+    Assert.IsTrue(TRdxTypeProof.DeclaresNonClassType(Map, 'TPacked'), 'packed');
+    Assert.IsTrue(TRdxTypeProof.DeclaresNonClassType(Map, 'ifoo'));
+    Assert.IsTrue(TRdxTypeProof.DeclaresNonClassType(Map, 'told'));
+    Assert.IsFalse(TRdxTypeProof.DeclaresNonClassType(Map, 'tfoo'), 'Klasse');
+    Assert.IsFalse(TRdxTypeProof.DeclaresNonClassType(Map, 'tgone'), 'nur im Kommentar');
+    Assert.IsFalse(TRdxTypeProof.DeclaresNonClassType(Map, 'tstringlist'),
       'aus einer anderen Unit: unbekannt');
-    Assert.IsFalse(TRdxSimpleFixes.DeclaresValueType(Map, ''), 'kein Typ');
+    Assert.IsFalse(TRdxTypeProof.DeclaresNonClassType(Map, ''), 'kein Typ');
   finally
     Map.Free;
     SL.Free;

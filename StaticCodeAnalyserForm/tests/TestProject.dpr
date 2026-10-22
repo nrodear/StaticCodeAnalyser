@@ -146,6 +146,7 @@ uses
   uTestFindingActions in 'uTestFindingActions.pas',
   uTestFindingActionMenu in 'uTestFindingActionMenu.pas',
   uTestEditorBulbGeometry in 'uTestEditorBulbGeometry.pas',
+  uTestEditorFindingStore in 'uTestEditorFindingStore.pas',
   uTestFindingKeyPolicy in 'uTestFindingKeyPolicy.pas',
   uTestBulbDecision in 'uTestBulbDecision.pas',
   uTestFindingSourcePick in 'uTestFindingSourcePick.pas',

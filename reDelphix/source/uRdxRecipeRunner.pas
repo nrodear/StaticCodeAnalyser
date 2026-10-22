@@ -361,6 +361,7 @@ uses
   // Rezept 5.2 (Charge S1): BuildSqlTemplate, AddSqlFacts - nur hier
   // gebraucht, nicht in der Schnittstelle (Gegen-Review S1, Minor 7).
   uRdxSqlTemplate,
+  uRdxSqlFacts,      // AddSqlFacts (seit Review Woche G01-03 eigene Unit)
   uSourcePlaces;     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
 
 // Dieser Laeufer ist gegen Version 1 des Quellstellen-Vertrags geschrieben

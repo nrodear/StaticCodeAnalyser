@@ -85,8 +85,9 @@ function PrevCodeRow(const AText: TVnpText; ARow: Integer): Integer;
 // gibt. Ueber die Zeile hinaus prueft TargetAt den Zusammenhang: kein
 // mehrzeiliger String oder Kommentar, kein asm-Block, kein
 // initialization-Abschnitt, keine FPC-Weiche in der Datei, keine
-// Direktive zwischen der Zeile darueber und der Anweisung, und bei
-// begin..end keine offene Kommentargrenze und kein Bedingungsausdruck.
+// Direktive auf der Zeile darueber, zwischen ihr und der Anweisung oder
+// auf der Anweisungszeile, und bei begin..end keine offene Kommentargrenze
+// und kein Bedingungsausdruck.
 function TargetAt(const AText: TVnpText; ARow, ACol: Integer;
   const ANameBase: string): TVnpTarget;
 
@@ -101,8 +102,8 @@ function IntroduceEdits(const AText: TVnpText;
   const ATarget: TVnpTarget): TVnpByteEdits;
 
 // C1h: wo der Sync-Block endet - Zeile und Zeichenspalte (exklusiv) im
-// Puffer NACH dem Schreiben (Vorbedingung wie IntroduceEdits: Plan.Ok).
-// Normal direkt hinter der letzten Verwendung:
+// Puffer NACH dem Schreiben (Vorbedingung wie IntroduceEdits: Plan.Ok -
+// sonst 0 und 0). Normal direkt hinter der letzten Verwendung:
 // so koppelt die IDE moeglichst wenige andere Bezeichner. Steht davor in
 // der Zeile Nicht-ASCII, endet er am Anfang der Folgezeile, wo Zeichen und
 // Bytes gleich zaehlen: SyncEditBlock liest das Blockende als UTF-8-Bytes
@@ -425,6 +426,27 @@ begin
   end;
 end;
 
+// Die Einrueckung fuer begin..end um den Zweig der Zweigzeile APrevRow: die
+// ihrer rohen Zeile - schliesst sie einen mehrzeiligen String, die der
+// Zeile, auf der die Anweisung beginnt (aufwaerts ueber die String-Zeilen
+// bis zum Oeffner). PrevForPlan gibt dem Plan dort nur den Code hinter dem
+// Schliesser (' then'), und begin..end bekam EIN Leerzeichen Einrueckung
+// (Review Woche 2026-10-21, G10-13); die rohe Schliesser-Zeile allein gab
+// begin..end die Spalte des Zweig-Inhalts statt der des 'if' (Folgewelle
+// A7: wie uRdxIntroEdits.BranchIndent in reDelphix, G06-14).
+function BranchIndent(const AText: TVnpText; const ARows: TVnpRows;
+  APrevRow: Integer): string;
+var
+  Row : Integer;
+  L   : string;
+begin
+  Row := APrevRow;
+  while (Row > 1) and (Row <= Length(ARows)) and (ARows[Row - 1].State = 's') do
+    Dec(Row);
+  L := LineOrEmpty(AText, Row);
+  Result := Copy(L, 1, Length(L) - Length(TrimLeft(L)));
+end;
+
 // Der Code der Zeile AFromRow und der Code-Zeilen darueber, von unten nach
 // oben (0: leer) - fuer uVnpPlan.IfExpressionAbove.
 function CodeFromRowUp(const ARows: TVnpRows; AFromRow: Integer): TArray<string>;
@@ -536,6 +558,8 @@ begin
     Result.Name, PrevState);
   if not Result.Plan.Ok then
     Exit;
+  if Result.Plan.Wrap then
+    Result.Plan.BlockIndent := BranchIndent(AText, Rows, Result.PrevRow);
   Why := PlacementReason(AText, Result, Rows);
   if Why <> '' then
   begin
@@ -543,16 +567,6 @@ begin
     Result.Plan.Wrap := False;
     Result.Plan.Reason := Why;
     Exit;
-  end;
-  // begin..end ruecken wie die ROHE Zweigzeile ein: schliesst sie einen
-  // mehrzeiligen String, bekam der Plan nur den getrimmten Code hinter dem
-  // Schliesser (' then'), und der Block stuende eine Spalte tief (Review
-  // Woche 2026-10-21, G10-13). Sonst ist es dieselbe Einrueckung.
-  if Result.Plan.Wrap then
-  begin
-    PrevLine := LineOrEmpty(AText, Result.PrevRow);
-    Result.Plan.BlockIndent := Copy(PrevLine, 1,
-      Length(PrevLine) - Length(TrimLeft(PrevLine)));
   end;
   // Mit Block steht 'begin' ueber der Deklaration: beide eine Zeile tiefer.
   Result.DeclRow := ARow + Ord(Result.Plan.Wrap);
@@ -602,6 +616,15 @@ var
   Stop  : Integer;   // Spalte hinter der letzten Verwendung
   Extra : Integer;   // Mehrbytes davor in der Zeile
 begin
+  // Wie IntroduceEdits: ein abgelehntes Ziel hat keine Spalten (NewCols
+  // leer) - (0, 0) statt eines Bereichsfehlers (Wochen-Review 2026-10-21,
+  // G06-15 in reDelphix; hier nachgezogen in der Folgewelle A7).
+  if not ATarget.Plan.Ok or (Length(ATarget.Plan.NewCols) = 0) then
+  begin
+    ARow := 0;
+    ACol := 0;
+    Exit;
+  end;
   Stop := ATarget.Plan.NewCols[High(ATarget.Plan.NewCols)]
     + Length(ATarget.Name);
   Extra := Utf8Len(Copy(ATarget.Plan.NewUseLine, 1, Stop - 1)) - (Stop - 1);

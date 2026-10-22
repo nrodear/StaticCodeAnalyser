@@ -44,7 +44,8 @@ implementation
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uTrailingWhitespace,
-  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner, uRdxTrailingBlanksFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner,
+  uRdxFixTable, uRdxTrailingBlanksFix,
   uTestRdxTextKit,      // Join, Apply
   uTestRdxDetectorKit;  // DetectSource, TSeen
 
@@ -88,7 +89,7 @@ begin
     fkTrailingWhitespace);
   try
     SL.Text := ASource;
-    O := PlanTrailingBlanks(nil, SL, Finding, nil);
+    O := TRdxFixTable.FixFor(nil, SL, Finding, nil);
     AReason := O.Reason;
     if O.Enabled then
       Result := Apply(ASource, O.Edits);
@@ -132,7 +133,7 @@ begin
       F := TLeakFinding.New(FILE_NAME, '', Seen[i].Line, Seen[i].Msg,
         fkTrailingWhitespace);
       try
-        O := PlanTrailingBlanks(nil, SL, F, nil);
+        O := TRdxFixTable.FixFor(nil, SL, F, nil);
       finally
         F.Free;
       end;
@@ -285,7 +286,7 @@ var
 begin
   F := TLeakFinding.New(FILE_NAME, '', 6, BlanksMsg(11), fkTrailingWhitespace);
   try
-    O := PlanTrailingBlanks(nil, nil, F, nil);
+    O := TRdxFixTable.FixFor(nil, nil, F, nil);
   finally
     F.Free;
   end;

@@ -563,6 +563,17 @@ begin
   SyncBlockEnd(T, G, Row, Col);
   Assert.AreEqual<Integer>(6, Row, 'Wrap, Zeile von end;');
   Assert.AreEqual<Integer>(1, Col, 'Wrap, Spalte 1');
+  // Ein abgelehntes Ziel (kein Literal am Caret) hat keine Spalten: wie
+  // IntroduceEdits ein definiertes Ergebnis (0, 0) statt eines
+  // Bereichsfehlers auf NewCols[-1] (Wochen-Review 2026-10-21, in
+  // reDelphix G06-15; Folgewelle A7).
+  T := TextOf(TEncoding.UTF8.GetBytes('begin'#13#10'  X := Y;'#13#10
+    + 'end;'#13#10));
+  G := TargetAt(T, 2, 8, 'MagicNr');
+  Assert.IsFalse(G.Plan.Ok, 'abgelehnt: kein Literal am Caret');
+  SyncBlockEnd(T, G, Row, Col);
+  Assert.AreEqual<Integer>(0, Row, 'abgelehnt, Zeile 0');
+  Assert.AreEqual<Integer>(0, Col, 'abgelehnt, Spalte 0');
 end;
 
 initialization

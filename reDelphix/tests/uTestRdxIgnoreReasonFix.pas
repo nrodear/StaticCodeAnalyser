@@ -3,11 +3,14 @@ unit uTestRdxIgnoreReasonFix;
 // Editorhilfe SCA179 AttributeIgnoreWithoutReason (uRdxIgnoreReasonFix):
 // aus '[Ignore]' wird '[Ignore('reason')]'. Die Faelle auf Text laufen ohne
 // Parser und ohne Detektor (TTestRdxIgnoreReasonFix); die Rundlaeufe mit dem
-// ECHTEN Detektor und dem Planer der Tabelle (PlanIgnoreReason) stehen in
+// ECHTEN Detektor ueber die Tabelle (TRdxFixTable.FixFor) stehen in
 // einer eigenen Fixture hinter {$IFNDEF FPC} (TTestRdxIgnoreReasonDetector).
-// Die ganze Unit ist nur Delphi (reDelphix.Test): der Planer bindet
-// uEngineApi/uRdxRecipeRunner und uRdxFixRunner, der FPC-Pruefstand
-// (build.sh) fuehrt ihn nicht - die Weichen sind heute ohne Wirkung.
+// Die ganze Unit ist nur Delphi (reDelphix.Test): der Adapter-Test der
+// ersten Fixture ruft die Tabelle (TLeakFinding, uRdxFixTable).
+// Der Planer ist seit der Folgewelle G09-07 ohne Delphi-only-uses (den
+// Adapter traegt uRdxFixTable); die Unit steht trotzdem nicht im
+// FPC-Pruefstand (build.sh) - dessen Runner kennt die {$IFNDEF FPC}-
+// Weichen nicht, sie sind heute ohne Wirkung.
 // Prueft: die Formen '[Ignore]', '[Ignore()]', Schreibweise und Leerraum, den
 // Bereich (nur der Teil hinter dem Namen), und die Sperren - Gruppe, anderes
 // Attribut davor, Argument, Kommentar, verschobene Zeile.
@@ -59,6 +62,7 @@ uses
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
   {$ENDIF}
   uMethodd12, uSCAConsts, uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner,
+  uRdxFixTable,
   uRdxIgnoreReasonFix,
   uRdxText,              // _() und die gemeinsamen Gruende (E29)
   uTestRdxTextKit;       // Join, Apply
@@ -290,7 +294,7 @@ begin
   try
     Src := InClass(Join(['    [Ignore]', '    procedure Foo;']));
     SL.Text := Src;
-    O := PlanIgnoreReason(nil, SL, Finding, nil);
+    O := TRdxFixTable.FixFor(nil, SL, Finding, nil);
     Assert.IsTrue(O.Enabled, O.Reason);
     Assert.AreEqual<Integer>(1, Length(O.Edits));
     Assert.AreEqual(
@@ -298,11 +302,11 @@ begin
       Apply(Src, O.Edits));
     // Die Zeile ist verschoben: Grund, keine Ersetzung.
     Finding.LineNumber := IntToStr(ATTR_LINE + 1);
-    O := PlanIgnoreReason(nil, SL, Finding, nil);
+    O := TRdxFixTable.FixFor(nil, SL, Finding, nil);
     Assert.IsFalse(O.Enabled);
     Assert.AreEqual(Moved, O.Reason);
     // Ohne Quelltext keine Hilfe.
-    O := PlanIgnoreReason(nil, nil, Finding, nil);
+    O := TRdxFixTable.FixFor(nil, nil, Finding, nil);
     Assert.IsFalse(O.Enabled);
   finally
     Finding.Free;
@@ -338,7 +342,7 @@ begin
     fkAttributeIgnoreWithoutReason);
   try
     SL.Text := ASource;
-    Result := PlanIgnoreReason(nil, SL, Finding, nil);
+    Result := TRdxFixTable.FixFor(nil, SL, Finding, nil);
   finally
     Finding.Free;
     SL.Free;

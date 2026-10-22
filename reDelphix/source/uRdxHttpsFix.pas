@@ -27,11 +27,8 @@ unit uRdxHttpsFix;
 interface
 
 uses
-  System.Classes,    // TStrings
-  uEngineApi,        // TSourcePlaces
-  uMethodd12,        // TLeakFinding
-  uRdxCodeMap,       // TRdxCodeMap
-  uRdxRecipeRunner;  // TRdxFixOutcome, TRdxEdit
+  uRdxBufferMath,    // TRdxEdit
+  uRdxCodeMap;       // TRdxCodeMap
 
 type
   // Der Planer von SCA115 (Form TRdxMapPlanner, uRdxFixRunner).
@@ -48,16 +45,10 @@ type
     class function UrlReason(const AUrl: string): string; static;
   end;
 
-// Adapter der Tabelle (uRdxFixTable, Form TRdxFixPlanner): Zeile und Meldung
-// aus AFinding.
-function PlanHttps(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-
 implementation
 
 uses
   System.SysUtils,
-  uRdxFixRunner,     // MapFix
   uRefactorInfo;     // TRefactorSpan.Make
 
 const
@@ -274,13 +265,6 @@ begin
   AEdit.Expected := SCHEME_HTTP;
   AEdit.NewText := SCHEME_HTTPS;
   Result := True;
-end;
-
-function PlanHttps(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
-    TRdxHttpsFix.Https);
 end;
 
 end.

@@ -35,12 +35,8 @@ unit uRdxTwiceInheritedFix;
 interface
 
 uses
-  System.Classes,        // TStrings
-  uEngineApi,            // TSourcePlaces
-  uMethodd12,            // TLeakFinding
   uRdxBufferMath,        // TRdxEdit
-  uRdxCodeMap,           // TRdxCodeMap
-  uRdxRecipeRunner;      // TRdxFixOutcome
+  uRdxCodeMap;           // TRdxCodeMap
 
 const
   // Gruende (deutsch wie die der Nachbarn; Tests pinnen sie ueber diese
@@ -61,10 +57,8 @@ const
   R_TWICE_DIFFERENT = 'die beiden Aufrufe sind nicht textgleich';
   R_TWICE_SHARED = 'ein Aufruf teilt die Zeile mit anderem Code oder einem '
     + 'Kommentar - die Hilfe loescht ganze Zeilen';
-  // Hinweise: der Hauptweg steht in der Tabelle (uRdxFixTable, R_TWICE_HINT
-  // der Integrationsnotiz), der des zweiten Eintrags setzt der Planer selbst.
-  R_TWICE_ALT_HINT = 'der erste Aufruf entfaellt - die Elternmethode laeuft '
-    + 'nur noch einmal; Reihenfolge und Nebenwirkung pruefen';
+  // Die Hinweise beider Eintraege (R_TWICE_HINT, R_TWICE_ALT_HINT) stehen
+  // mit den Adaptern in der Tabelle (uRdxFixTable).
 
 type
   // Die Planer auf der Code-Sicht (Form TRdxMapPlanner, uRdxFixRunner): die
@@ -82,20 +76,11 @@ type
       out AReason: string): Boolean; static;
   end;
 
-// Die Adapter in der Form von TRdxFixPlanner (uRdxFixTable): der Hauptweg
-// (Variant 0; Hinweis und Kennzeichnung setzt die Zeile der Tabelle) und der
-// zweite Eintrag (Variant = 1, Hinweis und Kennzeichnung setzt er selbst).
-function PlanTwiceInherited(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-function PlanTwiceInheritedAlt(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-
 implementation
 
 uses
   System.SysUtils,
-  uRefactorInfo,     // TRefactorSpan.Make
-  uRdxFixRunner;     // MapFix
+  uRefactorInfo;     // TRefactorSpan.Make
 
 const
   SPAN_093 = 'sca093';
@@ -369,28 +354,6 @@ class function TRdxTwiceInheritedFix.DeleteFirst(AMap: TRdxCodeMap;
   out AReason: string): Boolean;
 begin
   Result := PlanDelete(AMap, ALine, True, AEdit, AReason);
-end;
-
-{ ---- Die Adapter ---- }
-
-function PlanTwiceInherited(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
-    TRdxTwiceInheritedFix.DeleteSecond);
-end;
-
-// Der zweite Eintrag: Variant und Kennzeichnung auch gesperrt (der Eintrag
-// steht mit Grund im Menue und sagt, was er taete - wie SCA168).
-function PlanTwiceInheritedAlt(APlaces: TSourcePlaces; ALines: TStrings;
-  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
-begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
-    TRdxTwiceInheritedFix.DeleteFirst);
-  Result.Variant := 1;
-  Result.ChangesBehavior := True;
-  if Result.Enabled then
-    Result.Hint := R_TWICE_ALT_HINT;
 end;
 
 end.

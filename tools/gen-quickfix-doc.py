@@ -42,8 +42,7 @@ AUFRUF (Repo-Wurzel):
               (reDelphix/data/profile-code-aktionen.json), keine ohne Hilfe
               ausser PROFILE_EXTRA. Quellfehler (Exit 2) ist eine Unit in
               reDelphix/source, die 'ChangesBehavior :=' setzt, ohne dass
-              der Generator sie liest (Tabelle, Laeufer, Anbieter,
-              uRdx*Fix.pas).
+              der Generator sie liest (Tabelle, Laeufer, Anbieter).
   DRIFT       QUICKFIXES.md ist byte-gleich mit dem, was der Generator jetzt
               schreiben wuerde (UTF-8 mit BOM, CRLF - so liegt jede .md im
               Checkout, .gitattributes: *.md eol=crlf); gemeldet wird die
@@ -80,15 +79,12 @@ RDX = os.path.join(REPO, 'reDelphix')
 SRC_TABLE = os.path.join(RDX, 'source', 'uRdxFixTable.pas')
 SRC_RUNNER = os.path.join(RDX, 'source', 'uRdxFixRunner.pas')
 SRC_PROVIDER = os.path.join(RDX, 'source', 'uRdxProvider.pas')
-# Planer-Units mit eigenem Adapter PlanXxx (TRdxFixPlanner): FIX_ROWS nennt nur
-# den Namen, der Rumpf steht dort (Chargen Q und R, je einfache Hilfe eine
-# Unit). Gelesen per Namensmuster uRdx*Fix.pas statt einer Handliste: eine
-# neue Planer-Unit, die in der Liste fehlte, liess ihre Kennzeichnung still
-# auf 'nein' fallen (Review Woche 2026-10-21, G10-25). Dass keine ANDERE
-# Unit 'ChangesBehavior :=' setzt, prueft unmarked_units().
+# Alle Planer der Tabelle (TRdxFixPlanner) stehen in uRdxFixTable - seit der
+# Folgewelle des Wochen-Reviews 2026-10-21 (G09-07) auch die der Chargen Q
+# und R; bis dahin trug jede Planer-Unit uRdx*Fix.pas ihren Adapter selbst,
+# und der Generator las sie mit (SRC_PLANNER_UNITS, G10-25). Dass keine
+# ANDERE Unit 'ChangesBehavior :=' setzt, prueft unmarked_units().
 SRC_DIR = os.path.join(RDX, 'source')
-SRC_PLANNER_UNITS = tuple(sorted(glob.glob(os.path.join(SRC_DIR,
-                                                        'uRdx*Fix.pas'))))
 # Profil code-aktionen (README 'Code-Aktionen in der IDE ausprobieren'): jede
 # Art mit Hilfe steht darin, sonst gibt es nach dem Import keinen Fund und
 # keine Gluehbirne (Review Woche 2026-10-21, G10-05). Arten im Profil OHNE
@@ -464,10 +460,10 @@ def parse_row(item, i):
 def unmarked_units(read=None):
     """Units in reDelphix/source, die die Kennzeichnung setzen ('Changes-
     Behavior :=' im Code), deren Ruempfe der Generator aber nicht liest -
-    Tabelle, Laeufer, Anbieter (Rezepte) und die Planer-Units. read: die
-    gelesenen Pfade (nur der Selbsttest gibt sie vor)."""
+    er liest Tabelle, Laeufer und Anbieter (Rezepte). read: die gelesenen
+    Pfade (nur der Selbsttest gibt sie vor)."""
     if read is None:
-        read = (SRC_TABLE, SRC_RUNNER, SRC_PROVIDER) + SRC_PLANNER_UNITS
+        read = (SRC_TABLE, SRC_RUNNER, SRC_PROVIDER)
     read = {os.path.normcase(os.path.abspath(p)) for p in read}
     out = []
     for path in sorted(glob.glob(os.path.join(SRC_DIR, '*.pas'))):
@@ -504,20 +500,13 @@ def parse_table(table_text=None, runner_text=None):
     runner = routines(strip_comments(runner_text), SRC_RUNNER)
     for name, bodies in runner.items():
         index.setdefault(name, []).extend(bodies)
-    for unit_path in SRC_PLANNER_UNITS:
-        for name, bodies in routines(strip_comments(load_text(unit_path)),
-                                     unit_path).items():
-            index.setdefault(name, []).extend(bodies)
     for r in rows:
         for planner in (r['plan'], r['alt']):
             if planner and planner not in index:
                 raise SourceError(
-                    'FIX_ROWS[%d]: Planer %s ohne Rumpf in %s, %s und den %d '
-                    'Planer-Units %s' % (r['index'], planner, rel(SRC_TABLE),
-                                         rel(SRC_RUNNER),
-                                         len(SRC_PLANNER_UNITS),
-                                         rel(os.path.join(SRC_DIR,
-                                                          'uRdx*Fix.pas'))))
+                    'FIX_ROWS[%d]: Planer %s ohne Rumpf in %s und %s - die '
+                    'Adapter gehoeren in die Tabelle'
+                    % (r['index'], planner, rel(SRC_TABLE), rel(SRC_RUNNER)))
         # Wie TRdxFixTable.FixFor: die Zeile ODER der Planer kennzeichnet;
         # den zweiten Eintrag kennzeichnet nur sein Planer.
         r['changes_main'] = ('ja' if r['changes']
@@ -529,7 +518,8 @@ def parse_table(table_text=None, runner_text=None):
         raise SourceError(
             "'ChangesBehavior :=' in %s - der Generator liest dort nicht, "
             "QUICKFIXES.md nennte die Hilfe still 'Aendert Verhalten: nein'. "
-            "Die Unit als uRdx<Name>Fix.pas benennen oder hier aufnehmen"
+            "Den Adapter in die Tabelle (uRdxFixTable) legen oder die Unit "
+            "hier aufnehmen"
             % ', '.join(outside))
     return {'rows': rows, 'captions': captions, 'alt_captions': alt_captions,
             'sizes': {k: (v[0], len(v[2])) for k, v in arrays.items()},
@@ -1577,15 +1567,14 @@ def selftest():
                       + [rows[0]['kind']]))['errors']
     expect(any('steht mehrfach' in e for e in errs),
            'Profil-Mutant erkannt: Art doppelt im Profil')
-    # Kennzeichnung ausserhalb der gelesenen Units (G10-25): ohne die
-    # Planer-Units faellt die, die heute 'ChangesBehavior :=' setzt, auf.
-    marking = [p for p in SRC_PLANNER_UNITS
-               if CB_RE.search(strip_comments(load_text(p)))]
-    outside = unmarked_units(read=(SRC_TABLE, SRC_RUNNER, SRC_PROVIDER))
-    expect(bool(marking) and all(rel(p) in outside for p in marking)
-           and not unmarked_units(),
+    # Kennzeichnung ausserhalb der gelesenen Units (G10-25): liest der
+    # Generator eine Unit nicht, die 'ChangesBehavior :=' setzt, faellt sie
+    # auf - hier die Tabelle (ihre Adapter setzen die Kennzeichnung, seit
+    # G09-07 auch die der zweiten Eintraege SCA093 und SCA046).
+    outside = unmarked_units(read=(SRC_RUNNER, SRC_PROVIDER))
+    expect(rel(SRC_TABLE) in outside and not unmarked_units(),
            'Kennzeichnung ausserhalb erkannt (%s)'
-           % ', '.join(os.path.basename(p) for p in marking))
+           % os.path.basename(SRC_TABLE))
 
     text = render(model, inputs['po'])
     lines = text.split('\n')
