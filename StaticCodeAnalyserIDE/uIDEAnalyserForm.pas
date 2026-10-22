@@ -485,10 +485,13 @@ type
     // Klick auf einen dynamischen Eintrag aus uFindingActions: fuehrt
     // Execute des Anbieters aus (RunFindingAction).
     procedure GridMenuActionClick(Sender: TObject);
-    // Fuehrt A aus; Fehler des Anbieters landen in der Status-Bar, nicht in
-    // der IDE (Grid-Menue, Ctrl+Alt+F/S). True, wenn Execute ohne Ausnahme
-    // lief.
-    function RunFindingAction(const A: TFindingAction; Sender: TObject): Boolean;
+    // Fuehrt A aus; eine Ausnahme des Anbieters faengt sie ab und liefert
+    // ihren Text als AFailure (fertige Status-Zeile) - der Aufrufer schreibt
+    // ihn in die Status-Bar, zusammen mit seinen anderen Meldungen (Grid-
+    // Menue, Ctrl+Alt+F/S; Review Woche G04-05). True, wenn Execute ohne
+    // Ausnahme lief.
+    function RunFindingAction(const A: TFindingAction; Sender: TObject;
+      out AFailure: string): Boolean;
     // Fuehrt fuer den Fund der Grid-Zeile die erste Aktion der Art AKind
     // aus der Anbieter-Registry aus, die eine Taste ungesehen ausfuehren
     // darf (TFindingMenuModel.FirstRunnable - dasselbe Modell wie
@@ -499,9 +502,12 @@ type
     // ausgelassen) - False heisst: kein Anbieter bietet diese Art fuer den
     // Fund an, der Aufrufer darf seinen eigenen Weg gehen (Ctrl+Alt+S bei
     // Config-/DFM-Funden, Review 2026-10-14 MAJOR 1). Fehler werfender
-    // Anbieter (Model.Errors) stehen in der Status-Bar.
+    // Anbieter (Model.Errors) kommen als AErrs zurueck (eine Zeile, '' =
+    // keine): bei True stehen sie schon mit dem Ergebnis in der Status-Bar,
+    // bei False schreibt sie bisher niemand - der Aufrufer haengt sie an
+    // seine eigene Meldung (StatusWithErrors), sonst ueberschriebe die sie.
     function RunFirstAction(RowIdx: Integer; AKind: TFindingActionKind;
-      const ADoneFmt, AMissingFmt: string): Boolean;
+      const ADoneFmt, AMissingFmt: string; out AErrs: string): Boolean;
     // Ctrl+Alt+F: die erste verfuegbare Hilfe (fakFix) der Registry - mit
     // reDelphix dieselbe wie in der Gluehbirne (Pufferabgleich, ein
     // Undo-Schritt). Status-Bar zeigt Ergebnis oder Grund.
@@ -2861,18 +2867,22 @@ end;
 
 procedure TAnalyserFrame.GridMenuActionClick(Sender: TObject);
 var
-  Idx : Integer;
+  Idx     : Integer;
+  Failure : string;
 begin
   if not (Sender is TMenuItem) then Exit;
   Idx := TMenuItem(Sender).Tag - GRID_ACTION_TAG;
   if (Idx < 0) or (Idx > High(FGridActions)) then Exit;
-  RunFindingAction(FGridActions[Idx], Sender);
+  if not RunFindingAction(FGridActions[Idx], Sender, Failure)
+     and (Failure <> '') then
+    StatusMode(Failure);
 end;
 
 function TAnalyserFrame.RunFindingAction(const A: TFindingAction;
-  Sender: TObject): Boolean;
+  Sender: TObject; out AFailure: string): Boolean;
 begin
-  Result := False;
+  Result   := False;
+  AFailure := '';
   if not Assigned(A.Execute) then Exit;
   try
     A.Execute(Sender);
@@ -2881,7 +2891,7 @@ begin
     on EStackExhausted do raise;
     on EAbort do raise;   // ein stiller Abbruch ist keine Statusmeldung wert
     on E: Exception do
-      StatusMode(Format(_('Finding action failed: %s'), [E.Message]));
+      AFailure := Format(_('Finding action failed: %s'), [E.Message]);
   end;
 end;
 
@@ -2965,8 +2975,23 @@ begin
     Result := A.Caption + ' - ' + A.Hint;
 end;
 
+// Eine Status-Zeile aus der Meldung der Taste und den Anbieterfehlern
+// (RunFirstAction.AErrs): beide in EINER Zeile, weil ein zweiter
+// StatusMode den ersten sofort ueberschreibt (Gegen-Review Welle 1,
+// Minor 8; Review Woche G04-05). Leere Teile fallen weg.
+function StatusWithErrors(const AMsg, AErrs: string): string;
+begin
+  if AErrs = '' then
+    Result := AMsg
+  else if AMsg = '' then
+    Result := AErrs
+  else
+    Result := AMsg + ' | ' + AErrs;
+end;
+
 function TAnalyserFrame.RunFirstAction(RowIdx: Integer;
-  AKind: TFindingActionKind; const ADoneFmt, AMissingFmt: string): Boolean;
+  AKind: TFindingActionKind; const ADoneFmt, AMissingFmt: string;
+  out AErrs: string): Boolean;
 // Die Auswahl (erste ausfuehrbare ihrer Art, sonst der erste Grund) trifft
 // TFindingMenuModel.FirstRunnable - getestet in uTestFindingKeyPolicy;
 // hier nur Fund holen, Modell bauen, melden.
@@ -2974,10 +2999,10 @@ var
   F      : TLeakFinding;
   Model  : TFindingMenuModel;
   Choice : TFindingKeyChoice;
-  Errs   : string;   // alle Anbieterfehler in einer Zeile
   Msg    : string;   // Ergebnis der Taste
 begin
   Result := False;
+  AErrs  := '';
   if not Assigned(FDisplayedFindings) or (RowIdx <= 0)
      or (RowIdx > FDisplayedFindings.Count) then Exit;
   F := FDisplayedFindings[RowIdx - 1];
@@ -2985,32 +3010,30 @@ begin
   Model := BuildFindingMenuModel(TArray<TLeakFinding>.Create(F), []);
   // Ein werfender Anbieter blieb bis 2026-10-14 unsichtbar - die Taste
   // meldete dann nur "nicht verfuegbar: SCAnnn". Die Fehler stehen MIT
-  // dem Ergebnis in einer Zeile: ein StatusMode je Fehler wurde von der
-  // Folgemeldung sofort ueberschrieben (Gegen-Review Welle 1, Minor 8).
-  Errs := string.Join('; ', Model.Errors);
-  if Errs <> '' then
-    Errs := Format(_('Finding actions: provider failed - %s'), [Errs]);
+  // dem Ergebnis in einer Zeile (StatusWithErrors).
+  AErrs := string.Join('; ', Model.Errors);
+  if AErrs <> '' then
+    AErrs := Format(_('Finding actions: provider failed - %s'), [AErrs]);
   Choice := Model.FirstRunnable(AKind);
   Msg := '';
   case Choice.Verdict of
     kvRun:
-      if RunFindingAction(Model.Actions[Choice.Index], Self) then
+      // Wirft Execute, ist sein Fehlertext die Meldung der Taste - frueher
+      // schrieb RunFindingAction ihn selbst, und die Errs-Zeile danach
+      // ueberschrieb ihn (Review Woche G04-05).
+      if RunFindingAction(Model.Actions[Choice.Index], Self, Msg) then
         Msg := Format(ADoneFmt, [Model.Actions[Choice.Index].Caption]);
     kvDisabled, kvChangesBehavior:
       Msg := Format(AMissingFmt,
         [SkippedActionText(Model.Actions[Choice.Index], Choice.Verdict)]);
   else
-    // kvNone: keine Aktion dieser Art - der Aufrufer entscheidet; die
-    // Anbieterfehler sieht er trotzdem (seine Meldung kommt danach).
-    if Errs <> '' then StatusMode(Errs);
+    // kvNone: keine Aktion dieser Art - der Aufrufer entscheidet und
+    // schreibt AErrs mit seiner eigenen Meldung; ein StatusMode hier
+    // ueberschriebe er sofort.
     Exit;
   end;
-  if (Msg <> '') and (Errs <> '') then
-    StatusMode(Msg + ' | ' + Errs)
-  else if Msg <> '' then
-    StatusMode(Msg)
-  else if Errs <> '' then
-    StatusMode(Errs);
+  if (Msg <> '') or (AErrs <> '') then
+    StatusMode(StatusWithErrors(Msg, AErrs));
   Result := True;
 end;
 
@@ -3020,22 +3043,27 @@ procedure TAnalyserFrame.ApplyQuickFixForRow(RowIdx: Integer);
 // die falsche Zeile), nur vier Regeln. Jetzt die Registry (Beschluss
 // 2026-10-09: alles auf reDelphix).
 var
-  F : TLeakFinding;
+  F    : TLeakFinding;
+  Errs : string;
+  Msg  : string;
 begin
   if TFindingActions.ProviderCount = 0 then
     StatusMode(_('Quick-Fix: the reDelphix package is not loaded'))
   else if not RunFirstAction(RowIdx, fakFix, _('Quick-Fix applied: %s'),
-      _('Quick-Fix not available: %s')) then
+      _('Quick-Fix not available: %s'), Errs) then
   begin
     // Kein Anbieter hat eine Hilfe fuer diesen Fund: die Regel nennen,
-    // wie bisher.
+    // wie bisher - mit den Anbieterfehlern in derselben Zeile.
+    Msg := '';
     if Assigned(FDisplayedFindings) and (RowIdx > 0)
        and (RowIdx <= FDisplayedFindings.Count) then
     begin
       F := FDisplayedFindings[RowIdx - 1];
       if Assigned(F) then
-        StatusMode(Format(_('Quick-Fix not available: %s'), [F.RuleID]));
+        Msg := Format(_('Quick-Fix not available: %s'), [F.RuleID]);
     end;
+    if (Msg <> '') or (Errs <> '') then
+      StatusMode(StatusWithErrors(Msg, Errs));
   end;
 end;
 
@@ -3060,31 +3088,40 @@ var
   F      : TLeakFinding;
   Target : TMarkerTarget;
   Why    : string;
+  Errs   : string;   // Anbieterfehler aus RunFirstAction, an jede Meldung
 begin
+  Errs := '';
   if (TFindingActions.ProviderCount > 0)
      and RunFirstAction(RowIdx, fakSuppress, _('Suppress inserted: %s'),
-       _('Suppress not available: %s')) then Exit;
+       _('Suppress not available: %s'), Errs) then Exit;
   if not Assigned(FDisplayedFindings) then Exit;
   if (RowIdx <= 0) or (RowIdx > FDisplayedFindings.Count) then Exit;
   F := FDisplayedFindings[RowIdx - 1];
   if not Assigned(F) then Exit;
 
-  if (StrToIntDef(F.LineNumber, 0) <= 0) or (F.FileName = '') then
+  // F.LineInt ist die Zahl, die auch MarkerTargetFor bekommt - eine
+  // Pruefung auf demselben Weg (vorher StrToIntDef(F.LineNumber, 0);
+  // Review Woche G04-03).
+  if (F.LineInt <= 0) or (F.FileName = '') then
   begin
-    StatusMode(_('Suppress: cannot locate source line'));
+    StatusMode(StatusWithErrors(_('Suppress: cannot locate source line'),
+      Errs));
     Exit;
   end;
   if not TSuppression.MarkerTargetFor(F.FileName, F.LineInt, F.Kind, Target,
        Why) then
   begin
-    StatusMode(Format(_('Suppress: cannot place the marker: %s'), [Why]));
+    StatusMode(StatusWithErrors(
+      Format(_('Suppress: cannot place the marker: %s'), [Why]), Errs));
     Exit;
   end;
   if TIDEEditor.InsertLineAbove(Target.HostFile, Target.Line,
        Target.MarkerLine) then
-    StatusMode(Format(_('Suppress inserted: %s'), [Target.MarkerLine]))
+    StatusMode(StatusWithErrors(
+      Format(_('Suppress inserted: %s'), [Target.MarkerLine]), Errs))
   else
-    StatusMode(_('Suppress: editor write failed (file not in IDE?)'));
+    StatusMode(StatusWithErrors(
+      _('Suppress: editor write failed (file not in IDE?)'), Errs));
 end;
 
 function TAnalyserFrame.BuildClaudePrompt(F: TLeakFinding): string;
@@ -4865,9 +4902,10 @@ end;
 procedure KeepEditorFindings(const AFileName: string;
   AFindings: TObjectList<TLeakFinding>);
 var
-  F, C : TLeakFinding;
-  Key  : string;
-  Kept : TEditorFindingsCopy;
+  F, C   : TLeakFinding;
+  Key    : string;
+  Kept   : TEditorFindingsCopy;
+  Stored : TEditorFindingsCopy;
 begin
   if GEditorFindings = nil then
     GEditorFindings := TObjectDictionary<string, TEditorFindingsCopy>.Create(
@@ -4877,24 +4915,43 @@ begin
      and (GEditorFindings.Count >= MAX_EDITOR_FINDING_FILES) then
     DropOldestEditorFindings;
   Kept := TEditorFindingsCopy.Create;
-  Kept.Gen := NextFindingsGeneration;
-  if Assigned(AFindings) then
-    for F in AFindings do
-    begin
-      if not Assigned(F) then Continue;
-      C := TLeakFinding.Create;
-      C.FileName   := F.FileName;
-      C.MethodName := F.MethodName;
-      C.LineNumber := F.LineNumber;
-      C.EndLine    := F.EndLine;
-      C.MissingVar := F.MissingVar;
-      C.Severity   := F.Severity;
-      C.Kind       := F.Kind;
-      C.Confidence := F.Confidence;
-      C.RuleID     := F.RuleID;
-      Kept.Items.Add(C);
-    end;
-  GEditorFindings.AddOrSetValue(Key, Kept);
+  // Kept gehoert bis zum AddOrSetValue niemandem: wirft das Kopieren
+  // (EOutOfMemory), gaebe sonst niemand Kept samt der schon kopierten Funde
+  // frei (Review Woche G04-07). Steht Kept schon im Dictionary (beim
+  // Ersetzen wirft erst die Freigabe der alten Kopie), besitzt es Kept -
+  // dann kein Free. Kept lebt beim Vergleich noch: keine
+  // Adress-Wiederverwendung.
+  try
+    Kept.Gen := NextFindingsGeneration;
+    if Assigned(AFindings) then
+      for F in AFindings do
+      begin
+        if not Assigned(F) then Continue;
+        // C geht SOFORT in die Liste: wirft danach eine Zuweisung, gibt
+        // das Free von Kept auch C frei.
+        C := TLeakFinding.Create;
+        try
+          Kept.Items.Add(C);
+        except
+          C.Free;
+          raise;
+        end;
+        C.FileName   := F.FileName;
+        C.MethodName := F.MethodName;
+        C.LineNumber := F.LineNumber;
+        C.EndLine    := F.EndLine;
+        C.MissingVar := F.MissingVar;
+        C.Severity   := F.Severity;
+        C.Kind       := F.Kind;
+        C.Confidence := F.Confidence;
+        C.RuleID     := F.RuleID;
+      end;
+    GEditorFindings.AddOrSetValue(Key, Kept);
+  except
+    if not GEditorFindings.TryGetValue(Key, Stored) or (Stored <> Kept) then
+      Kept.Free;
+    raise;
+  end;
 end;
 
 function FindingsAtEditorLine(const AFile: string;
@@ -5306,6 +5363,9 @@ type
     procedure PopupFreed(APopup: TPopupMenu);
     function  FindEditorPopup(AForm: TCustomForm): TPopupMenu;
     procedure OnPopupHandler(Sender: TObject);
+    // Sitzt GENAU OnPopupHandler DIESER Instanz auf APopup.OnPopup (Code
+    // UND Data)? Nur dann darf der Abbau das Original zurueckschreiben.
+    function HandlerIsOurs(APopup: TPopupMenu): Boolean;
     procedure ItemClick(Sender: TObject);
     // AH10: Eintraege der Anbieter zu den Funden der Cursorzeile anhaengen
     // bzw. einen davon ausfuehren.
@@ -5471,10 +5531,21 @@ begin
       begin
         // Nur restoren wenn unser Handler noch installiert ist; sonst hat
         // ein anderes Plugin nach uns gehookt - dessen Chain wuerde brechen
-        // wenn wir blind ueberschreiben. Vergleich via .Data (= Self) ist
-        // robuster als .Code (vermeidet Method-vs-Class-Pointer-Syntax).
-        if TMethod(Slot.Popup.OnPopup).Data = Pointer(Self) then
-          Slot.Popup.OnPopup := Slot.OrigOnPopup;
+        // wenn wir blind ueberschreiben. Dann bleibt OnPopupHandler in
+        // dessen Kette: bis zum Entladen laesst er (ohne Slot) den
+        // IDE-Aufbau aus, danach zeigt der Zeiger in entladenen Code. Beides
+        // ist von hier aus nicht zu heilen, ohne die fremde Kette zu
+        // brechen - der Fall geht deshalb in DebugView, damit eine spaetere
+        // AV ihre Ursache hat (Review Woche G04-01).
+        if HandlerIsOurs(Slot.Popup) then
+          Slot.Popup.OnPopup := Slot.OrigOnPopup
+        else
+        begin
+          // noinspection DebugOutput
+          OutputDebugString(PChar('SCA: DetachAll - editor popup ' +
+            Slot.Popup.Name + ' was hooked by another plugin after us; ' +
+            'our OnPopup handler stays in its chain'));
+        end;
       end;
       if Assigned(Slot.OurItem) then
       begin
@@ -5487,6 +5558,20 @@ begin
     end;
     FSlots.Clear;   // doOwnsValues -> Slots werden gefreut
   end;
+end;
+
+function TEditorContextMenuHook.HandlerIsOurs(APopup: TPopupMenu): Boolean;
+// Vergleich ueber TMethod (Code UND Data = exakt DIESER Handler DIESER
+// Instanz) - vorher pruefte DetachAll nur .Data, HookEditorForm beides
+// (Review Woche G04-01). Der Klammer-Zwang ist Delphi-Praezedenz: 'and'
+// bindet staerker als '=', ohne Klammern parst der Ausdruck als
+// '(.. and ..Code) = ..' und ergibt E2015.
+var
+  Ours : TNotifyEvent;
+begin
+  Ours   := OnPopupHandler;
+  Result := (TMethod(APopup.OnPopup).Code = TMethod(Ours).Code)
+    and (TMethod(APopup.OnPopup).Data = TMethod(Ours).Data);
 end;
 
 function TEditorContextMenuHook.FindEditorPopup(AForm: TCustomForm): TPopupMenu;
@@ -5550,14 +5635,7 @@ begin
   begin
     // Original-Handler zurueckgeben, sofern unser Hook noch draufsitzt -
     // sonst wuerde ein fremder, spaeter installierter Handler entfernt.
-    // Vergleich ueber TMethod (Code UND Data = exakt DIESER Handler DIESER
-    // Instanz); der Klammer-Zwang ist Delphi-Praezedenz: 'and' bindet
-    // staerker als '=', ohne Klammern parst der Ausdruck als
-    // '(Assigned(..) and ..Code) = ..' und ergibt E2015.
-    var Ours: TNotifyEvent := OnPopupHandler;
-    if Assigned(Alt.Popup) and
-       (TMethod(Alt.Popup.OnPopup).Code = TMethod(Ours).Code) and
-       (TMethod(Alt.Popup.OnPopup).Data = TMethod(Ours).Data) then
+    if Assigned(Alt.Popup) and HandlerIsOurs(Alt.Popup) then
       Alt.Popup.OnPopup := Alt.OrigOnPopup;
     FSlots.Remove(Alt.Popup);   // doOwnsValues -> Slot wird gefreut
   end;

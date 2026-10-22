@@ -38,31 +38,37 @@ end;
 
 procedure TTestFindingSourcePick.OnlyDock_UsesDock;
 begin
-  Assert.IsTrue(PickFindingSource(State(True, 5, False, 9)) = fsDock,
+  Assert.AreEqual<Integer>(Ord(fsDock),
+    Ord(PickFindingSource(State(True, 5, False, 9))),
     'ohne Silent-Kopien zaehlt deren Stand nicht');
 end;
 
 procedure TTestFindingSourcePick.OnlySilent_UsesSilent;
 begin
-  Assert.IsTrue(PickFindingSource(State(False, 9, True, 2)) = fsSilent,
+  Assert.AreEqual<Integer>(Ord(fsSilent),
+    Ord(PickFindingSource(State(False, 9, True, 2))),
     'ohne Dock-Funde dieser Datei zaehlt dessen Stand nicht');
 end;
 
 procedure TTestFindingSourcePick.Neither_None;
 begin
-  Assert.IsTrue(PickFindingSource(State(False, 0, False, 0)) = fsNone);
+  Assert.AreEqual<Integer>(Ord(fsNone),
+    Ord(PickFindingSource(State(False, 0, False, 0))));
 end;
 
 procedure TTestFindingSourcePick.Both_SilentNewer_UsesSilent;
 begin
-  Assert.IsTrue(PickFindingSource(State(True, 5, True, 6)) = fsSilent,
+  Assert.AreEqual<Integer>(Ord(fsSilent),
+    Ord(PickFindingSource(State(True, 5, True, 6))),
     'der juengere Silent-Lauf gewinnt - nie zeilenweise gemischt');
 end;
 
 procedure TTestFindingSourcePick.Both_DockNewerOrSame_UsesDock;
 begin
-  Assert.IsTrue(PickFindingSource(State(True, 7, True, 6)) = fsDock);
-  Assert.IsTrue(PickFindingSource(State(True, 6, True, 6)) = fsDock,
+  Assert.AreEqual<Integer>(Ord(fsDock),
+    Ord(PickFindingSource(State(True, 7, True, 6))));
+  Assert.AreEqual<Integer>(Ord(fsDock),
+    Ord(PickFindingSource(State(True, 6, True, 6))),
     'Gleichstand: das Dock, das der Benutzer sieht');
 end;
 

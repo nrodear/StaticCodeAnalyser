@@ -19,11 +19,11 @@ unit uBulbDecision;
 //      parst dafuer die ganze Datei. Deshalb erst, wenn der Caret
 //      BULB_SETTLE_MS auf derselben Zeile ruht (Durchpfeilen fragt nie),
 //      und je Schluessel Datei+Zeile+Zeilentext+Funde nur EINMAL
-//      (WantsProviderCheck -> NoteProviderAnswer). Tippen auf der Zeile
+//      (BeginProviderCheck -> NoteProviderAnswer). Tippen auf der Zeile
 //      aendert den Schluessel; bis zur neuen Antwort gilt die alte weiter
 //      (sonst blinkte die Birne bei jedem Tastendruck); eine andere Zeile
 //      beginnt ohne Birne.
-//   WantsProviderCheck merkt die Frage als GESTELLT, bevor der Aufrufer
+//   BeginProviderCheck merkt die Frage als GESTELLT, bevor der Aufrufer
 //   fragt: wirft ein Anbieter (Stapelueberlauf im Parse), fragte der
 //   250-ms-Takt dieselbe Zeile sonst sofort wieder - ohne Schutzseite
 //   endet der zweite Ueberlauf hart.
@@ -86,12 +86,15 @@ type
       ANowMs: UInt64);
     // Stufe 2: True heisst "jetzt die Anbieter fragen und mit
     // NoteProviderAnswer antworten"; die Frage gilt ab hier als gestellt
-    // (ohne Antwort: keine Hilfe). False ohne Funde, vor Ablauf von
+    // (ohne Antwort: keine Hilfe). Ein Verb, keine Frage (bis 2026-10-22
+    // WantsProviderCheck; Review Woche G04-03): jeder Aufruf schreibt den
+    // Zustand fort - Schluessel, Ruhezeit-Beginn, "gefragt" -, ist also
+    // je Runde EINMAL zu rufen, nie "nur zum Nachsehen". False ohne Funde, vor Ablauf von
     // BULB_SETTLE_MS oder wenn der Schluessel schon beantwortet ist. Die
     // Ruhezeit beginnt mit der ERSTEN Bewertung eines Schluessels (dem
     // Aufruf, der ihn zum ersten Mal sieht) - also mit der Ankunft des
     // Carets auf der Zeile, nicht mit NoteFindings.
-    function WantsProviderCheck(const ALineText: string;
+    function BeginProviderCheck(const ALineText: string;
       ANowMs: UInt64): Boolean;
     // Antwort der Anbieter fuer den aktuellen Schluessel - auch vom Menue,
     // das beim Oeffnen frisch fragt und die gemerkte Antwort korrigiert.
@@ -189,7 +192,7 @@ begin
     FKey := '';
 end;
 
-function TBulbDecision.WantsProviderCheck(const ALineText: string;
+function TBulbDecision.BeginProviderCheck(const ALineText: string;
   ANowMs: UInt64): Boolean;
 var
   Prefix : string;
