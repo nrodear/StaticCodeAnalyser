@@ -8,6 +8,7 @@ uDetectorUtils.pas
 uRefactor*.pas
 uSourcePlaces.pas
 uFindingActions.pas
+uScaConfigDir.pas
 uTest*.pas
 uRdx*.pas
 uRdx*.inc
