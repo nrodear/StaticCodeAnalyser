@@ -88,6 +88,14 @@
       "ConsecutiveSection",
       "AvoidOut",
       "RaisingRawException",
+      "CanBeClassMethod",
+      "BoolAlwaysTrue",
+      "TObjectListWithoutOwnership",
+      "SourceNonAsciiIdentifier",
+      "ParamNameMismatch",
+      "DeepNesting",
+      "ParamByNameInLoop",
+      "FieldByNameInLoop",
       "FileReadError"
     ]
   }

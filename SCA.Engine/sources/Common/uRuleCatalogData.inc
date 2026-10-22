@@ -220,7 +220,7 @@ const
         #13#10 + 'if d then DoStuff;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA019
     (
@@ -1325,7 +1325,7 @@ const
         '  P.AsInteger := Ids[i];' + #13#10 + '  Q.ExecSQL;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA112
     (
@@ -1339,7 +1339,7 @@ const
         '  Total := Total + Amt.AsCurrency;' + #13#10 + '  Q.Next;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA113
     (
@@ -1840,7 +1840,7 @@ const
         '// Caller: TMath.Add(1, 2)   // no instance needed';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA149
     (
@@ -1866,7 +1866,7 @@ const
         'if Length(s) = 0 then DoOther;    // empty check';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA151
     (
@@ -2166,7 +2166,7 @@ const
         'L.Add(TFoo.Create);' + #13#10 + 'L.Free; // item freed';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA175
     (
@@ -2410,7 +2410,7 @@ const
       GoodEx   : 'var Login: string;  // all-ASCII identifier';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA194
     (
@@ -2501,7 +2501,7 @@ const
         'Q.ParamByName(''customer_id'').AsInteger := Id;' + #13#10 + 'Q.Open;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA200
     (

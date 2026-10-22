@@ -133,9 +133,8 @@ const
   KW_NOT   = 'not';
   KW_FOR   = 'for';
   KW_RESULT = 'result';
-  // Hier endet die Suche nach der Routine um die Stelle.
-  UNIT_BOUNDS: array[0..6] of string = ('implementation', 'interface',
-    'initialization', 'finalization', 'unit', 'program', 'library');
+  // Hier endet die Suche nach der Routine um die Stelle: UNIT_BOUNDS
+  // (uRdxCodeMap, seit der Folgewelle B1 zentral).
   // Im Rumpf gesperrt (Sprungziele, Assembler).
   JUMP_WORDS: array[0..1] of string = ('goto', 'asm');
   // Davor wird ein Name deklariert (Variable, Parameter, Member).
@@ -547,12 +546,6 @@ begin
     Result := KW_NOT + ' ' + Result
   else
     Result := KW_NOT + ' (' + Result + ')';
-end;
-
-// Der Leerraum am Zeilenanfang.
-function IndentOf(const ALine: string): string;
-begin
-  Result := Copy(ALine, 1, SkipBlanks(ALine, 1) - 1);
 end;
 
 // Die Blockzeilen eine Stufe flacher: auf die Einrueckung des if, mit #10

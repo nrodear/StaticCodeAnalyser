@@ -272,20 +272,6 @@ end;
 
 { ---- Die Klasse ---- }
 
-// Die Namen der Vorfahrenliste, mit ', ' verbunden.
-function JoinNames(const ANames: TArray<string>): string;
-var
-  i : Integer;
-begin
-  Result := '';
-  for i := 0 to High(ANames) do
-  begin
-    if i > 0 then
-      Result := Result + ', ';
-    Result := Result + ANames[i];
-  end;
-end;
-
 // Der eine Klassenkopf: nicht generisch, kein Helper, kein Attribut, nur
 // TObject als Vorfahr, mit Ende und ohne Direktive. '' oder der Grund.
 function ClassReason(AMap: TRdxCodeMap; var C: TRdxCmCtx): string;
@@ -317,7 +303,7 @@ begin
   Names := TRdxBlocks.HeritageOf(AMap, C.ClassTok);
   if (Length(Names) > 1)
      or ((Length(Names) = 1) and (LowerCase(Names[0]) <> ANCESTOR_OK)) then
-    Exit(_(R_CM_HERITAGE, [JoinNames(Names)]));
+    Exit(_(R_CM_HERITAGE, [JoinStrings(Names, ', ')]));
   C.ClassEnd := ClassEnd(AMap, C.ClassTok);
   if C.ClassEnd.Low = '' then
     Exit(_(R_CM_CLASS_END));

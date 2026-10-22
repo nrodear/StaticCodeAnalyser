@@ -12,8 +12,9 @@ unit uTestRdxHomoglyphFix;
 //   ausserhalb der Routine, Name vergeben oder reserviert, with, String
 //   und Direktive, unsichere Routinengrenzen, initialization).
 //   Fixture 2 (nur Delphi): der ECHTE Detektor (uSourceEncoding, S3) auf
-//   einer UTF-8-Datei mit BOM meldet die Zeile; die Hilfe behebt Fund fuer
-//   Fund, bis der Detektor schweigt.
+//   einer UTF-8-Datei mit BOM meldet die Zeile; die Hilfe ueber den
+//   Einstieg der Tabelle (TRdxFixTable.FixFor via PlanFixIn/FixAllWith,
+//   Adapter PlanHomoglyph) behebt Fund fuer Fund, bis der Detektor schweigt.
 // Quelltext reines ASCII: die Homoglyphen entstehen ueber #$xxxx.
 // Die Units haben den Kopf 'unit t;', 'interface', 'implementation'
 // (Zeilen 1-3); der implementation-Teil beginnt auf Zeile 4.
@@ -72,7 +73,10 @@ uses
   uTestRdxTextKit    // Apply
 {$IFNDEF FPC}
   , System.IOUtils, System.Generics.Collections,
-  uMethodd12, uSCAConsts, uSourceEncoding
+  uMethodd12, uSCAConsts, uSourceEncoding,
+  uRdxRecipeRunner,      // TRdxFixOutcome
+  uRdxFixTable,          // TRdxFixTable.CaptionFor
+  uTestRdxDetectorKit    // TSeen, PlanFixIn, FixAllWith
 {$ENDIF}
   ;
 
@@ -493,49 +497,35 @@ begin
   end;
 end;
 
-// Die Hilfe zum ersten Fund - der Planer wie der Adapter der Tabelle ihn
-// ruft (Zeile und Meldung aus dem Fund).
-function PlanFirst(const ASource: string; out APlan: TRdxHomoglyphPlan;
-  out AReason: string): Boolean;
+// Der erste Fund in der Form TDetectFunc (FixAllWith) - je Datei meldet
+// der Detektor ohnehin nur einen.
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
 var
-  Line : Integer;
-  Msg  : string;
-  SL   : TStringList;
-  Map  : TRdxCodeMap;
+  S : TSeen;
 begin
-  Assert.IsTrue(Detect(ASource, Line, Msg) > 0, 'der Detektor meldet');
-  SL := TStringList.Create;
-  Map := nil;
-  try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    Result := TRdxHomoglyphFix.ToAscii(Map, Line, Msg, APlan, AReason);
-  finally
-    Map.Free;
-    SL.Free;
-  end;
+  Result := nil;
+  S := Default(TSeen);
+  if Detect(ASource, S.Line, S.Msg) > 0 then
+    Result := TArray<TSeen>.Create(S);
 end;
 
-// Fund fuer Fund (je Datei meldet der Detektor nur den ersten), bis der
-// Detektor schweigt.
-function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
+// Die Hilfe zum ersten Fund ueber den Einstieg der Tabelle (PlanFixIn:
+// TRdxFixTable.FixFor, Adapter PlanHomoglyph; Zeile und Meldung aus dem
+// Fund).
+function PlanFirst(const ASource: string): TRdxFixOutcome;
 var
-  P    : TRdxHomoglyphPlan;
-  R    : string;
-  Pass : Integer;
-  Line : Integer;
-  Msg  : string;
+  Seen : TArray<TSeen>;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    if Detect(Result, Line, Msg) = 0 then Exit;
-    Assert.IsTrue(PlanFirst(Result, P, R), Format('Zeile %d: %s', [Line, R]));
-    Result := Apply(Result, P.Edits);
-  end;
-  Assert.Fail(Format('der Detektor meldet nach %d Runden noch', [MAX_PASSES]));
+  Seen := DetectKind(ASource, fkSourceNonAsciiIdentifier);
+  Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet');
+  Result := PlanFixIn(ASource, 't.pas', fkSourceNonAsciiIdentifier, Seen[0]);
+end;
+
+// Fund fuer Fund ueber die Tabelle (je Datei meldet der Detektor nur den
+// ersten), bis der Detektor schweigt (FixAllWith).
+function FixAll(const ASource: string): string;
+begin
+  Result := FixAllWith(ASource, fkSourceNonAsciiIdentifier, DetectKind);
 end;
 
 procedure TTestRdxHomoglyphDetector.Detector_ReportsLineOfFirstLetter;
@@ -556,7 +546,18 @@ procedure TTestRdxHomoglyphDetector.Detector_RoundTrip;
 var
   Fixed, Msg : string;
   Line       : Integer;
+  O          : TRdxFixOutcome;
 begin
+  // Tabellenzeile: Name = der neue ASCII-Name (Menuetext), Hinweis der
+  // Zeile, bedeutungsgleich.
+  O := PlanFirst(LocalSrc(LOGIN_H));
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual('Login', O.Name);
+  Assert.IsFalse(O.ChangesBehavior, 'bedeutungsgleich');
+  Assert.IsTrue(Pos('Kommentare', O.Hint) > 0, O.Hint);
+  Assert.IsTrue(Pos('Login',
+    TRdxFixTable.CaptionFor(fkSourceNonAsciiIdentifier, O)) > 0,
+    'der Menuetext nennt den neuen Namen');
   Fixed := FixAll(LocalSrc(LOGIN_H));
   Assert.AreEqual(LocalSrc('Login'), Fixed);
   Assert.AreEqual<Integer>(0, Detect(Fixed, Line, Msg), 'der Detektor schweigt');
@@ -595,13 +596,14 @@ end;
 
 procedure TTestRdxHomoglyphDetector.Detector_Umlaut_NoHelp;
 var
-  P : TRdxHomoglyphPlan;
-  R : string;
+  O : TRdxFixOutcome;
 begin
   // Der Detektor meldet jeden Nicht-ASCII-Buchstaben - auch einen gewollten
   // Umlaut; die Hilfe lehnt ab.
-  Assert.IsFalse(PlanFirst(LocalSrc('Gr' + UML_O + 'sse'), P, R));
-  Assert.AreEqual(_(R_HG_UNKNOWN, ['U+00F6']), R);
+  O := PlanFirst(LocalSrc('Gr' + UML_O + 'sse'));
+  Assert.IsFalse(O.Enabled);
+  Assert.AreEqual(_(R_HG_UNKNOWN, ['U+00F6']), O.Reason);
+  Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
 end;
 
 {$ENDIF}

@@ -189,8 +189,9 @@ const
   // Dahinter steht im Rumpf eine inline-Deklaration.
   INLINE_DECL: array[0..1] of string = ('var', 'const');
   // Die reservierten Woerter von Delphi, dazu Result, Self und operator: so
-  // darf der neue Name nicht heissen.
-  RESERVED: array[0..66] of string = ('and', 'array', 'as', 'asm', 'begin',
+  // darf der neue Name nicht heissen. Eigener Name, weil uRdxCodeMap seit
+  // der Folgewelle B1 RESERVED (ohne die drei) fuehrt.
+  BLOCKED_NAMES: array[0..66] of string = ('and', 'array', 'as', 'asm', 'begin',
     'case', 'class', 'const', 'constructor', 'destructor', 'dispinterface',
     'div', 'do', 'downto', 'else', 'end', 'except', 'exports', 'file',
     'finalization', 'finally', 'for', 'function', 'goto', 'if',
@@ -593,7 +594,7 @@ begin
   Li := WithLine(AMap, From, Occ[High(Occ)]);
   if Li > 0 then
     AReason := _(R_HG_WITH, [Li, NewName])
-  else if InList(LowerCase(NewName), RESERVED) then
+  else if InList(LowerCase(NewName), BLOCKED_NAMES) then
     AReason := _(R_HG_KEYWORD, [NewName])
   else
   begin

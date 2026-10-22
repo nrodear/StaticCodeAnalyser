@@ -3,10 +3,12 @@ unit uTestRdxLookupHoistFix;
 // Editorhilfe SCA111 ParamByNameInLoop und SCA112 FieldByNameInLoop
 // (uRdxLookupHoistFix): der Planer auf Text (erste Fixture, auch im
 // FPC-Pruefstand) und der ECHTE Detektor (uPerfHotspots) auf dem echten AST
-// (zweite Fixture, nur Delphi). Die Adapter der Tabelle stehen noch nicht in
-// uRdxFixTable (Integrationsnotiz) - die Rundlaeufe rufen den Planer
-// selbst, mit der Meldung des Detektors. Die Fixtures stehen in einer
-// Routine 'Foo', deren Rumpf auf Zeile 8 beginnt (BODY).
+// ueber den Einstieg der Tabelle (TRdxFixTable.FixFor via PlanFixIn/
+// FixAllWith, Adapter PlanParamByNameLoop/PlanFieldByNameLoop; zweite
+// Fixture, nur Delphi). Der Adapter verlangt den Empfaenger als Variable
+// (LookupCheck, Quellstellen-Dienst) - die Quellen der zweiten Fixture
+// deklarieren Q darum neben i (Declared, dieselben Zeilen). Die Fixtures
+// stehen in einer Routine 'Foo', deren Rumpf auf Zeile 8 beginnt (BODY).
 
 interface
 
@@ -52,6 +54,10 @@ type
     [Test] procedure Detector_CatalogExamples_Fixed;
     [Test] procedure Detector_NestedLoops_TwoPasses;
     [Test] procedure Detector_TwoCallsOnLine_NoHelp;
+    // ---- Tabellenzeile (Adapter, LookupCheck) ----
+    [Test] procedure Table_HintNamesVariableAndMarked;
+    [Test] procedure Table_UnknownReceiver_NoHelp;
+    [Test] procedure Table_FpcFile_NamesInlineVariable;
   end;
 {$ENDIF}
 
@@ -62,7 +68,9 @@ uses
   {$IFNDEF FPC}
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uPerfHotspots,
-  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
+  uRdxRecipeRunner,      // TRdxFixOutcome
+  uRdxFixTable,          // TRdxFixTable.CaptionFor
+  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn
   {$ENDIF}
   uRdxCodeMap, uRdxLookupHoistFix,
   uRdxText,              // _() und die gemeinsamen Gruende
@@ -509,7 +517,7 @@ end;
 
 {$IFNDEF FPC}
 
-{ ---- Detektor ---- }
+{ ---- Detektor und Tabelle ---- }
 
 // Die Funde der Arten SCA111/SCA112 - der echte Detektor auf dem echten
 // AST.
@@ -524,52 +532,33 @@ begin
   Result := DetectSource('rdx_lookup_', ASource, AKind, RunDetector);
 end;
 
-function IsParam(AKind: TFindingKind): Boolean;
+// ASource mit Q als Variable von Foo - auf der Zeile von i (Wrap,
+// WrapWith), die Zeilen bleiben. Ohne Deklaration lehnt der Adapter ab
+// (LookupCheck: Q koennte eine Funktion sein).
+function Declared(const ASource: string): string;
 begin
-  Result := AKind = fkParamByNameInLoop;
+  Result := StringReplace(ASource, '  i: Integer;',
+    '  i: Integer; Q: TFDQuery;', []);
 end;
 
-// Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt - der Planer mit Zeile und Meldung des Funds.
-function FixAll(const ASource: string; AKind: TFindingKind): string;
-const
-  MAX_PASSES = 10;
+// Die Hilfe fuer den ersten Fund der Art AKind ueber den Einstieg der
+// Tabelle (PlanFixIn: TRdxFixTable.FixFor, Adapter PlanParamByNameLoop
+// bzw. PlanFieldByNameLoop) in der Datei AFile.
+function PlanFirstIn(const ASource, AFile: string;
+  AKind: TFindingKind): TRdxFixOutcome;
 var
-  Pass : Integer;
   Seen : TArray<TSeen>;
-  SL   : TStringList;
-  Map  : TRdxCodeMap;
-  P    : TRdxLookupPlan;
-  R    : string;
-  Ok   : Boolean;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    Seen := Detect(Result, AKind);
-    if Length(Seen) = 0 then
-      Exit;
-    SL := TStringList.Create;
-    try
-      SL.Text := Result;
-      Map := TRdxCodeMap.Create(SL);
-      try
-        if IsParam(AKind) then
-          Ok := TRdxLookupHoistFix.ParamByNameLoop(Map, Seen[0].Line,
-            Seen[0].Msg, P, R)
-        else
-          Ok := TRdxLookupHoistFix.FieldByNameLoop(Map, Seen[0].Line,
-            Seen[0].Msg, P, R);
-      finally
-        Map.Free;
-      end;
-    finally
-      SL.Free;
-    end;
-    Assert.IsTrue(Ok, Format('Zeile %d: %s', [Seen[0].Line, R]));
-    Result := Apply(Result, P.Edits);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Seen := Detect(ASource, AKind);
+  Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet');
+  Result := PlanFixIn(ASource, AFile, AKind, Seen[0]);
+end;
+
+// Fund fuer Fund ueber die Tabelle, nach jeder Ersetzung neu gemeldet, bis
+// der Detektor schweigt (FixAllWith).
+function FixAll(const ASource: string; AKind: TFindingKind): string;
+begin
+  Result := FixAllWith(ASource, AKind, Detect);
 end;
 
 procedure TTestRdxLookupHoistDetector.Detector_ReportsCallLines;
@@ -598,14 +587,15 @@ procedure TTestRdxLookupHoistDetector.Detector_FieldRoundTrip;
 var
   Fixed : string;
 begin
-  Fixed := FixAll(Wrap(['  while not Q.Eof do', '  begin',
+  Fixed := FixAll(Declared(Wrap(['  while not Q.Eof do', '  begin',
     '    Total := Total + Q.FieldByName(''Amount'').AsCurrency;',
     '    Count := Count + Q.FieldByName(''Amount'').AsInteger;',
-    '    Q.Next;', '  end;']), fkFieldByNameInLoop);
-  Assert.AreEqual(Wrap(['  var FldAmount := Q.FieldByName(''Amount'');',
+    '    Q.Next;', '  end;'])), fkFieldByNameInLoop);
+  Assert.AreEqual(Declared(Wrap([
+    '  var FldAmount := Q.FieldByName(''Amount'');',
     '  while not Q.Eof do', '  begin',
     '    Total := Total + FldAmount.AsCurrency;',
-    '    Count := Count + FldAmount.AsInteger;', '    Q.Next;', '  end;']),
+    '    Count := Count + FldAmount.AsInteger;', '    Q.Next;', '  end;'])),
     Fixed);
   Assert.AreEqual<Integer>(0, Length(Detect(Fixed, fkFieldByNameInLoop)),
     'der Detektor schweigt danach');
@@ -615,12 +605,12 @@ procedure TTestRdxLookupHoistDetector.Detector_ParamRoundTrip;
 var
   Fixed : string;
 begin
-  Fixed := FixAll(Wrap(['  repeat', '    Q.Close;',
+  Fixed := FixAll(Declared(Wrap(['  repeat', '    Q.Close;',
     '    Q.ParamByName(''Day'').AsDate := D;', '    Q.Open;',
-    '    D := D + 1;', '  until D > Last;']), fkParamByNameInLoop);
-  Assert.AreEqual(Wrap(['  var PrmDay := Q.ParamByName(''Day'');', '  repeat',
-    '    Q.Close;', '    PrmDay.AsDate := D;', '    Q.Open;', '    D := D + 1;',
-    '  until D > Last;']), Fixed);
+    '    D := D + 1;', '  until D > Last;'])), fkParamByNameInLoop);
+  Assert.AreEqual(Declared(Wrap(['  var PrmDay := Q.ParamByName(''Day'');',
+    '  repeat', '    Q.Close;', '    PrmDay.AsDate := D;', '    Q.Open;',
+    '    D := D + 1;', '  until D > Last;'])), Fixed);
   Assert.AreEqual<Integer>(0, Length(Detect(Fixed, fkParamByNameInLoop)),
     'der Detektor schweigt danach');
 end;
@@ -630,12 +620,12 @@ var
   Fixed : string;
 begin
   // Rumpf ohne begin: der Detektor liest ihn bis zum naechsten ';'.
-  Fixed := FixAll(Wrap(['  while not Q.Eof do',
+  Fixed := FixAll(Declared(Wrap(['  while not Q.Eof do',
     '    if Q.FieldByName(''Old'').AsBoolean then Q.Delete else Q.Next;',
-    '  Done;']), fkFieldByNameInLoop);
-  Assert.AreEqual(Wrap(['  var FldOld := Q.FieldByName(''Old'');',
+    '  Done;'])), fkFieldByNameInLoop);
+  Assert.AreEqual(Declared(Wrap(['  var FldOld := Q.FieldByName(''Old'');',
     '  while not Q.Eof do',
-    '    if FldOld.AsBoolean then Q.Delete else Q.Next;', '  Done;']), Fixed);
+    '    if FldOld.AsBoolean then Q.Delete else Q.Next;', '  Done;'])), Fixed);
 end;
 
 procedure TTestRdxLookupHoistDetector.Detector_CatalogExamples_Fixed;
@@ -647,7 +637,8 @@ begin
   Meta := TRuleCatalog.GetRuleCanonical(fkFieldByNameInLoop);
   Assert.IsTrue(Pos('FieldByName', Meta.BadExample) > 0, Meta.BadExample);
   Src := Join(['unit t;', 'interface', 'implementation', 'procedure Foo;',
-    'begin', CatalogText(Meta.BadExample), 'end;', 'end.']);
+    'var', '  Q: TFDQuery;', 'begin', CatalogText(Meta.BadExample), 'end;',
+    'end.']);
   Assert.AreEqual<Integer>(1, Length(Detect(Src, fkFieldByNameInLoop)),
     'der Detektor meldet das Beispiel');
   Fixed := FixAll(Src, fkFieldByNameInLoop);
@@ -657,9 +648,9 @@ begin
 
   Meta := TRuleCatalog.GetRuleCanonical(fkParamByNameInLoop);
   Assert.IsTrue(Pos('ParamByName', Meta.BadExample) > 0, Meta.BadExample);
-  Src := Join(['unit t;', 'interface', 'implementation', 'procedure Foo;',
-    'var', '  i: Integer;', 'begin', CatalogText(Meta.BadExample), 'end;',
-    'end.']);
+  Src := Declared(Join(['unit t;', 'interface', 'implementation',
+    'procedure Foo;', 'var', '  i: Integer;', 'begin',
+    CatalogText(Meta.BadExample), 'end;', 'end.']));
   Assert.AreEqual<Integer>(1, Length(Detect(Src, fkParamByNameInLoop)),
     'der Detektor meldet das Beispiel');
   Fixed := FixAll(Src, fkParamByNameInLoop);
@@ -672,46 +663,85 @@ begin
   // Erst die innere Schleife; die neue Zeile steht in der aeusseren, der
   // Detektor meldet sie, und der zweite Durchlauf zieht sie weiter hinaus
   // (Name2) - Q.First laesst die Felder stehen.
-  Assert.AreEqual(Wrap(['  var FldAmount2 := Q.FieldByName(''Amount'');',
+  Assert.AreEqual(Declared(Wrap([
+    '  var FldAmount2 := Q.FieldByName(''Amount'');',
     '  for i := 0 to 9 do', '  begin', '    Q.First;',
     '    var FldAmount := FldAmount2;', '    while not Q.Eof do', '    begin',
     '      Sum := Sum + FldAmount.AsCurrency;', '      Q.Next;', '    end;',
-    '  end;']),
-    FixAll(Wrap(['  for i := 0 to 9 do', '  begin', '    Q.First;',
+    '  end;'])),
+    FixAll(Declared(Wrap(['  for i := 0 to 9 do', '  begin', '    Q.First;',
       '    while not Q.Eof do', '    begin',
       '      Sum := Sum + Q.FieldByName(''Amount'').AsCurrency;',
-      '      Q.Next;', '    end;', '  end;']), fkFieldByNameInLoop));
+      '      Q.Next;', '    end;', '  end;'])), fkFieldByNameInLoop));
 end;
 
 procedure TTestRdxLookupHoistDetector.Detector_TwoCallsOnLine_NoHelp;
 var
-  Src  : string;
-  Seen : TArray<TSeen>;
-  SL   : TStringList;
-  Map  : TRdxCodeMap;
-  P    : TRdxLookupPlan;
-  R    : string;
+  O : TRdxFixOutcome;
 begin
-  Src := LoopWith('    X := Q.FieldByName(''A'').AsString + '
-    + 'Q.FieldByName(''B'').AsString;', '    Y := 1;');
-  Seen := Detect(Src, fkFieldByNameInLoop);
-  Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet');
-  SL := TStringList.Create;
-  try
-    SL.Text := Src;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Assert.IsFalse(TRdxLookupHoistFix.FieldByNameLoop(Map, Seen[0].Line,
-        Seen[0].Msg, P, R), 'keine Hilfe');
-    finally
-      Map.Free;
-    end;
-  finally
-    SL.Free;
-  end;
-  Assert.AreEqual(_(R_LH_MANY, [2, METHOD_FIELD]), R);
-  // Der Menuetext kennt den Aufruf erst, wenn er feststeht.
-  Assert.AreEqual('', P.Lookup);
+  O := PlanFirstIn(Declared(LoopWith('    X := Q.FieldByName(''A'').AsString + '
+    + 'Q.FieldByName(''B'').AsString;', '    Y := 1;')), 't.pas',
+    fkFieldByNameInLoop);
+  Assert.IsFalse(O.Enabled, 'keine Hilfe');
+  Assert.AreEqual(_(R_LH_MANY, [2, METHOD_FIELD]), O.Reason);
+  // Der Menuetext kennt den Aufruf erst, wenn er feststeht; gekennzeichnet
+  // ist der Eintrag auch gesperrt (Tabellenzeile).
+  Assert.AreEqual('', O.Name);
+  Assert.IsTrue(O.ChangesBehavior);
+end;
+
+procedure TTestRdxLookupHoistDetector.Table_HintNamesVariableAndMarked;
+var
+  O : TRdxFixOutcome;
+begin
+  // Der Hinweis nennt den neuen Namen (HintByPlanner), der Menuetext den
+  // Aufruf; gekennzeichnet (Changes: True).
+  O := PlanFirstIn(Declared(LoopWith(
+    '    Q.ParamByName(''Id'').AsInteger := 1;', '    Q.ExecSQL;')), 't.pas',
+    fkParamByNameInLoop);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual('Q.ParamByName(''Id'')', O.Name);
+  Assert.IsTrue(O.ChangesBehavior, 'gekennzeichnet');
+  Assert.IsTrue(Pos('Parameter-Referenz PrmId', O.Hint) > 0, O.Hint);
+  Assert.IsTrue(Pos('Q.ParamByName(''Id'')',
+    TRdxFixTable.CaptionFor(fkParamByNameInLoop, O)) > 0,
+    'der Menuetext nennt den Aufruf');
+  O := PlanFirstIn(Declared(LoopWith('    X := Q.FieldByName(''A'').AsString;',
+    '    Y := 1;')), 't.pas', fkFieldByNameInLoop);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(Pos('Feld-Referenz FldA', O.Hint) > 0, O.Hint);
+end;
+
+procedure TTestRdxLookupHoistDetector.Table_UnknownReceiver_NoHelp;
+var
+  O : TRdxFixOutcome;
+begin
+  // Q ist nirgends deklariert - es koennte eine Funktion sein, die bei
+  // jedem Aufruf ein anderes Objekt liefert (LookupCheck).
+  O := PlanFirstIn(LoopWith('    X := Q.FieldByName(''A'').AsString;',
+    '    Y := 1;'), 't.pas', fkFieldByNameInLoop);
+  Assert.IsFalse(O.Enabled, 'keine Hilfe');
+  Assert.AreEqual(TRdxLookupHoistFix.UnknownReceiverReason('Q'), O.Reason);
+  Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+  // Eine Inline-Variable vor der Schleife gilt als Beweis.
+  O := PlanFirstIn(Wrap(['  var Q := TFDQuery.Create(nil);',
+    '  while not Q.Eof do', '  begin',
+    '    X := Q.FieldByName(''A'').AsString;', '    Q.Next;', '  end;']),
+    't.pas', fkFieldByNameInLoop);
+  Assert.IsTrue(O.Enabled, O.Reason);
+end;
+
+procedure TTestRdxLookupHoistDetector.Table_FpcFile_NamesInlineVariable;
+var
+  O : TRdxFixOutcome;
+begin
+  // Eine .pp-Datei baut FPC - der Plattenblick (lfInlineVar) lehnt ab und
+  // nennt die Inline-Variable, nicht die Inline-Konstante von SCA014.
+  O := PlanFirstIn(Declared(LoopWith('    X := Q.FieldByName(''A'').AsString;',
+    '    Y := 1;')), 't.pp', fkFieldByNameInLoop);
+  Assert.IsFalse(O.Enabled, 'keine Hilfe');
+  Assert.IsTrue(Pos('Inline-Variable', O.Reason) > 0, O.Reason);
+  Assert.AreEqual<Integer>(0, Pos('Inline-Konstante', O.Reason), O.Reason);
 end;
 
 {$ENDIF}

@@ -200,9 +200,8 @@ uses
 
 const
   SPAN_LOOKUP = 'lookup';
-  // Hier endet die Suche nach der Routine um den Aufruf.
-  UNIT_BOUNDS: array[0..6] of string = ('implementation', 'interface',
-    'initialization', 'finalization', 'unit', 'program', 'library');
+  // Hier endet die Suche nach der Routine um den Aufruf: UNIT_BOUNDS
+  // (uRdxCodeMap, seit der Folgewelle B1 zentral).
   // Die Schleifen.
   LOOP_WORDS: array[0..2] of string = ('for', 'while', 'repeat');
   // Davor beginnt die Schleife eine eigene Anweisung.
@@ -211,9 +210,8 @@ const
   BLOCK_WORDS: array[0..3] of string = ('begin', 'try', 'case', 'asm');
   // Anweisungen mit Kopf bis 'do'.
   DO_WORDS: array[0..2] of string = ('for', 'while', 'with');
-  // Davor endet eine Anweisung ohne ';'.
-  STMT_STOPS: array[0..4] of string = ('end', 'else', 'until', 'finally',
-    'except');
+  // Davor endet eine Anweisung ohne ';': STATEMENT_STOPS (uRdxCodeMap,
+  // dieselbe Menge).
   // Steht eines davon auf oberster Ebene in einer einfachen Anweisung oder
   // einer until-Bedingung, liest die Hilfe sie nicht (bedingter Ausdruck
   // 'if .. then .. else', eine Struktur mitten in der Anweisung).
@@ -487,7 +485,7 @@ end;
 function IsStopAfter(const T, APrev: TRdxToken): Boolean;
 begin
   Result := (T.Low = ';')
-    or (InList(T.Low, STMT_STOPS) and IsKeywordAfter(T, APrev));
+    or (InList(T.Low, STATEMENT_STOPS) and IsKeywordAfter(T, APrev));
 end;
 
 // Eine einfache Anweisung (Zuweisung, Aufruf, raise, Inline-Deklaration)

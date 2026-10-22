@@ -2,8 +2,9 @@ unit uTestRdxDeepNestingFix;
 
 // Editorhilfe SCA018 DeepNesting (uRdxDeepNestingFix): der Planer auf Text
 // (erste Fixture, FPC-tauglich) und der ECHTE Detektor (uDeepNesting) auf
-// dem echten AST mit MapFix wie der Adapter der Tabelle (zweite Fixture,
-// nur Delphi). Die Fixtures stehen in einer Routine 'Foo', deren Kopf auf
+// dem echten AST ueber den Einstieg der Tabelle (TRdxFixTable.FixFor via
+// PlanFixIn/FixAllWith, Adapter PlanDeepNesting; zweite Fixture, nur
+// Delphi). Die Fixtures stehen in einer Routine 'Foo', deren Kopf auf
 // Zeile 4 steht; der Rumpf beginnt auf Zeile 5, seine erste Anweisung
 // steht auf Zeile 6 (IF_LINE). Die Meldung nennt die Art der tiefsten
 // Stelle ('Depth 5 (if from line 8, limit: 4)'); der Planer bekommt deren
@@ -49,7 +50,7 @@ type
     [Test] procedure Detector_ReportsDeepestLine;
     [Test] procedure Detector_RoundTrip;
     [Test] procedure Detector_TwoLevelsOver_TwoSteps;
-    [Test] procedure Detector_MapFix_OneEdit;
+    [Test] procedure Detector_Table_OneEdit;
     [Test] procedure Detector_CodeAfterIf_NoHelp;
   end;
 {$ENDIF}
@@ -62,8 +63,8 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uDeepNesting,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uRdxFixRunner,         // MapFix (wie der Adapter der Tabelle)
-  uTestRdxDetectorKit,   // TSeen, DetectSource
+  uRdxFixTable,          // TRdxFixTable.CaptionFor
+  uTestRdxDetectorKit,   // TSeen, DetectSource, PlanFixIn, FixAllWith
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxDeepNestingFix,
   uRdxText,              // _() und die gemeinsamen Gruende
@@ -445,7 +446,7 @@ end;
 
 {$IFNDEF FPC}
 
-{ ---- Detektor ---- }
+{ ---- Detektor und Tabelle ---- }
 
 // Die Funde der Art SCA018 - der echte Detektor auf dem echten AST.
 procedure RunDetector(AKind: TFindingKind; Root: TAstNode;
@@ -469,45 +470,29 @@ begin
   end;
 end;
 
-// Die Hilfe fuer den ersten Fund des Detektors ueber MapFix - so ruft sie
-// der Adapter der Tabelle.
+// Dasselbe in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := Detect(ASource);
+end;
+
+// Die Hilfe fuer den ersten Fund des Detektors ueber den Einstieg der
+// Tabelle (PlanFixIn: TRdxFixTable.FixFor, Adapter PlanDeepNesting).
 function PlanFirst(const ASource: string; out ASeen: TSeen): TRdxFixOutcome;
 var
   Seen : TArray<TSeen>;
-  SL   : TStringList;
 begin
   Seen := Detect(ASource);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet einen Fund');
   ASeen := Seen[0];
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    Result := MapFix(SL, ASeen.Line, ASeen.Msg, TRdxDeepNestingFix.GuardClause);
-  finally
-    SL.Free;
-  end;
+  Result := PlanFixIn(ASource, 't.pas', fkDeepNesting, ASeen);
 end;
 
-// Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt.
+// Fund fuer Fund ueber die Tabelle, nach jeder Ersetzung neu gemeldet, bis
+// der Detektor schweigt (FixAllWith).
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass : Integer;
-  O    : TRdxFixOutcome;
-  S    : TSeen;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    if Length(Detect(Result)) = 0 then
-      Exit;
-    O := PlanFirst(Result, S);
-    Assert.IsTrue(O.Enabled, O.Reason);
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Result := FixAllWith(ASource, fkDeepNesting, DetectKind);
 end;
 
 // Tiefe 5: if A > if B > if C > if D > if E (Zeile 12).
@@ -555,7 +540,7 @@ begin
     '          Work;']), FixAll(Src));
 end;
 
-procedure TTestRdxDeepNestingDetector.Detector_MapFix_OneEdit;
+procedure TTestRdxDeepNestingDetector.Detector_Table_OneEdit;
 var
   S : TSeen;
   O : TRdxFixOutcome;
@@ -566,9 +551,12 @@ begin
   Assert.AreEqual<Integer>(IF_LINE + 1, O.Edits[0].Span.StartLine, 'ab dem if');
   Assert.AreEqual<Integer>(14, O.Edits[0].Span.EndLine, 'bis zum end');
   Assert.AreEqual('if not A then Exit;'#10, Copy(O.Edits[0].NewText, 1, 20));
-  // Die Kennzeichnung setzt erst die Tabellenzeile - der Planer laesst sie
-  // auf dem Default (Changes: False).
+  // Tabellenzeile: bedeutungsgleich (Changes: False), Hinweis der Zeile,
+  // Menuetext ohne Platzhalter.
   Assert.IsFalse(O.ChangesBehavior);
+  Assert.IsTrue(Pos('rueckt eine Stufe aus', O.Hint) > 0, O.Hint);
+  Assert.AreEqual(_('Turn the last if into a guard clause with Exit'),
+    TRdxFixTable.CaptionFor(fkDeepNesting, O));
 end;
 
 procedure TTestRdxDeepNestingDetector.Detector_CodeAfterIf_NoHelp;

@@ -171,6 +171,13 @@
         <DCCReference Include="..\source\uRdxConsecutiveSectionFix.pas"/>
         <DCCReference Include="..\source\uRdxAvoidOutFix.pas"/>
         <DCCReference Include="..\source\uRdxRawExceptionFix.pas"/>
+        <DCCReference Include="..\source\uRdxClassMethodFix.pas"/>
+        <DCCReference Include="..\source\uRdxAlwaysTrueFix.pas"/>
+        <DCCReference Include="..\source\uRdxObjectListFix.pas"/>
+        <DCCReference Include="..\source\uRdxHomoglyphFix.pas"/>
+        <DCCReference Include="..\source\uRdxParamNameFix.pas"/>
+        <DCCReference Include="..\source\uRdxDeepNestingFix.pas"/>
+        <DCCReference Include="..\source\uRdxLookupHoistFix.pas"/>
         <DCCReference Include="uTestRdxRecipes.pas"/>
         <DCCReference Include="uTestRdxBench.pas"/>
         <DCCReference Include="uTestRdxSca044.pas"/>
@@ -249,6 +256,13 @@
         <DCCReference Include="uTestRdxConsecutiveSectionFix.pas"/>
         <DCCReference Include="uTestRdxAvoidOutFix.pas"/>
         <DCCReference Include="uTestRdxRawExceptionFix.pas"/>
+        <DCCReference Include="uTestRdxClassMethodFix.pas"/>
+        <DCCReference Include="uTestRdxAlwaysTrueFix.pas"/>
+        <DCCReference Include="uTestRdxObjectListFix.pas"/>
+        <DCCReference Include="uTestRdxHomoglyphFix.pas"/>
+        <DCCReference Include="uTestRdxParamNameFix.pas"/>
+        <DCCReference Include="uTestRdxDeepNestingFix.pas"/>
+        <DCCReference Include="uTestRdxLookupHoistFix.pas"/>
         <DCCReference Include="uTestRdxMagicGuards.pas"/>
         <DCCReference Include="uTestRdxMagicFixDetector.pas"/>
         <DCCReference Include="uTestRdxNilFix.pas"/>

@@ -161,9 +161,8 @@ const
   KW_TOBJECTLIST = 'tobjectlist';
   KW_CREATE = 'create';
   KW_USES = 'uses';
-  // Hier endet die Suche nach der Routine um die Zeile.
-  UNIT_BOUNDS: array[0..6] of string = ('implementation', 'interface',
-    'initialization', 'finalization', 'unit', 'program', 'library');
+  // Hier endet die Suche nach der Routine um die Zeile: UNIT_BOUNDS
+  // (uRdxCodeMap, seit der Folgewelle B1 zentral).
   // Dahinter endet die Anweisung 'X := TList<T>.Create'.
   STATEMENT_ENDS: array[0..5] of string = (';', 'end', 'else', 'until',
     'finally', 'except');

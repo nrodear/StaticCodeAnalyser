@@ -2,8 +2,9 @@ unit uTestRdxParamNameFix;
 
 // Editorhilfe SCA199 ParamNameMismatch (uRdxParamNameFix): der Planer auf
 // Text (erste Fixture, FPC-tauglich) und der ECHTE Detektor
-// (uParamNameMismatch) auf dem echten AST mit MapFix wie der Adapter der
-// Tabelle (zweite Fixture, nur Delphi). Die Fixtures stehen in einer
+// (uParamNameMismatch) auf dem echten AST ueber den Einstieg der Tabelle
+// (TRdxFixTable.FixFor via PlanFixIn/FixAllWith, Adapter PlanParamName;
+// zweite Fixture, nur Delphi). Die Fixtures stehen in einer
 // Routine 'Load(Q: TFDQuery)', deren Rumpf auf Zeile 5 beginnt; der
 // gemeldete Aufruf steht auf Zeile 8 (CALL_LINE). Die Meldung (a) nennt die
 // Platzhalter des SQL ('(it has :Id, :Name)') - daraus waehlt der Planer.
@@ -48,7 +49,7 @@ type
     [Test] procedure Detector_RoundTrip;
     [Test] procedure Detector_CreatedQuery_BothDirectionsGone;
     [Test] procedure Detector_CatalogExample_NoHelp;
-    [Test] procedure Detector_MapFix_OneEdit;
+    [Test] procedure Detector_Table_OneEditMarkedAndName;
   end;
 {$ENDIF}
 
@@ -63,8 +64,8 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uParamNameMismatch,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uRdxFixRunner,         // MapFix (wie der Adapter der Tabelle)
-  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
+  uRdxFixTable,          // TRdxFixTable.CaptionFor
+  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxParamNameFix,
   uRdxText,              // _() und die gemeinsamen Gruende
@@ -382,7 +383,7 @@ end;
 
 {$IFNDEF FPC}
 
-{ ---- Detektor ---- }
+{ ---- Detektor und Tabelle ---- }
 
 // Die Funde der Art SCA199 - der echte Detektor auf dem echten AST.
 procedure RunDetector(AKind: TFindingKind; Root: TAstNode;
@@ -403,19 +404,24 @@ begin
   Result := Pos('''): the SQL this routine assigns to ', S.Msg) > 0;
 end;
 
-// Die Hilfe fuer den Fund S ueber MapFix - so ruft sie der Adapter der
-// Tabelle.
-function PlanSeen(const ASource: string; const S: TSeen): TRdxFixOutcome;
+// Nur die Funde (a) in der Form TDetectFunc (FixAllWith) - die Hilfe gibt
+// es nur fuer sie.
+function DetectUnknown(const ASource: string;
+  AKind: TFindingKind): TArray<TSeen>;
 var
-  SL : TStringList;
+  S : TSeen;
 begin
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    Result := MapFix(SL, S.Line, S.Msg, TRdxParamNameFix.UsePlaceholder);
-  finally
-    SL.Free;
-  end;
+  Result := nil;
+  for S in Detect(ASource) do
+    if IsUnknown(S) then
+      Result := Result + [S];
+end;
+
+// Die Hilfe fuer den Fund S ueber den Einstieg der Tabelle (PlanFixIn:
+// TRdxFixTable.FixFor, Adapter PlanParamName).
+function PlanSeen(const ASource: string; const S: TSeen): TRdxFixOutcome;
+begin
+  Result := PlanFixIn(ASource, 't.pas', fkParamNameMismatch, S);
 end;
 
 // Die Hilfe fuer den ersten Fund (a).
@@ -433,30 +439,11 @@ begin
   Result := Default(TRdxFixOutcome);
 end;
 
-// Fund (a) fuer Fund (a), nach jeder Ersetzung neu gemeldet, bis keiner
-// mehr kommt.
+// Fund (a) fuer Fund (a) ueber die Tabelle, nach jeder Ersetzung neu
+// gemeldet, bis keiner mehr kommt (FixAllWith).
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass  : Integer;
-  O     : TRdxFixOutcome;
-  S     : TSeen;
-  Found : Boolean;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    Found := False;
-    for S in Detect(Result) do
-      Found := Found or IsUnknown(S);
-    if not Found then
-      Exit;
-    O := PlanFirst(Result, S);
-    Assert.IsTrue(O.Enabled, O.Reason);
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail('der Detektor meldet auch nach zehn Durchlaeufen Funde (a)');
+  Result := FixAllWith(ASource, fkParamNameMismatch, DetectUnknown);
 end;
 
 procedure TTestRdxParamNameDetector.Detector_ReportsUnknownWithList;
@@ -521,7 +508,7 @@ begin
   Assert.AreEqual(_(R_PN_NO_CANDIDATE, ['custid', ':customer_id']), O.Reason);
 end;
 
-procedure TTestRdxParamNameDetector.Detector_MapFix_OneEdit;
+procedure TTestRdxParamNameDetector.Detector_Table_OneEditMarkedAndName;
 var
   S : TSeen;
   O : TRdxFixOutcome;
@@ -531,10 +518,15 @@ begin
   Assert.AreEqual<Integer>(1, Length(O.Edits), 'eine Ersetzung');
   Assert.AreEqual('Nmae', O.Edits[0].Expected);
   Assert.AreEqual('Name', O.Edits[0].NewText);
-  // Die Kennzeichnung (Changes: True) und den Namen im Menuetext setzt der
-  // Adapter bzw. die Tabellenzeile - MapFix laesst beide auf dem Default.
-  Assert.IsFalse(O.ChangesBehavior);
-  Assert.AreEqual('', O.Name);
+  // Die Kennzeichnung setzt die Tabellenzeile (Changes: True), den Namen
+  // im Menuetext (der eingesetzte Platzhalter) der Adapter; Hinweis der
+  // Zeile.
+  Assert.IsTrue(O.ChangesBehavior, 'gekennzeichnet');
+  Assert.AreEqual('Name', O.Name);
+  Assert.IsTrue(Pos('Platzhalter', O.Hint) > 0, O.Hint);
+  Assert.IsTrue(Pos('Name',
+    TRdxFixTable.CaptionFor(fkParamNameMismatch, O)) > 0,
+    'der Menuetext nennt den Platzhalter');
 end;
 
 {$ENDIF}

@@ -1,9 +1,10 @@
 unit uTestRdxAlwaysTrueFix;
 
 // Editorhilfe SCA150 BoolAlwaysTrue (uRdxAlwaysTrueFix): der Planer auf Text
-// (erste Fixture, auch im FPC-Pruefstand) und - nur Delphi - der Weg des
-// Adapters (MapFix, wie uRdxFixTable ihn rufen soll) mit dem ECHTEN Detektor
-// (uBoolAlwaysTrue) auf dem echten AST (zweite Fixture). Die Fixtures stehen
+// (erste Fixture, auch im FPC-Pruefstand) und - nur Delphi - der Einstieg
+// der Tabelle (TRdxFixTable.FixFor via PlanFixIn/FixAllWith, Adapter
+// PlanBoolAlwaysTrue) mit dem ECHTEN Detektor (uBoolAlwaysTrue) auf dem
+// echten AST (zweite Fixture). Die Fixtures stehen
 // in einer Routine 'Foo(const S: string)'; ihr Rumpf beginnt auf Zeile 6
 // (BODY).
 
@@ -44,7 +45,7 @@ type
   [TestFixture]
   TTestRdxAlwaysTrueDetector = class
   public
-    // ---- Weg des Adapters (MapFix) ----
+    // ---- Einstieg der Tabelle (Adapter PlanBoolAlwaysTrue) ----
     [Test] procedure Adapter_OneEditWithoutBehaviorChange;
     [Test] procedure Adapter_StaleFinding_NoHelp;
     // ---- echter Detektor ----
@@ -66,8 +67,8 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uBoolAlwaysTrue,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uRdxFixRunner,         // MapFix - der Weg des Adapters der Tabelle
-  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
+  uRdxFixTable,          // TRdxFixTable.CaptionFor
+  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxAlwaysTrueFix,
   uRdxText,              // _() und die gemeinsamen Gruende
@@ -338,7 +339,7 @@ end;
 
 {$IFNDEF FPC}
 
-{ ---- Weg des Adapters und echter Detektor ---- }
+{ ---- Einstieg der Tabelle und echter Detektor ---- }
 
 // Die Funde der Art SCA150 - der echte Detektor auf dem echten AST.
 procedure RunDetector(AKind: TFindingKind; Root: TAstNode;
@@ -352,20 +353,23 @@ begin
   Result := DetectSource('rdx_bat_', ASource, fkBoolAlwaysTrue, RunDetector);
 end;
 
-// Die Hilfe fuer Zeile und Meldung so, wie der Adapter der Tabelle sie
-// ruft (MapFix, Integrationsnotiz).
+// Dasselbe in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := DetectSource('rdx_bat_', ASource, AKind, RunDetector);
+end;
+
+// Die Hilfe fuer Zeile und Meldung ueber den Einstieg der Tabelle
+// (PlanFixIn: TRdxFixTable.FixFor, Adapter PlanBoolAlwaysTrue).
 function PlanVia(const ASource: string; ALine: Integer;
   const AMsg: string): TRdxFixOutcome;
 var
-  SL : TStringList;
+  S : TSeen;
 begin
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    Result := MapFix(SL, ALine, AMsg, TRdxAlwaysTrueFix.ResolveIf);
-  finally
-    SL.Free;
-  end;
+  S := Default(TSeen);
+  S.Line := ALine;
+  S.Msg := AMsg;
+  Result := PlanFixIn(ASource, 't.pas', fkBoolAlwaysTrue, S);
 end;
 
 // Die Hilfe fuer den ersten Fund des Detektors.
@@ -378,25 +382,11 @@ begin
   Result := PlanVia(ASource, Seen[0].Line, Seen[0].Msg);
 end;
 
-// Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt.
+// Fund fuer Fund ueber die Tabelle, nach jeder Ersetzung neu gemeldet, bis
+// der Detektor schweigt (FixAllWith).
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass : Integer;
-  O    : TRdxFixOutcome;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    if Length(Detect(Result)) = 0 then
-      Exit;
-    O := PlanFirst(Result);
-    Assert.IsTrue(O.Enabled, O.Reason);
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Result := FixAllWith(ASource, fkBoolAlwaysTrue, DetectKind);
 end;
 
 procedure TTestRdxAlwaysTrueDetector.Adapter_OneEditWithoutBehaviorChange;
@@ -410,8 +400,12 @@ begin
   Assert.AreEqual('DoStuff', O.Edits[0].NewText);
   Assert.AreEqual<Integer>(BODY, O.Edits[0].Span.StartLine);
   Assert.AreEqual<Integer>(3, O.Edits[0].Span.StartCol);
-  // Die Kennzeichnung setzt erst die Tabellenzeile (Changes: False).
+  // Tabellenzeile: bedeutungsgleich (Changes: False), Hinweis der Zeile,
+  // Menuetext ohne Platzhalter.
   Assert.IsFalse(O.ChangesBehavior);
+  Assert.IsTrue(Pos('else-Zweig', O.Hint) > 0, O.Hint);
+  Assert.AreEqual(_('Remove the always-true condition'),
+    TRdxFixTable.CaptionFor(fkBoolAlwaysTrue, O));
 end;
 
 procedure TTestRdxAlwaysTrueDetector.Adapter_StaleFinding_NoHelp;

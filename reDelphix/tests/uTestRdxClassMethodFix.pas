@@ -1,9 +1,10 @@
 unit uTestRdxClassMethodFix;
 
 // Editorhilfe SCA148 CanBeClassMethod (uRdxClassMethodFix): der Planer auf
-// Text (erste Fixture, auch im FPC-Pruefstand) und - nur Delphi - der Weg
-// des Adapters (zwei Ersetzungen, wie uRdxFixTable ihn rufen soll) mit dem
-// ECHTEN Detektor (uCanBeClassMethod) auf dem echten AST (zweite Fixture).
+// Text (erste Fixture, auch im FPC-Pruefstand) und - nur Delphi - der
+// Einstieg der Tabelle (TRdxFixTable.FixFor via PlanFixIn/FixAllWith,
+// Adapter PlanCanBeClassMethod: zwei Ersetzungen) mit dem ECHTEN Detektor
+// (uCanBeClassMethod) auf dem echten AST (zweite Fixture).
 // Die Fixtures sind Units mit einer Klasse TMath (UnitWith); die gemeldete
 // Zeile ist die des Implementierungskopfs (LineStartingWith).
 
@@ -44,7 +45,7 @@ type
   [TestFixture]
   TTestRdxClassMethodDetector = class
   public
-    // ---- Weg des Adapters (zwei Ersetzungen) ----
+    // ---- Einstieg der Tabelle (Adapter PlanCanBeClassMethod) ----
     [Test] procedure Adapter_TwoEditsAndName;
     [Test] procedure Adapter_StaleFinding_NoHelp;
     // ---- echter Detektor ----
@@ -65,7 +66,8 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uCanBeClassMethod,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
+  uRdxFixTable,          // TRdxFixTable.CaptionFor
+  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxClassMethodFix,
   uRdxText,              // _() und die gemeinsamen Gruende
@@ -430,7 +432,7 @@ end;
 
 {$IFNDEF FPC}
 
-{ ---- Weg des Adapters und echter Detektor ---- }
+{ ---- Einstieg der Tabelle und echter Detektor ---- }
 
 // Die Funde der Art SCA148 - der echte Detektor auf dem echten AST.
 procedure RunDetector(AKind: TFindingKind; Root: TAstNode;
@@ -444,32 +446,24 @@ begin
   Result := DetectSource('rdx_cbcm_', ASource, fkCanBeClassMethod, RunDetector);
 end;
 
-// Die Hilfe so, wie der Adapter der Tabelle sie bauen soll
-// (Integrationsnotiz): Code-Sicht, zwei Ersetzungen, gesperrt ohne
-// Ersetzungen, Name aus der Meldung.
+// Dasselbe in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := DetectSource('rdx_cbcm_', ASource, AKind, RunDetector);
+end;
+
+// Die Hilfe fuer Zeile und Meldung ueber den Einstieg der Tabelle
+// (PlanFixIn: TRdxFixTable.FixFor, Adapter PlanCanBeClassMethod - zwei
+// Ersetzungen, gesperrt ohne Ersetzungen, Name aus der Meldung).
 function PlanVia(const ASource: string; ALine: Integer;
   const AMsg: string): TRdxFixOutcome;
 var
-  SL  : TStringList;
-  Map : TRdxCodeMap;
+  S : TSeen;
 begin
-  Result := Default(TRdxFixOutcome);
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    Map := TRdxCodeMap.Create(SL);
-    try
-      Result.Enabled := TRdxClassMethodFix.MakeStatic(Map, ALine, AMsg,
-        Result.Edits, Result.Reason);
-    finally
-      Map.Free;
-    end;
-  finally
-    SL.Free;
-  end;
-  if not Result.Enabled then
-    Result.Edits := nil;
-  Result.Name := TRdxClassMethodFix.MethodNameOf(AMsg);
+  S := Default(TSeen);
+  S.Line := ALine;
+  S.Msg := AMsg;
+  Result := PlanFixIn(ASource, 't.pas', fkCanBeClassMethod, S);
 end;
 
 // Die Hilfe fuer den ersten Fund des Detektors.
@@ -482,25 +476,11 @@ begin
   Result := PlanVia(ASource, Seen[0].Line, Seen[0].Msg);
 end;
 
-// Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt.
+// Fund fuer Fund ueber die Tabelle, nach jeder Ersetzung neu gemeldet, bis
+// der Detektor schweigt (FixAllWith).
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass : Integer;
-  O    : TRdxFixOutcome;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    if Length(Detect(Result)) = 0 then
-      Exit;
-    O := PlanFirst(Result);
-    Assert.IsTrue(O.Enabled, O.Reason);
-    Result := Apply(Result, O.Edits);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Result := FixAllWith(ASource, fkCanBeClassMethod, DetectKind);
 end;
 
 procedure TTestRdxClassMethodDetector.Adapter_TwoEditsAndName;
@@ -521,6 +501,9 @@ begin
   Assert.AreEqual<Integer>(LineStartingWith(Src, ADD_HEAD),
     O.Edits[1].Span.StartLine);
   Assert.IsFalse(O.ChangesBehavior, 'bedeutungsgleich (Tabellenzeile)');
+  Assert.IsTrue(Pos('of object', O.Hint) > 0, O.Hint);
+  Assert.IsTrue(Pos('Add', TRdxFixTable.CaptionFor(fkCanBeClassMethod, O)) > 0,
+    'der Menuetext nennt die Methode');
 end;
 
 procedure TTestRdxClassMethodDetector.Adapter_StaleFinding_NoHelp;

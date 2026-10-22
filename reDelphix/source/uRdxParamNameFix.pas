@@ -127,9 +127,8 @@ const
     'addparameter');
   // Trennt die Namen in ParamValues['a;b'].
   VALUES_SEP = ';';
-  // Hier endet die Suche nach der Routine um den Aufruf.
-  UNIT_BOUNDS: array[0..6] of string = ('implementation', 'interface',
-    'initialization', 'finalization', 'unit', 'program', 'library');
+  // Hier endet die Suche nach der Routine um den Aufruf: UNIT_BOUNDS
+  // (uRdxCodeMap, seit der Folgewelle B1 zentral).
   // So weit sucht IsParamArg rueckwaerts nach der oeffnenden Klammer.
   MAX_BACK_TOKENS = 64;
 

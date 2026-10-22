@@ -197,6 +197,15 @@ program reDelphix.Test;
 //   * uTestRdxAvoidOutFix       - SCA086 out -> var
 //   * uTestRdxRawExceptionFix   - SCA127 Exception -> EArgumentException
 //                                 bzw. EInvalidOpException
+//   * uTestRdxClassMethodFix    - SCA148 Methode -> class ... static
+//   * uTestRdxAlwaysTrueFix     - SCA150 immer wahres if aufloesen
+//   * uTestRdxObjectListFix     - SCA174 TList<T> -> TObjectList<T>
+//   * uTestRdxHomoglyphFix      - SCA193 Homoglyph-Bezeichner in ASCII
+//   * uTestRdxParamNameFix      - SCA199 Parametername mit Tippfehler ->
+//                                 Platzhalter des SQL
+//   * uTestRdxDeepNestingFix    - SCA018 letztes if -> Waechter-Klausel
+//   * uTestRdxLookupHoistFix    - SCA111/SCA112 ParamByName/FieldByName
+//                                 vor die Schleife
 //
 // SPRACHE: der Hauptblock setzt die reDelphix-Texte fuer ALLE Tests auf
 // Deutsch (SetRdxLanguageOverride('de'), wie der FPC-Pruefstand) - die
@@ -303,6 +312,13 @@ uses
   uRdxConsecutiveSectionFix in '..\source\uRdxConsecutiveSectionFix.pas',
   uRdxAvoidOutFix in '..\source\uRdxAvoidOutFix.pas',
   uRdxRawExceptionFix in '..\source\uRdxRawExceptionFix.pas',
+  uRdxClassMethodFix in '..\source\uRdxClassMethodFix.pas',
+  uRdxAlwaysTrueFix in '..\source\uRdxAlwaysTrueFix.pas',
+  uRdxObjectListFix in '..\source\uRdxObjectListFix.pas',
+  uRdxHomoglyphFix in '..\source\uRdxHomoglyphFix.pas',
+  uRdxParamNameFix in '..\source\uRdxParamNameFix.pas',
+  uRdxDeepNestingFix in '..\source\uRdxDeepNestingFix.pas',
+  uRdxLookupHoistFix in '..\source\uRdxLookupHoistFix.pas',
   uTestRdxRecipes in 'uTestRdxRecipes.pas',
   uTestRdxBench in 'uTestRdxBench.pas',
   uTestRdxSca044 in 'uTestRdxSca044.pas',
@@ -381,6 +397,13 @@ uses
   uTestRdxConsecutiveSectionFix in 'uTestRdxConsecutiveSectionFix.pas',
   uTestRdxAvoidOutFix in 'uTestRdxAvoidOutFix.pas',
   uTestRdxRawExceptionFix in 'uTestRdxRawExceptionFix.pas',
+  uTestRdxClassMethodFix in 'uTestRdxClassMethodFix.pas',
+  uTestRdxAlwaysTrueFix in 'uTestRdxAlwaysTrueFix.pas',
+  uTestRdxObjectListFix in 'uTestRdxObjectListFix.pas',
+  uTestRdxHomoglyphFix in 'uTestRdxHomoglyphFix.pas',
+  uTestRdxParamNameFix in 'uTestRdxParamNameFix.pas',
+  uTestRdxDeepNestingFix in 'uTestRdxDeepNestingFix.pas',
+  uTestRdxLookupHoistFix in 'uTestRdxLookupHoistFix.pas',
   uTestRdxMagicGuards in 'uTestRdxMagicGuards.pas',
   uTestRdxMagicFixDetector in 'uTestRdxMagicFixDetector.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',

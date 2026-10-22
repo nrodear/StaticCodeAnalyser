@@ -2344,6 +2344,260 @@
         ]
       },
       "hinweis": "Passt keine der beiden Klassen (Datei fehlt, Netz, Fachfehler), keinen Eintrag wählen und eine eigene Klasse schreiben. EArgumentOutOfRangeException ist eine Unterklasse von EArgumentException – ein Handler darauf fängt die neue Ausnahme nicht."
+    },
+    "CanBeClassMethod": {
+      "titel": "Methode zur statischen Klassenmethode machen",
+      "was": "Macht eine Methode ohne Bezug auf ihr Objekt zur statischen Klassenmethode: an der Deklaration im Klassenrumpf kommt `class` davor und `static;` direkt hinter die Signatur (weitere Direktiven wie `inline` bleiben dahinter), am Kopf der Implementierung `class` davor – beides in einem Schritt. Eine statische Klassenmethode hat kein `Self`; Aufrufe mit Klammern (`Add(..)`, `Obj.Add(..)`, `TMath.Add(..)`) bleiben gültig. Die Hilfe prüft nur, was die Datei beweist: die Klasse steht dort und erbt direkt von TObject – dann kennt sie alle Member.",
+      "platzhalter": "`%s` = der Methodenname aus der Meldung.",
+      "nichtAngeboten": [
+        "die Klasse steht nicht genau einmal in der Datei (etwa das Katalogbeispiel ohne Klasse, ein record), ist generisch, ein Helper oder hat eine andere Vorfahrenliste als `TObject`",
+        "der Rumpf nennt `Self`, `inherited` oder unqualifiziert einen Member der Klasse (Feld, Property, Konstante, Methode) bzw. von TObject (`ClassName`, `Free` …)",
+        "die Deklaration trägt virtual, dynamic, abstract, override, reintroduce, message, final, dispid, static, external oder overload, steht unter published (oder ohne Abschnitt in einer Datei mit `{$M+}`) oder hat ein Attribut; der Rumpf ist asm",
+        "der Methodenname steht noch einmal in der Klassendeklaration (Property-Accessor) oder in der Datei hinter `@`, als Wert einer Zuweisung bzw. als Argument ohne Klammern (möglicher Methodenzeiger `of object`)",
+        "mehrere Deklarationen oder Implementierungen, Konstruktor oder Destruktor, schon `class`, eine Compiler-Direktive oder ein geschachtelter Typ im Klassenrumpf, eine verschobene Zeile"
+      ],
+      "beispielVorher": [
+        "type",
+        "  TMath = class",
+        "  public",
+        "    function Add(A, B: Integer): Integer;",
+        "  end;",
+        "",
+        "function TMath.Add(A, B: Integer): Integer;",
+        "begin",
+        "  Result := A + B;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "type",
+        "  TMath = class",
+        "  public",
+        "    class function Add(A, B: Integer): Integer; static;",
+        "  end;",
+        "",
+        "class function TMath.Add(A, B: Integer): Integer;",
+        "begin",
+        "  Result := A + B;",
+        "end;"
+      ],
+      "hinweis": "Andere Units sieht die Hilfe nicht: verwendet eine die Methode als Methodenzeiger (`of object`, etwa als Ereignis-Handler), übersetzt sie danach nicht mehr."
+    },
+    "BoolAlwaysTrue": {
+      "titel": "Immer wahre Bedingung entfernen",
+      "was": "Löst ein `if` auf, dessen ganze Bedingung immer wahr ist – `Length(X) >= 0` bzw. `0 <= Length(X)` (Length ist nie negativ): übrig bleibt der then-Zweig, ein else-Zweig lief nie und entfällt. Ein begin..end-Zweig bleibt als Block stehen, Kommentare darin und hinter dem `;` bleiben. Der Detektor meldet nur diese Length-Vergleiche, kein `if True then`.",
+      "nichtAngeboten": [
+        "die immer falsche Form (`Length(X) < 0`, `0 > Length(X)`): der Zweig lief nie – ob `= 0` gemeint war, entscheidet der Mensch",
+        "der Vergleich ist nicht die ganze Bedingung eines if als Anweisung (and/or, while, until, Zuweisung, bedingter Ausdruck) oder nicht immer wahr (`>= 0.5`, `1.0 <= Length(X)`)",
+        "das Argument von Length ist kein bloßer Name bzw. keine Kette `A.B` (Aufruf, Ausdruck, Literal, Index)",
+        "ein Zweig ist keine einfache Anweisung und kein begin..end (if, case, Schleife, try, with, anonyme Methode auf oberster Ebene, leer)",
+        "ein Kommentar in der Bedingung oder im else-Zweig, eine Compiler-Direktive im if, zwei Vergleiche auf der Zeile oder eine verschobene Zeile"
+      ],
+      "beispielVorher": [
+        "if Length(S) >= 0 then",
+        "  DoStuff",
+        "else",
+        "  DoOther;"
+      ],
+      "beispielNachher": [
+        "DoStuff;"
+      ],
+      "hinweis": "Ein Name als Argument kann eine parameterlose Funktion sein – sie läuft danach nicht mehr. War ein anderer Vergleich gemeint (Tippfehler, etwa `> 0`), fehlt er weiterhin."
+    },
+    "TObjectListWithoutOwnership": {
+      "titel": "TList<T> durch TObjectList<T> ersetzen",
+      "was": "Macht aus der lokalen Liste `L: TList<TFoo>`, die frisch erzeugte Objekte aufnimmt (`L.Add(TFoo.Create)`), eine `TObjectList<TFoo>` – in der Deklaration und im `TList<TFoo>.Create`, in einem Schritt (inline `var L: TList<TFoo> := …` ebenso, bei `var L := TList<TFoo>.Create` nur das Create). Die Liste besitzt ihre Elemente danach (`OwnsObjects` ist `True`) und gibt sie mit `Free` frei. Die Hilfe prüft vorher am Text, dass nichts doppelt freigegeben wird.",
+      "kennzeichnung": "die Liste gibt ihre Elemente jetzt frei – bei Free, aber auch bei Clear und Delete",
+      "platzhalter": "`%s` = der Elementtyp aus der Meldung (etwa `TFoo`).",
+      "nichtAngeboten": [
+        "die Liste ist keine lokale Variable der Routine: Parameter, Feld (auch `FList` im Konstruktor), globale Variable, Variable einer äußeren Routine; mit anderen zusammen deklariert (`L, M: TList<TFoo>`), anders deklariert (`TList<TBar>`, qualifiziert, Alias) oder in einer verschachtelten Routine genutzt",
+        "die Variable wird nicht genau einmal zugewiesen, oder die Zuweisung ist kein `TList<TFoo>.Create` ohne Argumente (`Create(Andere)` übernähme fremde Objekte)",
+        "ein `Add`/`Insert` nimmt ein Objekt, das nicht genau dort entsteht (`L.Add(Item)`) oder dessen Konstruktor ein Argument bekommt, das kein Literal ist (`TFoo.Create(Self)` – ein TComponent-Besitzer gibt es selbst frei)",
+        "ein Element wird freigegeben (`L[i].Free`, `FreeAndNil(L[0])`, `for E in L do E.Free`) oder als Wert benutzt (`X := L[0]`, `Keep(L.First)`), die Liste selbst als Wert (`Result := L`, `Keep(L)`)",
+        "ein Member außerhalb einer festen Liste (`Extract`, `Remove`, `ToArray`, `List`, `AddRange`, `OnNotify` …) oder eine Zuweisung an ein Member (`L.Count := 0`, `L[0] := …`)",
+        "ein `with` oder eine Compiler-Direktive in der Routine; `System.Generics.Collections` fehlt in uses; die Datei deklariert selbst einen Typ `TList` bzw. `TObjectList`",
+        "auf der Zeile steht kein `L.Add(` (Zeile verschoben)"
+      ],
+      "beispielVorher": [
+        "procedure Foo;",
+        "var",
+        "  L: TList<TFoo>;",
+        "begin",
+        "  L := TList<TFoo>.Create;",
+        "  try",
+        "    L.Add(TFoo.Create);",
+        "  finally",
+        "    L.Free;",
+        "  end;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "procedure Foo;",
+        "var",
+        "  L: TObjectList<TFoo>;",
+        "begin",
+        "  L := TObjectList<TFoo>.Create;",
+        "  try",
+        "    L.Add(TFoo.Create);",
+        "  finally",
+        "    L.Free;",
+        "  end;",
+        "end;"
+      ],
+      "hinweis": "Ob `TFoo` eine Klasse ist, prüft die Hilfe nicht – für einen Record übersetzt die Unit danach nicht (TObjectList<T> verlangt eine Klasse), es entsteht kein stiller Fehler. Ein Konstruktor, der das neue Objekt selbst irgendwo einträgt, ist am Text nicht zu sehen."
+    },
+    "SourceNonAsciiIdentifier": {
+      "titel": "Doppelgänger-Buchstaben im Namen durch ASCII ersetzen",
+      "was": "Schreibt den ersten Bezeichner der gemeldeten Zeile, in dem ein Buchstabe nur lateinisch aussieht (Homoglyph: kyrillisches `о` U+043E statt `o`, griechisches `Μ` U+039C statt `M`), in ASCII – an allen Vorkommen im Code der Unit, in einem Schritt. Bedeutungsgleich: der Name gilt nur in dieser Unit, und der neue Name ist dort noch frei. Kommentare bleiben, wie sie sind. Die Hilfe kennt nur eine feste Tabelle bekannter Doppelgänger (kyrillische und griechische Buchstaben).",
+      "platzhalter": "`%s` = der neue Name in ASCII (etwa `Login`); `X`, wenn die Hilfe vorher ablehnt.",
+      "nichtAngeboten": [
+        "ein Zeichen des Namens steht nicht in der Tabelle (Umlaut, ein Buchstabe ohne lateinischen Doppelgänger) oder der Name hat keinen einzigen ASCII-Buchstaben (Name in einer anderen Schrift)",
+        "der Name steht im interface-Teil, die Datei ist keine Unit (Programm, Bibliothek, Include-Datei) oder hat eine `exports`-Klausel",
+        "das erste Vorkommen ist nicht die Deklaration (der Name kommt dann aus einer anderen Unit: Nutzung im Rumpf, als Typ, in `uses`, in `initialization`), eine lokale Deklaration wird außerhalb ihrer Routine genutzt, oder ein Vorkommen ist anders geschrieben",
+        "der neue Name ist ein reserviertes Wort oder steht schon im Code der Datei; ein `with` liegt im Gültigkeitsbereich; ein String ohne Leerzeichen (`'Login'`, `'TUser.Login'`) oder eine Compiler-Direktive nennt den alten oder neuen Namen",
+        "vor der Deklaration steht ein Routinenkopf, dessen Grenzen nicht sicher lesbar sind (lokaler Klassentyp, Methoden einer Klasse im implementation-Teil)",
+        "auf der Zeile steht kein Bezeichner mit Nicht-ASCII-Zeichen im Code (Zeile verschoben)"
+      ],
+      "beispielVorher": [
+        "procedure Foo;",
+        "var",
+        "  L‹U+043E›gin: string;",
+        "begin",
+        "  L‹U+043E›gin := 'x';",
+        "  Show(L‹U+043E›gin);",
+        "end;"
+      ],
+      "beispielNachher": [
+        "procedure Foo;",
+        "var",
+        "  Login: string;",
+        "begin",
+        "  Login := 'x';",
+        "  Show(Login);",
+        "end;"
+      ],
+      "hinweis": "‹U+043E› steht im Beispiel für das kyrillische o, das im Editor genau wie das lateinische aussieht. Der Detektor meldet je Datei nur die erste betroffene Zeile; nach der Hilfe meldet er den nächsten Namen. Ein String mit Leerzeichen (`'Login failed'`) gilt als Satz und sperrt nicht."
+    },
+    "ParamNameMismatch": {
+      "titel": "Parameternamen mit Tippfehler durch den Platzhalter des SQL ersetzen",
+      "was": "Ersetzt im gemeldeten `ParamByName('x')` den Namen durch den Platzhalter des SQL, der genau einen Tippfehler entfernt ist: ein Zeichen mehr, weniger oder anders, oder zwei Nachbarn vertauscht (`'Nmae'` → `'Name'`, `'custid'` → `'cust_id'`). Die Kandidaten nennt die Meldung (`(it has :Id, :Name)`); eingesetzt wird die Schreibweise des SQL. Nur der Text zwischen den Quotes ändert sich; auch `Q.Params.ParamByName`, `Q.Parameters.ParamByName` und `Self.Q`.",
+      "kennzeichnung": "der Aufruf bindet danach einen anderen Parameter, statt zur Laufzeit mit „parameter not found“ abzubrechen – prüfen, dass der Wert zu diesem Platzhalter gehört",
+      "platzhalter": "`%s` = der eingesetzte Platzhalter (ohne `:`).",
+      "nichtAngeboten": [
+        "der andere Fund der Regel: ein Platzhalter, den die Routine nie setzt (kein Wert bekannt)",
+        "kein Platzhalter oder mehr als einer ist einen Tippfehler entfernt (das Katalogbeispiel `custid` → `customer_id` ist kein Tippfehler), einer der Namen ist kürzer als drei Zeichen, die Meldung nennt keine oder nur einen Teil der Platzhalter (mehr als sechs)",
+        "der Name ist kein einfaches Literal als ganzes Argument (`'Nm' + 'ae'`, `#`-Zeichen, Variable), steht zweimal auf der Zeile, oder die Zeile ist verschoben; Query hinter einem Cast oder Index",
+        "die Routine setzt den gewählten Namen schon (ParamByName, FindParam, ParamValues, SetVariable, CreateParam …) – ein zweiter Zugriff überschriebe einen Wert",
+        "keine Routine mit begin..end-Rumpf um den Aufruf (initialization) oder unsichere Routinengrenzen"
+      ],
+      "beispielVorher": [
+        "  Q.SQL.Clear;",
+        "  Q.SQL.Add('select * from t where name = :Name and id = :Id');",
+        "  Q.ParamByName('Nmae').AsString := 'x';",
+        "  Q.ParamByName('Id').AsInteger := 1;",
+        "  Q.Open;"
+      ],
+      "beispielNachher": [
+        "  Q.SQL.Clear;",
+        "  Q.SQL.Add('select * from t where name = :Name and id = :Id');",
+        "  Q.ParamByName('Name').AsString := 'x';",
+        "  Q.ParamByName('Id').AsInteger := 1;",
+        "  Q.Open;"
+      ],
+      "hinweis": "Steht derselbe falsche Name zweimal in der Routine, gilt die Hilfe nur für das erste Vorkommen: danach setzt die Routine den Namen schon, und das zweite bleibt Handarbeit."
+    },
+    "DeepNesting": {
+      "titel": "Letztes if in eine Wächter-Klausel umwandeln",
+      "was": "Ist die letzte Anweisung der Routine ein `if A then begin … end` ohne else und liegt die gemeldete (tiefste) Stelle in diesem Block, wird daraus `if not A then Exit;`, und der Block rückt eine Stufe aus – alles darin liegt eine Ebene flacher. Gleiche Bedeutung: die Bedingung wird einmal ausgewertet, ist sie falsch, endet die Routine wie bisher. Die Negation bleibt lesbar: `not X` wird zu `X`, ein einfacher Operand zu `not X`, alles andere zu `not (A)`. Liegt die Tiefe mehr als eine Stufe über der Grenze, bleibt der Fund eine Ebene flacher stehen; endet der Block wieder mit einem solchen if, greift die Hilfe erneut.",
+      "nichtAngeboten": [
+        "die letzte Anweisung ist kein `if … then begin … end` (Code danach, ein else, try, Schleife) oder das if steht nicht selbst im Rumpf (hinter then/else/do, im try)",
+        "die gemeldete Stelle liegt nicht in diesem Block (die Wächter-Klausel flachte sie nicht ab), oder die Zeile ist verschoben",
+        "eine Funktion ohne `Result := …` als eigene Anweisung vor dem if",
+        "eine Compiler-Direktive, eine anonyme Methode, goto oder asm in der Routine; die Datei deklariert einen eigenen Bezeichner Exit; die Bedingung enthält einen bedingten Ausdruck (`if X then A else B`)",
+        "Code neben `begin` oder vor `end`, ein Kommentar im Kopf des if oder neben dem end, eine Blockzeile in einem Block-Kommentar oder mehrzeiligen String, ein Inline-`var`/`const` auf oberster Ebene des Blocks, ungleiche Einrückung"
+      ],
+      "beispielVorher": [
+        "begin",
+        "  Prepare;",
+        "  if Ready then",
+        "  begin",
+        "    if B then",
+        "      Work;",
+        "    More;",
+        "  end;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "begin",
+        "  Prepare;",
+        "  if not Ready then Exit;",
+        "  if B then",
+        "    Work;",
+        "  More;",
+        "end;"
+      ],
+      "hinweis": "Kommentare im Block rücken mit ihrer Zeile aus. Die Hilfe nimmt an, dass die Bedingung ein Boolean-Ausdruck ist – für einen Variant mit Ganzzahlwert wäre `not` bitweise."
+    },
+    "ParamByNameInLoop": {
+      "titel": "`ParamByName` vor die Schleife ziehen",
+      "was": "Setzt `var PrmId := Q.ParamByName('id');` als eigene Zeile vor die Schleife (mit deren Einrückung) und ersetzt in der Schleife – Kopf, Rumpf, `until`-Bedingung – jedes `Q.ParamByName('id')` mit genau diesem Literal durch den Namen. Die Meldung nennt weder Empfänger noch Parameter: die Hilfe sucht den Aufruf auf der Fundzeile selbst. Der Name ist `Prm` plus der Parametername in Bezeichner-Teilen (`customer_id` → `PrmCustomerId`); kommt er in der Datei schon vor, `…2` bis `…9`. `Open`, `Close` und `ExecSQL` in der Schleife sind erlaubt – sie lassen die Parameter stehen. Die Inline-Variable braucht Delphi 10.3 oder neuer.",
+      "platzhalter": "`%s` = der Aufruf, z. B. `Q.ParamByName('id')`; den neuen Namen nennt der Hinweis des Eintrags.",
+      "kennzeichnung": "fehlt der Parameter, kommt die Ausnahme jetzt auch, wenn die Schleife nie läuft; setzt ein Aufruf in der Schleife SQL oder Params indirekt neu, zeigt die Referenz ins Leere",
+      "nichtAngeboten": [
+        "kein oder mehrere verschiedene `ParamByName`-Aufrufe auf der Fundzeile (Zeile verschoben bzw. mehrdeutig)",
+        "der Empfänger ist kein einfacher Name (`Self.Q`, `DM.Q`, `Q.Parameters` bei ADO), ist in der Datei als Property oder Routine deklariert oder dem Quellstellen-Dienst nicht als Variable, Parameter oder Feld bekannt; das Argument ist kein einzelnes String-Literal auf der Zeile, oder ein Kommentar steht im Aufruf",
+        "in der Schleife: `Q.SQL`, `Q.Params`, `Q.Prepare`/`Unprepare`/`Prepared`, `Q.Connection`, `Q.Command`, `Q.Free` u. a., `Q` wird zugewiesen, weitergereicht oder über ein anderes Objekt erreicht, oder eine anonyme Methode",
+        "die Schleife beginnt keine eigene Zeile und Anweisung in einem `begin..end` (nach `then`, `do`, `else`, im try-, except-, finally- oder case-Teil); `with`, `asm`, `goto` oder eine Direktive in der Routine; der Hauptblock eines Programms; eine Schleife davor, die die Hilfe nicht sicher liest",
+        "Dateien, die FPC oder ein Delphi vor 10.3 übersetzt (wie bei SCA014: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, Lazarus- oder alte Delphi-Projektdatei, `.pp`/`.lpr`), Skript-Units, ein Netzpfad",
+        "kein freier Name (`PrmX` bis `PrmX9` kommen in der Datei schon vor)"
+      ],
+      "beispielVorher": [
+        "  for i := 0 to High(Ids) do",
+        "  begin",
+        "    Q.ParamByName('id').AsInteger := Ids[i];",
+        "    Q.ExecSQL;",
+        "  end;"
+      ],
+      "beispielNachher": [
+        "  var PrmId := Q.ParamByName('id');",
+        "  for i := 0 to High(Ids) do",
+        "  begin",
+        "    PrmId.AsInteger := Ids[i];",
+        "    Q.ExecSQL;",
+        "  end;"
+      ],
+      "hinweis": "In geschachtelten Schleifen kommt der Lookup vor die innerste Schleife, deren Rumpf ihn trägt; der Detektor meldet die neue Zeile dann in der äußeren erneut, und ein zweiter Klick zieht sie weiter hinaus (`var PrmId := PrmId2;`), wenn die äußere Schleife es erlaubt."
+    },
+    "FieldByNameInLoop": {
+      "titel": "`FieldByName` vor die Schleife ziehen",
+      "was": "Setzt `var FldAmount := Q.FieldByName('Amount');` als eigene Zeile vor die Schleife (mit deren Einrückung) und ersetzt in der Schleife – Kopf, Rumpf, `until`-Bedingung – jedes `Q.FieldByName('Amount')` mit genau diesem Literal durch den Namen; ein anderes oder anders geschriebenes Literal (`'amount'`) bleibt stehen. Die Meldung nennt weder Empfänger noch Feld: die Hilfe sucht den Aufruf auf der Fundzeile selbst. Der Name ist `Fld` plus der Feldname in Bezeichner-Teilen (`customer_id` → `FldCustomerId`); kommt er in der Datei schon vor, `…2` bis `…9`. Die Inline-Variable braucht Delphi 10.3 oder neuer.",
+      "platzhalter": "`%s` = der Aufruf, z. B. `Q.FieldByName('Amount')`; den neuen Namen nennt der Hinweis des Eintrags.",
+      "kennzeichnung": "fehlt das Feld, kommt die Ausnahme jetzt auch, wenn die Schleife nie läuft; schließt oder öffnet ein Aufruf in der Schleife die Datenmenge indirekt, zeigt die Referenz ins Leere",
+      "nichtAngeboten": [
+        "kein oder mehrere verschiedene `FieldByName`-Aufrufe auf der Fundzeile (Zeile verschoben bzw. mehrdeutig – etwa `Q.FieldByName('A').AsString + Q.FieldByName('B').AsString`)",
+        "der Empfänger ist kein einfacher Name (`Self.Q`, `DM.Q`, `Q.Fields`), ist in der Datei als Property oder Routine deklariert oder dem Quellstellen-Dienst nicht als Variable, Parameter oder Feld bekannt; das Argument ist kein einzelnes String-Literal auf der Zeile, oder ein Kommentar steht im Aufruf",
+        "in der Schleife: `Q.Open`, `Close`, `Active`, `SQL`, `Fields`, `FieldDefs`, `Refresh`, `Requery`, `ExecSQL`, `Prepare`/`Unprepare`, `NextRecordset`, `Connection`, `LoadFromFile`, `Free` u. a., `Q` wird zugewiesen, weitergereicht oder über ein anderes Objekt erreicht, oder eine anonyme Methode",
+        "die Schleife beginnt keine eigene Zeile und Anweisung in einem `begin..end` (nach `then`, `do`, `else`, im try-, except-, finally- oder case-Teil); `with`, `asm`, `goto` oder eine Direktive in der Routine; der Hauptblock eines Programms; eine Schleife davor, die die Hilfe nicht sicher liest",
+        "Dateien, die FPC oder ein Delphi vor 10.3 übersetzt (wie bei SCA014: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, Lazarus- oder alte Delphi-Projektdatei, `.pp`/`.lpr`), Skript-Units, ein Netzpfad",
+        "kein freier Name (`FldX` bis `FldX9` kommen in der Datei schon vor)"
+      ],
+      "beispielVorher": [
+        "  Total := 0;",
+        "  while not Q.Eof do",
+        "  begin",
+        "    Total := Total + Q.FieldByName('Amount').AsCurrency;",
+        "    Q.Next;",
+        "  end;"
+      ],
+      "beispielNachher": [
+        "  Total := 0;",
+        "  var FldAmount := Q.FieldByName('Amount');",
+        "  while not Q.Eof do",
+        "  begin",
+        "    Total := Total + FldAmount.AsCurrency;",
+        "    Q.Next;",
+        "  end;"
+      ],
+      "hinweis": "In geschachtelten Schleifen kommt der Lookup vor die innerste Schleife, deren Rumpf ihn trägt (dort, wo die Datenmenge in der äußeren Schleife neu geöffnet wird, ist das der richtige Platz); der Detektor meldet die neue Zeile dann in der äußeren erneut, und ein zweiter Klick zieht sie weiter hinaus (`var FldAmount := FldAmount2;`), wenn die äußere Schleife es erlaubt."
     }
   }
 }

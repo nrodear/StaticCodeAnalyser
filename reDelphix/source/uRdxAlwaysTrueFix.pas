@@ -111,9 +111,8 @@ const
   KW_BEGIN  = 'begin';
   ZERO      = '0';
   // Hier endet eine einfache Anweisung (auf Klammertiefe 0, als
-  // Schluesselwort; dazu ';').
-  BRANCH_ENDS: array[0..4] of string = ('else', 'end', 'until', 'except',
-    'finally');
+  // Schluesselwort; dazu ';'): STATEMENT_STOPS (uRdxCodeMap, dieselbe
+  // Menge).
   // Auf oberster Ebene einer einfachen Anweisung nicht erlaubt: ein
   // eigener Block, eine Struktur oder eine anonyme Methode.
   NOT_SIMPLE: array[0..18] of string = ('begin', 'case', 'try', 'asm',
@@ -300,7 +299,7 @@ begin
   end;
   if (AStart.Low = '') or (AStart.Low = ';')
      or (IsKeywordAfter(AStart, P)
-         and (InList(AStart.Low, BRANCH_ENDS) or InList(AStart.Low, NOT_SIMPLE))) then
+         and (InList(AStart.Low, STATEMENT_STOPS) or InList(AStart.Low, NOT_SIMPLE))) then
     Exit(_(R_AT_BRANCH, [AWord]));
   Depth := 0;
   T := AStart;
@@ -309,7 +308,7 @@ begin
     if Depth = 0 then
     begin
       if (T.Low = ';')
-         or (IsKeywordAfter(T, P) and InList(T.Low, BRANCH_ENDS)) then
+         or (IsKeywordAfter(T, P) and InList(T.Low, STATEMENT_STOPS)) then
         Break;
       if IsKeywordAfter(T, P) and InList(T.Low, NOT_SIMPLE) then
         Exit(_(R_AT_BRANCH, [AWord]));
@@ -333,7 +332,7 @@ begin
   if ATerm.Low = ';' then
     Exit;
   if not (IsKeywordAfter(ATerm, Before(AMap, ATerm))
-          and InList(ATerm.Low, BRANCH_ENDS)) then
+          and InList(ATerm.Low, STATEMENT_STOPS)) then
     Result := _(R_AT_TAIL);
 end;
 

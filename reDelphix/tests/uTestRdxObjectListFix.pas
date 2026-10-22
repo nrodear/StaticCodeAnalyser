@@ -11,9 +11,9 @@ unit uTestRdxObjectListFix;
 //   als Wert, ungepruefte Members, Laufvariable, with, Direktive, uses,
 //   eigener Typ).
 //   Fixture 2 (nur Delphi): der ECHTE Detektor (uTObjectListWithoutOwnership)
-//   auf dem echten AST meldet die Add-Zeile; die Hilfe (der Planer wie der
-//   Adapter der Tabelle ihn ruft: Zeile und Meldung) behebt den Fund, bis
-//   der Detektor schweigt.
+//   auf dem echten AST meldet die Add-Zeile; die Hilfe ueber den Einstieg
+//   der Tabelle (TRdxFixTable.FixFor via PlanFixIn/FixAllWith, Adapter
+//   PlanObjectList) behebt den Fund, bis der Detektor schweigt.
 // Die Quellen haben den Kopf HEAD (Zeilen 1-6, 'procedure Foo;' auf 6);
 // die Zeile eines Fundes sucht LineOf, statt sie zu zaehlen.
 
@@ -56,6 +56,7 @@ type
   public
     [Test] procedure Detector_ReportsAddLine;
     [Test] procedure Detector_RoundTrip;
+    [Test] procedure Table_TwoEditsMarkedAndName;
     [Test] procedure Detector_TwoAdds_Fixed;
     [Test] procedure Detector_InlineVar_RoundTrip;
     [Test] procedure Detector_CatalogExample_Fixed;
@@ -75,7 +76,9 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog,
   uTObjectListWithoutOwnership,
-  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
+  uRdxRecipeRunner,      // TRdxFixOutcome
+  uRdxFixTable,          // TRdxFixTable.CaptionFor
+  uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxObjectListFix,
   uRdxText,              // _() und MsgMovedSuffix
@@ -478,7 +481,7 @@ end;
 
 {$IFNDEF FPC}
 
-{ ---- Detektor ---- }
+{ ---- Detektor und Tabelle ---- }
 
 // Die Funde der Art SCA174 - der echte Detektor auf dem echten AST.
 procedure RunDetector(AKind: TFindingKind; Root: TAstNode;
@@ -493,37 +496,29 @@ begin
     RunDetector);
 end;
 
-// Die Hilfe fuer den ersten Fund des Detektors - der Planer wie der Adapter
-// der Tabelle ihn ruft (Zeile und Meldung aus dem Fund).
-function PlanFirst(const ASource: string; out APlan: TRdxObjectListPlan;
-  out AReason: string): Boolean;
+// Dasselbe in der Form TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := DetectSource('rdx_ol_', ASource, AKind, RunDetector);
+end;
+
+// Die Hilfe fuer den ersten Fund des Detektors ueber den Einstieg der
+// Tabelle (PlanFixIn: TRdxFixTable.FixFor, Adapter PlanObjectList).
+function PlanFirst(const ASource: string): TRdxFixOutcome;
 var
   Seen : TArray<TSeen>;
 begin
   Seen := Detect(ASource);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet einen Fund');
-  Result := PlanOf(ASource, Seen[0].Line, Seen[0].Msg, APlan, AReason);
+  Result := PlanFixIn(ASource, 't.pas', fkTObjectListWithoutOwnership,
+    Seen[0]);
 end;
 
-// Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt.
+// Fund fuer Fund ueber die Tabelle, nach jeder Ersetzung neu gemeldet, bis
+// der Detektor schweigt (FixAllWith).
 function FixAll(const ASource: string): string;
-const
-  MAX_PASSES = 10;
-var
-  Pass : Integer;
-  P    : TRdxObjectListPlan;
-  R    : string;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    if Length(Detect(Result)) = 0 then
-      Exit;
-    Assert.IsTrue(PlanFirst(Result, P, R), R);
-    Result := Apply(Result, P.Edits);
-  end;
-  Assert.Fail('der Detektor schweigt auch nach zehn Durchlaeufen nicht');
+  Result := FixAllWith(ASource, fkTObjectListWithoutOwnership, DetectKind);
 end;
 
 procedure TTestRdxObjectListDetector.Detector_ReportsAddLine;
@@ -546,6 +541,24 @@ begin
   Assert.AreEqual(Owned(StdSrc), Fixed);
   Assert.AreEqual<Integer>(0, Length(Detect(Fixed)),
     'der Detektor schweigt danach');
+end;
+
+procedure TTestRdxObjectListDetector.Table_TwoEditsMarkedAndName;
+var
+  O : TRdxFixOutcome;
+begin
+  // Tabellenzeile: Deklaration und Create in EINEM Schritt, gekennzeichnet
+  // (Changes: True), Name = der Elementtyp aus der Meldung, Hinweis der
+  // Zeile.
+  O := PlanFirst(StdSrc);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual<Integer>(2, Length(O.Edits), 'Deklaration und Create');
+  Assert.IsTrue(O.ChangesBehavior, 'gekennzeichnet');
+  Assert.AreEqual('TFoo', O.Name);
+  Assert.IsTrue(Pos('Clear', O.Hint) > 0, O.Hint);
+  Assert.IsTrue(Pos('TObjectList<TFoo>',
+    TRdxFixTable.CaptionFor(fkTObjectListWithoutOwnership, O)) > 0,
+    'der Menuetext nennt den Elementtyp');
 end;
 
 procedure TTestRdxObjectListDetector.Detector_TwoAdds_Fixed;
@@ -589,45 +602,45 @@ end;
 
 procedure TTestRdxObjectListDetector.Detector_ItemFreed_NoHelp;
 var
-  P : TRdxObjectListPlan;
-  R : string;
+  O : TRdxFixOutcome;
 begin
   // Die Elemente werden schon von Hand freigegeben - der Detektor meldet
   // trotzdem, die Hilfe lehnt ab (sonst doppelte Freigabe).
-  Assert.IsFalse(PlanFirst(Src(['var', '  L: TList<TFoo>;', '  i: Integer;'],
+  O := PlanFirst(Src(['var', '  L: TList<TFoo>;', '  i: Integer;'],
     ['  L := TList<TFoo>.Create;', '  L.Add(TFoo.Create);',
-     '  for i := 0 to L.Count - 1 do', '    L[i].Free;', '  L.Free;']), P, R));
-  Assert.AreEqual(_(R_OL_ITEM, [14]), R);
+     '  for i := 0 to L.Count - 1 do', '    L[i].Free;', '  L.Free;']));
+  Assert.IsFalse(O.Enabled);
+  Assert.AreEqual(_(R_OL_ITEM, [14]), O.Reason);
 end;
 
 procedure TTestRdxObjectListDetector.Detector_Field_NoHelp;
 var
-  P : TRdxObjectListPlan;
-  R : string;
+  O : TRdxFixOutcome;
 begin
   // Ein Feld: der Detektor meldet (Name klein, ohne Self), die Hilfe nicht -
   // die Liste kann anderswo gefuellt oder geleert werden.
-  Assert.IsFalse(PlanFirst(Join(['unit t;', 'interface', 'uses',
+  O := PlanFirst(Join(['unit t;', 'interface', 'uses',
     '  System.Generics.Collections;', 'type', '  TFoo = class', '  end;',
     '  THolder = class', '  private', '    FList: TList<TFoo>;', '  public',
     '    constructor Create;', '  end;', 'implementation',
     'constructor THolder.Create;', 'begin', '  FList := TList<TFoo>.Create;',
-    '  FList.Add(TFoo.Create);', 'end;', 'end.']), P, R));
-  Assert.AreEqual(_(R_OL_NOT_LOCAL, ['FList']), R);
+    '  FList.Add(TFoo.Create);', 'end;', 'end.']));
+  Assert.IsFalse(O.Enabled);
+  Assert.AreEqual(_(R_OL_NOT_LOCAL, ['FList']), O.Reason);
 end;
 
 procedure TTestRdxObjectListDetector.Detector_ReusedVariable_NoHelp;
 var
-  P : TRdxObjectListPlan;
-  R : string;
+  O : TRdxFixOutcome;
 begin
   // Posten 306 des Detektors: das Add gehoert zur besitzenden Liste, eine
   // spaetere TList-Zuweisung laesst den Detektor trotzdem melden. Die
   // Deklaration ist keine TList<TFoo> - keine Hilfe.
-  Assert.IsFalse(PlanFirst(Src(['var', '  L: TObjectList<TFoo>;'],
+  O := PlanFirst(Src(['var', '  L: TObjectList<TFoo>;'],
     ['  L := TObjectList<TFoo>.Create;', '  L.Add(TFoo.Create);', '  L.Free;',
-     '  L := TList<TFoo>.Create;', '  L.Free;']), P, R));
-  Assert.AreEqual(_(R_OL_DECL_TYPE, ['L', 8, 'TFoo']), R);
+     '  L := TList<TFoo>.Create;', '  L.Free;']));
+  Assert.IsFalse(O.Enabled);
+  Assert.AreEqual(_(R_OL_DECL_TYPE, ['L', 8, 'TFoo']), O.Reason);
 end;
 
 procedure TTestRdxObjectListDetector.NestedRoutineUse_NoHelp;
