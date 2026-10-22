@@ -213,7 +213,8 @@ function SqlHintOf(const AResult: TRdxSqlTemplate): string;
 // with-Block; Routinen- und Typgrenzen einmal fuer alle), AReq.Binding
 // (FireDacConnectionProven bei einem Aufruf, AdoObjectProven beim Query-
 // Objekt - beides ausserhalb eines with-Blocks) und bei 'Q.SQL.Add(..)'
-// AReq.Prefix/ChainNames (die Kette, Kopf der Unit, Punkt 3).
+// AReq.Prefix/ChainNames (die Kette, Kopf der Unit, Punkt 3) - alle vier
+// zuerst zurueck auf den Stand ohne Fakten.
 procedure AddSqlFacts(AMap: TRdxCodeMap; var AReq: TRdxSqlRequest);
 // Ist AName (ein blosser Bezeichner) an ALine eine Konstante? Jede
 // Deklaration des Namens in der Datei muss eine untypisierte Konstante
@@ -2446,13 +2447,52 @@ begin
   end;
 end;
 
+// Steht P ('(' bzw. ',' vor einem 'Name =') in der Klammer einer
+// Aufzaehlung - vor ihrer oeffnenden '(' steht '=' ('TE = (A = 1, ..)')
+// bzw. ':' ('V: (A = 1, ..)')? Rueckwaerts mit Klammerzaehlung; ein ';'
+// beendet die Suche. Ein Vergleich in Klammern im Code ('if (FConn = nil)',
+// 'F(A, Name = 1)') ist keine Deklaration - er verwarf sonst jeden
+// Konstanten- und Typbeweis des Namens.
+function InEnumList(AMap: TRdxCodeMap; const P: TRdxToken): Boolean;
+var
+  T     : TRdxToken;
+  Paren : Integer;
+  n     : Integer;
+begin
+  Result := False;
+  Paren := 0;
+  T := P;
+  for n := 1 to MAX_WALK do
+  begin
+    if (T.Low = '') or (T.Low = ';') then Exit;
+    if T.Low = ')' then
+      Inc(Paren)
+    else if T.Low = '(' then
+    begin
+      if Paren = 0 then
+      begin
+        T := Before(AMap, T);
+        Exit((T.Low = '=') or (T.Low = ':'));
+      end;
+      Dec(Paren);
+    end;
+    T := Before(AMap, T);
+  end;
+end;
+
 // 'Name =': Konstante (const-Section), sonst Typ, Aufzaehlungswert oder
-// resourcestring (dkOther); False bei einem Vergleich im Code.
+// resourcestring (dkOther); False bei einem Vergleich im Code - auch in
+// Klammern (InEnumList).
 function EqualsDeclAt(AMap: TRdxCodeMap; const T, P, N: TRdxToken;
   var D: TSqlDecl): Boolean;
 begin
   Result := True;
-  if (P.Low = '(') or (P.Low = ',') or (P.Low = 'type') then
+  if (P.Low = '(') or (P.Low = ',') then
+  begin
+    Result := InEnumList(AMap, P);
+    D.Kind := dkOther;
+  end
+  else if P.Low = 'type' then
     D.Kind := dkOther
   else if not InList(P.Low, CONST_LEADS) then
     Result := False
@@ -3450,6 +3490,12 @@ var
   Scopes         : TSqlScopes;
   Chain          : TSqlChain;
 begin
+  // 'Setzt' gilt auch fuer eine wiederverwendete Anfrage: kein Fakt eines
+  // frueheren Laufs bleibt stehen (Review Woche G01-13).
+  AReq.Consts := nil;
+  AReq.Binding := sbByTarget;
+  AReq.Prefix := '';
+  AReq.ChainNames := nil;
   Scopes := Default(TSqlScopes);
   SetLength(AReq.Consts, Length(AReq.Parts));
   for i := 0 to High(AReq.Parts) do
