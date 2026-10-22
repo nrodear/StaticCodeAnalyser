@@ -40,14 +40,8 @@ const
   // reichlich Reserve fuer Abfragen zwischen Aufbau und Klick (Gluehbirne
   // im Hintergrund). Review reDelphiX 2026-10-07, Blocker 2.
   RDX_ACTION_BATCHES = 8 * MAX_FINDINGS_PER_MENU;
-  // Grund ohne offene Datei - bis Charge H3c als R_NO_FILE_OPEN doppelt
-  // (Minor 6). Seit E29 (Gruppe G6) nehmen Describe, PlanUses und die
-  // Ruempfe in uRdxFixRunner die uebersetzte Fassung uRdxText.MsgNoFileOpen;
-  // die Konstante bleibt nur fuer uRdxFixTable (Geruest TRdxFixFrame,
-  // PlanFloatEquality, PlanMoveSizeOfPointer ...), bis die Gruppen
-  // gemergt sind - dann entfallen sie und ihre Ausnahme in
-  // tools/rdx_i18n_gate.allow (c_groups 0).
-  R_NO_FILE = 'keine Datei geoeffnet';
+  // Der Grund ohne offene Datei ist seit E29 (C-Gruppen G6/G7)
+  // uRdxText.MsgNoFileOpen - bis dahin hier R_NO_FILE.
 
 type
   // Haelt Objekte in Chargen: BeginBatch eroeffnet eine Charge (ein

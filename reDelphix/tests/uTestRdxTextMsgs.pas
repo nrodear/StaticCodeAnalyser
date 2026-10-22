@@ -190,8 +190,9 @@ end;
 // ---- Tests: ADe ist woertlich der Text der genannten Planer ----
 
 procedure TTestRdxTextMsgs.LineMoved_ThreeLanguages;
-// R_MOVED in uRdxCleanupFixes, uRdxFlowFixes, uRdxMagicFixes,
-// uRdxResultFixes und uRdxTryFixes.
+// Bis E29 R_MOVED in uRdxCleanupFixes, uRdxFlowFixes, uRdxMagicFixes,
+// uRdxResultFixes und uRdxTryFixes - seit den C-Gruppen rufen sie diese
+// Funktion.
 begin
   Check3(MsgLineMoved, 'line moved? Analyse the file again',
     'Zeile verschoben? Datei neu pruefen', 1,
@@ -199,8 +200,9 @@ begin
 end;
 
 procedure TTestRdxTextMsgs.MovedSuffix_ThreeLanguages;
-// '... - ' + R_MOVED bzw. '... - Zeile verschoben? Datei neu pruefen' in
-// 12 Units; der Grund geht woertlich durch (kein Muster).
+// Bis E29 '... - ' + R_MOVED bzw. '... - Zeile verschoben? Datei neu
+// pruefen' in 12 Units - seit den C-Gruppen MsgMovedSuffix(_(Grund)); der
+// Grund geht woertlich durch (kein Muster).
 begin
   Check3(ProbeMovedSuffix, 'R%d - line moved? Analyse the file again',
     'R%d - Zeile verschoben? Datei neu pruefen', 1,
@@ -217,7 +219,9 @@ begin
 end;
 
 procedure TTestRdxTextMsgs.NoColumn_ThreeLanguages;
-// R_NO_COLUMN in uRdxLineFixes und uRdxSimpleFixes, uRdxStructFixes.
+// Bis E29 R_NO_COLUMN (uRdxCodeMap) in uRdxLineFixes, uRdxSimpleFixes,
+// uRdxStructFixes, uRdxTabsFix und uRdxTrailingBlanksFix - seit den
+// C-Gruppen (zuletzt G10) rufen sie MsgNoColumn, die Konstante ist weg.
 begin
   Check3(MsgNoColumn, 'the message has no column',
     'Spalte fehlt in der Meldung', 0, 'la colonne manque dans le message');
@@ -255,21 +259,24 @@ begin
 end;
 
 procedure TTestRdxTextMsgs.NoFileOpen_ThreeLanguages;
-// R_NO_FILE in uRdxRecipeRunner (auch von uRdxFixTable benutzt).
+// Bis E29 R_NO_FILE in uRdxRecipeRunner (auch uRdxFixTable) - seit den
+// C-Gruppen G6/G7 rufen uRdxFixRunner und uRdxFixTable MsgNoFileOpen.
 begin
   Check3(MsgNoFileOpen, 'no file open', 'keine Datei geoeffnet', 1,
     'aucun fichier ouvert');
 end;
 
 procedure TTestRdxTextMsgs.ByHand_ThreeLanguages;
-// R_BY_HAND in uRdxResultFixes; '; von Hand' in uRdxFixTable,
-// uRdxMagicFixes, uRdxSqlTemplate, ' - von Hand' in uRdxScopeTable.
+// Bis E29 R_BY_HAND in uRdxResultFixes; '; von Hand' in uRdxFixTable,
+// uRdxMagicFixes, uRdxSqlTemplate, ' - von Hand' in uRdxScopeTable - seit
+// den C-Gruppen ein Argument MsgByHand der uebersetzten Gruende.
 begin
   Check3(MsgByHand, 'by hand', 'von Hand', 0, 'a la main');
 end;
 
 procedure TTestRdxTextMsgs.CheckByHand_ThreeLanguages;
-// R_BY_HAND in uRdxTryFixes; uRdxDeclFixes, uRdxFlowFixes, uRdxRoutineFixes.
+// Bis E29 R_BY_HAND in uRdxTryFixes; uRdxDeclFixes, uRdxFlowFixes,
+// uRdxRoutineFixes - seit den C-Gruppen ein Argument MsgCheckByHand.
 begin
   Check3(MsgCheckByHand, 'check by hand', 'von Hand pruefen', 1,
     'a verifier a la main');
@@ -331,8 +338,9 @@ begin
 end;
 
 procedure TTestRdxTextMsgs.NoLongerAtReportedPlace_ThreeLanguages;
-// R_ASSERT_MOVED, R_TOBJECT_MOVED, R_ARGS_MOVED, R_FREE_MOVED und
-// 'Assigned(X) ...' in uRdxSimpleFixes.
+// Bis E29 R_ASSERT_MOVED, R_TOBJECT_MOVED, R_ARGS_MOVED, R_FREE_MOVED und
+// 'Assigned(X) ...' in uRdxSimpleFixes - seit der C-Gruppe G1 diese
+// Funktion.
 begin
   Check3(ProbeNotAtPlace, 'Assert( is no longer at the reported place',
     'Assert( steht nicht mehr an der gemeldeten Stelle', 0,
