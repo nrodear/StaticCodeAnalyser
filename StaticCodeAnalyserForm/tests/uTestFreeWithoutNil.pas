@@ -72,6 +72,9 @@ type
     [Test] procedure VarUndOutParam_Gemeldet;
     [Test] procedure InlineConst_NichtGemeldet;
     [Test] procedure BeforeDestruction_NichtGemeldet;
+    [Test] procedure DoFreeUndFinalizeClass_NichtGemeldet;
+    [Test] procedure FreieRoutineFinalize_NichtGemeldet;
+    [Test] procedure MethodeFinalize_Gemeldet;
   end;
 
 implementation
@@ -1375,6 +1378,66 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
     'die Instanz stirbt wie im Destruktor');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.DoFreeUndFinalizeClass_NichtGemeldet;
+// Lazarus idedebugger DoFree und ZXing-Port FinalizeClass: beide sind ein
+// Abbau der Instanz bzw. der Klasse - wie ein Destruktor. Je ein Aufruf
+// dahinter, damit "letzter Aufruf" nicht mitspielt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TStruct.DoFree;'#13#10 +
+  'begin'#13#10 +
+  '  FAnchestor.Free;'#13#10 +
+  '  inherited DoFree;'#13#10 +
+  'end;'#13#10 +
+  'class procedure TSupport.FinalizeClass;'#13#10 +
+  'begin'#13#10 +
+  '  FBuffer.Free;'#13#10 +
+  '  DoLog;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'DoFree/FinalizeClass bauen ab wie ein Destruktor');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.FreieRoutineFinalize_NichtGemeldet;
+// xEdit-Skript 'Finalize' raeumt die Globalen am Skriptende ab - auch mit
+// Aufrufen hinter dem Free.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Finalize: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  slDump.SaveToFile(''x.txt'');'#13#10 +
+  '  slDump.Free;'#13#10 +
+  '  AddMessage(''done'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'freie Finalize-Routine - Programm- bzw. Skriptende');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.MethodeFinalize_Gemeldet;
+// WAECHTER: eine METHODE Finalize ist ein Lebenszyklus-Schritt (doublecmd
+// TFileSourceOperation.Finalize) - das Objekt lebt, das Feld haengt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TCopyOperation.Finalize;'#13#10 +
+  'begin'#13#10 +
+  '  FHelper.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'Methode Finalize - das Objekt lebt weiter');
   finally F.Free; end;
 end;
 

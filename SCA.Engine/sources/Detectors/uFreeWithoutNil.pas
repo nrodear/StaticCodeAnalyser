@@ -377,11 +377,22 @@ begin
     if MDotPos > 0 then MNameLow := Copy(MNameLow, MDotPos + 1, MaxInt);
     if EndsText('destroy', MNameLow) then Continue;
     // BeforeDestruction laeuft unmittelbar vor dem Destruktor - die Instanz
-    // stirbt wie dort (Korpus 2026-10-22: JvID3v2Base FList.Free).
-    if MNameLow = 'beforedestruction' then Continue;
+    // stirbt wie dort (Korpus 2026-10-22: JvID3v2Base FList.Free). Ebenso
+    // DoFree (Lazarus-Muster: der Destruktor-Rumpf als Methode, idedebugger
+    // TWatchResultTypeStruct) und FinalizeClass (Klassen-Teardown aus der
+    // finalization, ZXing-Port) - Korpus-Stichprobe 2026-10-22.
+    if (MNameLow = 'beforedestruction') or (MNameLow = 'dofree')
+       or (MNameLow = 'finalizeclass') then Continue;
     // Freie Routine (kein Klassenpraefix): der Empfaenger ist kein Feld,
     // die Ausnahme "letzter Aufruf" gilt hier weiter (s. Kopf).
     var IsFreeRoutine := MDotPos = 0;
+    // Eine freie Routine 'Finalize*' raeumt Globale am Programm- bzw.
+    // Skriptende ab (xEdit-Skripte 'Finalize', VirtualTrees
+    // FinalizeGlobalStructures aus der finalization) - auch mitten im Rumpf
+    // ist dort nichts mehr zu schuetzen. Eine METHODE 'Finalize' bleibt
+    // Befund: sie ist ein Schritt im Lebenszyklus, das Objekt lebt weiter
+    // (doublecmd TFileSourceOperation.Finalize).
+    if IsFreeRoutine and StartsText('finaliz', MNameLow) then Continue;
 
     // Lokale Var-Namen einmal pro Methode sammeln. Free-Calls auf Locals
     // sind harmlos, weil die Variable beim Method-Ende sowieso aus dem
