@@ -411,10 +411,12 @@ end;
 
 procedure TTestRdxTryFixes.Refuse_NothingToProtect;
 begin
+  // '... - nichts zu schuetzen' traegt in der de.po einen echten Umlaut
+  // (Charge G3) - geprueft wird das umlautfreie Teilstueck davor.
   AssertRefused(InProc(['  X := TFoo.Create;', '  X.Free;']), 6, 'X',
-    'nichts zu schuetzen');
+    'folgt direkt auf die Zeile 6');
   AssertRefused(InProc(['  X := TFoo.Create;', '  // nur Kommentar',
-    '  X.Free;']), 6, 'X', 'nichts zu schuetzen');
+    '  X.Free;']), 6, 'X', 'folgt direkt auf die Zeile 6');
 end;
 
 procedure TTestRdxTryFixes.Refuse_DirectiveAndMultiString;
