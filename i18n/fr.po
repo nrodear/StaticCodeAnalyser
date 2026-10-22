@@ -4086,3 +4086,273 @@ msgstr "indentation irrégulière dans le bloc - ligne %d"
 
 msgid "unexpected code after the \"if\" statement"
 msgstr "code inattendu après l'instruction « if »"
+
+msgid "class(TObject) is inside a comment or string"
+msgstr "class(TObject) se trouve dans un commentaire ou une chaîne"
+
+msgid "the class body starts on the same line"
+msgstr "le corps de la classe commence sur la même ligne"
+
+msgid "comment in the expression X.Free;"
+msgstr "commentaire dans l'expression X.Free;"
+
+msgid "something else follows X.Free;"
+msgstr "quelque chose suit encore X.Free;"
+
+msgid "X.Free; is the statement after \"%s\" - the nil would become conditional"
+msgstr "X.Free; est l'instruction après « %s » - le nil deviendrait conditionnel"
+
+msgid "compiler directive before X.Free; - the statement before it does not always apply"
+msgstr "directive de compilation avant X.Free; - l'instruction qui précède ne s'applique pas toujours"
+
+msgid "the next line is not \"X := nil;\""
+msgstr "la ligne suivante n'est pas « X := nil; »"
+
+msgid "something else follows X := nil"
+msgstr "quelque chose suit encore X := nil"
+
+msgid "no line after the nil assignment"
+msgstr "aucune ligne après l'affectation de nil"
+
+msgid "comment or string in the nil line"
+msgstr "commentaire ou chaîne dans la ligne du nil"
+
+msgid "Assert is qualified here - not System.Assert"
+msgstr "Assert est qualifié ici - ce n'est pas System.Assert"
+
+msgid "\"%s Assert\" is not a call to System.Assert"
+msgstr "« %s Assert » n'est pas un appel à System.Assert"
+
+msgid "Assert already has a message"
+msgstr "Assert a déjà un message"
+
+msgid "Assert does not end on this line"
+msgstr "Assert ne se termine pas sur cette ligne"
+
+msgid "comment in the condition"
+msgstr "commentaire dans la condition"
+
+msgid "Assert without a condition"
+msgstr "Assert sans condition"
+
+msgid "condition too long for a string literal (255 characters)"
+msgstr "condition trop longue pour un littéral chaîne (255 caractères)"
+
+msgid "comment or string on the line - it would be lost on deletion"
+msgstr "commentaire ou chaîne sur la ligne - il serait perdu à la suppression"
+
+msgid "strict stands alone - it belongs to the next line"
+msgstr "strict est seul - il appartient à la ligne suivante"
+
+msgid "strict on the line before belongs to this section"
+msgstr "le strict de la ligne précédente appartient à cette section"
+
+msgid "line %d carries more than \"%s\""
+msgstr "la ligne %d porte plus que « %s »"
+
+msgid "\"%s\" follows the section - it is not empty"
+msgstr "« %s » suit la section - elle n'est pas vide"
+
+msgid "compiler directive up to the next section - the empty section may apply only in one branch"
+msgstr "directive de compilation avant la section suivante - la section vide ne s'applique peut-être que dans une branche"
+
+msgid "the message has no section"
+msgstr "la section manque dans le message"
+
+msgid "no line after the section"
+msgstr "aucune ligne après la section"
+
+msgid "%s.Free appears more than once on the line"
+msgstr "%s.Free figure plusieurs fois sur la ligne"
+
+msgid "%s.Destroy instead of %s.Free - FreeAndNil replaces only Free"
+msgstr "%s.Destroy au lieu de %s.Free - FreeAndNil ne remplace que Free"
+
+msgid "%s.Free is no longer on the line"
+msgstr "%s.Free n'est plus sur la ligne"
+
+msgid "the message has no receiver"
+msgstr "le receveur manque dans le message"
+
+msgid "%s.Free is attached to a path - FreeAndNil needs a variable"
+msgstr "%s.Free est rattaché à un chemin - FreeAndNil exige une variable"
+
+msgid "X.Free() with parentheses"
+msgstr "X.Free() avec parenthèses"
+
+msgid "no simple variable left of := (path, index or var declaration) - its type decides the meaning"
+msgstr "pas de variable simple à gauche de := (chemin, index ou déclaration var) - son type décide du sens"
+
+msgid "declaration: neither \";\" nor \":\" follows ()"
+msgstr "déclaration : ni « ; » ni « : » ne suit ()"
+
+msgid "a link of the call chain is not a plain name"
+msgstr "un maillon de la chaîne d'appels n'est pas un simple nom"
+
+msgid "the call is part of an expression - without parentheses the name could be taken as a pointer"
+msgstr "l'appel fait partie d'une expression - sans parenthèses, le nom pourrait être pris pour un pointeur"
+
+msgid "%s looks like an event - as a field Delphi calls it without (), as a property that is not proven; which one is meant stays open without the type"
+msgstr "%s ressemble à un événement - comme champ, Delphi l'appelle sans (), comme propriété ce n'est pas prouvé ; lequel est visé reste ouvert sans le type"
+
+msgid "%s is declared as a property in this unit - if the call means it, it is not proven whether Delphi calls a property of procedural type without ()"
+msgstr "%s est déclaré comme propriété dans cette unité - si l'appel la désigne, rien ne prouve que Delphi appelle une propriété de type procédural sans ()"
+
+msgid "%s() in the function %s - without parentheses the meaning depends on the dialect (recursion or result)"
+msgstr "%s() dans la fonction %s - sans parenthèses, le sens dépend du dialecte (récursion ou résultat de la fonction)"
+
+msgid "the parentheses contain more than whitespace"
+msgstr "les parenthèses contiennent autre chose que des espaces"
+
+msgid "no plain name before () (member or result call)"
+msgstr "pas de simple nom avant () (appel sur un élément ou sur un résultat)"
+
+msgid "more than whitespace between the name and ()"
+msgstr "autre chose que des espaces entre le nom et ()"
+
+msgid "the comparison with True/False is no longer at the reported place"
+msgstr "la comparaison avec True/False n'est plus à l'endroit signalé"
+
+msgid "no plain name left of the comparison"
+msgstr "pas de simple nom à gauche de la comparaison"
+
+msgid "a path is on the left - its type cannot be proven here"
+msgstr "un chemin se trouve à gauche - son type n'est pas prouvable ici"
+
+msgid "\"%s\" is left of the name - the comparison binds differently there"
+msgstr "« %s » se trouve à gauche du nom - la comparaison s'y lie autrement"
+
+msgid "the expression continues after %s - the comparison binds differently there"
+msgstr "l'expression continue après %s - la comparaison s'y lie autrement"
+
+msgid "comment in the comparison"
+msgstr "commentaire dans la comparaison"
+
+msgid "Assigned is qualified here - not the system routine"
+msgstr "Assigned est qualifié ici - ce n'est pas la routine système"
+
+msgid "\"%s\" before the expression binds only to its first part"
+msgstr "« %s » avant l'expression ne porte que sur sa première partie"
+
+msgid "\"%s\" before the expression - the parenthesis belongs to a call or cast"
+msgstr "« %s » avant l'expression - la parenthèse appartient à un appel ou à un transtypage"
+
+msgid "\"%s\" after the expression binds only to its last part"
+msgstr "« %s » après l'expression ne porte que sur sa dernière partie"
+
+msgid "no \"Assigned(X) and (X <> nil)\" on one line here (no quick fix without parentheses around the comparison)"
+msgstr "aucun « Assigned(X) and (X <> nil) » sur une seule ligne à cet endroit (pas de Quick-Fix sans parenthèses autour de la comparaison)"
+
+msgid "comment in the expression"
+msgstr "commentaire dans l'expression"
+
+msgid "operand before the comparison is ambiguous"
+msgstr "opérande avant la comparaison ambigu"
+
+msgid "operand after the comparison is ambiguous"
+msgstr "opérande après la comparaison ambigu"
+
+msgid "anonymous method in the statement"
+msgstr "méthode anonyme dans l'instruction"
+
+msgid "operand spans several lines"
+msgstr "opérande sur plusieurs lignes"
+
+msgid "Assigned(X) is already in the statement (SCA084)"
+msgstr "Assigned(X) figure déjà dans l'instruction (SCA084)"
+
+msgid "comparison spans several lines"
+msgstr "comparaison sur plusieurs lignes"
+
+msgid "boundary of the comparison unclear (\"%s %s ... %s\")"
+msgstr "limite de la comparaison incertaine (« %s %s ... %s »)"
+
+msgid "no nil comparison in the finding"
+msgstr "aucune comparaison avec nil dans le résultat"
+
+msgid "the statement is no longer at the reported place"
+msgstr "l'instruction n'est plus à l'endroit signalé"
+
+msgid "code and finding do not match (%d instead of %d comparisons)"
+msgstr "le code et le résultat ne concordent pas (%d au lieu de %d comparaisons)"
+
+msgid "comment or directive in the statement"
+msgstr "commentaire ou directive dans l'instruction"
+
+msgid "nested nil comparisons"
+msgstr "comparaisons avec nil imbriquées"
+
+msgid "%s looks like an event or function - Assigned() then checks the pointer, not the result"
+msgstr "%s ressemble à un événement ou à une fonction - Assigned() vérifie alors le pointeur, pas le résultat"
+
+msgid "%s is of type %s - Assigned() is not reliably equivalent for it"
+msgstr "%s est de type %s - Assigned() n'y est pas équivalent à coup sûr"
+
+msgid "type of %s not proven - \"= nil\" would call a function or method pointer, Assigned() would not"
+msgstr "type de %s non prouvé - « = nil » appellerait un pointeur de fonction ou de méthode, Assigned() non"
+
+msgid "%s ends in %s - not proven as a field in this unit: \"= nil\" would call a method without arguments, Assigned() would only check the method pointer"
+msgstr "%s se termine par %s - non prouvé comme champ dans cette unité : « = nil » appellerait une méthode sans arguments, Assigned() ne vérifierait que le pointeur de méthode"
+
+msgid "%s has the procedural type %s (declared in this unit) - \"= nil\" calls it, Assigned() does not"
+msgstr "%s a le type procédural %s (déclaré dans cette unité) - « = nil » l'appelle, Assigned() non"
+
+msgid "%s: type %s is not proven in this unit as a class, interface or pointer and is not a class of the Delphi sources - \"= nil\" would call a function type of another unit, Assigned() would not"
+msgstr "%s : le type %s n'est prouvé dans cette unité ni comme classe, ni comme interface, ni comme pointeur, et ce n'est pas une classe des sources Delphi - « = nil » appellerait un type fonction d'une autre unité, Assigned() non"
+
+msgid "no \";;\" at the reported place"
+msgstr "aucun « ;; » à l'endroit signalé"
+
+msgid "the message has no keyword or column"
+msgstr "le mot-clé ou la colonne manque dans le message"
+
+msgid "the keyword is not at the reported place"
+msgstr "le mot-clé n'est pas à l'endroit signalé"
+
+msgid "%s belongs to a type declaration - not a unit section"
+msgstr "%s appartient à une déclaration de type - pas une section d'unité"
+
+msgid "no begin"
+msgstr "aucun begin"
+
+msgid "no end found for the begin"
+msgstr "aucun end trouvé pour le begin"
+
+msgid "the end of this begin is not before the dot - not a unit body"
+msgstr "le end de ce begin ne précède pas le point - pas un corps d'unité"
+
+msgid "not a unit - in program/library, begin is the body"
+msgstr "pas une unité - dans program/library, begin est le corps"
+
+msgid "compiler directive on the line of the begin"
+msgstr "directive de compilation sur la ligne du begin"
+
+msgid "%d casts %s(...).Free"
+msgstr "%d transtypages %s(...).Free"
+
+msgid "only for Free - Destroy stays as it is"
+msgstr "uniquement pour Free - Destroy reste tel quel"
+
+msgid "the cast %s(...) spans several lines"
+msgstr "le transtypage %s(...) s'étend sur plusieurs lignes"
+
+msgid "no %s(...).Free"
+msgstr "aucun %s(...).Free"
+
+msgid "comment or string in the cast"
+msgstr "commentaire ou chaîne dans le transtypage"
+
+msgid "\"%s\" as operand - not the same without the cast"
+msgstr "« %s » comme opérande - pas équivalent sans le transtypage"
+
+msgid "the operand is a path (A.B, Self.F), not a plain identifier - its type cannot be checked"
+msgstr "l'opérande est un chemin (A.B, Self.F), pas un simple identificateur - son type n'est pas vérifiable"
+
+msgid "the operand is not a plain identifier - a call or an index, for example; the cast could be needed to compile"
+msgstr "l'opérande n'est pas un simple identificateur - par exemple un appel ou un index ; le transtypage pourrait être nécessaire à la compilation"
+
+msgid "the message has no type name"
+msgstr "le nom de type manque dans le message"
+
+msgid "%s is an interface - %s(X).Free would call its method Free, X.Free the one of TObject"
+msgstr "%s est une interface - %s(X).Free appellerait sa méthode Free, X.Free celle de TObject"
