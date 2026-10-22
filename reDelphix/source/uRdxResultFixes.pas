@@ -38,9 +38,9 @@ unit uRdxResultFixes;
 //          Aufzaehlung der Unit (InitValueFor; Typen der Unit nur auf
 //          Unit-Ebene) -, sonst Default(T) (Records, Typparameter,
 //          Unbekanntes, ein Name, den die Unit auch lokal in einer anderen
-//          Routine bzw. geschachtelt definiert). Default()
-//          gibt es erst ab Delphi 2009 bzw. FPC
-//          3.0 - eine Datei mit Spuren aelterer Compiler bekommt es nicht
+//          Routine bzw. geschachtelt definiert). Default() gibt es erst ab
+//          Delphi 2009 bzw. FPC 3.0 - eine Datei mit Spuren aelterer
+//          Compiler bekommt es nicht
 //          (OldCompilerTrace; Gegen-Review H5, Minor 4: 96 der 132
 //          Angebote lagen in JVCL/CnWizards, die ab Delphi 5/6 bauen).
 //          Gekennzeichnet: Result ist danach definiert statt zufaellig;
@@ -91,8 +91,9 @@ unit uRdxResultFixes;
 // Compiler-Direktive zwischen Kopf und begin (Kopf oder Rumpf unter einem
 // Zweig), zwei Koepfe auf der gemeldeten Zeile. SCA096/SCA097: 'class
 // constructor/destructor', Kopf ohne Klasse, 'inherited' irgendwo im Text
-// der Routine (inaktiver Zweig, Kommentar, lokale Routine - der Detektor
-// sieht nur den aktiven AST), Klasse nicht (eindeutig) in der Unit,
+// der Routine (inaktiver Zweig, Kommentar, String-Literal, lokale Routine -
+// der Detektor sieht nur den aktiven AST; ein String sperrt mit, die
+// Zeile wird roh gelesen), Klasse nicht (eindeutig) in der Unit,
 // object-Typ, Record, class helper, eine Direktive in der Vorfahrenliste
 // (der Vorfahr haengt an einem Zweig), eine geerbte Methode, die in der
 // Unit 'abstract' ist, und unter {$mode objfpc}/{$mode fpc} ein Vorfahr
@@ -103,8 +104,10 @@ unit uRdxResultFixes;
 // 'System.Halt', 'SysUtils.Abort'), Exit (auch 'System.Exit') oder goto auf
 // jeder Tiefe (inherited am Ende liefe dort nie) und eine Direktive
 // zwischen letzter Anweisung und end. SCA121/SCA196: FPC-Modus ohne Result
-// (fpc, tp, macpas, iso), '{$X-}'; SCA121 dazu eine Datei ohne
-// implementation-Teil (xEdit-/JvInterpreter-Skripte kennen Default() nicht),
+// (fpc, tp, macpas, iso), '{$X-}'; SCA121 dazu Default() in einer Datei
+// ohne implementation-Teil bzw. ohne Kopf (xEdit-/JvInterpreter-Skripte
+// kennen Default() nicht; ein Literal wie 'Result := 0;' kennen sie - seit
+// Review Woche G08-07 wie bei den alten Compilern nur fuer Default()),
 // eine Zuweisung an Result bzw. den Funktionsnamen oder Exit(Wert) (auch
 // 'System.Exit(Wert)') im Rumpf (der Detektor sah sie nicht - meist in
 // einem inaktiven Zweig), Default() in einer Datei mit Spuren alter Compiler
@@ -251,8 +254,8 @@ const
   SYSTEM_UNIT = 'system';
   // SCA097: damit verlaesst der Ablauf den Destruktor vor dem Ende - auf
   // jeder Tiefe (LeavesDestructorReason; Gegen-Review H5, Minor 2).
-  // raise/Halt/Abort
-  // mitten im Rumpf sind Fehlerpfade; dort fehlt inherited ohnehin.
+  // raise/Halt/Abort mitten im Rumpf sind Fehlerpfade; dort fehlt
+  // inherited ohnehin.
   JUMP_WORDS: array[0..1] of string = ('exit', 'goto');
   KW_ABSTRACT = 'abstract';
   // So weit folgen die Planer der Vorfahrenkette in der Unit (OwnConstructor,
@@ -1081,7 +1084,9 @@ end;
 // Steht 'inherited' irgendwo im Text der Routine - auch in einem
 // Kommentar, einem inaktiven $IFDEF-Zweig oder einer lokalen Routine? Dann
 // hat ihn jemand gesetzt, verschoben oder auskommentiert, und der Detektor
-// sah ihn nur nicht im AST. '' oder der Grund.
+// sah ihn nur nicht im AST. Gelesen wird die rohe Zeile, ein String-Literal
+// ('Log(''inherited skipped'')') sperrt also mit - lieber eine Sperre zu
+// viel; der Grund nennt es (Review Woche G08-05). '' oder der Grund.
 function InheritedReason(AMap: TRdxCodeMap; const R: TRdxRoutine): string;
 var
   Li : Integer;
@@ -1090,7 +1095,8 @@ begin
   for Li := R.Head.Line to R.Last.Line do
     if HasIdentWord(LowerCase(AMap.Raw(Li)), WORD_INHERITED) then
       Exit(Format('"inherited" steht schon in Zeile %d (inaktiver Zweig, '
-        + 'Kommentar oder lokale Routine) - %s', [Li, R_BY_HAND]));
+        + 'Kommentar, String-Literal oder lokale Routine) - %s',
+        [Li, R_BY_HAND]));
 end;
 
 // Der erste Eintrag der Vorfahrenliste hinter AClass (Token 'class') wie im
@@ -1212,17 +1218,26 @@ begin
   Result := MethodDecls(AScan, OwnerPathOf(R.Name), LastPart(R.Name));
 end;
 
-// Die EINE Deklaration der Methode R. '' oder der Grund.
+// Die EINE Deklaration der Methode R. '' oder der Grund. Mehrere Koepfe
+// kommen auch aus mehreren Klassen gleichen letzten Namens ('TA.TItem',
+// 'TB.TItem' - ClassHeads schluesselt nur danach): dann heisst der Grund
+// "mehrdeutig" wie bei OwnerOf, nicht "Overload?" (Review Woche G08-06;
+// SCA121 fragt OwnerOf nicht).
 function DeclOf(var AScan: TRdxScan; const R: TRdxRoutine;
   out D: TRdxRoutine): string;
 var
-  Heads : TArray<TRdxToken>;
+  Heads   : TArray<TRdxToken>;
+  NClass  : Integer;
 begin
   D := Default(TRdxRoutine);
   Heads := DeclHeadsOf(AScan, R);
   if Length(Heads) = 0 then
     Exit(Format('keine Deklaration von %s im Rumpf der Klasse %s - %s',
       [LastPart(R.Name), OwnerPathOf(R.Name), R_MOVED]));
+  NClass := Length(ClassHeads(AScan, OwnerPathOf(R.Name)));
+  if (Length(Heads) > 1) and (NClass > 1) then
+    Exit(Format('%d Klassen namens %s in der Unit - mehrdeutig',
+      [NClass, LastPart(OwnerPathOf(R.Name))]));
   if Length(Heads) > 1 then
     Exit(Format('%d Deklarationen von %s in Klassen dieses Namens - '
       + 'Overload?', [Length(Heads), LastPart(R.Name)]));
@@ -1269,7 +1284,10 @@ begin
   while not Blocked and (T.Low <> '') and not SameTok(T, R.EndTok)
     and not InList(T.Low, [';', '(']) do
   begin
-    Blocked := T.IsWord and (Copy(T.Low, 1, Length(RAISE_PREFIX)) = RAISE_PREFIX);
+    // Ein Ziel einer Zuweisung ('RaiseOnError := ..') ist kein Aufruf - bis
+    // Review Woche G08-06 hiess es "blockierter Konstruktor".
+    Blocked := T.IsWord and (Copy(T.Low, 1, Length(RAISE_PREFIX)) = RAISE_PREFIX)
+      and (After(AMap, T).Low <> ':=');
     if not Blocked then
       T := After(AMap, T);
   end;
@@ -1328,6 +1346,9 @@ function DelegationAt(var AScan: TRdxScan; const R: TRdxRoutine;
   const T: TRdxToken; var ASeen: TArray<string>): string;
 begin
   Result := '';
+  // Ein Ziel einer Zuweisung ('Created := True', 'CreateDate := Now') ist
+  // kein Aufruf - bis Review Woche G08-06 hiess es "Delegation".
+  if After(AScan.Map, T).Low = ':=' then Exit;
   if Copy(T.Low, 1, Length(CREATE_PREFIX)) = CREATE_PREFIX then
     Exit(Format('Aufruf %s in Zeile %d - vielleicht ein anderer '
       + 'Konstruktor der Klasse (Delegation), der die Elternklasse schon '
@@ -1921,8 +1942,8 @@ end;
 
 // SCA121: der Wert fuer 'Result := <Wert>;' zur Funktion R in AValue
 // (InitValueFor); Default(T) nur mit einfachem Typbezeichner
-// (TypeTextReason) und ohne Spuren alter Compiler (OldCompilerReason). ''
-// oder der Grund.
+// (TypeTextReason), ohne Spuren alter Compiler (OldCompilerReason) und
+// nicht in einem Skript bzw. Include (ScriptReason). '' oder der Grund.
 function ValueReason(var AScan: TRdxScan; const R: TRdxRoutine;
   out AValue: string): string;
 var
@@ -1937,6 +1958,11 @@ begin
   Result := TypeTextReason(TypeTx);
   if Result = '' then
     Result := OldCompilerReason(AScan.Map);
+  // Skript bzw. Include: nur Default() kennt der Interpreter nicht - ein
+  // Literal geht (bis Review Woche G08-07 sperrte ScriptReason vor der
+  // Wertwahl jede Skript-Unit).
+  if Result = '' then
+    Result := ScriptReason(AScan.Map, FEATURE_DEFAULT);
 end;
 
 // SCA196: gleicher Typ wie in der Meldung (ohne Leerraum, Gross/klein
@@ -2053,9 +2079,12 @@ begin
   First := True;
   for K in TypeDefsOf(AScan, ALowBase) do
   begin
+    // AtUnitLevel ist auch False, wenn eine Routine davor nicht sicher zu
+    // lesen ist (Review Woche G08-03) - der Grund nennt beides.
     if not AtUnitLevel(AScan.Map, K) then
       Exit(Format('%s ist in dieser Unit auch in einer Routine bzw. einem '
-        + 'Typ definiert (Zeile %d) - welche Definition gilt, haengt am '
+        + 'Typ definiert (Zeile %d), oder eine Routine davor ist nicht '
+        + 'sicher zu lesen - welche Definition gilt, haengt am '
         + 'Gueltigkeitsbereich; %s', [AType, K.Line, R_BY_HAND]));
     S := DefStatement(AScan.Map, K);
     if S = '' then
@@ -2361,8 +2390,6 @@ begin
     AReason := NameReason(R, Name);
   if AReason = '' then
     AReason := BodyReason(AMap, R);
-  if AReason = '' then
-    AReason := ScriptReason(AMap, FEATURE_DEFAULT);
   if AReason = '' then
     AReason := ResultModeReason(AMap);
   if AReason = '' then

@@ -230,6 +230,17 @@ begin
     ['  Run(A);']);
   Assert.AreEqual(StringReplace(S, 'begin'#13#10,
     'begin'#13#10'  inherited;'#13#10, []), Ctor(S, 'constructor TFoo', R, P), R);
+  // Ein Feld als erstes Ziel, dessen Name mit Raise bzw. Create beginnt, ist
+  // kein Aufruf (Review Woche G08-06; bis dahin "blockierter Konstruktor"
+  // bzw. "Delegation").
+  S := CtorUnit('class(TComponent)', 'constructor Create(A: Integer); override;',
+    ['  RaiseOnError := A > 0;']);
+  Assert.AreEqual(StringReplace(S, 'begin'#13#10,
+    'begin'#13#10'  inherited;'#13#10, []), Ctor(S, 'constructor TFoo', R, P), R);
+  S := CtorUnit('class(TComponent)', 'constructor Create(A: Integer); override;',
+    ['  Created := True;']);
+  Assert.AreEqual(StringReplace(S, 'begin'#13#10,
+    'begin'#13#10'  inherited;'#13#10, []), Ctor(S, 'constructor TFoo', R, P), R);
 end;
 
 procedure TTestRdxInheritedFixes.Refuse096_Design;
@@ -266,6 +277,11 @@ begin
   AssertCtorRefused(CtorUnit('class(TBase)',
     'constructor Create(A: Integer); override;', ['{$IFDEF OLD}',
     '  inherited;', '{$ENDIF}']), 'constructor TFoo', '"inherited" steht schon');
+  // Auch in einem String-Literal - die rohe Zeile zaehlt, der Grund nennt es
+  // (Review Woche G08-05; bis dahin nur Zweig, Kommentar, lokale Routine).
+  AssertCtorRefused(CtorUnit('class', 'constructor Create(A: Integer);',
+    ['  Log(''inherited skipped'');']), 'constructor TFoo',
+    'Kommentar, String-Literal oder lokale Routine');
 end;
 
 procedure TTestRdxInheritedFixes.Refuse096_TypeKinds;
