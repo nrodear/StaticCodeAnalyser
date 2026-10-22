@@ -1,6 +1,6 @@
 unit uTestRdxInheritedFixes;
 
-// Quick-Fixes "Konstruktoren und Destruktoren" (uRdxResultFixes, Charge H5)
+// Quick-Fixes "Konstruktoren und Destruktoren" (uRdxInheritedFixes, Charge H5)
 // auf Text - ohne Parser, ohne Detektor (laeuft in reDelphix.Test UND im
 // FPC-Pruefstand):
 //   SCA096 (a) 'inherited Create;' bei direktem TObject-Erben ('class',
@@ -61,6 +61,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxCodeMap, uRdxResultFixes,
+  uRdxInheritedFixes,  // SCA096/SCA097 (seit Review Woche G08-04)
   uTestRdxTextKit;   // Join, Apply, LineStartingWith
 
 const
@@ -104,7 +105,7 @@ function Ctor(const ASource, AHead: string; out AReason: string;
   out APlan: TRdxResultPlan): string;
 begin
   Result := '';
-  APlan := PlanAt(TRdxResultFixes.ConstructorInherited, ASource, AHead,
+  APlan := PlanAt(TRdxInheritedFixes.ConstructorInherited, ASource, AHead,
     MSG_CTOR, AReason);
   if AReason = '' then
     Result := Apply(ASource, APlan.Edits);
@@ -114,7 +115,7 @@ function Dtor(const ASource, AHead: string; out AReason: string;
   out APlan: TRdxResultPlan): string;
 begin
   Result := '';
-  APlan := PlanAt(TRdxResultFixes.DestructorInherited, ASource, AHead,
+  APlan := PlanAt(TRdxInheritedFixes.DestructorInherited, ASource, AHead,
     MSG_DTOR, AReason);
   if AReason = '' then
     Result := Apply(ASource, APlan.Edits);
@@ -330,7 +331,7 @@ begin
     'begin', 'end;']), 'constructor Create', 'ohne Klasse');
   S := InUnit(['  TFoo = class', '    constructor Create;', '  end;'],
     ['constructor TFoo.Create;', 'begin', 'end;']);
-  P := PlanAt(TRdxResultFixes.ConstructorInherited, S, 'constructor TFoo',
+  P := PlanAt(TRdxInheritedFixes.ConstructorInherited, S, 'constructor TFoo',
     'Something else', R);
   Assert.IsTrue(Pos('Meldung unbekannt', R) > 0, R);
   Assert.AreEqual(STMT_INHERITED, P.Name, 'Menuetext auch gesperrt');
