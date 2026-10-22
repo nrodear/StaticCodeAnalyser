@@ -112,11 +112,14 @@ type
     // ApplyToFindings Marker LIEST (Review 2026-10-14, MAJOR 2):
     //   * Pascal- und Konfigurationsdatei: der Zeilenmarker in die Datei
     //     selbst, vor ALine.
-    //   * Formulardatei (.dfm, unter dlFpc .lfm): der DATEIWEITE Marker
-    //     ('// noinspection-file X') in die Schwester-Unit
-    //     (ResolveMarkerHostFile) - eine '//'-Zeile in der .dfm liesse das
-    //     Formular nicht mehr laden (die EXE schrieb sie bis 2026-10-14
-    //     ohne Undo). Beim Lesen haelt BuildMap die FUNDZEILE der .dfm
+    //   * Formulardatei (.dfm oder .lfm, UNABHAENGIG vom Scan-Dialekt): der
+    //     DATEIWEITE Marker ('// noinspection-file X') in die Schwester-
+    //     Unit (TStaticFiles.PairedUnitFileAnyDialect: .pas, bei .lfm danach
+    //     .pp) - eine '//'-Zeile in der Form liesse sie nicht mehr laden
+    //     (die EXE schrieb sie bis 2026-10-14 ohne Undo). Dialektfrei, weil
+    //     diese Funktion NACH dem Scan laeuft, wenn Run ScanDialect schon
+    //     auf dlDelphi zurueckgesetzt hat - mit IsFormFileName ging ein
+    //     .lfm-Fund in den Pascal-Zweig (Review Woche G02-01). Beim Lesen haelt BuildMap die FUNDZEILE der .dfm
     //     gegen die Zielzeilen der Marker in der .pas (es gibt keine
     //     Zuordnung dfm->pas); ein Zeilenmarker muesste also VOR die Zeile
     //     ALine - 1 der Unit, und jeder weitere Marker oder Edit darueber
@@ -523,16 +526,20 @@ begin
     AReason := 'finding has no source line';
     Exit;
   end;
-  ATarget.HostFile := ResolveMarkerHostFile(AFileName);
-  if not TStaticFiles.IsFormFileName(AFileName) then
+  // Dialektfrei (s. Deklaration): NICHT ResolveMarkerHostFile/
+  // IsFormFileName - die fragen den Scan-Dialekt, der hier schon
+  // zurueckgesetzt ist.
+  if not TStaticFiles.IsFormFileNameAnyDialect(AFileName) then
   begin
+    ATarget.HostFile := AFileName;
     ATarget.MarkerLine := MarkerLineFor(ATarget.HostFile, AKind);
     ATarget.Line := ALine;
     Exit(True);
   end;
   // Formulardatei: der dateiweite Marker in die Schwester-Unit (s.
   // Deklaration).
-  if SameText(ATarget.HostFile, AFileName) then
+  ATarget.HostFile := TStaticFiles.PairedUnitFileAnyDialect(AFileName);
+  if ATarget.HostFile = '' then
   begin
     AReason := 'no unit file beside the form file';
     Exit;
