@@ -11,7 +11,7 @@ type
   public
     [Test] procedure FreeWithoutNil_Reported;
     [Test] procedure FreeAndNil_NotReported;
-    [Test] procedure FreeAtMethodEnd_NotReported;
+    [Test] procedure FreeAtMethodEnd_Reported;
     [Test] procedure FreeFollowedByNilAssign_NotReported;
     // Voll-Review 2026-09-12 (Blocker): nil-Out auf DERSELBEN Zeile.
     [Test] procedure FreeAndNilOutOnOneLine_NotReported;
@@ -46,7 +46,7 @@ type
     [Test] procedure ReadBetweenFreeAndNilOut_Kontrolle;
     [Test] procedure NilOutBeforeFreeOnOneLine_KnownLimit;
     [Test] procedure NilOutBeforeFreeOnPreviousLine_Kontrolle;
-    [Test] procedure TrailingAssignAfterLastCall_KnownLimit;
+    [Test] procedure TrailingAssignAfterLastCall_Reported;
     [Test] procedure TrailingAssignAfterLastCall_Kontrolle;
     [Test] procedure FreeOfFieldViaDestroy_StillReported;
     [Test] procedure DestroyFollowedByNilOut_NotReported;
@@ -54,16 +54,17 @@ type
     [Test] procedure ReassignWithRealReadBetween_Reported;
   end;
 
-  // Die Ausnahme "Free ist der letzte Aufruf der Methode" (2026-10-22):
-  // nicht im Konstruktor, nicht vor einem raise. Eigene Fixture -
-  // TTestFreeWithoutNil traegt schon 37 Faelle.
+  // Ohne die Ausnahme "Free ist der letzte Aufruf der Methode"
+  // (2026-10-22): jedes Feld-Free am Methodenende ist ein Fund. Eigene
+  // Fixture - TTestFreeWithoutNil traegt schon 37 Faelle.
   [TestFixture]
   TTestFreeWithoutNilLetzterAufruf = class
   public
     [Test] procedure Ctor_ExceptFreeVorRaise_BeideGemeldet;
     [Test] procedure Ctor_FreeAlsLetzteAnweisung_Gemeldet;
     [Test] procedure Methode_FreeVorRaise_Gemeldet;
-    [Test] procedure Methode_RaiseVorDemFree_NichtGemeldet;
+    [Test] procedure TearDown_BeideFelder_Gemeldet;
+    [Test] procedure TearDown_LocalAmEnde_NichtGemeldet;
   end;
 
 implementation
@@ -137,9 +138,9 @@ begin
 end;
 
 procedure TTestFreeWithoutNil.FreeAtMethodEnd_Kontrolle;
-// Klammer zu FreeAtMethodEnd_NotReported: dieselbe Fixture
-// mit einer Anweisung HINTER dem Free, damit es nicht mehr
-// die letzte ist. Gemessen: 1.
+// Klammer zu FreeAtMethodEnd_Reported: dieselbe Fixture mit einer
+// Anweisung HINTER dem Free. Bis 2026-10-22 unterschied die Ausnahme
+// "letzter Aufruf" die beiden (0 gegen 1); seither melden beide.
 const SRC =
   'unit t; implementation'#13#10 +
   'procedure TFoo.Shutdown;'#13#10 +
@@ -479,10 +480,10 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFreeWithoutNil.TrailingAssignAfterLastCall_KnownLimit;
-// GRENZE: hinter dem Free steht nur noch eine Zuweisung an
-// ein anderes Feld - fuer die Ende-Erkennung ist das Free
-// damit die letzte relevante Anweisung. Gemessen: 0.
+procedure TTestFreeWithoutNil.TrailingAssignAfterLastCall_Reported;
+// Bis 2026-10-22 eine GRENZE (0): hinter dem Free stand nur noch eine
+// Zuweisung, fuer die Ausnahme "letzter Aufruf" war das Free damit das
+// Ende. Die Ausnahme ist weg - das Feld bleibt haengend, Fund.
 const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +
@@ -506,9 +507,9 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual<Integer>(0,
+    Assert.AreEqual<Integer>(1,
       TFindingHelper.Count(F, fkFreeWithoutNil),
-      'BEKANNTE GRENZE: eine Zuweisung dahinter macht das Free nicht zur Mitte');
+      'das Feld bleibt nach dem Free haengend - auch ohne Aufruf dahinter');
   finally F.Free; end;
 end;
 
@@ -726,10 +727,11 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFreeWithoutNil.FreeAtMethodEnd_NotReported;
-// Free als letzte Anweisung -> kein Folge-Use moeglich -> kein Befund.
-// FELD-Receiver (Voll-Review 2026-09-12, Major): mit lokaler Variable
-// griff der Local-Var-Skip, IsLastStmtOfMethod lief nie.
+procedure TTestFreeWithoutNil.FreeAtMethodEnd_Reported;
+// Free eines FELDES als letzte Anweisung: das Objekt lebt weiter, das
+// Feld zeigt auf freigegebenen Speicher - Fund. Bis 2026-10-22 hiess der
+// Test FreeAtMethodEnd_NotReported (Ausnahme "letzter Aufruf"); Locals
+// und Parameter bleiben ueber den Local-Var-Skip ohne Fund.
 const SRC =
   'unit t; implementation'#13#10 +
   'procedure TFoo.Shutdown;'#13#10 +
@@ -740,7 +742,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFreeWithoutNil));
   finally F.Free; end;
 end;
 
@@ -1138,8 +1140,10 @@ end;
 // except-Zweig gibt zwei Felder frei und wirft weiter. Delphi ruft bei
 // einer Ausnahme im Konstruktor den Destruktor, der beide Felder noch
 // einmal freigibt - SCA139 meldete nur das erste, das zweite war "der
-// letzte Aufruf der Methode". Die drei ersten Faelle sind ohne den Fix
-// rot (1 statt 2, 0 statt 1, 0 statt 1).
+// letzte Aufruf der Methode". Dasselbe in mvc-database
+// (TSQLiteTest.TearDown: 'FQuery.Free; FConnection.Free;' - nur FQuery).
+// Die ersten vier Faelle sind mit der Ausnahme rot (1 statt 2, 0 statt 1,
+// 0 statt 1, 1 statt 2).
 
 procedure TTestFreeWithoutNilLetzterAufruf.Ctor_ExceptFreeVorRaise_BeideGemeldet;
 const SRC =
@@ -1204,22 +1208,41 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFreeWithoutNilLetzterAufruf.Methode_RaiseVorDemFree_NichtGemeldet;
-// WAECHTER: nur ein raise HINTER dem Free hebt die Ausnahme auf - eines
-// davor laesst sie stehen (wie FreeAtMethodEnd_NotReported).
+procedure TTestFreeWithoutNilLetzterAufruf.TearDown_BeideFelder_Gemeldet;
+// Der Fall aus mvc-database: zwei Felder am Ende von TearDown - beide
+// gleich behandelt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TSQLiteTest.TearDown;'#13#10 +
+  'begin'#13#10 +
+  '  FQuery.Free;'#13#10 +
+  '  FConnection.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'beide Felder bleiben haengend');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.TearDown_LocalAmEnde_NichtGemeldet;
+// WAECHTER: die Ausnahme war nur fuer Locals richtig - die faengt der
+// Local-Var-Skip weiterhin ab, auch am Methodenende.
 const SRC =
   'unit t; implementation'#13#10 +
   'procedure TFoo.Shutdown;'#13#10 +
+  'var L: TStringList;'#13#10 +
   'begin'#13#10 +
-  '  if FBusy then'#13#10 +
-  '    raise EAbort.Create(''busy'');'#13#10 +
-  '  FList.Free;'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  DoLog(L);'#13#10 +
+  '  L.Free;'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
-    'raise vor dem Free - Free bleibt der letzte Aufruf');
+    'eine lokale Variable faellt mit der Methode aus dem Scope');
   finally F.Free; end;
 end;
 
