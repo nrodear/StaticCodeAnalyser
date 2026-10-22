@@ -1,7 +1,7 @@
 unit uTestRdxAlwaysTrueFix;
 
 // Editorhilfe SCA150 BoolAlwaysTrue (uRdxAlwaysTrueFix): der Planer auf Text
-// (erste Fixture, auch im FPC-Pruefstand) und - nur Delphi - der Einstieg
+// (erste Fixture, FPC-tauglich) und - nur Delphi - der Einstieg
 // der Tabelle (TRdxFixTable.FixFor via PlanFixIn/FixAllWith, Adapter
 // PlanBoolAlwaysTrue) mit dem ECHTEN Detektor (uBoolAlwaysTrue) auf dem
 // echten AST (zweite Fixture). Die Fixtures stehen

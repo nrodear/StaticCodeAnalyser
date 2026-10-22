@@ -1,7 +1,7 @@
 unit uTestRdxClassMethodFix;
 
 // Editorhilfe SCA148 CanBeClassMethod (uRdxClassMethodFix): der Planer auf
-// Text (erste Fixture, auch im FPC-Pruefstand) und - nur Delphi - der
+// Text (erste Fixture, FPC-tauglich) und - nur Delphi - der
 // Einstieg der Tabelle (TRdxFixTable.FixFor via PlanFixIn/FixAllWith,
 // Adapter PlanCanBeClassMethod: zwei Ersetzungen) mit dem ECHTEN Detektor
 // (uCanBeClassMethod) auf dem echten AST (zweite Fixture).

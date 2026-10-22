@@ -1,8 +1,8 @@
 unit uTestRdxLookupHoistFix;
 
 // Editorhilfe SCA111 ParamByNameInLoop und SCA112 FieldByNameInLoop
-// (uRdxLookupHoistFix): der Planer auf Text (erste Fixture, auch im
-// FPC-Pruefstand) und der ECHTE Detektor (uPerfHotspots) auf dem echten AST
+// (uRdxLookupHoistFix): der Planer auf Text (erste Fixture,
+// FPC-tauglich) und der ECHTE Detektor (uPerfHotspots) auf dem echten AST
 // ueber den Einstieg der Tabelle (TRdxFixTable.FixFor via PlanFixIn/
 // FixAllWith, Adapter PlanParamByNameLoop/PlanFieldByNameLoop; zweite
 // Fixture, nur Delphi). Der Adapter verlangt den Empfaenger als Variable

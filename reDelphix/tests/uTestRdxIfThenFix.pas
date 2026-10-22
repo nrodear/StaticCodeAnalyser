@@ -1,7 +1,7 @@
 unit uTestRdxIfThenFix;
 
 // Editorhilfe SCA131 IfThenShortCircuit (uRdxIfThenFix): der Planer auf Text
-// (erste Fixture, auch im FPC-Pruefstand) und - nur Delphi - der ECHTE
+// (erste Fixture, FPC-tauglich) und - nur Delphi - der ECHTE
 // Detektor (uIfThenShortCircuit) auf dem echten AST ueber den Einstieg der
 // Tabelle (TRdxFixTable.FixFor mit geoeffnetem Quellstellen-Dienst, Adapter
 // PlanIfThenToIf samt Variant-Sperre; zweite Fixture). Die Fixtures stehen

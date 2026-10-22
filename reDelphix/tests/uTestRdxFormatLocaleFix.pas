@@ -7,8 +7,9 @@ unit uTestRdxFormatLocaleFix;
 // Detektor (TFormatMismatchDetector) laufen ueber den Einstieg der Tabelle
 // (TRdxFixTable.FixFor bzw. AlternativeFixFor, Adapter PlanFormatLocale/
 // PlanFormatLocaleAlt) und stehen in einer eigenen Fixture hinter
-// {$IFNDEF FPC}. Der Pruefstand-Runner nimmt nur eine Fixture je Unit - die
-// Weiche ist heute ohne Wirkung (wie uTestRdxCategoryArgFix).
+// {$IFNDEF FPC} - die Text-Fixture bleibt FPC-tauglich. Im FPC-Pruefstand
+// steht die Unit nicht (uRdxFormatSettingsFix fehlt in der Unit-Liste von
+// build.sh).
 // Prueft: Hilfe mit Literal, Konstante, Verkettung, verdoppeltem Quote,
 // RTL-Qualifizierung, der Bereich, der Alt-Weg samt Waehrungs-Spec; die
 // Sperren - anderer Formatstring, verschoben, zwei Format, qualifiziert,

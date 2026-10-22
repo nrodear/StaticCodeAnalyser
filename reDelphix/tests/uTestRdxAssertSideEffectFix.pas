@@ -1,7 +1,7 @@
 unit uTestRdxAssertSideEffectFix;
 
 // Editorhilfe SCA169 AssertWithSideEffect (uRdxAssertSideEffectFix): der
-// Planer auf Text (erste Fixture, auch im FPC-Pruefstand) und - nur Delphi -
+// Planer auf Text (erste Fixture, FPC-tauglich) und - nur Delphi -
 // der ECHTE Detektor (uAssertWithSideEffect) auf dem echten AST ueber den
 // Einstieg der Tabelle (TRdxFixTable.FixFor, Adapter PlanAssertOutside;
 // zweite Fixture). Die Fixtures stehen in einer
