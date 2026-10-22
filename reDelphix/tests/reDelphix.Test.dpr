@@ -122,6 +122,44 @@ program reDelphix.Test;
 //                        auto/fest), Sprache der SCA, analyser.ini
 //   * uTestRdxTextMsgs - die gemeinsamen Texte aus uRdxText (Charge C1):
 //                        je Funktion en/de/fr, de = bisheriger Wortlaut
+//   Nacharbeit des Code-Reviews (Charge FB):
+//   * uTestRdxFormatGuards - Format()-Umformung: kein Literal ueber 255
+//                        Elemente (R2-02), kein Zeiger am Kettenanfang
+//   * uTestRdxFreeTypes - Typ-Sperre von SCA085/SCA139 auf Text (Zeiger-
+//                        typen und Aliasse der Unit, R2-01/R3-01)
+//   * uTestRdxSqlBinds - SQL-Vorlage: Literal-Laenge (R2-02), geerbtes
+//                        Member vor der Unit-Konstante (R2-05)
+//   * uTestRdxFreeGatesDetector - die Sperren aus Laeufer und Tabelle
+//                        gegen die echten Detektoren (TRdxFixTable.FixFor)
+//   Einfache Hilfen der Chargen Q und R (je Planer-Unit uRdx<Name>Fix eine
+//   Testunit: Planer auf Text, Adapter der Tabelle, Rundlauf mit dem
+//   echten Detektor; Einzelheiten im Kopf jeder Unit):
+//   * uTestRdxHttpsFix          - SCA115 'http://' -> 'https://'
+//   * uTestRdxParensFix         - SCA094 '((X))' -> '(X)'
+//   * uTestRdxAttrGapFix        - SCA183 Leerzeilen nach einem Attribut
+//   * uTestRdxTwiceInheritedFix - SCA093 zweiter gleicher inherited-Aufruf
+//                                 entfaellt
+//   * uTestRdxNativeIntFix      - SCA161 Integer(P1) - Integer(P2) ->
+//                                 NativeInt
+//   * uTestRdxEmptyFinallyFix   - SCA083 try..finally ohne Aufraeum-Code
+//                                 entfaellt
+//   * uTestRdxForRangeFix       - SCA046 'to' -> 'downto' bzw. Grenzen
+//                                 tauschen
+//   * uTestRdxTabsFix           - SCA061 Tabs -> Leerzeichen
+//   * uTestRdxTrailingBlanksFix - SCA063 Leerraum am Zeilenende
+//   * uTestRdxKeywordCaseFix    - SCA064 Schluesselwort klein
+//   * uTestRdxEmptyExceptFix    - SCA002 leerer except-Block -> 'raise;'
+//   * uTestRdxEmptyOnHandlerFix - SCA159 leerer on-Handler -> 'raise;'
+//   * uTestRdxEmptyBlockFix     - SCA077 'with X.Add(T) do begin end;' ->
+//                                 'X.Add(T);'
+//   * uTestRdxNoSonarFix        - SCA065 '// NOSONAR' -> Marker des
+//                                 Analysers ueber der Zeile
+//   * uTestRdxTrailingCommaFix  - SCA068 Komma vor ')'
+//   * uTestRdxGroupedDeclFix    - SCA076 'A, B: T;' -> eine Zeile je Name
+//   * uTestRdxIgnoreReasonFix   - SCA179 '[Ignore]' mit Grund
+//   * uTestRdxAttrDuplicateFix  - SCA180 doppeltes Attribut loeschen
+//   * uTestRdxCategoryArgFix    - SCA181 '[Category]' mit Argument
+//   * uTestRdxGotoExitFix       - SCA060 goto zum Routinen-Ende -> Exit
 //
 // SPRACHE: der Hauptblock setzt die reDelphix-Texte fuer ALLE Tests auf
 // Deutsch (SetRdxLanguageOverride('de'), wie der FPC-Pruefstand) - die
