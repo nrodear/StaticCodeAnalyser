@@ -620,8 +620,11 @@ begin
   PlanOf(TRdxTryFixes.UnpairedLock, InProc(['  Locks[%1].Lock; Locks[%1].Lock;',
     '  DoWork;', '  Locks[%1].UnLock;']), 6,
     Format(MSG_153, ['Locks[%1].Lock']), R);
-  Assert.IsTrue(Pos('Zeile 6 traegt 2 Sperren "Locks[%1].Lock" - mehrdeutig',
-    R) > 0, R);
+  // 'traegt' im Rahmen von uRdxCodeMap.OneTokenReason bekommt seit der
+  // Umstellung E29 (Gruppe G5) in de.po einen echten Umlaut - die Quelle
+  // bleibt ASCII: Anfang und Ende ohne das Wort.
+  Assert.IsTrue(Pos('Zeile 6 tr', R) > 0, R);
+  Assert.IsTrue(Pos(' 2 Sperren "Locks[%1].Lock" - mehrdeutig', R) > 0, R);
 end;
 
 // Huellen beliebig tief (Nachpruefung R5-04, Nit; gegen d840f1e5 rot): bis

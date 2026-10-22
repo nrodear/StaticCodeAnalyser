@@ -275,7 +275,11 @@ type
 
   // Was IncludeChainReason je Include prueft: Test mit Arg, und MissingFmt
   // fuer ein Include, das nicht zu finden oder zu lesen ist (%s die Datei,
-  // %s die Ursache - 'nicht neben der Unit gefunden', 'nicht lesbar' ...).
+  // %s die Ursache - 'not found next to the unit', 'not readable' ...; de
+  // 'nicht neben der Unit gefunden', 'nicht lesbar'). MissingFmt ist ein
+  // SCHON UEBERSETZTES Muster des Aufrufers (uRdxText._, unformatiert); die
+  // Ursache uebersetzt IncludeChainReason, der Grund aus Test kommt
+  // uebersetzt vom Aufrufer (Entscheid E29).
   TRdxIncludeCheck = record
     Test       : TRdxIncludeTest;
     Arg        : string;
@@ -337,7 +341,8 @@ implementation
 uses
   System.SysUtils,
   uFileTextCache,    // LoadFileSmart: Includes dekodiert wie der Scan
-  uRdxPaths;         // IsNetworkPath (Includes nie aus dem Netz)
+  uRdxPaths,         // IsNetworkPath (Includes nie aus dem Netz)
+  uRdxText;          // _, MsgHeaderEndNotFound, MsgDeleteByHand (E29)
 
 const
   KW_CLASS = 'class';
@@ -390,15 +395,17 @@ const
   MAX_NESTING    = 8;     // Tiefe lokaler Routinen in Routinen
   MAX_NAME_PARTS = 8;     // Glieder eines qualifizierten Namens
   // Ursache fuer MissingFmt: Unit oder Include auf einem Netzpfad (R4-03).
-  R_INC_NETWORK = 'auf einem Netzpfad (%s) - nicht gelesen, der Menueaufbau '
-    + 'laeuft im Hauptthread';
+  // msgid, %s der Teil, der den Pfad zum Netzpfad macht (NetworkRoot).
+  R_INC_NETWORK = 'on a network path (%s) - not read, the menu is built in '
+    + 'the main thread';
   // SCA053/SCA164/SCA147: ein Zeilen-Marker ueber dem Bereich, der in ihn
   // zielt (MarkerAboveReason; uSuppression.ParseCommentText: der Kommentar
   // beginnt mit dem Wort).
   MARKER_LINE = 'noinspection';
-  R_MARKER_ABOVE = 'der Marker "%s" in Zeile %d zielt auf die geloeschte '
-    + 'Zeile und gaelte danach still der naechsten Code-Zeile; von Hand '
-    + 'loeschen';
+  // msgid: %s der Marker, %d seine Zeile, %s das Satzende MsgDeleteByHand
+  // (de wie bisher '...; von Hand loeschen').
+  R_MARKER_ABOVE = 'the marker "%s" in line %d targets the deleted line and '
+    + 'would then silently apply to the next code line; %s';
   MAX_INCLUDE_DEPTH = 4;
   INCLUDE_EXTENSIONS: array[0..1] of string = ('.inc', '.pas');
   // Folgt eines davon einem Include, steht es im Kopf der Unit
@@ -535,7 +542,7 @@ begin
   for n := 1 to MAX_NAME_PARTS do
   begin
     if not T.IsWord then
-      Exit(Format('kein Name hinter "%s"', [R.Keyword.Low]));
+      Exit(_('no name after "%s"', [R.Keyword.Low]));
     R.NameTok := T;
     AddText(R.Parts, T.Low);
     AddText(Raw, TokText(AMap, T));
@@ -550,7 +557,7 @@ begin
     end;
     T := After(AMap, T);
   end;
-  Result := 'Name mit zu vielen Gliedern';
+  Result := _('name with too many parts');
 end;
 
 // Ab AFrom (hinter dem Namen) Typparameter, Parameter und Rueckgabe bis zum
@@ -574,7 +581,7 @@ begin
       T := After(AMap, T);
   end;
   if T.Low <> KW_SEMI then
-    Exit('Ende des Kopfs nicht gefunden');
+    Exit(MsgHeaderEndNotFound);
   AEnd := T;
   Result := '';
 end;
@@ -601,7 +608,7 @@ begin
     AddText(R.Directives, T.Low);
     S := SemicolonAt0(AMap, T);
     if S.Low = '' then
-      Exit(Format('Direktive "%s" ohne ";"', [T.Low]));
+      Exit(_('directive "%s" without ";"', [T.Low]));
     R.Last := S;
     T := After(AMap, S);
   end;
@@ -632,7 +639,7 @@ begin
   AAfter := Default(TRdxToken);
   Close := MatchClose(AMap, AOpen);
   if Close.Low = '' then
-    Exit('FPC-Direktiven "[" ohne "]"');
+    Exit(_('FPC directives "[" without "]"'));
   T := After(AMap, AOpen);
   while (T.Low <> '') and not SameTok(T, Close) do
   begin
@@ -642,7 +649,7 @@ begin
   end;
   S := After(AMap, Close);
   if S.Low <> KW_SEMI then
-    Exit('FPC-Direktiven "[..]" ohne ";"');
+    Exit(_('FPC directives "[..]" without ";"'));
   R.Last := S;
   AAfter := After(AMap, S);
   Result := '';
@@ -675,10 +682,10 @@ var
   Sub : TRdxRoutine;
 begin
   if ADepth >= MAX_NESTING then
-    Exit('lokale Routinen zu tief verschachtelt');
+    Exit(_('local routines nested too deeply'));
   Result := ReadRoutineAt(AMap, T, ADepth + 1, Sub);
   if Result <> '' then
-    Exit('lokale Routine ' + Sub.Name + ': ' + Result);
+    Exit(_('local routine %s: %s', [Sub.Name, Result]));
   T := Sub.Last;
 end;
 
@@ -691,10 +698,10 @@ begin
   if InList(T.Low, BODY_WORDS) then
     Result := rsFound
   else if InList(T.Low, CLASS_LIKE) and (APrev.Low = '=') then
-    AReason := 'lokaler Klassen- oder Objekttyp - Grenzen nicht sicher'
+    AReason := _('local class or object type - boundaries not certain')
   else if (T.Low = KW_END) or InList(T.Low, UNIT_STOPS) then
-    AReason := Format('"%s" im Deklarationsteil - Ende der Routine nicht '
-      + 'sicher', [T.Low]);
+    AReason := _('"%s" in the declaration section - end of the routine '
+      + 'not certain', [T.Low]);
   if AReason <> '' then
     Result := rsStop;
 end;
@@ -750,7 +757,7 @@ begin
     P := T;
     T := After(AMap, T);
   end;
-  Result := 'kein Rumpf zur Routine gefunden';
+  Result := _('no body found for the routine');
 end;
 
 // Haken der end-Bilanz im Rumpf: Abschnittswoerter der Unit und ein
@@ -762,12 +769,12 @@ begin
   Result := '';
   if not IsKeywordAfter(T, APrev) then Exit;
   if InList(T.Low, UNIT_STOPS) then
-    Result := Format('"%s" im Rumpf - Ende der Routine nicht gefunden',
-      [T.Low])
+    Result := _('"%s" in the body - end of the routine not found', [T.Low])
   else if (APrev.Low = KW_SEMI)
      and (InList(T.Low, ROUTINE_WORDS) or (T.Low = KW_CLASS))
      and not AssignsTo(AMap, T) then
-    Result := 'Routinenkopf im Rumpf - Ende der Routine nicht sicher';
+    Result := _('routine header in the body - '
+      + 'end of the routine not certain');
 end;
 
 // Das end eines asm-Rumpfs: das erste end als Schluesselwort ('@@End' und
@@ -786,7 +793,7 @@ begin
     T := After(AMap, T);
   end;
   if T.Low = '' then
-    Exit('kein end zum asm-Rumpf');
+    Exit(_('no end for the asm body'));
   AEnd := T;
   Result := '';
 end;
@@ -801,14 +808,14 @@ begin
   else
     Result := BlockEnd(AMap, R.Body, BodyHook, R.EndTok, Last);
   if (Result = '') and (R.EndTok.Low = '') then
-    Result := 'kein end zum Rumpf gefunden';
+    Result := _('no end found for the body');
   if Result <> '' then Exit;
   S := After(AMap, R.EndTok);
   // FPC: 'end [''eax''];' hinter einem asm-Rumpf.
   if S.Low = '[' then
     S := AfterClose(AMap, S);
   if S.Low <> KW_SEMI then
-    Exit('hinter dem end des Rumpfs fehlt ";"');
+    Exit(_('";" is missing after the end of the body'));
   R.Last := S;
 end;
 
@@ -833,7 +840,7 @@ begin
   if AHead.Low = KW_CLASS then
     R.Keyword := After(AMap, AHead);
   if not InList(R.Keyword.Low, ROUTINE_WORDS) then
-    Exit('kein Routinenkopf');
+    Exit(_('no routine header'));
   Result := ReadName(AMap, R, T);
   if Result = '' then
     Result := HeaderEndFrom(AMap, T, R.HeaderEnd);
@@ -844,8 +851,8 @@ begin
   if Result = '' then
     Result := ReadBody(AMap, R);
   if (Result = '') and not FollowsRoutine(AMap, R.Last) then
-    Result := 'hinter der Routine beginnt nichts Neues - ihr Ende ist nicht '
-      + 'sicher';
+    Result := _('nothing new begins after the routine - '
+      + 'its end is not certain');
 end;
 
 { ---- Zeilen-Marker ueber einem Bereich (SCA053, SCA164, SCA147) ---- }
@@ -887,7 +894,7 @@ begin
     begin
       Marker := LineMarkerAt(AMap, Li);
       if Marker <> '' then
-        Exit(Format(R_MARKER_ABOVE, [Marker, Li]));
+        Exit(_(R_MARKER_ABOVE, [Marker, Li, MsgDeleteByHand]));
       if Copy(S, 1, Length('//')) <> '//' then
         Exit;
     end;
@@ -951,7 +958,7 @@ begin
     D.Keyword := After(AMap, AHead);
   Result := ReadName(AMap, D, T);
   if (Result = '') and (Length(D.Parts) > 1) then
-    Result := 'Methodenaufloesung (IFoo.X = Y) - keine eigene Methode';
+    Result := _('method resolution (IFoo.X = Y) - not a method of its own');
   if Result = '' then
     Result := HeaderEndFrom(AMap, T, D.HeaderEnd);
   if Result = '' then
@@ -1258,23 +1265,24 @@ begin
   Result := '';
   if Copy(AFile, 1, 1) = '%' then Exit;
   if AUnitDir = '' then
-    Exit(Format(ACheck.MissingFmt, [AFile, 'die Datei der Unit ist unbekannt']));
+    Exit(Format(ACheck.MissingFmt,
+      [AFile, _('the file of the unit is unknown')]));
   if ADepth > MAX_INCLUDE_DEPTH then
-    Exit(Format(ACheck.MissingFmt, [AFile, 'zu tief verschachtelt']));
+    Exit(Format(ACheck.MissingFmt, [AFile, _('nested too deeply')]));
   Net := NetworkPlace(ADir, AUnitDir, AFile);
   if Net <> '' then
-    Exit(Format(ACheck.MissingFmt, [AFile, Format(R_INC_NETWORK, [Net])]));
+    Exit(Format(ACheck.MissingFmt, [AFile, _(R_INC_NETWORK, [Net])]));
   Path := FindInclude(ADir, AFile);
   if Path = '' then
     Path := FindInclude(AUnitDir, AFile);
   if Path = '' then
-    Exit(Format(ACheck.MissingFmt, [AFile, 'nicht neben der Unit gefunden']));
+    Exit(Format(ACheck.MissingFmt, [AFile, _('not found next to the unit')]));
   Nested := nil;
   Map := nil;
   SL := TStringList.Create;
   try
     if not ReadIncludeText(Path, SL) then
-      Exit(Format(ACheck.MissingFmt, [AFile, 'nicht lesbar']));
+      Exit(Format(ACheck.MissingFmt, [AFile, _('not readable')]));
     Map := TRdxCodeMap.Create(SL);
     Result := ACheck.Test(AFile, SL, Map, ACheck.Arg);
     if Result <> '' then Exit;
@@ -1288,7 +1296,7 @@ begin
     Result := IncludeFileReason(ExtractFilePath(Path), AUnitDir, F, ACheck,
       ADepth + 1);
     if Result <> '' then
-      Exit(Format('%s (eingebunden von %s)', [Result, AFile]));
+      Exit(_('%s (included from %s)', [Result, AFile]));
   end;
 end;
 

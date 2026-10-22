@@ -153,7 +153,10 @@ uses
   uRefactorInfo,     // TRefactorSpan.Make
   // Routinengrenzen, Decl/Impl-Finder, Klassenkopf, Include-Kette und
   // MarkerAboveReason (bis Charge B2S-b hier, Review R6-12)
-  uRdxBlocks;
+  uRdxBlocks,
+  // _ und die gemeinsamen Texte (MsgMovedSuffix, MsgNoHeader ...): die
+  // Gruende in der Sprache der SCA (Entscheid E29)
+  uRdxText;
 
 const
   SPAN_164 = 'sca164';
@@ -198,22 +201,28 @@ const
   STACK_COND   = 'c';
   STACK_REGION = 'r';
   MAX_BACK       = 400;   // so weit sucht InExports rueckwaerts
-  R_IMPL_INCLUDE = '{$I}-Include im implementation-Teil (Zeile %d) - dort '
-    + 'kann ein Aufrufer stehen, den die Hilfe nicht sieht';
-  R_LAST_LINE = 'die Routine endet auf der letzten Zeile der Datei';
+  // Die Gruende sind englische msgids (Entscheid E29): uebersetzt mit _()
+  // an der Verwendung in DIESER Unit (tools/i18n_extract.py loest nur
+  // Konstanten derselben Unit auf); de.po traegt den bisherigen Wortlaut.
+  R_IMPL_INCLUDE = '{$I} include in the implementation section (line %d) - a '
+    + 'caller that the quick fix does not see may be there';
+  R_LAST_LINE = 'the routine ends on the last line of the file';
   // SCA164/SCA147: Include-Dateien vor implementation (IncludeReason) - fuer
   // beide Regeln: die Routine deklarieren oder rufen (SCA164) bzw. die
   // Methode als Property-Accessor einer Nachfahrenklasse nennen (SCA147;
   // bis zur Nachpruefung der Charge B1-FD sprach der Text nur von SCA164).
-  R_INC_MISSING = 'Include %s vor implementation %s - es kann den Namen '
-    + 'deklarieren, rufen oder als Property-Accessor nennen, die Hilfe sieht '
-    + 'es nicht';
+  // Ein MUSTER fuer TRdxIncludeCheck.MissingFmt (%s die Datei, %s die
+  // Ursache aus uRdxBlocks): uebersetzt, aber unformatiert uebergeben.
+  R_INC_MISSING = 'include %s before implementation %s - it can declare the '
+    + 'name, call it or name it as a property accessor, and the quick fix '
+    + 'does not see it';
   // SCA164/SCA147: Marker im geloeschten Bereich, die ausserhalb wirken
-  // (MarkerLinesReason, Gegen-Review R4-04).
-  R_MARKER_FILE = '"// noinspection-file" in Zeile %d - der Marker gilt der '
-    + 'ganzen Datei und ginge mit verloren; von Hand loeschen';
-  R_MARKER_TAIL = 'Zeile %d endet mit dem Kommentar "%s" - ein Marker hinter '
-    + 'Code gilt der Zeile dahinter bzw. bleibt stehen; von Hand loeschen';
+  // (MarkerLinesReason, Gegen-Review R4-04). Das letzte %s ist das Satzende
+  // MsgDeleteByHand (de wie bisher '; von Hand loeschen').
+  R_MARKER_FILE = '"// noinspection-file" in line %d - the marker applies to '
+    + 'the whole file and would be lost with it; %s';
+  R_MARKER_TAIL = 'line %d ends with the comment "%s" - a marker after code '
+    + 'applies to the line after it or stays; %s';
 
 type
   // Ganze Zeilen Top..Bottom - ein Loeschbereich.
@@ -461,17 +470,17 @@ begin
   P := Before(AMap, AFirst);
   N := After(AMap, ALast);
   if (P.Low <> '') and (P.Line = AFirst.Line) then
-    Result := 'vor dem Kopf steht Code auf derselben Zeile (zwei Routinen auf '
-      + 'einer Zeile?)'
+    Result := _('code precedes the header on the same line (two routines on '
+      + 'one line?)')
   else if (N.Low <> '') and (N.Line = ALast.Line) then
-    Result := 'hinter dem Ende steht Code auf derselben Zeile (zwei Routinen '
-      + 'auf einer Zeile?)'
+    Result := _('code follows the end on the same line (two routines on one '
+      + 'line?)')
   else if AMap.StartsInside(ATop) then
-    Result := 'auf der Kopfzeile endet ein Kommentar ueber Zeilen'
+    Result := _('a comment spanning several lines ends on the header line')
   else if AMap.StartsInside(ALast.Line + 1) then
-    Result := 'hinter dem Ende beginnt ein Kommentar ueber Zeilen'
+    Result := _('a comment spanning several lines begins after the end')
   else if ALast.Line >= AMap.LineCount then
-    Result := R_LAST_LINE;
+    Result := _(R_LAST_LINE);
 end;
 
 // Die ganzen Zeilen von R (Kopf bis R.Last) samt dem, was darueber zum
@@ -562,7 +571,7 @@ begin
     Slash := AMap.LineCommentCol(Li);
     if (Slash > 0) and (Pos(MARKER_FILE,
          LowerCase(Copy(AMap.Raw(Li), Slash, MaxInt))) > 0) then
-      Exit(Format(R_MARKER_FILE, [Li]));
+      Exit(_(R_MARKER_FILE, [Li, MsgDeleteByHand]));
     if Trim(AMap.Raw(Li)) <> '' then
       Last := Li;
   end;
@@ -571,8 +580,8 @@ begin
   if Slash = 0 then Exit;
   Comment := Copy(AMap.Raw(Last), Slash, MaxInt);
   if MarkerReason(Comment) <> '' then
-    Result := Format(R_MARKER_TAIL, [Last,
-      TrimRight(Copy(Comment, 1, MARKER_QUOTE_LEN))]);
+    Result := _(R_MARKER_TAIL, [Last,
+      TrimRight(Copy(Comment, 1, MARKER_QUOTE_LEN)), MsgDeleteByHand]);
 end;
 
 { ---- Direktiven (OpensDirective, DirectiveWord, IncludeInLines: seit
@@ -584,7 +593,7 @@ function PopDirective(var AStack: string; const AWant, AWord: string;
   ALine: Integer): string;
 begin
   if Copy(AStack, Length(AStack), 1) <> AWant then
-    Exit(Format('{$%s} in Zeile %d ohne Gegenstueck im Bereich',
+    Exit(_('{$%s} in line %d without a counterpart in the range',
       [UpperCase(AWord), ALine]));
   SetLength(AStack, Length(AStack) - 1);
   Result := '';
@@ -604,7 +613,7 @@ begin
   else if InList(AWord, COND_MID) then
   begin
     if Copy(AStack, Length(AStack), 1) <> STACK_COND then
-      Result := Format('{$%s} in Zeile %d ohne $IF im Bereich',
+      Result := _('{$%s} in line %d without $IF in the range',
         [UpperCase(AWord), ALine]);
   end
   else if AWord = 'endregion' then
@@ -612,8 +621,8 @@ begin
   else if InList(AWord, COND_CLOSERS) then
     Result := PopDirective(AStack, STACK_COND, AWord, ALine)
   else
-    Result := Format('Compiler-Direktive {$%s} in Zeile %d - sie wirkt '
-      + 'vielleicht ueber die Routine hinaus', [UpperCase(AWord), ALine]);
+    Result := _('compiler directive {$%s} in line %d - it may act beyond the '
+      + 'routine', [UpperCase(AWord), ALine]);
 end;
 
 // Die Direktiven in den Zeilen ALines: nur ausgeglichene $IF../$ELSE/
@@ -634,8 +643,8 @@ begin
         if Result <> '' then Exit;
       end;
   if Stack <> '' then
-    Result := 'Direktive ohne Gegenstueck im Bereich ($IF.. ohne $ENDIF bzw. '
-      + '$REGION ohne $ENDREGION)';
+    Result := _('directive without a counterpart in the range ($IF.. without '
+      + '$ENDIF or $REGION without $ENDREGION)');
 end;
 
 { ---- Was die Datei sonst ueber den Namen sagt ---- }
@@ -728,12 +737,11 @@ function NameFactsReason(const F: TRdxFileFacts; const AName: string): string;
 begin
   Result := '';
   if F.NameLiteral > 0 then
-    Result := Format('%s steht in einem String-Literal (Zeile %d) - Aufruf '
-      + 'per Name (GetProcAddress, MethodAddress, RTTI, Skript)?',
+    Result := _('%s is in a string literal (line %d) - call by name '
+      + '(GetProcAddress, MethodAddress, RTTI, script)?',
       [AName, F.NameLiteral])
   else if F.NameDirective > 0 then
-    Result := Format('eine Direktive nennt %s (Zeile %d)',
-      [AName, F.NameDirective]);
+    Result := _('a directive names %s (line %d)', [AName, F.NameDirective]);
 end;
 
 // Ein Lauf ueber alle Code-Token: 'implementation' und jedes Vorkommen von
@@ -787,20 +795,18 @@ var
 begin
   P := Before(AMap, AHit);
   if AHit.Line < AImplLine then
-    Result := Format('%s steht im interface-Teil (Zeile %d) - exportiert, '
-      + 'Aufrufer in anderen Units moeglich', [AName, AHit.Line])
+    Result := _('%s is in the interface section (line %d) - exported, '
+      + 'callers in other units possible', [AName, AHit.Line])
   else if InExports(AMap, AHit) then
-    Result := Format('die exports-Klausel nennt %s (Zeile %d)',
-      [AName, AHit.Line])
+    Result := _('the exports clause names %s (line %d)', [AName, AHit.Line])
   else if IsRoutineHead(AMap, P) then
-    Result := Format('zweite Routine %s in Zeile %d - Overload, '
-      + '$IFDEF-Zwilling oder Deklaration', [AName, AHit.Line])
+    Result := _('second routine %s in line %d - overload, $IFDEF twin or '
+      + 'declaration', [AName, AHit.Line])
   else if InList(P.Low, ACCESSOR_WORDS) then
-    Result := Format('%s ist Accessor einer Property (Zeile %d)',
+    Result := _('%s is the accessor of a property (line %d)',
       [AName, AHit.Line])
   else
-    Result := Format('%s wird in Zeile %d verwendet - Fund veraltet? Datei '
-      + 'neu pruefen', [AName, AHit.Line]);
+    Result := MsgStaleSuffix(_('%s is used in line %d', [AName, AHit.Line]));
 end;
 
 // Der Name aus der Meldung zwischen AKey und ' appears unused'; '' ohne
@@ -815,24 +821,30 @@ begin
     Result := Trim(Copy(AMessage, Length(AKey) + 1, E - Length(AKey) - 1));
 end;
 
-// Der eine Kopf mit dem Namen AName auf ALine (AWhat: was gesucht wird,
-// fuer den Grund). '' oder der Grund; AHead ist der Kopfanfang. Der Name
-// aus der Meldung steht als Argument im Text, nie im Muster ManyFmt
-// (Vertrag von TRdxLineSearch; bis Review Woche G05-19 stand er dort - je
-// Routinenname ein anderes Muster, keine msgid). Wortlaut unveraendert.
+// Der eine Kopf mit dem Namen AName auf ALine. AWhat sagt, was gesucht
+// wird: ein SCHON UEBERSETZTES Muster mit %s fuer den Namen ('of the
+// routine %s', de 'der Routine %s'). '' oder der Grund; AHead ist der
+// Kopfanfang. Der Name aus der Meldung steht als Argument im Text, nie im
+// Muster ManyFmt (Vertrag von TRdxLineSearch; bis Review Woche G05-19
+// stand er dort - je Routinenname ein anderes Muster, keine msgid).
 function HeadOn(AMap: TRdxCodeMap; ALine: Integer; const AName,
   AWhat: string; out AHead: TRdxToken): string;
 var
-  S : TRdxLineSearch;
-  K : TRdxToken;
+  S   : TRdxLineSearch;
+  K   : TRdxToken;
+  Who : string;
 begin
   AHead := Default(TRdxToken);
+  // Die Ergaenzung ('der Routine Foo') einmal formatiert: als ganze
+  // Nominalphrase fuer What und als ManyArg des Musters - Text aus der
+  // Meldung steht nie im Muster (Texte umstellen, Kopf-Suche aus uRdxText).
+  Who := Format(AWhat, [AName]);
   S := Default(TRdxLineSearch);
   S.Test := IsHeadNamed;
   S.Arg := LowerCase(AName);
-  S.What := Format('kein Kopf %s %s', [AWhat, AName]);
-  S.ManyFmt := '%d Koepfe ' + AWhat + ' %s';
-  S.ManyArg := AName;
+  S.What := MsgNoHeader(Who);
+  S.ManyFmt := MsgHeadersFmt;
+  S.ManyArg := Who;
   Result := OneTokenOnLine(AMap, ALine, S, K);
   if Result = '' then
     AHead := HeadStart(AMap, K);
@@ -887,26 +899,26 @@ begin
   Result := '';
   if (Length(R.Parts) > 1) or (R.Head.Low = KW_CLASS)
      or InList(R.Keyword.Low, CTOR_DTOR) then
-    Result := 'Methode einer Klasse - die meldet SCA147 bzw. SCA148'
+    Result := _('method of a class - SCA147 or SCA148 reports it')
   else if R.Keyword.Low = KW_OPERATOR then
     // FPC: globaler Operator ('operator explicit(A: TFoo): Integer;') - bis
     // Charge H3c hiess auch er "Methode einer Klasse" (Gegen-Review H3,
     // Minor 12).
-    Result := 'globaler Operator (FPC) - der Compiler ruft ihn ueber sein '
-      + 'Zeichen bzw. die Umwandlung, nicht ueber den Namen'
+    Result := _('global operator (FPC) - the compiler calls it through its '
+      + 'symbol or the conversion, not through its name')
   else if HasDirective(R, REACHABLE_DIRECTIVES, W) then
-    Result := Format('Direktive %s - die Routine ist von aussen erreichbar '
-      + 'oder hat keinen Rumpf', [W]);
+    Result := _('directive %s - the routine is reachable from outside or has '
+      + 'no body', [W]);
 end;
 
 // SCA164: {$L}, {$I} im implementation-Teil, Name in Literal/Direktive.
 function RoutineFactsReason(const F: TRdxFileFacts; const AName: string): string;
 begin
   if F.LinksObject > 0 then
-    Result := Format('die Unit linkt eine Objektdatei ({$L} in Zeile %d) - '
-      + 'der C-Code ruft Routinen per Name', [F.LinksObject])
+    Result := _('the unit links an object file ({$L} in line %d) - the C '
+      + 'code calls routines by name', [F.LinksObject])
   else if F.ImplInclude > 0 then
-    Result := Format(R_IMPL_INCLUDE, [F.ImplInclude])
+    Result := _(R_IMPL_INCLUDE, [F.ImplInclude])
   else
     Result := NameFactsReason(F, AName);
 end;
@@ -922,7 +934,7 @@ begin
   if Result = '' then
     Result := DirectiveBalance(AMap, ALines);
   if Result <> '' then
-    Result := 'forward-Deklaration: ' + Result;
+    Result := _('forward declaration: %s', [Result]);
 end;
 
 // Der Plan fuer die freie Routine R: Nachweis am Puffer, Bereiche,
@@ -937,8 +949,8 @@ begin
   FwdL := Default(TRdxLines);
   Scan := ScanName(AMap, LowerCase(R.Name));
   if (Scan.Impl.Low = '') or TokBefore(R.Head, Scan.Impl) then
-    Exit('der Kopf steht nicht im implementation-Teil (interface oder '
-      + 'Programm) - von aussen erreichbar');
+    Exit(_('the header is not in the implementation section (interface or '
+      + 'program) - reachable from outside'));
   Result := OutsideHits(AMap, Scan, R, Fwd);
   if Result = '' then
     Result := ForwardLines(AMap, Fwd, FwdL);
@@ -972,11 +984,11 @@ var
 begin
   Result := '';
   if HasDirective(D, DISPATCH_DIRECTIVES, W) then
-    Result := Format('Direktive %s - Vorfahren, Nachfahren, Nachrichten oder '
-      + 'Overload-Geschwister erreichen die Methode ohne ihren Namen', [W])
+    Result := _('directive %s - ancestors, descendants, messages or overload '
+      + 'siblings reach the method without its name', [W])
   else if InList(D.Keyword.Low, NO_SPECIAL) then
-    Result := Format('%s - verdeckt Geerbtes bzw. wird ohne Namen gerufen; '
-      + 'von Hand pruefen', [D.Keyword.Low]);
+    Result := _('%s - hides inherited members or is called without a name; '
+      + '%s', [D.Keyword.Low, MsgCheckByHand]);
 end;
 
 // 'T [<..>] = interface' bzw. dispinterface: das Token 'interface'; Low =
@@ -1066,8 +1078,8 @@ begin
   if InList(Key, ROOT_INTERFACES) then
   begin
     if RootMember(Key, ALowMethod) then
-      Result := Format('%s ist ein Member von %s - die Methode kann es '
-        + 'implementieren', [ALowMethod, AName]);
+      Result := _('%s is a member of %s - the method can implement it',
+        [ALowMethod, AName]);
   end
   else if InterfaceParents(AMap, Key, Parents) then
   begin
@@ -1075,8 +1087,8 @@ begin
       AddText(AWork, P);
   end
   else
-    Result := Format('die Klasse implementiert %s (nicht in dieser Datei '
-      + 'deklariert) - die Methode kann ein Interface-Member sein', [AName]);
+    Result := _('the class implements %s (not declared in this file) - the '
+      + 'method can be an interface member', [AName]);
 end;
 
 // Ein Interface der Klasse aus einer anderen Unit - direkt oder als
@@ -1107,7 +1119,7 @@ begin
     if InList(LowerCase(Name), Seen) then Continue;
     AddText(Seen, LowerCase(Name));
     if Length(Seen) > MAX_INTERFACES then
-      Exit('Interface-Kette zu lang - Grenzen nicht sicher');
+      Exit(_('interface chain too long - boundaries not certain'));
     Result := InterfaceReason(AMap, Name, ALowMethod, Work);
   end;
 end;
@@ -1122,29 +1134,30 @@ var
   IncLine : Integer;
 begin
   if not EnclosingClass(AMap, D.Head, LowerCase(LastPart(AClassPath)), C) then
-    Exit(Format('die Deklaration steht nicht im Rumpf der Klasse %s - Zeile '
-      + 'verschoben? Datei neu pruefen', [AClassPath]));
+    Exit(MsgMovedSuffix(_('the declaration is not in the body of class %s',
+      [AClassPath])));
   if not InList(C.Vis, PRIVATE_SECTIONS) then
   begin
+    // Ohne Abschnittswort ein eigener Satz (de wie bisher 'unter "Vorgabe
+    // ohne Abschnitt"') - kein uebersetztes Stueck als %s (Entscheid E29).
     if C.Vis = '' then
-      C.Vis := 'Vorgabe ohne Abschnitt';
-    Exit(Format('die Methode steht unter "%s", nicht unter private',
-      [C.Vis]));
+      Exit(_('the method is in the default section without a visibility '
+        + 'keyword, not under private'));
+    Exit(_('the method is under "%s", not under private', [C.Vis]));
   end;
   if (Before(AMap, C.NameTok).Low = ']') or (Before(AMap, D.Head).Low = ']') then
-    Exit('Attribut an Klasse oder Methode - RTTI kann die Methode per Name '
-      + 'finden');
+    Exit(_('attribute on the class or method - RTTI can find the method by '
+      + 'name'));
   Decls := TRdxBlocks.FindMethodDecls(AMap, AClassPath, D.Name);
   if Length(Decls) <> 1 then
-    Exit(Format('%d Deklarationen von %s in Klassen dieses Namens - '
-      + 'Overload?', [Length(Decls), D.Name]));
+    Exit(MsgDeclsInClassesOfName(Length(Decls), D.Name));
   // Ein Include im Klassenrumpf kann eine Property mit 'read X' tragen -
   // der Detektor prueft nur Includes im implementation-Teil (Gate F).
   IncLine := IncludeInLines(AMap, C.ClassTok.Line,
     ClassEnd(AMap, C.ClassTok).Line);
   if IncLine > 0 then
-    Exit(Format('{$I}-Include im Klassenrumpf (Zeile %d) - dort kann die '
-      + 'Methode stehen (Property-Accessor)', [IncLine]));
+    Exit(_('{$I} include in the class body (line %d) - the method can appear '
+      + 'there (property accessor)', [IncLine]));
   Result := ForeignInterfaceReason(AMap, C.ClassTok, LowerCase(D.Name));
 end;
 
@@ -1158,14 +1171,14 @@ begin
   R := Default(TRdxRoutine);
   Heads := TRdxBlocks.FindMethodImpls(AMap, AClassPath, D.Name);
   if Length(Heads) = 0 then
-    Exit(Format('keine Implementierung von %s.%s in der Datei (include-Datei? '
+    Exit(_('no implementation of %s.%s in the file (include file? '
       + 'abstract?)', [AClassPath, D.Name]));
   if Length(Heads) > 1 then
-    Exit(Format('%d Implementierungen von %s.%s - Overload?',
+    Exit(_('%d implementations of %s.%s - overload?',
       [Length(Heads), AClassPath, D.Name]));
   Result := TRdxBlocks.ReadRoutine(AMap, Heads[0], R);
   if Result <> '' then
-    Result := 'Implementierung: ' + Result;
+    Result := _('implementation: %s', [Result]);
 end;
 
 // Jedes Vorkommen des Namens ausser Deklaration und Implementierung
@@ -1185,10 +1198,10 @@ end;
 function MethodFactsReason(const F: TRdxFileFacts; const AName: string): string;
 begin
   if F.Rtti > 0 then
-    Result := Format('{$RTTI} in Zeile %d - erweiterte RTTI kann private '
-      + 'Methoden per Name aufrufen', [F.Rtti])
+    Result := _('{$RTTI} in line %d - extended RTTI can call private methods '
+      + 'by name', [F.Rtti])
   else if F.ImplInclude > 0 then
-    Result := Format(R_IMPL_INCLUDE, [F.ImplInclude])
+    Result := _(R_IMPL_INCLUDE, [F.ImplInclude])
   else
     Result := NameFactsReason(F, AName);
 end;
@@ -1202,7 +1215,7 @@ var
 begin
   Scan := ScanName(AMap, LowerCase(D.Name));
   if (Scan.Impl.Low = '') or TokBefore(R.Head, Scan.Impl) then
-    Exit('die Implementierung steht nicht im implementation-Teil');
+    Exit(_('the implementation is not in the implementation section'));
   Result := MethodHitsReason(AMap, Scan, D, R);
   if Result = '' then
     Result := HeadLines(AMap, D, abDocOnly, DeclL);
@@ -1217,7 +1230,7 @@ begin
   if Result = '' then
     Result := DirectiveBalance(AMap, ImplL);
   if (Result = '') and (DeclL.Bottom >= ImplL.Top) then
-    Result := 'Deklaration und Implementierung ueberlappen';
+    Result := _('declaration and implementation overlap');
   if Result = '' then
     Result := MarkerLinesReason(AMap, DeclL);
   if Result = '' then
@@ -1254,9 +1267,9 @@ function NameInInclude(const AFile: string; ALines: TStrings;
 begin
   Result := '';
   if HasIdentWord(LowerCase(ALines.Text), LowerCase(AArg)) then
-    Result := Format('das Include %s nennt %s - als Deklaration (nach dem '
-      + 'Loeschen E2065), Aufruf oder Property-Accessor (E2003), die Hilfe '
-      + 'sieht es nicht', [AFile, AArg]);
+    Result := _('the include %s names %s - as a declaration (E2065 after the '
+      + 'deletion), call or property accessor (E2003), and the quick fix does '
+      + 'not see it', [AFile, AArg]);
 end;
 
 { TRdxRoutineFixes }
@@ -1268,7 +1281,7 @@ var
 begin
   Check.Test := NameInInclude;
   Check.Arg := AName;
-  Check.MissingFmt := R_INC_MISSING;
+  Check.MissingFmt := _(R_INC_MISSING);
   Result := IncludeChainReason(AUnitFile, AIncludes, Check);
 end;
 
@@ -1283,9 +1296,9 @@ begin
   R := Default(TRdxRoutine);
   APlan.Name := NameFromMessage(AMessage, KEY_ROUTINE);
   if APlan.Name = '' then
-    AReason := 'Name der Routine fehlt in der Meldung'
+    AReason := _('the message has no routine name')
   else
-    AReason := HeadOn(AMap, ALine, APlan.Name, 'der Routine', Head);
+    AReason := HeadOn(AMap, ALine, APlan.Name, _('of the routine %s'), Head);
   if AReason = '' then
     AReason := TRdxBlocks.ReadRoutine(AMap, Head, R);
   if AReason = '' then
@@ -1315,9 +1328,9 @@ begin
   ClassPath := Copy(Full, 1, LastDelimiter('.', Full) - 1);
   APlan.Name := LastPart(Full);
   if (ClassPath = '') or (APlan.Name = '') then
-    AReason := 'Klasse oder Methode fehlt in der Meldung'
+    AReason := _('the message has no class or method')
   else
-    AReason := HeadOn(AMap, ALine, APlan.Name, 'der Methode', Head);
+    AReason := HeadOn(AMap, ALine, APlan.Name, _('of the method %s'), Head);
   if AReason = '' then
     AReason := TRdxBlocks.MethodDecl(AMap, Head, D);
   if AReason = '' then

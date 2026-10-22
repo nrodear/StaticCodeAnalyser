@@ -4836,3 +4836,255 @@ msgstr "le nom de variable manque dans le message"
 
 msgid "\"%s\" is a keyword, not a variable (the parser read a section as a variable) - no quick fix"
 msgstr "\"%s\" est un mot-clé, pas une variable (l'analyseur a lu une section comme une variable) - pas de Quick-Fix"
+
+msgid "noinspection marker in the range - it suppresses other findings"
+msgstr "marqueur noinspection dans la plage - il masque d'autres résultats"
+
+msgid "%s in the range - an intent comment stays"
+msgstr "%s dans la plage - un commentaire d'intention reste en place"
+
+msgid "%s on the reported line"
+msgstr "%s sur la ligne signalée"
+
+msgid "line %d carries %s - ambiguous"
+msgstr "la ligne %d porte %s - ambigu"
+
+msgid "on a network path (%s) - not read, the menu is built in the main thread"
+msgstr "sur un chemin réseau (%s) - non lu, le menu est construit dans le thread principal"
+
+msgid "the marker \"%s\" in line %d targets the deleted line and would then silently apply to the next code line; %s"
+msgstr "le marqueur « %s » à la ligne %d vise la ligne supprimée et s'appliquerait ensuite silencieusement à la ligne de code suivante ; %s"
+
+msgid "no name after \"%s\""
+msgstr "aucun nom après « %s »"
+
+msgid "name with too many parts"
+msgstr "nom avec trop de composants"
+
+msgid "directive \"%s\" without \";\""
+msgstr "directive « %s » sans « ; »"
+
+msgid "FPC directives \"[\" without \"]\""
+msgstr "directives FPC « [ » sans « ] »"
+
+msgid "FPC directives \"[..]\" without \";\""
+msgstr "directives FPC « [..] » sans « ; »"
+
+msgid "local routines nested too deeply"
+msgstr "routines locales imbriquées trop profondément"
+
+msgid "local routine %s: %s"
+msgstr "routine locale %s : %s"
+
+msgid "local class or object type - boundaries not certain"
+msgstr "type classe ou objet local - limites incertaines"
+
+msgid "\"%s\" in the declaration section - end of the routine not certain"
+msgstr "« %s » dans la partie déclarations - fin de la routine incertaine"
+
+msgid "no body found for the routine"
+msgstr "aucun corps trouvé pour la routine"
+
+msgid "\"%s\" in the body - end of the routine not found"
+msgstr "« %s » dans le corps - fin de la routine introuvable"
+
+msgid "routine header in the body - end of the routine not certain"
+msgstr "en-tête de routine dans le corps - fin de la routine incertaine"
+
+msgid "no end for the asm body"
+msgstr "aucun end pour le corps asm"
+
+msgid "no end found for the body"
+msgstr "aucun end trouvé pour le corps"
+
+msgid "\";\" is missing after the end of the body"
+msgstr "« ; » manque après le end du corps"
+
+msgid "no routine header"
+msgstr "aucun en-tête de routine"
+
+msgid "nothing new begins after the routine - its end is not certain"
+msgstr "rien de nouveau ne commence après la routine - sa fin est incertaine"
+
+msgid "method resolution (IFoo.X = Y) - not a method of its own"
+msgstr "résolution de méthode (IFoo.X = Y) - pas une méthode propre"
+
+msgid "the file of the unit is unknown"
+msgstr "le fichier de l'unité est inconnu"
+
+msgid "nested too deeply"
+msgstr "imbriqué trop profondément"
+
+msgid "not found next to the unit"
+msgstr "introuvable à côté de l'unité"
+
+msgid "not readable"
+msgstr "illisible"
+
+msgid "%s (included from %s)"
+msgstr "%s (inclus depuis %s)"
+
+msgid "{$I} include in the implementation section (line %d) - a caller that the quick fix does not see may be there"
+msgstr "include {$I} dans la section implementation (ligne %d) - un appelant que le Quick-Fix ne voit pas peut s'y trouver"
+
+msgid "the routine ends on the last line of the file"
+msgstr "la routine se termine sur la dernière ligne du fichier"
+
+msgid "include %s before implementation %s - it can declare the name, call it or name it as a property accessor, and the quick fix does not see it"
+msgstr "include %s avant implementation %s - il peut déclarer le nom, l'appeler ou le citer comme accesseur de propriété, et le Quick-Fix ne le voit pas"
+
+msgid "\"// noinspection-file\" in line %d - the marker applies to the whole file and would be lost with it; %s"
+msgstr "« // noinspection-file » à la ligne %d - le marqueur s'applique à tout le fichier et serait perdu lui aussi ; %s"
+
+msgid "line %d ends with the comment \"%s\" - a marker after code applies to the line after it or stays; %s"
+msgstr "la ligne %d se termine par le commentaire « %s » - un marqueur derrière du code s'applique à la ligne suivante ou reste en place ; %s"
+
+msgid "code precedes the header on the same line (two routines on one line?)"
+msgstr "du code précède l'en-tête sur la même ligne (deux routines sur une ligne ?)"
+
+msgid "code follows the end on the same line (two routines on one line?)"
+msgstr "du code suit la fin sur la même ligne (deux routines sur une ligne ?)"
+
+msgid "a comment spanning several lines ends on the header line"
+msgstr "un commentaire sur plusieurs lignes se termine sur la ligne d'en-tête"
+
+msgid "a comment spanning several lines begins after the end"
+msgstr "un commentaire sur plusieurs lignes commence après la fin"
+
+msgid "{$%s} in line %d without a counterpart in the range"
+msgstr "{$%s} à la ligne %d sans contrepartie dans la plage"
+
+msgid "{$%s} in line %d without $IF in the range"
+msgstr "{$%s} à la ligne %d sans $IF dans la plage"
+
+msgid "compiler directive {$%s} in line %d - it may act beyond the routine"
+msgstr "directive de compilation {$%s} à la ligne %d - elle agit peut-être au-delà de la routine"
+
+msgid "directive without a counterpart in the range ($IF.. without $ENDIF or $REGION without $ENDREGION)"
+msgstr "directive sans contrepartie dans la plage ($IF.. sans $ENDIF ou $REGION sans $ENDREGION)"
+
+msgid "%s is in a string literal (line %d) - call by name (GetProcAddress, MethodAddress, RTTI, script)?"
+msgstr "%s figure dans un littéral chaîne (ligne %d) - appel par nom (GetProcAddress, MethodAddress, RTTI, script) ?"
+
+msgid "a directive names %s (line %d)"
+msgstr "une directive nomme %s (ligne %d)"
+
+msgid "%s is in the interface section (line %d) - exported, callers in other units possible"
+msgstr "%s figure dans la section interface (ligne %d) - exporté, appelants possibles dans d'autres unités"
+
+msgid "the exports clause names %s (line %d)"
+msgstr "la clause exports nomme %s (ligne %d)"
+
+msgid "second routine %s in line %d - overload, $IFDEF twin or declaration"
+msgstr "deuxième routine %s à la ligne %d - overload, jumeau $IFDEF ou déclaration"
+
+msgid "%s is the accessor of a property (line %d)"
+msgstr "%s est l'accesseur d'une propriété (ligne %d)"
+
+msgid "%s is used in line %d"
+msgstr "%s est utilisé à la ligne %d"
+
+msgid "method of a class - SCA147 or SCA148 reports it"
+msgstr "méthode d'une classe - SCA147 ou SCA148 la signale"
+
+msgid "global operator (FPC) - the compiler calls it through its symbol or the conversion, not through its name"
+msgstr "opérateur global (FPC) - le compilateur l'appelle par son symbole ou la conversion, pas par son nom"
+
+msgid "directive %s - the routine is reachable from outside or has no body"
+msgstr "directive %s - la routine est accessible de l'extérieur ou n'a pas de corps"
+
+msgid "the unit links an object file ({$L} in line %d) - the C code calls routines by name"
+msgstr "l'unité lie un fichier objet ({$L} à la ligne %d) - le code C appelle des routines par leur nom"
+
+msgid "forward declaration: %s"
+msgstr "déclaration forward : %s"
+
+msgid "the header is not in the implementation section (interface or program) - reachable from outside"
+msgstr "l'en-tête ne figure pas dans la section implementation (interface ou programme) - accessible de l'extérieur"
+
+msgid "directive %s - ancestors, descendants, messages or overload siblings reach the method without its name"
+msgstr "directive %s - ancêtres, descendants, messages ou autres overloads atteignent la méthode sans son nom"
+
+msgid "%s - hides inherited members or is called without a name; %s"
+msgstr "%s - masque des membres hérités ou est appelé sans nom ; %s"
+
+msgid "%s is a member of %s - the method can implement it"
+msgstr "%s est un membre de %s - la méthode peut l'implémenter"
+
+msgid "the class implements %s (not declared in this file) - the method can be an interface member"
+msgstr "la classe implémente %s (non déclaré dans ce fichier) - la méthode peut être un membre d'interface"
+
+msgid "interface chain too long - boundaries not certain"
+msgstr "chaîne d'interfaces trop longue - limites incertaines"
+
+msgid "the declaration is not in the body of class %s"
+msgstr "la déclaration ne figure pas dans le corps de la classe %s"
+
+msgid "the method is in the default section without a visibility keyword, not under private"
+msgstr "la méthode figure dans la section par défaut sans mot-clé de visibilité, pas sous private"
+
+msgid "the method is under \"%s\", not under private"
+msgstr "la méthode figure sous « %s », pas sous private"
+
+msgid "attribute on the class or method - RTTI can find the method by name"
+msgstr "attribut sur la classe ou la méthode - la RTTI peut trouver la méthode par son nom"
+
+msgid "{$I} include in the class body (line %d) - the method can appear there (property accessor)"
+msgstr "include {$I} dans le corps de la classe (ligne %d) - la méthode peut y figurer (accesseur de propriété)"
+
+msgid "no implementation of %s.%s in the file (include file? abstract?)"
+msgstr "aucune implémentation de %s.%s dans le fichier (fichier include ? abstract ?)"
+
+msgid "%d implementations of %s.%s - overload?"
+msgstr "%d implémentations de %s.%s - overload ?"
+
+msgid "implementation: %s"
+msgstr "implémentation : %s"
+
+msgid "{$RTTI} in line %d - extended RTTI can call private methods by name"
+msgstr "{$RTTI} à la ligne %d - la RTTI étendue peut appeler des méthodes privées par leur nom"
+
+msgid "the implementation is not in the implementation section"
+msgstr "l'implémentation ne figure pas dans la section implementation"
+
+msgid "declaration and implementation overlap"
+msgstr "la déclaration et l'implémentation se chevauchent"
+
+msgid "the include %s names %s - as a declaration (E2065 after the deletion), call or property accessor (E2003), and the quick fix does not see it"
+msgstr "l'include %s nomme %s - comme déclaration (E2065 après la suppression), appel ou accesseur de propriété (E2003), et le Quick-Fix ne le voit pas"
+
+msgid "the message has no routine name"
+msgstr "le nom de la routine manque dans le message"
+
+msgid "of the routine %s"
+msgstr "de la routine %s"
+
+msgid "the message has no class or method"
+msgstr "la classe ou la méthode manque dans le message"
+
+msgid "of the method %s"
+msgstr "de la méthode %s"
+
+msgid "no if, case or except found for the else"
+msgstr "aucun if, case ou except trouvé pour le else"
+
+msgid "the %s is in parentheses"
+msgstr "le %s se trouve entre parenthèses"
+
+msgid "no start of the statement found for the %s"
+msgstr "aucun début d'instruction trouvé pour le %s"
+
+msgid "the else matches no if"
+msgstr "le else ne correspond à aucun if"
+
+msgid "record before the else - the end count is uncertain"
+msgstr "record avant le else - le décompte des end est incertain"
+
+msgid "\"%s\" after a \";\" before the else - header of an anonymous method? It is unclear what the else belongs to"
+msgstr "\"%s\" après un \";\" avant le else - en-tête d'une méthode anonyme ? Impossible de savoir à quoi appartient le else"
+
+msgid "the else is in parentheses"
+msgstr "le else se trouve entre parenthèses"
+
+msgid "the else belongs to a case or except - a statement list follows it"
+msgstr "le else appartient à un case ou à un except - une liste d'instructions le suit"
