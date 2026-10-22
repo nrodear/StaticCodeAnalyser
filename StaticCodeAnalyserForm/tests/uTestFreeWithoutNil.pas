@@ -54,6 +54,18 @@ type
     [Test] procedure ReassignWithRealReadBetween_Reported;
   end;
 
+  // Die Ausnahme "Free ist der letzte Aufruf der Methode" (2026-10-22):
+  // nicht im Konstruktor, nicht vor einem raise. Eigene Fixture -
+  // TTestFreeWithoutNil traegt schon 37 Faelle.
+  [TestFixture]
+  TTestFreeWithoutNilLetzterAufruf = class
+  public
+    [Test] procedure Ctor_ExceptFreeVorRaise_BeideGemeldet;
+    [Test] procedure Ctor_FreeAlsLetzteAnweisung_Gemeldet;
+    [Test] procedure Methode_FreeVorRaise_Gemeldet;
+    [Test] procedure Methode_RaiseVorDemFree_NichtGemeldet;
+  end;
+
 implementation
 
 // noinspection-file GodClass, LargeClass, DuplicateBlock
@@ -1120,7 +1132,99 @@ begin
   finally F.Free; end;
 end;
 
+{ ---- Die Ausnahme "letzter Aufruf" (2026-10-22) -------------------- }
+//
+// Gefunden in xml-as-html-final (TXMLProcessingController.Create): der
+// except-Zweig gibt zwei Felder frei und wirft weiter. Delphi ruft bei
+// einer Ausnahme im Konstruktor den Destruktor, der beide Felder noch
+// einmal freigibt - SCA139 meldete nur das erste, das zweite war "der
+// letzte Aufruf der Methode". Die drei ersten Faelle sind ohne den Fix
+// rot (1 statt 2, 0 statt 1, 0 statt 1).
+
+procedure TTestFreeWithoutNilLetzterAufruf.Ctor_ExceptFreeVorRaise_BeideGemeldet;
+const SRC =
+  'unit t; implementation'#13#10 +
+  'constructor TFoo.Create;'#13#10 +
+  'begin'#13#10 +
+  '  inherited Create;'#13#10 +
+  '  try'#13#10 +
+  '    FA := TA.Create;'#13#10 +
+  '    FB := TB.Create;'#13#10 +
+  '  except'#13#10 +
+  '    FA.Free;'#13#10 +
+  '    FB.Free;'#13#10 +
+  '    raise;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'beide Felder - der Destruktor gibt sie nach dem raise noch einmal frei');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.Ctor_FreeAlsLetzteAnweisung_Gemeldet;
+// Ohne raise: das Feld ist nach dem Konstruktor frei, der Destruktor gibt
+// es spaeter noch einmal frei.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'constructor TFoo.Create;'#13#10 +
+  'begin'#13#10 +
+  '  inherited Create;'#13#10 +
+  '  FTmp.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'im Konstruktor schuetzt "letzter Aufruf" nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.Methode_FreeVorRaise_Gemeldet;
+// Gewoehnliche Methode: nach dem raise lebt das Objekt weiter, das Feld
+// zeigt auf freigegebenen Speicher.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Load;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    DoLoad;'#13#10 +
+  '  except'#13#10 +
+  '    FList.Free;'#13#10 +
+  '    raise;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'Free vor raise ist kein Methodenende');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.Methode_RaiseVorDemFree_NichtGemeldet;
+// WAECHTER: nur ein raise HINTER dem Free hebt die Ausnahme auf - eines
+// davor laesst sie stehen (wie FreeAtMethodEnd_NotReported).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Shutdown;'#13#10 +
+  'begin'#13#10 +
+  '  if FBusy then'#13#10 +
+  '    raise EAbort.Create(''busy'');'#13#10 +
+  '  FList.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'raise vor dem Free - Free bleibt der letzte Aufruf');
+  finally F.Free; end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestFreeWithoutNil);
+  TDUnitX.RegisterTestFixture(TTestFreeWithoutNilLetzterAufruf);
 
 end.

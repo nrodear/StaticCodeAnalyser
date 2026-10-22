@@ -25,6 +25,14 @@ unit uFreeWithoutNil;
 //     `<ident> := nil` ODER `FreeAndNil(<ident>)`. Wenn vorhanden -> OK.
 //   * Wenn die Free-Anweisung die LETZTE im Body ist (kein Folge-Use
 //     moeglich) -> kein Befund (Method-Exit-Pattern, common in destructor).
+//     NICHT in einem Konstruktor und NICHT, wenn hinter dem Free ein
+//     'raise' steht (2026-10-22): das Objekt ueberlebt die Methode, und
+//     sein Destruktor gibt das Feld noch einmal frei. Im Konstruktor ruft
+//     Delphi den Destruktor bei JEDER Ausnahme selbst auf - das Muster
+//       try ... except FA.Free; FB.Free; raise; end;
+//     gibt FA/FB also doppelt frei (gefunden in xml-as-html-final,
+//     TXMLProcessingController.Create: nur FA wurde gemeldet, FB als
+//     letzter Aufruf nicht).
 //
 // Limitierung: einfache lexische Heuristik, keine Path-Analysis. False
 // Positives bei try/finally L.Free; end mit `Exit;`/`raise;` direkt
@@ -292,6 +300,21 @@ var
       Result := True;
   end;
 
+  // Steht ein 'raise' hinter dem Free (gleiche oder spaetere Zeile)? Dann
+  // endet die Methode mit einer Ausnahme, das Objekt lebt weiter, und das
+  // Feld zeigt auf freigegebenen Speicher - "letzter Aufruf" schuetzt dann
+  // nichts. 'raise' ist kein nkCall, IsLastStmtOfMethod sieht es nicht.
+  function RaiseFollows(MethodNode, FreeCall: TAstNode): Boolean;
+  var
+    Raises : TList<TAstNode>;
+    S      : TAstNode;
+  begin
+    Result := False;
+    Raises := MethodNode.FindAllRef(nkRaise);
+    for S in Raises do
+      if S.Line >= FreeCall.Line then Exit(True);
+  end;
+
 var
   LocalNames : TDictionary<string, Boolean>;
   LV         : TAstNode;
@@ -316,6 +339,10 @@ begin
     var MDotPos := LastDelimiter('.', MNameLow);
     if MDotPos > 0 then MNameLow := Copy(MNameLow, MDotPos + 1, MaxInt);
     if EndsText('destroy', MNameLow) then Continue;
+    // Konstruktor: die Ausnahme "letzter Aufruf" gilt nicht (s. Kopf) -
+    // jede Ausnahme im Konstruktor fuehrt in den Destruktor, und ein Feld,
+    // das am Ende des Konstruktors frei ist, gibt er noch einmal frei.
+    var IsCtor := Pos('constructor', LowerCase(M.TypeRef)) > 0;
 
     // Lokale Var-Namen einmal pro Methode sammeln. Free-Calls auf Locals
     // sind harmlos, weil die Variable beim Method-Ende sowieso aus dem
@@ -395,7 +422,8 @@ begin
         // Reassigned-after-free (FPopUpBitmap.Free; FPopUpBitmap := TBitmap.Create):
         // Feld vor jedem Read neu belegt -> kein Dangling-Pointer.
         if HasSafeReassignAfter(M, N, RecvLow) then Continue;
-        if IsLastStmtOfMethod(M, N) then Continue;
+        if IsLastStmtOfMethod(M, N) and not IsCtor
+           and not RaiseFollows(M, N) then Continue;
 
         F            := TLeakFinding.Create;
         F.FileName   := FileName;
