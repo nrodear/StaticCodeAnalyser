@@ -1121,7 +1121,7 @@ C.Name := SomeName;
 | Tags | `loop`, `typo` |
 | Detector | `uReversedForRange.pas` |
 
-`for i := 10 `to` 1 do` is a `downto`-vs-to typo: in Pascal a `to`-loop with start > end iterates zero times, so the body silently never runs and the bug shows up as missing side-effects with no compiler warning. The detector evaluates compile-time integer expressions on both sides (literals, simple negations, and `Length(arr)-1` for constant-length declarations) so `for i := Length(L)-1 to 0` is flagged. Variable-bounded loops are excluded - they may legitimately do nothing depending on runtime data. To iterate descending, write `downto`; to express 'maybe empty' explicitly, guard with an `if From <= To`.
+`for i := 10 `to` 1 do` is a `downto`-vs-to typo: in Pascal a `to`-loop with start > end iterates zero times, so the body silently never runs and the bug shows up as missing side-effects with no compiler warning. The detector compares integer literals on both sides, an optional leading minus included (`for i := 5 to -1` is flagged); expressions and constants such as `Length(L)-1` or `High(A)` are not evaluated. Variable-bounded loops are excluded - they may legitimately do nothing depending on runtime data. To iterate descending, write `downto`; to express 'maybe empty' explicitly, guard with an `if From <= To`.
 
 ```pascal
 // BAD
@@ -2251,7 +2251,7 @@ end;
 ## SCA094
 **Redundant double parentheses**
 
-> `((Ident))` - drop the outer parens
+> `((Ident))` - drop the inner parens
 
 | Field | Value |
 |---|---|
@@ -4200,14 +4200,14 @@ SetString(s, PChar(Buf), Len);   // explicit length
 | Tags | `pointer`, `win64`, `truncation`, `mormot`, `sonar50` |
 | Detector | `uPointerSubtraction.pas` |
 
-Lexical scan for `(Cardinal|LongWord|Integer|LongInt)(<id>) - (Cardinal|...)(<id>)` - two 32-bit casts joined by minus. On Win64 a Pointer is 64-bit while Cardinal/Integer/LongWord/LongInt are 32-bit, so the cast drops the upper four bytes of the address. The resulting difference is wrong whenever the allocator hands out high addresses - the code works on Win32 and breaks intermittently on Win64. Common porting bug from Delphi-7 / Delphi-2007 examples that pre-date Win64. Fix: use `PtrUInt(P1) - PtrUInt(P2)` or `NativeInt(P1) - NativeInt(P2)` - pointer-width integer types that match the platform pointer size.
+Lexical scan for `(Cardinal|LongWord|Integer|LongInt)(<id>) - (Cardinal|...)(<id>)` - two 32-bit casts joined by minus. On Win64 a Pointer is 64-bit while Cardinal/Integer/LongWord/LongInt are 32-bit, so the cast drops the upper four bytes of the address. The resulting difference is wrong whenever the allocator hands out high addresses - the code works on Win32 and breaks intermittently on Win64. Common porting bug from Delphi-7 / Delphi-2007 examples that pre-date Win64. Fix: use `NativeUInt(P1) - NativeUInt(P2)` or `NativeInt(P1) - NativeInt(P2)` - pointer-width integer types that match the platform pointer size (`PtrUInt`/`PtrInt` are the FPC and mORMot names; the Delphi RTL does not declare them).
 
 ```pascal
 // BAD
 Diff := Cardinal(P1) - Cardinal(P2);   // upper 32 bits lost on Win64
 
 // GOOD
-Diff := PtrUInt(P1) - PtrUInt(P2);     // pointer-wide cast
+Diff := NativeUInt(P1) - NativeUInt(P2);   // pointer-wide cast
 ```
 
 ---

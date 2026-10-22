@@ -377,7 +377,7 @@
     },
     "SCA094": {
       "name": "Überflüssige doppelte Klammern",
-      "shortDescription": "`((Ident))` - die äußeren Klammern weglassen"
+      "shortDescription": "`((Ident))` - die inneren Klammern weglassen"
     },
     "SCA095": {
       "name": "Wiederholte Sichtbarkeitssektion",

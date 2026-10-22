@@ -377,7 +377,7 @@
     },
     "SCA094": {
       "name": "Doubles parenthèses redondantes",
-      "shortDescription": "`((Ident))` - supprimer les parenthèses extérieures"
+      "shortDescription": "`((Ident))` - supprimer les parenthèses intérieures"
     },
     "SCA095": {
       "name": "Section de visibilité répétée",
