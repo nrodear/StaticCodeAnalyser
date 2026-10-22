@@ -242,9 +242,11 @@ var
 begin
   Assert.AreEqual(InUnit(['  L.Free;']),
     Fix(lkCast, InUnit(['  TStringList(L).Free;']), 6, CastMsg('TStringList'), R), R);
-  // Ein Pfad als Operand, Leerraum in den Klammern, Kommentar dahinter.
-  Assert.AreEqual(InUnit(['  if A then Self.FList.Free; // weg']),
-    Fix(lkCast, InUnit(['  if A then TObjectList( Self.FList ).Free; // weg']), 6,
+  // Leerraum in den Klammern, Kommentar dahinter. (Bis zur Review Woche
+  // G07-17 stand hier ein Pfad 'Self.FList' - den lehnte der Laeufer immer
+  // ab, jetzt schon der Planer, s. Sca123_Refusals.)
+  Assert.AreEqual(InUnit(['  if A then FList.Free; // weg']),
+    Fix(lkCast, InUnit(['  if A then TObjectList( FList ).Free; // weg']), 6,
       CastMsg('TObjectList'), R), R);
   // Gross/klein des Typs wie im Code; ein Cast vor Destroy zaehlt nicht mit.
   Assert.AreEqual(InUnit(['  L.Free;']),
@@ -275,6 +277,11 @@ begin
   Assert.AreEqual('', Fix(lkCast, InUnit(['  TFoo(nil).Free;']), 6, CastMsg('TFoo'),
     R));
   Assert.IsTrue(Pos('"nil"', R) > 0, R);
+  // Ein Pfad: sein Typ ist fuer den Laeufer nicht pruefbar - der Planer
+  // lehnt ihn selbst ab (Review Woche G07-17).
+  Assert.AreEqual('', Fix(lkCast, InUnit(['  TObjectList(Self.FList).Free;']), 6,
+    CastMsg('TObjectList'), R));
+  Assert.IsTrue(Pos('ein Pfad', R) > 0, R);
   // Zwei Casts auf der Zeile; ein Kommentar im Cast; Zeile verschoben.
   Assert.AreEqual('', Fix(lkCast, InUnit(['  TFoo(A).Free; TFoo(B).Free;']), 6,
     CastMsg('TFoo'), R));

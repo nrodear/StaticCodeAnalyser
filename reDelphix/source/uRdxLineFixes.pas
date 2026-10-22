@@ -52,7 +52,9 @@ type
     class function CastTargetOf(const AMessage: string): string; static;
 
     // SCA123: genau ein 'T(X).Free' auf ALine -> 'X.Free' (NewText = X).
-    // X ein Bezeichnerpfad (A, A.B, Self.F) ohne Kommentar; T kein
+    // X ein blosser Bezeichner ohne Kommentar - einen Pfad (A.B, Self.F)
+    // lehnt schon der Planer ab, weil der Aufrufer nur den Typ eines
+    // blossen Bezeichners beweist (Review Woche G07-17); T kein
     // Interface ('IFoo(X).Free' riefe eine Interface-Methode Free). Nur
     // Free - Destroy bietet die Hilfe nicht an. Dass X schon den Typ T hat
     // (sonst kann T oder der Typ von X Free verdecken, oder der Cast ist
@@ -337,7 +339,9 @@ begin
   end;
   // Die Gruende "keiner"/"mehrere" wie bei jeder Token-Suche (OneTokenReason).
   if n > 1 then
-    Result := OneTokenReason(ALine, n, '', '%d Casts ' + ATarget + '(...).Free')
+    // Der Typ aus der Meldung als Argument, nie im Muster (Vertrag von
+    // OneTokenReason; Review Woche G07-16).
+    Result := OneTokenReason(ALine, n, '', '%d Casts %s(...).Free', ATarget)
   else if n = 1 then
     Exit
   else if ckDestroy in Seen then
@@ -348,32 +352,31 @@ begin
     Result := OneTokenReason(ALine, 0, 'kein ' + ATarget + '(...).Free', '');
 end;
 
-// Ist der Operand zwischen den Klammern ein Bezeichnerpfad (A, A.B,
-// Self.F) - und steht darin kein Kommentar oder String? '' oder der Grund.
+// Ist der Operand zwischen den Klammern ein blosser Bezeichner - und steht
+// darin kein Kommentar oder String? '' oder der Grund. Ein Pfad (A.B,
+// Self.F) sperrt schon hier: den Typ beweist der Aufrufer
+// (uRdxFixRunner.CastTypeReason ueber DeclaredTypeOf) nur fuer einen
+// blossen Bezeichner und lehnt jeden Pfad ab. Bis zur Review Woche G07-17
+// plante der Planer Pfade trotzdem - Doku und Test versprachen eine Hilfe,
+// die der Nutzer nie bekam. Lernt der Aufrufer Pfade (wie SCA126: das
+// letzte Glied eines Feldpfads), faellt die Sperre hier mit.
 function OperandReason(AMap: TRdxCodeMap; const ASite: TRdxCastSite): string;
 var
-  T          : TRdxToken;
-  WantWord   : Boolean;
+  T, N : TRdxToken;
 begin
   Result := '';
   if AMap.HasNonCode(ASite.Open.Line, ASite.Open.Col, ASite.Close.Col) then
     Exit('Kommentar oder String im Cast');
-  WantWord := True;
   T := After(AMap, ASite.Open);
-  while (T.Col < ASite.Close.Col) and (T.Line = ASite.Open.Line) do
-  begin
-    if InList(T.Low, NOT_OPERANDS) then
-      Exit(Format('"%s" als Operand - ohne den Cast nicht dasselbe', [T.Low]));
-    if WantWord <> T.IsWord then
-      Exit('der Operand ist kein einfacher Bezeichner(pfad) - etwa ein '
-        + 'Aufruf oder ein Index; der Cast koennte zum Uebersetzen noetig sein');
-    if not WantWord and (T.Low <> '.') then
-      Exit('der Operand ist kein einfacher Bezeichner(pfad)');
-    WantWord := not WantWord;
-    T := After(AMap, T);
-  end;
-  if WantWord then
-    Result := 'der Operand ist kein einfacher Bezeichner(pfad)';
+  N := After(AMap, T);
+  if InList(T.Low, NOT_OPERANDS) then
+    Exit(Format('"%s" als Operand - ohne den Cast nicht dasselbe', [T.Low]));
+  if T.IsWord and (N.Low = '.') then
+    Exit('der Operand ist ein Pfad (A.B, Self.F), kein blosser Bezeichner - '
+      + 'sein Typ ist nicht pruefbar');
+  if not T.IsWord or not SameTok(N, ASite.Close) then
+    Result := 'der Operand ist kein blosser Bezeichner - etwa ein Aufruf oder '
+      + 'ein Index; der Cast koennte zum Uebersetzen noetig sein';
 end;
 
 // Ein Interface-Cast ('IFoo(X)')? I und ein Grossbuchstabe.
