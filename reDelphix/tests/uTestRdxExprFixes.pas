@@ -174,18 +174,21 @@ end;
 
 procedure TTestRdxExprFixes.Sca066_Refusals;
 const
+  // 'kein blosser Name' traegt in de.po das echte Eszett (Charge G1) - die
+  // Tabelle prueft je Grund ein Teilstueck ohne dieses Wort, die Quelle
+  // bleibt ASCII.
   CASES: array[0..13, 0..2] of string = (
     ('  X := Foo() + 1;', '11', 'Ausdrucks'),
     ('  Bar(Foo());', '10', 'Ausdrucks'),
     ('  if Assigned(GetObj()) then Exit;', '21', 'Ausdrucks'),
     ('  X := Foo().Bar;', '11', 'Ausdrucks'),
     ('  F()();', '4', 'Ausdrucks'),
-    ('  Arr[0]();', '9', 'kein blosser Name'),
+    ('  Arr[0]();', '9', 'Element- oder Ergebnisaufruf'),
     ('  Foo( { leer } );', '6', 'nur Leerraum'),
     ('  Foo(X);', '6', 'nur Leerraum'),
     ('  Foo {x} ();', '11', 'nur Leerraum'),
     ('  S := ''Foo()'';', '12', 'nicht mehr'),
-    ('  X := TFoo<T>.Create();', '22', 'kein blosser Name'),
+    ('  X := TFoo<T>.Create();', '22', 'Glied der Aufrufkette'),
     ('  Obj.OnIdle();', '13', 'Ereignis'),
     ('  var P := GetProc();', '19', 'einfache Variable'),
     ('  Self.P := GetProc();', '20', 'einfache Variable'));
@@ -265,13 +268,15 @@ end;
 
 procedure TTestRdxExprFixes.Sca072_Refusals;
 const
+  // 'kein blosser Name' traegt in de.po das echte Eszett (Charge G1) - die
+  // Zeile mit F(1) prueft den Anfang des Grunds ohne dieses Wort.
   CASES: array[0..10, 0..2] of string = (
     ('  if A and X = True then', '14', 'bindet'),
     ('  if X = True and Y then', '8', 'bindet'),
     ('  if not X = False then', '12', 'bindet'),
     ('  if Obj.Active = True then', '17', 'Pfad'),
     ('  if Self.FDone = False then', '17', 'Pfad'),
-    ('  if F(1) = True then', '11', 'kein blosser Name'),
+    ('  if F(1) = True then', '11', 'links vom Vergleich steht kein'),
     ('  if X {a} = True then', '12', 'Kommentar'),
     ('  X := Y;', '6', 'nicht mehr'),
     ('  if X >= True then', '9', 'nicht mehr'),
