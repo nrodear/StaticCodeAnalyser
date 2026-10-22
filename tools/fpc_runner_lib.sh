@@ -12,8 +12,8 @@
 # Stubs, Grabsteine, Registrierungspruefung, Sprache des Laufs.
 #
 # Nutzer: SCA.SharedUI/tools/run_fpc_pure.sh, VarNameProject/tools/
-# fpc-pruefstand/build.sh. reDelphix/tools/fpc-pruefstand/build.sh hat noch
-# seine eigene Fassung derselben Regeln (Umstellung offen, Folgewelle A7).
+# fpc-pruefstand/build.sh, reDelphix/tools/fpc-pruefstand/build.sh (seit
+# Folgewelle B3).
 #
 # Vertrag der Funktionen: keine ruft exit - sie melden Fehler auf stderr
 # und geben 1 (rot/gescheitert) oder 2 (Aufruf-/Quellfehler) zurueck; der

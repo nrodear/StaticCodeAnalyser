@@ -39,14 +39,21 @@
 #     fpc -Mdelphiunicode -Fu<eigen> -FU<frisch> -FE<frisch> harness.pas
 #   Der Runner selbst laeuft im Skriptverzeichnis (Tests suchen Daten des
 #   Checkouts von dort aus).
-# Anpassung fuer FPC 3.2.2 (adapt): System.SysUtils -> SysUtils & Co.,
-#   Assert.AreEqual<Integer>( -> Assert.AreEqualInt( und [TestFixture]/
-#   [Test] am Zeilenanfang weg - alles nur AUSSERHALB von String-Literalen:
-#   ein Test, der einen qualifizierten Unitnamen oder ein Attribut als Text
-#   prueft, sieht unter FPC dieselben Daten wie unter Delphi (Review R6-03;
-#   bis dahin wurde aus dem Literal 'System.Classes' 'Classes' und aus
-#   '    [Test]' '    '). Die Zeilen bleiben, FPC-Meldungen nennen die
-#   Zeilennummern der Quellen.
+# Bausteine: Anpassung der Quellen, Fixture-Erkennung, Runner, Bau und
+#   Abgleich der Testzahl kommen aus tools/fpc_runner_lib.sh im
+#   Wurzelverzeichnis DIESES Checkouts (auch bei SCA_ROOT) - gemeinsam mit
+#   SCA.SharedUI/tools/run_fpc_pure.sh und VarNameProject (Review Woche
+#   2026-10-21, G10-01; Folgewelle A7, Umstellung B3). Hier bleibt, was nur
+#   diesen Pruefstand betrifft: Quellen und Unit-Liste, Stubs, Grabsteine,
+#   Registrierungspruefung, Sprache des Laufs.
+# Anpassung fuer FPC 3.2.2 (fpc_adapt): System.SysUtils -> SysUtils & Co.,
+#   System.Hash -> HashStub (FPC_ADAPT_EXTRA), Assert.AreEqual<Integer>( ->
+#   Assert.AreEqualInt( und [TestFixture]/[Test] am Zeilenanfang weg -
+#   alles nur AUSSERHALB von String-Literalen: ein Test, der einen
+#   qualifizierten Unitnamen oder ein Attribut als Text prueft, sieht unter
+#   FPC dieselben Daten wie unter Delphi (Review R6-03; bis dahin wurde aus
+#   dem Literal 'System.Classes' 'Classes' und aus '    [Test]' '    ').
+#   Die Zeilen bleiben, FPC-Meldungen nennen die Zeilennummern der Quellen.
 # Runner: genau EINE Fixture je Testunit mit einfachen [Test]-Methoden. Ein
 #   Test ohne Assert ist rot - wie unter TestInsight und reDelphix.Test
 #   (FailsOnNoAsserts = True, Review R6-09).
@@ -68,6 +75,7 @@ SCA="$(cd "${SCA_ROOT:-$RDX/..}" 2>/dev/null && pwd)"
 # fehler (Exit 2), kein gescheiterter Bau (Review reDelphiX nach Bereichen
 # 2026-10-10, Nit 54).
 FPC="${FPC:-/c/lazarus/fpc/3.2.2/bin/i386-win32/fpc.exe}"
+LIB="$(cd "$RDX/.." && pwd)/tools/fpc_runner_lib.sh"
 MARK=.pruefstand
 if [ $# -eq 0 ]; then
   echo "Aufruf: build.sh <testunit> [<testunit> ...]" >&2
@@ -81,6 +89,12 @@ if [ -z "$SCA" ] || [ ! -d "$SCA/SCA.Engine/sources" ]; then
   echo "SCA-Wurzel nicht gefunden: ${SCA_ROOT:-$RDX/..}" >&2
   exit 2
 fi
+if [ ! -f "$LIB" ]; then
+  echo "Bausteine fehlen: $LIB" >&2
+  exit 2
+fi
+# shellcheck source=../../../tools/fpc_runner_lib.sh
+. "$LIB"
 
 # Bricht ab, wenn eine Pflichtquelle fehlt.
 need() {
@@ -147,40 +161,10 @@ need "$SRC"
 } > "$WORK/uDetectorUtils.pas"
 
 # --- 2) echte Units + Tests kopieren und fuer FPC 3.2.2 anpassen ------------
-# adapt <zielverzeichnis> <datei> ...: je Datei eine Kopie gleichen Namens.
-# Felder mit -F"'": ungerade = ausserhalb eines String-Literals ('' im
-# Literal ergibt ein leeres Feld dazwischen, das nichts zu ersetzen hat).
-# Ein Attribut steht nur am Zeilenanfang, also im ersten Feld. Das
-# Zielverzeichnis kommt ueber die Umgebung: awk -v wertet Backslashes im
-# Wert als Escapes ('C:\Users\..\tmp' -> '\t' wird ein Tabulator).
+# adapt <zielverzeichnis> <datei> ...: fpc_adapt der Bausteine, dazu
+# System.Hash -> HashStub (der eingecheckte Stub neben dem Skript).
 adapt() {
-  local dir="$1"
-  shift
-  ADAPT_DIR="$dir" awk -F"'" -v OFS="'" '
-    BEGIN { dir = ENVIRON["ADAPT_DIR"] }
-    FNR == 1 {
-      if (out != "") close(out)
-      out = FILENAME
-      sub(/^.*[\/\\]/, "", out)
-      out = dir "/" out
-    }
-    {
-      sub(/\r$/, "")
-      if ($1 ~ /^[[:space:]]*\[TestFixture\]/) sub(/\[TestFixture\]/, "", $1)
-      if ($1 ~ /^[[:space:]]*\[Test\]/) sub(/\[Test\] */, "", $1)
-      for (i = 1; i <= NF; i += 2) {
-        gsub(/System\.SysUtils/, "SysUtils", $i)
-        gsub(/System\.Classes/, "Classes", $i)
-        gsub(/System\.Hash/, "HashStub", $i)
-        gsub(/System\.StrUtils/, "StrUtils", $i)
-        gsub(/System\.SyncObjs/, "SyncObjs", $i)
-        gsub(/System\.IOUtils/, "IOUtils", $i)
-        gsub(/System\.Generics\.Collections/, "Generics.Collections", $i)
-        gsub(/Assert\.AreEqual<Integer>\(/, "Assert.AreEqualInt(", $i)
-      }
-      print > out
-    }
-    END { if (out != "") close(out) }' "$@"
+  FPC_ADAPT_EXTRA='System.Hash=HashStub' fpc_adapt "$@"
 }
 UNITS=()
 for u in uRefactorInfo uRefactorInfoBuilder uRefactorConcat uFindingActions uScaConfigDir; do
@@ -280,158 +264,65 @@ if [ -n "$UNREG" ]; then
   exit 2
 fi
 
-# Der Runner kennt genau EINE Fixture mit einfachen [Test]-Methoden: eine
-# zweite Fixture oder [Setup]/[TearDown]/[TestCase] liefe hier still anders
-# als unter DUnitX (Review reDelphiX nach Bereichen 2026-10-10, Nit 55).
-# Ausgabe je Datei: 'fixtures sonderattribut tests'.
-mapfile -t STATS < <(awk '
-  function flush() { print fix, bad, tests }
-  FNR == 1 { if (NR > 1) flush(); fix = 0; bad = 0; tests = 0 }
-  { sub(/\r$/, "") }
-  /^[[:space:]]*\[TestFixture/ { fix++ }
-  /\[(Setup|TearDown|SetupFixture|TearDownFixture)\]|\[TestCase/ { bad = 1 }
-  /^[[:space:]]*\[Test\]/ { tests++ }
-  END { if (NR > 0) flush() }' "${SRCS[@]}")
-if [ ${#STATS[@]} -ne ${#SRCS[@]} ]; then
-  echo "Testunits ohne Inhalt? ${#SRCS[@]} Dateien, ${#STATS[@]} gelesen" >&2
-  exit 2
-fi
-EXPECTED=()
+# Je Testunit die angepasste Kopie und ihre Fixture (fpc_fixture_info: genau
+# EINE Fixture mit einfachen [Test]-Methoden - eine zweite Fixture oder
+# [Setup]/[TearDown]/[TestCase] liefe hier still anders als unter DUnitX,
+# Review reDelphiX nach Bereichen 2026-10-10, Nit 55; dann Exit 2). Alle
+# Testunits werden geprueft, bevor runner.pas entsteht: ein Abbruch laesst
+# keinen halben Runner im Arbeitsverzeichnis.
+adapt "$WORK" "${SRCS[@]}" || exit 2
+CLS=()
+PROCS=()
+total=0
 for k in "${!SRCS[@]}"; do
-  read -r fixtures bad tests <<< "${STATS[$k]}"
-  if [ "$fixtures" != "1" ] || [ "$bad" != "0" ]; then
-    echo "$(basename "${SRCS[$k]}" .pas): $fixtures Fixture(s) oder [Setup]/[TearDown]/[TestCase] - der Pruefstand-Runner kann nur EINE Fixture mit einfachen [Test]-Methoden" >&2
+  t="${SRCS[$k]##*/}"
+  t="${t%.pas}"
+  fpc_fixture_info "${SRCS[$k]}" "$WORK/$t.pas" || exit 2
+  # Abgleich: jede [Test]-Methode muss als '    procedure Name;' erkannt
+  # sein, sonst fehlte ihr Run()-Aufruf und der Lauf meldete trotzdem gruen.
+  if [ -z "$FPC_CLS" ] || [ "$FPC_EXPECTED" != "$FPC_GOT" ]; then
+    echo "$t: Fixture-Klasse '${FPC_CLS:-?}', [Test]-Attribute $FPC_EXPECTED, erkannte Testmethoden $FPC_GOT - Abbruch" >&2
     exit 2
   fi
-  EXPECTED+=("$tests")
+  CLS[$k]="$FPC_CLS"
+  PROCS[$k]="$FPC_PROCS"
+  total=$((total + FPC_GOT))
 done
-adapt "$WORK" "${SRCS[@]}" || exit 2
-COPIES=()
-for src in "${SRCS[@]}"; do COPIES+=("$WORK/${src##*/}"); done
-
-# Je angepasster Testunit die Fixture-Klasse ('C name') und die Methoden
-# '    procedure Name;' ('P name'), eingeleitet von 'F datei'.
-declare -A CLS PROCS
-current=""
-while read -r kind name; do
-  case "$kind" in
-    F) current="$name" ;;
-    C) CLS[$current]="$name" ;;
-    P) PROCS[$current]="${PROCS[$current]:-} $name" ;;
-  esac
-done < <(awk '
-  FNR == 1 { f = FILENAME; sub(/^.*[\/\\]/, "", f); sub(/\.pas$/, "", f); print "F", f; c = 0 }
-  !c && /^  T[A-Za-z0-9_]+ = class$/ { print "C", $1; c = 1 }
-  /^    procedure [A-Za-z0-9_]+;/ { p = $2; sub(/;.*$/, "", p); print "P", p }' \
-  "${COPIES[@]}")
 
 # --- 4) Runner erzeugen ------------------------------------------------------
-# Laeuft in der aktuellen Shell (Gruppe, keine Subshell): ein exit hier
-# beendet das Skript, Meldungen gehen deshalb nach stderr; total zaehlt die
-# [Test]-Attribute aller Testunits fuer den Abgleich mit dem Lauf.
-total=0
+# total zaehlt die [Test]-Attribute aller Testunits fuer den Abgleich mit
+# dem Lauf. Ein Test ohne Assert ist rot (FPC_RUNNER_NOASSERT_FAILS, Review
+# R6-09).
 {
-  printf 'program runner;\n\nuses\n  SysUtils, DUnitX.TestFramework, uRdxText'
-  for t in "$@"; do printf ',\n  %s' "$t"; done
-  printf ';\n\n'
-  cat <<'PAS'
-type
-  TTestProc = procedure of object;
-
-var
-  Passed, Failed : Integer;
-
-// Ein Test ohne Assert ist rot (AssertCalls zaehlt der Stub
-// DUnitX.TestFramework) - wie TestInsight und reDelphix.Test.
-procedure Run(const AName: string; AProc: TTestProc);
-begin
-  AssertCalls := 0;
-  try
-    AProc();
-    if AssertCalls > 0 then
-      Inc(Passed)
-    else
-    begin
-      Inc(Failed);
-      Writeln('FAIL ', AName, ': kein Assert (FailsOnNoAsserts)');
-    end;
-  except
-    on E: ETestPass do Inc(Passed);
-    on E: Exception do
-    begin
-      Inc(Failed);
-      Writeln('FAIL ', AName, ': ', E.ClassName, ': ', E.Message);
-    end;
-  end;
-end;
-
-PAS
+  FPC_RUNNER_NOASSERT_FAILS=1 fpc_runner_head uRdxText "$@"
   for k in "${!SRCS[@]}"; do
     t="${SRCS[$k]##*/}"
-    t="${t%.pas}"
-    cls="${CLS[$t]:-}"
-    procs="${PROCS[$t]:-}"
-    # Abgleich: jede [Test]-Methode muss als '    procedure Name;' erkannt
-    # sein, sonst fehlte ihr Run()-Aufruf und der Lauf meldete trotzdem gruen.
-    got=0
-    for p in $procs; do got=$((got + 1)); done
-    if [ -z "$cls" ] || [ "${EXPECTED[$k]}" != "$got" ]; then
-      echo "$t: Fixture-Klasse '${cls:-?}', [Test]-Attribute ${EXPECTED[$k]}, erkannte Testmethoden $got - Abbruch" >&2
-      exit 2
-    fi
-    total=$((total + got))
-    printf 'procedure RunSuite%d;\nvar\n  T : %s;\nbegin\n  T := %s.Create;\n  try\n' "$((k + 1))" "$cls" "$cls"
-    for p in $procs; do
-      printf "    Run('%s.%s', T.%s);\n" "$t" "$p" "$p"
-    done
-    printf '  finally\n    T.Free;\n  end;\nend;\n\n'
+    # shellcheck disable=SC2086 # PROCS: ein Name je Zeile
+    fpc_runner_suite "$((k + 1))" "${t%.pas}" "${CLS[$k]}" ${PROCS[$k]}
   done
-  printf 'begin\n  Passed := 0;\n  Failed := 0;\n'
   # Die reDelphix-Texte deutsch wie in reDelphix.Test.dpr: die Erwartungen
   # der Tests sind deutsch, und redelphix.ini bzw. %APPDATA% bleiben aus
   # dem Lauf heraus (uRdxText liest mit Override keine ini).
-  printf "  SetRdxLanguageOverride('de');\n"
-  for k in "${!SRCS[@]}"; do printf '  RunSuite%d;\n' "$((k + 1))"; done
-  printf "  Writeln('PASSED ', Passed, '  FAILED ', Failed);\n  if Failed > 0 then Halt(1);\nend.\n"
+  fpc_runner_main "${#SRCS[@]}" "SetRdxLanguageOverride('de');"
 } > "$WORK/runner.pas"
 
 # --- 5) bauen und laufen lassen ----------------------------------------------
-# FPC schreibt erst in eine Datei: der Exit-Code zaehlt (ein Pipe-Ende
-# verdeckte ihn), angezeigt werden die ersten 60 Zeilen ohne Kopfzeilen.
-cd "$WORK" || exit 2
-"$FPC" -Mdelphiunicode -Sh -gl -vew -FEout -FUout runner.pas > fpc.log 2>&1
-frc=$?
-tr -d '\r' < fpc.log \
-  | grep -vE '^(Free Pascal|Copyright|Target OS|Compiling|Linking|[0-9]+ lines compiled)' | head -60
-if [ $frc -ne 0 ] || [ ! -f "$OUT/runner.exe" ]; then
-  echo "KEIN runner.exe - Bau gescheitert (FPC-Exit $frc)"
-  exit 1
-fi
+# fpc_build: der FPC-Exit zaehlt (ein Pipe-Ende verdeckte ihn), angezeigt
+# werden die ersten 60 Zeilen ohne Kopfzeilen.
+fpc_build "$WORK" "" || exit 1
 # Der Runner laeuft im Skriptverzeichnis wie bis Charge FF: Tests suchen
 # Daten des Checkouts vom Arbeitsverzeichnis des Prozesses aus aufwaerts
 # (uTestRdxRecipes: data\unitscopes.txt); geschrieben wird dort nichts,
 # Tests schreiben nach TEMP.
-( cd "$HERE" && "$OUT/runner.exe" ) > "$WORK/run.log" 2>&1
-rc=$?
-tr -d '\r' < "$WORK/run.log"
-echo "runner exit=$rc"
-# Abgleich mit den [Test]-Attributen: ein fremdes oder abgebrochenes
-# Ergebnis (anderer runner.exe, Absturz vor der Zusammenfassung) ist nie
-# gruen (Review R6-02).
-summary="$(tr -d '\r' < "$WORK/run.log" | grep -E '^PASSED [0-9]+  FAILED [0-9]+$' | tail -1)"
-# Jeder Exit des Runners ungleich 0 wird 1 (Vertrag im Kopf: 0/1/2): ein
-# Absturz endet sonst mit FPCs Laufzeitfehler-Code (216 Zugriffsverletzung,
-# 217 unbehandelte Ausnahme), und ein Aufrufer, der 1 = rot von 2 =
-# Aufruffehler trennt, ordnete den Lauf falsch ein (Review Woche
-# 2026-10-21, G10-21). Der Code selbst steht oben in 'runner exit='.
-if [ -z "$summary" ]; then
-  echo "Lauf ohne Zusammenfassung 'PASSED n  FAILED m' - abgebrochen?" >&2
-  exit 1
-fi
-read -r _ passed _ failed <<< "$summary"
-if [ $((passed + failed)) -ne "$total" ]; then
-  echo "Der Lauf zaehlt $((passed + failed)) Tests, die Testunits tragen $total [Test]-Attribute - das Ergebnis gehoert nicht zu diesem Aufruf" >&2
-  exit 1
-fi
-[ $rc -ne 0 ] && exit 1
+# fpc_run_check: ein fremdes oder abgebrochenes Ergebnis (anderer
+# runner.exe, Absturz vor der Zusammenfassung) ist nie gruen (Review
+# R6-02), und jeder Exit des Runners ungleich 0 wird 1 (Vertrag im Kopf:
+# 0/1/2) - ein Absturz endet sonst mit FPCs Laufzeitfehler-Code (216
+# Zugriffsverletzung, 217 unbehandelte Ausnahme), und ein Aufrufer, der 1 =
+# rot von 2 = Aufruffehler trennt, ordnete den Lauf falsch ein (Review Woche
+# 2026-10-21, G10-21). Der Code selbst steht in 'runner exit='.
+cd "$HERE" || exit 2
+fpc_run_check "$OUT/runner.exe" "$WORK/run.log" "$total" \
+  "die Testunits tragen $total [Test]-Attribute - das Ergebnis gehoert nicht zu diesem Aufruf" rc \
+  || exit 1
 exit 0
