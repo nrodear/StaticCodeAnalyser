@@ -34,6 +34,7 @@ source\uRdxProvider.pas           je Fund die Aktionen bauen (Anker/fixMode aus 
 source\uRdxRecipeRunner.pas       Rezept-Laeufer auf TSourcePlaces: Fund -> Beschreibung -> Ersetzung fuer SCA044 (Format), SCA003 (SQL-Vorlage) und die uses-Klauseln (PlanUses, QualifyUses, ClausesOf); dazu die geteilten Ergebnistypen (TRdxFixOutcome) und der Aktionsring des Anbieters; ohne ToolsAPI, testbar
 source\uRdxFixRunner.pas          die Ruempfe der einfachen Hilfen, die den Quellstellen-Dienst brauchen (TRdxFixRunner: SCA075/SCA085/SCA126/SCA074/SCA087/SCA139/SCA066/SCA072/SCA084/SCA007/SCA168/SCA101/SCA099), und die Bausteine der Tabelle (MapFix, CastFreeFix, EmptyRaiseFix, AppendUses, CondAssignReason, SelfAssignReason) - bis Charge B2S-b in uRdxRecipeRunner (Review R6-12); ohne ToolsAPI, nur Delphi; nur uRdxFixTable ruft sie
 source\uRdxFixTable.pas           Tabelle der einfachen Hilfen: je Fundart Planer, Hinweis, Kennzeichnung (E2), zweiter Eintrag, Menuetext (Charge R8); EIN Geruest fuer die Planer mit Plan-Record (TRdxFixFrame, generisch, Charge H5c); ohne ToolsAPI, nur Delphi
+source\uRdx*Fix.pas               die einfachen Hilfen der Chargen Q und R, je Hilfe eine Unit mit Planer und Adapter (TRdxFixPlanner, Zeile in FIX_ROWS): uRdxHttpsFix SCA115, uRdxParensFix SCA094, uRdxAttrGapFix SCA183, uRdxTwiceInheritedFix SCA093, uRdxNativeIntFix SCA161, uRdxEmptyFinallyFix SCA083, uRdxForRangeFix SCA046, uRdxTabsFix SCA061, uRdxTrailingBlanksFix SCA063, uRdxKeywordCaseFix SCA064, uRdxEmptyExceptFix SCA002, uRdxEmptyOnHandlerFix SCA159, uRdxEmptyBlockFix SCA077, uRdxNoSonarFix SCA065, uRdxTrailingCommaFix SCA068, uRdxGroupedDeclFix SCA076, uRdxIgnoreReasonFix SCA179, uRdxAttrDuplicateFix SCA180, uRdxCategoryArgFix SCA181, uRdxGotoExitFix SCA060 (tools\gen-quickfix-doc.py liest sie per Namensmuster)
 source\uRdxRecipes.pas            reine Textlogik: Literal-Codec, Format() nach der Kompilat-Regel, Query-Objekt eines SQL-Ziels, uses-Schreibweise, Rahmenwerk
 source\uRdxScopeTable.pas         Kurzname -> qualifizierte Unit (Compiler-Reihenfolge der Scope-Liste); Index der Projekt-Units TRdxProjectUnits (Gegenprobe, Netzpfade ungelesen - uRdxPaths)
 source\uRdxSimpleFixes.pas        Quick-Fixes SCA066/SCA072/SCA074/SCA075/SCA084/SCA085/SCA087/SCA126/SCA139 (reine Textlogik)
@@ -63,7 +64,7 @@ source\uRdxText.pas               Sprache der Texte: _() in die reDelphix-Sprach
 data\unitscopes.txt               die Scope-Tabelle (erzeugt), als RCDATA eingelinkt (data\unitscopes.rc)
 data\quickfixes-doc.json          Titel, Wirkung, Sperren und Beispiele je Quick-Fix (von Hand gepflegt) - Quelle fuer QUICKFIXES.md
 QUICKFIXES.md                     alle Quick-Fixes mit Menuetext en/de/fr, Kennzeichnung, Sperren, Beispiel - ERZEUGT von tools\gen-quickfix-doc.py (Repo-Wurzel)
-tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 55 Testunits und zwei Hilfs-Units (siehe "Pruefen"); Konfigurationen Debug/Release (TestInsight) und CI (Konsole, Exit-Code)
+tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt: Testunits und die zwei Hilfs-Units uTestRdxDetectorKit/uTestRdxTextKit, je Unit mit Zweck im Kopf der .dpr (siehe "Pruefen"); Konfigurationen Debug/Release (TestInsight) und CI (Konsole, Exit-Code)
 tools\gen_unitscopes.py           erzeugt data\unitscopes.txt aus der Delphi-Installation
 tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik (dazu die Hilfs-Unit tests\uTestRdxTextKit) unter FPC 3.2.2 in einem eigenen Arbeitsverzeichnis je Lauf und fuehrt Tests aus (Sprache 'de', Stub uLocalization.pas liest die echten i18n\*.po); neben dem Skript nur Grabsteine der Kopien (siehe "Pruefen")
 tools\fpc-pruefstand\selftest.sh  Selbsttest von build.sh (zwei Laeufe zugleich, FPC-Exit, Testzahl, Registrierung, Test ohne Assert, PRUEFSTAND_DIR, Grabsteine, TMPDIR mit Backslashes, Hilfs-Unit)
@@ -453,7 +454,9 @@ deutsche Endung wie `-ieren`, `-iert`, `-heit` oder ein grossgeschriebenes
 Nomen auf `-ung`, ein Umlaut, ein umschriebener Umlaut in einer Folge, die
 es englisch nicht gibt, oder `%d` mit grossgeschriebenem Nomen - auch ein
 einzelnes Wort; verkettete Literale zaehlen als ein Text), dazu deutsche
-msgids, qualifizierte Aufrufe `X._()`, `_(KONSTANTE)` mit einer Konstante,
+msgids, qualifizierte Aufrufe `X._()` (ausser `uRdxText._()`: so ruft
+`uRdxText.pas` wegen E2251 sein eigenes `_`, der Extraktor liest es wie
+`_()`, und das Gate prueft es ebenso), `_(KONSTANTE)` mit einer Konstante,
 die in der Unit keine reine Literal-Kette ist, und dynamische Argumente
 (`_(AWhat)`, `_(Format(..))`, `_('a ' + X)` - der Extraktor uebergeht sie
 still). Die Heuristik kennt Woerter und Endungen, keine Sprache: still
@@ -562,6 +565,13 @@ Projekt scannen. Gluehbirne oder Editor-Kontextmenue auf der Fundzeile:
 | SCA165 UnusedSuppression | wirkungsloser `// noinspection`-Marker | Marker entfernen - nur bei genau einer Art und nur, wenn kein `//`-Kommentar vor der Code-Zeile sein Ziel ist, auf dem seine Art gemeldet werden kann; Mehrarten- und `All`-Marker stehen gesperrt da (unter diesem Teilprofil wirken sie vielleicht nur scheinbar nicht), ebenso ein TodoComment-/CommentedOutCode-Marker ueber einer TODO-/Kommentarzeile (SCA165 prueft nur die Code-Zeile); ein Marker einer Code-Art mit Warum-Kommentar darunter wird entfernt |
 | SCA142 UnsortedUses, SCA007 UnusedUses | Fund auf einer uses-Zeile | uses: Eintraege qualifizieren (Winapi.Windows, System.SysUtils ...) - nur im Kontextmenue, nicht in der Gluehbirne: es behebt den Fund nicht |
 | jede Regel ausser SCA165 | beliebig | Hier / in dieser Datei unterdruecken; Stelle zeigen (Kontextmenue) |
+
+Die einfachen Hilfen der Chargen Q und R (SCA002, SCA046, SCA060, SCA061,
+SCA063, SCA064, SCA065, SCA068, SCA076, SCA077, SCA083, SCA093, SCA094,
+SCA115, SCA159, SCA161, SCA179, SCA180, SCA181, SCA183) stehen im Profil,
+aber nicht in dieser Tabelle: Fund und Hilfe je Regel mit Beispiel nennt
+`QUICKFIXES.md`. Dass jede Regel mit Hilfe im Profil steht, prueft
+`python tools\gen-quickfix-doc.py --check` (Konsistenz).
 
 SCA007 laeuft nur mit eingeschaltetem uses-Check (Optionen bzw.
 `[Detectors] UsesCheck=1`); SCA142 reicht fuer die uses-Hilfe. Den
@@ -1058,6 +1068,23 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   Trenner-Formen 2/2 in der Nachbesserung FF; das Netzlaufwerk ueber die Huellen
   `RemoteDriveReason`/`NetworkPathReason` woertlich unter FPC, vier Mutanten der
   Huellen je rot).
+* Die einfachen Hilfen der Chargen Q und R - je Planer-Unit `uRdx<Name>Fix`
+  eine Testunit `uTestRdx<Name>Fix`: der Planer auf Text (mit Gegenproben
+  Kommentar, String, verschobene Zeile), der Adapter in der Form der Tabelle
+  und der Rundlauf mit dem ECHTEN Detektor samt Katalog-Beispiel; Einzelheiten
+  im Kopf jeder Unit. `uTestRdxHttpsFix` (SCA115, 19 Tests), `uTestRdxParensFix`
+  (SCA094, 14), `uTestRdxAttrGapFix` (SCA183, 38), `uTestRdxTwiceInheritedFix`
+  (SCA093, 19), `uTestRdxNativeIntFix` (SCA161, 17), `uTestRdxEmptyFinallyFix`
+  (SCA083, 18), `uTestRdxForRangeFix` (SCA046, 18), `uTestRdxTabsFix` (SCA061,
+  15), `uTestRdxTrailingBlanksFix` (SCA063, 17), `uTestRdxKeywordCaseFix`
+  (SCA064, 16), `uTestRdxEmptyExceptFix` (SCA002, 18), `uTestRdxEmptyOnHandlerFix`
+  (SCA159, 19), `uTestRdxEmptyBlockFix` (SCA077, 23), `uTestRdxNoSonarFix`
+  (SCA065, 20), `uTestRdxTrailingCommaFix` (SCA068, 16), `uTestRdxGroupedDeclFix`
+  (SCA076, 20), `uTestRdxIgnoreReasonFix` (SCA179, 23), `uTestRdxAttrDuplicateFix`
+  (SCA180, 30), `uTestRdxCategoryArgFix` (SCA181, 20), `uTestRdxGotoExitFix`
+  (SCA060, 28) - zusammen 408 Tests (gezaehlt an den `[Test]`-Attributen), nur in
+  reDelphix.Test: die Planer-Units ziehen fuer ihren Adapter `uEngineApi` und
+  `uRdxFixRunner` herein und stehen deshalb nicht im FPC-Pruefstand.
 
 Ohne Delphi (FPC 3.2.2):
 

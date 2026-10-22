@@ -175,12 +175,14 @@ IOTAEditWriter nach -, nicht nur Offsets.
 | `uTestVnpRefuse` | 9 | begin..end fuer den Zweig, alle Ablehnungen (case-Zweig, Sprungmarke, on-Handler, Zeilenanfang, schon benannt - `var X := 42;` wie `const X = 42;`, Konstanten, Deklarationszeilen, Zeile darueber) |
 | `uTestVnpGuards` | 18 | Schutzregeln aus dem Korpus-A/B und dem Review vom 2026-10-13: Routinen-Koepfe und Eigenschaften (auch Fortsetzungen `message`/`dispid`/`external`/`stdcall` auf der Folgezeile; `Register<Integer>(42)` und `Register; X := 42` sind Anweisungen), Typ-/Sprungmarken-/asm-/exports-/Attribut-Zeilen, typisierte Konstanten, generische Deklarationen, case-Marken hinter `for`, on-Handler ohne Variable, zweite `var`/`const` hinter einer Anweisung, Zeilen, die einen Ausdruck oder eine Liste fortsetzen, Schluesselwoerter hinter Kommentaren, `initialization` darueber, `else` des eigenen `if`, offene Bloecke, Bedingungsausdruck in der Zeile darueber, Direktiven zwischen Zweig und Anweisung, mehrzeilige Strings, Ende des Sync-Blocks |
 | `uTestVnpEdits` | 20 | C1h Ende zu Ende: Demo-Faelle 1-6 (CR LF, LF, BOM, Umlaute und Euro VOR dem Literal), Text-Schnappschuss (Zeilenende je Zeile, BOM in Zeile 1), Zeile darueber, Ziel am Caret, Writer-Vertrag |
-| `uTestVnpContext` | 17 | Zusammenhang ueber Zeilen in `TargetAt` (Review 2026-10-13, Gegen-Review 2026-10-14): mehrzeilige Strings mit fuenf Quotes und `''' + '''`, Kommentar- und String-Zustand in einem Lauf, asm-Block (auch Sprungmarke `@end:`), initialization-Abschnitt, FPC-Weiche, Direktive auch ohne Block und auf der Zeile darueber, Zeile darueber ab ihrem Kommentar-Zustand, `*)` in Spalte 1, Kommentargrenzen eines begin..end, Bedingungsausdruck mit Armen auf eigenen Zeilen, Zeilenenden je Zeile, Vorbedingung von `IntroduceEdits` |
+| `uTestVnpContext` | 18 | Zusammenhang ueber Zeilen in `TargetAt` (Review 2026-10-13, Gegen-Review 2026-10-14, Review Woche 2026-10-21): mehrzeilige Strings mit fuenf Quotes und `''' + '''` (Einrueckung des Blocks hinter einem Schliesser), Kommentar- und String-Zustand in einem Lauf, asm-Block (auch Sprungmarke `@end:`), initialization-Abschnitt, FPC-Weiche, Direktive auch ohne Block, auf der Zeile darueber und am Anfang der Anweisungszeile, Zeile darueber ab ihrem Kommentar-Zustand, `*)` in Spalte 1, Kommentargrenzen eines begin..end, Bedingungsausdruck mit Armen auf eigenen Zeilen, Zeilenenden je Zeile, Vorbedingung von `IntroduceEdits` |
 | `uTestVnpTemplate` | 20 | D1: Template-Code, Template-XML (wie `ifnil.xml`), eigenes Template erkennen, Anweisung loeschen/zurueckschreiben, Modell der Template-Expansion (Annahme D-M3 - in der IDE zu bestaetigen) |
 
 Ohne IDE: `bash VarNameProject/tools/fpc-pruefstand/build.sh` (alle
 `tests/uTestVnp*.pas`; `WORK=<ordner>` fuer parallele Laeufe). Stand
-2026-10-14: 92 von 92 gruen (2026-10-11: 73 von 73). Die Erwartungen haben
+2026-10-14: 92 von 92 gruen (2026-10-11: 73 von 73); seither 100 Tests
+(Tabelle oben, gezaehlt an den `[Test]`-Attributen), der naechste Lauf
+steht aus. Die Erwartungen haben
 unabhaengige Agenten von Hand aus dem Vertrag abgeleitet
 (Interface-Kommentare, README, Demo-Dateien); Gegenpruefer haben mit
 Mutationstests nachgesehen, dass die Tests Fehler auch finden. Dazu lief ein
@@ -433,7 +435,7 @@ anlegt, sind ignoriert.
   2 Templates) und sichtbar: sind die Stellen umrandet?
 - **M2** Umrandet die Variante GENAU die `MagicNr01`-Stellen (nicht
   daneben, nicht weitere Bezeichner)?
-- **M3** Steht der Caret auf dem Namen in der `var`-Zeile? Ueberschreibt
+- **M3** Steht der Caret auf dem Namen in der `const`-Zeile? Ueberschreibt
   Tippen den ganzen Namen (vorausgewaehlt) oder fuegt es ein?
 - **M4** Aendern sich beim Tippen alle Stellen mit?
 - **M5** Tasten: was tun Enter, Tab, Umschalt+Tab, Esc? Bleibt der neue
@@ -478,9 +480,10 @@ abgrenzen kann, lehnt er ab (lieber nichts tun als falschen Code schreiben).
   ueber die Zeile; die Zeile darueber muss eine Anweisung beenden (`;`,
   `begin`, `try` ...). Beginnt sie in einem Kommentar, zaehlt nur ihr Code
   hinter dessen Ende (`{ Bsp:` / `Foo; // } if A then` ist ein Zweig).
-  Steht auf der Zeile darueber oder zwischen ihr und der Anweisung eine
-  Direktive (`{$IFDEF}`, auch `Foo; {$ENDIF}` oder `{$IFDEF A} if B then
-  {$ELSE} Foo; {$ENDIF}`), Abbruch - mit und ohne Block.
+  Steht auf der Zeile darueber, zwischen ihr und der Anweisung oder auf
+  der Anweisungszeile selbst eine Direktive (`{$IFDEF}`, auch `Foo;
+  {$ENDIF}`, `{$IFDEF A} if B then {$ELSE} Foo; {$ENDIF}` oder `{$ENDIF}
+  X := 42;`), Abbruch - mit und ohne Block.
 - Eingefuegte Zeilen enden wie die Zeile, vor die sie kommen (`begin` wie
   die Zweigzeile, Deklaration und `end;` wie die Anweisung); eine letzte
   Zeile ohne Zeilenende bekommt das erste Zeilenende der Datei, eine Datei

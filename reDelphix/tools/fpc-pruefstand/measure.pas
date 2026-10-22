@@ -8,8 +8,13 @@ program measure;
 //
 // ABGELOEST durch reDelphix/tools/probe/RdxCorpusProbe (echter Parser und
 // Laeufer); bleibt als Mess-Historie. Uebersetzbar gegen die kopierten Units
-// eines build.sh-Laufs mit PRUEFSTAND_DIR=<dir>:
-// fpc -Mdelphiunicode -Fu<dir> measure.pas.
+// eines build.sh-Laufs mit PRUEFSTAND_DIR=<dir> - aber NICHT hier im
+// Skriptverzeichnis: build.sh legt hier je kopierter Unit einen Grabstein
+// mit {$FATAL} ab (uRefactorInfo.pas ...), und FPC sucht Units zuerst im
+// Verzeichnis der Hauptquelle, erst dann in -Fu (Review Woche 2026-10-21,
+// G10-22; aus der FPC-Doku, nicht per Lauf belegt). Deshalb measure.pas
+// erst nach <dir> kopieren und dort uebersetzen:
+//   cp measure.pas <dir>/ && cd <dir> && fpc -Mdelphiunicode measure.pas
 
 uses
   SysUtils, Classes, uRefactorInfo, uRefactorInfoBuilder, uRefactorConcat;

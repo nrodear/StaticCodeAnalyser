@@ -2,8 +2,9 @@ unit uVnpIntroduce;
 
 // VarNameProject - Code-Aktion "Lokale Konstante einfuehren" (bis E26
 // "Lokale Variable einfuehren": eine Zahl wird zur Inline-Konstante, Nico
-// 2026-10-13 - sie behaelt Faltung, Ueberladungswahl und die
-// vorzeichenlose Rechnung des Literals, siehe uVnpPlan), Ablauf wie bei
+// 2026-10-13 - dass sie Faltung, Ueberladungswahl und die vorzeichenlose
+// Rechnung des Literals behaelt, ist die Praemisse von E26, ihr Beleg P6
+// ist noch nicht gebaut, siehe uVnpPlan), Ablauf wie bei
 // ReSharper "Introduce Variable" (Nico 2026-10-11, E17):
 //   1. Caret auf einem Zahl-Literal, z. B. 'Result := Value * 42 + 42;'.
 //   2. Darueber entsteht 'const MagicNr01 = 42;', die gleichen Literale

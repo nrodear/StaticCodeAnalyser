@@ -42,6 +42,9 @@ NICHT in die Liste:
                             Regel heisst 'Klasse oder Interface');
   * Aliasse '= TFoo',     - ein Alias beweist nichts ueber das Ziel; die
     '= type TFoo'           Hilfe loest Aliasse der EIGENEN Unit selbst auf.
+Gross-/Kleinschreibung ist egal wie in Pascal ('= Interface', '= Class',
+'Packed Class' zaehlen mit - ohne das fehlten rund 100 Deklarationen, etwa
+aus IPPeerAPI, ToolsAPI, IBX; Review Woche 2026-10-21, G10-08).
 Kommentare und Strings sind sicher entfernt; $IFDEF-Zweige werden NICHT
 ausgewertet - jeder Zweig zaehlt (Vereinigung).
 
@@ -87,10 +90,11 @@ CONST_NAME = 'RDX_RTL_TYPES'
 
 # 'TName = class ...' / 'TName<T> = interface ...'; die Generik-Klammer
 # traegt weder '=' noch ';' noch Klammern (haelt den Lauf in der Zeile).
+# re.I: Pascal unterscheidet nicht, die Art geht klein an classify().
 DECL = re.compile(
     r'(?<![\w.])([A-Za-z_]\w*)\s*(?:<[^=;()]{0,200}?>)?\s*=\s*(?:packed\s+)?'
     r'(class\b|interface\b|dispinterface\b|record\b|object\b|procedure\b|'
-    r'function\b|reference\b|type\b|\^)\s*([A-Za-z_]\w*)?')
+    r'function\b|reference\b|type\b|\^)\s*([A-Za-z_]\w*)?', re.I)
 # Woerter, die nie ein Klassenname sein koennen - als Gegenprobe
 # (TYPE_KIND_WORDS und die Prozedurtyp-Woerter aus uRdxSimpleFixes).
 NEVER = {'class', 'record', 'object', 'interface', 'dispinterface',
@@ -113,7 +117,8 @@ def code_only(text):
 
 
 def read_text(path):
-    raw = io.open(path, 'rb').read()
+    with io.open(path, 'rb') as f:
+        raw = f.read()
     try:
         return raw.decode('utf-8-sig')
     except UnicodeDecodeError:
@@ -158,7 +163,7 @@ def collect(label, base, names, counts, per_folder):
             folder = rel.split(os.sep)[0]
             code = code_only(read_text(os.path.join(dp, f)))
             for m in DECL.finditer(code):
-                art = classify(m.group(2), (m.group(3) or '').lower())
+                art = classify(m.group(2).lower(), (m.group(3) or '').lower())
                 counts[(label, art)] = counts.get((label, art), 0) + 1
                 if art not in ('class', 'interface'):
                     continue
@@ -228,7 +233,8 @@ def render(names, sources, counts, per_folder, stand):
     w('// Regel: ein Name steht hier, wenn er dort als class, class(..), class')
     w('//   abstract/sealed, class; (Vorwaertsdeklaration), interface,')
     w('//   interface(..), dispinterface deklariert ist - generisch ohne')
-    w('//   Parameter (TList<T> -> tlist), alles klein, sortiert (Binaersuche).')
+    w('//   Parameter (TList<T> -> tlist), alles klein, sortiert (Binaersuche);')
+    w("//   Gross-/Kleinschreibung der Quelle egal ('= Interface', 'Packed Class').")
     w('//   NICHT: class helper, class of (Metaklassen), Records, Prozedurtypen')
     w('//   (procedure/function/reference to), Zeigertypen (^T), Aliasse')
     w('//   (= TFoo, = type TFoo) - keiner davon beweist "Klasse oder Interface".')
@@ -273,7 +279,8 @@ STAND_RE = re.compile(r'^// Stand: (\d{4}-\d{2}-\d{2}) - ', re.M)
 def existing():
     if not os.path.isfile(DST):
         return None
-    return io.open(DST, 'rb').read().decode('ascii', errors='replace')
+    with io.open(DST, 'rb') as f:
+        return f.read().decode('ascii', errors='replace')
 
 
 def list_part(text):
@@ -310,6 +317,10 @@ def main(argv):
     i = 1
     while i < len(argv):
         a = argv[i]
+        if a in ('--date', '--source') and i + 1 >= len(argv):
+            raise SystemExit('%s braucht einen Wert (%s)' % (
+                a, '--date JJJJ-MM-TT' if a == '--date'
+                else '--source <Stand>=<Pfad>'))
         if a == '--date':
             i += 1
             date = argv[i]
@@ -362,7 +373,8 @@ def main(argv):
     if old == text:
         print('unveraendert: ' + os.path.relpath(DST, ROOT))
         return 0
-    io.open(DST, 'wb').write(text.encode('ascii'))
+    with io.open(DST, 'wb') as f:
+        f.write(text.encode('ascii'))
     print('geschrieben: ' + os.path.relpath(DST, ROOT))
     return 0
 
