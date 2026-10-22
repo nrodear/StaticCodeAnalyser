@@ -291,27 +291,26 @@ begin
     Result := OldSymbolIn(DirectiveArgs(AMap, ALine, ACol), AFloor);
 end;
 
+// Der Lauf ueber alle Direktiven: NextDirective (uRdxCodeMap; bis zur
+// Folgewelle des Wochen-Reviews, G08-01, hier ausgeschrieben).
 function OldCompilerTrace(AMap: TRdxCodeMap; const AFloor: TRdxCompilerFloor;
   out ALine: Integer): string;
 var
   Li, Co : Integer;
-  L      : string;
 begin
   Result := '';
   ALine := 0;
-  for Li := 1 to AMap.LineCount do
+  Li := 1;
+  Co := 1;
+  while NextDirective(AMap, Li, Co) do
   begin
-    L := AMap.Raw(Li);
-    for Co := 1 to Length(L) do
-      if CharInSet(L[Co], ['{', '(']) and OpensDirective(AMap, Li, Co) then
-      begin
-        Result := OldTraceAt(AMap, Li, Co, AFloor);
-        if Result <> '' then
-        begin
-          ALine := Li;
-          Exit;
-        end;
-      end;
+    Result := OldTraceAt(AMap, Li, Co, AFloor);
+    if Result <> '' then
+    begin
+      ALine := Li;
+      Exit;
+    end;
+    Inc(Co);
   end;
 end;
 

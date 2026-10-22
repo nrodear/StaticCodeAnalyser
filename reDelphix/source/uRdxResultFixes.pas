@@ -1059,21 +1059,20 @@ begin
     Result := Format('{$X-} in Zeile %d - dort gibt es kein Result', [ALine]);
 end;
 
+// Der Lauf ueber alle Direktiven: NextDirective (uRdxCodeMap; bis zur
+// Folgewelle des Wochen-Reviews, G08-01, hier ausgeschrieben).
 function ResultModeReason(AMap: TRdxCodeMap): string;
 var
   Li, Co : Integer;
-  L      : string;
 begin
   Result := '';
-  for Li := 1 to AMap.LineCount do
+  Li := 1;
+  Co := 1;
+  while NextDirective(AMap, Li, Co) do
   begin
-    L := AMap.Raw(Li);
-    for Co := 1 to Length(L) do
-      if CharInSet(L[Co], ['{', '(']) and OpensDirective(AMap, Li, Co) then
-      begin
-        Result := DirectiveResultReason(AMap, Li, Co);
-        if Result <> '' then Exit;
-      end;
+    Result := DirectiveResultReason(AMap, Li, Co);
+    if Result <> '' then Exit;
+    Inc(Co);
   end;
 end;
 

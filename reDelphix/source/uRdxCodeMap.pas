@@ -263,6 +263,17 @@ function DirectiveBetween(AMap: TRdxCodeMap; const APrev: TRdxToken;
 // seitdem gleich, der Vorfilter bleibt billig). Bis Charge H3c in
 // uRdxRoutineFixes.
 function OpensDirective(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
+// Die naechste Direktive (OpensDirective) ab (ALine, ACol) einschliesslich,
+// zeilenweise bis zum Dateiende: True mit ALine/ACol auf ihrem '{' bzw. '('
+// - weiter geht es ab ACol + 1; False am Dateiende. Der Lauf ueber alle
+// Direktiven einer Datei:
+//   Li := 1; Co := 1;
+//   while NextDirective(AMap, Li, Co) do begin <Probe an Li, Co>; Inc(Co); end;
+// Bis zur Folgewelle des Wochen-Reviews (G08-01) schrieben ihn
+// uRdxResultFixes.ResultModeReason, uRdxCompilerTraces.OldCompilerTrace und
+// uRdxInheritedFixes.DirectiveLine je aus. Ein Iterator statt einer Probe
+// als Parameter: FPC 3.2 kennt keine anonymen Methoden.
+function NextDirective(AMap: TRdxCodeMap; var ALine, ACol: Integer): Boolean;
 // Das Wort einer Direktive an (ALine, ACol): '{$IFDEF X}' -> 'ifdef'; AArg:
 // dahinter Leerraum oder ein Quote (Dateiname - '{$I x.inc}', nicht
 // '{$I+}'). Bis Charge H3c in uRdxRoutineFixes.
@@ -1089,6 +1100,28 @@ begin
   L := AMap.Raw(ALine);
   Result := (ACol <= Length(L)) and CharInSet(L[ACol], ['{', '('])
     and DirectiveAt(AMap, ALine, ACol);
+end;
+
+// Das Zeichen vorab ('{', '('): billiger als der Aufruf je Spalte.
+function NextDirective(AMap: TRdxCodeMap; var ALine, ACol: Integer): Boolean;
+var
+  L : string;
+begin
+  if ACol < 1 then
+    ACol := 1;
+  while ALine <= AMap.LineCount do
+  begin
+    L := AMap.Raw(ALine);
+    while ACol <= Length(L) do
+    begin
+      if CharInSet(L[ACol], ['{', '(']) and OpensDirective(AMap, ALine, ACol) then
+        Exit(True);
+      Inc(ACol);
+    end;
+    Inc(ALine);
+    ACol := 1;
+  end;
+  Result := False;
 end;
 
 // Die Spalte hinter '{$' bzw. '(*$' der Direktive an ACol.
