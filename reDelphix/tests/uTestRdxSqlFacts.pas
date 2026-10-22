@@ -110,6 +110,17 @@ begin
   C := ConstIn(EntGenUnit(['  Test_Table_SoftDel = ''x'';'], USE_LINE),
     'TEST_TABLE_SOFTDEL', 'FConn.ExecSQL');
   Assert.AreEqual('x', C.Value);
+  // Ein Vergleich in Klammern im Rumpf ist keine Deklaration (Review Woche
+  // G01-04: bis dahin sckNone - '(Name =' galt als Aufzaehlungswert).
+  C := ConstIn(EntGenUnit(['  TEST_TABLE_SOFTDEL = ''entgen_test_softdel'';'],
+    '  if (TEST_TABLE_SOFTDEL = '''') or Check(1, TEST_TABLE_SOFTDEL = ''x'') then'
+    + #13#10 + '    Exit;' + #13#10 + USE_LINE), 'TEST_TABLE_SOFTDEL',
+    'FConn.ExecSQL');
+  Assert.AreEqual('entgen_test_softdel', C.Value, 'Vergleich in Klammern');
+  // Ein Aufzaehlungswert gleichen Namens verwirft den Beweis weiterhin.
+  Assert.IsTrue(ConstIn(EntGenUnit(['  TEST_TABLE_SOFTDEL = ''x'';', 'type',
+    '  TE = (teA = 0, TEST_TABLE_SOFTDEL = (1 shl 2));'], USE_LINE),
+    'TEST_TABLE_SOFTDEL', 'FConn.ExecSQL').Kind = sckNone, 'Aufzaehlung');
 end;
 
 procedure TTestRdxSqlFacts.Const_InterfaceSection_Visible;
@@ -213,6 +224,11 @@ begin
   Assert.IsTrue(FireDacIn(Src, 'FConn', ['FireDAC.Comp.Client']));
   Assert.IsTrue(FireDacIn(Src, 'Self.FConn', ['System.SysUtils',
     'FireDAC.Comp.Client']), 'Self. davor');
+  // 'if (FConn = nil)' ist keine Deklaration (Review Woche G01-04).
+  Src := EntGenUnit(['  X = 1;'], '  if (FConn = nil) then' + #13#10
+    + '    FConn := TFDConnection.Create(nil);' + #13#10 + USE_LINE);
+  Assert.IsTrue(FireDacIn(Src, 'FConn', ['FireDAC.Comp.Client']),
+    'Vergleich in Klammern');
   // Qualifizierter Typ und Liste 'A, B: T'.
   Src := Join(['unit u;', 'interface', 'var', '  C1, FConn: FireDAC.Comp.Client.TFDConnection;',
     'implementation', 'end.']);
@@ -312,9 +328,9 @@ begin
     Assert.AreEqual('entgen_test_softdel', R.Consts[2].Value);
     Assert.IsTrue(R.Consts[3].Kind = sckNone, 'Parameter der Routine');
     Assert.IsTrue(R.Binding = sbFireDacExecSql);
-    // Im with-Block ist kein Name bewiesen.
-    R.Consts := nil;
-    R.Binding := sbByTarget;
+    // Im with-Block ist kein Name bewiesen - auch auf derselben Anfrage:
+    // AddSqlFacts setzt die Fakten des ersten Laufs zurueck (Review Woche
+    // G01-13; bis dahin setzte der Test sie hier von Hand zurueck).
     R.InWith := True;
     AddSqlFacts(Map, R);
     Assert.IsTrue(R.Consts[2].Kind = sckNone, 'with');
