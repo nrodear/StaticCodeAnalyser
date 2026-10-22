@@ -2,9 +2,10 @@ unit uTestRdxFreeTypes;
 
 // Charge FB (Code-Review reDelphix, R2-01/R3-01, missed R2(4)/R3(2); die
 // Nachpruefung: Aliasse der Unit und 'type'): der
-// Textteil der Typ-Sperre von SCA085/SCA139 - TRdxSimpleFixes.
-// DeclaresValueType zaehlt einen Zeigertyp der Unit ('PFoo = ^TFoo') mit:
-// 'P.Free' meint das Ziel (Delphi dereferenziert), FreeAndNil(P) naehme den
+// Textteil der Typ-Sperre von SCA085/SCA139 - TRdxTypeProof.
+// DeclaresNonClassType (bis zur Folgewelle A4 TRdxSimpleFixes.
+// DeclaresValueType, Review Woche G07-20) zaehlt einen Zeigertyp der
+// Unit ('PFoo = ^TFoo') mit: 'P.Free' meint das Ziel (Delphi dereferenziert), FreeAndNil(P) naehme den
 // Zeiger als TObject. Reine Textlogik - laeuft in reDelphix.Test UND im
 // FPC-Pruefstand; gegen den Stand 4358b769 rot (der Zeiger galt als
 // unbekannt). Die Sperren im Laeufer (eigene Free, fremder P-Typ,
@@ -34,11 +35,11 @@ implementation
 
 uses
   System.Classes,
-  uRdxCodeMap, uRdxSimpleFixes,
+  uRdxCodeMap, uRdxTypeProof,
   uTestRdxTextKit;   // Join
 
-// DeclaresValueType(ATypeName) in einer Unit mit den Typen ATypes.
-function ValueTypeIn(const ATypes: array of string;
+// DeclaresNonClassType(ATypeName) in einer Unit mit den Typen ATypes.
+function NonClassTypeIn(const ATypes: array of string;
   const ATypeName: string): Boolean;
 var
   SL  : TStringList;
@@ -50,7 +51,7 @@ begin
     SL.Text := Join(['unit u;', 'interface', 'type']) + #13#10 + Join(ATypes)
       + #13#10 + Join(['implementation', 'end.']);
     Map := TRdxCodeMap.Create(SL);
-    Result := TRdxSimpleFixes.DeclaresValueType(Map, ATypeName);
+    Result := TRdxTypeProof.DeclaresNonClassType(Map, ATypeName);
   finally
     Map.Free;
     SL.Free;
@@ -62,8 +63,8 @@ const
   TYPES: array[0..4] of string = ('  PX509_CRL = ^X509_CRL;',
     '  X509_CRL = object', '  public', '    procedure Free;', '  end;');
 begin
-  Assert.IsTrue(ValueTypeIn(TYPES, 'px509_crl'), 'Zeiger auf object');
-  Assert.IsTrue(ValueTypeIn(TYPES, 'X509_CRL'), 'das object selbst');
+  Assert.IsTrue(NonClassTypeIn(TYPES, 'px509_crl'), 'Zeiger auf object');
+  Assert.IsTrue(NonClassTypeIn(TYPES, 'X509_CRL'), 'das object selbst');
 end;
 
 procedure TTestRdxFreeTypes.PointerAlias_IsNoObject_ClassStays;
@@ -71,12 +72,12 @@ const
   TYPES: array[0..4] of string = ('  PFoo = ^TFoo;', '  PObj = ^TObj;',
     '  TObj = class', '  end;', '  TAlias = TObj;');
 begin
-  Assert.IsTrue(ValueTypeIn(TYPES, 'pfoo'), 'Zeiger auf fremden Typ');
-  Assert.IsTrue(ValueTypeIn(TYPES, 'PObj'), 'Zeiger auf eine Klasse');
-  Assert.IsFalse(ValueTypeIn(TYPES, 'tobj'), 'Klasse');
-  Assert.IsFalse(ValueTypeIn(TYPES, 'talias'), 'Alias auf eine Klasse');
+  Assert.IsTrue(NonClassTypeIn(TYPES, 'pfoo'), 'Zeiger auf fremden Typ');
+  Assert.IsTrue(NonClassTypeIn(TYPES, 'PObj'), 'Zeiger auf eine Klasse');
+  Assert.IsFalse(NonClassTypeIn(TYPES, 'tobj'), 'Klasse');
+  Assert.IsFalse(NonClassTypeIn(TYPES, 'talias'), 'Alias auf eine Klasse');
   // Eine Variable mit Zeigertyp ist keine Typdeklaration.
-  Assert.IsFalse(ValueTypeIn(['  TRec = record', '    P: PFoo;', '  end;'],
+  Assert.IsFalse(NonClassTypeIn(['  TRec = record', '    P: PFoo;', '  end;'],
     'p'), 'Feld');
 end;
 
@@ -88,12 +89,12 @@ const
 begin
   // Gegen den ersten Stand der Charge (3d753de6) rot: DeclaresValueType las
   // nur das erste Wort hinter '=' - 'tb', 'pfoo', 'type'.
-  Assert.IsTrue(ValueTypeIn(TYPES, 'ta'), 'Alias auf einen Record der Unit');
-  Assert.IsTrue(ValueTypeIn(TYPES, 'pmy'), 'Alias auf einen Zeiger der Unit');
-  Assert.IsTrue(ValueTypeIn(TYPES, 'pdist'), 'eigener Zeigertyp (type ^)');
+  Assert.IsTrue(NonClassTypeIn(TYPES, 'ta'), 'Alias auf einen Record der Unit');
+  Assert.IsTrue(NonClassTypeIn(TYPES, 'pmy'), 'Alias auf einen Zeiger der Unit');
+  Assert.IsTrue(NonClassTypeIn(TYPES, 'pdist'), 'eigener Zeigertyp (type ^)');
   // Gegenproben: ein Alias auf eine Klasse - der Unit oder fremd - bleibt.
-  Assert.IsFalse(ValueTypeIn(TYPES, 'town'), 'Alias auf eine Klasse');
-  Assert.IsFalse(ValueTypeIn(['  TMyList = TObjectList;'], 'tmylist'),
+  Assert.IsFalse(NonClassTypeIn(TYPES, 'town'), 'Alias auf eine Klasse');
+  Assert.IsFalse(NonClassTypeIn(['  TMyList = TObjectList;'], 'tmylist'),
     'Alias auf einen fremden Typ');
 end;
 

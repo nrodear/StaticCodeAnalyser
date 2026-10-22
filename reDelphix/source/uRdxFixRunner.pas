@@ -180,6 +180,7 @@ uses
   uRefactorInfo,     // TRefactorSpan (FindUsesEntry)
   uRdxRecipes,       // TRdxRecipes (IsPlainIdent, HasUnit)
   uRdxSimpleFixes,   // Planer der einfachen Hilfen (reine Textlogik)
+  uRdxTypeProof,     // Typbeweis auf dem Text (bis Folgewelle A4 in uRdxSimpleFixes)
   uRdxStructFixes,   // Planer SCA007/SCA168 (uses-Eintrag, case-else)
   uRdxLineFixes,     // Planer SCA123 (CastFreeFix)
   uRdxRaiseFixes,    // Planer SCA020 mit raise (EmptyRaiseFix)
@@ -280,7 +281,7 @@ function VariableCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
   ALine: Integer; const AName: string): string;
 begin
   Result := '';
-  if TRdxSimpleFixes.DeclaresProperty(AMap, AName) then
+  if TRdxTypeProof.DeclaresProperty(AMap, AName) then
     Exit(Format('%s ist in dieser Unit als Property deklariert - FreeAndNil '
       + 'braucht eine Variable', [AName]));
   if TRdxSimpleFixes.WithBefore(AMap, ALine) or APlaces.InWithBlock(ALine) then
@@ -294,7 +295,7 @@ end;
 // Ist ATypeLow nach Delphi-Konvention ein Zeigertyp aus einer anderen
 // Unit? 'P' und dahinter ein Grossbuchstabe, eine Ziffer oder '_' in einer
 // Schreibweise des Quelltexts ('PEVP_PKEY', 'PSSL_CTX'; nicht 'Parser'),
-// nicht in dieser Unit deklariert (dort entscheidet DeclaresValueType bzw.
+// nicht in dieser Unit deklariert (dort entscheidet DeclaresNonClassType bzw.
 // die Deklaration) und keine Klasse der Delphi-Quellen ('PDFDocument' aus
 // iOSapi, uRdxRtlTypes). Korpus ab8 (Review FB, R3-01): 8 SCA085-Funde mit
 // fremdem P-Typ - alle Zeiger aus mormot.lib.openssl11 auf ein object mit
@@ -309,7 +310,7 @@ begin
   Result := False;
   ASpelling := '';
   if (Length(ATypeLow) < 2) or (ATypeLow[1] <> 'p')
-     or (TRdxSimpleFixes.DeclaredTypeKind(AMap, ATypeLow) <> '')
+     or (TRdxTypeProof.DeclaredTypeKind(AMap, ATypeLow) <> '')
      or IsRtlClassOrInterface(ATypeLow) then
     Exit;
   T := NextToken(AMap, 1, 1);
@@ -331,18 +332,18 @@ end;
 // Der Name, unter dem der Typ ATypeLow aus einer anderen Unit kommt:
 // ATypeLow selbst, wenn diese Unit ihn nicht deklariert; das Ende seiner
 // Alias-Kette, wenn sie die Unit verlaesst ('PMyKey = PEVP_PKEY' ->
-// 'pevp_pkey', TRdxExprFixes.ResolvedTypeKind; Nachpruefung FB - bis dahin
+// 'pevp_pkey', TRdxTypeProof.ResolvedTypeKind; Nachpruefung FB - bis dahin
 // galt ein solcher Alias als Typ dieser Unit und behielt die Hilfe); ''
 // fuer einen Typ, den die Unit ausformuliert (class, record, '^' ...).
 function ForeignTypeName(AMap: TRdxCodeMap; const ATypeLow: string): string;
 var
   Kind : string;
 begin
-  Kind := TRdxExprFixes.ResolvedTypeKind(AMap, ATypeLow);
+  Kind := TRdxTypeProof.ResolvedTypeKind(AMap, ATypeLow);
   if Kind = '' then
     Result := ATypeLow
   else if TRdxRecipes.IsPlainIdent(Kind) and not InList(Kind, OWN_TYPE_WORDS)
-     and (TRdxSimpleFixes.DeclaredTypeKind(AMap, Kind) = '') then
+     and (TRdxTypeProof.DeclaredTypeKind(AMap, Kind) = '') then
     Result := Kind
   else
     Result := '';
@@ -353,7 +354,7 @@ end;
 // deklarierte Typ von X):
 //   * ein record/object/interface, Zeiger ('PFoo = ^TFoo') oder eigener Typ
 //     ('PFoo = type ^TFoo') dieser Unit, auch ueber Aliasse der Unit
-//     (DeclaresValueType) - 'X.Free' ist dort eine eigene Methode, beim
+//     (DeclaresNonClassType) - 'X.Free' ist dort eine eigene Methode, beim
 //     Zeiger die des Ziels;
 //   * eine Routine Free irgendwo in der Unit (eine Klasse, die zurueckgibt
 //     statt freizugeben: ein Pool mit 'procedure Free; reintroduce') -
@@ -373,9 +374,9 @@ var
   Spelling : string;
 begin
   Result := '';
-  if TRdxSimpleFixes.DeclaresValueType(AMap, ATypeLow) then
+  if TRdxTypeProof.DeclaresNonClassType(AMap, ATypeLow) then
     Result := Format(R_NOT_AN_OBJECT, [AName, ATypeLow])
-  else if TRdxSimpleFixes.DeclaresRoutine(AMap, 'Free') then
+  else if TRdxTypeProof.DeclaresRoutine(AMap, 'Free') then
     Result := R_OWN_FREE
   else if PointerNamedType(AMap, ForeignTypeName(AMap, ATypeLow),
        Spelling) then
@@ -470,7 +471,7 @@ begin
   try
     // Eine eigene Routine Assert (Methode oder global) bindet vor
     // System.Assert - ihre Parameter kennt hier niemand.
-    if TRdxSimpleFixes.DeclaresRoutine(Map, 'Assert') then
+    if TRdxTypeProof.DeclaresRoutine(Map, 'Assert') then
       Result.Reason := 'die Unit deklariert eine eigene Routine Assert'
     else if TRdxSimpleFixes.WithBefore(Map, ALine)
             or APlaces.InWithBlock(ALine) then
@@ -695,7 +696,7 @@ begin
   if TypeLow = '' then
     Result := Format('Typ von %s unbekannt - ist er prozedural, liest Delphi '
       + 'den Namen ohne () als Zeiger', [APlan.Target])
-  else if TRdxExprFixes.ProceduralType(AMap, TypeLow) then
+  else if TRdxTypeProof.ProceduralType(AMap, TypeLow) then
     Result := Format('%s hat einen Prozedurtyp (%s) - ohne () liest Delphi den '
       + 'Namen als Zeiger', [APlan.Target, TypeLow]);
 end;
@@ -741,16 +742,16 @@ end;
 function AssignedNilReason(AMap: TRdxCodeMap;
   const AName, ATypeLow: string): string;
 begin
-  if TRdxSimpleFixes.DeclaresRoutine(AMap, 'Assigned') then
+  if TRdxTypeProof.DeclaresRoutine(AMap, 'Assigned') then
     Exit('die Unit deklariert eine eigene Routine Assigned');
   if ATypeLow = '' then
     Exit(Format('Typ von %s unbekannt - bei einem Funktionstyp ruft '
       + '"%s <> nil" ihn auf, Assigned() nicht', [AName, AName]));
   Result := TRdxNilFix.NilOperandRisk(AName, ATypeLow);
   if Result <> '' then Exit;
-  if TRdxExprFixes.ProceduralType(AMap, ATypeLow) then
+  if TRdxTypeProof.ProceduralType(AMap, ATypeLow) then
     Exit(Format(R_PROC_TYPE, [AName, AName]));
-  if not TRdxExprFixes.PointerLikeType(AMap, ATypeLow) then
+  if not TRdxTypeProof.PointerLikeType(AMap, ATypeLow) then
     Result := Format('%s: Typ %s ist in dieser Unit nicht als Klasse, '
       + 'Interface oder Zeiger bewiesen und keine Klasse der Delphi-Quellen '
       + '- ein Funktionstyp riefe "%s <> nil" auf', [AName, ATypeLow, AName]);
@@ -1019,6 +1020,16 @@ end;
 
 // SCA123: ist der Operand AOperand ein blosser Bezeichner, ausserhalb eines
 // with-Blocks und als genau ATarget deklariert? '' oder der Grund.
+// PFADE (A.B, Self.F) lernt die Pruefung NICHT (Folgewelle A4, geprueft):
+// der Weg von SCA126 - das letzte Glied als Feld der Datei
+// (TRdxTypeProof.FieldTypeOf) - beweist nur den NAMEN, gleichnamige Felder
+// aller Klassen der Unit zaehlen mit, und der Typ des Pfads davor ist
+// unbekannt. SCA126 fragt dort nur "Feld oder Methode", hier ist der GENAUE
+// Typ der ganze Beweis: 'TStringList(Other.FList).Free' mit einem
+// fremden Other, dessen FList ein TRefCountedObject ist (eigenes Free),
+// verlore den Cast, wenn nur ein FList dieser Unit TStringList heisst.
+// Den Pfad sperrt darum schon der Planer (uRdxLineFixes.OperandReason,
+// Review Woche G07-17); die Pruefung hier bleibt als zweite Wand.
 function CastTypeReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
   ALine: Integer; const AOperand, ATarget: string): string;
 var
@@ -1152,7 +1163,7 @@ begin
   if Length(Parts) = 0 then
     Exit('Ziel fehlt');
   for i := 0 to High(Parts) do
-    if TRdxSimpleFixes.DeclaresProperty(AMap, Trim(Parts[i])) then
+    if TRdxTypeProof.DeclaresProperty(AMap, Trim(Parts[i])) then
       Exit(Format('%s ist in dieser Unit als Property deklariert - die '
         + 'Zuweisung ruft vielleicht einen Setter', [Trim(Parts[i])]));
   Root := Trim(Parts[0]);
