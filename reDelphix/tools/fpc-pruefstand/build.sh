@@ -54,19 +54,26 @@
 #   FPC dieselben Daten wie unter Delphi (Review R6-03; bis dahin wurde aus
 #   dem Literal 'System.Classes' 'Classes' und aus '    [Test]' '    ').
 #   Die Zeilen bleiben, FPC-Meldungen nennen die Zeilennummern der Quellen.
-# Runner: genau EINE Fixture je Testunit mit einfachen [Test]-Methoden. Ein
-#   Test ohne Assert ist rot - wie unter TestInsight und reDelphix.Test
-#   (FailsOnNoAsserts = True, Review R6-09).
+# Runner: je FPC-sichtbarer Fixture einer Testunit eine RunSuite, nur
+#   einfache [Test]-Methoden. Sichtbar heisst: nicht in {$IFNDEF FPC}..
+#   {$ENDIF} bzw. im {$ELSE}-Teil von {$IFDEF FPC} (nur diese einfache,
+#   nicht verschachtelte Form; jede andere Bedingungs-Direktive ausserhalb
+#   von Literalen und Kommentaren bricht mit Exit 2 ab). So laufen
+#   Testunits mit Text-Fixture und Delphi-only Detektor-Fixture (Folgewelle
+#   B3). Ein Test ohne Assert ist rot - wie unter TestInsight und
+#   reDelphix.Test (FailsOnNoAsserts = True, Review R6-09).
 # Exit: 0 alle Tests gruen; 1 Test rot, Bau gescheitert (FPC-Exit) oder der
-#   Lauf zaehlt nicht genau so viele Tests, wie die Testunits [Test]-
-#   Attribute tragen; 2 Aufruf- oder Quellfehler, auch wenn die Zahl der
-#   [Test]-Attribute einer Testunit nicht zur Zahl der erkannten
-#   Testmethoden passt (der Runner liesse sonst Tests still aus) oder eine
+#   Lauf zaehlt nicht genau so viele Tests, wie die Testunits sichtbare
+#   [Test]-Attribute tragen; 2 Aufruf- oder Quellfehler, auch wenn die Zahl
+#   der sichtbaren [Test]-Attribute einer Testunit nicht zur Zahl der
+#   erkannten Testmethoden passt (der Runner liesse sonst Tests still aus),
+#   eine Testunit eine unbekannte Bedingungs-Direktive traegt oder eine
 #   Testunit - aufgerufen oder in reDelphix\tests - eine Fixture nicht mit
 #   TDUnitX.RegisterTestFixture anmeldet (ein DUnitX-Runner mit UseRTTI =
 #   False liesse sie still aus, Review R6-06).
-# Je Arbeitsschritt EIN awk-Aufruf ueber alle Dateien: ein Prozessstart
-# kostet unter Git Bash 50 ms und mehr.
+# Je Arbeitsschritt moeglichst EIN awk-Aufruf ueber alle Dateien: ein
+# Prozessstart kostet unter Git Bash 50 ms und mehr (die Fixture-Erkennung
+# braucht einen je Testunit).
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 RDX="$(cd "$HERE/../.." && pwd)"
@@ -264,46 +271,55 @@ if [ -n "$UNREG" ]; then
   exit 2
 fi
 
-# Je Testunit die angepasste Kopie und ihre Fixture (fpc_fixture_info: genau
-# EINE Fixture mit einfachen [Test]-Methoden - eine zweite Fixture oder
-# [Setup]/[TearDown]/[TestCase] liefe hier still anders als unter DUnitX,
-# Review reDelphiX nach Bereichen 2026-10-10, Nit 55; dann Exit 2). Alle
-# Testunits werden geprueft, bevor runner.pas entsteht: ein Abbruch laesst
-# keinen halben Runner im Arbeitsverzeichnis.
+# Je Testunit die angepasste Kopie und ihre FPC-sichtbaren Fixtures
+# (fpc_fixtures): eine Fixture in {$IFNDEF FPC}..{$ENDIF} - etwa die
+# Detektor-Fixture neben der Text-Fixture einer Planer-Testunit - zaehlt
+# und laeuft nicht, jede sichtbare bekommt ihre RunSuite. Keine sichtbare
+# Fixture, ein sichtbares [Setup]/[TearDown]/[TestCase] (liefe hier still
+# anders als unter DUnitX, Review reDelphiX nach Bereichen 2026-10-10,
+# Nit 55) oder eine andere Bedingungs-Direktive als die einfache FPC-Form
+# (lieber laut als falsch gezaehlt): Exit 2. Alle Testunits werden
+# geprueft, bevor runner.pas entsteht: ein Abbruch laesst keinen halben
+# Runner im Arbeitsverzeichnis.
 adapt "$WORK" "${SRCS[@]}" || exit 2
-CLS=()
-PROCS=()
+SUITES=()
 total=0
 for k in "${!SRCS[@]}"; do
   t="${SRCS[$k]##*/}"
   t="${t%.pas}"
-  fpc_fixture_info "${SRCS[$k]}" "$WORK/$t.pas" || exit 2
-  # Abgleich: jede [Test]-Methode muss als '    procedure Name;' erkannt
-  # sein, sonst fehlte ihr Run()-Aufruf und der Lauf meldete trotzdem gruen.
-  if [ -z "$FPC_CLS" ] || [ "$FPC_EXPECTED" != "$FPC_GOT" ]; then
-    echo "$t: Fixture-Klasse '${FPC_CLS:-?}', [Test]-Attribute $FPC_EXPECTED, erkannte Testmethoden $FPC_GOT - Abbruch" >&2
+  fpc_fixtures "${SRCS[$k]}" "$WORK/$t.pas" || exit 2
+  # Abgleich: jede sichtbare [Test]-Methode muss als '    procedure Name;'
+  # im Rumpf einer sichtbaren Fixture erkannt sein, sonst fehlte ihr
+  # Run()-Aufruf und der Lauf meldete trotzdem gruen.
+  classes=""
+  while read -r cls _; do
+    [ -n "$cls" ] && classes="${classes:+$classes }$cls"
+  done <<< "$FPC_FIXTURES"
+  if [[ " $classes " == *" ? "* ]] || [ "$FPC_EXPECTED" != "$FPC_GOT" ]; then
+    echo "$t: Fixture-Klasse '$classes', [Test]-Attribute $FPC_EXPECTED, erkannte Testmethoden $FPC_GOT - Abbruch" >&2
     exit 2
   fi
-  CLS[$k]="$FPC_CLS"
-  PROCS[$k]="$FPC_PROCS"
+  while read -r line; do
+    [ -n "$line" ] && SUITES+=("$t $line")
+  done <<< "$FPC_FIXTURES"
   total=$((total + FPC_GOT))
 done
 
 # --- 4) Runner erzeugen ------------------------------------------------------
-# total zaehlt die [Test]-Attribute aller Testunits fuer den Abgleich mit
-# dem Lauf. Ein Test ohne Assert ist rot (FPC_RUNNER_NOASSERT_FAILS, Review
-# R6-09).
+# Je sichtbarer Fixture eine RunSuite (Run('<testunit>.<methode>', ..)).
+# total zaehlt die sichtbaren [Test]-Attribute aller Testunits fuer den
+# Abgleich mit dem Lauf. Ein Test ohne Assert ist rot
+# (FPC_RUNNER_NOASSERT_FAILS, Review R6-09).
 {
   FPC_RUNNER_NOASSERT_FAILS=1 fpc_runner_head uRdxText "$@"
-  for k in "${!SRCS[@]}"; do
-    t="${SRCS[$k]##*/}"
-    # shellcheck disable=SC2086 # PROCS: ein Name je Zeile
-    fpc_runner_suite "$((k + 1))" "${t%.pas}" "${CLS[$k]}" ${PROCS[$k]}
+  for k in "${!SUITES[@]}"; do
+    # shellcheck disable=SC2086 # '<testunit> <klasse> <methode> ...'
+    fpc_runner_suite "$((k + 1))" ${SUITES[$k]}
   done
   # Die reDelphix-Texte deutsch wie in reDelphix.Test.dpr: die Erwartungen
   # der Tests sind deutsch, und redelphix.ini bzw. %APPDATA% bleiben aus
   # dem Lauf heraus (uRdxText liest mit Override keine ini).
-  fpc_runner_main "${#SRCS[@]}" "SetRdxLanguageOverride('de');"
+  fpc_runner_main "${#SUITES[@]}" "SetRdxLanguageOverride('de');"
 } > "$WORK/runner.pas"
 
 # --- 5) bauen und laufen lassen ----------------------------------------------
