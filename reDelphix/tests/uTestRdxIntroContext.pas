@@ -55,12 +55,14 @@ type
     [Test] procedure MultiLineString_ReopenedAfterCloser;
     [Test] procedure CommentAndStringStates_Combined;
     [Test] procedure AsmLabel_DoesNotEndAsm;
+    // Wochen-Review 2026-10-21
+    [Test] procedure DirectiveOnStatementRow;
   end;
 
 implementation
 
 uses
-  System.SysUtils, uRdxIntroPlan, uRdxIntroEdits;
+  System.SysUtils, uRdxIntroEdits;
 
 const
   NAME_BASE = 'MagicNr';
@@ -399,6 +401,30 @@ begin
   B := Buf(['procedure P;', 'begin', '  1:', '    if C then', '      Foo(42);',
     'end;']);
   AssertAccepted(TargetIn(B, 5, 11), True, 4, 'if hinter einer case-Marke');
+  // Der Ausdruck geht ueber eine then/else-Zeile weiter (Wochen-Review
+  // 2026-10-21): ein geschachteltes 'if B then' als else-Arm und die
+  // else-if-Kette - vorher hielt die Suche an der Zeile mit then/else an,
+  // und begin..end landete mitten im Ausdruck. Zeile 5, die 42 in Spalte
+  // 11 bzw. 9.
+  B := Buf(['procedure P;', 'begin', '  X := if A then 1 else', '    if B then',
+    '      Foo(42);', 'end;']);
+  AssertRefusedWith(TargetIn(B, 5, 11), 'Bedingungsausdruck',
+    'geschachteltes if als else-Arm');
+  B := Buf(['procedure P;', 'begin', '  X := if A then 1', '  else if B then',
+    '    Foo(42);', 'end;']);
+  AssertRefusedWith(TargetIn(B, 5, 9), 'Bedingungsausdruck',
+    'else-if-Kette des Ausdrucks');
+  // Dieselben Formen als Anweisung bleiben Zweige.
+  B := Buf(['procedure P;', 'begin', '  if A then Z := 1', '  else if B then',
+    '    Foo(42);', 'end;']);
+  AssertAccepted(TargetIn(B, 5, 9), True, 4, 'else-if-Kette der Anweisung');
+  B := Buf(['procedure P;', 'begin', '  if A then', '    if B then',
+    '      Foo(42);', 'end;']);
+  AssertAccepted(TargetIn(B, 5, 11), True, 4, 'geschachtelte if-Anweisung');
+  B := Buf(['procedure P;', 'begin', '  Z := 1; if B then', '    Foo(42);',
+    'end;']);
+  AssertAccepted(TargetIn(B, 4, 9), True, 3,
+    'if-Anweisung mitten in der Zeile');
 end;
 
 // Die Direktive AUF der Zeile darueber zaehlt wie eine dazwischen:
@@ -448,6 +474,13 @@ begin
     '    X := 42;', 'end;']);
   AssertAccepted(TargetIn(B, 5, 10), True, 4,
     'Schliesser mit then dahinter: Zweig');
+  // begin..end bekommt die Einrueckung der Zeile, auf der die Anweisung
+  // beginnt ('  if S = ...'), nicht die des Codes hinter dem Schliesser
+  // (' then': EIN Leerzeichen - Wochen-Review 2026-10-21).
+  Assert.AreEqual(Buf(['begin', '  if S = ' + Q(3), '    a',
+    '    ' + Q(3) + ' then', '  begin', '    const MagicNr01 = 42;',
+    '    X := MagicNr01;', '  end;', 'end;']), RunC1h(B, 5, 10),
+    'Schliesser mit then dahinter: Text danach');
 end;
 
 // Kommentar- und String-Zustand laufen in EINEM Lauf (Pruefer 2026-10-14,
@@ -536,6 +569,37 @@ begin
   G := Default(TRdxIntroTarget);
   Assert.AreEqual<Integer>(0, Length(IntroduceEdits(T, G)),
     'leeres Ziel (SourceRow 0): keine Ersetzungen');
+end;
+
+// Eine Direktive AUF der Anweisungszeile vor dem Literal: die Deklaration
+// kommt an den Zeilenanfang, vor das '{$ENDIF}' - in den Zweig A
+// (Wochen-Review 2026-10-21; DirectiveBetween endete vor der
+// Anweisungszeile). Mit Block zaehlt die ganze Zeile: 'end;' kaeme hinter
+// das '{$ENDIF}'. Eine Direktive HINTER dem Literal ohne Block stoert
+// nicht.
+procedure TTestRdxIntroContext.DirectiveOnStatementRow;
+var
+  B : string;
+begin
+  B := Buf(['procedure P;', 'begin', '{$IFDEF A}', '  Foo;',
+    '{$ENDIF} X := 42;', 'end;']);
+  // Zeile 5, die 42 in Spalte 15.
+  AssertRefusedWith(TargetIn(B, 5, 15), 'Direktive', 'ENDIF am Zeilenanfang');
+  B := Buf(['begin', '  Foo;', '  (*$ENDIF*) X := 42;', 'end;']);
+  // Zeile 3, die 42 in Spalte 19.
+  AssertRefusedWith(TargetIn(B, 3, 19), 'Direktive',
+    '(*$ENDIF*) am Zeilenanfang');
+  B := Buf(['procedure P;', 'begin', '{$IFDEF A}', '  if B then',
+    '    X := 42; {$ENDIF}', 'end;']);
+  // Zeile 5, die 42 in Spalte 10: mit Block hinter der Anweisung.
+  AssertRefusedWith(TargetIn(B, 5, 10), 'Direktive',
+    'ENDIF hinter der Anweisung im Zweig');
+  B := Buf(['begin', '  Foo;', '  X := 42; {$IFDEF D} Log; {$ENDIF}', 'end;']);
+  // Zeile 3, die 42 in Spalte 8: ohne Block hinter dem Literal.
+  AssertAccepted(TargetIn(B, 3, 8), False, 2, 'Direktive hinter dem Literal');
+  Assert.AreEqual('  X := MagicNr01; {$IFDEF D} Log; {$ENDIF}',
+    TargetIn(B, 3, 8).Plan.NewUseLine, 'Direktive hinter dem Literal, '
+    + 'NewUseLine');
 end;
 
 initialization

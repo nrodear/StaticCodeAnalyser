@@ -471,6 +471,26 @@ begin
   // Die 42 in Spalte 13.
   P := PlanIntroduce('    1: X := 42;', '  case K of', 13, 'N01');
   AssertRefusedWith(P, 'case-Zweig', 'case-Zweig');
+  // Ein Feld unter private: die 255 in Spalte 20 - der Grund nannte
+  // "case-Zweig, Sprungmarke oder on-Handler" (Wochen-Review 2026-10-21).
+  P := PlanIntroduce('    FBuf: array[0..255] of Byte;', '  private', 20,
+    'N01');
+  AssertRefusedWith(P, 'Feld oder eine Variable', 'Feld mit Literal im Typ');
+  P := PlanIntroduce('    A, B: array[0..9] of Byte;', '  var', 20, 'N01');
+  AssertRefusedWith(P, 'Feld oder eine Variable', 'zwei Namen, Literal im Typ');
+  // Eine Sprungmarke mit Aufruf bleibt eine: die 42 in Spalte 12.
+  P := PlanIntroduce('  lbl: Foo(42);', 'begin', 12, 'N01');
+  AssertRefusedWith(P, 'Sprungmarke', 'Sprungmarke mit Aufruf');
+  // Hinter dem ';' einer Inline-var ist die Deklaration zu Ende: die 42 in
+  // Spalte 23 steht in der Anweisung dahinter (vorher als "in der
+  // Deklaration" abgelehnt - TypeEndCol endete nur an ':=' oder 'in').
+  P := PlanIntroduce('  var I: Integer; Foo(42);', 'begin', 23, 'N01');
+  Assert.IsTrue(P.Ok, 'Literal hinter der Inline-var: ' + P.Reason);
+  Assert.AreEqual('  var I: Integer; Foo(N01);', P.NewUseLine,
+    'Literal hinter der Inline-var, NewUseLine');
+  // Ein Vorgabewert vor dem ';' bleibt Teil der Deklaration.
+  P := PlanIntroduce('  var I: Integer = 5; Foo(5);', 'begin', 20, 'N01');
+  AssertRefusedWith(P, 'Deklaration', 'Vorgabewert vor dem ;');
 end;
 
 // In einem mehrzeiligen String (Delphi 12, ''' ... ''') ist kein Code - die
@@ -567,6 +587,16 @@ begin
   SyncBlockEnd(T, G, Row, Col);
   Assert.AreEqual<Integer>(6, Row, 'Wrap, Zeile von end;');
   Assert.AreEqual<Integer>(1, Col, 'Wrap, Spalte 1');
+  // Ein abgelehntes Ziel (kein Literal am Caret) hat keine Spalten: wie
+  // IntroduceEdits ein definiertes Ergebnis (0, 0) statt eines
+  // Bereichsfehlers auf NewCols[-1] (Wochen-Review 2026-10-21).
+  T := TextOf(TEncoding.UTF8.GetBytes('begin'#13#10'  X := Y;'#13#10
+    + 'end;'#13#10));
+  G := TargetAt(T, 2, 8, 'MagicNr');
+  Assert.IsFalse(G.Plan.Ok, 'abgelehnt: kein Literal am Caret');
+  SyncBlockEnd(T, G, Row, Col);
+  Assert.AreEqual<Integer>(0, Row, 'abgelehnt, Zeile 0');
+  Assert.AreEqual<Integer>(0, Col, 'abgelehnt, Spalte 0');
 end;
 
 initialization
