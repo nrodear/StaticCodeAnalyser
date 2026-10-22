@@ -121,8 +121,9 @@ M="$TMP/sca"
 mkdir -p "$M/SCA.Engine/sources/Common" "$M/SCA.Engine/sources/Infrastructure" \
          "$M/StaticCodeAnalyserForm/tests" "$M/i18n"
 # uScaConfigDir steht seit dbb4c1fa in der Pflichtliste von build.sh - ohne
-# die Kopie brachen 4 und 5 an "Quelle fehlt" ab statt am Gepruefen.
-for u in uDetectorUtils uRefactorInfo uRefactorInfoBuilder uRefactorConcat uFindingActions uScaConfigDir; do
+# die Kopie brachen 4 und 5 an "Quelle fehlt" ab statt am Gepruefen;
+# uSCAConsts seit der Folgewelle B3.
+for u in uDetectorUtils uRefactorInfo uRefactorInfoBuilder uRefactorConcat uFindingActions uScaConfigDir uSCAConsts; do
   cp "$SCA/SCA.Engine/sources/Common/$u.pas" "$M/SCA.Engine/sources/Common/"
 done
 cp "$SCA/SCA.Engine/sources/Infrastructure/uSourcePlaces.pas" "$M/SCA.Engine/sources/Infrastructure/"
