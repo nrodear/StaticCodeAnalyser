@@ -477,34 +477,7 @@ type
     Reason    : string;
   end;
 
-{ ---- kleine Helfer ---- }
-
-function CharAt(const S: string; AIndex: Integer): Char;
-begin
-  if (AIndex >= 1) and (AIndex <= Length(S)) then
-    Result := S[AIndex]
-  else
-    Result := #0;
-end;
-
-function JoinWith(const AItems: TArray<string>; const ASep: string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(AItems) do
-    begin
-      if i > 0 then
-        SB.Append(ASep);
-      SB.Append(AItems[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
+{ ---- kleine Helfer (CharAt, JoinStrings: uRdxCodeMap) ---- }
 
 // Der Operand, wie ihn ein Grund zeigt: hoechstens MAX_SHOWN Zeichen.
 function Shown(const AOperand: string): string;
@@ -514,9 +487,11 @@ begin
     Result := Copy(Result, 1, MAX_SHOWN) + '...';
 end;
 
-// S ohne Leerraum, klein - Vergleichsform fuer Ziel und Operand (vorab
-// bemessen statt verkettet, SCA110).
-function Squeezed(const S: string): string;
+// S ohne jedes Zeichen bis ' ' (Leerraum, Zeilenenden, die Marke KEPT_MARK
+// #1), klein - Vergleichsform fuer Ziel und Operand (vorab bemessen statt
+// verkettet, SCA110). Nicht uRdxCodeMap.Squeezed: das nimmt nur
+// Leerzeichen und Tabs heraus.
+function SqueezedBelowSpace(const S: string): string;
 var
   i, n : Integer;
 begin
@@ -1066,7 +1041,7 @@ begin
         AddText(Segs, WithoutPrefix(AParts[i]))
       else
         AddText(Segs, AParts[i]);
-  Result := JoinWith(Segs, '');
+  Result := JoinStrings(Segs, '');
   if HasNonAscii(Result) then
     Exit('');
   Result := NameCharsOf(Result);
@@ -1174,7 +1149,7 @@ begin
   // 'S := S + ..': das Ziel als ERSTER Term ist der bisherige Text. Weiter
   // hinten ('S := ''INSERT INTO '' + S') ist es ein Operand wie jeder.
   else if not AReq.IsCall and (ACount.Terms = 0)
-     and (Squeezed(Txt) = Squeezed(AReq.Target)) then
+     and (SqueezedBelowSpace(Txt) = SqueezedBelowSpace(AReq.Target)) then
     AddSeg(ASegs, skKept, Txt, False)
   else
   begin
@@ -1667,7 +1642,7 @@ begin
   S.Reason := StringReason(S, AFollow, ASolid);
   if S.Reason <> '' then Exit;
   CutOutput(S);
-  AddParam(S, S.StrFirst, JoinWith(S.StrParts, ' + '));
+  AddParam(S, S.StrFirst, JoinStrings(S.StrParts, ' + '));
 end;
 
 // Ein Zeichen im String. Liest der Leser stumm (Wert einer Konstante, die
@@ -1924,7 +1899,7 @@ begin
   Items := nil;
   for k := AFirst to ALast do
     AddText(Items, S.Segs[k].Text);
-  Result := JoinWith(Items, ' + ');
+  Result := JoinStrings(Items, ' + ');
 end;
 
 // Darf der Lauf AFirst..ALast im Code Parameter werden? '' oder der Grund
@@ -2101,7 +2076,7 @@ begin
   if Length(Items) = 0 then
     Result := ''''''
   else
-    Result := JoinWith(Items, ' + ');
+    Result := JoinStrings(Items, ' + ');
 end;
 
 // Je Parameter eine Zeile 'APrefixParamByName(''Name'').Value := Wert;'.
@@ -2131,7 +2106,7 @@ begin
   Items := nil;
   for i := 0 to High(AParams) do
     AddText(Items, AParams[i].Value);
-  Result := JoinWith(Items, ', ');
+  Result := JoinStrings(Items, ', ');
 end;
 
 function StatementOf(const AReq: TRdxSqlRequest; const ASql: string): string;

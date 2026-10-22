@@ -416,26 +416,6 @@ type
       const APrev: TRdxToken): TRdxStep;
   end;
 
-// Glieder zu 'A.B.C' (TStringBuilder - keine Verkettung in der Schleife).
-function JoinDotted(const AParts: TArray<string>): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(AParts) do
-    begin
-      if i > 0 then
-        SB.Append('.');
-      SB.Append(AParts[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
 // 'TOuter.TInner' -> ['touter', 'tinner'].
 function SplitDotted(const S: string): TArray<string>;
 var
@@ -543,7 +523,7 @@ begin
       T := AfterClose(AMap, T);
     if T.Low <> '.' then
     begin
-      R.Name := JoinDotted(Raw);
+      R.Name := JoinStrings(Raw, '.');   // Glieder zu 'A.B.C'
       AAfter := T;
       Exit('');
     end;

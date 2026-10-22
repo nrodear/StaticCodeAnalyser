@@ -415,7 +415,8 @@ implementation
 
 uses
   System.SysUtils,
-  uRdxCodeMap;   // IsIdentStart, IsIdentChar (Zeichen > #127 wie der Core)
+  uRdxCodeMap;   // IsIdentStart, IsIdentChar (Zeichen > #127 wie der Core),
+                 // CharAt, JoinStrings, Surrogat-Haelften
 
 const
   // Paar-Regel von LooksLikeSql (Review 2026-10-07, Nit 6): je Verb die
@@ -1394,16 +1395,6 @@ type
     BlankRun  : Integer;
   end;
 
-function IsHighSurrogateCh(C: Char): Boolean;
-begin
-  Result := (C >= #$D800) and (C <= #$DBFF);
-end;
-
-function IsLowSurrogateCh(C: Char): Boolean;
-begin
-  Result := (C >= #$DC00) and (C <= #$DFFF);
-end;
-
 // Elemente eines Zeichens bzw. Codes: vorsichtig seine Laenge in UTF-8 -
 // ASCII eins, bis U+07FF zwei, sonst drei (ein einzelnes Surrogat auch).
 // Bis zur Nachpruefung FB zaehlte alles ueber ASCII zwei; ein CJK-Zeichen
@@ -1740,25 +1731,6 @@ type
     Args     : TArray<string>;
     TargetU  : Boolean;
   end;
-
-// Die Strings mit ASep verbunden (string.Join kennt FPC nicht).
-function JoinStrings(const AItems: TArray<string>; const ASep: string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(AItems) do
-    begin
-      if i > 0 then SB.Append(ASep);
-      SB.Append(AItems[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
 
 // Ein Literal-Term: sein Quelltext in den Formatstring (AppendLiteralSource)
 // und sein Wert zu den Literalen. '' oder der Grund.
@@ -2125,15 +2097,6 @@ begin
   for i := Low(FPC_TELLS) to High(FPC_TELLS) do
     if Pos(FPC_TELLS[i], S) > 0 then
       Exit(True);
-end;
-
-// Zeichen an AIndex, #0 ausserhalb von S.
-function CharAt(const S: string; AIndex: Integer): Char;
-begin
-  if (AIndex >= 1) and (AIndex <= Length(S)) then
-    Result := S[AIndex]
-  else
-    Result := #0;
 end;
 
 // Erste Stelle ab AFrom, die kein Leerraum ist (Length + 1 am Ende).

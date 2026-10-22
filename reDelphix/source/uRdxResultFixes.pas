@@ -419,12 +419,6 @@ begin
   Result.NewText := Result.Expected + ASuffix;
 end;
 
-// Leerraum am Zeilenanfang.
-function LeadingBlanks(const S: string): string;
-begin
-  Result := Copy(S, 1, SkipBlanks(S, 1) - 1);
-end;
-
 // 'TOuter.TInner.Create' -> 'TOuter.TInner' (das letzte Glied: LastPart).
 function OwnerPathOf(const AName: string): string;
 begin
@@ -960,8 +954,8 @@ begin
   F := After(AMap, R.Body);
   if (F.Line > R.Body.Line) and not SameTok(F, R.EndTok)
      and OwnLineAt(AMap, F) then
-    Exit(LeadingBlanks(AMap.Raw(F.Line)));
-  B := LeadingBlanks(AMap.Raw(R.Body.Line));
+    Exit(IndentOf(AMap.Raw(F.Line)));
+  B := IndentOf(AMap.Raw(R.Body.Line));
   Result := B + IndentStep(B, '');
 end;
 

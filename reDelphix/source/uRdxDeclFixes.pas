@@ -468,7 +468,7 @@ begin
   // Die Einrueckung ist der Leerraum vor dem Kopf - nicht alles bis zum
   // ersten Token: ein Kommentar davor ('{ alt } procedure Run;') kaeme
   // sonst in jede Geruestzeile (Review Quick-Fix-Units 2026-10-14).
-  Indent := Copy(L, 1, SkipBlanks(L, 1) - 1);
+  Indent := IndentOf(L);
   if Length(Indent) + 1 <> First.Col then
   begin
     AReason := 'vor dem Kopf steht auf seiner Zeile ein Kommentar - das '
@@ -627,7 +627,7 @@ begin
   begin
     // Kopf am Zeilenende (ein Kommentar dahinter bleibt auf der Zeile): die
     // GUID in eine eigene Zeile, eingerueckt wie die Member darunter.
-    Indent := Copy(AMap.Raw(ALine), 1, SkipBlanks(AMap.Raw(ALine), 1) - 1);
+    Indent := IndentOf(AMap.Raw(ALine));
     AEdit.Span := TRefactorSpan.Make(SPAN_197, Last.Line, Last.Col, Last.Line,
       Length(L) + 1);
     AEdit.Expected := Copy(L, Last.Col, MaxInt);

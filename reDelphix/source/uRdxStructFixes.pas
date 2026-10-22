@@ -1004,7 +1004,7 @@ begin
     Owner := Kw;
   end;
   L := AMap.Raw(Owner.Line);
-  ABranch.Indent := Copy(L, 1, SkipBlanks(L, 1) - 1);
+  ABranch.Indent := IndentOf(L);
 end;
 
 // StatementEnd, ein Token: Klammertiefe fortschreiben; rsFound an einem

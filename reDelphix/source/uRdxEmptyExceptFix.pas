@@ -83,12 +83,6 @@ const
   // So weit zurueck sucht die Planung die Einrueckstufe des try-Rumpfs.
   STEP_LOOKBACK = 200;
 
-// Der Leerraum am Zeilenanfang.
-function IndentOf(const ALine: string): string;
-begin
-  Result := Copy(ALine, 1, SkipBlanks(ALine, 1) - 1);
-end;
-
 // Genau ein Schluesselwort except auf ALine. '' oder der Grund.
 function FindExcept(AMap: TRdxCodeMap; ALine: Integer;
   out AExc: TRdxToken): string;

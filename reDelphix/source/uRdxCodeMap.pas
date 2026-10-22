@@ -185,6 +185,37 @@ function SkipBlanks(const S: string; AFrom: Integer): Integer;
 // Zahl der Quotes ab S[AAt] in Folge.
 function QuoteRun(const S: string; AAt: Integer): Integer;
 
+// ---- Kleine Text-Helfer (Folgewelle des Wochen-Reviews, G01-02/G09-26:
+// bis dahin je Planer eine Kopie) ----
+
+// Das Zeichen an AIndex, #0 ausserhalb von S. Bis dahin je eine Kopie in
+// uRdxSqlTemplate, uRdxSqlFacts, uRdxRecipes und uRdxIntroPlan
+// (VarNameProject.uVnpPlan traegt die gespiegelte eigene).
+function CharAt(const S: string; AIndex: Integer): Char;
+// S ohne Leerzeichen und Tabs (IsBlank), klein geschrieben - die
+// Vergleichsform 'finally end;' -> 'finallyend;'. Bis dahin je eine Kopie
+// in uRdxNoSonarFix, uRdxEmptyFinallyFix und uRdxSimpleFixes. Nicht
+// uRdxSqlTemplate.SqueezedBelowSpace: das nimmt JEDES Zeichen bis ' '
+// heraus, auch die Marke KEPT_MARK (#1) der SQL-Vorlage.
+function Squeezed(const S: string): string;
+// Die Strings mit ASep verbunden (string.Join kennt FPC nicht). Bis dahin
+// als JoinStrings in uRdxRecipes, als JoinWith in uRdxSqlTemplate und
+// uRdxSqlFacts und als JoinDotted (ASep '.') in uRdxBlocks.
+function JoinStrings(const AItems: TArray<string>; const ASep: string): string;
+// Der Einzug von S: Leerzeichen und Tabs am Anfang. Bis dahin je eine Kopie
+// in uRdxEmptyFinallyFix, uRdxEmptyExceptFix, uRdxNoSonarFix und (als
+// LeadingBlanks) uRdxResultFixes.
+function IndentOf(const S: string): string;
+// S ist leer oder traegt nur Leerzeichen und Tabs (IsBlank). Bis dahin in
+// uRdxAttrGapFix. Nicht Trim(S) = '': Trim nimmt jedes Zeichen bis ' '.
+function IsBlankLine(const S: string): Boolean;
+// Die erste bzw. zweite Haelfte eines UTF-16-Surrogatpaars. Bis dahin als
+// IsHighSurrogateCh/IsLowSurrogateCh in uRdxRecipes, IsLowSurrogate in
+// uRdxCleanupFixes und IsSecondHalf in uRdxTryFixes - eigene Namen, weil
+// System.Character IsLowSurrogate fuehrt.
+function IsHighSurrogateCh(C: Char): Boolean;
+function IsLowSurrogateCh(C: Char): Boolean;
+
 // Das Token, das an (ALine, ACol) beginnt (Code vorausgesetzt). Liegt ACol
 // ausserhalb der Zeile (Spalte aus einer Meldung, leere Zeile), "kein
 // Token" (Low = '', Line/Col wie gefragt) - bis Review Woche G05-13 las
@@ -554,6 +585,72 @@ begin
   Result := 0;
   while (AAt + Result <= Length(S)) and (S[AAt + Result] = '''') do
     Inc(Result);
+end;
+
+{ ---- Kleine Text-Helfer ---- }
+
+function CharAt(const S: string; AIndex: Integer): Char;
+begin
+  if (AIndex >= 1) and (AIndex <= Length(S)) then
+    Result := S[AIndex]
+  else
+    Result := #0;
+end;
+
+// Vorab bemessen statt verkettet (SCA110).
+function Squeezed(const S: string): string;
+var
+  i, n : Integer;
+begin
+  SetLength(Result, Length(S));
+  n := 0;
+  for i := 1 to Length(S) do
+    if not IsBlank(S[i]) then
+    begin
+      Inc(n);
+      Result[n] := S[i];
+    end;
+  SetLength(Result, n);
+  Result := LowerCase(Result);
+end;
+
+function JoinStrings(const AItems: TArray<string>; const ASep: string): string;
+var
+  SB : TStringBuilder;
+  i  : Integer;
+begin
+  SB := TStringBuilder.Create;
+  try
+    for i := 0 to High(AItems) do
+    begin
+      if i > 0 then
+        SB.Append(ASep);
+      SB.Append(AItems[i]);
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+function IndentOf(const S: string): string;
+begin
+  Result := Copy(S, 1, SkipBlanks(S, 1) - 1);
+end;
+
+function IsBlankLine(const S: string): Boolean;
+begin
+  Result := SkipBlanks(S, 1) > Length(S);
+end;
+
+function IsHighSurrogateCh(C: Char): Boolean;
+begin
+  Result := (C >= #$D800) and (C <= #$DBFF);
+end;
+
+function IsLowSurrogateCh(C: Char): Boolean;
+begin
+  Result := (C >= #$DC00) and (C <= #$DFFF);
 end;
 
 { TRdxCodeMap }
@@ -1366,7 +1463,7 @@ function IndentStep(const AIndent, ADeeperLine: string): string;
 var
   Deeper : string;
 begin
-  Deeper := Copy(ADeeperLine, 1, SkipBlanks(ADeeperLine, 1) - 1);
+  Deeper := IndentOf(ADeeperLine);
   if (Length(Deeper) > Length(AIndent))
      and (Copy(Deeper, 1, Length(AIndent)) = AIndent) then
     Exit(Copy(Deeper, Length(AIndent) + 1, MaxInt));

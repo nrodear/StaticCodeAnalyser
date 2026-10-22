@@ -118,29 +118,6 @@ type
     EndTok : TRdxToken;
   end;
 
-// Die Zeile ohne Leerraum, klein geschrieben - 'finally end;' -> 'finallyend;'.
-function Squeezed(const S: string): string;
-var
-  SB : TStringBuilder;
-  C  : Char;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for C in S do
-      if not IsBlank(C) then
-        SB.Append(C);
-    Result := LowerCase(SB.ToString);
-  finally
-    SB.Free;
-  end;
-end;
-
-// Der Leerraum am Zeilenanfang.
-function IndentOf(const ALine: string): string;
-begin
-  Result := Copy(ALine, 1, SkipBlanks(ALine, 1) - 1);
-end;
-
 // Ist T das Schluesselwort finally (kein 'X.Finally', kein '&Finally')?
 function IsFinallyKeyword(AMap: TRdxCodeMap; const T: TRdxToken;
   const AArg: string): Boolean;

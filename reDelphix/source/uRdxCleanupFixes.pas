@@ -203,9 +203,6 @@ const
   // FPC-Makro: '{$DEFINE M := X}' (MacroReason).
   MACRO_WORDS: array[0..1] of string = ('define', 'definec');
   MACRO_ASSIGN = ':=';
-  // Die zweite Haelfte eines UTF-16-Surrogatpaars (LinesCut).
-  LOW_SURROGATE_FIRST = $DC00;
-  LOW_SURROGATE_LAST  = $DFFF;
 
 type
   // SCA070: die Region der Meldung.
@@ -306,17 +303,6 @@ end;
 
 { ---- CutEdit: loeschen und aufraeumen ---- }
 
-// Die zweite Haelfte eines UTF-16-Surrogatpaars? Dieselbe Frage steht noch
-// als uRdxTryFixes.IsSecondHalf und uRdxRecipes.IsLowSurrogateCh (die
-// Bereiche dazu in uTestRdxCleanupScope.SplitsPair) - drei Kopien; die
-// Zusammenlegung nach uRdxCodeMap fasst Units anderer Planer an und ist
-// eine eigene Charge (Review Woche G07-01; bis dahin nannte dieser
-// Kommentar nur die Kopie in uRdxTryFixes).
-function IsLowSurrogate(C: Char): Boolean;
-begin
-  Result := (Ord(C) >= LOW_SURROGATE_FIRST) and (Ord(C) <= LOW_SURROGATE_LAST);
-end;
-
 // Die ganzen Zeilen AFirst..ALast samt Zeilenende loeschen (bis Charge
 // H3c LinesEdit - gleich benannt wie die Ersetzung ganzer Zeilen in
 // uRdxRoutineFixes, mit anderem Vertrag; Minor 5). Ein Bereich
@@ -351,7 +337,7 @@ begin
       + 'von Hand loeschen');
   L := AMap.Raw(P);
   Col := Length(L);
-  if (Col > 1) and IsLowSurrogate(L[Col]) then
+  if (Col > 1) and IsLowSurrogateCh(L[Col]) then   // uRdxCodeMap
     Dec(Col);
   // Es bleiben die Zeilenenden von P bis AFirst - 1; hinter der letzten
   // Zeile der Datei liegt das von ALast ausserhalb des Bereichs und

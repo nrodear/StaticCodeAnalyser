@@ -221,37 +221,6 @@ type
   // Was an einer Stelle 'Q.SQL.<Glied>' steht.
   TSqlChainStep = (chIgnore, chFragment, chFragmentStop, chStop);
 
-{ ---- kleine Helfer ----
-  Dieselben wie in uRdxSqlTemplate; eine gemeinsame Fassung in uRdxCodeMap
-  ist Review Woche G01-02 (Folgewelle). }
-
-function CharAt(const S: string; AIndex: Integer): Char;
-begin
-  if (AIndex >= 1) and (AIndex <= Length(S)) then
-    Result := S[AIndex]
-  else
-    Result := #0;
-end;
-
-function JoinWith(const AItems: TArray<string>; const ASep: string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(AItems) do
-    begin
-      if i > 0 then
-        SB.Append(ASep);
-      SB.Append(AItems[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
 { ---- Deklarationen am Quelltext ---- }
 
 // Naechste Spalte ab AFrom, an der ALow (klein) als ganzes Wort im Code
@@ -293,7 +262,7 @@ begin
     AddText(Parts, T.Low);
     D := After(AMap, T);
   end;
-  Result := JoinWith(Parts, '.');
+  Result := JoinStrings(Parts, '.');
 end;
 
 // 'Name:' bzw. 'Name, B, C:' hinter einem DECL_LEADS-Token: dkTyped mit
@@ -365,7 +334,7 @@ begin
   for L := ALine1 + 1 to ALine2 - 1 do
     AddText(Lines, AMap.Raw(L));
   AddText(Lines, Copy(AMap.Raw(ALine2), 1, ACol2 - 1));
-  Result := JoinWith(Lines, sLineBreak);
+  Result := JoinStrings(Lines, sLineBreak);
 end;
 
 // Der Quelltext des Werts hinter '=' bis vor das ';' auf Klammertiefe 0

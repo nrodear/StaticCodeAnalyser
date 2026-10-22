@@ -107,12 +107,6 @@ begin
     Result := Copy(AMessage, P, Q - P);
 end;
 
-// Nur Leerzeichen und Tabulatoren (oder nichts).
-function IsBlankLine(const S: string): Boolean;
-begin
-  Result := SkipBlanks(S, 1) > Length(S);
-end;
-
 // Die Klammerbilanz ('[' und '(' gegen ']' und ')') der Code-Zeichen von
 // ALine zwischen AFrom und ATo; > 0 heisst, das Attribut laeuft weiter.
 function OpenBrackets(AMap: TRdxCodeMap; ALine, AFrom, ATo: Integer): Integer;

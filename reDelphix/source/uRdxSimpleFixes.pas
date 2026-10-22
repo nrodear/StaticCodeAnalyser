@@ -1611,13 +1611,6 @@ begin
   Result := Copy(AMap.Raw(AFirst.Line), AFirst.Col, ALast.EndCol - AFirst.Col);
 end;
 
-// Ohne Leerraum, klein - fuer den Vergleich mit dem Bereichstext.
-function Squeezed(const AText: string): string;
-begin
-  Result := LowerCase(StringReplace(StringReplace(AText, ' ', '',
-    [rfReplaceAll]), #9, '', [rfReplaceAll]));
-end;
-
 { ---- SCA126: die Anweisung lesen ---- }
 
 type

@@ -245,7 +245,7 @@ begin
   // Eingerueckt wie die Zeile des end - das begin kann auf der Kopfzeile
   // stehen ('procedure P; begin').
   L := AMap.Raw(ABody.EndTok.Line);
-  Indent := Copy(L, 1, SkipBlanks(L, 1) - 1);
+  Indent := IndentOf(L);
   AEdit.NewText := AEdit.Expected + #10 + Indent + IndentStep(Indent, '')
     + AText;
 end;
