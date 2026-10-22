@@ -378,8 +378,8 @@ type
 procedure VerarbeiteZeile(const ALine: string; AInitHandler: TStrings;
   var St: TPasLektuere; AResIdents, AZuweisungen: TStringList);
 var
-  W    : string;
-  WCol : Integer;
+  W, W2       : string;
+  WCol, W2Col : Integer;
 begin
   // Erstes WORT der Zeile (wortgenau, Voll-Review 2026-09-12, Major
   // 56): der fruehere Praefix-Match (StartsText) beendete den
@@ -390,7 +390,26 @@ begin
   W := LowerCase(TDetectorUtils.ExtractFirstWord(ALine, WCol));
   // G4: Routinen-Tracking. Der Kopf bestimmt, in welchem Kontext
   // die folgenden Zuweisungen liegen.
-  if IstRoutinenKopf(W) then
+  //
+  // Klassenmethode ('class procedure TForm1.Setup;', auch class
+  // function/constructor/destructor/operator; Review Woche G03-12): das
+  // erste Wort ist 'class', der Kopf wurde frueher nicht erkannt - stand die
+  // Klassenmethode direkt hinter FormCreate, blieb AktIstInit True, ihre
+  // Aufrufe zaehlten als Init-Aufrufe, und die Captions einer so
+  // 'gerufenen' Instanzmethode fielen still aus dem Bericht. Eine
+  // Klassenmethode hat keine Instanz, also nie Init-Kontext.
+  if W = 'class' then
+  begin
+    W2 := LowerCase(TDetectorUtils.ExtractFirstWord(
+      Copy(ALine, WCol + Length(W), MaxInt), W2Col));
+    if IstRoutinenKopf(W2) or (W2 = 'operator') then
+    begin
+      St.AktRoutine := KopfName(ALine,
+        WCol + Length(W) + W2Col - 2 + Length(W2));
+      St.AktIstInit := False;
+    end;
+  end
+  else if IstRoutinenKopf(W) then
   begin
     St.AktRoutine := KopfName(ALine, WCol - 1 + Length(W));
     St.AktIstInit := IstInitRoutine(W, St.AktRoutine, AInitHandler);
@@ -465,7 +484,7 @@ var
   Cached  : Boolean;
   LineFor : TArray<Integer>;
   Code, S : string;
-  Lhs     : string;                 // die getrimmte Zeile
+  Zeile   : string;                 // die getrimmte Zeile
   St      : TPasLektuere;
 begin
   ARegime := False;
@@ -496,9 +515,9 @@ begin
     St.InitCalls.CaseSensitive := False;
     for S in Code.Split([#10]) do
     begin
-      Lhs := Trim(S);
-      if Lhs = '' then Continue;
-      VerarbeiteZeile(Lhs, AInitHandler, St, AResIdents, AZuweisungen);
+      Zeile := Trim(S);
+      if Zeile = '' then Continue;
+      VerarbeiteZeile(Zeile, AInitHandler, St, AResIdents, AZuweisungen);
     end;
     LoeseInitZuweisungen(St.ZuwJeRout, St.InitNamen, St.InitCalls,
       AUeberschrieben);

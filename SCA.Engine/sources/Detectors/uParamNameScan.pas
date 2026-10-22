@@ -1007,7 +1007,14 @@ end;
 // Query mitbringt (DFM, andere Routine, Zuweisung aus fremder Query) - nicht
 // dem, das hier erst folgt. Verworfen statt Incomplete: ein spaeteres
 // SQL.Text/SQL.Clear ersetzt das SQL ganz, die Zugriffe danach bleiben
-// pruefbar. Eine hier erzeugte Query hat vor ihrem ersten SQL keine
+// pruefbar - aber gegen die VEREINIGUNG aller SQL-Beitraege der Routine:
+// Reset leert Parts nicht, TQueryJudge.Judge verbindet sie alle. Ein
+// Zugriff nach dem Ersetzen, der nur einen Platzhalter des ALTEN SQL
+// trifft, bleibt still - bewusstes FN, dieselbe Regel wie fuer
+// alternative SQL-Texte in if/else (docs/rules/SCA199.md, "Alternative
+// SQL texts"; Test Scan_SqlReplaced_OldPlaceholderAccepted). Erst eine
+// Neuerzeugung der Query vergisst das alte SQL (HandleAssign).
+// Eine hier erzeugte Query hat vor ihrem ersten SQL keine
 // Parameter - dort bleibt der Zugriff stehen (Review 2026-10-14, Blocker).
 procedure TRoutineScanner.AddRef(AQ: Integer; const AName: string;
   ALine: Integer; AThrows: Boolean);
