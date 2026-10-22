@@ -62,6 +62,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxCodeMap, uRdxResultFixes,
+  uRdxInheritedFixes,  // SCA096/SCA097 (seit Review Woche G08-04)
   uTestRdxTextKit;   // Join, Apply, LineStartingWith
 
 const
@@ -580,14 +581,14 @@ var
 begin
   S := LargeUnit(3000, 20);
   T0 := Now;
-  P := PlanOf(TRdxResultFixes.ConstructorInherited, S,
+  P := PlanOf(TRdxInheritedFixes.ConstructorInherited, S,
     LineStartingWith(S, 'constructor TFoo.Create'), MSG_CTOR, R);
   Ms := Round((Now - T0) * MSecsPerDay);
   Assert.AreEqual('', R, 'SCA096 angeboten');
   Assert.AreEqual(STMT_INHERITED, P.Name);
   Assert.IsTrue(Ms < MAX_MS, Format('SCA096: %d ms', [Ms]));
   T0 := Now;
-  P := PlanOf(TRdxResultFixes.DestructorInherited, S,
+  P := PlanOf(TRdxInheritedFixes.DestructorInherited, S,
     LineStartingWith(S, 'destructor TFoo.Destroy'), MSG_DTOR, R);
   Ms := Round((Now - T0) * MSecsPerDay);
   Assert.AreEqual('', R, 'SCA097 angeboten');
@@ -624,20 +625,20 @@ begin
   S := Join(['unit u;', 'interface', 'type', Join(GEN_CTOR), '  end;',
     'implementation', 'constructor TBar.Create(AOwner: TComponent);', 'begin',
     '  OpenEx(AOwner);', 'end;', 'end.']);
-  PlanOf(TRdxResultFixes.ConstructorInherited, S,
+  PlanOf(TRdxInheritedFixes.ConstructorInherited, S,
     LineStartingWith(S, 'constructor TBar.Create'), MSG_CTOR, R);
   Assert.IsTrue(Pos('Aufruf OpenEx in Zeile 16 - ein Konstruktor der Klasse '
     + '(Delegation)', R) > 0, R);
   S := Join(['unit u;', 'interface', 'type', Join(GEN_DTOR), '  end;',
     'implementation', 'destructor TBar.Destroy;', 'begin', '  FList.Free;',
     'end;', 'end.']);
-  PlanOf(TRdxResultFixes.DestructorInherited, S,
+  PlanOf(TRdxInheritedFixes.DestructorInherited, S,
     LineStartingWith(S, 'destructor TBar.Destroy'), MSG_DTOR, R);
   Assert.IsTrue(Pos('TGen.Destroy ist abstrakt (Zeile 6)', R) > 0, R);
   S := Join(['unit u;', 'interface', 'type', Join(MULTI), '  end;',
     'implementation', 'destructor TMulti<T1, T2>.Destroy;', 'begin',
     '  FItems.Free;', 'end;', 'end.']);
-  P := PlanOf(TRdxResultFixes.DestructorInherited, S,
+  P := PlanOf(TRdxInheritedFixes.DestructorInherited, S,
     LineStartingWith(S, 'destructor TMulti'), MSG_DTOR, R);
   Assert.AreEqual('', R, 'SCA097 an TMulti angeboten');
   Assert.IsFalse(P.Changes, 'direkter TObject-Erbe');

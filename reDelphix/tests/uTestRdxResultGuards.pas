@@ -1,7 +1,8 @@
 unit uTestRdxResultGuards;
 
 // Gegen-Review der Charge H5 (Charge H5c): die Fixtures des Pruefers als
-// Tests gegen uRdxResultFixes - ohne Parser, ohne Detektor (laeuft in
+// Tests gegen uRdxResultFixes (SCA096/SCA097 seit Review Woche G08-04
+// gegen uRdxInheritedFixes) - ohne Parser, ohne Detektor (laeuft in
 // reDelphix.Test UND im FPC-Pruefstand). Jeder Test war gegen den Stand
 // 111fed9d rot.
 //   SCA096 Major 1: Delegation an einen eigenen Konstruktor ohne 'Create'
@@ -68,6 +69,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxCodeMap, uRdxResultFixes,
+  uRdxInheritedFixes,  // SCA096/SCA097 (seit Review Woche G08-04)
   uTestRdxTextKit;   // Join, Apply, LineStartingWith
 
 const
@@ -190,10 +192,10 @@ begin
   S := UnitWith(NO_HEAD, SOCKET_TYPES,
     ['constructor THttpClientSocket.OpenFrom(aClient: TCrtSocket);', 'begin',
     '  OpenOptions(''x'');', 'end;']);
-  AssertRefused(TRdxResultFixes.ConstructorInherited, S,
+  AssertRefused(TRdxInheritedFixes.ConstructorInherited, S,
     'constructor THttpClientSocket.OpenFrom', MSG_CTOR, 'Delegation');
   S := CtorSource(NO_HEAD, CHAIN_TYPES, ['  if A > 0 then', '    Make(A);']);
-  AssertRefused(TRdxResultFixes.ConstructorInherited, S, 'constructor TFoo',
+  AssertRefused(TRdxInheritedFixes.ConstructorInherited, S, 'constructor TFoo',
     MSG_CTOR, 'Aufruf Make');
 end;
 
@@ -208,7 +210,7 @@ var
 begin
   // 'Init' ist eine Prozedur der Klasse - keine Delegation.
   S := CtorSource(NO_HEAD, TYPES, ['  Init;']);
-  F := RunFix(TRdxResultFixes.ConstructorInherited, S, 'constructor TFoo',
+  F := RunFix(TRdxInheritedFixes.ConstructorInherited, S, 'constructor TFoo',
     MSG_CTOR);
   Assert.AreEqual(StringReplace(S, '  Init;', '  inherited;'#13#10'  Init;', []),
     F.Text, F.Reason);
@@ -228,10 +230,10 @@ const
     '  TMid = class(TBase)', '  end;', '  TFoo = class(TMid)',
     '    constructor Create(A: Integer); override;', '  end;');
 begin
-  AssertRefused(TRdxResultFixes.ConstructorInherited,
+  AssertRefused(TRdxInheritedFixes.ConstructorInherited,
     CtorSource(NO_HEAD, DIRECT, ['  Log(A);']), 'constructor TFoo', MSG_CTOR,
     'TBase.Create ist abstrakt');
-  AssertRefused(TRdxResultFixes.ConstructorInherited,
+  AssertRefused(TRdxInheritedFixes.ConstructorInherited,
     CtorSource(NO_HEAD, CHAIN, ['  Log(A);']), 'constructor TFoo', MSG_CTOR,
     'TBase.Create ist abstrakt');
 end;
@@ -245,11 +247,11 @@ const
 var
   F : TFixRun;
 begin
-  AssertRefused(TRdxResultFixes.ConstructorInherited,
+  AssertRefused(TRdxInheritedFixes.ConstructorInherited,
     CtorSource(OBJFPC, TYPES, ['  Log(A);']), 'constructor TFoo', MSG_CTOR,
     'nicht beweisbar');
   // Im Delphi-Modus bleibt das Angebot.
-  F := RunFix(TRdxResultFixes.ConstructorInherited,
+  F := RunFix(TRdxInheritedFixes.ConstructorInherited,
     CtorSource(DELPHI_MODE, TYPES, ['  Log(A);']), 'constructor TFoo', MSG_CTOR);
   Assert.AreNotEqual('', F.Text, F.Reason);
 end;
@@ -265,10 +267,10 @@ const
   IMPL: array[0..3] of string = ('destructor TFoo.Destroy;', 'begin',
     '  FList.Free;', 'end;');
 begin
-  AssertRefused(TRdxResultFixes.DestructorInherited,
+  AssertRefused(TRdxInheritedFixes.DestructorInherited,
     UnitWith(NO_HEAD, ABSTRACT_TYPES, IMPL), 'destructor TFoo', MSG_DTOR,
     'TBase.Destroy ist abstrakt');
-  AssertRefused(TRdxResultFixes.DestructorInherited,
+  AssertRefused(TRdxInheritedFixes.DestructorInherited,
     UnitWith(OBJFPC, FOREIGN_TYPES, IMPL), 'destructor TFoo', MSG_DTOR,
     'nicht beweisbar');
 end;
@@ -281,15 +283,15 @@ const
     '    destructor Destroy; override;', '  end;');
 begin
   // Abbrevia TMultiTree.Destroy: 'exit' in einer Schleife.
-  AssertRefused(TRdxResultFixes.DestructorInherited, UnitWith(NO_HEAD, TYPES,
+  AssertRefused(TRdxInheritedFixes.DestructorInherited, UnitWith(NO_HEAD, TYPES,
     ['destructor TFoo.Destroy;', 'begin', '  while Curr <> nil do',
     '    if Curr = Root then', '    begin', '      Curr.Free;', '      exit;',
     '    end', '    else', '      Curr := Curr.Parent;', 'end;']),
     'destructor TFoo', MSG_DTOR, 'exit in Zeile');
-  AssertRefused(TRdxResultFixes.DestructorInherited, UnitWith(NO_HEAD, TYPES,
+  AssertRefused(TRdxInheritedFixes.DestructorInherited, UnitWith(NO_HEAD, TYPES,
     ['destructor TFoo.Destroy;', 'begin', '  if A = nil then Exit;',
     '  A.Free;', 'end;']), 'destructor TFoo', MSG_DTOR, 'Exit in Zeile');
-  AssertRefused(TRdxResultFixes.DestructorInherited, UnitWith(NO_HEAD, TYPES,
+  AssertRefused(TRdxInheritedFixes.DestructorInherited, UnitWith(NO_HEAD, TYPES,
     ['destructor TFoo.Destroy;', 'label Done;', 'begin',
     '  if A = nil then goto Done;', '  A.Free;', 'Done:', 'end;']),
     'destructor TFoo', MSG_DTOR, 'goto in Zeile');
@@ -307,10 +309,10 @@ const
     '    constructor Create(A: Integer); override;');
   END_LINE: array[0..0] of string = ('  end;');
 begin
-  AssertRefused(TRdxResultFixes.ConstructorInherited,
+  AssertRefused(TRdxInheritedFixes.ConstructorInherited,
     CtorSource(NO_HEAD, [IN_LIST[0], IN_LIST[1], END_LINE[0]], ['  Log(A);']),
     'constructor TFoo', MSG_CTOR, 'Direktive in der Vorfahrenliste');
-  AssertRefused(TRdxResultFixes.ConstructorInherited,
+  AssertRefused(TRdxInheritedFixes.ConstructorInherited,
     CtorSource(NO_HEAD, [AROUND_LIST[0], AROUND_LIST[1], END_LINE[0]],
     ['  Log(A);']), 'constructor TFoo', MSG_CTOR,
     'Direktive in der Vorfahrenliste');
@@ -323,7 +325,7 @@ const
     '  TFoo = class(Other.IFoo)', '    constructor Create(A: Integer);',
     '  end;');
 begin
-  AssertRefused(TRdxResultFixes.ConstructorInherited,
+  AssertRefused(TRdxInheritedFixes.ConstructorInherited,
     CtorSource(NO_HEAD, TYPES, ['  Log(A);']), 'constructor TFoo', MSG_CTOR,
     'Elternklasse IFoo');
 end;
@@ -342,7 +344,7 @@ begin
   begin
     S := CtorSource(NO_HEAD, ['  TFoo = class(' + H + ')',
       '    constructor Create(A: Integer);', '  end;'], ['  Log(A);']);
-    F := RunFix(TRdxResultFixes.ConstructorInherited, S, 'constructor TFoo',
+    F := RunFix(TRdxInheritedFixes.ConstructorInherited, S, 'constructor TFoo',
       MSG_CTOR);
     Assert.AreEqual(StringReplace(S, '  Log(A);',
       '  inherited Create;'#13#10'  Log(A);', []), F.Text, H + ': ' + F.Reason);
@@ -360,7 +362,7 @@ const
     '  TFoo = class(TPersistent)', '    constructor Create(A: Integer);',
     '  end;');
 begin
-  AssertRefused(TRdxResultFixes.ConstructorInherited,
+  AssertRefused(TRdxInheritedFixes.ConstructorInherited,
     CtorSource(NO_HEAD, TYPES, ['  Log(A);']), 'constructor TFoo', MSG_CTOR,
     'Entwurf');
 end;
@@ -370,7 +372,7 @@ var
   F : TFixRun;
 begin
   // TPersistent.Destroy ist NICHT leer - gekennzeichnet wie bisher.
-  F := RunFix(TRdxResultFixes.DestructorInherited,
+  F := RunFix(TRdxInheritedFixes.DestructorInherited,
     UnitWith(NO_HEAD, ['  TFoo = class(TPersistent)',
     '    destructor Destroy; override;', '  end;'], ['destructor TFoo.Destroy;',
     'begin', '  FList.Free;', 'end;']), 'destructor TFoo', MSG_DTOR);
@@ -646,7 +648,7 @@ const
     '    IFoo = interface', '    end;', '  end;', '  TFoo = class(IFoo)',
     '    constructor Create(A: Integer);', '  end;');
 begin
-  AssertRefused(TRdxResultFixes.ConstructorInherited,
+  AssertRefused(TRdxInheritedFixes.ConstructorInherited,
     CtorSource(NO_HEAD, TYPES, ['  Log(A);']), 'constructor TFoo', MSG_CTOR,
     'Elternklasse IFoo und keine override-Deklaration');
 end;
