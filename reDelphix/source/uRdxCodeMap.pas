@@ -33,12 +33,15 @@ const
   // Hinter diesen Token ist ein Wort ein Bezeichner ('&End', '@@End',
   // 'X.Then').
   IDENT_PREFIXES: array[0..2] of string = ('&', '@', '.');
-  // Token vor dem Anfang einer Anweisung (uRdxStructFixes: steht vor dem
+  // Token vor dem Anfang einer Anweisung (StartsStatement: steht vor dem
   // if etwas anderes, ist es ein bedingter Ausdruck; uRdxRaiseFixes:
-  // 'EFoo.Create(..)' als ganze Anweisung).
-  STATEMENT_PREV: array[0..11] of string = (';', 'begin', 'then', 'else',
+  // 'EFoo.Create(..)' als ganze Anweisung). 'otherwise' ist der Default-
+  // Zweig eines case in FPC (wie else) - seit der Folgewelle des Wochen-
+  // Reviews (Wunsch aus G07 an G05): in Delphi ist Otherwise ein Bezeichner,
+  // und ein Bezeichner steht nie unmittelbar vor einem Anweisungsanfang.
+  STATEMENT_PREV: array[0..12] of string = (';', 'begin', 'then', 'else',
     'do', 'try', 'finally', 'except', 'repeat', ':', 'initialization',
-    'finalization');
+    'finalization', 'otherwise');
   // Das Wort einer Include-Direktive ('{$I datei}', '{$INCLUDE datei}').
   INCLUDE_WORDS: array[0..1] of string = ('i', 'include');
   // Damit beginnt der Kopf einer Routine (bis Charge H3c je eine Kopie in
