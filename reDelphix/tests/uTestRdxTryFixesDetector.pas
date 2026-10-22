@@ -281,11 +281,12 @@ var
   Meta : TRuleMeta;
 begin
   // Ohne Free (Katalog-Beispiel 'bad', never-freed bzw. proven-leak):
-  // keine Hilfe, der Grund nennt die Variante.
+  // keine Hilfe, der Grund nennt die Variante. Das Teilstueck ohne 'fuer':
+  // de.po traegt es seit Charge G7 mit echtem Umlaut.
   Meta := TRuleCatalog.GetRuleCanonical(fkMemoryLeak);
   Assert.IsTrue(Pos('list.Free', Meta.BadExample) = 0, Meta.BadExample);
   AssertNoHelp(InProc(['  L: TStringList;'], ['  L := TStringList.Create;',
-    '  ShowMessage(L.Text);']), fkMemoryLeak, 'keine Hilfe fuer die Variante');
+    '  ShowMessage(L.Text);']), fkMemoryLeak, 'die Variante');
 end;
 
 { ---- SCA153 ---- }

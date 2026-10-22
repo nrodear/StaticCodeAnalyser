@@ -48,6 +48,7 @@ uses
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uEmptyFinallyBlock,
   uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner,
   uRdxFixTable, uRdxEmptyFinallyFix,
+  uRdxText,              // MsgNoFileOpen (Charge G7)
   uTestRdxDetectorKit,   // TSeen, CatalogText, DetectSource
   uTestRdxTextKit;       // Join, Apply, LineOf
 
@@ -423,7 +424,7 @@ begin
     // Ohne Zeilen: kein Puffer.
     O := TRdxFixTable.FixFor(nil, nil, F, nil);
     Assert.IsFalse(O.Enabled);
-    Assert.AreEqual(R_NO_FILE, O.Reason);
+    Assert.AreEqual(MsgNoFileOpen, O.Reason);
     SL.Text := S;
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
     Assert.IsTrue(O.Enabled, O.Reason);

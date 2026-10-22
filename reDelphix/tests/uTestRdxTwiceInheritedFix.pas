@@ -307,8 +307,10 @@ begin
   Assert.IsTrue(A.Enabled, A.Reason);
   Assert.AreEqual<Integer>(1, A.Variant, 'der zweite Eintrag ist Variant 1');
   Assert.IsTrue(A.ChangesBehavior, 'gekennzeichnet (E2)');
-  Assert.AreEqual('der erste Aufruf entfaellt - die Elternmethode '
-    + 'laeuft nur noch einmal; Reihenfolge und Nebenwirkung pruefen', A.Hint);
+  // de.po traegt echte Umlaute (Charge G7) - hier als #$-Code.
+  Assert.AreEqual('der erste Aufruf entf'#$00E4'llt - die Elternmethode '
+    + 'l'#$00E4'uft nur noch einmal; Reihenfolge und Nebenwirkung '
+    + 'pr'#$00FC'fen', A.Hint);
   Assert.AreEqual<Integer>(6, A.Edits[0].Span.StartLine, 'der erste Aufruf');
 end;
 

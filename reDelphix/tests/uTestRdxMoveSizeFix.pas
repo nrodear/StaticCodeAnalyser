@@ -67,7 +67,7 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uEngineApi, uRuleCatalog,
   uMoveSizeOfPointer,
-  uRdxRecipeRunner,      // TRdxFixOutcome, R_NO_FILE, UsesNamesOf
+  uRdxRecipeRunner,      // TRdxFixOutcome, UsesNamesOf
   uRdxFixTable,          // TRdxFixTable.FixFor
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, FixAllWith
   {$ENDIF}
@@ -584,7 +584,7 @@ begin
   Assert.AreEqual<Integer>(1, Length(Seen));
   O := PlanSeen(Src, Seen[0], False);
   Assert.IsFalse(O.Enabled);
-  Assert.AreEqual(R_NO_FILE, O.Reason);
+  Assert.AreEqual(MsgNoFileOpen, O.Reason);
   Assert.AreEqual('Integer', O.Name, 'Name auch ohne Datei');
   // Mit Datei: die Hilfe gilt.
   O := PlanSeen(Src, Seen[0], True);

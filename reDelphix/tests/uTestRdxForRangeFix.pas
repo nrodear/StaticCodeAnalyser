@@ -227,8 +227,9 @@ begin
   Assert.AreEqual<Integer>(0, Main.Variant);
   Assert.AreEqual<Integer>(1, Alt.Variant);
   Assert.IsTrue(Alt.ChangesBehavior);
-  Assert.AreEqual('die Schleife lief bisher nie und zaehlt danach '
-    + 'aufwaerts; war sie absichtlich abgeschaltet, ist das ein '
+  // de.po traegt echte Umlaute (Charge G7) - hier als #$-Code.
+  Assert.AreEqual('die Schleife lief bisher nie und z'#$00E4'hlt danach '
+    + 'aufw'#$00E4'rts; war sie absichtlich abgeschaltet, ist das ein '
     + 'Eingriff', Alt.Hint);
   // Beide Eintraege lehnen auch gemeinsam ab; der Alt-Planer bleibt Variant 1.
   Fixed(InUnit(['  Foo(1);']), BODY_LINE, RevMsg(10, 1, 'x'), True, Alt);

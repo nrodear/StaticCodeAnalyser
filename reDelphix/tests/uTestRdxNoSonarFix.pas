@@ -428,7 +428,7 @@ begin
     F.Free;
   end;
   Assert.IsFalse(O.Enabled);
-  Assert.AreEqual(R_NO_FILE, O.Reason);
+  Assert.AreEqual(MsgNoFileOpen, O.Reason);
 end;
 
 { ---- echter Detektor und Core ---- }
