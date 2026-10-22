@@ -190,9 +190,13 @@ begin
   // Das Netzlaufwerk ueber die Naht der Regel (Q: gilt als Netzlaufwerk).
   D := FreshDir;
   Net := DRIVE_Q + PathDelim + 'lib';
-  SetRdxRemoteDriveTest(FakeRemoteDrive);
-  U := TRdxProjectUnits.Create;
+  U := nil;
   try
+    // Die prozessweite Naht erst im try: wirft Create, nimmt das finally
+    // sie zurueck - sonst bliebe Q: fuer alle folgenden Tests ein
+    // Netzlaufwerk (Wochen-Review 2026-10-21).
+    SetRdxRemoteDriveTest(FakeRemoteDrive);
+    U := TRdxProjectUnits.Create;
     Touch(D + 'Local.pas');
     U.AddDir(D);
     Assert.IsTrue(U.Knows('Local'), 'lokal: gelesen');
