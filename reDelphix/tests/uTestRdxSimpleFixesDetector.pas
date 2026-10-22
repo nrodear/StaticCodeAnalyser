@@ -132,6 +132,8 @@ type
     [Test] procedure Sca168_LastArmIf_RoundTrip;
     [Test] procedure Sca007_StaleFinding_NoHelp;
     [Test] procedure Alternative_OtherKinds_None;
+    // Wochen-Review 2026-10-21
+    [Test] procedure Sca007_NamespaceSibling_NotAUse;
   end;
 
   // Stufe 3: SCA101 und SCA099, Zweig als Block (Entscheid E7).
@@ -1353,6 +1355,33 @@ begin
   Seen.Line := 4;
   Seen.Msg := 'System.Classes';
   Assert.IsFalse(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason));
+  Assert.IsTrue(Pos('benutzt', Reason) > 0, Reason);
+end;
+
+// Ein Geschwister-Eintrag in uses ('mormot.core.os.security' neben
+// 'mormot.core.os') ist kein Bezug: vorher las UnitStillUsed die
+// uses-Klausel mit, sah 'os' '.' und sperrte die Hilfe mit "wird im Text
+// benutzt" (Wochen-Review 2026-10-21). Ein voll qualifizierter Bezug im
+// Code zaehlt weiter.
+procedure TTestRdxSimpleFixesDetector4.Sca007_NamespaceSibling_NotAUse;
+var
+  Src    : string;
+  Seen   : TSeen;
+  Edits  : TArray<TRdxEdit>;
+  Reason : string;
+begin
+  Src := Join(['unit t;', 'interface', 'implementation',
+    'uses mormot.core.os, mormot.core.os.security;', 'procedure P;', 'begin',
+    '  Exit;', 'end;', 'end.']);
+  Seen.Line := 4;
+  Seen.Msg := 'mormot.core.os';
+  Assert.IsTrue(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason),
+    'Geschwister in uses: ' + Reason);
+  Src := Join(['unit t;', 'interface', 'implementation',
+    'uses mormot.core.os, mormot.core.os.security;', 'procedure P;', 'begin',
+    '  mormot.core.os.Sleep(1);', 'end;', 'end.']);
+  Assert.IsFalse(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason),
+    'voll qualifizierter Bezug');
   Assert.IsTrue(Pos('benutzt', Reason) > 0, Reason);
 end;
 
