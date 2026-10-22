@@ -83,26 +83,22 @@ const
   // So weit zurueck sucht die Planung die Einrueckstufe des try-Rumpfs.
   STEP_LOOKBACK = 200;
 
-// Genau ein Schluesselwort except auf ALine. '' oder der Grund.
+// Das Schluesselwort except (CountTokensOnLine) - nicht 'X.Except'.
+function IsExceptWord(AMap: TRdxCodeMap; const T: TRdxToken;
+  const AArg: string): Boolean;
+begin
+  Result := (T.Low = KW_EXCEPT) and IsKeywordAfter(T, Before(AMap, T));
+end;
+
+// Genau ein Schluesselwort except auf ALine. '' oder der Grund. Der Lauf
+// ist CountTokensOnLine (uRdxCodeMap; bis zur Folgewelle des
+// Wochen-Reviews, G09-16, hier ausgeschrieben), die Gruende bleiben hier.
 function FindExcept(AMap: TRdxCodeMap; ALine: Integer;
   out AExc: TRdxToken): string;
 var
-  T, Prev : TRdxToken;
-  n       : Integer;
+  n : Integer;
 begin
-  AExc := Default(TRdxToken);
-  n := 0;
-  T := NextToken(AMap, ALine, 1);
-  while (T.Low <> '') and (T.Line = ALine) do
-  begin
-    Prev := Before(AMap, T);
-    if (T.Low = KW_EXCEPT) and IsKeywordAfter(T, Prev) then
-    begin
-      Inc(n);
-      AExc := T;
-    end;
-    T := After(AMap, T);
-  end;
+  n := CountTokensOnLine(AMap, ALine, IsExceptWord, '', AExc);
   Result := '';
   if n = 0 then
     Result := MsgMovedSuffix(_(R_EXC_MOVED))

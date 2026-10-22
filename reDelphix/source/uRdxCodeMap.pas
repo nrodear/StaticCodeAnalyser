@@ -480,6 +480,15 @@ function ParenDelta(const T: TRdxToken): Integer;
 // (kein Treffer) oder mehrdeutig (mehrere) ist.
 function OneTokenOnLine(AMap: TRdxCodeMap; ALine: Integer;
   const ASearch: TRdxLineSearch; out AHit: TRdxToken): string;
+// Der Lauf von OneTokenOnLine ohne Grundtext: die Zahl der Code-Token auf
+// ALine, auf die ATest (mit AArg) passt; AHit ist der letzte Treffer oder
+// leer. Fuer Planer, die ihre Gruende selbst als msgids schreiben (E29) -
+// OneTokenReason formatiert deutsch. Bis zur Folgewelle des Wochen-Reviews
+// (G09-03/G09-16) schrieben uRdxEmptyExceptFix.FindExcept,
+// uRdxEmptyBlockFix.FindBegin, uRdxEmptyOnHandlerFix.FindHead und
+// uRdxForRangeFix.FindSite den Lauf deshalb je neu aus.
+function CountTokensOnLine(AMap: TRdxCodeMap; ALine: Integer;
+  ATest: TRdxTokenTest; const AArg: string; out AHit: TRdxToken): Integer;
 // Der Grund zu ACount Treffern auf ALine: 0 -> '<AWhat> auf der
 // gemeldeten Zeile - Zeile verschoben? Datei neu pruefen'; mehr als 1 ->
 // 'Zeile N traegt <AManyFmt mit ACount fuer %d und AArg fuer %s> -
@@ -1574,24 +1583,31 @@ begin
       [ALine, Format(AManyFmt, [ACount, AArg])]);
 end;
 
-function OneTokenOnLine(AMap: TRdxCodeMap; ALine: Integer;
-  const ASearch: TRdxLineSearch; out AHit: TRdxToken): string;
+function CountTokensOnLine(AMap: TRdxCodeMap; ALine: Integer;
+  ATest: TRdxTokenTest; const AArg: string; out AHit: TRdxToken): Integer;
 var
   T : TRdxToken;
-  n : Integer;
 begin
   AHit := Default(TRdxToken);
-  n := 0;
+  Result := 0;
   T := NextToken(AMap, ALine, 1);
   while (T.Low <> '') and (T.Line = ALine) do
   begin
-    if ASearch.Test(AMap, T, ASearch.Arg) then
+    if ATest(AMap, T, AArg) then
     begin
-      Inc(n);
+      Inc(Result);
       AHit := T;
     end;
     T := After(AMap, T);
   end;
+end;
+
+function OneTokenOnLine(AMap: TRdxCodeMap; ALine: Integer;
+  const ASearch: TRdxLineSearch; out AHit: TRdxToken): string;
+var
+  n : Integer;
+begin
+  n := CountTokensOnLine(AMap, ALine, ASearch.Test, ASearch.Arg, AHit);
   Result := OneTokenReason(ALine, n, ASearch.What, ASearch.ManyFmt,
     ASearch.ManyArg);
 end;

@@ -98,26 +98,22 @@ const
   FOLLOW_OK: array[0..4] of string = ('end', 'until', 'else', 'except',
     'finally');
 
+// Das Schluesselwort begin (CountTokensOnLine) - nicht 'X.Begin'.
+function IsBeginWord(AMap: TRdxCodeMap; const T: TRdxToken;
+  const AArg: string): Boolean;
+begin
+  Result := (T.Low = KW_BEGIN) and IsKeywordAfter(T, Before(AMap, T));
+end;
+
 // Das eine begin auf ALine (Code-Sicht, als Schluesselwort). '' oder der
-// Grund.
+// Grund. Der Lauf ist CountTokensOnLine (uRdxCodeMap; bis zur Folgewelle
+// des Wochen-Reviews, G09-16, hier ausgeschrieben).
 function FindBegin(AMap: TRdxCodeMap; ALine: Integer;
   out ABegin: TRdxToken): string;
 var
-  T : TRdxToken;
   N : Integer;
 begin
-  ABegin := Default(TRdxToken);
-  N := 0;
-  T := NextToken(AMap, ALine, 1);
-  while (T.Low <> '') and (T.Line = ALine) do
-  begin
-    if (T.Low = KW_BEGIN) and IsKeywordAfter(T, Before(AMap, T)) then
-    begin
-      Inc(N);
-      ABegin := T;
-    end;
-    T := After(AMap, T);
-  end;
+  N := CountTokensOnLine(AMap, ALine, IsBeginWord, '', ABegin);
   if N = 0 then
     Result := MsgMovedSuffix(_(R_EBL_NO_BEGIN))
   else if N > 1 then

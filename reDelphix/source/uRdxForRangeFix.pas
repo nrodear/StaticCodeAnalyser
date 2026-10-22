@@ -145,32 +145,38 @@ end;
 
 // Der eine umgekehrte Kopf auf ALine, dessen Werte die Meldung nennt.
 // '' und ASite, sonst der Grund.
+// Beginnt an T ein umgekehrter for-Kopf mit Literalgrenzen (das Praedikat
+// fuer OneTokenOnLine)?
+function IsReversedHead(AMap: TRdxCodeMap; const T: TRdxToken;
+  const AArg: string): Boolean;
+var
+  S : TRdxForSite;
+begin
+  Result := (T.Low = 'for') and IsKeywordAfter(T, Before(AMap, T))
+    and ReadHead(AMap, T, S) and (S.FromVal > S.ToVal);
+end;
+
+// Der Lauf ist OneTokenOnLine (uRdxCodeMap; bis zur Folgewelle des
+// Wochen-Reviews, G09-03, hier ausgeschrieben); den Kopf des letzten
+// Treffers liest ReadHead noch einmal - wie bisher steht in ASite der
+// letzte.
 function FindSite(AMap: TRdxCodeMap; ALine: Integer; const AMessage: string;
   out ASite: TRdxForSite): string;
 var
-  T, Prev : TRdxToken;
-  S       : TRdxForSite;
-  n       : Integer;
+  Search     : TRdxLineSearch;
+  Hit        : TRdxToken;
   BFrom, BTo : Int64;
 begin
   ASite := Default(TRdxForSite);
   if not TRdxForRangeFix.BoundsOf(AMessage, BFrom, BTo) then
     Exit(R_FORRANGE_BOUNDS);
-  n := 0;
-  Prev := PrevToken(AMap, ALine, 1);
-  T := NextToken(AMap, ALine, 1);
-  while (T.Low <> '') and (T.Line = ALine) do
-  begin
-    if (T.Low = 'for') and IsKeywordAfter(T, Prev) and ReadHead(AMap, T, S)
-       and (S.FromVal > S.ToVal) then
-    begin
-      Inc(n);
-      ASite := S;
-    end;
-    Prev := T;
-    T := After(AMap, T);
-  end;
-  Result := OneTokenReason(ALine, n, R_FORRANGE_WHAT, R_FORRANGE_MANY);
+  Search := Default(TRdxLineSearch);
+  Search.Test    := IsReversedHead;
+  Search.What    := R_FORRANGE_WHAT;
+  Search.ManyFmt := R_FORRANGE_MANY;
+  Result := OneTokenOnLine(AMap, ALine, Search, Hit);
+  if Hit.Low <> '' then
+    ReadHead(AMap, Hit, ASite);
   if Result <> '' then Exit;
   if (ASite.FromVal <> BFrom) or (ASite.ToVal <> BTo) then
     Result := R_FORRANGE_OTHER
