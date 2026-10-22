@@ -1048,16 +1048,16 @@
       "titel": "else-Zweig im case ergänzen",
       "was": "Setzt ein leeres `else` vor das `end` des case – bedeutungsgleich (alle anderen Werte: nichts tun, wie bisher). Steht das `end` allein auf der Zeile, kommt das `else` in eine eigene Zeile mit derselben Einrückung; endet der letzte Arm nicht auf `;`, setzt die Hilfe es mit.",
       "zweiterEintrag": {
-        "was": "Setzt `else raise EProgrammerError.Create('Unhandled case');` vor das `end`, die raise-Zeile eingerückt wie die Arme; fehlt `System.SysUtils`, kommt es in uses.",
+        "was": "Setzt `else raise EInvalidOpException.Create('Unhandled case');` vor das `end`, die raise-Zeile eingerückt wie die Arme; fehlt `System.SysUtils`, kommt es in uses (in Dateien mit FPC-Weiche oder FPC-Modus als `SysUtils` – FPC 3.2.2 kennt die Klasse ebenfalls).",
         "kennzeichnung": "ein nicht behandelter Wert löst danach eine Exception aus",
         "nichtAngeboten": [
-          "in Dateien mit FPC-Weiche oder FPC-Modus (FPC kennt EProgrammerError nicht)"
+          "dieselben Sperren wie der erste Eintrag"
         ],
         "beispielNachher": [
           "  case X of",
           "    1: A;",
           "  else",
-          "    raise EProgrammerError.Create('Unhandled case');",
+          "    raise EInvalidOpException.Create('Unhandled case');",
           "  end;"
         ]
       },

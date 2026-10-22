@@ -4409,7 +4409,7 @@ case Status of
   stNew    : DoNew;
   stActive : DoActive;
 else
-  raise EProgrammerError.Create('Unhandled status');
+  raise EInvalidOpException.Create('Unhandled status');
 end;
 ```
 

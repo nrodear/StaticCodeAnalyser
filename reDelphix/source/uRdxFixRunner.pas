@@ -119,8 +119,8 @@ type
     class function CaseElseFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer): TRdxFixOutcome; static;
     // SCA168, zweiter Eintrag: else mit RAISE_UNHANDLED - aendert das
-    // Verhalten; SysUtils kommt bei Bedarf mit; nicht in Dateien mit
-    // FPC-Weiche oder FPC-Modus (FPC kennt EProgrammerError nicht).
+    // Verhalten; SysUtils kommt bei Bedarf mit (mit FPC-Weiche als
+    // Kurzname - FPC kennt EInvalidOpException ebenfalls).
     class function CaseRaiseFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer; const AUsesNames: TArray<string>): TRdxFixOutcome; static;
 
@@ -232,7 +232,7 @@ const
   R_NO_HELP      = 'keine Hilfe an dieser Stelle';
   // Hinweise, die der Rumpf selbst setzt - vor dem ' + uses ...' bzw. mit
   // dem Namen; die festen Hinweise je Art fuehrt uRdxFixTable (Charge R8).
-  R_CASE_RAISE_HINT = 'unbehandelte Werte loesen EProgrammerError aus';
+  R_CASE_RAISE_HINT = 'unbehandelte Werte loesen EInvalidOpException aus';
   R_CAST_HINT   = '%s ist schon als %s deklariert - der Cast aendert nichts';
   R_EMPTY_RAISE_HINT = 'ein Aufruf loest ENotImplemented aus statt nichts zu '
     + 'tun';
@@ -972,15 +972,11 @@ class function TRdxFixRunner.CaseRaiseFix(APlaces: TSourcePlaces;
   ALines: TStrings; ALine: Integer;
   const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  if Assigned(APlaces) and APlaces.IsOpen
-     and TRdxRecipeRunner.SourceLooksFpcAware(APlaces) then
-  begin
-    Result := Default(TRdxFixOutcome);
-    Result.Reason := 'Datei mit FPC-Weiche oder FPC-Modus - FPC kennt '
-      + 'EProgrammerError nicht';
-  end
-  else
-    Result := CaseElseOutcome(APlaces, ALines, ALine, RAISE_UNHANDLED);
+  // Keine FPC-Sperre mehr: EInvalidOpException steht auch in SysUtils von
+  // FPC 3.2.2, und AppendUses schreibt dort den Kurznamen (bis
+  // 2026-10-22 sperrte die nie existierende Klasse EProgrammerError
+  // die Variante in FPC-Dateien).
+  Result := CaseElseOutcome(APlaces, ALines, ALine, RAISE_UNHANDLED);
   Result.Variant := 1;
   Result.ChangesBehavior := True;
   if not Result.Enabled then Exit;
