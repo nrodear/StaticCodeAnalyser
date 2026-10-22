@@ -124,8 +124,8 @@ function IfExpressionAbove(const ACodeAbove: array of string): Boolean;
 
 // Traegt die Zeile eine FPC-Weiche oder einen FPC-Modus ('{$IFDEF FPC}',
 // '{$IFNDEF FPC}', '{$IF DEFINED(FPC)}', '{$IF FPC_FULLVERSION ...}',
-// '{$MODE ...}', auch als '(*$..*)')? Dieselben Spuren wie reDelphix (TRdxRecipes.
-// LineLooksFpcAware): eine Inline-Konstante gibt es in FPC 3.2 nicht, in
+// '{$MODE ...}', auch als '(*$..*)')? Die Pruefung von reDelphix (ruft
+// TRdxRecipes.LineLooksFpcAware): eine Inline-Konstante gibt es in FPC 3.2 nicht, in
 // so einer Datei lehnt TargetAt ab. Ein Treffer in einem Kommentar macht
 // nur vorsichtig, nie falsch.
 function LineLooksFpcAware(const ALine: string): Boolean;
@@ -155,7 +155,8 @@ uses
   // Bis Charge B2S-a im interface - die Schnittstelle braucht sie nicht
   // (Review R3-07).
   System.SysUtils,
-  uRdxCodeMap;   // CharAt, IsIdentChar (Folgewelle des Wochen-Reviews)
+  uRdxCodeMap,   // CharAt, IsIdentChar (Folgewelle des Wochen-Reviews)
+  uRdxRecipes;   // TRdxRecipes.LineLooksFpcAware (eine Liste FPC_TELLS)
 
 type
   // Ein Zahl-Literal der Zeile: Spalten [First, Stop).
@@ -219,10 +220,6 @@ const
   // Unit-Abschnitt, in dem eine Inline-Deklaration nicht gemessen ist.
   SECTION_STARTS: array[0..1] of string = ('initialization',
     'finalization');
-  // Spuren einer FPC-Weiche, ohne Leerraum und klein geschrieben (wie
-  // TRdxRecipes.FPC_TELLS in reDelphix).
-  FPC_TELLS: array[0..5] of string = ('{$mode', '(*$mode', '$ifdeffpc',
-    '$ifndeffpc', 'defined(fpc', 'fpc_fullversion');
   // Bloecke einer Zeile: diese Woerter oeffnen ...
   BLOCK_OPENERS: array[0..4] of string = ('begin', 'try', 'case', 'repeat',
     'asm');
@@ -739,8 +736,7 @@ begin
   W := FirstCodeWord(ALine);
   if (W <> 'var') and (W <> 'const') then
     Exit;
-  S := LowerCase(StringReplace(StringReplace(Trim(CodePart(ALine)), ' ', '',
-    [rfReplaceAll]), #9, '', [rfReplaceAll]));
+  S := Squeezed(Trim(CodePart(ALine)));   // uRdxCodeMap
   if W = 'var' then
     P := Pos(':=', S) + 2
   else
@@ -1295,17 +1291,13 @@ begin
   end;
 end;
 
+// Die Spuren (FPC_TELLS) und ihre Pruefung stehen einmal in reDelphix:
+// TRdxRecipes.LineLooksFpcAware (Folgewelle des Wochen-Reviews, G01-08;
+// bis dahin eine Kopie hier, die anders als die in uRdxRecipes kein '$'
+// verlangte - diese vorsichtigere Fassung gilt seitdem fuer beide).
 function LineLooksFpcAware(const ALine: string): Boolean;
-var
-  S    : string;
-  Tell : string;
 begin
-  S := LowerCase(StringReplace(StringReplace(ALine, ' ', '', [rfReplaceAll]),
-    #9, '', [rfReplaceAll]));
-  for Tell in FPC_TELLS do
-    if Pos(Tell, S) > 0 then
-      Exit(True);
-  Result := False;
+  Result := TRdxRecipes.LineLooksFpcAware(ALine);
 end;
 
 function NextFreeName(const AText, ABase: string): string;
