@@ -265,6 +265,16 @@ begin
     '    function Bar: Integer; overload;', '  end;', 'implementation',
     'function TFoo.Bar;', 'begin', 'end;', 'end.']);
   AssertRefused121(S, 'function TFoo.Bar', 'Bar', 'Overload');
+  // Zwei Klassen gleichen letzten Namens (TA.TItem, TB.TItem) mit je einem
+  // Get: mehrdeutig, kein Overload (Review Woche G08-06; bis dahin
+  // 'Overload?').
+  S := Join(['unit u;', 'interface', 'type', '  TA = class', '  public type',
+    '    TItem = class', '      function Get: Integer;', '    end;', '  end;',
+    '  TB = class', '  public type', '    TItem = class',
+    '      function Get: string;', '    end;', '  end;', 'implementation',
+    'function TA.TItem.Get;', 'begin', 'end;', 'end.']);
+  AssertRefused121(S, 'function TA.TItem.Get', 'Get',
+    '2 Klassen namens TItem in der Unit - mehrdeutig');
 end;
 
 procedure TTestRdxResultFixes.Sca121_GenericQualifiedOperator;
@@ -303,14 +313,26 @@ begin
 end;
 
 procedure TTestRdxResultFixes.Refuse121_ScriptOrInclude;
+var
+  R : string;
 begin
-  // xEdit-/JvInterpreter-Skript: 'unit' ohne implementation-Teil.
-  AssertRefused121(Join(['unit UserScript;', 'function Initialize: integer;',
-    'begin', 'end;', 'end.']), 'function Initialize', 'Initialize',
+  // xEdit-/JvInterpreter-Skript: 'unit' ohne implementation-Teil - Default()
+  // kennt der Interpreter nicht ...
+  AssertRefused121(Join(['unit UserScript;', 'function Get: TMyRec;',
+    'begin', 'end;', 'end.']), 'function Get', 'Get',
     'ohne implementation-Teil');
-  // Include-Datei bzw. Fragment ohne Kopf.
-  AssertRefused121(Join(['function F: Integer;', 'begin', 'end;']),
+  // ... ein Literal schon (Review Woche G08-07; bis dahin sperrte die Probe
+  // vor der Wertwahl auch das).
+  Assert.AreEqual(Join(['unit UserScript;', 'function Initialize: integer;',
+    'begin', '  Result := 0;', 'end;', 'end.']),
+    Fix121(Join(['unit UserScript;', 'function Initialize: integer;', 'begin',
+      'end;', 'end.']), 'function Initialize', 'Initialize', R), R);
+  // Include-Datei bzw. Fragment ohne Kopf: ebenso.
+  AssertRefused121(Join(['function F: TMyRec;', 'begin', 'end;']),
     'function F', 'F', 'Include oder Skript');
+  Assert.AreEqual(Join(['function F: Integer;', 'begin', '  Result := 0;',
+    'end;']), Fix121(Join(['function F: Integer;', 'begin', 'end;']),
+    'function F', 'F', R), R);
 end;
 
 procedure TTestRdxResultFixes.Refuse121_NoResult;
@@ -352,6 +374,8 @@ begin
     'end;']), 'function F', 'F', 'specialize');
   AssertRefused121(InUnit(['function F:', '  Integer;', 'begin', 'end;']),
     'function F', 'F', 'mehrere Zeilen');
+  AssertRefused121(InUnit(['function F: { alt } Integer;', 'begin', 'end;']),
+    'function F', 'F', 'Kommentar oder Direktive im Rueckgabetyp');
   // Freie Funktion ohne Signatur (Deklaration im interface-Teil).
   AssertRefused121(InUnit(['function F;', 'begin', 'end;']), 'function F', 'F',
     'keine Methode');
@@ -385,8 +409,10 @@ end;
 
 procedure TTestRdxResultFixes.Sca196_NilKinds;
 const
-  TYPES: array[0..4] of string = ('TArray<string>', 'TBytes',
-    'TStringDynArray', 'TInts', 'IFoo');
+  // IInterface: ein Interface der RTL (InterfaceProven ueber
+  // IsRtlClassOrInterface).
+  TYPES: array[0..5] of string = ('TArray<string>', 'TBytes',
+    'TStringDynArray', 'TInts', 'IFoo', 'IInterface');
 var
   R, T, S : string;
   P       : TRdxResultPlan;
@@ -439,6 +465,12 @@ begin
     '  Result := Length(Inner);', 'end;']);
   AssertRefused196(S, 'Result := Result', 'Outer', 'string',
     'die Routine heisst Inner');
+  // Ein Methodenkopf: der Name ist das letzte Glied des Klassenpfads.
+  S := Join(['unit u;', 'interface', 'type', '  TFoo = class',
+    '    function Bar: string;', '  end;', 'implementation',
+    'function TFoo.Bar: string;', 'begin', '  Use(Result);', 'end;', 'end.']);
+  Assert.AreEqual(StringReplace(S, 'begin', 'begin'#13#10'  Result := '''';',
+    []), Fix196(S, 'Use(Result)', Msg196('Bar', 'string'), R, P), R);
 end;
 
 procedure TTestRdxResultFixes.Refuse196_TypeNotProven;
