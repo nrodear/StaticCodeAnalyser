@@ -98,7 +98,8 @@ implementation
 uses
   System.SysUtils,
   uRdxBufferMath,    // TRdxEdit
-  uRdxBlocks;        // TRdxRoutine, HeritageOf, MethodDecl, HasDirective
+  uRdxBlocks,        // TRdxRoutine, HeritageOf, MethodDecl, HasDirective
+  uRdxText;          // _() und die gemeinsamen Texte (MsgByHand ...), E29
 
 const
   KW_CLASS    = 'class';
@@ -166,8 +167,14 @@ const
     'finally', 'except');
   OBJECT_KINDS: array[0..0] of string = ('object');
   RECORD_KINDS: array[0..0] of string = ('record');
-  R_MOVED   = 'Zeile verschoben? Datei neu pruefen';
-  R_BY_HAND = 'von Hand';
+  // Gruende als englische msgids (Entscheid E29), uebersetzt an der
+  // Verwendung mit _() - mit den Planern aus uRdxResultFixes abgespalten
+  // (Folgewelle A3), die Umstellung der Charge C (G2) zog mit. Das
+  // gemeinsame Ende ('Zeile verschoben? ...', 'von Hand') kommt aus
+  // uRdxText (MsgMovedSuffix, MsgByHand).
+  // CtorVariantReason: dieselbe msgid wie R_NO_DECL in uRdxResultFixes
+  // (DeclOf) - ein Satz, zwei Stellen.
+  R_NO_DECL = 'no declaration of %s in the body of class %s';
 
 type
   // Die Klasse einer Methode (OwnerOf).
@@ -226,11 +233,11 @@ function MethodHeadReason(const R: TRdxRoutine): string;
 begin
   Result := '';
   if R.Head.Low = KW_CLASS then
-    Result := Format('class %s - ohne Vererbungskette, inherited gehoert '
-      + 'nicht hinein', [R.Keyword.Low])
+    Result := _('class %s - without an inheritance chain, inherited does '
+      + 'not belong there', [R.Keyword.Low])
   else if Length(R.Parts) < 2 then
-    Result := Format('%s ohne Klasse (kein TKlasse.Name) - %s',
-      [R.Keyword.Low, R_BY_HAND]);
+    Result := _('%s without a class (no TClass.Name) - %s',
+      [R.Keyword.Low, MsgByHand]);
 end;
 
 // Steht 'inherited' irgendwo im Text der Routine - auch in einem
@@ -246,9 +253,9 @@ begin
   Result := '';
   for Li := R.Head.Line to R.Last.Line do
     if HasIdentWord(LowerCase(AMap.Raw(Li)), WORD_INHERITED) then
-      Exit(Format('"inherited" steht schon in Zeile %d (inaktiver Zweig, '
-        + 'Kommentar, String-Literal oder lokale Routine) - %s',
-        [Li, R_BY_HAND]));
+      Exit(_('"inherited" already appears in line %d (inactive branch, '
+        + 'comment, string literal or local routine) - %s',
+        [Li, MsgByHand]));
 end;
 
 // Der erste Eintrag der Vorfahrenliste hinter AClass (Token 'class') wie im
@@ -309,15 +316,15 @@ var
 begin
   First := FirstHeritage(AScan.Map, AClass, Open, Close);
   if (Open.Low <> '') and (Close.Low = '') then
-    Exit(Format('Vorfahrenliste ohne ")" (Zeile %d) - %s',
-      [AClass.Line, R_BY_HAND]));
+    Exit(_('ancestor list without ")" (line %d) - %s',
+      [AClass.Line, MsgByHand]));
   Stop := AClass;
   if Close.Low <> '' then
     Stop := Close;
   if DirectiveBetween(AScan.Map, Before(AScan.Map, AClass), Stop.Line,
        Stop.Col) then
-    Exit(Format('Compiler-Direktive in der Vorfahrenliste (Zeile %d) - der '
-      + 'Vorfahr haengt an einem Zweig; %s', [AClass.Line, R_BY_HAND]));
+    Exit(_('compiler directive in the ancestor list (line %d) - the '
+      + 'ancestor depends on a branch; %s', [AClass.Line, MsgByHand]));
   Low := LowerCase(First);
   AOwner.Parent := 'TObject';
   if First <> '' then
@@ -348,18 +355,18 @@ begin
   if Length(Heads) = 0 then
   begin
     if DeclaredAs(AScan, Low, OBJECT_KINDS) then
-      Exit('object-Typ (altes Objektmodell) - ' + R_BY_HAND);
+      Exit(_('object type (old object model) - %s', [MsgByHand]));
     if DeclaredAs(AScan, Low, RECORD_KINDS) then
-      Exit('Record - ohne Vererbung');
-    Exit(Format('Klasse %s nicht in dieser Unit - der Vorfahr ist nicht '
-      + 'beweisbar', [AClassPath]));
+      Exit(_('record - no inheritance'));
+    Exit(_('class %s not in this unit - the ancestor cannot be proven',
+      [AClassPath]));
   end;
   if Length(Heads) > 1 then
-    Exit(Format('%d Klassen namens %s in der Unit - mehrdeutig',
+    Exit(_('%d classes named %s in the unit - ambiguous',
       [Length(Heads), LastPart(AClassPath)]));
   AOwner.ClassTok := Heads[0];
   if After(AScan.Map, Heads[0]).Low = 'helper' then
-    Exit('class helper - inherited meint dort die erweiterte Klasse');
+    Exit(_('class helper - inherited means the extended class there'));
   Result := ParentReason(AScan, Heads[0], AOwner);
 end;
 
@@ -376,12 +383,12 @@ begin
   Result := DeclOf(AScan, R, D);
   if Result <> '' then Exit;
   if not HasDirective(D, [KW_OVERRIDE], W) then
-    Exit(Format('Elternklasse %s und keine override-Deklaration - welcher '
-      + 'Elternkonstruktor mit welchen Argumenten laufen soll, ist Entwurf; '
-      + '%s', [AOwner.Parent, R_BY_HAND]));
+    Exit(_('parent class %s and no override declaration - which parent '
+      + 'constructor should run with which arguments is a design decision; '
+      + '%s', [AOwner.Parent, MsgByHand]));
   if HasDirective(D, [KW_OVERLOAD], W) then
-    Exit('override mit overload - welcher geerbte Konstruktor gemeint ist, '
-      + 'ist nicht sicher; ' + R_BY_HAND);
+    Exit(_('override with overload - which inherited constructor is meant '
+      + 'is not certain; %s', [MsgByHand]));
 end;
 
 // SCA096 (b): bricht die erste Anweisung den Konstruktor ab - 'raise',
@@ -411,9 +418,9 @@ begin
       T := After(AMap, T);
   end;
   if Blocked then
-    Result := Format('der Konstruktor bricht mit seiner ersten Anweisung ab '
-      + '(Zeile %d, blockierter Konstruktor) - inherited davor liefe '
-      + 'vergeblich; %s', [After(AMap, R.Body).Line, R_BY_HAND]);
+    Result := _('the constructor aborts with its first statement (line %d, '
+      + 'blocked constructor) - inherited before it would run in vain; %s',
+      [After(AMap, R.Body).Line, MsgByHand]);
 end;
 
 // SCA096 (b): ist ALowName ein Konstruktor der Klasse AClassPath oder eines
@@ -469,15 +476,15 @@ begin
   // kein Aufruf - bis Review Woche G08-06 hiess es "Delegation".
   if After(AScan.Map, T).Low = ':=' then Exit;
   if Copy(T.Low, 1, Length(CREATE_PREFIX)) = CREATE_PREFIX then
-    Exit(Format('Aufruf %s in Zeile %d - vielleicht ein anderer '
-      + 'Konstruktor der Klasse (Delegation), der die Elternklasse schon '
-      + 'initialisiert; inherited davor liefe doppelt; %s',
-      [TokText(AScan.Map, T), T.Line, R_BY_HAND]));
+    Exit(_('call %s in line %d - maybe another constructor of the class '
+      + '(delegation) that already initializes the parent class; inherited '
+      + 'before it would run twice; %s',
+      [TokText(AScan.Map, T), T.Line, MsgByHand]));
   if not CallCandidate(AScan.Map, T) or InList(T.Low, ASeen) then Exit;
   if OwnConstructor(AScan, OwnerPathOf(R.Name), T.Low) then
-    Exit(Format('Aufruf %s in Zeile %d - ein Konstruktor der Klasse '
-      + '(Delegation), der die Elternklasse schon initialisiert; inherited '
-      + 'davor liefe doppelt; %s', [TokText(AScan.Map, T), T.Line, R_BY_HAND]));
+    Exit(_('call %s in line %d - a constructor of the class (delegation) '
+      + 'that already initializes the parent class; inherited before it '
+      + 'would run twice; %s', [TokText(AScan.Map, T), T.Line, MsgByHand]));
   SetLength(ASeen, Length(ASeen) + 1);
   ASeen[High(ASeen)] := T.Low;
 end;
@@ -523,8 +530,8 @@ var
 begin
   Result := DeclOf(AScan, R, D);
   if (Result = '') and not HasDirective(D, [KW_OVERRIDE], W) then
-    Result := 'die Deklaration traegt kein override - dann verdeckt der '
-      + 'Destruktor die virtuelle Methode (SCA149); ' + R_BY_HAND;
+    Result := _('the declaration carries no override - then the destructor '
+      + 'hides the virtual method (SCA149); %s', [MsgByHand]);
 end;
 
 // SCA096 (b), SCA097: die Deklarationen von AMethod in der Klasse ACls der
@@ -544,13 +551,13 @@ begin
     if H.Low = KW_CLASS then Continue;
     AFound := True;
     if TRdxBlocks.MethodDecl(AScan.Map, H, D) <> '' then
-      Exit(Format('die Deklaration von %s.%s in Zeile %d ist nicht zu lesen '
-        + '- ob sie abstrakt ist, bleibt offen; %s',
-        [ACls, AMethod, H.Line, R_BY_HAND]));
+      Exit(_('the declaration of %s.%s in line %d cannot be read - whether '
+        + 'it is abstract remains open; %s',
+        [ACls, AMethod, H.Line, MsgByHand]));
     if HasDirective(D, [KW_ABSTRACT], W) then
-      Exit(Format('%s.%s ist abstrakt (Zeile %d) - inherited ruft dort nichts '
-        + 'bzw. uebersetzt unter FPC objfpc nicht; %s',
-        [ACls, AMethod, H.Line, R_BY_HAND]));
+      Exit(_('%s.%s is abstract (line %d) - inherited calls nothing there or '
+        + 'does not compile under FPC objfpc; %s',
+        [ACls, AMethod, H.Line, MsgByHand]));
   end;
 end;
 
@@ -587,10 +594,10 @@ begin
   end;
   Mode := DirectiveLine(ACtx.Scan.Map, 'mode', ABSTRACT_FATAL_MODES);
   if Mode > 0 then
-    Result := Format('{$mode objfpc/fpc} in Zeile %d, und die geerbte Methode '
-      + 'ist ab %s nicht in dieser Unit zu sehen - ist sie abstrakt, '
-      + 'uebersetzt FPC das inherited nicht; nicht beweisbar, %s',
-      [Mode, Cls, R_BY_HAND]);
+    Result := _('{$mode objfpc/fpc} in line %d, and from %s on the '
+      + 'inherited method is not visible in this unit - if it is abstract, '
+      + 'FPC does not compile the inherited; not provable, %s',
+      [Mode, Cls, MsgByHand]);
 end;
 
 { ---- Das Ende des Destruktors (SCA097) ---- }
@@ -645,9 +652,9 @@ begin
   begin
     if IsExitAt(AMap, T, P)
        or (InList(T.Low, JUMP_WORDS) and IsKeywordAfter(T, P)) then
-      Exit(Format('%s in Zeile %d - der Ablauf verlaesst den Destruktor dort '
-        + 'vor dem Ende, ein inherited am Ende liefe auf diesem Weg nie; %s',
-        [TokText(AMap, T), T.Line, R_BY_HAND]));
+      Exit(_('%s in line %d - the control flow leaves the destructor there '
+        + 'before the end, an inherited at the end would never run on this '
+        + 'path; %s', [TokText(AMap, T), T.Line, MsgByHand]));
     P := T;
     T := After(AMap, T);
   end;
@@ -695,8 +702,8 @@ begin
   S := LastStatementStart(AMap, R);
   Path := PathAt(AMap, S, Low);
   if InList(S.Low, DEAD_END_WORDS) or InList(Low, DEAD_END_PATHS) then
-    Exit(Format('die letzte Anweisung ist %s (Zeile %d) - inherited '
-      + 'dahinter liefe nie; %s', [Path, S.Line, R_BY_HAND]));
+    Exit(_('the last statement is %s (line %d) - inherited after it would '
+      + 'never run; %s', [Path, S.Line, MsgByHand]));
   Result := LeavesDestructorReason(AMap, R);
 end;
 
@@ -714,15 +721,17 @@ var
 begin
   ACtx := Default(TRdxMethodCtx);
   ACtx.Scan := NewScan(AMap);
+  // What: die Ergaenzung der Kopf-Suche als ganze uebersetzte Phrase
+  // (RoutineOnLine setzt sie in MsgNoHeader/MsgHeadersFmt ein).
   Key := KEY_DTOR;
-  What := 'eines Destruktors';
+  What := _('of a destructor');
   if AWord = KW_CONSTRUCTOR then
   begin
     Key := KEY_CTOR;
-    What := 'eines Konstruktors';
+    What := _('of a constructor');
   end;
   if Pos(Key, AMessage) = 0 then
-    Exit(Format('Meldung unbekannt - kein "%s"', [Key]));
+    Exit(_('unknown message - no "%s"', [Key]));
   Result := RoutineOnLine(AMap, ALine, AWord, What, ACtx.Routine);
   if Result = '' then
     Result := MethodHeadReason(ACtx.Routine);
@@ -748,8 +757,8 @@ begin
   begin
     APlan.Name := STMT_INHERITED_CREATE;
     if Length(DeclHeadsOf(ACtx.Scan, ACtx.Routine)) = 0 then
-      Exit(Format('keine Deklaration von %s im Rumpf der Klasse %s - %s',
-        [LastPart(ACtx.Routine.Name), OwnerPathOf(ACtx.Routine.Name), R_MOVED]));
+      Exit(MsgMovedSuffix(_(R_NO_DECL, [LastPart(ACtx.Routine.Name),
+        OwnerPathOf(ACtx.Routine.Name)])));
     Exit('');
   end;
   Result := CtorOverrideReason(ACtx.Scan, ACtx.Routine, ACtx.Owner);
