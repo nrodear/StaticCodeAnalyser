@@ -4090,3 +4090,189 @@ msgstr "uneinheitliche Einrückung im Block - Zeile %d"
 
 msgid "unexpected code after the \"if\" statement"
 msgstr "unerwarteter Code hinter der if-Anweisung"
+
+msgid "the keyword uses is not on the expected line"
+msgstr "Schlüsselwort uses nicht auf der erwarteten Zeile"
+
+msgid "no \";\" after the only entry"
+msgstr "hinter dem einzigen Eintrag steht kein \";\""
+
+msgid "no \",\" after the entry"
+msgstr "hinter dem Eintrag steht kein \",\""
+
+msgid "comma before or semicolon after the last entry not found"
+msgstr "Komma vor bzw. Semikolon hinter dem letzten Eintrag nicht gefunden"
+
+msgid "comment or directive in the range to be deleted"
+msgstr "Kommentar oder Direktive im zu löschenden Bereich"
+
+msgid "the range contains more than this entry - would another one be deleted with it? Analyse the file again"
+msgstr "im Bereich steht mehr als dieser Eintrag - ginge ein weiterer mit? Datei neu prüfen"
+
+msgid "no such uses entry"
+msgstr "kein solcher uses-Eintrag"
+
+msgid "no case"
+msgstr "kein case"
+
+msgid "%d case statements"
+msgstr "%d case-Anweisungen"
+
+msgid "the case already has an else branch"
+msgstr "das case hat schon einen else-Zweig"
+
+msgid "else in the case, owner unclear: %s"
+msgstr "else im case, Besitzer unklar: %s"
+
+msgid "the case has an otherwise branch (FPC) - or an arm calls an identifier Otherwise; %s"
+msgstr "das case hat einen otherwise-Zweig (FPC) - oder ein Arm ruft einen Bezeichner Otherwise; %s"
+
+msgid "no end found for the case"
+msgstr "kein end zum case gefunden"
+
+msgid "there is a compiler directive between an open ( and the case - a branch can leave the parenthesis open, so it is unclear whether the case is a statement"
+msgstr "zwischen einer offenen ( und dem case steht eine Compiler-Direktive - ein Zweig kann die Klammer offen lassen, ob das case eine Anweisung ist, ist unklar"
+
+msgid "the case is in the variant part of a record - not a case statement (finding moved? Analyse the file again)"
+msgstr "das case steht im Variantenteil eines Records - kein case-Statement (Fund verschoben? Datei neu prüfen)"
+
+msgid "no block found around the case (fragment?) - it is unclear whether it is a statement"
+msgstr "kein Block um das case gefunden (Fragment?) - ob es eine Anweisung ist, ist unklar"
+
+msgid "the case has no branches"
+msgstr "das case hat keine Zweige"
+
+msgid "compiler directive in the case - a branch could shift the end count"
+msgstr "Compiler-Direktive im case - ein Zweig könnte die end-Bilanz verschieben"
+
+msgid "no then/else/do at the reported place"
+msgstr "kein then/else/do an der gemeldeten Stelle"
+
+msgid "no \"end else\""
+msgstr "kein \"end else\""
+
+msgid "%d times \"end else\""
+msgstr "%d-mal \"end else\""
+
+msgid "the %s is in an expression (conditional expression, Delphi 13) - not a branch of a statement"
+msgstr "das %s steht in einem Ausdruck (bedingter Ausdruck, Delphi 13) - kein Zweig einer Anweisung"
+
+msgid "\"%s\" in the statement - structure, conditional expression, anonymous method or inline declaration"
+msgstr "\"%s\" in der Anweisung - Struktur, bedingter Ausdruck, anonyme Methode oder Inline-Deklaration"
+
+msgid "inline declaration (%s) in the else branch - begin..end would narrow its scope"
+msgstr "Inline-Deklaration (%s) im else-Zweig - begin..end engte ihren Gültigkeitsbereich ein"
+
+msgid "no end found for the else branch"
+msgstr "kein end zum else-Zweig gefunden"
+
+msgid "end of file after the %s"
+msgstr "Dateiende hinter dem %s"
+
+msgid "the statement is already in begin..end"
+msgstr "die Anweisung steht schon in begin..end"
+
+msgid "empty statement after the %s"
+msgstr "leere Anweisung hinter dem %s"
+
+msgid "the statement starts with a string"
+msgstr "die Anweisung beginnt mit einem String"
+
+msgid "compiler directive in the range - begin or end would be on the other side"
+msgstr "Compiler-Direktive im Bereich - begin oder end stünde auf der anderen Seite"
+
+msgid "doubled apostrophes"
+msgstr "verdoppelte Apostrophe"
+
+msgid "literal with an apostrophe"
+msgstr "Literal mit Apostroph"
+
+msgid "call with several arguments - no template"
+msgstr "Aufruf mit mehreren Argumenten - keine Vorlage"
+
+msgid "only constants - no injection risk"
+msgstr "nur Konstanten - kein Injection-Risiko"
+
+msgid "no SQL text in the chain - the statement is built elsewhere (Format, function, editor content), no template"
+msgstr "kein SQL-Text in der Kette - die Anweisung entsteht anderswo (Format, Funktion, Editor-Inhalt), keine Vorlage"
+
+msgid "DDL/DCL (%s ...): %s"
+msgstr "DDL/DCL (%s ...): %s"
+
+msgid "table/column names and DDL cannot be parameterized - check names/whitelist"
+msgstr "Tabellen-/Spaltennamen und DDL lassen sich nicht parametrisieren - Namen prüfen/Whitelist"
+
+msgid "procedural block (%s ...) - parameters of a statement do not apply inside it; %s"
+msgstr "prozeduraler Block (%s ...) - Parameter einer Anweisung gelten darin nicht; %s"
+
+msgid "operand '%s' is already escaped for SQL text (%s) - a parameter needs the raw value; remove the escaping, %s"
+msgstr "Operand '%s' ist schon für SQL-Text maskiert (%s) - ein Parameter braucht den Rohwert; Maskierung entfernen, %s"
+
+msgid "operand '%s' is at the start of the SQL text - no value. %s"
+msgstr "Operand '%s' steht am Anfang des SQL-Texts - kein Wert. %s"
+
+msgid "operand '%s' directly follows %s - it is not visible whether a value belongs there"
+msgstr "Operand '%s' folgt direkt auf %s - ob dort ein Wert steht, ist nicht sichtbar"
+
+msgid "operand '%s' is after %s - SQL expects no value there. %s"
+msgstr "Operand '%s' steht hinter %s - dort erwartet SQL keinen Wert. %s"
+
+msgid "statement type unknown ('%s') - it is not visible whether '%s' is a value"
+msgstr "Anweisungsart unbekannt ('%s') - ob '%s' ein Wert ist, ist nicht sichtbar"
+
+msgid "operand '%s' is in an SQL string that a constant or an earlier line of the chain opens or closes - the template would have to cut it; %s"
+msgstr "Operand '%s' steht in einem SQL-String, den eine Konstante oder eine frühere Zeile der Kette öffnet bzw. schließt - die Vorlage müsste sie zerschneiden; %s"
+
+msgid "operand '%s' is part of an identifier. %s"
+msgstr "Operand '%s' ist Teil eines Bezeichners. %s"
+
+msgid "operand '%s' after %s is text - MySQL inserts it as a string ('10' instead of 10, syntax error); only IntToStr(x) binds a number"
+msgstr "Operand '%s' hinter %s ist ein Text - MySQL setzt ihn als String ein ('10' statt 10, Syntaxfehler); nur IntToStr(x) bindet eine Zahl"
+
+msgid "operand '%s' is the whole %s list - a parameter is ONE value, not a list"
+msgstr "Operand '%s' ist die ganze %s-Liste - ein Parameter ist EIN Wert, keine Liste"
+
+msgid "operand '%s' is in a join condition (ON) - a column is usually meant there. %s"
+msgstr "Operand '%s' steht in einer Join-Bedingung (ON) - dort ist meist eine Spalte gemeint. %s"
+
+msgid "operand '%s' is in a quoted name. %s"
+msgstr "Operand '%s' steht in einem gequoteten Namen. %s"
+
+msgid "operand '%s' is in an SQL comment - no template"
+msgstr "Operand '%s' steht in einem SQL-Kommentar - keine Vorlage"
+
+msgid "SQL string around '%s' does not close - no template"
+msgstr "SQL-String um '%s' schließt nicht - keine Vorlage"
+
+msgid "// bind parameters: "
+msgstr "// Parameter binden: "
+
+msgid "%s() binds no parameters (no FireDAC connection proven) - use a query object with ParamByName"
+msgstr "%s() bindet keine Parameter (keine FireDAC-Verbindung nachgewiesen) - Query-Objekt mit ParamByName verwenden"
+
+msgid "the SQL text already carries the placeholder :%s - the order of the values for ExecSQL is unclear"
+msgstr "der SQL-Text trägt schon den Platzhalter :%s - die Reihenfolge der Werte für ExecSQL ist unklar"
+
+msgid "the SQL text carries a positional placeholder '?' - named parameters do not mix with it; %s"
+msgstr "der SQL-Text trägt einen positionalen Platzhalter '?' - benannte Parameter mischen sich damit nicht; %s"
+
+msgid "%d parameter(s), %d constant(s) read as well, nothing is written"
+msgstr "%d Parameter, %d Konstante(n) mitgelesen, nichts wird geschrieben"
+
+msgid "%d parameter(s), nothing is written"
+msgstr "%d Parameter, nichts wird geschrieben"
+
+msgid "operand '%s' is directly before '%s' - it is not visible whether the value ends there"
+msgstr "Operand '%s' steht direkt vor '%s' - ob der Wert dort endet, ist nicht sichtbar"
+
+msgid "a number"
+msgstr "einer Zahl"
+
+msgid "an SQL string"
+msgstr "einem SQL-String"
+
+msgid "a placeholder"
+msgstr "einem Platzhalter"
+
+msgid "an expression of an earlier line"
+msgstr "einem Ausdruck einer früheren Zeile"

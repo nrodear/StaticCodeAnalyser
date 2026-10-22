@@ -295,12 +295,14 @@ begin
   // die Konstante zerschneiden.
   R := Req([Target('Q.SQL.Text'), Op('SQL_BASE'), Op('Name'), Lit('''''''''')]);
   SetConst(R, 1, 'SELECT * FROM t WHERE name = ''');
-  AssertRefused(R, 'die Vorlage muesste sie zerschneiden');
+  // Umlautfreies Teilstueck von R_CUT: de.po traegt 'muesste' mit echtem
+  // Umlaut (Charge G8, Entscheid E29) - Pascal bleibt ASCII.
+  AssertRefused(R, 'sie zerschneiden');
   // ... bzw. schliesst ihn.
   R := Req([Target('Q.SQL.Text'), Lit('''SELECT * FROM t WHERE name = '''''''),
     Op('Name'), Op('QUOTE_AND')]);
   SetConst(R, 3, ''' AND b = 1');
-  AssertRefused(R, 'die Vorlage muesste sie zerschneiden');
+  AssertRefused(R, 'sie zerschneiden');
   // Innerhalb des Strings ohne Quote: ein Stueck des Werts.
   R := Req([Target('Q.SQL.Text'), Lit('''SELECT * FROM t WHERE n LIKE '''''''),
     Op('PCT'), Op('X'), Lit('''%''''''')]);
@@ -384,7 +386,9 @@ begin
     '  Q.SQL.Add(X + '' AND b = 1''); // here']);
   Assert.IsFalse(FactsBuilt(Src, '// here', CallReq([Target('Q.SQL.Add'),
     Op('X'), Lit(''' AND b = 1''')]), T), T.Text);
-  Assert.IsTrue(Pos('folgt direkt auf einem Ausdruck einer frueheren Zeile',
+  // Umlautfreies Teilstueck: de.po traegt 'frueheren' mit echtem Umlaut
+  // (SHOWN_CHAIN_EXPR, Charge G8, Entscheid E29) - Pascal bleibt ASCII.
+  Assert.IsTrue(Pos('folgt direkt auf einem Ausdruck einer ',
     T.Reason) > 0, T.Reason);
 end;
 
