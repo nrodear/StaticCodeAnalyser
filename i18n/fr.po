@@ -4587,3 +4587,252 @@ msgstr "ancêtre générique - le détecteur compare T au type substitué ; over
 
 msgid "unknown message - neither \"missing override\" nor \"hides all inherited\""
 msgstr "message inconnu - ni \"missing override\" ni \"hides all inherited\""
+
+msgid "only statement after %s - an empty branch would remain"
+msgstr "seule instruction après %s - il resterait une branche vide"
+
+msgid "only statement of a case branch or after a label"
+msgstr "seule instruction d'une branche case ou après une étiquette"
+
+msgid "the statement spans several lines"
+msgstr "l'instruction s'étend sur plusieurs lignes"
+
+msgid "no \"if .. then %s := .. else %s := ..\" on the reported line"
+msgstr "aucun \"if .. then %s := .. else %s := ..\" sur la ligne signalée"
+
+msgid "line %d carries %d such if statements - ambiguous (the message names no column)"
+msgstr "la ligne %d porte %d instructions if de ce type - ambigu (le message ne nomme aucune colonne)"
+
+msgid "the expression continues after \"%s\" - not a plain if..else"
+msgstr "l'expression continue après \"%s\" - pas un simple if..else"
+
+msgid "comment or directive in the statement - it would be lost"
+msgstr "commentaire ou directive dans l'instruction - il serait perdu"
+
+msgid "empty condition"
+msgstr "condition vide"
+
+msgid "the if is inside an expression (conditional expression, Delphi 13) - not a statement"
+msgstr "le if se trouve dans une expression (expression conditionnelle, Delphi 13) - pas une instruction"
+
+msgid "the message has no target or values"
+msgstr "la cible ou les valeurs manquent dans le message"
+
+msgid "no \"%s;\""
+msgstr "aucun \"%s;\""
+
+msgid "%d jump statements"
+msgstr "%d instructions de saut"
+
+msgid "jump and \";\" on different lines"
+msgstr "saut et \";\" sur des lignes différentes"
+
+msgid "comment on the line - it may explain the place; %s"
+msgstr "commentaire sur la ligne - il explique peut-être l'endroit; %s"
+
+msgid "code follows the jump - no redundant jump; %s"
+msgstr "du code suit le saut - pas de saut superflu; %s"
+
+msgid "Exit in a loop is an early return, not a no-op"
+msgstr "Exit dans une boucle est un retour anticipé, pas un no-op"
+
+msgid "jump in the finally part - Delphi (E2126) and FPC (06040) do not compile it; %s"
+msgstr "saut dans la partie finally - Delphi (E2126) et FPC (06040) ne le compilent pas; %s"
+
+msgid "the unit declares its own routine %s - the jump may call it"
+msgstr "l'unité déclare sa propre routine %s - le saut l'appelle peut-être"
+
+msgid "%s - the jump is the only statement there"
+msgstr "%s - le saut y est la seule instruction"
+
+msgid "no then branch before the else"
+msgstr "aucune branche then avant le else"
+
+msgid "comment between the then branch and the jump - it would be lost"
+msgstr "commentaire entre la branche then et le saut - il serait perdu"
+
+msgid "the message has no jump statement"
+msgstr "l'instruction de saut manque dans le message"
+
+msgid "no self-assignment \"%s := %s\""
+msgstr "aucune auto-affectation \"%s := %s\""
+
+msgid "%d self-assignments of %s"
+msgstr "%d auto-affectations de %s"
+
+msgid "Result := Result may silence a compiler message (Delphi W1035, FPC \"Function result does not seem to be set\") - removed, it would come back; decide by hand or suppress"
+msgstr "Result := Result fait peut-être taire un message du compilateur (Delphi W1035, FPC \"Function result does not seem to be set\") - une fois retiré, il reviendrait; à décider à la main ou à masquer par un marqueur de suppression"
+
+msgid "%s is also the name of a routine of this unit - the right side may be a (recursive) call"
+msgstr "%s est aussi le nom d'une routine de cette unité - à droite peut figurer un appel (récursif)"
+
+msgid "the unit declares a class operator Assign - an assignment can run code there"
+msgstr "l'unité déclare un class operator Assign - une affectation peut y exécuter du code"
+
+msgid "the message has no target"
+msgstr "la cible manque dans le message"
+
+msgid "nothing precedes the range, and it reaches the end of the file - %s"
+msgstr "rien ne précède la plage, et elle va jusqu'à la fin du fichier - %s"
+
+msgid "empty range"
+msgstr "plage vide"
+
+msgid "the finding reaches line %d, the file has %d lines"
+msgstr "le résultat va jusqu'à la ligne %d, le fichier a %d lignes"
+
+msgid "no comment at line %d column %d"
+msgstr "aucun commentaire à la ligne %d colonne %d"
+
+msgid "line %d carries code or text next to the comment (column %d) - %s"
+msgstr "la ligne %d porte du code ou du texte à côté du commentaire (colonne %d) - %s"
+
+msgid "comment at line %d column %d not readable"
+msgstr "commentaire illisible à la ligne %d colonne %d"
+
+msgid "column %d points into the middle of a comment"
+msgstr "la colonne %d pointe au milieu d'un commentaire"
+
+msgid "directive in the range (line %d) - it is active code, not a comment"
+msgstr "directive dans la plage (ligne %d) - c'est du code actif, pas un commentaire"
+
+msgid "documentation comment (///, {* or (**, line %d) - its sample code stays"
+msgstr "commentaire de documentation (///, {* ou (**, ligne %d) - son code d'exemple reste"
+
+msgid "comment without an end up to the end of the file"
+msgstr "commentaire sans fin jusqu'à la fin du fichier"
+
+msgid "comment before the first code of the file (license or header comment) - %s"
+msgstr "commentaire avant le premier code du fichier (commentaire de licence ou d'en-tête) - %s"
+
+msgid "line %d does not look like code (no \";\" at the end, no \":=\", no begin/procedure/function)"
+msgstr "la ligne %d ne ressemble pas à du code (pas de \";\" à la fin, pas de \":=\", pas de begin/procedure/function)"
+
+msgid "no comment at the reported place"
+msgstr "aucun commentaire à l'endroit signalé"
+
+msgid "several comments, and one reaches beyond the finding with text - the cut would not be contiguous; %s"
+msgstr "plusieurs commentaires, et l'un dépasse le résultat avec du texte - la coupe ne serait pas d'un seul tenant; %s"
+
+msgid "the message has no column or line count"
+msgstr "la colonne ou le nombre de lignes manque dans le message"
+
+msgid "no \"%s\""
+msgstr "aucun \"%s\""
+
+msgid "%d times \"%s\""
+msgstr "%d fois \"%s\""
+
+msgid "name list not readable"
+msgstr "liste de noms illisible"
+
+msgid "initialized variable - the expression can have side effects"
+msgstr "variable initialisée - l'expression peut avoir des effets de bord"
+
+msgid "absolute variable - it occupies the memory of another one"
+msgstr "variable absolute - elle occupe la mémoire d'une autre"
+
+msgid "type with \"%s\" (across several lines) - %s"
+msgstr "type avec \"%s\" (sur plusieurs lignes) - %s"
+
+msgid "\"%s\" in the type - declaration not readable"
+msgstr "\"%s\" dans le type - déclaration illisible"
+
+msgid "bracket without a counterpart in the type"
+msgstr "parenthèse ou crochet sans contrepartie dans le type"
+
+msgid "no \";\" after the type"
+msgstr "pas de \";\" après le type"
+
+msgid "for var - the control variable of a loop (the detector does not count the loop header as a use) - no quick fix"
+msgstr "for var - la variable de contrôle d'une boucle (le détecteur ne compte pas l'en-tête de la boucle comme une utilisation) - pas de Quick-Fix"
+
+msgid "inline declaration with initializer \":=\" - the expression can have side effects"
+msgstr "déclaration inline avec initialiseur \":=\" - l'expression peut avoir des effets de bord"
+
+msgid "no \":\" after the name list (\"%s\")"
+msgstr "pas de \":\" après la liste de noms (\"%s\")"
+
+msgid "\"%s\" after the type still belongs to the declaration - %s"
+msgstr "\"%s\" après le type appartient encore à la déclaration - %s"
+
+msgid "local %s section - not a variable"
+msgstr "section %s locale - pas une variable"
+
+msgid "no var section before the declaration"
+msgstr "aucune section var avant la déclaration"
+
+msgid "the declaration is not in a var section (\"%s\")"
+msgstr "la déclaration n'est pas dans une section var (\"%s\")"
+
+msgid "attribute before the declaration - %s"
+msgstr "attribut avant la déclaration - %s"
+
+msgid "the name is inside an attribute (\"[...]\") - not a variable"
+msgstr "le nom se trouve dans un attribut (\"[...]\") - pas une variable"
+
+msgid "unclear what the declaration belongs to (\"%s\" before it)"
+msgstr "impossible de savoir à quoi appartient la déclaration (« %s » devant)"
+
+msgid "the declaration is inside an open parenthesis - a parameter of a routine or of a procedural type, not a local variable"
+msgstr "la déclaration se trouve dans une parenthèse ouverte - un paramètre d'une routine ou d'un type procédural, pas une variable locale"
+
+msgid "class var - a class field, not a local variable"
+msgstr "class var - un champ de classe, pas une variable locale"
+
+msgid "declaration after \";\" in a statement block - unclear"
+msgstr "déclaration après \";\" dans un bloc d'instructions - situation peu claire"
+
+msgid "no routine around the declaration (global variable?) - no quick fix"
+msgstr "aucune routine autour de la déclaration (variable globale ?) - pas de Quick-Fix"
+
+msgid "the search for the routine ends at \"%s\" (line %d) - perhaps the variant part of a local record whose case has no end of its own; what the declaration belongs to is unclear - no quick fix"
+msgstr "la recherche de la routine s'arrête à « %s » (ligne %d) - peut-être la partie variante d'un record local dont le case n'a pas de end propre ; on ne sait pas à quoi appartient la déclaration - pas de Quick-Fix"
+
+msgid "routine body not found - %s"
+msgstr "corps de la routine introuvable - %s"
+
+msgid "routine body not found"
+msgstr "corps de la routine introuvable"
+
+msgid "routine body not found - too many local routines"
+msgstr "corps de la routine introuvable - trop de routines locales"
+
+msgid "the name still occurs in the scope (line %d) - under {$IFDEF} and in asm it also counts as a use"
+msgstr "le nom apparaît encore dans la portée (ligne %d) - même sous {$IFDEF} et dans asm, il compte comme une utilisation"
+
+msgid "{$I} include in the scope (line %d) - it may contain the name in a place that the quick fix does not see"
+msgstr "include {$I} dans la portée (ligne %d) - il peut contenir le nom à un endroit que le Quick-Fix ne voit pas"
+
+msgid "a directive names \"%s\" (line %d) - macro or condition, the quick fix does not evaluate it"
+msgstr "une directive nomme \"%s\" (ligne %d) - macro ou condition, le Quick-Fix ne l'évalue pas"
+
+msgid "asm in the scope (line %d) - assembler can address the variable via the stack frame, without its name"
+msgstr "asm dans la portée (ligne %d) - l'assembleur peut adresser la variable via le cadre de pile, sans son nom"
+
+msgid "a macro inserts \"%s\" ({$DEFINE ... := ...} in line %d) - the quick fix does not see its use"
+msgstr "une macro insère \"%s\" ({$DEFINE ... := ...} à la ligne %d) - le Quick-Fix ne voit pas son utilisation"
+
+msgid "no end of the block around the declaration found"
+msgstr "aucune fin du bloc trouvée autour de la déclaration"
+
+msgid "the unit declares a class operator Initialize/Finalize (managed record) - a variable can run code"
+msgstr "l'unité déclare un class operator Initialize/Finalize (record managé) - une variable peut exécuter du code"
+
+msgid "unclear what the inline declaration belongs to (\"%s\" before it)"
+msgstr "impossible de savoir à quoi appartient la déclaration inline (« %s » devant)"
+
+msgid "comment in the declaration - it would be lost"
+msgstr "commentaire dans la déclaration - il serait perdu"
+
+msgid "directive in the declaration or its var section - a branch could become empty"
+msgstr "directive dans la déclaration ou sa section var - une branche pourrait devenir vide"
+
+msgid "the name list does not start on the reported line"
+msgstr "la liste de noms ne commence pas sur la ligne signalée"
+
+msgid "the message has no variable name"
+msgstr "le nom de variable manque dans le message"
+
+msgid "\"%s\" is a keyword, not a variable (the parser read a section as a variable) - no quick fix"
+msgstr "\"%s\" est un mot-clé, pas une variable (l'analyseur a lu une section comme une variable) - pas de Quick-Fix"

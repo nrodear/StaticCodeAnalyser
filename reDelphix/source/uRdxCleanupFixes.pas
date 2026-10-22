@@ -144,8 +144,10 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxBlocks;        // ReadRoutine (SCA053: Ende des Gueltigkeitsbereichs),
+  uRdxBlocks,        // ReadRoutine (SCA053: Ende des Gueltigkeitsbereichs),
                      // MarkerAboveReason (Marker ueber der Deklaration)
+  uRdxText;          // _() und die gemeinsamen Texte (Msg...): Gruende in der
+                     // reDelphix-Sprache (E29), nie uLocalization
 
 const
   SPAN_070 = 'sca070';
@@ -155,7 +157,6 @@ const
   KEY_START   = ' lines starting at column ';
   KEY_VAR     = 'Unused local variable: ';
   KEY_VAR_END = ' (';
-  R_MOVED = 'Zeile verschoben? Datei neu pruefen';
   // SCA053: Schluesselwoerter von Delphi (RESERVED, uRdxCodeMap) sind kein
   // Variablenname (17 Korpusfunde nennen 'resourcestring': der Parser las
   // die Section als Variable).
@@ -359,7 +360,7 @@ begin
   Result := '';
   AEdit := Default(TRdxEdit);
   if not PosBefore(AFrom, ATo) then
-    Exit('leerer Bereich');
+    Exit(_('empty range'));
   LeadBlank := SkipBlanks(AMap.Raw(AFrom.Line), 1) >= AFrom.Col;
   TailBlank := SkipBlanks(AMap.Raw(ATo.Line), ATo.Col)
     > Length(AMap.Raw(ATo.Line));
@@ -374,7 +375,7 @@ begin
   else
     AEdit := JoinCut(AMap, AFrom, ATo, ARole);
   if (Result = '') and (AEdit.Expected = '') then
-    Result := 'leerer Bereich';
+    Result := _('empty range');
 end;
 
 function CutEdit(AMap: TRdxCodeMap; const AFrom, ATo: TRdxTextPos;
@@ -427,11 +428,11 @@ var
 begin
   Result := '';
   if ARegion.Last > AMap.LineCount then
-    Exit(Format('der Fund reicht bis Zeile %d, die Datei hat %d Zeilen - %s',
-      [ARegion.Last, AMap.LineCount, R_MOVED]));
+    Exit(MsgMovedSuffix(_('the finding reaches line %d, the file has %d lines',
+      [ARegion.Last, AMap.LineCount])));
   if AMap.ClassAt(ARegion.First, ARegion.Col) <> 'k' then
-    Exit(Format('an Zeile %d Spalte %d steht kein Kommentar - %s',
-      [ARegion.First, ARegion.Col, R_MOVED]));
+    Exit(MsgMovedSuffix(_('no comment at line %d column %d',
+      [ARegion.First, ARegion.Col])));
   for Li := ARegion.First to ARegion.Last do
   begin
     L := AMap.Raw(Li);
@@ -440,8 +441,8 @@ begin
       From := ARegion.Col;
     for Co := From to Length(L) do
       if not IsBlank(L[Co]) and (AMap.ClassAt(Li, Co) <> 'k') then
-        Exit(Format('Zeile %d traegt neben dem Kommentar Code oder Text '
-          + '(Spalte %d) - von Hand loeschen', [Li, Co]));
+        Exit(_('line %d carries code or text next to the comment (column %d) '
+          + '- %s', [Li, Co, MsgDeleteByHand]));
   end;
 end;
 
@@ -543,7 +544,7 @@ begin
     else
     begin
       if not CommentAt(AMap, Li, Co, C) then
-        Exit(Format('Kommentar an Zeile %d Spalte %d nicht lesbar', [Li, Co]));
+        Exit(_('comment at line %d column %d not readable', [Li, Co]));
       if PosBefore(From, C.Stop) then
         AddComment(AList, C);
       if not C.IsClosed then
@@ -564,8 +565,8 @@ begin
   if (AFirst.Open.Line < ARegion.First)
      and (SkipBlanks(AMap.Raw(ARegion.First), 1) >= ARegion.Col) then
     Exit;
-  Result := Format('Spalte %d zeigt mitten in einen Kommentar - %s',
-    [ARegion.Col, R_MOVED]);
+  Result := MsgMovedSuffix(_('column %d points into the middle of a comment',
+    [ARegion.Col]));
 end;
 
 // Die Sperren je Kommentar: Direktive, Doku, offenes Ende - und ein
@@ -578,17 +579,17 @@ begin
   for C in AList do
   begin
     if C.Directive then
-      Exit(Format('Direktive im Bereich (Zeile %d) - sie ist aktiver Code, '
-        + 'kein Kommentar', [C.Open.Line]));
+      Exit(_('directive in the range (line %d) - it is active code, not a '
+        + 'comment', [C.Open.Line]));
     if C.Doc then
-      Exit(Format('Doku-Kommentar (///, {* bzw. (**, Zeile %d) - sein '
-        + 'Beispielcode bleibt', [C.Open.Line]));
+      Exit(_('documentation comment (///, {* or (**, line %d) - its sample '
+        + 'code stays', [C.Open.Line]));
     if not C.IsClosed then
-      Exit('Kommentar ohne Ende bis zum Dateiende');
+      Exit(_('comment without an end up to the end of the file'));
   end;
   if PrevToken(AMap, AList[0].Open.Line, AList[0].Open.Col).Low = '' then
-    Result := 'Kommentar vor dem ersten Code der Datei (Lizenz- oder '
-      + 'Kopfkommentar) - von Hand entscheiden';
+    Result := _('comment before the first code of the file (license or '
+      + 'header comment) - %s', [MsgDecideByHand]);
 end;
 
 // Backtick-Spannen ('`code`') entfernen - wie der Detektor
@@ -665,8 +666,8 @@ end;
 
 function MarkerOnLineReason(ALine: Integer): string;
 begin
-  Result := Format('Zeile %d sieht nicht nach Code aus (kein ";" am Ende, kein '
-    + '":=", kein begin/procedure/function) - %s', [ALine, R_MOVED]);
+  Result := MsgMovedSuffix(_('line %d does not look like code (no ";" at the '
+    + 'end, no ":=", no begin/procedure/function)', [ALine]));
 end;
 
 // Die Gegenproben am Kommentar: Anfang, Art, Code-Merkmal. '' oder der
@@ -675,7 +676,7 @@ function CommentReason(AMap: TRdxCodeMap; const ARegion: TRdxRegion;
   const AList: TRdxCommentList): string;
 begin
   if Length(AList) = 0 then
-    Exit('kein Kommentar an der gemeldeten Stelle - ' + R_MOVED);
+    Exit(MsgMovedSuffix(_('no comment at the reported place')));
   Result := StartReason(AMap, ARegion, AList[0]);
   if Result = '' then
     Result := KindReason(AMap, AList);
@@ -717,8 +718,8 @@ begin
   AFrom := F.Open;
   ATo := G.Stop;
   if (Length(AList) > 1) and (KeepFront or KeepBack) then
-    Exit('mehrere Kommentare, und einer reicht mit Text ueber den Fund '
-      + 'hinaus - der Schnitt waere nicht zusammenhaengend; von Hand loeschen');
+    Exit(_('several comments, and one reaches beyond the finding with text - '
+      + 'the cut would not be contiguous; %s', [MsgDeleteByHand]));
   if KeepFront then
     AFrom := TextPos(ARegion.First, 1)
   else if KeepBack then
@@ -741,8 +742,10 @@ begin
   List := nil;
   CutStart := TextPos(0, 0);
   CutStop := TextPos(0, 0);
+  // Eigene msgid, nicht MsgNoColumn: der Satz nennt auch die Zeilenzahl
+  // (c_groups Abschnitt 3).
   if not RegionOf(AMessage, ALine, Region) then
-    AReason := 'Spalte oder Zeilenzahl fehlt in der Meldung'
+    AReason := _('the message has no column or line count')
   else
     AReason := RegionReason(AMap, Region);
   if AReason = '' then
@@ -805,11 +808,12 @@ begin
     Prev := T;
     T := After(AMap, T);
   end;
-  // Der Name aus der Meldung kommt als Argument, nicht ins Muster - so
-  // bleibt '%d-mal "%s"' eine msgid (Vertrag von OneTokenReason; bis zur
-  // Review Woche G07-09 stand er im Muster).
-  Result := OneTokenReason(ALine, n, Format('kein "%s"', [AKey]),
-    '%d-mal "%s"', AKey);
+  // What als ganze uebersetzte Nominalphrase; das Muster bleibt unformatiert
+  // (%d = Zahl der Treffer) und der Name aus der Meldung kommt als Argument
+  // dazu, nie ins Muster (Vertrag von OneTokenReason; bis zur Review Woche
+  // G07-09 stand er im Muster).
+  Result := OneTokenReason(ALine, n, _('no "%s"', [AKey]),
+    _('%d times "%s"'), AKey);
 end;
 
 // Die Namensgruppe um ADecl.Name ('A, X, B'): erster und letzter Name,
@@ -827,7 +831,7 @@ begin
   begin
     W := Before(AMap, P);
     if not W.IsWord then
-      Exit('Namensliste nicht lesbar');
+      Exit(_('name list not readable'));
     ADecl.First := W;
     Inc(ADecl.Count);
     P := Before(AMap, W);
@@ -838,7 +842,7 @@ begin
   begin
     W := After(AMap, P);
     if not W.IsWord then
-      Exit('Namensliste nicht lesbar');
+      Exit(_('name list not readable'));
     ADecl.Last := W;
     Inc(ADecl.Count);
     P := After(AMap, W);
@@ -856,19 +860,19 @@ function TypeTokenReason(AMap: TRdxCodeMap; const T, APrev: TRdxToken): string;
 begin
   Result := '';
   if (T.Low = '=') or (T.Low = ':=') then
-    Result := 'initialisierte Variable - der Ausdruck kann Seiteneffekte haben'
+    Result := _('initialized variable - the expression can have side effects')
   else if not IsKeywordAfter(T, APrev) then
     Exit
   else if T.Low = 'absolute' then
-    Result := 'absolute-Variable - sie liegt auf dem Speicher einer anderen'
+    Result := _('absolute variable - it occupies the memory of another one')
   else if ((T.Low = 'object') and (APrev.Low = 'of'))
      or ((T.Low = 'class') and (After(AMap, T).Low = 'of')) then
     Exit
   else if InList(T.Low, MULTI_LINE_TYPES) then
-    Result := Format('Typ mit "%s" (ueber mehrere Zeilen) - von Hand loeschen',
-      [T.Low])
+    Result := _('type with "%s" (across several lines) - %s',
+      [T.Low, MsgDeleteByHand])
   else if InList(T.Low, TYPE_STOPS) then
-    Result := Format('"%s" im Typ - Deklaration nicht lesbar', [T.Low]);
+    Result := _('"%s" in the type - declaration not readable', [T.Low]);
 end;
 
 // Ab AColon bis zum ';' der Deklaration (Klammern uebersprungen). '' oder
@@ -887,7 +891,7 @@ begin
   begin
     Inc(Depth, ParenDelta(T));
     if Depth < 0 then
-      Exit('Klammer ohne Gegenstueck im Typ');
+      Exit(_('bracket without a counterpart in the type'));
     if Depth = 0 then
     begin
       Result := TypeTokenReason(AMap, T, Prev);
@@ -902,7 +906,7 @@ begin
     Prev := T;
     T := After(AMap, T);
   end;
-  Result := 'kein ";" hinter dem Typ';
+  Result := _('no ";" after the type');
 end;
 
 // Die Form der Deklaration: 'for var', Initialisierer, Typ bis ';', keine
@@ -912,21 +916,21 @@ var
   N : TRdxToken;
 begin
   if (ADecl.Lead.Low = 'var') and (Before(AMap, ADecl.Lead).Low = 'for') then
-    Exit('for var - die Laufvariable einer Schleife (der Detektor zaehlt den '
-      + 'Schleifenkopf nicht als Verwendung) - keine Hilfe');
+    Exit(_('for var - the control variable of a loop (the detector does not '
+      + 'count the loop header as a use) - no quick fix'));
   if ADecl.Colon.Low = ':=' then
-    Exit('Inline-Deklaration mit Initialisierer ":=" - der Ausdruck kann '
-      + 'Seiteneffekte haben');
+    Exit(_('inline declaration with initializer ":=" - the expression can '
+      + 'have side effects'));
   if ADecl.Colon.Low <> ':' then
-    Exit(Format('kein ":" hinter der Namensliste ("%s") - %s',
-      [ADecl.Colon.Low, R_MOVED]));
+    Exit(MsgMovedSuffix(_('no ":" after the name list ("%s")',
+      [ADecl.Colon.Low])));
   Result := TypeEnd(AMap, ADecl.Colon, ADecl.Semi);
   if Result <> '' then
     Exit;
   N := After(AMap, ADecl.Semi);
   if IsKeywordAfter(N, ADecl.Semi) and InList(N.Low, CALL_CONVENTIONS) then
-    Result := Format('"%s" hinter dem Typ gehoert noch zur Deklaration - von '
-      + 'Hand loeschen', [N.Low]);
+    Result := _('"%s" after the type still belongs to the declaration - %s',
+      [N.Low, MsgDeleteByHand]);
 end;
 
 // Ein Wort rueckwaerts (GoverningSection): True, wo die Suche endet -
@@ -1033,12 +1037,11 @@ begin
   if K.Low = 'var' then
     ADecl.VarTok := K
   else if (K.Low = 'const') or (K.Low = 'resourcestring') then
-    Result := Format('lokale %s-Section - keine Variable', [K.Low])
+    Result := _('local %s section - not a variable', [K.Low])
   else if K.Low = '' then
-    Result := 'keine var-Section vor der Deklaration'
+    Result := _('no var section before the declaration')
   else
-    Result := Format('die Deklaration steht nicht in einer var-Section '
-      + '("%s")', [K.Low]);
+    Result := _('the declaration is not in a var section ("%s")', [K.Low]);
 end;
 
 // Steht T in einer offenen Klammer - ein Parameter einer Routine oder eines
@@ -1075,23 +1078,25 @@ function OwnerReason(AMap: TRdxCodeMap; var ADecl: TRdxVarDecl): string;
 begin
   Result := '';
   if ADecl.Lead.Low = ']' then
-    Exit('Attribut vor der Deklaration - von Hand loeschen')
+    Exit(_('attribute before the declaration - %s', [MsgDeleteByHand]))
   else if ADecl.Lead.Low = '[' then
-    Exit('der Name steht in einem Attribut ("[...]") - keine Variable')
+    Exit(_('the name is inside an attribute ("[...]") - not a variable'))
   else if ADecl.Lead.Low = 'var' then
     ADecl.VarTok := ADecl.Lead
   else if ADecl.Lead.Low = ';' then
     Result := SectionReason(AMap, ADecl)
   else
-    Result := Format('unklar, wozu die Deklaration gehoert ("%s" davor)',
+    // Eigene msgid nach dem Muster von MsgUnclearStatementOwner - hier
+    // ist die Deklaration das Subjekt (c_groups Abschnitt 3).
+    Result := _('unclear what the declaration belongs to ("%s" before it)',
       [ADecl.Lead.Low]);
   if (Result = '') and InOpenParen(AMap, ADecl.First) then
-    Result := 'die Deklaration steht in einer offenen Klammer - ein Parameter '
-      + 'einer Routine bzw. eines Prozedurtyps, keine lokale Variable';
+    Result := _('the declaration is inside an open parenthesis - a parameter '
+      + 'of a routine or of a procedural type, not a local variable');
   if Result <> '' then
     Exit;
   if Before(AMap, ADecl.VarTok).Low = 'class' then
-    Exit('class var - ein Klassenfeld, keine lokale Variable');
+    Exit(_('class var - a class field, not a local variable'));
   ADecl.InBlock := InsideBlock(AMap, ADecl.VarTok, ADecl.Stop);
   // Endet die Suche an case, asm oder record (BlockStep, rsStop), steht
   // davor meist der Variantenteil eines lokalen Records: sein case hat
@@ -1100,15 +1105,15 @@ begin
   // Das sperrt - mit diesem Grund; bis zur Review Woche G07-10 hiess es
   // 'globale Variable?', obwohl die Variable lokal war.
   if ADecl.InBlock and (ADecl.Lead.Low <> 'var') then
-    Result := 'Deklaration hinter ";" in einem Anweisungsblock - unklar'
+    Result := _('declaration after ";" in a statement block - unclear')
   else if not ADecl.InBlock and InList(ADecl.Stop.Low, BLOCK_PAIRS) then
-    Result := Format('die Suche nach der Routine endet an "%s" (Zeile %d) - '
-      + 'etwa der Variantenteil eines lokalen Records, dessen case kein '
-      + 'eigenes end hat; wozu die Deklaration gehoert, ist unklar - keine '
-      + 'Hilfe', [ADecl.Stop.Low, ADecl.Stop.Line])
+    Result := _('the search for the routine ends at "%s" (line %d) - perhaps '
+      + 'the variant part of a local record whose case has no end of its '
+      + 'own; what the declaration belongs to is unclear - no quick fix',
+      [ADecl.Stop.Low, ADecl.Stop.Line])
   else if not ADecl.InBlock and not InList(ADecl.Stop.Low, ROUTINE_WORDS) then
-    Result := 'keine Routine um die Deklaration (globale Variable?) - keine '
-      + 'Hilfe';
+    Result := _('no routine around the declaration (global variable?) - no '
+      + 'quick fix');
 end;
 
 // Die Routine, deren Deklarationsteil die var-Section von ADecl traegt:
@@ -1131,16 +1136,18 @@ begin
   H := ADecl.Stop;
   for n := 1 to MAX_OWNER_STEPS do
   begin
+    // Den Grund von ReadRoutine uebersetzt uRdxBlocks; er steht hier als
+    // %s im eigenen Satz (Texte umstellen: der Aufrufer uebersetzt).
     Result := TRdxBlocks.ReadRoutine(AMap, H, R);
     if Result <> '' then
-      Exit('Rumpf der Routine nicht gefunden - ' + Result);
+      Exit(_('routine body not found - %s', [Result]));
     if not TokAfter(ADecl.VarTok, R.Last) then
       Exit('');
     if InsideBlock(AMap, H, Stop) or not InList(Stop.Low, ROUTINE_WORDS) then
-      Exit('Rumpf der Routine nicht gefunden');
+      Exit(_('routine body not found'));
     H := Stop;
   end;
-  Result := 'Rumpf der Routine nicht gefunden - zu viele lokale Routinen';
+  Result := _('routine body not found - too many local routines');
 end;
 
 // Das letzte Token der Bedingung hinter AUntil: vor dem ';' bzw. vor dem
@@ -1235,9 +1242,8 @@ begin
   begin
     if T.IsWord and (P.Low <> '.') and not SameTok(T, ASkip)
        and SameIdent(T.Low, AKey) then
-      Exit(Format('der Name kommt im Gueltigkeitsbereich noch vor (Zeile %d) '
-        + '- auch unter {$IFDEF} und in asm zaehlt er als Verwendung',
-        [T.Line]));
+      Exit(_('the name still occurs in the scope (line %d) - under {$IFDEF} '
+        + 'and in asm it also counts as a use', [T.Line]));
     P := T;
     T := After(AMap, T);
   end;
@@ -1276,20 +1282,19 @@ begin
   Result := '';
   Li := IncludeInLines(AMap, AFrom.Line, ATo.Line);
   if Li > 0 then
-    Exit(Format('{$I}-Include im Gueltigkeitsbereich (Zeile %d) - dort kann '
-      + 'der Name stehen, den die Hilfe nicht sieht', [Li]));
+    Exit(_('{$I} include in the scope (line %d) - it may contain the name in '
+      + 'a place that the quick fix does not see', [Li]));
   Li := DirectiveNaming(AMap, AFrom.Line, ATo.Line, AKey);
   if Li > 0 then
-    Exit(Format('eine Direktive nennt "%s" (Zeile %d) - Makro oder Bedingung, '
-      + 'die Hilfe wertet sie nicht aus', [AKey, Li]));
+    Exit(_('a directive names "%s" (line %d) - macro or condition, the quick '
+      + 'fix does not evaluate it', [AKey, Li]));
   P := Before(AMap, AFrom);
   T := AFrom;
   while (T.Low <> '') and not TokAfter(T, ATo) do
   begin
     if (T.Low = 'asm') and IsKeywordAfter(T, P) then
-      Exit(Format('asm im Gueltigkeitsbereich (Zeile %d) - Assembler kann die '
-        + 'Variable ueber den Stack-Rahmen ansprechen, ohne ihren Namen',
-        [T.Line]));
+      Exit(_('asm in the scope (line %d) - assembler can address the '
+        + 'variable via the stack frame, without its name', [T.Line]));
     P := T;
     T := After(AMap, T);
   end;
@@ -1321,8 +1326,8 @@ begin
       begin
         Args := LowerCase(DirectiveArgs(AMap, Li, Co));
         if (Pos(MACRO_ASSIGN, Args) > 0) and HasIdentWord(Args, AKey) then
-          Exit(Format('ein Makro setzt "%s" ein ({$DEFINE ... := ...} in Zeile '
-            + '%d) - die Hilfe sieht seine Verwendung nicht', [AKey, Li]));
+          Exit(_('a macro inserts "%s" ({$DEFINE ... := ...} in line %d) - '
+            + 'the quick fix does not see its use', [AKey, Li]));
       end;
   end;
 end;
@@ -1343,7 +1348,7 @@ begin
     From := ADecl.VarTok;
     Upto := BlockStop(AMap, ADecl.VarTok);
     if Upto.Low = '' then
-      Exit('kein Ende des Blocks um die Deklaration gefunden');
+      Exit(_('no end of the block around the declaration found'));
   end
   else
   begin
@@ -1382,8 +1387,8 @@ begin
     begin
       N := After(AMap, T);
       if (N.Low = 'initialize') or (N.Low = 'finalize') then
-        Exit('die Unit deklariert einen class operator Initialize/Finalize '
-          + '(verwalteter Record) - eine Variable kann Code ausfuehren');
+        Exit(_('the unit declares a class operator Initialize/Finalize '
+          + '(managed record) - a variable can run code'));
     end;
     T := NextTokenOnLineWith(AMap, T, KW_OPERATOR);
   end;
@@ -1414,12 +1419,11 @@ begin
   if P.Low = ';' then
     Exit;
   if not InList(P.Low, LIST_OPENERS) then
-    Exit(Format('unklar, wozu die Inline-Deklaration gehoert ("%s" davor)',
+    Exit(_('unclear what the inline declaration belongs to ("%s" before it)',
       [P.Low]));
   N := After(AMap, ADecl.Semi);
   if (N.Low = '') or InList(N.Low, LIST_ENDS) then
-    Result := Format('einzige Anweisung hinter %s - es bliebe ein leerer '
-      + 'Block (SCA077)', [P.Low]);
+    Result := MsgOnlyStatementEmptyBlock(P.Low);
 end;
 
 // Was geloescht wird: in einer Gruppe der Name samt Komma ('X, ' bzw.
@@ -1462,15 +1466,15 @@ var
 begin
   Result := '';
   if CommentInRange(AMap, SpanOf(AFrom, ATo, SPAN_053)) then
-    Exit('Kommentar in der Deklaration - er ginge verloren');
+    Exit(_('comment in the declaration - it would be lost'));
   if ADecl.InBlock then
     Directive := DirectiveInLines(AMap, ADecl.VarTok.Line, ADecl.Semi.Line)
   else
     Directive := DirectiveBefore(AMap, ADecl.VarTok.Line,
       After(AMap, ADecl.Semi));
   if Directive then
-    Result := 'Direktive in der Deklaration bzw. ihrer var-Section - ein '
-      + 'Zweig koennte leer werden';
+    Result := _('directive in the declaration or its var section - a branch '
+      + 'could become empty');
 end;
 
 // Steht die Deklaration allein auf ihrer Zeile und folgt ihr nur ein
@@ -1520,8 +1524,8 @@ begin
   if Result = '' then
     Result := GroupOf(AMap, ADecl);
   if (Result = '') and (ADecl.First.Line <> ALine) then
-    Result := 'die Namensliste beginnt nicht auf der gemeldeten Zeile - '
-      + R_MOVED;
+    Result := MsgMovedSuffix(_('the name list does not start on the reported '
+      + 'line'));
   // Erst der Besitzer (Section, Block), dann die Form: eine const-Section
   // heisst so, nicht 'initialisierte Variable'.
   if Result = '' then
@@ -1544,10 +1548,10 @@ begin
   CutStop := TextPos(0, 0);
   Key := LowerCase(UnusedVarName(AMessage));
   if Key = '' then
-    AReason := 'Variablenname fehlt in der Meldung'
+    AReason := _('the message has no variable name')
   else if InList(Key, RESERVED) then
-    AReason := Format('"%s" ist ein Schluesselwort, keine Variable (der '
-      + 'Parser las eine Section als Variable) - keine Hilfe', [Key])
+    AReason := _('"%s" is a keyword, not a variable (the parser read a '
+      + 'section as a variable) - no quick fix', [Key])
   else
     AReason := DeclReason(AMap, ALine, Key, Decl);
   if AReason = '' then
