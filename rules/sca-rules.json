@@ -4315,6 +4315,7 @@
       "tags": ["loop", "off-by-one", "range-check", "runtime-error"],
       "cwe": ["CWE-193", "CWE-125"],
       "detectorUnit": "uLoopPastHighBound.pas",
+      "editorHelp": true,
       "examples": {
         "bad": "for i := 0 to Names.Count do\n  WriteLn(Names[i]);   // Names[Names.Count] raises",
         "good": "for i := 0 to Names.Count - 1 do\n  WriteLn(Names[i]);"

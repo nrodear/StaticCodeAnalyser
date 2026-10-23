@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6513 Zeilen, 291361 Bytes
-  CPoLines_de: array[0..6512] of string = (
+  // i18n\de.po - 6546 Zeilen, 293131 Bytes
+  CPoLines_de: array[0..6545] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6527,7 +6527,40 @@ const
     'msgstr "kein Tab an der gemeldeten Stelle"',
     '',
     'msgid "the first tab of the line is inside a string or comment - it stays untouched, the help would leave the finding in place"',
-    'msgstr "der erste Tab der Zeile steht in einem String oder Kommentar - der bleibt unangetastet, die Hilfe lie'#$00DF'e den Fund stehen"'
+    'msgstr "der erste Tab der Zeile steht in einem String oder Kommentar - der bleibt unangetastet, die Hilfe lie'#$00DF'e den Fund stehen"',
+    '',
+    'msgid "the message does not name the loop head - analyse the file again"',
+    'msgstr "die Meldung nennt den Schleifenkopf nicht - Datei neu pr'#$00FC'fen"',
+    '',
+    'msgid "the loop runs from 1 to Count - whether the index should be i - 1 or the bound Count - 1 is for you to decide"',
+    'msgstr "die Schleife l'#$00E4'uft von 1 bis Count - ob der Index i - 1 oder die Grenze Count - 1 sein soll, ist von Hand zu entscheiden"',
+    '',
+    'msgid "the type is not proven - an array needs High(), a string has to run from 1"',
+    'msgstr "der Typ ist nicht bewiesen - ein Array braucht High(), ein String muss bei 1 beginnen"',
+    '',
+    'msgid "the reported line carries %d for headers with this range - ambiguous"',
+    'msgstr "die gemeldete Zeile tr'#$00E4'gt %d for-K'#$00F6'pfe mit diesem Bereich - mehrdeutig"',
+    '',
+    'msgid "the for header on the line has another range than the finding"',
+    'msgstr "der for-Kopf auf der Zeile hat einen anderen Bereich als der Fund"',
+    '',
+    'msgid "the for header goes over more than one line"',
+    'msgstr "der for-Kopf geht '#$00FC'ber mehr als eine Zeile"',
+    '',
+    'msgid "compiler directive in the line of the for header"',
+    'msgstr "Compiler-Direktive in der Zeile des for-Kopfs"',
+    '',
+    'msgid "comment or string in the for header"',
+    'msgstr "Kommentar oder String im for-Kopf"',
+    '',
+    'msgid "a string from 0 to High() + 1 is wrong at both ends - correct the range by hand"',
+    'msgstr "ein String von 0 bis High() + 1 ist an beiden Enden falsch - den Bereich von Hand korrigieren"',
+    '',
+    'msgid "the loop runs one pass less (a string loop starts at 1) - if the last pass was meant for a sentinel or a terminator, this is an intervention"',
+    'msgstr "die Schleife l'#$00E4'uft einen Durchlauf weniger ('#$00FC'ber einen String ab 1) - war der letzte Durchlauf f'#$00FC'r einen W'#$00E4'chter oder ein Endezeichen gedacht, ist das ein Eingriff"',
+    '',
+    'msgid "Let the loop run %s"',
+    'msgstr "Schleife %s laufen lassen"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -6802,8 +6835,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6509 Zeilen, 303343 Bytes
-  CPoLines_fr: array[0..6508] of string = (
+  // i18n\fr.po - 6542 Zeilen, 305111 Bytes
+  CPoLines_fr: array[0..6541] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -13312,7 +13345,40 @@ const
     'msgstr "aucune tabulation '#$00E0' l''endroit signal'#$00E9'"',
     '',
     'msgid "the first tab of the line is inside a string or comment - it stays untouched, the help would leave the finding in place"',
-    'msgstr "la premi'#$00E8're tabulation de la ligne se trouve dans une cha'#$00EE'ne ou un commentaire - elle reste intacte, l''aide laisserait le r'#$00E9'sultat en place"'
+    'msgstr "la premi'#$00E8're tabulation de la ligne se trouve dans une cha'#$00EE'ne ou un commentaire - elle reste intacte, l''aide laisserait le r'#$00E9'sultat en place"',
+    '',
+    'msgid "the message does not name the loop head - analyse the file again"',
+    'msgstr "le message ne nomme pas l''en-t'#$00EA'te de la boucle - analysez '#$00E0' nouveau le fichier"',
+    '',
+    'msgid "the loop runs from 1 to Count - whether the index should be i - 1 or the bound Count - 1 is for you to decide"',
+    'msgstr "la boucle va de 1 '#$00E0' Count - '#$00E0' d'#$00E9'cider '#$00E0' la main si l''indice doit '#$00EA'tre i - 1 ou la borne Count - 1"',
+    '',
+    'msgid "the type is not proven - an array needs High(), a string has to run from 1"',
+    'msgstr "le type n''est pas prouv'#$00E9' - un tableau demande High(), une cha'#$00EE'ne doit commencer '#$00E0' 1"',
+    '',
+    'msgid "the reported line carries %d for headers with this range - ambiguous"',
+    'msgstr "la ligne signal'#$00E9'e porte %d en-t'#$00EA'tes for avec cette plage - ambigu"',
+    '',
+    'msgid "the for header on the line has another range than the finding"',
+    'msgstr "l''en-t'#$00EA'te for de la ligne a une autre plage que le constat"',
+    '',
+    'msgid "the for header goes over more than one line"',
+    'msgstr "l''en-t'#$00EA'te for s'''#$00E9'tend sur plus d''une ligne"',
+    '',
+    'msgid "compiler directive in the line of the for header"',
+    'msgstr "directive de compilation sur la ligne de l''en-t'#$00EA'te for"',
+    '',
+    'msgid "comment or string in the for header"',
+    'msgstr "commentaire ou cha'#$00EE'ne dans l''en-t'#$00EA'te for"',
+    '',
+    'msgid "a string from 0 to High() + 1 is wrong at both ends - correct the range by hand"',
+    'msgstr "une cha'#$00EE'ne de 0 '#$00E0' High() + 1 est fausse aux deux bouts - corrigez la plage '#$00E0' la main"',
+    '',
+    'msgid "the loop runs one pass less (a string loop starts at 1) - if the last pass was meant for a sentinel or a terminator, this is an intervention"',
+    'msgstr "la boucle fait un passage de moins (sur une cha'#$00EE'ne, elle commence '#$00E0' 1) - si le dernier passage visait une sentinelle ou un terminateur, c''est une intervention"',
+    '',
+    'msgid "Let the loop run %s"',
+    'msgstr "Faire tourner la boucle %s"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

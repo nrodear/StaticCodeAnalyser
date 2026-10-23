@@ -2535,7 +2535,7 @@ const
       GoodEx   : 'for i := 0 to Names.Count - 1 do' + #13#10 + '  WriteLn(Names[i]);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     )
   );
 

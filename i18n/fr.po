@@ -6507,3 +6507,36 @@ msgstr "aucune tabulation à l'endroit signalé"
 
 msgid "the first tab of the line is inside a string or comment - it stays untouched, the help would leave the finding in place"
 msgstr "la première tabulation de la ligne se trouve dans une chaîne ou un commentaire - elle reste intacte, l'aide laisserait le résultat en place"
+
+msgid "the message does not name the loop head - analyse the file again"
+msgstr "le message ne nomme pas l'en-tête de la boucle - analysez à nouveau le fichier"
+
+msgid "the loop runs from 1 to Count - whether the index should be i - 1 or the bound Count - 1 is for you to decide"
+msgstr "la boucle va de 1 à Count - à décider à la main si l'indice doit être i - 1 ou la borne Count - 1"
+
+msgid "the type is not proven - an array needs High(), a string has to run from 1"
+msgstr "le type n'est pas prouvé - un tableau demande High(), une chaîne doit commencer à 1"
+
+msgid "the reported line carries %d for headers with this range - ambiguous"
+msgstr "la ligne signalée porte %d en-têtes for avec cette plage - ambigu"
+
+msgid "the for header on the line has another range than the finding"
+msgstr "l'en-tête for de la ligne a une autre plage que le constat"
+
+msgid "the for header goes over more than one line"
+msgstr "l'en-tête for s'étend sur plus d'une ligne"
+
+msgid "compiler directive in the line of the for header"
+msgstr "directive de compilation sur la ligne de l'en-tête for"
+
+msgid "comment or string in the for header"
+msgstr "commentaire ou chaîne dans l'en-tête for"
+
+msgid "a string from 0 to High() + 1 is wrong at both ends - correct the range by hand"
+msgstr "une chaîne de 0 à High() + 1 est fausse aux deux bouts - corrigez la plage à la main"
+
+msgid "the loop runs one pass less (a string loop starts at 1) - if the last pass was meant for a sentinel or a terminator, this is an intervention"
+msgstr "la boucle fait un passage de moins (sur une chaîne, elle commence à 1) - si le dernier passage visait une sentinelle ou un terminateur, c'est une intervention"
+
+msgid "Let the loop run %s"
+msgstr "Faire tourner la boucle %s"

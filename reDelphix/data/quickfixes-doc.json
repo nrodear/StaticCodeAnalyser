@@ -2598,6 +2598,39 @@
         "  end;"
       ],
       "hinweis": "In geschachtelten Schleifen kommt der Lookup vor die innerste Schleife, deren Rumpf ihn trägt (dort, wo die Datenmenge in der äußeren Schleife neu geöffnet wird, ist das der richtige Platz); der Detektor meldet die neue Zeile dann in der äußeren erneut, und ein zweiter Klick zieht sie weiter hinaus (`var FldAmount := FldAmount2;`), wenn die äußere Schleife es erlaubt."
+    },
+    "LoopPastHighBound": {
+      "titel": "Grenze der for-Schleife auf den letzten Index setzen",
+      "was": "Die for-Schleife läuft einen Index zu weit (`0 to L.Count`, `0 to Length(A)`, `High(A) + 1`, bei Strings `0 to Length(S)` bzw. `1 to Length(S) + 1`) und liest oder schreibt dieselbe Sammlung mit dem Schleifenindex. Die Hilfe ändert genau eine Stelle im Kopf: `L.Count` → `L.Count - 1`, `Length(A)` → `High(A)` (Array bzw. `Low(A) to Length(A)` bei einem dynamischen Array), `High(A) + 1` → `High(A)`, bei Strings `0 to Length(S)` → `1 to Length(S)` und `1 to Length(S) + 1` → `1 to Length(S)`. Welche Form gilt, sagt der Rat in der Meldung des Detektors (er kennt den Typ); die Hilfe sucht denselben Kopf auf der gemeldeten Zeile und prüft Variable und Grenzen gegen die Meldung.",
+      "kennzeichnung": "die Schleife läuft einen Durchlauf weniger bzw. beginnt bei einem String bei 1 – war der letzte Durchlauf für einen Wächter oder ein Endezeichen gedacht, ist das ein Eingriff",
+      "platzhalter": "`%s` = der neue Bereich (`0 to L.Count - 1`, `1 to Length(S)`).",
+      "nichtAngeboten": [
+        "`1 to X.Count` mit `X[i]` – ob der Index `i - 1` oder die Grenze `Count - 1` sein soll, entscheidet der Mensch",
+        "`0 to Length(A)` ohne Typbeweis (ein Array braucht `High(A)`, ein String `1 to Length(S)`) und `0 to High(S) + 1` über einen String oder einen Typ, der einer sein kann (falsch an beiden Enden)",
+        "eine Compiler-Direktive in der Zeile des Kopfs, ein Kopf über mehrere Zeilen, ein Kommentar oder String im Kopf",
+        "kein oder mehr als ein passender Kopf auf der Zeile (Zeile verschoben, schon korrigiert, mehrdeutig)"
+      ],
+      "beispielVorher": [
+        "  for i := 0 to L.Count do",
+        "    WriteLn(L[i]);"
+      ],
+      "beispielNachher": [
+        "  for i := 0 to L.Count - 1 do",
+        "    WriteLn(L[i]);"
+      ],
+      "weitereBeispiele": [
+        {
+          "titel": "String (1-basiert)",
+          "vorher": [
+            "  for i := 0 to Length(S) do",
+            "    if S[i] = 'x' then Exit;"
+          ],
+          "nachher": [
+            "  for i := 1 to Length(S) do",
+            "    if S[i] = 'x' then Exit;"
+          ]
+        }
+      ]
     }
   }
 }

@@ -201,7 +201,8 @@ uses
   uRdxHomoglyphFix,     // SCA193
   uRdxParamNameFix,     // SCA199
   uRdxDeepNestingFix,   // SCA018
-  uRdxLookupHoistFix;   // SCA111, SCA112
+  uRdxLookupHoistFix,   // SCA111, SCA112
+  uRdxLoopBoundFix;     // SCA203
 
 type
   // Was die Hilfe auf einem Netzpfad nicht liest (NetworkPathReason): je
@@ -2007,6 +2008,18 @@ begin
     Result.Hint := _(R_FIELD_HOIST_HINT, [P.Name, P.Name]);
 end;
 
+// SCA203 (Charge A3 / Q2): die Grenze der for-Schleife, die einen Index zu
+// weit laeuft - eine Stelle im Kopf (Count - 1, High, ab 1, ohne + 1). Name
+// = der neue Bereich fuer den Menuetext ('%s'), auch wenn der Planer
+// ablehnt; Hinweis und Kennzeichnung (Changes: True) setzt die Zeile.
+function PlanLoopBound(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxLoopBoundFix.LastIndex);
+  Result.Name := TRdxLoopBoundFix.RangeAfter(AFinding.Message);
+end;
+
 { ---- Die Tabelle ---- }
 
 type
@@ -2017,7 +2030,7 @@ type
   end;
 
 const
-  FIX_ROW_HIGH = 89;
+  FIX_ROW_HIGH = 90;
 
   // Je Art eine Zeile; die Reihenfolge ist die der Chargen (Stufe 2a,
   // Stufe 2 Rest, uQuickFix-Umzug/Stufe 3, Zeilen, Ausnahmen, Deklarationen
@@ -2271,7 +2284,10 @@ const
     (Kind: fkParamByNameInLoop; Plan: PlanParamByNameLoop;
      HintByPlanner: True; Changes: True; Alt: nil),
     (Kind: fkFieldByNameInLoop; Plan: PlanFieldByNameLoop;
-     HintByPlanner: True; Changes: True; Alt: nil)
+     HintByPlanner: True; Changes: True; Alt: nil),
+    // SCA203: die Schleife laeuft einmal weniger bzw. ab 1 (E2).
+    (Kind: fkLoopPastHighBound; Plan: PlanLoopBound;
+     HintByPlanner: False; Changes: True; Alt: nil)
   );
 
   // Die festen Hinweise (englische msgids) unter dem Index der Zeile, je
@@ -2585,7 +2601,12 @@ const
     // ParamByNameInLoop
     '',
     // FieldByNameInLoop
-    ''
+    '',
+    // SCA203 (Charge A3): gekennzeichnet.
+    // LoopPastHighBound
+    'the loop runs one pass less (a string loop starts at 1) - if the last '
+      + 'pass was meant for a sentinel or a terminator, this is an '
+      + 'intervention'
   );
 
   // Menuetexte (msgids) unter dem Index der Zeile; '%s' = Name der Hilfe
@@ -2693,7 +2714,8 @@ const
     'Use parameter name "%s" from the SQL',
     'Turn the last if into a guard clause with Exit',
     'Move %s before the loop',
-    'Move %s before the loop'
+    'Move %s before the loop',
+    'Let the loop run %s'
   );
 
   // Menuetexte des zweiten Eintrags (Alt), '' ohne.
@@ -2717,7 +2739,7 @@ const
     '', '', '',
     '', '', '', '', '', '', '',
     'Raise EInvalidOpException instead (invalid state)',
-    '', '', '', '', '', '', '', ''
+    '', '', '', '', '', '', '', '', ''
   );
 
   // Die Namen der Planer (PlannerName, fuer uTestRdxFixTable): eine eigene
@@ -2726,7 +2748,7 @@ const
   // faellt dort auf (Wochen-Review 2026-10-21, Major P03/P29: welcher Planer
   // an welcher Art haengt, band bis dahin kein Test). Ein neuer Planer
   // braucht hier eine Zeile, sonst nennt PlannerName '?'.
-  PLANNER_NAMES: array[0..95] of TRdxPlannerName = (
+  PLANNER_NAMES: array[0..96] of TRdxPlannerName = (
     (Name: 'PlanExplicitTObject'; Plan: PlanExplicitTObject),
     (Name: 'PlanFreeAndNil'; Plan: PlanFreeAndNil),
     (Name: 'PlanNilComparison'; Plan: PlanNilComparison),
@@ -2822,7 +2844,8 @@ const
     (Name: 'PlanParamName'; Plan: PlanParamName),
     (Name: 'PlanDeepNesting'; Plan: PlanDeepNesting),
     (Name: 'PlanParamByNameLoop'; Plan: PlanParamByNameLoop),
-    (Name: 'PlanFieldByNameLoop'; Plan: PlanFieldByNameLoop)
+    (Name: 'PlanFieldByNameLoop'; Plan: PlanFieldByNameLoop),
+    (Name: 'PlanLoopBound'; Plan: PlanLoopBound)
   );
 
 var
