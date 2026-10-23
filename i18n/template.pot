@@ -4971,6 +4971,10 @@ msgstr ""
 msgid "followed by \".\", \"[\" or \"(\" - the parentheses belong to a chain"
 msgstr ""
 
+#: SCA.Engine/sources/Output/uFixHint.pas:4608
+msgid "for loop runs one index past the end - the upper bound is Count - 1 or High()"
+msgstr ""
+
 #: reDelphix/source/uRdxCleanupFixes.pas:919
 msgid "for var - the control variable of a loop (the detector does not count the loop header as a use) - no quick fix"
 msgstr ""
@@ -6032,6 +6036,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxBlocks.pas:1285
 msgid "not readable"
+msgstr ""
+
+#: SCA.Engine/sources/Output/uFixHint.pas:4593
+msgid "not/and/or/xor bind tighter than comparisons - put the comparison in parentheses"
 msgstr ""
 
 #: reDelphix/source/uRdxBlocks.pas:854

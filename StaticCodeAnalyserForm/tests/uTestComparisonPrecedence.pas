@@ -40,6 +40,7 @@ type
     [Test] procedure BitTestIdioms_NoFinding;
     [Test] procedure CommentsAndStrings_NoFinding;
     [Test] procedure Message_ShowsHowItIsEvaluated;
+    [Test] procedure Confidence_ErrorHigh_WarningMedium;
   end;
 
 implementation
@@ -241,6 +242,34 @@ begin
     Assert.IsTrue(Pos('''(not L.Count) > ...''', K1) > 0, K1);
     Assert.IsTrue(Pos('''not (L.Count > ...)''', K1) > 0, K1);
     Assert.IsTrue(Pos('(True or B)', K2) > 0, K2);
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestComparisonPrecedence.Confidence_ErrorHigh_WarningMedium;
+var
+  F : TObjectList<TLeakFinding>;
+  CE, CW : Integer;
+  i : Integer;
+begin
+  // Wie SCA203: Error (Typ belegt) traegt fcHigh, Warning (ohne Beleg)
+  // fcMedium - im Default (FindingMinConfidence = fcMedium) sichtbar.
+  // Ohne die Konfidenz im else-Zweig erbte die Warning fcHigh.
+  F := TFindingHelper.FindingsOfFile(Quelltext('N: Integer; R: TRec;',
+    ['  if not N = 0 then Exit;',
+     '  if not R.Status = cOk then Exit;']));
+  try
+    CE := -1;
+    CW := -1;
+    for i := 0 to F.Count - 1 do
+      if F[i].Kind = fkComparisonPrecedence then
+        if F[i].LineNumber = '8' then
+          CE := Ord(F[i].Confidence)
+        else if F[i].LineNumber = '9' then
+          CW := Ord(F[i].Confidence);
+    Assert.AreEqual<Integer>(Ord(fcHigh), CE, 'Error Zeile 8');
+    Assert.AreEqual<Integer>(Ord(fcMedium), CW, 'Warning Zeile 9');
   finally
     F.Free;
   end;

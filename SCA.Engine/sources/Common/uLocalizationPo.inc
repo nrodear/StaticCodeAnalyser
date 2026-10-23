@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6606 Zeilen, 296376 Bytes
-  CPoLines_de: array[0..6605] of string = (
+  // i18n\de.po - 6612 Zeilen, 296739 Bytes
+  CPoLines_de: array[0..6611] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1569,6 +1569,12 @@ const
     '',
     'msgid "Non-ASCII character in identifier - homoglyph / confusable risk"',
     'msgstr "Nicht-ASCII-Zeichen im Bezeichner - Homoglyphen-/Verwechslungsrisiko"',
+    '',
+    'msgid "not/and/or/xor bind tighter than comparisons - put the comparison in parentheses"',
+    'msgstr "not/and/or/xor binden st'#$00E4'rker als Vergleiche - den Vergleich klammern"',
+    '',
+    'msgid "for loop runs one index past the end - the upper bound is Count - 1 or High()"',
+    'msgstr "for-Schleife l'#$00E4'uft einen Index '#$00FC'ber das Ende hinaus - die Obergrenze ist Count - 1 oder High()"',
     '',
     'msgid "File not found:"',
     'msgstr "Datei nicht gefunden:"',
@@ -6895,8 +6901,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6602 Zeilen, 308470 Bytes
-  CPoLines_fr: array[0..6601] of string = (
+  // i18n\fr.po - 6608 Zeilen, 308851 Bytes
+  CPoLines_fr: array[0..6607] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -8463,6 +8469,12 @@ const
     '',
     'msgid "Non-ASCII character in identifier - homoglyph / confusable risk"',
     'msgstr "Caract'#$00E8're non ASCII dans un identificateur - risque d''homoglyphe / de confusion"',
+    '',
+    'msgid "not/and/or/xor bind tighter than comparisons - put the comparison in parentheses"',
+    'msgstr "not/and/or/xor sont prioritaires sur les comparaisons - mettre la comparaison entre parenth'#$00E8'ses"',
+    '',
+    'msgid "for loop runs one index past the end - the upper bound is Count - 1 or High()"',
+    'msgstr "la boucle for d'#$00E9'passe la fin d''un indice - la borne sup'#$00E9'rieure est Count - 1 ou High()"',
     '',
     'msgid "File not found:"',
     'msgstr "Fichier introuvable :"',

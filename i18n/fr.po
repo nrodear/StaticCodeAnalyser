@@ -1565,6 +1565,12 @@ msgstr "Un fichier .pas/.dfm se trouve dans le dossier du projet mais n'est pas 
 msgid "Non-ASCII character in identifier - homoglyph / confusable risk"
 msgstr "Caractère non ASCII dans un identificateur - risque d'homoglyphe / de confusion"
 
+msgid "not/and/or/xor bind tighter than comparisons - put the comparison in parentheses"
+msgstr "not/and/or/xor sont prioritaires sur les comparaisons - mettre la comparaison entre parenthèses"
+
+msgid "for loop runs one index past the end - the upper bound is Count - 1 or High()"
+msgstr "la boucle for dépasse la fin d'un indice - la borne supérieure est Count - 1 ou High()"
+
 msgid "File not found:"
 msgstr "Fichier introuvable :"
 

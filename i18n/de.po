@@ -1553,6 +1553,12 @@ msgstr "Eine .pas-Datei wird von Projekt-Units per uses gezogen (kompiliert uebe
 msgid "Non-ASCII character in identifier - homoglyph / confusable risk"
 msgstr "Nicht-ASCII-Zeichen im Bezeichner - Homoglyphen-/Verwechslungsrisiko"
 
+msgid "not/and/or/xor bind tighter than comparisons - put the comparison in parentheses"
+msgstr "not/and/or/xor binden stärker als Vergleiche - den Vergleich klammern"
+
+msgid "for loop runs one index past the end - the upper bound is Count - 1 or High()"
+msgstr "for-Schleife läuft einen Index über das Ende hinaus - die Obergrenze ist Count - 1 oder High()"
+
 msgid "File not found:"
 msgstr "Datei nicht gefunden:"
 

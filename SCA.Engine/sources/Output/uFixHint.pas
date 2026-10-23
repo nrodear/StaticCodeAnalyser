@@ -4588,6 +4588,32 @@ begin
         '// Latin/Cyrillic/Greek) and consider transliterating for clarity.';
     end;
 
+    fkComparisonPrecedence:
+    begin
+      Result.Description := _('not/and/or/xor bind tighter than comparisons - put the comparison in parentheses');
+      Result.Before :=
+        'if not List.Count > 0 then   // (not List.Count) > 0 - false for every Count'#13#10 +
+        '  Exit;'#13#10 +
+        'if Ready = True or Busy = False then   // (Ready = (True or Busy)) = False'#13#10 +
+        '  Start;';
+      Result.After :=
+        'if not (List.Count > 0) then'#13#10 +
+        '  Exit;'#13#10 +
+        'if Ready or not Busy then'#13#10 +
+        '  Start;';
+    end;
+
+    fkLoopPastHighBound:
+    begin
+      Result.Description := _('for loop runs one index past the end - the upper bound is Count - 1 or High()');
+      Result.Before :=
+        'for i := 0 to Names.Count do'#13#10 +
+        '  WriteLn(Names[i]);   // Names[Names.Count] raises';
+      Result.After :=
+        'for i := 0 to Names.Count - 1 do'#13#10 +
+        '  WriteLn(Names[i]);';
+    end;
+
   end;
 
   // Checklist-Drift-Fix 2026-07-24 (Audit SCA175-194: 11 Kinds ohne Branch):

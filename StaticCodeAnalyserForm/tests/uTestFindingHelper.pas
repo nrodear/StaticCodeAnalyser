@@ -176,6 +176,11 @@ begin
       TReRaiseExceptionDetector.AnalyzeUnit(Root, SAMPLE_FILENAME, Result);
       TCastAndFreeDetector.AnalyzeUnit(Root, SAMPLE_FILENAME, Result);
       TInstanceInvokedConstructorDetector.AnalyzeUnit(Root, SAMPLE_FILENAME, Result);
+      // SCA125 ist hier bewusst stumm: er liest Attribute/Direktiven der
+      // Deklaration aus der Datei, und SAMPLE_FILENAME ist nicht lesbar
+      // (AcquireLines = nil -> kein Fund). Die Datei liest er nur in
+      // FindingsOfFile; SCA125-Tests laufen dort. Der Aufruf bleibt wie bei
+      // den anderen Detektoren, die in beiden Harnessen stehen (GodClass).
       TInheritedMethodEmptyDetector.AnalyzeUnit(Root, SAMPLE_FILENAME, Result);
       TNilComparisonDetector.AnalyzeUnit(Root, SAMPLE_FILENAME, Result);
       TRaisingRawExceptionDetector.AnalyzeUnit(Root, SAMPLE_FILENAME, Result);

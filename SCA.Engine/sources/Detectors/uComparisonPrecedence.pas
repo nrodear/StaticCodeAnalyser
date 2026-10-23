@@ -12,7 +12,7 @@ unit uComparisonPrecedence;
 // TTypeResolver (strenger Modus = Beweis) einordnen, melden.
 //
 // Severity (Entscheid Nico 2026-10-23): Error nur fuer die bewiesene
-// Menge, sonst Warning.
+// Menge (fcHigh), sonst Warning (fcMedium, wie SCA203).
 //   K1 Error: der Operand ist nachweislich nicht Boolean - Zahl oder
 //      Zahlmenge rechts, Ganzzahl-Aufruf (Pos, Ord, Length, CompareText..)
 //      oder .Count/.IndexOf als letztes Glied, oder der nackte Bezeichner
@@ -130,10 +130,18 @@ begin
           if InTypeList(T, BOOL_TYPES) then Continue;
         end;
       end;
-      F := TLeakFinding.New(FileName, '', H.Line, MessageFor(H),
-        fkComparisonPrecedence);
-      if not Proven then
+      // Wie SCA203: ohne Typbeleg Warning mit fcMedium - KindDefaultConfidence
+      // liefert fuer das Kind fcHigh (else-Zweig). fcMedium bleibt im
+      // Default (FindingMinConfidence = fcMedium) sichtbar.
+      if Proven then
+        F := TLeakFinding.New(FileName, '', H.Line, MessageFor(H),
+          fkComparisonPrecedence)
+      else
+      begin
+        F := TLeakFinding.New(FileName, '', H.Line, MessageFor(H),
+          fkComparisonPrecedence, fcMedium);
         F.Severity := lsWarning;
+      end;
       Results.Add(F);
     end;
   finally
