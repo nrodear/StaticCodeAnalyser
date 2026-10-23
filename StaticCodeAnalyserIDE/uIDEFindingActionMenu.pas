@@ -15,8 +15,11 @@ unit uIDEFindingActionMenu;
 // GRID_ACTION_TAG - 1 ab).
 //
 // Fragte das Modell nicht alle Funde ab (Omitted > 0, Obergrenze je Menue
-// aus uFindingActions), steht am Ende eine deaktivierte Hinweiszeile -
-// sonst saehe der Benutzer nicht, dass Funde fehlen.
+// aus uFindingActions), steht hinter den Fund-Eintraegen eine deaktivierte
+// Hinweiszeile - sonst saehe der Benutzer nicht, dass Funde fehlen. Traegt
+// das Modell Code-Aktionen ohne Fund (Charge B, ContextEntryCount), steht
+// sie VOR deren Abschnitt, nicht am Ende (uEditorContextModel.
+// OmittedLineIndex); ohne sie am Ende wie bisher.
 
 interface
 
@@ -37,7 +40,8 @@ procedure FillPopupFromModel(APopup: TPopupMenu;
 implementation
 
 uses
-  System.SysUtils, uLocalization;
+  System.SysUtils, uLocalization,
+  uEditorContextModel;   // OmittedLineIndex - Hinweiszeile vor dem Kontextteil
 
 function MenuCaptionOf(const AText: string): string;
 // TMenuItem deutet ein einzelnes '&' als Hotkey-Praefix (Vcl.Menus
@@ -52,16 +56,38 @@ begin
   Result := StringReplace(AText, '&', '&&', [rfReplaceAll]);
 end;
 
+procedure AddOmittedLine(APopup: TPopupMenu; const AModel: TFindingMenuModel;
+  ATagBase: Integer; AOwner: TComponent; ASink: TList<TMenuItem>);
+// Die Hinweiszeile zu Omitted (deaktiviert, Tag wie Trenner/Kopfzeilen).
+var
+  Item : TMenuItem;
+begin
+  Item := TMenuItem.Create(AOwner);
+  Item.Caption := Format(_('%d more findings on this line are not listed'),
+    [AModel.Omitted]);
+  Item.Enabled := False;
+  Item.Tag     := ATagBase - 1;
+  APopup.Items.Add(Item);
+  if Assigned(ASink) then
+    ASink.Add(Item);
+end;
+
 procedure FillPopupFromModel(APopup: TPopupMenu;
   const AModel: TFindingMenuModel; AOnClick: TNotifyEvent;
   ATagBase: Integer; AOwner: TComponent; ASink: TList<TMenuItem>);
 var
-  i    : Integer;
-  Item : TMenuItem;
+  i       : Integer;
+  Item    : TMenuItem;
+  OmitAt  : Integer;
 begin
   if not Assigned(APopup) then Exit;
+  // Index in Entries, VOR dem die Hinweiszeile steht (= Length(Entries)
+  // ohne Kontextteil: ans Ende wie bisher).
+  OmitAt := OmittedLineIndex(AModel);
   for i := 0 to High(AModel.Entries) do
   begin
+    if (i = OmitAt) and (AModel.Omitted > 0) then
+      AddOmittedLine(APopup, AModel, ATagBase, AOwner, ASink);
     Item := TMenuItem.Create(AOwner);
     case AModel.Entries[i].Kind of
       mkSeparator:
@@ -86,17 +112,8 @@ begin
     if Assigned(ASink) then
       ASink.Add(Item);
   end;
-  if AModel.Omitted > 0 then
-  begin
-    Item := TMenuItem.Create(AOwner);
-    Item.Caption := Format(_('%d more findings on this line are not listed'),
-      [AModel.Omitted]);
-    Item.Enabled := False;
-    Item.Tag     := ATagBase - 1;
-    APopup.Items.Add(Item);
-    if Assigned(ASink) then
-      ASink.Add(Item);
-  end;
+  if (OmitAt >= Length(AModel.Entries)) and (AModel.Omitted > 0) then
+    AddOmittedLine(APopup, AModel, ATagBase, AOwner, ASink);
 end;
 
 end.

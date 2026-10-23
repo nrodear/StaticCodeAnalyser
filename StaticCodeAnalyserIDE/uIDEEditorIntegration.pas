@@ -8,6 +8,9 @@
 //     Datei plus Caret-Zeile einer Ansicht lesen (ViewFileAndLine,
 //     TopViewFileAndLine - EINE Fassung fuer Kontextmenue und Birne,
 //     Review 2026-10-14, Punkt 10);
+//   * Caret und Auswahl einer Ansicht in ZEICHEN-Spalten als
+//     TEditorContext (ViewContext, TopViewContext - Charge B, V3: die
+//     Code-Aktionen ohne Fund im Editor-Kontextmenue);
 //   * das Verzeichnis des aktiven Projekts (GetCurrentProjectDir);
 //   * eine Zeile VOR eine Pufferzeile schreiben (InsertLineAbove - der
 //     Unterdrueck-Marker von Ctrl+Alt+S ohne Anbieter).
@@ -24,7 +27,8 @@
 interface
 
 uses
-  ToolsAPI;
+  ToolsAPI,
+  uFindingActions;   // TEditorContext (ViewContext)
 
 type
   // Status-Code von TryGetCurrentPasFile - der Caller will pro Fehlerursache
@@ -76,6 +80,23 @@ type
     // ViewFileAndLine.
     class function TopViewFileAndLine(out AFile: string;
       out ALine: Integer): Boolean; static;
+
+    // Datei, Caret (Zeile, ZEICHEN-Spalte 1-basiert) und Auswahl einer
+    // Ansicht als TEditorContext (Charge B, V3). Datei und Zeile wie
+    // ViewFileAndLine (auch .dfm in der Textansicht), False in denselben
+    // Faellen. Die Spalten kommen aus IOTAEditView.ConvertPos: CharIndex
+    // zaehlt ZEICHEN (0-basiert, Tab = 1; gemessen 2026-10-11) - keine
+    // Byte-Rechnung, kein Puffertext. Auswahl nur aus einem gueltigen,
+    // sichtbaren, nicht leeren Block; ein Spaltenblock ist keine Auswahl
+    // (uEditorContextModel.ApplyEditorBlock). Findings bleibt leer (setzt
+    // der Aufrufer). Protokolliert Rohwerte und Umrechnung per
+    // OutputDebugString ('SCA: ctx ...') - Messpunkt fuer den UI-Test
+    // (btInclusive/btLine und das Blockende auf Nicht-ASCII-Zeilen sind
+    // ungemessen). Reine Abfrage: kein Notifier, kein Fenster.
+    class function ViewContext(const AView: IOTAEditView;
+      out ACtx: TEditorContext): Boolean; static;
+    // Dasselbe fuer die oberste Ansicht - der Weg des Editor-Kontextmenues.
+    class function TopViewContext(out ACtx: TEditorContext): Boolean; static;
 
     // Liefert das Verzeichnis des aktiven IDE-Projekts (ohne Trailing
     // PathDelimiter). Leer wenn kein Projekt geladen oder Service
@@ -153,8 +174,10 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  Winapi.Windows,        // OutputDebugString; VOR System.SysUtils (FindClose-Falle)
   System.SysUtils, System.IOUtils, System.StrUtils,
-  uCrashDiag;   // EStackExhausted - nie verschlucken
+  uCrashDiag,            // EStackExhausted - nie verschlucken
+  uEditorContextModel;   // ApplyEditorBlock, CharColOfIndex - der getestete Kern
 
 function FirstSourceEditorOf(const AModule: IOTAModule): IOTASourceEditor;
 // Der Pascal-Quelltext eines Moduls: der erste IOTASourceEditor unter den
@@ -245,6 +268,106 @@ begin
   Result := False;
   if not Supports(BorlandIDEServices, IOTAEditorServices, EditorSvc) then Exit;
   Result := ViewFileAndLine(EditorSvc.TopView, AFile, ALine);
+end;
+
+procedure CtxLog(const AFormat: string; const AArgs: array of const);
+// Messkanal von ViewContext (DebugView, Praefix 'SCA: ctx') - Rohwerte und
+// Umrechnung fuer den UI-Test; eine Meldung im Editor waere lauter als der
+// Nutzen.
+begin
+  // noinspection DebugOutput
+  OutputDebugString(PChar('SCA: ctx ' + Format(AFormat, AArgs)));
+end;
+
+function BlockStyleOf(AStyle: TOTABlockType): TEditorBlockStyle;
+// ToolsAPI-Blockart -> Spiegel in uEditorContextModel (gleiche Reihenfolge,
+// aber per case - keine Ord-Gleichheit vorausgesetzt).
+begin
+  case AStyle of
+    btInclusive    : Result := ebsInclusive;
+    btLine         : Result := ebsLine;
+    btColumn       : Result := ebsColumn;
+    btNonInclusive : Result := ebsNonInclusive;
+  else
+    Result := ebsUnknown;
+  end;
+end;
+
+function CharColAt(const AView: IOTAEditView; ALine, ADisplayCol: Integer): Integer;
+// Anzeige-Spalte (TOTAEditPos.Col, Tabs expandiert) -> Zeichen-Spalte
+// (1-basiert) ueber die IDE selbst: ConvertPos(True, ...) liefert
+// TOTACharPos.CharIndex in ZEICHEN der Zeile (Rueckrichtung von reDelphix
+// uRdxEditor.DisplayPosOf). TOTAEditPos.Col ist SmallInt - ein Block-Wert
+// ausserhalb wird vorher gekappt (sonst ERangeError unter $R+).
+var
+  EP : TOTAEditPos;
+  CP : TOTACharPos;
+begin
+  if ADisplayCol < 1 then
+    ADisplayCol := 1
+  else if ADisplayCol > High(SmallInt) then
+    ADisplayCol := High(SmallInt);
+  EP.Line      := ALine;
+  EP.Col       := ADisplayCol;
+  CP.Line      := ALine;
+  CP.CharIndex := 0;
+  AView.ConvertPos(True, EP, CP);
+  Result := CharColOfIndex(CP.CharIndex);
+end;
+
+class function TIDEEditor.ViewContext(const AView: IOTAEditView;
+  out ACtx: TEditorContext): Boolean;
+var
+  FileName : string;
+  Line     : Integer;
+  Caret    : TOTAEditPos;
+  Block    : IOTAEditBlock;
+  Raw      : TEditorBlockChars;
+  Buf      : IOTAEditBuffer;
+begin
+  ACtx   := Default(TEditorContext);
+  Result := False;
+  if not ViewFileAndLine(AView, FileName, Line) then Exit;
+  Caret := AView.CursorPos;
+  ACtx  := TEditorContext.At(FileName, Line, CharColAt(AView, Line, Caret.Col));
+  CtxLog('caret %d:%d (display) -> char col %d', [Caret.Line, Caret.Col, ACtx.Col]);
+  Block := AView.Block;
+  if Assigned(Block) and Block.IsValid and Block.Visible and (Block.Size > 0) then
+  begin
+    Raw.Style     := BlockStyleOf(Block.Style);
+    Raw.StartLine := Block.StartingRow;
+    Raw.StartCol  := CharColAt(AView, Block.StartingRow, Block.StartingColumn);
+    Raw.EndLine   := Block.EndingRow;
+    Raw.EndCol    := CharColAt(AView, Block.EndingRow, Block.EndingColumn);
+    ApplyEditorBlock(ACtx, Raw);
+    CtxLog('block style=%d size=%d '
+      + 'display %d:%d..%d:%d -> chars %d:%d..%d:%d -> sel=%s %d:%d..%d:%d',
+      [Ord(Block.Style), Block.Size,
+       Block.StartingRow, Block.StartingColumn,
+       Block.EndingRow, Block.EndingColumn,
+       Raw.StartLine, Raw.StartCol, Raw.EndLine, Raw.EndCol,
+       BoolToStr(ACtx.HasSelection, True),
+       ACtx.SelStartLine, ACtx.SelStartCol, ACtx.SelEndLine, ACtx.SelEndCol]);
+    // Nur Messung (nicht benutzt): die Blockgrenzen des Puffers als
+    // TOTACharPos - ob deren CharIndex Zeichen oder Bytes zaehlt, ist
+    // ungemessen (memory: SyncEditBlock liest das Blockende als Bytes).
+    Buf := AView.Buffer;
+    if Assigned(Buf) then
+      CtxLog('buffer block start %d:%d after %d:%d (raw CharIndex)',
+        [Buf.BlockStart.Line, Buf.BlockStart.CharIndex,
+         Buf.BlockAfter.Line, Buf.BlockAfter.CharIndex]);
+  end;
+  Result := True;
+end;
+
+class function TIDEEditor.TopViewContext(out ACtx: TEditorContext): Boolean;
+var
+  EditorSvc : IOTAEditorServices;
+begin
+  ACtx   := Default(TEditorContext);
+  Result := False;
+  if not Supports(BorlandIDEServices, IOTAEditorServices, EditorSvc) then Exit;
+  Result := ViewContext(EditorSvc.TopView, ACtx);
 end;
 
 class function TIDEEditor.GetCurrentProjectDir: string;
