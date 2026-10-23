@@ -2598,6 +2598,45 @@
         "  end;"
       ],
       "hinweis": "In geschachtelten Schleifen kommt der Lookup vor die innerste Schleife, deren Rumpf ihn trägt (dort, wo die Datenmenge in der äußeren Schleife neu geöffnet wird, ist das der richtige Platz); der Detektor meldet die neue Zeile dann in der äußeren erneut, und ein zweiter Klick zieht sie weiter hinaus (`var FldAmount := FldAmount2;`), wenn die äußere Schleife es erlaubt."
+    },
+    "InheritedMethodEmpty": {
+      "titel": "Leeres Override entfernen",
+      "was": "Löscht ein Override, dessen Rumpf nur den Vorfahren mit denselben Argumenten ruft (`inherited;`, `inherited Name(A, B);`, `Result := inherited ...`): die Deklaration im Klassenrumpf samt `///`-Doku und die Implementierung samt Kommentaren darüber, die die Methode nennen, und einer Leerzeile – beides in einem Schritt. Ohne Override ruft die virtuelle Bindung die Methode des Vorfahren direkt; `Obj.Name` und `inherited Name` in Nachfahren bleiben gültig. Ein leerer Sichtbarkeitsabschnitt bleibt stehen (SCA087 hat eine eigene Hilfe).",
+      "platzhalter": "`%s` = der Methodenname aus der Meldung.",
+      "nichtAngeboten": [
+        "der nächste Vorfahr mit dieser Methode steht nicht in der Datei (etwa TObject.Destroy, TControl.Paint) – seine Sichtbarkeit ist nicht belegt; ein Override in einem sichtbareren Abschnitt als der Vorfahr (public über protected, protected über strict protected) bräche Aufrufer, und protected-Member sind in der ganzen eigenen Unit sichtbar",
+        "die Methode des Vorfahren ist abstract oder steht dort mehrfach; Override oder Vorfahr stehen vor jedem Sichtbarkeitsabschnitt (die Sichtbarkeit hängt dann an `{$M+}`), außer beide stehen ohne Abschnitt oder der Vorfahr ist published",
+        "die Deklaration trägt neben `override` eine weitere Direktive (final, overload, reintroduce, message, deprecated, Aufrufkonvention …), ein Attribut, einen Default-Wert oder steht mehrfach in der Klasse; Klassenmethode; die Klasse steht nicht genau einmal in der Datei",
+        "der Rumpf tut mehr als die Durchreichung: weitere Anweisung, andere Methode, andere oder umgestellte Argumente, `inherited Name;` bei Parametern, eine Funktion ohne `Result :=`; lokale Deklarationen, eine Direktive am Kopf",
+        "ein Kommentar oder eine Compiler-Direktive vom Kopf bis zum `end;` der Implementierung bzw. eine Direktive in der Deklaration, eine verschobene Zeile"
+      ],
+      "beispielVorher": [
+        "type",
+        "  TBase = class",
+        "  protected",
+        "    procedure Paint; virtual;",
+        "  end;",
+        "  TFoo = class(TBase)",
+        "  protected",
+        "    procedure Paint; override;",
+        "  end;",
+        "",
+        "procedure TFoo.Paint;",
+        "begin",
+        "  inherited;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "type",
+        "  TBase = class",
+        "  protected",
+        "    procedure Paint; virtual;",
+        "  end;",
+        "  TFoo = class(TBase)",
+        "  protected",
+        "  end;"
+      ],
+      "hinweis": "Der Detektor meldet auch Overrides, deren Vorfahr in einer anderen Unit steht (dort, wo die Sichtbarkeit nicht anzuheben ist, mit hoher, sonst mit niedriger Konfidenz); die Hilfe bietet sich nur an, wenn sie die Sichtbarkeit des Vorfahren in der Datei belegt."
     }
   }
 }

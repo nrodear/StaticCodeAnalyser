@@ -201,7 +201,8 @@ uses
   uRdxHomoglyphFix,     // SCA193
   uRdxParamNameFix,     // SCA199
   uRdxDeepNestingFix,   // SCA018
-  uRdxLookupHoistFix;   // SCA111, SCA112
+  uRdxLookupHoistFix,   // SCA111, SCA112
+  uRdxInheritedEmptyFix; // SCA125
 
 type
   // Was die Hilfe auf einem Netzpfad nicht liest (NetworkPathReason): je
@@ -2007,6 +2008,20 @@ begin
     Result.Hint := _(R_FIELD_HOIST_HINT, [P.Name, P.Name]);
 end;
 
+// SCA125 (Charge A4, Todo Q14): Deklaration und Implementierung des leeren
+// Overrides in EINEM Schritt - die Plan-Form von SCA147 (RoutineForm; der
+// Plan nennt keine Includes, IncludeCheck bleibt still). Name = der
+// Methodenname aus der Meldung, auch gesperrt.
+function PlanInheritedMethodEmpty(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  P : TRdxRoutinePlan;
+begin
+  Result := TRdxFixFrame.Run<TRdxRoutinePlan>(
+    RoutineForm(TRdxInheritedEmptyFix.DeleteOverride),
+    APlaces, ALines, AFinding, P);
+end;
+
 { ---- Die Tabelle ---- }
 
 type
@@ -2017,14 +2032,14 @@ type
   end;
 
 const
-  FIX_ROW_HIGH = 89;
+  FIX_ROW_HIGH = 90;
 
   // Je Art eine Zeile; die Reihenfolge ist die der Chargen (Stufe 2a,
   // Stufe 2 Rest, uQuickFix-Umzug/Stufe 3, Zeilen, Ausnahmen, Deklarationen
   // H1, Anweisungen H2, Routinen H3b, Aufraeumen H3a, try/finally H4,
   // Ergebnis und Konstruktoren H5, Magic Number Q14, einfache Hilfen Q, R,
-  // QF, QF8..QF11 und QF12..QF15). Der feste Hinweis steht unter demselben
-  // Index in FIX_HINTS, der Menuetext in FIX_CAPTIONS (s. Kopf).
+  // QF, QF8..QF11, QF12..QF15 und Charge A). Der feste Hinweis steht unter
+  // demselben Index in FIX_HINTS, der Menuetext in FIX_CAPTIONS (s. Kopf).
   FIX_ROWS: array[0..FIX_ROW_HIGH] of TRdxFixRow = (
     (Kind: fkExplicitTObjectInheritance; Plan: PlanExplicitTObject;
      HintByPlanner: False; Changes: False; Alt: nil),
@@ -2271,7 +2286,12 @@ const
     (Kind: fkParamByNameInLoop; Plan: PlanParamByNameLoop;
      HintByPlanner: True; Changes: True; Alt: nil),
     (Kind: fkFieldByNameInLoop; Plan: PlanFieldByNameLoop;
-     HintByPlanner: True; Changes: True; Alt: nil)
+     HintByPlanner: True; Changes: True; Alt: nil),
+    // Charge A (Wettbewerbs-Todo 2026-10-23). SCA125 (Q14): das leere
+    // Override geht ganz - bedeutungsgleich; die Sichtbarkeit belegt der
+    // Planer am Vorfahren in der Datei, sonst sperrt er.
+    (Kind: fkInheritedMethodEmpty; Plan: PlanInheritedMethodEmpty;
+     HintByPlanner: False; Changes: False; Alt: nil)
   );
 
   // Die festen Hinweise (englische msgids) unter dem Index der Zeile, je
@@ -2585,7 +2605,13 @@ const
     // ParamByNameInLoop
     '',
     // FieldByNameInLoop
-    ''
+    '',
+    // Charge A. SCA125 (Q14): bedeutungsgleich - die Sichtbarkeit ist
+    // belegt (Vorfahr in der Datei, mindestens so sichtbar).
+    // InheritedMethodEmpty
+    'same meaning - without the override, virtual dispatch calls the '
+      + 'method of the ancestor directly; declaration and implementation go '
+      + 'together'
   );
 
   // Menuetexte (msgids) unter dem Index der Zeile; '%s' = Name der Hilfe
@@ -2693,7 +2719,8 @@ const
     'Use parameter name "%s" from the SQL',
     'Turn the last if into a guard clause with Exit',
     'Move %s before the loop',
-    'Move %s before the loop'
+    'Move %s before the loop',
+    'Remove the empty override %s'
   );
 
   // Menuetexte des zweiten Eintrags (Alt), '' ohne.
@@ -2717,7 +2744,7 @@ const
     '', '', '',
     '', '', '', '', '', '', '',
     'Raise EInvalidOpException instead (invalid state)',
-    '', '', '', '', '', '', '', ''
+    '', '', '', '', '', '', '', '', ''
   );
 
   // Die Namen der Planer (PlannerName, fuer uTestRdxFixTable): eine eigene
@@ -2726,7 +2753,7 @@ const
   // faellt dort auf (Wochen-Review 2026-10-21, Major P03/P29: welcher Planer
   // an welcher Art haengt, band bis dahin kein Test). Ein neuer Planer
   // braucht hier eine Zeile, sonst nennt PlannerName '?'.
-  PLANNER_NAMES: array[0..95] of TRdxPlannerName = (
+  PLANNER_NAMES: array[0..96] of TRdxPlannerName = (
     (Name: 'PlanExplicitTObject'; Plan: PlanExplicitTObject),
     (Name: 'PlanFreeAndNil'; Plan: PlanFreeAndNil),
     (Name: 'PlanNilComparison'; Plan: PlanNilComparison),
@@ -2822,7 +2849,8 @@ const
     (Name: 'PlanParamName'; Plan: PlanParamName),
     (Name: 'PlanDeepNesting'; Plan: PlanDeepNesting),
     (Name: 'PlanParamByNameLoop'; Plan: PlanParamByNameLoop),
-    (Name: 'PlanFieldByNameLoop'; Plan: PlanFieldByNameLoop)
+    (Name: 'PlanFieldByNameLoop'; Plan: PlanFieldByNameLoop),
+    (Name: 'PlanInheritedMethodEmpty'; Plan: PlanInheritedMethodEmpty)
   );
 
 var

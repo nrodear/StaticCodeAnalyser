@@ -1509,7 +1509,7 @@ const
         '// parent''s Paint is reached by normal virtual dispatch.';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA126
     (

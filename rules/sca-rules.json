@@ -2574,6 +2574,7 @@
       "type": "Code Smell",
       "tags": ["inheritance", "dead-code", "sonardelphi"],
       "detectorUnit": "uInheritedMethodEmpty.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "type\n  TFooSubclass = class(TFoo)\n  protected\n    procedure Paint; override;\n  end;\n\nprocedure TFooSubclass.Paint;\nbegin\n  inherited;     // adds nothing - drop this whole override\nend;",
         "good": "// Remove both the declaration and the implementation. The\n// parent's Paint is reached by normal virtual dispatch."

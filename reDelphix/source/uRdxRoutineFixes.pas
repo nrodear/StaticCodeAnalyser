@@ -63,7 +63,9 @@ unit uRdxRoutineFixes;
 interface
 
 uses
-  uRdxBufferMath, uRdxCodeMap;
+  uRdxBufferMath, uRdxCodeMap,
+  uRdxBlocks;        // TRdxRoutine (DeleteMethodEdits; bis Charge A4 nur
+                     // im implementation-Teil)
 
 type
   // Ergebnis der Planer: alle Ersetzungen (EIN Undo-Schritt) und der Name
@@ -143,6 +145,20 @@ type
     // Nachfahrenklasse nennen (R4-05). '{$I %DATE%}' (FPC) ist keine Datei.
     class function IncludeReason(const AUnitFile: string;
       const AIncludes: TArray<string>; const AName: string): string; static;
+
+    // SCA125 (uRdxInheritedEmptyFix, Charge A4): Deklaration D und
+    // Implementierung R einer Methode loeschen wie bei SCA147 - Bereiche
+    // samt '///'-Doku und Attributen ueber der Deklaration bzw. den
+    // Kommentaren ueber der Implementierung, die die Methode nennen, EINE
+    // Leerzeile, Direktiven-Bilanz, Ueberlappung und Marker
+    // (MarkerLinesReason). OHNE den Nachweis am Namen und die Datei-Fakten
+    // von SCA147: ob die Methode danach fehlt, entscheidet der Aufrufer
+    // (ein leeres Override erreicht danach der Vorfahr). Die Ersetzungen
+    // (Deklaration zuerst, Rolle ARole) kommen an AEdits. '' oder der
+    // Grund.
+    class function DeleteMethodEdits(AMap: TRdxCodeMap; const D,
+      R: TRdxRoutine; const ARole: string;
+      var AEdits: TArray<TRdxEdit>): string; static;
   end;
 
 implementation
@@ -151,9 +167,9 @@ uses
   System.SysUtils,
   System.Classes,    // TStrings (NameInInclude: TRdxIncludeTest)
   uRefactorInfo,     // TRefactorSpan.Make
-  // Routinengrenzen, Decl/Impl-Finder, Klassenkopf, Include-Kette und
-  // MarkerAboveReason (bis Charge B2S-b hier, Review R6-12)
-  uRdxBlocks,
+  // uRdxBlocks (Routinengrenzen, Decl/Impl-Finder, Klassenkopf, Include-
+  // Kette, MarkerAboveReason - bis Charge B2S-b hier, Review R6-12) steht
+  // seit Charge A4 im interface-Teil (TRdxRoutine in DeleteMethodEdits).
   // _ und die gemeinsamen Texte (MsgMovedSuffix, MsgNoHeader ...): die
   // Gruende in der Sprache der SCA (Entscheid E29)
   uRdxText;
@@ -1353,6 +1369,33 @@ class function TRdxRoutineFixes.FormNamesMethod(const AFormText,
   AName: string): Boolean;
 begin
   Result := HasIdentWord(LowerCase(AFormText), LowerCase(AName));
+end;
+
+class function TRdxRoutineFixes.DeleteMethodEdits(AMap: TRdxCodeMap;
+  const D, R: TRdxRoutine; const ARole: string;
+  var AEdits: TArray<TRdxEdit>): string;
+var
+  DeclL, ImplL : TRdxLines;
+begin
+  // Dieselben Bausteine in derselben Reihenfolge wie PlanMethod (SCA147),
+  // nur ohne MethodHitsReason und MethodFactsReason.
+  Result := HeadLines(AMap, D, abDocOnly, DeclL);
+  if Result = '' then
+    Result := HeadLines(AMap, R, abComments, ImplL);
+  if Result <> '' then Exit;
+  TakeBlankLine(AMap, ImplL, DeclL.Bottom);
+  Result := DirectiveBalance(AMap, DeclL);
+  if Result = '' then
+    Result := DirectiveBalance(AMap, ImplL);
+  if (Result = '') and (DeclL.Bottom >= ImplL.Top) then
+    Result := _('declaration and implementation overlap');
+  if Result = '' then
+    Result := MarkerLinesReason(AMap, DeclL);
+  if Result = '' then
+    Result := MarkerLinesReason(AMap, ImplL);
+  if Result <> '' then Exit;
+  AddEdit(AEdits, LinesEdit(AMap, DeclL, ARole));
+  AddEdit(AEdits, LinesEdit(AMap, ImplL, ARole));
 end;
 
 end.

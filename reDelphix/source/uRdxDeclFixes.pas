@@ -105,6 +105,16 @@ type
     class function DirectiveFor(const AMessage: string): string; static;
   end;
 
+// Parameternamen in '(...)' bzw. '[...]' ab AOpen (AClose ')' bzw. ']'):
+// je Gruppe (getrennt durch ';' auf Tiefe 1) die Woerter vor dem ':' - ohne
+// const/var/out/constref und ohne Attribute '[ref]'; ohne ':' (untypisiert)
+// alle Woerter. AShape: die ganze Liste als Token-Folge (klein, je Token
+// ein Leerzeichen dahinter), '_' statt jedes Namens. Seit Charge A4
+// oeffentlich (SCA125, uRdxInheritedEmptyFix: Durchreichung der Parameter
+// und Default-Werte '=' in der Liste).
+function ParamNamesOf(AMap: TRdxCodeMap; const AOpen: TRdxToken;
+  const AClose: string; out AShape: string): TArray<string>;
+
 implementation
 
 uses
