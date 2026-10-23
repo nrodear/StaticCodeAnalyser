@@ -49,7 +49,10 @@ uses
 // Der Typ der Sammlung, soweit bewiesen: nur ein Bezeichner oder
 // 'Self.Bezeichner' - eine laengere Kette ('Memo1.Lines') ist ein Member
 // eines fremden Typs, dessen Deklaration der Resolver nicht kennt.
-function KindOf(AResolver: TTypeResolver; const ACollection: string;
+// ACode ist die Code-Sicht der Unit: an ihr unterscheidet KindOfResolved
+// das zusammengezogene 'arrayofinteger' der klassischen var-Sektion von
+// einem gleichnamigen Namenstyp 'ArrayOfInteger'.
+function KindOf(AResolver: TTypeResolver; const ACollection, ACode: string;
   ALine: Integer): TLoopBoundTypeKind;
 var
   Name : string;
@@ -59,7 +62,8 @@ begin
     Name := Copy(Name, 6, MaxInt);
   if (Name = '') or (Pos('.', Name) > 0) then
     Exit(ltkUnknown);
-  Result := TLoopBoundScan.KindOfType(AResolver.ResolveTypeAt(Name, ALine));
+  Result := TLoopBoundScan.KindOfResolved(AResolver.ResolveTypeAt(Name, ALine),
+    ACode);
 end;
 
 class procedure TLoopPastHighBoundDetector.AnalyzeUnit(UnitNode: TAstNode;
@@ -98,7 +102,7 @@ begin
     begin
       if (Hit.ForPos < 1) or (Hit.ForPos > Length(LineFor)) then Continue;
       LineNo := LineFor[Hit.ForPos - 1] + 1;
-      Kind := KindOf(Resolver, Hit.Collection, LineNo);
+      Kind := KindOf(Resolver, Hit.Collection, Code, LineNo);
       Verdict := TLoopBoundScan.Verdict(Hit, Kind);
       if Verdict = lbdSkip then Continue;
       F := TLeakFinding.Create;

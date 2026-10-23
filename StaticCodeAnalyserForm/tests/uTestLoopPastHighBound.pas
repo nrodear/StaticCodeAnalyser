@@ -46,11 +46,24 @@ type
     [Test] procedure Message_NamesHeadAccessAndBound;
   end;
 
+  // Typbeweis 'array of' aus der klassischen var-Sektion (2026-10-23): der
+  // Parser zieht 'array of Integer' zu 'arrayofInteger' zusammen - gleich
+  // einem Namenstyp 'ArrayOfInteger'. TLoopBoundScan.KindOfResolved trennt
+  // beide an der Code-Sicht der Unit.
+  [TestFixture]
+  TTestLoopPastHighBoundTypes = class
+  public
+    [Test] procedure NamedTypeHomonym_Warning;
+    [Test] procedure KindOfResolved_ConcatenatedArrayOf_IsArray;
+    [Test] procedure KindOfResolved_NamedTypeInCode_NotArray;
+    [Test] procedure KindOfResolved_WholeWordsAndDelegation;
+  end;
+
 implementation
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uSCAConsts, uMethodd12,
+  uSCAConsts, uMethodd12, uLoopBoundScan,
   uTestFindingHelper;
 
 const
@@ -323,7 +336,66 @@ begin
   end;
 end;
 
+{ ---- Typbeweis 'array of' (TTestLoopPastHighBoundTypes) ---- }
+
+// Ein Namenstyp, dessen Name wie das zusammengezogene 'array of Integer'
+// lautet - er ist ein STATISCHES Array, kein Beweis fuer den Index 0. Der
+// Test haelt den Beweis eng: ein Praefix-Vergleich auf 'arrayof' allein
+// machte daraus einen Error.
+procedure TTestLoopPastHighBoundTypes.NamedTypeHomonym_Warning;
+begin
+  AssertOneHit('unit t;' + CRLF + 'interface' + CRLF + 'implementation' +
+    CRLF + 'type' + CRLF +
+    '  ArrayOfInteger = array[1..3] of Integer;' + CRLF +
+    'procedure Foo;' + CRLF + 'var' + CRLF +
+    '  A: ArrayOfInteger;' + CRLF + '  i: Integer;' + CRLF +
+    'begin' + CRLF +
+    '  for i := 0 to Length(A) do // HIT' + CRLF +
+    '    A[i] := 0;' + CRLF +
+    'end;' + CRLF + 'end.', lsWarning,
+    'ArrayOfInteger ist ein Namenstyp unbekannter Untergrenze - Warning');
+end;
+
+procedure TTestLoopPastHighBoundTypes.KindOfResolved_ConcatenatedArrayOf_IsArray;
+begin
+  Assert.AreEqual<Integer>(Ord(ltkArray), Ord(TLoopBoundScan.KindOfResolved(
+    'arrayofinteger', 'var' + CRLF + '  A: array of Integer;' + CRLF)),
+    'array of Integer bildet den Bezeichner arrayofinteger nie');
+  Assert.AreEqual<Integer>(Ord(ltkArray), Ord(TLoopBoundScan.KindOfResolved(
+    'arrayofarrayofbyte', '  M: array of array of Byte;')),
+    'auch verschachtelt');
+end;
+
+procedure TTestLoopPastHighBoundTypes.KindOfResolved_NamedTypeInCode_NotArray;
+begin
+  Assert.AreEqual<Integer>(Ord(ltkOther), Ord(TLoopBoundScan.KindOfResolved(
+    'arrayofinteger', 'type ArrayOfInteger = array[1..3] of Integer;' + CRLF +
+    'var A: ARRAYOFINTEGER;')),
+    'der Namenstyp steht als Bezeichner im Code (Schreibweise egal)');
+  Assert.AreEqual<Integer>(Ord(ltkOther), Ord(TLoopBoundScan.KindOfResolved(
+    'arrayofinteger', 'A:ArrayOfInteger')),
+    'auch am Textende und ohne Leerraum davor');
+end;
+
+procedure TTestLoopPastHighBoundTypes.KindOfResolved_WholeWordsAndDelegation;
+begin
+  Assert.AreEqual<Integer>(Ord(ltkArray), Ord(TLoopBoundScan.KindOfResolved(
+    'arrayofinteger', 'A: array of Integer; B: TMyArrayOfInteger; ' +
+    'C: ArrayOfInteger2; D: ArrayOfInteger_X;')),
+    'nur ganze Bezeichner zaehlen');
+  Assert.AreEqual<Integer>(Ord(ltkOther), Ord(TLoopBoundScan.KindOfResolved(
+    'packedarrayofbyte', 'P: packed array of Byte;')),
+    'packed array of bleibt beim alten Weg');
+  Assert.AreEqual<Integer>(Ord(ltkArray), Ord(TLoopBoundScan.KindOfResolved(
+    'array', '')), 'sonst wie KindOfType: array');
+  Assert.AreEqual<Integer>(Ord(ltkList), Ord(TLoopBoundScan.KindOfResolved(
+    'tstringlist', '')), 'sonst wie KindOfType: Liste');
+  Assert.AreEqual<Integer>(Ord(ltkUnknown), Ord(TLoopBoundScan.KindOfResolved(
+    '', 'A: array of Integer;')), 'ohne Typ kein Beweis');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestLoopPastHighBound);
+  TDUnitX.RegisterTestFixture(TTestLoopPastHighBoundTypes);
 
 end.

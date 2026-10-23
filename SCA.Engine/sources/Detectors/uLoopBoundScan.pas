@@ -110,6 +110,14 @@ type
     class function KindOfType(const ABareTypeLow: string): TLoopBoundTypeKind;
       static;
 
+    // Wie KindOfType, fuer den Typ, den der Resolver aus dieser Unit
+    // liefert; ACode ist die Code-Sicht derselben Unit (Kommentare und
+    // Strings entfernt, Gross-/Kleinschreibung beliebig). Zusaetzlich:
+    // 'arrayof...' ist ein 'array of'-Typ, wenn ACode keinen Bezeichner
+    // dieses Namens enthaelt (Begruendung an der Implementierung).
+    class function KindOfResolved(const ABareTypeLow, ACode: string):
+      TLoopBoundTypeKind; static;
+
     // Error, Warning oder nicht melden - nach Variante, Typbeweis und den
     // Merkmalen des Rumpfs.
     class function Verdict(const AHit: TLoopBoundHit;
@@ -977,6 +985,61 @@ begin
     Result := ltkMap
   else
     Result := ltkOther;
+end;
+
+// Steht AWordLow (klein, nur Bezeichnerzeichen) in ACode als ganzer
+// Bezeichner - links und rechts kein weiteres Bezeichnerzeichen? Ohne
+// Unterschied in Gross-/Kleinschreibung und ohne Kopie des Textes.
+function ContainsWordCI(const ACode, AWordLow: string): Boolean;
+var
+  N, L, P, K : Integer;
+  C          : Char;
+begin
+  Result := False;
+  N := Length(ACode);
+  L := Length(AWordLow);
+  if L = 0 then Exit;
+  P := 1;
+  while P <= N - L + 1 do
+  begin
+    if (P = 1) or not IsWordChar(ACode[P - 1]) then
+    begin
+      K := 1;
+      while K <= L do
+      begin
+        C := ACode[P + K - 1];
+        if CharInSet(C, ['A'..'Z']) then
+          C := Chr(Ord(C) + 32);
+        if C <> AWordLow[K] then Break;
+        Inc(K);
+      end;
+      if (K > L) and ((P + L > N) or not IsWordChar(ACode[P + L])) then
+        Exit(True);
+    end;
+    Inc(P);
+  end;
+end;
+
+// Die klassische lokale var-Sektion haengt die Typ-Token OHNE Leerraum
+// aneinander (uParser2, ParseLocalVarSection): 'A: array of Integer'
+// kommt als TypeRef 'arrayofInteger' an, der nackte Typ ist dann
+// 'arrayofinteger' statt 'array' - Parameter und Inline-Variablen behalten
+// den Leerraum und werden 'array'. Dieselbe Form haette ein NAMENSTYP
+// 'ArrayOfInteger' (Homonym-Falle, s. uUninitVar IsDynArrayDeclLine). Der
+// Parser bleibt unberuehrt (die Aenderung bewegte Funde vieler Detektoren);
+// unterschieden wird hier: der strenge Resolver kennt nur Deklarationen
+// DIESER Unit, ein Namenstyp steht dort also als Bezeichner im Code
+// ('A: ArrayOfInteger'). 'array of Integer' bildet diesen Bezeichner nie.
+// Kommt er im Code vor, bleibt es beim alten Weg (kein Beweis). 'packed
+// array of' ('packedarrayof...') bleibt bewusst aussen vor.
+class function TLoopBoundScan.KindOfResolved(const ABareTypeLow,
+  ACode: string): TLoopBoundTypeKind;
+begin
+  if (Length(ABareTypeLow) > 7) and (Copy(ABareTypeLow, 1, 7) = 'arrayof')
+     and not ContainsWordCI(ACode, ABareTypeLow) then
+    Result := ltkArray
+  else
+    Result := KindOfType(ABareTypeLow);
 end;
 
 // Beweist die Typart die Variante? False in AReport = nicht melden.
