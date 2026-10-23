@@ -11,7 +11,7 @@
 const
   // Index == Ord(TFindingKind), Drift-Guard im Leser wie bei
   // RULE_CATALOG_DATA (RuleID muss zur Position passen).
-  RULE_OVERLAY_DE : array[0..200] of TRuleOverlayData = (
+  RULE_OVERLAY_DE : array[0..201] of TRuleOverlayData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -1308,12 +1308,19 @@ const
       Name     : 'IP-Adresse in einer versionierten Konfigurationsdatei';
       ShortDesc: 'IPv4- oder IPv6-Adresse (privat, geteilt oder ' + #$00F6 +
         'ffentlich) als Wert in einer .ini-Datei des Quellbaums'
+    ),
+    // SCA202
+    (
+      RuleID   : 'SCA202';
+      Name     : 'not, and, or oder xor bindet vor dem Vergleich';
+      ShortDesc: '''not Count > 0'' oder ''A = True or B = False'' - not/and/or/xor binden st' + #$00E4 +
+        'rker als Vergleiche, der Ausdruck kompiliert, pr' + #$00FC + 'ft aber etwas anderes'
     )
   );
 
   // Index == Ord(TFindingKind), Drift-Guard im Leser wie bei
   // RULE_CATALOG_DATA (RuleID muss zur Position passen).
-  RULE_OVERLAY_FR : array[0..200] of TRuleOverlayData = (
+  RULE_OVERLAY_FR : array[0..201] of TRuleOverlayData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -2730,6 +2737,12 @@ const
       Name     : 'Adresse IP dans un fichier de configuration versionn' + #$00E9;
       ShortDesc: 'Adresse IPv4 ou IPv6 (priv' + #$00E9 + 'e, partag' + #$00E9 +
         'e ou publique) comme valeur dans un fichier .ini de l''arborescence des sources'
+    ),
+    // SCA202
+    (
+      RuleID   : 'SCA202';
+      Name     : 'not, and, or ou xor s''applique avant la comparaison';
+      ShortDesc: '''not Count > 0'' ou ''A = True or B = False'' - not/and/or/xor sont prioritaires sur les comparaisons, l''expression compile mais teste autre chose'
     )
   );
 

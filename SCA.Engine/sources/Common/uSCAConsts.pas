@@ -759,15 +759,21 @@ type
                                  //          Loopback/Doku/Multicast/...). Grammatik,
                                  //          Klassen und Gates in uIpAddressScan.
                                  //          Anlass Nico 2026-10-09.
-    fkHardcodedIpInConfig        // SCA201 - dieselbe Adresse in einer versionierten
+    fkHardcodedIpInConfig,       // SCA201 - dieselbe Adresse in einer versionierten
                                  //          Konfigurationsdatei (.ini). Laeuft NICHT ueber
                                  //          die Detektor-Registry, sondern im Konfigu-
                                  //          rations-Durchlauf von ParseLeaks (die .ini
                                  //          darf nie in die Pascal-Pipeline).
+    fkComparisonPrecedence       // SCA202 - not/and/or/xor binden staerker als die
+                                 //          Vergleiche: 'not Count > 0' (bitweises not
+                                 //          einer Ganzzahl) und 'A = True or B = False'
+                                 //          (Boolean-Kette) kompilieren still falsch.
+                                 //          Error nur mit Typbeleg, sonst Warning
+                                 //          (uComparisonPrecedenceScan). Q1 2026-10-23.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Delphi-Sets
-  // tragen hoechstens 256 Elemente - aktuell sind 201 belegt (SCA201),
+  // tragen hoechstens 256 Elemente - aktuell sind 202 belegt (SCA202),
   // die Reserve ist also endlich: die Encoding-Familie allein brachte
   // 9 Kinds, die Attribut-Familie 5. Wer sich der Grenze naehert, muss
   // TFindingKinds, PFindingKinds und die Ord(K)+1-basierte SCA-ID-
@@ -1052,7 +1058,8 @@ const
     (Name: 'DuplicateInterfaceGuid';     FindingType: ftBug;          DefaultSeverity: lsWarning), // fkDuplicateInterfaceGuid
     (Name: 'ParamNameMismatch';          FindingType: ftBug;          DefaultSeverity: lsWarning), // fkParamNameMismatch
     (Name: 'HardcodedIpAddress';         FindingType: ftSecurityHotspot; DefaultSeverity: lsWarning), // fkHardcodedIpAddress
-    (Name: 'HardcodedIpInConfig';        FindingType: ftSecurityHotspot; DefaultSeverity: lsHint)     // fkHardcodedIpInConfig
+    (Name: 'HardcodedIpInConfig';        FindingType: ftSecurityHotspot; DefaultSeverity: lsHint),    // fkHardcodedIpInConfig
+    (Name: 'ComparisonPrecedence';       FindingType: ftBug;          DefaultSeverity: lsError)    // fkComparisonPrecedence
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

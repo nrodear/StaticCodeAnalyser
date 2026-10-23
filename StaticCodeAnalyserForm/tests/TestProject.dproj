@@ -261,6 +261,7 @@
         <DCCReference Include="uTestEmptyInterface.pas"/>
         <DCCReference Include="uTestInterfaceGuid.pas"/>
         <DCCReference Include="uTestParamNameMismatch.pas"/>
+        <DCCReference Include="uTestComparisonPrecedence.pas"/>
         <DCCReference Include="uTestRuleListBox.pas"/>
         <DCCReference Include="uTestVcsChanges.pas"/>
         <DCCReference Include="uTestAssertMessage.pas"/>

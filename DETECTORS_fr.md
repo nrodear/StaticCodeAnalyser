@@ -7,7 +7,7 @@ poignée de détecteurs bonus propres à cet outil.
 
 Légende des statuts : ✅ implémenté · 🟡 partiel · 🔲 ouvert
 
-**Résumé (2026-08-07) :** Les **201 kinds de règles** du roster canonique [`rules/sca-rules.json`](rules/sca-rules.json) sont tous implémentés et énumérés dans ce fichier (portés par **159 enregistrements de pipeline** ; plusieurs classes émettent plusieurs kinds — p. ex. `uVisibilityCheck` → 3 kinds de visibilité, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 kinds DFM ; **SCA194/SCA195 sont à portée projet, non basés sur l'AST** — émis par le dispatch du scan projet/groupe, pas par le registre de détecteurs par fichier ; **SCA201** provient de la passe de configuration sur les fichiers .ini). 44 / 50 slots de règles Sonar complets ; les 4 slots ouverts (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) exigent de l'inférence de types / une résolution inter-unités et n'ont pas encore de SCA-ID.
+**Résumé (2026-08-07) :** Les **202 kinds de règles** du roster canonique [`rules/sca-rules.json`](rules/sca-rules.json) sont tous implémentés et énumérés dans ce fichier (portés par **160 enregistrements de pipeline** ; plusieurs classes émettent plusieurs kinds — p. ex. `uVisibilityCheck` → 3 kinds de visibilité, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 kinds DFM ; **SCA194/SCA195 sont à portée projet, non basés sur l'AST** — émis par le dispatch du scan projet/groupe, pas par le registre de détecteurs par fichier ; **SCA201** provient de la passe de configuration sur les fichiers .ini). 44 / 50 slots de règles Sonar complets ; les 4 slots ouverts (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) exigent de l'inférence de types / une résolution inter-unités et n'ont pas encore de SCA-ID.
 
 Les 4 slots encore ouverts exigent tous inférence de types / analyse de flux / résolution de symboles inter-unités : #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI. **#16 UninitVar** dispose d'un MVP conservateur (`SCA166`) — la sensibilité complète aux chemins reste ouverte pour la phase 3.
 
@@ -152,7 +152,7 @@ Catalogue Sonar-50
 🏛 Cluster mORMot :                  9 (SCA153-161, tous complets)
 🧩 Nommage/formatage SonarDelphi : 60 (SCA060-119, section ci-dessous)
 
-🎯 Total général : 201 kinds de détecteurs (184 unités de détecteur).
+🎯 Total général : 202 kinds de détecteurs (186 unités de détecteur).
 ```
 
 ---
@@ -464,6 +464,7 @@ Les types de retour managés (famille string, tableaux dynamiques, `Variant`, in
 | SCA199 | **ParamNameMismatch** | Nom passé à ParamByName absent des :paramètres du SQL que la routine donne à cette requête (« paramètre introuvable » à l'exécution), ou un paramètre que la routine ne lie jamais | Warning | Bug | ✅ | `uParamNameMismatch` |
 | SCA200 | **HardcodedIpAddress** | Adresse IPv4/IPv6 (privée, partagée ou publique) dans un littéral de chaîne - la déplacer dans la configuration ou utiliser un nom d'hôte ; loopback, documentation, multicast, versions et OID ne sont pas signalés | Warning | Security Hotspot | ✅ | `uHardcodedIpAddress` |
 | SCA201 | **HardcodedIpInConfig** | Adresse IPv4/IPv6 comme valeur dans un fichier .ini de l'arborescence des sources (passe de configuration, pas un détecteur par unité ; marqueurs `; noinspection`) | Hint | Security Hotspot | ✅ | `uHardcodedIpInConfig` |
+| SCA202 | **ComparisonPrecedence** | not/and/or/xor sont prioritaires sur les comparaisons : `not Count > 0` (not bit à bit d'un entier) et `A = True or B = False` (chaîne booléenne) compilent mais testent autre chose ; Error avec preuve du type, sinon Warning ; `Flags and Mask = 0` n'est pas signalé | Error | Bug | ✅ | `uComparisonPrecedence` |
 
 ## ⚙️ Configuration — SCA001 OwnershipSinks (liste blanche des fuites mémoire)
 

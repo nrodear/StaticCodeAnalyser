@@ -30,7 +30,7 @@
       "DfmCircularDataSource", "DfmRequiredFieldUnbound",
       "DfmRequiredFieldNotVisible", "DfmCrossFormCoupling",
       "DfmActionMismatch", "DuplicateInterfaceGuid",
-      "ParamNameMismatch"
+      "ParamNameMismatch", "ComparisonPrecedence"
     ],
     "code-quality": [
       "EmptyExcept", "UnusedUses", "MissingFinally", "DeadCode",
@@ -4303,6 +4303,43 @@
       "cleanCodeAttribute": "TRUSTWORTHY",
       "impacts": [
         { "softwareQuality": "SECURITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA202",
+      "kind": "ComparisonPrecedence",
+      "name": "not, and, or or xor binds before the comparison",
+      "shortDescription": "'not Count > 0' or 'A = True or B = False' - not/and/or/xor bind tighter than comparisons, so the expression compiles but tests something else",
+      "fullDescription": "In Pascal the operators not, and, or and xor bind tighter than the comparisons (=, <>, <, >, <=, >=, in) - the same in Delphi and Free Pascal. Two spellings therefore compile without a message and test something else than they read. (1) 'not' in front of a comparison: 'if not List.Count > 0' is '(not List.Count) > 0'. For an integer, not is the bitwise complement, so the condition is false for every Count >= 0; 'not Key in [...]' and 'not Result = mrOk' fail the same way. (2) Comparisons chained by and/or/xor: 'if A = True or B = False' is '(A = (True or B)) = False'. This compiles only when the operands are Boolean (or Variant) - with integers, strings, enumerations or sets the compiler already reports a type error. Write the comparison in parentheses: 'not (List.Count > 0)', '(A = True) or (B = False)' - or drop the comparison with True/False. The severity is Error when the type is evidenced (a number or a set of numbers on the right, Pos/Ord/Length/CompareText... or .Count/.IndexOf as the operand, a local variable, parameter or field of an integer type, True/False in the chain) and Warning otherwise. Conditions of if/while/until/case and right-hand sides of := are read; comments, string literals (also Delphi 12 multi-line strings) and asm blocks never count as code.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["logic", "operator-precedence", "suspicious"],
+      "cwe": ["CWE-783"],
+      "detectorUnit": "uComparisonPrecedence.pas",
+      "examples": {
+        "bad": "if not List.Count > 0 then   // (not List.Count) > 0 - false for every Count\n  Exit;\nif Ready = True or Busy = False then   // (Ready = (True or Busy)) = False\n  Start;",
+        "good": "if not (List.Count > 0) then\n  Exit;\nif Ready or not Busy then\n  Start;"
+      },
+      "exceptions": [
+        {
+          "case": "Boolean operand with = or <>",
+          "why": "For Boolean values (not A) = B is the same as not (A = B), so the order does not change the result. Not reported when True/False stands on the right, when the operand ends in a well-known Boolean member (Checked, Visible, Enabled, Active, ReadOnly, Modified, Focused, Showing, Eof, Bof, IsEmpty, Selected, Expanded, Down), or when the operand or the identifier on the right is a variable, parameter or field of a Boolean type. With <, >, <=, >= or in the order would matter for Booleans too - such code is practically never written and is not reported (deliberate false negative).",
+          "example": "if not CheckBox1.Checked = Ini.ReadBool('a', 'b', False) then  // not reported"
+        },
+        {
+          "case": "Bit tests and open intent",
+          "why": "'Flags and Mask = 0' is '(Flags and Mask) = 0' - the correct bit test. 'not' behind and/or/* is part of the operand ('Flags and not Mask <> 0' clears bits before the test). 'X = A or B' compares X with the bitwise or of A and B; whether that was meant cannot be told from the text. None of these is reported.",
+          "example": "if Flags and not Mask <> 0 then  // not reported"
+        },
+        {
+          "case": "Known limits",
+          "why": "Chains are read only in conditions of if/while/until and on the right of := - not in other call arguments (Assert(A = True or B = False)). Without evidence of the type (properties, function results, Variant) a finding stays a Warning. Generic type arguments (TList<Integer>, IsType<T>) are recognised by their shape; an unusual spelling of a comparison that looks like one ('A < B > C') is not reported as a chain.",
+          "example": "Assert(Ready = True or Busy = False);  // not reported"
+        }
+      ],
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
       ]
     }
   ]

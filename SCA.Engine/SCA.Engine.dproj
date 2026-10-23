@@ -287,6 +287,8 @@
         <DCCReference Include="sources\Detectors\uSynchronizeInDestructor.pas"/>
         <DCCReference Include="sources\Detectors\uTabulationCharacter.pas"/>
         <DCCReference Include="sources\Detectors\uTautologicalExpr.pas"/>
+        <DCCReference Include="sources\Detectors\uComparisonPrecedenceScan.pas"/>
+        <DCCReference Include="sources\Detectors\uComparisonPrecedence.pas"/>
         <DCCReference Include="sources\Detectors\uThreadFreeOnTerminateWithRef.pas"/>
         <DCCReference Include="sources\Detectors\uTObjectListWithoutOwnership.pas"/>
         <DCCReference Include="sources\Detectors\uTodoComment.pas"/>

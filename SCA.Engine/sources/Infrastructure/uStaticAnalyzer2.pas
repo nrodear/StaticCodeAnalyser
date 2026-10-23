@@ -146,6 +146,7 @@ uses
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
   uUnusedLocal, uUnusedParameter, uTautologicalExpr,
+  uComparisonPrecedence,   // SCA202 - not/and/or/xor vor Vergleichen
   uSqlDangerousStatement,
   uNilDeref, uMissingFinally, uDivByZero, uDeadCode,
   uLongMethod, uLongParamList, uMagicNumbers, uDuplicateString,
@@ -697,6 +698,10 @@ begin
   AddD('UninitVar',      fkUninitVar,       TUninitVarDetector.AnalyzeUnit);
   AddD3('UnusedParameter',fkUnusedParameter, TUnusedParameterDetector.AnalyzeUnit);
   AddD('TautologicalBoolExpr',fkTautologicalBoolExpr, TTautologicalExprDetector.AnalyzeUnit);
+  // SCA202 (2026-10-23): ohne Vorfilter-Token - 'or' steckt in jedem
+  // 'for'/'procedure', ein Token waere keine NOTWENDIGE Bedingung.
+  AddD('ComparisonPrecedence', fkComparisonPrecedence,
+       TComparisonPrecedenceDetector.AnalyzeUnit);
   // AContext-fuehrend seit dem tplFixtureDir-Anker (ScanRootDir)
   AddD('SqlDangerousStatement', fkSqlDangerousStatement, TSqlDangerousStatementDetector.AnalyzeUnit);
   // UnusedUses: bleibt im Detector-Pool eingetragen; der per-Scan-Opt-out

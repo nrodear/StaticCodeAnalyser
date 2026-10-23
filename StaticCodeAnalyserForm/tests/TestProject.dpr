@@ -180,6 +180,7 @@ uses
   uTestEmptyInterface in 'uTestEmptyInterface.pas',
   uTestInterfaceGuid in 'uTestInterfaceGuid.pas',
   uTestParamNameMismatch in 'uTestParamNameMismatch.pas',
+  uTestComparisonPrecedence in 'uTestComparisonPrecedence.pas',
   uTestRuleListBox in 'uTestRuleListBox.pas',
   uTestVcsChanges in 'uTestVcsChanges.pas',
   uTestAssertMessage in 'uTestAssertMessage.pas',

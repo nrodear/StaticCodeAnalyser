@@ -269,6 +269,8 @@ contains
   uSynchronizeInDestructor in 'sources\Detectors\uSynchronizeInDestructor.pas',
   uTabulationCharacter in 'sources\Detectors\uTabulationCharacter.pas',
   uTautologicalExpr in 'sources\Detectors\uTautologicalExpr.pas',
+  uComparisonPrecedenceScan in 'sources\Detectors\uComparisonPrecedenceScan.pas',
+  uComparisonPrecedence in 'sources\Detectors\uComparisonPrecedence.pas',
   uThreadFreeOnTerminateWithRef in 'sources\Detectors\uThreadFreeOnTerminateWithRef.pas',
   uTObjectListWithoutOwnership in 'sources\Detectors\uTObjectListWithoutOwnership.pas',
   uTodoComment in 'sources\Detectors\uTodoComment.pas',

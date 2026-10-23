@@ -276,6 +276,8 @@ contains
   uSynchronizeInDestructor in '..\SCA.Engine\sources\Detectors\uSynchronizeInDestructor.pas',
   uTabulationCharacter in '..\SCA.Engine\sources\Detectors\uTabulationCharacter.pas',
   uTautologicalExpr in '..\SCA.Engine\sources\Detectors\uTautologicalExpr.pas',
+  uComparisonPrecedenceScan in '..\SCA.Engine\sources\Detectors\uComparisonPrecedenceScan.pas',
+  uComparisonPrecedence in '..\SCA.Engine\sources\Detectors\uComparisonPrecedence.pas',
   uTodoComment in '..\SCA.Engine\sources\Detectors\uTodoComment.pas',
   uTooLongLine in '..\SCA.Engine\sources\Detectors\uTooLongLine.pas',
   uTrailingCommaArgList in '..\SCA.Engine\sources\Detectors\uTrailingCommaArgList.pas',

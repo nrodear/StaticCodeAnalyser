@@ -205,6 +205,7 @@ All 201 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA199](#sca199) | ParamByName name does not match the SQL placeholders | Warning | Bug | `uParamNameMismatch.pas` |
 | [SCA200](#sca200) | IP address as string literal | Warning | Security Hotspot | `uHardcodedIpAddress.pas` |
 | [SCA201](#sca201) | IP address in a versioned configuration file | Hint | Security Hotspot | `uHardcodedIpInConfig.pas` |
+| [SCA202](#sca202) | not, and, or or xor binds before the comparison | **Error** | Bug | `uComparisonPrecedence.pas` |
 
 ---
 
@@ -5303,4 +5304,42 @@ IP address '10.20.30.40' (private, RFC 1918) in [Database] Server - an environme
 
 ---
 
-_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA201.md`._
+## SCA202
+**not, and, or or xor binds before the comparison**
+
+> 'not Count > 0' or 'A = True or B = False' - not/and/or/xor bind tighter than comparisons, so the expression compiles but tests something else
+
+| Field | Value |
+|---|---|
+| Severity | **Error** | Type | Bug |
+| Tags | `logic`, `operator-precedence`, `suspicious` |
+| CWE | [CWE-783](https://cwe.mitre.org/data/definitions/783.html) |
+| Detector | `uComparisonPrecedence.pas` |
+
+In Pascal the operators not, and, or and xor bind tighter than the comparisons (=, <>, <, >, <=, >=, in) - the same in Delphi and Free Pascal. Two spellings therefore compile without a message and test something else than they read. (1) 'not' in front of a comparison: 'if not List.Count > 0' is '(not List.Count) > 0'. For an integer, not is the bitwise complement, so the condition is false for every Count >= 0; 'not Key in [...]' and 'not Result = mrOk' fail the same way. (2) Comparisons chained by and/or/xor: 'if A = True or B = False' is '(A = (True or B)) = False'. This compiles only when the operands are Boolean (or Variant) - with integers, strings, enumerations or sets the compiler already reports a type error. Write the comparison in parentheses: 'not (List.Count > 0)', '(A = True) or (B = False)' - or drop the comparison with True/False. The severity is Error when the type is evidenced (a number or a set of numbers on the right, Pos/Ord/Length/CompareText... or .Count/.IndexOf as the operand, a local variable, parameter or field of an integer type, True/False in the chain) and Warning otherwise. Conditions of if/while/until/case and right-hand sides of := are read; comments, string literals (also Delphi 12 multi-line strings) and asm blocks never count as code.
+
+```pascal
+// BAD
+if not List.Count > 0 then   // (not List.Count) > 0 - false for every Count
+  Exit;
+if Ready = True or Busy = False then   // (Ready = (True or Busy)) = False
+  Start;
+
+// GOOD
+if not (List.Count > 0) then
+  Exit;
+if Ready or not Busy then
+  Start;
+```
+
+**Not reported:** a Boolean operand with `=`/`<>` (`(not A) = B` equals `not (A = B)`: True/False on the right, well-known Boolean members such as `Checked`/`Visible`/`Enabled`, Boolean variables); bit tests (`Flags and Mask = 0`, `Flags and not Mask <> 0`) and `X = A or B`; chains outside if/while/until conditions and `:=` right-hand sides (e.g. in `Assert(...)` arguments).
+
+What the message looks like:
+
+```
+Operator precedence: 'not List.Count > ...' is evaluated as '(not List.Count) > ...' - for an integer, not is the bitwise complement and the comparison is not negated; write 'not (List.Count > ...)'
+```
+
+---
+
+_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA202.md`._

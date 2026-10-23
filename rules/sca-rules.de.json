@@ -806,6 +806,10 @@
     "SCA201": {
       "name": "IP-Adresse in einer versionierten Konfigurationsdatei",
       "shortDescription": "IPv4- oder IPv6-Adresse (privat, geteilt oder öffentlich) als Wert in einer .ini-Datei des Quellbaums"
+    },
+    "SCA202": {
+      "name": "not, and, or oder xor bindet vor dem Vergleich",
+      "shortDescription": "'not Count > 0' oder 'A = True or B = False' - not/and/or/xor binden stärker als Vergleiche, der Ausdruck kompiliert, prüft aber etwas anderes"
     }
   }
 }
