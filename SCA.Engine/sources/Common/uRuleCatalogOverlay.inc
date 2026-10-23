@@ -11,7 +11,7 @@
 const
   // Index == Ord(TFindingKind), Drift-Guard im Leser wie bei
   // RULE_CATALOG_DATA (RuleID muss zur Position passen).
-  RULE_OVERLAY_DE : array[0..201] of TRuleOverlayData = (
+  RULE_OVERLAY_DE : array[0..202] of TRuleOverlayData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -1315,12 +1315,20 @@ const
       Name     : 'not, and, or oder xor bindet vor dem Vergleich';
       ShortDesc: '''not Count > 0'' oder ''A = True or B = False'' - not/and/or/xor binden st' + #$00E4 +
         'rker als Vergleiche, der Ausdruck kompiliert, pr' + #$00FC + 'ft aber etwas anderes'
+    ),
+    // SCA203
+    (
+      RuleID   : 'SCA203';
+      Name     : 'for-Schleife l' + #$00E4 + 'uft einen Index ' + #$00FC + 'ber das Ende';
+      ShortDesc: 'for-Schleife l' + #$00E4 +
+        'uft bis Count, Length() oder High() + 1 und indiziert dieselbe Sammlung mit der Schleifenvariablen - der letzte Durchlauf liegt au' +
+        #$00DF + 'erhalb'
     )
   );
 
   // Index == Ord(TFindingKind), Drift-Guard im Leser wie bei
   // RULE_CATALOG_DATA (RuleID muss zur Position passen).
-  RULE_OVERLAY_FR : array[0..201] of TRuleOverlayData = (
+  RULE_OVERLAY_FR : array[0..202] of TRuleOverlayData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -2743,6 +2751,13 @@ const
       RuleID   : 'SCA202';
       Name     : 'not, and, or ou xor s''applique avant la comparaison';
       ShortDesc: '''not Count > 0'' ou ''A = True or B = False'' - not/and/or/xor sont prioritaires sur les comparaisons, l''expression compile mais teste autre chose'
+    ),
+    // SCA203
+    (
+      RuleID   : 'SCA203';
+      Name     : 'La boucle for d' + #$00E9 + 'passe le dernier indice';
+      ShortDesc: 'La boucle for va jusqu''' + #$00E0 + ' Count, Length() ou High() + 1 et indexe la m' +
+        #$00EA + 'me collection avec la variable de boucle - le dernier passage est hors limites'
     )
   );
 

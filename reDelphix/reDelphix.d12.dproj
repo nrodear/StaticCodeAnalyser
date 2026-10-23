@@ -193,6 +193,7 @@
         <DCCReference Include="source\uRdxParamNameFix.pas"/>
         <DCCReference Include="source\uRdxDeepNestingFix.pas"/>
         <DCCReference Include="source\uRdxLookupHoistFix.pas"/>
+        <DCCReference Include="source\uRdxLoopBoundFix.pas"/>
         <DCCReference Include="source\uRdxRecipeRunner.pas"/>
         <DCCReference Include="source\uRdxFixRunner.pas"/>
         <DCCReference Include="source\uRdxFixTable.pas"/>

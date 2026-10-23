@@ -70,6 +70,7 @@ uses
   uTestHardcodedPath in 'uTestHardcodedPath.pas',
   uTestHardcodedIpAddress in 'uTestHardcodedIpAddress.pas',
   uTestHardcodedIpInConfig in 'uTestHardcodedIpInConfig.pas',
+  uTestLoopPastHighBound in 'uTestLoopPastHighBound.pas',
   uTestIpAddressScanKit in 'uTestIpAddressScanKit.pas',
   uTestIpAddressScanGrammar in 'uTestIpAddressScanGrammar.pas',
   uTestIpAddressScanClasses in 'uTestIpAddressScanClasses.pas',

@@ -153,6 +153,7 @@ uses
   uHardcodedPath, uDebugOutput, uDeepNesting,
   uHardcodedIpAddress,   // SCA200 - IP-Adressen in String-Literalen
   uHardcodedIpInConfig,  // SCA201 - IP-Adressen in .ini (Konfigurations-Durchlauf)
+  uLoopPastHighBound,    // SCA203 - for-Schleife einen Index zu weit
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uCustomRuleDetector,
   uDfmAnalysisRunner, uDfmRepoIndex, uSymbolReferenceIndex, uTypeIndex, uAstFileCache,
@@ -726,6 +727,11 @@ begin
   // Konfigurations-Durchlauf von ParseLeaks (RunConfigPass).
   AddD('HardcodedIpAddress', fkHardcodedIpAddress,
        THardcodedIpAddressDetector.AnalyzeUnit);
+  // SCA203 (Charge A3, 2026-10-23): jeder Kopf, den die Regel meldet, endet
+  // auf '.Count', 'Length(..)' oder 'High(..) + 1' - eines der drei Woerter
+  // steht dann in der Datei (NOTWENDIGE Bedingung).
+  AddD('LoopPastHighBound', fkLoopPastHighBound,
+       TLoopPastHighBoundDetector.AnalyzeUnit, ['count', 'length', 'high']);
   // Seit 2026-09-05 context-faehig (Scanwurzel fuers Geltungsbereich-
   // Gate) -> volle 4-Parameter-Registrierung statt AddD3-Adapter.
   AddD('DebugOutput',      fkDebugOutput,     TDebugOutputDetector.AnalyzeUnit);

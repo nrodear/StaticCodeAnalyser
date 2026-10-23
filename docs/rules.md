@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Rule Catalog
 
-All 201 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
+All 203 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
@@ -206,6 +206,7 @@ All 201 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA200](#sca200) | IP address as string literal | Warning | Security Hotspot | `uHardcodedIpAddress.pas` |
 | [SCA201](#sca201) | IP address in a versioned configuration file | Hint | Security Hotspot | `uHardcodedIpInConfig.pas` |
 | [SCA202](#sca202) | not, and, or or xor binds before the comparison | **Error** | Bug | `uComparisonPrecedence.pas` |
+| [SCA203](#sca203) | for loop runs one index past the end | **Error** | Bug | `uLoopPastHighBound.pas` |
 
 ---
 
@@ -5342,4 +5343,38 @@ Operator precedence: 'not List.Count > ...' is evaluated as '(not List.Count) > 
 
 ---
 
-_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA202.md`._
+## SCA203
+**for loop runs one index past the end**
+
+> for loop runs to Count, Length() or High() + 1 and indexes the same collection with the loop variable - the last pass is out of range
+
+| Field | Value |
+|---|---|
+| Severity | Error | Type | Bug |
+| Tags | `loop`, `off-by-one`, `range-check`, `runtime-error` |
+| CWE | [CWE-193](https://cwe.mitre.org/data/definitions/193.html), [CWE-125](https://cwe.mitre.org/data/definitions/125.html) |
+| Detector | `uLoopPastHighBound.pas` |
+
+A classic off-by-one: 'for i := 0 to List.Count do' with List[i] in the body reads List[List.Count], one item past the end. The compiler accepts it; at run time it raises ERangeError with {$R+}, EArgumentOutOfRangeException or EStringListError for TList and TStrings, and otherwise silently reads or writes the memory behind the last element. Reported are loop heads whose upper bound is one index too far - 'X.Count' (from 0, or from 1 when X is a proven list), 'Length(A)' from 0, 'Low(A) to Length(A)' for a dynamic array, 'High(A) + 1' - when the body reads or writes the same collection (same name or chain) with the unshifted loop variable: X[i], X[i, j], and for .Count also X.Items[i], X.Strings[i] and X.Objects[i]. Strings are 1-based and have their own forms: '0 to Length(S)' with S[i] is wrong at both ends (S[0] before the first character), '1 to Length(S) + 1' past the last; '1 to Length(S)' is correct. The finding is an error only when the type is proven: the collection is a name declared in the unit (parameter, local or inline variable, Result, field of the method's own class or its ancestors in the unit, unit variable) whose type is a known list (TList, TObjectList, TStrings, TStringList, TCollection, TMenuItem, FPC TFPList/TFPGList ...), an array or a string, and the body neither leaves the pass before the access (break, exit, continue, raise, goto) nor grows the collection nor contains an anonymous method. Otherwise it is a warning. Fix: Count - 1, High(A) (or Length(A) - 1), and for strings 1 to Length(S).
+
+```pascal
+// BAD
+for i := 0 to Names.Count do
+  WriteLn(Names[i]);   // Names[Names.Count] raises
+
+// GOOD
+for i := 0 to Names.Count - 1 do
+  WriteLn(Names[i]);
+```
+
+**Not reported:** a shifted index (`L[i - 1]`), `Insert(i, ..)`, another collection, a guard on the loop variable in the body, `1 to X.Count` and `Low(A) to Length(A)` without a type proof, ShortString and PChar, downto loops.
+
+What the message looks like:
+
+```
+Loop past the last index: i := 0 to Names.Count with Names[i] - the last pass is out of range; the bound should be Names.Count - 1
+```
+
+---
+
+_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA203.md`._

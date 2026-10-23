@@ -3,7 +3,7 @@
 > **Erzeugte Datei – nicht von Hand bearbeiten.** Quelle: [`data/quickfixes-doc.json`](data/quickfixes-doc.json) (Titel, Beschreibung, Sperren, Beispiele) und der Quelltext: welche Hilfen es gibt, ihre Menütexte und ob sie das Verhalten ändern, stehen in [`source/uRdxFixTable.pas`](source/uRdxFixTable.pas) (`FIX_ROWS`, `FIX_CAPTIONS`, `FIX_ALT_CAPTIONS`) und [`source/uRdxProvider.pas`](source/uRdxProvider.pas) (Rezepte), die Übersetzungen in [`i18n/de.po`](../i18n/de.po) und [`i18n/fr.po`](../i18n/fr.po), Regel-IDs und Namen in [`rules/sca-rules.json`](../rules/sca-rules.json).
 > Erzeugen (Repo-Wurzel): `python tools/gen-quickfix-doc.py`, prüfen: `python tools/gen-quickfix-doc.py --check` (auch in der CI, `.github/workflows/quickfix-doc.yml`).
 
-reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 90 Quick-Fixes aus der Tabelle der einfachen Hilfen (8 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
+reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 91 Quick-Fixes aus der Tabelle der einfachen Hilfen (8 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
 
 ## Lesehilfe
 
@@ -110,6 +110,7 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 90 Qui
 | SCA196 ManagedResultUninit | `Result zuerst initialisieren: %s` | Quick-Fix | ja | [SCA196](#sca196) |
 | SCA197 InterfaceWithoutGuid | `Neue GUID einfügen` | Quick-Fix | nein | [SCA197](#sca197) |
 | SCA199 ParamNameMismatch | `Parameternamen "%s" aus dem SQL verwenden` | Quick-Fix | ja | [SCA199](#sca199) |
+| SCA203 LoopPastHighBound | `Schleife %s laufen lassen` | Quick-Fix | ja | [SCA203](#sca203) |
 | jede Regel mit Anker im Regelkatalog (Feld `anchor`), wenn sich die Anweisung des Funds beschreiben lässt | `Stelle zeigen` | Navigation | nein | [Details](#rezept-showspan) |
 | SCA044 ConcatToFormat | `Format() aus Verkettung bilden` | Quick-Fix | nein | [Details](#rezept-formatcall) |
 | SCA003 SQLInjection | `Parametrisierte Vorlage in die Zwischenablage` | Quick-Fix | nein | [Details](#rezept-sqltemplate) |
@@ -4397,6 +4398,61 @@ Nachher:
 ```
 
 **Hinweis.** Steht derselbe falsche Name zweimal in der Routine, gilt die Hilfe nur für das erste Vorkommen: danach setzt die Routine den Namen schon, und das zweite bleibt Handarbeit.
+
+<a id="sca203"></a>
+
+### SCA203 – Grenze der for-Schleife auf den letzten Index setzen
+
+- **Regel:** SCA203 `LoopPastHighBound` – for loop runs one index past the end
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** **ja** – die Schleife läuft einen Durchlauf weniger bzw. beginnt bei einem String bei 1 – war der letzte Durchlauf für einen Wächter oder ein Endezeichen gedacht, ist das ein Eingriff. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| en | de | fr |
+|---|---|---|
+| `Let the loop run %s` | `Schleife %s laufen lassen` | `Faire tourner la boucle %s` |
+
+**Platzhalter:** `%s` = der neue Bereich (`0 to L.Count - 1`, `1 to Length(S)`).
+
+**Wirkung:** Die for-Schleife läuft einen Index zu weit (`0 to L.Count`, `0 to Length(A)`, `High(A) + 1`, bei Strings `0 to Length(S)` bzw. `1 to Length(S) + 1`) und liest oder schreibt dieselbe Sammlung mit dem Schleifenindex. Die Hilfe ändert genau eine Stelle im Kopf: `L.Count` → `L.Count - 1`, `Length(A)` → `High(A)` (Array bzw. `Low(A) to Length(A)` bei einem dynamischen Array), `High(A) + 1` → `High(A)`, bei Strings `0 to Length(S)` → `1 to Length(S)` und `1 to Length(S) + 1` → `1 to Length(S)`. Welche Form gilt, sagt der Rat in der Meldung des Detektors (er kennt den Typ); die Hilfe sucht denselben Kopf auf der gemeldeten Zeile und prüft Variable und Grenzen gegen die Meldung.
+
+**Nicht angeboten**
+
+- `1 to X.Count` mit `X[i]` – ob der Index `i - 1` oder die Grenze `Count - 1` sein soll, entscheidet der Mensch
+- `0 to Length(A)` ohne Typbeweis (ein Array braucht `High(A)`, ein String `1 to Length(S)`) und `0 to High(S) + 1` über einen String oder einen Typ, der einer sein kann (falsch an beiden Enden)
+- eine Compiler-Direktive in der Zeile des Kopfs, ein Kopf über mehrere Zeilen, ein Kommentar oder String im Kopf
+- kein oder mehr als ein passender Kopf auf der Zeile (Zeile verschoben, schon korrigiert, mehrdeutig)
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  for i := 0 to L.Count do
+    WriteLn(L[i]);
+```
+
+Nachher:
+
+```pascal
+  for i := 0 to L.Count - 1 do
+    WriteLn(L[i]);
+```
+
+**Beispiel: String (1-basiert)**
+
+Vorher:
+
+```pascal
+  for i := 0 to Length(S) do
+    if S[i] = 'x' then Exit;
+```
+
+Nachher:
+
+```pascal
+  for i := 1 to Length(S) do
+    if S[i] = 'x' then Exit;
+```
 
 ## Weitere Code-Aktionen
 

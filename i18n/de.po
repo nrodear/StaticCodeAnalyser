@@ -6511,3 +6511,36 @@ msgstr "kein Tab an der gemeldeten Stelle"
 
 msgid "the first tab of the line is inside a string or comment - it stays untouched, the help would leave the finding in place"
 msgstr "der erste Tab der Zeile steht in einem String oder Kommentar - der bleibt unangetastet, die Hilfe ließe den Fund stehen"
+
+msgid "the message does not name the loop head - analyse the file again"
+msgstr "die Meldung nennt den Schleifenkopf nicht - Datei neu prüfen"
+
+msgid "the loop runs from 1 to Count - whether the index should be i - 1 or the bound Count - 1 is for you to decide"
+msgstr "die Schleife läuft von 1 bis Count - ob der Index i - 1 oder die Grenze Count - 1 sein soll, ist von Hand zu entscheiden"
+
+msgid "the type is not proven - an array needs High(), a string has to run from 1"
+msgstr "der Typ ist nicht bewiesen - ein Array braucht High(), ein String muss bei 1 beginnen"
+
+msgid "the reported line carries %d for headers with this range - ambiguous"
+msgstr "die gemeldete Zeile trägt %d for-Köpfe mit diesem Bereich - mehrdeutig"
+
+msgid "the for header on the line has another range than the finding"
+msgstr "der for-Kopf auf der Zeile hat einen anderen Bereich als der Fund"
+
+msgid "the for header goes over more than one line"
+msgstr "der for-Kopf geht über mehr als eine Zeile"
+
+msgid "compiler directive in the line of the for header"
+msgstr "Compiler-Direktive in der Zeile des for-Kopfs"
+
+msgid "comment or string in the for header"
+msgstr "Kommentar oder String im for-Kopf"
+
+msgid "a string from 0 to High() + 1 is wrong at both ends - correct the range by hand"
+msgstr "ein String von 0 bis High() + 1 ist an beiden Enden falsch - den Bereich von Hand korrigieren"
+
+msgid "the loop runs one pass less (a string loop starts at 1) - if the last pass was meant for a sentinel or a terminator, this is an intervention"
+msgstr "die Schleife läuft einen Durchlauf weniger (über einen String ab 1) - war der letzte Durchlauf für einen Wächter oder ein Endezeichen gedacht, ist das ein Eingriff"
+
+msgid "Let the loop run %s"
+msgstr "Schleife %s laufen lassen"

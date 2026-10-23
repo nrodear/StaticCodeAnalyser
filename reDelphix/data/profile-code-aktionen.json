@@ -96,6 +96,7 @@
       "DeepNesting",
       "ParamByNameInLoop",
       "FieldByNameInLoop",
+      "LoopPastHighBound",
       "FileReadError"
     ]
   }

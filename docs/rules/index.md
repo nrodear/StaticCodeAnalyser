@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Rule Catalog
 
-All 202 detector rules. Click an ID for full details.
+All 203 detector rules. Click an ID for full details.
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
@@ -206,6 +206,7 @@ All 202 detector rules. Click an ID for full details.
 | [SCA200](SCA200.md) | IP address as string literal | Warning | Security Hotspot | `uHardcodedIpAddress.pas` |
 | [SCA201](SCA201.md) | IP address in a versioned configuration file | Hint | Security Hotspot | `uHardcodedIpInConfig.pas` |
 | [SCA202](SCA202.md) | not, and, or or xor binds before the comparison | Error | Bug | `uComparisonPrecedence.pas` |
+| [SCA203](SCA203.md) | for loop runs one index past the end | Error | Bug | `uLoopPastHighBound.pas` |
 
 ---
 

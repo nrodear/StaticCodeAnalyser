@@ -70,7 +70,7 @@ const
   // SCA127, SCA174, SCA199, SCA111 und SCA112; SCA149, SCA096, SCA097 und
   // SCA086 kennzeichnet der Planer, die zweiten Eintraege von SCA128/SCA059
   // kennzeichnen sich selbst.
-  EXPECTED: array[0..89] of TExpectedRow = (
+  EXPECTED: array[0..90] of TExpectedRow = (
     (Kind: fkExplicitTObjectInheritance; Plan: 'PlanExplicitTObject';
      Caption: 'Remove (TObject) from the class declaration';
      Changes: False; Alt: ''; AltCaption: ''),
@@ -351,6 +351,9 @@ const
      Changes: True; Alt: ''; AltCaption: ''),
     (Kind: fkFieldByNameInLoop; Plan: 'PlanFieldByNameLoop';
      Caption: 'Move %s before the loop';
+     Changes: True; Alt: ''; AltCaption: ''),
+    (Kind: fkLoopPastHighBound; Plan: 'PlanLoopBound';
+     Caption: 'Let the loop run %s';
      Changes: True; Alt: ''; AltCaption: '')
   );
 

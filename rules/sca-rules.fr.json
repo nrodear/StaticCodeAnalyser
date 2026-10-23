@@ -810,6 +810,10 @@
     "SCA202": {
       "name": "not, and, or ou xor s'applique avant la comparaison",
       "shortDescription": "'not Count > 0' ou 'A = True or B = False' - not/and/or/xor sont prioritaires sur les comparaisons, l'expression compile mais teste autre chose"
+    },
+    "SCA203": {
+      "name": "La boucle for dépasse le dernier indice",
+      "shortDescription": "La boucle for va jusqu'à Count, Length() ou High() + 1 et indexe la même collection avec la variable de boucle - le dernier passage est hors limites"
     }
   }
 }

@@ -764,16 +764,22 @@ type
                                  //          die Detektor-Registry, sondern im Konfigu-
                                  //          rations-Durchlauf von ParseLeaks (die .ini
                                  //          darf nie in die Pascal-Pipeline).
-    fkComparisonPrecedence       // SCA202 - not/and/or/xor binden staerker als die
+    fkComparisonPrecedence,      // SCA202 - not/and/or/xor binden staerker als die
                                  //          Vergleiche: 'not Count > 0' (bitweises not
                                  //          einer Ganzzahl) und 'A = True or B = False'
                                  //          (Boolean-Kette) kompilieren still falsch.
                                  //          Error nur mit Typbeleg, sonst Warning
                                  //          (uComparisonPrecedenceScan). Q1 2026-10-23.
+    fkLoopPastHighBound          // SCA203 - for-Schleife einen Index zu weit: '0 to
+                                 //          List.Count' / '0 to Length(A)' / 'High(A) + 1'
+                                 //          mit List[i]/A[i] im Rumpf, String-Formen
+                                 //          '0 to Length(S)' und '1 to Length(S) + 1'.
+                                 //          Error nur mit Typbeweis, sonst Warning
+                                 //          (uLoopBoundScan). Charge A3 / Q2 2026-10-23.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Delphi-Sets
-  // tragen hoechstens 256 Elemente - aktuell sind 202 belegt (SCA202),
+  // tragen hoechstens 256 Elemente - aktuell sind 203 belegt (SCA203),
   // die Reserve ist also endlich: die Encoding-Familie allein brachte
   // 9 Kinds, die Attribut-Familie 5. Wer sich der Grenze naehert, muss
   // TFindingKinds, PFindingKinds und die Ord(K)+1-basierte SCA-ID-
@@ -1059,7 +1065,8 @@ const
     (Name: 'ParamNameMismatch';          FindingType: ftBug;          DefaultSeverity: lsWarning), // fkParamNameMismatch
     (Name: 'HardcodedIpAddress';         FindingType: ftSecurityHotspot; DefaultSeverity: lsWarning), // fkHardcodedIpAddress
     (Name: 'HardcodedIpInConfig';        FindingType: ftSecurityHotspot; DefaultSeverity: lsHint),    // fkHardcodedIpInConfig
-    (Name: 'ComparisonPrecedence';       FindingType: ftBug;          DefaultSeverity: lsError)    // fkComparisonPrecedence
+    (Name: 'ComparisonPrecedence';       FindingType: ftBug;          DefaultSeverity: lsError),   // fkComparisonPrecedence
+    (Name: 'LoopPastHighBound';          FindingType: ftBug;          DefaultSeverity: lsError)    // fkLoopPastHighBound
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.
