@@ -55,7 +55,8 @@ uses
   uEngineApi,          // TSourcePlaces
   uMethodd12,          // TLeakFinding
   uSCAConsts,          // TFindingKind
-  uRdxRecipeRunner;    // TRdxFixOutcome
+  uRdxRecipeRunner,    // TRdxFixOutcome
+  uRdxContextRunner;   // TRdxContextOutcome (ContextCaption)
 
 type
   // Ein Planer der Tabelle - die Form von TRdxFixRunner.FixFor fuer EINE
@@ -116,6 +117,16 @@ type
     // KindName im Menue).
     class function CaptionFor(AKind: TFindingKind;
       const AOutcome: TRdxFixOutcome): string; static;
+
+    // Menuetext einer Code-Aktion ohne Fund (Charge B, Entscheid F2): der
+    // der Fund-Hilfe mit derselben Kette - ckIntroduceConst wie SCA014
+    // (fkMagicNumber), ckTryFinallyCreate wie SCA009 (fkMissingFinally) -,
+    // gebaut von CaptionFor mit AOutcome.Name und der Kennzeichnung bei
+    // ChangesBehavior. Gleich geschrieben, damit die Kontextaktion auf
+    // einer Fundzeile hinter der Fund-Hilfe wegfaellt (uFindingActionMenu,
+    // Dedup per Caption).
+    class function ContextCaption(
+      const AOutcome: TRdxContextOutcome): string; static;
 
     // Fuer uTestRdxFixTable: die Zeilen, ihre Menuetexte (msgids,
     // unuebersetzt; AVariant 0 oder 1) und ihre festen Hinweise (msgid aus
@@ -2988,6 +2999,21 @@ begin
     Result := Format(Result, [Name]);
   if AOutcome.ChangesBehavior then
     Result := Result + ' ' + _(CAP_CHANGES);
+end;
+
+class function TRdxFixTable.ContextCaption(
+  const AOutcome: TRdxContextOutcome): string;
+const
+  // Die Fund-Hilfe je Code-Aktion (dieselbe Planer-Kette).
+  CONTEXT_KINDS: array[TRdxContextKind] of TFindingKind = (fkMagicNumber,
+    fkMissingFinally);
+var
+  Fix : TRdxFixOutcome;
+begin
+  Fix := Default(TRdxFixOutcome);
+  Fix.Name := AOutcome.Name;
+  Fix.ChangesBehavior := AOutcome.ChangesBehavior;
+  Result := CaptionFor(CONTEXT_KINDS[AOutcome.Kind], Fix);
 end;
 
 procedure BuildRowIndex;

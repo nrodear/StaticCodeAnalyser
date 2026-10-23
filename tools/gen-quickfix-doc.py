@@ -91,6 +91,16 @@ SRC_PROVIDER = os.path.join(RDX, 'source', 'uRdxProvider.pas')
 # und der Generator las sie mit (SRC_PLANNER_UNITS, G10-25). Dass keine
 # ANDERE Unit 'ChangesBehavior :=' setzt, prueft unmarked_units().
 SRC_DIR = os.path.join(RDX, 'source')
+# Units, die 'ChangesBehavior :=' setzen, deren Aktionen aber NICHT in
+# QUICKFIXES.md gehoeren - je mit Grund (unmarked_units laesst sie aus):
+NOT_DOCUMENTED = {
+    'uRdxContextRunner.pas':
+        'Code-Aktionen ohne Fund (Charge B, fakContext): weder Fund-Hilfe '
+        'noch Rezept, QUICKFIXES.md fuehrt sie nicht. Menuetext und '
+        'Kennzeichnung sind die der Fund-Hilfen SCA014/SCA009 '
+        '(uRdxFixTable.ContextCaption, Test uTestRdxContextRunner); Doku: '
+        'reDelphix/README.md, "Code-Aktionen ohne Fund".',
+}
 # Profil code-aktionen (README 'Code-Aktionen in der IDE ausprobieren'): jede
 # Art mit Hilfe steht darin, sonst gibt es nach dem Import keinen Fund und
 # keine Gluehbirne (Review Woche 2026-10-21, G10-05). Arten im Profil OHNE
@@ -480,6 +490,8 @@ def unmarked_units(read=None):
     out = []
     for path in sorted(glob.glob(os.path.join(SRC_DIR, '*.pas'))):
         if os.path.normcase(os.path.abspath(path)) in read:
+            continue
+        if os.path.basename(path) in NOT_DOCUMENTED:
             continue
         if CB_RE.search(strip_comments(load_text(path))):
             out.append(rel(path))

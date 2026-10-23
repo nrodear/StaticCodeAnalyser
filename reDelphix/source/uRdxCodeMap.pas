@@ -336,6 +336,40 @@ function PrevToken(AMap: TRdxCodeMap; ALine, ACol: Integer): TRdxToken;
 // Vor ATok.
 function Before(AMap: TRdxCodeMap; const ATok: TRdxToken): TRdxToken;
 
+// ---- Das Konstrukt unter dem Caret (Charge B, V4: Code-Aktionen ohne
+// Fund, uRdxContextRunner). ACol ist die Zeichenspalte des Carets
+// (1-basiert, UTF-16, der Caret steht VOR dem Zeichen ACol); Spalten wie
+// TRdxToken, Stop exklusiv. Anders als TokenAt (beginnt an ACol) zaehlt
+// hier jede Spalte im Token und die direkt dahinter - wo der Caret nach dem
+// Tippen eines Worts steht. ----
+
+// Das Code-Token, dessen Bereich [Col, EndCol) ACol enthaelt; sonst das
+// Token, das direkt VOR ACol endet (Caret hinter einem Wort); sonst "kein
+// Token" (Low = '', Len = 0, Line/Col wie gefragt) - auch in einem String
+// oder Kommentar und ausserhalb der Zeile. Beginnt an ACol ein Token und
+// endet davor eines ('X:=', Caret vor ':='), gilt das an ACol.
+function TokenContaining(AMap: TRdxCodeMap; ALine, ACol: Integer): TRdxToken;
+
+type
+  // Art eines Literals (LiteralContaining).
+  TRdxLiteralKind = (lkNone, lkNumber, lkChar, lkString);
+
+// Das Literal, das ACol enthaelt oder direkt vor ACol endet - wie
+// TokenContaining, aber ueber die Token-Grenzen der Code-Sicht hinweg
+// ('1.5' sind dort drei Token, '$FF' zwei, '#13' zwei):
+//   lkNumber  dezimal mit Zifferntrennern ('1_000'), Bruch ('1.5' - ein
+//             '.' nur mit Ziffer dahinter, '1..5' ist ein Bereich) und
+//             Exponent ('1e3', '2.5E-3'), hex '$FF', binaer '%101', oktal
+//             '&17' (Delphi 11); nicht in einem Bezeichner ('X1') und nicht
+//             mit einem Bezeichner-Zeichen dahinter ('12x');
+//   lkChar    Zeichen '#13', '#$0D', auch als Folge '#13#10';
+//   lkString  '..' samt ''-Escapes, auch als Mischform mit Zeichen ohne
+//             Leerraum dazwischen ('a'#13'b' ist EIN Literal); ein
+//             mehrzeiliger String nur mit seinem Teil auf ALine.
+// AFirst/AStop: Zeichenspalten, AStop exklusiv; lkNone mit 0 und 0.
+function LiteralContaining(AMap: TRdxCodeMap; ALine, ACol: Integer;
+  out AFirst, AStop: Integer): TRdxLiteralKind;
+
 // Beginnt an (ALine, ACol) eine Compiler-Direktive ('{$' oder '(*$')? Die
 // Code-Sicht fuehrt Direktiven als Kommentar ('k'). Nur eine, die aus Code
 // heraus oeffnet (TRdxCodeMap.DirectiveStartsAt): '{$' in einem
@@ -1252,6 +1286,214 @@ end;
 function Before(AMap: TRdxCodeMap; const ATok: TRdxToken): TRdxToken;
 begin
   Result := PrevToken(AMap, ATok.Line, ATok.Col);
+end;
+
+{ ---- Das Konstrukt unter dem Caret (V4) ---- }
+
+function TokenContaining(AMap: TRdxCodeMap; ALine, ACol: Integer): TRdxToken;
+var
+  T, Ending : TRdxToken;
+begin
+  Result := Default(TRdxToken);
+  Result.Line := ALine;
+  Result.Col := ACol;
+  if (ALine < 1) or (ALine > AMap.LineCount) or (ACol < 1) then
+    Exit;
+  Ending := Result;
+  T := NextToken(AMap, ALine, 1);
+  while (T.Low <> '') and (T.Line = ALine) and (T.Col <= ACol) do
+  begin
+    if ACol < T.EndCol then
+      Exit(T);
+    if ACol = T.EndCol then
+      Ending := T;
+    T := After(AMap, T);
+  end;
+  Result := Ending;
+end;
+
+const
+  // Ziffern der Zahl-Literale je Basis (LiteralContaining); '_' trennt
+  // Zifferngruppen (Delphi 11) und steht in keiner Menge - DigitRunEnd
+  // nimmt es selbst dazu.
+  DEC_DIGITS: TSysCharSet = ['0'..'9'];
+  HEX_DIGITS: TSysCharSet = ['0'..'9', 'A'..'F', 'a'..'f'];
+  BIN_DIGITS: TSysCharSet = ['0', '1'];
+  OCT_DIGITS: TSysCharSet = ['0'..'7'];
+
+// Ende (exklusiv) einer Folge aus ADigits und '_' ab AFrom (AFrom selbst,
+// wenn dort keine beginnt).
+function DigitRunEnd(const L: string; AFrom: Integer;
+  const ADigits: TSysCharSet): Integer;
+begin
+  Result := AFrom;
+  while (Result <= Length(L))
+     and (CharInSet(L[Result], ADigits) or (L[Result] = '_')) do
+    Inc(Result);
+end;
+
+// Ende (exklusiv) eines Zahl-Literals, das an AStart beginnt; 0, wenn dort
+// keines beginnt (s. LiteralContaining): davor kein Bezeichner-Zeichen und
+// kein einzelner '.' (Member, Bruchteil - '..' davor ist eine
+// Bereichsgrenze), dahinter kein Bezeichner-Zeichen.
+function NumberLiteralEnd(const L: string; AStart: Integer): Integer;
+var
+  C, P : Char;
+  i, j : Integer;
+begin
+  Result := 0;
+  if AStart > 1 then
+  begin
+    P := L[AStart - 1];
+    if IsIdentChar(P) or ((P = '.') and (CharAt(L, AStart - 2) <> '.')) then
+      Exit;
+  end;
+  C := L[AStart];
+  case C of
+    '$': i := DigitRunEnd(L, AStart + 1, HEX_DIGITS);
+    '%': i := DigitRunEnd(L, AStart + 1, BIN_DIGITS);
+    '&': i := DigitRunEnd(L, AStart + 1, OCT_DIGITS);
+    '0'..'9':
+      begin
+        i := DigitRunEnd(L, AStart, DEC_DIGITS);
+        if (CharAt(L, i) = '.') and CharInSet(CharAt(L, i + 1), DEC_DIGITS) then
+          i := DigitRunEnd(L, i + 1, DEC_DIGITS);
+        if CharInSet(CharAt(L, i), ['e', 'E']) then
+        begin
+          j := i + 1;
+          if CharInSet(CharAt(L, j), ['+', '-']) then
+            Inc(j);
+          if CharInSet(CharAt(L, j), DEC_DIGITS) then
+            i := DigitRunEnd(L, j, DEC_DIGITS);
+        end;
+      end;
+  else
+    Exit;
+  end;
+  // Ein Vorsatz ohne Ziffer ('$', '&begin') bzw. ein Bezeichner-Zeichen
+  // dahinter ('12x', '1E' ohne Exponent) ist kein Literal.
+  if (i = AStart + 1) and not CharInSet(C, DEC_DIGITS) then
+    Exit;
+  if (i <= Length(L)) and IsIdentChar(L[i]) then
+    Exit;
+  Result := i;
+end;
+
+// Ende (exklusiv) eines Zeichens '#13' bzw. '#$0D' an AStart (dort steht
+// '#'); 0 ohne Ziffer.
+function CharLiteralEnd(const L: string; AStart: Integer): Integer;
+var
+  i : Integer;
+begin
+  Result := 0;
+  if CharAt(L, AStart + 1) = '$' then
+  begin
+    i := DigitRunEnd(L, AStart + 2, HEX_DIGITS);
+    if i = AStart + 2 then Exit;
+  end
+  else
+  begin
+    i := DigitRunEnd(L, AStart + 1, DEC_DIGITS);
+    if i = AStart + 1 then Exit;
+  end;
+  Result := i;
+end;
+
+// Ein String- bzw. Zeichen-Stueck ab AStart: sein Ende (exklusiv) und
+// seine Art; AStart selbst und lkNone, wenn dort keines beginnt.
+function TextPieceEnd(AMap: TRdxCodeMap; ALine: Integer; const L: string;
+  AStart: Integer; out AKind: TRdxLiteralKind): Integer;
+begin
+  AKind := lkNone;
+  Result := AStart;
+  if AMap.ClassAt(ALine, AStart) = 's' then
+  begin
+    while AMap.ClassAt(ALine, Result) = 's' do
+      Inc(Result);
+    AKind := lkString;
+  end
+  else if (L[AStart] = '#') and AMap.IsCode(ALine, AStart) then
+  begin
+    Result := CharLiteralEnd(L, AStart);
+    if Result = 0 then
+      Result := AStart
+    else
+      AKind := lkChar;
+  end;
+end;
+
+function LiteralContaining(AMap: TRdxCodeMap; ALine, ACol: Integer;
+  out AFirst, AStop: Integer): TRdxLiteralKind;
+var
+  L          : string;
+  i, e, n    : Integer;
+  K, Piece   : TRdxLiteralKind;
+  EndKind    : TRdxLiteralKind;
+  EndFirst   : Integer;
+begin
+  AFirst := 0;
+  AStop := 0;
+  Result := lkNone;
+  EndKind := lkNone;
+  EndFirst := 0;
+  L := AMap.Raw(ALine);
+  i := 1;
+  while (i <= Length(L)) and (i <= ACol) do
+  begin
+    K := lkNone;
+    e := TextPieceEnd(AMap, ALine, L, i, Piece);
+    if Piece <> lkNone then
+    begin
+      // Stuecke ohne Leerraum dazwischen sind EIN Literal ('a'#13'b').
+      K := Piece;
+      repeat
+        n := TextPieceEnd(AMap, ALine, L, e, Piece);
+        if Piece = lkString then
+          K := lkString;
+        if Piece <> lkNone then
+          e := n;
+      until Piece = lkNone;
+    end
+    else if AMap.IsCode(ALine, i) then
+    begin
+      e := NumberLiteralEnd(L, i);
+      if e > 0 then
+        K := lkNumber
+      else if IsIdentStart(L[i]) then
+      begin
+        // Ein Bezeichner als Ganzes - seine Ziffern sind keine Zahl ('X1').
+        e := i;
+        while (e <= Length(L)) and IsIdentChar(L[e]) do
+          Inc(e);
+      end
+      else
+        e := i + 1;
+    end
+    else
+      e := i + 1;
+    if K <> lkNone then
+    begin
+      if ACol < e then
+      begin
+        AFirst := i;
+        AStop := e;
+        Exit(K);
+      end;
+      if ACol = e then
+      begin
+        EndKind := K;
+        EndFirst := i;
+      end;
+    end;
+    i := e;
+  end;
+  // Kein Literal enthaelt ACol: das, das direkt davor endet.
+  if EndKind <> lkNone then
+  begin
+    AFirst := EndFirst;
+    AStop := ACol;
+    Result := EndKind;
+  end;
 end;
 
 // Die Code-Sicht merkt sich beim Aufbau, wo aus Code heraus '{$' bzw.
