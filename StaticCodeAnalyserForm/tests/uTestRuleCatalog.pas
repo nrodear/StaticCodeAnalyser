@@ -1197,11 +1197,14 @@ begin
     'SCA003 meldet Zuweisungen und Aufrufe');
   Assert.AreEqual('assisted', Meta.FixMode,
     'SCA003 ist ein Review-Zeiger - nur assistiert, nie automatisch');
-  // Editorhilfe (Beschluss 2026-10-10): SCA044 schreibt (Format()), SCA003
-  // legt nur eine Vorlage in die Zwischenablage - keine Editorhilfe.
+  // Editorhilfe = Code-Aktion zum Fund (Beschluss 2026-10-10, Begriff seit
+  // 2026-10-11): SCA044 schreibt (Format()), SCA003 legt die
+  // parametrisierte Vorlage in die Zwischenablage - beides ist eine
+  // Code-Aktion, Gluehbirne und QF-Badge zeigen sie (Q17, 2026-10-23; bis
+  // dahin stand SCA003 hier ausdruecklich ohne).
   Assert.IsTrue(TRuleCatalog.GetRuleCanonical(fkConcatToFormat).EditorHelp,
     'SCA044 hat eine Editorhilfe');
-  Assert.IsFalse(Meta.EditorHelp, 'SCA003 hat keine Editorhilfe');
+  Assert.IsTrue(Meta.EditorHelp, 'SCA003 hat eine Editorhilfe (SQL-Vorlage)');
 end;
 
 procedure TTestRuleCatalog.FallbackCarriesAnchorAndFixMode;
@@ -1395,8 +1398,8 @@ begin
     Assert.IsFalse(Meta.EditorHelp, 'SCA044: ausdrueckliches editorHelp false gilt');
     Assert.IsTrue(TRuleCatalog.GetRuleCanonical(fkFreeWithoutNil).EditorHelp,
       'SCA139: editorHelp "ja" ist kein Boolean -> Tabellenwert true');
-    Assert.IsFalse(TRuleCatalog.GetRuleCanonical(fkSQLInjection).EditorHelp,
-      'SCA003 ohne editorHelp in der Datei -> Tabellenwert false');
+    Assert.IsTrue(TRuleCatalog.GetRuleCanonical(fkSQLInjection).EditorHelp,
+      'SCA003 ohne editorHelp in der Datei -> Tabellenwert true');
   finally
     TRuleCatalog.JsonFilePath := AltPfad;
     if TFile.Exists(Datei) then TFile.Delete(Datei);

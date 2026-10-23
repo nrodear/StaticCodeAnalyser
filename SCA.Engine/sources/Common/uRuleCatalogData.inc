@@ -47,7 +47,7 @@ const
         'Query.ParamByName(''n'').AsString := UserName;';
       Anchor   : 'assign-or-call';
       FixMode  : 'assisted';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA004
     (
