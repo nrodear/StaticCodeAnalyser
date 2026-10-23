@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Catalogue de règles
 
-Les 201 règles de détection. Cliquez sur un identifiant pour le détail complet.
+Les 202 règles de détection. Cliquez sur un identifiant pour le détail complet.
 
 | ID | Nom | Sévérité | Type | Détecteur |
 |---|---|---|---|---|
@@ -205,6 +205,7 @@ Les 201 règles de détection. Cliquez sur un identifiant pour le détail comple
 | [SCA199](SCA199.md) | Le nom passé à ParamByName ne correspond pas aux paramètres du SQL | Warning | Bug | `uParamNameMismatch.pas` |
 | [SCA200](SCA200.md) | Adresse IP en littéral de chaîne | Warning | Security Hotspot | `uHardcodedIpAddress.pas` |
 | [SCA201](SCA201.md) | Adresse IP dans un fichier de configuration versionné | Hint | Security Hotspot | `uHardcodedIpInConfig.pas` |
+| [SCA203](SCA203.md) | La boucle for dépasse le dernier indice | Error | Bug | `uLoopPastHighBound.pas` |
 
 ---
 

@@ -806,6 +806,10 @@
     "SCA201": {
       "name": "IP-Adresse in einer versionierten Konfigurationsdatei",
       "shortDescription": "IPv4- oder IPv6-Adresse (privat, geteilt oder öffentlich) als Wert in einer .ini-Datei des Quellbaums"
+    },
+    "SCA203": {
+      "name": "for-Schleife läuft einen Index über das Ende",
+      "shortDescription": "for-Schleife läuft bis Count, Length() oder High() + 1 und indiziert dieselbe Sammlung mit der Schleifenvariablen - der letzte Durchlauf liegt außerhalb"
     }
   }
 }

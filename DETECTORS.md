@@ -7,7 +7,7 @@ specific to this tool.
 
 Status legend: ✅ implemented · 🟡 partial · 🔲 open
 
-**Summary (2026-08-07):** All **201 rule kinds** from the canonical roster [`rules/sca-rules.json`](rules/sca-rules.json) are implemented and enumerated in this file (delivered by **159 pipeline registrations**; several classes emit multiple kinds — e.g. `uVisibilityCheck` → 3 visibility kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM kinds; **SCA194/SCA195 are project-scope, not AST-based** — emitted from the project/group scan dispatch, not the per-file detector registry; **SCA201** comes from the configuration pass over .ini files). 44 / 50 Sonar-rule slots complete; the 4 open slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) need type-inference / cross-unit resolution and have no SCA-ID yet.
+**Summary (2026-08-07):** All **203 rule kinds** from the canonical roster [`rules/sca-rules.json`](rules/sca-rules.json) are implemented and enumerated in this file (delivered by **159 pipeline registrations**; several classes emit multiple kinds — e.g. `uVisibilityCheck` → 3 visibility kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM kinds; **SCA194/SCA195 are project-scope, not AST-based** — emitted from the project/group scan dispatch, not the per-file detector registry; **SCA201** comes from the configuration pass over .ini files). 44 / 50 Sonar-rule slots complete; the 4 open slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) need type-inference / cross-unit resolution and have no SCA-ID yet.
 
 Remaining 4 open slots all need type-inference / flow-analysis / cross-unit symbol resolution: #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI. **#16 UninitVar** has a conservative MVP (`SCA166`) — full path-sensitivity remains open for Phase 3.
 
@@ -151,7 +151,7 @@ Sonar-50 catalogue
 🏛 mORMot-cluster:                  9 (SCA153-161, all complete)
 🧩 SonarDelphi naming/formatting:  60 (SCA060-119, section below)
 
-🎯 Grand total: 201 detector kinds (184 detector units).
+🎯 Grand total: 203 detector kinds (184 detector units).
 ```
 
 ---
@@ -460,6 +460,7 @@ Managed return types (string family, dynamic arrays, `Variant`, interfaces) retu
 | SCA199 | **ParamNameMismatch** | ParamByName name not among the :placeholders of the SQL the routine gives that query (run-time "parameter not found"), or a placeholder the routine never binds | Warning | Bug | ✅ | `uParamNameMismatch` |
 | SCA200 | **HardcodedIpAddress** | IPv4/IPv6 address (private, shared or public) in a string literal - move it to the configuration or use a host name; loopback, documentation, multicast, versions and OIDs are not reported (a host word beside the version word wins: `Version_IPv4 := '1.2.3.4'` is reported, `IPv4` counts as the host word `ip`) | Warning | Security Hotspot | ✅ | `uHardcodedIpAddress` |
 | SCA201 | **HardcodedIpInConfig** | IPv4/IPv6 address as a value in an .ini file of the source tree (configuration pass, not a per-unit detector; `; noinspection` markers) | Hint | Security Hotspot | ✅ | `uHardcodedIpInConfig` |
+| SCA203 | **LoopPastHighBound** | for loop runs one index past the end (`0 to X.Count`, `0 to Length(A)`, `High(A) + 1`; strings `0 to Length(S)` and `1 to Length(S) + 1`) and indexes the same collection with the plain loop variable - Error with a proven type (list, array, string), otherwise Warning | Error | Bug | ✅ | `uLoopPastHighBound` |
 
 ## ⚙️ Configuration — SCA001 OwnershipSinks (memory-leak whitelist)
 

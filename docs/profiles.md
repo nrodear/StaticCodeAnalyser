@@ -1,7 +1,7 @@
 ﻿# Scan profiles
 
 A **profile** is a named set of rules. It answers one question: *which of
-the 201 detectors run in this scan?* Everything else - severity floor,
+the 203 detectors run in this scan?* Everything else - severity floor,
 suppressions, baseline - filters afterwards. The profile decides what is
 looked for in the first place.
 
@@ -9,13 +9,13 @@ looked for in the first place.
 
 | Profile | Rules | What it is for |
 |---|---|---|
-| `strict` | 201 | Everything. The completeness promise hangs on this one. |
-| `default` | 194 | Everything except the seven pure-convention rules of `style`. Those seven account for roughly half of all findings on a large code base - which is why they are not in the default. |
-| `selftest-quiet` | 190 | `default` minus a few formatting rules. Used when this repository scans itself. |
+| `strict` | 203 | Everything. The completeness promise hangs on this one. |
+| `default` | 196 | Everything except the seven pure-convention rules of `style`. Those seven account for roughly half of all findings on a large code base - which is why they are not in the default. |
+| `selftest-quiet` | 192 | `default` minus a few formatting rules. Used when this repository scans itself. |
 | `code-quality` | 26 | Maintainability: dead code, long methods, complexity, unused uses. |
 | `ide-fast` | 21 | Small enough to run on every file you open in the IDE. Bugs and security, no style. |
 | `dfm-only` | 20 | The form-file checks alone. |
-| `bugs-only` | 17 | Defects only - no smells, no conventions. |
+| `bugs-only` | 18 | Defects only - no smells, no conventions. |
 | `security` | 9 | Vulnerabilities and hotspots only. |
 | `style` | 7 | The pure-convention rules that `default` leaves out. |
 
@@ -51,7 +51,7 @@ Each entry is a list of tokens, applied **left to right**:
 
 | Token | Effect |
 |---|---|
-| `*` | all 201 kinds |
+| `*` | all 203 kinds |
 | `Kind` | add this kind |
 | `!Kind` or `-Kind` | remove this kind |
 

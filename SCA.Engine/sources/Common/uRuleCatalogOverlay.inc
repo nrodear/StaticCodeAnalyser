@@ -11,7 +11,7 @@
 const
   // Index == Ord(TFindingKind), Drift-Guard im Leser wie bei
   // RULE_CATALOG_DATA (RuleID muss zur Position passen).
-  RULE_OVERLAY_DE : array[0..200] of TRuleOverlayData = (
+  RULE_OVERLAY_DE : array[0..201] of TRuleOverlayData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -1308,12 +1308,20 @@ const
       Name     : 'IP-Adresse in einer versionierten Konfigurationsdatei';
       ShortDesc: 'IPv4- oder IPv6-Adresse (privat, geteilt oder ' + #$00F6 +
         'ffentlich) als Wert in einer .ini-Datei des Quellbaums'
+    ),
+    // SCA203
+    (
+      RuleID   : 'SCA203';
+      Name     : 'for-Schleife l' + #$00E4 + 'uft einen Index ' + #$00FC + 'ber das Ende';
+      ShortDesc: 'for-Schleife l' + #$00E4 +
+        'uft bis Count, Length() oder High() + 1 und indiziert dieselbe Sammlung mit der Schleifenvariablen - der letzte Durchlauf liegt au' +
+        #$00DF + 'erhalb'
     )
   );
 
   // Index == Ord(TFindingKind), Drift-Guard im Leser wie bei
   // RULE_CATALOG_DATA (RuleID muss zur Position passen).
-  RULE_OVERLAY_FR : array[0..200] of TRuleOverlayData = (
+  RULE_OVERLAY_FR : array[0..201] of TRuleOverlayData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -2730,6 +2738,13 @@ const
       Name     : 'Adresse IP dans un fichier de configuration versionn' + #$00E9;
       ShortDesc: 'Adresse IPv4 ou IPv6 (priv' + #$00E9 + 'e, partag' + #$00E9 +
         'e ou publique) comme valeur dans un fichier .ini de l''arborescence des sources'
+    ),
+    // SCA203
+    (
+      RuleID   : 'SCA203';
+      Name     : 'La boucle for d' + #$00E9 + 'passe le dernier indice';
+      ShortDesc: 'La boucle for va jusqu''' + #$00E0 + ' Count, Length() ou High() + 1 et indexe la m' +
+        #$00EA + 'me collection avec la variable de boucle - le dernier passage est hors limites'
     )
   );
 

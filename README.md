@@ -14,7 +14,7 @@ and **13 (Florence)** — ships as an **IDE plugin** with a dockable tool window
 **standalone Windows app**. The installer serves the 32-bit IDE of Delphi 12 and
 **both** IDEs of Delphi 13, 32- and 64-bit; the standalone app ships as a 32-bit and
 a 64-bit build.
-AST-based analysis with **201 rules**: 177 Pascal checks for memory leaks,
+AST-based analysis with **203 rules**: 179 Pascal checks for memory leaks,
 SQL injection, code smells, security vulnerabilities, file-encoding & Unicode safety
 (Trojan Source), and code duplication
 (including a **Sonar-Delphi-compatible** subset SCA060+), **plus a
@@ -57,7 +57,7 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 
 ## Main features
 
-### 1. Static code analysis (201 rules — 177 Pascal + 23 DFM + 1 INI, Sonar taxonomy)
+### 1. Static code analysis (203 rules — 179 Pascal + 23 DFM + 1 INI, Sonar taxonomy)
 
 **Pascal AST checks (~130)**: **bugs** (MemoryLeak, NilDeref, DivByZero,
 FormatMismatch, ReversedForRange, SelfAssignment, VirtualCallInCtor,
@@ -261,7 +261,7 @@ reference: [docs/sonar-config.md](docs/sonar-config.md).
 
 ---
 
-## What is detected (201 rules — 177 Pascal + 23 DFM + 1 INI)
+## What is detected (203 rules — 179 Pascal + 23 DFM + 1 INI)
 
 Findings fall into one of **five Sonar categories**:
 

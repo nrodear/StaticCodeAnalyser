@@ -806,6 +806,10 @@
     "SCA201": {
       "name": "Adresse IP dans un fichier de configuration versionné",
       "shortDescription": "Adresse IPv4 ou IPv6 (privée, partagée ou publique) comme valeur dans un fichier .ini de l'arborescence des sources"
+    },
+    "SCA203": {
+      "name": "La boucle for dépasse le dernier indice",
+      "shortDescription": "La boucle for va jusqu'à Count, Length() ou High() + 1 et indexe la même collection avec la variable de boucle - le dernier passage est hors limites"
     }
   }
 }

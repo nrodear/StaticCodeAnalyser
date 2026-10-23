@@ -13,7 +13,7 @@
 const
   // Index == Ord(TFindingKind) - die JSON ist positionsgleich zum Enum
   // (Test RuleIDMatchesOrdinal sichert das ab).
-  RULE_CATALOG_DATA : array[0..200] of TRuleFallbackData = (
+  RULE_CATALOG_DATA : array[0..201] of TRuleFallbackData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -2521,6 +2521,18 @@ const
       ShortDesc: 'IPv4 or IPv6 address (private, shared or public) as a value in an .ini file of the source tree';
       BadEx    : '[Database]' + #13#10 + 'Server=10.20.30.40';
       GoodEx   : '[Database]' + #13#10 + 'Server=db.example.internal';
+      Anchor   : '';
+      FixMode  : '';
+      EditorHelp: False
+    ),
+    // SCA203
+    (
+      RuleID   : 'SCA203';
+      Name     : 'for loop runs one index past the end';
+      ShortDesc: 'for loop runs to Count, Length() or High() + 1 and indexes the same collection with the loop variable - the last pass is out of range';
+      BadEx    : 'for i := 0 to Names.Count do' + #13#10 +
+        '  WriteLn(Names[i]);   // Names[Names.Count] raises';
+      GoodEx   : 'for i := 0 to Names.Count - 1 do' + #13#10 + '  WriteLn(Names[i]);';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False

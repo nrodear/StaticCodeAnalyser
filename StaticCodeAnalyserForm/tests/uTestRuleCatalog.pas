@@ -765,6 +765,7 @@ begin
   Assert.IsTrue(fkDivByZero     in P, 'bugs-only: DivByZero fehlt');
   Assert.IsTrue(fkSQLInjection  in P, 'bugs-only: SQLInjection fehlt');
   Assert.IsTrue(fkDfmDeadEvent  in P, 'bugs-only: DfmDeadEvent fehlt');
+  Assert.IsTrue(fkLoopPastHighBound in P, 'bugs-only: LoopPastHighBound fehlt');
   // Draussen: Code Smells und Duplikate.
   Assert.IsFalse(fkLongMethod      in P, 'bugs-only: LongMethod sollte raus');
   Assert.IsFalse(fkMagicNumber     in P, 'bugs-only: MagicNumber sollte raus');

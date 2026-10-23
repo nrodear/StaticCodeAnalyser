@@ -15,6 +15,7 @@ uses
   uLongMethod, uLongParamList, uMagicNumbers, uDuplicateString,
   uHardcodedPath, uDebugOutput, uDeepNesting,
   uHardcodedIpAddress,   // SCA200 - liest den Quelltext (FindingsOfFile)
+  uLoopPastHighBound,    // SCA203 - liest die Code-Sicht (FindingsOfFile)
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uWithStatement,
   uGotoStatement, uTabulationCharacter, uTooLongLine, uTrailingWhitespace,
@@ -293,6 +294,9 @@ begin
         TParamNameMismatchDetector.AnalyzeUnit(Root, TempPath, Result);
         // SCA200: liest die Literale aus dem Quelltext (Strip-Cache).
         THardcodedIpAddressDetector.AnalyzeUnit(Root, TempPath, Result);
+        // SCA203: liest die Code-Sicht der Datei (Strip-Cache), den AST
+        // nur fuer den Typbeweis.
+        TLoopPastHighBoundDetector.AnalyzeUnit(Root, TempPath, Result);
         TAssertMessageDetector.AnalyzeUnit(Root, TempPath, Result);
         TExplicitTObjectInheritanceDetector.AnalyzeUnit(Root, TempPath, Result);
         TGroupedDeclarationDetector.AnalyzeUnit(Root, TempPath, Result);

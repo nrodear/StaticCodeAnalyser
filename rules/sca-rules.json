@@ -30,7 +30,7 @@
       "DfmCircularDataSource", "DfmRequiredFieldUnbound",
       "DfmRequiredFieldNotVisible", "DfmCrossFormCoupling",
       "DfmActionMismatch", "DuplicateInterfaceGuid",
-      "ParamNameMismatch"
+      "ParamNameMismatch", "LoopPastHighBound"
     ],
     "code-quality": [
       "EmptyExcept", "UnusedUses", "MissingFinally", "DeadCode",
@@ -4302,6 +4302,48 @@
       "cleanCodeAttribute": "TRUSTWORTHY",
       "impacts": [
         { "softwareQuality": "SECURITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA203",
+      "kind": "LoopPastHighBound",
+      "name": "for loop runs one index past the end",
+      "shortDescription": "for loop runs to Count, Length() or High() + 1 and indexes the same collection with the loop variable - the last pass is out of range",
+      "fullDescription": "A classic off-by-one: 'for i := 0 to List.Count do' with List[i] in the body reads List[List.Count], one item past the end. The compiler accepts it; at run time it raises ERangeError with {$R+}, EArgumentOutOfRangeException or EStringListError for TList and TStrings, and otherwise silently reads or writes the memory behind the last element. Reported are loop heads whose upper bound is one index too far - 'X.Count' (from 0, or from 1 when X is a proven list), 'Length(A)' from 0, 'Low(A) to Length(A)' for a dynamic array, 'High(A) + 1' - when the body reads or writes the same collection (same name or chain) with the unshifted loop variable: X[i], X[i, j], and for .Count also X.Items[i], X.Strings[i] and X.Objects[i]. Strings are 1-based and have their own forms: '0 to Length(S)' with S[i] is wrong at both ends (S[0] before the first character), '1 to Length(S) + 1' past the last; '1 to Length(S)' is correct. The finding is an error only when the type is proven: the collection is a name declared in the unit (parameter, local or inline variable, Result, field of the method's own class or its ancestors in the unit, unit variable) whose type is a known list (TList, TObjectList, TStrings, TStringList, TCollection, TMenuItem, FPC TFPList/TFPGList ...), an array or a string, and the body neither leaves the pass before the access (break, exit, continue, raise, goto) nor grows the collection nor contains an anonymous method. Otherwise it is a warning. Fix: Count - 1, High(A) (or Length(A) - 1), and for strings 1 to Length(S).",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["loop", "off-by-one", "range-check", "runtime-error"],
+      "cwe": ["CWE-193", "CWE-125"],
+      "detectorUnit": "uLoopPastHighBound.pas",
+      "examples": {
+        "bad": "for i := 0 to Names.Count do\n  WriteLn(Names[i]);   // Names[Names.Count] raises",
+        "good": "for i := 0 to Names.Count - 1 do\n  WriteLn(Names[i]);"
+      },
+      "exceptions": [
+        {
+          "case": "Shifted index, insert position, other collection",
+          "why": "Only an access with the plain loop variable proves the last pass is out of range. X[i - 1] with '1 to X.Count', X.Insert(i, ..) (valid up to Count) and an index into another collection (M[i] while counting L, X.L[i] while counting L) are correct or not decidable lexically.",
+          "example": "for i := 1 to L.Count do S := L[i - 1];  // not reported"
+        },
+        {
+          "case": "A guard on the loop variable",
+          "why": "When an if, while, case or until condition in the body before or with the first access names the loop variable outside the index (if i < L.Count, if i = Length(A) then .. else A[i]), the extra pass is deliberate - typically a sentinel step after the last element.",
+          "example": "for i := 0 to Length(A) do if i = Length(A) then Flush else Add(A[i]);  // not reported"
+        },
+        {
+          "case": "Forms that are correct without a type proof",
+          "why": "'1 to X.Count' is not reported for an unproven X: COM collections such as Excel's Sheets are 1-based. 'Low(A) to Length(A)' is reported only for a dynamic array: for a static 'array[1..N]' and for a string it is correct. '1 to Length(S) + 1' needs a proven string. ShortString and PChar are not reported for Length: S[0] is the length byte and P[Length(P)] the terminating #0. For TDictionary-like types X[i] is a key, not a position.",
+          "example": "for i := 1 to Sheets.Count do Sheets[i].Calculate;  // not reported"
+        },
+        {
+          "case": "Known limits",
+          "why": "The loop variable assigned in the body vetoes the finding. downto loops, bounds with further arithmetic (Count - 1, Pred(Count)), named indexed properties other than Items, Strings and Objects (RTID.ThreadIDs[i] while counting RTID.Count) and accesses through 'with' are not reported.",
+          "example": "for i := 0 to RTID.Count do TID := RTID.ThreadIDs[i];  // not reported (false negative)"
+        }
+      ],
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
       ]
     }
   ]

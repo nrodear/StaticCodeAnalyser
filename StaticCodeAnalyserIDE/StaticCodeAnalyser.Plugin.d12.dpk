@@ -199,6 +199,8 @@ contains
   uIpAddressScan in '..\SCA.Engine\sources\Detectors\uIpAddressScan.pas',
   uHardcodedIpAddress in '..\SCA.Engine\sources\Detectors\uHardcodedIpAddress.pas',
   uHardcodedIpInConfig in '..\SCA.Engine\sources\Detectors\uHardcodedIpInConfig.pas',
+  uLoopBoundScan in '..\SCA.Engine\sources\Detectors\uLoopBoundScan.pas',
+  uLoopPastHighBound in '..\SCA.Engine\sources\Detectors\uLoopPastHighBound.pas',
   uHardcodedSecret in '..\SCA.Engine\sources\Detectors\uHardcodedSecret.pas',
   uHardcodedString in '..\SCA.Engine\sources\Detectors\uHardcodedString.pas',
   uIfElseBegin in '..\SCA.Engine\sources\Detectors\uIfElseBegin.pas',

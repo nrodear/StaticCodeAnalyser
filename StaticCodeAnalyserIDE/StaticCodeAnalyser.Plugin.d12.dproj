@@ -204,6 +204,8 @@
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uIpAddressScan.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedIpAddress.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedIpInConfig.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uLoopBoundScan.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uLoopPastHighBound.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedSecret.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedString.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uIfElseBegin.pas"/>
