@@ -148,6 +148,7 @@ uses
   uTestFindingActionMenu in 'uTestFindingActionMenu.pas',
   uTestContextActions in 'uTestContextActions.pas',
   uTestContextActionMenu in 'uTestContextActionMenu.pas',
+  uTestEditorContextModel in 'uTestEditorContextModel.pas',
   uTestEditorBulbGeometry in 'uTestEditorBulbGeometry.pas',
   uTestEditorFindingStore in 'uTestEditorFindingStore.pas',
   uTestFindingKeyPolicy in 'uTestFindingKeyPolicy.pas',

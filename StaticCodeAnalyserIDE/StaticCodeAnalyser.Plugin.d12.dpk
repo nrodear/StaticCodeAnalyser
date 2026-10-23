@@ -361,6 +361,7 @@ contains
   uBulbDecision in '..\SCA.SharedUI\sources\uBulbDecision.pas',
   uEditorBulbButton in '..\SCA.SharedUI\sources\uEditorBulbButton.pas',
   uEditorBulbGeometry in '..\SCA.SharedUI\sources\uEditorBulbGeometry.pas',
+  uEditorContextModel in '..\SCA.SharedUI\sources\uEditorContextModel.pas',
   uEditorFindingStore in '..\SCA.SharedUI\sources\uEditorFindingStore.pas',
   uFindingGridRenderer in '..\SCA.SharedUI\sources\uFindingGridRenderer.pas',
   uFindingsPropertiesFrame in '..\SCA.SharedUI\sources\uFindingsPropertiesFrame.pas',

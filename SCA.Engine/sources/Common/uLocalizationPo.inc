@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6612 Zeilen, 296739 Bytes
-  CPoLines_de: array[0..6611] of string = (
+  // i18n\de.po - 6615 Zeilen, 296784 Bytes
+  CPoLines_de: array[0..6614] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2281,6 +2281,9 @@ const
     '',
     'msgid "%d more findings on this line are not listed"',
     'msgstr "%d weitere Funde auf dieser Zeile sind nicht aufgef'#$00FC'hrt"',
+    '',
+    'msgid "Code actions"',
+    'msgstr "Code-Aktionen"',
     '',
     'msgid "Suppress here (// noinspection %s)"',
     'msgstr "Hier unterdr'#$00FC'cken (// noinspection %s)"',
@@ -6901,8 +6904,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6608 Zeilen, 308851 Bytes
-  CPoLines_fr: array[0..6607] of string = (
+  // i18n\fr.po - 6611 Zeilen, 308898 Bytes
+  CPoLines_fr: array[0..6610] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -9165,6 +9168,9 @@ const
     '',
     'msgid "%d more findings on this line are not listed"',
     'msgstr "%d autres r'#$00E9'sultats sur cette ligne ne sont pas list'#$00E9's"',
+    '',
+    'msgid "Code actions"',
+    'msgstr "Actions de code"',
     '',
     'msgid "Suppress here (// noinspection %s)"',
     'msgstr "Masquer ici (// noinspection %s)"',

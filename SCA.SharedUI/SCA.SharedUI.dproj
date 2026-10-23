@@ -99,6 +99,7 @@
         <DCCReference Include="sources\uBulbDecision.pas"/>
         <DCCReference Include="sources\uEditorBulbButton.pas"/>
         <DCCReference Include="sources\uEditorBulbGeometry.pas"/>
+        <DCCReference Include="sources\uEditorContextModel.pas"/>
         <DCCReference Include="sources\uEditorFindingStore.pas"/>
         <DCCReference Include="sources\uFindingGridRenderer.pas"/>
         <DCCReference Include="sources\uFindingsPropertiesFrame.pas"/>
