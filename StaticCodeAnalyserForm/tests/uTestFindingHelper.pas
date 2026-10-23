@@ -36,7 +36,7 @@ uses
   uInterfaceName, uMethodName,
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
-  uUnusedLocal, uUnusedParameter, uTautologicalExpr,
+  uUnusedLocal, uUnusedParameter, uTautologicalExpr, uComparisonPrecedence,
   uSqlDangerousStatement,
   uSynchronizeInDestructor, uLockWithoutTryFinally,
   uPerfHotspots, uConcurrencyExt, uRestHttpSecurity,
@@ -329,6 +329,9 @@ begin
         TReversedForRangeDetector.AnalyzeUnit(Root, TempPath, Result);
         TLengthUnderflowDetector.AnalyzeUnit(Root, TempPath, Result);
         TTautologicalExprDetector.AnalyzeUnit(Root, TempPath, Result);
+        // SCA202: liest den Quelltext (uComparisonPrecedenceScan), den AST
+        // nur fuer den Typ-Resolver.
+        TComparisonPrecedenceDetector.AnalyzeUnit(Root, TempPath, Result);
         TLockWithoutTryFinallyDetector.AnalyzeUnit(Root, TempPath, Result);
         TPerfHotspotsDetector.AnalyzeUnit(Root, TempPath, Result);
         TConcurrencyExtDetector.AnalyzeUnit(Root, TempPath, Result);

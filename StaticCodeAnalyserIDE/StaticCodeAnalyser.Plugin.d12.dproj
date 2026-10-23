@@ -281,6 +281,8 @@
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uSynchronizeInDestructor.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uTabulationCharacter.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uTautologicalExpr.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uComparisonPrecedenceScan.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uComparisonPrecedence.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uTodoComment.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uTooLongLine.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uTrailingCommaArgList.pas"/>

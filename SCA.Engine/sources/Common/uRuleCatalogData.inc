@@ -13,7 +13,7 @@
 const
   // Index == Ord(TFindingKind) - die JSON ist positionsgleich zum Enum
   // (Test RuleIDMatchesOrdinal sichert das ab).
-  RULE_CATALOG_DATA : array[0..200] of TRuleFallbackData = (
+  RULE_CATALOG_DATA : array[0..201] of TRuleFallbackData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -2521,6 +2521,21 @@ const
       ShortDesc: 'IPv4 or IPv6 address (private, shared or public) as a value in an .ini file of the source tree';
       BadEx    : '[Database]' + #13#10 + 'Server=10.20.30.40';
       GoodEx   : '[Database]' + #13#10 + 'Server=db.example.internal';
+      Anchor   : '';
+      FixMode  : '';
+      EditorHelp: False
+    ),
+    // SCA202
+    (
+      RuleID   : 'SCA202';
+      Name     : 'not, and, or or xor binds before the comparison';
+      ShortDesc: '''not Count > 0'' or ''A = True or B = False'' - not/and/or/xor bind tighter than comparisons, so the expression compiles but tests something else';
+      BadEx    : 'if not List.Count > 0 then   // (not List.Count) > 0 - false for every Count' + #13#10 +
+        '  Exit;' + #13#10 +
+        'if Ready = True or Busy = False then   // (Ready = (True or Busy)) = False' + #13#10 +
+        '  Start;';
+      GoodEx   : 'if not (List.Count > 0) then' + #13#10 + '  Exit;' + #13#10 + 'if Ready or not Busy then' +
+        #13#10 + '  Start;';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False

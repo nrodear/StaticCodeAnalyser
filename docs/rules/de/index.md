@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Regelkatalog
 
-Alle 201 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibung.
+Alle 202 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibung.
 
 | ID | Name | Schweregrad | Typ | Detektor |
 |---|---|---|---|---|
@@ -205,6 +205,7 @@ Alle 201 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibu
 | [SCA199](SCA199.md) | ParamByName-Name passt nicht zu den SQL-Platzhaltern | Warning | Bug | `uParamNameMismatch.pas` |
 | [SCA200](SCA200.md) | IP-Adresse als String-Literal | Warning | Security Hotspot | `uHardcodedIpAddress.pas` |
 | [SCA201](SCA201.md) | IP-Adresse in einer versionierten Konfigurationsdatei | Hint | Security Hotspot | `uHardcodedIpInConfig.pas` |
+| [SCA202](SCA202.md) | not, and, or oder xor bindet vor dem Vergleich | Error | Bug | `uComparisonPrecedence.pas` |
 
 ---
 
