@@ -97,6 +97,7 @@
       "ParamByNameInLoop",
       "FieldByNameInLoop",
       "LoopPastHighBound",
+      "InheritedMethodEmpty",
       "FileReadError"
     ]
   }

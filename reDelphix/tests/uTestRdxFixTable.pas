@@ -70,7 +70,7 @@ const
   // SCA127, SCA174, SCA199, SCA111 und SCA112; SCA149, SCA096, SCA097 und
   // SCA086 kennzeichnet der Planer, die zweiten Eintraege von SCA128/SCA059
   // kennzeichnen sich selbst.
-  EXPECTED: array[0..90] of TExpectedRow = (
+  EXPECTED: array[0..91] of TExpectedRow = (
     (Kind: fkExplicitTObjectInheritance; Plan: 'PlanExplicitTObject';
      Caption: 'Remove (TObject) from the class declaration';
      Changes: False; Alt: ''; AltCaption: ''),
@@ -354,7 +354,11 @@ const
      Changes: True; Alt: ''; AltCaption: ''),
     (Kind: fkLoopPastHighBound; Plan: 'PlanLoopBound';
      Caption: 'Let the loop run %s';
-     Changes: True; Alt: ''; AltCaption: '')
+     Changes: True; Alt: ''; AltCaption: ''),
+    // Charge A (SCA125, Q14).
+    (Kind: fkInheritedMethodEmpty; Plan: 'PlanInheritedMethodEmpty';
+     Caption: 'Remove the empty override %s';
+     Changes: False; Alt: ''; AltCaption: '')
   );
 
 procedure TTestRdxFixTable.EveryRow_HasPlanHintAndCaption;

@@ -132,6 +132,7 @@ contains
   uRdxDeepNestingFix in 'source\uRdxDeepNestingFix.pas',
   uRdxLookupHoistFix in 'source\uRdxLookupHoistFix.pas',
   uRdxLoopBoundFix in 'source\uRdxLoopBoundFix.pas',
+  uRdxInheritedEmptyFix in 'source\uRdxInheritedEmptyFix.pas',
   uRdxRecipeRunner in 'source\uRdxRecipeRunner.pas',
   uRdxFixRunner in 'source\uRdxFixRunner.pas',
   uRdxFixTable in 'source\uRdxFixTable.pas',

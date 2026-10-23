@@ -78,6 +78,7 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 91 Qui
 | SCA121 RoutineResultUnassigned | `Result mit %s initialisieren` | Quick-Fix | ja | [SCA121](#sca121) |
 | SCA122 ReRaiseException | `raise; verwenden (Original-Stack-Trace bleibt)` | Quick-Fix | nein | [SCA122](#sca122) |
 | SCA123 CastAndFree | `Cast nach %s vor Free entfernen` | Quick-Fix | nein | [SCA123](#sca123) |
+| SCA125 InheritedMethodEmpty | `Leeres Override %s entfernen` | Quick-Fix | nein | [SCA125](#sca125) |
 | SCA126 NilComparison | `Assigned() statt Vergleich mit nil verwenden` | Quick-Fix | nein | [SCA126](#sca126) |
 | SCA127 RaisingRawException | `Stattdessen EArgumentException auslösen (falsches Argument)` / `Stattdessen EInvalidOpException auslösen (unzulässiger Zustand)` | Quick-Fix | ja / ja | [SCA127](#sca127) |
 | SCA128 DateFormatSettings | `FormatSettings ausdrücklich übergeben` / `TFormatSettings.Invariant übergeben` | Quick-Fix | nein / ja | [SCA128](#sca128) |
@@ -2818,6 +2819,66 @@ Nachher:
 ```
 
 **Hinweis.** Im Beispiel ist `L` als `TStringList` deklariert.
+
+<a id="sca125"></a>
+
+### SCA125 – Leeres Override entfernen
+
+- **Regel:** SCA125 `InheritedMethodEmpty` – Override whose entire body is `inherited;`
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Remove the empty override %s` | `Leeres Override %s entfernen` | `Supprimer la redéfinition vide %s` |
+
+**Platzhalter:** `%s` = der Methodenname aus der Meldung.
+
+**Wirkung:** Löscht ein Override, dessen Rumpf nur den Vorfahren mit denselben Argumenten ruft (`inherited;`, `inherited Name(A, B);`, `Result := inherited ...`): die Deklaration im Klassenrumpf samt `///`-Doku und die Implementierung samt Kommentaren darüber, die die Methode nennen, und einer Leerzeile – beides in einem Schritt. Ohne Override ruft die virtuelle Bindung die Methode des Vorfahren direkt; `Obj.Name` und `inherited Name` in Nachfahren bleiben gültig. Ein leerer Sichtbarkeitsabschnitt bleibt stehen (SCA087 hat eine eigene Hilfe).
+
+**Nicht angeboten**
+
+- der nächste Vorfahr mit dieser Methode steht nicht in der Datei (etwa TObject.Destroy, TControl.Paint) – seine Sichtbarkeit ist nicht belegt; ein Override in einem sichtbareren Abschnitt als der Vorfahr (public über protected, protected über strict protected) bräche Aufrufer, und protected-Member sind in der ganzen eigenen Unit sichtbar
+- die Methode des Vorfahren ist abstract oder steht dort mehrfach; Override oder Vorfahr stehen vor jedem Sichtbarkeitsabschnitt (die Sichtbarkeit hängt dann an `{$M+}`), außer beide stehen ohne Abschnitt oder der Vorfahr ist published
+- die Deklaration trägt neben `override` eine weitere Direktive (final, overload, reintroduce, message, deprecated, Aufrufkonvention …), ein Attribut, einen Default-Wert oder steht mehrfach in der Klasse; Klassenmethode; die Klasse steht nicht genau einmal in der Datei
+- der Rumpf tut mehr als die Durchreichung: weitere Anweisung, andere Methode, andere oder umgestellte Argumente, `inherited Name;` bei Parametern, eine Funktion ohne `Result :=`; lokale Deklarationen, eine Direktive am Kopf
+- ein Kommentar oder eine Compiler-Direktive vom Kopf bis zum `end;` der Implementierung bzw. eine Direktive in der Deklaration, eine verschobene Zeile
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+type
+  TBase = class
+  protected
+    procedure Paint; virtual;
+  end;
+  TFoo = class(TBase)
+  protected
+    procedure Paint; override;
+  end;
+
+procedure TFoo.Paint;
+begin
+  inherited;
+end;
+```
+
+Nachher:
+
+```pascal
+type
+  TBase = class
+  protected
+    procedure Paint; virtual;
+  end;
+  TFoo = class(TBase)
+  protected
+  end;
+```
+
+**Hinweis.** Der Detektor meldet auch Overrides, deren Vorfahr in einer anderen Unit steht (dort, wo die Sichtbarkeit nicht anzuheben ist, mit hoher, sonst mit niedriger Konfidenz); die Hilfe bietet sich nur an, wenn sie die Sichtbarkeit des Vorfahren in der Datei belegt.
 
 <a id="sca126"></a>
 

@@ -6540,3 +6540,63 @@ msgstr "la boucle fait un passage de moins (sur une chaîne, elle commence à 1)
 
 msgid "Let the loop run %s"
 msgstr "Faire tourner la boucle %s"
+
+msgid "method name missing from the message"
+msgstr "nom de méthode absent du message"
+
+msgid "class method - the quick fix removes only instance overrides"
+msgstr "méthode de classe - la correction ne supprime que les redéfinitions de méthodes d'instance"
+
+msgid "directive \"%s\" on the implementation header"
+msgstr "directive « %s » sur l'en-tête de l'implémentation"
+
+msgid "the method declares local variables, constants or routines"
+msgstr "la méthode déclare des variables, constantes ou routines locales"
+
+msgid "the body does more than call the inherited method with the same arguments"
+msgstr "le corps fait plus qu'appeler la méthode héritée avec les mêmes arguments"
+
+msgid "compiler directive in the declaration or the implementation"
+msgstr "directive de compilation dans la déclaration ou l'implémentation"
+
+msgid "comment in line %d of the method - it would be deleted with it; %s"
+msgstr "commentaire à la ligne %d de la méthode - il serait supprimé avec elle ; %s"
+
+msgid "declaration and implementation of %s differ (%s, %s)"
+msgstr "la déclaration et l'implémentation de %s diffèrent (%s, %s)"
+
+msgid "the declaration of %s carries no \"override\""
+msgstr "la déclaration de %s ne porte pas « override »"
+
+msgid "attribute on the declaration - RTTI or a framework can use the override"
+msgstr "attribut sur la déclaration - la RTTI ou un framework peut utiliser la redéfinition"
+
+msgid "default value on a parameter - it can differ from the ancestor"
+msgstr "valeur par défaut sur un paramètre - elle peut différer de l'ancêtre"
+
+msgid "declaration and implementation of %s have different parameter lists"
+msgstr "la déclaration et l'implémentation de %s ont des listes de paramètres différentes"
+
+msgid "visibility of the ancestor not proven - %s is not declared in this file; %s"
+msgstr "visibilité de l'ancêtre non prouvée - %s n'est pas déclaré dans ce fichier ; %s"
+
+msgid "%d declarations of %s in the ancestor %s - overload?"
+msgstr "%d déclarations de %s dans l'ancêtre %s - surcharge ?"
+
+msgid "the method of the ancestor %s is abstract - without the override a call raises EAbstractError"
+msgstr "la méthode de l'ancêtre %s est abstraite - sans la redéfinition, un appel lève EAbstractError"
+
+msgid "ancestor chain too long - boundaries not certain"
+msgstr "chaîne d'ancêtres trop longue - limites incertaines"
+
+msgid "the override is under \"%s\", the method of the ancestor %s under \"%s\" - the override widens the visibility, removing it breaks callers"
+msgstr "la redéfinition est sous « %s », la méthode de l'ancêtre %s sous « %s » - la redéfinition élargit la visibilité, la supprimer casse les appelants"
+
+msgid "the override or the method of the ancestor %s stands before any visibility section - the visibility is not certain; %s"
+msgstr "la redéfinition ou la méthode de l'ancêtre %s précède toute section de visibilité - la visibilité est incertaine ; %s"
+
+msgid "same meaning - without the override, virtual dispatch calls the method of the ancestor directly; declaration and implementation go together"
+msgstr "même sens - sans la redéfinition, la liaison virtuelle appelle directement la méthode de l'ancêtre ; déclaration et implémentation partent ensemble"
+
+msgid "Remove the empty override %s"
+msgstr "Supprimer la redéfinition vide %s"
