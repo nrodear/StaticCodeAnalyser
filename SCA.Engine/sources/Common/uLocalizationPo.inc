@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6612 Zeilen, 296739 Bytes
-  CPoLines_de: array[0..6611] of string = (
+  // i18n\de.po - 6615 Zeilen, 296951 Bytes
+  CPoLines_de: array[0..6614] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -4528,6 +4528,9 @@ const
     'msgid "Result - the buffer leaves the routine"',
     'msgstr "Result - der Puffer verl'#$00E4'sst die Routine"',
     '',
+    'msgid "%s is a binary or octal literal - the code action only handles decimal and hexadecimal numbers"',
+    'msgstr "%s ist ein Bin'#$00E4'r- oder Oktal-Literal - die Code-Aktion kennt nur dezimale und hexadezimale Zahlen"',
+    '',
     'msgid "the first argument of GetMem is not a simple identifier"',
     'msgstr "das erste Argument von GetMem ist kein einfacher Bezeichner"',
     '',
@@ -6901,8 +6904,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6608 Zeilen, 308851 Bytes
-  CPoLines_fr: array[0..6607] of string = (
+  // i18n\fr.po - 6611 Zeilen, 309073 Bytes
+  CPoLines_fr: array[0..6610] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -11411,6 +11414,9 @@ const
     '',
     'msgid "Result - the buffer leaves the routine"',
     'msgstr "Result - le tampon quitte la routine"',
+    '',
+    'msgid "%s is a binary or octal literal - the code action only handles decimal and hexadecimal numbers"',
+    'msgstr "%s est un litt'#$00E9'ral binaire ou octal - l''action de code ne traite que les nombres d'#$00E9'cimaux et hexad'#$00E9'cimaux"',
     '',
     'msgid "the first argument of GetMem is not a simple identifier"',
     'msgstr "le premier argument de GetMem n''est pas un identificateur simple"',

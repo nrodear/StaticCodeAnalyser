@@ -155,6 +155,19 @@ type
       const AMessage: string; out APlan: TRdxMagicPlan;
       out AReason: string): Boolean; static;
 
+    // Code-Aktion ohne Fund (Charge B, uRdxContextRunner): der Plan fuer das
+    // Zahl-Literal, das Zeichenspalte ACol auf ALine enthaelt oder direkt
+    // vor ACol endet (uRdxCodeMap.LiteralContaining = lkNumber; die
+    // Caret-Regel von PlanIntroduce) - dieselbe Kette wie MagicNumber hinter
+    // LiteralAt: nur DIESES Literal (E28), dieselben Sperren der Code-Aktion
+    // und der Datei. Value ist das Literal wie im Quelltext ('$FF', '1.5',
+    // '1_000'). True mit dem Plan; False mit dem Grund; False mit AReason
+    // = '', wenn an ACol kein Zahl-Literal steht (kein Kandidat - die
+    // Aktion entfaellt, Entscheid F4). Was nur die Platte weiss
+    // (FileReason, IncludeReason), fragt der Aufrufer danach.
+    class function IntroduceAt(AMap: TRdxCodeMap; ALine, ACol: Integer;
+      out APlan: TRdxMagicPlan; out AReason: string): Boolean; static;
+
     // Was nur die Platte weiss (der Check in uRdxFixTable, nach dem
     // Planer): eine Lazarus-/FPC-Dateiart (.pp, .lpr) oder ein Lazarus-
     // Projekt bzw. -Paket (.lpi, .lpk, .lpr) im Verzeichnis der Unit oder
@@ -638,13 +651,47 @@ begin
       [S, Li, MsgByHand]);
 end;
 
+// Der Plan fuer das Literal APlan.Value in Spalte ACol der Zeile ALine -
+// der Teil von MagicNumber hinter LiteralAt, seit Charge B auch der von
+// IntroduceAt (Code-Aktion ohne Fund): TargetAt mit dem Literal als Caret,
+// nur dieses Literal (E28), dann Skript, Hauptblock und Spuren alter
+// Compiler. True mit Name, Line, Col, Wrap und der einen Ersetzung, sonst
+// False mit dem Grund (APlan.Value bleibt).
+function PlanLiteral(AMap: TRdxCodeMap; ALine, ACol: Integer;
+  var APlan: TRdxMagicPlan; out AReason: string): Boolean;
+var
+  Text   : TRdxIntroText;
+  Target : TRdxIntroTarget;
+begin
+  Result := False;
+  Text := IntroTextOf(AMap);
+  Target := TargetAt(Text, ALine, ACol, MAGIC_NAME_BASE);
+  if not Target.Plan.Ok then
+    AReason := Target.Plan.Reason
+  else if (Target.Plan.Literal <> APlan.Value)
+     or not KeepOnlyLiteral(Text, Target, ACol) then
+    AReason := MsgMovedSuffix(_('at the literal in column %d the code action '
+      + 'reads "%s" instead of %s', [ACol, Target.Plan.Literal, APlan.Value]))
+  else
+    AReason := ScriptReason(AMap, _(FEATURE_INLINE));
+  if AReason = '' then
+    AReason := MainBlockReason(AMap, ALine);
+  if AReason = '' then
+    AReason := CompilerReason(AMap);
+  if AReason <> '' then Exit;
+  APlan.Name := Target.Name;
+  APlan.Line := ALine;
+  APlan.Col := ACol;
+  APlan.Wrap := Target.Plan.Wrap;
+  AddEdit(APlan.Edits, AsOneEdit(Text, IntroduceEdits(Text, Target)));
+  Result := True;
+end;
+
 class function TRdxMagicFixes.MagicNumber(AMap: TRdxCodeMap; ALine: Integer;
   const AMessage: string; out APlan: TRdxMagicPlan;
   out AReason: string): Boolean;
 var
-  Col    : Integer;
-  Text   : TRdxIntroText;
-  Target : TRdxIntroTarget;
+  Col : Integer;
 begin
   Result := False;
   Col := 0;
@@ -658,27 +705,31 @@ begin
   else
     AReason := LiteralAt(AMap, ALine, APlan.Value, Col);
   if AReason <> '' then Exit;
-  Text := IntroTextOf(AMap);
-  Target := TargetAt(Text, ALine, Col, MAGIC_NAME_BASE);
-  if not Target.Plan.Ok then
-    AReason := Target.Plan.Reason
-  else if (Target.Plan.Literal <> APlan.Value)
-     or not KeepOnlyLiteral(Text, Target, Col) then
-    AReason := MsgMovedSuffix(_('at the literal in column %d the code action '
-      + 'reads "%s" instead of %s', [Col, Target.Plan.Literal, APlan.Value]))
-  else
-    AReason := ScriptReason(AMap, _(FEATURE_INLINE));
-  if AReason = '' then
-    AReason := MainBlockReason(AMap, ALine);
-  if AReason = '' then
-    AReason := CompilerReason(AMap);
-  if AReason <> '' then Exit;
-  APlan.Name := Target.Name;
-  APlan.Line := ALine;
-  APlan.Col := Col;
-  APlan.Wrap := Target.Plan.Wrap;
-  AddEdit(APlan.Edits, AsOneEdit(Text, IntroduceEdits(Text, Target)));
-  Result := True;
+  Result := PlanLiteral(AMap, ALine, Col, APlan, AReason);
+end;
+
+class function TRdxMagicFixes.IntroduceAt(AMap: TRdxCodeMap; ALine,
+  ACol: Integer; out APlan: TRdxMagicPlan; out AReason: string): Boolean;
+var
+  First, Stop : Integer;
+begin
+  Result := False;
+  AReason := '';
+  APlan := Default(TRdxMagicPlan);
+  if LiteralContaining(AMap, ALine, ACol, First, Stop) <> lkNumber then
+    Exit;   // kein Kandidat (F4): kein Eintrag
+  APlan.Value := Copy(AMap.Raw(ALine), First, Stop - First);
+  // Die Code-Aktion liest nur dezimale und hexadezimale Zahlen
+  // (uRdxIntroPlan.NumbersOf); ein Delphi-11-Binaer- bzw. Oktal-Literal
+  // fiele dort als "kein Zahl-Literal am Caret" durch - der Satz sagt,
+  // warum.
+  if CharInSet(APlan.Value[1], ['%', '&']) then
+  begin
+    AReason := _('%s is a binary or octal literal - the code action only '
+      + 'handles decimal and hexadecimal numbers', [APlan.Value]);
+    Exit;
+  end;
+  Result := PlanLiteral(AMap, ALine, First, APlan, AReason);
 end;
 
 { ---- Was nur die Platte weiss ---- }

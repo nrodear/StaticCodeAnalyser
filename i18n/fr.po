@@ -4507,6 +4507,9 @@ msgstr "l'affectation va à une expression, pas à une variable"
 msgid "Result - the buffer leaves the routine"
 msgstr "Result - le tampon quitte la routine"
 
+msgid "%s is a binary or octal literal - the code action only handles decimal and hexadecimal numbers"
+msgstr "%s est un littéral binaire ou octal - l'action de code ne traite que les nombres décimaux et hexadécimaux"
+
 msgid "the first argument of GetMem is not a simple identifier"
 msgstr "le premier argument de GetMem n'est pas un identificateur simple"
 

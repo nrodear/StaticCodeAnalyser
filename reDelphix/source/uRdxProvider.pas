@@ -161,6 +161,7 @@ type
     FSource      : TRdxSourceCache;  // offene Quelle (Minor 9)
     FScopes      : TRdxScopeTable;
     FToken       : Integer;
+    FContextToken: Integer;          // Kontext-Anbieter (Charge B), 0 = ab
     FUsesNames   : TArray<string>;   // Namen der uses-Eintraege der Datei
     // Die Rezept-Zuordnung: eine neue Hilfe ist ein Rezept mehr in einer
     // der beiden Listen (Konstruktor), nicht ein Zweig mehr in Provide.
@@ -214,6 +215,15 @@ type
       const ACtx: TRdxRecipeContext);
     // Der Einstieg des Hosts (TFindingActionProvider).
     function Provide(const AFinding: TLeakFinding): TArray<TFindingAction>;
+    // Code-Aktionen ohne Fund am Caret (Charge B, TContextActionProvider):
+    // nur Pascal-Quelltext und nur der Editor-Puffer (das Kontextmenue
+    // gehoert zu einer offenen Datei - keine Platte, kein Netzpfad im
+    // Hauptthread); die Eintraege rechnet uRdxContextRunner, die
+    // Menuetexte uRdxFixTable.ContextCaption (gleich denen der Fund-
+    // Hilfen, Dedup F2). Kein Kandidat am Caret: keine Aktion, auch keine
+    // Diagnose (F4) - Kind setzt die Registry (fakContext).
+    function ProvideContext(
+      const AContext: TEditorContext): TArray<TFindingAction>;
   public
     // Create baut die Rezeptlisten und den Quellstellen-Dienst; Destroy
     // meldet ab (UnregisterAtHost) und gibt beides frei. Von aussen nur
@@ -229,11 +239,12 @@ type
     class procedure Shutdown; static;
 
     // Meldet Provide an der Registry des SCA-Plugins an (TFindingActions,
-    // aus uRdxRegister.Register); ein zweiter Aufruf meldet nicht doppelt an.
-    // Protokolliert Token und Groesse der Scope-Tabelle.
+    // aus uRdxRegister.Register), seit Charge B auch ProvideContext
+    // (RegisterContext); ein zweiter Aufruf meldet nicht doppelt an.
+    // Protokolliert die Token und die Groesse der Scope-Tabelle.
     procedure RegisterAtHost;
-    // Meldet wieder ab (Pflicht vor dem Entladen, s. uRdxRegister); ohne
-    // Anmeldung ohne Wirkung. Destroy ruft es selbst.
+    // Meldet wieder ab, beide Anbieter (Pflicht vor dem Entladen, s.
+    // uRdxRegister); ohne Anmeldung ohne Wirkung. Destroy ruft es selbst.
     procedure UnregisterAtHost;
     // Token der Anmeldung bei TFindingActions, 0 = nicht angemeldet.
     property Token: Integer read FToken;
@@ -252,6 +263,7 @@ uses
   uRdxText,         // _(): in die reDelphix-Sprache, nie uLocalization (E29)
   uRuleCatalog,
   uRdxFixTable,     // Tabelle der einfachen Hilfen: Planer und Menuetexte
+  uRdxContextRunner, // Code-Aktionen ohne Fund am Caret (Charge B)
   uRdxSuppress,
   uRdxEditor,
   uRdxLog;          // Protokoll: DebugView + %TEMP%\reDelphix.log
@@ -406,9 +418,13 @@ procedure TRdxProvider.RegisterAtHost;
 begin
   if FToken = 0 then
     FToken := TFindingActions.Register(Provide);
+  if FContextToken = 0 then
+    FContextToken := TFindingActions.RegisterContext(ProvideContext);
   RdxLog('registriert, Token %d, Anbieter gesamt %d, Scope-Tabelle %d '
     + 'Eintraege aus %s',
     [FToken, TFindingActions.ProviderCount, FScopes.Count, FScopes.Source]);
+  RdxLog('Kontext-Anbieter registriert, Token %d, Kontext-Anbieter gesamt %d',
+    [FContextToken, TFindingActions.ContextProviderCount]);
 end;
 
 procedure TRdxProvider.UnregisterAtHost;
@@ -417,6 +433,11 @@ begin
   begin
     TFindingActions.Unregister(FToken);
     FToken := 0;
+  end;
+  if FContextToken <> 0 then
+  begin
+    TFindingActions.Unregister(FContextToken);
+    FContextToken := 0;
   end;
 end;
 
@@ -915,6 +936,52 @@ begin
   finally
     Lines.Free;
   end;
+end;
+
+
+function TRdxProvider.ProvideContext(
+  const AContext: TEditorContext): TArray<TFindingAction>;
+var
+  Text     : string;
+  Lines    : TStringList;
+  Outcomes : TArray<TRdxContextOutcome>;
+  O        : TRdxContextOutcome;
+  Caption  : string;
+  Act      : TRdxAction;
+begin
+  Result := nil;
+  // Eine eigene Charge im Ring (wie je Provide): die Aktionen der Funde
+  // desselben Menues bleiben am Leben (RDX_ACTION_BATCHES).
+  FActions.BeginBatch;
+  if not IsPascalSource(AContext.FileName) then Exit;
+  // Nur der Puffer: geschrieben wird in ihn, und das Menue haengt an einer
+  // offenen Datei. Leer oder nicht lesbar, oder nicht offen: nichts.
+  if TRdxEditor.ReadBuffer(AContext.FileName, Text) <> txBuffer then Exit;
+  Lines := TStringList.Create;
+  try
+    Lines.Text := Text;
+    Outcomes := TRdxContextRunner.Run(Lines, AContext);
+    for O in Outcomes do
+    begin
+      Caption := TRdxFixTable.ContextCaption(O);
+      if Caption = '' then Continue;
+      if O.Enabled then
+      begin
+        Act := NewAction(akReplace, AContext.FileName);
+        Act.FEdits := O.Edits;
+        Add(Result, Caption, O.Hint, True, Act);
+      end
+      else
+        Add(Result, Caption, O.Reason, False, nil);
+      // E2: gekennzeichnet; Kind setzt die Registry (fakContext).
+      Result[High(Result)].ChangesBehavior := O.ChangesBehavior;
+    end;
+  finally
+    Lines.Free;
+  end;
+  RdxLog('Kontext %s:%d:%d - %d Eintraege',
+    [ExtractFileName(AContext.FileName), AContext.Line, AContext.Col,
+     Length(Result)]);
 end;
 
 end.
