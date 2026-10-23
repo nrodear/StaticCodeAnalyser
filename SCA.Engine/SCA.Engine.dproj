@@ -220,6 +220,8 @@
         <DCCReference Include="sources\Detectors\uIpAddressScan.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedIpAddress.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedIpInConfig.pas"/>
+        <DCCReference Include="sources\Detectors\uLoopBoundScan.pas"/>
+        <DCCReference Include="sources\Detectors\uLoopPastHighBound.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedSecret.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedString.pas"/>
         <DCCReference Include="sources\Detectors\uIfElseBegin.pas"/>
@@ -287,6 +289,8 @@
         <DCCReference Include="sources\Detectors\uSynchronizeInDestructor.pas"/>
         <DCCReference Include="sources\Detectors\uTabulationCharacter.pas"/>
         <DCCReference Include="sources\Detectors\uTautologicalExpr.pas"/>
+        <DCCReference Include="sources\Detectors\uComparisonPrecedenceScan.pas"/>
+        <DCCReference Include="sources\Detectors\uComparisonPrecedence.pas"/>
         <DCCReference Include="sources\Detectors\uThreadFreeOnTerminateWithRef.pas"/>
         <DCCReference Include="sources\Detectors\uTObjectListWithoutOwnership.pas"/>
         <DCCReference Include="sources\Detectors\uTodoComment.pas"/>

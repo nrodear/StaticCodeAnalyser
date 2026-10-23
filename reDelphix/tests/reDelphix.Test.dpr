@@ -206,6 +206,10 @@ program reDelphix.Test;
 //   * uTestRdxDeepNestingFix    - SCA018 letztes if -> Waechter-Klausel
 //   * uTestRdxLookupHoistFix    - SCA111/SCA112 ParamByName/FieldByName
 //                                 vor die Schleife
+//   * uTestRdxLoopBoundFix      - SCA203 Grenze der for-Schleife auf den
+//                                 letzten Index
+//   * uTestRdxInheritedEmptyFix - SCA125 leeres Override loeschen
+//                                 (Deklaration und Implementierung)
 //
 // SPRACHE: der Hauptblock setzt die reDelphix-Texte fuer ALLE Tests auf
 // Deutsch (SetRdxLanguageOverride('de'), wie der FPC-Pruefstand) - die
@@ -319,6 +323,8 @@ uses
   uRdxParamNameFix in '..\source\uRdxParamNameFix.pas',
   uRdxDeepNestingFix in '..\source\uRdxDeepNestingFix.pas',
   uRdxLookupHoistFix in '..\source\uRdxLookupHoistFix.pas',
+  uRdxLoopBoundFix in '..\source\uRdxLoopBoundFix.pas',
+  uRdxInheritedEmptyFix in '..\source\uRdxInheritedEmptyFix.pas',
   uTestRdxRecipes in 'uTestRdxRecipes.pas',
   uTestRdxBench in 'uTestRdxBench.pas',
   uTestRdxSca044 in 'uTestRdxSca044.pas',
@@ -404,6 +410,8 @@ uses
   uTestRdxParamNameFix in 'uTestRdxParamNameFix.pas',
   uTestRdxDeepNestingFix in 'uTestRdxDeepNestingFix.pas',
   uTestRdxLookupHoistFix in 'uTestRdxLookupHoistFix.pas',
+  uTestRdxLoopBoundFix in 'uTestRdxLoopBoundFix.pas',
+  uTestRdxInheritedEmptyFix in 'uTestRdxInheritedEmptyFix.pas',
   uTestRdxMagicGuards in 'uTestRdxMagicGuards.pas',
   uTestRdxMagicFixDetector in 'uTestRdxMagicFixDetector.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',

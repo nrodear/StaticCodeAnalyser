@@ -146,12 +146,14 @@ uses
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
   uUnusedLocal, uUnusedParameter, uTautologicalExpr,
+  uComparisonPrecedence,   // SCA202 - not/and/or/xor vor Vergleichen
   uSqlDangerousStatement,
   uNilDeref, uMissingFinally, uDivByZero, uDeadCode,
   uLongMethod, uLongParamList, uMagicNumbers, uDuplicateString,
   uHardcodedPath, uDebugOutput, uDeepNesting,
   uHardcodedIpAddress,   // SCA200 - IP-Adressen in String-Literalen
   uHardcodedIpInConfig,  // SCA201 - IP-Adressen in .ini (Konfigurations-Durchlauf)
+  uLoopPastHighBound,    // SCA203 - for-Schleife einen Index zu weit
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uCustomRuleDetector,
   uDfmAnalysisRunner, uDfmRepoIndex, uSymbolReferenceIndex, uTypeIndex, uAstFileCache,
@@ -538,7 +540,7 @@ begin
   // Track C Opt-in (Runde 3): AContext-fuehrend (record-value-type-Gegenprobe
   // via CtxTypeIndex) -> AddD statt AddD3, damit der Ctx durchgereicht wird.
   AddD('InstanceInvokedConstructor', fkInstanceInvokedConstructor, TInstanceInvokedConstructorDetector.AnalyzeUnit);
-  AddD3('InheritedMethodEmpty', fkInheritedMethodEmpty, TInheritedMethodEmptyDetector.AnalyzeUnit);
+  AddD('InheritedMethodEmpty', fkInheritedMethodEmpty, TInheritedMethodEmptyDetector.AnalyzeUnit, ['override']);  // Q14: liest Deklaration + Quelltext
   AddD3('NilComparison',   fkNilComparison,   TNilComparisonDetector.AnalyzeUnit);
   AddD3('RaisingRawException', fkRaisingRawException, TRaisingRawExceptionDetector.AnalyzeUnit);
   AddD3('DateFormatSettings', fkDateFormatSettings, TDateFormatSettingsDetector.AnalyzeUnit);
@@ -697,6 +699,10 @@ begin
   AddD('UninitVar',      fkUninitVar,       TUninitVarDetector.AnalyzeUnit);
   AddD3('UnusedParameter',fkUnusedParameter, TUnusedParameterDetector.AnalyzeUnit);
   AddD('TautologicalBoolExpr',fkTautologicalBoolExpr, TTautologicalExprDetector.AnalyzeUnit);
+  // SCA202 (2026-10-23): ohne Vorfilter-Token - 'or' steckt in jedem
+  // 'for'/'procedure', ein Token waere keine NOTWENDIGE Bedingung.
+  AddD('ComparisonPrecedence', fkComparisonPrecedence,
+       TComparisonPrecedenceDetector.AnalyzeUnit);
   // AContext-fuehrend seit dem tplFixtureDir-Anker (ScanRootDir)
   AddD('SqlDangerousStatement', fkSqlDangerousStatement, TSqlDangerousStatementDetector.AnalyzeUnit);
   // UnusedUses: bleibt im Detector-Pool eingetragen; der per-Scan-Opt-out
@@ -721,6 +727,11 @@ begin
   // Konfigurations-Durchlauf von ParseLeaks (RunConfigPass).
   AddD('HardcodedIpAddress', fkHardcodedIpAddress,
        THardcodedIpAddressDetector.AnalyzeUnit);
+  // SCA203 (Charge A3, 2026-10-23): jeder Kopf, den die Regel meldet, endet
+  // auf '.Count', 'Length(..)' oder 'High(..) + 1' - eines der drei Woerter
+  // steht dann in der Datei (NOTWENDIGE Bedingung).
+  AddD('LoopPastHighBound', fkLoopPastHighBound,
+       TLoopPastHighBoundDetector.AnalyzeUnit, ['count', 'length', 'high']);
   // Seit 2026-09-05 context-faehig (Scanwurzel fuers Geltungsbereich-
   // Gate) -> volle 4-Parameter-Registrierung statt AddD3-Adapter.
   AddD('DebugOutput',      fkDebugOutput,     TDebugOutputDetector.AnalyzeUnit);

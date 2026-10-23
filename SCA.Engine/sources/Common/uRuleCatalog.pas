@@ -1158,7 +1158,7 @@ begin
      fkDfmDuplicateBinding, fkDfmDeadEvent, fkDfmSchemaMismatch,
      fkDfmCircularDataSource, fkDfmRequiredFieldUnbound,
      fkDfmRequiredFieldNotVisible, fkDfmCrossFormCoupling,
-     fkDfmActionMismatch, fkDuplicateInterfaceGuid, fkParamNameMismatch]);
+     fkDfmActionMismatch, fkDuplicateInterfaceGuid, fkParamNameMismatch, fkComparisonPrecedence, fkLoopPastHighBound]);
   FProfiles.AddOrSetValue('code-quality',
     [fkEmptyExcept, fkUnusedUses, fkMissingFinally, fkDeadCode,
      fkLongMethod, fkLongParamList, fkMagicNumber, fkDebugOutput,

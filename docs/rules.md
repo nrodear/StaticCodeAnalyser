@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Rule Catalog
 
-All 201 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
+All 203 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
@@ -205,6 +205,8 @@ All 201 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA199](#sca199) | ParamByName name does not match the SQL placeholders | Warning | Bug | `uParamNameMismatch.pas` |
 | [SCA200](#sca200) | IP address as string literal | Warning | Security Hotspot | `uHardcodedIpAddress.pas` |
 | [SCA201](#sca201) | IP address in a versioned configuration file | Hint | Security Hotspot | `uHardcodedIpInConfig.pas` |
+| [SCA202](#sca202) | not, and, or or xor binds before the comparison | **Error** | Bug | `uComparisonPrecedence.pas` |
+| [SCA203](#sca203) | for loop runs one index past the end | **Error** | Bug | `uLoopPastHighBound.pas` |
 
 ---
 
@@ -3129,18 +3131,24 @@ end;
 | Tags | `inheritance`, `dead-code`, `sonardelphi` |
 | Detector | `uInheritedMethodEmpty.pas` |
 
-A method declared with `override` whose body contains only `inherited;` (or `inherited <SameName>;`) adds nothing on top of the parent class's behaviour. The compiler's normal virtual dispatch already calls the parent implementation if the subclass does not override - the empty override is therefore pure noise that wastes a VMT slot, slows down code reviews ('does this override do something?' - reader has to read the body to confirm 'no'), and creates dead code that needs to be revisited every time the parent method's signature changes. Detector walks every `nkMethod` whose `TypeRef` contains `;override`, skips bodyless variants (abstract / forward / external / dispid), and flags the method when its body contains exactly one non-parameter child that is `nkInherited` with either no argument expression at all (`inherited;`) or with the same identifier as the method itself (`inherited <SameName>;`). Calls to a *different* parent method (`inherited Other;` - intentional hijack) are deliberately not flagged. Maps to Sonar-Delphi `InheritedMethodWithNoCodeCheck`.
+A method declared with `override` whose implementation only calls the ancestor with the same arguments adds nothing on top of the parent class's behaviour: virtual dispatch already reaches the ancestor when the subclass does not override. The empty override is noise that slows down code reviews and has to be revisited whenever the ancestor's signature changes. Detector walks every method implementation `TClass.Name` whose body is exactly one statement - `inherited;` (procedures, constructors, destructors), `inherited Name;` (no parameters), `inherited Name(p1, .., pn)` with the parameters passed through unchanged and in order, or `Result := inherited [Name(..)]` in functions - and reads the DECLARATION in the class of the same unit (implementation headers never repeat `override`). The declaration must be unique (no overloads, no {$IFDEF} twins) and carry `override` and no other directive (message, final, reintroduce, deprecated, calling convention, ...), no attribute and no default parameter; no compiler directive may sit between implementation header and `end`. Class methods are skipped. Visibility: when the ancestor's method is declared in the same unit and is less visible, the override widens its visibility and is not reported. When the ancestor lies outside the unit, private/protected overrides and public overrides of well-known public root methods (Destroy, Create, AfterConstruction, BeforeDestruction, Assign, ToString, Equals, GetHashCode) are reported with high confidence, other public/published overrides with low confidence (hidden by default). The source file must be readable. Maps to Sonar-Delphi `InheritedMethodWithNoCodeCheck`.
 
 ```pascal
 // BAD
-procedure TFooSubclass.AfterConstruction; override;
+type
+  TFooSubclass = class(TFoo)
+  protected
+    procedure Paint; override;
+  end;
+
+procedure TFooSubclass.Paint;
 begin
   inherited;     // adds nothing - drop this whole override
 end;
 
 // GOOD
-// Remove the override entirely. The parent's AfterConstruction will
-// be invoked by the normal virtual dispatch.
+// Remove both the declaration and the implementation. The
+// parent's Paint is reached by normal virtual dispatch.
 ```
 
 ---
@@ -5303,4 +5311,76 @@ IP address '10.20.30.40' (private, RFC 1918) in [Database] Server - an environme
 
 ---
 
-_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA201.md`._
+## SCA202
+**not, and, or or xor binds before the comparison**
+
+> 'not Count > 0' or 'A = True or B = False' - not/and/or/xor bind tighter than comparisons, so the expression compiles but tests something else
+
+| Field | Value |
+|---|---|
+| Severity | **Error** | Type | Bug |
+| Tags | `logic`, `operator-precedence`, `suspicious` |
+| CWE | [CWE-783](https://cwe.mitre.org/data/definitions/783.html) |
+| Detector | `uComparisonPrecedence.pas` |
+
+In Pascal the operators not, and, or and xor bind tighter than the comparisons (=, <>, <, >, <=, >=, in) - the same in Delphi and Free Pascal. Two spellings therefore compile without a message and test something else than they read. (1) 'not' in front of a comparison: 'if not List.Count > 0' is '(not List.Count) > 0'. For an integer, not is the bitwise complement, so the condition is false for every Count >= 0; 'not Key in [...]' and 'not Result = mrOk' fail the same way. (2) Comparisons chained by and/or/xor: 'if A = True or B = False' is '(A = (True or B)) = False'. This compiles only when the operands are Boolean (or Variant) - with integers, strings, enumerations or sets the compiler already reports a type error. Write the comparison in parentheses: 'not (List.Count > 0)', '(A = True) or (B = False)' - or drop the comparison with True/False. The severity is Error when the type is evidenced (a number or a set of numbers on the right, Pos/Ord/Length/CompareText... or .Count/.IndexOf as the operand, a local variable, parameter or field of an integer type, True/False in the chain) and Warning otherwise. Conditions of if/while/until/case and right-hand sides of := are read; comments, string literals (also Delphi 12 multi-line strings) and asm blocks never count as code.
+
+```pascal
+// BAD
+if not List.Count > 0 then   // (not List.Count) > 0 - false for every Count
+  Exit;
+if Ready = True or Busy = False then   // (Ready = (True or Busy)) = False
+  Start;
+
+// GOOD
+if not (List.Count > 0) then
+  Exit;
+if Ready or not Busy then
+  Start;
+```
+
+**Not reported:** a Boolean operand with `=`/`<>` (`(not A) = B` equals `not (A = B)`: True/False on the right, well-known Boolean members such as `Checked`/`Visible`/`Enabled`, Boolean variables); bit tests (`Flags and Mask = 0`, `Flags and not Mask <> 0`) and `X = A or B`; chains outside if/while/until conditions and `:=` right-hand sides (e.g. in `Assert(...)` arguments).
+
+What the message looks like:
+
+```
+Operator precedence: 'not List.Count > ...' is evaluated as '(not List.Count) > ...' - for an integer, not is the bitwise complement and the comparison is not negated; write 'not (List.Count > ...)'
+```
+
+---
+
+## SCA203
+**for loop runs one index past the end**
+
+> for loop runs to Count, Length() or High() + 1 and indexes the same collection with the loop variable - the last pass is out of range
+
+| Field | Value |
+|---|---|
+| Severity | Error | Type | Bug |
+| Tags | `loop`, `off-by-one`, `range-check`, `runtime-error` |
+| CWE | [CWE-193](https://cwe.mitre.org/data/definitions/193.html), [CWE-125](https://cwe.mitre.org/data/definitions/125.html) |
+| Detector | `uLoopPastHighBound.pas` |
+
+A classic off-by-one: 'for i := 0 to List.Count do' with List[i] in the body reads List[List.Count], one item past the end. The compiler accepts it; at run time it raises ERangeError with {$R+}, EArgumentOutOfRangeException or EStringListError for TList and TStrings, and otherwise silently reads or writes the memory behind the last element. Reported are loop heads whose upper bound is one index too far - 'X.Count' (from 0, or from 1 when X is a proven list), 'Length(A)' from 0, 'Low(A) to Length(A)' for a dynamic array, 'High(A) + 1' - when the body reads or writes the same collection (same name or chain) with the unshifted loop variable: X[i], X[i, j], and for .Count also X.Items[i], X.Strings[i] and X.Objects[i]. Strings are 1-based and have their own forms: '0 to Length(S)' with S[i] is wrong at both ends (S[0] before the first character), '1 to Length(S) + 1' past the last; '1 to Length(S)' is correct. The finding is an error only when the type is proven: the collection is a name declared in the unit (parameter, local or inline variable, Result, field of the method's own class or its ancestors in the unit, unit variable) whose type is a known list (TList, TObjectList, TStrings, TStringList, TCollection, TMenuItem, FPC TFPList/TFPGList ...), an array or a string, and the body neither leaves the pass before the access (break, exit, continue, raise, goto) nor grows the collection nor contains an anonymous method. Otherwise it is a warning. Fix: Count - 1, High(A) (or Length(A) - 1), and for strings 1 to Length(S).
+
+```pascal
+// BAD
+for i := 0 to Names.Count do
+  WriteLn(Names[i]);   // Names[Names.Count] raises
+
+// GOOD
+for i := 0 to Names.Count - 1 do
+  WriteLn(Names[i]);
+```
+
+**Not reported:** a shifted index (`L[i - 1]`), `Insert(i, ..)`, another collection, a guard on the loop variable in the body, `1 to X.Count` and `Low(A) to Length(A)` without a type proof, ShortString and PChar, downto loops.
+
+What the message looks like:
+
+```
+Loop past the last index: i := 0 to Names.Count with Names[i] - the last pass is out of range; the bound should be Names.Count - 1
+```
+
+---
+
+_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA203.md`._

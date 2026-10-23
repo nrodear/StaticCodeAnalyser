@@ -96,6 +96,8 @@
       "DeepNesting",
       "ParamByNameInLoop",
       "FieldByNameInLoop",
+      "LoopPastHighBound",
+      "InheritedMethodEmpty",
       "FileReadError"
     ]
   }

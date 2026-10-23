@@ -3,7 +3,7 @@
 > **Erzeugte Datei – nicht von Hand bearbeiten.** Quelle: [`data/quickfixes-doc.json`](data/quickfixes-doc.json) (Titel, Beschreibung, Sperren, Beispiele) und der Quelltext: welche Hilfen es gibt, ihre Menütexte und ob sie das Verhalten ändern, stehen in [`source/uRdxFixTable.pas`](source/uRdxFixTable.pas) (`FIX_ROWS`, `FIX_CAPTIONS`, `FIX_ALT_CAPTIONS`) und [`source/uRdxProvider.pas`](source/uRdxProvider.pas) (Rezepte), die Übersetzungen in [`i18n/de.po`](../i18n/de.po) und [`i18n/fr.po`](../i18n/fr.po), Regel-IDs und Namen in [`rules/sca-rules.json`](../rules/sca-rules.json).
 > Erzeugen (Repo-Wurzel): `python tools/gen-quickfix-doc.py`, prüfen: `python tools/gen-quickfix-doc.py --check` (auch in der CI, `.github/workflows/quickfix-doc.yml`).
 
-reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 90 Quick-Fixes aus der Tabelle der einfachen Hilfen (8 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
+reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 92 Quick-Fixes aus der Tabelle der einfachen Hilfen (8 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
 
 ## Lesehilfe
 
@@ -78,6 +78,7 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 90 Qui
 | SCA121 RoutineResultUnassigned | `Result mit %s initialisieren` | Quick-Fix | ja | [SCA121](#sca121) |
 | SCA122 ReRaiseException | `raise; verwenden (Original-Stack-Trace bleibt)` | Quick-Fix | nein | [SCA122](#sca122) |
 | SCA123 CastAndFree | `Cast nach %s vor Free entfernen` | Quick-Fix | nein | [SCA123](#sca123) |
+| SCA125 InheritedMethodEmpty | `Leeres Override %s entfernen` | Quick-Fix | nein | [SCA125](#sca125) |
 | SCA126 NilComparison | `Assigned() statt Vergleich mit nil verwenden` | Quick-Fix | nein | [SCA126](#sca126) |
 | SCA127 RaisingRawException | `Stattdessen EArgumentException auslösen (falsches Argument)` / `Stattdessen EInvalidOpException auslösen (unzulässiger Zustand)` | Quick-Fix | ja / ja | [SCA127](#sca127) |
 | SCA128 DateFormatSettings | `FormatSettings ausdrücklich übergeben` / `TFormatSettings.Invariant übergeben` | Quick-Fix | nein / ja | [SCA128](#sca128) |
@@ -110,6 +111,7 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 90 Qui
 | SCA196 ManagedResultUninit | `Result zuerst initialisieren: %s` | Quick-Fix | ja | [SCA196](#sca196) |
 | SCA197 InterfaceWithoutGuid | `Neue GUID einfügen` | Quick-Fix | nein | [SCA197](#sca197) |
 | SCA199 ParamNameMismatch | `Parameternamen "%s" aus dem SQL verwenden` | Quick-Fix | ja | [SCA199](#sca199) |
+| SCA203 LoopPastHighBound | `Schleife %s laufen lassen` | Quick-Fix | ja | [SCA203](#sca203) |
 | jede Regel mit Anker im Regelkatalog (Feld `anchor`), wenn sich die Anweisung des Funds beschreiben lässt | `Stelle zeigen` | Navigation | nein | [Details](#rezept-showspan) |
 | SCA044 ConcatToFormat | `Format() aus Verkettung bilden` | Quick-Fix | nein | [Details](#rezept-formatcall) |
 | SCA003 SQLInjection | `Parametrisierte Vorlage in die Zwischenablage` | Quick-Fix | nein | [Details](#rezept-sqltemplate) |
@@ -2818,6 +2820,66 @@ Nachher:
 
 **Hinweis.** Im Beispiel ist `L` als `TStringList` deklariert.
 
+<a id="sca125"></a>
+
+### SCA125 – Leeres Override entfernen
+
+- **Regel:** SCA125 `InheritedMethodEmpty` – Override whose entire body is `inherited;`
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Remove the empty override %s` | `Leeres Override %s entfernen` | `Supprimer la redéfinition vide %s` |
+
+**Platzhalter:** `%s` = der Methodenname aus der Meldung.
+
+**Wirkung:** Löscht ein Override, dessen Rumpf nur den Vorfahren mit denselben Argumenten ruft (`inherited;`, `inherited Name(A, B);`, `Result := inherited ...`): die Deklaration im Klassenrumpf samt `///`-Doku und die Implementierung samt Kommentaren darüber, die die Methode nennen, und einer Leerzeile – beides in einem Schritt. Ohne Override ruft die virtuelle Bindung die Methode des Vorfahren direkt; `Obj.Name` und `inherited Name` in Nachfahren bleiben gültig. Ein leerer Sichtbarkeitsabschnitt bleibt stehen (SCA087 hat eine eigene Hilfe).
+
+**Nicht angeboten**
+
+- der nächste Vorfahr mit dieser Methode steht nicht in der Datei (etwa TObject.Destroy, TControl.Paint) – seine Sichtbarkeit ist nicht belegt; ein Override in einem sichtbareren Abschnitt als der Vorfahr (public über protected, protected über strict protected) bräche Aufrufer, und protected-Member sind in der ganzen eigenen Unit sichtbar
+- die Methode des Vorfahren ist abstract oder steht dort mehrfach; Override oder Vorfahr stehen vor jedem Sichtbarkeitsabschnitt (die Sichtbarkeit hängt dann an `{$M+}`), außer beide stehen ohne Abschnitt oder der Vorfahr ist published
+- die Deklaration trägt neben `override` eine weitere Direktive (final, overload, reintroduce, message, deprecated, Aufrufkonvention …), ein Attribut, einen Default-Wert oder steht mehrfach in der Klasse; Klassenmethode; die Klasse steht nicht genau einmal in der Datei
+- der Rumpf tut mehr als die Durchreichung: weitere Anweisung, andere Methode, andere oder umgestellte Argumente, `inherited Name;` bei Parametern, eine Funktion ohne `Result :=`; lokale Deklarationen, eine Direktive am Kopf
+- ein Kommentar oder eine Compiler-Direktive vom Kopf bis zum `end;` der Implementierung bzw. eine Direktive in der Deklaration, eine verschobene Zeile
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+type
+  TBase = class
+  protected
+    procedure Paint; virtual;
+  end;
+  TFoo = class(TBase)
+  protected
+    procedure Paint; override;
+  end;
+
+procedure TFoo.Paint;
+begin
+  inherited;
+end;
+```
+
+Nachher:
+
+```pascal
+type
+  TBase = class
+  protected
+    procedure Paint; virtual;
+  end;
+  TFoo = class(TBase)
+  protected
+  end;
+```
+
+**Hinweis.** Der Detektor meldet auch Overrides, deren Vorfahr in einer anderen Unit steht (dort, wo die Sichtbarkeit nicht anzuheben ist, mit hoher, sonst mit niedriger Konfidenz); die Hilfe bietet sich nur an, wenn sie die Sichtbarkeit des Vorfahren in der Datei belegt.
+
 <a id="sca126"></a>
 
 ### SCA126 – Assigned() statt Vergleich mit nil
@@ -4397,6 +4459,61 @@ Nachher:
 ```
 
 **Hinweis.** Steht derselbe falsche Name zweimal in der Routine, gilt die Hilfe nur für das erste Vorkommen: danach setzt die Routine den Namen schon, und das zweite bleibt Handarbeit.
+
+<a id="sca203"></a>
+
+### SCA203 – Grenze der for-Schleife auf den letzten Index setzen
+
+- **Regel:** SCA203 `LoopPastHighBound` – for loop runs one index past the end
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** **ja** – die Schleife läuft einen Durchlauf weniger bzw. beginnt bei einem String bei 1 – war der letzte Durchlauf für einen Wächter oder ein Endezeichen gedacht, ist das ein Eingriff. Nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+
+| en | de | fr |
+|---|---|---|
+| `Let the loop run %s` | `Schleife %s laufen lassen` | `Faire tourner la boucle %s` |
+
+**Platzhalter:** `%s` = der neue Bereich (`0 to L.Count - 1`, `1 to Length(S)`).
+
+**Wirkung:** Die for-Schleife läuft einen Index zu weit (`0 to L.Count`, `0 to Length(A)`, `High(A) + 1`, bei Strings `0 to Length(S)` bzw. `1 to Length(S) + 1`) und liest oder schreibt dieselbe Sammlung mit dem Schleifenindex. Die Hilfe ändert genau eine Stelle im Kopf: `L.Count` → `L.Count - 1`, `Length(A)` → `High(A)` (Array bzw. `Low(A) to Length(A)` bei einem dynamischen Array), `High(A) + 1` → `High(A)`, bei Strings `0 to Length(S)` → `1 to Length(S)` und `1 to Length(S) + 1` → `1 to Length(S)`. Welche Form gilt, sagt der Rat in der Meldung des Detektors (er kennt den Typ); die Hilfe sucht denselben Kopf auf der gemeldeten Zeile und prüft Variable und Grenzen gegen die Meldung.
+
+**Nicht angeboten**
+
+- `1 to X.Count` mit `X[i]` – ob der Index `i - 1` oder die Grenze `Count - 1` sein soll, entscheidet der Mensch
+- `0 to Length(A)` ohne Typbeweis (ein Array braucht `High(A)`, ein String `1 to Length(S)`) und `0 to High(S) + 1` über einen String oder einen Typ, der einer sein kann (falsch an beiden Enden)
+- eine Compiler-Direktive in der Zeile des Kopfs, ein Kopf über mehrere Zeilen, ein Kommentar oder String im Kopf
+- kein oder mehr als ein passender Kopf auf der Zeile (Zeile verschoben, schon korrigiert, mehrdeutig)
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  for i := 0 to L.Count do
+    WriteLn(L[i]);
+```
+
+Nachher:
+
+```pascal
+  for i := 0 to L.Count - 1 do
+    WriteLn(L[i]);
+```
+
+**Beispiel: String (1-basiert)**
+
+Vorher:
+
+```pascal
+  for i := 0 to Length(S) do
+    if S[i] = 'x' then Exit;
+```
+
+Nachher:
+
+```pascal
+  for i := 1 to Length(S) do
+    if S[i] = 'x' then Exit;
+```
 
 ## Weitere Code-Aktionen
 

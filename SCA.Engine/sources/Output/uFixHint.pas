@@ -3416,13 +3416,20 @@ begin
     begin
       Result.Description := _('Override whose body is just "inherited" adds nothing');
       Result.Before :=
-        'procedure TFooSubclass.AfterConstruction; override;'#13#10 +
+        'type'#13#10 +
+        '  TFooSubclass = class(TFoo)'#13#10 +
+        '  public'#13#10 +
+        '    procedure AfterConstruction; override;'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        'procedure TFooSubclass.AfterConstruction;'#13#10 +
         'begin'#13#10 +
         '  inherited;             // <- empty override, wastes a VMT slot'#13#10 +
         '                         //    and forces every reader to verify'#13#10 +
         'end;';
       Result.After :=
-        '// Remove the override entirely. Virtual dispatch falls'#13#10 +
+        '// Remove the override entirely - declaration AND implementation.'#13#10 +
+        '// Virtual dispatch falls'#13#10 +
         '// through to the parent automatically when no override exists.'#13#10 +
         ''#13#10 +
         '// (Different parent method intentionally?  Keep it but document why:'#13#10 +
@@ -4579,6 +4586,32 @@ begin
         '// Use ASCII identifiers. If a Unicode identifier is intentional,'#13#10 +
         '// confirm every letter is from the expected script (no mixed'#13#10 +
         '// Latin/Cyrillic/Greek) and consider transliterating for clarity.';
+    end;
+
+    fkComparisonPrecedence:
+    begin
+      Result.Description := _('not/and/or/xor bind tighter than comparisons - put the comparison in parentheses');
+      Result.Before :=
+        'if not List.Count > 0 then   // (not List.Count) > 0 - false for every Count'#13#10 +
+        '  Exit;'#13#10 +
+        'if Ready = True or Busy = False then   // (Ready = (True or Busy)) = False'#13#10 +
+        '  Start;';
+      Result.After :=
+        'if not (List.Count > 0) then'#13#10 +
+        '  Exit;'#13#10 +
+        'if Ready or not Busy then'#13#10 +
+        '  Start;';
+    end;
+
+    fkLoopPastHighBound:
+    begin
+      Result.Description := _('for loop runs one index past the end - the upper bound is Count - 1 or High()');
+      Result.Before :=
+        'for i := 0 to Names.Count do'#13#10 +
+        '  WriteLn(Names[i]);   // Names[Names.Count] raises';
+      Result.After :=
+        'for i := 0 to Names.Count - 1 do'#13#10 +
+        '  WriteLn(Names[i]);';
     end;
 
   end;

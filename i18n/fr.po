@@ -1565,6 +1565,12 @@ msgstr "Un fichier .pas/.dfm se trouve dans le dossier du projet mais n'est pas 
 msgid "Non-ASCII character in identifier - homoglyph / confusable risk"
 msgstr "Caractère non ASCII dans un identificateur - risque d'homoglyphe / de confusion"
 
+msgid "not/and/or/xor bind tighter than comparisons - put the comparison in parentheses"
+msgstr "not/and/or/xor sont prioritaires sur les comparaisons - mettre la comparaison entre parenthèses"
+
+msgid "for loop runs one index past the end - the upper bound is Count - 1 or High()"
+msgstr "la boucle for dépasse la fin d'un indice - la borne supérieure est Count - 1 ou High()"
+
 msgid "File not found:"
 msgstr "Fichier introuvable :"
 
@@ -6507,3 +6513,96 @@ msgstr "aucune tabulation à l'endroit signalé"
 
 msgid "the first tab of the line is inside a string or comment - it stays untouched, the help would leave the finding in place"
 msgstr "la première tabulation de la ligne se trouve dans une chaîne ou un commentaire - elle reste intacte, l'aide laisserait le résultat en place"
+
+msgid "the message does not name the loop head - analyse the file again"
+msgstr "le message ne nomme pas l'en-tête de la boucle - analysez à nouveau le fichier"
+
+msgid "the loop runs from 1 to Count - whether the index should be i - 1 or the bound Count - 1 is for you to decide"
+msgstr "la boucle va de 1 à Count - à décider à la main si l'indice doit être i - 1 ou la borne Count - 1"
+
+msgid "the type is not proven - an array needs High(), a string has to run from 1"
+msgstr "le type n'est pas prouvé - un tableau demande High(), une chaîne doit commencer à 1"
+
+msgid "the reported line carries %d for headers with this range - ambiguous"
+msgstr "la ligne signalée porte %d en-têtes for avec cette plage - ambigu"
+
+msgid "the for header on the line has another range than the finding"
+msgstr "l'en-tête for de la ligne a une autre plage que le constat"
+
+msgid "the for header goes over more than one line"
+msgstr "l'en-tête for s'étend sur plus d'une ligne"
+
+msgid "compiler directive in the line of the for header"
+msgstr "directive de compilation sur la ligne de l'en-tête for"
+
+msgid "comment or string in the for header"
+msgstr "commentaire ou chaîne dans l'en-tête for"
+
+msgid "a string from 0 to High() + 1 is wrong at both ends - correct the range by hand"
+msgstr "une chaîne de 0 à High() + 1 est fausse aux deux bouts - corrigez la plage à la main"
+
+msgid "the loop runs one pass less (a string loop starts at 1) - if the last pass was meant for a sentinel or a terminator, this is an intervention"
+msgstr "la boucle fait un passage de moins (sur une chaîne, elle commence à 1) - si le dernier passage visait une sentinelle ou un terminateur, c'est une intervention"
+
+msgid "Let the loop run %s"
+msgstr "Faire tourner la boucle %s"
+
+msgid "method name missing from the message"
+msgstr "nom de méthode absent du message"
+
+msgid "class method - the quick fix removes only instance overrides"
+msgstr "méthode de classe - la correction ne supprime que les redéfinitions de méthodes d'instance"
+
+msgid "directive \"%s\" on the implementation header"
+msgstr "directive « %s » sur l'en-tête de l'implémentation"
+
+msgid "the method declares local variables, constants or routines"
+msgstr "la méthode déclare des variables, constantes ou routines locales"
+
+msgid "the body does more than call the inherited method with the same arguments"
+msgstr "le corps fait plus qu'appeler la méthode héritée avec les mêmes arguments"
+
+msgid "compiler directive in the declaration or the implementation"
+msgstr "directive de compilation dans la déclaration ou l'implémentation"
+
+msgid "comment in line %d of the method - it would be deleted with it; %s"
+msgstr "commentaire à la ligne %d de la méthode - il serait supprimé avec elle ; %s"
+
+msgid "declaration and implementation of %s differ (%s, %s)"
+msgstr "la déclaration et l'implémentation de %s diffèrent (%s, %s)"
+
+msgid "the declaration of %s carries no \"override\""
+msgstr "la déclaration de %s ne porte pas « override »"
+
+msgid "attribute on the declaration - RTTI or a framework can use the override"
+msgstr "attribut sur la déclaration - la RTTI ou un framework peut utiliser la redéfinition"
+
+msgid "default value on a parameter - it can differ from the ancestor"
+msgstr "valeur par défaut sur un paramètre - elle peut différer de l'ancêtre"
+
+msgid "declaration and implementation of %s have different parameter lists"
+msgstr "la déclaration et l'implémentation de %s ont des listes de paramètres différentes"
+
+msgid "visibility of the ancestor not proven - %s is not declared in this file; %s"
+msgstr "visibilité de l'ancêtre non prouvée - %s n'est pas déclaré dans ce fichier ; %s"
+
+msgid "%d declarations of %s in the ancestor %s - overload?"
+msgstr "%d déclarations de %s dans l'ancêtre %s - surcharge ?"
+
+msgid "the method of the ancestor %s is abstract - without the override a call raises EAbstractError"
+msgstr "la méthode de l'ancêtre %s est abstraite - sans la redéfinition, un appel lève EAbstractError"
+
+msgid "ancestor chain too long - boundaries not certain"
+msgstr "chaîne d'ancêtres trop longue - limites incertaines"
+
+msgid "the override is under \"%s\", the method of the ancestor %s under \"%s\" - the override widens the visibility, removing it breaks callers"
+msgstr "la redéfinition est sous « %s », la méthode de l'ancêtre %s sous « %s » - la redéfinition élargit la visibilité, la supprimer casse les appelants"
+
+msgid "the override or the method of the ancestor %s stands before any visibility section - the visibility is not certain; %s"
+msgstr "la redéfinition ou la méthode de l'ancêtre %s précède toute section de visibilité - la visibilité est incertaine ; %s"
+
+msgid "same meaning - without the override, virtual dispatch calls the method of the ancestor directly; declaration and implementation go together"
+msgstr "même sens - sans la redéfinition, la liaison virtuelle appelle directement la méthode de l'ancêtre ; déclaration et implémentation partent ensemble"
+
+msgid "Remove the empty override %s"
+msgstr "Supprimer la redéfinition vide %s"

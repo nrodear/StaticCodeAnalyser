@@ -153,6 +153,7 @@
         <DCCReference Include="uTestHardcodedPath.pas"/>
         <DCCReference Include="uTestHardcodedIpAddress.pas"/>
         <DCCReference Include="uTestHardcodedIpInConfig.pas"/>
+        <DCCReference Include="uTestLoopPastHighBound.pas"/>
         <DCCReference Include="uTestIpAddressScanKit.pas"/>
         <DCCReference Include="uTestIpAddressScanGrammar.pas"/>
         <DCCReference Include="uTestIpAddressScanClasses.pas"/>
@@ -261,6 +262,7 @@
         <DCCReference Include="uTestEmptyInterface.pas"/>
         <DCCReference Include="uTestInterfaceGuid.pas"/>
         <DCCReference Include="uTestParamNameMismatch.pas"/>
+        <DCCReference Include="uTestComparisonPrecedence.pas"/>
         <DCCReference Include="uTestRuleListBox.pas"/>
         <DCCReference Include="uTestVcsChanges.pas"/>
         <DCCReference Include="uTestAssertMessage.pas"/>
