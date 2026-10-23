@@ -352,6 +352,9 @@ begin
         TEmptyOnHandlerDetector.AnalyzeUnit(Root, TempPath, Result);
         TStringFromPointerDetector.AnalyzeUnit(Root, TempPath, Result);
         TPointerSubtractionDetector.AnalyzeUnit(Root, TempPath, Result);
+        // SCA125 (Q14): liest Attribute/Direktiven der Deklaration aus dem
+        // Quelltext - ohne lesbare Datei meldet er nichts (FindingsOf: stumm).
+        TInheritedMethodEmptyDetector.AnalyzeUnit(Root, TempPath, Result);
         // GodClass hat einen Lines-abhaengigen Guard (IsEmptyClassDeclLine liest
         // die Quellzeile per AcquireLines) - MUSS im File-Harness laufen, sonst
         // ist der Guard (Parser-Slurp-Artefakt-Unterdrueckung) ungetestet und

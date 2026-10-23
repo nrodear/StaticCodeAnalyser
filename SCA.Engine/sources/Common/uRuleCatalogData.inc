@@ -1501,10 +1501,12 @@ const
       RuleID   : 'SCA125';
       Name     : 'Override whose entire body is `inherited;`';
       ShortDesc: 'An override that only forwards to the parent serves no purpose - remove it';
-      BadEx    : 'procedure TFooSubclass.AfterConstruction; override;' + #13#10 + 'begin' + #13#10 +
+      BadEx    : 'type' + #13#10 + '  TFooSubclass = class(TFoo)' + #13#10 + '  protected' + #13#10 +
+        '    procedure Paint; override;' + #13#10 + '  end;' + #13#10 + #13#10 +
+        'procedure TFooSubclass.Paint;' + #13#10 + 'begin' + #13#10 +
         '  inherited;     // adds nothing - drop this whole override' + #13#10 + 'end;';
-      GoodEx   : '// Remove the override entirely. The parent''s AfterConstruction will' + #13#10 +
-        '// be invoked by the normal virtual dispatch.';
+      GoodEx   : '// Remove both the declaration and the implementation. The' + #13#10 +
+        '// parent''s Paint is reached by normal virtual dispatch.';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False

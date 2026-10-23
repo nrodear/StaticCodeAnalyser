@@ -3416,13 +3416,20 @@ begin
     begin
       Result.Description := _('Override whose body is just "inherited" adds nothing');
       Result.Before :=
-        'procedure TFooSubclass.AfterConstruction; override;'#13#10 +
+        'type'#13#10 +
+        '  TFooSubclass = class(TFoo)'#13#10 +
+        '  public'#13#10 +
+        '    procedure AfterConstruction; override;'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        'procedure TFooSubclass.AfterConstruction;'#13#10 +
         'begin'#13#10 +
         '  inherited;             // <- empty override, wastes a VMT slot'#13#10 +
         '                         //    and forces every reader to verify'#13#10 +
         'end;';
       Result.After :=
-        '// Remove the override entirely. Virtual dispatch falls'#13#10 +
+        '// Remove the override entirely - declaration AND implementation.'#13#10 +
+        '// Virtual dispatch falls'#13#10 +
         '// through to the parent automatically when no override exists.'#13#10 +
         ''#13#10 +
         '// (Different parent method intentionally?  Keep it but document why:'#13#10 +

@@ -538,7 +538,7 @@ begin
   // Track C Opt-in (Runde 3): AContext-fuehrend (record-value-type-Gegenprobe
   // via CtxTypeIndex) -> AddD statt AddD3, damit der Ctx durchgereicht wird.
   AddD('InstanceInvokedConstructor', fkInstanceInvokedConstructor, TInstanceInvokedConstructorDetector.AnalyzeUnit);
-  AddD3('InheritedMethodEmpty', fkInheritedMethodEmpty, TInheritedMethodEmptyDetector.AnalyzeUnit);
+  AddD('InheritedMethodEmpty', fkInheritedMethodEmpty, TInheritedMethodEmptyDetector.AnalyzeUnit, ['override']);  // Q14: liest Deklaration + Quelltext
   AddD3('NilComparison',   fkNilComparison,   TNilComparisonDetector.AnalyzeUnit);
   AddD3('RaisingRawException', fkRaisingRawException, TRaisingRawExceptionDetector.AnalyzeUnit);
   AddD3('DateFormatSettings', fkDateFormatSettings, TDateFormatSettingsDetector.AnalyzeUnit);
