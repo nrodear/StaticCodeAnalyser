@@ -124,6 +124,9 @@ ART_NAMES = {
     'fakNavigate': 'Navigation',
     'fakRefactor': 'Refactoring',
     'fakSuppress': 'Unterdrücken',
+    # Code-Aktion ohne Fund (Charge B): setzt die Registry
+    # (ContextActionsFor), kein Rezept der Fund-Tabelle.
+    'fakContext': 'Code-Aktion',
 }
 # Wo eine gekennzeichnete Hilfe laeuft (Tasten-Policy, uFindingActionMenu).
 UEBER_MENUE = 'über Menü oder Glühbirne, nie über Strg+Alt+F'

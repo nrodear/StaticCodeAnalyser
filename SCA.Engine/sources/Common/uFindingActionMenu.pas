@@ -32,6 +32,12 @@ unit uFindingActionMenu;
 // Anbieter - TFindingActions.ActionsFor wirft als Ganzes), nie das
 // Menue; die Meldung landet in Errors, der Host protokolliert sie.
 // Ausgenommen: ein erschoepfter Stapel und EAbort laufen zum Host durch.
+//
+// Code-Aktionen ohne Fund (Charge B, E14/E16): BuildEditorMenuModel haengt
+// hinter die Fund-Aktionen der Caret-Zeile die Aktionen der Kontext-
+// Anbieter (Kind = fakContext), abgesetzt durch Trenner und optionale
+// Kopfzeile; eine Caption, die schon im Modell steht, kommt nicht zweimal.
+// Die Gluehbirnen-Form (moAvailableFixesOnly) bekommt nie Kontextaktionen.
 
 interface
 
@@ -78,6 +84,13 @@ type
     Actions : TArray<TFindingAction>;
     Errors  : TArray<string>;      // Meldungen werfender Anbieter
     Omitted : Integer;             // Funde ueber MAX_FINDINGS_PER_MENU, nicht gefragt
+    // Code-Aktionen ohne Fund (Charge B, AppendContextActions): sie stehen
+    // immer am ENDE - die letzten ContextEntryCount Eintraege (samt ihrem
+    // Trenner und ihrer Kopfzeile) und die letzten ContextActionCount
+    // Aktionen. 0 = keine. Ein Host, der sie als Untermenue zeichnet,
+    // schneidet sie damit ab; Default(TFindingMenuModel) = keine.
+    ContextEntryCount  : Integer;
+    ContextActionCount : Integer;
     // True, wenn das Modell keine einzige Aktion traegt - dann gibt es
     // auch keine Eintraege (Trenner und Kopfzeilen entstehen nur vor
     // Aktionen). Die Gluehbirne erscheint genau dann nicht; Errors und
@@ -114,6 +127,29 @@ function BuildFindingMenuModelFrom(const AFindings: TArray<TLeakFinding>;
 // Omitted.
 function BuildFindingMenuModel(const AFindings: TArray<TLeakFinding>;
   AOptions: TFindingMenuOptions): TFindingMenuModel;
+
+// Reine Form der Code-Aktionen ohne Fund (Charge B, E14/E16): haengt
+// AActions hinten an AModel an - jede mit Kind = fakContext. Eine Aktion,
+// deren Caption schon im Modell steht (eine Fund-Aktion der Zeile oder
+// eine fruehere Kontextaktion), faellt weg: gleiche Captions stehen nur
+// einmal, und zwar am Fund. Bleibt etwas, steht davor ein Trenner, wenn
+// das Modell schon Eintraege hat oder moLeadingSeparator gesetzt ist, und
+// mit moHeaders eine deaktivierte Kopfzeile AHeader (leer: keine). Mit
+// moAvailableFixesOnly (die Form der Gluehbirne) haengt sie NICHTS an -
+// Kontextaktionen stehen nie in der Gluehbirne. Zaehlt
+// ContextEntryCount/ContextActionCount hoch.
+procedure AppendContextActions(var AModel: TFindingMenuModel;
+  const AActions: TArray<TFindingAction>; AOptions: TFindingMenuOptions;
+  const AHeader: string);
+
+// Das Modell des Editor-Kontextmenues: die Funde AContext.Findings wie
+// BuildFindingMenuModel, dahinter die Code-Aktionen der Kontext-Anbieter
+// (TFindingActions.ContextActionsFor, einmal je Aufruf) ueber
+// AppendContextActions. Wirft ein Kontext-Anbieter, fallen die Kontext-
+// aktionen weg und die Meldung kommt nach Errors (ausser EStackExhausted
+// und EAbort) - die Fund-Aktionen bleiben.
+function BuildEditorMenuModel(const AContext: TEditorContext;
+  AOptions: TFindingMenuOptions; const AContextHeader: string): TFindingMenuModel;
 
 // 'Caption  (Hint)' bzw. nur Caption.
 function FindingActionCaption(const AAction: TFindingAction): string;
@@ -386,6 +422,84 @@ begin
   Result := BuildFindingMenuModelFrom(Asked, Lists, AOptions);
   Result.Errors  := Errors;
   Result.Omitted := Length(AFindings) - Length(Asked);
+end;
+
+{ ---- Code-Aktionen ohne Fund (Charge B) ---- }
+
+function CaptionInModel(const AModel: TFindingMenuModel;
+  const ACaption: string): Boolean;
+var
+  i : Integer;
+begin
+  Result := False;
+  for i := 0 to High(AModel.Actions) do
+    if AModel.Actions[i].Caption = ACaption then
+      Exit(True);
+end;
+
+procedure AppendContextActions(var AModel: TFindingMenuModel;
+  const AActions: TArray<TFindingAction>; AOptions: TFindingMenuOptions;
+  const AHeader: string);
+var
+  Keep       : TArray<TFindingAction>;
+  k, n, s    : Integer;
+  Dup        : Boolean;
+  FirstEntry : Integer;
+begin
+  if moAvailableFixesOnly in AOptions then Exit;   // nie in der Gluehbirne
+  SetLength(Keep, Length(AActions));
+  n := 0;
+  for k := 0 to High(AActions) do
+  begin
+    // Gegen das Modell (Fund-Aktionen und schon angehaengte Kontext-
+    // aktionen) und gegen die schon behaltenen dieser Liste.
+    Dup := CaptionInModel(AModel, AActions[k].Caption);
+    s := 0;
+    while not Dup and (s < n) do
+    begin
+      Dup := Keep[s].Caption = AActions[k].Caption;
+      Inc(s);
+    end;
+    if Dup then Continue;
+    Keep[n] := AActions[k];
+    Keep[n].Kind := fakContext;
+    Inc(n);
+  end;
+  if n = 0 then Exit;
+  SetLength(Keep, n);
+  FirstEntry := Length(AModel.Entries);
+  if (FirstEntry > 0) or (moLeadingSeparator in AOptions) then
+    AddEntry(AModel, mkSeparator, '-', '', False, -1);
+  if (moHeaders in AOptions) and (AHeader <> '') then
+    AddEntry(AModel, mkHeader, AHeader, '', False, -1);
+  AddActionsOf(AModel, Keep);
+  Inc(AModel.ContextEntryCount, Length(AModel.Entries) - FirstEntry);
+  Inc(AModel.ContextActionCount, n);
+end;
+
+function BuildEditorMenuModel(const AContext: TEditorContext;
+  AOptions: TFindingMenuOptions; const AContextHeader: string): TFindingMenuModel;
+var
+  Ctx : TArray<TFindingAction>;
+begin
+  Result := BuildFindingMenuModel(AContext.Findings, AOptions);
+  if moAvailableFixesOnly in AOptions then Exit;   // Anbieter gar nicht fragen
+  try
+    Ctx := TFindingActions.ContextActionsFor(AContext);
+  except
+    on EStackExhausted do raise;
+    on EAbort do raise;   // ein Abbruch erreicht den Host, nicht Errors
+    // noinspection ExceptionTooGeneral
+    // Ein werfender Kontext-Anbieter kostet die Kontextaktionen, nie das
+    // Menue und nie die Fund-Aktionen - wie in BuildFindingMenuModel.
+    on E: Exception do
+    begin
+      Ctx := nil;
+      SetLength(Result.Errors, Length(Result.Errors) + 1);
+      Result.Errors[High(Result.Errors)] := E.Message;
+    end;
+  end;
+  AppendContextActions(Result, Ctx, AOptions, AContextHeader);
 end;
 
 end.
