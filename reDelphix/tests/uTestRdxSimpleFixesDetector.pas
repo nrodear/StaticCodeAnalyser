@@ -1163,13 +1163,14 @@ var
   K    : TFindingKind;
   Want : Boolean;
 begin
-  // Hilfen = TRdxFixTable.Handles, dazu Format() (SCA044, eigenes Rezept)
-  // und 'Marker entfernen' (SCA165). Nicht: die SQL-Vorlage (SCA003, nur
-  // Zwischenablage) und uses-qualifizieren (ein Umbau, keine Hilfe).
+  // Hilfen = TRdxFixTable.Handles, dazu die Rezepte Format() (SCA044) und
+  // SQL-Vorlage (SCA003, Zwischenablage - auch eine Code-Aktion zum Fund,
+  // Q17 2026-10-23) sowie 'Marker entfernen' (SCA165). Nicht:
+  // uses-qualifizieren (ein Umbau, keine Hilfe).
   for K := Low(TFindingKind) to High(TFindingKind) do
   begin
     Want := TRdxFixTable.Handles(K)
-      or (K in [fkConcatToFormat, fkUnusedSuppression]);
+      or (K in [fkConcatToFormat, fkSQLInjection, fkUnusedSuppression]);
     Assert.AreEqual(Want, TRuleCatalog.GetRuleCanonical(K).EditorHelp,
       'editorHelp in rules/sca-rules.json: ' + KindName(K));
   end;

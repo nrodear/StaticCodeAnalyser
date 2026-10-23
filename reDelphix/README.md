@@ -1275,7 +1275,9 @@ python tools/gen-quickfix-doc.py --selftest
 `--check` meldet KONSISTENZ (Exit 1), wenn eine Zeile in `FIX_ROWS` oder ein
 Rezept des Anbieters keinen Eintrag in `data\quickfixes-doc.json` hat (oder
 ein Eintrag keine Hilfe), eine Regel mit `editorHelp` im Katalog keine Hilfe
-hat oder ein Pflichtfeld fehlt, und DRIFT mit der ersten abweichenden
+hat, eine Regel mit Hilfe (Zeile in `FIX_ROWS` oder Quick-Fix-Rezept wie
+die SQL-Vorlage zu SCA003) kein `editorHelp` traegt oder ein Pflichtfeld
+fehlt, und DRIFT mit der ersten abweichenden
 Zeile, wenn die Datei nicht mehr byte-gleich neu erzeugt waere. Eine
 fehlende Uebersetzung ist kein Fehler: sie steht als `(fehlt)` in der
 Datei. `--selftest` belegt an Mutanten (auch am Quelltext: neue Zeile in

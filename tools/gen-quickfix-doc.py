@@ -37,7 +37,8 @@ AUFRUF (Repo-Wurzel):
               quickfixes-doc.json, jeder Eintrag dort gehoert zu einer Art
               bzw. einem Rezept; jede Art mit editorHelp im Katalog hat eine
               Zeile in FIX_ROWS oder ein Rezept, das sie bindet, und jede
-              Zeile traegt editorHelp; die vier Arrays (FIX_ROWS,
+              Zeile traegt editorHelp, ebenso jede Regel, die ein
+              Quick-Fix-Rezept (fakFix) bindet; die vier Arrays (FIX_ROWS,
               FIX_CAPTIONS, FIX_ALT_CAPTIONS, FIX_HINTS) sind gleich lang,
               ein fester Hinweis steht in FIX_HINTS genau bei HintByPlanner =
               False (wie uTestRdxFixTable, das nur der IDE-Bau laeuft); die
@@ -1021,6 +1022,16 @@ def build(inputs):
             'exc_rules': sorted(exc, key=rule_number), 'modes': rc['modes'],
             'captions': captions, 'art': rc['art'], 'alt': None,
             'sort': (1, n, rc['key'])})
+        # Gegenrichtung wie bei FIX_ROWS: ein Quick-Fix-Rezept, das eine
+        # Regel bindet, ist eine Code-Aktion zu ihren Funden - die Regel
+        # traegt editorHelp (Q17: SCA003 hatte die SQL-Vorlage, aber kein
+        # Flag, also weder QF-Badge noch Quick-Wins im HTML).
+        if rc['art'] == 'fakFix':
+            for r in rules:
+                if r.get('editorHelp') is not True:
+                    errors.append('%s: %s %s hat eine Hilfe, im Katalog fehlt '
+                                  '"editorHelp": true'
+                                  % (rc['key'], r.get('id', '?'), r['kind']))
 
     keys = {e['key'] for e in entries}
     if len(keys) != len(entries):
@@ -1433,6 +1444,8 @@ def selftest():
                    if any(PLACEHOLDER_RE.search(c['msgid'])
                           for c in e['captions']))
     recipe = next(e for e in model['entries'] if e['is_recipe'])
+    fix_recipe = next(e for e in model['entries']
+                      if e['is_recipe'] and e['art'] == 'fakFix' and e['rules'])
     covered = {e['rules'][0]['kind'] for e in model['all_entries']
                if not e['is_recipe']}
     covered |= {r['kind'] for e in model['all_entries'] if e['is_recipe']
@@ -1492,6 +1505,11 @@ def selftest():
         ('Zeile ohne editorHelp im Katalog',
          set_field(['catalog', rows[0]['kind'], 'editorHelp'], None),
          (rows[0]['kind'], 'im Katalog fehlt "editorHelp"')),
+        ('Quick-Fix-Rezept ohne editorHelp im Katalog',
+         set_field(['catalog', fix_recipe['rules'][0]['kind'], 'editorHelp'],
+                   None),
+         (fix_recipe['key'], fix_recipe['rules'][0]['kind'],
+          'im Katalog fehlt "editorHelp"')),
         ('FIX_CAPTIONS kuerzer als FIX_ROWS',
          lambda i: i['table']['captions'].pop(),
          ('FIX_CAPTIONS', 'nicht gleich lang')),
