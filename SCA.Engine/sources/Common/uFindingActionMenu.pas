@@ -132,7 +132,11 @@ function BuildFindingMenuModel(const AFindings: TArray<TLeakFinding>;
 // AActions hinten an AModel an - jede mit Kind = fakContext. Eine Aktion,
 // deren Caption schon im Modell steht (eine Fund-Aktion der Zeile oder
 // eine fruehere Kontextaktion), faellt weg: gleiche Captions stehen nur
-// einmal, und zwar am Fund. Bleibt etwas, steht davor ein Trenner, wenn
+// einmal, und zwar am Fund. Verglichen OHNE Gross-/Kleinschreibung
+// (SameText): ein Name im Menuetext kommt auf dem Fundweg aus der
+// Detektormeldung, auf dem Kontextweg aus dem Quelltext - Pascal-
+// Bezeichner unterscheiden sie nicht ('Foo' / 'foo', SCA009; Review
+// Charge B, Befund 5). Bleibt etwas, steht davor ein Trenner, wenn
 // das Modell schon Eintraege hat oder moLeadingSeparator gesetzt ist, und
 // mit moHeaders eine deaktivierte Kopfzeile AHeader (leer: keine). Mit
 // moAvailableFixesOnly (die Form der Gluehbirne) haengt sie NICHTS an -
@@ -433,7 +437,7 @@ var
 begin
   Result := False;
   for i := 0 to High(AModel.Actions) do
-    if AModel.Actions[i].Caption = ACaption then
+    if SameText(AModel.Actions[i].Caption, ACaption) then
       Exit(True);
 end;
 
@@ -457,7 +461,7 @@ begin
     s := 0;
     while not Dup and (s < n) do
     begin
-      Dup := Keep[s].Caption = AActions[k].Caption;
+      Dup := SameText(Keep[s].Caption, AActions[k].Caption);
       Inc(s);
     end;
     if Dup then Continue;

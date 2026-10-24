@@ -366,12 +366,17 @@ begin
 end;
 
 procedure TTestContextActions.IsValid_NeedsFileLineAndCol;
+var
+  Empty : TEditorContext;
 begin
   Assert.IsTrue(TEditorContext.At('a.pas', 1, 1).IsValid);
   Assert.IsFalse(TEditorContext.At('', 1, 1).IsValid);
   Assert.IsFalse(TEditorContext.At('a.pas', 0, 1).IsValid);
   Assert.IsFalse(TEditorContext.At('a.pas', 1, 0).IsValid);
-  Assert.IsFalse(Default(TEditorContext).IsValid);
+  // Erst in eine Variable: eine Methode direkt auf Default(..) ist kein
+  // gesicherter Delphi-Ausdruck (Review Charge B, Befund 6).
+  Empty := Default(TEditorContext);
+  Assert.IsFalse(Empty.IsValid);
 end;
 
 procedure TTestContextActions.SetSelection_AcceptsOnlyWellFormedNonEmpty;

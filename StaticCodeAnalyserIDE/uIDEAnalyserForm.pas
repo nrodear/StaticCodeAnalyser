@@ -5653,7 +5653,29 @@ begin
   // (4) AH10: Aktionen fremder Anbieter zu den Funden der Cursorzeile -
   // unabhaengig vom Silent-Schalter, abhaengig davon, ob ein Anbieter
   // angemeldet ist und auf der Zeile ein Fund liegt.
-  AddActionItems(Popup, Slot);
+  // Gekapselt (Review Charge B, Befund 2): eine Ausnahme aus OnPopup liesse
+  // die VCL das GANZE Editor-Kontextmenue nicht zeigen - ein EAbort, den
+  // BuildEditorMenuModel vertragsgemaess durchreicht, ebenso wie ein Fehler
+  // beim Lesen der Ansicht (TopViewContext: ConvertPos, Block). Dann fehlen
+  // nur die SCA-Eintraege; Cut/Copy/Paste der IDE bleiben. Halb angehaengte
+  // Eintraege raeumt ClearActionItems ab (selbst je Eintrag gekapselt).
+  try
+    AddActionItems(Popup, Slot);
+  except
+    on EStackExhausted do raise;
+    // Ein stiller Abbruch: keine Eintraege, kein Protokoll.
+    on EAbort do
+      Slot.ClearActionItems;
+    // noinspection ExceptionTooGeneral
+    // Der Diagnose-Kanal des Plugins (DebugView) wie in ClearActionItems.
+    on E: Exception do
+    begin
+      Slot.ClearActionItems;
+      // noinspection DebugOutput
+      OutputDebugString(PChar('SCA: editor menu actions - ' + E.ClassName
+        + ': ' + E.Message));
+    end;
+  end;
 end;
 
 procedure TEditorContextMenuHook.AddActionItems(APopup: TPopupMenu;
@@ -5675,21 +5697,37 @@ procedure TEditorContextMenuHook.AddActionItems(APopup: TPopupMenu;
 // Fund-Aktionen (ActionItemClick -> Execute des Anbieters). Ohne den
 // Schalter wie bisher: nur Fund-Aktionen, ohne Fund nichts.
 var
-  Ctx   : TEditorContext;
-  Model : TFindingMenuModel;
-  i     : Integer;
+  CtxOn    : Boolean;
+  Ctx      : TEditorContext;
+  FilePath : string;
+  Line     : Integer;
+  Model    : TFindingMenuModel;
+  i        : Integer;
 begin
-  if not EditorMenuWanted(GContextActionsOn) then Exit;
-  // Datei, Zeile, Zeichen-Spalte und Auswahl der obersten Ansicht - Datei
-  // und Zeile ueber dieselbe Funktion wie die Gluehbirne fuer ihren Editor
-  // (ViewFileAndLine, Review 2026-10-14, Punkt 10).
-  if not TIDEEditor.TopViewContext(Ctx) then Exit;
+  CtxOn := GContextActionsOn;   // ein Wert fuer den ganzen Aufbau
+  if not EditorMenuWanted(CtxOn) then Exit;
+  if CtxOn then
+  begin
+    // Datei, Zeile, Zeichen-Spalte und Auswahl der obersten Ansicht - Datei
+    // und Zeile ueber dieselbe Funktion wie die Gluehbirne fuer ihren
+    // Editor (ViewFileAndLine, Review 2026-10-14, Punkt 10).
+    if not TIDEEditor.TopViewContext(Ctx) then Exit;
+  end
+  else
+  begin
+    // Ohne den Schalter der Weg bis Charge B: nur Datei und Zeile - kein
+    // ConvertPos, kein Lesen des Blocks (Review Charge B, Befund 3; der
+    // Not-Aus laesst so nichts Neues laufen). Die Spalte nutzt dann
+    // niemand (BuildFindingMenuModel liest nur Findings).
+    if not TIDEEditor.TopViewFileAndLine(FilePath, Line) then Exit;
+    Ctx := TEditorContext.At(FilePath, Line, 1);
+  end;
   Ctx.Findings := FindingsAtEditorLine(Ctx.FileName, Ctx.Line);
   // Ohne Kontextaktionen und ohne Fund gibt es nichts zu fragen (wie bis
   // Charge B) - das Modell waere ohnehin leer.
-  if (not GContextActionsOn) and (Length(Ctx.Findings) = 0) then Exit;
+  if (not CtxOn) and (Length(Ctx.Findings) = 0) then Exit;
 
-  Model := BuildEditorPopupModel(Ctx, GContextActionsOn, _('Code actions'));
+  Model := BuildEditorPopupModel(Ctx, CtxOn, _('Code actions'));
   for i := 0 to High(Model.Errors) do
     OutputDebugString(PChar('SCA: finding action provider failed - '
       + Model.Errors[i]));

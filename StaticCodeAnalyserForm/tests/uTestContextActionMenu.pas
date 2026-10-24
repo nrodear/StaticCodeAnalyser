@@ -19,6 +19,7 @@ type
     [Test] procedure Append_AfterFindingActions_SeparatorHeaderActions;
     [Test] procedure Append_SameCaptionAsFindingAction_Dropped;
     [Test] procedure Append_SameCaptionTwiceInContext_Once;
+    [Test] procedure Append_CaptionDiffersOnlyInCase_Dropped;
     [Test] procedure Append_AllDuplicates_NothingAppended;
     [Test] procedure Append_EmptyModel_SeparatorOnlyWithOption;
     [Test] procedure Append_AvailableFixesOnly_NothingInBulb;
@@ -189,6 +190,32 @@ begin
   AppendContextActions(M, [Act('B', fakFix), Act('C', fakFix)], [], '');
   Assert.AreEqual<Integer>(3, M.ActionCount);
   Assert.AreEqual<Integer>(3, M.ContextActionCount);
+end;
+
+// Der Name im Menuetext der Fund-Hilfe SCA009 stammt aus der Meldung des
+// Detektors, der der Kontextaktion aus dem Quelltext - gleich bis auf die
+// Schreibweise ('List' / 'list'): trotzdem nur einmal, am Fund (Review
+// Charge B, Befund 5). Auch innerhalb der Kontextliste.
+procedure TTestContextActionMenu.Append_CaptionDiffersOnlyInCase_Dropped;
+var
+  F : TLeakFinding;
+  M : TFindingMenuModel;
+begin
+  F := Finding('Concat A');
+  try
+    M := FindingModel(F, [Act('Free List in a try/finally block', fakFix)]);
+    AppendContextActions(M, [Act('Free list in a try/finally block', fakFix),
+      Act('Konstante', fakFix), Act('KONSTANTE', fakFix)],
+      [moLeadingSeparator, moHeaders], CTX_HEADER);
+    Assert.AreEqual<Integer>(2, M.ActionCount, 'Fund-Aktion + eine Konstante');
+    Assert.AreEqual('Free List in a try/finally block', M.Actions[0].Caption,
+      'die Schreibweise des Funds bleibt');
+    Assert.IsTrue(M.Actions[0].Kind = fakFix, 'am Fund');
+    Assert.AreEqual<Integer>(1, M.ContextActionCount);
+    Assert.AreEqual('Konstante', M.Actions[1].Caption, 'die erste Schreibweise');
+  finally
+    F.Free;
+  end;
 end;
 
 procedure TTestContextActionMenu.Append_AllDuplicates_NothingAppended;

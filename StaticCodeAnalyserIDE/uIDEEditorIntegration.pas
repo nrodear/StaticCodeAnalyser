@@ -90,9 +90,11 @@ type
     // sichtbaren, nicht leeren Block; ein Spaltenblock ist keine Auswahl
     // (uEditorContextModel.ApplyEditorBlock). Findings bleibt leer (setzt
     // der Aufrufer). Protokolliert Rohwerte und Umrechnung per
-    // OutputDebugString ('SCA: ctx ...') - Messpunkt fuer den UI-Test
-    // (btInclusive/btLine und das Blockende auf Nicht-ASCII-Zeilen sind
-    // ungemessen). Reine Abfrage: kein Notifier, kein Fenster.
+    // OutputDebugString ('SCA: ctx ...', nur im DEBUG-Bau) - Messpunkt fuer
+    // den UI-Test (btInclusive/btLine und das Blockende auf
+    // Nicht-ASCII-Zeilen sind ungemessen). Reine Abfrage: kein Notifier,
+    // kein Fenster. Nur mit GContextActionsOn gerufen - ohne den Schalter
+    // nimmt das Kontextmenue TopViewFileAndLine wie bis Charge B.
     class function ViewContext(const AView: IOTAEditView;
       out ACtx: TEditorContext): Boolean; static;
     // Dasselbe fuer die oberste Ansicht - der Weg des Editor-Kontextmenues.
@@ -273,10 +275,15 @@ end;
 procedure CtxLog(const AFormat: string; const AArgs: array of const);
 // Messkanal von ViewContext (DebugView, Praefix 'SCA: ctx') - Rohwerte und
 // Umrechnung fuer den UI-Test; eine Meldung im Editor waere lauter als der
-// Nutzen.
+// Nutzen. Nur im DEBUG-Bau (Konfiguration Debug des Plugin-Projekts, wie
+// der Detector-Review-Filter in uIDEAnalyserForm): eine MESSUNG, keine
+// Fehlerdiagnose - die bleibt immer sichtbar (uUiElementRegistry). Im
+// Release-Bau ein leerer Aufruf (Review Charge B, Befund 3).
 begin
+  {$IFDEF DEBUG}
   // noinspection DebugOutput
   OutputDebugString(PChar('SCA: ctx ' + Format(AFormat, AArgs)));
+  {$ENDIF}
 end;
 
 function BlockStyleOf(AStyle: TOTABlockType): TEditorBlockStyle;
@@ -323,7 +330,9 @@ var
   Caret    : TOTAEditPos;
   Block    : IOTAEditBlock;
   Raw      : TEditorBlockChars;
+  {$IFDEF DEBUG}
   Buf      : IOTAEditBuffer;
+  {$ENDIF}
 begin
   ACtx   := Default(TEditorContext);
   Result := False;
@@ -340,6 +349,8 @@ begin
     Raw.EndLine   := Block.EndingRow;
     Raw.EndCol    := CharColAt(AView, Block.EndingRow, Block.EndingColumn);
     ApplyEditorBlock(ACtx, Raw);
+    // Messung (UI-Test) nur im DEBUG-Bau - auch die Lesezugriffe dafuer.
+    {$IFDEF DEBUG}
     CtxLog('block style=%d size=%d '
       + 'display %d:%d..%d:%d -> chars %d:%d..%d:%d -> sel=%s %d:%d..%d:%d',
       [Ord(Block.Style), Block.Size,
@@ -356,6 +367,7 @@ begin
       CtxLog('buffer block start %d:%d after %d:%d (raw CharIndex)',
         [Buf.BlockStart.Line, Buf.BlockStart.CharIndex,
          Buf.BlockAfter.Line, Buf.BlockAfter.CharIndex]);
+    {$ENDIF}
   end;
   Result := True;
 end;
