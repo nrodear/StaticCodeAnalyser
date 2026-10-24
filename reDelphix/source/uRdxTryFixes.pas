@@ -187,6 +187,26 @@ type
     // Der Bezeichner am Anfang der Meldung (SCA009/SCA001: X, auch vor
     // ' (try/except ...)' bzw. ' - Rueckgabewert'); '' ohne.
     class function NameOf(const AMessage: string): string; static;
+
+    // Code-Aktion C3 ohne Fund (Charge B, uRdxContextRunner): die
+    // Caret-Zeile ALine traegt eine Zuweisung 'X := ..Create..' bzw. 'var
+    // X[: T] := ..Create..' (das ':=' und ein '.Create..' als Code in einer
+    // Anweisung - der Kandidat). X kommt aus der Zeile, nicht aus einer
+    // Meldung; bei mehreren solchen Zuweisungen die, deren Anweisung ACol
+    // enthaelt, sonst die erste. Dann dieselbe Kette wie MissingFinally
+    // (ObjectPair, Baustein B5 mit ScanPair: die Freigabe X.Free bzw.
+    // FreeAndNil(X) muss schon als ganze Anweisung in derselben Liste
+    // stehen - sonst gesperrt, Entscheid F6). Kandidat ist nur eine
+    // LOKALE Variable der Routine (var-Abschnitt oder Inline-var, wie bei
+    // Puffern; ohne Fund hat niemand das belegt): ein Feld, eine globale
+    // Variable oder ein Parameter kennte nach finally das freie Objekt,
+    // Result und ein Ausdruck ('Self.F', 'A[i]') geben es weiter. True
+    // mit dem Plan (Name X wie im Quelltext); False mit dem Grund; False
+    // mit AReason = '', wenn die Zeile keinen Kandidaten traegt oder die
+    // Erzeugung schon geschuetzt ist (direkt dahinter beginnt ein try) -
+    // dann entfaellt die Aktion (Entscheid F4).
+    class function CreateAt(AMap: TRdxCodeMap; ALine, ACol: Integer;
+      out APlan: TRdxTryPlan; out AReason: string): Boolean; static;
   end;
 
 implementation
@@ -218,7 +238,8 @@ const
   METHODS_109: array[0..2] of string = ('enter', 'acquire', 'beginwrite');
 
 type
-  // Eine Erzeugung (CreateAt): ihr erstes Token ('X' bzw. 'var') und ':='.
+  // Eine Erzeugung (CreateSiteAt): ihr erstes Token ('X' bzw. 'var') und
+  // ':='.
   TRdxCreateSite = record
     First  : TRdxToken;
     Assign : TRdxToken;
@@ -477,7 +498,7 @@ end;
 
 // Die Zuweisung an X an T: 'X := ..' oder 'var X[: T] := ..'; ASite.First
 // ist das erste Token der Anweisung, ASite.Assign das ':='.
-function CreateAt(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
+function CreateSiteAt(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
   const AKey: string; out ASite: TRdxCreateSite): Boolean;
 begin
   ASite := Default(TRdxCreateSite);
@@ -533,7 +554,7 @@ begin
   T := NextToken(AMap, ALine, 1);
   while (T.Low <> '') and (T.Line = ALine) do
   begin
-    if CreateAt(AMap, T, Prev, APair.Key, Site) then
+    if CreateSiteAt(AMap, T, Prev, APair.Key, Site) then
     begin
       Inc(n);
       Hit := Site;
@@ -705,8 +726,9 @@ end;
 
 // SCA156: die Allokation an T (AStart: ihr erstes Token, AllocStart) -
 // 'GetMem(P, N)', 'P := GetMem(N)'/'P := AllocMem(N)' oder die
-// Inline-Deklaration 'var P[: T] := AllocMem(N)' (wie CreateAt; bis Charge
-// B1 las der Planer dort den Typnamen als Puffer, Gegen-Review R5, R5-10).
+// Inline-Deklaration 'var P[: T] := AllocMem(N)' (wie CreateSiteAt; bis
+// Charge B1 las der Planer dort den Typnamen als Puffer, Gegen-Review R5,
+// R5-10).
 // '' oder der Grund; APair mit Key, Name, First, What.
 function BufferAt(AMap: TRdxCodeMap; const T, AStart: TRdxToken;
   var APair: TRdxPair): string;
@@ -887,6 +909,87 @@ begin
   APlan.Name := Pair.Name;
   if AReason = '' then
     AReason := TryFinally(AMap, Pair, APlan.Edit);
+  Result := AReason = '';
+end;
+
+
+// C3: das Ziel der Zuweisung mit dem ':=' AAssign - X bzw. bei 'var X[:
+// T] :=' das Wort hinter dem var.
+function AssignTarget(AMap: TRdxCodeMap; const AAssign: TRdxToken): TRdxToken;
+var
+  D : TRdxToken;
+begin
+  D := InlineVarOf(AMap, AAssign);
+  if D.Low <> '' then
+    Result := After(AMap, D)
+  else
+    Result := Before(AMap, AAssign);
+end;
+
+// C3: das ':=' der Erzeugung auf ALine, die die Aktion meint (s.
+// CreateAt): die letzte, deren Ziel an oder vor ACol beginnt, sonst die
+// erste; Low = '' ohne Kandidaten.
+function CreationOnLine(AMap: TRdxCodeMap; ALine, ACol: Integer): TRdxToken;
+var
+  T, Stop : TRdxToken;
+  First   : Boolean;
+begin
+  Result := Default(TRdxToken);
+  First := True;
+  T := NextToken(AMap, ALine, 1);
+  while (T.Low <> '') and (T.Line = ALine) do
+  begin
+    if T.Low = ':=' then
+    begin
+      Stop := StatementStop(AMap, After(AMap, T));
+      if (Stop.Low <> '') and CreatesIn(AMap, T, Stop)
+         and (First or (AssignTarget(AMap, T).Col <= ACol)) then
+      begin
+        Result := T;
+        First := False;
+      end;
+    end;
+    T := After(AMap, T);
+  end;
+end;
+
+class function TRdxTryFixes.CreateAt(AMap: TRdxCodeMap; ALine, ACol: Integer;
+  out APlan: TRdxTryPlan; out AReason: string): Boolean;
+var
+  Assign, V, N : TRdxToken;
+  Pair         : TRdxPair;
+begin
+  Result := False;
+  AReason := '';
+  APlan := Default(TRdxTryPlan);
+  Assign := CreationOnLine(AMap, ALine, ACol);
+  if Assign.Low = '' then
+    Exit;   // kein Kandidat (F4): kein Eintrag
+  // Kandidat ist nur eine lokale Variable (Inline-var oder var-Abschnitt
+  // der Routine, IsLocalVar). Ein Ausdruck ('Self.F', 'A[i]', 'P^'),
+  // Result, ein Feld, eine globale Variable, ein Parameter: dort uebernimmt
+  // ein anderer das Objekt (Fabrik, Feld im Konstruktor), bzw. er kennte
+  // nach finally das freie Objekt - ein gesperrter Eintrag stuende auf
+  // jeder solchen Zeile (Korpus-Probe Charge B3: 1.648 von 3.000
+  // Create-Zeilen, davon Result 380 und Ausdruck 128). Gefragt VOR den
+  // Gruenden der Kette: auch 'Result := TFoo.Create;' als letzte Anweisung
+  // ist kein Kandidat.
+  V := AssignTarget(AMap, Assign);
+  if not V.IsWord or (Before(AMap, V).Low = '.')
+     or ((InlineVarOf(AMap, Assign).Low = '')
+         and not IsLocalVar(AMap, V, V.Low)) then
+    Exit;
+  APlan.Name := TokText(AMap, V);
+  Pair := Default(TRdxPair);
+  AReason := ObjectPair(AMap, ALine, APlan.Name, Pair);
+  if AReason <> '' then Exit;
+  // Schon geschuetzt ('X := TFoo.Create;' und direkt dahinter 'try'): das
+  // ist die Form, die die Aktion herstellen wuerde - kein Eintrag, statt
+  // auf jeder richtigen Erzeugung einen gesperrten zu zeigen.
+  N := After(AMap, Pair.Semi);
+  if (N.Low = 'try') and IsKeywordAt(AMap, N, Pair.Semi) then
+    Exit;
+  AReason := TryFinally(AMap, Pair, APlan.Edit);
   Result := AReason = '';
 end;
 

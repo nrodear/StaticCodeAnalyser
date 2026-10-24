@@ -210,6 +210,9 @@ program reDelphix.Test;
 //                                 letzten Index
 //   * uTestRdxInheritedEmptyFix - SCA125 leeres Override loeschen
 //                                 (Deklaration und Implementierung)
+//   * uTestRdxContextRunner     - Code-Aktionen ohne Fund am Caret
+//                                 (Charge B): Konstrukt unter dem Caret,
+//                                 Lokale Konstante, try/finally um Create
 //
 // SPRACHE: der Hauptblock setzt die reDelphix-Texte fuer ALLE Tests auf
 // Deutsch (SetRdxLanguageOverride('de'), wie der FPC-Pruefstand) - die
@@ -325,6 +328,7 @@ uses
   uRdxLookupHoistFix in '..\source\uRdxLookupHoistFix.pas',
   uRdxLoopBoundFix in '..\source\uRdxLoopBoundFix.pas',
   uRdxInheritedEmptyFix in '..\source\uRdxInheritedEmptyFix.pas',
+  uRdxContextRunner in '..\source\uRdxContextRunner.pas',
   uTestRdxRecipes in 'uTestRdxRecipes.pas',
   uTestRdxBench in 'uTestRdxBench.pas',
   uTestRdxSca044 in 'uTestRdxSca044.pas',
@@ -412,6 +416,7 @@ uses
   uTestRdxLookupHoistFix in 'uTestRdxLookupHoistFix.pas',
   uTestRdxLoopBoundFix in 'uTestRdxLoopBoundFix.pas',
   uTestRdxInheritedEmptyFix in 'uTestRdxInheritedEmptyFix.pas',
+  uTestRdxContextRunner in 'uTestRdxContextRunner.pas',
   uTestRdxMagicGuards in 'uTestRdxMagicGuards.pas',
   uTestRdxMagicFixDetector in 'uTestRdxMagicFixDetector.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',

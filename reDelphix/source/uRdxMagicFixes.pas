@@ -89,6 +89,13 @@ unit uRdxMagicFixes;
 // Angebote gewesen; die alten Delphi-Projekte (Charge SQc) nehmen davon
 // noch 120 weg (alte Projektdatei ohne .dproj 111 - CnWizards 72, JVCL
 // 37 -, .dproj vor 10.3 9): 576 Angebote.
+// GANZE DATEI ODER STELLE (Entscheid Nico 2026-10-24, nur die Code-Aktion
+// ohne Fund): FPC-Weiche, Skript, Spuren alter Compiler (FileWideReason)
+// und der ganze Plattenblick sperren die Datei - dort zeigt das
+// Kontextmenue keinen Eintrag; alle anderen Sperren (Zeilen-Leser,
+// Hauptblock, Binaer-/Oktal-Literal) haengen an der Stelle und stehen
+// ausgegraut mit Grund da. Die Fund-Hilfe SCA014 nennt weiter jeden Grund
+// in der bisherigen Reihenfolge.
 //
 // NAME: MagicNr01, MagicNr02 ... - der erste, der in der Datei nicht als
 // ganzes Wort vorkommt (uRdxIntroPlan.NextFreeName, wie im Labor; auch
@@ -126,13 +133,19 @@ type
   //   Edits  genau eine Ersetzung: von Spalte 1 der ersten geaenderten
   //          Zeile bis hinter das Literal bzw. (Wrap) bis zum Anfang der
   //          Zeile nach der Anweisung
+  //   FileWide  abgelehnt wegen der GANZEN Datei (FPC-Weiche, Skript,
+  //          Spuren alter Compiler - FileWideReason), nicht wegen der
+  //          Stelle; setzt nur IntroduceAt (Entscheid Nico 2026-10-24: die
+  //          Code-Aktion ohne Fund zeigt dann keinen Eintrag). MagicNumber
+  //          laesst es False - die Fund-Hilfe SCA014 nennt jeden Grund.
   TRdxMagicPlan = record
-    Value : string;
-    Name  : string;
-    Line  : Integer;
-    Col   : Integer;
-    Wrap  : Boolean;
-    Edits : TArray<TRdxEdit>;
+    Value    : string;
+    Name     : string;
+    Line     : Integer;
+    Col      : Integer;
+    Wrap     : Boolean;
+    Edits    : TArray<TRdxEdit>;
+    FileWide : Boolean;
   end;
 
   // Der Planer der Charge Q14 und seine Bausteine (s. Kopf).
@@ -154,6 +167,22 @@ type
     class function MagicNumber(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out APlan: TRdxMagicPlan;
       out AReason: string): Boolean; static;
+
+    // Code-Aktion ohne Fund (Charge B, uRdxContextRunner): der Plan fuer das
+    // Zahl-Literal, das Zeichenspalte ACol auf ALine enthaelt oder direkt
+    // vor ACol endet (uRdxCodeMap.LiteralContaining = lkNumber; die
+    // Caret-Regel von PlanIntroduce) - dieselbe Kette wie MagicNumber hinter
+    // LiteralAt: nur DIESES Literal (E28), dieselben Sperren der Code-Aktion
+    // und der Datei. Value ist das Literal wie im Quelltext ('$FF', '1.5',
+    // '1_000'). True mit dem Plan; False mit dem Grund; False mit AReason
+    // = '', wenn an ACol kein Zahl-Literal steht (kein Kandidat - die
+    // Aktion entfaellt, Entscheid F4). Die Sperren der GANZEN Datei
+    // (FPC-Weiche, Skript, Spuren alter Compiler) prueft IntroduceAt VOR
+    // denen der Stelle: False mit dem Grund und APlan.FileWide = True
+    // (Entscheid Nico 2026-10-24). Was nur die Platte weiss (FileReason,
+    // IncludeReason - ebenfalls die ganze Datei), fragt der Aufrufer.
+    class function IntroduceAt(AMap: TRdxCodeMap; ALine, ACol: Integer;
+      out APlan: TRdxMagicPlan; out AReason: string): Boolean; static;
 
     // Was nur die Platte weiss (der Check in uRdxFixTable, nach dem
     // Planer): eine Lazarus-/FPC-Dateiart (.pp, .lpr) oder ein Lazarus-
@@ -191,7 +220,8 @@ uses
   System.Classes,       // TStrings (TRdxIncludeTest)
   uRefactorInfo,        // TRefactorSpan.Make
   uRdxIntroPlan,        // CharColOfByte, LineLooksFpcAware
-  uRdxIntroEdits,       // TextOf, TargetAt, IntroduceEdits, ApplyIntroEdits
+  uRdxIntroEdits,       // TextOf, TargetAt, IntroduceEdits, ApplyIntroEdits,
+                        // FpcFileReason
   uRdxPaths,            // IsNetworkPath
   uRdxBlocks,           // IncludeChainReason, AllIncludes
   uRdxCompilerTraces,   // OldCompilerTrace, ScriptReason, FLOOR_INLINE_DECL,
@@ -638,13 +668,47 @@ begin
       [S, Li, MsgByHand]);
 end;
 
+// Der Plan fuer das Literal APlan.Value in Spalte ACol der Zeile ALine -
+// der Teil von MagicNumber hinter LiteralAt, seit Charge B auch der von
+// IntroduceAt (Code-Aktion ohne Fund): TargetAt mit dem Literal als Caret,
+// nur dieses Literal (E28), dann Skript, Hauptblock und Spuren alter
+// Compiler. True mit Name, Line, Col, Wrap und der einen Ersetzung, sonst
+// False mit dem Grund (APlan.Value bleibt). AText = IntroTextOf(AMap) -
+// IntroduceAt baut ihn schon fuer FileWideReason.
+function PlanLiteral(AMap: TRdxCodeMap; const AText: TRdxIntroText;
+  ALine, ACol: Integer; var APlan: TRdxMagicPlan;
+  out AReason: string): Boolean;
+var
+  Target : TRdxIntroTarget;
+begin
+  Result := False;
+  Target := TargetAt(AText, ALine, ACol, MAGIC_NAME_BASE);
+  if not Target.Plan.Ok then
+    AReason := Target.Plan.Reason
+  else if (Target.Plan.Literal <> APlan.Value)
+     or not KeepOnlyLiteral(AText, Target, ACol) then
+    AReason := MsgMovedSuffix(_('at the literal in column %d the code action '
+      + 'reads "%s" instead of %s', [ACol, Target.Plan.Literal, APlan.Value]))
+  else
+    AReason := ScriptReason(AMap, _(FEATURE_INLINE));
+  if AReason = '' then
+    AReason := MainBlockReason(AMap, ALine);
+  if AReason = '' then
+    AReason := CompilerReason(AMap);
+  if AReason <> '' then Exit;
+  APlan.Name := Target.Name;
+  APlan.Line := ALine;
+  APlan.Col := ACol;
+  APlan.Wrap := Target.Plan.Wrap;
+  AddEdit(APlan.Edits, AsOneEdit(AText, IntroduceEdits(AText, Target)));
+  Result := True;
+end;
+
 class function TRdxMagicFixes.MagicNumber(AMap: TRdxCodeMap; ALine: Integer;
   const AMessage: string; out APlan: TRdxMagicPlan;
   out AReason: string): Boolean;
 var
-  Col    : Integer;
-  Text   : TRdxIntroText;
-  Target : TRdxIntroTarget;
+  Col : Integer;
 begin
   Result := False;
   Col := 0;
@@ -658,27 +722,57 @@ begin
   else
     AReason := LiteralAt(AMap, ALine, APlan.Value, Col);
   if AReason <> '' then Exit;
+  Result := PlanLiteral(AMap, IntroTextOf(AMap), ALine, Col, APlan, AReason);
+end;
+
+// Die Sperren der GANZEN Datei aus der Kette von PlanLiteral - dieselben
+// Pruefungen, nur ohne die Stelle: die FPC-Weiche irgendwo in der Datei
+// (uRdxIntroEdits.FpcFileReason, sonst in TargetAt), Skript
+// (ScriptReason) und Spuren alter Compiler (CompilerReason). Der
+// Hauptblock haengt an der Zeile (die Routinen eines Programms davor sind
+// frei) und gehoert nicht dazu. '' oder der Grund.
+function FileWideReason(AMap: TRdxCodeMap; const AText: TRdxIntroText): string;
+begin
+  Result := FpcFileReason(AText);
+  if Result = '' then
+    Result := ScriptReason(AMap, _(FEATURE_INLINE));
+  if Result = '' then
+    Result := CompilerReason(AMap);
+end;
+
+class function TRdxMagicFixes.IntroduceAt(AMap: TRdxCodeMap; ALine,
+  ACol: Integer; out APlan: TRdxMagicPlan; out AReason: string): Boolean;
+var
+  First, Stop : Integer;
+  Text        : TRdxIntroText;
+begin
+  Result := False;
+  AReason := '';
+  APlan := Default(TRdxMagicPlan);
+  if LiteralContaining(AMap, ALine, ACol, First, Stop) <> lkNumber then
+    Exit;   // kein Kandidat (F4): kein Eintrag
+  APlan.Value := Copy(AMap.Raw(ALine), First, Stop - First);
+  // Erst die ganze Datei, dann die Stelle: eine FPC-Unit mit dem Literal
+  // in einer Deklarationszeile ist zuerst eine FPC-Unit (Entscheid Nico
+  // 2026-10-24: dort kein Eintrag, auch kein gesperrter).
   Text := IntroTextOf(AMap);
-  Target := TargetAt(Text, ALine, Col, MAGIC_NAME_BASE);
-  if not Target.Plan.Ok then
-    AReason := Target.Plan.Reason
-  else if (Target.Plan.Literal <> APlan.Value)
-     or not KeepOnlyLiteral(Text, Target, Col) then
-    AReason := MsgMovedSuffix(_('at the literal in column %d the code action '
-      + 'reads "%s" instead of %s', [Col, Target.Plan.Literal, APlan.Value]))
-  else
-    AReason := ScriptReason(AMap, _(FEATURE_INLINE));
-  if AReason = '' then
-    AReason := MainBlockReason(AMap, ALine);
-  if AReason = '' then
-    AReason := CompilerReason(AMap);
-  if AReason <> '' then Exit;
-  APlan.Name := Target.Name;
-  APlan.Line := ALine;
-  APlan.Col := Col;
-  APlan.Wrap := Target.Plan.Wrap;
-  AddEdit(APlan.Edits, AsOneEdit(Text, IntroduceEdits(Text, Target)));
-  Result := True;
+  AReason := FileWideReason(AMap, Text);
+  if AReason <> '' then
+  begin
+    APlan.FileWide := True;
+    Exit;
+  end;
+  // Die Code-Aktion liest nur dezimale und hexadezimale Zahlen
+  // (uRdxIntroPlan.NumbersOf); ein Delphi-11-Binaer- bzw. Oktal-Literal
+  // fiele dort als "kein Zahl-Literal am Caret" durch - der Satz sagt,
+  // warum.
+  if CharInSet(APlan.Value[1], ['%', '&']) then
+  begin
+    AReason := _('%s is a binary or octal literal - the code action only '
+      + 'handles decimal and hexadecimal numbers', [APlan.Value]);
+    Exit;
+  end;
+  Result := PlanLiteral(AMap, Text, ALine, First, APlan, AReason);
 end;
 
 { ---- Was nur die Platte weiss ---- }

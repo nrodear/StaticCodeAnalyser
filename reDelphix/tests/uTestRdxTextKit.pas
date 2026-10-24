@@ -112,6 +112,15 @@ function NewTempDir(const APrefix: string): string;
 // abgeleitete Wurzel (ParentDir-Kette in uTestRdxMagicFix) haette TEMP
 // selbst geleert, ein leerer Pfad das aktuelle Verzeichnis.
 procedure RemoveTree(const ADir: string);
+// Die Caret-Marke der Kontext-Tests (Charge B, uTestRdxContextRunner):
+// '{^}' - im Pascal-Text ausserhalb von Kommentaren unmoeglich und
+// eindeutig ('|' trennt bei JoinLines, uTestRdxIntroEdits).
+const
+  CARET_MARK = '{^}';
+// Entfernt die erste CARET_MARK aus ASource und liefert ihre Stelle: Zeile
+// (1-basiert, Zeilen wie TStringList.Text - CRLF oder LF) und Zeichenspalte
+// (1-basiert, der Caret steht VOR dem Zeichen dort). False ohne Marke.
+function CaretOf(var ASource: string; out ALine, ACol: Integer): Boolean;
 
 implementation
 
@@ -203,6 +212,27 @@ end;
 function NewMap(const ASource: string): TRdxCodeMap;
 begin
   Result := TOwnLinesMap.CreateFor(ASource);
+end;
+
+function CaretOf(var ASource: string; out ALine, ACol: Integer): Boolean;
+var
+  P, i, LastLf : Integer;
+begin
+  ALine := 0;
+  ACol := 0;
+  P := Pos(CARET_MARK, ASource);
+  Result := P > 0;
+  if not Result then Exit;
+  ALine := 1;
+  LastLf := 0;
+  for i := 1 to P - 1 do
+    if ASource[i] = #10 then
+    begin
+      Inc(ALine);
+      LastLf := i;
+    end;
+  ACol := P - LastLf;
+  Delete(ASource, P, Length(CARET_MARK));
 end;
 
 function LineOf(const ASource, AText: string): Integer;

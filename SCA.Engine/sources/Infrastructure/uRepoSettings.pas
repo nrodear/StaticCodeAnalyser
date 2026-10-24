@@ -1174,15 +1174,18 @@ const
     '; Valid names:'#13#10 +
     ';   SharedUiHooks, DockForm, LineHighlighter, EditorBulb,'#13#10 +
     ';   AnnotationOverlay, WatchMode, WarmUpCaches, ViewMenuItem,'#13#10 +
-    ';   EditorContextMenu, OptionsPageSCA, OptionsPageSonar,'#13#10 +
-    ';   FindingsProperties, AboutBox, ToolsMenuItem'#13#10 +
+    ';   EditorContextMenu, EditorContextActions, OptionsPageSCA,'#13#10 +
+    ';   OptionsPageSonar, FindingsProperties, AboutBox, ToolsMenuItem'#13#10 +
     '; PackageWizard is deliberately NOT switchable - it carries the'#13#10 +
     '; teardown of every other element on unload.'#13#10 +
     '; Dependent degradation: DockForm=0 also removes the View menu entry;'#13#10 +
     '; WatchMode=0 leaves the properties panel without live findings;'#13#10 +
     '; SharedUiHooks=0 falls back to VCL default colours;'#13#10 +
     '; LineHighlighter=0 also silences the EditorBulb (the light bulb'#13#10 +
-    '; at the caret line gets its editor events from there).'#13#10 +
+    '; at the caret line gets its editor events from there);'#13#10 +
+    '; EditorContextActions=0 removes the code actions without a finding'#13#10 +
+    '; from the editor context menu (finding actions stay);'#13#10 +
+    '; EditorContextMenu=0 silences EditorContextActions too.'#13#10 +
     ';'#13#10 +
     ';Element.AnnotationOverlay=0'#13#10 +
     ''#13#10 +

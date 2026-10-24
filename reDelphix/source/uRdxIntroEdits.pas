@@ -103,6 +103,14 @@ function PrevCodeRow(const AText: TRdxIntroText; ARow: Integer): Integer;
 function TargetAt(const AText: TRdxIntroText; ARow, ACol: Integer;
   const ANameBase: string): TRdxIntroTarget;
 
+// Die FPC-Weiche irgendwo in der Datei (uRdxIntroPlan.LineLooksFpcAware,
+// die Pruefung von TargetAt): '' oder der Grund. Eine Sperre der GANZEN
+// Datei - die Code-Aktion ohne Fund (uRdxMagicFixes.IntroduceAt) fragt sie
+// vor der Stelle, um dann gar keinen Eintrag zu zeigen (Entscheid Nico
+// 2026-10-24; Abweichung vom Labor: dort steht die Pruefung nur in
+// TargetAt).
+function FpcFileReason(const AText: TRdxIntroText): string;
+
 // C1h: die Ersetzungen EINES Writers, aufsteigend - die Deklaration ueber
 // die Anweisung, die Literale der Zeile durch den Namen; bei Plan.Wrap
 // 'begin' an den Anfang der Zeile nach der Zweigzeile und 'end;' an den
@@ -411,6 +419,14 @@ begin
   Result := False;
 end;
 
+function FpcFileReason(const AText: TRdxIntroText): string;
+begin
+  Result := '';
+  if SourceLooksFpcAware(AText) then
+    Result := _('the file carries an FPC switch ({$IFDEF FPC}, {$MODE ...}) - '
+      + 'FPC 3.2 has no inline constants');
+end;
+
 // Was an der Caret-Zeile ARow selbst keinen Code zulaesst - vor dem Plan:
 // '' oder der Grund. ARows sind die Zeilen 1..ARow (RowsUpTo).
 function ContextReason(const AText: TRdxIntroText; ARow: Integer;
@@ -430,9 +446,7 @@ begin
   if Section = 'i' then
     Exit(_('the line is in the initialization/finalization section - whether '
       + 'an inline declaration is valid there has not been measured'));
-  if SourceLooksFpcAware(AText) then
-    Exit(_('the file carries an FPC switch ({$IFDEF FPC}, {$MODE ...}) - '
-      + 'FPC 3.2 has no inline constants'));
+  Result := FpcFileReason(AText);
 end;
 
 // Die Zeile darueber APrevRow fuer den Plan: roh ab ihrem Kommentar-

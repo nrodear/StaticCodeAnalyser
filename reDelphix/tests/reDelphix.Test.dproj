@@ -180,6 +180,7 @@
         <DCCReference Include="..\source\uRdxLookupHoistFix.pas"/>
         <DCCReference Include="..\source\uRdxLoopBoundFix.pas"/>
         <DCCReference Include="..\source\uRdxInheritedEmptyFix.pas"/>
+        <DCCReference Include="..\source\uRdxContextRunner.pas"/>
         <DCCReference Include="uTestRdxRecipes.pas"/>
         <DCCReference Include="uTestRdxBench.pas"/>
         <DCCReference Include="uTestRdxSca044.pas"/>
@@ -267,6 +268,7 @@
         <DCCReference Include="uTestRdxLookupHoistFix.pas"/>
         <DCCReference Include="uTestRdxLoopBoundFix.pas"/>
         <DCCReference Include="uTestRdxInheritedEmptyFix.pas"/>
+        <DCCReference Include="uTestRdxContextRunner.pas"/>
         <DCCReference Include="uTestRdxMagicGuards.pas"/>
         <DCCReference Include="uTestRdxMagicFixDetector.pas"/>
         <DCCReference Include="uTestRdxNilFix.pas"/>

@@ -678,6 +678,7 @@ uses
   uProfileViewer,               // ShowProfileViewer - Hamburger-Item
   // Nur hier gebraucht (Review nach Bereichen 2026-10-10, Nit 42):
   uFindingActionMenu,           // das eine Menue-Modell zu den Aktionen (Stufe C), FirstRunnable
+  uEditorContextModel,          // Editor-Kontextmenue mit Code-Aktionen ohne Fund (Charge B, V2)
   uIDEFindingActionMenu,        // Modell -> TMenuItems
   uIDEFindingBulb,              // Gluehbirne an der Caret-Zeile (Element EditorBulb)
   uFindingSourcePick,           // PickFindingSource - Dock oder Silent-Kopien je Datei
@@ -5335,6 +5336,11 @@ var
   GCtxMenuHook    : TEditorContextMenuHook = nil;
   GCtxMenuHookIfc : INTAEditServicesNotifier = nil;
   GCtxMenuHookIdx : Integer = -1;
+  // Element EditorContextActions (Not-Aus [UI], Charge B F7): zeigt das
+  // Editor-Kontextmenue Code-Aktionen ohne Fund? Gesetzt von
+  // Enable-/DisableEditorContextActions ueber die UI-Registry; False, bis
+  // das Element angemeldet ist (und nach seinem Abbau).
+  GContextActionsOn : Boolean = False;
 
 { TPopupHookSlot }
 
@@ -5647,7 +5653,29 @@ begin
   // (4) AH10: Aktionen fremder Anbieter zu den Funden der Cursorzeile -
   // unabhaengig vom Silent-Schalter, abhaengig davon, ob ein Anbieter
   // angemeldet ist und auf der Zeile ein Fund liegt.
-  AddActionItems(Popup, Slot);
+  // Gekapselt (Review Charge B, Befund 2): eine Ausnahme aus OnPopup liesse
+  // die VCL das GANZE Editor-Kontextmenue nicht zeigen - ein EAbort, den
+  // BuildEditorMenuModel vertragsgemaess durchreicht, ebenso wie ein Fehler
+  // beim Lesen der Ansicht (TopViewContext: ConvertPos, Block). Dann fehlen
+  // nur die SCA-Eintraege; Cut/Copy/Paste der IDE bleiben. Halb angehaengte
+  // Eintraege raeumt ClearActionItems ab (selbst je Eintrag gekapselt).
+  try
+    AddActionItems(Popup, Slot);
+  except
+    on EStackExhausted do raise;
+    // Ein stiller Abbruch: keine Eintraege, kein Protokoll.
+    on EAbort do
+      Slot.ClearActionItems;
+    // noinspection ExceptionTooGeneral
+    // Der Diagnose-Kanal des Plugins (DebugView) wie in ClearActionItems.
+    on E: Exception do
+    begin
+      Slot.ClearActionItems;
+      // noinspection DebugOutput
+      OutputDebugString(PChar('SCA: editor menu actions - ' + E.ClassName
+        + ': ' + E.Message));
+    end;
+  end;
 end;
 
 procedure TEditorContextMenuHook.AddActionItems(APopup: TPopupMenu;
@@ -5660,21 +5688,46 @@ procedure TEditorContextMenuHook.AddActionItems(APopup: TPopupMenu;
 // (Konzept Editor-Gluehbirne 2026-10-06) kommt die Form aus
 // uFindingActionMenu - dieselbe wie im Dock-Grid und spaeter an der
 // Gluehbirne.
+// Seit Charge B (V2, Entscheide Nico 2026-10-23 E14/F1/F7): mit
+// GContextActionsOn ([UI] Element.EditorContextActions) stehen dahinter
+// die Code-Aktionen ohne Fund (Kontext-Anbieter) als flacher Abschnitt mit
+// deaktivierter Kopfzeile 'Code actions' - auch auf einer Zeile ohne Fund;
+// eine Caption, die schon eine Fund-Aktion traegt, steht nur einmal (am
+// Fund, Dedup im Modell). Ausgefuehrt wird ueber denselben Weg wie die
+// Fund-Aktionen (ActionItemClick -> Execute des Anbieters). Ohne den
+// Schalter wie bisher: nur Fund-Aktionen, ohne Fund nichts.
 var
+  CtxOn    : Boolean;
+  Ctx      : TEditorContext;
   FilePath : string;
   Line     : Integer;
-  Found    : TArray<TLeakFinding>;
   Model    : TFindingMenuModel;
   i        : Integer;
 begin
-  if TFindingActions.ProviderCount = 0 then Exit;
-  // Datei und Zeile der obersten Ansicht - dieselbe Funktion wie die
-  // Gluehbirne fuer ihren Editor (Review 2026-10-14, Punkt 10).
-  if not TIDEEditor.TopViewFileAndLine(FilePath, Line) then Exit;
-  Found := FindingsAtEditorLine(FilePath, Line);
-  if Length(Found) = 0 then Exit;
+  CtxOn := GContextActionsOn;   // ein Wert fuer den ganzen Aufbau
+  if not EditorMenuWanted(CtxOn) then Exit;
+  if CtxOn then
+  begin
+    // Datei, Zeile, Zeichen-Spalte und Auswahl der obersten Ansicht - Datei
+    // und Zeile ueber dieselbe Funktion wie die Gluehbirne fuer ihren
+    // Editor (ViewFileAndLine, Review 2026-10-14, Punkt 10).
+    if not TIDEEditor.TopViewContext(Ctx) then Exit;
+  end
+  else
+  begin
+    // Ohne den Schalter der Weg bis Charge B: nur Datei und Zeile - kein
+    // ConvertPos, kein Lesen des Blocks (Review Charge B, Befund 3; der
+    // Not-Aus laesst so nichts Neues laufen). Die Spalte nutzt dann
+    // niemand (BuildFindingMenuModel liest nur Findings).
+    if not TIDEEditor.TopViewFileAndLine(FilePath, Line) then Exit;
+    Ctx := TEditorContext.At(FilePath, Line, 1);
+  end;
+  Ctx.Findings := FindingsAtEditorLine(Ctx.FileName, Ctx.Line);
+  // Ohne Kontextaktionen und ohne Fund gibt es nichts zu fragen (wie bis
+  // Charge B) - das Modell waere ohnehin leer.
+  if (not CtxOn) and (Length(Ctx.Findings) = 0) then Exit;
 
-  Model := BuildFindingMenuModel(Found, [moLeadingSeparator, moHeaders]);
+  Model := BuildEditorPopupModel(Ctx, CtxOn, _('Code actions'));
   for i := 0 to High(Model.Errors) do
     OutputDebugString(PChar('SCA: finding action provider failed - '
       + Model.Errors[i]));
@@ -6082,6 +6135,20 @@ begin
   RegisterFindingBulb(FindingsAtEditorLine);
 end;
 
+// Element EditorContextActions (Charge B, V2/F7): nur ein Schalter, den
+// TEditorContextMenuHook.AddActionItems bei jedem Oeffnen liest - kein
+// eigener Hook, kein OTA-Objekt. Ohne das Element EditorContextMenu
+// (dessen OnPopup-Hook) bleibt er wirkungslos.
+procedure EnableEditorContextActions;
+begin
+  GContextActionsOn := True;
+end;
+
+procedure DisableEditorContextActions;
+begin
+  GContextActionsOn := False;
+end;
+
 procedure AddUiElements(ARegistry: TUiElementRegistry);
 // Vertrag steht an der Deklaration. Die SortKeys bilden die am 2026-08-10
 // gemessene Reihenfolge ab (Messung 0.5, Protokollzeilen REG 1-7);
@@ -6102,6 +6169,7 @@ const
   SK_WARMUP         = 60;
   SK_VIEW_MENU      = 70;
   SK_CTX_MENU       = 80;
+  SK_CTX_ACTIONS    = 85;
   SK_OPTIONS_SCA    = 90;
   SK_OPTIONS_SONAR  = 100;
   procedure AddEl(const AName: string; ASortKey: Integer;
@@ -6148,6 +6216,10 @@ begin
   // Silent-Mode-Eintrag. Triggert die Silent-Analyse via Klick.
   AddEl('EditorContextMenu', SK_CTX_MENU,
     RegisterEditorContextMenuHook, UnregisterEditorContextMenuHook);
+  // Code-Aktionen ohne Fund im Editor-Kontextmenue (Charge B, V2): nur ein
+  // Schalter fuer den Hook davor; rueckwaerts abgebaut VOR ihm.
+  AddEl('EditorContextActions', SK_CTX_ACTIONS,
+    EnableEditorContextActions, DisableEditorContextActions);
   // Tools > Options > Third Party > Static Code Analyser
   // (Checkbox um den Silent-Mode aus-/anzuschalten).
   AddEl('OptionsPageSCA', SK_OPTIONS_SCA,

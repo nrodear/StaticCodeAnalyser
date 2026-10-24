@@ -2265,6 +2265,9 @@ msgstr "Keine Aktionen für diese Zeile"
 msgid "%d more findings on this line are not listed"
 msgstr "%d weitere Funde auf dieser Zeile sind nicht aufgeführt"
 
+msgid "Code actions"
+msgstr "Code-Aktionen"
+
 msgid "Suppress here (// noinspection %s)"
 msgstr "Hier unterdrücken (// noinspection %s)"
 
@@ -4510,6 +4513,9 @@ msgstr "die Zuweisung geht an einen Ausdruck, nicht an eine Variable"
 
 msgid "Result - the buffer leaves the routine"
 msgstr "Result - der Puffer verlässt die Routine"
+
+msgid "%s is a binary or octal literal - the code action only handles decimal and hexadecimal numbers"
+msgstr "%s ist ein Binär- oder Oktal-Literal - die Code-Aktion kennt nur dezimale und hexadezimale Zahlen"
 
 msgid "the first argument of GetMem is not a simple identifier"
 msgstr "das erste Argument von GetMem ist kein einfacher Bezeichner"
