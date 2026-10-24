@@ -267,13 +267,19 @@ Formulars wieder ein. Die DFM-Funde (Szene 2, auch SCA026 `:101`) haben
 keine Code-Aktion –
 Doppelklick öffnet die .dfm an der Stelle.
 
-## Szene 8: Ausblick – Charge B (noch nicht in diesem Stand)
+## Szene 8: Code-Aktionen ohne Fund (Charge B)
 
-Code-Aktionen ohne Fund, die mit Charge B kommen. Natürliche Stellen im Demo:
+Rechtsklick mit dem Caret auf der Stelle – im Editor-Kontextmenü stehen
+die Code-Aktionen am Caret, auch auf einer Zeile ohne Fund. Stellen im Demo:
 
 - **Lokale Konstante einführen** auf einem Zahl-Literal ohne Fund:
-  `uOrderModel.pas:398` `Weight := 2;`, `uPriceCalculator.pas:128`
-  `FTaxRate := 0.19;`, `uPriceCalculator.pas:228` `Result := 5.90;`.
+  `uOrderModel.pas:405` `Result := (11 - Sum mod 11) mod 11;` (Caret auf
+  der ersten `11` – nur dieses Literal wird ersetzt),
+  `uPriceCalculator.pas:128` `FTaxRate := 0.19;`,
+  `uPriceCalculator.pas:228` `Result := 5.90;` (der `else`-Zweig bekommt
+  `begin..end`). Triviale Zahlen wie in `Weight := 2;` (Zeile 398) bieten
+  nichts an – dieselbe Menge, die SCA014 durchlässt (0, 1, 2, -1, 10,
+  100, Zweierpotenzen bis 1024).
 - **try/finally um Create, wenn ein Free existiert**:
   `uOrderForm.pas:102` `Importer := TLegacyImporter.Create;` – das `try`
   kommt erst nach `Order := TOrder.Create(..)`; wirft

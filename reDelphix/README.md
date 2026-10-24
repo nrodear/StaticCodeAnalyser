@@ -596,7 +596,7 @@ liegt im Core (`uFindingActions`: `fakContext`, `TEditorContext`,
 
 | Aktion | Am Caret | Verhalten |
 |---|---|---|
-| Lokale Konstante fuer N einfuehren | ein Zahl-Literal (Caret davor, darin oder direkt dahinter; dezimal mit `_`, Bruch, Exponent, `$FF`) | dieselbe Kette wie der Quick-Fix SCA014 (`TRdxMagicFixes.IntroduceAt` -> `PlanLiteral`, Tabelle oben): `const MagicNr01 = N;` als Inline-Konstante direkt vor der Anweisung (E26), nur DIESES Literal (E28), ein Zweig ohne `begin` bekommt `begin..end`, Name `MagicNr01`.. der erste freie (F3), kein Sync Edit, kein Dialog; dieselben Sperren (Zeilen-Leser der Code-Aktion, FPC-Weiche, Spuren alter Compiler, Hauptblock, Skript) und derselbe Plattenblick (`FileReason`, `IncludeReason`: Lazarus-Projekt, alte Delphi-Projekte, Includes, Netzpfad). Sperrt die GANZE Datei (FPC-Weiche, Skript, Spuren alter Compiler - `TRdxMagicPlan.FileWide` aus `IntroduceAt` - und der ganze Plattenblick), steht KEIN Eintrag da, auch wenn zugleich die Stelle sperrt (Entscheid Nico 2026-10-24); Sperren der Stelle (Ausdrucksfortsetzung, `else if`, Deklarationszeile, Hauptblock ...) stehen ausgegraut mit Grund da. Die Fund-Hilfe SCA014 nennt weiter jeden Grund. Nur Zahlen (F5): `#13`, Strings und Zeichen bieten nichts an; ein Binaer- oder Oktal-Literal (`%101`, `&17`) steht gesperrt da (ausser in einer gesperrten Datei). Bedeutungsgleich nach der Praemisse von E26 (unten: hier steht das Literal auch in Arithmetik und Aufrufen - gemessen ist P6 noch nicht) |
+| Lokale Konstante fuer N einfuehren | ein Zahl-Literal (Caret davor, darin oder direkt dahinter; dezimal mit `_`, Bruch, Exponent, `$FF`) | dieselbe Kette wie der Quick-Fix SCA014 (`TRdxMagicFixes.IntroduceAt` -> `PlanLiteral`, Tabelle oben): `const MagicNr01 = N;` als Inline-Konstante direkt vor der Anweisung (E26), nur DIESES Literal (E28), ein Zweig ohne `begin` bekommt `begin..end`, Name `MagicNr01`.. der erste freie (F3), kein Sync Edit, kein Dialog; dieselben Sperren (Zeilen-Leser der Code-Aktion, FPC-Weiche, Spuren alter Compiler, Hauptblock, Skript) und derselbe Plattenblick (`FileReason`, `IncludeReason`: Lazarus-Projekt, alte Delphi-Projekte, Includes, Netzpfad). Sperrt die GANZE Datei (FPC-Weiche, Skript, Spuren alter Compiler - `TRdxMagicPlan.FileWide` aus `IntroduceAt` - und der ganze Plattenblick), steht KEIN Eintrag da, auch wenn zugleich die Stelle sperrt (Entscheid Nico 2026-10-24); Sperren der Stelle (Ausdrucksfortsetzung, `else if`, Deklarationszeile, Hauptblock ...) stehen ausgegraut mit Grund da. Die Fund-Hilfe SCA014 nennt weiter jeden Grund. Ein triviales Literal - dieselbe Menge, die SCA014 durchlaesst: die Vorgabe von `[Detectors] MagicNumberTrivials` (`0,1,2,-1,10,100`) und Zweierpotenzen bis 1024, nur dezimale Ganzzahlen, ein unaeres `-` zaehlt mit (`-1` trivial, `-10` nicht); gespiegelt in `TRdxMagicFixes.IsTrivialLiteral`, eine eigene Liste in der analyser.ini sieht reDelphix nicht - ist kein Kandidat: kein Eintrag (Entscheid Nico 2026-10-24; Korpus B3: 161 der 226 Angebote fallen weg). Nur Zahlen (F5): `#13`, Strings und Zeichen bieten nichts an; ein Binaer- oder Oktal-Literal (`%101`, `&17`) steht gesperrt da (ausser in einer gesperrten Datei). Bedeutungsgleich nach der Praemisse von E26 (unten: hier steht das Literal auch in Arithmetik und Aufrufen - gemessen ist P6 noch nicht) |
 | X in einem try/finally-Block freigeben (aendert Verhalten) | eine Zeile `X := T.Create..;` bzw. `var X[: T] := T.Create..;`, X eine LOKALE Variable der Routine | C3: dieselbe Kette wie der Quick-Fix SCA009 (`TRdxTryFixes.CreateAt` -> `ObjectPair`, Baustein B5), X aus der Zeile; die Freigabe `X.Free`/`FreeAndNil(X)` muss schon als ganze, unbedingte Anweisung in derselben Liste stehen, sonst gesperrt mit Grund (F6). Mehrere Erzeugungen auf der Zeile: die, in deren Anweisung der Caret steht. Gekennzeichnet (E2) wie SCA009 |
 
 **Wann ein Eintrag entsteht (F4):** nur mit einem Kandidaten am Caret -
@@ -632,9 +632,11 @@ endet - ueber die Token-Grenzen der Code-Sicht hinweg: `1.5`, `$FF`,
 Laeufer am Caret, ohne ToolsAPI, im FPC-Pruefstand; Caret im virtuellen
 Raum hinter dem Zeilenende zaehlt als Zeilenende), die Auswahl des
 Kontexts nutzt noch keine Aktion (F8). Tests: `uTestRdxContextRunner`
-(Caret-Marke `{^}`, `uTestRdxTextKit.CaretOf`): 29 Text-Tests (auch im
+(Caret-Marke `{^}`, `uTestRdxTextKit.CaretOf`): 33 Text-Tests (auch im
 FPC-Pruefstand; davon 7 in `TTestRdxContextFileLocks`: ganze Datei = kein
-Eintrag, Stelle = ausgegraut, SCA014 unveraendert), dazu 4 nur unter
+Eintrag, Stelle = ausgegraut, SCA014 unveraendert; 4 in
+`TTestRdxContextTrivial`: triviale Literale ohne Eintrag, der Caret
+entscheidet), dazu 4 nur unter
 Delphi (Menuetext und Ersetzung gleich denen der Fund-Hilfen, ueber
 `PlanFixIn`; SCA014 ueber die Tabelle in einer FPC-Unit weiter mit Grund).
 
@@ -653,7 +655,11 @@ case-Zweig 16, ...), kein Eintrag 2.558 (85,3 %); C3 unveraendert. C3
 Freigabe in derselben Liste 222, Weitergabe 209, bedingte/zweite Freigabe
 72, ...), kein Eintrag 2.328 (Result/Feld/Ausdruck/global - ohne diesen
 Filter stuenden 1.648 weitere gesperrt da -, schon geschuetzt, keine
-Erzeugung als Code). Stichprobe je 20 Angebote von Hand:
+Erzeugung als Code). Seit dem Entscheid 2026-10-24 (triviale Literale
+ohne Eintrag, dieselben Stellen erneut): Konstante angeboten 65, gesperrt
+134, kein Eintrag 2.801 - weg sind 161 Angebote und 82 gesperrte Eintraege
+(0: 98, 1: 82, 2: 29, 4: 9, 8: 7, 10/100/16/64: je 3-4 ...); uebrig `-2`
+(fuer SCA014 nicht trivial). Stichprobe je 20 Angebote von Hand:
 20/20 uebersetzen (Delphi ab 10.3) und behalten das Verhalten (C3: auf dem
 normalen Weg; die Freigabe laeuft danach auch bei einer Ausnahme - der
 Zweck). Laufzeit im Harness: Konstante rund 20 ms je Stelle (Plattenblick
@@ -1148,7 +1154,10 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   ihn behebt), alte Compiler, Lazarus-Paket und FPC-Include ueber den Check der
   Tabelle, dazu das Netzlaufwerk (`RemoteDriveReason`, auch lang geschrieben
   `\\?\Q:\..`: der Grund nennt `Netzlaufwerk Q:`; Q: ueber die Naht
-  `SetRdxRemoteDriveTest`, Gegenpruefung V-B2S-3) - 11 Tests; ohne Delphi
+  `SetRdxRemoteDriveTest`, Gegenpruefung V-B2S-3), und dieselben Trivialen wie
+  die Code-Aktion ohne Fund (`Sca014_TrivialsLikeContextAction`: Detektor mit
+  der Liste aus `TRepoSettings` gegen `TRdxMagicFixes.IsTrivialLiteral`, Entscheid
+  Nico 2026-10-24) - 12 Tests; ohne Delphi
   gegengeprueft (CLI-Exe und FPC-Planer, 6/6 der Rundlauf- und Sperrfaelle, die
   Trenner-Formen 2/2 in der Nachbesserung FF; das Netzlaufwerk ueber die Huellen
   `RemoteDriveReason`/`NetworkPathReason` woertlich unter FPC, vier Mutanten der
@@ -1188,6 +1197,10 @@ Ohne Delphi (FPC 3.2.2):
 bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxTextMsgs uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths uTestRdxBlocks uTestRdxCategoryArgFix uTestRdxEmptyBlockFix uTestRdxEmptyExceptFix uTestRdxGotoExitFix uTestRdxNativeIntFix uTestRdxParensFix uTestRdxTrailingCommaFix uTestRdxLoopBoundFix uTestRdxContextRunner
 ```
 
+Gemessen (2026-10-24, FPC-Lauf, nach dem Entscheid "triviale Literale ohne Eintrag"):
+`PASSED 845  FAILED 0` - 51 Testunits, davon `uTestRdxContextRunner` 33 (neue
+Fixture `TTestRdxContextTrivial`, 4 Tests; ohne die Pruefung in `IntroduceAt` 3
+davon rot). Davor `PASSED 841`.
 Gemessen (2026-10-24, FPC-Lauf, nach dem Entscheid "Sperren der ganzen Datei ohne
 Eintrag"; Nachbesserung Review Charge B: zwei Tests zu Literalen am Zeilenende, mit
 `-Cr -Co` vor dem Fix in TextPieceEnd beide ERangeError): `PASSED 838  FAILED 0` - 51

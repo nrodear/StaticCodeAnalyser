@@ -96,6 +96,23 @@ unit uRdxMagicFixes;
 // Hauptblock, Binaer-/Oktal-Literal) haengen an der Stelle und stehen
 // ausgegraut mit Grund da. Die Fund-Hilfe SCA014 nennt weiter jeden Grund
 // in der bisherigen Reihenfolge.
+// TRIVIALE LITERALE (Entscheid Nico 2026-10-24, nur die Code-Aktion ohne
+// Fund): ein Literal, das SCA014 als trivial durchliesse, bekommt keinen
+// Eintrag - wie "kein Kandidat" (Korpus B3: 148 von 226 Angeboten waren
+// 0, 1 oder 2). Dieselbe Menge wie TMagicNumberDetector.IsTrivial
+// (SCA.Engine\sources\Detectors\uMagicNumbers.pas): die Liste
+// [Detectors] MagicNumberTrivials mit ihrem Vorgabewert 0,1,2,-1,10,100
+// (TRepoSettings, SCA.Engine\sources\Infrastructure\uRepoSettings.pas)
+// und immer die Zweierpotenzen bis 1024. reDelphix liest die
+// Engine-Konfiguration nicht: hier steht der VORGABEWERT gespiegelt
+// (SCA014_TRIVIALS) - eine eigene Liste in der analyser.ini sieht die
+// Code-Aktion nicht. Wie SCA014 nur dezimale Ganzzahlen ('0', '16'):
+// Hex, Binaer, Bruch, Exponent und Zifferntrenner sieht der Detektor nie
+// als Zahl, sie bleiben Kandidaten ('$1', '1.0', '1_000'). Ein '-' direkt
+// vor dem Literal, wo ein Operand beginnt ('X := -1', '(-1)'), gehoert zum
+// Wert - '-1' ist trivial, '-10' nicht (IsTrivial vergleicht den Text mit
+// Vorzeichen; Zweierpotenzen nur positiv). Die Fund-Hilfe SCA014 laeuft
+// nur, wo SCA014 meldete - dort ist das Literal nie trivial.
 //
 // NAME: MagicNr01, MagicNr02 ... - der erste, der in der Datei nicht als
 // ganzes Wort vorkommt (uRdxIntroPlan.NextFreeName, wie im Labor; auch
@@ -176,13 +193,21 @@ type
     // und der Datei. Value ist das Literal wie im Quelltext ('$FF', '1.5',
     // '1_000'). True mit dem Plan; False mit dem Grund; False mit AReason
     // = '', wenn an ACol kein Zahl-Literal steht (kein Kandidat - die
-    // Aktion entfaellt, Entscheid F4). Die Sperren der GANZEN Datei
+    // Aktion entfaellt, Entscheid F4), ebenso fuer ein triviales Literal
+    // (IsTrivialLiteral, die Menge von SCA014; APlan leer - Entscheid Nico
+    // 2026-10-24, s. Kopf "Triviale Literale"). Die Sperren der GANZEN Datei
     // (FPC-Weiche, Skript, Spuren alter Compiler) prueft IntroduceAt VOR
     // denen der Stelle: False mit dem Grund und APlan.FileWide = True
     // (Entscheid Nico 2026-10-24). Was nur die Platte weiss (FileReason,
     // IncludeReason - ebenfalls die ganze Datei), fragt der Aufrufer.
     class function IntroduceAt(AMap: TRdxCodeMap; ALine, ACol: Integer;
       out APlan: TRdxMagicPlan; out AReason: string): Boolean; static;
+
+    // Ist das Zahl-Literal in den Zeichenspalten [AFirst, AStop) der Zeile
+    // ALine eines, das SCA014 als trivial durchliesse (s. Kopf "Triviale
+    // Literale")? Ein '-' direkt davor, wo ein Operand beginnt, zaehlt mit.
+    class function IsTrivialLiteral(AMap: TRdxCodeMap; ALine, AFirst,
+      AStop: Integer): Boolean; static;
 
     // Was nur die Platte weiss (der Check in uRdxFixTable, nach dem
     // Planer): eine Lazarus-/FPC-Dateiart (.pp, .lpr) oder ein Lazarus-
@@ -740,6 +765,57 @@ begin
     Result := CompilerReason(AMap);
 end;
 
+const
+  // Der Vorgabewert von [Detectors] MagicNumberTrivials - gespiegelt aus
+  // TRepoSettings.Create (SCA.Engine\sources\Infrastructure\
+  // uRepoSettings.pas, FMagicTrivials); reDelphix liest die Engine-
+  // Konfiguration nicht (s. Kopf "Triviale Literale"). Zieht der
+  // Vorgabewert dort um, muss er hier mit. Die laengere Liste
+  // uSCAConsts.DEFAULT_MAGIC_TRIVIALS gilt nur ohne geladene Einstellungen
+  // (ResetEngineConfigDefaults) - TRepoSettings ueberschreibt sie.
+  SCA014_TRIVIALS: array[0..5] of string = ('0', '1', '2', '-1', '10', '100');
+  // Zweierpotenzen bis hierher sind immer trivial
+  // (TMagicNumberDetector.IsTrivial, uMagicNumbers.pas).
+  SCA014_POW2_MAX = 1024;
+
+// Steht ATok fuer das Ende eines Operanden - dann ist ein '-' dahinter
+// binaer ('A -1', 'F(X)-1', 'P^-1')? Ein Bezeichner (kein
+// Schluesselwort), eine Zahl, ')', ']' oder '^'.
+function EndsOperand(AMap: TRdxCodeMap; const ATok: TRdxToken): Boolean;
+begin
+  if ATok.Low = '' then
+    Result := False
+  else if ATok.IsWord then
+    Result := not (IsKeyword(ATok.Low)
+      and IsKeywordAfter(ATok, Before(AMap, ATok)))
+  else
+    Result := CharInSet(ATok.Low[1], ['0'..'9', ')', ']', '^']);
+end;
+
+class function TRdxMagicFixes.IsTrivialLiteral(AMap: TRdxCodeMap; ALine,
+  AFirst, AStop: Integer): Boolean;
+var
+  Value : string;
+  Minus : TRdxToken;
+  i, N  : Integer;
+begin
+  Result := False;
+  Value := Copy(AMap.Raw(ALine), AFirst, AStop - AFirst);
+  if Value = '' then Exit;
+  // Wie SCA014 nur eine dezimale Ganzzahl (der Detektor liest Ziffern).
+  for i := 1 to Length(Value) do
+    if not CharInSet(Value[i], ['0'..'9']) then Exit;
+  // Ein unaeres '-' direkt davor gehoert zum Wert.
+  Minus := PrevToken(AMap, ALine, AFirst);
+  if (Minus.Low = '-') and (Minus.Line = ALine) and (Minus.EndCol = AFirst)
+     and not EndsOperand(AMap, Before(AMap, Minus)) then
+    Value := '-' + Value;
+  for i := Low(SCA014_TRIVIALS) to High(SCA014_TRIVIALS) do
+    if Value = SCA014_TRIVIALS[i] then Exit(True);
+  Result := TryStrToInt(Value, N) and (N > 0) and (N <= SCA014_POW2_MAX)
+    and ((N and (N - 1)) = 0);
+end;
+
 class function TRdxMagicFixes.IntroduceAt(AMap: TRdxCodeMap; ALine,
   ACol: Integer; out APlan: TRdxMagicPlan; out AReason: string): Boolean;
 var
@@ -751,6 +827,10 @@ begin
   APlan := Default(TRdxMagicPlan);
   if LiteralContaining(AMap, ALine, ACol, First, Stop) <> lkNumber then
     Exit;   // kein Kandidat (F4): kein Eintrag
+  // Ein triviales Literal (die Menge von SCA014): wie kein Kandidat
+  // (Entscheid Nico 2026-10-24).
+  if IsTrivialLiteral(AMap, ALine, First, Stop) then
+    Exit;
   APlan.Value := Copy(AMap.Raw(ALine), First, Stop - First);
   // Erst die ganze Datei, dann die Stelle: eine FPC-Unit mit dem Literal
   // in einer Deklarationszeile ist zuerst eine FPC-Unit (Entscheid Nico

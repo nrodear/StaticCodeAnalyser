@@ -31,7 +31,10 @@ unit uRdxContextRunner;
 // WANN EIN EINTRAG ENTSTEHT (F4): nur, wenn am Caret ein Kandidat steht -
 // ein Zahl-Literal bzw. eine Zeile 'X := ..Create..', die noch nicht
 // geschuetzt ist. Dann freigegeben mit Ersetzungen, oder gesperrt mit dem
-// Grund. Sonst gar nichts - kein Rauschen auf jedem Rechtsklick.
+// Grund. Sonst gar nichts - kein Rauschen auf jedem Rechtsklick. Ein
+// triviales Zahl-Literal (0, 1, 2, -1, 10, 100, Zweierpotenzen bis 1024 -
+// die Menge von SCA014, TRdxMagicFixes.IsTrivialLiteral) ist kein
+// Kandidat (Entscheid Nico 2026-10-24).
 // Sperrt ckIntroduceConst die GANZE Datei - FPC-Weiche, Skript, Spuren
 // alter Compiler (TRdxMagicPlan.FileWide) oder der Plattenblick (Lazarus-
 // bzw. altes Delphi-Projekt, Includes, Netzpfad) -, entfaellt der Eintrag
@@ -122,8 +125,9 @@ var
   Why  : string;
   O    : TRdxContextOutcome;
 begin
-  // Kein Kandidat (F4) bzw. eine Sperre der ganzen Datei (Plan.FileWide:
-  // FPC-Weiche, Skript, Spuren alter Compiler): kein Eintrag.
+  // Kein Kandidat (F4; auch ein triviales Literal) bzw. eine Sperre der
+  // ganzen Datei (Plan.FileWide: FPC-Weiche, Skript, Spuren alter
+  // Compiler): kein Eintrag.
   if not TRdxMagicFixes.IntroduceAt(AMap, ALine, ACol, Plan, Why)
      and ((Why = '') or Plan.FileWide) then
     Exit;

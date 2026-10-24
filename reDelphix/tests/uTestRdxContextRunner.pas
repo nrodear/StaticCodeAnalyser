@@ -8,7 +8,8 @@ unit uTestRdxContextRunner;
 // (reDelphix.Test UND FPC-Pruefstand); die Sperren der ganzen Datei gegen
 // die der Stelle (TTestRdxContextFileLocks, Entscheid Nico 2026-10-24:
 // ganze Datei = kein Eintrag, Stelle = ausgegraut, SCA014 unveraendert) -
-// ebenso. Nur Delphi (letzte Fixture): der
+// ebenso; triviale Literale ohne Eintrag (TTestRdxContextTrivial, Entscheid
+// Nico 2026-10-24: die Menge von SCA014). Nur Delphi (letzte Fixture): der
 // Menuetext der Kontextaktion (uRdxFixTable.ContextCaption) ist auf einer
 // Fundzeile derselbe wie der der Fund-Hilfe SCA014 bzw. SCA009 (PlanFixIn,
 // TRdxFixTable.CaptionFor) - nur dann faellt sie im Menue weg (Dedup per
@@ -75,6 +76,21 @@ type
     [Test] procedure LocalLock_StaysGreyed;
     [Test] procedure FileWide_OnlyFromIntroduceAt;
     [Test] procedure Sca014_FileLocksKeepReason;
+  end;
+
+  // Triviale Literale (Entscheid Nico 2026-10-24): was SCA014 durchliesse
+  // (TRdxMagicFixes.IsTrivialLiteral - 0, 1, 2, -1, 10, 100, Zweierpotenzen
+  // bis 1024), bekommt keinen Eintrag, wie kein Kandidat; der Caret
+  // entscheidet, welches Literal der Zeile gilt. Dass die Menge die von
+  // SCA014 ist, prueft gegen den echten Detektor
+  // uTestRdxMagicFixDetector.Sca014_TrivialsLikeContextAction.
+  [TestFixture]
+  TTestRdxContextTrivial = class
+  public
+    [Test] procedure Trivial_NoEntry;
+    [Test] procedure Trivial_UnaryMinus;
+    [Test] procedure NonTrivial_Offered;
+    [Test] procedure Trivial_CaretDecides;
   end;
 
 {$IFNDEF FPC}
@@ -880,6 +896,99 @@ begin
   Assert.IsTrue(MagicAt(Src, P, R), R);
 end;
 
+{ ---- Triviale Literale (Entscheid Nico 2026-10-24) ---- }
+
+// 0, 1, 2 und die uebrigen Trivialen von SCA014: kein Eintrag - auch nicht
+// ausgegraut an einer gesperrten Stelle; IntroduceAt wie "kein Kandidat".
+procedure TTestRdxContextTrivial.Trivial_NoEntry;
+const
+  LITS: array[0..8] of string = ('0', '1', '2', '10', '100', '4', '16',
+    '256', '1024');
+var
+  L : string;
+  P : TRdxMagicPlan;
+  R : string;
+begin
+  for L in LITS do
+  begin
+    AssertNone(UnitWith([], ['  Foo;', '  Bar({^}' + L + ');']), L);
+    AssertNone(UnitWith([], ['  Foo;', '  Bar(' + L + '{^});']),
+      L + ' (Caret dahinter)');
+  end;
+  AssertNone(UnitWith([], ['  Foo;', '  const C = {^}1;']),
+    'Deklarationszeile');
+  Assert.IsFalse(IntroAt(UnitWith([], ['  Foo;', '  Bar({^}2);']), P, R), '2');
+  Assert.AreEqual('', R, 'kein Grund');
+  Assert.AreEqual('', P.Value, 'kein Wert');
+  Assert.IsFalse(P.FileWide, 'keine Sperre der Datei');
+end;
+
+// Ein '-' direkt vor dem Literal, wo ein Operand beginnt, gehoert zum Wert
+// (wie '-1' in der Liste von SCA014); hinter einem Operanden ist es binaer.
+procedure TTestRdxContextTrivial.Trivial_UnaryMinus;
+var
+  Src : string;
+begin
+  AssertNone(UnitWith([], ['  Foo;', '  X := -{^}1;']), '-1');
+  AssertNone(UnitWith([], ['  Foo;', '  Bar(Y, -1{^});']), '(Y, -1)');
+  AssertNone(UnitWith([], ['  Foo;', '  if X = -{^}1 then Bar;']), '= -1');
+  AssertNone(UnitWith([], ['  Foo;', '  X := Y -1{^}0;']), 'binaer: 10');
+  AssertNone(UnitWith([], ['  Foo;', '  X := F(Y)-1{^}0;']), 'binaer: F(Y)-10');
+  AssertNone(UnitWith([], ['  Foo;', '  X := A[2]-1{^}00;']), 'binaer: A[2]-100');
+  // '-10' ist nicht trivial (SCA014 vergleicht mit Vorzeichen): angeboten,
+  // die Konstante nimmt das Literal ohne Vorzeichen.
+  Assert.AreEqual(UnitWith([], ['  Foo;', '  const MagicNr01 = 10;',
+    '  X := -MagicNr01;']), Fixed(UnitWith([], ['  Foo;', '  X := -1{^}0;']),
+    ckIntroduceConst), '-10');
+  // Hinter einem Schluesselwort ist das '-' unaer: '-10', angeboten.
+  Assert.AreEqual('10', OneAt(UnitWith([], ['  Foo;', '  X := Y div -1{^}0;']),
+    ckIntroduceConst, Src).Name, 'div -10');
+end;
+
+// 3 und 0.19 werden angeboten; auch was SCA014 nie als Ganzzahl liest
+// (Bruch, Hex, Zifferntrenner) und eine Zweierpotenz ueber 1024.
+procedure TTestRdxContextTrivial.NonTrivial_Offered;
+const
+  LITS: array[0..5] of string = ('1.0', '0.0', '$1', '$0', '1_000', '2048');
+var
+  L, Src : string;
+begin
+  Assert.AreEqual(UnitWith([], ['  Foo;', '  const MagicNr01 = 3;',
+    '  Bar(MagicNr01);']), Fixed(UnitWith([], ['  Foo;', '  Bar({^}3);']),
+    ckIntroduceConst), '3');
+  Assert.AreEqual(UnitWith([], ['  Foo;', '  const MagicNr01 = 0.19;',
+    '  FTaxRate := MagicNr01;']), Fixed(UnitWith([], ['  Foo;',
+    '  FTaxRate := 0.1{^}9;']), ckIntroduceConst), '0.19');
+  for L in LITS do
+    Assert.IsTrue(OneAt(UnitWith([], ['  Foo;', '  Bar(' + Copy(L, 1, 1)
+      + '{^}' + Copy(L, 2, MaxInt) + ');']), ckIntroduceConst, Src).Enabled,
+      L);
+end;
+
+// Ein triviales und ein anderes Literal auf einer Zeile: der Caret
+// entscheidet.
+procedure TTestRdxContextTrivial.Trivial_CaretDecides;
+var
+  All : TArray<TRdxContextOutcome>;
+  Src : string;
+begin
+  AssertNone(UnitWith([], ['  Foo;', '  Bar({^}1, 200);']), 'Caret auf 1');
+  AssertNone(UnitWith([], ['  Foo;', '  Bar(1{^}, 200);']), 'Caret hinter 1');
+  Assert.AreEqual(UnitWith([], ['  Foo;', '  const MagicNr01 = 200;',
+    '  Bar(1, MagicNr01);']), Fixed(UnitWith([], ['  Foo;',
+    '  Bar(1, 2{^}00);']), ckIntroduceConst), 'Caret auf 200');
+  AssertNone(UnitWith([], ['  Foo;', '  if X > 200 then Bar({^}2);']),
+    'SCA014-Zeile, Caret auf 2');
+  Assert.AreEqual('200', OneAt(UnitWith([], ['  Foo;',
+    '  if X > 2{^}00 then Bar(2);']), ckIntroduceConst, Src).Name,
+    'SCA014-Zeile, Caret auf 200');
+  // In einer Erzeugung: auf dem trivialen Argument nur try/finally.
+  All := RunAt(ProcWith(['  X: TFoo;'], ['  Foo;', '  X := TFoo.Create({^}1);',
+    '  X.Run;', '  X.Free;']), Src);
+  Assert.AreEqual<Integer>(1, Length(All), 'nur ein Eintrag');
+  Assert.IsTrue(All[0].Kind = ckTryFinallyCreate, 'try/finally');
+end;
+
 {$IFNDEF FPC}
 
 { ---- Menuetext: gleich dem der Fund-Hilfe (Dedup, F2) ---- }
@@ -975,6 +1084,7 @@ initialization
   TDUnitX.RegisterTestFixture(TTestRdxCaret);
   TDUnitX.RegisterTestFixture(TTestRdxContextRunner);
   TDUnitX.RegisterTestFixture(TTestRdxContextFileLocks);
+  TDUnitX.RegisterTestFixture(TTestRdxContextTrivial);
   {$IFNDEF FPC}
   TDUnitX.RegisterTestFixture(TTestRdxContextCaption);
   {$ENDIF}

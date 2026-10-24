@@ -38,14 +38,19 @@ type
     [Test] procedure Sca014_FpcInclude_NoHelp;
     // Gegenpruefung V-B2S-3: das Netzlaufwerk (NetworkPathReason).
     [Test] procedure Sca014_RemoteDrive_NoHelp;
+    // Entscheid Nico 2026-10-24: dieselben Trivialen wie die Code-Aktion.
+    [Test] procedure Sca014_TrivialsLikeContextAction;
   end;
 
 implementation
 
 uses
-  System.SysUtils, System.Generics.Collections,
+  System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog,
   uMagicNumbers,
+  uRepoSettings,         // TRepoSettings (Vorgabe MagicNumberTrivials)
+  uRdxCodeMap,           // TRdxCodeMap
+  uRdxMagicFixes,        // IsTrivialLiteral
   uRdxRecipeRunner,      // TRdxFixOutcome
   uRdxFixTable,          // CaptionFor
   uRdxPaths,             // SetRdxRemoteDriveTest (Naht fuer das Netzlaufwerk)
@@ -342,6 +347,61 @@ begin
       + 'Include-Dateien', O.Reason) > 0, O.Reason);
   finally
     SetRdxRemoteDriveTest(nil);
+  end;
+end;
+
+// Entscheid Nico 2026-10-24: die Code-Aktion ohne Fund laesst genau die
+// Literale aus, die SCA014 durchlaesst (TRdxMagicFixes.IsTrivialLiteral) -
+// gemessen mit der Liste, die EXE, Plugin und CLI setzen (die Vorgabe von
+// TRepoSettings, nicht uSCAConsts.DEFAULT_MAGIC_TRIVIALS des Pruefstands,
+// s. Sca014_CatalogExample). Je Zahl: meldet der Detektor 'if X > N' nicht,
+// ist N trivial. Negative Zahlen meldet der Detektor nie (der Lexer trennt
+// das '-' ab) - '-1' pruefen die Text-Tests (TTestRdxContextTrivial).
+procedure TTestRdxMagicFixDetector.Sca014_TrivialsLikeContextAction;
+const
+  NUMS: array[0..23] of Integer = (0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 16,
+    31, 32, 63, 64, 99, 100, 101, 255, 256, 1000, 1024, 2048);
+var
+  Settings : TRepoSettings;
+  Alt, Own : TStringList;
+  N        : Integer;
+  S        : string;
+  Map      : TRdxCodeMap;
+  Silent   : Boolean;
+begin
+  Alt := DetectorMagicTrivials;
+  Own := TStringList.Create;
+  try
+    // Eine Kopie der Vorgabe-Liste (wie uSCAConsts sie anlegt) - die
+    // globale Liste gehoert danach wieder Alt.
+    Own.CaseSensitive := False;
+    Own.Sorted := True;
+    Own.Duplicates := dupIgnore;
+    Settings := TRepoSettings.Create;
+    try
+      Own.AddStrings(Settings.MagicNumberTrivials);
+    finally
+      Settings.Free;
+    end;
+    Assert.IsTrue(Own.Count > 0, 'Vorgabe-Liste aus TRepoSettings');
+    DetectorMagicTrivials := Own;
+    for N in NUMS do
+    begin
+      S := IntToStr(N);
+      Silent := Length(Detect(InUnit([], ['  Foo;',
+        '  if X > ' + S + ' then Bar;']), fkMagicNumber)) = 0;
+      // '  Bar(' sind sechs Zeichen: das Literal beginnt in Spalte 7.
+      Map := NewMap('  Bar(' + S + ');');
+      try
+        Assert.IsTrue(Silent = TRdxMagicFixes.IsTrivialLiteral(Map, 1, 7,
+          7 + Length(S)), S + ': Detektor still = trivial');
+      finally
+        Map.Free;
+      end;
+    end;
+  finally
+    DetectorMagicTrivials := Alt;
+    Own.Free;
   end;
 end;
 
