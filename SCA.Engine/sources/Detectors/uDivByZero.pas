@@ -74,6 +74,18 @@ unit uDivByZero;
 //     'x div a.Count'); der LINKE Operand ist egal - '(a + b - 1) div b',
 //     'Abs(a) div b' und 'Arr[i] div b' zaehlen seit Charge D 2026-10-24
 //     (FindeDivOperator, vorher fehlte das Leerzeichen vor dem Operator)
+//   - Diese neuen Formen melden mit fcLow (Nico 2026-10-24): die
+//     A/B-Stichprobe der Charge-D-Adds vom 2026-10-24 war nur 7/20 echt
+//     (65 % FP). fcLow heisst: im Default (MinConfidence medium)
+//     unsichtbar, ab 'low' sichtbar, Severity vom Evidence-Tiering auf
+//     Hint gedeckelt (der Detektor selbst vergibt weiter Warning).
+//     "Neu" ist jeder Divisor, den erst die Charge-D-Suche liefert - der
+//     Operator hinter ')' / ']' / '^' ebenso wie ein Bezeichner hinter
+//     uebersprungenem Zahlen-Operanden ('(a div 2) + (a mod b)'). Was die
+//     Suche davor fand (' div ' mit Leerzeichen, ExtractDivisor mit
+//     AVorD4Suche), wird zuerst geprueft und meldet unveraendert mit der
+//     Kind-Default-Konfidenz. H1 (Literal 0) bleibt auch in der neuen
+//     Form Error: die Null ist bewiesen, die FP-Stichprobe betraf H2/H3.
 //   - Je Zuweisung zaehlt nur der ERSTE Bezeichner-Operand (erst alle div,
 //     dann alle mod; Zahlen-Operanden werden uebersprungen):
 //     'a div m + b div n' prueft nur 'm'; H2/H3 nur in
@@ -102,7 +114,8 @@ type
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>);
   private
-    class function ExtractDivisor(const ExprLow: string): string; static;
+    class function ExtractDivisor(const ExprLow: string;
+      AVorD4Suche: Boolean): string; static;
     class function IsIntegerType(const TypeLow: string): Boolean; static;
     class function HasGuardingIf(MethodNode: TAstNode;
       const VarLow: string; DivNode: TAstNode): Boolean; static;
@@ -349,13 +362,21 @@ begin
   Result := 0;
 end;
 
-class function TDivByZeroDetector.ExtractDivisor(
-  const ExprLow: string): string;
+class function TDivByZeroDetector.ExtractDivisor(const ExprLow: string;
+  AVorD4Suche: Boolean): string;
 // Gibt den Bezeichner direkt nach 'div' / 'mod' zurueck (oder '').
 // Reihenfolge wie bisher: erst alle div-, dann alle mod-Vorkommen, der
 // erste Bezeichner-Operand gewinnt (Zahlen werden uebersprungen, ein
 // Bezeichner beginnt nie mit einer Ziffer). Ein Klammer-Operand ('div (b)')
 // bleibt bewusst aussen vor ("komplexe Ausdruecke", Kopfkommentar).
+//
+// AVorD4Suche = True bildet die Suche VOR Charge D exakt nach: nur
+// ' div ' / ' mod ' mit Leerzeichen links UND rechts, kein weiteres
+// Leerzeichen uebersprungen, und der erste NICHTLEERE Operand gewinnt -
+// auch eine Zahl ('div 2' liefert '2' und damit keinen Fund). Der
+// Aufrufer meldet diesen Divisor mit der bisherigen Konfidenz und nur
+// einen davon abweichenden Divisor der neuen Suche mit fcLow (Nico
+// 2026-10-24, Kopfkommentar).
 const
   Operators : array[0..1] of string = ('div', 'mod');
 var
@@ -370,9 +391,21 @@ begin
     while p > 0 do
     begin
       Start := p + Length(Op);
-      // JoinTokInto schreibt hoechstens ein Leerzeichen; mehr schadet nicht.
-      while (Start <= Length(ExprLow)) and (ExprLow[Start] = ' ') do
+      if AVorD4Suche then
+      begin
+        // Alte Nadel ' div ': Leerzeichen vor UND hinter dem Operator.
+        if (p = 1) or (ExprLow[p - 1] <> ' ') or
+           (Start > Length(ExprLow)) or (ExprLow[Start] <> ' ') then
+        begin
+          p := FindeDivOperator(ExprLow, Op, p + 1);
+          Continue;
+        end;
         Inc(Start);
+      end
+      else
+        // JoinTokInto schreibt hoechstens ein Leerzeichen; mehr schadet nicht.
+        while (Start <= Length(ExprLow)) and (ExprLow[Start] = ' ') do
+          Inc(Start);
       var Divisor := '';
       i := Start;
       while i <= Length(ExprLow) do
@@ -389,7 +422,9 @@ begin
       // Wortgrenze steht '(x div 2) + (y mod n)' jetzt VOR 'n' in der
       // Liste, und 'n' ging verloren (Korpus-Drop cnwizards
       // testoperators.pas:39). Die Literal-Null erledigt H1 vorher.
-      if (Divisor <> '') and not CharInSet(Divisor[1], ['0'..'9']) then
+      // Die Vor-D4-Suche kannte den Sprung nicht (siehe oben).
+      if (Divisor <> '') and
+         (AVorD4Suche or not CharInSet(Divisor[1], ['0'..'9'])) then
       begin
         Result := Divisor;
         Exit;
@@ -1385,7 +1420,8 @@ end;
 class procedure TDivByZeroDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 
-  procedure Report(const Detail: string; Line: Integer; Sev: TLeakSeverity);
+  procedure Report(const Detail: string; Line: Integer; Sev: TLeakSeverity;
+    ANeueForm: Boolean = False);
   var F: TLeakFinding;
   begin
     // Factory + expliziter Severity-Override (Voll-Review 2026-09-12):
@@ -1393,8 +1429,14 @@ class procedure TDivByZeroDetector.AnalyzeMethod(MethodNode: TAstNode;
     // Confidence=KindDefault - New/SetKind liefert Kind +
     // Katalog-Severity + Default-Confidence, der Override danach
     // stellt exakt denselben Feld-Endstand her.
-    F := TLeakFinding.New(FileName, MethodNode.Name, Line, Detail,
-      fkDivByZero);
+    // ANeueForm: Divisor, den erst die Charge-D-Suche findet -> fcLow
+    // (Nico 2026-10-24, Kopfkommentar).
+    if ANeueForm then
+      F := TLeakFinding.New(FileName, MethodNode.Name, Line, Detail,
+        fkDivByZero, fcLow)
+    else
+      F := TLeakFinding.New(FileName, MethodNode.Name, Line, Detail,
+        fkDivByZero);
     F.Severity := Sev;
     Results.Add(F);
   end;
@@ -1404,8 +1446,58 @@ var
   Nodes   : TList<TAstNode>;
   ExprLow : string;
   Divisor : string;
+  DivisorVorD4 : string;
   Reported : TDictionary<string, Boolean>;
   MethodCfg : TCFG;      // G5: lazy gebaut, Free im finally
+
+  // H2/H3: ADivisor ist eine Integer-Variable der Methode, und kein Guard
+  // schuetzt sie an der Division ADivNode. Steht nach dem var-Block, weil
+  // sie IntVars und MethodCfg braucht; ADivNode kommt als Parameter (die
+  // Schleifenvariable N ist inline und hier unsichtbar).
+  function UngeschuetzterDivisor(const ADivisor: string;
+    ADivNode: TAstNode): Boolean;
+  begin
+    Result := False;
+    if (ADivisor = '') or (IntVars.IndexOf(ADivisor) < 0) then Exit;
+
+    // Gibt es einen Guard?
+    if HasGuardingIf(MethodNode, ADivisor, ADivNode) then Exit;
+
+    // G1: aufsteigende for-Schleifenvariable mit nichtnull-Literal-Start -
+    // im Rumpf immer >= Start >= 1 (Real-World-FP-Audit 2026-07-12).
+    if IsGuardedByForLoopVar(MethodNode, ADivNode, ADivisor) then Exit;
+
+    // G7: Divisor ist die Obergrenze der umgebenden for-Schleife
+    // ('for y := 0 to n - 1 do .. div n') - im Rumpf ist n >= 1.
+    if IsGuardedByForUpperBound(MethodNode, ADivNode, ADivisor) then Exit;
+
+    // G2: 'if divisor = 0 then Break/Continue' im selben Schleifenrumpf vor
+    // der Division (Real-World-FP-Audit 2026-07-12).
+    if HasBreakContinueGuard(MethodNode, ADivNode, ADivisor) then Exit;
+
+    // G4: 'while divisor <> 0 do ... x div divisor' (bzw. > 0 / >= 1) - der
+    // Divisor ist im while-Kopf direkt gegen 0 geschuetzt, die Division liegt
+    // im Rumpf und der Divisor wird davor nicht veraendert (FP-Klasse SCA010
+    // while-guarded-divisor, Welle 1 5%-FP-Konzept 2026-07-18).
+    if IsGuardedByWhileCond(MethodNode, ADivNode, ADivisor) then Exit;
+
+    // Provably-nonzero: Divisor wird ausschliesslich mit beweisbar-nichtnullen
+    // Ausdruecken belegt (nichtnull-Literale ODER Clamp 'Max(1,..)' G3) - kann
+    // an der Divisionsstelle nicht 0 sein. TP-sicher, weil jede nicht-beweisbare
+    // Zuweisung die Suppression aufhebt (Real-World-Audit 2026-07-10/-12).
+    if AllAssignmentsProvablyNonZero(MethodNode, ADivisor, ADivNode) then Exit;
+
+    // G5 (#6 CFG-Schlussstueck 2026-07-24): 'if n = 0 then Handle
+    // else x := a div n' - die Else-Kante dominiert die Division,
+    // dort ist n beweisbar <> 0. Letztes Gate, CFG nur fuer
+    // Ueberlebende aller billigen Gates (Perf-Regel).
+    if DivDominatedByNonZeroElseEdge(MethodNode, MethodCfg, ADivNode,
+         ADivisor) then
+      Exit;
+
+    Result := True;
+  end;
+
 begin
   MethodCfg := nil;
   IntVars := TStringList.Create;
@@ -1437,49 +1529,30 @@ begin
         Continue;
       end;
 
-      // H2/H3: Variable als Divisor
-      Divisor := ExtractDivisor(ExprLow);
-      if (Divisor = '') or (IntVars.IndexOf(Divisor) < 0) then Continue;
-
-      // Gibt es einen Guard?
-      if HasGuardingIf(MethodNode, Divisor, N) then Continue;
-
-      // G1: aufsteigende for-Schleifenvariable mit nichtnull-Literal-Start -
-      // im Rumpf immer >= Start >= 1 (Real-World-FP-Audit 2026-07-12).
-      if IsGuardedByForLoopVar(MethodNode, N, Divisor) then Continue;
-
-      // G7: Divisor ist die Obergrenze der umgebenden for-Schleife
-      // ('for y := 0 to n - 1 do .. div n') - im Rumpf ist n >= 1.
-      if IsGuardedByForUpperBound(MethodNode, N, Divisor) then Continue;
-
-      // G2: 'if divisor = 0 then Break/Continue' im selben Schleifenrumpf vor
-      // der Division (Real-World-FP-Audit 2026-07-12).
-      if HasBreakContinueGuard(MethodNode, N, Divisor) then Continue;
-
-      // G4: 'while divisor <> 0 do ... x div divisor' (bzw. > 0 / >= 1) - der
-      // Divisor ist im while-Kopf direkt gegen 0 geschuetzt, die Division liegt
-      // im Rumpf und der Divisor wird davor nicht veraendert (FP-Klasse SCA010
-      // while-guarded-divisor, Welle 1 5%-FP-Konzept 2026-07-18).
-      if IsGuardedByWhileCond(MethodNode, N, Divisor) then Continue;
-
-      // Provably-nonzero: Divisor wird ausschliesslich mit beweisbar-nichtnullen
-      // Ausdruecken belegt (nichtnull-Literale ODER Clamp 'Max(1,..)' G3) - kann
-      // an der Divisionsstelle nicht 0 sein. TP-sicher, weil jede nicht-beweisbare
-      // Zuweisung die Suppression aufhebt (Real-World-Audit 2026-07-10/-12).
-      if AllAssignmentsProvablyNonZero(MethodNode, Divisor, N) then Continue;
-
-      // G5 (#6 CFG-Schlussstueck 2026-07-24): 'if n = 0 then Handle
-      // else x := a div n' - die Else-Kante dominiert die Division,
-      // dort ist n beweisbar <> 0. Letztes Gate, CFG nur fuer
-      // Ueberlebende aller billigen Gates (Perf-Regel).
-      if DivDominatedByNonZeroElseEdge(MethodNode, MethodCfg, N, Divisor) then
-        Continue;
+      // H2/H3: Variable als Divisor. Erst der Divisor, den die Suche vor
+      // Charge D fand - er meldet wie bisher (gleiche Konfidenz, gleiche
+      // Identitaet). Nur wenn der keinen Fund ergibt, kommt der Divisor
+      // der Charge-D-Suche (Operator hinter ')' / ']' / '^', Zahlen-
+      // Operand uebersprungen) zum Zug, und zwar mit fcLow (Nico
+      // 2026-10-24: Stichprobe 7/20 echt). Ist er derselbe, war er schon
+      // geprueft.
+      DivisorVorD4 := ExtractDivisor(ExprLow, True);
+      var NeueForm := False;
+      Divisor := DivisorVorD4;
+      if not UngeschuetzterDivisor(Divisor, N) then
+      begin
+        Divisor := ExtractDivisor(ExprLow, False);
+        if (Divisor = DivisorVorD4) or
+           not UngeschuetzterDivisor(Divisor, N) then
+          Continue;
+        NeueForm := True;
+      end;
 
       var Key := IntToStr(N.Line) + ':' + Divisor;
       if Reported.ContainsKey(Key) then Continue;
       Reported.Add(Key, True);
       Report('Division durch "' + Divisor + '" ohne Pruefung auf 0',
-             N.Line, lsWarning);
+             N.Line, lsWarning, NeueForm);
     end;
 
     // ---- Pruefe nkCall-Knoten (z.B. SetField(x div y)) ----

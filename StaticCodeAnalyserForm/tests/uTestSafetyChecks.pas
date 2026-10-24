@@ -139,6 +139,9 @@ type
   // Der Ausdruckstext ('(a+b-1)div b') hat kein Leerzeichen vor dem
   // Operator; ExtractDivisor suchte ' div ' und sah das Aufrunden-Idiom
   // nie. Eigene Fixture aus demselben Grund wie oben.
+  // Seit Nico 2026-10-24 melden die neuen Formen mit fcLow; FindingsOf ist
+  // der rohe Detektor-Weg ohne Confidence-Filter und Tiering, darum sind
+  // die Funde hier sichtbar und tragen die rohe Severity Warning.
   [TestFixture]
   TTestDivByZeroLeftOperand = class
   public
@@ -1943,6 +1946,11 @@ begin
     Assert.AreEqual(TFindingHelper.LineOf(SRC, '(A + B - 1) div B'),
       TFindingHelper.FirstOf(F, fkDivByZero).LineNumber,
       'Fund auf der Divisionszeile');
+    // Nico 2026-10-24: die neue Form meldet mit fcLow (Stichprobe 7/20
+    // echt). '(a+b-1)div b' hat kein ' div ' - die Vor-D4-Suche liefert ''.
+    Assert.AreEqual<TFindingConfidence>(fcLow,
+      TFindingHelper.FirstOf(F, fkDivByZero).Confidence,
+      'Operator hinter '')'' ist eine neue Form -> fcLow');
   finally F.Free; end;
 end;
 
@@ -1957,8 +1965,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
-    'Abs(A) div B meldet B');
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+      'Abs(A) div B meldet B');
+    Assert.AreEqual<TFindingConfidence>(fcLow,
+      TFindingHelper.FirstOf(F, fkDivByZero).Confidence,
+      '''abs(a)div b'' ist eine neue Form -> fcLow');
   finally F.Free; end;
 end;
 
@@ -1973,8 +1985,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
-    'Arr[0] div B meldet B');
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+      'Arr[0] div B meldet B');
+    Assert.AreEqual<TFindingConfidence>(fcLow,
+      TFindingHelper.FirstOf(F, fkDivByZero).Confidence,
+      '''arr[0]div b'' ist eine neue Form -> fcLow');
   finally F.Free; end;
 end;
 
@@ -1989,8 +2005,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
-    '(A * 2) mod B meldet B');
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+      '(A * 2) mod B meldet B');
+    Assert.AreEqual<TFindingConfidence>(fcLow,
+      TFindingHelper.FirstOf(F, fkDivByZero).Confidence,
+      '''(a*2)mod b'' ist eine neue Form -> fcLow');
   finally F.Free; end;
 end;
 
@@ -2006,9 +2026,15 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual<Integer>(1,
-    TFindingHelper.CountSev(F, fkDivByZero, lsError),
-    '(A + 1) div 0 ist eine Division durch Literal 0');
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.CountSev(F, fkDivByZero, lsError),
+      '(A + 1) div 0 ist eine Division durch Literal 0');
+    // H1 bleibt auch in der neuen Form fcHigh: die Null ist bewiesen,
+    // der fcLow-Entscheid (2026-10-24) betrifft H2/H3.
+    Assert.AreEqual<TFindingConfidence>(fcHigh,
+      TFindingHelper.FirstOf(F, fkDivByZero).Confidence,
+      'Literal 0 ist bewiesen - keine Herabstufung');
   finally F.Free; end;
 end;
 
@@ -2078,8 +2104,14 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
-    'A mod B hinter A div 2 wird geprueft');
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+      'A mod B hinter A div 2 wird geprueft');
+    // Auch der Zahlen-Sprung ist neu: die Vor-D4-Suche lieferte '2' und
+    // damit keinen Fund - 'b' zaehlt als neue Form.
+    Assert.AreEqual<TFindingConfidence>(fcLow,
+      TFindingHelper.FirstOf(F, fkDivByZero).Confidence,
+      'b erst durch den Zahlen-Sprung gefunden -> fcLow');
   finally F.Free; end;
 end;
 
@@ -2087,6 +2119,9 @@ procedure TTestDivByZeroLeftOperand.Div_ParenNumberBeforeMod_StillReported;
 // Korpus-Drop der ersten Fassung (cnwizards testoperators.pas:39): mit der
 // Wortgrenze stand ')div 3' vor ' mod B' und '3' verdraengte 'B'. Bisher
 // wie kuenftig: B wird gemeldet.
+// Zugleich der Pin fuer die ALTE Form (Nico 2026-10-24): ' mod b' fand
+// schon die Vor-D4-Suche, der Fund behaelt seine Konfidenz fcHigh - auch
+// wenn dieselbe Zeile eine neue Form (')div 3') enthaelt.
 const SRC =
   'unit t; implementation'#13#10+
   'function Mix(A, B: Integer): Integer;'#13#10+
@@ -2096,8 +2131,12 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
-    'A mod B bleibt gemeldet, auch hinter (..) div 3');
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+      'A mod B bleibt gemeldet, auch hinter (..) div 3');
+    Assert.AreEqual<TFindingConfidence>(fcHigh,
+      TFindingHelper.FirstOf(F, fkDivByZero).Confidence,
+      'alte Form '' mod b'' behaelt fcHigh');
   finally F.Free; end;
 end;
 
