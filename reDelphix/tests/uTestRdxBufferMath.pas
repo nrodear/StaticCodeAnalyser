@@ -11,8 +11,10 @@ unit uTestRdxBufferMath;
 // das Ergebnis, nicht nur die Offsets.
 //
 // Dazu die SmallInt-Grenze der Editor-Markierung (Nit 8: Spalte und
-// Byte-Praefix bis 32767) und die Wahl des Textes (Nit 24: offen, aber
-// leer oder nicht lesbar, sperrt - kein stiller Rueckfall auf die Platte).
+// Byte-Praefix bis 32767), die Wahl des Textes (Nit 24: offen, aber
+// leer oder nicht lesbar, sperrt - kein stiller Rueckfall auf die Platte)
+// und welche Dateien der Anbieter ueberhaupt liest (Review R1-04: nur
+// Pascal-Quelltext).
 
 interface
 
@@ -34,19 +36,25 @@ type
     [Test] procedure Plan_NewTextGetsBufferEol;
     [Test] procedure Plan_EmptyExpected_Rejected;
     [Test] procedure Plan_EmptyBuffer_Rejected;
+    // Review Woche G05-10: ein Bereich hinter dem Zeilenende ist ein
+    // Fehler der Hilfe, kein veralteter Puffer
+    [Test] procedure Plan_SpanOffLine_NamesPlannerError;
     // Nit 8: SmallInt-Spalten der Editor-Markierung
     [Test] procedure EditorColumn_AsciiLimit;
     [Test] procedure EditorColumn_MultiByteLimit;
     [Test] procedure SpanFitsEditor_BothEnds;
     // Nit 24: offener Puffer schlaegt die Platte, auch leer
     [Test] procedure ChooseTextSource_OpenBufferWins;
+    // Review R1-04: nur Pascal-Quelltext liest der Anbieter
+    [Test] procedure IsPascalSource_OnlyPascalFiles;
   end;
 
 implementation
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uRefactorInfo, uRdxBufferMath;
+  uRefactorInfo, uRdxBufferMath,
+  uRdxText;   // MsgNoValidRange: der gemeinsame Text (Charge C1/G7)
 
 function Bytes(const S: string): TBytes;
 begin
@@ -167,7 +175,10 @@ begin
      Edit(2, 6, 11, 'x - y', 'z')], Plan, Err),
     'der zweite Bereich passt nicht');
   Assert.AreEqual<Integer>(0, Length(Plan), 'auch der erste wird nicht geplant');
-  Assert.IsTrue(Pos('weicht vom Stand beim Menueaufbau ab', Err) > 0, Err);
+  // de.po: '... beim Menueaufbau ...' mit echtem Umlaut (Charge G7) - der
+  // Anfang des Satzes und das Detail sind ohne.
+  Assert.IsTrue(Pos('Quelltext im Editor weicht vom Stand beim', Err) = 1, Err);
+  Assert.IsTrue(Pos('(ab Zeichen 3: erwartet', Err) > 0, Err);
 end;
 
 procedure TTestRdxBufferMath.Plan_Overlap_Rejected;
@@ -179,7 +190,10 @@ begin
   B := Bytes('s := x + y;');
   Assert.IsFalse(PlanByteEdits(B,
     [Edit(1, 6, 11, 'x + y', 'z'), Edit(1, 10, 11, 'y', 'w')], Plan, Err));
-  Assert.IsTrue(Pos('ueberlappen', Err) > 0, Err);
+  // de.po: 'Ersetzungen ueberlappen ...' mit echtem Umlaut (Charge G7) -
+  // die Bytes beider Bereiche sind ohne.
+  Assert.IsTrue(Pos('Ersetzungen ', Err) = 1, Err);
+  Assert.IsTrue(Pos('(Bytes 5..10 und 9..10)', Err) > 0, Err);
 end;
 
 procedure TTestRdxBufferMath.Plan_NewTextGetsBufferEol;
@@ -203,7 +217,10 @@ begin
   B := Bytes('a := 1;');
   Assert.IsFalse(PlanByteEdits(B, [Edit(1, 1, 2, '', 'x')], Plan, Err),
     'blind einfuegen ist nicht erlaubt - immer gegen Text pruefen');
+  // Der gemeinsame Text aus uRdxText (de 'gueltiger' mit echtem Umlaut).
+  Assert.AreEqual(MsgNoValidRange, Err);
   Assert.IsFalse(PlanByteEdits(B, nil, Plan, Err), 'keine Ersetzung');
+  Assert.IsTrue(Pos('keine Ersetzung', Err) > 0, Err);
 end;
 
 procedure TTestRdxBufferMath.Plan_EmptyBuffer_Rejected;
@@ -216,6 +233,40 @@ begin
   Assert.IsFalse(PlanByteEdits(nil, [Edit(1, 1, 2, 'a', 'b')], Plan, Err));
   Assert.IsTrue(Pos('0 Zeilen', Err) > 0, Err);
   Assert.AreEqual<Integer>(0, Length(Plan));
+end;
+
+procedure TTestRdxBufferMath.Plan_SpanOffLine_NamesPlannerError;
+var
+  B    : TBytes;
+  E    : TRdxEdit;
+  Plan : TArray<TRdxByteEdit>;
+  Err  : string;
+begin
+  // Der Rumpf hinter 'if A then' und einer LEEREN Zeile, gebaut wie die
+  // Planer Expected bauen (RangeText): SpanText verlangt StartCol <= Laenge
+  // der ersten Zeile und liefert hier ''. Der Puffer ist unveraendert - der
+  // Grund nennt den Bereich, nicht "weicht ab ... Menue neu oeffnen" (bis
+  // Review Woche G05-10 hiess es immer so, Gegen-Review R4-02).
+  B := Bytes('  if A then'#13#10#13#10'    Foo;');
+  E.Span := TRefactorSpan.Make('t', 2, 1, 3, 9);
+  E.Expected := #10'    Foo;';
+  E.NewText := 'x';
+  Assert.IsFalse(PlanByteEdits(B, [E], Plan, Err), 'nicht geschrieben');
+  Assert.IsTrue(Pos('hinter dem Zeilenende', Err) > 0, Err);
+  Assert.IsTrue(Pos('Fehler der Hilfe', Err) > 0, Err);
+  Assert.IsTrue(Pos('weicht vom Stand', Err) = 0, Err);
+  // Hinter dem Ende der letzten Zeile ebenso.
+  E.Span := TRefactorSpan.Make('t', 1, 3, 3, 20);
+  E.Expected := 'if A then'#10#10'    Foo;';
+  Assert.IsFalse(PlanByteEdits(B, [E], Plan, Err));
+  Assert.IsTrue(Pos('hinter dem Zeilenende', Err) > 0, Err);
+  // Gegenprobe: derselbe Bereich mit anderem Erwartungstext - der Puffer
+  // weicht ab, der alte Grund bleibt. de.po: '... beim Menueaufbau ab' mit
+  // echtem Umlaut (Charge G7) - hier nur der Teil ohne.
+  E.Span := TRefactorSpan.Make('t', 2, 1, 3, 9);
+  E.Expected := #10'    Bar;';
+  Assert.IsFalse(PlanByteEdits(B, [E], Plan, Err));
+  Assert.IsTrue(Pos('weicht vom Stand beim Men', Err) > 0, Err);
 end;
 
 procedure TTestRdxBufferMath.EditorColumn_AsciiLimit;
@@ -236,14 +287,19 @@ procedure TTestRdxBufferMath.EditorColumn_MultiByteLimit;
 var
   L : string;
 begin
-  // Umlaut: 2 UTF-8-Bytes je Zeichen - die Byte-Grenze kommt bei der
-  // halben Zeichen-Spalte.
+  // Umlaut: 2 UTF-8-Bytes je Zeichen. In die SmallInt-Felder schreibt
+  // uRdxEditor seit ff8d7f2f die ZEICHEN-Spalte (CharIndex), die hier bis
+  // 20000 passte; die Byte-Schranke von EditorColumnFits ist strenger als
+  // noetig und bewusst beibehalten (Doku dort) - dieser Test pinnt sie als
+  // Entscheid, nicht als Notwendigkeit.
   L := StringOfChar(#$00E4, 20000);
   Assert.AreEqual<Integer>(32766, Utf8PrefixLength(L, 16384));
   Assert.AreEqual<Integer>(0, Utf8PrefixLength(L, 1), 'kein Praefix');
   Assert.IsTrue(EditorColumnFits(L, 16384), '16383 Zeichen = 32766 Bytes');
-  Assert.IsFalse(EditorColumnFits(L, 16385), '16384 Zeichen = 32768 Bytes');
-  Assert.IsFalse(EditorColumnFits(L, 20000), 'Spalte passt, Bytes nicht');
+  Assert.IsFalse(EditorColumnFits(L, 16385),
+    '16384 Zeichen = 32768 Bytes - Byte-Schranke (Entscheid, s. oben)');
+  Assert.IsFalse(EditorColumnFits(L, 20000),
+    'Zeichen-Spalte passte, Byte-Schranke greift (Entscheid, s. oben)');
 end;
 
 procedure TTestRdxBufferMath.SpanFitsEditor_BothEnds;
@@ -281,6 +337,23 @@ begin
     'offen, aber nicht lesbar');
   Assert.IsTrue(ChooseTextSource(True, False, 'Rest') = txBlocked,
     'Lesefehler zaehlt, auch mit Teiltext');
+end;
+
+procedure TTestRdxBufferMath.IsPascalSource_OnlyPascalFiles;
+const
+  // Relative Pfade (ein Punkt im Verzeichnis zaehlt nicht als Endung).
+  PASCAL: array[0..6] of string = ('src\Main.pas', 'Proj.DPR', 'pkg.dpk',
+    'jedi.inc', 'laz.lpr', 'unit.PP', 'x.y\Mixed.Pas');
+  // Formulare, Konfiguration, Projekte: dort liest Provide nichts mehr.
+  OTHER: array[0..7] of string = ('Main.dfm', 'Main.fmx', 'Main.lfm',
+    'app.ini', 'Proj.dproj', 'notes.txt', 'src.pas\README', '');
+var
+  i : Integer;
+begin
+  for i := 0 to High(PASCAL) do
+    Assert.IsTrue(IsPascalSource(PASCAL[i]), PASCAL[i]);
+  for i := 0 to High(OTHER) do
+    Assert.IsFalse(IsPascalSource(OTHER[i]), OTHER[i]);
 end;
 
 initialization

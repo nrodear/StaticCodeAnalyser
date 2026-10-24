@@ -142,6 +142,23 @@ type
     [Test] procedure ImpactsAsStringsDoesNotRaise;
   end;
 
+  // Review Bereich C Engine-Kern (Blocker 2, Major 7, Minor; 2026-10-14):
+  // Reload laeuft unter dem Katalog-Monitor, fixMode 'none' schaltet
+  // editorHelp ab, profiles.json wird atomar geschrieben. Eigene Fixture,
+  // weil TTestRuleCatalog mit 38 Tests ueber der Grenze je Fixture liegt.
+  [TestFixture]
+  TTestRuleCatalogGuard = class
+  public
+    [Test] procedure Reload_WhileWorkersRead_EveryAnswerConsistent;
+    [Test] procedure FixModeNone_TurnsEditorHelpOff;
+    [Test] procedure SaveUserProfile_WritesAtomically_NoTempFileLeft;
+    // Der Tausch scheitert (Ziel schreibgeschuetzt): False mit Text, der
+    // alte Dateiinhalt und das Profil im Speicher bleiben, und keine
+    // Nachbardatei bleibt liegen (Review Woche G03-10/G03-26).
+    [Test] procedure SaveUserProfile_TargetReadOnly_KeepsOldFileNoTempLeft;
+  end;
+
+
 implementation
 
 uses
@@ -162,6 +179,24 @@ const
   PROF_DEFAULT = 'default';
   PROF_STRICT  = 'strict';
   PROF_STYLE   = 'style';
+
+function NachbarDateienVon(const APfad: string): Integer;
+// Zahl der liegengebliebenen Nachbardateien von APfad ('<Datei>*.tmp'):
+// trifft den alten festen Namen '<Datei>.tmp' ebenso wie den je Prozess
+// ('<Datei>.<pid>.tmp') - der Test haengt nicht an der Namensbildung.
+begin
+  Result := Length(TDirectory.GetFiles(ExtractFilePath(APfad),
+    ExtractFileName(APfad) + '*.tmp'));
+end;
+
+procedure LoescheNachbarDateien(const APfad: string);
+var
+  Datei : string;
+begin
+  for Datei in TDirectory.GetFiles(ExtractFilePath(APfad),
+                 ExtractFileName(APfad) + '*.tmp') do
+    System.SysUtils.DeleteFile(Datei);
+end;
 
 procedure TTestRuleCatalog.Setup;
 begin
@@ -235,7 +270,7 @@ procedure TTestRuleCatalog.JsonTypeMatchesKindMeta;
 // JSON type == KIND_META.FindingType. Die Kategorie steuert den
 // Sonar-/SARIF-Export und die UI-Gruppierung; driftet sie, sehen User
 // denselben Befund in der IDE als Bug und im CI-Report als Code Smell.
-// Zusatznutzen: TRuleCatalog.ParseFindingType faellt bei unbekannter
+// Zusatznutzen: ParseFindingType (uRuleCatalog) faellt bei unbekannter
 // Schreibweise still auf ftCodeSmell zurueck - ein Tippfehler im
 // type-Feld einer Bug-/Vulnerability-Rule wird damit hier sichtbar,
 // statt lautlos zum Code Smell zu werden.
@@ -730,6 +765,8 @@ begin
   Assert.IsTrue(fkDivByZero     in P, 'bugs-only: DivByZero fehlt');
   Assert.IsTrue(fkSQLInjection  in P, 'bugs-only: SQLInjection fehlt');
   Assert.IsTrue(fkDfmDeadEvent  in P, 'bugs-only: DfmDeadEvent fehlt');
+  Assert.IsTrue(fkComparisonPrecedence in P, 'bugs-only: ComparisonPrecedence fehlt');
+  Assert.IsTrue(fkLoopPastHighBound in P, 'bugs-only: LoopPastHighBound fehlt');
   // Draussen: Code Smells und Duplikate.
   Assert.IsFalse(fkLongMethod      in P, 'bugs-only: LongMethod sollte raus');
   Assert.IsFalse(fkMagicNumber     in P, 'bugs-only: MagicNumber sollte raus');
@@ -1162,11 +1199,14 @@ begin
     'SCA003 meldet Zuweisungen und Aufrufe');
   Assert.AreEqual('assisted', Meta.FixMode,
     'SCA003 ist ein Review-Zeiger - nur assistiert, nie automatisch');
-  // Editorhilfe (Beschluss 2026-10-10): SCA044 schreibt (Format()), SCA003
-  // legt nur eine Vorlage in die Zwischenablage - keine Editorhilfe.
+  // Editorhilfe = Code-Aktion zum Fund (Beschluss 2026-10-10, Begriff seit
+  // 2026-10-11): SCA044 schreibt (Format()), SCA003 legt die
+  // parametrisierte Vorlage in die Zwischenablage - beides ist eine
+  // Code-Aktion, Gluehbirne und QF-Badge zeigen sie (Q17, 2026-10-23; bis
+  // dahin stand SCA003 hier ausdruecklich ohne).
   Assert.IsTrue(TRuleCatalog.GetRuleCanonical(fkConcatToFormat).EditorHelp,
     'SCA044 hat eine Editorhilfe');
-  Assert.IsFalse(Meta.EditorHelp, 'SCA003 hat keine Editorhilfe');
+  Assert.IsTrue(Meta.EditorHelp, 'SCA003 hat eine Editorhilfe (SQL-Vorlage)');
 end;
 
 procedure TTestRuleCatalog.FallbackCarriesAnchorAndFixMode;
@@ -1360,13 +1400,203 @@ begin
     Assert.IsFalse(Meta.EditorHelp, 'SCA044: ausdrueckliches editorHelp false gilt');
     Assert.IsTrue(TRuleCatalog.GetRuleCanonical(fkFreeWithoutNil).EditorHelp,
       'SCA139: editorHelp "ja" ist kein Boolean -> Tabellenwert true');
-    Assert.IsFalse(TRuleCatalog.GetRuleCanonical(fkSQLInjection).EditorHelp,
-      'SCA003 ohne editorHelp in der Datei -> Tabellenwert false');
+    Assert.IsTrue(TRuleCatalog.GetRuleCanonical(fkSQLInjection).EditorHelp,
+      'SCA003 ohne editorHelp in der Datei -> Tabellenwert true');
   finally
     TRuleCatalog.JsonFilePath := AltPfad;
     if TFile.Exists(Datei) then TFile.Delete(Datei);
     TRuleCatalog.Reload;   // echten Katalog wiederherstellen
   end;
 end;
+
+{ TTestRuleCatalogGuard }
+
+procedure TTestRuleCatalogGuard.Reload_WhileWorkersRead_EveryAnswerConsistent;
+// Vier Leser fragen den Katalog in Schleifen, waehrend der Testthread ihn
+// wiederholt neu laedt (das Profil-Fenster 'Neu laden' waehrend eines
+// Massenscans). Jede Antwort muss vollstaendig sein: ID gesetzt, Kind
+// passend, 'default'-Profil nie leer, lokalisierter Name nie leer. Vor
+// dem Monitor las ein Worker in ein halb geleertes Dictionary. Gezaehlt
+// statt assertiert: DUnitX-Assertions gehoeren auf den Testthread.
+//
+// Auch eine EXCEPTION im Worker zaehlt (Review Woche G03-06): das ist das
+// Hauptsymptom ohne Monitor (EListError/AV beim Lesen waehrend Clear).
+// TThread faengt sie sonst still in FatalException, der Worker endet,
+// WaitFor kehrt normal zurueck - und der Zaehler bliebe 0.
+var
+  Threads : array[0..3] of TThread;
+  Fehler  : Integer;
+  i, j    : Integer;
+begin
+  Fehler := 0;
+  for i := Low(Threads) to High(Threads) do
+  begin
+    Threads[i] := TThread.CreateAnonymousThread(
+      procedure
+      var
+        K     : TFindingKind;
+        Meta  : TRuleMeta;
+        Runde : Integer;
+      begin
+        try
+          for Runde := 1 to 40 do
+            for K := Low(TFindingKind) to High(TFindingKind) do
+            begin
+              Meta := TRuleCatalog.GetRuleCanonical(K);
+              if (Meta.ID = '') or (Meta.Kind <> K) then
+                AtomicIncrement(Fehler);
+              if TRuleCatalog.GetProfile(PROF_DEFAULT) = [] then
+                AtomicIncrement(Fehler);
+              if TRuleCatalog.GetRule(K, 'de').Name = '' then
+                AtomicIncrement(Fehler);
+            end;
+        except
+          // Jede Exception ist ein Befund dieses Tests, keine zu
+          // verschluckende Stoerung - sie landet im Zaehler.
+          AtomicIncrement(Fehler);
+        end;
+      end);
+    Threads[i].FreeOnTerminate := False;
+  end;
+  try
+    for i := Low(Threads) to High(Threads) do
+      Threads[i].Start;
+    for j := 1 to 25 do
+      TRuleCatalog.Reload;
+    for i := Low(Threads) to High(Threads) do
+      Threads[i].WaitFor;
+    // Zweiter Riegel: was am except oben vorbeikaeme (nichts sollte),
+    // stuende hier.
+    for i := Low(Threads) to High(Threads) do
+      Assert.IsNull(Threads[i].FatalException,
+        Format('Worker %d endete mit einer Exception', [i]));
+  finally
+    for i := Low(Threads) to High(Threads) do
+      Threads[i].Free;
+  end;
+  Assert.AreEqual<Integer>(0, Fehler,
+    'unvollstaendige Katalog-Antworten waehrend Reload');
+end;
+
+procedure TTestRuleCatalogGuard.FixModeNone_TurnsEditorHelpOff;
+// fixMode 'none' schaltet jede Schreibhilfe ab - dann darf der Bericht
+// auch kein Quick-Win-Badge zeigen, egal was editorHelp in der Datei
+// sagt. Gegenprobe: 'auto' laesst den Tabellenwert (SCA044: true) stehen.
+var
+  AltPfad : string;
+  Datei   : string;
+  Meta    : TRuleMeta;
+begin
+  AltPfad := TRuleCatalog.JsonFilePath;
+  Datei := SchreibeTempJson(
+    '{"rules":[' +
+    '{"id":"SCA139","kind":"FreeWithoutNil","name":"n139",' +
+    '"fixMode":"none","editorHelp":true},' +
+    '{"id":"SCA044","kind":"ConcatToFormat","name":"n44","fixMode":"auto"}]}');
+  try
+    TRuleCatalog.JsonFilePath := Datei;
+    TRuleCatalog.Reload;
+    Meta := TRuleCatalog.GetRuleCanonical(fkFreeWithoutNil);
+    Assert.AreEqual('none', Meta.FixMode);
+    Assert.IsFalse(Meta.EditorHelp,
+      'fixMode none gewinnt gegen editorHelp true');
+    Meta := TRuleCatalog.GetRuleCanonical(fkConcatToFormat);
+    Assert.AreEqual('auto', Meta.FixMode);
+    Assert.IsTrue(Meta.EditorHelp,
+      'SCA044 ohne editorHelp in der Datei -> Tabellenwert true');
+  finally
+    TRuleCatalog.JsonFilePath := AltPfad;
+    if TFile.Exists(Datei) then TFile.Delete(Datei);
+    TRuleCatalog.Reload;   // echten Katalog wiederherstellen
+  end;
+end;
+
+procedure TTestRuleCatalogGuard.SaveUserProfile_WritesAtomically_NoTempFileLeft;
+// WriteUserProfiles schreibt eine Nachbardatei und benennt sie um: nach
+// dem Speichern steht die Zieldatei, die Nachbardatei ist weg, und ein
+// zweites Speichern ersetzt die bestehende Datei.
+var
+  AltPfad : string;
+  TmpPfad : string;
+  Err     : string;
+  Ziel    : TDictionary<string, TFindingKinds>;
+begin
+  AltPfad := TRuleCatalog.UserProfilesPath;
+  TmpPfad := TPath.Combine(TPath.GetTempPath, 'sca_test_profiles_atomic_' +
+    TGuid.NewGuid.ToString.Replace('{', '').Replace('}', '') + '.json');
+  TRuleCatalog.UserProfilesPath := TmpPfad;
+  try
+    Assert.IsTrue(TRuleCatalog.SaveUserProfile('atomic-probe',
+      [fkMemoryLeak], Err), 'Anlegen: ' + Err);
+    Assert.IsTrue(TFile.Exists(TmpPfad), 'Zieldatei steht');
+    Assert.AreEqual<Integer>(0, NachbarDateienVon(TmpPfad),
+      'die Nachbardatei ist umbenannt, nicht liegengeblieben');
+    Ziel := TDictionary<string, TFindingKinds>.Create;
+    try
+      Assert.IsTrue(TRuleCatalog.ReadProfilesFile(TmpPfad, Ziel, Err),
+        'lesbar: ' + Err);
+      Assert.IsTrue(Ziel.ContainsKey('atomic-probe'));
+    finally
+      Ziel.Free;
+    end;
+    Assert.IsTrue(TRuleCatalog.SaveUserProfile('atomic-probe',
+      [fkSQLInjection], Err), 'Aendern: ' + Err);
+    Assert.AreEqual<Integer>(0, NachbarDateienVon(TmpPfad));
+    Assert.IsTrue(fkSQLInjection in TRuleCatalog.GetProfile('atomic-probe'));
+  finally
+    TRuleCatalog.DeleteUserProfile('atomic-probe', Err);
+    TRuleCatalog.UserProfilesPath := AltPfad;
+    if TFile.Exists(TmpPfad) then TFile.Delete(TmpPfad);
+    LoescheNachbarDateien(TmpPfad);
+  end;
+end;
+
+procedure TTestRuleCatalogGuard.SaveUserProfile_TargetReadOnly_KeepsOldFileNoTempLeft;
+// Ein schreibgeschuetztes Ziel laesst MoveFileEx(REPLACE_EXISTING) mit
+// ERROR_ACCESS_DENIED scheitern - die Nachbardatei ist da schon
+// geschrieben. Ohne das Aufraeumen im except blieb sie im
+// Konfigverzeichnis liegen; der alte Inhalt muss in jedem Fall stehen.
+var
+  AltPfad : string;
+  TmpPfad : string;
+  Err     : string;
+  Vorher  : string;
+begin
+  AltPfad := TRuleCatalog.UserProfilesPath;
+  TmpPfad := TPath.Combine(TPath.GetTempPath, 'sca_test_profiles_ro_' +
+    TGuid.NewGuid.ToString.Replace('{', '').Replace('}', '') + '.json');
+  TRuleCatalog.UserProfilesPath := TmpPfad;
+  try
+    Assert.IsTrue(TRuleCatalog.SaveUserProfile('ro-probe',
+      [fkMemoryLeak], Err), 'Anlegen: ' + Err);
+    Vorher := TFile.ReadAllText(TmpPfad);
+    Assert.IsTrue(FileSetReadOnly(TmpPfad, True), 'Schreibschutz setzen');
+
+    Assert.IsFalse(TRuleCatalog.SaveUserProfile('ro-probe',
+      [fkSQLInjection], Err), 'Tausch auf ein schreibgeschuetztes Ziel');
+    Assert.IsTrue(Err <> '', 'Fehlertext fuer die Oberflaeche');
+    Assert.AreEqual(Vorher, TFile.ReadAllText(TmpPfad),
+      'alter Dateiinhalt unveraendert');
+    Assert.AreEqual<Integer>(0, NachbarDateienVon(TmpPfad),
+      'keine Nachbardatei-Leiche');
+    Assert.IsTrue(fkMemoryLeak in TRuleCatalog.GetProfile('ro-probe'),
+      'der Speicher bleibt beim gespeicherten Stand');
+    Assert.IsFalse(fkSQLInjection in TRuleCatalog.GetProfile('ro-probe'));
+  finally
+    if TFile.Exists(TmpPfad) then
+      FileSetReadOnly(TmpPfad, False);
+    TRuleCatalog.DeleteUserProfile('ro-probe', Err);
+    TRuleCatalog.UserProfilesPath := AltPfad;
+    if TFile.Exists(TmpPfad) then TFile.Delete(TmpPfad);
+    LoescheNachbarDateien(TmpPfad);
+  end;
+end;
+
+initialization
+  // Anmeldung ausdruecklich, nicht nur ueber UseRTTI des Runners (Review
+  // Woche G03-25): ein Runner ohne RTTI-Suche liesse die Waechter sonst
+  // still aus.
+  TDUnitX.RegisterTestFixture(TTestRuleCatalog);
+  TDUnitX.RegisterTestFixture(TTestRuleCatalogGuard);
 
 end.

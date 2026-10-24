@@ -1,0 +1,29 @@
+# tools/rdx_i18n_gate.allow - bewusst feste (nicht uebersetzte) Texte in
+# reDelphix/source fuer tools/rdx_i18n_gate.py (Entscheid E29, Charge C1).
+#
+# Format je Zeile:  <Unit.pas oder *> | <Art> <Wert> | <Begruendung>
+#   unit             die ganze Unit
+#   const <NAME>     alle Literale der Konstante NAME (auch String-Arrays)
+#   text <Text>      eine Literal-Kette mit genau diesem Text
+#   regex <Muster>   Literal-Ketten, auf die das Muster passt (re.search)
+#   call <Routine>   Literale im ersten Argument jedes Aufrufs der Routine
+#   name <NAME>      ein Fund der Art qualif/fremd mit diesem Namen bzw. der
+#                    Art dynamisch mit diesem Argument (wie im Fund)
+# '*' als Unit nur mit text, regex und call. Ein Eintrag ohne Begruendung,
+# mit unbekannter Art oder kaputtem Muster bricht das Gate ab (Exit 2);
+# einer, der nichts (mehr) trifft, ist ein Fund ('ausnahme') - wer einen
+# Text umstellt, nimmt seinen Eintrag mit heraus.
+#
+# Nicht noetig sind Eintraege fuer englische Meldungsschluessel zum Lesen
+# der SCA-Meldungen (KEY_* wie 'Comment at column '), Code-Schnipsel
+# ('Result := nil', 'raise ENotImplemented.Create(''%s'');') und
+# Schluesselwoerter: die Heuristik haelt sie nicht fuer deutsch, ein
+# Eintrag traefe nichts. Ein deutscher Kommentar in erzeugtem Code ist
+# dagegen Text fuer den Nutzer (uRdxSqlTemplate.BIND_COMMENT) - uebersetzen
+# oder hier mit Begruendung eintragen.
+
+uRdxLog.pas | unit | Protokoll (reDelphix.log, OutputDebugString): Zeilen fuer die Fehlersuche, keine Oberflaeche - bleibt deutsch (Plan E29)
+* | call RdxLog | Protokoll: der Text eines RdxLog-Aufrufs geht nur nach reDelphix.log, nie in ein Menue oder eine Meldung
+uRdxProvider.pas | const OPEN_NAMES | Protokoll: Woerter der Provide-Zeile im reDelphix.log (Argument von RdxLog, nie in der Oberflaeche)
+uRdxProvider.pas | const SOURCE_NAMES | Protokoll: Quelle des Texts in der Provide-Zeile im reDelphix.log ('quelle=Editor-Puffer', Argument von RdxLog, nie in der Oberflaeche) - seit FIX-C1 sieht die Heuristik einzelne Woerter
+uRdxProvider.pas | name S_TOO_LONG | die msgid steht in uRdxEditor (dort _(S_TOO_LONG), derselbe Text) - der Extraktor findet sie dort

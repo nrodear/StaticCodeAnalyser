@@ -3,8 +3,11 @@ unit uTrailingCommaArgList;
 // Detektor fuer trailing Komma in Argument-Listen: `Foo(A, B,)`.
 //
 // SonarDelphi-Aequivalent: communitydelphi:TrailingCommaArgumentList.
-// Delphi-Compiler akzeptiert das stillschweigend in vielen Releases,
-// aber:
+// Delphi lehnt das Komma in einem normalen Aufruf ab: es haengt ein leeres
+// Argument an (z. B. E2034 "Zu viele Parameter"). Uebersetzt wird es nur in
+// einem spaet gebundenen Aufruf auf einem Variant oder einer dispinterface
+// (OLE-Automation, `Excel.Workbooks.Open(Name,)`) - dort ist das leere
+// Argument ein weggelassener optionaler Parameter. Auch dort gilt:
 //   * Suggeriert dass noch ein Argument folgen sollte (vergessen)
 //   * Verwirrt Diff-Tools - die zusaetzliche leere Zeile vor `)` wirkt
 //     wie eine entfernte Zeile.

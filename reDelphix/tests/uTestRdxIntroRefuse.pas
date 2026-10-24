@@ -1,7 +1,7 @@
 unit uTestRdxIntroRefuse;
 
 // DUnitX-Tests fuer uRdxIntroPlan (reDelphix, Code-Aktion "Lokale
-// Variable einfuehren", Refactoring ohne Fund): der Zweig ohne begin
+// Konstante einfuehren", Refactoring ohne Fund): der Zweig ohne begin
 // (begin..end, Einrueckung) und alle Ablehnungen - case-Zweig,
 // Sprungmarke, on-Handler, Zeilenanfang, schon benannt,
 // Konstanten-Kontexte, Deklarationszeilen, die Zeile darueber. Aus
@@ -12,8 +12,10 @@ unit uTestRdxIntroRefuse;
 // alle Erwartungen sind von Hand abgeleitete Literale, Spalten 1-basierte
 // Zeichenspalten der Zeile (ein Tab ist EINE Spalte).
 //
-// 1:1 aus dem Labor VarNameProject (uTestVnpRefuse, Stand 41bccb23,
-// Entscheid E24).
+// 1:1 aus dem Labor VarNameProject (uTestVnpRefuse, Stand 2026-10-14 nach dem
+// Review F/B vom 2026-10-13, Entscheid E24: erst der im Labor gemessene
+// Stand, die Zusammenlegung mit uRdxCodeMap/uRdxBufferMath folgt
+// spaeter).
 
 interface
 
@@ -61,7 +63,7 @@ begin
   Assert.IsTrue(P.Ok, 'then, Ok: ' + P.Reason);
   Assert.IsTrue(P.Wrap, 'then, Wrap');
   Assert.AreEqual('  ', P.BlockIndent, 'then, BlockIndent');
-  Assert.AreEqual('    var N01 := 999;', P.DeclText, 'then, DeclText');
+  Assert.AreEqual('    const N01 = 999;', P.DeclText, 'then, DeclText');
   Assert.AreEqual('    Result := N01;', P.NewUseLine, 'then, NewUseLine');
   P := PlanIntroduce('    Result := 999;', '  if X then // Kommentar', 15,
     'N01');
@@ -83,7 +85,7 @@ begin
     'MagicNr01');
   Assert.IsTrue(P.Ok, 'Fall 2, Ok: ' + P.Reason);
   Assert.IsFalse(P.Wrap, 'Fall 2, kein Wrap');
-  Assert.AreEqual('  var MagicNr01 := 1000;', P.DeclText, 'Fall 2, DeclText');
+  Assert.AreEqual('  const MagicNr01 = 1000;', P.DeclText, 'Fall 2, DeclText');
   Assert.AreEqual('  if Result > MagicNr01 then', P.NewUseLine,
     'Fall 2, NewUseLine');
 end;
@@ -98,8 +100,8 @@ begin
   P := PlanIntroduce(#9'Result := Value and $FF00;', 'begin', 22, 'MagicNr01');
   Assert.IsTrue(P.Ok, 'Fall 5, Ok: ' + P.Reason);
   Assert.AreEqual(TAB1, P.Indent, 'Fall 5, Indent');
-  Assert.AreEqual(#9'var MagicNr01 := $FF00;', P.DeclText, 'Fall 5, DeclText');
-  Assert.AreEqual<Integer>(6, P.NameCol, 'Fall 5, NameCol');
+  Assert.AreEqual(#9'const MagicNr01 = $FF00;', P.DeclText, 'Fall 5, DeclText');
+  Assert.AreEqual<Integer>(8, P.NameCol, 'Fall 5, NameCol');
   Assert.AreEqual(#9'Result := Value and MagicNr01;', P.NewUseLine,
     'Fall 5, NewUseLine');
   Assert.AreEqual<Integer>(1, Length(P.OldCols), 'Fall 5, Zahl OldCols');
@@ -109,8 +111,8 @@ begin
   Assert.IsTrue(P.Ok, 'Tabs, Ok: ' + P.Reason);
   Assert.IsTrue(P.Wrap, 'Tabs, Wrap');
   Assert.AreEqual(#9#9, P.BlockIndent, 'Tabs, BlockIndent');
-  Assert.AreEqual(#9#9#9'var N01 := 5;', P.DeclText, 'Tabs, DeclText');
-  Assert.AreEqual<Integer>(8, P.NameCol, 'Tabs, NameCol');
+  Assert.AreEqual(#9#9#9'const N01 = 5;', P.DeclText, 'Tabs, DeclText');
+  Assert.AreEqual<Integer>(10, P.NameCol, 'Tabs, NameCol');
   P := PlanIntroduce(#9'    Y := 5;', #9'  else', 11, 'N01');
   Assert.IsTrue(P.Ok, 'gemischt, Ok: ' + P.Reason);
   Assert.IsTrue(P.Wrap, 'gemischt, Wrap');
@@ -122,7 +124,8 @@ begin
   Assert.IsTrue(P.Ok, 'Tab/Leerzeichen, Ok: ' + P.Reason);
   Assert.IsTrue(P.Wrap, 'Tab/Leerzeichen, Wrap');
   Assert.AreEqual(TAB1, P.BlockIndent, 'Tab/Leerzeichen, BlockIndent');
-  Assert.AreEqual('    var N01 := 5;', P.DeclText, 'Tab/Leerzeichen, DeclText');
+  Assert.AreEqual('    const N01 = 5;', P.DeclText,
+    'Tab/Leerzeichen, DeclText');
 end;
 
 // begin..end fuer den Zweig nur, wenn die Zeile genau die EINE Anweisung
@@ -134,20 +137,26 @@ end;
 // else in Strings und Kommentaren und 'Else' als Teil eines Bezeichners
 // lassen den Wrap zu.
 procedure TTestRdxIntroRefuse.Wrap_ExactlyOneCompleteStatement;
+const
+  // Aus dem Grund '... endet nicht auf dieser Zeile mit ";" (mehrzeilig
+  // oder vor else) - nicht unterstuetzt' ein umlautfreies Teilstueck: in
+  // i18n/de.po steht 'nicht unterstuetzt' mit echtem Umlaut (Entscheid
+  // E29), die Testquellen bleiben ASCII.
+  NO_SEMI = '(mehrzeilig oder vor else)';
 var
   P : TRdxIntroPlan;
 begin
   P := PlanIntroduce('    Result := 999', '  if X then', 15, 'N01');
   Assert.IsFalse(P.Ok, 'ohne ;');
-  Assert.IsTrue(Pos('nicht unterstuetzt', P.Reason) > 0,
+  Assert.IsTrue(Pos(NO_SEMI, P.Reason) > 0,
     'Grund ohne ;: ' + P.Reason);
   P := PlanIntroduce('    Result := 42 +', '  if Done then', 15, 'N01');
   Assert.IsFalse(P.Ok, 'Ausdruck geht in der naechsten Zeile weiter');
-  Assert.IsTrue(Pos('nicht unterstuetzt', P.Reason) > 0,
+  Assert.IsTrue(Pos(NO_SEMI, P.Reason) > 0,
     'Grund Ausdruck: ' + P.Reason);
   P := PlanIntroduce('    Foo(42,', '  for I := 1 to 3 do', 9, 'N01');
   Assert.IsFalse(P.Ok, 'Argumentliste geht in der naechsten Zeile weiter');
-  Assert.IsTrue(Pos('nicht unterstuetzt', P.Reason) > 0,
+  Assert.IsTrue(Pos(NO_SEMI, P.Reason) > 0,
     'Grund Argumentliste: ' + P.Reason);
   // Neu: die ZEILE endet mit ';', die Zweig-Anweisung aber vor dem else
   // bzw. vor der zweiten Anweisung.
@@ -253,6 +262,9 @@ end;
 // Deklaration (auch hex, mit Typangabe, mit Tab vor dem Literal) ->
 // Abbruch; ist es nur ein Teil des Werts, geht es (README Grenzen;
 // vnptest: named var, named hex, named const, var part, var compare).
+// Beide Formen zaehlen: die Inline-var eines Anwenders und die
+// Inline-Konstante, die die Aktion selbst schreibt (E26: 'const MagicNr01
+// = 42;' - sonst baute ein zweiter Lauf 'const N02 = 42;' davor).
 // 'const Max: Integer = 42;' faellt auch unter die Konstanten-Regel; die
 // Pruefung auf 'Namen' (vnptest) haelt fest, dass "schon benannt" zuerst
 // greift.
@@ -269,6 +281,15 @@ begin
   P := PlanIntroduce('  const Max: Integer = 42; // x', 'begin', 25, 'N02');
   Assert.IsFalse(P.Ok, 'const');
   Assert.IsTrue(Pos('Namen', P.Reason) > 0, 'Grund const: ' + P.Reason);
+  // E26: die eigene Deklaration (die 42 in Spalte 21, $FF00 in Spalte 20).
+  P := PlanIntroduce('  const MagicNr01 = 42;', 'begin', 21, 'N02');
+  Assert.IsFalse(P.Ok, 'eigene Inline-Konstante');
+  Assert.IsTrue(Pos('Namen', P.Reason) > 0,
+    'Grund eigene Inline-Konstante: ' + P.Reason);
+  P := PlanIntroduce(#9'const MagicNr02 = $FF00;', 'begin', 20, 'N02');
+  Assert.IsFalse(P.Ok, 'eigene Inline-Konstante hex');
+  Assert.IsTrue(Pos('Namen', P.Reason) > 0,
+    'Grund eigene Inline-Konstante hex: ' + P.Reason);
   P := PlanIntroduce('  var Y := 42 * X;', 'begin', 13, 'N02');
   Assert.IsTrue(P.Ok, 'Teil des Werts: ' + P.Reason);
   P := PlanIntroduce('  var B := X = 42;', 'begin', 18, 'N02');

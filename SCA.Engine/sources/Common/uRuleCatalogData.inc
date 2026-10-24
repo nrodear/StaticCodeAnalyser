@@ -13,7 +13,7 @@
 const
   // Index == Ord(TFindingKind) - die JSON ist positionsgleich zum Enum
   // (Test RuleIDMatchesOrdinal sichert das ab).
-  RULE_CATALOG_DATA : array[0..200] of TRuleFallbackData = (
+  RULE_CATALOG_DATA : array[0..202] of TRuleFallbackData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -24,7 +24,7 @@ const
         'finally' + #13#10 + '  list.Free;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA002
     (
@@ -35,7 +35,7 @@ const
       GoodEx   : 'try DoStuff except on E: Exception do LogError(E.Message); end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA003
     (
@@ -47,7 +47,7 @@ const
         'Query.ParamByName(''n'').AsString := UserName;';
       Anchor   : 'assign-or-call';
       FixMode  : 'assisted';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA004
     (
@@ -116,7 +116,7 @@ const
       GoodEx   : 'obj := TFoo.Create;' + #13#10 + 'try obj.DoStuff finally obj.Free end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA010
     (
@@ -139,7 +139,7 @@ const
         #13#10 + 'end;' + #13#10 + 'WriteLn(''reached'');';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA012
     (
@@ -172,7 +172,7 @@ const
       GoodEx   : 'const MAX_RETRIES = 3;' + #13#10 + 'if RetryCount > MAX_RETRIES then ...';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA015
     (
@@ -207,7 +207,7 @@ const
       GoodEx   : 'Logger.Debug(''reached step 3'');';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA018
     (
@@ -220,7 +220,7 @@ const
         #13#10 + 'if d then DoStuff;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA019
     (
@@ -556,7 +556,7 @@ const
       GoodEx   : 'for i := 10 downto 1 do DoStuff(i);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA047
     (
@@ -567,7 +567,7 @@ const
       GoodEx   : 'FCount := ACount;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA048
     (
@@ -644,7 +644,7 @@ const
       GoodEx   : 'begin' + #13#10 + '  DoStuff;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA054
     (
@@ -655,7 +655,7 @@ const
       GoodEx   : 'procedure Process(const Data: TData);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA055
     (
@@ -710,7 +710,7 @@ const
       GoodEx   : 'S := Format(''%.2f'', [Price], TFormatSettings.Invariant);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA060
     (
@@ -722,7 +722,7 @@ const
       GoodEx   : 'if Failed then Exit;' + #13#10 + '...';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA061
     (
@@ -733,7 +733,7 @@ const
       GoodEx   : 'procedure Foo;' + #13#10 + 'begin' + #13#10 + '  DoStuff;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA062
     (
@@ -756,7 +756,7 @@ const
       GoodEx   : '  DoStuff;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA064
     (
@@ -767,7 +767,7 @@ const
       GoodEx   : 'procedure Foo;' + #13#10 + 'begin' + #13#10 + '  if X then DoStuff;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA065
     (
@@ -778,7 +778,7 @@ const
       GoodEx   : '// noinspection - covered by integration test' + #13#10 + 'Dispose(P);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA066
     (
@@ -809,11 +809,13 @@ const
       RuleID   : 'SCA068';
       Name     : 'Trailing comma in argument list';
       ShortDesc: '`Foo(A, B,)` - drop the comma or add the missing argument';
-      BadEx    : 'WriteLn(''A'', ''B'', );' + #13#10 + 'DoStuff(Param1, Param2,);';
-      GoodEx   : 'WriteLn(''A'', ''B'');' + #13#10 + 'DoStuff(Param1, Param2);';
+      BadEx    : 'Excel.Workbooks.Open(FileName,);   // Excel: Variant' + #13#10 +
+        'Excel.ActiveWorkbook.SaveAs(NewName, );';
+      GoodEx   : 'Excel.Workbooks.Open(FileName);   // Excel: Variant' + #13#10 +
+        'Excel.ActiveWorkbook.SaveAs(NewName);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA069
     (
@@ -824,7 +826,7 @@ const
       GoodEx   : 'const TIMEOUT_MS = 1_800_000;' + #13#10 + 'const MAX_BYTES = 10_485_760;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA070
     (
@@ -835,7 +837,7 @@ const
       GoodEx   : '// TODO: re-enable once issue #123 is fixed - see history';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA071
     (
@@ -901,7 +903,7 @@ const
       GoodEx   : 'var A: Integer;' + #13#10 + '    B: Integer;' + #13#10 + '    C: Integer;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA077
     (
@@ -912,7 +914,7 @@ const
       GoodEx   : 'if Active then Activate;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA078
     (
@@ -934,7 +936,7 @@ const
       GoodEx   : 'const' + #13#10 + '  A = 1;' + #13#10 + '  B = 2;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA080
     (
@@ -946,7 +948,7 @@ const
       GoodEx   : 'procedure Foo;' + #13#10 + 'begin' + #13#10 + '  DoStuff;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA081
     (
@@ -982,7 +984,7 @@ const
         #13#10 + '  Stream.Free;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA084
     (
@@ -1015,7 +1017,7 @@ const
       GoodEx   : 'procedure Foo(var S: string);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA087
     (
@@ -1101,18 +1103,18 @@ const
         #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA094
     (
       RuleID   : 'SCA094';
       Name     : 'Redundant double parentheses';
-      ShortDesc: '`((Ident))` - drop the outer parens';
+      ShortDesc: '`((Ident))` - drop the inner parens';
       BadEx    : 'if ((Active)) then ...' + #13#10 + 'Result := ((42));';
       GoodEx   : 'if Active then ...' + #13#10 + 'Result := 42;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA095
     (
@@ -1137,7 +1139,7 @@ const
         '  FX := 0;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA097
     (
@@ -1150,7 +1152,7 @@ const
         '  inherited;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA098
     (
@@ -1161,7 +1163,7 @@ const
       GoodEx   : 'Result := Active;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA099
     (
@@ -1255,7 +1257,7 @@ const
       GoodEx   : 'procedure DoStuff;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA107
     (
@@ -1299,7 +1301,7 @@ const
         '  FLock.Leave;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA110
     (
@@ -1325,7 +1327,7 @@ const
         '  P.AsInteger := Ids[i];' + #13#10 + '  Q.ExecSQL;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA112
     (
@@ -1339,7 +1341,7 @@ const
         '  Total := Total + Amt.AsCurrency;' + #13#10 + '  Q.Next;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA113
     (
@@ -1350,7 +1352,7 @@ const
       GoodEx   : 'MyThread := TWorker.Create(True);' + #13#10 + 'MyThread.Start;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA114
     (
@@ -1372,7 +1374,7 @@ const
       GoodEx   : 'Url := ''https://api.contoso-shop.de/v1/users'';';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA116
     (
@@ -1409,7 +1411,7 @@ const
       GoodEx   : 'type' + #13#10 + '  EMyError = class(Exception);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA119
     (
@@ -1422,7 +1424,7 @@ const
         'begin ... end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA120
     (
@@ -1450,7 +1452,7 @@ const
         #13#10 + '  if L <> nil then' + #13#10 + '    Result := L.Count;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA122
     (
@@ -1501,13 +1503,15 @@ const
       RuleID   : 'SCA125';
       Name     : 'Override whose entire body is `inherited;`';
       ShortDesc: 'An override that only forwards to the parent serves no purpose - remove it';
-      BadEx    : 'procedure TFooSubclass.AfterConstruction; override;' + #13#10 + 'begin' + #13#10 +
+      BadEx    : 'type' + #13#10 + '  TFooSubclass = class(TFoo)' + #13#10 + '  protected' + #13#10 +
+        '    procedure Paint; override;' + #13#10 + '  end;' + #13#10 + #13#10 +
+        'procedure TFooSubclass.Paint;' + #13#10 + 'begin' + #13#10 +
         '  inherited;     // adds nothing - drop this whole override' + #13#10 + 'end;';
-      GoodEx   : '// Remove the override entirely. The parent''s AfterConstruction will' + #13#10 +
-        '// be invoked by the normal virtual dispatch.';
+      GoodEx   : '// Remove both the declaration and the implementation. The' + #13#10 +
+        '// parent''s Paint is reached by normal virtual dispatch.';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA126
     (
@@ -1532,7 +1536,7 @@ const
         '  raise EArgumentOutOfRangeException.CreateFmt(''x = %d'', [x]);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA128
     (
@@ -1545,7 +1549,7 @@ const
         #13#10 + 'WriteLn(DateToStr(Now, FS));';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA129
     (
@@ -1584,7 +1588,7 @@ const
         '  x := FetchFromDb;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA132
     (
@@ -1672,7 +1676,7 @@ const
         '// Cast one operand; the other is auto-promoted; multiplication is 64-bit.';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA138
     (
@@ -1780,7 +1784,7 @@ const
         'if SameValue(Ratio, 0.5, 1e-9) then DoStuff;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA145
     (
@@ -1826,7 +1830,7 @@ const
         #13#10 + '// or call HelperA from DoStuff to make the dependency explicit';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA148
     (
@@ -1840,7 +1844,7 @@ const
         '// Caller: TMath.Add(1, 2)   // no instance needed';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA149
     (
@@ -1866,7 +1870,7 @@ const
         'if Length(s) = 0 then DoOther;    // empty check';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA151
     (
@@ -1907,7 +1911,7 @@ const
         '  FLocker.UnLock;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA154
     (
@@ -1921,7 +1925,7 @@ const
         'FillChar(V, SizeOf(V), 0);             // matches the variable''s size';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA155
     (
@@ -1944,7 +1948,7 @@ const
         '  FreeMem(P);' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA157
     (
@@ -1981,7 +1985,7 @@ const
         '    Logger.Error(E.Message);' + #13#10 + '    raise;' + #13#10 + '  end;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA160
     (
@@ -2000,10 +2004,10 @@ const
       Name     : 'Pointer subtraction via 32-bit cast';
       ShortDesc: '`Cardinal(P1) - Cardinal(P2)` (or Integer / LongWord / LongInt variants) truncates the upper 32 bits of a 64-bit pointer on Win64 - difference is intermittently wrong';
       BadEx    : 'Diff := Cardinal(P1) - Cardinal(P2);   // upper 32 bits lost on Win64';
-      GoodEx   : 'Diff := PtrUInt(P1) - PtrUInt(P2);     // pointer-wide cast';
+      GoodEx   : 'Diff := NativeUInt(P1) - NativeUInt(P2);   // pointer-wide cast';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA162
     (
@@ -2039,7 +2043,7 @@ const
         '// or move it to interface if it should be exported';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA165
     (
@@ -2081,7 +2085,7 @@ const
         '    Players[i].Card := Random(52);' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA168
     (
@@ -2091,8 +2095,8 @@ const
       BadEx    : 'case Status of' + #13#10 + '  stNew    : DoNew;' + #13#10 + '  stActive : DoActive;' +
         #13#10 + 'end;';
       GoodEx   : 'case Status of' + #13#10 + '  stNew    : DoNew;' + #13#10 + '  stActive : DoActive;' +
-        #13#10 + 'else' + #13#10 + '  raise EProgrammerError.Create(''Unhandled status'');' + #13#10 +
-        'end;';
+        #13#10 + 'else' + #13#10 + '  raise EInvalidOpException.Create(''Unhandled status'');' +
+        #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: True
@@ -2106,7 +2110,7 @@ const
       GoodEx   : 'var Ok := InitializeSubsystem;' + #13#10 + 'Assert(Ok, ''subsystem init failed'');';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA170
     (
@@ -2117,7 +2121,7 @@ const
       GoodEx   : 'function Hash(const s: string): Integer;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA171
     (
@@ -2166,7 +2170,7 @@ const
         'L.Add(TFoo.Create);' + #13#10 + 'L.Free; // item freed';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA175
     (
@@ -2250,7 +2254,7 @@ const
       GoodEx   : '[Ignore(''TBD ticket #1234 - flaky on CI'')]' + #13#10 + 'procedure SomeTest;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA180
     (
@@ -2261,7 +2265,7 @@ const
       GoodEx   : '[Test]' + #13#10 + 'procedure Foo;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA181
     (
@@ -2272,7 +2276,7 @@ const
       GoodEx   : '[Category(''Slow'')]' + #13#10 + 'procedure Foo;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA182
     (
@@ -2296,7 +2300,7 @@ const
       GoodEx   : '[Test]' + #13#10 + 'procedure Foo;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA184
     (
@@ -2355,7 +2359,7 @@ const
       GoodEx   : '// no bidirectional control characters anywhere in source';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA189
     (
@@ -2399,7 +2403,7 @@ const
       GoodEx   : '// no zero-width / invisible characters in source';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA193
     (
@@ -2410,7 +2414,7 @@ const
       GoodEx   : 'var Login: string;  // all-ASCII identifier';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA194
     (
@@ -2449,7 +2453,7 @@ const
         #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA197
     (
@@ -2501,7 +2505,7 @@ const
         'Q.ParamByName(''customer_id'').AsInteger := Id;' + #13#10 + 'Q.Open;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA200
     (
@@ -2524,6 +2528,33 @@ const
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False
+    ),
+    // SCA202
+    (
+      RuleID   : 'SCA202';
+      Name     : 'not, and, or or xor binds before the comparison';
+      ShortDesc: '''not Count > 0'' or ''A = True or B = False'' - not/and/or/xor bind tighter than comparisons, so the expression compiles but tests something else';
+      BadEx    : 'if not List.Count > 0 then   // (not List.Count) > 0 - false for every Count' + #13#10 +
+        '  Exit;' + #13#10 +
+        'if Ready = True or Busy = False then   // (Ready = (True or Busy)) = False' + #13#10 +
+        '  Start;';
+      GoodEx   : 'if not (List.Count > 0) then' + #13#10 + '  Exit;' + #13#10 + 'if Ready or not Busy then' +
+        #13#10 + '  Start;';
+      Anchor   : '';
+      FixMode  : '';
+      EditorHelp: False
+    ),
+    // SCA203
+    (
+      RuleID   : 'SCA203';
+      Name     : 'for loop runs one index past the end';
+      ShortDesc: 'for loop runs to Count, Length() or High() + 1 and indexes the same collection with the loop variable - the last pass is out of range';
+      BadEx    : 'for i := 0 to Names.Count do' + #13#10 +
+        '  WriteLn(Names[i]);   // Names[Names.Count] raises';
+      GoodEx   : 'for i := 0 to Names.Count - 1 do' + #13#10 + '  WriteLn(Names[i]);';
+      Anchor   : '';
+      FixMode  : '';
+      EditorHelp: True
     )
   );
 

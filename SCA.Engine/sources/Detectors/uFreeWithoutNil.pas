@@ -23,8 +23,25 @@ unit uFreeWithoutNil;
 //   * Walk nkCall mit Name passend zu `<ident>.Free` (oder `.Destroy`).
 //   * Schaue im SELBEN Method-Body nach einer Folge-Anweisung
 //     `<ident> := nil` ODER `FreeAndNil(<ident>)`. Wenn vorhanden -> OK.
-//   * Wenn die Free-Anweisung die LETZTE im Body ist (kein Folge-Use
-//     moeglich) -> kein Befund (Method-Exit-Pattern, common in destructor).
+//   * Das Free als LETZTER Aufruf (IsLastStmtOfMethod, "kein Folge-Use
+//     moeglich") entlastet nur noch in FREIEN Routinen (ohne Klassen-
+//     praefix) - dort ist der Empfaenger ein globales Objekt, und die
+//     Routine raeumt typischerweise am Programm- bzw. Skriptende auf
+//     (Finalisierungs-Helfer, xEdit-'Finalize'). Steht dahinter ein
+//     'raise', gilt auch das nicht: das Programm laeuft weiter.
+//     In METHODEN gilt die Ausnahme nicht (2026-10-22): das Objekt lebt
+//     ueber die Methode hinaus - TearDown/Reset/FormClose lassen das Feld
+//     auf freigegebenem Speicher stehen, ein spaeteres Assigned() oder der
+//     Destruktor greift darauf zu; im Konstruktor ruft Delphi bei JEDER
+//     Ausnahme den Destruktor ('try .. except FA.Free; FB.Free; raise;
+//     end;' = Double Free). Vorher meldete SCA139 von 'FA.Free; FB.Free;'
+//     am Methodenende nur FA (xml-as-html-final, mvc-database).
+//     Korpus-Stichprobe der Erweiterung (30 Adds, 2026-10-22): 15 echt,
+//     13 FP - 7 Globale in freien Routinen (darum die Ausnahme dort),
+//     2 Parameter mit Modifier (const: jetzt lokal; out bleibt Befund - die
+//     Variable des Aufrufers haengt), 2 Inline-const, 1 BeforeDestruction
+//     (unten behoben), 1 sich selbst aushaengende Liste
+//     ('while FNext <> nil do FNext.Free', bekannte Grenze).
 //
 // Limitierung: einfache lexische Heuristik, keine Path-Analysis. False
 // Positives bei try/finally L.Free; end mit `Exit;`/`raise;` direkt
@@ -281,6 +298,7 @@ var
     Result := True;
   end;
 
+
   function IsLastStmtOfMethod(MethodNode, FreeCall: TAstNode): Boolean;
   var
     AllCalls : TList<TAstNode>;
@@ -292,10 +310,52 @@ var
       Result := True;
   end;
 
+  // Steht ein 'raise' hinter dem Free (gleiche oder spaetere Zeile)? Dann
+  // endet die Routine mit einer Ausnahme, und das Programm laeuft weiter -
+  // "letzter Aufruf" schuetzt nichts. 'raise' ist kein nkCall,
+  // IsLastStmtOfMethod sieht es nicht.
+  function RaiseFollows(MethodNode, FreeCall: TAstNode): Boolean;
+  var
+    Raises : TList<TAstNode>;
+    S      : TAstNode;
+  begin
+    Result := False;
+    Raises := MethodNode.FindAllRef(nkRaise);
+    for S in Raises do
+      if S.Line >= FreeCall.Line then Exit(True);
+  end;
+
+  // Ist der Parameter eine LOKALE Kopie der Referenz? Ohne Modifier, 'const'
+  // und 'constref' ja - nil-Setzen erreicht den Aufrufer ohnehin nicht. 'var'
+  // und 'out' sind die Variable des Aufrufers: dort bleibt der Fund (und
+  // FreeAndNil die Hilfe). Der Parser legt den Modifier als Namenspraefix ab
+  // ('const AList', uParser2 nkParam); bis 2026-10-22 verglich der Skip den
+  // ganzen Namen, ein const-Parameter kam nie in LocalNames (Korpus:
+  // delphimvcframework Render(const ACollection ..)). AIdentLow ist der
+  // Bezeichner ohne Modifier.
+  function IsLocalCopyParam(const AName: string; out AIdentLow: string): Boolean;
+  var
+    SpaceIdx : Integer;
+    Modifier : string;
+  begin
+    AIdentLow := LowerCase(Trim(AName));
+    Modifier := '';
+    SpaceIdx := LastDelimiter(' ', AIdentLow);
+    if SpaceIdx > 0 then
+    begin
+      Modifier := Trim(Copy(AIdentLow, 1, SpaceIdx - 1));
+      AIdentLow := Copy(AIdentLow, SpaceIdx + 1, MaxInt);
+    end;
+    Result := (Modifier = '') or (Modifier = 'const')
+      or (Modifier = 'constref');
+  end;
+
 var
   LocalNames : TDictionary<string, Boolean>;
   LV         : TAstNode;
   LVs        : TList<TAstNode>;
+  Sec        : TAstNode;
+  PIdent     : string;
 begin
   Methods := UnitNode.FindAllRef(nkMethod);
   for M in Methods do
@@ -316,6 +376,23 @@ begin
     var MDotPos := LastDelimiter('.', MNameLow);
     if MDotPos > 0 then MNameLow := Copy(MNameLow, MDotPos + 1, MaxInt);
     if EndsText('destroy', MNameLow) then Continue;
+    // BeforeDestruction laeuft unmittelbar vor dem Destruktor - die Instanz
+    // stirbt wie dort (Korpus 2026-10-22: JvID3v2Base FList.Free). Ebenso
+    // DoFree (Lazarus-Muster: der Destruktor-Rumpf als Methode, idedebugger
+    // TWatchResultTypeStruct) und FinalizeClass (Klassen-Teardown aus der
+    // finalization, ZXing-Port) - Korpus-Stichprobe 2026-10-22.
+    if (MNameLow = 'beforedestruction') or (MNameLow = 'dofree')
+       or (MNameLow = 'finalizeclass') then Continue;
+    // Freie Routine (kein Klassenpraefix): der Empfaenger ist kein Feld,
+    // die Ausnahme "letzter Aufruf" gilt hier weiter (s. Kopf).
+    var IsFreeRoutine := MDotPos = 0;
+    // Eine freie Routine 'Finalize*' raeumt Globale am Programm- bzw.
+    // Skriptende ab (xEdit-Skripte 'Finalize', VirtualTrees
+    // FinalizeGlobalStructures aus der finalization) - auch mitten im Rumpf
+    // ist dort nichts mehr zu schuetzen. Eine METHODE 'Finalize' bleibt
+    // Befund: sie ist ein Schritt im Lebenszyklus, das Objekt lebt weiter
+    // (doublecmd TFileSourceOperation.Finalize).
+    if IsFreeRoutine and StartsText('finaliz', MNameLow) then Continue;
 
     // Lokale Var-Namen einmal pro Methode sammeln. Free-Calls auf Locals
     // sind harmlos, weil die Variable beim Method-Ende sowieso aus dem
@@ -330,11 +407,20 @@ begin
           LocalNames.AddOrSetValue(LowerCase(Trim(LV.Name)), True);
       // Parameter zaehlen wie Locals: method-scoped, Nil-Out beim
       // Method-Ende sinnlos. `Findings.Free` (Param der Ownership uebernimmt)
-      // ist kein Free-Without-Nil-Smell.
+      // ist kein Free-Without-Nil-Smell. Nur lokale Kopien - var/out bleiben
+      // Befund (IsLocalCopyParam).
       LVs := M.FindAllRef(nkParam);
       for LV in LVs do
-        if LV.Name <> '' then
-          LocalNames.AddOrSetValue(LowerCase(Trim(LV.Name)), True);
+        if (LV.Name <> '') and IsLocalCopyParam(LV.Name, PIdent) then
+          LocalNames.AddOrSetValue(PIdent, True);
+      // Lokale und Inline-Konstanten ('const L = TList.Create;', Delphi
+      // 10.3+): der Parser legt sie als nkConstSection mit nkField-Kindern
+      // ab, nicht als nkLocalVar - sie fallen wie Locals aus dem Scope.
+      LVs := M.FindAllRef(nkConstSection);
+      for Sec in LVs do
+        for LV in Sec.Children do
+          if (LV.Kind = nkField) and (LV.Name <> '') then
+            LocalNames.AddOrSetValue(LowerCase(Trim(LV.Name)), True);
 
       Calls := M.FindAllRef(nkCall);
       for N in Calls do
@@ -395,7 +481,8 @@ begin
         // Reassigned-after-free (FPopUpBitmap.Free; FPopUpBitmap := TBitmap.Create):
         // Feld vor jedem Read neu belegt -> kein Dangling-Pointer.
         if HasSafeReassignAfter(M, N, RecvLow) then Continue;
-        if IsLastStmtOfMethod(M, N) then Continue;
+        if IsFreeRoutine and IsLastStmtOfMethod(M, N)
+           and not RaiseFollows(M, N) then Continue;
 
         F            := TLeakFinding.Create;
         F.FileName   := FileName;

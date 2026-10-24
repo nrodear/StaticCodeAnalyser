@@ -17,7 +17,7 @@ Anwendung gibt es als 32- und als 64-Bit-Build. **Lazarus-/Free-Pascal**-Projekt
 scannen die eigenständige Anwendung und das CLI nativ — dieselbe Engine, dieselben
 Regeln, dialektbewusst: `.lpi`/`.lpk`-Projekte, `.pp`/`.lpr`-Units und
 `.lfm`-Formulare ([Details](#lazarus--free-pascal-fpc)).
-AST-basierte Analyse mit **201 Regeln**: 177 Pascal-Checks für
+AST-basierte Analyse mit **203 Regeln**: 179 Pascal-Checks für
 Speicherlecks, SQL-Injection, Code-Smells, Sicherheitslücken und Code-Duplikate
 (inklusive einer **Sonar-Delphi-kompatiblen** Teilmenge SCA060+),
 **plus ein dedizierter DFM-Scanner mit 23 Checks** auf Basis eines eigenen DFM-Lexers
@@ -44,7 +44,7 @@ direkt in der IDE, mit Claude-AI-Anbindung.**
 
 | Fähigkeit | Wie genutzt |
 |-----------|-------------|
-| 🐛 **Bugs finden** | 177 Pascal-Regeln laufen über jede `.pas`-Datei (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 DFM-Regeln über jede `.dfm` (tote Event-Handler, Klartext-DB-Credentials, zirkuläre Master-Detail-Verkettung, unbenutzte Komponenten, …) — **insgesamt 199**, ausgeliefert von 158 Pipeline-Registrierungen |
+| 🐛 **Bugs finden** | 178 Pascal-Regeln laufen über jede `.pas`-Datei (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 DFM-Regeln über jede `.dfm` (tote Event-Handler, Klartext-DB-Credentials, zirkuläre Master-Detail-Verkettung, unbenutzte Komponenten, …) — **insgesamt 199**, ausgeliefert von 158 Pipeline-Registrierungen |
 | 🔐 **Sicherheitslücken** | SQLInjection (Score-basiert), HardcodedSecret, HardcodedPath, HardcodedIpAddress (auch in .ini-Dateien) |
 | 🧹 **Code-Smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Inkrementell analysieren** | „Branch-Changes"-Button: nur die im Git-/SVN-Branch geänderten Dateien — 200 ms statt 60 s |
@@ -60,7 +60,7 @@ direkt in der IDE, mit Claude-AI-Anbindung.**
 
 ## Hauptfeatures
 
-### 1. Statische Code-Analyse (201 Regeln — 177 Pascal + 23 DFM + 1 INI, Sonar-Taxonomie)
+### 1. Statische Code-Analyse (203 Regeln — 179 Pascal + 23 DFM + 1 INI, Sonar-Taxonomie)
 
 **Pascal-AST-Checks (~130)**: **Bugs** (MemoryLeak, NilDeref, DivByZero,
 FormatMismatch, ReversedForRange, SelfAssignment, VirtualCallInCtor,
@@ -267,7 +267,7 @@ Volles Setup: [docs/sonar-setup.md](docs/sonar-setup.md). Quick-Reference:
 
 ---
 
-## Was wird erkannt (201 Regeln — 177 Pascal + 23 DFM + 1 INI)
+## Was wird erkannt (203 Regeln — 179 Pascal + 23 DFM + 1 INI)
 
 Alle Befunde landen in einer der **5 Sonar-Kategorien**:
 

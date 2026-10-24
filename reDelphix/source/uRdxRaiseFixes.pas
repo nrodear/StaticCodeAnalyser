@@ -9,15 +9,15 @@ unit uRdxRaiseFixes;
 //   SCA120 MissingRaise: 'raise ' vor 'EFoo.Create(..)', das als ganze
 //          Anweisung steht (aendert das Verhalten: das ist der Fix).
 //   SCA122 ReRaiseException: 'raise E;' -> 'raise;' im Handler 'on E: ..
-//          do' (bedeutungsgleich bis auf den Stack-Trace).
+//          do' (bedeutungsgleich bis auf den Stack-Trace - solange E im
+//          Handler nicht neu zugewiesen wird).
 // GRUNDSATZ wie in uRdxSimpleFixes: lieber keine Hilfe als eine falsche -
 // der Planer prueft den Fund am aktuellen Text nach.
 
 interface
 
 uses
-  System.SysUtils,
-  uRefactorInfo, uRdxBufferMath, uRdxCodeMap;
+  uRdxBufferMath, uRdxCodeMap;
 
 const
   // SCA020 (b): %s ist der Name der Methode wie im Kopf.
@@ -27,6 +27,10 @@ const
   INTENT_INLINE = '{ intentionally empty }';
 
 type
+  // Die Planer an Ausnahmen und leeren Rumpfen (SCA020, SCA120, SCA122):
+  // reine Textlogik auf der Code-Sicht. Die uses-Ergaenzung (SysUtils fuer
+  // ENotImplemented) und die Kennzeichnung "aendert Verhalten" setzt der
+  // Aufrufer (uRdxFixRunner: EmptyRaiseFix; uRdxFixTable).
   TRdxRaiseFixes = class
   public
     // SCA020: der leere Rumpf der Methode, deren Kopf auf ALine beginnt
@@ -53,7 +57,12 @@ type
     // variable "E" ...') -> 'raise'. Nur, wenn rueckwaerts der eigene
     // Handler 'on E: T do' kommt, bevor ein except/finally oder eine
     // anonyme Methode: im except eines inneren try wuerfe 'raise;' die
-    // innere Exception weiter.
+    // innere Exception weiter. Und nicht, wenn E dazwischen neu zugewiesen
+    // wird ('E := EWrapped.Create(..)'): 'raise E' wirft dann das neue
+    // Objekt, 'raise;' die urspruengliche Exception (Review R3, Charge FC).
+    // Ebenso nicht, wenn E dazwischen als ganzes Argument uebergeben wird
+    // ('Wrap(E)'): ein var-/out-Parameter aendert E ebenso, und ob er es
+    // ist, sieht der Planer nicht (Review Woche G07-19).
     class function ReRaise(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
@@ -62,14 +71,17 @@ type
 implementation
 
 uses
-  uRdxStructFixes;   // StartsStatementAt (SCA120: kein bedingter Ausdruck)
+  // StartsStatement (SCA120: kein bedingter Ausdruck) kommt seit der
+  // Folgewelle des Wochen-Reviews (G07-13) aus uRdxCodeMap - bis dahin band
+  // die Unit dafuer uRdxStructFixes ein.
+  System.SysUtils,
+  uRefactorInfo,     // TRefactorSpan.Make
+  uRdxText;          // _() - Gruende in der Sprache der SCA (E29)
 
 const
   SPAN_020 = 'sca020';
   SPAN_120 = 'sca120';
   SPAN_122 = 'sca122';
-  ROUTINE_WORDS: array[0..4] of string = ('procedure', 'function',
-    'constructor', 'destructor', 'operator');
   // Hier endet eine Anweisung.
   STATEMENT_ENDS: array[0..5] of string = (';', 'end', 'else', 'until',
     'except', 'finally');
@@ -91,84 +103,73 @@ type
     EndTok   : TRdxToken;
   end;
 
+// Ein Routinenkopf (OneTokenOnLine, HeaderOn) - die eine Kopferkennung
+// uRdxCodeMap.IsRoutineHeadAfter: ein Prozedurtyp ('TCb = procedure of
+// object;', 'var Cb: procedure;', 'reference to procedure') ist keiner.
+// Bis zur Review Woche G07-18 eine eigene Fassung ohne den Blick auf das
+// Token davor - ein veralteter Fund auf einer Typzeile lief dann bis zum
+// naechsten Routinenwort und nannte 'lokale Routine' als Grund.
+function IsRoutineWord(AMap: TRdxCodeMap; const T: TRdxToken;
+  const AArg: string): Boolean;
+begin
+  Result := IsRoutineHeadAfter(T, Before(AMap, T));
+end;
+
 // Das eine Routinen-Wort auf ALine. Zwei Koepfe auf einer Zeile
 // ('procedure P1; begin end; procedure P2; ...') heissen mehrdeutig - der
 // Fund koennte jeden meinen (Gegen-Review Ausnahme-Hilfen, Major 3).
-// '' oder der Grund.
+// '' oder der Grund. What und ManyFmt kommen uebersetzt an
+// OneTokenReason (uRdxCodeMap setzt sie in seinen Satz, Texte umstellen):
+// ManyFmt ist ein reines Muster, %d die Zahl der Koepfe.
 function HeaderOn(AMap: TRdxCodeMap; ALine: Integer;
   out AKeyword: TRdxToken): string;
 var
-  T, Prev : TRdxToken;
-  n       : Integer;
+  S : TRdxLineSearch;
 begin
-  Result := '';
-  AKeyword := Default(TRdxToken);
-  n := 0;
-  Prev := PrevToken(AMap, ALine, 1);
-  T := NextToken(AMap, ALine, 1);
-  while (T.Low <> '') and (T.Line = ALine) do
-  begin
-    if IsKeywordAfter(T, Prev) and InList(T.Low, ROUTINE_WORDS) then
-    begin
-      Inc(n);
-      AKeyword := T;
-    end;
-    Prev := T;
-    T := After(AMap, T);
-  end;
-  if n = 0 then
-    Result := 'kein Methodenkopf auf der gemeldeten Zeile - Zeile verschoben? '
-      + 'Datei neu pruefen'
-  else if n > 1 then
-    Result := Format('Zeile %d traegt %d Routinenkoepfe - mehrdeutig',
-      [ALine, n]);
+  S := Default(TRdxLineSearch);
+  S.Test    := IsRoutineWord;
+  S.What    := _('no method header');
+  S.ManyFmt := _('%d routine headers');
+  Result := OneTokenOnLine(AMap, ALine, S, AKeyword);
 end;
 
 // Der Name hinter dem Routinen-Wort bis vor '(' ':' ';' oder bis zum
-// Zeilenende (die Parameter auf der Folgezeile). '' ohne Name.
-function NameAfter(AMap: TRdxCodeMap; const AKeyword: TRdxToken): string;
+// Zeilenende (die Parameter auf der Folgezeile) - als TEXT, mit allen
+// Gliedern ('TFoo.Bar'). '' ohne Name. Bis Charge B2S-a hiess sie
+// NameAfter wie uRdxCodeMap.NameAfter (bis Charge B2S-a in
+// uRdxSimpleFixes), die das letzte Glied als TOKEN liefert (Review R3-05).
+// Der Text endet hinter dem LETZTEN Token des Namens: ein Kommentar
+// dahinter ('procedure TFoo.Bar { alt }' bzw. '// alt') bleibt draussen -
+// bis zur Review Woche G07-11 endete er am Zeilenende bzw. am '//' und
+// nahm einen Blockkommentar in den ENotImplemented-Text.
+function HeaderNameText(AMap: TRdxCodeMap; const AKeyword: TRdxToken): string;
 var
-  First, T : TRdxToken;
-  L        : string;
-  Stop     : Integer;
+  First, T, Last : TRdxToken;
+  L              : string;
 begin
   Result := '';
   First := After(AMap, AKeyword);
   if (First.Line <> AKeyword.Line) or not First.IsWord then Exit;
   L := AMap.Raw(AKeyword.Line);
-  T := First;
+  Last := First;
+  T := After(AMap, First);
   while (T.Low <> '') and (T.Line = AKeyword.Line)
      and not InList(T.Low, ['(', ':', ';']) do
-    T := After(AMap, T);
-  Stop := Length(L) + 1;
-  if T.Line = AKeyword.Line then
-    Stop := T.Col
-  else if AMap.LineCommentCol(AKeyword.Line) > 0 then
-    Stop := AMap.LineCommentCol(AKeyword.Line);
-  Result := Trim(Copy(L, First.Col, Stop - First.Col));
-end;
-
-// Ein Kommentar (oder eine Direktive) zwischen den Token A und B?
-function CommentBetween(AMap: TRdxCodeMap; const A, B: TRdxToken): Boolean;
-var
-  Li, First, Last : Integer;
-begin
-  Result := False;
-  for Li := A.Line to B.Line do
   begin
-    First := 1;
-    if Li = A.Line then
-      First := A.EndCol;
-    Last := Length(AMap.Raw(Li));
-    if Li = B.Line then
-      Last := B.Col - 1;
-    if AMap.HasComment(Li, First, Last) then
-      Exit(True);
+    Last := T;
+    T := After(AMap, T);
   end;
+  Result := Trim(Copy(L, First.Col, Last.EndCol - First.Col));
 end;
 
 // Ab dem Kopf das begin des Rumpfs - ohne lokale Routine dazwischen
 // (deren begin waere es nicht sicher) und ohne asm. '' oder der Grund.
+// Bewusst nicht der Baustein ReadRoutine (uRdxBlocks, Gegen-Review
+// H3, Major 2): SCA020 braucht nur den LEEREN Rumpf direkt hinter dem Kopf
+// und lehnt eine lokale Routine und asm mit eigenem Grund ab; ReadRoutine
+// liest beides und lehnt anderes ab (lokaler Klassentyp, nichts Neues
+// hinter dem end) - der Wechsel aenderte Angebote und Gruende von SCA020.
+// Zweite Kopie eines Routinen-Lesers nach Rule of Three vertretbar.
 function BodyBegin(AMap: TRdxCodeMap; const AKeyword: TRdxToken;
   out ABegin: TRdxToken): string;
 var
@@ -185,14 +186,14 @@ begin
       Exit('');
     end;
     if IsKeywordAfter(T, Prev) and InList(T.Low, ROUTINE_WORDS) then
-      Exit('lokale Routine zwischen Kopf und Rumpf - welches begin gemeint '
-        + 'ist, ist nicht sicher');
+      Exit(_('local routine between header and body - which begin is meant '
+        + 'is not certain'));
     if IsKeywordAfter(T, Prev) and (T.Low = 'asm') then
-      Exit('asm-Rumpf');
+      Exit(_('asm body'));
     Prev := T;
     T := After(AMap, T);
   end;
-  Result := 'kein Rumpf zur Methode gefunden';
+  Result := _('no body found for the method');
 end;
 
 // Kopf, Name und der leere Rumpf der Methode auf ALine. '' oder der Grund.
@@ -202,21 +203,26 @@ begin
   ABody := Default(TRdxMethodBody);
   Result := HeaderOn(AMap, ALine, ABody.Keyword);
   if Result <> '' then Exit;
-  ABody.Name := NameAfter(AMap, ABody.Keyword);
+  ABody.Name := HeaderNameText(AMap, ABody.Keyword);
   Result := BodyBegin(AMap, ABody.Keyword, ABody.BeginTok);
   if Result <> '' then Exit;
   ABody.EndTok := After(AMap, ABody.BeginTok);
   if ABody.EndTok.Low <> 'end' then
-    Result := 'der Rumpf ist nicht leer - Code unter einer Direktive bzw. ein '
-      + 'asm-Block (der Detektor sieht nur den aktiven Zweig) oder Fund '
-      + 'veraltet'
+    Result := _('the body is not empty - code under a directive or an asm '
+      + 'block (the detector sees only the active branch) or finding '
+      + 'outdated')
   // Ein Kommentar im Rumpf ist keine Absicht (sonst schwiege der Detektor):
   // auskommentierter Code (SCA070) - der Absichtskommentar verdeckte ihn,
   // und ein schon eingefuegter Kommentar kaeme doppelt (Gegen-Review,
-  // Minor 4/5).
-  else if CommentBetween(AMap, ABody.BeginTok, ABody.EndTok) then
-    Result := 'im Rumpf steht schon ein Kommentar ohne Absicht - '
-      + 'auskommentierter Code (SCA070)? Von Hand entscheiden';
+  // Minor 4/5). Zwischen begin und end (CommentInRange - bis Charge B2S-a
+  // als CommentBetween kopiert, derselbe Lauf mit Token statt Bereich).
+  // Eigene msgid, nicht MsgDecideByHand: 'Von' steht gross am Satzanfang
+  // hinter dem '?' (Texte umstellen, Varianten behalten ihren Wortlaut).
+  else if CommentInRange(AMap, TRefactorSpan.Make(SPAN_020,
+    ABody.BeginTok.Line, ABody.BeginTok.EndCol, ABody.EndTok.Line,
+    ABody.EndTok.Col)) then
+    Result := _('the body already holds a comment without intent - '
+      + 'commented-out code (SCA070)? Decide by hand');
 end;
 
 // Die Ersetzung fuer das begin: AText inline dahinter oder (begin und end
@@ -240,13 +246,14 @@ begin
     Exit;
   end;
   if SkipBlanks(L, B.EndCol) <= Length(L) then
-    Exit('hinter dem begin steht noch etwas - eine eigene Zeile passte nicht');
+    Exit(_('something else follows the begin - a line of its own would not '
+      + 'fit'));
   if AMap.StartsInside(B.Line + 1) then
-    Exit('hinter dem begin beginnt ein Kommentar ueber Zeilen');
+    Exit(_('a comment spanning several lines starts after the begin'));
   // Eingerueckt wie die Zeile des end - das begin kann auf der Kopfzeile
   // stehen ('procedure P; begin').
   L := AMap.Raw(ABody.EndTok.Line);
-  Indent := Copy(L, 1, SkipBlanks(L, 1) - 1);
+  Indent := IndentOf(L);
   AEdit.NewText := AEdit.Expected + #10 + Indent + IndentStep(Indent, '')
     + AText;
 end;
@@ -263,10 +270,10 @@ begin
   AReason := MethodBodyOn(AMap, ALine, Body);
   if (AReason = '') and (AStatementFmt <> '')
      and InList(Body.Keyword.Low, ['constructor', 'destructor']) then
-    AReason := Format('%s - eine Exception dort hinterliesse ein halbes '
-      + 'Objekt bzw. keinen Destruktor', [Body.Keyword.Low]);
+    AReason := _('%s - an exception there would leave a half-built object '
+      + 'or no destructor', [Body.Keyword.Low]);
   if (AReason = '') and (AStatementFmt <> '') and (Body.Name = '') then
-    AReason := 'Name der Methode nicht auf der Kopfzeile';
+    AReason := _('name of the method not on the header line');
   if AReason <> '' then Exit;
   if AStatementFmt = '' then
     AReason := BodyEdit(AMap, Body, INTENT_LINE, INTENT_INLINE, AEdit)
@@ -294,25 +301,6 @@ begin
       Q - P - Length(KEY_EXCEPTION));
 end;
 
-// Ab dem '(' AOpen (auch ueber Zeilen) das Token hinter der passenden ')'.
-function AfterParens(AMap: TRdxCodeMap; const AOpen: TRdxToken): TRdxToken;
-var
-  Depth : Integer;
-begin
-  Depth := 0;
-  Result := AOpen;
-  while Result.Low <> '' do
-  begin
-    if Result.Low = '(' then
-      Inc(Depth)
-    else if Result.Low = ')' then
-      Dec(Depth);
-    Result := After(AMap, Result);
-    if Depth = 0 then
-      Exit;
-  end;
-end;
-
 // Steht an T 'ATarget.Create..' als ganze Anweisung? Dann True; AWhole
 // False, wenn es nur Teil eines Ausdrucks ist.
 function CreateAt(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
@@ -332,21 +320,31 @@ begin
   Result := True;
   N := After(AMap, C);
   if N.Low = '(' then
-    N := AfterParens(AMap, N);
+    N := AfterClose(AMap, N);
   // Ein then-Zweig ist nur dann eine Anweisung, wenn sein if eine ist -
   // in 'Foo(if C then EFoo.Create(..) else nil)' waere raise E2029
   // (Gegen-Review Ausnahme-Hilfen, Major 2).
   AWhole := InList(N.Low, STATEMENT_ENDS)
-    and TRdxStructFixes.StartsStatementAt(AMap, T);
+    and StartsStatement(AMap, T);
+end;
+
+// 'AArg.Create..' an T (OneTokenOnLine, MissingRaise) - ob als ganze
+// Anweisung, prueft der Aufrufer am einen Treffer noch einmal.
+function IsCreateOf(AMap: TRdxCodeMap; const T: TRdxToken;
+  const AArg: string): Boolean;
+var
+  Whole : Boolean;
+begin
+  Result := CreateAt(AMap, T, Before(AMap, T), AArg, Whole);
 end;
 
 class function TRdxRaiseFixes.MissingRaise(AMap: TRdxCodeMap; ALine: Integer;
   const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
-  Target       : string;
-  T, Prev, Hit : TRdxToken;
-  Whole, Found : Boolean;
-  n            : Integer;
+  Target : string;
+  Hit    : TRdxToken;
+  Whole  : Boolean;
+  S      : TRdxLineSearch;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -354,34 +352,24 @@ begin
   Target := CreateTargetOf(AMessage);
   if Target = '' then
   begin
-    AReason := 'Exception-Klasse fehlt in der Meldung';
+    AReason := _('the message has no exception class');
     Exit;
   end;
-  n := 0;
-  Found := False;
-  Hit := Default(TRdxToken);
-  Prev := PrevToken(AMap, ALine, 1);
-  T := NextToken(AMap, ALine, 1);
-  while (T.Low <> '') and (T.Line = ALine) do
-  begin
-    if CreateAt(AMap, T, Prev, Target, Whole) then
-    begin
-      Inc(n);
-      Found := Whole;
-      Hit := T;
-    end;
-    Prev := T;
-    T := After(AMap, T);
-  end;
-  if n = 0 then
-    AReason := Format('kein %s.Create auf der gemeldeten Zeile - Zeile '
-      + 'verschoben? Datei neu pruefen', [Target])
-  else if n > 1 then
-    AReason := Format('Zeile %d traegt %d-mal %s.Create - mehrdeutig',
-      [ALine, n, Target])
-  else if not Found then
-    AReason := Format('%s.Create(..) steht nicht als ganze Anweisung - '
-      + 'Teil eines Ausdrucks?', [Target]);
+  // Target stammt aus der Meldung: im Muster ManyFmt steht es nie, nur als
+  // ManyArg (OneTokenReason formatiert es als %s ein).
+  S := Default(TRdxLineSearch);
+  S.Test    := IsCreateOf;
+  S.Arg     := Target;
+  S.What    := _('no %s.Create', [Target]);
+  // Der Name aus der Meldung als Argument, nie im Muster (Vertrag von
+  // TRdxLineSearch; bis zur Review Woche G07-16 stand er im Muster).
+  S.ManyFmt := _('%d times %s.Create');
+  S.ManyArg := Target;
+  AReason := OneTokenOnLine(AMap, ALine, S, Hit);
+  if (AReason = '') and CreateAt(AMap, Hit, Before(AMap, Hit), Target, Whole)
+     and not Whole then
+    AReason := _('%s.Create(..) is not a whole statement - part of an '
+      + 'expression?', [Target]);
   if AReason <> '' then Exit;
   AEdit.Span := TRefactorSpan.Make(SPAN_120, ALine, Hit.Col, ALine, Hit.EndCol);
   AEdit.Expected := Copy(AMap.Raw(ALine), Hit.Col, Hit.Len);
@@ -390,18 +378,6 @@ begin
 end;
 
 { ---- SCA122 ---- }
-
-// E aus 'Re-raise of bound variable "E" loses ...'.
-function BoundNameOf(const AMessage: string): string;
-var
-  P, Q : Integer;
-begin
-  Result := '';
-  P := Pos('"', AMessage);
-  Q := Pos('"', AMessage, P + 1);
-  if (P > 0) and (Q > P + 1) then
-    Result := Copy(AMessage, P + 1, Q - P - 1);
-end;
 
 // Ist ADo das 'do' eines Handlers 'on Name: T do' (bzw. 'on T do', dann
 // AName = '')? Typ auch mit Punkten ('SysUtils.EFoo').
@@ -438,41 +414,79 @@ begin
   AReason := '';
   if (T.Low = 'except') or (T.Low = 'finally') then
   begin
-    AReason := 'raise steht im except/finally eines inneren try - "raise;" '
-      + 'wuerde dort eine andere Exception weiterwerfen';
+    AReason := _('raise is in the except/finally of an inner try - "raise;" '
+      + 'would re-raise a different exception there');
+    Exit(rsStop);
+  end;
+  // Ein Routinenkopf: die Suche hat die umschliessende Routine verlassen,
+  // ohne einen Handler zu treffen (ein veralteter Fund) - bis zur Review
+  // Woche G07-11 hiess das 'anonyme Methode im Handler'.
+  if IsRoutineHead(AMap, T) then
+  begin
+    AReason := _('no handler "on %s: ... do" before the raise in this '
+      + 'routine', [AName]);
     Exit(rsStop);
   end;
   if InList(T.Low, ['procedure', 'function']) then
   begin
-    AReason := 'anonyme Methode im Handler (das raise darin oder eine davor) '
-      + '- nicht sicher pruefbar';
+    AReason := _('anonymous method in the handler (the raise inside it or '
+      + 'one before it) - cannot be checked safely');
     Exit(rsStop);
   end;
   // 'with H do raise E': E kann ein Member von H sein - 'raise;' wuerfe
   // dann eine andere Exception (Gegen-Review Ausnahme-Hilfen, Blocker 1).
   if T.Low = 'with' then
   begin
-    AReason := 'with-Anweisung zwischen Handler und raise - der Name koennte '
-      + 'ein Member sein';
+    AReason := _('with statement between handler and raise - the name could '
+      + 'be a member');
     Exit(rsStop);
   end;
   if (T.Low <> 'do') or not HandlerOf(AMap, T, Bound) then Exit;
   if SameText(Bound, AName) then
     Exit(rsFound);
-  AReason := Format('raise steht im Handler von "%s", nicht von "%s"',
+  AReason := _('raise is in the handler of "%s", not of "%s"',
     [Bound, AName]);
   Result := rsStop;
 end;
 
 // Ein Schritt rueckwaerts (ReRaiseReason): ganze Bloecke (end..begin,
-// until..repeat) ueberspringen, auf oberster Ebene HandlerStep.
+// until..repeat) ueberspringen, auf oberster Ebene HandlerStep. Auf jeder
+// Tiefe sperrt eine Zuweisung an die gebundene Variable ('E := ..', nicht
+// 'Obj.E := ..'): 'raise E' wirft danach das neue Objekt, 'raise;' die
+// urspruengliche Exception - nicht nur ein anderer Stack-Trace, eine andere
+// Exception (Review R3, verpasst, Charge FC; FPC-Probe: 'aussen: ersetzt'
+// mit raise E gegen 'aussen: innen' mit raise;). Ein inneres 'on E: ..',
+// das E verdeckt, sperrt dabei mit - lieber keine Hilfe.
 function RaiseBackStep(AMap: TRdxCodeMap; const T: TRdxToken;
   const AName: string; var ABlock: Integer; out AReason: string): TRdxStep;
+var
+  P : TRdxToken;
 begin
   Result := rsGoOn;
   AReason := '';
+  P := Before(AMap, T);
+  if SameText(T.Low, AName) and not InList(P.Low, IDENT_PREFIXES)
+     and (After(AMap, T).Low = ':=') then
+  begin
+    AReason := _('%s is reassigned between handler and raise - "raise %s;" '
+      + 'then raises a different object than "raise;"', [AName, AName]);
+    Exit(rsStop);
+  end;
+  // Als ganzes Argument ('Wrap(E)', 'Replace(A, E)'): ein var-/out-
+  // Parameter kann E ersetzen - dieselbe Lage wie 'E := ..'. Ob der
+  // Parameter var ist, sieht der Planer nicht; die Hilfe gilt als
+  // bedeutungsgleich und laeuft mit Strg+Alt+F unbesehen - also lieber
+  // keine (Review Woche G07-19; bis dahin nur als GRENZE im Kopf).
+  if SameText(T.Low, AName) and ((P.Low = '(') or (P.Low = ','))
+     and InList(After(AMap, T).Low, [')', ',']) then
+  begin
+    AReason := _('%s is passed as an argument between handler and raise - a '
+      + 'var parameter can replace it, "raise %s;" would then raise a '
+      + 'different object than "raise;"', [AName, AName]);
+    Exit(rsStop);
+  end;
   // Satzzeichen und Bezeichner zaehlen nicht.
-  if not IsKeywordAfter(T, Before(AMap, T)) then Exit;
+  if not IsKeywordAfter(T, P) then Exit;
   if (T.Low = 'end') or (T.Low = 'until') then
     Inc(ABlock)
   else if (IsEndOpener(T.Low) or (T.Low = 'repeat')) and (ABlock > 0) then
@@ -496,44 +510,41 @@ begin
     if RaiseBackStep(AMap, T, AName, Block, Result) <> rsGoOn then Exit;
     T := Before(AMap, T);
   end;
-  Result := Format('kein Handler "on %s: ... do" vor dem raise gefunden',
-    [AName]);
+  Result := _('no handler "on %s: ... do" found before the raise', [AName]);
+end;
+
+// 'raise AArg' vor dem Ende der Anweisung an T (OneTokenOnLine, RaiseOn).
+function IsRaiseOf(AMap: TRdxCodeMap; const T: TRdxToken;
+  const AArg: string): Boolean;
+var
+  N : TRdxToken;
+begin
+  N := After(AMap, T);
+  Result := (T.Low = 'raise') and SameText(N.Low, AArg)
+    and InList(After(AMap, N).Low, STATEMENT_ENDS);
 end;
 
 // Das eine 'raise AName' (vor dem Ende der Anweisung) auf ALine, raise und
 // Name auf derselben Zeile ohne Kommentar dazwischen. '' oder der Grund.
+// AName (aus der Meldung) steht im Muster ManyFmt nie, nur als ManyArg.
 function RaiseOn(AMap: TRdxCodeMap; ALine: Integer; const AName: string;
   out AHit, AVar: TRdxToken): string;
 var
-  T, N  : TRdxToken;
-  Count : Integer;
+  S : TRdxLineSearch;
 begin
-  Result := '';
-  AHit := Default(TRdxToken);
   AVar := Default(TRdxToken);
-  Count := 0;
-  T := NextToken(AMap, ALine, 1);
-  while (T.Low <> '') and (T.Line = ALine) do
-  begin
-    N := After(AMap, T);
-    if (T.Low = 'raise') and SameText(N.Low, AName)
-       and InList(After(AMap, N).Low, STATEMENT_ENDS) then
-    begin
-      Inc(Count);
-      AHit := T;
-      AVar := N;
-    end;
-    T := N;
-  end;
-  if Count = 0 then
-    Result := Format('kein "raise %s" auf der gemeldeten Zeile - Zeile '
-      + 'verschoben? Datei neu pruefen', [AName])
-  else if Count > 1 then
-    Result := Format('Zeile %d traegt %d-mal "raise %s" - mehrdeutig',
-      [ALine, Count, AName])
-  else if (AVar.Line <> AHit.Line)
+  S := Default(TRdxLineSearch);
+  S.Test    := IsRaiseOf;
+  S.Arg     := AName;
+  S.What    := _('no "raise %s"', [AName]);
+  S.ManyFmt := _('%d times "raise %s"');   // AName als Argument (G07-16)
+  S.ManyArg := AName;
+  Result := OneTokenOnLine(AMap, ALine, S, AHit);
+  if Result <> '' then Exit;
+  AVar := After(AMap, AHit);
+  if (AVar.Line <> AHit.Line)
      or AMap.HasNonCode(AHit.Line, AHit.Col, AVar.EndCol - 1) then
-    Result := 'Kommentar oder Zeilenumbruch zwischen raise und Name';
+    Result := _('comment or line break between raise and name');
 end;
 
 class function TRdxRaiseFixes.ReRaise(AMap: TRdxCodeMap; ALine: Integer;
@@ -544,9 +555,14 @@ var
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  Name := BoundNameOf(AMessage);
+  // E aus 'Re-raise of bound variable "E" loses ...' (bis Charge B2S-a
+  // eine eigene Kopie BoundNameOf).
+  // 'name of the variable' wie de 'Name der Variablen' - 'the message has
+  // no variable name' ist die msgid zu 'Variablenname fehlt in der Meldung'
+  // (uRdxCleanupFixes), ein anderer Wortlaut.
+  Name := QuotedText(AMessage, '"');
   if Name = '' then
-    AReason := 'Name der Variablen fehlt in der Meldung'
+    AReason := _('the message has no name of the variable')
   else
     AReason := RaiseOn(AMap, ALine, Name, Hit, BoundTok);
   if AReason = '' then

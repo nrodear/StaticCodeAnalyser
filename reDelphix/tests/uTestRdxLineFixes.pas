@@ -36,45 +36,13 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxLineFixes;
+  uRdxBufferMath, uRdxCodeMap, uRdxLineFixes,
+  uTestRdxTextKit;   // Join, Apply
 
 type
   TRdxLineKind = (lkSemi, lkIndent, lkInit, lkCast);
 
 // ---- Helfer ----
-
-function Apply(const ASource: string; const AEdit: TRdxEdit): string;
-var
-  Bytes : TBytes;
-  Edits : TArray<TRdxEdit>;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-begin
-  SetLength(Edits, 1);
-  Edits[0] := AEdit;
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, Edits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
-end;
-
-// Zeilen mit CRLF verbunden (TStringBuilder: string.Join kennt FPC nicht).
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
 
 // Die Hilfe AKind fuer Zeile ALine mit der Meldung AMessage: neuer Text
 // oder '' bei Ablehnung (AReason).
@@ -274,9 +242,11 @@ var
 begin
   Assert.AreEqual(InUnit(['  L.Free;']),
     Fix(lkCast, InUnit(['  TStringList(L).Free;']), 6, CastMsg('TStringList'), R), R);
-  // Ein Pfad als Operand, Leerraum in den Klammern, Kommentar dahinter.
-  Assert.AreEqual(InUnit(['  if A then Self.FList.Free; // weg']),
-    Fix(lkCast, InUnit(['  if A then TObjectList( Self.FList ).Free; // weg']), 6,
+  // Leerraum in den Klammern, Kommentar dahinter. (Bis zur Review Woche
+  // G07-17 stand hier ein Pfad 'Self.FList' - den lehnte der Laeufer immer
+  // ab, jetzt schon der Planer, s. Sca123_Refusals.)
+  Assert.AreEqual(InUnit(['  if A then FList.Free; // weg']),
+    Fix(lkCast, InUnit(['  if A then TObjectList( FList ).Free; // weg']), 6,
       CastMsg('TObjectList'), R), R);
   // Gross/klein des Typs wie im Code; ein Cast vor Destroy zaehlt nicht mit.
   Assert.AreEqual(InUnit(['  L.Free;']),
@@ -293,10 +263,11 @@ begin
   // Interface-Cast: IFoo(X).Free riefe eine Interface-Methode.
   Assert.AreEqual('', Fix(lkCast, InUnit(['  IFoo(X).Free;']), 6, CastMsg('IFoo'), R));
   Assert.IsTrue(Pos('Interface', R) > 0, R);
-  // Nur Free.
+  // Nur Free. 'nur fuer Free' traegt in de.po das echte Umlaut-u (Charge
+  // G1) - geprueft wird der zweite Teil des Grunds, die Quelle bleibt ASCII.
   Assert.AreEqual('', Fix(lkCast, InUnit(['  TFoo(X).Destroy;']), 6, CastMsg('TFoo'),
     R));
-  Assert.IsTrue(Pos('nur fuer Free', R) > 0, R);
+  Assert.IsTrue(Pos('Destroy bleibt, wie es ist', R) > 0, R);
   // Aufruf bzw. Index als Operand: der Cast kann zum Uebersetzen noetig sein.
   Assert.AreEqual('', Fix(lkCast, InUnit(['  TFoo(List[0]).Free;']), 6,
     CastMsg('TFoo'), R));
@@ -307,6 +278,11 @@ begin
   Assert.AreEqual('', Fix(lkCast, InUnit(['  TFoo(nil).Free;']), 6, CastMsg('TFoo'),
     R));
   Assert.IsTrue(Pos('"nil"', R) > 0, R);
+  // Ein Pfad: sein Typ ist fuer den Laeufer nicht pruefbar - der Planer
+  // lehnt ihn selbst ab (Review Woche G07-17).
+  Assert.AreEqual('', Fix(lkCast, InUnit(['  TObjectList(Self.FList).Free;']), 6,
+    CastMsg('TObjectList'), R));
+  Assert.IsTrue(Pos('ein Pfad', R) > 0, R);
   // Zwei Casts auf der Zeile; ein Kommentar im Cast; Zeile verschoben.
   Assert.AreEqual('', Fix(lkCast, InUnit(['  TFoo(A).Free; TFoo(B).Free;']), 6,
     CastMsg('TFoo'), R));

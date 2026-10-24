@@ -38,7 +38,7 @@ uniquement » ne signifie donc jamais « programme différent », mais
 | **Markup wiki Jira** | — | ✅ | coller un résultat dans un ticket |
 | **Texte brut (presse-papiers)** | — | ✅ | les résultats d'un fichier avec avant/après, à coller |
 | **Sonar : résultat unique** | — | ✅ | un résultat choisi comme fichier external-issue sous `.sonar\external\` |
-| **Infos détecteurs (catalogue)** | — | ✅ | page HTML autonome des 201 règles — pas un export de résultats |
+| **Infos détecteurs (catalogue)** | — | ✅ | page HTML autonome des 203 règles — pas un export de résultats |
 | **Prompt IA (presse-papiers)** | — | ✅ | confier un résultat isolé à un assistant, avec son contexte de code |
 | **Télémétrie de suppression** | `--telemetry-csv <fichier>` | — | quelles règles sont le plus souvent supprimées (classement du bruit) |
 | **Durées des détecteurs** | `--time-detectors` (stdout) / `--time-detectors-out <fichier>` | — | repérer les détecteurs lents |
@@ -280,8 +280,10 @@ mélanger niveaux et confiances de deux mondes différents. Avec
 `EvidenceTiering=0`, le SARIF est identique octet pour octet à la
 sortie d'avant 0.9.18.
 
-Deux points à surveiller : le BOM UTF-8 peut faire trébucher les
-uploaders basés sur Node, et téléverser un SARIF **filtré par la
+Deux points à surveiller : un SARIF écrit par la **v0.9.14 ou une version
+antérieure** porte un BOM UTF-8 qui fait trébucher les uploaders basés sur
+Node (la sortie actuelle est sans BOM, voir *Encodage* ci-dessus), et
+téléverser un SARIF **filtré par la
 référence** contrarie le cycle de vie des alertes de la plateforme
 (elle résout tout ce que le filtre a retiré). Pour le code scanning,
 téléversez le rapport non filtré et laissez la plateforme suivre

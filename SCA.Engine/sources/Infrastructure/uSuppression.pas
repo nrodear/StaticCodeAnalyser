@@ -49,6 +49,15 @@ type
   TSuppressedKinds = uSCAConsts.TFindingKinds;
   TSuppressionMarker = uSCAConsts.TSuppressionMarker;
 
+  // Ziel eines Unterdrueck-Markers, den ein Werkzeug schreibt
+  // (TSuppression.MarkerTargetFor): die Datei, in die der Marker gehoert,
+  // die Zeile dort, VOR die er kommt (1-basiert), und sein Text.
+  TMarkerTarget = record
+    HostFile   : string;
+    Line       : Integer;
+    MarkerLine : string;
+  end;
+
   TSuppression = class
   public
     // Filtert unterdrueckte Befunde aus der Liste (in-place). Emittiert
@@ -85,12 +94,56 @@ type
 
     // Die Marker-Zeile, die ein Werkzeug ueber die Fundzeile schreibt
     // (IDE/EXE "Unterdruecken"): '// noinspection X', in einer
-    // Konfigurationsdatei '; noinspection X'.
+    // Konfigurationsdatei '; noinspection X'. Nur der TEXT - wohin er
+    // gehoert (bei einer Formulardatei: in die Schwester-Unit), sagt
+    // MarkerTargetFor; wer schreibt, nimmt das.
     class function MarkerLineFor(const AFileName: string;
       AKind: TFindingKind): string; static;
     // Dasselbe fuer eine Regelkarte ohne Datei (Workbench, Regel-Info): in
     // der Dateiart, in der die Regel meldet - SCA201 nur in .ini.
     class function MarkerTextFor(AKind: TFindingKind): string; static;
+    // Der DATEIWEITE Marker in der Syntax des Hosts: '// noinspection-file
+    // X', in einer Konfigurationsdatei '; noinspection-file X'. Eine
+    // Quelle fuer MarkerTargetFor (Formdateien) und uClaudePrompt.
+    class function FileWideMarkerFor(const AFileName: string;
+      AKind: TFindingKind): string; static;
+    // Wohin ein Werkzeug (IDE/EXE "Unterdruecken") den Marker fuer den
+    // Fund in AFileName, Zeile ALine schreibt - konsistent dazu, wie
+    // ApplyToFindings Marker LIEST (Review 2026-10-14, MAJOR 2):
+    //   * Pascal- und Konfigurationsdatei: der Zeilenmarker in die Datei
+    //     selbst, vor ALine.
+    //   * Formulardatei (.dfm oder .lfm, UNABHAENGIG vom Scan-Dialekt): der
+    //     DATEIWEITE Marker ('// noinspection-file X') in die Schwester-
+    //     Unit (TStaticFiles.PairedUnitFileAnyDialect: .pas, bei .lfm danach
+    //     .pp) - eine '//'-Zeile in der Form liesse sie nicht mehr laden
+    //     (die EXE schrieb sie bis 2026-10-14 ohne Undo). Dialektfrei, weil
+    //     diese Funktion NACH dem Scan laeuft, wenn Run ScanDialect schon
+    //     auf dlDelphi zurueckgesetzt hat - mit IsFormFileName ging ein
+    //     .lfm-Fund in den Pascal-Zweig (Review Woche G02-01). Beim Lesen haelt BuildMap die FUNDZEILE der .dfm
+    //     gegen die Zielzeilen der Marker in der .pas (es gibt keine
+    //     Zuordnung dfm->pas); ein Zeilenmarker muesste also VOR die Zeile
+    //     ALine - 1 der Unit, und jeder weitere Marker oder Edit darueber
+    //     verschoebe die Ziele aller tieferen DFM-Marker still (Gegen-
+    //     Review Welle 1, Major 3). Der dateiweite Marker haengt an keiner
+    //     Zeilennummer und ist das, was uClaudePrompt fuer Formdateien
+    //     empfiehlt. Er kommt dorthin, wo BuildMap ihn liest - ueberall in
+    //     der Unit: vor den ersten vorhandenen dateiweiten Marker (die
+    //     Marker bleiben beisammen), sonst vor die 'interface'-Zeile,
+    //     sonst (kein Unit-Kopf) in Zeile 1. Traegt die Unit schon einen
+    //     dateiweiten Marker dieser Art, kein zweiter: False, AReason
+    //     "already" (der Fund ist dann mit dem naechsten Scan weg).
+    //     ABGELEHNT (False, AReason englisch wie TBaseline.IsBaselineFile,
+    //     der Host schreibt dann nichts): keine Schwester-Unit, Unit nicht
+    //     lesbar, kein ALine. Gelesen wird die Unit von der Platte mit
+    //     Stat-Zwang (uFileTextCache, AForceStat): ein Werkzeug schreibt
+    //     ohne Cache-Invalidierung, der zweite Marker derselben Sitzung
+    //     prueft sonst gegen die alte Fassung (Gegen-Review Welle 1,
+    //     Major 2). Ein ungespeicherter Editorpuffer kann abweichen - dann
+    //     korrigiert der naechste Scan, und der Marker ist mit Strg+Z
+    //     zurueckzunehmen.
+    class function MarkerTargetFor(const AFileName: string; ALine: Integer;
+      AKind: TFindingKind; out ATarget: TMarkerTarget;
+      out AReason: string): Boolean; static;
   private
     // Allokationsfreier case-insensitiver Substring-Check auf
     // 'noinspection' (ASCII-Folding reicht - der Tag selbst ist ASCII).
@@ -354,8 +407,10 @@ begin
 end;
 
 const
-  MARKER_PASCAL = '// noinspection ';
-  MARKER_INI    = '; noinspection ';
+  MARKER_PASCAL      = '// noinspection ';
+  MARKER_INI         = '; noinspection ';
+  MARKER_PASCAL_FILE = '// noinspection-file ';
+  MARKER_INI_FILE    = '; noinspection-file ';
 
 class function TSuppression.MarkerLineFor(const AFileName: string;
   AKind: TFindingKind): string;
@@ -364,6 +419,15 @@ begin
     Result := MARKER_INI + KindName(AKind)
   else
     Result := MARKER_PASCAL + KindName(AKind);
+end;
+
+class function TSuppression.FileWideMarkerFor(const AFileName: string;
+  AKind: TFindingKind): string;
+begin
+  if TConfigFiles.IsConfigFile(AFileName) then
+    Result := MARKER_INI_FILE + KindName(AKind)
+  else
+    Result := MARKER_PASCAL_FILE + KindName(AKind);
 end;
 
 class function TSuppression.MarkerTextFor(AKind: TFindingKind): string;
@@ -390,6 +454,113 @@ begin
   begin
     var PasFile := TStaticFiles.PairedUnitFile(FileName);
     if PasFile <> '' then Result := PasFile;
+  end;
+end;
+
+// Die Zeile (1-basiert), VOR die der dateiweite Marker fuer AKind in die
+// Unit ALines kommt - oder False mit Grund, wenn die Unit schon einen
+// dateiweiten Marker dieser Art traegt. Dieselbe Leseregel wie BuildMap
+// (ParseHostMarkerLine mit Kommentarzustand, Pascal-Syntax): nur was
+// BuildMap als Marker liest, zaehlt als vorhanden. Reihenfolge der
+// Plaetze s. Vertrag von MarkerTargetFor.
+function FileWideMarkerSlot(ALines: TStrings; AKind: TFindingKind;
+  const AHostName: string; out ALine: Integer; out AReason: string): Boolean;
+var
+  State     : TCommentScanState;
+  Kinds     : TSuppressedKinds;
+  FileWide  : Boolean;
+  i         : Integer;
+  FirstWide : Integer;
+  Iface     : Integer;
+begin
+  Result := False;
+  ALine := 0;
+  AReason := '';
+  FirstWide := -1;
+  Iface := -1;
+  State := Default(TCommentScanState);
+  for i := 0 to ALines.Count - 1 do
+  begin
+    // Die 'interface'-Zeile: nur das Wort - und nur ausserhalb eines
+    // Blockkommentars (State gilt hier fuer den Zeilenanfang, weil
+    // ParseHostMarkerLine ihn erst danach fortschreibt): ein auskommentierter
+    // Unit-Kopf { unit X; interface ... } liesse den Marker sonst im Kommentar
+    // landen, wo BuildMap ihn nie liest (Gegen-Review FX+E7, Verdacht 1).
+    if (Iface < 0) and not (State.InBraceComment or State.InParenComment)
+       and SameText(Trim(ALines[i]), 'interface') then
+      Iface := i;
+    if not ParseHostMarkerLine(ALines[i], msPascal, State, Kinds, FileWide)
+       or not FileWide then
+      Continue;
+    if AKind in Kinds then
+    begin
+      AReason := Format('a file-wide marker for %s is already in %s ' +
+        '(line %d)', [KindName(AKind), AHostName, i + 1]);
+      Exit;
+    end;
+    if FirstWide < 0 then
+      FirstWide := i;
+  end;
+  if FirstWide >= 0 then
+    ALine := FirstWide + 1
+  else if Iface >= 0 then
+    ALine := Iface + 1
+  else
+    ALine := 1;
+  Result := True;
+end;
+
+class function TSuppression.MarkerTargetFor(const AFileName: string;
+  ALine: Integer; AKind: TFindingKind; out ATarget: TMarkerTarget;
+  out AReason: string): Boolean;
+// Vertrag an der Deklaration.
+var
+  Lines  : TStringList;
+  Cached : Boolean;
+begin
+  Result  := False;
+  AReason := '';
+  ATarget := Default(TMarkerTarget);
+  if ALine <= 0 then
+  begin
+    AReason := 'finding has no source line';
+    Exit;
+  end;
+  // Dialektfrei (s. Deklaration): NICHT ResolveMarkerHostFile/
+  // IsFormFileName - die fragen den Scan-Dialekt, der hier schon
+  // zurueckgesetzt ist.
+  if not TStaticFiles.IsFormFileNameAnyDialect(AFileName) then
+  begin
+    ATarget.HostFile := AFileName;
+    ATarget.MarkerLine := MarkerLineFor(ATarget.HostFile, AKind);
+    ATarget.Line := ALine;
+    Exit(True);
+  end;
+  // Formulardatei: der dateiweite Marker in die Schwester-Unit (s.
+  // Deklaration).
+  ATarget.HostFile := TStaticFiles.PairedUnitFileAnyDialect(AFileName);
+  if ATarget.HostFile = '' then
+  begin
+    AReason := 'no unit file beside the form file';
+    Exit;
+  end;
+  ATarget.MarkerLine := FileWideMarkerFor(ATarget.HostFile, AKind);
+  // Mit Stat-Zwang (AForceStat): die Unit wurde vielleicht gerade von
+  // diesem Werkzeug beschrieben, und zwischen zwei Markern derselben
+  // Sitzung laeuft kein Scan (kein Clear) - ohne den Zwang saehe der
+  // zweite Marker den Schnappschuss der Generation, nicht die Datei
+  // (Gegen-Review Welle 1, Major 2; wie uFindingFingerprint).
+  Lines := AcquireLines(ATarget.HostFile, Cached, nil, True);
+  if Lines = nil then
+  begin
+    AReason := 'unit file not readable: ' + ATarget.HostFile;
+    Exit;
+  end;
+  try
+    Result := FileWideMarkerSlot(Lines, AKind,
+      ExtractFileName(ATarget.HostFile), ATarget.Line, AReason);
+  finally
+    ReleaseLines(Lines, Cached);
   end;
 end;
 

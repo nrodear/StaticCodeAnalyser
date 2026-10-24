@@ -12,8 +12,9 @@ unit uTestRdxRecipes;
 //     '%' -> '%%', Sperre fuer SQL-Text (SCA003), Sperre ohne Operand
 //     im with-Block beweist kein Name etwas, IntToStr(x) wird nur %d/%u,
 //     wenn der Core den Aufruf als RTL bewiesen hat
-//   * SQL-Vorlage: Zuweisung und Aufruf, Parameter nie in Quotes, ohne
-//     Query-Objekt als Kommentar, Einrueckung mit Tabs bleibt Tabs
+//   * SQL-Vorlage: nur das Query-Objekt des Ziels (QueryObjectOf); die
+//     Vorlage selbst pinnen seit Charge S1 uTestRdxSqlTemplate und
+//     uTestRdxSqlFacts
 //   * Fund-Abgleich: Ziel und '+'-Zahl aus den Meldungen von SCA044/SCA003,
 //     die '+'-Zaehlung von SCA044 auf dem Knotentext
 //   * uses: Schreibweise der Datei (nur Delphi-Scopes zaehlen, FPC-Weiche
@@ -91,16 +92,8 @@ type
     [Test] procedure TargetsComparable_AsciiBoth_True;
     [Test] procedure TargetsComparable_NonAsciiEitherSide_False;
 
-    // ---- SQL-Vorlage ---------------------------------------------------
+    // ---- SQL-Vorlage (die Tests der Vorlage: uTestRdxSqlTemplate) ------
     [Test] procedure QueryObject_Forms;
-    [Test] procedure SqlTemplate_Assign;
-    [Test] procedure SqlTemplate_Call;
-    [Test] procedure SqlTemplate_QuotedParam_Unquoted;
-    [Test] procedure SqlTemplate_ArgumentRole_Blocked;
-    // Review 2026-10-07 Minor 24: String-Puffer statt Query-Objekt.
-    [Test] procedure SqlTemplate_PlainStringTarget;
-    // Minor 31: Tab-Einrueckung bleibt Tab-Einrueckung.
-    [Test] procedure SqlTemplate_TabIndent_KeepsTabs;
 
     // ---- uses ----------------------------------------------------------
     [Test] procedure Framework_FromUnitNames;
@@ -155,17 +148,40 @@ begin
     TRdxRecipes.MakePart(ROLE_OPERAND, AText, AType, AResolved));
 end;
 
+const
+  // Die Urteile beim Namen - eine Meldung nennt so Soll und Ist (Review
+  // Woche G01-15). Ein neues Urteil macht die Liste unvollstaendig, das
+  // faellt schon beim Bau auf.
+  VERDICT_NAMES: array[TRdxOperandVerdict] of string = ('ovString',
+    'ovByCompiler', 'ovNonString', 'ovAnsi', 'ovVariantRisk', 'ovNoOperand');
+
+// Urteil AActual muss AExpected sein. Ueber die Namen statt
+// AreEqual<TRdxOperandVerdict>: der Ersatz-DUnitX des FPC-Pruefstands kennt
+// nur Strings und Zahlen.
+procedure AssertVerdict(AExpected, AActual: TRdxOperandVerdict;
+  const AMsg: string = '');
+begin
+  Assert.AreEqual(VERDICT_NAMES[AExpected], VERDICT_NAMES[AActual], AMsg);
+end;
+
 function MakeTable(const ALines: array of string): TRdxScopeTable;
 var
   SL : TStringList;
   i  : Integer;
 begin
-  Result := TRdxScopeTable.Create;
+  // Die Tabelle erst nach der Liste und mit eigenem Schutz: scheitert
+  // LoadFromStrings, gibt der except-Zweig sie frei (Review Woche G01-17).
   SL := TStringList.Create;
   try
     for i := Low(ALines) to High(ALines) do
       SL.Add(ALines[i]);
-    Result.LoadFromStrings(SL);
+    Result := TRdxScopeTable.Create;
+    try
+      Result.LoadFromStrings(SL);
+    except
+      Result.Free;
+      raise;
+    end;
   finally
     SL.Free;
   end;
@@ -309,68 +325,68 @@ end;
 
 procedure TTestRdxRecipes.Judge_DeclaredTypes;
 begin
-  Assert.IsTrue(JP('Name', rvString, 'string') = ovString, 'deklariert string');
-  Assert.IsTrue(JP('c', rvString, 'char') = ovString, 'Char nimmt %s');
-  Assert.IsTrue(JP('n', rvNonString, 'integer') = ovNonString, 'deklariert integer');
-  Assert.IsTrue(JP('A', rvString, 'ansistring') = ovAnsi,
+  AssertVerdict(ovString, JP('Name', rvString, 'string'), 'deklariert string');
+  AssertVerdict(ovString, JP('c', rvString, 'char'), 'Char nimmt %s');
+  AssertVerdict(ovNonString, JP('n', rvNonString, 'integer'), 'deklariert integer');
+  AssertVerdict(ovAnsi, JP('A', rvString, 'ansistring'),
     'AnsiString ist String, aber kein Unicode');
-  Assert.IsTrue(JP('U', rvString, 'utf8string') = ovAnsi);
-  Assert.IsTrue(JP('R', rvString, 'rawutf8') = ovAnsi);
-  Assert.IsTrue(JP('V', rvUnknown, 'variant') = ovVariantRisk, 'deklariert Variant');
-  Assert.IsTrue(JP('V', rvUnknown, 'olevariant') = ovVariantRisk);
-  Assert.IsTrue(JP('Fn', rvUnknown, 'tfilename') = ovString, 'RTL-Alias auf string');
-  Assert.IsTrue(JP('R', rvUnknown, 'tmyrec') = ovByCompiler,
+  AssertVerdict(ovAnsi, JP('U', rvString, 'utf8string'));
+  AssertVerdict(ovAnsi, JP('R', rvString, 'rawutf8'));
+  AssertVerdict(ovVariantRisk, JP('V', rvUnknown, 'variant'), 'deklariert Variant');
+  AssertVerdict(ovVariantRisk, JP('V', rvUnknown, 'olevariant'));
+  AssertVerdict(ovString, JP('Fn', rvUnknown, 'tfilename'), 'RTL-Alias auf string');
+  AssertVerdict(ovByCompiler, JP('R', rvUnknown, 'tmyrec'),
     'fremder Typname: das Kompilat buergt');
 end;
 
 procedure TTestRdxRecipes.Judge_TextTells;
 begin
-  Assert.IsTrue(JP('E.Message', rvUnknown) = ovByCompiler);
-  Assert.IsTrue(JP('Edit1.Text', rvUnknown) = ovByCompiler);
-  Assert.IsTrue(JP('GetName(x)', rvUnknown) = ovByCompiler);
-  Assert.IsTrue(JP('Items[i]', rvUnknown) = ovByCompiler);
-  Assert.IsTrue(JP('sLineBreak', rvUnknown) = ovString, 'RTL-Konstante');
-  Assert.IsTrue(JP('PathDelim', rvUnknown) = ovString);
-  Assert.IsTrue(JP('ExtractFileName(F)', rvUnknown) = ovString,
+  AssertVerdict(ovByCompiler, JP('E.Message', rvUnknown));
+  AssertVerdict(ovByCompiler, JP('Edit1.Text', rvUnknown));
+  AssertVerdict(ovByCompiler, JP('GetName(x)', rvUnknown));
+  AssertVerdict(ovByCompiler, JP('Items[i]', rvUnknown));
+  AssertVerdict(ovString, JP('sLineBreak', rvUnknown), 'RTL-Konstante');
+  AssertVerdict(ovString, JP('PathDelim', rvUnknown));
+  AssertVerdict(ovString, JP('ExtractFileName(F)', rvUnknown),
     'RTL-Funktion mit String-Ergebnis');
-  Assert.IsTrue(JP('SysUtils.ExtractFileName(F)', rvUnknown) = ovString);
-  Assert.IsTrue(JP('TPath.Combine(A, B)', rvUnknown) = ovString);
-  Assert.IsTrue(JP('Copy(S, 1, 3)', rvUnknown) = ovString);
-  Assert.IsTrue(JP('Obj.ExtractFileName(F)', rvUnknown) = ovByCompiler,
+  AssertVerdict(ovString, JP('SysUtils.ExtractFileName(F)', rvUnknown));
+  AssertVerdict(ovString, JP('TPath.Combine(A, B)', rvUnknown));
+  AssertVerdict(ovString, JP('Copy(S, 1, 3)', rvUnknown));
+  AssertVerdict(ovByCompiler, JP('Obj.ExtractFileName(F)', rvUnknown),
     'Methode unbekannten Typs, nicht die RTL');
-  Assert.IsTrue(JP('ExtractFileName(F).Trim', rvUnknown) = ovByCompiler,
+  AssertVerdict(ovByCompiler, JP('ExtractFileName(F).Trim', rvUnknown),
     'die Klammer schliesst den Term nicht');
-  Assert.IsTrue(JP('Q.FieldByName(''a'').Value', rvUnknown) = ovVariantRisk,
+  AssertVerdict(ovVariantRisk, JP('Q.FieldByName(''a'').Value', rvUnknown),
     '.Value kann Variant sein');
-  Assert.IsTrue(JP('Null', rvUnknown) = ovVariantRisk);
-  Assert.IsTrue(JP('True', rvUnknown) = ovVariantRisk,
+  AssertVerdict(ovVariantRisk, JP('Null', rvUnknown));
+  AssertVerdict(ovVariantRisk, JP('True', rvUnknown),
     'nur hinter einem Variant uebersetzbar');
-  Assert.IsTrue(JP('Variant(x)', rvUnknown) = ovVariantRisk);
-  Assert.IsTrue(JP('Integer(x)', rvUnknown) = ovNonString, 'Zahl-Cast');
+  AssertVerdict(ovVariantRisk, JP('Variant(x)', rvUnknown));
+  AssertVerdict(ovNonString, JP('Integer(x)', rvUnknown), 'Zahl-Cast');
   // Review 2026-10-07 Minor 12: Cast und RTL-Aufruf mit Ansi-Ergebnis
   // urteilen wie die Deklaration - nicht die Schreibweise entscheidet.
-  Assert.IsTrue(JP('AnsiString(A)', rvUnknown) = ovAnsi, 'Cast auf AnsiString');
-  Assert.IsTrue(JP('UTF8String(x)', rvUnknown) = ovAnsi);
-  Assert.IsTrue(JP('RawByteString(x)', rvUnknown) = ovAnsi);
-  Assert.IsTrue(JP('ShortString(x)', rvUnknown) = ovAnsi);
-  Assert.IsTrue(JP('AnsiChar(b)', rvUnknown) = ovAnsi);
-  Assert.IsTrue(JP('UTF8Encode(S)', rvUnknown) = ovAnsi, 'RawByteString-Ergebnis');
-  Assert.IsTrue(JP('AnsiToUtf8(S)', rvUnknown) = ovAnsi);
-  Assert.IsTrue(JP('SysUtils.Utf8ToAnsi(S)', rvUnknown) = ovAnsi);
-  Assert.IsTrue(JP('Obj.UTF8Encode(S)', rvUnknown) = ovByCompiler,
+  AssertVerdict(ovAnsi, JP('AnsiString(A)', rvUnknown), 'Cast auf AnsiString');
+  AssertVerdict(ovAnsi, JP('UTF8String(x)', rvUnknown));
+  AssertVerdict(ovAnsi, JP('RawByteString(x)', rvUnknown));
+  AssertVerdict(ovAnsi, JP('ShortString(x)', rvUnknown));
+  AssertVerdict(ovAnsi, JP('AnsiChar(b)', rvUnknown));
+  AssertVerdict(ovAnsi, JP('UTF8Encode(S)', rvUnknown), 'RawByteString-Ergebnis');
+  AssertVerdict(ovAnsi, JP('AnsiToUtf8(S)', rvUnknown));
+  AssertVerdict(ovAnsi, JP('SysUtils.Utf8ToAnsi(S)', rvUnknown));
+  AssertVerdict(ovByCompiler, JP('Obj.UTF8Encode(S)', rvUnknown),
     'Methode unbekannten Typs, nicht die RTL');
-  Assert.IsTrue(JP('UTF8ToString(S)', rvUnknown) = ovString,
+  AssertVerdict(ovString, JP('UTF8ToString(S)', rvUnknown),
     'Unicode-Ergebnis bleibt String');
   // Minor 13: Aufrufe mit Zahl-Ergebnis sperren wie ein Zahl-Cast.
-  Assert.IsTrue(JP('Length(Marker)', rvUnknown) = ovNonString, 'Length');
-  Assert.IsTrue(JP('Ord(c)', rvUnknown) = ovNonString);
-  Assert.IsTrue(JP('Round(x)', rvUnknown) = ovNonString);
-  Assert.IsTrue(JP('StrToIntDef(s, 0)', rvUnknown) = ovNonString);
-  Assert.IsTrue(JP('Obj.Length(x)', rvUnknown) = ovByCompiler,
+  AssertVerdict(ovNonString, JP('Length(Marker)', rvUnknown), 'Length');
+  AssertVerdict(ovNonString, JP('Ord(c)', rvUnknown));
+  AssertVerdict(ovNonString, JP('Round(x)', rvUnknown));
+  AssertVerdict(ovNonString, JP('StrToIntDef(s, 0)', rvUnknown));
+  AssertVerdict(ovByCompiler, JP('Obj.Length(x)', rvUnknown),
     'Methode unbekannten Typs');
-  Assert.IsTrue(JP('(a + b)', rvUnknown) = ovNoOperand);
-  Assert.IsTrue(JP('5', rvUnknown) = ovNoOperand);
-  Assert.IsTrue(JP('a and b', rvUnknown) = ovNoOperand);
+  AssertVerdict(ovNoOperand, JP('(a + b)', rvUnknown));
+  AssertVerdict(ovNoOperand, JP('5', rvUnknown));
+  AssertVerdict(ovNoOperand, JP('a and b', rvUnknown));
 end;
 
 procedure TTestRdxRecipes.Format_ByCompiler_Listed;
@@ -462,16 +478,16 @@ var
   P : TRdxPart;
 begin
   // String-indizierter Bezeichner: TDataSet.FieldValues (Variant).
-  Assert.IsTrue(JP('DS[''Name'']', rvUnknown) = ovVariantRisk);
-  Assert.IsTrue(JP('DS [ ''Name'' ]', rvUnknown) = ovVariantRisk);
+  AssertVerdict(ovVariantRisk, JP('DS[''Name'']', rvUnknown));
+  AssertVerdict(ovVariantRisk, JP('DS [ ''Name'' ]', rvUnknown));
   // Gegenstueck 'Items[i]' (Zahl-Index bleibt Kompilat): Judge_TextTells.
-  Assert.IsTrue(JP('DS[''Name''].AsString', rvUnknown) = ovByCompiler, 'dahinter steht noch etwas');
+  AssertVerdict(ovByCompiler, JP('DS[''Name''].AsString', rvUnknown), 'dahinter steht noch etwas');
   // Kopf-Bezeichner deklariert Variant: V.Name, V[0].
   P := TRdxRecipes.MakePart(ROLE_OPERAND, 'V.Name', rvUnknown);
   P.HeadResolved := 'variant';
-  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovVariantRisk);
+  AssertVerdict(ovVariantRisk, TRdxRecipes.JudgeOperand(P));
   P.HeadResolved := 'tobject';
-  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovByCompiler);
+  AssertVerdict(ovByCompiler, TRdxRecipes.JudgeOperand(P));
   Assert.AreEqual('Obj', TRdxRecipes.HeadIdentOf('Obj.Items[i].Name'));
   Assert.AreEqual('Type', TRdxRecipes.HeadIdentOf('&Type.Name'));
   Assert.AreEqual('', TRdxRecipes.HeadIdentOf('(a + b)'));
@@ -482,7 +498,7 @@ begin
   // Blosser Klammerausdruck '(a + b)': Shape_RejectsExpressions.
   Assert.IsFalse(TRdxRecipes.IsOperandShape('(a + b) c'));
   Assert.IsTrue(TRdxRecipes.IsOperandShape('Item.&Type'), '& hinter dem Punkt');
-  Assert.IsTrue(JP('(Sender as TButton).Caption', rvUnknown) = ovByCompiler);
+  AssertVerdict(ovByCompiler, JP('(Sender as TButton).Caption', rvUnknown));
 end;
 
 procedure TTestRdxRecipes.Format_AnsiOperand_UnicodeTarget_Allowed;
@@ -602,25 +618,25 @@ begin
   // eine Methode von Obj binden. Ausserhalb bewiesen, im with-Block nur
   // noch laut Kompilat (strittiger Minor 1).
   P := TRdxRecipes.MakePart(ROLE_OPERAND, 'ExtractFileName(F)', rvUnknown);
-  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovString, 'ausserhalb: RTL');
+  AssertVerdict(ovString, TRdxRecipes.JudgeOperand(P), 'ausserhalb: RTL');
   P.InWith := True;
-  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovByCompiler, 'RTL-Funktion im with');
+  AssertVerdict(ovByCompiler, TRdxRecipes.JudgeOperand(P), 'RTL-Funktion im with');
   P := TRdxRecipes.MakePart(ROLE_OPERAND, 'sLineBreak', rvUnknown);
   P.InWith := True;
-  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovByCompiler, 'RTL-Konstante im with');
+  AssertVerdict(ovByCompiler, TRdxRecipes.JudgeOperand(P), 'RTL-Konstante im with');
   P := TRdxRecipes.MakePart(ROLE_OPERAND, 'Fn', rvUnknown, 'tfilename');
   P.InWith := True;
-  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovByCompiler, 'Typ-Alias im with');
+  AssertVerdict(ovByCompiler, TRdxRecipes.JudgeOperand(P), 'Typ-Alias im with');
   // Was sperrt, sperrt auch im with-Block weiter.
   P := TRdxRecipes.MakePart(ROLE_OPERAND, 'A', rvUnknown, 'ansistring');
   P.InWith := True;
-  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovAnsi);
+  AssertVerdict(ovAnsi, TRdxRecipes.JudgeOperand(P));
   P := TRdxRecipes.MakePart(ROLE_OPERAND, 'V', rvUnknown, 'variant');
   P.InWith := True;
-  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovVariantRisk);
+  AssertVerdict(ovVariantRisk, TRdxRecipes.JudgeOperand(P));
   P := TRdxRecipes.MakePart(ROLE_OPERAND, 'Length(S)', rvUnknown);
   P.InWith := True;
-  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovNonString);
+  AssertVerdict(ovNonString, TRdxRecipes.JudgeOperand(P));
   Assert.IsFalse(TRdxRecipes.MakePart(ROLE_OPERAND, 'x').InWith,
     'MakePart setzt InWith zurueck');
 end;
@@ -630,13 +646,13 @@ var
   P : TRdxPart;
 begin
   P := TRdxRecipes.MakePart(ROLE_OPERAND, 'ExtractFileName(F)', rvUnknown);
-  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovString, 'unverdeckt: RTL');
+  AssertVerdict(ovString, TRdxRecipes.JudgeOperand(P), 'unverdeckt: RTL');
   P.Shadowed := True;
-  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovByCompiler,
+  AssertVerdict(ovByCompiler, TRdxRecipes.JudgeOperand(P),
     'verdeckt: der Name beweist keinen String');
   P := TRdxRecipes.MakePart(ROLE_OPERAND, 'Length(S)', rvUnknown);
   P.Shadowed := True;
-  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovNonString,
+  AssertVerdict(ovNonString, TRdxRecipes.JudgeOperand(P),
     'was sperrt, sperrt weiter');
   Assert.IsFalse(TRdxRecipes.MakePart(ROLE_OPERAND, 'x').Shadowed,
     'MakePart setzt Shadowed zurueck');
@@ -895,113 +911,15 @@ begin
   Assert.AreEqual('DM.SQLQuery1', TRdxRecipes.QueryObjectOf('DM.SQLQuery1.SQL.Text'),
     'das Glied .SQL ganz, nicht der Anfang von .SQLQuery1');
   // Ein blosser Bezeichner kommt unveraendert zurueck - das ist KEIN
-  // Query-Objekt; BuildSqlTemplate fragt deshalb HasQueryObject (Review
-  // 2026-10-07, Minor 24; SqlTemplate_PlainStringTarget).
+  // Query-Objekt; BuildSqlTemplate (uRdxSqlTemplate) fragt deshalb
+  // HasQueryObject (Review 2026-10-07, Minor 24; uTestRdxSqlTemplate,
+  // PlainStringTarget_CommentForm).
   Assert.AreEqual('SQLText', TRdxRecipes.QueryObjectOf('SQLText'));
   Assert.IsFalse(TRdxRecipes.HasQueryObject('SQLText'), 'String-Puffer');
   Assert.IsFalse(TRdxRecipes.HasQueryObject('Self.SQLText'), 'kein Glied .SQL');
   Assert.IsTrue(TRdxRecipes.HasQueryObject('Query.SQL.Text'));
   Assert.IsTrue(TRdxRecipes.HasQueryObject('FDQuery1.SQL.Add'));
   Assert.IsTrue(TRdxRecipes.HasQueryObject('Cmd.CommandText'));
-end;
-
-procedure TTestRdxRecipes.SqlTemplate_Assign;
-var
-  Parts    : TRdxParts;
-  Template : string;
-  Reason   : string;
-begin
-  Parts := [Target('Query.SQL.Text'),
-            Lit('''SELECT * FROM users WHERE id = '''), Op('Id', rvUnknown)];
-  Assert.IsTrue(TRdxRecipes.BuildSqlTemplate('Query.SQL.Text', False, Parts, '  ',
-    Template, Reason), Reason);
-  Assert.AreEqual(
-    '  Query.SQL.Text := ''SELECT * FROM users WHERE id = :p1'';' + sLineBreak +
-    '  Query.ParamByName(''p1'').Value := Id;', Template);
-end;
-
-procedure TTestRdxRecipes.SqlTemplate_Call;
-var
-  Parts    : TRdxParts;
-  Template : string;
-  Reason   : string;
-begin
-  Parts := [Target('Query.SQL.Add'),
-            Lit('''SELECT * FROM t WHERE a = '''), Op('A', rvUnknown),
-            Lit(''' AND b = '''), Op('B', rvUnknown)];
-  Assert.IsTrue(TRdxRecipes.BuildSqlTemplate('Query.SQL.Add', True, Parts, '',
-    Template, Reason), Reason);
-  Assert.AreEqual(
-    'Query.SQL.Add(''SELECT * FROM t WHERE a = :p1 AND b = :p2'');' + sLineBreak +
-    'Query.ParamByName(''p1'').Value := A;' + sLineBreak +
-    'Query.ParamByName(''p2'').Value := B;', Template);
-end;
-
-procedure TTestRdxRecipes.SqlTemplate_QuotedParam_Unquoted;
-var
-  Parts    : TRdxParts;
-  Template : string;
-  Reason   : string;
-begin
-  // WHERE name=''' + Name + '''' -> der Parameter steht nicht in Quotes
-  Parts := [Target('Q.SQL.Text'),
-            Lit('''SELECT * FROM u WHERE name='''''''), Op('Name', rvUnknown),
-            Lit('''''''''')];
-  Assert.IsTrue(TRdxRecipes.BuildSqlTemplate('Q.SQL.Text', False, Parts, '',
-    Template, Reason), Reason);
-  Assert.IsTrue(Pos('WHERE name=:p1''', Template) > 0, Template);
-  Assert.IsFalse(Pos(''':p1''', Template) > 0, 'kein Parameter in Quotes');
-end;
-
-procedure TTestRdxRecipes.SqlTemplate_ArgumentRole_Blocked;
-var
-  Parts    : TRdxParts;
-  Template : string;
-  Reason   : string;
-begin
-  Parts := [Target('ExecuteFmt'), TRdxRecipes.MakePart(ROLE_ARGUMENT, '''x'''),
-            TRdxRecipes.MakePart(ROLE_ARGUMENT, '[a]')];
-  Assert.IsFalse(TRdxRecipes.BuildSqlTemplate('ExecuteFmt', True, Parts, '',
-    Template, Reason));
-  Assert.IsTrue(Pos('Argument', Reason) > 0, Reason);
-end;
-
-procedure TTestRdxRecipes.SqlTemplate_PlainStringTarget;
-var
-  Parts    : TRdxParts;
-  Template : string;
-  Reason   : string;
-begin
-  // SCA003 meldet auch einen lokalen String-Puffer: 'S.ParamByName'
-  // uebersetzte nicht - die Parameterzeilen werden Kommentar mit
-  // Platzhalter, die SQL-Zeile bleibt.
-  Parts := [Target('S'), Lit('''SELECT * FROM t WHERE id='''), Op('Id', rvUnknown)];
-  Assert.IsTrue(TRdxRecipes.BuildSqlTemplate('S', False, Parts, '  ',
-    Template, Reason), Reason);
-  Assert.AreEqual(
-    '  S := ''SELECT * FROM t WHERE id=:p1'';' + sLineBreak +
-    '  // <Query>.ParamByName(''p1'').Value := Id;', Template);
-end;
-
-procedure TTestRdxRecipes.SqlTemplate_TabIndent_KeepsTabs;
-var
-  Parts    : TRdxParts;
-  Template : string;
-  Reason   : string;
-begin
-  // Die Einrueckung kommt als Text: zwei Tabs bleiben zwei Tabs, auch vor
-  // den ParamByName-Zeilen (bis Minor 31 wurden es zwei Leerzeichen).
-  Parts := [Target('Q.SQL.Text'), Lit('''SELECT * FROM t WHERE id='''),
-            Op('Id', rvUnknown)];
-  Assert.IsTrue(TRdxRecipes.BuildSqlTemplate('Q.SQL.Text', False, Parts, #9#9,
-    Template, Reason), Reason);
-  Assert.AreEqual(
-    #9#9'Q.SQL.Text := ''SELECT * FROM t WHERE id=:p1'';' + sLineBreak +
-    #9#9'Q.ParamByName(''p1'').Value := Id;', Template);
-  // Gemischt bleibt gemischt; was kein Tab ist, wird ein Leerzeichen.
-  Assert.AreEqual('  '#9, TRdxRecipes.IndentTextOf('  '#9));
-  Assert.AreEqual('  '#9' ', TRdxRecipes.IndentTextOf('ab'#9'c'));
-  Assert.AreEqual('', TRdxRecipes.IndentTextOf(''));
 end;
 
 { ---- uses ---- }
@@ -1026,8 +944,8 @@ end;
 procedure TTestRdxRecipes.UsesNameFor_FollowsFileStyle;
 begin
   // Ohne Vorbild oder mit einem Eintrag unter einem Delphi-Scope:
-  // qualifiziert. (Keine 'System.SysUtils'/'System.Classes' im Test - der
-  // FPC-Pruefstand schreibt diese Namen in den kopierten Quellen um.)
+  // qualifiziert. (Bis Charge FF mied der Test 'System.SysUtils' - der
+  // FPC-Pruefstand schrieb Unitnamen auch in Literalen um, Review R6-03.)
   Assert.AreEqual('System.Math', TRdxRecipes.UsesNameFor(nil, 'Math', 'System.Math'));
   Assert.AreEqual('System.Math',
     TRdxRecipes.UsesNameFor(['Classes', 'Winapi.Windows'], 'Math', 'System.Math'));
@@ -1060,6 +978,10 @@ begin
   Assert.IsTrue(TRdxRecipes.LineLooksFpcAware('{$MODE ObjFPC}{$H+}'));
   Assert.IsTrue(TRdxRecipes.LineLooksFpcAware('(*$IFDEF FPC*)'));
   Assert.IsTrue(TRdxRecipes.LineLooksFpcAware('{$ifdef'#9'fpc}'), 'Tab statt Leerzeichen');
+  // FPC_FULLVERSION allein ist eine Weiche (Pruefer 2026-10-14, d) - wie
+  // im Labor (uRdxIntroPlan), seit Charge R8 auch hier.
+  Assert.IsTrue(TRdxRecipes.LineLooksFpcAware('{$IF FPC_FULLVERSION >= 30200}'),
+    'FPC_FULLVERSION allein');
   Assert.IsFalse(TRdxRecipes.LineLooksFpcAware('unit FpcTools;'), 'nur Direktiven zaehlen');
   Assert.IsFalse(TRdxRecipes.LineLooksFpcAware('{$IFDEF MSWINDOWS}'));
   Assert.IsFalse(TRdxRecipes.LineLooksFpcAware('{$R *.res}'));
@@ -1188,6 +1110,7 @@ begin
     Assert.IsTrue(T.Resolve('ComCtrls', fwUnknown, Q, Why), Why);
     Assert.AreEqual('Vcl.ComCtrls', Q);
     Assert.IsFalse(T.Resolve('Forms', fwBoth, Q, Why));
+    Assert.IsTrue(Pos('VCL und FMX', Why) > 0, Why);
     Assert.IsFalse(T.Resolve('MyUnit', fwVcl, Q, Why));
     Assert.IsTrue(Pos('nicht in der Scope-Tabelle', Why) > 0, Why);
   finally
@@ -1226,6 +1149,7 @@ begin
     Assert.IsTrue(Pos('DCC_Namespace', Why) > 0, Why);
     Assert.IsFalse(T.Resolve('Skia', fwUnknown, Q, Why),
       'Rahmenwerk unbekannt: VCL moeglich');
+    Assert.IsTrue(Pos('DCC_Namespace', Why) > 0, Why);
     // Eine FMX-Datei hat kein Vcl in der Liste: System vor FMX wie bisher.
     Assert.IsTrue(T.Resolve('Skia', fwFmx, Q, Why), Why);
     Assert.AreEqual('System.Skia', Q);
@@ -1301,8 +1225,9 @@ begin
   Path := FindScopeFile;
   Assert.IsTrue(Path <> '', 'data\unitscopes.txt nicht gefunden');
   T  := TRdxScopeTable.Create;
-  SL := TStringList.Create;
+  SL := nil;
   try
+    SL := TStringList.Create;
     Assert.IsTrue(T.LoadFromFile(Path), Path);
     Assert.IsTrue(T.Resolve('Foundation', fwVcl, Q, Why), Why);
     Assert.AreEqual('Winapi.Foundation', Q);

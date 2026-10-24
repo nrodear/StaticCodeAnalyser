@@ -1,0 +1,2674 @@
+﻿{
+  "$comment": "Quelle fuer reDelphix/QUICKFIXES.md (Entscheid E30). Je Code-Aktion ein Eintrag: Schluessel = Fundart (Kind-Name wie im Katalog) bzw. 'recipe:' + Name der AddXxx-Methode in uRdxProvider. Menuetexte und Kennzeichnung NICHT hier - sie kommen aus dem Quelltext und i18n/*.po. Felder: titel, was, nichtAngeboten (Liste), beispielVorher/beispielNachher (Zeilen, aus den Tests reDelphix/tests/uTestRdx*.pas) oder ohneBeispiel; optional nachherTitel, weitereBeispiele [{titel, vorher, nachher, nachherTitel}], hinweis, platzhalter (Pflicht, wenn ein Menuetext %s/%d traegt), kennzeichnung (Pflicht bei 'je nach Fund', erlaubt bei 'ja'), zweiterEintrag {was, beispielNachher, beispielVorher, nichtAngeboten, kennzeichnung} (Pflicht genau bei Alt in FIX_ROWS), regelText (Rezepte). Danach: python tools/gen-quickfix-doc.py",
+  "eintraege": {
+    "MemoryLeak": {
+      "titel": "Freigabe in try/finally setzen (Variante freed-outside-finally)",
+      "was": "Nur für die Variante freed-outside-finally: das `Free` ist da, steht aber neben dem `finally`. Die Erzeugung `X := TFoo.Create..;` bleibt stehen, die Zeilen bis zur Freigabe rücken eine Stufe tiefer in einen neuen `try`-Teil, die Freigabe kommt ins `finally` – derselbe Baustein wie bei SCA009.",
+      "kennzeichnung": "`Free` läuft danach auch bei einer Ausnahme und bei Exit – das ist der Fix",
+      "platzhalter": "`%s` = die Variable aus der Meldung.",
+      "nichtAngeboten": [
+        "die Varianten never-freed, return-value-not-freed und proven-leak: der Eintrag steht gesperrt mit der Variante da (maßgeblich ist das Feld `LeakVariant` des Funds)",
+        "die Freigabe ist bedingt, liegt tiefer, steht doppelt oder in anderer Schreibweise da, oder X bekommt im Bereich eine zweite Zuweisung",
+        "X wird im Bereich weitergegeben (Argument eines Add-/Insert-/Register-…-Aufrufs, Zuweisung an ein Feld oder `Result`, Methodenzeiger, `@X` – auch durch Cast, Klammern oder `as`) oder steht in einem raise-Ausdruck",
+        "Direktive, Marke/goto, asm, Inline-`var`/`const` auf der Ebene der Erzeugung, mehrzeiliges `'''`-Literal im Bereich"
+      ],
+      "beispielVorher": [
+        "  X := TStringList.Create;",
+        "  Y := TStringList.Create;",
+        "  try",
+        "    Y.Add('a');",
+        "  finally",
+        "    Y.Free;",
+        "  end;",
+        "  X.Free;"
+      ],
+      "beispielNachher": [
+        "  X := TStringList.Create;",
+        "  try",
+        "    Y := TStringList.Create;",
+        "    try",
+        "      Y.Add('a');",
+        "    finally",
+        "      Y.Free;",
+        "    end;",
+        "  finally",
+        "    X.Free;",
+        "  end;"
+      ]
+    },
+    "UnusedUses": {
+      "titel": "Unit aus uses entfernen",
+      "was": "Löscht den Eintrag der Meldung aus seiner uses-Klausel: mit dem Komma bis zum nächsten Eintrag bzw. – beim letzten – ab dem Komma davor; steht er allein auf seiner Zeile, die ganze Zeile samt `//`-Kommentar; der einzige Eintrag geht mit der ganzen Klausel. Ein `in`-Pfad geht mit. Vorher prüft die Hilfe den Fund am aktuellen Puffer nach (dieselben Spuren wie der Detektor).",
+      "kennzeichnung": "der Fund ist heuristisch (danach kompilieren – ein Typ, den der Detektor nicht kennt, macht ihn falsch), und ein `initialization`-Abschnitt der Unit läuft danach nicht mehr",
+      "platzhalter": "`%s` = die Unit aus der Meldung.",
+      "nichtAngeboten": [
+        "der Puffer trägt den Fund nicht mehr (ein Fund aus einem älteren Scan)",
+        "ein Kommentar im gelöschten Bereich, auch `{Form1}` hinter einer Formular-Unit",
+        "Compiler-Direktiven in einer uses-Klausel",
+        "im gelöschten Bereich steht mehr als dieser Eintrag"
+      ],
+      "beispielVorher": [
+        "uses",
+        "  A,",
+        "  B,",
+        "  C;"
+      ],
+      "beispielNachher": [
+        "uses",
+        "  A,",
+        "  C;"
+      ],
+      "hinweis": "SCA007 meldet der Analyser nur mit eingeschaltetem uses-Check (`[Detectors] UsesCheck=1`). Im Beispiel nennt der Fund die Unit `B`."
+    },
+    "MissingFinally": {
+      "titel": "Objekt in try/finally freigeben",
+      "was": "Die Erzeugung `X := TFoo.Create..;` (auch `var X := ..`, `CreateFmt` & Co., über Zeilen) bleibt stehen, die Zeilen bis zur Freigabe `X.Free`/`X.Destroy`/`FreeAndNil(X)` rücken eine Stufe tiefer in den `try`-Teil, die Freigabe kommt ins `finally`; ein direkt folgendes `X := nil;` geht mit. `try`, `finally` und `end;` stehen in eigenen Zeilen, eingerückt wie die Erzeugung.",
+      "kennzeichnung": "`Free` läuft danach auch bei einer Ausnahme und bei Exit – das ist der Fix",
+      "platzhalter": "`%s` = die Variable aus der Meldung.",
+      "nichtAngeboten": [
+        "keine unbedingte Freigabe von X in derselben Anweisungsliste (sie fehlt, steht tiefer oder in einem Zweig), eine zweite Freigabe oder eine zweite Zuweisung an X im Bereich",
+        "Erzeugung oder Freigabe nicht allein auf ihrer Zeile, die Erzeugung hinter then/else/do oder in einem case-Zweig, nichts zwischen Erzeugung und Freigabe",
+        "X wird im Bereich weitergegeben: direktes Argument eines Add-/Insert-/Push-/Register-…-Aufrufs, ganze rechte Seite einer Zuweisung an Feld, Property, `Result` oder Parameter – auch durch Cast, Klammern oder `as` (`FCurrent := TFoo(X)`, `List.Add(X as TObject)`) –, Methodenzeiger an ein Ereignis, `@X`; X in einem raise-Ausdruck; auch über einen generischen Cast (`TList<TFoo>(X)`), einen generischen Aufruf (`Register<TFoo>(X)`) oder einen Array-Konstruktor (`AddRange([X])`, `FArr := [X]`)",
+        "Exit bei weitergegebenem X, Break/Continue, deren Schleife den Bereich umschließt – auch als `System.Exit`/`System.Break`/`System.Continue`",
+        "Direktive, Marke/goto, asm, Inline-`var`/`const` auf der Ebene der Erzeugung, mehrzeiliges `'''`-Literal, ein umschließendes try, dessen except- bzw. finally-Teil X nennt"
+      ],
+      "beispielVorher": [
+        "  X := TStringList.Create;",
+        "  X.Add('a');",
+        "  Foo(X);",
+        "  X.Free;"
+      ],
+      "beispielNachher": [
+        "  X := TStringList.Create;",
+        "  try",
+        "    X.Add('a');",
+        "    Foo(X);",
+        "  finally",
+        "    X.Free;",
+        "  end;"
+      ],
+      "hinweis": "Das Meldungs-Suffix „(try/except instead of try/finally)“ schränkt die Hilfe nicht ein – es sagt nur, dass die Methode irgendwo ein try/except hat."
+    },
+    "MagicNumber": {
+      "titel": "Lokale Konstante einführen",
+      "was": "Setzt `const MagicNr01 = N;` als eigene Anweisung direkt vor die Anweisung mit der if-Bedingung und ersetzt das Literal der Bedingung durch den Namen – nur dieses eine; gleiche Literale hinter `then` bleiben. Ein Zweig ohne `begin` bekommt `begin..end`. Der Name ist der erste `MagicNrNN`, der in der Datei nicht vorkommt; umbenennen von Hand oder mit Refactor > Rename (Strg+Umschalt+E). Bedeutungsgleich nach der Prämisse von E26: die untypisierte Inline-Konstante behält Faltung, Überladungswahl und vorzeichenlose Rechnung des Literals – für einen Vergleichswert einer if-Bedingung gilt das als sicher, gemessen ist es noch nicht (Teil P6 der Kompilierprobe, Bau offen).",
+      "platzhalter": "`%s` = die Zahl aus der Meldung; den Namen der Konstante nennt der Hinweis des Eintrags.",
+      "nichtAngeboten": [
+        "die Zahl der Meldung steht nicht oder mehrfach als Vergleichswert in den if-Bedingungen der Fundzeile (Zeile verschoben bzw. mehrdeutig), oder nur in einer Folgezeile der Bedingung",
+        "eine Zahl mit Zifferntrennern (`if X > 200_000`, auch `200_000.5`): der Detektor meldet nur ihren ersten Block (`200`) – ein Fehlalarm, der Grund sagt es",
+        "die Sperren der Code-Aktion „Lokale Konstante einführen“: `else if`, Zweig über mehrere Zeilen, Zeile darüber ohne Anweisungsende, Direktive davor, case-Zweig, asm, initialization, mehrzeilige Strings und Kommentare",
+        "Dateien, die FPC oder ein Compiler vor Delphi 10.3 übersetzt: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, ein Include, das nicht neben der Unit liegt, ein Lazarus-Projekt/-Paket in der Nähe, `.pp`/`.lpr`, ein altes Delphi-Projekt (`.dproj` vor 10.3, `.dof`, `.bdsproj`, `.bpr`, `.bpg`)",
+        "ein Netzpfad oder Netzlaufwerk, auch für ein Include der Unit (kein Plattenzugriff beim Menüaufbau im Hauptthread)",
+        "der Hauptblock eines Programms bzw. einer Bibliothek"
+      ],
+      "beispielVorher": [
+        "  Foo;",
+        "  if X > 200 then Y := 200;"
+      ],
+      "beispielNachher": [
+        "  Foo;",
+        "  const MagicNr01 = 200;",
+        "  if X > MagicNr01 then Y := 200;"
+      ],
+      "hinweis": "Keine Sync-Edit-Sitzung zum Umbenennen: dort zerstört Esc Text."
+    },
+    "EmptyMethod": {
+      "titel": "Leeren Rumpf als beabsichtigt kennzeichnen",
+      "was": "Setzt `// intentionally empty` in eine eigene Zeile zwischen `begin` und `end`, eine Stufe tiefer; stehen beide auf einer Zeile, `{ intentionally empty }` inline. Der Detektor wertet einen solchen Kommentar als Absicht – bedeutungsgleich.",
+      "zweiterEintrag": {
+        "was": "Setzt `raise ENotImplemented.Create('<Name>');` mit dem Namen aus dem Methodenkopf in den leeren Rumpf; fehlt `System.SysUtils`, kommt es in uses.",
+        "kennzeichnung": "der Aufruf löst danach eine Exception aus, statt nichts zu tun",
+        "nichtAngeboten": [
+          "in constructor und destructor und ohne den Namen auf der Kopfzeile"
+        ],
+        "beispielNachher": [
+          "procedure TFoo.DoStuff;",
+          "begin",
+          "  raise ENotImplemented.Create('TFoo.DoStuff');",
+          "end;"
+        ]
+      },
+      "nichtAngeboten": [
+        "zwei Routinenköpfe auf der Zeile (der Fund könnte jeden meinen), eine lokale Routine zwischen Kopf und Rumpf, `asm`",
+        "hinter dem `begin` steht noch Code, oder der Rumpf ist nicht wirklich leer (Code unter einer inaktiven Direktive, ein asm-Block)",
+        "ein Kommentar im Rumpf – er ist keine Absicht (sonst schwiege der Detektor), meist auskommentierter Code"
+      ],
+      "beispielVorher": [
+        "procedure TFoo.DoStuff;",
+        "begin",
+        "end;"
+      ],
+      "beispielNachher": [
+        "procedure TFoo.DoStuff;",
+        "begin",
+        "  // intentionally empty",
+        "end;"
+      ]
+    },
+    "SelfAssignment": {
+      "titel": "Selbstzuweisung entfernen",
+      "was": "Löscht `X := X;` – allein auf der Zeile die ganze Zeile –, auch für Pfade (`Pt.Y := Pt.Y;`, `R^.F := R^.F;`). Bedeutungsgleich; war ein anderer Wert gemeint (Tippfehler), fehlt er weiterhin – der Hinweis des Eintrags sagt es.",
+      "platzhalter": "`%s` = das Ziel der Zuweisung.",
+      "nichtAngeboten": [
+        "`Result := Result` (stillt vielleicht W1035 – dort lieber unterdrücken)",
+        "die Wurzel ist keine Variable, ein Pfadteil ist eine Property der Unit, X ist auch eine Routine der Unit",
+        "ein `class operator Assign` in der Unit (verwaltete Records führen bei der Zuweisung Code aus)",
+        "ein Kommentar auf der Zeile, die einzige Anweisung hinter then/else/do, eines case-Zweigs oder eines Blocks, über mehrere Zeilen, im `with`-Block"
+      ],
+      "beispielVorher": [
+        "  Foo;",
+        "  Temp := Temp;",
+        "  Bar;"
+      ],
+      "beispielNachher": [
+        "  Foo;",
+        "  Bar;"
+      ]
+    },
+    "UnusedLocalVar": {
+      "titel": "Ungenutzte lokale Variable entfernen",
+      "was": "Löscht die Deklaration: `X: T;` samt Zeile (ein `//`-Kommentar dahinter geht mit – außer er trägt einen Marker, `noinspection` oder TODO/FIXME/HACK/XXX: der gilt der Zeile dahinter bzw. bleibt stehen, als eigene Zeile), aus `A, X, B: T;` wird `A, B: T;`, `var` geht mit, wenn die Section dadurch leer wird, eine Inline-Deklaration `var X: T;` als ganze Anweisung. Bedeutungsgleich – vorher prüft die Hilfe am Text, dass der Name im Gültigkeitsbereich sonst nirgends als Code vorkommt (auch in lokalen Routinen, inaktiven Zweigen und asm).",
+      "platzhalter": "`%s` = die Variable aus der Meldung.",
+      "nichtAngeboten": [
+        "`for var` (der Detektor meldet die Laufvariable) und ein Schlüsselwort als Name (`resourcestring`)",
+        "eine const-/resourcestring-Section, ein Initialisierer (`= 5`, `:= F()`), `absolute`, ein Typ über mehrere Zeilen, ein Attribut, ein Kommentar oder eine Direktive in der Deklaration",
+        "ein `// noinspection` darüber, der auf die Zeile der Deklaration zielt – gelöscht gälte er der Zeile dahinter",
+        "ein `class operator Initialize/Finalize` in der Unit (die Variable führt Code aus)",
+        "ein `{$I}`-Include, eine Direktive, die den Namen nennt, oder `asm` im Gültigkeitsbereich; ein FPC-Makro `{$DEFINE M := X}` in der Datei",
+        "die einzige Anweisung eines Blocks, außerhalb einer Routine, in einer offenen Klammer (ein Parameter, keine Variable)"
+      ],
+      "beispielVorher": [
+        "procedure P;",
+        "var",
+        "  A: Integer;",
+        "  X: TObject;",
+        "  B: string;",
+        "begin",
+        "  A := Length(B);",
+        "end;"
+      ],
+      "beispielNachher": [
+        "procedure P;",
+        "var",
+        "  A: Integer;",
+        "  B: string;",
+        "begin",
+        "  A := Length(B);",
+        "end;"
+      ],
+      "weitereBeispiele": [
+        {
+          "titel": "die Section wird leer",
+          "vorher": [
+            "procedure P;",
+            "var",
+            "  Tmp: Integer;   // never used",
+            "begin",
+            "  DoStuff;",
+            "end;"
+          ],
+          "nachher": [
+            "procedure P;",
+            "begin",
+            "  DoStuff;",
+            "end;"
+          ]
+        }
+      ]
+    },
+    "EmptyArgumentList": {
+      "titel": "Leere Klammern entfernen",
+      "was": "`Foo()` → `Foo` an der Spalte aus der Meldung, auch in Deklarationen (`procedure Foo();`) – nur, wo Delphi den Namen ohne Klammern genauso aufruft: als ganze Anweisung, als ganze Bedingung von if/while/until oder als ganze rechte Seite einer Zuweisung an eine einfache Variable mit bekanntem, nicht prozeduralem Typ.",
+      "nichtAngeboten": [
+        "als Argument oder Teil eines Ausdrucks (etwa bei einer Überladung mit `TFunc`), bei `Arr[0]()` und `F()()`",
+        "der Name ist eine Variable (Prozedurvariable) oder heißt wie ein Ereignis (`OnIdle()`)",
+        "die Unit deklariert den Namen als Property, auch hinter einem Pfad (`Dlg.RefProc()`) – ob Delphi eine Property mit Prozedurtyp ohne () aufruft, ist ohne Delphi-12-Probe nicht belegt; eine Property einer anderen Unit mit unauffälligem Namen sieht die Sperre nicht",
+        "in der eigenen Funktion, im `with`-Block, in Dateien mit FPC-Weiche oder FPC-Modus"
+      ],
+      "beispielVorher": [
+        "  DoStuff();"
+      ],
+      "beispielNachher": [
+        "  DoStuff;"
+      ]
+    },
+    "CommentedOutCode": {
+      "titel": "Auskommentierten Code löschen",
+      "was": "Löscht genau die Region der Meldung ab Zeile und Spalte: eine `//`-Zeile ganz, einen Kommentar hinter Code ab seiner Spalte, die Inhaltszeilen eines mehrzeiligen `{ }`/`(* *)`. Die Begrenzer gehen erst mit, wenn der Kommentar danach leer ist; Prosa vor oder hinter der Region bleibt. Bedeutungsgleich.",
+      "nichtAngeboten": [
+        "eine Direktive im Bereich, ein Doku-Kommentar (`///`, `{*`, `(**`), ein Kopfkommentar vor dem ersten Code der Datei (Lizenz)",
+        "`noinspection` oder TODO/FIXME/HACK/XXX im gelöschten Text",
+        "der Text passt nicht mehr zur Meldung (Spalte, Code-Merkmal der ersten und letzten Zeile) – Zeile verschoben",
+        "mehrere Kommentare in der Region, von denen einer mit Text über sie hinausreicht"
+      ],
+      "beispielVorher": [
+        "  Foo;",
+        "  // X := 1;",
+        "  Bar;"
+      ],
+      "beispielNachher": [
+        "  Foo;",
+        "  Bar;"
+      ],
+      "weitereBeispiele": [
+        {
+          "titel": "Blockkommentar über mehrere Zeilen",
+          "vorher": [
+            "  Foo;",
+            "  {",
+            "    X := 1;",
+            "    Y := 2;",
+            "  }",
+            "  Bar;"
+          ],
+          "nachher": [
+            "  Foo;",
+            "  Bar;"
+          ]
+        }
+      ]
+    },
+    "UnitLevelKeywordIndent": {
+      "titel": "Schlüsselwort an Spalte 1 setzen",
+      "was": "Löscht die Einrückung vor dem Unit-Schlüsselwort aus der Meldung (`interface`, `implementation` …). Bedeutungsgleich – nur Leerraum.",
+      "nichtAngeboten": [
+        "vor dem Schlüsselwort steht mehr als Leerraum (ein Kommentar ginge verloren)",
+        "die Zeile beginnt in einem Kommentar oder mehrzeiligen String",
+        "das `interface` gehört zu einem Typ (`IFoo =` davor)"
+      ],
+      "beispielVorher": [
+        "unit u;",
+        "interface",
+        "  implementation",
+        "end."
+      ],
+      "beispielNachher": [
+        "unit u;",
+        "interface",
+        "implementation",
+        "end."
+      ]
+    },
+    "RedundantBoolean": {
+      "titel": "Überflüssigen Vergleich mit True/False entfernen",
+      "was": "`X = True` / `X <> False` → `X`, `X = False` / `X <> True` → `not X` – für einen bloßen Bezeichner, der in der Unit als `Boolean` deklariert ist.",
+      "nichtAngeboten": [
+        "X ist kein bloßer Bezeichner (Pfad, auch `Self.X`) oder nicht als `Boolean` deklariert – bei Variant und LongBool ist `= True` nicht dasselbe",
+        "links beginnt kein Ausdruck bzw. rechts von True/False endet keiner (`X = True and Y` heißt `X = (True and Y)`)",
+        "im `with`-Block"
+      ],
+      "beispielVorher": [
+        "  if IsDone = False then Exit;"
+      ],
+      "beispielNachher": [
+        "  if not IsDone then Exit;"
+      ]
+    },
+    "AssertMessage": {
+      "titel": "Bedingung als Assert-Meldung",
+      "was": "`Assert(c)` → `Assert(c, 'c')` an der Spalte aus der Meldung; Apostrophe der Bedingung werden verdoppelt. Bedeutungsgleich – die Meldung nennt danach, was fehlschlug.",
+      "nichtAngeboten": [
+        "die Klammer schließt nicht auf derselben Zeile, oder ein Kommentar steht darin",
+        "`Obj.Assert`, eine eigene Routine `Assert` in der Unit, `with`-Block",
+        "das Literal würde länger als 255 Zeichen (E2056)"
+      ],
+      "beispielVorher": [
+        "  Assert(X > 0);"
+      ],
+      "beispielNachher": [
+        "  Assert(X > 0, 'X > 0');"
+      ]
+    },
+    "ExplicitTObjectInheritance": {
+      "titel": "(TObject) aus der Klassendeklaration entfernen",
+      "was": "`class(TObject)` → `class` an der Spalte aus der Meldung, nur auf den Zeilen, ohne Parser. Bedeutungsgleich – TObject ist ohnehin der Vorfahr. Aus `class(TObject);` wird `class end;` (ein bloßes `class;` wäre eine Vorwärtsdeklaration).",
+      "nichtAngeboten": [
+        "an der Spalte der Meldung steht kein `class(TObject)` (Puffer geändert), oder die Meldung nennt keine Spalte",
+        "weitere Einträge in der Klammer (`class(TObject, IFoo)`)",
+        "der Klassenrumpf steht auf derselben Zeile",
+        "die Stelle liegt in einem mehrzeiligen String"
+      ],
+      "beispielVorher": [
+        "  TFoo = class(TObject)"
+      ],
+      "beispielNachher": [
+        "  TFoo = class"
+      ]
+    },
+    "RedundantJump": {
+      "titel": "Überflüssiges Exit/Continue entfernen",
+      "was": "Löscht `Exit;` bzw. `Continue;` vor dem Ende – allein auf der Zeile die ganze Zeile; hinter dem `else` eines if fällt `else Exit` weg. Bedeutungsgleich: dahinter folgt nur noch die end-Kette bis zum Routinen- bzw. Schleifenende.",
+      "platzhalter": "`%s` = `Exit` bzw. `Continue`.",
+      "nichtAngeboten": [
+        "die einzige Anweisung hinter then/do, eines case-Zweigs, des else von case/except oder eines Blocks (es bliebe ein leerer Zweig)",
+        "mehrere Sprünge auf der Zeile, ein Kommentar auf der Zeile (er erklärt den Sprung)",
+        "eine eigene Routine `Exit` bzw. `Continue` in der Unit",
+        "Exit im Rumpf einer Schleife, Sprünge im `finally`-Teil"
+      ],
+      "beispielVorher": [
+        "procedure P;",
+        "begin",
+        "  DoStuff;",
+        "  Exit;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "procedure P;",
+        "begin",
+        "  DoStuff;",
+        "end;"
+      ]
+    },
+    "SuperfluousSemicolon": {
+      "titel": "Überzähliges Semikolon entfernen",
+      "was": "`;;` bzw. `; ;` an der Spalte aus der Meldung → `;` – das zweite war eine leere Anweisung.",
+      "nichtAngeboten": [
+        "an der Spalte der Meldung steht kein `;;` (Zeile verschoben), oder die Meldung nennt keine Spalte",
+        "das `;;` steht in einem String, Kommentar oder mehrzeiligen String"
+      ],
+      "beispielVorher": [
+        "  DoStuff;;"
+      ],
+      "beispielNachher": [
+        "  DoStuff;"
+      ]
+    },
+    "AssignedAndAssignedNil": {
+      "titel": "Überflüssigen nil-Vergleich entfernen",
+      "was": "`Assigned(X) and (X <> nil)` bzw. `(X <> nil) and Assigned(X)` → `Assigned(X)` – alles auf einer Zeile, der Vergleich geklammert.",
+      "nichtAngeboten": [
+        "X ist nicht als Klasse, Interface oder Zeiger bewiesen (in der Unit deklariert, auch über Alias, oder eine Klasse der Delphi-Quellen, E27) – bei einem Funktionstyp ruft `X <> nil` ihn auf, `Assigned(X)` nicht",
+        "`not` davor (es bindet nur an den ersten Teil), eine Aufruf- oder Cast-Klammer (`Boolean(X <> nil) and …`)",
+        "eine eigene Routine `Assigned` in der Unit, `with`-Block"
+      ],
+      "beispielVorher": [
+        "  if Assigned(Obj) and (Obj <> nil) then ;"
+      ],
+      "beispielNachher": [
+        "  if Assigned(Obj) then ;"
+      ]
+    },
+    "FreeAndNilHint": {
+      "titel": "FreeAndNil statt Free und nil",
+      "was": "`X.Free;` + `X := nil;` → `FreeAndNil(X);`. Fehlt `System.SysUtils` in uses, kommt es als zweite Ersetzung mit (in der Schreibweise der Datei).",
+      "platzhalter": "`%s` = die Variable aus der Meldung.",
+      "nichtAngeboten": [
+        "X ist nicht in der Unit deklariert (Property, geerbtes Feld) oder steht im `with`-Block",
+        "der Typ von X ist in der Unit – auch über einen Alias – ein `record`, `object`, `interface`, ein Zeiger (`PFoo = ^TFoo`) oder ein eigener Typ (`= type ..`), die Unit deklariert eine Routine `Free`, oder der Typ ist nach Konvention ein Zeiger einer anderen Unit (`PEVP_PKEY`, auch hinter einem Alias der Unit) – `FreeAndNil` nimmt nur ein `TObject`",
+        "eine Direktive vor `X.Free;` (das nil würde bedingt)",
+        "die Zeile trägt ein anderes Paar als die Meldung (Zeile verschoben)",
+        "ein Kommentar im Ausdruck (`X{owned}.Free;`, `X.{c}Free;`, `X.Free {c};`) – der Detektor meldet diese Formen wie `X.Free;`, der Grund nennt den Kommentar",
+        "`System.SysUtils` fehlt und die uses-Klausel trägt Direktiven oder liegt in einem `$IFDEF`-Zweig"
+      ],
+      "beispielVorher": [
+        "  L.Free;",
+        "  L := nil;"
+      ],
+      "beispielNachher": [
+        "  FreeAndNil(L);"
+      ]
+    },
+    "EmptyVisibilitySection": {
+      "titel": "Leeren Sichtbarkeitsabschnitt entfernen",
+      "was": "Löscht die Zeile des leeren Abschnitts (`public`, `strict private` …). Bedeutungsgleich.",
+      "nichtAngeboten": [
+        "die Zeile trägt mehr als genau diesen Abschnitt, etwa einen Kommentar",
+        "`strict` allein auf der Zeile (es gehört zur nächsten)",
+        "eine Compiler-Direktive bis zum nächsten Abschnitt (er wäre vielleicht nur in einem Zweig leer)"
+      ],
+      "beispielVorher": [
+        "  TFoo = class",
+        "  public",
+        "  private",
+        "    FX: Integer;",
+        "  end;"
+      ],
+      "beispielNachher": [
+        "  TFoo = class",
+        "  private",
+        "    FX: Integer;",
+        "  end;"
+      ]
+    },
+    "LegacyInitializationSection": {
+      "titel": "begin durch initialization ersetzen",
+      "was": "Das `begin` des Unit-Rumpfs (`begin .. end.`) wird `initialization`, in der Schreibweise des `begin`. Bedeutungsgleich – der Abschnitt kann danach ein `finalization` bekommen.",
+      "nichtAngeboten": [
+        "in `program` und `library` (dort ist es der Rumpf)",
+        "das `end` zu genau diesem `begin` steht nicht vor dem Punkt",
+        "eine Direktive auf der Zeile"
+      ],
+      "beispielVorher": [
+        "procedure P; begin end;",
+        "begin",
+        "  P;",
+        "end."
+      ],
+      "beispielNachher": [
+        "procedure P; begin end;",
+        "initialization",
+        "  P;",
+        "end."
+      ]
+    },
+    "ConstructorWithoutInherited": {
+      "titel": "inherited als Erstes im Konstruktor aufrufen",
+      "was": "Setzt den Aufruf als erste Anweisung in eine eigene Zeile hinter das `begin`, eingerückt wie die erste Anweisung (im Einzeiler `begin end;` inline). Die Form wählt die Hilfe: `inherited Create;`, wenn die Klasse direkt von TObject erbt oder von einem Vorfahren ohne eigenen Konstruktor (TPersistent, TInterfacedObject, TCustomAttribute); `inherited;`, wenn die Deklaration `override` trägt.",
+      "kennzeichnung": "nur `inherited;` (mit `override`): der überschriebene Elternkonstruktor läuft danach zuerst, mit denselben Argumenten; `inherited Create;` ist bedeutungsgleich, TObject.Create ist leer",
+      "platzhalter": "`%s` = die eingefügte Anweisung (`inherited Create` bzw. `inherited`).",
+      "nichtAngeboten": [
+        "ein anderer Vorfahr ohne `override` – welcher Elternkonstruktor mit welchen Argumenten laufen soll, ist Entwurf",
+        "`override` mit `overload`, mehrere Deklarationen",
+        "Delegation an einen anderen Konstruktor (`Create..`, `Self.Create..` oder ein Konstruktor der Klasse bzw. eines Vorfahren in der Unit)",
+        "eine in der Unit abstrakte geerbte Methode, `{$mode objfpc}` mit einem Vorfahren außerhalb der Unit, eine Direktive in der Vorfahrenliste",
+        "eine erste Anweisung, die abbricht (`raise`, `Assert(False..)`), `inherited` irgendwo im Text der Routine",
+        "`object`, Record, class helper, `class constructor`, asm, eine Direktive zwischen Kopf und `begin`"
+      ],
+      "beispielVorher": [
+        "type",
+        "  TFoo = class",
+        "    FX: Integer;",
+        "  public",
+        "    constructor Create;",
+        "  end;",
+        "implementation",
+        "constructor TFoo.Create;",
+        "begin",
+        "  FX := 0;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "type",
+        "  TFoo = class",
+        "    FX: Integer;",
+        "  public",
+        "    constructor Create;",
+        "  end;",
+        "implementation",
+        "constructor TFoo.Create;",
+        "begin",
+        "  inherited Create;",
+        "  FX := 0;",
+        "end;"
+      ],
+      "weitereBeispiele": [
+        {
+          "titel": "mit override (gekennzeichnet)",
+          "vorher": [
+            "type",
+            "  TFoo = class(TComponent)",
+            "  public",
+            "    constructor Create(A: Integer); override;",
+            "  end;",
+            "implementation",
+            "constructor TFoo.Create(A: Integer);",
+            "begin",
+            "  Run(A);",
+            "end;"
+          ],
+          "nachher": [
+            "type",
+            "  TFoo = class(TComponent)",
+            "  public",
+            "    constructor Create(A: Integer); override;",
+            "  end;",
+            "implementation",
+            "constructor TFoo.Create(A: Integer);",
+            "begin",
+            "  inherited;",
+            "  Run(A);",
+            "end;"
+          ]
+        }
+      ]
+    },
+    "DestructorWithoutInherited": {
+      "titel": "inherited als Letztes im Destruktor aufrufen",
+      "was": "Setzt `inherited;` in eine eigene Zeile direkt vor das `end` des Rumpfs, eingerückt wie die erste Anweisung; fehlt der letzten Anweisung das `;`, kommt es hinter ihr letztes Zeichen – auch hinter ein String-Literal. Nur mit `override` an der Deklaration.",
+      "kennzeichnung": "außer bei direktem TObject-Erben (TObject.Destroy ist leer) – sonst läuft der Elterndestruktor danach und gibt die geerbten Felder frei",
+      "nichtAngeboten": [
+        "kein `override` an der Deklaration (dann verdeckt Destroy die virtuelle Methode – eigentlich SCA149)",
+        "eine letzte Anweisung `Exit`/`raise`/`Halt`/`Abort`/`goto` (auch `System.Exit`, `System.Halt`, `SysUtils.Abort`), `Exit` (auch `System.Exit`) oder `goto` auf irgendeiner Tiefe",
+        "eine in der Unit abstrakte geerbte Methode, `{$mode objfpc}` mit einem Vorfahren außerhalb der Unit",
+        "eine Direktive zwischen letzter Anweisung und `end`, `inherited` im Text der Routine",
+        "`object`-Typ, `class destructor`, asm, eine Direktive zwischen Kopf und `begin`"
+      ],
+      "beispielVorher": [
+        "type",
+        "  TFoo = class(TComponent)",
+        "  public",
+        "    destructor Destroy; override;",
+        "  end;",
+        "implementation",
+        "destructor TFoo.Destroy;",
+        "begin",
+        "  FList.Free;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "type",
+        "  TFoo = class(TComponent)",
+        "  public",
+        "    destructor Destroy; override;",
+        "  end;",
+        "implementation",
+        "destructor TFoo.Destroy;",
+        "begin",
+        "  FList.Free;",
+        "  inherited;",
+        "end;"
+      ]
+    },
+    "RedundantConditional": {
+      "titel": "Bedingung direkt zuweisen",
+      "was": "`if C then X := True else X := False` → `X := C`, die Gegenrichtung → `X := not C` (Klammern nur um ein zusammengesetztes C). Zeilenumbrüche in C bleiben, Ziel und Zuweisung wie im then-Zweig. Bedeutungsgleich.",
+      "platzhalter": "`%s` = das Ziel der Zuweisung.",
+      "nichtAngeboten": [
+        "X ist nicht als `Boolean` deklariert (bei Variant bekäme X den Wert der Bedingung); in der Gegenrichtung ist auch C nicht als Boolean bewiesen – ein Aufruf als C bleibt dort aus",
+        "Ziel und Werte passen nicht zur Meldung, ein `;` vor dem `else`, ein Ausdruck hinter dem zweiten Wert (`X := False or Y`)",
+        "ein Kommentar oder eine Direktive in der Anweisung, begin..end-Zweige, ein bedingter Ausdruck (Delphi 13)",
+        "`with`-Block, zwei solche Anweisungen auf der Zeile"
+      ],
+      "beispielVorher": [
+        "  if R.Contains(P) then",
+        "    FActive := True",
+        "  else",
+        "    FActive := False;"
+      ],
+      "beispielNachher": [
+        "  FActive := R.Contains(P);"
+      ],
+      "weitereBeispiele": [
+        {
+          "titel": "Gegenrichtung",
+          "vorher": [
+            "  if A > B then Done := False else Done := True;"
+          ],
+          "nachher": [
+            "  Done := not (A > B);"
+          ]
+        }
+      ]
+    },
+    "IfElseBegin": {
+      "titel": "else-Zweig in begin..end setzen",
+      "was": "Setzt die Anweisung hinter dem `else` des einen `end else` der Fundzeile in `begin..end` (Entscheid E7, bedeutungsgleich). `end else if` und `end else begin` zählen nicht mit. Die Form wie bei SCA101.",
+      "nichtAngeboten": [
+        "ein bedingter Ausdruck (Delphi 13: `X := if A then B else C`)",
+        "eine Struktur, eine anonyme Methode oder eine Inline-Deklaration in der Anweisung",
+        "eine Direktive vom entscheidenden Token bis zum Ende der Anweisung",
+        "schon vorhandenes `begin`, leere Anweisung"
+      ],
+      "beispielVorher": [
+        "  if A then",
+        "  begin",
+        "    X;",
+        "  end else Y;"
+      ],
+      "beispielNachher": [
+        "  if A then",
+        "  begin",
+        "    X;",
+        "  end else",
+        "  begin",
+        "    Y;",
+        "  end;"
+      ]
+    },
+    "BeginEndRequired": {
+      "titel": "Zweig in begin..end setzen",
+      "was": "Setzt die Anweisung hinter `then`/`else`/`do` an der Spalte aus der Meldung in `begin..end` (Entscheid E7, bedeutungsgleich). Hinter dem `else` eines case oder except kommt die ganze Anweisungsliste in den Block. Wem ein `else` gehört, entscheidet eine Rückwärtssuche wie der Compiler (dangling else). `begin` und `end` stehen in eigenen Zeilen, wenn die Anweisung auf der Zeile des Schlüsselworts steht oder allein auf ihren Zeilen, sonst inline.",
+      "nichtAngeboten": [
+        "ein bedingter Ausdruck (Delphi 13: `X := if A then B else C`)",
+        "eine Struktur, eine anonyme Methode oder eine Inline-Deklaration in der Anweisung",
+        "eine Deklaration hinter einem `;` vor dem `else` (Kopf einer anonymen Methode), `record` vor dem `else`",
+        "eine Direktive vom entscheidenden Token bis zum Ende der Anweisung",
+        "schon vorhandenes `begin`, leere Anweisung"
+      ],
+      "beispielVorher": [
+        "  if Active then DoStuff;"
+      ],
+      "beispielNachher": [
+        "  if Active then",
+        "  begin",
+        "    DoStuff;",
+        "  end;"
+      ]
+    },
+    "LockWithoutTryFinally": {
+      "titel": "Sperre in try/finally freigeben",
+      "was": "Derselbe Baustein wie bei SCA009, für Sperren: Enter/Leave, Acquire/Release, BeginWrite/EndWrite, `TMonitor.Enter(O)`/`TMonitor.Exit(O)`, `EnterCriticalSection(CS)`/`LeaveCriticalSection(CS)`. Die Freigabe bestimmt die Hilfe selbst: derselbe Empfänger bzw. dasselbe Argument, als Text gleich.",
+      "kennzeichnung": "die Sperre wird danach auch bei einer Ausnahme freigegeben – das ist der Fix",
+      "platzhalter": "`%s` = die Sperre aus der Meldung (etwa `FLock`).",
+      "nichtAngeboten": [
+        "Exit im Bereich (auch `System.Exit`), eine zweite Sperre derselben Sperre, eine frühere Freigabe – auch in anderer Schreibweise (`Self.FLock.Leave`, `FLock.Release` nach `FLock.Enter`)",
+        "`TMonitor.Enter(O, Timeout)` bzw. `TMonitor.TryEnter(O)` (eine Bedingung)",
+        "ein umschließender Handler, der die Sperre freigibt",
+        "die Sperre der Meldung steht nicht mehr auf der Zeile; die übrigen Sperren wie bei SCA009 (Direktive, goto, asm …)"
+      ],
+      "beispielVorher": [
+        "  FLock.Enter;",
+        "  DoWork;",
+        "  FLock.Leave;"
+      ],
+      "beispielNachher": [
+        "  FLock.Enter;",
+        "  try",
+        "    DoWork;",
+        "  finally",
+        "    FLock.Leave;",
+        "  end;"
+      ]
+    },
+    "PublicMemberWithoutDoc": {
+      "titel": "Dokumentationsgerüst einfügen",
+      "was": "Setzt über die Deklaration `/// <summary></summary>`, je Typparameter `/// <typeparam name=\"T\"></typeparam>`, je Parameter `/// <param name=\"X\"></param>` und bei einer Funktion `/// <returns></returns>` – eingerückt wie die Deklaration, die Platzhalter leer (ein `TODO` riefe SCA019). Bedeutungsgleich.",
+      "nichtAngeboten": [
+        "die Zeile beginnt in einem Kommentar, oder der Name passt nicht mehr zur Meldung",
+        "darüber endet ein Kommentar über Zeilen (der Detektor hält dessen Schlusszeile für Code)",
+        "über Attributzeilen steht schon XMLDoc (`///`) – sonst entstünde ein zweiter summary-Block",
+        "eine Direktive im Kopf bis zu dessen `;`"
+      ],
+      "beispielVorher": [
+        "  TFoo = class",
+        "  public",
+        "    procedure Run;",
+        "  end;"
+      ],
+      "beispielNachher": [
+        "  TFoo = class",
+        "  public",
+        "    /// <summary></summary>",
+        "    procedure Run;",
+        "  end;"
+      ],
+      "weitereBeispiele": [
+        {
+          "titel": "Funktion mit Parametern",
+          "vorher": [
+            "    function Find(const AId: Integer; out AUser: TUser): Boolean;"
+          ],
+          "nachher": [
+            "    /// <summary></summary>",
+            "    /// <param name=\"AId\"></param>",
+            "    /// <param name=\"AUser\"></param>",
+            "    /// <returns></returns>",
+            "    function Find(const AId: Integer; out AUser: TUser): Boolean;"
+          ]
+        }
+      ]
+    },
+    "MissingRaise": {
+      "titel": "Exception auslösen",
+      "was": "Setzt `raise ` vor `EFoo.Create(..)` (auch `CreateFmt` & Co., Argumente über Zeilen) – nur, wenn der Ausdruck eine ganze Anweisung ist.",
+      "kennzeichnung": "die Exception wird danach ausgelöst, der Code dahinter läuft im Fehlerfall nicht mehr – das ist der Fix",
+      "nichtAngeboten": [
+        "keine ganze Anweisung: `X := EFoo.Create`, `EFoo.Create(..).Free`, im bedingten Ausdruck von Delphi 13",
+        "im then-Zweig, wenn das `if` keine Anweisung beginnt",
+        "andere Aufrufe als die Create-Varianten des Detektors (`Create`, `CreateFmt`, `CreateRes`, `CreateHelp` …)"
+      ],
+      "beispielVorher": [
+        "  EFoo.Create('x');"
+      ],
+      "beispielNachher": [
+        "  raise EFoo.Create('x');"
+      ]
+    },
+    "RoutineResultUnassigned": {
+      "titel": "Result mit dem Anfangswert initialisieren",
+      "was": "Setzt `Result := <Wert>;` als erste Anweisung. Der Wert folgt dem Rückgabetyp: `False`, `0`, `''`, `#0`, `nil`, `[]` bzw. `System.Low(T)` für eine schlichte Aufzählung der Unit (qualifiziert – kein anderes `Low` in Klasse, Vorfahr oder Unit verdeckt es), sonst `Default(T)` (Records, Typparameter, Unbekanntes, ein Typname, den die Unit auch in einer anderen Routine oder einem Klassenrumpf definiert, eine Unit mit eigenem Bezeichner `System`).",
+      "kennzeichnung": "Result ist danach definiert statt zufällig; spätere Zuweisungen gelten weiter",
+      "platzhalter": "`%s` = der eingesetzte Wert (`0`, `''`, `nil`, `System.Low(T)`, `Default(T)` …).",
+      "nichtAngeboten": [
+        "`Default(T)` in Dateien mit Spuren von Compilern vor Delphi 2009 (`jvcl.inc`, `VER150`, `CompilerVersion < 20` …)",
+        "eine Zuweisung an Result bzw. den Funktionsnamen oder `Exit(Wert)` (auch `System.Exit(Wert)`) im Rumpf – auch im inaktiven `$IFDEF`-Zweig",
+        "`Default(T)` in einer Datei ohne `implementation`-Teil bzw. ohne unit/program/library-Kopf (Skripte, Includes) – ein Literal (`False`, `0`, `''`, `nil` …) bietet die Hilfe dort an",
+        "ein FPC-Modus ohne Result, `{$X-}`, asm, eine Direktive zwischen Kopf und `begin`",
+        "ein Rückgabetyp, der kein einfacher Typbezeichner ist oder den die Funktion in ihrem Deklarationsteil selbst definiert (im Rumpf meinte der Name den lokalen Typ), eine freie Funktion ohne Signatur im Kopf, mehrere Deklarationen"
+      ],
+      "beispielVorher": [
+        "function F(A: Integer): Integer;",
+        "begin",
+        "  if A > 0 then",
+        "    Log('x');",
+        "end;"
+      ],
+      "beispielNachher": [
+        "function F(A: Integer): Integer;",
+        "begin",
+        "  Result := 0;",
+        "  if A > 0 then",
+        "    Log('x');",
+        "end;"
+      ]
+    },
+    "ReRaiseException": {
+      "titel": "raise; statt raise E;",
+      "was": "`raise E;` → `raise;` – dieselbe Exception, der Original-Stack-Trace bleibt erhalten.",
+      "nichtAngeboten": [
+        "rückwärts kommt vor dem eigenen Handler `on E: T do` ein `except`/`finally` (im except eines inneren try würfe `raise;` die innere Exception)",
+        "der Handler einer anderen Variablen, eine anonyme Methode oder ein `with` dazwischen (der Name könnte ein Member sein)",
+        "E wird zwischen Handler und raise neu zugewiesen (`E := EWrapped.Create(..)`): `raise E` wirft dann das neue Objekt, `raise;` die ursprüngliche Exception"
+      ],
+      "beispielVorher": [
+        "  try",
+        "    X;",
+        "  except",
+        "    on E: EFoo do",
+        "    begin",
+        "      Log(E.Message);",
+        "      raise E;",
+        "    end;",
+        "  end;"
+      ],
+      "beispielNachher": [
+        "  try",
+        "    X;",
+        "  except",
+        "    on E: EFoo do",
+        "    begin",
+        "      Log(E.Message);",
+        "      raise;",
+        "    end;",
+        "  end;"
+      ]
+    },
+    "CastAndFree": {
+      "titel": "Cast vor Free entfernen",
+      "was": "`TFoo(X).Free` → `X.Free` – nur, wenn X schon als genau `TFoo` deklariert ist: nur dann binden beide dasselbe `Free`.",
+      "platzhalter": "`%s` = der Cast-Typ (`TFoo`).",
+      "nichtAngeboten": [
+        "X ist kein bloßer Bezeichner, steht im `with`-Block oder ist nicht als genau dieser Typ deklariert – ein anderer Typ kann `Free` verdecken, ein Pointer-Operand braucht den Cast zum Übersetzen",
+        "andere Methoden als `Free`, Interface-Casts"
+      ],
+      "beispielVorher": [
+        "  TStringList(L).Free;"
+      ],
+      "beispielNachher": [
+        "  L.Free;"
+      ],
+      "hinweis": "Im Beispiel ist `L` als `TStringList` deklariert."
+    },
+    "NilComparison": {
+      "titel": "Assigned() statt Vergleich mit nil",
+      "was": "Schreibt alle nil-Vergleiche der einen Anweisung um, die auf der Fundzeile beginnt: `X = nil` → `not Assigned(X)`, `X <> nil` → `Assigned(X)`.",
+      "nichtAngeboten": [
+        "zwei solche Anweisungen auf der Zeile (mehrdeutig)",
+        "ein Operand vom Typ String, Variant, Menge, Array oder Prozedur/Ereignis",
+        "ein Operand ohne beweisbaren Typ – bewiesen sind Klassen, Interfaces und Zeiger der Unit und Klassen/Interfaces der Delphi-Quellen (E27); ein Kundentyp aus einer anderen Unit sperrt, ein Typ in einer generischen Klasse zählt mit seinem eigenen Namen (`TList<Integer>.TEmptyFunc` ist nicht TList)"
+      ],
+      "beispielVorher": [
+        "  if Obj = nil then Exit;"
+      ],
+      "beispielNachher": [
+        "  if not Assigned(Obj) then Exit;"
+      ],
+      "weitereBeispiele": [
+        {
+          "titel": "Vergleich mit `<> nil`",
+          "vorher": [
+            "  while x <> nil do x := x.Next;"
+          ],
+          "nachher": [
+            "  while Assigned(x) do x := x.Next;"
+          ]
+        }
+      ]
+    },
+    "FreeWithoutNil": {
+      "titel": "FreeAndNil statt Free",
+      "was": "`X.Free` → `FreeAndNil(X)`, auch hinter `then`/`else`/`do` (ersetzt wird nur der Ausdruck). Fehlt `System.SysUtils` in uses, kommt es mit.",
+      "platzhalter": "`%s` = die Variable vor `.Free`.",
+      "nichtAngeboten": [
+        "X ist kein bloßer Bezeichner (`Self.X`, Pfad) oder nicht in der Unit deklariert; `with`-Block",
+        "der Typ von X ist in der Unit – auch über einen Alias – ein `record`, `object`, `interface`, ein Zeiger oder ein eigener Typ (`= type ..`; `Free` ist dort eine eigene Methode bzw. die des Ziels), die Unit deklariert eine Routine `Free`, oder der Typ ist nach Konvention ein Zeiger einer anderen Unit (auch hinter einem Alias der Unit)",
+        "X ist ein `const`- bzw. `constref`-Parameter (FPC: Fehler, Delphi bis 10.3: E2197; ab 10.4 würde nur die lokale Kopie nil)",
+        "`Free` mit Klammern oder mehrfach auf der Zeile, `X.Destroy`"
+      ],
+      "beispielVorher": [
+        "    FList.Free;"
+      ],
+      "beispielNachher": [
+        "    FreeAndNil(FList);"
+      ]
+    },
+    "UnusedPrivateMethod": {
+      "titel": "Ungenutzte private Methode löschen",
+      "was": "Löscht die Deklaration im Klassenrumpf (samt `///`-Doku) und die Implementierung samt Kommentarzeilen darüber, die die Methode beim Namen nennen. Bedeutungsgleich – der Name steht sonst nirgends im Code der Datei (rekursive Aufrufe im eigenen Rumpf zählen nicht).",
+      "platzhalter": "`%s` = die Methode.",
+      "nichtAngeboten": [
+        "nicht unter `private`/`strict private`; `virtual`/`dynamic`/`override`/`abstract`/`reintroduce`/`message`/`overload`, Konstruktor, Destruktor, Operator",
+        "mehr als eine Deklaration oder Implementierung, keine Implementierung in der Datei, Property-Accessor",
+        "der Name als String-Literal (`MethodAddress`), `{$RTTI}` in der Datei, ein Attribut an Methode oder Klasse",
+        "`{$I}` im Klassenrumpf oder im implementation-Teil, ein Include davor, das den Namen nennt (Property-Accessor einer Nachfahrenklasse), nicht neben der Unit oder auf einem Netzpfad liegt, ein Interface der Klasse aus einer anderen Unit",
+        "ein Marker-Kommentar (`noinspection`, TODO …) hinter der Deklaration oder dem `end;` der Implementierung – er gilt der Zeile dahinter –, oder ein `// noinspection` darüber, der auf sie zielt",
+        "eine `.dfm`/`.fmx`/`.lfm` neben der Unit nennt den Namen (Bindung an ein Ereignis)",
+        "die Unit liegt auf einem Netzpfad bzw. Netzlaufwerk – die Hilfe liest dort keine Formdatei (Menüaufbau im Hauptthread)"
+      ],
+      "beispielVorher": [
+        "type",
+        "  IFoo = interface",
+        "    procedure Run;",
+        "  end;",
+        "  TFoo = class(TInterfacedObject, IFoo)",
+        "  private",
+        "    procedure Dead;",
+        "  public",
+        "    procedure Run;",
+        "  end;",
+        "implementation",
+        "procedure TFoo.Dead;",
+        "begin",
+        "end;",
+        "",
+        "procedure TFoo.Run;",
+        "begin",
+        "end;"
+      ],
+      "beispielNachher": [
+        "type",
+        "  IFoo = interface",
+        "    procedure Run;",
+        "  end;",
+        "  TFoo = class(TInterfacedObject, IFoo)",
+        "  private",
+        "  public",
+        "    procedure Run;",
+        "  end;",
+        "implementation",
+        "procedure TFoo.Run;",
+        "begin",
+        "end;"
+      ],
+      "hinweis": "Der leere `private`-Abschnitt, der danach bleiben kann, meldet SCA087 – mit eigener Hilfe."
+    },
+    "MissingOverride": {
+      "titel": "override bzw. reintroduce an die Deklaration anfügen",
+      "was": "Nach dem Rat der Meldung: bei gleicher Signatur `override`, bei abweichender `reintroduce`. `reintroduce` kommt direkt hinter das `;` des Kopfs (vor vorhandene Direktiven), `override` hinter ein vorhandenes `overload` (sonst ebenfalls direkt hinter den Kopf) – die Reihenfolge der Sprachreferenz. Nie beide als Einträge: Strg+Alt+F ließe das gekennzeichnete `override` aus und deckte den Polymorphie-Fehler mit `reintroduce` still zu.",
+      "kennzeichnung": "nur `override`: der virtuelle Aufruf landet danach in dieser Methode; `reintroduce` ist bedeutungsgleich, nur die Warnung W1010 entfällt",
+      "platzhalter": "`%s` = die Direktive (`override` bzw. `reintroduce`).",
+      "nichtAngeboten": [
+        "`override`, wenn die Methode der Elternklasse (in derselben Unit) nicht dieselbe Form hat: `class`, Parameter-Modifier, Typen und Defaults, Rückgabe, Aufrufkonvention",
+        "`reintroduce` bei generischem Vorfahren (`class(TBase<Integer>)`)",
+        "`override` bzw. `reintroduce` steht schon da, `override` neben `virtual`/`dynamic`/`static`/`message`/`inline`",
+        "der Name passt nicht mehr, eine Property, eine Direktive im Kopf, ein unbekannter Meldungstext"
+      ],
+      "beispielVorher": [
+        "  TBase = class",
+        "  public",
+        "    procedure DoWork(const A: string; B: Integer = 0); virtual;",
+        "  end;",
+        "  TDerived = class(TBase)",
+        "  public",
+        "    procedure DoWork(const X: string; Y: Integer = 0);",
+        "  end;"
+      ],
+      "beispielNachher": [
+        "  TBase = class",
+        "  public",
+        "    procedure DoWork(const A: string; B: Integer = 0); virtual;",
+        "  end;",
+        "  TDerived = class(TBase)",
+        "  public",
+        "    procedure DoWork(const X: string; Y: Integer = 0); override;",
+        "  end;"
+      ],
+      "weitereBeispiele": [
+        {
+          "titel": "abweichende Signatur: reintroduce",
+          "vorher": [
+            "  TBase = class",
+            "    procedure DoWork; virtual;",
+            "  end;",
+            "  TDerived = class(TBase)",
+            "    procedure DoWork(A: Integer);",
+            "  end;"
+          ],
+          "nachher": [
+            "  TBase = class",
+            "    procedure DoWork; virtual;",
+            "  end;",
+            "  TDerived = class(TBase)",
+            "    procedure DoWork(A: Integer); reintroduce;",
+            "  end;"
+          ]
+        }
+      ]
+    },
+    "UnpairedLock": {
+      "titel": "Sperre in try/finally freigeben",
+      "was": "Derselbe Baustein wie bei SCA009, für Lock/UnLock und die übrigen Sperrpaare (Enter/Leave, Acquire/Release, `EnterCriticalSection`/`LeaveCriticalSection` …). Die Sperre der Meldung wird auf der Zeile nachgeprüft; die Freigabe bestimmt die Hilfe selbst (derselbe Empfänger, als Text gleich).",
+      "kennzeichnung": "die Sperre wird danach auch bei einer Ausnahme freigegeben – das ist der Fix",
+      "platzhalter": "`%s` = die Sperre (etwa `FLocker`).",
+      "nichtAngeboten": [
+        "Exit im Bereich (auch `System.Exit`), eine zweite Sperre derselben Sperre, eine frühere Freigabe – auch in anderer Schreibweise",
+        "`Lock(..)` mit Argumenten (keine Sperre), `TMonitor.Enter(O, Timeout)` bzw. `TMonitor.TryEnter(O)`",
+        "ein umschließender Handler, der die Sperre freigibt",
+        "die Sperre der Meldung steht nicht mehr auf der Zeile; die übrigen Sperren wie bei SCA009"
+      ],
+      "beispielVorher": [
+        "  FLocker.Lock;",
+        "  DoStuff;",
+        "  FLocker.UnLock;"
+      ],
+      "beispielNachher": [
+        "  FLocker.Lock;",
+        "  try",
+        "    DoStuff;",
+        "  finally",
+        "    FLocker.UnLock;",
+        "  end;"
+      ],
+      "hinweis": "Ein Fund an SCA109 und SCA153 zugleich verschwindet mit der einen Hilfe aus beiden."
+    },
+    "GetMemWithoutFreeMem": {
+      "titel": "Puffer in try/finally freigeben",
+      "was": "Derselbe Baustein wie bei SCA009, für `GetMem(P, N)`, `P := AllocMem(N)`, `var P[: T] := AllocMem(N)` und `P := GetMem(N)` (FPC) mit `FreeMem(P[, N])` bzw. `FreeMemAndNil(P)`; ein direkt folgendes `P := nil;` geht mit ins `finally`. P muss eine lokale Variable der Routine sein.",
+      "kennzeichnung": "`FreeMem` läuft danach auch bei einer Ausnahme und bei Exit – das ist der Fix",
+      "platzhalter": "`%s` = der Puffer.",
+      "nichtAngeboten": [
+        "P ist keine lokale Variable der Routine (Feld, globale Variable, Parameter) – nach dem `finally` kennte der Halter den freigegebenen Puffer, eine finalization bzw. ein Destruktor gäbe ihn ein zweites Mal frei",
+        "`ReallocMem` (der Puffer bestand schon vorher), `Result := ..` (der Puffer verlässt die Routine)",
+        "ein erstes Argument, das kein einfacher Bezeichner ist (`Pointer(P)`), ein qualifizierter Aufruf außer `System.`",
+        "`Inc`/`Dec`/`GetMem`/`ReallocMem`/`@` auf P im Bereich, auch durch einen Cast; eine Freigabe in anderer Schreibweise",
+        "eine Weitergabe ohne Ausstieg (`FBuf := P`, `Liste.Add(P)`); die übrigen Sperren wie bei SCA009"
+      ],
+      "beispielVorher": [
+        "procedure Run;",
+        "var",
+        "  P: Pointer;",
+        "begin",
+        "  GetMem(P, 1024);",
+        "  DoStuff(P);",
+        "  FreeMem(P);",
+        "end;"
+      ],
+      "beispielNachher": [
+        "procedure Run;",
+        "var",
+        "  P: Pointer;",
+        "begin",
+        "  GetMem(P, 1024);",
+        "  try",
+        "    DoStuff(P);",
+        "  finally",
+        "    FreeMem(P);",
+        "  end;",
+        "end;"
+      ]
+    },
+    "UnusedRoutine": {
+      "titel": "Ungenutzte Routine löschen",
+      "was": "Löscht die freie Routine des implementation-Teils vom Kopf bis zu ihrem `end;` – samt lokaler Abschnitte und Routinen, der `///`-Doku- und Attributzeilen darüber, der Kommentarzeilen darüber, die die Routine beim Namen nennen, einer Leerzeile und einer `forward`-Deklaration. Bedeutungsgleich: die Hilfe prüft am Puffer neu, dass der Name sonst nirgends steht – nicht als Code (auch nicht in inaktiven Zweigen), in keinem String-Literal und in keiner Direktive.",
+      "platzhalter": "`%s` = die Routine.",
+      "nichtAngeboten": [
+        "Overloads, Methoden (das meldet SCA147), globale FPC-Operatoren",
+        "`export`/`public`/`alias`/`external`/`forward`/`interrupt`, `{$L}`/`{$LINK}` in der Datei",
+        "`{$I}` im implementation-Teil oder ein Include davor, das die Routine nennt, nicht neben der Unit liegt oder – wie die Unit selbst – auf einem Netzpfad (kein Plattenzugriff beim Menüaufbau)",
+        "eine Direktive im Bereich außer ausgeglichenem `$IF..`/`$ENDIF` bzw. `$REGION`",
+        "ein Marker-Kommentar (`noinspection`, TODO …) hinter dem `end;` bzw. der `forward`-Deklaration – er gilt der Zeile dahinter –, `// noinspection-file` in der Routine oder ein `// noinspection` über dem Kopf bzw. der `forward`-Deklaration, der auf die Routine zielt",
+        "zwei Routinen auf einer Zeile, ein Kopf vor `implementation`, unsichere Grenzen (lokaler Klassentyp, `$IFDEF`-geteilter Rumpf)"
+      ],
+      "beispielVorher": [
+        "procedure Keep;",
+        "begin",
+        "end;",
+        "",
+        "/// <summary>Helper</summary>",
+        "// Dead does X",
+        "procedure Dead(A: Integer);",
+        "var",
+        "  I: Integer;",
+        "  procedure Inner;",
+        "  begin",
+        "    Dead(I);",
+        "  end;",
+        "begin",
+        "  I := A;",
+        "  Inner;",
+        "end;",
+        "",
+        "procedure Keep2;",
+        "begin",
+        "  Keep;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "procedure Keep;",
+        "begin",
+        "end;",
+        "",
+        "procedure Keep2;",
+        "begin",
+        "  Keep;",
+        "end;"
+      ]
+    },
+    "DefaultCaseInCaseStatement": {
+      "titel": "else-Zweig im case ergänzen",
+      "was": "Setzt ein leeres `else` vor das `end` des case – bedeutungsgleich (alle anderen Werte: nichts tun, wie bisher). Steht das `end` allein auf der Zeile, kommt das `else` in eine eigene Zeile mit derselben Einrückung; endet der letzte Arm nicht auf `;`, setzt die Hilfe es mit.",
+      "zweiterEintrag": {
+        "was": "Setzt `else raise EInvalidOpException.Create('Unhandled case');` vor das `end`, die raise-Zeile eingerückt wie die Arme; fehlt `System.SysUtils`, kommt es in uses (in Dateien mit FPC-Weiche oder FPC-Modus als `SysUtils` – FPC 3.2.2 kennt die Klasse ebenfalls).",
+        "kennzeichnung": "ein nicht behandelter Wert löst danach eine Exception aus",
+        "nichtAngeboten": [
+          "dieselben Sperren wie der erste Eintrag"
+        ],
+        "beispielNachher": [
+          "  case X of",
+          "    1: A;",
+          "  else",
+          "    raise EInvalidOpException.Create('Unhandled case');",
+          "  end;"
+        ]
+      },
+      "nichtAngeboten": [
+        "eine Direktive zwischen `case` und `end`",
+        "schon ein `else` oder (FPC) `otherwise` hinter `;`",
+        "ein case ohne Zweige, zwei `case` auf der Zeile",
+        "ein case, das keine Anweisung ist: der Variantenteil eines Records (ein verschobener Fund) oder ein case ohne umschließenden Block (Fragment)",
+        "eine offene `(` vor dem case mit einer Direktive dazwischen – ein Zweig kann sie offen lassen, die Lage ist unklar"
+      ],
+      "beispielVorher": [
+        "  case X of",
+        "    1: A;",
+        "  end;"
+      ],
+      "beispielNachher": [
+        "  case X of",
+        "    1: A;",
+        "  else",
+        "  end;"
+      ]
+    },
+    "ManagedResultUninit": {
+      "titel": "Result zuerst initialisieren",
+      "was": "Setzt als erste Anweisung `Result := '';` (string-Familie), `Result := nil;` (dynamische Arrays, TBytes, Interfaces) oder `VarClear(Result);` (Variant – fehlt Variants in uses, kommt `System.Variants` bzw. `Variants` mit). Die Hilfe sucht die innerste Routine um die gemeldete Lese-Zeile; Name und Rückgabetyp müssen zur Meldung passen.",
+      "kennzeichnung": "Result hängt danach nicht mehr am alten Inhalt der Zielvariable des Aufrufers",
+      "platzhalter": "`%s` = die eingefügte Anweisung (`Result := ''`, `Result := nil` bzw. `VarClear(Result)`).",
+      "nichtAngeboten": [
+        "ein Typ, der nicht als String, dynamisches Array, Interface oder Variant bewiesen ist (ein fremdes `IFoo` kann ein Record sein); deklariert die Unit den Namen selbst, gilt nur ihre Definition auf Unit-Ebene – eine Definition in einer Routine oder einem Klassenrumpf sperrt (auch in einem Include ohne unit-Kopf)",
+        "`absolute Result`, asm, eine Direktive zwischen Kopf und `begin`, ein FPC-Modus ohne Result",
+        "Name oder Typ passen nicht zur Meldung, auf der Zeile steht kein `Result` (Zeile verschoben)"
+      ],
+      "beispielVorher": [
+        "function Join(const A: array of string): string;",
+        "var",
+        "  I: Integer;",
+        "begin",
+        "  for I := 0 to High(A) do",
+        "    Result := Result + A[I];",
+        "end;"
+      ],
+      "beispielNachher": [
+        "function Join(const A: array of string): string;",
+        "var",
+        "  I: Integer;",
+        "begin",
+        "  Result := '';",
+        "  for I := 0 to High(A) do",
+        "    Result := Result + A[I];",
+        "end;"
+      ]
+    },
+    "InterfaceWithoutGuid": {
+      "titel": "Neue GUID einfügen",
+      "was": "Setzt eine frisch erzeugte GUID `['{...}']` in eine eigene Zeile hinter den Interface-Kopf, eingerückt wie die Member (steht der Rumpf auf derselben Zeile, inline). Bedeutungsgleich – nur für eigene Interfaces.",
+      "nichtAngeboten": [
+        "generische Interfaces (eine GUID gälte für alle Ausprägungen), Vorwärtsdeklarationen",
+        "ein `[` hinter dem Kopf (GUID oder Attribut)",
+        "COM-Merkmale im Rumpf (`stdcall`/`safecall`/`dispid` …) oder `{$INTERFACES CORBA}`/`{$CALLING STDCALL}` in der Datei – ein COM-Import braucht die echte IID",
+        "hinter dem Kopf beginnt kein Rumpf, oder eine Direktive steht vom Kopf bis zum ersten Member"
+      ],
+      "beispielVorher": [
+        "type",
+        "  IFoo = interface",
+        "    procedure Run;",
+        "  end;"
+      ],
+      "beispielNachher": [
+        "type",
+        "  IFoo = interface",
+        "    ['{11111111-2222-3333-4444-555555555555}']",
+        "    procedure Run;",
+        "  end;"
+      ],
+      "hinweis": "Im Beispiel steht eine feste GUID wie im Test; die Hilfe erzeugt jedes Mal eine neue."
+    },
+    "recipe:ShowSpan": {
+      "titel": "Stelle zeigen",
+      "was": "Markiert im Editor den exakten Bereich der Anweisung, die der Fund meint.",
+      "regelText": "jede Regel mit Anker im Regelkatalog (Feld `anchor`), wenn sich die Anweisung des Funds beschreiben lässt",
+      "nichtAngeboten": [
+        "die Anweisung lässt sich nicht beschreiben (kein Anker, Zeile verschoben)",
+        "ausgegraut: der Bereich liegt hinter Spalte 32767 bzw. hinter 32766 Bytes seiner Zeile (die Editor-Markierung rechnet in SmallInt)"
+      ],
+      "ohneBeispiel": "kein Umbau – die Aktion markiert nur."
+    },
+    "recipe:FormatCall": {
+      "titel": "Format() aus Verkettung bilden",
+      "was": "Ersetzt die Terme einer `+`-Kette durch `Format('...%s...', [..])` nach der Kompilat-Regel: `IntToStr(n)` mit bekanntem Ganzzahltyp wird `%d`/`%u` mit `n`, ein Char-Operand bekannten Typs geht als `string(c)` hinein, `X := X + ...` wird `X := X + Format(...)`. Kein Literal im Formatstring trägt mehr als 255 Zeichen (bis Delphi 11 E2056; vorsichtig nach UTF-8 gezählt): ein längerer Teil wird mit ` + ` geteilt, der Wert bleibt. Fehlt `System.SysUtils`, kommt es als zweite Ersetzung in die uses-Klausel (eine sortierte Liste bleibt sortiert); der Hinweis des Eintrags sagt dann `+ uses System.SysUtils`.",
+      "nichtAngeboten": [
+        "SQL-Literale in der Kette, ein Kommentar oder eine Direktive im ersetzten Bereich",
+        "Variant-Anzeichen (`.Value`, `FieldValues`, als Variant deklariert …), Zahl-Operanden und Aufrufe mit Zahl-Ergebnis",
+        "ein Zeiger am Kettenanfang (`P + N + '.txt'` mit `P: PChar` bzw. `PChar(S)` – Delphi rechnet zuerst Zeiger-Arithmetik); hinter `X +` beim Selbst-Anhängen nicht, dort ist X der Anfang",
+        "Nicht-Unicode-Strings als Ziel oder Operand (`AnsiString`, `RawByteString`, `UTF8String`, `ShortString`), ein `AnsiChar`-Operand",
+        "die Zeile trägt nicht mehr Ziel und `+`-Zahl des Funds (Zeile verschoben)",
+        "`System.SysUtils` fehlt und die uses-Klausel trägt Direktiven oder liegt in einem `$IFDEF`-Zweig"
+      ],
+      "beispielVorher": [
+        "  Text := Marker + 'id:' + IntToStr(Id) + ' Milli: ' + IntToStr(n);"
+      ],
+      "beispielNachher": [
+        "  Text := Format('%sid:%d Milli: %d', [Marker, Id, n]);"
+      ],
+      "hinweis": "Im Beispiel sind `Id` und `n` als `Integer` deklariert, `Marker` als `string`. Fehlt `System.SysUtils`, wird aus `uses System.Classes, Vcl.Forms;` in derselben Aktion `uses System.Classes, System.SysUtils, Vcl.Forms;` (ein Undo-Schritt)."
+    },
+    "recipe:SqlTemplate": {
+      "titel": "Parametrisierte SQL-Vorlage in die Zwischenablage",
+      "was": "Baut aus der SQL-Verkettung eine Vorlage mit Parametern und legt sie in die Zwischenablage – schreibt nie in den Editor. Parameter wird ein Operand nur dort, wo SQL einen Wert erwartet (hinter `=`, `<>`, `<`, `>`, `LIKE`, `BETWEEN`/`AND`, in `IN (..)`/`VALUES (..)`); die Namen kommen aus dem Operanden (`FId` → `:Id`), Konstanten behalten ihren Namen. `QuotedStr(x)`, `AnsiQuotedStr(x, '''')` und das Verdoppeln der Apostrophe in einem SQL-String (`StringReplace(x, '''', '''''', [rfReplaceAll])`, auch `Trim(x).Replace('''', '''''')`) binden `x`; ein SQL-Text über 255 Zeichen wird mit ` + ` geteilt. Ziel Query-Objekt: `ParamByName`-Zeilen (bei ADO `Parameters.ParamByName`); `ExecSQL` einer FireDAC-Verbindung: die Überladung mit Werten.",
+      "nachherTitel": "In der Zwischenablage",
+      "nichtAngeboten": [
+        "DDL/DCL und prozedurale Blöcke (CREATE, ALTER, DROP, GRANT, BEGIN, EXECUTE BLOCK …) – für den Rest des Texts, auch hinter `;`",
+        "Bezeichner-Positionen (FROM, INTO, ORDER BY, Spalten- und SELECT-Liste), ein nackter Operand in einer Join-Bedingung, ein Operand, der an einem Bezeichner klebt",
+        "eine Anweisung, die nicht mit DML oder einer Klausel beginnt, ein `?` im Text, eine Kette ohne SQL-Literal, nur Konstanten",
+        "ein Aufruf, der den Text ohne Parameterkanal ausführt",
+        "ein schon maskierter Wert (`EscapeString(x)`, `QuotedStr` in einem SQL-String, `AnsiQuotedStr(x, '\"')`, `x.QuotedString` auch ohne Klammern, ein Literal mit Apostroph wie in `StringReplace(x, '''', '''''', [])` ohne `rfReplaceAll`) – der Parameter trüge die Maskierung in die Daten",
+        "eine Konstante der Unit gilt in einer Methode einer Klasse mit Vorfahr von außerhalb (`class(TForm)`) nicht als bewiesen – ein geerbtes Member gleichen Namens bindet vorher"
+      ],
+      "beispielVorher": [
+        "  Obj.SQL.Text := 'SELECT * FROM t WHERE a = ' + Marker + ' AND b = ' + Tag;"
+      ],
+      "beispielNachher": [
+        "  Obj.SQL.Text := 'SELECT * FROM t WHERE a = :Marker AND b = :Tag';",
+        "  Obj.ParamByName('Marker').Value := Marker;",
+        "  Obj.ParamByName('Tag').Value := Tag;"
+      ]
+    },
+    "recipe:UsesActions": {
+      "titel": "uses-Einträge qualifizieren",
+      "was": "Qualifiziert einen Eintrag der uses-Klausel nach der Scope-Tabelle (`Windows` → `Winapi.Windows`), dazu „alle n Einträge“ der Zeile. Ein Umbau an der Stelle, keine Hilfe zum Fund: nie in der Glühbirne, je Menü nur einmal, auch wenn mehrere Funde auf der Zeile stehen.",
+      "regelText": "jeder Fund auf einer Zeile einer uses-Klausel (auch der Programm-Klausel einer .dpr/.lpr), etwa SCA142 UnsortedUses oder SCA007 UnusedUses",
+      "platzhalter": "in `uses: %s -> %s` der Kurzname und der qualifizierte Name, in `uses: qualify %s` der Kurzname; `%d` = die Zahl der Einträge.",
+      "nichtAngeboten": [
+        "ausgegraut: Scope-Tabelle nicht geladen (`unitscopes.txt`)",
+        "ausgegraut: Compiler-Direktiven in der uses-Klausel oder die Klausel in einem `$IFDEF`-Zweig, eine Datei mit FPC-Weiche oder FPC-Modus (FPC 3.2 kennt keine Unit-Scopes)",
+        "eine gleichnamige Projekt-Unit (Datei neben der Unit, Modul eines Projekts der Gruppe, Datei im Unit-Suchpfad der aktiven Konfiguration und Plattform, jede Ebene bis Base einzeln – `Base_Win32` eingeschlossen), ein mehrdeutiger Name ohne erkennbares Rahmenwerk (Forms: VCL/FMX)",
+        "ausgegraut: ein Verzeichnis neben der Unit oder im Unit-Suchpfad liegt auf einem Netzpfad (UNC, Netzlaufwerk) – reDelphix liest dort im Hauptthread nicht, ob das Projekt eine gleichnamige Unit hat, bleibt offen",
+        "ausgegraut: der Eintrag (bzw. „alle“) machte eine sortierte Klausel unsortiert – sonst käme ein neuer SCA142-Fund"
+      ],
+      "beispielVorher": [
+        "uses Windows, Classes, Foo;"
+      ],
+      "beispielNachher": [
+        "uses Winapi.Windows, Classes, Foo;"
+      ],
+      "weitereBeispiele": [
+        {
+          "titel": "alle 2 Einträge qualifizieren",
+          "vorher": [
+            "uses Windows, Classes, Foo;"
+          ],
+          "nachher": [
+            "uses Winapi.Windows, System.Classes, Foo;"
+          ]
+        }
+      ],
+      "hinweis": "`Foo` kennt die Scope-Tabelle nicht – der Eintrag bleibt."
+    },
+    "recipe:RemoveMarker": {
+      "titel": "Wirkungslosen Unterdrück-Marker entfernen",
+      "was": "Entfernt einen `// noinspection`-Marker, der nichts unterdrückt: steht er allein auf der Zeile, die ganze Zeile; hinter Code nur den Kommentar.",
+      "nichtAngeboten": [
+        "ausgegraut: der Marker nennt mehr als eine Art oder lautet `All` – SCA165 kommt auch, wenn nur die Arten des aktiven Scan-Profils nichts unterdrückt haben",
+        "ausgegraut: die nächste nicht-leere Zeile hinter dem Marker ist eine `//`-Kommentarzeile vor dem Code (etwa ein TODO, bei gestapelten Markern die Markerzeile darunter), und seine Art kann auf einer Kommentarzeile gemeldet werden (TodoComment, CommentedOutCode, NoSonarMarker, TabulationCharacter, TooLongLine, TrailingWhitespace, CustomRule, SCA185–SCA193, UnusedSuppression) – SCA165 prüft nur die Code-Zeile, auf der Kommentarzeile wirkt der Marker vielleicht doch; ein Marker einer Code-Art mit Warum-Kommentar darunter wird entfernt",
+        "der Marker liegt in einem Blockkommentar",
+        "ein `; noinspection`-Marker einer Konfigurationsdatei (.ini) – reDelphix liest nur Pascal-Quelltext"
+      ],
+      "beispielVorher": [
+        "  // noinspection NilDeref",
+        "  L := TStringList.Create;"
+      ],
+      "beispielNachher": [
+        "  L := TStringList.Create;"
+      ],
+      "weitereBeispiele": [
+        {
+          "titel": "Marker hinter Code",
+          "vorher": [
+            "  U := 'http://x';   // noinspection HttpInsteadOfHttps"
+          ],
+          "nachher": [
+            "  U := 'http://x';"
+          ]
+        }
+      ]
+    },
+    "recipe:Suppress": {
+      "titel": "Hier bzw. in dieser Datei unterdrücken",
+      "was": "„Hier“ setzt `// noinspection <Art>` in eine eigene Zeile über die Fundzeile, eingerückt wie sie; „In dieser Datei“ setzt `// noinspection-file <Art>` hinter die Kopfanweisung der Unit. Ein vorhandener Marker bekommt die Art dazu, außer er lautet `All`/`*` (dann eine eigene Zeile). Auf einer `//`-Kommentarzeile (etwa einem TODO) bekommt der Marker, der sie schon trägt, die Art auch über Leerzeilen hinweg – eine neue Zeile dazwischen nähme ihm sein Ziel. Im Aktionsmenü stehen beide im Untermenü „Unterdrücken“ am Ende, je Fund unter der Kopfzeile `SCAnnn  <Art>`; der Marker steht im Hinweis des Menüpunkts (Statuszeile).",
+      "regelText": "Fund in Pascal-Quelltext (`.pas`, `.dpr`, `.dpk`, `.inc`, `.lpr`, `.pp`)",
+      "nichtAngeboten": [
+        "die Fundzeile liegt in einem Blockkommentar oder mehrzeiligen String",
+        "die Art steht schon im Marker",
+        "„Hier“ auf einer `//`-Kommentarzeile, die ein Marker trägt, der sich nicht erweitern lässt (`All`, Marker hinter Code) und eine Art nennt, die auf Kommentarzeilen gemeldet wird",
+        "SCA165 selbst – einen wirkungslosen Marker entfernt „Wirkungslosen Unterdrück-Marker entfernen“",
+        "Funde außerhalb von Pascal-Quelltext (.dfm, Konfiguration) – dort setzt das Plugin den Marker selbst (Strg+Alt+S)"
+      ],
+      "beispielVorher": [
+        "procedure P;",
+        "begin",
+        "  L := TStringList.Create;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "procedure P;",
+        "begin",
+        "  // noinspection MemoryLeak",
+        "  L := TStringList.Create;",
+        "end;"
+      ],
+      "weitereBeispiele": [
+        {
+          "titel": "In dieser Datei unterdrücken (Art MagicNumber)",
+          "vorher": [
+            "unit u;",
+            "interface"
+          ],
+          "nachher": [
+            "unit u;",
+            "// noinspection-file MagicNumber",
+            "interface"
+          ]
+        }
+      ]
+    },
+    "HttpInsteadOfHttps": {
+      "titel": "http:// durch https:// ersetzen",
+      "was": "Ersetzt im gemeldeten String-Literal nur das Schema `http://` durch `https://`. Die Hilfe sucht das Literal über die URL aus der Meldung (der Fund nennt nur die Zeile).",
+      "kennzeichnung": "der Server muss https auf dem Standardport 443 mit gültigem Zertifikat anbieten",
+      "nichtAngeboten": [
+        "die URL kommt auf der Zeile zweimal vor, ist Teil eines längeren Strings oder steht in einem Kommentar oder mehrzeiligen String",
+        "Port, Benutzerangabe, IP-Adresse (auch private), IPv6, Platzhalter im Host, ein Host ohne Punkt, `localhost`, `*.local`, `*.internal`, `*.test`",
+        "ein Namespace- oder Schema-Kennzeichen in der Adresse oder davor (`xmlns`, `schema`, `/ns/`, `w3.org`, `tempuri.org`, `purl.org` und ähnliche) – aus Vorsicht, auch wenn der Detektor solche Adressen als echte Endpunkte meldet"
+      ],
+      "beispielVorher": [
+        "  Url := 'http://api.example.org/v1/items';"
+      ],
+      "beispielNachher": [
+        "  Url := 'https://api.example.org/v1/items';"
+      ]
+    },
+    "RedundantParentheses": {
+      "titel": "Überflüssiges inneres Klammerpaar entfernen",
+      "was": "Macht aus `((X))` ein `(X)`: das innere Paar fällt, das äußere bleibt. Bedeutung und Rangfolge bleiben gleich.",
+      "nichtAngeboten": [
+        "nur nach einem Operator (`:=`, `+`, `-`, `and`, `or` …) oder Schlüsselwort (`if`, `while`, `until` …) oder bei einem Literal als Inhalt hinter einem Bezeichner (`Foo((1))`) – sonst nicht",
+        "`Foo((X))` mit einer Variablen: das innere Paar könnte ein Ausdruck für einen var-Parameter, eine Überladung oder ein Cast sein (3 von 4 Funden im Korpus)",
+        "nach `=`, `:`, `,` oder `(` (Konstante, Vergleich, dreifache Klammer) und am Zeilenanfang",
+        "ein Kommentar im Klammerpaar, danach folgt `.`, `[` oder `(`, oder die Zeile ist verschoben"
+      ],
+      "beispielVorher": [
+        "  if ((Ready)) then",
+        "    Run;"
+      ],
+      "beispielNachher": [
+        "  if (Ready) then",
+        "    Run;"
+      ]
+    },
+    "AttributeMisalignment": {
+      "titel": "Leerzeile nach dem Attribut entfernen",
+      "was": "Löscht die Leerzeilen (nur Leerzeichen oder Tab) zwischen dem Attribut und der ersten Zeile mit Inhalt, einer Deklaration. Bedeutungsgleich.",
+      "nichtAngeboten": [
+        "ein Ziel-Attribut (`[assembly: …]`, `[Result: …]`) oder ein Attribut über mehrere Zeilen",
+        "hinter dem `]` steht Text oder ein Kommentar",
+        "hinter der Leerzeile folgt ein Kommentar, eine Direktive oder keine Deklaration (der Detektor prüft nur „irgendetwas“)",
+        "das `[` ist ein Set-Literal, nicht der Anfang eines Attributs (davor fehlt ein Deklarationsende)"
+      ],
+      "beispielVorher": [
+        "  public",
+        "    [Test]",
+        "",
+        "    procedure Foo;"
+      ],
+      "beispielNachher": [
+        "  public",
+        "    [Test]",
+        "    procedure Foo;"
+      ]
+    },
+    "TwiceInheritedCalls": {
+      "titel": "Zweiten doppelten inherited-Aufruf entfernen",
+      "was": "Löscht den zweiten von zwei gleichen, direkt aufeinander folgenden `inherited`-Aufrufen im Rumpf. Der Detektor meldet auf der Zeile des Methodenkopfs; die Hilfe sucht die Aufrufe selbst, nur auf oberster Ebene des Rumpfs, und verlangt genau zwei.",
+      "kennzeichnung": "die Elternmethode läuft nur noch einmal – Reihenfolge und Nebenwirkung prüfen",
+      "nichtAngeboten": [
+        "eine Anweisung, ein Kommentar oder eine Direktive steht zwischen den Aufrufen (auch das Katalogbeispiel `inherited; DoStuff; inherited;`: ohne Datenfluss ist nicht zu beweisen, dass das Weglassen gleich bleibt)",
+        "die Aufrufe stehen in if, case, try oder einem verschachtelten Block; es sind nicht genau zwei; sie sind nicht textgleich oder nicht je allein auf ihrer Zeile",
+        "der letzte Aufruf hat vor dem `end` kein `;`, oder die Routine hat eine verschachtelte Routine, asm oder external"
+      ],
+      "beispielVorher": [
+        "procedure TFoo.Done;",
+        "begin",
+        "  inherited;",
+        "  inherited;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "procedure TFoo.Done;",
+        "begin",
+        "  inherited;",
+        "end;"
+      ],
+      "zweiterEintrag": {
+        "was": "Löscht stattdessen den ersten der beiden Aufrufe.",
+        "kennzeichnung": "die Elternmethode läuft nur noch einmal – Reihenfolge und Nebenwirkung prüfen",
+        "nichtAngeboten": [
+          "dieselben Sperren wie der erste Eintrag"
+        ],
+        "beispielNachher": [
+          "procedure TFoo.Done;",
+          "begin",
+          "  inherited;",
+          "end;"
+        ]
+      }
+    },
+    "PointerSubtraction": {
+      "titel": "32-Bit-Casts durch NativeInt ersetzen",
+      "was": "Im Zeigerabzug `Cast(a) - Cast(b)` werden beide Cast-Wörter ersetzt: `Integer`/`LongInt` durch `NativeInt`, `Cardinal`/`LongWord` durch `NativeUInt`. Eine Ersetzung vom ersten Cast-Wort bis hinter den zweiten Cast; die Operanden bleiben. Die Meldung nennt keine Spalte: die Hilfe sucht das Muster auf den Code-Spalten der Zeile und hilft nur bei genau einem Treffer.",
+      "kennzeichnung": "Win32 bleibt gleich, unter Win64 ist der Abstand der volle Adressabstand; bei {$R+} kann die Zuweisung an ein Integer-Ziel ERangeError auslösen",
+      "nichtAngeboten": [
+        "die beiden Casts haben verschiedene Vorzeichenart (`Cardinal` gegen `Integer`) – NativeInt oder NativeUInt wäre geraten",
+        "mehrere Treffer auf der Zeile (die Hilfe weiß nicht, welchen der Detektor meldete)",
+        "ein Operand ist eine Zahl oder kein einfacher Bezeichner, der Abzug geht mit einem weiteren 32-Bit-Cast weiter, oder ein Kommentar, String oder eine Direktive steht dazwischen",
+        "das Cast-Wort steht hinter `.`, `&` oder `@`"
+      ],
+      "beispielVorher": [
+        "  Len := Integer(PEnd) - Integer(PStart);"
+      ],
+      "beispielNachher": [
+        "  Len := NativeInt(PEnd) - NativeInt(PStart);"
+      ],
+      "hinweis": "Die Hilfe prüft nicht, ob die Operanden Zeiger sind – das hat der Detektor entschieden."
+    },
+    "EmptyFinallyBlock": {
+      "titel": "Leeres try/finally auflösen",
+      "was": "Entfernt `try`, `finally` und `end` und rückt den Rumpf eine Stufe aus (Tab oder Leerzeichen des Umfelds bleiben). Fehlt dem Rumpf das `;` und stand eines hinter dem `end`, setzt die Hilfe es hinter die letzte Anweisung. Bedeutungsgleich: Ausnahmen laufen weiter nach außen.",
+      "nichtAngeboten": [
+        "ein Kommentar oder eine Direktive im `finally` (der Detektor meldet solche Fälle trotzdem, weil er Kommentare ausblendet)",
+        "`try` steht hinter `then`, `else`, `do` oder einer Marke (dort bräuchte es ein `begin`)",
+        "try, finally und end stehen nicht je allein auf ihrer Zeile, die Einrückung weicht ab, oder der Rumpf ist leer",
+        "im Rumpf stehen `label`, `goto` oder `asm`, oder `var`/`const` auf seiner obersten Ebene (ein `const`-Parameter einer anonymen Methode oder ein Inline-`var` in einem inneren begin..end stört nicht), oder im Bereich liegt eine Direktive oder ein Blockkommentar"
+      ],
+      "beispielVorher": [
+        "  try",
+        "    DoWork;",
+        "  finally",
+        "  end;"
+      ],
+      "beispielNachher": [
+        "  DoWork;"
+      ]
+    },
+    "ReversedForRange": {
+      "titel": "`to` durch `downto` ersetzen",
+      "was": "Macht aus `for I := 10 to 1 do` ein `for I := 10 downto 1 do`. Der Detektor meldet nur Ganzzahl-Literale, die Meldung nennt keine Spalte: die Hilfe sucht den Kopf selbst und prüft die Werte gegen die Meldung.",
+      "kennzeichnung": "die Schleife lief bisher nie und zählt danach abwärts; war sie absichtlich abgeschaltet, ist das ein Eingriff",
+      "nichtAngeboten": [
+        "mehrere umgekehrte Köpfe auf der Zeile, ein Kopf über mehrere Zeilen",
+        "ein Kommentar, eine Direktive oder ein String im Kopf, eine Typangabe an der Schleifenvariablen",
+        "die Zeile ist verschoben (die Werte passen nicht zur Meldung)"
+      ],
+      "beispielVorher": [
+        "  for I := 10 to 1 do",
+        "    Process(I);"
+      ],
+      "beispielNachher": [
+        "  for I := 10 downto 1 do",
+        "    Process(I);"
+      ],
+      "zweiterEintrag": {
+        "was": "Vertauscht stattdessen Start- und Endwert: `for I := 1 to 10 do`.",
+        "kennzeichnung": "die Schleife lief bisher nie und zählt danach aufwärts; war sie absichtlich abgeschaltet, ist das ein Eingriff",
+        "nichtAngeboten": [
+          "dieselben Sperren wie der erste Eintrag"
+        ],
+        "beispielNachher": [
+          "  for I := 1 to 10 do",
+          "    Process(I);"
+        ]
+      }
+    },
+    "TabulationCharacter": {
+      "titel": "Tabulatoren der Zeile durch Leerzeichen ersetzen",
+      "was": "Ersetzt die Tabulatoren im Code der gemeldeten Zeile durch Leerzeichen bis zum nächsten Tabstopp (Tabweite 2, feste Annahme; Leerzeichen und Tab davor werden sauber zusammengezogen). Eine Ersetzung vom ersten bis zum letzten Code-Tab; Tabs in Strings und Kommentaren dazwischen bleiben. Nur die gemeldete Zeile.",
+      "nichtAngeboten": [
+        "der erste Tab der Zeile liegt in einem String, Kommentar oder mehrzeiligen String (der Detektor meldet ihn trotzdem, der Fund bliebe stehen)",
+        "die Zeile ist verschoben, oder die Meldung nennt keine Spalte"
+      ],
+      "ohneBeispiel": "nicht abbildbar – der Unterschied ist nur Leerraum (Tab gegen Leerzeichen).",
+      "hinweis": "Bleibt hinter dem letzten Code-Tab ein Tab in einem String oder Kommentar, meldet der Detektor die Zeile nach der Hilfe weiter."
+    },
+    "TrailingWhitespace": {
+      "titel": "Leerraum am Zeilenende entfernen",
+      "was": "Löscht die Leerzeichen und Tabs am Zeilenende, ab der Spalte aus der Meldung. Eine reine Leerzeile aus Blanks wird leer. Kommentare, Direktiven und Code sind erlaubt. Bedeutungsgleich.",
+      "nichtAngeboten": [
+        "der Leerraum ist String-Inhalt: eine Zeile in einem mehrzeiligen String (`'''`), die Eröffnungszeile selbst oder ein nicht geschlossener String",
+        "die Endfolge beginnt nicht bei der Spalte aus der Meldung, oder sie reicht nicht bis zum Zeilenende"
+      ],
+      "ohneBeispiel": "nicht abbildbar – der Unterschied ist nur Leerraum am Zeilenende."
+    },
+    "LowercaseKeyword": {
+      "titel": "Schlüsselwort kleinschreiben",
+      "was": "Schreibt das gemeldete Schlüsselwort an der gemeldeten Spalte klein (`Begin` → `begin`). Bedeutungsgleich: Delphi unterscheidet Groß- und Kleinschreibung nicht.",
+      "platzhalter": "`%s` = das Schlüsselwort wie gemeldet (etwa `Begin`).",
+      "nichtAngeboten": [
+        "das Wort steht in einem Kommentar oder String, ist Teil eines Bezeichners oder schon klein geschrieben",
+        "das Wort ist ein Bezeichner: hinter `.`, `&` oder `@`, vor `:=`, als benanntes Argument",
+        "ein Wort, das auch Bezeichner sein kann (`on`, `out`, `contains`, `requires`, `implements`, `absolute`); Direktiven und Sichtbarkeitswörter nur im passenden Kontext",
+        "die Zeile ist verschoben, oder die Meldung nennt Wort oder Spalte nicht",
+        "ein Feld, das wie eine Direktive heißt und hinter einem Prozedurtyp-Feld steht (`OnDone: procedure of object;` / `Forward: Boolean;`) – Feldnamen sind über RTTI sichtbar"
+      ],
+      "beispielVorher": [
+        "procedure Run;",
+        "Begin",
+        "  DoWork;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "procedure Run;",
+        "begin",
+        "  DoWork;",
+        "end;"
+      ],
+      "hinweis": "Der Detektor meldet auch Member hinter einem Punkt (`Foo.End`); die Hilfe bietet dort nichts an."
+    },
+    "EmptyExcept": {
+      "titel": "`raise;` in den leeren `except`-Block einfügen",
+      "was": "Macht aus `try Work except end;` ein `try Work except raise; end;`. Stehen `except` und `end` auf verschiedenen Zeilen, kommt das `raise;` in eine neue Zeile unter `except`, eine Stufe tiefer (die Stufe liest die Hilfe aus dem try-Rumpf davor, sonst zwei Leerzeichen bzw. ein Tab). Der Detektor meldet auf der Zeile des `except`; die Hilfe bedient nur die eindeutige Form: zwischen `except` und `end` steht nur Leerraum.",
+      "kennzeichnung": "eine bisher verschluckte Ausnahme läuft jetzt nach außen weiter – der Aufrufer muss sie behandeln; war das Verschlucken Absicht, ist das ein Eingriff",
+      "nichtAngeboten": [
+        "ein Kommentar oder eine Direktive steht im Block oder ein Kommentar hinter dem `end` auf seiner Zeile (ein Kommentar ist Absicht, etwa `// ignore errors`, `end; // darf scheitern`)",
+        "zwischen `except` und `end` steht etwas anderes als Leerraum: ein Handler (`on E: ... do`, auch der leere, das ist SCA159), eine Anweisung, ein einzelnes `;` (`except;`) oder ein `else`",
+        "die Zeile ist verschoben (kein `except` als Code auf der Zeile) oder trägt mehrere `except`"
+      ],
+      "beispielVorher": [
+        "  try",
+        "    Work;",
+        "  except",
+        "  end;"
+      ],
+      "beispielNachher": [
+        "  try",
+        "    Work;",
+        "  except",
+        "    raise;",
+        "  end;"
+      ],
+      "weitereBeispiele": [
+        {
+          "titel": "In einer Zeile",
+          "vorher": [
+            "  try Work except end;"
+          ],
+          "nachher": [
+            "  try Work except raise; end;"
+          ]
+        }
+      ],
+      "hinweis": "Die Hilfe macht den Fund still, indem sie die Ausnahme weiterreicht; ob stattdessen geloggt oder gezielt behandelt werden soll, entscheidet der Autor."
+    },
+    "EmptyOnHandler": {
+      "titel": "Leeren Ausnahme-Handler mit raise; versehen",
+      "was": "Ersetzt den leeren Rumpf eines `on E: T do`-Handlers durch `raise;`, die Ausnahme läuft dann weiter statt still verschluckt zu werden. Zwei Formen: `do ;` wird `do raise;`, `do begin end` wird `do begin raise; end` (begin und end auf eigenen Zeilen: `raise;` als eigene Zeile eine Stufe tiefer). Der Detektor bleibt unverändert und meldet auch Handler mit Kommentar; die Hilfe nicht.",
+      "kennzeichnung": "die Ausnahme wird nicht mehr verschluckt, sondern an den Aufrufer weitergereicht – Programmablauf und äußere Handler prüfen",
+      "nichtAngeboten": [
+        "Kommentar oder Direktive im Handler, davor oder dahinter auf der Zeile (ein Kommentar ist Absicht, auch wenn der Detektor ihn nicht sieht), oder ein Kommentar in der Zeile davor (er nennt meist die Absicht)",
+        "mehr als ein `on`-Handler auf der Zeile, oder die Zeile ist verschoben, der Rumpf nicht mehr leer oder der Typ ein anderer als in der Meldung",
+        "das `on` beginnt keinen Handler (davor weder `except` noch `;`), der Kopf steht nicht auf einer Zeile oder das `;` nicht auf der Zeile von `do`",
+        "der Typ ist EAbort (stilles Abbruchsignal der VCL)"
+      ],
+      "beispielVorher": [
+        "try",
+        "  DoStuff;",
+        "except",
+        "  on E: EDatabaseError do ;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "try",
+        "  DoStuff;",
+        "except",
+        "  on E: EDatabaseError do raise;",
+        "end;"
+      ],
+      "hinweis": "Die Hilfe macht den Fund nicht „richtig“, sie macht das Verschlucken sichtbar: ob der Aufrufer die Ausnahme erwartet oder ein Log/Recovery gebraucht wird, entscheidet der Mensch."
+    },
+    "EmptyBlock": {
+      "titel": "Leeres `with ... do begin end` durch den Aufruf ersetzen",
+      "was": "Ersetzt `with <Aufrufkette> do begin end` durch die Aufrufkette als Anweisung (`with X.Add(T) do begin end;` wird `X.Add(T);`). `begin` und `end` dürfen auf eigenen Zeilen stehen; der Fund steht auf der Zeile des `begin`. Der Aufruf wird wie vorher genau einmal ausgeführt. Bedeutungsgleich. Andere leere Blöcke (`begin end;` allein, `if C then begin end;`, `else begin end`, `while C do begin end;`) bekommen keine Hilfe.",
+      "nichtAngeboten": [
+        "der leere Block gehört nicht zu einem `with ... do` (if, else, while, for, allein stehendes begin..end): ob eine Anweisung fehlt oder der Zweig weg kann, entscheidet nur der Mensch",
+        "der Ausdruck ist kein Aufruf (`with Foo do begin end;`: als Anweisung bliebe ein Bezeichner), mehrere Objekte im `with` (`with A, B do`), der Kopf geht über mehrere Zeilen, oder die Form ist keine Kette `A.B(...).C(...)` (Index, `as`, Generics)",
+        "der Ausdruck könnte ein Typecast sein (`with TButton(Sender) do`, `with Foo(X) do`: `Name(X);` ist keine Anweisung)",
+        "ein Kommentar oder eine Direktive steht zwischen `with` und `end`, hinter dem `end` folgt etwas anderes als `;` oder ein Blockende, die Zeile ist verschoben oder trägt mehrere `begin`"
+      ],
+      "beispielVorher": [
+        "  with Items.Add(T) do begin end;"
+      ],
+      "beispielNachher": [
+        "  Items.Add(T);"
+      ]
+    },
+    "NoSonarMarker": {
+      "titel": "NOSONAR durch einen noinspection-All-Marker über der Zeile ersetzen",
+      "was": "Aus `X; // NOSONAR - Grund` wird eine eigene Zeile `// noinspection All` (mit dem Einzug der Zeile) über dem Code; der Rest des Kommentars bleibt hinter dem Code (`X; // Grund`). Ein führender `:` oder `-` hinter NOSONAR fällt weg, ohne Rest entfällt der Kommentar. Der Marker steht bewusst darüber: ein `noinspection` gilt für die folgende Zeile, und `All` zählt nur als ganze Artenliste – ein Grund dahinter machte ihn wirkungslos.",
+      "kennzeichnung": "der Marker unterdrückt jetzt alle Regeln der Zeile (bisher unterdrückte NOSONAR nichts); kritische Arten (HardcodedSecret, SQLInjection u. a.) bleiben sichtbar",
+      "nichtAngeboten": [
+        "der Kommentar steht auf einer eigenen Zeile (unklar, welche Zeile gemeint ist), NOSONAR ist nicht das erste Wort oder steht mehrfach da",
+        "der Rest hinter NOSONAR beginnt mit `noinspection`, oder direkt darüber steht schon `// noinspection All`",
+        "das `//` steht in einem Block-Kommentar, String oder mehrzeiligen String, die Zeile ist verschoben, oder die Meldung nennt keine Spalte"
+      ],
+      "beispielVorher": [
+        "  Dispose(P); // NOSONAR - we know about this"
+      ],
+      "beispielNachher": [
+        "  // noinspection All",
+        "  Dispose(P); // we know about this"
+      ],
+      "hinweis": "Findet SCA auf der Zeile nichts zu unterdrücken, meldet SCA165 den neuen Marker als wirkungslos; dann den Kommentar ganz löschen."
+    },
+    "TrailingCommaArgList": {
+      "titel": "Überzähliges Komma entfernen",
+      "was": "Löscht das Komma vor der schließenden Klammer einer Argumentliste samt dem Leerraum bis zur `)`: `Foo(A, B,)` wird `Foo(A, B)`. Der Detektor meldet die Spalte des Kommas; die Hilfe sucht rückwärts die öffnende Klammer.",
+      "nichtAngeboten": [
+        "vor dem Komma steht kein Argument (`Foo(,)`, `Foo(A,,)`): dort fehlt ein Element, das Komma ist nicht überzählig",
+        "das Komma beendet eine Liste in `[...]` (Set- oder Array-Literal), oder die öffnende Klammer ist nicht zu finden",
+        "die Zeile ist verschoben: an der Spalte steht kein Komma im Code, oder dahinter folgt etwas anderes als Leerraum und `)` (Kommentar, String)"
+      ],
+      "beispielVorher": [
+        "  WriteLn('A', 'B', );",
+        "  DoStuff(Param1, Param2,);"
+      ],
+      "beispielNachher": [
+        "  WriteLn('A', 'B');",
+        "  DoStuff(Param1, Param2);"
+      ],
+      "hinweis": "Bedeutungsgleich: das Komma trug nichts."
+    },
+    "GroupedDeclaration": {
+      "titel": "Gruppierte Deklaration in Einzelzeilen teilen",
+      "was": "Macht aus `A, B, C: Integer;` je Name eine Zeile (`A: Integer;`, `B: Integer;`, `C: Integer;`) mit der Einrückung der Ursprungszeile. Nur eine einzeilige Variablen- oder Felddeklaration mit einem einfachen Typnamen; steht `var` davor, trägt jede neue Zeile das `var` wieder.",
+      "nichtAngeboten": [
+        "der Typ ist kein einfacher Typname: `record`, `class`, `array of`, `array[..] of`, `set of`, Aufzählung, `^T`, `string[N]` (je Name entstünde ein eigener Typ, `A := B` ginge nicht mehr); Generics aus Vorsicht",
+        "Initialisierer (`= 5`), `absolute`, Direktive hinter dem Typ, Kommentar, String oder Direktive auf der Zeile",
+        "mehrzeilige Deklaration, mehrere Gruppen auf der Zeile",
+        "etwas anderes als Leerraum oder ein einzelnes `var` vor den Namen (Attribut, `private`, `class var`, `threadvar`)",
+        "Parameterlisten und case-Marken; die Zeile ist verschoben, oder die Meldung nennt keine Spalte",
+        "vor der Gruppe steht ein Attribut, auch auf der Zeile darüber (`[Weak]` über `FA, FB: IFoo;`) – es gilt für alle Namen, nach dem Teilen stünde es nur über dem ersten"
+      ],
+      "beispielVorher": [
+        "var",
+        "  A, B, C: Integer;"
+      ],
+      "beispielNachher": [
+        "var",
+        "  A: Integer;",
+        "  B: Integer;",
+        "  C: Integer;"
+      ],
+      "hinweis": "Der Detektor meldet auch Gruppen mit anonymem Typ; dort bleibt der Fund stehen."
+    },
+    "AttributeIgnoreWithoutReason": {
+      "titel": "Grund zu [Ignore] hinzufügen",
+      "was": "Macht aus `[Ignore]` oder `[Ignore()]` ein `[Ignore('reason')]`. Der Platzhalter `reason` ist danach durch den echten Grund (Ticket, Abhängigkeit, bekannte Einschränkung) zu ersetzen. Der Test wird mit und ohne Text gleich übersprungen; Schreibweise des Namens und Einrückung bleiben.",
+      "nichtAngeboten": [
+        "das Attribut steht in einer Gruppe (`[Ignore, Test]`) oder neben einem anderen Attribut auf derselben Zeile (`[Test][Ignore]`)",
+        "die Klammern haben schon einen Inhalt (`[Ignore('kaputt')]`, `[Ignore(X)]`), oder das Attribut läuft über mehrere Zeilen",
+        "hinter dem `]` oder im Attribut steht ein Kommentar oder Text; die Zeile ist verschoben, auskommentiert oder kein Attribut"
+      ],
+      "beispielVorher": [
+        "[Ignore]",
+        "procedure SomeTest;"
+      ],
+      "beispielNachher": [
+        "[Ignore('reason')]",
+        "procedure SomeTest;"
+      ],
+      "hinweis": "Der Platzhalter `reason` muss durch den echten Grund ersetzt werden."
+    },
+    "AttributeDuplicate": {
+      "titel": "Doppeltes Attribut entfernen",
+      "was": "Löscht die Dublette eines Attributs: steht sie allein auf ihrer Zeile, die ganze Zeile; steht sie mit weiteren Attributen auf einer Zeile (`[A][A]`), nur die letzte gleiche Gruppe samt Trennzeichen. Gleich heißt: derselbe Name (Groß-/Kleinschreibung egal) und genau dieselben Argumente. Bedeutungsgleich.",
+      "nichtAngeboten": [
+        "die Argumente unterscheiden sich (`[Category('a')]` und `[Category('b')]`) – der Detektor meldet sie ohnehin nicht",
+        "zwischen den Attributen oder dahinter steht Code, ein Kommentar oder eine Direktive",
+        "ein Ziel-Attribut (`[Result: …]`, `[assembly: …]`), ein Attribut über mehrere Zeilen oder mit einer Klammer im String",
+        "die Zeile ist verschoben, steht in einem Kommentar oder ist die letzte der Datei"
+      ],
+      "beispielVorher": [
+        "  public",
+        "    [Test]",
+        "    [Test]",
+        "    procedure Foo;"
+      ],
+      "beispielNachher": [
+        "  public",
+        "    [Test]",
+        "    procedure Foo;"
+      ]
+    },
+    "AttributeCategoryWithoutString": {
+      "titel": "Dem Attribut [Category] einen Kategorienamen geben",
+      "was": "Macht aus `[Category]` ein `[Category('category')]`. Der Platzhalter `category` macht den Code übersetzbar; den echten Namen der Kategorie setzt du selbst (die Hilfe kann ihn nicht kennen). Schreibweise und Leerzeichen vor dem `]` bleiben, ein Kommentar dahinter auch.",
+      "nichtAngeboten": [
+        "das Attribut hat schon ein Argument oder eine Liste (`[Category('x')]`, `[Category(Name)]`, `[Category()]`, `[Category, Test]`) - der Detektor meldet diese Formen nie, und eine Konstante könnte ein String sein",
+        "hinter dem `]` steht weiterer Code (`[Category][Test]`) oder eine Compiler-Direktive",
+        "vor dem Attribut steht kein Deklarationsende (`;`, `public`, `class`, ein anderes Attribut ...) - etwa ein Array-Index - oder eine Direktive liegt dazwischen",
+        "die Zeile ist verschoben, auskommentiert oder liegt in einem Kommentar",
+        "das Attribut steht auf seiner Zeile hinter einem anderen (`[Test][Category]`)"
+      ],
+      "beispielVorher": [
+        "    [Category]",
+        "    procedure Foo;"
+      ],
+      "beispielNachher": [
+        "    [Category('category')]",
+        "    procedure Foo;"
+      ],
+      "hinweis": "Der Platzhalter `category` ist bewusst kein TODO (SCA019); ersetze ihn durch den Namen deiner Kategorie, etwa `Slow`."
+    },
+    "GotoStatement": {
+      "titel": "goto durch Exit ersetzen",
+      "was": "Ersetzt das gemeldete `goto Marke` durch `Exit`, wenn die Marke die letzte Anweisung der Routine ist (`Marke:` steht unmittelbar vor dem end des Rumpfs). Dann führt der Sprung ans Routinenende, genau wie Exit; ein goto aus einem try heraus übersetzt Delphi nicht (E2127) – das Exit der Hilfe übersetzt und läuft durch das finally, Result einer Funktion bleibt unverändert. Die Marke selbst bleibt stehen.",
+      "nichtAngeboten": [
+        "die Marke ist nicht die letzte Anweisung der Routine (Code dahinter, Marke in einem inneren Block, Rücksprung)",
+        "mehr als ein goto auf der Zeile, die Marke steht nicht auf derselben Zeile, ein Kommentar steht im goto, oder die Zeile ist verschoben",
+        "keine Routine mit begin..end-Rumpf um die Zeile (Hauptblock, initialization, asm) oder unsichere Routinengrenzen",
+        "der Rumpf enthält eine Compiler-Direktive oder eine anonyme Methode",
+        "die Datei deklariert einen eigenen Bezeichner Exit"
+      ],
+      "beispielVorher": [
+        "label Fin;",
+        "begin",
+        "  if Failed then goto Fin;",
+        "  Work;",
+        "Fin:",
+        "end;"
+      ],
+      "beispielNachher": [
+        "label Fin;",
+        "begin",
+        "  if Failed then Exit;",
+        "  Work;",
+        "Fin:",
+        "end;"
+      ],
+      "hinweis": "Die Marke bleibt stehen. Springt kein weiteres goto mehr zu ihr, meldet Delphi sie als ungenutzte Marke (Hinweis/Warnung, kein Fehler); Marke und label-Eintrag können dann von Hand entfallen."
+    },
+    "DateFormatSettings": {
+      "titel": "FormatSettings ausdrücklich übergeben",
+      "was": "Hängt an jeden gebietsabhängigen RTL-Aufruf der Fundzeile (`StrToDate`, `StrToTime`, `StrToDateTime`, `DateToStr`, `TimeToStr`, `DateTimeToStr`, `StrToFloat`, `StrToCurr`, `FloatToStr`, `CurrToStr`, `FormatDateTime`, `FormatFloat`, `FormatCurr`) das Argument `FormatSettings` an. Gleiche Bedeutung: die Überladung ohne Settings liest dieselbe globale Variable `SysUtils.FormatSettings` (in FPC `absolute DefaultFormatSettings`). Alle Aufrufe der Zeile in einer Ersetzung - der Detektor schweigt nach dem ersten Settings-Argument für die ganze Anweisung.",
+      "nichtAngeboten": [
+        "der gemeldete Aufruf steht nicht (mehr) auf den Code-Spalten der Zeile, erst auf einer Folgezeile der Anweisung, oder die Anweisung geht auf einer Folgezeile mit einem weiteren solchen Aufruf weiter",
+        "ein Aufruf ist qualifiziert (außer `SysUtils.` und `System.SysUtils.`), hat eine andere Zahl von Argumenten (auch FPC-Überladungen wie `StrToDate(S, '/')`), schließt nicht auf der Zeile oder ist kein Aufruf; eine Direktive auf der Zeile",
+        "SysUtils steht in keiner uses-Klausel, die Datei deklariert eine eigene Routine des Namens, oder vor dem Aufruf steht in seiner Routine ein `with`",
+        "die Datei deklariert einen Bezeichner `FormatSettings` (Feld, Variable, Parameter, Property) oder nutzt ihn als Member (`X.FormatSettings`) - der bloße Name bände dort",
+        "die Datei fragt nach Compilern vor Delphi XE (die globale `FormatSettings` gibt es erst seit XE), etwa über `jedi.inc` oder `{$IFDEF VER210}`"
+      ],
+      "beispielVorher": [
+        "  r := DateToStr(d) + ' ' + TimeToStr(d);"
+      ],
+      "beispielNachher": [
+        "  r := DateToStr(d, FormatSettings) + ' ' + TimeToStr(d, FormatSettings);"
+      ],
+      "zweiterEintrag": {
+        "was": "Übergibt stattdessen `TFormatSettings.Invariant`: Punkt als Dezimaltrenner, Datum `MM/dd/yyyy`, englische Monats- und Tagesnamen - unabhängig vom System, für Dateien, SQL und Protokolle.",
+        "kennzeichnung": "unabhängig vom System: Punkt als Dezimaltrenner, Datum MM/dd/yyyy, englische Monats- und Tagesnamen - für Dateien, SQL und Protokolle, nicht für die Anzeige",
+        "nichtAngeboten": [
+          "dieselben Sperren wie der erste Eintrag, ohne die zu `FormatSettings`",
+          "eine FPC-Weiche oder ein FPC-Modus in der Datei (FPC 3.2 kennt kein `TFormatSettings.Invariant`), Spuren von Compilern bis Delphi 10.3, ein eigenes `TFormatSettings`"
+        ],
+        "beispielNachher": [
+          "  r := DateToStr(d, TFormatSettings.Invariant) + ' ' + TimeToStr(d, TFormatSettings.Invariant);"
+        ]
+      },
+      "hinweis": "Aufrufe über mehrere Zeilen bleiben ohne Hilfe."
+    },
+    "FormatLocaleHint": {
+      "titel": "FormatSettings an Format übergeben",
+      "was": "Hängt an das eine `Format` der Fundzeile das dritte Argument `FormatSettings` an. Gleiche Bedeutung: `Format` ohne drittes Argument liest dieselbe globale Variable. Ist das erste Argument ein Literal, muss es zum Formatstring der Meldung passen.",
+      "nichtAngeboten": [
+        "kein oder mehr als ein `Format` auf der Zeile (auch verschachtelt); mORMot-Funktionen wie `FormatUtf8` sind keine RTL-Format",
+        "das Literal auf der Zeile passt nicht zur Meldung (Zeile verschoben), der Aufruf ist qualifiziert (`string.Format`, `Self.Format`), hat nicht genau zwei Argumente oder schließt nicht auf der Zeile, steht erst auf einer Folgezeile, oder die Anweisung geht mit einem weiteren `Format` weiter",
+        "eine Direktive auf der Zeile, und dieselben Fragen an die Datei wie bei SCA128 (SysUtils, eigene Routine `Format`, `FormatSettings` deklariert oder als Member, `with`, Compiler vor Delphi XE)"
+      ],
+      "beispielVorher": [
+        "S := Format('%.2f', [Price]);"
+      ],
+      "beispielNachher": [
+        "S := Format('%.2f', [Price], FormatSettings);"
+      ],
+      "zweiterEintrag": {
+        "was": "Übergibt stattdessen `TFormatSettings.Invariant` - das gute Beispiel des Katalogs: Punkt als Dezimaltrenner, unabhängig vom System.",
+        "kennzeichnung": "unabhängig vom System: Punkt als Dezimaltrenner, Komma als Tausendertrenner - für Dateien, SQL und Protokolle, nicht für die Anzeige",
+        "nichtAngeboten": [
+          "dieselben Sperren wie der erste Eintrag, ohne die zu `FormatSettings`",
+          "eine Währungs-Spec `%m` im Formatstring (Invariant schreibt das allgemeine Währungszeichen ¤), eine FPC-Weiche oder ein FPC-Modus, Spuren von Compilern bis Delphi 10.3, ein eigenes `TFormatSettings`"
+        ],
+        "beispielNachher": [
+          "S := Format('%.2f', [Price], TFormatSettings.Invariant);"
+        ]
+      }
+    },
+    "MethodName": {
+      "titel": "Methodennamen mit Großbuchstaben beginnen",
+      "was": "Schreibt den ersten Buchstaben der gemeldeten Methode groß (`doWork` → `DoWork`) – im Kopf der Deklaration im Klassenrumpf und im Kopf `TKlasse.doWork` der Implementierung derselben Datei, in einem Schritt. Bedeutungsgleich: Delphi unterscheidet Groß- und Kleinschreibung nicht. Aufrufe, Property-Accessoren und Kommentare bleiben, wie sie sind; eine published Methode bleibt an ihre Formdatei gebunden (`TObject.MethodAddress` vergleicht ohne Groß/klein).",
+      "platzhalter": "`%s` = der neue Name (etwa `DoWork`).",
+      "nichtAngeboten": [
+        "die Methode steht nicht im Rumpf einer Klasse dieser Datei: freie Routine (auch das Katalogbeispiel `procedure doStuff;`), record, Interface, Klasse in einem Include oder eine gemeldete Implementierung ohne Deklaration davor",
+        "`overload`, mehr als eine Deklaration in Klassen dieses Namens (`{$IFDEF}`-Zwillinge), keine oder mehr als eine Implementierung in der Datei (abstract, external, Include)",
+        "ein `{$I}`-Include im Klassenrumpf, ein String-Literal der Datei nennt den Namen (Aufruf per Name über RTTI oder `MethodAddress`)",
+        "kein oder mehr als ein Kopf der Methode auf der Zeile, die Zeile ist verschoben oder die Deklaration schon anders geschrieben"
+      ],
+      "beispielVorher": [
+        "type",
+        "  TFoo = class",
+        "  public",
+        "    procedure doWork;",
+        "  end;",
+        "implementation",
+        "procedure TFoo.doWork;",
+        "begin",
+        "end;"
+      ],
+      "beispielNachher": [
+        "type",
+        "  TFoo = class",
+        "  public",
+        "    procedure DoWork;",
+        "  end;",
+        "implementation",
+        "procedure TFoo.DoWork;",
+        "begin",
+        "end;"
+      ],
+      "hinweis": "Aufrufe wie `doWork;` bleiben stehen und binden weiter; RTTI (`TRttiMethod.Name`) und `TObject.MethodName` nennen danach den neuen Namen."
+    },
+    "IntegerOverflow": {
+      "titel": "Linken Operanden nach Int64 umwandeln",
+      "was": "Macht aus `Total := Count * Size;` ein `Total := Int64(Count) * Size;` – der Cast des linken Operanden stuft die Multiplikation auf 64 Bit hoch. Die Hilfe sucht die Anweisung über Ziel und Operanden aus der Meldung (der Fund nennt nur die Zeile des Ziels) und prüft die Typen über den Quellstellen-Dienst: das Ziel als Int64, UInt64 oder QWord, beide Operanden als Integer oder Cardinal deklariert.",
+      "kennzeichnung": "das Produkt wird in 64 Bit gerechnet – ein Ergebnis über MaxInt bleibt erhalten statt still abgeschnitten; mit Überlaufprüfung (Q+) entfällt die Ausnahme EIntOverflow",
+      "platzhalter": "`%s` = der linke Operand (etwa `Count`).",
+      "nichtAngeboten": [
+        "ein Operand ist nicht als Integer oder Cardinal bewiesen (unbekannt, Property, Funktion ohne Klammern, Gleitkomma, Variant, Word/Byte/SmallInt, schon 64 Bit) oder das Ziel nicht als Int64/UInt64/QWord",
+        "das Ziel ist ein Pfad (`Self.Total`, `R.Total`) oder die Zeile liegt in einem with-Block",
+        "die Anweisung steht nicht oder mehrfach auf der Zeile (verschoben, schon gecastet, ein weiterer Operator dahinter), oder eine Direktive steht darin",
+        "die Datei deklariert einen eigenen Bezeichner `Int64`"
+      ],
+      "beispielVorher": [
+        "var",
+        "  BytesTotal: Int64;",
+        "  SectorCount, SectorSize: Integer;",
+        "begin",
+        "  BytesTotal := SectorCount * SectorSize;"
+      ],
+      "beispielNachher": [
+        "var",
+        "  BytesTotal: Int64;",
+        "  SectorCount, SectorSize: Integer;",
+        "begin",
+        "  BytesTotal := Int64(SectorCount) * SectorSize;"
+      ],
+      "hinweis": "Der Detektor beweist keine Typen; die Hilfe bietet nur an, wenn der Quellstellen-Dienst Ziel und Operanden beweist."
+    },
+    "SourceBidiOverride": {
+      "titel": "Bidi-Steuerzeichen entfernen, in Strings als #$-Code",
+      "was": "Behandelt alle Bidi-Steuerzeichen der gemeldeten Zeile (U+061C, U+202A–U+202E, U+2066–U+2069) in einer Ersetzung: im Kommentar wird das Zeichen gelöscht, im String-Literal als Zeichen-Code geschrieben und das Literal an der Stelle aufgebrochen (`'abc'#$202E'def'` – Delphi-Form ohne `+`, gleicher Wert). Danach zeigt die Zeile, was der Compiler liest. Bedeutungsgleich.",
+      "nichtAngeboten": [
+        "ein Zeichen der Zeile steht im Code (außerhalb von String und Kommentar) oder in einer Compiler-Direktive (`{$I …}`, `{$MESSAGE '…'}`) – dann für die ganze Zeile nicht",
+        "ein Zeichen steht in einem mehrzeiligen String (`'''…'''`), in einem String, der auf der Zeile nicht endet, oder in einem String mit `.` oder `[` dahinter",
+        "das Löschen änderte die Form des Kommentars (aus `{‹U+202E›$I x}` würde eine Direktive, `*‹U+202E›)` beendete einen `(* *)`-Kommentar früher)",
+        "auf der Zeile steht kein Zeichen der Regel (Zeile verschoben); U+200E/U+200F meldet der Detektor nicht"
+      ],
+      "beispielVorher": [
+        "  S := 'abc‹U+202E›def'; // check‹U+2066› admin"
+      ],
+      "beispielNachher": [
+        "  S := 'abc'#$202E'def'; // check admin"
+      ],
+      "hinweis": "‹U+202E› steht im Beispiel für das unsichtbare Steuerzeichen. Der Detektor meldet je Datei nur die erste betroffene Zeile; nach der Hilfe meldet er die nächste. Folgt dem letzten Zeichen-Code ein Bezeichner (`'‹U+202E›'then`), setzt die Hilfe ein Leerzeichen dazwischen."
+    },
+    "SourceInvisibleChar": {
+      "titel": "Unsichtbare Zeichen entfernen, in Strings als #$-Code",
+      "was": "Behandelt alle unsichtbaren Zeichen der gemeldeten Zeile (U+200B ZWSP, U+200C ZWNJ, U+200D ZWJ, U+2060 Word-Joiner, U+FEFF mitten in der Datei) in einer Ersetzung: im String-Literal immer als Zeichen-Code, nie gelöscht – ein ZWJ gehört dort oft zu einer Emoji-Folge, der Wert bleibt gleich (`'👨'#$200D'💻'`); im Kommentar wird das Zeichen gelöscht. Bedeutungsgleich.",
+      "nichtAngeboten": [
+        "ein Joiner (U+200C/U+200D) im Kommentar steht neben einem Nicht-ASCII-Zeichen – Teil einer Emoji-Folge (auch hinter U+FE0F) oder einer Schrift (ZWNJ im Persischen); dann für die ganze Zeile nicht",
+        "ein Zeichen der Zeile steht im Code (in einem Bezeichner, auch ein U+FEFF vor `unit`) oder in einer Compiler-Direktive",
+        "ein Zeichen steht in einem mehrzeiligen String, in einem String, der auf der Zeile nicht endet, oder in einem String mit `.` oder `[` dahinter; das Löschen änderte die Form des Kommentars",
+        "auf der Zeile steht kein Zeichen der Regel (Zeile verschoben); NBSP (U+00A0) meldet der Detektor nicht"
+      ],
+      "beispielVorher": [
+        "  S := 'ab‹U+200B›c'; // hidden‹U+200D› text"
+      ],
+      "beispielNachher": [
+        "  S := 'ab'#$200B'c'; // hidden text"
+      ],
+      "hinweis": "‹U+200B› und ‹U+200D› stehen im Beispiel für die unsichtbaren Zeichen. ZWSP, Word-Joiner und U+FEFF verbinden nichts und werden im Kommentar immer gelöscht, auch neben Nicht-ASCII-Text. Der Detektor meldet je Datei nur die erste betroffene Zeile; nach der Hilfe meldet er die nächste."
+    },
+    "ThreadResumeDeprecated": {
+      "titel": "Resume durch Start ersetzen",
+      "was": "Ersetzt im gemeldeten `X.Resume;` nur das Wort `Resume` durch `Start` (Schreibweise wie im Text). Nur, wenn X in derselben Routine unmittelbar davor mit `X := T.Create(True);` angehalten erzeugt und seitdem nicht gestartet wurde – dann tun Resume und Start dasselbe; Start löst EThread nur bei einem schon laufenden Thread aus. Der Detektor meldet die Zeile des Empfängers; die Hilfe prüft den Beweis am aktuellen Text.",
+      "platzhalter": "`%s` = der Empfänger aus der Meldung (`Worker`).",
+      "nichtAngeboten": [
+        "die letzte Zuweisung an X vor dem Resume in dieser Routine ist nicht `T.Create(True);` (etwa `Create(False)`, ein Parameter, ein anderer Wert), oder es gibt keine – das Objekt kam von woanders",
+        "die Erzeugung steht in einem Zweig oder Block, den das Resume nicht teilt (`if A then X := ...`, `begin ... end` davor)",
+        "zwischen Erzeugung und Resume steht eine Schleife, `goto`, `with`, eine anonyme Methode oder eine Direktive, oder X kommt dort anders vor als in `X.Feld := ...` (auch `X.Suspended := False`, `Register(X)`); das Resume ist selbst Rumpf einer Schleife oder eines `with`",
+        "X wird in der Routine mehr als einmal fortgesetzt oder gestartet, oder die Datei ruft `X.Suspend` (Start nach Suspend löst EThread aus)",
+        "der erzeugte Typ ist in der Datei nicht als TThread-Nachfahre zu sehen (Name endet nicht auf `Thread`, keine Vorfahrenkette in der Datei), oder er hat einen eigenen Konstruktor `Create`, der seinen ersten Parameter nicht an `inherited Create(..)` weiterreicht",
+        "die Datei unterstützt Compiler ohne `TThread.Start` – eine Spur in einer Direktive: `CompilerVersion` bis 21, `VER200` und älter, `DELPHI14`/`COMPILER14`/`RTL210` und älter, `FPC_FULLVERSION` bis 20600, `jedi.inc`, `jvcl.inc`, `cnpack.inc` u. a. –, oder das Resume steht in einem offenen `{$IF}`/`{$IFDEF}`-Block (die Altzweige `{$IF CompilerVersion >= 21} Start {$ELSE} Resume`)",
+        "X ist qualifiziert (`Self.FWorker.Resume`, `Pool.Worker.Resume`), das Resume steht nicht in einer Routine (etwa im initialization-Teil), oder die Zeile ist verschoben bzw. trägt zwei Aufrufe"
+      ],
+      "beispielVorher": [
+        "  Worker := TWorkerThread.Create(True);",
+        "  Worker.FreeOnTerminate := True;",
+        "  Worker.Resume;"
+      ],
+      "beispielNachher": [
+        "  Worker := TWorkerThread.Create(True);",
+        "  Worker.FreeOnTerminate := True;",
+        "  Worker.Start;"
+      ],
+      "hinweis": "Die zweite Lösung der Meldung – mit `Create(False)` erzeugen und Resume streichen – bietet die Hilfe nicht an: Eigenschaften, die zwischen Erzeugung und Start gesetzt werden, liefen dann gegen den schon laufenden Thread."
+    },
+    "InsecureRandom": {
+      "titel": "Randomize im initialization-Abschnitt aufrufen",
+      "was": "Setzt `Randomize;` als erste Anweisung in den initialization-Abschnitt der Unit – in eine neue Zeile unter `initialization` (Stufe der Folgezeile), hinter einen Kommentar am Zeilenende, oder direkt dahinter, wenn auf der Zeile Code oder eine Direktive folgt. Hat die Unit keinen, entsteht vor `end.` (bzw. vor einem `finalization` ohne `initialization`) ein neuer Abschnitt. Eine Anwendung erledigt alle Funde der Datei. Der Detektor meint die wiederholbare Folge (Startwert 0 ohne Randomize), keine kryptographische Sicherheit.",
+      "kennzeichnung": "die Zufallsfolge ist danach bei jedem Lauf eine andere – eine bisher wiederholbare Folge, etwa für Tests, geht verloren; der Aufruf beim Laden der Unit wirkt für das ganze Programm",
+      "nichtAngeboten": [
+        "die Datei ruft `Randomize` schon (auch `System.Randomize`; der Fund ist veraltet) oder setzt `RandSeed` – ein fester Startwert ist womöglich gewollt, der Detektor sieht das nicht",
+        "`program`, `library` oder `package` (dort gehört Randomize an den Anfang des Hauptblocks – von Hand), eine Datei ohne `unit` (Include, Skript) oder ohne bzw. mit mehreren `implementation`",
+        "die Unit endet mit `begin ... end.` (SCA088 – erst dessen Hilfe) oder trägt mehrere `initialization` bzw. `finalization` (etwa in `{$IFDEF}`-Zweigen)",
+        "die Einfügestelle liegt in einem offenen `{$IF}`/`{$IFDEF}`-Block, oder `end.` bzw. `finalization` steht nicht allein am Zeilenanfang",
+        "auf der gemeldeten Zeile (und den Folgezeilen ihrer Anweisung) steht kein Aufruf von Random, RandomRange oder RandomFrom als Code – Zeile verschoben, String, Kommentar oder ein eigenes Zufallsobjekt (`FRng.Random`)"
+      ],
+      "beispielVorher": [
+        "function Dice: Integer;",
+        "begin",
+        "  Result := Random(6) + 1;",
+        "end;",
+        "end."
+      ],
+      "beispielNachher": [
+        "function Dice: Integer;",
+        "begin",
+        "  Result := Random(6) + 1;",
+        "end;",
+        "initialization",
+        "  Randomize;",
+        "",
+        "end."
+      ],
+      "weitereBeispiele": [
+        {
+          "titel": "Vorhandener initialization-Abschnitt",
+          "vorher": [
+            "initialization",
+            "  Foo;",
+            "end."
+          ],
+          "nachher": [
+            "initialization",
+            "  Randomize;",
+            "  Foo;",
+            "end."
+          ]
+        }
+      ],
+      "hinweis": "Für Passwörter, Token, Salze und Schlüssel bleibt Random auch nach Randomize ungeeignet – dort gehört ein kryptographischer Zufallsgenerator hin (BCryptGenRandom unter Windows, /dev/urandom unter POSIX)."
+    },
+    "FloatEquality": {
+      "titel": "Gleitkommavergleich mit Toleranz (SameValue/IsZero)",
+      "was": "Macht aus `A = B` ein `SameValue(A, B)`, aus einem Vergleich mit einer Null (`0`, `0.0`) ein `IsZero(A)` und aus `<>` dasselbe mit `not` davor. Der Detektor meldet nur die Zeile, die Meldung nennt den Vergleich: die Hilfe sucht genau diese drei Token auf der Zeile. Fehlt `Math` in uses, kommt `System.Math` (in einer Datei mit FPC-Weiche `Math`) als zweite Ersetzung mit, in der Schreibweise der Datei.",
+      "kennzeichnung": "vergleicht mit dem Standard-Epsilon von System.Math statt exakt – ein gewollt exakter Vergleich (Schalter- oder Sentinelwert) ändert seine Bedeutung",
+      "platzhalter": "`%s` = `SameValue` bzw. `IsZero` (bei einer Null-Seite).",
+      "nichtAngeboten": [
+        "der Vergleich ist nicht der ganze Ausdruck einer Bedingung, Zuweisung oder eines Arguments: davor steht nicht `if`, `while`, `until`, `(`, `:=` oder `,`, dahinter nicht `then`, `do`, `)`, `;`, `,`, `else` oder `end` – der Operatorrang: `if A = B and C` heißt `A = (B and C)`, `not A = B` heißt `(not A) = B`, und bei `a + b = c` meldet der Detektor den Teil `b = c`",
+        "ein Operand ist nicht als Single, Double, Extended oder Real bewiesen – Currency vergleicht als Festkommatyp exakt; ein unbekannter Typ (auch in einer verschachtelten Routine) oder ein eigener Alias wie `TFloat`; Single gegen etwas anderes als Single (die Überladungen von SameValue wären mehrdeutig)",
+        "das Wächter-Idiom `if X = 0 then X := ...` und jeder Fund, den der Detektor als gewollt herabstuft",
+        "eine `with`-Anweisung in der Routine, ein eigenes `SameValue` bzw. `IsZero` in der Datei",
+        "der Vergleich steht nicht oder mehrfach auf der Zeile, trägt einen Kommentar oder steht in einer Aufzählung `(A = 1, B = 2)`",
+        "`Math` fehlt und die uses-Klausel trägt Direktiven oder liegt in einem `$IFDEF`-Zweig"
+      ],
+      "beispielVorher": [
+        "  if Ratio = 0.5 then Work;",
+        "  while Ratio <> 0 do Work;"
+      ],
+      "beispielNachher": [
+        "  if SameValue(Ratio, 0.5) then Work;",
+        "  while not IsZero(Ratio) do Work;"
+      ]
+    },
+    "MoveSizeOfPointer": {
+      "titel": "SizeOf des Zieltyps statt der Zeigergröße",
+      "was": "Ersetzt in `Move`, `FillChar`, `CopyMemory` oder `ZeroMemory` die Länge `SizeOf(PInteger)` durch `SizeOf(Integer)` – nur, wenn der Aufruf beweisbar genau ein Element anfasst: jedes Puffer-Argument ist `X^` (bei `CopyMemory`/`ZeroMemory` `X`) mit `X` vom gemeldeten Zeigertyp oder `X` (bzw. `@X`) mit `X` vom Zieltyp. Der Zeigertyp muss ein Paar der RTL sein (PByte, PWord, PInteger, PCardinal, PInt64, PDouble, PChar …). Der Detektor meldet nur die Zeile; die Hilfe sucht den Aufruf selbst.",
+      "kennzeichnung": "kopiert bzw. füllt jetzt SizeOf(Zieltyp) Bytes statt 4/8 – war ein ganzer Puffer gemeint, die Länge von Hand setzen",
+      "platzhalter": "`%s` = der Zieltyp (`Integer` zu `PInteger`).",
+      "nichtAngeboten": [
+        "ein Puffer-Argument ist keine einzelne Variable (`Buf[0]`, `R.Feld`) oder sein Typ ist nicht bewiesen bzw. passt nicht – so auch das Katalogbeispiel `FillChar(P^, SizeOf(PInteger), 0)` mit `P: PByte`; `Move(Src, Dst, SizeOf(PInteger))` kopiert den Zeiger selbst, dort ist die Zeigergröße richtig",
+        "ein Zeigertyp ohne Paar der RTL (eigene Typen) oder ohne eigene Elementgröße (`PPointer`, `PString`), ein in der Datei selbst deklarierter `PInteger`, eine eigene Routine `Move` usw.",
+        "die Länge ist nicht genau `SizeOf(PTyp)` (`SizeOf(PInteger) + 1`, `Count * SizeOf(PInteger)`)",
+        "der Aufruf ist qualifiziert (`System.Move`, `List.Move`), steht nicht oder mehrfach auf der Zeile, reicht über die Zeile, trägt einen Kommentar oder eine andere Zahl Argumente",
+        "eine `with`-Anweisung in der Routine"
+      ],
+      "beispielVorher": [
+        "procedure Foo(Src: PInteger; Dst: PInteger);",
+        "begin",
+        "  Move(Src^, Dst^, SizeOf(PInteger));",
+        "end;"
+      ],
+      "beispielNachher": [
+        "procedure Foo(Src: PInteger; Dst: PInteger);",
+        "begin",
+        "  Move(Src^, Dst^, SizeOf(Integer));",
+        "end;"
+      ],
+      "hinweis": "Im Referenzkorpus meldet der Detektor keine Stelle; die Hilfe deckt bewusst nur den Einzelelement-Fall ab."
+    },
+    "DebugOutput": {
+      "titel": "Debug-Ausgabe in {$IFDEF DEBUG} setzen",
+      "was": "Setzt die gemeldete Anweisung (WriteLn, ShowMessage, ShowMessagePos, OutputDebugString, auch `System.WriteLn`) in `{$IFDEF DEBUG}` .. `{$ENDIF}`, je auf einer eigenen Zeile mit der Einrückung der Anweisung; eine Anweisung über mehrere Zeilen kommt bis zu ihrem `;` ganz hinein. Der Debug-Build gibt weiter aus, der Release-Build nicht mehr; der Detektor wertet einen DEBUG-Bereich als Absicht. Die Meldung nennt keine Spalte: die Hilfe sucht den Aufruf auf der Zeile selbst.",
+      "kennzeichnung": "im Release-Build entfällt die Ausgabe samt der Auswertung ihrer Argumente; FPC/Lazarus definiert DEBUG nicht von selbst - dort wirkt die Hilfe wie Löschen",
+      "nichtAngeboten": [
+        "die einzige Anweisung hinter then/else/do ohne begin, eines case-Zweigs oder hinter einer Marke (ohne sie gehörte die nächste Anweisung zum Zweig)",
+        "der Aufruf steht in einem Ausdruck, mit weiterem Code auf seinen Zeilen, zweimal auf der Zeile oder ohne eigenes `;`; ein Member-Aufruf wie `Log.WriteLn`",
+        "ein Kommentar oder eine Direktive auf den Zeilen der Anweisung, ein Bedingungsblock, der direkt davor öffnet oder dahinter schließt, oder ein offener Bedingungsblock, der DEBUG nennt (`{$IFNDEF DEBUG}`, ELSE-Zweig von `{$IFDEF DEBUG}`)",
+        "ein Aufruf in einer anonymen Methode rechts in einer Zuweisung (der Detektor meldet dort die Zeile der Zuweisung)"
+      ],
+      "beispielVorher": [
+        "  Foo;",
+        "  WriteLn('here #3');",
+        "  Bar;"
+      ],
+      "beispielNachher": [
+        "  Foo;",
+        "  {$IFDEF DEBUG}",
+        "  WriteLn('here #3');",
+        "  {$ENDIF}",
+        "  Bar;"
+      ],
+      "zweiterEintrag": {
+        "was": "Löscht stattdessen die Anweisung (ihre ganzen Zeilen).",
+        "kennzeichnung": "die Ausgabe entfällt in jedem Build, auch beim Debuggen; ihre Argumente werden nicht mehr ausgewertet",
+        "nichtAngeboten": [
+          "dieselben Sperren wie der erste Eintrag",
+          "die Anweisung ist die einzige ihres Blocks (es bliebe ein leerer Block, SCA077) oder endet auf der letzten Zeile der Datei"
+        ],
+        "beispielNachher": [
+          "  Foo;",
+          "  Bar;"
+        ]
+      },
+      "hinweis": "Einklammern lässt eine einzige Anweisung eines begin..end-Blocks stehen; im Release-Build ist der Block dann leer, im Quelltext nicht."
+    },
+    "DeadCode": {
+      "titel": "Unerreichbaren Code löschen",
+      "was": "Löscht die Anweisungen hinter einem unbedingten `Exit`, `Exit(..)`, `raise`, `Break` oder `Continue` bis vor das `end`, `until`, `except` bzw. `finally`, das ihre Anweisungsliste schließt - ganze Zeilen. Bedeutungsgleich: der Code lief nie. Die Hilfe prüft am Text nach, dass vor der gemeldeten Zeile genau der Terminator der Meldung steht, und zwar unbedingt (nicht hinter then/else/do); verschachtelte Blöcke, if/else, case und try im toten Bereich gehen mit.",
+      "platzhalter": "`%s` = die Zahl der Zeilen, die die Hilfe löscht (Leerzeilen dazwischen zählen mit).",
+      "nichtAngeboten": [
+        "ein Kommentar im Bereich, auch hinter dem Terminator auf seiner Zeile (`Exit; // alt:`) - er dokumentiert oft geparkten Code",
+        "eine Marke (ein goto macht den Rest erreichbar) oder eine typisierte Inline-Deklaration im Bereich, ein asm-Block, eine Direktive vom Terminator bis zum Listenende",
+        "der Terminator steht hinter then/else/do oder einer Marke, ist ein anderer als in der Meldung, oder die Datei deklariert einen eigenen Bezeichner Exit, Break bzw. Continue",
+        "das Listenende steht auf der letzten Zeile des toten Codes (`Foo; end;`) - die Hilfe löscht nur ganze Zeilen"
+      ],
+      "beispielVorher": [
+        "begin",
+        "  Exit;",
+        "  WriteLn('never reached');",
+        "end;"
+      ],
+      "beispielNachher": [
+        "begin",
+        "  Exit;",
+        "end;"
+      ],
+      "hinweis": "Toter Code ist oft bewusst geparkter Code oder ein vertauschtes Paar (`Exit(False); Error := ..`) - der Menüeintrag nennt deshalb die Zahl der Zeilen. Geparkter Code steht danach nur noch in der Versionsverwaltung."
+    },
+    "IfThenShortCircuit": {
+      "titel": "IfThen durch if..then..else ersetzen",
+      "was": "Macht aus `X := IfThen(C, A, B);` die mehrzeilige Form `if C then X := A else X := B;` aus dem Katalog; die Zweige rücken eine Stufe tiefer (zwei Leerzeichen bzw. ein Tab, wenn die Zeile mit Tabs einrückt). IfThen aus System.Math bzw. System.StrUtils ist eine gewöhnliche Funktion: beide Arme laufen vor dem Aufruf, danach läuft nur noch der zutreffende. Der Detektor meldet auf der Zeile der Anweisung, ohne Spalte; die Hilfe bedient nur die Zuweisung, deren ganze rechte Seite das IfThen ist, allein auf ihrer Zeile.",
+      "kennzeichnung": "nur noch der zutreffende Zweig läuft – Nebenwirkungen, Kosten und Ausnahmen des anderen entfallen; die Bedingung läuft weiter genau einmal",
+      "nichtAngeboten": [
+        "kein oder mehr als ein IfThen im Code der Zeile (verschoben, verschachtelt), eine andere Anweisung oder ein Kommentar davor, Code oder eine Direktive dahinter, ein Aufruf über mehrere Zeilen",
+        "IfThen ist nicht die ganze rechte Seite (`Trim(IfThen(..))`, `IfThen(..) + 1`, `ShowMessage(IfThen(..))`) oder die Zuweisung ist eine Inline-Deklaration (`var X := IfThen(..)`)",
+        "die Zuweisung ist Zweig eines `then`, `else` oder `do` ohne `begin..end`, ein case-Zweig oder trägt eine Marke",
+        "nicht genau drei Argumente (mit zwei hängt der dritte an der Überladung: 0 oder ''), eine anonyme Methode, ein Kommentar oder Typargumente (`TFoo<T>`) in den Argumenten",
+        "IfThen ist womöglich nicht das der RTL: fremder Qualifizierer, eigene Routine IfThen in der Datei, weder System.Math noch System.StrUtils in uses, ein `with` davor in der Routine",
+        "das Ziel ist als Variant bzw. OleVariant deklariert (ein Literal-Zweig gäbe einen anderen VarType)"
+      ],
+      "beispielVorher": [
+        "  x := IfThen(b, A(), B());"
+      ],
+      "beispielNachher": [
+        "  if b then",
+        "    x := A()",
+        "  else",
+        "    x := B();"
+      ],
+      "hinweis": "Die neue Form trägt Zweige ohne begin..end – wie das GoodExample des Katalogs meldet SCA101 (BeginEndRequired, Hinweis) sie, wo die Regel eingeschaltet ist."
+    },
+    "AssertWithSideEffect": {
+      "titel": "Bedingung außerhalb von Assert auswerten",
+      "was": "Macht aus `Assert(C, M);` ein `if not (C) then Assert(False, M);` auf derselben Zeile. Ohne Assertions (`$C-`, der übliche Release-Bau) übersetzt Delphi `Assert(..)` samt Argument nicht – die Nebenwirkung des Aufrufs fiel dort weg. Danach läuft die Bedingung immer; ohne Assertions entfällt nur die Prüfung, mit Assertions bleibt alles wie vorher (auch Datei und Zeile der Meldung). Ohne Meldung wird die Bedingung zum Meldungstext wie bei SCA074. Ein Klammerpaar um die ganze Bedingung wird nicht verdoppelt.",
+      "kennzeichnung": "die Bedingung läuft jetzt auch ohne Assertions (Release, $C-) – dort entfällt nur die Prüfung; ohne Meldung wird die Bedingung zum Meldungstext",
+      "nichtAngeboten": [
+        "kein oder mehr als ein `Assert(` im Code der Zeile (verschoben, Kommentar, String, `Assert.IsTrue` von DUnitX), eine andere Anweisung oder ein Kommentar davor, Code oder eine Direktive dahinter, ein Aufruf über mehrere Zeilen",
+        "hinter dem Aufruf folgt `else` (das neue if nähme es an sich), oder der Aufruf ist ein case-Zweig bzw. trägt eine Marke",
+        "nicht ein oder zwei Argumente, eine anonyme Methode, ein Kommentar oder Typargumente im Argument; eine Bedingung über 255 Zeichen ohne Meldung (das Literal ginge nicht)",
+        "Assert ist womöglich nicht System.Assert: ein fremder Qualifizierer (`Obj.Assert`), eine eigene Routine Assert in der Datei, ein `with` davor in der Routine"
+      ],
+      "beispielVorher": [
+        "  Assert(UpdateCache(X));"
+      ],
+      "beispielNachher": [
+        "  if not (UpdateCache(X)) then Assert(False, 'UpdateCache(X)');"
+      ],
+      "weitereBeispiele": [
+        {
+          "titel": "Mit Meldung",
+          "vorher": [
+            "  Assert(InitCache(X), 'cache ready');"
+          ],
+          "nachher": [
+            "  if not (InitCache(X)) then Assert(False, 'cache ready');"
+          ]
+        }
+      ],
+      "hinweis": "Liefert die Bedingung einen Variant, wäre `not` bitweise (`Assert(V)` mit V = 1 hält, `if not (V)` löst aus) – die Hilfe kennt die Ergebnistypen der Aufrufe nicht. Die neue Form trägt einen Zweig ohne begin..end; SCA101 (BeginEndRequired, Hinweis) meldet ihn, wo die Regel eingeschaltet ist."
+    },
+    "UnusedParameter": {
+      "titel": "Ungenutzten Parameter mit `_` kennzeichnen",
+      "was": "Benennt den Parameter der Meldung in `_Name` um - im Kopf der Implementierung, in jeder Deklaration derselben Routine (Klassenrumpf, interface-Teil, `forward`) und in `<param name=\"...\">` der `///`-Doku direkt darüber. Bedeutungsgleich: ein Parametername ist nicht Teil des Aufrufs (Delphi kennt keine benannten Argumente), Overrides und Interface-Implementierungen dürfen andere Namen tragen, eine Formdatei bindet nur den Methodennamen. Der Unterstrich dokumentiert die Absicht; der Detektor übergeht solche Namen.",
+      "platzhalter": "`%s` = der Parameter.",
+      "nichtAngeboten": [
+        "der Name kommt im Bereich der Routine sonst als Code vor - im Rumpf, in lokalen Routinen, in inaktiven `$IFDEF`-Zweigen, hinter `.` oder in `with` (Kommentare und Strings zählen nicht); `asm` in der Routine (Parameter über Register)",
+        "`_Name` steht schon als Code in der Datei (doppelter Bezeichner bzw. verdeckt danach ein Feld oder eine Variable)",
+        "ein Kommentar, eine Direktive oder ein Attribut in der Parameterliste (auch FPC `{%H-}`), `&Name`",
+        "Deklaration und Implementierung nicht eindeutig zu paaren: `overload`, mehr als eine Deklaration oder Implementierung, ein `$IFDEF`-Zwilling oder eine gleichnamige lokale Routine, verschiedene Namenslisten, Record-Methoden (die Hilfe findet nur Klassenköpfe)",
+        "ein `{$I}` in der Routine, bei freien Routinen in der Datei (es kann die Deklaration tragen)",
+        "ein Attribut an Routine, Deklaration oder Klasse - RTTI-gestützte Frameworks binden Parameter auch per Namen",
+        "die Zeile ist verschoben, oder auf ihr beginnen zwei Routinen mit diesem Parameter"
+      ],
+      "beispielVorher": [
+        "type",
+        "  TFoo = class",
+        "  public",
+        "    procedure Run(A: Integer; Mode: Integer);",
+        "  end;",
+        "implementation",
+        "procedure TFoo.Run(A: Integer; Mode: Integer);",
+        "begin",
+        "  A := A + 1;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "type",
+        "  TFoo = class",
+        "  public",
+        "    procedure Run(A: Integer; _Mode: Integer);",
+        "  end;",
+        "implementation",
+        "procedure TFoo.Run(A: Integer; _Mode: Integer);",
+        "begin",
+        "  A := A + 1;",
+        "end;"
+      ],
+      "hinweis": "Das Projektprofil wertet UnusedParameter bewusst ab (Ereignishandler erben Sender); die Hilfe ist für Funde in eigenen Routinen gedacht. Den Parameter zu streichen (samt Argument an allen Aufrufstellen) ist eine andere, größere Umformung."
+    },
+    "ConstStringParameter": {
+      "titel": "`const` vor den string-Parameter",
+      "was": "Macht aus `S: string` ein `const S: string` - in der Implementierung und in jeder Deklaration derselben Routine (`forward`, Klassenrumpf); bei einer Gruppe `A, B: string` steht das `const` vor der Gruppe und gilt für alle Namen. Nur für unit-lokale Routinen und nur, wenn der Rumpf keinen Namen der Gruppe beschreibt: dann ist es bedeutungsgleich und spart den Referenzzähler je Aufruf.",
+      "platzhalter": "`%s` = der Parameter.",
+      "nichtAngeboten": [
+        "die Routine ist im interface-Teil deklariert; die Methode steht nicht unter `private`/`strict private` einer Klasse des interface-Teils; `virtual`/`dynamic`/`override`/`abstract`/`reintroduce`/`message`/`dispid`; die Klasse implementiert ein Interface",
+        "der Name der Routine steht in der Datei ohne Aufruf oder mit `@` (Methodenzeiger, Ereignis, Rückruf, `exports`, Property-Accessor) - der Typ passte danach nicht mehr; ein `{$I}` in der Datei",
+        "ein Name der Gruppe wird beschrieben: `S :=`, `S[i] :=`, `@S`, als Laufvariable, oder als ganzes Argument an eine Routine, die nicht als nur lesend bekannt ist (`Delete`, `Insert`, `SetLength`, `ReadLn`, eigene Routinen) - auch in lokalen Routinen und inaktiven Zweigen",
+        "die Gruppe trägt schon `const`/`var`/`out`, ein anderer Typ als in der Meldung, eine Deklaration gruppiert anders",
+        "dieselben Sperren des Kopfs wie bei UnusedParameter: Kommentar, Direktive oder Attribut in der Liste, `overload`, `asm`, Deklaration und Implementierung nicht eindeutig zu paaren, verschobene Zeile"
+      ],
+      "beispielVorher": [
+        "function Hash(s: string): Integer;",
+        "begin",
+        "  Result := Length(s);",
+        "end;"
+      ],
+      "beispielNachher": [
+        "function Hash(const s: string): Integer;",
+        "begin",
+        "  Result := Length(s);",
+        "end;"
+      ],
+      "hinweis": "Ändert die Routine selbst die Variable, die der Aufrufer übergibt (ein Feld, eine globale Variable), hängt ein const-Parameter danach an freigegebenem Text - diesen Fall sieht die Textprüfung nicht."
+    },
+    "ExceptionName": {
+      "titel": "Exception-Klasse mit E-Präfix umbenennen",
+      "was": "Benennt die gemeldete Exception-Klasse `MyError = class(Exception)` in `EMyError` um – „E“ und der Name mit großem Anfangsbuchstaben (`myError` → `EMyError`, `error` → `EError`; ein Klassen-`T` vor einem Wort wird ersetzt: `TMyError` → `EMyError`, ein Akronym bleibt: `TCPError` → `ETCPError`) – und mit ihr jeden Verweis im Code der Datei (`raise`, `on E:`, Vorfahrenliste, `class of`). Bedeutungsgleich: die Klasse steht im implementation-Teil (oder in einem Programm) und ist nur in dieser Datei sichtbar; je Verweis eine Ersetzung, ein Rückgängig-Schritt. Kommentare behalten den alten Namen.",
+      "platzhalter": "`%s` = der neue Name.",
+      "nichtAngeboten": [
+        "die Klasse steht im interface-Teil (andere Units können sie nennen) oder in einer Datei ohne `implementation`, die kein Programm bzw. keine Bibliothek ist (Include-Datei)",
+        "der neue Name steht schon im Code der Datei (Groß/klein egal), eine Direktive nennt den alten oder neuen Namen, ein String-Literal nennt den alten (ClassName, FindClass, RTTI)",
+        "ein Verweis vor der Deklaration (er meint einen anderen Typ), ein Verweis mit Punkt davor (`X.MyError`), `MyError :=` oder ein `with` davor in derselben Routine",
+        "ein `{$I}` im implementation-Teil, ein Kommentar oder eine Direktive in der Deklaration, die Zeile ist verschoben",
+        "Zeichen außerhalb A-Z, a-z, 0-9, `_` im Namen, ein Name, der schon das Präfix trägt"
+      ],
+      "beispielVorher": [
+        "implementation",
+        "",
+        "type",
+        "  MyError = class(Exception);",
+        "",
+        "procedure Check(A: Integer);",
+        "begin",
+        "  if A < 0 then",
+        "    raise MyError.Create('negative');",
+        "end;"
+      ],
+      "beispielNachher": [
+        "implementation",
+        "",
+        "type",
+        "  EMyError = class(Exception);",
+        "",
+        "procedure Check(A: Integer);",
+        "begin",
+        "  if A < 0 then",
+        "    raise EMyError.Create('negative');",
+        "end;"
+      ],
+      "hinweis": "Nicht prüfbar ohne Projektwissen: trägt ein Vorfahr aus einer anderen Unit ein Member gleichen Namens, sieht eine Methode dort unter dem alten Namen das Member, nach der Umbenennung die Klasse – selten, der Compiler meldet es meist."
+    },
+    "LocalConstantName": {
+      "titel": "Lokale Konstante in UPPER_SNAKE_CASE umbenennen",
+      "was": "Benennt die gemeldete Konstante im const-Abschnitt einer Routine in UPPER_SNAKE_CASE um (`MaxRetries` → `MAX_RETRIES`, `HTTPPort` → `HTTP_PORT`, `cMax` → `C_MAX`, `Base64Len` → `BASE64_LEN`) und mit ihr jeden Verweis hinter der Deklaration bis zum Ende der Routine – auch in lokalen Routinen dahinter. Bedeutungsgleich: die lokale Konstante verschattet in ihrer Routine jeden gleichen Namen, und der neue Name steht nirgends im Code der Datei; je Verweis eine Ersetzung, ein Rückgängig-Schritt. Außerhalb der Routine, in Kommentaren und bei `X.Name` (Member) bleibt der alte Name.",
+      "platzhalter": "`%s` = der neue Name.",
+      "nichtAngeboten": [
+        "der neue Name steht schon im Code der Datei (Groß/klein egal; ändert sich nur Groß/klein, entfällt die Frage) oder in einer Direktive",
+        "ein `with` oder ein `{$I}` in der Routine, eine Direktive in der Routine nennt den Namen (`{$IF MaxRetries > 2}`)",
+        "der Name steht in der Routine vor der Deklaration oder wird dahinter neu deklariert bzw. als Name benutzt: Parameter, Variable, Konstante, Typ oder Marke einer lokalen Routine bzw. anonymen Methode, Feld, Feldname einer Record-Konstante, Inline-`var`/`const`, `Name :=`, `@@Name`; vorsichtig auch `(Name)` und `(.., Name)` im Deklarationsteil",
+        "ein Kommentar oder eine Direktive in der Deklaration, die Zeile ist verschoben, die Meldung nennt eine andere Routine, unsichere Routinengrenzen",
+        "Zeichen außerhalb A-Z, a-z, 0-9, `_` im Namen, ein Name schon in UPPER_SNAKE_CASE"
+      ],
+      "beispielVorher": [
+        "procedure Retry;",
+        "const",
+        "  MaxRetries = 3;",
+        "var",
+        "  I: Integer;",
+        "begin",
+        "  for I := 1 to MaxRetries do",
+        "    if TryOnce then",
+        "      Exit;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "procedure Retry;",
+        "const",
+        "  MAX_RETRIES = 3;",
+        "var",
+        "  I: Integer;",
+        "begin",
+        "  for I := 1 to MAX_RETRIES do",
+        "    if TryOnce then",
+        "      Exit;",
+        "end;"
+      ],
+      "hinweis": "Ein Präfix wie `c` bleibt im Namen (`cMax` → `C_MAX`) – kürzen von Hand oder mit Refactor > Rename."
+    },
+    "DigitGrouping": {
+      "titel": "Ziffern mit `_` gruppieren",
+      "was": "Setzt in das gemeldete Ganzzahl-Literal Zifferntrenner in Dreiergruppen von rechts (`1800000` → `1_800_000`). Bedeutungsgleich: der Compiler liest `_` in einem Zahl-Literal nicht. Nur das Literal an der gemeldeten Spalte.",
+      "nichtAngeboten": [
+        "die Datei baut wohl auch mit einem anderen Compiler: FPC-Weiche oder FPC-Modus in der Datei, Dateiart `.pp`/`.lpr`, Lazarus-Projekt oder alte Delphi-Projektdatei neben der Unit, Spuren von Compilern vor Delphi 11 in der Datei oder ihren Includes (`{$IF CompilerVersion >= 35}`, `DELPHI27_UP`, `jedi.inc` …) – Zifferntrenner gibt es erst ab Delphi 11",
+        "ein Include oder eine Skript-Unit ohne implementation-Teil",
+        "ein Zeichencode (`#65279` – der Detektor meldet ihn mit), eine Sprungmarke (label-Abschnitt, `goto`), ein Literal in einem asm-Block",
+        "die Zeile ist verschoben, an der Spalte steht kein ungruppiertes Literal (Hex, Binär, Float, schon gruppiert, Teil eines Bezeichners, Kommentar, String), oder die Meldung nennt keine Spalte",
+        "die Unit liegt auf einem Netzpfad (die Hilfe liest dort keine Projekt- und Include-Dateien)"
+      ],
+      "beispielVorher": [
+        "const",
+        "  TIMEOUT_MS = 1800000;"
+      ],
+      "beispielNachher": [
+        "const",
+        "  TIMEOUT_MS = 1_800_000;"
+      ],
+      "hinweis": "Je Zeile meldet der Detektor nur das erste Literal – das nächste derselben Zeile danach."
+    },
+    "ConsecutiveSection": {
+      "titel": "Mit dem vorigen const- bzw. var-Abschnitt zusammenlegen",
+      "was": "Streicht das Schlüsselwort des zweiten von zwei gleichen Abschnitten (`const` nach `const`, `var` nach `var`); seine Deklarationen gehören danach zum ersten. Steht das Schlüsselwort allein auf seiner Zeile, geht die Zeile; steht dahinter schon die erste Deklaration (`const B = 2;`), rückt sie auf die Einrückung der ersten Deklaration des ersten Abschnitts. Bedeutungsgleich.",
+      "platzhalter": "`%s` = die Art aus der Meldung (`const` bzw. `var`).",
+      "nichtAngeboten": [
+        "`type`-Abschnitte (nur `const` und `var`)",
+        "Inline-Deklarationen in einem Anweisungsblock (`begin … end`, `initialization`) – der Detektor meldet zwei `var X: T;` ohne `:=` mit; Streichen bräche den Compiler",
+        "zwischen den Schlüsselwörtern steht etwas anderes als Deklarationen: Sichtbarkeit (`public` …), `threadvar`, `resourcestring`, `label`, ein Routinenkopf, ein Typ mit Rumpf (`record … end`), ein anderer Abschnitt; der erste Abschnitt ist `class var`/`class const`",
+        "eine Compiler-Direktive zwischen den Schlüsselwörtern, ein Kommentar zwischen den Abschnitten oder auf der Zeile des Schlüsselworts",
+        "die Zeile beginnt nicht mit dem gemeldeten Schlüsselwort (verschoben), oder dahinter folgt keine Deklaration"
+      ],
+      "beispielVorher": [
+        "const",
+        "  A = 1;",
+        "const",
+        "  B = 2;"
+      ],
+      "beispielNachher": [
+        "const",
+        "  A = 1;",
+        "  B = 2;"
+      ],
+      "weitereBeispiele": [
+        {
+          "titel": "Schlüsselwort mit Deklaration auf einer Zeile",
+          "vorher": [
+            "const A = 1;",
+            "const B = 2;"
+          ],
+          "nachher": [
+            "const A = 1;",
+            "      B = 2;"
+          ]
+        }
+      ],
+      "hinweis": "Ein Kommentar hinter der letzten Deklaration des ersten Abschnitts bleibt stehen."
+    },
+    "AvoidOut": {
+      "titel": "`out` durch `var` ersetzen",
+      "was": "Macht aus dem gemeldeten `out`-Parameter einen `var`-Parameter – in Deklaration und Implementierung in einem Schritt (wiederholt die Implementierung die Parameterliste nicht, nur in der Deklaration). Für einfache Typen (Integer, Boolean, Double, Pointer, TObject …) behandelt Delphi `out` wie `var`: bedeutungsgleich.",
+      "kennzeichnung": "nur bei einem verwalteten oder unbekannten Typ (string, Interface, dynamisches Array, Variant, Record, eigener Typ): `out` gab den Wert des Aufrufers beim Aufruf frei, `var` nicht – liest die Routine den Parameter vor dem Setzen, sieht sie danach den alten Wert",
+      "platzhalter": "`%s` = der Parameter (der erste Name hinter `out`).",
+      "nichtAngeboten": [
+        "untypisiertes `out` (`out Obj`), ein Prozedur- oder Methodentyp, eine anonyme Methode, `reference to`, ein Operator",
+        "die Köpfe dieses Namens in der Datei sind nicht genau ein Paar Deklaration + Implementierung (Overload, gleichnamige Methode einer anderen Klasse, Deklaration oder Implementierung fehlt; nur ein Rumpf in einer Datei mit Include)",
+        "der Name steht im Code ohne Aufruf (`@Load`, `OnX := Load`) – als Methodenzeiger änderte sich sein Typ",
+        "`virtual`, `dynamic`, `abstract`, `override`, `final`, `message`, `dispid`, `overload`, eine Aufrufkonvention oder `external`",
+        "die Methode steht unter `published` oder ohne Sichtbarkeitswort (eine Formdatei kann sie an ein Ereignis binden), ihre Klasse implementiert Interfaces, oder sie ist die Methode eines interface-Typs",
+        "der andere Kopf trägt das `out` nicht genauso (`out A, B: T` gegen `out A: T; out B: T`), die Zeile ist verschoben, oder die Meldung nennt keine Spalte"
+      ],
+      "beispielVorher": [
+        "type",
+        "  TFoo = class",
+        "  public",
+        "    procedure Get(out S: string);",
+        "  end;",
+        "implementation",
+        "procedure TFoo.Get(out S: string);"
+      ],
+      "beispielNachher": [
+        "type",
+        "  TFoo = class",
+        "  public",
+        "    procedure Get(var S: string);",
+        "  end;",
+        "implementation",
+        "procedure TFoo.Get(var S: string);"
+      ],
+      "hinweis": "Aufrufer in anderen Units bleiben übersetzbar (out und var verlangen beide eine Variable); nimmt eine andere Unit die Routine als Methodenzeiger, passt dort der Typ nicht mehr – das sieht die Hilfe nicht."
+    },
+    "RaisingRawException": {
+      "titel": "Spezifische Exception-Klasse statt `Exception` auslösen",
+      "was": "Ersetzt in `raise Exception.Create(..)` nur den Klassennamen durch `EArgumentException` – für ein falsches Argument des Aufrufers. Konstruktor und Argumente bleiben (`CreateFmt`, `CreateRes`, `CreateHelp` …). Welche Klasse passt, entscheidet der Benutzer: der zweite Eintrag bietet `EInvalidOpException`. Fehlt `System.SysUtils` in uses, kommt es mit.",
+      "kennzeichnung": "on-Handler für EArgumentException fangen die Ausnahme jetzt, E.ClassName im Log wechselt; on E: Exception fängt weiter",
+      "nichtAngeboten": [
+        "kein oder mehr als ein `raise Exception` im Code der Zeile (Zeile verschoben, nur in Kommentar oder String, schon eine andere Klasse)",
+        "`raise Exception;` ohne Konstruktor, eine Compiler-Direktive zwischen `raise` und dem Konstruktor",
+        "die Datei deklariert selbst `Exception` oder die Zielklasse (Typ, Variable, Parameter, Routine)"
+      ],
+      "beispielVorher": [
+        "if X < 0 then",
+        "  raise Exception.Create('x is negative');"
+      ],
+      "beispielNachher": [
+        "if X < 0 then",
+        "  raise EArgumentException.Create('x is negative');"
+      ],
+      "zweiterEintrag": {
+        "was": "Setzt stattdessen `EInvalidOpException` ein – für einen unzulässigen Zustand bzw. einen Aufruf zur falschen Zeit.",
+        "kennzeichnung": "on-Handler für EInvalidOpException fangen die Ausnahme jetzt, E.ClassName im Log wechselt; on E: Exception fängt weiter",
+        "nichtAngeboten": [
+          "dieselben Sperren wie der erste Eintrag"
+        ],
+        "beispielNachher": [
+          "if X < 0 then",
+          "  raise EInvalidOpException.Create('x is negative');"
+        ]
+      },
+      "hinweis": "Passt keine der beiden Klassen (Datei fehlt, Netz, Fachfehler), keinen Eintrag wählen und eine eigene Klasse schreiben. EArgumentOutOfRangeException ist eine Unterklasse von EArgumentException – ein Handler darauf fängt die neue Ausnahme nicht."
+    },
+    "CanBeClassMethod": {
+      "titel": "Methode zur statischen Klassenmethode machen",
+      "was": "Macht eine Methode ohne Bezug auf ihr Objekt zur statischen Klassenmethode: an der Deklaration im Klassenrumpf kommt `class` davor und `static;` direkt hinter die Signatur (weitere Direktiven wie `inline` bleiben dahinter), am Kopf der Implementierung `class` davor – beides in einem Schritt. Eine statische Klassenmethode hat kein `Self`; Aufrufe mit Klammern (`Add(..)`, `Obj.Add(..)`, `TMath.Add(..)`) bleiben gültig. Die Hilfe prüft nur, was die Datei beweist: die Klasse steht dort und erbt direkt von TObject – dann kennt sie alle Member.",
+      "platzhalter": "`%s` = der Methodenname aus der Meldung.",
+      "nichtAngeboten": [
+        "die Klasse steht nicht genau einmal in der Datei (etwa das Katalogbeispiel ohne Klasse, ein record), ist generisch, ein Helper oder hat eine andere Vorfahrenliste als `TObject`",
+        "der Rumpf nennt `Self`, `inherited` oder unqualifiziert einen Member der Klasse (Feld, Property, Konstante, Methode) bzw. von TObject (`ClassName`, `Free` …)",
+        "die Deklaration trägt virtual, dynamic, abstract, override, reintroduce, message, final, dispid, static, external oder overload, steht unter published (oder ohne Abschnitt in einer Datei mit `{$M+}`) oder hat ein Attribut; der Rumpf ist asm",
+        "der Methodenname steht noch einmal in der Klassendeklaration (Property-Accessor) oder in der Datei hinter `@`, als Wert einer Zuweisung bzw. als Argument ohne Klammern (möglicher Methodenzeiger `of object`)",
+        "mehrere Deklarationen oder Implementierungen, Konstruktor oder Destruktor, schon `class`, eine Compiler-Direktive oder ein geschachtelter Typ im Klassenrumpf, eine verschobene Zeile"
+      ],
+      "beispielVorher": [
+        "type",
+        "  TMath = class",
+        "  public",
+        "    function Add(A, B: Integer): Integer;",
+        "  end;",
+        "",
+        "function TMath.Add(A, B: Integer): Integer;",
+        "begin",
+        "  Result := A + B;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "type",
+        "  TMath = class",
+        "  public",
+        "    class function Add(A, B: Integer): Integer; static;",
+        "  end;",
+        "",
+        "class function TMath.Add(A, B: Integer): Integer;",
+        "begin",
+        "  Result := A + B;",
+        "end;"
+      ],
+      "hinweis": "Andere Units sieht die Hilfe nicht: verwendet eine die Methode als Methodenzeiger (`of object`, etwa als Ereignis-Handler), übersetzt sie danach nicht mehr."
+    },
+    "BoolAlwaysTrue": {
+      "titel": "Immer wahre Bedingung entfernen",
+      "was": "Löst ein `if` auf, dessen ganze Bedingung immer wahr ist – `Length(X) >= 0` bzw. `0 <= Length(X)` (Length ist nie negativ): übrig bleibt der then-Zweig, ein else-Zweig lief nie und entfällt. Ein begin..end-Zweig bleibt als Block stehen, Kommentare darin und hinter dem `;` bleiben. Der Detektor meldet nur diese Length-Vergleiche, kein `if True then`.",
+      "nichtAngeboten": [
+        "die immer falsche Form (`Length(X) < 0`, `0 > Length(X)`): der Zweig lief nie – ob `= 0` gemeint war, entscheidet der Mensch",
+        "der Vergleich ist nicht die ganze Bedingung eines if als Anweisung (and/or, while, until, Zuweisung, bedingter Ausdruck) oder nicht immer wahr (`>= 0.5`, `1.0 <= Length(X)`)",
+        "das Argument von Length ist kein bloßer Name bzw. keine Kette `A.B` (Aufruf, Ausdruck, Literal, Index)",
+        "ein Zweig ist keine einfache Anweisung und kein begin..end (if, case, Schleife, try, with, anonyme Methode auf oberster Ebene, leer)",
+        "ein Kommentar in der Bedingung oder im else-Zweig, eine Compiler-Direktive im if, zwei Vergleiche auf der Zeile oder eine verschobene Zeile"
+      ],
+      "beispielVorher": [
+        "if Length(S) >= 0 then",
+        "  DoStuff",
+        "else",
+        "  DoOther;"
+      ],
+      "beispielNachher": [
+        "DoStuff;"
+      ],
+      "hinweis": "Ein Name als Argument kann eine parameterlose Funktion sein – sie läuft danach nicht mehr. War ein anderer Vergleich gemeint (Tippfehler, etwa `> 0`), fehlt er weiterhin."
+    },
+    "TObjectListWithoutOwnership": {
+      "titel": "TList<T> durch TObjectList<T> ersetzen",
+      "was": "Macht aus der lokalen Liste `L: TList<TFoo>`, die frisch erzeugte Objekte aufnimmt (`L.Add(TFoo.Create)`), eine `TObjectList<TFoo>` – in der Deklaration und im `TList<TFoo>.Create`, in einem Schritt (inline `var L: TList<TFoo> := …` ebenso, bei `var L := TList<TFoo>.Create` nur das Create). Die Liste besitzt ihre Elemente danach (`OwnsObjects` ist `True`) und gibt sie mit `Free` frei. Die Hilfe prüft vorher am Text, dass nichts doppelt freigegeben wird.",
+      "kennzeichnung": "die Liste gibt ihre Elemente jetzt frei – bei Free, aber auch bei Clear und Delete",
+      "platzhalter": "`%s` = der Elementtyp aus der Meldung (etwa `TFoo`).",
+      "nichtAngeboten": [
+        "die Liste ist keine lokale Variable der Routine: Parameter, Feld (auch `FList` im Konstruktor), globale Variable, Variable einer äußeren Routine; mit anderen zusammen deklariert (`L, M: TList<TFoo>`), anders deklariert (`TList<TBar>`, qualifiziert, Alias) oder in einer verschachtelten Routine genutzt",
+        "die Variable wird nicht genau einmal zugewiesen, oder die Zuweisung ist kein `TList<TFoo>.Create` ohne Argumente (`Create(Andere)` übernähme fremde Objekte)",
+        "ein `Add`/`Insert` nimmt ein Objekt, das nicht genau dort entsteht (`L.Add(Item)`) oder dessen Konstruktor ein Argument bekommt, das kein Literal ist (`TFoo.Create(Self)` – ein TComponent-Besitzer gibt es selbst frei)",
+        "ein Element wird freigegeben (`L[i].Free`, `FreeAndNil(L[0])`, `for E in L do E.Free`) oder als Wert benutzt (`X := L[0]`, `Keep(L.First)`), die Liste selbst als Wert (`Result := L`, `Keep(L)`)",
+        "ein Member außerhalb einer festen Liste (`Extract`, `Remove`, `ToArray`, `List`, `AddRange`, `OnNotify` …) oder eine Zuweisung an ein Member (`L.Count := 0`, `L[0] := …`)",
+        "ein `with` oder eine Compiler-Direktive in der Routine; `System.Generics.Collections` fehlt in uses; die Datei deklariert selbst einen Typ `TList` bzw. `TObjectList`",
+        "auf der Zeile steht kein `L.Add(` (Zeile verschoben)"
+      ],
+      "beispielVorher": [
+        "procedure Foo;",
+        "var",
+        "  L: TList<TFoo>;",
+        "begin",
+        "  L := TList<TFoo>.Create;",
+        "  try",
+        "    L.Add(TFoo.Create);",
+        "  finally",
+        "    L.Free;",
+        "  end;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "procedure Foo;",
+        "var",
+        "  L: TObjectList<TFoo>;",
+        "begin",
+        "  L := TObjectList<TFoo>.Create;",
+        "  try",
+        "    L.Add(TFoo.Create);",
+        "  finally",
+        "    L.Free;",
+        "  end;",
+        "end;"
+      ],
+      "hinweis": "Ob `TFoo` eine Klasse ist, prüft die Hilfe nicht – für einen Record übersetzt die Unit danach nicht (TObjectList<T> verlangt eine Klasse), es entsteht kein stiller Fehler. Ein Konstruktor, der das neue Objekt selbst irgendwo einträgt, ist am Text nicht zu sehen."
+    },
+    "SourceNonAsciiIdentifier": {
+      "titel": "Doppelgänger-Buchstaben im Namen durch ASCII ersetzen",
+      "was": "Schreibt den ersten Bezeichner der gemeldeten Zeile, in dem ein Buchstabe nur lateinisch aussieht (Homoglyph: kyrillisches `о` U+043E statt `o`, griechisches `Μ` U+039C statt `M`), in ASCII – an allen Vorkommen im Code der Unit, in einem Schritt. Bedeutungsgleich: der Name gilt nur in dieser Unit, und der neue Name ist dort noch frei. Kommentare bleiben, wie sie sind. Die Hilfe kennt nur eine feste Tabelle bekannter Doppelgänger (kyrillische und griechische Buchstaben).",
+      "platzhalter": "`%s` = der neue Name in ASCII (etwa `Login`); `X`, wenn die Hilfe vorher ablehnt.",
+      "nichtAngeboten": [
+        "ein Zeichen des Namens steht nicht in der Tabelle (Umlaut, ein Buchstabe ohne lateinischen Doppelgänger) oder der Name hat keinen einzigen ASCII-Buchstaben (Name in einer anderen Schrift)",
+        "der Name steht im interface-Teil, die Datei ist keine Unit (Programm, Bibliothek, Include-Datei) oder hat eine `exports`-Klausel",
+        "das erste Vorkommen ist nicht die Deklaration (der Name kommt dann aus einer anderen Unit: Nutzung im Rumpf, als Typ, in `uses`, in `initialization`), eine lokale Deklaration wird außerhalb ihrer Routine genutzt, oder ein Vorkommen ist anders geschrieben",
+        "der neue Name ist ein reserviertes Wort oder steht schon im Code der Datei; ein `with` liegt im Gültigkeitsbereich; ein String ohne Leerzeichen (`'Login'`, `'TUser.Login'`) oder eine Compiler-Direktive nennt den alten oder neuen Namen",
+        "vor der Deklaration steht ein Routinenkopf, dessen Grenzen nicht sicher lesbar sind (lokaler Klassentyp, Methoden einer Klasse im implementation-Teil)",
+        "auf der Zeile steht kein Bezeichner mit Nicht-ASCII-Zeichen im Code (Zeile verschoben)"
+      ],
+      "beispielVorher": [
+        "procedure Foo;",
+        "var",
+        "  L‹U+043E›gin: string;",
+        "begin",
+        "  L‹U+043E›gin := 'x';",
+        "  Show(L‹U+043E›gin);",
+        "end;"
+      ],
+      "beispielNachher": [
+        "procedure Foo;",
+        "var",
+        "  Login: string;",
+        "begin",
+        "  Login := 'x';",
+        "  Show(Login);",
+        "end;"
+      ],
+      "hinweis": "‹U+043E› steht im Beispiel für das kyrillische o, das im Editor genau wie das lateinische aussieht. Der Detektor meldet je Datei nur die erste betroffene Zeile; nach der Hilfe meldet er den nächsten Namen. Ein String mit Leerzeichen (`'Login failed'`) gilt als Satz und sperrt nicht."
+    },
+    "ParamNameMismatch": {
+      "titel": "Parameternamen mit Tippfehler durch den Platzhalter des SQL ersetzen",
+      "was": "Ersetzt im gemeldeten `ParamByName('x')` den Namen durch den Platzhalter des SQL, der genau einen Tippfehler entfernt ist: ein Zeichen mehr, weniger oder anders, oder zwei Nachbarn vertauscht (`'Nmae'` → `'Name'`, `'custid'` → `'cust_id'`). Die Kandidaten nennt die Meldung (`(it has :Id, :Name)`); eingesetzt wird die Schreibweise des SQL. Nur der Text zwischen den Quotes ändert sich; auch `Q.Params.ParamByName`, `Q.Parameters.ParamByName` und `Self.Q`.",
+      "kennzeichnung": "der Aufruf bindet danach einen anderen Parameter, statt zur Laufzeit mit „parameter not found“ abzubrechen – prüfen, dass der Wert zu diesem Platzhalter gehört",
+      "platzhalter": "`%s` = der eingesetzte Platzhalter (ohne `:`).",
+      "nichtAngeboten": [
+        "der andere Fund der Regel: ein Platzhalter, den die Routine nie setzt (kein Wert bekannt)",
+        "kein Platzhalter oder mehr als einer ist einen Tippfehler entfernt (das Katalogbeispiel `custid` → `customer_id` ist kein Tippfehler), einer der Namen ist kürzer als drei Zeichen, die Meldung nennt keine oder nur einen Teil der Platzhalter (mehr als sechs)",
+        "der Name ist kein einfaches Literal als ganzes Argument (`'Nm' + 'ae'`, `#`-Zeichen, Variable), steht zweimal auf der Zeile, oder die Zeile ist verschoben; Query hinter einem Cast oder Index",
+        "die Routine setzt den gewählten Namen schon (ParamByName, FindParam, ParamValues, SetVariable, CreateParam …) – ein zweiter Zugriff überschriebe einen Wert",
+        "keine Routine mit begin..end-Rumpf um den Aufruf (initialization) oder unsichere Routinengrenzen"
+      ],
+      "beispielVorher": [
+        "  Q.SQL.Clear;",
+        "  Q.SQL.Add('select * from t where name = :Name and id = :Id');",
+        "  Q.ParamByName('Nmae').AsString := 'x';",
+        "  Q.ParamByName('Id').AsInteger := 1;",
+        "  Q.Open;"
+      ],
+      "beispielNachher": [
+        "  Q.SQL.Clear;",
+        "  Q.SQL.Add('select * from t where name = :Name and id = :Id');",
+        "  Q.ParamByName('Name').AsString := 'x';",
+        "  Q.ParamByName('Id').AsInteger := 1;",
+        "  Q.Open;"
+      ],
+      "hinweis": "Steht derselbe falsche Name zweimal in der Routine, gilt die Hilfe nur für das erste Vorkommen: danach setzt die Routine den Namen schon, und das zweite bleibt Handarbeit."
+    },
+    "DeepNesting": {
+      "titel": "Letztes if in eine Wächter-Klausel umwandeln",
+      "was": "Ist die letzte Anweisung der Routine ein `if A then begin … end` ohne else und liegt die gemeldete (tiefste) Stelle in diesem Block, wird daraus `if not A then Exit;`, und der Block rückt eine Stufe aus – alles darin liegt eine Ebene flacher. Gleiche Bedeutung: die Bedingung wird einmal ausgewertet, ist sie falsch, endet die Routine wie bisher. Die Negation bleibt lesbar: `not X` wird zu `X`, ein einfacher Operand zu `not X`, alles andere zu `not (A)`. Liegt die Tiefe mehr als eine Stufe über der Grenze, bleibt der Fund eine Ebene flacher stehen; endet der Block wieder mit einem solchen if, greift die Hilfe erneut.",
+      "nichtAngeboten": [
+        "die letzte Anweisung ist kein `if … then begin … end` (Code danach, ein else, try, Schleife) oder das if steht nicht selbst im Rumpf (hinter then/else/do, im try)",
+        "die gemeldete Stelle liegt nicht in diesem Block (die Wächter-Klausel flachte sie nicht ab), oder die Zeile ist verschoben",
+        "eine Funktion ohne `Result := …` als eigene Anweisung vor dem if",
+        "eine Compiler-Direktive, eine anonyme Methode, goto oder asm in der Routine; die Datei deklariert einen eigenen Bezeichner Exit; die Bedingung enthält einen bedingten Ausdruck (`if X then A else B`)",
+        "Code neben `begin` oder vor `end`, ein Kommentar im Kopf des if oder neben dem end, eine Blockzeile in einem Block-Kommentar oder mehrzeiligen String, ein Inline-`var`/`const` auf oberster Ebene des Blocks, ungleiche Einrückung"
+      ],
+      "beispielVorher": [
+        "begin",
+        "  Prepare;",
+        "  if Ready then",
+        "  begin",
+        "    if B then",
+        "      Work;",
+        "    More;",
+        "  end;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "begin",
+        "  Prepare;",
+        "  if not Ready then Exit;",
+        "  if B then",
+        "    Work;",
+        "  More;",
+        "end;"
+      ],
+      "hinweis": "Kommentare im Block rücken mit ihrer Zeile aus. Die Hilfe nimmt an, dass die Bedingung ein Boolean-Ausdruck ist – für einen Variant mit Ganzzahlwert wäre `not` bitweise."
+    },
+    "ParamByNameInLoop": {
+      "titel": "`ParamByName` vor die Schleife ziehen",
+      "was": "Setzt `var PrmId := Q.ParamByName('id');` als eigene Zeile vor die Schleife (mit deren Einrückung) und ersetzt in der Schleife – Kopf, Rumpf, `until`-Bedingung – jedes `Q.ParamByName('id')` mit genau diesem Literal durch den Namen. Die Meldung nennt weder Empfänger noch Parameter: die Hilfe sucht den Aufruf auf der Fundzeile selbst. Der Name ist `Prm` plus der Parametername in Bezeichner-Teilen (`customer_id` → `PrmCustomerId`); kommt er in der Datei schon vor, `…2` bis `…9`. `Open`, `Close` und `ExecSQL` in der Schleife sind erlaubt – sie lassen die Parameter stehen. Die Inline-Variable braucht Delphi 10.3 oder neuer.",
+      "platzhalter": "`%s` = der Aufruf, z. B. `Q.ParamByName('id')`; den neuen Namen nennt der Hinweis des Eintrags.",
+      "kennzeichnung": "fehlt der Parameter, kommt die Ausnahme jetzt auch, wenn die Schleife nie läuft; setzt ein Aufruf in der Schleife SQL oder Params indirekt neu, zeigt die Referenz ins Leere",
+      "nichtAngeboten": [
+        "kein oder mehrere verschiedene `ParamByName`-Aufrufe auf der Fundzeile (Zeile verschoben bzw. mehrdeutig)",
+        "der Empfänger ist kein einfacher Name (`Self.Q`, `DM.Q`, `Q.Parameters` bei ADO), ist in der Datei als Property oder Routine deklariert oder dem Quellstellen-Dienst nicht als Variable, Parameter oder Feld bekannt; das Argument ist kein einzelnes String-Literal auf der Zeile, oder ein Kommentar steht im Aufruf",
+        "in der Schleife: `Q.SQL`, `Q.Params`, `Q.Prepare`/`Unprepare`/`Prepared`, `Q.Connection`, `Q.Command`, `Q.Free` u. a., `Q` wird zugewiesen, weitergereicht oder über ein anderes Objekt erreicht, oder eine anonyme Methode",
+        "die Schleife beginnt keine eigene Zeile und Anweisung in einem `begin..end` (nach `then`, `do`, `else`, im try-, except-, finally- oder case-Teil); `with`, `asm`, `goto` oder eine Direktive in der Routine; der Hauptblock eines Programms; eine Schleife davor, die die Hilfe nicht sicher liest",
+        "Dateien, die FPC oder ein Delphi vor 10.3 übersetzt (wie bei SCA014: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, Lazarus- oder alte Delphi-Projektdatei, `.pp`/`.lpr`), Skript-Units, ein Netzpfad",
+        "kein freier Name (`PrmX` bis `PrmX9` kommen in der Datei schon vor)"
+      ],
+      "beispielVorher": [
+        "  for i := 0 to High(Ids) do",
+        "  begin",
+        "    Q.ParamByName('id').AsInteger := Ids[i];",
+        "    Q.ExecSQL;",
+        "  end;"
+      ],
+      "beispielNachher": [
+        "  var PrmId := Q.ParamByName('id');",
+        "  for i := 0 to High(Ids) do",
+        "  begin",
+        "    PrmId.AsInteger := Ids[i];",
+        "    Q.ExecSQL;",
+        "  end;"
+      ],
+      "hinweis": "In geschachtelten Schleifen kommt der Lookup vor die innerste Schleife, deren Rumpf ihn trägt; der Detektor meldet die neue Zeile dann in der äußeren erneut, und ein zweiter Klick zieht sie weiter hinaus (`var PrmId := PrmId2;`), wenn die äußere Schleife es erlaubt."
+    },
+    "FieldByNameInLoop": {
+      "titel": "`FieldByName` vor die Schleife ziehen",
+      "was": "Setzt `var FldAmount := Q.FieldByName('Amount');` als eigene Zeile vor die Schleife (mit deren Einrückung) und ersetzt in der Schleife – Kopf, Rumpf, `until`-Bedingung – jedes `Q.FieldByName('Amount')` mit genau diesem Literal durch den Namen; ein anderes oder anders geschriebenes Literal (`'amount'`) bleibt stehen. Die Meldung nennt weder Empfänger noch Feld: die Hilfe sucht den Aufruf auf der Fundzeile selbst. Der Name ist `Fld` plus der Feldname in Bezeichner-Teilen (`customer_id` → `FldCustomerId`); kommt er in der Datei schon vor, `…2` bis `…9`. Die Inline-Variable braucht Delphi 10.3 oder neuer.",
+      "platzhalter": "`%s` = der Aufruf, z. B. `Q.FieldByName('Amount')`; den neuen Namen nennt der Hinweis des Eintrags.",
+      "kennzeichnung": "fehlt das Feld, kommt die Ausnahme jetzt auch, wenn die Schleife nie läuft; schließt oder öffnet ein Aufruf in der Schleife die Datenmenge indirekt, zeigt die Referenz ins Leere",
+      "nichtAngeboten": [
+        "kein oder mehrere verschiedene `FieldByName`-Aufrufe auf der Fundzeile (Zeile verschoben bzw. mehrdeutig – etwa `Q.FieldByName('A').AsString + Q.FieldByName('B').AsString`)",
+        "der Empfänger ist kein einfacher Name (`Self.Q`, `DM.Q`, `Q.Fields`), ist in der Datei als Property oder Routine deklariert oder dem Quellstellen-Dienst nicht als Variable, Parameter oder Feld bekannt; das Argument ist kein einzelnes String-Literal auf der Zeile, oder ein Kommentar steht im Aufruf",
+        "in der Schleife: `Q.Open`, `Close`, `Active`, `SQL`, `Fields`, `FieldDefs`, `Refresh`, `Requery`, `ExecSQL`, `Prepare`/`Unprepare`, `NextRecordset`, `Connection`, `LoadFromFile`, `Free` u. a., `Q` wird zugewiesen, weitergereicht oder über ein anderes Objekt erreicht, oder eine anonyme Methode",
+        "die Schleife beginnt keine eigene Zeile und Anweisung in einem `begin..end` (nach `then`, `do`, `else`, im try-, except-, finally- oder case-Teil); `with`, `asm`, `goto` oder eine Direktive in der Routine; der Hauptblock eines Programms; eine Schleife davor, die die Hilfe nicht sicher liest",
+        "Dateien, die FPC oder ein Delphi vor 10.3 übersetzt (wie bei SCA014: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, Lazarus- oder alte Delphi-Projektdatei, `.pp`/`.lpr`), Skript-Units, ein Netzpfad",
+        "kein freier Name (`FldX` bis `FldX9` kommen in der Datei schon vor)"
+      ],
+      "beispielVorher": [
+        "  Total := 0;",
+        "  while not Q.Eof do",
+        "  begin",
+        "    Total := Total + Q.FieldByName('Amount').AsCurrency;",
+        "    Q.Next;",
+        "  end;"
+      ],
+      "beispielNachher": [
+        "  Total := 0;",
+        "  var FldAmount := Q.FieldByName('Amount');",
+        "  while not Q.Eof do",
+        "  begin",
+        "    Total := Total + FldAmount.AsCurrency;",
+        "    Q.Next;",
+        "  end;"
+      ],
+      "hinweis": "In geschachtelten Schleifen kommt der Lookup vor die innerste Schleife, deren Rumpf ihn trägt (dort, wo die Datenmenge in der äußeren Schleife neu geöffnet wird, ist das der richtige Platz); der Detektor meldet die neue Zeile dann in der äußeren erneut, und ein zweiter Klick zieht sie weiter hinaus (`var FldAmount := FldAmount2;`), wenn die äußere Schleife es erlaubt."
+    },
+    "LoopPastHighBound": {
+      "titel": "Grenze der for-Schleife auf den letzten Index setzen",
+      "was": "Die for-Schleife läuft einen Index zu weit (`0 to L.Count`, `0 to Length(A)`, `High(A) + 1`, bei Strings `0 to Length(S)` bzw. `1 to Length(S) + 1`) und liest oder schreibt dieselbe Sammlung mit dem Schleifenindex. Die Hilfe ändert genau eine Stelle im Kopf: `L.Count` → `L.Count - 1`, `Length(A)` → `High(A)` (Array bzw. `Low(A) to Length(A)` bei einem dynamischen Array), `High(A) + 1` → `High(A)`, bei Strings `0 to Length(S)` → `1 to Length(S)` und `1 to Length(S) + 1` → `1 to Length(S)`. Welche Form gilt, sagt der Rat in der Meldung des Detektors (er kennt den Typ); die Hilfe sucht denselben Kopf auf der gemeldeten Zeile und prüft Variable und Grenzen gegen die Meldung.",
+      "kennzeichnung": "die Schleife läuft einen Durchlauf weniger bzw. beginnt bei einem String bei 1 – war der letzte Durchlauf für einen Wächter oder ein Endezeichen gedacht, ist das ein Eingriff",
+      "platzhalter": "`%s` = der neue Bereich (`0 to L.Count - 1`, `1 to Length(S)`).",
+      "nichtAngeboten": [
+        "`1 to X.Count` mit `X[i]` – ob der Index `i - 1` oder die Grenze `Count - 1` sein soll, entscheidet der Mensch",
+        "`0 to Length(A)` ohne Typbeweis (ein Array braucht `High(A)`, ein String `1 to Length(S)`) und `0 to High(S) + 1` über einen String oder einen Typ, der einer sein kann (falsch an beiden Enden)",
+        "eine Compiler-Direktive in der Zeile des Kopfs, ein Kopf über mehrere Zeilen, ein Kommentar oder String im Kopf",
+        "kein oder mehr als ein passender Kopf auf der Zeile (Zeile verschoben, schon korrigiert, mehrdeutig)"
+      ],
+      "beispielVorher": [
+        "  for i := 0 to L.Count do",
+        "    WriteLn(L[i]);"
+      ],
+      "beispielNachher": [
+        "  for i := 0 to L.Count - 1 do",
+        "    WriteLn(L[i]);"
+      ],
+      "weitereBeispiele": [
+        {
+          "titel": "String (1-basiert)",
+          "vorher": [
+            "  for i := 0 to Length(S) do",
+            "    if S[i] = 'x' then Exit;"
+          ],
+          "nachher": [
+            "  for i := 1 to Length(S) do",
+            "    if S[i] = 'x' then Exit;"
+          ]
+        }
+      ]
+    },
+    "InheritedMethodEmpty": {
+      "titel": "Leeres Override entfernen",
+      "was": "Löscht ein Override, dessen Rumpf nur den Vorfahren mit denselben Argumenten ruft (`inherited;`, `inherited Name(A, B);`, `Result := inherited ...`): die Deklaration im Klassenrumpf samt `///`-Doku und die Implementierung samt Kommentaren darüber, die die Methode nennen, und einer Leerzeile – beides in einem Schritt. Ohne Override ruft die virtuelle Bindung die Methode des Vorfahren direkt; `Obj.Name` und `inherited Name` in Nachfahren bleiben gültig. Ein leerer Sichtbarkeitsabschnitt bleibt stehen (SCA087 hat eine eigene Hilfe).",
+      "platzhalter": "`%s` = der Methodenname aus der Meldung.",
+      "nichtAngeboten": [
+        "der nächste Vorfahr mit dieser Methode steht nicht in der Datei (etwa TObject.Destroy, TControl.Paint) – seine Sichtbarkeit ist nicht belegt; ein Override in einem sichtbareren Abschnitt als der Vorfahr (public über protected, protected über strict protected) bräche Aufrufer, und protected-Member sind in der ganzen eigenen Unit sichtbar",
+        "die Methode des Vorfahren ist abstract oder steht dort mehrfach; Override oder Vorfahr stehen vor jedem Sichtbarkeitsabschnitt (die Sichtbarkeit hängt dann an `{$M+}`), außer beide stehen ohne Abschnitt oder der Vorfahr ist published",
+        "die Deklaration trägt neben `override` eine weitere Direktive (final, overload, reintroduce, message, deprecated, Aufrufkonvention …), ein Attribut, einen Default-Wert oder steht mehrfach in der Klasse; Klassenmethode; die Klasse steht nicht genau einmal in der Datei",
+        "der Rumpf tut mehr als die Durchreichung: weitere Anweisung, andere Methode, andere oder umgestellte Argumente, `inherited Name;` bei Parametern, eine Funktion ohne `Result :=`; lokale Deklarationen, eine Direktive am Kopf",
+        "ein Kommentar oder eine Compiler-Direktive vom Kopf bis zum `end;` der Implementierung bzw. eine Direktive in der Deklaration, eine verschobene Zeile"
+      ],
+      "beispielVorher": [
+        "type",
+        "  TBase = class",
+        "  protected",
+        "    procedure Paint; virtual;",
+        "  end;",
+        "  TFoo = class(TBase)",
+        "  protected",
+        "    procedure Paint; override;",
+        "  end;",
+        "",
+        "procedure TFoo.Paint;",
+        "begin",
+        "  inherited;",
+        "end;"
+      ],
+      "beispielNachher": [
+        "type",
+        "  TBase = class",
+        "  protected",
+        "    procedure Paint; virtual;",
+        "  end;",
+        "  TFoo = class(TBase)",
+        "  protected",
+        "  end;"
+      ],
+      "hinweis": "Der Detektor meldet auch Overrides, deren Vorfahr in einer anderen Unit steht (dort, wo die Sichtbarkeit nicht anzuheben ist, mit hoher, sonst mit niedriger Konfidenz); die Hilfe bietet sich nur an, wenn sie die Sichtbarkeit des Vorfahren in der Datei belegt."
+    }
+  }
+}

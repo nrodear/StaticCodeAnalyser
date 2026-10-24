@@ -37,7 +37,7 @@ program" — it means *not reachable from a script*.
 | **Jira wiki markup** | — | ✅ | Pasting a finding into a ticket |
 | **Plain text (clipboard)** | — | ✅ | One file's findings with before/after, for pasting |
 | **Sonar: single finding** | — | ✅ | One selected finding as an external-issue file under `.sonar\external\` |
-| **Detector info (rule catalog)** | — | ✅ | Self-contained HTML page of all 201 rules — not a findings export |
+| **Detector info (rule catalog)** | — | ✅ | Self-contained HTML page of all 203 rules — not a findings export |
 | **AI prompt (clipboard)** | — | ✅ | Hand a single finding to an assistant, with code context |
 | **Suppression telemetry** | `--telemetry-csv <file>` | — | Which rules get suppressed most (noise ranking) |
 | **Detector timings** | `--time-detectors` (stdout) / `--time-detectors-out <file>` | — | Finding slow detectors |
@@ -262,7 +262,9 @@ and export cannot mix levels and confidence values from two different
 policy states. With `EvidenceTiering=0` the SARIF is byte-identical to
 pre-0.9.18 output.
 
-Two things to watch: the UTF-8 BOM can trip Node-based uploaders, and
+Two things to watch: a SARIF written by **v0.9.14 or earlier** carries a
+UTF-8 BOM that trips Node-based uploaders (current output is BOM-free,
+see *Encoding* above), and
 uploading a **baseline-filtered** SARIF fights the platform's own alert
 lifecycle (it resolves everything the filter removed). For code scanning,
 upload the unfiltered report and let the platform track state.

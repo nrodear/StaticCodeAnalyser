@@ -1,0 +1,292 @@
+unit uRdxGotoExitFix;
+
+// reDelphix - Editorhilfe fuer SCA060 GotoStatement, OHNE ToolsAPI und ohne
+// Parser: 'goto L' wird zu 'Exit', wenn die Marke L das Ende der Routine
+// ist. Das betrifft etwa ein Viertel der Funde; alle anderen 'goto' (Sprung
+// nach hinten, in die Mitte, aus einer Schleife in Code, der weiterlaeuft)
+// haben keine einfache Umformung und bekommen keine Hilfe.
+//
+// DER FUND: uGotoStatement meldet auf der Zeile des ERSTEN 'goto' der Zeile,
+// die Meldung nennt die Spalte als '(col N)'. Die Marke steht nicht in der
+// Meldung; der Planer liest sie hinter dem 'goto'.
+//
+// BEDEUTUNGSGLEICH, wenn
+//   - die Marke L die LETZTE Anweisung der innersten Routine um das 'goto'
+//     ist: 'L:' (optional ';' dahinter) steht unmittelbar vor dem 'end' des
+//     Rumpfs, davor ein ';' oder das 'begin'. Dann fuehrt 'goto L' ans
+//     Routinenende, genau wie 'Exit'; Result einer Funktion bleibt in
+//     beiden Faellen wie es ist. Ein try-Block zwischen Sprung und Marke
+//     braucht keine Sperre: ein 'goto' aus try- oder finally-Teil heraus
+//     uebersetzt Delphi nicht (E2127 "'GOTO %s' leads into or out of TRY
+//     statement", Meldungstext in dcc32370.dll) - die Marke als letzte
+//     Anweisung steht immer ausserhalb jedes try. Damit kann die Hilfe auch
+//     kein 'Exit' in einen finally-Teil schreiben (E2126), das vorher
+//     uebersetzt haette.
+//   - die Zeile genau ein 'goto' traegt und die Marke dahinter auf derselben
+//     Zeile steht.
+//
+// GESPERRT (lieber keine Hilfe als eine falsche):
+//   - mehr als ein 'goto' auf der Zeile, kein 'goto' an der gemeldeten
+//     Spalte (Zeile verschoben), Kommentar zwischen 'goto' und Marke, Marke
+//     auf der Folgezeile oder keine einfache Form 'goto Marke;',
+//   - keine Routine mit begin..end-Rumpf um die Zeile (Hauptblock des
+//     Programms, initialization, asm) oder die Grenzen der naechsten
+//     Routine sind nicht sicher lesbar,
+//   - die Marke ist NICHT die letzte Anweisung (Code dahinter wuerde
+//     uebersprungen, 'Exit' taete etwas anderes),
+//   - der Rumpf traegt eine Compiler-Direktive (bedingter Code kann die
+//     Marke verschieben) oder eine anonyme Methode (dort verlaesst 'Exit'
+//     nur die Methode; die Hilfe prueft nicht, wo das 'goto' steht),
+//   - die Datei deklariert einen eigenen Bezeichner 'Exit' (dann ist es
+//     nicht die RTL-Prozedur).
+//
+// HINWEIS: die Marke bleibt stehen. Gibt es danach kein 'goto' mehr zu ihr,
+// meldet Delphi die ungenutzte Marke (Hinweis/Warnung, kein Fehler), und die
+// Marke samt 'label'-Eintrag kann von Hand entfallen. Die Hilfe aendert nur
+// das gemeldete 'goto'.
+//
+// OHNE ToolsAPI und ohne Delphi-only-Unit (FPC-Pruefstand): den Adapter
+// PlanGotoExit (Form TRdxFixPlanner) traegt die Tabelle uRdxFixTable.
+
+interface
+
+uses
+  uRdxBufferMath,        // TRdxEdit
+  uRdxCodeMap;           // TRdxCodeMap
+
+const
+  // Die Gruende der Ablehnung als englische msgids (die Tests pruefen sie
+  // mit _()).
+  R_GOTO_MOVED = 'no "goto" at the reported place';
+  R_GOTO_MANY = 'the line has more than one "goto"';
+  R_GOTO_FORM = 'the "goto" is not of the form "goto Label;" on one line';
+  R_GOTO_COMMENT = 'comment inside "goto <label>"';
+  R_GOTO_NO_ROUTINE = 'no routine with a begin..end body around the "goto"';
+  R_GOTO_BOUNDS = 'the bounds of the routine around the "goto" are not '
+    + 'safe to read';
+  R_GOTO_DIRECTIVE = 'compiler directive in the routine - conditional code '
+    + 'could move the label';
+  R_GOTO_ANON = 'the routine contains an anonymous method - "Exit" would '
+    + 'leave only that method if the "goto" sits in it';
+  R_GOTO_NOT_LAST = 'label "%s" is not the last statement of the routine - '
+    + '"Exit" would skip the code after it';
+  R_GOTO_SHADOW = 'the file declares its own "Exit" - it is not the '
+    + 'procedure of the RTL';
+
+type
+  TRdxGotoExitFix = class
+  public
+    // SCA060: 'goto L' -> 'Exit', wenn L die letzte Anweisung der Routine
+    // ist. Spalte aus der Meldung ('(col N)').
+    class function GotoToExit(AMap: TRdxCodeMap; ALine: Integer;
+      const AMessage: string; out AEdit: TRdxEdit;
+      out AReason: string): Boolean; static;
+  end;
+
+// Die '(col N)' einer Meldung des Detektors; 0 = nicht vorhanden.
+function GotoColumn(const AMessage: string): Integer;
+
+implementation
+
+uses
+  System.SysUtils,
+  uRefactorInfo,    // TRefactorSpan.Make
+  uRdxText,         // _(): in die reDelphix-Sprache, nie uLocalization
+  uRdxBlocks;       // TRdxBlocks.BeginBodyAround, TRdxRoutine
+
+const
+  SPAN_060 = 'sca060';
+  KEY_COL = '(col ';
+  // Hier endet die Suche nach der Routine um das 'goto': UNIT_BOUNDS
+  // (uRdxCodeMap; bis zur Folgewelle des Wochen-Reviews eine Kopie hier).
+  // Dahinter endet die Anweisung 'goto L'.
+  GOTO_FOLLOW: array[0..5] of string = (';', 'end', 'else', 'until',
+    'finally', 'except');
+  // Davor beginnt eine Anweisung (die Marke steht am Anfang einer).
+  LABEL_PREV: array[0..1] of string = (';', 'begin');
+  // Davor wird ein Name deklariert (Variable, Parameter, Member).
+  EXIT_DECL_PREV: array[0..5] of string = ('var', 'const', 'property',
+    'procedure', 'function', ',');
+
+// NumberAfterKey (uRdxCodeMap) - bis zur Folgewelle des Wochen-Reviews
+// (G09-08) eine eigene Ziffernschleife.
+function GotoColumn(const AMessage: string): Integer;
+begin
+  Result := NumberAfterKey(AMessage, KEY_COL);
+end;
+
+// Wie viele 'goto' stehen im Code von ALine?
+function GotosOnLine(AMap: TRdxCodeMap; ALine: Integer): Integer;
+var
+  T : TRdxToken;
+begin
+  Result := 0;
+  T := NextToken(AMap, ALine, 1);
+  while (T.Low <> '') and (T.Line = ALine) do
+  begin
+    if T.Low = 'goto' then
+      Inc(Result);
+    T := After(AMap, T);
+  end;
+end;
+
+// Ist T eine Marke: ein Bezeichner oder eine Zahl?
+function IsLabelToken(const T: TRdxToken): Boolean;
+var
+  i : Integer;
+begin
+  Result := T.IsWord;
+  if Result or (T.Low = '') then
+    Exit;
+  Result := True;
+  for i := 1 to Length(T.Low) do
+    if not CharInSet(T.Low[i], ['0'..'9']) then
+      Exit(False);
+end;
+
+// Das 'goto' an (ALine, ACol) und seine Marke dahinter; '' oder der Grund.
+function ReadGoto(AMap: TRdxCodeMap; ALine, ACol: Integer;
+  out AGoto, ALabel: TRdxToken): string;
+var
+  L    : string;
+  Next : TRdxToken;
+begin
+  Result := '';
+  AGoto := Default(TRdxToken);
+  ALabel := Default(TRdxToken);
+  L := AMap.Raw(ALine);
+  // An der Spalte beginnt ein ganzes Wort: TokenAt liest ab ACol, in
+  // 'xgoto' laese es sonst 'goto' (und GotosOnLine faende keines).
+  if (ACol > Length(L)) or not AMap.IsCode(ALine, ACol)
+     or ((ACol > 1) and IsIdentChar(L[ACol - 1])) then
+    Exit(MsgMovedSuffix(_(R_GOTO_MOVED)));
+  AGoto := TokenAt(AMap, ALine, ACol);
+  if (AGoto.Low <> 'goto') or (AGoto.Col <> ACol)
+     or not IsKeywordAfter(AGoto, Before(AMap, AGoto)) then
+    Exit(MsgMovedSuffix(_(R_GOTO_MOVED)));
+  if GotosOnLine(AMap, ALine) <> 1 then
+    Exit(_(R_GOTO_MANY));
+  ALabel := After(AMap, AGoto);
+  if (ALabel.Line <> ALine) or not IsLabelToken(ALabel) then
+    Exit(_(R_GOTO_FORM));
+  Next := After(AMap, ALabel);
+  if not InList(Next.Low, GOTO_FOLLOW) then
+    Exit(_(R_GOTO_FORM));
+  if AMap.HasComment(ALine, AGoto.EndCol, ALabel.Col - 1) then
+    Exit(_(R_GOTO_COMMENT));
+end;
+
+// Die innerste Routine mit begin..end-Rumpf um AAt mit den Gruenden
+// dieser Unit; '' oder der Grund. Die Suche ist der Baustein
+// uRdxBlocks.BeginBodyAround (bis zur Hygiene-Welle H1 hier als Kopie
+// ausgeschrieben): ein Kopf mit unsicheren Grenzen beendet sie.
+function EnclosingRoutine(AMap: TRdxCodeMap; const AAt: TRdxToken;
+  out ARoutine: TRdxRoutine): string;
+begin
+  case BeginBodyAround(AMap, AAt, ARoutine) of
+    rbfUnsure: Result := _(R_GOTO_BOUNDS);
+    rbfNone:   Result := _(R_GOTO_NO_ROUTINE);
+  else
+    Result := '';
+  end;
+end;
+
+// Was im Rumpf steht, das die Hilfe nicht liest: eine Direktive oder eine
+// anonyme Methode. '' oder der Grund.
+function BodyReason(AMap: TRdxCodeMap; const ARoutine: TRdxRoutine): string;
+var
+  T, P : TRdxToken;
+begin
+  Result := '';
+  if DirectiveBetween(AMap, ARoutine.Body, ARoutine.EndTok.Line,
+       ARoutine.EndTok.Col) then
+    Exit(_(R_GOTO_DIRECTIVE));
+  P := ARoutine.Body;
+  T := After(AMap, P);
+  while (T.Low <> '') and TokBefore(T, ARoutine.EndTok) do
+  begin
+    if InList(T.Low, ROUTINE_WORDS) and IsKeywordAfter(T, P) then
+      Exit(_(R_GOTO_ANON));
+    P := T;
+    T := After(AMap, T);
+  end;
+end;
+
+// Steht die Marke ALabel als letzte Anweisung vor dem end der Routine?
+// 'L:' oder 'L: ;' unmittelbar davor, die Marke am Anfang einer Anweisung.
+function LabelIsLast(AMap: TRdxCodeMap; const ARoutine: TRdxRoutine;
+  const ALabel: TRdxToken): Boolean;
+var
+  P, Lab : TRdxToken;
+begin
+  P := Before(AMap, ARoutine.EndTok);
+  if P.Low = ';' then
+    P := Before(AMap, P);
+  Result := False;
+  if P.Low <> ':' then
+    Exit;
+  Lab := Before(AMap, P);
+  Result := (Lab.Low = ALabel.Low) and IsLabelToken(Lab)
+    and InList(Before(AMap, Lab).Low, LABEL_PREV);
+end;
+
+// Deklariert die Datei einen eigenen Bezeichner 'Exit' (Variable, Parameter,
+// Member, Routine, Marke)? Dann ist 'Exit' dort nicht die RTL-Prozedur.
+function ExitIsShadowed(AMap: TRdxCodeMap): Boolean;
+var
+  T : TRdxToken;
+begin
+  Result := False;
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), 'exit');
+  while T.Low <> '' do
+  begin
+    if (T.Low = 'exit')
+       and ((After(AMap, T).Low = ':')
+            or InList(Before(AMap, T).Low, EXIT_DECL_PREV)) then
+      Exit(True);
+    T := NextTokenOnLineWith(AMap, T, 'exit');
+  end;
+end;
+
+class function TRdxGotoExitFix.GotoToExit(AMap: TRdxCodeMap; ALine: Integer;
+  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+var
+  Col        : Integer;
+  G, Lab     : TRdxToken;
+  Routine    : TRdxRoutine;
+  L          : string;
+begin
+  Result := False;
+  AEdit := Default(TRdxEdit);
+  AReason := '';
+  Col := GotoColumn(AMessage);
+  if Col <= 0 then
+  begin
+    AReason := MsgNoColumn;
+    Exit;
+  end;
+  AReason := ReadGoto(AMap, ALine, Col, G, Lab);
+  if AReason = '' then
+    AReason := EnclosingRoutine(AMap, G, Routine);
+  if AReason = '' then
+    AReason := BodyReason(AMap, Routine);
+  if AReason <> '' then
+    Exit;
+  if not LabelIsLast(AMap, Routine, Lab) then
+  begin
+    AReason := _(R_GOTO_NOT_LAST, [TokText(AMap, Lab)]);
+    Exit;
+  end;
+  if ExitIsShadowed(AMap) then
+  begin
+    AReason := _(R_GOTO_SHADOW);
+    Exit;
+  end;
+  L := AMap.Raw(ALine);
+  AEdit.Span := TRefactorSpan.Make(SPAN_060, ALine, G.Col, ALine, Lab.EndCol);
+  AEdit.Expected := Copy(L, G.Col, Lab.EndCol - G.Col);
+  AEdit.NewText := 'Exit';
+  Result := True;
+end;
+
+end.

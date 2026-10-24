@@ -13,6 +13,10 @@ unit uClaudePrompt;
 // Diese Unit war zuvor 1:1 in uMainForm.pas und uIDEAnalyserForm.pas
 // dupliziert - jetzt zentral und identisch fuer Standalone-App und
 // IDE-Plugin.
+//
+// Die Unit BAUT nur Text. Sie sendet nichts und darf es nie: kein Netz-
+// uses, kein Prozessstart - der Nutzer traegt den Prompt selbst in einen
+// Chat (Projektregel "No AI in pipeline"; Review 2026-10-13 bestaetigt).
 
 interface
 
@@ -46,7 +50,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uLocalization, uSuppression;
+  uLocalization, uSuppression,
+  uStaticFiles;   // IsFormFileNameAnyDialect/PairedUnitFileAnyDialect - Marker-Host einer Formdatei
 
 const
   CONTEXT_LINES = 5;
@@ -258,6 +263,40 @@ begin
   Result := MdZelle(StringReplace(S, '`', '', [rfReplaceAll]));
 end;
 
+function MdFence(const S: string): string;
+// Zaun eines Markdown-Codeblocks: laenger als der laengste Backtick-Lauf
+// im Inhalt, mindestens drei (CommonMark 4.5). Ein ``` im Quelltext -
+// etwa Markdown-Hilfe in einem String-Literal - schloss den Block sonst
+// vorzeitig, und das Modell las den Rest des Codes als Prosa (Review
+// 2026-10-13).
+var
+  i, Run, Longest : Integer;
+begin
+  Longest := 0;
+  Run := 0;
+  for i := 1 to Length(S) do
+    if S[i] = '`' then
+    begin
+      Inc(Run);
+      if Run > Longest then Longest := Run;
+    end
+    else
+      Run := 0;
+  if Longest < 2 then Longest := 2;
+  Result := StringOfChar('`', Longest + 1);
+end;
+
+function FormUnitFor(const AFormFile: string): string;
+// Die Schwester-Unit einer Formdatei: die vorhandene (.pas, bei Lazarus
+// .pp), sonst der .pas-Name daneben - fuer den Hinweis reicht der Name.
+// Dialektfrei wie TSuppression.MarkerTargetFor: der Prompt entsteht nach
+// dem Scan, ScanDialect ist dann schon zurueckgesetzt (Review Woche G02-02).
+begin
+  Result := TStaticFiles.PairedUnitFileAnyDialect(AFormFile);
+  if Result = '' then
+    Result := ChangeFileExt(AFormFile, '.pas');
+end;
+
 
 class function TClaudePrompt.Build(F: TLeakFinding;
   const Hint: TFixHint): string;
@@ -265,6 +304,7 @@ var
   SB      : TStringBuilder;
   Line    : Integer;
   Snippet : string;
+  Fence   : string;
 begin
   Line    := StrToIntDef(F.LineNumber, 0);
   Snippet := LoadSnippet(F.FileName, Line);
@@ -307,12 +347,15 @@ begin
     end;
 
     // -- Eigentlicher Code-Snippet (PRIMARY EVIDENCE) --------------------
+    // Zaunlaenge je Block aus dem Inhalt (MdFence): ``` im Code darf den
+    // Block nicht schliessen.
     if Snippet <> '' then
     begin
       SB.AppendLine('## ' + _('Code (>>> marks the line that triggered the rule)'));
-      SB.AppendLine('```pascal');
+      Fence := MdFence(Snippet);
+      SB.AppendLine(Fence + 'pascal');
       SB.Append(Snippet);
-      SB.AppendLine('```');
+      SB.AppendLine(Fence);
       SB.AppendLine('');
     end;
 
@@ -324,17 +367,19 @@ begin
       if Hint.Before <> '' then
       begin
         SB.AppendLine('**' + _('Anti-pattern') + ':**');
-        SB.AppendLine('```pascal');
+        Fence := MdFence(Hint.Before);
+        SB.AppendLine(Fence + 'pascal');
         SB.AppendLine(Hint.Before);
-        SB.AppendLine('```');
+        SB.AppendLine(Fence);
         SB.AppendLine('');
       end;
       if Hint.After <> '' then
       begin
         SB.AppendLine('**' + _('Recommended fix') + ':**');
-        SB.AppendLine('```pascal');
+        Fence := MdFence(Hint.After);
+        SB.AppendLine(Fence + 'pascal');
         SB.AppendLine(Hint.After);
-        SB.AppendLine('```');
+        SB.AppendLine(Fence);
         SB.AppendLine('');
       end;
     end;
@@ -353,8 +398,29 @@ begin
     // Marker in der Syntax der Fund-Datei (SCA201: ';' in der .ini), als
     // eigene Zeile DARUEBER - ein Marker gilt fuer die naechste Code-Zeile;
     // in einer .ini waere ein ';' hinter dem Wert Teil des Werts.
-    SB.AppendLine(Format(_('If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on its own line directly above the affected line.'),
-      [TSuppression.MarkerLineFor(F.FileName, F.Kind)]));
+    //
+    // Eine Formdatei (.dfm, bei Lazarus .lfm) kennt keinen Kommentar: ihre
+    // Funde lesen die Marker aus der Schwester-Unit (uSuppression.
+    // ResolveMarkerHostFile). Ein Zeilenmarker wirkte dort nur, wenn seine
+    // Zielzeile in der Unit zufaellig die Nummer der Fundzeile der Form
+    // traegt - jeder Edit darueber verschoebe das still. Der dateiweite
+    // Marker haengt an keiner Zeilennummer; er ist der robuste Weg und
+    // derselbe, den TSuppression.MarkerTargetFor fuer Strg+Alt+S liefert
+    // (Gegen-Review Welle 1, Major 3; vorher stand hier die Zeilenform).
+    // Ein '// noinspection X' in der .dfm selbst waere Datenmuell im
+    // Formular (Review 2026-10-13). Die Formdatei-Frage ist dialektfrei
+    // (IsFormFileNameAnyDialect): IsFormFileName kennte die .lfm nach dem
+    // Scan nicht mehr (Review Woche G02-02).
+    if TStaticFiles.IsFormFileNameAnyDialect(F.FileName) then
+    begin
+      var FormUnit := FormUnitFor(F.FileName);
+      SB.AppendLine(Format(_('If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on its own line in the unit `%s` (a form file takes no comment marker; the file-wide marker in its unit covers the form).'),
+        [TSuppression.FileWideMarkerFor(FormUnit, F.Kind),
+         ExtractFileName(FormUnit)]));
+    end
+    else
+      SB.AppendLine(Format(_('If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on its own line directly above the affected line.'),
+        [TSuppression.MarkerLineFor(F.FileName, F.Kind)]));
     Result := SB.ToString;
   finally
     SB.Free;

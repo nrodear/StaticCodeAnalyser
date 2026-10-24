@@ -17,7 +17,7 @@ a 64-bit build. **Lazarus / Free Pascal** projects are scanned natively by the
 standalone app and the CLI — same engine, same rules, dialect-aware: `.lpi`/`.lpk`
 projects, `.pp`/`.lpr` units and `.lfm` forms
 ([details](#lazarus--free-pascal-fpc)).
-AST-based analysis with **201 rules**: 177 Pascal checks for memory leaks,
+AST-based analysis with **203 rules**: 179 Pascal checks for memory leaks,
 SQL injection, code smells, security vulnerabilities, file-encoding & Unicode safety
 (Trojan Source), and code duplication
 (including a **Sonar-Delphi-compatible** subset SCA060+), **plus a
@@ -44,7 +44,7 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 
 | Capability | Details |
 |------------|---------|
-| 🐛 **Bug detection** | 177 Pascal rules run against every `.pas` file (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 DFM rules against every `.dfm` (dead event handlers, hard-coded DB credentials, circular master-detail, unused components, …) — **199 total**, delivered by 158 pipeline registrations |
+| 🐛 **Bug detection** | 178 Pascal rules run against every `.pas` file (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 DFM rules against every `.dfm` (dead event handlers, hard-coded DB credentials, circular master-detail, unused components, …) — **199 total**, delivered by 158 pipeline registrations |
 | 🔐 **Security checks** | SQLInjection (score-based), HardcodedSecret, HardcodedPath, HardcodedIpAddress (also in .ini files); **Unicode safety** — Trojan Source / bidirectional-override (CVE-2021-42574), invisible / zero-width characters, BOM / UTF-8 encoding integrity |
 | 🧹 **Code smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Incremental analysis** | "Branch-Changes" button: only the files modified in the Git/SVN branch — 200 ms instead of 60 s |
@@ -60,7 +60,7 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 
 ## Main features
 
-### 1. Static code analysis (201 rules — 177 Pascal + 23 DFM + 1 INI, Sonar taxonomy)
+### 1. Static code analysis (203 rules — 179 Pascal + 23 DFM + 1 INI, Sonar taxonomy)
 
 **Pascal AST checks (~130)**: **bugs** (MemoryLeak, NilDeref, DivByZero,
 FormatMismatch, ReversedForRange, SelfAssignment, VirtualCallInCtor,
@@ -264,7 +264,7 @@ reference: [docs/sonar-config.md](docs/sonar-config.md).
 
 ---
 
-## What is detected (201 rules — 177 Pascal + 23 DFM + 1 INI)
+## What is detected (203 rules — 179 Pascal + 23 DFM + 1 INI)
 
 Findings fall into one of **five Sonar categories**:
 

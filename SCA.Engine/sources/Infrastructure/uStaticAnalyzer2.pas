@@ -25,7 +25,7 @@ type
   end;
 
   TStaticAnalyzer2 = class
-    // Uses-Häufigkeit: liefert sortierte "N  UnitName"-Zeilen
+    // Uses-Haeufigkeit: liefert sortierte "N  UnitName"-Zeilen
     class function Analyze(const FileName: string): TStringList;
     class function AnalyzeRecursive(const Path: string): TStringList;
 
@@ -47,6 +47,12 @@ type
       AProgress: TProc<Integer, Integer> = nil;
       AIncludeUsesCheck: Boolean = False;
       AIgnore: TIgnoreList = nil): TObjectList<TLeakFinding>;
+
+    // SCA201 in Profil UND Mindestschwere des Prozess-Zustands aktiv? Das
+    // eine Gate fuer Aufrufer, die Konfigurationsdateien vorab sammeln
+    // (uEngineApi.AnalyzeProjectFiles) - dieselbe Entscheidung wie im
+    // Konfigurations-Durchlauf selbst (Review Bereich C, Minor).
+    class function ConfigPassActive: Boolean; static;
 
     // Analysiert eine bereits ermittelte Datei-Liste (z.B. aus VCS-Diff).
     // Nimmt KEINE Ownership der Liste, kopiert sie intern.
@@ -124,7 +130,7 @@ uses
   uLowercaseKeyword, uNoSonarMarker, uEmptyArgumentList,
   uInlineAssembly, uTrailingCommaArgList, uDigitGrouping,
   uCommentedOutCode, uUnitLevelKeywordIndent, uRedundantBoolean,
-  uEmptyInterface, uInterfaceGuid, uParamNameMismatch, uAssertMessage, uExplicitTObjectInheritance,
+  uEmptyInterface, uInterfaceGuid, uParamNameMismatch, uParamNameScan, uAssertMessage, uExplicitTObjectInheritance,
   uGroupedDeclaration, uEmptyBlock, uExceptOnException,
   uConsecutiveSection, uRedundantJump, uClassPerFile,
   uSuperfluousSemicolon, uEmptyFinallyBlock, uAssignedAndAssignedNil,
@@ -140,12 +146,14 @@ uses
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
   uUnusedLocal, uUnusedParameter, uTautologicalExpr,
+  uComparisonPrecedence,   // SCA202 - not/and/or/xor vor Vergleichen
   uSqlDangerousStatement,
   uNilDeref, uMissingFinally, uDivByZero, uDeadCode,
   uLongMethod, uLongParamList, uMagicNumbers, uDuplicateString,
   uHardcodedPath, uDebugOutput, uDeepNesting,
   uHardcodedIpAddress,   // SCA200 - IP-Adressen in String-Literalen
   uHardcodedIpInConfig,  // SCA201 - IP-Adressen in .ini (Konfigurations-Durchlauf)
+  uLoopPastHighBound,    // SCA203 - for-Schleife einen Index zu weit
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uCustomRuleDetector,
   uDfmAnalysisRunner, uDfmRepoIndex, uSymbolReferenceIndex, uTypeIndex, uAstFileCache,
@@ -452,10 +460,11 @@ begin
   gDetectors[Count - 1].ExtraKinds := [fkDuplicateInterfaceGuid];
   // SCA199: ParamByName-Namen gegen die :Platzhalter im SQL derselben Query.
   // Vorfilter: ohne einen dieser Parameterzugriffe kann die Regel nichts
-  // melden - sie braucht mindestens einen (uParamNameScan).
+  // melden - sie braucht mindestens einen. EINE Liste mit dem Detektor-
+  // Vorfilter je Routine (PARAM_ACCESS_WORDS, uParamNameScan); die zweite
+  // Kopie hier hatte SetComplexVariable/SetLongVariable verloren.
   AddD('ParamNameMismatch', fkParamNameMismatch,
-       TParamNameMismatchDetector.AnalyzeUnit,
-       ['parambyname', 'setvariable', 'declarevariable', 'findparam', 'paramvalues']);
+       TParamNameMismatchDetector.AnalyzeUnit, PARAM_ACCESS_WORDS);
   AddD('AssertMessage',   fkAssertMessage,   TAssertMessageDetector.AnalyzeUnit);
   AddD('ExplicitTObjectInheritance',fkExplicitTObjectInheritance,TExplicitTObjectInheritanceDetector.AnalyzeUnit);
   AddD('GroupedDeclaration',fkGroupedDeclaration,TGroupedDeclarationDetector.AnalyzeUnit);
@@ -531,7 +540,7 @@ begin
   // Track C Opt-in (Runde 3): AContext-fuehrend (record-value-type-Gegenprobe
   // via CtxTypeIndex) -> AddD statt AddD3, damit der Ctx durchgereicht wird.
   AddD('InstanceInvokedConstructor', fkInstanceInvokedConstructor, TInstanceInvokedConstructorDetector.AnalyzeUnit);
-  AddD3('InheritedMethodEmpty', fkInheritedMethodEmpty, TInheritedMethodEmptyDetector.AnalyzeUnit);
+  AddD('InheritedMethodEmpty', fkInheritedMethodEmpty, TInheritedMethodEmptyDetector.AnalyzeUnit, ['override']);  // Q14: liest Deklaration + Quelltext
   AddD3('NilComparison',   fkNilComparison,   TNilComparisonDetector.AnalyzeUnit);
   AddD3('RaisingRawException', fkRaisingRawException, TRaisingRawExceptionDetector.AnalyzeUnit);
   AddD3('DateFormatSettings', fkDateFormatSettings, TDateFormatSettingsDetector.AnalyzeUnit);
@@ -690,6 +699,10 @@ begin
   AddD('UninitVar',      fkUninitVar,       TUninitVarDetector.AnalyzeUnit);
   AddD3('UnusedParameter',fkUnusedParameter, TUnusedParameterDetector.AnalyzeUnit);
   AddD('TautologicalBoolExpr',fkTautologicalBoolExpr, TTautologicalExprDetector.AnalyzeUnit);
+  // SCA202 (2026-10-23): ohne Vorfilter-Token - 'or' steckt in jedem
+  // 'for'/'procedure', ein Token waere keine NOTWENDIGE Bedingung.
+  AddD('ComparisonPrecedence', fkComparisonPrecedence,
+       TComparisonPrecedenceDetector.AnalyzeUnit);
   // AContext-fuehrend seit dem tplFixtureDir-Anker (ScanRootDir)
   AddD('SqlDangerousStatement', fkSqlDangerousStatement, TSqlDangerousStatementDetector.AnalyzeUnit);
   // UnusedUses: bleibt im Detector-Pool eingetragen; der per-Scan-Opt-out
@@ -714,6 +727,11 @@ begin
   // Konfigurations-Durchlauf von ParseLeaks (RunConfigPass).
   AddD('HardcodedIpAddress', fkHardcodedIpAddress,
        THardcodedIpAddressDetector.AnalyzeUnit);
+  // SCA203 (Charge A3, 2026-10-23): jeder Kopf, den die Regel meldet, endet
+  // auf '.Count', 'Length(..)' oder 'High(..) + 1' - eines der drei Woerter
+  // steht dann in der Datei (NOTWENDIGE Bedingung).
+  AddD('LoopPastHighBound', fkLoopPastHighBound,
+       TLoopPastHighBoundDetector.AnalyzeUnit, ['count', 'length', 'high']);
   // Seit 2026-09-05 context-faehig (Scanwurzel fuers Geltungsbereich-
   // Gate) -> volle 4-Parameter-Registrierung statt AddD3-Adapter.
   AddD('DebugOutput',      fkDebugOutput,     TDebugOutputDetector.AnalyzeUnit);
@@ -819,6 +837,26 @@ begin
     <= Ord(CfgMinSeverity(AContext));
 end;
 
+class function TStaticAnalyzer2.ConfigPassActive: Boolean;
+begin
+  Result := ConfigPassEnabled(nil);
+end;
+
+// Der eine Baublock fuer einen fkFileReadError-Fund (Review Bereich C,
+// Major 5: vorher elfmal woertlich im Code, zuletzt in
+// ScanConfigFileGuarded). Kein Methodenname, Zeile 0: der Fund haengt an
+// der Datei, nicht an einer Stelle. Auch aus anonymen Methoden heraus
+// nutzbar (keine Capture-Grenzen, anders als die lokalen Helfer).
+function NewFileErrorFinding(const AFileName, AMsg: string): TLeakFinding;
+begin
+  Result            := TLeakFinding.Create;
+  Result.FileName   := AFileName;
+  Result.MethodName := '';
+  Result.LineNumber := '0';
+  Result.MissingVar := AMsg;
+  Result.SetKind(fkFileReadError);
+end;
+
 // Dateigroesse ohne Ausnahme (TFile.GetSize wirft bei einer verschwundenen
 // Datei); -1 = nicht (mehr) da. Voll qualifiziert: Winapi.Windows steht
 // in den uses HINTER System.SysUtils, sein FindClose(THandle) verdeckte
@@ -878,7 +916,18 @@ begin
     ReleaseLines(Lines, Cached);
   end;
   if Assigned(AContext) then
-    TSuppression.CollectMarkersForScan(AFile, AContext.SuppressionMarkers);
+    try
+      TSuppression.CollectMarkersForScan(AFile, AContext.SuppressionMarkers);
+    except
+      // Best-effort wie im Hauptlauf: ein Marker-Fehler degradiert nur das
+      // Unused-Tracking dieser Datei - er darf nicht als "Detector failed"
+      // von SCA201 erscheinen (Review Bereich C, Minor). Abbruch und
+      // Stapelueberlauf gehen durch.
+      on EAbort do raise;
+      on EStackExhausted do raise;
+      // noinspection ExceptionTooGeneral, EmptyOnHandler (Best-effort wie der Hauptlauf)
+      on Exception do ;
+    end;
 end;
 
 // ScanConfigFile mit dem Schutz des Hauptlaufs: eine unerwartete Ausnahme
@@ -887,8 +936,6 @@ end;
 // durch, die Post-Filter des Scans laufen weiter.
 procedure ScanConfigFileGuarded(const AFile, AAnchor: string;
   Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
-var
-  Err : TLeakFinding;
 begin
   try
     ScanConfigFile(AFile, AAnchor, Results, AContext);
@@ -899,16 +946,8 @@ begin
     // Hauptlauf (Review 2026-10-09): ein Fehler kostet nur diese Datei.
     // noinspection ExceptionTooGeneral
     on E: Exception do
-    begin
-      Err := TLeakFinding.Create;
-      Err.FileName   := AFile;
-      Err.MethodName := '';
-      Err.LineNumber := '0';
-      Err.MissingVar := Format(DETECTOR_FAILED_FMT,
-        [KIND_META[fkHardcodedIpInConfig].Name, DescribeException(E)]);
-      Err.SetKind(fkFileReadError);
-      Results.Add(Err);
-    end;
+      Results.Add(NewFileErrorFinding(AFile, Format(DETECTOR_FAILED_FMT,
+        [KIND_META[fkHardcodedIpInConfig].Name, DescribeException(E)])));
   end;
 end;
 
@@ -1032,7 +1071,7 @@ procedure RunAllDetectors(Root: TAstNode; const FileName: string;
 //     O(n^2) ueber die Scan-Laufzeit. Bei 1000 Files mit je 100 Findings:
 //     vorher ~50 Mio Filter-Iterations, jetzt ~100k.
 //   * Watch wird nur instanziiert wenn AOnTime tatsaechlich assigned ist
-//     (spart ~1 µs QueryPerformanceCounter pro Detektor pro File).
+//     (spart ~1 us QueryPerformanceCounter pro Detektor pro File).
 var
   i, j       : Integer;
   Watch      : TStopwatch;
@@ -1045,7 +1084,7 @@ var
   // Pro-File Token-Presence-Set: TRUE = Token im File vorhanden, FALSE = nicht.
   // Wird LAZY beim ersten Tagged-Detector aufgebaut (EinMAL pro File ueber
   // gAllPrefilterTokensLow). Detector-Check ist danach O(1) Hash-Lookup
-  // pro Token statt teurem Pos pro Detector × Token.
+  // pro Token statt teurem Pos pro Detector x Token.
   TokenPresent : TDictionary<string, Boolean>;
   TokenSetReady : Boolean;
 
@@ -1284,15 +1323,8 @@ procedure ProcessOneFileParallel(const AFileName: string;
   end;
 
   procedure AddSlotError(const AFile, AMsg: string);
-  var F: TLeakFinding;
   begin
-    F            := TLeakFinding.Create;
-    F.FileName   := AFile;
-    F.MethodName := '';
-    F.LineNumber := '0';
-    F.MissingVar := AMsg;
-    F.SetKind(fkFileReadError);
-    ASlot.Findings.Add(F);
+    ASlot.Findings.Add(NewFileErrorFinding(AFile, AMsg));
   end;
 
 var
@@ -1399,14 +1431,9 @@ begin
         if CaptHasLog then
           CaptSlot.LogLines.Add(Format('  DETEKTOR %s FEHLER: %s',
             [Name, ErrMsg]));
-        // entspricht AddSlotError - inlined wegen Capture-Limits
-        var F := TLeakFinding.Create;
-        F.FileName   := CaptFile;
-        F.MethodName := '';
-        F.LineNumber := '0';
-        F.MissingVar := Format(DETECTOR_FAILED_FMT, [Name, ErrMsg]);
-        F.SetKind(fkFileReadError);
-        CaptSlot.Findings.Add(F);
+        // Unit-Funktion statt des lokalen AddSlotError (Capture-Grenze).
+        CaptSlot.Findings.Add(NewFileErrorFinding(CaptFile,
+          Format(DETECTOR_FAILED_FMT, [Name, ErrMsg])));
       end);
 
     // Suppression-Marker JETZT einsammeln - der Dateitext liegt noch heiss
@@ -1586,7 +1613,43 @@ begin
   end;
 end;
 
-{ Zählt uses-Items über alle Dateien und liefert Top-N sortiert. }
+{ ---- Helfer fuer ParseFiles / ParseLeaks ---- }
+
+// Vorkommen von AName in ACounts um eins erhoehen; ein neuer Name
+// beginnt bei 1. Eigene Routine, damit die Zaehlung in ParseFiles nicht
+// die fuenfte Ebene der Schleifen ist (SCA018).
+procedure CountName(ACounts: TDictionary<string, Integer>;
+  const AName: string);
+begin
+  if ACounts.ContainsKey(AName) then
+    ACounts[AName] := ACounts[AName] + 1
+  else
+    ACounts.Add(AName, 1);
+end;
+
+// Entdeckte Klassen (Auto-Discovery in ParseLeaks) uebernehmen: jede
+// Klasse aus AClasses, die nicht in AExcludes steht, an ARuntime (die
+// per-Scan-LeakyClasses; nil fuer die Static-only-Gruppe, die keine
+// Instanzen hat und keine Leak-Detektion braucht) und an ALog (die Liste
+// fuer das .log). Beide Ziele und AExcludes sind nil-sicher - der Guard
+// bleibt als Spiegel des alten Codes. Reihenfolge je Klasse: erst
+// Laufzeit, dann Log.
+procedure TakeDiscoveredClasses(const AClasses: TArray<string>;
+  AExcludes, ARuntime, ALog: TStringList);
+var
+  Cls : string;
+begin
+  for Cls in AClasses do
+  begin
+    if Assigned(AExcludes) and (AExcludes.IndexOf(Cls) >= 0) then Continue;
+    if Assigned(ARuntime) then
+      ARuntime.Add(Cls);
+    if Assigned(ALog) then
+      ALog.Add(Cls);
+  end;
+end;
+
+{ Zaehlt uses-Items ueber alle Dateien und liefert Top-N sortiert. }
 
 class procedure TStaticAnalyzer2.ParseFiles(FileList: TStringList;
   var Results: TStringList);
@@ -1628,12 +1691,7 @@ begin
           for UsesNode in UsesList do
             for Item in UsesNode.Children do
               if Item.Kind = nkUsesItem then
-              begin
-                if NameCounts.ContainsKey(Item.Name) then
-                  NameCounts[Item.Name] := NameCounts[Item.Name] + 1
-                else
-                  NameCounts.Add(Item.Name, 1);
-              end;
+                CountName(NameCounts, Item.Name);
         finally
           UsesList.Free;
         end;
@@ -1642,7 +1700,7 @@ begin
       end;
     end;
 
-    // Absteigend nach Häufigkeit sortieren
+    // Absteigend nach Haeufigkeit sortieren
     Pairs := NameCounts.ToArray;
     TArray.Sort<TPair<string, Integer>>(Pairs,
       TComparer<TPair<string, Integer>>.Construct(
@@ -1666,15 +1724,8 @@ class procedure TStaticAnalyzer2.ParseLeaks(FileList: TStringList;
 // MaxFileMB * 1024 * 1024). Default 5 MB.
 
   procedure AddFileError(const AFileName, AMsg: string);
-  var F: TLeakFinding;
   begin
-    F            := TLeakFinding.Create;
-    F.FileName   := AFileName;
-    F.MethodName := '';
-    F.LineNumber := '0';
-    F.MissingVar := AMsg;
-    F.SetKind(fkFileReadError);
-    Results.Add(F);
+    Results.Add(NewFileErrorFinding(AFileName, AMsg));
   end;
 
   procedure SafeProgress(Current, Total: Integer);
@@ -1684,7 +1735,15 @@ class procedure TStaticAnalyzer2.ParseLeaks(FileList: TStringList;
       AProgress(Current, Total);
     except
       on EAbort do raise; // User-Cancel muss durchgereicht werden!
-      // andere Callback-Exceptions duerfen die Analyse nicht abbrechen
+      // Guard-Page nach Overflow unwiederbringlich weg - s.
+      // uAstFileCache.Acquire. NIE verschlucken.
+      on EStackExhausted do raise;
+      // Ohne diesen else-Zweig reicht ein except-Block, der nur on-Handler
+      // nennt, jede ANDERE Ausnahme weiter - der Kommentar behauptete bis
+      // 2026-10-14 das Gegenteil (Review Bereich C, Major 9). Jetzt
+      // wirklich verschluckt: eine Ausnahme im Fortschritts-Rueckruf des
+      // Hosts darf den Scan nicht abreissen, sie kostet nur diese Anzeige.
+      else ;
     end;
   end;
 
@@ -1797,7 +1856,7 @@ begin
 
     // AST-File-Cache: pro .pas einmal parsen, von beiden Pre-Indizes UND
     // dem Main-Loop wiederverwendet. Spart 2 von 3 Parser-Durchlaeufen pro
-    // File (perf_analyse.md Hot-Spot 🅐).
+    // File (perf_analyse.md Hot-Spot A).
     // Phase-3 D.2.3: Context erzeugen, der die per-Scan-Instanzen
     // (AstFileCache/DfmRepoIndex/SymbolRefIndex) BESITZT und am Scan-Ende
     // freigibt. Keine Prozess-Globals mehr fuer diese drei -> jeder (auch
@@ -1835,7 +1894,7 @@ begin
     // File-Text-Cache: pro .pas einmal Lines.LoadFromFile, von den
     // File-Scan-Detektoren (Todo, With, Reversed, Length, Tautological,
     // DuplicateBlock, CustomRule) wiederverwendet (perf_analyse.md
-    // Hot-Spot 🅑).
+    // Hot-Spot B).
     // Lifecycle-Fix 2026-07-04 (Audit Global-State): Clear + WIEDERVERWENDUNG
     // der einen Prozess-Instanz statt FreeAndNil + Re-Create. Das alte Muster
     // riss ein Use-after-free-Fenster fuer jeden Halter der ALTEN Referenz
@@ -1880,12 +1939,11 @@ begin
       FreeAndNil(Ctx.DfmRepoIndex);   // ggf. nil (Build-Fehler) - ok
     end;
 
-    // Symbol-Reference-Index. Visibility-Detektoren (fkCanBeUnitPrivate,
-    // fkCanBeStrictPrivate, fkCanBeProtected, fkUnusedPublicMember)
-    // konsultieren ihn NICHT mehr - sie laufen single-file. Index wird
-    // hier dennoch aufgebaut weil andere Konsumenten (Tests, mORMot-Cross-
-    // Check) ihn lesen; kann perspektivisch entfallen wenn keiner mehr
-    // referenziert.
+    // Symbol-Reference-Index. Konsumenten (Stand 2026-10-24): uVisibility-
+    // Check NUR im fkUnusedPublicMember-Zweig (SCA052 schweigt, wenn eine
+    // andere Unit des Index-Scopes den Member-Namen dotted benutzt) und
+    // uDfmComponentUnused (SCA184, Regel U4). Die drei CanBe*-Varianten
+    // (SCA050/051/107) laufen single-file und lesen ihn nicht.
     LastPhase := 'Pre-Index: SymbolRefIndex.Build';
     Ctx.SymbolRefIndex := TSymbolReferenceIndex.Create;
     try
@@ -2019,14 +2077,14 @@ begin
       LastFile  := FileName;
       LastPhase := Format('File %d/%d: pre-check', [i + 1, Total]);
 
-      // Leerer Dateiname → ignorieren (defensiv)
+      // Leerer Dateiname -> ignorieren (defensiv)
       if Trim(FileName) = '' then
       begin
         AddFileError('(leer)', 'Leerer Dateiname in der Liste');
         Continue;
       end;
 
-      // Datei-Existenz pruefen (mit Exception-Schutz – Race-Conditions)
+      // Datei-Existenz pruefen (mit Exception-Schutz - Race-Conditions)
       try
         if not TFile.Exists(FileName) then
         begin
@@ -2168,28 +2226,15 @@ begin
           var StaticOnly   : TArray<string>;
           TCustomClassDiscovery.DiscoverInUnit(Root, Instantiable, StaticOnly);
 
-          for var Cls in Instantiable do
-          begin
-            if Assigned(LeakyClassExcludes) and
-               (LeakyClassExcludes.IndexOf(Cls) >= 0) then Continue;
-            // TD-1 Inkrement 2c: Discovery-Funde an die per-Scan-Kopie haengen
-            // (nicht mehr an den Prozess-Global). Ctx.LeakyClasses existiert
-            // immer (Constructor), der Guard bleibt als Spiegel des alten Codes.
-            if Assigned(Ctx.LeakyClasses) then
-              Ctx.LeakyClasses.Add(Cls);
-            if Assigned(DiscoveredClasses) then
-              DiscoveredClasses.Add(Cls);
-          end;
-
-          for var Cls in StaticOnly do
-          begin
-            if Assigned(LeakyClassExcludes) and
-               (LeakyClassExcludes.IndexOf(Cls) >= 0) then Continue;
-            // Bewusst NICHT in LeakyClasses - static-only Klassen haben
-            // keine Instanzen und brauchen keine Leak-Detektion.
-            if Assigned(DiscoveredStaticClasses) then
-              DiscoveredStaticClasses.Add(Cls);
-          end;
+          // TD-1 Inkrement 2c: Discovery-Funde an die per-Scan-Kopie haengen
+          // (nicht mehr an den Prozess-Global). Ctx.LeakyClasses existiert
+          // immer (Constructor). Static-only bewusst NICHT in LeakyClasses
+          // (nil) - die Schleifen selbst stehen in TakeDiscoveredClasses,
+          // sonst waere der Ausschluss-Guard die fuenfte Ebene (SCA018).
+          TakeDiscoveredClasses(Instantiable, LeakyClassExcludes,
+            Ctx.LeakyClasses, DiscoveredClasses);
+          TakeDiscoveredClasses(StaticOnly, LeakyClassExcludes,
+            nil, DiscoveredStaticClasses);
         except
           // Audit 2026-07-01 (Error-Handling): Discovery-Fehler auf EINER Datei
           // darf nicht den GESAMTEN Scan abreissen (frueher: Exception
@@ -2201,16 +2246,8 @@ begin
           // uAstFileCache.Acquire. NIE verschlucken.
           on EStackExhausted do raise;
           on E: Exception do
-          begin
-            var Ferr := TLeakFinding.Create;
-            Ferr.FileName   := FileName;
-            Ferr.MethodName := '';
-            Ferr.LineNumber := '0';
-            Ferr.MissingVar := 'AutoDiscovery failed: '
-                               + DescribeException(E);
-            Ferr.SetKind(fkFileReadError);
-            Results.Add(Ferr);
-          end;
+            Results.Add(NewFileErrorFinding(FileName,
+              'AutoDiscovery failed: ' + DescribeException(E)));
         end;
 
         // Custom-Rules (aus analyser-rules.yml) NACH den built-in
@@ -2230,16 +2267,8 @@ begin
             // uAstFileCache.Acquire. NIE verschlucken.
             on EStackExhausted do raise;
             on E: Exception do
-            begin
-              var Ferr := TLeakFinding.Create;
-              Ferr.FileName   := FileName;
-              Ferr.MethodName := '';
-              Ferr.LineNumber := '0';
-              Ferr.MissingVar := 'CustomRules failed: '
-                                 + DescribeException(E);
-              Ferr.SetKind(fkFileReadError);
-              Results.Add(Ferr);
-            end;
+              Results.Add(NewFileErrorFinding(FileName,
+                'CustomRules failed: ' + DescribeException(E)));
           end;
 
         LastPhase := Format('File %d/%d: RunAllDetectors', [i + 1, Total]);
@@ -2275,15 +2304,9 @@ begin
                   [Name, ErrMsg]));
                 CaptLogStream.Flush;
               except end;
-            // entspricht AddFileError - inlined wegen Capture-Limits
-            var F := TLeakFinding.Create;
-            F.FileName   := CaptFileName;
-            F.MethodName := '';
-            F.LineNumber := '0';
-            F.MissingVar := Format(DETECTOR_FAILED_FMT,
-                                   [Name, ErrMsg]);
-            F.SetKind(fkFileReadError);
-            CaptResults.Add(F);
+            // Unit-Funktion statt des lokalen AddFileError (Capture-Grenze).
+            CaptResults.Add(NewFileErrorFinding(CaptFileName,
+              Format(DETECTOR_FAILED_FMT, [Name, ErrMsg])));
           end);
 
         // UnusedSuppression Scan-Zeit-Collection (Audit #2a, 2026-07-05):
@@ -2475,15 +2498,8 @@ class function TStaticAnalyzer2.AnalyzeOne(const FileName, AConfigRoot: string;
   AIncludeUsesCheck: Boolean): TObjectList<TLeakFinding>;
 
   procedure AddError(const Msg: string);
-  var F: TLeakFinding;
   begin
-    F            := TLeakFinding.Create;
-    F.FileName   := FileName;
-    F.MethodName := '';
-    F.LineNumber := '0';
-    F.MissingVar := Msg;
-    F.SetKind(fkFileReadError);
-    Result.Add(F);
+    Result.Add(NewFileErrorFinding(FileName, Msg));
   end;
 
 var
@@ -2511,6 +2527,28 @@ begin
       ParseLeaks(FileList, Result, nil, AIncludeUsesCheck,
         TParseSideLists.Make(nil, Configs, AConfigRoot));
     except
+      // Abbruch geht durch wie in AnalyzeLeaksRecursive/FromList, statt
+      // als 'Analyseabbruch'-Fund zu enden (Review Woche G02-05). Heute
+      // unerreichbar: ohne Progress-Callback wirft ParseLeaks kein
+      // EAbort (einzige Quelle sind SafeProgress und der nachgereichte
+      // Progress des Parallelpfads). Der Zweig haelt den Vertrag gleich,
+      // falls hier einmal ein Callback ankommt.
+      on EAbort do
+      begin
+        FreeAndNil(Result);
+        raise;
+      end;
+      // Erschoepfter Stapel geht durch - uIDEAnalyseRunner verlaesst sich
+      // darauf (Review Bereich C, Major 10); die Schutzseite ist nach
+      // einem Ueberlauf unwiederbringlich weg. Result geht wie beim
+      // EAbort-Zweig frei: der residente Wirt (IDE) lebt weiter, die
+      // Liste mit allen bis dahin gesammelten Funden bliebe sonst liegen
+      // (Review Woche G02-05).
+      on EStackExhausted do
+      begin
+        FreeAndNil(Result);
+        raise;
+      end;
       on E: Exception do
         AddError('Analyseabbruch: ' + DescribeException(E));
     end;
@@ -2533,15 +2571,8 @@ class function TStaticAnalyzer2.AnalyzeLeaks(const FileName: string;
 // die Routine auf den einfachen Single-File-Pfad zurueck (kein Index).
 
   procedure AddError(const Msg: string);
-  var F: TLeakFinding;
   begin
-    F            := TLeakFinding.Create;
-    F.FileName   := FileName;
-    F.MethodName := '';
-    F.LineNumber := '0';
-    F.MissingVar := Msg;
-    F.SetKind(fkFileReadError);
-    Result.Add(F);
+    Result.Add(NewFileErrorFinding(FileName, Msg));
   end;
 
 var
@@ -2591,6 +2622,24 @@ begin
       ParseLeaks(AnalyzeList, Result, nil, AIncludeUsesCheck,
         TParseSideLists.Make(IndexList));
     except
+      // Abbruch geht durch - wie in AnalyzeOne (dort die Begruendung,
+      // warum der Zweig heute unerreichbar ist; Review Woche G02-05).
+      on EAbort do
+      begin
+        FreeAndNil(Result);
+        raise;
+      end;
+      // Erschoepfter Stapel geht durch - uIDEAnalyseRunner verlaesst sich
+      // darauf (Review Bereich C, Major 10); die Schutzseite ist nach
+      // einem Ueberlauf unwiederbringlich weg. Result geht wie beim
+      // EAbort-Zweig frei: der residente Wirt (IDE) lebt weiter, die
+      // Liste mit allen bis dahin gesammelten Funden bliebe sonst liegen
+      // (Review Woche G02-05).
+      on EStackExhausted do
+      begin
+        FreeAndNil(Result);
+        raise;
+      end;
       on E: Exception do
         AddError('Analyseabbruch: ' + DescribeException(E));
     end;
@@ -2606,15 +2655,8 @@ class function TStaticAnalyzer2.AnalyzeLeaksRecursive(const Path: string;
   AIgnore: TIgnoreList): TObjectList<TLeakFinding>;
 
   procedure AddError(const Msg: string);
-  var F: TLeakFinding;
   begin
-    F            := TLeakFinding.Create;
-    F.FileName   := Path;
-    F.MethodName := '';
-    F.LineNumber := '0';
-    F.MissingVar := Msg;
-    F.SetKind(fkFileReadError);
-    Result.Add(F);
+    Result.Add(NewFileErrorFinding(Path, Msg));
   end;
 
 var
@@ -2700,6 +2742,17 @@ begin
         FreeAndNil(Result);
         raise;
       end;
+      // Erschoepfter Stapel geht durch - uIDEAnalyseRunner verlaesst sich
+      // darauf (Review Bereich C, Major 10); die Schutzseite ist nach
+      // einem Ueberlauf unwiederbringlich weg. Result geht wie beim
+      // EAbort-Zweig frei: der residente Wirt (IDE) lebt weiter, die
+      // Liste mit allen bis dahin gesammelten Funden bliebe sonst liegen
+      // (Review Woche G02-05).
+      on EStackExhausted do
+      begin
+        FreeAndNil(Result);
+        raise;
+      end;
       on E: Exception do
         AddError('Analyseabbruch: ' + DescribeException(E));
     end;
@@ -2716,15 +2769,8 @@ class function TStaticAnalyzer2.AnalyzeLeaksFromList(AFiles: TStringList;
 // Eingangsliste wird kopiert - der Aufrufer behaelt seine Ownership.
 
   procedure AddError(const Msg: string);
-  var F: TLeakFinding;
   begin
-    F            := TLeakFinding.Create;
-    F.FileName   := '';
-    F.MethodName := '';
-    F.LineNumber := '0';
-    F.MissingVar := Msg;
-    F.SetKind(fkFileReadError);
-    Result.Add(F);
+    Result.Add(NewFileErrorFinding('', Msg));
   end;
 
 var
@@ -2748,7 +2794,10 @@ begin
     // Optionales Index-Superset (Scan-Scope-Konzept 2026-07-20): Fehler bei
     // der Index-Sammlung sind NICHT fatal - dann faellt ParseLeaks intern
     // auf die Analyse-Liste zurueck (ASide.IndexFiles=nil).
-    if (AIndexRoot <> '') and DirectoryExists(AIndexRoot) then
+    // Nur wenn es Units zu analysieren gibt: eine Liste nur aus .ini
+    // braucht keinen Projektindex (Review Bereich C, Minor) - der
+    // Konfigurations-Durchlauf verankert sich ueber AIndexRoot selbst.
+    if (Copy.Count > 0) and (AIndexRoot <> '') and DirectoryExists(AIndexRoot) then
     begin
       IndexList := TStaticFiles.TryGetAllPasFiles(AIndexRoot, IndexErr);
       if IndexErr <> '' then
@@ -2770,6 +2819,17 @@ begin
         TParseSideLists.Make(IndexList, Configs, AIndexRoot));
     except
       on EAbort do
+      begin
+        FreeAndNil(Result);
+        raise;
+      end;
+      // Erschoepfter Stapel geht durch - uIDEAnalyseRunner verlaesst sich
+      // darauf (Review Bereich C, Major 10); die Schutzseite ist nach
+      // einem Ueberlauf unwiederbringlich weg. Result geht wie beim
+      // EAbort-Zweig frei: der residente Wirt (IDE) lebt weiter, die
+      // Liste mit allen bis dahin gesammelten Funden bliebe sonst liegen
+      // (Review Woche G02-05).
+      on EStackExhausted do
       begin
         FreeAndNil(Result);
         raise;

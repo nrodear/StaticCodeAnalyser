@@ -15,6 +15,7 @@ uses
   uLongMethod, uLongParamList, uMagicNumbers, uDuplicateString,
   uHardcodedPath, uDebugOutput, uDeepNesting,
   uHardcodedIpAddress,   // SCA200 - liest den Quelltext (FindingsOfFile)
+  uLoopPastHighBound,    // SCA203 - liest die Code-Sicht (FindingsOfFile)
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uWithStatement,
   uGotoStatement, uTabulationCharacter, uTooLongLine, uTrailingWhitespace,
@@ -36,7 +37,7 @@ uses
   uInterfaceName, uMethodName,
   uReversedForRange, uSelfAssignment, uVirtualCallInCtor, uLengthUnderflow,
   uVisibilityCheck,
-  uUnusedLocal, uUnusedParameter, uTautologicalExpr,
+  uUnusedLocal, uUnusedParameter, uTautologicalExpr, uComparisonPrecedence,
   uSqlDangerousStatement,
   uSynchronizeInDestructor, uLockWithoutTryFinally,
   uPerfHotspots, uConcurrencyExt, uRestHttpSecurity,
@@ -175,6 +176,11 @@ begin
       TReRaiseExceptionDetector.AnalyzeUnit(Root, SAMPLE_FILENAME, Result);
       TCastAndFreeDetector.AnalyzeUnit(Root, SAMPLE_FILENAME, Result);
       TInstanceInvokedConstructorDetector.AnalyzeUnit(Root, SAMPLE_FILENAME, Result);
+      // SCA125 ist hier bewusst stumm: er liest Attribute/Direktiven der
+      // Deklaration aus der Datei, und SAMPLE_FILENAME ist nicht lesbar
+      // (AcquireLines = nil -> kein Fund). Die Datei liest er nur in
+      // FindingsOfFile; SCA125-Tests laufen dort. Der Aufruf bleibt wie bei
+      // den anderen Detektoren, die in beiden Harnessen stehen (GodClass).
       TInheritedMethodEmptyDetector.AnalyzeUnit(Root, SAMPLE_FILENAME, Result);
       TNilComparisonDetector.AnalyzeUnit(Root, SAMPLE_FILENAME, Result);
       TRaisingRawExceptionDetector.AnalyzeUnit(Root, SAMPLE_FILENAME, Result);
@@ -293,6 +299,9 @@ begin
         TParamNameMismatchDetector.AnalyzeUnit(Root, TempPath, Result);
         // SCA200: liest die Literale aus dem Quelltext (Strip-Cache).
         THardcodedIpAddressDetector.AnalyzeUnit(Root, TempPath, Result);
+        // SCA203: liest die Code-Sicht der Datei (Strip-Cache), den AST
+        // nur fuer den Typbeweis.
+        TLoopPastHighBoundDetector.AnalyzeUnit(Root, TempPath, Result);
         TAssertMessageDetector.AnalyzeUnit(Root, TempPath, Result);
         TExplicitTObjectInheritanceDetector.AnalyzeUnit(Root, TempPath, Result);
         TGroupedDeclarationDetector.AnalyzeUnit(Root, TempPath, Result);
@@ -329,6 +338,9 @@ begin
         TReversedForRangeDetector.AnalyzeUnit(Root, TempPath, Result);
         TLengthUnderflowDetector.AnalyzeUnit(Root, TempPath, Result);
         TTautologicalExprDetector.AnalyzeUnit(Root, TempPath, Result);
+        // SCA202: liest den Quelltext (uComparisonPrecedenceScan), den AST
+        // nur fuer den Typ-Resolver.
+        TComparisonPrecedenceDetector.AnalyzeUnit(Root, TempPath, Result);
         TLockWithoutTryFinallyDetector.AnalyzeUnit(Root, TempPath, Result);
         TPerfHotspotsDetector.AnalyzeUnit(Root, TempPath, Result);
         TConcurrencyExtDetector.AnalyzeUnit(Root, TempPath, Result);
@@ -352,6 +364,9 @@ begin
         TEmptyOnHandlerDetector.AnalyzeUnit(Root, TempPath, Result);
         TStringFromPointerDetector.AnalyzeUnit(Root, TempPath, Result);
         TPointerSubtractionDetector.AnalyzeUnit(Root, TempPath, Result);
+        // SCA125 (Q14): liest Attribute/Direktiven der Deklaration aus dem
+        // Quelltext - ohne lesbare Datei meldet er nichts (FindingsOf: stumm).
+        TInheritedMethodEmptyDetector.AnalyzeUnit(Root, TempPath, Result);
         // GodClass hat einen Lines-abhaengigen Guard (IsEmptyClassDeclLine liest
         // die Quellzeile per AcquireLines) - MUSS im File-Harness laufen, sonst
         // ist der Guard (Parser-Slurp-Artefakt-Unterdrueckung) ungetestet und

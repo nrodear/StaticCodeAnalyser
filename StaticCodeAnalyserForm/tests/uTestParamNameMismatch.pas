@@ -86,6 +86,40 @@ type
     [Test] procedure Detector_DeclaredLocalQuery_UnassignedReported;
   end;
 
+  // Woher ein Name kommt und ob er zaehlt: Zugriffe vor dem ersten
+  // SQL-Beitrag der Routine, ersetztes SQL, angelegte Parameter, nq-Quote,
+  // var-Abschnitt hinter geschachtelten Routinen, gemeinsame
+  // Vorfilterliste (Anlass: Review 2026-10-14, Bericht D, Bereich A; der
+  // Name nennt seit der Review Woche G03-24 das Verhalten, nicht den
+  // Anlass). Zweite Fixture, damit keine ueber 20 Tests waechst.
+  [TestFixture]
+  TTestParamNameMismatchNameOrigin = class
+  public
+    // --- (a) nur gegen das SQL, das die Routine selbst zuweist ----------
+    // Blocker: ParamByName auf das DFM-SQL, dann SQL.Text := ... - der
+    // fruehe Zugriff wurde gegen das NEUE SQL gemeldet
+    [Test] procedure Scan_AccessBeforeFirstSqlOp_NotJudged;
+    [Test] procedure Scan_AccessBeforeFirstSqlOp_LaterTypoReported;
+    [Test] procedure Scan_CreatedQuery_AccessBeforeSql_Kept;
+    [Test] procedure Scan_ReassignedQuery_AccessBeforeSql_Discarded;
+    [Test] procedure Scan_RecreatedQuery_OldSqlForgotten;
+    // ersetztes SQL: gegen die Vereinigung beurteilt (bewusstes FN)
+    [Test] procedure Scan_SqlReplaced_OldPlaceholderAccepted;
+    // --- angelegte Parameter (CreateParam/Add/CreateParameter) ----------
+    [Test] procedure Scan_CreateParamLiteral_KnownName;
+    [Test] procedure Scan_ParamsAddAndCreateParameter_KnownNames;
+    [Test] procedure Scan_CreateParamVariable_Silent;
+    [Test] procedure Scan_CreateParam_NoUnassigned;
+    // --- Platzhalter ---------------------------------------------------
+    [Test] procedure Placeholders_OracleNqQuote;
+    // --- Vorfilter: eine Liste fuer Engine und Detektor ------------------
+    [Test] procedure AccessWords_OneListCoversDoaVariants;
+    [Test] procedure Detector_SetComplexVariableOnly_Judged;
+    // --- Detektor: var-Abschnitt hinter geschachtelten Routinen ----------
+    [Test] procedure Detector_VarSectionAfterNestedRoutine_Judged;
+    [Test] procedure Detector_VarSectionBetweenNestedRoutines_Judged;
+  end;
+
 implementation
 
 // noinspection-file GodClass, SQLInjection
@@ -813,7 +847,365 @@ begin
   end;
 end;
 
+{ === Review 2026-10-14 ===================================================== }
+
+{ --- (a) nur gegen das SQL, das die Routine selbst zuweist ----------------- }
+
+procedure TTestParamNameMismatchNameOrigin.Scan_AccessBeforeFirstSqlOp_NotJudged;
+begin
+  // Reproduktion des Blockers (review1w/sca199/uFx.pas): 'id' gilt dem
+  // DFM-SQL, das SQL.Text danach ersetzt es ganz
+  Assert.AreEqual('', Scan(L([
+    'procedure TDM.Run;',
+    'begin',
+    '  qryCheck.ParamByName(''id'').AsInteger := FId;',
+    '  qryCheck.Open;',
+    '  qryCheck.Close;',
+    '  qryCheck.SQL.Text := ''insert into t (id) values (:newid)'';',
+    '  qryCheck.ParamByName(''newid'').AsInteger := FId;',
+    '  qryCheck.ExecSQL;',
+    'end;'])), 'SQL.Text');
+  Assert.AreEqual('', Scan(L([
+    'procedure P;',
+    'begin',
+    '  Q.ParamByName(''id'').AsInteger := 1;',
+    '  Q.Open;',
+    '  Q.SQL.Clear;',
+    '  Q.SQL.Add(''select * from t where k = :k'');',
+    '  Q.ParamByName(''k'').AsInteger := 1;',
+    'end;'])), 'SQL.Clear + Add');
+end;
+
+procedure TTestParamNameMismatchNameOrigin.Scan_AccessBeforeFirstSqlOp_LaterTypoReported;
+begin
+  // verworfen, nicht Incomplete: was NACH dem Ersetzen kommt, bleibt pruefbar
+  Assert.AreEqual('A:Q.id@16', Scan(L([
+    'procedure P;',                                              // 10
+    'begin',                                                     // 11
+    '  Q.ParamByName(''id'').AsInteger := 1;',                   // 12
+    '  Q.Open;',                                                 // 13
+    '  Q.SQL.Text := ''select * from t where k = :k'';',         // 14
+    '  Q.ParamByName(''k'').AsInteger := 1;',                    // 15
+    '  Q.ParamByName(''id'').AsInteger := 1;',                   // 16
+    'end;'])));
+end;
+
+procedure TTestParamNameMismatchNameOrigin.Scan_CreatedQuery_AccessBeforeSql_Kept;
+begin
+  // eine hier erzeugte Query hat vor ihrem SQL keine Parameter - der
+  // Zugriff trifft das SQL dieser Routine oder gar keines
+  Assert.AreEqual('A:Q.zz@13', Scan(L([
+    'procedure P;',                                              // 10
+    'begin',                                                     // 11
+    '  Q := TFDQuery.Create(nil);',                              // 12
+    '  Q.ParamByName(''zz'').AsInteger := 1;',                   // 13
+    '  Q.SQL.Text := ''select * from t where a = :a'';',         // 14
+    '  Q.ParamByName(''a'').AsInteger := 1;',                    // 15
+    'end;'])));
+end;
+
+procedure TTestParamNameMismatchNameOrigin.Scan_ReassignedQuery_AccessBeforeSql_Discarded;
+begin
+  // nach Q := DM.qryOther gilt der Zugriff dem SQL der fremden Query -
+  // vorher wurde 'x' gegen das SQL der ersten Query gemeldet
+  Assert.AreEqual('', Scan(L([
+    'procedure P;',
+    'begin',
+    '  Q := TFDQuery.Create(nil);',
+    '  Q.SQL.Text := ''select * from t where a = :a'';',
+    '  Q.ParamByName(''a'').AsInteger := 1;',
+    '  Q := DM.qryOther;',
+    '  Q.ParamByName(''x'').AsInteger := 1;',
+    'end;'])));
+end;
+
+procedure TTestParamNameMismatchNameOrigin.Scan_RecreatedQuery_OldSqlForgotten;
+begin
+  // Gegen-Review Welle 1, Minor 11: dieselbe Variable ein zweites Mal
+  // erzeugt - das SQL und die Zugriffe der ersten Instanz gelten fuer die
+  // zweite nicht mehr. Vorher matchte das zweite 'a' das alte ':a' (FN).
+  Assert.AreEqual('A:Q.a@18', Scan(L([
+    'procedure P;',                                              // 10
+    'begin',                                                     // 11
+    '  Q := TFDQuery.Create(nil);',                              // 12
+    '  Q.SQL.Text := ''select * from t where a = :a'';',         // 13
+    '  Q.ParamByName(''a'').AsInteger := 1;',                    // 14
+    '  Q.Free;',                                                 // 15
+    '  Q := TFDQuery.Create(nil);',                              // 16
+    '  Q.SQL.Text := ''select * from t where b = :b'';',         // 17
+    '  Q.ParamByName(''a'').AsInteger := 1;',                    // 18
+    '  Q.ParamByName(''b'').AsInteger := 2;',                    // 19
+    'end;'])), 'zweite Instanz: a ist kein Platzhalter mehr');
+  // Gegenprobe: passende Namen in beiden Instanzen - still; auch ein
+  // per CreateParam angelegter Name der ersten Instanz gilt nicht weiter.
+  Assert.AreEqual('A:Q.x@18', Scan(L([
+    'procedure P;',                                              // 10
+    'begin',                                                     // 11
+    '  Q := TFDQuery.Create(nil);',                              // 12
+    '  Q.SQL.Text := ''select * from t where a = :a'';',         // 13
+    '  Q.Params.CreateParam(ftInteger, ''x'', ptInput);',        // 14
+    '  Q.Free;',                                                 // 15
+    '  Q := TFDQuery.Create(nil);',                              // 16
+    '  Q.SQL.Text := ''select * from t where a = :a'';',         // 17
+    '  Q.ParamByName(''x'').AsInteger := 1;',                    // 18
+    '  Q.ParamByName(''a'').AsInteger := 2;',                    // 19
+    'end;'])), 'angelegter Name der ersten Instanz gilt nicht weiter');
+  // Gegen-Review FX+E7, Minor 1: auch 'unvollstaendig' (SQL.Add(Var)) und
+  // 'dynamisch angefasst' (Params[0]) der ERSTEN Instanz gelten fuer die
+  // zweite nicht - sonst bliebe sie trotz vollstaendigem SQL unbeurteilt
+  // (FN). Beide Urteile kommen: (a) 'a' ist kein Platzhalter, (b) ':b' wird
+  // nie gesetzt - das (b) beweist, dass DynRefs zurueckgesetzt ist.
+  Assert.AreEqual('B:Q.b@17 | A:Q.a@18', Scan(L([
+    'procedure P;',                                              // 10
+    'begin',                                                     // 11
+    '  Q := TFDQuery.Create(nil);',                              // 12
+    '  Q.SQL.Add(SomeVar);',                                     // 13
+    '  Q.Params[0].AsInteger := 1;',                             // 14
+    '  Q.Free;',                                                 // 15
+    '  Q := TFDQuery.Create(nil);',                              // 16
+    '  Q.SQL.Text := ''select * from t where b = :b'';',         // 17
+    '  Q.ParamByName(''a'').AsInteger := 1;',                    // 18
+    'end;'])), 'unvollstaendige erste Instanz macht die zweite nicht stumm');
+end;
+
+procedure TTestParamNameMismatchNameOrigin.Scan_SqlReplaced_OldPlaceholderAccepted;
+begin
+  // Review Woche G03-03 (strittig, Einwand: docs/rules/SCA199.md,
+  // 'Alternative SQL texts'): SQL.Text := ... ersetzt das SQL, die Parts
+  // der Routine werden aber VEREINIGT beurteilt. Das zweite
+  // ParamByName('a') ist zur Laufzeit 'parameter not found', bleibt hier
+  // still, weil ':a' im ersten SQL steht. Gepinnt, damit eine Aenderung
+  // dieser Semantik bewusst geschieht (dann auch die Doku).
+  Assert.AreEqual('', Scan(L([
+    'procedure P;',
+    'begin',
+    '  Q := TFDQuery.Create(nil);',
+    '  Q.SQL.Text := ''select * from t where a = :a'';',
+    '  Q.ParamByName(''a'').AsInteger := 1;',
+    '  Q.Open;',
+    '  Q.SQL.Text := ''select * from t where b = :b'';',
+    '  Q.ParamByName(''a'').AsInteger := 1;',
+    '  Q.ParamByName(''b'').AsInteger := 2;',
+    'end;'])), 'Vereinigung: alter Platzhalter gilt (FN mit Absicht)');
+end;
+
+{ --- angelegte Parameter --------------------------------------------------- }
+
+procedure TTestParamNameMismatchNameOrigin.Scan_CreateParamLiteral_KnownName;
+begin
+  // 'x' ist angelegt, auch ohne :x im SQL - 'zz' bleibt ein Tippfehler
+  Assert.AreEqual('A:Q.zz@16', Scan(L([
+    'procedure P;',                                              // 10
+    'begin',                                                     // 11
+    '  Q.SQL.Text := ''select * from t where a = :a'';',         // 12
+    '  Q.Params.CreateParam(ftInteger, ''x'', ptInput);',        // 13
+    '  Q.ParamByName(''X'').AsInteger := 1;',                    // 14
+    '  Q.ParamByName(''a'').AsInteger := 1;',                    // 15
+    '  Q.ParamByName(''zz'').AsInteger := 1;',                   // 16
+    'end;'])));
+end;
+
+procedure TTestParamNameMismatchNameOrigin.Scan_ParamsAddAndCreateParameter_KnownNames;
+begin
+  Assert.AreEqual('', Scan(L([
+    'procedure P;',
+    'begin',
+    '  Q.SQL.Text := ''select * from t'';',
+    '  Q.Params.Add(''x'', ftInteger);',
+    '  Q.ParamByName(''x'').AsInteger := 1;',
+    'end;'])), 'FireDAC Params.Add');
+  Assert.AreEqual('', Scan(L([
+    'procedure P;',
+    'begin',
+    '  Q.SQL.Text := ''select * from t'';',
+    '  Q.Parameters.CreateParameter(''y'', ftInteger, pdInput, 0, 1);',
+    '  Q.Parameters.ParamByName(''y'').Value := 1;',
+    'end;'])), 'ADO CreateParameter');
+end;
+
+procedure TTestParamNameMismatchNameOrigin.Scan_CreateParamVariable_Silent;
+begin
+  // ohne Literalnamen kann jeder Name entstehen: kein Urteil
+  Assert.AreEqual('', Scan(L([
+    'procedure P;',
+    'begin',
+    '  Q.SQL.Text := ''select * from t'';',
+    '  Q.Params.CreateParam(ftInteger, N, ptInput);',
+    '  Q.ParamByName(''zz'').AsInteger := 1;',
+    'end;'])), 'Variable');
+  Assert.AreEqual('', Scan(L([
+    'procedure P;',
+    'begin',
+    '  Q.SQL.Text := ''select * from t'';',
+    '  Q.Params.AddParameter.Name := ''zz'';',
+    '  Q.ParamByName(''zz'').AsInteger := 1;',
+    'end;'])), 'AddParameter.Name');
+  Assert.AreEqual('', Scan(L([
+    'procedure P;',
+    'begin',
+    '  Q.SQL.Text := ''select * from t'';',
+    '  Q.Params.CreateParam(ftInteger, ''p'' + IntToStr(I), ptInput);',
+    '  Q.ParamByName(''zz'').AsInteger := 1;',
+    'end;'])), 'Ausdruck');
+end;
+
+procedure TTestParamNameMismatchNameOrigin.Scan_CreateParam_NoUnassigned;
+begin
+  // (b) bleibt ausgesetzt, sobald Params angefasst wird (wie bisher)
+  Assert.AreEqual('', Scan(L([
+    'procedure P;',
+    'begin',
+    '  Q := TFDQuery.Create(nil);',
+    '  Q.SQL.Text := ''select * from t where a = :a and b = :b'';',
+    '  Q.Params.CreateParam(ftInteger, ''a'', ptInput);',
+    '  Q.ParamByName(''a'').AsInteger := 1;',
+    'end;'])));
+end;
+
+{ --- Platzhalter ----------------------------------------------------------- }
+
+procedure TTestParamNameMismatchNameOrigin.Placeholders_OracleNqQuote;
+begin
+  // nq'[...]' schliesst erst mit ]' - das Apostroph in it's zaehlt nicht
+  Assert.AreEqual('x', Ph('select nq''[it''s :b]'' from t where x = :x'), 'nq');
+  Assert.AreEqual('x', Ph('select NQ''{:b}'' from t where x = :x'), 'NQ gross');
+  Assert.AreEqual('x', Ph('select q''[:b]'' from t where x = :x'), 'q unveraendert');
+  // ein Bezeichner, der auf nq endet, oeffnet keinen q-String
+  Assert.AreEqual('y', Ph('select fnq''x'' from t where y = :y'), 'Bezeichner');
+end;
+
+{ --- Vorfilter ------------------------------------------------------------- }
+
+procedure TTestParamNameMismatchNameOrigin.AccessWords_OneListCoversDoaVariants;
+var
+  Alle, W : string;
+begin
+  Alle := ',' + Zeilen(PARAM_ACCESS_WORDS, ',');
+  for W in PARAM_ACCESS_WORDS do
+    Assert.AreEqual(LowerCase(W), W, 'Vorfilter vergleicht klein: ' + W);
+  Assert.IsTrue(Pos(',parambyname,', Alle) > 0, Alle);
+  Assert.IsTrue(Pos(',setcomplexvariable,', Alle) > 0, 'DOA SetComplexVariable: ' + Alle);
+  Assert.IsTrue(Pos(',setlongvariable,', Alle) > 0, 'DOA SetLongVariable: ' + Alle);
+end;
+
+procedure TTestParamNameMismatchNameOrigin.Detector_SetComplexVariableOnly_Judged;
+var
+  F : TObjectList<TLeakFinding>;
+  B : TLeakFinding;
+begin
+  // nur SetComplexVariable in der Routine: der Detektor-Vorfilter kannte
+  // das Wort nicht, die Routine kam nie beim Scanner an
+  F := TFindingHelper.FindingsOfFile(Quelltext([
+    'unit t;',                                                   // 1
+    'interface',                                                 // 2
+    'implementation',                                            // 3
+    'procedure Load;',                                           // 4
+    'var',                                                       // 5
+    '  OQ: TOracleQuery;',                                       // 6
+    'begin',                                                     // 7
+    '  OQ := TOracleQuery.Create(nil);',                         // 8
+    '  OQ.SQL.Add(''select * from t where a = :a and b = :b'');', // 9
+    '  OQ.SetComplexVariable(''a'', otString, 10);',             // 10
+    '  OQ.Execute;',
+    'end;',
+    'end.']));
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkParamNameMismatch));
+    B := TFindingHelper.FirstOf(F, fkParamNameMismatch);
+    Assert.AreEqual('9', B.LineNumber);
+    Assert.IsTrue(Pos(':b', B.MissingVar) > 0, B.MissingVar);
+  finally
+    F.Free;
+  end;
+end;
+
+{ --- Detektor: geschachtelte Routinen -------------------------------------- }
+
+procedure TTestParamNameMismatchNameOrigin.Detector_VarSectionAfterNestedRoutine_Judged;
+var
+  F : TObjectList<TLeakFinding>;
+  B : TLeakFinding;
+begin
+  // Der var-Abschnitt steht HINTER der geschachtelten Routine. Bis
+  // 2026-10-14 wurde bis vor das 'begin' der aeusseren ausgeblendet, 'Q'
+  // stand damit im ausgeblendeten Text und wurde nie beurteilt. Die
+  // mehrzeilige letzte Anweisung der inneren muss trotzdem verborgen
+  // bleiben (Fortsetzungszeile und 'end;' hinter dem AST-Ende).
+  F := TFindingHelper.FindingsOfFile(Quelltext([
+    'unit t;',                                                   // 1
+    'interface',                                                 // 2
+    'implementation',                                            // 3
+    'procedure Outer;',                                          // 4
+    '  procedure Inner;',                                        // 5
+    '  begin',                                                   // 6
+    '    ShowMessage(',                                          // 7
+    '      ''x'');',                                             // 8
+    '  end;',                                                    // 9
+    'var',                                                       // 10
+    '  Q: TFDQuery;',                                            // 11
+    'begin',                                                     // 12
+    '  Q := TFDQuery.Create(nil);',                              // 13
+    '  Q.SQL.Text := ''select * from t where a = :a and b = :b'';', // 14
+    '  Q.ParamByName(''a'').AsInteger := 1;',                    // 15
+    '  Inner;',                                                  // 16
+    '  Q.Open;',                                                 // 17
+    'end;',
+    'end.']));
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkParamNameMismatch));
+    B := TFindingHelper.FirstOf(F, fkParamNameMismatch);
+    Assert.AreEqual('14', B.LineNumber);
+    Assert.IsTrue(Pos(':b', B.MissingVar) > 0, B.MissingVar);
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestParamNameMismatchNameOrigin.Detector_VarSectionBetweenNestedRoutines_Judged;
+var
+  F : TObjectList<TLeakFinding>;
+  B : TLeakFinding;
+begin
+  // var-Abschnitt ZWISCHEN zwei geschachtelten Routinen: jede wird fuer
+  // sich ausgeblendet, der Abschnitt dazwischen bleibt sichtbar
+  F := TFindingHelper.FindingsOfFile(Quelltext([
+    'unit t;',                                                   // 1
+    'interface',                                                 // 2
+    'implementation',                                            // 3
+    'procedure Outer;',                                          // 4
+    'var',                                                       // 5
+    '  A: Integer;',                                             // 6
+    '  procedure Inner1;',                                       // 7
+    '  begin',                                                   // 8
+    '    A := 1;',                                               // 9
+    '  end;',                                                    // 10
+    'var',                                                       // 11
+    '  Q: TFDQuery;',                                            // 12
+    '  procedure Inner2;',                                       // 13
+    '  begin',                                                   // 14
+    '    A := 2;',                                               // 15
+    '  end;',                                                    // 16
+    'begin',                                                     // 17
+    '  Q := TFDQuery.Create(nil);',                              // 18
+    '  Q.SQL.Text := ''select * from t where a = :a and b = :b'';', // 19
+    '  Q.ParamByName(''a'').AsInteger := 1;',                    // 20
+    '  Inner1;',                                                 // 21
+    '  Inner2;',                                                 // 22
+    '  Q.Open;',                                                 // 23
+    'end;',
+    'end.']));
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkParamNameMismatch));
+    B := TFindingHelper.FirstOf(F, fkParamNameMismatch);
+    Assert.AreEqual('19', B.LineNumber);
+    Assert.IsTrue(Pos(':b', B.MissingVar) > 0, B.MissingVar);
+  finally
+    F.Free;
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestParamNameMismatch);
+  TDUnitX.RegisterTestFixture(TTestParamNameMismatchNameOrigin);
 
 end.

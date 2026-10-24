@@ -31,6 +31,8 @@ type
     [Test] procedure Sca085_CommentTrap_UsesCodeOccurrence;
     [Test] procedure Sca085_Refusals;
     [Test] procedure Sca085_DirectiveBeforeFree_Refused;
+    // Gegen-Review R8 (Major 2): '{$' hinter '//' ist keine Direktive.
+    [Test] procedure Sca085_LineCommentDirective_NotADirective;
     [Test] procedure Sca085_VariableContext;
     // ---- Stufe 2, Rest: SCA074, SCA087, SCA139 ----
     [Test] procedure Sca074_Variants;
@@ -40,48 +42,18 @@ type
     [Test] procedure Sca087_Refusals;
     [Test] procedure Sca139_Variants;
     [Test] procedure Sca139_Refusals;
-    [Test] procedure Sca139_DeclaresValueType;
+    [Test] procedure Sca139_DeclaresNonClassType;
   end;
 
 implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxSimpleFixes;
+  uRdxBufferMath, uRdxCodeMap, uRdxSimpleFixes,
+  uRdxTypeProof,     // DeclaresProperty, DeclaresRoutine ... (Folgewelle A4)
+  uTestRdxTextKit;   // Join, Apply
 
 // ---- Helfer ----
-
-function Apply(const ASource: string; const AEdits: TArray<TRdxEdit>): string;
-var
-  Bytes : TBytes;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-  Ok    : Boolean;
-begin
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Ok := PlanByteEdits(Bytes, AEdits, Plan, Err);
-  Assert.IsTrue(Ok, Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
-end;
-
-// Zeilen mit CRLF verbunden (TStringBuilder: string.Join kennt FPC nicht).
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
 
 // SCA075 auf einer Zeile: liefert den neuen Text der ganzen Quelle oder
 // '' bei Ablehnung (AReason).
@@ -261,17 +233,31 @@ procedure TTestRdxSimpleFixes.Sca075_Refusals;
 var
   R : string;
 begin
+  // Je Ablehnung auch der Grund (Review R6-04): ein Test ohne ihn bliebe
+  // gruen, wenn eine andere Sperre greift oder eine Sperre nie erreicht wird.
   Assert.AreEqual('', Fix075(InUnit('  TFoo = class(TObject) procedure P; end;'), 4, 10, R),
     'Rumpf in derselben Zeile');
-  Assert.IsTrue(R <> '');
+  Assert.IsTrue(Pos('Klassenrumpf beginnt in derselben Zeile', R) > 0, R);
+  // 'class(TObject, IFoo)' meldet der Detektor nicht - steht es an der
+  // Stelle, hat sich die Zeile seit dem Scan geaendert.
   Assert.AreEqual('', Fix075(InUnit('  TFoo = class(TObject, IFoo)'), 4, 10, R),
     'nie class(IFoo)');
+  Assert.IsTrue(Pos('nicht mehr an der gemeldeten Stelle', R) > 0, R);
   Assert.AreEqual('', Fix075(InUnit('  TFoo = class(TComponent)'), 4, 10, R),
     'Puffer geaendert');
+  Assert.IsTrue(Pos('nicht mehr an der gemeldeten Stelle', R) > 0, R);
   Assert.AreEqual('', Fix075(InUnit('  TFoo = class(TObject)'), 4, 11, R),
     'falsche Spalte');
+  Assert.IsTrue(Pos('nicht mehr an der gemeldeten Stelle', R) > 0, R);
   Assert.AreEqual('', Fix075(InUnit('  TFoo = class(TObject)'), 4, 0, R),
     'keine Spalte in der Meldung');
+  Assert.IsTrue(Pos('Spalte fehlt in der Meldung', R) > 0, R);
+  // Die Spalte liegt hinter dem Ende der (inzwischen gekuerzten) Zeile: die
+  // Meldung hat ihre Spalte, die Zeile hat sich geaendert (Review R3,
+  // verpasst - bis Charge FC hiess es auch hier 'Spalte fehlt').
+  Assert.AreEqual('', Fix075(InUnit('  TFoo = class'), 4, 30, R),
+    'Spalte hinter dem Zeilenende');
+  Assert.IsTrue(Pos('nicht mehr an der gemeldeten Stelle', R) > 0, R);
 end;
 
 // ---- SCA085 ----
@@ -357,6 +343,27 @@ begin
   Assert.IsTrue(Pos('Direktive', R) > 0, R);
 end;
 
+procedure TTestRdxSimpleFixes.Sca085_LineCommentDirective_NotADirective;
+var
+  R : string;
+begin
+  // DirectiveBetween prueft seit Charge R8 DirectiveAt (uRdxCodeMap): ein
+  // '{$' hinter '//' ist keine Direktive. Bis dahin zaehlte jedes '{$' im
+  // Kommentar vor X.Free; mit - ein auskommentiertes IFDEF sperrte die
+  // Hilfe (Gegen-Review R8, Major 2).
+  Assert.AreEqual(Join(['unit u;', 'procedure P;', 'begin',
+      '  // {$IFDEF A}', '  FreeAndNil(X);', 'end;', 'end.']),
+    Fix085(Join(['unit u;', 'procedure P;', 'begin',
+      '  // {$IFDEF A}', '  X.Free;', '  X := nil;', 'end;', 'end.']), 5, R), R);
+  // Hinter X.Free; darf ein //-Kommentar stehen - auch mit '{$' darin.
+  Assert.AreEqual(FreeOnly('  FreeAndNil(X); // {$IFDEF A}'),
+    Fix085(FreeNil('  X.Free; // {$IFDEF A}', '  X := nil;'), 4, R), R);
+  // Gegenprobe: eine Blockdirektive davor bleibt gesperrt.
+  Assert.AreEqual('', Fix085(Join(['unit u;', 'procedure P;', 'begin',
+    '  {$IFDEF A}{$ENDIF}', '  X.Free;', '  X := nil;', 'end;', 'end.']), 5, R));
+  Assert.IsTrue(Pos('Direktive', R) > 0, R);
+end;
+
 procedure TTestRdxSimpleFixes.Sca085_VariableContext;
 var
   SL  : TStringList;
@@ -398,9 +405,9 @@ begin
       'end;',                                             // 30
       'end.']);
     Map := TRdxCodeMap.Create(SL);
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresProperty(Map, 'Items'));
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresProperty(Map, 'ITEMS'), 'ohne Gross/Klein');
-    Assert.IsFalse(TRdxSimpleFixes.DeclaresProperty(Map, 'FList'));
+    Assert.IsTrue(TRdxTypeProof.DeclaresProperty(Map, 'Items'));
+    Assert.IsTrue(TRdxTypeProof.DeclaresProperty(Map, 'ITEMS'), 'ohne Gross/Klein');
+    Assert.IsFalse(TRdxTypeProof.DeclaresProperty(Map, 'FList'));
     Assert.IsTrue(TRdxSimpleFixes.DeclaresInlineVar(Map, 10, 'L'));
     Assert.IsFalse(TRdxSimpleFixes.DeclaresInlineVar(Map, 10, 'M'));
     Assert.IsFalse(TRdxSimpleFixes.DeclaresInlineVar(Map, 24, 'L'),
@@ -420,6 +427,23 @@ const
   // Zeile vor X.Free; - das nil wuerde bedingt
   GUARDS: array[0..4] of string = ('  if FOwns then', '  else',
     '  with FData do', '  for I := 0 to 1 do', '  1:');
+  // Je Ablehnung auch der Grund (Review R6-04): ohne ihn blieb gruen, dass
+  // die Kommentar-Sperre nie griff - nach einem frischen Scan hiess es
+  // 'X.Free; steht nicht mehr an der gemeldeten Stelle'. Spalten:
+  // Free-Zeile, nil-Zeile, Grund.
+  CASES: array[0..9, 0..2] of string = (
+    // Der Detektor liest ohne Kommentare und meldet diese drei Formen.
+    ('  X{owned}.Free;', '  X := nil;', 'Kommentar im Ausdruck'),
+    ('  X.{c}Free;', '  X := nil;', 'Kommentar im Ausdruck'),
+    ('  X.Free {c};', '  X := nil;', 'Kommentar im Ausdruck'),
+    // Leerzeichen vor dem Punkt meldet er nicht: Zeile seit dem Scan anders.
+    ('  X (*c*).Free;', '  X := nil;', 'nicht mehr an der gemeldeten Stelle'),
+    ('  DoSomething;', '  X := nil;', 'nicht mehr an der gemeldeten Stelle'),
+    ('  X.Free; Log(''x'');', '  X := nil;', 'hinter X.Free; steht noch etwas'),
+    ('  X.Free; {$IFDEF A}', '  X := nil;', 'hinter X.Free; steht noch etwas'),
+    ('  X.Free;', '  X := nil; Y := 0;', 'hinter X := nil steht noch etwas'),
+    ('  X.Free;', '  Y := nil;', 'ist nicht "X := nil;"'),
+    ('  X.Free;', '  X := nil; // weg', 'Kommentar oder String in der nil-Zeile'));
 var
   R   : string;
   Src : string;
@@ -432,22 +456,14 @@ begin
     Assert.AreEqual('', Fix085(Src, 5, R), GUARDS[i]);
     Assert.IsTrue(Pos('bedingt', R) > 0, R);
   end;
-  Assert.AreEqual('', Fix085(FreeNil('  X.Free; Log(''x'');', '  X := nil;'), 4, R),
-    'Code nach Free;');
-  Assert.AreEqual('', Fix085(FreeNil('  X.Free; {$IFDEF A}', '  X := nil;'), 4, R),
-    'Direktive nach Free;');
-  Assert.AreEqual('', Fix085(FreeNil('  X{owned}.Free;', '  X := nil;'), 4, R),
-    'Kommentar im Ausdruck');
-  Assert.AreEqual('', Fix085(FreeNil('  X.Free;', '  X := nil; Y := 0;'), 4, R),
-    'Code nach nil');
-  Assert.AreEqual('', Fix085(FreeNil('  X.Free;', '  Y := nil;'), 4, R),
-    'andere Variable');
-  Assert.AreEqual('', Fix085(FreeNil('  X.Free;', '  X := nil; // weg'), 4, R),
-    'Kommentar in der nil-Zeile');
+  for i := 0 to High(CASES) do
+  begin
+    Assert.AreEqual('', Fix085(FreeNil(CASES[i, 0], CASES[i, 1]), 4, R), CASES[i, 0]);
+    Assert.IsTrue(Pos(CASES[i, 2], R) > 0, CASES[i, 0] + ' / ' + CASES[i, 1] + ': ' + R);
+  end;
   Assert.AreEqual('', Fix085(Join(['  X.Free;', '  X := nil;']), 1, R),
     'nil-Zeile ist die letzte');
-  Assert.AreEqual('', Fix085(FreeNil('  DoSomething;', '  X := nil;'), 4, R),
-    'kein Free');
+  Assert.IsTrue(Pos('keine Zeile hinter der nil-Zuweisung', R) > 0, R);
 end;
 
 // ---- SCA074 ----
@@ -543,12 +559,12 @@ begin
       'end;',
       'end.']);
     Map := TRdxCodeMap.Create(SL);
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Assert'),
+    Assert.IsTrue(TRdxTypeProof.DeclaresRoutine(Map, 'Assert'),
       'qualifiziert: letztes Segment');
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'Check'));
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresRoutine(Map, 'VALUE'), 'ohne Gross/Klein');
-    Assert.IsFalse(TRdxSimpleFixes.DeclaresRoutine(Map, 'Gone'), 'nur im Kommentar');
-    Assert.IsFalse(TRdxSimpleFixes.DeclaresRoutine(Map, 'TFoo'), 'nur Qualifizierer');
+    Assert.IsTrue(TRdxTypeProof.DeclaresRoutine(Map, 'Check'));
+    Assert.IsTrue(TRdxTypeProof.DeclaresRoutine(Map, 'VALUE'), 'ohne Gross/Klein');
+    Assert.IsFalse(TRdxTypeProof.DeclaresRoutine(Map, 'Gone'), 'nur im Kommentar');
+    Assert.IsFalse(TRdxTypeProof.DeclaresRoutine(Map, 'TFoo'), 'nur Qualifizierer');
   finally
     Map.Free;
     SL.Free;
@@ -625,7 +641,7 @@ begin
     '    FX: Integer;']), 6, 'private', R));
   Assert.IsTrue(Pos('strict', R) > 0, R);
   Assert.AreEqual('', Fix087(Join(['  public']), 1, 'public', R), 'letzte Zeile');
-  Assert.IsTrue(R <> '');
+  Assert.IsTrue(Pos('keine Zeile hinter dem Abschnitt', R) > 0, R);
 end;
 
 // ---- SCA139 ----
@@ -677,7 +693,7 @@ begin
   Assert.IsTrue(Pos('fehlt', R) > 0, R);
 end;
 
-procedure TTestRdxSimpleFixes.Sca139_DeclaresValueType;
+procedure TTestRdxSimpleFixes.Sca139_DeclaresNonClassType;
 var
   SL  : TStringList;
   Map : TRdxCodeMap;
@@ -699,15 +715,15 @@ begin
       'implementation',
       'end.']);
     Map := TRdxCodeMap.Create(SL);
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresValueType(Map, 'trec'));
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresValueType(Map, 'TPacked'), 'packed');
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresValueType(Map, 'ifoo'));
-    Assert.IsTrue(TRdxSimpleFixes.DeclaresValueType(Map, 'told'));
-    Assert.IsFalse(TRdxSimpleFixes.DeclaresValueType(Map, 'tfoo'), 'Klasse');
-    Assert.IsFalse(TRdxSimpleFixes.DeclaresValueType(Map, 'tgone'), 'nur im Kommentar');
-    Assert.IsFalse(TRdxSimpleFixes.DeclaresValueType(Map, 'tstringlist'),
+    Assert.IsTrue(TRdxTypeProof.DeclaresNonClassType(Map, 'trec'));
+    Assert.IsTrue(TRdxTypeProof.DeclaresNonClassType(Map, 'TPacked'), 'packed');
+    Assert.IsTrue(TRdxTypeProof.DeclaresNonClassType(Map, 'ifoo'));
+    Assert.IsTrue(TRdxTypeProof.DeclaresNonClassType(Map, 'told'));
+    Assert.IsFalse(TRdxTypeProof.DeclaresNonClassType(Map, 'tfoo'), 'Klasse');
+    Assert.IsFalse(TRdxTypeProof.DeclaresNonClassType(Map, 'tgone'), 'nur im Kommentar');
+    Assert.IsFalse(TRdxTypeProof.DeclaresNonClassType(Map, 'tstringlist'),
       'aus einer anderen Unit: unbekannt');
-    Assert.IsFalse(TRdxSimpleFixes.DeclaresValueType(Map, ''), 'kein Typ');
+    Assert.IsFalse(TRdxTypeProof.DeclaresNonClassType(Map, ''), 'kein Typ');
   finally
     Map.Free;
     SL.Free;

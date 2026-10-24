@@ -119,6 +119,33 @@ type
 
     // Traegt der Name eine Formdatei-Endung des aktiven Dialekts?
     class function IsFormFileName(const AFileName: string): Boolean; static;
+
+    // ---- Formdatei-Fragen NACH dem Scan (Review Woche G02-01/02) ------
+    //
+    // Dieselben Fragen OHNE den Dialekt-View-State, fuer Wege, die nach
+    // TAnalysisSession.Run auf dem UI-Thread laufen (Strg+Alt+S ueber
+    // TSuppression.MarkerTargetFor, Claude-Prompt). Run stellt ScanDialect
+    // im finally auf den Vorzustand zurueck - in EXE und Plugin dlDelphi -,
+    // ein .lfm-Fund eines FPC-Scans waere fuer IsFormFileName dort keine
+    // Formdatei mehr, und die '//'-Zeile ginge in die Lazarus-Form.
+    //
+    // Die Scan-Wege (Sammlung, Paarung, Marker-LESEN in BuildMap) bleiben
+    // bei den dialektbewussten Funktionen oben; deren GATE-PFLICHT gilt
+    // unveraendert, diese beiden bewegen keinen Fund.
+
+    // '.dfm' und '.lfm' sind immer Formdateien - eine Kommentarzeile
+    // gehoert in keine, egal welcher Dialekt gerade gilt.
+    class function IsFormFileNameAnyDialect(const AFileName: string): Boolean;
+      static;
+
+    // Existierende Schwester-Unit ('' wenn keine): '.pas', bei einer
+    // '.lfm' danach '.pp' - das ist die Reihenfolge, in der ein FPC-Scan
+    // (PairedUnitFile unter dlFpc) die Marker einer .lfm liest. Eine
+    // '.dfm' bekommt bewusst KEINE '.pp': der Delphi-Scan liest dort nur
+    // die .pas, ein Marker in der .pp bliebe wirkungslos - die Ablehnung
+    // ("keine Unit") ist ehrlicher als ein Marker ohne Leser.
+    class function PairedUnitFileAnyDialect(const AFormFile: string): string;
+      static;
   end;
 
   // Konfigurationsdateien fuer den Konfigurations-Durchlauf (SCA201
@@ -321,7 +348,7 @@ end;
 
 class function TStaticFiles.GetAllPasFilesRecursive(const Path: string)
   : TStringList;
-// Alte API – wirft keine Exception mehr, gibt aber leere Liste bei Fehler zurueck.
+// Alte API - wirft keine Exception mehr, gibt aber leere Liste bei Fehler zurueck.
 var
   TickCounter: Integer;
 begin
@@ -583,6 +610,28 @@ begin
     Result := Low.EndsWith('.lfm');
 end;
 
+class function TStaticFiles.IsFormFileNameAnyDialect(
+  const AFileName: string): Boolean;
+var
+  Low : string;
+begin
+  Low := LowerCase(AFileName);
+  Result := Low.EndsWith('.dfm') or Low.EndsWith('.lfm');
+end;
+
+class function TStaticFiles.PairedUnitFileAnyDialect(
+  const AFormFile: string): string;
+begin
+  Result := ChangeFileExt(AFormFile, '.pas');
+  if TFile.Exists(Result) then Exit;
+  if LowerCase(ExtractFileExt(AFormFile)) = '.lfm' then
+  begin
+    Result := ChangeFileExt(AFormFile, '.pp');
+    if TFile.Exists(Result) then Exit;
+  end;
+  Result := '';
+end;
+
 { TConfigFiles }
 
 class function TConfigFiles.Collect(const Path: string;
@@ -592,15 +641,22 @@ var
   TickCounter : Integer;
 begin
   Result := TStringList.Create;
-  if (Path = '') or not DirectoryExists(Path) then Exit;
-  // ScanRec faengt Fehler je Eintrag selbst (ohne Errors-Liste: still);
-  // ohne Tick-Callback gibt es auch kein EAbort.
-  Units := TStringList.Create;
-  TickCounter := 0;
   try
-    TStaticFiles.ScanRec(Path, Units, 0, nil, nil, AIgnore, TickCounter, nil, Result);
-  finally
-    Units.Free;
+    if (Path = '') or not DirectoryExists(Path) then Exit;
+    // ScanRec faengt Fehler je Eintrag selbst (ohne Errors-Liste: still);
+    // ohne Tick-Callback gibt es auch kein EAbort. Die Klammer um alles:
+    // wirft ScanRec doch (Speicher), geht das Ergebnis mit, statt zu
+    // lecken (Review Bereich C, Minor).
+    Units := TStringList.Create;
+    TickCounter := 0;
+    try
+      TStaticFiles.ScanRec(Path, Units, 0, nil, nil, AIgnore, TickCounter, nil, Result);
+    finally
+      Units.Free;
+    end;
+  except
+    Result.Free;
+    raise;
   end;
 end;
 

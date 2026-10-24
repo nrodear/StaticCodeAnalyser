@@ -2213,14 +2213,16 @@ begin
     begin
       Result.Description := _('Trailing comma in argument list');
       Result.Before :=
-        'Logger.Info(''ctx=%s'', [Ctx,]);   // <-- stray comma'#13#10 +
-        'CallFoo(A, B,);                  // <-- ditto';
+        '// Excel: Variant (late-bound OLE automation call)'#13#10 +
+        'Excel.Workbooks.Open(FileName,);   // <-- stray comma';
       Result.After :=
-        'Logger.Info(''ctx=%s'', [Ctx]);'#13#10 +
-        'CallFoo(A, B);'#13#10 +
+        'Excel.Workbooks.Open(FileName);'#13#10 +
         ''#13#10 +
-        '// Unlike Python/JS, Pascal does not allow trailing commas in calls.'#13#10 +
-        '// Usually a leftover from copy-paste or comment-out of last arg.';
+        '// In a normal call Delphi rejects the comma: it adds an empty'#13#10 +
+        '// argument (E2034 too many actual parameters). Only late-bound'#13#10 +
+        '// Variant/dispinterface calls compile it - the empty argument is'#13#10 +
+        '// an omitted optional parameter. Usually a leftover from'#13#10 +
+        '// copy-paste or a commented-out last argument.';
     end;
 
     fkDigitGrouping:
@@ -3416,13 +3418,20 @@ begin
     begin
       Result.Description := _('Override whose body is just "inherited" adds nothing');
       Result.Before :=
-        'procedure TFooSubclass.AfterConstruction; override;'#13#10 +
+        'type'#13#10 +
+        '  TFooSubclass = class(TFoo)'#13#10 +
+        '  public'#13#10 +
+        '    procedure AfterConstruction; override;'#13#10 +
+        '  end;'#13#10 +
+        ''#13#10 +
+        'procedure TFooSubclass.AfterConstruction;'#13#10 +
         'begin'#13#10 +
         '  inherited;             // <- empty override, wastes a VMT slot'#13#10 +
         '                         //    and forces every reader to verify'#13#10 +
         'end;';
       Result.After :=
-        '// Remove the override entirely. Virtual dispatch falls'#13#10 +
+        '// Remove the override entirely - declaration AND implementation.'#13#10 +
+        '// Virtual dispatch falls'#13#10 +
         '// through to the parent automatically when no override exists.'#13#10 +
         ''#13#10 +
         '// (Different parent method intentionally?  Keep it but document why:'#13#10 +
@@ -4364,13 +4373,14 @@ begin
         'procedure Foo(P1, P2: Pointer);'#13#10 +
         'var Diff: NativeInt;            // 32 on Win32, 64 on Win64'#13#10 +
         'begin'#13#10 +
-        '  Diff := PtrUInt(P1) - PtrUInt(P2);     // pointer-wide cast'#13#10 +
+        '  Diff := NativeInt(P1) - NativeInt(P2); // pointer-wide cast'#13#10 +
         '  // or NativeUInt for an unsigned result'#13#10 +
         'end;'#13#10 +
         ''#13#10 +
         '// Pointer-width integer types in Delphi:'#13#10 +
-        '//   NativeInt / PtrInt   - signed, pointer-sized'#13#10 +
-        '//   NativeUInt / PtrUInt - unsigned, pointer-sized'#13#10 +
+        '//   NativeInt  - signed, pointer-sized'#13#10 +
+        '//   NativeUInt - unsigned, pointer-sized'#13#10 +
+        '// (PtrInt / PtrUInt are the FPC and mORMot names.)'#13#10 +
         '// Always use these for arithmetic on pointer addresses.';
     end;
 
@@ -4578,6 +4588,32 @@ begin
         '// Use ASCII identifiers. If a Unicode identifier is intentional,'#13#10 +
         '// confirm every letter is from the expected script (no mixed'#13#10 +
         '// Latin/Cyrillic/Greek) and consider transliterating for clarity.';
+    end;
+
+    fkComparisonPrecedence:
+    begin
+      Result.Description := _('not/and/or/xor bind tighter than comparisons - put the comparison in parentheses');
+      Result.Before :=
+        'if not List.Count > 0 then   // (not List.Count) > 0 - false for every Count'#13#10 +
+        '  Exit;'#13#10 +
+        'if Ready = True or Busy = False then   // (Ready = (True or Busy)) = False'#13#10 +
+        '  Start;';
+      Result.After :=
+        'if not (List.Count > 0) then'#13#10 +
+        '  Exit;'#13#10 +
+        'if Ready or not Busy then'#13#10 +
+        '  Start;';
+    end;
+
+    fkLoopPastHighBound:
+    begin
+      Result.Description := _('for loop runs one index past the end - the upper bound is Count - 1 or High()');
+      Result.Before :=
+        'for i := 0 to Names.Count do'#13#10 +
+        '  WriteLn(Names[i]);   // Names[Names.Count] raises';
+      Result.After :=
+        'for i := 0 to Names.Count - 1 do'#13#10 +
+        '  WriteLn(Names[i]);';
     end;
 
   end;

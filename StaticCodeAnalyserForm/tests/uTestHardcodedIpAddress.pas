@@ -2,11 +2,12 @@ unit uTestHardcodedIpAddress;
 
 // Tests fuer SCA200 HardcodedIpAddress (THardcodedIpAddressDetector).
 //
-// Die Grammatik-, Klassen- und Gate-Faelle im Detail laufen im FPC-
-// Pruefstand gegen uIpAddressScan (168 Faelle, Scratchpad fpc-ip); hier
-// steht der Detektor im echten Weg: Datei lesen, Kommentar-Strip, Zeile
-// ueber LineFor, Testpfad-Gate, Pipeline mit Suppression und
-// Konfidenzfilter, Katalogbeispiel.
+// Die Grammatik-, Klassen- und Gate-Faelle im Detail stehen in
+// uTestIpAddressScanGrammar/-Classes/-Pascal/-Ini gegen uIpAddressScan
+// (seit 2026-10-13 versioniert, vorher nur im Scratchpad des FPC-
+// Pruefstands); hier steht der Detektor im echten Weg: Datei lesen,
+// Kommentar-Strip, Zeile ueber LineFor, Testpfad-Gate, Pipeline mit
+// Suppression und Konfidenzfilter, Katalogbeispiel.
 
 interface
 
@@ -50,7 +51,7 @@ implementation
 
 uses
   System.IOUtils,
-  uAstNode, uParser2, uRuleCatalog, uHardcodedIpAddress;
+  uAstNode, uParser2, uRuleCatalog, uAnalyzeContext, uHardcodedIpAddress;
 
 // Eine Unit mit ABody im Rumpf einer Routine.
 function InUnit(const ABody: string): string;
@@ -80,11 +81,15 @@ end;
 
 // Detektor direkt auf einer Datei unter ARelPath (Testpfad-Gate braucht
 // einen frei waehlbaren Pfad - FindingsOfFile schreibt immer nach Temp).
+// Das Temp-Verzeichnis ist die Scanwurzel des Kontexts: nur ARelPath
+// zaehlt fuer das Gate, nicht der Pfad DARUEBER (Review 2026-10-13: ein
+// TEMP unter '...\test\...' haette jeden Fall still auf 0 gezogen).
 function IpCountAt(const ASource, ARelPath: string): Integer;
 var
   Dir, Path : string;
   Parser    : TParser2;
   Root      : TAstNode;
+  Ctx       : TAnalyzeContext;
   Res       : TObjectList<TLeakFinding>;
 begin
   Dir := TPath.Combine(TPath.GetTempPath, 'sca_ip_' + TGuid.NewGuid.ToString);
@@ -92,12 +97,14 @@ begin
   TDirectory.CreateDirectory(ExtractFilePath(Path));
   TFile.WriteAllText(Path, ASource, TEncoding.UTF8);
   Res := TObjectList<TLeakFinding>.Create(True);
+  Ctx := TAnalyzeContext.Create;
   try
+    Ctx.ScanRootDir := Dir;
     Parser := TParser2.Create;
     try
       Root := Parser.ParseFile(Path);
       try
-        THardcodedIpAddressDetector.AnalyzeUnit(Root, Path, Res);
+        THardcodedIpAddressDetector.AnalyzeUnit(Root, Path, Res, Ctx);
       finally
         Root.Free;
       end;
@@ -106,6 +113,7 @@ begin
     end;
     Result := TFindingHelper.Count(Res, fkHardcodedIpAddress);
   finally
+    Ctx.Free;
     Res.Free;
     TDirectory.Delete(Dir, True);
   end;

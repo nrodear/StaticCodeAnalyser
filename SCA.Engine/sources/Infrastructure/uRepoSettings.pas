@@ -508,10 +508,10 @@ type
     // Aus [UI] ClipboardOnClick gelesen, wirkt in EXE und IDE-Plugin:
     //   1 (Default) - Zwischenablage NICHT anfassen
     //   2           - Jira-Mini-Issue (Headline + 5 Fakten-Bullets)
-    //   3           - Claude-AI-Prompt (Verhalten vor 2026-08-12; das
-    //                 Plugin stellt bei Quick-Fix-faehigen Regeln einen
-    //                 Quick-Fix-Block voran, die EXE nicht - bewusste
-    //                 Alt-Divergenz)
+    //   3           - Claude-AI-Prompt (Verhalten vor 2026-08-12; EXE und
+    //                 Plugin kopieren denselben Prompt - den Quick-Fix-
+    //                 Block, den das Plugin voranstellte, gibt es seit dem
+    //                 Wegfall von uQuickFix am 2026-10-10 nicht mehr)
     // Ungueltige Werte werden beim Laden auf 1 geklemmt; die Mapping-
     // Funktion in uFindingCopyText faellt zusaetzlich defensiv auf
     // "nicht anfassen" zurueck. Die expliziten Kopier-Gesten (Kontext-
@@ -580,10 +580,11 @@ uses
   Winapi.Windows, System.IOUtils,
   uIgnoreList, uSCAConsts, uCustomRuleDetector, uRuleCatalog,
   uPathOverrides,
-  uEngineApi;   // TAnalysisSession.Acquire/ReleaseEngineLock - Schnappschuss
-                // der Discovery-Globals in PersistDiscoveredClasses. Zirkel
-                // ueber die implementation-uses ist zulaessig: uEngineApi
-                // fuehrt uRepoSettings ebenfalls nur in der implementation.
+  uEngineLock;  // Acquire/ReleaseEngineLock - Schnappschuss der Discovery-
+                // Globals in PersistDiscoveredClasses. Blatt-Unit statt der
+                // Fassade uEngineApi (Review Bereich C, Major 11): die zog
+                // ueber ihr interface-uses den Quellstellen-Dienst in jeden
+                // Scan-Pfad, nur um diesen einen Lock zu erreichen.
 
 const
   DEFAULT_INI_CONTENT =
@@ -1152,10 +1153,8 @@ const
     ';   1 = leave the clipboard alone (default)'#13#10 +
     ';   2 = Jira mini issue: one headline plus five fact bullets'#13#10 +
     ';       (rule, file:line, method, message, fix hint)'#13#10 +
-    ';   3 = Claude AI prompt (the behaviour before 2026-08-12; in the'#13#10 +
-    ';       IDE plugin with a quick-fix block prepended when the rule'#13#10 +
-    ';       has a quick-fix provider - the EXE copies the prompt'#13#10 +
-    ';       without that block)'#13#10 +
+    ';   3 = Claude AI prompt (the behaviour before 2026-08-12; EXE and'#13#10 +
+    ';       IDE plugin copy the same prompt)'#13#10 +
     '; Invalid values fall back to 1. A change takes effect on the next'#13#10 +
     '; analysis run at the latest. The explicit copy gestures (context'#13#10 +
     '; menu "Copy AI prompt") always copy the AI prompt regardless of this'#13#10 +
@@ -1175,15 +1174,18 @@ const
     '; Valid names:'#13#10 +
     ';   SharedUiHooks, DockForm, LineHighlighter, EditorBulb,'#13#10 +
     ';   AnnotationOverlay, WatchMode, WarmUpCaches, ViewMenuItem,'#13#10 +
-    ';   EditorContextMenu, OptionsPageSCA, OptionsPageSonar,'#13#10 +
-    ';   FindingsProperties, AboutBox, ToolsMenuItem'#13#10 +
+    ';   EditorContextMenu, EditorContextActions, OptionsPageSCA,'#13#10 +
+    ';   OptionsPageSonar, FindingsProperties, AboutBox, ToolsMenuItem'#13#10 +
     '; PackageWizard is deliberately NOT switchable - it carries the'#13#10 +
     '; teardown of every other element on unload.'#13#10 +
     '; Dependent degradation: DockForm=0 also removes the View menu entry;'#13#10 +
     '; WatchMode=0 leaves the properties panel without live findings;'#13#10 +
     '; SharedUiHooks=0 falls back to VCL default colours;'#13#10 +
     '; LineHighlighter=0 also silences the EditorBulb (the light bulb'#13#10 +
-    '; at the caret line gets its editor events from there).'#13#10 +
+    '; at the caret line gets its editor events from there);'#13#10 +
+    '; EditorContextActions=0 removes the code actions without a finding'#13#10 +
+    '; from the editor context menu (finding actions stay);'#13#10 +
+    '; EditorContextMenu=0 silences EditorContextActions too.'#13#10 +
     ';'#13#10 +
     ';Element.AnnotationOverlay=0'#13#10 +
     ''#13#10 +
@@ -1424,6 +1426,9 @@ begin
       Ini.Free;
     end;
   except
+    // Leer mit Absicht: Schnell-Leser fuer EINEN Wert - bei jedem Fehler
+    // (Datei gesperrt, kaputt, verschwunden) bleibt ADefault, genau wie
+    // bei QuickReadBool. Der Aufrufer hat keinen Fehlerkanal.
   end;
 end;
 
@@ -1660,6 +1665,9 @@ begin
   begin
     OldPath := TIgnoreList.ConfigDir + 'repo.ini';
     if FileExists(OldPath) then
+      // Leer mit Absicht: scheitert die Umbenennung (Rechte, offene Datei),
+      // bleibt die alte repo.ini liegen und die neue analyser.ini entsteht
+      // leer - Verlust der Alt-Einstellungen, aber kein Startabbruch.
       try RenameFile(OldPath, Result); except end;
   end;
 end;
@@ -1677,6 +1685,8 @@ begin
   SL := TStringList.Create;
   try
     SL.Text := DEFAULT_INI_CONTENT;
+    // Leer mit Absicht: die Vorlage ist Komfort - ohne schreibbares
+    // Konfigverzeichnis laeuft das Werkzeug mit Vorgaben weiter.
     try SL.SaveToFile(Path, TEncoding.UTF8); except end;
   finally
     SL.Free;
@@ -2454,14 +2464,14 @@ begin
     //
     // TCriticalSection ist reentrant - ein Aufrufer, der das Lock schon
     // haelt, laeuft durch.
-    TAnalysisSession.AcquireEngineLock;
+    AcquireEngineLock;
     try
       if Assigned(uSCAConsts.DiscoveredClasses) then
         SnapInst.Assign(uSCAConsts.DiscoveredClasses);
       if Assigned(uSCAConsts.DiscoveredStaticClasses) then
         SnapStat.Assign(uSCAConsts.DiscoveredStaticClasses);
     finally
-      TAnalysisSession.ReleaseEngineLock;
+      ReleaseEngineLock;
     end;
 
     // Wenn beide Discovery-Listen leer waren: nichts zu tun
@@ -2482,6 +2492,8 @@ begin
     begin
       Raw := TStringList.Create;
       try
+        // Leer mit Absicht: ein unlesbares .log heisst nur, dass die
+        // alten Treffer nicht gemergt werden - die neuen werden geschrieben.
         try Raw.LoadFromFile(LogPath); except end;
         ReadOldList(Raw, HEADER_INST,   Inst);
         ReadOldList(Raw, HEADER_STATIC, Stat);
@@ -2510,6 +2522,8 @@ begin
       for i := 0 to Stat.Count - 1 do
         Output.Add('; ' + Stat[i]);
 
+      // Leer mit Absicht: Discovery-Treffer sind Beiwerk des Laufs; ein
+      // Schreibfehler darf weder Scan noch Oberflaeche stoeren.
       try Output.SaveToFile(LogPath); except end;
     finally
       Output.Free;

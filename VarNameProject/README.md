@@ -1,10 +1,12 @@
-# VarNameProject - Testprojekt "Lokale Variable einfuehren"
+# VarNameProject - Testprojekt "Lokale Konstante einfuehren"
 
 Zweck: klaeren, wie reDelphix einen NEUEN Namen erfragt, ohne Dialog -
 so wie ReSharper "Introduce Variable" (Nico 2026-10-11, Entscheid E17 im
 Konzept "Editorhilfen ohne Fund" - seit 2026-10-11 heissen sie Code-Aktionen,
-zu einem Fund Quick-Fix, ohne Fund Refactoring; diese hier heisst "Lokale
-Variable einfuehren"):
+zu einem Fund Quick-Fix, ohne Fund Refactoring; diese hier hiess "Lokale
+Variable einfuehren" und heisst seit Entscheid E26 (2026-10-13) **"Lokale
+Konstante einfuehren"**: die Deklaration ist `const MagicNr01 = 42;`, keine
+Variable - siehe "Entscheide" und die Kompilierprobe):
 
 1. Der Code entsteht mit einem vorlaeufigen Namen, z. B. `MagicNr01`.
 2. Es geht inline weiter - kein Fenster.
@@ -24,8 +26,8 @@ Weg stabil traegt.
 | Datei | Inhalt |
 |---|---|
 | `package/VarNameProject.d12.dpk/.dproj` | Entwurfszeit-Paket (rtl, vcl, designide) - eigenstaendig, ohne SCA.Engine und reDelphix |
-| `source/uVnpPlan.pas` | reine Textlogik (auch unter FPC): Zahl-Literal am Caret, gleiche Literale der Zeile, Deklarationszeile, Spalten danach, freier Name `MagicNrNN`, begin..end fuer Zweige, Template-Code fuer D1 |
-| `source/uVnpEdits.pas` | was am Puffer geaendert wird, ohne ToolsAPI (auch unter FPC): Text-Schnappschuss (Zeilen, Byte-Anfaenge, Zeilenende), Ziel an der Caret-Position, die Ersetzungen des Writers fuer C1h, Loeschen/Zurueckschreiben der Anweisung fuer D1, Template-Datei, eigenes Template erkennen; `ApplyByteEdits` stellt den Writer fuer die Tests nach |
+| `source/uVnpPlan.pas` | reine Textlogik (auch unter FPC): Zahl-Literal am Caret, gleiche Literale der Zeile, Deklarationszeile `const MagicNrNN = <Literal>;` (E26), Spalten danach, freier Name, begin..end fuer Zweige, Ablehnungen der Zeile, FPC-Weiche, Template-Code fuer D1 |
+| `source/uVnpEdits.pas` | was am Puffer geaendert wird, ohne ToolsAPI (auch unter FPC): Text-Schnappschuss (Zeilen, Byte-Anfaenge, Zeilenende je Zeile), Ziel an der Caret-Position samt dem Zusammenhang ueber Zeilen (mehrzeilige Strings und Kommentare, asm, initialization, FPC-Weiche, Direktiven, Kommentargrenzen eines begin..end, Bedingungsausdruck), die Ersetzungen des Writers fuer C1h, Loeschen/Zurueckschreiben der Anweisung fuer D1, Template-Datei, eigenes Template erkennen; `ApplyByteEdits` stellt den Writer fuer die Tests nach |
 | `source/uVnpIntroduce.pas` | Ablauf in der IDE: Sperren pruefen, Fokus, planen, dann C1h (Ersetzungen mit einem Writer, Block markieren, IDE-Sync-Edit) oder D1 (Live Template laden, Anweisung ersetzen per `InsertCode`); Sonde "Sitzung jetzt" |
 | `source/uVnpSync.pas` | Prozess-Merker nach einer Zugriffsverletzung; Sonde N1 (Dummy-Notifier fuer Hypothese H1) |
 | `source/uVnpLog.pas` | Protokoll: `%TEMP%\VarNameProject.log` (jede Zeile mit PID, Kopfzeile je Ladung) und Meldungsansicht (Gruppe "VarNameProject") |
@@ -59,8 +61,8 @@ Weg stabil traegt.
 
 | Variante | Weg | gekoppelt | Ende der Sitzung |
 |---|---|---|---|
-| C1h | eigener Writer (ein Strg+Z), Block vom Namen in der Deklaration bis hinter seine letzte Verwendung, dann `SyncEditBlock(nil)` = Strg+Umschalt+J | JEDER Bezeichner, der im Block mehrfach vorkommt (in Fall 1 nur `MagicNr01`) | laut Hilfe Esc oder der Knopf im Rand; Enter ungeprueft |
-| D1 | Live Template zur Laufzeit: XML nach `%TEMP%\VarNameProject\tpl`, `LoadTemplates`, Anweisung loeschen, `InsertCode` | nur der Name (ein Punkt, alle Stellen gleichnamig) | laut Hilfe Esc, Enter oder Tab am letzten Punkt |
+| C1h | eigener Writer (ein Strg+Z), Block vom Namen in der Deklaration bis hinter seine letzte Verwendung, dann `SyncEditBlock(nil)` = Strg+Umschalt+J | JEDER Bezeichner, der im Block mehrfach vorkommt (in Fall 1 nur `MagicNr01`) | der Knopf im Rand. Gemessen (UI-Test 2026-10-11): Enter tut nichts, **Esc zerstoert Text** - eine Sitzung der Code-Aktion darf Esc nie an das Sync Edit durchlassen |
+| D1 | Live Template zur Laufzeit: XML nach `%TEMP%\VarNameProject\tpl`, `LoadTemplates`, Anweisung loeschen, `InsertCode` | nur der Name (ein Punkt, alle Stellen gleichnamig) | laut Hilfe Enter oder Tab am letzten Punkt (ungemessen - D1 lief nicht; Esc dort ungeprueft) |
 
 Beide nur mit IDE-eigenen Objekten und ohne Notifier. Vor jedem Lauf:
 Abbruch, wenn der Prozess-Merker gesetzt ist (Zugriffsverletzung in einem
@@ -169,20 +171,26 @@ IOTAEditWriter nach -, nicht nur Offsets.
 
 | Testunit | Tests | Inhalt |
 |---|---|---|
-| `uTestVnpPlan` | 12 | Literal am Caret, gleiche Literale (nur Code), Formen (hex, Bruch, Exponent, `_`, Bereich), Spalten, Kommentare, freier Name, Bytes/Zeichen; alle 44 Pruefungen des frueheren Ad-hoc-Tests |
-| `uTestVnpRefuse` | 9 | begin..end fuer den Zweig, alle Ablehnungen (case-Zweig, Sprungmarke, on-Handler, Zeilenanfang, schon benannt, Konstanten, Deklarationszeilen, Zeile darueber) |
-| `uTestVnpGuards` | 11 | Schutzregeln aus dem Korpus-A/B: Routinen-Koepfe und Eigenschaften, Typ-/Sprungmarken-/asm-/exports-/Attribut-Zeilen, generische Deklarationen, case-Marken hinter `for`, on-Handler ohne Variable, Zeilen, die einen Ausdruck oder eine Liste fortsetzen, Schluesselwoerter hinter Kommentaren, `else` des eigenen `if`, offene Bloecke, Direktiven zwischen Zweig und Anweisung, mehrzeilige Strings |
-| `uTestVnpEdits` | 20 | C1h Ende zu Ende: Demo-Faelle 1-6 (CR LF, LF, BOM, Umlaute und Euro VOR dem Literal), Text-Schnappschuss, Zeile darueber, Ziel am Caret, Writer-Vertrag |
+| `uTestVnpPlan` | 15 | Literal am Caret, gleiche Literale (nur Code), Formen (hex, Bruch, Exponent, `_`, Bereich), Spalten, Kommentare (auch `*)` in Spalte 1), freier Name (auch ueber 99 hinaus), FPC-Weiche, Bytes/Zeichen; alle 44 Pruefungen des frueheren Ad-hoc-Tests |
+| `uTestVnpRefuse` | 9 | begin..end fuer den Zweig, alle Ablehnungen (case-Zweig, Sprungmarke, on-Handler, Zeilenanfang, schon benannt - `var X := 42;` wie `const X = 42;`, Konstanten, Deklarationszeilen, Zeile darueber) |
+| `uTestVnpGuards` | 18 | Schutzregeln aus dem Korpus-A/B und dem Review vom 2026-10-13: Routinen-Koepfe und Eigenschaften (auch Fortsetzungen `message`/`dispid`/`external`/`stdcall` auf der Folgezeile; `Register<Integer>(42)` und `Register; X := 42` sind Anweisungen), Typ-/Sprungmarken-/asm-/exports-/Attribut-Zeilen, typisierte Konstanten, generische Deklarationen, case-Marken hinter `for`, on-Handler ohne Variable, zweite `var`/`const` hinter einer Anweisung, Zeilen, die einen Ausdruck oder eine Liste fortsetzen, Schluesselwoerter hinter Kommentaren, `initialization` darueber, `else` des eigenen `if`, offene Bloecke, Bedingungsausdruck in der Zeile darueber, Direktiven zwischen Zweig und Anweisung, mehrzeilige Strings, Ende des Sync-Blocks |
+| `uTestVnpEdits` | 20 | C1h Ende zu Ende: Demo-Faelle 1-6 (CR LF, LF, BOM, Umlaute und Euro VOR dem Literal), Text-Schnappschuss (Zeilenende je Zeile, BOM in Zeile 1), Zeile darueber, Ziel am Caret, Writer-Vertrag |
+| `uTestVnpContext` | 18 | Zusammenhang ueber Zeilen in `TargetAt` (Review 2026-10-13, Gegen-Review 2026-10-14, Review Woche 2026-10-21): mehrzeilige Strings mit fuenf Quotes und `''' + '''` (Einrueckung des Blocks hinter einem Schliesser), Kommentar- und String-Zustand in einem Lauf, asm-Block (auch Sprungmarke `@end:`), initialization-Abschnitt, FPC-Weiche, Direktive auch ohne Block, auf der Zeile darueber und auf der Anweisungszeile (auch hinter dem Literal), Zeile darueber ab ihrem Kommentar-Zustand, `*)` in Spalte 1, Kommentargrenzen eines begin..end, Bedingungsausdruck mit Armen auf eigenen Zeilen (auch geschachtelt, else-if-Kette, Bedingung ueber Zeilen), Zeilenenden je Zeile, Vorbedingung von `IntroduceEdits` |
 | `uTestVnpTemplate` | 20 | D1: Template-Code, Template-XML (wie `ifnil.xml`), eigenes Template erkennen, Anweisung loeschen/zurueckschreiben, Modell der Template-Expansion (Annahme D-M3 - in der IDE zu bestaetigen) |
 
 Ohne IDE: `bash VarNameProject/tools/fpc-pruefstand/build.sh` (alle
 `tests/uTestVnp*.pas`; `WORK=<ordner>` fuer parallele Laeufe). Stand
-2026-10-11: 72 von 72 gruen. Die Erwartungen haben unabhaengige Agenten von
-Hand aus dem Vertrag abgeleitet (Interface-Kommentare, README, Demo-Dateien);
-Gegenpruefer haben mit Mutationstests nachgesehen, dass die Tests Fehler
-auch finden. Dazu lief ein Korpus-A/B: alter gegen neuen Plan ueber 8 Mio.
-Zeilen von `D:\git-sca-realworld` (1,07 Mio. Caret-Positionen) - jede
-Abweichung musste eine beabsichtigte Regel erklaeren.
+2026-10-14: 92 von 92 gruen (2026-10-11: 73 von 73); seither 100 Tests
+(Tabelle oben, gezaehlt an den `[Test]`-Attributen), der naechste Lauf
+steht aus. Die Erwartungen haben
+unabhaengige Agenten von Hand aus dem Vertrag abgeleitet
+(Interface-Kommentare, README, Demo-Dateien); Gegenpruefer haben mit
+Mutationstests nachgesehen, dass die Tests Fehler auch finden. Dazu lief ein
+Korpus-A/B: alter gegen neuen Plan ueber 8 Mio. Zeilen von
+`D:\git-sca-realworld` (1,07 Mio. Caret-Positionen) - jede Abweichung musste
+eine beabsichtigte Regel erklaeren. Das Review vom 2026-10-13 (Bericht F,
+FPC-Harness mit 24 Gegenbeispielen) fand weitere Luecken des Zeilen-Lesers;
+alle 24 Faelle verhalten sich seit 2026-10-14 wie beabsichtigt.
 
 Gefunden und behoben, alles mit Test:
 - zwei Anweisungen in der Zweigzeile (`Y := 42; Z := 1;`): begin..end um
@@ -206,6 +214,34 @@ Gefunden und behoben, alles mit Test:
   verschiedenen Zweigen;
 - die obere Grenze eines Bereichs (`0..9`) war kein Literal; `for var I:
   Integer := ...` und `Writeln(X:8:2)` wurden als Sprungmarke abgelehnt.
+
+Review 2026-10-13 (Bericht F, behoben 2026-10-14, alles mit Test):
+- `var MagicNr01 := 1;` rechnete anders als das Literal (`C - 1` mit `C:
+  Cardinal` ergab -1 statt 4294967295; Integer- statt ShortInt-/Byte-
+  Ueberladung) - seit E26 eine Inline-Konstante;
+- ein mehrzeiliger String mit fuenf Quotes galt an einer Inhaltszeile mit
+  drei Quotes als beendet - die Deklaration landete IM String;
+- begin..end um einen Zweig, dessen Zeile in einem offenen Kommentar
+  endet (`X := 42; { Kommentar`): `end;` landete im Kommentar, Code hinter
+  dem Kommentarende rutschte in den Block; ebenso `begin` hinter einer
+  Zweigzeile mit offenem Kommentar;
+- Fortsetzungen eines Routinen-Kopfs auf der Folgezeile (`message WM_USER
+  + 5;`, `dispid 5;`, `external 'x.dll' index 5;`), Zeilen im asm-Block,
+  eine zweite Deklaration hinter einer Anweisung (`Foo; var A: array[0..9]
+  of Byte;`, `Foo; const C = 5;`) bekamen eine Deklaration;
+- eine Direktive zwischen der Zeile darueber und der Anweisung wurde nur
+  mit Block geprueft (`{$IFDEF A} if B then {$ELSE} Foo; {$ENDIF}`);
+- die Zeile darueber wurde ab Code gelesen, auch wenn sie in einem
+  Kommentar beginnt (`{ Bsp:` / `Foo; // } if A then`);
+- `*)` in Spalte 1 schloss den Kommentar schon am `*`, das `)` galt als Code;
+- der else-Arm eines Bedingungsausdrucks (Delphi 13: `X := if C then A` /
+  `else` / `Foo(42);`) bekam begin..end mitten im Ausdruck;
+- eingefuegte Zeilen bekamen CR LF, sobald es irgendwo in der Datei vorkam
+  - jetzt das Zeilenende ihrer Nachbarzeile;
+- der Rueckfall `MagicNrX` nach 99 Namen war ungeprueft - jetzt `MagicNr100`
+  usw. gegen den Text geprueft;
+- `IntroduceEdits` ohne gueltigen Plan lief in einen Bereichsfehler;
+- Dateien mit FPC-Weiche: eine Inline-Konstante gibt es in FPC 3.2 nicht.
 
 Nicht ohne IDE pruefbar: Sync Edit, `InsertCode`, Fokus, Abbau - dafuer der
 Testplan oben.
@@ -353,33 +389,45 @@ Testplan oben.
   reDelphix (Wizard, Menue, Taste), erst 1:1, Zusammenfuehren mit
   `uRdxCodeMap`/`WrapInBlock`/`ReplaceSpans` danach mit Korpus-A/B; Enter
   und Dialog entstehen zuerst hier im Labor.
-- **Typisierte Variable (E26)**: die Deklaration wird `var MagicNr01:
-  <Typ> := 42;`, damit die Variable zur Laufzeit rechnet wie der Compiler
-  das Literal. Die Typregel klaert zuerst die Kompilierprobe unten.
+- **Inline-Konstante (E26, Nico 2026-10-13)**: zuerst war eine typisierte
+  Variable `var MagicNr01: <Typ> := 42;` vorgesehen. Die Kompilierprobe
+  (Win32, D12) zeigte, dass keine Typregel das Literal trifft: `var
+  MagicNr01 := 1` bzw. `: Integer` rechnete `C - MagicNr01` mit `C:
+  Cardinal` als -1 statt 4294967295 (P2.33/34), waehlte Integer- statt
+  ShortInt-/Byte-Ueberladungen (P4.9-16), und `var M := 100000` bekam einen
+  anonymen 32-Bit-Typ (P1.2). Entscheid: die Deklaration wird eine
+  **Inline-Konstante `const MagicNr01 = 42;`** - sie behaelt Faltung,
+  Ueberladungswahl und die vorzeichenlose Rechnung des Literals. Die Aktion
+  heisst seither "Lokale Konstante einfuehren". Beleg: Teil P6 der Probe
+  (Bau offen). Folge: in Dateien mit FPC-Weiche (FPC 3.2 kennt keine
+  Inline-Konstante) lehnt die Aktion ab.
 
 ## Kompilierprobe E26 (`probe/VnpTypeProbe.dpr`)
 
 Konsolenprogramm ohne `.dproj` (wie `tools/ResultProbe`): die `.dpr` in der
 IDE oeffnen, Win32 bauen, ausfuehren; wenn moeglich Win64 ebenso. Es misst,
-was die Typregel entscheidet - mit genau dem Code, den die Code-Aktion
-schreiben wuerde:
+wie der Compiler mit dem Code rechnet, den die Code-Aktion schreibt - P1
+bis P5 fuer die Variable (Win32-Lauf 2026-10-13, Ergebnis: siehe E26), P6
+fuer die Inline-Konstante:
 
 | Teil | Frage |
 |---|---|
-| P1 | Welchen Typ bekommt die heutige Form `var M := <Literal>` (42, 2147483648, `$FFFFFFFF`, `$FFFFFFFFFFFFFFFF`, 3.5, `1_000_000` ...)? |
+| P1 | Welchen Typ bekommt die fruehere Form `var M := <Literal>` (42, 2147483648, `$FFFFFFFF`, `$FFFFFFFFFFFFFFFF`, 3.5, `1_000_000` ...)? |
 | P2 | Gefaltetes Original (`100000 * 100000`, `1 shl 40`, `$FFFFFFFF + 1`, `1 shl 31`, `(-8) shr 1`) gegen Integer-, Int64- und Cardinal-Variable; Literal neben einer Laufzeit-Variablen (`N * 100000`) |
 | P3 | Bitmuster von `0.1` und `0.1 * 3` ueber Extended-, Double- und untypisierte Variable |
 | P4 | Ueberladungswahl: Literal gegen Variable (Integer/Int64, ShortInt, Byte, Single/Double[/Extended]) |
 | P5 | Kompiliert eine Int64-, UInt64- oder Cardinal-Variable dort, wo Integer erwartet wird (SetLength, Copy, for, Inc, case, in ...)? |
+| P6 | **E26:** dieselben Faelle wie P2, P3 und P4 mit `const MagicNr01 = <Literal>;` statt `var`; Sollwert ist jedes Mal das gefaltete Original (`1 shl 40` = 256, `C - 1` = 4294967295, `OvShort3(42)` = ShortInt ...). Wo das Original den Bau abbricht (E2099), ist derselbe Fehler die Erwartung - jeder dieser Faelle hat einen eigenen Schalter (`PROBE_P6_FOLD_*`, `PROBE_P6_BIGLIT_FOLD`), Standard an: bricht der Bau dort ab, ist das der Beleg, Schalter aus, weiter |
 
 Jeder Messpunkt mit Kompilierrisiko steht hinter einem eigenen
-`{$DEFINE PROBE_...}` (Standard: alle an). Bricht der Bau ab, die
-betroffenen Schalter in EINER Runde abschalten (`{.$DEFINE`) und die
-Fehlertexte melden - der Fehler ist selbst ein Ergebnis. Die
-Compiler-Meldungen (vor allem Warnungen in P2/P5) mitkopieren; das
-Protokoll steht in `%TEMP%\VarNameProject_TypeProbe.txt` (nach jedem Lauf
-in `..._Win32.txt` bzw. `..._Win64.txt` umbenennen). Die `.dproj` und `.res`,
-die die IDE anlegt, sind ignoriert.
+`{$DEFINE PROBE_...}` (Standard: alle an; die P2-Originale mit E2099 sind
+seit dem ersten Bau aus). Bricht der Bau ab, die betroffenen Schalter in
+EINER Runde abschalten (`{.$DEFINE`) und die Fehlertexte melden - der
+Fehler ist selbst ein Ergebnis. Die Compiler-Meldungen (vor allem
+Warnungen in P2/P5/P6) mitkopieren; das Protokoll steht in
+`%TEMP%\VarNameProject_TypeProbe.txt` (nach jedem Lauf in `..._Win32.txt`
+bzw. `..._Win64.txt` umbenennen). Die `.dproj` und `.res`, die die IDE
+anlegt, sind ignoriert.
 
 ## Was zurueckmelden (Messpunkte)
 
@@ -387,7 +435,7 @@ die die IDE anlegt, sind ignoriert.
   2 Templates) und sichtbar: sind die Stellen umrandet?
 - **M2** Umrandet die Variante GENAU die `MagicNr01`-Stellen (nicht
   daneben, nicht weitere Bezeichner)?
-- **M3** Steht der Caret auf dem Namen in der `var`-Zeile? Ueberschreibt
+- **M3** Steht der Caret auf dem Namen in der `const`-Zeile? Ueberschreibt
   Tippen den ganzen Namen (vorausgewaehlt) oder fuegt es ein?
 - **M4** Aendern sich beim Tippen alle Stellen mit?
 - **M5** Tasten: was tun Enter, Tab, Umschalt+Tab, Esc? Bleibt der neue
@@ -428,38 +476,79 @@ abgrenzen kann, lehnt er ab (lieber nichts tun als falschen Code schreiben).
 
 - Nur Zahl-Literale; nur gleiche Literale DERSELBEN Zeile werden ersetzt.
   Die obere Grenze eines Bereichs (`0..9`) ist ein eigenes Literal.
-- Die Deklaration kommt als Inline-`var` (Delphi 10.3+) direkt ueber die
-  Zeile; die Zeile darueber muss eine Anweisung beenden (`;`, `begin`,
-  `try` ...).
+- Die Deklaration kommt als Inline-`const` (Delphi 10.3+, E26) direkt
+  ueber die Zeile; die Zeile darueber muss eine Anweisung beenden (`;`,
+  `begin`, `try` ...). Beginnt sie in einem Kommentar, zaehlt nur ihr Code
+  hinter dessen Ende (`{ Bsp:` / `Foo; // } if A then` ist ein Zweig).
+  Steht auf der Zeile darueber, zwischen ihr und der Anweisung oder auf
+  der Anweisungszeile selbst eine Direktive (`{$IFDEF}`, auch `Foo;
+  {$ENDIF}`, `{$IFDEF A} if B then {$ELSE} Foo; {$ENDIF}` oder `{$ENDIF}
+  X := 42;`), Abbruch - mit und ohne Block.
+- Eingefuegte Zeilen enden wie die Zeile, vor die sie kommen (`begin` wie
+  die Zweigzeile, Deklaration und `end;` wie die Anweisung); eine letzte
+  Zeile ohne Zeilenende bekommt das erste Zeilenende der Datei, eine Datei
+  ohne jedes CR LF.
 - Zweig ohne begin (die Zeile darueber endet mit `then`/`do`/`else`): C1h
   setzt `begin..end` um Deklaration und Anweisung - nur, wenn die Zeile
   genau die EINE Anweisung des Zweigs ist: sie endet auf der Zeile mit
   `;`, ein weiteres `;` steht nur in einem Block, der auf der Zeile
   schliesst, jedes `else` gehoert zu einem `if` derselben Zeile, und es
-  schliesst nichts von ausserhalb (`until`, `finally`, `end`). Steht
-  zwischen Zweig und Anweisung eine Direktive (`{$IFDEF}`), Abbruch. In
-  reDelphix soll dafuer der vorhandene Block-Planer (SCA101, WrapInBlock)
-  einspringen. D1 lehnt Zweige ohne begin ganz ab, ebenso Zeilen mit `|`
-  (Trennzeichen des Templates) und `]]>` (Ende des CDATA-Abschnitts).
+  schliesst nichts von ausserhalb (`until`, `finally`, `end`). Endet die
+  Zweigzeile oder die Anweisung in einem offenen `{`/`(*`-Kommentar,
+  Abbruch (`begin` bzw. `end;` landete im Kommentar oder String). Gehoert
+  das `then`/`else` zu einem Bedingungsausdruck (Delphi 13: `X := if C
+  then A` auf der Zeile darueber, oder weiter oben mit den Armen auf
+  eigenen Zeilen - `X := if C then` / `A` / `else`, auch `X :=` / `if C
+  then` / ...), Abbruch: der Leser geht von der Zweigzeile aufwaerts bis
+  zum `if` oder bis eine Zeile eine Anweisung beendet (`;`) bzw. einen
+  Block oder einen do-/of-Zweig oeffnet - dann ist das `if` eine
+  Anweisung. Eine Zeile, die mit `then`/`else` endet, haelt den Gang nicht
+  an (`X := if A then 1 else` / `if B then`, die else-if-Kette `X := if A
+  then 1` / `else if B then`, auch eine Bedingung ueber Zeilen `X := if
+  (A and` / `B) then` / `Foo(1)` / `else`), ausser sie beginnt mitten in
+  der Zeile eine if-Anweisung (`Z := 1; if C then`) - Folgewelle A7, wie
+  reDelphix. In
+  reDelphix soll der vorhandene
+  Block-Planer (SCA101, WrapInBlock) einspringen. D1 lehnt Zweige ohne
+  begin ganz ab, ebenso Zeilen mit `|` (Trennzeichen des Templates) und
+  `]]>` (Ende des CDATA-Abschnitts).
 - Nie vor einem case-Zweig, einer Sprungmarke oder einem on-Handler
   (`1: ...`, `Fertig: ...`, `on E: X do ...`, auch `on E do ...` und
   case-Zweige hinter `for ... do`) - dort ist eine Deklaration dazwischen
   ungueltig.
-- Nie, wenn das Literal schon allein der Wert einer Deklaration ist.
-- Nie, wo die Zahl eine Konstante bleiben muss (E2026): `const`-Zeilen,
-  der Typ einer Inline-var (auch `for var I: 0..9`), Deklarationen
+- Nie, wenn das Literal schon allein der Wert einer Deklaration ist
+  (`var X := 42;` wie `const X = 42;`, auch typisiert).
+- Nie, wo die Zahl Teil einer Deklaration ist: `const`-Zeilen (auch hinter
+  einer Anweisung, `Foo; const C = 5;`), der Typ einer Inline-var (auch
+  `for var I: 0..9` und `Foo; var A: array[0..9] of Byte;`), Deklarationen
   `Name = ...` (auch generisch und mit `type`), Routinen-Koepfe
-  (Vorgabewerte, dispid, message, external index), `property ... default`,
-  Attribute `[...]`, `goto`/`label`, `exports`, `asm`.
+  (Vorgabewerte, dispid, message, external index) - auch ihre
+  Fortsetzungen auf der Folgezeile (`message WM_USER + 5;`, `dispid 5;`,
+  `external 'x.dll' index 5;`, `stdcall; external ...`; dieselben Woerter
+  mit `:=`, `.`, `(`, `[` dahinter sind Anweisungen), `property ...
+  default`, Attribute `[...]`, `goto`/`label`, `exports`, `asm`-Zeilen und
+  Zeilen in einem `asm`-Block.
 - Nie in Zeilen, die etwas fortsetzen: beginnt der Code mit einem Wert
   (Zahl, Vorzeichen - etwa der else-Wert eines Bedingungsausdrucks von
   Delphi 13) oder endet er mit `,` ausserhalb von Klammern (case-Marken).
-- Nie in einem mehrzeiligen String (Delphi 12, `'''` ... `'''`).
+- Nie in einem mehrzeiligen String (Delphi 12, `'''` ... `'''`, auch mit
+  fuenf oder mehr Quotes - geschlossen wird er nur von genau so vielen
+  Quotes am Zeilenanfang wie der Oeffner hatte; hinter dem Schliesser kann
+  auf derselben Zeile ein neuer beginnen, `''' + '''`) und nie in einem
+  Kommentar ueber mehrere Zeilen. Kommentar- und String-Zustand laufen in
+  einem Lauf: ein `'''` in einem Kommentarblock oeffnet nichts, ein `{`
+  oder `(*` im Text eines Strings schliesst nichts auf.
+- Nie im `initialization`-/`finalization`-Abschnitt (ob dort eine
+  Inline-Deklaration gilt, ist nicht gemessen) und nie in einer Datei mit
+  FPC-Weiche (`{$IFDEF FPC}`, `{$MODE ...}`): FPC 3.2 kennt keine
+  Inline-Konstante.
 - Schluesselwoerter am Zeilenanfang zaehlen auch hinter einem Kommentar
   oder einer Direktive (`{$IFDEF X}const ...`).
 - Bewusst abgelehnt, obwohl gueltig (der Leser grenzt es nicht ab): eine
   anonyme Funktion mit Ergebnistyp (`function: Integer`) - ihr `:`
   ausserhalb von Klammern sieht aus wie eine Sprungmarke.
-- Typ: `var X := 3.5` wird Extended, `$FFFFFFFF` Cardinal/Int64 - fuer den
-  Test egal, fuer die echte Hilfe in reDelphix nicht.
-- Kommentare ueber Zeilen vor der Caret-Zeile sieht der Leser nicht.
+- Typ: eine Inline-Konstante hat den Typ des Literals selbst (E26) - was
+  fuer das Literal galt (Faltung in 32 Bit, Ueberladungswahl, Cardinal-
+  Rechnung), gilt fuer sie; Beleg Teil P6 der Kompilierprobe (Bau offen).
+  Der Name `MagicNrNN` ist ueber den ganzen Puffer frei (auch jenseits
+  von 99).

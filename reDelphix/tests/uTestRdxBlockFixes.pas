@@ -36,45 +36,11 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxStructFixes;
+  System.Classes,
+  uRdxBufferMath, uRdxCodeMap, uRdxStructFixes,
+  uTestRdxTextKit;   // Join, Apply
 
 // ---- Helfer ----
-
-function Apply(const ASource: string; const AEdits: array of TRdxEdit): string;
-var
-  Bytes : TBytes;
-  Edits : TArray<TRdxEdit>;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-  i     : Integer;
-begin
-  SetLength(Edits, Length(AEdits));
-  for i := 0 to High(AEdits) do
-    Edits[i] := AEdits[i];
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, Edits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
-end;
-
-// Zeilen mit CRLF verbunden (TStringBuilder: string.Join kennt FPC nicht).
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
 
 // SCA101/SCA099: neuer Text oder '' bei Ablehnung (AReason). AWord <> '':
 // das Schluesselwort an der Spalte, an der AWord in Zeile ALine zuerst
@@ -256,6 +222,14 @@ begin
   Assert.IsTrue(Pos('"procedure"', R) > 0, R);
   Assert.AreEqual('', FixBlock(InProc(['  if A then var I := 1;']), 5, 'then', R));
   Assert.IsTrue(Pos('"var"', R) > 0, R);
+  // Ein Stopper-Wort IN Klammern beendet die Anweisung nicht: das benannte
+  // Argument 'End := 5' (OLE-Automation) sperrt wie ein Wort der Struktur
+  // (StatementStep zaehlt die Klammertiefe mit ParenDelta; Gegenpruefung
+  // V2-B2S-1: ohne die Tiefe rot - die Hilfe schnitt die Anweisung am
+  // 'End' ab und setzte '; end' in die Klammer).
+  Assert.AreEqual('', FixBlock(InProc(['  if A then',
+    '    Doc.Range(Start := 0, End := 5).Select;']), 5, 'then', R));
+  Assert.IsTrue(Pos('"end" in der Anweisung', R) > 0, R);
   Assert.AreEqual('', FixBlock(InProc(['  case X of', '    1: A;', '  else',
     '    var I := 1;', '  end;']), 7, 'else', R));
   Assert.IsTrue(Pos('Inline-Deklaration', R) > 0, R);

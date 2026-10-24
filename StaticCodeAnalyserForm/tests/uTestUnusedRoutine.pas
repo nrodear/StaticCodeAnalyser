@@ -51,11 +51,27 @@ type
     [Test] procedure IncludeZielMitUngueltigenZeichen_KeinAbbruch;
   end;
 
+  // Der Include-Leser von SCA164 (2026-10-22): Direktiven nur im Code,
+  // ein absolutes Ziel im Netz nie gelesen. Eigene Fixture -
+  // TTestUnusedRoutine traegt schon 25 Tests.
+  [TestFixture]
+  TTestUnusedRoutineIncludeLeser = class
+  public
+    [Test] procedure IncludeImZeilenkommentar_NichtGelesen;
+    [Test] procedure IncludeImKlammerkommentarUeberZweiZeilen_NichtGelesen;
+    [Test] procedure IncludeImStringliteral_NichtGelesen;
+    [Test] procedure IncludeImCodeMitKommentarDahinter_Gelesen;
+    [Test] procedure IncludeHinterKommentarAufDerZeile_Gelesen;
+    [Test] procedure NetzpfadZiel_NichtGelesen;
+    [Test] procedure IsNetworkIncludePath_Regel;
+  end;
+
 implementation
 
 uses
   System.SysUtils, System.Classes, System.IOUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
+  uUnusedRoutine,        // TUnusedRoutineDetector.IsNetworkIncludePath
   uTestFindingHelper;
 
 { --- Posten 216: zwei Whitelists ohne Test ----------------------- }
@@ -587,19 +603,24 @@ end;
 // deshalb beide den Inhalt des ERSTEN - gemessen am 03.09., der zweite
 // Test war dadurch rot. In Produktion aendert sich eine Include-Datei
 // waehrend eines Scans nicht; im Test schon.
-function ZaehleMitInclude(const AIncName, AIncInhalt: string): Integer;
+function ZaehleMitIncludeIn(const AIncName, AIncInhalt, ASrc: string): Integer;
 var
   IncPath : string;
 begin
   IncPath := SchreibeInclude(AIncName, AIncInhalt);
   try
-    Result := ZaehleFunde(SrcMitInclude(AIncName));
+    Result := ZaehleFunde(ASrc);
   finally
     if TFile.Exists(IncPath) then
     begin
       TFile.Delete(IncPath);
     end;
   end;
+end;
+
+function ZaehleMitInclude(const AIncName, AIncInhalt: string): Integer;
+begin
+  Result := ZaehleMitIncludeIn(AIncName, AIncInhalt, SrcMitInclude(AIncName));
 end;
 
 procedure TTestUnusedRoutine.Unused_CallerInImplInclude_NoFinding;
@@ -667,8 +688,114 @@ begin
   finally F.Free; end;
 end;
 
+{ ---- Der Include-Leser (2026-10-22) ------------------------------- }
+//
+// Selbstscan mit --time-detectors: UnusedRoutine 20.959 ms von 21.302 ms,
+// davon 20.954 ms in EINER Datei - uRdxBlocks.pas nennt in einem
+// '//'-Kommentar '{$I \\server\share\defs.inc}', der Leser nahm die
+// Rohzeile und FileExists wartete auf den Server. Zwei Gates: Direktiven
+// nur im Code, ein absolutes Ziel im Netz nie gelesen.
+
+// Die Fixture dieser Tests: AZeilen stehen im implementation-Teil VOR der
+// toten Routine Helferlein.
+function SrcMitZeilen(const AZeilen: string): string;
+begin
+  Result :=
+    'unit t;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    AZeilen + #13#10 +
+    'procedure Helferlein;'#13#10 +
+    'begin'#13#10 +
+    '  Beep;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+end;
+
+const
+  // Ein Include, das Helferlein ruft - gelesen entlastet es die Routine.
+  RUFT_AUF =
+    'procedure RuftAuf;'#13#10 +
+    'begin'#13#10 +
+    '  Helferlein;'#13#10 +
+    'end;';
+
+procedure TTestUnusedRoutineIncludeLeser.IncludeImZeilenkommentar_NichtGelesen;
+// Der Fall von uRdxBlocks.pas:1232, nur mit lokalem Ziel. Ohne den Fix
+// ROT mit 0: das Include wurde gelesen und nannte den Aufrufer.
+begin
+  Assert.AreEqual<Integer>(1, ZaehleMitIncludeIn(
+    'sca_test_inc_zeilenkommentar.inc', RUFT_AUF,
+    SrcMitZeilen('// {$I sca_test_inc_zeilenkommentar.inc}')),
+    'ein Include in einem //-Kommentar ist keine Direktive');
+end;
+
+procedure TTestUnusedRoutineIncludeLeser.IncludeImKlammerkommentarUeberZweiZeilen_NichtGelesen;
+// '(* *)' ueber zwei Zeilen: der Zustand muss die Zeile ueberdauern.
+begin
+  Assert.AreEqual<Integer>(1, ZaehleMitIncludeIn(
+    'sca_test_inc_klammer.inc', RUFT_AUF,
+    SrcMitZeilen('(* Hinweis:'#13#10'   {$I sca_test_inc_klammer.inc} *)')),
+    'ein Include in einem (* *)-Kommentar ist keine Direktive');
+end;
+
+procedure TTestUnusedRoutineIncludeLeser.IncludeImStringliteral_NichtGelesen;
+// Die Lazarus-codetools-Tests setzen Pascal als Literal zusammen (H5).
+begin
+  Assert.AreEqual<Integer>(1, ZaehleMitIncludeIn(
+    'sca_test_inc_string.inc', RUFT_AUF,
+    SrcMitZeilen('const QUELLE = ''{$I sca_test_inc_string.inc}'';')),
+    'ein Include in einem Stringliteral ist keine Direktive');
+end;
+
+procedure TTestUnusedRoutineIncludeLeser.IncludeImCodeMitKommentarDahinter_Gelesen;
+// WAECHTER: der Leser darf nicht mehr ausblenden als Kommentare - die
+// Direktive vor einem '//' bleibt Code.
+begin
+  Assert.AreEqual<Integer>(0, ZaehleMitIncludeIn(
+    'sca_test_inc_dahinter.inc', RUFT_AUF,
+    SrcMitZeilen('{$I sca_test_inc_dahinter.inc} // Aufrufer')),
+    'die Direktive vor dem Kommentar wird gelesen');
+end;
+
+procedure TTestUnusedRoutineIncludeLeser.IncludeHinterKommentarAufDerZeile_Gelesen;
+// WAECHTER: ein '{ }' vor der Direktive endet auf der Zeile - danach ist
+// wieder Code.
+begin
+  Assert.AreEqual<Integer>(0, ZaehleMitIncludeIn(
+    'sca_test_inc_davor.inc', RUFT_AUF,
+    SrcMitZeilen('{ Aufrufer } {$I sca_test_inc_davor.inc}')),
+    'die Direktive hinter dem Kommentar wird gelesen');
+end;
+
+procedure TTestUnusedRoutineIncludeLeser.NetzpfadZiel_NichtGelesen;
+// Ein absolutes Ziel im Netz liest der Detektor nicht: der Fund bleibt.
+// Ohne das Gate ist der Test ebenfalls gruen - nach 21 s in FileExists
+// (gemessen 2026-10-22); die Regel selbst prueft IsNetworkIncludePath_Regel.
+begin
+  Assert.AreEqual<Integer>(1, ZaehleFunde(
+    SrcMitZeilen('{$I \\server\share\defs.inc}')),
+    'ein Ziel im Netz ist kein Beleg - die Routine bleibt gemeldet');
+end;
+
+procedure TTestUnusedRoutineIncludeLeser.IsNetworkIncludePath_Regel;
+// Die Regel von uRdxPaths.IsNetworkPath, nachgebildet: UNC mit '\' und
+// '/', der Win32-Namensraum ('\\?\UNC\' im Netz, '\\?\C:\' lokal), ein
+// relatives Ziel nirgends. Das Netzlaufwerk (GetDriveType) bleibt
+// ungeprueft - es haengt an der Laufwerkstabelle des Rechners.
+begin
+  Assert.IsTrue(TUnusedRoutineDetector.IsNetworkIncludePath('\\srv\share\x.inc'), 'UNC');
+  Assert.IsTrue(TUnusedRoutineDetector.IsNetworkIncludePath('//srv/share/x.inc'), 'UNC mit /');
+  Assert.IsTrue(TUnusedRoutineDetector.IsNetworkIncludePath('\\?\UNC\srv\share\x.inc'), 'Namensraum UNC');
+  Assert.IsFalse(TUnusedRoutineDetector.IsNetworkIncludePath('\\?\C:\x.inc'), 'Namensraum lokal');
+  Assert.IsFalse(TUnusedRoutineDetector.IsNetworkIncludePath('C:\x.inc'), 'lokales Laufwerk');
+  Assert.IsFalse(TUnusedRoutineDetector.IsNetworkIncludePath('\x.inc'), 'Wurzel des Laufwerks');
+  Assert.IsFalse(TUnusedRoutineDetector.IsNetworkIncludePath('..\x.inc'), 'relativ');
+  Assert.IsFalse(TUnusedRoutineDetector.IsNetworkIncludePath(''), 'leer');
+end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestUnusedRoutine);
+  TDUnitX.RegisterTestFixture(TTestUnusedRoutineIncludeLeser);
 
 end.

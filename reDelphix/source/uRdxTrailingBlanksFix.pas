@@ -1,0 +1,102 @@
+unit uRdxTrailingBlanksFix;
+
+// reDelphix - Editorhilfe fuer SCA063 TrailingWhitespace, OHNE ToolsAPI und
+// ohne Parser: die Leerzeichen und Tabs am Zeilenende werden geloescht.
+// Die Meldung nennt die Spalte des ersten Leerzeichens der Endfolge
+// ('Trailing whitespace from column N ...'). Bedeutungsgleich im Code, in
+// Zeilen- und Block-Kommentaren und in Direktiven. GRUNDSATZ wie in
+// uRdxLineFixes: lieber keine Hilfe als eine falsche - der Planer prueft
+// den Fund am aktuellen Text nach. Keine Hilfe, wenn der Leerraum Teil
+// eines Strings ist: Inhalt eines mehrzeiligen Strings (''' ... ''', auch
+// die Eroeffnungszeile) oder eines nicht geschlossenen Strings.
+
+interface
+
+uses
+  uRdxBufferMath,      // TRdxEdit
+  uRdxCodeMap;         // TRdxCodeMap
+
+type
+  // Der Planer von SCA063 (Form TRdxMapPlanner, uRdxFixRunner).
+  TRdxTrailingBlanksFix = class
+  public
+    // Die Spalte aus der Meldung ('from column N'); 0 = nicht vorhanden.
+    class function ColumnOf(const AMessage: string): Integer; static;
+
+    // ALine endet ab der Spalte aus der Meldung nur noch auf Leerzeichen
+    // und Tabs, und keines davon ist String-Inhalt: diese Endfolge wird
+    // geloescht (NewText ''). Eine Zeile nur aus Leerraum wird leer.
+    class function TrimEnd(AMap: TRdxCodeMap; ALine: Integer;
+      const AMessage: string; out AEdit: TRdxEdit;
+      out AReason: string): Boolean; static;
+  end;
+
+implementation
+
+uses
+  System.SysUtils,
+  uRefactorInfo,       // TRefactorSpan.Make
+  uRdxText;            // _(), MsgNoColumn, MsgMovedSuffix (E29)
+
+const
+  SPAN_063 = 'sca063';
+  KEY_FROM = 'from column ';
+  // Die Gruende als englische msgids (E29), uebersetzt mit _() aus
+  // uRdxText; Deutsch und Franzoesisch in i18n/de.po und i18n/fr.po. Das
+  // Ende ' - Zeile verschoben? ...' haengt MsgMovedSuffix an.
+  R_BLANKS_MOVED = 'no whitespace at the line end at the reported place';
+  R_BLANKS_STRING = 'the whitespace is inside a multi-line or unclosed '
+    + 'string - it is content, the help does not delete it';
+
+// Der Zahlenleser ist NumberAfterKey (uRdxCodeMap) - bis zur Folgewelle
+// des Wochen-Reviews (G09-30) eine Kopie von ColumnFromMessage.
+class function TRdxTrailingBlanksFix.ColumnOf(const AMessage: string): Integer;
+begin
+  Result := NumberAfterKey(AMessage, KEY_FROM);
+end;
+
+class function TRdxTrailingBlanksFix.TrimEnd(AMap: TRdxCodeMap;
+  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  out AReason: string): Boolean;
+var
+  L        : string;
+  Col, i   : Integer;
+begin
+  Result := False;
+  AEdit := Default(TRdxEdit);
+  AReason := '';
+  Col := ColumnOf(AMessage);
+  if Col <= 0 then
+  begin
+    AReason := MsgNoColumn;
+    Exit;
+  end;
+  L := AMap.Raw(ALine);
+  // Die Endfolge muss genau bei Col beginnen (davor kein Leerraum) und bis
+  // zum Zeilenende reichen.
+  if (Col > Length(L)) or ((Col > 1) and IsBlank(L[Col - 1])) then
+  begin
+    AReason := MsgMovedSuffix(_(R_BLANKS_MOVED));
+    Exit;
+  end;
+  for i := Col to Length(L) do
+    if not IsBlank(L[i]) then
+    begin
+      AReason := MsgMovedSuffix(_(R_BLANKS_MOVED));
+      Exit;
+    end;
+  // String-Inhalt (mehrzeilig oder nicht geschlossen) bleibt unberuehrt.
+  for i := Col to Length(L) do
+    if AMap.ClassAt(ALine, i) = 's' then
+    begin
+      AReason := _(R_BLANKS_STRING);
+      Exit;
+    end;
+  AEdit.Span := TRefactorSpan.Make(SPAN_063, ALine, Col, ALine,
+    Length(L) + 1);
+  AEdit.Expected := Copy(L, Col, Length(L) - Col + 1);
+  AEdit.NewText := '';
+  Result := True;
+end;
+
+end.

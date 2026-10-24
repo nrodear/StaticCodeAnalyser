@@ -11,7 +11,7 @@ type
   public
     [Test] procedure FreeWithoutNil_Reported;
     [Test] procedure FreeAndNil_NotReported;
-    [Test] procedure FreeAtMethodEnd_NotReported;
+    [Test] procedure FreeAtMethodEnd_Reported;
     [Test] procedure FreeFollowedByNilAssign_NotReported;
     // Voll-Review 2026-09-12 (Blocker): nil-Out auf DERSELBEN Zeile.
     [Test] procedure FreeAndNilOutOnOneLine_NotReported;
@@ -46,12 +46,35 @@ type
     [Test] procedure ReadBetweenFreeAndNilOut_Kontrolle;
     [Test] procedure NilOutBeforeFreeOnOneLine_KnownLimit;
     [Test] procedure NilOutBeforeFreeOnPreviousLine_Kontrolle;
-    [Test] procedure TrailingAssignAfterLastCall_KnownLimit;
+    [Test] procedure TrailingAssignAfterLastCall_Reported;
     [Test] procedure TrailingAssignAfterLastCall_Kontrolle;
     [Test] procedure FreeOfFieldViaDestroy_StillReported;
     [Test] procedure DestroyFollowedByNilOut_NotReported;
     [Test] procedure ReassignWithForeignReadBetween_NotReported;
     [Test] procedure ReassignWithRealReadBetween_Reported;
+  end;
+
+  // Ohne die Ausnahme "Free ist der letzte Aufruf der Methode"
+  // (2026-10-22): jedes Feld-Free am Methodenende ist ein Fund. Eigene
+  // Fixture - TTestFreeWithoutNil traegt schon 37 Faelle.
+  [TestFixture]
+  TTestFreeWithoutNilLetzterAufruf = class
+  public
+    [Test] procedure Ctor_ExceptFreeVorRaise_BeideGemeldet;
+    [Test] procedure Ctor_FreeAlsLetzteAnweisung_Gemeldet;
+    [Test] procedure Methode_FreeVorRaise_Gemeldet;
+    [Test] procedure TearDown_BeideFelder_Gemeldet;
+    [Test] procedure TearDown_LocalAmEnde_NichtGemeldet;
+    // Korpus-Stichprobe 2026-10-22: die vier FP-Klassen der Erweiterung
+    [Test] procedure FreieRoutine_GlobalAmEnde_NichtGemeldet;
+    [Test] procedure FreieRoutine_GlobalVorRaise_Gemeldet;
+    [Test] procedure ConstParam_NichtGemeldet;
+    [Test] procedure VarUndOutParam_Gemeldet;
+    [Test] procedure InlineConst_NichtGemeldet;
+    [Test] procedure BeforeDestruction_NichtGemeldet;
+    [Test] procedure DoFreeUndFinalizeClass_NichtGemeldet;
+    [Test] procedure FreieRoutineFinalize_NichtGemeldet;
+    [Test] procedure MethodeFinalize_Gemeldet;
   end;
 
 implementation
@@ -125,9 +148,9 @@ begin
 end;
 
 procedure TTestFreeWithoutNil.FreeAtMethodEnd_Kontrolle;
-// Klammer zu FreeAtMethodEnd_NotReported: dieselbe Fixture
-// mit einer Anweisung HINTER dem Free, damit es nicht mehr
-// die letzte ist. Gemessen: 1.
+// Klammer zu FreeAtMethodEnd_Reported: dieselbe Fixture mit einer
+// Anweisung HINTER dem Free. Bis 2026-10-22 unterschied die Ausnahme
+// "letzter Aufruf" die beiden (0 gegen 1); seither melden beide.
 const SRC =
   'unit t; implementation'#13#10 +
   'procedure TFoo.Shutdown;'#13#10 +
@@ -467,10 +490,10 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFreeWithoutNil.TrailingAssignAfterLastCall_KnownLimit;
-// GRENZE: hinter dem Free steht nur noch eine Zuweisung an
-// ein anderes Feld - fuer die Ende-Erkennung ist das Free
-// damit die letzte relevante Anweisung. Gemessen: 0.
+procedure TTestFreeWithoutNil.TrailingAssignAfterLastCall_Reported;
+// Bis 2026-10-22 eine GRENZE (0): hinter dem Free stand nur noch eine
+// Zuweisung, fuer die Ausnahme "letzter Aufruf" war das Free damit das
+// Ende. Die Ausnahme ist weg - das Feld bleibt haengend, Fund.
 const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +
@@ -494,9 +517,9 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual<Integer>(0,
+    Assert.AreEqual<Integer>(1,
       TFindingHelper.Count(F, fkFreeWithoutNil),
-      'BEKANNTE GRENZE: eine Zuweisung dahinter macht das Free nicht zur Mitte');
+      'das Feld bleibt nach dem Free haengend - auch ohne Aufruf dahinter');
   finally F.Free; end;
 end;
 
@@ -714,10 +737,11 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFreeWithoutNil.FreeAtMethodEnd_NotReported;
-// Free als letzte Anweisung -> kein Folge-Use moeglich -> kein Befund.
-// FELD-Receiver (Voll-Review 2026-09-12, Major): mit lokaler Variable
-// griff der Local-Var-Skip, IsLastStmtOfMethod lief nie.
+procedure TTestFreeWithoutNil.FreeAtMethodEnd_Reported;
+// Free eines FELDES als letzte Anweisung: das Objekt lebt weiter, das
+// Feld zeigt auf freigegebenen Speicher - Fund. Bis 2026-10-22 hiess der
+// Test FreeAtMethodEnd_NotReported (Ausnahme "letzter Aufruf"); Locals
+// und Parameter bleiben ueber den Local-Var-Skip ohne Fund.
 const SRC =
   'unit t; implementation'#13#10 +
   'procedure TFoo.Shutdown;'#13#10 +
@@ -728,7 +752,7 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil));
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFreeWithoutNil));
   finally F.Free; end;
 end;
 
@@ -1120,7 +1144,305 @@ begin
   finally F.Free; end;
 end;
 
+{ ---- Die Ausnahme "letzter Aufruf" (2026-10-22) -------------------- }
+//
+// Gefunden in xml-as-html-final (TXMLProcessingController.Create): der
+// except-Zweig gibt zwei Felder frei und wirft weiter. Delphi ruft bei
+// einer Ausnahme im Konstruktor den Destruktor, der beide Felder noch
+// einmal freigibt - SCA139 meldete nur das erste, das zweite war "der
+// letzte Aufruf der Methode". Dasselbe in mvc-database
+// (TSQLiteTest.TearDown: 'FQuery.Free; FConnection.Free;' - nur FQuery).
+// Die ersten vier Faelle sind mit der Ausnahme rot (1 statt 2, 0 statt 1,
+// 0 statt 1, 1 statt 2).
+
+procedure TTestFreeWithoutNilLetzterAufruf.Ctor_ExceptFreeVorRaise_BeideGemeldet;
+const SRC =
+  'unit t; implementation'#13#10 +
+  'constructor TFoo.Create;'#13#10 +
+  'begin'#13#10 +
+  '  inherited Create;'#13#10 +
+  '  try'#13#10 +
+  '    FA := TA.Create;'#13#10 +
+  '    FB := TB.Create;'#13#10 +
+  '  except'#13#10 +
+  '    FA.Free;'#13#10 +
+  '    FB.Free;'#13#10 +
+  '    raise;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'beide Felder - der Destruktor gibt sie nach dem raise noch einmal frei');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.Ctor_FreeAlsLetzteAnweisung_Gemeldet;
+// Ohne raise: das Feld ist nach dem Konstruktor frei, der Destruktor gibt
+// es spaeter noch einmal frei.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'constructor TFoo.Create;'#13#10 +
+  'begin'#13#10 +
+  '  inherited Create;'#13#10 +
+  '  FTmp.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'im Konstruktor schuetzt "letzter Aufruf" nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.Methode_FreeVorRaise_Gemeldet;
+// Gewoehnliche Methode: nach dem raise lebt das Objekt weiter, das Feld
+// zeigt auf freigegebenen Speicher.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Load;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    DoLoad;'#13#10 +
+  '  except'#13#10 +
+  '    FList.Free;'#13#10 +
+  '    raise;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'Free vor raise ist kein Methodenende');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.TearDown_BeideFelder_Gemeldet;
+// Der Fall aus mvc-database: zwei Felder am Ende von TearDown - beide
+// gleich behandelt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TSQLiteTest.TearDown;'#13#10 +
+  'begin'#13#10 +
+  '  FQuery.Free;'#13#10 +
+  '  FConnection.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'beide Felder bleiben haengend');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.TearDown_LocalAmEnde_NichtGemeldet;
+// WAECHTER: die Ausnahme war nur fuer Locals richtig - die faengt der
+// Local-Var-Skip weiterhin ab, auch am Methodenende.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Shutdown;'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  DoLog(L);'#13#10 +
+  '  L.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'eine lokale Variable faellt mit der Methode aus dem Scope');
+  finally F.Free; end;
+end;
+
+{ ---- Korpus-Stichprobe 2026-10-22: FP-Klassen der Erweiterung ---------- }
+//
+// 30 zufaellige Adds aus realworld+Lazarus: 15 echt, 13 FP. Je Klasse ein
+// Fall; ohne die zugehoerige Aenderung jeweils rot (1 bzw. 2 statt 0).
+// Die beiden Waechter (GlobalVorRaise, VarUndOutParam) sind es nicht.
+
+procedure TTestFreeWithoutNilLetzterAufruf.FreieRoutine_GlobalAmEnde_NichtGemeldet;
+// Finalisierungs-Helfer (Alcinoe ALRttiFinalization, doublecmd Finish,
+// xEdit-Skripte 'Finalize'): ein globales Objekt am Ende einer freien
+// Routine - die Ausnahme "letzter Aufruf" gilt dort weiter.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Finish;'#13#10 +
+  'begin'#13#10 +
+  '  GCache.Clear;'#13#10 +
+  '  GCodecs.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'freie Routine, globales Objekt am Ende - kein Feld, kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.FreieRoutine_GlobalVorRaise_Gemeldet;
+// WAECHTER: vor einem raise schuetzt "letzter Aufruf" auch in der freien
+// Routine nicht - das Programm laeuft weiter, das Global haengt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure LoadAll;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    DoLoad;'#13#10 +
+  '  except'#13#10 +
+  '    GCache.Free;'#13#10 +
+  '    raise;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'Free vor raise - das Global bleibt haengend');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.ConstParam_NichtGemeldet;
+// delphimvcframework Render(const ACollection ..): der Parser legt
+// 'const ACollection' als Namen ab - der Parameter-Skip griff nie. Ein
+// const-Parameter ist eine lokale Kopie wie einer ohne Modifier.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Fill(const AList: TList; constref ARef: TList);'#13#10 +
+  'begin'#13#10 +
+  '  AList.Free;'#13#10 +
+  '  ARef.Free;'#13#10 +
+  '  DoLog;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'const/constref-Parameter sind lokale Kopien');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.VarUndOutParam_Gemeldet;
+// WAECHTER: var/out sind die Variable des Aufrufers - sie haengt nach dem
+// Free, FreeAndNil hilft dort wirklich.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Fill(var AObj: TObject; out AOut: TObject);'#13#10 +
+  'begin'#13#10 +
+  '  AObj.Free;'#13#10 +
+  '  AOut.Free;'#13#10 +
+  '  DoLog;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'var/out bleiben Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.InlineConst_NichtGemeldet;
+// Inno Setup Setup.ScriptRunner: 'const ProcNos = TPSList.Create;' - eine
+// Inline-Konstante faellt mit der Methode aus dem Scope.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Run;'#13#10 +
+  'begin'#13#10 +
+  '  const ProcNos = TList.Create;'#13#10 +
+  '  try'#13#10 +
+  '    DoRun(ProcNos);'#13#10 +
+  '  finally'#13#10 +
+  '    ProcNos.Free;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'Inline-Konstante ist lokal');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.BeforeDestruction_NichtGemeldet;
+// JVCL JvID3v2Base: BeforeDestruction laeuft direkt vor dem Destruktor.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFrame.BeforeDestruction;'#13#10 +
+  'begin'#13#10 +
+  '  inherited BeforeDestruction;'#13#10 +
+  '  FList.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'die Instanz stirbt wie im Destruktor');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.DoFreeUndFinalizeClass_NichtGemeldet;
+// Lazarus idedebugger DoFree und ZXing-Port FinalizeClass: beide sind ein
+// Abbau der Instanz bzw. der Klasse - wie ein Destruktor. Je ein Aufruf
+// dahinter, damit "letzter Aufruf" nicht mitspielt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TStruct.DoFree;'#13#10 +
+  'begin'#13#10 +
+  '  FAnchestor.Free;'#13#10 +
+  '  inherited DoFree;'#13#10 +
+  'end;'#13#10 +
+  'class procedure TSupport.FinalizeClass;'#13#10 +
+  'begin'#13#10 +
+  '  FBuffer.Free;'#13#10 +
+  '  DoLog;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'DoFree/FinalizeClass bauen ab wie ein Destruktor');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.FreieRoutineFinalize_NichtGemeldet;
+// xEdit-Skript 'Finalize' raeumt die Globalen am Skriptende ab - auch mit
+// Aufrufen hinter dem Free.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Finalize: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  slDump.SaveToFile(''x.txt'');'#13#10 +
+  '  slDump.Free;'#13#10 +
+  '  AddMessage(''done'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'freie Finalize-Routine - Programm- bzw. Skriptende');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilLetzterAufruf.MethodeFinalize_Gemeldet;
+// WAECHTER: eine METHODE Finalize ist ein Lebenszyklus-Schritt (doublecmd
+// TFileSourceOperation.Finalize) - das Objekt lebt, das Feld haengt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TCopyOperation.Finalize;'#13#10 +
+  'begin'#13#10 +
+  '  FHelper.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFreeWithoutNil),
+    'Methode Finalize - das Objekt lebt weiter');
+  finally F.Free; end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestFreeWithoutNil);
+  TDUnitX.RegisterTestFixture(TTestFreeWithoutNilLetzterAufruf);
 
 end.

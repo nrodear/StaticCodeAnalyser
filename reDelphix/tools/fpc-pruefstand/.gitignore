@@ -1,8 +1,15 @@
+# Kopien und Erzeugnisse von build.sh-Laeufen vor Charge FF lagen hier;
+# seit FF baut build.sh in einem eigenen Arbeitsverzeichnis, loescht
+# solche Reste und legt je kopierter Unit einen Grabstein ab (<unit>.pas
+# mit {$FATAL ...}, Kopf von build.sh) - dieselben Muster.
 out/
 runner.pas
 uDetectorUtils.pas
 uRefactor*.pas
 uSourcePlaces.pas
 uFindingActions.pas
+uScaConfigDir.pas
+uSCAConsts.pas
 uTest*.pas
 uRdx*.pas
+uRdx*.inc

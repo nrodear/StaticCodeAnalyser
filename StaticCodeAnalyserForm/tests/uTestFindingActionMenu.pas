@@ -38,9 +38,10 @@ type
     // MAX_FINDINGS_PER_MENU Anbieter-Abfragen, der Rest zaehlt nach Omitted.
     [Test] procedure Registry_AsksAtMostMaxFindingsPerMenu;
     // Editorhilfen E1: Unterdruecken in der Birne nur neben einer Hilfe,
-    // in jeder Form mit einem Trenner abgesetzt.
+    // in jeder Form im Untermenue 'Unterdruecken' hinter einem Trenner
+    // (Vorschlag 2; bis dahin flach hinter einem Trenner).
     [Test] procedure AvailableFixesOnly_SuppressOnlyNextToAFix;
-    [Test] procedure Suppress_SeparatedFromOtherActions;
+    [Test] procedure Suppress_InSubmenuAfterOtherActions;
     // Review reDelphiX nach Bereichen 2026-10-10, Minor 13/14: ein Umbau an
     // der Stelle (fakRefactor) steht je Menue nur einmal und nie in der
     // Gluehbirne.
@@ -91,6 +92,7 @@ begin
     Result[i].Hint    := '';
     Result[i].Enabled := True;
     Result[i].Execute := DoExecute;
+    Result[i].Kind    := fakFix;   // Vorgabe waere fakUnset (nie Hilfe)
   end;
 end;
 
@@ -102,7 +104,10 @@ end;
 function Act(const ACaption, AHint: string; AEnabled: Boolean;
   AWithExecute: Boolean): TFindingAction;
 begin
-  Result := Default(TFindingAction);   // Kind = fakFix
+  Result := Default(TFindingAction);
+  // Seit 2026-10-14 ist die Vorgabe fakUnset (nie Hilfe); die Hilfe wird
+  // hier ausdruecklich gesetzt, wie ein Anbieter es tun muss.
+  Result.Kind    := fakFix;
   Result.Caption := ACaption;
   Result.Hint    := AHint;
   Result.Enabled := AEnabled;
@@ -131,8 +136,9 @@ begin
     Lists[1] := [Act('Stelle zeigen', 'Zeile 10', True, True)];
     M := BuildFindingMenuModelFrom([F1, F2], Lists,
       [moLeadingSeparator, moHeaders]);
-    // Trenner, Kopf 1, 2 Aktionen, Kopf 2, 1 Aktion = 6 Eintraege
-    Assert.AreEqual<Integer>(6, Length(M.Entries));
+    // Trenner, Kopf 1, 2 Aktionen, Trenner, Kopf 2, 1 Aktion = 7 Eintraege
+    // (seit Vorschlag 2 ein Trenner nach jeder Fund-Gruppe)
+    Assert.AreEqual<Integer>(7, Length(M.Entries));
     Assert.AreEqual<Integer>(3, M.ActionCount);
     Assert.IsTrue(M.Entries[0].Kind = mkSeparator);
     Assert.AreEqual('-', M.Entries[0].Caption);
@@ -140,12 +146,16 @@ begin
     Assert.IsFalse(M.Entries[1].Enabled, 'Kopfzeile ist nie klickbar');
     Assert.AreEqual<Integer>(-1, M.Entries[1].ActionIndex);
     Assert.IsTrue(M.Entries[2].Kind = mkAction);
-    Assert.AreEqual('Stelle zeigen  (Zeile 10)', M.Entries[2].Caption);
+    // Hilfe, verfuegbar: nur die Caption, keine Spalte hinter #9, kein '='
+    // (Nico 2026-10-25)
+    Assert.AreEqual('Stelle zeigen', M.Entries[2].Caption);
     Assert.AreEqual<Integer>(0, M.Entries[2].ActionIndex);
-    Assert.AreEqual('Format() bilden  (3 Terme)', M.Entries[3].Caption);
+    Assert.AreEqual('Format() bilden', M.Entries[3].Caption);
+    Assert.IsTrue(Pos('3 Terme', M.Entries[3].Hint) = 1, 'der Hint im Hint');
     Assert.AreEqual<Integer>(1, M.Entries[3].ActionIndex);
-    Assert.IsTrue(M.Entries[4].Kind = mkHeader);
-    Assert.AreEqual<Integer>(2, M.Entries[5].ActionIndex);
+    Assert.IsTrue(M.Entries[4].Kind = mkSeparator);
+    Assert.IsTrue(M.Entries[5].Kind = mkHeader);
+    Assert.AreEqual<Integer>(2, M.Entries[6].ActionIndex);
     Assert.IsFalse(M.IsEmpty);
   finally
     F1.Free; F2.Free;
@@ -165,8 +175,9 @@ begin
     Lists[1] := [Act('Stelle zeigen', '', True, True)];
     M := BuildFindingMenuModelFrom([F1, F2], Lists, [moLeadingSeparator, moHeaders]);
     Assert.AreEqual<Integer>(3, Length(M.Entries), 'Trenner, Kopf, Aktion');
-    Assert.IsTrue(Pos('mit', M.Entries[1].Caption) > 0, M.Entries[1].Caption);
-    Assert.AreEqual('Stelle zeigen', M.Entries[2].Caption, 'ohne Hint keine Klammer');
+    Assert.IsTrue(Pos('mit', M.Entries[2].Hint) > 0,
+      'die Aktion gehoert zum zweiten Fund: ' + M.Entries[2].Hint);
+    Assert.AreEqual('Stelle zeigen', M.Entries[2].Caption);
   finally
     F1.Free; F2.Free;
   end;
@@ -204,9 +215,10 @@ begin
     M := BuildFindingMenuModelFrom([F], Lists, []);
     Assert.AreEqual<Integer>(1, Length(M.Entries));
     Assert.IsFalse(M.Entries[0].Enabled);
-    Assert.AreEqual('Format() bilden  (Operand ''n'': kein String)',
-      M.Entries[0].Caption, 'der Grund steht in der Beschriftung');
-    Assert.AreEqual('Operand ''n'': kein String', M.Entries[0].Hint);
+    Assert.AreEqual('Format() bilden (Operand ''n'': kein String)',
+      M.Entries[0].Caption, 'der kurze Grund in Klammern, kein #9');
+    Assert.IsTrue(Pos('Operand ''n'': kein String', M.Entries[0].Hint) = 1,
+      M.Entries[0].Hint);
   finally
     F.Free;
   end;
@@ -253,12 +265,15 @@ var
   F   : TLeakFinding;
   Cap : string;
 begin
+  // Seit Vorschlag 2 steht die Meldung nur noch ohne Regelnamen im Kopf
+  // (eigene Regel, RuleID gesetzt) - und auf 40 Zeichen gekuerzt.
   F := Finding(StringOfChar('m', 70) + '   ');
   try
+    F.RuleID := 'CUSTOM01';
     Cap := FindingHeaderCaption(F);
     Assert.IsTrue(Pos(F.ResolvedRuleId + '  ', Cap) = 1, 'Regel-ID zuerst: ' + Cap);
-    Assert.IsTrue(Pos(StringOfChar('m', 60), Cap) > 0);
-    Assert.IsFalse(Pos(StringOfChar('m', 61), Cap) > 0, 'auf 60 Zeichen gekuerzt');
+    Assert.IsTrue(Pos(StringOfChar('m', 40), Cap) > 0);
+    Assert.IsFalse(Pos(StringOfChar('m', 41), Cap) > 0, 'auf 40 Zeichen gekuerzt');
     Assert.AreEqual('', FindingHeaderCaption(nil));
   finally
     F.Free;
@@ -428,13 +443,18 @@ begin
     Lists[1] := [Act('Umbauen', '', True, True), SuppressAct('Hier ausblenden')];
     M := BuildFindingMenuModelFrom([F1, F2], Lists, [moHeaders, moAvailableFixesOnly]);
     // F1: keine Hilfe -> faellt samt Unterdruecken weg (keine Birne)
-    // F2: Kopf, Hilfe, Trenner, Unterdruecken
-    Assert.AreEqual<Integer>(4, Length(M.Entries));
-    Assert.IsTrue(Pos('mit Umbau', M.Entries[0].Caption) > 0, M.Entries[0].Caption);
+    // F2: Kopf, Hilfe, Trenner, Untermenue 'Unterdruecken' mit Kopf und
+    // Unterdruecken (Vorschlag 2)
+    Assert.AreEqual<Integer>(6, Length(M.Entries));
+    Assert.IsTrue(M.Entries[0].Kind = mkHeader);
+    Assert.IsTrue(Pos('mit Umbau', M.Entries[1].Hint) > 0, M.Entries[1].Hint);
     Assert.IsTrue(M.Entries[1].Kind = mkAction);
     Assert.IsTrue(M.Entries[2].Kind = mkSeparator);
-    Assert.IsTrue(M.Entries[3].Kind = mkAction);
-    Assert.IsTrue(M.Actions[M.Entries[3].ActionIndex].Kind = fakSuppress);
+    Assert.IsTrue(M.Entries[3].Kind = mkSubmenu);
+    Assert.IsTrue(M.Entries[4].Kind = mkHeader);
+    Assert.IsTrue(M.Entries[5].Kind = mkAction);
+    Assert.AreEqual<Integer>(3, M.Entries[5].Parent);
+    Assert.IsTrue(M.Actions[M.Entries[5].ActionIndex].Kind = fakSuppress);
     SetLength(Lists, 1);
     M := BuildFindingMenuModelFrom([F1], Lists, [moAvailableFixesOnly]);
     Assert.IsTrue(M.IsEmpty, 'nur Unterdruecken: keine Birne');
@@ -443,7 +463,7 @@ begin
   end;
 end;
 
-procedure TTestFindingActionMenu.Suppress_SeparatedFromOtherActions;
+procedure TTestFindingActionMenu.Suppress_InSubmenuAfterOtherActions;
 var
   F     : TLeakFinding;
   Lists : TArray<TArray<TFindingAction>>;
@@ -455,12 +475,17 @@ begin
     Lists[0] := [NavAct('Zur Stelle'), Act('Neu schreiben', '', True, True),
                  SuppressAct('Hier'), SuppressAct('In der Datei')];
     M := BuildFindingMenuModelFrom([F], Lists, []);
-    Assert.AreEqual<Integer>(5, Length(M.Entries), 'ein Trenner vor dem Block');
+    // Zur Stelle, Neu schreiben, Trenner, Unterdruecken > [Hier, In der Datei]
+    Assert.AreEqual<Integer>(6, Length(M.Entries));
     Assert.IsTrue(M.Entries[2].Kind = mkSeparator);
+    Assert.IsTrue(M.Entries[3].Kind = mkSubmenu);
+    Assert.AreEqual('Hier', M.Entries[4].Caption);
+    Assert.AreEqual<Integer>(3, M.Entries[5].Parent);
     Assert.AreEqual<Integer>(4, M.ActionCount);
     Lists[0] := [SuppressAct('Hier')];
     M := BuildFindingMenuModelFrom([F], Lists, []);
-    Assert.AreEqual<Integer>(1, Length(M.Entries), 'kein Trenner am Anfang');
+    Assert.AreEqual<Integer>(2, Length(M.Entries), 'kein Trenner am Anfang');
+    Assert.IsTrue(M.Entries[0].Kind = mkSubmenu);
   finally
     F.Free;
   end;
@@ -504,7 +529,8 @@ begin
     Lists[1] := [Act('uses qualifizieren', '', True, True)];
     M := BuildFindingMenuModelFrom([F1, F2], Lists, [moHeaders, moAvailableFixesOnly]);
     Assert.AreEqual<Integer>(2, Length(M.Entries), 'nur Kopf und Aktion des zweiten');
-    Assert.IsTrue(Pos('mit Hilfe', M.Entries[0].Caption) > 0, M.Entries[0].Caption);
+    Assert.IsTrue(M.Entries[0].Kind = mkHeader);
+    Assert.IsTrue(Pos('mit Hilfe', M.Entries[1].Hint) > 0, M.Entries[1].Hint);
     SetLength(Lists, 1);   // nur noch der erste Fund
     M := BuildFindingMenuModelFrom([F1], Lists, [moHeaders, moAvailableFixesOnly]);
     Assert.IsTrue(M.IsEmpty, 'ohne Hilfe keine Gluehbirne');

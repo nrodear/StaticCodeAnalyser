@@ -200,6 +200,14 @@ function ApplyFailOnPolicy(Raw: Integer; const FailOn: string;
 // testbar ohne Run-Seiteneffekt.
 function FixtureFilterAnker(const Args: TCliArgs): string;
 
+// Verzeichnis, gegen das [Baseline] File= aufgeloest wird (Vertrag an der
+// Implementierung). AProjOrGroup ist die Gruppe, sonst das Projekt des
+// Laufs. In der interface-Sektion aus demselben Grund wie
+// ApplyFailOnPolicy: die Wirts-Regel "Projekt, sonst Scan-Wurzel, sonst
+// leer" ist testbar ohne Run (Review Woche G02-07).
+function BaselineConfigDir(const Args: TCliArgs;
+  const AProjOrGroup: string): string;
+
 // Stack-Reserve aus dem PE-Header von AExePath in MB; 0 wenn die Datei
 // kein lesbarer PE ist. Steht im Interface, damit der Wachposten
 // testbar bleibt (gleiche Begruendung wie bei ApplyFailOnPolicy) - der
@@ -1400,6 +1408,22 @@ begin
   end;
 end;
 
+function BaselineConfigDir(const Args: TCliArgs;
+  const AProjOrGroup: string): string;
+// Verzeichnis, gegen das [Baseline] File= aufgeloest wird: das des
+// Projekts bzw. der Gruppe, sonst die Scan-Wurzel - dieselbe Regel wie EXE
+// und Plugin (TBaseline.ResolveConfigured). Bis 2026-10-14 ging der Wert
+// roh durch, also relativ zum Arbeitsverzeichnis des Aufrufers; das bleibt
+// als Rueckfall, wenn die Datei projektrelativ nicht existiert
+// (ResolveConfiguredWithFallback, Gegen-Review Welle 1, Major 4). Leer
+// (Datei-Modus ohne Projekt): der Pfad bleibt relativ wie bisher.
+begin
+  if AProjOrGroup <> '' then
+    Result := ExtractFileDir(AProjOrGroup)
+  else
+    Result := Args.Path;
+end;
+
 function AutoBasisPfad(const Args: TCliArgs): string;
 // Der Pfad, an dem die Auto-Aufloesung ansetzt - je nach Modus.
 begin
@@ -1441,62 +1465,62 @@ begin
   // Teillauf bekommt keine - sonst gaebe es jeden Fund zweimal.
   Configs := TStringList.Create;
   try
-  // Obermengen-Endungen: unter dlFpc sammelt IsUnitLikeFile
-  // .pas UND .pp/.lpr - die Partition entscheidet je Datei.
-  TStaticFiles.ScanDialect := dlFpc;
-  try
-    AlleDateien := TStaticFiles.TryGetAllPasFiles(Args.Path, EnumErr, nil,
-      nil, Configs);
-  finally
-    TStaticFiles.ScanDialect := AltDialekt;
-  end;
-  if (EnumErr <> '') or (AlleDateien = nil) or (AlleDateien.Count = 0) then
-  begin
-    FreeAndNil(AlleDateien);
-    if EnumErr <> '' then
-      WriteLn(ErrOutput,
-        'Hinweis: --dialect=auto ohne Datei-Partition (' +
-        EnumErr + ') - Wurzelverdikt gilt fuer den ganzen Baum.');
-    Exit;
-  end;
-
-  DirCache   := TDictionary<string, TSourceDialect>.Create;
-  PartDelphi := TStringList.Create;
-  PartFpc    := TStringList.Create;
-  try
-    for Datei in AlleDateien do
-      if AutoDialektFuerDatei(Datei, Args.Path,
-           Req.Dialect, DirCache) = dlFpc then
-        PartFpc.Add(Datei)
-      else
-        PartDelphi.Add(Datei);
-    if (PartDelphi.Count > 0) and (PartFpc.Count > 0) then
-    begin
-      WriteLn(ErrOutput, Format(
-        'Hinweis: --dialect=auto V2 - Mischbaum: %d Dateien ' +
-        'delphi, %d fpc (Doppellauf).',
-        [PartDelphi.Count, PartFpc.Count]));
-      PartDelphi.AddStrings(Configs);
-      AlleDateien.AddStrings(Configs);
-      Req.Scope     := ssFileList;
-      Req.Files     := PartDelphi.ToStringArray;
-      Req.Dialect   := dlDelphi;
-      Req.IndexRoot := Args.IndexRoot;
-      ZweiteFiles   := PartFpc.ToStringArray;
-    end
-    else
-    begin
-      // Einheitlicher Baum: EIN ssRecursive-Lauf mit dem per-Datei
-      // bestaetigten Verdikt (praeziser als V1, gleiche Mechanik).
-      if PartFpc.Count > 0 then Req.Dialect := dlFpc
-      else                      Req.Dialect := dlDelphi;
-      FreeAndNil(AlleDateien);
+    // Obermengen-Endungen: unter dlFpc sammelt IsUnitLikeFile
+    // .pas UND .pp/.lpr - die Partition entscheidet je Datei.
+    TStaticFiles.ScanDialect := dlFpc;
+    try
+      AlleDateien := TStaticFiles.TryGetAllPasFiles(Args.Path, EnumErr, nil,
+        nil, Configs);
+    finally
+      TStaticFiles.ScanDialect := AltDialekt;
     end;
-  finally
-    PartDelphi.Free;
-    PartFpc.Free;
-    DirCache.Free;
-  end;
+    if (EnumErr <> '') or (AlleDateien = nil) or (AlleDateien.Count = 0) then
+    begin
+      FreeAndNil(AlleDateien);
+      if EnumErr <> '' then
+        WriteLn(ErrOutput,
+          'Hinweis: --dialect=auto ohne Datei-Partition (' +
+          EnumErr + ') - Wurzelverdikt gilt fuer den ganzen Baum.');
+      Exit;
+    end;
+
+    DirCache   := TDictionary<string, TSourceDialect>.Create;
+    PartDelphi := TStringList.Create;
+    PartFpc    := TStringList.Create;
+    try
+      for Datei in AlleDateien do
+        if AutoDialektFuerDatei(Datei, Args.Path,
+             Req.Dialect, DirCache) = dlFpc then
+          PartFpc.Add(Datei)
+        else
+          PartDelphi.Add(Datei);
+      if (PartDelphi.Count > 0) and (PartFpc.Count > 0) then
+      begin
+        WriteLn(ErrOutput, Format(
+          'Hinweis: --dialect=auto V2 - Mischbaum: %d Dateien ' +
+          'delphi, %d fpc (Doppellauf).',
+          [PartDelphi.Count, PartFpc.Count]));
+        PartDelphi.AddStrings(Configs);
+        AlleDateien.AddStrings(Configs);
+        Req.Scope     := ssFileList;
+        Req.Files     := PartDelphi.ToStringArray;
+        Req.Dialect   := dlDelphi;
+        Req.IndexRoot := Args.IndexRoot;
+        ZweiteFiles   := PartFpc.ToStringArray;
+      end
+      else
+      begin
+        // Einheitlicher Baum: EIN ssRecursive-Lauf mit dem per-Datei
+        // bestaetigten Verdikt (praeziser als V1, gleiche Mechanik).
+        if PartFpc.Count > 0 then Req.Dialect := dlFpc
+        else                      Req.Dialect := dlDelphi;
+        FreeAndNil(AlleDateien);
+      end;
+    finally
+      PartDelphi.Free;
+      PartFpc.Free;
+      DirCache.Free;
+    end;
   finally
     Configs.Free;
   end;
@@ -1856,13 +1880,47 @@ begin
     begin
       var Probed := TStringList.Create;
       try
+        // Der ebenfalls gepruefte CWD-Kandidat des Rueckfalls - die
+        // Fehlerliste unten nennt ihn mit, sonst saehe ein CI-Autor, der bis
+        // 2026-10-14 CWD-relativ arbeitete, nicht, dass auch sein alter Ort
+        // leer war (Review Woche G02-08).
+        var CwdCandidate := '';
         if EffBaseline = '' then
-          EffBaseline := Settings.BaselineFile;
+        begin
+          // Projektrelativ wie EXE und Plugin; existiert die Datei dort
+          // nicht, der alte CLI-Weg (relativ zum Arbeitsverzeichnis) -
+          // CI-Aufrufe aus einem anderen CWD brachen sonst still
+          // (Gegen-Review Welle 1, Major 4). Der Rueckfall wird genannt -
+          // mit dem Ort des ersten Versuchs: ohne Projekt (--path) ist das
+          // die Scan-Wurzel, nicht "das Projekt" (BaselineConfigDir).
+          var UsedCwd: Boolean;
+          EffBaseline := TBaseline.ResolveConfiguredWithFallback(
+            Settings.BaselineFile, BaselineConfigDir(Args, BlProjOrGroup),
+            GetCurrentDir, UsedCwd);
+          if not UsedCwd then
+            CwdCandidate := TBaseline.ResolveConfigured(Settings.BaselineFile,
+              GetCurrentDir);
+          if UsedCwd and not Args.Quiet then
+          begin
+            if BlProjOrGroup <> '' then
+              WriteLn('Baseline: [Baseline] File= not found beside the ' +
+                'project - using the working directory: ', EffBaseline)
+            else
+              WriteLn('Baseline: [Baseline] File= not found under the ' +
+                'scan root - using the working directory: ', EffBaseline);
+          end;
+        end;
         if EffBaseline = '' then
           EffBaseline := TBaseline.ResolveBaselinePath(
             BlProjOrGroup, Args.Path, Probed)
         else
+        begin
           Probed.Add(EffBaseline);
+          // Derselbe Ort (absoluter Eintrag, kein Projekt) steht nur einmal.
+          if (CwdCandidate <> '') and not SameText(
+               ExpandFileName(CwdCandidate), ExpandFileName(EffBaseline)) then
+            Probed.Add(CwdCandidate);
+        end;
         if (EffBaseline = '') or not FileExists(EffBaseline) then
         begin
           WriteLn(ErrOutput, 'Error: baseline scan requested but no ' +

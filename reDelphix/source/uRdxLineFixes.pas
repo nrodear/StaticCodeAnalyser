@@ -11,14 +11,23 @@ unit uRdxLineFixes;
 // Alle vier aendern die Bedeutung nicht. GRUNDSATZ wie in uRdxSimpleFixes:
 // lieber keine Hilfe als eine falsche - der Planer prueft den Fund am
 // aktuellen Text nach, statt dem Detektor zu glauben.
+//
+// TEXTE (Entscheid E29, Charge G1): jeder Grund ist eine englische msgid,
+// uebersetzt mit uRdxText._ in die Sprache der SCA-Oberflaeche; die
+// deutsche Fassung (der bisherige Wortlaut) steht in i18n/de.po. Gemeinsame
+// Texte kommen aus uRdxText (MsgNoColumn, MsgMovedSuffix ...), Code-Token
+// ('begin', 'TFoo(...).Free') stehen als %s im Satz.
 
 interface
 
 uses
-  System.SysUtils,
-  uRefactorInfo, uRdxBufferMath, uRdxCodeMap;
+  uRdxBufferMath, uRdxCodeMap;
 
 type
+  // Die Planer an einer Zeile (SCA082, SCA071, SCA088, SCA123): reine
+  // Textlogik auf der Code-Sicht, alle vier bedeutungsgleich. Ob X den
+  // Cast-Typ schon hat (SCA123), prueft der Aufrufer mit dem
+  // Quellstellen-Dienst.
   TRdxLineFixes = class
   public
     // SCA082: an der Spalte aus der Meldung ('at column N') ein ';', danach
@@ -49,7 +58,9 @@ type
     class function CastTargetOf(const AMessage: string): string; static;
 
     // SCA123: genau ein 'T(X).Free' auf ALine -> 'X.Free' (NewText = X).
-    // X ein Bezeichnerpfad (A, A.B, Self.F) ohne Kommentar; T kein
+    // X ein blosser Bezeichner ohne Kommentar - einen Pfad (A.B, Self.F)
+    // lehnt schon der Planer ab, weil der Aufrufer nur den Typ eines
+    // blossen Bezeichners beweist (Review Woche G07-17); T kein
     // Interface ('IFoo(X).Free' riefe eine Interface-Methode Free). Nur
     // Free - Destroy bietet die Hilfe nicht an. Dass X schon den Typ T hat
     // (sonst kann T oder der Typ von X Free verdecken, oder der Cast ist
@@ -61,16 +72,21 @@ type
 
 implementation
 
+uses
+  System.SysUtils,
+  uRefactorInfo,   // TRefactorSpan.Make
+  uRdxText;        // _(), Msg...: in die reDelphix-Sprache, nie uLocalization (E29)
+
 const
   SPAN_082 = 'sca082';
   SPAN_071 = 'sca071';
   SPAN_088 = 'sca088';
   SPAN_123 = 'sca123';
-  R_NO_COLUMN    = 'Spalte fehlt in der Meldung';
-  R_SEMI_MOVED   = 'kein ";;" an der gemeldeten Stelle - Zeile verschoben? '
-    + 'Datei neu pruefen';
-  R_KW_MOVED     = 'das Schluesselwort steht nicht an der gemeldeten Stelle '
-    + '- Zeile verschoben? Datei neu pruefen';
+  // Gruende ohne das gemeinsame Ende: MsgMovedSuffix haengt ' - line
+  // moved? Analyse the file again' an (deutsch '... - Zeile verschoben?
+  // Datei neu pruefen', uRdxText).
+  R_SEMI_MOVED   = 'no ";;" at the reported place';
+  R_KW_MOVED     = 'the keyword is not at the reported place';
   KEY_CURRENTLY  = 'currently at column ';
   KEY_CAST       = 'Type-cast ';
   // Woerter, die als Operand eines Casts keine Variable sind.
@@ -94,7 +110,7 @@ begin
   Col := ColumnFromMessage(AMessage);
   if Col <= 0 then
   begin
-    AReason := R_NO_COLUMN;
+    AReason := MsgNoColumn;
     Exit;
   end;
   L := AMap.Raw(ALine);
@@ -102,7 +118,7 @@ begin
   if not AMap.IsCode(ALine, Col) or (L[Col] <> ';')
      or not AMap.IsCode(ALine, Next) or (L[Next] <> ';') then
   begin
-    AReason := R_SEMI_MOVED;
+    AReason := MsgMovedSuffix(_(R_SEMI_MOVED));
     Exit;
   end;
   AEdit.Span := TRefactorSpan.Make(SPAN_082, ALine, Col, ALine, Next + 1);
@@ -113,29 +129,16 @@ end;
 
 { ---- SCA071 ---- }
 
-// Wort und Spalte aus '... "interface" ... currently at column 5'.
-// False, wenn eines fehlt.
+// Wort und Spalte aus '... "interface" ... currently at column 5' - das
+// Wort zwischen den ersten beiden '"' (QuotedText, uRdxCodeMap; bis
+// Charge B2S-a hier ausgeschrieben), die Spalte ueber NumberAfterKey
+// (uRdxCodeMap; bis zur Folgewelle des Wochen-Reviews, G09-08, hier
+// ausgeschrieben). False, wenn eines fehlt.
 function KeywordOf(const AMessage: string; out AWord: string;
   out ACol: Integer): Boolean;
-var
-  P, Q, i : Integer;
 begin
-  AWord := '';
-  ACol := 0;
-  P := Pos('"', AMessage);
-  Q := Pos('"', AMessage, P + 1);
-  if (P > 0) and (Q > P + 1) then
-    AWord := Copy(AMessage, P + 1, Q - P - 1);
-  P := Pos(KEY_CURRENTLY, AMessage);
-  if P > 0 then
-  begin
-    i := P + Length(KEY_CURRENTLY);
-    while (i <= Length(AMessage)) and CharInSet(AMessage[i], ['0'..'9']) do
-    begin
-      ACol := ACol * 10 + Ord(AMessage[i]) - Ord('0');
-      Inc(i);
-    end;
-  end;
+  AWord := QuotedText(AMessage, '"');
+  ACol := NumberAfterKey(AMessage, KEY_CURRENTLY);
   Result := (AWord <> '') and (ACol > 1);
 end;
 
@@ -143,23 +146,26 @@ class function TRdxLineFixes.KeywordIndent(AMap: TRdxCodeMap;
   ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
-  L, Word : string;
+  L       : string;
+  Keyword : string;   // nicht 'Word': verdeckte System.Word (Review R3-06)
   Col     : Integer;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
   L := AMap.Raw(ALine);
-  if not KeywordOf(AMessage, Word, Col) then
-    AReason := 'Schluesselwort oder Spalte fehlt in der Meldung'
+  // Eigener Satz, nicht MsgNoColumn: es fehlt das Wort ODER die Spalte -
+  // ein anderer Wortlaut als 'Spalte fehlt in der Meldung'.
+  if not KeywordOf(AMessage, Keyword, Col) then
+    AReason := _('the message has no keyword or column')
   else if AMap.StartsInside(ALine) then
-    AReason := 'die Zeile beginnt in einem Kommentar oder String'
+    AReason := MsgLineStartsInCommentOrString
   else if (SkipBlanks(L, 1) <> Col) or not AMap.IsCode(ALine, Col)
-     or not SameText(TokenAt(AMap, ALine, Col).Low, Word) then
-    AReason := R_KW_MOVED
+     or not SameText(TokenAt(AMap, ALine, Col).Low, Keyword) then
+    AReason := MsgMovedSuffix(_(R_KW_MOVED))
   else if InList(PrevToken(AMap, ALine, Col).Low, TYPE_KEYWORD_PREV) then
-    AReason := Format('%s gehoert zu einer Typ-Deklaration - kein '
-      + 'Unit-Abschnitt', [Word]);
+    AReason := _('%s belongs to a type declaration - not a unit section',
+      [Keyword]);
   if AReason <> '' then Exit;
   AEdit.Span := TRefactorSpan.Make(SPAN_071, ALine, 1, ALine, Col);
   AEdit.Expected := Copy(L, 1, Col - 1);
@@ -181,71 +187,40 @@ begin
     Result := UpperCase(Copy(AWord, 1, 1)) + Copy(Result, 2, MaxInt);
 end;
 
+// Ein begin als Schluesselwort (OneTokenOnLine, BeginOn).
+function IsBeginKeyword(AMap: TRdxCodeMap; const T: TRdxToken;
+  const AArg: string): Boolean;
+begin
+  Result := (T.Low = 'begin') and IsKeywordAfter(T, Before(AMap, T));
+end;
+
 // Das eine begin (Schluesselwort, Code) auf ALine. '' oder der Grund.
+// What ist eine schon uebersetzte Nominalphrase - OneTokenReason setzt sie
+// in seinen Satz; das Muster '%d begin' ist Code und bleibt.
 function BeginOn(AMap: TRdxCodeMap; ALine: Integer;
   out ABegin: TRdxToken): string;
 var
-  T, Prev : TRdxToken;
-  n       : Integer;
+  S : TRdxLineSearch;
 begin
-  Result := '';
-  ABegin := Default(TRdxToken);
-  n := 0;
-  Prev := PrevToken(AMap, ALine, 1);
-  T := NextToken(AMap, ALine, 1);
-  while (T.Low <> '') and (T.Line = ALine) do
-  begin
-    if (T.Low = 'begin') and IsKeywordAfter(T, Prev) then
-    begin
-      Inc(n);
-      ABegin := T;
-    end;
-    Prev := T;
-    T := After(AMap, T);
-  end;
-  if n = 0 then
-    Result := 'kein begin auf der gemeldeten Zeile - Zeile verschoben? '
-      + 'Datei neu pruefen'
-  else if n > 1 then
-    Result := Format('Zeile %d traegt %d begin - mehrdeutig', [ALine, n]);
+  S := Default(TRdxLineSearch);
+  S.Test    := IsBeginKeyword;
+  S.What    := _('no begin');
+  S.ManyFmt := '%d begin';
+  Result := OneTokenOnLine(AMap, ALine, S, ABegin);
 end;
 
-// Das end zu ABegin (Bilanz wie MatchingEnd) - steht es vor dem '.'?
+// Das end zu ABegin (end-Bilanz BlockEnd) - steht es vor dem '.'?
 // '' oder der Grund.
 function EndsUnit(AMap: TRdxCodeMap; const ABegin: TRdxToken): string;
 var
-  T, Prev : TRdxToken;
-  Depth   : Integer;
+  EndTok, Last : TRdxToken;
 begin
-  Depth := 1;
-  Prev := ABegin;
-  T := After(AMap, ABegin);
-  while (T.Low <> '') and (Depth > 0) do
-  begin
-    if IsKeywordAfter(T, Prev) and IsEndOpener(T.Low) then
-      Inc(Depth)
-    else if IsKeywordAfter(T, Prev) and (T.Low = 'end') then
-      Dec(Depth);
-    Prev := T;
-    if Depth > 0 then
-      T := After(AMap, T);
-  end;
-  Result := '';
-  if Depth > 0 then
-    Result := 'kein end zum begin gefunden'
-  else if After(AMap, T).Low <> '.' then
-    Result := 'das end zu diesem begin steht nicht vor dem Punkt - kein '
-      + 'Unit-Rumpf';
-end;
-
-function DirectiveOnLine(AMap: TRdxCodeMap; ALine: Integer): Boolean;
-var
-  Co : Integer;
-begin
-  Result := False;
-  for Co := 1 to Length(AMap.Raw(ALine)) do
-    if DirectiveAt(AMap, ALine, Co) then
-      Exit(True);
+  Result := BlockEnd(AMap, ABegin, nil, EndTok, Last);
+  if EndTok.Low = '' then
+    Result := _('no end found for the begin')
+  else if After(AMap, EndTok).Low <> '.' then
+    Result := _('the end of this begin is not before the dot - not a unit '
+      + 'body');
 end;
 
 class function TRdxLineFixes.LegacyInit(AMap: TRdxCodeMap; ALine: Integer;
@@ -257,11 +232,11 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   if NextToken(AMap, 1, 1).Low <> 'unit' then
-    AReason := 'keine Unit - in program/library ist begin der Rumpf'
+    AReason := _('not a unit - in program/library, begin is the body')
   else
     AReason := BeginOn(AMap, ALine, B);
-  if (AReason = '') and DirectiveOnLine(AMap, ALine) then
-    AReason := 'Compiler-Direktive auf der Zeile des begin';
+  if (AReason = '') and DirectiveInLines(AMap, ALine, ALine) then
+    AReason := _('compiler directive on the line of the begin');
   if AReason = '' then
     AReason := EndsUnit(AMap, B);
   if AReason <> '' then Exit;
@@ -298,30 +273,13 @@ type
   // Was an einem Token steht (CastAt).
   TRdxCastKind = (ckNone, ckFree, ckDestroy, ckOpenLine);
 
-// Ab dem '(' AOpen die schliessende ')' auf derselben Zeile. False ohne.
+// Ab dem '(' AOpen die schliessende ')' auf derselben Zeile (MatchClose
+// ohne weitere Zeilen). False ohne.
 function CloseParen(AMap: TRdxCodeMap; const AOpen: TRdxToken;
   out AClose: TRdxToken): Boolean;
-var
-  T     : TRdxToken;
-  Depth : Integer;
 begin
-  Result := False;
-  AClose := Default(TRdxToken);
-  Depth := 0;
-  T := AOpen;
-  while (T.Low <> '') and (T.Line = AOpen.Line) do
-  begin
-    if T.Low = '(' then
-      Inc(Depth)
-    else if T.Low = ')' then
-      Dec(Depth);
-    if Depth = 0 then
-    begin
-      AClose := T;
-      Exit(True);
-    end;
-    T := After(AMap, T);
-  end;
+  AClose := MatchClose(AMap, AOpen, 0);
+  Result := AClose.Low <> '';
 end;
 
 // Steht an T der Cast 'ATarget(...)'? ckFree/ckDestroy mit '.Free' bzw.
@@ -381,53 +339,51 @@ begin
     Prev := T;
     T := After(AMap, T);
   end;
+  // Die Gruende "keiner"/"mehrere" wie bei jeder Token-Suche (OneTokenReason):
+  // das Muster der Mehrdeutigkeit uebersetzt, ATarget aus der Meldung als
+  // sein %s (AArg) - nie ins Muster gehaengt; die Nominalphrase fuer
+  // "keiner" uebersetzt mit ATarget als Argument.
   if n > 1 then
-    Result := Format('Zeile %d traegt %d Casts %s(...).Free - mehrdeutig',
-      [ALine, n, ATarget])
+    // Der Typ aus der Meldung als Argument, nie im Muster (Vertrag von
+    // OneTokenReason; Review Woche G07-16).
+    Result := OneTokenReason(ALine, n, '', _('%d casts %s(...).Free'), ATarget)
   else if n = 1 then
     Exit
   else if ckDestroy in Seen then
-    Result := 'nur fuer Free - Destroy bleibt, wie es ist'
+    Result := _('only for Free - Destroy stays as it is')
   else if ckOpenLine in Seen then
-    Result := Format('der Cast %s(...) geht ueber mehrere Zeilen', [ATarget])
+    Result := _('the cast %s(...) spans several lines', [ATarget])
   else
-    Result := Format('kein %s(...).Free auf der gemeldeten Zeile - Zeile '
-      + 'verschoben? Datei neu pruefen', [ATarget]);
+    Result := OneTokenReason(ALine, 0, _('no %s(...).Free', [ATarget]), '');
 end;
 
-// Ist der Operand zwischen den Klammern ein Bezeichnerpfad (A, A.B,
-// Self.F) - und steht darin kein Kommentar oder String? '' oder der Grund.
+// Ist der Operand zwischen den Klammern ein blosser Bezeichner - und steht
+// darin kein Kommentar oder String? '' oder der Grund. Ein Pfad (A.B,
+// Self.F) sperrt schon hier: den Typ beweist der Aufrufer
+// (uRdxFixRunner.CastTypeReason ueber DeclaredTypeOf) nur fuer einen
+// blossen Bezeichner und lehnt jeden Pfad ab. Bis zur Review Woche G07-17
+// plante der Planer Pfade trotzdem - Doku und Test versprachen eine Hilfe,
+// die der Nutzer nie bekam. Der Weg von SCA126 (das letzte Glied als Feld
+// der Datei) beweist nur den Namen, nicht den genauen Typ, den SCA123
+// braucht - die Sperre bleibt (Folgewelle A4, Begruendung bei
+// uRdxFixRunner.CastTypeReason).
 function OperandReason(AMap: TRdxCodeMap; const ASite: TRdxCastSite): string;
 var
-  T          : TRdxToken;
-  WantWord   : Boolean;
+  T, N : TRdxToken;
 begin
   Result := '';
   if AMap.HasNonCode(ASite.Open.Line, ASite.Open.Col, ASite.Close.Col) then
-    Exit('Kommentar oder String im Cast');
-  WantWord := True;
+    Exit(_('comment or string in the cast'));
   T := After(AMap, ASite.Open);
-  while (T.Col < ASite.Close.Col) and (T.Line = ASite.Open.Line) do
-  begin
-    if InList(T.Low, NOT_OPERANDS) then
-      Exit(Format('"%s" als Operand - ohne den Cast nicht dasselbe', [T.Low]));
-    if WantWord <> T.IsWord then
-      Exit('der Operand ist kein einfacher Bezeichner(pfad) - etwa ein '
-        + 'Aufruf oder ein Index; der Cast koennte zum Uebersetzen noetig sein');
-    if not WantWord and (T.Low <> '.') then
-      Exit('der Operand ist kein einfacher Bezeichner(pfad)');
-    WantWord := not WantWord;
-    T := After(AMap, T);
-  end;
-  if WantWord then
-    Result := 'der Operand ist kein einfacher Bezeichner(pfad)';
-end;
-
-// Ein Interface-Cast ('IFoo(X)')? I und ein Grossbuchstabe.
-function LooksLikeInterface(const AType: string): Boolean;
-begin
-  Result := (Length(AType) >= 2) and (AType[1] = 'I')
-    and CharInSet(AType[2], ['A'..'Z']);
+  N := After(AMap, T);
+  if InList(T.Low, NOT_OPERANDS) then
+    Exit(_('"%s" as operand - not the same without the cast', [T.Low]));
+  if T.IsWord and (N.Low = '.') then
+    Exit(_('the operand is a path (A.B, Self.F), not a plain identifier - '
+      + 'its type cannot be checked'));
+  if not T.IsWord or not SameTok(N, ASite.Close) then
+    Result := _('the operand is not a plain identifier - a call or an index, '
+      + 'for example; the cast could be needed to compile');
 end;
 
 class function TRdxLineFixes.CastFree(AMap: TRdxCodeMap; ALine: Integer;
@@ -441,10 +397,10 @@ begin
   AEdit := Default(TRdxEdit);
   Target := CastTargetOf(AMessage);
   if Target = '' then
-    AReason := 'Typname fehlt in der Meldung'
-  else if LooksLikeInterface(Target) then
-    AReason := Format('%s ist ein Interface - %s(X).Free riefe dessen '
-      + 'Methode Free, X.Free die von TObject', [Target, Target])
+    AReason := _('the message has no type name')
+  else if LooksLikeInterfaceName(Target) then
+    AReason := _('%s is an interface - %s(X).Free would call its method '
+      + 'Free, X.Free the one of TObject', [Target, Target])
   else
     AReason := CastOn(AMap, ALine, Target, Site);
   if AReason = '' then

@@ -124,6 +124,8 @@
         <DCCReference Include="sources\Common\uRuleCatalog.pas"/>
         <DCCReference Include="sources\Common\uSCAConsts.pas"/>
         <DCCReference Include="sources\Common\uSourceLineEdit.pas"/>
+        <DCCReference Include="sources\Common\uAtomicFile.pas"/>
+        <DCCReference Include="sources\Common\uScaConfigDir.pas"/>
         <DCCReference Include="sources\Common\uYamlSubsetParser.pas"/>
         <DCCReference Include="sources\Detectors\uAbstractNotImpl.pas"/>
         <DCCReference Include="sources\Detectors\uAnonMethodCaptureLoopVar.pas"/>
@@ -218,6 +220,8 @@
         <DCCReference Include="sources\Detectors\uIpAddressScan.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedIpAddress.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedIpInConfig.pas"/>
+        <DCCReference Include="sources\Detectors\uLoopBoundScan.pas"/>
+        <DCCReference Include="sources\Detectors\uLoopPastHighBound.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedSecret.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedString.pas"/>
         <DCCReference Include="sources\Detectors\uIfElseBegin.pas"/>
@@ -285,6 +289,8 @@
         <DCCReference Include="sources\Detectors\uSynchronizeInDestructor.pas"/>
         <DCCReference Include="sources\Detectors\uTabulationCharacter.pas"/>
         <DCCReference Include="sources\Detectors\uTautologicalExpr.pas"/>
+        <DCCReference Include="sources\Detectors\uComparisonPrecedenceScan.pas"/>
+        <DCCReference Include="sources\Detectors\uComparisonPrecedence.pas"/>
         <DCCReference Include="sources\Detectors\uThreadFreeOnTerminateWithRef.pas"/>
         <DCCReference Include="sources\Detectors\uTObjectListWithoutOwnership.pas"/>
         <DCCReference Include="sources\Detectors\uTodoComment.pas"/>
@@ -319,6 +325,7 @@
         <DCCReference Include="sources\Infrastructure\uDfmRepoIndex.pas"/>
         <DCCReference Include="sources\Infrastructure\uEditorCommand.pas"/>
         <DCCReference Include="sources\Infrastructure\uEngineApi.pas"/>
+        <DCCReference Include="sources\Infrastructure\uEngineLock.pas"/>
         <DCCReference Include="sources\Infrastructure\uEvidenceTiering.pas"/>
         <DCCReference Include="sources\Infrastructure\uExport.pas"/>
         <DCCReference Include="sources\Infrastructure\uExportHtml.pas"/>

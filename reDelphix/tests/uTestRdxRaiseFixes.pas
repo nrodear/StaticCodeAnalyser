@@ -33,13 +33,16 @@ type
     // einer Zeile, Kommentar im Rumpf, Kopf ueber zwei Zeilen.
     [Test] procedure Review_Refusals;
     [Test] procedure Review_Forms;
+    // Review R3, verpasst (Charge FC): 'E := ..' zwischen Handler und raise.
+    [Test] procedure Sca122_BoundReassigned_Refused;
   end;
 
 implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxRaiseFixes;
+  uRdxBufferMath, uRdxCodeMap, uRdxRaiseFixes,
+  uTestRdxTextKit;   // Join, Apply, InProc
 
 type
   TRdxRaiseKind = (rkEmpty, rkMissing, rkReRaise);
@@ -48,39 +51,6 @@ const
   EMPTY_MSG = 'Method body is empty';
 
 // ---- Helfer ----
-
-function Apply(const ASource: string; const AEdit: TRdxEdit): string;
-var
-  Bytes : TBytes;
-  Edits : TArray<TRdxEdit>;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-begin
-  SetLength(Edits, 1);
-  Edits[0] := AEdit;
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, Edits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
-end;
-
-// Zeilen mit CRLF verbunden (TStringBuilder: string.Join kennt FPC nicht).
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
 
 // Die Hilfe AKind fuer Zeile ALine: neuer Text oder '' bei Ablehnung.
 // AArg ist bei rkEmpty das Anweisungsformat ('' = Kommentar), sonst die
@@ -132,13 +102,6 @@ function InImpl(const ALines: array of string): string;
 begin
   Result := Join(['unit u;', 'interface', 'implementation']) + #13#10
     + Join(ALines) + #13#10 + 'end.';
-end;
-
-// Eine Unit mit Routine P; ALines ist ihr Rumpf (ab Zeile 6).
-function InProc(const ALines: array of string): string;
-begin
-  Result := Join(['unit u;', 'interface', 'implementation', 'procedure P;',
-    'begin']) + #13#10 + Join(ALines) + #13#10 + Join(['end;', 'end.']);
 end;
 
 // ---- SCA020 ----
@@ -324,6 +287,17 @@ begin
   Assert.AreEqual('', Fix(rkEmpty, InImpl(['constructor TFoo.Create;', 'begin',
     'end;']), 4, RAISE_NOT_IMPLEMENTED, R));
   Assert.IsTrue(Pos('constructor', R) > 0, R);
+  // SCA020: ein veralteter Fund auf einer Prozedurtyp-Zeile ist kein
+  // Methodenkopf (IsRoutineHeadAfter; Review Woche G07-18 - bis dahin
+  // 'lokale Routine zwischen Kopf und Rumpf').
+  Assert.AreEqual('', Fix(rkEmpty, InImpl(['type', '  TCb = procedure of object;',
+    'procedure P;', 'begin', 'end;']), 5, '', R));
+  Assert.IsTrue(Pos('kein Methodenkopf', R) > 0, R);
+  // SCA122: ein veralteter Fund ohne Handler - die Suche erreicht den Kopf
+  // der Routine (Review Woche G07-11 (2) - bis dahin 'anonyme Methode').
+  Assert.AreEqual('', Fix(rkReRaise, InProc(['  raise E;']), 6, ReRaiseMsg('E'),
+    R));
+  Assert.IsTrue(Pos('in dieser Routine', R) > 0, R);
 end;
 
 procedure TTestRdxRaiseFixes.Review_Forms;
@@ -342,6 +316,48 @@ begin
   Assert.AreEqual(InImpl(['end; procedure P;', 'begin', '  ' + INTENT_LINE,
       'end;']),
     Fix(rkEmpty, InImpl(['end; procedure P;', 'begin', 'end;']), 4, '', R), R);
+  // Ein Blockkommentar hinter dem Namen bleibt aus dem Text (Review Woche
+  // G07-11 (3): bis dahin 'TFoo.Bar { alt }').
+  Assert.AreEqual(InImpl(['procedure TFoo.Bar { alt }', '  (A: Integer);', 'begin',
+      '  raise ENotImplemented.Create(''TFoo.Bar'');', 'end;']),
+    Fix(rkEmpty, InImpl(['procedure TFoo.Bar { alt }', '  (A: Integer);', 'begin',
+      'end;']), 4, RAISE_NOT_IMPLEMENTED, R), R);
+end;
+
+procedure TTestRdxRaiseFixes.Sca122_BoundReassigned_Refused;
+var
+  R : string;
+begin
+  // Die Probe des Pruefers (onvar.pas, FPC 3.2.2 -Mdelphi): mit 'raise E'
+  // kommt aussen 'ersetzt' an, mit 'raise;' 'innen' - eine andere
+  // Exception, nicht nur ein anderer Stack-Trace. Bis Charge FC bot die
+  // Hilfe 'raise;' an (bedeutungsgleich gekennzeichnet).
+  Assert.AreEqual('', Fix(rkReRaise, InProc(['  try', '    X;', '  except',
+    '    on E: Exception do', '    begin',
+    '      E := Exception.Create(''ersetzt'');', '      raise E;', '    end;',
+    '  end;']), 12, ReRaiseMsg('E'), R));
+  Assert.IsTrue(Pos('neu zugewiesen', R) > 0, R);
+  // Auch in einem Block zwischen Handler und raise, Gross/klein egal.
+  Assert.AreEqual('', Fix(rkReRaise, InProc(['  try X; except on E: EFoo do '
+    + 'begin if A then begin e := EBar.Create(''x''); end; raise E; end; end;']),
+    6, ReRaiseMsg('E'), R));
+  Assert.IsTrue(Pos('neu zugewiesen', R) > 0, R);
+  // Gegenprobe: ein Member von E oder ein gleichnamiges Feld eines anderen
+  // Objekts aendert E nicht - die Hilfe bleibt.
+  Assert.AreEqual(InProc(['  try X; except on E: EFoo do begin E.Message := '
+      + '''x''; Self.E := nil; raise; end; end;']),
+    Fix(rkReRaise, InProc(['  try X; except on E: EFoo do begin E.Message := '
+      + '''x''; Self.E := nil; raise E; end; end;']), 6, ReRaiseMsg('E'), R), R);
+  // Review Woche G07-19: E als ganzes Argument - ein var-Parameter kann es
+  // ersetzen ('procedure Wrap(var AErr: Exception)'); bis dahin bot die
+  // Hilfe 'raise;' als bedeutungsgleich an. Ein Member als Argument
+  // ('Log(E.Message)', Sca122_ReRaise) bleibt erlaubt.
+  Assert.AreEqual('', Fix(rkReRaise, InProc(['  try X; except on E: EFoo do '
+    + 'begin Wrap(E); raise E; end; end;']), 6, ReRaiseMsg('E'), R));
+  Assert.IsTrue(Pos('als Argument', R) > 0, R);
+  Assert.AreEqual('', Fix(rkReRaise, InProc(['  try X; except on E: EFoo do '
+    + 'begin Replace(A, E, B); raise E; end; end;']), 6, ReRaiseMsg('E'), R));
+  Assert.IsTrue(Pos('als Argument', R) > 0, R);
 end;
 
 initialization

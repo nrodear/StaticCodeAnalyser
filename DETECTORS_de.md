@@ -6,7 +6,7 @@ Orientiert sich am Sonar-50er-Katalog plus eigene Bonus-Detektoren.
 
 Status: ✅ implementiert | 🟡 teilweise | 🔲 offen
 
-**Zusammenfassung (2026-08-07):** Alle **201 Regel-Kinds** des kanonischen Rosters [`rules/sca-rules.json`](rules/sca-rules.json) sind implementiert und in dieser Datei aufgeführt (geliefert von **159 Pipeline-Registrierungen**; einige Klassen emittieren mehrere Kinds — z. B. `uVisibilityCheck` → 3 Visibility-Kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM-Kinds; **SCA194/SCA195 sind projekt-weit, nicht AST-basiert** — emittiert aus dem Projekt-/Gruppen-Scan-Dispatch, nicht der per-Datei-Detektor-Registry; **SCA201** kommt aus dem Konfigurations-Durchlauf über .ini-Dateien). 44 / 50 Sonar-Regel-Slots vollständig; die 4 offenen Slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) brauchen Typ-Inferenz / Cross-Unit-Auflösung und haben noch keine SCA-ID.
+**Zusammenfassung (2026-08-07):** Alle **203 Regel-Kinds** des kanonischen Rosters [`rules/sca-rules.json`](rules/sca-rules.json) sind implementiert und in dieser Datei aufgeführt (geliefert von **161 Pipeline-Registrierungen**; einige Klassen emittieren mehrere Kinds — z. B. `uVisibilityCheck` → 3 Visibility-Kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM-Kinds; **SCA194/SCA195 sind projekt-weit, nicht AST-basiert** — emittiert aus dem Projekt-/Gruppen-Scan-Dispatch, nicht der per-Datei-Detektor-Registry; **SCA201** kommt aus dem Konfigurations-Durchlauf über .ini-Dateien). 44 / 50 Sonar-Regel-Slots vollständig; die 4 offenen Slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) brauchen Typ-Inferenz / Cross-Unit-Auflösung und haben noch keine SCA-ID.
 
 Verbleibende 4 offene Slots brauchen Typ-Inferenz / Flow-Analyse / Cross-Unit-Symbol-Resolution: #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI. **#16 UninitVar** ist als konservativer MVP (`SCA166`) ausgeliefert — Full Path-Sensitivity bleibt fuer Phase 3 offen.
 
@@ -151,7 +151,7 @@ Sonar-50-Katalog
 🏛 mORMot-Cluster:                   9 (SCA153-161, alle vollständig)
 🧩 SonarDelphi Naming/Formatting:  60 (SCA060-119, Sektion unten)
 
-🎯 Gesamt: 201 Detektor-Kinds (184 Detektor-Units).
+🎯 Gesamt: 203 Detektor-Kinds (188 Detektor-Units).
 ```
 
 ---
@@ -269,7 +269,7 @@ Alle bringen Vorher/Nachher-Fix-Hints und ein DUnitX-Fixture mit.
 | SCA158 | **PointerArithmeticOnString** | `PChar(s) +/- Offset` (oder `PAnsiChar` / `PWideChar`) ohne vorherigen Empty-Check auf `s` — `PChar('')` ist NIL, Arithmetik auf nil führt zur Access-Violation | Warning | Bug | `uPointerArithmeticOnString` |
 | SCA159 | **EmptyOnHandler** | `on E: SomeException do ;` (oder leerer `begin end`) — typisierter Exception-Handler schluckt eine spezifische Exception still; schlimmer als `except end` weil die Typ-Annotation absichtlich wirkt | Warning | Bug | `uEmptyOnHandler` |
 | SCA160 | **StringFromPointer** | `string(P)` / `AnsiString(P)` / `UTF8String(P)` Cast aus P-Präfix-Pointer setzt Null-Terminator voraus — liest über das Buffer-Ende hinaus wenn Terminator fehlt; Heap-Overread | Warning | Bug | `uStringFromPointer` |
-| SCA161 | **PointerSubtraction** | `Cardinal(P1) - Cardinal(P2)` (oder Integer/LongWord/LongInt-Varianten) trunkiert die oberen 32 Bit eines 64-Bit-Pointers auf Win64; stattdessen `PtrUInt`/`NativeInt` benutzen | Warning | Bug | `uPointerSubtraction` |
+| SCA161 | **PointerSubtraction** | `Cardinal(P1) - Cardinal(P2)` (oder Integer/LongWord/LongInt-Varianten) trunkiert die oberen 32 Bit eines 64-Bit-Pointers auf Win64; stattdessen `NativeInt`/`NativeUInt` benutzen | Warning | Bug | `uPointerSubtraction` |
 
 ---
 
@@ -460,6 +460,8 @@ Verwaltete Return-Typen (string-Familie, dynamische Arrays, `Variant`, Interface
 | SCA199 | **ParamNameMismatch** | ParamByName-Name fehlt unter den :Platzhaltern des SQL, das die Routine dieser Query gibt (zur Laufzeit "Parameter nicht gefunden"), oder ein Platzhalter, den die Routine nie bindet | Warning | Bug | ✅ | `uParamNameMismatch` |
 | SCA200 | **HardcodedIpAddress** | IPv4-/IPv6-Adresse (privat, geteilt oder öffentlich) in einem String-Literal - in die Konfiguration auslagern oder Hostnamen verwenden; Loopback, Dokumentation, Multicast, Versionen und OIDs werden nicht gemeldet | Warning | Security Hotspot | ✅ | `uHardcodedIpAddress` |
 | SCA201 | **HardcodedIpInConfig** | IPv4-/IPv6-Adresse als Wert in einer .ini-Datei des Quellbaums (Konfigurations-Durchlauf, kein Unit-Detektor; Marker `; noinspection`) | Hint | Security Hotspot | ✅ | `uHardcodedIpInConfig` |
+| SCA202 | **ComparisonPrecedence** | not/and/or/xor binden stärker als Vergleiche: `not Count > 0` (bitweises not einer Ganzzahl) und `A = True or B = False` (Boolean-Kette) kompilieren, prüfen aber etwas anderes; Error mit Typbeleg, sonst Warning; `Flags and Mask = 0` wird nicht gemeldet | Error | Bug | ✅ | `uComparisonPrecedence` |
+| SCA203 | **LoopPastHighBound** | for-Schleife läuft einen Index über das Ende (`0 to X.Count`, `0 to Length(A)`, `High(A) + 1`; Strings `0 to Length(S)` und `1 to Length(S) + 1`) und indiziert dieselbe Sammlung mit der unverschobenen Schleifenvariablen - Error mit Typbeweis (Liste, Array, String), sonst Warning | Error | Bug | ✅ | `uLoopPastHighBound` |
 
 ## ⚙️ Konfiguration — SCA001 OwnershipSinks (MemoryLeak-Whitelist)
 

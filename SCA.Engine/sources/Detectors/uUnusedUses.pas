@@ -4,69 +4,45 @@
 //
 // Kombiniert zwei Heuristiken:
 //
-//   H1 – Qualifizierter Bezeichner:
+//   H1 - Qualifizierter Bezeichner:
 //        Sucht 'unitname.' als Praefix in Bezeichnern.
 //        Beispiel: SysUtils.IntToStr  ->  'sysutils.' im Raw-Corpus
 //
-//   H2 – Bekannte Typen / Funktionen:
+//   H2 - Bekannte Typen / Funktionen:
 //        Prueft ob bekannte Bezeichner aus der Unit als eigenstaendige
 //        Woerter im Quelltext vorkommen.
 //        Beispiel: TStringList  ->  System.Classes ist benoetigt
 //
 // Einschraenkungen (keine 100% Sicherheit):
-//   – Units mit reinem Initialisierungscode (z.B. Vcl.Themes)
-//   – Bedingte Kompilierung ($IFDEF)
-//   – Typen aus unbekannten (nicht gemappten) Units
+//   - Units mit reinem Initialisierungscode (z.B. Vcl.Themes)
+//   - Bedingte Kompilierung ($IFDEF)
+//   - Typen aus unbekannten (nicht gemappten) Units
 //   Befunde sind daher immer Warnungen, keine Fehler.
 //
-// ===================================================================
-// IM CLI LAEUFT DIESER DETEKTOR NICHT. Befund vom 2026-09-15 -
-// GEFIXT 2026-09-19 (Zweig sca007-cli-recall): uConsoleRunner setzt
-// Req.UsesCheck jetzt ueber EffektiverUsesCheck (ini-Schalter ODER
-// Profil 'strict'). Der Kettenbefund darunter bleibt als Doku des
-// Defekts stehen; das FREIGABE-GATE (FP-Stichprobe am gebauten Stand
-// VOR dem Merge) steht im Vertrag der Charge.
-// ===================================================================
+// OPT-IN: der Detektor laeuft nur mit [Detectors] UsesCheck=1 oder im
+// Profil 'strict' (uRepoSettings: "alle + opt-in Detektoren"). Form-GUI
+// und IDE-Plugin setzen Req.UsesCheck aus Settings.UsesCheck; der CLI
+// seit 2026-09-19 ueber uConsoleRunner.EffektiverUsesCheck (ini-Schalter
+// ODER Profil 'strict').
 //
-// Die Kette, jede Stelle nachgesehen:
-//   uStaticAnalyzer2.pas:262   schaltet fkUnusedUses ab, solange
-//                              AIncludeUsesCheck False ist
-//   uEngineApi.pas:324         TAnalysisRequest.Default setzt
-//                              UsesCheck := False
-//   uConsoleRunner.pas         setzt das Feld NIE - null Vorkommen von
-//                              'UsesCheck' in der ganzen Unit
+// HISTORIE (Review 2026-10-13: der Kopf trug "GEFIXT" und "NICHT HIER
+// GEFIXT" zugleich - hier die Reihenfolge):
+//   2026-09-15  Befund: im CLI lief der Detektor NIE. uConsoleRunner
+//               setzte Req.UsesCheck nicht, TAnalysisRequest.Default
+//               laesst es False, uStaticAnalyzer2 schaltet fkUnusedUses
+//               damit ab. Drei Belege: Referenzlauf 752.457 Funde mit
+//               SCA007 = 0; 27 repo-weise Laeufe mit UsesCheck=1 je 0;
+//               --time-detectors fuehrte UnusedUses nicht. Bewusst nicht
+//               sofort gefixt: die eine Zeile legt rund 24.000 Funde mit
+//               ungemessener FP-Quote frei - ein Recall-Paket mit eigenem
+//               Zweig, Bau und FP-Stichprobe (Projektregel; Vorbild
+//               AutoDiscoverClasses, uEngineApi BUGFIX 2026-07-15).
+//   2026-09-19  Gefixt im Zweig sca007-cli-recall samt FP-Stichprobe am
+//               gebauten Stand (C-/D4-/F3-Chargen in dieser Unit).
 //
-// Form-GUI (uMainForm:1285/1379/2598) und IDE-Plugin
-// (uIDEAnalyserForm:4802, uIDEAnalyseRunner:272) setzen es korrekt aus
-// Settings.UsesCheck; uRepoSettings:1679 liest [Detectors] UsesCheck
-// auch sauber aus der ini. Nur der CLI-Pfad laesst es auf dem Default
-// stehen - damit ist der ini-Schalter dort wirkungslos, obwohl ihn die
-// Doku an vier Stellen verspricht (docs/rules/de/SCA007.md,
-// README_de.md, docs/configuration_de.md, SCA.Engine/API_de.md).
-//
-// Schaerfer noch: uRepoSettings:375 definiert das Profil 'strict' als
-// "alle + opt-in Detektoren (UsesCheck)". Der Referenzlauf faehrt genau
-// dieses Profil - und bekommt die Regel trotzdem nicht.
-//
-// DREI UNABHAENGIGE BELEGE, dass es wirklich so ist:
-//   * Referenzlauf 752.457 Funde: SCA007 = 0, auf 13.419 Dateien
-//   * 27 repo-weise Laeufe mit [Detectors] UsesCheck=1 in einer
-//     APPDATA-Kopie: in JEDEM Repo 0, auch in vcl-styles-utils
-//   * --time-detectors listet 180 Detektoren mit CallCount - UnusedUses
-//     kommt darin ueberhaupt nicht vor
-//
-// Die 0 ist also NICHT die Losbildungsfalle (die traefe hier auch
-// sachlich nicht: AnalyzeUnit bekommt keinen Projektkontext, CollectText
-// baut den Suchtext allein aus DIESEM AST - was in anderen Units steht,
-// kann der Detektor gar nicht wissen).
-//
-// NICHT HIER GEFIXT, mit Absicht: das Feld durchzureichen ist eine
-// Zeile, legt aber nach Nachbildung groessenordnungsmaessig 24.000
-// Funde frei, deren FP-Quote UNGEMESSEN ist. Das ist ein Recall-Paket
-// und bekommt nach Projektregel einen eigenen Zweig, einen eigenen Bau
-// und vorher eine FP-Stichprobe. Derselbe Defekttyp ist fuer
-// AutoDiscoverClasses schon einmal aufgetreten und in uEngineApi:460ff
-// als BUGFIX 2026-07-15 dokumentiert.
+// Die 0 war NICHT die Losbildungsfalle: AnalyzeUnit bekommt keinen
+// Projektkontext, CollectText baut den Suchtext allein aus DIESEM AST -
+// was in anderen Units steht, kann der Detektor nicht wissen.
 
 interface
 
@@ -110,12 +86,27 @@ type
     // exakt 374 solcher Funde (mORMot 277, Alcinoe 88, ...).
     class function IstRtlNamespace(const UnitLow: string): Boolean; static;
 
-    // Bekannte oeffentliche Bezeichner einer Unit (fuer H2), lowercase
+    // Bekannte oeffentliche Bezeichner einer Unit (fuer H2), lowercase.
+    // VERTRAG: UnitLow ist der volle Name in Kleinschrift ('system.
+    // classes') ODER ein Kurzname ('classes'); beide Schreibweisen sind
+    // je Eintrag gelistet. LEER heisst "Unit nicht gemappt" - nicht
+    // "keine Bezeichner": H2 kann dann nichts beweisen und der Detektor
+    // schweigt (lieber false negative als false positive). Die Tabelle
+    // kennt KEINEN Kurznamen-Rueckfall; den liefert IdentsFor.
     class function KnownIdents(const UnitLow: string): TArray<string>; static;
+
+    // KnownIdents mit dem Kurznamen-Rueckfall fuer RTL-Namespaces: leer
+    // fuer den vollen Namen UND IstRtlNamespace -> KnownIdents(Kurzname).
+    // 'fmx.styles' -> die 'styles'-Liste; 'alcinoe.fmx.stdctrls' bleibt
+    // leer (C-Charge 2026-09-19). Oeffentlich, weil die SCA007-
+    // Editorhilfe (reDelphix uRdxRecipeRunner.UnitStillUsed) dieselbe
+    // Kette nachbaut - sie soll kuenftig hierher zeigen (Review
+    // 2026-10-13; reDelphix in dieser Charge unveraendert).
+    class function IdentsFor(const UnitLow: string): TArray<string>; static;
   private
     // Baut zwei Corpus-Varianten:
-    //   RawText  – lowercase, Punkte erhalten (fuer H1: 'sysutils.')
-    //   WordText – lowercase, alle Nicht-Bezeichner durch Leerzeichen (fuer H2: ' tlist ')
+    //   RawText  - lowercase, Punkte erhalten (fuer H1: 'sysutils.')
+    //   WordText - lowercase, alle Nicht-Bezeichner durch Leerzeichen (fuer H2: ' tlist ')
     class procedure CollectText(Node: TAstNode;
       RawSB, WordSB: TStringBuilder); static;
 
@@ -353,7 +344,7 @@ class function TUnusedUsesDetector.KnownIdents(
 begin
   Result := [];
 
-  // ══ System-Einheiten ══════════════════════════════════════════════════════
+  // == System-Einheiten ===================================================
 
   if (UnitLow = 'system.classes') or (UnitLow = 'classes') then
     Result := ['tstringlist','tstrings','tmemorystream','tfilestream',
@@ -508,7 +499,7 @@ begin
     Result := ['ixmlnode','ixmldocument','ixmlnodelist',
                'ixmlelementnode','ixmlattr','txmlnodetype']
 
-  // ══ Winapi-Einheiten ══════════════════════════════════════════════════════
+  // == Winapi-Einheiten ===================================================
 
   else if (UnitLow = 'winapi.shellapi') or (UnitLow = 'shellapi') then
     Result := ['shellexecute','shellexecuteex','shfileinfo',
@@ -524,7 +515,7 @@ begin
     Result := ['ttbbutton','timagelist','ttvitem','tlvitem',
                'initcommoncontrols','initcommoncontrolsex']
 
-  // ══ VCL-Einheiten ═════════════════════════════════════════════════════════
+  // == VCL-Einheiten ======================================================
 
   else if (UnitLow = 'vcl.controls') or (UnitLow = 'controls') then
     Result := ['tcontrol','twincontrol','tcontainercontrol','tcustomcontrol',
@@ -626,7 +617,7 @@ begin
     Result := ['tdbgrid','tdbgridcolumn','tdbgridcolumns',
                'tcustomdbgrid','tdbgridoption']
 
-  // ══ Datenbank-Einheiten ═══════════════════════════════════════════════════
+  // == Datenbank-Einheiten ================================================
 
   else if (UnitLow = 'data.db') or (UnitLow = 'db') then
     Result := ['tdataset','tfield','tfieldtype','tparam','tdatasource',
@@ -652,7 +643,7 @@ begin
   else if (UnitLow = 'firedac.stan.param') then
     Result := ['tfdparam','tfdparams']
 
-  // ══ VCL – weitere Steuerelemente ═════════════════════════════════════════
+  // == VCL - weitere Steuerelemente =======================================
 
   else if (UnitLow = 'vcl.mask') or (UnitLow = 'mask') then
     Result := ['tmaskedit','tcustommask','teditoption']
@@ -689,7 +680,7 @@ begin
   else if (UnitLow = 'vcl.shell.shellctrls') then
     Result := ['tshelltreeview','tshelllistview','tshellcombobox']
 
-  // ══ System – Threading & Synchronisation ═════════════════════════════════
+  // == System - Threading & Synchronisation ===============================
 
   else if (UnitLow = 'system.syncobjs') or (UnitLow = 'syncobjs') then
     Result := ['tcriticalsection','tmutex','tevent','tsemaphore',
@@ -704,7 +695,7 @@ begin
     Result := ['tactionlist','tcustomactionlist','tbasicaction',
                'tcommonactionlink']
 
-  // ══ System – Netzwerk & Internet ══════════════════════════════════════════
+  // == System - Netzwerk & Internet =======================================
 
   else if (UnitLow = 'system.net.urlclient') then
     Result := ['turlclient','turlrequest','turlresponse',
@@ -716,7 +707,7 @@ begin
   else if (UnitLow = 'system.net.httpclientcomponent') then
     Result := ['tnethttpclient','tnethttprequest']
 
-  // ══ REST / JSON ═══════════════════════════════════════════════════════════
+  // == REST / JSON ========================================================
 
   else if (UnitLow = 'rest.client') then
     Result := ['trestclient','trestrequest','trestresponse',
@@ -737,7 +728,7 @@ begin
     Result := ['toauth1authenticator','toauth2authenticator',
                'toauthaccesstokentype']
 
-  // ══ Indy (Internet Direct) ════════════════════════════════════════════════
+  // == Indy (Internet Direct) =============================================
 
   else if (UnitLow = 'idhttp') then
     Result := ['tidhttp','tidhttprequestinfo','tidhttpresponseinfo',
@@ -763,7 +754,7 @@ begin
   else if (UnitLow = 'idiohandler') or (UnitLow = 'idiohandlerstack') then
     Result := ['tidiohandler','tidiohandlerstack','tidiohandlersocket']
 
-  // ══ FireMonkey (FMX) ══════════════════════════════════════════════════════
+  // == FireMonkey (FMX) ===================================================
 
   else if (UnitLow = 'fmx.types') then
     Result := ['tfmxobject','talignlayout','talign','trotation',
@@ -851,7 +842,7 @@ begin
   else if (UnitLow = 'fmx.calendars') then
     Result := ['tcalendarview','tdatepicker']
 
-  // ══ Winapi – weitere Einheiten ════════════════════════════════════════════
+  // == Winapi - weitere Einheiten =========================================
 
   else if (UnitLow = 'winapi.winsock2') or (UnitLow = 'winsock2') then
     Result := ['tsocket','twsadata','tfd_set','tsockaddr',
@@ -883,7 +874,7 @@ begin
     Result := ['tgdiplus','tgraphics','tbitmap','tpen','tbrush',
                'tstringformat','tfont']
 
-  // ══ IBX / InterBase ═══════════════════════════════════════════════════════
+  // == IBX / InterBase ====================================================
 
   else if (UnitLow = 'ibx.ibdatabase') or (UnitLow = 'ibdatabase') then
     Result := ['tibdatabase','tibtransaction','tibsql']
@@ -894,13 +885,13 @@ begin
   else if (UnitLow = 'ibx.ibsql') or (UnitLow = 'ibsql') then
     Result := ['tibsql','tibsqltype','tibxsqlvar']
 
-  // ══ DBX / SQLExpress ══════════════════════════════════════════════════════
+  // == DBX / SQLExpress ===================================================
 
   else if (UnitLow = 'data.dbxcommon') or (UnitLow = 'dbxcommon') then
     Result := ['tsqlconnection','tsqlquery','tsqldataset',
                'tsqlstoredproc','tsqlmonitor']
 
-  // ══ Sonstige ══════════════════════════════════════════════════════════════
+  // == Sonstige ===========================================================
 
   // 'tthermemanager' stand hier und war tot; die naheliegende Korrektur
   // 'tthememanager' ist es ebenfalls (0 Korpustreffer). Entfernt statt
@@ -978,6 +969,16 @@ begin
                'tpushnotificationservice'];
 end;
 
+class function TUnusedUsesDetector.IdentsFor(
+  const UnitLow: string): TArray<string>;
+// Vertrag siehe Deklaration. Der Rueckfall bleibt an IstRtlNamespace
+// gebunden - dort steht das WARUM (Alcinoe-FP der C-Charge).
+begin
+  Result := KnownIdents(UnitLow);
+  if (Length(Result) = 0) and IstRtlNamespace(UnitLow) then
+    Result := KnownIdents(ShortName(UnitLow));
+end;
+
 { ---- Oeffentliche API ---- }
 
 class procedure TUnusedUsesDetector.AnalyzeUnit(UnitNode: TAstNode;
@@ -1019,6 +1020,15 @@ begin
     // bleibt es still beim AST-Text - die Bestandsfixturen behalten
     // ihren Vertrag, und genau dafuer ist der Kanal ADDITIV statt
     // ersetzend.
+    //
+    // OHNE Scan-Kontext (Review 2026-10-13): AnalyzeUnit hat keinen
+    // TAnalyzeContext-Parameter und ist in uStaticAnalyzer2 ueber AddD3
+    // registriert - der Adapter verwirft den Kontext. AcquireLines mit
+    // nil faellt auf den Prozess-Cache zurueck (dieselben Zeilen wie im
+    // Scan), nur der Strip-Slot des Kontexts bleibt ungenutzt: ein
+    // Strip je Datei mehr, keine andere Antwort. Der Umstieg auf den
+    // Kontext braucht den 4-Parameter-Vertrag (AddD statt AddD3) in
+    // uStaticAnalyzer2 - Muster uHardcodedIpAddress.
     SrcLines := AcquireLines(FileName, SrcCached, nil);
     if SrcLines <> nil then
     try
@@ -1069,26 +1079,25 @@ begin
 
       Found := False;
 
-      // ── H1: Qualifizierter Bezeichner ('sysutils.' im Raw-Text) ───────────
+      // -- H1: Qualifizierter Bezeichner ('sysutils.' im Raw-Text) --------
       if (Pos(ShortLow + '.', RawText)  > 0) or
          (Pos(UnitLow  + '.', RawText)  > 0) then
         Found := True;
 
-      // ── H2: Bekannte Bezeichner im Word-Text ──────────────────────────────
+      // -- H2: Bekannte Bezeichner im Word-Text ---------------------------
       if not Found then
       begin
-        var Idents := KnownIdents(UnitLow);
         // Kurznamen-Fallback NUR fuer RTL-Namespaces (C-Charge
         // 2026-09-19): eine fremde Unit wie 'Alcinoe.FMX.StdCtrls'
         // fiele sonst auf die VCL-'stdctrls'-Identliste zurueck und
         // wuerde trotz Nutzung ihrer EIGENEN Typen gemeldet - das
-        // FP-Muster 1 der Recall-Freigabe-Stichprobe.
-        if (Length(Idents) = 0) and IstRtlNamespace(UnitLow) then
-          Idents := KnownIdents(ShortLow);
+        // FP-Muster 1 der Recall-Freigabe-Stichprobe. Vertrag und
+        // Rueckfall stehen in IdentsFor.
+        var Idents := IdentsFor(UnitLow);
 
         // Unbekannte Unit (kein Mapping): Verwendung nicht bestimmbar.
-        // Ohne Mapping wuerden alle unbekannten Units fälschlich als unused
-        // gemeldet → lieber false negative als false positive.
+        // Ohne Mapping wuerden alle unbekannten Units faelschlich als unused
+        // gemeldet -> lieber false negative als false positive.
         if Length(Idents) = 0 then Continue;
 
         for var Id in Idents do
@@ -1103,7 +1112,7 @@ begin
 
       if Found then Continue;
 
-      // H1 und H2 haben keine Verwendung gefunden → melden
+      // H1 und H2 haben keine Verwendung gefunden -> melden
       Reported.AddOrSetValue(UnitLow, True);
       F            := TLeakFinding.Create;
       F.FileName   := FileName;

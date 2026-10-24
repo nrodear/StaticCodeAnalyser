@@ -32,6 +32,16 @@ type
     [Test] procedure IsBaseline_RejectsNonJson;
     [Test] procedure IsBaseline_RejectsMissingFile;
     [Test] procedure Write_ReturnsWrittenCount_ExcludingReadErrors;
+
+    // Review 2026-10-14 (Bestand): [Baseline] File= wurde in vier Wirten
+    // mit drei Bedeutungen aufgeloest - jetzt EINE Regel in der Engine.
+    [Test] procedure ResolveConfigured_RelativeAgainstProjectDir;
+    [Test] procedure ResolveConfigured_AbsoluteAndEmptyUnchanged;
+    // CLI-Rueckfall (Gegen-Review Welle 1, Major 4): erst projektrelativ,
+    // sonst das Arbeitsverzeichnis - nur, wenn die Datei dort existiert.
+    [Test] procedure ResolveConfiguredWithFallback_ProjectFirst_ThenCwd;
+    // BuildCountSource stand byte-gleich in EXE und Plugin.
+    [Test] procedure NewOnly_EmptySetIsSource_LoadedSetFiltersIntoOwnedList;
   end;
 
 implementation
@@ -240,6 +250,117 @@ begin
     Assert.Contains(TFile.ReadAllText(Fn), '"count": 1',
       'auch das count-Feld der Datei zaehlt ohne Lesefehler');
   finally
+    List.Free;
+  end;
+end;
+
+procedure TTestBaselineResolve.ResolveConfigured_RelativeAgainstProjectDir;
+begin
+  Assert.AreEqual(TPath.Combine(FTmp, '.sca\x.baseline.json'),
+    TBaseline.ResolveConfigured('.sca\x.baseline.json', FTmp));
+  Assert.AreEqual(TPath.Combine(FTmp, '.sca\x.baseline.json'),
+    TBaseline.ResolveConfigured('  .sca\x.baseline.json  ',
+      IncludeTrailingPathDelimiter(FTmp)),
+    'Leerraum weg, Trenner nur einmal');
+  Assert.AreEqual('.sca\x.baseline.json',
+    TBaseline.ResolveConfigured('.sca\x.baseline.json', ''),
+    'ohne Projektverzeichnis bleibt der Pfad relativ');
+end;
+
+procedure TTestBaselineResolve.ResolveConfigured_AbsoluteAndEmptyUnchanged;
+var
+  Abs : string;
+begin
+  Abs := TPath.Combine(FTmp, 'a.json');
+  Assert.AreEqual(Abs, TBaseline.ResolveConfigured(Abs,
+    TPath.Combine(FTmp, 'anderswo')), 'Laufwerkspfad bleibt');
+  Assert.AreEqual('\abs\b.json', TBaseline.ResolveConfigured('\abs\b.json', FTmp),
+    'fuehrender Trenner gilt als absolut (wie bisher in beiden Wirten)');
+  Assert.AreEqual('', TBaseline.ResolveConfigured('', FTmp));
+  Assert.AreEqual('', TBaseline.ResolveConfigured('   ', FTmp), 'nur Leerraum');
+end;
+
+procedure TTestBaselineResolve.ResolveConfiguredWithFallback_ProjectFirst_ThenCwd;
+var
+  Proj, Cwd, Abs : string;
+  Used           : Boolean;
+begin
+  Proj := TPath.Combine(FTmp, 'proj');
+  Cwd  := TPath.Combine(FTmp, 'cwd');
+  TDirectory.CreateDirectory(Proj);
+  TDirectory.CreateDirectory(Cwd);
+  // Nirgends vorhanden: der projektrelative Pfad bleibt (die Fehlermeldung
+  // nennt den erwarteten Ort), kein Rueckfall.
+  Assert.AreEqual(TPath.Combine(Proj, 'b.json'),
+    TBaseline.ResolveConfiguredWithFallback('b.json', Proj, Cwd, Used));
+  Assert.IsFalse(Used, 'nirgends vorhanden: kein Rueckfall');
+  // Nur im CWD: der alte CLI-Weg, gemeldet ueber Used.
+  MakeFile('cwd\b.json');
+  Assert.AreEqual(TPath.Combine(Cwd, 'b.json'),
+    TBaseline.ResolveConfiguredWithFallback('b.json', Proj, Cwd, Used));
+  Assert.IsTrue(Used, 'nur im CWD: Rueckfall');
+  // In beiden: das Projekt gewinnt.
+  MakeFile('proj\b.json');
+  Assert.AreEqual(TPath.Combine(Proj, 'b.json'),
+    TBaseline.ResolveConfiguredWithFallback('b.json', Proj, Cwd, Used));
+  Assert.IsFalse(Used, 'projektrelativ vorhanden: kein Rueckfall');
+  // Absolut, leer und ohne Rueckfall-Verzeichnis wie ResolveConfigured.
+  Abs := TPath.Combine(FTmp, 'x.json');
+  Assert.AreEqual(Abs,
+    TBaseline.ResolveConfiguredWithFallback(Abs, Proj, Cwd, Used));
+  Assert.IsFalse(Used, 'absolut: kein Rueckfall');
+  Assert.AreEqual('',
+    TBaseline.ResolveConfiguredWithFallback('  ', Proj, Cwd, Used));
+  Assert.AreEqual(TPath.Combine(Proj, 'c.json'),
+    TBaseline.ResolveConfiguredWithFallback('c.json', Proj, '', Used),
+    'ohne Rueckfall-Verzeichnis');
+  Assert.IsFalse(Used);
+end;
+
+procedure TTestBaselineResolve.NewOnly_EmptySetIsSource_LoadedSetFiltersIntoOwnedList;
+var
+  List   : TObjectList<TLeakFinding>;
+  Src    : TList<TLeakFinding>;
+  S      : TBaselineSet;
+  Owned  : TList<TLeakFinding>;
+  Res    : TList<TLeakFinding>;
+  F1, F2 : TLeakFinding;
+  Fn     : string;
+begin
+  Fn   := TPath.Combine(FTmp, 'bl.json');
+  List := TObjectList<TLeakFinding>.Create(True);
+  Src  := TList<TLeakFinding>.Create;
+  S    := TBaselineSet.Create;
+  try
+    F1 := TLeakFinding.New('uAlt.pas', 'Run', 10, 'Obj', fkMemoryLeak);
+    List.Add(F1);
+    TBaseline.Write(List, Fn, TBaselineScope.ByFileName);   // nur F1
+    F2 := TLeakFinding.New('uNeu.pas', 'Go', 20, 'Neu', fkMissingFinally);
+    List.Add(F2);
+    Src.AddRange(List);
+    // Leeres Set (fail-open): die Quelle selbst, nichts zu befreien.
+    Res := S.NewOnly(Src, Owned);
+    Assert.IsTrue(Res = Src, 'leeres Set: die Quelle selbst');
+    Assert.IsNull(Owned);
+    // Geladen: eigene Liste mit den NEUEN Funden.
+    S.LoadFromFile(Fn, TBaselineScope.ByFileName);
+    Assert.IsFalse(S.IsEmpty);
+    Res := S.NewOnly(Src, Owned);
+    try
+      Assert.IsNotNull(Owned, 'der Aufrufer bekommt eine eigene Liste');
+      Assert.IsTrue(Res = Owned);
+      Assert.AreEqual<Integer>(1, Owned.Count);
+      Assert.IsTrue(Owned[0] = F2, 'nur der Fund, der nicht in der Baseline steht');
+      Assert.AreEqual<Integer>(2, Src.Count, 'die Quelle bleibt unangetastet');
+    finally
+      Owned.Free;
+    end;
+    Res := S.NewOnly(nil, Owned);
+    Assert.IsNull(Res);
+    Assert.IsNull(Owned);
+  finally
+    S.Free;
+    Src.Free;
     List.Free;
   end;
 end;

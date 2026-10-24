@@ -40,13 +40,38 @@ unit uParamNameScan;
 //   * Eine geschachtelte Routine erwaehnt Q.
 //   * Das SQL ist ein Programmblock (BEGIN ... END, Firebird EXECUTE BLOCK,
 //     PL/SQL): ':v' kann dort eine lokale Variable sein - dann kein (b).
-//   * Ein String im SQL schliesst nicht (Oracle q'[...]', Backslash-
-//     Escapes): die Platzhalter sind dann nicht verlaesslich lesbar.
+//   * Ein String im SQL schliesst nicht (Oracle q'[...]' und nq'[...]',
+//     Backslash-Escapes): die Platzhalter sind dann nicht verlaesslich
+//     lesbar.
+//
+// Zugriffe VOR dem ersten SQL-Beitrag der Routine (vor Create, SQL.Clear,
+// SQL.Text := oder SQL.Add) gelten dem SQL, das die Query schon hatte -
+// aus dem DFM oder einer anderen Routine - und werden verworfen. Erst was
+// die Routine danach zuweist, wird gegen das hier sichtbare SQL geprueft
+// (Review 2026-10-14: ParamByName('id') auf das DFM-SQL, Open, dann
+// SQL.Text := '... :newid' - 'id' wurde gegen das NEUE SQL gemeldet).
+// Eine in der Routine erzeugte Query hat vor ihrem ersten SQL keine
+// Parameter; dort bleiben die Zugriffe stehen.
+//
+// Params.CreateParam / Params.Add / Parameters.CreateParameter mit einem
+// Literalnamen legen einen Parameter an, den das SQL nicht kennt: dieser
+// Name ist fuer (a) bekannt. Ohne Literalnamen (Variable, Add ohne
+// Argument, AddParameter.Name := ...) kann jeder Name entstehen - dann
+// kein Urteil ueber die Query. (b) bleibt wie bei jedem Params-Zugriff
+// ausgesetzt.
 //
 // (b) braucht zusaetzlich: Q ist in der Routine erzeugt (sonst binden
 // Master-Detail, DFM-Params oder andere Routinen), Params werden nicht
 // dynamisch angefasst (Params[i], ParamByName(Variable), MasterSource),
 // und die Routine setzt mindestens einen Parameter von Q mit Literal-Namen.
+//
+// Grenze der Meldung (a): sie nennt die vorhandenen Platzhalter sortiert
+// und bei MAX_LISTED gekappt. Diese Liste ist Teil des Meldetexts und
+// damit der Fund-Identitaet (Baseline, SARIF-Vergleich): kommt ein
+// Platzhalter ins SQL oder wird einer umbenannt, aendert sich der Text
+// ALLER (a)-Funde dieser Query, obwohl der gemeldete Tippfehler sich nicht
+// bewegt hat. Bewusst belassen (Review 2026-10-14) - jeder Umbau des
+// Texts bewegt saemtliche bestehenden Baselines.
 //
 // Gelesen wird ab dem ersten 'begin' der Routine - Kopf und var-Abschnitt
 // sind Deklarationen, keine Benutzungen.
@@ -76,6 +101,19 @@ interface
 
 uses
   System.SysUtils, System.Classes;
+
+const
+  // Ohne eines dieser Woerter (klein, als Teilstring der kleingeschriebenen
+  // Zeile bzw. Datei) kann die Regel nichts melden: jeder Zugriff, den der
+  // Scanner als Zuweisung zaehlt, enthaelt eines davon, und (a) wie (b)
+  // brauchen mindestens einen. EINE Liste fuer beide Vorfilter - den der
+  // Engine je Datei (uStaticAnalyzer2) und den des Detektors je Routine
+  // (uParamNameMismatch). Bis 2026-10-14 standen zwei Kopien mit je fuenf
+  // Woertern; SetComplexVariable und SetLongVariable (DOA) fehlten in
+  // beiden, Routinen nur mit diesen Zugriffen kamen nie beim Scanner an.
+  PARAM_ACCESS_WORDS: array[0..6] of string = (
+    'parambyname', 'findparam', 'paramvalues', 'setvariable',
+    'declarevariable', 'setcomplexvariable', 'setlongvariable');
 
 type
   TParamNameIssueKind = (
@@ -126,6 +164,12 @@ const
     'paramvalues', 'setvariable', 'declarevariable', 'setcomplexvariable',
     'setlongvariable', 'macrobyname', 'macros');
 
+  // Methoden von Params/Parameters, die einen Parameter MIT Namen anlegen
+  // (Data.DB/UniDAC CreateParam, FireDAC Add('x', ft), ADO CreateParameter;
+  // AddParameter liefert ihn namenlos). Klein.
+  PARAM_CREATORS: array[0..3] of string = (
+    'createparam', 'createparameter', 'add', 'addparameter');
+
 type
   TTokKind = (tkIdent, tkString, tkNumber, tkSym, tkAssign);
 
@@ -173,13 +217,21 @@ begin
   end;
 end;
 
-function IsMemberWord(const ALow: string): Boolean;
+// Steht AWord (klein) in der Liste? Die eine lineare Suche fuer alle
+// Wortlisten dieser Unit - sie sind kurz, ein Set lohnt nicht. Indexschleife
+// statt for-in, weil der Parameter ein offenes Array ist (auch TArray).
+function InWordList(const AList: array of string; const AWord: string): Boolean;
 var
-  W : string;
+  k : Integer;
 begin
-  for W in MEMBER_WORDS do
-    if W = ALow then Exit(True);
+  for k := 0 to High(AList) do
+    if AList[k] = AWord then Exit(True);
   Result := False;
+end;
+
+function IsMemberWord(const ALow: string): Boolean;
+begin
+  Result := InWordList(MEMBER_WORDS, ALow);
 end;
 
 // ===========================================================================
@@ -444,12 +496,20 @@ begin
   Result := Length(ASql) + 1;
 end;
 
+// Oracle q'[...]' und nq'[...]' (nationale Form): q bzw. nq als eigenes
+// Wort direkt vor dem Apostroph an APos. Bis 2026-10-14 stand das n zwar
+// in der Zeichenmenge, die Schlussbedingung verlangte aber q - nq'...'
+// wurde als Bezeichner plus gewoehnlichem String gelesen.
 function IsOracleQQuote(const ASql: string; APos: Integer): Boolean;
+var
+  Start : Integer;   // Index des q bzw. des n davor
 begin
-  Result := (ASql[APos] = '''') and (APos > 1) and
-            CharInSet(ASql[APos - 1], ['q', 'Q', 'n', 'N']) and
-            ((APos = 2) or not IsIdentChar(ASql[APos - 2])) and
-            ((ASql[APos - 1] = 'q') or (ASql[APos - 1] = 'Q'));
+  Result := False;
+  if (ASql[APos] <> '''') or (APos < 2) then Exit;
+  Start := APos - 1;
+  if not CharInSet(ASql[Start], ['q', 'Q']) then Exit;
+  if (Start > 1) and CharInSet(ASql[Start - 1], ['n', 'N']) then Dec(Start);
+  Result := (Start = 1) or not IsIdentChar(ASql[Start - 1]);
 end;
 
 // Ab APos ('-' von '--' oder '/' von '/*') hinter den Kommentar.
@@ -695,6 +755,7 @@ type
     DynRefs    : Boolean;   // Parameter dynamisch angefasst -> kein (b)
     Parts      : TArray<TSqlPart>;
     Refs       : TArray<TRef>;
+    Known      : TArray<string>;   // per CreateParam/Add angelegte Namen (klein) -> kein (a)
   end;
 
   TChain = record
@@ -712,6 +773,8 @@ type
     function MatchClose(AOpen: Integer): Integer;
     function ExprEnd(AFrom: Integer): Integer;
     function LiteralExpr(AFrom, ATo: Integer; out AValue: string): Boolean;
+    function IsLiteralArg(AIdx: Integer): Boolean;
+    function FirstLiteralArg(AIdx: Integer; out AValue: string): Boolean;
     function ReadChain(AStart: Integer): TChain;
     procedure ChainKey(const AChain: TChain; ACount: Integer;
       out AKey, ADisplay: string);
@@ -727,11 +790,13 @@ type
     procedure AddPart(AQ: Integer; const AText: string; ALine: Integer);
     procedure AddRef(AQ: Integer; const AName: string; ALine: Integer;
       AThrows: Boolean);
+    procedure AddKnown(AQ: Integer; const ALowName: string);
     procedure HandleSqlAdd(AQ, E: Integer);
     procedure HandleSqlText(AQ, E: Integer);
     procedure HandleSql(AQ: Integer; const AChain: TChain; AMember: Integer);
     procedure HandleParamValues(AQ, E: Integer);
     procedure HandleParamAccess(AQ: Integer; const AMember: string; E: Integer);
+    procedure HandleParamCreate(AQ: Integer; const AChain: TChain; AMember: Integer);
     procedure HandleAssign(const AChain: TChain);
     function IsReleaseArg(AStart: Integer): Boolean;
     function IsStatementStart(AIdx: Integer): Boolean;
@@ -832,13 +897,10 @@ begin
              (T.Low = 'finally') or (T.Low = 'until'));
 end;
 
+// ';' oder eines der Woerter aus IsStatementEndWord - EINE Wortliste.
 function IsStatementEnd(const T: TTok): Boolean;
 begin
-  if T.Kind = tkSym then
-    Exit(T.Text = ';');
-  Result := (T.Kind = tkIdent) and
-            ((T.Low = 'end') or (T.Low = 'else') or (T.Low = 'except') or
-             (T.Low = 'finally') or (T.Low = 'until'));
+  Result := ((T.Kind = tkSym) and (T.Text = ';')) or IsStatementEndWord(T);
 end;
 
 // Ende des Ausdrucks ab AFrom: erstes ';'/end/else/... auf Klammertiefe 0
@@ -896,6 +958,41 @@ begin
   Result := HasLit;
 end;
 
+// Das Token an AIdx ist ein GANZES Literal-Argument: ('x') / ('x', ...) /
+// (..., 'x') - nicht 'a' + B und nicht Teil eines Ausdrucks.
+function TTokenCursor.IsLiteralArg(AIdx: Integer): Boolean;
+begin
+  Result := (Tok(AIdx).Kind = tkString) and
+            (IsSym(AIdx - 1, '(') or IsSym(AIdx - 1, ',')) and
+            (IsSym(AIdx + 1, ',') or IsSym(AIdx + 1, ')'));
+end;
+
+// Erstes Argument des Aufrufs an AIdx (Bezeichner vor der Klammer), das ein
+// ganzes Literal ist - auf Klammertiefe 0, damit Foo(1, 'x') als Argument
+// nicht sein inneres 'x' liefert. False ohne Klammer oder ohne Literal.
+function TTokenCursor.FirstLiteralArg(AIdx: Integer; out AValue: string): Boolean;
+var
+  k, Close, Depth : Integer;
+begin
+  Result := False;
+  AValue := '';
+  if not IsSym(AIdx + 1, '(') then Exit;
+  Close := MatchClose(AIdx + 1);   // -1: die Schleife laeuft dann nicht
+  Depth := 0;
+  for k := AIdx + 2 to Close - 1 do
+  begin
+    if IsSym(k, '(') or IsSym(k, '[') then
+      Inc(Depth)
+    else if IsSym(k, ')') or IsSym(k, ']') then
+      Dec(Depth)
+    else if (Depth = 0) and IsLiteralArg(k) then
+    begin
+      AValue := FToks[k].Text;
+      Exit(True);
+    end;
+  end;
+end;
+
 procedure TRoutineScanner.AddPart(AQ: Integer; const AText: string; ALine: Integer);
 var
   L : Integer;
@@ -906,16 +1003,39 @@ begin
   FQs[AQ].Parts[L].Line := ALine;
 end;
 
+// Ein Zugriff vor dem ersten SQL-Beitrag der Routine gilt dem SQL, das die
+// Query mitbringt (DFM, andere Routine, Zuweisung aus fremder Query) - nicht
+// dem, das hier erst folgt. Verworfen statt Incomplete: ein spaeteres
+// SQL.Text/SQL.Clear ersetzt das SQL ganz, die Zugriffe danach bleiben
+// pruefbar - aber gegen die VEREINIGUNG aller SQL-Beitraege der Routine:
+// Reset leert Parts nicht, TQueryJudge.Judge verbindet sie alle. Ein
+// Zugriff nach dem Ersetzen, der nur einen Platzhalter des ALTEN SQL
+// trifft, bleibt still - bewusstes FN, dieselbe Regel wie fuer
+// alternative SQL-Texte in if/else (docs/rules/SCA199.md, "Alternative
+// SQL texts"; Test Scan_SqlReplaced_OldPlaceholderAccepted). Erst eine
+// Neuerzeugung der Query vergisst das alte SQL (HandleAssign).
+// Eine hier erzeugte Query hat vor ihrem ersten SQL keine
+// Parameter - dort bleibt der Zugriff stehen (Review 2026-10-14, Blocker).
 procedure TRoutineScanner.AddRef(AQ: Integer; const AName: string;
   ALine: Integer; AThrows: Boolean);
 var
   L : Integer;
 begin
+  if not (FQs[AQ].Created or FQs[AQ].Reset or FQs[AQ].HasSqlOp) then Exit;
   L := Length(FQs[AQ].Refs);
   SetLength(FQs[AQ].Refs, L + 1);
   FQs[AQ].Refs[L].Name := AName;
   FQs[AQ].Refs[L].Line := ALine;
   FQs[AQ].Refs[L].Throws := AThrows;
+end;
+
+procedure TRoutineScanner.AddKnown(AQ: Integer; const ALowName: string);
+var
+  L : Integer;
+begin
+  L := Length(FQs[AQ].Known);
+  SetLength(FQs[AQ].Known, L + 1);
+  FQs[AQ].Known[L] := ALowName;
 end;
 
 procedure TQueryJudge.AddIssue(const AIssue: TParamNameIssue);
@@ -1063,13 +1183,29 @@ begin
   end;
   // erstes Argument muss EIN Literal sein: ('x') bzw. ('x', ...)
   if not IsSym(E + 1, '(') or (MatchClose(E + 1) < 0) or
-     (Tok(E + 2).Kind <> tkString) or
-     not (IsSym(E + 3, ')') or IsSym(E + 3, ',')) then
+     not IsLiteralArg(E + 2) then
   begin
     FQs[AQ].DynRefs := True;
     Exit;
   end;
   AddRef(AQ, FToks[E + 2].Text, FToks[E + 2].Line, AMember = 'parambyname');
+end;
+
+// Q.Params.CreateParam(ft, 'x', pt) / Q.Params.Add('x', ft) /
+// Q.Parameters.CreateParameter('x', ...): legt 'x' an, auch ohne :x im SQL
+// - fuer (a) ein bekannter Name. Ohne Literalnamen (Variable, Add ohne
+// Argument, AddParameter.Name := ...) kann jeder Name entstehen: kein
+// Urteil. AMember = Index von Params/Parameters in der Kette.
+procedure TRoutineScanner.HandleParamCreate(AQ: Integer; const AChain: TChain;
+  AMember: Integer);
+var
+  Name : string;
+begin
+  FQs[AQ].DynRefs := True;   // Params angefasst -> kein (b), wie bisher
+  if (AMember + 1 = High(AChain.Toks)) and FirstLiteralArg(AChain.Last, Name) then
+    AddKnown(AQ, LowerCase(Name))
+  else
+    FQs[AQ].Incomplete := True;
 end;
 
 // V := TXxx.Create(...) erzeugt - nur genau diese Form, alles andere
@@ -1100,6 +1236,26 @@ begin
     end;
   end;
   Q := QueryOf(Key, Disp);
+  // Erneute Erzeugung derselben Variablen (Q := TFDQuery.Create ... Free
+  // ... Q := TFDQuery.Create): die neue Instanz beginnt ohne SQL, ohne
+  // Parameterzugriffe und ohne angelegte Namen - sonst matchte ein
+  // ParamByName der zweiten Instanz das SQL der ersten (FN; Gegen-Review
+  // Welle 1, Minor 11). Das Urteil ueber die erste Instanz geht damit
+  // verloren (bewusst: lieber ein stilles Nein als ein falsches Ja). Eine
+  // Zuweisung aus fremder Quelle (Q := DM.qry) setzt nur die Flags: dort
+  // gilt der bestehende Vertrag (Zugriffe vor der ersten SQL-Operation
+  // zaehlen nicht, kein (b)).
+  // Incomplete/DynRefs gehoeren ebenfalls zur alten Instanz: ein SQL.Add(Var)
+  // der ERSTEN Instanz darf die zweite nicht unbeurteilt lassen (Gegen-Review
+  // FX+E7, Minor 1).
+  if Created then
+  begin
+    FQs[Q].Parts := nil;
+    FQs[Q].Refs := nil;
+    FQs[Q].Known := nil;
+    FQs[Q].Incomplete := False;
+    FQs[Q].DynRefs := False;
+  end;
   FQs[Q].Created := Created;
   FQs[Q].Reset := False;
   FQs[Q].HasSqlOp := False;
@@ -1127,12 +1283,8 @@ const
     'getfieldnames', 'createblobstream', 'close', 'free', 'prepare',
     'unprepare', 'first', 'next', 'last', 'prior', 'edit', 'post', 'cancel',
     'refresh', 'disablecontrols', 'enablecontrols', 'execute', 'disposeof');
-var
-  W : string;
 begin
-  for W in HARMLESS do
-    if W = ALow then Exit(True);
-  Result := False;
+  Result := InWordList(HARMLESS, ALow);
 end;
 
 // Routinen der RTL, die als nackter Aufruf keine Query bedienen.
@@ -1146,12 +1298,8 @@ const
     'begin', 'end', 'try', 'finally', 'except', 'then', 'else', 'do', 'if',
     'while', 'for', 'repeat', 'until', 'case', 'of', 'raise', 'not', 'and',
     'or', 'on', 'result', 'self', 'nil');
-var
-  W : string;
 begin
-  for W in RTL do
-    if W = ALow then Exit(True);
-  Result := False;
+  Result := InWordList(RTL, ALow);
 end;
 
 // Aufruf an einer Kette: Q.Foo(...), Foo(...), Foo; Self.Foo.
@@ -1226,6 +1374,16 @@ begin
   FQs[Q].Incomplete := True;
 end;
 
+// Q.Params.CreateParam / .Add / Q.Parameters.CreateParameter / .AddParameter
+// - AMember zeigt auf Params/Parameters.
+function IsParamCreator(const AChain: TChain; AMember: Integer): Boolean;
+begin
+  Result := ((AChain.Toks[AMember].Low = 'params') or
+             (AChain.Toks[AMember].Low = 'parameters')) and
+            (AMember < High(AChain.Toks)) and
+            InWordList(PARAM_CREATORS, AChain.Toks[AMember + 1].Low);
+end;
+
 procedure TRoutineScanner.HandleMemberChain(const AChain: TChain; AMember: Integer);
 var
   Key, Disp, Member : string;
@@ -1248,6 +1406,8 @@ begin
     HandleSql(Q, AChain, AMember)
   else if (Member = 'macrobyname') or (Member = 'macros') then
     FQs[Q].Incomplete := True     // Makros koennen SQL samt Platzhaltern einsetzen
+  else if IsParamCreator(AChain, AMember) then
+    HandleParamCreate(Q, AChain, AMember)
   else if (Member = 'params') or (Member = 'parameters') or
           (AMember <> High(AChain.Toks)) then
     FQs[Q].DynRefs := True        // Params[i], Params.Assign, Params.Count, ...
@@ -1412,7 +1572,8 @@ begin
   List := PlaceholderList(ANames);
   for R in AQ.Refs do
   begin
-    if not R.Throws or MatchesAny(APhAll, R.Name) then Continue;
+    if not R.Throws or MatchesAny(APhAll, R.Name) or
+       InWordList(AQ.Known, LowerCase(R.Name)) then Continue;
     Iss.Kind := pikUnknownParam;
     Iss.Line := R.Line;
     Iss.Query := AQ.Display;

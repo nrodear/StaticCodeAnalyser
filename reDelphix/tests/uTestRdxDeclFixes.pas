@@ -39,7 +39,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxDeclFixes;
+  uRdxBufferMath, uRdxCodeMap, uRdxDeclFixes,
+  uTestRdxTextKit;   // Join, JoinWith, Apply
 
 type
   TRdxDeclKind = (dkDoc, dkGuid, dkDirective);
@@ -48,45 +49,6 @@ const
   GUID_1 = '{11111111-2222-3333-4444-555555555555}';
 
 // ---- Helfer ----
-
-function Apply(const ASource: string; const AEdit: TRdxEdit): string;
-var
-  Bytes : TBytes;
-  Edits : TArray<TRdxEdit>;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-begin
-  SetLength(Edits, 1);
-  Edits[0] := AEdit;
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, Edits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
-end;
-
-// Teile mit ASep verbunden (TStringBuilder: string.Join kennt FPC nicht).
-function JoinWith(const ASep: string; const AParts: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(AParts) do
-    begin
-      if i > 0 then SB.Append(ASep);
-      SB.Append(AParts[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
-// Zeilen mit CRLF verbunden.
-function Join(const ALines: array of string): string;
-begin
-  Result := JoinWith(#13#10, ALines);
-end;
 
 // Die frisch erzeugte GUID hinter '[''' als GUID geprueft und durch GUID_1
 // ersetzt - so bleiben die Vergleiche fest.
@@ -298,10 +260,12 @@ begin
   Assert.AreEqual('', Fix(dkDoc, InClass(['    procedure Run;']), 6, DocMsg('Stop'),
     R));
   Assert.IsTrue(Pos('verschoben', R) > 0, R);
-  // Darueber endet ein Kommentar ueber Zeilen - Doku steht schon da.
+  // Darueber endet ein Kommentar ueber Zeilen - Doku steht schon da. Der
+  // Grund kommt aus der de.po ('ueber' mit echtem Umlaut, Charge G3):
+  // geprueft wird ein umlautfreies Teilstueck.
   Assert.AreEqual('', Fix(dkDoc, InClass(['    { Startet', '      den Lauf }',
     '    procedure Run;']), 8, DocMsg('Run'), R));
-  Assert.IsTrue(Pos('Kommentar ueber Zeilen', R) > 0, R);
+  Assert.IsTrue(Pos('endet ein Kommentar', R) > 0, R);
   // Direktive im Kopf; hinter dessen ';' sperrt sie nicht.
   Assert.AreEqual('', Fix(dkDoc, InClass(['    procedure Run({$IFDEF X}A: '
     + 'Integer{$ENDIF});']), 6, DocMsg('Run'), R));
@@ -314,6 +278,15 @@ begin
   Assert.AreEqual('', Fix(dkDoc, InClass(['    FCount: Integer;']), 6,
     DocMsg('FCount'), R));
   Assert.IsTrue(Pos('verschoben', R) > 0, R);
+  // Ein Kommentar VOR dem Kopf auf seiner Zeile kaeme sonst in jede
+  // Geruestzeile (Review Quick-Fix-Units 2026-10-14).
+  Assert.AreEqual('', Fix(dkDoc, InClass(['    { alt } procedure Run;']), 6,
+    DocMsg('Run'), R));
+  Assert.IsTrue(Pos('vor dem Kopf', R) > 0, R);
+  Assert.AreEqual(InClass(['    /// <summary></summary>',
+      '    procedure Run; { alt }']),
+    Fix(dkDoc, InClass(['    procedure Run; { alt }']), 6, DocMsg('Run'), R),
+    'hinter dem Kopf stoert er nicht: ' + R);
   // XMLDoc ueber den Attributen (auch mit Leerzeile dazwischen) sieht der
   // Detektor nicht - kein zweiter summary-Block.
   Assert.AreEqual('', Fix(dkDoc, InClass(['    /// <summary>Lauf</summary>',
@@ -362,9 +335,11 @@ begin
   Assert.AreEqual('', Fix(dkGuid, Join(['type', '  IList<T> = interface',
     '    function Get: T;', '  end;']), 2, GuidMsg('IList'), R));
   Assert.IsTrue(Pos('generisch', R) > 0, R);
+  // Vorwaertsdeklaration: 'Vorwaerts' traegt in der de.po einen echten
+  // Umlaut (Charge G3) - geprueft wird das umlautfreie Ende.
   Assert.AreEqual('', Fix(dkGuid, Join(['type', '  IFoo = interface;']), 2,
     GuidMsg('IFoo'), R));
-  Assert.IsTrue(Pos('Vorwaerts', R) > 0, R);
+  Assert.IsTrue(Pos('deklaration - sie', R) > 0, R);
   Assert.AreEqual('', Fix(dkGuid, Join(['type', '  IFoo = interface',
     '    [''' + GUID_1 + ''']', '  end;']), 2, GuidMsg('IFoo'), R));
   Assert.IsTrue(Pos('GUID oder Attribut', R) > 0, R);
@@ -444,6 +419,23 @@ begin
   Assert.AreEqual(DIRECTIVE_REINTRODUCE,
     TRdxDeclFixes.DirectiveFor(HidesMsg('X')));
   Assert.AreEqual('', TRdxDeclFixes.DirectiveFor('Method TDerived.X is odd'));
+  // 'override' neben 'overload': hinter das overload (Reihenfolge der
+  // Sprachreferenz: overload vor der Bindung; Review Quick-Fix-Units
+  // 2026-10-14), vor deprecated/stdcall dagegen direkt hinter den Kopf.
+  Assert.AreEqual(Hierarchy(['    procedure DoWork; overload; virtual;'],
+      DERIVED, ['    procedure DoWork; overload; override; // x']),
+    Fix(dkDirective, Hierarchy(['    procedure DoWork; overload; virtual;'],
+      DERIVED, ['    procedure DoWork; overload; // x']), 10,
+      ShadowMsg('DoWork'), R), R);
+  Assert.AreEqual(Hierarchy(['    procedure DoWork; virtual;'], DERIVED,
+      ['    procedure DoWork; override; deprecated;']),
+    Fix(dkDirective, Hierarchy(['    procedure DoWork; virtual;'], DERIVED,
+      ['    procedure DoWork; deprecated;']), 10, ShadowMsg('DoWork'), R), R);
+  Assert.AreEqual(Hierarchy(['    procedure DoWork; overload; stdcall; virtual;'],
+      DERIVED, ['    procedure DoWork; overload; override; stdcall;']),
+    Fix(dkDirective, Hierarchy(['    procedure DoWork; overload; stdcall; virtual;'],
+      DERIVED, ['    procedure DoWork; overload; stdcall;']), 10,
+      ShadowMsg('DoWork'), R), R);
 end;
 
 procedure TTestRdxDeclFixes.Sca149_Refusals;
@@ -481,6 +473,13 @@ begin
     + 'virtual;'], DERIVED, ['    procedure DoWork; stdcall;']), 10,
     ShadowMsg('DoWork'), R));
   Assert.IsTrue(Pos('andere Form', R) > 0, R);
+  // Nur anders gruppiert: dieselbe Signatur fuer den Compiler - die Hilfe
+  // lehnt ab, der Grund nennt die Gruppierung (Review Woche G07-11 (1):
+  // bis dahin 'override uebersetzte nicht').
+  Assert.AreEqual('', Fix(dkDirective, Hierarchy(['    procedure DoWork(A, B: '
+    + 'Integer); virtual;'], DERIVED, ['    procedure DoWork(A: Integer; B: '
+    + 'Integer);']), 10, ShadowMsg('DoWork'), R));
+  Assert.IsTrue(Pos('gruppiert nur die Parameter anders', R) > 0, R);
   // Ohne Basis im Text kein override.
   Assert.AreEqual('', Fix(dkDirective, InClass(['    procedure DoWork;']), 6,
     ShadowMsg('DoWork'), R));

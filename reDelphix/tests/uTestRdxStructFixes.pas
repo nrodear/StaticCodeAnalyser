@@ -38,50 +38,19 @@ type
     [Test] procedure Sca168_LastArmWithoutSemicolon;
     [Test] procedure Sca168_IndentAndEscapedEnd;
     [Test] procedure Sca007_OwnLineAndSkippedEntry;
+    // Review R3-04 (Charge FC): ein verschobener Fund auf dem Variantenteil
+    // eines Records bekommt kein else.
+    [Test] procedure Sca168_VariantRecord_Refused;
   end;
 
 implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRefactorInfo, uRdxBufferMath, uRdxCodeMap, uRdxStructFixes;
+  uRefactorInfo, uRdxBufferMath, uRdxCodeMap, uRdxStructFixes,
+  uTestRdxTextKit;   // Join, Apply
 
 // ---- Helfer ----
-
-function Apply(const ASource: string; const AEdits: array of TRdxEdit): string;
-var
-  Bytes : TBytes;
-  Edits : TArray<TRdxEdit>;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-  i     : Integer;
-begin
-  SetLength(Edits, Length(AEdits));
-  for i := 0 to High(AEdits) do
-    Edits[i] := AEdits[i];
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, Edits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
-end;
-
-// Zeilen mit CRLF verbunden (TStringBuilder: string.Join kennt FPC nicht).
-function Join(const ALines: array of string): string;
-var
-  SB : TStringBuilder;
-  i  : Integer;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for i := 0 to High(ALines) do
-    begin
-      if i > 0 then SB.Append(#13#10);
-      SB.Append(ALines[i]);
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
 
 // Ein uses-Eintrag wie aus TSourcePlaces.UsesEntries.
 function Entry(ALine, ACol: Integer; const AName: string): TRefactorSpan;
@@ -201,10 +170,23 @@ begin
     'implementation', 'end.']);
   Assert.AreEqual(Join(['unit u;', 'interface', 'implementation', 'end.']),
     FixUses(Src, Clause(3, [Entry(4, 3, 'System.Classes')]), 0, R), R);
-  // Hinter 'interface' auf derselben Zeile: nur der Text.
+  // Hinter 'interface' auf derselben Zeile: nur der Text, samt Leerraum
+  // davor (Review Woche G07-23 b: bis dahin blieb 'interface ').
   Src := Join(['unit u;', 'interface uses A;', 'implementation', 'end.']);
-  Assert.AreEqual(Join(['unit u;', 'interface ', 'implementation', 'end.']),
+  Assert.AreEqual(Join(['unit u;', 'interface', 'implementation', 'end.']),
     FixUses(Src, Clause(2, [Entry(2, 16, 'A')]), 0, R), R);
+  // Ein '//'-Kommentar hinter dem ';' beschrieb den Eintrag: er geht mit
+  // den Zeilen (Review Woche G07-23 a: bis dahin blieb ' // TStringList').
+  Src := Join(['unit u;', 'interface', 'uses', '  System.Classes; // TStringList',
+    'implementation', 'end.']);
+  Assert.AreEqual(Join(['unit u;', 'interface', 'implementation', 'end.']),
+    FixUses(Src, Clause(3, [Entry(4, 3, 'System.Classes')]), 0, R), R);
+  // Ein Marker dahinter bleibt (er gilt der naechsten Zeile).
+  Src := Join(['unit u;', 'interface', 'uses', '  System.Classes; // noinspection X',
+    'implementation', 'end.']);
+  Assert.AreEqual(Join(['unit u;', 'interface', ' // noinspection X',
+    'implementation', 'end.']),
+    FixUses(Src, Clause(3, [Entry(4, 3, 'System.Classes')]), 0, R), R);
 end;
 
 procedure TTestRdxStructFixes.Sca007_InPath;
@@ -244,7 +226,7 @@ begin
   Assert.IsTrue(Pos('","', R) > 0, R);
   Assert.AreEqual('', FixUses(Src, Clause(3, [Entry(3, 6, 'A')]), 2, R),
     'Index ausserhalb');
-  Assert.IsTrue(R <> '');
+  Assert.IsTrue(Pos('kein solcher uses-Eintrag', R) > 0, R);
 end;
 
 // ---- SCA168 ----
@@ -304,6 +286,14 @@ begin
   Assert.AreEqual('', FixCase(InProc(['  case X of', '    1: A;', '  else',
     '    B;', '  end;']), 5, '', R), 'schon ein else');
   Assert.IsTrue(Pos('else-Zweig', R) > 0, R);
+  // Das else des case auch OHNE ';' vor ihm (Review Quick-Fix-Units
+  // 2026-10-14): es gehoert zum case, nicht zu einem if.
+  Assert.AreEqual('', FixCase(InProc(['  case K of 1: Foo else Bar end;']), 5,
+    '', R), 'else ohne ; davor');
+  Assert.IsTrue(Pos('else-Zweig', R) > 0, R);
+  Assert.AreEqual('', FixCase(InProc(['  case K of', '    1: begin Foo end',
+    '  else', '    Bar;', '  end;']), 5, '', R), 'else hinter end ohne ;');
+  Assert.IsTrue(Pos('else-Zweig', R) > 0, R);
   Assert.AreEqual('', FixCase(InProc(['  case X of', '{$IFDEF Y}', '    1: A;',
     '{$ENDIF}', '  end;']), 5, '', R), 'Direktive');
   Assert.IsTrue(Pos('Direktive', R) > 0, R);
@@ -318,6 +308,17 @@ begin
   Assert.AreEqual('', FixCase(InProc(['  case X of', '    1: A;', '  otherwise',
     '    B;', '  end;']), 5, '', R), 'FPC otherwise');
   Assert.IsTrue(Pos('otherwise', R) > 0, R);
+  // Auch OHNE ';' davor (Review Woche G07-06): FPC liest es wie die
+  // else-Form - sonst kaeme 'otherwise B; else end', zwei Default-Zweige.
+  Assert.AreEqual('', FixCase(InProc(['  case X of', '    1: A', '  otherwise',
+    '    B;', '  end;']), 5, '', R), 'FPC otherwise ohne ;');
+  Assert.IsTrue(Pos('otherwise', R) > 0, R);
+  // 'Obj.&Case(1)' ist ein Bezeichner, keine case-Anweisung (Review Woche
+  // G07-24: ein verschobener Fund schrieb sonst ein else vor das end der
+  // Routine).
+  Assert.AreEqual('', FixCase(InProc(['  Obj.&Case(1);']), 5, '', R),
+    '&Case als Bezeichner');
+  Assert.IsTrue(Pos('kein case', R) > 0, R);
   Assert.AreEqual('', FixCase(InProc(['  case X of', '  end;']), 5, '', R),
     'ohne Zweige');
   Assert.IsTrue(Pos('keine Zweige', R) > 0, R);
@@ -344,6 +345,10 @@ begin
   // Inline: das ';' vor das else.
   Assert.AreEqual(InProc(['  case X of 1: if B then A; else end;']),
     FixCase(InProc(['  case X of 1: if B then A end;']), 5, '', R), R);
+  // Ein if-else im letzten Arm ohne ';': das else gehoert dem if, das
+  // case bekommt seines.
+  Assert.AreEqual(InProc(['  case X of 1: if B then A else C; else end;']),
+    FixCase(InProc(['  case X of 1: if B then A else C end;']), 5, '', R), R);
 end;
 
 procedure TTestRdxStructFixes.Sca168_IndentAndEscapedEnd;
@@ -378,6 +383,67 @@ begin
   Assert.AreEqual('', FixUses(Src, Clause(3, [Entry(3, 6, 'A'), Entry(3, 12, 'C')]),
     0, R));
   Assert.IsTrue(Pos('mehr als dieser Eintrag', R) > 0, R);
+end;
+
+// Eine Unit, deren Typabschnitt ALines traegt (ab Zeile 4).
+function InTypes(const ALines: array of string): string;
+begin
+  Result := Join(['unit u;', 'interface', 'type']) + #13#10 + Join(ALines)
+    + #13#10 + Join(['implementation', 'end.']);
+end;
+
+procedure TTestRdxStructFixes.Sca168_VariantRecord_Refused;
+var
+  R, Src : string;
+begin
+  // Fixture a04 des Pruefers: bis Charge FC schloss das end des Records
+  // die Bilanz, und das else landete in der Typdeklaration ('1: (B: Byte);
+  // else end;' - uebersetzt nicht).
+  Assert.AreEqual('', FixCase(InTypes(['  TRec = record', '    case Integer of',
+    '      0: (A: Integer);', '      1: (B: Byte);', '  end;']), 5, '', R),
+    'Variantenteil');
+  Assert.IsTrue(Pos('Variantenteil', R) > 0, R);
+  // Mit Feld davor, Tag-Feld und packed - die raise-Variante ebenso.
+  Assert.AreEqual('', FixCase(InTypes(['  TRec = packed record', '    Kind: Byte;',
+    '    case Tag: Integer of', '      0: (A: Integer);', '  end;']), 6,
+    RAISE_UNHANDLED, R), 'packed, Tag-Feld, raise');
+  Assert.IsTrue(Pos('Variantenteil', R) > 0, R);
+  // Geschachtelter Variantenteil in der Feldliste eines Zweigs.
+  Assert.AreEqual('', FixCase(InTypes(['  TRec = record', '    case Integer of',
+    '      0: (A: Integer;', '        case B: Byte of', '          1: (C: Byte));',
+    '  end;']), 7, '', R), 'geschachtelt');
+  Assert.IsTrue(Pos('Variantenteil', R) > 0, R);
+  // Gegenproben: case-Anweisungen bleiben Hilfen - im initialization-
+  // Abschnitt, im Arm eines aeusseren case, im Rumpf einer anonymen
+  // Methode in einem Aufruf und hinter einem lokalen Record-Typ mit
+  // Variantenteil (dessen case bleibt gesperrt).
+  Assert.AreEqual(Join(['unit u;', 'interface', 'implementation',
+      'initialization', '  case X of', '    1: A;', '  else', '  end;', 'end.']),
+    FixCase(Join(['unit u;', 'interface', 'implementation', 'initialization',
+      '  case X of', '    1: A;', '  end;', 'end.']), 5, '', R), R);
+  Assert.AreEqual(InProc(['  case X of', '    1: case Y of', '         2: A;',
+      '       else', '       end;', '  end;']),
+    FixCase(InProc(['  case X of', '    1: case Y of', '         2: A;',
+      '       end;', '  end;']), 6, '', R), R);
+  Assert.AreEqual(InProc(['  Run(procedure', '    begin', '      case X of',
+      '        1: A;', '      else', '      end;', '    end);']),
+    FixCase(InProc(['  Run(procedure', '    begin', '      case X of',
+      '        1: A;', '      end;', '    end);']), 7, '', R), R);
+  Src := Join(['unit u;', 'implementation', 'procedure P;', 'type',
+    '  TR = record', '    case Integer of', '      0: (A: Integer);', '  end;',
+    'begin', '  case X of', '    1: A;', '  end;', 'end;', 'end.']);
+  Assert.AreEqual(StringReplace(Src, '    1: A;'#13#10'  end;',
+      '    1: A;'#13#10'  else'#13#10'  end;', []), FixCase(Src, 10, '', R), R);
+  Assert.AreEqual('', FixCase(Src, 6, '', R), 'lokaler Record');
+  Assert.IsTrue(Pos('Variantenteil', R) > 0, R);
+  // Je Zweig einer Direktive ein 'Foo(' vor einer case-Anweisung (Fixture
+  // s08 der Nachpruefung FC): die offene '(' ist kein Variantenteil, die
+  // Lage ist unklar - gesperrt, aber nicht mehr mit dem Grund
+  // 'Variantenteil'.
+  Assert.AreEqual('', FixCase(InProc(['  {$IFDEF A} Foo( {$ELSE} Bar( {$ENDIF} 1);',
+    '  case X of', '    1: ;', '  end;']), 6, '', R), 'Direktive vor dem case');
+  Assert.IsTrue(Pos('offenen ( und dem case', R) > 0, R);
+  Assert.IsTrue(Pos('Variantenteil', R) = 0, R);
 end;
 
 initialization

@@ -1,0 +1,55 @@
+# GitHub Actions workflow: haelt reDelphix/QUICKFIXES.md vollstaendig und
+# aktuell (Entscheid E30, 2026-10-15).
+#
+# Die Liste aller Quick-Fixes von reDelphix wird ERZEUGT: welche Hilfen es
+# gibt, ihre Menuetexte und ob sie das Verhalten aendern, liest
+# tools/gen-quickfix-doc.py aus dem Quelltext (uRdxFixTable: FIX_ROWS,
+# FIX_CAPTIONS, FIX_ALT_CAPTIONS; uRdxProvider: die Rezepte), die
+# Uebersetzungen aus i18n/*.po, Regel-IDs und Namen aus
+# rules/sca-rules.json, Beschreibung, Sperren und Beispiele aus
+# reDelphix/data/quickfixes-doc.json. Wer eine Hilfe ergaenzt und die Doku
+# vergisst, oder einen Menuetext bzw. eine Uebersetzung aendert und die
+# Datei nicht neu erzeugt, faellt hier auf.
+#
+# Der Selbsttest laeuft zuerst: er belegt an Mutanten (fehlender Eintrag,
+# neue Zeile in FIX_ROWS, neues Rezept, editorHelp ohne Hilfe, Drift ...),
+# dass das Gate die Faelle, die es schliessen soll, auch rot meldet - ein
+# Gate kann sonst still kaputt sein.
+#
+# Lokal vorab pruefen: `python tools/gen-quickfix-doc.py --selftest`
+#                 und: `python tools/gen-quickfix-doc.py --check`
+
+name: Quickfix Doc
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  quickfix-doc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Selbsttest des Gates
+        run: python3 tools/gen-quickfix-doc.py --selftest
+
+      - name: QUICKFIXES.md vollstaendig und aktuell
+        run: python3 tools/gen-quickfix-doc.py --check
+
+      - name: Erklaerung (bei Fehlschlag)
+        if: failure()
+        run: |
+          echo "KONSISTENZ: eine Hilfe (Zeile in FIX_ROWS oder Rezept im"
+          echo "Anbieter) ohne Eintrag in reDelphix/data/quickfixes-doc.json,"
+          echo "ein Eintrag ohne Hilfe, editorHelp im Katalog ohne Hilfe oder"
+          echo "ein Pflichtfeld fehlt. Den Eintrag ergaenzen: titel, was,"
+          echo "nichtAngeboten, Beispiel aus den Tests (reDelphix/tests)."
+          echo ""
+          echo "DRIFT: Quelltext, .po oder JSON geaendert, die Datei aber"
+          echo "nicht neu erzeugt. Dann:"
+          echo "  python tools/gen-quickfix-doc.py"
+          echo "und reDelphix/QUICKFIXES.md MIT committen - von Hand"
+          echo "bearbeiten hilft nicht, der naechste Lauf ueberschreibt es."

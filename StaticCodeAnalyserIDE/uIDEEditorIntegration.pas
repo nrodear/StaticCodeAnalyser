@@ -1,10 +1,19 @@
 ﻿unit uIDEEditorIntegration;
 
-// Stateless wrappers around RAD Studio's ToolsAPI for everything the
-// Analyser-Frame needs from the IDE-Editor:
-//   * Open a file in the editor and jump to a specific line.
-//   * Detect the .pas file currently shown in the top edit-view.
-//   * Get the active project's directory.
+// Zustandslose Huellen um die ToolsAPI fuer alles, was Dock-Fenster,
+// Kontextmenue und Gluehbirne vom IDE-Editor brauchen:
+//   * eine Datei im Editor oeffnen und zu einer Zeile springen
+//     (OpenFileAtLine, ShowFileAtLine, CenterCurrentViewOnLine);
+//   * die .pas der obersten Ansicht bestimmen (TryGetCurrentPasFile) und
+//     Datei plus Caret-Zeile einer Ansicht lesen (ViewFileAndLine,
+//     TopViewFileAndLine - EINE Fassung fuer Kontextmenue und Birne,
+//     Review 2026-10-14, Punkt 10);
+//   * Caret und Auswahl einer Ansicht in ZEICHEN-Spalten als
+//     TEditorContext (ViewContext, TopViewContext - Charge B, V3: die
+//     Code-Aktionen ohne Fund im Editor-Kontextmenue);
+//   * das Verzeichnis des aktiven Projekts (GetCurrentProjectDir);
+//   * eine Zeile VOR eine Pufferzeile schreiben (InsertLineAbove - der
+//     Unterdrueck-Marker von Ctrl+Alt+S ohne Anbieter).
 //
 // Vorher: zwei Methoden + eine free function direkt in der God-Class
 // TAnalyserFrame, alle drei mit `BorlandIDEServices as IOTAxxx`-Casts
@@ -18,7 +27,8 @@
 interface
 
 uses
-  ToolsAPI;
+  ToolsAPI,
+  uFindingActions;   // TEditorContext (ViewContext)
 
 type
   // Status-Code von TryGetCurrentPasFile - der Caller will pro Fehlerursache
@@ -56,6 +66,39 @@ type
     // sie sauber als Pas-Input bekommt - er sucht intern selbst nach
     // der .dfm dazu.
     class function TryGetCurrentPasFile(out APath: string): TCurrentFileResult; static;
+
+    // Datei und Caret-Zeile EINER Ansicht - ohne Umleitung auf die .pas:
+    // auch .dpr/.dpk/.inc, und in der Textansicht eines Formulars die
+    // .dfm selbst (deren Zeilen stehen nicht in der .pas; Review reDelphiX
+    // nach Bereichen 2026-10-10, Minor 20). False ohne Ansicht, Puffer,
+    // Dateinamen oder bei Zeile < 1. nil-sicher.
+    class function ViewFileAndLine(const AView: IOTAEditView;
+      out AFile: string; out ALine: Integer): Boolean; static;
+    // Dasselbe fuer die oberste Ansicht (TopView) - der Weg des
+    // Editor-Kontextmenues; die Gluehbirne nimmt die Ansicht IHRES
+    // Editors (INTACodeEditorServices.GetViewForEditor) und ruft
+    // ViewFileAndLine.
+    class function TopViewFileAndLine(out AFile: string;
+      out ALine: Integer): Boolean; static;
+
+    // Datei, Caret (Zeile, ZEICHEN-Spalte 1-basiert) und Auswahl einer
+    // Ansicht als TEditorContext (Charge B, V3). Datei und Zeile wie
+    // ViewFileAndLine (auch .dfm in der Textansicht), False in denselben
+    // Faellen. Die Spalten kommen aus IOTAEditView.ConvertPos: CharIndex
+    // zaehlt ZEICHEN (0-basiert, Tab = 1; gemessen 2026-10-11) - keine
+    // Byte-Rechnung, kein Puffertext. Auswahl nur aus einem gueltigen,
+    // sichtbaren, nicht leeren Block; ein Spaltenblock ist keine Auswahl
+    // (uEditorContextModel.ApplyEditorBlock). Findings bleibt leer (setzt
+    // der Aufrufer). Protokolliert Rohwerte und Umrechnung per
+    // OutputDebugString ('SCA: ctx ...', nur im DEBUG-Bau) - Messpunkt fuer
+    // den UI-Test (btInclusive/btLine und das Blockende auf
+    // Nicht-ASCII-Zeilen sind ungemessen). Reine Abfrage: kein Notifier,
+    // kein Fenster. Nur mit GContextActionsOn gerufen - ohne den Schalter
+    // nimmt das Kontextmenue TopViewFileAndLine wie bis Charge B.
+    class function ViewContext(const AView: IOTAEditView;
+      out ACtx: TEditorContext): Boolean; static;
+    // Dasselbe fuer die oberste Ansicht - der Weg des Editor-Kontextmenues.
+    class function TopViewContext(out ACtx: TEditorContext): Boolean; static;
 
     // Liefert das Verzeichnis des aktiven IDE-Projekts (ohne Trailing
     // PathDelimiter). Leer wenn kein Projekt geladen oder Service
@@ -113,9 +156,13 @@ type
 
     // Fuegt eine neue Zeile DIREKT VOR der angegebenen LineNumber ein.
     // Wird vom Auto-Suppress benutzt: `// noinspection <RuleName>`
-    // ueber der Befund-Zeile. NewLine wird mit der Einrueckung der
-    // Befund-Zeile ausgerichtet (lexikalisches Whitespace-Kopieren),
-    // damit der Marker visuell zur Code-Zeile gehoert.
+    // ueber der Befund-Zeile (Host und Zeile liefert
+    // TSuppression.MarkerTargetFor - bei einem .dfm-Fund die .pas).
+    // NewLine wird mit der Einrueckung der Befund-Zeile ausgerichtet
+    // (lexikalisches Whitespace-Kopieren), damit der Marker visuell zur
+    // Code-Zeile gehoert; das Zeilenende ist das des PUFFERS an dieser
+    // Zeile (eine LF-Datei bekommt kein CRLF untergeschoben, Review
+    // 2026-10-14), hinter der letzten Zeile ohne Zeilenende sLineBreak.
     //
     // Liefert True bei Erfolg, sonst False (Datei nicht in der IDE,
     // Zeile out-of-range, ...).
@@ -129,7 +176,27 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.SysUtils, System.IOUtils, System.StrUtils;
+  Winapi.Windows,        // OutputDebugString; VOR System.SysUtils (FindClose-Falle)
+  System.SysUtils, System.IOUtils, System.StrUtils,
+  uCrashDiag,            // EStackExhausted - nie verschlucken
+  uEditorContextModel;   // ApplyEditorBlock, CharColOfIndex - der getestete Kern
+
+function FirstSourceEditorOf(const AModule: IOTAModule): IOTASourceEditor;
+// Der Pascal-Quelltext eines Moduls: der erste IOTASourceEditor unter den
+// ModuleFileEditors - ein Form-Modul fuehrt dort auch den DFM-Editor, und
+// nur der erste Quelltext-Editor ist die .pas. nil ohne Modul oder ohne
+// Quelltext-Editor. Stand bis 2026-10-14 dreimal als Schleife in dieser
+// Unit (OpenFileAtLine, ShowFileAtLine, TryGetEditPosition).
+var
+  i : Integer;
+begin
+  Result := nil;
+  if not Assigned(AModule) then Exit;
+  for i := 0 to AModule.ModuleFileCount - 1 do
+    if Supports(AModule.ModuleFileEditors[i], IOTASourceEditor, Result) then
+      Exit;
+  Result := nil;
+end;
 
 class function TIDEEditor.TryGetCurrentPasFile(out APath: string): TCurrentFileResult;
 var
@@ -181,6 +248,140 @@ begin
   Result := cfrNotPascalFile;
 end;
 
+class function TIDEEditor.ViewFileAndLine(const AView: IOTAEditView;
+  out AFile: string; out ALine: Integer): Boolean;
+begin
+  AFile  := '';
+  ALine  := 0;
+  Result := False;
+  if not Assigned(AView) or not Assigned(AView.Buffer) then Exit;
+  AFile := AView.Buffer.FileName;
+  ALine := AView.CursorPos.Line;
+  Result := (AFile <> '') and (ALine >= 1);
+end;
+
+class function TIDEEditor.TopViewFileAndLine(out AFile: string;
+  out ALine: Integer): Boolean;
+var
+  EditorSvc : IOTAEditorServices;
+begin
+  AFile  := '';
+  ALine  := 0;
+  Result := False;
+  if not Supports(BorlandIDEServices, IOTAEditorServices, EditorSvc) then Exit;
+  Result := ViewFileAndLine(EditorSvc.TopView, AFile, ALine);
+end;
+
+procedure CtxLog(const AFormat: string; const AArgs: array of const);
+// Messkanal von ViewContext (DebugView, Praefix 'SCA: ctx') - Rohwerte und
+// Umrechnung fuer den UI-Test; eine Meldung im Editor waere lauter als der
+// Nutzen. Nur im DEBUG-Bau (Konfiguration Debug des Plugin-Projekts, wie
+// der Detector-Review-Filter in uIDEAnalyserForm): eine MESSUNG, keine
+// Fehlerdiagnose - die bleibt immer sichtbar (uUiElementRegistry). Im
+// Release-Bau ein leerer Aufruf (Review Charge B, Befund 3).
+begin
+  {$IFDEF DEBUG}
+  // noinspection DebugOutput
+  OutputDebugString(PChar('SCA: ctx ' + Format(AFormat, AArgs)));
+  {$ENDIF}
+end;
+
+function BlockStyleOf(AStyle: TOTABlockType): TEditorBlockStyle;
+// ToolsAPI-Blockart -> Spiegel in uEditorContextModel (gleiche Reihenfolge,
+// aber per case - keine Ord-Gleichheit vorausgesetzt).
+begin
+  case AStyle of
+    btInclusive    : Result := ebsInclusive;
+    btLine         : Result := ebsLine;
+    btColumn       : Result := ebsColumn;
+    btNonInclusive : Result := ebsNonInclusive;
+  else
+    Result := ebsUnknown;
+  end;
+end;
+
+function CharColAt(const AView: IOTAEditView; ALine, ADisplayCol: Integer): Integer;
+// Anzeige-Spalte (TOTAEditPos.Col, Tabs expandiert) -> Zeichen-Spalte
+// (1-basiert) ueber die IDE selbst: ConvertPos(True, ...) liefert
+// TOTACharPos.CharIndex in ZEICHEN der Zeile (Rueckrichtung von reDelphix
+// uRdxEditor.DisplayPosOf). TOTAEditPos.Col ist SmallInt - ein Block-Wert
+// ausserhalb wird vorher gekappt (sonst ERangeError unter $R+).
+var
+  EP : TOTAEditPos;
+  CP : TOTACharPos;
+begin
+  if ADisplayCol < 1 then
+    ADisplayCol := 1
+  else if ADisplayCol > High(SmallInt) then
+    ADisplayCol := High(SmallInt);
+  EP.Line      := ALine;
+  EP.Col       := ADisplayCol;
+  CP.Line      := ALine;
+  CP.CharIndex := 0;
+  AView.ConvertPos(True, EP, CP);
+  Result := CharColOfIndex(CP.CharIndex);
+end;
+
+class function TIDEEditor.ViewContext(const AView: IOTAEditView;
+  out ACtx: TEditorContext): Boolean;
+var
+  FileName : string;
+  Line     : Integer;
+  Caret    : TOTAEditPos;
+  Block    : IOTAEditBlock;
+  Raw      : TEditorBlockChars;
+  {$IFDEF DEBUG}
+  Buf      : IOTAEditBuffer;
+  {$ENDIF}
+begin
+  ACtx   := Default(TEditorContext);
+  Result := False;
+  if not ViewFileAndLine(AView, FileName, Line) then Exit;
+  Caret := AView.CursorPos;
+  ACtx  := TEditorContext.At(FileName, Line, CharColAt(AView, Line, Caret.Col));
+  CtxLog('caret %d:%d (display) -> char col %d', [Caret.Line, Caret.Col, ACtx.Col]);
+  Block := AView.Block;
+  if Assigned(Block) and Block.IsValid and Block.Visible and (Block.Size > 0) then
+  begin
+    Raw.Style     := BlockStyleOf(Block.Style);
+    Raw.StartLine := Block.StartingRow;
+    Raw.StartCol  := CharColAt(AView, Block.StartingRow, Block.StartingColumn);
+    Raw.EndLine   := Block.EndingRow;
+    Raw.EndCol    := CharColAt(AView, Block.EndingRow, Block.EndingColumn);
+    ApplyEditorBlock(ACtx, Raw);
+    // Messung (UI-Test) nur im DEBUG-Bau - auch die Lesezugriffe dafuer.
+    {$IFDEF DEBUG}
+    CtxLog('block style=%d size=%d '
+      + 'display %d:%d..%d:%d -> chars %d:%d..%d:%d -> sel=%s %d:%d..%d:%d',
+      [Ord(Block.Style), Block.Size,
+       Block.StartingRow, Block.StartingColumn,
+       Block.EndingRow, Block.EndingColumn,
+       Raw.StartLine, Raw.StartCol, Raw.EndLine, Raw.EndCol,
+       BoolToStr(ACtx.HasSelection, True),
+       ACtx.SelStartLine, ACtx.SelStartCol, ACtx.SelEndLine, ACtx.SelEndCol]);
+    // Nur Messung (nicht benutzt): die Blockgrenzen des Puffers als
+    // TOTACharPos - ob deren CharIndex Zeichen oder Bytes zaehlt, ist
+    // ungemessen (memory: SyncEditBlock liest das Blockende als Bytes).
+    Buf := AView.Buffer;
+    if Assigned(Buf) then
+      CtxLog('buffer block start %d:%d after %d:%d (raw CharIndex)',
+        [Buf.BlockStart.Line, Buf.BlockStart.CharIndex,
+         Buf.BlockAfter.Line, Buf.BlockAfter.CharIndex]);
+    {$ENDIF}
+  end;
+  Result := True;
+end;
+
+class function TIDEEditor.TopViewContext(out ACtx: TEditorContext): Boolean;
+var
+  EditorSvc : IOTAEditorServices;
+begin
+  ACtx   := Default(TEditorContext);
+  Result := False;
+  if not Supports(BorlandIDEServices, IOTAEditorServices, EditorSvc) then Exit;
+  Result := ViewContext(EditorSvc.TopView, ACtx);
+end;
+
 class function TIDEEditor.GetCurrentProjectDir: string;
 var
   ModSvc    : IOTAModuleServices;
@@ -226,7 +427,6 @@ var
   SrcEditor  : IOTASourceEditor;
   EditView   : IOTAEditView;
   EditPos    : TOTAEditPos;
-  i          : Integer;
   TargetPath : string;
   AsPas      : string;
   AsDfm      : string;
@@ -289,10 +489,7 @@ begin
   if LineNumber <= 0 then Exit;
 
   // IOTASourceEditor aus dem Modul holen.
-  SrcEditor := nil;
-  for i := 0 to Module.ModuleFileCount - 1 do
-    if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, SrcEditor) then
-      Break;
+  SrcEditor := FirstSourceEditorOf(Module);
   if not Assigned(SrcEditor) then Exit;
 
   // Editor-Tab in den Vordergrund bringen (wichtig wenn Datei bereits
@@ -322,7 +519,6 @@ var
   SrcEditor : IOTASourceEditor;
   EditView  : IOTAEditView;
   EditPos   : TOTAEditPos;
-  i         : Integer;
 begin
   Result := False;
   if (AbsPath = '') or (LineNumber <= 0) then Exit;
@@ -338,10 +534,7 @@ begin
   if not Assigned(Module) then Exit;
 
   // SrcEditor aus dem Modul holen.
-  SrcEditor := nil;
-  for i := 0 to Module.ModuleFileCount - 1 do
-    if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, SrcEditor) then
-      Break;
+  SrcEditor := FirstSourceEditorOf(Module);
   if not Assigned(SrcEditor) then Exit;
 
   SrcEditor.Show;   // Tab nach vorne bringen
@@ -399,13 +592,12 @@ function TryGetEditPosition(const AbsPath: string;
 //   Modul finden (oder oeffnen) -> Source-Editor -> EditView -> Buffer
 //   -> EditPosition
 //
-// Diese 28 Zeilen standen bis 2026-08-18 ZWEIMAL byte-gleich in dieser
-// Unit (ApplyLineReplacement und InsertLineAbove). Ein Fix an einer der
-// beiden Kopien - etwa der aktive View statt EditViews[0], oder ein
-// MarkModified - haette Quick-Fix und Auto-Suppress fuer dieselbe Datei
-// auseinanderlaufen lassen. ApplyLineReplacement (Ctrl+Alt+F ueber
-// uQuickFix: Zeile von der Platte, ohne Pufferabgleich) entfiel am
-// 2026-10-10 - Ctrl+Alt+F laeuft ueber die Anbieter-Registry (reDelphix).
+// Einziger Aufrufer ist seit 2026-10-10 InsertLineAbove (der zweite,
+// ApplyLineReplacement fuer den alten uQuickFix-Weg, entfiel - Ctrl+Alt+F
+// laeuft ueber die Anbieter-Registry). Die Routine bleibt eigenstaendig,
+// weil sie der EINE Ort ist, an dem das Plugin einen Pfad in eine
+// Schreibposition des Puffers uebersetzt: Modulwahl, Editorwahl und
+// View-Wahl stehen hier, nicht im Schreiber.
 //
 // Der Source-Editor wird ueber die ModuleFileEditors gesucht und nicht
 // ueber Index 0: ein Form-Modul liefert dort auch den DFM-Editor, und
@@ -413,16 +605,14 @@ function TryGetEditPosition(const AbsPath: string;
 //
 // Bekannte Enge, bewusst uebernommen statt hier still geaendert:
 // EditViews[0] ist nicht zwingend der AKTIVE View. Bei geteiltem Fenster
-// editiert der Nutzer moeglicherweise in einem anderen. Das war in beiden
-// Kopien so; es zu aendern ist eine Verhaltensfrage und gehoert in einen
-// eigenen Schritt - jetzt aber an EINER Stelle.
+// editiert der Nutzer moeglicherweise in einem anderen. Es zu aendern ist
+// eine Verhaltensfrage und gehoert in einen eigenen Schritt.
 var
   ModSvc     : IOTAModuleServices;
   Module     : IOTAModule;
   SourceEdit : IOTASourceEditor;
   EditView   : IOTAEditView;
   EditBuffer : IOTAEditBuffer;
-  i          : Integer;
 begin
   Result   := False;
   AEditPos := nil;
@@ -435,15 +625,19 @@ begin
     try
       Module := ModSvc.OpenModule(AbsPath);
     except
-      Exit;   // Open fehlgeschlagen - Aufrufer meldet in der Statuszeile
+      on EStackExhausted do raise;
+      on EAbort do raise;
+      // noinspection ExceptionTooGeneral
+      // Die IDE konnte das Modul nicht oeffnen (Datei weg, gesperrt,
+      // fremder Dateityp - die OTA wirft dafuer keine eigene Klasse): fuer
+      // den Aufrufer ist das "nicht schreibbar", er meldet es in der
+      // Statuszeile; eine IDE-Meldung waere lauter als der Schaden.
+      on Exception do Exit;
     end;
   end;
   if Module = nil then Exit;
 
-  SourceEdit := nil;
-  for i := 0 to Module.ModuleFileCount - 1 do
-    if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, SourceEdit) then
-      Break;
+  SourceEdit := FirstSourceEditorOf(Module);
   if SourceEdit = nil then Exit;
   if SourceEdit.EditViewCount = 0 then Exit;
 
@@ -455,14 +649,34 @@ begin
   Result := AEditPos <> nil;
 end;
 
+function BufferLineBreakAt(const AEditPos: IOTAEditPosition): string;
+// Zeilenende des Puffers an der Zeile der Position: Read hinter dem
+// Zeilenende liefert die Umbruchzeichen selbst (CRLF, LF, CR). Keine
+// (letzte Zeile ohne Umbruch) oder etwas anderes: sLineBreak wie bisher.
+// Verschiebt die Position ans Zeilenende - der Aufrufer setzt sie neu.
+var
+  Tail : string;
+begin
+  Result := sLineBreak;
+  AEditPos.MoveEOL;
+  Tail := AEditPos.Read(2);
+  if Tail.StartsWith(#13#10) then
+    Result := #13#10
+  else if (Tail <> '') and (Tail[1] = #10) then
+    Result := #10
+  else if (Tail <> '') and (Tail[1] = #13) then
+    Result := #13;
+end;
+
 class function TIDEEditor.InsertLineAbove(const AbsPath: string;
   LineNumber: Integer; const NewLine: string): Boolean;
 // Strategie:
 //   1. Modul / Source-Editor ueber TryGetEditPosition
 //   2. EditPosition.GotoLine(LineNumber); MoveBOL;
 //   3. Read(MaxIndent) -> Einrueckungs-String der Befund-Zeile lesen
-//   4. EditPosition.GotoLine(LineNumber); MoveBOL; (zurueck nach Read)
-//   5. InsertText(Indent + NewLine + #13#10);
+//   4. MoveEOL; Read(2) -> das Zeilenende des Puffers an dieser Zeile
+//   5. EditPosition.GotoLine(LineNumber); MoveBOL; (zurueck nach Read)
+//   6. InsertText(Indent + NewLine + Zeilenende);
 //
 // `Indent + NewLine` wird VOR der bestehenden Zeile eingefuegt - die
 // alte Zeile rutscht eins runter. Ctrl+Z reverts.
@@ -473,6 +687,7 @@ var
   j           : Integer;
   LineHead    : string;
   Indent      : string;
+  LineBreak   : string;
 begin
   Result := False;
   if (LineNumber <= 0) or (AbsPath = '') or (NewLine = '') then Exit;
@@ -491,12 +706,22 @@ begin
       else
         Break;
 
+    // Zeilenende des Puffers an dieser Zeile (steht noch am Zeilenanfang).
+    LineBreak := BufferLineBreakAt(EditPos);
+
     // Cursor zurueck an Zeilen-Anfang + neue Zeile davor einfuegen.
     EditPos.GotoLine(LineNumber);
     EditPos.MoveBOL;
-    EditPos.InsertText(Indent + NewLine + sLineBreak);
+    EditPos.InsertText(Indent + NewLine + LineBreak);
   except
-    Exit;
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    // noinspection ExceptionTooGeneral
+    // Die Puffer-API wirft bei einer Zeile hinter dem Ende, einem
+    // schreibgeschuetzten Puffer oder einem Modul im Abbau - ohne eigene
+    // Klasse dafuer: nicht geschrieben, der Aufrufer meldet es in der
+    // Statuszeile.
+    on Exception do Exit;
   end;
 
   Result := True;

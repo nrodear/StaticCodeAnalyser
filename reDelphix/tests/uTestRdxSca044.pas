@@ -77,6 +77,9 @@ type
     [Test] procedure Numeric_CardinalArg_UsesU;
     [Test] procedure SelfAppend_FormatOverRest;
     [Test] procedure SelfAppend_OnlyLiterals_Disabled;
+    // Nachpruefung FB zu R2-04: hinter 'X +' ist X der Kettenanfang - ein
+    // Zeiger als erster Term dahinter verkettet.
+    [Test] procedure SelfAppend_PointerCastFirst_Enabled;
     // AH22 (Verifikations-Workflow nach AH21): Ansi-Operand bei
     // Unicode-Ziel, Variant-Quellen ohne Tell, Klammergruppe, Literal-
     // Quelltext, Leerraum in Literalen, Kommentar vor der Kette,
@@ -117,6 +120,11 @@ type
     [Test] procedure Sql_TwoCallsOnLine_Ambiguous;
     [Test] procedure Sql_NestedCallInArgument_NotAmbiguous;
     [Test] procedure Sql_TabIndent_KeepsTabs;
+    // Charge S1 (Nico, IDE-Test 2026-10-14): delphimvcframework
+    // EntGenTestsU.pas - DDL mit Konstante ueber FConn.ExecSQL; und die
+    // FireDAC-Overload ExecSQL(SQL, [Werte]) mit eingesetzter Konstante.
+    [Test] procedure Sql_NicoDdlExecSql_Refused;
+    [Test] procedure Sql_FireDacExecSql_OverloadWithConstant;
     [Test] procedure Anchor_Call_OnAssignLine_NoStatement;
     [Test] procedure HeadOf_StripsArguments;
     // Minor 20: Gegenprobe gegen den Fund (Puffer juenger als Fundliste).
@@ -155,7 +163,9 @@ uses
   uAstNode, uParser2, uMethodd12, uSCAConsts, uConcatToFormat,
   uUnsortedUses,   // SCA142 auf dem Ergebnis einer uses-Ergaenzung
   uEngineApi, uRefactorInfo, uRdxRecipes, uRdxRecipeRunner,
-  uRdxBufferMath;   // PlanByteEdits/ApplyByteEdits - der Weg des Editors
+  uRdxBufferMath,   // TRdxEdit
+  uRdxText,         // SetRdxLanguageOverride (SelfAppend_OnlyLiterals_Disabled)
+  uTestRdxTextKit;  // Apply (der Weg des Editors), LineOf, WriteText
 
 const
   // Eine Unit mit allem, was die Varianten brauchen: Feld, Parameter
@@ -182,39 +192,12 @@ begin
   Result := HEAD + ABody + FOOT;
 end;
 
-// Schreibt ASource in eine Temp-Datei und liefert deren Pfad.
+// Schreibt ASource in eine Temp-Datei und liefert deren Pfad (eigener
+// Name je Aufruf ueber TempName mit GUID, geschrieben mit WriteText).
 function WriteTemp(const ASource: string): string;
-var
-  SL : TStringList;
 begin
-  Result := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
-    + 'rdx_sca044_' + FormatDateTime('hhnnsszzz', Now)
-    + IntToStr(Random(1000000)) + '.pas';
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    SL.SaveToFile(Result);
-  finally
-    SL.Free;
-  end;
-end;
-
-// Zeile (1-basiert) der ersten Quellzeile, die AMarker enthaelt.
-function LineOf(const ASource, AMarker: string): Integer;
-var
-  SL : TStringList;
-  i  : Integer;
-begin
-  Result := 0;
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    for i := 0 to SL.Count - 1 do
-      if Pos(AMarker, SL[i]) > 0 then
-        Exit(i + 1);
-  finally
-    SL.Free;
-  end;
+  Result := TempName('rdx_sca044_', '.pas');
+  WriteText(Result, ASource);
 end;
 
 // Funde der Art AKind in der Datei - die echten Detektoren SCA044
@@ -232,8 +215,9 @@ begin
   Result := 0;
   AFirst := '';
   Path := WriteTemp(ASource);
-  Results := TObjectList<TLeakFinding>.Create(True);
+  Results := nil;
   try
+    Results := TObjectList<TLeakFinding>.Create(True);
     Parser := TParser2.Create;
     try
       Root := Parser.ParseFile(Path);
@@ -309,11 +293,11 @@ var
   IsCall : Boolean;
   Why    : string;
 begin
-  Result   := False;
-  AOutcome := Default(TRdxFormatOutcome);
   Places := OpenTemp(ASource, Path);
   try
-    if not Places.IsOpen then Exit;
+    // Wie RunSql: ohne lesbare Datei liefe kein Rezept - ein IsFalse-Test
+    // waere dann leer gruen (Review Woche G01-16).
+    Assert.IsTrue(Places.IsOpen, 'Temp-Datei nicht lesbar');
     Info := TRdxRecipeRunner.DescribeAnchor(Places, LineOf(ASource, AMarker),
       'assign', IsCall, Why);
     try
@@ -342,29 +326,41 @@ type
   end;
 
 // Die Zeile mit AMarker ueber den Anker AAnchor beschreiben (der Katalog
-// fuehrt SCA003 mit 'assign-or-call'), dann TRdxRecipeRunner.SqlTemplate.
+// fuehrt SCA003 mit 'assign-or-call'), dann TRdxRecipeRunner.SqlTemplate -
+// mit den Zeilen desselben Texts wie der Anbieter (TRdxRecipeContext.Lines).
 function RunSql(const ASource, AMarker, AAnchor: string): TSqlRun;
 var
   Path   : string;
   Places : TSourcePlaces;
   Info   : TRefactorInfo;
+  Lines  : TStringList;
+  Offer  : TRdxSqlOffer;
 begin
   Result := Default(TSqlRun);
+  // OpenTemp wirft bei einem Parser-Watchdog weiter - Lines erst danach
+  // anlegen, sonst bliebe sie liegen (Review Woche G01-17).
   Places := OpenTemp(ASource, Path);
+  Lines := nil;
   try
+    Lines := TStringList.Create;
+    Lines.Text := ASource;
     Assert.IsTrue(Places.IsOpen, 'Temp-Datei nicht lesbar');
     Info := TRdxRecipeRunner.DescribeAnchor(Places, LineOf(ASource, AMarker),
       AAnchor, Result.IsCall, Result.Why);
     try
       Result.Described := Assigned(Info);
       if Result.Described then
-        Result.Built := TRdxRecipeRunner.SqlTemplate(Places, Info,
-          Result.IsCall, Result.Template, Result.Hint, Result.Reason);
+        Result.Built := TRdxRecipeRunner.SqlTemplate(Places, Lines, Info,
+          Result.IsCall, Offer);
+      Result.Template := Offer.Template;
+      Result.Hint     := Offer.Hint;
+      Result.Reason   := Offer.Reason;
     finally
       Info.Free;
     end;
   finally
     CloseTemp(Places, Path);
+    Lines.Free;
   end;
 end;
 
@@ -416,32 +412,18 @@ begin
   Result.NewText  := AOutcome.NewText;
 end;
 
-// Wendet die Ersetzungen so an wie der Editor (uRdxEditor.ReplaceSpans):
-// EIN Plan ueber denselben Puffer - PlanByteEdits prueft jeden erwarteten
-// Text, sortiert, lehnt Ueberlappungen ab und setzt #10 im neuen Text auf
-// das Zeilenende des Puffers -, dann ApplyByteEdits. Bis 2026-10-10 eine
-// eigene TStringList-Nachbildung, Kette und uses nacheinander (Review
-// reDelphiX nach Bereichen, Minor 25).
-function ApplyEdits(const ASource: string; const AEdits: TArray<TRdxEdit>): string;
-var
-  Bytes : TBytes;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-begin
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, AEdits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
-end;
-
 // Alle Ersetzungen des Ergebnisses in EINER Aktion, wie der Anbieter sie
-// uebergibt: die Kette und gegebenenfalls die uses-Ergaenzung.
+// uebergibt: die Kette und gegebenenfalls die uses-Ergaenzung - angewendet
+// wie der Editor (uTestRdxTextKit.Apply: ein Plan ueber denselben Puffer).
+// Bis 2026-10-10 eine eigene TStringList-Nachbildung, Kette und uses
+// nacheinander (Review reDelphiX nach Bereichen, Minor 25).
 function ApplyOutcome(const ASource: string;
   const AOutcome: TRdxFormatOutcome): string;
 begin
   if AOutcome.NeedsUses then
-    Result := ApplyEdits(ASource, [EditOf(AOutcome), AOutcome.UsesEdit])
+    Result := Apply(ASource, [EditOf(AOutcome), AOutcome.UsesEdit])
   else
-    Result := ApplyEdits(ASource, [EditOf(AOutcome)]);
+    Result := Apply(ASource, [EditOf(AOutcome)]);
 end;
 
 { ---- Detektor-Heuristik ---- }
@@ -1091,8 +1073,9 @@ var
 begin
   Src  := WithUses(CHAIN, FPC_USES);
   Path := WriteTemp(Src);
-  Places := TSourcePlaces.Create;
+  Places := nil;
   try
+    Places := TSourcePlaces.Create;
     Assert.IsTrue(Places.Open(Path));
     Assert.AreEqual<Integer>(LineOf(Src, '{$IFDEF FPC}'),
       TRdxRecipeRunner.UsesDirectiveLine(Places));
@@ -1102,8 +1085,9 @@ begin
   end;
   Src  := UnitWith(CHAIN);
   Path := WriteTemp(Src);
-  Places := TSourcePlaces.Create;
+  Places := nil;
   try
+    Places := TSourcePlaces.Create;
     Assert.IsTrue(Places.Open(Path));
     Assert.AreEqual<Integer>(0, TRdxRecipeRunner.UsesDirectiveLine(Places),
       'ohne Direktive keine Sperre');
@@ -1145,13 +1129,41 @@ begin
 end;
 
 procedure TTestRdxSca044.SelfAppend_OnlyLiterals_Disabled;
+const
+  SELF_APPEND = '  Text := Text + ''a'' + #13#10 + ''b'' + ''c'';';
+var
+  O   : TRdxFormatOutcome;
+  Old : string;
+begin
+  // Hinter 'Text +' nur Literale: Format haette kein Argument.
+  Assert.IsFalse(RunRecipe(UnitWith(SELF_APPEND), 'Text := Text', O));
+  Assert.IsTrue(Pos('nur Literale', O.Reason) > 0, O.Reason);
+  // Dasselbe in en (E29, c_groups 2.6): BuildReasonOf fragt die Kennung
+  // NoOperand - bis dahin Pos('kein Operand', Grund), in en still falsch.
+  Old := RdxLanguageOverride;
+  SetRdxLanguageOverride('en');
+  try
+    Assert.IsFalse(RunRecipe(UnitWith(SELF_APPEND), 'Text := Text', O));
+    Assert.AreEqual('there are only literals behind Text', O.Reason);
+  finally
+    SetRdxLanguageOverride(Old);
+  end;
+end;
+
+procedure TTestRdxSca044.SelfAppend_PointerCastFirst_Enabled;
 var
   O : TRdxFormatOutcome;
 begin
-  // Hinter 'Text +' nur Literale: Format haette kein Argument.
-  Assert.IsFalse(RunRecipe(UnitWith(
-    '  Text := Text + ''a'' + #13#10 + ''b'' + ''c'';'), 'Text := Text', O));
-  Assert.IsTrue(Pos('nur Literale', O.Reason) > 0, O.Reason);
+  // Pruefer FB_verify (uTestFbProbeC): die Sperre 'Zeiger am Kettenanfang'
+  // (R2-04) traf beim Selbst-Anhaengen den ersten Term HINTER 'Text +' -
+  // dort verkettet Delphi aber Text + PChar(Marker), der Anfang ist Text.
+  // Gegen den ersten Stand der Charge (3d753de6) rot, 4358b769 bot es an.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := Text + PChar(Marker) + Obj.ClassName + ''.txt'';'),
+    'Text := Text', O), O.Reason);
+  Assert.IsTrue(O.SelfAppend);
+  Assert.AreEqual('Format(''%s%s.txt'', [PChar(Marker), Obj.ClassName])',
+    O.NewText);
 end;
 
 { ---- Review reDelphiX 2026-10-07, Welle 2 ---- }
@@ -1175,8 +1187,8 @@ begin
   Assert.IsTrue(R.IsCall, 'Aufruf-Knoten');
   Assert.IsTrue(R.Built, R.Reason);
   Assert.AreEqual(
-    '  Obj.SQL.Add(''SELECT * FROM t WHERE a = :p1'');' + sLineBreak +
-    '  Obj.ParamByName(''p1'').Value := Marker;', R.Template);
+    '  Obj.SQL.Add(''SELECT * FROM t WHERE a = :Marker'');' + sLineBreak +
+    '  Obj.ParamByName(''Marker'').Value := Marker;', R.Template);
   Assert.AreEqual('1 Parameter, nichts wird geschrieben', R.Hint);
 end;
 
@@ -1184,17 +1196,27 @@ procedure TTestRdxSca044.Sql_AssignAnchor_TextTemplate;
 var
   R : TSqlRun;
 begin
+  // Bis Charge S1 stand hier 'SELECT '' + Marker + '' FROM '' + Tag' mit
+  // der Vorlage 'SELECT :p1 FROM :p2' - Spalten und Tabelle als Parameter,
+  // ungueltiges SQL. Jetzt nur Werte (uTestRdxSqlTemplate).
   R := RunSql(UnitWith(
-    '  Obj.SQL.Text := ''SELECT '' + Marker + '' FROM '' + Tag;'),
+    '  Obj.SQL.Text := ''SELECT * FROM t WHERE a = '' + Marker + '' AND b = '' + Tag;'),
     'Obj.SQL.Text', 'assign-or-call');
   Assert.IsTrue(R.Described, R.Why);
   Assert.IsFalse(R.IsCall, 'Zuweisung');
   Assert.IsTrue(R.Built, R.Reason);
   Assert.AreEqual(
-    '  Obj.SQL.Text := ''SELECT :p1 FROM :p2'';' + sLineBreak +
-    '  Obj.ParamByName(''p1'').Value := Marker;' + sLineBreak +
-    '  Obj.ParamByName(''p2'').Value := Tag;', R.Template);
+    '  Obj.SQL.Text := ''SELECT * FROM t WHERE a = :Marker AND b = :Tag'';' + sLineBreak +
+    '  Obj.ParamByName(''Marker'').Value := Marker;' + sLineBreak +
+    '  Obj.ParamByName(''Tag'').Value := Tag;', R.Template);
   Assert.AreEqual('2 Parameter, nichts wird geschrieben', R.Hint);
+  // Tabelle und Spalten an Bezeichner-Positionen: abgelehnt mit Grund.
+  R := RunSql(UnitWith(
+    '  Obj.SQL.Text := ''SELECT '' + Marker + '' FROM '' + Tag;'),
+    'Obj.SQL.Text', 'assign-or-call');
+  Assert.IsTrue(R.Described, R.Why);
+  Assert.IsFalse(R.Built, R.Template);
+  Assert.IsTrue(Pos('nicht parametrisieren', R.Reason) > 0, R.Reason); // umlautfrei (de.po, G8)
 end;
 
 procedure TTestRdxSca044.Sql_TwoCallsOnLine_Ambiguous;
@@ -1214,12 +1236,13 @@ var
 begin
   // Ein Aufruf IM Argument ist kein eigener Knoten (uParser2 legt die
   // Argumente als Text ab) - die Zeile bleibt eindeutig.
-  R := RunSql(UnitWith('  Obj.SQL.Add(''x'' + IntToStr(Id));'),
+  R := RunSql(UnitWith('  Obj.SQL.Add(''WHERE id = '' + IntToStr(Id));'),
     'Obj.SQL.Add', 'assign-or-call');
   Assert.IsTrue(R.Described, R.Why);
   Assert.IsTrue(R.IsCall);
   Assert.IsTrue(R.Built, R.Reason);
-  Assert.IsTrue(Pos('Obj.ParamByName(''p1'').Value := IntToStr(Id);', R.Template) > 0,
+  // IntToStr(Id) bindet Id selbst (Charge S1).
+  Assert.IsTrue(Pos('Obj.ParamByName(''Id'').Value := Id;', R.Template) > 0,
     R.Template);
 end;
 
@@ -1232,8 +1255,73 @@ begin
   R := RunSql(UnitWith(#9#9 + SQL_ADD), 'Obj.SQL.Add', 'assign-or-call');
   Assert.IsTrue(R.Built, R.Why + R.Reason);
   Assert.AreEqual(
-    #9#9'Obj.SQL.Add(''SELECT * FROM t WHERE a = :p1'');' + sLineBreak +
-    #9#9'Obj.ParamByName(''p1'').Value := Marker;', R.Template);
+    #9#9'Obj.SQL.Add(''SELECT * FROM t WHERE a = :Marker'');' + sLineBreak +
+    #9#9'Obj.ParamByName(''Marker'').Value := Marker;', R.Template);
+end;
+
+// Eine Unit wie delphimvcframework EntGenTestsU.pas: FireDAC.Comp.Client
+// in uses, FConn: TFDConnection, Konstante der Unit, ABody im Rumpf von
+// CreateTable(const AColumnTypes: string; AId: Integer).
+function EntGenUnit(const ABody: string): string;
+begin
+  Result :=
+    'unit EntGen;'#13#10 +
+    'interface'#13#10 +
+    'uses System.SysUtils, FireDAC.Comp.Client;'#13#10 +
+    'type TTest = class'#13#10 +
+    '  FConn: TFDConnection;'#13#10 +
+    '  procedure CreateTable(const AColumnTypes: string; AId: Integer);'#13#10 +
+    'end;'#13#10 +
+    'implementation'#13#10 +
+    'const'#13#10 +
+    '  TEST_TABLE_SOFTDEL     = ''entgen_test_softdel'';'#13#10 +
+    'procedure TTest.CreateTable(const AColumnTypes: string; AId: Integer);'#13#10 +
+    'begin'#13#10 +
+    ABody + #13#10 +
+    'end;'#13#10 +
+    'end.';
+end;
+
+procedure TTestRdxSca044.Sql_NicoDdlExecSql_Refused;
+var
+  R : TSqlRun;
+begin
+  // Bis Charge S1: 'CREATE TABLE :p1 (  id BIGSERIAL PRIMARY KEY, :p2)'
+  // samt '// <Query>.ParamByName(''p1'').Value := TEST_TABLE_SOFTDEL;'.
+  R := RunSql(EntGenUnit(
+    '  FConn.ExecSQL('#13#10 +
+    '    ''CREATE TABLE '' + TEST_TABLE_SOFTDEL + '' ('' +'#13#10 +
+    '    ''  id BIGSERIAL PRIMARY KEY, '' + AColumnTypes + '')'');'),
+    'FConn.ExecSQL', 'assign-or-call');
+  Assert.IsTrue(R.Described, R.Why);
+  Assert.IsTrue(R.IsCall, 'Aufruf-Knoten');
+  Assert.IsFalse(R.Built, R.Template);
+  Assert.IsTrue(Pos('DDL/DCL (CREATE ...)', R.Reason) > 0, R.Reason);
+  Assert.IsTrue(Pos('nicht parametrisieren', R.Reason) > 0, R.Reason); // umlautfrei (de.po, G8)
+end;
+
+procedure TTestRdxSca044.Sql_FireDacExecSql_OverloadWithConstant;
+var
+  R : TSqlRun;
+begin
+  // Die Konstante wird mitgelesen, ihr Name bleibt (Charge SQc), IntToStr(AId)
+  // bindet AId, FConn ist als TFDConnection mit FireDAC.Comp.Client nachgewiesen.
+  R := RunSql(EntGenUnit(
+    '  FConn.ExecSQL(''DELETE FROM '' + TEST_TABLE_SOFTDEL + '' WHERE id = '' + IntToStr(AId));'),
+    'FConn.ExecSQL', 'assign-or-call');
+  Assert.IsTrue(R.Described, R.Why);
+  Assert.IsTrue(R.Built, R.Reason);
+  Assert.AreEqual(
+    '  FConn.ExecSQL(''DELETE FROM '' + TEST_TABLE_SOFTDEL + '' WHERE id = :Id'', [AId]);',
+    R.Template);
+  Assert.AreEqual('1 Parameter, 1 Konstante(n) mitgelesen, nichts wird geschrieben',
+    R.Hint);
+  // Ohne FireDAC.Comp.Client bindet ExecSQL nichts - abgelehnt.
+  R := RunSql(StringReplace(EntGenUnit(
+    '  FConn.ExecSQL(''DELETE FROM '' + TEST_TABLE_SOFTDEL + '' WHERE id = '' + IntToStr(AId));'),
+    ', FireDAC.Comp.Client', '', []), 'FConn.ExecSQL', 'assign-or-call');
+  Assert.IsFalse(R.Built, R.Template);
+  Assert.IsTrue(Pos('bindet keine Parameter', R.Reason) > 0, R.Reason);
 end;
 
 procedure TTestRdxSca044.Anchor_Call_OnAssignLine_NoStatement;
@@ -1301,7 +1389,10 @@ begin
   Assert.AreEqual<Integer>(1, FindingsOf(Src, fkConcatToFormat, Msg));
   Assert.IsFalse(DescribeForFinding(UnitWith('  Text := Marker + ''a'' + Tag;'),
     fkConcatToFormat, Msg, 'Text := Marker', Why));
-  Assert.IsTrue(Pos('veraendert', Why) > 0, Why);
+  // Der Grund 'Zeile veraendert?' (MismatchOf, '+'-Zahl). Umlautfreies
+  // Teilstueck: 'veraendert' steht in de.po mit echtem Umlaut (E29, Gruppe
+  // G6); "x '+', der Fund nennt" traegt nur dieser Grund.
+  Assert.IsTrue(Pos('x ''+'', der Fund nennt', Why) > 0, Why);
 end;
 
 procedure TTestRdxSca044.Describe_Sca003Finding_CallTarget;

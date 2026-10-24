@@ -5,9 +5,9 @@ unit uTestRdxSimpleFixesDetector;
 // in der zweiten, SCA066/SCA072/SCA084 in der dritten, SCA007/SCA168 in
 // der vierten, SCA101/SCA099 in der fuenften, SCA082/SCA071/SCA088/SCA123
 // in der sechsten, SCA020/SCA120/SCA122 in der siebten, SCA117/SCA197/
-// SCA149 in der achten Fixture),
+// SCA149 in der achten, SCA098/SCA080/SCA047 in der neunten Fixture),
 // TSourcePlaces und
-// TRdxFixRunner.FixFor - derselbe Einstieg wie im Anbieter. Je Fall meldet
+// TRdxFixTable.FixFor - derselbe Einstieg wie im Anbieter. Je Fall meldet
 // der Detektor, die Hilfe plant aus dem Fund (Art, Zeile, Meldung), die
 // Ersetzungen werden angewandt - und derselbe Detektor meldet danach
 // NICHTS mehr. Dazu die Katalog-
@@ -32,6 +32,9 @@ type
     [Test] procedure Sca085_Property_NoHelp;
     [Test] procedure Sca085_PropertyBesideSameNamedField_NoHelp;
     [Test] procedure Sca085_InlineVar_Helps;
+    // Review R6-04 (Nachbesserung FF): der Detektor meldet 'X{c}.Free;'
+    // und Co., die Hilfe nennt den Kommentar als Grund.
+    [Test] procedure Sca085_CommentInExpression_NoHelp;
     [Test] procedure Sca085_CatalogExample;
     // ---- SCA126 ----
     [Test] procedure Sca126_RoundTrip;
@@ -43,6 +46,16 @@ type
     // Gegen-Review: im with-Block kann der Operand ein Member sein.
     [Test] procedure Sca126_InWith_NoHelp;
     [Test] procedure Sca126_CatalogExample;
+    // Review Quick-Fix-Units 2026-10-14 (Blocker): ein Funktionstyp
+    // derselben Unit und ein Pfad auf eine Methode ohne Argumente.
+    [Test] procedure Sca126_ProcTypeOfOwnUnit_NoHelp;
+    [Test] procedure Sca126_PathOperands;
+    // Semantik-Gegen-Review 2026-10-14 (Major, Charge R8): ein Kundentyp
+    // einer anderen Unit ist nicht bewiesen - wie bei SCA084.
+    [Test] procedure Sca126_ForeignType_NoHelp;
+    // Entscheid E27 (Nico 2026-10-14, Charge R10): eine Klasse der Delphi-
+    // Quellen (uRdxRtlTypes) ist bewiesen, auch aus einer anderen Unit.
+    [Test] procedure Sca126_RtlType_Helps;
   end;
 
   // Stufe 2, Rest (2026-10-10): SCA074, SCA087, SCA139 - eine eigene
@@ -113,12 +126,16 @@ type
     // ---- SCA168 ----
     [Test] procedure Sca168_RoundTrip;
     [Test] procedure Sca168_Raise_AddsUses;
-    [Test] procedure Sca168_FpcFile_NoRaise;
+    [Test] procedure Sca168_FpcFile_Raise_ShortUses;
     [Test] procedure Sca168_CatalogExample;
+    // 2026-10-22: die Klasse, die eine Hilfe schreibt, gibt es in der RTL.
+    [Test] procedure RaisedClasses_ExistInRtl;
     // Gegen-Review 2026-10-10.
     [Test] procedure Sca168_LastArmIf_RoundTrip;
     [Test] procedure Sca007_StaleFinding_NoHelp;
     [Test] procedure Alternative_OtherKinds_None;
+    // Wochen-Review 2026-10-21
+    [Test] procedure Sca007_NamespaceSibling_NotAUse;
   end;
 
   // Stufe 3: SCA101 und SCA099, Zweig als Block (Entscheid E7).
@@ -175,41 +192,56 @@ type
     [Test] procedure Sca149_Reintroduce_RoundTrip;
   end;
 
+  // Ganze Anweisungen (uRdxFlowFixes, Charge H2): SCA098, SCA080, SCA047 -
+  // dazu die Pruefungen des Laeufers (Boolean bewiesen, Variable, with).
+  [TestFixture]
+  TTestRdxSimpleFixesDetector9 = class
+  public
+    [Test] procedure Sca098_RoundTrip;
+    [Test] procedure Sca098_CatalogExample;
+    [Test] procedure Sca098_NotProvenBoolean_NoHelp;
+    [Test] procedure Sca098_InWith_NoHelp;
+    [Test] procedure Sca080_RoundTrip_CatalogExample;
+    [Test] procedure Sca080_ThenExit_NoHelp;
+    [Test] procedure Sca047_RoundTrip;
+    [Test] procedure Sca047_CatalogExample;
+    [Test] procedure Sca047_ResultAndWith_NoHelp;
+  end;
+
 implementation
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uParser2, uMethodd12, uSCAConsts, uRuleCatalog,
+  uAstNode, uMethodd12, uSCAConsts, uRuleCatalog,
   uExplicitTObjectInheritance, uFreeAndNilHint, uNilComparison,
   uAssertMessage, uEmptyVisibilitySection, uFreeWithoutNil,
   uEmptyArgumentList, uRedundantBoolean, uAssignedAndAssignedNil,
   uUnusedUses, uDefaultCaseInCaseStatement, uBeginEndRequired, uIfElseBegin,
   uSuperfluousSemicolon, uUnitLevelKeywordIndent, uLegacyInitializationSection,
   uCastAndFree, uEmptyMethod, uMissingRaise, uReRaiseException, uRdxRaiseFixes,
+  uRdxStructFixes,   // RAISE_UNHANDLED (RaisedClasses_ExistInRtl)
   uPublicMemberWithoutDoc, uInterfaceGuid, uMissingOverride, uRdxDeclFixes,
-  uEngineApi, uRdxBufferMath, uRdxRecipeRunner;
+  uRedundantConditional, uRedundantJump, uSelfAssignment,
+  uEngineApi, uRdxBufferMath, uRdxRecipeRunner,
+  uRdxFixTable,   // der Einstieg des Anbieters (Charge R8: Tabelle statt Ketten)
+  uTestRdxDetectorKit,   // TSeen, Detect-/Plan-/FixAll-Helfer (Charge H3c)
+  uTestRdxTextKit;       // Join, Apply
 
-type
-  // Was die Hilfe aus einem Fund liest - wie der Anbieter aus TLeakFinding.
-  TSeen = record
-    Line : Integer;
-    Msg  : string;
-  end;
+// ---- Helfer (die gemeinsamen seit Charge H3c in uTestRdxDetectorKit) ----
 
-// ---- Helfer ----
-
-function WriteTemp(const ASource: string): string;
-var
-  SL : TStringList;
+// Die Detektoren der Anweisungs-Hilfen - ein fuenfter Verteiler (SCA091).
+procedure RunFlowDetector(AKind: TFindingKind; Root: TAstNode;
+  const Path: string; Results: TObjectList<TLeakFinding>);
 begin
-  Result := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
-    + 'rdx_simple_' + GUIDToString(TGUID.NewGuid) + '.pas';
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    SL.SaveToFile(Result);
-  finally
-    SL.Free;
+  case AKind of
+    fkRedundantConditional:
+      TRedundantConditionalDetector.AnalyzeUnit(Root, Path, Results);
+    fkRedundantJump:
+      TRedundantJumpDetector.AnalyzeUnit(Root, Path, Results);
+    fkSelfAssignment:
+      TSelfAssignmentDetector.AnalyzeUnit(Root, Path, Results);
+  else
+    Assert.Fail('keine Hilfe fuer diese Art');
   end;
 end;
 
@@ -225,7 +257,7 @@ begin
     fkMissingOverride:
       TMissingOverrideDetector.AnalyzeUnit(Root, Path, Results);
   else
-    Assert.Fail('keine Hilfe fuer diese Art');
+    RunFlowDetector(AKind, Root, Path, Results);
   end;
 end;
 
@@ -278,182 +310,74 @@ begin
   end;
 end;
 
+// Der Verteiler fuer den echten Detektor der Art AKind (TDetectorRun).
+procedure RunDetector(AKind: TFindingKind; Root: TAstNode;
+  const Path: string; Results: TObjectList<TLeakFinding>);
+begin
+  case AKind of
+    fkExplicitTObjectInheritance:
+      TExplicitTObjectInheritanceDetector.AnalyzeUnit(Root, Path, Results);
+    fkFreeAndNilHint:
+      TFreeAndNilHintDetector.AnalyzeUnit(Root, Path, Results);
+    fkNilComparison:
+      TNilComparisonDetector.AnalyzeUnit(Root, Path, Results);
+    fkAssertMessage:
+      TAssertMessageDetector.AnalyzeUnit(Root, Path, Results);
+    fkEmptyVisibilitySection:
+      TEmptyVisibilitySectionDetector.AnalyzeUnit(Root, Path, Results);
+    fkFreeWithoutNil:
+      TFreeWithoutNilDetector.AnalyzeUnit(Root, Path, Results);
+  else
+    RunLaterDetector(AKind, Root, Path, Results);
+  end;
+end;
+
 // Funde der Art AKind - der echte Detektor auf dem echten AST.
 function Detect(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
-var
-  Path    : string;
-  Parser  : TParser2;
-  Root    : TAstNode;
-  Results : TObjectList<TLeakFinding>;
-  F       : TLeakFinding;
-  n       : Integer;
 begin
-  Result := nil;
-  Path := WriteTemp(ASource);
-  Results := TObjectList<TLeakFinding>.Create(True);
-  try
-    Parser := TParser2.Create;
-    try
-      Root := Parser.ParseFile(Path);
-      try
-        case AKind of
-          fkExplicitTObjectInheritance:
-            TExplicitTObjectInheritanceDetector.AnalyzeUnit(Root, Path, Results);
-          fkFreeAndNilHint:
-            TFreeAndNilHintDetector.AnalyzeUnit(Root, Path, Results);
-          fkNilComparison:
-            TNilComparisonDetector.AnalyzeUnit(Root, Path, Results);
-          fkAssertMessage:
-            TAssertMessageDetector.AnalyzeUnit(Root, Path, Results);
-          fkEmptyVisibilitySection:
-            TEmptyVisibilitySectionDetector.AnalyzeUnit(Root, Path, Results);
-          fkFreeWithoutNil:
-            TFreeWithoutNilDetector.AnalyzeUnit(Root, Path, Results);
-        else
-          RunLaterDetector(AKind, Root, Path, Results);
-        end;
-      finally
-        Root.Free;
-      end;
-    finally
-      Parser.Free;
-    end;
-    SetLength(Result, Results.Count);
-    n := 0;
-    for F in Results do
-      if F.Kind = AKind then
-      begin
-        Result[n].Line := F.LineInt;
-        Result[n].Msg  := F.Message;
-        Inc(n);
-      end;
-    SetLength(Result, n);
-  finally
-    Results.Free;
-    DeleteFile(Path);
-  end;
+  Result := DetectSource('rdx_simple_', ASource, AKind, RunDetector);
 end;
 
-// Die Hilfe fuer EINEN Fund ueber den Einstieg des Anbieters: der Fund
-// als TLeakFinding, der Quellstellen-Dienst auf demselben Text.
-function PlanFix(const ASource: string; AKind: TFindingKind;
-  const ASeen: TSeen; out AEdits: TArray<TRdxEdit>; out AReason: string): Boolean;
-var
-  SL      : TStringList;
-  Places  : TSourcePlaces;
-  Finding : TLeakFinding;
-  O       : TRdxFixOutcome;
-begin
-  Assert.IsTrue(TRdxFixRunner.Handles(AKind), 'FixFor kennt die Art');
-  SL := TStringList.Create;
-  Places := TSourcePlaces.Create;
-  Finding := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, AKind);
-  try
-    SL.Text := ASource;
-    Assert.IsTrue(Places.OpenSource('t.pas', ASource), 'OpenSource');
-    O := TRdxFixRunner.FixFor(Places, SL, Finding,
-      TRdxRecipeRunner.UsesNamesOf(Places));
-  finally
-    Finding.Free;
-    Places.Free;
-    SL.Free;
-  end;
-  AEdits  := O.Edits;
-  AReason := O.Reason;
-  Result  := O.Enabled;
-end;
-
-// Der zweite Eintrag (TRdxFixRunner.AlternativeFixFor) fuer EINEN Fund -
-// SCA168 (else mit raise) und SCA020 (raise ENotImplemented).
+// Der zweite Eintrag (TRdxFixTable.AlternativeFixFor) fuer EINEN Fund -
+// SCA168 (else mit raise) und SCA020 (raise ENotImplemented). Der Lauf des
+// Kits (PlanAltFixIn) fuer 't.pas' - bis zur Review Woche G07-27 stand er
+// hier kopiert.
 function PlanAltFix(const ASource: string; AKind: TFindingKind;
   const ASeen: TSeen): TRdxFixOutcome;
-var
-  SL      : TStringList;
-  Places  : TSourcePlaces;
-  Finding : TLeakFinding;
 begin
-  SL := TStringList.Create;
-  Places := TSourcePlaces.Create;
-  Finding := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, AKind);
-  try
-    SL.Text := ASource;
-    Assert.IsTrue(Places.OpenSource('t.pas', ASource), 'OpenSource');
-    Result := TRdxFixRunner.AlternativeFixFor(Places, SL, Finding,
-      TRdxRecipeRunner.UsesNamesOf(Places));
-  finally
-    Finding.Free;
-    Places.Free;
-    SL.Free;
-  end;
+  Result := PlanAltFixIn(ASource, 't.pas', AKind, ASeen);
 end;
 
-// Schreibt wie der Editor: alle Ersetzungen gegen denselben Puffer geprueft.
-function Apply(const ASource: string; const AEdits: TArray<TRdxEdit>): string;
-var
-  Bytes : TBytes;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
+// Die Hilfe (FixFor) fuer EINEN Fund als ganzes Ergebnis - mit
+// ChangesBehavior und Hinweis. Der Lauf des Kits (PlanFixIn) fuer 't.pas'
+// - bis zur Review Woche G07-27 stand er hier Zeile fuer Zeile kopiert
+// (ohne den Handles-Assert des Kits).
+function PlanMain(const ASource: string; AKind: TFindingKind;
+  const ASeen: TSeen): TRdxFixOutcome;
 begin
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Assert.IsTrue(PlanByteEdits(Bytes, AEdits, Plan, Err), Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
+  Result := PlanFixIn(ASource, 't.pas', AKind, ASeen);
 end;
 
-// Fund fuer Fund, nach jeder Ersetzung neu gemeldet (wie der Benutzer es
-// taete), bis der Detektor schweigt.
+// Fund fuer Fund, bis der Detektor schweigt (uTestRdxDetectorKit).
 function FixAll(const ASource: string; AKind: TFindingKind): string;
-const
-  MAX_PASSES = 10;
-var
-  Seen   : TArray<TSeen>;
-  Edits  : TArray<TRdxEdit>;
-  Reason : string;
-  Pass   : Integer;
 begin
-  Result := ASource;
-  for Pass := 1 to MAX_PASSES do
-  begin
-    Seen := Detect(Result, AKind);
-    if Length(Seen) = 0 then Exit;
-    Assert.IsTrue(PlanFix(Result, AKind, Seen[0], Edits, Reason),
-      Format('Zeile %d: %s', [Seen[0].Line, Reason]));
-    Result := Apply(Result, Edits);
-  end;
-  Assert.Fail(Format('der Detektor meldet nach %d Runden noch', [MAX_PASSES]));
+  Result := FixAllWith(ASource, AKind, Detect);
 end;
 
 // Der erste Fund muss abgelehnt werden, mit AReasonPart im Grund.
 procedure AssertNoHelp(const ASource: string; AKind: TFindingKind;
   const AReasonPart: string);
-var
-  Seen   : TArray<TSeen>;
-  Edits  : TArray<TRdxEdit>;
-  Reason : string;
 begin
-  Seen := Detect(ASource, AKind);
-  Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet');
-  Assert.IsFalse(PlanFix(ASource, AKind, Seen[0], Edits, Reason), 'keine Hilfe');
-  Assert.IsTrue(Pos(AReasonPart, Reason) > 0, Reason);
+  AssertNoHelpWith(ASource, AKind, AReasonPart, Detect);
 end;
 
-// Wie AssertNoHelp, aber fuer den Fund auf Zeile ALine.
+// Wie AssertNoHelp, aber fuer den Fund auf Zeile ALine (Kit seit der
+// Review Woche G07-27).
 procedure AssertNoHelpAt(const ASource: string; AKind: TFindingKind;
   ALine: Integer; const AReasonPart: string);
-var
-  Seen   : TArray<TSeen>;
-  S      : TSeen;
-  Edits  : TArray<TRdxEdit>;
-  Reason : string;
 begin
-  Seen := Detect(ASource, AKind);
-  for S in Seen do
-    if S.Line = ALine then
-    begin
-      Assert.IsFalse(PlanFix(ASource, AKind, S, Edits, Reason), 'keine Hilfe');
-      Assert.IsTrue(Pos(AReasonPart, Reason) > 0, Reason);
-      Exit;
-    end;
-  Assert.Fail(Format('kein Fund auf Zeile %d', [ALine]));
+  uTestRdxDetectorKit.AssertNoHelpAt(ASource, AKind, ALine, AReasonPart,
+    Detect);
 end;
 
 function CountOf(const APart, AText: string): Integer;
@@ -469,13 +393,9 @@ begin
   end;
 end;
 
-function Join(const ALines: array of string): string;
-begin
-  Result := string.Join(#13#10, ALines);
-end;
-
 // Ein Katalog-Beispiel als Quelltext: '...' faellt weg, Zeilenenden CRLF
-// (JSON liefert #10, der eingebaute Katalog #13#10).
+// (JSON liefert #10, der eingebaute Katalog #13#10) - anders als
+// uTestRdxDetectorKit.CatalogText, das '...' stehen laesst.
 function Snip(const AExample: string): string;
 begin
   Result := StringReplace(AExample, '...', '', [rfReplaceAll]);
@@ -625,6 +545,23 @@ begin
       '  L := nil;'])]), fkFreeAndNilHint));
 end;
 
+procedure TTestRdxSimpleFixesDetector.Sca085_CommentInExpression_NoHelp;
+const
+  FORMS: array[0..2] of string = ('  FList{owned}.Free;', '  FList.{c}Free;',
+    '  FList.Free {c};');
+var
+  Form : string;
+begin
+  // Der Detektor liest die Zeile ohne Kommentare und meldet diese Formen
+  // wie 'FList.Free;' (ohne Delphi gegengeprueft: CLI-Exe, SCA085 auf allen
+  // drei). Die Hilfe ersetzt nicht ueber einen Kommentar hinweg und nennt
+  // ihn - bis Review R6-04 lautete der Grund direkt nach dem Scan 'X.Free;
+  // steht nicht mehr an der gemeldeten Stelle'.
+  for Form in FORMS do
+    AssertNoHelp(Format(UNIT_085, ['uses System.SysUtils;', Join([Form,
+      '  FList := nil;'])]), fkFreeAndNilHint, 'Kommentar im Ausdruck');
+end;
+
 procedure TTestRdxSimpleFixesDetector.Sca085_CatalogExample;
 var
   Meta : TRuleMeta;
@@ -648,6 +585,8 @@ const
     '  end;'#13#10 +
     '  TFoo = class'#13#10 +
     '    FList: TList;'#13#10 +
+    '    FDriver: TChromium;'#13#10 +
+    '    FOwner: TObject;'#13#10 +
     '    FOnChange: TNotifyEvent;'#13#10 +
     '    function Check(Obj: TObject; P: TNode): Boolean;'#13#10 +
     '  end;'#13#10 +
@@ -662,27 +601,57 @@ const
 
 procedure TTestRdxSimpleFixesDetector.Sca126_RoundTrip;
 begin
+  // Operanden mit bewiesenem Typ: TObject (Feld und Parameter) und die
+  // Klasse TNode dieser Unit. FList: TList (System.Classes) ist seit E27
+  // ueber die Liste der Delphi-Quellen bewiesen (Sca126_RtlType_Helps);
+  // FDriver: TChromium (Kundentyp, andere Unit) bleibt ohne Hilfe
+  // (Sca126_ForeignType_NoHelp).
   Assert.AreEqual(
     Format(UNIT_126, [Join([
-      '  if Assigned(FList) then',
-      '    FList.Clear;',
+      '  if Assigned(FOwner) then',
+      '    FOwner.Free;',
       '  while Assigned(P) do',
       '    P := P.Next;',
       '  B := not Assigned(Obj);',
-      '  Result := Assigned(FList) and Assigned(Obj);',
+      '  Result := Assigned(FOwner) and Assigned(Obj);',
       '  Assert(Assigned(Obj), ''x'');',
       '  if not Assigned(Obj) then',
-      '    Exit(not Assigned(FList));'])]),
+      '    Exit(not Assigned(FOwner));'])]),
     FixAll(Format(UNIT_126, [Join([
-      '  if FList <> nil then',
-      '    FList.Clear;',
+      '  if FOwner <> nil then',
+      '    FOwner.Free;',
       '  while P <> nil do',
       '    P := P.Next;',
       '  B := Obj = nil;',
-      '  Result := (FList <> nil) and not (Obj = nil);',
+      '  Result := (FOwner <> nil) and not (Obj = nil);',
       '  Assert(Obj <> nil, ''x'');',
       '  if nil = Obj then',
-      '    Exit(FList = nil);'])]), fkNilComparison));
+      '    Exit(FOwner = nil);'])]), fkNilComparison));
+end;
+
+procedure TTestRdxSimpleFixesDetector.Sca126_ForeignType_NoHelp;
+begin
+  // TChromium kommt aus einer fremden Unit (CEF): DeclaredTypeOf liefert
+  // 'tchromium', weder die Datei noch die Liste der Delphi-Quellen beweist,
+  // dass es eine Klasse ist - ein 'TObjFactory = function: TObject' einer
+  // anderen Unit saehe genauso aus, und '= nil' riefe ihn auf, Assigned()
+  // nicht (Charge R8; bis E27 stand hier FList: TList).
+  AssertNoHelp(Format(UNIT_126, [Join([
+    '  if FDriver <> nil then',
+    '    FDriver.Free;'])]), fkNilComparison, 'nicht als Klasse');
+end;
+
+procedure TTestRdxSimpleFixesDetector.Sca126_RtlType_Helps;
+begin
+  // E27: TList aus System.Classes steht in der Liste der Delphi-Quellen
+  // (uRdxRtlTypes) - bewiesen, obwohl diese Unit es nicht deklariert.
+  Assert.AreEqual(
+    Format(UNIT_126, [Join([
+      '  if Assigned(FList) then',
+      '    FList.Clear;'])]),
+    FixAll(Format(UNIT_126, [Join([
+      '  if FList <> nil then',
+      '    FList.Clear;'])]), fkNilComparison));
 end;
 
 procedure TTestRdxSimpleFixesDetector.Sca126_TwoStatementsOnOneLine_NoHelp;
@@ -724,6 +693,59 @@ begin
   Assert.IsTrue(Pos('nil', Meta.BadExample) > 0, Meta.BadExample);
   Assert.AreEqual(InRoutine(Snip(Meta.GoodExample)),
     FixAll(InRoutine(Snip(Meta.BadExample)), fkNilComparison));
+end;
+
+const
+  // Wie UNIT_126, dazu ein Funktionstyp der Unit und ein Feld davon.
+  UNIT_126_FACTORY =
+    'unit t;'#13#10 +
+    'interface'#13#10 +
+    'uses System.Classes;'#13#10 +
+    'type'#13#10 +
+    '  TObjFactory = function: TObject;'#13#10 +
+    '  TFoo = class'#13#10 +
+    '    FMaker: TObjFactory;'#13#10 +
+    '    FList: TList;'#13#10 +
+    '    function Check: Boolean;'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'function TFoo.Check: Boolean;'#13#10 +
+    'begin'#13#10 +
+    '%s'#13#10 +
+    'end;'#13#10 +
+    'end.';
+
+procedure TTestRdxSimpleFixesDetector.Sca126_ProcTypeOfOwnUnit_NoHelp;
+begin
+  // 'FMaker = nil' ruft die Funktion auf (Delphi), 'not Assigned(FMaker)'
+  // pruefte den Zeiger - der Typname TObjFactory verraet das nicht, erst
+  // seine Deklaration in der Unit.
+  AssertNoHelp(Format(UNIT_126_FACTORY, [Join([
+    '  if FMaker = nil then',
+    '    Exit(False);',
+    '  Result := True;'])]), fkNilComparison, 'Prozedurtyp');
+end;
+
+procedure TTestRdxSimpleFixesDetector.Sca126_PathOperands;
+begin
+  // 'FList.First' ist eine Methode ohne Argumente: nicht als Feld
+  // bewiesen, keine Hilfe.
+  AssertNoHelp(Format(UNIT_126_FACTORY, [Join([
+    '  if FList.First = nil then',
+    '    Exit(False);',
+    '  Result := True;'])]), fkNilComparison, 'nicht als Feld bewiesen');
+  // 'P.Next' endet auf ein Feld der Unit (TNode.Next: TNode) - die Hilfe
+  // kommt; 'FItems[I]' vergleicht ein Ergebnis (uTestRdxNilFix prueft die
+  // Operanden-Regel selbst).
+  Assert.AreEqual(
+    Format(UNIT_126, [Join([
+      '  while Assigned(P.Next) do',
+      '    P := P.Next;',
+      '  Result := True;'])]),
+    FixAll(Format(UNIT_126, [Join([
+      '  while P.Next <> nil do',
+      '    P := P.Next;',
+      '  Result := True;'])]), fkNilComparison));
 end;
 
 { ---- SCA074 ---- }
@@ -1069,6 +1091,15 @@ begin
       'if Assigned(Obj) and (Obj <> nil) then Exit;',
       'if (Obj <> nil) and Assigned(Obj) then Exit;'])),
       fkAssignedAndAssignedNil));
+  // E27 (Charge R10): eine Klasse der Delphi-Quellen aus einer anderen
+  // Unit ist bewiesen (uRdxRtlTypes) - derselbe Beweis wie bei SCA126.
+  Assert.AreEqual(Join(['unit t;', 'interface', 'implementation',
+    'uses System.Classes;', 'procedure P;', 'var', '  L: TStringList;', 'begin',
+    '  if Assigned(L) then Exit;', 'end;', 'end.']),
+    FixAll(Join(['unit t;', 'interface', 'implementation',
+      'uses System.Classes;', 'procedure P;', 'var', '  L: TStringList;', 'begin',
+      '  if Assigned(L) and (L <> nil) then Exit;', 'end;', 'end.']),
+      fkAssignedAndAssignedNil));
 end;
 
 procedure TTestRdxSimpleFixesDetector3.Sca084_ProcType_NoHelp;
@@ -1107,10 +1138,12 @@ end;
 
 procedure TTestRdxSimpleFixesDetector3.Sca084_OtherUnitType_NoHelp;
 begin
-  // TStringList ist eine Klasse - beweisen laesst es sich in dieser Unit
-  // nicht; SCA084 bleibt bei der Zulassungsliste.
+  // TChromium (CEF) ist eine Klasse - beweisen laesst es sich weder in
+  // dieser Unit noch ueber die Liste der Delphi-Quellen; SCA084 bleibt bei
+  // der Zulassungsliste (bis E27 stand hier TStringList, seitdem bewiesen:
+  // Sca084_RoundTrip).
   AssertNoHelp(Join(['unit t;', 'interface', 'implementation',
-    'uses System.Classes;', 'procedure P;', 'var', '  L: TStringList;', 'begin',
+    'uses uCef;', 'procedure P;', 'var', '  L: TChromium;', 'begin',
     '  if Assigned(L) and (L <> nil) then Exit;', 'end;', 'end.']),
     fkAssignedAndAssignedNil, 'nicht als Klasse');
 end;
@@ -1130,13 +1163,14 @@ var
   K    : TFindingKind;
   Want : Boolean;
 begin
-  // Hilfen = TRdxFixRunner.Handles, dazu Format() (SCA044, eigenes Rezept)
-  // und 'Marker entfernen' (SCA165). Nicht: die SQL-Vorlage (SCA003, nur
-  // Zwischenablage) und uses-qualifizieren (ein Umbau, keine Hilfe).
+  // Hilfen = TRdxFixTable.Handles, dazu die Rezepte Format() (SCA044) und
+  // SQL-Vorlage (SCA003, Zwischenablage - auch eine Code-Aktion zum Fund,
+  // Q17 2026-10-23) sowie 'Marker entfernen' (SCA165). Nicht:
+  // uses-qualifizieren (ein Umbau, keine Hilfe).
   for K := Low(TFindingKind) to High(TFindingKind) do
   begin
-    Want := TRdxFixRunner.Handles(K)
-      or (K in [fkConcatToFormat, fkUnusedSuppression]);
+    Want := TRdxFixTable.Handles(K)
+      or (K in [fkConcatToFormat, fkSQLInjection, fkUnusedSuppression]);
     Assert.AreEqual(Want, TRuleCatalog.GetRuleCanonical(K).EditorHelp,
       'editorHelp in rules/sca-rules.json: ' + KindName(K));
   end;
@@ -1177,31 +1211,17 @@ end;
 
 procedure TTestRdxSimpleFixesDetector4.Sca007_MarkedAsBehaviorChange;
 var
-  Src     : string;
-  Seen    : TArray<TSeen>;
-  SL      : TStringList;
-  Places  : TSourcePlaces;
-  Finding : TLeakFinding;
-  O       : TRdxFixOutcome;
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
 begin
   // Entscheid E2: eine Unit kann im initialization-Abschnitt registrieren.
   Src := Format(UNIT_007, ['uses System.Classes, System.SysUtils;']);
   Seen := Detect(Src, fkUnusedUses);
   Assert.AreEqual<Integer>(1, Length(Seen), 'nur System.Classes');
-  SL := TStringList.Create;
-  Places := TSourcePlaces.Create;
-  Finding := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
-    fkUnusedUses);
-  try
-    SL.Text := Src;
-    Assert.IsTrue(Places.OpenSource('t.pas', Src), 'OpenSource');
-    O := TRdxFixRunner.FixFor(Places, SL, Finding,
-      TRdxRecipeRunner.UsesNamesOf(Places));
-  finally
-    Finding.Free;
-    Places.Free;
-    SL.Free;
-  end;
+  // Ueber den Einstieg des Anbieters wie PlanMain (bis zur Review Woche
+  // G07-27 eine vierte Hand-Kopie des Laufs).
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.IsTrue(O.ChangesBehavior, 'Kennzeichnung (aendert Verhalten)');
   Assert.AreEqual('System.Classes', O.Name);
@@ -1223,7 +1243,7 @@ var
   Seen       : TArray<TSeen>;
   O          : TRdxFixOutcome;
 begin
-  // Ohne SysUtils: die uses-Ergaenzung kommt mit (EProgrammerError).
+  // Ohne SysUtils: die uses-Ergaenzung kommt mit (EInvalidOpException).
   Src := Join(['unit t;', 'interface', 'implementation', 'procedure P(X: Integer);',
     'begin', '  case X of', '    1: Exit;', '  end;', 'end;', 'end.']);
   Seen := Detect(Src, fkDefaultCaseInCaseStatement);
@@ -1233,29 +1253,37 @@ begin
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.IsTrue(O.ChangesBehavior, 'Kennzeichnung (aendert Verhalten)');
   After := Apply(Src, O.Edits);
-  Assert.IsTrue(Pos('raise EProgrammerError.Create(', After) > 0, After);
+  Assert.IsTrue(Pos('raise EInvalidOpException.Create(', After) > 0, After);
   Assert.AreEqual<Integer>(1, CountOf('SysUtils', After), After);
   Assert.AreEqual<Integer>(0, Length(Detect(After, fkDefaultCaseInCaseStatement)),
     'der Detektor schweigt');
 end;
 
-procedure TTestRdxSimpleFixesDetector4.Sca168_FpcFile_NoRaise;
+procedure TTestRdxSimpleFixesDetector4.Sca168_FpcFile_Raise_ShortUses;
 var
   Src    : string;
+  After  : string;
   Seen   : TArray<TSeen>;
   O      : TRdxFixOutcome;
   Edits  : TArray<TRdxEdit>;
   Reason : string;
 begin
+  // EInvalidOpException steht auch in SysUtils von FPC 3.2.2: die
+  // raise-Variante gilt in FPC-Dateien, die uses-Ergaenzung nimmt den
+  // Kurznamen (FPC 3.2 kennt keine Unit-Scopes). Bis 2026-10-22 sperrte
+  // EProgrammerError (gibt es in keiner RTL) die Variante hier.
   Src := Join(['unit t;', '{$mode delphi}', 'interface', 'implementation',
     'procedure P(X: Integer);', 'begin', '  case X of', '    1: Exit;', '  end;',
     'end;', 'end.']);
   Seen := Detect(Src, fkDefaultCaseInCaseStatement);
   Assert.AreEqual<Integer>(1, Length(Seen));
   O := PlanAltFix(Src, fkDefaultCaseInCaseStatement, Seen[0]);
-  Assert.AreEqual<Integer>(1, O.Variant, 'der Eintrag steht da - gesperrt');
-  Assert.IsFalse(O.Enabled);
-  Assert.IsTrue(Pos('EProgrammerError', O.Reason) > 0, O.Reason);
+  Assert.AreEqual<Integer>(1, O.Variant, 'zweiter Eintrag');
+  Assert.IsTrue(O.Enabled, O.Reason);
+  After := Apply(Src, O.Edits);
+  Assert.IsTrue(Pos('raise EInvalidOpException.Create(', After) > 0, After);
+  Assert.AreEqual<Integer>(1, CountOf('SysUtils', After), After);
+  Assert.AreEqual<Integer>(0, Pos('System.SysUtils', After), After);
   // Das leere else bleibt auch in FPC-Dateien verfuegbar.
   Assert.IsTrue(PlanFix(Src, fkDefaultCaseInCaseStatement, Seen[0], Edits,
     Reason), Reason);
@@ -1272,7 +1300,7 @@ begin
   // leere Hilfe schreibt das else, die zweite das raise; danach schweigt
   // der Detektor.
   Meta := TRuleCatalog.GetRuleCanonical(fkDefaultCaseInCaseStatement);
-  Assert.IsTrue(Pos('raise EProgrammerError.Create(', Meta.GoodExample) > 0,
+  Assert.IsTrue(Pos('raise EInvalidOpException.Create(', Meta.GoodExample) > 0,
     Meta.GoodExample);
   Bad := InRoutine(Snip(Meta.BadExample));
   Assert.AreEqual(StringReplace(Bad, #13#10'  end;', #13#10'  else'#13#10'  end;',
@@ -1313,6 +1341,33 @@ begin
   Assert.IsTrue(Pos('benutzt', Reason) > 0, Reason);
 end;
 
+// Ein Geschwister-Eintrag in uses ('mormot.core.os.security' neben
+// 'mormot.core.os') ist kein Bezug: vorher las UnitStillUsed die
+// uses-Klausel mit, sah 'os' '.' und sperrte die Hilfe mit "wird im Text
+// benutzt" (Wochen-Review 2026-10-21). Ein voll qualifizierter Bezug im
+// Code zaehlt weiter.
+procedure TTestRdxSimpleFixesDetector4.Sca007_NamespaceSibling_NotAUse;
+var
+  Src    : string;
+  Seen   : TSeen;
+  Edits  : TArray<TRdxEdit>;
+  Reason : string;
+begin
+  Src := Join(['unit t;', 'interface', 'implementation',
+    'uses mormot.core.os, mormot.core.os.security;', 'procedure P;', 'begin',
+    '  Exit;', 'end;', 'end.']);
+  Seen.Line := 4;
+  Seen.Msg := 'mormot.core.os';
+  Assert.IsTrue(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason),
+    'Geschwister in uses: ' + Reason);
+  Src := Join(['unit t;', 'interface', 'implementation',
+    'uses mormot.core.os, mormot.core.os.security;', 'procedure P;', 'begin',
+    '  mormot.core.os.Sleep(1);', 'end;', 'end.']);
+  Assert.IsFalse(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason),
+    'voll qualifizierter Bezug');
+  Assert.IsTrue(Pos('benutzt', Reason) > 0, Reason);
+end;
+
 procedure TTestRdxSimpleFixesDetector4.Alternative_OtherKinds_None;
 var
   Seen : TSeen;
@@ -1322,6 +1377,48 @@ begin
   Assert.AreEqual<Integer>(0, PlanAltFix(Format(UNIT_007,
     ['uses System.Classes;']), fkUnusedUses, Seen).Variant,
     'nur SCA168 und SCA020 haben einen zweiten Eintrag');
+end;
+
+// Die Klasse hinter 'raise ' bis zum ersten Punkt; '' ohne beides.
+function RaisedClass(const ATemplate: string): string;
+var
+  P, Q : Integer;
+begin
+  Result := '';
+  P := Pos('raise ', ATemplate);
+  Q := Pos('.', ATemplate);
+  if (P > 0) and (Q > P + Length('raise ')) then
+    Result := Copy(ATemplate, P + Length('raise '),
+      Q - P - Length('raise '));
+end;
+
+// Die Klassen, die eine Hilfe in Nutzercode schreibt, gibt es in
+// System.SysUtils von Delphi 12 und 13 und in SysUtils von FPC 3.2.2
+// (2026-10-22: SCA168 schrieb EProgrammerError - die Klasse gibt es in
+// keiner RTL, nach dem Klick kompilierte der Code nicht, E2003). Die
+// Positivliste ist aus den RTL-Quellen abgeschrieben (System.SysUtils.pas
+// Zeilen 468-597, FPC sysutilh.inc); eine neue Klasse erst dort
+// nachsehen, dann hier eintragen.
+procedure TTestRdxSimpleFixesDetector4.RaisedClasses_ExistInRtl;
+const
+  RTL_CLASSES: array[0..4] of string = ('EArgumentException',
+    'EArgumentOutOfRangeException', 'EInvalidOpException', 'ENotImplemented',
+    'ENotSupportedException');
+  TEMPLATES: array[0..1] of string = (RAISE_UNHANDLED, RAISE_NOT_IMPLEMENTED);
+var
+  Template, Cls, Known : string;
+  Found                : Boolean;
+begin
+  for Template in TEMPLATES do
+  begin
+    Cls := RaisedClass(Template);
+    Found := False;
+    for Known in RTL_CLASSES do
+      if SameText(Known, Cls) then
+        Found := True;
+    Assert.IsTrue(Found, Format('%s schreibt "%s" - nicht in der Positivliste',
+      [Template, Cls]));
+  end;
 end;
 
 { ---- SCA101 / SCA099 ---- }
@@ -1373,22 +1470,27 @@ end;
 
 procedure TTestRdxSimpleFixesDetector5.Sca101_SameMeaning;
 var
-  Src  : string;
-  Seen : TArray<TSeen>;
-  SL   : TStringList;
-  O    : TRdxFixOutcome;
+  Src     : string;
+  Seen    : TArray<TSeen>;
+  SL      : TStringList;
+  Finding : TLeakFinding;
+  O       : TRdxFixOutcome;
 begin
   // Bedeutungsgleich: kein '(changes behavior)', Strg+Alt+F darf sie
-  // ausfuehren; der Hinweis sagt es.
+  // ausfuehren; der Hinweis sagt es. Ueber die Tabelle - sie setzt den
+  // Hinweis, nicht der Rumpf (Charge R8); BlockFix braucht keinen Dienst.
   Src := InRoutine('if Obj <> nil then Obj.Free;');
   Seen := Detect(Src, fkBeginEndRequired);
   Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet');
   SL := TStringList.Create;
+  Finding := nil;
   try
+    Finding := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
+      fkBeginEndRequired);
     SL.Text := Src;
-    O := TRdxFixRunner.BlockFix(fkBeginEndRequired, SL, Seen[0].Line,
-      Seen[0].Msg);
+    O := TRdxFixTable.FixFor(nil, SL, Finding, nil);
   finally
+    Finding.Free;
     SL.Free;
   end;
   Assert.IsTrue(O.Enabled, O.Reason);
@@ -1537,30 +1639,6 @@ end;
 
 { ---- SCA020 / SCA120 / SCA122 ---- }
 
-// Die Hilfe (FixFor) fuer EINEN Fund als ganzes Ergebnis - mit
-// ChangesBehavior und Hinweis.
-function PlanMain(const ASource: string; AKind: TFindingKind;
-  const ASeen: TSeen): TRdxFixOutcome;
-var
-  SL      : TStringList;
-  Places  : TSourcePlaces;
-  Finding : TLeakFinding;
-begin
-  SL := TStringList.Create;
-  Places := TSourcePlaces.Create;
-  Finding := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, AKind);
-  try
-    SL.Text := ASource;
-    Assert.IsTrue(Places.OpenSource('t.pas', ASource), 'OpenSource');
-    Result := TRdxFixRunner.FixFor(Places, SL, Finding,
-      TRdxRecipeRunner.UsesNamesOf(Places));
-  finally
-    Finding.Free;
-    Places.Free;
-    SL.Free;
-  end;
-end;
-
 procedure TTestRdxSimpleFixesDetector7.Sca020_RoundTrip;
 begin
   // Der Absichtskommentar: danach schweigt der Detektor.
@@ -1568,6 +1646,12 @@ begin
       '  ' + INTENT_LINE, 'end;'])),
     FixAll(InImplementation(Join(['procedure P;', 'begin', 'end;'])),
       fkEmptyMethod));
+  // Die Inline-Form auf einer Zeile: uEmptyMethod.BodyHasIntentComment
+  // nimmt '{ intentionally empty }' hinter dem begin als Absicht (Review
+  // Woche G07-28 - bis dahin nur ohne Detektor geprueft).
+  Assert.AreEqual(InImplementation('procedure P; begin ' + INTENT_INLINE
+      + ' end;'),
+    FixAll(InImplementation('procedure P; begin end;'), fkEmptyMethod));
 end;
 
 procedure TTestRdxSimpleFixesDetector7.Sca020_Raise_AddsUses;
@@ -1768,6 +1852,127 @@ begin
     FixAll(Src, fkMissingOverride));
 end;
 
+{ ---- SCA098 / SCA080 / SCA047 ---- }
+
+procedure TTestRdxSimpleFixesDetector9.Sca098_RoundTrip;
+begin
+  // Vorwaerts ueber Zeilen, Gegenrichtung mit Vergleich und mit einem
+  // Boolean-Bezeichner; Result ist Boolean (Funktion), Done eine lokale
+  // Boolean-Variable. Danach schweigt der Detektor.
+  Assert.AreEqual(InImplementation(Join(['function F(A, B: Integer): Boolean;',
+      'var', '  Done: Boolean;', 'begin', '  Result := A > B;',
+      '  Done := not (A = B);', '  Result := not Done;', 'end;'])),
+    FixAll(InImplementation(Join(['function F(A, B: Integer): Boolean;', 'var',
+      '  Done: Boolean;', 'begin', '  if A > B then', '    Result := True',
+      '  else', '    Result := False;',
+      '  if A = B then Done := False else Done := True;',
+      '  if Done then Result := False else Result := True;', 'end;'])),
+      fkRedundantConditional));
+end;
+
+procedure TTestRdxSimpleFixesDetector9.Sca098_CatalogExample;
+var
+  Meta : TRuleMeta;
+begin
+  Meta := TRuleCatalog.GetRuleCanonical(fkRedundantConditional);
+  Assert.AreEqual(InImplementation(Join(['function F(Active: Boolean): Boolean;',
+      'begin', '  ' + Snip(Meta.GoodExample), 'end;'])),
+    FixAll(InImplementation(Join(['function F(Active: Boolean): Boolean;',
+      'begin', '  ' + Snip(Meta.BadExample), 'end;'])), fkRedundantConditional));
+end;
+
+procedure TTestRdxSimpleFixesDetector9.Sca098_NotProvenBoolean_NoHelp;
+begin
+  // Ein Variant bekaeme den Wert der Bedingung statt True/False.
+  AssertNoHelp(InImplementation(Join(['function F(A: Integer): Boolean;', 'var',
+    '  V: Variant;', 'begin', '  if A > 0 then V := True else V := False;',
+    '  Result := V;', 'end;'])), fkRedundantConditional,
+    'nicht als Boolean bewiesen');
+  // Gegenrichtung mit einem Aufruf als C: sein Typ ist nicht bewiesen
+  // (bei einem Variant waere 'not' bitweise).
+  AssertNoHelp(InImplementation(Join(['function IsOk(A: Integer): Boolean;',
+    'begin', '  Result := A > 0;', 'end;', 'procedure P(A: Integer);', 'var',
+    '  Done: Boolean;', 'begin',
+    '  if IsOk(A) then Done := False else Done := True;', 'end;'])),
+    fkRedundantConditional, 'Bedingung ist nicht als Boolean bewiesen');
+end;
+
+procedure TTestRdxSimpleFixesDetector9.Sca098_InWith_NoHelp;
+begin
+  // Im with-Block koennte Done ein Member des with-Ausdrucks sein.
+  AssertNoHelp(InImplementation(Join(['procedure P(A: Boolean);', 'var',
+    '  Obj: TObject;', '  Done: Boolean;', 'begin', '  with Obj do', '  begin',
+    '    if A then Done := True else Done := False;', '  end;', 'end;'])),
+    fkRedundantConditional, 'with');
+end;
+
+procedure TTestRdxSimpleFixesDetector9.Sca080_RoundTrip_CatalogExample;
+var
+  Meta : TRuleMeta;
+begin
+  Meta := TRuleCatalog.GetRuleCanonical(fkRedundantJump);
+  Assert.AreEqual(InImplementation(Snip(Meta.GoodExample)),
+    FixAll(InImplementation(Snip(Meta.BadExample)), fkRedundantJump));
+  // Continue hinter dem else eines if: 'else Continue' faellt weg.
+  Assert.AreEqual(InImplementation(Join(['procedure Q(A: Boolean);', 'var',
+      '  I: Integer;', 'begin', '  for I := 0 to 9 do', '  begin',
+      '    if A then', '      Beep;', '  end;', 'end;'])),
+    FixAll(InImplementation(Join(['procedure Q(A: Boolean);', 'var',
+      '  I: Integer;', 'begin', '  for I := 0 to 9 do', '  begin',
+      '    if A then', '      Beep', '    else', '      Continue;', '  end;',
+      'end;'])), fkRedundantJump));
+end;
+
+procedure TTestRdxSimpleFixesDetector9.Sca080_ThenExit_NoHelp;
+begin
+  // 'if A then Exit;' am Ende: es bliebe 'if A then' stehen.
+  AssertNoHelp(InImplementation(Join(['procedure P(A: Boolean);', 'begin',
+    '  Beep;', '  if A then Exit;', 'end;'])), fkRedundantJump, 'hinter then');
+end;
+
+procedure TTestRdxSimpleFixesDetector9.Sca047_RoundTrip;
+const
+  HEAD = 'type'#13#10'  TFoo = class'#13#10'    FCount: Integer;'#13#10
+    + '    procedure Run(ACount: Integer);'#13#10'  end;'#13#10
+    + 'procedure TFoo.Run(ACount: Integer);'#13#10'var'#13#10
+    + '  Temp: string;'#13#10'begin'#13#10'  Temp := ''x'';'#13#10;
+begin
+  // Lokale Variable, Feld der Unit, Parameter - jede Zeile faellt weg.
+  Assert.AreEqual(InImplementation(HEAD + Join(['  Beep;', 'end;'])),
+    FixAll(InImplementation(HEAD + Join(['  Temp := Temp;', '  FCount := FCount;',
+      '  ACount := ACount;', '  Beep;', 'end;'])), fkSelfAssignment));
+end;
+
+procedure TTestRdxSimpleFixesDetector9.Sca047_CatalogExample;
+const
+  HEAD = 'type'#13#10'  TFoo = class'#13#10'    FCount: Integer;'#13#10
+    + '    procedure SetCount(ACount: Integer);'#13#10'  end;'#13#10
+    + 'procedure TFoo.SetCount(ACount: Integer);'#13#10'begin'#13#10
+    + '  Beep;'#13#10;
+var
+  Meta : TRuleMeta;
+begin
+  // 'good' zeigt den gemeinten Wert (Tippfehler ACount) - die Hilfe kann
+  // ihn nicht raten und loescht die wirkungslose Zuweisung.
+  Meta := TRuleCatalog.GetRuleCanonical(fkSelfAssignment);
+  Assert.AreEqual('FCount := ACount;', Snip(Meta.GoodExample));
+  Assert.AreEqual(InImplementation(HEAD + 'end;'),
+    FixAll(InImplementation(HEAD + '  ' + Snip(Meta.BadExample) + #13#10
+      + 'end;'), fkSelfAssignment));
+end;
+
+procedure TTestRdxSimpleFixesDetector9.Sca047_ResultAndWith_NoHelp;
+begin
+  // Result := Result stillt vielleicht eine Compiler-Meldung.
+  AssertNoHelp(InImplementation(Join(['function F: Integer;', 'begin',
+    '  Result := 1;', '  Result := Result;', 'end;'])), fkSelfAssignment,
+    'Result');
+  // Im with-Block koennte X ein Member mit Setter sein.
+  AssertNoHelp(InImplementation(Join(['procedure P;', 'var', '  Obj: TObject;',
+    '  X: Integer;', 'begin', '  X := 1;', '  with Obj do', '  begin',
+    '    Beep;', '    X := X;', '  end;', 'end;'])), fkSelfAssignment, 'with');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector2);
@@ -1777,5 +1982,6 @@ initialization
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector6);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector7);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector8);
+  TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector9);
 
 end.

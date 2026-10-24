@@ -84,11 +84,11 @@ const
   // Erwarteter Template-Code (von Hand): Deklaration und Anweisung OHNE
   // Einrueckung, jede Namensstelle |vnpname|, |end| am Ende, dazwischen
   // das Zeilenende des Puffers.
-  CODE_FALL1 = 'var |vnpname| := 42;' + #13#10
+  CODE_FALL1 = 'const |vnpname| = 42;' + #13#10
     + 'Result := Value * |vnpname| + |vnpname|;|end|';
-  CODE_FALL5 = 'var |vnpname| := $FF00;' + #10
+  CODE_FALL5 = 'const |vnpname| = $FF00;' + #10
     + 'Result := Value and |vnpname|;|end|';
-  CODE_FALL6 = 'var |vnpname| := 42;' + #13#10
+  CODE_FALL6 = 'const |vnpname| = 42;' + #13#10
     + 'Result := ' + QGREET + ' + IntToStr(Count * |vnpname|);|end|';
 
 type
@@ -383,7 +383,7 @@ begin
     + C.Target.Plan.Reason);
   Assert.AreEqual(CODE_FALL1, CodeOf(C, Reason), 'Fall 1');
   Assert.AreEqual('', Reason, 'Fall 1: kein Ablehnungsgrund');
-  Assert.AreEqual('var |p| := 42;' + #13#10
+  Assert.AreEqual('const |p| = 42;' + #13#10
     + 'Result := Value * |p| + |p|;|end|', TemplateCode(C.Target.Plan,
     C.Target.Name, 'p', C.Text.Eol, Reason), 'Fall 1, kurzer Punkt p');
   T := TargetAt(C.Text, 4, 21, 'N');
@@ -431,17 +431,17 @@ var
   C      : TTplCase;
   Reason : string;
 begin
-  Assert.AreEqual('var |vnpname| := 42;' + #13#10
+  Assert.AreEqual('const |vnpname| = 42;' + #13#10
     + 'Result := Value * |vnpname|; // Hinweis|end|',
     CodeOf(LineCase(LINE_NOTE, 21), Reason), 'Kommentar hinter der Anweisung');
-  Assert.AreEqual('var |vnpname| := 42;' + #13#10
+  Assert.AreEqual('const |vnpname| = 42;' + #13#10
     + 'S := ''42'' + IntToStr(|vnpname|); // 42|end|',
     CodeOf(LineCase('  S := ''42'' + IntToStr(42); // 42', 24), Reason),
     '42 in String und Kommentar bleibt');
   C := LineCase('  Result := MagicNr01Max * 42;', 28);
   Assert.AreEqual('MagicNr01', C.Target.Name,
     'Vorbedingung: MagicNr01Max belegt MagicNr01 nicht');
-  Assert.AreEqual('var |vnpname| := 42;' + #13#10
+  Assert.AreEqual('const |vnpname| = 42;' + #13#10
     + 'Result := MagicNr01Max * |vnpname|;|end|', CodeOf(C, Reason),
     'MagicNr01Max bleibt');
 end;
@@ -534,7 +534,7 @@ end;
 procedure TTestVnpTemplate.TemplateXml_CodeAndNameVerbatim;
 const
   NAME_UML = 'Gr' + #$00F6 + #$00DF + 'e01';
-  CODE_MARKUP = 'var |vnpname| := 42;' + #13#10
+  CODE_MARKUP = 'const |vnpname| = 42;' + #13#10
     + 'B := (A < |vnpname|) and (C > 0) and (S = ''&"'');|end|';
 var
   Xml : string;
@@ -651,7 +651,8 @@ end;
 // Anweisungszeile mit LF allein. StatementDeleteEdit laesst die Einrueckung
 // und GENAU dieses LF stehen - die Laenge kommt aus der Zeile, nicht aus
 // dem Zeilenende des Puffers. Der Template-Code nimmt das Zeilenende des
-// Puffers (TVnpText.Eol: CR LF, sobald eines vorkommt).
+// Puffers (TVnpText.Eol: das Ende der ERSTEN Zeile, die eines hat - hier
+// CR LF, weil die erste Zeile mit CR LF endet).
 procedure TTestVnpTemplate.Delete_LfLineInCrLfFile;
 var
   C      : TTplCase;
@@ -660,7 +661,7 @@ begin
   C := MixedCase;
   Assert.AreEqual('begin' + #13#10 + '  ' + #10 + 'end;' + #13#10,
     DeletedText(C), 'LF-Zeile nach dem Loeschen');
-  Assert.AreEqual('var |vnpname| := 42;' + #13#10
+  Assert.AreEqual('const |vnpname| = 42;' + #13#10
     + 'Result := Value * |vnpname|;|end|', CodeOf(C, Reason),
     'Template-Code mit dem CR LF des Puffers');
 end;
@@ -704,19 +705,19 @@ begin
   Assert.AreEqual(Joined(['function Scale(Value: Integer): Integer;',
     'begin',
     '  // Fall 1: zwei gleiche Literale auf der Zeile - Caret auf eine 42.',
-    '  var MagicNr01 := 42;', '  Result := Value * MagicNr01 + MagicNr01;',
+    '  const MagicNr01 = 42;', '  Result := Value * MagicNr01 + MagicNr01;',
     'end;'], #13#10), ModelText(Fall1, '  ', #13#10), 'Fall 1 im Modell');
   Assert.AreEqual(Joined(['function Mask(Value: Cardinal): Cardinal;',
     'begin',
     #9'// Fall 5: Tab-Einrueckung und Hex-Literal - prueft die Spalten.',
-    #9'var MagicNr01 := $FF00;', #9'Result := Value and MagicNr01;',
+    #9'const MagicNr01 = $FF00;', #9'Result := Value and MagicNr01;',
     'end;'], #10), ModelText(Fall5, #9, #10), 'Fall 5 im Modell');
   Assert.AreEqual(Joined([FALL6_NOTE,
     'function Greeting(Count: Integer): string;', 'begin',
-    '  var MagicNr01 := 42;',
+    '  const MagicNr01 = 42;',
     '  Result := ' + QGREET + ' + IntToStr(Count * MagicNr01);', 'end;'],
     #13#10), ModelText(Fall6, '  ', #13#10), 'Fall 6 im Modell');
-  Assert.AreEqual(Joined(['begin', '  var MagicNr01 := 42;',
+  Assert.AreEqual(Joined(['begin', '  const MagicNr01 = 42;',
     '  Result := Value * MagicNr01; // Hinweis', 'end;'], #13#10),
     ModelText(LineCase(LINE_NOTE, 21), '  ', #13#10),
     'Kommentar hinter der Anweisung im Modell');

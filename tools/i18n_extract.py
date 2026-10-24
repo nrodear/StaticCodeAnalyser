@@ -236,6 +236,17 @@ def _is_ident_char(ch: str) -> bool:
     return ch.isalnum() or ch == "_"
 
 
+QUALIFIED_OWN = "uRdxText."
+
+
+def _is_own_qualified(s: str, i: int) -> bool:
+    """True bei 'uRdxText._(': uRdxText.pas sieht zwei _ (das eigene und das
+    der uses-Unit uLocalization, E2251) und qualifiziert deshalb das eigene."""
+    n = len(QUALIFIED_OWN)
+    return s[max(0, i - n):i] == QUALIFIED_OWN and not (
+        i > n and _is_ident_char(s[i - n - 1]))
+
+
 def _preceded_by_routine_keyword(s: str, i: int) -> bool:
     """True, wenn vor Position i (Beginn von '_') das Schluesselwort
     'function' oder 'procedure' steht - dann ist es die Deklaration von _
@@ -450,7 +461,7 @@ def scan_source(text: str, consts: dict[str, str] | None = None,
                 # (uLocalization.pas) ist kein Aufruf.
                 i += 1
                 continue
-            if not (_is_ident_char(prev) or prev == "."):
+            if not (_is_ident_char(prev) or prev == ".") or _is_own_qualified(s, i):
                 j = sc.skip_trivia(i + 1)
                 if j < n and s[j] == "(":
                     call_line = sc.line_of(i)

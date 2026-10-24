@@ -1,18 +1,20 @@
 unit uTestRdxIntroPlan;
 
 // DUnitX-Tests fuer uRdxIntroPlan (reDelphix, Code-Aktion "Lokale
-// Variable einfuehren", Refactoring ohne Fund): das Literal am Caret, alle
-// gleichen Literale der Zeile (nur Code - nicht in Strings und
-// Kommentaren), die Deklarationszeile, die Spalten vor und nach dem
-// Ersetzen, CodePart, NextFreeName, Utf8Len und CharColOfByte. Den Zweig
-// ohne begin und die Ablehnungen prueft uTestRdxIntroRefuse (geteilt wegen
-// SCA141).
+// Konstante einfuehren", Refactoring ohne Fund): das Literal am Caret,
+// alle gleichen Literale der Zeile (nur Code - nicht in Strings und
+// Kommentaren), die Deklarationszeile (E26: 'const Name = Literal;'), die
+// Spalten vor und nach dem Ersetzen, CodePart, NextFreeName,
+// LineLooksFpcAware, Utf8Len und CharColOfByte. Den Zweig ohne begin und
+// die Ablehnungen prueft uTestRdxIntroRefuse (geteilt wegen SCA141).
 //
-// 1:1 aus dem Labor VarNameProject (uTestVnpPlan, Stand 41bccb23,
-// Entscheid E24), nur Variante C1h: die Tests von TemplateCode und
-// LoneLfCount (Variante D1, uTestVnpTemplate) bleiben im Labor. README und
-// Demo-Dateien meinen hier und in den Tests die des Labors
-// (VarNameProject\README.md, VarNameProject\demo).
+// 1:1 aus dem Labor VarNameProject (uTestVnpPlan, Stand 2026-10-14 nach dem
+// Review F/B vom 2026-10-13, Entscheid E24: erst der im Labor gemessene
+// Stand, die Zusammenlegung mit uRdxCodeMap/uRdxBufferMath folgt
+// spaeter), nur Variante C1h: die
+// Tests von TemplateCode und LoneLfCount (Variante D1, uTestVnpTemplate)
+// bleiben im Labor. README und Demo-Dateien meinen hier und in den Tests
+// die des Labors (VarNameProject\README.md, VarNameProject\demo).
 //
 // Vertrag: die Interface-Kommentare von uRdxIntroPlan, README (Varianten,
 // Grenzen, Messpunkte) und die Demo-Dateien (Faelle 1-6). Alle Erwartungen
@@ -46,7 +48,10 @@ type
     // Kommentare und Hilfsfunktionen
     [Test] procedure CodePart_StringsStayCommentsGo;
     [Test] procedure Comment_ParenStarParenOnlyOpens;
+    [Test] procedure Comment_StarParenAtColumnOne;
     [Test] procedure NextFreeName_WholeWordIgnoreCase;
+    [Test] procedure NextFreeName_BeyondNinetyNine;
+    [Test] procedure LineLooksFpcAware_Patterns;
     [Test] procedure Utf8Len_CharColOfByte;
     [Test] procedure Fall6_UmlautLineCharColumns;
   end;
@@ -81,8 +86,8 @@ begin
   Assert.AreEqual('MagicNr01', Copy(P.NewUseLine, P.NewCols[1], 9),
     'Name an NewCols[1]');
   Assert.AreEqual('42', P.Literal, 'Literal');
-  Assert.AreEqual('  var MagicNr01 := 42;', P.DeclText, 'DeclText');
-  Assert.AreEqual<Integer>(7, P.NameCol, 'NameCol');
+  Assert.AreEqual('  const MagicNr01 = 42;', P.DeclText, 'DeclText');
+  Assert.AreEqual<Integer>(9, P.NameCol, 'NameCol');
   Assert.AreEqual('  Result := Value * MagicNr01 + MagicNr01;', P.NewUseLine,
     'NewUseLine');
   Assert.AreEqual<Integer>(21, P.NewCols[0], 'NewCols[0]');
@@ -145,8 +150,8 @@ begin
   P := PlanIntroduce('X := 4 + 42 + 4;', 'begin', 15, 'MagicNr01');
   Assert.IsTrue(P.Ok, '4, Ok: ' + P.Reason);
   Assert.AreEqual('4', P.Literal, '4, Literal');
-  Assert.AreEqual('var MagicNr01 := 4;', P.DeclText, '4, DeclText');
-  Assert.AreEqual<Integer>(5, P.NameCol, '4, NameCol ohne Einrueckung');
+  Assert.AreEqual('const MagicNr01 = 4;', P.DeclText, '4, DeclText');
+  Assert.AreEqual<Integer>(7, P.NameCol, '4, NameCol ohne Einrueckung');
   Assert.AreEqual('X := MagicNr01 + 42 + MagicNr01;', P.NewUseLine,
     '4, NewUseLine');
   Assert.AreEqual<Integer>(2, Length(P.OldCols), '4, Zahl OldCols');
@@ -229,8 +234,8 @@ begin
   P := PlanIntroduce('X:=42;', 'begin', 4, 'N01');
   Assert.IsTrue(P.Ok, 'ohne Leerzeichen: ' + P.Reason);
   Assert.AreEqual('42', P.Literal, 'ohne Leerzeichen, Literal');
-  Assert.AreEqual('var N01 := 42;', P.DeclText, 'ohne Leerzeichen, DeclText');
-  Assert.AreEqual<Integer>(5, P.NameCol, 'ohne Leerzeichen, NameCol');
+  Assert.AreEqual('const N01 = 42;', P.DeclText, 'ohne Leerzeichen, DeclText');
+  Assert.AreEqual<Integer>(7, P.NameCol, 'ohne Leerzeichen, NameCol');
   Assert.AreEqual('X:=N01;', P.NewUseLine, 'ohne Leerzeichen, NewUseLine');
   Assert.AreEqual<Integer>(1, Length(P.OldCols), 'ohne Leerzeichen, Zahl');
   Assert.AreEqual<Integer>(4, P.OldCols[0], 'ohne Leerzeichen, OldCols[0]');
@@ -239,7 +244,7 @@ begin
   P := PlanIntroduce('  X := -42;', 'begin', 9, 'N01');
   Assert.IsTrue(P.Ok, 'Minus, Ok: ' + P.Reason);
   Assert.AreEqual('42', P.Literal, 'Minus, Literal');
-  Assert.AreEqual('  var N01 := 42;', P.DeclText, 'Minus, DeclText');
+  Assert.AreEqual('  const N01 = 42;', P.DeclText, 'Minus, DeclText');
   Assert.AreEqual('  X := -N01;', P.NewUseLine, 'Minus bleibt in der Zeile');
 end;
 
@@ -265,7 +270,7 @@ begin
   P := PlanIntroduce('  F := 2e-3;', 'begin', 11, 'N01');
   Assert.IsTrue(P.Ok, '2e-3, Ok: ' + P.Reason);
   Assert.AreEqual('2e-3', P.Literal, '2e-3, Literal');
-  Assert.AreEqual('  var N01 := 2e-3;', P.DeclText, '2e-3, DeclText');
+  Assert.AreEqual('  const N01 = 2e-3;', P.DeclText, '2e-3, DeclText');
   Assert.AreEqual('  F := N01;', P.NewUseLine, '2e-3, NewUseLine');
   P := PlanIntroduce('  M := X and $ff;', 'begin', 16, 'N01');
   Assert.IsTrue(P.Ok, '$ff, Ok: ' + P.Reason);
@@ -276,7 +281,7 @@ begin
     'MagicNr01');
   Assert.IsTrue(P.Ok, 'Fall 4, Ok: ' + P.Reason);
   Assert.AreEqual('0.5', P.Literal, 'Fall 4, Literal');
-  Assert.AreEqual('  var MagicNr01 := 0.5;', P.DeclText, 'Fall 4, DeclText');
+  Assert.AreEqual('  const MagicNr01 = 0.5;', P.DeclText, 'Fall 4, DeclText');
   Assert.AreEqual('  Result := Width * Height * MagicNr01;', P.NewUseLine,
     'Fall 4, NewUseLine');
   // Zifferntrenner: 1_000 in Spalte 8 und 16, danach 8 und 14.
@@ -383,6 +388,31 @@ begin
   Assert.AreEqual('', CodePart('(*) x *)'), 'CodePart: alles Kommentar');
 end;
 
+// Ein '*)' in Spalte 1 schliesst den (* *)-Kommentar erst am ')' - davor
+// las der Leser 'Copy(ALine, 0, 2)' und schloss schon am '*', das ')'
+// galt als Code (Pruefer 2026-10-13, Minor 2: eine Zeile mit '*)' am
+// Anfang zaehlte als Code-Zeile darueber und fuehrte zur Ablehnung). Ein
+// '*' oder ')' allein in Spalte 1 schliesst nicht.
+procedure TTestRdxIntroPlan.Comment_StarParenAtColumnOne;
+begin
+  // Die Char-Ergebnisse per IsTrue: DUnitX hat keine Char-Ueberladung von
+  // AreEqual (Gegen-Review Welle 1, Verdacht E2250/E2251).
+  Assert.AreEqual(' X := 1;', CodePartFrom('*) X := 1;', 'p'),
+    '*) in Spalte 1: nur der Code dahinter');
+  Assert.IsTrue(CommentStateAfter('*) X := 1;', 'p') = 'c',
+    '*) in Spalte 1 schliesst');
+  Assert.AreEqual('', CodePartFrom('*)', 'p'), '*) allein: kein Code');
+  Assert.IsTrue(CommentStateAfter('*)', 'p') = 'c', '*) allein schliesst');
+  Assert.AreEqual(' Y', CodePartFrom(' *) Y', 'p'), '*) in Spalte 2');
+  Assert.AreEqual('', CodePartFrom('*', 'p'), '* allein bleibt Kommentar');
+  Assert.IsTrue(CommentStateAfter('*', 'p') = 'p', '* allein schliesst nicht');
+  Assert.AreEqual('', CodePartFrom(') X', 'p'), ') ohne * bleibt Kommentar');
+  Assert.IsTrue(CommentStateAfter(') X', 'p') = 'p',
+    ') ohne * schliesst nicht');
+  Assert.IsTrue(CommentStateAfter('*) X', 'b') = 'b',
+    'im { }-Kommentar schliesst *) nicht');
+end;
+
 // NextFreeName: ABase + '01', '02', ... - der erste Name, der NICHT als
 // ganzes Wort im Text steht (auch in einer Luecke, nicht hoechster + 1);
 // Gross/Klein egal; als Teil eines laengeren Bezeichners zaehlt er nicht
@@ -407,6 +437,65 @@ begin
   Assert.AreEqual('MagicNr10', NextFreeName('MagicNr01 MagicNr02 MagicNr03 '
     + 'MagicNr04 MagicNr05 MagicNr06 MagicNr07 MagicNr08 MagicNr09',
     'MagicNr'), 'nach 09 kommt 10');
+end;
+
+// Die Namen ABase + AFrom .. ABase + ATo (zweistellig), durch Leerzeichen
+// getrennt - rekursiv statt Verkettung in einer Schleife (SCA110).
+function TakenNames(const ABase: string; AFrom, ATo: Integer): string;
+begin
+  Result := '';
+  if AFrom <= ATo then
+    Result := ABase + Format('%.2d', [AFrom]) + ' '
+      + TakenNames(ABase, AFrom + 1, ATo);
+end;
+
+// Sind 01 bis 99 belegt, geht es dreistellig weiter - und auch 100 wird
+// gegen den Text geprueft (Pruefer 2026-10-13, Minor 4: ein fester
+// Rueckfall 'MagicNrX' ohne Pruefung konnte kollidieren).
+procedure TTestRdxIntroPlan.NextFreeName_BeyondNinetyNine;
+var
+  All : string;
+begin
+  All := TakenNames('MagicNr', 1, 99);
+  Assert.AreEqual('MagicNr100', NextFreeName(All, 'MagicNr'),
+    '01..99 belegt');
+  Assert.AreEqual('MagicNr101', NextFreeName(All + 'MagicNr100', 'MagicNr'),
+    '01..100 belegt');
+  Assert.AreEqual('MagicNr50', NextFreeName(TakenNames('MagicNr', 1, 49)
+    + TakenNames('MagicNr', 51, 99), 'MagicNr'), 'Luecke bei 50');
+end;
+
+// LineLooksFpcAware: die Spuren einer FPC-Weiche wie in reDelphix
+// (TRdxRecipes.LineLooksFpcAware) - {$IFDEF FPC}, {$IFNDEF FPC}, {$IF
+// DEFINED(FPC)}, {$MODE ...} (auch MODESWITCH), die Form (*$..*); Gross/
+// Klein und Leerraum egal. Andere Direktiven, 'FPC' in Kommentar oder
+// Bezeichner und eine leere Zeile sind keine.
+procedure TTestRdxIntroPlan.LineLooksFpcAware_Patterns;
+begin
+  Assert.IsTrue(LineLooksFpcAware('{$IFDEF FPC}'), 'IFDEF FPC');
+  Assert.IsTrue(LineLooksFpcAware('  {$ifndef fpc}'), 'ifndef fpc klein');
+  Assert.IsTrue(LineLooksFpcAware('{$IF DEFINED(FPC)}'), 'IF DEFINED(FPC)');
+  Assert.IsTrue(LineLooksFpcAware('{$IF Defined(FPC) and (FPC_FULLVERSION '
+    + '>= 30200)}'), 'IF Defined(FPC) and ...');
+  // FPC_FULLVERSION allein ist eine Weiche (Pruefer 2026-10-14, d).
+  Assert.IsTrue(LineLooksFpcAware('{$IF FPC_FULLVERSION >= 30200}'),
+    'IF FPC_FULLVERSION allein');
+  Assert.IsTrue(LineLooksFpcAware('{$MODE objfpc}{$H+}'), 'MODE objfpc');
+  Assert.IsTrue(LineLooksFpcAware('{$mode delphiunicode}'),
+    'mode delphiunicode');
+  Assert.IsTrue(LineLooksFpcAware('{$MODESWITCH advancedrecords}'),
+    'MODESWITCH');
+  Assert.IsTrue(LineLooksFpcAware('(*$mode delphi*)'), '(*$mode*)');
+  Assert.IsTrue(LineLooksFpcAware('{ $IFDEF FPC }'),
+    'Leerraum in der Direktive (vorsichtig)');
+  Assert.IsFalse(LineLooksFpcAware('{$IFDEF DEBUG}'), 'IFDEF DEBUG');
+  Assert.IsFalse(LineLooksFpcAware('{$IFDEF MSWINDOWS}'), 'IFDEF MSWINDOWS');
+  Assert.IsFalse(LineLooksFpcAware('  X := 42; // laeuft auch unter FPC'),
+    'FPC im Kommentar ohne Direktive');
+  Assert.IsFalse(LineLooksFpcAware('uses FpcUnit, SysUtils;'),
+    'FPC im Bezeichner');
+  Assert.IsFalse(LineLooksFpcAware('{$R *.dfm}'), 'Ressourcen-Direktive');
+  Assert.IsFalse(LineLooksFpcAware(''), 'leer');
 end;
 
 // Utf8Len zaehlt UTF-8-Bytes (Umlaut 2, Euro 3, Surrogatpaar 4);
@@ -474,7 +563,7 @@ begin
   P := PlanIntroduce(FALL6, 'begin', 43, 'MagicNr01');
   Assert.IsTrue(P.Ok, 'Ok: ' + P.Reason);
   Assert.AreEqual('42', P.Literal, 'Literal');
-  Assert.AreEqual('  var MagicNr01 := 42;', P.DeclText, 'DeclText');
+  Assert.AreEqual('  const MagicNr01 = 42;', P.DeclText, 'DeclText');
   Assert.AreEqual('  Result := ''Gr'#$00FC#$00DF'e '#$20AC
     + ' '' + IntToStr(Count * MagicNr01);', P.NewUseLine, 'NewUseLine');
   Assert.AreEqual<Integer>(1, Length(P.OldCols), 'Zahl OldCols');

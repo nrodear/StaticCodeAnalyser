@@ -394,7 +394,7 @@ uses
   // uBaseline ist in interface uses (TBaselineSet-Feld) - hier nicht mehr
   // listen, sonst E2004 Bezeichner redeklariert.
   uSourceLineEdit,                // Suppress schreibt in die Datei
-  uSuppression,                   // MarkerLineFor - ';' in .ini, '//' sonst (SCA201)
+  uSuppression,                   // MarkerTargetFor - Marker-Host und -Zeile (bei .dfm die .pas)
   uAppTheme,                      // Hell/Dunkel der Standalone-EXE
   uStaticFiles, uRuleCatalog,
   uExport,                        // TExporter.ExportCsv (kanonischer CSV-Schreiber)
@@ -464,7 +464,7 @@ begin
   // den Runs ohne Form-Neustart greifen.
   Settings := TRepoSettings.Create;
   try
-    try Settings.Load; except end;
+    try Settings.Load; except end;   // INI fehlt oder defekt: Vorgaben gelten, der Lauf geht weiter
     SetLanguage(Settings.Language);
     // Klick-Kopie-Modus initial lesen; je Analyse-Lauf zieht
     // ApplyDetectorConfig ihn frisch nach (gleiche Semantik wie die
@@ -539,7 +539,7 @@ begin
   begin
     var DRCfg := TRepoSettings.Create;
     try
-      try DRCfg.Load; except end;
+      try DRCfg.Load; except end;   // INI fehlt oder defekt: Vorgaben gelten, der Lauf geht weiter
       if DRCfg.DetectorReviewFilterEnabled then
         SeverityFilterCombo.Items.AddObject(
           _('Detector Review (1 per detector, random)'),
@@ -1291,7 +1291,7 @@ var
 begin
   Settings := TRepoSettings.Create;
   try
-    try Settings.Load; except end;
+    try Settings.Load; except end;   // INI fehlt oder defekt: Vorgaben gelten, der Lauf geht weiter
     // Custom-LeakyClasses + Excludes in die globalen Listen ziehen,
     // AutoDiscover-Flag durchreichen. MUSS vor dem Analyzer-Aufruf
     // passieren, sonst landet TMeineKlasse & Co. nie in LeakyClasses.
@@ -1316,7 +1316,7 @@ begin
         // IncludeTests (Default skip). CLI bleibt bewusst erschoepfend.
         var Ignore := TIgnoreList.Create;
         try
-          try Ignore.LoadDefault; except end;
+          try Ignore.LoadDefault; except end;   // Ignore-Liste fehlt oder defekt: dann wird nichts ausgeschlossen
           Ignore.SkipTests := not Settings.IncludeTests;
           var Req := TScanRequest.Init;
           Req.SkipConfig := True;
@@ -1374,7 +1374,7 @@ begin
 
     // Discovery-Treffer in INI persistieren (nur wenn aktiviert).
     if Settings.AutoDiscoverClasses then
-      try Settings.PersistDiscoveredClasses; except end;
+      try Settings.PersistDiscoveredClasses; except end;   // schreibgeschuetzte INI: nur die Discovery-Treffer gehen verloren, nicht der Scan
   finally
     Settings.Free;
     EndAnalysisUI;
@@ -1403,7 +1403,7 @@ begin
   // IDE-Plugin RunCurrent. Kein File-Phase-Callback (eine Datei).
   BeginAnalysisUI(0);
   try
-    try Settings.Load; except end;
+    try Settings.Load; except end;   // INI fehlt oder defekt: Vorgaben gelten, der Lauf geht weiter
     ApplyDetectorConfig(Settings, True);
 
     StatusBar1.Panels[2].Text := _('Analysing: ') + ExtractFileName(AFilePath);
@@ -1447,7 +1447,7 @@ begin
     end;
 
     if Settings.AutoDiscoverClasses then
-      try Settings.PersistDiscoveredClasses; except end;
+      try Settings.PersistDiscoveredClasses; except end;   // schreibgeschuetzte INI: nur die Discovery-Treffer gehen verloren, nicht der Scan
   finally
     Settings.Free;
     EndAnalysisUI;
@@ -1595,25 +1595,14 @@ end;
 
 function TForm2.BuildCountSource(
   out AOwned: TList<TLeakFinding>): TList<TLeakFinding>;
-var
-  i : Integer;
+// Der Rumpf (Filtern, Ausnahme-Festigkeit) liegt seit 2026-10-14 in
+// TBaselineSet.NewOnly - byte-gleich mit dem Plugin, einmal getestet. Hier
+// nur noch die Wirts-Frage, ob der Filter ueberhaupt an ist.
 begin
   AOwned := nil;
   Result := FAllFindings;
   if not BaselineActive then Exit;
-  // Ausnahme-fest: wirft die Befuellung (praktisch nur OOM), gibt es
-  // KEINE halbfertige Liste im out-Parameter - der Aufrufer klammert
-  // erst NACH dem Aufruf in try/finally (Chargen-Review 06.09.).
-  AOwned := TList<TLeakFinding>.Create;
-  try
-    for i := 0 to FAllFindings.Count - 1 do
-      if not FBaselineSet.Contains(FAllFindings[i]) then
-        AOwned.Add(FAllFindings[i]);
-  except
-    FreeAndNil(AOwned);
-    raise;
-  end;
-  Result := AOwned;
+  Result := FBaselineSet.NewOnly(FAllFindings, AOwned);
 end;
 
 function TForm2.SelectedTypeFilter: TTypeFilter;
@@ -1768,7 +1757,7 @@ begin
   Counters.FileErrors := nFileErr;
   Settings := TRepoSettings.Create;
   try
-    try Settings.Load; except end;
+    try Settings.Load; except end;   // INI fehlt oder defekt: Vorgaben gelten, der Lauf geht weiter
     Counters.GradeBMax := Settings.ScoreThresholdB;
     Counters.GradeCMax := Settings.ScoreThresholdC;
     Counters.GradeDMax := Settings.ScoreThresholdD;
@@ -2269,17 +2258,25 @@ begin
 end;
 
 procedure TForm2.SuppressSelectedFinding;
-// Ctrl+Alt+S, wie im Plugin: '// noinspection <RuleName>' UEBER die
-// Fundzeile. Das Plugin schreibt in den IDE-Editor (Strg+Z nimmt
-// zurueck); hier geht es in die DATEI - uSourceLineEdit schreibt nur,
-// wenn die Byte-Treue-Probe besteht. Der Befund verschwindet wie im
-// Plugin erst mit dem naechsten Analyse-Lauf.
+// Ctrl+Alt+S, wie im Plugin: die Marker-Zeile UEBER die Fundzeile -
+// '// noinspection <RuleName>', in einer Konfigurationsdatei
+// '; noinspection', bei einem .dfm-/.lfm-Fund der DATEIWEITE Marker in die
+// Unit (.pas, bei .lfm auch .pp - dialektfrei, Review Woche G02-01)
+// (Host und Zeile aus TSuppression.MarkerTargetFor; bis 2026-10-14 ging
+// die '//'-Zeile in die .dfm, und das Formular lud nicht mehr - Review
+// MAJOR 2; die Zeilenform in der .pas hing an der Zeilennummer, Gegen-
+// Review Welle 1, Major 3). Das Plugin
+// schreibt in den IDE-Editor (Strg+Z nimmt zurueck); hier geht es in die
+// DATEI - uSourceLineEdit schreibt nur, wenn die Byte-Treue-Probe
+// besteht. Der Befund verschwindet wie im Plugin erst mit dem naechsten
+// Analyse-Lauf.
 var
   f       : TLeakFinding;
   absPath : string;
   relPath : string;
   lineNo  : Integer;
-  Marker  : string;
+  Target  : TMarkerTarget;
+  Why     : string;
   Err     : string;
 begin
   if not TryResolveSelectedFinding(f, absPath, relPath, lineNo) then Exit;
@@ -2288,9 +2285,26 @@ begin
     StatusBar1.Panels[2].Text := _('Suppress: cannot locate source line');
     Exit;
   end;
-  Marker := TSuppression.MarkerLineFor(absPath, f.Kind);
-  if TSourceLineEdit.InsertLineAbove(absPath, lineNo, Marker, Err) then
-    StatusBar1.Panels[2].Text := Format(_('Suppress inserted: %s'), [Marker])
+  if not TSuppression.MarkerTargetFor(absPath, lineNo, f.Kind, Target, Why) then
+  begin
+    StatusBar1.Panels[2].Text :=
+      Format(_('Suppress: cannot place the marker: %s'), [Why]);
+    Exit;
+  end;
+  if TSourceLineEdit.InsertLineAbove(Target.HostFile, Target.Line,
+       Target.MarkerLine, Err) then
+  begin
+    // Ging der Marker in eine ANDERE Datei als die des Funds (Formdatei ->
+    // Schwester-Unit), nennt die Meldung sie - wer sonst die .dfm oeffnet,
+    // sieht keinen Marker (Review Woche G02-09).
+    if SameText(Target.HostFile, absPath) then
+      StatusBar1.Panels[2].Text :=
+        Format(_('Suppress inserted: %s'), [Target.MarkerLine])
+    else
+      StatusBar1.Panels[2].Text :=
+        Format(_('Suppress inserted in %s: %s'),
+          [ExtractFileName(Target.HostFile), Target.MarkerLine]);
+  end
   else
     StatusBar1.Panels[2].Text :=
       Format(_('Suppress: could not write file: %s'), [Err]);
@@ -2443,6 +2457,7 @@ begin
       DEFAULT_MAX_RECENT,
       AppPath, ppLast);
   except
+    // Komfortliste (s. o.): der Pfad wird diese Sitzung nicht gemerkt.
   end;
 end;
 
@@ -2465,7 +2480,7 @@ begin
     Settings.Profile := ProfileCombo.Items[ProfileCombo.ItemIndex];
     // Save-Fehler bleiben still: eine schreibgeschuetzte INI soll den Lauf
     // nicht abbrechen, und die Auswahl wirkt fuer diese Sitzung ohnehin.
-    try Settings.Save; except end;
+    try Settings.Save; except end;   // schreibgeschuetzte INI: wirkt fuer die Sitzung (s. ProfileComboChange)
   finally
     Settings.Free;
   end;
@@ -2561,7 +2576,7 @@ begin
   Files    := nil;
   Findings := nil;
   try
-    try Settings.Load; except end;
+    try Settings.Load; except end;   // INI fehlt oder defekt: Vorgaben gelten, der Lauf geht weiter
     ApplyDetectorConfig(Settings, True);
 
     Files := TVcsChanges.GetChangedPasFilesAuto(StartDir, Info, Settings);
@@ -2876,16 +2891,6 @@ begin
     Result := '';
 end;
 
-// Absolute Pfade (Laufwerk, UNC, fuehrender Separator) erkennen -
-// Pruefung von Hand, wie im Plugin, damit hier kein TPath-Namensraum
-// noetig wird.
-function IsAbsolutePathStr(const Path: string): Boolean;
-begin
-  Result := ((Length(Path) >= 2) and (Path[2] = ':')) or
-            ((Length(Path) >= 2) and (Path[1] = '\') and (Path[2] = '\')) or
-            ((Length(Path) >= 1) and ((Path[1] = '\') or (Path[1] = '/')));
-end;
-
 function TForm2.ResolveUiBaselinePath(ASettings: TRepoSettings;
   AProbed: TStrings): string;
 // Praezedenz wie CLI (Konzept par.1): [Baseline] File= (mit Relativ-
@@ -2895,11 +2900,11 @@ var
   Path : string;
 begin
   Result := '';
-  Path := Trim(ASettings.BaselineFile);
+  // EINE Aufloesung fuer alle Wirte (TBaseline.ResolveConfigured,
+  // 2026-10-14) - vorher hier eine eigene Kopie der Regel.
+  Path := TBaseline.ResolveConfigured(ASettings.BaselineFile, FCurrentBaseDir);
   if Path <> '' then
   begin
-    if (not IsAbsolutePathStr(Path)) and (FCurrentBaseDir <> '') then
-      Path := IncludeTrailingPathDelimiter(FCurrentBaseDir) + Path;
     if Assigned(AProbed) then AProbed.Add(Path);
     if FileExists(Path) then Exit(Path);
     Exit;                    // explizit konfiguriert, aber fehlt -> kein .sca-Raten
@@ -2932,7 +2937,7 @@ begin
   if not Assigned(FBaselineSet) then Exit;
   Settings := TRepoSettings.Create;
   try
-    try Settings.Load; except end;
+    try Settings.Load; except end;   // INI fehlt oder defekt: Vorgaben gelten, der Lauf geht weiter
     if not Settings.BaselineOnlyNew then
     begin
       FBaselineSet.Clear;
@@ -3039,7 +3044,7 @@ begin
       end;
     end;
     Settings.BaselineOnlyNew := ANewVal;
-    try Settings.Save; except end;
+    try Settings.Save; except end;   // schreibgeschuetzte INI: wirkt fuer die Sitzung (s. ProfileComboChange)
   finally
     Settings.Free;
   end;
@@ -3073,7 +3078,7 @@ begin
       DirOfProjectPath(Projectpath.Text));
     if DefTarget <> '' then
     begin
-      try ForceDirectories(ExtractFilePath(DefTarget)); except end;
+      try ForceDirectories(ExtractFilePath(DefTarget)); except end;   // kein .sca-Ordner anlegbar: der Dialog startet im Vorgabe-Ordner
       Dlg.InitialDir := ExcludeTrailingPathDelimiter(ExtractFilePath(DefTarget));
       Dlg.FileName   := ExtractFileName(DefTarget);
     end
@@ -3115,7 +3120,7 @@ var
 begin
   Settings := TRepoSettings.Create;
   try
-    try Settings.Load; except end;
+    try Settings.Load; except end;   // INI fehlt oder defekt: Vorgaben gelten, der Lauf geht weiter
     NewVal := not Settings.BaselineOnlyNew;
   finally
     Settings.Free;
@@ -3757,7 +3762,7 @@ begin
   begin
     var S := TRepoSettings.Create;
     try
-      try S.Load; except end;
+      try S.Load; except end;   // INI fehlt oder defekt: Vorgaben gelten, der Lauf geht weiter
       FMIBaseline.Checked := S.BaselineOnlyNew;
     finally
       S.Free;

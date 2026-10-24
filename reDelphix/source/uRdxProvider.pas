@@ -11,6 +11,10 @@ unit uRdxProvider;
 //
 // WELCHER TEXT GILT
 //
+// Gelesen wird nur Pascal-Quelltext (uRdxBufferMath.IsPascalSource): ein
+// Fund in einer .dfm, .ini oder .dproj bekommt "reDelphix: nichts
+// anzubieten", ohne dass die Datei gelesen wird (Review R1-04 - vorher las
+// Provide bis zu 1,8 MB .dfm im Hauptthread fuer genau diese Meldung).
 // Ist die Datei im Editor offen, der Editor-Puffer - auch mit
 // ungespeicherten Aenderungen; ist der Puffer leer oder nicht lesbar,
 // kommt nur "reDelphix: Editor-Puffer leer oder nicht lesbar" und KEIN
@@ -25,8 +29,9 @@ unit uRdxProvider;
 //
 // WAS ANGEBOTEN WIRD
 //
-// Die Menuetexte sind englische msgids (CAP_* unten, uebersetzt ueber
-// i18n/*.po); hier stehen sie deutsch zur Erlaeuterung.
+// Die Menuetexte sind englische msgids (CAP_* unten; die der einfachen
+// Hilfen in uRdxFixTable, FIX_CAPTIONS; uebersetzt ueber i18n/*.po); hier
+// stehen sie deutsch zur Erlaeuterung.
 //
 //   "Stelle zeigen"                    wenn sich die Anweisung des Funds
 //                                      beschreiben laesst (Anker der Regel);
@@ -71,12 +76,18 @@ interface
 uses
   System.SysUtils, System.Classes,
   uEngineApi, uRefactorInfo, uMethodd12, uFindingActions,
-  uRdxRecipes, uRdxScopeTable,
+  uRdxScopeTable,
   uRdxBufferMath,   // TRdxTextSource, SpanFitsEditor
   uRdxRecipeRunner;
 
 type
   TRdxActionKind = (akShowSpan, akReplace, akSqlTemplate);
+
+  // Eine Aktion liess sich nicht ausfuehren (Bereich nicht markierbar,
+  // Puffer weicht vom Stand beim Menueaufbau ab ...). Message ist der
+  // Grund samt Protokollhinweis; der Host zeigt ihn an (Review R1-05,
+  // SCA127: bis dahin die Basisklasse Exception).
+  ERdxActionFailed = class(Exception);
 
   // Ein Menuepunkt samt allem, was Execute braucht. Lebt im Anbieter, bis
   // RDX_ACTION_BATCHES neuere Provide-Chargen entstanden sind (TRdxObjectRing) -
@@ -94,7 +105,7 @@ type
     FEdits    : TArray<TRdxEdit>;
   public
     // TNotifyEvent fuer TFindingAction.Execute. Fehler laufen als
-    // Exception zum Host, der sie anzeigt.
+    // ERdxActionFailed zum Host, der sie anzeigt.
     procedure Execute(Sender: TObject);
   end;
 
@@ -150,6 +161,7 @@ type
     FSource      : TRdxSourceCache;  // offene Quelle (Minor 9)
     FScopes      : TRdxScopeTable;
     FToken       : Integer;
+    FContextToken: Integer;          // Kontext-Anbieter (Charge B), 0 = ab
     FUsesNames   : TArray<string>;   // Namen der uses-Eintraege der Datei
     // Die Rezept-Zuordnung: eine neue Hilfe ist ein Rezept mehr in einer
     // der beiden Listen (Konstruktor), nicht ein Zweig mehr in Provide.
@@ -180,8 +192,9 @@ type
       const ACtx: TRdxRecipeContext);
     procedure AddUsesActions(var AList: TArray<TFindingAction>;
       const ACtx: TRdxRecipeContext);
-    // Die einfachen Editorhilfen ueber TRdxFixRunner (welche Regeln:
-    // TRdxFixRunner.Handles) - eine weitere Regel braucht hier kein Rezept.
+    // Die einfachen Editorhilfen ueber die Tabelle uRdxFixTable (welche
+    // Regeln: TRdxFixTable.Handles; Planer, Hinweis und Menuetext je Zeile)
+    // - eine weitere Regel braucht hier kein Rezept.
     procedure AddSimpleFix(var AList: TArray<TFindingAction>;
       const ACtx: TRdxRecipeContext);
     // Text-Rezepte (Editorhilfen Stufe 1)
@@ -202,17 +215,46 @@ type
       const ACtx: TRdxRecipeContext);
     // Der Einstieg des Hosts (TFindingActionProvider).
     function Provide(const AFinding: TLeakFinding): TArray<TFindingAction>;
+    // Code-Aktionen ohne Fund am Caret (Charge B, TContextActionProvider):
+    // nur Pascal-Quelltext, den Text nur aus dem Editor-Puffer (das
+    // Kontextmenue gehoert zu einer offenen Datei). Die Platte liest erst
+    // "Lokale Konstante einfuehren" fuer einen Kandidaten am Caret:
+    // TRdxMagicFixes.FileReason (Projektdateien der Verzeichnisse darueber)
+    // und IncludeReason (die Includes der Unit) - wie die Fund-Hilfe SCA014;
+    // beide pruefen vorher den Netzpfad (uRdxPaths.IsNetworkPath) und
+    // greifen dort nicht auf die Platte zu. Die Eintraege rechnet
+    // uRdxContextRunner, die
+    // Menuetexte uRdxFixTable.ContextCaption (gleich denen der Fund-
+    // Hilfen, Dedup F2). Kein Kandidat am Caret: keine Aktion, auch keine
+    // Diagnose (F4) - Kind setzt die Registry (fakContext).
+    function ProvideContext(
+      const AContext: TEditorContext): TArray<TFindingAction>;
   public
+    // Create baut die Rezeptlisten und den Quellstellen-Dienst; Destroy
+    // meldet ab (UnregisterAtHost) und gibt beides frei. Von aussen nur
+    // ueber Instance/Shutdown - die Tests erzeugen eigene Anbieter.
     constructor Create;
     destructor Destroy; override;
 
+    // Der eine Anbieter des Pakets: beim ersten Aufruf erzeugt (lazy),
+    // danach derselbe; Shutdown gibt ihn frei, ein spaeterer Aufruf erzeugte
+    // einen neuen. Einziger Einstieg fuer uRdxRegister.
     class function Instance: TRdxProvider; static;
     // Abmelden und freigeben - aus der finalization von uRdxRegister.
     class procedure Shutdown; static;
 
+    // Meldet Provide an der Registry des SCA-Plugins an (TFindingActions,
+    // aus uRdxRegister.Register), seit Charge B auch ProvideContext
+    // (RegisterContext); ein zweiter Aufruf meldet nicht doppelt an.
+    // Protokolliert die Token und die Groesse der Scope-Tabelle.
     procedure RegisterAtHost;
+    // Meldet wieder ab, beide Anbieter (Pflicht vor dem Entladen, s.
+    // uRdxRegister); ohne Anmeldung ohne Wirkung. Destroy ruft es selbst.
     procedure UnregisterAtHost;
+    // Token der Anmeldung bei TFindingActions, 0 = nicht angemeldet.
     property Token: Integer read FToken;
+    // Die Scope-Tabelle fuer 'uses: X -> Scope.X' (gehoert dem Anbieter,
+    // geladen im Konstruktor; Count = 0: nichts gefunden).
     property Scopes: TRdxScopeTable read FScopes;
   end;
 
@@ -223,17 +265,20 @@ uses
   uCrashDiag,       // EStackExhausted
   uSCAConsts,       // KindName, fkUnusedSuppression
   uFileTextCache,   // LoadFileSmart: dieselbe Dekodierung wie der Scan
-  uLocalization,
+  uRdxText,         // _(): in die reDelphix-Sprache, nie uLocalization (E29)
   uRuleCatalog,
+  uRdxFixTable,     // Tabelle der einfachen Hilfen: Planer und Menuetexte
+  uRdxContextRunner, // Code-Aktionen ohne Fund am Caret (Charge B)
   uRdxSuppress,
   uRdxEditor,
   uRdxLog;          // Protokoll: DebugView + %TEMP%\reDelphix.log
 
 const
   // Menuetexte ueber _() (Editorhilfen E6): englische msgids, de/fr in
-  // i18n/*.po. Die Gruende aus den reinen Rezept-Units (uRdxRecipes,
-  // uRdxRecipeRunner) sind noch deutsch - Pruefstand und Tests pruefen sie
-  // woertlich (Nacharbeit im Todo).
+  // i18n/*.po, angezeigt in der reDelphix-Sprache (uRdxText, Entscheid
+  // E29: wie die SCA-Oberflaeche oder redelphix.ini [UI] Language). Gruende
+  // und Hinweise der Planer kommen schon uebersetzt aus ihren Units
+  // (Charge C1 und die Gruppen danach) - hier nie ein zweites _().
   CAP_SHOW     = 'Show location';
   CAP_FORMAT   = 'Build Format() from concatenation';
   CAP_SQL      = 'Copy parameterized template to clipboard';
@@ -241,31 +286,6 @@ const
   CAP_USES     = 'uses: qualify entries';
   // fixMode einer Regel, ausdruecklich abgeschaltet (Minor 5).
   FIX_NONE     = 'none';
-  CAP_FREENIL  = 'Use FreeAndNil(%s)';
-  CAP_ASSIGNED = 'Use Assigned() instead of comparing with nil';
-  CAP_TOBJECT  = 'Remove (TObject) from the class declaration';
-  CAP_ASSERT   = 'Use the condition as the Assert message';
-  CAP_EMPTYSEC = 'Remove the empty visibility section';
-  CAP_NOARGS   = 'Remove the empty parentheses';
-  CAP_REDBOOL  = 'Remove the redundant comparison with True/False';
-  CAP_NILCHECK = 'Remove the redundant comparison with nil';
-  CAP_UNUSEDUSES = 'Remove unit %s from uses';
-  CAP_CASE_ELSE  = 'Add an empty else branch';
-  CAP_CASE_RAISE = 'Add an else branch that raises an exception';
-  CAP_BEGIN_END  = 'Put the branch in begin..end';
-  CAP_SEMI       = 'Remove the extra semicolon';
-  CAP_INDENT     = 'Move the keyword to column 1';
-  CAP_INIT       = 'Replace begin with initialization';
-  CAP_CAST       = 'Remove the cast to %s before Free';
-  CAP_EMPTY_INTENT  = 'Mark the empty body as intentional';
-  CAP_EMPTY_RAISE   = 'Raise ENotImplemented in the empty body';
-  CAP_MISSING_RAISE = 'Raise the exception';
-  CAP_RERAISE       = 'Use raise; to keep the original stack trace';
-  CAP_DOC           = 'Insert a documentation skeleton';
-  CAP_GUID          = 'Insert a new GUID';
-  CAP_DIRECTIVE     = 'Add "%s;" to the declaration';
-  // Entscheid E2: eine Hilfe, die das Verhalten aendern kann, sagt es.
-  CAP_CHANGES    = '(changes behavior)';
   DIAG_PREFIX  = 'reDelphix: ';
   // Fuer das Protokoll (deutsch wie die uebrigen Zeilen).
   SOURCE_NAMES : array[TRdxTextSource] of string =
@@ -285,13 +305,18 @@ begin
   case FKind of
     akShowSpan:
       if not TRdxEditor.SelectSpan(FFileName, FSpan, Err) then
-        raise Exception.Create(Err);
+        raise ERdxActionFailed.Create(Err);
     akReplace:
       // Alle Ersetzungen auf einmal: geprueft, dann EIN Undo-Schritt.
       if not TRdxEditor.ReplaceSpans(FFileName, FEdits, Err) then
-        raise Exception.Create(Err);
+        raise ERdxActionFailed.Create(Err);
     akSqlTemplate:
       Clipboard.AsText := FTemplate;
+  else
+    // Jede Art hat oben ihren Zweig; eine neue ohne Zweig faellt hier auf,
+    // statt still nichts zu tun (SCA168) - der Host zeigt die Meldung.
+    raise ERdxActionFailed.Create(DIAG_PREFIX
+      + _('action kind %d without execution', [Ord(FKind)]));
   end;
 end;
 
@@ -398,9 +423,13 @@ procedure TRdxProvider.RegisterAtHost;
 begin
   if FToken = 0 then
     FToken := TFindingActions.Register(Provide);
+  if FContextToken = 0 then
+    FContextToken := TFindingActions.RegisterContext(ProvideContext);
   RdxLog('registriert, Token %d, Anbieter gesamt %d, Scope-Tabelle %d '
     + 'Eintraege aus %s',
     [FToken, TFindingActions.ProviderCount, FScopes.Count, FScopes.Source]);
+  RdxLog('Kontext-Anbieter registriert, Token %d, Kontext-Anbieter gesamt %d',
+    [FContextToken, TFindingActions.ContextProviderCount]);
 end;
 
 procedure TRdxProvider.UnregisterAtHost;
@@ -409,6 +438,11 @@ begin
   begin
     TFindingActions.Unregister(FToken);
     FToken := 0;
+  end;
+  if FContextToken <> 0 then
+  begin
+    TFindingActions.Unregister(FContextToken);
+    FContextToken := 0;
   end;
 end;
 
@@ -426,6 +460,11 @@ procedure TRdxProvider.Add(var AList: TArray<TFindingAction>;
 var
   A : TFindingAction;
 begin
+  // Ein lokaler Record ist nicht initialisiert: ChangesBehavior (E2, die
+  // Taste fuehrt eine so gekennzeichnete Hilfe nicht ungesehen aus) stuende
+  // sonst auf Zufall (Review Welle 1, Bereich D). Default setzt alle Felder,
+  // auch Kind auf fakUnset - darum unten AUSDRUECKLICH fakFix.
+  A := Default(TFindingAction);
   A.Caption := ACaption;
   A.Hint    := AHint;
   A.Enabled := AEnabled and Assigned(AAction);
@@ -456,16 +495,6 @@ procedure TRdxProvider.AddRefactor(var AList: TArray<TFindingAction>;
 begin
   Add(AList, ACaption, AHint, Assigned(AAction), AAction);
   AList[High(AList)].Kind := fakRefactor;
-end;
-
-// Nur Pascal-Quelltext traegt '//'-Marker (DFM-Funde nicht).
-function IsPascalSource(const AFileName: string): Boolean;
-var
-  Ext : string;
-begin
-  Ext := LowerCase(ExtractFileExt(AFileName));
-  Result := (Ext = '.pas') or (Ext = '.dpr') or (Ext = '.dpk')
-    or (Ext = '.inc') or (Ext = '.lpr') or (Ext = '.pp');
 end;
 
 procedure TRdxProvider.AddShowSpan(var AList: TArray<TFindingAction>;
@@ -525,8 +554,8 @@ end;
 procedure TRdxProvider.AddSqlTemplate(var AList: TArray<TFindingAction>;
   const ACtx: TRdxRecipeContext);
 var
-  Template, Hint, Reason : string;
-  Act : TRdxAction;
+  Offer : TRdxSqlOffer;
+  Act   : TRdxAction;
 begin
   if ACtx.FixMode <> 'assisted' then Exit;
   if ACtx.Info = nil then
@@ -534,15 +563,54 @@ begin
     Add(AList, _(CAP_SQL), ACtx.Why, False, nil);
     Exit;
   end;
-  if not TRdxRecipeRunner.SqlTemplate(FSource.Places, ACtx.Info, ACtx.IsCall,
-       Template, Hint, Reason) then
+  if not TRdxRecipeRunner.SqlTemplate(FSource.Places, ACtx.Lines, ACtx.Info,
+       ACtx.IsCall, Offer) then
   begin
-    Add(AList, _(CAP_SQL), Reason, False, nil);
+    Add(AList, _(CAP_SQL), Offer.Reason, False, nil);
     Exit;
   end;
   Act := NewAction(akSqlTemplate, '');
-  Act.FTemplate := Template;
-  Add(AList, _(CAP_SQL), Hint, True, Act);
+  Act.FTemplate := Offer.Template;
+  Add(AList, _(CAP_SQL), Offer.Hint, True, Act);
+end;
+
+// Warum 'uses: ...' fuer die ganze Klausel gesperrt ist (APlan.Block);
+// '' bei qbNone. Bis Review R1-05 ein case ohne else in AddUsesActions.
+function QualifyBlockReason(const APlan: TRdxQualifyPlan): string;
+begin
+  case APlan.Block of
+    qbNoTable:
+      Result := _('Scope table not loaded (unitscopes.txt)');
+    qbDirectives:
+      Result := Format(_('uses clause contains compiler directives (line %d)'),
+        [APlan.BlockLine]);
+    qbFpcSwitch:
+      Result := _('file with an FPC switch or FPC mode - FPC 3.2 knows no '
+        + 'unit scopes');
+  else
+    Result := '';   // qbNone: nichts gesperrt
+  end;
+end;
+
+// Warum ein Eintrag nicht qualifiziert wird (AItem.Why <> qwOk). Bei einer
+// Projekt-Unit sagt AUnits, ob es eine ist oder ein Netzpfad die Frage
+// offen liess (Review R1-02); AUnits = nil: nie gefragt.
+function QualifyItemReason(const AItem: TRdxQualifyItem;
+  AUnits: TRdxProjectUnits): string;
+begin
+  case AItem.Why of
+    qwOwnUnit:
+      begin
+        if (AUnits <> nil) and (AUnits.Unreadable <> '') then
+          Result := AUnits.UnreadableReason
+        else
+          Result := Format(_('own unit %s in the project'), [AItem.Short]);
+      end;
+    qwUnsorts:
+      Result := _('the clause would no longer be sorted (new SCA142)');
+  else
+    Result := AItem.ScopeReason;
+  end;
 end;
 
 procedure TRdxProvider.AddUsesActions(var AList: TArray<TFindingAction>;
@@ -551,8 +619,8 @@ var
   Plan     : TRdxQualifyPlan;
   Item     : TRdxQualifyItem;
   Act      : TRdxAction;
-  Reason   : string;
   FileName : string;
+  Units    : TRdxProjectUnits;
 begin
   // Die Planung liegt im Laeufer (testbar, ohne ToolsAPI); hier nur die
   // Menuetexte. Nichts ausserhalb einer uses-Klausel - sonst stuende
@@ -562,55 +630,39 @@ begin
   // der Regel schaltet auch den Umbau auf ihrem Signal ab (Minor 5).
   if ACtx.FixMode = FIX_NONE then Exit;
   FileName := ACtx.FileName;
-  Plan := TRdxRecipeRunner.QualifyUses(FSource.Places, FScopes, ACtx.Line,
-    function(const AShortName: string): Boolean
+  // Die Projekt-Units EINMAL je Aufruf und erst, wenn ein Eintrag sie
+  // braucht (Review R1-02): QualifyUses fragt fuer jeden aufloesbaren
+  // Eintrag aller Klauseln - bis dahin lief dafuer je Eintrag die ganze
+  // Projektgruppe ueber die ToolsAPI, auch fuer die Gluehbirne. Ausserhalb
+  // einer uses-Klausel fragt niemand, der Index entsteht dann nicht.
+  Units := nil;
+  try
+    Plan := TRdxRecipeRunner.QualifyUses(FSource.Places, FScopes, ACtx.Line,
+      function(const AShortName: string): Boolean
+      begin
+        if Units = nil then
+          Units := TRdxEditor.ProjectUnits(FileName);
+        Result := Units.Knows(AShortName);
+      end);
+    if not Plan.InClause then Exit;
+    if Plan.Block <> qbNone then
     begin
-      Result := TRdxEditor.ProjectHasUnit(AShortName, FileName);
-    end);
-  if not Plan.InClause then Exit;
-  case Plan.Block of
-    qbNoTable:
-      begin
-        AddRefactor(AList, _(CAP_USES), _('Scope table not loaded (unitscopes.txt)'), nil);
-        Exit;
-      end;
-    qbDirectives:
-      begin
-        AddRefactor(AList, _(CAP_USES), Format(
-          _('uses clause contains compiler directives (line %d)'),
-          [Plan.BlockLine]), nil);
-        Exit;
-      end;
-    qbFpcSwitch:
-      begin
-        AddRefactor(AList, _(CAP_USES),
-          _('file with an FPC switch or FPC mode - FPC 3.2 knows no unit scopes'),
-          nil);
-        Exit;
-      end;
-  end;
-  for Item in Plan.Items do
-  begin
-    if Item.Why = qwOk then
-    begin
-      Act := NewAction(akReplace, ACtx.FileName);
-      SetLength(Act.FEdits, 1);
-      Act.FEdits[0] := Item.Edit;
-      AddRefactor(AList, 'uses: ' + Item.Short + ' -> ' + Item.Qualified, '', Act);
-      Continue;
+      AddRefactor(AList, _(CAP_USES), QualifyBlockReason(Plan), nil);
+      Exit;
     end;
-    case Item.Why of
-      qwOwnUnit:
-        Reason := Format(_('own unit %s in the project'), [Item.Short]);
-      qwUnsorts:
-        Reason := _('the clause would no longer be sorted (new SCA142)');
-    else
-      Reason := Item.ScopeReason;
-    end;
-    AddRefactor(AList, Format(_('uses: qualify %s'), [Item.Short]), Reason, nil);
-  end;
-  if Length(Plan.All) >= 2 then
-  begin
+    for Item in Plan.Items do
+      if Item.Why = qwOk then
+      begin
+        Act := NewAction(akReplace, ACtx.FileName);
+        SetLength(Act.FEdits, 1);
+        Act.FEdits[0] := Item.Edit;
+        AddRefactor(AList, 'uses: ' + Item.Short + ' -> ' + Item.Qualified,
+          '', Act);
+      end
+      else
+        AddRefactor(AList, Format(_('uses: qualify %s'), [Item.Short]),
+          QualifyItemReason(Item, Units), nil);
+    if Length(Plan.All) < 2 then Exit;
     if Plan.AllUnsorts then
       AddRefactor(AList, Format(_(CAP_USES_ALL), [Length(Plan.All)]),
         _('the clause would no longer be sorted (new SCA142)'), nil)
@@ -621,121 +673,25 @@ begin
       AddRefactor(AList, Format(_(CAP_USES_ALL), [Length(Plan.All)]),
         Plan.AllPreview, Act);
     end;
+  finally
+    Units.Free;
   end;
-end;
-
-// Menuetexte der Deklarations-Hilfen (SCA117, SCA197, SCA149) - ein
-// vierter Verteiler (SCA091). AName ist bei SCA149 die Direktive.
-function DeclFixCaption(AKind: TFindingKind; const AName: string): string;
-begin
-  case AKind of
-    fkPublicMemberWithoutDoc:
-      Result := _(CAP_DOC);
-    fkInterfaceWithoutGuid:
-      Result := _(CAP_GUID);
-    fkMissingOverride:
-      Result := Format(_(CAP_DIRECTIVE), [AName]);
-  else
-    Result := uSCAConsts.KindName(AKind);
-  end;
-end;
-
-// Menuetexte der Zeilen-Hilfen (SCA082, SCA071, SCA088, SCA123, SCA020,
-// SCA120, SCA122) - ein dritter Verteiler (SCA091). AName ist der Cast-Typ
-// bei SCA123, AVariant waehlt bei SCA020 den Eintrag.
-function LineFixCaption(AKind: TFindingKind; AVariant: Integer;
-  const AName: string): string;
-begin
-  case AKind of
-    fkSuperfluousSemicolon:
-      Result := _(CAP_SEMI);
-    fkUnitLevelKeywordIndent:
-      Result := _(CAP_INDENT);
-    fkLegacyInitializationSection:
-      Result := _(CAP_INIT);
-    fkCastAndFree:
-      Result := Format(_(CAP_CAST), [AName]);
-    fkEmptyMethod:
-      if AVariant = 1 then
-        Result := _(CAP_EMPTY_RAISE)
-      else
-        Result := _(CAP_EMPTY_INTENT);
-    fkMissingRaise:
-      Result := _(CAP_MISSING_RAISE);
-    fkReRaiseException:
-      Result := _(CAP_RERAISE);
-  else
-    Result := DeclFixCaption(AKind, AName);
-  end;
-end;
-
-// Menuetexte der Hilfen aus dem uQuickFix-Umzug und der Stufe 3 (SCA066,
-// SCA072, SCA084, SCA007, SCA168, SCA101, SCA099) - ein zweiter Verteiler
-// (SCA091).
-// AVariant waehlt den Eintrag, AName ist die Unit bei SCA007.
-function LaterFixCaption(AKind: TFindingKind; AVariant: Integer;
-  const AName: string): string;
-begin
-  case AKind of
-    fkEmptyArgumentList:
-      Result := _(CAP_NOARGS);
-    fkRedundantBoolean:
-      Result := _(CAP_REDBOOL);
-    fkAssignedAndAssignedNil:
-      Result := _(CAP_NILCHECK);
-    fkUnusedUses:
-      Result := Format(_(CAP_UNUSEDUSES), [AName]);
-    fkDefaultCaseInCaseStatement:
-      if AVariant = 1 then
-        Result := _(CAP_CASE_RAISE)
-      else
-        Result := _(CAP_CASE_ELSE);
-    fkBeginEndRequired, fkIfElseBegin:
-      Result := _(CAP_BEGIN_END);
-  else
-    Result := LineFixCaption(AKind, AVariant, AName);
-  end;
-end;
-
-// Menuetext einer einfachen Hilfe; AOutcome.Name ist X bei SCA085/SCA139
-// und die Unit bei SCA007 ('' wenn der Planer abgelehnt hat, bevor X
-// feststand), Variant waehlt den Eintrag, ChangesBehavior haengt die
-// Kennzeichnung an (E2).
-function SimpleFixCaption(AKind: TFindingKind;
-  const AOutcome: TRdxFixOutcome): string;
-var
-  N : string;
-begin
-  N := AOutcome.Name;
-  if N = '' then N := 'X';
-  case AKind of
-    fkFreeAndNilHint, fkFreeWithoutNil:
-      Result := Format(_(CAP_FREENIL), [N]);
-    fkNilComparison:
-      Result := _(CAP_ASSIGNED);
-    fkExplicitTObjectInheritance:
-      Result := _(CAP_TOBJECT);
-    fkAssertMessage:
-      Result := _(CAP_ASSERT);
-    fkEmptyVisibilitySection:
-      Result := _(CAP_EMPTYSEC);
-  else
-    Result := LaterFixCaption(AKind, AOutcome.Variant, N);
-  end;
-  if AOutcome.ChangesBehavior then
-    Result := Result + ' ' + _(CAP_CHANGES);
 end;
 
 procedure TRdxProvider.AddSimpleFix(var AList: TArray<TFindingAction>;
   const ACtx: TRdxRecipeContext);
 
   // Ein Eintrag zu AOutcome: mit seinen Ersetzungen oder gesperrt mit Grund.
+  // Menuetext, Variante und Kennzeichnung (E2) kommen aus der Tabelle;
+  // ohne Menuetext kein Eintrag - bis Charge R8 stand dann der interne
+  // Name der Art im Menue (uTestRdxFixTable pinnt jede Zeile).
   procedure AddOutcome(const AOutcome: TRdxFixOutcome);
   var
     Caption : string;
     Act     : TRdxAction;
   begin
-    Caption := SimpleFixCaption(ACtx.Finding.Kind, AOutcome);
+    Caption := TRdxFixTable.CaptionFor(ACtx.Finding.Kind, AOutcome);
+    if Caption = '' then Exit;
     if not AOutcome.Enabled then
       Add(AList, Caption, AOutcome.Reason, False, nil)
     else
@@ -751,13 +707,15 @@ procedure TRdxProvider.AddSimpleFix(var AList: TArray<TFindingAction>;
 var
   Alt : TRdxFixOutcome;
 begin
-  if not TRdxFixRunner.Handles(ACtx.Finding.Kind)
-     or not IsPascalSource(ACtx.FileName)
+  // Nur Pascal-Quelltext kommt bis hierher (FindingDiagnosis) - die
+  // Gates IsPascalSource in den Rezepten waren seit R1-04 unerreichbar
+  // (Wochen-Review 2026-10-21).
+  if not TRdxFixTable.Handles(ACtx.Finding.Kind)
      or (ACtx.FixMode = FIX_NONE) then Exit;
-  AddOutcome(TRdxFixRunner.FixFor(FSource.Places, ACtx.Lines, ACtx.Finding,
+  AddOutcome(TRdxFixTable.FixFor(FSource.Places, ACtx.Lines, ACtx.Finding,
     FUsesNames));
   // Zweiter Eintrag derselben Regel (SCA168, SCA020: jeweils mit raise).
-  Alt := TRdxFixRunner.AlternativeFixFor(FSource.Places, ACtx.Lines,
+  Alt := TRdxFixTable.AlternativeFixFor(FSource.Places, ACtx.Lines,
     ACtx.Finding, FUsesNames);
   if Alt.Variant > 0 then
     AddOutcome(Alt);
@@ -770,14 +728,23 @@ var
   Why : string;
 begin
   // Ein wirkungsloser Marker wird entfernt, nicht seinerseits unterdrueckt.
-  if (ACtx.Finding.Kind = fkUnusedSuppression)
-     or not IsPascalSource(ACtx.FileName) then Exit;
+  // Menuetext nur die Aktion, der Marker steht im Hint (Aktionsmenue nach
+  // Vorschlag 2, Mock 2b, Nico 2026-10-24: im Untermenue 'Unterdruecken'
+  // stehen nur 'Hier unterdruecken' / 'In dieser Datei unterdruecken'; bis
+  // dahin 'Suppress here (// noinspection %s)' als ein Menuetext). Der
+  // Marker ist Code, kein Text - keine msgid.
+  if ACtx.Finding.Kind = fkUnusedSuppression then Exit;
   if TRdxSuppress.LineMarker(ACtx.Lines, ACtx.Line, ACtx.KindName, E, Why) then
-    AddReplace(AList, Format(_('Suppress here (// noinspection %s)'),
-      [ACtx.KindName]), ACtx.FileName, E, fakSuppress);
+  begin
+    AddReplace(AList, _('Suppress here'), ACtx.FileName, E, fakSuppress);
+    AList[High(AList)].Hint := '// noinspection ' + ACtx.KindName;
+  end;
   if TRdxSuppress.FileMarker(ACtx.Lines, ACtx.KindName, E, Why) then
-    AddReplace(AList, Format(_('Suppress in this file (// noinspection-file %s)'),
-      [ACtx.KindName]), ACtx.FileName, E, fakSuppress);
+  begin
+    AddReplace(AList, _('Suppress in this file'), ACtx.FileName, E,
+      fakSuppress);
+    AList[High(AList)].Hint := '// noinspection-file ' + ACtx.KindName;
+  end;
 end;
 
 procedure TRdxProvider.AddRemoveMarker(var AList: TArray<TFindingAction>;
@@ -788,8 +755,12 @@ var
 begin
   // SCA165: eine echte Hilfe (fakFix) - der Marker unterdrueckt nichts.
   // Lehnt RemoveMarker ab (Mehrarten- oder 'All'-Marker: vielleicht nur
-  // unter dem aktuellen Profil wirkungslos), steht der Eintrag gesperrt
-  // mit dem Grund da - die Birne zaehlt nur verfuegbare Hilfen.
+  // unter dem aktuellen Profil wirkungslos; Kommentarzeile als Ziel, die
+  // SCA165 nicht prueft), steht der Eintrag gesperrt mit dem Grund da -
+  // die Birne zaehlt nur verfuegbare Hilfen. Nur '//'-Marker in Pascal-
+  // Quelltext: ein '; noinspection' einer .ini kennt RemoveMarker nicht
+  // (Review R1, missed 1) - Provide liest solche Dateien gar nicht
+  // (FindingDiagnosis).
   if (ACtx.Finding.Kind <> fkUnusedSuppression)
      or (ACtx.FixMode = FIX_NONE) then Exit;
   if not TRdxSuppress.RemoveMarker(ACtx.Lines, ACtx.Line, E, Why) then
@@ -842,9 +813,10 @@ begin
   try
     FUsesNames := TRdxRecipeRunner.UsesNamesOf(FSource.Places);
 
-    Meta         := TRuleCatalog.GetRuleCanonical(ACtx.Finding.Kind);
-    Anchor       := LowerCase(Meta.Anchor);
-    ACtx.FixMode := LowerCase(Meta.FixMode);
+    // fixMode steht schon im Kontext (Provide, vor allen Rezepten); hier
+    // nur noch der Anker der Regel.
+    Meta   := TRuleCatalog.GetRuleCanonical(ACtx.Finding.Kind);
+    Anchor := LowerCase(Meta.Anchor);
     RdxLog('Provide %s %s:%d anchor=%s fixMode=%s quelle=%s%s',
       [ACtx.Finding.ResolvedRuleId, ExtractFileName(ACtx.FileName), ACtx.Line,
        Anchor, ACtx.FixMode, SOURCE_NAMES[ASource], OPEN_NAMES[Opened]]);
@@ -885,6 +857,27 @@ begin
     Add(AList, DIAG_PREFIX + _('nothing to offer'), '', False, nil);
 end;
 
+// Warum es zum Fund nichts gibt, bevor eine Datei gelesen wird: kein
+// Dateiname, keine Zeile - oder kein Pascal-Quelltext (Review R1-04, s.
+// Kopf: fuer andere Dateien gibt es kein Rezept, auch kein Text-Rezept,
+// missed 1). '' = weiter. Bis R1-05 vier Zweige in Provide. Ob die Datei
+// auf der Platte liegt, fragt Provide erst, wenn sie nicht im Editor offen
+// ist: FileExists auf einer getrennten Freigabe blockierte sonst JEDEN
+// Provide (Gluehbirne je Caret-Zeile, Hauptthread) fuer den SMB-Timeout -
+// auch fuer eine offene Datei, deren Puffer die Wahrheit ist
+// (Wochen-Review 2026-10-21; gemessen 2,5 bis 16 s, uRdxPaths).
+function FindingDiagnosis(const AFinding: TLeakFinding): string;
+begin
+  if AFinding.FileName = '' then
+    Result := _('finding without file name')
+  else if AFinding.LineInt < 1 then
+    Result := _('finding without line')
+  else if not IsPascalSource(AFinding.FileName) then
+    Result := _('nothing to offer')
+  else
+    Result := '';
+end;
+
 function TRdxProvider.Provide(
   const AFinding: TLeakFinding): TArray<TFindingAction>;
 var
@@ -893,6 +886,7 @@ var
   Source : TRdxTextSource;
   Lines  : TStringList;
   R      : TRdxRecipe;
+  Why    : string;
 begin
   Result := nil;
   // Kein FActions.Clear mehr (Stufe B): die Objekte des vorigen Provide
@@ -901,20 +895,10 @@ begin
   FActions.BeginBatch;
   FUsesNames := nil;
   if not Assigned(AFinding) then Exit;
-  if AFinding.FileName = '' then
+  Why := FindingDiagnosis(AFinding);
+  if Why <> '' then
   begin
-    Add(Result, DIAG_PREFIX + _('finding without file name'), '', False, nil);
-    Exit;
-  end;
-  if not FileExists(AFinding.FileName) then
-  begin
-    Add(Result, DIAG_PREFIX + Format(_('file not found: %s'),
-      [AFinding.FileName]), '', False, nil);
-    Exit;
-  end;
-  if AFinding.LineInt < 1 then
-  begin
-    Add(Result, DIAG_PREFIX + _('finding without line'), '', False, nil);
+    Add(Result, DIAG_PREFIX + Why, '', False, nil);
     Exit;
   end;
   // Den Text EINMAL lesen - Puffer, sonst Platte wie der Scan. Offen, aber
@@ -925,6 +909,12 @@ begin
   begin
     Add(Result, DIAG_PREFIX + _('editor buffer empty or not readable'), '',
       False, nil);
+    Exit;
+  end;
+  if (Source = txDisk) and not FileExists(AFinding.FileName) then
+  begin
+    Add(Result, DIAG_PREFIX + Format(_('file not found: %s'),
+      [AFinding.FileName]), '', False, nil);
     Exit;
   end;
   Lines := TStringList.Create;
@@ -948,14 +938,11 @@ begin
     // 'none' sperrt auch die Text-Rezepte (Minor 5), und die brauchen den
     // Baum nicht.
     Ctx.FixMode  := LowerCase(TRuleCatalog.GetRuleCanonical(AFinding.Kind).FixMode);
-    // Nur Pascal-Quelltext durch den Parser: ein Fund in .dfm/.dproj
-    // braeuchte sonst Parse-Zeit im UI-Thread, bekaeme eine sinnlose
-    // Diagnose und verdraengte die zuletzt geparste .pas aus dem Cache
-    // (Review nach Bereichen 2026-10-10, Minor 15).
-    if IsPascalSource(AFinding.FileName) then
-      AddTreeActions(Result, Ctx, Source, Text)
-    else
-      Ctx.Why := _('nothing to offer');
+    // Nur Pascal-Quelltext kommt hier an (s. oben) und durch den Parser -
+    // ein Fund in .dfm/.dproj braeuchte sonst Parse-Zeit im UI-Thread und
+    // verdraengte die zuletzt geparste .pas aus dem Cache (Review nach
+    // Bereichen 2026-10-10, Minor 15).
+    AddTreeActions(Result, Ctx, Source, Text);
     for R in FTextRecipes do
       R(Result, Ctx);
     AddDiagnosis(Result, Ctx);
@@ -964,6 +951,54 @@ begin
   finally
     Lines.Free;
   end;
+end;
+
+
+function TRdxProvider.ProvideContext(
+  const AContext: TEditorContext): TArray<TFindingAction>;
+var
+  Text     : string;
+  Lines    : TStringList;
+  Outcomes : TArray<TRdxContextOutcome>;
+  O        : TRdxContextOutcome;
+  Caption  : string;
+  Act      : TRdxAction;
+begin
+  Result := nil;
+  if not IsPascalSource(AContext.FileName) then Exit;
+  // Eine eigene Charge im Ring (wie je Provide): die Aktionen der Funde
+  // desselben Menues bleiben am Leben (RDX_ACTION_BATCHES). Erst hinter der
+  // Pascal-Pruefung - ein Rechtsklick in einer .dfm/.dproj soll keine
+  // Charge verbrauchen (Review Charge B, Befund 4).
+  FActions.BeginBatch;
+  // Nur der Puffer: geschrieben wird in ihn, und das Menue haengt an einer
+  // offenen Datei. Leer oder nicht lesbar, oder nicht offen: nichts.
+  if TRdxEditor.ReadBuffer(AContext.FileName, Text) <> txBuffer then Exit;
+  Lines := TStringList.Create;
+  try
+    Lines.Text := Text;
+    Outcomes := TRdxContextRunner.Run(Lines, AContext);
+    for O in Outcomes do
+    begin
+      Caption := TRdxFixTable.ContextCaption(O);
+      if Caption = '' then Continue;
+      if O.Enabled then
+      begin
+        Act := NewAction(akReplace, AContext.FileName);
+        Act.FEdits := O.Edits;
+        Add(Result, Caption, O.Hint, True, Act);
+      end
+      else
+        Add(Result, Caption, O.Reason, False, nil);
+      // E2: gekennzeichnet; Kind setzt die Registry (fakContext).
+      Result[High(Result)].ChangesBehavior := O.ChangesBehavior;
+    end;
+  finally
+    Lines.Free;
+  end;
+  RdxLog('Kontext %s:%d:%d - %d Eintraege',
+    [ExtractFileName(AContext.FileName), AContext.Line, AContext.Col,
+     Length(Result)]);
 end;
 
 end.

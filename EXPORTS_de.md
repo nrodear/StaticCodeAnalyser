@@ -36,7 +36,7 @@ als CLI. „Nur in der GUI" heißt also nie „anderes Programm", sondern
 | **Jira-Wiki-Markup** | — | ✅ | Fund in ein Ticket einfügen |
 | **Klartext (Zwischenablage)** | — | ✅ | Funde einer Datei mit Vorher/Nachher, zum Einfügen |
 | **Sonar: einzelner Fund** | — | ✅ | Ein gewählter Fund als External-Issue-Datei unter `.sonar\external\` |
-| **Detektor-Info (Regelkatalog)** | — | ✅ | Self-contained HTML-Seite aller 201 Regeln — kein Fund-Export |
+| **Detektor-Info (Regelkatalog)** | — | ✅ | Self-contained HTML-Seite aller 203 Regeln — kein Fund-Export |
 | **AI-Prompt (Zwischenablage)** | — | ✅ | einzelnen Fund samt Codekontext an einen Assistenten geben |
 | **Suppression-Telemetrie** | `--telemetry-csv <Datei>` | — | welche Regeln am häufigsten unterdrückt werden |
 | **Detektor-Laufzeiten** | `--time-detectors` (stdout) / `--time-detectors-out <Datei>` | — | langsame Detektoren finden |
@@ -267,7 +267,9 @@ Scan und Export kann Levels und Konfidenzen nicht aus zwei Welten
 mischen. Mit `EvidenceTiering=0` ist das SARIF byte-identisch zum
 Stand vor 0.9.18.
 
-Zwei Fallen: Das UTF-8-BOM kann Node-basierte Uploader stören, und ein
+Zwei Fallen: Ein SARIF aus **v0.9.14 oder älter** trägt ein UTF-8-BOM,
+das Node-basierte Uploader stört (die aktuelle Ausgabe ist BOM-frei,
+siehe *Kodierung* oben), und ein
 **baseline-gefiltertes** SARIF arbeitet gegen den Alert-Lebenszyklus der
 Plattform (sie schließt alles, was der Filter entfernt hat). Für
 Code-Scanning den ungefilterten Report hochladen und die Plattform den

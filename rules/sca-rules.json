@@ -30,7 +30,7 @@
       "DfmCircularDataSource", "DfmRequiredFieldUnbound",
       "DfmRequiredFieldNotVisible", "DfmCrossFormCoupling",
       "DfmActionMismatch", "DuplicateInterfaceGuid",
-      "ParamNameMismatch"
+      "ParamNameMismatch", "ComparisonPrecedence", "LoopPastHighBound"
     ],
     "code-quality": [
       "EmptyExcept", "UnusedUses", "MissingFinally", "DeadCode",
@@ -93,6 +93,7 @@
       "cwe": ["CWE-401"],
       "configKey": "[Detectors] LeakyClasses",
       "detectorUnit": "uLeakDetector2.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "list := TStringList.Create;\nDoStuff(list);   // <-- exception here leaks list",
         "good": "list := TStringList.Create;\ntry\n  DoStuff(list);\nfinally\n  list.Free;\nend;"
@@ -113,6 +114,7 @@
       "tags": ["error-handling"],
       "cwe": ["CWE-390"],
       "detectorUnit": "uCodeSmells2.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "try DoStuff except end;",
         "good": "try DoStuff except on E: Exception do LogError(E.Message); end;"
@@ -136,6 +138,7 @@
       "detectorUnit": "uSQLInjection.pas",
       "anchor": "assign-or-call",
       "fixMode": "assisted",
+      "editorHelp": true,
       "examples": {
         "bad":  "Query.SQL.Text := 'SELECT * FROM Users WHERE Name=''' + UserName + '''';",
         "good": "Query.SQL.Text := 'SELECT * FROM Users WHERE Name=:n';\nQuery.ParamByName('n').AsString := UserName;"
@@ -256,6 +259,7 @@
       "type": "Code Smell",
       "tags": ["memory", "exception-safety"],
       "detectorUnit": "uMissingFinally.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "obj := TFoo.Create;\nobj.DoStuff;\nobj.Free;",
         "good": "obj := TFoo.Create;\ntry obj.DoStuff finally obj.Free end;"
@@ -296,6 +300,7 @@
       "tags": ["dead-code"],
       "cwe": ["CWE-561"],
       "detectorUnit": "uDeadCode.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "Exit;\nWriteLn('never reached');",
         "good": "if Failed then\nbegin\n  WriteLn('failed');\n  Exit;\nend;\nWriteLn('reached');"
@@ -356,6 +361,7 @@
       "tags": ["maintainability"],
       "configKey": "[Detectors] MagicNumberTrivials",
       "detectorUnit": "uMagicNumbers.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "if RetryCount > 3 then ...",
         "good": "const MAX_RETRIES = 3;\nif RetryCount > MAX_RETRIES then ..."
@@ -414,6 +420,7 @@
       "type": "Code Smell",
       "tags": ["debug-code"],
       "detectorUnit": "uDebugOutput.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "WriteLn('here #3');",
         "good": "Logger.Debug('reached step 3');"
@@ -434,6 +441,7 @@
       "tags": ["complexity"],
       "configKey": "[Detectors] DeepNestingMaxDepth",
       "detectorUnit": "uDeepNesting.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "if a then\n  if b then\n    if c then\n      if d then DoStuff;",
         "good": "if not a then Exit;\nif not b then Exit;\nif not c then Exit;\nif d then DoStuff;"
@@ -981,11 +989,12 @@
       "kind": "ReversedForRange",
       "name": "for i := High to Low - missing downto",
       "shortDescription": "for i := 10 to 1 do - loop body never executes",
-      "fullDescription": "`for i := 10 to 1 do` is a downto-vs-to typo: in Pascal a `to`-loop with start > end iterates zero times, so the body silently never runs and the bug shows up as missing side-effects with no compiler warning. The detector evaluates compile-time integer expressions on both sides (literals, simple negations, and `Length(arr)-1` for constant-length declarations) so `for i := Length(L)-1 to 0` is flagged. Variable-bounded loops are excluded - they may legitimately do nothing depending on runtime data. To iterate descending, write `downto`; to express 'maybe empty' explicitly, guard with an `if From <= To`.",
+      "fullDescription": "`for i := 10 to 1 do` is a downto-vs-to typo: in Pascal a `to`-loop with start > end iterates zero times, so the body silently never runs and the bug shows up as missing side-effects with no compiler warning. The detector compares integer literals on both sides, an optional leading minus included (`for i := 5 to -1` is flagged); expressions and constants such as `Length(L)-1` or `High(A)` are not evaluated. Variable-bounded loops are excluded - they may legitimately do nothing depending on runtime data. To iterate descending, write `downto`; to express 'maybe empty' explicitly, guard with an `if From <= To`.",
       "defaultSeverity": "Error",
       "type": "Bug",
       "tags": ["loop", "typo"],
       "detectorUnit": "uReversedForRange.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "for i := 10 to 1 do DoStuff(i);",
         "good": "for i := 10 downto 1 do DoStuff(i);"
@@ -1005,6 +1014,7 @@
       "type": "Bug",
       "tags": ["typo", "no-op"],
       "detectorUnit": "uSelfAssignment.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "FCount := FCount;",
         "good": "FCount := ACount;"
@@ -1120,6 +1130,7 @@
       "type": "Code Smell",
       "tags": ["dead-code", "locals"],
       "detectorUnit": "uUnusedLocal.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "var\n  Tmp: Integer;   // never used\nbegin\n  DoStuff;\nend;",
         "good": "begin\n  DoStuff;\nend;"
@@ -1139,6 +1150,7 @@
       "type": "Code Smell",
       "tags": ["dead-code", "api-design"],
       "detectorUnit": "uUnusedParameter.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "procedure Process(const Data: TData; Mode: Integer);  // Mode never referenced",
         "good": "procedure Process(const Data: TData);"
@@ -1236,6 +1248,7 @@
       "type": "Bug",
       "tags": ["string-formatting", "i18n", "locale"],
       "detectorUnit": "uFormatMismatch.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "S := Format('%.2f', [Price]);",
         "good": "S := Format('%.2f', [Price], TFormatSettings.Invariant);"
@@ -1255,6 +1268,7 @@
       "type": "Code Smell",
       "tags": ["control-flow", "delphi-classic"],
       "detectorUnit": "uGotoStatement.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "label MyExit;\nbegin\n  if Failed then goto MyExit;\n  ...\n  MyExit:\nend;",
         "good": "if Failed then Exit;\n..."
@@ -1274,6 +1288,7 @@
       "type": "Code Smell",
       "tags": ["formatting", "style"],
       "detectorUnit": "uTabulationCharacter.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "procedure Foo;\nbegin\n<TAB>DoStuff;\nend;",
         "good": "procedure Foo;\nbegin\n  DoStuff;\nend;"
@@ -1313,6 +1328,7 @@
       "type": "Code Smell",
       "tags": ["formatting", "style"],
       "detectorUnit": "uTrailingWhitespace.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "  DoStuff;   <-- trailing spaces",
         "good": "  DoStuff;"
@@ -1332,6 +1348,7 @@
       "type": "Code Smell",
       "tags": ["formatting", "style", "convention"],
       "detectorUnit": "uLowercaseKeyword.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "Procedure Foo;\nBegin\n  If X then DoStuff;\nEnd;",
         "good": "procedure Foo;\nbegin\n  if X then DoStuff;\nend;"
@@ -1351,6 +1368,7 @@
       "type": "Code Smell",
       "tags": ["suppression", "audit"],
       "detectorUnit": "uNoSonarMarker.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "Dispose(P); // NOSONAR - we know about this",
         "good": "// noinspection - covered by integration test\nDispose(P);"
@@ -1404,14 +1422,15 @@
       "kind": "TrailingCommaArgList",
       "name": "Trailing comma in argument list",
       "shortDescription": "`Foo(A, B,)` - drop the comma or add the missing argument",
-      "fullDescription": "Trailing comma before `)` in Delphi has no semantic benefit (unlike Python/JS where it stabilizes the diff) and suggests a forgotten argument. Matches SonarDelphi communitydelphi:TrailingCommaArgumentList.",
+      "fullDescription": "Trailing comma before `)` in an argument list. In a normal call Delphi rejects it: the comma adds an empty argument (E2034 too many actual parameters). Only a late-bound call on a Variant or dispinterface (OLE automation) compiles it, where the empty argument is an omitted optional parameter. There it has no semantic benefit (unlike Python/JS where it stabilizes the diff) and suggests a forgotten argument. Matches SonarDelphi communitydelphi:TrailingCommaArgumentList.",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["style", "bug-risk"],
       "detectorUnit": "uTrailingCommaArgList.pas",
+      "editorHelp": true,
       "examples": {
-        "bad":  "WriteLn('A', 'B', );\nDoStuff(Param1, Param2,);",
-        "good": "WriteLn('A', 'B');\nDoStuff(Param1, Param2);"
+        "bad":  "Excel.Workbooks.Open(FileName,);   // Excel: Variant\nExcel.ActiveWorkbook.SaveAs(NewName, );",
+        "good": "Excel.Workbooks.Open(FileName);   // Excel: Variant\nExcel.ActiveWorkbook.SaveAs(NewName);"
       },
       "cleanCodeAttribute": "CONVENTIONAL",
       "impacts": [
@@ -1428,6 +1447,7 @@
       "type": "Code Smell",
       "tags": ["readability", "modern-delphi"],
       "detectorUnit": "uDigitGrouping.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "const TIMEOUT_MS = 1800000;\nconst MAX_BYTES = 10485760;",
         "good": "const TIMEOUT_MS = 1_800_000;\nconst MAX_BYTES = 10_485_760;"
@@ -1447,6 +1467,7 @@
       "type": "Code Smell",
       "tags": ["maintenance", "dead-code"],
       "detectorUnit": "uCommentedOutCode.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "// X := 42;\n// if Active then Process;",
         "good": "// TODO: re-enable once issue #123 is fixed - see history"
@@ -1572,6 +1593,7 @@
       "type": "Code Smell",
       "tags": ["style", "diff-hygiene"],
       "detectorUnit": "uGroupedDeclaration.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "var A, B, C: Integer;\nfield FX, FY: TPoint;",
         "good": "var A: Integer;\n    B: Integer;\n    C: Integer;"
@@ -1591,6 +1613,7 @@
       "type": "Code Smell",
       "tags": ["dead-code", "refactor"],
       "detectorUnit": "uEmptyBlock.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "if Active then begin end;",
         "good": "if Active then Activate;"
@@ -1629,6 +1652,7 @@
       "type": "Code Smell",
       "tags": ["style", "structure"],
       "detectorUnit": "uConsecutiveSection.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "const A = 1;\nconst B = 2;",
         "good": "const\n  A = 1;\n  B = 2;"
@@ -1648,6 +1672,7 @@
       "type": "Code Smell",
       "tags": ["dead-code", "control-flow"],
       "detectorUnit": "uRedundantJump.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "procedure Foo;\nbegin\n  DoStuff;\n  Exit;\nend;",
         "good": "procedure Foo;\nbegin\n  DoStuff;\nend;"
@@ -1718,6 +1743,7 @@
       "type": "Bug",
       "tags": ["resource-leak", "refactor"],
       "detectorUnit": "uEmptyFinallyBlock.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "Stream := TFileStream.Create(P);\ntry\n  ...\nfinally\nend;",
         "good": "Stream := TFileStream.Create(P);\ntry\n  ...\nfinally\n  Stream.Free;\nend;"
@@ -1777,6 +1803,7 @@
       "type": "Code Smell",
       "tags": ["api-design", "bug-risk"],
       "detectorUnit": "uAvoidOut.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "procedure Foo(out S: string);",
         "good": "procedure Foo(var S: string);"
@@ -1913,6 +1940,7 @@
       "type": "Bug",
       "tags": ["inheritance", "bug-risk"],
       "detectorUnit": "uTwiceInheritedCalls.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "procedure Foo;\nbegin\n  inherited;\n  DoStuff;\n  inherited;\nend;",
         "good": "procedure Foo;\nbegin\n  inherited;\n  DoStuff;\nend;"
@@ -1926,12 +1954,13 @@
       "id": "SCA094",
       "kind": "RedundantParentheses",
       "name": "Redundant double parentheses",
-      "shortDescription": "`((Ident))` - drop the outer parens",
+      "shortDescription": "`((Ident))` - drop the inner parens",
       "fullDescription": "Double parentheses around a single identifier, literal or simple expression add nothing - a single pair is sufficient (often none). Matches SonarDelphi communitydelphi:RedundantParentheses. Only the simple-expression case is flagged; complex `((A + B))` may still benefit from inner parens for precedence and is not reported.",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["style", "redundancy"],
       "detectorUnit": "uRedundantParentheses.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "if ((Active)) then ...\nResult := ((42));",
         "good": "if Active then ...\nResult := 42;"
@@ -1970,6 +1999,7 @@
       "type": "Bug",
       "tags": ["inheritance", "initialization"],
       "detectorUnit": "uConstructorWithoutInherited.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "constructor TFoo.Create;\nbegin\n  FX := 0;\nend;",
         "good": "constructor TFoo.Create;\nbegin\n  inherited;\n  FX := 0;\nend;"
@@ -1989,6 +2019,7 @@
       "type": "Bug",
       "tags": ["inheritance", "memory-leak"],
       "detectorUnit": "uDestructorWithoutInherited.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "destructor TFoo.Destroy;\nbegin\n  FreeAndNil(FBar);\nend;",
         "good": "destructor TFoo.Destroy;\nbegin\n  FreeAndNil(FBar);\n  inherited;\nend;"
@@ -2008,6 +2039,7 @@
       "type": "Code Smell",
       "tags": ["simplification", "style"],
       "detectorUnit": "uRedundantConditional.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "if Active then Result := True else Result := False;",
         "good": "Result := Active;"
@@ -2162,6 +2194,7 @@
       "type": "Code Smell",
       "tags": ["naming", "convention"],
       "detectorUnit": "uMethodName.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "procedure doStuff;",
         "good": "procedure DoStuff;"
@@ -2221,6 +2254,7 @@
       "tags": ["concurrency", "lock", "exception-safety"],
       "cwe": ["CWE-667"],
       "detectorUnit": "uLockWithoutTryFinally.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "FLock.Enter;\nDoWork;     // exception here leaves FLock held forever\nFLock.Leave;",
         "good": "FLock.Enter;\ntry\n  DoWork;\nfinally\n  FLock.Leave;\nend;"
@@ -2259,6 +2293,7 @@
       "type": "Code Smell",
       "tags": ["performance", "database"],
       "detectorUnit": "uPerfHotspots.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "for i := 0 to High(Ids) do begin\n  Q.ParamByName('id').AsInteger := Ids[i];\n  Q.ExecSQL;\nend;",
         "good": "var P := Q.ParamByName('id');\nfor i := 0 to High(Ids) do begin\n  P.AsInteger := Ids[i];\n  Q.ExecSQL;\nend;"
@@ -2278,6 +2313,7 @@
       "type": "Code Smell",
       "tags": ["performance", "database"],
       "detectorUnit": "uPerfHotspots.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "while not Q.Eof do begin\n  Total := Total + Q.FieldByName('Amount').AsCurrency;\n  Q.Next;\nend;",
         "good": "var Amt := Q.FieldByName('Amount');\nwhile not Q.Eof do begin\n  Total := Total + Amt.AsCurrency;\n  Q.Next;\nend;"
@@ -2297,6 +2333,7 @@
       "type": "Code Smell",
       "tags": ["concurrency", "deprecated"],
       "detectorUnit": "uConcurrencyExt.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "MyThread := TWorker.Create(True);\nMyThread.Resume;",
         "good": "MyThread := TWorker.Create(True);\nMyThread.Start;"
@@ -2338,6 +2375,7 @@
       "cwe": ["CWE-319"],
       "owasp": ["A02:2021-Cryptographic Failures"],
       "detectorUnit": "uRestHttpSecurity.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "Url := 'http://api.contoso-shop.de/v1/users';",
         "good": "Url := 'https://api.contoso-shop.de/v1/users';"
@@ -2398,6 +2436,7 @@
       "type": "Code Smell",
       "tags": ["naming", "convention"],
       "detectorUnit": "uNamingExt.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "type\n  MyError = class(Exception);",
         "good": "type\n  EMyError = class(Exception);"
@@ -2417,6 +2456,7 @@
       "type": "Code Smell",
       "tags": ["naming", "convention"],
       "detectorUnit": "uNamingExt.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "procedure Foo;\nconst\n  MaxRetries = 3;\nbegin ... end;",
         "good": "procedure Foo;\nconst\n  MAX_RETRIES = 3;\nbegin ... end;"
@@ -2456,6 +2496,7 @@
       "type": "Bug",
       "tags": ["function", "uninitialized", "sonardelphi"],
       "detectorUnit": "uRoutineResultAssigned.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "function GetCount(L: TList): Integer;\nbegin\n  if L = nil then\n    LogMessage('nil list');\n  // Result never set -> garbage\nend;",
         "good": "function GetCount(L: TList): Integer;\nbegin\n  Result := 0;\n  if L <> nil then\n    Result := L.Count;\nend;"
@@ -2529,14 +2570,15 @@
       "kind": "InheritedMethodEmpty",
       "name": "Override whose entire body is `inherited;`",
       "shortDescription": "An override that only forwards to the parent serves no purpose - remove it",
-      "fullDescription": "A method declared with `override` whose body contains only `inherited;` (or `inherited <SameName>;`) adds nothing on top of the parent class's behaviour. The compiler's normal virtual dispatch already calls the parent implementation if the subclass does not override - the empty override is therefore pure noise that wastes a VMT slot, slows down code reviews ('does this override do something?' - reader has to read the body to confirm 'no'), and creates dead code that needs to be revisited every time the parent method's signature changes. Detector walks every `nkMethod` whose `TypeRef` contains `;override`, skips bodyless variants (abstract / forward / external / dispid), and flags the method when its body contains exactly one non-parameter child that is `nkInherited` with either no argument expression at all (`inherited;`) or with the same identifier as the method itself (`inherited <SameName>;`). Calls to a *different* parent method (`inherited Other;` - intentional hijack) are deliberately not flagged. Maps to Sonar-Delphi `InheritedMethodWithNoCodeCheck`.",
+      "fullDescription": "A method declared with `override` whose implementation only calls the ancestor with the same arguments adds nothing on top of the parent class's behaviour: virtual dispatch already reaches the ancestor when the subclass does not override. The empty override is noise that slows down code reviews and has to be revisited whenever the ancestor's signature changes. Detector walks every method implementation `TClass.Name` whose body is exactly one statement - `inherited;` (procedures, constructors, destructors), `inherited Name;` (no parameters), `inherited Name(p1, .., pn)` with the parameters passed through unchanged and in order, or `Result := inherited [Name(..)]` in functions - and reads the DECLARATION in the class of the same unit (implementation headers never repeat `override`). The declaration must be unique (no overloads, no {$IFDEF} twins) and carry `override` and no other directive (message, final, reintroduce, deprecated, calling convention, ...), no attribute and no default parameter; no compiler directive may sit between implementation header and `end`. Class methods are skipped. Visibility: when the ancestor's method is declared in the same unit and is less visible, the override widens its visibility and is not reported. When the ancestor lies outside the unit, private/protected overrides and public overrides of well-known public root methods (Destroy, Create, AfterConstruction, BeforeDestruction, Assign, ToString, Equals, GetHashCode) are reported with high confidence, other public/published overrides with low confidence (hidden by default). The source file must be readable. Maps to Sonar-Delphi `InheritedMethodWithNoCodeCheck`.",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["inheritance", "dead-code", "sonardelphi"],
       "detectorUnit": "uInheritedMethodEmpty.pas",
+      "editorHelp": true,
       "examples": {
-        "bad":  "procedure TFooSubclass.AfterConstruction; override;\nbegin\n  inherited;     // adds nothing - drop this whole override\nend;",
-        "good": "// Remove the override entirely. The parent's AfterConstruction will\n// be invoked by the normal virtual dispatch."
+        "bad":  "type\n  TFooSubclass = class(TFoo)\n  protected\n    procedure Paint; override;\n  end;\n\nprocedure TFooSubclass.Paint;\nbegin\n  inherited;     // adds nothing - drop this whole override\nend;",
+        "good": "// Remove both the declaration and the implementation. The\n// parent's Paint is reached by normal virtual dispatch."
       },
       "cleanCodeAttribute": "DISTINCT",
       "impacts": [
@@ -2573,6 +2615,7 @@
       "type": "Code Smell",
       "tags": ["exception", "error-handling", "sonardelphi"],
       "detectorUnit": "uRaisingRawException.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "if x < 0 then\n  raise Exception.Create('x is negative');",
         "good": "if x < 0 then\n  raise EArgumentOutOfRangeException.CreateFmt('x = %d', [x]);"
@@ -2592,6 +2635,7 @@
       "type": "Bug",
       "tags": ["locale", "i18n", "sonardelphi"],
       "detectorUnit": "uDateFormatSettings.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "var d := StrToDate(UserInput);     // breaks under EN locale\nWriteLn(DateToStr(Now));",
         "good": "var FS := TFormatSettings.Invariant;\nvar d := StrToDate(UserInput, FS);\nWriteLn(DateToStr(Now, FS));"
@@ -2649,6 +2693,7 @@
       "type": "Bug",
       "tags": ["control-flow", "side-effects", "performance", "sonardelphi"],
       "detectorUnit": "uIfThenShortCircuit.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "x := Math.IfThen(IsCacheHit, FetchFromCache, FetchFromDb);\n//                            both calls run every time",
         "good": "if IsCacheHit then\n  x := FetchFromCache\nelse\n  x := FetchFromDb;"
@@ -2763,6 +2808,7 @@
       "type": "Bug",
       "tags": ["arithmetic", "integer-overflow", "sonar50"],
       "detectorUnit": "uIntegerOverflow.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "var\n  BytesTotal: Int64;\n  SectorCount, SectorSize: Integer;\nbegin\n  BytesTotal := SectorCount * SectorSize;   // <- 32-bit overflow, then widen",
         "good": "BytesTotal := Int64(SectorCount) * SectorSize;\n// Cast one operand; the other is auto-promoted; multiplication is 64-bit."
@@ -2796,7 +2842,7 @@
       "kind": "FreeWithoutNil",
       "name": "Free without subsequent nil-out",
       "shortDescription": "`obj.Free;` without `obj := nil;` (or using FreeAndNil) leaves a dangling pointer - any subsequent use is Use-After-Free",
-      "fullDescription": "After `obj.Free`, the variable still points at the freed memory. Any further dereference is Use-After-Free, an Access Violation at best, silent corruption at worst. The detector walks `nkCall` nodes whose name matches `<ident>.Free` or `<ident>.Destroy`, then forward-scans the same method for a subsequent `<ident> := nil` or `FreeAndNil(<ident>)`. If neither exists, the call is reported - unless it is the last call in the method body (no follow-up use possible, typical for destructors and try/finally tails). `Self`/`Result`/`inherited` as receivers are excluded since they follow different lifecycle patterns. Maps to Sonar-50 rule #25.",
+      "fullDescription": "After `obj.Free`, the variable still points at the freed memory. Any further dereference is Use-After-Free, an Access Violation at best, silent corruption at worst. The detector walks `nkCall` nodes whose name matches `<ident>.Free` or `<ident>.Destroy`, then forward-scans the same method for a subsequent `<ident> := nil` or `FreeAndNil(<ident>)`. If neither exists, the call is reported - in a method also when it is the last call: a field outlives the method, and a later `Assigned` check or the destructor touches freed memory (in a constructor Delphi runs the destructor on every exception). A standalone routine that frees a global as its last call (cleanup at program or script end) is not reported unless a `raise` follows. Local variables, inline constants and `const` parameters are skipped (they go out of scope), destructors, `BeforeDestruction`, `DoFree`, `FinalizeClass`, OnDestroy handlers and standalone `Finalize*` routines too (the instance, the class or the program ends with them). `Self`/`Result`/`inherited` as receivers are excluded since they follow different lifecycle patterns. Maps to Sonar-50 rule #25.",
       "defaultSeverity": "Warning",
       "type": "Code Smell",
       "tags": ["memory", "lifecycle", "sonar50"],
@@ -2897,6 +2943,7 @@
       "type": "Bug",
       "tags": ["floating-point", "precision", "sonar50"],
       "detectorUnit": "uFloatEquality.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "var Ratio: Double;\n...\nif Ratio = 0.5 then DoStuff;     // <- IEEE-754: almost never true after arithmetic",
         "good": "uses System.Math;\n...\nif SameValue(Ratio, 0.5, 1e-9) then DoStuff;"
@@ -2954,6 +3001,7 @@
       "type": "Code Smell",
       "tags": ["dead-code", "maintainability", "sonar50"],
       "detectorUnit": "uUnusedPrivateMethod.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "TFoo = class\nprivate\n  procedure HelperA;            // <- never called\npublic\n  procedure DoStuff;\nend;",
         "good": "TFoo = class\npublic\n  procedure DoStuff;\nend;\n// or call HelperA from DoStuff to make the dependency explicit"
@@ -2998,6 +3046,7 @@
       "type": "Code Smell",
       "tags": ["oop", "refactoring", "sonar50"],
       "detectorUnit": "uCanBeClassMethod.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "function TMath.Add(A, B: Integer): Integer;\nbegin\n  Result := A + B;          // only uses params, no Self\nend;",
         "good": "class function TMath.Add(A, B: Integer): Integer;\nbegin\n  Result := A + B;\nend;\n// Caller: TMath.Add(1, 2)   // no instance needed"
@@ -3037,6 +3086,7 @@
       "type": "Bug",
       "tags": ["control-flow", "dead-code", "sonar50"],
       "detectorUnit": "uBoolAlwaysTrue.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "if Length(s) >= 0 then DoStuff;   // <- always True\nif Length(s) < 0 then DoOther;    // <- always False",
         "good": "if Length(s) > 0 then DoStuff;    // non-empty check\nif Length(s) = 0 then DoOther;    // empty check"
@@ -3094,6 +3144,7 @@
       "type": "Bug",
       "tags": ["concurrency", "mormot", "exception-safety", "sonar50"],
       "detectorUnit": "uUnpairedLock.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "FLocker.Lock;\nDoStuff;\nFLocker.UnLock;",
         "good": "FLocker.Lock;\ntry\n  DoStuff;\nfinally\n  FLocker.UnLock;\nend;"
@@ -3114,6 +3165,7 @@
       "type": "Bug",
       "tags": ["memory", "pointer", "mormot", "sonar50"],
       "detectorUnit": "uMoveSizeOfPointer.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "var Buf: array[0..255] of Byte; P: PByte;\nMove(Src^, P^, SizeOf(PByte));        // copies 8 bytes (pointer), not the buffer\nFillChar(P^, SizeOf(PInteger), 0);    // zeroes 8 bytes, not the integer",
         "good": "Move(Src^, P^, SizeOf(Byte) * Count);  // explicit element count\nFillChar(V, SizeOf(V), 0);             // matches the variable's size"
@@ -3159,6 +3211,7 @@
       "type": "Bug",
       "tags": ["memory-leak", "exception-safety", "mormot", "sonar50"],
       "detectorUnit": "uGetMemWithoutFreeMem.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "GetMem(P, 1024);\nDoStuff(P);\nFreeMem(P);",
         "good": "GetMem(P, 1024);\ntry\n  DoStuff(P);\nfinally\n  FreeMem(P);\nend;"
@@ -3217,6 +3270,7 @@
       "type": "Bug",
       "tags": ["exception-handling", "silent-failure", "mormot", "sonar50"],
       "detectorUnit": "uEmptyOnHandler.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "try DoStuff; except\n  on E: EDatabaseError do ;\nend;",
         "good": "try DoStuff; except\n  on E: EDatabaseError do\n  begin\n    Logger.Error(E.Message);\n    raise;\n  end;\nend;"
@@ -3252,14 +3306,15 @@
       "kind": "PointerSubtraction",
       "name": "Pointer subtraction via 32-bit cast",
       "shortDescription": "`Cardinal(P1) - Cardinal(P2)` (or Integer / LongWord / LongInt variants) truncates the upper 32 bits of a 64-bit pointer on Win64 - difference is intermittently wrong",
-      "fullDescription": "Lexical scan for `(Cardinal|LongWord|Integer|LongInt)(<id>) - (Cardinal|...)(<id>)` - two 32-bit casts joined by minus. On Win64 a Pointer is 64-bit while Cardinal/Integer/LongWord/LongInt are 32-bit, so the cast drops the upper four bytes of the address. The resulting difference is wrong whenever the allocator hands out high addresses - the code works on Win32 and breaks intermittently on Win64. Common porting bug from Delphi-7 / Delphi-2007 examples that pre-date Win64. Fix: use `PtrUInt(P1) - PtrUInt(P2)` or `NativeInt(P1) - NativeInt(P2)` - pointer-width integer types that match the platform pointer size.",
+      "fullDescription": "Lexical scan for `(Cardinal|LongWord|Integer|LongInt)(<id>) - (Cardinal|...)(<id>)` - two 32-bit casts joined by minus. On Win64 a Pointer is 64-bit while Cardinal/Integer/LongWord/LongInt are 32-bit, so the cast drops the upper four bytes of the address. The resulting difference is wrong whenever the allocator hands out high addresses - the code works on Win32 and breaks intermittently on Win64. Common porting bug from Delphi-7 / Delphi-2007 examples that pre-date Win64. Fix: use `NativeUInt(P1) - NativeUInt(P2)` or `NativeInt(P1) - NativeInt(P2)` - pointer-width integer types that match the platform pointer size (`PtrUInt`/`PtrInt` are the FPC and mORMot names; the Delphi RTL does not declare them).",
       "defaultSeverity": "Warning",
       "type": "Bug",
       "tags": ["pointer", "win64", "truncation", "mormot", "sonar50"],
       "detectorUnit": "uPointerSubtraction.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "Diff := Cardinal(P1) - Cardinal(P2);   // upper 32 bits lost on Win64",
-        "good": "Diff := PtrUInt(P1) - PtrUInt(P2);     // pointer-wide cast"
+        "good": "Diff := NativeUInt(P1) - NativeUInt(P2);   // pointer-wide cast"
       },
       "cleanCodeAttribute": "LOGICAL",
       "impacts": [
@@ -3318,6 +3373,7 @@
       "type": "Code Smell",
       "tags": ["dead-code", "maintainability", "sonardelphi"],
       "detectorUnit": "uUnusedRoutine.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "implementation\nprocedure InternalHelper;     // never called\nbegin\n  WriteLn('hi');\nend;\nend.",
         "good": "implementation\n// remove InternalHelper, or call it from somewhere,\n// or move it to interface if it should be exported"
@@ -3378,6 +3434,7 @@
       "tags": ["reliability", "randomness", "seed"],
       "configKey": "",
       "detectorUnit": "uInsecureRandom.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "procedure DealCards;\nvar i: Integer;\nbegin\n  for i := 1 to 5 do\n    Players[i].Card := Random(52);\nend;",
         "good": "procedure DealCards;\nvar i: Integer;\nbegin\n  Randomize;   // once, at startup\n  for i := 1 to 5 do\n    Players[i].Card := Random(52);\nend;"
@@ -3401,7 +3458,7 @@
       "editorHelp": true,
       "examples": {
         "bad":  "case Status of\n  stNew    : DoNew;\n  stActive : DoActive;\nend;",
-        "good": "case Status of\n  stNew    : DoNew;\n  stActive : DoActive;\nelse\n  raise EProgrammerError.Create('Unhandled status');\nend;"
+        "good": "case Status of\n  stNew    : DoNew;\n  stActive : DoActive;\nelse\n  raise EInvalidOpException.Create('Unhandled status');\nend;"
       },
       "cleanCodeAttribute": "COMPLETE",
       "impacts": [
@@ -3419,6 +3476,7 @@
       "tags": ["reliability", "assert", "side-effect"],
       "configKey": "",
       "detectorUnit": "uAssertWithSideEffect.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "Assert(InitializeSubsystem);   // Release build skips Init entirely",
         "good": "var Ok := InitializeSubsystem;\nAssert(Ok, 'subsystem init failed');"
@@ -3439,6 +3497,7 @@
       "tags": ["performance", "string", "refcount"],
       "configKey": "",
       "detectorUnit": "uConstStringParameter.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "function Hash(s: string): Integer;",
         "good": "function Hash(const s: string): Integer;"
@@ -3519,6 +3578,7 @@
       "tags": ["memory-safety", "leak", "container"],
       "configKey": "",
       "detectorUnit": "uTObjectListWithoutOwnership.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "L := TList<TFoo>.Create;\nL.Add(TFoo.Create);\nL.Free; // TFoo instance leaks",
         "good": "L := TObjectList<TFoo>.Create; // OwnsObjects=True default\nL.Add(TFoo.Create);\nL.Free; // item freed"
@@ -3619,6 +3679,7 @@
       "tags": ["test", "dunitx", "documentation"],
       "configKey": "",
       "detectorUnit": "uAttributeIgnoreWithoutReason.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "[Ignore]\nprocedure SomeTest;",
         "good": "[Ignore('TBD ticket #1234 - flaky on CI')]\nprocedure SomeTest;"
@@ -3639,6 +3700,7 @@
       "tags": ["attribute", "duplication"],
       "configKey": "",
       "detectorUnit": "uAttributeDuplicate.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "[Test]\n[Test]\nprocedure Foo;",
         "good": "[Test]\nprocedure Foo;"
@@ -3659,6 +3721,7 @@
       "tags": ["test", "dunitx", "compile-error"],
       "configKey": "",
       "detectorUnit": "uAttributeCategoryWithoutString.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "[Category]\nprocedure Foo;",
         "good": "[Category('Slow')]\nprocedure Foo;"
@@ -3699,6 +3762,7 @@
       "tags": ["attribute", "readability"],
       "configKey": "",
       "detectorUnit": "uAttributeMisalignment.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "[Test]\n\nprocedure Foo;",
         "good": "[Test]\nprocedure Foo;"
@@ -3795,6 +3859,7 @@
       "tags": ["security", "unicode", "trojan-source"],
       "cwe": ["CWE-1007"],
       "detectorUnit": "uSourceEncoding.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "// a comment containing U+202E can visually reorder the code that follows",
         "good": "// no bidirectional control characters anywhere in source"
@@ -3872,6 +3937,7 @@
       "tags": ["security", "unicode", "trojan-source"],
       "cwe": ["CWE-1007"],
       "detectorUnit": "uSourceEncoding.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "// an identifier or string with an embedded U+200B is not what it looks like",
         "good": "// no zero-width / invisible characters in source"
@@ -3892,6 +3958,7 @@
       "tags": ["security", "unicode", "trojan-source"],
       "cwe": ["CWE-1007"],
       "detectorUnit": "uSourceEncoding.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "var Login: string;  // one letter is a Cyrillic homoglyph (U+043E), not Latin 'o'",
         "good": "var Login: string;  // all-ASCII identifier"
@@ -3951,6 +4018,7 @@
         "memory"
       ],
       "detectorUnit": "uManagedResultUninit.pas",
+      "editorHelp": true,
       "examples": {
         "bad": "function CollectNames(const L: TStrings): TArray<string>;\nvar i: Integer;\nbegin\n  for i := 0 to L.Count - 1 do\n    Result := Result + [L[i]];  // reads the CALLER's old array on first iteration\nend;",
         "good": "function CollectNames(const L: TStrings): TArray<string>;\nvar i: Integer;\nbegin\n  Result := [];  // or: Result := nil; / SetLength(Result, 0);\n  for i := 0 to L.Count - 1 do\n    Result := Result + [L[i]];\nend;"
@@ -4122,6 +4190,7 @@
         "runtime-error"
       ],
       "detectorUnit": "uParamNameMismatch.pas",
+      "editorHelp": true,
       "examples": {
         "bad": "Q := TFDQuery.Create(nil);\nQ.SQL.Add('SELECT name FROM customer');\nQ.SQL.Add('WHERE customer_id = :customer_id');\nQ.ParamByName('custid').AsInteger := Id;   // no :custid - raises at Open\nQ.Open;",
         "good": "Q := TFDQuery.Create(nil);\nQ.SQL.Add('SELECT name FROM customer');\nQ.SQL.Add('WHERE customer_id = :customer_id');\nQ.ParamByName('customer_id').AsInteger := Id;\nQ.Open;"
@@ -4235,6 +4304,86 @@
       "cleanCodeAttribute": "TRUSTWORTHY",
       "impacts": [
         { "softwareQuality": "SECURITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA202",
+      "kind": "ComparisonPrecedence",
+      "name": "not, and, or or xor binds before the comparison",
+      "shortDescription": "'not Count > 0' or 'A = True or B = False' - not/and/or/xor bind tighter than comparisons, so the expression compiles but tests something else",
+      "fullDescription": "In Pascal the operators not, and, or and xor bind tighter than the comparisons (=, <>, <, >, <=, >=, in) - the same in Delphi and Free Pascal. Two spellings therefore compile without a message and test something else than they read. (1) 'not' in front of a comparison: 'if not List.Count > 0' is '(not List.Count) > 0'. For an integer, not is the bitwise complement, so the condition is false for every Count >= 0; 'not Key in [...]' and 'not Result = mrOk' fail the same way. (2) Comparisons chained by and/or/xor: 'if A = True or B = False' is '(A = (True or B)) = False'. This compiles only when the operands are Boolean (or Variant) - with integers, strings, enumerations or sets the compiler already reports a type error. Write the comparison in parentheses: 'not (List.Count > 0)', '(A = True) or (B = False)' - or drop the comparison with True/False. The severity is Error when the type is evidenced (a number or a set of numbers on the right, Pos/Ord/Length/CompareText... or .Count/.IndexOf as the operand, a local variable, parameter or field of an integer type, True/False in the chain) and Warning otherwise. Conditions of if/while/until/case and right-hand sides of := are read; comments, string literals (also Delphi 12 multi-line strings) and asm blocks never count as code.",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["logic", "operator-precedence", "suspicious"],
+      "cwe": ["CWE-783"],
+      "detectorUnit": "uComparisonPrecedence.pas",
+      "examples": {
+        "bad": "if not List.Count > 0 then   // (not List.Count) > 0 - false for every Count\n  Exit;\nif Ready = True or Busy = False then   // (Ready = (True or Busy)) = False\n  Start;",
+        "good": "if not (List.Count > 0) then\n  Exit;\nif Ready or not Busy then\n  Start;"
+      },
+      "exceptions": [
+        {
+          "case": "Boolean operand with = or <>",
+          "why": "For Boolean values (not A) = B is the same as not (A = B), so the order does not change the result. Not reported when True/False stands on the right, when the operand ends in a well-known Boolean member (Checked, Visible, Enabled, Active, ReadOnly, Modified, Focused, Showing, Eof, Bof, IsEmpty, Selected, Expanded, Down), or when the operand or the identifier on the right is a variable, parameter or field of a Boolean type. With <, >, <=, >= or in the order would matter for Booleans too - such code is practically never written and is not reported (deliberate false negative).",
+          "example": "if not CheckBox1.Checked = Ini.ReadBool('a', 'b', False) then  // not reported"
+        },
+        {
+          "case": "Bit tests and open intent",
+          "why": "'Flags and Mask = 0' is '(Flags and Mask) = 0' - the correct bit test. 'not' behind and/or/* is part of the operand ('Flags and not Mask <> 0' clears bits before the test). 'X = A or B' compares X with the bitwise or of A and B; whether that was meant cannot be told from the text. None of these is reported.",
+          "example": "if Flags and not Mask <> 0 then  // not reported"
+        },
+        {
+          "case": "Known limits",
+          "why": "Chains are read only in conditions of if/while/until and on the right of := - not in other call arguments (Assert(A = True or B = False)). Without evidence of the type (properties, function results, Variant) a finding stays a Warning. Generic type arguments (TList<Integer>, IsType<T>) are recognised by their shape; an unusual spelling of a comparison that looks like one ('A < B > C') is not reported as a chain.",
+          "example": "Assert(Ready = True or Busy = False);  // not reported"
+        }
+      ],
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA203",
+      "kind": "LoopPastHighBound",
+      "name": "for loop runs one index past the end",
+      "shortDescription": "for loop runs to Count, Length() or High() + 1 and indexes the same collection with the loop variable - the last pass is out of range",
+      "fullDescription": "A classic off-by-one: 'for i := 0 to List.Count do' with List[i] in the body reads List[List.Count], one item past the end. The compiler accepts it; at run time it raises ERangeError with {$R+}, EArgumentOutOfRangeException or EStringListError for TList and TStrings, and otherwise silently reads or writes the memory behind the last element. Reported are loop heads whose upper bound is one index too far - 'X.Count' (from 0, or from 1 when X is a proven list), 'Length(A)' from 0, 'Low(A) to Length(A)' for a dynamic array, 'High(A) + 1' - when the body reads or writes the same collection (same name or chain) with the unshifted loop variable: X[i], X[i, j], and for .Count also X.Items[i], X.Strings[i] and X.Objects[i]. Strings are 1-based and have their own forms: '0 to Length(S)' with S[i] is wrong at both ends (S[0] before the first character), '1 to Length(S) + 1' past the last; '1 to Length(S)' is correct. The finding is an error only when the type is proven: the collection is a name declared in the unit (parameter, local or inline variable, Result, field of the method's own class or its ancestors in the unit, unit variable) whose type is a known list (TList, TObjectList, TStrings, TStringList, TCollection, TMenuItem, FPC TFPList/TFPGList ...), an array or a string, and the body neither leaves the pass before the access (break, exit, continue, raise, goto) nor grows the collection nor contains an anonymous method. Otherwise it is a warning. Fix: Count - 1, High(A) (or Length(A) - 1), and for strings 1 to Length(S).",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["loop", "off-by-one", "range-check", "runtime-error"],
+      "cwe": ["CWE-193", "CWE-125"],
+      "detectorUnit": "uLoopPastHighBound.pas",
+      "editorHelp": true,
+      "examples": {
+        "bad": "for i := 0 to Names.Count do\n  WriteLn(Names[i]);   // Names[Names.Count] raises",
+        "good": "for i := 0 to Names.Count - 1 do\n  WriteLn(Names[i]);"
+      },
+      "exceptions": [
+        {
+          "case": "Shifted index, insert position, other collection",
+          "why": "Only an access with the plain loop variable proves the last pass is out of range. X[i - 1] with '1 to X.Count', X.Insert(i, ..) (valid up to Count) and an index into another collection (M[i] while counting L, X.L[i] while counting L) are correct or not decidable lexically.",
+          "example": "for i := 1 to L.Count do S := L[i - 1];  // not reported"
+        },
+        {
+          "case": "A guard on the loop variable",
+          "why": "When an if, while, case or until condition in the body before or with the first access names the loop variable outside the index (if i < L.Count, if i = Length(A) then .. else A[i]), the extra pass is deliberate - typically a sentinel step after the last element.",
+          "example": "for i := 0 to Length(A) do if i = Length(A) then Flush else Add(A[i]);  // not reported"
+        },
+        {
+          "case": "Forms that are correct without a type proof",
+          "why": "'1 to X.Count' is not reported for an unproven X: COM collections such as Excel's Sheets are 1-based. 'Low(A) to Length(A)' is reported only for a dynamic array: for a static 'array[1..N]' and for a string it is correct. '1 to Length(S) + 1' needs a proven string. ShortString and PChar are not reported for Length: S[0] is the length byte and P[Length(P)] the terminating #0. For TDictionary-like types X[i] is a key, not a position.",
+          "example": "for i := 1 to Sheets.Count do Sheets[i].Calculate;  // not reported"
+        },
+        {
+          "case": "Known limits",
+          "why": "The loop variable assigned in the body vetoes the finding. downto loops, bounds with further arithmetic (Count - 1, Pred(Count)), named indexed properties other than Items, Strings and Objects (RTID.ThreadIDs[i] while counting RTID.Count) and accesses through 'with' are not reported.",
+          "example": "for i := 0 to RTID.Count do TID := RTID.ThreadIDs[i];  // not reported (false negative)"
+        }
+      ],
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
       ]
     }
   ]

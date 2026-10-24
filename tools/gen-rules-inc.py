@@ -44,7 +44,8 @@ def pas_parts(s: str) -> list:
       * einfache Anfuehrungszeichen MUESSEN verdoppelt werden - sonst endet
         das Literal mitten im Text und der Compiler sieht Bezeichner.
       * Zeilenumbrueche werden zu #13#10 ausserhalb der Quotes.
-      * Non-ASCII als #$XX, damit die .inc reines ASCII bleibt.
+      * Non-ASCII als #$XXXX, damit die .inc reines ASCII bleibt; jenseits
+        von U+FFFF als UTF-16-Surrogatpaar (#$D83D#$DE00).
       * leerer String -> ''
     """
     if s is None:
@@ -64,9 +65,21 @@ def pas_parts(s: str) -> list:
             parts.append('#13#10')
         elif ch == Q:
             buf.append(Q + Q)          # verdoppeln
+        elif ord(ch) > 0xFFFF:
+            flush()
+            # Jenseits der BMP (Emoji, einige CJK): ein Delphi-Zeichencode
+            # im Literal reicht nur bis $FFFF - '#$1F600' kompiliert nicht,
+            # und --check vergleicht nur Text, saehe es also nie (Review
+            # Woche G03-28). UTF-16 braucht das Surrogatpaar.
+            v = ord(ch) - 0x10000
+            parts.append('#$%04X#$%04X' % (0xD800 + (v >> 10),
+                                           0xDC00 + (v & 0x3FF)))
         elif ord(ch) < 32 or ord(ch) > 126:
             flush()
-            parts.append('#$%02X' % ord(ch))
+            # Vierstellig (#$00E9): zweistellig (#$E9) ist ein AnsiChar der
+            # aktiven Codepage, der Wert haengt dann an der Build-Maschine
+            # (Review Bereich C, Minor).
+            parts.append('#$%04X' % ord(ch))
         else:
             buf.append(ch)
     flush()

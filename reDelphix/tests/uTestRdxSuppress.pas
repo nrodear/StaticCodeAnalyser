@@ -42,7 +42,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxSuppress;
+  uRdxBufferMath, uRdxSuppress,
+  uTestRdxTextKit;   // Apply
 
 const
   CODE = '  L := TStringList';   // Anfang der Fundzeile
@@ -56,20 +57,6 @@ const
     '  L := TStringList.Create;'#13#10 +
     'end;'#13#10 +
     'end.';
-
-// Wendet AEdit auf ASource an (wie der Editor) und liefert den neuen Text.
-function Apply(const ASource: string; const AEdit: TRdxEdit): string;
-var
-  Bytes : TBytes;
-  Plan  : TArray<TRdxByteEdit>;
-  Err   : string;
-  Ok    : Boolean;
-begin
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
-  Ok := PlanByteEdits(Bytes, [AEdit], Plan, Err);
-  Assert.IsTrue(Ok, Err);
-  Result := TEncoding.UTF8.GetString(ApplyByteEdits(Bytes, Plan));
-end;
 
 function LinesOf(const ASource: string): TStringList;
 begin
@@ -126,7 +113,18 @@ begin
   try
     Assert.IsFalse(TRdxSuppress.LineMarker(L, 7, KIND, E, R),
       'gross/klein wie der Core');
-    Assert.IsTrue(R <> '');
+    Assert.IsTrue(Pos('schon da', R) > 0, R);
+  finally
+    L.Free;
+  end;
+  // ':' direkt hinter dem Tag ohne Leerzeichen (Review Quick-Fix-Units
+  // 2026-10-14): die Art steht da - sonst kaeme '// noinspection: X,X'.
+  Src := StringReplace(BASE_SRC, CODE,
+    '  // noinspection:MemoryLeak'#13#10 + CODE, []);
+  L := LinesOf(Src);
+  try
+    Assert.IsFalse(TRdxSuppress.LineMarker(L, 7, KIND, E, R), 'Tag:Art');
+    Assert.IsTrue(Pos('schon da', R) > 0, R);
   finally
     L.Free;
   end;
@@ -140,9 +138,14 @@ var
 begin
   L := LinesOf('unit u;'#13#10#13#10'end.');
   try
+    // Jede Ablehnung mit IHREM Grund (Nachbesserung FF, Befundklasse
+    // R6-04: bis dahin prueften diese Asserts nur das False).
     Assert.IsFalse(TRdxSuppress.LineMarker(L, 2, 'X', E, R));
+    Assert.IsTrue(Pos('Fundzeile ist leer', R) > 0, R);
     Assert.IsFalse(TRdxSuppress.LineMarker(L, 99, 'X', E, R));
+    Assert.IsTrue(Pos('keine Fundzeile', R) > 0, R);
     Assert.IsFalse(TRdxSuppress.LineMarker(L, 1, '', E, R));
+    Assert.IsTrue(Pos('keine Fundzeile', R) > 0, R);
   finally
     L.Free;
   end;
@@ -180,6 +183,21 @@ begin
       'noinspection-file MagicNumber, TooLongLine', []), Apply(Src, E));
     Assert.IsFalse(TRdxSuppress.FileMarker(L, 'toolongline', E, R),
       'steht schon da');
+    Assert.IsTrue(Pos('schon da', R) > 0, R);
+  finally
+    L.Free;
+  end;
+  // Auch mit ':' direkt hinter dem Tag.
+  Src := StringReplace(BASE_SRC, 'implementation',
+    'implementation'#13#10'// noinspection-file:TooLongLine', []);
+  L := LinesOf(Src);
+  try
+    Assert.IsFalse(TRdxSuppress.FileMarker(L, 'TooLongLine', E, R),
+      'Tag:Art steht schon da');
+    Assert.IsTrue(Pos('schon da', R) > 0, R);
+    Assert.IsTrue(TRdxSuppress.FileMarker(L, 'MagicNumber', E, R), R);
+    Assert.AreEqual(StringReplace(Src, 'noinspection-file:TooLongLine',
+      'noinspection-file: MagicNumber,TooLongLine', []), Apply(Src, E));
   finally
     L.Free;
   end;
@@ -215,6 +233,18 @@ begin
   try
     Assert.IsTrue(TRdxSuppress.RemoveMarker(L, 9, E, R), R);
     Assert.AreEqual(BASE_SRC, Apply(Src, E), 'das Zeilenende davor geht mit');
+  finally
+    L.Free;
+  end;
+  // Letzte Zeile hinter einer LEEREN Vorzeile (WholeLineRemoval, dritter
+  // Zweig - bis zum Wochen-Review 2026-10-21 ohne Test): die Markerzeile
+  // wird geleert, die Leerzeile bleibt.
+  Src := BASE_SRC + #13#10#13#10'// noinspection-file X';
+  L := LinesOf(Src);
+  try
+    Assert.IsTrue(TRdxSuppress.RemoveMarker(L, 10, E, R), R);
+    Assert.AreEqual(BASE_SRC + #13#10#13#10, Apply(Src, E),
+      'Vorzeile leer: nur der Marker geht');
   finally
     L.Free;
   end;
@@ -336,8 +366,10 @@ begin
   L := LinesOf(Src);
   try
     Assert.IsFalse(TRdxSuppress.LineMarker(L, 7, 'TooLongLine', E, R));
+    Assert.IsTrue(Pos('mehrzeiligen String', R) > 0, R);
     Assert.IsFalse(TRdxSuppress.LineMarker(L, 8, 'TooLongLine', E, R),
       'auch die schliessende Zeile liegt noch im String');
+    Assert.IsTrue(Pos('mehrzeiligen String', R) > 0, R);
     Assert.IsTrue(TRdxSuppress.LineMarker(L, 6, 'TooLongLine', E, R), R);
   finally
     L.Free;
@@ -425,6 +457,33 @@ begin
   finally
     L.Free;
   end;
+  // Die beiden Ablehnungen von HeadLineReason (bis zum Wochen-Review
+  // 2026-10-21 ohne Test): kein Kopf (Include) bzw. kein ';' dahinter, und
+  // ein Block-Kommentar, der hinter der Kopfzeile beginnt - die neue Zeile
+  // laege darin.
+  L := LinesOf('procedure P;'#13#10'begin'#13#10'end;');
+  try
+    Assert.IsFalse(TRdxSuppress.FileMarker(L, 'MagicNumber', E, R));
+    Assert.IsTrue(Pos('keine unit-Zeile gefunden', R) > 0, 'Include: ' + R);
+  finally
+    L.Free;
+  end;
+  L := LinesOf('unit u');
+  try
+    Assert.IsFalse(TRdxSuppress.FileMarker(L, 'MagicNumber', E, R));
+    Assert.IsTrue(Pos('keine unit-Zeile gefunden', R) > 0, 'ohne ;: ' + R);
+  finally
+    L.Free;
+  end;
+  L := LinesOf('unit u; { Lizenz'#13#10'  Text }'#13#10'interface'#13#10
+    + 'implementation'#13#10'end.');
+  try
+    Assert.IsFalse(TRdxSuppress.FileMarker(L, 'MagicNumber', E, R));
+    Assert.IsTrue(Pos('Block-Kommentar', R) > 0, 'Kommentar hinter dem Kopf: '
+      + R);
+  finally
+    L.Free;
+  end;
 end;
 
 procedure TTestRdxSuppress.RemoveMarker_MultiKind_Refused;
@@ -442,6 +501,16 @@ begin
   try
     Assert.IsFalse(TRdxSuppress.RemoveMarker(L, 6, E, R));
     Assert.IsTrue(Pos('mehrere Arten', R) > 0, R);
+  finally
+    L.Free;
+  end;
+  // Ein Marker ohne Art (R_NO_KIND, bis zum Wochen-Review 2026-10-21 ohne
+  // Test).
+  Src := StringReplace(BASE_SRC, CODE, '  // noinspection'#13#10 + CODE, []);
+  L := LinesOf(Src);
+  try
+    Assert.IsFalse(TRdxSuppress.RemoveMarker(L, 6, E, R));
+    Assert.IsTrue(Pos('keine erkennbare Art', R) > 0, R);
   finally
     L.Free;
   end;

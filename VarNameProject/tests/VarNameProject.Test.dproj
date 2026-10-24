@@ -95,6 +95,7 @@
         <DCCReference Include="uTestVnpRefuse.pas"/>
         <DCCReference Include="uTestVnpGuards.pas"/>
         <DCCReference Include="uTestVnpEdits.pas"/>
+        <DCCReference Include="uTestVnpContext.pas"/>
         <DCCReference Include="uTestVnpTemplate.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

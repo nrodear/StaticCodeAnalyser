@@ -21,6 +21,12 @@ Lauf, in dem sie angegeben werden.
 > SonarQube-Einstellungen stehen **nicht** in dieser Datei - siehe
 > [sonar-config.md](sonar-config.md).
 
+> reDelphix, die Code-Aktionen des IDE-Plugins, hat eigene Einstellungen in
+> `redelphix.ini` neben dieser Datei und legt sie beim ersten Gebrauch mit
+> kommentierter Vorlage an. Mit der Vorgabe `[UI] Language=auto` folgen die
+> reDelphix-Texte dem Schluessel `Language` unten - siehe
+> [reDelphix/README.md](../reDelphix/README.md#sprache-und-redelphixini).
+
 
 ## `[Scan]`
 
@@ -161,9 +167,9 @@ dort traegt der strukturelle Grund, nicht die Rate.
 
 | Schluessel | Typ | Standard | Bedeutung |
 |---|---|---|---|
-| `Language` | String | `en` | Oberflaechensprache: `de`, `en`, `fr`. Leer = Systemgebietsschema. |
+| `Language` | String | `en` | Oberflaechensprache: `de`, `en`, `fr`. Leer oder unbekannt = Englisch. reDelphix folgt dem Schluessel, solange seine eigene `redelphix.ini` nichts anderes sagt (siehe oben). |
 | `Theme` | String | `system` | Design der EXE: `system` (Windows folgen), `light`, `dark`. |
-| `Element.<Name>` | Bool | `True` | **Not-Aus je UI-Element des IDE-Plugins.** `0` legt genau dieses Element still, ohne Deinstallation - fuer den Fall, dass eines die IDE stoert. Wirkt erst nach IDE-Neustart; uebersprungene Elemente meldet das Plugin per Debug-Ausgabe (Praefix `SCA-UI`). Gueltige Namen: `SharedUiHooks`, `DockForm`, `LineHighlighter`, `EditorBulb` (Gluehbirne mit den Fund-Aktionen an der Caret-Zeile; sie bekommt ihre Editor-Ereignisse vom `LineHighlighter`, `LineHighlighter=0` legt sie also mit still), `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `OptionsPageSCA`, `OptionsPageSonar`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` ist bewusst NICHT abschaltbar - er traegt den Abbau aller uebrigen. Die eigenstaendige EXE liest diese Schluessel nicht. |
+| `Element.<Name>` | Bool | `True` | **Not-Aus je UI-Element des IDE-Plugins.** `0` legt genau dieses Element still, ohne Deinstallation - fuer den Fall, dass eines die IDE stoert. Wirkt erst nach IDE-Neustart; uebersprungene Elemente meldet das Plugin per Debug-Ausgabe (Praefix `SCA-UI`). Gueltige Namen: `SharedUiHooks`, `DockForm`, `LineHighlighter`, `EditorBulb` (Gluehbirne mit den Fund-Aktionen an der Caret-Zeile; sie bekommt ihre Editor-Ereignisse vom `LineHighlighter`, `LineHighlighter=0` legt sie also mit still), `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `EditorContextActions` (Code-Aktionen ohne Fund im Editor-Kontextmenue, flacher Abschnitt unter den Fund-Aktionen mit der deaktivierten Kopfzeile "Code-Aktionen"; die Fund-Aktionen bleiben; ohne `EditorContextMenu` wirkungslos), `OptionsPageSCA`, `OptionsPageSonar`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` ist bewusst NICHT abschaltbar - er traegt den Abbau aller uebrigen. Die eigenstaendige EXE liest diese Schluessel nicht. |
 | `ClipboardOnClick` | Integer | `1` | Was ein Zeilenklick kopiert: `1` nichts, `2` Jira-Mini-Ticket, `3` Markdown-Prompt. |
 | `EditorColorScheme` | String | `default` | Farbschema von Editor-Markerstreifen und Overlay-Titelleiste. |
 | `OverlayPosition` | String | `below` | Wo sich das Hover-Overlay relativ zur Fundzeile verankert. `below` (Standard) beginnt eine Zeile darunter am Zeilenanfang; `sameline` legt sich ueber die Fundzeile. |

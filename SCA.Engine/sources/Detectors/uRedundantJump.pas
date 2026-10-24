@@ -28,6 +28,19 @@ unit uRedundantJump;
 //      `repeat ... Break; until True`, der einzige Fall in dem ein Break
 //      wirklich redundant waere).
 //
+// Charge D5 (2026-10-24): ein einzelnes `end;` vor dem naechsten
+// Routinen-/Abschnittskopf zaehlt jetzt auch als Routinenende (vorher nur
+// ab zwei end - die Routine mitten in der Unit blieb stumm, siehe
+// END-CHAIN-WALK unten).
+//
+// BEKANNTE GRENZE: `Continue;` am Ende eines Schleifenkoerpers, hinter dem
+// die Routine weiterlaeuft ('for .. do begin ..; Continue; end; Foo;'),
+// meldet der Detektor nicht - der End-Chain-Walk weiss nicht, welcher
+// Block mit dem end schliesst (Schleifenrumpf oder if-Zweig); das braucht
+// eine Blockpaarung. Nachbildung 2026-10-24: 13 (realworld) bzw. 3
+// (lazarus) solche Stellen, deren erstes end einen 'do begin'-Rumpf
+// schliesst.
+//
 // Schweregrad: lsHint.
 
 interface
@@ -204,9 +217,21 @@ begin
       //     eine Routinen-Grenze (procedure/function/...) ist. Identifier/if/
       //     else/finally/var/... heisst: ein umschliessender Block hat noch
       //     Code -> NICHT redundant (die 12/15-FP-Klasse der Ist-Messung).
+      //
+      // ROUTINENGRENZE AUCH BEI KETTEN-LAENGE 1 (Charge D5, ShowcaseDemo
+      // 2026-10-24): die Sperre oben war Disziplin des Umbaus 2026-07-18
+      // (keine neuen Funde in DIESEM Schritt), keine Semantik. Folge: ein
+      // `Exit;` direkt vor dem `end;` einer Routine mitten in der Unit
+      // (dahinter der naechste Routinenkopf) blieb stumm, gemeldet wurde nur
+      // die LETZTE Routine vor `end.` - fuegte man `initialization` an, fiel
+      // der Fund weg. Ein einzelnes `end;`, hinter dem ein Routinen- oder
+      // Abschnittskopf steht, schliesst den Routinenrumpf selbst (kein
+      // Statement-Block kann von einem Kopf gefolgt werden). Jetzt gilt fuer
+      // jede Ketten-Laenge dieselbe Terminator-Liste; var/const/type/label
+      // bleiben draussen (inline-var, siehe oben). Nachbildung: +53 Funde
+      // realworld, +58 lazarus, 0 Drops, Stichprobe 20/20 echt redundant.
       var Look := q + 3;                                          // direkt nach `end`
       var ChainOk := False;
-      var ExtraEnds := 0;                                         // ends NACH dem ersten
       while True do
       begin
         // whitespace + optional `;` hinter dem konsumierten `end`
@@ -218,7 +243,6 @@ begin
            ((Look + 3 > Length(Code)) or not IsIdent(Code[Look + 3])) then
         begin
           Inc(Look, 3);
-          Inc(ExtraEnds);
           Continue;                                               // Kette fortsetzen
         end;
         Break;                                                    // Look steht auf Terminator
@@ -230,12 +254,12 @@ begin
       else if SameText(Copy(Code, Look, 5), 'until') and
               ((Look + 5 > Length(Code)) or not IsIdent(Code[Look + 5])) then
         ChainOk := True                                           // repeat-Ende
-      else if ExtraEnds >= 1 then
+      else
       begin
-        // Nur bei Ketten-Laenge >=2 (ALT haette gemeldet): Routinen-Grenze
-        // akzeptieren. var/const/type/label BEWUSST NICHT in der Liste -
-        // inline-var/const sind ausfuehrbarer Code (waere FP), label/decl-
-        // Sections zu mehrdeutig.
+        // Routinen-/Abschnittsgrenze (jede Ketten-Laenge, siehe oben).
+        // var/const/type/label BEWUSST NICHT in der Liste - inline-var/const
+        // sind ausfuehrbarer Code (waere FP), label/decl-Sections zu
+        // mehrdeutig.
         var TermStart := Look;
         var TermEnd := TermStart;
         while (TermEnd <= Length(Code)) and IsIdent(Code[TermEnd]) do Inc(TermEnd);

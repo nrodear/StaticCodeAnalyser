@@ -235,7 +235,8 @@ type
     class function BlankStringLiterals(const S: string): string; static;
 
     // Splittet einen Argumentlisten-Text an TOP-LEVEL-Kommas: nested
-    // Parens und String-Literale werden respektiert.
+    // runde UND eckige Klammern (Set-/Array-Literale, seit 2026-10-14)
+    // sowie String-Literale werden respektiert.
     // 'cond, a, b' -> ['cond', ' a', ' b'] (Teile UNGETRIMMT, wie die
     // Ursprungsfassung).
     // Zentralisiert aus uIfThenShortCircuit (Voll-Review 2026-09-12,
@@ -331,7 +332,7 @@ type
     // 0-basierter Quellzeilen-Index pro Ergebnis-Zeichen.
     // Byte-identische Zentralisierung der bis dahin in 9 Detektoren
     // kopierten lokalen StripFileComments-Routine (uPerfHotspots-Familie;
-    // MD5-Beweis der Zwillinge, siehe Konzept §6-Follow-up). NICHT
+    // MD5-Beweis der Zwillinge, siehe Konzept Abschnitt 6, Follow-up). NICHT
     // verwechseln mit StripStringsAndComments (blankt Strings mit FillCh).
     class function StripFileCommentsKeepStrings(Lines: TStrings;
       out LineForChar: TArray<Integer>): string; static;
@@ -991,7 +992,11 @@ begin
 
     if LeftOK and RightOK then Exit(i);
 
-    Inc(Start, 1); // weiter suchen
+    // Hinter dem verworfenen Treffer weitersuchen, nicht ein Zeichen
+    // hinter dem alten Start: PosEx fand sonst denselben Treffer so oft
+    // wieder, wie Zeichen zwischen Start und i liegen - quadratisch
+    // (Review Bereich C, Major 13: ~1500 Wiederholungen bei 7,9 KB).
+    Start := i + 1;
     if Start > HLen - NLen + 1 then Exit;
   end;
 end;
@@ -1033,7 +1038,7 @@ begin
 
     if LeftOK and RightOK then Exit(i);
 
-    Inc(Start);
+    Start := i + 1;   // hinter dem Treffer weiter, s. FindWholeWordLower
     if Start > HLen - NLen + 1 then Exit;
   end;
 end;
@@ -1128,8 +1133,9 @@ end;
 
 class function TDetectorUtils.SplitTopLevelArgs(
   const Args: string): TArray<string>;
-// Byte-identische Zentralisierung der uIfThenShortCircuit-Fassung
-// (Voll-Review 2026-09-12, Posten 71) - Vertrag siehe interface.
+// Zentralisierung der uIfThenShortCircuit-Fassung (Voll-Review 2026-09-12,
+// Posten 71) - Vertrag siehe interface; seit 2026-10-14 zaehlen auch
+// eckige Klammern als Tiefe.
 var
   parts : TList<string>;
   i, depth, start : Integer;
@@ -1147,8 +1153,11 @@ begin
         if c = '''' then inStr := False;
       end
       else if c = '''' then inStr := True
-      else if c = '(' then Inc(depth)
-      else if c = ')' then Dec(depth)
+      // Eckige Klammern zaehlen mit (Review Bereich C, Minor): ein Set-
+      // oder Array-Literal 'IfThen(x, [1, 2], [3])' wurde sonst an seinen
+      // inneren Kommata zerlegt.
+      else if CharInSet(c, ['(', '[']) then Inc(depth)
+      else if CharInSet(c, [')', ']']) then Dec(depth)
       else if (c = ',') and (depth = 0) then
       begin
         parts.Add(Copy(Args, start, i - start));

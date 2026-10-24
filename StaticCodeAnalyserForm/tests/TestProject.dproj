@@ -117,6 +117,10 @@
         <DCCReference Include="uTestBaselineMetricFingerprint.pas"/>
         <DCCReference Include="uTestBaselineJson.pas"/>
         <DCCReference Include="uTestSourceLineEdit.pas"/>
+        <DCCReference Include="uTestFileTextCache.pas"/>
+        <DCCReference Include="uTestParserReviewC.pas"/>
+        <DCCReference Include="uTestDetectorUtilsText.pas"/>
+        <DCCReference Include="uTestConfigPass.pas"/>
         <DCCReference Include="uTestEditorCommand.pas"/>
         <DCCReference Include="uTestDfmLexer.pas"/>
         <DCCReference Include="uTestDfmParser.pas"/>
@@ -149,8 +153,15 @@
         <DCCReference Include="uTestHardcodedPath.pas"/>
         <DCCReference Include="uTestHardcodedIpAddress.pas"/>
         <DCCReference Include="uTestHardcodedIpInConfig.pas"/>
+        <DCCReference Include="uTestLoopPastHighBound.pas"/>
+        <DCCReference Include="uTestIpAddressScanKit.pas"/>
+        <DCCReference Include="uTestIpAddressScanGrammar.pas"/>
+        <DCCReference Include="uTestIpAddressScanClasses.pas"/>
+        <DCCReference Include="uTestIpAddressScanPascal.pas"/>
+        <DCCReference Include="uTestIpAddressScanIni.pas"/>
         <DCCReference Include="uTestFormatMismatch.pas"/>
         <DCCReference Include="uTestUnusedUses.pas"/>
+        <DCCReference Include="uTestUnusedUsesIdents.pas"/>
         <DCCReference Include="uTestEmptyExcept.pas"/>
         <DCCReference Include="uTestEmptyMethod.pas"/>
         <DCCReference Include="uTestDuplicate.pas"/>
@@ -177,6 +188,7 @@
         <DCCReference Include="uTestFindingFingerprint.pas"/>
         <DCCReference Include="uTestExportSonarGeneric.pas"/>
         <DCCReference Include="uTestExportHtml.pas"/>
+        <DCCReference Include="uTestExportHtmlRowAttrs.pas"/>
         <DCCReference Include="uTestSonarConfig.pas"/>
         <DCCReference Include="uTestSonarTokenStorage.pas"/>
         <DCCReference Include="..\sources\Console\uConsoleRunner.pas"/>
@@ -215,7 +227,16 @@
         <DCCReference Include="uTestSourcePlacesTypes.pas"/>
         <DCCReference Include="uTestFindingActions.pas"/>
         <DCCReference Include="uTestFindingActionMenu.pas"/>
+        <DCCReference Include="uTestFindingMenuCompact.pas"/>
+        <DCCReference Include="uTestContextActions.pas"/>
+        <DCCReference Include="uTestContextActionMenu.pas"/>
+        <DCCReference Include="uTestEditorContextModel.pas"/>
         <DCCReference Include="uTestEditorBulbGeometry.pas"/>
+        <DCCReference Include="uTestEditorFindingStore.pas"/>
+        <DCCReference Include="uTestFindingKeyPolicy.pas"/>
+        <DCCReference Include="uTestBulbDecision.pas"/>
+        <DCCReference Include="uTestFindingSourcePick.pas"/>
+        <DCCReference Include="uTestMarkerTarget.pas"/>
         <DCCReference Include="uTestPerfHotspots.pas"/>
         <DCCReference Include="uTestConcurrencyExt.pas"/>
         <DCCReference Include="uTestEngineApi.pas"/>
@@ -228,6 +249,7 @@
         <DCCReference Include="uTestSymbolReferenceIndex.pas"/>
         <DCCReference Include="uTestUnusedLocal.pas"/>
         <DCCReference Include="uTestUninitVar.pas"/>
+        <DCCReference Include="uTestUninitVarUnicodeIdent.pas"/>
         <DCCReference Include="uTestUnusedParameter.pas"/>
         <DCCReference Include="uTestTautologicalExpr.pas"/>
         <DCCReference Include="uTestDfmMasterDetailUnlinked.pas"/>
@@ -245,6 +267,7 @@
         <DCCReference Include="uTestEmptyInterface.pas"/>
         <DCCReference Include="uTestInterfaceGuid.pas"/>
         <DCCReference Include="uTestParamNameMismatch.pas"/>
+        <DCCReference Include="uTestComparisonPrecedence.pas"/>
         <DCCReference Include="uTestRuleListBox.pas"/>
         <DCCReference Include="uTestVcsChanges.pas"/>
         <DCCReference Include="uTestAssertMessage.pas"/>
@@ -347,6 +370,7 @@
         <DCCReference Include="uTestUnicodeToAnsiCast.pas"/>
         <DCCReference Include="uTestUseAfterFree.pas"/>
         <DCCReference Include="uTestClaudePrompt.pas"/>
+        <DCCReference Include="uTestClaudePromptMarkers.pas"/>
         <DCCReference Include="uTestFindingCopyText.pas"/>
         <DCCReference Include="uTestHintTextLayout.pas"/>
         <DCCReference Include="uTestHitCacheRepair.pas"/>

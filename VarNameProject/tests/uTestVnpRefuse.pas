@@ -1,7 +1,7 @@
 unit uTestVnpRefuse;
 
 // DUnitX-Tests fuer uVnpPlan (VarNameProject, Code-Aktion "Lokale
-// Variable einfuehren"): der Zweig ohne begin (begin..end, Einrueckung) und
+// Konstante einfuehren"): der Zweig ohne begin (begin..end, Einrueckung) und
 // alle Ablehnungen - case-Zweig, Sprungmarke, on-Handler, Zeilenanfang,
 // schon benannt, Konstanten-Kontexte, Deklarationszeilen, die Zeile
 // darueber. Aus uTestVnpPlan abgeteilt (SCA141: Klasse ueber 500 Zeilen),
@@ -56,7 +56,7 @@ begin
   Assert.IsTrue(P.Ok, 'then, Ok: ' + P.Reason);
   Assert.IsTrue(P.Wrap, 'then, Wrap');
   Assert.AreEqual('  ', P.BlockIndent, 'then, BlockIndent');
-  Assert.AreEqual('    var N01 := 999;', P.DeclText, 'then, DeclText');
+  Assert.AreEqual('    const N01 = 999;', P.DeclText, 'then, DeclText');
   Assert.AreEqual('    Result := N01;', P.NewUseLine, 'then, NewUseLine');
   P := PlanIntroduce('    Result := 999;', '  if X then // Kommentar', 15,
     'N01');
@@ -78,7 +78,7 @@ begin
     'MagicNr01');
   Assert.IsTrue(P.Ok, 'Fall 2, Ok: ' + P.Reason);
   Assert.IsFalse(P.Wrap, 'Fall 2, kein Wrap');
-  Assert.AreEqual('  var MagicNr01 := 1000;', P.DeclText, 'Fall 2, DeclText');
+  Assert.AreEqual('  const MagicNr01 = 1000;', P.DeclText, 'Fall 2, DeclText');
   Assert.AreEqual('  if Result > MagicNr01 then', P.NewUseLine,
     'Fall 2, NewUseLine');
 end;
@@ -93,8 +93,8 @@ begin
   P := PlanIntroduce(#9'Result := Value and $FF00;', 'begin', 22, 'MagicNr01');
   Assert.IsTrue(P.Ok, 'Fall 5, Ok: ' + P.Reason);
   Assert.AreEqual(TAB1, P.Indent, 'Fall 5, Indent');
-  Assert.AreEqual(#9'var MagicNr01 := $FF00;', P.DeclText, 'Fall 5, DeclText');
-  Assert.AreEqual<Integer>(6, P.NameCol, 'Fall 5, NameCol');
+  Assert.AreEqual(#9'const MagicNr01 = $FF00;', P.DeclText, 'Fall 5, DeclText');
+  Assert.AreEqual<Integer>(8, P.NameCol, 'Fall 5, NameCol');
   Assert.AreEqual(#9'Result := Value and MagicNr01;', P.NewUseLine,
     'Fall 5, NewUseLine');
   Assert.AreEqual<Integer>(1, Length(P.OldCols), 'Fall 5, Zahl OldCols');
@@ -104,8 +104,8 @@ begin
   Assert.IsTrue(P.Ok, 'Tabs, Ok: ' + P.Reason);
   Assert.IsTrue(P.Wrap, 'Tabs, Wrap');
   Assert.AreEqual(#9#9, P.BlockIndent, 'Tabs, BlockIndent');
-  Assert.AreEqual(#9#9#9'var N01 := 5;', P.DeclText, 'Tabs, DeclText');
-  Assert.AreEqual<Integer>(8, P.NameCol, 'Tabs, NameCol');
+  Assert.AreEqual(#9#9#9'const N01 = 5;', P.DeclText, 'Tabs, DeclText');
+  Assert.AreEqual<Integer>(10, P.NameCol, 'Tabs, NameCol');
   P := PlanIntroduce(#9'    Y := 5;', #9'  else', 11, 'N01');
   Assert.IsTrue(P.Ok, 'gemischt, Ok: ' + P.Reason);
   Assert.IsTrue(P.Wrap, 'gemischt, Wrap');
@@ -117,7 +117,8 @@ begin
   Assert.IsTrue(P.Ok, 'Tab/Leerzeichen, Ok: ' + P.Reason);
   Assert.IsTrue(P.Wrap, 'Tab/Leerzeichen, Wrap');
   Assert.AreEqual(TAB1, P.BlockIndent, 'Tab/Leerzeichen, BlockIndent');
-  Assert.AreEqual('    var N01 := 5;', P.DeclText, 'Tab/Leerzeichen, DeclText');
+  Assert.AreEqual('    const N01 = 5;', P.DeclText,
+    'Tab/Leerzeichen, DeclText');
 end;
 
 // begin..end fuer den Zweig nur, wenn die Zeile genau die EINE Anweisung
@@ -226,6 +227,7 @@ var
 begin
   P := PlanIntroduce('  else Result := 7;', 'X := 1;', 18, 'N01');
   Assert.IsFalse(P.Ok, 'else');
+  Assert.IsTrue(Pos('"else"', P.Reason) > 0, 'Grund else: ' + P.Reason);
   // Neu:
   P := PlanIntroduce('  end else Y := 42;', '    X := 1;', 18, 'N01');
   Assert.IsFalse(P.Ok, 'end');
@@ -242,12 +244,16 @@ begin
   Assert.IsTrue(Pos('"except"', P.Reason) > 0, 'Grund except: ' + P.Reason);
   P := PlanIntroduce('  UNTIL I > 10;', '    Inc(I);', 14, 'N01');
   Assert.IsFalse(P.Ok, 'UNTIL gross geschrieben');
+  Assert.IsTrue(Pos('"until"', P.Reason) > 0, 'Grund UNTIL: ' + P.Reason);
 end;
 
 // Schon benannt: ist das Literal ALLEIN der Wert einer var/const-
 // Deklaration (auch hex, mit Typangabe, mit Tab vor dem Literal) ->
 // Abbruch; ist es nur ein Teil des Werts, geht es (README Grenzen;
 // vnptest: named var, named hex, named const, var part, var compare).
+// Beide Formen zaehlen: die Inline-var eines Anwenders und die
+// Inline-Konstante, die die Aktion selbst schreibt (E26: 'const MagicNr01
+// = 42;' - sonst baute ein zweiter Lauf 'const N02 = 42;' davor).
 // 'const Max: Integer = 42;' faellt auch unter die Konstanten-Regel; die
 // Pruefung auf 'Namen' (vnptest) haelt fest, dass "schon benannt" zuerst
 // greift.
@@ -264,6 +270,15 @@ begin
   P := PlanIntroduce('  const Max: Integer = 42; // x', 'begin', 25, 'N02');
   Assert.IsFalse(P.Ok, 'const');
   Assert.IsTrue(Pos('Namen', P.Reason) > 0, 'Grund const: ' + P.Reason);
+  // E26: die eigene Deklaration (die 42 in Spalte 21, $FF00 in Spalte 20).
+  P := PlanIntroduce('  const MagicNr01 = 42;', 'begin', 21, 'N02');
+  Assert.IsFalse(P.Ok, 'eigene Inline-Konstante');
+  Assert.IsTrue(Pos('Namen', P.Reason) > 0,
+    'Grund eigene Inline-Konstante: ' + P.Reason);
+  P := PlanIntroduce(#9'const MagicNr02 = $FF00;', 'begin', 20, 'N02');
+  Assert.IsFalse(P.Ok, 'eigene Inline-Konstante hex');
+  Assert.IsTrue(Pos('Namen', P.Reason) > 0,
+    'Grund eigene Inline-Konstante hex: ' + P.Reason);
   P := PlanIntroduce('  var Y := 42 * X;', 'begin', 13, 'N02');
   Assert.IsTrue(P.Ok, 'Teil des Werts: ' + P.Reason);
   P := PlanIntroduce('  var B := X = 42;', 'begin', 18, 'N02');
@@ -294,6 +309,8 @@ begin
   Assert.IsTrue(Pos('Konstante', P.Reason) > 0, 'Grund const: ' + P.Reason);
   P := PlanIntroduce('  CONST C = 42 * 2;', 'begin', 18, 'N01');
   Assert.IsFalse(P.Ok, 'CONST, die 2 - Plan "' + P.NewUseLine + '"');
+  Assert.IsTrue(Pos('Konstanten-Deklarationen', P.Reason) > 0,
+    'Grund CONST: ' + P.Reason);
   // array[0..9]: die 0 in Spalte 16, die 9 in Spalte 19.
   P := PlanIntroduce('  var A: array[0..9] of Byte;', 'begin', 16, 'N01');
   Assert.IsFalse(P.Ok, 'Typ, untere Grenze - Plan "' + P.NewUseLine + '"');
@@ -378,6 +395,8 @@ begin
   // Ohne Leerzeichen um '=': die 42 in Spalte 5.
   P := PlanIntroduce('  C=42;', 'begin', 5, 'N01');
   Assert.IsFalse(P.Ok, 'C=42 - Plan "' + P.NewUseLine + '"');
+  Assert.IsTrue(Pos('type-Abschnitt', P.Reason) > 0,
+    'Grund C=42: ' + P.Reason);
   // '=' als Vergleich: die 42 in Spalte 10 bzw. 13.
   P := PlanIntroduce('  if X = 42 then', '  Y := 1;', 10, 'N01');
   Assert.IsTrue(P.Ok, 'Vergleich im if: ' + P.Reason);

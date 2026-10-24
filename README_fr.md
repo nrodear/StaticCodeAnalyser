@@ -17,7 +17,7 @@ autonome existe en version 32 bits et 64 bits. Les projets **Lazarus / Free Pasc
 sont analysés nativement par l'application autonome et la CLI — même moteur, mêmes
 règles, selon le dialecte : projets `.lpi`/`.lpk`, unités `.pp`/`.lpr` et fiches
 `.lfm` ([détails](#lazarus--free-pascal-fpc)).
-Analyse basée sur l'AST avec **201 règles** : 177 contrôles
+Analyse basée sur l'AST avec **203 règles** : 179 contrôles
 Pascal pour les fuites mémoire, l'injection SQL, les code smells, les
 vulnérabilités de sécurité, l'encodage des fichiers et la sûreté Unicode
 (Trojan Source) et la duplication de code
@@ -48,7 +48,7 @@ aucune installation Sonar, directement dans l'IDE, avec passage de relais à Cla
 
 | Capacité | Détails |
 |----------|---------|
-| 🐛 **Détection de bugs** | 177 règles Pascal exécutées sur chaque fichier `.pas` (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 règles DFM sur chaque `.dfm` (gestionnaires d'événements morts, identifiants de base de données en clair, maître-détail circulaire, composants inutilisés, …) — **199 au total**, portées par 158 enregistrements de pipeline |
+| 🐛 **Détection de bugs** | 178 règles Pascal exécutées sur chaque fichier `.pas` (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 règles DFM sur chaque `.dfm` (gestionnaires d'événements morts, identifiants de base de données en clair, maître-détail circulaire, composants inutilisés, …) — **199 au total**, portées par 158 enregistrements de pipeline |
 | 🔐 **Contrôles de sécurité** | SQLInjection (basé sur un score), HardcodedSecret, HardcodedPath, HardcodedIpAddress (aussi dans les fichiers .ini) ; **sûreté Unicode** — Trojan Source / bidirectional override (CVE-2021-42574), caractères invisibles / à chasse nulle, intégrité BOM / encodage UTF-8 |
 | 🧹 **Code smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Analyse incrémentale** | Bouton « Branch-Changes » : uniquement les fichiers modifiés dans la branche Git/SVN — 200 ms au lieu de 60 s |
@@ -64,7 +64,7 @@ aucune installation Sonar, directement dans l'IDE, avec passage de relais à Cla
 
 ## Fonctions principales
 
-### 1. Analyse statique de code (201 règles — 177 Pascal + 23 DFM + 1 INI, taxonomie Sonar)
+### 1. Analyse statique de code (203 règles — 179 Pascal + 23 DFM + 1 INI, taxonomie Sonar)
 
 **Contrôles AST Pascal (~130)** : **bugs** (MemoryLeak, NilDeref, DivByZero,
 FormatMismatch, ReversedForRange, SelfAssignment, VirtualCallInCtor,
@@ -276,7 +276,7 @@ Référence du résolveur de configuration : [docs/sonar-config.md](docs/sonar-c
 
 ---
 
-## Ce qui est détecté (201 règles — 177 Pascal + 23 DFM + 1 INI)
+## Ce qui est détecté (203 règles — 179 Pascal + 23 DFM + 1 INI)
 
 Chaque résultat tombe dans l'une des **cinq catégories Sonar** :
 

@@ -33,6 +33,13 @@ type
     // dieser Test macht den Kommentar-Vertrag an den Combo-Populates
     // (uMainForm/uIDEAnalyserForm) maschinell pruefbar.
     [Test] procedure AllLanguages_KeepDefaultAsPassthrough;
+    // TranslateTo (Entscheid E29, 2026-10-15): eine BESTIMMTE Sprache, ohne
+    // die aktive anzufassen - reDelphix hat eine eigene Sprachwahl und
+    // darf die SCA-Oberflaeche nicht umstellen.
+    [Test] procedure TranslateTo_German_KeepsActiveLanguage;
+    [Test] procedure TranslateTo_EnglishEmptyUnknown_IsIdentity;
+    [Test] procedure TranslateTo_RegionalCode_UsesBaseLanguage;
+    [Test] procedure TranslateTo_Format_TranslatesThenFormats;
   end;
 
 implementation
@@ -111,7 +118,12 @@ end;
 
 procedure TTestLocalization.ParsePo_BrokenInput_DoesNotRaise;
 // Auflage des Cutovers: bei kaputter Datei NIE crashen, sondern still auf
-// Englisch zurueckfallen.
+// Englisch zurueckfallen. Dazu der Vertrag des Ergebnisses (Review Woche
+// G05-05: bis dahin nur "keine Exception"): ein Literal ohne
+// schliessendes Quote ist strukturell kaputt (False - LoadLanguage
+// verwirft die Tabelle), Leeres und Text ohne Schluesselwort sind
+// tolerant leer (True, kein Eintrag). Die Ergebnisse erst hinter dem
+// try/except: ein Assert darin waere eine Exception, die der Block schluckt.
 var
   D  : TDictionary<string, string>;
   Ok : Boolean;
@@ -127,6 +139,12 @@ begin
       Ok := False;
     end;
     Assert.IsTrue(Ok, 'kaputte .po darf keine Exception werfen');
+    Assert.IsFalse(ParsePo('msgid "unterminiert', D),
+      'Literal ohne schliessendes Quote: kaputt');
+    Assert.IsTrue(ParsePo('', D), 'leerer Text: tolerant');
+    Assert.IsTrue(ParsePo('voelliger Unsinn ohne Struktur', D),
+      'Text ohne Schluesselwort: tolerant');
+    Assert.AreEqual<Integer>(0, Integer(D.Count), 'kein Eintrag');
   finally D.Free; end;
 end;
 
@@ -273,6 +291,62 @@ begin
   finally
     SetLanguage(Old);
   end;
+end;
+
+procedure TTestLocalization.TranslateTo_German_KeepsActiveLanguage;
+// Der Kern des Vertrags: die aktive Sprache (hier fr) bleibt in allen drei
+// Sichten stehen - CurrentLanguage, Tabellengroesse und _() -, waehrend
+// TranslateTo die deutsche Tabelle liefert.
+var
+  Old : string;
+  N   : Integer;
+begin
+  Old := CurrentLanguage;
+  try
+    SetLanguage('fr');
+    N := TranslationCount;
+    Assert.AreEqual('Fehler', TranslateTo('de', 'Errors'),
+      'TranslateTo(de) muss die deutsche .po nehmen');
+    Assert.AreEqual('fr', CurrentLanguage,
+      'TranslateTo darf die aktive Sprache nicht umstellen');
+    Assert.AreEqual<Integer>(N, TranslationCount,
+      'die aktive Tabelle muss die franzoesische bleiben');
+    Assert.AreEqual('Erreurs', _('Errors'),
+      '_() uebersetzt weiter in die aktive Sprache');
+  finally
+    SetLanguage(Old);
+  end;
+end;
+
+procedure TTestLocalization.TranslateTo_EnglishEmptyUnknown_IsIdentity;
+// Wie SetLanguage: '' und Muell sind kein Kuerzel, 'xx' hat keine .po, und
+// die en.po ist Identitaet - in allen vier Faellen kommt der Ausgangstext.
+const
+  LANGS: array[0..3] of string = ('en', '', 'xx', '..\..\boese');
+var
+  Lang : string;
+begin
+  for Lang in LANGS do
+    Assert.AreEqual('Errors', TranslateTo(Lang, 'Errors'),
+      Format('"%s" muss den englischen Ausgangstext liefern', [Lang]));
+end;
+
+procedure TTestLocalization.TranslateTo_RegionalCode_UsesBaseLanguage;
+// Dieselbe Normalisierung wie SetLanguage (NormalizeLangCode): 'de-DE',
+// ' DE ' und 'de_AT' sind Deutsch - der Wert kommt aus einer von Hand
+// gepflegten ini (redelphix.ini).
+begin
+  Assert.AreEqual('Fehler', TranslateTo('de-DE', 'Errors'));
+  Assert.AreEqual('Fehler', TranslateTo(' DE ', 'Errors'));
+  Assert.AreEqual('Fehler', TranslateTo('de_AT', 'Errors'));
+end;
+
+procedure TTestLocalization.TranslateTo_Format_TranslatesThenFormats;
+// Erst uebersetzen, dann formatieren - die Uebersetzung darf die
+// Platzhalter umstellen; ohne Eintrag bleibt der Ausgangstext formatiert.
+begin
+  Assert.AreEqual('3 Befunde', TranslateTo('de', '%d findings', [3]));
+  Assert.AreEqual('3 findings', TranslateTo('xx', '%d findings', [3]));
 end;
 
 initialization

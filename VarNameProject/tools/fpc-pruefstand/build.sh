@@ -4,24 +4,36 @@
 # (tests/uTestVnp*.pas) - dieselben Tests, die tests/VarNameProject.Test.dpr
 # in Delphi faehrt, hier ohne IDE (FPC 3.2.2, i386-win32). Muster:
 # reDelphix/tools/fpc-pruefstand, aber eigenstaendig (VarNameProject haengt
-# weder an SCA.Engine noch an reDelphix).
+# weder an SCA.Engine noch an reDelphix); die Bausteine (Anpassung der
+# Quellen, Runner, Bau, Abgleich der Testzahl) kommen aus
+# tools/fpc_runner_lib.sh im Wurzelverzeichnis des Repos - gemeinsam mit
+# SCA.SharedUI/tools/run_fpc_pure.sh (Review Woche 2026-10-21, G10-01;
+# Folgewelle A7).
 # Aufruf: build.sh [<testunit> ...]   ohne Argument: alle tests/uTestVnp*.pas
 # WORK=<ordner> legt Kopien, runner.pas und out/ dort ab (Vorgabe: work/
 #   neben diesem Skript) - so stoeren sich zwei Laeufe nicht.
 # FPC=<pfad> ueberschreibt den Compiler.
-# Exit: 0 alle Tests gruen; 1 Test rot oder Bau gescheitert; 2 Aufruf- oder
-#   Quellfehler, auch wenn die Zahl der [Test]-Attribute einer Testunit
-#   nicht zur Zahl der erkannten Testmethoden passt (der Runner liesse sonst
-#   Tests still aus).
+# Exit: 0 alle Tests gruen; 1 Test rot, Bau gescheitert, Lauf ohne
+#   Zusammenfassung oder mit einer anderen Testzahl als den [Test]-
+#   Attributen; 2 Aufruf- oder Quellfehler, auch wenn die Zahl der
+#   [Test]-Attribute einer Testunit nicht zur Zahl der erkannten
+#   Testmethoden passt (der Runner liesse sonst Tests still aus).
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 VNP="$(cd "$HERE/../.." && pwd)"
+LIB="$(cd "$VNP/.." && pwd)/tools/fpc_runner_lib.sh"
 FPC="${FPC:-/c/lazarus/fpc/3.2.2/bin/i386-win32/fpc.exe}"
 WORK="${WORK:-$HERE/work}"
 if [ ! -x "$FPC" ]; then
   echo "FPC nicht gefunden: $FPC (FPC=<pfad> setzen)" >&2
   exit 2
 fi
+if [ ! -f "$LIB" ]; then
+  echo "Bausteine fehlen: $LIB" >&2
+  exit 2
+fi
+# shellcheck source=../../../tools/fpc_runner_lib.sh
+. "$LIB"
 if [ $# -eq 0 ]; then
   set -- $(cd "$VNP/tests" 2>/dev/null && ls uTestVnp*.pas 2>/dev/null \
     | sed 's/\.pas$//')
@@ -37,38 +49,24 @@ mkdir -p "$WORK/out" || exit 2
 # statt still die alte Kopie zu uebersetzen.
 rm -f "$WORK"/*.pas "$WORK"/out/*
 
-# Fuer FPC 3.2.2 anpassen: Namensraeume, DUnitX-Attribute, generisches
-# AreEqual<Integer> (der Shim kennt AreEqualInt).
-adapt() {
-  tr -d '\r' < "$1" \
-  | sed -e 's/System\.SysUtils/SysUtils/g' \
-        -e 's/System\.Classes/Classes/g' \
-        -e 's/System\.StrUtils/StrUtils/g' \
-        -e 's/System\.Generics\.Collections/Generics.Collections/g' \
-        -e 's/\[TestFixture\]//' \
-        -e 's/\[Test\] *//' \
-        -e 's/Assert\.AreEqual<Integer>(/Assert.AreEqualInt(/g' \
-  > "$2"
-}
-
+# Fuer FPC 3.2.2 anpassen (fpc_adapt: Namensraeume, DUnitX-Attribute,
+# generisches AreEqual<Integer> - nur ausserhalb von String-Literalen).
 for u in uVnpPlan uVnpEdits; do
   if [ ! -f "$VNP/source/$u.pas" ]; then
     echo "Quelle fehlt: $VNP/source/$u.pas" >&2
     exit 2
   fi
-  adapt "$VNP/source/$u.pas" "$WORK/$u.pas"
+  fpc_adapt "$WORK" "$VNP/source/$u.pas" || exit 2
 done
 cp "$HERE/DUnitX.TestFramework.pas" "$WORK/" || exit 2
 
 # Runner erzeugen. Laeuft in der aktuellen Shell (Gruppe, keine Subshell):
-# ein exit hier beendet das Skript, Meldungen gehen deshalb nach stderr.
+# ein exit hier beendet das Skript, Meldungen gehen deshalb nach stderr;
+# total zaehlt die [Test]-Attribute aller Testunits fuer den Abgleich mit
+# dem Lauf.
+total=0
 {
-  printf 'program runner;\n\nuses\n  SysUtils, DUnitX.TestFramework'
-  for t in "$@"; do printf ',\n  %s' "$t"; done
-  printf ';\n\ntype\n  TTestProc = procedure of object;\n\nvar\n  Passed, Failed : Integer;\n\n'
-  printf 'procedure Run(const AName: string; AProc: TTestProc);\nbegin\n  try\n    AProc();\n    Inc(Passed);\n'
-  printf '  except\n    on E: ETestPass do Inc(Passed);\n    on E: Exception do\n    begin\n      Inc(Failed);\n'
-  printf "      Writeln('FAIL ', AName, ': ', E.ClassName, ': ', E.Message);\n    end;\n  end;\nend;\n\n"
+  fpc_runner_head "$@"
   n=0
   for t in "$@"; do
     src="$VNP/tests/$t.pas"
@@ -76,48 +74,29 @@ cp "$HERE/DUnitX.TestFramework.pas" "$WORK/" || exit 2
       echo "Testunit fehlt: $src" >&2
       exit 2
     fi
-    # Der Runner kennt genau EINE Fixture mit einfachen [Test]-Methoden:
-    # eine zweite Fixture oder [Setup]/[TearDown]/[TestCase] liefe hier
-    # still anders als unter DUnitX.
-    fixtures=$(tr -d '\r' < "$src" | grep -cE '^[[:space:]]*\[TestFixture')
-    if [ "$fixtures" != "1" ] \
-       || tr -d '\r' < "$src" | grep -qE '\[(Setup|TearDown|SetupFixture|TearDownFixture)\]|\[TestCase'; then
-      echo "$t: $fixtures Fixture(s) oder [Setup]/[TearDown]/[TestCase] - der Runner kann nur EINE Fixture mit einfachen [Test]-Methoden" >&2
-      exit 2
-    fi
-    adapt "$src" "$WORK/$t.pas"
-    cls=$(grep -oE '^  T[A-Za-z0-9_]+ = class$' "$WORK/$t.pas" | head -1 | awk '{print $1}')
+    fpc_adapt "$WORK" "$src" || exit 2
+    fpc_fixture_info "$src" "$WORK/$t.pas" || exit 2
     # Abgleich: jede [Test]-Methode muss als '    procedure Name;' erkannt
     # sein, sonst fehlte ihr Run()-Aufruf und der Lauf meldete trotzdem gruen.
-    expected=$(tr -d '\r' < "$src" | grep -cE '^[[:space:]]*\[Test\]')
-    procs=$(grep -oE '^    procedure [A-Za-z0-9_]+;' "$WORK/$t.pas" | awk '{gsub(";","",$2); print $2}')
-    got=$(printf '%s' "$procs" | grep -c .)
-    if [ -z "$cls" ] || [ "$expected" != "$got" ]; then
-      echo "$t: Fixture-Klasse '${cls:-?}', [Test]-Attribute $expected, erkannte Testmethoden $got - Abbruch" >&2
+    if [ -z "$FPC_CLS" ] || [ "$FPC_EXPECTED" != "$FPC_GOT" ]; then
+      echo "$t: Fixture-Klasse '${FPC_CLS:-?}', [Test]-Attribute $FPC_EXPECTED, erkannte Testmethoden $FPC_GOT - Abbruch" >&2
       exit 2
     fi
     n=$((n+1))
-    printf 'procedure RunSuite%d;\nvar\n  T : %s;\nbegin\n  T := %s.Create;\n  try\n' "$n" "$cls" "$cls"
-    for p in $procs; do
-      printf "    Run('%s.%s', T.%s);\n" "$t" "$p" "$p"
-    done
-    printf '  finally\n    T.Free;\n  end;\nend;\n\n'
+    total=$((total + FPC_GOT))
+    # shellcheck disable=SC2086 # FPC_PROCS: ein Name je Zeile
+    fpc_runner_suite "$n" "$t" "$FPC_CLS" $FPC_PROCS
   done
-  printf 'begin\n  Passed := 0;\n  Failed := 0;\n'
-  i=0
-  for t in "$@"; do i=$((i+1)); printf '  RunSuite%d;\n' "$i"; done
-  printf "  Writeln('PASSED ', Passed, '  FAILED ', Failed);\n  if Failed > 0 then Halt(1);\nend.\n"
+  fpc_runner_main "$n"
 } > "$WORK/runner.pas"
 
+# Bauen und laufen lassen, beides in WORK (fpc_build: FPC-Exit zaehlt;
+# fpc_run_check: Zusammenfassung und Testzahl wie reDelphix, Review R6-02;
+# jeder Exit des Runners ungleich 0 wird 1 - Vertrag oben 0/1/2, ein
+# Absturz endete sonst mit FPCs Laufzeitfehler-Code 216/217, G10-21).
+fpc_build "$WORK" "" || exit 1
 cd "$WORK" || exit 2
-"$FPC" -Mdelphiunicode -Sh -gl -vew -FEout -FUout runner.pas 2>&1 \
-  | grep -vE '^(Free Pascal|Copyright|Target OS|Compiling|Linking|[0-9]+ lines compiled)' | head -60
-if [ -f "$WORK/out/runner.exe" ]; then
-  "$WORK/out/runner.exe"
-  rc=$?
-  echo "runner exit=$rc"
-  exit $rc
-else
-  echo "KEIN runner.exe - Bau gescheitert"
-  exit 1
-fi
+fpc_run_check "$WORK/out/runner.exe" "$WORK/run.log" "$total" \
+  "die Testunits tragen $total [Test]-Attribute - das Ergebnis gehoert nicht zu diesem Aufruf" rc \
+  || exit 1
+exit 0

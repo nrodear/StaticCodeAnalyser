@@ -29,7 +29,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uEngineApi, uRdxScopeTable, uRdxRecipeRunner;
+  uEngineApi, uRdxScopeTable, uRdxRecipeRunner,
+  uTestRdxTextKit;   // LineOf
 
 const
   SCOPES: array[0..4] of string = (
@@ -44,29 +45,19 @@ var
   SL : TStringList;
   S  : string;
 begin
-  Result := TRdxScopeTable.Create;
+  // Die Tabelle erst nach der Liste und mit eigenem Schutz: scheitert
+  // LoadFromStrings, gibt der except-Zweig sie frei (Review Woche G01-17).
   SL := TStringList.Create;
   try
     for S in SCOPES do
       SL.Add(S);
-    Result.LoadFromStrings(SL);
-  finally
-    SL.Free;
-  end;
-end;
-
-function LineOf(const ASource, AMarker: string): Integer;
-var
-  SL : TStringList;
-  i  : Integer;
-begin
-  Result := 0;
-  SL := TStringList.Create;
-  try
-    SL.Text := ASource;
-    for i := 0 to SL.Count - 1 do
-      if Pos(AMarker, SL[i]) > 0 then
-        Exit(i + 1);
+    Result := TRdxScopeTable.Create;
+    try
+      Result.LoadFromStrings(SL);
+    except
+      Result.Free;
+      raise;
+    end;
   finally
     SL.Free;
   end;
@@ -107,15 +98,24 @@ begin
     Assert.IsTrue(Plan.Block = qbNone);
     Assert.AreEqual<Integer>(3, Length(Plan.Items));
     Assert.AreEqual('Winapi.Windows', Plan.Items[0].Qualified);
-    Assert.IsTrue(Plan.Items[0].Why = qwOk);
+    Assert.AreEqual<TRdxQualifyWhy>(qwOk, Plan.Items[0].Why);
     Assert.AreEqual('Windows', Plan.Items[0].Edit.Expected);
     Assert.AreEqual('Winapi.Windows', Plan.Items[0].Edit.NewText);
-    Assert.IsTrue(Plan.Items[1].Why = qwOk);
-    Assert.IsTrue(Plan.Items[2].Why = qwScopeTable, 'Foo kennt die Tabelle nicht');
+    Assert.AreEqual<TRdxQualifyWhy>(qwOk, Plan.Items[1].Why);
+    Assert.AreEqual<TRdxQualifyWhy>(qwScopeTable, Plan.Items[2].Why,
+      'Foo kennt die Tabelle nicht');
     Assert.IsTrue(Plan.Items[2].ScopeReason <> '');
     Assert.AreEqual<Integer>(2, Length(Plan.All));
     Assert.AreEqual('Winapi.Windows, System.Classes', Plan.AllPreview);
     Assert.IsFalse(Plan.AllUnsorts);
+    // Mehr Ziele als MAX_QUALIFY_PREVIEW (3): die Vorschau nennt drei und
+    // ', ...' (bis zum Wochen-Review 2026-10-21 ohne Test - die groesste
+    // Fixture hatte drei Eintraege).
+    Plan := PlanFor(Src('', 'uses Windows, Classes, Variants, Messages;'),
+      'uses', S, nil);
+    Assert.AreEqual<Integer>(4, Length(Plan.All));
+    Assert.AreEqual('Winapi.Windows, System.Classes, System.Variants, ...',
+      Plan.AllPreview);
   finally
     S.Free;
   end;
@@ -149,16 +149,16 @@ begin
     // 'System.SysUtils' am Ende nicht.
     Plan := PlanFor(Src('', 'uses Classes, Messages, SysUtils;'), 'uses', S, nil);
     Assert.AreEqual<Integer>(3, Length(Plan.Items));
-    Assert.IsTrue(Plan.Items[0].Why = qwUnsorts, 'Classes');
-    Assert.IsTrue(Plan.Items[1].Why = qwUnsorts, 'Messages');
-    Assert.IsTrue(Plan.Items[2].Why = qwOk, 'SysUtils');
+    Assert.AreEqual<TRdxQualifyWhy>(qwUnsorts, Plan.Items[0].Why, 'Classes');
+    Assert.AreEqual<TRdxQualifyWhy>(qwUnsorts, Plan.Items[1].Why, 'Messages');
+    Assert.AreEqual<TRdxQualifyWhy>(qwOk, Plan.Items[2].Why, 'SysUtils');
     Assert.AreEqual<Integer>(3, Length(Plan.All),
       'alle bleiben qualifizierbar - gesperrt ist nur das Ergebnis');
     Assert.IsTrue(Plan.AllUnsorts, 'Winapi.Messages vor System.SysUtils');
     // Gegenprobe: System.Classes, System.SysUtils bleibt sortiert.
     Plan := PlanFor(Src('', 'uses Classes, SysUtils;'), 'uses', S, nil);
-    Assert.IsTrue(Plan.Items[0].Why = qwOk);
-    Assert.IsTrue(Plan.Items[1].Why = qwOk);
+    Assert.AreEqual<TRdxQualifyWhy>(qwOk, Plan.Items[0].Why);
+    Assert.AreEqual<TRdxQualifyWhy>(qwOk, Plan.Items[1].Why);
     Assert.IsFalse(Plan.AllUnsorts);
   finally
     S.Free;
@@ -228,8 +228,9 @@ begin
       begin
         Result := SameText(AShortName, 'Classes');
       end);
-    Assert.IsTrue(Plan.Items[0].Why = qwOk);
-    Assert.IsTrue(Plan.Items[1].Why = qwOwnUnit, 'eigene Unit Classes im Projekt');
+    Assert.AreEqual<TRdxQualifyWhy>(qwOk, Plan.Items[0].Why);
+    Assert.AreEqual<TRdxQualifyWhy>(qwOwnUnit, Plan.Items[1].Why,
+      'eigene Unit Classes im Projekt');
     Assert.AreEqual<Integer>(1, Length(Plan.All));
   finally
     S.Free;

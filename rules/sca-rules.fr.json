@@ -377,7 +377,7 @@
     },
     "SCA094": {
       "name": "Doubles parenthèses redondantes",
-      "shortDescription": "`((Ident))` - supprimer les parenthèses extérieures"
+      "shortDescription": "`((Ident))` - supprimer les parenthèses intérieures"
     },
     "SCA095": {
       "name": "Section de visibilité répétée",
@@ -806,6 +806,14 @@
     "SCA201": {
       "name": "Adresse IP dans un fichier de configuration versionné",
       "shortDescription": "Adresse IPv4 ou IPv6 (privée, partagée ou publique) comme valeur dans un fichier .ini de l'arborescence des sources"
+    },
+    "SCA202": {
+      "name": "not, and, or ou xor s'applique avant la comparaison",
+      "shortDescription": "'not Count > 0' ou 'A = True or B = False' - not/and/or/xor sont prioritaires sur les comparaisons, l'expression compile mais teste autre chose"
+    },
+    "SCA203": {
+      "name": "La boucle for dépasse le dernier indice",
+      "shortDescription": "La boucle for va jusqu'à Count, Length() ou High() + 1 et indexe la même collection avec la variable de boucle - le dernier passage est hors limites"
     }
   }
 }
