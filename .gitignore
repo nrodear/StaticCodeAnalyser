@@ -40,6 +40,9 @@ reDelphix/reDelphix.d12.res
 reDelphix/unitscopes.res
 reDelphix/tests/reDelphix.Test.res
 reDelphix/tools/probe/RdxCorpusProbe.res
+# ShowcaseDemo (examples/ShowcaseDemo): die IDE legt die Projekt-.res beim
+# ersten Oeffnen an - nicht einchecken.
+examples/ShowcaseDemo/ShowcaseDemo.res
 # VarNameProject-Kompilierprobe E26: die IDE legt Projekt und .res beim
 # Oeffnen der .dpr selbst an (wie bei tools/ResultProbe) - nicht einchecken.
 VarNameProject/probe/VnpTypeProbe.dproj

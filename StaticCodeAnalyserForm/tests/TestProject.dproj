@@ -227,6 +227,9 @@
         <DCCReference Include="uTestSourcePlacesTypes.pas"/>
         <DCCReference Include="uTestFindingActions.pas"/>
         <DCCReference Include="uTestFindingActionMenu.pas"/>
+        <DCCReference Include="uTestContextActions.pas"/>
+        <DCCReference Include="uTestContextActionMenu.pas"/>
+        <DCCReference Include="uTestEditorContextModel.pas"/>
         <DCCReference Include="uTestEditorBulbGeometry.pas"/>
         <DCCReference Include="uTestEditorFindingStore.pas"/>
         <DCCReference Include="uTestFindingKeyPolicy.pas"/>
@@ -245,6 +248,7 @@
         <DCCReference Include="uTestSymbolReferenceIndex.pas"/>
         <DCCReference Include="uTestUnusedLocal.pas"/>
         <DCCReference Include="uTestUninitVar.pas"/>
+        <DCCReference Include="uTestUninitVarUnicodeIdent.pas"/>
         <DCCReference Include="uTestUnusedParameter.pas"/>
         <DCCReference Include="uTestTautologicalExpr.pas"/>
         <DCCReference Include="uTestDfmMasterDetailUnlinked.pas"/>

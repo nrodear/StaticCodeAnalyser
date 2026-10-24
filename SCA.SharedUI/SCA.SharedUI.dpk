@@ -110,6 +110,7 @@ contains
   uBulbDecision in 'sources\uBulbDecision.pas',
   uEditorBulbButton in 'sources\uEditorBulbButton.pas',
   uEditorBulbGeometry in 'sources\uEditorBulbGeometry.pas',
+  uEditorContextModel in 'sources\uEditorContextModel.pas',
   uEditorFindingStore in 'sources\uEditorFindingStore.pas',
   uExportMenu in 'sources\uExportMenu.pas',
   uFindingFilter in 'sources\uFindingFilter.pas',

@@ -135,6 +135,46 @@ type
     [Test] procedure Div_YodaEqualZero_StillReported;   // TP-Gegenprobe
   end;
 
+  // ---- DivByZero: Operator hinter ')' / ']' (Charge D 2026-10-24) -------
+  // Der Ausdruckstext ('(a+b-1)div b') hat kein Leerzeichen vor dem
+  // Operator; ExtractDivisor suchte ' div ' und sah das Aufrunden-Idiom
+  // nie. Eigene Fixture aus demselben Grund wie oben.
+  [TestFixture]
+  TTestDivByZeroLeftOperand = class
+  public
+    [Test] procedure Div_RoundUpIdiom_ReportsWarning;
+    [Test] procedure Div_CallAsLeftOperand_Reported;
+    [Test] procedure Div_IndexAsLeftOperand_Reported;
+    [Test] procedure Mod_ParenAsLeftOperand_Reported;
+    [Test] procedure Div_ParenLiteralZero_ReportsError;
+    [Test] procedure Div_RoundUpGreaterGuard_NoFinding;   // Gegenprobe
+    [Test] procedure Div_RoundUpExitGuard_NoFinding;      // Gegenprobe
+    [Test] procedure Div_DivModInsideIdentifier_NoFinding; // Gegenprobe
+    [Test] procedure Div_NumberOperandSkipped_LaterModReported;
+    [Test] procedure Div_ParenNumberBeforeMod_StillReported; // Korpus-Drop
+  end;
+
+  // ---- DivByZero G7: Obergrenze einer for-Schleife (Charge D 2026-10-24) --
+  // 'for I := 0 to N - 1 do .. T div N': laeuft der Rumpf, ist N >= 1.
+  [TestFixture]
+  TTestDivByZeroForBound = class
+  private
+    class function DivCount(const ASrc: string): Integer; static;
+  public
+    [Test] procedure Div_ForToNMinusOne_NoFinding;
+    [Test] procedure Div_ForToPredN_NoFinding;
+    [Test] procedure Div_ForOneToN_NoFinding;
+    [Test] procedure Div_ForInlineVarToNMinusOne_NoFinding;
+    [Test] procedure Div_ForBoundAssignedInBody_StillReported;   // Gegenprobe
+    [Test] procedure Div_ForBoundDecInBody_StillReported;        // Gegenprobe
+    [Test] procedure Div_ForOtherIdentifier_StillReported;       // Gegenprobe
+    [Test] procedure Div_AfterForLoop_StillReported;             // Gegenprobe
+    [Test] procedure Div_ForZeroToN_StillReported;               // Gegenprobe
+    [Test] procedure Div_ForCardinalBound_StillReported;         // Gegenprobe
+    [Test] procedure Div_ForInnerLoopVarIsBound_StillReported;   // Gegenprobe
+    [Test] procedure Div_CommentedForHeader_StillReported;       // Gegenprobe
+  end;
+
   // ---- DeadCode Erweiterungen --------------------------------------------------------
   [TestFixture]
   TTestDeadCodeExt = class
@@ -1879,6 +1919,402 @@ begin
   finally F.Free; end;
 end;
 
+{ TTestDivByZeroLeftOperand }
+
+procedure TTestDivByZeroLeftOperand.Div_RoundUpIdiom_ReportsWarning;
+// ShowcaseDemo-Fund: '(A + B - 1) div B' (Aufrunden) - B ist ein
+// ungepruefter Parameter, gemeldet wurde nur 'A div B'. Warning, nicht
+// Error: der Wert von B ist nicht belegt (Severity-Politik).
+const SRC =
+  'unit t; implementation'#13#10+
+  'function PageCount(A, B: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := (A + B - 1) div B;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.CountSev(F, fkDivByZero, lsWarning),
+      '(A + B - 1) div B meldet B als Warning');
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+      'genau ein Fund');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, '(A + B - 1) div B'),
+      TFindingHelper.FirstOf(F, fkDivByZero).LineNumber,
+      'Fund auf der Divisionszeile');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroLeftOperand.Div_CallAsLeftOperand_Reported;
+// 'Abs(A) div B' - der Aufruf links endet ebenfalls mit ')'.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Steps(A, B: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := Abs(A) div B;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+    'Abs(A) div B meldet B');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroLeftOperand.Div_IndexAsLeftOperand_Reported;
+// 'Arr[0] div B' - Index-Zugriff links endet mit ']'.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Share(const Arr: array of Integer; B: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := Arr[0] div B;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+    'Arr[0] div B meldet B');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroLeftOperand.Mod_ParenAsLeftOperand_Reported;
+// Dasselbe fuer mod: '(A * 2) mod B'.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Slot(A, B: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := (A * 2) mod B;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+    '(A * 2) mod B meldet B');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroLeftOperand.Div_ParenLiteralZero_ReportsError;
+// H1 hatte dieselbe Nadel (' div 0'): '(A + 1) div 0' blieb stumm. Die
+// Literal-Null ist bewiesen - Error.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Broken(A: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := (A + 1) div 0;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.CountSev(F, fkDivByZero, lsError),
+    '(A + 1) div 0 ist eine Division durch Literal 0');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroLeftOperand.Div_RoundUpGreaterGuard_NoFinding;
+// Gegenprobe: die Guards gelten fuer die neue Form genauso.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function PageCount(A, B: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  if B > 0 then'#13#10+
+  '    Result := (A + B - 1) div B;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'if B > 0 schuetzt auch (A + B - 1) div B');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroLeftOperand.Div_RoundUpExitGuard_NoFinding;
+// Gegenprobe: Bail-Guard 'if B <= 0 then Exit'.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function PageCount(A, B: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  if B <= 0 then'#13#10+
+  '    Exit;'#13#10+
+  '  Result := (A + B - 1) div B;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'if B <= 0 then Exit schuetzt (A + B - 1) div B');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroLeftOperand.Div_DivModInsideIdentifier_NoFinding;
+// Gegenprobe zur Wortgrenze: 'div'/'mod' mitten in Bezeichnern sind keine
+// Operatoren - '(Individual)+Modulo' darf nichts melden.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Mix(Individual, Modulo: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := (Individual) + Modulo;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'Individual/Modulo enthalten div/mod nur als Teilwort');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroLeftOperand.Div_NumberOperandSkipped_LaterModReported;
+// 'A div 2' belegte frueher den einzigen Operanden-Platz der Zuweisung -
+// 'A mod B' dahinter blieb ungeprueft. Zahlen werden jetzt uebersprungen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Split(A, B: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := (A div 2) + (A mod B);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+    'A mod B hinter A div 2 wird geprueft');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroLeftOperand.Div_ParenNumberBeforeMod_StillReported;
+// Korpus-Drop der ersten Fassung (cnwizards testoperators.pas:39): mit der
+// Wortgrenze stand ')div 3' vor ' mod B' und '3' verdraengte 'B'. Bisher
+// wie kuenftig: B wird gemeldet.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Mix(A, B: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := ((A + 2) * (B - 3) div 3) + (A mod B);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+    'A mod B bleibt gemeldet, auch hinter (..) div 3');
+  finally F.Free; end;
+end;
+
+{ TTestDivByZeroForBound }
+
+class function TTestDivByZeroForBound.DivCount(const ASrc: string): Integer;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(ASrc);
+  try
+    Result := TFindingHelper.Count(F, fkDivByZero);
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestDivByZeroForBound.Div_ForToNMinusOne_NoFinding;
+// ShowcaseDemo-Stichprobe (img32 resamplers:798): 'for y := 0 to n - 1'.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Sum(T, N: Integer): Integer;'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  for I := 0 to N - 1 do'#13#10+
+  '    Result := Result + T div N;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(0, DivCount(SRC),
+    'im Rumpf von for I := 0 to N - 1 ist N >= 1');
+end;
+
+procedure TTestDivByZeroForBound.Div_ForToPredN_NoFinding;
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Sum(T, N: Integer): Integer;'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  for I := 0 to Pred(N) do'#13#10+
+  '    Result := Result + T mod N;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(0, DivCount(SRC),
+    'im Rumpf von for I := 0 to Pred(N) ist N >= 1');
+end;
+
+procedure TTestDivByZeroForBound.Div_ForOneToN_NoFinding;
+// Form A: Start >= 1 und Ende N - kein Typ-Vorbehalt, darum Cardinal.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Fill(T: Integer; N: Cardinal);'#13#10+
+  'var I, R: Integer;'#13#10+
+  'begin'#13#10+
+  '  for I := 1 to N do'#13#10+
+  '  begin'#13#10+
+  '    R := T div N;'#13#10+
+  '    WriteLn(R);'#13#10+
+  '  end;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(0, DivCount(SRC),
+    'im Rumpf von for I := 1 to N ist N >= 1');
+end;
+
+procedure TTestDivByZeroForBound.Div_ForInlineVarToNMinusOne_NoFinding;
+// Inline-Laufvariable ohne Typ: Integer aus dem Literal abgeleitet.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Sum(T, N: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  for var I := 0 to N - 1 do'#13#10+
+  '    Result := Result + T div N;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(0, DivCount(SRC),
+    'for var I := 0 to N - 1 schuetzt ebenso');
+end;
+
+procedure TTestDivByZeroForBound.Div_ForBoundAssignedInBody_StillReported;
+// Die Grenze wird einmal ausgewertet - eine Zuweisung an N im Rumpf (auch
+// NACH der Division) gilt fuer die naechste Iteration.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Sum(T, N: Integer): Integer;'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  for I := 0 to N - 1 do'#13#10+
+  '  begin'#13#10+
+  '    Result := Result + T div N;'#13#10+
+  '    N := N - 1;'#13#10+
+  '  end;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(1, DivCount(SRC),
+    'N wird im Rumpf zugewiesen - kein Schutz');
+end;
+
+procedure TTestDivByZeroForBound.Div_ForBoundDecInBody_StillReported;
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Sum(T, N: Integer): Integer;'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  for I := 0 to N - 1 do'#13#10+
+  '  begin'#13#10+
+  '    Dec(N);'#13#10+
+  '    Result := Result + T div N;'#13#10+
+  '  end;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(1, DivCount(SRC),
+    'Dec(N) im Rumpf - kein Schutz');
+end;
+
+procedure TTestDivByZeroForBound.Div_ForOtherIdentifier_StillReported;
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Sum(T, M, N: Integer): Integer;'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  for I := 0 to M - 1 do'#13#10+
+  '    Result := Result + T div N;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(1, DivCount(SRC),
+    'die Grenze M sagt nichts ueber N');
+end;
+
+procedure TTestDivByZeroForBound.Div_AfterForLoop_StillReported;
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Avg(T, N: Integer): Integer;'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  for I := 0 to N - 1 do'#13#10+
+  '    Result := Result + T;'#13#10+
+  '  Result := Result div N;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(1, DivCount(SRC),
+    'nach der Schleife kann N = 0 sein (Rumpf nie gelaufen)');
+end;
+
+procedure TTestDivByZeroForBound.Div_ForZeroToN_StillReported;
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Sum(T, N: Integer): Integer;'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  for I := 0 to N do'#13#10+
+  '    Result := Result + T div N;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(1, DivCount(SRC),
+    'for I := 0 to N laeuft auch mit N = 0');
+end;
+
+procedure TTestDivByZeroForBound.Div_ForCardinalBound_StillReported;
+// Cardinal: N - 1 laeuft bei N = 0 auf den Hoechstwert ueber, der Rumpf
+// laeuft MIT N = 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Sum(T: Integer; N: Cardinal): Integer;'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  for I := 0 to N - 1 do'#13#10+
+  '    Result := Result + T div N;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(1, DivCount(SRC),
+    'N - 1 mit Cardinal-N schuetzt nicht');
+end;
+
+procedure TTestDivByZeroForBound.Div_ForInnerLoopVarIsBound_StillReported;
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Sum(T, M: Integer): Integer;'#13#10+
+  'var I, N: Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  N := M;'#13#10+
+  '  for I := 0 to N - 1 do'#13#10+
+  '  begin'#13#10+
+  '    Result := Result + T div N;'#13#10+
+  '    for N := 0 to 3 do'#13#10+
+  '      Result := Result + 1;'#13#10+
+  '  end;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(1, DivCount(SRC),
+    'innere Schleife mit Laufvariable N veraendert N');
+end;
+
+procedure TTestDivByZeroForBound.Div_CommentedForHeader_StillReported;
+// Kommentare zaehlen nie als Code: der auskommentierte Kopf schuetzt nicht.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Sum(T, M, N: Integer): Integer;'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  for I := 0 to M - 1 do // for I := 0 to N - 1 do'#13#10+
+  '    Result := Result + T div N;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(1, DivCount(SRC),
+    'for-Kopf im Kommentar ist kein Guard');
+end;
+
 // Angemeldet wie in den uebrigen Testunits (Review Woche G03-25): ohne
 // RegisterTestFixture liefen die Fixtures nur, weil TestProject.dpr
 // UseRTTI := True setzt - ein Runner ohne RTTI liesse sie still aus.
@@ -1889,6 +2325,8 @@ initialization
   TDUnitX.RegisterTestFixture(TTestMissingFinallyExt);
   TDUnitX.RegisterTestFixture(TTestDivByZeroExt);
   TDUnitX.RegisterTestFixture(TTestDivByZeroCompactGuards);
+  TDUnitX.RegisterTestFixture(TTestDivByZeroLeftOperand);
+  TDUnitX.RegisterTestFixture(TTestDivByZeroForBound);
   TDUnitX.RegisterTestFixture(TTestDeadCodeExt);
 
 end.

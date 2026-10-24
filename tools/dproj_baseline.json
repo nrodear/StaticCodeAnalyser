@@ -39,6 +39,10 @@
     "platform": "Win32",
     "projectVersion": "20.1"
   },
+  "examples/ShowcaseDemo/ShowcaseDemo.dproj": {
+    "platform": "Win32",
+    "projectVersion": "20.1"
+  },
   "reDelphix/reDelphix.d12.dproj": {
     "platform": "Win32",
     "projectVersion": "20.1"

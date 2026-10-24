@@ -54,6 +54,7 @@ source\uRdxCompilerTraces.pas     Spuren alter Compiler je Sprachmittel (Default
 source\uRdxMagicFixes.pas         Quick-Fix SCA014 "Lokale Konstante einfuehren" (Charge Q14, E28): Ziel aus dem Fund, dann uRdxIntroPlan/uRdxIntroEdits ohne Sync-Edit-Sitzung; Platte: Lazarus-Projekt, alte Delphi-Projekte (.dof/.bdsproj/.bpr/.bpg, .dproj vor 10.3) und Includes neben der Unit, kein Netzpfad (Charge SQc; seit Charge B1-FD auch kein Include auf einem Netzpfad; `\\?\C:\..` ist seit Charge B2S-a lokal)
 source\uRdxIntroPlan.pas          Code-Aktion "Lokale Variable einfuehren" (ohne Fund; seit Charge Q14 auch der Quick-Fix SCA014): Literal am Caret, Deklaration, Spalten, Ablehnungen (reine Textlogik)
 source\uRdxIntroEdits.pas         dieselbe Aktion: Puffertext, Ziel am Caret, Ersetzungen des Writers, Ende des Sync-Blocks (reine Textlogik; IDE-Teil folgt)
+source\uRdxContextRunner.pas      Code-Aktionen ohne Fund am Caret (Charge B, V5): Lokale Konstante (TRdxMagicFixes.IntroduceAt) und try/finally um Create (TRdxTryFixes.CreateAt), ein Eintrag je Kandidat; reine Textlogik, FPC-Pruefstand
 source\uRdxSuppress.pas           Unterdrueck-Marker setzen und entfernen (reine Textlogik)
 source\uRdxCodeMap.pas            Code-Sicht der Datei (Kommentare, Strings, mehrzeilige Strings), Token-Leser und die geteilten Bausteine der Planer: Bereiche (RangeText, CommentInRange, LastCharBefore/FirstCharAfter, CanAppendLine - bis Charge B2S-a in uRdxStructFixes), Fragen an die ganze Datei (NextTokenOnLineWith, DeclaresAfter/DeclaresRoutine - bis dahin in uRdxSimpleFixes), Klammertiefe (ParenDelta) und Meldungstext (QuotedText, ColumnFromMessage); die Planer-Units haengen fuer solche Helfer nicht mehr aneinander (Review R3-07)
 source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung aller Ersetzungen, Spaltengrenze, Textwahl
@@ -582,6 +583,82 @@ SCA007 laeuft nur mit eingeschaltetem uses-Check (Optionen bzw.
 Ablauf je Aktion protokolliert `%TEMP%\reDelphix.log` (`Provide ...`,
 `neu geparst` / `wiederverwendet`).
 
+## Code-Aktionen ohne Fund (Charge B, 2026-10-23)
+
+Im Editor-Kontextmenue des SCA-Plugins stehen hinter den Fund-Aktionen der
+Caret-Zeile die **Code-Aktionen am Caret** - auch auf einer Zeile ohne Fund
+(Abschnitt mit der Kopfzeile "Code-Aktionen", Entscheid F1; den Host baut
+Charge B2, Schalter `[UI] Element.EditorContextActions`, F7). Der Vertrag
+liegt im Core (`uFindingActions`: `fakContext`, `TEditorContext`,
+`TFindingActions.RegisterContext`, Charge B1); reDelphix meldet dafuer
+`TRdxProvider.ProvideContext` an (`RegisterAtHost`, Abmelden mit
+`UnregisterAtHost`). Nie in der Gluehbirne, nie per Taste (E15).
+
+| Aktion | Am Caret | Verhalten |
+|---|---|---|
+| Lokale Konstante fuer N einfuehren | ein Zahl-Literal (Caret davor, darin oder direkt dahinter; dezimal mit `_`, Bruch, Exponent, `$FF`) | dieselbe Kette wie der Quick-Fix SCA014 (`TRdxMagicFixes.IntroduceAt` -> `PlanLiteral`, Tabelle oben): `const MagicNr01 = N;` als Inline-Konstante direkt vor der Anweisung (E26), nur DIESES Literal (E28), ein Zweig ohne `begin` bekommt `begin..end`, Name `MagicNr01`.. der erste freie (F3), kein Sync Edit, kein Dialog; dieselben Sperren (Zeilen-Leser der Code-Aktion, FPC-Weiche, Spuren alter Compiler, Hauptblock, Skript) und derselbe Plattenblick (`FileReason`, `IncludeReason`: Lazarus-Projekt, alte Delphi-Projekte, Includes, Netzpfad). Sperrt die GANZE Datei (FPC-Weiche, Skript, Spuren alter Compiler - `TRdxMagicPlan.FileWide` aus `IntroduceAt` - und der ganze Plattenblick), steht KEIN Eintrag da, auch wenn zugleich die Stelle sperrt (Entscheid Nico 2026-10-24); Sperren der Stelle (Ausdrucksfortsetzung, `else if`, Deklarationszeile, Hauptblock ...) stehen ausgegraut mit Grund da. Die Fund-Hilfe SCA014 nennt weiter jeden Grund. Nur Zahlen (F5): `#13`, Strings und Zeichen bieten nichts an; ein Binaer- oder Oktal-Literal (`%101`, `&17`) steht gesperrt da (ausser in einer gesperrten Datei). Bedeutungsgleich nach der Praemisse von E26 (unten: hier steht das Literal auch in Arithmetik und Aufrufen - gemessen ist P6 noch nicht) |
+| X in einem try/finally-Block freigeben (aendert Verhalten) | eine Zeile `X := T.Create..;` bzw. `var X[: T] := T.Create..;`, X eine LOKALE Variable der Routine | C3: dieselbe Kette wie der Quick-Fix SCA009 (`TRdxTryFixes.CreateAt` -> `ObjectPair`, Baustein B5), X aus der Zeile; die Freigabe `X.Free`/`FreeAndNil(X)` muss schon als ganze, unbedingte Anweisung in derselben Liste stehen, sonst gesperrt mit Grund (F6). Mehrere Erzeugungen auf der Zeile: die, in deren Anweisung der Caret steht. Gekennzeichnet (E2) wie SCA009 |
+
+**Wann ein Eintrag entsteht (F4):** nur mit einem Kandidaten am Caret -
+dann freigegeben oder ausgegraut mit dem Grund im Hint; sonst gar nichts
+(kein "reDelphix: ..."). Ebenso nichts, wenn die Lokale Konstante an der
+ganzen Datei scheitert (Entscheid Nico 2026-10-24, s. Tabelle) - sonst
+stuende in jeder FPC-faehigen Unit auf jedem Zahl-Literal ein
+ausgegrauter Eintrag. Kein Kandidat fuer C3: eine Erzeugung, hinter der
+schon `try` beginnt (die Form, die die Aktion herstellt), und eine
+Zuweisung an `Result`, ein Feld, eine globale Variable, einen Parameter
+oder einen Ausdruck (`Self.F`, `A[i]`) - dort uebernimmt ein anderer
+Halter das Objekt, und ein gesperrter Eintrag stuende auf jeder solchen
+Zeile. Der Text kommt nur aus dem Editor-Puffer einer Pascal-Datei; die
+Platte liest erst die Lokale Konstante fuer einen Kandidaten am Caret
+(`FileReason`: Projektdateien der Verzeichnisse darueber, `IncludeReason`:
+die Includes - wie die Fund-Hilfe SCA014), beide nach der Netzpfad-Sperre
+(`uRdxPaths.IsNetworkPath`, dort kein Plattenzugriff).
+
+**Menuetext = der der Fund-Hilfe (F2):** `uRdxFixTable.ContextCaption`
+baut ihn ueber `CaptionFor` der Zeile `fkMagicNumber` bzw.
+`fkMissingFinally` - gleich geschrieben, also faellt die Kontextaktion auf
+einer SCA014- bzw. SCA009-Fundzeile hinter der Fund-Hilfe weg
+(`uFindingActionMenu`, Dedup per Caption). Die Hinweise sind dieselben
+msgids. Die Gross-/Kleinschreibung zaehlt dabei nicht (`SameText`, Review
+Charge B, Befund 5): der Name kommt auf dem Fundweg aus der Meldung des
+Detektors, auf dem Kontextweg aus der Zeile - `List` und `list` sind
+derselbe Bezeichner.
+
+**Bausteine:** `uRdxCodeMap.TokenContaining` und `LiteralContaining` (V4:
+das Token bzw. Literal, das die Caret-Spalte enthaelt oder direkt davor
+endet - ueber die Token-Grenzen der Code-Sicht hinweg: `1.5`, `$FF`,
+`#13#10`, `'a'#13'b'` als EIN Literal), `uRdxContextRunner` (V5: der
+Laeufer am Caret, ohne ToolsAPI, im FPC-Pruefstand; Caret im virtuellen
+Raum hinter dem Zeilenende zaehlt als Zeilenende), die Auswahl des
+Kontexts nutzt noch keine Aktion (F8). Tests: `uTestRdxContextRunner`
+(Caret-Marke `{^}`, `uTestRdxTextKit.CaretOf`): 29 Text-Tests (auch im
+FPC-Pruefstand; davon 7 in `TTestRdxContextFileLocks`: ganze Datei = kein
+Eintrag, Stelle = ausgegraut, SCA014 unveraendert), dazu 4 nur unter
+Delphi (Menuetext und Ersetzung gleich denen der Fund-Hilfen, ueber
+`PlanFixIn`; SCA014 ueber die Tabelle in einer FPC-Unit weiter mit Grund).
+
+**Korpus-Probe (Charge B3, `D:\git-sca-realworld`, 13.446 .pas, je 3.000
+zufaellige Stellen, FPC-Harness gegen `TRdxContextRunner.Run`):**
+Konstante (Caret auf einem Zahl-Literal laut grober Regex): angeboten 226
+(7,5 %), gesperrt 2.144 (71,5 % - FPC-Weiche in der Datei 561, Spuren alter
+Compiler 515, Zeile setzt einen Ausdruck fort 387, Deklarationszeile 146,
+...), kein Eintrag 630 (Literal im String/Kommentar, `#13` u. a.). Seit dem
+Entscheid 2026-10-24 (Sperren der ganzen Datei ohne Eintrag, dieselben
+Stellen erneut): angeboten 226 (dieselben Stellen, dieselben Ersetzungen),
+gesperrt 216 (7,2 % - nur noch Gruende der Stelle: Deklarationszeile 51,
+Ausdrucksfortsetzung 47, unklare Zeile darueber 27, Listen-Komma 18,
+case-Zweig 16, ...), kein Eintrag 2.558 (85,3 %); C3 unveraendert. C3
+(Zeilen mit `:=` und `.Create`): angeboten 56 (1,9 %), gesperrt 616 (keine
+Freigabe in derselben Liste 222, Weitergabe 209, bedingte/zweite Freigabe
+72, ...), kein Eintrag 2.328 (Result/Feld/Ausdruck/global - ohne diesen
+Filter stuenden 1.648 weitere gesperrt da -, schon geschuetzt, keine
+Erzeugung als Code). Stichprobe je 20 Angebote von Hand:
+20/20 uebersetzen (Delphi ab 10.3) und behalten das Verhalten (C3: auf dem
+normalen Weg; die Freigabe laeuft danach auch bei einer Ausnahme - der
+Zweck). Laufzeit im Harness: Konstante rund 20 ms je Stelle (Plattenblick
+und Durchsicht der Datei), C3 unter 2 ms.
+
 ## Lokale Variable einfuehren (Refactoring ohne Fund, in Arbeit)
 
 Code-Aktion ohne Fund - seit Entscheid E26 (Nico 2026-10-13) heisst sie
@@ -621,7 +698,11 @@ R4-10).
   Units, 79 Tests: Plan 15, Refuse 9, Guards 18, Edits 20, Context 17)
   stehen in reDelphix.Test und laufen im FPC-Pruefstand (Kommando unter
   "Pruefen").
-  Das Package bietet die Aktion ohne Fund noch nicht an.
+  Seit Charge B bietet das Package die Aktion ohne Fund im Editor-
+  Kontextmenue an - in der Form des Quick-Fixes SCA014 (nur das
+  Literal am Caret, kein Sync Edit; Abschnitt "Code-Aktionen ohne
+  Fund" oben); die Fassung mit allen gleichen Literalen und Sync Edit
+  bleibt im Labor.
 * **Quick-Fix SCA014 (Charge Q14, Entscheid E28):** dieselbe Logik schreibt
   die Konstante zu einem SCA014-Fund - `TargetAt` mit dem Literal der
   if-Bedingung als Caret, `IntroduceEdits` nur fuer dieses eine Literal,
@@ -1104,8 +1185,15 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxTextMsgs uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths uTestRdxBlocks uTestRdxCategoryArgFix uTestRdxEmptyBlockFix uTestRdxEmptyExceptFix uTestRdxGotoExitFix uTestRdxNativeIntFix uTestRdxParensFix uTestRdxTrailingCommaFix uTestRdxLoopBoundFix
+bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxTextMsgs uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths uTestRdxBlocks uTestRdxCategoryArgFix uTestRdxEmptyBlockFix uTestRdxEmptyExceptFix uTestRdxGotoExitFix uTestRdxNativeIntFix uTestRdxParensFix uTestRdxTrailingCommaFix uTestRdxLoopBoundFix uTestRdxContextRunner
 ```
+
+Gemessen (2026-10-24, FPC-Lauf, nach dem Entscheid "Sperren der ganzen Datei ohne
+Eintrag"; Nachbesserung Review Charge B: zwei Tests zu Literalen am Zeilenende, mit
+`-Cr -Co` vor dem Fix in TextPieceEnd beide ERangeError): `PASSED 838  FAILED 0` - 51
+Testunits, davon `uTestRdxContextRunner` 29 (Code-Aktionen ohne Fund; seine letzte
+Fixture, 4 Tests, nur in reDelphix.Test). Davor `PASSED 836`.
+Charge B3 (2026-10-23): `PASSED 830  FAILED 0`, `uTestRdxContextRunner` 21.
 
 Erwartet (Stand 2026-10-22, nach den C-Gruppen der Text-Umstellung E29, gezaehlt ohne FPC-Lauf):
 `PASSED 791  FAILED 0` - 50 Testunits. Gegenueber der Folgewelle B3 (788) drei Tests der
