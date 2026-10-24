@@ -22,6 +22,8 @@
 //       - Method-Header passt nicht zu LocalVar-Decl (Parser-Artefakt
 //         analog uUnusedLocal.LooksLikeRealLocalVar)
 //       - Method ueberschreitet Hard-Caps (MaxLocalVars, MaxStatements)
+//       - Name ist nur das ASCII-Bruchstueck eines Unicode-Bezeichners
+//         (TLexer liest Bezeichner nur ASCII, s. IsUnicodeIdentFragment)
 //
 // Phase-2-Erweiterung (siehe Konzept §11): Sibling-Write-Check fuer
 // if-then-else mit beidseitigem Write. Phase-3 (CFG) und Phase-4
@@ -70,6 +72,7 @@ implementation
 
 uses
   System.StrUtils,
+  System.Character,  // IsNonAsciiIdentChar (Unicode-Bezeichner-Fragmente)
   uFileTextCache, uAstSpans;
 
 // Hard-Caps werden zur Laufzeit aus uSCAConsts.DetectorMaxLocalVars /
@@ -1897,6 +1900,116 @@ begin
   end;
 end;
 
+function IsNonAsciiIdentChar(C: Char): Boolean;
+// Nicht-ASCII-Zeichen, das Delphi in einem Bezeichner zulaesst: Unicode-
+// Buchstabe/-Ziffer, kombinierendes Zeichen oder Surrogat (Buchstaben
+// ausserhalb der BMP). Satz- und Leerzeichen (U+00A0, U+00B7, ...) zaehlen
+// NICHT - an ihnen endet auch fuer Delphi der Bezeichner.
+begin
+  Result := (Ord(C) >= $80) and
+    (C.IsLetterOrDigit or C.IsSurrogate or
+     (C.GetUnicodeCategory in [TUnicodeCategory.ucNonSpacingMark,
+                               TUnicodeCategory.ucCombiningMark,
+                               TUnicodeCategory.ucEnclosingMark]));
+end;
+
+function BuildNonAsciiCodeView(Lines: TStringList;
+  FromLine, ToLine: Integer): TArray<string>;
+// Code-Sicht (Kommentare/Strings geblankt, gelowert) der Zeilen
+// [FromLine..ToLine] - aber NUR, wenn dort ein Nicht-ASCII-Zeichen im CODE
+// steht; sonst nil. Der Rohzeilen-Vorlauf kostet einen Zeichenvergleich je
+// Zeichen und haelt die reinen ASCII-Methoden (Normalfall) vom Strippen frei.
+var
+  i, From0, To0 : Integer;
+  HasNonAscii   : Boolean;
+  State         : TBlankScanState;
+  C             : Char;
+begin
+  Result := nil;
+  if Lines = nil then Exit;
+  From0 := FromLine - 1;
+  To0   := ToLine - 1;
+  if From0 < 0 then From0 := 0;
+  if To0 > Lines.Count - 1 then To0 := Lines.Count - 1;
+  if To0 < From0 then Exit;
+  HasNonAscii := False;
+  for i := From0 to To0 do
+  begin
+    for C in Lines[i] do
+      if Ord(C) >= $80 then
+      begin
+        HasNonAscii := True;
+        Break;
+      end;
+    if HasNonAscii then Break;
+  end;
+  if not HasNonAscii then Exit;
+  SetLength(Result, To0 - From0 + 1);
+  State := Default(TBlankScanState);
+  HasNonAscii := False;
+  for i := From0 to To0 do
+  begin
+    Result[i - From0] := LowerCase(TDetectorUtils.BlankNonCode(Lines[i], State));
+    if not HasNonAscii then
+      for C in Result[i - From0] do
+        if Ord(C) >= $80 then
+        begin
+          HasNonAscii := True;
+          Break;
+        end;
+  end;
+  // Nicht-ASCII nur in Kommentaren/Strings (deutsche Kommentare): kein
+  // Bezeichner betroffen.
+  if not HasNonAscii then Result := nil;
+end;
+
+function IsUnicodeIdentFragment(const AView: TArray<string>;
+  const NameLow: string): Boolean;
+// Charge D1 (ShowcaseDemo 2026-10-24): ist der Var-Name nur das ASCII-
+// Bruchstueck eines Unicode-Bezeichners? Der geteilte TLexer liest
+// Bezeichner nur als A..Z/a..z/0..9/_ (uLexer.pas TLexer.ReadIdent) und
+// zerlegt 'Am<U+043E>unt: Integer' in 'Am' + tkUnknown + 'unt'; der Parser
+// legt daraus einen typlosen nkLocalVar 'Am' an. Die ASCII-Wortgrenze dieser
+// Unit findet 'am' dann in jedem 'Am<U+043E>unt := ...' als READ, den Write
+// nie -> Error-Tier-Fehlalarm "Am is read ... but never assigned".
+// Fragment = mindestens ein ASCII-wortgebundenes Vorkommen grenzt direkt an
+// ein Nicht-ASCII-Bezeichnerzeichen, und KEIN Vorkommen ist ein sauberes
+// Wort. Ein echtes ASCII-'Am' derselben Methode (sauberes Vorkommen in
+// Decl oder Rumpf) bleibt damit unberuehrt. Quelle ist die Code-Sicht
+// (Kommentare/Strings zaehlen nie). Nur Inventur-Skip -> monoton, der
+// Detektor kann dadurch nur Funde verlieren, nie gewinnen.
+// Bewusst detektorlokal: der Lexer-Defekt trifft alle AST-Konsumenten und
+// wird gesondert berichtet (Briefing Charge D: geteilte Helfer nicht ohne
+// Bewegungsvertrag aller Konsumenten aendern).
+var
+  i, P, NL, LL, Fragments : Integer;
+  Before, After : Char;
+begin
+  Result := False;
+  if (AView = nil) or (NameLow = '') then Exit;
+  NL := Length(NameLow);
+  Fragments := 0;
+  for i := 0 to High(AView) do
+  begin
+    LL := Length(AView[i]);
+    P := PosEx(NameLow, AView[i], 1);
+    while P > 0 do
+    begin
+      if P > 1 then Before := AView[i][P - 1] else Before := ' ';
+      if P + NL <= LL then After := AView[i][P + NL] else After := ' ';
+      if not IsIdentChar(Before) and not IsIdentChar(After) then
+      begin
+        if IsNonAsciiIdentChar(Before) or IsNonAsciiIdentChar(After) then
+          Inc(Fragments)
+        else
+          Exit(False);   // sauberes Wort -> echte Variable
+      end;
+      P := PosEx(NameLow, AView[i], P + NL);
+    end;
+  end;
+  Result := Fragments > 0;
+end;
+
 function IsFileDeclaredTypeName(Lines: TStringList;
   const NameLow: string): Boolean;
 // Zensus-Triage 2026-07-25, H5 (Symptom-Gate keyword-misparse): traegt der
@@ -3536,12 +3649,18 @@ var
   var
     LV : TAstNode;
     VarRec : TVarInfo;
+    NonAsciiView : TArray<string>;   // Charge D1: nil = Methode ohne Nicht-ASCII-Code
   begin
+    NonAsciiView := BuildNonAsciiCodeView(Lines, MethodNode.Line, MethodEndL);
     for LV in LocalVars do
     begin
       if Trim(LV.Name) = '' then Continue;
       if LV.Name.StartsWith('_') then Continue;
       if not LooksLikeRealLocalVar(Lines, LV.Line) then Continue;
+      // Charge D1 (2026-10-24): Lexer-Bruchstueck eines Unicode-Bezeichners
+      // ('Am' aus 'Am<U+043E>unt') ist keine eigene Variable - s.
+      // IsUnicodeIdentFragment.
+      if IsUnicodeIdentFragment(NonAsciiView, LowerCase(LV.Name)) then Continue;
       // SCA166-Scope: Parser-Artefakt-Phantoms (nested-Proc-Param / Function-
       // Pointer-Typ-Var / Feld-`if X=nil`) tragen '(' ')' '=' im TypeRef -
       // nie ein echter uninit-Local. TP-sicher (AST-Dump-verifiziert 2026-07-14).
