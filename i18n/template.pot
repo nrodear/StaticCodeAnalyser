@@ -59,7 +59,7 @@ msgstr ""
 msgid "\"%s Assert\" is not a call to System.Assert"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2591
+#: reDelphix/source/uRdxCodeMap.pas:2594
 msgid "\"%s\" after a \";\" before the else - header of an anonymous method? It is unclear what the else belongs to"
 msgstr ""
 
@@ -570,8 +570,8 @@ msgstr ""
 msgid "%s in the name is no known look-alike of an ASCII letter - maybe an intended letter"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:1747
-#: reDelphix/source/uRdxCodeMap.pas:1749
+#: reDelphix/source/uRdxCodeMap.pas:1750
+#: reDelphix/source/uRdxCodeMap.pas:1752
 msgid "%s in the range - an intent comment stays"
 msgstr ""
 
@@ -839,7 +839,7 @@ msgstr ""
 msgid "%s of a custom memory manager (qualified) - %s"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:1890
+#: reDelphix/source/uRdxCodeMap.pas:1893
 msgid "%s on the reported line"
 msgstr ""
 
@@ -935,7 +935,7 @@ msgstr ""
 msgid "%s.Resume is the body of a loop or with statement (\"%s\" before it)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:839
+#: reDelphix/source/uRdxProvider.pas:844
 msgid "%s: no fixMode in the rule catalog"
 msgstr ""
 
@@ -1354,8 +1354,8 @@ msgstr ""
 msgid "Bugs"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:531
-#: reDelphix/source/uRdxProvider.pas:546
+#: reDelphix/source/uRdxProvider.pas:536
+#: reDelphix/source/uRdxProvider.pas:551
 msgid "Build Format() from concatenation"
 msgstr ""
 
@@ -1557,7 +1557,7 @@ msgstr ""
 msgid "Code Smell"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5692
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5730
 msgid "Code actions"
 msgstr ""
 
@@ -1637,9 +1637,9 @@ msgstr ""
 msgid "Copy Jira issue"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:558
-#: reDelphix/source/uRdxProvider.pas:564
+#: reDelphix/source/uRdxProvider.pas:563
 #: reDelphix/source/uRdxProvider.pas:569
+#: reDelphix/source/uRdxProvider.pas:574
 msgid "Copy parameterized template to clipboard"
 msgstr ""
 
@@ -2102,7 +2102,7 @@ msgid "Finding"
 msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2898
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5727
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5765
 #: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:825
 msgid "Finding action failed: %s"
 msgstr ""
@@ -2518,7 +2518,7 @@ msgstr ""
 msgid "Line"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:512
+#: reDelphix/source/uRdxProvider.pas:517
 msgid "Line %d:%d to %d:%d"
 msgstr ""
 
@@ -3100,8 +3100,8 @@ msgstr ""
 msgid "Remove bidi control characters (as #$ code in strings)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:753
-#: reDelphix/source/uRdxProvider.pas:756
+#: reDelphix/source/uRdxProvider.pas:758
+#: reDelphix/source/uRdxProvider.pas:761
 msgid "Remove ineffective suppression marker"
 msgstr ""
 
@@ -3395,7 +3395,7 @@ msgstr ""
 msgid "Scanning... %d found"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:578
+#: reDelphix/source/uRdxProvider.pas:583
 msgid "Scope table not loaded (unitscopes.txt)"
 msgstr ""
 
@@ -3507,8 +3507,8 @@ msgstr ""
 msgid "Show annotation overlay on hover (otherwise click marked line)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:505
-#: reDelphix/source/uRdxProvider.pas:512
+#: reDelphix/source/uRdxProvider.pas:510
+#: reDelphix/source/uRdxProvider.pas:517
 msgid "Show location"
 msgstr ""
 
@@ -3603,7 +3603,7 @@ msgstr ""
 msgid "Static Code Analyser: analyse this file, no dock opens"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:6076
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:6114
 msgid "Static Code Analysis"
 msgstr ""
 
@@ -3633,11 +3633,11 @@ msgstr ""
 msgid "Summary"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:728
+#: reDelphix/source/uRdxProvider.pas:733
 msgid "Suppress here (// noinspection %s)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:731
+#: reDelphix/source/uRdxProvider.pas:736
 msgid "Suppress in this file (// noinspection-file %s)"
 msgstr ""
 
@@ -4190,7 +4190,7 @@ msgstr ""
 msgid "absolute variable - it occupies the memory of another one"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:314
+#: reDelphix/source/uRdxProvider.pas:319
 msgid "action kind %d without execution"
 msgstr ""
 
@@ -4883,7 +4883,7 @@ msgstr ""
 msgid "doubled apostrophes"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:895
+#: reDelphix/source/uRdxProvider.pas:900
 msgid "editor buffer empty or not readable"
 msgstr ""
 
@@ -4944,12 +4944,12 @@ msgstr ""
 msgid "except on E: Exception catches every error - prefer a specific subclass"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:901
+#: reDelphix/source/uRdxProvider.pas:906
 msgid "file not found: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:776
-#: reDelphix/source/uRdxProvider.pas:913
+#: reDelphix/source/uRdxProvider.pas:781
+#: reDelphix/source/uRdxProvider.pas:918
 msgid "file not readable"
 msgstr ""
 
@@ -4957,7 +4957,7 @@ msgstr ""
 msgid "file uses VCL and FMX: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:583
+#: reDelphix/source/uRdxProvider.pas:588
 msgid "file with an FPC switch or FPC mode - FPC 3.2 knows no unit scopes"
 msgstr ""
 
@@ -4969,11 +4969,11 @@ msgstr ""
 msgid "finally and end are not alone on their lines (code or comment beside them)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:857
+#: reDelphix/source/uRdxProvider.pas:862
 msgid "finding without file name"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:859
+#: reDelphix/source/uRdxProvider.pas:864
 msgid "finding without line"
 msgstr ""
 
@@ -5184,7 +5184,7 @@ msgstr ""
 msgid "line %d carries %d such if statements - ambiguous (the message names no column)"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:1892
+#: reDelphix/source/uRdxCodeMap.pas:1895
 msgid "line %d carries %s - ambiguous"
 msgstr ""
 
@@ -5750,8 +5750,8 @@ msgstr ""
 msgid "no if condition on line %d compares with %s"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2589
-#: reDelphix/source/uRdxCodeMap.pas:2641
+#: reDelphix/source/uRdxCodeMap.pas:2592
+#: reDelphix/source/uRdxCodeMap.pas:2644
 msgid "no if, case or except found for the else"
 msgstr ""
 
@@ -5918,7 +5918,7 @@ msgstr ""
 msgid "no single implementation part - the end of the unit is not provable"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2528
+#: reDelphix/source/uRdxCodeMap.pas:2531
 msgid "no start of the statement found for the %s"
 msgstr ""
 
@@ -6001,7 +6001,7 @@ msgstr ""
 msgid "no whitespace at the line end at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:1744
+#: reDelphix/source/uRdxCodeMap.pas:1747
 msgid "noinspection marker in the range - it suppresses other findings"
 msgstr ""
 
@@ -6060,8 +6060,8 @@ msgstr ""
 msgid "nothing precedes the range, and it reaches the end of the file - %s"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:842
-#: reDelphix/source/uRdxProvider.pas:861
+#: reDelphix/source/uRdxProvider.pas:847
+#: reDelphix/source/uRdxProvider.pas:866
 msgid "nothing to offer"
 msgstr ""
 
@@ -6319,7 +6319,7 @@ msgstr ""
 msgid "own constructor %s.Create - not provable that True still means CreateSuspended"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:602
+#: reDelphix/source/uRdxProvider.pas:607
 msgid "own unit %s in the project"
 msgstr ""
 
@@ -6410,7 +6410,7 @@ msgstr ""
 msgid "record - no inheritance"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2572
+#: reDelphix/source/uRdxCodeMap.pas:2575
 msgid "record before the else - the end count is uncertain"
 msgstr ""
 
@@ -6732,7 +6732,7 @@ msgstr ""
 msgid "the %s is in an expression (conditional expression, Delphi 13) - not a branch of a statement"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2527
+#: reDelphix/source/uRdxCodeMap.pas:2530
 msgid "the %s is in parentheses"
 msgstr ""
 
@@ -7012,8 +7012,8 @@ msgstr ""
 msgid "the class name \"%s\" contains characters outside A-Z, a-z, 0-9 and \"_\" - the help cannot find every spelling of it"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:605
-#: reDelphix/source/uRdxProvider.pas:663
+#: reDelphix/source/uRdxProvider.pas:610
+#: reDelphix/source/uRdxProvider.pas:668
 msgid "the clause would no longer be sorted (new SCA142)"
 msgstr ""
 
@@ -7157,15 +7157,15 @@ msgstr ""
 msgid "the duplicate is on the last line of the file"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2720
+#: reDelphix/source/uRdxCodeMap.pas:2723
 msgid "the else belongs to a case or except - a statement list follows it"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2639
+#: reDelphix/source/uRdxCodeMap.pas:2642
 msgid "the else is in parentheses"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2556
+#: reDelphix/source/uRdxCodeMap.pas:2559
 msgid "the else matches no if"
 msgstr ""
 
@@ -8499,7 +8499,7 @@ msgstr ""
 msgid "untyped \"out\" parameter - \"var\" would mean something else"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:580
+#: reDelphix/source/uRdxProvider.pas:585
 #: reDelphix/source/uRdxRecipeRunner.pas:1129
 msgid "uses clause contains compiler directives (line %d)"
 msgstr ""
@@ -8512,16 +8512,16 @@ msgstr ""
 msgid "uses entry in line %d not readable"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:658
+#: reDelphix/source/uRdxProvider.pas:663
 msgid "uses: qualify %s"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:662
-#: reDelphix/source/uRdxProvider.pas:668
+#: reDelphix/source/uRdxProvider.pas:667
+#: reDelphix/source/uRdxProvider.pas:673
 msgid "uses: qualify all %d entries"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:645
+#: reDelphix/source/uRdxProvider.pas:650
 msgid "uses: qualify entries"
 msgstr ""
 

@@ -609,16 +609,21 @@ schon `try` beginnt (die Form, die die Aktion herstellt), und eine
 Zuweisung an `Result`, ein Feld, eine globale Variable, einen Parameter
 oder einen Ausdruck (`Self.F`, `A[i]`) - dort uebernimmt ein anderer
 Halter das Objekt, und ein gesperrter Eintrag stuende auf jeder solchen
-Zeile. Gelesen wird nur der Editor-Puffer einer Pascal-Datei (keine
-Platte, kein Netzpfad im Hauptthread).
+Zeile. Der Text kommt nur aus dem Editor-Puffer einer Pascal-Datei; die
+Platte liest erst die Lokale Konstante fuer einen Kandidaten am Caret
+(`FileReason`: Projektdateien der Verzeichnisse darueber, `IncludeReason`:
+die Includes - wie die Fund-Hilfe SCA014), beide nach der Netzpfad-Sperre
+(`uRdxPaths.IsNetworkPath`, dort kein Plattenzugriff).
 
 **Menuetext = der der Fund-Hilfe (F2):** `uRdxFixTable.ContextCaption`
 baut ihn ueber `CaptionFor` der Zeile `fkMagicNumber` bzw.
 `fkMissingFinally` - gleich geschrieben, also faellt die Kontextaktion auf
 einer SCA014- bzw. SCA009-Fundzeile hinter der Fund-Hilfe weg
 (`uFindingActionMenu`, Dedup per Caption). Die Hinweise sind dieselben
-msgids. Weicht der Name ab (der Detektor meldet X anders geschrieben als
-die Zeile), stehen beide da.
+msgids. Die Gross-/Kleinschreibung zaehlt dabei nicht (`SameText`, Review
+Charge B, Befund 5): der Name kommt auf dem Fundweg aus der Meldung des
+Detektors, auf dem Kontextweg aus der Zeile - `List` und `list` sind
+derselbe Bezeichner.
 
 **Bausteine:** `uRdxCodeMap.TokenContaining` und `LiteralContaining` (V4:
 das Token bzw. Literal, das die Caret-Spalte enthaelt oder direkt davor
@@ -627,7 +632,7 @@ endet - ueber die Token-Grenzen der Code-Sicht hinweg: `1.5`, `$FF`,
 Laeufer am Caret, ohne ToolsAPI, im FPC-Pruefstand; Caret im virtuellen
 Raum hinter dem Zeilenende zaehlt als Zeilenende), die Auswahl des
 Kontexts nutzt noch keine Aktion (F8). Tests: `uTestRdxContextRunner`
-(Caret-Marke `{^}`, `uTestRdxTextKit.CaretOf`): 27 Text-Tests (auch im
+(Caret-Marke `{^}`, `uTestRdxTextKit.CaretOf`): 29 Text-Tests (auch im
 FPC-Pruefstand; davon 7 in `TTestRdxContextFileLocks`: ganze Datei = kein
 Eintrag, Stelle = ausgegraut, SCA014 unveraendert), dazu 4 nur unter
 Delphi (Menuetext und Ersetzung gleich denen der Fund-Hilfen, ueber
@@ -1184,8 +1189,10 @@ bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath 
 ```
 
 Gemessen (2026-10-24, FPC-Lauf, nach dem Entscheid "Sperren der ganzen Datei ohne
-Eintrag"): `PASSED 836  FAILED 0` - 51 Testunits, davon `uTestRdxContextRunner` 27
-(Code-Aktionen ohne Fund; seine letzte Fixture, 4 Tests, nur in reDelphix.Test).
+Eintrag"; Nachbesserung Review Charge B: zwei Tests zu Literalen am Zeilenende, mit
+`-Cr -Co` vor dem Fix in TextPieceEnd beide ERangeError): `PASSED 838  FAILED 0` - 51
+Testunits, davon `uTestRdxContextRunner` 29 (Code-Aktionen ohne Fund; seine letzte
+Fixture, 4 Tests, nur in reDelphix.Test). Davor `PASSED 836`.
 Charge B3 (2026-10-23): `PASSED 830  FAILED 0`, `uTestRdxContextRunner` 21.
 
 Erwartet (Stand 2026-10-22, nach den C-Gruppen der Text-Umstellung E29, gezaehlt ohne FPC-Lauf):

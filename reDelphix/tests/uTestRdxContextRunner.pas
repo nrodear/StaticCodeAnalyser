@@ -34,6 +34,7 @@ type
     [Test] procedure Literal_Numbers;
     [Test] procedure Literal_CharsAndStrings;
     [Test] procedure Literal_NotInIdentifierOrComment;
+    [Test] procedure Literal_AtLineEnd;
   end;
 
   [TestFixture]
@@ -57,6 +58,7 @@ type
     // ---- Laeufer ----
     [Test] procedure Run_BothOnOneLine;
     [Test] procedure Run_InvalidContext;
+    [Test] procedure Run_LiteralAtLineEnd;
   end;
 
   // Sperren der GANZEN Datei gegen Sperren der Stelle (Entscheid Nico
@@ -349,6 +351,20 @@ begin
   AssertNoLiteral('  B := Y;', 2, 'Einzug');
 end;
 
+// Ein String- bzw. Zeichen-Literal beendet die Zeile (ohne ';'):
+// LiteralContaining fragt hinter dem letzten Stueck weiter, an Spalte
+// Laenge + 1 (Review Charge B, Befund 1 - vor dem Fix las TextPieceEnd dort
+// L[AStart], unter {$RANGECHECKS ON} ERangeError). Caret am Anfang, im
+// zweiten Zeichen und dahinter (AssertLiteral) und im virtuellen Raum.
+procedure TTestRdxCaret.Literal_AtLineEnd;
+begin
+  AssertLiteral('  S := ''abc''', '''abc''', lkString);
+  AssertLiteral('  S := #13#10', '#13#10', lkChar);
+  AssertLiteral('  S := ''a''#13', '''a''#13', lkString);
+  AssertLiteral('  S := #$0D''a''', '#$0D''a''', lkString);
+  AssertNoLiteral('  S := ''abc''', 20, 'virtueller Raum hinter dem String');
+end;
+
 { ---- Lokale Konstante einfuehren ---- }
 
 // Caret am Anfang, im Literal und direkt dahinter: derselbe Eintrag.
@@ -638,6 +654,23 @@ begin
   finally
     SL.Free;
   end;
+end;
+
+// Ein String bzw. #13#10 am Zeilenende, Caret dahinter bzw. im virtuellen
+// Raum: kein Kandidat, kein Eintrag - und keine Ausnahme (Befund 1).
+procedure TTestRdxContextRunner.Run_LiteralAtLineEnd;
+var
+  Src : string;
+begin
+  AssertNone(ProcWith(['  S: string;'], ['  S := ''abc''{^}', '    + ''d'';']),
+    'String am Zeilenende');
+  AssertNone(ProcWith(['  S: string;'], ['  S := #13#10{^}', '    + ''d'';']),
+    '#13#10 am Zeilenende');
+  AssertNone(ProcWith(['  S: string;'], ['  S := ''a{^}bc''', '    + ''d'';']),
+    'im String');
+  Src := ProcWith(['  S: string;'], ['  S := ''abc''', '    + ''d'';']);
+  Assert.AreEqual<Integer>(0, Length(RunPos(Src, NoDiskFile,
+    LineOf(Src, '  S := ''abc'''), 40)), 'virtueller Raum');
 end;
 
 { ---- Ganze Datei oder Stelle (Entscheid Nico 2026-10-24) ---- }

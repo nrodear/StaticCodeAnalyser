@@ -216,9 +216,14 @@ type
     // Der Einstieg des Hosts (TFindingActionProvider).
     function Provide(const AFinding: TLeakFinding): TArray<TFindingAction>;
     // Code-Aktionen ohne Fund am Caret (Charge B, TContextActionProvider):
-    // nur Pascal-Quelltext und nur der Editor-Puffer (das Kontextmenue
-    // gehoert zu einer offenen Datei - keine Platte, kein Netzpfad im
-    // Hauptthread); die Eintraege rechnet uRdxContextRunner, die
+    // nur Pascal-Quelltext, den Text nur aus dem Editor-Puffer (das
+    // Kontextmenue gehoert zu einer offenen Datei). Die Platte liest erst
+    // "Lokale Konstante einfuehren" fuer einen Kandidaten am Caret:
+    // TRdxMagicFixes.FileReason (Projektdateien der Verzeichnisse darueber)
+    // und IncludeReason (die Includes der Unit) - wie die Fund-Hilfe SCA014;
+    // beide pruefen vorher den Netzpfad (uRdxPaths.IsNetworkPath) und
+    // greifen dort nicht auf die Platte zu. Die Eintraege rechnet
+    // uRdxContextRunner, die
     // Menuetexte uRdxFixTable.ContextCaption (gleich denen der Fund-
     // Hilfen, Dedup F2). Kein Kandidat am Caret: keine Aktion, auch keine
     // Diagnose (F4) - Kind setzt die Registry (fakContext).
@@ -950,10 +955,12 @@ var
   Act      : TRdxAction;
 begin
   Result := nil;
-  // Eine eigene Charge im Ring (wie je Provide): die Aktionen der Funde
-  // desselben Menues bleiben am Leben (RDX_ACTION_BATCHES).
-  FActions.BeginBatch;
   if not IsPascalSource(AContext.FileName) then Exit;
+  // Eine eigene Charge im Ring (wie je Provide): die Aktionen der Funde
+  // desselben Menues bleiben am Leben (RDX_ACTION_BATCHES). Erst hinter der
+  // Pascal-Pruefung - ein Rechtsklick in einer .dfm/.dproj soll keine
+  // Charge verbrauchen (Review Charge B, Befund 4).
+  FActions.BeginBatch;
   // Nur der Puffer: geschrieben wird in ihn, und das Menue haengt an einer
   // offenen Datei. Leer oder nicht lesbar, oder nicht offen: nichts.
   if TRdxEditor.ReadBuffer(AContext.FileName, Text) <> txBuffer then Exit;

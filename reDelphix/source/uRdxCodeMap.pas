@@ -1412,7 +1412,10 @@ begin
       Inc(Result);
     AKind := lkString;
   end
-  else if (L[AStart] = '#') and AMap.IsCode(ALine, AStart) then
+  // CharAt statt L[AStart]: LiteralContaining fragt hinter einem Stueck
+  // weiter, das die Zeile beendet - AStart = Length(L) + 1 (unter
+  // {$RANGECHECKS ON} sonst ERangeError bei jedem Rechtsklick dort).
+  else if (CharAt(L, AStart) = '#') and AMap.IsCode(ALine, AStart) then
   begin
     Result := CharLiteralEnd(L, AStart);
     if Result = 0 then
