@@ -19,6 +19,16 @@ type
     [Test] procedure Test_ConnectionString_WithPwdEq_Detected;
     [Test] procedure Test_ConnectionString_CaseInsensitive;
 
+    // --- Treffer: Params.Strings mit Password=/Pwd=/User_Password= ---
+    // Jede Gegenprobe steht neben genau EINEM echten Eintrag, damit der
+    // Test ohne den Params-Zweig rot ist (0 statt 1).
+    [Test] procedure Test_FdParams_Password_Detected_OnItemLine;
+    [Test] procedure Test_Params_PwdAndUserPassword_CaseInsensitive;
+    [Test] procedure Test_Params_WrappedItem_IsJoined;
+    [Test] procedure Test_Params_EmptyValue_NotDetected;
+    [Test] procedure Test_Params_OtherKeys_NotDetected;
+    [Test] procedure Test_Params_NonCredentialClass_NotDetected;
+
     // --- Beide gleichzeitig ---
     [Test] procedure Test_BothPasswordAndConnectionString_TwoFindings;
 
@@ -142,6 +152,125 @@ begin
     'end');
   try
     Assert.AreEqual<Integer>(1, Count(F, fkDfmHardcodedDbCreds));
+  finally F.Free; end;
+end;
+
+{ --- Params.Strings --- }
+
+procedure TTestDfmHardcodedDbCreds.Test_FdParams_Password_Detected_OnItemLine;
+// ShowcaseDemo uOrderForm.dfm: mehrzeilige String-Liste, Fund auf der
+// Zeile des Password-Eintrags (4), nicht auf der 'Params.Strings'-Zeile (2).
+// Wuerde der Splitter die Items verschmelzen, hiesse der Schluessel
+// 'Database' und es gaebe keinen Fund.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(
+    'object FDConnection1: TFDConnection'#13#10 +
+    '  Params.Strings = ('#13#10 +
+    '    ''Database=orders'''#13#10 +
+    '    ''Password=Sommer2024!'''#13#10 +
+    '    ''DriverID=PG'')'#13#10 +
+    '  LoginPrompt = False'#13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmHardcodedDbCreds));
+    Assert.AreEqual('4', F[0].LineNumber);
+    Assert.Contains(F[0].MissingVar, 'Params.Strings');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedDbCreds.Test_Params_PwdAndUserPassword_CaseInsensitive;
+// IBX schreibt die Schluessel klein ('password=...'); Pwd= und
+// User_Password= sind die Aliase anderer Treiber.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(
+    'object Db: TIBDatabase'#13#10 +
+    '  Params.Strings = ('#13#10 +
+    '    ''user_name=SYSDBA'''#13#10 +
+    '    ''password=masterkey'')'#13#10 +
+    'end'#13#10 +
+    'object Sql: TSQLConnection'#13#10 +
+    '  Params.Strings = ('#13#10 +
+    '    ''PWD=a'' ''USER_PASSWORD=b'')'#13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(3, Count(F, fkDfmHardcodedDbCreds));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedDbCreds.Test_Params_WrappedItem_IsJoined;
+// TWriter bricht lange Items mit ' +' um; die Teile sind EIN Eintrag.
+// #39 ist ein Apostroph mitten im Wert.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(
+    'object Conn: TFDConnection'#13#10 +
+    '  Params.Strings = ('#13#10 +
+    '    ''Pass'' +'#13#10 +
+    '      ''word=geh''#39''eim'')'#13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmHardcodedDbCreds));
+    Assert.AreEqual('3', F[0].LineNumber);
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedDbCreds.Test_Params_EmptyValue_NotDetected;
+// 'Password=' und 'Password=   ' tragen kein Klartext-Passwort; nur der
+// Pwd-Eintrag mit Wert zaehlt.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(
+    'object Conn: TFDConnection'#13#10 +
+    '  Params.Strings = ('#13#10 +
+    '    ''Password='''#13#10 +
+    '    ''Password=   '''#13#10 +
+    '    ''Pwd=x'')'#13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmHardcodedDbCreds));
+    Assert.AreEqual('5', F[0].LineNumber);
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedDbCreds.Test_Params_OtherKeys_NotDetected;
+// Nur die exakten Schluessel zaehlen: 'Passwort', 'MyPassword', ein Item
+// ohne '=' und ConnectionDef bleiben stumm.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(
+    'object Conn: TFDConnection'#13#10 +
+    '  Params.Strings = ('#13#10 +
+    '    ''ConnectionDef=Orders'''#13#10 +
+    '    ''Passwort=x'''#13#10 +
+    '    ''MyPassword=x'''#13#10 +
+    '    ''Password'''#13#10 +
+    '    ''User_Password=y'')'#13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmHardcodedDbCreds));
+    Assert.Contains(F[0].MissingVar, 'User_Password=');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedDbCreds.Test_Params_NonCredentialClass_NotDetected;
+// Die Klassen-Whitelist gilt auch fuer Params: TJvUIBDataBase (realworld,
+// jvcl/donations/UIB) steht nicht darauf.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(
+    'object Uib: TJvUIBDataBase'#13#10 +
+    '  Params.Strings = ('#13#10 +
+    '    ''password=masterkey'')'#13#10 +
+    'end'#13#10 +
+    'object Conn: TFDConnection'#13#10 +
+    '  Params.Strings = ('#13#10 +
+    '    ''Password=pw'')'#13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmHardcodedDbCreds));
+    Assert.Contains(F[0].MissingVar, 'TFDConnection');
   finally F.Free; end;
 end;
 
