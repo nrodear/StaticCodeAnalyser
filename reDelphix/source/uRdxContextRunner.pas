@@ -20,7 +20,8 @@ unit uRdxContextRunner;
 //                      E26; nur dieses Literal E28; kein Sync Edit, kein
 //                      Dialog), danach was nur die Platte weiss
 //                      (FileReason, IncludeReason - wie MagicCheck der
-//                      Tabelle). Bedeutungsgleich.
+//                      Tabelle). Bedeutungsgleich. Sperren der ganzen
+//                      Datei: kein Eintrag (s. "Wann ein Eintrag entsteht").
 //   ckTryFinallyCreate C3 "try/finally um Create": TRdxTryFixes.CreateAt -
 //                      die Kette des Quick-Fixes SCA009 mit X aus der Zeile;
 //                      die Freigabe muss schon dastehen (F6). Gekennzeichnet
@@ -31,6 +32,15 @@ unit uRdxContextRunner;
 // ein Zahl-Literal bzw. eine Zeile 'X := ..Create..', die noch nicht
 // geschuetzt ist. Dann freigegeben mit Ersetzungen, oder gesperrt mit dem
 // Grund. Sonst gar nichts - kein Rauschen auf jedem Rechtsklick.
+// Sperrt ckIntroduceConst die GANZE Datei - FPC-Weiche, Skript, Spuren
+// alter Compiler (TRdxMagicPlan.FileWide) oder der Plattenblick (Lazarus-
+// bzw. altes Delphi-Projekt, Includes, Netzpfad) -, entfaellt der Eintrag
+// ebenso, auch wenn zugleich die Stelle sperrte (Entscheid Nico
+// 2026-10-24: in einer solchen Unit ist die Inline-Konstante nirgends
+// sicher, ein ausgegrauter Eintrag auf jedem Zahl-Literal waere Rauschen).
+// Sperren der Stelle (Ausdrucksfortsetzung, else-if, Deklarationszeile,
+// Hauptblock ...) bleiben ausgegraut mit Grund. Die Fund-Hilfe SCA014 nennt
+// weiter jeden Grund.
 //
 // CARET: Zeichenspalte wie im Kontext (1-basiert, UTF-16, vor dem Zeichen
 // Col); ein Caret im virtuellen Raum hinter dem Zeilenende (Col > Laenge +
@@ -112,16 +122,17 @@ var
   Why  : string;
   O    : TRdxContextOutcome;
 begin
-  if TRdxMagicFixes.IntroduceAt(AMap, ALine, ACol, Plan, Why) then
-  begin
-    // Was nur die Platte weiss, wie MagicCheck der Tabelle (FileReason
-    // prueft den Netzpfad selbst, vor jedem Plattenzugriff).
-    Why := TRdxMagicFixes.FileReason(AFileName, lfInlineConst);
-    if Why = '' then
-      Why := TRdxMagicFixes.IncludeReason(AFileName, AMap, lfInlineConst);
-  end
-  else if Why = '' then
-    Exit;   // kein Kandidat
+  // Kein Kandidat (F4) bzw. eine Sperre der ganzen Datei (Plan.FileWide:
+  // FPC-Weiche, Skript, Spuren alter Compiler): kein Eintrag.
+  if not TRdxMagicFixes.IntroduceAt(AMap, ALine, ACol, Plan, Why)
+     and ((Why = '') or Plan.FileWide) then
+    Exit;
+  // Was nur die Platte weiss, wie MagicCheck der Tabelle (FileReason
+  // prueft den Netzpfad selbst, vor jedem Plattenzugriff) - auch das gilt
+  // der ganzen Datei: kein Eintrag, auch vor einer Sperre der Stelle.
+  if (TRdxMagicFixes.FileReason(AFileName, lfInlineConst) <> '')
+     or (TRdxMagicFixes.IncludeReason(AFileName, AMap, lfInlineConst) <> '') then
+    Exit;
   O := Default(TRdxContextOutcome);
   O.Kind := ckIntroduceConst;
   O.Name := Plan.Value;

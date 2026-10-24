@@ -5,7 +5,10 @@ unit uTestRdxContextRunner;
 // Laeufer am Caret (uRdxContextRunner, V5) mit "Lokale Konstante
 // einfuehren" (TRdxMagicFixes.IntroduceAt) und C3 "try/finally um Create"
 // (TRdxTryFixes.CreateAt) - zweite Fixture; beide auf Text, ohne Parser
-// (reDelphix.Test UND FPC-Pruefstand). Nur Delphi (dritte Fixture): der
+// (reDelphix.Test UND FPC-Pruefstand); die Sperren der ganzen Datei gegen
+// die der Stelle (TTestRdxContextFileLocks, Entscheid Nico 2026-10-24:
+// ganze Datei = kein Eintrag, Stelle = ausgegraut, SCA014 unveraendert) -
+// ebenso. Nur Delphi (letzte Fixture): der
 // Menuetext der Kontextaktion (uRdxFixTable.ContextCaption) ist auf einer
 // Fundzeile derselbe wie der der Fund-Hilfe SCA014 bzw. SCA009 (PlanFixIn,
 // TRdxFixTable.CaptionFor) - nur dann faellt sie im Menue weg (Dedup per
@@ -44,7 +47,6 @@ type
     [Test] procedure Const_SameAsSca014;
     [Test] procedure Const_NoCandidate_NoEntry;
     [Test] procedure Const_Refused_WithReason;
-    [Test] procedure Const_Refused_LazarusProject;
     // ---- C3 try/finally um Create ----
     [Test] procedure Try_Basic;
     [Test] procedure Try_InlineVarAndFreeAndNil;
@@ -57,6 +59,22 @@ type
     [Test] procedure Run_InvalidContext;
   end;
 
+  // Sperren der GANZEN Datei gegen Sperren der Stelle (Entscheid Nico
+  // 2026-10-24): "Lokale Konstante einfuehren" zeigt in einer Datei, die die
+  // Inline-Konstante nirgends vertraegt, keinen Eintrag; die Fund-Hilfe
+  // SCA014 nennt dort weiter den Grund.
+  [TestFixture]
+  TTestRdxContextFileLocks = class
+  public
+    [Test] procedure FileLock_FpcSwitch_NoEntry;
+    [Test] procedure FileLock_ScriptAndOldCompiler_NoEntry;
+    [Test] procedure FileLock_Disk_NoEntry;
+    [Test] procedure FileLock_Include_NoEntry;
+    [Test] procedure LocalLock_StaysGreyed;
+    [Test] procedure FileWide_OnlyFromIntroduceAt;
+    [Test] procedure Sca014_FileLocksKeepReason;
+  end;
+
 {$IFNDEF FPC}
   [TestFixture]
   TTestRdxContextCaption = class
@@ -64,6 +82,7 @@ type
     [Test] procedure Caption_ConstLikeSca014;
     [Test] procedure Caption_TryLikeSca009;
     [Test] procedure Caption_RefusedKeepsName;
+    [Test] procedure Caption_Sca014TableKeepsFileLock;
   end;
 {$ENDIF}
 
@@ -86,6 +105,9 @@ uses
 
 const
   MAGIC_MSG = 'Magic number "%s" in if condition - use a constant';
+  // Sperren der ganzen Datei im Kopf der Unit (TTestRdxContextFileLocks).
+  FPC_HEAD = '{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}';
+  OLD_HEAD = '{$IFDEF VER150}{$ENDIF}';
 
 // ---- Helfer ----
 
@@ -172,12 +194,13 @@ begin
   Result := Apply(Src, O.Edits);
 end;
 
-// Kein Eintrag am Caret (F4).
-procedure AssertNone(const AMarked, AWhat: string);
+// Kein Eintrag am Caret (F4; Sperre der ganzen Datei).
+procedure AssertNone(const AMarked, AWhat: string;
+  const AFileName: string = '');
 var
   Src : string;
 begin
-  Assert.AreEqual<Integer>(0, Length(RunAt(AMarked, Src)), AWhat);
+  Assert.AreEqual<Integer>(0, Length(RunAt(AMarked, Src, AFileName)), AWhat);
 end;
 
 // Genau ein gesperrter Eintrag der Art AKind: keine Ersetzungen, APart im
@@ -439,38 +462,12 @@ begin
   O := Refused(UnitWith([], ['  Foo;', '  const C = 2{^}00;']),
     ckIntroduceConst, 'Deklaration');
   Assert.AreEqual('200', O.Name, 'Name auch gesperrt');
-  Refused(UnitWith(['{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}'], ['  Foo;',
-    '  Bar(2{^}00);']), ckIntroduceConst, 'FPC');
-  Refused(UnitWith(['{$IFDEF VER150}{$ENDIF}'], ['  Foo;', '  Bar(2{^}00);']),
-    ckIntroduceConst, 'Delphi 10.3');
   // Delphi-11-Binaerliteral: die Code-Aktion liest nur dezimal und hex.
   O := Refused(UnitWith([], ['  Foo;', '  Bar(%1{^}01);']), ckIntroduceConst,
     '%101');
   Assert.AreEqual('%101', O.Name);
-end;
-
-// Was nur die Platte weiss (FileReason): ein Lazarus-Projekt neben der Unit.
-procedure TTestRdxContextRunner.Const_Refused_LazarusProject;
-const
-  MARKED = 'unit u;'#13#10'interface'#13#10'implementation'#13#10
-    + 'procedure P;'#13#10'begin'#13#10'  Foo;'#13#10'  Bar(2{^}00);'#13#10
-    + 'end;'#13#10'end.';
-var
-  Dir, Src : string;
-  O        : TRdxContextOutcome;
-begin
-  Dir := NewTempDir('rdx_ctx_');
-  try
-    WriteText(Dir + 'demo.lpi', '<?xml version="1.0"?>');
-    O := Refused(MARKED, ckIntroduceConst, 'Lazarus', Dir + 'u.pas');
-    Assert.IsTrue(Pos('demo.lpi', O.Reason) > 0, O.Reason);
-    // Ohne Projektdatei dieselbe Stelle freigegeben.
-    Assert.IsTrue(DeleteFile(Dir + 'demo.lpi'), 'demo.lpi geloescht');
-    O := OneAt(MARKED, ckIntroduceConst, Src, Dir + 'u.pas');
-    Assert.IsTrue(O.Enabled, 'ohne .lpi freigegeben: ' + O.Reason);
-  finally
-    RemoveTree(Dir);
-  end;
+  // Sperren der ganzen Datei (FPC-Weiche, alte Compiler, Plattenblick):
+  // TTestRdxContextFileLocks - dort kein Eintrag (Entscheid 2026-10-24).
 end;
 
 { ---- C3 try/finally um Create ---- }
@@ -643,6 +640,213 @@ begin
   end;
 end;
 
+{ ---- Ganze Datei oder Stelle (Entscheid Nico 2026-10-24) ---- }
+
+// TRdxMagicFixes.IntroduceAt am Caret von AMarked.
+function IntroAt(const AMarked: string; out APlan: TRdxMagicPlan;
+  out AReason: string): Boolean;
+var
+  Src       : string;
+  Line, Col : Integer;
+  Map       : TRdxCodeMap;
+begin
+  Src := AMarked;
+  Assert.IsTrue(CaretOf(Src, Line, Col), 'Caret-Marke fehlt');
+  Map := NewMap(Src);
+  try
+    Result := TRdxMagicFixes.IntroduceAt(Map, Line, Col, APlan, AReason);
+  finally
+    Map.Free;
+  end;
+end;
+
+// Die Fund-Hilfe SCA014 (TRdxMagicFixes.MagicNumber) zum Fund "200" auf
+// der Zeile 'if X > 200' von ASource (ohne Caret-Marke).
+function MagicAt(const ASource: string; out APlan: TRdxMagicPlan;
+  out AReason: string): Boolean;
+var
+  Map : TRdxCodeMap;
+begin
+  Map := NewMap(ASource);
+  try
+    Result := TRdxMagicFixes.MagicNumber(Map, LineOf(ASource, 'if X >'),
+      Format(MAGIC_MSG, ['200']), APlan, AReason);
+  finally
+    Map.Free;
+  end;
+end;
+
+// Die FPC-Weiche irgendwo in der Datei: kein Eintrag - auch nicht, wenn
+// zugleich die Stelle sperrte (die Datei entscheidet zuerst).
+procedure TTestRdxContextFileLocks.FileLock_FpcSwitch_NoEntry;
+var
+  Src : string;
+begin
+  AssertNone(UnitWith([FPC_HEAD], ['  Foo;', '  Bar(2{^}00);']), 'FPC-Weiche');
+  AssertNone(UnitWith([], ['  Foo;', '  Bar(2{^}00);', '  {$IFNDEF FPC}',
+    '  Baz;', '  {$ENDIF}']), 'FPC-Weiche unter der Stelle');
+  AssertNone(UnitWith([FPC_HEAD], ['  Foo;', '  const C = 2{^}00;']),
+    'FPC-Weiche und Deklarationszeile');
+  AssertNone(UnitWith([FPC_HEAD], ['  Foo;', '  Bar(%1{^}01);']),
+    'FPC-Weiche und Binaerliteral');
+  // Gegenprobe: ohne Weiche ein freigegebener Eintrag.
+  Assert.IsTrue(OneAt(UnitWith([], ['  Foo;', '  Bar(2{^}00);']),
+    ckIntroduceConst, Src).Enabled, 'ohne Weiche freigegeben');
+end;
+
+// Skript (kein unit-Kopf bzw. kein implementation-Teil) und Spuren alter
+// Compiler: kein Eintrag.
+procedure TTestRdxContextFileLocks.FileLock_ScriptAndOldCompiler_NoEntry;
+begin
+  AssertNone(UnitWith([OLD_HEAD], ['  Foo;', '  Bar(2{^}00);']), 'VER150');
+  AssertNone(UnitWith([OLD_HEAD], ['  X := Foo +', '    2{^}00;']),
+    'VER150 und Ausdrucksfortsetzung');
+  AssertNone(Join(['procedure P;', 'begin', '  Foo;', '  Bar(2{^}00);',
+    'end;']), 'Skript ohne unit-Kopf');
+  AssertNone(Join(['unit u;', 'interface', 'procedure P;', 'begin', '  Foo;',
+    '  Bar(2{^}00);', 'end;', 'end.']), 'unit ohne implementation-Teil');
+end;
+
+// Was nur die Platte weiss (FileReason): Lazarus-Projekt, alte
+// Projektdatei, FPC-Dateiart, Netzpfad - kein Eintrag, auch vor einer
+// Sperre der Stelle; ohne Projektdatei wieder freigegeben bzw. ausgegraut.
+procedure TTestRdxContextFileLocks.FileLock_Disk_NoEntry;
+var
+  Dir, Src, M, Decl : string;
+begin
+  M := UnitWith([], ['  Foo;', '  Bar(2{^}00);']);
+  Decl := UnitWith([], ['  Foo;', '  const C = 2{^}00;']);
+  Dir := NewTempDir('rdx_ctx_');
+  try
+    WriteText(Dir + 'demo.lpi', '<?xml version="1.0"?>');
+    AssertNone(M, 'Lazarus-Projekt', Dir + 'u.pas');
+    AssertNone(Decl, 'Lazarus-Projekt und Deklarationszeile', Dir + 'u.pas');
+    Assert.IsTrue(DeleteFile(Dir + 'demo.lpi'), 'demo.lpi geloescht');
+    WriteText(Dir + 'demo.dof', '[FileVersion]');
+    AssertNone(M, 'alte Projektdatei', Dir + 'u.pas');
+    Assert.IsTrue(DeleteFile(Dir + 'demo.dof'), 'demo.dof geloescht');
+    // Ohne Projektdatei: freigegeben, die Stelle sperrt wieder sichtbar.
+    Assert.IsTrue(OneAt(M, ckIntroduceConst, Src, Dir + 'u.pas').Enabled,
+      'ohne Projektdatei freigegeben');
+    Refused(Decl, ckIntroduceConst, 'Deklaration', Dir + 'u.pas');
+  finally
+    RemoveTree(Dir);
+  end;
+  AssertNone(M, 'FPC-Dateiart .pp', TempName('rdx_ctx_', PathDelim) + 'u.pp');
+  // Den Netzpfad aus Teilen (ein Pfad als Literal waere ein SCA016-Fund im
+  // Selbstscan, wie uTestRdxMagicGuards).
+  AssertNone(M, 'Netzpfad', PathDelim + PathDelim + 'rdx-ctx-gibt-es-nicht'
+    + PathDelim + 'share' + PathDelim + 'u.pas');
+end;
+
+// Die Includes (IncludeReason): FPC-Weiche, alte Spur, fehlendes Include -
+// kein Eintrag; ein harmloses Include laesst den Eintrag frei.
+procedure TTestRdxContextFileLocks.FileLock_Include_NoEntry;
+var
+  Dir, Src, M : string;
+begin
+  M := UnitWith(['{$I defs.inc}'], ['  Foo;', '  Bar(2{^}00);']);
+  Dir := NewTempDir('rdx_ctx_');
+  try
+    WriteText(Dir + 'defs.inc', FPC_HEAD);
+    AssertNone(M, 'FPC-Weiche im Include', Dir + 'u.pas');
+    WriteText(Dir + 'defs.inc', OLD_HEAD);
+    AssertNone(M, 'alte Spur im Include', Dir + 'u.pas');
+    Assert.IsTrue(DeleteFile(Dir + 'defs.inc'), 'defs.inc geloescht');
+    AssertNone(M, 'Include fehlt', Dir + 'u.pas');
+    WriteText(Dir + 'defs.inc', '{$DEFINE RDX_OK}');
+    Assert.IsTrue(OneAt(M, ckIntroduceConst, Src, Dir + 'u.pas').Enabled,
+      'harmloses Include freigegeben');
+  finally
+    RemoveTree(Dir);
+  end;
+end;
+
+// Sperren der Stelle bleiben ausgegraut mit Grund und Namen.
+procedure TTestRdxContextFileLocks.LocalLock_StaysGreyed;
+var
+  O : TRdxContextOutcome;
+begin
+  O := Refused(UnitWith([], ['  X := Foo +', '    2{^}00;']),
+    ckIntroduceConst, 'Ausdruck');
+  Assert.AreEqual('200', O.Name, 'Name auch gesperrt');
+  Refused(UnitWith([], ['  if A then Foo', '  else if X > 3{^}00 then Bar;']),
+    ckIntroduceConst, 'beginnt mit "else"');
+  Refused(UnitWith([], ['  Foo;', '  const C = 2{^}00;']), ckIntroduceConst,
+    'Deklaration');
+  Refused(Join(['program p;', 'begin', '  Foo;', '  Bar(2{^}00);', 'end.']),
+    ckIntroduceConst, 'Hauptblock');
+  Refused(UnitWith([], ['  Foo;', '  Bar(%1{^}01);']), ckIntroduceConst,
+    '%101');
+end;
+
+// Die Einordnung an der Quelle: FileWide setzt nur IntroduceAt, und nur
+// fuer die Sperren der ganzen Datei.
+procedure TTestRdxContextFileLocks.FileWide_OnlyFromIntroduceAt;
+var
+  P : TRdxMagicPlan;
+  R : string;
+begin
+  Assert.IsFalse(IntroAt(UnitWith([FPC_HEAD], ['  Foo;', '  Bar(2{^}00);']),
+    P, R), 'FPC-Weiche');
+  Assert.IsTrue(P.FileWide, 'FPC-Weiche: ganze Datei');
+  Assert.IsTrue(Pos('FPC', R) > 0, R);
+  Assert.AreEqual('200', P.Value, 'Wert auch gesperrt');
+  Assert.IsFalse(IntroAt(UnitWith([OLD_HEAD], ['  Foo;', '  Bar(2{^}00);']),
+    P, R), 'VER150');
+  Assert.IsTrue(P.FileWide, 'VER150: ganze Datei');
+  Assert.IsTrue(Pos('Delphi 10.3', R) > 0, R);
+  Assert.IsFalse(IntroAt(Join(['procedure P;', 'begin', '  Bar(2{^}00);',
+    'end;']), P, R), 'Skript');
+  Assert.IsTrue(P.FileWide, 'Skript: ganze Datei');
+  // Die Stelle: FileWide bleibt False.
+  Assert.IsFalse(IntroAt(UnitWith([], ['  Foo;', '  const C = 2{^}00;']), P, R),
+    'Deklaration');
+  Assert.IsFalse(P.FileWide, 'Deklaration: die Stelle');
+  Assert.IsTrue(R <> '', 'Grund der Stelle');
+  Assert.IsFalse(IntroAt(Join(['program p;', 'begin', '  Bar(2{^}00);',
+    'end.']), P, R), 'Hauptblock');
+  Assert.IsFalse(P.FileWide, 'Hauptblock: die Stelle');
+  Assert.IsTrue(IntroAt(UnitWith([], ['  Foo;', '  Bar(2{^}00);']), P, R), R);
+  Assert.IsFalse(P.FileWide, 'freigegeben');
+  // MagicNumber (SCA014) setzt es nie.
+  Assert.IsFalse(MagicAt(UnitWith([FPC_HEAD], ['  Foo;',
+    '  if X > 200 then Bar;']), P, R), 'SCA014 mit FPC-Weiche');
+  Assert.IsFalse(P.FileWide, 'SCA014: kein FileWide');
+end;
+
+// Dieselbe Sperre der ganzen Datei auf einer SCA014-Fundzeile: die
+// Fund-Hilfe nennt den Grund unveraendert (derselbe Satz wie IntroduceAt),
+// die Kontextaktion zeigt nichts.
+procedure TTestRdxContextFileLocks.Sca014_FileLocksKeepReason;
+const
+  HEADS: array[0..1] of string = (FPC_HEAD, OLD_HEAD);
+  PARTS: array[0..1] of string = ('FPC', 'Delphi 10.3');
+var
+  i         : Integer;
+  M, Src, R : string;
+  RI        : string;
+  P         : TRdxMagicPlan;
+begin
+  for i := 0 to High(HEADS) do
+  begin
+    M := UnitWith([HEADS[i]], ['  Foo;', '  if X > 2{^}00 then Bar;']);
+    Assert.AreEqual<Integer>(0, Length(RunAt(M, Src)), 'Kontext: ' + PARTS[i]);
+    Assert.IsFalse(MagicAt(Src, P, R), 'SCA014 gesperrt: ' + PARTS[i]);
+    Assert.IsTrue(Pos(PARTS[i], R) > 0, R);
+    IntroAt(M, P, RI);
+    Assert.AreEqual(R, RI, 'derselbe Satz: ' + PARTS[i]);
+  end;
+  M := Join(['procedure P;', 'begin', '  if X > 2{^}00 then Bar;', 'end;']);
+  Assert.AreEqual<Integer>(0, Length(RunAt(M, Src)), 'Kontext: Skript');
+  Assert.IsFalse(MagicAt(Src, P, R), 'SCA014 Skript gesperrt');
+  Assert.IsTrue(Pos('Skript', R) > 0, R);
+  // Gegenprobe: ohne Sperre bieten beide an.
+  M := UnitWith([], ['  Foo;', '  if X > 2{^}00 then Bar;']);
+  Assert.AreEqual<Integer>(1, Length(RunAt(M, Src)), 'Kontext ohne Sperre');
+  Assert.IsTrue(MagicAt(Src, P, R), R);
+end;
+
 {$IFNDEF FPC}
 
 { ---- Menuetext: gleich dem der Fund-Hilfe (Dedup, F2) ---- }
@@ -714,11 +918,30 @@ begin
     TRdxFixTable.ContextCaption(O));
 end;
 
+// Die Fund-Hilfe SCA014 ueber die Tabelle (MagicCheck mit Plattenblick):
+// in einer Datei mit FPC-Weiche ausgegraut mit dem Grund wie bisher - die
+// Kontextaktion zeigt dort nichts (Entscheid Nico 2026-10-24).
+procedure TTestRdxContextCaption.Caption_Sca014TableKeepsFileLock;
+var
+  Src : string;
+  Fix : TRdxFixOutcome;
+begin
+  Src := UnitWith([FPC_HEAD], ['  Foo;', '  if X > 200 then Bar;']);
+  Fix := PlanFixIn(Src, 't.pas', fkMagicNumber, SeenAt(LineOf(Src, 'if X >'),
+    Format(MAGIC_MSG, ['200'])));
+  Assert.IsFalse(Fix.Enabled, 'SCA014 gesperrt');
+  Assert.IsTrue(Pos('FPC', Fix.Reason) > 0, Fix.Reason);
+  Assert.AreEqual<Integer>(0, Length(RunPos(Src, 't.pas',
+    LineOf(Src, 'if X >'), Pos('200', '  if X > 200 then Bar;'))),
+    'Kontextaktion: kein Eintrag');
+end;
+
 {$ENDIF}
 
 initialization
   TDUnitX.RegisterTestFixture(TTestRdxCaret);
   TDUnitX.RegisterTestFixture(TTestRdxContextRunner);
+  TDUnitX.RegisterTestFixture(TTestRdxContextFileLocks);
   {$IFNDEF FPC}
   TDUnitX.RegisterTestFixture(TTestRdxContextCaption);
   {$ENDIF}
