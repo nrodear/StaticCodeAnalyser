@@ -149,8 +149,9 @@ const
   // Bis hier sucht ThenOf das then - dahinter beginnt keine Bedingung mehr.
   NOT_IN_CONDITION: array[0..3] of string = ('begin', 'end', 'do', 'of');
   JUMP_WORDS: array[0..2] of string = ('exit', 'continue', 'break');
-  // SCA080: hinter einer end-Kette aus mindestens zwei end beginnt hier
-  // etwas Neues (wie uRedundantJump).
+  // SCA080: hinter einer end-Kette beginnt hier etwas Neues (wie
+  // uRedundantJump; seit Charge D5 schon hinter EINEM end).
+  // var/const/type/label fehlen bewusst: inline-var/-const ist Code.
   CHAIN_TERMS: array[0..11] of string = ('procedure', 'function',
     'constructor', 'destructor', 'operator', 'class', 'initialization',
     'finalization', 'implementation', 'exports', 'resourcestring',
@@ -689,9 +690,10 @@ begin
 end;
 
 // Folgt hinter ASemi nur die end-Kette bis zum Routinenende, 'end.' oder
-// 'until'? Wie uRedundantJump: ein end allein nur vor Dateiende, '.'
-// bzw. until; ab zwei end auch vor dem Kopf einer Routine oder eines
-// Abschnitts.
+// 'until'? Wie uRedundantJump: hinter mindestens einem end Dateiende, '.',
+// until oder der Kopf einer Routine bzw. eines Abschnitts (CHAIN_TERMS).
+// Bis Charge D5 galt der Kopf erst ab zwei end - wie damals der Detektor,
+// der ein Exit vor dem end einer Routine mitten in der Unit nicht meldete.
 function ChainEnds(AMap: TRdxCodeMap; const ASemi: TRdxToken): Boolean;
 var
   T    : TRdxToken;
@@ -707,7 +709,7 @@ begin
       T := After(AMap, T);
   end;
   Result := (Ends > 0) and ((T.Low = '') or (T.Low = '.')
-    or (T.Low = 'until') or ((Ends >= 2) and InList(T.Low, CHAIN_TERMS)));
+    or (T.Low = 'until') or InList(T.Low, CHAIN_TERMS));
 end;
 
 { TRdxLoopScan }

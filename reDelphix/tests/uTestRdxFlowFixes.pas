@@ -36,6 +36,9 @@ type
     [Test] procedure Sca080_Inline;
     [Test] procedure Sca080_ElseExit;
     [Test] procedure Sca080_ChainTerminators;
+    [Test] procedure Sca080_SingleEndForms;
+    [Test] procedure Sca080_SingleEndSpan;
+    [Test] procedure Sca080_SingleEndRefusals;
     [Test] procedure Sca080_ContextRefusals;
     [Test] procedure Sca080_DetectorRefusals;
     [Test] procedure Sca047_Delete;
@@ -339,10 +342,83 @@ begin
     Fix(wkJump, InImpl(['procedure P;', 'begin', '  if A then', '  begin',
       '    Foo;', '    Exit;', '  end;', 'end;', 'procedure Q;', 'begin',
       'end;']), 9, JumpMsg('exit'), R), R);
-  // Ein end allein vor einem Routinenkopf genuegt nicht (wie der Detektor).
+  // Ein end allein vor einem Routinenkopf genuegt seit Charge D5 (wie der
+  // Detektor) - bis dahin stand hier die Ablehnung 'folgt noch Code'.
+  Assert.AreEqual(InImpl(['procedure P;', 'begin', '  Foo;', 'end;',
+      'procedure Q;', 'begin', 'end;']),
+    Fix(wkJump, InImpl(['procedure P;', 'begin', '  Foo;', '  Exit;', 'end;',
+      'procedure Q;', 'begin', 'end;']), 7, JumpMsg('exit'), R), R);
+end;
+
+procedure TTestRdxFlowFixes.Sca080_SingleEndForms;
+var
+  R : string;
+begin
+  // Charge D5, die neuen Fundformen des Detektors (ein end, dahinter ein
+  // Kopf): die letzte Routine vor initialization ...
+  Assert.AreEqual(InImpl(['procedure P;', 'begin', '  Foo;', 'end;',
+      'initialization', '  P;']),
+    Fix(wkJump, InImpl(['procedure P;', 'begin', '  Foo;', '  Exit;', 'end;',
+      'initialization', '  P;']), 7, JumpMsg('exit'), R), R);
+  // ... vor 'class procedure', der Sprung hinter einer Anweisung der Zeile ...
+  Assert.AreEqual(InImpl(['procedure P;', 'begin', '  Foo;', 'end;',
+      'class procedure TX.Q;', 'begin', 'end;']),
+    Fix(wkJump, InImpl(['procedure P;', 'begin', '  Foo; Exit;', 'end;',
+      'class procedure TX.Q;', 'begin', 'end;']), 6, JumpMsg('exit'), R), R);
+  // ... und 'else Exit' am Ende einer Funktion vor der naechsten.
+  Assert.AreEqual(InImpl(['function F: Boolean;', 'begin',
+      '  if A then Result := True;', 'end;', 'function G: Integer;', 'begin',
+      'end;']),
+    Fix(wkJump, InImpl(['function F: Boolean;', 'begin',
+      '  if A then Result := True else Exit;', 'end;', 'function G: Integer;',
+      'begin', 'end;']), 6, JumpMsg('exit'), R), R);
+end;
+
+procedure TTestRdxFlowFixes.Sca080_SingleEndSpan;
+var
+  R, Src : string;
+  P      : TRdxFlowPlan;
+begin
+  // Eine Leerzeile vor dem Sprung: der Bereich beginnt auf der Zeile des
+  // Sprungs (Spalte 1), nie auf der leeren Zeile davor; die Leerzeile bleibt.
+  Src := InImpl(['procedure P;', 'begin', '  Foo;', '', '  Exit;', 'end;',
+    'procedure Q;', 'begin', 'end;']);
+  P := PlanOf(wkJump, Src, 8, JumpMsg('exit'), R);
+  Assert.AreEqual('', R, R);
+  Assert.AreEqual<Integer>(8, P.Edit.Span.StartLine, 'Zeile des Sprungs');
+  Assert.AreEqual<Integer>(1, P.Edit.Span.StartCol, 'ganze Zeile');
+  Assert.AreEqual<Integer>(9, P.Edit.Span.EndLine, 'bis vor die end-Zeile');
+  Assert.AreEqual(InImpl(['procedure P;', 'begin', '  Foo;', '', 'end;',
+      'procedure Q;', 'begin', 'end;']),
+    Fix(wkJump, Src, 8, JumpMsg('exit'), R), R);
+end;
+
+procedure TTestRdxFlowFixes.Sca080_SingleEndRefusals;
+var
+  R : string;
+begin
+  // Gegenproben zu Charge D5. Schleifen-Gate auch vor einem Routinenkopf:
+  // die einanweisige Suchschleife bricht frueh ab.
+  AssertRefused(wkJump, InImpl(['procedure P;', 'begin', '  for I := 0 to 9 do',
+    '    if A then', '      Exit;', 'end;', 'procedure Q;', 'begin', 'end;']),
+    8, JumpMsg('exit'), 'Schleife');
+  // inline-const hinter dem end ist Code, kein Kopf.
+  AssertRefused(wkJump, InImpl(['procedure P;', 'begin', '  if A then',
+    '  begin', '    Foo;', '    Exit;', '  end;', '  const K = 3;', '  Use(K);',
+    'end;']), 9, JumpMsg('exit'), 'folgt noch Code');
+  // var nach einem einzelnen end bleibt draussen (wie der Detektor).
   AssertRefused(wkJump, InImpl(['procedure P;', 'begin', '  Foo;', '  Exit;',
-    'end;', 'procedure Q;', 'begin', 'end;']), 7, JumpMsg('exit'),
-    'folgt noch Code');
+    'end;', 'var', '  G: Integer;']), 7, JumpMsg('exit'), 'folgt noch Code');
+  // Die Waechterform 'if C then Exit;' am Routinenende: der Detektor meldet
+  // sie, die Hilfe sperrt sie aus dem eigenen Grund (es bliebe 'if C then')
+  // - nicht mehr mit 'folgt noch Code'.
+  AssertRefused(wkJump, InImpl(['function F: Boolean;', 'begin',
+    '  Result := Ok;', '  if not Result then', '    Exit;', 'end;',
+    'procedure Q;', 'begin', 'end;']), 8, JumpMsg('exit'), 'hinter then');
+  Assert.AreEqual('', Fix(wkJump, InImpl(['function F: Boolean;', 'begin',
+    '  Result := Ok;', '  if not Result then', '    Exit;', 'end;',
+    'procedure Q;', 'begin', 'end;']), 8, JumpMsg('exit'), R), R);
+  Assert.IsTrue(Pos('folgt noch Code', R) = 0, R);
 end;
 
 procedure TTestRdxFlowFixes.Sca080_ContextRefusals;
