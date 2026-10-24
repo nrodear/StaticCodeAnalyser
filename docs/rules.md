@@ -1588,16 +1588,16 @@ end;
 | Tags | `style`, `bug-risk` |
 | Detector | `uTrailingCommaArgList.pas` |
 
-Trailing comma before `)` in Delphi has no semantic benefit (unlike Python/JS where it stabilizes the diff) and suggests a forgotten argument. Matches SonarDelphi communitydelphi:TrailingCommaArgumentList.
+Trailing comma before `)` in an argument list. In a normal call Delphi rejects it: the comma adds an empty argument (E2034 too many actual parameters). Only a late-bound call on a Variant or dispinterface (OLE automation) compiles it, where the empty argument is an omitted optional parameter. There it has no semantic benefit (unlike Python/JS where it stabilizes the diff) and suggests a forgotten argument. Matches SonarDelphi communitydelphi:TrailingCommaArgumentList.
 
 ```pascal
 // BAD
-WriteLn('A', 'B', );
-DoStuff(Param1, Param2,);
+Excel.Workbooks.Open(FileName,);   // Excel: Variant
+Excel.ActiveWorkbook.SaveAs(NewName, );
 
 // GOOD
-WriteLn('A', 'B');
-DoStuff(Param1, Param2);
+Excel.Workbooks.Open(FileName);   // Excel: Variant
+Excel.ActiveWorkbook.SaveAs(NewName);
 ```
 
 ---

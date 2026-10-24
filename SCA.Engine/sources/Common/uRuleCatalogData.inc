@@ -809,8 +809,10 @@ const
       RuleID   : 'SCA068';
       Name     : 'Trailing comma in argument list';
       ShortDesc: '`Foo(A, B,)` - drop the comma or add the missing argument';
-      BadEx    : 'WriteLn(''A'', ''B'', );' + #13#10 + 'DoStuff(Param1, Param2,);';
-      GoodEx   : 'WriteLn(''A'', ''B'');' + #13#10 + 'DoStuff(Param1, Param2);';
+      BadEx    : 'Excel.Workbooks.Open(FileName,);   // Excel: Variant' + #13#10 +
+        'Excel.ActiveWorkbook.SaveAs(NewName, );';
+      GoodEx   : 'Excel.Workbooks.Open(FileName);   // Excel: Variant' + #13#10 +
+        'Excel.ActiveWorkbook.SaveAs(NewName);';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: True

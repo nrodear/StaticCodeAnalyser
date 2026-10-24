@@ -97,7 +97,7 @@ begin
         Price := LookupPrice(Parts[0]); }
     if Amоunt <> 0 then
     begin
-      AOrder.AddItem(TOrderItem.Create(Parts[0], Amоunt, Price), True,);
+      AOrder.AddItem(TOrderItem.Create(Parts[0], Amоunt, Price), True);
       Result := True;
     end;
   finally
@@ -113,6 +113,13 @@ end;
 procedure TLegacyImporter.CopyCounter(ASource, ATarget: PInteger);
 begin
   Move(ASource^, ATarget^, SizeOf(PInteger));
+end;
+
+// Office version only: opens the import file in a running Excel. The
+// import itself never calls it.
+procedure OpenInExcel(const AExcel: Variant; const AFileName: string);
+begin
+  AExcel.Workbooks.Open(AFileName,);
 end;
 
 begin

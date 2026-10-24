@@ -2213,14 +2213,16 @@ begin
     begin
       Result.Description := _('Trailing comma in argument list');
       Result.Before :=
-        'Logger.Info(''ctx=%s'', [Ctx,]);   // <-- stray comma'#13#10 +
-        'CallFoo(A, B,);                  // <-- ditto';
+        '// Excel: Variant (late-bound OLE automation call)'#13#10 +
+        'Excel.Workbooks.Open(FileName,);   // <-- stray comma';
       Result.After :=
-        'Logger.Info(''ctx=%s'', [Ctx]);'#13#10 +
-        'CallFoo(A, B);'#13#10 +
+        'Excel.Workbooks.Open(FileName);'#13#10 +
         ''#13#10 +
-        '// Unlike Python/JS, Pascal does not allow trailing commas in calls.'#13#10 +
-        '// Usually a leftover from copy-paste or comment-out of last arg.';
+        '// In a normal call Delphi rejects the comma: it adds an empty'#13#10 +
+        '// argument (E2034 too many actual parameters). Only late-bound'#13#10 +
+        '// Variant/dispinterface calls compile it - the empty argument is'#13#10 +
+        '// an omitted optional parameter. Usually a leftover from'#13#10 +
+        '// copy-paste or a commented-out last argument.';
     end;
 
     fkDigitGrouping:

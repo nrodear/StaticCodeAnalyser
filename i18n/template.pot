@@ -987,7 +987,7 @@ msgstr ""
 msgid "1-2 sentences why the rule fires on THIS specific code (not the generic explanation above)."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3498
+#: SCA.Engine/sources/Output/uFixHint.pas:3500
 msgid "8-bit string cast silently drops non-codepage characters"
 msgstr ""
 
@@ -1014,7 +1014,7 @@ msgstr ""
 msgid "AI prompt copied to clipboard: %s, line %s (%s)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4532
+#: SCA.Engine/sources/Output/uFixHint.pas:4534
 msgid "ANSI source (no BOM, not UTF-8) - code-page-dependent, non-portable"
 msgstr ""
 
@@ -1219,7 +1219,7 @@ msgstr ""
 msgid "Assert without a condition"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2318
+#: SCA.Engine/sources/Output/uFixHint.pas:2320
 msgid "Assert() without explanatory message"
 msgstr ""
 
@@ -1235,7 +1235,7 @@ msgstr ""
 msgid "Assigned is qualified here - not the system routine"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2533
+#: SCA.Engine/sources/Output/uFixHint.pas:2535
 msgid "Assigned(X) and (X <> nil) - one check is enough"
 msgstr ""
 
@@ -1243,7 +1243,7 @@ msgstr ""
 msgid "Assigned(X) is already in the statement (SCA084)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2859
+#: SCA.Engine/sources/Output/uFixHint.pas:2861
 msgid "Asymmetric begin/end in if/else - format consistently"
 msgstr ""
 
@@ -1255,7 +1255,7 @@ msgstr ""
 msgid "AutoDiscoverClasses - extend LeakyClasses with project-specific classes"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3581
+#: SCA.Engine/sources/Output/uFixHint.pas:3583
 msgid "Bare raise; outside an except/on handler raises NIL - Access Violation"
 msgstr ""
 
@@ -1305,7 +1305,7 @@ msgstr ""
 msgid "Before:"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4517
+#: SCA.Engine/sources/Output/uFixHint.pas:4519
 msgid "Bidirectional override char (Trojan Source) - code reads differently than it compiles"
 msgstr ""
 
@@ -1313,19 +1313,19 @@ msgstr ""
 msgid "Binary expression has identical left and right side - copy-paste bug?"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2280
+#: SCA.Engine/sources/Output/uFixHint.pas:2282
 msgid "Boolean compared to True/False - redundant"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3888
+#: SCA.Engine/sources/Output/uFixHint.pas:3890
 msgid "Boolean comparison is always true / always false"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3969
+#: SCA.Engine/sources/Output/uFixHint.pas:3971
 msgid "Boolean parameter drives internal branching - consider two methods with descriptive names"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2902
+#: SCA.Engine/sources/Output/uFixHint.pas:2904
 msgid "Branch body without begin..end - add explicit block"
 msgstr ""
 
@@ -1423,7 +1423,7 @@ msgstr ""
 msgid "Cannot read %s: %s"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4357
+#: SCA.Engine/sources/Output/uFixHint.pas:4359
 msgid "Cardinal/Integer subtraction on pointers truncates upper 32 bits on Win64"
 msgstr ""
 
@@ -1439,23 +1439,23 @@ msgstr ""
 msgid "Checking all classes..."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2958
+#: SCA.Engine/sources/Output/uFixHint.pas:2960
 msgid "Class field without \"F\" prefix"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3989
+#: SCA.Engine/sources/Output/uFixHint.pas:3991
 msgid "Class has too many methods or fields - split into focused units"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3623
+#: SCA.Engine/sources/Output/uFixHint.pas:3625
 msgid "Class inherits an abstract method but does not override it - EAbstractError"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3737
+#: SCA.Engine/sources/Output/uFixHint.pas:3739
 msgid "Class spans too many lines - split responsibilities into focused units"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2981
+#: SCA.Engine/sources/Output/uFixHint.pas:2983
 msgid "Class/record type without \"T\" prefix"
 msgstr ""
 
@@ -1578,7 +1578,7 @@ msgstr ""
 msgid "Code smells / style. Refactoring candidates."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2244
+#: SCA.Engine/sources/Output/uFixHint.pas:2246
 msgid "Comment contains Pascal-code markers - delete it or restore it"
 msgstr ""
 
@@ -1610,15 +1610,15 @@ msgstr ""
 msgid "Connectivity"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3646
+#: SCA.Engine/sources/Output/uFixHint.pas:3648
 msgid "Constructor allocates fields and raises - partially-initialized fields leak"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2801
+#: SCA.Engine/sources/Output/uFixHint.pas:2803
 msgid "Constructor does not call inherited - parent state uninitialized"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3394
+#: SCA.Engine/sources/Output/uFixHint.pas:3396
 msgid "Constructor invoked on instance - no allocation, fields re-initialised over live data"
 msgstr ""
 
@@ -1812,7 +1812,7 @@ msgstr ""
 msgid "Delphi project/group (*.dproj;*.groupproj)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2822
+#: SCA.Engine/sources/Output/uFixHint.pas:2824
 msgid "Destructor does not call inherited - resource leak"
 msgstr ""
 
@@ -1878,11 +1878,11 @@ msgstr ""
 msgid "Done. No findings."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2497
+#: SCA.Engine/sources/Output/uFixHint.pas:2499
 msgid "Double semicolon \";;\" - one is enough"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2763
+#: SCA.Engine/sources/Output/uFixHint.pas:2765
 msgid "Doubled parentheses around a simple expression"
 msgstr ""
 
@@ -1930,7 +1930,7 @@ msgstr ""
 msgid "Empty argument list \"()\" - drop the parentheses"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2380
+#: SCA.Engine/sources/Output/uFixHint.pas:2382
 msgid "Empty begin..end block"
 msgstr ""
 
@@ -1938,11 +1938,11 @@ msgstr ""
 msgid "Empty except block silently swallows every exception"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2511
+#: SCA.Engine/sources/Output/uFixHint.pas:2513
 msgid "Empty finally block - either drop the try or add cleanup"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2584
+#: SCA.Engine/sources/Output/uFixHint.pas:2586
 msgid "Empty visibility section in class - delete it"
 msgstr ""
 
@@ -1993,11 +1993,11 @@ msgstr ""
 msgid "Event handler in DFM points to a method that no longer exists"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3259
+#: SCA.Engine/sources/Output/uFixHint.pas:3261
 msgid "Exception class without E-prefix"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3295
+#: SCA.Engine/sources/Output/uFixHint.pas:3297
 msgid "Exception is constructed but never raised"
 msgstr ""
 
@@ -2013,7 +2013,7 @@ msgstr ""
 msgid "Exit in line %d, and %s is handed over in line %d - the exit might have transferred ownership; %s"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2452
+#: SCA.Engine/sources/Output/uFixHint.pas:2454
 msgid "Exit/Continue directly before end - redundant"
 msgstr ""
 
@@ -2043,7 +2043,7 @@ msgstr ""
 msgid "Field"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3139
+#: SCA.Engine/sources/Output/uFixHint.pas:3141
 msgid "FieldByName in loop - cache the TField reference outside"
 msgstr ""
 
@@ -2129,7 +2129,7 @@ msgstr ""
 msgid "Fix hint"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3798
+#: SCA.Engine/sources/Output/uFixHint.pas:3800
 msgid "Float equality is unreliable due to IEEE-754 rounding - use SameValue/Math.IsZero"
 msgstr ""
 
@@ -2158,7 +2158,7 @@ msgstr ""
 msgid "Free the buffer %s in a try/finally block"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3692
+#: SCA.Engine/sources/Output/uFixHint.pas:3694
 msgid "Free without nil-out - prefer FreeAndNil for dangling-pointer safety"
 msgstr ""
 
@@ -2171,11 +2171,11 @@ msgstr ""
 msgid "FreeMem now also runs on an exception and on Exit - the lines in between move into the try part"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3903
+#: SCA.Engine/sources/Output/uFixHint.pas:3905
 msgid "Function always returns the same literal on every code path"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3311
+#: SCA.Engine/sources/Output/uFixHint.pas:3313
 msgid "Function never assigns Result - return value undefined"
 msgstr ""
 
@@ -2183,7 +2183,7 @@ msgstr ""
 msgid "Function return value is not freed by the caller"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4068
+#: SCA.Engine/sources/Output/uFixHint.pas:4070
 msgid "GetMem / AllocMem without try/finally - an exception leaks the heap buffer"
 msgstr ""
 
@@ -2207,7 +2207,7 @@ msgstr ""
 msgid "Group the digits with \"_\""
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2352
+#: SCA.Engine/sources/Output/uFixHint.pas:2354
 msgid "Grouped variable/field declaration - one per line"
 msgstr ""
 
@@ -2301,7 +2301,7 @@ msgstr ""
 msgid "IfThen with two arguments - the default of the third depends on the overload (0 or an empty string)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3540
+#: SCA.Engine/sources/Output/uFixHint.pas:3542
 msgid "IfThen() evaluates both branches - no short-circuit semantics"
 msgstr ""
 
@@ -2371,15 +2371,15 @@ msgstr ""
 msgid "Insert suppression marker"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3673
+#: SCA.Engine/sources/Output/uFixHint.pas:3675
 msgid "Int64 target gets product of two ints - multiplication overflows in 32-bit"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2297
+#: SCA.Engine/sources/Output/uFixHint.pas:2299
 msgid "Interface declaration has no methods"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3002
+#: SCA.Engine/sources/Output/uFixHint.pas:3004
 msgid "Interface type without \"I\" prefix"
 msgstr ""
 
@@ -2387,11 +2387,11 @@ msgstr ""
 msgid "Introduce local constant for %s"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4489
+#: SCA.Engine/sources/Output/uFixHint.pas:4491
 msgid "Invalid UTF-8 sequence - compiler substitutes U+FFFD (data corruption)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4565
+#: SCA.Engine/sources/Output/uFixHint.pas:4567
 msgid "Invisible / zero-width character in source - hidden-text abuse"
 msgstr ""
 
@@ -2453,7 +2453,7 @@ msgstr ""
 msgid "Language (analyser.ini [UI])"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2228
+#: SCA.Engine/sources/Output/uFixHint.pas:2230
 msgid "Large integer literal without digit grouping"
 msgstr ""
 
@@ -2530,7 +2530,7 @@ msgstr ""
 msgid "Line too long for the editor selection (the editor reaches at most column %d)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3273
+#: SCA.Engine/sources/Output/uFixHint.pas:3275
 msgid "Local constant should be UPPER_SNAKE_CASE"
 msgstr ""
 
@@ -2538,19 +2538,19 @@ msgstr ""
 msgid "Local variable declared but never read or written"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4415
+#: SCA.Engine/sources/Output/uFixHint.pas:4417
 msgid "Local variable read before its first assignment - undefined value (garbage / AV)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3478
+#: SCA.Engine/sources/Output/uFixHint.pas:3480
 msgid "Locale-dependent conversion without explicit TFormatSettings"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3074
+#: SCA.Engine/sources/Output/uFixHint.pas:3076
 msgid "Lock acquired without try..finally release - exception leaves the lock held"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4017
+#: SCA.Engine/sources/Output/uFixHint.pas:4019
 msgid "Lock acquired without try/finally - an exception leaks the lock and deadlocks the next caller"
 msgstr ""
 
@@ -2609,23 +2609,23 @@ msgstr ""
 msgid "Method body is empty - forgotten stub or unintentional?"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2741
+#: SCA.Engine/sources/Output/uFixHint.pas:2743
 msgid "Method calls inherited more than once"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3712
+#: SCA.Engine/sources/Output/uFixHint.pas:3714
 msgid "Method has too many Exit statements - consolidate guards / single return"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3022
+#: SCA.Engine/sources/Output/uFixHint.pas:3024
 msgid "Method name not in PascalCase"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3863
+#: SCA.Engine/sources/Output/uFixHint.pas:3865
 msgid "Method never accesses Self or instance fields - could be `class function`"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3946
+#: SCA.Engine/sources/Output/uFixHint.pas:3948
 msgid "Method shadows a virtual parent method - add `override` directive"
 msgstr ""
 
@@ -2662,7 +2662,7 @@ msgstr ""
 msgid "Move %s before the loop"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4042
+#: SCA.Engine/sources/Output/uFixHint.pas:4044
 msgid "Move / FillChar uses SizeOf(pointer-type) - copies only 4/8 bytes, not the target buffer"
 msgstr ""
 
@@ -2670,7 +2670,7 @@ msgstr ""
 msgid "Move the keyword to column 1"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2477
+#: SCA.Engine/sources/Output/uFixHint.pas:2479
 msgid "Multiple class declarations in one unit"
 msgstr ""
 
@@ -2690,7 +2690,7 @@ msgstr ""
 msgid "NOSONAR is not the first word of the comment"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4503
+#: SCA.Engine/sources/Output/uFixHint.pas:4505
 msgid "NUL / control byte in source - binary file or mis-detected encoding"
 msgstr ""
 
@@ -2698,11 +2698,11 @@ msgstr ""
 msgid "Name of the new profile:"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2927
+#: SCA.Engine/sources/Output/uFixHint.pas:2929
 msgid "Nested procedure/function - consider extracting"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2662
+#: SCA.Engine/sources/Output/uFixHint.pas:2664
 msgid "Nested try block - consider extracting a procedure"
 msgstr ""
 
@@ -2770,7 +2770,7 @@ msgstr ""
 msgid "No sonar-project.properties found in "
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4579
+#: SCA.Engine/sources/Output/uFixHint.pas:4581
 msgid "Non-ASCII character in identifier - homoglyph / confusable risk"
 msgstr ""
 
@@ -2824,19 +2824,19 @@ msgstr ""
 msgid "Opened: %s  Line: %d"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3417
+#: SCA.Engine/sources/Output/uFixHint.pas:3419
 msgid "Override whose body is just \"inherited\" adds nothing"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3522
+#: SCA.Engine/sources/Output/uFixHint.pas:3524
 msgid "PChar(Char) reinterprets the codepoint as a pointer - undefined behaviour"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4147
+#: SCA.Engine/sources/Output/uFixHint.pas:4149
 msgid "PChar(s) arithmetic without empty-check - PChar('') is nil, arithmetic triggers AV"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3121
+#: SCA.Engine/sources/Output/uFixHint.pas:3123
 msgid "ParamByName in loop - cache the TParam reference outside"
 msgstr ""
 
@@ -2873,7 +2873,7 @@ msgstr ""
 msgid "Plain text -> Clipboard"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3197
+#: SCA.Engine/sources/Output/uFixHint.pas:3199
 msgid "Plaintext HTTP URL - prefer https:// for remote endpoints"
 msgstr ""
 
@@ -2890,7 +2890,7 @@ msgstr ""
 msgid "Plugin Open Error"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2885
+#: SCA.Engine/sources/Output/uFixHint.pas:2887
 msgid "Pointer type alias should start with \"P\""
 msgstr ""
 
@@ -2898,7 +2898,7 @@ msgstr ""
 msgid "Position in the buffer cannot be computed (%d..%d of %d)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3441
+#: SCA.Engine/sources/Output/uFixHint.pas:3443
 msgid "Prefer Assigned() over \"= nil\" / \"<> nil\""
 msgstr ""
 
@@ -2906,7 +2906,7 @@ msgstr ""
 msgid "Prefix parameter %s with \"_\" (intentionally unused)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3841
+#: SCA.Engine/sources/Output/uFixHint.pas:3843
 msgid "Private method has no caller in the unit - dead code"
 msgstr ""
 
@@ -2948,7 +2948,7 @@ msgstr ""
 msgid "Project path is empty."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2636
+#: SCA.Engine/sources/Output/uFixHint.pas:2638
 msgid "Public field - expose a property instead"
 msgstr ""
 
@@ -2968,7 +2968,7 @@ msgstr ""
 msgid "Public member is used only by subclasses - protected is tighter"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3231
+#: SCA.Engine/sources/Output/uFixHint.pas:3233
 msgid "Public member missing doc comment"
 msgstr ""
 
@@ -3015,11 +3015,11 @@ msgstr ""
 msgid "Raise ENotImplemented in the empty body"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3461
+#: SCA.Engine/sources/Output/uFixHint.pas:3463
 msgid "Raise a specific exception class, not the base Exception"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3816
+#: SCA.Engine/sources/Output/uFixHint.pas:3818
 msgid "Raise inside destructor without try/except - cleanup is aborted"
 msgstr ""
 
@@ -3039,7 +3039,7 @@ msgstr ""
 msgid "Raw score: %d"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3350
+#: SCA.Engine/sources/Output/uFixHint.pas:3352
 msgid "Re-raise of bound variable loses the original stack trace"
 msgstr ""
 
@@ -3275,7 +3275,7 @@ msgstr ""
 msgid "Result now starts with the named value instead of a random one - later assignments still apply"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3330
+#: SCA.Engine/sources/Output/uFixHint.pas:3332
 msgid "Result of managed type is read before it is assigned"
 msgstr ""
 
@@ -3454,7 +3454,7 @@ msgstr ""
 msgid "Server"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4107
+#: SCA.Engine/sources/Output/uFixHint.pas:4109
 msgid "SetLength growing by 1 inside a loop - O(n^2) reallocation; grow once before the loop"
 msgstr ""
 
@@ -3494,7 +3494,7 @@ msgstr ""
 msgid "Severity:"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4326
+#: SCA.Engine/sources/Output/uFixHint.pas:4328
 msgid "Shell API called with string concatenation in arguments"
 msgstr ""
 
@@ -3617,11 +3617,11 @@ msgstr ""
 msgid "Static Code Analysis Tool for Delphi"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4220
+#: SCA.Engine/sources/Output/uFixHint.pas:4222
 msgid "String cast from raw pointer assumes a null-terminator - heap overread if missing"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3102
+#: SCA.Engine/sources/Output/uFixHint.pas:3104
 msgid "String concatenation in loop - quadratic reallocations"
 msgstr ""
 
@@ -3674,7 +3674,7 @@ msgstr ""
 msgid "Suppress: editor write failed (file not in IDE?)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4453
+#: SCA.Engine/sources/Output/uFixHint.pas:4455
 msgid "Suppression marker has no matching finding - probably stale after fix"
 msgstr ""
 
@@ -3682,7 +3682,7 @@ msgstr ""
 msgid "Swap the loop bounds"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3041
+#: SCA.Engine/sources/Output/uFixHint.pas:3043
 msgid "Synchronize() in a destructor - worker and UI thread deadlock each other"
 msgstr ""
 
@@ -3694,7 +3694,7 @@ msgstr ""
 msgid "System.Generics.Collections is not in a uses clause of the file - TObjectList<T> may not come from there"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3212
+#: SCA.Engine/sources/Output/uFixHint.pas:3214
 msgid "TLS verification disabled - MITM-attack surface"
 msgstr ""
 
@@ -3714,11 +3714,11 @@ msgstr ""
 msgid "TObject.Destroy is empty - same meaning; the destructor then follows the convention"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3176
+#: SCA.Engine/sources/Output/uFixHint.pas:3178
 msgid "TThread destroyed without Terminate+WaitFor - worker may still be running"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3159
+#: SCA.Engine/sources/Output/uFixHint.pas:3161
 msgid "TThread.Resume is deprecated - use TThread.Start (since Delphi 2010)"
 msgstr ""
 
@@ -3750,7 +3750,7 @@ msgstr ""
 msgid "Too many parameters - introduce a parameter object / record"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4281
+#: SCA.Engine/sources/Output/uFixHint.pas:4283
 msgid "Top-level routine appears unused (dead code)"
 msgstr ""
 
@@ -3762,7 +3762,7 @@ msgstr ""
 msgid "Turn the last if into a guard clause with Exit"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2424
+#: SCA.Engine/sources/Output/uFixHint.pas:2426
 msgid "Two consecutive const/type/var sections - merge them"
 msgstr ""
 
@@ -3770,7 +3770,7 @@ msgstr ""
 msgid "Two sibling controls share the same TabOrder - tab navigation is undefined"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2778
+#: SCA.Engine/sources/Output/uFixHint.pas:2780
 msgid "Two visibility sections with the same keyword - merge them"
 msgstr ""
 
@@ -3782,7 +3782,7 @@ msgstr ""
 msgid "Type"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3377
+#: SCA.Engine/sources/Output/uFixHint.pas:3379
 msgid "Type-cast before Free / Destroy has no effect (Destroy is virtual)"
 msgstr ""
 
@@ -3791,7 +3791,7 @@ msgstr ""
 msgid "Type:"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4183
+#: SCA.Engine/sources/Output/uFixHint.pas:4185
 msgid "Typed exception handler is empty - swallows a specific exception silently"
 msgstr ""
 
@@ -3811,31 +3811,31 @@ msgstr ""
 msgid "UPDATE/DELETE/TRUNCATE without WHERE - affects ALL rows"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4545
+#: SCA.Engine/sources/Output/uFixHint.pas:4547
 msgid "UTF-16 source - compiles, but unusual and text-tool-unfriendly"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4555
+#: SCA.Engine/sources/Output/uFixHint.pas:4557
 msgid "UTF-32 source - compiler rejects it with fatal error F2438"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4472
+#: SCA.Engine/sources/Output/uFixHint.pas:4474
 msgid "UTF-8 source without BOM - Delphi reads it as ANSI, FPC as UTF-8 (mojibake on Delphi)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2606
+#: SCA.Engine/sources/Output/uFixHint.pas:2608
 msgid "Unit ends with begin..end. - use initialization section"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2724
+#: SCA.Engine/sources/Output/uFixHint.pas:2726
 msgid "Unit has no declarations - delete it or fill it"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3778
+#: SCA.Engine/sources/Output/uFixHint.pas:3780
 msgid "Unit has no descriptive header comment"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2260
+#: SCA.Engine/sources/Output/uFixHint.pas:2262
 msgid "Unit-level keyword not at column 1"
 msgstr ""
 
@@ -3879,7 +3879,7 @@ msgstr ""
 msgid "Use the condition as the Assert message"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3926
+#: SCA.Engine/sources/Output/uFixHint.pas:3928
 msgid "User-visible string is hardcoded - move to resourcestring / i18n"
 msgstr ""
 
@@ -3895,7 +3895,7 @@ msgstr ""
 msgid "Value"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3602
+#: SCA.Engine/sources/Output/uFixHint.pas:3604
 msgid "Variable used after Free / FreeAndNil - dangling pointer, AV likely"
 msgstr ""
 
@@ -3957,7 +3957,7 @@ msgstr ""
 msgid "Watching: %s"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4249
+#: SCA.Engine/sources/Output/uFixHint.pas:4251
 msgid "Weak/deprecated crypto algorithm in use"
 msgstr ""
 
@@ -4022,7 +4022,7 @@ msgstr ""
 msgid "X.Free() with parentheses"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2548
+#: SCA.Engine/sources/Output/uFixHint.pas:2550
 msgid "X.Free; X := nil; -> use FreeAndNil(X)"
 msgstr ""
 
@@ -4389,7 +4389,7 @@ msgstr ""
 msgid "call with several arguments - no template"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2696
+#: SCA.Engine/sources/Output/uFixHint.pas:2698
 msgid "case statement has many branches - consider dispatch table"
 msgstr ""
 
@@ -4442,7 +4442,7 @@ msgstr ""
 msgid "class var - a class field, not a local variable"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2334
+#: SCA.Engine/sources/Output/uFixHint.pas:2336
 msgid "class(TObject) - TObject is the default base, drop it"
 msgstr ""
 
@@ -4940,7 +4940,7 @@ msgstr ""
 msgid "end of the statement not found"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3557
+#: SCA.Engine/sources/Output/uFixHint.pas:3559
 msgid "except on E: Exception catches every error - prefer a specific subclass"
 msgstr ""
 
@@ -4981,7 +4981,7 @@ msgstr ""
 msgid "followed by \".\", \"[\" or \"(\" - the parentheses belong to a chain"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4608
+#: SCA.Engine/sources/Output/uFixHint.pas:4610
 msgid "for loop runs one index past the end - the upper bound is Count - 1 or High()"
 msgstr ""
 
@@ -5047,7 +5047,7 @@ msgstr ""
 msgid "heuristic finding - compile afterwards; if %s has an initialization section (registration), it no longer runs"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2843
+#: SCA.Engine/sources/Output/uFixHint.pas:2845
 msgid "if X then Y := True else Y := False - assign expression directly"
 msgstr ""
 
@@ -6048,7 +6048,7 @@ msgstr ""
 msgid "not readable"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4593
+#: SCA.Engine/sources/Output/uFixHint.pas:4595
 msgid "not/and/or/xor bind tighter than comparisons - put the comparison in parentheses"
 msgstr ""
 
@@ -6109,7 +6109,7 @@ msgstr ""
 msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 11, which has no digit separators; %s"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2399
+#: SCA.Engine/sources/Output/uFixHint.pas:2401
 msgid "on E: Exception catches everything - too broad"
 msgstr ""
 
@@ -6303,7 +6303,7 @@ msgstr ""
 msgid "other code stands between the two calls - only a human can decide whether it depends on the first call"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2562
+#: SCA.Engine/sources/Output/uFixHint.pas:2564
 msgid "out parameter - prefer Result or var"
 msgstr ""
 
@@ -8504,7 +8504,7 @@ msgstr ""
 msgid "uses clause contains compiler directives (line %d)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3759
+#: SCA.Engine/sources/Output/uFixHint.pas:3761
 msgid "uses clause is not in alphabetical order"
 msgstr ""
 
@@ -8589,7 +8589,7 @@ msgstr ""
 msgid "with statement in the routine - an operand or %s could bind to a member"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4387
+#: SCA.Engine/sources/Output/uFixHint.pas:4389
 msgid "with statement names multiple targets - ambiguous member lookup"
 msgstr ""
 

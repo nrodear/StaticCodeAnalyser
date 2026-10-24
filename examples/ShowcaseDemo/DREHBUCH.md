@@ -54,16 +54,17 @@ einfügt oder löscht – darum die Grundregel unten.
    (SCA007, SCA099, SCA101, SCA117, SCA126). `MinConfidence=low` braucht es
    für die sechs Formatregeln SCA061, SCA063, SCA064, SCA069, SCA076,
    SCA079 – die Engine meldet sie mit niedriger Konfidenz. Erwartung:
-   **218 Funde** (mit `MinConfidence=medium` 163; Profil `default`: 192
-   bzw. 137).
+   **214 Funde** (mit `MinConfidence=medium` 164; Profil `default`: 188
+   bzw. 138).
 4. Zurücksetzen: `git checkout examples/ShowcaseDemo`, `__history`
    löschen.
 5. Probelauf: einmal bauen (Win32, Debug). Erwartet: übersetzt mit
    Warnungen (W1010 „verdeckt virtuelle Methode“, W1035 „Rückgabewert
    undefiniert“, W1000 „Resume ist veraltet“, Hinweise zu ungenutzten
-   Variablen). **Falls** Delphi das überzählige Komma in
-   `uLegacyImport.pas` Zeile 100 (`..., True,);`) ablehnt: das Komma von
-   Hand löschen – dann entfällt nur die Szene zu SCA068.
+   Variablen). Das überzählige Komma für SCA068 steht im spät gebundenen
+   Variant-Aufruf `uLegacyImport.pas:122` (`AExcel.Workbooks.Open(AFileName,);`):
+   nur dort übersetzt Delphi es (leeres Argument = weggelassener optionaler
+   Parameter); in einem normalen Aufruf wäre es E2034 „Zu viele Parameter“.
 
 ## Szene 1: Projekt öffnen und kompilieren
 
@@ -74,7 +75,7 @@ einfügt oder löscht – darum die Grundregel unten.
 
 ## Szene 2: Scan und Überblick
 
-- Analyse für das Projekt starten. Dock-Fenster: **218 Funde**.
+- Analyse für das Projekt starten. Dock-Fenster: **214 Funde**.
 - Nach Schwere sortieren, die Error-Kacheln zeigen. Highlights **ohne**
   Code-Aktion (kurz anklicken, Fundtext vorlesen, von Hand erklären):
   - `uPriceCalculator.pas:157` **SCA202** `not AQuantity = 0` – bindet
@@ -91,6 +92,8 @@ einfügt oder löscht – darum die Grundregel unten.
     `:127` **SCA200** feste IP-Adresse.
   - `uOrderForm.pas:131` **SCA008** `Order` ist nil und wird dereferenziert
     (dazu `:130` **SCA019** TODO).
+  - `uOrderForm.dfm:101` **SCA026** Klartext-Passwort
+    `Password=Sommer2024!` in `FDConnection1.Params.Strings` (Error).
   - `uPriceCalculator.pas:108` **SCA010** Division durch einen Parameter
     ohne Prüfung auf 0.
   - DFM: **SCA024** Standardnamen (`Button1`, `Edit1` …), **SCA039**
@@ -107,14 +110,14 @@ uses, Zeichen aus einer Webseite kopiert. Von unten nach oben:
 
 | # | Zeile | Fund | Aktion (Menütext) | Erwartung danach |
 |---:|---:|---|---|---|
-| 1 | 118 | SCA088 | begin durch initialization ersetzen | `initialization` statt `begin` vor `end.` |
+| 1 | 125 | SCA088 | begin durch initialization ersetzen | `initialization` statt `begin` vor `end.` |
 | 2 | 115 | SCA154 | SizeOf(Integer) statt der Zeigergröße verwenden (ändert Verhalten) | `Move(ASource^, ATarget^, SizeOf(Integer))` |
 | 3 | 110 | SCA161 | Die 32-Bit-Casts durch NativeInt/NativeUInt ersetzen (ändert Verhalten) | `NativeInt(PEnd) - NativeInt(PStart)` – richtig auch unter Win64 |
 | 4 | 108 | SCA148 | **Hier unterdrücken** (Strg+Alt+S) statt Hilfe; im selben Menü steht „In dieser Datei unterdrücken“ | Zeile `// noinspection CanBeClassMethod` darüber; Fund weg |
-| 5 | 100 | SCA068 | Überzähliges Komma entfernen – im Dock-Grid per **Strg+Alt+F** | `..., True);` |
+| 5 | 122 | SCA068 | Überzähliges Komma entfernen – im Dock-Grid per **Strg+Alt+F** | `AExcel.Workbooks.Open(AFileName);` |
 | 6 | 95–97 | SCA070 | Auskommentierten Code löschen | der `{ if Price = 0 ... }`-Block ist weg (neu analysieren) |
 | 7 | 93 | SCA014 | Lokale Konstante für 20 einführen | `const MagicNr01 = 20;` vor dem `if` (neu analysieren) |
-| 8 | 81 | SCA193 | Namen in ASCII-Buchstaben schreiben: Amount | alle vier `Amоunt` (kyrillisches о) heißen `Amount`; auch der Fehlalarm SCA166 „Am read before …“ verschwindet |
+| 8 | 81 | SCA193 | Namen in ASCII-Buchstaben schreiben: Amount | alle vier `Amоunt` (kyrillisches о) heißen `Amount` |
 | 9 | 73 | SCA123 | Cast nach TStringList vor Free entfernen | `Lines.Free;` |
 | 10 | 68 | SCA099 | Zweig in begin..end setzen | `end else begin Inc(FStats.Skipped); end;` (neu analysieren) |
 | 11 | 64 | SCA063 | Leerraum am Zeilenende entfernen | – |
@@ -132,11 +135,15 @@ uses, Zeichen aus einer Webseite kopiert. Von unten nach oben:
 Hinweis zu 21: die uses-Aktionen stehen nur im Kontextmenü (Refactoring,
 nicht in der Glühbirne); vor Schritt 20 sind es vier Einträge.
 
+Hinweis zu 5: `OpenInExcel` (Zeile 120) ruft niemand auf, dazu meldet
+SCA164 „Ungenutzte Routine OpenInExcel löschen“. Stehen lassen – die Hilfe
+löschte die Routine samt der SCA068-Stelle; SCA164 zeigt Szene 5.
+
 ## Szene 4: uPriceCalculator.pas – Rechenfehler und Stilfragen
 
 | # | Zeile | Fund | Aktion | Erwartung danach |
 |---:|---:|---|---|---|
-| 1 | 342 | SCA080 | Überflüssiges Exit entfernen | **vor** Schritt 2: danach stünde `initialization` hinter `Reset`, der Fund fiele weg |
+| 1 | 342 | SCA080 | Überflüssiges Exit entfernen | `Exit;` vor dem `end` von `Reset` ist weg; die Reihenfolge zu Schritt 2 ist egal, der Fund bleibt auch mit `initialization` dahinter |
 | 2 | 333 | SCA167 | Randomize im initialization-Abschnitt aufrufen (ändert Verhalten) | neuer Abschnitt `initialization Randomize;` vor `end.` |
 | 3 | 319 | SCA122 | raise; verwenden (Original-Stack-Trace bleibt) | `raise;` |
 | 4 | 302 | SCA002 | raise; in den leeren except-Block einfügen (ändert Verhalten) | `except raise; end;` (neu analysieren) |
@@ -256,7 +263,8 @@ eine Team-Konvention.
 Die sechs SCA007-Funde in Zeile 8–14 (FireDAC- und VCL-Units) **nicht**
 anwenden, sondern erklären: der uses-Check ist heuristisch, darum
 „(ändert Verhalten)“; die IDE trägt die FireDAC-Units beim Speichern des
-Formulars wieder ein. Die DFM-Funde (Szene 2) haben keine Code-Aktion –
+Formulars wieder ein. Die DFM-Funde (Szene 2, auch SCA026 `:101`) haben
+keine Code-Aktion –
 Doppelklick öffnet die .dfm an der Stelle.
 
 ## Szene 8: Ausblick – Charge B (noch nicht in diesem Stand)
@@ -285,7 +293,8 @@ Nachgewiesen mit der reDelphix-Angebotsprobe (echter Code von
 `uRdxFixTable`, `uRdxFixRunner`, `uRdxRecipeRunner` und aller Planer unter
 FPC 3.2.2, SCA044 über `RdxCorpusProbe.exe`) auf dem SARIF des Laufs
 `--profile strict --min-severity hint`, `MinConfidence=low`, Stand
-reDelphiX 49ab918f. **106 von 106 angeboten.** Status **ja** = der echte
+reDelphiX 49ab918f (Funde nachgemessen mit der Exe 5575bd42 und der
+SCA068-Stelle in Zeile 122). **106 von 106 angeboten.** Status **ja** = der echte
 reDelphix-Code hat allein entschieden; **ja\*** = angeboten, eine Typ-,
 with- oder Baumfrage an die Engine (`DeclaredTypeOf`, `InWithBlock`,
 uses-Klauseln) hat dabei ein Probe-Orakel beantwortet – alle 19 Antworten
@@ -293,7 +302,7 @@ sind am Quelltext geprüft (Typen aus derselben Unit, kein `with` in der
 Routine), einmal in der IDE gegenprüfen. „weitere / gesperrt“: weitere
 Stellen mit Angebot bzw. Stellen, an denen die Hilfe begründet ablehnt
 (z. B. SCA014 hinter `else if`, SCA126 bei einem Typ aus einer anderen
-Unit). Nach dem Anwenden übersetzen alle 152 Ergebnisdateien unter FPC
+Unit). Nach dem Anwenden übersetzen alle 153 Ergebnisdateien unter FPC
 ohne neuen Fehler, außer Delphi-eigener Syntax (Inline-`var`/`const`,
 `TFormatSettings.Invariant`, Zifferntrenner, `System.Contnrs`).
 
@@ -323,7 +332,7 @@ ohne neuen Fehler, außer Delphi-eigener Syntax (Inline-`var`/`const`,
 | 22 | SCA064 | 1 | Begin klein schreiben | uLegacyImport.pas:43 | ja | 1 / 0 |
 | 23 | SCA065 | 1 | NOSONAR durch einen Marker "noinspection All" ersetzen (ä. V.) | uOrderRepository.pas:225 | ja | 0 / 0 |
 | 24 | SCA066 | 1 | Leere Klammern entfernen | uPriceCalculator.pas:130 | ja* | 0 / 0 |
-| 25 | SCA068 | 1 | Überzähliges Komma entfernen | uLegacyImport.pas:100 | ja | 0 / 0 |
+| 25 | SCA068 | 1 | Überzähliges Komma entfernen | uLegacyImport.pas:122 | ja | 0 / 0 |
 | 26 | SCA069 | 1 | Ziffern mit "_" gruppieren | uPriceCalculator.pas:74 | ja | 0 / 0 |
 | 27 | SCA070 | 1 | Auskommentierten Code löschen | uLegacyImport.pas:97 | ja | 0 / 0 |
 | 28 | SCA071 | 1 | Schlüsselwort an Spalte 1 setzen | uLegacyImport.pas:35 | ja | 0 / 0 |
@@ -340,7 +349,7 @@ ohne neuen Fehler, außer Delphi-eigener Syntax (Inline-`var`/`const`,
 | 39 | SCA085 | 1 | FreeAndNil(FAddress) verwenden | uOrderModel.pas:276 | ja* | 0 / 0 |
 | 40 | SCA086 | 1 | "out" für AItem durch "var" ersetzen (ä. V.) | uOrderModel.pas:158 | ja | 1 / 0 |
 | 41 | SCA087 | 1 | Leeren Sichtbarkeitsabschnitt entfernen | uOrderModel.pas:147 | ja | 0 / 0 |
-| 42 | SCA088 | 1 | begin durch initialization ersetzen | uLegacyImport.pas:118 | ja | 0 / 0 |
+| 42 | SCA088 | 1 | begin durch initialization ersetzen | uLegacyImport.pas:125 | ja | 0 / 0 |
 | 43 | SCA093 | 1 | Zweiten doppelten inherited-Aufruf entfernen (ä. V.) | uOrderModel.pas:317 | ja | 0 / 0 |
 | 44 | SCA093 | 2 | Ersten doppelten inherited-Aufruf entfernen (ä. V.) | uOrderModel.pas:317 | ja | 0 / 0 |
 | 45 | SCA094 | 1 | Das überflüssige innere Klammerpaar entfernen | uPriceCalculator.pas:233 | ja | 0 / 0 |
@@ -381,7 +390,7 @@ ohne neuen Fehler, außer Delphi-eigener Syntax (Inline-`var`/`const`,
 | 80 | SCA156 | 1 | Puffer Buffer in einem try/finally-Block freigeben (ä. V.) | uOrderRepository.pas:91 | ja | 0 / 0 |
 | 81 | SCA159 | 1 | Dem leeren Ausnahme-Handler "raise;" hinzufügen (ä. V.) | uPriceCalculator.pas:293 | ja | 0 / 0 |
 | 82 | SCA161 | 1 | Die 32-Bit-Casts durch NativeInt/NativeUInt ersetzen (ä. V.) | uLegacyImport.pas:110 | ja | 0 / 0 |
-| 83 | SCA164 | 1 | Ungenutzte Routine FormatSku löschen | uOrderModel.pas:440 | ja | 0 / 0 |
+| 83 | SCA164 | 1 | Ungenutzte Routine FormatSku löschen | uOrderModel.pas:440 | ja | 1 / 0 |
 | 84 | SCA167 | 1 | Randomize im initialization-Abschnitt aufrufen (ä. V.) | uPriceCalculator.pas:333 | ja | 0 / 0 |
 | 85 | SCA168 | 1 | Leeren else-Zweig ergänzen | uPriceCalculator.pas:164 | ja | 0 / 0 |
 | 86 | SCA168 | 2 | else-Zweig mit Exception ergänzen (ä. V.) | uPriceCalculator.pas:164 | ja | 0 / 0 |
@@ -400,7 +409,7 @@ ohne neuen Fehler, außer Delphi-eigener Syntax (Inline-`var`/`const`,
 | 99 | SCA199 | 1 | Parameternamen "City" aus dem SQL verwenden (ä. V.) | uOrderRepository.pas:214 | ja | 0 / 0 |
 | 100 | SCA203 | 1 | Schleife 0 to AOrder.Items.Count - 1 laufen lassen (ä. V.) | uPriceCalculator.pas:188 | ja | 0 / 0 |
 | 101 | Anbieter | - | Format() aus Verkettung bilden | uOrderForm.pas:176 | ja | 1 / 0 |
-| 102 | Anbieter | - | Hier / In dieser Datei unterdrücken | uLegacyImport.pas:8 | ja | 396 / 1 |
+| 102 | Anbieter | - | Hier / In dieser Datei unterdrücken | uLegacyImport.pas:8 | ja | 386 / 1 |
 | 103 | Anbieter | - | Parametrisierte Vorlage in die Zwischenablage | uOrderForm.pas:79 | ja* | 3 / 0 |
 | 104 | Anbieter | - | Stelle zeigen | uOrderForm.pas:176 | ja | 5 / 0 |
 | 105 | Anbieter | - | Wirkungslosen Unterdrück-Marker entfernen | uOrderRepository.pas:221 | ja | 0 / 0 |

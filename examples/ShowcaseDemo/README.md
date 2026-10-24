@@ -39,13 +39,15 @@ database.
    StaticCodeAnalyser.d12.exe --path examples\ShowcaseDemo --full --profile strict --min-severity hint --report-html demo.html
    ```
 
-Findings measured with the Charge A build (commit 49ab918f), counted per
-profile and confidence floor:
+Findings measured with the reDelphiX build 5575bd42 plus the commit that
+moved the SCA068 spot into the unused Variant routine `OpenInExcel`
+(uLegacyImport.pas:122, adds one SCA164), counted per profile and
+confidence floor:
 
 | Profile / MinConfidence | medium | low |
 |---|---:|---:|
-| `default` | 137 | 192 |
-| `strict` (for the video) | 163 | 218 |
+| `default` | 138 | 188 |
+| `strict` (for the video) | 164 | 214 |
 
 ## Reset
 
