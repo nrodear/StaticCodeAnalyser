@@ -25,10 +25,11 @@ unit uIDEFindingActionMenu;
 // Eintrag mit Parent >= 0 haengt als Kind an seinem Untermenue-Kopf
 // (mkSubmenu 'Unterdruecken'); nur die oberste Ebene kommt nach ASink.
 // Jeder Menuepunkt traegt den Hint des Eintrags (VCL zeigt ihn beim
-// Ueberfahren als Application.Hint); die Kennzeichnung hinter #9 steht
-// nativ rechtsbuendig in der Tastenspalte - unter den VCL-Stilen der IDE
-// zeichnet VCL selbst (owner-draw, DrawText mit tfExpandTabs: dann als
-// Tabulatorsprung, nicht rechtsbuendig; im IDE-Bau zu messen). Bilder
+// Ueberfahren als Application.Hint). Der Menuetext ist die Caption des
+// Anbieters ohne #9-Spalte (Nico 2026-10-25): unter den VCL-Stilen der
+// IDE zeichnet VCL selbst (owner-draw, DrawText mit tfExpandTabs) und
+// setzte den Teil hinter #9 als Tabulatorsprung hinter die laengste
+// Caption statt rechtsbuendig in die Tastenspalte. Bilder
 // (Entry.Icon) als TMenuItem.Bitmap - nie in die ImageList eines fremden
 // Popups (das Editor-Kontextmenue gehoert der IDE): Birne wie am Editor-
 // rand (uEditorBulbButton.DrawBulbGlyph), Auge "Hide" aus Segoe Fluent
@@ -84,7 +85,7 @@ function MenuCaptionOf(const AText: string): string;
 // cHotkeyPrefix): es verschwindet und das Folgezeichen wird
 // unterstrichen. Kopfzeilen tragen den Meldetext des Funds (z. B. ein
 // SCA015-Literal 'Save & Exit'), Aktionen den Text des Anbieters (samt
-// Kennzeichnung hinter #9) - beides soll woertlich erscheinen, also '&'
+// Grund einer gesperrten Aktion) - beides soll woertlich erscheinen, also '&'
 // als '&&' maskieren (Nit 2, Audit reDelphiX 2026-10-07). Kein
 // Anbieter setzt '&' absichtlich als Hotkey. Nur fuer Text aus dem
 // Modell; Hint, Trenner '-' und eigene Zeilen bleiben unberuehrt.

@@ -23,14 +23,15 @@ einfügt oder löscht – darum die Grundregel unten.
   sicher.
 - **Glühbirne** (Caret auf der Fundzeile) zeigt nur ausführbare Hilfen.
   Das **Kontextmenü** im Editor oder im Dock-Grid zeigt auch gesperrte
-  Einträge ausgegraut, der Kopf des Grunds steht rechts in der Spalte der
-  Tastenkürzel, der ganze Grund im Hinweis (Statuszeile) – gut für eine
+  Einträge ausgegraut, der Kopf des Grunds steht in Klammern hinter dem
+  Menütext, der ganze Grund im Hinweis (Statuszeile) – gut für eine
   Szene „warum hier nicht?“.
-- **Rechte Spalte** des Menüs: „=“ heißt bedeutungsgleich; bei
-  **„(ändert Verhalten)“** am Menütext steht dort, was sich ändert. Diese
-  Hilfen laufen nur per Menü oder Glühbirne, nie über **Strg+Alt+F** (erste
-  verfügbare, bedeutungsgleiche Hilfe im Dock-Grid). Die volle Erklärung
-  steht im Hinweis des Menüpunkts.
+- **Menütext** ohne Zusatz heißt bedeutungsgleich (das steht nur im
+  Hinweis); **„(ändert Verhalten)“** am Menütext kennzeichnet eine Hilfe,
+  die das Verhalten ändert. Diese Hilfen laufen nur per Menü oder
+  Glühbirne, nie über **Strg+Alt+F** (erste verfügbare, bedeutungsgleiche
+  Hilfe im Dock-Grid). Die volle Erklärung – was sich ändert – steht im
+  Hinweis des Menüpunkts.
 - **Unterdrücken** steht in einem Untermenü am Ende des Menüs („Hier
   unterdrücken“ / „In dieser Datei unterdrücken“ je Fund). **Strg+Alt+S**
   unterdrückt direkt.

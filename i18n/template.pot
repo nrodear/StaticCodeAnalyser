@@ -370,7 +370,7 @@ msgstr ""
 msgid "%d locks \"%s\""
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEFindingActionMenu.pas:227
+#: StaticCodeAnalyserIDE/uIDEFindingActionMenu.pas:228
 msgid "%d more findings on this line are not listed"
 msgstr ""
 
@@ -3633,7 +3633,7 @@ msgstr ""
 msgid "Summary"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uFindingActionMenu.pas:569
+#: SCA.Engine/sources/Common/uFindingActionMenu.pas:559
 msgid "Suppress"
 msgstr ""
 

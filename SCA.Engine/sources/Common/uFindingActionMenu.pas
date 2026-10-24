@@ -11,10 +11,13 @@ unit uFindingActionMenu;
 // Aenderungen "2b" vom selben Tag - so kurz wie Vorschlag 2): optional ein
 // Trenner vor dem ersten Fund mit Aktionen, je Fund optional eine
 // deaktivierte Kopfzeile 'SCAnnn  Regelname' (FindingHeaderCaption),
-// darunter die Aktionen als Caption + #9 + Kennzeichnung (FindingAction-
-// Caption: '=' fuer bedeutungsgleich, sonst der kurze Kopf des Hints - in
-// der Spalte, in der Windows sonst die Taste zeigt). Der volle Hint und
-// die volle Meldung des Funds stehen in Entry.Hint (FindingActionHint),
+// darunter die Aktionen mit der Caption des Anbieters (FindingAction-
+// Caption; eine gesperrte Aktion mit dem kurzen Grund in Klammern, Nico
+// 2026-10-25: keine Spalte hinter #9 mehr - unter den VCL-Stilen der IDE
+// zeichnete sie als Tabulatorsprung hinter der laengsten Caption, und
+// bedeutungsgleich ist der Normalfall, der nur im Hint steht). Der volle
+// Hint und die volle Meldung des Funds stehen in Entry.Hint
+// (FindingActionHint),
 // verfuegbare Hilfen und Code-Aktionen tragen das Bild miBulb,
 // 'Unterdruecken' miSuppress, die Kopfzeilen IM Untermenue miRule
 // (Entry.Icon; die Kopfzeilen oben bleiben ohne Bild). Enabled
@@ -157,14 +160,9 @@ const
   // Soviel vom Regelnamen bzw. (ohne ihn) von der Meldung steht hoechstens
   // in der Kopfzeile (FindingHeaderCaption, ShortMenuText).
   MENU_HEADER_TITLE_CHARS = 40;
-  // Soviel vom Kopf eines Hints steht hoechstens in der Kennzeichnungs-
-  // Spalte einer Aktion (FindingHintHead).
-  MENU_MARK_CHARS = 32;
-  // Kennzeichnung einer verfuegbaren, bedeutungsgleichen Code-Aenderung.
-  MENU_MARK_SAME = '=';
-  // Trenner zwischen Menuetext und Kennzeichnung: TMenuItem zeigt den Teil
-  // hinter #9 nativ rechtsbuendig in der Tastenspalte.
-  MENU_MARK_TAB = #9;
+  // Soviel vom Kopf eines Hints steht hoechstens als Grund in der Caption
+  // einer gesperrten Aktion (FindingHintHead).
+  MENU_REASON_CHARS = 32;
   // Der Kopf eines Hints endet vor dem ersten ' - ' (FindingHintHead).
   HINT_HEAD_SEPARATOR = ' - ';
   // Zwischen Hint der Aktion und Meldung des Funds (FindingActionHint) -
@@ -217,13 +215,13 @@ function BuildEditorMenuModel(const AContext: TEditorContext;
 // Leerzeichen in der zweiten Haelfte gekuerzt (sonst hart), ohne ',', ';'
 // und ':' am Ende, mit '...' (U+2026) abgeschlossen.
 function ShortMenuText(const AText: string; AMaxChars: Integer): string;
-// Der Kopf eines Hints fuer die Kennzeichnungs-Spalte (Vorschlag 2, Regel
-// 1): der Text vor dem ersten ' - ' (ohne ' - ' der ganze Hint), auf
-// MENU_MARK_CHARS gekuerzt (ShortMenuText). '' bleibt ''.
+// Der Kopf eines Hints fuer den Grund einer gesperrten Aktion (Vorschlag
+// 2, Regel 1): der Text vor dem ersten ' - ' (ohne ' - ' der ganze Hint),
+// auf MENU_REASON_CHARS gekuerzt (ShortMenuText). '' bleibt ''.
 // WARUM am uebersetzten Text: der Hint kommt als EIN Satz und EINE msgid
 // vom Anbieter (reDelphix FIX_HINTS, R_*_HINT, Gruende); ein eigenes Feld
 // fuer den Kopf haette jeden Anbieter und rund 470 msgids geteilt. Der
-// Kopf vor ' - ' ist dort die Kennzeichnung ('same meaning - ...', 'Free
+// Kopf vor ' - ' ist dort die Kurzform ('same meaning - ...', 'Free
 // now also runs on an exception and on Exit - ...'), und die
 // Uebersetzungen halten diese Form: alle 868 msgids mit ' - ' in i18n/
 // tragen es auch in de.po und fr.po, mit dem uebersetzten Kopf davor
@@ -232,17 +230,17 @@ function ShortMenuText(const AText: string; AMaxChars: Integer): string;
 // steht der Anfang des ganzen Hints da; der volle Hint steht ohnehin im
 // Hint des Menuepunkts.
 function FindingHintHead(const AHint: string): string;
-// Die Kennzeichnung einer Aktion in der Tastenspalte: MENU_MARK_SAME fuer
-// eine verfuegbare Code-Aenderung (fakFix, fakRefactor, fakContext), die
-// das Verhalten nicht aendert; sonst - verhaltensaendernd, gesperrt (dann
-// ist der Hint der Grund) oder eine andere Art - der Kopf des Hints
-// (FindingHintHead), '' ohne Hint.
-function FindingActionMark(const AAction: TFindingAction): string;
-// Der Menuetext einer Aktion der obersten Ebene: Caption + #9 +
-// Kennzeichnung bzw. nur Caption (keine Kennzeichnung). Gleich gebaut fuer
-// Fund- und Kontextaktion; dedupliziert wird ueber TFindingAction.Caption,
-// den Teil VOR #9 (AppendContextActions) - eine Kontextaktion mit
-// derselben Caption faellt weg, auch wenn ihre Kennzeichnung abwiche.
+// Der Menuetext einer Aktion der obersten Ebene (Nico 2026-10-25): die
+// Caption des Anbieters - eine verhaltensaendernde traegt dort schon ihre
+// eigene Kennzeichnung (reDelphix '(changes behavior)'), bedeutungsgleich
+// ist der Normalfall und steht nur im Hint. Eine gesperrte Aktion (nicht
+// Enabled oder ohne Execute) mit Hint: 'Caption (Grund)', der Grund als
+// Kopf des Hints (FindingHintHead) - so stand er vor Vorschlag 2 voll in
+// der Caption, mit Vorschlag 2 kurz in der Spalte hinter #9. Kein #9,
+// kein '='. Gleich gebaut fuer Fund- und Kontextaktion; dedupliziert wird
+// ueber TFindingAction.Caption (AppendContextActions, SameText) - eine
+// Kontextaktion mit derselben Caption faellt weg, auch wenn ihr Hint oder
+// ihre Sperre abwiche.
 function FindingActionCaption(const AAction: TFindingAction): string;
 // 'Caption  (Hint)' mit dem vollen Hint bzw. nur Caption - bis Vorschlag 2
 // der Menuetext jeder Aktion, heute fuer Statuszeilen (Ctrl+Alt+S nennt so
@@ -357,7 +355,7 @@ begin
   p := Pos(HINT_HEAD_SEPARATOR, Result);
   if p > 0 then
     Result := Copy(Result, 1, p - 1);
-  Result := ShortMenuText(Result, MENU_MARK_CHARS);
+  Result := ShortMenuText(Result, MENU_REASON_CHARS);
 end;
 
 function IsAvailable(const AAction: TFindingAction): Boolean;
@@ -365,24 +363,15 @@ begin
   Result := AAction.Enabled and Assigned(AAction.Execute);
 end;
 
-function FindingActionMark(const AAction: TFindingAction): string;
-begin
-  if IsAvailable(AAction) and not AAction.ChangesBehavior
-     and (AAction.Kind in [fakFix, fakRefactor, fakContext]) then
-    Result := MENU_MARK_SAME
-  else
-    Result := FindingHintHead(AAction.Hint);
-end;
-
 function FindingActionCaption(const AAction: TFindingAction): string;
 var
-  Mark : string;
+  Reason : string;
 begin
-  Mark := FindingActionMark(AAction);
-  if Mark <> '' then
-    Result := AAction.Caption + MENU_MARK_TAB + Mark
-  else
-    Result := AAction.Caption;
+  Result := AAction.Caption;
+  if IsAvailable(AAction) then Exit;
+  Reason := FindingHintHead(AAction.Hint);
+  if Reason <> '' then
+    Result := Format('%s (%s)', [Result, Reason]);
 end;
 
 function FindingActionFullCaption(const AAction: TFindingAction): string;
@@ -504,8 +493,9 @@ end;
 // nach Actions - in der Reihenfolge des Anbieters (Base + k: die Tasten
 // und die drei ActionItemClick-Wege lesen ActionIndex wie bisher; Actions
 // waechst einmal je Fund, nicht je Aktion) - und alle ausser den
-// Unterdrueck-Aktionen als Eintraege der obersten Ebene: Menuetext mit
-// Kennzeichnung, Hint mit Meldung, Bild (ActionIcon). Liefert Base.
+// Unterdrueck-Aktionen als Eintraege der obersten Ebene: Menuetext
+// (FindingActionCaption), Hint mit Meldung, Bild (ActionIcon). Liefert
+// Base.
 function AddActionsOf(var AModel: TFindingMenuModel;
   const AActs: TArray<TFindingAction>; AFinding: TLeakFinding): Integer;
 var

@@ -2,13 +2,15 @@ unit uTestFindingMenuCompact;
 
 // Tests fuer das Aktionsmenue nach Vorschlag 2 (Konzept 2026-10-24, mit
 // Nicos Aenderungen "2b" vom selben Tag) in uFindingActionMenu: kurze
-// Menuetexte mit Kennzeichnung hinter #9 ('=' bedeutungsgleich, sonst der
-// Kopf des Hints), voller Hint samt Meldung im Hint, kurze Kopfzeilen
+// Menuetexte - seit Nico 2026-10-25 nur die Caption des Anbieters, ohne
+// Spalte hinter #9 und ohne '=', eine gesperrte Aktion mit dem kurzen
+// Grund in Klammern -, voller Hint samt Meldung im Hint, kurze Kopfzeilen
 // (Regelname), EIN Untermenue 'Unterdruecken' am Ende der Fund-Gruppen mit
 // Kopfzeile 'SCAnnn  Art' je Fund, Bilder je Eintrag (Entry.Icon), Dedup
-// von Fund- und Kontextaktion ueber die Caption VOR #9. Die Erwartungen
-// sind ausgeschriebene Zeichenketten - vor Vorschlag 2 stand dort
-// 'Caption  (Hint)' und je Fund ein flacher Unterdrueck-Block.
+// von Fund- und Kontextaktion ueber die Caption. Die Erwartungen sind
+// ausgeschriebene Zeichenketten - vor Vorschlag 2 stand dort
+// 'Caption  (Hint)' und je Fund ein flacher Unterdrueck-Block, mit
+// Vorschlag 2 'Caption'#9'Kennzeichnung'.
 
 interface
 
@@ -22,10 +24,10 @@ type
     [Test] procedure HintHead_CutBeforeDash;
     [Test] procedure HintHead_LongCutAtWordWithEllipsis;
     [Test] procedure ShortMenuText_HardCutAndPunctuation;
-    [Test] procedure Caption_SameMeaning_EqualsInColumn;
-    [Test] procedure Caption_ChangesBehavior_HintHeadInColumn;
-    [Test] procedure Caption_Disabled_ReasonHeadInColumn;
-    [Test] procedure Caption_NoMark_NoTab;
+    [Test] procedure Caption_SameMeaning_OnlyCaption;
+    [Test] procedure Caption_ChangesBehavior_OnlyProviderCaption;
+    [Test] procedure Caption_Disabled_ReasonHeadInParentheses;
+    [Test] procedure Caption_Navigate_NoTabNoEquals;
     [Test] procedure Hint_JoinsActionHintAndFindingMessage;
     [Test] procedure Header_CatalogNameNotMessage;
     [Test] procedure Header_CustomRule_MessageCut;
@@ -35,7 +37,7 @@ type
     [Test] procedure Suppress_NoneAtAll_NoSubmenuNoTrailingSeparator;
     [Test] procedure Submenu_DisabledWhenNoChildAvailable;
     [Test] procedure Submenu_BeforeContextSection;
-    [Test] procedure Dedup_ContextActionDifferentMark_Dropped;
+    [Test] procedure Dedup_ContextActionDifferentHint_Dropped;
     [Test] procedure Dedup_SameActionSameEntryCaption;
     [Test] procedure Icons_BulbOnlyForAvailableFixAndContext;
     [Test] procedure KeyPolicy_SuppressInSubmenu_IndexUnchanged;
@@ -59,7 +61,7 @@ var
 
 const
   ELLIPSIS = #$2026;
-  TAB      = #9;
+  TAB      = #9;   // darf in keinem Menuetext mehr stehen
 
 procedure TExecOwner.DoExecute(Sender: TObject);
 begin
@@ -143,7 +145,7 @@ begin
     ShortMenuText('aaaa bbbb, cccc dddd', 10));
 end;
 
-procedure TTestFindingMenuCompact.Caption_SameMeaning_EqualsInColumn;
+procedure TTestFindingMenuCompact.Caption_SameMeaning_OnlyCaption;
 var
   F : TLeakFinding;
   M : TFindingMenuModel;
@@ -153,7 +155,8 @@ begin
     M := Model1(F, [Act('Zweig in begin..end setzen',
       'gleiche Bedeutung - nur die Form', fakFix)], []);
     Assert.AreEqual<Integer>(1, Length(M.Entries));
-    Assert.AreEqual('Zweig in begin..end setzen' + TAB + '=', M.Entries[0].Caption);
+    Assert.AreEqual('Zweig in begin..end setzen', M.Entries[0].Caption,
+      'bedeutungsgleich ist der Normalfall - nur im Hint, kein "="');
     Assert.IsTrue(Pos('gleiche Bedeutung - nur die Form', M.Entries[0].Hint) = 1,
       'der volle Hint steht im Hint: ' + M.Entries[0].Hint);
   finally
@@ -161,33 +164,41 @@ begin
   end;
 end;
 
-procedure TTestFindingMenuCompact.Caption_ChangesBehavior_HintHeadInColumn;
+procedure TTestFindingMenuCompact.Caption_ChangesBehavior_OnlyProviderCaption;
 var
   A : TFindingAction;
 begin
   A := Act('try/finally (aendert Verhalten)',
     'die Sperre wird freigegeben - auch bei Exit', fakFix);
   A.ChangesBehavior := True;
-  Assert.AreEqual('try/finally (aendert Verhalten)' + TAB
-    + 'die Sperre wird freigegeben', FindingActionCaption(A),
-    'verfuegbar, aber verhaltensaendernd: der Kopf des Hints, kein "="');
+  Assert.AreEqual('try/finally (aendert Verhalten)', FindingActionCaption(A),
+    'verfuegbar, verhaltensaendernd: die eigene Kennzeichnung des Anbieters, '
+    + 'der Kopf des Hints nicht noch einmal');
 end;
 
-procedure TTestFindingMenuCompact.Caption_Disabled_ReasonHeadInColumn;
+procedure TTestFindingMenuCompact.Caption_Disabled_ReasonHeadInParentheses;
 begin
-  Assert.AreEqual('Konstante' + TAB + 'kein Literal am Caret',
+  Assert.AreEqual('Konstante (kein Literal am Caret)',
     FindingActionCaption(Act('Konstante',
       'kein Literal am Caret - Caret auf eine Zahl setzen', fakFix, False)),
-    'gesperrt: der Grund, nicht "="');
+    'gesperrt: der kurze Grund in Klammern, kein #9');
+  Assert.AreEqual('Konstante', FindingActionCaption(Act('Konstante', '',
+    fakFix, False)), 'gesperrt ohne Hint: nur die Caption');
+  Assert.AreEqual('Format() bilden (Free now also runs on an' + ELLIPSIS + ')',
+    FindingActionCaption(Act('Format() bilden',
+      'Free now also runs on an exception and on Exit', fakFix, False)),
+    'der Grund auf MENU_REASON_CHARS gekuerzt');
 end;
 
-procedure TTestFindingMenuCompact.Caption_NoMark_NoTab;
+procedure TTestFindingMenuCompact.Caption_Navigate_NoTabNoEquals;
 begin
   Assert.AreEqual('Stelle zeigen',
     FindingActionCaption(Act('Stelle zeigen', '', fakNavigate)));
-  Assert.AreEqual('Stelle zeigen' + TAB + 'Zeile 10',
+  Assert.AreEqual('Stelle zeigen',
     FindingActionCaption(Act('Stelle zeigen', 'Zeile 10', fakNavigate)),
-    'Navigieren aendert nichts - kein "="');
+    'verfuegbar: der Hint steht nur im Hint');
+  Assert.IsTrue(Pos(TAB, FindingActionCaption(Act('Umbau', 'gleiche Bedeutung - x',
+    fakRefactor))) = 0, 'kein #9');
 end;
 
 procedure TTestFindingMenuCompact.Hint_JoinsActionHintAndFindingMessage;
@@ -378,14 +389,14 @@ begin
     Assert.AreEqual<Integer>(3, M.ContextEntryCount, 'Trenner, Kopf, Aktion');
     Assert.IsTrue(Sub < Length(M.Entries) - M.ContextEntryCount,
       'Unterdruecken vor dem Abschnitt der Code-Aktionen');
-    Assert.AreEqual('Konstante' + TAB + '=', M.Entries[High(M.Entries)].Caption);
+    Assert.AreEqual('Konstante', M.Entries[High(M.Entries)].Caption);
     Assert.AreEqual<Integer>(-1, M.Entries[High(M.Entries)].Parent);
   finally
     F.Free;
   end;
 end;
 
-procedure TTestFindingMenuCompact.Dedup_ContextActionDifferentMark_Dropped;
+procedure TTestFindingMenuCompact.Dedup_ContextActionDifferentHint_Dropped;
 var
   F : TLeakFinding;
   M : TFindingMenuModel;
@@ -399,7 +410,7 @@ begin
     C.ChangesBehavior := True;
     AppendContextActions(M, [C], [], '');
     Assert.AreEqual<Integer>(0, M.ContextActionCount,
-      'Dedup ueber die Caption vor #9 - die Kennzeichnung zaehlt nicht');
+      'Dedup ueber die Caption (SameText) - Hint und ChangesBehavior zaehlen nicht');
     Assert.AreEqual<Integer>(1, M.ActionCount);
   finally
     F.Free;
@@ -414,9 +425,8 @@ begin
   C := A;
   C.Kind := fakContext;
   Assert.AreEqual(FindingActionCaption(A), FindingActionCaption(C),
-    'Fund-Hilfe und Code-Aktion: derselbe Menuetext samt #9-Teil');
-  Assert.AreEqual('Lokale Konstante einfuehren' + TAB + '=',
-    FindingActionCaption(C));
+    'Fund-Hilfe und Code-Aktion: derselbe Menuetext');
+  Assert.AreEqual('Lokale Konstante einfuehren', FindingActionCaption(C));
 end;
 
 procedure TTestFindingMenuCompact.Icons_BulbOnlyForAvailableFixAndContext;

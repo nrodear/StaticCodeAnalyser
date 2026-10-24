@@ -114,10 +114,12 @@ die Engine also vorher. DCUs landen wie bei den anderen Projekten in
    * Rechtsklick auf einen Fund im Dock-Grid oder im Editor-Kontextmenue:
      hinter dem Trenner alle Aktionen von reDelphix. Form seit dem
      Aktionsmenue nach Vorschlag 2 (2026-10-24): je Fund eine Kopfzeile
-     `SCAnnn  Regelname`, darunter die Aktionen nur mit ihrem Menuetext;
-     rechts in der Spalte der Tastenkuerzel `=` fuer bedeutungsgleich,
-     sonst der Kopf des Hinweises (bei "(aendert Verhalten)" was sich
-     aendert, bei einem ausgegrauten Eintrag der Grund). Die volle
+     `SCAnnn  Regelname`, darunter die Aktionen nur mit ihrem Menuetext
+     (seit 2026-10-25 ohne rechte Spalte: unter den VCL-Stilen der IDE
+     stand sie als Tabulatorsprung hinter dem laengsten Text).
+     Bedeutungsgleich ist der Normalfall und steht nur im Hinweis; eine
+     verhaltensaendernde Hilfe traegt "(aendert Verhalten)" im Menuetext,
+     ein ausgegrauter Eintrag den kurzen Grund in Klammern. Die volle
      Erklaerung und die Meldung des Funds stehen im Hinweis des
      Menuepunkts (Statuszeile). Eine Gluehbirne steht vor jeder
      ausfuehrbaren Hilfe. "Hier unterdruecken" und "In dieser Datei

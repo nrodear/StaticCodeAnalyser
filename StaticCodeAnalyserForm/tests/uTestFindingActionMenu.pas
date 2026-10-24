@@ -146,10 +146,11 @@ begin
     Assert.IsFalse(M.Entries[1].Enabled, 'Kopfzeile ist nie klickbar');
     Assert.AreEqual<Integer>(-1, M.Entries[1].ActionIndex);
     Assert.IsTrue(M.Entries[2].Kind = mkAction);
-    // Hilfe, verfuegbar, nicht verhaltensaendernd: '=' in der Tastenspalte
-    Assert.AreEqual('Stelle zeigen'#9'=', M.Entries[2].Caption);
+    // Hilfe, verfuegbar: nur die Caption, keine Spalte hinter #9, kein '='
+    // (Nico 2026-10-25)
+    Assert.AreEqual('Stelle zeigen', M.Entries[2].Caption);
     Assert.AreEqual<Integer>(0, M.Entries[2].ActionIndex);
-    Assert.AreEqual('Format() bilden'#9'=', M.Entries[3].Caption);
+    Assert.AreEqual('Format() bilden', M.Entries[3].Caption);
     Assert.IsTrue(Pos('3 Terme', M.Entries[3].Hint) = 1, 'der Hint im Hint');
     Assert.AreEqual<Integer>(1, M.Entries[3].ActionIndex);
     Assert.IsTrue(M.Entries[4].Kind = mkSeparator);
@@ -176,7 +177,7 @@ begin
     Assert.AreEqual<Integer>(3, Length(M.Entries), 'Trenner, Kopf, Aktion');
     Assert.IsTrue(Pos('mit', M.Entries[2].Hint) > 0,
       'die Aktion gehoert zum zweiten Fund: ' + M.Entries[2].Hint);
-    Assert.AreEqual('Stelle zeigen'#9'=', M.Entries[2].Caption);
+    Assert.AreEqual('Stelle zeigen', M.Entries[2].Caption);
   finally
     F1.Free; F2.Free;
   end;
@@ -214,8 +215,8 @@ begin
     M := BuildFindingMenuModelFrom([F], Lists, []);
     Assert.AreEqual<Integer>(1, Length(M.Entries));
     Assert.IsFalse(M.Entries[0].Enabled);
-    Assert.AreEqual('Format() bilden'#9'Operand ''n'': kein String',
-      M.Entries[0].Caption, 'der Grund steht in der Tastenspalte');
+    Assert.AreEqual('Format() bilden (Operand ''n'': kein String)',
+      M.Entries[0].Caption, 'der kurze Grund in Klammern, kein #9');
     Assert.IsTrue(Pos('Operand ''n'': kein String', M.Entries[0].Hint) = 1,
       M.Entries[0].Hint);
   finally
