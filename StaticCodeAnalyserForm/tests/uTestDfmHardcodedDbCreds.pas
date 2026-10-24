@@ -44,6 +44,17 @@ type
     [Test] procedure Test_Finding_MissingVarMentionsComponentAndClass;
   end;
 
+  // Klassen-Whitelist 2026-10-24: JVCL-UIB und Lazarus-SQLdb (eigene
+  // Fixture, die erste ist bei 20 Tests voll).
+  [TestFixture]
+  TTestDfmHardcodedDbCredsClasses = class
+  public
+    [Test] procedure Test_LazarusIBConnection_Password_Detected;
+    [Test] procedure Test_JvUibDatabase_PasswordAndParams_TwoFindings;
+    [Test] procedure Test_SqldbFamily_EmptyPasswordStaysSilent;
+    [Test] procedure Test_UnlistedLazReportWrapper_NotDetected;
+  end;
+
 implementation
 
 uses
@@ -255,12 +266,12 @@ begin
 end;
 
 procedure TTestDfmHardcodedDbCreds.Test_Params_NonCredentialClass_NotDetected;
-// Die Klassen-Whitelist gilt auch fuer Params: TJvUIBDataBase (realworld,
-// jvcl/donations/UIB) steht nicht darauf.
+// Die Klassen-Whitelist gilt auch fuer Params: eine Query-Komponente
+// steht nicht darauf.
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(
-    'object Uib: TJvUIBDataBase'#13#10 +
+    'object Qry: TFDQuery'#13#10 +
     '  Params.Strings = ('#13#10 +
     '    ''password=masterkey'')'#13#10 +
     'end'#13#10 +
@@ -376,7 +387,85 @@ begin
   finally F.Free; end;
 end;
 
+{ --- Klassen-Whitelist: JVCL-UIB und Lazarus-SQLdb --- }
+
+procedure TTestDfmHardcodedDbCredsClasses.Test_LazarusIBConnection_Password_Detected;
+// lazarus components/lazreport/samples/Demo_CrossTab/unit1.lfm
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(
+    'object IBConnection1: TIBConnection'#13#10 +
+    '  DatabaseName = ''employee'''#13#10 +
+    '  Password = ''masterkey'''#13#10 +
+    '  UserName = ''sysdba'''#13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmHardcodedDbCreds));
+    Assert.AreEqual('3', F[0].LineNumber);
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedDbCredsClasses.Test_JvUibDatabase_PasswordAndParams_TwoFindings;
+// realworld jvcl/donations/UIB: dasselbe Passwort steht im Params-Eintrag
+// UND in der PassWord-Property - zwei Klartext-Stellen, zwei Funde.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(
+    'object DataBase: TJvUIBDataBase'#13#10 +
+    '  Params.Strings = ('#13#10 +
+    '    ''sql_dialect=3'''#13#10 +
+    '    ''password=masterkey'''#13#10 +
+    '    ''user_name=SYSDBA'')'#13#10 +
+    '  UserName = ''SYSDBA'''#13#10 +
+    '  PassWord = ''masterkey'''#13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(2, Count(F, fkDfmHardcodedDbCreds));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedDbCredsClasses.Test_SqldbFamily_EmptyPasswordStaysSilent;
+// ODBC haengt Params an den Connection-String (PWD= ist ein Credential),
+// MySQL80 traegt die Password-Property; ein leeres Password der
+// SQLite3-Verbindung bleibt stumm.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(
+    'object Odbc: TODBCConnection'#13#10 +
+    '  Params.Strings = ('#13#10 +
+    '    ''PWD=geheim'')'#13#10 +
+    'end'#13#10 +
+    'object My: TMySQL80Connection'#13#10 +
+    '  Password = ''root'''#13#10 +
+    'end'#13#10 +
+    'object Lite: TSQLite3Connection'#13#10 +
+    '  Password = '''''#13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(2, Count(F, fkDfmHardcodedDbCreds));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedDbCredsClasses.Test_UnlistedLazReportWrapper_NotDetected;
+// TLR_IBConnection (LazReport-Huelle) steht nicht auf der Liste; die
+// TPQConnection daneben schon.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(
+    'object LR_IBConnection1: TLR_IBConnection'#13#10 +
+    '  Password = ''masterkey'''#13#10 +
+    'end'#13#10 +
+    'object PQ: TPQConnection'#13#10 +
+    '  Password = ''postgres'''#13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmHardcodedDbCreds));
+    Assert.Contains(F[0].MissingVar, 'TPQConnection');
+  finally F.Free; end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestDfmHardcodedDbCreds);
+  TDUnitX.RegisterTestFixture(TTestDfmHardcodedDbCredsClasses);
 
 end.

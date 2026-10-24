@@ -57,10 +57,25 @@ uses
 const
   // Default-Whitelist der Klassen, die Credentials tragen koennen.
   // Phase 2 macht das via analyser.ini ueberschreibbar.
-  CONNECTION_CLASSES: array[0..6] of string = (
+  //
+  // 2026-10-24 (Nico) erweitert um JVCL-UIB und die Lazarus-SQLdb-
+  // Verbindungen. Klassennamen aus FPC 3.2.2 packages/fcl-db/src/sqldb
+  // (sqldb.pp, interbase, postgres, mysql/mysqlconn.inc, sqlite, odbc,
+  // mssql, oracle). SQLdb publiziert 'Password' als String-Property (Zweig
+  // 1) und 'Params' als TStrings; TODBCConnection haengt die Params-
+  // Eintraege an den ODBC-Connection-String an (Zweig 3 greift dort).
+  // TJvUIBDataBase speichert PassWord UND den 'password='-Eintrag in Params.
+  CONNECTION_CLASSES: array[0..23] of string = (
     'TADOConnection', 'TFDConnection', 'TIBDatabase',
     'TSQLConnection', 'TZConnection',  'TUniConnection',
-    'TOracleSession'
+    'TOracleSession',
+    'TJvUIBDataBase',
+    'TSQLConnector', 'TIBConnection', 'TPQConnection',
+    'TMySQL40Connection', 'TMySQL41Connection', 'TMySQL50Connection',
+    'TMySQL51Connection', 'TMySQL55Connection', 'TMySQL56Connection',
+    'TMySQL57Connection', 'TMySQL80Connection',
+    'TSQLite3Connection', 'TODBCConnection', 'TMSSQLConnection',
+    'TSybaseConnection', 'TOracleConnection'
   );
 
 function IsCredentialBearer(const ClassRef: string): Boolean;
