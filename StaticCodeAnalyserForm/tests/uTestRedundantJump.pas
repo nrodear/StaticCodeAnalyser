@@ -26,6 +26,12 @@ type
     [Test] procedure LoopBeforeExit_StillReported;            // TP-Gegenprobe (`;`-Regel)
     [Test] procedure ExitAfterStringWithLoopWords_StillReported; // TP-Gegenprobe (Blank-Fassung)
     [Test] procedure ExitInWithBlockAtTail_StillReported;     // TP-Gegenprobe (with ist keine Schleife)
+    // --- Charge D5 2026-10-24 (ShowcaseDemo): ein end vor dem Routinenkopf ---
+    [Test] procedure ExitBeforeEndMidUnit_Reported;
+    [Test] procedure ExitBeforeEndThenInitialization_Reported;
+    [Test] procedure GuardExitAtTailMidUnit_Reported;
+    [Test] procedure ExitInSearchLoopSingleEnd_NoFinding;     // Gegenprobe Schleifen-Gate
+    [Test] procedure ExitBeforeEndThenUnitConst_NoFinding;    // Gegenprobe const bleibt draussen
   end;
 
 implementation
@@ -373,6 +379,133 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkRedundantJump),
     'with-Block ist keine Schleife - Exit bleibt redundant');
+  finally F.Free; end;
+end;
+
+procedure TTestRedundantJump.ExitBeforeEndMidUnit_Reported;
+// Charge D5 (ShowcaseDemo 2026-10-24): 'Exit;' direkt vor dem end einer
+// Routine MITTEN in der Unit - dahinter steht der naechste Routinenkopf.
+// Bis 49ab918f akzeptierte die Kette aus EINEM end nur EOF/'end.'/'until'
+// als Terminator, der Fund fehlte (nur die letzte Routine wurde gemeldet).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  DoStuff;'#13#10 +
+  '  Exit;'#13#10 +
+  'end;'#13#10 +
+  'procedure Bar;'#13#10 +
+  'begin'#13#10 +
+  '  DoOther;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkRedundantJump),
+    'Exit vor dem end einer Routine mitten in der Unit ist redundant');
+  finally F.Free; end;
+end;
+
+procedure TTestRedundantJump.ExitBeforeEndThenInitialization_Reported;
+// Charge D5: die letzte Routine vor 'initialization' - der Fall aus dem
+// DREHBUCH des ShowcaseDemo (mit angefuegtem initialization-Abschnitt fiel
+// der Fund weg). Vorher: kein Fund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Reset;'#13#10 +
+  'begin'#13#10 +
+  '  Total := 0;'#13#10 +
+  '  Exit;'#13#10 +
+  'end;'#13#10 +
+  'initialization'#13#10 +
+  '  Randomize;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkRedundantJump),
+    'Exit vor dem end der Routine vor initialization ist redundant');
+  finally F.Free; end;
+end;
+
+procedure TTestRedundantJump.GuardExitAtTailMidUnit_Reported;
+// Charge D5: 'if C then Exit;' als letzte Anweisung einer Routine mitten in
+// der Unit (Korpus: der haeufigste neue Fund, z.B. Dev-Cpp
+// JvgGridHeaderControl.Loaded). Der Fund steht auf der Exit-Zeile.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Check: Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  Result := Validate;'#13#10 +
+  '  if not Result then'#13#10 +
+  '    Exit;'#13#10 +
+  'end;'#13#10 +
+  'class procedure TFoo.Bar;'#13#10 +
+  'begin'#13#10 +
+  '  DoOther;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkRedundantJump),
+      'if-Zweig-Exit am Routinenende ist redundant');
+    Fnd := TFindingHelper.FirstOf(F, fkRedundantJump);
+    Assert.AreEqual('6', Fnd.LineNumber, 'Fund auf der Exit-Zeile');
+  finally F.Free; end;
+end;
+
+procedure TTestRedundantJump.ExitInSearchLoopSingleEnd_NoFinding;
+// Gegenprobe Charge D5: auch der neue Weg (EIN end vor dem Routinenkopf)
+// laeuft durch das Schleifen-Gate - die einanweisige Suchschleife
+// 'for .. do if .. then Exit;' bricht frueh ab, das Exit ist nicht redundant.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Find;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 1 to N do'#13#10 +
+  '    if Match(i) then'#13#10 +
+  '      Exit;'#13#10 +
+  'end;'#13#10 +
+  'procedure Bar;'#13#10 +
+  'begin'#13#10 +
+  '  DoOther;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRedundantJump),
+    'Exit aus einer Schleife bleibt Frueh-Rueckkehr');
+  finally F.Free; end;
+end;
+
+procedure TTestRedundantJump.ExitBeforeEndThenUnitConst_NoFinding;
+// Gegenprobe Charge D5: 'const' (wie var/type/label) ist KEIN Terminator -
+// hinter einem einzelnen end kann es inline-const sein, also ausfuehrbarer
+// Code ('if C then begin ..; Exit; end; const K = ..;'). Die Liste der
+// Routinen-/Abschnittskoepfe wird nicht erweitert.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  if Cond then'#13#10 +
+  '  begin'#13#10 +
+  '    DoStuff;'#13#10 +
+  '    Exit;'#13#10 +
+  '  end;'#13#10 +
+  '  const K = 3;'#13#10 +
+  '  Use(K);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRedundantJump),
+    'Exit vor inline-const-Folgecode ist nicht redundant');
   finally F.Free; end;
 end;
 
