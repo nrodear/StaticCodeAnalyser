@@ -154,6 +154,27 @@ type
     [Test] procedure Div_ParenNumberBeforeMod_StillReported; // Korpus-Drop
   end;
 
+  // ---- DivByZero G7: Obergrenze einer for-Schleife (Charge D 2026-10-24) --
+  // 'for I := 0 to N - 1 do .. T div N': laeuft der Rumpf, ist N >= 1.
+  [TestFixture]
+  TTestDivByZeroForBound = class
+  private
+    class function DivCount(const ASrc: string): Integer; static;
+  public
+    [Test] procedure Div_ForToNMinusOne_NoFinding;
+    [Test] procedure Div_ForToPredN_NoFinding;
+    [Test] procedure Div_ForOneToN_NoFinding;
+    [Test] procedure Div_ForInlineVarToNMinusOne_NoFinding;
+    [Test] procedure Div_ForBoundAssignedInBody_StillReported;   // Gegenprobe
+    [Test] procedure Div_ForBoundDecInBody_StillReported;        // Gegenprobe
+    [Test] procedure Div_ForOtherIdentifier_StillReported;       // Gegenprobe
+    [Test] procedure Div_AfterForLoop_StillReported;             // Gegenprobe
+    [Test] procedure Div_ForZeroToN_StillReported;               // Gegenprobe
+    [Test] procedure Div_ForCardinalBound_StillReported;         // Gegenprobe
+    [Test] procedure Div_ForInnerLoopVarIsBound_StillReported;   // Gegenprobe
+    [Test] procedure Div_CommentedForHeader_StillReported;       // Gegenprobe
+  end;
+
   // ---- DeadCode Erweiterungen --------------------------------------------------------
   [TestFixture]
   TTestDeadCodeExt = class
@@ -2080,6 +2101,220 @@ begin
   finally F.Free; end;
 end;
 
+{ TTestDivByZeroForBound }
+
+class function TTestDivByZeroForBound.DivCount(const ASrc: string): Integer;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(ASrc);
+  try
+    Result := TFindingHelper.Count(F, fkDivByZero);
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestDivByZeroForBound.Div_ForToNMinusOne_NoFinding;
+// ShowcaseDemo-Stichprobe (img32 resamplers:798): 'for y := 0 to n - 1'.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Sum(T, N: Integer): Integer;'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  for I := 0 to N - 1 do'#13#10+
+  '    Result := Result + T div N;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(0, DivCount(SRC),
+    'im Rumpf von for I := 0 to N - 1 ist N >= 1');
+end;
+
+procedure TTestDivByZeroForBound.Div_ForToPredN_NoFinding;
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Sum(T, N: Integer): Integer;'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  for I := 0 to Pred(N) do'#13#10+
+  '    Result := Result + T mod N;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(0, DivCount(SRC),
+    'im Rumpf von for I := 0 to Pred(N) ist N >= 1');
+end;
+
+procedure TTestDivByZeroForBound.Div_ForOneToN_NoFinding;
+// Form A: Start >= 1 und Ende N - kein Typ-Vorbehalt, darum Cardinal.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Fill(T: Integer; N: Cardinal);'#13#10+
+  'var I, R: Integer;'#13#10+
+  'begin'#13#10+
+  '  for I := 1 to N do'#13#10+
+  '  begin'#13#10+
+  '    R := T div N;'#13#10+
+  '    WriteLn(R);'#13#10+
+  '  end;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(0, DivCount(SRC),
+    'im Rumpf von for I := 1 to N ist N >= 1');
+end;
+
+procedure TTestDivByZeroForBound.Div_ForInlineVarToNMinusOne_NoFinding;
+// Inline-Laufvariable ohne Typ: Integer aus dem Literal abgeleitet.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Sum(T, N: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  for var I := 0 to N - 1 do'#13#10+
+  '    Result := Result + T div N;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(0, DivCount(SRC),
+    'for var I := 0 to N - 1 schuetzt ebenso');
+end;
+
+procedure TTestDivByZeroForBound.Div_ForBoundAssignedInBody_StillReported;
+// Die Grenze wird einmal ausgewertet - eine Zuweisung an N im Rumpf (auch
+// NACH der Division) gilt fuer die naechste Iteration.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Sum(T, N: Integer): Integer;'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  for I := 0 to N - 1 do'#13#10+
+  '  begin'#13#10+
+  '    Result := Result + T div N;'#13#10+
+  '    N := N - 1;'#13#10+
+  '  end;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(1, DivCount(SRC),
+    'N wird im Rumpf zugewiesen - kein Schutz');
+end;
+
+procedure TTestDivByZeroForBound.Div_ForBoundDecInBody_StillReported;
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Sum(T, N: Integer): Integer;'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  for I := 0 to N - 1 do'#13#10+
+  '  begin'#13#10+
+  '    Dec(N);'#13#10+
+  '    Result := Result + T div N;'#13#10+
+  '  end;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(1, DivCount(SRC),
+    'Dec(N) im Rumpf - kein Schutz');
+end;
+
+procedure TTestDivByZeroForBound.Div_ForOtherIdentifier_StillReported;
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Sum(T, M, N: Integer): Integer;'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  for I := 0 to M - 1 do'#13#10+
+  '    Result := Result + T div N;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(1, DivCount(SRC),
+    'die Grenze M sagt nichts ueber N');
+end;
+
+procedure TTestDivByZeroForBound.Div_AfterForLoop_StillReported;
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Avg(T, N: Integer): Integer;'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  for I := 0 to N - 1 do'#13#10+
+  '    Result := Result + T;'#13#10+
+  '  Result := Result div N;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(1, DivCount(SRC),
+    'nach der Schleife kann N = 0 sein (Rumpf nie gelaufen)');
+end;
+
+procedure TTestDivByZeroForBound.Div_ForZeroToN_StillReported;
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Sum(T, N: Integer): Integer;'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  for I := 0 to N do'#13#10+
+  '    Result := Result + T div N;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(1, DivCount(SRC),
+    'for I := 0 to N laeuft auch mit N = 0');
+end;
+
+procedure TTestDivByZeroForBound.Div_ForCardinalBound_StillReported;
+// Cardinal: N - 1 laeuft bei N = 0 auf den Hoechstwert ueber, der Rumpf
+// laeuft MIT N = 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Sum(T: Integer; N: Cardinal): Integer;'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  for I := 0 to N - 1 do'#13#10+
+  '    Result := Result + T div N;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(1, DivCount(SRC),
+    'N - 1 mit Cardinal-N schuetzt nicht');
+end;
+
+procedure TTestDivByZeroForBound.Div_ForInnerLoopVarIsBound_StillReported;
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Sum(T, M: Integer): Integer;'#13#10+
+  'var I, N: Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  N := M;'#13#10+
+  '  for I := 0 to N - 1 do'#13#10+
+  '  begin'#13#10+
+  '    Result := Result + T div N;'#13#10+
+  '    for N := 0 to 3 do'#13#10+
+  '      Result := Result + 1;'#13#10+
+  '  end;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(1, DivCount(SRC),
+    'innere Schleife mit Laufvariable N veraendert N');
+end;
+
+procedure TTestDivByZeroForBound.Div_CommentedForHeader_StillReported;
+// Kommentare zaehlen nie als Code: der auskommentierte Kopf schuetzt nicht.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Sum(T, M, N: Integer): Integer;'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  for I := 0 to M - 1 do // for I := 0 to N - 1 do'#13#10+
+  '    Result := Result + T div N;'#13#10+
+  'end;';
+begin
+  Assert.AreEqual<Integer>(1, DivCount(SRC),
+    'for-Kopf im Kommentar ist kein Guard');
+end;
+
 // Angemeldet wie in den uebrigen Testunits (Review Woche G03-25): ohne
 // RegisterTestFixture liefen die Fixtures nur, weil TestProject.dpr
 // UseRTTI := True setzt - ein Runner ohne RTTI liesse sie still aus.
@@ -2091,6 +2326,7 @@ initialization
   TDUnitX.RegisterTestFixture(TTestDivByZeroExt);
   TDUnitX.RegisterTestFixture(TTestDivByZeroCompactGuards);
   TDUnitX.RegisterTestFixture(TTestDivByZeroLeftOperand);
+  TDUnitX.RegisterTestFixture(TTestDivByZeroForBound);
   TDUnitX.RegisterTestFixture(TTestDeadCodeExt);
 
 end.

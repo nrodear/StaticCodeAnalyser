@@ -54,6 +54,14 @@ unit uDivByZero;
 //        Ergebnis >= 1. Round/Trunc/Floor/Ceil eines Werts >= 1.0 bleibt >= 1.
 //        Sehr konservativ: der GESAMTE RHS muss exakt diese Form haben.
 //
+//   G7 - Obergrenze einer for-Schleife (Charge D 2026-10-24, Nico):
+//        'for v := <Literal >= 0> to n - 1 do' bzw. 'to Pred(n)' und
+//        'for v := <Literal >= 1> to n do' - laeuft der Rumpf, ist n >= 1.
+//        Gilt nur fuer Divisionen IM Rumpf, nur wenn n im ganzen Rumpf
+//        nicht zugewiesen, per Inc/Dec veraendert oder als innere
+//        Laufvariable benutzt wird, und fuer die 'n - 1'-Formen nur bei
+//        vorzeichenbehaftetem n und v (Cardinal-Ueberlauf bei n = 0).
+//
 // Zusaetzlich provably-nonzero (ohne if): wenn der Divisor im ganzen
 // Methodenrumpf ausschliesslich beweisbar-nichtnulle Ausdruecke zugewiesen
 // bekommt (nichtnull-Ganzzahl-Literale ODER Clamp G3) und mindestens einmal
@@ -150,6 +158,12 @@ type
     // G1: Divisor ist die Variable einer aufsteigenden for-Schleife mit
     // nichtnull-Literal-Startwert und die Division liegt in deren Rumpf.
     class function IsGuardedByForLoopVar(MethodNode, DivNode: TAstNode;
+      const VarLow: string): Boolean; static;
+    // G7 (Charge D 2026-10-24, Nico): Divisor ist die OBERGRENZE einer
+    // aufsteigenden for-Schleife ('for v := 0 to n - 1', 'to Pred(n)',
+    // 'for v := 1 to n'), die Division liegt im Rumpf und n bleibt dort
+    // unveraendert. Laeuft der Rumpf, ist n >= 1.
+    class function IsGuardedByForUpperBound(MethodNode, DivNode: TAstNode;
       const VarLow: string): Boolean; static;
     // G2: 'if <divisor>=0 then Break/Continue' im selben innersten Schleifen-
     // rumpf VOR der Division.
@@ -929,6 +943,141 @@ begin
   end;
 end;
 
+function IstVorzeichenbehafteterIntTyp(const ATypeLow: string): Boolean;
+// G7: nur fuer diese Typen ist 'n - 1' bei n = 0 wirklich -1. Bei
+// Cardinal/UInt64/NativeUInt laeuft 'n - 1' auf den Hoechstwert ueber und
+// der Rumpf laeuft MIT n = 0; Byte/Word bleiben aussen vor, weil die
+// Umwandlung der Grenze in den Typ der Laufvariable dort nicht belegt ist.
+begin
+  Result := (ATypeLow = 'integer') or (ATypeLow = 'longint') or
+            (ATypeLow = 'int64') or (ATypeLow = 'smallint') or
+            (ATypeLow = 'shortint') or (ATypeLow = 'nativeint') or
+            (ATypeLow = 'int32') or (ATypeLow = 'fixedint');
+end;
+
+function AlleDeklarationenVorzeichenbehaftet(MethodNode: TAstNode;
+  const AVarLow: string; AInlineVar: TAstNode): Boolean;
+// True, wenn AVarLow mindestens einmal und JEDES Mal (Parameter, lokale
+// Variable, auch in geschachtelten Routinen) mit einem vorzeichenbehafteten
+// Integer-Typ deklariert ist. Eine inline-Laufvariable ohne Typ
+// ('for var i := 0 to ..') leitet Integer aus dem Literal ab.
+var
+  Gefunden : Boolean;
+
+  function Pruefe(K: TNodeKind): Boolean;
+  var
+    N     : TAstNode;
+    PName : string;
+  begin
+    Result := True;
+    for N in MethodNode.FindAllRef(K) do
+    begin
+      PName := N.Name.ToLower;
+      for var Mod_ in ['out ', 'var ', 'const '] do
+        if PName.StartsWith(Mod_) then
+          PName := Copy(PName, Length(Mod_) + 1, MaxInt);
+      if PName <> AVarLow then Continue;
+      Gefunden := True;
+      if (N = AInlineVar) and (Trim(N.TypeRef) = '') then Continue;
+      if not IstVorzeichenbehafteterIntTyp(Trim(N.TypeRef.ToLower)) then
+        Exit(False);
+    end;
+  end;
+
+begin
+  Gefunden := False;
+  Result := Pruefe(nkParam) and Pruefe(nkLocalVar) and Gefunden;
+end;
+
+class function TDivByZeroDetector.IsGuardedByForUpperBound(
+  MethodNode, DivNode: TAstNode; const VarLow: string): Boolean;
+// G7: 'for v := <Literal >= 0> to n - 1 do' / 'to Pred(n)' bzw.
+// 'for v := <Literal >= 1> to n do'. Laeuft der Rumpf, gilt
+// Start <= Ende, also n >= 1 - aber nur, solange n im Rumpf nicht
+// veraendert wird: die Grenze wertet Delphi EINMAL aus, eine Zuweisung
+// an n in Iteration k gilt fuer die Division in Iteration k + 1. Darum
+// sperrt JEDE Zuweisung, jedes Inc/Dec(n) und eine innere for-Schleife
+// mit Laufvariable n im ganzen Rumpf (nicht nur vor der Division).
+// 'n - 1' / Pred(n) nur fuer vorzeichenbehaftete n und Laufvariable
+// (siehe IstVorzeichenbehafteterIntTyp); '1 to n' braucht das nicht -
+// bei n = 0 laeuft der Rumpf nie.
+// Lexikalische Grenze wie G4: ein var-Parameter-Aufruf 'Lies(n)' im
+// Rumpf faellt nicht auf.
+var
+  ForN, N, InlineVar : TAstNode;
+  H, Rest, EndExpr, LoopVarLow, StartVal, InnerVar, InnerHead : string;
+  pAssign, pTo : Integer;
+  StartNull, FormA, FormB, Veraendert : Boolean;
+begin
+  Result := False;
+  for ForN in MethodNode.FindAllRef(nkForStmt) do
+  begin
+    if not NodeInSubtree(ForN, DivNode) then Continue;
+    if not TryGetAscendingForLoopVar(ForN, LoopVarLow, StartVal) then Continue;
+    if LoopVarLow = VarLow then Continue;     // Laufvariable ist G1
+    H := ForN.TypeRef.ToLower;
+    pAssign := Pos(':=', H);
+    Rest := Copy(H, pAssign + 2, MaxInt);
+    pTo := Pos(' to ', Rest);
+    EndExpr := StringReplace(Copy(Rest, pTo + 4, MaxInt), ' ', '',
+      [rfReplaceAll]);
+    StartNull := Trim(StartVal) = '0';
+    // Form A 'for v := 1 to n': kein Typ-Vorbehalt.
+    FormA := (EndExpr = VarLow) and IsNonZeroIntLiteral(StartVal);
+    // Form B 'for v := 0 to n - 1' / 'to Pred(n)': n und v vorzeichenbehaftet.
+    FormB := ((EndExpr = VarLow + '-1') or (EndExpr = 'pred(' + VarLow + ')'))
+             and (StartNull or IsNonZeroIntLiteral(StartVal));
+    if FormB and not FormA then
+    begin
+      InlineVar := ForN.FindFirstChild(nkLocalVar);
+      FormB := AlleDeklarationenVorzeichenbehaftet(MethodNode, VarLow, nil) and
+               AlleDeklarationenVorzeichenbehaftet(MethodNode, LoopVarLow,
+                 InlineVar);
+    end;
+    if not (FormA or FormB) then Continue;
+
+    // n im Rumpf veraendert?
+    Veraendert := False;
+    for N in ForN.FindAllRef(nkAssign) do
+      if N.Name.ToLower = VarLow then
+      begin
+        Veraendert := True;
+        Break;
+      end;
+    if not Veraendert then
+      for N in ForN.FindAllRef(nkCall) do
+        if (TDetectorUtils.ContainsWholeWordLower('dec', N.Name.ToLower) or
+            TDetectorUtils.ContainsWholeWordLower('inc', N.Name.ToLower)) and
+           TDetectorUtils.ContainsWholeWordLower(VarLow, N.Name.ToLower) then
+        begin
+          Veraendert := True;
+          Break;
+        end;
+    // Innere for-Schleife mit Laufvariable n (auch downto): der Kopf
+    // 'n := ..' steht im Kopftext, nicht als nkAssign.
+    if not Veraendert then
+      for N in ForN.FindAllRef(nkForStmt) do
+      begin
+        if N = ForN then Continue;
+        InnerHead := N.TypeRef.ToLower;
+        pAssign := Pos(':=', InnerHead);
+        InlineVar := N.FindFirstChild(nkLocalVar);
+        if InlineVar <> nil then
+          InnerVar := InlineVar.Name.ToLower
+        else if pAssign > 0 then
+          InnerVar := Trim(Copy(InnerHead, 1, pAssign - 1))
+        else
+          InnerVar := '';
+        if InnerVar = VarLow then
+        begin
+          Veraendert := True;
+          Break;
+        end;
+      end;
+    if not Veraendert then Exit(True);
+  end;
+end;
+
 class function TDivByZeroDetector.HasBreakContinueGuard(
   MethodNode, DivNode: TAstNode; const VarLow: string): Boolean;
 // G2: 'if <divisor> = 0 then Break/Continue' (bzw. <=0 / <1) VOR der Division
@@ -1298,6 +1447,10 @@ begin
       // G1: aufsteigende for-Schleifenvariable mit nichtnull-Literal-Start -
       // im Rumpf immer >= Start >= 1 (Real-World-FP-Audit 2026-07-12).
       if IsGuardedByForLoopVar(MethodNode, N, Divisor) then Continue;
+
+      // G7: Divisor ist die Obergrenze der umgebenden for-Schleife
+      // ('for y := 0 to n - 1 do .. div n') - im Rumpf ist n >= 1.
+      if IsGuardedByForUpperBound(MethodNode, N, Divisor) then Continue;
 
       // G2: 'if divisor = 0 then Break/Continue' im selben Schleifenrumpf vor
       // der Division (Real-World-FP-Audit 2026-07-12).
