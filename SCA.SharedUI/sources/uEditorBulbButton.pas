@@ -67,6 +67,18 @@ type
     property OnBeforeMenu: TNotifyEvent read FOnBeforeMenu write FOnBeforeMenu;
   end;
 
+const
+  CLR_BULB_DEFAULT    = $0040C8FF;   // BGR: warmes Gelb
+  CLR_OUTLINE_DEFAULT = $00406080;   // BGR: Braun-Grau, auf hell und dunkel lesbar
+
+// Zeichnet die Birne (Sockel, Kolben, Glanzpunkt) in das Quadrat ALeft,
+// ATop .. +ASize von ACanvas - dieselbe Form wie die Birne im Editor
+// (TSCABulbButton.Paint ruft genau dies). Fuer das Bild vor den Hilfen im
+// Aktionsmenue (uIDEFindingActionMenu, Nico 2026-10-24): so sieht die
+// Birne im Menue aus wie die am Editorrand.
+procedure DrawBulbGlyph(ACanvas: TCanvas; ALeft, ATop, ASize: Integer;
+  ABulbColor, AOutlineColor: TColor);
+
 implementation
 
 // Die Zahlen in BulbShapeOf und Paint sind Proportionen der
@@ -98,9 +110,7 @@ begin
 end;
 
 const
-  CLR_BULB_DEFAULT    = $0040C8FF;   // BGR: warmes Gelb
   CLR_BULB_HOT        = $0080E0FF;   // heller beim Ueberfahren
-  CLR_OUTLINE_DEFAULT = $00406080;   // BGR: Braun-Grau, auf hell und dunkel lesbar
   CLR_BASE            = $00909090;   // Sockel
   MIN_REGION_SIZE     = 6;
 
@@ -158,37 +168,45 @@ begin
   Msg.Result := 1;   // Paint deckt die ganze Region ab - kein Flackern
 end;
 
-procedure TSCABulbButton.Paint;
+procedure DrawBulbGlyph(ACanvas: TCanvas; ALeft, ATop, ASize: Integer;
+  ABulbColor, AOutlineColor: TColor);
 var
-  S, G, X, BaseH : Integer;
+  S, G, X, Y, BaseH : Integer;
   Shape : TBulbShape;
 begin
-  S     := Width;
+  S     := ASize;
   Shape := BulbShapeOf(S);
   G     := Shape.GlassSize;
-  X     := Shape.GlassLeft;
+  X     := ALeft + Shape.GlassLeft;
+  Y     := ATop;
   BaseH := S - Shape.BaseTop;
 
   // Sockel zuerst - der Kolben ueberdeckt danach seine Oberkante
-  Canvas.Pen.Color := FOutlineColor;
-  Canvas.Pen.Width := 1;
-  Canvas.Brush.Style := bsSolid;
-  Canvas.Brush.Color := CLR_BASE;
-  Canvas.Rectangle(Shape.BaseLeft, Shape.BaseTop, Shape.BaseRight + 1, S);
-  Canvas.MoveTo(Shape.BaseLeft, Shape.BaseTop + (2 * BaseH) div 3);
-  Canvas.LineTo(Shape.BaseRight, Shape.BaseTop + (2 * BaseH) div 3);
+  ACanvas.Pen.Color := AOutlineColor;
+  ACanvas.Pen.Width := 1;
+  ACanvas.Brush.Style := bsSolid;
+  ACanvas.Brush.Color := CLR_BASE;
+  ACanvas.Rectangle(ALeft + Shape.BaseLeft, Y + Shape.BaseTop,
+    ALeft + Shape.BaseRight + 1, Y + S);
+  ACanvas.MoveTo(ALeft + Shape.BaseLeft, Y + Shape.BaseTop + (2 * BaseH) div 3);
+  ACanvas.LineTo(ALeft + Shape.BaseRight, Y + Shape.BaseTop + (2 * BaseH) div 3);
 
   // Glaskolben: Kreis
-  if FHot or FDown then
-    Canvas.Brush.Color := CLR_BULB_HOT
-  else
-    Canvas.Brush.Color := FBulbColor;
-  Canvas.Ellipse(X, 0, X + G, G);
+  ACanvas.Brush.Color := ABulbColor;
+  ACanvas.Ellipse(X, Y, X + G, Y + G);
 
   // Glanzpunkt oben links im Kreis
-  Canvas.Pen.Color := clWhite;
-  Canvas.Arc(X + G div 5, G div 5, X + (G * 3) div 5, (G * 3) div 5,
-    X + G div 2, G div 5, X + G div 5, G div 2);
+  ACanvas.Pen.Color := clWhite;
+  ACanvas.Arc(X + G div 5, Y + G div 5, X + (G * 3) div 5, Y + (G * 3) div 5,
+    X + G div 2, Y + G div 5, X + G div 5, Y + G div 2);
+end;
+
+procedure TSCABulbButton.Paint;
+begin
+  if FHot or FDown then
+    DrawBulbGlyph(Canvas, 0, 0, Width, CLR_BULB_HOT, FOutlineColor)
+  else
+    DrawBulbGlyph(Canvas, 0, 0, Width, FBulbColor, FOutlineColor);
 end;
 
 procedure TSCABulbButton.CMMouseEnter(var Msg: TMessage);

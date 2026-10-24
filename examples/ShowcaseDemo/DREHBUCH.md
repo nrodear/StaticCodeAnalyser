@@ -23,11 +23,17 @@ einfügt oder löscht – darum die Grundregel unten.
   sicher.
 - **Glühbirne** (Caret auf der Fundzeile) zeigt nur ausführbare Hilfen.
   Das **Kontextmenü** im Editor oder im Dock-Grid zeigt auch gesperrte
-  Einträge ausgegraut, der Grund steht in Klammern – gut für eine Szene
-  „warum hier nicht?“.
-- **„(ändert Verhalten)“** am Menütext: diese Hilfen laufen nur per Menü
-  oder Glühbirne, nie über **Strg+Alt+F** (erste verfügbare,
-  bedeutungsgleiche Hilfe im Dock-Grid). **Strg+Alt+S** unterdrückt.
+  Einträge ausgegraut, der Kopf des Grunds steht rechts in der Spalte der
+  Tastenkürzel, der ganze Grund im Hinweis (Statuszeile) – gut für eine
+  Szene „warum hier nicht?“.
+- **Rechte Spalte** des Menüs: „=“ heißt bedeutungsgleich; bei
+  **„(ändert Verhalten)“** am Menütext steht dort, was sich ändert. Diese
+  Hilfen laufen nur per Menü oder Glühbirne, nie über **Strg+Alt+F** (erste
+  verfügbare, bedeutungsgleiche Hilfe im Dock-Grid). Die volle Erklärung
+  steht im Hinweis des Menüpunkts.
+- **Unterdrücken** steht in einem Untermenü am Ende des Menüs („Hier
+  unterdrücken“ / „In dieser Datei unterdrücken“ je Fund). **Strg+Alt+S**
+  unterdrückt direkt.
 - Zurücksetzen jederzeit: `git checkout examples/ShowcaseDemo`.
 
 ## Szene 0: Vorbereitung (vor der Aufnahme)

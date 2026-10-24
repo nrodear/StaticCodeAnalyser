@@ -112,8 +112,17 @@ die Engine also vorher. DCUs landen wie bei den anderen Projekten in
 3. Datei im Editor oeffnen und mit dem SCA-Plugin scannen. Die Aktionen
    stehen an drei Stellen:
    * Rechtsklick auf einen Fund im Dock-Grid oder im Editor-Kontextmenue:
-     hinter dem Trenner alle Aktionen von reDelphix. Ein ausgegrauter
-     Eintrag nennt den Grund in Klammern.
+     hinter dem Trenner alle Aktionen von reDelphix. Form seit dem
+     Aktionsmenue nach Vorschlag 2 (2026-10-24): je Fund eine Kopfzeile
+     `SCAnnn  Regelname`, darunter die Aktionen nur mit ihrem Menuetext;
+     rechts in der Spalte der Tastenkuerzel `=` fuer bedeutungsgleich,
+     sonst der Kopf des Hinweises (bei "(aendert Verhalten)" was sich
+     aendert, bei einem ausgegrauten Eintrag der Grund). Die volle
+     Erklaerung und die Meldung des Funds stehen im Hinweis des
+     Menuepunkts (Statuszeile). Eine Gluehbirne steht vor jeder
+     ausfuehrbaren Hilfe. "Hier unterdruecken" und "In dieser Datei
+     unterdruecken" stehen in EINEM Untermenue "Unterdruecken" am Ende der
+     Funde, je Fund unter `SCAnnn  Art`; der Marker steht im Hinweis.
    * Die Gluehbirne im Editor (an der Caret-Zeile) zeigt nur die
      ausfuehrbaren Hilfen - ohne "Stelle zeigen", ohne ausgegraute
      Eintraege. Unterdruecken steht dort nur, wenn es zum Fund auch eine

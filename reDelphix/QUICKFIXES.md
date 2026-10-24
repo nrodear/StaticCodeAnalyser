@@ -117,7 +117,7 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 92 Qui
 | SCA003 SQLInjection | `Parametrisierte Vorlage in die Zwischenablage` | Quick-Fix | nein | [Details](#rezept-sqltemplate) |
 | jeder Fund auf einer Zeile einer uses-Klausel (auch der Programm-Klausel einer .dpr/.lpr), etwa SCA142 UnsortedUses oder SCA007 UnusedUses | `uses: %s -> %s` *(fester Text)* / `uses: alle %d Einträge qualifizieren` | Refactoring | nein | [Details](#rezept-usesactions) |
 | SCA165 UnusedSuppression | `Wirkungslosen Unterdrück-Marker entfernen` | Quick-Fix | nein | [Details](#rezept-removemarker) |
-| alle außer SCA165 | `Hier unterdrücken (// noinspection %s)` / `In dieser Datei unterdrücken (// noinspection-file %s)` | Unterdrücken | nein | [Details](#rezept-suppress) |
+| alle außer SCA165 | `Hier unterdrücken` / `In dieser Datei unterdrücken` | Unterdrücken | nein | [Details](#rezept-suppress) |
 
 ## Quick-Fixes je Regel
 
@@ -4735,12 +4735,10 @@ Nachher:
 
 | Eintrag | en | de | fr |
 |---|---|---|---|
-| 1 | `Suppress here (// noinspection %s)` | `Hier unterdrücken (// noinspection %s)` | `Masquer ici (// noinspection %s)` |
-| 2 | `Suppress in this file (// noinspection-file %s)` | `In dieser Datei unterdrücken (// noinspection-file %s)` | `Masquer dans ce fichier (// noinspection-file %s)` |
+| 1 | `Suppress here` | `Hier unterdrücken` | `Masquer ici` |
+| 2 | `Suppress in this file` | `In dieser Datei unterdrücken` | `Masquer dans ce fichier` |
 
-**Platzhalter:** `%s` = die Fundart (Kind-Name, etwa `MemoryLeak`).
-
-**Wirkung:** „Hier“ setzt `// noinspection <Art>` in eine eigene Zeile über die Fundzeile, eingerückt wie sie; „In dieser Datei“ setzt `// noinspection-file <Art>` hinter die Kopfanweisung der Unit. Ein vorhandener Marker bekommt die Art dazu, außer er lautet `All`/`*` (dann eine eigene Zeile). Auf einer `//`-Kommentarzeile (etwa einem TODO) bekommt der Marker, der sie schon trägt, die Art auch über Leerzeilen hinweg – eine neue Zeile dazwischen nähme ihm sein Ziel.
+**Wirkung:** „Hier“ setzt `// noinspection <Art>` in eine eigene Zeile über die Fundzeile, eingerückt wie sie; „In dieser Datei“ setzt `// noinspection-file <Art>` hinter die Kopfanweisung der Unit. Ein vorhandener Marker bekommt die Art dazu, außer er lautet `All`/`*` (dann eine eigene Zeile). Auf einer `//`-Kommentarzeile (etwa einem TODO) bekommt der Marker, der sie schon trägt, die Art auch über Leerzeilen hinweg – eine neue Zeile dazwischen nähme ihm sein Ziel. Im Aktionsmenü stehen beide im Untermenü „Unterdrücken“ am Ende, je Fund unter der Kopfzeile `SCAnnn  <Art>`; der Marker steht im Hinweis des Menüpunkts (Statuszeile).
 
 **Nicht angeboten**
 

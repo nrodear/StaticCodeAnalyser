@@ -2268,11 +2268,14 @@ msgstr "%d weitere Funde auf dieser Zeile sind nicht aufgeführt"
 msgid "Code actions"
 msgstr "Code-Aktionen"
 
-msgid "Suppress here (// noinspection %s)"
-msgstr "Hier unterdrücken (// noinspection %s)"
+msgid "Suppress"
+msgstr "Unterdrücken"
 
-msgid "Suppress in this file (// noinspection-file %s)"
-msgstr "In dieser Datei unterdrücken (// noinspection-file %s)"
+msgid "Suppress here"
+msgstr "Hier unterdrücken"
+
+msgid "Suppress in this file"
+msgstr "In dieser Datei unterdrücken"
 
 msgid "Remove ineffective suppression marker"
 msgstr "Wirkungslosen Unterdrück-Marker entfernen"

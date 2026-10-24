@@ -141,8 +141,9 @@ begin
     Assert.IsTrue(M.Entries[3].Kind = mkSeparator, 'Trenner vor den Kontextaktionen');
     Assert.IsTrue(M.Entries[4].Kind = mkHeader);
     Assert.AreEqual(CTX_HEADER, M.Entries[4].Caption);
-    Assert.AreEqual('Konstante', M.Entries[5].Caption);
-    Assert.AreEqual('try/finally', M.Entries[6].Caption);
+    // Code-Aktion, verfuegbar, bedeutungsgleich: '=' hinter #9 (Vorschlag 2)
+    Assert.AreEqual('Konstante'#9'=', M.Entries[5].Caption);
+    Assert.AreEqual('try/finally'#9'=', M.Entries[6].Caption);
     Assert.AreEqual<Integer>(4, M.ContextEntryCount, 'Trenner + Kopf + 2 Aktionen');
     Assert.AreEqual<Integer>(2, M.ContextActionCount);
     Assert.AreEqual<Integer>(3, M.ActionCount);
@@ -313,7 +314,7 @@ begin
       begin
         Assert.IsTrue(M.Entries[i].ActionIndex >= M.ActionCount - M.ContextActionCount,
           'Kontext-Eintraege zeigen in den hinteren Teil von Actions');
-        Assert.AreEqual(M.Actions[M.Entries[i].ActionIndex].Caption,
+        Assert.AreEqual(FindingActionCaption(M.Actions[M.Entries[i].ActionIndex]),
           M.Entries[i].Caption);
       end;
     Assert.AreEqual('K2', M.Actions[3].Caption);
@@ -333,7 +334,7 @@ begin
   AppendContextActions(M, [A], [], '');
   Assert.AreEqual<Integer>(1, Length(M.Entries));
   Assert.IsFalse(M.Entries[0].Enabled, 'gesperrt bleibt gesperrt');
-  Assert.AreEqual('Konstante  (kein Literal am Caret)', M.Entries[0].Caption);
+  Assert.AreEqual('Konstante'#9'kein Literal am Caret', M.Entries[0].Caption);
 end;
 
 procedure TTestContextActionMenu.Editor_NoFindings_OnlyContextActions;

@@ -3025,8 +3025,16 @@ begin
       // Wirft Execute, ist sein Fehlertext die Meldung der Taste - frueher
       // schrieb RunFindingAction ihn selbst, und die Errs-Zeile danach
       // ueberschrieb ihn (Review Woche G04-05).
+      // Unterdruecken nennt den Marker: seit dem Aktionsmenue nach
+      // Vorschlag 2 steht er im Hint, nicht mehr in der Caption.
       if RunFindingAction(Model.Actions[Choice.Index], Self, Msg) then
-        Msg := Format(ADoneFmt, [Model.Actions[Choice.Index].Caption]);
+      begin
+        if AKind = fakSuppress then
+          Msg := Format(ADoneFmt,
+            [FindingActionFullCaption(Model.Actions[Choice.Index])])
+        else
+          Msg := Format(ADoneFmt, [Model.Actions[Choice.Index].Caption]);
+      end;
     kvDisabled, kvChangesBehavior:
       Msg := Format(AMissingFmt,
         [SkippedActionText(Model.Actions[Choice.Index], Choice.Verdict)]);
@@ -5682,8 +5690,9 @@ procedure TEditorContextMenuHook.AddActionItems(APopup: TPopupMenu;
   ASlot: TPopupHookSlot);
 // Haengt hinter einem Trenner je Fund der Cursorzeile die Eintraege an,
 // die die angemeldeten Anbieter liefern: eine deaktivierte Kopfzeile
-// 'SCAnnn  Meldung' je Fund, darunter die Aktionen 'Caption  (Hint)',
-// deaktiviert mit Grund, Index in Slot.Actions im Tag. Items mit
+// 'SCAnnn  Regelname' je Fund, darunter die Aktionen (Form und Untermenue
+// 'Unterdruecken' seit Vorschlag 2: uFindingActionMenu), deaktiviert mit
+// Grund, Index in Slot.Actions im Tag. Items mit
 // Owner=nil + nur OnClick, wie der Silent-Eintrag. Seit Stufe C
 // (Konzept Editor-Gluehbirne 2026-10-06) kommt die Form aus
 // uFindingActionMenu - dieselbe wie im Dock-Grid und spaeter an der

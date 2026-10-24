@@ -227,6 +227,7 @@
         <DCCReference Include="uTestSourcePlacesTypes.pas"/>
         <DCCReference Include="uTestFindingActions.pas"/>
         <DCCReference Include="uTestFindingActionMenu.pas"/>
+        <DCCReference Include="uTestFindingMenuCompact.pas"/>
         <DCCReference Include="uTestContextActions.pas"/>
         <DCCReference Include="uTestContextActionMenu.pas"/>
         <DCCReference Include="uTestEditorContextModel.pas"/>

@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6618 Zeilen, 296996 Bytes
-  CPoLines_de: array[0..6617] of string = (
+  // i18n\de.po - 6621 Zeilen, 296943 Bytes
+  CPoLines_de: array[0..6620] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2285,11 +2285,14 @@ const
     'msgid "Code actions"',
     'msgstr "Code-Aktionen"',
     '',
-    'msgid "Suppress here (// noinspection %s)"',
-    'msgstr "Hier unterdr'#$00FC'cken (// noinspection %s)"',
+    'msgid "Suppress"',
+    'msgstr "Unterdr'#$00FC'cken"',
     '',
-    'msgid "Suppress in this file (// noinspection-file %s)"',
-    'msgstr "In dieser Datei unterdr'#$00FC'cken (// noinspection-file %s)"',
+    'msgid "Suppress here"',
+    'msgstr "Hier unterdr'#$00FC'cken"',
+    '',
+    'msgid "Suppress in this file"',
+    'msgstr "In dieser Datei unterdr'#$00FC'cken"',
     '',
     'msgid "Remove ineffective suppression marker"',
     'msgstr "Wirkungslosen Unterdr'#$00FC'ck-Marker entfernen"',
@@ -6907,8 +6910,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6614 Zeilen, 309120 Bytes
-  CPoLines_fr: array[0..6613] of string = (
+  // i18n\fr.po - 6617 Zeilen, 309061 Bytes
+  CPoLines_fr: array[0..6616] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -9175,11 +9178,14 @@ const
     'msgid "Code actions"',
     'msgstr "Actions de code"',
     '',
-    'msgid "Suppress here (// noinspection %s)"',
-    'msgstr "Masquer ici (// noinspection %s)"',
+    'msgid "Suppress"',
+    'msgstr "Masquer"',
     '',
-    'msgid "Suppress in this file (// noinspection-file %s)"',
-    'msgstr "Masquer dans ce fichier (// noinspection-file %s)"',
+    'msgid "Suppress here"',
+    'msgstr "Masquer ici"',
+    '',
+    'msgid "Suppress in this file"',
+    'msgstr "Masquer dans ce fichier"',
     '',
     'msgid "Remove ineffective suppression marker"',
     'msgstr "Retirer le marqueur de suppression sans effet"',

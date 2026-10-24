@@ -146,6 +146,7 @@ uses
   uTestSourcePlacesTypes in 'uTestSourcePlacesTypes.pas',
   uTestFindingActions in 'uTestFindingActions.pas',
   uTestFindingActionMenu in 'uTestFindingActionMenu.pas',
+  uTestFindingMenuCompact in 'uTestFindingMenuCompact.pas',
   uTestContextActions in 'uTestContextActions.pas',
   uTestContextActionMenu in 'uTestContextActionMenu.pas',
   uTestEditorContextModel in 'uTestEditorContextModel.pas',

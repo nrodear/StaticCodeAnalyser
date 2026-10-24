@@ -7,9 +7,17 @@ unit uFindingActionMenu;
 // (Review 2026-10-14). Ohne VCL und ohne ToolsAPI, damit TestProject es
 // prueft; das Zeichnen als TMenuItem macht uIDEFindingActionMenu im Plugin.
 //
-// Form (wie das Kontextmenue seit AH13): optional ein Trenner vor dem
-// ersten Fund mit Aktionen, je Fund optional eine deaktivierte Kopfzeile
-// 'SCAnnn  Meldung', darunter die Aktionen 'Caption  (Hint)'. Enabled
+// Form (Aktionsmenue nach Vorschlag 2, Konzept 2026-10-24, mit Nicos
+// Aenderungen "2b" vom selben Tag - so kurz wie Vorschlag 2): optional ein
+// Trenner vor dem ersten Fund mit Aktionen, je Fund optional eine
+// deaktivierte Kopfzeile 'SCAnnn  Regelname' (FindingHeaderCaption),
+// darunter die Aktionen als Caption + #9 + Kennzeichnung (FindingAction-
+// Caption: '=' fuer bedeutungsgleich, sonst der kurze Kopf des Hints - in
+// der Spalte, in der Windows sonst die Taste zeigt). Der volle Hint und
+// die volle Meldung des Funds stehen in Entry.Hint (FindingActionHint),
+// verfuegbare Hilfen und Code-Aktionen tragen das Bild miBulb,
+// 'Unterdruecken' miSuppress, die Kopfzeilen IM Untermenue miRule
+// (Entry.Icon; die Kopfzeilen oben bleiben ohne Bild). Enabled
 // ist Enabled des Anbieters UND Execute zugewiesen; ActionIndex zeigt in
 // die flache Liste Actions, ueber die der Host ausfuehrt. Mit
 // moAvailableFixesOnly bleiben nur Aktionen, die der Benutzer JETZT
@@ -18,9 +26,23 @@ unit uFindingActionMenu;
 // ausgegrauten Eintraege, keine Diagnosezeilen der Anbieter; ein Fund ohne
 // solche Aktion faellt samt Kopfzeile weg. Unterdrueck-Aktionen
 // (fakSuppress) bleiben dort NUR, wenn der Fund eine solche Hilfe hat
-// (Editorhilfen E1). In jeder Form steht vor dem ersten Unterdrueck-
-// Eintrag eines Funds ein Trenner. Ein Umbau an der Stelle (fakRefactor)
-// steht je Modell nur einmal: ein gleichlautender eines spaeteren Funds
+// (Editorhilfen E1).
+//
+// Unterdruecken (Aktionsmenue nach Vorschlag 2, Konzept 2026-10-24, mit
+// Nicos Aenderung "2b" vom selben Tag): die Unterdrueck-Aktionen ALLER
+// Funde stehen in EINEM Untermenue 'Unterdruecken' (mkSubmenu) hinter den
+// Fund-Gruppen - je Fund (mit moHeaders) die Kopfzeile 'SCAnnn  Art'
+// (FindingSuppressHeaderCaption), darunter seine Unterdrueck-Aktionen nur
+// mit ihrer Caption (der Marker steht im Hint), ein Trenner zwischen den
+// Funden. Oben steht je Fund nur die Gruppe aus Kopfzeile und uebrigen
+// Aktionen, ein Trenner nach jeder Gruppe (vor der naechsten bzw. vor
+// 'Unterdruecken', vor dem Abschnitt der Code-Aktionen ohne Fund ohnehin
+// einer, AppendContextActions). Ein Fund ohne Unterdrueck-Aktion
+// fehlt im Untermenue, ein Fund mit NUR solchen oben; ohne jede kein
+// Untermenue. Bis dahin standen sie je Fund flach hinter einem Trenner.
+//
+// Ein Umbau an der Stelle (fakRefactor) steht je Modell nur einmal: ein
+// gleichlautender eines spaeteren Funds
 // faellt weg; bleibt einem Fund dadurch nichts, faellt er samt Kopf weg.
 // Eine Aktion ohne gesetzte Art (fakUnset, die Vorgabe von
 // Default(TFindingAction)) erscheint in Kontextmenue und Dock-Grid wie
@@ -46,7 +68,22 @@ uses
   uMethodd12, uFindingActions;
 
 type
-  TFindingMenuEntryKind = (mkSeparator, mkHeader, mkAction);
+  // mkSubmenu (Aktionsmenue nach Vorschlag 2, 2026-10-24): der Kopf eines
+  // Untermenues - je Modell hoechstens einer, 'Unterdruecken'
+  // (_('Suppress')) ueber den Unterdrueck-Aktionen aller Funde. Er fuehrt
+  // nichts aus (ActionIndex -1) und ist Enabled, wenn mindestens eine
+  // seiner Aktionen es ist; seine Kinder (Kopfzeilen, Aktionen, Trenner)
+  // folgen in Entries UNMITTELBAR hinter ihm, mit Parent = sein Index.
+  TFindingMenuEntryKind = (mkSeparator, mkHeader, mkAction, mkSubmenu);
+
+  // Das Bild vor einem Eintrag (Nico 2026-10-24, Mock 2b) - welches Bild
+  // das ist und wie es aussieht, entscheidet der Host:
+  //   miNone      keines
+  //   miBulb      Gluehbirne: verfuegbare Hilfe (fakFix) oder Code-Aktion
+  //               ohne Fund (fakContext) der obersten Ebene
+  //   miSuppress  durchgestrichenes Auge: der Kopf 'Unterdruecken'
+  //   miRule      SCA-Eule: die Kopfzeile eines Funds im Untermenue
+  TFindingMenuIcon = (miNone, miBulb, miSuppress, miRule);
 
   TFindingMenuEntry = record
     Kind        : TFindingMenuEntryKind;
@@ -54,6 +91,12 @@ type
     Hint        : string;
     Enabled     : Boolean;
     ActionIndex : Integer;   // Index in TFindingMenuModel.Actions, -1 sonst
+    // Index des mkSubmenu-Eintrags in Entries, unter dem dieser Eintrag
+    // steht; -1 = oberste Ebene (Vorschlag 2). Hinten angehaengt - die
+    // Felder davor bleiben, wie die Hosts sie lesen.
+    Parent      : Integer;
+    // Bild vor dem Eintrag (Nico 2026-10-24, TFindingMenuIcon).
+    Icon        : TFindingMenuIcon;
   end;
 
   // Was eine Taste (Ctrl+Alt+F, Ctrl+Alt+S) mit dem Modell anfaengt -
@@ -111,8 +154,23 @@ type
   TFindingMenuOptions = set of TFindingMenuOption;
 
 const
-  // Soviel von der Meldung steht in der Kopfzeile.
-  MENU_HEADER_MESSAGE_CHARS = 60;
+  // Soviel vom Regelnamen bzw. (ohne ihn) von der Meldung steht hoechstens
+  // in der Kopfzeile (FindingHeaderCaption, ShortMenuText).
+  MENU_HEADER_TITLE_CHARS = 40;
+  // Soviel vom Kopf eines Hints steht hoechstens in der Kennzeichnungs-
+  // Spalte einer Aktion (FindingHintHead).
+  MENU_MARK_CHARS = 32;
+  // Kennzeichnung einer verfuegbaren, bedeutungsgleichen Code-Aenderung.
+  MENU_MARK_SAME = '=';
+  // Trenner zwischen Menuetext und Kennzeichnung: TMenuItem zeigt den Teil
+  // hinter #9 nativ rechtsbuendig in der Tastenspalte.
+  MENU_MARK_TAB = #9;
+  // Der Kopf eines Hints endet vor dem ersten ' - ' (FindingHintHead).
+  HINT_HEAD_SEPARATOR = ' - ';
+  // Zwischen Hint der Aktion und Meldung des Funds (FindingActionHint) -
+  // kein '|': VCL zeigt von einem Menue-Hint nur den Teil hinter '|'
+  // (GetLongHint).
+  MENU_HINT_JOIN = ' '#$00B7' ';
 
 // Reine Form: Funde und ihre Aktionslisten (gleich lang, Index = Fund)
 // -> Modell. Ein Fund ohne Aktionen erscheint nicht.
@@ -155,10 +213,55 @@ procedure AppendContextActions(var AModel: TFindingMenuModel;
 function BuildEditorMenuModel(const AContext: TEditorContext;
   AOptions: TFindingMenuOptions; const AContextHeader: string): TFindingMenuModel;
 
-// 'Caption  (Hint)' bzw. nur Caption.
+// AText ohne Leerraum aussen; laenger als AMaxChars Zeichen am letzten
+// Leerzeichen in der zweiten Haelfte gekuerzt (sonst hart), ohne ',', ';'
+// und ':' am Ende, mit '...' (U+2026) abgeschlossen.
+function ShortMenuText(const AText: string; AMaxChars: Integer): string;
+// Der Kopf eines Hints fuer die Kennzeichnungs-Spalte (Vorschlag 2, Regel
+// 1): der Text vor dem ersten ' - ' (ohne ' - ' der ganze Hint), auf
+// MENU_MARK_CHARS gekuerzt (ShortMenuText). '' bleibt ''.
+// WARUM am uebersetzten Text: der Hint kommt als EIN Satz und EINE msgid
+// vom Anbieter (reDelphix FIX_HINTS, R_*_HINT, Gruende); ein eigenes Feld
+// fuer den Kopf haette jeden Anbieter und rund 470 msgids geteilt. Der
+// Kopf vor ' - ' ist dort die Kennzeichnung ('same meaning - ...', 'Free
+// now also runs on an exception and on Exit - ...'), und die
+// Uebersetzungen halten diese Form: alle 868 msgids mit ' - ' in i18n/
+// tragen es auch in de.po und fr.po, mit dem uebersetzten Kopf davor
+// ('gleiche Bedeutung', 'meme sens'; zwei Optionstexte ausserhalb der
+// Menues ausgenommen, Stand 2026-10-24). Fehlt es einer Uebersetzung,
+// steht der Anfang des ganzen Hints da; der volle Hint steht ohnehin im
+// Hint des Menuepunkts.
+function FindingHintHead(const AHint: string): string;
+// Die Kennzeichnung einer Aktion in der Tastenspalte: MENU_MARK_SAME fuer
+// eine verfuegbare Code-Aenderung (fakFix, fakRefactor, fakContext), die
+// das Verhalten nicht aendert; sonst - verhaltensaendernd, gesperrt (dann
+// ist der Hint der Grund) oder eine andere Art - der Kopf des Hints
+// (FindingHintHead), '' ohne Hint.
+function FindingActionMark(const AAction: TFindingAction): string;
+// Der Menuetext einer Aktion der obersten Ebene: Caption + #9 +
+// Kennzeichnung bzw. nur Caption (keine Kennzeichnung). Gleich gebaut fuer
+// Fund- und Kontextaktion; dedupliziert wird ueber TFindingAction.Caption,
+// den Teil VOR #9 (AppendContextActions) - eine Kontextaktion mit
+// derselben Caption faellt weg, auch wenn ihre Kennzeichnung abwiche.
 function FindingActionCaption(const AAction: TFindingAction): string;
-// 'SCAnnn  Meldung' (Meldung auf MENU_HEADER_MESSAGE_CHARS gekuerzt).
+// 'Caption  (Hint)' mit dem vollen Hint bzw. nur Caption - bis Vorschlag 2
+// der Menuetext jeder Aktion, heute fuer Statuszeilen (Ctrl+Alt+S nennt so
+// den Marker, der im Menue nur noch im Hint steht).
+function FindingActionFullCaption(const AAction: TFindingAction): string;
+// Der Hint eines Menuepunkts: der Hint der Aktion und - mit Fund - dessen
+// 'SCAnnn: Meldung' (die Kopfzeile nennt nur den Regelnamen), verbunden
+// mit MENU_HINT_JOIN; ein leerer Teil faellt weg.
+function FindingActionHint(const AAction: TFindingAction;
+  AFinding: TLeakFinding): string;
+// Kopfzeile eines Funds: 'SCAnnn  Regelname' - der Name aus dem Regel-
+// katalog in der Sprache der Oberflaeche (TRuleCatalog.GetRule mit
+// CurrentLanguage, Overlay sca-rules.<lang>.json); fuer eine eigene Regel
+// (RuleID gesetzt) oder ohne Namen die Meldung. Beides auf
+// MENU_HEADER_TITLE_CHARS gekuerzt (ShortMenuText). nil -> ''.
 function FindingHeaderCaption(AFinding: TLeakFinding): string;
+// Kopfzeile eines Funds im Untermenue 'Unterdruecken': 'SCAnnn  Art' -
+// die Art, wie sie im Marker steht (uSCAConsts.KindName). nil -> ''.
+function FindingSuppressHeaderCaption(AFinding: TLeakFinding): string;
 
 // Identitaet eines Funds fuer Menue und Gluehbirne: Art, Ankerzeile und
 // Meldung - NICHT die Datei (die Aufrufer arbeiten je Datei) und nicht
@@ -172,7 +275,10 @@ function FindingIdentityKey(AFinding: TLeakFinding): string;
 implementation
 
 uses
-  uCrashDiag;
+  uCrashDiag,     // EStackExhausted
+  uLocalization,  // _ ('Suppress'), CurrentLanguage (Regelname der Kopfzeile)
+  uRuleCatalog,   // Regelname der Kopfzeile
+  uSCAConsts;     // KindName (Kopfzeile im Untermenue)
 
 { TFindingMenuModel }
 
@@ -222,7 +328,64 @@ end;
 
 { ---- Beschriftungen ---- }
 
+function ShortMenuText(const AText: string; AMaxChars: Integer): string;
+const
+  ELLIPSIS = #$2026;
+var
+  Cut : Integer;
+begin
+  Result := Trim(AText);
+  if Length(Result) <= AMaxChars then Exit;
+  // Result[Cut] ist das Zeichen hinter dem behaltenen Text.
+  Cut := AMaxChars + 1;
+  while (Cut > AMaxChars div 2) and (Result[Cut] <> ' ') do
+    Dec(Cut);
+  if Result[Cut] = ' ' then
+    Result := TrimRight(Copy(Result, 1, Cut - 1))
+  else
+    Result := Copy(Result, 1, AMaxChars);
+  while (Result <> '') and CharInSet(Result[Length(Result)], [',', ';', ':']) do
+    Result := TrimRight(Copy(Result, 1, Length(Result) - 1));
+  Result := Result + ELLIPSIS;
+end;
+
+function FindingHintHead(const AHint: string): string;
+var
+  p : Integer;
+begin
+  Result := AHint;
+  p := Pos(HINT_HEAD_SEPARATOR, Result);
+  if p > 0 then
+    Result := Copy(Result, 1, p - 1);
+  Result := ShortMenuText(Result, MENU_MARK_CHARS);
+end;
+
+function IsAvailable(const AAction: TFindingAction): Boolean;
+begin
+  Result := AAction.Enabled and Assigned(AAction.Execute);
+end;
+
+function FindingActionMark(const AAction: TFindingAction): string;
+begin
+  if IsAvailable(AAction) and not AAction.ChangesBehavior
+     and (AAction.Kind in [fakFix, fakRefactor, fakContext]) then
+    Result := MENU_MARK_SAME
+  else
+    Result := FindingHintHead(AAction.Hint);
+end;
+
 function FindingActionCaption(const AAction: TFindingAction): string;
+var
+  Mark : string;
+begin
+  Mark := FindingActionMark(AAction);
+  if Mark <> '' then
+    Result := AAction.Caption + MENU_MARK_TAB + Mark
+  else
+    Result := AAction.Caption;
+end;
+
+function FindingActionFullCaption(const AAction: TFindingAction): string;
 begin
   if AAction.Hint <> '' then
     Result := Format('%s  (%s)', [AAction.Caption, AAction.Hint])
@@ -230,11 +393,43 @@ begin
     Result := AAction.Caption;
 end;
 
+function FindingActionHint(const AAction: TFindingAction;
+  AFinding: TLeakFinding): string;
+var
+  Msg : string;
+begin
+  Result := AAction.Hint;
+  if not Assigned(AFinding) then Exit;
+  Msg := Trim(AFinding.MissingVar);
+  if Msg = '' then Exit;
+  Msg := AFinding.ResolvedRuleId + ': ' + Msg;
+  if Result = '' then
+    Result := Msg
+  else
+    Result := Result + MENU_HINT_JOIN + Msg;
+end;
+
 function FindingHeaderCaption(AFinding: TLeakFinding): string;
+var
+  Title : string;
+begin
+  if not Assigned(AFinding) then Exit('');
+  Title := '';
+  // Eine eigene Regel traegt ihre ID selbst; der Katalogname ihrer Art
+  // ('Custom rule') sagte nichts.
+  if AFinding.RuleID = '' then
+    Title := TRuleCatalog.GetRule(AFinding.Kind, CurrentLanguage).Name;
+  if Trim(Title) = '' then
+    Title := AFinding.MissingVar;
+  Result := Format('%s  %s', [AFinding.ResolvedRuleId,
+    ShortMenuText(Title, MENU_HEADER_TITLE_CHARS)]);
+end;
+
+function FindingSuppressHeaderCaption(AFinding: TLeakFinding): string;
 begin
   if not Assigned(AFinding) then Exit('');
   Result := Format('%s  %s', [AFinding.ResolvedRuleId,
-    TrimRight(Copy(AFinding.MissingVar, 1, MENU_HEADER_MESSAGE_CHARS))]);
+    KindName(AFinding.Kind)]);
 end;
 
 function FindingIdentityKey(AFinding: TLeakFinding): string;
@@ -246,9 +441,13 @@ end;
 
 { ---- Modell ---- }
 
-function IsAvailable(const AAction: TFindingAction): Boolean;
+// Das Bild einer Aktion der obersten Ebene (TFindingMenuIcon).
+function ActionIcon(const AAction: TFindingAction): TFindingMenuIcon;
 begin
-  Result := AAction.Enabled and Assigned(AAction.Execute);
+  if IsAvailable(AAction) and (AAction.Kind in [fakFix, fakContext]) then
+    Result := miBulb
+  else
+    Result := miNone;
 end;
 
 function IsAvailableFix(const AAction: TFindingAction): Boolean;
@@ -285,7 +484,8 @@ begin
 end;
 
 procedure AddEntry(var AModel: TFindingMenuModel; AKind: TFindingMenuEntryKind;
-  const ACaption, AHint: string; AEnabled: Boolean; AActionIndex: Integer);
+  const ACaption, AHint: string; AEnabled: Boolean; AActionIndex: Integer;
+  AParent: Integer = -1; AIcon: TFindingMenuIcon = miNone);
 var
   E : TFindingMenuEntry;
 begin
@@ -294,28 +494,97 @@ begin
   E.Hint        := AHint;
   E.Enabled     := AEnabled;
   E.ActionIndex := AActionIndex;
+  E.Parent      := AParent;
+  E.Icon        := AIcon;
   SetLength(AModel.Entries, Length(AModel.Entries) + 1);
   AModel.Entries[High(AModel.Entries)] := E;
 end;
 
-// Die Aktionen EINES Funds ins Modell; Unterdruecken ist keine Hilfe und
-// wird vom Rest des Funds mit einem Trenner abgesetzt. Actions waechst
-// einmal je Fund, nicht je Aktion.
-procedure AddActionsOf(var AModel: TFindingMenuModel;
-  const AActs: TArray<TFindingAction>);
+// Die Aktionen EINES Funds (AFinding; nil fuer Code-Aktionen ohne Fund)
+// nach Actions - in der Reihenfolge des Anbieters (Base + k: die Tasten
+// und die drei ActionItemClick-Wege lesen ActionIndex wie bisher; Actions
+// waechst einmal je Fund, nicht je Aktion) - und alle ausser den
+// Unterdrueck-Aktionen als Eintraege der obersten Ebene: Menuetext mit
+// Kennzeichnung, Hint mit Meldung, Bild (ActionIcon). Liefert Base.
+function AddActionsOf(var AModel: TFindingMenuModel;
+  const AActs: TArray<TFindingAction>; AFinding: TLeakFinding): Integer;
 var
-  k, Base : Integer;
+  k : Integer;
 begin
-  Base := Length(AModel.Actions);
-  SetLength(AModel.Actions, Base + Length(AActs));
+  Result := Length(AModel.Actions);
+  SetLength(AModel.Actions, Result + Length(AActs));
   for k := 0 to High(AActs) do
   begin
-    if (AActs[k].Kind = fakSuppress) and (k > 0)
-       and (AActs[k - 1].Kind <> fakSuppress) then
-      AddEntry(AModel, mkSeparator, '-', '', False, -1);
-    AModel.Actions[Base + k] := AActs[k];
-    AddEntry(AModel, mkAction, FindingActionCaption(AActs[k]), AActs[k].Hint,
-      IsAvailable(AActs[k]), Base + k);
+    AModel.Actions[Result + k] := AActs[k];
+    if AActs[k].Kind <> fakSuppress then
+      AddEntry(AModel, mkAction, FindingActionCaption(AActs[k]),
+        FindingActionHint(AActs[k], AFinding), IsAvailable(AActs[k]),
+        Result + k, -1, ActionIcon(AActs[k]));
+  end;
+end;
+
+function SuppressCount(const AActs: TArray<TFindingAction>): Integer;
+var
+  k : Integer;
+begin
+  Result := 0;
+  for k := 0 to High(AActs) do
+    if AActs[k].Kind = fakSuppress then
+      Inc(Result);
+end;
+
+// Ein Fund mit Unterdrueck-Aktionen, gemerkt fuer das Untermenue.
+type
+  TSuppressGroup = record
+    Finding : TLeakFinding;
+    Base    : Integer;                  // Index seiner ersten Aktion in Actions
+    Acts    : TArray<TFindingAction>;   // wie an AddActionsOf gegeben
+  end;
+
+// Vor einer Fund-Gruppe bzw. vor 'Unterdruecken': der fuehrende Trenner
+// (moLeadingSeparator, einmal je Modell), sonst nach einer vorigen Gruppe
+// einer (Vorschlag 2, Aenderung 2b).
+procedure SeparateNext(var AModel: TFindingMenuModel;
+  AOptions: TFindingMenuOptions; var ASepDone: Boolean; ATopGroups: Integer);
+begin
+  if (moLeadingSeparator in AOptions) and not ASepDone then
+  begin
+    AddEntry(AModel, mkSeparator, '-', '', False, -1);
+    ASepDone := True;
+  end
+  else if ATopGroups > 0 then
+    AddEntry(AModel, mkSeparator, '-', '', False, -1);
+end;
+
+// Das EINE Untermenue 'Unterdruecken' (Vorschlag 2, Aenderung 2b) als
+// letzter Eintrag der Fund-Gruppen: je Fund (mit moHeaders) die Kopfzeile
+// 'SCAnnn  Art', darunter seine Unterdrueck-Aktionen nur mit Caption (der
+// Marker steht im Hint, Aenderung 2b), ein Trenner zwischen den Funden.
+// Enabled, wenn eine Aktion es ist.
+procedure AddSuppressMenu(var AModel: TFindingMenuModel;
+  const AGroups: TArray<TSuppressGroup>; AOptions: TFindingMenuOptions);
+var
+  g, k, Sub : Integer;
+begin
+  AddEntry(AModel, mkSubmenu, _('Suppress'), '', False, -1, -1, miSuppress);
+  Sub := High(AModel.Entries);
+  for g := 0 to High(AGroups) do
+  begin
+    if g > 0 then
+      AddEntry(AModel, mkSeparator, '-', '', False, -1, Sub);
+    if moHeaders in AOptions then
+      AddEntry(AModel, mkHeader,
+        FindingSuppressHeaderCaption(AGroups[g].Finding), '', False, -1, Sub,
+        miRule);
+    for k := 0 to High(AGroups[g].Acts) do
+    begin
+      if AGroups[g].Acts[k].Kind <> fakSuppress then Continue;
+      AddEntry(AModel, mkAction, AGroups[g].Acts[k].Caption,
+        AGroups[g].Acts[k].Hint, IsAvailable(AGroups[g].Acts[k]),
+        AGroups[g].Base + k, Sub);
+      if IsAvailable(AGroups[g].Acts[k]) then
+        AModel.Entries[Sub].Enabled := True;
+    end;
   end;
 end;
 
@@ -359,34 +628,53 @@ function BuildFindingMenuModelFrom(const AFindings: TArray<TLeakFinding>;
   const AActions: TArray<TArray<TFindingAction>>;
   AOptions: TFindingMenuOptions): TFindingMenuModel;
 var
-  i         : Integer;
+  i, Base   : Integer;
   Count     : Integer;
+  NSup      : Integer;
   Acts      : TArray<TFindingAction>;
   SepDone   : Boolean;
+  TopGroups : Integer;                 // Fund-Gruppen der obersten Ebene
   Seen      : TArray<string>;   // Captions der schon gezeigten Umbauten
   SeenCount : Integer;
+  Groups    : TArray<TSuppressGroup>;  // Funde mit Unterdrueck-Aktionen
+  NGroups   : Integer;
 begin
   Result    := Default(TFindingMenuModel);
   Count     := Length(AFindings);
   if Length(AActions) < Count then Count := Length(AActions);
   SepDone   := False;
+  TopGroups := 0;
   Seen      := nil;
   SeenCount := 0;
+  SetLength(Groups, Count);
+  NGroups   := 0;
   for i := 0 to Count - 1 do
   begin
     Acts := DropSeenRefactors(FilterActions(AActions[i], AOptions), Seen,
       SeenCount);
     if Length(Acts) = 0 then Continue;
-    if (moLeadingSeparator in AOptions) and not SepDone then
+    NSup := SuppressCount(Acts);
+    if NSup < Length(Acts) then
     begin
-      AddEntry(Result, mkSeparator, '-', '', False, -1);
-      SepDone := True;
+      SeparateNext(Result, AOptions, SepDone, TopGroups);
+      if moHeaders in AOptions then
+        AddEntry(Result, mkHeader, FindingHeaderCaption(AFindings[i]), '',
+          False, -1);
+      Inc(TopGroups);
     end;
-    if moHeaders in AOptions then
-      AddEntry(Result, mkHeader, FindingHeaderCaption(AFindings[i]), '',
-        False, -1);
-    AddActionsOf(Result, Acts);
+    Base := AddActionsOf(Result, Acts, AFindings[i]);
+    if NSup > 0 then
+    begin
+      Groups[NGroups].Finding := AFindings[i];
+      Groups[NGroups].Base    := Base;
+      Groups[NGroups].Acts    := Acts;
+      Inc(NGroups);
+    end;
   end;
+  if NGroups = 0 then Exit;
+  SetLength(Groups, NGroups);
+  SeparateNext(Result, AOptions, SepDone, TopGroups);
+  AddSuppressMenu(Result, Groups, AOptions);
 end;
 
 function BuildFindingMenuModel(const AFindings: TArray<TLeakFinding>;
@@ -476,7 +764,7 @@ begin
     AddEntry(AModel, mkSeparator, '-', '', False, -1);
   if (moHeaders in AOptions) and (AHeader <> '') then
     AddEntry(AModel, mkHeader, AHeader, '', False, -1);
-  AddActionsOf(AModel, Keep);
+  AddActionsOf(AModel, Keep, nil);
   Inc(AModel.ContextEntryCount, Length(AModel.Entries) - FirstEntry);
   Inc(AModel.ContextActionCount, n);
 end;
