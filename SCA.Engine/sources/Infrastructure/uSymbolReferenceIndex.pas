@@ -17,6 +17,12 @@
 //         A.3+ Punkt 1
 //       - BARE nkCall WENN Name in FPublicMembers - A.3+ Punkt 3
 //         (verhindert FP-Explosion bei RTL-Standardfunktionen)
+//       - dotted Refs in den ARGUMENTEN von nkCall/nkRaise/nkInherited
+//         (Charge D2, 2026-10-24) - jedes Kettenglied, Stringliterale
+//         uebersprungen
+//   * Grenze: bare Bezeichner in Ausdruecken ('with O do Show(Name)',
+//     geerbter Member in einer Unterklasse einer fremden Unit) und
+//     'Exit(O.Name)' werden nicht erfasst.
 //   * Lookup pro Detektor-Lauf: "Wird MemberLow ausserhalb der eigenen
 //     Unit referenziert?"
 //
@@ -261,6 +267,17 @@ var
   // RHS, und SCA050-052/107/184 hielten einen extern benutzten Member fuer
   // unbenutzt (FP; Review Woche G03-18). Registriert wird wie immer nur
   // der Member rechts.
+  //
+  // Stringliterale zaehlen nicht (Charge D2, 2026-10-24): der Parser legt
+  // sie in RHS, Bedingungen und Aufruf-Argumenten mit QuoteStrLit ab
+  // ('...', inneres ' verdoppelt). Ohne den Sprung registrierte
+  // 'Format(''%s.Name'', [X])' den Member 'Name' aus dem Text. Der for-
+  // Kopf traegt Literale roh (ParseForStmt) - dort greift der Sprung nicht.
+  //
+  // Jedes Kettenglied zaehlt (Charge D2): 'A.B.C' registrierte bis
+  // 2026-10-24 nur B - nach B lief der Scan ueber den Punkt hinweg und las
+  // C als neuen KOPF, dem kein Punkt mehr folgte. In 'A.B.C.D' kamen so nur
+  // B und D an. Jetzt wird das gerade registrierte Glied selbst zum Kopf.
   var
     i, L, StartSecond : Integer;
     MemberName : string;
@@ -269,6 +286,26 @@ var
     i := 1;
     while i <= L do
     begin
+      if Expr[i] = '''' then
+      begin
+        // Literal ueberspringen; '' im Inneren ist ein escaptes Apostroph.
+        Inc(i);
+        while i <= L do
+        begin
+          if Expr[i] = '''' then
+          begin
+            if (i < L) and (Expr[i + 1] = '''') then
+            begin
+              Inc(i, 2);
+              Continue;
+            end;
+            Break;
+          end;
+          Inc(i);
+        end;
+        Inc(i);  // schliessendes '
+        Continue;
+      end;
       if CharInSet(Expr[i], [']', ')', '^']) then
         Inc(i)   // Ausdrucksende: weiter wie hinter einem Bezeichner
       else if not IsIdentCharLocal(Expr[i]) then
@@ -293,11 +330,33 @@ var
       while (i <= L) and IsIdentCharLocal(Expr[i]) do Inc(i);
       MemberName := Copy(Expr, StartSecond, i - StartSecond);
       AddReferenceNormalized(MemberName, SrcNorm);
+      // Glied als neuen Kopf lesen (Kettenglieder, s.o.). Terminiert: der
+      // naechste Durchlauf liest das Glied ganz und steht dann dahinter.
+      i := StartSecond;
     end;
   end;
 
+  procedure ScanArgsOf(const CallText: string);
+  // Charge D2 (2026-10-24): die Argumente einer Aufruf-Anweisung legt
+  // ParsePrimary VOLLSTAENDIG im Knotennamen ab ('Show(P.Summary(O))'),
+  // registriert wurde aber nur der Kopf vor der ersten '(' ueber
+  // ExtractRightOfDot. Ein Member, den eine fremde Unit nur als Argument
+  // benutzt - 'ShowMessage(Calc.PriceLabel(Order.Customer))', 'Lines.Add(
+  // ''x'' + O.CustomerCity)', 'Format(''%d'', [Imp.Stats.Imported])' -
+  // fehlte im Index, und SCA052 meldete ihn als tote API (ShowcaseDemo:
+  // Summary, PriceLabel, Stats, Customer, CustomerCity). Gescannt wird ab
+  // der ersten '(' - der Kopf bleibt bei der bisherigen Regel (nur das
+  // rechteste Glied, Test Build_NestedDottedAccess_RightmostIndexed).
+  var
+    ParenPos : Integer;
+  begin
+    ParenPos := Pos('(', CallText);
+    if ParenPos > 0 then
+      ScanExprForDottedRefs(Copy(CallText, ParenPos, MaxInt));
+  end;
+
 var
-  Calls, Assigns, Ifs, Whiles, Cases, Fors : TList<TAstNode>;
+  Calls, Assigns, Ifs, Whiles, Cases, Fors, Raises, Inherits : TList<TAstNode>;
   N : TAstNode;
   Target : string;
 begin
@@ -325,9 +384,33 @@ begin
         if (Target <> '') and FPublicMembers.Contains(LowerCase(Target)) then
           AddReferenceNormalized(Target, SrcNorm);
       end;
+      ScanArgsOf(N.Name);
     end;
   finally
     Calls.Free;
+  end;
+
+  // Charge D2: dieselbe Argument-Luecke bei 'raise E.CreateFmt(.., [O.Name])'
+  // und 'inherited Create(O.Owner)' - beide Knotennamen stammen ebenfalls
+  // aus ParsePrimary (Literale gequotet). Der Kopf zaehlt hier NICHT: der
+  // Exception-Konstruktor bzw. die geerbte Methode ist kein Fremdzugriff,
+  // den der Index bisher kannte - nur die Argumente kommen neu dazu.
+  // NICHT erfasst: 'Exit(O.Name)' - nkExit traegt sein Argument mit ROHEN
+  // Stringliteralen in TypeRef, ein Text in Anfuehrungszeichen waere dort
+  // von Code nicht zu unterscheiden.
+  Raises := RootNode.FindAll(nkRaise);
+  try
+    for N in Raises do
+      ScanArgsOf(N.Name);
+  finally
+    Raises.Free;
+  end;
+  Inherits := RootNode.FindAll(nkInherited);
+  try
+    for N in Inherits do
+      ScanArgsOf(N.Name);
+  finally
+    Inherits.Free;
   end;
 
   // nkAssign: LHS kann 'Obj.Field' sein -> wir indexieren das Field.

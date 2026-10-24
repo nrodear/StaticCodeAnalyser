@@ -1939,12 +1939,11 @@ begin
       FreeAndNil(Ctx.DfmRepoIndex);   // ggf. nil (Build-Fehler) - ok
     end;
 
-    // Symbol-Reference-Index. Visibility-Detektoren (fkCanBeUnitPrivate,
-    // fkCanBeStrictPrivate, fkCanBeProtected, fkUnusedPublicMember)
-    // konsultieren ihn NICHT mehr - sie laufen single-file. Index wird
-    // hier dennoch aufgebaut weil andere Konsumenten (Tests, mORMot-Cross-
-    // Check) ihn lesen; kann perspektivisch entfallen wenn keiner mehr
-    // referenziert.
+    // Symbol-Reference-Index. Konsumenten (Stand 2026-10-24): uVisibility-
+    // Check NUR im fkUnusedPublicMember-Zweig (SCA052 schweigt, wenn eine
+    // andere Unit des Index-Scopes den Member-Namen dotted benutzt) und
+    // uDfmComponentUnused (SCA184, Regel U4). Die drei CanBe*-Varianten
+    // (SCA050/051/107) laufen single-file und lesen ihn nicht.
     LastPhase := 'Pre-Index: SymbolRefIndex.Build';
     Ctx.SymbolRefIndex := TSymbolReferenceIndex.Create;
     try
