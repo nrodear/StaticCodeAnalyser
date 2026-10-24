@@ -135,6 +135,25 @@ type
     [Test] procedure Div_YodaEqualZero_StillReported;   // TP-Gegenprobe
   end;
 
+  // ---- DivByZero: Operator hinter ')' / ']' (Charge D 2026-10-24) -------
+  // Der Ausdruckstext ('(a+b-1)div b') hat kein Leerzeichen vor dem
+  // Operator; ExtractDivisor suchte ' div ' und sah das Aufrunden-Idiom
+  // nie. Eigene Fixture aus demselben Grund wie oben.
+  [TestFixture]
+  TTestDivByZeroLeftOperand = class
+  public
+    [Test] procedure Div_RoundUpIdiom_ReportsWarning;
+    [Test] procedure Div_CallAsLeftOperand_Reported;
+    [Test] procedure Div_IndexAsLeftOperand_Reported;
+    [Test] procedure Mod_ParenAsLeftOperand_Reported;
+    [Test] procedure Div_ParenLiteralZero_ReportsError;
+    [Test] procedure Div_RoundUpGreaterGuard_NoFinding;   // Gegenprobe
+    [Test] procedure Div_RoundUpExitGuard_NoFinding;      // Gegenprobe
+    [Test] procedure Div_DivModInsideIdentifier_NoFinding; // Gegenprobe
+    [Test] procedure Div_NumberOperandSkipped_LaterModReported;
+    [Test] procedure Div_ParenNumberBeforeMod_StillReported; // Korpus-Drop
+  end;
+
   // ---- DeadCode Erweiterungen --------------------------------------------------------
   [TestFixture]
   TTestDeadCodeExt = class
@@ -1879,6 +1898,188 @@ begin
   finally F.Free; end;
 end;
 
+{ TTestDivByZeroLeftOperand }
+
+procedure TTestDivByZeroLeftOperand.Div_RoundUpIdiom_ReportsWarning;
+// ShowcaseDemo-Fund: '(A + B - 1) div B' (Aufrunden) - B ist ein
+// ungepruefter Parameter, gemeldet wurde nur 'A div B'. Warning, nicht
+// Error: der Wert von B ist nicht belegt (Severity-Politik).
+const SRC =
+  'unit t; implementation'#13#10+
+  'function PageCount(A, B: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := (A + B - 1) div B;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.CountSev(F, fkDivByZero, lsWarning),
+      '(A + B - 1) div B meldet B als Warning');
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+      'genau ein Fund');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, '(A + B - 1) div B'),
+      TFindingHelper.FirstOf(F, fkDivByZero).LineNumber,
+      'Fund auf der Divisionszeile');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroLeftOperand.Div_CallAsLeftOperand_Reported;
+// 'Abs(A) div B' - der Aufruf links endet ebenfalls mit ')'.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Steps(A, B: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := Abs(A) div B;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+    'Abs(A) div B meldet B');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroLeftOperand.Div_IndexAsLeftOperand_Reported;
+// 'Arr[0] div B' - Index-Zugriff links endet mit ']'.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Share(const Arr: array of Integer; B: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := Arr[0] div B;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+    'Arr[0] div B meldet B');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroLeftOperand.Mod_ParenAsLeftOperand_Reported;
+// Dasselbe fuer mod: '(A * 2) mod B'.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Slot(A, B: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := (A * 2) mod B;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+    '(A * 2) mod B meldet B');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroLeftOperand.Div_ParenLiteralZero_ReportsError;
+// H1 hatte dieselbe Nadel (' div 0'): '(A + 1) div 0' blieb stumm. Die
+// Literal-Null ist bewiesen - Error.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Broken(A: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := (A + 1) div 0;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.CountSev(F, fkDivByZero, lsError),
+    '(A + 1) div 0 ist eine Division durch Literal 0');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroLeftOperand.Div_RoundUpGreaterGuard_NoFinding;
+// Gegenprobe: die Guards gelten fuer die neue Form genauso.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function PageCount(A, B: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  if B > 0 then'#13#10+
+  '    Result := (A + B - 1) div B;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'if B > 0 schuetzt auch (A + B - 1) div B');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroLeftOperand.Div_RoundUpExitGuard_NoFinding;
+// Gegenprobe: Bail-Guard 'if B <= 0 then Exit'.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function PageCount(A, B: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  if B <= 0 then'#13#10+
+  '    Exit;'#13#10+
+  '  Result := (A + B - 1) div B;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'if B <= 0 then Exit schuetzt (A + B - 1) div B');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroLeftOperand.Div_DivModInsideIdentifier_NoFinding;
+// Gegenprobe zur Wortgrenze: 'div'/'mod' mitten in Bezeichnern sind keine
+// Operatoren - '(Individual)+Modulo' darf nichts melden.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Mix(Individual, Modulo: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := (Individual) + Modulo;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'Individual/Modulo enthalten div/mod nur als Teilwort');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroLeftOperand.Div_NumberOperandSkipped_LaterModReported;
+// 'A div 2' belegte frueher den einzigen Operanden-Platz der Zuweisung -
+// 'A mod B' dahinter blieb ungeprueft. Zahlen werden jetzt uebersprungen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Split(A, B: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := (A div 2) + (A mod B);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+    'A mod B hinter A div 2 wird geprueft');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroLeftOperand.Div_ParenNumberBeforeMod_StillReported;
+// Korpus-Drop der ersten Fassung (cnwizards testoperators.pas:39): mit der
+// Wortgrenze stand ')div 3' vor ' mod B' und '3' verdraengte 'B'. Bisher
+// wie kuenftig: B wird gemeldet.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Mix(A, B: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := ((A + 2) * (B - 3) div 3) + (A mod B);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+    'A mod B bleibt gemeldet, auch hinter (..) div 3');
+  finally F.Free; end;
+end;
+
 // Angemeldet wie in den uebrigen Testunits (Review Woche G03-25): ohne
 // RegisterTestFixture liefen die Fixtures nur, weil TestProject.dpr
 // UseRTTI := True setzt - ein Runner ohne RTTI liesse sie still aus.
@@ -1889,6 +2090,7 @@ initialization
   TDUnitX.RegisterTestFixture(TTestMissingFinallyExt);
   TDUnitX.RegisterTestFixture(TTestDivByZeroExt);
   TDUnitX.RegisterTestFixture(TTestDivByZeroCompactGuards);
+  TDUnitX.RegisterTestFixture(TTestDivByZeroLeftOperand);
   TDUnitX.RegisterTestFixture(TTestDeadCodeExt);
 
 end.

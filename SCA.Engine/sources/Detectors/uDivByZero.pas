@@ -62,7 +62,16 @@ unit uDivByZero;
 // Einschraenkungen:
 //   - Floating-Point-Division (/) wird nicht geprueft
 //   - Felder (Self.FCount) ohne klare Initialisierung nicht analysiert
-//   - Komplexe Ausdruecke als Divisor werden uebersprungen
+//   - Komplexe Ausdruecke als Divisor werden uebersprungen ('x div (n)',
+//     'x div a.Count'); der LINKE Operand ist egal - '(a + b - 1) div b',
+//     'Abs(a) div b' und 'Arr[i] div b' zaehlen seit Charge D 2026-10-24
+//     (FindeDivOperator, vorher fehlte das Leerzeichen vor dem Operator)
+//   - Je Zuweisung zaehlt nur der ERSTE Bezeichner-Operand (erst alle div,
+//     dann alle mod; Zahlen-Operanden werden uebersprungen):
+//     'a div m + b div n' prueft nur 'm'; H2/H3 nur in
+//     nkAssign - in Aufrufargumenten prueft der Detektor nur H1
+//     (Literal 0), in if-/while-Bedingungen und Exit(..) gar nicht
+//   - Assert(n <> 0) ist kein Guard (mit $C- wird es nicht uebersetzt)
 //   - while-guarded-copy ('Temp := B' in 'while B <> 0 do ... x div Temp')
 //     wird BEWUSST NICHT modelliert: sicher waere sie nur mit einer
 //     Nicht-Reassignment-Pruefung von B/Temp zwischen Kopie und Division
@@ -295,11 +304,46 @@ begin
     (Pos('integer', TypeLow) > 0);
 end;
 
+function FindeDivOperator(const AExprLow, AOpLow: string;
+  AAb: Integer): Integer;
+// Naechstes Vorkommen von 'div' bzw. 'mod' als GANZES WORT ab AAb, oder 0.
+//
+// Der Ausdruckstext kommt aus uParser2.JoinTokInto, und das setzt ein
+// Leerzeichen nur zwischen zwei Ident-Zeichen: '(A + B - 1) div B' steht
+// als '(a+b-1)div b' im nkAssign, 'Abs(A) div B' als 'abs(a)div b',
+// 'Arr[0] div B' als 'arr[0]div b'. Die alte Suche nach ' div ' (mit
+// Leerzeichen links) fand den Operator hinter ')' / ']' / '^' nie - das
+// Aufrunden-Idiom '(n + k - 1) div k' blieb stumm, waehrend 'n div k'
+// gemeldet wurde (ShowcaseDemo, Charge D 2026-10-24). Links reicht
+// jetzt ein Nicht-Ident-Zeichen oder der Textanfang, rechts ebenso;
+// 'individual' oder 'modulo' treffen deshalb weiterhin nicht.
+// Detektorlokal geloest: JoinTokInto ist ein geteilter Helfer.
+const
+  IDENT = ['a'..'z', 'A'..'Z', '0'..'9', '_'];
+var
+  p, e : Integer;
+begin
+  p := Pos(AOpLow, AExprLow, AAb);
+  while p > 0 do
+  begin
+    e := p + Length(AOpLow);
+    if ((p = 1) or not CharInSet(AExprLow[p - 1], IDENT)) and
+       ((e > Length(AExprLow)) or not CharInSet(AExprLow[e], IDENT)) then
+      Exit(p);
+    p := Pos(AOpLow, AExprLow, p + 1);
+  end;
+  Result := 0;
+end;
+
 class function TDivByZeroDetector.ExtractDivisor(
   const ExprLow: string): string;
 // Gibt den Bezeichner direkt nach 'div' / 'mod' zurueck (oder '').
+// Reihenfolge wie bisher: erst alle div-, dann alle mod-Vorkommen, der
+// erste Bezeichner-Operand gewinnt (Zahlen werden uebersprungen, ein
+// Bezeichner beginnt nie mit einer Ziffer). Ein Klammer-Operand ('div (b)')
+// bleibt bewusst aussen vor ("komplexe Ausdruecke", Kopfkommentar).
 const
-  Operators : array[0..1] of string = (' div ', ' mod ');
+  Operators : array[0..1] of string = ('div', 'mod');
 var
   p, Start, i : Integer;
   Ch          : Char;
@@ -308,10 +352,13 @@ begin
   Result := '';
   for Op in Operators do
   begin
-    p := Pos(Op, ExprLow);
+    p := FindeDivOperator(ExprLow, Op, 1);
     while p > 0 do
     begin
       Start := p + Length(Op);
+      // JoinTokInto schreibt hoechstens ein Leerzeichen; mehr schadet nicht.
+      while (Start <= Length(ExprLow)) and (ExprLow[Start] = ' ') do
+        Inc(Start);
       var Divisor := '';
       i := Start;
       while i <= Length(ExprLow) do
@@ -323,12 +370,17 @@ begin
           Break;
         Inc(i);
       end;
-      if Divisor <> '' then
+      // Ein Zahlen-Operand ('div 2') ist nie eine Integer-Variable und
+      // darf den Platz eines spaeteren Bezeichners nicht belegen: mit der
+      // Wortgrenze steht '(x div 2) + (y mod n)' jetzt VOR 'n' in der
+      // Liste, und 'n' ging verloren (Korpus-Drop cnwizards
+      // testoperators.pas:39). Die Literal-Null erledigt H1 vorher.
+      if (Divisor <> '') and not CharInSet(Divisor[1], ['0'..'9']) then
       begin
         Result := Divisor;
         Exit;
       end;
-      p := PosEx(Op, ExprLow, p + 1);
+      p := FindeDivOperator(ExprLow, Op, p + 1);
     end;
   end;
 end;
@@ -1153,22 +1205,30 @@ function TeiltDurchLiteraleNull(const AExprLow: string): Boolean;
 //
 // Beide H1-Fundstellen (nkAssign und nkCall) riefen denselben
 // Doppel-Pos auf; die Pruefung existiert jetzt einmal.
+//
+// Linke Grenze wie in ExtractDivisor (FindeDivOperator): '(a+b)div 0'
+// hat kein Leerzeichen vor dem Operator (Charge D 2026-10-24).
 const
   IDENT_ODER_ZIFFER = ['0'..'9', 'a'..'z', 'A'..'Z', '_'];
 var
-  Nadel : string;
+  Op    : string;
   p, e  : Integer;
 begin
-  for Nadel in [' div 0', ' mod 0'] do
+  for Op in ['div', 'mod'] do
   begin
-    p := Pos(Nadel, AExprLow);
+    p := FindeDivOperator(AExprLow, Op, 1);
     while p > 0 do
     begin
-      e := p + Length(Nadel);   // erstes Zeichen NACH der Null
-      if (e > Length(AExprLow)) or
-         (not CharInSet(AExprLow[e], IDENT_ODER_ZIFFER)) then
-        Exit(True);
-      p := Pos(Nadel, AExprLow, p + 1);
+      e := p + Length(Op);      // Zeichen NACH dem Operator: ' 0'
+      if (e + 1 <= Length(AExprLow)) and (AExprLow[e] = ' ') and
+         (AExprLow[e + 1] = '0') then
+      begin
+        e := e + 2;             // erstes Zeichen NACH der Null
+        if (e > Length(AExprLow)) or
+           (not CharInSet(AExprLow[e], IDENT_ODER_ZIFFER)) then
+          Exit(True);
+      end;
+      p := FindeDivOperator(AExprLow, Op, p + 1);
     end;
   end;
   Result := False;
