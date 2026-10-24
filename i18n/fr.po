@@ -2264,11 +2264,14 @@ msgstr "%d autres résultats sur cette ligne ne sont pas listés"
 msgid "Code actions"
 msgstr "Actions de code"
 
-msgid "Suppress here (// noinspection %s)"
-msgstr "Masquer ici (// noinspection %s)"
+msgid "Suppress"
+msgstr "Masquer"
 
-msgid "Suppress in this file (// noinspection-file %s)"
-msgstr "Masquer dans ce fichier (// noinspection-file %s)"
+msgid "Suppress here"
+msgstr "Masquer ici"
+
+msgid "Suppress in this file"
+msgstr "Masquer dans ce fichier"
 
 msgid "Remove ineffective suppression marker"
 msgstr "Retirer le marqueur de suppression sans effet"

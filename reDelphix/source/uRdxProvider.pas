@@ -728,13 +728,23 @@ var
   Why : string;
 begin
   // Ein wirkungsloser Marker wird entfernt, nicht seinerseits unterdrueckt.
+  // Menuetext nur die Aktion, der Marker steht im Hint (Aktionsmenue nach
+  // Vorschlag 2, Mock 2b, Nico 2026-10-24: im Untermenue 'Unterdruecken'
+  // stehen nur 'Hier unterdruecken' / 'In dieser Datei unterdruecken'; bis
+  // dahin 'Suppress here (// noinspection %s)' als ein Menuetext). Der
+  // Marker ist Code, kein Text - keine msgid.
   if ACtx.Finding.Kind = fkUnusedSuppression then Exit;
   if TRdxSuppress.LineMarker(ACtx.Lines, ACtx.Line, ACtx.KindName, E, Why) then
-    AddReplace(AList, Format(_('Suppress here (// noinspection %s)'),
-      [ACtx.KindName]), ACtx.FileName, E, fakSuppress);
+  begin
+    AddReplace(AList, _('Suppress here'), ACtx.FileName, E, fakSuppress);
+    AList[High(AList)].Hint := '// noinspection ' + ACtx.KindName;
+  end;
   if TRdxSuppress.FileMarker(ACtx.Lines, ACtx.KindName, E, Why) then
-    AddReplace(AList, Format(_('Suppress in this file (// noinspection-file %s)'),
-      [ACtx.KindName]), ACtx.FileName, E, fakSuppress);
+  begin
+    AddReplace(AList, _('Suppress in this file'), ACtx.FileName, E,
+      fakSuppress);
+    AList[High(AList)].Hint := '// noinspection-file ' + ACtx.KindName;
+  end;
 end;
 
 procedure TRdxProvider.AddRemoveMarker(var AList: TArray<TFindingAction>;
