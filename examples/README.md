@@ -4,6 +4,10 @@ YAML-Profile für die Custom-Rule-Engine (`uCustomRuleDetector`).
 Werden über `[Detectors] CustomRulesFile=...` in `analyser.ini`
 oder via CLI-Flag `--custom-rules <file>` aktiviert.
 
+## Demo-Projekt
+
+[`ShowcaseDemo/`](ShowcaseDemo/README.md) - VCL-Demo für das Video: rund 160-220 Funde, jede reDelphix-Code-Aktion mindestens einmal angeboten; Drehbuch: [`ShowcaseDemo/DREHBUCH.md`](ShowcaseDemo/DREHBUCH.md).
+
 ## Verfügbare Profile
 
 | Datei | Fokus | Severity-Verteilung | Use-Case |
