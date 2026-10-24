@@ -164,6 +164,7 @@ uses
   uTestSymbolReferenceIndex in 'uTestSymbolReferenceIndex.pas',
   uTestUnusedLocal in 'uTestUnusedLocal.pas',
   uTestUninitVar in 'uTestUninitVar.pas',
+  uTestUninitVarUnicodeIdent in 'uTestUninitVarUnicodeIdent.pas',
   uTestUnusedParameter in 'uTestUnusedParameter.pas',
   uTestTautologicalExpr in 'uTestTautologicalExpr.pas',
   uTestDfmMasterDetailUnlinked in 'uTestDfmMasterDetailUnlinked.pas',

@@ -245,6 +245,7 @@
         <DCCReference Include="uTestSymbolReferenceIndex.pas"/>
         <DCCReference Include="uTestUnusedLocal.pas"/>
         <DCCReference Include="uTestUninitVar.pas"/>
+        <DCCReference Include="uTestUninitVarUnicodeIdent.pas"/>
         <DCCReference Include="uTestUnusedParameter.pas"/>
         <DCCReference Include="uTestTautologicalExpr.pas"/>
         <DCCReference Include="uTestDfmMasterDetailUnlinked.pas"/>
