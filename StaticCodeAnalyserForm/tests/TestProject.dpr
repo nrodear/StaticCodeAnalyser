@@ -155,6 +155,7 @@ uses
   uTestFindingKeyPolicy in 'uTestFindingKeyPolicy.pas',
   uTestBulbDecision in 'uTestBulbDecision.pas',
   uTestFindingSourcePick in 'uTestFindingSourcePick.pas',
+  uTestFindingFileIndex in 'uTestFindingFileIndex.pas',
   uTestMarkerTarget in 'uTestMarkerTarget.pas',
   uTestPerfHotspots in 'uTestPerfHotspots.pas',
   uTestConcurrencyExt in 'uTestConcurrencyExt.pas',

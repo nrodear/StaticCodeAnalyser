@@ -105,6 +105,7 @@
         <DCCReference Include="sources\uFindingsPropertiesFrame.pas"/>
         <DCCReference Include="sources\uFindingFilter.pas"/>
         <DCCReference Include="sources\uFindingSourcePick.pas"/>
+        <DCCReference Include="sources\uFindingFileIndex.pas"/>
         <DCCReference Include="sources\uFuzzyComboSearch.pas"/>
         <DCCReference Include="sources\uHintTextLayout.pas"/>
         <DCCReference Include="sources\uHitCacheRepair.pas"/>
