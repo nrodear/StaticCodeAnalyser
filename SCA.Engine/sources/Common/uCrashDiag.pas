@@ -451,9 +451,29 @@ end;
 function CsGetStackInfo(P: System.PExceptionRecord): Pointer;
 var
   Info : PCrashStackInfo;
+  Obj  : TObject;
 begin
   Result := nil;
-  if Assigned(P) and (P^.ExceptionCode = CS_STACK_OVERFLOW) then Exit;
+  if Assigned(P) then
+  begin
+    if P^.ExceptionCode = CS_STACK_OVERFLOW then Exit;
+    // Ein SCHON EINMAL geworfenes Objekt wird erneut geworfen ('raise E'
+    // nach AcquireExceptionObject - so reicht ein Thread seine Ausnahme
+    // weiter). Die RTL ruft dann RaisingException ein zweites Mal, und
+    // Exception.SetStackInfo (D12) ueberschreibt den Block OHNE Freigabe:
+    // der erste Block leckte, und an seine Stelle traete der Stapel der
+    // Weitergabe statt der des Ursprungs - der einzige, der bei der Jagd
+    // zaehlt. Vorhandenen Block zurueckgeben; die RTL setzt denselben
+    // Zeiger wieder ein. Nur bei Delphi-Saetzen: dort steht das Objekt im
+    // Satz, bei OS-Saetzen liegt an der Stelle die Fehleradresse.
+    // ('raise;' allein ist unkritisch - _RaiseAgain ruft den Haken nicht.)
+    if P^.ExceptionCode = CS_DELPHI_RAISE then
+    begin
+      Obj := TObject(P^.ExceptObject);
+      if (Obj is Exception) and IsOwnInfo(Exception(Obj).StackInfo) then
+        Exit(Exception(Obj).StackInfo);
+    end;
+  end;
   Info := HeapAlloc(GetProcessHeap, 0, SizeOf(TCrashStackInfo));
   if Info = nil then Exit;
   CaptureInto(Info^, P);

@@ -13,6 +13,18 @@ unit uTestCrashDiag;
 // EINER echten AV geprueft (Schreiben nach nil) - ob der Haken bei einer
 // Hardware-Ausnahme greift, laesst sich mit einem kuenstlichen Satz nicht
 // zeigen, die RTL erzeugt das Objekt dann selbst.
+//
+// NUR OHNE DEBUGGER (2026-10-25, Nico): eine Hardware-AV ist fuer den
+// IDE-Debugger eine 'Native OS Exception' ($C0000005) und haelt den Lauf
+// bei der ersten Gelegenheit an - unabhaengig von der Einstellung fuer
+// Sprach-Ausnahmen und unabhaengig davon, dass der Test sie faengt. Fuer
+// den, der TestProject unter dem Debugger laufen laesst, 'bricht' die Suite
+// damit bei jedem Lauf. Unter einem Debugger (IsDebuggerPresent oder
+// System.DebugHook) ueberspringt der Test den Schreibzugriff deshalb und
+// endet mit Assert.Pass; den Hakenweg mit OS-Satz prueft stattdessen
+// CrashStack_OsRecord_CapturesFaultAndCode IMMER - er reicht dem Haken den
+// Satz einer AV so, wie die RTL es taete (RaisingException), nur ohne den
+// Prozessor zu bemuehen. Ausser dem Debugger-Halt entgeht so nichts.
 
 interface
 
@@ -38,6 +50,8 @@ type
     [Test] procedure CrashStack_FormatFrame_UnknownModule;
     [Test] procedure CrashStack_Raise_CapturesRaisingFrame;
     [Test] procedure CrashStack_AccessViolation_CapturesFaultAddress;
+    [Test] procedure CrashStack_OsRecord_CapturesFaultAndCode;
+    [Test] procedure CrashStack_ReraisedObject_KeepsOriginFrames;
     [Test] procedure CrashStack_Inactive_ReportIsNoOp;
   end;
 
@@ -210,15 +224,34 @@ end;
 
 // ---------------------------------------------------------------------------
 // Diagnose-Stapel. Die reinen Funktionen (Pfad, Rahmenzeile) direkt; der
-// Erfassungsweg einmal mit raise und einmal mit einer ECHTEN
-// Zugriffsverletzung - genau der Fall der AV-Jagd. Beide Male wird der
-// Haken nur fuer die Dauer des Tests eingehaengt.
+// Erfassungsweg einmal mit raise, einmal mit dem OS-Satz einer AV ueber
+// RaisingException und - ohne Debugger - einmal mit einer ECHTEN
+// Zugriffsverletzung, genau dem Fall der AV-Jagd. Jedes Mal wird der
+// Haken nur fuer die Dauer des Tests eingehaengt (finally), die Tests
+// setzen SCA_CRASH_STACK nie - die Umgebung bleibt unberuehrt.
 // ---------------------------------------------------------------------------
+
+type
+  // Exception.RaisingException ist protected. Ein Nachfahre in DIESER Unit
+  // oeffnet den Zugriff per Cast; die Methode ist virtuell und laeuft auf
+  // dem echten Objekt (EAccessViolation ueberschreibt sie nicht).
+  TRaisingCracker = class(EAccessViolation);
 
 var
   // Ziel der echten AV. Global statt Literal-nil, damit der Compiler den
   // Schreibzugriff nicht als sinnlos erkennt oder vorab bemaengelt.
   GNilTarget: PInteger = nil;
+
+// Debugger am Prozess? IsDebuggerPresent sieht jeden (IDE, WinDbg),
+// DebugHook setzt der IDE-Debugger zusaetzlich in der RTL - beides, damit
+// kein Weg den Hardware-Halt ausloest.
+function DebuggerPresent: Boolean;
+begin
+  // Zwei Zuweisungen: IsDebuggerPresent ist BOOL (LongBool), kein Boolean.
+  Result := IsDebuggerPresent;
+  if not Result then
+    Result := DebugHook <> 0;
+end;
 
 // Bewusst eigene, kleine Routinen: der Test prueft, dass eine erfasste
 // Adresse in GENAU dieser Routine liegt. Ihre Groesse liegt weit unter
@@ -377,8 +410,18 @@ begin
   // RTL das Objekt selbst (SysUtils.GetExceptionObject) - der Haken muss
   // auch dort greifen, und die Ausloeseadresse muss der fehlerhafte
   // Befehl IN der schreibenden Routine sein. Schreiben nach nil
-  // beschaedigt nichts (Seite 0 ist nie gemappt); unter dem IDE-Debugger
-  // meldet sich die AV wie jede andere Testausnahme - Fortsetzen genuegt.
+  // beschaedigt nichts (Seite 0 ist nie gemappt).
+  //
+  // Unter einem Debugger NICHT: fuer ihn ist $C0000005 eine Native OS
+  // Exception und haelt bei der ersten Gelegenheit an - der Test fing sie
+  // zwar und bestand nach 'Weiter', aber jeder Lauf unter dem IDE-Debugger
+  // stand an dieser Stelle (Nico, 2026-10-25). Der Hakenweg mit einem
+  // OS-Satz ist in CrashStack_OsRecord_CapturesFaultAndCode ohne Debugger-
+  // Halt geprueft; hier bleibt ohne Debugger (Umschalt+Strg+F9, CI) der
+  // echte Prozessor-Fall.
+  if DebuggerPresent then
+    Assert.Pass('Hardware-AV unter Debugger uebersprungen (Native-OS-Halt); '
+                + 'Hakenweg siehe CrashStack_OsRecord_CapturesFaultAndCode');
   LogFile := TempLog;
   Fault := nil;
   Count := 0;
@@ -401,6 +444,111 @@ begin
   Assert.IsTrue(Count > 0, 'kein Rahmen bei einer echten AV erfasst');
   Assert.IsTrue(InRaiser(Fault, @WriteThroughNilHere),
                 'Ausloeseadresse liegt nicht in der schreibenden Routine');
+end;
+
+procedure TTestCrashDiag.CrashStack_OsRecord_CapturesFaultAndCode;
+var
+  LogFile : string;
+  Rec     : TExceptionRecord;
+  E       : EAccessViolation;
+  Addr    : Pointer;
+  Fault   : Pointer;
+  Count   : Integer;
+  Text    : string;
+begin
+  // Der Hakenweg einer Hardware-Ausnahme OHNE Prozessor und Debugger-Halt:
+  // SysUtils.GetExceptionObject setzt bei einer AV den OS-Satz als
+  // ExceptionRecord und ruft RaisingException(Satz) - genau das tut dieser
+  // Test von Hand. Der Haken muss Code und Fehleradresse AUS DEM SATZ
+  // nehmen (nicht aus ExceptAddr) und den laufenden Stapel erfassen.
+  LogFile := TempLog;
+  Addr := Pointer(UIntPtr(@WriteThroughNilHere) + 4);
+  Fault := nil;
+  Count := 0;
+  CrashStackInstall(LogFile);
+  try
+    E := MakeExternal(Rec, $C0000005, Addr);
+    try
+      TRaisingCracker(E).RaisingException(@Rec);
+      Fault := CrashStackFault(E);
+      Count := Length(CrashStackFrames(E));
+      CrashStackReport('Detektor Test', 'unit2.pas', E);
+    finally
+      E.Free;   // gibt den Block ueber den Aufraeum-Haken frei
+    end;
+  finally
+    CrashStackUninstall;
+  end;
+  Assert.IsTrue(Count > 0, 'kein Rahmen aus dem OS-Satz erfasst');
+  Assert.IsTrue(Fault = Addr,
+                'Ausloeseadresse muss die ExceptionAddress des Satzes sein');
+  Assert.IsTrue(TFile.Exists(LogFile), 'Diagnosedatei fehlt: ' + LogFile);
+  Text := TFile.ReadAllText(LogFile, TEncoding.UTF8);
+  TFile.Delete(LogFile);
+  Assert.IsTrue(Pos('Code $C0000005', Text) > 0,
+                'NT-Code des Satzes fehlt in der Ausloeser-Zeile: ' + Text);
+  Assert.IsTrue(Pos('EAccessViolation', Text) > 0, 'Fehlertext fehlt: ' + Text);
+  Assert.IsTrue(Pos('beim Ausloesen erfasst', Text) > 0,
+                'Rahmen nicht aus dem Ausnahmeobjekt: ' + Text);
+end;
+
+procedure TTestCrashDiag.CrashStack_ReraisedObject_KeepsOriginFrames;
+var
+  LogFile : string;
+  Saved   : Exception;
+  First   : TArray<Pointer>;
+  Second  : TArray<Pointer>;
+  Fault1  : Pointer;
+  Fault2  : Pointer;
+  i       : Integer;
+begin
+  // Ein schon geworfenes Objekt erneut werfen (so reicht ein Thread seine
+  // Ausnahme weiter): die RTL ruft RaisingException ZWEIMAL, und
+  // SetStackInfo ueberschreibt ohne Freigabe. Der Haken muss den ersten
+  // Block behalten - sonst leckt er, und der Stapel zeigte die Weitergabe
+  // statt des Ursprungs. Pruefbar ohne Blick in den Heap: dieselben Rahmen
+  // und dieselbe Ausloeseadresse vor und nach dem zweiten raise.
+  LogFile := TempLog;
+  Saved := nil;
+  Fault1 := nil;
+  Fault2 := nil;
+  CrashStackInstall(LogFile);
+  try
+    try
+      RaiseListErrorHere;
+    except
+      on E: EListError do
+      begin
+        First := CrashStackFrames(E);
+        Fault1 := CrashStackFault(E);
+        Saved := Exception(AcquireExceptionObject);
+      end;
+    end;
+    if Saved = nil then
+      Assert.Fail('Vorbedingung: erstes raise nicht gefangen');
+    try
+      raise Saved;
+    except
+      on E: EListError do
+      begin
+        Second := CrashStackFrames(E);
+        Fault2 := CrashStackFault(E);
+      end;
+    end;
+  finally
+    CrashStackUninstall;
+    if TFile.Exists(LogFile) then
+      TFile.Delete(LogFile);
+  end;
+  Assert.IsTrue(Length(First) > 0, 'kein Rahmen beim ersten raise');
+  Assert.IsTrue(Fault2 = Fault1,
+                'zweites raise hat die Ausloeseadresse des Ursprungs ersetzt');
+  Assert.AreEqual<Integer>(Length(First), Length(Second),
+                           'zweites raise hat den Stapel neu erfasst statt '
+                           + 'den des Ursprungs zu behalten');
+  for i := 0 to High(First) do
+    Assert.IsTrue(First[i] = Second[i],
+                  Format('Rahmen #%d weicht nach dem zweiten raise ab', [i]));
 end;
 
 procedure TTestCrashDiag.CrashStack_Inactive_ReportIsNoOp;
