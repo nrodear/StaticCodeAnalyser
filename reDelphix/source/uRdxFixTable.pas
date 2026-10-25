@@ -124,7 +124,8 @@ type
     // gebaut von CaptionFor mit AOutcome.Name und der Kennzeichnung bei
     // ChangesBehavior. Gleich geschrieben, damit die Kontextaktion auf
     // einer Fundzeile hinter der Fund-Hilfe wegfaellt (uFindingActionMenu,
-    // Dedup per Caption).
+    // Dedup per Caption). ckConcatToFormat (C16) wie das SCA044-Rezept
+    // des Anbieters (keine Zeile dieser Tabelle): CAP_CONTEXT_FORMAT.
     class function ContextCaption(
       const AOutcome: TRdxContextOutcome): string; static;
 
@@ -338,6 +339,12 @@ const
   // Entscheid E2: eine Hilfe, die das Verhalten aendern kann, sagt es.
   CAP_CHANGES  = '(changes behavior)';
   NAME_UNKNOWN = 'X';
+  // C16 (Charge N): der Menuetext von ckConcatToFormat - die msgid von
+  // CAP_FORMAT des SCA044-Rezepts (uRdxProvider) und
+  // uRdxContextRunner.CONTEXT_FORMAT_CAPTION; hier noch einmal, weil der
+  // Extraktor eine msgid-Konstante nur in der Unit ihres _() aufloest.
+  // Gleichheit: uTestRdxContextFormat.Caption_IsSca044RecipeCaption.
+  CAP_CONTEXT_FORMAT = 'Build Format() from concatenation';
 
 { ---- Das Geruest der Planer-Adapter (Charge H5c) ----
   Gegen-Review H5, Major 2: bis Charge H5c stand das Geruest - Code-Sicht
@@ -3004,12 +3011,16 @@ end;
 class function TRdxFixTable.ContextCaption(
   const AOutcome: TRdxContextOutcome): string;
 const
-  // Die Fund-Hilfe je Code-Aktion (dieselbe Planer-Kette).
-  CONTEXT_KINDS: array[TRdxContextKind] of TFindingKind = (fkMagicNumber,
-    fkMissingFinally);
+  // Die Fund-Hilfe je Code-Aktion der Tabelle (dieselbe Planer-Kette).
+  CONTEXT_KINDS: array[ckIntroduceConst..ckTryFinallyCreate] of TFindingKind
+    = (fkMagicNumber, fkMissingFinally);
 var
   Fix : TRdxFixOutcome;
 begin
+  // SCA044 ist ein Rezept des Anbieters, keine Zeile von FIX_ROWS: sein
+  // Menuetext ohne '%s' und ohne Kennzeichnung (bedeutungsgleich).
+  if AOutcome.Kind = ckConcatToFormat then
+    Exit(_(CAP_CONTEXT_FORMAT));
   Fix := Default(TRdxFixOutcome);
   Fix.Name := AOutcome.Name;
   Fix.ChangesBehavior := AOutcome.ChangesBehavior;

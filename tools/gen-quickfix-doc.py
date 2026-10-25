@@ -97,7 +97,7 @@ NOT_DOCUMENTED = {
     'uRdxContextRunner.pas':
         'Code-Aktionen ohne Fund (Charge B, fakContext): weder Fund-Hilfe '
         'noch Rezept, QUICKFIXES.md fuehrt sie nicht. Menuetext und '
-        'Kennzeichnung sind die der Fund-Hilfen SCA014/SCA009 '
+        'Kennzeichnung sind die der Fund-Hilfen SCA014/SCA009/SCA044 '
         '(uRdxFixTable.ContextCaption, Test uTestRdxContextRunner); Doku: '
         'reDelphix/README.md, "Code-Aktionen ohne Fund".',
 }
