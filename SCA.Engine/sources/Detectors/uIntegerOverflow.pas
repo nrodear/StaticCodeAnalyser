@@ -77,7 +77,16 @@ const
   // Ein-Ident-Match verlor beide Richtungen: 'Total' war kein
   // Int64-Ziel (FN) und ein nicht registrierter Int64-Operand
   // unterlief das Promotion-Gate (lsError-FP).
-  RE_INT64_VAR_DECL = '(?im)\b(\w+(?:\s*,\s*\w+)*)\s*:\s*(Int64|UInt64|QWord)\b';
+  // Perf (Charge P 2026-10-25): die Komma-Gruppe machte das Muster
+  // quadratisch in der Listenlaenge - ab JEDEM Wortanfang einer langen
+  // Liste ohne ': Int64' (Zahlentabellen, uses-Klauseln) lief sie bis
+  // zum selben Listenende und scheiterte am selben Schwanz
+  // (xregexpr_unicodedata.pas allein ~0,6 s). (*SKIP) setzt den
+  // naechsten Versuch ans Listenende: jeder spaetere Start in derselben
+  // Liste erreicht dasselbe Ende und scheitert am selben Schwanz, und
+  // kuerzere Listen helfen nie (hinter ihnen steht ',' statt ':').
+  // Treffermenge (Gruppe 1/2) identisch.
+  RE_INT64_VAR_DECL = '(?im)\b(\w+(?:\s*,\s*\w+)*)(*SKIP)\s*:\s*(Int64|UInt64|QWord)\b';
   RE_PRODUCT_ASSIGN = '(?im)\b(\w+)\s*:=\s*(\w+)\s*\*\s*(\w+)\s*;';
   // Real-World-FP-Audit 2026-07-12 (FP-Klasse 'scope-blinde file-globale
   // Var-Sammlung'): fuer die per-Method-Scope-Aufteilung der Ziel-Erkennung.
@@ -154,6 +163,7 @@ var
   Lines    : TStringList;
   Cached   : Boolean;
   Code     : string;
+  LowCode  : string;
   LineFor  : TArray<Integer>;
   Int64Vars     : TStringList;   // datei-global: NUR Operand-Promotion-Check
   FileLevelVars : TStringList;   // Felder/Globals: gueltiges Ziel in JEDER Routine
@@ -190,6 +200,14 @@ begin
     // Perf (2026-07-05): P1-strip-cache - geteilter Strip via Context-Cache.
     Code := TDetectorUtils.StripStringsAndCommentsCached(
       Lines, LineFor, AContext, FileName, ' ');
+
+    // Perf (Charge P 2026-10-25): billige Vorpruefung VOR der Regex - ohne
+    // ein Stueck des Typnamens ('nt64' steckt in Int64 und UInt64) kann
+    // RE_INT64_VAR_DECL nicht treffen. LowerCase faltet nur A..Z; das 'I'
+    // bleibt bewusst draussen, damit selbst eine Unicode-Faltung der Regex
+    // (tuerkisches I mit Punkt) die Vorpruefung nicht unterlaeuft.
+    LowCode := LowerCase(Code);
+    if (Pos('nt64', LowCode) = 0) and (Pos('qword', LowCode) = 0) then Exit;
 
     // Fast-Reject: ohne irgendeine Int64/UInt64/QWord-Deklaration kein Befund
     // moeglich - spart die Segmentierung unten fuer die grosse Mehrheit.
