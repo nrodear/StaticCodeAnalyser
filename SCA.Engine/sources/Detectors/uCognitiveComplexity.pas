@@ -63,7 +63,7 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 const
   // Default-Threshold; konfigurierbar via INI [Detectors] CognitiveLimit
@@ -72,23 +72,16 @@ const
 type
   TCognitiveComplexityDetector = class
   public
+    // Perf Q2: AContext haelt die Schwelle [Detectors] CognitiveLimit
+    // einen Scan lang (s. LimitFor); nil = Tests/Direktaufrufe, dann
+    // wird die ini wie bisher je Aufruf gelesen.
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   private
-    // ACollectChain=False (Normalfall) baut KEINE Zeichenkette -
-    // dieselbe Begruendung wie in uDeepNesting.Walk: der DFS laeuft
-    // ueber jeden Knoten jeder Methode. AnalyzeUnit ruft ein
-    // ZWEITES Mal, nur fuer meldende Methoden.
-    //
-    // ACHTUNG, ANDERER VERTRAG ALS BEI SCA018: dort IST die
-    // Gliederzahl die gemeldete Tiefe. Hier ist die Kette der
-    // TIEFSTE PFAD der Methode - sie veranschaulicht den
-    // Verschachtelungsanteil der Punktzahl, ist aber NICHT deren
-    // Nachrechnung (die Punktzahl zaehlt auch flache Verzweigungen
-    // und boolesche Operatoren).
-    class function CountInMethod(MethodNode: TAstNode;
-      ACollectChain: Boolean = False;
-      AChain: PString = nil): Integer; static;
+    // Der Walk selbst (CountInMethod) steht seit Perf Q2 als
+    // Unit-Funktion im implementation-Teil: er bekommt den Stapel und
+    // die Gliederliste vom Aufrufer, und deren Elementtyp ist dort
+    // deklariert. Vertrag und Begruendung stehen an der Funktion.
     class function CountBooleanOpsInCond(const CondText: string): Integer; static;
   end;
 
@@ -108,13 +101,31 @@ begin
   Result := StrToIntDef(S, ADefault);
 end;
 
+// Perf Q2 (2026-10-25): die Schwelle EINMAL je Kontext lesen. Bis
+// hierher lief QuickReadIntDef je DATEI - und TRepoSettings.QuickReadStr
+// legt dabei jedes Mal ein TMemIniFile an, laedt und zerlegt die ganze
+// analyser.ini (ohne ini drei FileExists je Datei). Profiler Q3: ~1,1 s
+// CPU auf jvcl, schon in v0.9.18. Der Kontext lebt einen Scan lang,
+// jeder Parallel-Worker hat seinen eigenen - der Wert ist damit wie die
+// TD-1-Schwellen der anderen Detektoren scan-konstant. Gelesen wird
+// derselbe Schluessel mit derselben Vorgabe wie zuvor; einziger
+// Unterschied: eine ini-Aenderung WAEHREND eines laufenden Scans wirkt
+// erst im naechsten. Ohne Kontext (Tests, Direktaufrufe) bleibt es beim
+// Lesen je Aufruf.
+function LimitFor(AContext: TAnalyzeContext): Integer;
+begin
+  if (AContext <> nil) and AContext.TryGetCognitiveLimit(Result) then Exit;
+  Result := QuickReadIntDef('Detectors', 'CognitiveLimit', DEF_COGNITIVE_LIMIT);
+  if AContext <> nil then AContext.PutCognitiveLimit(Result);
+end;
+
 type
   TStackEntry = record
     Node  : TAstNode;
     Depth : Integer;     // Verschachtelungstiefe relativ zum Method-Root
     // L1: Kette der Konstrukte bis zu diesem Knoten - als INDEX in
     // die Glieder-Liste (TDetectorUtils.NestingChainPush), -1 = noch
-    // kein Glied. Bei ACollectChain=False durchgehend -1.
+    // kein Glied.
     // Perf P3 (2026-10-25): bis hierher stand die Kette als string
     // im Record. Das machte ihn zu einem VERWALTETEN Typ: jedes
     // Stack.Add/Delete und jede Zuweisung Entry/Child lief ueber die
@@ -162,11 +173,31 @@ begin
   end;
 end;
 
-class function TCognitiveComplexityDetector.CountInMethod(
-  MethodNode: TAstNode; ACollectChain: Boolean;
-  AChain: PString): Integer;
+// Punktzahl einer Methode; dabei, im SELBEN Walk, die Kettenglieder
+// in ALinks und in ABestLink das Glied der tiefsten Stelle (-1 =
+// keins). Die Kette als TEXT entsteht erst in AnalyzeUnit und nur
+// fuer meldende Methoden.
+//
+// Perf Q2 (2026-10-25): bis hierher lief der Walk ZWEIMAL je
+// meldender Methode - erst ohne Kette, dann (ACollectChain=True) noch
+// einmal mit, und der zweite Lauf zaehlte dabei auch die booleschen
+// Operatoren jedes if neu (zwei String-Allokationen je if). Meldende
+// Methoden sind die grossen: laz strict 3.162 Funde, rund 15 % aller
+// Methodenzeilen und ein noch groesserer Teil der if-Knoten. Jetzt
+// fuehrt der eine Walk die Glieder IMMER mit - ein unverwalteter
+// 8-Byte-Record je Kontrollfluss-Knoten, kein Text. Stapel und
+// Gliederliste legt AnalyzeUnit EINMAL je Unit an; vorher entstanden
+// beide je Methode neu und wuchsen jedes Mal von Kapazitaet 0 auf.
+// AStack ist beim Aufruf leer: jeder Walk leert ihn vollstaendig.
+//
+// ACHTUNG, ANDERER VERTRAG ALS BEI SCA018: dort IST die Gliederzahl
+// die gemeldete Tiefe. Hier ist die Kette der TIEFSTE PFAD der
+// Methode - sie veranschaulicht den Verschachtelungsanteil der
+// Punktzahl, ist aber NICHT deren Nachrechnung (die Punktzahl zaehlt
+// auch flache Verzweigungen und boolesche Operatoren).
+function CountInMethod(MethodNode: TAstNode; AStack: TList<TStackEntry>;
+  ALinks: TList<TNestingChainLink>; var ABestLink: Integer): Integer;
 var
-  Stack : TList<TStackEntry>;
   Entry, Child : TStackEntry;
   i     : Integer;
   ChildDepth : Integer;
@@ -174,113 +205,103 @@ var
   IsControlFlow : Boolean;
   MaxDepth : Integer;      // L1: tiefste erreichte Ebene
   ChildLink : Integer;     // L1: Kettenglied, das die Kinder erben
-  BestLink  : Integer;     // L1: Kettenglied der tiefsten Stelle, -1 = keins
-  Links     : TList<TNestingChainLink>;   // nur bei ACollectChain
 begin
   Result := 0;
   MaxDepth := -1;
-  BestLink := -1;
-  if ACollectChain and (AChain <> nil) then AChain^ := '';
+  ABestLink := -1;
+  // Glieder der VORIGEN Methode verwerfen. Count := 0 und NICHT
+  // Clear: Clear setzt in Delphi auch Capacity auf 0 und nimmt damit
+  // genau die Wiederverwendung wieder weg.
+  ALinks.Count := 0;
   if MethodNode = nil then Exit;
-  Links := nil;
-  Stack := TList<TStackEntry>.Create;
-  try
-    if ACollectChain then
-      Links := TList<TNestingChainLink>.Create;
-    // Push children of MethodNode with Depth=0 (Method-Root selbst zaehlt nicht).
-    for i := MethodNode.Children.Count - 1 downto 0 do
-    begin
-      Entry.Node  := MethodNode.Children[i];
-      Entry.Depth := 0;
-      Entry.Link  := -1;
-      Stack.Add(Entry);
-    end;
-
-    while Stack.Count > 0 do
-    begin
-      Entry := Stack[Stack.Count - 1];
-      Stack.Delete(Stack.Count - 1);
-
-      IsControlFlow := False;
-      case Entry.Node.Kind of
-        nkIfStmt:
-          begin
-            // B1 + B2: 1 + current-Depth (Sonar-Formel)
-            Inc(Result, 1 + Entry.Depth);
-            // B3: boolean-Operatoren in if-Condition (and/or/xor)
-            Inc(Result, CountBooleanOpsInCond(Entry.Node.TypeRef));
-            IsControlFlow := True;
-          end;
-        nkForStmt, nkWhileStmt, nkRepeatStmt,
-        nkCaseStmt, nkOnHandler:
-          begin
-            Inc(Result, 1 + Entry.Depth);
-            IsControlFlow := True;
-          end;
-      end;
-
-      // L1: die Kette waechst an genau den Knoten, die auch die
-      // Verschachtelung erhoehen. Festgehalten wird der Pfad zur
-      // TIEFSTEN Stelle; bei Gleichstand gewinnt der erste
-      // (striktes >), genau wie in uDeepNesting. Die Kette ist
-      // PFADABHAENGIG (jeder Frame hat seine eigene, die Zweige
-      // divergieren) - deshalb Elternverweise statt eines Puffers;
-      // der Text entsteht erst nach dem Walk, einmal.
-      ChildLink := Entry.Link;
-      if ACollectChain and IsControlFlow then
-      begin
-        ChildLink := TDetectorUtils.NestingChainPush(Links,
-          Entry.Node.Kind, Entry.Link);
-        if Entry.Depth > MaxDepth then
-        begin
-          MaxDepth := Entry.Depth;
-          BestLink := ChildLink;
-        end;
-      end;
-
-      // Verschachtelung: wenn Control-Flow, Depth+1 fuer Children.
-      if IsControlFlow then ChildDepth := Entry.Depth + 1
-      else                  ChildDepth := Entry.Depth;
-
-      // 'else if'-Korrektur (2026-07-26): nkElseBranch haengt UNTER dem
-      // nkIfStmt und traegt dessen bereits erhoehte Tiefe. Ein DIREKT
-      // darin liegendes nkIfStmt ist aber kein verschachteltes if,
-      // sondern das naechste Glied einer flachen else-if-Kette und
-      // bekommt nach Sonar +1 OHNE Nesting-Zuschlag. Es erbt daher die
-      // Tiefe des umgebenden if (ChildDepth-1), womit jedes Kettenglied
-      // denselben Level wie das erste if bekommt -> Kosten N statt
-      // N*(N+1)/2. Bewusst NUR fuer das direkte Kind: ein 'else begin
-      // if ... end' liegt unter einem nkBlock, behaelt also seinen
-      // Nesting-Zuschlag (Sonar-konform). Der Eingriff kann Scores
-      // ausschliesslich SENKEN - nichts wird neu gezaehlt.
-      ElseIfDepth := ChildDepth;
-      if (Entry.Node.Kind = nkElseBranch) and (ChildDepth > 0) then
-        ElseIfDepth := ChildDepth - 1;
-
-      for i := Entry.Node.Children.Count - 1 downto 0 do
-      begin
-        Child.Node  := Entry.Node.Children[i];
-        if Child.Node.Kind = nkIfStmt then Child.Depth := ElseIfDepth
-        else                               Child.Depth := ChildDepth;
-        Child.Link  := ChildLink;
-        Stack.Add(Child);
-      end;
-    end;
-    // Frueher wurde AChain^ bei JEDEM neuen Maximum ueberschrieben -
-    // stehen bleibt der Pfad des letzten Maximums, und genau dessen
-    // Glied haelt BestLink.
-    if ACollectChain and (AChain <> nil) and (BestLink >= 0) then
-      AChain^ := TDetectorUtils.NestingChainText(Links, BestLink,
-        NodeKindName);
-  finally
-    Links.Free;
-    Stack.Free;
+  // Push children of MethodNode with Depth=0 (Method-Root selbst zaehlt nicht).
+  for i := MethodNode.Children.Count - 1 downto 0 do
+  begin
+    Entry.Node  := MethodNode.Children[i];
+    Entry.Depth := 0;
+    Entry.Link  := -1;
+    AStack.Add(Entry);
   end;
+
+  while AStack.Count > 0 do
+  begin
+    Entry := AStack[AStack.Count - 1];
+    AStack.Delete(AStack.Count - 1);
+
+    IsControlFlow := False;
+    case Entry.Node.Kind of
+      nkIfStmt:
+        begin
+          // B1 + B2: 1 + current-Depth (Sonar-Formel)
+          Inc(Result, 1 + Entry.Depth);
+          // B3: boolean-Operatoren in if-Condition (and/or/xor)
+          Inc(Result, TCognitiveComplexityDetector.CountBooleanOpsInCond(
+            Entry.Node.TypeRef));
+          IsControlFlow := True;
+        end;
+      nkForStmt, nkWhileStmt, nkRepeatStmt,
+      nkCaseStmt, nkOnHandler:
+        begin
+          Inc(Result, 1 + Entry.Depth);
+          IsControlFlow := True;
+        end;
+    end;
+
+    // L1: die Kette waechst an genau den Knoten, die auch die
+    // Verschachtelung erhoehen. Festgehalten wird der Pfad zur
+    // TIEFSTEN Stelle; bei Gleichstand gewinnt der erste
+    // (striktes >), genau wie in uDeepNesting. Die Kette ist
+    // PFADABHAENGIG (jeder Frame hat seine eigene, die Zweige
+    // divergieren) - deshalb Elternverweise statt eines Puffers;
+    // der Text entsteht erst nach dem Walk, einmal.
+    ChildLink := Entry.Link;
+    if IsControlFlow then
+    begin
+      ChildLink := TDetectorUtils.NestingChainPush(ALinks,
+        Entry.Node.Kind, Entry.Link);
+      if Entry.Depth > MaxDepth then
+      begin
+        MaxDepth := Entry.Depth;
+        ABestLink := ChildLink;
+      end;
+    end;
+
+    // Verschachtelung: wenn Control-Flow, Depth+1 fuer Children.
+    if IsControlFlow then ChildDepth := Entry.Depth + 1
+    else                  ChildDepth := Entry.Depth;
+
+    // 'else if'-Korrektur (2026-07-26): nkElseBranch haengt UNTER dem
+    // nkIfStmt und traegt dessen bereits erhoehte Tiefe. Ein DIREKT
+    // darin liegendes nkIfStmt ist aber kein verschachteltes if,
+    // sondern das naechste Glied einer flachen else-if-Kette und
+    // bekommt nach Sonar +1 OHNE Nesting-Zuschlag. Es erbt daher die
+    // Tiefe des umgebenden if (ChildDepth-1), womit jedes Kettenglied
+    // denselben Level wie das erste if bekommt -> Kosten N statt
+    // N*(N+1)/2. Bewusst NUR fuer das direkte Kind: ein 'else begin
+    // if ... end' liegt unter einem nkBlock, behaelt also seinen
+    // Nesting-Zuschlag (Sonar-konform). Der Eingriff kann Scores
+    // ausschliesslich SENKEN - nichts wird neu gezaehlt.
+    ElseIfDepth := ChildDepth;
+    if (Entry.Node.Kind = nkElseBranch) and (ChildDepth > 0) then
+      ElseIfDepth := ChildDepth - 1;
+
+    for i := Entry.Node.Children.Count - 1 downto 0 do
+    begin
+      Child.Node  := Entry.Node.Children[i];
+      if Child.Node.Kind = nkIfStmt then Child.Depth := ElseIfDepth
+      else                               Child.Depth := ChildDepth;
+      Child.Link  := ChildLink;
+      AStack.Add(Child);
+    end;
+  end;
+  // Frueher wurde die Kette bei JEDEM neuen Maximum ueberschrieben -
+  // stehen bleibt der Pfad des letzten Maximums, und genau dessen
+  // Glied haelt ABestLink.
 end;
 
 class procedure TCognitiveComplexityDetector.AnalyzeUnit(
   UnitNode: TAstNode; const FileName: string;
-  Results: TObjectList<TLeakFinding>);
+  Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Methods : TList<TAstNode>;
   M       : TAstNode;
@@ -288,17 +309,27 @@ var
   Limit   : Integer;
   F       : TLeakFinding;
   Chain   : string;   // L1: nur fuer meldende Methoden gefuellt
+  Stack   : TList<TStackEntry>;          // Perf Q2: je Unit EINMAL
+  Links   : TList<TNestingChainLink>;    // Perf Q2: je Unit EINMAL
+  BestLink : Integer;
 begin
-  Limit := QuickReadIntDef('Detectors', 'CognitiveLimit', DEF_COGNITIVE_LIMIT);
+  Limit := LimitFor(AContext);
+  Stack := nil;
+  Links := nil;
+  BestLink := -1;
   Methods := UnitNode.FindAll(nkMethod);
   try
+    Stack := TList<TStackEntry>.Create;
+    Links := TList<TNestingChainLink>.Create;
     for M in Methods do
     begin
-      CC := CountInMethod(M);
+      CC := CountInMethod(M, Stack, Links, BestLink);
       if CC <= Limit then Continue;
-      // Kette erst JETZT bauen - nur fuer meldende Methoden.
+      // Kette als Text erst JETZT - nur fuer meldende Methoden.
       Chain := '';
-      CountInMethod(M, True, @Chain);
+      if BestLink >= 0 then
+        Chain := TDetectorUtils.NestingChainText(Links, BestLink,
+          NodeKindName);
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := M.Name;
@@ -313,6 +344,8 @@ begin
       Results.Add(F);
     end;
   finally
+    Links.Free;
+    Stack.Free;
     Methods.Free;
   end;
 end;

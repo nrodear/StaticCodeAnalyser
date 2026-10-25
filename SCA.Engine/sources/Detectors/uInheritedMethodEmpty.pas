@@ -103,9 +103,20 @@ const
 
 type
   // Spaltentreue Code-Sicht der Unit: Kommentare und Strings geblankt.
+  //
+  // Perf Charge Q4 (2026-10-25): FAUL gebaut. Code hat von Anfang an
+  // Roh.Count Eintraege (alle Laengen-Grenzen bleiben gleich), gefuellt
+  // werden aber nur die Zeilen 1..Gebaut - CodeZeile zieht bei Bedarf nach,
+  // mit denselben ScanCodeLine-Aufrufen in derselben Reihenfolge und dem
+  // fortgetragenen State. Vorher wurde beim ersten Kandidaten die GANZE
+  // Datei geblankt; gelesen wird hoechstens bis zur letzten Kandidaten-
+  // Anweisung + MAX_KOPF_ZEILEN (Schaetzung laz: ~69 % der Zeilen der
+  // Kandidaten-Dateien, jvcl ~80 %).
   TCodeSicht = record
-    Roh  : TStrings;
-    Code : TArray<string>;
+    Roh    : TStrings;
+    Code   : TArray<string>;
+    Gebaut : Integer;              // Zeilen 1..Gebaut sind gefuellt
+    State  : TCommentScanState;    // Kommentarzustand hinter Zeile Gebaut
   end;
 
 function IstWortZeichen(C: Char): Boolean; inline;
@@ -344,17 +355,28 @@ end;
 
 // ---- Quelltext-Pruefungen (spaltentreue Code-Sicht) -----------------------
 
-function CodeZeile(const Sicht: TCodeSicht; Zeile: Integer): string;
+// Einziger Lesezugang zu Sicht.Code - baut faul bis Zeile nach.
+function CodeZeile(var Sicht: TCodeSicht; Zeile: Integer): string;
+var
+  Dummy : Integer;
 begin
   if (Zeile >= 1) and (Zeile <= Length(Sicht.Code)) then
-    Result := Sicht.Code[Zeile - 1]
+  begin
+    while Sicht.Gebaut < Zeile do
+    begin
+      Sicht.Code[Sicht.Gebaut] := TDetectorUtils.ScanCodeLine(
+        Sicht.Roh[Sicht.Gebaut], Sicht.State, Dummy, ' ', True);
+      Inc(Sicht.Gebaut);
+    end;
+    Result := Sicht.Code[Zeile - 1];
+  end
   else
     Result := '';
 end;
 
 // Steht an (Zeile, Spalte) das Methoden-Schluesselwort der Deklaration?
 // Schuetzt vor Spaltenversatz (Parser liest UTF-8 ohne BOM als ANSI).
-function KopfwortPasst(const Sicht: TCodeSicht; Zeile, Spalte: Integer;
+function KopfwortPasst(var Sicht: TCodeSicht; Zeile, Spalte: Integer;
   const Art: string): Boolean;
 begin
   Result := (Art <> '') and
@@ -362,7 +384,7 @@ begin
 end;
 
 // Steht vor der Deklaration (ggf. vor 'class') ein Attribut ']'?
-function HatAttribut(const Sicht: TCodeSicht; Zeile, Spalte: Integer): Boolean;
+function HatAttribut(var Sicht: TCodeSicht; Zeile, Spalte: Integer): Boolean;
 var
   S       : string;
   i, Ende : Integer;
@@ -392,7 +414,7 @@ end;
 
 // Code ab (Zeile, Spalte) ueber hoechstens MAX_KOPF_ZEILEN Zeilen, mit #10
 // getrennt. ZeileVon[k] = Quellzeile des Zeichens k (1-basiert).
-function CodeAb(const Sicht: TCodeSicht; Zeile, Spalte: Integer;
+function CodeAb(var Sicht: TCodeSicht; Zeile, Spalte: Integer;
   out ZeileVon: TArray<Integer>): string;
 var
   z, k, Bis : Integer;
@@ -406,8 +428,8 @@ begin
   Gesamt := 0;
   for z := Zeile to Bis do
   begin
-    if z = Zeile then Teil := Copy(Sicht.Code[z - 1], Spalte, MaxInt)
-    else Teil := Sicht.Code[z - 1];
+    if z = Zeile then Teil := Copy(CodeZeile(Sicht, z), Spalte, MaxInt)
+    else Teil := CodeZeile(Sicht, z);
     Teile := Teile + [Teil + #10];
     Inc(Gesamt, Length(Teil) + 1);
   end;
@@ -425,7 +447,7 @@ end;
 // Prueft die Direktiven hinter der Deklaration: nur 'override' erlaubt.
 // DeklEnde = Zeile des letzten Direktiven-';'. False, wenn eine andere
 // Direktive folgt oder das Ende nicht gefunden wird.
-function NurOverride(const Sicht: TCodeSicht; Zeile, Spalte: Integer;
+function NurOverride(var Sicht: TCodeSicht; Zeile, Spalte: Integer;
   out DeklEnde: Integer): Boolean;
 var
   S         : string;
@@ -478,7 +500,7 @@ begin
 end;
 
 // Zeile des 'end' nach der einzigen Anweisung (0 = nicht gefunden).
-function RumpfEnde(const Sicht: TCodeSicht; AbZeile: Integer): Integer;
+function RumpfEnde(var Sicht: TCodeSicht; AbZeile: Integer): Integer;
 var
   z, P : Integer;
   S    : string;
@@ -486,7 +508,7 @@ begin
   for z := AbZeile to AbZeile + MAX_KOPF_ZEILEN do
   begin
     if z > Length(Sicht.Code) then Break;
-    S := LowerCase(Sicht.Code[z - 1]);
+    S := LowerCase(CodeZeile(Sicht, z));
     P := Pos('end', S);
     while P > 0 do
     begin
@@ -514,17 +536,12 @@ begin
   Result := False;
 end;
 
+// Legt die Sicht an; gefuellt wird sie erst ueber CodeZeile.
 procedure BaueCodeSicht(var Sicht: TCodeSicht);
-var
-  State : TCommentScanState;
-  Dummy : Integer;
-  z     : Integer;
 begin
-  State := Default(TCommentScanState);
+  Sicht.State  := Default(TCommentScanState);
+  Sicht.Gebaut := 0;
   SetLength(Sicht.Code, Sicht.Roh.Count);
-  for z := 0 to Sicht.Roh.Count - 1 do
-    Sicht.Code[z] := TDetectorUtils.ScanCodeLine(Sicht.Roh[z], State, Dummy,
-      ' ', True);
 end;
 
 function KlassenIndex(UnitNode: TAstNode)
@@ -583,12 +600,19 @@ begin
     for M in Methoden do
     begin
       // ---- AST: Implementierung mit genau einer Anweisung ----------------
-      Teile := M.Name.Split(['.']);
-      if Length(Teile) < 2 then Continue;          // keine Methode
-      if HatTypeRefMarke(M.TypeRef, ';class') then Continue;
+      // Perf Charge Q4: die allokierenden Pruefungen (Split, LowerCase im
+      // TypeRef) laufen erst NACH den reinen AST-Pruefungen - vorher
+      // zahlte jede Methode der Unit (auch jede Deklaration in der Klasse)
+      // beide. Alle Pruefungen sind seiteneffektfreie Filter, die
+      // Reihenfolge aendert die Treffermenge nicht. Ohne '.' liefert
+      // Split hoechstens einen Teil - dieselbe Ablehnung wie unten.
+      if Pos('.', M.Name) = 0 then Continue;       // keine Methode
       Anw := EinzigeAnweisung(M);
       if not Assigned(Anw) then Continue;
       if not (Anw.Kind in [nkInherited, nkAssign]) then Continue;
+      Teile := M.Name.Split(['.']);
+      if Length(Teile) < 2 then Continue;          // keine Methode
+      if HatTypeRefMarke(M.TypeRef, ';class') then Continue;
       MethName := Teile[High(Teile)];
 
       // ---- Deklaration in der Klasse -------------------------------------

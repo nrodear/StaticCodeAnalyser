@@ -92,9 +92,34 @@ type
     // AnalyzeUnit ist das immer), und ein Id ohne Leerzeichen:
     // Woerter.ContainsKey(Id) = (Pos(' ' + Id + ' ',
     // Text.Replace('.', ' ')) > 0) - der alte H2-Vertrag auf dem
-    // WordText, der genau diese Ersetzung war.
+    // WordText, der genau diese Ersetzung war. Seit Charge Q5 nur noch
+    // das Orakel von WoerterVorhanden (der Detektor ruft es nicht mehr).
     class procedure SammleWoerter(const Text: string;
       Woerter: TDictionary<string, Boolean>); static;
+
+    // Perf Charge Q5 (2026-10-25). VERTRAG: Result[k] = Woerter.
+    // ContainsKey(Ids[k]) mit Woerter aus SammleWoerter(Text) - Ids[k] ist
+    // ein maximaler Lauf ohne ' ' und '.' in Text. Ohne Kopie und
+    // Hash-Eintrag je Wort des Textes: EIN Lauf ueber den Text, je Wort
+    // ein Fachvergleich (Laenge, erstes Zeichen) gegen die wenigen Ids;
+    // Schluss, sobald alle gefunden sind. '' ist nie ein Wort.
+    class function WoerterVorhanden(const Text: string;
+      const Ids: TArray<string>): TArray<Boolean>; static;
+
+    // Perf Charge Q5: der AST-Teil des Suchtexts. VERTRAG: die Verkettung
+    // von ' ' + RawSicht(OhneLiterale(S).ToLower) + ' ' fuer jedes
+    // nichtleere S aus Name und TypeRef jedes Knotens ausser nkUsesItem,
+    // in Baumreihenfolge (vorher je Name so angehaengt). Gerechnet mit
+    // EINEM ToLower ueber die verkettete Rohform - string.ToLower
+    // (LCMapString LCMAP_LOWERCASE) bildet zeichenweise und laengentreu
+    // ab, das ' ' bleibt ' ' (Probe ueber alle BMP-Zeichen in sieben
+    // Locales, auch tr-TR).
+    class function AstSuchtext(Node: TAstNode): string; static;
+
+    // I2 (2026-09-20): der Inhalt der Stringliterale eines AST-Namens
+    // geblankt (Begruendung an CollectText). Bis Charge Q5 lokal in
+    // CollectText; public fuer den Vertragstest von AstSuchtext.
+    class function OhneLiterale(const S: string): string; static;
 
     // F3 (2026-09-19): blankt jede uses-Klausel (vom Wort 'uses' bis
     // zum naechsten ';') im GESTRIPPTEN lowercase-Text zu Leerzeichen.
@@ -144,10 +169,11 @@ type
     // 2026-10-13; reDelphix in dieser Charge unveraendert).
     class function IdentsFor(const UnitLow: string): TArray<string>; static;
   private
-    // Baut den Suchtext RawText: lowercase, Punkte erhalten (H1:
-    // 'sysutils.'), sonstige Nicht-Bezeichner als Leerzeichen. Den
-    // frueheren zweiten Text WordText (dasselbe mit '.' -> ' ', fuer H2:
-    // ' tlist ') ersetzt seit Charge P1 die Wortmenge aus SammleWoerter.
+    // Sammelt die Rohform des AST-Teils: ' ' + OhneLiterale(S) + ' ' je
+    // nichtleerem Name/TypeRef (ausser nkUsesItem). Klein und Raw-Sicht
+    // macht AstSuchtext einmal fuer alles (Perf Charge Q5). Den frueheren
+    // zweiten Text WordText (dasselbe mit '.' -> ' ', fuer H2: ' tlist ')
+    // ersetzt seit Charge P1 die Wortmenge (heute WoerterVorhanden).
     class procedure CollectText(Node: TAstNode;
       RawSB: TStringBuilder); static;
 
@@ -351,6 +377,117 @@ begin
   end;
 end;
 
+class function TUnusedUsesDetector.WoerterVorhanden(const Text: string;
+  const Ids: TArray<string>): TArray<Boolean>;
+// Vertrag siehe Deklaration. Fach = (Ord(erstes Zeichen) * 7 + Laenge)
+// and 255 - fuer Id und Wort dieselbe Rechnung, jede Zeichenfolge hat ihr
+// Fach; die Gleichheit prueft danach Laenge und CompareMem.
+const
+  FAECHER = 256;
+var
+  Kopf     : array[0..FAECHER - 1] of Integer;
+  Naechst  : TArray<Integer>;
+  k, b     : Integer;
+  Offen    : Integer;   // noch nicht gefundene Ids (ohne '')
+  i, n     : Integer;
+  Start, L : Integer;
+  P        : PChar;
+begin
+  SetLength(Result, Length(Ids));
+  for k := 0 to High(Result) do
+    Result[k] := False;
+  if Length(Ids) = 0 then Exit;
+  for b := 0 to FAECHER - 1 do
+    Kopf[b] := -1;
+  SetLength(Naechst, Length(Ids));
+  Offen := 0;
+  for k := 0 to High(Ids) do
+  begin
+    Naechst[k] := -1;
+    if Ids[k] = '' then Continue;   // '' ist nie ein Wort
+    b := (Ord(Ids[k][1]) * 7 + Length(Ids[k])) and (FAECHER - 1);
+    Naechst[k] := Kopf[b];
+    Kopf[b] := k;
+    Inc(Offen);
+  end;
+  n := Length(Text);
+  P := PChar(Text);
+  i := 0;
+  while (i < n) and (Offen > 0) do
+  begin
+    while (i < n) and ((P[i] = ' ') or (P[i] = '.')) do Inc(i);
+    Start := i;
+    while (i < n) and (P[i] <> ' ') and (P[i] <> '.') do Inc(i);
+    L := i - Start;
+    if L = 0 then Continue;
+    k := Kopf[(Ord(P[Start]) * 7 + L) and (FAECHER - 1)];
+    while k >= 0 do
+    begin
+      if (not Result[k]) and (Length(Ids[k]) = L) and
+         CompareMem(PChar(Ids[k]), @P[Start], L * SizeOf(Char)) then
+      begin
+        Result[k] := True;
+        Dec(Offen);
+      end;
+      k := Naechst[k];
+    end;
+  end;
+end;
+
+class function TUnusedUsesDetector.OhneLiterale(const S: string): string;
+// I2 (2026-09-20): Inhalte von Stringliteralen ausblenden - Begruendung
+// an CollectText.
+var
+  i   : Integer;
+  InS : Boolean;
+  SB  : TStringBuilder;
+begin
+  if Pos('''', S) = 0 then Exit(S);   // Normalfall: nichts zu tun
+  SB := TStringBuilder.Create;
+  try
+    InS := False;
+    i := 1;
+    while i <= Length(S) do
+    begin
+      if S[i] = '''' then
+      begin
+        // Verdoppeltes '' INNERHALB eines Literals ist ein Zeichen
+        // des Literals, kein Ende - beide blanken und weiter.
+        if InS and (i < Length(S)) and (S[i + 1] = '''') then
+        begin
+          SB.Append('  ');
+          Inc(i, 2);
+          Continue;
+        end;
+        InS := not InS;
+        SB.Append(' ');
+      end
+      else if InS then
+        SB.Append(' ')
+      else
+        SB.Append(S[i]);
+      Inc(i);
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+class function TUnusedUsesDetector.AstSuchtext(Node: TAstNode): string;
+// Vertrag siehe Deklaration.
+var
+  SB : TStringBuilder;
+begin
+  SB := TStringBuilder.Create;
+  try
+    CollectText(Node, SB);
+    Result := RawSicht(SB.ToString.ToLower);
+  finally
+    SB.Free;
+  end;
+end;
+
 class procedure TUnusedUsesDetector.CollectText(Node: TAstNode;
   RawSB: TStringBuilder);
 
@@ -372,54 +509,23 @@ class procedure TUnusedUsesDetector.CollectText(Node: TAstNode;
   //
   // GEMESSEN (i_messung_sca007): 394 Faelle im Delphi-Korpus, 29 im
   // Lazarus-Korpus, in denen der EINZIGE Nachweis aus einem Literal
-  // stammt - sie werden zu Funden.
-  function OhneLiterale(const S: string): string;
-  var
-    i   : Integer;
-    InS : Boolean;
-    SB  : TStringBuilder;
-  begin
-    if Pos('''', S) = 0 then Exit(S);   // Normalfall: nichts zu tun
-    SB := TStringBuilder.Create;
-    try
-      InS := False;
-      i := 1;
-      while i <= Length(S) do
-      begin
-        if S[i] = '''' then
-        begin
-          // Verdoppeltes '' INNERHALB eines Literals ist ein Zeichen
-          // des Literals, kein Ende - beide blanken und weiter.
-          if InS and (i < Length(S)) and (S[i + 1] = '''') then
-          begin
-            SB.Append('  ');
-            Inc(i, 2);
-            Continue;
-          end;
-          InS := not InS;
-          SB.Append(' ');
-        end
-        else if InS then
-          SB.Append(' ')
-        else
-          SB.Append(S[i]);
-        Inc(i);
-      end;
-      Result := SB.ToString;
-    finally
-      SB.Free;
-    end;
-  end;
-
+  // stammt - sie werden zu Funden. Die Ausblendung selbst steht seit
+  // Charge Q5 in OhneLiterale (public, Vertragstest von AstSuchtext).
+  //
+  // Perf Charge Q5 (2026-10-25): je Name nur noch die Rohform anhaengen;
+  // ToLower (ein LCMapString-Aufruf samt Kopie) und RawSicht laufen in
+  // AstSuchtext EINMAL ueber den ganzen AST-Teil statt je Name. Die
+  // Kinder per Index statt for-in (kein Enumerator-Objekt je Knoten).
   procedure Add(const S: string);
   begin
     if S = '' then Exit;
-    // Raw: lowercase, Punkte beibehalten, sonstiges durch Leerzeichen
     RawSB.Append(' ');
-    RawSB.Append(RawSicht(OhneLiterale(S).ToLower));
+    RawSB.Append(OhneLiterale(S));
     RawSB.Append(' ');
   end;
 
+var
+  i : Integer;
 begin
   if not Assigned(Node) then Exit;
   // nkUsesItem-Knoten NICHT aufnehmen: der Unit-Name selbst soll
@@ -429,8 +535,8 @@ begin
     Add(Node.Name);
     Add(Node.TypeRef);
   end;
-  for var Child in Node.Children do
-    CollectText(Child, RawSB);
+  for i := 0 to Node.Children.Count - 1 do
+    CollectText(Node.Children[i], RawSB);
 end;
 
 { ---- Bekannte Bezeichner pro Unit (H2) ---- }
@@ -1106,7 +1212,10 @@ var
   RawText    : string;   // lowercase mit Punkten: fuer H1 und H2
   Punkte     : TArray<Integer>;                // H1, lazy
   PunkteDa   : Boolean;
-  Woerter    : TDictionary<string, Boolean>;   // H2, lazy
+  Woerter    : TDictionary<string, Boolean>;   // H2, lazy: Id -> ist Wort
+  Bedarf     : TList<string>;
+  Da         : TArray<Boolean>;
+  ItemIdx, j : Integer;
   Reported   : TDictionary<string, Boolean>;
   Item       : TAstNode;
   UnitLow    : string;
@@ -1120,7 +1229,8 @@ var
 begin
   RawSB  := TStringBuilder.Create;
   try
-    CollectText(UnitNode, RawSB);
+    // Perf Charge Q5: AST-Teil mit EINEM ToLower (Vertrag an AstSuchtext).
+    RawSB.Append(AstSuchtext(UnitNode));
 
     // D4 (2026-09-19, FP-Muster 2 der Recall-Freigabe-Stichprobe):
     // CollectText sieht nur AST-NAMEN (Node.Name/TypeRef) - eine
@@ -1171,8 +1281,9 @@ begin
   Reported  := TDictionary<string, Boolean>.Create;
   UsesItems := UnitNode.FindAll(nkUsesItem);
   try
-    for Item in UsesItems do
+    for ItemIdx := 0 to UsesItems.Count - 1 do
     begin
+      Item     := UsesItems[ItemIdx];
       UnitLow  := Item.Name.ToLower;
       ShortLow := ShortName(UnitLow);
 
@@ -1212,17 +1323,31 @@ begin
         // gemeldet -> lieber false negative als false positive.
         if Length(Idents) = 0 then Continue;
 
-        // Wortmenge einmal je Datei statt Pos(' ' + Id + ' ', WordText)
-        // je Bezeichner (Vertrag an SammleWoerter).
+        // Einmal je Datei: fuer die Bezeichner dieses und aller folgenden
+        // Eintraege, ob sie ein Wort des Suchtexts sind (Vertrag an
+        // WoerterVorhanden = SammleWoerter-Menge). Perf Charge Q5: statt
+        // ALLE Woerter der Datei zu kopieren und zu hashen (Charge P1)
+        // nur noch die wenigen gefragten - IdentsFor ist rein, jedes
+        // spaeter gefragte Id steht damit in der Tabelle.
         if Woerter = nil then
         begin
-          Woerter := TDictionary<string, Boolean>.Create;
-          SammleWoerter(RawText, Woerter);
+          Bedarf := TList<string>.Create;
+          try
+            for j := ItemIdx to UsesItems.Count - 1 do
+              Bedarf.AddRange(IdentsFor(UsesItems[j].Name.ToLower));
+            Da := WoerterVorhanden(RawText, Bedarf.ToArray);
+            Woerter := TDictionary<string, Boolean>.Create;
+            for j := 0 to Bedarf.Count - 1 do
+              Woerter.AddOrSetValue(Bedarf[j], Da[j]);
+          finally
+            Bedarf.Free;
+          end;
         end;
 
         for var Id in Idents do
         begin
-          if Woerter.ContainsKey(Id) then
+          var IstWort : Boolean;
+          if Woerter.TryGetValue(Id, IstWort) and IstWort then
           begin
             Found := True;
             Break;

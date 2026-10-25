@@ -35,19 +35,31 @@ type
     // Konsumiert die schon-gesammelte Results-Liste, sucht nach
     // fkDfmDbInUiForm-Findings im gleichen FileName und emittiert bei
     // Schwellwert-Ueberschreitung einen Aggregat-Hint.
+    //
+    // AFromIdx (Perf Charge Q3, 2026-10-25): erster Index von Results,
+    // der durchsucht wird. Der Aufrufer darf ihn nur dann ueber 0 setzen,
+    // wenn er belegen kann, dass VOR AFromIdx kein fkDfmDbInUiForm-Befund
+    // dieser Datei steht - dann ist das Ergebnis identisch zum Vollscan.
+    // Hintergrund: im seriellen Scan ist Results die KUMULATIVE Liste
+    // aller Dateien; der Vollscan je Formdatei war O(Dateien x Befunde)
+    // (jvcl: 1.289 Formdateien x bis zu 240.000 Befunde, ~1,3 s).
     class procedure Aggregate(const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AFromIdx: Integer = 0);
   end;
 
 implementation
+
+uses
+  System.Math;   // Max (Perf Charge Q3: AFromIdx-Untergrenze)
 
 // noinspection-file BeginEndRequired, CanBeStrictPrivate, CyclomaticComplexity, GroupedDeclaration, IfElseBegin, LengthUnderflow, LongMethod, MagicNumber, NilComparison, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 class procedure TDfmDataModuleSplitHintDetector.Aggregate(const FileName: string;
-  Results: TObjectList<TLeakFinding>);
+  Results: TObjectList<TLeakFinding>; AFromIdx: Integer);
 var
   i, Count : Integer;
+  FromIdx : Integer;
   Threshold : Integer;
   Names : TStringList;
   F : TLeakFinding;
@@ -66,7 +78,9 @@ begin
     Names.Sorted := True;
     Names.Duplicates := dupIgnore;
     Count := 0;
-    for i := 0 to Results.Count - 1 do
+    // Negativer Start = Vollscan (defensiv, der Aufrufer reicht nie < 0).
+    FromIdx := Max(AFromIdx, 0);
+    for i := FromIdx to Results.Count - 1 do
     begin
       F := Results[i];
       if F.Kind <> fkDfmDbInUiForm then Continue;

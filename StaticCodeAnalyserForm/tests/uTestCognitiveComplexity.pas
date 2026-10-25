@@ -26,6 +26,12 @@ type
     [Test] procedure Chain176_TwoReportingMethods_EachItsOwnPath;
     [Test] procedure Chain176_TieAtSameDepth_FirstPathWins;
     [Test] procedure Chain176_DeepestInElseBranch_SiblingDoesNotLeak;
+    // ---- Perf Q2 (2026-10-25): EIN Walk, Puffer je Unit ------------
+    [Test] procedure Chain176_ShallowerSecondMethod_OwnPath;
+    [Test] procedure Chain176_AfterDeepSilentMethod_NoForeignLinks;
+    // ---- Perf Q2: Schwelle einmal je Kontext statt ini je Datei -----
+    [Test] procedure Limit_FromContext_DrivesTheFinding;
+    [Test] procedure Limit_ReadOncePerContext_SameValueAsWithoutContext;
   end;
 
 implementation
@@ -33,6 +39,7 @@ implementation
 uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
+  uAstNode, uParser2, uAnalyzeContext, uCognitiveComplexity,
   uTestFindingHelper;
 
 procedure TTestCognitiveComplexity.DeepNesting_Reported;
@@ -471,6 +478,190 @@ begin
       Chain176OfMethod(F, 'Foo'),
       'tiefster Pfad durch den else-Zweig, ohne das for des then-Zweigs');
   finally F.Free; end;
+end;
+
+// Perf Q2: Punktzahl und Kette entstehen seit Q2 in EINEM Walk, und
+// Stapel wie Gliederliste werden ueber alle Methoden einer Unit
+// wiederverwendet. Gesichert wird, was dieser Umbau verderben kann:
+// der Stand der VORIGEN Methode (tiefste Ebene, Glieder) darf in die
+// naechste nicht hineinreichen - weder bei einer flacheren meldenden
+// Methode noch nach einer tiefen, aber stillen.
+
+procedure TTestCognitiveComplexity.Chain176_ShallowerSecondMethod_OwnPath;
+// Alpha 1+2+3+4+5+6 = 21 (sechs Ebenen). Beta 5+4+4+1+2 = 16 - die
+// Punktzahl kommt aus booleschen Operatoren, die Kette ist nur zwei
+// Glieder tief. Bliebe die tiefste Ebene von Alpha stehen, kaeme in
+// Beta nie ein neues Maximum zustande.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Alpha;'#13#10+
+  'begin'#13#10+
+  '  if A then'#13#10+
+  '    for I := 1 to 3 do'#13#10+
+  '      while B do'#13#10+
+  '        case C of'#13#10+
+  '          1: if D then'#13#10+
+  '               if E then DoIt;'#13#10+
+  '        end;'#13#10+
+  'end;'#13#10+
+  'procedure Beta;'#13#10+
+  'begin'#13#10+
+  '  if A and B and C and D and E then DoIt;'#13#10+
+  '  if F and G and H and J then DoIt;'#13#10+
+  '  if K and L and M and N then DoIt;'#13#10+
+  '  if P then'#13#10+
+  '    while Q do DoIt;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkCognitiveComplexity),
+      'Alpha 21 und Beta 16 liegen ueber 15');
+    Assert.AreEqual('if → for → while → case → if → if',
+      Chain176OfMethod(F, 'Alpha'), 'Alpha: eigener Pfad');
+    Assert.AreEqual('if → while', Chain176OfMethod(F, 'Beta'),
+      'Beta: der eigene, flachere Pfad - nichts aus Alpha');
+  finally F.Free; end;
+end;
+
+procedure TTestCognitiveComplexity.Chain176_AfterDeepSilentMethod_NoForeignLinks;
+// Deep 1+2+3+4 = 10 meldet nicht, fuellt aber die Gliederliste vier
+// Ebenen tief. Flat 4 x (1+3) = 16 meldet; sein tiefster Pfad ist das
+// ERSTE if allein (Gleichstand auf Ebene 0, striktes '>').
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Deep;'#13#10+
+  'begin'#13#10+
+  '  if A then'#13#10+
+  '    for I := 1 to 3 do'#13#10+
+  '      while B do'#13#10+
+  '        if C then DoIt;'#13#10+
+  'end;'#13#10+
+  'procedure Flat;'#13#10+
+  'begin'#13#10+
+  '  if A and B and C and D then DoIt;'#13#10+
+  '  if E and F and G and H then DoIt;'#13#10+
+  '  if J and K and L and M then DoIt;'#13#10+
+  '  if N and P and Q and R then DoIt;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCognitiveComplexity),
+      'nur Flat liegt ueber 15');
+    Assert.AreEqual('<kein Fund>', Chain176OfMethod(F, 'Deep'),
+      'Deep (10) meldet nicht');
+    Assert.AreEqual('if', Chain176OfMethod(F, 'Flat'),
+      'Flat: ein Glied, kein Rest aus Deep');
+  finally F.Free; end;
+end;
+
+// Perf Q2: die Schwelle [Detectors] CognitiveLimit liest SCA176 einmal je
+// Analyse-Kontext (= je Scan bzw. je Parallel-Worker) statt je Datei.
+// Gesichert wird: der Wert im Kontext bestimmt den Fund, und der einmal
+// gelesene Wert ist derselbe, den der Aufruf ohne Kontext liest.
+
+const
+  SRC_SCORE21 =
+    'unit t; implementation'#13#10 +
+    'procedure Foo;'#13#10 +
+    'begin'#13#10 +
+    '  if a > 0 then'#13#10 +
+    '    if b > 0 then'#13#10 +
+    '      while c > 0 do'#13#10 +
+    '        for d := 0 to 10 do'#13#10 +
+    '          if d mod 2 = 0 then'#13#10 +
+    '            if e > 0 then'#13#10 +
+    '              DoStuff;'#13#10 +
+    'end;';
+
+function CognitiveFindings(const ASource: string;
+  AContext: TAnalyzeContext): TObjectList<TLeakFinding>;
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+begin
+  Result := TObjectList<TLeakFinding>.Create(True);
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(ASource);
+    try
+      TCognitiveComplexityDetector.AnalyzeUnit(Root, 'Sample.pas', Result,
+        AContext);
+    finally
+      Root.Free;
+    end;
+  finally
+    Parser.Free;
+  end;
+end;
+
+procedure TTestCognitiveComplexity.Limit_FromContext_DrivesTheFinding;
+// Punktzahl 21. Mit Schwelle 30 im Kontext kein Fund, mit 10 ein Fund,
+// dessen Meldetext die 10 traegt - die ini (Vorgabe 15) spielt keine
+// Rolle mehr, sobald der Kontext den Wert haelt.
+var
+  Ctx : TAnalyzeContext;
+  F   : TObjectList<TLeakFinding>;
+begin
+  Ctx := TAnalyzeContext.Create;
+  try
+    Ctx.PutCognitiveLimit(30);
+    F := CognitiveFindings(SRC_SCORE21, Ctx);
+    try
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCognitiveComplexity),
+        '21 liegt unter der Kontext-Schwelle 30');
+    finally F.Free; end;
+  finally Ctx.Free; end;
+
+  Ctx := TAnalyzeContext.Create;
+  try
+    Ctx.PutCognitiveLimit(10);
+    F := CognitiveFindings(SRC_SCORE21, Ctx);
+    try
+      Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCognitiveComplexity),
+        '21 liegt ueber der Kontext-Schwelle 10');
+      Assert.IsTrue(Pos('Cognitive complexity 21 (limit: 10)',
+        TFindingHelper.FirstOf(F, fkCognitiveComplexity).MissingVar) > 0,
+        'Meldetext mit der Kontext-Schwelle');
+    finally F.Free; end;
+  finally Ctx.Free; end;
+end;
+
+procedure TTestCognitiveComplexity.Limit_ReadOncePerContext_SameValueAsWithoutContext;
+// Ein frischer Kontext haelt noch keine Schwelle; der erste Aufruf liest
+// sie und legt sie ab. Der abgelegte Wert ist derselbe, mit dem der
+// Aufruf OHNE Kontext meldet (dessen Meldetext nennt ihn).
+var
+  Ctx   : TAnalyzeContext;
+  F     : TObjectList<TLeakFinding>;
+  Limit : Integer;
+  Text0 : string;
+begin
+  F := CognitiveFindings(SRC_SCORE21, nil);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCognitiveComplexity),
+      'ohne Kontext: 21 ueber der ini-Schwelle (Vorgabe 15)');
+    Text0 := TFindingHelper.FirstOf(F, fkCognitiveComplexity).MissingVar;
+  finally F.Free; end;
+
+  Ctx := TAnalyzeContext.Create;
+  try
+    Assert.IsFalse(Ctx.TryGetCognitiveLimit(Limit),
+      'frischer Kontext: noch keine Schwelle abgelegt');
+    F := CognitiveFindings(SRC_SCORE21, Ctx);
+    try
+      Assert.IsTrue(Ctx.TryGetCognitiveLimit(Limit),
+        'nach dem ersten Aufruf liegt die Schwelle im Kontext');
+      Assert.IsTrue(Pos('(limit: ' + IntToStr(Limit) + ')', Text0) > 0,
+        'dieselbe Schwelle wie ohne Kontext - ' + Text0);
+      Assert.AreEqual(Text0,
+        TFindingHelper.FirstOf(F, fkCognitiveComplexity).MissingVar,
+        'mit und ohne Kontext derselbe Meldetext');
+    finally F.Free; end;
+  finally Ctx.Free; end;
 end;
 
 initialization

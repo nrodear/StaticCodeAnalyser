@@ -114,6 +114,20 @@ type
     // am Dateinamen). Bis zu vier Strukturregeln fragen je Datei.
     FFpcBindingFile  : string;
     FFpcBindingNames : TArray<string>;
+    // Perf Charge Q3 (2026-10-25): Formdateien, die TDfmAnalysisRunner
+    // in DIESEM Scan schon analysiert hat (Schluessel UpperCase = dieselbe
+    // ASCII-Faltung wie SameText). Lazy angelegt, vom Context besessen.
+    FDfmFormsSeen : TDictionary<string, Boolean>;
+    // Perf Q2 (2026-10-25): Ein-Wert-Slot fuer [Detectors]
+    // CognitiveLimit (SCA176). Der Detektor las den Wert bis dahin je
+    // DATEI ueber TRepoSettings.QuickReadStr - und das legt jedes Mal
+    // ein TMemIniFile an, laedt und zerlegt die ganze analyser.ini
+    // (Profiler Q3: ~1,1 s CPU auf jvcl, schon in v0.9.18). Je Kontext
+    // genuegt ein Lesen: der Kontext lebt einen Scan lang, und jeder
+    // Parallel-Worker hat seinen eigenen (liest dann eben je Worker
+    // einmal) - ohne Lock thread-sicher wie die Ein-Datei-Slots oben.
+    FCognitiveLimitSet : Boolean;
+    FCognitiveLimit    : Integer;
   public
     // TD-1 (2026-07-06): Per-Scan-Snapshot der skalaren Scan-Config (s.
     // TEngineScalarConfig). Value-Record - lebt/stirbt mit dem Context.
@@ -202,6 +216,19 @@ type
       out Names: TArray<string>): Boolean;
     procedure PutFpcBindingNames(const FileName: string;
       const Names: TArray<string>);
+
+    // Perf Charge Q3 (2026-10-25): True beim ERSTEN Aufruf je Formdatei
+    // (SameText-gleich) in diesem Context, danach False; merkt die Datei
+    // dabei vor. TDfmAnalysisRunner begrenzt damit die Aggregat-Suche
+    // des SCA057-Hints auf die eigenen Befunde - nur beim Erstbesuch kann
+    // kein frueherer fkDfmDbInUiForm-Befund derselben Formdatei in der
+    // Ergebnisliste stehen.
+    function FirstDfmFormVisit(const DfmFileName: string): Boolean;
+
+    // Perf Q2: Lookup/Store fuer [Detectors] CognitiveLimit (SCA176).
+    // TryGet liefert False, bis Put einmal lief.
+    function  TryGetCognitiveLimit(out ALimit: Integer): Boolean;
+    procedure PutCognitiveLimit(ALimit: Integer);
 
     // TD-1 (2026-07-06): Kopiert die skalare Scan-Config 1:1 aus den uSCAConsts-
     // Prozess-Globals in Config. Aufruf in ParseLeaks DIREKT nach Create - zu
@@ -542,6 +569,36 @@ begin
   FFpcBindingNames := Names;
 end;
 
+function TAnalyzeContext.FirstDfmFormVisit(const DfmFileName: string): Boolean;
+var
+  Key : string;
+begin
+  // UpperCase faltet wie SameText/CompareText nur ASCII - zwei Namen, die
+  // SameText gleich nennt, bekommen hier denselben Schluessel.
+  Key := UpperCase(DfmFileName);
+  if not Assigned(FDfmFormsSeen) then
+  begin
+    FDfmFormsSeen := TDictionary<string, Boolean>.Create;
+  end;
+  Result := not FDfmFormsSeen.ContainsKey(Key);
+  if Result then
+  begin
+    FDfmFormsSeen.Add(Key, True);
+  end;
+end;
+
+function TAnalyzeContext.TryGetCognitiveLimit(out ALimit: Integer): Boolean;
+begin
+  ALimit := FCognitiveLimit;
+  Result := FCognitiveLimitSet;
+end;
+
+procedure TAnalyzeContext.PutCognitiveLimit(ALimit: Integer);
+begin
+  FCognitiveLimit    := ALimit;
+  FCognitiveLimitSet := True;
+end;
+
 procedure TAnalyzeContext.SnapshotConfigFromGlobals;
 // TD-1 (2026-07-06): 1:1-Kopie ALLER 16 Skalar-Config-Globals aus uSCAConsts.
 // Reihenfolge/Feldnamen spiegeln TEngineScalarConfig. Aufruf-Zeitpunkt (direkt
@@ -599,6 +656,7 @@ begin
   // TD-1 Inkrement 2c: der LeakyClasses-Klon gehoert dem Context. Kein Bezug
   // zur Index/AST-Cache-Reihenfolge (er referenziert keine der Instanzen).
   FreeAndNil(LeakyClasses);
+  FreeAndNil(FDfmFormsSeen);   // Perf Charge Q3: Formdatei-Vormerkung
   FreeAndNil(DfmRepoIndex);
   FreeAndNil(SymbolRefIndex);
   // Track C: TypeIndex vor dem AstFileCache freigeben (nutzt ihn in Build).
