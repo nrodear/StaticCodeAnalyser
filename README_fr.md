@@ -14,7 +14,7 @@
 ancrable plus une **application Windows autonome**. L'installateur dessert l'IDE
 32 bits de Delphi 12 et les **deux** IDE de Delphi 13, 32 et 64 bits ; l'application
 autonome existe en version 32 bits et 64 bits.
-Analyse basée sur l'AST avec **203 règles** : 179 contrôles
+Analyse basée sur l'AST avec **205 règles** : 181 contrôles
 Pascal pour les fuites mémoire, l'injection SQL, les code smells, les
 vulnérabilités de sécurité, l'encodage des fichiers et la sûreté Unicode
 (Trojan Source) et la duplication de code
@@ -61,7 +61,7 @@ aucune installation Sonar, directement dans l'IDE, avec passage de relais à Cla
 
 ## Fonctions principales
 
-### 1. Analyse statique de code (203 règles — 179 Pascal + 23 DFM + 1 INI, taxonomie Sonar)
+### 1. Analyse statique de code (205 règles — 181 Pascal + 23 DFM + 1 INI, taxonomie Sonar)
 
 **Contrôles AST Pascal (~130)** : **bugs** (MemoryLeak, NilDeref, DivByZero,
 FormatMismatch, ReversedForRange, SelfAssignment, VirtualCallInCtor,
@@ -273,7 +273,7 @@ Référence du résolveur de configuration : [docs/sonar-config.md](docs/sonar-c
 
 ---
 
-## Ce qui est détecté (203 règles — 179 Pascal + 23 DFM + 1 INI)
+## Ce qui est détecté (205 règles — 181 Pascal + 23 DFM + 1 INI)
 
 Chaque résultat tombe dans l'une des **cinq catégories Sonar** :
 

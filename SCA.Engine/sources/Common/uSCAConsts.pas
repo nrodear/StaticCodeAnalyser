@@ -770,16 +770,26 @@ type
                                  //          (Boolean-Kette) kompilieren still falsch.
                                  //          Error nur mit Typbeleg, sonst Warning
                                  //          (uComparisonPrecedenceScan). Q1 2026-10-23.
-    fkLoopPastHighBound          // SCA203 - for-Schleife einen Index zu weit: '0 to
+    fkLoopPastHighBound,         // SCA203 - for-Schleife einen Index zu weit: '0 to
                                  //          List.Count' / '0 to Length(A)' / 'High(A) + 1'
                                  //          mit List[i]/A[i] im Rumpf, String-Formen
                                  //          '0 to Length(S)' und '1 to Length(S) + 1'.
                                  //          Error nur mit Typbeweis, sonst Warning
                                  //          (uLoopBoundScan). Charge A3 / Q2 2026-10-23.
+    fkFunctionNameAsResult,      // SCA204 - Ergebnis ueber den Funktionsnamen gesetzt
+                                 //          ('GetCount := ..' statt 'Result := ..').
+                                 //          Hint/Stil, nicht im default-Profil; nur wo
+                                 //          Result existiert ({$mode}-Lage). Fix in
+                                 //          reDelphix. Charge N / FN 2026-10-25.
+    fkFunctionNameRecursion      // SCA205 - Funktionsname im eigenen Rumpf GELESEN
+                                 //          ('Total := Total + X'): im Delphi-Modus ein
+                                 //          rekursiver Aufruf, nicht das Ergebnis.
+                                 //          Error nur bewiesen, sonst Warning
+                                 //          (uFuncNameResultScan). Charge N / FN.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Delphi-Sets
-  // tragen hoechstens 256 Elemente - aktuell sind 203 belegt (SCA203),
+  // tragen hoechstens 256 Elemente - aktuell sind 205 belegt (SCA205),
   // die Reserve ist also endlich: die Encoding-Familie allein brachte
   // 9 Kinds, die Attribut-Familie 5. Wer sich der Grenze naehert, muss
   // TFindingKinds, PFindingKinds und die Ord(K)+1-basierte SCA-ID-
@@ -1066,7 +1076,9 @@ const
     (Name: 'HardcodedIpAddress';         FindingType: ftSecurityHotspot; DefaultSeverity: lsWarning), // fkHardcodedIpAddress
     (Name: 'HardcodedIpInConfig';        FindingType: ftSecurityHotspot; DefaultSeverity: lsHint),    // fkHardcodedIpInConfig
     (Name: 'ComparisonPrecedence';       FindingType: ftBug;          DefaultSeverity: lsError),   // fkComparisonPrecedence
-    (Name: 'LoopPastHighBound';          FindingType: ftBug;          DefaultSeverity: lsError)    // fkLoopPastHighBound
+    (Name: 'LoopPastHighBound';          FindingType: ftBug;          DefaultSeverity: lsError),   // fkLoopPastHighBound
+    (Name: 'FunctionNameAsResult';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkFunctionNameAsResult
+    (Name: 'FunctionNameRecursion';      FindingType: ftBug;          DefaultSeverity: lsError)    // fkFunctionNameRecursion
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

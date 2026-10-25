@@ -4616,6 +4616,40 @@ begin
         '  WriteLn(Names[i]);';
     end;
 
+    fkFunctionNameAsResult:
+    begin
+      Result.Description := _('Result set through the function name - write Result := instead');
+      Result.Before :=
+        'function TList.GetCount: Integer;'#13#10 +
+        'begin'#13#10 +
+        '  GetCount := FCount;   // old Pascal form'#13#10 +
+        'end;';
+      Result.After :=
+        'function TList.GetCount: Integer;'#13#10 +
+        'begin'#13#10 +
+        '  Result := FCount;'#13#10 +
+        'end;';
+    end;
+
+    fkFunctionNameRecursion:
+    begin
+      Result.Description := _('The function name on the right side is a recursive call, not the current result');
+      Result.Before :=
+        'function Total: Integer;'#13#10 +
+        'begin'#13#10 +
+        '  Total := 0;'#13#10 +
+        '  for I := 1 to 3 do'#13#10 +
+        '    Total := Total + I;   // calls Total again'#13#10 +
+        'end;';
+      Result.After :=
+        'function Total: Integer;'#13#10 +
+        'begin'#13#10 +
+        '  Result := 0;'#13#10 +
+        '  for I := 1 to 3 do'#13#10 +
+        '    Result := Result + I;'#13#10 +
+        'end;';
+    end;
+
   end;
 
   // Checklist-Drift-Fix 2026-07-24 (Audit SCA175-194: 11 Kinds ohne Branch):

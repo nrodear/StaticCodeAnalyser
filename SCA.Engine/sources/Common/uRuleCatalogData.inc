@@ -13,7 +13,7 @@
 const
   // Index == Ord(TFindingKind) - die JSON ist positionsgleich zum Enum
   // (Test RuleIDMatchesOrdinal sichert das ab).
-  RULE_CATALOG_DATA : array[0..202] of TRuleFallbackData = (
+  RULE_CATALOG_DATA : array[0..204] of TRuleFallbackData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -2555,6 +2555,34 @@ const
       Anchor   : '';
       FixMode  : '';
       EditorHelp: True
+    ),
+    // SCA204
+    (
+      RuleID   : 'SCA204';
+      Name     : 'Result assigned through the function name';
+      ShortDesc: 'Function result set by assigning to the function name (''GetCount := ...'') - the old Pascal form; Delphi writes Result';
+      BadEx    : 'function TList.GetCount: Integer;' + #13#10 + 'begin' + #13#10 + '  GetCount := FCount;' +
+        #13#10 + 'end;';
+      GoodEx   : 'function TList.GetCount: Integer;' + #13#10 + 'begin' + #13#10 + '  Result := FCount;' +
+        #13#10 + 'end;';
+      Anchor   : '';
+      FixMode  : '';
+      EditorHelp: True
+    ),
+    // SCA205
+    (
+      RuleID   : 'SCA205';
+      Name     : 'Function name read in its own body is a recursive call';
+      ShortDesc: '''Total := Total + X'' inside function Total: on the right the name is a recursive call, not the current result';
+      BadEx    : 'function Total: Integer;' + #13#10 + 'var' + #13#10 + '  I: Integer;' + #13#10 + 'begin' +
+        #13#10 + '  Total := 0;' + #13#10 + '  for I := 1 to 3 do' + #13#10 +
+        '    Total := Total + I;   // recursive call, not the sum' + #13#10 + 'end;';
+      GoodEx   : 'function Total: Integer;' + #13#10 + 'var' + #13#10 + '  I: Integer;' + #13#10 + 'begin' +
+        #13#10 + '  Result := 0;' + #13#10 + '  for I := 1 to 3 do' + #13#10 +
+        '    Result := Result + I;' + #13#10 + 'end;';
+      Anchor   : '';
+      FixMode  : '';
+      EditorHelp: False
     )
   );
 

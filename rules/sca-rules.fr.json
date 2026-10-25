@@ -814,6 +814,14 @@
     "SCA203": {
       "name": "La boucle for dépasse le dernier indice",
       "shortDescription": "La boucle for va jusqu'à Count, Length() ou High() + 1 et indexe la même collection avec la variable de boucle - le dernier passage est hors limites"
+    },
+    "SCA204": {
+      "name": "Résultat affecté via le nom de la fonction",
+      "shortDescription": "Résultat de la fonction défini par affectation à son nom ('GetCount := ...') - l'ancienne forme Pascal ; Delphi écrit Result"
+    },
+    "SCA205": {
+      "name": "Le nom de la fonction lu dans son propre corps est un appel récursif",
+      "shortDescription": "'Total := Total + X' dans la fonction Total : à droite, le nom est un appel récursif, pas le résultat courant"
     }
   }
 }

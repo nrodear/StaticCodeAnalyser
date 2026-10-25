@@ -814,6 +814,14 @@
     "SCA203": {
       "name": "for-Schleife läuft einen Index über das Ende",
       "shortDescription": "for-Schleife läuft bis Count, Length() oder High() + 1 und indiziert dieselbe Sammlung mit der Schleifenvariablen - der letzte Durchlauf liegt außerhalb"
+    },
+    "SCA204": {
+      "name": "Ergebnis über den Funktionsnamen zugewiesen",
+      "shortDescription": "Funktionsergebnis durch Zuweisung an den Funktionsnamen gesetzt ('GetCount := ...') - die alte Pascal-Form; Delphi schreibt Result"
+    },
+    "SCA205": {
+      "name": "Funktionsname im eigenen Rumpf gelesen ist ein rekursiver Aufruf",
+      "shortDescription": "'Total := Total + X' in der Funktion Total: rechts ist der Name ein rekursiver Aufruf, nicht das bisherige Ergebnis"
     }
   }
 }

@@ -619,15 +619,16 @@ end;
 
 procedure TTestRuleCatalog.ProfileDefaultExcludesExactlyTheStyleRules;
 // Nagelt die Entscheidung fest (C1, 2026-08-02; SCA099 nachgezogen am
-// 2026-08-03): genau diese sieben reinen Konventions-Regeln sind aus
-// 'default' raus - zusammen 48,1 % aller Funde auf dem Referenzkorpus.
-// Nicht mehr und nicht weniger; jede spaetere stille Erweiterung der
-// Liste faellt hier auf.
+// 2026-08-03; SCA204 FunctionNameAsResult am 2026-10-25, Nico: "Stil
+// entscheidet das Team-Profil"): genau diese acht reinen Konventions-Regeln
+// sind aus 'default' raus - die ersten sieben zusammen 48,1 % aller Funde
+// auf dem Referenzkorpus. Nicht mehr und nicht weniger; jede spaetere
+// stille Erweiterung der Liste faellt hier auf.
 const
-  EXPECTED : array[0..6] of string = (
+  EXPECTED : array[0..7] of string = (
     'PublicMemberWithoutDoc', 'NilComparison', 'BeginEndRequired',
     'WithStatement', 'ClassPerFile', 'DfmHardcodedCaption',
-    'IfElseBegin');
+    'IfElseBegin', 'FunctionNameAsResult');
 var
   D     : TFindingKinds;
   K     : TFindingKind;
@@ -657,7 +658,7 @@ begin
            + 'Liste - stille Verkleinerung?', [N]));
   end;
   Assert.AreEqual<Integer>(Length(EXPECTED), Miss,
-    'default muss GENAU die sieben beschlossenen Regeln weglassen');
+    'default muss GENAU die acht beschlossenen Regeln weglassen');
 end;
 
 procedure TTestRuleCatalog.ProfileUnknownFallsBackToAll;
@@ -767,12 +768,15 @@ begin
   Assert.IsTrue(fkDfmDeadEvent  in P, 'bugs-only: DfmDeadEvent fehlt');
   Assert.IsTrue(fkComparisonPrecedence in P, 'bugs-only: ComparisonPrecedence fehlt');
   Assert.IsTrue(fkLoopPastHighBound in P, 'bugs-only: LoopPastHighBound fehlt');
+  Assert.IsTrue(fkFunctionNameRecursion in P, 'bugs-only: FunctionNameRecursion fehlt');
   // Draussen: Code Smells und Duplikate.
   Assert.IsFalse(fkLongMethod      in P, 'bugs-only: LongMethod sollte raus');
   Assert.IsFalse(fkMagicNumber     in P, 'bugs-only: MagicNumber sollte raus');
   Assert.IsFalse(fkTodoComment     in P, 'bugs-only: TodoComment sollte raus');
   Assert.IsFalse(fkDuplicateString in P, 'bugs-only: DuplicateString sollte raus');
   Assert.IsFalse(fkDuplicateBlock  in P, 'bugs-only: DuplicateBlock sollte raus');
+  // SCA204 ist Stil (Hint), SCA205 aus derselben Unit der Bug.
+  Assert.IsFalse(fkFunctionNameAsResult in P, 'bugs-only: FunctionNameAsResult sollte raus');
 end;
 
 procedure TTestRuleCatalog.ProfileCodeQualityExcludesBugs;
