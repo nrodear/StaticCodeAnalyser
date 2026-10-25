@@ -250,7 +250,9 @@ begin
   // Zwei Zuweisungen: IsDebuggerPresent ist BOOL (LongBool), kein Boolean.
   Result := IsDebuggerPresent;
   if not Result then
+    {$WARN SYMBOL_PLATFORM OFF}
     Result := DebugHook <> 0;
+    {$WARN SYMBOL_PLATFORM DEFAULT}
 end;
 
 // Bewusst eigene, kleine Routinen: der Test prueft, dass eine erfasste
@@ -463,8 +465,6 @@ begin
   // nehmen (nicht aus ExceptAddr) und den laufenden Stapel erfassen.
   LogFile := TempLog;
   Addr := Pointer(UIntPtr(@WriteThroughNilHere) + 4);
-  Fault := nil;
-  Count := 0;
   CrashStackInstall(LogFile);
   try
     E := MakeExternal(Rec, $C0000005, Addr);
@@ -511,7 +511,6 @@ begin
   LogFile := TempLog;
   Saved := nil;
   Fault1 := nil;
-  Fault2 := nil;
   CrashStackInstall(LogFile);
   try
     try
