@@ -344,6 +344,13 @@ type
       out LineForChar: TArray<Integer>; AContext: TAnalyzeContext;
       const FileName: string): string; static;
 
+    // Perf Charge P4 (2026-10-25): Lines.Text mit Ein-Datei-Slot im
+    // Context (TryGetFullText) - der Token-Vorfilter und SCA202 teilen sich
+    // so EINEN Ganztext je Datei. AContext=nil oder FileName='' -> direkt
+    // Lines.Text (Tests/Single-File).
+    class function LinesTextCached(Lines: TStrings; AContext: TAnalyzeContext;
+      const FileName: string): string; static;
+
     /// <summary>True, wenn APos INNERHALB eines Pascal-String-Literals
     /// liegt.</summary>
     /// <remarks>
@@ -1627,6 +1634,16 @@ begin
   Result := StripFileCommentsKeepStrings(Lines, LineForChar);
   if AContext <> nil then
     AContext.PutKeepStringsText(FileName, Result, LineForChar);
+end;
+
+class function TDetectorUtils.LinesTextCached(Lines: TStrings;
+  AContext: TAnalyzeContext; const FileName: string): string;
+begin
+  if (AContext <> nil) and AContext.TryGetFullText(FileName, Result) then
+    Exit;
+  Result := Lines.Text;
+  if AContext <> nil then
+    AContext.PutFullText(FileName, Result);
 end;
 
 class function TDetectorUtils.InStringLiteral(const ACode: string;

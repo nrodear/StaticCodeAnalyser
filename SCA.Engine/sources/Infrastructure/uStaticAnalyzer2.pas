@@ -1108,7 +1108,10 @@ var
     Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
     if Lines = nil then Exit(False);
     try
-      SrcLow := LowerCase(Lines.Text);
+      // Perf Charge P4 (2026-10-25): Ganztext ueber den Context-Slot -
+      // SCA202 braucht denselben Text derselben Datei.
+      SrcLow := LowerCase(TDetectorUtils.LinesTextCached(Lines, AContext,
+        FileName));
     finally
       ReleaseLines(Lines, Cached);
     end;

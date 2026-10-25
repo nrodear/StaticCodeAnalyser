@@ -45,7 +45,12 @@ type
 
   TPrecToken = record
     Kind : TPrecTokKind;
-    Low  : string;     // Bezeichner klein ('&Name' behaelt das '&'), sonst der Text
+    // Operator: der Text. Bezeichner: klein - aber NUR, wenn er eines der
+    // Woerter ist, die der Scanner vergleicht (Schluesselwoerter und die
+    // Listen unten, Perf Charge P4 2026-10-25); sonst ''. Zahl/String: ''.
+    // Den Bezeichnertext liefern Pos/Len (der Scanner kopiert ihn nur fuer
+    // einen Treffer).
+    Low  : string;
     Pos  : Integer;    // 1-basiert im Quelltext
     Len  : Integer;
     Line : Integer;    // 1-basiert
@@ -115,6 +120,126 @@ const
     'checked', 'visible', 'enabled', 'active', 'readonly', 'modified',
     'focused', 'showing', 'eof', 'bof', 'isempty', 'selected', 'expanded',
     'down');
+  // Woerter, die der Scanner direkt vergleicht und die in keiner Liste
+  // oben stehen.
+  EXTRA_WORDS: array[0..1] of string = ('true', 'false');
+
+// --- Wortnachschlag ohne Kopie (Perf Charge P4 2026-10-25) -----------------
+//
+// Frueher trug jedes Bezeichner-Token LowerCase(Copy(...)) als Low - zwei
+// Allokationen je Bezeichner, dazu zwei weitere fuer den asm-Test in Run.
+// Verglichen wird Low aber nur gegen die festen Woerter dieser Unit. Ein
+// Bezeichner bekommt deshalb das (geteilte) Wort aus der Tabelle, wenn er
+// ihm ASCII-case-insensitiv gleicht, sonst ''. Jeder Vergleich Low = W mit
+// W aus der Tabelle faellt damit wie vorher aus; LowerCase faltet ebenfalls
+// nur A..Z. Den Text eines Bezeichners holt TokLow erst fuer einen Treffer.
+
+const
+  KW_MAXLEN = 24;
+
+var
+  KwWords : array of string;
+  KwNext  : array of Integer;                       // Kette je Fach, -1 = Ende
+  KwHead  : array[1..KW_MAXLEN, 0..25] of Integer;  // Fach (Laenge, Erstbuchstabe)
+  OneCharOps : array[0..127] of string;             // Ein-Zeichen-Operatoren
+
+function KwFind(const S: string; AStart, ALen: Integer): Integer;
+var
+  c : Char;
+  k, j : Integer;
+  W : string;
+  Same : Boolean;
+begin
+  Result := -1;
+  if (ALen < 1) or (ALen > KW_MAXLEN) then Exit;
+  c := S[AStart];
+  if (c >= 'A') and (c <= 'Z') then c := Char(Ord(c) + 32);
+  if (c < 'a') or (c > 'z') then Exit;
+  k := KwHead[ALen, Ord(c) - Ord('a')];
+  while k >= 0 do
+  begin
+    W := KwWords[k];
+    Same := True;
+    for j := 2 to ALen do
+    begin
+      c := S[AStart + j - 1];
+      if (c >= 'A') and (c <= 'Z') then c := Char(Ord(c) + 32);
+      if c <> W[j] then
+      begin
+        Same := False;
+        Break;
+      end;
+    end;
+    if Same then Exit(k);
+    k := KwNext[k];
+  end;
+end;
+
+// Das Tabellenwort, dem S[AStart..AStart+ALen-1] gleicht, sonst ''.
+function KnownWord(const S: string; AStart, ALen: Integer): string;
+var
+  k : Integer;
+begin
+  k := KwFind(S, AStart, ALen);
+  if k >= 0 then
+    Result := KwWords[k]
+  else
+    Result := '';
+end;
+
+procedure KwAdd(const W: string);
+var
+  n, b : Integer;
+begin
+  if (Length(W) < 1) or (Length(W) > KW_MAXLEN) then Exit;
+  if KwFind(W, 1, Length(W)) >= 0 then Exit;
+  n := Length(KwWords);
+  SetLength(KwWords, n + 1);
+  SetLength(KwNext, n + 1);
+  KwWords[n] := W;
+  b := Ord(W[1]) - Ord('a');
+  KwNext[n] := KwHead[Length(W), b];
+  KwHead[Length(W), b] := n;
+end;
+
+procedure KwAddList(const AList: array of string);
+var
+  i : Integer;
+begin
+  for i := Low(AList) to High(AList) do
+    KwAdd(AList[i]);
+end;
+
+procedure InitWordTable;
+var
+  L, b, i : Integer;
+begin
+  for L := 1 to KW_MAXLEN do
+    for b := 0 to 25 do
+      KwHead[L, b] := -1;
+  KwAddList(RESERVED);
+  KwAddList(RESERVED2);
+  KwAddList(WIN_STOP);
+  KwAddList(GEN_FOLLOW_IDS);
+  KwAddList(INT_FUNCS);
+  KwAddList(INT_MEMBERS);
+  KwAddList(BOOL_MEMBERS);
+  KwAddList(EXTRA_WORDS);
+  for i := 0 to 127 do
+    OneCharOps[i] := Char(i);
+end;
+
+// Zwei-Zeichen-Operator aus C1 C2, sonst ''.
+function TwoCharOp(C1, C2: Char): string;
+begin
+  Result := '';
+  case C1 of
+    '<': if C2 = '>' then Result := '<>' else if C2 = '=' then Result := '<=';
+    '>': if C2 = '=' then Result := '>=';
+    ':': if C2 = '=' then Result := ':=';
+    '.': if C2 = '.' then Result := '..';
+  end;
+end;
 
 function InList(const S: string; const AList: array of string): Boolean;
 var
@@ -166,7 +291,7 @@ type
     FInAsm     : Boolean;
     FToks      : TPrecTokens;
     FCount     : Integer;
-    procedure Add(AKind: TPrecTokKind; AStart, AEnd: Integer);
+    procedure Add(AKind: TPrecTokKind; AStart, AEnd: Integer; const ALow: string);
     // Zeilenzaehlung fuer den Bereich [AFrom, ATo) (Kommentare, Mehrzeiler).
     procedure CountLines(AFrom, ATo: Integer);
     function StringEnd(AStart: Integer): Integer;
@@ -186,16 +311,15 @@ begin
   FLineStart := 1;
 end;
 
-procedure TPrecLexer.Add(AKind: TPrecTokKind; AStart, AEnd: Integer);
+// ALow: siehe TPrecToken.Low - der Aufrufer liefert es ohne Kopie.
+procedure TPrecLexer.Add(AKind: TPrecTokKind; AStart, AEnd: Integer;
+  const ALow: string);
 begin
   if FInAsm then Exit;
   if FCount = Length(FToks) then
     SetLength(FToks, FCount * 2 + 64);
   FToks[FCount].Kind := AKind;
-  if AKind = ptIdent then
-    FToks[FCount].Low := LowerCase(Copy(FSrc, AStart, AEnd - AStart))
-  else
-    FToks[FCount].Low := Copy(FSrc, AStart, AEnd - AStart);
+  FToks[FCount].Low  := ALow;
   FToks[FCount].Pos  := AStart;
   FToks[FCount].Len  := AEnd - AStart;
   FToks[FCount].Line := FLine;
@@ -327,13 +451,13 @@ begin
       j := MultiLineStringEnd(a);
       if j > 0 then
       begin
-        Add(ptString, a, j);
+        Add(ptString, a, j, '');
         CountLines(a, j);
       end
       else
       begin
         j := StringEnd(a);
-        Add(ptString, a, j);
+        Add(ptString, a, j, '');
       end;
       FI := j;
       Continue;
@@ -348,7 +472,7 @@ begin
       end
       else
         while (j <= FN) and IsDigitCh(FSrc[j]) do Inc(j);
-      Add(ptString, a, j);
+      Add(ptString, a, j, '');
       FI := j;
       Continue;
     end;
@@ -372,7 +496,7 @@ begin
           while (j <= FN) and IsDigitCh(FSrc[j]) do Inc(j);
         end;
       end;
-      Add(ptNumber, a, j);
+      Add(ptNumber, a, j, '');
       FI := j;
       Continue;
     end;
@@ -380,16 +504,17 @@ begin
     begin
       j := a + 1;
       while (j <= FN) and IsHexCh(FSrc[j]) do Inc(j);
-      Add(ptNumber, a, j);
+      Add(ptNumber, a, j, '');
       FI := j;
       Continue;
     end;
     if (c = '&') and (FI < FN) and IsIdStart(FSrc[FI + 1]) then
     begin
-      // &Name: ein Bezeichner, auch wenn Name ein reserviertes Wort ist.
+      // &Name: ein Bezeichner, auch wenn Name ein reserviertes Wort ist -
+      // nie ein Tabellenwort (das '&' gehoert zum Text).
       j := a + 1;
       while (j <= FN) and IsIdChar(FSrc[j]) do Inc(j);
-      Add(ptIdent, a, j);
+      Add(ptIdent, a, j, '');
       FI := j;
       Continue;
     end;
@@ -397,33 +522,38 @@ begin
     begin
       j := a + 1;
       while (j <= FN) and IsIdChar(FSrc[j]) do Inc(j);
-      W := LowerCase(Copy(FSrc, a, j - a));
+      // 'end' und 'asm' stehen in der Tabelle: W gleicht ihnen genau dann,
+      // wenn der kleingeschriebene Text es tut.
+      W := KnownWord(FSrc, a, j - a);
       if FInAsm then
       begin
         if W = 'end' then
         begin
           FInAsm := False;
-          Add(ptIdent, a, j);
+          Add(ptIdent, a, j, W);
         end;
       end
       else if W = 'asm' then
         FInAsm := True
       else
-        Add(ptIdent, a, j);
+        Add(ptIdent, a, j, W);
       FI := j;
       Continue;
     end;
     if FI < FN then
     begin
-      W := Copy(FSrc, FI, 2);
-      if (W = '<>') or (W = '<=') or (W = '>=') or (W = ':=') or (W = '..') then
+      W := TwoCharOp(c, FSrc[FI + 1]);
+      if W <> '' then
       begin
-        Add(ptOp, a, a + 2);
+        Add(ptOp, a, a + 2, W);
         Inc(FI, 2);
         Continue;
       end;
     end;
-    Add(ptOp, a, a + 1);
+    if Ord(c) <= 127 then
+      Add(ptOp, a, a + 1, OneCharOps[Ord(c)])
+    else
+      Add(ptOp, a, a + 1, c);   // nicht erreichbar: Ord > 127 ist IsIdStart
     Inc(FI);
   end;
   SetLength(FToks, FCount);
@@ -453,11 +583,19 @@ type
     FHits  : TPrecHits;
     FCount : Integer;
     FSeen  : array of Boolean;   // K2: and/or/xor-Token schon gemeldet
+    // ScanLevel-Stapel (Perf Charge P4): alle Klammerebenen teilen sich
+    // EIN Puffer-Paar statt je Ebene zwei frische dynamische Arrays. Eine
+    // Ebene belegt [Basis, FTop) und gibt beim Verlassen bis Basis frei.
+    FKinds : array of Char;
+    FIdx   : array of Integer;
+    FTop   : Integer;
+    procedure Push(AKind: Char; AIndex: Integer);
     function IsOp(I: Integer; const S: string): Boolean;
     function IsKw(I: Integer; const S: string): Boolean;
     function IsPlainId(I: Integer): Boolean;
     function IsRelop(I: Integer): Boolean;
     function IsBoolLit(I: Integer): Boolean;
+    function TokLow(I: Integer): string;
     function MatchClose(J: Integer): Integer;
     function GenericClose(J: Integer): Integer;
     function OperandEnd(J: Integer): Integer;
@@ -467,8 +605,7 @@ type
     procedure CheckNot(I, R: Integer);
     procedure ScanChains;
     procedure ScanLevel(A, B: Integer);
-    procedure CheckSegment(const AKinds: array of Char;
-      const AIdx: array of Integer; ACount: Integer);
+    procedure CheckSegment(ABase, ACount: Integer);
   public
     constructor Create(const ASource: string);
     function Run: TPrecHits;
@@ -516,6 +653,13 @@ end;
 function TPrecScanner.IsBoolLit(I: Integer): Boolean;
 begin
   Result := IsKw(I, 'true') or IsKw(I, 'false');
+end;
+
+// Bezeichnertext klein ('&Name' behaelt das '&') - das, was Low bis Charge
+// P4 fuer jeden Bezeichner trug; jetzt nur noch fuer Treffer gerechnet.
+function TPrecScanner.TokLow(I: Integer): string;
+begin
+  Result := LowerCase(Copy(FSrc, FT[I].Pos, FT[I].Len));
 end;
 
 // FT[J] ist '(' oder '[': Index NACH der passenden Klammer, -1 ohne.
@@ -743,13 +887,13 @@ begin
       H.Proven := True;
   end;
   if IsPlainId(RK) and (OperandEnd(RK) = RK + 1) then
-    H.RhsIdent := FT[RK].Low;
+    H.RhsIdent := TokLow(RK);
   // Operand
   A := I + 1;
   if IsPlainId(A) then
   begin
     if R = A + 1 then
-      H.OperandIdent := FT[A].Low;
+      H.OperandIdent := TokLow(A);
     if IsOp(A + 1, '(') and InList(FT[A].Low, INT_FUNCS) then
       H.Proven := True;
     // Letztes Glied der Kette - Aufruf-/Indexklammern und '^' am Ende
@@ -830,27 +974,24 @@ end;
 
 // Eine Klammerebene [A, B): Vergleiche (R), and/or/xor (L) und Trenner
 // (, .. : ; := und die Fenster-Endwoerter) sammeln; Klammern rekursiv.
+procedure TPrecScanner.Push(AKind: Char; AIndex: Integer);
+begin
+  if FTop = Length(FKinds) then
+  begin
+    SetLength(FKinds, FTop * 2 + 64);
+    SetLength(FIdx, FTop * 2 + 64);
+  end;
+  FKinds[FTop] := AKind;
+  FIdx[FTop] := AIndex;
+  Inc(FTop);
+end;
+
 procedure TPrecScanner.ScanLevel(A, B: Integer);
 var
-  Kinds : array of Char;
-  Idx   : array of Integer;
-  Cnt, J, M, C : Integer;
+  Base, J, M, C : Integer;
   S : string;
-
-  procedure Push(AKind: Char; AIndex: Integer);
-  begin
-    if Cnt = Length(Kinds) then
-    begin
-      SetLength(Kinds, Cnt * 2 + 8);
-      SetLength(Idx, Cnt * 2 + 8);
-    end;
-    Kinds[Cnt] := AKind;
-    Idx[Cnt] := AIndex;
-    Inc(Cnt);
-  end;
-
 begin
-  Cnt := 0;
+  Base := FTop;
   J := A;
   while J < B do
   begin
@@ -858,7 +999,13 @@ begin
     if (FT[J].Kind = ptOp) and ((S = '(') or (S = '[')) then
     begin
       M := MatchClose(J);
-      if (M < 0) or (M > B) then Exit;
+      if (M < 0) or (M > B) then
+      begin
+        FTop := Base;   // Ebene ohne Pruefung verlassen, Stapel freigeben
+        Exit;
+      end;
+      // Die innere Ebene legt oberhalb von FTop ab und gibt bis dorthin
+      // frei - die Eintraege dieser Ebene bleiben zusammenhaengend.
       ScanLevel(J + 1, M - 1);
       J := M;
       Continue;
@@ -884,36 +1031,37 @@ begin
     Inc(J);
   end;
   Push('|', B);
-  CheckSegment(Kinds, Idx, Cnt);
+  CheckSegment(Base, FTop - Base);
+  FTop := Base;
 end;
 
 // Je Segment zwischen zwei Trennern: liegt ein and/or/xor zwischen dem
 // ersten und dem letzten Vergleich, ist das eine Kette (K2). Gemeldet
 // wird das erste solche and/or/xor des Segments.
-procedure TPrecScanner.CheckSegment(const AKinds: array of Char;
-  const AIdx: array of Integer; ACount: Integer);
+procedure TPrecScanner.CheckSegment(ABase, ACount: Integer);
 var
   SegStart, k, m, q, FirstR, LastR, L, RBefore, RAfter : Integer;
   H : TPrecHit;
 begin
-  SegStart := 0;
-  for k := 0 to ACount - 1 do
+  // Die Ebene liegt in FKinds/FIdx[ABase .. ABase + ACount - 1].
+  SegStart := ABase;
+  for k := ABase to ABase + ACount - 1 do
   begin
-    if AKinds[k] <> '|' then Continue;
+    if FKinds[k] <> '|' then Continue;
     // Segment [SegStart, k)
     FirstR := -1;
     LastR := -1;
     for m := SegStart to k - 1 do
-      if AKinds[m] = 'R' then
+      if FKinds[m] = 'R' then
       begin
-        if FirstR < 0 then FirstR := AIdx[m];
-        LastR := AIdx[m];
+        if FirstR < 0 then FirstR := FIdx[m];
+        LastR := FIdx[m];
       end;
     if (FirstR >= 0) and (LastR > FirstR) then
       for m := SegStart to k - 1 do
       begin
-        if AKinds[m] <> 'L' then Continue;
-        L := AIdx[m];
+        if FKinds[m] <> 'L' then Continue;
+        L := FIdx[m];
         if (L <= FirstR) or (L >= LastR) then Continue;
         if not FSeen[L] then
         begin
@@ -928,12 +1076,12 @@ begin
           RBefore := FirstR;
           RAfter := LastR;
           for q := SegStart to k - 1 do
-            if AKinds[q] = 'R' then
+            if FKinds[q] = 'R' then
             begin
-              if (AIdx[q] < L) and (AIdx[q] > RBefore) then RBefore := AIdx[q];
-              if (AIdx[q] > L) and (AIdx[q] < RAfter) then RAfter := AIdx[q];
+              if (FIdx[q] < L) and (FIdx[q] > RBefore) then RBefore := FIdx[q];
+              if (FIdx[q] > L) and (FIdx[q] < RAfter) then RAfter := FIdx[q];
               // Beleg Boolean: True/False direkt an einem der Vergleiche.
-              if IsBoolLit(AIdx[q] - 1) or IsBoolLit(AIdx[q] + 1) then
+              if IsBoolLit(FIdx[q] - 1) or IsBoolLit(FIdx[q] + 1) then
                 H.Proven := True;
             end;
           H.LeftText := SpanText(RBefore + 1, L);
@@ -966,5 +1114,8 @@ begin
     S.Free;
   end;
 end;
+
+initialization
+  InitWordTable;
 
 end.

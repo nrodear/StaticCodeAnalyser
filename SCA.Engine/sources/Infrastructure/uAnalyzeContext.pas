@@ -103,6 +103,11 @@ type
     FKeepStripFile : string;
     FKeepStripCode : string;
     FKeepStripMap  : TArray<Integer>;
+    // Perf Charge P4 (2026-10-25): Ein-Datei-Slot fuer den Ganztext
+    // (Lines.Text) - der Token-Vorfilter in RunAllDetectors und SCA202
+    // bauten ihn je Datei getrennt neu. Gleiches Muster wie oben.
+    FFullTextFile : string;
+    FFullText     : string;
   public
     // TD-1 (2026-07-06): Per-Scan-Snapshot der skalaren Scan-Config (s.
     // TEngineScalarConfig). Value-Record - lebt/stirbt mit dem Context.
@@ -177,6 +182,12 @@ type
       out Code: string; out LineFor: TArray<Integer>): Boolean;
     procedure PutKeepStringsText(const FileName: string;
       const Code: string; const LineFor: TArray<Integer>);
+
+    // Perf Charge P4 (2026-10-25): Lookup/Store fuer
+    // TDetectorUtils.LinesTextCached (Ganztext = Lines.Text). Ein-Datei-
+    // Slot; FileName='' wird nie gecacht (In-Memory-Pfade).
+    function  TryGetFullText(const FileName: string; out Text: string): Boolean;
+    procedure PutFullText(const FileName, Text: string);
 
     // TD-1 (2026-07-06): Kopiert die skalare Scan-Config 1:1 aus den uSCAConsts-
     // Prozess-Globals in Config. Aufruf in ParseLeaks DIREKT nach Create - zu
@@ -479,6 +490,25 @@ begin
   FKeepStripFile := FileName;
   FKeepStripCode := Code;
   FKeepStripMap  := LineFor;
+end;
+
+function TAnalyzeContext.TryGetFullText(const FileName: string;
+  out Text: string): Boolean;
+// Perf Charge P4: exakter Key-Match wie die Strip-Slots (innerhalb eines
+// Scans bekommt jeder Detektor denselben FileName-String und der
+// FileTextCache ist ein Snapshot); FileName='' cached nie.
+begin
+  Result := False;
+  if (FileName = '') or (FFullTextFile <> FileName) then Exit;
+  Text   := FFullText;
+  Result := True;
+end;
+
+procedure TAnalyzeContext.PutFullText(const FileName, Text: string);
+begin
+  if FileName = '' then Exit;
+  FFullTextFile := FileName;
+  FFullText     := Text;
 end;
 
 procedure TAnalyzeContext.SnapshotConfigFromGlobals;

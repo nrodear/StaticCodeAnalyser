@@ -43,7 +43,7 @@ type
 implementation
 
 uses
-  uFileTextCache, uTypeResolver, uComparisonPrecedenceScan;
+  uFileTextCache, uTypeResolver, uDetectorUtils, uComparisonPrecedenceScan;
 
 const
   // Ganzzahl-Typen, deren 'not' bitweise rechnet (klein, bare).
@@ -97,7 +97,10 @@ begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
-    Hits := ScanPrecedence(Lines.Text);
+    // Perf Charge P4: Ganztext aus dem Context-Slot - der Token-Vorfilter
+    // hat ihn fuer diese Datei meist schon gebaut.
+    Hits := ScanPrecedence(TDetectorUtils.LinesTextCached(Lines, AContext,
+      FileName));
   finally
     ReleaseLines(Lines, Cached);
   end;

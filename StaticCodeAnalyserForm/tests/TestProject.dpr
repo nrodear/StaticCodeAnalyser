@@ -187,6 +187,7 @@ uses
   uTestInterfaceGuid in 'uTestInterfaceGuid.pas',
   uTestParamNameMismatch in 'uTestParamNameMismatch.pas',
   uTestComparisonPrecedence in 'uTestComparisonPrecedence.pas',
+  uTestContextTextCaches in 'uTestContextTextCaches.pas',
   uTestRuleListBox in 'uTestRuleListBox.pas',
   uTestVcsChanges in 'uTestVcsChanges.pas',
   uTestAssertMessage in 'uTestAssertMessage.pas',
