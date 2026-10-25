@@ -3,7 +3,7 @@
 > **Erzeugte Datei – nicht von Hand bearbeiten.** Quelle: [`data/quickfixes-doc.json`](data/quickfixes-doc.json) (Titel, Beschreibung, Sperren, Beispiele) und der Quelltext: welche Hilfen es gibt, ihre Menütexte und ob sie das Verhalten ändern, stehen in [`source/uRdxFixTable.pas`](source/uRdxFixTable.pas) (`FIX_ROWS`, `FIX_CAPTIONS`, `FIX_ALT_CAPTIONS`) und [`source/uRdxProvider.pas`](source/uRdxProvider.pas) (Rezepte), die Übersetzungen in [`i18n/de.po`](../i18n/de.po) und [`i18n/fr.po`](../i18n/fr.po), Regel-IDs und Namen in [`rules/sca-rules.json`](../rules/sca-rules.json).
 > Erzeugen (Repo-Wurzel): `python tools/gen-quickfix-doc.py`, prüfen: `python tools/gen-quickfix-doc.py --check` (auch in der CI, `.github/workflows/quickfix-doc.yml`).
 
-reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 92 Quick-Fixes aus der Tabelle der einfachen Hilfen (8 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
+reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 93 Quick-Fixes aus der Tabelle der einfachen Hilfen (8 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
 
 ## Lesehilfe
 
@@ -112,6 +112,7 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 92 Qui
 | SCA197 InterfaceWithoutGuid | `Neue GUID einfügen` | Quick-Fix | nein | [SCA197](#sca197) |
 | SCA199 ParamNameMismatch | `Parameternamen "%s" aus dem SQL verwenden` | Quick-Fix | ja | [SCA199](#sca199) |
 | SCA203 LoopPastHighBound | `Schleife %s laufen lassen` | Quick-Fix | ja | [SCA203](#sca203) |
+| SCA204 FunctionNameAsResult | `Result statt %s schreiben` | Quick-Fix | nein | [SCA204](#sca204) |
 | jede Regel mit Anker im Regelkatalog (Feld `anchor`), wenn sich die Anweisung des Funds beschreiben lässt | `Stelle zeigen` | Navigation | nein | [Details](#rezept-showspan) |
 | SCA044 ConcatToFormat | `Format() aus Verkettung bilden` | Quick-Fix | nein | [Details](#rezept-formatcall) |
 | SCA003 SQLInjection | `Parametrisierte Vorlage in die Zwischenablage` | Quick-Fix | nein | [Details](#rezept-sqltemplate) |
@@ -4514,6 +4515,52 @@ Nachher:
   for i := 1 to Length(S) do
     if S[i] = 'x' then Exit;
 ```
+
+<a id="sca204"></a>
+
+### SCA204 – Result statt Funktionsname schreiben
+
+- **Regel:** SCA204 `FunctionNameAsResult` – Result assigned through the function name
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Write Result instead of %s` | `Result statt %s schreiben` | `Écrire Result au lieu de %s` |
+
+**Platzhalter:** `%s` = der Funktionsname aus der Meldung.
+
+**Wirkung:** Ersetzt die Zuweisung an den Funktionsnamen (`GetCount := FCount;`, die alte Pascal-Form) durch `Result := FCount;` – jede solche Zuweisung am Anweisungsanfang der gemeldeten Zeile (`if A then F := 1 else F := 2;` wird zu beiden `Result :=`, auch hinter einem case-Label). Links vom `:=` sind Funktionsname und Result dieselbe Variable: bedeutungsgleich. Liest die Zeile den Namen rechts (`Total := Total + I`), bleibt das stehen – dort ist der Name ein rekursiver Aufruf (SCA205, eigener Fund ohne Hilfe).
+
+**Nicht angeboten**
+
+- es gibt kein Result: `{$mode fpc}`, `tp`, `macpas`, `iso` (auch mit `{$modeswitch result}`), `{$X-}` bzw. `{$EXTENDEDSYNTAX OFF}`; oder die Unit wird auch mit Free Pascal übersetzt (`{$IFDEF FPC}`, `FPC_…`) und setzt selbst keinen Modus delphi/delphiunicode/objfpc – Result hinge dann am Modus des Projekts
+- die innerste Routine um die Zeile ist keine Funktion dieses Namens (in einer geschachtelten Routine wäre Result deren Ergebnis), eine Prozedur, oder ihre Grenzen sind nicht sicher lesbar
+- Kopf oder Deklarationsteil nennen den Namen noch einmal (Parameter, lokale Variable, geschachtelte Routine) oder deklarieren Result
+- vor der Zeile steht im Rumpf ein `with` oder eine anonyme Methode
+- keine Zuweisung an den Namen am Anweisungsanfang auf der Zeile (Zeile verschoben, schon korrigiert), ein Kommentar oder eine Direktive zwischen Name und `:=`
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+function TList.GetCount: Integer;
+begin
+  GetCount := FCount;
+end;
+```
+
+Nachher:
+
+```pascal
+function TList.GetCount: Integer;
+begin
+  Result := FCount;
+end;
+```
+
+**Hinweis.** Die Regel SCA204 steht nur in den Profilen strict und style (Stil entscheidet das Team-Profil); das Lesen des Namens (SCA205) bekommt keine Hilfe – ob der Wert (`Result`) oder die Rekursion (`Name()`) gemeint war, weiß nur der Autor.
 
 ## Weitere Code-Aktionen
 

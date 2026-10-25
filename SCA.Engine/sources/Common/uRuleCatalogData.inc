@@ -2567,7 +2567,7 @@ const
         #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA205
     (

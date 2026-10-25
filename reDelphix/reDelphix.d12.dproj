@@ -195,6 +195,7 @@
         <DCCReference Include="source\uRdxLookupHoistFix.pas"/>
         <DCCReference Include="source\uRdxLoopBoundFix.pas"/>
         <DCCReference Include="source\uRdxInheritedEmptyFix.pas"/>
+        <DCCReference Include="source\uRdxFuncNameFix.pas"/>
         <DCCReference Include="source\uRdxContextRunner.pas"/>
         <DCCReference Include="source\uRdxRecipeRunner.pas"/>
         <DCCReference Include="source\uRdxFixRunner.pas"/>

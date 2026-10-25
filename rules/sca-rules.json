@@ -4397,6 +4397,7 @@
       "type": "Code Smell",
       "tags": ["style", "convention", "delphi-classic"],
       "detectorUnit": "uFunctionNameResult.pas",
+      "editorHelp": true,
       "examples": {
         "bad": "function TList.GetCount: Integer;\nbegin\n  GetCount := FCount;\nend;",
         "good": "function TList.GetCount: Integer;\nbegin\n  Result := FCount;\nend;"

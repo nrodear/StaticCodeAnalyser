@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6627 Zeilen, 297294 Bytes
-  CPoLines_de: array[0..6626] of string = (
+  // i18n\de.po - 6663 Zeilen, 299484 Bytes
+  CPoLines_de: array[0..6662] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6641,7 +6641,43 @@ const
     'msgstr "bedeutungsgleich - ohne das Override ruft die virtuelle Bindung die Methode des Vorfahren direkt; Deklaration und Implementierung gehen zusammen"',
     '',
     'msgid "Remove the empty override %s"',
-    'msgstr "Leeres Override %s entfernen"'
+    'msgstr "Leeres Override %s entfernen"',
+    '',
+    'msgid "Write Result instead of %s"',
+    'msgstr "Result statt %s schreiben"',
+    '',
+    'msgid "a \"with\" or an anonymous method in %s before the line - \"%s\" may mean something else there"',
+    'msgstr "ein \"with\" oder eine anonyme Methode in %s vor der Zeile - \"%s\" kann dort etwas anderes meinen"',
+    '',
+    'msgid "a comment or directive stands between \"%s\" and \":=\""',
+    'msgstr "zwischen \"%s\" und \":=\" steht ein Kommentar oder eine Direktive"',
+    '',
+    'msgid "no assignment \"%s :=\" at the start of a statement on the reported line"',
+    'msgstr "keine Zuweisung \"%s :=\" am Anfang einer Anweisung auf der gemeldeten Zeile"',
+    '',
+    'msgid "no routine with a begin..end body around the line"',
+    'msgstr "keine Routine mit begin..end-Rumpf um die Zeile"',
+    '',
+    'msgid "same meaning - on the left of \":=\" Result and the function name are the same variable; the name in an expression stays (a recursive call, SCA205)"',
+    'msgstr "bedeutungsgleich - links vom \":=\" sind Result und der Funktionsname dieselbe Variable; der Name in einem Ausdruck bleibt (ein rekursiver Aufruf, SCA205)"',
+    '',
+    'msgid "the bounds of the routine around the line are not safe to read"',
+    'msgstr "die Grenzen der Routine um die Zeile sind nicht sicher lesbar"',
+    '',
+    'msgid "the head or the declarations of %s declare \"Result\""',
+    'msgstr "Kopf oder Deklarationen von %s deklarieren \"Result\""',
+    '',
+    'msgid "the head or the declarations of %s name \"%s\" again (parameter, local, nested routine) - it may not be the result"',
+    'msgstr "Kopf oder Deklarationen von %s nennen \"%s\" noch einmal (Parameter, lokal, geschachtelte Routine) - es ist vielleicht nicht das Ergebnis"',
+    '',
+    'msgid "the line belongs to %s, not to the function %s - there \"Result\" would be another result"',
+    'msgstr "die Zeile geh'#$00F6'rt zu %s, nicht zur Funktion %s - dort w'#$00E4're \"Result\" ein anderes Ergebnis"',
+    '',
+    'msgid "the message names no function (\"Name :=\")"',
+    'msgstr "die Meldung nennt keine Funktion (\"Name :=\")"',
+    '',
+    'msgid "the unit is also compiled with Free Pascal ({$IFDEF FPC} in line %d) and sets no {$mode} - whether Result exists depends on the mode of the project"',
+    'msgstr "die Unit wird auch mit Free Pascal '#$00FC'bersetzt ({$IFDEF FPC} in Zeile %d) und setzt kein {$mode} - ob es Result gibt, h'#$00E4'ngt am Modus des Projekts"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -6916,8 +6952,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6623 Zeilen, 309397 Bytes
-  CPoLines_fr: array[0..6622] of string = (
+  // i18n\fr.po - 6659 Zeilen, 311629 Bytes
+  CPoLines_fr: array[0..6658] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -13540,7 +13576,43 @@ const
     'msgstr "m'#$00EA'me sens - sans la red'#$00E9'finition, la liaison virtuelle appelle directement la m'#$00E9'thode de l''anc'#$00EA'tre ; d'#$00E9'claration et impl'#$00E9'mentation partent ensemble"',
     '',
     'msgid "Remove the empty override %s"',
-    'msgstr "Supprimer la red'#$00E9'finition vide %s"'
+    'msgstr "Supprimer la red'#$00E9'finition vide %s"',
+    '',
+    'msgid "Write Result instead of %s"',
+    'msgstr "'#$00C9'crire Result au lieu de %s"',
+    '',
+    'msgid "a \"with\" or an anonymous method in %s before the line - \"%s\" may mean something else there"',
+    'msgstr "un \"with\" ou une m'#$00E9'thode anonyme dans %s avant la ligne - \"%s\" peut y d'#$00E9'signer autre chose"',
+    '',
+    'msgid "a comment or directive stands between \"%s\" and \":=\""',
+    'msgstr "un commentaire ou une directive se trouve entre \"%s\" et \":=\""',
+    '',
+    'msgid "no assignment \"%s :=\" at the start of a statement on the reported line"',
+    'msgstr "aucune affectation \"%s :=\" en d'#$00E9'but d''instruction sur la ligne signal'#$00E9'e"',
+    '',
+    'msgid "no routine with a begin..end body around the line"',
+    'msgstr "aucune routine avec un corps begin..end autour de la ligne"',
+    '',
+    'msgid "same meaning - on the left of \":=\" Result and the function name are the same variable; the name in an expression stays (a recursive call, SCA205)"',
+    'msgstr "m'#$00EA'me sens - '#$00E0' gauche de \":=\", Result et le nom de la fonction sont la m'#$00EA'me variable ; le nom dans une expression reste (un appel r'#$00E9'cursif, SCA205)"',
+    '',
+    'msgid "the bounds of the routine around the line are not safe to read"',
+    'msgstr "les limites de la routine autour de la ligne ne sont pas lisibles avec certitude"',
+    '',
+    'msgid "the head or the declarations of %s declare \"Result\""',
+    'msgstr "l''en-t'#$00EA'te ou les d'#$00E9'clarations de %s d'#$00E9'clarent \"Result\""',
+    '',
+    'msgid "the head or the declarations of %s name \"%s\" again (parameter, local, nested routine) - it may not be the result"',
+    'msgstr "l''en-t'#$00EA'te ou les d'#$00E9'clarations de %s nomment encore \"%s\" (param'#$00E8'tre, local, routine imbriqu'#$00E9'e) - ce n''est peut-'#$00EA'tre pas le r'#$00E9'sultat"',
+    '',
+    'msgid "the line belongs to %s, not to the function %s - there \"Result\" would be another result"',
+    'msgstr "la ligne appartient '#$00E0' %s, pas '#$00E0' la fonction %s - l'#$00E0', \"Result\" serait un autre r'#$00E9'sultat"',
+    '',
+    'msgid "the message names no function (\"Name :=\")"',
+    'msgstr "le message ne nomme aucune fonction (\"Name :=\")"',
+    '',
+    'msgid "the unit is also compiled with Free Pascal ({$IFDEF FPC} in line %d) and sets no {$mode} - whether Result exists depends on the mode of the project"',
+    'msgstr "l''unit'#$00E9' est aussi compil'#$00E9'e avec Free Pascal ({$IFDEF FPC} '#$00E0' la ligne %d) et ne fixe aucun {$mode} - l''existence de Result d'#$00E9'pend du mode du projet"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

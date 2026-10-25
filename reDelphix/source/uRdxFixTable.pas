@@ -214,7 +214,8 @@ uses
   uRdxDeepNestingFix,   // SCA018
   uRdxLookupHoistFix,   // SCA111, SCA112
   uRdxLoopBoundFix,     // SCA203
-  uRdxInheritedEmptyFix; // SCA125
+  uRdxInheritedEmptyFix, // SCA125
+  uRdxFuncNameFix;      // SCA204
 
 type
   // Was die Hilfe auf einem Netzpfad nicht liest (NetworkPathReason): je
@@ -2046,6 +2047,17 @@ begin
     APlaces, ALines, AFinding, P);
 end;
 
+// SCA204 (Charge N / FN): 'Name :=' -> 'Result :=' auf der gemeldeten
+// Zeile, bedeutungsgleich. Name = der Funktionsname aus der Meldung fuer den
+// Menuetext ('%s'), auch wenn der Planer ablehnt.
+function PlanFuncNameResult(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxFuncNameFix.ResultAssign);
+  Result.Name := TRdxFuncNameFix.NameOf(AFinding.Message);
+end;
+
 { ---- Die Tabelle ---- }
 
 type
@@ -2056,7 +2068,7 @@ type
   end;
 
 const
-  FIX_ROW_HIGH = 91;
+  FIX_ROW_HIGH = 92;
 
   // Je Art eine Zeile; die Reihenfolge ist die der Chargen (Stufe 2a,
   // Stufe 2 Rest, uQuickFix-Umzug/Stufe 3, Zeilen, Ausnahmen, Deklarationen
@@ -2318,6 +2330,10 @@ const
     // Override geht ganz - bedeutungsgleich; die Sichtbarkeit belegt der
     // Planer am Vorfahren in der Datei, sonst sperrt er.
     (Kind: fkInheritedMethodEmpty; Plan: PlanInheritedMethodEmpty;
+     HintByPlanner: False; Changes: False; Alt: nil),
+    // Charge N / FN (2026-10-25). SCA204: Result statt Funktionsname -
+    // bedeutungsgleich (links vom ':=' dieselbe Variable).
+    (Kind: fkFunctionNameAsResult; Plan: PlanFuncNameResult;
      HintByPlanner: False; Changes: False; Alt: nil)
   );
 
@@ -2643,7 +2659,12 @@ const
     // InheritedMethodEmpty
     'same meaning - without the override, virtual dispatch calls the '
       + 'method of the ancestor directly; declaration and implementation go '
-      + 'together'
+      + 'together',
+    // Charge N / FN. SCA204: bedeutungsgleich.
+    // FunctionNameAsResult
+    'same meaning - on the left of ":=" Result and the function name are '
+      + 'the same variable; the name in an expression stays (a recursive '
+      + 'call, SCA205)'
   );
 
   // Menuetexte (msgids) unter dem Index der Zeile; '%s' = Name der Hilfe
@@ -2753,7 +2774,8 @@ const
     'Move %s before the loop',
     'Move %s before the loop',
     'Let the loop run %s',
-    'Remove the empty override %s'
+    'Remove the empty override %s',
+    'Write Result instead of %s'
   );
 
   // Menuetexte des zweiten Eintrags (Alt), '' ohne.
@@ -2777,7 +2799,7 @@ const
     '', '', '',
     '', '', '', '', '', '', '',
     'Raise EInvalidOpException instead (invalid state)',
-    '', '', '', '', '', '', '', '', '', ''
+    '', '', '', '', '', '', '', '', '', '', ''
   );
 
   // Die Namen der Planer (PlannerName, fuer uTestRdxFixTable): eine eigene
@@ -2786,7 +2808,7 @@ const
   // faellt dort auf (Wochen-Review 2026-10-21, Major P03/P29: welcher Planer
   // an welcher Art haengt, band bis dahin kein Test). Ein neuer Planer
   // braucht hier eine Zeile, sonst nennt PlannerName '?'.
-  PLANNER_NAMES: array[0..97] of TRdxPlannerName = (
+  PLANNER_NAMES: array[0..98] of TRdxPlannerName = (
     (Name: 'PlanExplicitTObject'; Plan: PlanExplicitTObject),
     (Name: 'PlanFreeAndNil'; Plan: PlanFreeAndNil),
     (Name: 'PlanNilComparison'; Plan: PlanNilComparison),
@@ -2884,7 +2906,8 @@ const
     (Name: 'PlanParamByNameLoop'; Plan: PlanParamByNameLoop),
     (Name: 'PlanFieldByNameLoop'; Plan: PlanFieldByNameLoop),
     (Name: 'PlanLoopBound'; Plan: PlanLoopBound),
-    (Name: 'PlanInheritedMethodEmpty'; Plan: PlanInheritedMethodEmpty)
+    (Name: 'PlanInheritedMethodEmpty'; Plan: PlanInheritedMethodEmpty),
+    (Name: 'PlanFuncNameResult'; Plan: PlanFuncNameResult)
   );
 
 var

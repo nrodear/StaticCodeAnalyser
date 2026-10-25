@@ -133,6 +133,7 @@ contains
   uRdxLookupHoistFix in 'source\uRdxLookupHoistFix.pas',
   uRdxLoopBoundFix in 'source\uRdxLoopBoundFix.pas',
   uRdxInheritedEmptyFix in 'source\uRdxInheritedEmptyFix.pas',
+  uRdxFuncNameFix in 'source\uRdxFuncNameFix.pas',
   uRdxContextRunner in 'source\uRdxContextRunner.pas',
   uRdxRecipeRunner in 'source\uRdxRecipeRunner.pas',
   uRdxFixRunner in 'source\uRdxFixRunner.pas',
