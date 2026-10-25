@@ -35,44 +35,15 @@ uses
   uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
-  // Das Ergebnis eines Walk-Laufs: die tiefste Stelle und - auf
-  // Wunsch - der Pfad dorthin.
-  TDeepestHit = record
-    Line    : Integer;
-    Depth   : Integer;
-    Kind    : TNodeKind;
-    // Nur gefuellt, wenn Collect gesetzt ist. Der Normallauf baut
-    // KEINE Zeichenkette - der DFS laeuft ueber jeden Knoten jeder
-    // Methode, und AnalyzeUnit ruft ein zweites Mal nur fuer die
-    // Methoden, die wirklich melden.
-    Chain   : string;
-    Collect : Boolean;
-  end;
-
   TDeepNestingDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   private
-    // Ohne TDeepestHit.Collect (der Normalfall) entsteht KEINE Kette -
-    // der Walk laeuft ueber jeden Knoten jeder Methode, und eine
-    // Verkettung je Verschachtelungsknoten waere korpusweit eine
-    // Allokationslawine in genau dem Pfad, der diesem Plugin schon
-    // einen Stack-Overflow beschert hat. AnalyzeUnit ruft den Walk
-    // deshalb ein ZWEITES Mal - nur fuer die Methoden, die wirklich
-    // einen Fund erzeugen (korpusweit 3.452 von Millionen).
-    // R1 (2026-09-22): die vier var-Parameter waren EIN Zustand -
-    // "die tiefste bisher gefundene Stelle" - und standen trotzdem
-    // einzeln in der Signatur. Als Record ist das benennbar, und
-    // Walk kommt von sieben auf drei Parameter.
-    //
-    // Collect gehoert mit hinein: es ist kein Schalter des
-    // Aufrufers an die Funktion, sondern Teil der Anfrage ("sammle
-    // dabei die Kette"). Als nackter Boolean-Parameter war es
-    // genau das, was ein Aufrufer nicht lesen kann - Walk(M, 0, X,
-    // Y, Z, True, @C) sagt nicht, was True bedeutet.
-    class procedure Walk(Node: TAstNode; Depth: Integer;
-      var ADeepest: TDeepestHit); static;
+    // Der Walk (samt TDeepestHit) steht seit Perf Q2 als Unit-Prozedur
+    // im implementation-Teil: er bekommt Stapel und Gliederliste vom
+    // Aufrufer, und deren Elementtypen sind dort deklariert. Vertrag
+    // und Begruendung stehen am Walk.
     class function KindName(Kind: TNodeKind): string; static;
   end;
 
@@ -111,11 +82,46 @@ end;
 // Funktion fuer TDetectorUtils.NestingChainText (ein procedural
 // type, kein Methodenzeiger). Ersetzt KetteUm: die Kette wird nicht
 // mehr je Stapel-Frame verkettet, sondern als Elternverweis gefuehrt
-// und erst am Ende des Walks einmal zu Text.
+// und erst nach dem Walk einmal zu Text (seit Perf Q2 nur fuer
+// meldende Methoden, in AnalyzeUnit).
 function KindNameOf(AKind: TNodeKind): string;
 begin
   Result := TDeepNestingDetector.KindName(AKind);
 end;
+
+type
+  // Das Ergebnis eines Walk-Laufs: die tiefste Stelle und das
+  // Kettenglied dorthin.
+  // Perf Q2 (2026-10-25): bis hierher stand die Kette als Text im
+  // Record (Chain) und ein Schalter Collect bestimmte, ob der Walk sie
+  // ueberhaupt sammelt - AnalyzeUnit lief dafuer fuer meldende
+  // Methoden ein ZWEITES Mal. Jetzt sammelt der eine Walk die Glieder
+  // immer (unverwaltete 8-Byte-Records, nur an zaehlenden Knoten),
+  // und Link zeigt auf das Glied der tiefsten Stelle (-1 = keins).
+  // Den Text baut AnalyzeUnit nur fuer meldende Methoden. Nebenbei
+  // ist der Record wieder unverwaltet: kein string, keine
+  // RTTI-Initialisierung je Methode.
+  TDeepestHit = record
+    Line    : Integer;
+    Depth   : Integer;
+    Kind    : TNodeKind;
+    Link    : Integer;
+  end;
+
+  TFrame = record
+    N : TAstNode;
+    D : Integer;
+    // Kette der Konstrukte von aussen bis zu diesem Knoten, als
+    // INDEX in die Gliederliste (-1 = noch kein Glied).
+    // Perf P3 (2026-10-25): hier stand bis dahin die Kette als
+    // string. Das machte TFrame zu einem VERWALTETEN Record - jedes
+    // Stack.Add/Delete und jede Zuweisung Cur/F lief ueber die
+    // RTTI-Kopie, fuer jeden Knoten jeder Methode, auch im
+    // Normallauf mit leerer Kette (Messagent 2026-10-25: SCA018 laz
+    // 0,17 -> 0,61 s seit v0.9.18). Mit dem Integer ist TFrame
+    // wieder unverwaltet wie in v0.9.18.
+    L : Integer;
+  end;
 
 // R1 (2026-09-22): zaehlt dieses Kind als eigene Ebene?
 //
@@ -124,9 +130,8 @@ end;
 // Detektors, und er hat dem Plugin schon einmal einen
 // Stack-Overflow beschert. Der Compiler expandiert die Funktion,
 // es bleibt derselbe Ausdruck wie vorher, nur mit einem Namen.
-// Nimmt die ELTERNART statt des ganzen Frames: TFrame ist lokal in
-// Walk deklariert und hier gar nicht sichtbar - und gebraucht wird
-// ohnehin nur diese eine Eigenschaft.
+// Nimmt die ELTERNART statt des ganzen Frames - gebraucht wird
+// nur diese eine Eigenschaft.
 function ZaehltAlsEbene(AParentKind: TNodeKind;
   AChild: TAstNode): Boolean; inline;
 begin
@@ -139,22 +144,28 @@ begin
                      and (AChild.Kind = nkIfStmt));
 end;
 
-// R1: neues Maximum uebernehmen. Die Kette setzt Walk erst nach
-// dem letzten Maximum (Perf P3) - hier nur die Stelle selbst.
+// R1: neues Maximum uebernehmen - die Stelle und ihr Kettenglied.
 procedure MerkeTiefste(var ADeepest: TDeepestHit; ADepth: Integer;
-  AChild: TAstNode);
+  AChild: TAstNode; ALink: Integer);
 begin
   ADeepest.Depth := ADepth;
   ADeepest.Line  := AChild.Line;
   ADeepest.Kind  := AChild.Kind;
+  ADeepest.Link  := ALink;
 end;
 
-class procedure TDeepNestingDetector.Walk(Node: TAstNode; Depth: Integer;
-  var ADeepest: TDeepestHit);
+procedure Walk(Node: TAstNode; Depth: Integer; var ADeepest: TDeepestHit;
+  AStack: TList<TFrame>; ALinks: TList<TNestingChainLink>);
 // FIX (jvcl-Audit 2026-06-07): iterative DFS statt rekursivem Walk.
 // Bei tief verschachteltem AST (z.B. JvId3v2.pas mit langen
 // if-then-else-Ketten) sprengte Walk(Self) den Default-Stack mit
 // STACK_OVERFLOW ($C00000FD). Explicit Stack mit (Node, Depth)-Paaren.
+//
+// Perf Q2 (2026-10-25): AStack und ALinks legt AnalyzeUnit EINMAL je
+// Unit an; vorher entstanden beide je Methode neu und wuchsen jedes
+// Mal von Kapazitaet 0 auf. AStack ist beim Aufruf leer - jeder Walk
+// leert ihn vollstaendig. ALinks verwirft die Glieder der vorigen
+// Methode hier.
 //
 // FIX (Autopsie 2026-08-27, SCA018-FP-Klasse 'else-if-Kette'): ein
 // direkt unter nkElseBranch haengendes nkIfStmt zaehlt NICHT als neue
@@ -162,7 +173,7 @@ class procedure TDeepNestingDetector.Walk(Node: TAstNode; Depth: Integer;
 // nkIfStmt (uParser2.ParseIfStmt:2402-2407) und dieses traegt bereits
 // die erhoehte Tiefe; jedes Kettenglied bekam dadurch +1, obwohl
 // 'if..else if..else if' fachlich EINE mehrarmige Verzweigung ist.
-// Mechanik-Vorlage: uCognitiveComplexity.CountInMethod:173-192, dort
+// Mechanik-Vorlage: uCognitiveComplexity.CountInMethod, dort
 // seit 2026-07-26 im Einsatz (ElseIfDepth := ChildDepth - 1).
 // GEZAEHLT am Korpus D:\git-sca-realworld (rw17, Detektor-Replikat
 // ueber alle Dateien mit SCA018-Fund): 5.935 reproduzierte Funde ->
@@ -186,78 +197,45 @@ class procedure TDeepNestingDetector.Walk(Node: TAstNode; Depth: Integer;
 // FP-Quote bleibt dabei praktisch konstant (39,2 / 36,6 / 39,9 /
 // 44,7 %), weil Ketten schneller inflationieren als echte Schachtelung
 // tief wird.
-type
-  TFrame = record
-    N : TAstNode;
-    D : Integer;
-    // Kette der Konstrukte von aussen bis zu diesem Knoten, als
-    // INDEX in Links (-1 = noch kein Glied). Ohne Collect
-    // durchgehend -1.
-    // Perf P3 (2026-10-25): hier stand bis dahin die Kette als
-    // string. Das machte TFrame zu einem VERWALTETEN Record - jedes
-    // Stack.Add/Delete und jede Zuweisung Cur/F lief ueber die
-    // RTTI-Kopie, fuer jeden Knoten jeder Methode, auch im
-    // Normallauf mit leerer Kette (Messagent 2026-10-25: SCA018 laz
-    // 0,17 -> 0,61 s seit v0.9.18). Mit dem Integer ist TFrame
-    // wieder unverwaltet wie in v0.9.18.
-    L : Integer;
-  end;
 var
-  Stack    : TList<TFrame>;
   Cur      : TFrame;
   Child    : TAstNode;
   NewDepth : Integer;
   NewLink  : Integer;
-  BestLink : Integer;                    // Glied des letzten Maximums
-  Links    : TList<TNestingChainLink>;   // nur bei Collect
   F        : TFrame;
 begin
+  // Count := 0 und NICHT Clear: Clear setzt in Delphi auch Capacity
+  // auf 0 und nimmt damit genau die Wiederverwendung wieder weg.
+  ALinks.Count := 0;
+  ADeepest.Link := -1;
   if Node = nil then Exit;
-  BestLink := -1;
-  Links := nil;
-  Stack := TList<TFrame>.Create;
-  try
-    if ADeepest.Collect then
-      Links := TList<TNestingChainLink>.Create;
-    F.N := Node; F.D := Depth; F.L := -1;
-    Stack.Add(F);
-    while Stack.Count > 0 do
+  F.N := Node; F.D := Depth; F.L := -1;
+  AStack.Add(F);
+  while AStack.Count > 0 do
+  begin
+    Cur := AStack[AStack.Count - 1];
+    AStack.Delete(AStack.Count - 1);
+    for Child in Cur.N.Children do
     begin
-      Cur := Stack[Stack.Count - 1];
-      Stack.Delete(Stack.Count - 1);
-      for Child in Cur.N.Children do
+      NewDepth := Cur.D;
+      NewLink  := Cur.L;
+      if ZaehltAlsEbene(Cur.N.Kind, Child) then
       begin
-        NewDepth := Cur.D;
-        NewLink  := Cur.L;
-        if ZaehltAlsEbene(Cur.N.Kind, Child) then
-        begin
-          Inc(NewDepth);
-          // Die Kette waechst an GENAU den Knoten, die auch die
-          // Tiefe erhoehen - damit ist ihre Gliederzahl immer die
-          // gemeldete Tiefe, und das else-if-Kettenglied wird hier
-          // wie dort nicht mitgezaehlt.
-          if ADeepest.Collect then
-            NewLink := TDetectorUtils.NestingChainPush(Links,
-              Child.Kind, NewLink);
-          if NewDepth > ADeepest.Depth then
-          begin
-            MerkeTiefste(ADeepest, NewDepth, Child);
-            BestLink := NewLink;
-          end;
-        end;
-        F.N := Child; F.D := NewDepth; F.L := NewLink;
-        Stack.Add(F);
+        Inc(NewDepth);
+        // Die Kette waechst an GENAU den Knoten, die auch die
+        // Tiefe erhoehen - damit ist ihre Gliederzahl immer die
+        // gemeldete Tiefe, und das else-if-Kettenglied wird hier
+        // wie dort nicht mitgezaehlt.
+        NewLink := TDetectorUtils.NestingChainPush(ALinks,
+          Child.Kind, NewLink);
+        // Frueher setzte jedes neue Maximum die Kette neu - stehen
+        // blieb die des letzten, und genau dessen Glied haelt Link.
+        if NewDepth > ADeepest.Depth then
+          MerkeTiefste(ADeepest, NewDepth, Child, NewLink);
       end;
+      F.N := Child; F.D := NewDepth; F.L := NewLink;
+      AStack.Add(F);
     end;
-    // Frueher setzte jedes neue Maximum die Kette neu - stehen blieb
-    // die des letzten, und genau dessen Glied haelt BestLink. Ohne
-    // neues Maximum bleibt ADeepest.Chain unberuehrt, wie zuvor.
-    if ADeepest.Collect and (BestLink >= 0) then
-      ADeepest.Chain := TDetectorUtils.NestingChainText(Links,
-        BestLink, KindNameOf);
-  finally
-    Links.Free;
-    Stack.Free;
   end;
 end;
 
@@ -266,33 +244,28 @@ class procedure TDeepNestingDetector.AnalyzeUnit(UnitNode: TAstNode;
 var
   Methods       : TList<TAstNode>;
   M             : TAstNode;
-  // R1 (2026-09-22): zwei Records statt sieben Einzelvariablen.
-  // Tiefste traegt den Normallauf, MitKette den zweiten Lauf, der
-  // nur fuer meldende Methoden ueberhaupt stattfindet.
+  // R1 (2026-09-22): ein Record statt Einzelvariablen.
   Tiefste       : TDeepestHit;
-  MitKette      : TDeepestHit;
   F             : TLeakFinding;
   MaxNesting    : Integer;   // TD-1: Schwelle per-Scan aus AContext.Config
+  Stack         : TList<TFrame>;              // Perf Q2: je Unit EINMAL
+  Links         : TList<TNestingChainLink>;   // Perf Q2: je Unit EINMAL
 begin
   // TD-1 (2026-07-06): Schwelle einmal aus dem Context lesen (scan-konstant).
   MaxNesting := CfgMaxNesting(AContext);
+  Stack := nil;
+  Links := nil;
   Methods := UnitNode.FindAll(nkMethod);
   try
+    Stack := TList<TFrame>.Create;
+    Links := TList<TNestingChainLink>.Create;
     for M in Methods do
     begin
       Tiefste := Default(TDeepestHit);
-      Walk(M, 0, Tiefste);
+      Walk(M, 0, Tiefste, Stack, Links);
 
       if Tiefste.Depth > MaxNesting then
       begin
-        // Erst JETZT die Kette bauen: nur fuer Methoden, die
-        // wirklich melden. Zweiter Lauf derselben Funktion statt
-        // einer zweiten Implementierung - sonst drifteten die
-        // beiden Tiefenmodelle (else-if-Regel!) frueher oder
-        // spaeter auseinander.
-        MitKette := Default(TDeepestHit);
-        MitKette.Collect := True;
-        Walk(M, 0, MitKette);
         F            := TLeakFinding.Create;
         F.FileName   := FileName;
         F.MethodName := M.Name;
@@ -302,16 +275,19 @@ begin
           [Tiefste.Depth, KindName(Tiefste.Kind),
            Tiefste.Line, MaxNesting]);
         F.SetKind(fkDeepNesting);
-        // Der MELDETEXT kommt unveraendert aus dem ersten Lauf -
-        // nur die Kette aus dem zweiten. Beide Laeufe liefern
-        // dieselbe Tiefe (gleiche Funktion, gleiches Modell); haette
-        // man hier auf MitKette umgestellt, waere das eine stille
-        // Verhaltensaenderung an der Fund-Identitaet gewesen.
-        F.StructureChain := MitKette.Chain;
+        // Die Kette als Text erst JETZT - nur fuer meldende
+        // Methoden. Sie stammt aus DEMSELBEN Walk wie Tiefe und
+        // Anker; bis Perf Q2 kam sie aus einem zweiten Lauf derselben
+        // Funktion.
+        if Tiefste.Link >= 0 then
+          F.StructureChain := TDetectorUtils.NestingChainText(Links,
+            Tiefste.Link, KindNameOf);
         Results.Add(F);
       end;
     end;
   finally
+    Links.Free;
+    Stack.Free;
     Methods.Free;
   end;
 end;

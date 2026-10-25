@@ -118,6 +118,16 @@ type
     // in DIESEM Scan schon analysiert hat (Schluessel UpperCase = dieselbe
     // ASCII-Faltung wie SameText). Lazy angelegt, vom Context besessen.
     FDfmFormsSeen : TDictionary<string, Boolean>;
+    // Perf Q2 (2026-10-25): Ein-Wert-Slot fuer [Detectors]
+    // CognitiveLimit (SCA176). Der Detektor las den Wert bis dahin je
+    // DATEI ueber TRepoSettings.QuickReadStr - und das legt jedes Mal
+    // ein TMemIniFile an, laedt und zerlegt die ganze analyser.ini
+    // (Profiler Q3: ~1,1 s CPU auf jvcl, schon in v0.9.18). Je Kontext
+    // genuegt ein Lesen: der Kontext lebt einen Scan lang, und jeder
+    // Parallel-Worker hat seinen eigenen (liest dann eben je Worker
+    // einmal) - ohne Lock thread-sicher wie die Ein-Datei-Slots oben.
+    FCognitiveLimitSet : Boolean;
+    FCognitiveLimit    : Integer;
   public
     // TD-1 (2026-07-06): Per-Scan-Snapshot der skalaren Scan-Config (s.
     // TEngineScalarConfig). Value-Record - lebt/stirbt mit dem Context.
@@ -214,6 +224,11 @@ type
     // kein frueherer fkDfmDbInUiForm-Befund derselben Formdatei in der
     // Ergebnisliste stehen.
     function FirstDfmFormVisit(const DfmFileName: string): Boolean;
+
+    // Perf Q2: Lookup/Store fuer [Detectors] CognitiveLimit (SCA176).
+    // TryGet liefert False, bis Put einmal lief.
+    function  TryGetCognitiveLimit(out ALimit: Integer): Boolean;
+    procedure PutCognitiveLimit(ALimit: Integer);
 
     // TD-1 (2026-07-06): Kopiert die skalare Scan-Config 1:1 aus den uSCAConsts-
     // Prozess-Globals in Config. Aufruf in ParseLeaks DIREKT nach Create - zu
@@ -570,6 +585,18 @@ begin
   begin
     FDfmFormsSeen.Add(Key, True);
   end;
+end;
+
+function TAnalyzeContext.TryGetCognitiveLimit(out ALimit: Integer): Boolean;
+begin
+  ALimit := FCognitiveLimit;
+  Result := FCognitiveLimitSet;
+end;
+
+procedure TAnalyzeContext.PutCognitiveLimit(ALimit: Integer);
+begin
+  FCognitiveLimit    := ALimit;
+  FCognitiveLimitSet := True;
 end;
 
 procedure TAnalyzeContext.SnapshotConfigFromGlobals;
