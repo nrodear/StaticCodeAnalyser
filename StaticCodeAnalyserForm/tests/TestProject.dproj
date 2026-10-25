@@ -162,6 +162,7 @@
         <DCCReference Include="uTestFormatMismatch.pas"/>
         <DCCReference Include="uTestUnusedUses.pas"/>
         <DCCReference Include="uTestUnusedUsesIdents.pas"/>
+        <DCCReference Include="uTestUnusedUsesSuchtext.pas"/>
         <DCCReference Include="uTestEmptyExcept.pas"/>
         <DCCReference Include="uTestEmptyMethod.pas"/>
         <DCCReference Include="uTestDuplicate.pas"/>

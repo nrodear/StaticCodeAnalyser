@@ -79,6 +79,7 @@ uses
   uTestFormatMismatch in 'uTestFormatMismatch.pas',
   uTestUnusedUses in 'uTestUnusedUses.pas',
   uTestUnusedUsesIdents in 'uTestUnusedUsesIdents.pas',
+  uTestUnusedUsesSuchtext in 'uTestUnusedUsesSuchtext.pas',
   uTestEmptyExcept in 'uTestEmptyExcept.pas',
   uTestEmptyMethod in 'uTestEmptyMethod.pas',
   uTestDuplicate in 'uTestDuplicate.pas',
