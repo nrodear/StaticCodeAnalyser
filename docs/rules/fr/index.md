@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Catalogue de règles
 
-Les 203 règles de détection. Cliquez sur un identifiant pour le détail complet.
+Les 205 règles de détection. Cliquez sur un identifiant pour le détail complet.
 
 | ID | Nom | Sévérité | Type | Détecteur |
 |---|---|---|---|---|
@@ -207,6 +207,8 @@ Les 203 règles de détection. Cliquez sur un identifiant pour le détail comple
 | [SCA201](SCA201.md) | Adresse IP dans un fichier de configuration versionné | Hint | Security Hotspot | `uHardcodedIpInConfig.pas` |
 | [SCA202](SCA202.md) | not, and, or ou xor s'applique avant la comparaison | Error | Bug | `uComparisonPrecedence.pas` |
 | [SCA203](SCA203.md) | La boucle for dépasse le dernier indice | Error | Bug | `uLoopPastHighBound.pas` |
+| [SCA204](SCA204.md) | Résultat affecté via le nom de la fonction | Hint | Code Smell | `uFunctionNameResult.pas` |
+| [SCA205](SCA205.md) | Le nom de la fonction lu dans son propre corps est un appel récursif | Error | Bug | `uFunctionNameResult.pas` |
 
 ---
 

@@ -172,6 +172,7 @@ uses
   uHardcodedIpAddress,   // SCA200 - IP-Adressen in String-Literalen
   uHardcodedIpInConfig,  // SCA201 - IP-Adressen in .ini (Konfigurations-Durchlauf)
   uLoopPastHighBound,    // SCA203 - for-Schleife einen Index zu weit
+  uFunctionNameResult,   // SCA204/SCA205 - Funktionsname statt Result
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uCustomRuleDetector,
   uDfmAnalysisRunner, uDfmRepoIndex, uSymbolReferenceIndex, uTypeIndex, uAstFileCache,
@@ -752,6 +753,14 @@ begin
   // steht dann in der Datei (NOTWENDIGE Bedingung).
   AddD('LoopPastHighBound', fkLoopPastHighBound,
        TLoopPastHighBoundDetector.AnalyzeUnit, ['count', 'length', 'high']);
+  // SCA204 + SCA205 (Charge N / FN, 2026-10-25): eine Unit, zwei Kinds. Anker
+  // SCA204 (Hint, nur strict/style); ohne ExtraKinds liefe der Detektor
+  // unter default/bugs-only (die nur SCA205 fuehren) gar nicht - und die
+  // Severity-Schwelle zaehlt die strengste der beiden (Error). Jeder Fund
+  // steht im Rumpf einer Funktion: 'function' ist NOTWENDIG.
+  AddD('FunctionNameResult', fkFunctionNameAsResult,
+       TFunctionNameResultDetector.AnalyzeUnit, ['function']);
+  gDetectors[Count - 1].ExtraKinds := [fkFunctionNameRecursion];
   // Seit 2026-09-05 context-faehig (Scanwurzel fuers Geltungsbereich-
   // Gate) -> volle 4-Parameter-Registrierung statt AddD3-Adapter.
   AddD('DebugOutput',      fkDebugOutput,     TDebugOutputDetector.AnalyzeUnit);

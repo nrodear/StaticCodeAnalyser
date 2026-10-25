@@ -30,7 +30,8 @@
       "DfmCircularDataSource", "DfmRequiredFieldUnbound",
       "DfmRequiredFieldNotVisible", "DfmCrossFormCoupling",
       "DfmActionMismatch", "DuplicateInterfaceGuid",
-      "ParamNameMismatch", "ComparisonPrecedence", "LoopPastHighBound"
+      "ParamNameMismatch", "ComparisonPrecedence", "LoopPastHighBound",
+      "FunctionNameRecursion"
     ],
     "code-quality": [
       "EmptyExcept", "UnusedUses", "MissingFinally", "DeadCode",
@@ -55,13 +56,13 @@
     "style": [
       "PublicMemberWithoutDoc", "NilComparison", "BeginEndRequired",
       "WithStatement", "ClassPerFile", "DfmHardcodedCaption",
-      "IfElseBegin"
+      "IfElseBegin", "FunctionNameAsResult"
     ],
     "default": [
       "*",
       "!PublicMemberWithoutDoc", "!NilComparison", "!BeginEndRequired",
       "!WithStatement", "!ClassPerFile", "!DfmHardcodedCaption",
-      "!IfElseBegin"
+      "!IfElseBegin", "!FunctionNameAsResult"
     ],
     "strict":  ["*", "UnusedUses"],
 
@@ -4379,6 +4380,84 @@
           "case": "Known limits",
           "why": "The loop variable assigned in the body vetoes the finding. downto loops, bounds with further arithmetic (Count - 1, Pred(Count)), named indexed properties other than Items, Strings and Objects (RTID.ThreadIDs[i] while counting RTID.Count) and accesses through 'with' are not reported.",
           "example": "for i := 0 to RTID.Count do TID := RTID.ThreadIDs[i];  // not reported (false negative)"
+        }
+      ],
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA204",
+      "kind": "FunctionNameAsResult",
+      "name": "Result assigned through the function name",
+      "shortDescription": "Function result set by assigning to the function name ('GetCount := ...') - the old Pascal form; Delphi writes Result",
+      "fullDescription": "Inside a function, 'GetCount := FItems.Count;' sets the result - the form Pascal had before Result existed. It works, but the same name means two different things in one body: on the left of ':=' it is the result variable, anywhere else it is a recursive call of the function (see SCA205). 'Result :=' says what is meant and cannot be mistaken for a call. Reported is an assignment to the bare function name at the start of a statement (also behind a case label) in the function's own body. Only where Result exists: in Delphi (not under {$X-}), and in Free Pascal in the modes delphi, delphiunicode and objfpc or with {$modeswitch result}; a file without {$mode} counts as Delphi in a Delphi scan and as unknown under --dialect=fpc. Style rule (hint): profiles strict and style, not default. reDelphix offers the replacement 'Result :='.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["style", "convention", "delphi-classic"],
+      "detectorUnit": "uFunctionNameResult.pas",
+      "examples": {
+        "bad": "function TList.GetCount: Integer;\nbegin\n  GetCount := FCount;\nend;",
+        "good": "function TList.GetCount: Integer;\nbegin\n  Result := FCount;\nend;"
+      },
+      "exceptions": [
+        {
+          "case": "No Result available",
+          "why": "In the Free Pascal modes fpc, tp, macpas and iso there is no Result unless {$modeswitch result} is set, and Delphi has none under {$X-} or {$EXTENDEDSYNTAX OFF} - assigning to the function name is the only way there. Under --dialect=fpc a file without {$mode} is skipped, because its mode comes from the project or the command line.",
+          "example": "{$mode fpc}\nfunction Twice(X: Integer): Integer;\nbegin\n  Twice := 2 * X;  // not reported\nend;"
+        },
+        {
+          "case": "The name may mean something else",
+          "why": "A parameter, local variable, constant, type or nested routine of the same name hides the result; a nested routine that names it may set the outer result itself; inside 'with Obj do' the object can have a member of that name (the assignment then sets the member); inside an anonymous method the outer result is out of reach. Such routines or spans are skipped.",
+          "example": "with Obj do\n  Total := 5;  // not reported - may be Obj.Total"
+        },
+        {
+          "case": "Elements of the result",
+          "why": "'GetRec.X := 5', 'GetArr[0] := 1' and 'GetP^ := 8' write into the result under Free Pascal's Delphi mode; for Delphi itself this is not verified, so these forms are left alone (deliberate false negative).",
+          "example": "GetRec.X := 5;  // not reported"
+        }
+      ],
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA205",
+      "kind": "FunctionNameRecursion",
+      "name": "Function name read in its own body is a recursive call",
+      "shortDescription": "'Total := Total + X' inside function Total: on the right the name is a recursive call, not the current result",
+      "fullDescription": "In Delphi the name of a function inside its own body is the result variable only on the left of ':='. Everywhere else - in an expression, a condition, Exit(Name) - it calls the function again. 'Total := Total + X;' therefore does not add X to the result built so far: it recurses, usually until the stack overflows. Free Pascal's objfpc and fpc modes read the result there instead, which is why ported code shows this pattern. Reported is the bare name (no parentheses, not behind a dot, not after inherited or @) in an expression of a function that also assigns to its own name - the author uses the name as a variable. It is an error when the function has no parameters and the body shows no deliberate recursion (no Name(), no call statement 'Name;', no Self.Name, no Name<T>) and the name is not a bare call argument; otherwise a warning (default parameters only, deliberate recursion next to it, bare argument). Only in Delphi mode: Delphi, or Free Pascal with {$mode delphi} / {$mode delphiunicode}. Fix: Result (or Name() when the recursion is intended).",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["recursion", "result", "stack-overflow", "fpc-port"],
+      "cwe": ["CWE-674"],
+      "detectorUnit": "uFunctionNameResult.pas",
+      "examples": {
+        "bad": "function Total: Integer;\nvar\n  I: Integer;\nbegin\n  Total := 0;\n  for I := 1 to 3 do\n    Total := Total + I;   // recursive call, not the sum\nend;",
+        "good": "function Total: Integer;\nvar\n  I: Integer;\nbegin\n  Result := 0;\n  for I := 1 to 3 do\n    Result := Result + I;\nend;"
+      },
+      "exceptions": [
+        {
+          "case": "The function writes Result",
+          "why": "Whoever writes Result knows the difference; the bare name is then how Delphi spells a parameterless recursive call - recursive-descent parsers ('Result := -ReadFactor'), retries ('Result := AddKeyStroke'), a function assigned to a procedure variable ('errno := Stub_errno'). Only functions that also assign to their own name are judged.",
+          "example": "function Factor: Integer;\nbegin\n  if Tok = '-' then begin Next; Result := -Factor; end  // not reported\n  else Result := Number;\nend;"
+        },
+        {
+          "case": "Mandatory parameters",
+          "why": "With a parameter that has no default, the bare name does not compile (not enough actual parameters) or calls another overload: in F(A) the expression 'F + A' calls F(). Neither is a hidden recursion.",
+          "example": "function F(A: Integer): Integer; overload;\nbegin\n  F := F + A;  // not reported - calls the overload F()\nend;"
+        },
+        {
+          "case": "Free Pascal objfpc/fpc modes",
+          "why": "There the bare name on the right reads the result - verified with fpc 3.2.2; the pattern is correct code in those modes. A file with any non-Delphi {$mode}, or without {$mode} under --dialect=fpc, is not reported.",
+          "example": "{$mode objfpc}\nTotal := Total + I;  // not reported - reads the result"
+        },
+        {
+          "case": "Compiler-error contexts and conditional code",
+          "why": "As the argument of Inc, Dec, SetLength and other var-parameter routines the name does not compile in Delphi mode. A compiler directive right before or after the name usually means two {$IFDEF} versions stand side by side. Neither is reported; of {$IFDEF}/{$ELSE} branches only one is read (FPC from the scan dialect, otherwise the first).",
+          "example": "Inc(Total);  // not reported - does not compile in Delphi mode"
         }
       ],
       "cleanCodeAttribute": "LOGICAL",

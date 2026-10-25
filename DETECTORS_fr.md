@@ -7,7 +7,7 @@ poignée de détecteurs bonus propres à cet outil.
 
 Légende des statuts : ✅ implémenté · 🟡 partiel · 🔲 ouvert
 
-**Résumé (2026-08-07) :** Les **203 kinds de règles** du roster canonique [`rules/sca-rules.json`](rules/sca-rules.json) sont tous implémentés et énumérés dans ce fichier (portés par **161 enregistrements de pipeline** ; plusieurs classes émettent plusieurs kinds — p. ex. `uVisibilityCheck` → 3 kinds de visibilité, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 kinds DFM ; **SCA194/SCA195 sont à portée projet, non basés sur l'AST** — émis par le dispatch du scan projet/groupe, pas par le registre de détecteurs par fichier ; **SCA201** provient de la passe de configuration sur les fichiers .ini). 44 / 50 slots de règles Sonar complets ; les 4 slots ouverts (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) exigent de l'inférence de types / une résolution inter-unités et n'ont pas encore de SCA-ID.
+**Résumé (2026-08-07) :** Les **205 kinds de règles** du roster canonique [`rules/sca-rules.json`](rules/sca-rules.json) sont tous implémentés et énumérés dans ce fichier (portés par **162 enregistrements de pipeline** ; plusieurs classes émettent plusieurs kinds — p. ex. `uVisibilityCheck` → 3 kinds de visibilité, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 kinds DFM ; **SCA194/SCA195 sont à portée projet, non basés sur l'AST** — émis par le dispatch du scan projet/groupe, pas par le registre de détecteurs par fichier ; **SCA201** provient de la passe de configuration sur les fichiers .ini). 44 / 50 slots de règles Sonar complets ; les 4 slots ouverts (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) exigent de l'inférence de types / une résolution inter-unités et n'ont pas encore de SCA-ID.
 
 Les 4 slots encore ouverts exigent tous inférence de types / analyse de flux / résolution de symboles inter-unités : #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI. **#16 UninitVar** dispose d'un MVP conservateur (`SCA166`) — la sensibilité complète aux chemins reste ouverte pour la phase 3.
 
@@ -152,7 +152,7 @@ Catalogue Sonar-50
 🏛 Cluster mORMot :                  9 (SCA153-161, tous complets)
 🧩 Nommage/formatage SonarDelphi : 60 (SCA060-119, section ci-dessous)
 
-🎯 Total général : 203 kinds de détecteurs (188 unités de détecteur).
+🎯 Total général : 205 kinds de détecteurs (190 unités de détecteur).
 ```
 
 ---
@@ -466,6 +466,8 @@ Les types de retour managés (famille string, tableaux dynamiques, `Variant`, in
 | SCA201 | **HardcodedIpInConfig** | Adresse IPv4/IPv6 comme valeur dans un fichier .ini de l'arborescence des sources (passe de configuration, pas un détecteur par unité ; marqueurs `; noinspection`) | Hint | Security Hotspot | ✅ | `uHardcodedIpInConfig` |
 | SCA202 | **ComparisonPrecedence** | not/and/or/xor sont prioritaires sur les comparaisons : `not Count > 0` (not bit à bit d'un entier) et `A = True or B = False` (chaîne booléenne) compilent mais testent autre chose ; Error avec preuve du type, sinon Warning ; `Flags and Mask = 0` n'est pas signalé | Error | Bug | ✅ | `uComparisonPrecedence` |
 | SCA203 | **LoopPastHighBound** | La boucle for dépasse le dernier indice (`0 to X.Count`, `0 to Length(A)`, `High(A) + 1` ; chaînes `0 to Length(S)` et `1 to Length(S) + 1`) et indexe la même collection avec la variable de boucle non décalée - Error avec type prouvé (liste, tableau, chaîne), sinon Warning | Error | Bug | ✅ | `uLoopPastHighBound` |
+| SCA204 | **FunctionNameAsResult** | résultat défini par affectation au nom de la fonction (`GetCount := ..`) - l'ancienne forme Pascal, Delphi écrit `Result :=` ; seulement là où Result existe (Delphi, FPC delphi/objfpc ou `{$modeswitch result}`) ; profils strict et style, pas default | Hint | Code Smell | ✅ | `uFunctionNameResult` |
+| SCA205 | **FunctionNameRecursion** | nom de la fonction lu dans son propre corps (`Total := Total + X`) - en mode Delphi un appel récursif, pas le résultat courant ; seulement les fonctions qui affectent leur propre nom et sans paramètre obligatoire - Error sans paramètre et sans récursion voulue, sinon Warning | Error | Bug | ✅ | `uFunctionNameResult` |
 
 ## ⚙️ Configuration — SCA001 OwnershipSinks (liste blanche des fuites mémoire)
 

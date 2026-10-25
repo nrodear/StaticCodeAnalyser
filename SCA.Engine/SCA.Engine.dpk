@@ -204,6 +204,8 @@ contains
   uHardcodedIpInConfig in 'sources\Detectors\uHardcodedIpInConfig.pas',
   uLoopBoundScan in 'sources\Detectors\uLoopBoundScan.pas',
   uLoopPastHighBound in 'sources\Detectors\uLoopPastHighBound.pas',
+  uFuncNameResultScan in 'sources\Detectors\uFuncNameResultScan.pas',
+  uFunctionNameResult in 'sources\Detectors\uFunctionNameResult.pas',
   uHardcodedSecret in 'sources\Detectors\uHardcodedSecret.pas',
   uHardcodedString in 'sources\Detectors\uHardcodedString.pas',
   uIfElseBegin in 'sources\Detectors\uIfElseBegin.pas',

@@ -1559,6 +1559,12 @@ msgstr "not/and/or/xor binden stärker als Vergleiche - den Vergleich klammern"
 msgid "for loop runs one index past the end - the upper bound is Count - 1 or High()"
 msgstr "for-Schleife läuft einen Index über das Ende hinaus - die Obergrenze ist Count - 1 oder High()"
 
+msgid "Result set through the function name - write Result := instead"
+msgstr "Ergebnis über den Funktionsnamen gesetzt - stattdessen Result := schreiben"
+
+msgid "The function name on the right side is a recursive call, not the current result"
+msgstr "Der Funktionsname auf der rechten Seite ist ein rekursiver Aufruf, nicht das bisherige Ergebnis"
+
 msgid "File not found:"
 msgstr "Datei nicht gefunden:"
 

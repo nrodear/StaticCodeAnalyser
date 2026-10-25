@@ -1571,6 +1571,12 @@ msgstr "not/and/or/xor sont prioritaires sur les comparaisons - mettre la compar
 msgid "for loop runs one index past the end - the upper bound is Count - 1 or High()"
 msgstr "la boucle for dépasse la fin d'un indice - la borne supérieure est Count - 1 ou High()"
 
+msgid "Result set through the function name - write Result := instead"
+msgstr "Résultat défini via le nom de la fonction - écrire Result := à la place"
+
+msgid "The function name on the right side is a recursive call, not the current result"
+msgstr "Le nom de la fonction à droite est un appel récursif, pas le résultat courant"
+
 msgid "File not found:"
 msgstr "Fichier introuvable :"
 

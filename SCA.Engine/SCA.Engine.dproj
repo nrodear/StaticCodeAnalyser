@@ -222,6 +222,8 @@
         <DCCReference Include="sources\Detectors\uHardcodedIpInConfig.pas"/>
         <DCCReference Include="sources\Detectors\uLoopBoundScan.pas"/>
         <DCCReference Include="sources\Detectors\uLoopPastHighBound.pas"/>
+        <DCCReference Include="sources\Detectors\uFuncNameResultScan.pas"/>
+        <DCCReference Include="sources\Detectors\uFunctionNameResult.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedSecret.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedString.pas"/>
         <DCCReference Include="sources\Detectors\uIfElseBegin.pas"/>

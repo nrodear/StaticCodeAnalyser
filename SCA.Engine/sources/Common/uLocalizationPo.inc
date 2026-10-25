@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6621 Zeilen, 296943 Bytes
-  CPoLines_de: array[0..6620] of string = (
+  // i18n\de.po - 6627 Zeilen, 297294 Bytes
+  CPoLines_de: array[0..6626] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1575,6 +1575,12 @@ const
     '',
     'msgid "for loop runs one index past the end - the upper bound is Count - 1 or High()"',
     'msgstr "for-Schleife l'#$00E4'uft einen Index '#$00FC'ber das Ende hinaus - die Obergrenze ist Count - 1 oder High()"',
+    '',
+    'msgid "Result set through the function name - write Result := instead"',
+    'msgstr "Ergebnis '#$00FC'ber den Funktionsnamen gesetzt - stattdessen Result := schreiben"',
+    '',
+    'msgid "The function name on the right side is a recursive call, not the current result"',
+    'msgstr "Der Funktionsname auf der rechten Seite ist ein rekursiver Aufruf, nicht das bisherige Ergebnis"',
     '',
     'msgid "File not found:"',
     'msgstr "Datei nicht gefunden:"',
@@ -6910,8 +6916,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6617 Zeilen, 309061 Bytes
-  CPoLines_fr: array[0..6616] of string = (
+  // i18n\fr.po - 6623 Zeilen, 309397 Bytes
+  CPoLines_fr: array[0..6622] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -8484,6 +8490,12 @@ const
     '',
     'msgid "for loop runs one index past the end - the upper bound is Count - 1 or High()"',
     'msgstr "la boucle for d'#$00E9'passe la fin d''un indice - la borne sup'#$00E9'rieure est Count - 1 ou High()"',
+    '',
+    'msgid "Result set through the function name - write Result := instead"',
+    'msgstr "R'#$00E9'sultat d'#$00E9'fini via le nom de la fonction - '#$00E9'crire Result := '#$00E0' la place"',
+    '',
+    'msgid "The function name on the right side is a recursive call, not the current result"',
+    'msgstr "Le nom de la fonction '#$00E0' droite est un appel r'#$00E9'cursif, pas le r'#$00E9'sultat courant"',
     '',
     'msgid "File not found:"',
     'msgstr "Fichier introuvable :"',

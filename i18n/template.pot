@@ -128,11 +128,11 @@ msgstr ""
 msgid "\"%s\" in the type - declaration not readable"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1828
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1833
 msgid "\"%s\" is a built-in profile and cannot be changed."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1868
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1873
 msgid "\"%s\" is a built-in profile."
 msgstr ""
 
@@ -727,7 +727,7 @@ msgstr ""
 msgid "%s is not a pointer type of the RTL with one target type"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1620
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1625
 msgid "%s is not a valid JSON object."
 msgstr ""
 
@@ -999,7 +999,7 @@ msgstr ""
 msgid "@%s in line %d - the pointer can change"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1819
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1824
 #: SCA.SharedUI/sources/uProfileViewer.pas:679
 msgid "A profile without rules would find nothing."
 msgstr ""
@@ -1116,7 +1116,7 @@ msgstr ""
 msgid "AllocMem without assignment - the buffer cannot be tracked"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1814
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1819
 msgid "Allowed characters: letters, digits, hyphen, underscore and dot."
 msgstr ""
 
@@ -1419,7 +1419,7 @@ msgstr ""
 msgid "Cannot open or find the file in the editor"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1612
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1617
 msgid "Cannot read %s: %s"
 msgstr ""
 
@@ -2084,7 +2084,7 @@ msgstr ""
 msgid "File not found: "
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1595
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1600
 msgid "File not found: %s"
 msgstr ""
 
@@ -3279,6 +3279,10 @@ msgstr ""
 msgid "Result of managed type is read before it is assigned"
 msgstr ""
 
+#: SCA.Engine/sources/Output/uFixHint.pas:4621
+msgid "Result set through the function name - write Result := instead"
+msgstr ""
+
 #: reDelphix/source/uRdxThreadResumeFix.pas:606
 msgid "Resume stands in a conditional compilation block - an older compiler may need it"
 msgstr ""
@@ -3738,11 +3742,15 @@ msgstr ""
 msgid "Text (one-line hint, no window)"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1805
+#: SCA.Engine/sources/Output/uFixHint.pas:4636
+msgid "The function name on the right side is a recursive call, not the current result"
+msgstr ""
+
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1810
 msgid "The profile name must not be empty."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1873
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1878
 msgid "There is no profile \"%s\"."
 msgstr ""
 

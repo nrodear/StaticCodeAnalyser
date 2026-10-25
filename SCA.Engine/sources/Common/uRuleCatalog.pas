@@ -1129,10 +1129,14 @@ begin
   // nannte SIEBEN solche Regeln, C1 verschob sechs - diese blieb ohne
   // Grund liegen. Sie ist dieselbe Bauart wie fkBeginEndRequired
   // daneben: Code Smell, Hint, reine Frage der Schreibweise.
+  //
+  // fkFunctionNameAsResult (SCA204) seit 2026-10-25 (Nico: "Stil
+  // entscheidet das Team-Profil"): 'GetCount := ..' statt 'Result := ..'
+  // ist richtig, nur altmodisch - nicht in den Default.
   FProfiles.AddOrSetValue('style',
     [fkPublicMemberWithoutDoc, fkNilComparison, fkBeginEndRequired,
      fkWithStatement, fkClassPerFile, fkDfmHardcodedCaption,
-     fkIfElseBegin]);
+     fkIfElseBegin, fkFunctionNameAsResult]);
   // 'default' = alles ausser 'style'. Bewusst als Differenz gebildet und
   // nicht als zweite Liste: so kann ein neues Kind hier gar nicht erst
   // durchfallen, und der Fallback bleibt automatisch synchron mit der
@@ -1158,7 +1162,8 @@ begin
      fkDfmDuplicateBinding, fkDfmDeadEvent, fkDfmSchemaMismatch,
      fkDfmCircularDataSource, fkDfmRequiredFieldUnbound,
      fkDfmRequiredFieldNotVisible, fkDfmCrossFormCoupling,
-     fkDfmActionMismatch, fkDuplicateInterfaceGuid, fkParamNameMismatch, fkComparisonPrecedence, fkLoopPastHighBound]);
+     fkDfmActionMismatch, fkDuplicateInterfaceGuid, fkParamNameMismatch, fkComparisonPrecedence, fkLoopPastHighBound,
+     fkFunctionNameRecursion]);
   FProfiles.AddOrSetValue('code-quality',
     [fkEmptyExcept, fkUnusedUses, fkMissingFinally, fkDeadCode,
      fkLongMethod, fkLongParamList, fkMagicNumber, fkDebugOutput,
