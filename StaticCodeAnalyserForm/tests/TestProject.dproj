@@ -156,6 +156,7 @@
         <DCCReference Include="uTestLoopPastHighBound.pas"/>
         <DCCReference Include="uTestLoopBoundScanText.pas"/>
         <DCCReference Include="uTestFunctionNameResult.pas"/>
+        <DCCReference Include="uTestFuncNameScanText.pas"/>
         <DCCReference Include="uTestIpAddressScanKit.pas"/>
         <DCCReference Include="uTestIpAddressScanGrammar.pas"/>
         <DCCReference Include="uTestIpAddressScanClasses.pas"/>
