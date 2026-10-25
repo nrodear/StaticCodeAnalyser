@@ -36,23 +36,33 @@ type
     [Test] procedure Test_LowercaseUPrefix_Stripped;
     [Test] procedure Test_UppercaseUName_NotStripped;
     [Test] procedure Test_LowercaseUThenLowercase_StillStripped;
+
+    // --- Perf Charge Q3: begrenzte Aggregat-Suche (AFromIdx) ---
+    [Test] procedure Test_FromIdx_EarlierFindingsOfSameFileNotCounted;
+    [Test] procedure Test_FromIdx_AtCallStart_SameHintAsFullScan;
+    [Test] procedure Test_FromIdx_Negative_ActsAsFullScan;
+    [Test] procedure Test_Ctx_FirstDfmFormVisit_OnlyFirstCallTrue;
+    [Test] procedure Test_Ctx_FirstDfmFormVisit_FoldsCaseLikeSameText;
   end;
 
 implementation
 
 uses
-  System.SysUtils, System.Generics.Collections,
+  System.SysUtils, System.Classes, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uDfmParser, uComponentGraph,
-  uDfmDbInUiForm, uDfmDataModuleSplitHint;
+  uDfmDbInUiForm, uDfmDataModuleSplitHint,
+  uAnalyzeContext;   // Perf Charge Q3: FirstDfmFormVisit
 
-function RunDbInUiThenAggregate(const Src: string;
-  const FileName: string = 'uMainForm.dfm'): TObjectList<TLeakFinding>;
+// Haengt die DbInUiForm-Befunde von Src unter FileName an L an (ohne
+// Aggregat) - mehrfach aufgerufen entsteht die kumulative Liste wie im
+// seriellen Scan (Perf Charge Q3).
+procedure AppendDbInUi(const Src, FileName: string;
+  L: TObjectList<TLeakFinding>);
 var
   Parser : TDfmParser;
   Graph  : TComponentGraph;
 begin
-  Result := TObjectList<TLeakFinding>.Create(True);
   Parser := TDfmParser.Create;
   try
     Graph := Parser.ParseSource(Src);
@@ -60,14 +70,21 @@ begin
       // Binding = nil: dieser Harness prueft die Aggregation, nicht die
       // Wurzel-Erkennung. Ohne Bindung entscheidet der Klassenname wie vor
       // dem 2026-09-12 - die Fixturen hier heissen darum weiter TForm1.
-      TDfmDbInUiFormDetector.Analyze(Graph, nil, FileName, Result);
-      TDfmDataModuleSplitHintDetector.Aggregate(FileName, Result);
+      TDfmDbInUiFormDetector.Analyze(Graph, nil, FileName, L);
     finally
       Graph.Free;
     end;
   finally
     Parser.Free;
   end;
+end;
+
+function RunDbInUiThenAggregate(const Src: string;
+  const FileName: string = 'uMainForm.dfm'): TObjectList<TLeakFinding>;
+begin
+  Result := TObjectList<TLeakFinding>.Create(True);
+  AppendDbInUi(Src, FileName, Result);
+  TDfmDataModuleSplitHintDetector.Aggregate(FileName, Result);
 end;
 
 function Count(F: TObjectList<TLeakFinding>; K: TFindingKind): Integer;
@@ -405,6 +422,160 @@ begin
     Assert.IsTrue(Pos('TfJvDBMoveDataModule', Hit.MissingVar) > 0,
       'auch vor kleinem f ist das u das Praefix - gemeldet wurde: ' + Hit.MissingVar);
   finally F.Free; end;
+end;
+
+{ --- Perf Charge Q3: begrenzte Aggregat-Suche ----------------------- }
+//
+// Im seriellen Scan haengt jede Datei ihre Befunde an EINE kumulative
+// Liste; Aggregate durchsuchte sie je Formdatei ganz. Der Runner reicht
+// jetzt den Listenstand vor der Formdatei als AFromIdx durch, wenn der
+// Context belegt, dass die Formdatei zum ersten Mal besucht wird. Die
+// Tests halten: (1) AFromIdx begrenzt wirklich, (2) mit dem Listenstand
+// als Start ist das Ergebnis gleich dem Vollscan, (3) negativ = voll,
+// (4)+(5) die Vormerkung im Context. Ohne die Aenderung sind alle fuenf
+// rot (AFromIdx und FirstDfmFormVisit gibt es nicht - Uebersetzungs-
+// fehler).
+
+const
+  Q3_DFM_THREE_DB =
+    'object F: TForm'#13#10 +
+    '  object Conn: TADOConnection end'#13#10 +
+    '  object Qry: TADOQuery end'#13#10 +
+    '  object DS: TDataSource end'#13#10 +
+    'end';
+
+  Q3_MAIN_DFM = 'uMainForm.dfm';
+
+// Fremdbefund (anderer Kind, andere Datei) als Fuellmaterial davor.
+procedure Q3AppendOther(const FileName: string; L: TObjectList<TLeakFinding>);
+var
+  F : TLeakFinding;
+begin
+  F := TLeakFinding.Create;
+  F.FileName   := FileName;
+  F.LineNumber := '1';
+  F.MissingVar := 'Button1.Caption = ''x''';
+  F.SetKind(fkDfmHardcodedCaption);
+  L.Add(F);
+end;
+
+function Q3HintText(L: TObjectList<TLeakFinding>): string;
+var
+  F  : TLeakFinding;
+  SL : TStringList;
+begin
+  SL := TStringList.Create;
+  try
+    for F in L do
+    begin
+      if F.Kind = fkDfmDataModuleSplitHint then
+      begin
+        SL.Add(Format('%s|%s|%s', [F.FileName, F.LineNumber, F.MissingVar]));
+      end;
+    end;
+    Result := SL.Text;
+  finally
+    SL.Free;
+  end;
+end;
+
+procedure TTestDfmDataModuleSplitHint.Test_FromIdx_EarlierFindingsOfSameFileNotCounted;
+// Drei DbInUiForm-Befunde VOR AFromIdx: mit Start hinter ihnen zaehlt
+// Aggregate nichts (kein Hint), der Vollscan derselben Liste meldet ihn.
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  L := TObjectList<TLeakFinding>.Create(True);
+  try
+    AppendDbInUi(Q3_DFM_THREE_DB, Q3_MAIN_DFM, L);
+    TDfmDataModuleSplitHintDetector.Aggregate(Q3_MAIN_DFM, L, L.Count);
+    Assert.AreEqual<Integer>(0, Count(L, fkDfmDataModuleSplitHint),
+      'Start hinter den Befunden - nichts zu zaehlen');
+    TDfmDataModuleSplitHintDetector.Aggregate(Q3_MAIN_DFM, L, 0);
+    Assert.AreEqual<Integer>(1, Count(L, fkDfmDataModuleSplitHint),
+      'Gegenprobe Vollscan: Hint kommt');
+  finally
+    L.Free;
+  end;
+end;
+
+procedure TTestDfmDataModuleSplitHint.Test_FromIdx_AtCallStart_SameHintAsFullScan;
+// Die Lage im Scan: davor stehen Befunde ANDERER Dateien (auch
+// DbInUiForm einer anderen Form), dann die eigenen. Start = Listenstand
+// vor der eigenen Form liefert denselben Hint wie der Vollscan.
+var
+  LFull, LFrom : TObjectList<TLeakFinding>;
+  Start, i     : Integer;
+begin
+  LFull := TObjectList<TLeakFinding>.Create(True);
+  LFrom := TObjectList<TLeakFinding>.Create(True);
+  try
+    for i := 1 to 50 do
+    begin
+      Q3AppendOther('uOther' + IntToStr(i) + '.dfm', LFull);
+      Q3AppendOther('uOther' + IntToStr(i) + '.dfm', LFrom);
+    end;
+    AppendDbInUi(Q3_DFM_THREE_DB, 'uOtherForm.dfm', LFull);
+    AppendDbInUi(Q3_DFM_THREE_DB, 'uOtherForm.dfm', LFrom);
+    Start := LFrom.Count;
+    AppendDbInUi(Q3_DFM_THREE_DB, Q3_MAIN_DFM, LFull);
+    AppendDbInUi(Q3_DFM_THREE_DB, Q3_MAIN_DFM, LFrom);
+    TDfmDataModuleSplitHintDetector.Aggregate(Q3_MAIN_DFM, LFull);
+    TDfmDataModuleSplitHintDetector.Aggregate(Q3_MAIN_DFM, LFrom, Start);
+    Assert.AreEqual<Integer>(1, Count(LFrom, fkDfmDataModuleSplitHint));
+    Assert.AreEqual<Integer>(LFull.Count, LFrom.Count);
+    Assert.AreEqual(Q3HintText(LFull), Q3HintText(LFrom));
+  finally
+    LFrom.Free;
+    LFull.Free;
+  end;
+end;
+
+procedure TTestDfmDataModuleSplitHint.Test_FromIdx_Negative_ActsAsFullScan;
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  L := TObjectList<TLeakFinding>.Create(True);
+  try
+    AppendDbInUi(Q3_DFM_THREE_DB, Q3_MAIN_DFM, L);
+    TDfmDataModuleSplitHintDetector.Aggregate(Q3_MAIN_DFM, L, -5);
+    Assert.AreEqual<Integer>(1, Count(L, fkDfmDataModuleSplitHint));
+  finally
+    L.Free;
+  end;
+end;
+
+procedure TTestDfmDataModuleSplitHint.Test_Ctx_FirstDfmFormVisit_OnlyFirstCallTrue;
+var
+  Ctx : TAnalyzeContext;
+begin
+  Ctx := TAnalyzeContext.Create;
+  try
+    Assert.IsTrue(Ctx.FirstDfmFormVisit('C:\p\uMainForm.dfm'), 'Erstbesuch');
+    Assert.IsFalse(Ctx.FirstDfmFormVisit('C:\p\uMainForm.dfm'),
+      'zweiter Besuch derselben Formdatei');
+    Assert.IsTrue(Ctx.FirstDfmFormVisit('C:\p\uOther.dfm'),
+      'andere Formdatei ist ein eigener Erstbesuch');
+  finally
+    Ctx.Free;
+  end;
+end;
+
+procedure TTestDfmDataModuleSplitHint.Test_Ctx_FirstDfmFormVisit_FoldsCaseLikeSameText;
+// Aggregate vergleicht per SameText - zwei Schreibweisen, die SameText
+// gleich nennt, muessen als DIESELBE Formdatei gelten (sonst wuerde der
+// Zweitbesuch faelschlich begrenzt suchen).
+var
+  Ctx : TAnalyzeContext;
+begin
+  Ctx := TAnalyzeContext.Create;
+  try
+    Assert.IsTrue(SameText('C:\P\UMAINFORM.DFM', 'c:\p\umainform.dfm'));
+    Assert.IsTrue(Ctx.FirstDfmFormVisit('c:\p\umainform.dfm'));
+    Assert.IsFalse(Ctx.FirstDfmFormVisit('C:\P\UMAINFORM.DFM'));
+  finally
+    Ctx.Free;
+  end;
 end;
 
 initialization

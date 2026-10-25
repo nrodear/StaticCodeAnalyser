@@ -63,6 +63,21 @@ uses
   uDfmDataModuleSplitHint,
   uCrashDiag;  // EStackExhausted - Kontrakt 2026-08-04
 
+// Perf Charge Q3 (2026-10-25): erster Index von Results, den die
+// SCA057-Aggregat-Suche dieser Formdatei durchsuchen muss - Begruendung
+// am Aufruf in AnalyzePasFile. Erstbesuch im Context = Listenstand,
+// sonst (Zweitbesuch, kein Context) 0 = Vollsuche wie vor Q3.
+function AggregateStartIndex(AContext: TAnalyzeContext;
+  const ADfmFileName: string; AResults: TObjectList<TLeakFinding>): Integer;
+begin
+  Result := 0;
+  if not Assigned(AResults) then Exit;   // Aggregate prueft nil selbst
+  if Assigned(AContext) and AContext.FirstDfmFormVisit(ADfmFileName) then
+  begin
+    Result := AResults.Count;
+  end;
+end;
+
 class procedure TDfmAnalysisRunner.AnalyzePasFile(const PasFileName: string;
   Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -75,6 +90,7 @@ var
   OwnsUnitNode: Boolean;      // Perf P8: Cache-AST wird nur geliehen
   Binding     : TFormBinding;
   RepoIdx     : TDfmRepoIndex;
+  AggFromIdx  : Integer;      // Perf Charge Q3: Startindex der SCA057-Suche
 begin
   RepoIdx := CtxDfmRepoIndex(AContext);
   if PasFileName = '' then Exit;
@@ -86,6 +102,22 @@ begin
   // (Recherche 16.09.: 1.009 Formulare, 0 Read Errors).
   DfmFileName := TStaticFiles.PairedFormFile(PasFileName);
   if DfmFileName = '' then Exit;
+
+  // Perf Charge Q3 (2026-10-25): Startindex fuer die Aggregat-Suche des
+  // SCA057-Hints (TDfmDataModuleSplitHintDetector.Aggregate, Block 5).
+  // Im seriellen Scan ist Results die KUMULATIVE Liste aller Dateien -
+  // die Vollsuche je Formdatei kostete auf jvcl ~1,3 s (1.289 Form-
+  // dateien x bis zu 240.000 Befunde). Identisch bleibt das Ergebnis,
+  // wenn VOR Results.Count kein fkDfmDbInUiForm-Befund DIESER Formdatei
+  // steht. Den erzeugt allein TDfmDbInUiFormDetector, und zwar nur hier
+  // in AnalyzePasFile; ParseLeaks startet mit einer frischen Liste (vor
+  // dem Lauf hoechstens fkFileReadError). Also kann ein solcher Befund
+  // nur aus einem FRUEHEREN Besuch derselben Formdatei im selben Scan
+  // stammen (Datei doppelt in der Liste) - den meldet der Context, und
+  // dann bleibt es bei der Vollsuche wie bisher. Ohne Context (Tests,
+  // Einzelaufrufe) ebenfalls Vollsuche. Die Vormerkung steht VOR den
+  // Detektoren, damit auch ein abgebrochener Besuch zaehlt.
+  AggFromIdx := AggregateStartIndex(AContext, DfmFileName, Results);
 
   try
     // TDfmBinaryReader transparent: liefert Text-DFMs unveraendert
@@ -210,7 +242,8 @@ begin
     TDfmDbInUiFormDetector.Analyze(Graph, Binding, DfmFileName, Results);
     // Aggregat-Hint NACH DbInUiForm (verbraucht dessen Findings als Input).
     // Die beiden gehoeren zusammen und wandern nur gemeinsam.
-    TDfmDataModuleSplitHintDetector.Aggregate(DfmFileName, Results);
+    TDfmDataModuleSplitHintDetector.Aggregate(DfmFileName, Results,
+      AggFromIdx);
   except
     // AUSSER Stapelueberlauf und Abbruch (Kontrakt 2026-08-04): dieser
     // Sammelfang machte den Durchreich-Schutz in RunAllDetectors fuer
