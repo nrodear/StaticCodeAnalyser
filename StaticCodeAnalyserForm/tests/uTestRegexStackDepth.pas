@@ -11,6 +11,14 @@ unit uTestRegexStackDepth;
 //
 // Jeder Test mit langer Eingabe haette OHNE den Umbau den Testlauf mit
 // Stack-Ueberlauf beendet (Tiefe je Muster gemessen, s. Kommentar am Test).
+// Pruef-Thread (Integration Charge R, 2026-10-26): die Detektor- und
+// Regex-Aufrufe laufen deshalb NICHT im Test-Thread, sondern in einem
+// eigenen Thread mit fest reservierten 1 MB Stack (RunOnProbeStack) -
+// so gross wie der Hauptthread von bds.exe und unabhaengig davon, wie tief
+// DUnitX gerade steht. Liefe der possessive Umbau im Delphi-pcre16 doch
+// rekursiv, endete der Ueberlauf (EStackOverflow) in diesem Thread und
+// wird zum roten Test, statt den ganzen TestProject-Lauf abzubrechen (so
+// geschehen bei SCA137). Die Asserts bleiben im Test-Thread.
 // Die Detektoren laufen DIREKT (nicht ueber FindingsOfFile): der Waechter
 // gilt der einen Regex-Stelle, nicht den uebrigen Detektoren auf Zeilen mit
 // mehreren zehn KB. Die beiden kurzen HardcodedString-Tests pinnen den
@@ -59,10 +67,61 @@ uses
 
 const
   LONG_LIST = 5000;   // Listenelemente je langer Liste
+  // Reservierter Stack des Pruef-Threads: der Delphi-Default (1 MB), mit
+  // dem bds.exe und TestProject laufen - s. Kopfkommentar.
+  PROBE_STACK = 1024 * 1024;
 
 type
   TDetectorRun = reference to procedure(Root: TAstNode; const FileName: string;
     Results: TObjectList<TLeakFinding>);
+
+  // Fuehrt einen Rumpf in einem eigenen Thread mit PROBE_STACK aus. Eine
+  // Ausnahme im Rumpf (auch EStackOverflow) faengt TThread als
+  // FatalException; RunOnProbeStack macht daraus Assert.Fail.
+  TStackProbeThread = class(TThread)
+  private
+    FBody : TProc;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(const ABody: TProc);
+  end;
+
+constructor TStackProbeThread.Create(const ABody: TProc);
+begin
+  // Windows-Ueberladung: STACK_SIZE_PARAM_IS_A_RESERVATION, also genau
+  // PROBE_STACK reserviert statt des Werts aus dem PE-Kopf.
+  inherited Create(True, PROBE_STACK);
+  FreeOnTerminate := False;
+  FBody := ABody;
+end;
+
+procedure TStackProbeThread.Execute;
+begin
+  FBody();
+end;
+
+procedure RunOnProbeStack(const ABody: TProc);
+var
+  T   : TStackProbeThread;
+  Err : string;
+begin
+  Err := '';
+  T := TStackProbeThread.Create(ABody);
+  try
+    T.Start;
+    T.WaitFor;
+    if T.FatalException is Exception then
+      Err := T.FatalException.ClassName + ': ' +
+        Exception(T.FatalException).Message
+    else if T.FatalException <> nil then
+      Err := T.FatalException.ClassName;
+  finally
+    T.Free;
+  end;
+  if Err <> '' then
+    Assert.Fail('Ausnahme im 1-MB-Pruef-Thread (Stack-Ueberlauf?): ' + Err);
+end;
 
 // 'P0, P1, ..., P<N-1>' - eine Zeile, Komma + Leerzeichen.
 function IdentList(const APrefix: string; ACount: Integer): string;
@@ -83,39 +142,60 @@ begin
   end;
 end;
 
-// Schreibt ASrc in eine Temp-Datei, parst sie (AParse) und ruft ARun.
+// Schreibt ASrc in eine Temp-Datei, parst sie (AParse) und ruft ARun -
+// alles im Pruef-Thread (RunOnProbeStack). Die Parameter gehen ueber
+// Lokale in den Rumpf (Result und Parameter faengt eine anonyme Methode
+// nicht ueberall).
 function RunDetector(const ASrc: string; AParse: Boolean;
   const ARun: TDetectorRun): TObjectList<TLeakFinding>;
 var
-  TempPath : string;
-  Parser   : TParser2;
-  Root     : TAstNode;
+  Findings : TObjectList<TLeakFinding>;
+  Src      : string;
+  Parse    : Boolean;
+  Run      : TDetectorRun;
 begin
-  Result := TObjectList<TLeakFinding>.Create(True);
-  TempPath := TPath.Combine(TPath.GetTempPath,
-    'sca_r4_' + TGuid.NewGuid.ToString
-      .Replace('{', '').Replace('}', '').Replace('-', '') + '.pas');
-  TFile.WriteAllText(TempPath, ASrc, TEncoding.UTF8);
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  Src := ASrc;
+  Parse := AParse;
+  Run := ARun;
   try
-    if AParse then
-    begin
-      Parser := TParser2.Create;
-      try
-        Root := Parser.ParseFile(TempPath);
+    RunOnProbeStack(
+      procedure
+      var
+        TempPath : string;
+        Parser   : TParser2;
+        Root     : TAstNode;
+      begin
+        TempPath := TPath.Combine(TPath.GetTempPath,
+          'sca_r4_' + TGuid.NewGuid.ToString
+            .Replace('{', '').Replace('}', '').Replace('-', '') + '.pas');
+        TFile.WriteAllText(TempPath, Src, TEncoding.UTF8);
         try
-          ARun(Root, TempPath, Result);
+          if Parse then
+          begin
+            Parser := TParser2.Create;
+            try
+              Root := Parser.ParseFile(TempPath);
+              try
+                Run(Root, TempPath, Findings);
+              finally
+                Root.Free;
+              end;
+            finally
+              Parser.Free;
+            end;
+          end
+          else
+            Run(nil, TempPath, Findings);
         finally
-          Root.Free;
+          if TFile.Exists(TempPath) then TFile.Delete(TempPath);
         end;
-      finally
-        Parser.Free;
-      end;
-    end
-    else
-      ARun(nil, TempPath, Result);
-  finally
-    if TFile.Exists(TempPath) then TFile.Delete(TempPath);
+      end);
+  except
+    Findings.Free;
+    raise;
   end;
+  Result := Findings;
 end;
 
 { uDetectorUtils }
@@ -126,6 +206,7 @@ procedure TTestRegexStackDepth.AttrPosition_LongFieldListWithType_True;
 // Bezeichner (5.000 -> ~20.000 Rahmen, Ueberlauf ab ~1.000).
 var
   Lines : TStringList;
+  Hit   : Boolean;
 begin
   Lines := TStringList.Create;
   try
@@ -135,7 +216,13 @@ begin
     Lines.Add('    [Inject]');
     Lines.Add('    ' + IdentList('v', LONG_LIST) + ': Integer;');
     Lines.Add('  end;');
-    Assert.IsTrue(TDetectorUtils.IsLikelyAttributePosition(Lines, 3),
+    Hit := False;
+    RunOnProbeStack(
+      procedure
+      begin
+        Hit := TDetectorUtils.IsLikelyAttributePosition(Lines, 3);
+      end);
+    Assert.IsTrue(Hit,
       'Attribut vor einer Feldliste mit 5.000 Bezeichnern');
   finally
     Lines.Free;
@@ -148,6 +235,7 @@ procedure TTestRegexStackDepth.AttrPosition_LongIdentListWithoutType_False;
 // Backtracking durch alle 5.000 Wiederholungen).
 var
   Lines : TStringList;
+  Hit   : Boolean;
 begin
   Lines := TStringList.Create;
   try
@@ -157,7 +245,13 @@ begin
     Lines.Add('    [Inject]');
     Lines.Add('    ' + IdentList('v', LONG_LIST) + ';');
     Lines.Add('  end;');
-    Assert.IsFalse(TDetectorUtils.IsLikelyAttributePosition(Lines, 3),
+    Hit := True;   // lief der Rumpf nicht, bleibt der Test rot
+    RunOnProbeStack(
+      procedure
+      begin
+        Hit := TDetectorUtils.IsLikelyAttributePosition(Lines, 3);
+      end);
+    Assert.IsFalse(Hit,
       'Liste ohne Typ-Doppelpunkt ist kein Member');
   finally
     Lines.Free;
