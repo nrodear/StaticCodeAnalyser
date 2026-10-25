@@ -213,6 +213,8 @@ program reDelphix.Test;
 //   * uTestRdxContextRunner     - Code-Aktionen ohne Fund am Caret
 //                                 (Charge B): Konstrukt unter dem Caret,
 //                                 Lokale Konstante, try/finally um Create
+//   * uTestRdxContextFormat     - C16 (Charge N): Format() aus Verkettung
+//                                 am Caret (dieselbe Kette wie SCA044)
 //   * uTestRdxSharedMap         - Charge P5: geteilte Code-Sicht
 //                                 (TRdxMappedLines, Acquire/Release) gleich
 //                                 der frischen; Plattenblick-Cache von
@@ -332,6 +334,7 @@ uses
   uRdxLookupHoistFix in '..\source\uRdxLookupHoistFix.pas',
   uRdxLoopBoundFix in '..\source\uRdxLoopBoundFix.pas',
   uRdxInheritedEmptyFix in '..\source\uRdxInheritedEmptyFix.pas',
+  uRdxPlacesRunner in '..\source\uRdxPlacesRunner.pas',
   uRdxContextRunner in '..\source\uRdxContextRunner.pas',
   uTestRdxRecipes in 'uTestRdxRecipes.pas',
   uTestRdxBench in 'uTestRdxBench.pas',
@@ -421,6 +424,7 @@ uses
   uTestRdxLoopBoundFix in 'uTestRdxLoopBoundFix.pas',
   uTestRdxInheritedEmptyFix in 'uTestRdxInheritedEmptyFix.pas',
   uTestRdxContextRunner in 'uTestRdxContextRunner.pas',
+  uTestRdxContextFormat in 'uTestRdxContextFormat.pas',
   uTestRdxSharedMap in 'uTestRdxSharedMap.pas',
   uTestRdxMagicGuards in 'uTestRdxMagicGuards.pas',
   uTestRdxMagicFixDetector in 'uTestRdxMagicFixDetector.pas',

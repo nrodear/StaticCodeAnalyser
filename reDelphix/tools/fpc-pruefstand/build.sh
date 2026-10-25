@@ -192,8 +192,10 @@ UNITS+=("$SCA/SCA.Engine/sources/Infrastructure/uSourcePlaces.pas")
 # (uRdxCategoryArgFix .. uRdxTrailingCommaFix), dazu seit Charge A3/A4
 # uRdxLoopBoundFix (SCA203) und uRdxInheritedEmptyFix (SCA125). Seit
 # Charge B (Code-Aktionen ohne Fund) der Laeufer am Caret uRdxContextRunner
-# (V5) - er geht direkt ueber die Planer-Units, nicht ueber uRdxFixTable.
-for u in uRdxText uRdxRecipes uRdxPaths uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxBlocks uRdxSuppress uRdxSimpleFixes uRdxStructFixes uRdxLineFixes uRdxRaiseFixes uRdxDeclFixes uRdxFlowFixes uRdxRoutineFixes uRdxCleanupFixes uRdxTryFixes uRdxResultFixes uRdxSqlTemplate uRdxIntroPlan uRdxIntroEdits uRdxRtlTypes uRdxCompilerTraces uRdxMagicFixes uRdxTypeProof uRdxTrySpan uRdxHandOver uRdxInheritedFixes uRdxSqlFacts uRdxCategoryArgFix uRdxEmptyBlockFix uRdxEmptyExceptFix uRdxGotoExitFix uRdxNativeIntFix uRdxParensFix uRdxTrailingCommaFix uRdxLoopBoundFix uRdxInheritedEmptyFix uRdxContextRunner; do
+# (V5) - er geht direkt ueber die Planer-Units, nicht ueber uRdxFixTable;
+# seit Charge N (C16) auch ueber uRdxPlacesRunner (Describe, FormatRewrite
+# und die uses-Fragen von SCA044, aus uRdxRecipeRunner umgezogen).
+for u in uRdxText uRdxRecipes uRdxPaths uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxBlocks uRdxSuppress uRdxSimpleFixes uRdxStructFixes uRdxLineFixes uRdxRaiseFixes uRdxDeclFixes uRdxFlowFixes uRdxRoutineFixes uRdxCleanupFixes uRdxTryFixes uRdxResultFixes uRdxSqlTemplate uRdxIntroPlan uRdxIntroEdits uRdxRtlTypes uRdxCompilerTraces uRdxMagicFixes uRdxTypeProof uRdxTrySpan uRdxHandOver uRdxInheritedFixes uRdxSqlFacts uRdxCategoryArgFix uRdxEmptyBlockFix uRdxEmptyExceptFix uRdxGotoExitFix uRdxNativeIntFix uRdxParensFix uRdxTrailingCommaFix uRdxLoopBoundFix uRdxInheritedEmptyFix uRdxPlacesRunner uRdxContextRunner; do
   if [ -f "$RDX/source/$u.pas" ]; then
     UNITS+=("$RDX/source/$u.pas")
   else

@@ -255,6 +255,13 @@ type
     // Cache von FileReason/IncludeReason geleert - ein Menueaufbau (die Funde
     // und die Code-Aktion) teilt sich EINEN Plattenblick je Datei.
     procedure BeginDiskBatch;
+    // Der Quellstellen-Dienst fuer die Code-Aktion am Caret (C16, "Format()
+    // aus Verkettung"): AText (der Puffer) geparst oder - gleicher Name,
+    // gleicher Text - der schon offene (TRdxSourceCache, Minor 9). nil,
+    // wenn der Parser scheitert; der Grund steht im Protokoll, die anderen
+    // Code-Aktionen bleiben. Ein erschoepfter Stapel und EAbort laufen
+    // weiter wie in AddTreeActions.
+    function ContextPlaces(const AFileName, AText: string): TSourcePlaces;
     // Der Einstieg des Hosts (TFindingActionProvider).
     function Provide(const AFinding: TLeakFinding): TArray<TFindingAction>;
     // Code-Aktionen ohne Fund am Caret (Charge B, TContextActionProvider):
@@ -264,8 +271,11 @@ type
     // TRdxMagicFixes.FileReason (Projektdateien der Verzeichnisse darueber)
     // und IncludeReason (die Includes der Unit) - wie die Fund-Hilfe SCA014;
     // beide pruefen vorher den Netzpfad (uRdxPaths.IsNetworkPath) und
-    // greifen dort nicht auf die Platte zu. Die Eintraege rechnet
-    // uRdxContextRunner, die
+    // greifen dort nicht auf die Platte zu. "Format() aus Verkettung" (C16)
+    // braucht den geparsten Puffer: nur, wenn am Caret eine '+'-Kette
+    // stehen kann (TRdxContextRunner.WantsPlaces), oeffnet ContextPlaces
+    // den Quellstellen-Dienst - derselbe wie fuer die Funde des Menues.
+    // Die Eintraege rechnet uRdxContextRunner, die
     // Menuetexte uRdxFixTable.ContextCaption (gleich denen der Fund-
     // Hilfen, Dedup F2). Kein Kandidat am Caret: keine Aktion, auch keine
     // Diagnose (F4) - Kind setzt die Registry (fakContext).
@@ -1056,11 +1066,31 @@ begin
 end;
 
 
+function TRdxProvider.ContextPlaces(const AFileName,
+  AText: string): TSourcePlaces;
+begin
+  Result := nil;
+  try
+    if FSource.Open(AFileName, txBuffer, AText) <> orFailed then
+      Result := FSource.Places;
+  except
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    // noinspection ExceptionTooGeneral
+    // Wie AddTreeActions: ein Fehler beim Parsen kostet nur die Aktion,
+    // die den Baum braucht (der Dienst schliesst sich dabei selbst).
+    on E: Exception do
+      RdxLog('Kontext %s: Parser %s: %s',
+        [ExtractFileName(AFileName), E.ClassName, E.Message]);
+  end;
+end;
+
 function TRdxProvider.ProvideContext(
   const AContext: TEditorContext): TArray<TFindingAction>;
 var
   Text     : string;
   Lines    : TStrings;
+  Places   : TSourcePlaces;
   Outcomes : TArray<TRdxContextOutcome>;
   O        : TRdxContextOutcome;
   Caption  : string;
@@ -1084,7 +1114,11 @@ begin
   BeginDiskBatch;
   PrevDisk := TRdxMagicFixes.UseDiskCache(FDiskCache);
   try
-    Outcomes := TRdxContextRunner.Run(Lines, AContext);
+    // C16: der Baum nur, wenn am Caret eine Kette stehen kann.
+    Places := nil;
+    if TRdxContextRunner.WantsPlaces(Lines, AContext) then
+      Places := ContextPlaces(AContext.FileName, Text);
+    Outcomes := TRdxContextRunner.Run(Lines, AContext, Places);
     for O in Outcomes do
     begin
       Caption := TRdxFixTable.ContextCaption(O);

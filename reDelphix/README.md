@@ -31,7 +31,8 @@ Konzept: `Konzept_SourceRefactor_Quellstellen_2026-10-02.md`, Abschnitt 15
 reDelphix.d12.dpk / .dproj        {$DESIGNONLY}, requires rtl, vcl, designide, SCA.Engine
 source\uRdxRegister.pas           Register -> Anbieter an TFindingActions anmelden; finalization: abmelden
 source\uRdxProvider.pas           je Fund die Aktionen bauen (Anker/fixMode aus dem Regelkatalog); Quell-Cache TRdxSourceCache; seit Charge P5 die Zeilen der zuletzt gelesenen Datei samt geteilter Code-Sicht (SharedLines) und ein Plattenblick je Menueaufbau (BeginDiskBatch, DISK_BATCH_MS)
-source\uRdxRecipeRunner.pas       Rezept-Laeufer auf TSourcePlaces: Fund -> Beschreibung -> Ersetzung fuer SCA044 (Format), SCA003 (SQL-Vorlage) und die uses-Klauseln (PlanUses, QualifyUses, ClausesOf); dazu die geteilten Ergebnistypen (TRdxFixOutcome) und der Aktionsring des Anbieters; ohne ToolsAPI, testbar
+source\uRdxRecipeRunner.pas       Rezept-Laeufer auf TSourcePlaces: Fund -> Beschreibung -> Ersetzung fuer SCA044 (Format), SCA003 (SQL-Vorlage) und die uses-Klauseln (PlanUses, QualifyUses, ClausesOf); dazu die geteilten Ergebnistypen (TRdxFixOutcome) und der Aktionsring des Anbieters; ohne ToolsAPI, testbar. Describe, PartsOf, FormatRewrite und die uses-Fragen delegiert er seit C16 an uRdxPlacesRunner
+source\uRdxPlacesRunner.pas       der Teil des Rezept-Laeufers, der nur TSourcePlaces braucht (Charge N, C16; 1:1 aus uRdxRecipeRunner): Describe/DescribeAnchor, PartsOf, FormatRewrite (SCA044 und die Code-Aktion "Format() aus Verkettung"), PlanUses, Klauseln, Direktiven, FPC-Weiche; ohne Fund und Katalog, FPC-Pruefstand
 source\uRdxFixRunner.pas          die Ruempfe der einfachen Hilfen, die den Quellstellen-Dienst brauchen (TRdxFixRunner: SCA075/SCA085/SCA126/SCA074/SCA087/SCA139/SCA066/SCA072/SCA084/SCA007/SCA168/SCA101/SCA099), und die Bausteine der Tabelle (MapFix, CastFreeFix, EmptyRaiseFix, AppendUses, CondAssignReason, SelfAssignReason) - bis Charge B2S-b in uRdxRecipeRunner (Review R6-12); ohne ToolsAPI, nur Delphi; nur uRdxFixTable ruft sie
 source\uRdxFixTable.pas           Tabelle der einfachen Hilfen: je Fundart Planer, Hinweis, Kennzeichnung (E2), zweiter Eintrag, Menuetext (Charge R8); EIN Geruest fuer die Planer mit Plan-Record (TRdxFixFrame, generisch, Charge H5c); ohne ToolsAPI, nur Delphi
 source\uRdx*Fix.pas               die einfachen Hilfen der Chargen Q und R, je Hilfe eine Unit mit Planer und Adapter (TRdxFixPlanner, Zeile in FIX_ROWS): uRdxHttpsFix SCA115, uRdxParensFix SCA094, uRdxAttrGapFix SCA183, uRdxTwiceInheritedFix SCA093, uRdxNativeIntFix SCA161, uRdxEmptyFinallyFix SCA083, uRdxForRangeFix SCA046, uRdxTabsFix SCA061, uRdxTrailingBlanksFix SCA063, uRdxKeywordCaseFix SCA064, uRdxEmptyExceptFix SCA002, uRdxEmptyOnHandlerFix SCA159, uRdxEmptyBlockFix SCA077, uRdxNoSonarFix SCA065, uRdxTrailingCommaFix SCA068, uRdxGroupedDeclFix SCA076, uRdxIgnoreReasonFix SCA179, uRdxAttrDuplicateFix SCA180, uRdxCategoryArgFix SCA181, uRdxGotoExitFix SCA060 (tools\gen-quickfix-doc.py liest sie per Namensmuster); Charge QF: uRdxFormatSettingsFix SCA128/SCA059, uRdxMethodNameFix SCA106, uRdxIntegerOverflowFix SCA137, uRdxCharEscapeFix SCA188/SCA192, uRdxThreadResumeFix SCA113, uRdxInsecureRandomFix SCA167, uRdxFloatEqualityFix SCA144, uRdxMoveSizeFix SCA154, uRdxDebugOutputFix SCA017, uRdxDeadCodeFix SCA011, uRdxIfThenFix SCA131, uRdxAssertSideEffectFix SCA169; Chargen QF8..QF11: uRdxUnusedParameterFix SCA054, uRdxConstStringParameterFix SCA170, uRdxExceptionNameFix SCA118, uRdxLocalConstantNameFix SCA119, uRdxDigitGroupingFix SCA069, uRdxConsecutiveSectionFix SCA079, uRdxAvoidOutFix SCA086, uRdxRawExceptionFix SCA127; Chargen QF12..QF15: uRdxClassMethodFix SCA148, uRdxAlwaysTrueFix SCA150, uRdxObjectListFix SCA174, uRdxHomoglyphFix SCA193, uRdxParamNameFix SCA199, uRdxDeepNestingFix SCA018, uRdxLookupHoistFix SCA111/SCA112; Charge A3: uRdxLoopBoundFix SCA203; Charge A4: uRdxInheritedEmptyFix SCA125 - seit der Folgewelle G09-07 nur noch die Textlogik, die Adapter stehen in uRdxFixTable
@@ -54,7 +55,7 @@ source\uRdxCompilerTraces.pas     Spuren alter Compiler je Sprachmittel (Default
 source\uRdxMagicFixes.pas         Quick-Fix SCA014 "Lokale Konstante einfuehren" (Charge Q14, E28): Ziel aus dem Fund, dann uRdxIntroPlan/uRdxIntroEdits ohne Sync-Edit-Sitzung; Platte: Lazarus-Projekt, alte Delphi-Projekte (.dof/.bdsproj/.bpr/.bpg, .dproj vor 10.3) und Includes neben der Unit, kein Netzpfad (Charge SQc; seit Charge B1-FD auch kein Include auf einem Netzpfad; `\\?\C:\..` ist seit Charge B2S-a lokal); Plattenblick-Cache TRdxDiskReasonCache (Charge P5, nur aktiv ueber UseDiskCache)
 source\uRdxIntroPlan.pas          Code-Aktion "Lokale Variable einfuehren" (ohne Fund; seit Charge Q14 auch der Quick-Fix SCA014): Literal am Caret, Deklaration, Spalten, Ablehnungen (reine Textlogik)
 source\uRdxIntroEdits.pas         dieselbe Aktion: Puffertext, Ziel am Caret, Ersetzungen des Writers, Ende des Sync-Blocks (reine Textlogik; IDE-Teil folgt)
-source\uRdxContextRunner.pas      Code-Aktionen ohne Fund am Caret (Charge B, V5): Lokale Konstante (TRdxMagicFixes.IntroduceAt) und try/finally um Create (TRdxTryFixes.CreateAt), ein Eintrag je Kandidat; reine Textlogik, FPC-Pruefstand
+source\uRdxContextRunner.pas      Code-Aktionen ohne Fund am Caret (Charge B, V5): Lokale Konstante (TRdxMagicFixes.IntroduceAt) und try/finally um Create (TRdxTryFixes.CreateAt) als Textlogik, seit C16 Format() aus Verkettung (TRdxPlacesRunner.FormatRewrite, mit Quellstellen-Dienst); ein Eintrag je Kandidat, FPC-Pruefstand
 source\uRdxSuppress.pas           Unterdrueck-Marker setzen und entfernen (reine Textlogik)
 source\uRdxCodeMap.pas            Code-Sicht der Datei (Kommentare, Strings, mehrzeilige Strings), Token-Leser und die geteilten Bausteine der Planer: Bereiche (RangeText, CommentInRange, LastCharBefore/FirstCharAfter, CanAppendLine - bis Charge B2S-a in uRdxStructFixes), Fragen an die ganze Datei (NextTokenOnLineWith, DeclaresAfter/DeclaresRoutine - bis dahin in uRdxSimpleFixes), Klammertiefe (ParenDelta) und Meldungstext (QuotedText, ColumnFromMessage); die Planer-Units haengen fuer solche Helfer nicht mehr aneinander (Review R3-07); seit Charge P5 die geteilte Sicht: TRdxMappedLines traegt ihre Map, TRdxCodeMap.Acquire/Release statt Create/Free
 source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung aller Ersetzungen, Spaltengrenze, Textwahl
@@ -609,6 +610,7 @@ liegt im Core (`uFindingActions`: `fakContext`, `TEditorContext`,
 |---|---|---|
 | Lokale Konstante fuer N einfuehren | ein Zahl-Literal (Caret davor, darin oder direkt dahinter; dezimal mit `_`, Bruch, Exponent, `$FF`) | dieselbe Kette wie der Quick-Fix SCA014 (`TRdxMagicFixes.IntroduceAt` -> `PlanLiteral`, Tabelle oben): `const MagicNr01 = N;` als Inline-Konstante direkt vor der Anweisung (E26), nur DIESES Literal (E28), ein Zweig ohne `begin` bekommt `begin..end`, Name `MagicNr01`.. der erste freie (F3), kein Sync Edit, kein Dialog; dieselben Sperren (Zeilen-Leser der Code-Aktion, FPC-Weiche, Spuren alter Compiler, Hauptblock, Skript) und derselbe Plattenblick (`FileReason`, `IncludeReason`: Lazarus-Projekt, alte Delphi-Projekte, Includes, Netzpfad). Sperrt die GANZE Datei (FPC-Weiche, Skript, Spuren alter Compiler - `TRdxMagicPlan.FileWide` aus `IntroduceAt` - und der ganze Plattenblick), steht KEIN Eintrag da, auch wenn zugleich die Stelle sperrt (Entscheid Nico 2026-10-24); Sperren der Stelle (Ausdrucksfortsetzung, `else if`, Deklarationszeile, Hauptblock ...) stehen ausgegraut mit Grund da. Die Fund-Hilfe SCA014 nennt weiter jeden Grund. Ein triviales Literal - dieselbe Menge, die SCA014 durchlaesst: die Vorgabe von `[Detectors] MagicNumberTrivials` (`0,1,2,-1,10,100`) und Zweierpotenzen bis 1024, nur dezimale Ganzzahlen, ein unaeres `-` zaehlt mit (`-1` trivial, `-10` nicht); gespiegelt in `TRdxMagicFixes.IsTrivialLiteral`, eine eigene Liste in der analyser.ini sieht reDelphix nicht - ist kein Kandidat: kein Eintrag (Entscheid Nico 2026-10-24; Korpus B3: 161 der 226 Angebote fallen weg). Nur Zahlen (F5): `#13`, Strings und Zeichen bieten nichts an; ein Binaer- oder Oktal-Literal (`%101`, `&17`) steht gesperrt da (ausser in einer gesperrten Datei). Bedeutungsgleich nach der Praemisse von E26 (unten: hier steht das Literal auch in Arithmetik und Aufrufen - gemessen ist P6 noch nicht) |
 | X in einem try/finally-Block freigeben (aendert Verhalten) | eine Zeile `X := T.Create..;` bzw. `var X[: T] := T.Create..;`, X eine LOKALE Variable der Routine | C3: dieselbe Kette wie der Quick-Fix SCA009 (`TRdxTryFixes.CreateAt` -> `ObjectPair`, Baustein B5), X aus der Zeile; die Freigabe `X.Free`/`FreeAndNil(X)` muss schon als ganze, unbedingte Anweisung in derselben Liste stehen, sonst gesperrt mit Grund (F6). Mehrere Erzeugungen auf der Zeile: die, in deren Anweisung der Caret steht. Gekennzeichnet (E2) wie SCA009 |
+| Format() aus Verkettung bilden | eine `+`-Kette einer Zuweisung oder des EINEN Arguments eines Aufrufs (`ShowMessage('a' + ..)`), Caret zwischen dem ersten und dem letzten Term oder direkt dahinter; auf einer Fortsetzungszeile wird die Anweisung bis zu 30 Zeilen aufwaerts gesucht (nicht ueber ein `;`) | C16 (Charge N): dieselbe Kette wie die Fund-Hilfe SCA044 (`TRdxPlacesRunner.DescribeAnchor` -> `ChainOf`/`CallOf`, dann `FormatRewrite` nach der Kompilat-Regel, Rezept 5.1) - aber schon ab einem `+`. Kandidat nur mit mindestens zwei Literalen ODER einem Literal und einer Umwandlung nach String (`IntToStr`, `UIntToStr`, `IntToHex`, `FloatToStr(F)`, `FormatFloat`, `CurrToStr(F)`, `FormatCurr`, `BoolToStr`, `DateToStr`, `TimeToStr`, `DateTimeToStr`, `FormatDateTime`, `VarToStr`, `GUIDToString`, `x.ToString`); `'a' + B` und Ketten ohne Literal bieten nichts an. Nur bedeutungsgleich wie bei SCA044: `IntToStr(x)` wird `%d`/`%u` nur mit bewiesenem Ganzzahltyp, `FloatToStr(x)` bleibt Argument von `%s` (kein `%g`), `%` im Literal wird `%%`, Apostrophe und `#13` bleiben; gesperrt mit dem Grund der Fund-Hilfe: Kommentar im Bereich, Variant-Anzeichen oder Variant-Typ, Zahl, Klammerausdruck, AnsiString, SQL-Text, schon ein `Format(` in der Kette. Fehlt `System.SysUtils`, kommt es als zweite Ersetzung mit; laesst es sich nicht einfuegen (Direktive in der Klausel, kein Abschnitt - `TRdxFormatOutcome.FileWide`), gilt das jeder Kette der Datei: kein Eintrag (wie bei der Konstante). Kein Eintrag auch bei einer Kette nur aus Literalen, mehreren Anweisungen auf der Zeile, mehreren Argumenten, einer Kette, die anders zerfaellt, als der Parser sie sieht. Bedeutungsgleich, nicht gekennzeichnet |
 
 **Wann ein Eintrag entsteht (F4):** nur mit einem Kandidaten am Caret -
 dann freigegeben oder ausgegraut mit dem Grund im Hint; sonst gar nichts
@@ -624,12 +626,21 @@ Zeile. Der Text kommt nur aus dem Editor-Puffer einer Pascal-Datei; die
 Platte liest erst die Lokale Konstante fuer einen Kandidaten am Caret
 (`FileReason`: Projektdateien der Verzeichnisse darueber, `IncludeReason`:
 die Includes - wie die Fund-Hilfe SCA014), beide nach der Netzpfad-Sperre
-(`uRdxPaths.IsNetworkPath`, dort kein Plattenzugriff).
+(`uRdxPaths.IsNetworkPath`, dort kein Plattenzugriff). "Format() aus
+Verkettung" braucht den geparsten Puffer: der Anbieter oeffnet den
+Quellstellen-Dienst (`TRdxProvider.ContextPlaces`, derselbe Quell-Cache wie
+fuer die Funde des Menues) nur, wenn auf der Caret-Zeile oder einer
+Nachbarzeile ein `+` als Code steht (`TRdxContextRunner.WantsPlaces`);
+scheitert der Parser, entfaellt nur dieser Eintrag (Protokoll).
 
 **Menuetext = der der Fund-Hilfe (F2):** `uRdxFixTable.ContextCaption`
 baut ihn ueber `CaptionFor` der Zeile `fkMagicNumber` bzw.
 `fkMissingFinally` - gleich geschrieben, also faellt die Kontextaktion auf
-einer SCA014- bzw. SCA009-Fundzeile hinter der Fund-Hilfe weg
+einer SCA014- bzw. SCA009-Fundzeile hinter der Fund-Hilfe weg; "Format()
+aus Verkettung" nimmt die msgid des SCA044-Rezepts (`CAP_FORMAT` in
+`uRdxProvider`, `CAP_CONTEXT_FORMAT` in `uRdxFixTable` - SCA044 ist keine
+Zeile der Tabelle; die Gleichheit prueft
+`uTestRdxContextFormat.Caption_IsSca044RecipeCaption` am Quelltext)
 (`uFindingActionMenu`, Dedup per Caption). Die Hinweise sind dieselben
 msgids. Die Gross-/Kleinschreibung zaehlt dabei nicht (`SameText`, Review
 Charge B, Befund 5): der Name kommt auf dem Fundweg aus der Meldung des
@@ -650,6 +661,25 @@ Eintrag, Stelle = ausgegraut, SCA014 unveraendert; 4 in
 entscheidet), dazu 4 nur unter
 Delphi (Menuetext und Ersetzung gleich denen der Fund-Hilfen, ueber
 `PlanFixIn`; SCA014 ueber die Tabelle in einer FPC-Unit weiter mit Grund).
+"Format() aus Verkettung" (C16): `uTestRdxContextFormat` - 19 Tests auch
+im FPC-Pruefstand (gegen den Stub-Parser, der keine Typen kennt: dort
+bleibt `IntToStr(N)` Argument von `%s`, unter Delphi wird es `%d`):
+Angebot mit Umwandlung, mit zwei Literalen, Selbst-Anhaengen, Argument,
+`%`/Apostroph, fehlendes `System.SysUtils` (mit und ohne Klausel);
+Gegenproben triviale Kette, ohne Literal, nur Literale, `FloatToStr` bleibt
+`%s`, Variant-Anzeichen und Kommentar im Bereich gesperrt, Kette nur in
+Kommentar/String, Caret ausserhalb der Kette, mehrere Argumente, uses mit
+Direktive = kein Eintrag (die Fund-Hilfe nennt den Grund), ohne Dienst kein
+Eintrag, die Vorprobe, die Reihenfolge hinter der Konstante, der Menuetext
+gleich dem des SCA044-Rezepts; jede Ersetzung beginnt auf einem Zeichen
+(nie auf einer leeren Zeile). Dazu 4 nur unter Delphi (ContextCaption,
+Variant-Lokale, Caret auf der Fortsetzungszeile, Ersetzung gleich der des
+Fund-Wegs `TRdxRecipeRunner.Describe` + `FormatRewrite`). Je Mutante des
+Laeufers (Kandidat, Caret, NoOperand, FileWide, Vorprobe, Umwandlung,
+Aktion, uses-Ersetzung) wird mindestens ein Test rot; zwei Waechter
+schuetzen nur doppelt (Ende der Anweisung bei der Suche aufwaerts - sonst
+faengt der Caret-Bereich es; Form der Kette - Argumente zaehlen nie als
+Literal).
 
 **Korpus-Probe (Charge B3, `D:\git-sca-realworld`, 13.446 .pas, je 3.000
 zufaellige Stellen, FPC-Harness gegen `TRdxContextRunner.Run`):**
@@ -675,6 +705,29 @@ ohne Eintrag, dieselben Stellen erneut): Konstante angeboten 65, gesperrt
 normalen Weg; die Freigabe laeuft danach auch bei einer Ausnahme - der
 Zweck). Laufzeit im Harness: Konstante rund 20 ms je Stelle (Plattenblick
 und Durchsicht der Datei), C3 unter 2 ms.
+
+**Korpus-Probe C16 (Charge N, 2026-10-25, `D:\git-sca-realworld`, 13.446
+.pas, 3.000 zufaellige Stellen aus 68.295 ASCII-Zeilen mit `+` und
+Apostroph, Caret an zufaelliger Spalte; FPC-Harness gegen
+`TRdxContextRunner.Run` mit Quellstellen-Dienst auf dem Stub-Parser des
+Pruefstands):** angeboten 273 (9,1 %; davon 136 mit mindestens drei `+`,
+dort steht auch der SCA044-Fund und die Kontextaktion faellt dahinter weg),
+gesperrt 13 (0,4 %: Kommentar im Bereich 4, kein einfacher Operand 5,
+Variant moeglich 2, schon `Format(` 1, SQL-Text 1), kein Eintrag 2.714
+(90,5 %; Stichprobe 20: mehrere Argumente, Caret auf dem Aufrufkopf, ein
+Literal ohne Umwandlung, keine Kette, Fortsetzungszeile einer langen
+Kette). Grenzen des Stubs nach beiden Seiten: er kennt keine Typen (eine
+AnsiString- oder Variant-Variable stuende unter Delphi gesperrt da,
+`IntToStr(N)` wird dort `%d`), und eine mehrzeilige Kette mit Text hinter
+`:=` zerfaellt fuer ihn anders als fuer den Parser (Delphi bietet dort
+mehr an). Stichprobe 20 Angebote von Hand: 20/20 uebersetzen und geben
+dasselbe aus (u. a. `raise Exception.Create(..)`, `FormID.ToString(True)`,
+Selbst-Anhaengen an `Result`, `inttohex(..)`, 30 Terme mit `sLineBreak`,
+eine Kette ueber vier Zeilen mit `#13`); ein `TimeSeparator: Char` geht
+ohne `string(..)`-Cast nach `%s` (bekannte Grenze der Kompilat-Regel: ein
+Char unbekannten Typs - gleiche Ausgabe ausser bei `#0`), ein
+`DebugLogger(line: AnsiString)` wandelt Format wie die Kette. Laufzeit im
+Harness: rund 1,6 ms je Stelle (ein Parse je Datei).
 
 ## Lokale Variable einfuehren (Refactoring ohne Fund, in Arbeit)
 
@@ -1201,6 +1254,11 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   Charge A3: `uTestRdxLoopBoundFix` (SCA203, 26 Tests) - die Text-Fixture
   (18) laeuft auch im FPC-Pruefstand (`uRdxLoopBoundFix` steht in der
   Unit-Liste von build.sh), die Detektor-Fixture (8) nur in reDelphix.Test.
+* Charge N (C16): `uTestRdxContextFormat` (23 Tests) - "Format() aus
+  Verkettung" am Caret (Abschnitt "Code-Aktionen ohne Fund"); die erste
+  Fixture (19) laeuft auch im FPC-Pruefstand (`uRdxPlacesRunner` in der
+  Unit-Liste von build.sh), die zweite (4: ContextCaption, Variant-Lokale,
+  Fortsetzungszeile, gleich dem Fund-Weg) nur in reDelphix.Test.
 * Charge P5 (Performance): `uTestRdxSharedMap` (18 Tests, auch im
   FPC-Pruefstand) - `TTestRdxSharedMap` (10): `TRdxCodeMap.Acquire` liefert
   fuer `TRdxMappedLines` EINE Map, fuer andere Zeilen je Aufruf eine neue;
@@ -1224,9 +1282,13 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxTextMsgs uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths uTestRdxBlocks uTestRdxCategoryArgFix uTestRdxEmptyBlockFix uTestRdxEmptyExceptFix uTestRdxGotoExitFix uTestRdxNativeIntFix uTestRdxParensFix uTestRdxTrailingCommaFix uTestRdxLoopBoundFix uTestRdxContextRunner uTestRdxSharedMap
+bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxTextMsgs uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths uTestRdxBlocks uTestRdxCategoryArgFix uTestRdxEmptyBlockFix uTestRdxEmptyExceptFix uTestRdxGotoExitFix uTestRdxNativeIntFix uTestRdxParensFix uTestRdxTrailingCommaFix uTestRdxLoopBoundFix uTestRdxContextRunner uTestRdxSharedMap uTestRdxContextFormat
 ```
 
+Gemessen (2026-10-25, FPC-Lauf, Charge N C16, Basis d2403f61 ohne Charge Q): `PASSED 883  FAILED 0` - 53
+Testunits, davon `uTestRdxContextFormat` 19 (neu: "Format() aus Verkettung" am
+Caret; die Unit-Liste von build.sh traegt dazu `uRdxPlacesRunner`). Davor
+`PASSED 864`.
 Gemessen (2026-10-25, FPC-Lauf, Charge Q6): `PASSED 870  FAILED 0` - 52
 Testunits, davon `uTestRdxSharedMap` 25 (neu `TTestRdxFileMarkerCache` 6:
 Datei-Marker je Map einmal). Davor `PASSED 864`.

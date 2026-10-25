@@ -291,6 +291,17 @@ die Code-Aktionen am Caret, auch auf einer Zeile ohne Fund. Stellen im Demo:
   `uOrderForm.pas:102` `Importer := TLegacyImporter.Create;` – das `try`
   kommt erst nach `Order := TOrder.Create(..)`; wirft
   `LoadCustomer`, leckt der Importer. Kein Fund meldet das heute.
+- **Format() aus Verkettung bilden** auf einer Kette ohne SCA044-Fund
+  (nur zwei `+`): `uOrderModel.pas:231`
+  `Result := ClassName + ' #' + IntToStr(FId);` (Caret irgendwo in der
+  Kette) wird `Result := Format('%s #%d', [ClassName, FId]);` – `FId` ist
+  als `Integer` belegt, darum `%d` statt `IntToStr`. Als Argument eines
+  Aufrufs: `uPriceCalculator.pas:197`
+  `Lines.Add('Printed: ' + DateToStr(Date));` wird
+  `Lines.Add(Format('Printed: %s', [DateToStr(Date)]));`. Auf
+  `uPriceCalculator.pas:210` (SCA044, Szene 4) steht der Eintrag nur einmal –
+  die Code-Aktion trägt den Menütext der Fund-Hilfe und fällt dahinter weg.
+  Ein triviales `'a' + B` (ein Literal, keine Umwandlung) bietet nichts an.
 
 ## Szene 9: Abschluss
 
