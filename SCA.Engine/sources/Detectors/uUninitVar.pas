@@ -61,7 +61,14 @@ type
       // Zensus-Triage 2026-07-25, Hook 1b: Same-File-Signaturindex
       // Name -> var/out-Flag je Parameterposition (baut AnalyzeUnit einmal
       // pro File; nil = Aufloesung aus, z.B. Direkt-Aufrufe in Tests).
-      ASigVarOut: TDictionary<string, TArray<Boolean>> = nil);
+      ASigVarOut: TDictionary<string, TArray<Boolean>> = nil;
+      // Perf Charge Q1: Datei-Code-Sicht aus AnalyzeUnit (BuildFileStrip)
+      // samt der Zeilen, aus denen sie gebaut ist. Genutzt nur, wenn die
+      // Methode DIESELBE Zeilen-Instanz erhaelt (AnalyzeUnit haelt sie so
+      // lange) - sonst und bei nil wird wie bisher je Methode gestrippt.
+      AFileLines: TStringList = nil;
+      const AFileStrip: TArray<string> = nil;
+      const AFileFresh: TArray<Boolean> = nil);
   end;
 
 implementation
@@ -73,6 +80,7 @@ implementation
 uses
   System.StrUtils,
   System.Character,  // IsNonAsciiIdentChar (Unicode-Bezeichner-Fragmente)
+  System.Generics.Defaults,  // Perf Charge Q1: einmal geholte Default-Comparer
   uFileTextCache, uAstSpans;
 
 // Hard-Caps werden zur Laufzeit aus uSCAConsts.DetectorMaxLocalVars /
@@ -99,6 +107,9 @@ const
   // Abbrevia/zip/ID3/Syn*-Stream-Reader). Return-Wert-Varianten wie
   // ReadInteger/ReadString matchen NICHT (kein gefuelltes Arg, sondern
   // Rueckgabewert) - der '(' direkt nach dem Namen filtert sie aus.
+  // VERTRAG (Perf Charge Q1): jeder Eintrag enthaelt 'read' - darauf baut
+  // der Vorfilter in LineFillsVarViaReadCall. Ein Eintrag ohne 'read'
+  // braucht dort einen anderen Vorfilter.
   READ_FILL_FUNCS : array[0..4] of string = (
     'read', 'readln', 'readbuffer', 'blockread', 'readdata'
   );
@@ -697,6 +708,22 @@ type
   TLineRange = record
     StartLine, EndLine : Integer;
   end;
+
+var
+  // Perf Charge Q1 (2026-10-25): Default-Comparer der Record-Listen dieser
+  // Unit, EINMAL je Prozess geholt (initialization) und jedem Create
+  // mitgegeben. Hintergrund: TList<T>.Create ohne Comparer ruft fuer
+  // Record-T TComparer<T>._Default, und das fragt in der Delphi-12-RTL
+  // (System.Rtti registriert GetRecCompareAddrs) bei JEDEM Aufruf die RTTI
+  // nach einem '='-Operator ab - TRttiContext, GetType, GetDeclaredMethods.
+  // Gemessen (Sampling-Profiler, laz, Profil nur SCA166): rund 13 % der
+  // Detektorzeit steckten darin, je Methode (TVarInfo, TLineRange) und je
+  // Ausdruck (TExprCall). Delphi 13 fragt dort nicht mehr. VERHALTENS-
+  // NEUTRAL: es ist derselbe Default-Comparer, und keine dieser Listen ruft
+  // IndexOf/Contains/Remove/Sort - er wird nie benutzt.
+  GExprCallComparer  : IComparer<TExprCall>;
+  GLineRangeComparer : IComparer<TLineRange>;
+  GVarInfoComparer   : IComparer<TVarInfo>;
 
 // Note: AST-basierte Nested-Method-Detection wurde im Block-1-Cleanup
 // entfernt — der Parser entfernt den Outer-MethodNode bei
@@ -1301,6 +1328,11 @@ var
 begin
   Result := False;
   if (LLow = '') or (NameLow = '') then Exit;
+  // Perf Charge Q1: jedes READ_FILL_FUNCS-Wort enthaelt 'read' - ohne
+  // 'read' in der Zeile findet keines der fuenf PosEx unten etwas. Die
+  // Funktion laeuft je Zeile UND je Variable (FindFirstReadLine/
+  // FindFirstSourceWriteLine), ein Vorfilter statt fuenf Suchen.
+  if Pos('read', LLow) = 0 then Exit;
   for Fn in READ_FILL_FUNCS do
   begin
     FnLen := Length(Fn);
@@ -1629,8 +1661,39 @@ begin
     Exit(False);
 end;
 
-function BuildSameFileVarOutIndex(Lines: TStringList)
+procedure BuildFileStrip(Lines: TStringList; out AStrip: TArray<string>;
+  out AFresh: TArray<Boolean>);
+// Perf Charge Q1: Code-Sicht der GANZEN Datei, einmal je AnalyzeUnit.
+// AStrip[i] = LowerCase(BlankNonCode(Lines[i], State)) mit State ab Zeile 1
+// durchlaufend; AFresh[i] = vor Zeile i ist kein Blockkommentar offen.
+// Wo AFresh[i] gilt, beginnt der State dort wie ein frischer - ab dieser
+// Zeile ist die Folge also zeichengleich mit einem Strip, der bei i neu
+// startet (BlankNonCode ist eine reine Funktion von Zeile und State, der
+// State hat nur InBrace/InParen). StripMethodLow nutzt genau das.
+var
+  i     : Integer;
+  State : TBlankScanState;
+begin
+  AStrip := nil;
+  AFresh := nil;
+  if Lines = nil then Exit;
+  SetLength(AStrip, Lines.Count);
+  SetLength(AFresh, Lines.Count);
+  State := Default(TBlankScanState);
+  for i := 0 to Lines.Count - 1 do
+  begin
+    AFresh[i] := not State.InBrace and not State.InParen;
+    AStrip[i] := LowerCase(TDetectorUtils.BlankNonCode(Lines[i], State));
+  end;
+end;
+
+function BuildSameFileVarOutIndex(const AFileStrip: TArray<string>)
   : TDictionary<string, TArray<Boolean>>;
+// Perf Charge Q1: liest die Datei-Code-Sicht AFileStrip (BuildFileStrip:
+// je Zeile LowerCase(BlankNonCode) mit durchlaufendem State ab Zeile 1) -
+// genau die Folge, die diese Funktion frueher selbst Zeile fuer Zeile
+// erzeugte (auch die Folgezeilen mehrzeiliger Parameterlisten liefen durch
+// denselben State). AnalyzeUnit teilt das Array mit den Methoden-Strips.
 // Scannt die GESTRIPPTE Quelle (Interface + Implementation, Multi-Line-
 // Kommentare via BlankNonCode-State) nach Routinen-Headern und baut
 // Name -> var/out-Flag je Parameterposition. Key = letztes Namenssegment
@@ -1641,8 +1704,7 @@ const
   KWS : array[0..3] of string =
     ('procedure ', 'function ', 'constructor ', 'destructor ');
 var
-  State : TBlankScanState;
-  i, k, p, e, Depth, Guard : Integer;
+  i, k, p, e, Depth, Guard, PStart : Integer;
   S, T, Name, Params : string;
   Flags, Old, Merged : TArray<Boolean>;
   Matched : Boolean;
@@ -1691,12 +1753,10 @@ var
 
 begin
   Result := TDictionary<string, TArray<Boolean>>.Create;
-  if Lines = nil then Exit;
-  State := Default(TBlankScanState);
   i := 0;
-  while i < Lines.Count do
+  while i < Length(AFileStrip) do
   begin
-    S := LowerCase(TDetectorUtils.BlankNonCode(Lines[i], State));
+    S := AFileStrip[i];
     Inc(i);
     T := TrimLeft(S);
     if T.StartsWith('class ') then T := TrimLeft(Copy(T, 7, MaxInt));
@@ -1752,6 +1812,10 @@ begin
     Inc(p);
     Guard := 0;
     repeat
+      // Perf Charge Q1: die Zeichen [PStart..p-1] am Stueck anhaengen statt
+      // eines je Schleifendurchlauf - dieselbe Folge (die schliessende ')'
+      // bei Depth = 0 bleibt wie bisher draussen).
+      PStart := p;
       while (p <= Length(T)) and (Depth > 0) do
       begin
         if T[p] = '(' then Inc(Depth)
@@ -1760,13 +1824,14 @@ begin
           Dec(Depth);
           if Depth = 0 then Break;
         end;
-        Params := Params + T[p];
         Inc(p);
       end;
+      if p > PStart then
+        Params := Params + Copy(T, PStart, p - PStart);
       if Depth > 0 then
       begin
-        if (i >= Lines.Count) or (Guard >= 40) then Break;
-        T := LowerCase(TDetectorUtils.BlankNonCode(Lines[i], State));
+        if (i >= Length(AFileStrip)) or (Guard >= 40) then Break;
+        T := AFileStrip[i];
         Inc(i);
         Inc(Guard);
         Params := Params + ' ';
@@ -1816,13 +1881,16 @@ begin
     begin
       e := i;
       while (e <= L) and IsIdentChar(LLow[e]) do Inc(e);
-      Token := Copy(LLow, i, e - i);
       Prev := #0;
       j := i - 1;
       while (j >= 1) and (LLow[j] = ' ') do Dec(j);
       if j >= 1 then Prev := LLow[j];
       j := e;
       while (j <= L) and (LLow[j] = ' ') do Inc(j);
+      // Perf Charge Q1: Token erst kopieren, wenn ein Call-'(' folgt -
+      // vorher entschieden die reinen Positionspruefungen ohnehin zuerst.
+      if (Prev <> '.') and (j <= L) and (LLow[j] = '(') then
+        Token := Copy(LLow, i, e - i);
       if (Prev <> '.') and (j <= L) and (LLow[j] = '(')
          and ((Shadow = nil) or not Shadow.ContainsKey(Token))
          and SigIdx.TryGetValue(Token, Flags) and (Length(Flags) > 0) then
@@ -2530,7 +2598,9 @@ class procedure TUninitVarDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   AContext: TAnalyzeContext; ARecordTypes: TDictionary<string, Boolean>;
   const ADirLines: TArray<Integer>;
-  ASigVarOut: TDictionary<string, TArray<Boolean>>);
+  ASigVarOut: TDictionary<string, TArray<Boolean>>;
+  AFileLines: TStringList; const AFileStrip: TArray<string>;
+  const AFileFresh: TArray<Boolean>);
 var
   LocalVars        : TList<TAstNode>;
   Assigns, Calls, Fors : TList<TAstNode>;
@@ -2934,7 +3004,12 @@ var
     ArgsLow : string;
   begin
     if ExprRaw = '' then Exit;
-    Calls := TList<TExprCall>.Create;
+    // Perf Charge Q1: ParseCallsInExpr legt einen Call nur hinter einem
+    // '(' an - ohne '(' bliebe die Liste leer und die Schleife ein No-Op.
+    // Spart die Listenanlage fuer die Mehrzahl der Bedingungs-/Zuweisungs-
+    // Ausdruecke.
+    if Pos('(', ExprRaw) = 0 then Exit;
+    Calls := TList<TExprCall>.Create(GExprCallComparer);
     try
       TDetectorUtils.ParseCallsInExpr(ExprRaw, Calls);
       for Call in Calls do
@@ -3316,6 +3391,14 @@ var
     if To0 > Lines.Count - 1 then To0 := Lines.Count - 1;
     if To0 < From0 then Exit;
     AFrom0 := From0;
+    // Perf Charge Q1: dieselben Zeilen schon in der Datei-Code-Sicht und
+    // vor From0 kein Blockkommentar offen -> der dortige State ist ab From0
+    // ein frischer, die Zeilen sind zeichengleich (s. BuildFileStrip).
+    // Nur bei identischer Zeilen-Instanz (AnalyzeUnit haelt sie).
+    if (AFileLines <> nil) and (Lines = AFileLines)
+       and (Length(AFileStrip) = Lines.Count)
+       and (Length(AFileFresh) = Lines.Count) and AFileFresh[From0] then
+      Exit(Copy(AFileStrip, From0, To0 - From0 + 1));
     SetLength(Result, To0 - From0 + 1);
     StripState.InBrace := False;
     StripState.InParen := False;
@@ -3366,6 +3449,31 @@ var
       Result := MethodStrip;
   end;
 
+  function MethodHasAsmLine: Boolean;
+  // Perf Charge Q1: MethodHasAsmBlock(Lines, MethodNode.Line, MethodEndL)
+  // auf dem geteilten Strip-Array. Fuer MethodNode.Line >= 1 sind Grenzen,
+  // Klemmung und frischer BlankNonCode-State dieselben wie in
+  // StripMethodLow; Trim und LowerCase vertauschen (Trim nimmt nur Zeichen
+  // <= ' ', LowerCase aendert nur A..Z) - also dieselbe Zeilenpruefung.
+  // Vorher strippte MethodHasAsmBlock die Methode ein zweites Mal.
+  // Randfall MethodNode.Line < 1 (StripMethodLow liefert dort nil) bleibt
+  // beim alten Weg.
+  var
+    i : Integer;
+    T : string;
+  begin
+    if MethodNode.Line < 1 then
+      Exit(MethodHasAsmBlock(Lines, MethodNode.Line, MethodEndL));
+    Result := False;
+    EnsureMethodStrip;
+    for i := 0 to High(MethodStrip) do
+    begin
+      T := Trim(MethodStrip[i]);
+      if (T = 'asm') or T.StartsWith('asm ') or T.StartsWith('asm;') then
+        Exit(True);
+    end;
+  end;
+
   function FindFirstSourceWriteLine(const NameLow: string;
     DeclLine, MethodStartLine, MethodEndLine: Integer): Integer;
   // FP-Fix Source-Line-Fallback fuer Write-Detection. Wird gerufen wenn
@@ -3395,6 +3503,11 @@ var
       // (BuildStrippedLowCache, identische Bounds via PhaseC) statt
       // BlankNonCode pro Variable.
       L := StrippedLow[i - StrippedFrom0];
+      // Perf Charge Q1: alle drei Write-Formen unten verlangen NameLow als
+      // Teilstring der Zeile (Read-Fill: im Argumenttext, Typecast: PosEx,
+      // Zuweisung: StartsWith) - ohne Vorkommen ist die Zeile ein No-Op.
+      // Die Pruefungen sind rein, die Reihenfolge der Treffer bleibt.
+      if Pos(NameLow, L) = 0 then Continue;
       if i + 1 = DeclLine then Continue;
       if IsLineInRanges(i + 1, NestedRanges) then Continue;
       // Read-Family-Fill ('Stream.Read(Buf, Size)') fuellt den Buffer = Write.
@@ -3522,6 +3635,10 @@ var
       // BlankNonCode pro Variable. Multi-Line-Comment-State ist dort
       // bereits ueber alle Zeilen mitgelaufen (FP-Fix-Semantik unveraendert).
       L := StrippedLow[i - StrippedFrom0];
+      // Perf Charge Q1: ein Read-Treffer (Exit unten) verlangt NameLow in
+      // der Zeile; die Skip-Pruefungen davor sind rein. Ohne Vorkommen
+      // also sofort weiter - spart die Pruefkette je Zeile UND Variable.
+      if Pos(NameLow, L) = 0 then Continue;
       if (i + 1 = DeclLine) or (i + 1 = FirstWriteLine) then Continue;
       if IsLineInRanges(i + 1, NestedRanges) then Continue;
       // Skip wenn Zeile eine reine Var-Decl ist (Multi-line-Decl-Fix)
@@ -3928,7 +4045,15 @@ var
   var
     MethodStartLine, MethodEndLine, FirstMatchPos, i : Integer;
     P : PVarInfo;
+    // Perf Charge Q1: Kandidatenzeilen der @- und with-Scans, einmal je
+    // Methode (aufsteigende Indizes in StrippedLow) statt je Variable alle
+    // Zeilen. Der @-Scan trifft nur Zeilen mit '@' (Pos(AT+Name) > 0), der
+    // with-Scan nur Zeilen, deren TrimLeft mit 'with ' beginnt - dieselben
+    // Zeilen in derselben Reihenfolge, also dieselben Treffer.
+    AtLineIdx, WithLineIdx : TArray<Integer>;
   begin
+    AtLineIdx   := nil;
+    WithLineIdx := nil;
     CollectBodyTokens(MethodNode, BodySB);
     BodyLow := LowerCase(BodySB.ToString);
     MethodStartLine := MethodNode.Line;
@@ -3973,6 +4098,27 @@ var
               ProcessCallsInExprText(Copy(CLine, EqP + 1, MaxInt), CSrcLine);
           end;
         end;
+        // Perf Charge Q1: Kandidatenzeilen (s. AtLineIdx). StrippedLow
+        // bleibt fuer den Rest der Methode unveraendert.
+        var nAt   := 0;
+        var nWith := 0;
+        SetLength(AtLineIdx, Length(StrippedLow));
+        SetLength(WithLineIdx, Length(StrippedLow));
+        for var sli := 0 to High(StrippedLow) do
+        begin
+          if Pos(chr(64), StrippedLow[sli]) > 0 then
+          begin
+            AtLineIdx[nAt] := sli;
+            Inc(nAt);
+          end;
+          if TrimLeft(StrippedLow[sli]).StartsWith('with ') then
+          begin
+            WithLineIdx[nWith] := sli;
+            Inc(nWith);
+          end;
+        end;
+        SetLength(AtLineIdx, nAt);
+        SetLength(WithLineIdx, nWith);
       end;
       // FirstWrite = fruehester ECHTER Write. Den Source-Scan IMMER laufen
       // lassen (nicht nur bei FirstWriteLine=0):
@@ -4007,7 +4153,8 @@ var
       // '@'-Vorkommen ohnehin) - kein eigener Hook noetig, per Tests
       // GetProcAddressAtLhs_NoFinding / ReadBeforeAtLhsAssign_StillFlagged
       // abgesichert.
-      if StrippedBuilt then
+      // Perf Charge Q1: ohne Zeile mit '@' kann kein Muster treffen.
+      if StrippedBuilt and (Length(AtLineIdx) > 0) then
       begin
         // A3b-Fix: auch @<alias> zaehlt fuers ZIEL (Indy: LMsg.msg_name
         // := AT-LAddr fuellt LAddrStore ueber den absolute-Alias).
@@ -4020,8 +4167,9 @@ var
         for var api := 0 to AtPats.Count - 1 do
         begin
         var AtPat := AtPats[api];
-        for var li := 0 to High(StrippedLow) do
+        for var aki := 0 to High(AtLineIdx) do
         begin
+          var li := AtLineIdx[aki];
           var ap := Pos(AtPat, StrippedLow[li]);
           if (ap > 0) and
              ((ap + Length(AtPat) > Length(StrippedLow[li])) or
@@ -4057,14 +4205,17 @@ var
       // Read-Scan schon immer uebersprungen (Regel 4), und ohne Index ist
       // die Klassen-Eigenschaft nicht beweisbar - dieselbe Vertrauensstufe
       // wie beim @-Scan. Nur Write-Registrierung -> monoton.
-      if StrippedBuilt then
+      // Perf Charge Q1: ohne with-Zeile kein Treffer; die Typpruefung
+      // darunter ist eine reine Abfrage.
+      if StrippedBuilt and (Length(WithLineIdx) > 0) then
       begin
         var TIw := CtxTypeIndex(AContext);
         if (TIw = nil) or TIw.IsEmpty or
            (TIw.TypeKindOf(BaseTypeLow(P.TypeLow)) <> tkiClass) then
         begin
-          for var wli := 0 to High(StrippedLow) do
+          for var wki := 0 to High(WithLineIdx) do
           begin
+            var wli := WithLineIdx[wki];
             var WT := TrimLeft(StrippedLow[wli]);
             if not WT.StartsWith('with ') then Continue;
             var wp := 6;
@@ -4361,8 +4512,8 @@ var
     end;
 
   begin
-    WithRanges  := TList<TLineRange>.Create;
-    AnonRanges  := TList<TLineRange>.Create;
+    WithRanges  := TList<TLineRange>.Create(GLineRangeComparer);
+    AnonRanges  := TList<TLineRange>.Create(GLineRangeComparer);
     RangesBuilt := False;
     try
     for i := 0 to VarList.Count - 1 do
@@ -4549,10 +4700,10 @@ begin
     if LocalVars.Count = 0 then Exit;
     if LocalVars.Count > CfgMaxLocalVars(AContext) then Exit;   // TD-1: per-Scan
 
-    VarList      := TList<TVarInfo>.Create;
+    VarList      := TList<TVarInfo>.Create(GVarInfoComparer);
     VarMap       := TDictionary<string, Integer>.Create;
     BodySB       := TStringBuilder.Create;
-    NestedRanges := TList<TLineRange>.Create;
+    NestedRanges := TList<TLineRange>.Create(GLineRangeComparer);
     Lines        := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
     MethodCfg    := nil;   // #6 Inkr.4: lazy gebaut im PhaseD-Postfilter
     AbsAliases   := TDictionary<string,string>.Create;   // A3
@@ -4569,7 +4720,8 @@ begin
       // ';asm'-Marker (IsAsmMethod, Fast-Out oben) fasst nur GANZE asm-Methoden.
       // Konservativ die ganze Methode ueberspringen (asm selten -> FN akzeptabel,
       // TP-sicher). Exit loest das umgebende finally (Lines/Ranges freigeben).
-      if (Lines <> nil) and MethodHasAsmBlock(Lines, MethodNode.Line, MethodEndL) then
+      // Perf Charge Q1: ueber das geteilte Strip-Array (MethodHasAsmLine).
+      if (Lines <> nil) and MethodHasAsmLine then
         Exit;
       // Phase 2.6: source-line-basierte Nested-Method-Detection.
       if Lines <> nil then
@@ -4624,6 +4776,8 @@ var
   SigVarOut : TDictionary<string, TArray<Boolean>>;
   SigLines  : TStringList;
   SigCached : Boolean;
+  FileStrip : TArray<string>;    // Perf Charge Q1: Datei-Code-Sicht
+  FileFresh : TArray<Boolean>;
 begin
   if UnitNode = nil then Exit;
 
@@ -4654,13 +4808,20 @@ begin
   // File bauen (Interface + Implementation der gestrippten Quelle) und an
   // alle AnalyzeMethod-Aufrufe durchreichen. Lines kommen aus demselben
   // Cache, den auch AnalyzeMethod nutzt.
+  // Perf Charge Q1: die Zeilen bleiben bis zum Ende gehalten (ReleaseLines
+  // im finally ganz unten) - solange zeigt AnalyzeMethods AcquireLines aus
+  // dem Cache auf DIESELBE Instanz, und nur dann gilt deren Code-Sicht
+  // FileStrip auch fuer die Methoden (Zeigervergleich in StripMethodLow;
+  // eine freigegebene Instanz koennte ihre Adresse sonst weitergeben).
   SigVarOut := nil;
+  FileStrip := nil;
+  FileFresh := nil;
   SigLines := AcquireLines(FileName, SigCached, CtxFileTextCache(AContext));
   try
-    if SigLines <> nil then
-      SigVarOut := BuildSameFileVarOutIndex(SigLines);
-  finally
-    ReleaseLines(SigLines, SigCached);
+  if SigLines <> nil then
+  begin
+    BuildFileStrip(SigLines, FileStrip, FileFresh);
+    SigVarOut := BuildSameFileVarOutIndex(FileStrip);
   end;
   try
   // Value-Type-Records dieser Unit einsammeln: ein Methodenaufruf auf einer
@@ -4682,7 +4843,7 @@ begin
     try
       for M in Methods do
         AnalyzeMethod(M, FileName, Results, AContext, RecTypes, DirLines,
-                      SigVarOut);
+                      SigVarOut, SigLines, FileStrip, FileFresh);
     finally
       Methods.Free;
     end;
@@ -4692,6 +4853,15 @@ begin
   finally
     SigVarOut.Free;
   end;
+  finally
+    ReleaseLines(SigLines, SigCached);
+  end;
 end;
+
+initialization
+  // Perf Charge Q1: s. GExprCallComparer.
+  GExprCallComparer  := TComparer<TExprCall>.Default;
+  GLineRangeComparer := TComparer<TLineRange>.Default;
+  GVarInfoComparer   := TComparer<TVarInfo>.Default;
 
 end.
