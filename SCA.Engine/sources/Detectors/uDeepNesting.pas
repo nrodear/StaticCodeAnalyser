@@ -81,6 +81,9 @@ implementation
 // noinspection-file ConsecutiveSection, TooLongLine, UnsortedUses, UnusedParameter
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uDetectorUtils;   // Perf P3: NestingChainPush/-Text (Kette als Index)
+
 // Schwellwert kommt aus uSCAConsts.DetectorMaxNesting (analyser.ini ->
 // DeepNestingMaxDepth). Default 4 (also wird ab 5 verschachtelten
 // Ebenen gemeldet).
@@ -104,27 +107,14 @@ begin
   end;
 end;
 
-// R1 (2026-09-22): Kette um ein Glied verlaengern. Steht hier
-// heraussen, weil die beiden Zweige in Walk eine vierte
-// Verschachtelungsebene aufmachten - genau die, die den Detektor
-// am eigenen Code hat anschlagen lassen (SCA176: 27).
-function KetteUm(const AKette: string; AKind: TNodeKind): string;
+// Perf P3 (2026-10-25): Wort fuer ein Kettenglied, als schlichte
+// Funktion fuer TDetectorUtils.NestingChainText (ein procedural
+// type, kein Methodenzeiger). Ersetzt KetteUm: die Kette wird nicht
+// mehr je Stapel-Frame verkettet, sondern als Elternverweis gefuehrt
+// und erst am Ende des Walks einmal zu Text.
+function KindNameOf(AKind: TNodeKind): string;
 begin
-  if AKette = '' then
-    Exit(TDeepNestingDetector.KindName(AKind));
-  // Der Akkumulator ist an die VERSCHACHTELUNGSTIEFE gebunden,
-  // nicht an die Knotenzahl: gemessen liegen 98,1 % der
-  // SCA018-Funde bei Tiefe <= 8, das Maximum im Korpus ist 16.
-  // Ein TStringBuilder scheidet hier aus, weil die Kette
-  // PFADABHAENGIG ist - jeder Stack-Frame traegt seine eigene, und
-  // die Zweige divergieren. Ein Builder hat genau einen Puffer und
-  // koennte das nicht abbilden.
-  //
-  // Der frueher noetige noinspection-Marker ist mit der Extraktion
-  // ENTFALLEN: hier gibt es keine Schleife mehr, die Regel feuert
-  // gar nicht. Der Selbstscan hat den toten Marker prompt als
-  // SCA165 gemeldet.
-  Result := AKette + CHAIN_SEP + TDeepNestingDetector.KindName(AKind);
+  Result := TDeepNestingDetector.KindName(AKind);
 end;
 
 // R1 (2026-09-22): zaehlt dieses Kind als eigene Ebene?
@@ -149,18 +139,14 @@ begin
                      and (AChild.Kind = nkIfStmt));
 end;
 
-// R1: neues Maximum uebernehmen. Die Kette nur, wenn sie
-// ueberhaupt gesammelt wird - sonst stuende dort die leere
-// Zeichenkette und ueberschriebe nichts, aber der Vertrag waere
-// unklar.
+// R1: neues Maximum uebernehmen. Die Kette setzt Walk erst nach
+// dem letzten Maximum (Perf P3) - hier nur die Stelle selbst.
 procedure MerkeTiefste(var ADeepest: TDeepestHit; ADepth: Integer;
-  AChild: TAstNode; const AKette: string);
+  AChild: TAstNode);
 begin
   ADeepest.Depth := ADepth;
   ADeepest.Line  := AChild.Line;
   ADeepest.Kind  := AChild.Kind;
-  if ADeepest.Collect then
-    ADeepest.Chain := AKette;
 end;
 
 class procedure TDeepNestingDetector.Walk(Node: TAstNode; Depth: Integer;
@@ -204,25 +190,36 @@ type
   TFrame = record
     N : TAstNode;
     D : Integer;
-    // Kette der Konstrukte von aussen bis zu diesem Knoten. Bei
-    // nicht gesetztem Collect bleibt sie durchgehend leer; die
-    // Zuweisung an ein Kind ist dann eine reine
-    // Referenzzaehler-Erhoehung, keine Kopie.
-    C : string;
+    // Kette der Konstrukte von aussen bis zu diesem Knoten, als
+    // INDEX in Links (-1 = noch kein Glied). Ohne Collect
+    // durchgehend -1.
+    // Perf P3 (2026-10-25): hier stand bis dahin die Kette als
+    // string. Das machte TFrame zu einem VERWALTETEN Record - jedes
+    // Stack.Add/Delete und jede Zuweisung Cur/F lief ueber die
+    // RTTI-Kopie, fuer jeden Knoten jeder Methode, auch im
+    // Normallauf mit leerer Kette (Messagent 2026-10-25: SCA018 laz
+    // 0,17 -> 0,61 s seit v0.9.18). Mit dem Integer ist TFrame
+    // wieder unverwaltet wie in v0.9.18.
+    L : Integer;
   end;
 var
   Stack    : TList<TFrame>;
   Cur      : TFrame;
   Child    : TAstNode;
   NewDepth : Integer;
-  NewChain : string;
-
+  NewLink  : Integer;
+  BestLink : Integer;                    // Glied des letzten Maximums
+  Links    : TList<TNestingChainLink>;   // nur bei Collect
   F        : TFrame;
 begin
   if Node = nil then Exit;
+  BestLink := -1;
+  Links := nil;
   Stack := TList<TFrame>.Create;
   try
-    F.N := Node; F.D := Depth; F.C := '';
+    if ADeepest.Collect then
+      Links := TList<TNestingChainLink>.Create;
+    F.N := Node; F.D := Depth; F.L := -1;
     Stack.Add(F);
     while Stack.Count > 0 do
     begin
@@ -231,7 +228,7 @@ begin
       for Child in Cur.N.Children do
       begin
         NewDepth := Cur.D;
-        NewChain := Cur.C;
+        NewLink  := Cur.L;
         if ZaehltAlsEbene(Cur.N.Kind, Child) then
         begin
           Inc(NewDepth);
@@ -240,15 +237,26 @@ begin
           // gemeldete Tiefe, und das else-if-Kettenglied wird hier
           // wie dort nicht mitgezaehlt.
           if ADeepest.Collect then
-            NewChain := KetteUm(NewChain, Child.Kind);
+            NewLink := TDetectorUtils.NestingChainPush(Links,
+              Child.Kind, NewLink);
           if NewDepth > ADeepest.Depth then
-            MerkeTiefste(ADeepest, NewDepth, Child, NewChain);
+          begin
+            MerkeTiefste(ADeepest, NewDepth, Child);
+            BestLink := NewLink;
+          end;
         end;
-        F.N := Child; F.D := NewDepth; F.C := NewChain;
+        F.N := Child; F.D := NewDepth; F.L := NewLink;
         Stack.Add(F);
       end;
     end;
+    // Frueher setzte jedes neue Maximum die Kette neu - stehen blieb
+    // die des letzten, und genau dessen Glied haelt BestLink. Ohne
+    // neues Maximum bleibt ADeepest.Chain unberuehrt, wie zuvor.
+    if ADeepest.Collect and (BestLink >= 0) then
+      ADeepest.Chain := TDetectorUtils.NestingChainText(Links,
+        BestLink, KindNameOf);
   finally
+    Links.Free;
     Stack.Free;
   end;
 end;

@@ -22,6 +22,10 @@ type
     // ---- L1 (2026-09-20): Verschachtelungskette auch bei SCA176 --
     [Test] procedure Chain176_DeepestPath_OuterToInner;
     [Test] procedure Chain176_NotTheScore_ButThePath;
+    // ---- Perf P3 (2026-10-25): Kette als Elternverweis -------------
+    [Test] procedure Chain176_TwoReportingMethods_EachItsOwnPath;
+    [Test] procedure Chain176_TieAtSameDepth_FirstPathWins;
+    [Test] procedure Chain176_DeepestInElseBranch_SiblingDoesNotLeak;
   end;
 
 implementation
@@ -343,6 +347,129 @@ begin
       Assert.AreEqual('if → if', Kette,
         'neun flache if treiben die Punktzahl, nicht die Kette');
     end;
+  finally F.Free; end;
+end;
+
+{ ---- Perf P3 (2026-10-25): Kette als Elternverweis --------------- }
+//
+// Der Walk fuehrt die Kette nicht mehr als string je Stapel-Frame,
+// sondern als Index in eine Glieder-Liste mit Elternverweis; der
+// Text entsteht erst nach dem Walk. Die drei Faelle sichern genau
+// die Stellen, an denen ein solcher Umbau kippen kann: eine Liste
+// je Methode (nicht ueber Methoden hinweg), striktes '>' beim
+// Gleichstand, und Geschwister-Zweige, deren Glieder nicht in den
+// Pfad des anderen geraten. Alle Punktzahlen liegen bei 17-21, also
+// sicher ueber dem Limit 15 - kein Assert.Pass-Ausweg.
+
+function Chain176OfMethod(F: TObjectList<TLeakFinding>;
+  const AMethod: string): string;
+var X: TLeakFinding;
+begin
+  Result := '<kein Fund>';
+  for X in F do
+    if (X.Kind = fkCognitiveComplexity)
+       and (Pos(AMethod, X.MethodName) > 0) then
+      Exit(X.StructureChain);
+end;
+
+procedure TTestCognitiveComplexity.Chain176_TwoReportingMethods_EachItsOwnPath;
+// Alpha 1+2+3+4+5+6 = 21, Beta ebenso 21 - beide melden, jede mit
+// ihrem eigenen tiefsten Pfad.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Alpha;'#13#10+
+  'begin'#13#10+
+  '  if A then'#13#10+
+  '    for I := 1 to 3 do'#13#10+
+  '      while B do'#13#10+
+  '        case C of'#13#10+
+  '          1: if D then'#13#10+
+  '               if E then DoIt;'#13#10+
+  '        end;'#13#10+
+  'end;'#13#10+
+  'procedure Beta;'#13#10+
+  'begin'#13#10+
+  '  while A do'#13#10+
+  '    repeat'#13#10+
+  '      if B then'#13#10+
+  '        for I := 1 to 3 do'#13#10+
+  '          if C then'#13#10+
+  '            if D then DoIt;'#13#10+
+  '    until E;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkCognitiveComplexity),
+      'beide Methoden liegen bei 21');
+    Assert.AreEqual('if → for → while → case → if → if',
+      Chain176OfMethod(F, 'Alpha'), 'Alpha: eigener Pfad');
+    Assert.AreEqual('while → repeat → if → for → if → if',
+      Chain176OfMethod(F, 'Beta'),
+      'Beta: eigener Pfad, nichts aus Alpha');
+  finally F.Free; end;
+end;
+
+procedure TTestCognitiveComplexity.Chain176_TieAtSameDepth_FirstPathWins;
+// Zwei Zweige erreichen dieselbe Tiefe 3 (Punktzahl 10 + 10 = 20).
+// Bei Gleichstand gewinnt der ERSTE (striktes '>') - der zweite
+// Zweig darf die Kette nicht ueberschreiben.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  if A then'#13#10+
+  '  begin'#13#10+
+  '    for I := 1 to 3 do'#13#10+
+  '      while B do'#13#10+
+  '        if C then DoIt;'#13#10+
+  '  end;'#13#10+
+  '  repeat'#13#10+
+  '    case X of'#13#10+
+  '      1: if D then'#13#10+
+  '           if E then DoIt;'#13#10+
+  '    end;'#13#10+
+  '  until F;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCognitiveComplexity),
+      'Punktzahl 20 liegt ueber 15');
+    Assert.AreEqual('if → for → while → if', Chain176OfMethod(F, 'Foo'),
+      'Gleichstand: der erste Pfad bleibt stehen');
+  finally F.Free; end;
+end;
+
+procedure TTestCognitiveComplexity.Chain176_DeepestInElseBranch_SiblingDoesNotLeak;
+// then-Zweig 'for' (Tiefe 1), else-Zweig vier Ebenen tief - Punktzahl
+// 1+2+2+3+4+5 = 17. Der else-Zweig selbst ist kein Glied; das 'for'
+// des Geschwisters darf nicht in seinem Pfad auftauchen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  if A then'#13#10+
+  '    for I := 1 to 3 do DoIt'#13#10+
+  '  else'#13#10+
+  '    while B do'#13#10+
+  '      if C then'#13#10+
+  '        if D then'#13#10+
+  '          repeat'#13#10+
+  '            DoIt;'#13#10+
+  '          until E;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCognitiveComplexity),
+      'Punktzahl 17 liegt ueber 15');
+    Assert.AreEqual('if → while → if → if → repeat',
+      Chain176OfMethod(F, 'Foo'),
+      'tiefster Pfad durch den else-Zweig, ohne das for des then-Zweigs');
   finally F.Free; end;
 end;
 
