@@ -266,7 +266,7 @@ const
     ' a..b . .c. ',
     ' tlist  tobjectlist tlist ',
     ' tlisx tlist tmemo tmema t ');
-  IDS: array[0..12] of string = (
+  ID_TABELLE: array[0..12] of string = (
     'tstringlist', 'create', 'obj', 'tlist', 'tobjectlist', 'a', 'b', 'c',
     'obj.tstringlist', '', 'tlist', 'tmemo', 'x y');
 var
@@ -276,9 +276,9 @@ var
   Ids  : TArray<string>;
   k    : Integer;
 begin
-  SetLength(Ids, Length(IDS));
-  for k := 0 to High(IDS) do
-    Ids[k] := IDS[k];
+  SetLength(Ids, Length(ID_TABELLE));
+  for k := 0 to High(ID_TABELLE) do
+    Ids[k] := ID_TABELLE[k];
   for Text in TEXTE do
   begin
     W := TDictionary<string, Boolean>.Create;
