@@ -44,6 +44,7 @@ type
 implementation
 
 uses
+  Winapi.Windows,   // GetCurrentProcessId; vor SysUtils, damit SysUtils-Namen gewinnen
   System.SysUtils,
   System.IOUtils,
   uCrashDiag;
