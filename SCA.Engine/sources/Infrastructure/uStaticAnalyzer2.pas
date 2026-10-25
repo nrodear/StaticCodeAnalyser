@@ -670,7 +670,8 @@ begin
   // SCA175 AnonMethodCaptureLoopVar: Pre-Filter 'procedure' (anonymous-Marker).
   AddD3('AnonMethodCaptureLoopVar', fkAnonMethodCaptureLoopVar, TAnonMethodCaptureLoopVarDetector.AnalyzeUnit, ['procedure']);
   // SCA176 CognitiveComplexity: kein Pre-Filter (jede Method gepruft).
-  AddD3('CognitiveComplexity', fkCognitiveComplexity, TCognitiveComplexityDetector.AnalyzeUnit);
+  // Perf Q2: AContext-fuehrend (Schwelle einmal je Kontext statt ini je Datei).
+  AddD('CognitiveComplexity', fkCognitiveComplexity, TCognitiveComplexityDetector.AnalyzeUnit);
   // SCA177 ThreadFreeOnTerminateWithRef: Pre-Filter 'freeonterminate'.
   AddD3('ThreadFreeOnTerminateWithRef', fkThreadFreeOnTerminateWithRef, TThreadFreeOnTerminateWithRefDetector.AnalyzeUnit, ['freeonterminate']);
   // SCA178 PathTraversal: Pre-Filter file-open-API tokens.

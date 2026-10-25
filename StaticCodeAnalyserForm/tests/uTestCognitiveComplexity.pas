@@ -29,6 +29,9 @@ type
     // ---- Perf Q2 (2026-10-25): EIN Walk, Puffer je Unit ------------
     [Test] procedure Chain176_ShallowerSecondMethod_OwnPath;
     [Test] procedure Chain176_AfterDeepSilentMethod_NoForeignLinks;
+    // ---- Perf Q2: Schwelle einmal je Kontext statt ini je Datei -----
+    [Test] procedure Limit_FromContext_DrivesTheFinding;
+    [Test] procedure Limit_ReadOncePerContext_SameValueAsWithoutContext;
   end;
 
 implementation
@@ -36,6 +39,7 @@ implementation
 uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
+  uAstNode, uParser2, uAnalyzeContext, uCognitiveComplexity,
   uTestFindingHelper;
 
 procedure TTestCognitiveComplexity.DeepNesting_Reported;
@@ -552,6 +556,112 @@ begin
     Assert.AreEqual('if', Chain176OfMethod(F, 'Flat'),
       'Flat: ein Glied, kein Rest aus Deep');
   finally F.Free; end;
+end;
+
+// Perf Q2: die Schwelle [Detectors] CognitiveLimit liest SCA176 einmal je
+// Analyse-Kontext (= je Scan bzw. je Parallel-Worker) statt je Datei.
+// Gesichert wird: der Wert im Kontext bestimmt den Fund, und der einmal
+// gelesene Wert ist derselbe, den der Aufruf ohne Kontext liest.
+
+const
+  SRC_SCORE21 =
+    'unit t; implementation'#13#10 +
+    'procedure Foo;'#13#10 +
+    'begin'#13#10 +
+    '  if a > 0 then'#13#10 +
+    '    if b > 0 then'#13#10 +
+    '      while c > 0 do'#13#10 +
+    '        for d := 0 to 10 do'#13#10 +
+    '          if d mod 2 = 0 then'#13#10 +
+    '            if e > 0 then'#13#10 +
+    '              DoStuff;'#13#10 +
+    'end;';
+
+function CognitiveFindings(const ASource: string;
+  AContext: TAnalyzeContext): TObjectList<TLeakFinding>;
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+begin
+  Result := TObjectList<TLeakFinding>.Create(True);
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(ASource);
+    try
+      TCognitiveComplexityDetector.AnalyzeUnit(Root, 'Sample.pas', Result,
+        AContext);
+    finally
+      Root.Free;
+    end;
+  finally
+    Parser.Free;
+  end;
+end;
+
+procedure TTestCognitiveComplexity.Limit_FromContext_DrivesTheFinding;
+// Punktzahl 21. Mit Schwelle 30 im Kontext kein Fund, mit 10 ein Fund,
+// dessen Meldetext die 10 traegt - die ini (Vorgabe 15) spielt keine
+// Rolle mehr, sobald der Kontext den Wert haelt.
+var
+  Ctx : TAnalyzeContext;
+  F   : TObjectList<TLeakFinding>;
+begin
+  Ctx := TAnalyzeContext.Create;
+  try
+    Ctx.PutCognitiveLimit(30);
+    F := CognitiveFindings(SRC_SCORE21, Ctx);
+    try
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCognitiveComplexity),
+        '21 liegt unter der Kontext-Schwelle 30');
+    finally F.Free; end;
+  finally Ctx.Free; end;
+
+  Ctx := TAnalyzeContext.Create;
+  try
+    Ctx.PutCognitiveLimit(10);
+    F := CognitiveFindings(SRC_SCORE21, Ctx);
+    try
+      Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCognitiveComplexity),
+        '21 liegt ueber der Kontext-Schwelle 10');
+      Assert.IsTrue(Pos('Cognitive complexity 21 (limit: 10)',
+        TFindingHelper.FirstOf(F, fkCognitiveComplexity).MissingVar) > 0,
+        'Meldetext mit der Kontext-Schwelle');
+    finally F.Free; end;
+  finally Ctx.Free; end;
+end;
+
+procedure TTestCognitiveComplexity.Limit_ReadOncePerContext_SameValueAsWithoutContext;
+// Ein frischer Kontext haelt noch keine Schwelle; der erste Aufruf liest
+// sie und legt sie ab. Der abgelegte Wert ist derselbe, mit dem der
+// Aufruf OHNE Kontext meldet (dessen Meldetext nennt ihn).
+var
+  Ctx   : TAnalyzeContext;
+  F     : TObjectList<TLeakFinding>;
+  Limit : Integer;
+  Text0 : string;
+begin
+  F := CognitiveFindings(SRC_SCORE21, nil);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCognitiveComplexity),
+      'ohne Kontext: 21 ueber der ini-Schwelle (Vorgabe 15)');
+    Text0 := TFindingHelper.FirstOf(F, fkCognitiveComplexity).MissingVar;
+  finally F.Free; end;
+
+  Ctx := TAnalyzeContext.Create;
+  try
+    Assert.IsFalse(Ctx.TryGetCognitiveLimit(Limit),
+      'frischer Kontext: noch keine Schwelle abgelegt');
+    F := CognitiveFindings(SRC_SCORE21, Ctx);
+    try
+      Assert.IsTrue(Ctx.TryGetCognitiveLimit(Limit),
+        'nach dem ersten Aufruf liegt die Schwelle im Kontext');
+      Assert.IsTrue(Pos('(limit: ' + IntToStr(Limit) + ')', Text0) > 0,
+        'dieselbe Schwelle wie ohne Kontext - ' + Text0);
+      Assert.AreEqual(Text0,
+        TFindingHelper.FirstOf(F, fkCognitiveComplexity).MissingVar,
+        'mit und ohne Kontext derselbe Meldetext');
+    finally F.Free; end;
+  finally Ctx.Free; end;
 end;
 
 initialization

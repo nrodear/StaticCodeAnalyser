@@ -63,7 +63,7 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 const
   // Default-Threshold; konfigurierbar via INI [Detectors] CognitiveLimit
@@ -72,8 +72,11 @@ const
 type
   TCognitiveComplexityDetector = class
   public
+    // Perf Q2: AContext haelt die Schwelle [Detectors] CognitiveLimit
+    // einen Scan lang (s. LimitFor); nil = Tests/Direktaufrufe, dann
+    // wird die ini wie bisher je Aufruf gelesen.
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   private
     // Der Walk selbst (CountInMethod) steht seit Perf Q2 als
     // Unit-Funktion im implementation-Teil: er bekommt den Stapel und
@@ -96,6 +99,24 @@ var
 begin
   S := TRepoSettings.QuickReadStr(ASection, AKey, IntToStr(ADefault));
   Result := StrToIntDef(S, ADefault);
+end;
+
+// Perf Q2 (2026-10-25): die Schwelle EINMAL je Kontext lesen. Bis
+// hierher lief QuickReadIntDef je DATEI - und TRepoSettings.QuickReadStr
+// legt dabei jedes Mal ein TMemIniFile an, laedt und zerlegt die ganze
+// analyser.ini (ohne ini drei FileExists je Datei). Profiler Q3: ~1,1 s
+// CPU auf jvcl, schon in v0.9.18. Der Kontext lebt einen Scan lang,
+// jeder Parallel-Worker hat seinen eigenen - der Wert ist damit wie die
+// TD-1-Schwellen der anderen Detektoren scan-konstant. Gelesen wird
+// derselbe Schluessel mit derselben Vorgabe wie zuvor; einziger
+// Unterschied: eine ini-Aenderung WAEHREND eines laufenden Scans wirkt
+// erst im naechsten. Ohne Kontext (Tests, Direktaufrufe) bleibt es beim
+// Lesen je Aufruf.
+function LimitFor(AContext: TAnalyzeContext): Integer;
+begin
+  if (AContext <> nil) and AContext.TryGetCognitiveLimit(Result) then Exit;
+  Result := QuickReadIntDef('Detectors', 'CognitiveLimit', DEF_COGNITIVE_LIMIT);
+  if AContext <> nil then AContext.PutCognitiveLimit(Result);
 end;
 
 type
@@ -280,7 +301,7 @@ end;
 
 class procedure TCognitiveComplexityDetector.AnalyzeUnit(
   UnitNode: TAstNode; const FileName: string;
-  Results: TObjectList<TLeakFinding>);
+  Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Methods : TList<TAstNode>;
   M       : TAstNode;
@@ -292,7 +313,7 @@ var
   Links   : TList<TNestingChainLink>;    // Perf Q2: je Unit EINMAL
   BestLink : Integer;
 begin
-  Limit := QuickReadIntDef('Detectors', 'CognitiveLimit', DEF_COGNITIVE_LIMIT);
+  Limit := LimitFor(AContext);
   Stack := nil;
   Links := nil;
   BestLink := -1;
