@@ -41,6 +41,7 @@ uses
   uTestEditorCommand in 'uTestEditorCommand.pas',
   uTestDfmLexer in 'uTestDfmLexer.pas',
   uTestDfmParser in 'uTestDfmParser.pas',
+  uTestDfmQualifiedValue in 'uTestDfmQualifiedValue.pas',
   uTestDfmBinaryReader in 'uTestDfmBinaryReader.pas',
   uTestDfmPropValue in 'uTestDfmPropValue.pas',
   uTestDfmDefaultName in 'uTestDfmDefaultName.pas',
