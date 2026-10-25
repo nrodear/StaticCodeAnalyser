@@ -269,6 +269,7 @@
         <DCCReference Include="uTestRdxLoopBoundFix.pas"/>
         <DCCReference Include="uTestRdxInheritedEmptyFix.pas"/>
         <DCCReference Include="uTestRdxContextRunner.pas"/>
+        <DCCReference Include="uTestRdxSharedMap.pas"/>
         <DCCReference Include="uTestRdxMagicGuards.pas"/>
         <DCCReference Include="uTestRdxMagicFixDetector.pas"/>
         <DCCReference Include="uTestRdxNilFix.pas"/>

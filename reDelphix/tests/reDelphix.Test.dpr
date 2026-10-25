@@ -213,6 +213,10 @@ program reDelphix.Test;
 //   * uTestRdxContextRunner     - Code-Aktionen ohne Fund am Caret
 //                                 (Charge B): Konstrukt unter dem Caret,
 //                                 Lokale Konstante, try/finally um Create
+//   * uTestRdxSharedMap         - Charge P5: geteilte Code-Sicht
+//                                 (TRdxMappedLines, Acquire/Release) gleich
+//                                 der frischen; Plattenblick-Cache von
+//                                 FileReason/IncludeReason
 //
 // SPRACHE: der Hauptblock setzt die reDelphix-Texte fuer ALLE Tests auf
 // Deutsch (SetRdxLanguageOverride('de'), wie der FPC-Pruefstand) - die
@@ -417,6 +421,7 @@ uses
   uTestRdxLoopBoundFix in 'uTestRdxLoopBoundFix.pas',
   uTestRdxInheritedEmptyFix in 'uTestRdxInheritedEmptyFix.pas',
   uTestRdxContextRunner in 'uTestRdxContextRunner.pas',
+  uTestRdxSharedMap in 'uTestRdxSharedMap.pas',
   uTestRdxMagicGuards in 'uTestRdxMagicGuards.pas',
   uTestRdxMagicFixDetector in 'uTestRdxMagicFixDetector.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',

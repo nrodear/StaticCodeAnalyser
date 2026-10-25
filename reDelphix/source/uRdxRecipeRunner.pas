@@ -1245,11 +1245,11 @@ begin
     Result.PartLines[i] := AInfo.Parts[i].StartLine;
   Result.InWith    := APlaces.InWithBlock(AInfo.Span.StartLine);
   Result.UsesNames := TRdxRecipeRunner.UsesNamesOf(APlaces);
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     AddSqlFacts(Map, Result);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
 end;
 

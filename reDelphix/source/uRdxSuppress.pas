@@ -479,7 +479,7 @@ begin
     AReason := _('the finding line is empty');
     Exit;
   end;
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     // Zeilen-Detektoren (TodoComment, TooLongLine) melden auch Zeilen IN
     // einem '{ ... }' oder ''' ... '''. Eine Zeile davor laege ebenfalls
@@ -502,7 +502,7 @@ begin
       Exit;
     end;
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   // Eigene Zeile direkt ueber der Fundzeile; ueber einer Code-Zeile mit
   // 'All'-Marker darueber ist das ein gestapelter Marker, den der Core
@@ -552,7 +552,7 @@ begin
     AReason := _('no file');
     Exit;
   end;
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     // Ein vorhandener Datei-Marker bekommt die Art dazu - nur ein echter
     // (kein Text in einem Kommentar) und keiner mit 'All'.
@@ -571,7 +571,7 @@ begin
     // Sonst hinter die Kopfanweisung.
     AReason := HeadLineReason(Map, Head);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if AReason <> '' then Exit;
   AEdit := WholeLine(ALines, Head,
@@ -588,11 +588,11 @@ function LineCommentCol(ALines: TStrings; ALine: Integer): Integer;
 var
   Map : TRdxCodeMap;
 begin
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     Result := Map.LineCommentCol(ALine);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
 end;
 
