@@ -48,7 +48,8 @@ implementation
 
 uses
   System.RegularExpressions, System.StrUtils,
-  uFileTextCache;
+  uFileTextCache,
+  uRegExMatches;   // CachedEx - Muster je Thread einmal kompiliert
 
 const
   // Generischer Direktiven-Match: Name + optional ON/OFF. Dispatch im
@@ -186,7 +187,10 @@ begin
   LastOff := TDictionary<string, Integer>.Create;
   PushStack := TStack<TDictionary<string, Integer>>.Create;
   try
-    RE := TRegEx.Create(DIRECTIVE_RE, [roIgnoreCase]);
+    // Perf (Charge R2 2026-10-26): kompilierte Instanz aus dem Thread-Cache
+    // (je Thread einmal statt je Datei neu: TPerlRegEx + pcre_maketables +
+    // Compile). Gleiches Muster, gleiche Optionen.
+    RE := TRegExMatches.CachedEx(DIRECTIVE_RE, [roIgnoreCase]);
     for i := 0 to Lines.Count - 1 do
     begin
       // StripNonDirectiveComments behaelt {$...} aber strippt
