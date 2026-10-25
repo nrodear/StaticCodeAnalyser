@@ -26,6 +26,9 @@ type
     [Test] procedure Chain176_TwoReportingMethods_EachItsOwnPath;
     [Test] procedure Chain176_TieAtSameDepth_FirstPathWins;
     [Test] procedure Chain176_DeepestInElseBranch_SiblingDoesNotLeak;
+    // ---- Perf Q2 (2026-10-25): EIN Walk, Puffer je Unit ------------
+    [Test] procedure Chain176_ShallowerSecondMethod_OwnPath;
+    [Test] procedure Chain176_AfterDeepSilentMethod_NoForeignLinks;
   end;
 
 implementation
@@ -470,6 +473,84 @@ begin
     Assert.AreEqual('if → while → if → if → repeat',
       Chain176OfMethod(F, 'Foo'),
       'tiefster Pfad durch den else-Zweig, ohne das for des then-Zweigs');
+  finally F.Free; end;
+end;
+
+// Perf Q2: Punktzahl und Kette entstehen seit Q2 in EINEM Walk, und
+// Stapel wie Gliederliste werden ueber alle Methoden einer Unit
+// wiederverwendet. Gesichert wird, was dieser Umbau verderben kann:
+// der Stand der VORIGEN Methode (tiefste Ebene, Glieder) darf in die
+// naechste nicht hineinreichen - weder bei einer flacheren meldenden
+// Methode noch nach einer tiefen, aber stillen.
+
+procedure TTestCognitiveComplexity.Chain176_ShallowerSecondMethod_OwnPath;
+// Alpha 1+2+3+4+5+6 = 21 (sechs Ebenen). Beta 5+4+4+1+2 = 16 - die
+// Punktzahl kommt aus booleschen Operatoren, die Kette ist nur zwei
+// Glieder tief. Bliebe die tiefste Ebene von Alpha stehen, kaeme in
+// Beta nie ein neues Maximum zustande.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Alpha;'#13#10+
+  'begin'#13#10+
+  '  if A then'#13#10+
+  '    for I := 1 to 3 do'#13#10+
+  '      while B do'#13#10+
+  '        case C of'#13#10+
+  '          1: if D then'#13#10+
+  '               if E then DoIt;'#13#10+
+  '        end;'#13#10+
+  'end;'#13#10+
+  'procedure Beta;'#13#10+
+  'begin'#13#10+
+  '  if A and B and C and D and E then DoIt;'#13#10+
+  '  if F and G and H and J then DoIt;'#13#10+
+  '  if K and L and M and N then DoIt;'#13#10+
+  '  if P then'#13#10+
+  '    while Q do DoIt;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkCognitiveComplexity),
+      'Alpha 21 und Beta 16 liegen ueber 15');
+    Assert.AreEqual('if → for → while → case → if → if',
+      Chain176OfMethod(F, 'Alpha'), 'Alpha: eigener Pfad');
+    Assert.AreEqual('if → while', Chain176OfMethod(F, 'Beta'),
+      'Beta: der eigene, flachere Pfad - nichts aus Alpha');
+  finally F.Free; end;
+end;
+
+procedure TTestCognitiveComplexity.Chain176_AfterDeepSilentMethod_NoForeignLinks;
+// Deep 1+2+3+4 = 10 meldet nicht, fuellt aber die Gliederliste vier
+// Ebenen tief. Flat 4 x (1+3) = 16 meldet; sein tiefster Pfad ist das
+// ERSTE if allein (Gleichstand auf Ebene 0, striktes '>').
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Deep;'#13#10+
+  'begin'#13#10+
+  '  if A then'#13#10+
+  '    for I := 1 to 3 do'#13#10+
+  '      while B do'#13#10+
+  '        if C then DoIt;'#13#10+
+  'end;'#13#10+
+  'procedure Flat;'#13#10+
+  'begin'#13#10+
+  '  if A and B and C and D then DoIt;'#13#10+
+  '  if E and F and G and H then DoIt;'#13#10+
+  '  if J and K and L and M then DoIt;'#13#10+
+  '  if N and P and Q and R then DoIt;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCognitiveComplexity),
+      'nur Flat liegt ueber 15');
+    Assert.AreEqual('<kein Fund>', Chain176OfMethod(F, 'Deep'),
+      'Deep (10) meldet nicht');
+    Assert.AreEqual('if', Chain176OfMethod(F, 'Flat'),
+      'Flat: ein Glied, kein Rest aus Deep');
   finally F.Free; end;
 end;
 

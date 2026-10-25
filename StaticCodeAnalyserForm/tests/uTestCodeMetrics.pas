@@ -89,6 +89,15 @@ type
     [Test] procedure DeepNesting_ChainPlusRealNesting_AnchorMovesToRealNesting;
   end;
 
+  // ---- DeepNesting Perf Q2: EIN Walk, Puffer je Unit -------------------------------
+  // Eigene Fixture, weil TTestDeepNestingExt die 20 Tests voll hat.
+  [TestFixture]
+  TTestDeepNestingOneWalk = class
+  public
+    [Test] procedure Chain_ShallowerSecondMethod_OwnChain;
+    [Test] procedure Chain_AfterDeepSilentMethod_AnchorAndChainOwn;
+  end;
+
   // ---- CyclomaticComplexity (TCyclomaticComplexityDetector) --------------------------
   [TestFixture]
   TTestCyclomaticComplexity = class
@@ -1437,6 +1446,95 @@ begin
     Assert.AreEqual('if → repeat → while → case → if → if',
       ChainOfMethod(F, 'Foo'),
       'sechs Glieder aus dem else-Zweig, keins aus dem then-Zweig');
+  finally F.Free; end;
+end;
+
+// =============================================================================
+// DeepNesting Perf Q2: Tiefe, Anker und Kette aus EINEM Walk
+// =============================================================================
+//
+// Bis Q2 lief der Walk fuer meldende Methoden ein zweites Mal, nur fuer
+// die Kette. Seit Q2 sammelt der eine Walk die Glieder immer, und
+// Stapel wie Gliederliste werden ueber alle Methoden der Unit
+// wiederverwendet. Gesichert wird, was das verderben kann: Reste der
+// VORIGEN Methode - nach einer tieferen meldenden ebenso wie nach
+// einer tiefen, aber stillen.
+
+procedure TTestDeepNestingOneWalk.Chain_ShallowerSecondMethod_OwnChain;
+// Alpha Tiefe 6, Beta Tiefe 5 - beide melden, die zweite ist flacher.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Alpha;'#13#10+
+  'begin'#13#10+
+  '  if A then'#13#10+
+  '    for I := 1 to 3 do'#13#10+
+  '      while B do'#13#10+
+  '        repeat'#13#10+
+  '          case C of'#13#10+
+  '            1: if D then DoIt;'#13#10+
+  '          end;'#13#10+
+  '        until E;'#13#10+
+  'end;'#13#10+
+  'procedure Beta;'#13#10+
+  'begin'#13#10+
+  '  while A do'#13#10+
+  '    while B do'#13#10+
+  '      if C then'#13#10+
+  '        for I := 1 to 3 do'#13#10+
+  '          if D then DoIt;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkDeepNesting),
+      'Alpha (6) und Beta (5) liegen ueber 4');
+    Assert.AreEqual('if → for → while → repeat → case → if',
+      ChainOfMethod(F, 'Alpha'), 'Alpha: sechs eigene Glieder');
+    Assert.AreEqual('while → while → if → for → if',
+      ChainOfMethod(F, 'Beta'), 'Beta: fuenf eigene Glieder, nichts aus Alpha');
+  finally F.Free; end;
+end;
+
+procedure TTestDeepNestingOneWalk.Chain_AfterDeepSilentMethod_AnchorAndChainOwn;
+// Shallow Tiefe 4 meldet nicht, fuellt aber die Gliederliste. Deeper
+// Tiefe 5 meldet: Anker (Zeile, Art) und Kette muessen aus seinem
+// EIGENEN Walk stammen und zueinander passen - das if ist das letzte
+// Glied der Kette und die gemeldete Stelle.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Shallow;'#13#10+
+  'begin'#13#10+
+  '  if A then'#13#10+
+  '    for I := 1 to 3 do'#13#10+
+  '      while B do'#13#10+
+  '        if C then DoIt;'#13#10+
+  'end;'#13#10+
+  'procedure Deeper;'#13#10+
+  'begin'#13#10+
+  '  repeat'#13#10+
+  '    case X of'#13#10+
+  '      1: while B do'#13#10+
+  '           for I := 1 to 3 do'#13#10+
+  '             if C then DoDeeper;'#13#10+
+  '    end;'#13#10+
+  '  until Y;'#13#10+
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDeepNesting),
+      'nur Deeper liegt ueber 4');
+    Hit := TFindingHelper.FirstOf(F, fkDeepNesting);
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'DoDeeper'), Hit.LineNumber,
+      'Anker ist das innerste if von Deeper');
+    Assert.IsTrue(Pos('Depth 5 (if from line', Hit.MissingVar) > 0,
+      'Tiefe 5 - gemeldet wurde: ' + Hit.MissingVar);
+    Assert.AreEqual('repeat → case → while → for → if', Hit.StructureChain,
+      'Deeper: eigene Kette, kein Glied aus Shallow');
   finally F.Free; end;
 end;
 
