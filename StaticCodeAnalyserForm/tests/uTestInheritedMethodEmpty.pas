@@ -44,6 +44,19 @@ type
     [Test] procedure NamedWithoutArgsButParams_NoFinding;
   end;
 
+  // Perf Charge Q4 (2026-10-25): die Code-Sicht wird faul gebaut - nur bis
+  // zur hoechsten gelesenen Zeile, der Kommentarzustand wird zwischen den
+  // Teilaufbauten weitergetragen. Eigene Fixture, weil die obere ihre 20
+  // Tests voll hat. Alle drei sind vor und nach dem Umbau gruen (reiner
+  // Tempo-Umbau); sie halten fest, was ein fauler Aufbau brechen koennte.
+  [TestFixture]
+  TTestInheritedMethodEmptyLazyView = class
+  public
+    [Test] procedure SecondCandidateFarBehindFirst_BothReported;
+    [Test] procedure CommentAcrossBuildBoundary_EndInCommentIgnored;
+    [Test] procedure CommentAcrossBuildBoundary_Reported;
+  end;
+
 implementation
 
 uses
@@ -457,7 +470,89 @@ begin
   Assert.AreEqual<Integer>(0, Treffer(SRC));
 end;
 
+{ TTestInheritedMethodEmptyLazyView }
+
+function Zeilen(const Text: string; Anzahl: Integer): string;
+var
+  k : Integer;
+begin
+  Result := '';
+  for k := 1 to Anzahl do
+    Result := Result + Text + CRLF;
+end;
+
+// Kommentar-Rumpf fuer die beiden Grenz-Tests. Zeilen: 1-3 KOPF,
+// 6 Deklaration, 11 'inherited; {', 12-67 Kommentarzeilen mit 'end',
+// 68 '}', 69 Rumpf-'end'. NurOverride baut die Sicht bis Deklaration +
+// MAX_KOPF_ZEILEN = Zeile 66, RumpfEnde baut ab 67 weiter - die Grenze
+// liegt also MITTEN im Kommentar. Ginge der Kommentarzustand dort
+// verloren, hielte RumpfEnde Zeile 67 fuer das Rumpfende (FPC-Probe mit
+// absichtlich zurueckgesetztem Zustand: Rumpfende in einer Kommentarzeile,
+// Fund statt keinem).
+function GrenzQuelle(const EndZeile: string): string;
+begin
+  Result := KOPF +
+    '  TFoo = class(TControl)' + CRLF +
+    '  protected' + CRLF +
+    '    procedure Paint; override;' + CRLF +
+    '  end;' + CRLF +
+    'implementation' + CRLF +
+    'procedure TFoo.Paint;' + CRLF +
+    'begin' + CRLF +
+    '  inherited; {' + CRLF +
+    Zeilen('    end of note', 56) +
+    '  }' + CRLF +
+    EndZeile + CRLF +
+    'end.';
+end;
+
+procedure TTestInheritedMethodEmptyLazyView.SecondCandidateFarBehindFirst_BothReported;
+// Der zweite Kandidat liegt ~80 Zeilen hinter dem Ende des ersten - die
+// Sicht muss ueber die beim ersten Kandidaten gebauten Zeilen hinaus
+// nachgezogen werden.
+var
+  Src : string;
+begin
+  Src := KOPF +
+    '  TFoo = class(TControl)' + CRLF +
+    '  protected' + CRLF +
+    '    procedure Paint; override;' + CRLF +
+    '  end;' + CRLF +
+    '  TBar = class(TControl)' + CRLF +
+    '  protected' + CRLF +
+    '    procedure Resize; override;' + CRLF +
+    '  end;' + CRLF +
+    'implementation' + CRLF +
+    'procedure TFoo.Paint;' + CRLF +
+    'begin' + CRLF +
+    '  inherited;' + CRLF +
+    'end;' + CRLF +
+    Zeilen('// Fuelltext', 80) +
+    'procedure TBar.Resize;' + CRLF +
+    'begin' + CRLF +
+    '  inherited;' + CRLF +
+    'end;' + CRLF +
+    'end.';
+  Assert.AreEqual<Integer>(2, Treffer(Src));
+end;
+
+procedure TTestInheritedMethodEmptyLazyView.CommentAcrossBuildBoundary_EndInCommentIgnored;
+// Die Direktive steht am ECHTEN Rumpfende (Zeile 69) -> kein Fund. Mit
+// verlorenem Kommentarzustand endete der Rumpf scheinbar im Kommentar, die
+// Direktive laege ausserhalb, und es gaebe einen Fund.
+begin
+  Assert.AreEqual<Integer>(0, Treffer(GrenzQuelle('end;{$IFDEF SCA_NIE}{$ENDIF}')));
+end;
+
+procedure TTestInheritedMethodEmptyLazyView.CommentAcrossBuildBoundary_Reported;
+// Gegenprobe: derselbe Rumpf ohne Direktive meldet - der lange Kommentar
+// allein sperrt nichts.
+begin
+  Assert.AreEqual<Integer>(1, Treffer(GrenzQuelle('end;')));
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestInheritedMethodEmpty);
+  TDUnitX.RegisterTestFixture(TTestInheritedMethodEmptyLazyView);
 
 end.
