@@ -37,6 +37,10 @@ type
     [Test] procedure SammleWoerter_PunktTrenntWoerter;
     [Test] procedure RawSicht_ZeichenmengeWieFrueher;
     [Test] procedure IdentsFor_Dotless_GleichKnownIdents;
+    // ---- Charge Q5: Wortabfrage ohne Wortmenge, AST-Teil mit einem
+    //      ToLower - Orakel ist die Form von Charge P1 ----
+    [Test] procedure WoerterVorhanden_GleichSammleWoerter;
+    [Test] procedure AstSuchtext_GleichFormJeName;
     // ---- Detektor an den Grenzen der Wortmenge ----
     [Test] procedure Datei_H1_TrefferMittenImWort_NoFinding;
     [Test] procedure Datei_H2_Grossschreibung_NoFinding;
@@ -243,6 +247,107 @@ begin
     Assert.IsFalse(W.ContainsKey('obj.tstringlist'), 'nie ein Wort mit Punkt');
   finally
     W.Free;
+  end;
+end;
+
+procedure TTestUnusedUsesSuchtext.WoerterVorhanden_GleichSammleWoerter;
+// Orakel: SammleWoerter + ContainsKey (Charge P1). Randfaelle: leeres Id,
+// Id mit Punkt/Leerzeichen, doppeltes Id, Wort am Textanfang/-ende, ohne
+// umrahmende Leerzeichen, Teilwoerter, gleiches Fach (Laenge und erstes
+// Zeichen) bei verschiedenen Woertern, alle Ids gefunden (vorzeitiger
+// Schluss).
+const
+  TEXTE: array[0..7] of string = (
+    '',
+    ' tstringlist ',
+    'tstringlist',
+    ' obj.tstringlist.create ',
+    ' tstringlistex mytstringlist tstringlist_2 ',
+    ' a..b . .c. ',
+    ' tlist  tobjectlist tlist ',
+    ' tlisx tlist tmemo tmema t ');
+  IDS: array[0..12] of string = (
+    'tstringlist', 'create', 'obj', 'tlist', 'tobjectlist', 'a', 'b', 'c',
+    'obj.tstringlist', '', 'tlist', 'tmemo', 'x y');
+var
+  Text : string;
+  W    : TDictionary<string, Boolean>;
+  Da   : TArray<Boolean>;
+  Ids  : TArray<string>;
+  k    : Integer;
+begin
+  SetLength(Ids, Length(IDS));
+  for k := 0 to High(IDS) do
+    Ids[k] := IDS[k];
+  for Text in TEXTE do
+  begin
+    W := TDictionary<string, Boolean>.Create;
+    try
+      TUnusedUsesDetector.SammleWoerter(Text, W);
+      Da := TUnusedUsesDetector.WoerterVorhanden(Text, Ids);
+      Assert.AreEqual<Integer>(Length(Ids), Length(Da), 'ein Eintrag je Id');
+      for k := 0 to High(Ids) do
+        Assert.IsTrue(Da[k] = W.ContainsKey(Ids[k]),
+          'WoerterVorhanden weicht von der Wortmenge ab: Text="' + Text +
+          '" Id="' + Ids[k] + '"');
+    finally
+      W.Free;
+    end;
+  end;
+  // Alle gefunden: der vorzeitige Schluss laesst keinen Eintrag aus.
+  Da := TUnusedUsesDetector.WoerterVorhanden(' a b a c ', ['c', 'a', 'b', 'a']);
+  Assert.IsTrue(Da[0] and Da[1] and Da[2] and Da[3], 'alle vier gefunden');
+  Assert.AreEqual<Integer>(0, Length(TUnusedUsesDetector.WoerterVorhanden(' a ', nil)),
+    'keine Ids');
+end;
+
+procedure TTestUnusedUsesSuchtext.AstSuchtext_GleichFormJeName;
+// Orakel: die Form von Charge P1 - je nichtleerem Name/TypeRef (ausser
+// nkUsesItem) ' ' + RawSicht(OhneLiterale(S).ToLower) + ' ' in
+// Baumreihenfolge. Namen mit Grossbuchstaben, Nicht-ASCII (Umlaut,
+// tuerkisches I mit Punkt, Kelvin-Zeichen), Literalen und Punkten.
+var
+  Root, Cls, M : TAstNode;
+
+  function AltForm(N: TAstNode): string;
+    function Teil(const S: string): string;
+    begin
+      if S = '' then Exit('');
+      Result := ' ' + TUnusedUsesDetector.RawSicht(
+        TUnusedUsesDetector.OhneLiterale(S).ToLower) + ' ';
+    end;
+  var
+    i : Integer;
+  begin
+    Result := '';
+    if N.Kind <> nkUsesItem then
+      Result := Teil(N.Name) + Teil(N.TypeRef);
+    for i := 0 to N.Children.Count - 1 do
+      Result := Result + AltForm(N.Children[i]);
+  end;
+
+begin
+  Root := TAstNode.Create(nkUnit, 'MyUnit');
+  try
+    Root.Add(nkUsesItem, 'System.Classes');
+    Cls := Root.Add(nkClass, 'TFooBar');
+    Cls.TypeRef := 'TObjectList<TStringList>';
+    M := Cls.Add(nkMethod, #$00C4 + 'rger' + #$0130 + 'STANBUL' + #$212A);
+    M.TypeRef := 'Vcl.Dialogs.TOpenDialog';
+    M.Add(nkUnknown, '''it''''s TList''');
+    M.Add(nkUnknown, '');
+    M.Add(nkUnknown, 'X'' Y');
+    Root.Add(nkUnknown, 'SysUtils.IntToStr');
+    Assert.AreEqual(AltForm(Root), TUnusedUsesDetector.AstSuchtext(Root),
+      'AstSuchtext = Form je Name');
+    Assert.IsTrue(Pos(' tobjectlist tstringlist ',
+      TUnusedUsesDetector.AstSuchtext(Root)) > 0, 'TypeRef klein und getrennt');
+    Assert.IsTrue(Pos('system.classes', TUnusedUsesDetector.AstSuchtext(Root)) = 0,
+      'nkUsesItem bleibt draussen');
+    Assert.IsTrue(Pos('tlist', TUnusedUsesDetector.AstSuchtext(Root)) = 0,
+      'Literalinhalt bleibt draussen');
+  finally
+    Root.Free;
   end;
 end;
 
