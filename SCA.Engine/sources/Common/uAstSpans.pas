@@ -155,13 +155,25 @@ implementation
 // meldet der Compiler H2443/H2445 (inline nicht expandiert).
 uses
   System.SysUtils,   // StrToIntDef (CollectNestedSpans)
-  System.Generics.Collections;
+  System.Generics.Collections,
+  System.Generics.Defaults;  // Perf Charge R3: einmal geholter Default-Comparer
 
 const
   // Anfangsgroesse des Arbeitsstapels. Deckt die Verzweigungsbreite
   // typischer Methoden- und Klassenknoten ohne Nachwachsen ab; darueber
   // hinaus verdoppelt der Walk selbst.
   INITIAL_STACK_CAPACITY = 64;
+
+var
+  // Perf Charge R3 (2026-10-26, Muster aus Q1/uUninitVar): Default-Comparer
+  // des Arbeitsstapels in CollectWithMethodScope EINMAL je Prozess
+  // (initialization) und jedem Create mitgegeben. TList<T>.Create ohne
+  // Comparer ruft fuer Record-T TComparer<T>._Default, und das fragt in der
+  // Delphi-12-RTL bei JEDEM Aufruf per TRttiContext die RTTI nach einem
+  // '='-Operator ab (Delphi 13 nicht mehr). Der Walk laeuft je Datei aus
+  // sechs Detektoren. VERHALTENSNEUTRAL: derselbe Default-Comparer, und der
+  // Stapel ruft nie IndexOf/Contains/Remove/Sort.
+  GNodeScopePairComparer : IComparer<TNodeScopePair>;
 
 class function TAstSpans.FindBodyBlock(AMethod: TAstNode): TAstNode;
 var
@@ -246,7 +258,7 @@ begin
   Result := nil;
   if ARoot = nil then Exit;
   Cnt := 0;
-  Stack := TList<TNodeScopePair>.Create;
+  Stack := TList<TNodeScopePair>.Create(GNodeScopePairComparer);
   try
     F.Node := ARoot; F.Method := nil;
     Stack.Add(F);
@@ -344,5 +356,9 @@ begin
         AEnds[Cnt - 1] := AStarts[Cnt - 1];
     end;
 end;
+
+initialization
+  // Perf Charge R3: s. GNodeScopePairComparer.
+  GNodeScopePairComparer := TComparer<TNodeScopePair>.Default;
 
 end.
