@@ -41,6 +41,10 @@ type
     [Test] procedure CommentsAndStrings_NoFinding;
     [Test] procedure Message_ShowsHowItIsEvaluated;
     [Test] procedure Confidence_ErrorHigh_WarningMedium;
+    // --- Perf Charge P4: Wortnachschlag ohne Kopie --------------------------
+    [Test] procedure KeywordsInAnyCase_SameAsLowerCase;
+    [Test] procedure AsmBlockInAnyCase_Skipped;
+    [Test] procedure AmpersandIdentifier_KeepsItsText;
   end;
 
 implementation
@@ -270,6 +274,64 @@ begin
           CW := Ord(F[i].Confidence);
     Assert.AreEqual<Integer>(Ord(fcHigh), CE, 'Error Zeile 8');
     Assert.AreEqual<Integer>(Ord(fcMedium), CW, 'Warning Zeile 9');
+  finally
+    F.Free;
+  end;
+end;
+
+// Perf Charge P4 (2026-10-25): der Lexer kopiert Bezeichner nicht mehr,
+// sondern schlaegt sie case-insensitiv in der Wort-Tabelle nach. Die drei
+// Tests pinnen die Randfaelle dieses Nachschlags; sie waren vor dem Umbau
+// gruen und werden rot, wenn der Nachschlag Gross-/Kleinschreibung
+// beachtet, Praefixe gelten laesst ('Counter' als 'count') oder '&Name'
+// als Schluesselwort liest.
+
+procedure TTestComparisonPrecedence.KeywordsInAnyCase_SameAsLowerCase;
+begin
+  // Zeile 8: IF/NOT/COUNT gross - .Count belegt die Ganzzahl (Error).
+  // Zeile 9: .Counter ist KEIN Tabellenwort, nur 'count' ist sein Praefix
+  //          - kein Beleg, Warning.
+  // Zeile 10: TRUE und 'Or' gemischt - Kette mit Boolean-Literal (Error).
+  Assert.AreEqual('E8,W9,E10', Funde('L: TStringList; X: TFoo; A, B: Boolean;',
+    ['  IF NOT L.COUNT > Limit THEN Exit;',
+     '  If Not X.Counter > Limit Then Exit;',
+     '  if A = TRUE Or B = False then Exit;']));
+end;
+
+procedure TTestComparisonPrecedence.AsmBlockInAnyCase_Skipped;
+begin
+  // ASM ... End ueberspringt der Lexer in jeder Schreibweise: Zeile 9
+  // liegt im asm-Block und zaehlt nicht, Zeile 11 dahinter schon.
+  Assert.AreEqual('E11', Funde('N: Integer;',
+    ['  ASM',
+     '    if not N = 1 then',
+     '  End;',
+     '  if not N = 0 then Exit;']));
+end;
+
+procedure TTestComparisonPrecedence.AmpersandIdentifier_KeepsItsText;
+var
+  F : TObjectList<TLeakFinding>;
+  Msg : string;
+  i, N : Integer;
+begin
+  // '&Type' ist ein Bezeichner, kein Schluesselwort (als 'type' gelesen
+  // waere er kein Operand und der Fund fiele weg); die Meldung zeigt ihn
+  // wie geschrieben.
+  F := TFindingHelper.FindingsOfFile(Quelltext('&Type: Integer;',
+    ['  if not &Type > 0 then Exit;']));
+  try
+    Msg := '';
+    N := 0;
+    for i := 0 to F.Count - 1 do
+      if F[i].Kind = fkComparisonPrecedence then
+      begin
+        Inc(N);
+        if F[i].LineNumber = '8' then
+          Msg := F[i].MissingVar;
+      end;
+    Assert.AreEqual<Integer>(1, N, 'nur Zeile 8');
+    Assert.IsTrue(Pos('''not &Type > ...''', Msg) > 0, Msg);
   finally
     F.Free;
   end;

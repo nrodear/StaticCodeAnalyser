@@ -409,7 +409,7 @@ begin
   if not Assigned(ALines) then Exit;
   if AForm.NeedsOpen and not (Assigned(APlaces) and APlaces.IsOpen) then
     Exit;
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     Result.Enabled := AForm.Planner(Map, AFinding.LineInt, AFinding.Message,
       APlan, Result.Reason);
@@ -417,7 +417,7 @@ begin
     if Result.Enabled and Assigned(AForm.Check) then
       Result.Reason := AForm.Check(APlaces, Map, AFinding, APlan);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   Result.Enabled := Result.Enabled and (Result.Reason = '');
   if not Result.Enabled then
@@ -1606,12 +1606,12 @@ begin
     Exit;
   end;
   SetLength(Result.Edits, 1);
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     Result.Enabled := TRdxFloatEqualityFix.ToleranceCompare(Map,
       AFinding.LineInt, AFinding.Message, Result.Edits[0], Result.Reason);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if Result.Enabled then
     Result.Reason := TRdxFloatEqualityFix.ContextReason(
@@ -1656,14 +1656,14 @@ begin
     Exit;
   end;
   SetLength(Result.Edits, 1);
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     Result.Enabled := TRdxMoveSizeFix.PointeeSize(Map, AFinding.LineInt,
       AFinding.Message, Result.Edits[0], Result.Reason)
       and TRdxMoveSizeFix.Operands(Map, AFinding.LineInt, AFinding.Message,
         Ops, Result.Reason);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if Result.Enabled then
     Result.Reason := TRdxMoveSizeFix.ContextReason(
@@ -1828,12 +1828,12 @@ begin
     Detail := TRdxMagicFixes.FileReason(AFinding.FileName, lfDigitSeparator);
     if Detail = '' then
     begin
-      Map := TRdxCodeMap.Create(ALines);
+      Map := TRdxCodeMap.Acquire(ALines);
       try
         Detail := TRdxMagicFixes.IncludeReason(AFinding.FileName, Map,
           lfDigitSeparator);
       finally
-        Map.Free;
+        TRdxCodeMap.Release(Map);
       end;
     end;
     if Detail <> '' then
@@ -1926,12 +1926,12 @@ begin
     Result.Reason := MsgNoFileOpen;
     Exit;
   end;
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     Result.Enabled := TRdxClassMethodFix.MakeStatic(Map, AFinding.LineInt,
       AFinding.Message, Result.Edits, Result.Reason);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if not Result.Enabled then
     Result.Edits := nil;

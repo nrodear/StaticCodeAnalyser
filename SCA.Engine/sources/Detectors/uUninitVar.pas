@@ -1913,54 +1913,65 @@ begin
                                TUnicodeCategory.ucEnclosingMark]));
 end;
 
-function BuildNonAsciiCodeView(Lines: TStringList;
-  FromLine, ToLine: Integer): TArray<string>;
-// Code-Sicht (Kommentare/Strings geblankt, gelowert) der Zeilen
-// [FromLine..ToLine] - aber NUR, wenn dort ein Nicht-ASCII-Zeichen im CODE
-// steht; sonst nil. Der Rohzeilen-Vorlauf kostet einen Zeichenvergleich je
-// Zeichen und haelt die reinen ASCII-Methoden (Normalfall) vom Strippen frei.
+function RangeHasNonAscii(Lines: TStringList;
+  FromLine, ToLine: Integer): Boolean;
+// Rohzeilen-Vorlauf der Code-Sicht: steht in [FromLine..ToLine] (auf die
+// Datei geklemmt) irgendein Zeichen >= $80? Kostet einen Zeichenvergleich
+// je Zeichen und haelt die reinen ASCII-Methoden (Normalfall) vom Strippen
+// frei. Lines = nil oder leerer Bereich -> False.
 var
   i, From0, To0 : Integer;
-  HasNonAscii   : Boolean;
-  State         : TBlankScanState;
   C             : Char;
 begin
-  Result := nil;
+  Result := False;
   if Lines = nil then Exit;
   From0 := FromLine - 1;
   To0   := ToLine - 1;
   if From0 < 0 then From0 := 0;
   if To0 > Lines.Count - 1 then To0 := Lines.Count - 1;
-  if To0 < From0 then Exit;
-  HasNonAscii := False;
   for i := From0 to To0 do
-  begin
     for C in Lines[i] do
       if Ord(C) >= $80 then
-      begin
-        HasNonAscii := True;
-        Break;
-      end;
-    if HasNonAscii then Break;
-  end;
-  if not HasNonAscii then Exit;
+        Exit(True);
+end;
+
+function CodeViewHasNonAscii(const AView: TArray<string>): Boolean;
+// Steht in der (geblankten) Code-Sicht noch ein Zeichen >= $80? Nein
+// heisst: Nicht-ASCII nur in Kommentaren/Strings (deutsche Kommentare),
+// kein Bezeichner betroffen.
+var
+  i : Integer;
+  C : Char;
+begin
+  Result := False;
+  for i := 0 to High(AView) do
+    for C in AView[i] do
+      if Ord(C) >= $80 then
+        Exit(True);
+end;
+
+function BuildNonAsciiCodeView(Lines: TStringList;
+  FromLine, ToLine: Integer): TArray<string>;
+// Code-Sicht (Kommentare/Strings geblankt, gelowert) der Zeilen
+// [FromLine..ToLine] - aber NUR, wenn dort ein Nicht-ASCII-Zeichen im CODE
+// steht; sonst nil. Perf Charge P4: der Detektor nimmt fuer FromLine >= 1
+// das mit PhaseC geteilte Zeilenarray (MethodNonAsciiCodeView) - hier
+// bleibt nur der Randfall FromLine < 1 (Klemmung auf Zeile 1).
+var
+  i, From0, To0 : Integer;
+  State         : TBlankScanState;
+begin
+  Result := nil;
+  if not RangeHasNonAscii(Lines, FromLine, ToLine) then Exit;
+  From0 := FromLine - 1;
+  To0   := ToLine - 1;
+  if From0 < 0 then From0 := 0;
+  if To0 > Lines.Count - 1 then To0 := Lines.Count - 1;
   SetLength(Result, To0 - From0 + 1);
   State := Default(TBlankScanState);
-  HasNonAscii := False;
   for i := From0 to To0 do
-  begin
     Result[i - From0] := LowerCase(TDetectorUtils.BlankNonCode(Lines[i], State));
-    if not HasNonAscii then
-      for C in Result[i - From0] do
-        if Ord(C) >= $80 then
-        begin
-          HasNonAscii := True;
-          Break;
-        end;
-  end;
-  // Nicht-ASCII nur in Kommentaren/Strings (deutsche Kommentare): kein
-  // Bezeichner betroffen.
-  if not HasNonAscii then Result := nil;
+  if not CodeViewHasNonAscii(Result) then Result := nil;
 end;
 
 function IsUnicodeIdentFragment(const AView: TArray<string>;
@@ -2539,6 +2550,17 @@ var
   StrippedLow      : TArray<string>;
   StrippedFrom0    : Integer;   // 0-basierter Lines-Index von StrippedLow[0]
   StrippedBuilt    : Boolean;   // lazy: erst bauen wenn ein Finder laeuft
+  // Perf Charge P4 (2026-10-25): das gestrippte Zeilenarray des GANZEN
+  // Methodenbereichs [MethodNode.Line..MethodEndL], frueher gebaut von der
+  // PhaseA-Code-Sicht (Charge D1). BuildStrippedLowCache uebernimmt es bei
+  // identischen Grenzen, statt dieselben Zeilen ein zweites Mal zu strippen.
+  // GETEILT: StrippedLow und das Ergebnis von MethodNonAsciiCodeView sind
+  // dann DASSELBE Array (dynamische Arrays kennen kein Copy-on-Write) -
+  // StrippedLow[i] := ... oder MethodStrip[i] := ... ist verboten, es
+  // veraendert die Sicht des anderen Lesers mit. Nur lesen.
+  MethodStrip      : TArray<string>;
+  MethodStripFrom0 : Integer;
+  MethodStripReady : Boolean;
   MaxChildren      : Integer;   // TD-1: Hard-Cap per-Scan aus AContext.Config
   MethodCfg        : TCFG;      // #6 Inkr.4: lazy im PhaseD-CFG-Postfilter
   AbsAliases       : TDictionary<string,string>; // A3: aliasLow -> zielLow ('absolute')
@@ -3267,9 +3289,10 @@ var
     Result := HasIdent;
   end;
 
-  procedure BuildStrippedLowCache(MethodStartLine, MethodEndLine: Integer);
+  function StripMethodLow(MethodStartLine, MethodEndLine: Integer;
+    out AFrom0: Integer): TArray<string>;
   // Perf (2026-07-05): P7-uninitvar - EIN BlankNonCode-Durchlauf ueber den
-  // Methodenbereich [From0..To0], Ergebnis gelowert in StrippedLow.
+  // Methodenbereich [From0..To0], Ergebnis gelowert.
   // FindFirstSourceWriteLine/FindFirstReadLine lesen nur noch aus dem
   // Array; beide starteten bisher identisch mit frischem StripState bei
   // MethodStartLine - das vorberechnete Array ist daher byte-identisch.
@@ -3277,12 +3300,14 @@ var
   // alle Zeilen mit, damit Multi-Line-Block-Comments { ... \n ... } und
   // (* ... \n ... *) korrekt geclipped werden. Annahme wie bisher: bei
   // MethodStartLine ist kein Block-Comment offen.
+  // Seit Charge P4 eine reine Funktion (Grenzen -> Array), damit PhaseA
+  // und PhaseC sich das Ergebnis teilen koennen.
   var
     i, From0, To0 : Integer;
     StripState : TBlankScanState;
   begin
-    StrippedLow   := nil;
-    StrippedFrom0 := 0;
+    Result := nil;
+    AFrom0 := 0;
     if Lines = nil then Exit;
     if (MethodStartLine <= 0) or (MethodEndLine < MethodStartLine) then Exit;
     From0 := MethodStartLine - 1;
@@ -3290,12 +3315,55 @@ var
     if From0 < 0 then From0 := 0;
     if To0 > Lines.Count - 1 then To0 := Lines.Count - 1;
     if To0 < From0 then Exit;
-    StrippedFrom0 := From0;
-    SetLength(StrippedLow, To0 - From0 + 1);
+    AFrom0 := From0;
+    SetLength(Result, To0 - From0 + 1);
     StripState.InBrace := False;
     StripState.InParen := False;
     for i := From0 to To0 do
-      StrippedLow[i - From0] := LowerCase(TDetectorUtils.BlankNonCode(Lines[i], StripState));
+      Result[i - From0] := LowerCase(TDetectorUtils.BlankNonCode(Lines[i], StripState));
+  end;
+
+  procedure EnsureMethodStrip;
+  // Perf Charge P4: das Array fuer [MethodNode.Line..MethodEndL] genau
+  // einmal je Methode bauen - wer zuerst fragt (PhaseA-Code-Sicht oder
+  // PhaseC), baut; der andere uebernimmt.
+  begin
+    if MethodStripReady then Exit;
+    MethodStrip := StripMethodLow(MethodNode.Line, MethodEndL, MethodStripFrom0);
+    MethodStripReady := True;
+  end;
+
+  procedure BuildStrippedLowCache(MethodStartLine, MethodEndLine: Integer);
+  // Fuellt StrippedLow/StrippedFrom0 fuer [MethodStartLine..MethodEndLine].
+  // PhaseC ruft mit genau den Methodengrenzen - dann ist es das geteilte
+  // Array (Perf Charge P4), sonst wie bisher frisch gerechnet.
+  begin
+    if (MethodStartLine = MethodNode.Line) and (MethodEndLine = MethodEndL) then
+    begin
+      EnsureMethodStrip;
+      // Referenz, keine Kopie: StrippedLow[i] nie beschreiben (s. MethodStrip).
+      StrippedLow   := MethodStrip;
+      StrippedFrom0 := MethodStripFrom0;
+    end
+    else
+      StrippedLow := StripMethodLow(MethodStartLine, MethodEndLine, StrippedFrom0);
+  end;
+
+  function MethodNonAsciiCodeView: TArray<string>;
+  // Charge D1: Code-Sicht der Methode fuer IsUnicodeIdentFragment, nil =
+  // kein Nicht-ASCII im CODE. Perf Charge P4: dasselbe Ergebnis wie
+  // BuildNonAsciiCodeView(Lines, MethodNode.Line, MethodEndL) - fuer
+  // MethodNode.Line >= 1 decken sich dessen Grenzen und Strip (frischer
+  // State, LowerCase(BlankNonCode)) mit StripMethodLow, das Array wird
+  // deshalb mit PhaseC geteilt statt zweimal gestrippt.
+  begin
+    if MethodNode.Line < 1 then
+      Exit(BuildNonAsciiCodeView(Lines, MethodNode.Line, MethodEndL));
+    Result := nil;
+    if not RangeHasNonAscii(Lines, MethodNode.Line, MethodEndL) then Exit;
+    EnsureMethodStrip;
+    if CodeViewHasNonAscii(MethodStrip) then
+      Result := MethodStrip;
   end;
 
   function FindFirstSourceWriteLine(const NameLow: string;
@@ -3650,8 +3718,10 @@ var
     LV : TAstNode;
     VarRec : TVarInfo;
     NonAsciiView : TArray<string>;   // Charge D1: nil = Methode ohne Nicht-ASCII-Code
+    ViewBuilt    : Boolean;          // Perf Charge P4: Sicht erst beim ersten Kandidaten
   begin
-    NonAsciiView := BuildNonAsciiCodeView(Lines, MethodNode.Line, MethodEndL);
+    NonAsciiView := nil;
+    ViewBuilt    := False;
     for LV in LocalVars do
     begin
       if Trim(LV.Name) = '' then Continue;
@@ -3659,7 +3729,14 @@ var
       if not LooksLikeRealLocalVar(Lines, LV.Line) then Continue;
       // Charge D1 (2026-10-24): Lexer-Bruchstueck eines Unicode-Bezeichners
       // ('Am' aus 'Am<U+043E>unt') ist keine eigene Variable - s.
-      // IsUnicodeIdentFragment.
+      // IsUnicodeIdentFragment. Die Sicht ist eine reine Funktion der
+      // Methodenzeilen; sie erst hier zu bauen aendert nichts, spart sie
+      // aber, wenn keine Variable bis hierher kommt.
+      if not ViewBuilt then
+      begin
+        NonAsciiView := MethodNonAsciiCodeView;
+        ViewBuilt    := True;
+      end;
       if IsUnicodeIdentFragment(NonAsciiView, LowerCase(LV.Name)) then Continue;
       // SCA166-Scope: Parser-Artefakt-Phantoms (nested-Proc-Param / Function-
       // Pointer-Typ-Var / Feld-`if X=nil`) tragen '(' ')' '=' im TypeRef -
@@ -4485,6 +4562,7 @@ begin
       // initialisieren (lazy Build in PhaseC).
       MethodEndL    := TAstSpans.SubtreeMaxLine(MethodNode);
       StrippedBuilt := False;
+      MethodStripReady := False;   // Perf Charge P4: geteiltes Strip-Array
       // asm-Body-Skip (2026-07-13): eine Methode mit EINGEBETTETEM asm-Block
       // schreibt ihre Locals oft per Register/Memory-Ref (unsichtbar fuer den
       // Parser, tkKwAsm wird ohne Knoten geskippt) -> read-vor-write-FP. Der

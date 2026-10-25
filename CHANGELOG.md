@@ -96,6 +96,7 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `ParamByName` of the second instance matched a placeholder that
   only existed in the first SQL and the mismatch went unreported. A
   re-creation now starts with an empty SQL and parameter record.
+- **`--time-detectors` no longer loses sub-millisecond detector calls** - the per-detector table summed whole milliseconds per call, truncated, so every call under 1 ms counted 0 and on large corpora the table showed only about half of the real detector time. The engine now sums timer ticks per call and converts once for the output: `Total ms` with three and `Avg ms` with four decimals, numbers always with a decimal point (before: the locale's separator in `Avg ms` and `% Scan`), ties ordered by name, and a closing line `Timing format: 2 (...)` so readers can tell the formats apart. Columns, heading and the `Total:` line keep their wording; the scan log's `(langsam!)` line keeps whole milliseconds and its 500 ms threshold. New `tools/perf_ab.py` (A/B of two executables with sweep and leave-one-out per detector unit, reads both formats and refuses per-detector verdicts across them) and `tools/perf_rdx/` (reDelphix timing per finding with FPC, no Delphi build).
 
 ---
 

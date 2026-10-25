@@ -78,6 +78,9 @@ type
     [Test] procedure Chain_MixedConstructs_OuterToInner;
     [Test] procedure Chain_ElseIfChain_CountedLikeTheDepth;
     [Test] procedure Chain_EmptyWhenNoFinding;
+    // ---- Perf P3 (2026-10-25): Kette als Elternverweis -------------
+    [Test] procedure Chain_TwoReportingMethods_EachItsOwnPath;
+    [Test] procedure Chain_DeeperElseBranch_SiblingDoesNotLeak;
     // ---- 'else if'-Kette (Autopsie 2026-08-27) ------------------------------
     [Test] procedure DeepNesting_ElseIfChainOneLine_NoFinding;
     [Test] procedure DeepNesting_ElseIfCascadeOwnLine_NoFinding;
@@ -1344,6 +1347,96 @@ begin
       'Tiefe 2 liegt unter der Schwelle');
     Assert.AreEqual('', ChainOf(F),
       'ohne Fund bleibt die Kette leer');
+  finally F.Free; end;
+end;
+
+{ ---- Perf P3 (2026-10-25): Kette als Elternverweis --------------- }
+//
+// Walk fuehrt die Kette seit P3 als Index in eine Glieder-Liste
+// (Elternverweis) statt als string je Stapel-Frame. Gesichert wird,
+// was ein solcher Umbau verderben kann: eine Liste je Methode, und
+// Geschwister-Zweige, deren Glieder nicht in den Pfad des anderen
+// geraten - auch dann nicht, wenn der SPAETERE Zweig der tiefere ist.
+
+function ChainOfMethod(F: TObjectList<TLeakFinding>;
+  const AMethod: string): string;
+var X: TLeakFinding;
+begin
+  Result := '<kein Fund>';
+  for X in F do
+    if (X.Kind = fkDeepNesting) and (Pos(AMethod, X.MethodName) > 0) then
+      Exit(X.StructureChain);
+end;
+
+procedure TTestDeepNestingExt.Chain_TwoReportingMethods_EachItsOwnPath;
+// Beide Methoden Tiefe 5, verschiedene Pfade.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Alpha;'#13#10+
+  'begin'#13#10+
+  '  if A then'#13#10+
+  '    for I := 1 to 3 do'#13#10+
+  '      while B do'#13#10+
+  '        case C of'#13#10+
+  '          1: if D then DoIt;'#13#10+
+  '        end;'#13#10+
+  'end;'#13#10+
+  'procedure Beta;'#13#10+
+  'begin'#13#10+
+  '  while A do'#13#10+
+  '    repeat'#13#10+
+  '      if B then'#13#10+
+  '        for I := 1 to 3 do'#13#10+
+  '          if C then DoIt;'#13#10+
+  '    until E;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkDeepNesting),
+      'beide Methoden liegen bei Tiefe 5');
+    Assert.AreEqual('if → for → while → case → if',
+      ChainOfMethod(F, 'Alpha'), 'Alpha: eigener Pfad');
+    Assert.AreEqual('while → repeat → if → for → if',
+      ChainOfMethod(F, 'Beta'), 'Beta: eigener Pfad, nichts aus Alpha');
+  finally F.Free; end;
+end;
+
+procedure TTestDeepNestingExt.Chain_DeeperElseBranch_SiblingDoesNotLeak;
+// then-Zweig Tiefe 5, else-Zweig Tiefe 6: der SPAETER besuchte Zweig
+// gewinnt, und sein Pfad fuehrt ueber das Kopf-if - ohne ein Glied
+// des then-Zweigs. Der else-Zweig selbst ist kein Glied (wie bei der
+// Tiefe), das repeat darin ist eine echte Ebene.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  if A then'#13#10+
+  '  begin'#13#10+
+  '    for I := 1 to 3 do'#13#10+
+  '      while B do'#13#10+
+  '        if C then'#13#10+
+  '          if D then DoIt;'#13#10+
+  '  end'#13#10+
+  '  else'#13#10+
+  '    repeat'#13#10+
+  '      while E do'#13#10+
+  '        case G of'#13#10+
+  '          1: if H then'#13#10+
+  '               if J then DoIt;'#13#10+
+  '        end;'#13#10+
+  '    until K;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDeepNesting),
+      'eine Methode, ein Fund');
+    Assert.AreEqual('if → repeat → while → case → if → if',
+      ChainOfMethod(F, 'Foo'),
+      'sechs Glieder aus dem else-Zweig, keins aus dem then-Zweig');
   finally F.Free; end;
 end;
 

@@ -78,6 +78,18 @@ type
   //                   IsTestFixturePath).
   TTestPathLevel = (tplFixture, tplSecret, tplFixtureDir);
 
+  // Ein Glied der Verschachtelungskette (TDetectorUtils.NestingChain*):
+  // das Konstrukt und der Index des aeusseren Glieds (-1 = keins).
+  // Bewusst OHNE string - der Record wandert durch die heissen
+  // Tiefen-Walks und muss unverwaltet bleiben.
+  TNestingChainLink = record
+    Kind   : TNodeKind;
+    Parent : Integer;
+  end;
+
+  // Wort fuer ein Konstrukt in der Kette ('if', 'for', ...).
+  TNestingKindName = function(AKind: TNodeKind): string;
+
   TDetectorUtils = class
      public
       // True, wenn Ch zu einem Identifier gehoert (a..z, 0..9, _).
@@ -188,6 +200,14 @@ type
     // Beide Argumente muessen bereits lower-case sein.
     class function FindTokenBoundedLower(const Needle, HaystackLower: string)
       : Integer; static;
+
+    // Kommt ALower (klein geschrieben, nicht leer) in S vor, ASCII-case-
+    // insensitiv? Gleichwertig zu Pos(ALower, LowerCase(S)) > 0 - LowerCase
+    // faltet ebenfalls nur A..Z -, aber ohne S zu kopieren (Perf Charge P4,
+    // dort als lokale Funktion EnthaeltKlein; seit dem Review Charge P hier,
+    // auch fuer die Vorpruefung von SCA-IntegerOverflow).
+    class function ContainsLowerAscii(const S, ALower: string): Boolean;
+      static;
 
     // ENTFERNT Pascal-String-Literale aus einem Ausdrucks-Text - die
     // Zeichen fallen WEG, alle Positionen dahinter VERSCHIEBEN sich.
@@ -342,6 +362,13 @@ type
     // direkt rechnen (Tests/Single-File).
     class function StripFileCommentsKeepStringsCached(Lines: TStrings;
       out LineForChar: TArray<Integer>; AContext: TAnalyzeContext;
+      const FileName: string): string; static;
+
+    // Perf Charge P4 (2026-10-25): Lines.Text mit Ein-Datei-Slot im
+    // Context (TryGetFullText) - der Token-Vorfilter und SCA202 teilen sich
+    // so EINEN Ganztext je Datei. AContext=nil oder FileName='' -> direkt
+    // Lines.Text (Tests/Single-File).
+    class function LinesTextCached(Lines: TStrings; AContext: TAnalyzeContext;
       const FileName: string): string; static;
 
     /// <summary>True, wenn APos INNERHALB eines Pascal-String-Literals
@@ -740,6 +767,28 @@ type
     // Whitespace raus + lowercase - normalisiert eine
     // Zuweisungs-LHS fuer Vergleiche ('Result .X' -> 'result.x').
     class function NormalizeLhsLower(const S: string): string; static;
+
+    // ------- Verschachtelungskette (SCA018 / SCA176) ----------------
+    // Perf P3 (2026-10-25): die beiden Tiefen-Walks trugen die Kette
+    // als string IM Stapel-Record. Das machte den Record zu einem
+    // verwalteten Typ - jedes Push/Pop/Kopieren lief ueber die
+    // RTTI-Kopie (_CopyRecord/FinalizeRecord), auch im Normallauf, in
+    // dem die Kette leer bleibt. Jetzt traegt der Record nur einen
+    // INDEX in eine Glieder-Liste (Elternverweis, -1 = kein Glied);
+    // der Text entsteht erst am Ende, fuer die eine gemeldete Stelle.
+    //
+    // Haengt Glied AKind unter AParent an und gibt seinen Index
+    // zurueck. Die Liste waechst nur - ein einmal vergebener Index
+    // bezeichnet fuer immer denselben Pfad.
+    class function NestingChainPush(ALinks: TList<TNestingChainLink>;
+      AKind: TNodeKind; AParent: Integer): Integer; static;
+    // Text des Pfads bis Glied AIndex, von aussen nach innen, Glieder
+    // mit CHAIN_SEP getrennt - zeichengleich mit der frueheren
+    // Verkettung je Stapel-Frame. AIndex < 0 ergibt ''. Die Woerter
+    // liefert der Detektor (ANameOf): die Kind-AUSWAHL der beiden
+    // Regeln ist absichtlich verschieden, siehe uCognitiveComplexity.
+    class function NestingChainText(ALinks: TList<TNestingChainLink>;
+      AIndex: Integer; ANameOf: TNestingKindName): string; static;
   end;
 
 
@@ -752,7 +801,11 @@ uses
   System.Masks,                  // MatchesMask fuer Test-Fixture-Patterns
   System.StrUtils,               // PosEx
   System.Generics.Defaults,      // Default-Comparer fuer TArray.Sort<Integer>
-  System.RegularExpressions;     // TRegEx fuer IsLikelyAttributePosition
+  System.RegularExpressions,     // TRegEx fuer IsLikelyAttributePosition
+  // Nur fuer CHAIN_SEP (NestingChainText). Implementation-seitig wie
+  // umgekehrt dort (uMethodd12 nutzt diese Unit fuer NewAtPos) - ein
+  // Interface-Zyklus entsteht nicht.
+  uMethodd12;
 
 type
   // Match-Modus einer Regel der zentralen Test-Pfad-Liste (Fund 3,
@@ -1005,6 +1058,30 @@ class function TDetectorUtils.ContainsWholeWordLower(const Needle,
   HaystackLower: string): Boolean;
 begin
   Result := FindWholeWordLower(Needle, HaystackLower) > 0;
+end;
+
+class function TDetectorUtils.ContainsLowerAscii(const S,
+  ALower: string): Boolean;
+var
+  j, k, n, m : Integer;
+  c : Char;
+begin
+  n := Length(S);
+  m := Length(ALower);
+  if m = 0 then Exit(False);   // wie Pos('', ...) = 0
+  for j := 1 to n - m + 1 do
+  begin
+    k := 1;
+    while k <= m do
+    begin
+      c := S[j + k - 1];
+      if (c >= 'A') and (c <= 'Z') then c := Char(Ord(c) + 32);
+      if c <> ALower[k] then Break;
+      Inc(k);
+    end;
+    if k > m then Exit(True);
+  end;
+  Result := False;
 end;
 
 class function TDetectorUtils.FindTokenBoundedLower(const Needle,
@@ -1627,6 +1704,16 @@ begin
   Result := StripFileCommentsKeepStrings(Lines, LineForChar);
   if AContext <> nil then
     AContext.PutKeepStringsText(FileName, Result, LineForChar);
+end;
+
+class function TDetectorUtils.LinesTextCached(Lines: TStrings;
+  AContext: TAnalyzeContext; const FileName: string): string;
+begin
+  if (AContext <> nil) and AContext.TryGetFullText(FileName, Result) then
+    Exit;
+  Result := Lines.Text;
+  if AContext <> nil then
+    AContext.PutFullText(FileName, Result);
 end;
 
 class function TDetectorUtils.InStringLiteral(const ACode: string;
@@ -2362,6 +2449,7 @@ var
   Z, Rest : string;
   pEq, i  : Integer;
   Name    : string;
+  Gecacht : TArray<string>;   // Perf Charge P4: Ein-Datei-Slot des Context
 
   // Typname LINKS vom '=', normalisiert - oder '' wenn dort kein
   // reiner Bezeichner steht (dann ist die Zeile keine Typdeklaration,
@@ -2404,20 +2492,45 @@ begin
   Result.Sorted        := True;      // IndexOf = Binaersuche
   if ALines = nil then Exit;
   try
-    Code := LowerCase(StripStringsAndCommentsCached(
-      ALines, LineFor, AContext, AFileName));
-    Zeilen := Code.Split([#10]);
-    for i := 0 to High(Zeilen) do
+    // Perf Charge P4: bis zu vier Strukturregeln fragen je Datei - das
+    // Ergebnis liegt im Ein-Datei-Slot des Context. Die Liste gehoert
+    // weiterhin dem Aufrufer, sie wird aus dem Slot frisch befuellt.
+    if (AContext <> nil) and
+       AContext.TryGetFpcBindingNames(AFileName, Gecacht) then
     begin
-      Z := Zeilen[i];
-      pEq := Pos('=', Z);
-      if pEq = 0 then Continue;
-      Rest := TrimLeft(Copy(Z, pEq + 1, MaxInt));
-      // 'packed' ist vor record/class erlaubt und schadet hier nicht.
-      if Copy(Rest, 1, 7) = 'packed ' then Rest := TrimLeft(Copy(Rest, 8, MaxInt));
-      if not BeginntMitArt(Rest) then Continue;
-      Name := TypNameLinks(Copy(Z, 1, pEq - 1));
-      if Name <> '' then Result.Add(Name);
+      for i := 0 to High(Gecacht) do
+        Result.Add(Gecacht[i]);
+      Exit;
+    end;
+    Code := StripStringsAndCommentsCached(ALines, LineFor, AContext, AFileName);
+    // Abkuerzung: alle vier Arten beginnen mit 'objc' oder lauten
+    // 'cppclass'. Fehlen beide im GESTRIPPTEN Text (nicht im Rohtext -
+    // entfernte Kommentare koennen Woerter zusammenfuegen), kann keine
+    // Zeile BeginntMitArt erfuellen: die Liste bleibt leer, ohne
+    // LowerCase und Split des Ganztexts.
+    if ContainsLowerAscii(Code, 'objc') or ContainsLowerAscii(Code, 'cppclass') then
+    begin
+      Code := LowerCase(Code);
+      Zeilen := Code.Split([#10]);
+      for i := 0 to High(Zeilen) do
+      begin
+        Z := Zeilen[i];
+        pEq := Pos('=', Z);
+        if pEq = 0 then Continue;
+        Rest := TrimLeft(Copy(Z, pEq + 1, MaxInt));
+        // 'packed' ist vor record/class erlaubt und schadet hier nicht.
+        if Copy(Rest, 1, 7) = 'packed ' then Rest := TrimLeft(Copy(Rest, 8, MaxInt));
+        if not BeginntMitArt(Rest) then Continue;
+        Name := TypNameLinks(Copy(Z, 1, pEq - 1));
+        if Name <> '' then Result.Add(Name);
+      end;
+    end;
+    if AContext <> nil then
+    begin
+      SetLength(Gecacht, Result.Count);
+      for i := 0 to Result.Count - 1 do
+        Gecacht[i] := Result[i];
+      AContext.PutFpcBindingNames(AFileName, Gecacht);
     end;
   except
     // Exception-Sicherheit: die Liste gehoert noch UNS, solange die
@@ -2505,6 +2618,50 @@ begin
     end;
     Inc(i);
   end;
+end;
+
+class function TDetectorUtils.NestingChainPush(
+  ALinks: TList<TNestingChainLink>; AKind: TNodeKind;
+  AParent: Integer): Integer;
+var
+  L : TNestingChainLink;
+begin
+  L.Kind   := AKind;
+  L.Parent := AParent;
+  Result   := ALinks.Add(L);
+end;
+
+class function TDetectorUtils.NestingChainText(
+  ALinks: TList<TNestingChainLink>; AIndex: Integer;
+  ANameOf: TNestingKindName): string;
+// Zwei Schritte, weil die Elternverweise von INNEN nach AUSSEN
+// zeigen, die Kette aber von aussen nach innen gelesen wird. Ein
+// Elternindex ist immer kleiner als der eigene (NestingChainPush
+// haengt an), die Schleifen enden also sicher.
+var
+  Kinds : TArray<TNodeKind>;
+  N, I, K : Integer;
+begin
+  Result := '';
+  N := 0;
+  I := AIndex;
+  while I >= 0 do
+  begin
+    Inc(N);
+    I := ALinks[I].Parent;
+  end;
+  SetLength(Kinds, N);
+  I := AIndex;
+  for K := N - 1 downto 0 do
+  begin
+    Kinds[K] := ALinks[I].Kind;
+    I := ALinks[I].Parent;
+  end;
+  for K := 0 to N - 1 do
+    if K = 0 then
+      Result := ANameOf(Kinds[K])
+    else
+      Result := Result + CHAIN_SEP + ANameOf(Kinds[K]);
 end;
 
 class function TDetectorUtils.IsEventHandlerSignature(

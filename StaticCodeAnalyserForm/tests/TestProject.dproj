@@ -162,6 +162,7 @@
         <DCCReference Include="uTestFormatMismatch.pas"/>
         <DCCReference Include="uTestUnusedUses.pas"/>
         <DCCReference Include="uTestUnusedUsesIdents.pas"/>
+        <DCCReference Include="uTestUnusedUsesSuchtext.pas"/>
         <DCCReference Include="uTestEmptyExcept.pas"/>
         <DCCReference Include="uTestEmptyMethod.pas"/>
         <DCCReference Include="uTestDuplicate.pas"/>
@@ -194,6 +195,7 @@
         <DCCReference Include="..\sources\Console\uConsoleRunner.pas"/>
         <DCCReference Include="uTestConsoleExitCode.pas"/>
         <DCCReference Include="uTestConsoleParseArgs.pas"/>
+        <DCCReference Include="uTestDetectorTimings.pas"/>
         <DCCReference Include="uTestExportSarifDiagnostics.pas"/>
         <DCCReference Include="uTestExportSonarTextRange.pas"/>
         <DCCReference Include="uTestContrastColor.pas"/>
@@ -236,6 +238,7 @@
         <DCCReference Include="uTestFindingKeyPolicy.pas"/>
         <DCCReference Include="uTestBulbDecision.pas"/>
         <DCCReference Include="uTestFindingSourcePick.pas"/>
+        <DCCReference Include="uTestFindingFileIndex.pas"/>
         <DCCReference Include="uTestMarkerTarget.pas"/>
         <DCCReference Include="uTestPerfHotspots.pas"/>
         <DCCReference Include="uTestConcurrencyExt.pas"/>
@@ -268,6 +271,7 @@
         <DCCReference Include="uTestInterfaceGuid.pas"/>
         <DCCReference Include="uTestParamNameMismatch.pas"/>
         <DCCReference Include="uTestComparisonPrecedence.pas"/>
+        <DCCReference Include="uTestContextTextCaches.pas"/>
         <DCCReference Include="uTestRuleListBox.pas"/>
         <DCCReference Include="uTestVcsChanges.pas"/>
         <DCCReference Include="uTestAssertMessage.pas"/>

@@ -26,6 +26,7 @@ type
     [Test] procedure FindWholeWordLower_SkipsPartialMatches_FindsLater;
     [Test] procedure FindWholeWordLower_FromOffset_AndNoMatch;
     [Test] procedure FindTokenBoundedLower_PunctuationEdges;
+    [Test] procedure ContainsLowerAscii_SameAsPosOfLowerCase;
   end;
 
 implementation
@@ -160,6 +161,41 @@ begin
   // Verworfener Treffer (rechts ein Ident-Zeichen), dann der echte.
   Assert.AreEqual<Integer>(16,
     TDetectorUtils.FindTokenBoundedLower('.text', 'a.text_b.text_c.text'));
+end;
+
+procedure TTestDetectorUtilsText.ContainsLowerAscii_SameAsPosOfLowerCase;
+// Review Charge P: die Vorpruefungen von SCA-IntegerOverflow ('nt64',
+// 'qword') und CollectFpcBindingTypeNames ('objc', 'cppclass') fragten
+// Pos(.., LowerCase(Code)) > 0 - ContainsLowerAscii muss je Text dasselbe
+// sagen, auch fuer Nicht-ASCII (LowerCase faltet nur A..Z: das tuerkische
+// I mit Punkt U+0130 und das A mit Umlaut U+00C4 bleiben, wie sie sind).
+const
+  NEEDLES : array[0..4] of string = ('nt64', 'qword', 'objc', 'cppclass', '');
+var
+  Texts : array[0..11] of string;
+  i, k  : Integer;
+begin
+  Texts[0]  := '';
+  Texts[1]  := 'x: Int64;';
+  Texts[2]  := 'X: UINT64;';
+  Texts[3]  := 'nt64';                    // Treffer am Anfang = Ende
+  Texts[4]  := 'q: QWord';                // Treffer am Ende
+  Texts[5]  := 'nt6';                     // kuerzer als das Muster
+  Texts[6]  := 'n t64 qwor d';            // getrennt - kein Treffer
+  Texts[7]  := 'I' + Char($0130) + 'NT64'; // Grossbuchstaben ringsum, nach Nicht-ASCII
+  Texts[8]  := Char($00C4) + 'NT64';
+  Texts[9]  := 'ObjCClass CPPCLASS';
+  Texts[10] := 'nnt64 qqword';            // Wiederaufsetzen nach Teiltreffer
+  Texts[11] := 'N' + Char($0130) + '64 Q' + Char($00C4) + 'ORD';  // Nicht-ASCII im Muster-Platz
+  for k := Low(NEEDLES) to High(NEEDLES) do
+    for i := Low(Texts) to High(Texts) do
+      Assert.AreEqual<Boolean>(Pos(NEEDLES[k], LowerCase(Texts[i])) > 0,
+        TDetectorUtils.ContainsLowerAscii(Texts[i], NEEDLES[k]),
+        Format('''%s'' in Text %d', [NEEDLES[k], i]));
+  Assert.IsTrue(TDetectorUtils.ContainsLowerAscii('X: UINT64;', 'nt64'),
+    'Gegenprobe: Grossschreibung trifft');
+  Assert.IsFalse(TDetectorUtils.ContainsLowerAscii('n t64', 'nt64'),
+    'Gegenprobe: Luecke trifft nicht');
 end;
 
 initialization

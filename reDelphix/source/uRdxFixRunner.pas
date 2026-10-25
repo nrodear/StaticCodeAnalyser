@@ -270,11 +270,11 @@ begin
     Exit;
   end;
   SetLength(Result.Edits, 1);
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     Result.Enabled := APlan(Map, ALine, AMessage, Result.Edits[0], Result.Reason);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if not Result.Enabled then
     Result.Edits := nil;
@@ -452,7 +452,7 @@ begin
     Result.Reason := MsgNoFileOpen;
     Exit;
   end;
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     if not TRdxSimpleFixes.FreeAndNilFix(Map, ALine, Result.Edits,
          Result.Name, Result.Reason) then
@@ -462,7 +462,7 @@ begin
     if Result.Reason = '' then
       Result.Reason := FreeMethodReason(APlaces, Map, ALine, Result.Name);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if Result.Reason <> '' then
   begin
@@ -485,7 +485,7 @@ begin
     Exit;
   end;
   SetLength(Result.Edits, 1);
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     // Eine eigene Routine Assert (Methode oder global) bindet vor
     // System.Assert - ihre Parameter kennt hier niemand. Der with-Grund
@@ -500,7 +500,7 @@ begin
       Result.Enabled := TRdxSimpleFixes.AssertMessage(Map, ALine, AMessage,
         Result.Edits[0], Result.Reason);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if not Result.Enabled then
     Result.Edits := nil;
@@ -666,7 +666,7 @@ begin
   // ablehnt; die Ersetzung schreibt X so, wie es im Quelltext steht.
   Result.Name := FreeReceiverOf(AMessage);
   SetLength(Result.Edits, 1);
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     if not TRdxSimpleFixes.FreeOnly(Map, ALine, Result.Name,
          Result.Edits[0], Result.Reason) then
@@ -680,7 +680,7 @@ begin
     if Result.Reason = '' then
       Result.Reason := ConstParamReason(Map, ALine, Result.Name);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if Result.Reason <> '' then
   begin
@@ -733,14 +733,14 @@ begin
     Result.Reason := _('file with an FPC switch or FPC mode - in objfpc only '
       + 'Foo() calls a procedure variable');
   if Result.Reason <> '' then Exit;
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     if TRdxExprFixes.EmptyArgs(Map, ALine, AMessage, Plan, Result.Reason) then
       Result.Reason := CallReason(APlaces, Map, ALine, Plan)
     else if Result.Reason = '' then
       Result.Reason := _(R_NO_HELP);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if Result.Reason <> '' then Exit;
   SetLength(Result.Edits, 1);
@@ -812,7 +812,7 @@ begin
     Result.Reason := MsgNoFileOpen;
     Exit;
   end;
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     if AKind = fkRedundantBoolean then
       Ok := TRdxExprFixes.RedundantBool(Map, ALine, AMessage, Plan,
@@ -825,7 +825,7 @@ begin
     else if Result.Reason = '' then
       Result.Reason := _(R_NO_HELP);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if Result.Reason <> '' then Exit;
   Result.Name := Plan.Name;
@@ -923,7 +923,7 @@ begin
     Result.Reason := FindUsesEntry(APlaces, ALine, Result.Name, Clause, Index);
   if Result.Reason <> '' then Exit;
   SetLength(Result.Edits, 1);
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     if UnitStillUsed(Map, Result.Name) then
       Result.Reason := MsgStaleSuffix(_('%s is used in the text',
@@ -932,7 +932,7 @@ begin
       Result.Enabled := TRdxStructFixes.RemoveUsesEntry(Map, Clause, Index,
         Result.Edits[0], Result.Reason);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if not Result.Enabled then
   begin
@@ -947,8 +947,9 @@ begin
 end;
 
 // Eingang eines Laeufers mit Quellstellen-Dienst: ohne offene Datei nil
-// und MsgNoFileOpen in AOutcome.Reason; sonst die Code-Sicht (der Aufrufer
-// gibt sie frei) und Platz fuer eine Ersetzung in AOutcome.Edits.
+// und MsgNoFileOpen in AOutcome.Reason; sonst die Code-Sicht (Acquire - der
+// Aufrufer gibt sie ueber TRdxCodeMap.Release zurueck) und Platz fuer eine
+// Ersetzung in AOutcome.Edits.
 function OpenMapFor(APlaces: TSourcePlaces; ALines: TStrings;
   var AOutcome: TRdxFixOutcome): TRdxCodeMap;
 begin
@@ -959,7 +960,7 @@ begin
     Exit;
   end;
   SetLength(AOutcome.Edits, 1);
-  Result := TRdxCodeMap.Create(ALines);
+  Result := TRdxCodeMap.Acquire(ALines);
 end;
 
 // SCA168: TRdxStructFixes.CaseElse mit AStatement ('' = leeres else).
@@ -975,7 +976,7 @@ begin
     Result.Enabled := TRdxStructFixes.CaseElse(Map, ALine, AStatement,
       Result.Edits, Result.Reason);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if not Result.Enabled then
     Result.Edits := nil;
@@ -1015,7 +1016,7 @@ begin
     Result.Reason := MsgNoFileOpen;
     Exit;
   end;
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     if AKind = fkIfElseBegin then
       Result.Enabled := TRdxStructFixes.ElseAfterEndOn(Map, ALine, Kw,
@@ -1027,7 +1028,7 @@ begin
       Result.Enabled := TRdxStructFixes.WrapInBlock(Map, Kw, Result.Edits,
         Result.Reason);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if not Result.Enabled then
     Result.Edits := nil;
@@ -1088,7 +1089,7 @@ begin
       Result.Reason := CastTypeReason(APlaces, Map, ALine,
         Result.Edits[0].NewText, Result.Name);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   Result.Enabled := Result.Enabled and (Result.Reason = '');
   if Result.Enabled then
@@ -1112,7 +1113,7 @@ begin
     Result.Enabled := TRdxRaiseFixes.EmptyBody(Map, ALine,
       RAISE_NOT_IMPLEMENTED, Result.Edits[0], Result.Reason);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   Result.Variant := 1;
   Result.ChangesBehavior := True;
@@ -1304,7 +1305,7 @@ begin
   end;
   Result.Reason := PickNilSite(APlaces, ALine, Site);
   if Result.Reason <> '' then Exit;
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     // Im with-Block kann ein Operand an ein Member des with-Ausdrucks
     // binden (ein Funktionszeiger: '= nil' ruft ihn auf) - der deklarierte
@@ -1323,7 +1324,7 @@ begin
     end;
     Result.Reason := NilOperandsReason(APlaces, Map, Site.Line, Plan);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if Result.Reason <> '' then Exit;
   Result.Hint    := NilHintOf(Plan);

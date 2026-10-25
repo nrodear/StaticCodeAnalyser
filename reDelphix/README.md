@@ -30,7 +30,7 @@ Konzept: `Konzept_SourceRefactor_Quellstellen_2026-10-02.md`, Abschnitt 15
 ```
 reDelphix.d12.dpk / .dproj        {$DESIGNONLY}, requires rtl, vcl, designide, SCA.Engine
 source\uRdxRegister.pas           Register -> Anbieter an TFindingActions anmelden; finalization: abmelden
-source\uRdxProvider.pas           je Fund die Aktionen bauen (Anker/fixMode aus dem Regelkatalog); Quell-Cache TRdxSourceCache
+source\uRdxProvider.pas           je Fund die Aktionen bauen (Anker/fixMode aus dem Regelkatalog); Quell-Cache TRdxSourceCache; seit Charge P5 die Zeilen der zuletzt gelesenen Datei samt geteilter Code-Sicht (SharedLines) und ein Plattenblick je Menueaufbau (BeginDiskBatch, DISK_BATCH_MS)
 source\uRdxRecipeRunner.pas       Rezept-Laeufer auf TSourcePlaces: Fund -> Beschreibung -> Ersetzung fuer SCA044 (Format), SCA003 (SQL-Vorlage) und die uses-Klauseln (PlanUses, QualifyUses, ClausesOf); dazu die geteilten Ergebnistypen (TRdxFixOutcome) und der Aktionsring des Anbieters; ohne ToolsAPI, testbar
 source\uRdxFixRunner.pas          die Ruempfe der einfachen Hilfen, die den Quellstellen-Dienst brauchen (TRdxFixRunner: SCA075/SCA085/SCA126/SCA074/SCA087/SCA139/SCA066/SCA072/SCA084/SCA007/SCA168/SCA101/SCA099), und die Bausteine der Tabelle (MapFix, CastFreeFix, EmptyRaiseFix, AppendUses, CondAssignReason, SelfAssignReason) - bis Charge B2S-b in uRdxRecipeRunner (Review R6-12); ohne ToolsAPI, nur Delphi; nur uRdxFixTable ruft sie
 source\uRdxFixTable.pas           Tabelle der einfachen Hilfen: je Fundart Planer, Hinweis, Kennzeichnung (E2), zweiter Eintrag, Menuetext (Charge R8); EIN Geruest fuer die Planer mit Plan-Record (TRdxFixFrame, generisch, Charge H5c); ohne ToolsAPI, nur Delphi
@@ -51,12 +51,12 @@ source\uRdxTryFixes.pas           Quick-Fixes try/finally SCA009/SCA001/SCA109/S
 source\uRdxSqlTemplate.pas        SQL-Vorlage zu SCA003 (Rezept 5.2, Charge S1, Nacharbeit SQc): nur Werte werden Parameter (DDL - auch hinter ';' -, Namen, Join-Bedingung, unbekannte Anweisungsart lehnen ab), Konstanten mitgelesen, ihr Name bleibt, FireDAC-ExecSQL, ADO-Parameters, Kette Q.SQL.Add, Namen aus dem Operanden; Nachweise am Quelltext (Konstante mit Sichtbarkeit ueber Routinen/Klassen, FireDAC-/ADO-Objekt), reine Textlogik
 source\uRdxResultFixes.pas        Quick-Fixes SCA096/SCA097 (inherited in Konstruktor/Destruktor) und SCA121/SCA196 (Result initialisieren, Charge H5) und die Bausteine erste/letzte Anweisung des Rumpfs, reine Textlogik; ein Index je Planerlauf (Typdeklarationen, Klassenkoepfe, seit Charge B2S-b auch die Methodendeklarationen je Kopf - kein Lauf ueber die ganze Datei je Vorfahr mehr, Review R5-07)
 source\uRdxCompilerTraces.pas     Spuren alter Compiler je Sprachmittel (Default() ab Delphi 2009, Inline-Konstante ab 10.3; dazu die ProjectVersion der .dproj, Charge SQc) und Skript-Units, reine Textlogik (Charge Q14; bis dahin in uRdxResultFixes)
-source\uRdxMagicFixes.pas         Quick-Fix SCA014 "Lokale Konstante einfuehren" (Charge Q14, E28): Ziel aus dem Fund, dann uRdxIntroPlan/uRdxIntroEdits ohne Sync-Edit-Sitzung; Platte: Lazarus-Projekt, alte Delphi-Projekte (.dof/.bdsproj/.bpr/.bpg, .dproj vor 10.3) und Includes neben der Unit, kein Netzpfad (Charge SQc; seit Charge B1-FD auch kein Include auf einem Netzpfad; `\\?\C:\..` ist seit Charge B2S-a lokal)
+source\uRdxMagicFixes.pas         Quick-Fix SCA014 "Lokale Konstante einfuehren" (Charge Q14, E28): Ziel aus dem Fund, dann uRdxIntroPlan/uRdxIntroEdits ohne Sync-Edit-Sitzung; Platte: Lazarus-Projekt, alte Delphi-Projekte (.dof/.bdsproj/.bpr/.bpg, .dproj vor 10.3) und Includes neben der Unit, kein Netzpfad (Charge SQc; seit Charge B1-FD auch kein Include auf einem Netzpfad; `\\?\C:\..` ist seit Charge B2S-a lokal); Plattenblick-Cache TRdxDiskReasonCache (Charge P5, nur aktiv ueber UseDiskCache)
 source\uRdxIntroPlan.pas          Code-Aktion "Lokale Variable einfuehren" (ohne Fund; seit Charge Q14 auch der Quick-Fix SCA014): Literal am Caret, Deklaration, Spalten, Ablehnungen (reine Textlogik)
 source\uRdxIntroEdits.pas         dieselbe Aktion: Puffertext, Ziel am Caret, Ersetzungen des Writers, Ende des Sync-Blocks (reine Textlogik; IDE-Teil folgt)
 source\uRdxContextRunner.pas      Code-Aktionen ohne Fund am Caret (Charge B, V5): Lokale Konstante (TRdxMagicFixes.IntroduceAt) und try/finally um Create (TRdxTryFixes.CreateAt), ein Eintrag je Kandidat; reine Textlogik, FPC-Pruefstand
 source\uRdxSuppress.pas           Unterdrueck-Marker setzen und entfernen (reine Textlogik)
-source\uRdxCodeMap.pas            Code-Sicht der Datei (Kommentare, Strings, mehrzeilige Strings), Token-Leser und die geteilten Bausteine der Planer: Bereiche (RangeText, CommentInRange, LastCharBefore/FirstCharAfter, CanAppendLine - bis Charge B2S-a in uRdxStructFixes), Fragen an die ganze Datei (NextTokenOnLineWith, DeclaresAfter/DeclaresRoutine - bis dahin in uRdxSimpleFixes), Klammertiefe (ParenDelta) und Meldungstext (QuotedText, ColumnFromMessage); die Planer-Units haengen fuer solche Helfer nicht mehr aneinander (Review R3-07)
+source\uRdxCodeMap.pas            Code-Sicht der Datei (Kommentare, Strings, mehrzeilige Strings), Token-Leser und die geteilten Bausteine der Planer: Bereiche (RangeText, CommentInRange, LastCharBefore/FirstCharAfter, CanAppendLine - bis Charge B2S-a in uRdxStructFixes), Fragen an die ganze Datei (NextTokenOnLineWith, DeclaresAfter/DeclaresRoutine - bis dahin in uRdxSimpleFixes), Klammertiefe (ParenDelta) und Meldungstext (QuotedText, ColumnFromMessage); die Planer-Units haengen fuer solche Helfer nicht mehr aneinander (Review R3-07); seit Charge P5 die geteilte Sicht: TRdxMappedLines traegt ihre Map, TRdxCodeMap.Acquire/Release statt Create/Free
 source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung aller Ersetzungen, Spaltengrenze, Textwahl
 source\uRdxPaths.pas              die EINE Netzpfad-Regel (Charge B2S-a): UNC, auch mit `/` und als `\\?\UNC\..`, und Netzlaufwerke (GetDriveType, selbst deklariert, mit Naht fuer Tests) - `\\?\C:\..` ist lokal; fuer Include-, Form- und Projektdateien und die Projekt-Units, ohne Winapi.Windows (FPC-Pruefstand)
 source\uRdxEditor.pas             ToolsAPI: Puffer lesen, Bereich markieren, Bereiche ersetzen (ein Undo-Schritt), Projekt-Units
@@ -1201,13 +1201,31 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   Charge A3: `uTestRdxLoopBoundFix` (SCA203, 26 Tests) - die Text-Fixture
   (18) laeuft auch im FPC-Pruefstand (`uRdxLoopBoundFix` steht in der
   Unit-Liste von build.sh), die Detektor-Fixture (8) nur in reDelphix.Test.
+* Charge P5 (Performance): `uTestRdxSharedMap` (18 Tests, auch im
+  FPC-Pruefstand) - `TTestRdxSharedMap` (10): `TRdxCodeMap.Acquire` liefert
+  fuer `TRdxMappedLines` EINE Map, fuer andere Zeilen je Aufruf eine neue;
+  `Release` laesst die getragene stehen; jede Aenderung der Zeilen (auch in
+  `BeginUpdate`) verwirft sie, die neue gleicht der frischen; Serial je
+  Aufbau; Unterdrueck-Hilfen (je Zeile und Art) und Kontext-Laeufer (je
+  Caret-Spalte) liefern mit geteilter Map dieselben Ersetzungen und Gruende
+  wie mit frischer, bei genau einem Aufbau. `TTestRdxDiskReasonCache` (8):
+  ohne Cache sieht jeder Aufruf die Platte (Vorgabe), mit Cache der erste bis
+  `Clear`; erster Blick gleich dem ohne Cache; Dateiart und Netzpfad vor dem
+  Cache; Schluessel mit Sprache und - fuer IncludeReason - der Map;
+  `UseDiskCache` stellt wieder her; ein freigegebener Cache meldet sich ab.
 
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxTextMsgs uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths uTestRdxBlocks uTestRdxCategoryArgFix uTestRdxEmptyBlockFix uTestRdxEmptyExceptFix uTestRdxGotoExitFix uTestRdxNativeIntFix uTestRdxParensFix uTestRdxTrailingCommaFix uTestRdxLoopBoundFix uTestRdxContextRunner
+bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxTextMsgs uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths uTestRdxBlocks uTestRdxCategoryArgFix uTestRdxEmptyBlockFix uTestRdxEmptyExceptFix uTestRdxGotoExitFix uTestRdxNativeIntFix uTestRdxParensFix uTestRdxTrailingCommaFix uTestRdxLoopBoundFix uTestRdxContextRunner uTestRdxSharedMap
 ```
 
+Gemessen (2026-10-25, FPC-Lauf, Review Charge P): `PASSED 864  FAILED 0` - 52
+Testunits, davon `uTestRdxSharedMap` 19 (neu: Changes zaehlt Schreiben, nicht
+Lesen - TRdxProvider.SharedLines). Davor `PASSED 863`.
+Gemessen (2026-10-25, FPC-Lauf, Charge P5): `PASSED 863  FAILED 0` - 52 Testunits,
+davon `uTestRdxSharedMap` 18 (geteilte Code-Sicht, Plattenblick-Cache). Davor
+`PASSED 845`.
 Gemessen (2026-10-24, FPC-Lauf, nach dem Entscheid "triviale Literale ohne Eintrag"):
 `PASSED 845  FAILED 0` - 51 Testunits, davon `uTestRdxContextRunner` 33 (neue
 Fixture `TTestRdxContextTrivial`, 4 Tests; ohne die Pruefung in `IntroduceAt` 3
