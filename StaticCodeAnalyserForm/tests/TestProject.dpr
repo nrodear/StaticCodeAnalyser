@@ -173,6 +173,7 @@ uses
   uTestUnusedLocal in 'uTestUnusedLocal.pas',
   uTestUninitVar in 'uTestUninitVar.pas',
   uTestUninitVarUnicodeIdent in 'uTestUninitVarUnicodeIdent.pas',
+  uTestUninitVarPerfQ1 in 'uTestUninitVarPerfQ1.pas',
   uTestUnusedParameter in 'uTestUnusedParameter.pas',
   uTestTautologicalExpr in 'uTestTautologicalExpr.pas',
   uTestDfmMasterDetailUnlinked in 'uTestDfmMasterDetailUnlinked.pas',
