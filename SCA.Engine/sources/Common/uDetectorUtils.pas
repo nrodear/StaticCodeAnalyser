@@ -78,6 +78,18 @@ type
   //                   IsTestFixturePath).
   TTestPathLevel = (tplFixture, tplSecret, tplFixtureDir);
 
+  // Ein Glied der Verschachtelungskette (TDetectorUtils.NestingChain*):
+  // das Konstrukt und der Index des aeusseren Glieds (-1 = keins).
+  // Bewusst OHNE string - der Record wandert durch die heissen
+  // Tiefen-Walks und muss unverwaltet bleiben.
+  TNestingChainLink = record
+    Kind   : TNodeKind;
+    Parent : Integer;
+  end;
+
+  // Wort fuer ein Konstrukt in der Kette ('if', 'for', ...).
+  TNestingKindName = function(AKind: TNodeKind): string;
+
   TDetectorUtils = class
      public
       // True, wenn Ch zu einem Identifier gehoert (a..z, 0..9, _).
@@ -740,6 +752,28 @@ type
     // Whitespace raus + lowercase - normalisiert eine
     // Zuweisungs-LHS fuer Vergleiche ('Result .X' -> 'result.x').
     class function NormalizeLhsLower(const S: string): string; static;
+
+    // ------- Verschachtelungskette (SCA018 / SCA176) ----------------
+    // Perf P3 (2026-10-25): die beiden Tiefen-Walks trugen die Kette
+    // als string IM Stapel-Record. Das machte den Record zu einem
+    // verwalteten Typ - jedes Push/Pop/Kopieren lief ueber die
+    // RTTI-Kopie (_CopyRecord/FinalizeRecord), auch im Normallauf, in
+    // dem die Kette leer bleibt. Jetzt traegt der Record nur einen
+    // INDEX in eine Glieder-Liste (Elternverweis, -1 = kein Glied);
+    // der Text entsteht erst am Ende, fuer die eine gemeldete Stelle.
+    //
+    // Haengt Glied AKind unter AParent an und gibt seinen Index
+    // zurueck. Die Liste waechst nur - ein einmal vergebener Index
+    // bezeichnet fuer immer denselben Pfad.
+    class function NestingChainPush(ALinks: TList<TNestingChainLink>;
+      AKind: TNodeKind; AParent: Integer): Integer; static;
+    // Text des Pfads bis Glied AIndex, von aussen nach innen, Glieder
+    // mit CHAIN_SEP getrennt - zeichengleich mit der frueheren
+    // Verkettung je Stapel-Frame. AIndex < 0 ergibt ''. Die Woerter
+    // liefert der Detektor (ANameOf): die Kind-AUSWAHL der beiden
+    // Regeln ist absichtlich verschieden, siehe uCognitiveComplexity.
+    class function NestingChainText(ALinks: TList<TNestingChainLink>;
+      AIndex: Integer; ANameOf: TNestingKindName): string; static;
   end;
 
 
@@ -752,7 +786,11 @@ uses
   System.Masks,                  // MatchesMask fuer Test-Fixture-Patterns
   System.StrUtils,               // PosEx
   System.Generics.Defaults,      // Default-Comparer fuer TArray.Sort<Integer>
-  System.RegularExpressions;     // TRegEx fuer IsLikelyAttributePosition
+  System.RegularExpressions,     // TRegEx fuer IsLikelyAttributePosition
+  // Nur fuer CHAIN_SEP (NestingChainText). Implementation-seitig wie
+  // umgekehrt dort (uMethodd12 nutzt diese Unit fuer NewAtPos) - ein
+  // Interface-Zyklus entsteht nicht.
+  uMethodd12;
 
 type
   // Match-Modus einer Regel der zentralen Test-Pfad-Liste (Fund 3,
@@ -2505,6 +2543,50 @@ begin
     end;
     Inc(i);
   end;
+end;
+
+class function TDetectorUtils.NestingChainPush(
+  ALinks: TList<TNestingChainLink>; AKind: TNodeKind;
+  AParent: Integer): Integer;
+var
+  L : TNestingChainLink;
+begin
+  L.Kind   := AKind;
+  L.Parent := AParent;
+  Result   := ALinks.Add(L);
+end;
+
+class function TDetectorUtils.NestingChainText(
+  ALinks: TList<TNestingChainLink>; AIndex: Integer;
+  ANameOf: TNestingKindName): string;
+// Zwei Schritte, weil die Elternverweise von INNEN nach AUSSEN
+// zeigen, die Kette aber von aussen nach innen gelesen wird. Ein
+// Elternindex ist immer kleiner als der eigene (NestingChainPush
+// haengt an), die Schleifen enden also sicher.
+var
+  Kinds : TArray<TNodeKind>;
+  N, I, K : Integer;
+begin
+  Result := '';
+  N := 0;
+  I := AIndex;
+  while I >= 0 do
+  begin
+    Inc(N);
+    I := ALinks[I].Parent;
+  end;
+  SetLength(Kinds, N);
+  I := AIndex;
+  for K := N - 1 downto 0 do
+  begin
+    Kinds[K] := ALinks[I].Kind;
+    I := ALinks[I].Parent;
+  end;
+  for K := 0 to N - 1 do
+    if K = 0 then
+      Result := ANameOf(Kinds[K])
+    else
+      Result := Result + CHAIN_SEP + ANameOf(Kinds[K]);
 end;
 
 class function TDetectorUtils.IsEventHandlerSignature(

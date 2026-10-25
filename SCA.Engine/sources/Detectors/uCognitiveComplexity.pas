@@ -110,12 +110,19 @@ end;
 
 type
   TStackEntry = record
-    // L1: Kette der Konstrukte bis zu diesem Knoten. Bei
-    // ACollectChain=False durchgehend leer - die Zuweisung an ein
-    // Kind ist dann eine reine Referenzzaehler-Erhoehung.
-    Chain : string;
     Node  : TAstNode;
     Depth : Integer;     // Verschachtelungstiefe relativ zum Method-Root
+    // L1: Kette der Konstrukte bis zu diesem Knoten - als INDEX in
+    // die Glieder-Liste (TDetectorUtils.NestingChainPush), -1 = noch
+    // kein Glied. Bei ACollectChain=False durchgehend -1.
+    // Perf P3 (2026-10-25): bis hierher stand die Kette als string
+    // im Record. Das machte ihn zu einem VERWALTETEN Typ: jedes
+    // Stack.Add/Delete und jede Zuweisung Entry/Child lief ueber die
+    // RTTI-Kopie - fuer jeden Knoten jeder Methode, auch im
+    // Normallauf mit leerer Kette (Messagent 2026-10-25: SCA176 laz
+    // 0,78 -> 1,16 s seit v0.9.18). Ein Integer haelt den Record
+    // unverwaltet wie in v0.9.18.
+    Link  : Integer;
   end;
 
 class function TCognitiveComplexityDetector.CountBooleanOpsInCond(
@@ -166,20 +173,26 @@ var
   ElseIfDepth : Integer;   // Tiefe fuer ein direktes nkIfStmt-Kind (else if)
   IsControlFlow : Boolean;
   MaxDepth : Integer;      // L1: tiefste erreichte Ebene
-  ChildChain : string;
+  ChildLink : Integer;     // L1: Kettenglied, das die Kinder erben
+  BestLink  : Integer;     // L1: Kettenglied der tiefsten Stelle, -1 = keins
+  Links     : TList<TNestingChainLink>;   // nur bei ACollectChain
 begin
   Result := 0;
   MaxDepth := -1;
+  BestLink := -1;
   if ACollectChain and (AChain <> nil) then AChain^ := '';
   if MethodNode = nil then Exit;
+  Links := nil;
   Stack := TList<TStackEntry>.Create;
   try
+    if ACollectChain then
+      Links := TList<TNestingChainLink>.Create;
     // Push children of MethodNode with Depth=0 (Method-Root selbst zaehlt nicht).
     for i := MethodNode.Children.Count - 1 downto 0 do
     begin
       Entry.Node  := MethodNode.Children[i];
       Entry.Depth := 0;
-      Entry.Chain := '';
+      Entry.Link  := -1;
       Stack.Add(Entry);
     end;
 
@@ -209,27 +222,19 @@ begin
       // L1: die Kette waechst an genau den Knoten, die auch die
       // Verschachtelung erhoehen. Festgehalten wird der Pfad zur
       // TIEFSTEN Stelle; bei Gleichstand gewinnt der erste
-      // (striktes >), genau wie in uDeepNesting.
-      ChildChain := Entry.Chain;
+      // (striktes >), genau wie in uDeepNesting. Die Kette ist
+      // PFADABHAENGIG (jeder Frame hat seine eigene, die Zweige
+      // divergieren) - deshalb Elternverweise statt eines Puffers;
+      // der Text entsteht erst nach dem Walk, einmal.
+      ChildLink := Entry.Link;
       if ACollectChain and IsControlFlow then
       begin
-        if ChildChain = '' then
-          ChildChain := NodeKindName(Entry.Node.Kind)
-        else
-        // Der Akkumulator ist an die VERSCHACHTELUNGSTIEFE gebunden,
-        // nicht an die Knotenzahl: gemessen liegen 98,1 % der
-        // SCA018-Funde bei Tiefe <= 8, das Maximum im Korpus ist 16.
-        // Ein TStringBuilder scheidet hier ausserdem aus, weil die
-        // Kette PFADABHAENGIG ist - jeder Stack-Frame traegt seine
-        // eigene, und die Zweige divergieren. Ein Builder hat genau
-        // einen Puffer und koennte das nicht abbilden.
-        // noinspection StringConcatInLoop
-          ChildChain := ChildChain + CHAIN_SEP +
-                        NodeKindName(Entry.Node.Kind);
+        ChildLink := TDetectorUtils.NestingChainPush(Links,
+          Entry.Node.Kind, Entry.Link);
         if Entry.Depth > MaxDepth then
         begin
           MaxDepth := Entry.Depth;
-          if AChain <> nil then AChain^ := ChildChain;
+          BestLink := ChildLink;
         end;
       end;
 
@@ -257,11 +262,18 @@ begin
         Child.Node  := Entry.Node.Children[i];
         if Child.Node.Kind = nkIfStmt then Child.Depth := ElseIfDepth
         else                               Child.Depth := ChildDepth;
-        Child.Chain := ChildChain;
+        Child.Link  := ChildLink;
         Stack.Add(Child);
       end;
     end;
+    // Frueher wurde AChain^ bei JEDEM neuen Maximum ueberschrieben -
+    // stehen bleibt der Pfad des letzten Maximums, und genau dessen
+    // Glied haelt BestLink.
+    if ACollectChain and (AChain <> nil) and (BestLink >= 0) then
+      AChain^ := TDetectorUtils.NestingChainText(Links, BestLink,
+        NodeKindName);
   finally
+    Links.Free;
     Stack.Free;
   end;
 end;
