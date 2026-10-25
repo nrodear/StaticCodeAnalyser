@@ -48,13 +48,53 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TUnusedUsesDetector = class
   public
+    // AContext (Charge P1, 2026-10-25): der Scan-Kontext liefert Zeilen-
+    // und Strip-Cache (ein Strip je Datei fuer alle Detektoren statt
+    // eines eigenen). nil -> Prozess-Cache und eigener Strip, dieselbe
+    // Antwort (Tests, reDelphix).
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
+
+    // ---- Suchtext-Bausteine (Charge P1, 2026-10-25) ----
+    // Tempo-Umbau ohne Verhaltensaenderung. Bis dahin pruefte H1 mit
+    // Pos(Praefix + '.', RawText) und H2 mit Pos(' ' + Id + ' ',
+    // WordText) - je Bezeichner ein Durchlauf ueber den GANZEN Suchtext
+    // (Quelltext + AST-Namen), bei ~25 Bezeichnern je gemappter Unit der
+    // groesste Posten des Strict-Laufs (laz ~4 s). Public und static,
+    // damit die Aequivalenz zur alten Pos-Form direkt testbar ist
+    // (uTestUnusedUsesSuchtext).
+
+    // Die Raw-Sicht eines (lowercase) Textes: jedes Zeichen ausser
+    // a..z, 0..9, '_' und '.' wird zu ' ' - zeichengenau die Abbildung,
+    // die CollectText und der Quelltext-Kanal frueher Zeichen fuer
+    // Zeichen anhingen. Die Laenge bleibt gleich.
+    class function RawSicht(const S: string): string; static;
+
+    // 1-basierte Positionen aller '.' in Text, aufsteigend.
+    class function PunktPositionen(const Text: string): TArray<Integer>; static;
+
+    // VERTRAG: = (Pos(Praefix + '.', Text) > 0), Punkte =
+    // PunktPositionen(Text). Also auch Treffer MITTEN im Wort
+    // ('myclasses.x' deckt 'classes') - das ist der alte H1-Vertrag,
+    // hier nur ohne Durchlauf je Praefix. Leeres Praefix: True gdw.
+    // Text einen Punkt hat.
+    class function PraefixVorPunkt(const Text: string;
+      const Punkte: TArray<Integer>; const Praefix: string): Boolean; static;
+
+    // Traegt jedes Wort von Text in Woerter ein - Woerter sind die
+    // maximalen Laeufe ohne ' ' und '.'. VERTRAG fuer einen Text, der
+    // leer ist oder mit ' ' beginnt und endet (der Suchtext in
+    // AnalyzeUnit ist das immer), und ein Id ohne Leerzeichen:
+    // Woerter.ContainsKey(Id) = (Pos(' ' + Id + ' ',
+    // Text.Replace('.', ' ')) > 0) - der alte H2-Vertrag auf dem
+    // WordText, der genau diese Ersetzung war.
+    class procedure SammleWoerter(const Text: string;
+      Woerter: TDictionary<string, Boolean>); static;
 
     // F3 (2026-09-19): blankt jede uses-Klausel (vom Wort 'uses' bis
     // zum naechsten ';') im GESTRIPPTEN lowercase-Text zu Leerzeichen.
@@ -104,11 +144,12 @@ type
     // 2026-10-13; reDelphix in dieser Charge unveraendert).
     class function IdentsFor(const UnitLow: string): TArray<string>; static;
   private
-    // Baut zwei Corpus-Varianten:
-    //   RawText  - lowercase, Punkte erhalten (fuer H1: 'sysutils.')
-    //   WordText - lowercase, alle Nicht-Bezeichner durch Leerzeichen (fuer H2: ' tlist ')
+    // Baut den Suchtext RawText: lowercase, Punkte erhalten (H1:
+    // 'sysutils.'), sonstige Nicht-Bezeichner als Leerzeichen. Den
+    // frueheren zweiten Text WordText (dasselbe mit '.' -> ' ', fuer H2:
+    // ' tlist ') ersetzt seit Charge P1 die Wortmenge aus SammleWoerter.
     class procedure CollectText(Node: TAstNode;
-      RawSB, WordSB: TStringBuilder); static;
+      RawSB: TStringBuilder); static;
 
     // Letzter Namensbestandteil: 'System.Classes' -> 'classes'
     class function ShortName(const QualName: string): string; static;
@@ -224,8 +265,94 @@ begin
   Result := False;
 end;
 
+class function TUnusedUsesDetector.RawSicht(const S: string): string;
+// Vertrag siehe Deklaration. Dieselbe Zeichenmenge wie das fruehere
+// CharInSet(Ch, ['a'..'z', '0'..'9', '_', '.']) - CharInSet war fuer
+// Zeichen ab #$0100 und fuer #$80..#$FF ebenfalls False.
+var
+  i   : Integer;
+  Src : PChar;
+  Dst : PChar;
+  Ch  : Char;
+begin
+  SetLength(Result, Length(S));
+  if S = '' then Exit;
+  Src := PChar(S);
+  Dst := PChar(Result);
+  for i := 0 to Length(S) - 1 do
+  begin
+    Ch := Src[i];
+    if ((Ch >= 'a') and (Ch <= 'z')) or ((Ch >= '0') and (Ch <= '9')) or
+       (Ch = '_') or (Ch = '.') then
+      Dst[i] := Ch
+    else
+      Dst[i] := ' ';
+  end;
+end;
+
+class function TUnusedUsesDetector.PunktPositionen(
+  const Text: string): TArray<Integer>;
+var
+  i, n : Integer;
+  P    : PChar;
+begin
+  n := 0;
+  P := PChar(Text);
+  for i := 0 to Length(Text) - 1 do
+    if P[i] = '.' then Inc(n);
+  SetLength(Result, n);
+  n := 0;
+  for i := 0 to Length(Text) - 1 do
+    if P[i] = '.' then
+    begin
+      Result[n] := i + 1;
+      Inc(n);
+    end;
+end;
+
+class function TUnusedUsesDetector.PraefixVorPunkt(const Text: string;
+  const Punkte: TArray<Integer>; const Praefix: string): Boolean;
+// Pos(Praefix + '.', Text) > 0 heisst: an einer Punktposition d steht
+// direkt davor das Praefix, also Text[d - L .. d - 1] = Praefix mit
+// L = Length(Praefix) und d > L. Der Vergleich des letzten Zeichens
+// vorab spart den CompareMem fuer fast jeden Punkt.
+var
+  L    : Integer;
+  d    : Integer;
+  Letz : Char;
+begin
+  L := Length(Praefix);
+  if L = 0 then Exit(Length(Punkte) > 0);
+  Letz := Praefix[L];
+  for d in Punkte do
+    if (d > L) and (Text[d - 1] = Letz) and
+       CompareMem(PChar(Text) + (d - L - 1), PChar(Praefix),
+         L * SizeOf(Char)) then
+      Exit(True);
+  Result := False;
+end;
+
+class procedure TUnusedUsesDetector.SammleWoerter(const Text: string;
+  Woerter: TDictionary<string, Boolean>);
+var
+  i, n, Start : Integer;
+  P           : PChar;
+begin
+  n := Length(Text);
+  P := PChar(Text);
+  i := 0;
+  while i < n do
+  begin
+    while (i < n) and ((P[i] = ' ') or (P[i] = '.')) do Inc(i);
+    Start := i;
+    while (i < n) and (P[i] <> ' ') and (P[i] <> '.') do Inc(i);
+    if i > Start then
+      Woerter.AddOrSetValue(Copy(Text, Start + 1, i - Start), True);
+  end;
+end;
+
 class procedure TUnusedUsesDetector.CollectText(Node: TAstNode;
-  RawSB, WordSB: TStringBuilder);
+  RawSB: TStringBuilder);
 
   // I2 (2026-09-20): Inhalte von Stringliteralen ausblenden.
   //
@@ -285,32 +412,12 @@ class procedure TUnusedUsesDetector.CollectText(Node: TAstNode;
   end;
 
   procedure Add(const S: string);
-  var
-    Low : string;
-    Ch  : Char;
   begin
     if S = '' then Exit;
-    Low := OhneLiterale(S).ToLower;
     // Raw: lowercase, Punkte beibehalten, sonstiges durch Leerzeichen
     RawSB.Append(' ');
-    for Ch in Low do
-    begin
-      if CharInSet(Ch, ['a'..'z', '0'..'9', '_', '.']) then
-        RawSB.Append(Ch)
-      else
-        RawSB.Append(' ');
-    end;
+    RawSB.Append(RawSicht(OhneLiterale(S).ToLower));
     RawSB.Append(' ');
-    // Word: nur Bezeichner-Zeichen, alles andere -> Leerzeichen
-    WordSB.Append(' ');
-    for Ch in Low do
-    begin
-      if CharInSet(Ch, ['a'..'z', '0'..'9', '_']) then
-        WordSB.Append(Ch)
-      else
-        WordSB.Append(' ');
-    end;
-    WordSB.Append(' ');
   end;
 
 begin
@@ -323,7 +430,7 @@ begin
     Add(Node.TypeRef);
   end;
   for var Child in Node.Children do
-    CollectText(Child, RawSB, WordSB);
+    CollectText(Child, RawSB);
 end;
 
 { ---- Bekannte Bezeichner pro Unit (H2) ---- }
@@ -973,21 +1080,33 @@ class function TUnusedUsesDetector.IdentsFor(
   const UnitLow: string): TArray<string>;
 // Vertrag siehe Deklaration. Der Rueckfall bleibt an IstRtlNamespace
 // gebunden - dort steht das WARUM (Alcinoe-FP der C-Charge).
+// Charge P1 (2026-10-25): fuer einen dotless Namen ist der Kurzname der
+// Name selbst - der zweite Durchlauf durch die else-if-Kette lieferte
+// dann dasselbe leere Ergebnis noch einmal und entfaellt.
+var
+  Kurz : string;
 begin
   Result := KnownIdents(UnitLow);
   if (Length(Result) = 0) and IstRtlNamespace(UnitLow) then
-    Result := KnownIdents(ShortName(UnitLow));
+  begin
+    Kurz := ShortName(UnitLow);
+    if Kurz <> UnitLow then
+      Result := KnownIdents(Kurz);
+  end;
 end;
 
 { ---- Oeffentliche API ---- }
 
 class procedure TUnusedUsesDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  AContext: TAnalyzeContext);
 var
   UsesItems  : TList<TAstNode>;
-  RawSB, WordSB : TStringBuilder;
-  RawText    : string;   // lowercase mit Punkten: fuer H1
-  WordText   : string;   // lowercase nur Bezeichner: fuer H2
+  RawSB      : TStringBuilder;
+  RawText    : string;   // lowercase mit Punkten: fuer H1 und H2
+  Punkte     : TArray<Integer>;                // H1, lazy
+  PunkteDa   : Boolean;
+  Woerter    : TDictionary<string, Boolean>;   // H2, lazy
   Reported   : TDictionary<string, Boolean>;
   Item       : TAstNode;
   UnitLow    : string;
@@ -998,12 +1117,10 @@ var
   SrcCached  : Boolean;
   LineFor    : TArray<Integer>;
   Gestript   : string;
-  Ch         : Char;
 begin
   RawSB  := TStringBuilder.Create;
-  WordSB := TStringBuilder.Create;
   try
-    CollectText(UnitNode, RawSB, WordSB);
+    CollectText(UnitNode, RawSB);
 
     // D4 (2026-09-19, FP-Muster 2 der Recall-Freigabe-Stichprobe):
     // CollectText sieht nur AST-NAMEN (Node.Name/TypeRef) - eine
@@ -1011,8 +1128,8 @@ begin
     // HelpCommand in einer nested procedure, TFieldDataLink.Create,
     // Variant-Zuweisungen), fehlte im Suchtext, und die uses-Zeile
     // wurde trotz Nutzung gemeldet. ADDITIVER Quelltext-Kanal: der
-    // kommentar- UND string-gestrippte Dateitext wird an beide
-    // Suchtexte ANGEHAENGT. Strings gestrippt aus derselben Politik,
+    // kommentar- UND string-gestrippte Dateitext wird an den
+    // Suchtext ANGEHAENGT. Strings gestrippt aus derselben Politik,
     // aus der der AST-Weg Literale nie sah: ein Bezeichner IN einem
     // Literal ist kein Verwendungsnachweis. Mehr Suchtext kann Funde
     // nur ENTFERNEN, nie erzeugen - richtungssicher. Ist die Datei
@@ -1021,48 +1138,36 @@ begin
     // ihren Vertrag, und genau dafuer ist der Kanal ADDITIV statt
     // ersetzend.
     //
-    // OHNE Scan-Kontext (Review 2026-10-13): AnalyzeUnit hat keinen
-    // TAnalyzeContext-Parameter und ist in uStaticAnalyzer2 ueber AddD3
-    // registriert - der Adapter verwirft den Kontext. AcquireLines mit
-    // nil faellt auf den Prozess-Cache zurueck (dieselben Zeilen wie im
-    // Scan), nur der Strip-Slot des Kontexts bleibt ungenutzt: ein
-    // Strip je Datei mehr, keine andere Antwort. Der Umstieg auf den
-    // Kontext braucht den 4-Parameter-Vertrag (AddD statt AddD3) in
-    // uStaticAnalyzer2 - Muster uHardcodedIpAddress.
-    SrcLines := AcquireLines(FileName, SrcCached, nil);
+    // MIT Scan-Kontext seit Charge P1 (2026-10-25; Review 2026-10-13
+    // hatte den Umstieg vorgemerkt): registriert ueber AddD, Zeilen aus
+    // CtxFileTextCache (im Scan dasselbe Objekt wie der Prozess-Cache,
+    // uStaticAnalyzer2: Ctx.FileTextCache := gFileTextCache) und der
+    // Strip aus dem Strip-Slot des Kontexts - derselbe
+    // StripStringsAndComments(Lines, '~'), den die anderen Ganztext-
+    // Detektoren dieser Datei schon gerechnet haben. Ohne Kontext (nil)
+    // rechnet der Detektor selbst, mit derselben Antwort.
+    SrcLines := AcquireLines(FileName, SrcCached, CtxFileTextCache(AContext));
     if SrcLines <> nil then
     try
       Gestript := TDetectorUtils.StripStringsAndCommentsCached(
-        SrcLines, LineFor, nil, FileName).ToLower;
+        SrcLines, LineFor, AContext, FileName).ToLower;
       // F3 (2026-09-19): uses-Klauseln liefern keinen Nachweis -
       // Vertrag und FN-Muster an der Deklaration von BlankeUsesKlauseln.
       BlankeUsesKlauseln(Gestript);
       RawSB.Append(' ');
-      WordSB.Append(' ');
-      for Ch in Gestript do
-      begin
-        if CharInSet(Ch, ['a'..'z', '0'..'9', '_', '.']) then
-          RawSB.Append(Ch)
-        else
-          RawSB.Append(' ');
-        if CharInSet(Ch, ['a'..'z', '0'..'9', '_']) then
-          WordSB.Append(Ch)
-        else
-          WordSB.Append(' ');
-      end;
+      RawSB.Append(RawSicht(Gestript));
       RawSB.Append(' ');
-      WordSB.Append(' ');
     finally
       ReleaseLines(SrcLines, SrcCached);
     end;
 
-    RawText  := RawSB.ToString;
-    WordText := WordSB.ToString;
+    RawText := RawSB.ToString;
   finally
     RawSB.Free;
-    WordSB.Free;
   end;
 
+  PunkteDa  := False;
+  Woerter   := nil;
   Reported  := TDictionary<string, Boolean>.Create;
   UsesItems := UnitNode.FindAll(nkUsesItem);
   try
@@ -1080,11 +1185,18 @@ begin
       Found := False;
 
       // -- H1: Qualifizierter Bezeichner ('sysutils.' im Raw-Text) --------
-      if (Pos(ShortLow + '.', RawText)  > 0) or
-         (Pos(UnitLow  + '.', RawText)  > 0) then
+      // = Pos(ShortLow + '.', RawText) > 0 oder Pos(UnitLow + '.', ...)
+      // (Vertrag an PraefixVorPunkt), ohne Durchlauf je Praefix.
+      if not PunkteDa then
+      begin
+        Punkte   := PunktPositionen(RawText);
+        PunkteDa := True;
+      end;
+      if PraefixVorPunkt(RawText, Punkte, ShortLow) or
+         PraefixVorPunkt(RawText, Punkte, UnitLow) then
         Found := True;
 
-      // -- H2: Bekannte Bezeichner im Word-Text ---------------------------
+      // -- H2: Bekannte Bezeichner als ganzes Wort -------------------------
       if not Found then
       begin
         // Kurznamen-Fallback NUR fuer RTL-Namespaces (C-Charge
@@ -1100,9 +1212,17 @@ begin
         // gemeldet -> lieber false negative als false positive.
         if Length(Idents) = 0 then Continue;
 
+        // Wortmenge einmal je Datei statt Pos(' ' + Id + ' ', WordText)
+        // je Bezeichner (Vertrag an SammleWoerter).
+        if Woerter = nil then
+        begin
+          Woerter := TDictionary<string, Boolean>.Create;
+          SammleWoerter(RawText, Woerter);
+        end;
+
         for var Id in Idents do
         begin
-          if Pos(' ' + Id + ' ', WordText) > 0 then
+          if Woerter.ContainsKey(Id) then
           begin
             Found := True;
             Break;
@@ -1125,6 +1245,7 @@ begin
   finally
     UsesItems.Free;
     Reported.Free;
+    Woerter.Free;
   end;
 end;
 

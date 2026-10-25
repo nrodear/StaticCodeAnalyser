@@ -710,7 +710,9 @@ begin
   // ausgewertet. Frueher haerteres Skip:=True nach dem Add - jetzt
   // dynamisch, damit derselbe Detector-Cache fuer Scans mit und ohne
   // UsesCheck wiederverwendet werden kann.
-  AddD3('UnusedUses',      fkUnusedUses,      TUnusedUsesDetector.AnalyzeUnit);
+  // Charge P1 (2026-10-25): AContext-fuehrend (Zeilen- und Strip-Cache des
+  // Scans statt eines eigenen Strips je Datei) -> AddD statt AddD3.
+  AddD('UnusedUses',       fkUnusedUses,      TUnusedUsesDetector.AnalyzeUnit);
   AddD3('NilDeref',        fkNilDeref,        TNilDerefDetector.AnalyzeUnit);
   AddD('MissingFinally',   fkMissingFinally,  TMissingFinallyDetector.AnalyzeUnit);   // TD-1 2c: AContext-fuehrend (LeakyClasses aus Ctx)
   AddD3('DivByZero',       fkDivByZero,       TDivByZeroDetector.AnalyzeUnit);
