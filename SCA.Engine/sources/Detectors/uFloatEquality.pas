@@ -205,8 +205,15 @@ begin
   Before := Copy(Code, 1, BeforePos);   // Deklaration steht VOR der Nutzung
   TypeStr := '';
   // 1) var/param/Feld-Deklaration 'VarName[, weitere]: Typ' - naechstliegende.
+  // Stack (Charge R4 2026-10-26): alle Komma-Listengruppen dieser Unit sind
+  // POSSESSIV ('*+'). Gierig kosteten sie in PCRE 8.45 (ohne JIT) 3 match()-
+  // Rahmen je Listenelement - ab ~1300 Elementen (lange Aufzaehlungstypen,
+  // Indy IdCharsets: 911) Stack-Ueberlauf bei 1 MB (bds.exe, TestProject).
+  // Possessiv laeuft die Gruppe iterativ. Gleiches Ergebnis: nach einem
+  // kuerzeren Listenende steht nie ':' (sondern Wortzeichen, Leerraum oder
+  // ','), Backtracking in die Liste fuehrte also nie zu einem Treffer.
   RE := TRegEx.Create('(?i)\b' + VarName +
-        '\b\s*(?:,\s*[A-Za-z_]\w*\s*)*:\s*([A-Za-z_][A-Za-z0-9_]*)');
+        '\b\s*(?:,\s*[A-Za-z_]\w*\s*)*+:\s*([A-Za-z_][A-Za-z0-9_]*)');
   MC := RE.Matches(Before);
   if MC.Count > 0 then
     TypeStr := MC[MC.Count - 1].Groups[1].Value
@@ -424,9 +431,10 @@ function IsLocalFloatVarInHeader(const Header, IdentLow: string): Boolean;
 // aus einem var-Block stammen. Genau darauf beruht die harte Projektregel
 // "NIE fuer Parameter" (deren Wert-Herkunft ist nur beim Caller sichtbar).
 begin
+  // '*+' = possessive Listengruppe (Stack, s. OperandDeclaredNonFloat).
   Result := TRegEx.IsMatch(Header,
     '(?i)\bvar\b[\s\S]*?(?<![\w.])' + IdentLow +
-    '\b\s*(?:,\s*[A-Za-z_]\w*\s*)*:\s*(Single|Double|Extended|Real|Currency)\b');
+    '\b\s*(?:,\s*[A-Za-z_]\w*\s*)*+:\s*(Single|Double|Extended|Real|Currency)\b');
 end;
 
 // G-Sent-2 (Triage 2026-07-25): Sentinel-Zero-DEMOTE. Vergleich '<var> = 0' /
@@ -549,9 +557,10 @@ begin
     if not TRegEx.IsMatch(RhsTrim, '(?i)^-?\d+(\.\d+)?(e[+-]?\d+)?$') then
     begin
       if not TRegEx.IsMatch(RhsTrim, '(?i)^[a-z_]\w*$') then Exit;
+      // '*+' = possessive Listengruppe (Stack, s. OperandDeclaredNonFloat).
       if not TRegEx.IsMatch(Header,
            '(?i)\bvar\b[\s\S]*?(?<![\w.])' + LowerCase(RhsTrim) +
-           '\b\s*(?:,\s*[A-Za-z_]\w*\s*)*:\s*[A-Za-z_]\w*') then Exit;
+           '\b\s*(?:,\s*[A-Za-z_]\w*\s*)*+:\s*[A-Za-z_]\w*') then Exit;
     end;
     HasAssign := True;
   end;
@@ -708,8 +717,9 @@ begin
     // Integer-deklarierte Locals/Params: 'ident[, weitere]: IntTyp' im
     // UNgeblankten Kopf (Parameter-Klammern inklusive - Parameter werden
     // hier nur LESEND als Beweis genutzt, nie unterdrueckt).
+    // '*+' = possessive Listengruppe (Stack, s. OperandDeclaredNonFloat).
     for Mm in TRegEx.Matches(RawHeader,
-        '(?i)\b([a-z_]\w*(?:\s*,\s*[a-z_]\w*)*)\s*:\s*([a-z_]\w*)') do
+        '(?i)\b([a-z_]\w*(?:\s*,\s*[a-z_]\w*)*+)\s*:\s*([a-z_]\w*)') do
       if IsProvableIntTypeName(LowerCase(Mm.Groups[2].Value)) then
         for var IdentPart in Mm.Groups[1].Value.Split([',']) do
         begin
@@ -955,8 +965,9 @@ begin
   if AtPos > Length(Code) then AtPos := Length(Code);
   Before := Copy(Code, 1, AtPos);   // Deklaration steht VOR der Nutzung
   BestPos := 0;
+  // '*+' = possessive Listengruppe (Stack, s. OperandDeclaredNonFloat).
   MC := TRegEx.Matches(Before, '(?i)\b' + IdentLow +
-          '\b\s*(?:,\s*[A-Za-z_]\w*\s*)*:\s*([A-Za-z_][A-Za-z0-9_]*)');
+          '\b\s*(?:,\s*[A-Za-z_]\w*\s*)*+:\s*([A-Za-z_][A-Za-z0-9_]*)');
   if MC.Count > 0 then
   begin
     BestPos := MC[MC.Count - 1].Index;
