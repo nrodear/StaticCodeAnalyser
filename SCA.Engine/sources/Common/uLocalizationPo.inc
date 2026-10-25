@@ -13,7 +13,7 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6663 Zeilen, 299484 Bytes
+  // i18n\de.po - 6663 Zeilen, 299779 Bytes
   CPoLines_de: array[0..6662] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -6271,8 +6271,8 @@ const
     'msgid "the marker now stands above the line and suppresses all rules of the line (so far NOSONAR suppressed nothing); critical kinds (HardcodedSecret, SQLInjection etc.) stay visible"',
     'msgstr "der Marker steht jetzt '#$00FC'ber der Zeile und unterdr'#$00FC'ckt alle Regeln der Zeile (bisher unterdr'#$00FC'ckte NOSONAR nichts); kritische Arten (HardcodedSecret, SQLInjection u. a.) bleiben sichtbar"',
     '',
-    'msgid "same meaning - only the superfluous comma goes away"',
-    'msgstr "gleiche Bedeutung - nur das '#$00FC'berz'#$00E4'hlige Komma entf'#$00E4'llt"',
+    'msgid "same meaning for COM - the empty last argument of the late-bound call (an omitted optional parameter) is now not passed at all; only a server that counts its arguments sees one fewer"',
+    'msgstr "gleiche Bedeutung f'#$00FC'r COM - das leere letzte Argument des sp'#$00E4't gebundenen Aufrufs (ein weggelassener optionaler Parameter) wird jetzt gar nicht '#$00FC'bergeben; nur ein Server, der seine Argumente z'#$00E4'hlt, sieht eines weniger"',
     '',
     'msgid "same meaning - each name keeps its type; with \"var\" each new line carries the \"var\" again"',
     'msgstr "gleiche Bedeutung - jeder Name beh'#$00E4'lt seinen Typ; bei \"var\" tr'#$00E4'gt jede neue Zeile das \"var\" wieder"',
@@ -6952,7 +6952,7 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6659 Zeilen, 311629 Bytes
+  // i18n\fr.po - 6659 Zeilen, 311919 Bytes
   CPoLines_fr: array[0..6658] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -13206,8 +13206,8 @@ const
     'msgid "the marker now stands above the line and suppresses all rules of the line (so far NOSONAR suppressed nothing); critical kinds (HardcodedSecret, SQLInjection etc.) stay visible"',
     'msgstr "le marqueur se trouve d'#$00E9'sormais au-dessus de la ligne et supprime toutes les r'#$00E8'gles de la ligne (jusqu''ici NOSONAR ne supprimait rien) ; les types critiques (HardcodedSecret, SQLInjection, etc.) restent visibles"',
     '',
-    'msgid "same meaning - only the superfluous comma goes away"',
-    'msgstr "m'#$00EA'me sens - seule la virgule superflue dispara'#$00EE't"',
+    'msgid "same meaning for COM - the empty last argument of the late-bound call (an omitted optional parameter) is now not passed at all; only a server that counts its arguments sees one fewer"',
+    'msgstr "m'#$00EA'me sens pour COM - le dernier argument vide de l''appel '#$00E0' liaison tardive (un param'#$00E8'tre optionnel omis) n''est d'#$00E9'sormais plus transmis du tout ; seul un serveur qui compte ses arguments en voit un de moins"',
     '',
     'msgid "same meaning - each name keeps its type; with \"var\" each new line carries the \"var\" again"',
     'msgstr "m'#$00EA'me sens - chaque nom garde son type ; avec '#$00AB' var '#$00BB', chaque nouvelle ligne reprend le '#$00AB' var '#$00BB'"',

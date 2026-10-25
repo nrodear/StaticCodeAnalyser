@@ -6254,8 +6254,8 @@ msgstr "gleiche Bedeutung - der Aufruf bleibt als Anweisung und läuft wie vorhe
 msgid "the marker now stands above the line and suppresses all rules of the line (so far NOSONAR suppressed nothing); critical kinds (HardcodedSecret, SQLInjection etc.) stay visible"
 msgstr "der Marker steht jetzt über der Zeile und unterdrückt alle Regeln der Zeile (bisher unterdrückte NOSONAR nichts); kritische Arten (HardcodedSecret, SQLInjection u. a.) bleiben sichtbar"
 
-msgid "same meaning - only the superfluous comma goes away"
-msgstr "gleiche Bedeutung - nur das überzählige Komma entfällt"
+msgid "same meaning for COM - the empty last argument of the late-bound call (an omitted optional parameter) is now not passed at all; only a server that counts its arguments sees one fewer"
+msgstr "gleiche Bedeutung für COM - das leere letzte Argument des spät gebundenen Aufrufs (ein weggelassener optionaler Parameter) wird jetzt gar nicht übergeben; nur ein Server, der seine Argumente zählt, sieht eines weniger"
 
 msgid "same meaning - each name keeps its type; with \"var\" each new line carries the \"var\" again"
 msgstr "gleiche Bedeutung - jeder Name behält seinen Typ; bei \"var\" trägt jede neue Zeile das \"var\" wieder"
