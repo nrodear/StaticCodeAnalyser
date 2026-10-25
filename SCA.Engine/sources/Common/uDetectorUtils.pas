@@ -201,6 +201,14 @@ type
     class function FindTokenBoundedLower(const Needle, HaystackLower: string)
       : Integer; static;
 
+    // Kommt ALower (klein geschrieben, nicht leer) in S vor, ASCII-case-
+    // insensitiv? Gleichwertig zu Pos(ALower, LowerCase(S)) > 0 - LowerCase
+    // faltet ebenfalls nur A..Z -, aber ohne S zu kopieren (Perf Charge P4,
+    // dort als lokale Funktion EnthaeltKlein; seit dem Review Charge P hier,
+    // auch fuer die Vorpruefung von SCA-IntegerOverflow).
+    class function ContainsLowerAscii(const S, ALower: string): Boolean;
+      static;
+
     // ENTFERNT Pascal-String-Literale aus einem Ausdrucks-Text - die
     // Zeichen fallen WEG, alle Positionen dahinter VERSCHIEBEN sich.
     // Pascal escaped einfache Apostrophe in Strings durch Verdoppelung
@@ -1050,6 +1058,30 @@ class function TDetectorUtils.ContainsWholeWordLower(const Needle,
   HaystackLower: string): Boolean;
 begin
   Result := FindWholeWordLower(Needle, HaystackLower) > 0;
+end;
+
+class function TDetectorUtils.ContainsLowerAscii(const S,
+  ALower: string): Boolean;
+var
+  j, k, n, m : Integer;
+  c : Char;
+begin
+  n := Length(S);
+  m := Length(ALower);
+  if m = 0 then Exit(False);   // wie Pos('', ...) = 0
+  for j := 1 to n - m + 1 do
+  begin
+    k := 1;
+    while k <= m do
+    begin
+      c := S[j + k - 1];
+      if (c >= 'A') and (c <= 'Z') then c := Char(Ord(c) + 32);
+      if c <> ALower[k] then Break;
+      Inc(k);
+    end;
+    if k > m then Exit(True);
+  end;
+  Result := False;
 end;
 
 class function TDetectorUtils.FindTokenBoundedLower(const Needle,
@@ -2453,31 +2485,6 @@ var
     end;
   end;
 
-  // Perf Charge P4: kommt 'objc' oder 'cppclass' ASCII-case-insensitiv
-  // vor? Gleichwertig zu Pos(..., LowerCase(S)) > 0 - LowerCase faltet
-  // ebenfalls nur A..Z -, aber ohne den Text zu kopieren.
-  function EnthaeltKlein(const S, AKlein: string): Boolean;
-  var
-    j, k, n, m : Integer;
-    c : Char;
-  begin
-    n := Length(S);
-    m := Length(AKlein);
-    for j := 1 to n - m + 1 do
-    begin
-      k := 1;
-      while k <= m do
-      begin
-        c := S[j + k - 1];
-        if (c >= 'A') and (c <= 'Z') then c := Char(Ord(c) + 32);
-        if c <> AKlein[k] then Break;
-        Inc(k);
-      end;
-      if k > m then Exit(True);
-    end;
-    Result := False;
-  end;
-
 begin
   Result := TStringList.Create;
   Result.CaseSensitive := False;
@@ -2501,7 +2508,7 @@ begin
     // entfernte Kommentare koennen Woerter zusammenfuegen), kann keine
     // Zeile BeginntMitArt erfuellen: die Liste bleibt leer, ohne
     // LowerCase und Split des Ganztexts.
-    if EnthaeltKlein(Code, 'objc') or EnthaeltKlein(Code, 'cppclass') then
+    if ContainsLowerAscii(Code, 'objc') or ContainsLowerAscii(Code, 'cppclass') then
     begin
       Code := LowerCase(Code);
       Zeilen := Code.Split([#10]);

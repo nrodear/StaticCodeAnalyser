@@ -2287,6 +2287,13 @@ begin
   if not Assigned(Findings) then Exit;
 
   try
+    // 0) Generation der Datei ZUERST weiterdrehen (Review Charge P): Delete
+    // gibt Funde frei, auf die FFileIndex zeigt. Liefe zwischen Delete und
+    // dem Weiterdrehen eine Ausnahme, bliebe der Stempel stehen und der
+    // naechste Sync nicht neu gebaut - mit haengenden Zeigern. Dazwischen
+    // zieht niemand eine Generation, der Wert ist derselbe wie bisher.
+    FFileGens.AddOrSetValue(NormalizePathForKey(FileName), NextFindingsGeneration);
+
     // 1) Alte Findings fuer DIESE Datei aus FAllFindings entfernen.
     for i := FAllFindings.Count - 1 downto 0 do
       if SameText(FAllFindings[i].FileName, FileName) then
@@ -2296,7 +2303,6 @@ begin
     Findings.OwnsObjects := False;
     for i := 0 to Findings.Count - 1 do
       FAllFindings.Add(Findings[i]);
-    FFileGens.AddOrSetValue(NormalizePathForKey(FileName), NextFindingsGeneration);
 
     // 3) Vorab gerechnete contextHashes DIESER Datei nachziehen
     // (2026-08-28). Sie stammen aus dem letzten Voll-Scan, also aus dem

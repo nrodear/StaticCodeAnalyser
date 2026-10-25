@@ -163,7 +163,6 @@ var
   Lines    : TStringList;
   Cached   : Boolean;
   Code     : string;
-  LowCode  : string;
   LineFor  : TArray<Integer>;
   Int64Vars     : TStringList;   // datei-global: NUR Operand-Promotion-Check
   FileLevelVars : TStringList;   // Felder/Globals: gueltiges Ziel in JEDER Routine
@@ -205,9 +204,11 @@ begin
     // ein Stueck des Typnamens ('nt64' steckt in Int64 und UInt64) kann
     // RE_INT64_VAR_DECL nicht treffen. LowerCase faltet nur A..Z; das 'I'
     // bleibt bewusst draussen, damit selbst eine Unicode-Faltung der Regex
-    // (tuerkisches I mit Punkt) die Vorpruefung nicht unterlaeuft.
-    LowCode := LowerCase(Code);
-    if (Pos('nt64', LowCode) = 0) and (Pos('qword', LowCode) = 0) then Exit;
+    // (tuerkisches I mit Punkt) die Vorpruefung nicht unterlaeuft. Seit dem
+    // Review Charge P ohne Kopie: ContainsLowerAscii faltet wie LowerCase
+    // nur A..Z und gleicht Pos(.., LowerCase(Code)) > 0.
+    if not TDetectorUtils.ContainsLowerAscii(Code, 'nt64')
+       and not TDetectorUtils.ContainsLowerAscii(Code, 'qword') then Exit;
 
     // Fast-Reject: ohne irgendeine Int64/UInt64/QWord-Deklaration kein Befund
     // moeglich - spart die Segmentierung unten fuer die grosse Mehrheit.

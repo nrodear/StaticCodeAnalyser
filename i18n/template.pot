@@ -40,8 +40,8 @@ msgstr ""
 msgid " - no changed .pas files"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4274
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4855
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4280
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4861
 msgid " · "
 msgstr ""
 
@@ -59,7 +59,7 @@ msgstr ""
 msgid "\"%s Assert\" is not a call to System.Assert"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2694
+#: reDelphix/source/uRdxCodeMap.pas:2706
 msgid "\"%s\" after a \";\" before the else - header of an anonymous method? It is unclear what the else belongs to"
 msgstr ""
 
@@ -570,8 +570,8 @@ msgstr ""
 msgid "%s in the name is no known look-alike of an ASCII letter - maybe an intended letter"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:1850
-#: reDelphix/source/uRdxCodeMap.pas:1852
+#: reDelphix/source/uRdxCodeMap.pas:1862
+#: reDelphix/source/uRdxCodeMap.pas:1864
 msgid "%s in the range - an intent comment stays"
 msgstr ""
 
@@ -839,7 +839,7 @@ msgstr ""
 msgid "%s of a custom memory manager (qualified) - %s"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:1993
+#: reDelphix/source/uRdxCodeMap.pas:2005
 msgid "%s on the reported line"
 msgstr ""
 
@@ -935,7 +935,7 @@ msgstr ""
 msgid "%s.Resume is the body of a loop or with statement (\"%s\" before it)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:900
+#: reDelphix/source/uRdxProvider.pas:905
 msgid "%s: no fixMode in the rule catalog"
 msgstr ""
 
@@ -1010,7 +1010,7 @@ msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2390
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3278
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2974
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2980
 msgid "AI prompt copied to clipboard: %s, line %s (%s)"
 msgstr ""
 
@@ -1100,11 +1100,11 @@ msgstr ""
 msgid "All files"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3453
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3459
 msgid "All findings reset."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3382
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3388
 msgid "All markers cleared."
 msgstr ""
 
@@ -1129,11 +1129,11 @@ msgstr ""
 msgid "An analysis is already running."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3676
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3682
 msgid "Analyse Branch-Changes"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5627
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5633
 msgid "Analyse current file (silent)"
 msgstr ""
 
@@ -1263,7 +1263,7 @@ msgstr ""
 msgid "Baseline (show only new findings)"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4024
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4030
 #: StaticCodeAnalyserIDE/uIDESCAOptions.pas:657
 msgid "Baseline JSON"
 msgstr ""
@@ -1277,14 +1277,14 @@ msgid "Baseline file:"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2982
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3906
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3912
 msgid "Baseline is enabled but no baseline file was found."
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3007
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3097
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3931
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4051
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3937
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4057
 msgid "Baseline written: %s (%d findings)"
 msgstr ""
 
@@ -1329,7 +1329,7 @@ msgstr ""
 msgid "Branch body without begin..end - add explicit block"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3336
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3342
 msgid "Branch changes: please provide a valid project path (for repo detection)."
 msgstr ""
 
@@ -1354,8 +1354,8 @@ msgstr ""
 msgid "Bugs"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:582
-#: reDelphix/source/uRdxProvider.pas:597
+#: reDelphix/source/uRdxProvider.pas:587
+#: reDelphix/source/uRdxProvider.pas:602
 msgid "Build Format() from concatenation"
 msgstr ""
 
@@ -1401,11 +1401,11 @@ msgid "Cancel"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2717
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3686
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3692
 msgid "Cancel Analysis"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3364
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3370
 msgid "Cancelling analysis..."
 msgstr ""
 
@@ -1468,7 +1468,7 @@ msgstr ""
 msgid "Clear all editor markers in all files (grids stay)"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3692
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3698
 msgid "Clear all markers"
 msgstr ""
 
@@ -1557,7 +1557,7 @@ msgstr ""
 msgid "Code Smell"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5712
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5718
 msgid "Code actions"
 msgstr ""
 
@@ -1637,9 +1637,9 @@ msgstr ""
 msgid "Copy Jira issue"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:609
-#: reDelphix/source/uRdxProvider.pas:615
+#: reDelphix/source/uRdxProvider.pas:614
 #: reDelphix/source/uRdxProvider.pas:620
+#: reDelphix/source/uRdxProvider.pas:625
 msgid "Copy parameterized template to clipboard"
 msgstr ""
 
@@ -1659,8 +1659,8 @@ msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3810
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3893
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3505
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3531
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3511
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3537
 msgid "Could not open editor. File: "
 msgstr ""
 
@@ -1670,8 +1670,8 @@ msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3015
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3105
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3939
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4055
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3945
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4061
 msgid "Could not write baseline: %s"
 msgstr ""
 
@@ -1692,7 +1692,7 @@ msgstr ""
 msgid "Crosses severities - Bugs can be Errors OR Warnings."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3309
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3315
 msgid "Current file is not a Pascal file."
 msgstr ""
 
@@ -1725,7 +1725,7 @@ msgstr ""
 msgid "DFM Viewer"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4221
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4227
 msgid "DFM as text: %s  Line: %d"
 msgstr ""
 
@@ -2019,7 +2019,7 @@ msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:628
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2722
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3711
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3717
 msgid "Export"
 msgstr ""
 
@@ -2079,8 +2079,8 @@ msgstr ""
 #: StaticCodeAnalyserForm/sources/UI/uDfmTextViewer.pas:42
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1394
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2229
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3315
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4186
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3321
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4192
 msgid "File not found: "
 msgstr ""
 
@@ -2101,14 +2101,14 @@ msgstr ""
 msgid "Finding"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2910
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5747
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2916
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5753
 #: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:825
 msgid "Finding action failed: %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2876
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3032
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2882
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3038
 msgid "Finding actions: provider failed - %s"
 msgstr ""
 
@@ -2280,7 +2280,7 @@ msgstr ""
 msgid "IDE Profile:"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3305
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3311
 msgid "IDE editor service not available."
 msgstr ""
 
@@ -2319,7 +2319,7 @@ msgid "Ignore list opened: %s"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2733
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3738
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3744
 msgid "Ignore list..."
 msgstr ""
 
@@ -2429,7 +2429,7 @@ msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2386
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3305
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2950
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2956
 msgid "Jira mini issue copied to clipboard: %s, line %s (%s)"
 msgstr ""
 
@@ -2473,15 +2473,15 @@ msgstr ""
 msgid "Lazarus/FPC file (%s) - FPC 3.2 does not know digit separators"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1087
+#: reDelphix/source/uRdxMagicFixes.pas:1091
 msgid "Lazarus/FPC file (%s) - FPC 3.2 has no digit separators"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1087
+#: reDelphix/source/uRdxMagicFixes.pas:1091
 msgid "Lazarus/FPC file (%s) - FPC 3.2 has no inline constants"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1087
+#: reDelphix/source/uRdxMagicFixes.pas:1091
 msgid "Lazarus/FPC file (%s) - FPC 3.2 has no inline variables"
 msgstr ""
 
@@ -2518,7 +2518,7 @@ msgstr ""
 msgid "Line"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:563
+#: reDelphix/source/uRdxProvider.pas:568
 msgid "Line %d:%d to %d:%d"
 msgstr ""
 
@@ -2559,7 +2559,7 @@ msgid "Long string concatenation - prefer Format() for readability"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2983
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3907
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3913
 msgid "Looked for:"
 msgstr ""
 
@@ -2726,7 +2726,7 @@ msgstr ""
 msgid "No entries for this filter."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3307
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3313
 msgid "No file opened."
 msgstr ""
 
@@ -2736,8 +2736,8 @@ msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2990
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3068
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3913
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4014
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3919
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4020
 msgid "No findings to write. Run an analysis first."
 msgstr ""
 
@@ -2762,7 +2762,7 @@ msgid "No rule catalogue found - profiles unavailable."
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2997
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3921
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3927
 msgid "No scan target selected - pick a path or project first."
 msgstr ""
 
@@ -2819,8 +2819,8 @@ msgstr ""
 msgid "Opened in external editor: %s  Line: %d"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4202
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4224
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4208
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4230
 msgid "Opened: %s  Line: %d"
 msgstr ""
 
@@ -2878,7 +2878,7 @@ msgid "Plaintext HTTP URL - prefer https:// for remote endpoints"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1142
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3249
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3255
 msgid "Please provide a valid project path."
 msgstr ""
 
@@ -2990,16 +2990,16 @@ msgstr ""
 msgid "Quality"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3076
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3082
 msgid "Quick-Fix applied: %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3077
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3087
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3083
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3093
 msgid "Quick-Fix not available: %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3075
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3081
 msgid "Quick-Fix: the reDelphix package is not loaded"
 msgstr ""
 
@@ -3100,8 +3100,8 @@ msgstr ""
 msgid "Remove bidi control characters (as #$ code in strings)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:814
-#: reDelphix/source/uRdxProvider.pas:817
+#: reDelphix/source/uRdxProvider.pas:819
+#: reDelphix/source/uRdxProvider.pas:822
 msgid "Remove ineffective suppression marker"
 msgstr ""
 
@@ -3251,7 +3251,7 @@ msgstr ""
 msgid "Required field is bound only to invisible controls"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3701
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3707
 msgid "Reset all findings (clear panels + markers)"
 msgstr ""
 
@@ -3314,7 +3314,7 @@ msgid "Rule-set profiles"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2734
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3746
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3752
 msgid "Rule-set profiles..."
 msgstr ""
 
@@ -3395,7 +3395,7 @@ msgstr ""
 msgid "Scanning... %d found"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:629
+#: reDelphix/source/uRdxProvider.pas:634
 msgid "Scope table not loaded (unitscopes.txt)"
 msgstr ""
 
@@ -3458,7 +3458,7 @@ msgstr ""
 msgid "SetLength growing by 1 inside a loop - O(n^2) reallocation; grow once before the loop"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3996
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4002
 msgid "Settings could not be reloaded - baseline filter unchanged."
 msgstr ""
 
@@ -3470,12 +3470,12 @@ msgid "Settings could not be reloaded - nothing was saved."
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2732
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3733
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3739
 msgid "Settings..."
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3813
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3535
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3541
 msgid "Settings: %s - changes take effect on the next analysis run."
 msgstr ""
 
@@ -3507,8 +3507,8 @@ msgstr ""
 msgid "Show annotation overlay on hover (otherwise click marked line)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:556
-#: reDelphix/source/uRdxProvider.pas:563
+#: reDelphix/source/uRdxProvider.pas:561
+#: reDelphix/source/uRdxProvider.pas:568
 msgid "Show location"
 msgstr ""
 
@@ -3517,7 +3517,7 @@ msgid "Show only findings new since the baseline (hide the legacy backlog)"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2724
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3723
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3729
 msgid "Show only new findings (baseline)"
 msgstr ""
 
@@ -3599,11 +3599,11 @@ msgstr ""
 msgid "Static Code Analyser: actions for this line"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5628
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5634
 msgid "Static Code Analyser: analyse this file, no dock opens"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:6096
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:6102
 msgid "Static Code Analysis"
 msgstr ""
 
@@ -3637,36 +3637,36 @@ msgstr ""
 msgid "Suppress"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:785
+#: reDelphix/source/uRdxProvider.pas:790
 msgid "Suppress here"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:790
+#: reDelphix/source/uRdxProvider.pas:795
 msgid "Suppress in this file"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2305
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3155
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3161
 msgid "Suppress inserted in %s: %s"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2302
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3120
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3152
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3126
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3158
 msgid "Suppress inserted: %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3121
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3127
 msgid "Suppress not available: %s"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2285
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3132
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3138
 msgid "Suppress: cannot locate source line"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2291
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3140
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3146
 msgid "Suppress: cannot place the marker: %s"
 msgstr ""
 
@@ -3674,7 +3674,7 @@ msgstr ""
 msgid "Suppress: could not write file: %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3160
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3166
 msgid "Suppress: editor write failed (file not in IDE?)"
 msgstr ""
 
@@ -4000,7 +4000,7 @@ msgid "Write %s in lowercase"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2984
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3908
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3914
 msgid "Write a new baseline with the current findings now?"
 msgstr ""
 
@@ -4010,7 +4010,7 @@ msgid "Write baseline"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2723
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3717
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3723
 msgid "Write baseline from current scan..."
 msgstr ""
 
@@ -4194,7 +4194,7 @@ msgstr ""
 msgid "absolute variable - it occupies the memory of another one"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:362
+#: reDelphix/source/uRdxProvider.pas:367
 msgid "action kind %d without execution"
 msgstr ""
 
@@ -4887,7 +4887,7 @@ msgstr ""
 msgid "doubled apostrophes"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:1001
+#: reDelphix/source/uRdxProvider.pas:1011
 msgid "editor buffer empty or not readable"
 msgstr ""
 
@@ -4948,12 +4948,12 @@ msgstr ""
 msgid "except on E: Exception catches every error - prefer a specific subclass"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:1007
+#: reDelphix/source/uRdxProvider.pas:1017
 msgid "file not found: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:837
-#: reDelphix/source/uRdxProvider.pas:1017
+#: reDelphix/source/uRdxProvider.pas:842
+#: reDelphix/source/uRdxProvider.pas:1027
 msgid "file not readable"
 msgstr ""
 
@@ -4961,7 +4961,7 @@ msgstr ""
 msgid "file uses VCL and FMX: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:634
+#: reDelphix/source/uRdxProvider.pas:639
 msgid "file with an FPC switch or FPC mode - FPC 3.2 knows no unit scopes"
 msgstr ""
 
@@ -4973,11 +4973,11 @@ msgstr ""
 msgid "finally and end are not alone on their lines (code or comment beside them)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:918
+#: reDelphix/source/uRdxProvider.pas:923
 msgid "finding without file name"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:920
+#: reDelphix/source/uRdxProvider.pas:925
 msgid "finding without line"
 msgstr ""
 
@@ -5070,7 +5070,7 @@ msgstr ""
 msgid "in"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1173
+#: reDelphix/source/uRdxMagicFixes.pas:1177
 msgid "include %s %s - the quick fix does not see its compiler switches (FPC, older Delphi)"
 msgstr ""
 
@@ -5188,7 +5188,7 @@ msgstr ""
 msgid "line %d carries %d such if statements - ambiguous (the message names no column)"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:1995
+#: reDelphix/source/uRdxCodeMap.pas:2007
 msgid "line %d carries %s - ambiguous"
 msgstr ""
 
@@ -5352,7 +5352,7 @@ msgid "network path %s - the quick fix reads no include files there (the menu is
 msgstr ""
 
 #: reDelphix/source/uRdxFixTable.pas:495
-#: reDelphix/source/uRdxMagicFixes.pas:1090
+#: reDelphix/source/uRdxMagicFixes.pas:1094
 msgid "network path %s - the quick fix reads no project or include files there (the menu is built in the main thread); %s"
 msgstr ""
 
@@ -5754,8 +5754,8 @@ msgstr ""
 msgid "no if condition on line %d compares with %s"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2692
-#: reDelphix/source/uRdxCodeMap.pas:2744
+#: reDelphix/source/uRdxCodeMap.pas:2704
+#: reDelphix/source/uRdxCodeMap.pas:2756
 msgid "no if, case or except found for the else"
 msgstr ""
 
@@ -5922,7 +5922,7 @@ msgstr ""
 msgid "no single implementation part - the end of the unit is not provable"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2631
+#: reDelphix/source/uRdxCodeMap.pas:2643
 msgid "no start of the statement found for the %s"
 msgstr ""
 
@@ -6005,7 +6005,7 @@ msgstr ""
 msgid "no whitespace at the line end at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:1847
+#: reDelphix/source/uRdxCodeMap.pas:1859
 msgid "noinspection marker in the range - it suppresses other findings"
 msgstr ""
 
@@ -6064,8 +6064,8 @@ msgstr ""
 msgid "nothing precedes the range, and it reaches the end of the file - %s"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:903
-#: reDelphix/source/uRdxProvider.pas:922
+#: reDelphix/source/uRdxProvider.pas:908
+#: reDelphix/source/uRdxProvider.pas:927
 msgid "nothing to offer"
 msgstr ""
 
@@ -6146,7 +6146,7 @@ msgstr ""
 msgid "only for ParamByName with a name the SQL does not have - a placeholder that is never set needs a value"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2989
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2995
 msgid "only from the menu or the light bulb"
 msgstr ""
 
@@ -6323,7 +6323,7 @@ msgstr ""
 msgid "own constructor %s.Create - not provable that True still means CreateSuspended"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:653
+#: reDelphix/source/uRdxProvider.pas:658
 msgid "own unit %s in the project"
 msgstr ""
 
@@ -6414,7 +6414,7 @@ msgstr ""
 msgid "record - no inheritance"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2675
+#: reDelphix/source/uRdxCodeMap.pas:2687
 msgid "record before the else - the end count is uncertain"
 msgstr ""
 
@@ -6736,7 +6736,7 @@ msgstr ""
 msgid "the %s is in an expression (conditional expression, Delphi 13) - not a branch of a statement"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2630
+#: reDelphix/source/uRdxCodeMap.pas:2642
 msgid "the %s is in parentheses"
 msgstr ""
 
@@ -7016,8 +7016,8 @@ msgstr ""
 msgid "the class name \"%s\" contains characters outside A-Z, a-z, 0-9 and \"_\" - the help cannot find every spelling of it"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:656
-#: reDelphix/source/uRdxProvider.pas:714
+#: reDelphix/source/uRdxProvider.pas:661
+#: reDelphix/source/uRdxProvider.pas:719
 msgid "the clause would no longer be sorted (new SCA142)"
 msgstr ""
 
@@ -7161,15 +7161,15 @@ msgstr ""
 msgid "the duplicate is on the last line of the file"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2823
+#: reDelphix/source/uRdxCodeMap.pas:2835
 msgid "the else belongs to a case or except - a statement list follows it"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2742
+#: reDelphix/source/uRdxCodeMap.pas:2754
 msgid "the else is in parentheses"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2659
+#: reDelphix/source/uRdxCodeMap.pas:2671
 msgid "the else matches no if"
 msgstr ""
 
@@ -7447,15 +7447,15 @@ msgstr ""
 msgid "the implementation of %s is not in this file"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1149
+#: reDelphix/source/uRdxMagicFixes.pas:1153
 msgid "the include %s carries an FPC switch (line %d) - FPC 3.2 has no digit separators"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1149
+#: reDelphix/source/uRdxMagicFixes.pas:1153
 msgid "the include %s carries an FPC switch (line %d) - FPC 3.2 has no inline constants"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1149
+#: reDelphix/source/uRdxMagicFixes.pas:1153
 msgid "the include %s carries an FPC switch (line %d) - FPC 3.2 has no inline variables"
 msgstr ""
 
@@ -7463,15 +7463,15 @@ msgstr ""
 msgid "the include %s names %s - as a declaration (E2065 after the deletion), call or property accessor (E2003), and the quick fix does not see it"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1152
+#: reDelphix/source/uRdxMagicFixes.pas:1156
 msgid "the include %s shows traces of older compilers (%s, line %d) - an inline constant exists only from Delphi 10.3 on; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1152
+#: reDelphix/source/uRdxMagicFixes.pas:1156
 msgid "the include %s shows traces of older compilers (%s, line %d) - an inline variable exists only from Delphi 10.3 on; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1152
+#: reDelphix/source/uRdxMagicFixes.pas:1156
 msgid "the include %s shows traces of older compilers (%s, line %d) - digit separators exist only from Delphi 11 on; %s"
 msgstr ""
 
@@ -8503,7 +8503,7 @@ msgstr ""
 msgid "untyped \"out\" parameter - \"var\" would mean something else"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:631
+#: reDelphix/source/uRdxProvider.pas:636
 #: reDelphix/source/uRdxRecipeRunner.pas:1129
 msgid "uses clause contains compiler directives (line %d)"
 msgstr ""
@@ -8516,16 +8516,16 @@ msgstr ""
 msgid "uses entry in line %d not readable"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:709
+#: reDelphix/source/uRdxProvider.pas:714
 msgid "uses: qualify %s"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:713
-#: reDelphix/source/uRdxProvider.pas:719
+#: reDelphix/source/uRdxProvider.pas:718
+#: reDelphix/source/uRdxProvider.pas:724
 msgid "uses: qualify all %d entries"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:696
+#: reDelphix/source/uRdxProvider.pas:701
 msgid "uses: qualify entries"
 msgstr ""
 

@@ -2554,6 +2554,10 @@ var
   // Methodenbereichs [MethodNode.Line..MethodEndL], frueher gebaut von der
   // PhaseA-Code-Sicht (Charge D1). BuildStrippedLowCache uebernimmt es bei
   // identischen Grenzen, statt dieselben Zeilen ein zweites Mal zu strippen.
+  // GETEILT: StrippedLow und das Ergebnis von MethodNonAsciiCodeView sind
+  // dann DASSELBE Array (dynamische Arrays kennen kein Copy-on-Write) -
+  // StrippedLow[i] := ... oder MethodStrip[i] := ... ist verboten, es
+  // veraendert die Sicht des anderen Lesers mit. Nur lesen.
   MethodStrip      : TArray<string>;
   MethodStripFrom0 : Integer;
   MethodStripReady : Boolean;
@@ -3337,6 +3341,7 @@ var
     if (MethodStartLine = MethodNode.Line) and (MethodEndLine = MethodEndL) then
     begin
       EnsureMethodStrip;
+      // Referenz, keine Kopie: StrippedLow[i] nie beschreiben (s. MethodStrip).
       StrippedLow   := MethodStrip;
       StrippedFrom0 := MethodStripFrom0;
     end

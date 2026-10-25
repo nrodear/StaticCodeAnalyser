@@ -222,11 +222,15 @@ type
   // Clear, Text, Sortieren, auch in BeginUpdate) verwirft sie; das naechste
   // Acquire baut neu. Eine Map darf darum nicht ueber eine Aenderung der
   // Zeilen hinweg gehalten werden (wie bisher: LEBENSDAUER). Die Zeilen
-  // besitzen ihre Map und geben sie mit sich frei.
+  // besitzen ihre Map und geben sie mit sich frei. Changes zaehlt jede
+  // dieser Aenderungen mit: wer Zeilen nach ihrem Ausgangstext
+  // wiederverwendet (TRdxProvider.SharedLines), erkennt daran, dass ein
+  // Verbraucher sie seither veraendert hat, und baut sie neu.
   TRdxMappedLines = class(TStringList)
   private
-    FMap    : TRdxCodeMap;
-    FBuilds : Integer;
+    FMap     : TRdxCodeMap;
+    FBuilds  : Integer;
+    FChanges : Integer;
     procedure DropMap;
   protected
     procedure Changing; override;
@@ -236,6 +240,9 @@ type
     function Map: TRdxCodeMap;
     // Wie oft eine Map gebaut wurde - fuer Tests und das Messgeruest.
     property Builds: Integer read FBuilds;
+    // Wie oft die Zeilen geaendert wurden (je Changing eins, auch in
+    // BeginUpdate) - gleich bleibt er nur, solange niemand schreibt.
+    property Changes: Integer read FChanges;
   end;
 
   // Ein Schritt einer Token-Suche der Planer: weiter, gefunden, abbrechen.
@@ -988,7 +995,11 @@ end;
 { TRdxCodeMap }
 
 var
-  GMapSerial : Int64 = 0;   // die letzte vergebene Serial
+  // Die letzte vergebene Serial. Ohne Sperre: reDelphix baut Maps nur im
+  // IDE-Hauptthread (Gluehbirne, Menueaufbau, Code-Aktionen; das Paket
+  // startet keine Threads). Wer eine Map aus einem anderen Thread baut,
+  // muss diesen Zaehler zuerst absichern (TInterlocked.Increment).
+  GMapSerial : Int64 = 0;
 
 constructor TRdxCodeMap.Create(ALines: TStrings);
 var
@@ -1064,6 +1075,7 @@ begin
   // VOR der Aenderung: auch eine in BeginUpdate (Changed kaeme erst mit
   // EndUpdate) laesst keine alte Map stehen.
   DropMap;
+  Inc(FChanges);
   inherited;
 end;
 

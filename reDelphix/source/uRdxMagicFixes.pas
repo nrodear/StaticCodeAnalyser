@@ -1061,7 +1061,11 @@ begin
 end;
 
 var
-  // Der aktive Cache des Plattenblicks (UseDiskCache), nil = keiner.
+  // Der aktive Cache des Plattenblicks (UseDiskCache), nil = keiner. Ohne
+  // Sperre: Anmelden, Nachschlagen und Abmelden laufen nur im
+  // IDE-Hauptthread (Gluehbirne, Menueaufbau; reDelphix startet keine
+  // Threads). Ein Aufruf von FileReason/IncludeReason aus einem anderen
+  // Thread braucht zuerst eine Sperre oder einen Cache je Thread.
   GDiskCache : TRdxDiskReasonCache = nil;
 
 // Der Schluessel eines Eintrags: Art ('F' FileReason, 'I' IncludeReason),

@@ -187,11 +187,26 @@ begin
     Result := '';
 end;
 
+// Ein Wort der festen Tabellen oben aufnehmen. Was nicht passt, bricht
+// laut ab (Review Charge P): bis dahin fiel ein Wort ueber KW_MAXLEN still
+// weg, und eines, das nicht mit a..z beginnt, lief beim Laden der Unit
+// in einen ERangeError ohne Hinweis auf das Wort. Ein Grossbuchstabe
+// irgendwo im Wort taete nie einen Treffer (KwFind faltet nur die
+// Eingabe). Doppelte (die Listen ueberschneiden sich) bleiben still.
 procedure KwAdd(const W: string);
 var
-  n, b : Integer;
+  n, b, j : Integer;
 begin
-  if (Length(W) < 1) or (Length(W) > KW_MAXLEN) then Exit;
+  if (Length(W) < 1) or (Length(W) > KW_MAXLEN)
+     or (W[1] < 'a') or (W[1] > 'z') then
+    raise EArgumentException.CreateFmt(
+      'uComparisonPrecedenceScan: table word ''%s'' does not fit the word ' +
+      'table (1..%d chars, first char a..z)', [W, KW_MAXLEN]);
+  for j := 2 to Length(W) do
+    if (W[j] >= 'A') and (W[j] <= 'Z') then
+      raise EArgumentException.CreateFmt(
+        'uComparisonPrecedenceScan: table word ''%s'' must be lower case',
+        [W]);
   if KwFind(W, 1, Length(W)) >= 0 then Exit;
   n := Length(KwWords);
   SetLength(KwWords, n + 1);

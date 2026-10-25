@@ -10,7 +10,8 @@ unit uTestRdxSharedMap;
 // Kontext-Laeufers mit geteilter Map wie mit frischer, je Zeile bzw. je
 // Caret-Spalte einer Fixture mit Block-Kommentaren, mehrzeiligem String,
 // Direktiven und Markern; die geteilte Map wird genau einmal gebaut und
-// mit jeder Aenderung der Zeilen verworfen.
+// mit jeder Aenderung der Zeilen verworfen; Changes zaehlt jede Aenderung
+// (TRdxProvider.SharedLines nimmt veraenderte Zeilen nicht wieder).
 //
 // TTestRdxDiskReasonCache: der Cache von TRdxMagicFixes.FileReason/
 // IncludeReason (UseDiskCache) - ohne Cache sieht jeder Aufruf die Platte
@@ -42,6 +43,7 @@ type
     [Test] procedure Suppress_SameAsFresh;
     [Test] procedure Suppress_AfterChange_SeesNewText;
     [Test] procedure Context_SameAsFresh;
+    [Test] procedure Changes_CountsWrites_NotReads;
   end;
 
   [TestFixture]
@@ -453,6 +455,59 @@ begin
       end;
     Assert.IsTrue(Found > 0, 'die Fixture hat Kandidaten');
     Assert.AreEqual<Integer>(1, ML.Builds);
+  finally
+    SL.Free;
+    ML.Free;
+  end;
+end;
+
+procedure TTestRdxSharedMap.Changes_CountsWrites_NotReads;
+// TRdxProvider.SharedLines nimmt die Zeilen eines Puffertexts nur wieder,
+// solange Changes steht (Review Charge P): Lesen und der Bau der Map
+// lassen ihn stehen, jede Aenderung - auch derselbe Wert, auch in
+// BeginUpdate - dreht ihn weiter.
+const
+  STEPS = 8;
+var
+  ML     : TRdxMappedLines;
+  SL     : TStringList;
+  C0, i  : Integer;
+  Before : Integer;
+  S      : string;
+begin
+  ML := MappedOf(FixtureSource);
+  SL := PlainOf(FixtureSource);
+  try
+    C0 := ML.Changes;
+    ML.Map;
+    S := ML[0] + ML.Text;
+    Assert.IsTrue(ML.Equals(SL), 'gleiche Zeilen');
+    Assert.AreEqual<Integer>(-1, ML.IndexOf('gibt es nicht'));
+    Assert.IsTrue(S <> '');
+    Assert.AreEqual<Integer>(C0, ML.Changes, 'Lesen und Map-Bau: kein Schreiben');
+    for i := 1 to STEPS do
+    begin
+      Before := ML.Changes;
+      case i of
+        1: ML[0] := ML[0];                       // Put, derselbe Wert
+        2: ML.Add('x;');                         // Add
+        3: ML.Insert(0, 'y;');                   // Insert
+        4: ML.Delete(0);                         // Delete
+        5: ML.Exchange(0, 1);                    // Exchange
+        6: ML.Text := FixtureSource;             // Text
+        7: begin                                 // in BeginUpdate
+             ML.BeginUpdate;
+             try
+               ML[1] := '{ a';
+               Assert.IsTrue(ML.Changes > Before, 'schon vor EndUpdate');
+             finally
+               ML.EndUpdate;
+             end;
+           end;
+        8: ML.Clear;                             // Clear
+      end;
+      Assert.IsTrue(ML.Changes > Before, Format('Schritt %d: gezaehlt', [i]));
+    end;
   finally
     SL.Free;
     ML.Free;

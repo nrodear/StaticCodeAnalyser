@@ -174,11 +174,14 @@ type
     FUsesNames   : TArray<string>;   // Namen der uses-Eintraege der Datei
     // Die Zeilen der zuletzt gelesenen Datei samt geteilter Code-Sicht
     // (Charge P5, s. SharedLines): Name, Herkunft und Text, aus dem sie
-    // entstanden.
+    // entstanden, und der Aenderungszaehler der Zeilen, als sie entstanden
+    // (TRdxMappedLines.Changes - weicht er ab, hat ein Verbraucher sie
+    // veraendert, und sie gelten nicht mehr als die des Texts).
     FLines       : TRdxMappedLines;
     FLinesName   : string;
     FLinesFrom   : TRdxTextSource;
     FLinesText   : string;
+    FLinesChanges: Integer;
     // Plattenblick je Menueaufbau (Charge P5, s. BeginDiskBatch).
     FDiskCache   : TRdxDiskReasonCache;
     FDiskWatch   : TStopwatch;
@@ -242,7 +245,9 @@ type
     // Caret, und bis dahin baute jeder Fund die Zeilen neu und die
     // Code-Sicht dreimal (Zeilen-Marker, Datei-Marker, Planer). Die Zeilen
     // gehoeren dem Anbieter und aendert niemand (Rezepte, Planer und
-    // Laeufer lesen nur); nil, wenn die Datei nicht lesbar ist.
+    // Laeufer lesen nur); schreibt doch einer hinein, liefert der naechste
+    // Aufruf frische Zeilen (FLinesChanges, kein Treffer mehr). nil, wenn
+    // die Datei nicht lesbar ist.
     function SharedLines(const AFileName: string; ASource: TRdxTextSource;
       var AText: string): TStrings;
     // Beginnt ein neuer Menueaufbau (Charge P5)? Ist das Fenster
@@ -929,8 +934,11 @@ function TRdxProvider.SharedLines(const AFileName: string;
 var
   Fresh : TRdxMappedLines;
 begin
-  // Aus demselben Puffertext entstehen dieselben Zeilen.
+  // Aus demselben Puffertext entstehen dieselben Zeilen - solange niemand
+  // in sie geschrieben hat (Changes; dann gilt wie bei jedem Fehlschlag:
+  // neu bauen).
   if (ASource = txBuffer) and Assigned(FLines) and (FLinesFrom = txBuffer)
+     and (FLines.Changes = FLinesChanges)
      and SameText(FLinesName, AFileName) and (FLinesText = AText) then
     Exit(FLines);
   Result := nil;
@@ -944,6 +952,7 @@ begin
       if not LoadFileSmart(AFileName, Fresh) then Exit;
       AText := Fresh.Text;
       if Assigned(FLines) and (FLinesFrom = txDisk)
+         and (FLines.Changes = FLinesChanges)
          and SameText(FLinesName, AFileName) and FLines.Equals(Fresh) then
         Exit(FLines);
     end;
@@ -953,6 +962,7 @@ begin
     FLinesName := AFileName;
     FLinesFrom := ASource;
     FLinesText := AText;
+    FLinesChanges := FLines.Changes;   // nach dem Befuellen: der Ausgangsstand
     Result := FLines;
   finally
     Fresh.Free;
