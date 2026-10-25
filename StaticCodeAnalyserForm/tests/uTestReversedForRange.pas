@@ -42,6 +42,9 @@ type
     [Test] procedure TwoViolationsOnTwoLines_BothReported;
     // Paket 9008: der Vorfilter verlangte das Wort der korrekten Form
     [Test] procedure PrefilterDoesNotRequireDownto_Reported;
+    // Perf Charge Q4: Schluesselwort-Vergleich ohne Copy/SameText
+    [Test] procedure MixedCaseKeywords_Reported;
+    [Test] procedure KeywordLookalikes_NoFinding;
   end;
 
 implementation
@@ -412,6 +415,63 @@ begin
   try Assert.AreEqual<Integer>(1,
     TFindingHelper.Count(F, fkReversedForRange),
     'for 10 to 1 mit do am Zeilenende muss gemeldet werden');
+  finally F.Free; end;
+end;
+
+{ --- Perf Charge Q4: Schluesselwoerter ohne Kopie verglichen ------ }
+//
+// ScanLine verglich for/var/to/do mit SameText(Copy(..)) - an JEDER
+// Codespalte eine Kopie. Der Ersatz TextAt faltet wie CompareText nur
+// A..Z. Die zwei Tests halten beide Richtungen fest: gemischte
+// Gross-/Kleinschreibung trifft weiter, Wortanfaenge und
+// Nicht-ASCII-Doppelgaenger treffen weiter nicht. Beide sind vor und
+// nach dem Umbau gruen (reiner Tempo-Umbau); die FPC-Probe alt/neu
+// (2,4 Mio. Zufallszeilen, 130.650 Treffer, 0 Abweichungen) steht im
+// Commit.
+
+procedure TTestReversedForRange.MixedCaseKeywords_Reported;
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  FOR VAR i := 10 TO 1 DO Bar(i);'#13#10 +
+  '  fOr i := 3 tO -2 dO'#13#10 +
+  '    Bar(i);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(2,
+      TFindingHelper.Count(F, fkReversedForRange),
+      'Schluesselwoerter sind in jeder Schreibweise Schluesselwoerter');
+  finally F.Free; end;
+end;
+
+procedure TTestReversedForRange.KeywordLookalikes_NoFinding;
+// Die letzte Zeile schreibt 'for' mit #$0166 #$014F #$0172 - Zeichen,
+// deren unteres Byte 'f', 'O', 'r' ist. Ein Vergleich ueber Byte- oder
+// AnsiChar-Casts hielte sie fuer das Schluesselwort; CompareText und
+// TextAt nicht. Die uebrigen Zeilen sind Wortanfaenge und -enden, die
+// keine Schluesselwoerter sind.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  fo i := 10 to 1 do Bar(i);'#13#10 +
+  '  Xfor i := 10 to 1 do Bar(i);'#13#10 +
+  '  forx := 10 to 1 do Bar(i);'#13#10 +
+  '  for i := 10 tox 1 do Bar(i);'#13#10 +
+  '  for i := 10 to 1 dox Bar(i);'#13#10 +
+  '  ' + #$0166#$014F#$0172 + ' i := 10 to 1 do Bar(i);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkReversedForRange),
+      'Wortanfaenge und Unicode-Doppelgaenger sind keine Schluesselwoerter');
   finally F.Free; end;
 end;
 
