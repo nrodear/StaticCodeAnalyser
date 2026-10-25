@@ -39,6 +39,11 @@ type
     // Dedupe ueber zwei Literale derselben Zeile: Pos zeigt auf das
     // Literal des GEMELDETEN Treffers; beide gemeldet / beide verworfen.
     [Test] procedure Pascal_DedupePos_OverTwoLiterals;
+    // Perf Charge Q5: Zeilensicht und Kontext erst beim ersten Treffer,
+    // Literale ohne '.'/':' ungelesen - die Zeilensicht blankt trotzdem
+    // JEDES geschlossene Literal, ein offenes bleibt stehen, Pos zeigt auf
+    // das Quote des Treffer-Literals.
+    [Test] procedure Pascal_LazyLineContext_SameAnswer;
   end;
 
 implementation
@@ -266,6 +271,36 @@ begin
   Assert.AreEqual<Integer>(1, Length(H), 'beide verworfen: ein Treffer');
   Assert.AreEqual('product', H[0].Reason, 'beide verworfen: Grund vom ersten Literal');
   Assert.AreEqual<Integer>(8, H[0].Pos, 'beide verworfen: Quote vom ersten Literal');
+end;
+
+procedure TTestIpAddressScanPascal.Pascal_LazyLineContext_SameAnswer;
+var
+  H : TArray<TCodeIpHit>;
+begin
+  // 'Version' steht in einem Literal OHNE Punkt vor dem Treffer-Literal:
+  // es ist geblankt und kein Kontextwort - gemeldet.
+  Assert.AreEqual('10.1.2.3=',
+    PascalGot('  X := ''Version'' + ''10.1.2.3'';'),
+    'Literal ohne Punkt zaehlt nicht als Kontext');
+  // Gegenprobe: derselbe Bezeichner als Code ist Versionskopf.
+  Assert.AreEqual('10.1.2.3=version',
+    PascalGot('  Version := ''abc'' + ''10.1.2.3'';'),
+    'Bezeichner Version bleibt Kontext');
+  // Ein offenes Literal hinter dem Treffer bleibt in der Zeilensicht
+  // stehen (wie bisher) - sein 'Version' wirkt als Versionskopf.
+  Assert.AreEqual('10.0.0.5=version',
+    PascalGot('  Host := ''10.0.0.5''; S := ''Version'),
+    'offenes Literal bleibt in der Zeilensicht');
+  // Pos: das Quote des zweiten Literals, das erste (ohne Punkt) zaehlt
+  // fuer die Position nicht mit.
+  H := TIpAddressScan.ScanPascalCode('  A := ''abc''; B := ''10.0.0.5'';');
+  Assert.AreEqual<Integer>(1, Length(H), 'ein Treffer');
+  Assert.AreEqual<Integer>(20, H[0].Pos, 'Quote vom zweiten Literal');
+  // Literal mit Doppelpunkt, aber ohne Adresse, vor dem Treffer: kein
+  // Eintrag, der Treffer danach unveraendert.
+  Assert.AreEqual('10.0.0.5=',
+    PascalGot('  Log(''Fehler: %s'', [''10.0.0.5'']);'),
+    'Doppelpunkt ohne Adresse liefert nichts');
 end;
 
 procedure TTestIpAddressScanPascal.Pascal_Positions_QuoteOfTheLiteral;
