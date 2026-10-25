@@ -349,16 +349,33 @@ begin
   while (Result <= Length(S)) and IsWordChar(S[Result]) do Inc(Result);
 end;
 
+// Zwei-Zeichen-Symbole := .. <= >= <>. Perf Charge Q5: die Zeichen direkt
+// statt einer Kopie Copy(S, P, 2) je Symbol (am Textende ist die Kopie
+// kuerzer und trifft nichts - hier P < Length(S)).
 function SymEnd(const S: string; P: Integer): Integer;
 var
-  Two : string;
+  C1, C2 : Char;
 begin
-  Two := Copy(S, P, 2);
-  if (Two = ':=') or (Two = '..') or (Two = '<=') or (Two = '>=') or
-     (Two = '<>') then
-    Result := P + 2
-  else
-    Result := P + 1;
+  Result := P + 1;
+  if P >= Length(S) then Exit;
+  C1 := S[P];
+  C2 := S[P + 1];
+  if ((C1 = ':') and (C2 = '=')) or ((C1 = '.') and (C2 = '.')) or
+     ((C1 = '<') and ((C2 = '=') or (C2 = '>'))) or
+     ((C1 = '>') and (C2 = '=')) then
+    Result := P + 2;
+end;
+
+// Traegt S einen Grossbuchstaben A..Z? Ohne ihn ist LowerCase(S) = S
+// (LowerCase faltet nur A..Z).
+function HasUpperAscii(const S: string): Boolean;
+var
+  k : Integer;
+begin
+  for k := 1 to Length(S) do
+    if (S[k] >= 'A') and (S[k] <= 'Z') then
+      Exit(True);
+  Result := False;
 end;
 
 // Ein Token ab P (Kommentare und Leerraum davor ueberlesen). False am Ende.
@@ -396,7 +413,9 @@ begin
   ATok.Text := Copy(S, P, Q - P);
   if (ATok.Kind = ltWord) and (ATok.Text[1] = '&') then
     ATok.Text := Copy(ATok.Text, 2, MaxInt);
-  if ATok.Kind in [ltWord, ltNumber] then
+  // Perf Charge Q5: schon kleine Woerter/Zahlen teilen sich den Text
+  // statt einer zweiten Allokation.
+  if (ATok.Kind in [ltWord, ltNumber]) and HasUpperAscii(ATok.Text) then
     ATok.Low := LowerCase(ATok.Text)
   else
     ATok.Low := ATok.Text;
@@ -941,14 +960,24 @@ end;
 
 class function TLoopBoundScan.ScanText(const AText: string): TLoopBoundHits;
 var
-  P, Cnt : Integer;
+  P, N, Cnt : Integer;
+  C   : Char;
   Hit : TLoopBoundHit;
 begin
   Result := nil;
   Cnt := 0;
+  N := Length(AText);
   P := 1;
-  while P <= Length(AText) - 2 do
+  while P <= N - 2 do
   begin
+    // Perf Charge Q5: ForWordAt beginnt mit 'f'/'F' - alle anderen
+    // Zeichen ohne Aufruf weiter (vorher ein Aufruf je Zeichen der Datei).
+    C := AText[P];
+    if (C <> 'f') and (C <> 'F') then
+    begin
+      Inc(P);
+      Continue;
+    end;
     if ForWordAt(AText, P) then
     begin
       if ScanForAt(AText, P, Hit) then

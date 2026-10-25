@@ -71,6 +71,7 @@ uses
   uTestHardcodedIpAddress in 'uTestHardcodedIpAddress.pas',
   uTestHardcodedIpInConfig in 'uTestHardcodedIpInConfig.pas',
   uTestLoopPastHighBound in 'uTestLoopPastHighBound.pas',
+  uTestLoopBoundScanText in 'uTestLoopBoundScanText.pas',
   uTestIpAddressScanKit in 'uTestIpAddressScanKit.pas',
   uTestIpAddressScanGrammar in 'uTestIpAddressScanGrammar.pas',
   uTestIpAddressScanClasses in 'uTestIpAddressScanClasses.pas',

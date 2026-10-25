@@ -154,6 +154,7 @@
         <DCCReference Include="uTestHardcodedIpAddress.pas"/>
         <DCCReference Include="uTestHardcodedIpInConfig.pas"/>
         <DCCReference Include="uTestLoopPastHighBound.pas"/>
+        <DCCReference Include="uTestLoopBoundScanText.pas"/>
         <DCCReference Include="uTestIpAddressScanKit.pas"/>
         <DCCReference Include="uTestIpAddressScanGrammar.pas"/>
         <DCCReference Include="uTestIpAddressScanClasses.pas"/>
