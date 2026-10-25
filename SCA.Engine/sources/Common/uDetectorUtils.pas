@@ -356,6 +356,13 @@ type
       out LineForChar: TArray<Integer>; AContext: TAnalyzeContext;
       const FileName: string): string; static;
 
+    // Perf Charge P4 (2026-10-25): Lines.Text mit Ein-Datei-Slot im
+    // Context (TryGetFullText) - der Token-Vorfilter und SCA202 teilen sich
+    // so EINEN Ganztext je Datei. AContext=nil oder FileName='' -> direkt
+    // Lines.Text (Tests/Single-File).
+    class function LinesTextCached(Lines: TStrings; AContext: TAnalyzeContext;
+      const FileName: string): string; static;
+
     /// <summary>True, wenn APos INNERHALB eines Pascal-String-Literals
     /// liegt.</summary>
     /// <remarks>
@@ -1667,6 +1674,16 @@ begin
     AContext.PutKeepStringsText(FileName, Result, LineForChar);
 end;
 
+class function TDetectorUtils.LinesTextCached(Lines: TStrings;
+  AContext: TAnalyzeContext; const FileName: string): string;
+begin
+  if (AContext <> nil) and AContext.TryGetFullText(FileName, Result) then
+    Exit;
+  Result := Lines.Text;
+  if AContext <> nil then
+    AContext.PutFullText(FileName, Result);
+end;
+
 class function TDetectorUtils.InStringLiteral(const ACode: string;
   APos: Integer): Boolean;
 var
@@ -2400,6 +2417,7 @@ var
   Z, Rest : string;
   pEq, i  : Integer;
   Name    : string;
+  Gecacht : TArray<string>;   // Perf Charge P4: Ein-Datei-Slot des Context
 
   // Typname LINKS vom '=', normalisiert - oder '' wenn dort kein
   // reiner Bezeichner steht (dann ist die Zeile keine Typdeklaration,
@@ -2435,6 +2453,31 @@ var
     end;
   end;
 
+  // Perf Charge P4: kommt 'objc' oder 'cppclass' ASCII-case-insensitiv
+  // vor? Gleichwertig zu Pos(..., LowerCase(S)) > 0 - LowerCase faltet
+  // ebenfalls nur A..Z -, aber ohne den Text zu kopieren.
+  function EnthaeltKlein(const S, AKlein: string): Boolean;
+  var
+    j, k, n, m : Integer;
+    c : Char;
+  begin
+    n := Length(S);
+    m := Length(AKlein);
+    for j := 1 to n - m + 1 do
+    begin
+      k := 1;
+      while k <= m do
+      begin
+        c := S[j + k - 1];
+        if (c >= 'A') and (c <= 'Z') then c := Char(Ord(c) + 32);
+        if c <> AKlein[k] then Break;
+        Inc(k);
+      end;
+      if k > m then Exit(True);
+    end;
+    Result := False;
+  end;
+
 begin
   Result := TStringList.Create;
   Result.CaseSensitive := False;
@@ -2442,20 +2485,45 @@ begin
   Result.Sorted        := True;      // IndexOf = Binaersuche
   if ALines = nil then Exit;
   try
-    Code := LowerCase(StripStringsAndCommentsCached(
-      ALines, LineFor, AContext, AFileName));
-    Zeilen := Code.Split([#10]);
-    for i := 0 to High(Zeilen) do
+    // Perf Charge P4: bis zu vier Strukturregeln fragen je Datei - das
+    // Ergebnis liegt im Ein-Datei-Slot des Context. Die Liste gehoert
+    // weiterhin dem Aufrufer, sie wird aus dem Slot frisch befuellt.
+    if (AContext <> nil) and
+       AContext.TryGetFpcBindingNames(AFileName, Gecacht) then
     begin
-      Z := Zeilen[i];
-      pEq := Pos('=', Z);
-      if pEq = 0 then Continue;
-      Rest := TrimLeft(Copy(Z, pEq + 1, MaxInt));
-      // 'packed' ist vor record/class erlaubt und schadet hier nicht.
-      if Copy(Rest, 1, 7) = 'packed ' then Rest := TrimLeft(Copy(Rest, 8, MaxInt));
-      if not BeginntMitArt(Rest) then Continue;
-      Name := TypNameLinks(Copy(Z, 1, pEq - 1));
-      if Name <> '' then Result.Add(Name);
+      for i := 0 to High(Gecacht) do
+        Result.Add(Gecacht[i]);
+      Exit;
+    end;
+    Code := StripStringsAndCommentsCached(ALines, LineFor, AContext, AFileName);
+    // Abkuerzung: alle vier Arten beginnen mit 'objc' oder lauten
+    // 'cppclass'. Fehlen beide im GESTRIPPTEN Text (nicht im Rohtext -
+    // entfernte Kommentare koennen Woerter zusammenfuegen), kann keine
+    // Zeile BeginntMitArt erfuellen: die Liste bleibt leer, ohne
+    // LowerCase und Split des Ganztexts.
+    if EnthaeltKlein(Code, 'objc') or EnthaeltKlein(Code, 'cppclass') then
+    begin
+      Code := LowerCase(Code);
+      Zeilen := Code.Split([#10]);
+      for i := 0 to High(Zeilen) do
+      begin
+        Z := Zeilen[i];
+        pEq := Pos('=', Z);
+        if pEq = 0 then Continue;
+        Rest := TrimLeft(Copy(Z, pEq + 1, MaxInt));
+        // 'packed' ist vor record/class erlaubt und schadet hier nicht.
+        if Copy(Rest, 1, 7) = 'packed ' then Rest := TrimLeft(Copy(Rest, 8, MaxInt));
+        if not BeginntMitArt(Rest) then Continue;
+        Name := TypNameLinks(Copy(Z, 1, pEq - 1));
+        if Name <> '' then Result.Add(Name);
+      end;
+    end;
+    if AContext <> nil then
+    begin
+      SetLength(Gecacht, Result.Count);
+      for i := 0 to Result.Count - 1 do
+        Gecacht[i] := Result[i];
+      AContext.PutFpcBindingNames(AFileName, Gecacht);
     end;
   except
     // Exception-Sicherheit: die Liste gehoert noch UNS, solange die

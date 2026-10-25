@@ -103,6 +103,17 @@ type
     FKeepStripFile : string;
     FKeepStripCode : string;
     FKeepStripMap  : TArray<Integer>;
+    // Perf Charge P4 (2026-10-25): Ein-Datei-Slot fuer den Ganztext
+    // (Lines.Text) - der Token-Vorfilter in RunAllDetectors und SCA202
+    // bauten ihn je Datei getrennt neu. Gleiches Muster wie oben.
+    FFullTextFile : string;
+    FFullText     : string;
+    // Perf Charge P4: Ein-Datei-Slot fuer das Ergebnis von
+    // TDetectorUtils.CollectFpcBindingTypeNames (sortierte, eindeutige
+    // Typnamen; leer ist ein gueltiges Ergebnis - der Treffer haengt nur
+    // am Dateinamen). Bis zu vier Strukturregeln fragen je Datei.
+    FFpcBindingFile  : string;
+    FFpcBindingNames : TArray<string>;
   public
     // TD-1 (2026-07-06): Per-Scan-Snapshot der skalaren Scan-Config (s.
     // TEngineScalarConfig). Value-Record - lebt/stirbt mit dem Context.
@@ -177,6 +188,20 @@ type
       out Code: string; out LineFor: TArray<Integer>): Boolean;
     procedure PutKeepStringsText(const FileName: string;
       const Code: string; const LineFor: TArray<Integer>);
+
+    // Perf Charge P4 (2026-10-25): Lookup/Store fuer
+    // TDetectorUtils.LinesTextCached (Ganztext = Lines.Text). Ein-Datei-
+    // Slot; FileName='' wird nie gecacht (In-Memory-Pfade).
+    function  TryGetFullText(const FileName: string; out Text: string): Boolean;
+    procedure PutFullText(const FileName, Text: string);
+
+    // Perf Charge P4: Lookup/Store fuer
+    // TDetectorUtils.CollectFpcBindingTypeNames. Ein-Datei-Slot;
+    // FileName='' wird nie gecacht.
+    function  TryGetFpcBindingNames(const FileName: string;
+      out Names: TArray<string>): Boolean;
+    procedure PutFpcBindingNames(const FileName: string;
+      const Names: TArray<string>);
 
     // TD-1 (2026-07-06): Kopiert die skalare Scan-Config 1:1 aus den uSCAConsts-
     // Prozess-Globals in Config. Aufruf in ParseLeaks DIREKT nach Create - zu
@@ -479,6 +504,42 @@ begin
   FKeepStripFile := FileName;
   FKeepStripCode := Code;
   FKeepStripMap  := LineFor;
+end;
+
+function TAnalyzeContext.TryGetFullText(const FileName: string;
+  out Text: string): Boolean;
+// Perf Charge P4: exakter Key-Match wie die Strip-Slots (innerhalb eines
+// Scans bekommt jeder Detektor denselben FileName-String und der
+// FileTextCache ist ein Snapshot); FileName='' cached nie.
+begin
+  Result := False;
+  if (FileName = '') or (FFullTextFile <> FileName) then Exit;
+  Text   := FFullText;
+  Result := True;
+end;
+
+procedure TAnalyzeContext.PutFullText(const FileName, Text: string);
+begin
+  if FileName = '' then Exit;
+  FFullTextFile := FileName;
+  FFullText     := Text;
+end;
+
+function TAnalyzeContext.TryGetFpcBindingNames(const FileName: string;
+  out Names: TArray<string>): Boolean;
+begin
+  Result := False;
+  if (FileName = '') or (FFpcBindingFile <> FileName) then Exit;
+  Names  := FFpcBindingNames;
+  Result := True;
+end;
+
+procedure TAnalyzeContext.PutFpcBindingNames(const FileName: string;
+  const Names: TArray<string>);
+begin
+  if FileName = '' then Exit;
+  FFpcBindingFile  := FileName;
+  FFpcBindingNames := Names;
 end;
 
 procedure TAnalyzeContext.SnapshotConfigFromGlobals;
