@@ -47,6 +47,7 @@ type
     [Test] procedure Datei_H2_IdentNachPunkt_NoFinding;
     [Test] procedure Datei_H2_NurTeilwoerter_ReportsWarning;
     [Test] procedure Datei_H2_NurKommentarUndString_ReportsWarning;
+    [Test] procedure Datei_H2_NurImLiteralMitApostroph_ReportsWarning;
     [Test] procedure Datei_ZweiGemappteUnits_NurUngenutzteGemeldet;
     [Test] procedure Datei_Reihenfolge_ZeilenUndNamen;
     [Test] procedure Datei_MitKontext_GleichOhneKontext;
@@ -344,8 +345,20 @@ begin
       TUnusedUsesDetector.AstSuchtext(Root)) > 0, 'TypeRef klein und getrennt');
     Assert.IsTrue(Pos('system.classes', TUnusedUsesDetector.AstSuchtext(Root)) = 0,
       'nkUsesItem bleibt draussen');
-    Assert.IsTrue(Pos('tlist', TUnusedUsesDetector.AstSuchtext(Root)) = 0,
+    // Wortgrenzen: 'tlist' steckt als Teilfolge in 'tobjectlist' (TypeRef
+    // der Klasse) - die Pruefung gilt dem WORT aus dem Literal, so wie H2
+    // fragt (' ' + Id + ' '). Bis 2026-10-25 stand hier Pos('tlist') und
+    // war an genau diesem Teilwort rot, obwohl die Gleichheit oben hielt.
+    Assert.IsTrue(Pos(' tlist ', TUnusedUsesDetector.AstSuchtext(Root)) = 0,
       'Literalinhalt bleibt draussen');
+    Assert.IsTrue(Pos(' it ', TUnusedUsesDetector.AstSuchtext(Root)) = 0,
+      'Literalinhalt vor dem verdoppelten Apostroph bleibt draussen');
+    // Das offene Literal in 'X'' Y' endet mit seinem Namen - es darf den
+    // naechsten Namen in der Verkettung nicht verschlucken.
+    Assert.IsTrue(Pos(' x ', TUnusedUsesDetector.AstSuchtext(Root)) > 0,
+      'Text vor dem offenen Literal bleibt');
+    Assert.IsTrue(Pos(' sysutils.inttostr ', TUnusedUsesDetector.AstSuchtext(Root)) > 0,
+      'Name hinter einem offenen Literal bleibt sichtbar');
   finally
     Root.Free;
   end;
@@ -486,6 +499,33 @@ begin
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedUses),
       'Bezeichner nur in Kommentar und String - Classes bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUsesSuchtext.Datei_H2_NurImLiteralMitApostroph_ReportsWarning;
+// Charge Q5 (AST-Teil verkettet, EIN ToLower): mehrere Literale in
+// mehreren AST-Namen, eines mit verdoppeltem Apostroph, eines nur aus
+// einem Apostroph. TStringList steht nur im Literal -> Classes bleibt ein
+// Fund; ShowMessage steht im CODE hinter den Literalen -> Dialogs gedeckt
+// (das Ausblenden darf nicht ueber das Literal hinausreichen). Pin - vor
+// Q5 ebenso gruen.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsAusDatei(
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'uses Classes, Dialogs;'#13#10+
+    'implementation'#13#10+
+    'procedure P;'#13#10+
+    'begin'#13#10+
+    '  Log(''it''''s TStringList'');'#13#10+
+    '  Log('''''''');'#13#10+
+    '  ShowMessage(''y'');'#13#10+
+    'end;'#13#10+
+    'end.');
+  try
+    Assert.AreEqual('Classes@3;', Beschreibung(F),
+      'Literalinhalt ist kein Nachweis, Code hinter Literalen schon');
   finally F.Free; end;
 end;
 
