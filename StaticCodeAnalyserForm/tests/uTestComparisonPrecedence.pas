@@ -45,6 +45,8 @@ type
     [Test] procedure KeywordsInAnyCase_SameAsLowerCase;
     [Test] procedure AsmBlockInAnyCase_Skipped;
     [Test] procedure AmpersandIdentifier_KeepsItsText;
+    // --- Perf Charge Q5: Token-Wort als Zeiger auf die Tabelle -------------
+    [Test] procedure TwoCharOperators_KeepTheirText;
   end;
 
 implementation
@@ -332,6 +334,48 @@ begin
       end;
     Assert.AreEqual<Integer>(1, N, 'nur Zeile 8');
     Assert.IsTrue(Pos('''not &Type > ...''', Msg) > 0, Msg);
+  finally
+    F.Free;
+  end;
+end;
+
+// Perf Charge Q5 (2026-10-25): TPrecToken.Low zeigt auf ein geteiltes
+// Tabellenwort (Ein-/Zwei-Zeichen-Operatoren, Woerter, '') statt einen
+// string zu tragen. Der Test pinnt die Zwei-Zeichen-Operatoren als
+// Vergleich (<>, >=, <=), als Fensteranfang (:=) und im Meldetext; er war
+// vor dem Umbau gruen und wird rot, wenn ein Zwei-Zeichen-Operator auf
+// das falsche Tabellenwort zeigt.
+procedure TTestComparisonPrecedence.TwoCharOperators_KeepTheirText;
+var
+  F : TObjectList<TLeakFinding>;
+  M8, M9, M10, Got : string;
+  i : Integer;
+begin
+  F := TFindingHelper.FindingsOfFile(Quelltext('N: Integer; L: TStringList; B: Boolean;',
+    ['  if not N <> 0 then Exit;',
+     '  B := not L.Count >= 1;',
+     '  if not L.Count <= 1 then Exit;']));
+  try
+    Got := '';
+    M8 := '';
+    M9 := '';
+    M10 := '';
+    for i := 0 to F.Count - 1 do
+      if F[i].Kind = fkComparisonPrecedence then
+      begin
+        if Got <> '' then Got := Got + ',';
+        Got := Got + F[i].LineNumber;
+        if F[i].LineNumber = '8' then
+          M8 := F[i].MissingVar
+        else if F[i].LineNumber = '9' then
+          M9 := F[i].MissingVar
+        else if F[i].LineNumber = '10' then
+          M10 := F[i].MissingVar;
+      end;
+    Assert.AreEqual('8,9,10', Got, 'je Zeile ein Fund');
+    Assert.IsTrue(Pos('''(not N) <> ...''', M8) > 0, M8);
+    Assert.IsTrue(Pos('''(not L.Count) >= ...''', M9) > 0, M9);
+    Assert.IsTrue(Pos('''(not L.Count) <= ...''', M10) > 0, M10);
   finally
     F.Free;
   end;
