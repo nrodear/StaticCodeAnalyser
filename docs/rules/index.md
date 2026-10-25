@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Rule Catalog
 
-All 203 detector rules. Click an ID for full details.
+All 205 detector rules. Click an ID for full details.
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
@@ -207,6 +207,8 @@ All 203 detector rules. Click an ID for full details.
 | [SCA201](SCA201.md) | IP address in a versioned configuration file | Hint | Security Hotspot | `uHardcodedIpInConfig.pas` |
 | [SCA202](SCA202.md) | not, and, or or xor binds before the comparison | Error | Bug | `uComparisonPrecedence.pas` |
 | [SCA203](SCA203.md) | for loop runs one index past the end | Error | Bug | `uLoopPastHighBound.pas` |
+| [SCA204](SCA204.md) | Result assigned through the function name | Hint | Code Smell | `uFunctionNameResult.pas` |
+| [SCA205](SCA205.md) | Function name read in its own body is a recursive call | Error | Bug | `uFunctionNameResult.pas` |
 
 ---
 

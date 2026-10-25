@@ -201,6 +201,8 @@ contains
   uHardcodedIpInConfig in '..\SCA.Engine\sources\Detectors\uHardcodedIpInConfig.pas',
   uLoopBoundScan in '..\SCA.Engine\sources\Detectors\uLoopBoundScan.pas',
   uLoopPastHighBound in '..\SCA.Engine\sources\Detectors\uLoopPastHighBound.pas',
+  uFuncNameResultScan in '..\SCA.Engine\sources\Detectors\uFuncNameResultScan.pas',
+  uFunctionNameResult in '..\SCA.Engine\sources\Detectors\uFunctionNameResult.pas',
   uHardcodedSecret in '..\SCA.Engine\sources\Detectors\uHardcodedSecret.pas',
   uHardcodedString in '..\SCA.Engine\sources\Detectors\uHardcodedString.pas',
   uIfElseBegin in '..\SCA.Engine\sources\Detectors\uIfElseBegin.pas',

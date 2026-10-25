@@ -210,6 +210,7 @@ program reDelphix.Test;
 //                                 letzten Index
 //   * uTestRdxInheritedEmptyFix - SCA125 leeres Override loeschen
 //                                 (Deklaration und Implementierung)
+//   * uTestRdxFuncNameFix       - SCA204 Result statt Funktionsname
 //   * uTestRdxContextRunner     - Code-Aktionen ohne Fund am Caret
 //                                 (Charge B): Konstrukt unter dem Caret,
 //                                 Lokale Konstante, try/finally um Create
@@ -335,6 +336,7 @@ uses
   uRdxLoopBoundFix in '..\source\uRdxLoopBoundFix.pas',
   uRdxInheritedEmptyFix in '..\source\uRdxInheritedEmptyFix.pas',
   uRdxPlacesRunner in '..\source\uRdxPlacesRunner.pas',
+  uRdxFuncNameFix in '..\source\uRdxFuncNameFix.pas',
   uRdxContextRunner in '..\source\uRdxContextRunner.pas',
   uTestRdxRecipes in 'uTestRdxRecipes.pas',
   uTestRdxBench in 'uTestRdxBench.pas',
@@ -423,6 +425,7 @@ uses
   uTestRdxLookupHoistFix in 'uTestRdxLookupHoistFix.pas',
   uTestRdxLoopBoundFix in 'uTestRdxLoopBoundFix.pas',
   uTestRdxInheritedEmptyFix in 'uTestRdxInheritedEmptyFix.pas',
+  uTestRdxFuncNameFix in 'uTestRdxFuncNameFix.pas',
   uTestRdxContextRunner in 'uTestRdxContextRunner.pas',
   uTestRdxContextFormat in 'uTestRdxContextFormat.pas',
   uTestRdxSharedMap in 'uTestRdxSharedMap.pas',

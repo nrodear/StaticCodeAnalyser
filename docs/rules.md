@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Rule Catalog
 
-All 203 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
+All 205 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
@@ -207,6 +207,8 @@ All 203 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA201](#sca201) | IP address in a versioned configuration file | Hint | Security Hotspot | `uHardcodedIpInConfig.pas` |
 | [SCA202](#sca202) | not, and, or or xor binds before the comparison | **Error** | Bug | `uComparisonPrecedence.pas` |
 | [SCA203](#sca203) | for loop runs one index past the end | **Error** | Bug | `uLoopPastHighBound.pas` |
+| [SCA204](#sca204) | Result assigned through the function name | Hint | Code Smell | `uFunctionNameResult.pas` |
+| [SCA205](#sca205) | Function name read in its own body is a recursive call | **Error** | Bug | `uFunctionNameResult.pas` |
 
 ---
 
@@ -5383,4 +5385,87 @@ Loop past the last index: i := 0 to Names.Count with Names[i] - the last pass is
 
 ---
 
-_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA203.md`._
+## SCA204
+**Result assigned through the function name**
+
+> Function result set by assigning to the function name ('GetCount := ...') - the old Pascal form; Delphi writes Result
+
+| Field | Value |
+|---|---|
+| Severity | Hint | Type | Code Smell |
+| Tags | `style`, `convention`, `delphi-classic` |
+| Detector | `uFunctionNameResult.pas` |
+
+Inside a function, 'GetCount := FItems.Count;' sets the result - the form Pascal had before Result existed. It works, but the same name means two different things in one body: on the left of ':=' it is the result variable, anywhere else it is a recursive call of the function (see SCA205). 'Result :=' says what is meant and cannot be mistaken for a call. Reported is an assignment to the bare function name at the start of a statement (also behind a case label) in the function's own body. Only where Result exists: in Delphi (not under {$X-}), and in Free Pascal in the modes delphi, delphiunicode and objfpc or with {$modeswitch result}; a file without {$mode} counts as Delphi in a Delphi scan and as unknown under --dialect=fpc. Style rule (hint): profiles strict and style, not default. reDelphix offers the replacement 'Result :='.
+
+```pascal
+// BAD
+function TList.GetCount: Integer;
+begin
+  GetCount := FCount;
+end;
+
+// GOOD
+function TList.GetCount: Integer;
+begin
+  Result := FCount;
+end;
+```
+
+**Not reported:** where there is no Result (Free Pascal fpc, tp, macpas without `{$modeswitch result}`, Delphi under `{$X-}`; under `--dialect=fpc` a file without `{$mode}`), procedures, `Name.X :=` / `Name[i] :=` / `Name^ :=`, a routine that hides the name (parameter, local, nested routine) or a nested routine that names it, assignments inside `with` or an anonymous method.
+
+What the message looks like:
+
+```
+Result assigned through the function name: 'GetCount :=' - write 'Result :=' (the bare name in an expression is a recursive call)
+```
+
+---
+
+## SCA205
+**Function name read in its own body is a recursive call**
+
+> 'Total := Total + X' inside function Total: on the right the name is a recursive call, not the current result
+
+| Field | Value |
+|---|---|
+| Severity | Error | Type | Bug |
+| Tags | `recursion`, `result`, `stack-overflow`, `fpc-port` |
+| CWE | [CWE-674](https://cwe.mitre.org/data/definitions/674.html) |
+| Detector | `uFunctionNameResult.pas` |
+
+In Delphi the name of a function inside its own body is the result variable only on the left of ':='. Everywhere else - in an expression, a condition, Exit(Name) - it calls the function again. 'Total := Total + X;' therefore does not add X to the result built so far: it recurses, usually until the stack overflows. Free Pascal's objfpc and fpc modes read the result there instead, which is why ported code shows this pattern. Reported is the bare name (no parentheses, not behind a dot, not after inherited or @) in an expression of a function that also assigns to its own name - the author uses the name as a variable. It is an error when the function has no parameters and the body shows no deliberate recursion (no Name(), no call statement 'Name;', no Self.Name, no Name<T>) and the name is not a bare call argument; otherwise a warning (default parameters only, deliberate recursion next to it, bare argument). Only in Delphi mode: Delphi, or Free Pascal with {$mode delphi} / {$mode delphiunicode}. Fix: Result (or Name() when the recursion is intended).
+
+```pascal
+// BAD
+function Total: Integer;
+var
+  I: Integer;
+begin
+  Total := 0;
+  for I := 1 to 3 do
+    Total := Total + I;   // recursive call, not the sum
+end;
+
+// GOOD
+function Total: Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 1 to 3 do
+    Result := Result + I;
+end;
+```
+
+**Not reported:** functions that write `Result` and use the bare name as a deliberate recursive call, functions with a mandatory parameter (compiler error or another overload), `Name()`, `Self.Name`, `inherited Name`, `@Name`, `Name<T>`, the call statement `Name;`, Free Pascal objfpc/fpc modes (the name reads the result there), the argument of Inc/SetLength and other var-parameter routines, a directive right before or after the name.
+
+What the message looks like:
+
+```
+Function name 'Total' read in its own body is a recursive call, not the current result - use Result, or write Total() if the recursion is intended
+```
+
+---
+
+_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA205.md`._

@@ -7,7 +7,7 @@ specific to this tool.
 
 Status legend: ✅ implemented · 🟡 partial · 🔲 open
 
-**Summary (2026-08-07):** All **203 rule kinds** from the canonical roster [`rules/sca-rules.json`](rules/sca-rules.json) are implemented and enumerated in this file (delivered by **161 pipeline registrations**; several classes emit multiple kinds — e.g. `uVisibilityCheck` → 3 visibility kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM kinds; **SCA194/SCA195 are project-scope, not AST-based** — emitted from the project/group scan dispatch, not the per-file detector registry; **SCA201** comes from the configuration pass over .ini files). 44 / 50 Sonar-rule slots complete; the 4 open slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) need type-inference / cross-unit resolution and have no SCA-ID yet.
+**Summary (2026-08-07):** All **205 rule kinds** from the canonical roster [`rules/sca-rules.json`](rules/sca-rules.json) are implemented and enumerated in this file (delivered by **162 pipeline registrations**; several classes emit multiple kinds — e.g. `uVisibilityCheck` → 3 visibility kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM kinds; **SCA194/SCA195 are project-scope, not AST-based** — emitted from the project/group scan dispatch, not the per-file detector registry; **SCA201** comes from the configuration pass over .ini files). 44 / 50 Sonar-rule slots complete; the 4 open slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) need type-inference / cross-unit resolution and have no SCA-ID yet.
 
 Remaining 4 open slots all need type-inference / flow-analysis / cross-unit symbol resolution: #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI. **#16 UninitVar** has a conservative MVP (`SCA166`) — full path-sensitivity remains open for Phase 3.
 
@@ -151,7 +151,7 @@ Sonar-50 catalogue
 🏛 mORMot-cluster:                  9 (SCA153-161, all complete)
 🧩 SonarDelphi naming/formatting:  60 (SCA060-119, section below)
 
-🎯 Grand total: 203 detector kinds (188 detector units).
+🎯 Grand total: 205 detector kinds (190 detector units).
 ```
 
 ---
@@ -462,6 +462,8 @@ Managed return types (string family, dynamic arrays, `Variant`, interfaces) retu
 | SCA201 | **HardcodedIpInConfig** | IPv4/IPv6 address as a value in an .ini file of the source tree (configuration pass, not a per-unit detector; `; noinspection` markers) | Hint | Security Hotspot | ✅ | `uHardcodedIpInConfig` |
 | SCA202 | **ComparisonPrecedence** | not/and/or/xor bind tighter than comparisons: `not Count > 0` (bitwise not of an integer) and `A = True or B = False` (Boolean chain) compile but test something else; Error with type evidence, otherwise Warning; `Flags and Mask = 0` is not reported | Error | Bug | ✅ | `uComparisonPrecedence` |
 | SCA203 | **LoopPastHighBound** | for loop runs one index past the end (`0 to X.Count`, `0 to Length(A)`, `High(A) + 1`; strings `0 to Length(S)` and `1 to Length(S) + 1`) and indexes the same collection with the plain loop variable - Error with a proven type (list, array, string), otherwise Warning | Error | Bug | ✅ | `uLoopPastHighBound` |
+| SCA204 | **FunctionNameAsResult** | result set by assigning to the function name (`GetCount := ..`) - the old Pascal form, Delphi writes `Result :=`; only where Result exists (Delphi, FPC delphi/objfpc or `{$modeswitch result}`); profiles strict and style, not default | Hint | Code Smell | ✅ | `uFunctionNameResult` |
+| SCA205 | **FunctionNameRecursion** | function name read in its own body (`Total := Total + X`) - in Delphi mode a recursive call, not the current result; only functions that assign to their own name and have no mandatory parameter - Error when parameterless without deliberate recursion, otherwise Warning | Error | Bug | ✅ | `uFunctionNameResult` |
 
 ## ⚙️ Configuration — SCA001 OwnershipSinks (memory-leak whitelist)
 

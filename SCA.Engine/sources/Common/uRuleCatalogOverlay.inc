@@ -11,7 +11,7 @@
 const
   // Index == Ord(TFindingKind), Drift-Guard im Leser wie bei
   // RULE_CATALOG_DATA (RuleID muss zur Position passen).
-  RULE_OVERLAY_DE : array[0..202] of TRuleOverlayData = (
+  RULE_OVERLAY_DE : array[0..204] of TRuleOverlayData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -1323,12 +1323,24 @@ const
       ShortDesc: 'for-Schleife l' + #$00E4 +
         'uft bis Count, Length() oder High() + 1 und indiziert dieselbe Sammlung mit der Schleifenvariablen - der letzte Durchlauf liegt au' +
         #$00DF + 'erhalb'
+    ),
+    // SCA204
+    (
+      RuleID   : 'SCA204';
+      Name     : 'Ergebnis ' + #$00FC + 'ber den Funktionsnamen zugewiesen';
+      ShortDesc: 'Funktionsergebnis durch Zuweisung an den Funktionsnamen gesetzt (''GetCount := ...'') - die alte Pascal-Form; Delphi schreibt Result'
+    ),
+    // SCA205
+    (
+      RuleID   : 'SCA205';
+      Name     : 'Funktionsname im eigenen Rumpf gelesen ist ein rekursiver Aufruf';
+      ShortDesc: '''Total := Total + X'' in der Funktion Total: rechts ist der Name ein rekursiver Aufruf, nicht das bisherige Ergebnis'
     )
   );
 
   // Index == Ord(TFindingKind), Drift-Guard im Leser wie bei
   // RULE_CATALOG_DATA (RuleID muss zur Position passen).
-  RULE_OVERLAY_FR : array[0..202] of TRuleOverlayData = (
+  RULE_OVERLAY_FR : array[0..204] of TRuleOverlayData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -2758,6 +2770,21 @@ const
       Name     : 'La boucle for d' + #$00E9 + 'passe le dernier indice';
       ShortDesc: 'La boucle for va jusqu''' + #$00E0 + ' Count, Length() ou High() + 1 et indexe la m' +
         #$00EA + 'me collection avec la variable de boucle - le dernier passage est hors limites'
+    ),
+    // SCA204
+    (
+      RuleID   : 'SCA204';
+      Name     : 'R' + #$00E9 + 'sultat affect' + #$00E9 + ' via le nom de la fonction';
+      ShortDesc: 'R' + #$00E9 + 'sultat de la fonction d' + #$00E9 + 'fini par affectation ' + #$00E0 +
+        ' son nom (''GetCount := ...'') - l''ancienne forme Pascal ; Delphi ' + #$00E9 +
+        'crit Result'
+    ),
+    // SCA205
+    (
+      RuleID   : 'SCA205';
+      Name     : 'Le nom de la fonction lu dans son propre corps est un appel r' + #$00E9 + 'cursif';
+      ShortDesc: '''Total := Total + X'' dans la fonction Total : ' + #$00E0 +
+        ' droite, le nom est un appel r' + #$00E9 + 'cursif, pas le r' + #$00E9 + 'sultat courant'
     )
   );
 

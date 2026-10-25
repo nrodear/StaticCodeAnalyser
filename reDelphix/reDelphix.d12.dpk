@@ -134,6 +134,7 @@ contains
   uRdxLoopBoundFix in 'source\uRdxLoopBoundFix.pas',
   uRdxInheritedEmptyFix in 'source\uRdxInheritedEmptyFix.pas',
   uRdxPlacesRunner in 'source\uRdxPlacesRunner.pas',
+  uRdxFuncNameFix in 'source\uRdxFuncNameFix.pas',
   uRdxContextRunner in 'source\uRdxContextRunner.pas',
   uRdxRecipeRunner in 'source\uRdxRecipeRunner.pas',
   uRdxFixRunner in 'source\uRdxFixRunner.pas',

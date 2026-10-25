@@ -1571,6 +1571,12 @@ msgstr "not/and/or/xor sont prioritaires sur les comparaisons - mettre la compar
 msgid "for loop runs one index past the end - the upper bound is Count - 1 or High()"
 msgstr "la boucle for dépasse la fin d'un indice - la borne supérieure est Count - 1 ou High()"
 
+msgid "Result set through the function name - write Result := instead"
+msgstr "Résultat défini via le nom de la fonction - écrire Result := à la place"
+
+msgid "The function name on the right side is a recursive call, not the current result"
+msgstr "Le nom de la fonction à droite est un appel récursif, pas le résultat courant"
+
 msgid "File not found:"
 msgstr "Fichier introuvable :"
 
@@ -6615,3 +6621,39 @@ msgstr "même sens - sans la redéfinition, la liaison virtuelle appelle directe
 
 msgid "Remove the empty override %s"
 msgstr "Supprimer la redéfinition vide %s"
+
+msgid "Write Result instead of %s"
+msgstr "Écrire Result au lieu de %s"
+
+msgid "a \"with\" or an anonymous method in %s before the line - \"%s\" may mean something else there"
+msgstr "un \"with\" ou une méthode anonyme dans %s avant la ligne - \"%s\" peut y désigner autre chose"
+
+msgid "a comment or directive stands between \"%s\" and \":=\""
+msgstr "un commentaire ou une directive se trouve entre \"%s\" et \":=\""
+
+msgid "no assignment \"%s :=\" at the start of a statement on the reported line"
+msgstr "aucune affectation \"%s :=\" en début d'instruction sur la ligne signalée"
+
+msgid "no routine with a begin..end body around the line"
+msgstr "aucune routine avec un corps begin..end autour de la ligne"
+
+msgid "same meaning - on the left of \":=\" Result and the function name are the same variable; the name in an expression stays (a recursive call, SCA205)"
+msgstr "même sens - à gauche de \":=\", Result et le nom de la fonction sont la même variable ; le nom dans une expression reste (un appel récursif, SCA205)"
+
+msgid "the bounds of the routine around the line are not safe to read"
+msgstr "les limites de la routine autour de la ligne ne sont pas lisibles avec certitude"
+
+msgid "the head or the declarations of %s declare \"Result\""
+msgstr "l'en-tête ou les déclarations de %s déclarent \"Result\""
+
+msgid "the head or the declarations of %s name \"%s\" again (parameter, local, nested routine) - it may not be the result"
+msgstr "l'en-tête ou les déclarations de %s nomment encore \"%s\" (paramètre, local, routine imbriquée) - ce n'est peut-être pas le résultat"
+
+msgid "the line belongs to %s, not to the function %s - there \"Result\" would be another result"
+msgstr "la ligne appartient à %s, pas à la fonction %s - là, \"Result\" serait un autre résultat"
+
+msgid "the message names no function (\"Name :=\")"
+msgstr "le message ne nomme aucune fonction (\"Name :=\")"
+
+msgid "the unit is also compiled with Free Pascal ({$IFDEF FPC} in line %d) and sets no {$mode} - whether Result exists depends on the mode of the project"
+msgstr "l'unité est aussi compilée avec Free Pascal ({$IFDEF FPC} à la ligne %d) et ne fixe aucun {$mode} - l'existence de Result dépend du mode du projet"

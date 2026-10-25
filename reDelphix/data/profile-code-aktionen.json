@@ -98,6 +98,7 @@
       "FieldByNameInLoop",
       "LoopPastHighBound",
       "InheritedMethodEmpty",
+      "FunctionNameAsResult",
       "FileReadError"
     ]
   }
