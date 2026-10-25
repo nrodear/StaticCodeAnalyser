@@ -53,6 +53,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  System.Generics.Defaults,  // Perf Charge R3: einmal geholte Comparer
   uDetectorUtils;   // Perf P3: NestingChainPush/-Text (Kette als Index)
 
 // Schwellwert kommt aus uSCAConsts.DetectorMaxNesting (analyser.ini ->
@@ -122,6 +123,18 @@ type
     // wieder unverwaltet wie in v0.9.18.
     L : Integer;
   end;
+
+var
+  // Perf Charge R3 (2026-10-26, Muster aus Q1/uUninitVar): Default-Comparer
+  // der beiden Record-Listen in AnalyzeUnit EINMAL je Prozess
+  // (initialization) und jedem Create mitgegeben. TList<T>.Create ohne
+  // Comparer ruft fuer Record-T TComparer<T>._Default, und das fragt in der
+  // Delphi-12-RTL bei JEDEM Aufruf per TRttiContext die RTTI nach einem
+  // '='-Operator ab (Delphi 13 nicht mehr) - hier je Datei zweimal.
+  // VERHALTENSNEUTRAL: derselbe Default-Comparer, und keine der Listen ruft
+  // IndexOf/Contains/Remove/Sort (auch NestingChainPush/-Text nicht).
+  GFrameComparer     : IComparer<TFrame>;
+  GChainLinkComparer : IComparer<TNestingChainLink>;
 
 // R1 (2026-09-22): zaehlt dieses Kind als eigene Ebene?
 //
@@ -257,8 +270,8 @@ begin
   Links := nil;
   Methods := UnitNode.FindAll(nkMethod);
   try
-    Stack := TList<TFrame>.Create;
-    Links := TList<TNestingChainLink>.Create;
+    Stack := TList<TFrame>.Create(GFrameComparer);
+    Links := TList<TNestingChainLink>.Create(GChainLinkComparer);
     for M in Methods do
     begin
       Tiefste := Default(TDeepestHit);
@@ -291,5 +304,10 @@ begin
     Methods.Free;
   end;
 end;
+
+initialization
+  // Perf Charge R3: s. GFrameComparer.
+  GFrameComparer     := TComparer<TFrame>.Default;
+  GChainLinkComparer := TComparer<TNestingChainLink>.Default;
 
 end.
