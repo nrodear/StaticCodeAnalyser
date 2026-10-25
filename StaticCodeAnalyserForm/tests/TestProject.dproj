@@ -194,6 +194,7 @@
         <DCCReference Include="..\sources\Console\uConsoleRunner.pas"/>
         <DCCReference Include="uTestConsoleExitCode.pas"/>
         <DCCReference Include="uTestConsoleParseArgs.pas"/>
+        <DCCReference Include="uTestDetectorTimings.pas"/>
         <DCCReference Include="uTestExportSarifDiagnostics.pas"/>
         <DCCReference Include="uTestExportSonarTextRange.pas"/>
         <DCCReference Include="uTestContrastColor.pas"/>

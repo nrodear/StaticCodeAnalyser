@@ -81,7 +81,8 @@ type
 var
   // Optional Per-Detector-Timing-Accumulator. Wenn von aussen
   // (CLI --time-detectors, IDE-Perf-Mode) gesetzt, summiert das
-  // AOnTime-Lambda in ParseLeaks pro Scan TotalMs + CallCount auf.
+  // AOnTime-Lambda in ParseLeaks pro Scan TotalTicks + CallCount auf
+  // (Key = Summe TStopwatch-TICKS, NICHT ms - s. AccumulateDetectorTicks).
   // Nil = kein Tracking (Default).
   // Lifecycle: Caller erzeugt, Lambda fuellt, Caller liest und gibt frei.
   // KEIN threadvar: Konsumenten (CLI uConsoleRunner / IDE) erzeugen, lesen und
@@ -107,6 +108,23 @@ var
   // Grund: der Konsument (CLI) liegt AUSSERHALB des SCA.Engine-Package,
   // ein exportierter threadvar traegt dort nicht.
   gParallelDeclineReason : string;
+
+// Per-Detector-Timing (--time-detectors), reine Funktionen (Tests:
+// uTestDetectorTimings). Bis 2026-10-25 summierte das AOnTime-Lambda je
+// Aufruf Watch.ElapsedMilliseconds - ganze ms, abgeschnitten: ein Aufruf
+// unter 1 ms zaehlte 0, auf grossen Korpora fehlte so rund die Haelfte der
+// Detektorzeit, kleine Detektoren sprangen zwischen 0 und N ms. Jetzt wird
+// in Ticks summiert und erst bei der Ausgabe in ms umgerechnet.
+// ATimings = nil -> nichts zu tun (kein Tracking angefordert).
+procedure AccumulateDetectorTicks(
+  ATimings: TDictionary<string, TPair<Int64, Integer>>;
+  const AName: string; AElapsedTicks: Int64);
+// Ticks -> ms mit Nachkommastellen; AFrequency = TStopwatch.Frequency.
+// AFrequency <= 0 liefert 0 (kein Zeitgeber, keine Division durch 0).
+function DetectorTicksToMs(ATicks, AFrequency: Int64): Double;
+// Ticks -> ganze ms, abgeschnitten - fuer die "langsam!"-Logzeile, deren
+// Schwelle (> 500 ms) und Format ('%d ms') unveraendert bleiben.
+function DetectorTicksToWholeMs(ATicks, AFrequency: Int64): Int64;
 
 implementation
 
@@ -227,7 +245,7 @@ type
   end;
   // Callbacks fuer den Aufrufer (Logging / Fehler-Reporting), damit
   // RunAllDetectors selbst kein Wissen ueber LogStream/FileError-Liste hat.
-  TDetectorTimeProc  = reference to procedure(const Name: string; ElapsedMs: Int64);
+  TDetectorTimeProc  = reference to procedure(const Name: string; ElapsedTicks: Int64);
   TDetectorErrorProc = reference to procedure(const Name, ErrMsg: string);
 
 const
@@ -1056,6 +1074,35 @@ begin
   end;
 end;
 
+procedure AccumulateDetectorTicks(
+  ATimings: TDictionary<string, TPair<Int64, Integer>>;
+  const AName: string; AElapsedTicks: Int64);
+var
+  Acc: TPair<Int64, Integer>;
+begin
+  if ATimings = nil then
+    Exit;
+  if ATimings.TryGetValue(AName, Acc) then
+    ATimings.AddOrSetValue(AName,
+      TPair<Int64, Integer>.Create(Acc.Key + AElapsedTicks, Acc.Value + 1))
+  else
+    ATimings.Add(AName, TPair<Int64, Integer>.Create(AElapsedTicks, 1));
+end;
+
+function DetectorTicksToMs(ATicks, AFrequency: Int64): Double;
+begin
+  if AFrequency <= 0 then
+    Exit(0);
+  Result := (ATicks * 1000.0) / AFrequency;
+end;
+
+function DetectorTicksToWholeMs(ATicks, AFrequency: Int64): Int64;
+begin
+  if AFrequency <= 0 then
+    Exit(0);
+  Result := (ATicks * 1000) div AFrequency;
+end;
+
 procedure RunAllDetectors(Root: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>; AIncludeUsesCheck: Boolean;
   AContext: TAnalyzeContext;
@@ -1210,7 +1257,7 @@ begin
           AOnError(gDetectors[i].Name, DescribeException(E));
     end;
     if HasTimeCb then
-      AOnTime(gDetectors[i].Name, Watch.ElapsedMilliseconds);
+      AOnTime(gDetectors[i].Name, Watch.ElapsedTicks);
   end;
 
   // ---- Post-Filter ----
@@ -2273,28 +2320,23 @@ begin
 
         LastPhase := Format('File %d/%d: RunAllDetectors', [i + 1, Total]);
         RunAllDetectors(Root, FileName, Results, AIncludeUsesCheck, Ctx,
-          procedure(const Name: string; ElapsedMs: Int64)
+          procedure(const Name: string; ElapsedTicks: Int64)
           var
-            Acc: TPair<Int64, Integer>;
+            SlowMs: Int64;
           begin
-            if (ElapsedMs > 500) and Assigned(CaptLogStream) then
+            // Logzeile unveraendert: ganze ms (abgeschnitten), Schwelle > 500.
+            // Eigener Name: ParseLeaks hat selbst ein ElapsedMs (Parse-Zeit).
+            SlowMs := DetectorTicksToWholeMs(ElapsedTicks, TStopwatch.Frequency);
+            if (SlowMs > 500) and Assigned(CaptLogStream) then
               try
                 CaptLogStream.WriteLine(Format('  Detektor %s: %d ms (langsam!)',
-                  [Name, ElapsedMs]));
+                  [Name, SlowMs]));
                 CaptLogStream.Flush;
               except end;
             // Per-Detector-Timing aggregieren wenn Accumulator vom Caller
-            // bereitgestellt wurde. Spart einem CLI-Konsumenten den eigenen
-            // AOnTime-Pfad zu bauen.
-            if Assigned(gDetectorTimings) then
-            begin
-              if gDetectorTimings.TryGetValue(Name, Acc) then
-                gDetectorTimings.AddOrSetValue(Name,
-                  TPair<Int64, Integer>.Create(Acc.Key + ElapsedMs, Acc.Value + 1))
-              else
-                gDetectorTimings.Add(Name,
-                  TPair<Int64, Integer>.Create(ElapsedMs, 1));
-            end;
+            // bereitgestellt wurde (nil -> No-Op). Spart einem CLI-
+            // Konsumenten den eigenen AOnTime-Pfad zu bauen.
+            AccumulateDetectorTicks(gDetectorTimings, Name, ElapsedTicks);
           end,
           procedure(const Name, ErrMsg: string)
           begin
