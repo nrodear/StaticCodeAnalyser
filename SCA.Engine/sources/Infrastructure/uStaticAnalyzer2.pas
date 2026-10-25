@@ -1256,10 +1256,15 @@ begin
       // Scan-Schleife, auch kuenftige.
       on EStackExhausted do raise;
       on E: Exception do
+      begin
+        // Diagnose-Stapel (SCA_CRASH_STACK): Rahmen in die eigene Datei,
+        // NIE in den Meldetext (Fund-Identitaet). Aus = sofort zurueck.
+        CrashStackReport('Detektor ' + gDetectors[i].Name, FileName, E);
         if Assigned(AOnError) then
           // Stuerzt ein Detektor ab, ist die Exception-Klasse und die
           // modulrelative Adresse das Einzige, was ihn eingrenzt.
           AOnError(gDetectors[i].Name, DescribeException(E));
+      end;
     end;
     if HasTimeCb then
       AOnTime(gDetectors[i].Name, Watch.ElapsedTicks);
@@ -1448,6 +1453,7 @@ begin
       on EStackExhausted do raise;
       on E: Exception do
       begin
+        CrashStackReport('Parser (parallel)', AFileName, E);
         SlotLog('  PARSER-FEHLER: ' + DescribeException(E));
         AddSlotError(AFileName, 'Lesefehler: ' + DescribeException(E));
         Exit;
@@ -2207,6 +2213,7 @@ begin
           on EStackExhausted do raise;
           on E: Exception do
           begin
+            CrashStackReport('Parser', FileName, E);
             LogLine('  PARSER-FEHLER: ' + DescribeException(E));
             AddFileError(FileName, 'Lesefehler: ' + DescribeException(E));
             Continue;

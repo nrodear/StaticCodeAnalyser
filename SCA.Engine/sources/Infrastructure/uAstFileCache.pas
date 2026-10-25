@@ -145,6 +145,7 @@ begin
         // kann schlicht falsch sein (s. Unit-Kopf uCrashDiag). Dieser
         // Fangpunkt ist der einzige Ort, an dem ein Parser-Absturz im
         // Cache-Pfad ueberhaupt sichtbar wird.
+        CrashStackReport('Parser (Cache)', FileName, E);
         FFailed.AddOrSetValue(K, DescribeException(E));
         Exit(nil);
       end;

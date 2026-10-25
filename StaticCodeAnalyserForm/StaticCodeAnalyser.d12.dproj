@@ -61,6 +61,7 @@
     <PropertyGroup Condition="'$(Base)'!=''">
         <DCC_DcuOutput>..\Output\$(Platform) $(Config)</DCC_DcuOutput>
         <DCC_ExeOutput>..\Output\$(Platform) $(Config)</DCC_ExeOutput>
+        <DCC_MapFile>3</DCC_MapFile>
         <DCC_UnitSearchPath>sources;sources\Console;sources\UI;resources;..\SCA.SharedUI\sources;..\SCA.Engine\sources\Common;..\SCA.Engine\sources\Detectors;..\SCA.Engine\sources\Infrastructure;..\SCA.Engine\sources\Output;..\SCA.Engine\sources\Parsing;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>
@@ -130,7 +131,7 @@
         <DCC_LocalDebugSymbols>false</DCC_LocalDebugSymbols>
         <DCC_Define>RELEASE;$(DCC_Define)</DCC_Define>
         <DCC_SymbolReferenceInfo>0</DCC_SymbolReferenceInfo>
-        <DCC_DebugInformation>0</DCC_DebugInformation>
+        <DCC_DebugInformation>1</DCC_DebugInformation>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2_Win32)'!=''">
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>

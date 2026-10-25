@@ -21,7 +21,25 @@
 // ausgelieferte EXE auf (uCustomerForm zog FireDAC-DFM-Streaming mit).
 // Die Dateien bleiben unter resources\ als reine Scan-Eingaben liegen
 // (Self-Scan-Baseline + Demo-Scans lesen sie von Disk, nicht aus der EXE).
+//
+// DIAGNOSE-BAU MIT FASTMM4 (AV-Jagd 2026-10-25, Heap-Korruption): nur mit
+// dem Define SCA_FULLDEBUG, sonst bleibt die Zeile unten unsichtbar. Auf
+// diesem Rechner liegt FastMM4 4.991 (ohne FastMM_FullDebugMode*.dll) z.B.
+// unter C:\Users\ngerlach\Documents\Embarcadero\Studio\HowToTestProject\
+// tests\Delphi-Mocks-v0.3.1\Tests\MemoryLeakTest. Fuer EINEN Diagnosebau
+// (nicht einchecken, die .dproj-Aenderung danach verwerfen):
+//   Projektoptionen > Delphi-Compiler > Bedingungen:
+//     SCA_FULLDEBUG;FullDebugMode;LoadDebugDLLDynamically;NoMessageBoxes
+//   Projektoptionen > Delphi-Compiler > Suchpfad: obigen Ordner anfuegen
+// Ohne die DLL fehlen FastMM die Stapel, die Blockpruefung (Kopf/Fuss-
+// Waechter, Schreiben nach Freigabe, Klasse des Vorbesitzers) laeuft
+// trotzdem; Funde landen in <Exe>_MemoryManager_EventLog.txt neben der
+// Exe. NoMessageBoxes ist Pflicht: ein Meldungsfenster haelt den
+// CLI-Stresslauf an. FastMM4 MUSS die erste Unit sein.
 uses
+  {$IFDEF SCA_FULLDEBUG}
+  FastMM4,
+  {$ENDIF}
   Winapi.Windows,
   Vcl.Forms,
   Vcl.Themes,          // TStyleManager - Hell/Dunkel der Standalone-EXE
@@ -31,7 +49,8 @@ uses
   uMainForm in 'sources\UI\uMainForm.pas' {Form2},
   uDfmTextViewer in 'sources\UI\uDfmTextViewer.pas',
   uConsoleRunner in 'sources\Console\uConsoleRunner.pas',
-  uAppTheme;
+  uAppTheme,
+  uCrashDiag;          // Diagnose-Stapel (SCA_CRASH_STACK), s. Programmrumpf
 
 {$R *.res}
 {$R 'styles\sca_styles.RES'}  // SCADark.vsf (s. styles\README.md)
@@ -196,6 +215,12 @@ begin
 end;
 
 begin
+  // Diagnose-Stapel fuer die AV-Jagd: nur mit gesetzter Umgebungsvariable
+  // SCA_CRASH_STACK (1 = <Exe>.crashstack.log neben der Exe, sonst ein
+  // Dateipfad). Ohne sie haengt kein Haken und nichts aendert sich. Die
+  // Rahmen gehen in die eigene Datei, nie in SCA006-Meldetexte; aufloesen
+  // mit tools\map_resolve.py gegen die Detailed-Map. Begruendung: uCrashDiag.
+  CrashStackInstallFromEnv;
   if IsCliMode then
   begin
     // Headless-Pfad - keine VCL-Form, exit code via Halt.
@@ -216,6 +241,7 @@ begin
         // aus dem Handler heraus und der Aufrufer bekam einen
         // Laufzeitfehler statt eines auswertbaren Codes.
         CliExitCode := 99;
+        CrashStackReport('CLI (Fatal)', '', E);  // aus = sofort zurueck
         try
           WriteLn(ErrOutput, 'Fatal: ', E.ClassName, ': ', E.Message);
         except
