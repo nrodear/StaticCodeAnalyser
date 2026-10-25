@@ -770,7 +770,7 @@ type
                                  //          (Boolean-Kette) kompilieren still falsch.
                                  //          Error nur mit Typbeleg, sonst Warning
                                  //          (uComparisonPrecedenceScan). Q1 2026-10-23.
-    fkLoopPastHighBound          // SCA203 - for-Schleife einen Index zu weit: '0 to
+    fkLoopPastHighBound,         // SCA203 - for-Schleife einen Index zu weit: '0 to
                                  //          List.Count' / '0 to Length(A)' / 'High(A) + 1'
                                  //          mit List[i]/A[i] im Rumpf, String-Formen
                                  //          '0 to Length(S)' und '1 to Length(S) + 1'.
