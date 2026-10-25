@@ -76,7 +76,13 @@ var
   H      : TFuncNameHit;
   Seen   : TDictionary<string, Boolean>;
   Key    : string;
+  EnKinds : TFindingKinds;
 begin
+  // Perf R1: steht SCA204 nicht im Profil (default, bugs-only), verwirft
+  // der Post-Filter in uStaticAnalyzer2 (Kind nicht in EnabledKinds) jeden
+  // SCA204-Fund - der Scanner laesst sie gleich weg und spart Dateien, in
+  // denen nur SCA204 moeglich waere ({$mode objfpc}). SCA205 unveraendert.
+  EnKinds := CfgEnabledKinds(AContext);
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
@@ -84,7 +90,8 @@ begin
     // Token-Vorfilter und SCA202). Der Scanner liest Kommentare, Strings
     // und Direktiven selbst - er braucht die {$mode}-Zeilen.
     Hits := TFuncNameScan.ScanText(TDetectorUtils.LinesTextCached(Lines,
-      AContext, FileName), TStaticFiles.ScanDialect = dlDelphi);
+      AContext, FileName), TStaticFiles.ScanDialect = dlDelphi,
+      (EnKinds = []) or (fkFunctionNameAsResult in EnKinds));
   finally
     ReleaseLines(Lines, Cached);
   end;
