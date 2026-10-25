@@ -782,7 +782,11 @@ begin
   //      szOID_TIMESTAMP_TOKEN tragen 'pwd'/'token' im NAMEN, der Wert ist aber
   //      eine reine Punkt-getrennte Ziffernfolge (OID) - niemals ein Geheimwert.
   //      TP-sicher: ein echtes Credential ist nie eine bare dotted-numeric-OID.
-  if IsMatchCached(BodyTrim, '^[0-9]+(\.[0-9]+)+$') then Exit;
+  //      Possessiv (Charge R4/INT): die Gruppe ist ohne Backtracking-Punkt
+  //      (jede Wiederholung beginnt mit '.', [0-9]+ nimmt alle Ziffern),
+  //      gleiches Ergebnis, aber PCRE wiederholt sie in einer Schleife statt
+  //      je Wiederholung eine Rekursionsebene - lange OIDs ohne Stack-Risiko.
+  if IsMatchCached(BodyTrim, '^[0-9]+(\.[0-9]+)++$') then Exit;
 
   // (d) Prompt-/Feld-Label endet auf ':' - Protokoll-/UI-Beschriftung.
   //     'AskP: ', 'Hotkey: '. Echte Secrets enden praktisch nie auf ':'.
