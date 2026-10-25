@@ -498,25 +498,25 @@
             "type",
             "  TFoo = class(TComponent)",
             "  public",
-            "    constructor Create(A: Integer); override;",
+            "    constructor Create(AOwner: TComponent); override;",
             "  end;",
             "implementation",
-            "constructor TFoo.Create(A: Integer);",
+            "constructor TFoo.Create(AOwner: TComponent);",
             "begin",
-            "  Run(A);",
+            "  Run(AOwner);",
             "end;"
           ],
           "nachher": [
             "type",
             "  TFoo = class(TComponent)",
             "  public",
-            "    constructor Create(A: Integer); override;",
+            "    constructor Create(AOwner: TComponent); override;",
             "  end;",
             "implementation",
-            "constructor TFoo.Create(A: Integer);",
+            "constructor TFoo.Create(AOwner: TComponent);",
             "begin",
             "  inherited;",
-            "  Run(A);",
+            "  Run(AOwner);",
             "end;"
           ]
         }
@@ -1580,21 +1580,21 @@
     },
     "TrailingCommaArgList": {
       "titel": "Überzähliges Komma entfernen",
-      "was": "Löscht das Komma vor der schließenden Klammer einer Argumentliste samt dem Leerraum bis zur `)`: `Foo(A, B,)` wird `Foo(A, B)`. Der Detektor meldet die Spalte des Kommas; die Hilfe sucht rückwärts die öffnende Klammer.",
+      "was": "Löscht das Komma vor der schließenden Klammer einer Argumentliste samt dem Leerraum bis zur `)`: `Excel.Workbooks.Open(FileName,)` wird `Excel.Workbooks.Open(FileName)`. Delphi übersetzt das Komma nur in einem spät gebundenen Aufruf auf einem Variant oder einer dispinterface (OLE-Automation); in einem normalen Aufruf hängt es ein leeres Argument an (E2034). Der Detektor meldet die Spalte des Kommas; die Hilfe sucht rückwärts die öffnende Klammer.",
       "nichtAngeboten": [
         "vor dem Komma steht kein Argument (`Foo(,)`, `Foo(A,,)`): dort fehlt ein Element, das Komma ist nicht überzählig",
         "das Komma beendet eine Liste in `[...]` (Set- oder Array-Literal), oder die öffnende Klammer ist nicht zu finden",
         "die Zeile ist verschoben: an der Spalte steht kein Komma im Code, oder dahinter folgt etwas anderes als Leerraum und `)` (Kommentar, String)"
       ],
       "beispielVorher": [
-        "  WriteLn('A', 'B', );",
-        "  DoStuff(Param1, Param2,);"
+        "  Excel.Workbooks.Open(FileName,);   // Excel: Variant",
+        "  Excel.ActiveWorkbook.SaveAs(NewName, );"
       ],
       "beispielNachher": [
-        "  WriteLn('A', 'B');",
-        "  DoStuff(Param1, Param2);"
+        "  Excel.Workbooks.Open(FileName);   // Excel: Variant",
+        "  Excel.ActiveWorkbook.SaveAs(NewName);"
       ],
-      "hinweis": "Bedeutungsgleich: das Komma trug nichts."
+      "hinweis": "Für COM bedeutungsgleich: im spät gebundenen Aufruf ist das leere letzte Argument ein weggelassener optionaler Parameter (`varError`, `DISP_E_PARAMNOTFOUND`), nach der Hilfe wird es gar nicht übergeben. Ein COM-Server mit Typbibliothek (Excel, Word) sieht keinen Unterschied; nur ein eigener IDispatch, der seine Argumente zählt (`cArgs`), sieht eines weniger. Darum keine Kennzeichnung."
     },
     "GroupedDeclaration": {
       "titel": "Gruppierte Deklaration in Einzelzeilen teilen",
@@ -2047,10 +2047,10 @@
         "das Ziel ist als Variant bzw. OleVariant deklariert (ein Literal-Zweig gäbe einen anderen VarType)"
       ],
       "beispielVorher": [
-        "  x := IfThen(b, A(), B());"
+        "  x := IfThen(Cond, A(), B());"
       ],
       "beispielNachher": [
-        "  if b then",
+        "  if Cond then",
         "    x := A()",
         "  else",
         "    x := B();"

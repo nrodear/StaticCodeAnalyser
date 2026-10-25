@@ -6250,8 +6250,8 @@ msgstr "même sens - l'appel reste une instruction et s'exécute exactement une 
 msgid "the marker now stands above the line and suppresses all rules of the line (so far NOSONAR suppressed nothing); critical kinds (HardcodedSecret, SQLInjection etc.) stay visible"
 msgstr "le marqueur se trouve désormais au-dessus de la ligne et supprime toutes les règles de la ligne (jusqu'ici NOSONAR ne supprimait rien) ; les types critiques (HardcodedSecret, SQLInjection, etc.) restent visibles"
 
-msgid "same meaning - only the superfluous comma goes away"
-msgstr "même sens - seule la virgule superflue disparaît"
+msgid "same meaning for COM - the empty last argument of the late-bound call (an omitted optional parameter) is now not passed at all; only a server that counts its arguments sees one fewer"
+msgstr "même sens pour COM - le dernier argument vide de l'appel à liaison tardive (un paramètre optionnel omis) n'est désormais plus transmis du tout ; seul un serveur qui compte ses arguments en voit un de moins"
 
 msgid "same meaning - each name keeps its type; with \"var\" each new line carries the \"var\" again"
 msgstr "même sens - chaque nom garde son type ; avec « var », chaque nouvelle ligne reprend le « var »"
