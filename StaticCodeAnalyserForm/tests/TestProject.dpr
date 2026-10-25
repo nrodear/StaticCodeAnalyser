@@ -35,6 +35,7 @@ uses
   uTestBaselineJson in 'uTestBaselineJson.pas',
   uTestSourceLineEdit in 'uTestSourceLineEdit.pas',
   uTestFileTextCache in 'uTestFileTextCache.pas',
+  uTestRegExCache in 'uTestRegExCache.pas',
   uTestParserReviewC in 'uTestParserReviewC.pas',
   uTestDetectorUtilsText in 'uTestDetectorUtilsText.pas',
   uTestConfigPass in 'uTestConfigPass.pas',

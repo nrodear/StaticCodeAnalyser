@@ -59,7 +59,8 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils,
+  uRegExMatches;   // CachedEx - Muster je Thread einmal kompiliert
 
 // Real-World-FP-Audit 2026-07-10: extrahiert den fuehrenden Bezeichner eines
 // Call-Arguments (ueberspringt @, ^, Klammern, Whitespace). Wird fuer den
@@ -113,8 +114,12 @@ begin
     // Real-World-FP-Audit 2026-07-10: Gruppe 2 = erstes Argument (Buffer),
     // Gruppe 3 = Region zwischen erstem Komma und SizeOf (fuer '*'-Guard),
     // Gruppe 4 = der (vermeintliche) Pointer-Typname.
-    RE := TRegEx.Create(
-      '(?i)\b(Move|FillChar|CopyMemory|ZeroMemory)\s*\(\s*([^,)]*?)\s*,([^)]*?)\bSizeOf\s*\(\s*(P[A-Z]\w+)\s*\)');
+    // Perf (Charge R2 2026-10-26): kompilierte Instanz aus dem Thread-Cache
+    // (je Thread einmal statt je Datei neu: TPerlRegEx + pcre_maketables +
+    // Compile). [roNotEmpty] = Default des Ein-Arg-TRegEx.Create.
+    RE := TRegExMatches.CachedEx(
+      '(?i)\b(Move|FillChar|CopyMemory|ZeroMemory)\s*\(\s*([^,)]*?)\s*,([^)]*?)\bSizeOf\s*\(\s*(P[A-Z]\w+)\s*\)',
+      [roNotEmpty]);
     for M in RE.Matches(Code) do
     begin
       Func    := M.Groups[1].Value;
