@@ -76,8 +76,13 @@ const
   // TRegEx.Create. Die dynamischen Patterns (mit Ident-Anteil) bleiben
   // per-Call-Compile in LOKALEN TRegEx-Variablen - lokal ist thread-sicher,
   // nur GETEILTE Instanzen waren das Problem.
+  // Stack (Charge R4 2026-10-26): die Gruppe der inneren Klammerpaare ist
+  // POSSESSIV ('*+'). Gierig kostete sie in PCRE 8.45 (ohne JIT) 2 match()-
+  // Rahmen je Klammerpaar - ab ~2000 Paaren im Parameterteil Stack-Ueberlauf
+  // bei 1 MB (bds.exe, TestProject). Gleiches Ergebnis: nach einem kuerzeren
+  // Ende der Gruppe steht nie ')' (sondern '(' oder ein Nicht-Klammerzeichen).
   RE_FUNC_HEADER =
-    '(?is)\bfunction\s+[\w.]+\s*(?:\([^()]*(?:\([^()]*\)[^()]*)*\))?\s*:\s*' +
+    '(?is)\bfunction\s+[\w.]+\s*(?:\([^()]*(?:\([^()]*\)[^()]*)*+\))?\s*:\s*' +
     '([A-Za-z0-9_<>,\s.]+?)\s*;';
   RE_RESUME_CALL = '(?i)\b(\w+)\.Resume\b(?!\s*\:=)';
   RE_FREE_AND_NIL = '(?i)\bFreeAndNil\s*\(\s*(\w+)\s*\)';
@@ -289,8 +294,12 @@ var
     // als TThread gemeldet (Vollzaehlung 2026-09-04, 2 der 9 Fehlalarme;
     // das Resume/Pause-PAAR an der Fundstelle verraet den Timer). Das
     // Match beginnt AM Identifier, Vorgaenger in der Liste stoeren nicht.
+    // Stack (Charge R4 2026-10-26): Listengruppe possessiv ('*+') - gierig
+    // 2 PCRE-Rahmen je Element, Ueberlauf bei 1 MB ab ~2000 Elementen (eine
+    // Zahlentabelle hinter dem Bezeichner genuegt, '\w+' nimmt Zahlen).
+    // Gleiches Ergebnis: nach einem kuerzeren Listenende folgt nie ':'.
     Re := TRegEx.Create(
-      '(?i)\b' + AIdent + '\s*(?:,\s*\w+)*\s*:\s*([A-Za-z0-9_<>,\s.]+?)\s*(?:;|\)|=)');
+      '(?i)\b' + AIdent + '\s*(?:,\s*\w+)*+\s*:\s*([A-Za-z0-9_<>,\s.]+?)\s*(?:;|\)|=)');
     Mt := Re.Match(Code);
     if Mt.Success then
       Result := Mt.Groups[1].Value

@@ -256,6 +256,7 @@ uses
   uTestEmptyOnHandler in 'uTestEmptyOnHandler.pas',
   uTestStringFromPointer in 'uTestStringFromPointer.pas',
   uTestPointerSubtraction in 'uTestPointerSubtraction.pas',
+  uTestRegexStackDepth in 'uTestRegexStackDepth.pas',
   uTestInsecureCryptoAlgorithm in 'uTestInsecureCryptoAlgorithm.pas',
   uTestCommandInjection in 'uTestCommandInjection.pas',
   uTestInsecureRandom in 'uTestInsecureRandom.pas',

@@ -2164,8 +2164,15 @@ const
     // Field-Decl `Name[, Name2]: Type;`. Sehr breit - aber nach
     // attribute-Zeile ist es das uebliche Pattern. Mehrere Namen
     // mit Komma getrennt, dann `:`, danach Type-Name.
+    // Stack (Charge R4 2026-10-26): die Listengruppe ist POSSESSIV ('*+').
+    // PCRE 8.45 ohne JIT schachtelt je Wiederholung einer gierigen Gruppe
+    // match()-Rahmen (hier 4 je Listenelement) - eine Zeile mit ~1000
+    // Bezeichnern sprengt den 1-MB-Stack von bds.exe/TestProject. Die
+    // possessive Gruppe laeuft iterativ (Tiefe konstant 4). Gleiches
+    // Ergebnis: nach einem kuerzeren Listenende steht nie ':' (sondern
+    // Wortzeichen oder '\s*,'), Backtracking in die Liste traf also nie.
     if TRegEx.IsMatch(Tr,
-         '^[A-Za-z_]\w*(\s*,\s*[A-Za-z_]\w*)*\s*:\s*[A-Za-z_<]',
+         '^[A-Za-z_]\w*(\s*,\s*[A-Za-z_]\w*)*+\s*:\s*[A-Za-z_<]',
          [roIgnoreCase]) then Exit(True);
     // Weitere Attribute-Line direkt darunter -> zaehlt auch als
     // Attribute-Kontext (Member kommt erst danach).
