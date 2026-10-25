@@ -214,10 +214,8 @@ const
     '    Result := 0;'#13#10 +
     'end;'#13#10 +
     'end.'#13#10;
-var
-  Txt : string;
 begin
-  Txt := RunBothModes(SRC, 3, 'CommentEndingOnSecondHeader_BothMethodsReported');
+  RunBothModes(SRC, 3, 'CommentEndingOnSecondHeader_BothMethodsReported');
 end;
 
 procedure TTestUninitVarPerfQ1.UpperCaseAsmBlock_SkipsMethod;
@@ -281,10 +279,8 @@ const
     '    Result := 0;'#13#10 +
     'end;'#13#10 +
     'end.'#13#10;
-var
-  Txt : string;
 begin
-  Txt := RunBothModes(SRC, 2, 'AsmOnlyInComments_MethodStillAnalysed');
+  RunBothModes(SRC, 2, 'AsmOnlyInComments_MethodStillAnalysed');
 end;
 
 procedure TTestUninitVarPerfQ1.ConditionWithoutParen_RegistersNoWrite;
@@ -314,10 +310,8 @@ const
     '    Result := 0;'#13#10 +
     'end;'#13#10 +
     'end.'#13#10;
-var
-  Txt : string;
 begin
-  Txt := RunBothModes(SRC, 2, 'ConditionWithoutParen_RegistersNoWrite');
+  RunBothModes(SRC, 2, 'ConditionWithoutParen_RegistersNoWrite');
 end;
 
 procedure TTestUninitVarPerfQ1.ConditionCallArg_StillWrites;
