@@ -118,6 +118,7 @@
         <DCCReference Include="uTestBaselineJson.pas"/>
         <DCCReference Include="uTestSourceLineEdit.pas"/>
         <DCCReference Include="uTestFileTextCache.pas"/>
+        <DCCReference Include="uTestRegExCache.pas"/>
         <DCCReference Include="uTestParserReviewC.pas"/>
         <DCCReference Include="uTestDetectorUtilsText.pas"/>
         <DCCReference Include="uTestConfigPass.pas"/>
@@ -156,6 +157,7 @@
         <DCCReference Include="uTestLoopPastHighBound.pas"/>
         <DCCReference Include="uTestLoopBoundScanText.pas"/>
         <DCCReference Include="uTestFunctionNameResult.pas"/>
+        <DCCReference Include="uTestFuncNameScanText.pas"/>
         <DCCReference Include="uTestIpAddressScanKit.pas"/>
         <DCCReference Include="uTestIpAddressScanGrammar.pas"/>
         <DCCReference Include="uTestIpAddressScanClasses.pas"/>
@@ -336,6 +338,7 @@
         <DCCReference Include="uTestEmptyOnHandler.pas"/>
         <DCCReference Include="uTestStringFromPointer.pas"/>
         <DCCReference Include="uTestPointerSubtraction.pas"/>
+        <DCCReference Include="uTestRegexStackDepth.pas"/>
         <DCCReference Include="uTestInsecureCryptoAlgorithm.pas"/>
         <DCCReference Include="uTestCommandInjection.pas"/>
         <DCCReference Include="uTestInsecureRandom.pas"/>

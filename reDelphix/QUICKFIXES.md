@@ -1085,7 +1085,7 @@ Nachher:
 |---|---|---|
 | `Remove the trailing comma` | `Überzähliges Komma entfernen` | `Supprimer la virgule superflue` |
 
-**Wirkung:** Löscht das Komma vor der schließenden Klammer einer Argumentliste samt dem Leerraum bis zur `)`: `Foo(A, B,)` wird `Foo(A, B)`. Der Detektor meldet die Spalte des Kommas; die Hilfe sucht rückwärts die öffnende Klammer.
+**Wirkung:** Löscht das Komma vor der schließenden Klammer einer Argumentliste samt dem Leerraum bis zur `)`: `Excel.Workbooks.Open(FileName,)` wird `Excel.Workbooks.Open(FileName)`. Delphi übersetzt das Komma nur in einem spät gebundenen Aufruf auf einem Variant oder einer dispinterface (OLE-Automation); in einem normalen Aufruf hängt es ein leeres Argument an (E2034). Der Detektor meldet die Spalte des Kommas; die Hilfe sucht rückwärts die öffnende Klammer.
 
 **Nicht angeboten**
 
@@ -1098,18 +1098,18 @@ Nachher:
 Vorher:
 
 ```pascal
-  WriteLn('A', 'B', );
-  DoStuff(Param1, Param2,);
+  Excel.Workbooks.Open(FileName,);   // Excel: Variant
+  Excel.ActiveWorkbook.SaveAs(NewName, );
 ```
 
 Nachher:
 
 ```pascal
-  WriteLn('A', 'B');
-  DoStuff(Param1, Param2);
+  Excel.Workbooks.Open(FileName);   // Excel: Variant
+  Excel.ActiveWorkbook.SaveAs(NewName);
 ```
 
-**Hinweis.** Bedeutungsgleich: das Komma trug nichts.
+**Hinweis.** Für COM bedeutungsgleich: im spät gebundenen Aufruf ist das leere letzte Argument ein weggelassener optionaler Parameter (`varError`, `DISP_E_PARAMNOTFOUND`), nach der Hilfe wird es gar nicht übergeben. Ein COM-Server mit Typbibliothek (Excel, Word) sieht keinen Unterschied; nur ein eigener IDispatch, der seine Argumente zählt (`cArgs`), sieht eines weniger. Darum keine Kennzeichnung.
 
 <a id="sca069"></a>
 
@@ -1979,12 +1979,12 @@ Vorher:
 type
   TFoo = class(TComponent)
   public
-    constructor Create(A: Integer); override;
+    constructor Create(AOwner: TComponent); override;
   end;
 implementation
-constructor TFoo.Create(A: Integer);
+constructor TFoo.Create(AOwner: TComponent);
 begin
-  Run(A);
+  Run(AOwner);
 end;
 ```
 
@@ -1994,13 +1994,13 @@ Nachher:
 type
   TFoo = class(TComponent)
   public
-    constructor Create(A: Integer); override;
+    constructor Create(AOwner: TComponent); override;
   end;
 implementation
-constructor TFoo.Create(A: Integer);
+constructor TFoo.Create(AOwner: TComponent);
 begin
   inherited;
-  Run(A);
+  Run(AOwner);
 end;
 ```
 
@@ -3067,13 +3067,13 @@ Nachher:
 Vorher:
 
 ```pascal
-  x := IfThen(b, A(), B());
+  x := IfThen(Cond, A(), B());
 ```
 
 Nachher:
 
 ```pascal
-  if b then
+  if Cond then
     x := A()
   else
     x := B();

@@ -66,7 +66,8 @@ implementation
 
 uses
   System.Classes, System.RegularExpressions,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils,
+  uRegExMatches;   // CachedEx - RANDOM_RE je Thread einmal kompiliert
 
 // True wenn das Random-Token an MatchIndex (1-basiert) ein Methoden-Aufruf auf
 // einem OBJEKT ist (Obj.Random) statt der globalen RTL-Random. Unqualified,
@@ -152,7 +153,13 @@ begin
   // gegenueber Expr verschoben sind). Qualifier ('.') stehen im Code, nie im
   // String -> erhalten. Casing des Codes bleibt -> AHit korrekt.
   Code := TDetectorUtils.StripStringLiterals(Expr);
-  M := TRegEx.Match(Code, RANDOM_RE, [roIgnoreCase]);
+  // Perf (Charge R2 2026-10-26): Instanz aus dem Thread-Cache statt
+  // TRegEx.Match(Code, RANDOM_RE, [roIgnoreCase]) je Ausdruck. NextMatch
+  // liest den Zustand dieser geteilten Instanz weiter - zulaessig, weil
+  // zwischen Match und NextMatch nur IsObjectQualifiedRandom laeuft (reine
+  // Zeichenschleife, keine Regex): niemand im selben Thread setzt das
+  // Subject dieses Musters dazwischen neu.
+  M := TRegExMatches.CachedEx(RANDOM_RE, [roIgnoreCase]).Match(Code);
   while M.Success do
   begin
     // Objekt-qualifizierte Custom-RNG-Methoden (FRng.Random(..)) ueberspringen -

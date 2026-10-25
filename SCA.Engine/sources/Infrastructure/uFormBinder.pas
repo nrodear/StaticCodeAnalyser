@@ -141,7 +141,19 @@ uses
   uStaticFiles,   // Formdatei-Paarung (Lazarus A4)
   System.IOUtils, System.StrUtils,
   uDfmParser, uDfmBinaryReader, uParser2,
-  uCrashDiag;  // EStackExhausted - Kontrakt 2026-08-04
+  uCrashDiag,  // EStackExhausted - Kontrakt 2026-08-04
+  System.Generics.Defaults;  // Perf Charge R3: einmal geholter Default-Comparer
+
+var
+  // Perf Charge R3 (2026-10-26, Muster aus Q1/uUninitVar): Default-Comparer
+  // der Events-Liste EINMAL je Prozess (initialization) und jedem Create
+  // mitgegeben. TList<T>.Create ohne Comparer ruft fuer Record-T
+  // TComparer<T>._Default, und das fragt in der Delphi-12-RTL bei JEDEM
+  // Aufruf per TRttiContext die RTTI nach einem '='-Operator ab (Delphi 13
+  // nicht mehr) - hier je Formular-Bindung (im jvcl-Profil sichtbar).
+  // VERHALTENSNEUTRAL: es ist derselbe Default-Comparer, den Create ohne
+  // Argument holen wuerde.
+  GBoundEventComparer : IComparer<TBoundEvent>;
 
 function IsEventPropertyName(const PropName: string): Boolean;
 begin
@@ -156,7 +168,7 @@ end;
 constructor TFormBinding.Create;
 begin
   inherited;
-  FEvents           := TList<TBoundEvent>.Create;
+  FEvents           := TList<TBoundEvent>.Create(GBoundEventComparer);
   FPublishedFields  := TDictionary<string, TAstNode>.Create;
   FPublishedMethods := TDictionary<string, TAstNode>.Create;
   FMethodImpls      := TDictionary<string, TAstNode>.Create;
@@ -568,5 +580,9 @@ begin
     Visited.Free;
   end;
 end;
+
+initialization
+  // Perf Charge R3: s. GBoundEventComparer.
+  GBoundEventComparer := TComparer<TBoundEvent>.Default;
 
 end.

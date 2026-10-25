@@ -71,10 +71,28 @@ implementation
 // noinspection-file GroupedDeclaration, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  System.Generics.Defaults;  // Perf Charge R3: einmal geholter Default-Comparer
+
+type
+  // Perf Charge R3: frueher lokal in WalkForBareRaise - der Comparer unten
+  // braucht den Typ auf Unit-Ebene. Gleiche Felder, gleiche Bedeutung.
+  TFrame = record Nd: TAstNode; InH: Boolean; end;
+
+var
+  // Perf Charge R3 (2026-10-26, Muster aus Q1/uUninitVar): Default-Comparer
+  // der Stapel-Liste EINMAL je Prozess (initialization) und jedem Create
+  // mitgegeben. TList<T>.Create ohne Comparer ruft fuer Record-T
+  // TComparer<T>._Default, und das fragt in der Delphi-12-RTL bei JEDEM
+  // Aufruf per TRttiContext die RTTI nach einem '='-Operator ab (Delphi 13
+  // nicht mehr). WalkForBareRaise laeuft je METHODE - im Profil (laz strict)
+  // der groesste Einzelposten dieses Lookups. VERHALTENSNEUTRAL: derselbe
+  // Default-Comparer, und die Liste ruft nie IndexOf/Contains/Remove/Sort.
+  GFrameComparer : IComparer<TFrame>;
+
 procedure WalkForBareRaise(N: TAstNode; const FileName, MethodName: string;
   Results: TObjectList<TLeakFinding>; InHandler: Boolean);
 // Hardening v4: iterative DFS - siehe Audit_jvcl_segfault.
-type TFrame = record Nd: TAstNode; InH: Boolean; end;
 var
   Stack : TList<TFrame>;
   Cur, F2 : TFrame;
@@ -83,7 +101,7 @@ var
   F      : TLeakFinding;
 begin
   if N = nil then Exit;
-  Stack := TList<TFrame>.Create;
+  Stack := TList<TFrame>.Create(GFrameComparer);
   try
     F2.Nd := N; F2.InH := InHandler;
     Stack.Add(F2);
@@ -137,5 +155,9 @@ begin
     Methods.Free;
   end;
 end;
+
+initialization
+  // Perf Charge R3: s. GFrameComparer.
+  GFrameComparer := TComparer<TFrame>.Default;
 
 end.

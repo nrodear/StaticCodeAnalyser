@@ -74,7 +74,8 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils,
+  uRegExMatches;   // CachedEx - Muster je Thread einmal kompiliert
 
 function IsWordCh(C: Char): Boolean; inline;
 begin
@@ -188,8 +189,11 @@ begin
     // Komma zwischen den Targets vor dem do-Keyword. Wir limitieren den
     // Scan-Bereich vor dem `do` damit nicht ein Komma in nachfolgendem
     // Code matched. Multiline-Match aktiviert.
-    RE := TRegEx.Create(
-      '(?ism)\bwith\s+[^,;{}\r\n]{1,200},\s*[^;{}]{1,200}\bdo\b');
+    // Perf (Charge R2 2026-10-26): kompilierte Instanz aus dem Thread-Cache
+    // (je Thread einmal statt je Datei neu: TPerlRegEx + pcre_maketables +
+    // Compile). [roNotEmpty] = Default des Ein-Arg-TRegEx.Create.
+    RE := TRegExMatches.CachedEx(
+      '(?ism)\bwith\s+[^,;{}\r\n]{1,200},\s*[^;{}]{1,200}\bdo\b', [roNotEmpty]);
     for M in RE.Matches(Code) do
     begin
       // Klammer-Gate: Kommas in Argument-, Index- oder Typargumentlisten

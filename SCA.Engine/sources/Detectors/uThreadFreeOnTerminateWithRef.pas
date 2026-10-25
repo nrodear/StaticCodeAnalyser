@@ -80,7 +80,8 @@ implementation
 
 uses
   System.RegularExpressions,
-  uAstSpans;   // SubtreeContains (Voll-Review 2026-09-12)
+  uAstSpans,   // SubtreeContains (Voll-Review 2026-09-12)
+  uRegExMatches;   // CachedEx - FoT-LHS-Muster je Thread einmal kompiliert
 
 class function TThreadFreeOnTerminateWithRefDetector.MatchFreeOnTerminateLHS(
   const LHS: string): string;
@@ -88,7 +89,11 @@ var
   M : TMatch;
 begin
   Result := '';
-  M := TRegEx.Match(LHS, '^([A-Za-z_]\w*)\.FreeOnTerminate$', [roIgnoreCase]);
+  // Perf (Charge R2 2026-10-26): konstantes Muster aus dem Thread-Cache
+  // statt Klassenaufruf TRegEx.Match(LHS, ..., [roIgnoreCase]) je
+  // Zuweisung - gleiche Optionen, Gruppe 1 wird beim Match kopiert.
+  M := TRegExMatches.CachedEx('^([A-Za-z_]\w*)\.FreeOnTerminate$',
+    [roIgnoreCase]).Match(LHS);
   if M.Success then Result := M.Groups[1].Value;
 end;
 

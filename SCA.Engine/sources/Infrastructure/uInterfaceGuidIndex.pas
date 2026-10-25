@@ -124,10 +124,22 @@ implementation
 // Laeufe nebeneinander lesbar bleiben.
 
 uses
+  System.Generics.Defaults,  // Perf Charge R3: einmal geholter Default-Comparer
   System.StrUtils,
   uFileTextCache,   // TryLoadLinesWithFallback - Laden ohne Cache-Eintrag
   uStaticFiles,     // IsUnitLikeFile - Dialekt-Endungen (Lazarus A3)
   uDetectorUtils;
+
+var
+  // Perf Charge R3 (2026-10-26, Muster aus Q1/uUninitVar): Default-Comparer
+  // der TInterfaceDecl-Listen EINMAL je Prozess (initialization) und jedem
+  // Create mitgegeben. TList<T>.Create ohne Comparer ruft fuer Record-T
+  // TComparer<T>._Default, und das fragt in der Delphi-12-RTL bei JEDEM
+  // Aufruf per TRttiContext die RTTI nach einem '='-Operator ab (Delphi 13
+  // nicht mehr) - ScanCode je Datei, Build je GUID. VERHALTENSNEUTRAL:
+  // derselbe Default-Comparer, und die Listen rufen nie IndexOf/Contains/
+  // Remove/Sort (nur Add/ToArray).
+  GInterfaceDeclComparer : IComparer<TInterfaceDecl>;
 
 function IstLeerraum(C: Char): Boolean;
 begin
@@ -279,7 +291,7 @@ begin
   if ACode = '' then Exit;
   Lwr := LowerCase(ACode);
 
-  Treffer := TList<TInterfaceDecl>.Create;
+  Treffer := TList<TInterfaceDecl>.Create(GInterfaceDeclComparer);
   try
     p := 1;
     while True do
@@ -403,7 +415,7 @@ begin
       if D.Guid = '' then Continue;
       if not FByGuid.TryGetValue(D.Guid, Liste) then
       begin
-        Liste := TList<TInterfaceDecl>.Create;
+        Liste := TList<TInterfaceDecl>.Create(GInterfaceDeclComparer);
         FByGuid.Add(D.Guid, Liste);
       end;
       Liste.Add(D);
@@ -421,5 +433,9 @@ begin
   if FByGuid.TryGetValue(AGuid, Liste) then
     Result := Liste.ToArray;
 end;
+
+initialization
+  // Perf Charge R3: s. GInterfaceDeclComparer.
+  GInterfaceDeclComparer := TComparer<TInterfaceDecl>.Default;
 
 end.

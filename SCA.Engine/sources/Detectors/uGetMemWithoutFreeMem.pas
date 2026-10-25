@@ -63,7 +63,8 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils,
+  uRegExMatches;   // CachedEx - Muster je Thread einmal kompiliert
 
 // Balance-Zaehlung zwischen Handler-Keyword und FreeMem: oeffnende
 // Bloecke (begin/case/try/record) erhoehen, 'end' senkt. Faellt die
@@ -141,7 +142,10 @@ begin
     CodeLow := LowerCase(Code);
 
     // Pattern: GetMem(P, n) / AllocMem(n) / ReallocMem(P, n).
-    RE := TRegEx.Create('(?i)\b(GetMem|AllocMem|ReallocMem)\s*\(');
+    // Perf (Charge R2 2026-10-26): kompilierte Instanz aus dem Thread-Cache
+    // (je Thread einmal statt je Datei neu: TPerlRegEx + pcre_maketables +
+    // Compile). [roNotEmpty] = Default des Ein-Arg-TRegEx.Create.
+    RE := TRegExMatches.CachedEx('(?i)\b(GetMem|AllocMem|ReallocMem)\s*\(', [roNotEmpty]);
     for M in RE.Matches(Code) do
     begin
       AfterPos := M.Index + M.Length;

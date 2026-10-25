@@ -82,6 +82,14 @@ unit uFuncNameResultScan;
 // Die Eingabe ist der Quelltext der Unit (Kommentare und Strings liest der
 // Scanner selbst; die {$mode}-Direktiven braucht er). Ohne Generics und
 // Inline-Variablen: der Korpus-Harness uebersetzt die Unit mit FPC 3.2.2.
+//
+// Tempo (Perf R1, 2026-10-25; vorher ~1,95 s auf laz/jvcl strict, 85 % im
+// Tokenizer): der Lexer legt Token als Spannen ohne Zeichenketten an
+// (TFnLite); der Vorfilter CanHit prueft darauf die notwendige Bedingung
+// 'Funktionsname :=' (rund 3 % der Korpusdateien bestehen ihn); nur dann
+// entstehen Text/Low (MaterializeAll, je verschiedener Zeichenfolge einmal)
+// und laeuft der Scanner. Treffer identisch (FPC-Harness, 17.979 Dateien x
+// beide Dialekte, byte-gleich).
 
 interface
 
@@ -112,8 +120,10 @@ type
   public
     // Alle Treffer im Text, nach Position sortiert (je Routine in
     // Textreihenfolge, Routinen in der Reihenfolge ihres Rumpfendes).
-    class function ScanText(const AText: string;
-      ADelphiDefault: Boolean): TFuncNameHits; static;
+    // AWantAssign = False (SCA204 nicht im Profil): ohne die fnuAssign-
+    // Treffer, die Lese-Treffer unveraendert (Perf R1).
+    class function ScanText(const AText: string; ADelphiDefault: Boolean;
+      AWantAssign: Boolean = True): TFuncNameHits; static;
 
     // Die Meldung des Treffers (englisch wie alle Detektor-Meldungen).
     class function MessageOf(const AHit: TFuncNameHit): string; static;
@@ -148,6 +158,21 @@ type
   end;
 
   TFnToks = array of TFnTok;
+
+  // Ein Token als Spanne im Text, ohne Zeichenketten (Perf R1): der Lexer
+  // legt erst diese an; Text/Low (TFnTok) entstehen nur fuer Dateien, die
+  // den Vorfilter CanHit bestehen (Materialize).
+  TFnLite = record
+    Kind     : TFnTokKind;
+    From     : Integer;   // Index des ersten Zeichens (mit '&')
+    Len      : Integer;
+    Line     : Integer;
+    Col      : Integer;
+    AfterDir : Boolean;
+    Esc      : Boolean;   // '&'-Bezeichner
+  end;
+
+  TFnLites = array of TFnLite;
 
   TFnDirectives = record
     Modes        : array of string;   // klein, erstes Wort hinter $mode
@@ -295,9 +320,6 @@ const
     'delete', 'initialize', 'finalize');
   // Zusammengesetzte Zuweisungen (FPC {$COPERATORS}).
   COMPOUND_ASSIGN: array[0..3] of string = ('+=', '-=', '*=', '/=');
-  // Zwei-Zeichen-Symbole des Tokenizers.
-  TWO_CHAR_SYMS: array[0..9] of string = (
-    ':=', '..', '<=', '>=', '<>', '+=', '-=', '*=', '/=', '@@');
   PARAM_MODIFIERS: array[0..3] of string = ('const', 'var', 'out',
     'constref');
 
@@ -313,13 +335,22 @@ end;
 
 function IsWordStart(C: Char): Boolean;
 begin
-  Result := ((C >= 'A') and (C <= 'Z')) or ((C >= 'a') and (C <= 'z')) or
-    (C = '_') or (Ord(C) > 127);
+  case C of
+    'A'..'Z', 'a'..'z', '_': Result := True;
+  else
+    Result := Ord(C) > 127;
+  end;
 end;
 
+// Perf R1: ein case statt IsWordStart + Ziffernvergleich (je Zeichen jedes
+// Worts).
 function IsWordChar(C: Char): Boolean;
 begin
-  Result := IsWordStart(C) or ((C >= '0') and (C <= '9'));
+  case C of
+    'A'..'Z', 'a'..'z', '_', '0'..'9': Result := True;
+  else
+    Result := Ord(C) > 127;
+  end;
 end;
 
 function IsDigit(C: Char): Boolean;
@@ -362,27 +393,34 @@ begin
 end;
 
 // Ueberliest bis hinter AClose (ein oder zwei Zeichen) und zaehlt Zeilen.
-// Liefert den Text dazwischen.
-function LexSkipTo(var L: TFnLexer; const AClose: string): string;
+// AFrom/ALen: der Text dazwischen (Perf R1: als Spanne - kopiert wird nur
+// der Rumpf einer Direktive, nicht jeder Kommentar).
+// AClose2 = #0: ein Zeichen.
+procedure LexSkipTo(var L: TFnLexer; AClose1, AClose2: Char;
+  out AFrom, ALen: Integer);
 var
-  From : Integer;
+  C : Char;
 begin
-  From := L.P;
+  AFrom := L.P;
   while L.P <= L.N do
   begin
-    if (L.S[L.P] = AClose[1]) and
-       ((Length(AClose) = 1) or (CharAt(L, L.P + 1) = AClose[2])) then
+    C := L.S[L.P];
+    if (C = AClose1) and
+       ((AClose2 = #0) or (CharAt(L, L.P + 1) = AClose2)) then
     begin
-      Result := Copy(L.S, From, L.P - From);
-      Inc(L.P, Length(AClose));
+      ALen := L.P - AFrom;
+      if AClose2 = #0 then
+        Inc(L.P)
+      else
+        Inc(L.P, 2);
       Exit;
     end;
-    if IsLineBreak(L.S[L.P]) then
+    if (C = #13) or (C = #10) then
       LexNewLine(L)
     else
       Inc(L.P);
   end;
-  Result := Copy(L.S, From, L.N - From + 1);
+  ALen := L.N - AFrom + 1;
 end;
 
 // Ein Pascal-String ab Q samt #nn-Folgen: Index dahinter. Eine Zeile
@@ -424,23 +462,41 @@ end;
 function LexWordEnd(const L: TFnLexer; Q: Integer): Integer;
 begin
   Result := Q + 1;
-  while IsWordChar(CharAt(L, Result)) do
+  while (Result <= L.N) and IsWordChar(L.S[Result]) do
     Inc(Result);
 end;
 
-// Ein Token ab L.P (dort steht kein Leerraum und kein Kommentar). L.P
-// steht danach dahinter.
-procedure LexToken(var L: TFnLexer; out T: TFnTok);
+// Steht bei P ein Zwei-Zeichen-Symbol des Tokenizers (':=', '..', '<=',
+// '>=', '<>', '+=', '-=', '*=', '/=', '@@')? Zeichenvergleich statt Copy +
+// Listensuche je Symbol (Perf R1).
+function IsTwoCharSym(const L: TFnLexer; P: Integer): Boolean;
+var
+  C1, C2 : Char;
+begin
+  C1 := L.S[P];
+  C2 := CharAt(L, P + 1);
+  case C1 of
+    ':', '<', '>', '+', '-', '*', '/':
+      Result := (C2 = '=') or ((C1 = '<') and (C2 = '>'));
+    '.': Result := C2 = '.';
+    '@': Result := C2 = '@';
+  else
+    Result := False;
+  end;
+end;
+
+// Ein Token ab L.P (dort steht kein Leerraum und kein Kommentar) als
+// Spanne. L.P steht danach dahinter.
+procedure LexToken(var L: TFnLexer; out T: TFnLite);
 var
   C : Char;
   Q : Integer;
-  Esc : Boolean;
 begin
   C := L.S[L.P];
   T.Line := L.Line;
   T.Col := L.P - L.LineFrom + 1;
   T.AfterDir := False;
-  Esc := (C = '&') and IsWordStart(CharAt(L, L.P + 1));
+  T.Esc := (C = '&') and IsWordStart(CharAt(L, L.P + 1));
   if (C = '''') or (C = '#') then
   begin
     Q := LexStringEnd(L, L.P);
@@ -452,32 +508,46 @@ begin
     Q := LexWordEnd(L, L.P);
     T.Kind := ftNumber;
   end
-  else if IsWordStart(C) or Esc then
+  else if IsWordStart(C) or T.Esc then
   begin
     Q := LexWordEnd(L, L.P);
     T.Kind := ftWord;
   end
   else
   begin
-    if InList(Copy(L.S, L.P, 2), TWO_CHAR_SYMS) then
+    if IsTwoCharSym(L, L.P) then
       Q := L.P + 2
     else
       Q := L.P + 1;
     T.Kind := ftSym;
   end;
-  T.Text := Copy(L.S, L.P, Q - L.P);
+  T.From := L.P;
+  T.Len := Q - L.P;
   L.P := Q;
-  if Esc then
+end;
+
+// Text und Kleinwort eines Tokens aus seiner Spanne.
+procedure Materialize(const S: string; const ALite: TFnLite; out T: TFnTok);
+begin
+  T.Kind := ALite.Kind;
+  T.Line := ALite.Line;
+  T.Col := ALite.Col;
+  T.AfterDir := ALite.AfterDir;
+  if ALite.Esc then
   begin
     // Ein '&'-Bezeichner ist nie ein Schluesselwort: das Kleinwort traegt
     // das '&' weiter, damit kein 'begin'/'end' daraus wird.
-    T.Text := Copy(T.Text, 2, MaxInt);
+    T.Text := Copy(S, ALite.From + 1, ALite.Len - 1);
     T.Low := '&' + LowerCase(T.Text);
   end
-  else if T.Kind in [ftWord, ftNumber] then
-    T.Low := LowerCase(T.Text)
   else
-    T.Low := T.Text;
+  begin
+    T.Text := Copy(S, ALite.From, ALite.Len);
+    if T.Kind in [ftWord, ftNumber] then
+      T.Low := LowerCase(T.Text)
+    else
+      T.Low := T.Text;
+  end;
 end;
 
 // Bedingung einer {$IF..}-Direktive: 1 wahr, 0 falsch, -1 unbekannt. Nur
@@ -616,20 +686,35 @@ begin
   NoteExtSyntax(Name, Arg, D);
 end;
 
+// Perf R1: der ganze Leerraum-Lauf ab L.P in einem Aufruf (Zeilenenden
+// zaehlen wie bisher einzeln).
+procedure LexBlankRun(var L: TFnLexer);
+var
+  C : Char;
+begin
+  C := L.S[L.P];
+  repeat
+    if (C = #13) or (C = #10) then
+      LexNewLine(L)
+    else
+      Inc(L.P);
+    if L.P > L.N then Break;
+    C := L.S[L.P];
+  until not ((C <= ' ') or (C = #$FEFF));
+end;
+
 // Leerraum, Zeilenende, Kommentar oder Direktive ab L.P ueberlesen (eine
 // Einheit). False: dort beginnt ein Token. ADir: es war eine Direktive.
 function LexTrivia(var L: TFnLexer; var D: TFnDirectives;
   var ADir: Boolean): Boolean;
 var
   C : Char;
-  Body : string;
+  BodyFrom, BodyLen : Integer;
 begin
   Result := True;
   C := L.S[L.P];
-  if IsLineBreak(C) then
-    LexNewLine(L)
-  else if (C <= ' ') or (C = #$FEFF) then
-    Inc(L.P)
+  if (C <= ' ') or (C = #$FEFF) then
+    LexBlankRun(L)
   else if (C = '/') and (CharAt(L, L.P + 1) = '/') then
   begin
     while (L.P <= L.N) and not IsLineBreak(L.S[L.P]) do
@@ -640,16 +725,17 @@ begin
     if C = '{' then
     begin
       Inc(L.P);
-      Body := LexSkipTo(L, '}');
+      LexSkipTo(L, '}', #0, BodyFrom, BodyLen);
     end
     else
     begin
       Inc(L.P, 2);
-      Body := LexSkipTo(L, '*)');
+      LexSkipTo(L, '*', ')', BodyFrom, BodyLen);
     end;
-    if (Body <> '') and (Body[1] = '$') then
+    // Nur der Rumpf einer Direktive wird kopiert (Text hinter '$').
+    if (BodyLen > 0) and (L.S[BodyFrom] = '$') then
     begin
-      NoteDirective(Copy(Body, 2, MaxInt), D);
+      NoteDirective(Copy(L.S, BodyFrom + 1, BodyLen - 1), D);
       ADir := True;
     end;
   end
@@ -657,12 +743,13 @@ begin
     Result := False;
 end;
 
+// Die Token der Unit als Spannen (ACount gueltig) samt Direktiven-Lage.
 procedure Tokenize(const AText: string; ADelphiDefault: Boolean;
-  out AToks: TFnToks; out ADirs: TFnDirectives);
+  out AToks: TFnLites; out ACount: Integer; out ADirs: TFnDirectives);
 var
   L    : TFnLexer;
   Cnt  : Integer;
-  T    : TFnTok;
+  T    : TFnLite;
   AfterDir : Boolean;
 begin
   AToks := nil;
@@ -694,7 +781,262 @@ begin
     AToks[Cnt] := T;
     Inc(Cnt);
   end;
-  SetLength(AToks, Cnt);
+  ACount := Cnt;
+end;
+
+// Gleiche Zeichen der Spannen (gross/klein unterschieden).
+function SpanSame(const S: string; AFrom, ALen, BFrom, BLen: Integer): Boolean;
+var
+  i : Integer;
+begin
+  if ALen <> BLen then Exit(False);
+  for i := 0 to ALen - 1 do
+    if S[AFrom + i] <> S[BFrom + i] then
+      Exit(False);
+  Result := True;
+end;
+
+// Die Token-Folge des Scanners (Text/Low) aus den ersten ACount Spannen.
+// Perf R1: Text/Low je VERSCHIEDENER Zeichenfolge einmal anlegen (Art,
+// '&' und damit Text/Low haengen nur an den Zeichen) - die Token teilen
+// die Zeichenketten statt je Token Copy + LowerCase.
+function MaterializeAll(const AText: string; const ALites: TFnLites;
+  ACount: Integer): TFnToks;
+var
+  Heads : array of Integer;
+  EFrom, ELen, ENext : array of Integer;
+  EText, ELow : array of string;
+  NE, Size, i, k, H, E : Integer;
+  Tmp : TFnTok;
+begin
+  SetLength(Result, ACount);
+  Size := 256;
+  while Size < ACount div 2 do
+    Size := Size * 2;
+  SetLength(Heads, Size);
+  for i := 0 to Size - 1 do
+    Heads[i] := -1;
+  NE := 0;
+  for i := 0 to ACount - 1 do
+  begin
+    H := ALites[i].Len and $FFFFF;
+    for k := ALites[i].From to ALites[i].From + ALites[i].Len - 1 do
+      H := ((H shl 5) + H + Ord(AText[k])) and $FFFFF;
+    H := H and (Size - 1);
+    E := Heads[H];
+    while (E >= 0) and not SpanSame(AText, ALites[i].From, ALites[i].Len,
+      EFrom[E], ELen[E]) do
+      E := ENext[E];
+    if E < 0 then
+    begin
+      if NE = Length(EFrom) then
+      begin
+        SetLength(EFrom, NE * 2 + 64);
+        SetLength(ELen, NE * 2 + 64);
+        SetLength(ENext, NE * 2 + 64);
+        SetLength(EText, NE * 2 + 64);
+        SetLength(ELow, NE * 2 + 64);
+      end;
+      Materialize(AText, ALites[i], Tmp);
+      E := NE;
+      EFrom[E] := ALites[i].From;
+      ELen[E] := ALites[i].Len;
+      EText[E] := Tmp.Text;
+      ELow[E] := Tmp.Low;
+      ENext[E] := Heads[H];
+      Heads[H] := E;
+      Inc(NE);
+    end;
+    Result[i].Kind := ALites[i].Kind;
+    Result[i].Line := ALites[i].Line;
+    Result[i].Col := ALites[i].Col;
+    Result[i].AfterDir := ALites[i].AfterDir;
+    Result[i].Text := EText[E];
+    Result[i].Low := ELow[E];
+  end;
+end;
+
+{ ---- Vorfilter (Perf R1) ---- }
+
+// Jeder Treffer braucht eine Zuweisung 'Name :=' an den eigenen Namen im
+// Rumpf (SCA204 direkt; SCA205 nur bei AUses.NA > 0, EmitHits): ein Wort am
+// Anweisungsanfang bzw. hinter ':' (ClassifyUse fucAssign), dahinter ':=',
+// gleich dem kurzen Namen eines Funktionskopfes (ParseName). CanHit prueft
+// diese NOTWENDIGE Bedingung auf den Spannen, ohne Zeichenketten anzulegen;
+// fehlt sie, kann der Scanner nichts melden, und Text/Low aller Token
+// (Materialize) samt Lauf entfallen. Die Namensmenge ist eine OBERMENGE
+// der kurzen Namen: alle Woerter hinter 'function' bis zum ersten Token auf
+// Typargument-Tiefe 0, das nicht Wort, '.' oder '<' ist. Vergleich wie
+// LowerCase (nur A..Z); Zeichen ueber 127 gelten untereinander als gleich
+// (Obermenge, falls ein LowerCase sie je faltete).
+
+const
+  FN_NAME_BUCKETS = 1024;   // Zweierpotenz (Maske)
+  FN_LAST_ASCII   = 127;
+
+type
+  TFnNameSet = record
+    Heads : array[0..FN_NAME_BUCKETS - 1] of Integer;
+    From  : array of Integer;
+    Len   : array of Integer;
+    Next  : array of Integer;
+    Count : Integer;
+  end;
+
+function FoldChar(C: Char): Char;
+begin
+  if (C >= 'A') and (C <= 'Z') then
+    Result := Char(Ord(C) + 32)
+  else if Ord(C) > FN_LAST_ASCII then
+    Result := #$80
+  else
+    Result := C;
+end;
+
+function SpanHash(const S: string; AFrom, ALen: Integer): Integer;
+var
+  i : Integer;
+begin
+  Result := ALen and $FFFFF;
+  for i := AFrom to AFrom + ALen - 1 do
+    Result := ((Result shl 5) + Result + Ord(FoldChar(S[i]))) and $FFFFF;
+  Result := Result and (FN_NAME_BUCKETS - 1);
+end;
+
+function SpanEq(const S: string; AFrom, ALen, BFrom, BLen: Integer): Boolean;
+var
+  i : Integer;
+begin
+  if ALen <> BLen then Exit(False);
+  for i := 0 to ALen - 1 do
+    if FoldChar(S[AFrom + i]) <> FoldChar(S[BFrom + i]) then
+      Exit(False);
+  Result := True;
+end;
+
+// Wort ohne '&', klein geschrieben gleich ALow (ALow: klein, nur ASCII).
+function LiteWordIs(const S: string; const T: TFnLite;
+  const ALow: string): Boolean;
+var
+  i : Integer;
+begin
+  Result := False;
+  if (T.Kind <> ftWord) or T.Esc or (T.Len <> Length(ALow)) then Exit;
+  for i := 1 to T.Len do
+    if FoldChar(S[T.From + i - 1]) <> ALow[i] then
+      Exit;
+  Result := True;
+end;
+
+function LiteSym1(const S: string; const T: TFnLite; C: Char): Boolean;
+begin
+  Result := (T.Kind = ftSym) and (T.Len = 1) and (S[T.From] = C);
+end;
+
+// Vor dem Namen einer Zuweisung (ClassifyUse fucAssign): STMT_START oder ':'.
+function LiteStmtPrev(const S: string; const T: TFnLite): Boolean;
+var
+  i : Integer;
+begin
+  if T.Kind = ftSym then
+    Exit(LiteSym1(S, T, ';') or LiteSym1(S, T, ':'));
+  Result := False;
+  if T.Kind <> ftWord then Exit;
+  for i := 0 to High(STMT_START) do
+    if LiteWordIs(S, T, STMT_START[i]) then
+      Exit(True);
+end;
+
+procedure NameAdd(var ASet: TFnNameSet; const S: string; const T: TFnLite);
+var
+  F, L, H : Integer;
+begin
+  F := T.From;
+  L := T.Len;
+  if T.Esc then
+  begin
+    Inc(F);
+    Dec(L);
+  end;
+  if ASet.Count = Length(ASet.From) then
+  begin
+    SetLength(ASet.From, ASet.Count * 2 + 16);
+    SetLength(ASet.Len, ASet.Count * 2 + 16);
+    SetLength(ASet.Next, ASet.Count * 2 + 16);
+  end;
+  H := SpanHash(S, F, L);
+  ASet.From[ASet.Count] := F;
+  ASet.Len[ASet.Count] := L;
+  ASet.Next[ASet.Count] := ASet.Heads[H];
+  ASet.Heads[H] := ASet.Count;
+  Inc(ASet.Count);
+end;
+
+function NameHas(const ASet: TFnNameSet; const S: string;
+  const T: TFnLite): Boolean;
+var
+  E : Integer;
+begin
+  E := ASet.Heads[SpanHash(S, T.From, T.Len)];
+  while E >= 0 do
+  begin
+    if SpanEq(S, T.From, T.Len, ASet.From[E], ASet.Len[E]) then
+      Exit(True);
+    E := ASet.Next[E];
+  end;
+  Result := False;
+end;
+
+// Woerter des Kopfes hinter 'function' bei I (Obermenge des kurzen Namens).
+procedure CollectHeadNames(var ASet: TFnNameSet; const S: string;
+  const T: TFnLites; ACount, I: Integer);
+var
+  J, Depth : Integer;
+begin
+  Depth := 0;
+  J := I + 1;
+  while J < ACount do
+  begin
+    if T[J].Kind = ftWord then
+      NameAdd(ASet, S, T[J])
+    else if LiteSym1(S, T[J], '<') then
+      Inc(Depth)
+    else if LiteSym1(S, T[J], '>') and (Depth > 0) then
+      Dec(Depth)
+    else if (Depth = 0) and not LiteSym1(S, T[J], '.') then
+      Break;
+    Inc(J);
+  end;
+end;
+
+// Bei I ein Wort ohne '&' hinter STMT_START bzw. ':' und vor ':='
+// (I >= 1, I + 1 < Anzahl).
+function IsAssignAt(const S: string; const T: TFnLites; I: Integer): Boolean;
+begin
+  Result := (T[I].Kind = ftWord) and not T[I].Esc and
+    (T[I + 1].Kind = ftSym) and (T[I + 1].Len = 2) and
+    (S[T[I + 1].From] = ':') and (S[T[I + 1].From + 1] = '=') and
+    LiteStmtPrev(S, T[I - 1]);
+end;
+
+function CanHit(const S: string; const T: TFnLites; ACount: Integer): Boolean;
+var
+  NS : TFnNameSet;
+  i  : Integer;
+begin
+  Result := False;
+  NS.Count := 0;
+  for i := 0 to FN_NAME_BUCKETS - 1 do
+    NS.Heads[i] := -1;
+  for i := 0 to ACount - 1 do
+    if LiteWordIs(S, T[i], 'function') then
+      CollectHeadNames(NS, S, T, ACount, i);
+  if NS.Count = 0 then Exit;
+  // Vor dem Namen steht mindestens das begin des Rumpfs (ab Index 1),
+  // hinter ihm das Zuweisungssymbol.
+  for i := 1 to ACount - 2 do
+    if IsAssignAt(S, T, i) and NameHas(NS, S, T[i]) then
+      Exit(True);
 end;
 
 function ModesFrom(const D: TFnDirectives;
@@ -1437,18 +1779,23 @@ end;
 { ---- TFuncNameScan ---- }
 
 class function TFuncNameScan.ScanText(const AText: string;
-  ADelphiDefault: Boolean): TFuncNameHits;
+  ADelphiDefault: Boolean; AWantAssign: Boolean): TFuncNameHits;
 var
-  Toks : TFnToks;
+  Lites : TFnLites;
+  Cnt : Integer;
   Dirs : TFnDirectives;
   Modes : TFuncNameModes;
   S : TFnScanner;
 begin
   Result := nil;
-  Tokenize(AText, ADelphiDefault, Toks, Dirs);
+  Tokenize(AText, ADelphiDefault, Lites, Cnt, Dirs);
   Modes := ModesFrom(Dirs, ADelphiDefault);
+  // Ohne SCA204 entfallen nur die fnuAssign-Treffer; das Lesen haengt an
+  // AUses.NA (den Zuweisungen), nicht an AllowAssign (EmitHits).
+  Modes.AllowAssign := Modes.AllowAssign and AWantAssign;
   if not Modes.AllowAssign and not Modes.AllowRead then Exit;
-  S := TFnScanner.Create(Toks, Modes);
+  if not CanHit(AText, Lites, Cnt) then Exit;
+  S := TFnScanner.Create(MaterializeAll(AText, Lites, Cnt), Modes);
   try
     S.Run;
     Result := S.Hits;

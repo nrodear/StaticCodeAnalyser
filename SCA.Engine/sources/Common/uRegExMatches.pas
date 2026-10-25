@@ -27,8 +27,13 @@ type
     class function CachedEx(const pattern: string;
       AOptions: TRegExOptions): TRegEx; static;
 
+    // Obergrenze der Cache-Eintraege, ab der CachedEx den Cache leert
+    // (s. Cache-Kommentar, Charge R2 2026-10-26). Public fuer den Test.
+    class function CacheCapacity: Integer; static;
+
   private
     class var FCache: TDictionary<string, TRegEx>;
+    class var FCapacity: Integer;
     class function Cached(const pattern: string): TRegEx; static;
   end;
 
@@ -72,11 +77,31 @@ implementation
 // Hashes). Diese Units beziehen ihre Patterns jetzt hier ueber CachedEx;
 // die TRegExOptions gehen mit in den Cache-Key, weil dasselbe Pattern mit
 // anderen Optionen eine ANDERS kompilierte Engine ist.
+// Kapazitaet (Charge R2 2026-10-26): mit der Umstellung der statischen
+// TRegEx-Klassenaufrufe (IsMatch/Match mit konstantem Muster) und der
+// je-Datei-TRegEx.Create auf CachedEx haelt jeder Worker ~55 Eintraege.
+// Die feste Grenze 1280 reichte damit nur noch fuer 23 Threads; der
+// Parallelmodus startet TThread.ProcessorCount Worker (Entwicklerrechner:
+// 28), und der Cache waere mitten im Scan immer wieder komplett geleert
+// und neu kompiliert worden - richtig, aber langsamer als ohne Cache.
+// Die Grenze waechst deshalb mit der Kernzahl: CPatternsPerThread Plaetze
+// je Worker plus CExtraThreads (Hauptthread, WatchMode, IDE-Scan), nie
+// unter der alten Grenze. Der Leerungs-Mechanismus fuer tote Thread-IDs
+// (IDE-Plugin) bleibt unveraendert.
 // ---------------------------------------------------------------------------
 const
-  // ~50 Patterns (inkl. der 2026-08-19 zugezogenen Detector-Patterns)
-  // x ~25 gleichzeitig gehaltene Thread-Generationen.
+  // Untergrenze: ~50 Patterns x ~25 gleichzeitig gehaltene
+  // Thread-Generationen (Stand 2026-08-19).
   CMaxCachedRegex = 1280;
+  // Plaetze je Thread (heute ~55 konstante Muster, Rest Reserve) und
+  // Threads ueber die Worker hinaus.
+  CPatternsPerThread = 96;
+  CExtraThreads      = 4;
+
+class function TRegExMatches.CacheCapacity: Integer;
+begin
+  Result := FCapacity;
+end;
 
 class function TRegExMatches.CachedEx(const pattern: string;
   AOptions: TRegExOptions): TRegEx;
@@ -101,7 +126,7 @@ begin
   try
     if not FCache.TryGetValue(CacheKey, Result) then
     begin
-      if FCache.Count >= CMaxCachedRegex then
+      if FCache.Count >= FCapacity then
         FCache.Clear;
       Result := TRegEx.Create(pattern, AOptions);
       FCache.Add(CacheKey, Result);
@@ -188,6 +213,11 @@ initialization
   // Pre-Init des Caches: vermeidet Lazy-Init-Race wenn WatchMode-Worker
   // und Main-Analyzer parallel den ersten Cached(...) aufrufen.
   TRegExMatches.FCache := TDictionary<string, TRegEx>.Create;
+  // Kapazitaet einmal beim Laden (vor jedem Worker) - danach nur gelesen.
+  TRegExMatches.FCapacity :=
+    CPatternsPerThread * (TThread.ProcessorCount + CExtraThreads);
+  if TRegExMatches.FCapacity < CMaxCachedRegex then
+    TRegExMatches.FCapacity := CMaxCachedRegex;
 
 finalization
   FreeAndNil(TRegExMatches.FCache);

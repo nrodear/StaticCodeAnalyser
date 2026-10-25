@@ -88,6 +88,7 @@ type
 implementation
 
 uses
+  System.Generics.Defaults,       // Perf Charge R3: einmal geholte Comparer
   uDetectorUtils,                 // Backlog-Welle 1, 2026-07-26
   uRepoSettings;                  // alphabetisch: diese Unit hat als einzige
                                   // der Welle keinen noinspection-Marker,
@@ -135,6 +136,18 @@ type
     // unverwaltet wie in v0.9.18.
     Link  : Integer;
   end;
+
+var
+  // Perf Charge R3 (2026-10-26, Muster aus Q1/uUninitVar): Default-Comparer
+  // der beiden Record-Listen in AnalyzeUnit EINMAL je Prozess
+  // (initialization) und jedem Create mitgegeben. TList<T>.Create ohne
+  // Comparer ruft fuer Record-T TComparer<T>._Default, und das fragt in der
+  // Delphi-12-RTL bei JEDEM Aufruf per TRttiContext die RTTI nach einem
+  // '='-Operator ab (Delphi 13 nicht mehr) - hier je Datei zweimal.
+  // VERHALTENSNEUTRAL: derselbe Default-Comparer, und keine der Listen ruft
+  // IndexOf/Contains/Remove/Sort (auch NestingChainPush/-Text nicht).
+  GStackEntryComparer : IComparer<TStackEntry>;
+  GChainLinkComparer  : IComparer<TNestingChainLink>;
 
 class function TCognitiveComplexityDetector.CountBooleanOpsInCond(
   const CondText: string): Integer;
@@ -319,8 +332,8 @@ begin
   BestLink := -1;
   Methods := UnitNode.FindAll(nkMethod);
   try
-    Stack := TList<TStackEntry>.Create;
-    Links := TList<TNestingChainLink>.Create;
+    Stack := TList<TStackEntry>.Create(GStackEntryComparer);
+    Links := TList<TNestingChainLink>.Create(GChainLinkComparer);
     for M in Methods do
     begin
       CC := CountInMethod(M, Stack, Links, BestLink);
@@ -349,5 +362,10 @@ begin
     Methods.Free;
   end;
 end;
+
+initialization
+  // Perf Charge R3: s. GStackEntryComparer.
+  GStackEntryComparer := TComparer<TStackEntry>.Default;
+  GChainLinkComparer  := TComparer<TNestingChainLink>.Default;
 
 end.

@@ -2506,7 +2506,9 @@ const
       + 'line (so far NOSONAR suppressed nothing); critical kinds '
       + '(HardcodedSecret, SQLInjection etc.) stay visible',
     // TrailingCommaArgList
-    'same meaning - only the superfluous comma goes away',
+    'same meaning for COM - the empty last argument of the late-bound call '
+      + '(an omitted optional parameter) is now not passed at all; only a '
+      + 'server that counts its arguments sees one fewer',
     // GroupedDeclaration
     'same meaning - each name keeps its type; with "var" each new line '
       + 'carries the "var" again',
