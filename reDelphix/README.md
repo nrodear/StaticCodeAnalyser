@@ -1213,6 +1213,13 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   `Clear`; erster Blick gleich dem ohne Cache; Dateiart und Netzpfad vor dem
   Cache; Schluessel mit Sprache und - fuer IncludeReason - der Map;
   `UseDiskCache` stellt wieder her; ein freigegebener Cache meldet sich ab.
+* Charge Q6 (Performance): `TTestRdxFileMarkerCache` (6 Tests in
+  `uTestRdxSharedMap`, auch im FPC-Pruefstand) - `TRdxSuppress.FileMarker`
+  liest den Text (erster erweiterbarer Datei-Marker, Kopfanweisung) je Map
+  einmal (`FileScans`): geteilte Map ein Durchlauf fuer alle Arten, frische
+  Zeilen je Aufruf einer; gleiche Ergebnisse wie mit frischer Map fuer jede
+  Form, nach Aenderung der Zeilen, im Wechsel zweier Dateien und je Sprache.
+  Nachbildung: ohne Cache 1 Test rot, Cache ohne Map-Schluessel 6 rot.
 
 Ohne Delphi (FPC 3.2.2):
 
@@ -1220,6 +1227,9 @@ Ohne Delphi (FPC 3.2.2):
 bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxTextMsgs uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths uTestRdxBlocks uTestRdxCategoryArgFix uTestRdxEmptyBlockFix uTestRdxEmptyExceptFix uTestRdxGotoExitFix uTestRdxNativeIntFix uTestRdxParensFix uTestRdxTrailingCommaFix uTestRdxLoopBoundFix uTestRdxContextRunner uTestRdxSharedMap
 ```
 
+Gemessen (2026-10-25, FPC-Lauf, Charge Q6): `PASSED 870  FAILED 0` - 52
+Testunits, davon `uTestRdxSharedMap` 25 (neu `TTestRdxFileMarkerCache` 6:
+Datei-Marker je Map einmal). Davor `PASSED 864`.
 Gemessen (2026-10-25, FPC-Lauf, Review Charge P): `PASSED 864  FAILED 0` - 52
 Testunits, davon `uTestRdxSharedMap` 19 (neu: Changes zaehlt Schreiben, nicht
 Lesen - TRdxProvider.SharedLines). Davor `PASSED 863`.

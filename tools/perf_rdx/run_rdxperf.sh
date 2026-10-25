@@ -2,19 +2,29 @@
 # reDelphix-Zeitmessung ohne Delphi-Bau (FPC 3.2.2, i386-win32). Misst je
 # Fundstelle eines SARIF, was das Aktionsmenue/die Gluehbirne fuer diesen
 # Fund an TEXT-Arbeit bezahlt (Lines.Text, Unterdrueck-Marker, Map-Planer,
-# Kontext-Runner) - Einzelheiten im Kopf von rdxperf.lpr.
+# Kontext-Runner, Plattenblick) - Einzelheiten im Kopf von rdxperf.lpr.
 #
-#   bash tools/perf_rdx/run_rdxperf.sh <sarif> [maxN] [regel,regel,..] [topN]
+#   [RDX_MODE=file|provide|old|all|a,b] bash tools/perf_rdx/run_rdxperf.sh <sarif> [maxN] [regel,regel,..] [topN]
 #
 # Beispiele:
 #   bash tools/perf_rdx/run_rdxperf.sh C:/temp/perf/ab_strict/self_new_r1.sarif
 #   bash tools/perf_rdx/run_rdxperf.sh C:/temp/perf/ab_strict/laz_new_r1.sarif 50000
+#   RDX_MODE=all bash tools/perf_rdx/run_rdxperf.sh self.sarif
 #   bash tools/perf_rdx/run_rdxperf.sh self.sarif "" SCA101,SCA015 40
+#
+# RDX_MODE (Standard file): file = wie der Anbieter heute (geteilte Zeilen
+# und Map je Datei, TRdxProvider.SharedLines), provide = eine Map je Fund,
+# old = der Weg vor Charge P5 (frische Zeilen je Fund, Map je Aufrufer) als
+# Vergleich. all = alle drei nacheinander mit EINEM Bau, danach der
+# Identitaets-Vergleich der Ergebnisse (compare_res.py, bis auf die
+# SCA197-GUID gleich; Exit 1 bei Abweichung). Ein Stand vor P5 (kein
+# TRdxMappedLines, z. B. SCA_ROOT=<alter Checkout>) kennt nur old.
 #
 # Ergebnis im Arbeitsverzeichnis RDXPERF_WORK (Standard
 # ${TMPDIR:-/tmp}/sca_rdxperf, NIE im Repo):
-#   out/<name>.csv   je Fund eine Zeile (ms je Anteil, Zaehler)
-#   out/<name>.txt   Zusammenfassung je Regel + langsamste Fundstellen
+#   out/<name>_<modus>.txt   Zusammenfassung je Regel + langsamste Fundstellen
+#   out/<name>_<modus>.csv   je Fund eine Zeile (ms je Anteil, Zaehler)
+#   out/<name>_<modus>.csv.res  Ergebnisse je Fund (Identitaets-Vergleich)
 #   excluded_units.txt  Planer-Units, die FPC 3.2.2 nicht uebersetzt - ihre
 #                    Regeln laufen dann nur mit der Grundlast lines/supp/ctx
 #   unmapped_rows.txt   Tabellenzeilen ohne MapFix-Form (nur im Delphi-
@@ -32,10 +42,16 @@ SCAW="$(cd "$SCA" && pwd -W)"
 FPC="${FPC:-/c/lazarus/fpc/3.2.2/bin/i386-win32/fpc.exe}"
 WORK="${RDXPERF_WORK:-${TMPDIR:-/tmp}/sca_rdxperf}"
 if [ $# -lt 1 ]; then
-  sed -n '2,12p' "$0"; exit 2
+  sed -n '2,13p' "$0"; exit 2
 fi
 SARIF="$1"; MAXN="${2:-}"; ONLY="${3:-}"; TOPN="${4:-25}"
 [ -f "$SARIF" ] || { echo "SARIF fehlt: $SARIF"; exit 2; }
+MODES="${RDX_MODE:-file}"
+[ "$MODES" = "all" ] && MODES="file,provide,old"
+MODES="${MODES//,/ }"
+for m in $MODES; do
+  case "$m" in file|provide|old) ;; *) echo "RDX_MODE unbekannt: $m (file, provide, old, all)"; exit 2;; esac
+done
 NAME="$(basename "$SARIF" .sarif)${MAXN:+_$MAXN}${ONLY:+_sel}"
 mkdir -p "$WORK/out"
 WORK="$(cd "$WORK" && pwd)"
@@ -44,7 +60,14 @@ case "$WORK/" in
   "$SCA"/*) echo "RDXPERF_WORK liegt im Repo ($WORK) - bitte ausserhalb"; exit 2;;
 esac
 REV="$(git -C "$SCA" rev-parse --short HEAD)"
-echo "rdxperf: SCA=$SCA @ $REV, Arbeitsverzeichnis $WORK"
+# Charge P5: kennt der Stand TRdxMappedLines, gibt es die Modi file/provide
+SHARED=""
+grep -q "TRdxMappedLines = class" "$SCA/reDelphix/source/uRdxCodeMap.pas" && SHARED="-dRDX_SHARED"
+if [ -z "$SHARED" ] && [ "$MODES" != "old" ]; then
+  echo "Stand $REV vor Charge P5 (kein TRdxMappedLines): nur Modus old"
+  MODES="old"
+fi
+echo "rdxperf: SCA=$SCA @ $REV, Modi: $MODES, Arbeitsverzeichnis $WORK"
 . "$SCA/tools/fpc_runner_lib.sh"
 : > "$WORK/excluded_units.txt"
 
@@ -68,7 +91,7 @@ for attempt in $(seq 1 30); do
   # 5) uebersetzen (frisches -FU, Hauptquelle im units-Verzeichnis)
   cp "$HERE/rdxperf.lpr" "$WORK/planners.inc" "$WORK/planner_uses.inc" "$WORK/units/"
   rm -rf "$WORK/bin" && mkdir -p "$WORK/bin"
-  ( cd "$WORK/units" && "$FPC" -Mdelphiunicode -Sh -O2 -vew -FU../bin -FE../bin rdxperf.lpr > ../out/fpc.log 2>&1 )
+  ( cd "$WORK/units" && "$FPC" -Mdelphiunicode -Sh -O2 $SHARED -vew -FU../bin -FE../bin rdxperf.lpr > ../out/fpc.log 2>&1 )
   [ -f "$WORK/bin/rdxperf.exe" ] && break
   BAD="$(tr -d '\r' < "$WORK/out/fpc.log" | grep -E '^uRdx[A-Za-z0-9]+\.pas\([0-9,]+\) (Error|Fatal)' | head -1 | sed 's/\.pas.*//')"
   if [ -z "$BAD" ] || grep -qx "$BAD" "$WORK/excluded_units.txt" \
@@ -80,8 +103,19 @@ for attempt in $(seq 1 30); do
   echo "$BAD" >> "$WORK/excluded_units.txt"
 done
 
-# 6) Messlauf
-"$WORK/bin/rdxperf.exe" "$WORK/out/$NAME.sites.tsv" "$WORK/out/$NAME.csv" "$TOPN" \
-  | tee "$WORK/out/$NAME.txt"
-echo "ausgenommen (FPC): $(tr '\n' ' ' < "$WORK/excluded_units.txt")" | tee -a "$WORK/out/$NAME.txt"
-echo "CSV: $WORK/out/$NAME.csv"
+# 6) Messlauf je Modus (derselbe Bau)
+RESS=()
+for m in $MODES; do
+  OUT="$WORK/out/${NAME}_$m"
+  echo; echo "== Modus $m"
+  RDX_MODE="$m" "$WORK/bin/rdxperf.exe" "$WORK/out/$NAME.sites.tsv" "$OUT.csv" "$TOPN" \
+    | tee "$OUT.txt"
+  echo "ausgenommen (FPC): $(tr '\n' ' ' < "$WORK/excluded_units.txt")" | tee -a "$OUT.txt"
+  echo "CSV: $OUT.csv"
+  RESS+=("$(cd "$WORK/out" && pwd -W)/${NAME}_$m.csv.res")
+done
+# 7) mehrere Modi: dieselben Ergebnisse (bis auf die SCA197-GUID)?
+if [ ${#RESS[@]} -gt 1 ]; then
+  echo; echo "== Identitaet der Modi"
+  python -I "$HERE/compare_res.py" "${RESS[@]}" || exit 1
+fi

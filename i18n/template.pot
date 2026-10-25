@@ -4050,7 +4050,7 @@ msgstr ""
 msgid "a \"with\" statement (line %d) could bind the new name %s to a member"
 msgstr ""
 
-#: reDelphix/source/uRdxSuppress.pas:537
+#: reDelphix/source/uRdxSuppress.pas:553
 msgid "a block comment starts after the unit line"
 msgstr ""
 
@@ -5687,7 +5687,7 @@ msgstr ""
 msgid "no end of the block around the declaration found"
 msgstr ""
 
-#: reDelphix/source/uRdxSuppress.pas:552
+#: reDelphix/source/uRdxSuppress.pas:624
 msgid "no file"
 msgstr ""
 
@@ -5703,7 +5703,7 @@ msgstr ""
 msgid "no finding"
 msgstr ""
 
-#: reDelphix/source/uRdxSuppress.pas:473
+#: reDelphix/source/uRdxSuppress.pas:476
 msgid "no finding line"
 msgstr ""
 
@@ -5792,11 +5792,11 @@ msgstr ""
 msgid "no lock \"%s\""
 msgstr ""
 
-#: reDelphix/source/uRdxSuppress.pas:683
+#: reDelphix/source/uRdxSuppress.pas:753
 msgid "no marker in the line"
 msgstr ""
 
-#: reDelphix/source/uRdxSuppress.pas:676
+#: reDelphix/source/uRdxSuppress.pas:746
 msgid "no marker line"
 msgstr ""
 
@@ -5979,8 +5979,7 @@ msgstr ""
 msgid "no ungrouped integer literal at the reported column"
 msgstr ""
 
-#: reDelphix/source/uRdxSuppress.pas:529
-#: reDelphix/source/uRdxSuppress.pas:534
+#: reDelphix/source/uRdxSuppress.pas:552
 msgid "no unit line found"
 msgstr ""
 
@@ -7337,11 +7336,11 @@ msgstr ""
 msgid "the finally block is not empty"
 msgstr ""
 
-#: reDelphix/source/uRdxSuppress.pas:479
+#: reDelphix/source/uRdxSuppress.pas:482
 msgid "the finding line is empty"
 msgstr ""
 
-#: reDelphix/source/uRdxSuppress.pas:489
+#: reDelphix/source/uRdxSuppress.pas:492
 msgid "the finding line lies in a block comment or multi-line string - a marker would have no effect there or would become part of the string"
 msgstr ""
 
@@ -7726,28 +7725,28 @@ msgstr ""
 msgid "the marker \"%s\" in line %d targets the deleted line and would then silently apply to the next code line; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxSuppress.pas:633
+#: reDelphix/source/uRdxSuppress.pas:703
 msgid "the marker also targets the comment line %d, and its kind can be reported there - SCA165 checks only the code line; please check by hand"
 msgstr ""
 
-#: reDelphix/source/uRdxSuppress.pas:607
+#: reDelphix/source/uRdxSuppress.pas:677
 msgid "the marker applies to all kinds (All) - perhaps ineffective only under the current scan profile, please check by hand"
 msgstr ""
 
-#: reDelphix/source/uRdxSuppress.pas:501
+#: reDelphix/source/uRdxSuppress.pas:504
 msgid "the marker in line %d applies to this comment line and cannot be extended (All or behind code) - a new line in between would take its target away; please add by hand"
 msgstr ""
 
-#: reDelphix/source/uRdxSuppress.pas:457
-#: reDelphix/source/uRdxSuppress.pas:565
+#: reDelphix/source/uRdxSuppress.pas:460
+#: reDelphix/source/uRdxSuppress.pas:638
 msgid "the marker is already there"
 msgstr ""
 
-#: reDelphix/source/uRdxSuppress.pas:609
+#: reDelphix/source/uRdxSuppress.pas:679
 msgid "the marker names no recognizable kind"
 msgstr ""
 
-#: reDelphix/source/uRdxSuppress.pas:612
+#: reDelphix/source/uRdxSuppress.pas:682
 msgid "the marker names several kinds - perhaps ineffective only under the current scan profile, please check by hand"
 msgstr ""
 

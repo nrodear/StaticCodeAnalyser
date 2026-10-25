@@ -20,8 +20,16 @@ unit uTestRdxSharedMap;
 // Sprache und - fuer IncludeReason - die Map (TRdxCodeMap.Serial). Baeume unter TEMP\rdx_p5_<GUID>, die
 // Unit drei Ebenen tiefer (wie uTestRdxMagicGuards).
 //
+// TTestRdxFileMarkerCache (Charge Q6): TRdxSuppress.FileMarker liest den
+// Text der Datei (erster erweiterbarer Datei-Marker, Kopfanweisung) je Map
+// einmal - mit geteilter Map ein Durchlauf fuer alle Arten, mit frischen
+// Zeilen je Aufruf einer wie bisher; Ergebnisse gleich denen mit frischer
+// Map fuer jede Form (Marker, 'All', Marker im Kommentar, Kopf mit
+// Block-Kommentar dahinter, keine Kopfanweisung), nach einer Aenderung der
+// Zeilen, abwechselnd fuer zwei Dateien und je Sprache.
+//
 // Ohne die Aenderung uebersetzt die Unit nicht (TRdxMappedLines, Acquire,
-// TRdxDiskReasonCache fehlen). FPC-tauglich: laeuft in reDelphix.Test UND
+// TRdxDiskReasonCache, TRdxSuppress.FileScans fehlen). FPC-tauglich: laeuft in reDelphix.Test UND
 // im FPC-Pruefstand.
 
 interface
@@ -57,6 +65,17 @@ type
     [Test] procedure Cache_LanguageInKey;
     [Test] procedure UseDiskCache_ReturnsPrevious;
     [Test] procedure Destroy_WhileActive_Unregisters;
+  end;
+
+  [TestFixture]
+  TTestRdxFileMarkerCache = class
+  public
+    [Test] procedure MappedLines_OneScanPerMap;
+    [Test] procedure PlainLines_ScanEachCall;
+    [Test] procedure Variants_SameAsFresh;
+    [Test] procedure Change_Rescans_SeesNewMarker;
+    [Test] procedure TwoFiles_Interleaved_SameAsFresh;
+    [Test] procedure Language_PerCall;
   end;
 
 implementation
@@ -772,8 +791,232 @@ begin
   Assert.AreEqual('', TRdxMagicFixes.FileReason('', lfInlineConst));
 end;
 
+{ ---- TTestRdxFileMarkerCache ---- }
+
+const
+  // Arten fuer FileMarker: TodoComment steht im Datei-Marker der Fixture.
+  FM_KINDS: array[0..3] of string = ('MagicNumber', 'TodoComment',
+    'todocomment', 'NilDeref');
+
+// FileMarker fuer AKind als Text (Ergebnis, Ersetzung, Grund).
+function FileMarkerText(ALines: TStrings; const AKind: string): string;
+var
+  E  : TRdxEdit;
+  R  : string;
+  Ok : Boolean;
+begin
+  Ok := TRdxSuppress.FileMarker(ALines, AKind, E, R);
+  Result := SuppressText(Ok, E, R);
+end;
+
+// Mit frischer Map (TStringList: Acquire baut je Aufruf neu) - der Weg
+// vor dem Cache.
+function FreshFileMarkerText(const AText, AKind: string): string;
+var
+  SL : TStringList;
+begin
+  SL := PlainOf(AText);
+  try
+    Result := FileMarkerText(SL, AKind);
+  finally
+    SL.Free;
+  end;
+end;
+
+// Die Formen, die FileMarker unterscheidet.
+function VariantSource(AIdx: Integer): string;
+begin
+  case AIdx of
+    0: Result := Join(['unit u;', 'interface', 'implementation', 'end.']);
+    1: Result := Join(['// Lizenz: Unit Name: X', 'unit u;',
+         '// noinspection-file All', 'interface',
+         '// noinspection-file TodoComment, MemoryLeak', 'implementation',
+         '// noinspection-file NilDeref', 'end.']);
+    2: Result := Join(['unit u;', 'interface', '{',
+         '// noinspection-file TodoComment', '}', 'end.']);
+    3: Result := Join(['unit u; { offen', 'bis hier }', 'interface', 'end.']);
+    4: Result := Join(['begin', 'end.']);
+    5: Result := Join(['(* nur Kommentar *)']);
+  else
+    Result := FixtureSource;
+  end;
+end;
+
+procedure TTestRdxFileMarkerCache.MappedLines_OneScanPerMap;
+var
+  ML       : TRdxMappedLines;
+  k, S0    : Integer;
+  Expected : array[0..3] of string;
+begin
+  for k := Low(FM_KINDS) to High(FM_KINDS) do
+    Expected[k] := FreshFileMarkerText(FixtureSource, FM_KINDS[k]);
+  ML := MappedOf(FixtureSource);
+  try
+    S0 := TRdxSuppress.FileScans;
+    for k := Low(FM_KINDS) to High(FM_KINDS) do
+      Assert.AreEqual(Expected[k], FileMarkerText(ML, FM_KINDS[k]), FM_KINDS[k]);
+    // Ein Durchlauf fuer alle Arten (bis Charge Q6: je Art einer).
+    Assert.AreEqual<Integer>(1, TRdxSuppress.FileScans - S0);
+    Assert.AreEqual<Integer>(1, ML.Builds);
+    Assert.IsTrue(Pos('True', Expected[0]) = 1, 'Gegenprobe: angeboten');
+    Assert.IsTrue(Pos('False', Expected[1]) = 1, 'Gegenprobe: schon da');
+  finally
+    ML.Free;
+  end;
+end;
+
+procedure TTestRdxFileMarkerCache.PlainLines_ScanEachCall;
+var
+  SL    : TStringList;
+  k, S0 : Integer;
+  First : string;
+begin
+  // Ohne getragene Map wie bisher: je Aufruf eine neue Map, ein Durchlauf.
+  SL := PlainOf(FixtureSource);
+  try
+    S0 := TRdxSuppress.FileScans;
+    First := FileMarkerText(SL, 'MagicNumber');
+    for k := 1 to 3 do
+      Assert.AreEqual(First, FileMarkerText(SL, 'MagicNumber'));
+    Assert.AreEqual<Integer>(4, TRdxSuppress.FileScans - S0);
+    Assert.IsTrue(Pos('True', First) = 1, 'Gegenprobe: angeboten');
+  finally
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxFileMarkerCache.Variants_SameAsFresh;
+const
+  // je Form: wird fuer MagicNumber etwas angeboten?
+  OFFERED: array[0..6] of Boolean = (True, True, True, False, False, False,
+    True);
+var
+  ML    : TRdxMappedLines;
+  v, k  : Integer;
+  A, B  : string;
+begin
+  for v := Low(OFFERED) to High(OFFERED) do
+  begin
+    ML := MappedOf(VariantSource(v));
+    try
+      for k := Low(FM_KINDS) to High(FM_KINDS) do
+      begin
+        A := FreshFileMarkerText(VariantSource(v), FM_KINDS[k]);
+        B := FileMarkerText(ML, FM_KINDS[k]);
+        Assert.AreEqual(A, B, Format('Form %d, %s', [v, FM_KINDS[k]]));
+        if k = 0 then
+          Assert.IsTrue((Pos('True', A) = 1) = OFFERED[v],
+            Format('Form %d: Gegenprobe %s', [v, A]));
+      end;
+      // Zweite Runde in umgekehrter Folge: der Eintrag haengt nicht an der
+      // Art des ersten Aufrufs.
+      for k := High(FM_KINDS) downto Low(FM_KINDS) do
+        Assert.AreEqual(FreshFileMarkerText(VariantSource(v), FM_KINDS[k]),
+          FileMarkerText(ML, FM_KINDS[k]), Format('Form %d rueckwaerts, %s',
+          [v, FM_KINDS[k]]));
+    finally
+      ML.Free;
+    end;
+  end;
+end;
+
+procedure TTestRdxFileMarkerCache.Change_Rescans_SeesNewMarker;
+var
+  ML    : TRdxMappedLines;
+  Src   : string;
+  A, B  : string;
+  S0    : Integer;
+begin
+  Src := VariantSource(0);
+  ML := MappedOf(Src);
+  try
+    A := FileMarkerText(ML, 'MagicNumber');
+    Assert.AreEqual(FreshFileMarkerText(Src, 'MagicNumber'), A);
+    Assert.IsTrue(Pos('// noinspection-file MagicNumber', A) > 0,
+      'hinter der Kopfanweisung: ' + A);
+    // Ein Datei-Marker kommt dazu: die naechste Hilfe erweitert ihn.
+    S0 := TRdxSuppress.FileScans;
+    ML.Insert(1, '// noinspection-file TodoComment');
+    B := FileMarkerText(ML, 'MagicNumber');
+    Assert.AreEqual(FreshFileMarkerText(ML.Text, 'MagicNumber'), B);
+    Assert.IsTrue(Pos('2:1-2:', B) > 0, 'den neuen Marker erweitert: ' + B);
+    Assert.AreEqual<Integer>(2, TRdxSuppress.FileScans - S0,
+      'neu durchsucht (geteilt + frisch)');
+    // ... und die Art, die er schon nennt, gibt es nicht noch einmal.
+    Assert.IsTrue(Pos('False', FileMarkerText(ML, 'TodoComment')) = 1);
+    // Wieder weg: zurueck zur Kopfanweisung.
+    ML.Delete(1);
+    Assert.AreEqual(A, FileMarkerText(ML, 'MagicNumber'));
+  finally
+    ML.Free;
+  end;
+end;
+
+procedure TTestRdxFileMarkerCache.TwoFiles_Interleaved_SameAsFresh;
+var
+  M1, M2 : TRdxMappedLines;
+  i      : Integer;
+  E1, E2 : string;
+begin
+  // Zwei Dateien im Wechsel: keine sieht die Ergebnisse der anderen.
+  E1 := FreshFileMarkerText(VariantSource(0), 'MagicNumber');
+  E2 := FreshFileMarkerText(VariantSource(1), 'MagicNumber');
+  // Gegenprobe: hinter der Kopfanweisung bzw. im Marker der Zeile 5.
+  Assert.IsTrue(Pos('suppress 1:1-1:8 ', E1) > 0, E1);
+  Assert.IsTrue(Pos('suppress 5:1-5:', E2) > 0, E2);
+  M1 := MappedOf(VariantSource(0));
+  M2 := MappedOf(VariantSource(1));
+  try
+    for i := 1 to 3 do
+    begin
+      Assert.AreEqual(E1, FileMarkerText(M1, 'MagicNumber'),
+        Format('Datei 1, Runde %d', [i]));
+      Assert.AreEqual(E2, FileMarkerText(M2, 'MagicNumber'),
+        Format('Datei 2, Runde %d', [i]));
+    end;
+    Assert.AreEqual<Integer>(1, M1.Builds);
+    Assert.AreEqual<Integer>(1, M2.Builds);
+  finally
+    M2.Free;
+    M1.Free;
+  end;
+end;
+
+procedure TTestRdxFileMarkerCache.Language_PerCall;
+var
+  ML       : TRdxMappedLines;
+  Old      : string;
+  RDe, REn : string;
+  v        : Integer;
+begin
+  // Der Grund wird je Aufruf uebersetzt, nicht mit dem Eintrag gemerkt.
+  Old := RdxLanguageOverride;
+  try
+    for v := 3 to 4 do
+    begin
+      ML := MappedOf(VariantSource(v));
+      try
+        SetRdxLanguageOverride('de');
+        RDe := FileMarkerText(ML, 'MagicNumber');
+        Assert.AreEqual(FreshFileMarkerText(VariantSource(v), 'MagicNumber'), RDe);
+        SetRdxLanguageOverride('en');
+        REn := FileMarkerText(ML, 'MagicNumber');
+        Assert.AreEqual(FreshFileMarkerText(VariantSource(v), 'MagicNumber'), REn);
+        Assert.IsTrue(RDe <> REn, Format('Form %d: zwei Sprachen, zwei Texte',
+          [v]));
+        Assert.AreEqual<Integer>(1, ML.Builds);
+      finally
+        ML.Free;
+      end;
+    end;
+  finally
+    SetRdxLanguageOverride(Old);
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestRdxSharedMap);
   TDUnitX.RegisterTestFixture(TTestRdxDiskReasonCache);
+  TDUnitX.RegisterTestFixture(TTestRdxFileMarkerCache);
 
 end.
