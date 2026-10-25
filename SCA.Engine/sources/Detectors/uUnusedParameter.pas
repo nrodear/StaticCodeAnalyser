@@ -773,27 +773,58 @@ function RoutineUsedAsProcValue(var AStripped: TStrippedUnit;
 //    echten Befund.
 //  * Gesucht wird im GESTRIPPTEN Text: ein Name in einem String oder
 //    Kommentar zaehlt nicht als Verwendung.
+//
+// Perf (Charge R2 2026-10-26): die drei Muster haengen vom Routinennamen
+// ab (dynamisch - kein Thread-Cache, der wuerde je Routine wachsen). Bis
+// dahin baute der Klassenaufruf TRegEx.IsMatch(Zeile, Muster) sie fuer
+// JEDE Zeile mit dem Namen neu (TPerlRegEx + pcre_maketables + Compile).
+// Jetzt entsteht jedes Muster hoechstens einmal je Aufruf, und erst wenn
+// es zum ersten Mal gebraucht wird - also nie oefter als vorher.
+// TRegEx.Create(Muster) traegt denselben Default [roNotEmpty] wie der
+// Zwei-Argument-Klassenaufruf; Match setzt Subject und Startposition je
+// Zeile neu, die Antwort haengt nicht von der Vorzeile ab.
 var
-  i     : Integer;
-  Zeile : string;
-  N     : string;
+  i      : Integer;
+  Zeile  : string;
+  N      : string;
+  ReArg  : TRegEx;
+  ReEvt  : TRegEx;
+  ReAdr  : TRegEx;
+  HatArg : Boolean;
+  HatEvt : Boolean;
+  HatAdr : Boolean;
 begin
   Result := False;
   N := LowerCase(Trim(ARoutineName));
   if Length(N) < 4 then Exit;
+  HatArg := False;
+  HatEvt := False;
+  HatAdr := False;
   for i := 0 to High(AStripped.Lines) do
   begin
     Zeile := LowerCase(AStripped.Lines[i]);
     if Pos(N, Zeile) = 0 then Continue;   // billiger Vorfilter
     // (1) als Argument:  Foo(..., Name, ...)  /  Foo(Name)
-    if TRegEx.IsMatch(Zeile, '[(,]\s*' + TRegEx.Escape(N)
-                      + '\s*[,)]') then Exit(True);
+    if not HatArg then
+    begin
+      ReArg := TRegEx.Create('[(,]\s*' + TRegEx.Escape(N) + '\s*[,)]');
+      HatArg := True;
+    end;
+    if ReArg.IsMatch(Zeile) then Exit(True);
     // (2) an ein Event gehaengt, Form  X.OnFoo := Name
-    if TRegEx.IsMatch(Zeile, ':=\s*' + TRegEx.Escape(N)
-                      + '\s*;') then Exit(True);
+    if not HatEvt then
+    begin
+      ReEvt := TRegEx.Create(':=\s*' + TRegEx.Escape(N) + '\s*;');
+      HatEvt := True;
+    end;
+    if ReEvt.IsMatch(Zeile) then Exit(True);
     // (3) Adresse:  @Name
-    if TRegEx.IsMatch(Zeile, '@\s*' + TRegEx.Escape(N)
-                      + '\b') then Exit(True);
+    if not HatAdr then
+    begin
+      ReAdr := TRegEx.Create('@\s*' + TRegEx.Escape(N) + '\b');
+      HatAdr := True;
+    end;
+    if ReAdr.IsMatch(Zeile) then Exit(True);
   end;
 end;
 

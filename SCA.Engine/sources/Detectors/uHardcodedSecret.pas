@@ -161,7 +161,20 @@ implementation
 
 uses
   System.StrUtils,  // PosEx (Vorkommen-Schleife IsSecretName)
-  uDetectorUtils;   // Fund 3: zentrale Test-Pfad-Muster (IsTestFixturePath)
+  uDetectorUtils,   // Fund 3: zentrale Test-Pfad-Muster (IsTestFixturePath)
+  uRegExMatches;    // CachedEx - Muster je Thread einmal kompiliert
+
+// Perf (Charge R2 2026-10-26): Ersatz fuer den Klassenaufruf
+// TRegEx.IsMatch(AText, APattern) mit KONSTANTEM Muster. Der Klassenaufruf
+// baute je Literal TPerlRegEx + pcre_maketables neu und kompilierte das
+// Muster; jetzt einmal je Thread (Schluessel Thread-ID|Optionen|Muster).
+// [roNotEmpty] ist exakt der Default von TRegEx.Create(Pattern), den der
+// Zwei-Argument-Klassenaufruf benutzt. Nur fuer konstante Muster - ein
+// dynamisches Muster wuerde den Cache fluten.
+function IsMatchCached(const AText, APattern: string): Boolean;
+begin
+  Result := TRegExMatches.CachedEx(APattern, [roNotEmpty]).IsMatch(AText);
+end;
 
 const
   SECRET_KW: array[0..11] of string = (
@@ -761,7 +774,7 @@ begin
      (Pos('%x', Body) > 0) or (Pos('=%', Body) > 0) then Exit;
 
   // (c) GUID/IID-Literal (COM-Interface-Konstante) - kein Secret.
-  if TRegEx.IsMatch(BodyTrim,
+  if IsMatchCached(BodyTrim,
        '^\{?[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}?$') then Exit;
 
   // (c2) ASN.1-OBJECT-IDENTIFIER (dotted-decimal, z.B. '1.2.840.113549.1.9.7').
@@ -769,7 +782,7 @@ begin
   //      szOID_TIMESTAMP_TOKEN tragen 'pwd'/'token' im NAMEN, der Wert ist aber
   //      eine reine Punkt-getrennte Ziffernfolge (OID) - niemals ein Geheimwert.
   //      TP-sicher: ein echtes Credential ist nie eine bare dotted-numeric-OID.
-  if TRegEx.IsMatch(BodyTrim, '^[0-9]+(\.[0-9]+)+$') then Exit;
+  if IsMatchCached(BodyTrim, '^[0-9]+(\.[0-9]+)+$') then Exit;
 
   // (d) Prompt-/Feld-Label endet auf ':' - Protokoll-/UI-Beschriftung.
   //     'AskP: ', 'Hotkey: '. Echte Secrets enden praktisch nie auf ':'.
@@ -922,23 +935,23 @@ begin
   // Replacement nicht noetig.
 
   // AWS Access Key (always starts AKIA, 20 chars total)
-  if TRegEx.IsMatch(Body, '^AKIA[0-9A-Z]{16}$') then
+  if IsMatchCached(Body, '^AKIA[0-9A-Z]{16}$') then
   begin AKind := 'AWS Access Key'; Exit(True); end;
   // GitHub Personal Access Token (classic, 40 chars)
-  if TRegEx.IsMatch(Body, '^ghp_[A-Za-z0-9]{36}$') then
+  if IsMatchCached(Body, '^ghp_[A-Za-z0-9]{36}$') then
   begin AKind := 'GitHub Personal Access Token'; Exit(True); end;
   // GitHub fine-grained PAT
-  if TRegEx.IsMatch(Body, '^github_pat_[A-Z0-9]{22}_[A-Za-z0-9_]{59,}$') then
+  if IsMatchCached(Body, '^github_pat_[A-Z0-9]{22}_[A-Za-z0-9_]{59,}$') then
   begin AKind := 'GitHub fine-grained Token'; Exit(True); end;
   // OpenAI API Key (sk-, sk-proj-, sk-org-)
-  if TRegEx.IsMatch(Body,
+  if IsMatchCached(Body,
        '^sk-(proj-|org-|svcacct-)?[A-Za-z0-9_-]{20,}$') then
   begin AKind := 'OpenAI API Key'; Exit(True); end;
   // Google API Key (AIza prefix, 39 chars total)
-  if TRegEx.IsMatch(Body, '^AIza[0-9A-Za-z_-]{35}$') then
+  if IsMatchCached(Body, '^AIza[0-9A-Za-z_-]{35}$') then
   begin AKind := 'Google API Key'; Exit(True); end;
   // Slack Bot/User/Workspace Token (xoxb-, xoxp-, xoxs-)
-  if TRegEx.IsMatch(Body, '^xox[bps]-[A-Za-z0-9-]{20,}$') then
+  if IsMatchCached(Body, '^xox[bps]-[A-Za-z0-9-]{20,}$') then
   begin AKind := 'Slack Token'; Exit(True); end;
   // JWT (3 Base64URL-segments getrennt durch Punkt; Header beginnt eyJ
   // weil { -> base64 = eyJ). Auch ohne Signatur-Segment akzeptiert
@@ -946,7 +959,7 @@ begin
   n := 0;
   for i := 1 to Length(Body) do if Body[i] = '.' then Inc(n);
   if (n in [1, 2]) and Body.StartsWith('eyJ') and
-     TRegEx.IsMatch(Body, '^eyJ[A-Za-z0-9+/=_-]{10,}\.eyJ[A-Za-z0-9+/=_-]{10,}') then
+     IsMatchCached(Body, '^eyJ[A-Za-z0-9+/=_-]{10,}\.eyJ[A-Za-z0-9+/=_-]{10,}') then
   begin AKind := 'JWT Token'; Exit(True); end;
 end;
 

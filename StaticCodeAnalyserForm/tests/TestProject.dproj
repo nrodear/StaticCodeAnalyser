@@ -118,6 +118,7 @@
         <DCCReference Include="uTestBaselineJson.pas"/>
         <DCCReference Include="uTestSourceLineEdit.pas"/>
         <DCCReference Include="uTestFileTextCache.pas"/>
+        <DCCReference Include="uTestRegExCache.pas"/>
         <DCCReference Include="uTestParserReviewC.pas"/>
         <DCCReference Include="uTestDetectorUtilsText.pas"/>
         <DCCReference Include="uTestConfigPass.pas"/>

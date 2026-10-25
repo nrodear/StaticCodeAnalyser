@@ -54,7 +54,8 @@ implementation
 
 uses
   System.RegularExpressions,
-  uDetectorUtils;
+  uDetectorUtils,
+  uRegExMatches;   // CachedEx - ANON_RE je Thread einmal kompiliert
 
 class function TAnonMethodCaptureLoopVarDetector.ExtractLoopVar(
   ForNode: TAstNode): string;
@@ -172,7 +173,11 @@ var
     // String-Inhalt zaehlt nie als Anon-Method-Code (laengenerhaltend,
     // damit AnonM.Index fuer den Tail-Schnitt gueltig bleibt).
     Blank := TDetectorUtils.BlankStringLiterals(Expr);
-    AnonM := TRegEx.Match(Blank, ANON_RE, [roIgnoreCase]);
+    // Perf (Charge R2 2026-10-26): kompilierte Instanz aus dem Thread-
+    // Cache statt TRegEx.Match(Blank, ANON_RE, [roIgnoreCase]) - der
+    // Klassenaufruf baute je Knoten TPerlRegEx + pcre_maketables neu.
+    // Gleiche Optionen, gleiches Ergebnis (TMatch kopiert Index/Gruppen).
+    AnonM := TRegExMatches.CachedEx(ANON_RE, [roIgnoreCase]).Match(Blank);
     if not AnonM.Success then Exit;
     // FP-Gate (Real-World-Audit 2026-07-31, FP-Klasse 'loop-var-als-call-
     // receiver-ausserhalb-des-closure-bodys'): die Loop-Var-Referenz muss
