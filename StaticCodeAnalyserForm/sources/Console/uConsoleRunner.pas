@@ -243,6 +243,19 @@ function AutoDialektFuerDatei(const ADateiPfad, AWurzel: string;
   AWurzelVerdikt: TSourceDialect;
   ADirCache: TDictionary<string, TSourceDialect>): TSourceDialect;
 
+// Zeilen der --time-detectors-Tabelle (Markdown), Timing-Format 2 (seit
+// 2026-10-25). ATimings = gDetectorTimings: je Detektor (Summe Ticks,
+// Aufrufe); AFrequency = Ticks je Sekunde (TStopwatch.Frequency). Spalten
+// wie Format 1, Zahlen jetzt mit Punkt (invariant, frueher ganze ms bzw.
+// Landes-Dezimalzeichen): Total ms 3, Avg ms 4 Nachkommastellen. Am Ende
+// die Kennzeile 'Timing format: 2 ...' fuer Leser (tools/perf_ab.py).
+// Sortiert nach Ticks absteigend, bei Gleichstand nach Name.
+// nil/leer -> leere Liste. Reine Funktion (Tests: uTestDetectorTimings);
+// der Aufrufer gibt die Liste frei.
+function BuildDetectorTimingsLines(
+  ATimings: TDictionary<string, TPair<Int64, Integer>>;
+  AFrequency: Int64): TStringList;
+
 implementation
 
 // noinspection-file BeginEndRequired, CanBeClassMethod, ConsecutiveSection, DebugOutput, ExceptOnException, GroupedDeclaration, IfElseBegin, InsecureCryptoAlgorithm, NestedRoutine, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedPublicMember
@@ -254,6 +267,7 @@ implementation
 uses
   System.IOUtils, System.Math,
   System.Generics.Defaults,           // TComparer fuer Detector-Timings-Sort
+  System.Diagnostics,                 // TStopwatch.Frequency (Detector-Timings in Ticks)
   uStaticAnalyzer2, uVcsChanges, uRepoSettings, uEngineApi,   // uSCAConsts seit D5 im interface-uses
   uStaticFiles,                       // ScanDialect/TryGetAllPasFiles (dlAuto V2, D5)
   uExportSARIF, uExportHtml, uExport, uCustomRuleDetector,
@@ -874,13 +888,14 @@ begin
   WriteLn('                        Treffern ueber einen grossen Korpus ist ein');
   WriteLn('                        Loeschkandidat. Erzwingt seriellen Lauf.');
   WriteLn('  --time-detectors      Aggregiert per-Detektor TotalMs + CallCount');
+  WriteLn('                        ueber den Scan. Markdown-Tabelle am Ende');
+  WriteLn('                        (ms mit Nachkommastellen, aus Zeitgeber-');
+  WriteLn('                        Ticks je Aufruf summiert). Identifiziert');
+  WriteLn('                        Hot-Path-Detektoren fuer gezielte Optimierung.');
   WriteLn('  --time-detectors-out <file>');
   WriteLn('                        Schreibt die Markdown-Tabelle in die angegebene Datei');
   WriteLn('                        (impliziert --time-detectors). Praktisch zum');
   WriteLn('                        Archivieren; stdout-Pipes funktionieren ebenfalls.');
-  WriteLn('                        ueber den Scan. Markdown-Tabelle am Ende.');
-  WriteLn('                        Identifiziert Hot-Path-Detektoren fuer');
-  WriteLn('                        gezielte Optimierung.');
   WriteLn('  --telemetry-csv <file> Pro suppressed Finding eine CSV-Zeile.');
   WriteLn('                        Spalten: timestamp_iso, kind, filename,');
   WriteLn('                        finding_line, marker_line. Aggregierbar');
@@ -1201,66 +1216,89 @@ end;
 
 { ---- Per-Detector-Timing-Tabelle ---- }
 
-procedure WriteDetectorTimingsMarkdown(const AOutFile: string = '');
-// Schreibt eine Markdown-Tabelle pro Detektor mit TotalMs / CallCount /
-// AvgMs / %-Anteil-am-Scan, sortiert nach TotalMs absteigend. Daten kommt
-// aus gDetectorTimings (befuellt durch das AOnTime-Lambda in ParseLeaks).
-// AOutFile = '' -> stdout (WriteLn). AOutFile <> '' -> zusaetzlich
-// als UTF-8 in die Datei schreiben (Archiv-Komfort; stdout-Pipes gehen seit
-// dem dpr-Redirect-Support 2026-07-05 ebenfalls).
+function BuildDetectorTimingsLines(
+  ATimings: TDictionary<string, TPair<Int64, Integer>>;
+  AFrequency: Int64): TStringList;
+// Kommentar zum Format an der Deklaration (interface). Warum Ticks: bis
+// 2026-10-25 kamen hier je Aufruf abgeschnittene ganze ms an - ein Aufruf
+// unter 1 ms zaehlte 0, die Tabelle zeigte auf grossen Korpora nur rund die
+// Haelfte der Detektorzeit. Warum invariant: die Tabelle wird maschinell
+// gelesen (tools/perf_ab.py), ein Landes-Komma waere dort ein Tausender-
+// trenner oder ein Spaltenbruch.
 var
   Pairs       : TArray<TPair<string, TPair<Int64, Integer>>>;
-  TotalMs     : Int64;
+  TotalTicks  : Int64;
   i           : Integer;
-  Name        : string;
   Acc         : TPair<Int64, Integer>;
-  Avg, Pct    : Double;
-  Lines       : TStringList;
+  Ms, Avg, Pct: Double;
+  Inv         : TFormatSettings;
+begin
+  Result := TStringList.Create;
+  if (ATimings = nil) or (ATimings.Count = 0) then Exit;
+
+  try
+    Inv := TFormatSettings.Invariant;
+    // Snapshot in Array kopieren damit wir sortieren koennen.
+    Pairs := ATimings.ToArray;
+    // Sortieren nach Ticks absteigend, Gleichstand nach Name (deterministisch).
+    TArray.Sort<TPair<string, TPair<Int64, Integer>>>(Pairs,
+      TComparer<TPair<string, TPair<Int64, Integer>>>.Construct(
+        function(const L, R: TPair<string, TPair<Int64, Integer>>): Integer
+        begin
+          Result := CompareValue(R.Value.Key, L.Value.Key);
+          if Result = 0 then
+            Result := CompareStr(L.Key, R.Key);
+        end));
+
+    TotalTicks := 0;
+    for i := 0 to High(Pairs) do
+      Inc(TotalTicks, Pairs[i].Value.Key);
+
+    Result.Add('');
+    Result.Add('## Per-Detector Timing');
+    Result.Add('');
+    Result.Add('| Rank | Detector | Total ms | Calls | Avg ms | % Scan |');
+    Result.Add('|---:|---|---:|---:|---:|---:|');
+    for i := 0 to High(Pairs) do
+    begin
+      Acc := Pairs[i].Value;
+      Ms  := DetectorTicksToMs(Acc.Key, AFrequency);
+      if Acc.Value > 0 then
+        Avg := Ms / Acc.Value
+      else
+        Avg := 0;
+      if TotalTicks > 0 then
+        Pct := (Acc.Key * 100.0) / TotalTicks
+      else
+        Pct := 0;
+      Result.Add(Format('| %d | %s | %.3f | %d | %.4f | %.1f%% |',
+        [i + 1, Pairs[i].Key, Ms, Acc.Value, Avg, Pct], Inv));
+    end;
+    Result.Add('');
+    Result.Add(Format('Total: %.3f ms over %d detectors',
+      [DetectorTicksToMs(TotalTicks, AFrequency), Length(Pairs)], Inv));
+    Result.Add('Timing format: 2 (ticks summed per call, ms with decimal point)');
+  except
+    Result.Free;
+    raise;
+  end;
+end;
+
+procedure WriteDetectorTimingsMarkdown(const AOutFile: string = '');
+// Schreibt die Tabelle aus BuildDetectorTimingsLines (Daten: gDetectorTimings,
+// befuellt durch das AOnTime-Lambda in ParseLeaks) auf stdout und optional
+// als UTF-8 in AOutFile (Archiv-Komfort; stdout-Pipes gehen seit dem
+// dpr-Redirect-Support 2026-07-05 ebenfalls).
+var
+  Lines : TStringList;
+  i     : Integer;
 begin
   if (gDetectorTimings = nil) or (gDetectorTimings.Count = 0) then Exit;
 
-  // Snapshot in Array kopieren damit wir sortieren koennen.
-  Pairs := gDetectorTimings.ToArray;
-  // Sortieren nach TotalMs absteigend.
-  TArray.Sort<TPair<string, TPair<Int64, Integer>>>(Pairs,
-    TComparer<TPair<string, TPair<Int64, Integer>>>.Construct(
-      function(const L, R: TPair<string, TPair<Int64, Integer>>): Integer
-      begin
-        Result := CompareValue(R.Value.Key, L.Value.Key);
-      end));
-
-  TotalMs := 0;
-  for i := 0 to High(Pairs) do
-    Inc(TotalMs, Pairs[i].Value.Key);
-
-  // Zeilen in TStringList aufbauen (single source of truth) - danach
-  // BEIDE Pfade: WriteLn auf stdout/CONOUT$ + optional File-Save.
-  Lines := TStringList.Create;
+  // Zeilen einmal aufbauen (single source of truth) - danach BEIDE Pfade:
+  // WriteLn auf stdout/CONOUT$ + optional File-Save.
+  Lines := BuildDetectorTimingsLines(gDetectorTimings, TStopwatch.Frequency);
   try
-    Lines.Add('');
-    Lines.Add('## Per-Detector Timing');
-    Lines.Add('');
-    Lines.Add('| Rank | Detector | Total ms | Calls | Avg ms | % Scan |');
-    Lines.Add('|---:|---|---:|---:|---:|---:|');
-    for i := 0 to High(Pairs) do
-    begin
-      Name := Pairs[i].Key;
-      Acc  := Pairs[i].Value;
-      if Acc.Value > 0 then
-        Avg := Acc.Key / Acc.Value
-      else
-        Avg := 0;
-      if TotalMs > 0 then
-        Pct := (Acc.Key * 100.0) / TotalMs
-      else
-        Pct := 0;
-      Lines.Add(Format('| %d | %s | %d | %d | %.2f | %.1f%% |',
-        [i + 1, Name, Acc.Key, Acc.Value, Avg, Pct]));
-    end;
-    Lines.Add('');
-    Lines.Add(Format('Total: %d ms over %d detectors',
-      [TotalMs, Length(Pairs)]));
-
     // stdout-Pfad: Konsole ODER Redirect-Ziel (dpr bindet umgeleitete
     // Streams seit 2026-07-05 an ihre Std-Handles).
     for i := 0 to Lines.Count - 1 do

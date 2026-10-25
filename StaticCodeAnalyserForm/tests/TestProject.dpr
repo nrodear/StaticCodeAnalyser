@@ -113,6 +113,7 @@ uses
   uConsoleRunner in '..\sources\Console\uConsoleRunner.pas',
   uTestConsoleExitCode in 'uTestConsoleExitCode.pas',
   uTestConsoleParseArgs in 'uTestConsoleParseArgs.pas',
+  uTestDetectorTimings in 'uTestDetectorTimings.pas',
   uTestExportSarifDiagnostics in 'uTestExportSarifDiagnostics.pas',
   uTestExportSonarTextRange in 'uTestExportSonarTextRange.pas',
   uTestContrastColor in 'uTestContrastColor.pas',
