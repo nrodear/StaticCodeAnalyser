@@ -86,7 +86,12 @@ const
   // Liste erreicht dasselbe Ende und scheitert am selben Schwanz, und
   // kuerzere Listen helfen nie (hinter ihnen steht ',' statt ':').
   // Treffermenge (Gruppe 1/2) identisch.
-  RE_INT64_VAR_DECL = '(?im)\b(\w+(?:\s*,\s*\w+)*)(*SKIP)\s*:\s*(Int64|UInt64|QWord)\b';
+  // Stack-Fix (2026-10-25, nach dem Bau von 88894c73): dieses Deklarations-
+  // Muster ist durch den Handscanner ScanInt64Decls ERSETZT (siehe dort) -
+  // PCRE 8.45 (Delphi-TRegEx, Interpreter) rekursiert je Wiederholung der
+  // Komma-Gruppe; eine Liste mit 2000 Elementen brauchte ~4000
+  // verschachtelte match()-Rahmen und sprengte den 1-MB-Stack von
+  // TestProject (dasselbe Risiko im IDE-Plugin, nur der Scanner hat 32 MB).
   RE_PRODUCT_ASSIGN = '(?im)\b(\w+)\s*:=\s*(\w+)\s*\*\s*(\w+)\s*;';
   // Real-World-FP-Audit 2026-07-12 (FP-Klasse 'scope-blinde file-globale
   // Var-Sammlung'): fuer die per-Method-Scope-Aufteilung der Ziel-Erkennung.
@@ -94,16 +99,129 @@ const
   RE_ROUTINE_HEADER =                                // Region-Start
     '(?im)^[ \t]*(?:class[ \t]+)?(?:procedure|function|constructor|destructor|operator)\b';
 
-// True wenn TypeText eines der Int64-Familien-Typen ist.
-function IsInt64Type(const TypeText: string): Boolean;
-var
-  Low : string;
-  T   : string;
+// Zeichenklassen von PCRE 8.45 ohne PCRE_UCP, wie Delphi-TRegEx sie
+// benutzt: \w = [A-Za-z0-9_] (Zeichen ueber 127 sind nie Wortzeichen,
+// 128..255 nicht in der C-Locale-Tabelle von pcre_maketables), \s =
+// Tab, LF, VT, FF, CR, Leerzeichen (VT seit PCRE 8.34).
+function IsDeclWordChar(C: Char): Boolean; inline;
 begin
-  Low := LowerCase(Trim(TypeText));
-  for T in INT64_TYPES do
-    if Low = T then Exit(True);
+  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
+end;
+
+function IsDeclSpace(C: Char): Boolean; inline;
+begin
+  Result := CharInSet(C, [#9, #10, #11, #12, #13, ' ']);
+end;
+
+// Laenge des Int64-Familien-Typnamens ab APos - ASCII-Faltung wie (?i)
+// (ein Nicht-ASCII-Zeichen trifft keinen ASCII-Buchstaben des Musters),
+// danach keine Wortfortsetzung (\b) -, sonst 0. Die drei Namen beginnen
+// verschieden, die Reihenfolge der Alternativen ist also gleichgueltig.
+function Int64TypeLenAt(const S: string; APos: Integer): Integer;
+var
+  k, m, L : Integer;
+  c       : Char;
+begin
+  for k := Low(INT64_TYPES) to High(INT64_TYPES) do
+  begin
+    L := Length(INT64_TYPES[k]);
+    if APos + L - 1 > Length(S) then Continue;
+    m := 1;
+    while m <= L do
+    begin
+      c := S[APos + m - 1];
+      if (c >= 'A') and (c <= 'Z') then c := Char(Ord(c) + 32);
+      if c <> INT64_TYPES[k][m] then Break;
+      Inc(m);
+    end;
+    if (m > L) and
+       ((APos + L > Length(S)) or not IsDeclWordChar(S[APos + L])) then
+      Exit(L);
+  end;
+  Result := 0;
+end;
+
+// Stack-Fix (2026-10-25): linearer Handscanner OHNE Rekursion an Stelle
+// von '(?im)\b(\w+(?:\s*,\s*\w+)*)(*SKIP)\s*:\s*(Int64|UInt64|QWord)\b'
+// (roNotEmpty, Matches-Schleife) - gleiche Treffer in gleicher Folge,
+// gegen PCRE 8.45 nachgewiesen (Korpus + Zufallstexte, 0 Abweichungen):
+//   * Start nur an einem Wortanfang (\b\w).
+//   * Die Ident-Liste ist gierig und eindeutig: jedes \w+ nimmt das ganze
+//     Wort, eine weitere Runde braucht '\s*,\s*' und dahinter ein Wort.
+//   * Schwanz '\s*:\s*' plus Typname mit Wortende. Scheitert er, beginnt
+//     der naechste Versuch am Listenende ((*SKIP)); kuerzere Listen
+//     koennen nie treffen (hinter ihnen steht ',' statt ':').
+//   * Nach einem Treffer geht es hinter dem Typnamen weiter.
+// ADest = nil: nur pruefen (IsMatch), Abbruch beim ersten Treffer. Sonst
+// wird jeder Bezeichner der Liste kleingeschrieben registriert - genau,
+// was das Aufteilen von Gruppe 1 an ',' mit Trim lieferte (die Trenner
+// sind \s-Zeichen, alle <= #32).
+// Jedes Zeichen wird nur konstant oft angesehen: der Folgeversuch beginnt
+// am Listenende, und die Vorausschau hinter der Liste reicht nur ueber
+// Leerraum, ':' oder ',' und einen Typnamen.
+function ScanInt64Decls(const AText: string; ADest: TStringList): Boolean;
+var
+  n, P0, ListEnd, j, w, TypePos, TypeLen : Integer;
+begin
   Result := False;
+  n := Length(AText);
+  P0 := 1;
+  while P0 <= n do
+  begin
+    // \b\w - nur an einem Wortanfang
+    if not IsDeclWordChar(AText[P0]) or
+       ((P0 > 1) and IsDeclWordChar(AText[P0 - 1])) then
+    begin
+      Inc(P0);
+      Continue;
+    end;
+
+    // (\w+(?:\s*,\s*\w+)*) gierig
+    ListEnd := P0;
+    while (ListEnd <= n) and IsDeclWordChar(AText[ListEnd]) do Inc(ListEnd);
+    while True do
+    begin
+      j := ListEnd;
+      while (j <= n) and IsDeclSpace(AText[j]) do Inc(j);
+      if (j > n) or (AText[j] <> ',') then Break;
+      Inc(j);
+      while (j <= n) and IsDeclSpace(AText[j]) do Inc(j);
+      if (j > n) or not IsDeclWordChar(AText[j]) then Break;
+      while (j <= n) and IsDeclWordChar(AText[j]) do Inc(j);
+      ListEnd := j;
+    end;
+
+    // \s*:\s*(Int64|UInt64|QWord)\b
+    TypeLen := 0;
+    TypePos := ListEnd;
+    while (TypePos <= n) and IsDeclSpace(AText[TypePos]) do Inc(TypePos);
+    if (TypePos <= n) and (AText[TypePos] = ':') then
+    begin
+      Inc(TypePos);
+      while (TypePos <= n) and IsDeclSpace(AText[TypePos]) do Inc(TypePos);
+      TypeLen := Int64TypeLenAt(AText, TypePos);
+    end;
+    if TypeLen = 0 then
+    begin
+      P0 := ListEnd;   // (*SKIP): naechster Versuch am Listenende
+      Continue;
+    end;
+
+    Result := True;
+    if ADest = nil then Exit;
+    // Major 72: JEDEN Bezeichner der Mehrfach-Deklaration registrieren.
+    j := P0;
+    while j < ListEnd do
+      if IsDeclWordChar(AText[j]) then
+      begin
+        w := j;
+        while (j < ListEnd) and IsDeclWordChar(AText[j]) do Inc(j);
+        ADest.Add(LowerCase(Copy(AText, w, j - w)));
+      end
+      else
+        Inc(j);
+    P0 := TypePos + TypeLen;
+  end;
 end;
 
 // Real-World-FP-Audit 2026-07-12 (FP-Klasse 'scope-blinde file-globale
@@ -140,21 +258,8 @@ end;
 
 // Sammelt alle Int64/UInt64/QWord-Variablennamen (lowercase) aus AText in ADest.
 procedure CollectInt64VarsInto(const AText: string; ADest: TStringList);
-var
-  M     : TMatch;
-  Re    : TRegEx;
-  Ident : string;
 begin
-  // Eigener CachedEx-Bezug statt Parameter-Durchreiche: der Dictionary-Hit
-  // ist billig und die Signatur bleibt stabil (2x pro File aufgerufen).
-  Re := TRegExMatches.CachedEx(RE_INT64_VAR_DECL, [roNotEmpty]);
-  for M in Re.Matches(AText) do
-    if IsInt64Type(M.Groups[2].Value) then
-      // Major 72: Gruppe 1 traegt die komma-getrennte Ident-Liste der
-      // Mehrfach-Deklaration - JEDEN Bezeichner registrieren.
-      for Ident in M.Groups[1].Value.Split([',']) do
-        if Trim(Ident) <> '' then
-          ADest.Add(LowerCase(Trim(Ident)));
+  ScanInt64Decls(AText, ADest);
 end;
 
 class procedure TIntegerOverflowDetector.AnalyzeUnit(UnitNode: TAstNode;
@@ -174,7 +279,6 @@ var
   F  : TLeakFinding;
   LineNo : Integer;
   ImplPos, FirstHeaderPos, P, NextBound, RegionCursor, LastBuilt : Integer;
-  ReVarDecl : TRegEx;
   ReAssign  : TRegEx;
   ReImpl    : TRegEx;
   ReHeader  : TRegEx;
@@ -189,8 +293,7 @@ var
   end;
 
 begin
-  ReVarDecl := TRegExMatches.CachedEx(RE_INT64_VAR_DECL, [roNotEmpty]);
-  ReAssign  := TRegExMatches.CachedEx(RE_PRODUCT_ASSIGN, [roNotEmpty]);
+  ReAssign  :=TRegExMatches.CachedEx(RE_PRODUCT_ASSIGN, [roNotEmpty]);
   ReImpl    := TRegExMatches.CachedEx(RE_IMPL_BOUNDARY, [roNotEmpty]);
   ReHeader  := TRegExMatches.CachedEx(RE_ROUTINE_HEADER, [roNotEmpty]);
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
@@ -200,19 +303,20 @@ begin
     Code := TDetectorUtils.StripStringsAndCommentsCached(
       Lines, LineFor, AContext, FileName, ' ');
 
-    // Perf (Charge P 2026-10-25): billige Vorpruefung VOR der Regex - ohne
+    // Perf (Charge P 2026-10-25): billige Vorpruefung VOR dem Scanner - ohne
     // ein Stueck des Typnamens ('nt64' steckt in Int64 und UInt64) kann
-    // RE_INT64_VAR_DECL nicht treffen. LowerCase faltet nur A..Z; das 'I'
-    // bleibt bewusst draussen, damit selbst eine Unicode-Faltung der Regex
-    // (tuerkisches I mit Punkt) die Vorpruefung nicht unterlaeuft. Seit dem
-    // Review Charge P ohne Kopie: ContainsLowerAscii faltet wie LowerCase
-    // nur A..Z und gleicht Pos(.., LowerCase(Code)) > 0.
+    // ScanInt64Decls nicht treffen. LowerCase faltet nur A..Z; das 'I'
+    // bleibt bewusst draussen, damit selbst eine Unicode-Faltung (tuerkisches
+    // I mit Punkt) die Vorpruefung nicht unterlaeuft (der Scanner faltet
+    // ohnehin nur ASCII, wie zuvor die Regex). Seit dem Review Charge P ohne
+    // Kopie: ContainsLowerAscii faltet wie LowerCase nur A..Z und gleicht
+    // Pos(.., LowerCase(Code)) > 0.
     if not TDetectorUtils.ContainsLowerAscii(Code, 'nt64')
        and not TDetectorUtils.ContainsLowerAscii(Code, 'qword') then Exit;
 
     // Fast-Reject: ohne irgendeine Int64/UInt64/QWord-Deklaration kein Befund
     // moeglich - spart die Segmentierung unten fuer die grosse Mehrheit.
-    if not ReVarDecl.IsMatch(Code) then Exit;
+    if not ScanInt64Decls(Code, nil) then Exit;
 
     Int64Vars     := TStringList.Create;
     FileLevelVars := TStringList.Create;

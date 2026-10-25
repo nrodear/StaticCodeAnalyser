@@ -33,13 +33,18 @@ type
     [Test] procedure QWordTarget_PrefilterStillReported;
     [Test] procedure MultiDecl_AcrossLines_Reported;
     [Test] procedure LongNumberTableBeforeDecl_Reported;
+    // Stack-Fix 2026-10-25: die Deklarations-Regex rekursierte in PCRE je
+    // Listenelement (2000 Elemente sprengten den 1-MB-Stack). Der
+    // Handscanner muss eine Zahlentabelle mit 50.000 Elementen und eine
+    // Ident-Liste mit 5.000 Bezeichnern ohne Stack-Probleme schaffen.
+    [Test] procedure VeryLongListsBeforeAndInDecl_Reported;
   end;
 
 implementation
 
 uses
-  System.SysUtils, System.Generics.Collections,
-  uSCAConsts, uMethodd12,
+  System.SysUtils, System.IOUtils, System.Generics.Collections,
+  uSCAConsts, uMethodd12, uIntegerOverflow,
   uTestFindingHelper;
 
 procedure TTestIntegerOverflow.Int64Mul_TwoIntegers_Reported;
@@ -328,7 +333,9 @@ end;
 procedure TTestIntegerOverflow.LongNumberTableBeforeDecl_Reported;
 // Der Laufzeit-Fall: eine lange Komma-Liste ohne ': Int64' (Zahlentabelle)
 // direkt vor der echten Deklaration. Vorher quadratisch, mit (*SKIP)
-// linear - die Deklaration dahinter wird weiter gefunden.
+// linear - die Deklaration dahinter wird weiter gefunden. Seit dem
+// Stack-Fix (2026-10-25) auch ohne PCRE-Rekursion je Element: mit der
+// Regex brach TestProject hier mit $C00000FD (Stack-Ueberlauf) ab.
 var
   SB  : TStringBuilder;
   i   : Integer;
@@ -357,6 +364,63 @@ begin
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkIntegerOverflow),
     'Deklaration hinter einer langen Zahlentabelle');
   finally F.Free; end;
+end;
+
+procedure TTestIntegerOverflow.VeryLongListsBeforeAndInDecl_Reported;
+// Je Liste EINE Zeile: die Zahlentabelle vor der Deklaration (50.000
+// Elemente) und die Ident-Liste der Deklaration selbst (5.001 Bezeichner,
+// 'Total' als LETZTER - nur wenn der Scanner die ganze Liste registriert,
+// ist es ein Int64-Ziel; schon 2000 Elemente sprengten mit der Regex den
+// Stack). Die Ident-Liste bleibt kuerzer, weil das sortierte Einfuegen in
+// die TStringLists quadratisch kopiert. Direkt am Detektor statt ueber
+// FindingsOfFile: der Waechter gilt dem Scanner, nicht den uebrigen
+// Detektoren auf einer Zeile mit mehreren hundert KB.
+const
+  TABLE_LEN = 50000;
+  IDENT_LEN = 5000;
+var
+  SB       : TStringBuilder;
+  i        : Integer;
+  F        : TObjectList<TLeakFinding>;
+  TempPath : string;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.Append('unit t; implementation'#13#10);
+    SB.Append('const Tab: array[0..' + IntToStr(TABLE_LEN - 1) + '] of Integer = (');
+    for i := 0 to TABLE_LEN - 1 do
+    begin
+      if i > 0 then SB.Append(', ');
+      SB.Append(i);
+    end;
+    SB.Append(');'#13#10);
+    SB.Append('procedure Foo;'#13#10 + 'var ');
+    for i := 0 to IDENT_LEN - 1 do
+      SB.Append('v').Append(i).Append(', ');
+    SB.Append('Total: Int64;'#13#10 +
+              '    SectorCount, SectorSize: Integer;'#13#10 +
+              'begin'#13#10 +
+              '  Total := SectorCount * SectorSize;'#13#10 +
+              'end;');
+    TempPath := TPath.Combine(TPath.GetTempPath,
+      'sca137_long_' + TGuid.NewGuid.ToString
+        .Replace('{', '').Replace('}', '').Replace('-', '') + '.pas');
+    TFile.WriteAllText(TempPath, SB.ToString, TEncoding.UTF8);
+  finally
+    SB.Free;
+  end;
+  F := TObjectList<TLeakFinding>.Create(True);
+  try
+    try
+      TIntegerOverflowDetector.AnalyzeUnit(nil, TempPath, F, nil);
+    finally
+      if TFile.Exists(TempPath) then TFile.Delete(TempPath);
+    end;
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkIntegerOverflow),
+      'lange Listen vor und in der Deklaration');
+  finally
+    F.Free;
+  end;
 end;
 
 initialization
