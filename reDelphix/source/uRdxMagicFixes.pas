@@ -121,6 +121,7 @@ unit uRdxMagicFixes;
 interface
 
 uses
+  System.Generics.Collections,   // TDictionary (TRdxDiskReasonCache)
   uRdxBufferMath, uRdxCodeMap;
 
 const
@@ -165,9 +166,41 @@ type
     FileWide : Boolean;
   end;
 
+  // Plattenblick je Menueaufbau (Charge P5, Performance): FileReason liest
+  // je Aufruf bis zu PROJECT_LEVELS + 1 Verzeichnisse samt .dproj-Koepfen,
+  // IncludeReason jedes Include der Unit - und ein Menue fragt bis zu
+  // MAX_FINDINGS_PER_MENU Funde derselben Datei, dazu die Code-Aktion am
+  // Caret. Ist ein Cache aktiv (TRdxMagicFixes.UseDiskCache), merken sich
+  // beide darin ihr Ergebnis: FileReason den Teil hinter Dateiart und
+  // Netzpfad (beide Pruefungen laufen weiter je Aufruf, vor jedem Blick in
+  // den Cache) je Dateiname - genau so geschrieben, der Grund nennt das
+  // Verzeichnis -, Sprachmittel und reDelphix-Sprache; IncludeReason dazu
+  // je Code-Sicht (TRdxCodeMap.Serial: dieselbe Map, dieselben Includes -
+  // eine neue Map, auch nach einer Aenderung der Zeilen, ist ein neuer
+  // Eintrag). Ohne aktiven Cache (Vorgabe; alle Tests
+  // ausser denen des Caches) fragt jeder Aufruf die Platte wie bisher. Wie
+  // lange ein Ergebnis gilt, bestimmt der Besitzer mit Clear (uRdxProvider:
+  // ein Menueaufbau) - eine Aenderung auf der Platte innerhalb dieser Zeit
+  // sieht erst der naechste.
+  TRdxDiskReasonCache = class
+  private
+    FItems : TDictionary<string, string>;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    procedure Clear;
+    function Count: Integer;
+  end;
+
   // Der Planer der Charge Q14 und seine Bausteine (s. Kopf).
   TRdxMagicFixes = class
   public
+    // Macht ACache zum Cache von FileReason und IncludeReason (nil: keiner,
+    // die Vorgabe) und liefert den bisherigen - der Aufrufer stellt ihn im
+    // finally wieder her. ACache bleibt im Besitz des Aufrufers.
+    class function UseDiskCache(
+      ACache: TRdxDiskReasonCache): TRdxDiskReasonCache; static;
+
     // Die Zahl aus der Meldung 'Magic number "200" in if condition - ...'
     // (zwischen den ersten beiden '"'): Ziffern, hoechstens ein '-' davor;
     // '' sonst.
@@ -993,21 +1026,17 @@ end;
 // Netzpfad: uRdxPaths.IsNetworkPath (UNC und Netzlaufwerk, seit Charge
 // B1-FD die eine Regel fuer Unit und Includes - bis dahin stand hier eine
 // eigene Kopie nur fuer UNC; seit Charge B2S-a ist '\\?\C:\..' lokal).
-class function TRdxMagicFixes.FileReason(const AFileName: string;
+// Die Projektdateien im Verzeichnis der Unit und bis PROJECT_LEVELS
+// darueber (der Plattenteil von FileReason, s. dort) - '' oder der Grund.
+function ProjectWalkReason(const AFileName: string;
   AFeature: TRdxLateFeature): string;
 var
-  Ext, Dir, Up : string;
-  Level        : Integer;
-  Files        : TRdxProjectFiles;
-  DelphiSeen   : Boolean;
+  Dir, Up    : string;
+  Level      : Integer;
+  Files      : TRdxProjectFiles;
+  DelphiSeen : Boolean;
 begin
   Result := '';
-  if AFileName = '' then Exit;
-  Ext := LowerCase(ExtractFileExt(AFileName));
-  if InList(Ext, FPC_EXTENSIONS) then
-    Exit(_(R_FPC_FILE[AFeature], [Ext]));
-  if IsNetworkPath(AFileName) then
-    Exit(_(R_NETWORK, [ExtractFileDir(AFileName), MsgByHand]));
   Dir := ExtractFileDir(AFileName);
   DelphiSeen := False;
   for Level := 0 to PROJECT_LEVELS do
@@ -1029,6 +1058,77 @@ begin
     if Up = Dir then Exit;
     Dir := Up;
   end;
+end;
+
+var
+  // Der aktive Cache des Plattenblicks (UseDiskCache), nil = keiner.
+  GDiskCache : TRdxDiskReasonCache = nil;
+
+// Der Schluessel eines Eintrags: Art ('F' FileReason, 'I' IncludeReason),
+// Sprachmittel, reDelphix-Sprache (die Gruende sind uebersetzt), Dateiname
+// und - fuer IncludeReason - die Serial der Map, je mit #0 getrennt (in
+// keinem Dateinamen).
+function DiskKey(AKind: Char; AFeature: TRdxLateFeature;
+  const AFileName, ARest: string): string;
+begin
+  Result := AKind + IntToStr(Ord(AFeature)) + #0 + RdxLanguage + #0
+    + AFileName + #0 + ARest;
+end;
+
+class function TRdxMagicFixes.FileReason(const AFileName: string;
+  AFeature: TRdxLateFeature): string;
+var
+  Ext, Key : string;
+begin
+  Result := '';
+  if AFileName = '' then Exit;
+  Ext := LowerCase(ExtractFileExt(AFileName));
+  if InList(Ext, FPC_EXTENSIONS) then
+    Exit(_(R_FPC_FILE[AFeature], [Ext]));
+  // Das Netzpfad-Gate laeuft je Aufruf, vor dem Cache (Charge P5).
+  if IsNetworkPath(AFileName) then
+    Exit(_(R_NETWORK, [ExtractFileDir(AFileName), MsgByHand]));
+  if GDiskCache = nil then
+    Exit(ProjectWalkReason(AFileName, AFeature));
+  Key := DiskKey('F', AFeature, AFileName, '');
+  if GDiskCache.FItems.TryGetValue(Key, Result) then Exit;
+  Result := ProjectWalkReason(AFileName, AFeature);
+  GDiskCache.FItems.AddOrSetValue(Key, Result);
+end;
+
+class function TRdxMagicFixes.UseDiskCache(
+  ACache: TRdxDiskReasonCache): TRdxDiskReasonCache;
+begin
+  Result := GDiskCache;
+  GDiskCache := ACache;
+end;
+
+{ TRdxDiskReasonCache }
+
+constructor TRdxDiskReasonCache.Create;
+begin
+  inherited Create;
+  FItems := TDictionary<string, string>.Create;
+end;
+
+destructor TRdxDiskReasonCache.Destroy;
+begin
+  // Noch aktiv (ein vergessenes Wiederherstellen): abmelden, sonst laese
+  // der naechste FileReason freigegebenen Speicher.
+  if GDiskCache = Self then
+    GDiskCache := nil;
+  FItems.Free;
+  inherited;
+end;
+
+procedure TRdxDiskReasonCache.Clear;
+begin
+  FItems.Clear;
+end;
+
+function TRdxDiskReasonCache.Count: Integer;
+begin
+  Result := FItems.Count;
 end;
 
 // Die Pruefung eines Includes (TRdxIncludeTest): eine FPC-Weiche oder eine
@@ -1056,11 +1156,24 @@ class function TRdxMagicFixes.IncludeReason(const AFileName: string;
   AMap: TRdxCodeMap; AFeature: TRdxLateFeature): string;
 var
   Check : TRdxIncludeCheck;
+  Incs  : TArray<string>;
+  Key   : string;
 begin
+  // Die Map bestimmt die Includes (AllIncludes liest jedes Zeichen der
+  // Datei - im Messgeruest teurer als der Blick auf die Platte); dieselbe
+  // Map heisst dieselbe Serial.
+  if GDiskCache <> nil then
+  begin
+    Key := DiskKey('I', AFeature, AFileName, IntToStr(AMap.Serial));
+    if GDiskCache.FItems.TryGetValue(Key, Result) then Exit;
+  end;
+  Incs := AllIncludes(AMap);
   Check.Test := CompilerInInclude;
   Check.Arg := IntToStr(Ord(AFeature));
   Check.MissingFmt := _(R_INC_UNSEEN);
-  Result := IncludeChainReason(AFileName, AllIncludes(AMap), Check);
+  Result := IncludeChainReason(AFileName, Incs, Check);
+  if GDiskCache <> nil then
+    GDiskCache.FItems.AddOrSetValue(Key, Result);
 end;
 
 end.

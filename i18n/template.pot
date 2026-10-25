@@ -59,7 +59,7 @@ msgstr ""
 msgid "\"%s Assert\" is not a call to System.Assert"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2594
+#: reDelphix/source/uRdxCodeMap.pas:2694
 msgid "\"%s\" after a \";\" before the else - header of an anonymous method? It is unclear what the else belongs to"
 msgstr ""
 
@@ -562,7 +562,7 @@ msgstr ""
 msgid "%s in line %d writes Result (inactive branch?) - the detector did not see it, the finding is doubtful; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1158
+#: reDelphix/source/uRdxFixRunner.pas:1159
 msgid "%s in the condition is not proven as Boolean here - with a Variant \"not\" would be bitwise"
 msgstr ""
 
@@ -570,8 +570,8 @@ msgstr ""
 msgid "%s in the name is no known look-alike of an ASCII letter - maybe an intended letter"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:1750
-#: reDelphix/source/uRdxCodeMap.pas:1752
+#: reDelphix/source/uRdxCodeMap.pas:1850
+#: reDelphix/source/uRdxCodeMap.pas:1852
 msgid "%s in the range - an intent comment stays"
 msgstr ""
 
@@ -587,7 +587,7 @@ msgstr ""
 msgid "%s is a Variant - a literal branch would give it another VarType than the result of IfThen"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:851
+#: reDelphix/source/uRdxMagicFixes.pas:884
 msgid "%s is a binary or octal literal - the code action only handles decimal and hexadecimal numbers"
 msgstr ""
 
@@ -607,7 +607,7 @@ msgstr ""
 msgid "%s is a variable (procedural type) - only () calls it safely"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1095
+#: reDelphix/source/uRdxFixRunner.pas:1096
 msgid "%s is already declared as %s - the cast changes nothing"
 msgstr ""
 
@@ -636,7 +636,7 @@ msgstr ""
 msgid "%s is declared as %s - not Single, Double, Extended or Real"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1064
+#: reDelphix/source/uRdxFixRunner.pas:1065
 msgid "%s is declared as %s, not as %s - another type can hide Free, or the cast is needed to compile"
 msgstr ""
 
@@ -652,7 +652,7 @@ msgstr ""
 msgid "%s is declared as a property in this unit - if the call means it, it is not proven whether Delphi calls a property of procedural type without ()"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1182
+#: reDelphix/source/uRdxFixRunner.pas:1183
 msgid "%s is declared as a property in this unit - the assignment may call a setter"
 msgstr ""
 
@@ -686,7 +686,7 @@ msgstr ""
 msgid "%s is in a string literal (line %d) - call by name (GetProcAddress, MethodAddress, RTTI, script)?"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:525
+#: reDelphix/source/uRdxMagicFixes.pas:558
 msgid "%s is in line %d, a continuation line of the if condition - the constant would belong before the if line (not supported)"
 msgstr ""
 
@@ -719,7 +719,7 @@ msgstr ""
 msgid "%s is not a local variable of the routine (field, global variable, parameter) - %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1055
+#: reDelphix/source/uRdxFixRunner.pas:1056
 msgid "%s is not a plain identifier - its type cannot be checked"
 msgstr ""
 
@@ -744,7 +744,7 @@ msgid "%s is not declared directly in class %s"
 msgstr ""
 
 #: reDelphix/source/uRdxFixRunner.pas:308
-#: reDelphix/source/uRdxFixRunner.pas:1189
+#: reDelphix/source/uRdxFixRunner.pas:1190
 msgid "%s is not known as a variable here (property or field from another unit?)"
 msgstr ""
 
@@ -761,7 +761,7 @@ msgstr ""
 msgid "%s is not proven Integer or Cardinal here (type: %s) - the cast could change the computation or not compile"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1148
+#: reDelphix/source/uRdxFixRunner.pas:1149
 msgid "%s is not proven as Boolean here (type: %s) - with Variant %s would get the value of the condition instead of True/False"
 msgstr ""
 
@@ -839,7 +839,7 @@ msgstr ""
 msgid "%s of a custom memory manager (qualified) - %s"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:1893
+#: reDelphix/source/uRdxCodeMap.pas:1993
 msgid "%s on the reported line"
 msgstr ""
 
@@ -935,7 +935,7 @@ msgstr ""
 msgid "%s.Resume is the body of a loop or with statement (\"%s\" before it)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:854
+#: reDelphix/source/uRdxProvider.pas:900
 msgid "%s: no fixMode in the rule catalog"
 msgstr ""
 
@@ -1354,8 +1354,8 @@ msgstr ""
 msgid "Bugs"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:536
-#: reDelphix/source/uRdxProvider.pas:551
+#: reDelphix/source/uRdxProvider.pas:582
+#: reDelphix/source/uRdxProvider.pas:597
 msgid "Build Format() from concatenation"
 msgstr ""
 
@@ -1637,9 +1637,9 @@ msgstr ""
 msgid "Copy Jira issue"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:563
-#: reDelphix/source/uRdxProvider.pas:569
-#: reDelphix/source/uRdxProvider.pas:574
+#: reDelphix/source/uRdxProvider.pas:609
+#: reDelphix/source/uRdxProvider.pas:615
+#: reDelphix/source/uRdxProvider.pas:620
 msgid "Copy parameterized template to clipboard"
 msgstr ""
 
@@ -2457,15 +2457,15 @@ msgstr ""
 msgid "Large integer literal without digit grouping"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1018
+#: reDelphix/source/uRdxMagicFixes.pas:1047
 msgid "Lazarus project/package %s in the directory %s - the unit probably also builds with FPC, and FPC 3.2 has no digit separators"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1018
+#: reDelphix/source/uRdxMagicFixes.pas:1047
 msgid "Lazarus project/package %s in the directory %s - the unit probably also builds with FPC, and FPC 3.2 has no inline constants"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1018
+#: reDelphix/source/uRdxMagicFixes.pas:1047
 msgid "Lazarus project/package %s in the directory %s - the unit probably also builds with FPC, and FPC 3.2 has no inline variables"
 msgstr ""
 
@@ -2473,15 +2473,15 @@ msgstr ""
 msgid "Lazarus/FPC file (%s) - FPC 3.2 does not know digit separators"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1008
+#: reDelphix/source/uRdxMagicFixes.pas:1087
 msgid "Lazarus/FPC file (%s) - FPC 3.2 has no digit separators"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1008
+#: reDelphix/source/uRdxMagicFixes.pas:1087
 msgid "Lazarus/FPC file (%s) - FPC 3.2 has no inline constants"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1008
+#: reDelphix/source/uRdxMagicFixes.pas:1087
 msgid "Lazarus/FPC file (%s) - FPC 3.2 has no inline variables"
 msgstr ""
 
@@ -2518,7 +2518,7 @@ msgstr ""
 msgid "Line"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:517
+#: reDelphix/source/uRdxProvider.pas:563
 msgid "Line %d:%d to %d:%d"
 msgstr ""
 
@@ -3100,8 +3100,8 @@ msgstr ""
 msgid "Remove bidi control characters (as #$ code in strings)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:768
-#: reDelphix/source/uRdxProvider.pas:771
+#: reDelphix/source/uRdxProvider.pas:814
+#: reDelphix/source/uRdxProvider.pas:817
 msgid "Remove ineffective suppression marker"
 msgstr ""
 
@@ -3395,7 +3395,7 @@ msgstr ""
 msgid "Scanning... %d found"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:583
+#: reDelphix/source/uRdxProvider.pas:629
 msgid "Scope table not loaded (unitscopes.txt)"
 msgstr ""
 
@@ -3507,8 +3507,8 @@ msgstr ""
 msgid "Show annotation overlay on hover (otherwise click marked line)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:510
-#: reDelphix/source/uRdxProvider.pas:517
+#: reDelphix/source/uRdxProvider.pas:556
+#: reDelphix/source/uRdxProvider.pas:563
 msgid "Show location"
 msgstr ""
 
@@ -3637,11 +3637,11 @@ msgstr ""
 msgid "Suppress"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:739
+#: reDelphix/source/uRdxProvider.pas:785
 msgid "Suppress here"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:744
+#: reDelphix/source/uRdxProvider.pas:790
 msgid "Suppress in this file"
 msgstr ""
 
@@ -4054,7 +4054,7 @@ msgstr ""
 msgid "a block comment starts after the unit line"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1124
+#: reDelphix/source/uRdxFixRunner.pas:1125
 msgid "a call raises ENotImplemented instead of doing nothing"
 msgstr ""
 
@@ -4194,7 +4194,7 @@ msgstr ""
 msgid "absolute variable - it occupies the memory of another one"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:319
+#: reDelphix/source/uRdxProvider.pas:362
 msgid "action kind %d without execution"
 msgstr ""
 
@@ -4239,12 +4239,12 @@ msgstr ""
 msgid "an inherited call is not of the form \"inherited;\" or \"inherited Name(...);\" on one line - %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:718
-#: reDelphix/source/uRdxMagicFixes.pas:763
+#: reDelphix/source/uRdxMagicFixes.pas:751
+#: reDelphix/source/uRdxMagicFixes.pas:796
 msgid "an inline constant"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:691
+#: reDelphix/source/uRdxMagicFixes.pas:724
 msgid "an inline constant exists only from Delphi 10.3 on - the file shows traces of older compilers (%s, line %d); %s"
 msgstr ""
 
@@ -4321,7 +4321,7 @@ msgstr ""
 msgid "assembler body - it can reach Self through a register"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:715
+#: reDelphix/source/uRdxMagicFixes.pas:748
 msgid "at the literal in column %d the code action reads \"%s\" instead of %s"
 msgstr ""
 
@@ -4887,7 +4887,7 @@ msgstr ""
 msgid "doubled apostrophes"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:910
+#: reDelphix/source/uRdxProvider.pas:1001
 msgid "editor buffer empty or not readable"
 msgstr ""
 
@@ -4948,12 +4948,12 @@ msgstr ""
 msgid "except on E: Exception catches every error - prefer a specific subclass"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:916
+#: reDelphix/source/uRdxProvider.pas:1007
 msgid "file not found: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:791
-#: reDelphix/source/uRdxProvider.pas:928
+#: reDelphix/source/uRdxProvider.pas:837
+#: reDelphix/source/uRdxProvider.pas:1017
 msgid "file not readable"
 msgstr ""
 
@@ -4961,7 +4961,7 @@ msgstr ""
 msgid "file uses VCL and FMX: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:588
+#: reDelphix/source/uRdxProvider.pas:634
 msgid "file with an FPC switch or FPC mode - FPC 3.2 knows no unit scopes"
 msgstr ""
 
@@ -4973,11 +4973,11 @@ msgstr ""
 msgid "finally and end are not alone on their lines (code or comment beside them)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:872
+#: reDelphix/source/uRdxProvider.pas:918
 msgid "finding without file name"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:874
+#: reDelphix/source/uRdxProvider.pas:920
 msgid "finding without line"
 msgstr ""
 
@@ -5070,7 +5070,7 @@ msgstr ""
 msgid "in"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1062
+#: reDelphix/source/uRdxMagicFixes.pas:1173
 msgid "include %s %s - the quick fix does not see its compiler switches (FPC, older Delphi)"
 msgstr ""
 
@@ -5188,7 +5188,7 @@ msgstr ""
 msgid "line %d carries %d such if statements - ambiguous (the message names no column)"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:1895
+#: reDelphix/source/uRdxCodeMap.pas:1995
 msgid "line %d carries %s - ambiguous"
 msgstr ""
 
@@ -5208,7 +5208,7 @@ msgstr ""
 msgid "line %d carries more than \"%s\""
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:501
+#: reDelphix/source/uRdxMagicFixes.pas:534
 msgid "line %d carries no if"
 msgstr ""
 
@@ -5224,7 +5224,7 @@ msgstr ""
 msgid "line %d ends with the comment \"%s\" - a marker after code applies to the line after it or stays; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1239
+#: reDelphix/source/uRdxFixRunner.pas:1240
 msgid "line %d is ambiguous (%d statements with a nil comparison)"
 msgstr ""
 
@@ -5352,7 +5352,7 @@ msgid "network path %s - the quick fix reads no include files there (the menu is
 msgstr ""
 
 #: reDelphix/source/uRdxFixTable.pas:495
-#: reDelphix/source/uRdxMagicFixes.pas:1010
+#: reDelphix/source/uRdxMagicFixes.pas:1090
 msgid "network path %s - the quick fix reads no project or include files there (the menu is built in the main thread); %s"
 msgstr ""
 
@@ -5750,12 +5750,12 @@ msgstr ""
 msgid "no identifier with a non-ASCII character in the code of the reported line"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:518
+#: reDelphix/source/uRdxMagicFixes.pas:551
 msgid "no if condition on line %d compares with %s"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2592
-#: reDelphix/source/uRdxCodeMap.pas:2644
+#: reDelphix/source/uRdxCodeMap.pas:2692
+#: reDelphix/source/uRdxCodeMap.pas:2744
 msgid "no if, case or except found for the else"
 msgstr ""
 
@@ -5922,7 +5922,7 @@ msgstr ""
 msgid "no single implementation part - the end of the unit is not provable"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2531
+#: reDelphix/source/uRdxCodeMap.pas:2631
 msgid "no start of the statement found for the %s"
 msgstr ""
 
@@ -5940,7 +5940,7 @@ msgstr ""
 msgid "no statement starts the reported line"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1236
+#: reDelphix/source/uRdxFixRunner.pas:1237
 msgid "no statement with a nil comparison starts on line %d"
 msgstr ""
 
@@ -6005,7 +6005,7 @@ msgstr ""
 msgid "no whitespace at the line end at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:1747
+#: reDelphix/source/uRdxCodeMap.pas:1847
 msgid "noinspection marker in the range - it suppresses other findings"
 msgstr ""
 
@@ -6064,8 +6064,8 @@ msgstr ""
 msgid "nothing precedes the range, and it reaches the end of the file - %s"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:857
-#: reDelphix/source/uRdxProvider.pas:876
+#: reDelphix/source/uRdxProvider.pas:903
+#: reDelphix/source/uRdxProvider.pas:922
 msgid "nothing to offer"
 msgstr ""
 
@@ -6101,15 +6101,15 @@ msgstr ""
 msgid "of the routine %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:990
+#: reDelphix/source/uRdxMagicFixes.pas:1023
 msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 10.3, which has no inline constants; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:990
+#: reDelphix/source/uRdxMagicFixes.pas:1023
 msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 10.3, which has no inline variables; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:990
+#: reDelphix/source/uRdxMagicFixes.pas:1023
 msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 11, which has no digit separators; %s"
 msgstr ""
 
@@ -6323,7 +6323,7 @@ msgstr ""
 msgid "own constructor %s.Create - not provable that True still means CreateSuspended"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:607
+#: reDelphix/source/uRdxProvider.pas:653
 msgid "own unit %s in the project"
 msgstr ""
 
@@ -6366,27 +6366,27 @@ msgstr ""
 msgid "procedural block (%s ...) - parameters of a statement do not apply inside it; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:986
+#: reDelphix/source/uRdxMagicFixes.pas:1019
 msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 = %s) - there are no inline constants there; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:986
+#: reDelphix/source/uRdxMagicFixes.pas:1019
 msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 = %s) - there are no inline variables there; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:986
+#: reDelphix/source/uRdxMagicFixes.pas:1019
 msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 11 = %s) - there are no digit separators there; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:984
+#: reDelphix/source/uRdxMagicFixes.pas:1017
 msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 10.3, which has no inline constants; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:984
+#: reDelphix/source/uRdxMagicFixes.pas:1017
 msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 10.3, which has no inline variables; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:984
+#: reDelphix/source/uRdxMagicFixes.pas:1017
 msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 11, which has no digit separators; %s"
 msgstr ""
 
@@ -6414,7 +6414,7 @@ msgstr ""
 msgid "record - no inheritance"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2575
+#: reDelphix/source/uRdxCodeMap.pas:2675
 msgid "record before the else - the end count is uncertain"
 msgstr ""
 
@@ -6736,7 +6736,7 @@ msgstr ""
 msgid "the %s is in an expression (conditional expression, Delphi 13) - not a branch of a statement"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2530
+#: reDelphix/source/uRdxCodeMap.pas:2630
 msgid "the %s is in parentheses"
 msgstr ""
 
@@ -7016,8 +7016,8 @@ msgstr ""
 msgid "the class name \"%s\" contains characters outside A-Z, a-z, 0-9 and \"_\" - the help cannot find every spelling of it"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:610
-#: reDelphix/source/uRdxProvider.pas:668
+#: reDelphix/source/uRdxProvider.pas:656
+#: reDelphix/source/uRdxProvider.pas:714
 msgid "the clause would no longer be sorted (new SCA142)"
 msgstr ""
 
@@ -7059,7 +7059,7 @@ msgstr ""
 msgid "the condition is always False - the branch never ran; whether \"= 0\" was meant is for a human to decide"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1154
+#: reDelphix/source/uRdxFixRunner.pas:1155
 msgid "the condition is not proven as Boolean (a call, a path or arithmetic as operand) - with a Variant \"not\" would be bitwise"
 msgstr ""
 
@@ -7161,15 +7161,15 @@ msgstr ""
 msgid "the duplicate is on the last line of the file"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2723
+#: reDelphix/source/uRdxCodeMap.pas:2823
 msgid "the else belongs to a case or except - a statement list follows it"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2642
+#: reDelphix/source/uRdxCodeMap.pas:2742
 msgid "the else is in parentheses"
 msgstr ""
 
-#: reDelphix/source/uRdxCodeMap.pas:2559
+#: reDelphix/source/uRdxCodeMap.pas:2659
 msgid "the else matches no if"
 msgstr ""
 
@@ -7423,15 +7423,15 @@ msgstr ""
 msgid "the host name is not a fixed name (placeholder or special characters)"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:521
+#: reDelphix/source/uRdxMagicFixes.pas:554
 msgid "the if condition on line %d compares %d times with %s - ambiguous; the quick fix replaces exactly one literal"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:514
+#: reDelphix/source/uRdxMagicFixes.pas:547
 msgid "the if condition on line %d compares with %s - with digit separators the detector reads only the first block %s (false alarm); no literal to replace"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:507
+#: reDelphix/source/uRdxMagicFixes.pas:540
 msgid "the if condition on line %d compares with %s and with %s - ambiguous (with digit separators the detector reads only the first block); the quick fix replaces exactly one literal"
 msgstr ""
 
@@ -7447,15 +7447,15 @@ msgstr ""
 msgid "the implementation of %s is not in this file"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1049
+#: reDelphix/source/uRdxMagicFixes.pas:1149
 msgid "the include %s carries an FPC switch (line %d) - FPC 3.2 has no digit separators"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1049
+#: reDelphix/source/uRdxMagicFixes.pas:1149
 msgid "the include %s carries an FPC switch (line %d) - FPC 3.2 has no inline constants"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1049
+#: reDelphix/source/uRdxMagicFixes.pas:1149
 msgid "the include %s carries an FPC switch (line %d) - FPC 3.2 has no inline variables"
 msgstr ""
 
@@ -7463,15 +7463,15 @@ msgstr ""
 msgid "the include %s names %s - as a declaration (E2065 after the deletion), call or property accessor (E2003), and the quick fix does not see it"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1052
+#: reDelphix/source/uRdxMagicFixes.pas:1152
 msgid "the include %s shows traces of older compilers (%s, line %d) - an inline constant exists only from Delphi 10.3 on; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1052
+#: reDelphix/source/uRdxMagicFixes.pas:1152
 msgid "the include %s shows traces of older compilers (%s, line %d) - an inline variable exists only from Delphi 10.3 on; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1052
+#: reDelphix/source/uRdxMagicFixes.pas:1152
 msgid "the include %s shows traces of older compilers (%s, line %d) - digit separators exist only from Delphi 11 on; %s"
 msgstr ""
 
@@ -7620,7 +7620,7 @@ msgstr ""
 msgid "the line is in the initialization/finalization section - whether an inline declaration is valid there has not been measured"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:679
+#: reDelphix/source/uRdxMagicFixes.pas:712
 msgid "the line is in the main block of the program or library (begin from line %d) - whether an inline declaration is valid there has not been measured; %s"
 msgstr ""
 
@@ -7882,7 +7882,7 @@ msgstr ""
 msgid "the message lists only part of the placeholders - the right one could be missing"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:745
+#: reDelphix/source/uRdxMagicFixes.pas:778
 msgid "the message names %s - the detector does not report signed numbers, the literal has no sign; not supported"
 msgstr ""
 
@@ -7918,7 +7918,7 @@ msgstr ""
 msgid "the message names no nesting kind"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:743
+#: reDelphix/source/uRdxMagicFixes.pas:776
 msgid "the message names no number (\"Magic number \"N\" ...\")"
 msgstr ""
 
@@ -8313,7 +8313,7 @@ msgstr ""
 msgid "the target is a Variant - behind 'X +' Delphi computes Variant arithmetic instead of concatenating, the compiler vouches for no operand"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1179
+#: reDelphix/source/uRdxFixRunner.pas:1180
 msgid "the target is missing"
 msgstr ""
 
@@ -8432,7 +8432,7 @@ msgstr ""
 msgid "type of %s not proven here - only Single, Double, Extended and Real operands are rewritten"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1266
+#: reDelphix/source/uRdxFixRunner.pas:1267
 msgid "type of %s unknown - for a function or method pointer '= nil' calls it, Assigned() does not"
 msgstr ""
 
@@ -8444,7 +8444,7 @@ msgstr ""
 msgid "type of %s unknown - if it is procedural, Delphi reads the name without () as a pointer"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1061
+#: reDelphix/source/uRdxFixRunner.pas:1062
 msgid "type of %s unknown - only a cast to its own type is provably without effect"
 msgstr ""
 
@@ -8477,7 +8477,7 @@ msgstr ""
 msgid "unexpected code after the empty block"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1002
+#: reDelphix/source/uRdxFixRunner.pas:1003
 msgid "unhandled values raise EInvalidOpException"
 msgstr ""
 
@@ -8486,7 +8486,7 @@ msgid "unit without an implementation part (script?) - only the compiler knows %
 msgstr ""
 
 #: reDelphix/source/uRdxFixRunner.pas:794
-#: reDelphix/source/uRdxFixRunner.pas:1147
+#: reDelphix/source/uRdxFixRunner.pas:1148
 #: reDelphix/source/uRdxIntegerOverflowFix.pas:231
 msgid "unknown"
 msgstr ""
@@ -8503,7 +8503,7 @@ msgstr ""
 msgid "untyped \"out\" parameter - \"var\" would mean something else"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:585
+#: reDelphix/source/uRdxProvider.pas:631
 #: reDelphix/source/uRdxRecipeRunner.pas:1129
 msgid "uses clause contains compiler directives (line %d)"
 msgstr ""
@@ -8516,16 +8516,16 @@ msgstr ""
 msgid "uses entry in line %d not readable"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:663
+#: reDelphix/source/uRdxProvider.pas:709
 msgid "uses: qualify %s"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:667
-#: reDelphix/source/uRdxProvider.pas:673
+#: reDelphix/source/uRdxProvider.pas:713
+#: reDelphix/source/uRdxProvider.pas:719
 msgid "uses: qualify all %d entries"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:650
+#: reDelphix/source/uRdxProvider.pas:696
 msgid "uses: qualify entries"
 msgstr ""
 
@@ -8545,7 +8545,7 @@ msgstr ""
 msgid "whitespace only"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1316
+#: reDelphix/source/uRdxFixRunner.pas:1317
 msgid "with statement - an operand could be a member of the with expression"
 msgstr ""
 
@@ -8565,9 +8565,9 @@ msgstr ""
 #: reDelphix/source/uRdxFixRunner.pas:498
 #: reDelphix/source/uRdxFixRunner.pas:708
 #: reDelphix/source/uRdxFixRunner.pas:787
-#: reDelphix/source/uRdxFixRunner.pas:1058
-#: reDelphix/source/uRdxFixRunner.pas:1142
-#: reDelphix/source/uRdxFixRunner.pas:1176
+#: reDelphix/source/uRdxFixRunner.pas:1059
+#: reDelphix/source/uRdxFixRunner.pas:1143
+#: reDelphix/source/uRdxFixRunner.pas:1177
 msgid "with statement in the routine - %s could be a member"
 msgstr ""
 

@@ -26,6 +26,12 @@ unit uRdxProvider;
 // (Ziel, '+'-Zahl; TRdxRecipeRunner.QueryOf/Describe): steht dort nach
 // einer Bearbeitung eine andere Anweisung, entfallen die Baum-Rezepte mit
 // dem Grund "Zeile verschoben?" (Review Minor 20).
+// Ebenso bleiben die Zeilen der zuletzt gelesenen Datei stehen, samt ihrer
+// Code-Sicht (uRdxCodeMap.TRdxMappedLines, Charge P5): Unterdrueck-Hilfen,
+// Planer und Kontext-Laeufer teilen sich EINE Code-Sicht je Text, ueber
+// alle Funde eines Menues und die Code-Aktion am Caret (SharedLines); was
+// FileReason/IncludeReason auf der Platte sehen, gilt fuer einen
+// Menueaufbau (DISK_BATCH_MS, BeginDiskBatch).
 //
 // WAS ANGEBOTEN WIRD
 //
@@ -75,9 +81,12 @@ interface
 
 uses
   System.SysUtils, System.Classes,
+  System.Diagnostics,   // TStopwatch (Fenster des Plattenblick-Caches)
   uEngineApi, uRefactorInfo, uMethodd12, uFindingActions,
   uRdxScopeTable,
   uRdxBufferMath,   // TRdxTextSource, SpanFitsEditor
+  uRdxCodeMap,      // TRdxMappedLines: Zeilen mit geteilter Code-Sicht (P5)
+  uRdxMagicFixes,   // TRdxDiskReasonCache (P5)
   uRdxRecipeRunner;
 
 type
@@ -163,6 +172,16 @@ type
     FToken       : Integer;
     FContextToken: Integer;          // Kontext-Anbieter (Charge B), 0 = ab
     FUsesNames   : TArray<string>;   // Namen der uses-Eintraege der Datei
+    // Die Zeilen der zuletzt gelesenen Datei samt geteilter Code-Sicht
+    // (Charge P5, s. SharedLines): Name, Herkunft und Text, aus dem sie
+    // entstanden.
+    FLines       : TRdxMappedLines;
+    FLinesName   : string;
+    FLinesFrom   : TRdxTextSource;
+    FLinesText   : string;
+    // Plattenblick je Menueaufbau (Charge P5, s. BeginDiskBatch).
+    FDiskCache   : TRdxDiskReasonCache;
+    FDiskWatch   : TStopwatch;
     // Die Rezept-Zuordnung: eine neue Hilfe ist ein Rezept mehr in einer
     // der beiden Listen (Konstruktor), nicht ein Zweig mehr in Provide.
     FTreeRecipes : TArray<TRdxRecipe>;   // brauchen den geparsten Quelltext
@@ -213,6 +232,24 @@ type
     // unterscheiden.
     procedure AddDiagnosis(var AList: TArray<TFindingAction>;
       const ACtx: TRdxRecipeContext);
+    // Die Zeilen zu AText (Charge P5, Performance): txBuffer - AText als
+    // Zeilen; txDisk - die Datei, gelesen wie der Scan (LoadFileSmart), AText
+    // wird ihr Text (Vergleichstext der offenen Quelle, Minor 9). Passen
+    // Dateiname, Herkunft und Inhalt zu den zuletzt gelieferten Zeilen
+    // (Puffer: derselbe Text; Platte: dieselben Zeilen), kommen DIESE samt
+    // ihrer schon gebauten Code-Sicht zurueck - ein Menue fragt bis zu
+    // MAX_FINDINGS_PER_MENU Funde derselben Datei und die Code-Aktion am
+    // Caret, und bis dahin baute jeder Fund die Zeilen neu und die
+    // Code-Sicht dreimal (Zeilen-Marker, Datei-Marker, Planer). Die Zeilen
+    // gehoeren dem Anbieter und aendert niemand (Rezepte, Planer und
+    // Laeufer lesen nur); nil, wenn die Datei nicht lesbar ist.
+    function SharedLines(const AFileName: string; ASource: TRdxTextSource;
+      var AText: string): TStrings;
+    // Beginnt ein neuer Menueaufbau (Charge P5)? Ist das Fenster
+    // DISK_BATCH_MS seit dem ersten Plattenblick der Charge um, wird der
+    // Cache von FileReason/IncludeReason geleert - ein Menueaufbau (die Funde
+    // und die Code-Aktion) teilt sich EINEN Plattenblick je Datei.
+    procedure BeginDiskBatch;
     // Der Einstieg des Hosts (TFindingActionProvider).
     function Provide(const AFinding: TLeakFinding): TArray<TFindingAction>;
     // Code-Aktionen ohne Fund am Caret (Charge B, TContextActionProvider):
@@ -292,6 +329,12 @@ const
     ('Editor-Puffer', 'Platte', 'gesperrt');
   OPEN_NAMES   : array[TRdxOpenResult] of string =
     ('', ', neu geparst', ', wiederverwendet');
+  // So lange (ms ab dem ersten Plattenblick) gilt ein Ergebnis von
+  // FileReason/IncludeReason (Charge P5, BeginDiskBatch): ein Menueaufbau
+  // ruft Provide fuer bis zu MAX_FINDINGS_PER_MENU Funde und ProvideContext
+  // in einer Schleife; eine Projekt- oder Include-Datei, die in dieser Zeit
+  // auf der Platte entsteht oder sich aendert, sieht erst der naechste.
+  DISK_BATCH_MS = 2000;
 
 var
   GInstance : TRdxProvider = nil;
@@ -383,6 +426,7 @@ begin
   // bleiben, steht bei RDX_ACTION_BATCHES (uRdxRecipeRunner).
   FActions := TRdxObjectRing.Create(RDX_ACTION_BATCHES);
   FSource  := TRdxSourceCache.Create;
+  FDiskCache := TRdxDiskReasonCache.Create;
   FScopes  := TRdxScopeTable.Create;
   FScopes.LoadDefault;   // False = keine Tabelle; uses-Aktionen sagen das
   // Reihenfolge = Reihenfolge im Menue.
@@ -402,6 +446,8 @@ destructor TRdxProvider.Destroy;
 begin
   UnregisterAtHost;
   FScopes.Free;
+  FDiskCache.Free;
+  FLines.Free;
   FSource.Free;
   FActions.Free;
   inherited;
@@ -878,15 +924,60 @@ begin
     Result := '';
 end;
 
+function TRdxProvider.SharedLines(const AFileName: string;
+  ASource: TRdxTextSource; var AText: string): TStrings;
+var
+  Fresh : TRdxMappedLines;
+begin
+  // Aus demselben Puffertext entstehen dieselben Zeilen.
+  if (ASource = txBuffer) and Assigned(FLines) and (FLinesFrom = txBuffer)
+     and SameText(FLinesName, AFileName) and (FLinesText = AText) then
+    Exit(FLines);
+  Result := nil;
+  Fresh := TRdxMappedLines.Create;
+  try
+    if ASource = txBuffer then
+      Fresh.Text := AText
+    else
+    begin
+      // Von der Platte jedes Mal lesen - verglichen werden die Zeilen.
+      if not LoadFileSmart(AFileName, Fresh) then Exit;
+      AText := Fresh.Text;
+      if Assigned(FLines) and (FLinesFrom = txDisk)
+         and SameText(FLinesName, AFileName) and FLines.Equals(Fresh) then
+        Exit(FLines);
+    end;
+    FLines.Free;
+    FLines     := Fresh;
+    Fresh      := nil;   // gehoert jetzt dem Anbieter
+    FLinesName := AFileName;
+    FLinesFrom := ASource;
+    FLinesText := AText;
+    Result := FLines;
+  finally
+    Fresh.Free;
+  end;
+end;
+
+procedure TRdxProvider.BeginDiskBatch;
+begin
+  if FDiskWatch.IsRunning
+     and (FDiskWatch.ElapsedMilliseconds <= DISK_BATCH_MS) then
+    Exit;
+  FDiskCache.Clear;
+  FDiskWatch := TStopwatch.StartNew;
+end;
+
 function TRdxProvider.Provide(
   const AFinding: TLeakFinding): TArray<TFindingAction>;
 var
-  Ctx    : TRdxRecipeContext;
-  Text   : string;
-  Source : TRdxTextSource;
-  Lines  : TStringList;
-  R      : TRdxRecipe;
-  Why    : string;
+  Ctx      : TRdxRecipeContext;
+  Text     : string;
+  Source   : TRdxTextSource;
+  Lines    : TStrings;
+  R        : TRdxRecipe;
+  Why      : string;
+  PrevDisk : TRdxDiskReasonCache;
 begin
   Result := nil;
   // Kein FActions.Clear mehr (Stufe B): die Objekte des vorigen Provide
@@ -917,17 +1008,18 @@ begin
       [AFinding.FileName]), '', False, nil);
     Exit;
   end;
-  Lines := TStringList.Create;
+  // Die Zeilen samt Code-Sicht teilen sich alle Rezepte dieses Funds und -
+  // bei unveraendertem Text - die folgenden Funde (Charge P5, SharedLines);
+  // bei txDisk wird Text der Vergleichstext der offenen Quelle (Minor 9).
+  Lines := SharedLines(AFinding.FileName, Source, Text);
+  if Lines = nil then
+  begin
+    Add(Result, DIAG_PREFIX + _('file not readable'), '', False, nil);
+    Exit;
+  end;
+  BeginDiskBatch;
+  PrevDisk := TRdxMagicFixes.UseDiskCache(FDiskCache);
   try
-    if Source = txBuffer then
-      Lines.Text := Text
-    else if LoadFileSmart(AFinding.FileName, Lines) then
-      Text := Lines.Text   // Vergleichstext fuer die offene Quelle (Minor 9)
-    else
-    begin
-      Add(Result, DIAG_PREFIX + _('file not readable'), '', False, nil);
-      Exit;
-    end;
     Ctx := Default(TRdxRecipeContext);
     Ctx.Finding  := AFinding;
     Ctx.FileName := AFinding.FileName;
@@ -949,7 +1041,7 @@ begin
     for R in FSuppressRecipes do
       R(Result, Ctx);
   finally
-    Lines.Free;
+    TRdxMagicFixes.UseDiskCache(PrevDisk);
   end;
 end;
 
@@ -958,11 +1050,12 @@ function TRdxProvider.ProvideContext(
   const AContext: TEditorContext): TArray<TFindingAction>;
 var
   Text     : string;
-  Lines    : TStringList;
+  Lines    : TStrings;
   Outcomes : TArray<TRdxContextOutcome>;
   O        : TRdxContextOutcome;
   Caption  : string;
   Act      : TRdxAction;
+  PrevDisk : TRdxDiskReasonCache;
 begin
   Result := nil;
   if not IsPascalSource(AContext.FileName) then Exit;
@@ -974,9 +1067,13 @@ begin
   // Nur der Puffer: geschrieben wird in ihn, und das Menue haengt an einer
   // offenen Datei. Leer oder nicht lesbar, oder nicht offen: nichts.
   if TRdxEditor.ReadBuffer(AContext.FileName, Text) <> txBuffer then Exit;
-  Lines := TStringList.Create;
+  // Dieselben Zeilen samt Code-Sicht wie die Funde desselben Menues, wenn
+  // der Puffer unveraendert ist (Charge P5, SharedLines), und derselbe
+  // Plattenblick (BeginDiskBatch).
+  Lines := SharedLines(AContext.FileName, txBuffer, Text);
+  BeginDiskBatch;
+  PrevDisk := TRdxMagicFixes.UseDiskCache(FDiskCache);
   try
-    Lines.Text := Text;
     Outcomes := TRdxContextRunner.Run(Lines, AContext);
     for O in Outcomes do
     begin
@@ -994,7 +1091,7 @@ begin
       Result[High(Result)].ChangesBehavior := O.ChangesBehavior;
     end;
   finally
-    Lines.Free;
+    TRdxMagicFixes.UseDiskCache(PrevDisk);
   end;
   RdxLog('Kontext %s:%d:%d - %d Eintraege',
     [ExtractFileName(AContext.FileName), AContext.Line, AContext.Col,

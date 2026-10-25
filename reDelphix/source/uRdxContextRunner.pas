@@ -187,7 +187,7 @@ begin
   if not Assigned(ALines) or not AContext.IsValid
      or (AContext.Line > ALines.Count) then
     Exit;
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     // Virtueller Raum hinter dem Zeilenende: wie das Zeilenende.
     Col := AContext.Col;
@@ -196,7 +196,7 @@ begin
     AddIntroduceConst(Result, Map, AContext.FileName, AContext.Line, Col);
     AddTryFinallyCreate(Result, Map, AContext.Line, Col);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
 end;
 
