@@ -78,10 +78,25 @@ const
   // konservieren die alte Zeilengrenze: ein Match reicht nie ueber ein
   // Zeilenende - sonst waere der Umbau eine zweite, ungewollte
   // Bewegungsrichtung (mehrzeilige Zuweisungen).
+  //
+  // Stack (Charge R4 2026-10-26): der Literal-Rumpf war
+  //   '([^'\n]*(?:''[^'\n]*)*)'
+  // - PCRE 8.45 (ohne JIT) kostete die gierige ''-Gruppe 2 match()-Rahmen je
+  // verdoppeltem Apostroph; ~2000 davon in einer Zeile (SQL-Text mit vielen
+  // ''x''-Werten) sprengten den 1-MB-Stack von bds.exe/TestProject. Jetzt
+  // zwei Zweige mit gleicher Gruppe 1 (Branch-Reset), beide ohne Rekursion:
+  //   1. Rumpf possessiv bis zum Ende, dann das schliessende ' - der Normalfall;
+  //   2. endet die Zeile ohne schliessendes ', fiel das alte Muster per
+  //      Backtracking auf "Rumpf bis vor das LETZTE ''" zurueck (dessen
+  //      erstes ' schloss) - genau das liefert Zweig 2 ueber das Lookahead
+  //      (?='') je Wiederholung. Ohne '' im Rumpf scheitern beide wie zuvor.
+  RE_QUOTED_LITERAL =
+    '''(?|([^''\n]*+(?:''''[^''\n]*+)*+)''|' +
+    '([^''\n]*+(?:''''[^''\n]*+(?=''''))*+)'')';
   RE_PROPERTY_ASSIGN =
-    '(?i)\.[ \t]*(?:Caption|Hint|Text)[ \t]*:=[ \t]*''([^''\n]*(?:''''[^''\n]*)*)''';
+    '(?i)\.[ \t]*(?:Caption|Hint|Text)[ \t]*:=[ \t]*' + RE_QUOTED_LITERAL;
   RE_DIALOG_CALL =
-    '(?i)\b(?:ShowMessage|MessageDlg)[ \t]*\([ \t]*''([^''\n]*(?:''''[^''\n]*)*)''';
+    '(?i)\b(?:ShowMessage|MessageDlg)[ \t]*\([ \t]*' + RE_QUOTED_LITERAL;
 
 function ContainsLetter(const S: string): Boolean;
 var
