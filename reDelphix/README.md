@@ -1288,6 +1288,9 @@ Ohne Delphi (FPC 3.2.2):
 bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxTextMsgs uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths uTestRdxBlocks uTestRdxCategoryArgFix uTestRdxEmptyBlockFix uTestRdxEmptyExceptFix uTestRdxGotoExitFix uTestRdxNativeIntFix uTestRdxParensFix uTestRdxTrailingCommaFix uTestRdxLoopBoundFix uTestRdxFuncNameFix uTestRdxContextRunner uTestRdxSharedMap uTestRdxContextFormat
 ```
 
+Gemessen (2026-10-25, FPC-Lauf, Charge N integriert = Q + C16 + FN):
+`PASSED 902  FAILED 0` - 54 Testunits; 864 + 6 (Q6 `TTestRdxFileMarkerCache`)
++ 19 (`uTestRdxContextFormat`) + 13 (Text-Fixture `uTestRdxFuncNameFix`).
 Gemessen (2026-10-25, FPC-Lauf, Charge N C16, Basis d2403f61 ohne Charge Q): `PASSED 883  FAILED 0` - 53
 Testunits, davon `uTestRdxContextFormat` 19 (neu: "Format() aus Verkettung" am
 Caret; die Unit-Liste von build.sh traegt dazu `uRdxPlacesRunner`). Davor
