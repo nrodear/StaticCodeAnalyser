@@ -27,6 +27,12 @@ type
     // Voll-Review 2026-09-12 (Major 72): Mehrfach-Deklarationen
     [Test] procedure MultiDecl_FirstIdentIsTarget_Reported;
     [Test] procedure MultiDecl_FirstIdentOperand_NoFinding;
+    // Charge P 2026-10-25 (Tempo-Umbau, Verhalten identisch): Waechter
+    // fuer die Typnamen-Vorpruefung und das (*SKIP) der Deklarations-Regex.
+    [Test] procedure UpperCaseDecl_PrefilterStillReported;
+    [Test] procedure QWordTarget_PrefilterStillReported;
+    [Test] procedure MultiDecl_AcrossLines_Reported;
+    [Test] procedure LongNumberTableBeforeDecl_Reported;
   end;
 
 implementation
@@ -257,6 +263,99 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkIntegerOverflow),
     'Int64-Operand aus Mehrfach-Deklaration promoted die Multiplikation');
+  finally F.Free; end;
+end;
+
+procedure TTestIntegerOverflow.UpperCaseDecl_PrefilterStillReported;
+// Die Vorpruefung sucht 'nt64' im kleingeschriebenen Code - eine
+// GROSS geschriebene Deklaration muss sie passieren wie bisher die
+// (?i)-Regex.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var TOTAL: INT64;'#13#10 +
+  '    SectorCount, SectorSize: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  TOTAL := SectorCount * SectorSize;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkIntegerOverflow),
+    'INT64 in Grossbuchstaben ist dieselbe Deklaration');
+  finally F.Free; end;
+end;
+
+procedure TTestIntegerOverflow.QWordTarget_PrefilterStillReported;
+// Ohne 'nt64' im Text traegt nur der zweite Vorpruefungs-Zweig 'qword'.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var Total: QWord;'#13#10 +
+  '    SectorCount, SectorSize: Cardinal;'#13#10 +
+  'begin'#13#10 +
+  '  Total := SectorCount * SectorSize;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkIntegerOverflow),
+    'QWord-Ziel ohne Int64 im Text');
+  finally F.Free; end;
+end;
+
+procedure TTestIntegerOverflow.MultiDecl_AcrossLines_Reported;
+// Die Ident-Liste darf ueber Zeilen laufen (\s faengt den Umbruch); das
+// (*SKIP) setzt erst am Listenende an und verliert den ersten Ident nicht.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var'#13#10 +
+  '  Total,'#13#10 +
+  '  Sum: Int64;'#13#10 +
+  '  SectorCount, SectorSize: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  Total := SectorCount * SectorSize;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkIntegerOverflow),
+    'Mehrfach-Deklaration ueber zwei Zeilen');
+  finally F.Free; end;
+end;
+
+procedure TTestIntegerOverflow.LongNumberTableBeforeDecl_Reported;
+// Der Laufzeit-Fall: eine lange Komma-Liste ohne ': Int64' (Zahlentabelle)
+// direkt vor der echten Deklaration. Vorher quadratisch, mit (*SKIP)
+// linear - die Deklaration dahinter wird weiter gefunden.
+var
+  SB  : TStringBuilder;
+  i   : Integer;
+  F   : TObjectList<TLeakFinding>;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.Append('unit t; implementation'#13#10);
+    SB.Append('const Tab: array[0..1999] of Integer = (');
+    for i := 0 to 1999 do
+    begin
+      if i > 0 then SB.Append(', ');
+      SB.Append(i);
+    end;
+    SB.Append(');'#13#10);
+    SB.Append('procedure Foo;'#13#10 +
+              'var Total, Sum: Int64;'#13#10 +
+              '    SectorCount, SectorSize: Integer;'#13#10 +
+              'begin'#13#10 +
+              '  Total := SectorCount * SectorSize;'#13#10 +
+              'end;');
+    F := TFindingHelper.FindingsOfFile(SB.ToString);
+  finally
+    SB.Free;
+  end;
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkIntegerOverflow),
+    'Deklaration hinter einer langen Zahlentabelle');
   finally F.Free; end;
 end;
 
