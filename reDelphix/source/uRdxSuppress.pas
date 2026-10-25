@@ -79,6 +79,9 @@ type
     // (das erste Code-Token der Datei, bis zu ihrem ';').
     class function FileMarker(ALines: TStrings; const AKindName: string;
       out AEdit: TRdxEdit; out AReason: string): Boolean; static;
+    // Wie oft FileMarker die Zeilen einer Datei durchsucht hat (je Map
+    // einmal, Charge Q6) - fuer Tests und das Messgeruest.
+    class function FileScans: Integer; static;
 
     // SCA165: den wirkungslosen Marker in Zeile AMarkerLine entfernen -
     // eine reine Kommentarzeile ganz, einen Kommentar hinter Code nur
@@ -512,37 +515,106 @@ begin
   Result := True;
 end;
 
+type
+  // Was HeadLine ueber die Kopfanweisung weiss (der Grund wird erst bei der
+  // Verwendung uebersetzt - die Sprache kann zwischen zwei Aufrufen wechseln).
+  THeadState = (hsFound, hsNoUnitLine, hsCommentAfter);
+
 // Die Zeile des ';' der Kopfanweisung unit/program/library/package - das
 // erste Code-Token der Datei; ein 'Unit Name: X' oder 'Library General
-// Public License' im Lizenzkopf davor ist Kommentar und zaehlt nicht. ''
-// oder der Grund (auch, wenn hinter dem ';' ein Block-Kommentar beginnt:
-// die neue Zeile laege darin).
-function HeadLineReason(AMap: TRdxCodeMap; out AHead: Integer): string;
+// Public License' im Lizenzkopf davor ist Kommentar und zaehlt nicht.
+// hsFound, sonst warum nicht (auch, wenn hinter dem ';' ein Block-Kommentar
+// beginnt: die neue Zeile laege darin).
+function HeadLine(AMap: TRdxCodeMap; out AHead: Integer): THeadState;
 var
   Tok : TRdxToken;
 begin
-  Result := '';
+  Result := hsFound;
   AHead := 0;
   Tok := NextToken(AMap, 1, 1);
   if (Tok.Low <> 'unit') and (Tok.Low <> 'program')
      and (Tok.Low <> 'library') and (Tok.Low <> 'package') then
-    Exit(_(R_NO_UNIT_LINE));
+    Exit(hsNoUnitLine);
   repeat
     Tok := After(AMap, Tok);
   until (Tok.Low = ';') or (Tok.Low = '');
   if Tok.Low = '' then
-    Exit(_(R_NO_UNIT_LINE));
+    Exit(hsNoUnitLine);
   AHead := Tok.Line;
   if AMap.StartsInside(AHead + 1) then
-    Result := _('a block comment starts after the unit line');
+    Result := hsCommentAfter;
+end;
+
+// Der Grund zu AState in der reDelphix-Sprache; '' fuer hsFound.
+function HeadReason(AState: THeadState): string;
+begin
+  case AState of
+    hsNoUnitLine   : Result := _(R_NO_UNIT_LINE);
+    hsCommentAfter : Result := _('a block comment starts after the unit line');
+  else
+    Result := '';
+  end;
+end;
+
+type
+  // Was FileMarker aus dem TEXT der Datei liest - unabhaengig von der Art
+  // (Charge Q6, Performance): der erste erweiterbare Datei-Marker und, ohne
+  // ihn, die Kopfanweisung. Bis dahin las FileMarker je Fund jede Zeile
+  // (IsFileMarker mit TrimLeft/Copy je Zeile; im Messgeruest rdxperf ueber
+  // den Selbstscan 1,75 von 2,25 s). Gilt fuer genau eine Map (Serial): eine
+  // Map aendert sich nach Create nicht, und die Zeilen, die sie traegt,
+  // aendern sich nicht, ohne dass sie verworfen wird (uRdxCodeMap,
+  // LEBENSDAUER und GETEILTE SICHT) - die Funde eines Menues teilen die Map
+  // ihrer Datei (TRdxProvider.SharedLines) und damit diesen Eintrag. Fuer
+  // Zeilen ohne eigene Map baut Acquire je Aufruf neu: neue Serial, neu
+  // gerechnet wie bisher.
+  TFileFacts = record
+    Serial : Int64;        // die Map, fuer die es gilt; 0 = keine
+    Marker : Integer;      // erster erweiterbarer Datei-Marker, 0 = keiner
+    Head   : Integer;      // ';' der Kopfanweisung (nur ohne Marker)
+    State  : THeadState;   // dto.
+  end;
+
+var
+  // EIN Eintrag, ohne Sperre: reDelphix rechnet nur im IDE-Hauptthread (wie
+  // GMapSerial in uRdxCodeMap).
+  GFileFacts : TFileFacts;
+  GFileScans : Integer = 0;
+
+function FileFactsOf(ALines: TStrings; AMap: TRdxCodeMap): TFileFacts;
+var
+  i : Integer;
+begin
+  if (GFileFacts.Serial <> 0) and (GFileFacts.Serial = AMap.Serial) then
+    Exit(GFileFacts);
+  Inc(GFileScans);
+  Result := Default(TFileFacts);
+  Result.Serial := AMap.Serial;
+  // Ein vorhandener Datei-Marker bekommt die Art dazu - nur ein echter
+  // (kein Text in einem Kommentar) und keiner mit 'All'.
+  for i := 1 to ALines.Count do
+    if TRdxSuppress.IsFileMarker(ALines[i - 1])
+       and IsExtensibleMarker(AMap, i) then
+    begin
+      Result.Marker := i;
+      Break;
+    end;
+  if Result.Marker = 0 then
+    Result.State := HeadLine(AMap, Result.Head);
+  GFileFacts := Result;
+end;
+
+class function TRdxSuppress.FileScans: Integer;
+begin
+  Result := GFileScans;
 end;
 
 class function TRdxSuppress.FileMarker(ALines: TStrings;
   const AKindName: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
-  Map  : TRdxCodeMap;
-  i    : Integer;
-  Head : Integer;
+  Map   : TRdxCodeMap;
+  Facts : TFileFacts;
+  i     : Integer;
 begin
   Result := False;
   AEdit  := Default(TRdxEdit);
@@ -554,28 +626,26 @@ begin
   end;
   Map := TRdxCodeMap.Acquire(ALines);
   try
-    // Ein vorhandener Datei-Marker bekommt die Art dazu - nur ein echter
-    // (kein Text in einem Kommentar) und keiner mit 'All'.
-    for i := 1 to ALines.Count do
-      if TRdxSuppress.IsFileMarker(ALines[i - 1])
-         and IsExtensibleMarker(Map, i) then
-      begin
-        if KindListed(ALines[i - 1], AKindName) then
-        begin
-          AReason := _(R_MARKER_THERE);
-          Exit;
-        end;
-        AEdit := WholeLine(ALines, i, WithKind(ALines[i - 1], TAG_FILEWIDE, AKindName));
-        Exit(True);
-      end;
-    // Sonst hinter die Kopfanweisung.
-    AReason := HeadLineReason(Map, Head);
+    Facts := FileFactsOf(ALines, Map);
   finally
     TRdxCodeMap.Release(Map);
   end;
+  if Facts.Marker > 0 then
+  begin
+    i := Facts.Marker;
+    if KindListed(ALines[i - 1], AKindName) then
+    begin
+      AReason := _(R_MARKER_THERE);
+      Exit;
+    end;
+    AEdit := WholeLine(ALines, i, WithKind(ALines[i - 1], TAG_FILEWIDE, AKindName));
+    Exit(True);
+  end;
+  // Sonst hinter die Kopfanweisung.
+  AReason := HeadReason(Facts.State);
   if AReason <> '' then Exit;
-  AEdit := WholeLine(ALines, Head,
-    ALines[Head - 1] + #10 + '// ' + TAG_FILEWIDE + ' ' + AKindName);
+  AEdit := WholeLine(ALines, Facts.Head,
+    ALines[Facts.Head - 1] + #10 + '// ' + TAG_FILEWIDE + ' ' + AKindName);
   Result := True;
 end;
 
