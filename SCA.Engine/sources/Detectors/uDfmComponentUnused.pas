@@ -178,6 +178,26 @@ begin
   end;
 end;
 
+procedure CollectUsedUnits(UnitNode: TAstNode; Target: THashSet<string>);
+// S4-Quelle: alle uses-Eintraege der Form-Unit (interface UND
+// implementation - der Feldtyp braucht zwar die interface-Sicht, beide
+// Klauseln zu nehmen ist die konservative Seite), klein geschrieben.
+// 'in'-Pfade schneidet der Parser schon ab.
+var
+  Items : TList<TAstNode>;
+  It    : TAstNode;
+begin
+  if UnitNode = nil then Exit;
+  Items := UnitNode.FindAll(nkUsesItem);
+  try
+    for It in Items do
+      if It.Name <> '' then
+        Target.Add(LowerCase(It.Name));
+  finally
+    Items.Free;
+  end;
+end;
+
 function HasEventProperty(C: TComponentNode): Boolean;
 // U1: mindestens eine belegte Event-Property (OnClick=..., OnChange=...).
 // Event-Definition identisch zum FormBinder (IsEventPropertyName), damit
@@ -300,6 +320,7 @@ var
   CodeTokens   : THashSet<string>;   // U3: Own-Unit-Code-Referenzen
   PropTokens   : THashSet<string>;   // U2: DFM-interne Referenzen
   StrLitTokens : THashSet<string>;   // S3: Namen in String-Literalen
+  UsedUnits    : THashSet<string>;   // S4: uses-Eintraege der Form-Unit
   Comps        : TList<TComponentNode>;
   C            : TComponentNode;
   NameLow      : string;
@@ -327,11 +348,13 @@ begin
   CodeTokens   := THashSet<string>.Create;
   PropTokens   := THashSet<string>.Create;
   StrLitTokens := THashSet<string>.Create;
+  UsedUnits    := THashSet<string>.Create;
   Comps        := nil;
   try
     CollectCodeTokens(Binding.UnitNode, CodeTokens);
     CollectPropTokens(Graph, PropTokens);
     CollectStringLiteralTokens(SrcText, StrLitTokens);
+    CollectUsedUnits(Binding.UnitNode, UsedUnits);
 
     Comps := Graph.EnumerateAll;
     for C in Comps do
@@ -347,7 +370,16 @@ begin
       if EndsText('field', C.ClassRef) then Continue;
       // S4: projekteigene Frame-/Form-Klasse (visuelle Vererbung /
       // eingebettete Frames schwer entscheidbar) -> konservativ skip.
-      if (RepoIdx <> nil) and (RepoIdx.GetUnitForClass(C.ClassRef) <> '') then
+      // "Projekteigen" heisst seit 2026-10-26: deklariert in der Form-Unit
+      // selbst oder in einer Unit, die sie per uses einbindet - so loest
+      // der Compiler den Feldtyp auf. Vorher reichte JEDE Deklaration im
+      // Scan-Umfang: im Sammelscan D:\git-sca-realworld schalteten die
+      // Pascal-Script-Koepfe cnwizards/Bin/PSDecl (StdCtrls.pas, Menus.pas
+      // ...) und fremde Interposer TLabel/TButton/TMenuItem in ALLEN
+      // Repos stumm (10.975 von 11.993 Funden). Header-Stubs zaehlen nicht
+      // (uDfmRepoIndex.IsHeaderStubUnit).
+      if (RepoIdx <> nil) and
+         RepoIdx.IsClassDeclaredInVisibleUnit(C.ClassRef, AOwnUnitPath, UsedUnits) then
         Continue;
       // inline/inherited-Subtrees: Laufzeit-Sub-Objekte bzw. in Parent-Form
       // deklarierte Member -> konservativ skip (analog SchemaMismatch).
@@ -380,6 +412,7 @@ begin
     end;
   finally
     Comps.Free;
+    UsedUnits.Free;
     StrLitTokens.Free;
     PropTokens.Free;
     CodeTokens.Free;

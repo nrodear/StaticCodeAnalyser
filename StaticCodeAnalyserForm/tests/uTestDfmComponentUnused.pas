@@ -49,6 +49,14 @@ type
     [Test] procedure Test_InheritedComponent_NotDetected;          // inherited
     [Test] procedure Test_NameOnlyInConstLiteral_NotDetected;      // S3 je Komponente
     [Test] procedure Test_OtherTextInConstLiteral_StillDetected;   // S3-Gegenprobe
+
+    // ---- S4 nur fuer SICHTBARE, uebersetzbare Deklarationen (2026-10-26) ----
+    [Test] procedure Test_FrameClassInUnusedUnit_StillDetected;    // nicht per uses
+    [Test] procedure Test_HeaderStubUnitInUses_StillDetected;      // PSDecl-Muster
+    [Test] procedure Test_HeaderStubWithInclude_NotDetected;       // {$I}-Rumpf
+    [Test] procedure Test_AbstractOnlyUnit_NotDetected;            // kein Rumpf noetig
+    [Test] procedure Test_UnitScopeSuffixInUses_NotDetected;       // 'Other' -> Vcl.Other
+    [Test] procedure Test_InterposerInOwnUnit_NotDetected;         // eigene Unit
   end;
 
 implementation
@@ -64,8 +72,11 @@ uses
 // Schreibt Main- (+ optional Other-) .pas in einen temp-Ordner, baut Repo-
 // und Symbol-Index ueber BEIDE Dateien und laesst den Detektor laufen.
 // MainFn wird als AOwnUnitPath (Cross-Unit + S3-Quelltext) uebergeben.
+// OtherFile: Dateiname der zweiten Unit - S4 vergleicht den Unit-Namen
+// (Dateistamm) mit den uses-Eintraegen, z.B. 'Vcl.Other.pas'.
 function RunDetector(const DfmSrc, MainPas, OtherPas: string;
-  UseSymIdx: Boolean = True): TObjectList<TLeakFinding>;
+  UseSymIdx: Boolean = True;
+  const OtherFile: string = 'uOther.pas'): TObjectList<TLeakFinding>;
 var
   DfmParser : TDfmParser;
   Graph     : TComponentGraph;
@@ -84,7 +95,7 @@ begin
   TDirectory.CreateDirectory(Tmp);
 
   MainFn  := TPath.Combine(Tmp, 'uMain.pas');
-  OtherFn := TPath.Combine(Tmp, 'uOther.pas');
+  OtherFn := TPath.Combine(Tmp, OtherFile);
   try
     TFile.WriteAllText(MainFn, MainPas, TEncoding.UTF8);
     if OtherPas <> '' then
@@ -495,10 +506,14 @@ end;
 procedure TTestDfmComponentUnused.Test_OwnProjectFrameClass_NotDetected;
 // S4: TMyFrame ist im Repo-Index (uOther deklariert die Klasse) -> visuelle
 // Vererbung bzw. eingebetteter Frame, konservativ ueberspringen.
+// 2026-10-26: uMain bindet uOther jetzt per uses ein. Die alte Fixture tat
+// das nicht - sie war so nicht uebersetzbar (TMyFrame in uMain unsichtbar)
+// und gruen nur, weil S4 jede Deklaration im Scan-Umfang zaehlte. Genau
+// die alte Fixture ist jetzt Test_FrameClassInUnusedUnit_StillDetected.
 const PAS_MAIN =
   'unit uMain;'#13#10 +
   'interface'#13#10 +
-  'uses Vcl.Forms;'#13#10 +
+  'uses Vcl.Forms, uOther;'#13#10 +
   'type TForm1 = class(TForm)'#13#10 +
   '  fraEmbedded: TMyFrame;'#13#10 +
   'end;'#13#10 +
@@ -674,6 +689,196 @@ begin
   F := RunDetector(DFM, PAS_MAIN, '');
   try Assert.AreEqual<Integer>(1, Count(F, fkDfmComponentUnused),
     'ohne den Namen im Literal greift S3 nicht');
+  finally F.Free; end;
+end;
+
+// ---- S4 nur fuer SICHTBARE, uebersetzbare Deklarationen (2026-10-26) -------
+//
+// Korpus-Anlass: im Sammelscan D:\git-sca-realworld schalteten die Pascal-
+// Script-Koepfe cnwizards/Bin/PSDecl/StdCtrls.pas, Menus.pas, ... (leerer
+// implementation-Teil) und fremde Interposer (Kastri MainFrm 'TButton =
+// class(...)') SCA184 fuer TLabel/TButton/TMenuItem in ALLEN Repos stumm -
+// 10.975 von 11.993 Funden. Jetzt zaehlt nur eine Deklaration in der Form-
+// Unit selbst oder in einer per uses eingebundenen Unit, und nie ein Stub.
+//
+// Am gebauten Stand f45c964d (alte Regel) per Mini-Repo nachgemessen
+// (scratchpad sca184\mini, MinConfidence=low): UnusedUnit 0, HeaderStub 0 -
+// beide Tests sind dort ROT (erwartet 1); die vier Gegenproben 0 = gruen.
+// Die Pruefung, dass der Detektor im Mini-Repo ueberhaupt meldet, ist der
+// Fall ohne zweite Unit (Test_UnknownFrameClass_StillDetected): 1.
+
+const
+  // uMain bindet uOther ein und hat eine Komponente der Klasse TMyFrame.
+  PAS_MAIN_USES_OTHER =
+    'unit uMain;'#13#10 +
+    'interface'#13#10 +
+    'uses Vcl.Forms, uOther;'#13#10 +
+    'type TForm1 = class(TForm)'#13#10 +
+    '  fraEmbedded: TMyFrame;'#13#10 +
+    'end;'#13#10 +
+    'var Form1: TForm1;'#13#10 +
+    'implementation'#13#10 +
+    'end.';
+  DFM_FRAME_OBJECT =
+    'object Form1: TForm1'#13#10 +
+    '  object fraEmbedded: TMyFrame'#13#10 +
+    '  end'#13#10 +
+    'end';
+
+procedure TTestDfmComponentUnused.Test_FrameClassInUnusedUnit_StillDetected;
+// Die alte S4-Fixture: uOther deklariert TMyFrame, uMain bindet uOther aber
+// NICHT ein. Der Compiler saehe die Klasse nicht; eine gleichnamige Klasse
+// irgendwo im Scan-Umfang ist kein Beleg fuer "projekteigen". Gegenprobe:
+// Test_OwnProjectFrameClass_NotDetected - identisch bis auf 'uOther' in uses.
+const PAS_MAIN =
+  'unit uMain;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms;'#13#10 +
+  'type TForm1 = class(TForm)'#13#10 +
+  '  fraEmbedded: TMyFrame;'#13#10 +
+  'end;'#13#10 +
+  'var Form1: TForm1;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+const PAS_OTHER =
+  'unit uOther;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms;'#13#10 +
+  'type TMyFrame = class(TFrame)'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunDetector(DFM_FRAME_OBJECT, PAS_MAIN, PAS_OTHER);
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmComponentUnused),
+    'Klasse nur in einer NICHT eingebundenen Unit: S4 darf nicht greifen');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmComponentUnused.Test_HeaderStubUnitInUses_StillDetected;
+// PSDecl-Muster: uOther ist eingebunden, deklariert TMyFrame mit einem
+// Konstruktor, hat aber KEINE Routine im implementation-Teil - so eine Unit
+// ist nicht uebersetzbar und liefert keine Komponentenklasse.
+const PAS_OTHER =
+  'unit uOther;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms;'#13#10 +
+  'type TMyFrame = class(TFrame)'#13#10 +
+  '  constructor Create;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunDetector(DFM_FRAME_OBJECT, PAS_MAIN_USES_OTHER, PAS_OTHER);
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmComponentUnused),
+    'Header-Stub zaehlt nicht als projekteigene Klasse');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmComponentUnused.Test_HeaderStubWithInclude_NotDetected;
+// Gegenprobe zum Stub, unterscheidet sich in genau einer Zeile: der Rumpf
+// kommt per {$I} (Lazarus-LCL-Muster). Der Parser expandiert Includes nicht;
+// ohne den Text-Schutz waere jede so gebaute Unit ein "Stub".
+const PAS_OTHER =
+  'unit uOther;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms;'#13#10 +
+  'type TMyFrame = class(TFrame)'#13#10 +
+  '  constructor Create;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  '{$I uOther.inc}'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunDetector(DFM_FRAME_OBJECT, PAS_MAIN_USES_OTHER, PAS_OTHER);
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmComponentUnused),
+    'Rumpf per Include: kein Stub, S4 greift');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmComponentUnused.Test_AbstractOnlyUnit_NotDetected;
+// Gegenprobe zum Stub: eine abstrakte Methode braucht keinen Rumpf - die
+// Unit ist trotz leerem implementation-Teil uebersetzbar.
+const PAS_OTHER =
+  'unit uOther;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms;'#13#10 +
+  'type TMyFrame = class(TFrame)'#13#10 +
+  '  procedure Run; virtual; abstract;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunDetector(DFM_FRAME_OBJECT, PAS_MAIN_USES_OTHER, PAS_OTHER);
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmComponentUnused),
+    'nur abstrakte Methoden: kein Stub, S4 greift');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmComponentUnused.Test_UnitScopeSuffixInUses_NotDetected;
+// Unit-Scope-Namen: 'uses Other' findet die Datei Vcl.Other.pas (wie
+// 'uses StdCtrls' -> Vcl.StdCtrls). Ohne Suffix-Abgleich verloeren alte
+// Formen ihre echten projekteigenen Klassen.
+const PAS_MAIN =
+  'unit uMain;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms, Other;'#13#10 +
+  'type TForm1 = class(TForm)'#13#10 +
+  '  fraEmbedded: TMyFrame;'#13#10 +
+  'end;'#13#10 +
+  'var Form1: TForm1;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+const PAS_OTHER =
+  'unit Vcl.Other;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms;'#13#10 +
+  'type TMyFrame = class(TFrame)'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunDetector(DFM_FRAME_OBJECT, PAS_MAIN, PAS_OTHER, True, 'Vcl.Other.pas');
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmComponentUnused),
+    'uses-Eintrag ohne Scope-Praefix trifft Vcl.Other.pas');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmComponentUnused.Test_InterposerInOwnUnit_NotDetected;
+// Interposer in der Form-Unit selbst ('TButton = class(Vcl.StdCtrls.TButton)'):
+// sichtbar ohne uses-Eintrag, der Vergleich laeuft ueber den Pfad. Die
+// Gegenprobe ohne Interposer ist Test_UnusedComponent_Detected.
+const PAS_MAIN =
+  'unit uMain;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms, Vcl.StdCtrls;'#13#10 +
+  'type TButton = class(Vcl.StdCtrls.TButton)'#13#10 +
+  '  procedure Run;'#13#10 +
+  'end;'#13#10 +
+  'type TForm1 = class(TForm)'#13#10 +
+  '  btnX: TButton;'#13#10 +
+  'end;'#13#10 +
+  'var Form1: TForm1;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TButton.Run;'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  'end.';
+const DFM =
+  'object Form1: TForm1'#13#10 +
+  '  object btnX: TButton'#13#10 +
+  '  end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunDetector(DFM, PAS_MAIN, '');
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmComponentUnused),
+    'Interposer in der eigenen Unit bleibt projekteigen');
   finally F.Free; end;
 end;
 

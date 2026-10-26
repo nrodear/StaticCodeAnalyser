@@ -24,6 +24,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
+  uCompatSet,  // D11: THashSet<T>-Ersatz (D12: leere Unit, natives THashSet)
   uAstNode, uAstFileCache;
 
 type
@@ -51,12 +52,20 @@ type
     // nicht gibt. Wer auf GetUnitForClass baut, muss wissen, ob die
     // Antwort eindeutig war.
     FClassAmbig : TDictionary<string, Boolean>;
+    // SCA184/S4 (2026-10-26): Klassenname -> Pfade ALLER Units, die die
+    // Klasse im interface-Teil deklarieren, Header-Stubs ausgenommen
+    // (s. IsHeaderStubUnit). FClassUnit behaelt nur den ersten Treffer
+    // und kennt keine Sichtbarkeit - S4 muss aber wissen, ob EINE der
+    // Deklarationen fuer die Form-Unit ueberhaupt sichtbar ist. Eigene
+    // Struktur, damit FormBinder/FrameResolver unberuehrt bleiben.
+    FClassDeclUnits : TObjectDictionary<string, TStringList>;
     // Per-Scan-AST-Cache (D.2.3 Infra): von Build reingereicht statt
     // gAstFileCache-Global -> ein Index-Lauf nutzt genau einen Cache.
     FAstCache : TAstFileCache;
     procedure ScanUnit(const PasFileName: string);
     procedure CollectVarsAt(Section: TAstNode; const Unitname: string);
-    procedure CollectClassesAt(Section: TAstNode; const Unitname: string);
+    procedure CollectClassesAt(Section: TAstNode; const Unitname: string;
+      AIsHeaderStub: Boolean);
   public
     constructor Create;
     destructor  Destroy; override;
@@ -74,6 +83,15 @@ type
     // GetUnitForClass hat dann GERATEN. Aufrufer, die aus dem
     // Ergebnis auf Abwesenheit schliessen, muessen das pruefen.
     function IsClassAmbiguous(const ClassRef: string): Boolean;
+
+    // SCA184/S4: True, wenn eine fuer die Form-Unit SICHTBARE Unit die
+    // Klasse deklariert - so loest auch der Compiler den Feldtyp auf.
+    // Sichtbar = die Form-Unit selbst (AOwnUnitPath, Pfadvergleich) oder
+    // eine Unit, deren Name in AUsedUnits steht (uses-Eintraege, klein).
+    // Ein Eintrag ohne Unit-Scope-Praefix ('stdctrls') trifft auch die
+    // Datei 'Vcl.StdCtrls.pas'. Header-Stubs zaehlen nie.
+    function IsClassDeclaredInVisibleUnit(const ClassRef, AOwnUnitPath: string;
+      AUsedUnits: THashSet<string>): Boolean;
 
     // Anzahl der erfassten Form-Variablen - praktisch fuer "Pipeline ready?"
     // Checks im Detektor.
@@ -95,10 +113,12 @@ begin
   FVars      := TDictionary<string, TFormVarInfo>.Create;
   FClassUnit := TDictionary<string, string>.Create;
   FClassAmbig := TDictionary<string, Boolean>.Create;
+  FClassDeclUnits := TObjectDictionary<string, TStringList>.Create([doOwnsValues]);
 end;
 
 destructor TDfmRepoIndex.Destroy;
 begin
+  FClassDeclUnits.Free;
   FClassUnit.Free;
   FClassAmbig.Free;
   FVars.Free;
@@ -114,6 +134,7 @@ begin
   FVars.Clear;
   FClassUnit.Clear;
   FClassAmbig.Clear;
+  FClassDeclUnits.Clear;
   if FileList = nil then Exit;
 
   for I := 0 to FileList.Count - 1 do
@@ -126,6 +147,91 @@ begin
     if not TStaticFiles.IsUnitLikeFile(FN) then Continue;
     ScanUnit(FN);
   end;
+end;
+
+function ImplHasIncludeDirective(const PasFileName: string;
+  FromLine: Integer): Boolean;
+// Steht ab der implementation-Zeile ein {$I datei} / {$INCLUDE datei}?
+// Der Parser expandiert Includes nicht - die Lazarus-LCL legt ganze
+// Implementierungen in .inc-Dateien (lcl/toolwin.pp, spinex.pp). Solche
+// Units sind uebersetzbar und KEIN Header-Stub. '{$I+}'/'{$I-}' (I/O-
+// Pruefung) und '{$IFDEF' tragen kein Leerzeichen nach dem I und zaehlen
+// nicht. Lesefehler -> True: im Zweifel kein Stub (alte S4-Wirkung).
+var
+  Lines : TStringList;
+  I     : Integer;
+  Up    : string;
+begin
+  Result := True;
+  Lines := TStringList.Create;
+  try
+    try
+      Lines.LoadFromFile(PasFileName);
+    except
+      Exit;
+    end;
+    I := FromLine - 1;
+    if I < 0 then I := 0;
+    while I < Lines.Count do
+    begin
+      Up := UpperCase(Lines[I]);
+      if (Pos('{$I ', Up) > 0) or (Pos('{$INCLUDE ', Up) > 0) then Exit;
+      Inc(I);
+    end;
+    Result := False;
+  finally
+    Lines.Free;
+  end;
+end;
+
+function IsHeaderStubUnit(Root: TAstNode; const PasFileName: string): Boolean;
+// Header-Stub (SCA184/S4, 2026-10-26): die Unit deklariert im interface-
+// Teil Routinen, die einen Rumpf brauchen (nicht abstract/external), hat
+// aber im implementation-Teil KEINE einzige Routine. So eine Unit ist
+// nicht uebersetzbar (E2065) und kann nicht die Klasse einer gestreamten
+// Komponente liefern. Korpus-Anlass: cnwizards/Bin/PSDecl - Pascal-
+// Script-Deklarationskoepfe namens StdCtrls.pas/Menus.pas/ExtCtrls.pas
+// mit leerem implementation-Teil; per Unit-Name sind sie von jeder alten
+// Form mit 'uses StdCtrls' aus "sichtbar".
+// Ohne interface- oder implementation-Abschnitt: kein Stub (konservativ).
+// Grenze: eine Unit, die NUR Interface-Typen mit Methoden und rumpflose
+// Klassen traegt, gilt ebenfalls als Stub (der Parser fuehrt Interfaces als
+// nkClass) - ihre Klassen verlieren nur den S4-Skip.
+var
+  IFace, Impl, Cur : TAstNode;
+  Stack            : TList<TAstNode>;
+  I                : Integer;
+  NeedsBody        : Boolean;
+begin
+  Result := False;
+  if Root = nil then Exit;
+  IFace := Root.FindFirstChild(nkInterface);
+  Impl  := Root.FindFirstChild(nkImplementation);
+  if (IFace = nil) or (Impl = nil) then Exit;
+  // Schneller Ausgang fuer fast alle Units: es gibt einen Rumpf.
+  if Impl.FindFirst(nkMethod) <> nil then Exit;
+
+  NeedsBody := False;
+  Stack := TList<TAstNode>.Create;
+  try
+    Stack.Add(IFace);
+    while (Stack.Count > 0) and (not NeedsBody) do
+    begin
+      Cur := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      // Direktiven stehen klein in TypeRef ('proc;virtual;abstract').
+      if (Cur.Kind = nkMethod) and
+         (Pos(';abstract', Cur.TypeRef) = 0) and
+         (Pos(';external', Cur.TypeRef) = 0) then
+        NeedsBody := True;
+      for I := 0 to Cur.Children.Count - 1 do
+        Stack.Add(Cur.Children[I]);
+    end;
+  finally
+    Stack.Free;
+  end;
+  if not NeedsBody then Exit;
+  Result := not ImplHasIncludeDirective(PasFileName, Impl.Line);
 end;
 
 procedure TDfmRepoIndex.ScanUnit(const PasFileName: string);
@@ -169,7 +275,7 @@ begin
     if IFace = nil then IFace := Root;
 
     CollectVarsAt(IFace, PasFileName);
-    CollectClassesAt(IFace, PasFileName);
+    CollectClassesAt(IFace, PasFileName, IsHeaderStubUnit(Root, PasFileName));
   finally
     if OwnsRoot then Root.Free;
   end;
@@ -219,13 +325,14 @@ begin
 end;
 
 procedure TDfmRepoIndex.CollectClassesAt(Section: TAstNode;
-  const Unitname: string);
+  const Unitname: string; AIsHeaderStub: Boolean);
 var
   Classes : TList<TAstNode>;
   C       : TAstNode;
   I       : Integer;
   Key      : string;
   Existing : string;
+  Decls    : TStringList;
 begin
   Classes := Section.FindAll(nkClass);
   try
@@ -234,6 +341,19 @@ begin
       C := Classes[I];
       if C.Name = '' then Continue;
       Key := LowerCase(C.Name);
+      // S4-Sicht: alle deklarierenden Units ausser Header-Stubs. Laeuft
+      // VOR dem FClassUnit-Zweig, weil der bei Mehrfachdeklaration per
+      // Continue aussteigt.
+      if not AIsHeaderStub then
+      begin
+        if not FClassDeclUnits.TryGetValue(Key, Decls) then
+        begin
+          Decls := TStringList.Create;
+          FClassDeclUnits.Add(Key, Decls);
+        end;
+        if Decls.IndexOf(Unitname) < 0 then
+          Decls.Add(Unitname);
+      end;
       if FClassUnit.TryGetValue(Key, Existing) then
       begin
         // Nur ueber UNIT-Grenzen hinweg mehrdeutig. Zwei nkClass mit
@@ -265,6 +385,40 @@ end;
 function TDfmRepoIndex.IsClassAmbiguous(const ClassRef: string): Boolean;
 begin
   Result := FClassAmbig.ContainsKey(LowerCase(ClassRef));
+end;
+
+function TDfmRepoIndex.IsClassDeclaredInVisibleUnit(const ClassRef,
+  AOwnUnitPath: string; AUsedUnits: THashSet<string>): Boolean;
+var
+  Decls   : TStringList;
+  DeclFn  : string;
+  OwnFull : string;
+  UnitLow : string;
+  P       : Integer;
+begin
+  Result := False;
+  if not FClassDeclUnits.TryGetValue(LowerCase(ClassRef), Decls) then Exit;
+  OwnFull := '';
+  if AOwnUnitPath <> '' then OwnFull := ExpandFileName(AOwnUnitPath);
+  for DeclFn in Decls do
+  begin
+    // Eigene Unit: Interposer 'TButton = class(Vcl.StdCtrls.TButton)'.
+    // Pfad statt Name - 'MainFrm'/'Unit1' gibt es in jedem zweiten
+    // Projekt eines Sammel-Scans.
+    if (OwnFull <> '') and SameText(ExpandFileName(DeclFn), OwnFull) then
+      Exit(True);
+    if AUsedUnits = nil then Continue;
+    UnitLow := LowerCase(ChangeFileExt(ExtractFileName(DeclFn), ''));
+    if AUsedUnits.Contains(UnitLow) then Exit(True);
+    // Unit-Scope-Suffixe: 'vcl.styles.colortabs' -> 'styles.colortabs',
+    // 'colortabs' - ein uses-Eintrag darf das Scope-Praefix weglassen.
+    P := Pos('.', UnitLow);
+    while P > 0 do
+    begin
+      if AUsedUnits.Contains(Copy(UnitLow, P + 1, MaxInt)) then Exit(True);
+      P := Pos('.', UnitLow, P + 1);
+    end;
+  end;
 end;
 
 function TDfmRepoIndex.VarCount: Integer;
