@@ -10,6 +10,8 @@
 //   BodyItem       := ObjectDecl | Property
 //   Property       := QualifiedName '=' VALUE
 //   QualifiedName  := Ident ('.' Ident)*
+//   VALUE          := ein atomares Lexer-Token, '-' Zahl, oder
+//                     QualifiedName (Referenz 'dm.Pop', s. ReadQualifiedTail)
 //
 // Properties werden in Phase 1 vollständig übersprungen - der Parser baut
 // nur die Komponenten-Hierarchie. Property-Werte werden anhand der Zeilen-
@@ -40,6 +42,7 @@ type
 
     function  ParseQualifiedName(out FirstLine, FirstCol: Integer): string;
     function  TryParsePropertyValue(EqLine: Integer; out Value: TPropValue): Boolean;
+    function  ReadQualifiedTail: string;
     procedure ParseProperty(Owner: TComponentNode);
     procedure ParseObjectInto(Parent: TComponentNode; Graph: TComponentGraph);
     procedure ParseBody(Owner: TComponentNode);
@@ -202,7 +205,8 @@ function TDfmParser.TryParsePropertyValue(EqLine: Integer;
 //   * '-' gefolgt von Zahl wird zu einem einzigen pvkInteger/pvkFloat-Wert
 //     zusammengefuegt (RawValue: '-42').
 //   * Alle anderen Wert-Formen (String, Set, ItemList, StrList, Binary,
-//     Bool, Ident) sind im Lexer bereits atomar.
+//     Bool, Ident) sind im Lexer bereits atomar - bis auf den
+//     qualifizierten Bezeichner 'dm.Pop', den ReadQualifiedTail anhaengt.
 //
 // Robustheit:
 //   * Ein Bezeichner auf einer ANDEREN Zeile als das '=' ist kein Wert,
@@ -276,9 +280,45 @@ begin
 
   FLex.Next;                                  // Wert-Token konsumieren
   Value.RawValue := Sign + Tok.Value;
+  // Charge R5 (2026-10-26): qualifizierter Bezeichner als Wert. TWriter
+  // schreibt eine Referenz auf die Komponente eines ANDEREN Moduls oder
+  // eines eingebetteten Frames als 'Besitzer.Name' (PopupMenu =
+  // dm.Pop, Images = dmShared.Images, ActiveControl =
+  // ButtonPanel1.OKButton). Bis hierher endete der Wert am ersten
+  // Bezeichner; der Punkt fiel in ParseBody als Fremdtoken weg, 'Pop'
+  // wurde als naechster Property-NAME gelesen und das Consume(tkEquals)
+  // in ParseProperty warf - die GANZE Formdatei war verloren
+  // (GEMESSEN: 221 von 3.061 Text-DFM/LFM und 1 von 100 binaeren DFM in
+  // D:\git-sca-realworld, 18 von 1.013 in D:\git-sca-lazarus - jeder
+  // Abbruch im Korpus ausser einer %FORMNAME%-Vorlage lag hier).
+  // Der Wert bleibt pvkIdent mit dem vollen Pfad im RawValue - so, wie
+  // ihn auch System.Classes als vaIdent liest.
+  if Tok.Kind = tkIdent then
+    Value.RawValue := Value.RawValue + ReadQualifiedTail;
   Value.Line     := Tok.Line;
   Value.Col      := Tok.Col;
   Result := True;
+end;
+
+function TDfmParser.ReadQualifiedTail: string;
+// Liest ('.' Ident)* hinter dem ersten Bezeichner eines Wertes und
+// liefert den Rest inklusive der Punkte ('.Pop', '.Panel.OKButton').
+// Folgt einem Punkt kein Bezeichner AUF SEINER ZEILE, endet der Wert dort;
+// der Punkt ist dann verbraucht - genau wie vorher, als ParseBody ihn als
+// Fremdtoken ueberlas. Die Zeilenpruefung haelt den Namen der naechsten
+// Property aus dem Wert (TWriter bricht Bezeichner nie um, vgl.
+// TryParsePropertyValue).
+var
+  Dot : TDfmToken;
+begin
+  Result := '';
+  while FLex.Peek.Kind = tkDot do
+  begin
+    Dot := FLex.Next;                         // '.'
+    if (FLex.Peek.Kind <> tkIdent) or (FLex.Peek.Line <> Dot.Line) then
+      Break;
+    Result := Result + '.' + FLex.Next.Value;
+  end;
 end;
 
 end.
