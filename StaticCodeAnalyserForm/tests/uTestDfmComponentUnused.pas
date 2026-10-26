@@ -49,17 +49,32 @@ type
     [Test] procedure Test_InheritedComponent_NotDetected;          // inherited
     [Test] procedure Test_NameOnlyInConstLiteral_NotDetected;      // S3 je Komponente
     [Test] procedure Test_OtherTextInConstLiteral_StillDetected;   // S3-Gegenprobe
+  end;
 
-    // ---- S4 nur fuer SICHTBARE, uebersetzbare Deklarationen (2026-10-26) ----
+  // S4 nur fuer SICHTBARE, uebersetzbare Deklarationen (2026-10-26). Eigene
+  // Fixture, weil TTestDfmComponentUnused sonst ueber 20 Tests waechst;
+  // Ablauf (RunDetector/CountUnused) und Fixturen liegen auf Unit-Ebene.
+  [TestFixture]
+  TTestDfmComponentUnusedVisibility = class
+  public
     [Test] procedure Test_FrameClassInUnusedUnit_StillDetected;    // nicht per uses
+    [Test] procedure Test_ImplUsesClass_NotDetected;               // uses im impl-Teil
     [Test] procedure Test_HeaderStubUnitInUses_StillDetected;      // PSDecl-Muster
     [Test] procedure Test_HeaderStubWithInclude_NotDetected;       // {$I}-Rumpf
+    [Test] procedure Test_IncludeSpellings_NotStub;                // (*$I, {$i'..'}, Tab
+    [Test] procedure Test_ConditionalDirectives_StillStub;         // {$IFDEF} ist kein {$I}
     [Test] procedure Test_AbstractOnlyUnit_NotDetected;            // kein Rumpf noetig
+    [Test] procedure Test_ExternalOnlyUnit_NotDetected;            // external: kein Rumpf
     [Test] procedure Test_UnitScopeSuffixInUses_NotDetected;       // 'Other' -> Vcl.Other
     [Test] procedure Test_InterposerInOwnUnit_NotDetected;         // eigene Unit
   end;
 
 implementation
+
+// noinspection-file ClassPerFile
+// Zwei Fixtures fuer denselben Detektor (Grenze 20 Tests je Fixture): die
+// Kernregeln und die S4-Sichtbarkeit teilen RunDetector und die Fixturen -
+// eine zweite Datei braechte nur einen zweiten Projekteintrag.
 
 uses
   System.SysUtils, System.Classes, System.IOUtils, System.Generics.Collections,
@@ -706,150 +721,213 @@ end;
 // beide Tests sind dort ROT (erwartet 1); die vier Gegenproben 0 = gruen.
 // Die Pruefung, dass der Detektor im Mini-Repo ueberhaupt meldet, ist der
 // Fall ohne zweite Unit (Test_UnknownFrameClass_StillDetected): 1.
+//
+// Die Fixturen entstehen aus FrameMain/FrameUnit: der eine Unterschied
+// zwischen Fall und Gegenprobe steht damit als Argument im Aufruf.
 
-const
-  // uMain bindet uOther ein und hat eine Komponente der Klasse TMyFrame.
-  PAS_MAIN_USES_OTHER =
+function CountUnused(const DfmSrc, MainPas, OtherPas: string;
+  const OtherFile: string = 'uOther.pas'): Integer;
+// RunDetector, zaehlen, freigeben - die S4-Faelle unterscheiden sich nur in
+// den Quelltexten, nicht im Ablauf.
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  F := RunDetector(DfmSrc, MainPas, OtherPas, True, OtherFile);
+  try
+    Result := Count(F, fkDfmComponentUnused);
+  finally
+    F.Free;
+  end;
+end;
+
+function FrameMain(const AIfaceUses, AImplPart: string): string;
+// uMain mit der Komponente fraEmbedded: TMyFrame. AIfaceUses = uses-Liste
+// des interface-Teils, AImplPart steht direkt hinter 'implementation'.
+begin
+  Result := Format(
     'unit uMain;'#13#10 +
     'interface'#13#10 +
-    'uses Vcl.Forms, uOther;'#13#10 +
+    'uses %s;'#13#10 +
     'type TForm1 = class(TForm)'#13#10 +
     '  fraEmbedded: TMyFrame;'#13#10 +
     'end;'#13#10 +
     'var Form1: TForm1;'#13#10 +
     'implementation'#13#10 +
-    'end.';
+    '%send.', [AIfaceUses, AImplPart]);
+end;
+
+function FrameUnit(const AMember, AImplPart: string;
+  const AUnitName: string = 'uOther'): string;
+// Die zweite Unit: deklariert TMyFrame mit AMember als Rumpf ('' = ohne
+// Member); AImplPart steht direkt hinter 'implementation'.
+begin
+  Result := Format(
+    'unit %s;'#13#10 +
+    'interface'#13#10 +
+    'uses Vcl.Forms;'#13#10 +
+    'type TMyFrame = class(TFrame)'#13#10 +
+    '%send;'#13#10 +
+    'implementation'#13#10 +
+    '%send.', [AUnitName, AMember, AImplPart]);
+end;
+
+const
   DFM_FRAME_OBJECT =
     'object Form1: TForm1'#13#10 +
     '  object fraEmbedded: TMyFrame'#13#10 +
     '  end'#13#10 +
     'end';
+  // Konstruktor ohne Rumpf im implementation-Teil: macht uOther zum Stub,
+  // solange kein Include den Rumpf nachliefert.
+  MEMBER_NEEDS_BODY = '  constructor Create;'#13#10;
+  USES_OTHER        = 'Vcl.Forms, uOther';
 
-procedure TTestDfmComponentUnused.Test_FrameClassInUnusedUnit_StillDetected;
+procedure TTestDfmComponentUnusedVisibility.Test_FrameClassInUnusedUnit_StillDetected;
 // Die alte S4-Fixture: uOther deklariert TMyFrame, uMain bindet uOther aber
 // NICHT ein. Der Compiler saehe die Klasse nicht; eine gleichnamige Klasse
-// irgendwo im Scan-Umfang ist kein Beleg fuer "projekteigen". Gegenprobe:
-// Test_OwnProjectFrameClass_NotDetected - identisch bis auf 'uOther' in uses.
-const PAS_MAIN =
-  'unit uMain;'#13#10 +
-  'interface'#13#10 +
-  'uses Vcl.Forms;'#13#10 +
-  'type TForm1 = class(TForm)'#13#10 +
-  '  fraEmbedded: TMyFrame;'#13#10 +
-  'end;'#13#10 +
-  'var Form1: TForm1;'#13#10 +
-  'implementation'#13#10 +
-  'end.';
-const PAS_OTHER =
-  'unit uOther;'#13#10 +
-  'interface'#13#10 +
-  'uses Vcl.Forms;'#13#10 +
-  'type TMyFrame = class(TFrame)'#13#10 +
-  'end;'#13#10 +
-  'implementation'#13#10 +
-  'end.';
-var F: TObjectList<TLeakFinding>;
+// irgendwo im Scan-Umfang ist kein Beleg fuer "projekteigen". Gegenproben:
+// Test_OwnProjectFrameClass_NotDetected (uOther im interface-uses) und
+// Test_ImplUsesClass_NotDetected (uOther im implementation-uses).
 begin
-  F := RunDetector(DFM_FRAME_OBJECT, PAS_MAIN, PAS_OTHER);
-  try Assert.AreEqual<Integer>(1, Count(F, fkDfmComponentUnused),
+  Assert.AreEqual<Integer>(1,
+    CountUnused(DFM_FRAME_OBJECT, FrameMain('Vcl.Forms', ''), FrameUnit('', '')),
     'Klasse nur in einer NICHT eingebundenen Unit: S4 darf nicht greifen');
-  finally F.Free; end;
 end;
 
-procedure TTestDfmComponentUnused.Test_HeaderStubUnitInUses_StillDetected;
+procedure TTestDfmComponentUnusedVisibility.Test_ImplUsesClass_NotDetected;
+// uOther steht nur in der uses-Klausel des implementation-Teils. Fuer den
+// Feldtyp reichte das dem Compiler nicht - S4 nimmt trotzdem beide Klauseln
+// (konservative Seite, kein neuer Fund aus einer Sichtbarkeitsfeinheit).
+// Traeger: CollectUsedUnits (uDfmComponentUnused) sammelt nkUsesItem ueber
+// die GANZE Unit. Beschraenkt man es auf den interface-Teil, liefert dieser
+// Test 1 wie Test_FrameClassInUnusedUnit_StillDetected, von dem er sich nur
+// in AImplPart unterscheidet.
+begin
+  Assert.AreEqual<Integer>(0,
+    CountUnused(DFM_FRAME_OBJECT, FrameMain('Vcl.Forms', 'uses uOther;'#13#10),
+      FrameUnit('', '')),
+    'uses im implementation-Teil zaehlt fuer S4 mit');
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_HeaderStubUnitInUses_StillDetected;
 // PSDecl-Muster: uOther ist eingebunden, deklariert TMyFrame mit einem
 // Konstruktor, hat aber KEINE Routine im implementation-Teil - so eine Unit
 // ist nicht uebersetzbar und liefert keine Komponentenklasse.
-const PAS_OTHER =
-  'unit uOther;'#13#10 +
-  'interface'#13#10 +
-  'uses Vcl.Forms;'#13#10 +
-  'type TMyFrame = class(TFrame)'#13#10 +
-  '  constructor Create;'#13#10 +
-  'end;'#13#10 +
-  'implementation'#13#10 +
-  'end.';
-var F: TObjectList<TLeakFinding>;
 begin
-  F := RunDetector(DFM_FRAME_OBJECT, PAS_MAIN_USES_OTHER, PAS_OTHER);
-  try Assert.AreEqual<Integer>(1, Count(F, fkDfmComponentUnused),
+  Assert.AreEqual<Integer>(1,
+    CountUnused(DFM_FRAME_OBJECT, FrameMain(USES_OTHER, ''),
+      FrameUnit(MEMBER_NEEDS_BODY, '')),
     'Header-Stub zaehlt nicht als projekteigene Klasse');
-  finally F.Free; end;
 end;
 
-procedure TTestDfmComponentUnused.Test_HeaderStubWithInclude_NotDetected;
+procedure TTestDfmComponentUnusedVisibility.Test_HeaderStubWithInclude_NotDetected;
 // Gegenprobe zum Stub, unterscheidet sich in genau einer Zeile: der Rumpf
 // kommt per {$I} (Lazarus-LCL-Muster). Der Parser expandiert Includes nicht;
 // ohne den Text-Schutz waere jede so gebaute Unit ein "Stub".
-const PAS_OTHER =
-  'unit uOther;'#13#10 +
-  'interface'#13#10 +
-  'uses Vcl.Forms;'#13#10 +
-  'type TMyFrame = class(TFrame)'#13#10 +
-  '  constructor Create;'#13#10 +
-  'end;'#13#10 +
-  'implementation'#13#10 +
-  '{$I uOther.inc}'#13#10 +
-  'end.';
-var F: TObjectList<TLeakFinding>;
 begin
-  F := RunDetector(DFM_FRAME_OBJECT, PAS_MAIN_USES_OTHER, PAS_OTHER);
-  try Assert.AreEqual<Integer>(0, Count(F, fkDfmComponentUnused),
+  Assert.AreEqual<Integer>(0,
+    CountUnused(DFM_FRAME_OBJECT, FrameMain(USES_OTHER, ''),
+      FrameUnit(MEMBER_NEEDS_BODY, '{$I uOther.inc}'#13#10)),
     'Rumpf per Include: kein Stub, S4 greift');
-  finally F.Free; end;
 end;
 
-procedure TTestDfmComponentUnused.Test_AbstractOnlyUnit_NotDetected;
+procedure TTestDfmComponentUnusedVisibility.Test_IncludeSpellings_NotStub;
+// Weitere Schreibweisen derselben Direktive (Review 2026-10-26, m1): klein,
+// Langform, Tab statt Leerzeichen, Apostroph direkt hinter $I, Klammer-
+// Stern-Form. Traeger: DirectiveIsInclude/HasIncludeAfter (uDfmRepoIndex);
+// die Fassung bis 3dd7d188 kannte nur '{$I ' und '{$INCLUDE ' (nach
+// UpperCase) und machte die letzten vier Faelle zum Stub (1 Fund).
+const
+  SPELLINGS: array[0..5] of string = (
+    '{$i uOther.inc}',
+    '{$include uOther.inc}',
+    '{$I'#9'uOther.inc}',
+    '{$INCLUDE'#9'uOther.inc}',
+    '{$I''uOther.inc''}',
+    '(*$I uOther.inc*)');
+var
+  S : string;
+begin
+  for S in SPELLINGS do
+  begin
+    Assert.AreEqual<Integer>(0,
+      CountUnused(DFM_FRAME_OBJECT, FrameMain(USES_OTHER, ''),
+        FrameUnit(MEMBER_NEEDS_BODY, S + #13#10)),
+      'Include nicht erkannt: ' + S);
+  end;
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_ConditionalDirectives_StillStub;
+// Gegenprobe zu den Schreibweisen: Direktiven, die mit $I BEGINNEN, aber
+// kein Include sind, lassen den Stub ein Stub. Traeger: die Bedingung an
+// das Zeichen hinter $I/$INCLUDE (Whitespace oder Apostroph) in
+// DirectiveIsInclude - ein blosser Praefix-Vergleich auf '{$I' machte jeden
+// Fall hier zu 0.
+const
+  NOT_INCLUDES: array[0..4] of string = (
+    '{$IFDEF DEBUG}{$ENDIF}',
+    '{$IFNDEF DEBUG}{$ENDIF}',
+    '{$IF Defined(DEBUG)}{$IFEND}',
+    '{$IFOPT R+}{$ENDIF}',
+    '{$I+}');
+var
+  S : string;
+begin
+  for S in NOT_INCLUDES do
+  begin
+    Assert.AreEqual<Integer>(1,
+      CountUnused(DFM_FRAME_OBJECT, FrameMain(USES_OTHER, ''),
+        FrameUnit(MEMBER_NEEDS_BODY, S + #13#10)),
+      'Kein Include, trotzdem als Rumpf gewertet: ' + S);
+  end;
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_AbstractOnlyUnit_NotDetected;
 // Gegenprobe zum Stub: eine abstrakte Methode braucht keinen Rumpf - die
 // Unit ist trotz leerem implementation-Teil uebersetzbar.
+begin
+  Assert.AreEqual<Integer>(0,
+    CountUnused(DFM_FRAME_OBJECT, FrameMain(USES_OTHER, ''),
+      FrameUnit('  procedure Run; virtual; abstract;'#13#10, '')),
+    'nur abstrakte Methoden: kein Stub, S4 greift');
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_ExternalOnlyUnit_NotDetected;
+// Das interface deklariert NUR eine external-Routine, der implementation-
+// Teil ist leer - uebersetzbar (der Rumpf liegt in der DLL), also kein
+// Stub, TMyFrame bleibt geschuetzt.
+// Traeger: MethodNeedsBody (uDfmRepoIndex), die Pruefung auf ';external'
+// im TypeRef (ParseMethodDirectives haengt es an, der Bibliotheksname
+// danach bricht die Direktivenschleife nur ab). Ohne sie braucht Beep einen
+// Rumpf, uOther wird zum Stub und der Test liefert 1 - wie
+// Test_HeaderStubUnitInUses_StillDetected.
 const PAS_OTHER =
   'unit uOther;'#13#10 +
   'interface'#13#10 +
   'uses Vcl.Forms;'#13#10 +
   'type TMyFrame = class(TFrame)'#13#10 +
-  '  procedure Run; virtual; abstract;'#13#10 +
   'end;'#13#10 +
+  'procedure Beep; external ''user32.dll'';'#13#10 +
   'implementation'#13#10 +
   'end.';
-var F: TObjectList<TLeakFinding>;
 begin
-  F := RunDetector(DFM_FRAME_OBJECT, PAS_MAIN_USES_OTHER, PAS_OTHER);
-  try Assert.AreEqual<Integer>(0, Count(F, fkDfmComponentUnused),
-    'nur abstrakte Methoden: kein Stub, S4 greift');
-  finally F.Free; end;
+  Assert.AreEqual<Integer>(0,
+    CountUnused(DFM_FRAME_OBJECT, FrameMain(USES_OTHER, ''), PAS_OTHER),
+    'nur external-Routinen: kein Stub, S4 greift');
 end;
 
-procedure TTestDfmComponentUnused.Test_UnitScopeSuffixInUses_NotDetected;
+procedure TTestDfmComponentUnusedVisibility.Test_UnitScopeSuffixInUses_NotDetected;
 // Unit-Scope-Namen: 'uses Other' findet die Datei Vcl.Other.pas (wie
 // 'uses StdCtrls' -> Vcl.StdCtrls). Ohne Suffix-Abgleich verloeren alte
 // Formen ihre echten projekteigenen Klassen.
-const PAS_MAIN =
-  'unit uMain;'#13#10 +
-  'interface'#13#10 +
-  'uses Vcl.Forms, Other;'#13#10 +
-  'type TForm1 = class(TForm)'#13#10 +
-  '  fraEmbedded: TMyFrame;'#13#10 +
-  'end;'#13#10 +
-  'var Form1: TForm1;'#13#10 +
-  'implementation'#13#10 +
-  'end.';
-const PAS_OTHER =
-  'unit Vcl.Other;'#13#10 +
-  'interface'#13#10 +
-  'uses Vcl.Forms;'#13#10 +
-  'type TMyFrame = class(TFrame)'#13#10 +
-  'end;'#13#10 +
-  'implementation'#13#10 +
-  'end.';
-var F: TObjectList<TLeakFinding>;
 begin
-  F := RunDetector(DFM_FRAME_OBJECT, PAS_MAIN, PAS_OTHER, True, 'Vcl.Other.pas');
-  try Assert.AreEqual<Integer>(0, Count(F, fkDfmComponentUnused),
+  Assert.AreEqual<Integer>(0,
+    CountUnused(DFM_FRAME_OBJECT, FrameMain('Vcl.Forms, Other', ''),
+      FrameUnit('', '', 'Vcl.Other'), 'Vcl.Other.pas'),
     'uses-Eintrag ohne Scope-Praefix trifft Vcl.Other.pas');
-  finally F.Free; end;
 end;
 
-procedure TTestDfmComponentUnused.Test_InterposerInOwnUnit_NotDetected;
+procedure TTestDfmComponentUnusedVisibility.Test_InterposerInOwnUnit_NotDetected;
 // Interposer in der Form-Unit selbst ('TButton = class(Vcl.StdCtrls.TButton)'):
 // sichtbar ohne uses-Eintrag, der Vergleich laeuft ueber den Pfad. Die
 // Gegenprobe ohne Interposer ist Test_UnusedComponent_Detected.
@@ -874,15 +952,13 @@ const DFM =
   '  object btnX: TButton'#13#10 +
   '  end'#13#10 +
   'end';
-var F: TObjectList<TLeakFinding>;
 begin
-  F := RunDetector(DFM, PAS_MAIN, '');
-  try Assert.AreEqual<Integer>(0, Count(F, fkDfmComponentUnused),
+  Assert.AreEqual<Integer>(0, CountUnused(DFM, PAS_MAIN, ''),
     'Interposer in der eigenen Unit bleibt projekteigen');
-  finally F.Free; end;
 end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestDfmComponentUnused);
+  TDUnitX.RegisterTestFixture(TTestDfmComponentUnusedVisibility);
 
 end.

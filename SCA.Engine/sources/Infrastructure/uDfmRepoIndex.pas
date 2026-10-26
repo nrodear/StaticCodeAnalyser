@@ -57,15 +57,20 @@ type
     // (s. IsHeaderStubUnit). FClassUnit behaelt nur den ersten Treffer
     // und kennt keine Sichtbarkeit - S4 muss aber wissen, ob EINE der
     // Deklarationen fuer die Form-Unit ueberhaupt sichtbar ist. Eigene
-    // Struktur, damit FormBinder/FrameResolver unberuehrt bleiben.
+    // Struktur, damit FormBinder/FrameResolver unberuehrt bleiben. Die
+    // Pfade liegen normalisiert vor (NormalizeUnitPath), damit die Abfrage
+    // je Komponente nur noch vergleicht.
     FClassDeclUnits : TObjectDictionary<string, TStringList>;
     // Per-Scan-AST-Cache (D.2.3 Infra): von Build reingereicht statt
     // gAstFileCache-Global -> ein Index-Lauf nutzt genau einen Cache.
     FAstCache : TAstFileCache;
     procedure ScanUnit(const PasFileName: string);
     procedure CollectVarsAt(Section: TAstNode; const Unitname: string);
-    procedure CollectClassesAt(Section: TAstNode; const Unitname: string;
-      AIsHeaderStub: Boolean);
+    procedure CollectClassesAt(Section: TAstNode; const Unitname: string);
+    // SCA184/S4: Klassen der Unit in FClassDeclUnits eintragen. Der
+    // Aufrufer ruft das nur fuer Units, die kein Header-Stub sind.
+    procedure CollectVisibleClassDecls(Section: TAstNode;
+      const Unitname: string);
   public
     constructor Create;
     destructor  Destroy; override;
@@ -86,12 +91,17 @@ type
 
     // SCA184/S4: True, wenn eine fuer die Form-Unit SICHTBARE Unit die
     // Klasse deklariert - so loest auch der Compiler den Feldtyp auf.
-    // Sichtbar = die Form-Unit selbst (AOwnUnitPath, Pfadvergleich) oder
+    // Sichtbar = die Form-Unit selbst (AOwnUnitFull, Pfadvergleich) oder
     // eine Unit, deren Name in AUsedUnits steht (uses-Eintraege, klein).
     // Ein Eintrag ohne Unit-Scope-Praefix ('stdctrls') trifft auch die
     // Datei 'Vcl.StdCtrls.pas'. Header-Stubs zaehlen nie.
-    function IsClassDeclaredInVisibleUnit(const ClassRef, AOwnUnitPath: string;
+    // AOwnUnitFull MUSS durch NormalizeUnitPath gelaufen sein - der
+    // Aufrufer rechnet das einmal je Form, nicht je Komponente.
+    function IsClassDeclaredInVisibleUnit(const ClassRef, AOwnUnitFull: string;
       AUsedUnits: THashSet<string>): Boolean;
+    // Pfadform, in der FClassDeclUnits die Units fuehrt (ExpandFileName;
+    // '' bleibt '').
+    class function NormalizeUnitPath(const APath: string): string; static;
 
     // Anzahl der erfassten Form-Variablen - praktisch fuer "Pipeline ready?"
     // Checks im Detektor.
@@ -149,18 +159,60 @@ begin
   end;
 end;
 
+function DirectiveIsInclude(const AUp: string; AFrom: Integer): Boolean;
+// AUp = gross geschriebene Zeile, AFrom = erstes Zeichen hinter dem '$'.
+// Include ist '$I' oder '$INCLUDE', gefolgt von Whitespace (Leerzeichen,
+// Tab) oder einem Apostroph ({$I'datei.inc'}). Die Bedingung an das
+// Folgezeichen haelt {$IF}, {$IFDEF}, {$IFNDEF}, {$IFEND}, {$IFOPT},
+// {$IMPORTEDDATA} und die I/O-Pruefung {$I+}/{$I-} heraus.
+var
+  After : Integer;
+begin
+  if Copy(AUp, AFrom, 7) = 'INCLUDE' then
+    After := AFrom + 7
+  else
+    After := AFrom + 1;
+  Result := (Copy(AUp, AFrom, 1) = 'I') and (After <= Length(AUp)) and
+            ((AUp[After] <= ' ') or (AUp[After] = ''''));
+end;
+
+function HasIncludeAfter(const AUp, AOpener: string): Boolean;
+// Prueft jede Direktive der Zeile, die mit AOpener ('{$' oder '(*$')
+// beginnt - '{$IFDEF X}{$I a.inc}' traegt das Include an zweiter Stelle.
+var
+  P : Integer;
+begin
+  Result := False;
+  P := Pos(AOpener, AUp);
+  while (P > 0) and not Result do
+  begin
+    Result := DirectiveIsInclude(AUp, P + Length(AOpener));
+    P := Pos(AOpener, AUp, P + 1);
+  end;
+end;
+
+function LineHasIncludeDirective(const ALine: string): Boolean;
+// {$I datei}, {$INCLUDE datei}, (*$I datei*) - Gross-/Kleinschreibung egal.
+// Wie bisher ein reiner Zeilen-Textvergleich: ein Include in einem
+// Kommentar oder String zaehlt mit - die sichere Seite (dann kein Stub,
+// alte S4-Wirkung).
+var
+  Up : string;
+begin
+  Up := UpperCase(ALine);
+  Result := HasIncludeAfter(Up, '{$') or HasIncludeAfter(Up, '(*$');
+end;
+
 function ImplHasIncludeDirective(const PasFileName: string;
   FromLine: Integer): Boolean;
-// Steht ab der implementation-Zeile ein {$I datei} / {$INCLUDE datei}?
+// Steht ab der implementation-Zeile eine Include-Direktive?
 // Der Parser expandiert Includes nicht - die Lazarus-LCL legt ganze
 // Implementierungen in .inc-Dateien (lcl/toolwin.pp, spinex.pp). Solche
-// Units sind uebersetzbar und KEIN Header-Stub. '{$I+}'/'{$I-}' (I/O-
-// Pruefung) und '{$IFDEF' tragen kein Leerzeichen nach dem I und zaehlen
-// nicht. Lesefehler -> True: im Zweifel kein Stub (alte S4-Wirkung).
+// Units sind uebersetzbar und KEIN Header-Stub. Lesefehler -> True: im
+// Zweifel kein Stub (alte S4-Wirkung).
 var
   Lines : TStringList;
   I     : Integer;
-  Up    : string;
 begin
   Result := True;
   Lines := TStringList.Create;
@@ -168,14 +220,18 @@ begin
     try
       Lines.LoadFromFile(PasFileName);
     except
-      Exit;
+      // Nur, was LoadFromFile an Dateiproblemen wirft: EFOpenError und
+      // EReadError (beide EStreamError) sowie EEncodingError (ungueltiges
+      // UTF-8 hinter einer BOM). Alles andere (EOutOfMemory ...) ist kein
+      // Dateiproblem und laeuft weiter.
+      on EStreamError do Exit;
+      on EEncodingError do Exit;
     end;
     I := FromLine - 1;
     if I < 0 then I := 0;
     while I < Lines.Count do
     begin
-      Up := UpperCase(Lines[I]);
-      if (Pos('{$I ', Up) > 0) or (Pos('{$INCLUDE ', Up) > 0) then Exit;
+      if LineHasIncludeDirective(Lines[I]) then Exit;
       Inc(I);
     end;
     Result := False;
@@ -184,24 +240,56 @@ begin
   end;
 end;
 
+function MethodNeedsBody(M: TAstNode): Boolean;
+// Braucht diese interface-Deklaration einen Rumpf im implementation-Teil?
+// Direktiven stehen klein in TypeRef ('proc;virtual;abstract'), external
+// auch bei Routinen auf Unit-Ebene ('proc;external').
+// GRENZEN (bekannt, bewusst nicht behoben):
+// - Interface-Typen (IFoo = interface): ihre Methoden brauchen keinen
+//   Rumpf, zaehlen hier aber mit. Der Parser fuehrt sie als nkClass ohne
+//   jedes Unterscheidungsmerkmal (Kopf-Keyword, GUID und Elternliste gehen
+//   nicht in den Knoten) - aus dem AST nicht verlaesslich erkennbar.
+// - 'dynamic; abstract;': 'dynamic' steht nicht in IsMethodDirectiveTok,
+//   ParseMethodDirectives bricht dort ab, ';abstract' fehlt im TypeRef.
+//   Den Parser dafuer anzufassen haette Folgewirkungen auf viele Detektoren.
+// Beide Faelle machen eine Unit nur dann faelschlich zum Stub, wenn ihr
+// implementation-Teil GAR KEINE Routine hat; ihre Klassen verlieren dann
+// nur den S4-Skip.
+begin
+  Result := (M.Kind = nkMethod) and
+            (Pos(';abstract', M.TypeRef) = 0) and
+            (Pos(';external', M.TypeRef) = 0);
+end;
+
+function SectionNeedsBody(ASection: TAstNode): Boolean;
+// Deklariert der Abschnitt (rekursiv, auch in Klassen) eine Routine, die
+// einen Rumpf braucht?
+var
+  Methods : TList<TAstNode>;
+  M       : TAstNode;
+begin
+  Result := False;
+  Methods := ASection.FindAll(nkMethod);
+  try
+    for M in Methods do
+      if MethodNeedsBody(M) then Exit(True);
+  finally
+    Methods.Free;
+  end;
+end;
+
 function IsHeaderStubUnit(Root: TAstNode; const PasFileName: string): Boolean;
 // Header-Stub (SCA184/S4, 2026-10-26): die Unit deklariert im interface-
-// Teil Routinen, die einen Rumpf brauchen (nicht abstract/external), hat
-// aber im implementation-Teil KEINE einzige Routine. So eine Unit ist
-// nicht uebersetzbar (E2065) und kann nicht die Klasse einer gestreamten
-// Komponente liefern. Korpus-Anlass: cnwizards/Bin/PSDecl - Pascal-
-// Script-Deklarationskoepfe namens StdCtrls.pas/Menus.pas/ExtCtrls.pas
-// mit leerem implementation-Teil; per Unit-Name sind sie von jeder alten
-// Form mit 'uses StdCtrls' aus "sichtbar".
+// Teil Routinen, die einen Rumpf brauchen (MethodNeedsBody), hat aber im
+// implementation-Teil KEINE einzige Routine und kein Include. So eine Unit
+// ist nicht uebersetzbar (E2065) und kann nicht die Klasse einer
+// gestreamten Komponente liefern. Korpus-Anlass: cnwizards/Bin/PSDecl -
+// Pascal-Script-Deklarationskoepfe namens StdCtrls.pas/Menus.pas/
+// ExtCtrls.pas mit leerem implementation-Teil; per Unit-Name sind sie von
+// jeder alten Form mit 'uses StdCtrls' aus "sichtbar".
 // Ohne interface- oder implementation-Abschnitt: kein Stub (konservativ).
-// Grenze: eine Unit, die NUR Interface-Typen mit Methoden und rumpflose
-// Klassen traegt, gilt ebenfalls als Stub (der Parser fuehrt Interfaces als
-// nkClass) - ihre Klassen verlieren nur den S4-Skip.
 var
-  IFace, Impl, Cur : TAstNode;
-  Stack            : TList<TAstNode>;
-  I                : Integer;
-  NeedsBody        : Boolean;
+  IFace, Impl : TAstNode;
 begin
   Result := False;
   if Root = nil then Exit;
@@ -210,27 +298,7 @@ begin
   if (IFace = nil) or (Impl = nil) then Exit;
   // Schneller Ausgang fuer fast alle Units: es gibt einen Rumpf.
   if Impl.FindFirst(nkMethod) <> nil then Exit;
-
-  NeedsBody := False;
-  Stack := TList<TAstNode>.Create;
-  try
-    Stack.Add(IFace);
-    while (Stack.Count > 0) and (not NeedsBody) do
-    begin
-      Cur := Stack[Stack.Count - 1];
-      Stack.Delete(Stack.Count - 1);
-      // Direktiven stehen klein in TypeRef ('proc;virtual;abstract').
-      if (Cur.Kind = nkMethod) and
-         (Pos(';abstract', Cur.TypeRef) = 0) and
-         (Pos(';external', Cur.TypeRef) = 0) then
-        NeedsBody := True;
-      for I := 0 to Cur.Children.Count - 1 do
-        Stack.Add(Cur.Children[I]);
-    end;
-  finally
-    Stack.Free;
-  end;
-  if not NeedsBody then Exit;
+  if not SectionNeedsBody(IFace) then Exit;
   Result := not ImplHasIncludeDirective(PasFileName, Impl.Line);
 end;
 
@@ -275,7 +343,9 @@ begin
     if IFace = nil then IFace := Root;
 
     CollectVarsAt(IFace, PasFileName);
-    CollectClassesAt(IFace, PasFileName, IsHeaderStubUnit(Root, PasFileName));
+    CollectClassesAt(IFace, PasFileName);
+    if not IsHeaderStubUnit(Root, PasFileName) then
+      CollectVisibleClassDecls(IFace, PasFileName);
   finally
     if OwnsRoot then Root.Free;
   end;
@@ -325,14 +395,13 @@ begin
 end;
 
 procedure TDfmRepoIndex.CollectClassesAt(Section: TAstNode;
-  const Unitname: string; AIsHeaderStub: Boolean);
+  const Unitname: string);
 var
   Classes : TList<TAstNode>;
   C       : TAstNode;
   I       : Integer;
   Key      : string;
   Existing : string;
-  Decls    : TStringList;
 begin
   Classes := Section.FindAll(nkClass);
   try
@@ -341,19 +410,6 @@ begin
       C := Classes[I];
       if C.Name = '' then Continue;
       Key := LowerCase(C.Name);
-      // S4-Sicht: alle deklarierenden Units ausser Header-Stubs. Laeuft
-      // VOR dem FClassUnit-Zweig, weil der bei Mehrfachdeklaration per
-      // Continue aussteigt.
-      if not AIsHeaderStub then
-      begin
-        if not FClassDeclUnits.TryGetValue(Key, Decls) then
-        begin
-          Decls := TStringList.Create;
-          FClassDeclUnits.Add(Key, Decls);
-        end;
-        if Decls.IndexOf(Unitname) < 0 then
-          Decls.Add(Unitname);
-      end;
       if FClassUnit.TryGetValue(Key, Existing) then
       begin
         // Nur ueber UNIT-Grenzen hinweg mehrdeutig. Zwei nkClass mit
@@ -364,6 +420,37 @@ begin
         Continue;
       end;
       FClassUnit.Add(Key, Unitname);
+    end;
+  finally
+    Classes.Free;
+  end;
+end;
+
+procedure TDfmRepoIndex.CollectVisibleClassDecls(Section: TAstNode;
+  const Unitname: string);
+// S4-Sicht: ALLE deklarierenden Units je Klasse (FClassUnit behaelt nur
+// den ersten Treffer). Der Pfad wird hier EINMAL je Unit normalisiert.
+var
+  Classes : TList<TAstNode>;
+  C       : TAstNode;
+  Key     : string;
+  FullFn  : string;
+  Decls   : TStringList;
+begin
+  FullFn  := NormalizeUnitPath(Unitname);
+  Classes := Section.FindAll(nkClass);
+  try
+    for C in Classes do
+    begin
+      if C.Name = '' then Continue;
+      Key := LowerCase(C.Name);
+      if not FClassDeclUnits.TryGetValue(Key, Decls) then
+      begin
+        Decls := TStringList.Create;
+        FClassDeclUnits.Add(Key, Decls);
+      end;
+      if Decls.IndexOf(FullFn) < 0 then
+        Decls.Add(FullFn);
     end;
   finally
     Classes.Free;
@@ -387,38 +474,52 @@ begin
   Result := FClassAmbig.ContainsKey(LowerCase(ClassRef));
 end;
 
-function TDfmRepoIndex.IsClassDeclaredInVisibleUnit(const ClassRef,
-  AOwnUnitPath: string; AUsedUnits: THashSet<string>): Boolean;
+function IsUnitNameUsed(const AUnitFile: string;
+  AUsedUnits: THashSet<string>): Boolean;
+// Steht der Unit-Name (Dateistamm) von AUnitFile in den uses-Eintraegen?
+// Unit-Scope-Suffixe zaehlen mit: 'vcl.styles.colortabs' wird auch als
+// 'styles.colortabs' und 'colortabs' gesucht - ein uses-Eintrag darf das
+// Scope-Praefix weglassen.
 var
-  Decls   : TStringList;
-  DeclFn  : string;
-  OwnFull : string;
   UnitLow : string;
   P       : Integer;
 begin
+  UnitLow := LowerCase(ChangeFileExt(ExtractFileName(AUnitFile), ''));
+  Result  := AUsedUnits.Contains(UnitLow);
+  P := Pos('.', UnitLow);
+  while (P > 0) and not Result do
+  begin
+    Result := AUsedUnits.Contains(Copy(UnitLow, P + 1, MaxInt));
+    P := Pos('.', UnitLow, P + 1);
+  end;
+end;
+
+function TDfmRepoIndex.IsClassDeclaredInVisibleUnit(const ClassRef,
+  AOwnUnitFull: string; AUsedUnits: THashSet<string>): Boolean;
+var
+  Decls   : TStringList;
+  DeclFn  : string;
+begin
   Result := False;
   if not FClassDeclUnits.TryGetValue(LowerCase(ClassRef), Decls) then Exit;
-  OwnFull := '';
-  if AOwnUnitPath <> '' then OwnFull := ExpandFileName(AOwnUnitPath);
   for DeclFn in Decls do
   begin
     // Eigene Unit: Interposer 'TButton = class(Vcl.StdCtrls.TButton)'.
     // Pfad statt Name - 'MainFrm'/'Unit1' gibt es in jedem zweiten
-    // Projekt eines Sammel-Scans.
-    if (OwnFull <> '') and SameText(ExpandFileName(DeclFn), OwnFull) then
+    // Projekt eines Sammel-Scans. Beide Seiten sind normalisiert.
+    if (AOwnUnitFull <> '') and SameText(DeclFn, AOwnUnitFull) then
       Exit(True);
-    if AUsedUnits = nil then Continue;
-    UnitLow := LowerCase(ChangeFileExt(ExtractFileName(DeclFn), ''));
-    if AUsedUnits.Contains(UnitLow) then Exit(True);
-    // Unit-Scope-Suffixe: 'vcl.styles.colortabs' -> 'styles.colortabs',
-    // 'colortabs' - ein uses-Eintrag darf das Scope-Praefix weglassen.
-    P := Pos('.', UnitLow);
-    while P > 0 do
-    begin
-      if AUsedUnits.Contains(Copy(UnitLow, P + 1, MaxInt)) then Exit(True);
-      P := Pos('.', UnitLow, P + 1);
-    end;
+    if (AUsedUnits <> nil) and IsUnitNameUsed(DeclFn, AUsedUnits) then
+      Exit(True);
   end;
+end;
+
+class function TDfmRepoIndex.NormalizeUnitPath(const APath: string): string;
+begin
+  if APath = '' then
+    Result := ''
+  else
+    Result := ExpandFileName(APath);
 end;
 
 function TDfmRepoIndex.VarCount: Integer;
