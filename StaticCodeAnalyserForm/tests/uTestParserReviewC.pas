@@ -32,7 +32,7 @@ type
   end;
 
   // Parser-Charge P (2026-10-27): FPC-'type helper' (P1), anonyme Methode
-  // mit var-Sektion (P2). Eigene Fixture,
+  // mit var-Sektion (P2), rohe String-Literale (P3). Eigene Fixture,
   // damit TTestParserReviewC unter 20 Tests bleibt; Parse/NodeNamed/
   // CountKind liegen auf Unit-Ebene.
   [TestFixture]
@@ -47,6 +47,11 @@ type
     [Test] procedure AnonVarSection_InlineVarInitializer;
     [Test] procedure AnonVarSection_LocalRoutineAndProcTypeInHead;
     [Test] procedure AnonVarSection_FormatMismatchAtAssignment;
+    // P3 - einheitliche Literal-Ablage (TokSourceText)
+    [Test] procedure Literal_ExitArgumentInSourceForm;
+    [Test] procedure Literal_ForHeaderAndRaiseAtInSourceForm;
+    [Test] procedure Literal_ParamDefaultInSourceForm;
+    [Test] procedure Literal_ParamNameInExitOrForLiteral_StillUnused;
   end;
 
 implementation
@@ -788,6 +793,153 @@ begin
     Assert.AreEqual('9', Hit.LineNumber, 'Fund an der Zuweisung P := ..');
   finally
     F.Free;
+  end;
+end;
+
+function FirstOfKind(Root: TAstNode; AKind: TNodeKind): TAstNode;
+// Erster Knoten der Art AKind; nil, wenn keiner.
+begin
+  Result := Root.FindFirst(AKind);
+end;
+
+function TypeRefsOf(Root: TAstNode; AKind: TNodeKind): string;
+// TypeRef aller Knoten der Art AKind in Dokumentreihenfolge, mit '|'
+// getrennt - ein Vergleich statt einer Liste je Test.
+var
+  L     : TList<TAstNode>;
+  Parts : TArray<string>;
+  I     : Integer;
+begin
+  L := Root.FindAll(AKind);
+  try
+    SetLength(Parts, L.Count);
+    for I := 0 to L.Count - 1 do
+    begin
+      Parts[I] := L[I].TypeRef;
+    end;
+  finally
+    L.Free;
+  end;
+  Result := string.Join('|', Parts) + '|';
+end;
+
+procedure TTestParserChargeP.Literal_ExitArgumentInSourceForm;
+// Vorher stand der Literal-WERT roh im TypeRef ('it''s' -> it's, '' -> leer).
+// Ohne Literal bleibt die Form mit Leerzeichen je Token ('- 1').
+const
+  SRC =
+    'unit e; interface implementation'#13#10 +
+    'function F(N: Integer): string;'#13#10 +
+    'begin'#13#10 +
+    '  if N = 0 then Exit(''it''''s'');'#13#10 +
+    'end;'#13#10 +
+    'function G(N: Integer): string;'#13#10 +
+    'begin'#13#10 +
+    '  if N = 0 then Exit('''');'#13#10 +
+    'end;'#13#10 +
+    'function H: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  Exit(-1);'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  Root : TAstNode;
+begin
+  Root := Parse(SRC);
+  try
+    // Apostroph verdoppelt und aussen gequotet; leeres Literal sichtbar;
+    // ohne Literal unveraendert.
+    Assert.AreEqual('''it''''s''|''''|- 1|', TypeRefsOf(Root, nkExit));
+  finally
+    Root.Free;
+  end;
+end;
+
+procedure TTestParserChargeP.Literal_ForHeaderAndRaiseAtInSourceForm;
+// for-Kopf und 'raise .. at': bisher roh ('C in ab'), jetzt in Quellform.
+const
+  SRC =
+    'unit f; interface implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var C: Char;'#13#10 +
+    'begin'#13#10 +
+    '  for C in ''ab'' do'#13#10 +
+    '    Writeln(C);'#13#10 +
+    '  raise Exception.Create(''x'') at Addr(''y'');'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  Root : TAstNode;
+begin
+  Root := Parse(SRC);
+  try
+    Assert.AreEqual('C in ''ab''', FirstOfKind(Root, nkForStmt).TypeRef);
+    Assert.IsTrue(Pos('''y''', FirstOfKind(Root, nkRaise).TypeRef) > 0,
+      'at-Ausdruck: ' + FirstOfKind(Root, nkRaise).TypeRef);
+  finally
+    Root.Free;
+  end;
+end;
+
+procedure TTestParserChargeP.Literal_ParamDefaultInSourceForm;
+// Vorgabewert im Routinenkopf: 'string=a b' -> 'string=''a b'''.
+const
+  SRC =
+    'unit d; interface implementation'#13#10 +
+    'procedure P(const S: string = ''a b''; N: Integer = 1);'#13#10 +
+    'begin'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  Root : TAstNode;
+begin
+  Root := Parse(SRC);
+  try
+    // Zweiter Parameter ohne Literal: unveraendert.
+    Assert.AreEqual('string=''a b''|Integer=1|', TypeRefsOf(Root, nkParam));
+  finally
+    Root.Free;
+  end;
+end;
+
+procedure TTestParserChargeP.Literal_ParamNameInExitOrForLiteral_StillUnused;
+// Detektor-Sicht (SCA054): der Literalinhalt ist kein Lesen des
+// Parameters. Exe 8c3eac8f an genau diesen Zeichenketten: je 0 Funde
+// (ROT); Kontrolle ohne Literal 1, Simulation 'Exit(#39''AName''#39)' 1.
+// Im Referenzkorpus bewegt P3 nichts (Vertrag P3) - eine Zusage fuer
+// fremden Code.
+const
+  HEAD =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'type'#13#10 +
+    '  TFoo = class'#13#10 +
+    '    function Lbl(AName: string): string;'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'function TFoo.Lbl(AName: string): string;'#13#10 +
+    'begin'#13#10;
+  TAIL =
+    'end;'#13#10 +
+    'end.';
+  BODIES: array[0..1] of string = (
+    '  if Result = '''' then Exit(''AName'');'#13#10 +
+    '  Result := ''x'';'#13#10,
+    '  for var C in ''AName'' do'#13#10 +
+    '    Result := C;'#13#10);
+var
+  B : string;
+  F : TObjectList<TLeakFinding>;
+begin
+  for B in BODIES do
+  begin
+    F := TFindingHelper.FindingsOfFile(HEAD + B + TAIL);
+    try
+      Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+        'AName nur im Literal: ' + B);
+    finally
+      F.Free;
+    end;
   end;
 end;
 

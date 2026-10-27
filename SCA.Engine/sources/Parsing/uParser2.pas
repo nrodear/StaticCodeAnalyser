@@ -346,6 +346,21 @@ begin
     Result := '''' + StringReplace(Value, '''', '''''', [rfReplaceAll]) + '''';
 end;
 
+function TokSourceText(const T: TToken): string;
+// DIE Literal-Ablage aller flachen Knotentexte (Parser-Charge P3,
+// 2026-10-27): ein String-/Zeichenliteral in Quellform (QuoteStrLit),
+// jedes andere Token mit seinem Wert. Die Flachtext-Leser der Detektoren
+// blenden Literale nur in dieser Form aus (BlankStringLiterals); bis P3
+// legten Exit-Argument, for-Kopf, 'raise .. at' und Parameter-Vorgabewert
+// den Inhalt ROH ab - 'Exit(''AName'')' las sich fuer SCA054 wie ein
+// Lesen des Parameters AName. Neue Sammel-Schleifen nehmen diese Funktion.
+begin
+  if T.Kind = tkStrLit then
+    Result := QuoteStrLit(T.Value)
+  else
+    Result := T.Value;
+end;
+
 constructor TParser2.Create;
 begin
   inherited;
@@ -1432,10 +1447,7 @@ begin
             tkSemicolon:
               if NestDepth = 0 then Break;
           end;
-          if Tok.Kind = tkStrLit then
-            JoinTokInto(ConstValue, QuoteStrLit(Tok.Value))
-          else
-            JoinTokInto(ConstValue, Tok.Value);
+          JoinTokInto(ConstValue, TokSourceText(Tok));
           Next;
         end;
       end;
@@ -2107,7 +2119,9 @@ begin
             // JoinTokInto statt roher Konkatenation: Mehrwort-Typen wie
             // 'array of Integer' klebten sonst zu 'arrayofInteger' zusammen
             // (Audit 2026-07) - Wortgrenzen-Checks auf TypeRef liefen ins Leere.
-            JoinTokInto(PType, Tok.Value);
+            // Ein Literal im Vorgabewert ('S: string = ''x''') in Quellform
+            // (TokSourceText, P3) - roh las es sich als Code.
+            JoinTokInto(PType, TokSourceText(Tok));
             Next;
           end;
 
@@ -2697,7 +2711,9 @@ begin
               Dec(Depth);
             end;
             if ExitArg <> '' then ExitArg := ExitArg + ' ';
-            ExitArg := ExitArg + Tok.Value;
+            // Literale in Quellform (TokSourceText, P3): roh las sich
+            // 'Exit(''AName'')' wie ein Lesen von AName (SCA054).
+            ExitArg := ExitArg + TokSourceText(Tok);
             Next;
           end;
           Eat(tkRParen);
@@ -2730,10 +2746,7 @@ begin
           while not (Tok.Kind in [tkSemicolon, tkKwEnd, tkKwElse, tkKwUntil,
                                   tkKwExcept, tkKwFinally, tkEof]) do
           begin
-            if Tok.Kind = tkStrLit then
-              JoinTokInto(RhsTxt, QuoteStrLit(Tok.Value))
-            else
-              JoinTokInto(RhsTxt, Tok.Value);
+            JoinTokInto(RhsTxt, TokSourceText(Tok));
             Next;
           end;
           Parent.Add(nkAssign, T.Value, T.Line, T.Col).TypeRef := RhsTxt;
@@ -2936,10 +2949,7 @@ begin
   CondText := '';
   while not (Tok.Kind in [tkKwThen, tkKwEnd, tkEof]) do
   begin
-    if Tok.Kind = tkStrLit then
-      CondText := CondText + QuoteStrLit(Tok.Value)
-    else
-      CondText := CondText + Tok.Value;
+    CondText := CondText + TokSourceText(Tok);
     CondText := CondText + ' ';
     Next;
   end;
@@ -3113,10 +3123,7 @@ begin
   var Sel := '';
   while not (Tok.Kind in [tkKwOf, tkEof]) do
   begin
-    if Tok.Kind = tkStrLit then
-      JoinTokInto(Sel, QuoteStrLit(Tok.Value))
-    else
-      JoinTokInto(Sel, Tok.Value);
+    JoinTokInto(Sel, TokSourceText(Tok));
     Next;
   end;
   CaseNode.TypeRef := Sel;
@@ -3226,15 +3233,16 @@ begin
   // was auf '.' endet, am Folgetoken - der Bereichsoperator '..'
   // (tkDotDot) stand als 'Low ( A ) ..High ( A )', ein Stringliteral '.'
   // ebenso. Jetzt traegt '..' wie vor Major 14 beidseitig ein Leerzeichen.
-  // Bestand und bewusst unveraendert: Stringliterale stehen roh (ohne
-  // QuoteStrLit) im Kopf - eine Umstellung bewegt Funde (A/B).
+  // Stringliterale stehen seit der Parser-Charge P3 in Quellform im Kopf
+  // (TokSourceText) - vorher roh, 'for C in ''AItem''' las sich wie ein
+  // Lesen von AItem. Korpus-A/B (Simulation): 0 Bewegung.
   Header := '';
   PrevKind := tkEof;
   while not (Tok.Kind in [tkKwDo, tkEof]) do
   begin
     if (Header <> '') and (Tok.Kind <> tkDot) and (PrevKind <> tkDot) then
       Header := Header + ' ';
-    Header := Header + Tok.Value;
+    Header := Header + TokSourceText(Tok);
     PrevKind := Tok.Kind;
     Next;
   end;
@@ -3262,10 +3270,7 @@ begin
   Cond := '';
   while not (Tok.Kind in [tkKwDo, tkEof]) do
   begin
-    if Tok.Kind = tkStrLit then
-      JoinTokInto(Cond, QuoteStrLit(Tok.Value))
-    else
-      JoinTokInto(Cond, Tok.Value);
+    JoinTokInto(Cond, TokSourceText(Tok));
     Next;
   end;
   WhileNode.TypeRef := Cond;
@@ -3493,7 +3498,7 @@ begin
                             tkKwExcept, tkKwFinally, tkEof]) do
     begin
       if AtExpr <> '' then AtExpr := AtExpr + ' ';
-      AtExpr := AtExpr + Tok.Value;
+      AtExpr := AtExpr + TokSourceText(Tok);   // Literale in Quellform (P3)
       Next;
     end;
     RaiseNode.TypeRef := Trim(AtExpr);
@@ -3643,10 +3648,7 @@ begin
     else
       ;   // ';' else until except finally: RhsStopsAt oben
     end;
-    if Tok.Kind = tkStrLit then
-      JoinTokInto(Result, QuoteStrLit(Tok.Value))
-    else
-      JoinTokInto(Result, Tok.Value);
+    JoinTokInto(Result, TokSourceText(Tok));
     Next;
   end;
 end;
@@ -3861,10 +3863,7 @@ begin
       else
         ;   // Abbruch-Token: RhsStopsAt oben
       end;
-      if Tok.Kind = tkStrLit then
-        JoinTokInto(FullRHS, QuoteStrLit(Tok.Value))
-      else
-        JoinTokInto(FullRHS, Tok.Value);
+      JoinTokInto(FullRHS, TokSourceText(Tok));
       Next;
     end;
     Node         := Parent.Add(nkAssign, LHS, T.Line, T.Col);
@@ -3973,10 +3972,8 @@ begin
             // 'varlow.') ein Phantom-Deref einer gleichnamigen lokalen
             // Variable. Als Wort-Evidenz ('Data DB TField') bleiben die
             // Idents fuer uUnusedUses vollwertig erhalten.
-            if Tok.Kind = tkStrLit then
-              JoinTokInto(GText, QuoteStrLit(Tok.Value))
-            else if Tok.Kind <> tkDot then
-              JoinTokInto(GText, Tok.Value);
+            if Tok.Kind <> tkDot then
+              JoinTokInto(GText, TokSourceText(Tok));
             Next;
           end;
           S := S + GText;
@@ -4024,10 +4021,7 @@ begin
             end
             else
             begin
-              if ArgTok.Kind = tkStrLit then
-                JoinTokInto(Args, QuoteStrLit(ArgTok.Value))
-              else
-                JoinTokInto(Args, ArgTok.Value);
+              JoinTokInto(Args, TokSourceText(ArgTok));
               Next;
             end;
           end;
