@@ -125,9 +125,13 @@ type
     function Parse(AFromLine, AFromCol, AToLine, AToCol: Integer): Boolean;
     // Dasselbe fuer den Bereich einer Wurzel.
     function ParseRoot(const ARoot: TRdxExprRoot): Boolean;
+    // Zahl der gelesenen Token.
     function TokCount: Integer;
+    // Das Token AIndex (0-basiert, < TokCount).
     function Tok(AIndex: Integer): TRdxExprTok;
+    // Zahl der Knoten nach Parse.
     function NodeCount: Integer;
+    // Der Knoten AIndex (0-basiert, < NodeCount).
     function Node(AIndex: Integer): TRdxExprNode;
     // Der Wurzelknoten nach Parse; -1 ohne.
     property Root: Integer read FRoot;
@@ -747,6 +751,8 @@ begin
         for j := 0 to High(FNodes[i].Ops) do
           if FNodes[i].Ops[j] = ATok then
             Exit(i);
+    else
+      ;   // ekPrimary/ekParen tragen keinen Operator
     end;
   end;
   Result := -1;
@@ -775,6 +781,8 @@ begin
     ekChain:
       if (AIndex >= 0) and (AIndex <= High(FNodes[ANode].Ops)) then
         Result := FToks[FNodes[ANode].Ops[AIndex]].Low;
+  else
+    ;   // die anderen Arten: kein Operator, Result bleibt ''
   end;
 end;
 
@@ -854,6 +862,8 @@ begin
           Exit(Text(L) + ' ' + Op + ' ' + Text(R));
         end;
       end;
+  else
+    ;   // ekChain/ekUnary: geklammert verneint, s. u.
   end;
   Result := 'not (' + Text(ANode) + ')';
 end;
