@@ -6685,8 +6685,20 @@ msgstr "der else-Zweig endet auf ein if ohne else - nach dem Tausch nähme diese
 msgid "the if statement is not safe to read (anonymous method, conditional expression, asm or label in it)"
 msgstr "die if-Anweisung ist nicht sicher lesbar (anonyme Methode, bedingter Ausdruck, asm oder Marke darin)"
 
+msgid "comment or directive in the expression - it would be lost"
+msgstr "Kommentar oder Direktive im Ausdruck - er ginge verloren"
+
+msgid "the chain mixes \"%s\" and \"%s\" - De Morgan needs one operator"
+msgstr "die Kette mischt \"%s\" und \"%s\" - De Morgan braucht einen Operator"
+
 msgid "Invert the if (swap then and else)"
 msgstr "if umkehren (then und else tauschen)"
 
+msgid "Apply De Morgan to \"%s\""
+msgstr "De Morgan auf \"%s\" anwenden"
+
 msgid "same meaning - the condition is negated once, then and else swap places"
 msgstr "gleiche Bedeutung - die Bedingung wird einmal verneint, then und else tauschen die Plätze"
+
+msgid "same meaning - the same terms in the same order, each negated; the evaluation stops at the same term"
+msgstr "gleiche Bedeutung - dieselben Glieder in derselben Reihenfolge, je verneint; die Auswertung endet am selben Glied"

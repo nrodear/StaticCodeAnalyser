@@ -56,6 +56,23 @@ type
   end;
 
   [TestFixture]
+  TTestRdxCtxDeMorgan = class
+  public
+    [Test] procedure DeMorgan_NotAnd;
+    [Test] procedure DeMorgan_NotOrComparisons;
+    [Test] procedure DeMorgan_CaretOnNot;
+    [Test] procedure DeMorgan_DoubleNegation;
+    [Test] procedure DeMorgan_InsideAndKeepsParens;
+    [Test] procedure DeMorgan_Reverse;
+    [Test] procedure DeMorgan_WhileUntilThreeTerms;
+    [Test] procedure DeMorgan_StringOperand;
+    [Test] procedure DeMorgan_MultiLine;
+    [Test] procedure DeMorgan_Bitwise_NoEntry;
+    [Test] procedure DeMorgan_Mixed_Refused;
+    [Test] procedure DeMorgan_Comment_Refused;
+  end;
+
+  [TestFixture]
   TTestRdxCtxIfTexts = class
   public
     [Test] procedure Captions_German;
@@ -84,6 +101,7 @@ uses
   uRdxBufferMath, uRdxCodeMap,
   uRdxContextRunner,
   uRdxIfFixes,           // R_IF_*
+  uRdxCondFixes,         // R_CF_*
   uRdxDeepNestingFix,    // GuardClause, R_DN_*
   uRdxText,              // _
   uTestRdxTextKit;       // Join, Apply, InProc, CaretOf, LineOf, NewMap
@@ -476,6 +494,103 @@ begin
     '    Work;', '    {$ENDIF}', '  end;']), ckGuardClause, _(R_DN_DIRECTIVE));
 end;
 
+{ ---- C8 De Morgan ---- }
+
+procedure TTestRdxCtxDeMorgan.DeMorgan_NotAnd;
+begin
+  Assert.AreEqual(InProc(['  if (not A) or (not B) then Foo;']),
+    Fixed(InProc(['  if not (A {^}and B) then Foo;']), ckDeMorgan));
+end;
+
+procedure TTestRdxCtxDeMorgan.DeMorgan_NotOrComparisons;
+begin
+  Assert.AreEqual(InProc(['  if (not (X > 0)) and (not Done) then Foo;']),
+    Fixed(InProc(['  if not ((X > 0) {^}or Done) then Foo;']), ckDeMorgan));
+end;
+
+procedure TTestRdxCtxDeMorgan.DeMorgan_CaretOnNot;
+begin
+  Assert.AreEqual(InProc(['  if (not A) or (not B.Ok) then Foo;']),
+    Fixed(InProc(['  if {^}not (A and B.Ok) then Foo;']), ckDeMorgan));
+  AssertNone(InProc(['  if {^}not A then Foo;']), ckDeMorgan,
+    'not ohne Kette');
+end;
+
+procedure TTestRdxCtxDeMorgan.DeMorgan_DoubleNegation;
+begin
+  Assert.AreEqual(InProc(['  if A or (not B) then Foo;']),
+    Fixed(InProc(['  if not (not A {^}and B) then Foo;']), ckDeMorgan));
+end;
+
+// In einer and-Kette braucht das or-Ergebnis Klammern.
+procedure TTestRdxCtxDeMorgan.DeMorgan_InsideAndKeepsParens;
+begin
+  Assert.AreEqual(InProc(['  if X and ((not A) or (not B)) then Foo;']),
+    Fixed(InProc(['  if X and not (A {^}and B) then Foo;']), ckDeMorgan));
+  Assert.AreEqual(InProc(['  if X and ((not A) and (not B)) then Foo;']),
+    Fixed(InProc(['  if X and not (A {^}or B) then Foo;']), ckDeMorgan));
+end;
+
+// Ohne 'not ( )' darum: die Kette wird 'not (..)' - und zurueck.
+procedure TTestRdxCtxDeMorgan.DeMorgan_Reverse;
+begin
+  Assert.AreEqual(InProc(['  if not ((not A) or (not B)) then Foo;']),
+    Fixed(InProc(['  if A {^}and B then Foo;']), ckDeMorgan));
+  Assert.AreEqual(InProc(['  if not (A and B) then Foo;']),
+    Fixed(InProc(['  if (not A) {^}or (not B) then Foo;']), ckDeMorgan));
+  Assert.AreEqual(InProc(['  if not (A or (X > 0)) then Foo;']),
+    Fixed(InProc(['  if not A {^}and not (X > 0) then Foo;']), ckDeMorgan));
+end;
+
+procedure TTestRdxCtxDeMorgan.DeMorgan_WhileUntilThreeTerms;
+begin
+  Assert.AreEqual(InProc(['  while (not A) or (not B) or (not C) do Foo;']),
+    Fixed(InProc(['  while not (A and B {^}and C) do Foo;']), ckDeMorgan));
+  Assert.AreEqual(InProc(['  repeat', '    Foo;',
+    '  until (not A) and (not B);']), Fixed(InProc(['  repeat', '    Foo;',
+    '  until not (A {^}or B);']), ckDeMorgan));
+end;
+
+procedure TTestRdxCtxDeMorgan.DeMorgan_StringOperand;
+begin
+  Assert.AreEqual(InProc(['  if (not (S = ''and'')) or (not Ok) then Foo;']),
+    Fixed(InProc(['  if not ((S = ''and'') {^}and Ok) then Foo;']),
+    ckDeMorgan));
+end;
+
+procedure TTestRdxCtxDeMorgan.DeMorgan_MultiLine;
+begin
+  Assert.AreEqual(InProc(['  if (not Assigned(A)) or (not A.Enabled) then Foo;']),
+    Fixed(InProc(['  if not (Assigned(A) {^}and', '      A.Enabled) then Foo;']),
+    ckDeMorgan));
+end;
+
+// Bitweise (Operand eines Vergleichs bzw. 'X > 0 or Done' = 'X > (0 or
+// Done)') und ausserhalb einer Bedingung: kein Eintrag.
+procedure TTestRdxCtxDeMorgan.DeMorgan_Bitwise_NoEntry;
+begin
+  AssertNone(InProc(['  if (Flags {^}and Mask) <> 0 then Foo;']), ckDeMorgan,
+    'Operand eines Vergleichs');
+  AssertNone(InProc(['  if X > 0 {^}or Done then Foo;']), ckDeMorgan,
+    'Vorrang: X > (0 or Done)');
+  AssertNone(InProc(['  B := not (A {^}and C);']), ckDeMorgan,
+    'Zuweisung');
+  AssertNone(InProc(['  if Foo(A {^}and B) then Bar;']), ckDeMorgan,
+    'Argument');
+end;
+
+procedure TTestRdxCtxDeMorgan.DeMorgan_Mixed_Refused;
+begin
+  AssertRefused(InProc(['  if not (A {^}or B xor C) then Foo;']), ckDeMorgan,
+    _(R_CF_MIXED, ['or', 'xor']));
+end;
+
+procedure TTestRdxCtxDeMorgan.DeMorgan_Comment_Refused;
+begin
+  AssertRefused(InProc(['  if not (A {^}and { b } B) then Foo;']), ckDeMorgan,
+    _(R_CF_COMMENT));
+end;
+
 { ---- Texte und Reihenfolge ---- }
 
 function OutcomeOf(AKind: TRdxContextKind;
@@ -490,6 +605,8 @@ procedure TTestRdxCtxIfTexts.Captions_German;
 begin
   Assert.AreEqual('if umkehren (then und else tauschen)',
     TRdxContextRunner.CaptionOf(OutcomeOf(ckInvertIf, '')));
+  Assert.AreEqual('De Morgan auf "and" anwenden',
+    TRdxContextRunner.CaptionOf(OutcomeOf(ckDeMorgan, 'and')));
   // Arten mit Fund-Hilfe: den Text baut uRdxFixTable.ContextCaption.
   Assert.AreEqual('', TRdxContextRunner.CaptionOf(OutcomeOf(ckGuardClause, '')));
   Assert.AreEqual('', TRdxContextRunner.CaptionOf(OutcomeOf(ckIntroduceConst,
@@ -528,7 +645,7 @@ var
   K : TRdxContextKind;
   O : TRdxContextOutcome;
 begin
-  for K in [ckInvertIf] do
+  for K in [ckInvertIf, ckDeMorgan] do
   begin
     O := OutcomeOf(K, 'and');
     Assert.AreEqual(TRdxContextRunner.CaptionOf(O),
@@ -542,6 +659,7 @@ end;
 initialization
   TDUnitX.RegisterTestFixture(TTestRdxCtxInvertIf);
   TDUnitX.RegisterTestFixture(TTestRdxCtxGuard);
+  TDUnitX.RegisterTestFixture(TTestRdxCtxDeMorgan);
   TDUnitX.RegisterTestFixture(TTestRdxCtxIfTexts);
   {$IFNDEF FPC}
   TDUnitX.RegisterTestFixture(TTestRdxCtxIfCaption);

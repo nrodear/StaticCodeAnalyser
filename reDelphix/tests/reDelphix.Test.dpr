@@ -342,6 +342,7 @@ uses
   uRdxFuncNameFix in '..\source\uRdxFuncNameFix.pas',
   uRdxCondExpr in '..\source\uRdxCondExpr.pas',
   uRdxIfFixes in '..\source\uRdxIfFixes.pas',
+  uRdxCondFixes in '..\source\uRdxCondFixes.pas',
   uRdxContextRunner in '..\source\uRdxContextRunner.pas',
   uTestRdxRecipes in 'uTestRdxRecipes.pas',
   uTestRdxBench in 'uTestRdxBench.pas',

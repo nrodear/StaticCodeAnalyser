@@ -184,6 +184,7 @@
         <DCCReference Include="..\source\uRdxFuncNameFix.pas"/>
         <DCCReference Include="..\source\uRdxCondExpr.pas"/>
         <DCCReference Include="..\source\uRdxIfFixes.pas"/>
+        <DCCReference Include="..\source\uRdxCondFixes.pas"/>
         <DCCReference Include="..\source\uRdxContextRunner.pas"/>
         <DCCReference Include="uTestRdxRecipes.pas"/>
         <DCCReference Include="uTestRdxBench.pas"/>

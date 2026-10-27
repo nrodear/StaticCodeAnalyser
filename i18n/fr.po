@@ -6681,8 +6681,20 @@ msgstr "la branche else se termine par un if sans else - après l'échange ce if
 msgid "the if statement is not safe to read (anonymous method, conditional expression, asm or label in it)"
 msgstr "l'instruction if n'est pas lisible de façon sûre (méthode anonyme, expression conditionnelle, asm ou étiquette)"
 
+msgid "comment or directive in the expression - it would be lost"
+msgstr "commentaire ou directive dans l'expression - il serait perdu"
+
+msgid "the chain mixes \"%s\" and \"%s\" - De Morgan needs one operator"
+msgstr "la chaîne mélange « %s » et « %s » - De Morgan exige un seul opérateur"
+
 msgid "Invert the if (swap then and else)"
 msgstr "Inverser le if (échanger then et else)"
 
+msgid "Apply De Morgan to \"%s\""
+msgstr "Appliquer De Morgan à « %s »"
+
 msgid "same meaning - the condition is negated once, then and else swap places"
 msgstr "même sens - la condition est niée une fois, then et else échangent leurs places"
+
+msgid "same meaning - the same terms in the same order, each negated; the evaluation stops at the same term"
+msgstr "même sens - les mêmes termes dans le même ordre, chacun nié ; l'évaluation s'arrête au même terme"

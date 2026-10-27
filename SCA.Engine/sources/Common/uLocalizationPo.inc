@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6692 Zeilen, 301383 Bytes
-  CPoLines_de: array[0..6691] of string = (
+  // i18n\de.po - 6704 Zeilen, 301976 Bytes
+  CPoLines_de: array[0..6703] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6702,11 +6702,23 @@ const
     'msgid "the if statement is not safe to read (anonymous method, conditional expression, asm or label in it)"',
     'msgstr "die if-Anweisung ist nicht sicher lesbar (anonyme Methode, bedingter Ausdruck, asm oder Marke darin)"',
     '',
+    'msgid "comment or directive in the expression - it would be lost"',
+    'msgstr "Kommentar oder Direktive im Ausdruck - er ginge verloren"',
+    '',
+    'msgid "the chain mixes \"%s\" and \"%s\" - De Morgan needs one operator"',
+    'msgstr "die Kette mischt \"%s\" und \"%s\" - De Morgan braucht einen Operator"',
+    '',
     'msgid "Invert the if (swap then and else)"',
     'msgstr "if umkehren (then und else tauschen)"',
     '',
+    'msgid "Apply De Morgan to \"%s\""',
+    'msgstr "De Morgan auf \"%s\" anwenden"',
+    '',
     'msgid "same meaning - the condition is negated once, then and else swap places"',
-    'msgstr "gleiche Bedeutung - die Bedingung wird einmal verneint, then und else tauschen die Pl'#$00E4'tze"'
+    'msgstr "gleiche Bedeutung - die Bedingung wird einmal verneint, then und else tauschen die Pl'#$00E4'tze"',
+    '',
+    'msgid "same meaning - the same terms in the same order, each negated; the evaluation stops at the same term"',
+    'msgstr "gleiche Bedeutung - dieselben Glieder in derselben Reihenfolge, je verneint; die Auswertung endet am selben Glied"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -6981,8 +6993,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6688 Zeilen, 313567 Bytes
-  CPoLines_fr: array[0..6687] of string = (
+  // i18n\fr.po - 6700 Zeilen, 314165 Bytes
+  CPoLines_fr: array[0..6699] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -13666,11 +13678,23 @@ const
     'msgid "the if statement is not safe to read (anonymous method, conditional expression, asm or label in it)"',
     'msgstr "l''instruction if n''est pas lisible de fa'#$00E7'on s'#$00FB're (m'#$00E9'thode anonyme, expression conditionnelle, asm ou '#$00E9'tiquette)"',
     '',
+    'msgid "comment or directive in the expression - it would be lost"',
+    'msgstr "commentaire ou directive dans l''expression - il serait perdu"',
+    '',
+    'msgid "the chain mixes \"%s\" and \"%s\" - De Morgan needs one operator"',
+    'msgstr "la cha'#$00EE'ne m'#$00E9'lange '#$00AB' %s '#$00BB' et '#$00AB' %s '#$00BB' - De Morgan exige un seul op'#$00E9'rateur"',
+    '',
     'msgid "Invert the if (swap then and else)"',
     'msgstr "Inverser le if ('#$00E9'changer then et else)"',
     '',
+    'msgid "Apply De Morgan to \"%s\""',
+    'msgstr "Appliquer De Morgan '#$00E0' '#$00AB' %s '#$00BB'"',
+    '',
     'msgid "same meaning - the condition is negated once, then and else swap places"',
-    'msgstr "m'#$00EA'me sens - la condition est ni'#$00E9'e une fois, then et else '#$00E9'changent leurs places"'
+    'msgstr "m'#$00EA'me sens - la condition est ni'#$00E9'e une fois, then et else '#$00E9'changent leurs places"',
+    '',
+    'msgid "same meaning - the same terms in the same order, each negated; the evaluation stops at the same term"',
+    'msgstr "m'#$00EA'me sens - les m'#$00EA'mes termes dans le m'#$00EA'me ordre, chacun ni'#$00E9' ; l'''#$00E9'valuation s''arr'#$00EA'te au m'#$00EA'me terme"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

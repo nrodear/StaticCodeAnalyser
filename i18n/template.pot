@@ -1197,6 +1197,10 @@ msgstr ""
 msgid "Applies to the plugin user interface only - detector messages, findings and exports are never translated. The list holds the built-in translations plus every i18n\\<code>.po file placed next to the plugin BPL. Captions already on screen switch after an IDE restart."
 msgstr ""
 
+#: reDelphix/source/uRdxContextRunner.pas:555
+msgid "Apply De Morgan to \"%s\""
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:328
 msgid "As of: "
 msgstr ""
@@ -2153,7 +2157,7 @@ msgstr ""
 msgid "Free is outside the protecting finally block"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:250
+#: reDelphix/source/uRdxContextRunner.pas:257
 #: reDelphix/source/uRdxFixTable.pas:2996
 msgid "Free now also runs on an exception and on Exit - the lines in between move into the try part"
 msgstr ""
@@ -2395,7 +2399,7 @@ msgstr ""
 msgid "Invalid UTF-8 sequence - compiler substitutes U+FFFD (data corruption)"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:541
+#: reDelphix/source/uRdxContextRunner.pas:554
 msgid "Invert the if (swap then and else)"
 msgstr ""
 
@@ -4627,6 +4631,10 @@ msgstr ""
 msgid "comment or directive in or beside the handler - intent, no help"
 msgstr ""
 
+#: reDelphix/source/uRdxCondFixes.pas:208
+msgid "comment or directive in the expression - it would be lost"
+msgstr ""
+
 #: reDelphix/source/uRdxEmptyFinallyFix.pas:176
 msgid "comment or directive in the finally block - intent, no help"
 msgstr ""
@@ -6597,12 +6605,12 @@ msgstr ""
 msgid "same meaning - the compiler does not read \"_\" in numbers; digit separators exist only from Delphi 11 on, FPC does not know them"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:534
+#: reDelphix/source/uRdxContextRunner.pas:542
 #: reDelphix/source/uRdxFixTable.pas:2996
 msgid "same meaning - the condition is evaluated once as before; if it is false, the routine ends as before; the body moves out one level"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:529
+#: reDelphix/source/uRdxContextRunner.pas:537
 msgid "same meaning - the condition is negated once, then and else swap places"
 msgstr ""
 
@@ -6610,7 +6618,7 @@ msgstr ""
 msgid "same meaning - the condition was always true (Length is never negative): the then branch runs as before, an else branch never ran and goes away; if another comparison was meant (e.g. > 0), it is still missing"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:224
+#: reDelphix/source/uRdxContextRunner.pas:231
 #: reDelphix/source/uRdxFixTable.pas:1295
 msgid "same meaning - the constant %s holds the literal; rename it by hand or with Refactor > Rename (Ctrl+Shift+E)"
 msgstr ""
@@ -6629,6 +6637,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxFixTable.pas:2996
 msgid "same meaning - the name appears nowhere else in the code of the file; documentation and a comment above it that names the routine go with it"
+msgstr ""
+
+#: reDelphix/source/uRdxContextRunner.pas:547
+msgid "same meaning - the same terms in the same order, each negated; the evaluation stops at the same term"
 msgstr ""
 
 #: reDelphix/source/uRdxFixTable.pas:2996
@@ -7040,6 +7052,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxRecipes.pas:1832
 msgid "the chain already contains Format()"
+msgstr ""
+
+#: reDelphix/source/uRdxCondFixes.pas:206
+msgid "the chain mixes \"%s\" and \"%s\" - De Morgan needs one operator"
 msgstr ""
 
 #: reDelphix/source/uRdxExceptionNameFix.pas:475
