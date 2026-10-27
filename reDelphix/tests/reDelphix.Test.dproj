@@ -182,6 +182,8 @@
         <DCCReference Include="..\source\uRdxInheritedEmptyFix.pas"/>
         <DCCReference Include="..\source\uRdxPlacesRunner.pas"/>
         <DCCReference Include="..\source\uRdxFuncNameFix.pas"/>
+        <DCCReference Include="..\source\uRdxCondExpr.pas"/>
+        <DCCReference Include="..\source\uRdxIfFixes.pas"/>
         <DCCReference Include="..\source\uRdxContextRunner.pas"/>
         <DCCReference Include="uTestRdxRecipes.pas"/>
         <DCCReference Include="uTestRdxBench.pas"/>
@@ -273,6 +275,7 @@
         <DCCReference Include="uTestRdxFuncNameFix.pas"/>
         <DCCReference Include="uTestRdxContextRunner.pas"/>
         <DCCReference Include="uTestRdxContextFormat.pas"/>
+        <DCCReference Include="uTestRdxContextIf.pas"/>
         <DCCReference Include="uTestRdxSharedMap.pas"/>
         <DCCReference Include="uTestRdxMagicGuards.pas"/>
         <DCCReference Include="uTestRdxMagicFixDetector.pas"/>

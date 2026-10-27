@@ -216,6 +216,9 @@ program reDelphix.Test;
 //                                 Lokale Konstante, try/finally um Create
 //   * uTestRdxContextFormat     - C16 (Charge N): Format() aus Verkettung
 //                                 am Caret (dieselbe Kette wie SCA044)
+//   * uTestRdxContextIf         - C7/C8 (Charge C78): if umkehren,
+//                                 Waechter-Klausel, De Morgan, Vergleich
+//                                 drehen, if teilen/zusammenfuegen am Caret
 //   * uTestRdxSharedMap         - Charge P5: geteilte Code-Sicht
 //                                 (TRdxMappedLines, Acquire/Release) gleich
 //                                 der frischen; Plattenblick-Cache von
@@ -337,6 +340,8 @@ uses
   uRdxInheritedEmptyFix in '..\source\uRdxInheritedEmptyFix.pas',
   uRdxPlacesRunner in '..\source\uRdxPlacesRunner.pas',
   uRdxFuncNameFix in '..\source\uRdxFuncNameFix.pas',
+  uRdxCondExpr in '..\source\uRdxCondExpr.pas',
+  uRdxIfFixes in '..\source\uRdxIfFixes.pas',
   uRdxContextRunner in '..\source\uRdxContextRunner.pas',
   uTestRdxRecipes in 'uTestRdxRecipes.pas',
   uTestRdxBench in 'uTestRdxBench.pas',
@@ -428,6 +433,7 @@ uses
   uTestRdxFuncNameFix in 'uTestRdxFuncNameFix.pas',
   uTestRdxContextRunner in 'uTestRdxContextRunner.pas',
   uTestRdxContextFormat in 'uTestRdxContextFormat.pas',
+  uTestRdxContextIf in 'uTestRdxContextIf.pas',
   uTestRdxSharedMap in 'uTestRdxSharedMap.pas',
   uTestRdxMagicGuards in 'uTestRdxMagicGuards.pas',
   uTestRdxMagicFixDetector in 'uTestRdxMagicFixDetector.pas',

@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6663 Zeilen, 299779 Bytes
-  CPoLines_de: array[0..6662] of string = (
+  // i18n\de.po - 6692 Zeilen, 301383 Bytes
+  CPoLines_de: array[0..6691] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6677,7 +6677,36 @@ const
     'msgstr "die Meldung nennt keine Funktion (\"Name :=\")"',
     '',
     'msgid "the unit is also compiled with Free Pascal ({$IFDEF FPC} in line %d) and sets no {$mode} - whether Result exists depends on the mode of the project"',
-    'msgstr "die Unit wird auch mit Free Pascal '#$00FC'bersetzt ({$IFDEF FPC} in Zeile %d) und setzt kein {$mode} - ob es Result gibt, h'#$00E4'ngt am Modus des Projekts"'
+    'msgstr "die Unit wird auch mit Free Pascal '#$00FC'bersetzt ({$IFDEF FPC} in Zeile %d) und setzt kein {$mode} - ob es Result gibt, h'#$00E4'ngt am Modus des Projekts"',
+    '',
+    '# reDelphix C7/C8 (uRdxIfFixes, uRdxCondFixes, uRdxContextRunner): if umkehren, De Morgan, Vergleich drehen, if teilen/zusammenfuegen',
+    '',
+    'msgid "compiler directive in the if statement - conditional code could change its branches"',
+    'msgstr "Compiler-Direktive in der if-Anweisung - bedingter Code k'#$00F6'nnte ihre Zweige '#$00E4'ndern"',
+    '',
+    'msgid "comment in the condition - it would be lost or swallow the new parenthesis"',
+    'msgstr "Kommentar in der Bedingung - er ginge verloren oder schluckte die neue Klammer"',
+    '',
+    'msgid "the condition is not readable (multi-line string or comment)"',
+    'msgstr "die Bedingung ist nicht lesbar (mehrzeiliger String oder Kommentar)"',
+    '',
+    'msgid "empty then or else branch"',
+    'msgstr "leerer then- oder else-Zweig"',
+    '',
+    'msgid "the else branch is another if (else-if chain) - after the swap it would take the new else"',
+    'msgstr "der else-Zweig ist wieder ein if (else-if-Kette) - nach dem Tausch n'#$00E4'hme es das neue else"',
+    '',
+    'msgid "the else branch ends with an if without else - after the swap that if would take the new else"',
+    'msgstr "der else-Zweig endet auf ein if ohne else - nach dem Tausch n'#$00E4'hme dieses if das neue else"',
+    '',
+    'msgid "the if statement is not safe to read (anonymous method, conditional expression, asm or label in it)"',
+    'msgstr "die if-Anweisung ist nicht sicher lesbar (anonyme Methode, bedingter Ausdruck, asm oder Marke darin)"',
+    '',
+    'msgid "Invert the if (swap then and else)"',
+    'msgstr "if umkehren (then und else tauschen)"',
+    '',
+    'msgid "same meaning - the condition is negated once, then and else swap places"',
+    'msgstr "gleiche Bedeutung - die Bedingung wird einmal verneint, then und else tauschen die Pl'#$00E4'tze"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -6952,8 +6981,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6659 Zeilen, 311919 Bytes
-  CPoLines_fr: array[0..6658] of string = (
+  // i18n\fr.po - 6688 Zeilen, 313567 Bytes
+  CPoLines_fr: array[0..6687] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -13612,7 +13641,36 @@ const
     'msgstr "le message ne nomme aucune fonction (\"Name :=\")"',
     '',
     'msgid "the unit is also compiled with Free Pascal ({$IFDEF FPC} in line %d) and sets no {$mode} - whether Result exists depends on the mode of the project"',
-    'msgstr "l''unit'#$00E9' est aussi compil'#$00E9'e avec Free Pascal ({$IFDEF FPC} '#$00E0' la ligne %d) et ne fixe aucun {$mode} - l''existence de Result d'#$00E9'pend du mode du projet"'
+    'msgstr "l''unit'#$00E9' est aussi compil'#$00E9'e avec Free Pascal ({$IFDEF FPC} '#$00E0' la ligne %d) et ne fixe aucun {$mode} - l''existence de Result d'#$00E9'pend du mode du projet"',
+    '',
+    '# reDelphix C7/C8 (uRdxIfFixes, uRdxCondFixes, uRdxContextRunner): if umkehren, De Morgan, Vergleich drehen, if teilen/zusammenfuegen',
+    '',
+    'msgid "compiler directive in the if statement - conditional code could change its branches"',
+    'msgstr "directive de compilation dans l''instruction if - du code conditionnel pourrait changer ses branches"',
+    '',
+    'msgid "comment in the condition - it would be lost or swallow the new parenthesis"',
+    'msgstr "commentaire dans la condition - il serait perdu ou avalerait la nouvelle parenth'#$00E8'se"',
+    '',
+    'msgid "the condition is not readable (multi-line string or comment)"',
+    'msgstr "la condition n''est pas lisible (cha'#$00EE'ne multiligne ou commentaire)"',
+    '',
+    'msgid "empty then or else branch"',
+    'msgstr "branche then ou else vide"',
+    '',
+    'msgid "the else branch is another if (else-if chain) - after the swap it would take the new else"',
+    'msgstr "la branche else est un autre if (cha'#$00EE'ne else-if) - apr'#$00E8's l'''#$00E9'change il prendrait le nouveau else"',
+    '',
+    'msgid "the else branch ends with an if without else - after the swap that if would take the new else"',
+    'msgstr "la branche else se termine par un if sans else - apr'#$00E8's l'''#$00E9'change ce if prendrait le nouveau else"',
+    '',
+    'msgid "the if statement is not safe to read (anonymous method, conditional expression, asm or label in it)"',
+    'msgstr "l''instruction if n''est pas lisible de fa'#$00E7'on s'#$00FB're (m'#$00E9'thode anonyme, expression conditionnelle, asm ou '#$00E9'tiquette)"',
+    '',
+    'msgid "Invert the if (swap then and else)"',
+    'msgstr "Inverser le if ('#$00E9'changer then et else)"',
+    '',
+    'msgid "same meaning - the condition is negated once, then and else swap places"',
+    'msgstr "m'#$00EA'me sens - la condition est ni'#$00E9'e une fois, then et else '#$00E9'changent leurs places"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

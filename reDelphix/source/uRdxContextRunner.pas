@@ -37,6 +37,13 @@ unit uRdxContextRunner;
 //                      wird '%%', System.SysUtils kommt notfalls mit).
 //                      Braucht den Quellstellen-Dienst (Run mit APlaces;
 //                      ohne ihn kein Eintrag). Bedeutungsgleich.
+//   ckInvertIf         C7 "if umkehren" (Charge C78, 2026-10-27): Caret auf
+//                      'if'/'then' eines if MIT else - Bedingung verneint,
+//                      Zweige getauscht (uRdxIfFixes.InvertIf).
+//                      Alle sechs bedeutungsgleich (Annahmen in den Units:
+//                      'not' logisch, {$B-} fuer Teilen/Zusammenfuegen);
+//                      ein Kandidat entsteht nur am ausloesenden Token,
+//                      nicht auf der ganzen Bedingung (wenig Rauschen).
 //
 // WANN EIN EINTRAG ENTSTEHT (F4): nur, wenn am Caret ein Kandidat steht -
 // ein Zahl-Literal bzw. eine Zeile 'X := ..Create..', die noch nicht
@@ -83,7 +90,8 @@ uses
   uRdxBufferMath;    // TRdxEdit
 
 type
-  TRdxContextKind = (ckIntroduceConst, ckTryFinallyCreate, ckConcatToFormat);
+  TRdxContextKind = (ckIntroduceConst, ckTryFinallyCreate, ckConcatToFormat,
+    ckInvertIf);
 
   // Ein Eintrag am Caret.
   //   Kind     die Aktion
@@ -91,7 +99,8 @@ type
   //   Name     fuer '%s' im Menuetext: das Literal wie im Quelltext bzw. X
   //            - auch, wenn gesperrt ist, soweit schon bekannt; bei
   //            ckConcatToFormat das Ziel bzw. der Aufrufkopf (der Menuetext
-  //            hat kein '%s')
+  //            hat kein '%s'); ckDeMorgan 'and'/'or', ckFlipCompare der
+  //            Operator; die anderen C7/C8-Arten ''
   //   Hint     freigegeben: was passiert (uebersetzt, uRdxText)
   //   Reason   gesperrt: warum nicht (uebersetzt)
   //   Edits    die Ersetzungen (ein Undo-Schritt, uRdxEditor.ReplaceSpans)
@@ -123,6 +132,11 @@ type
     // Run selbst; der Anbieter oeffnet den Dienst nur dann.
     class function WantsPlaces(ALines: TStrings;
       const AContext: TEditorContext): Boolean; static;
+    // Menuetext der Arten ohne Fund-Hilfe (C7/C8 ausser ckGuardClause),
+    // uebersetzt; '' fuer die anderen - deren Text baut
+    // uRdxFixTable.ContextCaption aus der Fund-Hilfe (F2).
+    class function CaptionOf(const AOutcome: TRdxContextOutcome): string;
+      static;
   end;
 
 const
@@ -144,6 +158,7 @@ uses
   uRdxTryFixes,      // CreateAt
   uRdxRecipes,       // CollapseWhitespace
   uRdxPlacesRunner,  // DescribeAnchor, FormatRewrite, UsesNamesOf (C16)
+  uRdxIfFixes,       // InvertIf, SplitIf, MergeIf (C7/C8)
   uRdxText;          // _ (Texte in der Sprache der SCA, E29)
 
 const
@@ -156,6 +171,10 @@ const
     + 'it by hand or with Refactor > Rename (Ctrl+Shift+E)';
   R_TRY_HINT = 'Free now also runs on an exception and on Exit - the lines '
     + 'in between move into the try part';
+  // C7/C8 (Charge C78): Menuetexte und Hinweise der Arten ohne Fund-Hilfe.
+  CAP_INVERT_IF = 'Invert the if (swap then and else)';
+  R_INVERT_HINT = 'same meaning - the condition is negated once, then and '
+    + 'else swap places';
 
 // Haengt AOutcome an AList an.
 procedure AddOutcome(var AList: TArray<TRdxContextOutcome>;
@@ -462,6 +481,53 @@ begin
   end;
 end;
 
+// Ein Eintrag aus dem Ergebnis eines C7/C8-Planers: kein Kandidat (False,
+// AWhy leer) -> nichts; sonst freigegeben mit AEdits und AHint bzw.
+// gesperrt mit AWhy.
+procedure AddPlanned(var AList: TArray<TRdxContextOutcome>;
+  AKind: TRdxContextKind; AOk: Boolean; const AWhy, AName, AHint: string;
+  const AEdits: TArray<TRdxEdit>);
+var
+  O : TRdxContextOutcome;
+begin
+  if not AOk and (AWhy = '') then
+    Exit;
+  O := Default(TRdxContextOutcome);
+  O.Kind := AKind;
+  O.Name := AName;
+  O.Enabled := AOk;
+  if AOk then
+  begin
+    O.Edits := AEdits;
+    O.Hint := AHint;
+  end
+  else
+    O.Reason := AWhy;
+  AddOutcome(AList, O);
+end;
+
+// Die sechs C7/C8-Aktionen am Caret, in der Reihenfolge von TRdxContextKind.
+procedure AddIfActions(var AList: TArray<TRdxContextOutcome>;
+  AMap: TRdxCodeMap; ALine, ACol: Integer);
+var
+  Ok    : Boolean;
+  Why   : string;
+  Edits : TArray<TRdxEdit>;
+begin
+  Ok := TRdxIfFixes.InvertIf(AMap, ALine, ACol, Edits, Why);
+  AddPlanned(AList, ckInvertIf, Ok, Why, '', _(R_INVERT_HINT), Edits);
+end;
+
+class function TRdxContextRunner.CaptionOf(
+  const AOutcome: TRdxContextOutcome): string;
+begin
+  case AOutcome.Kind of
+    ckInvertIf:    Result := _(CAP_INVERT_IF);
+  else
+    Result := '';
+  end;
+end;
+
 class function TRdxContextRunner.WantsPlaces(ALines: TStrings;
   const AContext: TEditorContext): Boolean;
 var
@@ -499,6 +565,7 @@ begin
     AddIntroduceConst(Result, Map, AContext.FileName, AContext.Line, Col);
     AddTryFinallyCreate(Result, Map, AContext.Line, Col);
     AddConcatToFormat(Result, Map, APlaces, AContext.Line, Col);
+    AddIfActions(Result, Map, AContext.Line, Col);
   finally
     TRdxCodeMap.Release(Map);
   end;
