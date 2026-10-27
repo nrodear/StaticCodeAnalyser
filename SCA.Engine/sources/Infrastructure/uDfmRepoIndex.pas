@@ -440,7 +440,11 @@ function FirstTypeHelperLine(Section: TAstNode;
 // Charge P1 (2026-10-27) als nkRecord an der Position des 'type'-Tokens;
 // ein gewoehnlicher record steht auf 'record'. Der Quelltext an (Zeile,
 // Spalte) entscheidet also - Kommentare und Strings erzeugen keinen Knoten.
-// Lesefehler -> 0 (Klassen zaehlen wie bei jeder anderen Unit).
+// Gelesen wird mit DERSELBEN Kette wie TParser2.ParseFile
+// (TryLoadSourceLines: Kodierung, Rueckfaelle, Zeilentrennung) - Zeile und
+// Spalte des Knotens zeigen damit in genau diesen Text (Review n1; eine
+// Markierung im TypeRef waere fuer uUnusedUses/den Symbolindex Text und
+// bewegte Funde). Unlesbar -> 0 (Klassen zaehlen wie bei jeder Unit).
 var
   Recs  : TList<TAstNode>;
   R     : TAstNode;
@@ -453,13 +457,7 @@ begin
     if Recs.Count = 0 then Exit;
     Lines := TStringList.Create;
     try
-      try
-        Lines.LoadFromFile(PasFileName);
-      except
-        // wie ImplHasIncludeDirective: nur Dateiprobleme abfangen
-        on EStreamError do Exit;
-        on EEncodingError do Exit;
-      end;
+      if not TParser2.TryLoadSourceLines(PasFileName, Lines) then Exit;
       for R in Recs do
         if IsTypeHelperAt(Lines, R) and ((Result = 0) or (R.Line < Result)) then
           Result := R.Line;

@@ -395,9 +395,12 @@ begin
   // aus ParsePrimary (Literale gequotet). Der Kopf zaehlt hier NICHT: der
   // Exception-Konstruktor bzw. die geerbte Methode ist kein Fremdzugriff,
   // den der Index bisher kannte - nur die Argumente kommen neu dazu.
-  // NICHT erfasst: 'Exit(O.Name)' - nkExit traegt sein Argument mit ROHEN
-  // Stringliteralen in TypeRef, ein Text in Anfuehrungszeichen waere dort
-  // von Code nicht zu unterscheiden.
+  // NICHT erfasst: 'Exit(O.Name)'. Der fruehere Grund (rohe Stringliterale
+  // in nkExit.TypeRef) entfiel mit der Parser-Charge P3 - Literale stehen
+  // dort jetzt in Quellform. Es bleibt: TypeRef traegt ein Leerzeichen
+  // zwischen JEDEM Token ('O . Name'), die Punkt-Suche von
+  // ScanExprForDottedRefs faende dort nichts; ein Erfassen braeuchte eine
+  // eigene Normalisierung und bewegte SCA052 (eigener Posten).
   Raises := RootNode.FindAll(nkRaise);
   try
     for N in Raises do

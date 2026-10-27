@@ -32,6 +32,13 @@ type
     constructor Create;
     // Laedt Datei, parst und gibt Root-Node (nkUnit) zurueck.
     function ParseFile(const FileName: string): TAstNode;
+    // Die Lese-/Dekodierkette von ParseFile (Default-Kodierung bzw. BOM,
+    // dann UTF-8, dann Default-Codepage ohne BOM) - fuer Konsumenten, die
+    // Zeile/Spalte eines Knotens im Quelltext nachschlagen: ParseFile parst
+    // ALines.Text, die Zeilen und Spalten stimmen also ueberein (Review
+    // Parser-Charge P, n1). False, wenn die Datei nicht lesbar ist.
+    class function TryLoadSourceLines(const FileName: string;
+      ALines: TStringList): Boolean; static;
     // Parst einen String direkt.
     function ParseSource(const Source: string): TAstNode;
     // Parst einen schon gelesenen Dateiinhalt so, wie ParseFile die Datei
@@ -414,21 +421,28 @@ begin
   Result := True;
 end;
 
+class function TParser2.TryLoadSourceLines(const FileName: string;
+  ALines: TStringList): Boolean;
+begin
+  Result := True;
+  try
+    ALines.LoadFromFile(FileName);
+  except
+    try ALines.LoadFromFile(FileName, TEncoding.UTF8);
+    except
+      Result := LoadAnsiWithoutBom(FileName, ALines);
+    end;
+  end;
+end;
+
 function TParser2.ParseFile(const FileName: string): TAstNode;
 var
   SL: TStringList;
 begin
   SL := TStringList.Create;
   try
-    try
-      SL.LoadFromFile(FileName);
-    except
-      try SL.LoadFromFile(FileName, TEncoding.UTF8);
-      except
-        if not LoadAnsiWithoutBom(FileName, SL) then
-          raise Exception.CreateFmt('Datei nicht lesbar: %s', [FileName]);
-      end;
-    end;
+    if not TryLoadSourceLines(FileName, SL) then
+      raise Exception.CreateFmt('Datei nicht lesbar: %s', [FileName]);
     Result := ParseNamedSource(SL.Text, FileName);
   finally
     SL.Free;
