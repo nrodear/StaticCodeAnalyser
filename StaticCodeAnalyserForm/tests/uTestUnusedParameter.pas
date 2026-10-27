@@ -116,6 +116,25 @@ type
     [Test] procedure EscapedQuoteBeforeCodeUse_NoFinding;      // Gegenprobe
   end;
 
+  // SCA054u (2026-10-27): die Quell-Rueckfrage endete am LETZTEN KNOTEN
+  // statt am end der Routine - until-Bedingung, Fortsetzungszeilen und
+  // inaktive {$IFDEF}-Zweige am Rumpfende blieben unsichtbar. Alle Tests
+  // ueber FindingsOfFile: nur dort laeuft die Quell-Rueckfrage. Die
+  // IFDEF-Form (Korpus-Mehrheit) ist hier NICHT pruefbar - der Harness
+  // parst beide Zweige, die Nutzung steht dann ohnehin im AST.
+  [TestFixture]
+  TTestUnusedParameterBodyEnd = class
+  public
+    [Test] procedure UsedOnlyInUntilCondition_NoFinding;
+    [Test] procedure UsedOnlyInUntilContinuationLine_NoFinding;
+    [Test] procedure UsedInIndexOnContinuationLine_NoFinding;
+    [Test] procedure UsedInUntilAfterNestedBlocks_NoFinding;
+    [Test] procedure OnlyInCommentAfterEnd_StillReported;   // Gegenprobe
+    [Test] procedure OnlyInUntilLiteral_StillReported;   // Gegenprobe
+    [Test] procedure NameInFollowingRoutine_StillReported;   // Gegenprobe
+    [Test] procedure NameInInitializationSection_StillReported;   // Gegenprobe
+  end;
+
 implementation
 
 uses
@@ -1382,8 +1401,203 @@ begin
   finally F.Free; end;
 end;
 
+// ---- TTestUnusedParameterBodyEnd (SCA054u) ---------------------------
+
+const
+  MSG_BODYEND_USED = 'Nutzung hinter dem letzten Knoten ist eine Nutzung';
+  MSG_BODYEND_KEPT = 'Der Fund muss bleiben';
+
+function UnusedParamCountOfFile(const ASource: string): Integer;
+// SCA054-Funde ueber FindingsOfFile - der Produktionsweg MIT Quell-
+// Rueckfrage. FindingsOf haette keine Datei, die Rueckfrage liefe tot.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(ASource);
+  try
+    Result := TFindingHelper.Count(F, fkUnusedParameter);
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameterBodyEnd.UsedOnlyInUntilCondition_NoFinding;
+// Korpusform jvcl HID CollectionDemo Unit1.pas:40. Die until-Bedingung
+// hat keinen eigenen Knoten - sie lag hinter dem letzten Knoten und
+// damit ausserhalb der Quell-Rueckfrage. Alte Exe (27.10.): 1 Fund.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Idx, Count: Integer);'#13#10 +
+  'var'#13#10 +
+  '  I: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  I := Idx;'#13#10 +
+  '  repeat'#13#10 +
+  '    Inc(I);'#13#10 +
+  '  until I >= Count;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+begin
+  Assert.AreEqual<Integer>(0, UnusedParamCountOfFile(SRC), MSG_BODYEND_USED);
+end;
+
+procedure TTestUnusedParameterBodyEnd.UsedOnlyInUntilContinuationLine_NoFinding;
+// Korpusform VirtualTrees GetNextVisibleSibling: die Nutzung steht in
+// der FORTSETZUNGSZEILE einer mehrzeiligen until-Bedingung.
+// Alte Exe: 1 Fund (IncludeFiltered).
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'function Foo(Node: Integer; IncludeFiltered: Boolean): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  Result := Node;'#13#10 +
+  '  repeat'#13#10 +
+  '    Result := Next(Result);'#13#10 +
+  '  until (Result = 0) or'#13#10 +
+  '        (IncludeFiltered and (Result > 5));'#13#10 +
+  'end;'#13#10 +
+  'end.';
+begin
+  Assert.AreEqual<Integer>(0, UnusedParamCountOfFile(SRC), MSG_BODYEND_USED);
+end;
+
+procedure TTestUnusedParameterBodyEnd.UsedInIndexOnContinuationLine_NoFinding;
+// Korpusform JvDBFilter SetNodeOp: letzte Anweisung ueber zwei Zeilen,
+// der Index-Ausdruck links der Zuweisung fehlt im AST-Text und steht
+// hinter der Knotenzeile. Alte Exe: 1 Fund (Index).
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Node, Index, Data: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  PWordArray(Buf + (Node +'#13#10 +
+  '    4))^[Index] := Data;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+begin
+  Assert.AreEqual<Integer>(0, UnusedParamCountOfFile(SRC), MSG_BODYEND_USED);
+end;
+
+procedure TTestUnusedParameterBodyEnd.UsedInUntilAfterNestedBlocks_NoFinding;
+// Bilanz-Probe fuer RoutineEndLine: try/case/begin im Rumpf schliessen
+// je ein end, erst das letzte end beendet die Routine. Zaehlte die
+// Bilanz falsch, endete der Bereich vor dem until. Alte Exe: 1 Fund.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Count: Integer);'#13#10 +
+  'var'#13#10 +
+  '  J: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  J := 0;'#13#10 +
+  '  repeat'#13#10 +
+  '    try'#13#10 +
+  '      case J of'#13#10 +
+  '        0: begin Inc(J); end;'#13#10 +
+  '      else'#13#10 +
+  '        Inc(J, 2);'#13#10 +
+  '      end;'#13#10 +
+  '    finally'#13#10 +
+  '      Dec(J);'#13#10 +
+  '    end;'#13#10 +
+  '  until J >= Count;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+begin
+  Assert.AreEqual<Integer>(0, UnusedParamCountOfFile(SRC), MSG_BODYEND_USED);
+end;
+
+procedure TTestUnusedParameterBodyEnd.OnlyInCommentAfterEnd_StillReported;
+// GEGENPROBE: der Name steht nur in Kommentaren auf der until- und der
+// end-Zeile. Kommentare zaehlen nie - auch nicht im verlaengerten Bereich.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Count: Integer);'#13#10 +
+  'var'#13#10 +
+  '  I: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  I := 0;'#13#10 +
+  '  repeat'#13#10 +
+  '    Inc(I);'#13#10 +
+  '  until I >= 10; { Count }'#13#10 +
+  'end; // Count'#13#10 +
+  'end.';
+begin
+  Assert.AreEqual<Integer>(1, UnusedParamCountOfFile(SRC), MSG_BODYEND_KEPT);
+end;
+
+procedure TTestUnusedParameterBodyEnd.OnlyInUntilLiteral_StillReported;
+// GEGENPROBE: der Name steht nur im Literal der until-Bedingung.
+// Die Quell-Rueckfrage liest die gestrippte Quelle.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Count: Integer);'#13#10 +
+  'var'#13#10 +
+  '  S: string;'#13#10 +
+  'begin'#13#10 +
+  '  repeat'#13#10 +
+  '    S := Next;'#13#10 +
+  '  until S = ''Count'';'#13#10 +
+  'end;'#13#10 +
+  'end.';
+begin
+  Assert.AreEqual<Integer>(1, UnusedParamCountOfFile(SRC), MSG_BODYEND_KEPT);
+end;
+
+procedure TTestUnusedParameterBodyEnd.NameInFollowingRoutine_StillReported;
+// GEGENPROBE zur Obergrenze: hinter dem end steht die naechste Routine
+// mit dem Namen als Code. Der Bereich endet am end von Foo - ein Scan bis
+// zur naechsten Routine oder ans Dateiende wuerde den Fund verschlucken.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Count: Integer);'#13#10 +
+  'var'#13#10 +
+  '  N: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  N := 1;'#13#10 +
+  '  repeat'#13#10 +
+  '    N := N * 2;'#13#10 +
+  '  until N > 100;'#13#10 +
+  'end;'#13#10 +
+  ''#13#10 +
+  'procedure Bar(Total: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  Total := Count;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+begin
+  Assert.AreEqual<Integer>(1, UnusedParamCountOfFile(SRC), MSG_BODYEND_KEPT);
+end;
+
+procedure TTestUnusedParameterBodyEnd.NameInInitializationSection_StillReported;
+// GEGENPROBE fuer die letzte Routine der Unit: dahinter steht nur noch
+// die initialization-Sektion, die den Namen (eine Unit-Variable) liest.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'var'#13#10 +
+  '  Count: Integer;'#13#10 +
+  'procedure Foo(Count: Integer);'#13#10 +
+  'var'#13#10 +
+  '  K: Cardinal;'#13#10 +
+  'begin'#13#10 +
+  '  K := 5;'#13#10 +
+  '  repeat'#13#10 +
+  '    Dec(K);'#13#10 +
+  '  until K = 0;'#13#10 +
+  'end;'#13#10 +
+  'initialization'#13#10 +
+  '  Count := 1;'#13#10 +
+  'end.';
+begin
+  Assert.AreEqual<Integer>(1, UnusedParamCountOfFile(SRC), MSG_BODYEND_KEPT);
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestUnusedParameter);
   TDUnitX.RegisterTestFixture(TTestUnusedParameterLiteral);
+  TDUnitX.RegisterTestFixture(TTestUnusedParameterBodyEnd);
 
 end.
