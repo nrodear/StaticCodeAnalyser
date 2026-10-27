@@ -40,6 +40,11 @@ unit uRdxContextRunner;
 //   ckInvertIf         C7 "if umkehren" (Charge C78, 2026-10-27): Caret auf
 //                      'if'/'then' eines if MIT else - Bedingung verneint,
 //                      Zweige getauscht (uRdxIfFixes.InvertIf).
+//   ckGuardClause      C7 Waechter-Klausel: Caret auf 'if'/'then' des
+//                      LETZTEN 'if A then begin B end' der Routine -
+//                      dieselbe Kette wie die Fund-Hilfe SCA018
+//                      (uRdxDeepNestingFix.GuardAt), Menuetext und Hinweis
+//                      wie dort (Dedup F2).
 //                      Alle sechs bedeutungsgleich (Annahmen in den Units:
 //                      'not' logisch, {$B-} fuer Teilen/Zusammenfuegen);
 //                      ein Kandidat entsteht nur am ausloesenden Token,
@@ -91,7 +96,7 @@ uses
 
 type
   TRdxContextKind = (ckIntroduceConst, ckTryFinallyCreate, ckConcatToFormat,
-    ckInvertIf);
+    ckInvertIf, ckGuardClause);
 
   // Ein Eintrag am Caret.
   //   Kind     die Aktion
@@ -159,6 +164,7 @@ uses
   uRdxRecipes,       // CollapseWhitespace
   uRdxPlacesRunner,  // DescribeAnchor, FormatRewrite, UsesNamesOf (C16)
   uRdxIfFixes,       // InvertIf, SplitIf, MergeIf (C7/C8)
+  uRdxDeepNestingFix, // GuardAt (C7, Kette von SCA018)
   uRdxText;          // _ (Texte in der Sprache der SCA, E29)
 
 const
@@ -171,6 +177,10 @@ const
     + 'it by hand or with Refactor > Rename (Ctrl+Shift+E)';
   R_TRY_HINT = 'Free now also runs on an exception and on Exit - the lines '
     + 'in between move into the try part';
+  // C7: der Hinweis der Fund-Hilfe SCA018 (FIX_HINTS, Zeile DeepNesting).
+  R_GUARD_HINT = 'same meaning - the condition is evaluated once as before; '
+    + 'if it is false, the routine ends as before; the body moves out one '
+    + 'level';
   // C7/C8 (Charge C78): Menuetexte und Hinweise der Arten ohne Fund-Hilfe.
   CAP_INVERT_IF = 'Invert the if (swap then and else)';
   R_INVERT_HINT = 'same meaning - the condition is negated once, then and '
@@ -512,10 +522,16 @@ procedure AddIfActions(var AList: TArray<TRdxContextOutcome>;
 var
   Ok    : Boolean;
   Why   : string;
+  Edit  : TRdxEdit;
   Edits : TArray<TRdxEdit>;
 begin
   Ok := TRdxIfFixes.InvertIf(AMap, ALine, ACol, Edits, Why);
   AddPlanned(AList, ckInvertIf, Ok, Why, '', _(R_INVERT_HINT), Edits);
+  Edits := nil;
+  Ok := TRdxDeepNestingFix.GuardAt(AMap, ALine, ACol, Edit, Why);
+  if Ok then
+    AddEdit(Edits, Edit);
+  AddPlanned(AList, ckGuardClause, Ok, Why, '', _(R_GUARD_HINT), Edits);
 end;
 
 class function TRdxContextRunner.CaptionOf(

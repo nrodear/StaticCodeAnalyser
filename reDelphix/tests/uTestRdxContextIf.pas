@@ -44,6 +44,18 @@ type
   end;
 
   [TestFixture]
+  TTestRdxCtxGuard = class
+  public
+    [Test] procedure Guard_LastIf;
+    [Test] procedure Guard_CaretOnThen;
+    [Test] procedure Guard_SameAsSca018;
+    [Test] procedure Guard_NotLast_NoEntry;
+    [Test] procedure Guard_InnerIf_NoEntry;
+    [Test] procedure Guard_ResultNotSet_Refused;
+    [Test] procedure Guard_Directive_Refused;
+  end;
+
+  [TestFixture]
   TTestRdxCtxIfTexts = class
   public
     [Test] procedure Captions_German;
@@ -54,6 +66,7 @@ type
   [TestFixture]
   TTestRdxCtxIfCaption = class
   public
+    [Test] procedure Caption_GuardLikeSca018;
     [Test] procedure Caption_OthersFromRunner;
   end;
 {$ENDIF}
@@ -63,12 +76,15 @@ implementation
 uses
   System.SysUtils, System.Classes,
   {$IFNDEF FPC}
+  uSCAConsts,            // fkDeepNesting
+  uRdxRecipeRunner,      // TRdxFixOutcome
   uRdxFixTable,          // CaptionFor, ContextCaption
   {$ENDIF}
   uFindingActions,       // TEditorContext
   uRdxBufferMath, uRdxCodeMap,
   uRdxContextRunner,
   uRdxIfFixes,           // R_IF_*
+  uRdxDeepNestingFix,    // GuardClause, R_DN_*
   uRdxText,              // _
   uTestRdxTextKit;       // Join, Apply, InProc, CaretOf, LineOf, NewMap
 
@@ -387,6 +403,79 @@ begin
     ckInvertIf, 'Marke');
 end;
 
+{ ---- C7 Waechter-Klausel ---- }
+
+procedure TTestRdxCtxGuard.Guard_LastIf;
+begin
+  Assert.AreEqual(InProc(['  Prepare;', '  if not Ready then Exit;',
+    '  Work;', '  More;']), Fixed(InProc(['  Prepare;', '  {^}if Ready then',
+    '  begin', '    Work;', '    More;', '  end;']), ckGuardClause));
+  Assert.AreEqual(InProc(['  if Assigned(P) then Exit;', '  Work;']),
+    Fixed(InProc(['  {^}if not Assigned(P) then', '  begin', '    Work;',
+    '  end;']), ckGuardClause));
+end;
+
+procedure TTestRdxCtxGuard.Guard_CaretOnThen;
+begin
+  Assert.AreEqual(InProc(['  if not (A and B) then Exit;', '  Work;']),
+    Fixed(InProc(['  if A and B th{^}en', '  begin', '    Work;', '  end;']),
+    ckGuardClause));
+end;
+
+// Dieselbe Ersetzung wie die Fund-Hilfe SCA018 an derselben Routine.
+procedure TTestRdxCtxGuard.Guard_SameAsSca018;
+var
+  Src, Why : string;
+  O        : TRdxContextOutcome;
+  Map      : TRdxCodeMap;
+  E        : TRdxEdit;
+begin
+  O := KindAt(InProc(['  Prepare;', '  {^}if Ready then', '  begin',
+    '    if Deep then', '      Work;', '  end;']), ckGuardClause, Src);
+  Map := NewMap(Src);
+  try
+    Assert.IsTrue(TRdxDeepNestingFix.GuardClause(Map, LineOf(Src, 'if Deep'),
+      'Depth 2 (if from line 8, limit: 1)', E, Why), Why);
+  finally
+    Map.Free;
+  end;
+  Assert.AreEqual<Integer>(1, Length(O.Edits));
+  Assert.AreEqual(Apply(Src, E), Apply(Src, O.Edits));
+end;
+
+procedure TTestRdxCtxGuard.Guard_NotLast_NoEntry;
+begin
+  AssertNone(InProc(['  {^}if Ready then', '  begin', '    Work;', '  end;',
+    '  Done;']), ckGuardClause, 'Code dahinter');
+  AssertNone(InProc(['  {^}if Ready then', '  begin', '    Work;', '  end',
+    '  else', '  begin', '    Done;', '  end;']), ckGuardClause, 'mit else');
+  AssertNone(InProc(['  {^}if Ready then Work;']), ckGuardClause,
+    'ohne begin..end');
+end;
+
+procedure TTestRdxCtxGuard.Guard_InnerIf_NoEntry;
+begin
+  AssertNone(InProc(['  if Ready then', '  begin', '    {^}if Deep then',
+    '    begin', '      Work;', '    end;', '  end;']), ckGuardClause,
+    'inneres if');
+end;
+
+procedure TTestRdxCtxGuard.Guard_ResultNotSet_Refused;
+var
+  Src : string;
+begin
+  Src := Join(['unit u;', 'interface', 'implementation',
+    'function F: Integer;', 'begin', '  {^}if Ready then', '  begin',
+    '    Result := 1;', '  end;', 'end;', 'end.']);
+  AssertRefused(Src, ckGuardClause, _(R_DN_RESULT));
+end;
+
+procedure TTestRdxCtxGuard.Guard_Directive_Refused;
+begin
+  AssertRefused(InProc(['  {^}if Ready then', '  begin', '    {$IFDEF D}',
+    '    Work;', '    {$ENDIF}', '  end;']), ckGuardClause, _(R_DN_DIRECTIVE));
+end;
+
 { ---- Texte und Reihenfolge ---- }
 
 function OutcomeOf(AKind: TRdxContextKind;
@@ -402,6 +491,7 @@ begin
   Assert.AreEqual('if umkehren (then und else tauschen)',
     TRdxContextRunner.CaptionOf(OutcomeOf(ckInvertIf, '')));
   // Arten mit Fund-Hilfe: den Text baut uRdxFixTable.ContextCaption.
+  Assert.AreEqual('', TRdxContextRunner.CaptionOf(OutcomeOf(ckGuardClause, '')));
   Assert.AreEqual('', TRdxContextRunner.CaptionOf(OutcomeOf(ckIntroduceConst,
     '12')));
 end;
@@ -413,11 +503,25 @@ var
 begin
   O := KindAt(InProc(['  {^}if A then Foo else Bar;']), ckInvertIf, Src);
   Assert.IsTrue(Pos('gleiche Bedeutung', O.Hint) = 1, O.Hint);
+  O := KindAt(InProc(['  {^}if A then', '  begin', '    Foo;', '  end;']),
+    ckGuardClause, Src);
+  Assert.IsTrue(Pos('gleiche Bedeutung', O.Hint) = 1, O.Hint);
   Assert.AreEqual('die Bedingung ist nicht lesbar (mehrzeiliger String oder '
     + 'Kommentar)', _(R_IF_COND_UNREADABLE));
 end;
 
 {$IFNDEF FPC}
+
+procedure TTestRdxCtxIfCaption.Caption_GuardLikeSca018;
+var
+  Fix : TRdxFixOutcome;
+begin
+  Fix := Default(TRdxFixOutcome);
+  Assert.AreEqual(TRdxFixTable.CaptionFor(fkDeepNesting, Fix),
+    TRdxFixTable.ContextCaption(OutcomeOf(ckGuardClause, '')));
+  Assert.IsTrue(Pos('Letztes if in eine W', TRdxFixTable.ContextCaption(
+    OutcomeOf(ckGuardClause, ''))) = 1);
+end;
 
 procedure TTestRdxCtxIfCaption.Caption_OthersFromRunner;
 var
@@ -437,6 +541,7 @@ end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestRdxCtxInvertIf);
+  TDUnitX.RegisterTestFixture(TTestRdxCtxGuard);
   TDUnitX.RegisterTestFixture(TTestRdxCtxIfTexts);
   {$IFNDEF FPC}
   TDUnitX.RegisterTestFixture(TTestRdxCtxIfCaption);

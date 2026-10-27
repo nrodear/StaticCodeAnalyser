@@ -2153,7 +2153,7 @@ msgstr ""
 msgid "Free is outside the protecting finally block"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:240
+#: reDelphix/source/uRdxContextRunner.pas:250
 #: reDelphix/source/uRdxFixTable.pas:2996
 msgid "Free now also runs on an exception and on Exit - the lines in between move into the try part"
 msgstr ""
@@ -2395,7 +2395,7 @@ msgstr ""
 msgid "Invalid UTF-8 sequence - compiler substitutes U+FFFD (data corruption)"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:525
+#: reDelphix/source/uRdxContextRunner.pas:541
 msgid "Invert the if (swap then and else)"
 msgstr ""
 
@@ -4161,7 +4161,7 @@ msgstr ""
 msgid "a directive names %s (line %d)"
 msgstr ""
 
-#: reDelphix/source/uRdxDeepNestingFix.pas:448
+#: reDelphix/source/uRdxDeepNestingFix.pas:456
 msgid "a line of the block starts inside a block comment or multi-line string - moving it left would change it"
 msgstr ""
 
@@ -4563,8 +4563,8 @@ msgstr ""
 msgid "comment in the expression X.Free;"
 msgstr ""
 
-#: reDelphix/source/uRdxDeepNestingFix.pas:428
-#: reDelphix/source/uRdxDeepNestingFix.pas:442
+#: reDelphix/source/uRdxDeepNestingFix.pas:436
+#: reDelphix/source/uRdxDeepNestingFix.pas:450
 msgid "comment in the head of the if or beside its end"
 msgstr ""
 
@@ -4762,7 +4762,7 @@ msgstr ""
 msgid "compiler directive in the range - try or finally might end up in only one branch"
 msgstr ""
 
-#: reDelphix/source/uRdxDeepNestingFix.pas:244
+#: reDelphix/source/uRdxDeepNestingFix.pas:252
 msgid "compiler directive in the routine - conditional code could change its last statement"
 msgstr ""
 
@@ -5095,10 +5095,10 @@ msgstr ""
 msgid "if X then Y := True else Y := False - assign expression directly"
 msgstr ""
 
-#: reDelphix/source/uRdxDeepNestingFix.pas:418
-#: reDelphix/source/uRdxDeepNestingFix.pas:431
-#: reDelphix/source/uRdxDeepNestingFix.pas:435
+#: reDelphix/source/uRdxDeepNestingFix.pas:426
+#: reDelphix/source/uRdxDeepNestingFix.pas:439
 #: reDelphix/source/uRdxDeepNestingFix.pas:443
+#: reDelphix/source/uRdxDeepNestingFix.pas:451
 msgid "if, begin and end do not stand on their own lines as usual (code beside them)"
 msgstr ""
 
@@ -5163,7 +5163,7 @@ msgstr ""
 msgid "inline declaration with initializer \":=\" - the expression can have side effects"
 msgstr ""
 
-#: reDelphix/source/uRdxDeepNestingFix.pas:473
+#: reDelphix/source/uRdxDeepNestingFix.pas:481
 msgid "inline var or const at the top of the block - its scope would grow to the rest of the routine"
 msgstr ""
 
@@ -5408,7 +5408,7 @@ msgstr ""
 msgid "no \"%s\""
 msgstr ""
 
-#: reDelphix/source/uRdxDeepNestingFix.pas:200
+#: reDelphix/source/uRdxDeepNestingFix.pas:208
 msgid "no \"%s\" on the reported line"
 msgstr ""
 
@@ -5935,7 +5935,7 @@ msgstr ""
 msgid "no routine with a begin..end body around the line"
 msgstr ""
 
-#: reDelphix/source/uRdxDeepNestingFix.pas:212
+#: reDelphix/source/uRdxDeepNestingFix.pas:220
 #: reDelphix/source/uRdxObjectListFix.pas:260
 msgid "no routine with a begin..end body around the reported line"
 msgstr ""
@@ -6597,11 +6597,12 @@ msgstr ""
 msgid "same meaning - the compiler does not read \"_\" in numbers; digit separators exist only from Delphi 11 on, FPC does not know them"
 msgstr ""
 
+#: reDelphix/source/uRdxContextRunner.pas:534
 #: reDelphix/source/uRdxFixTable.pas:2996
 msgid "same meaning - the condition is evaluated once as before; if it is false, the routine ends as before; the body moves out one level"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:518
+#: reDelphix/source/uRdxContextRunner.pas:529
 msgid "same meaning - the condition is negated once, then and else swap places"
 msgstr ""
 
@@ -6609,7 +6610,7 @@ msgstr ""
 msgid "same meaning - the condition was always true (Length is never negative): the then branch runs as before, an else branch never ran and goes away; if another comparison was meant (e.g. > 0), it is still missing"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:214
+#: reDelphix/source/uRdxContextRunner.pas:224
 #: reDelphix/source/uRdxFixTable.pas:1295
 msgid "same meaning - the constant %s holds the literal; rename it by hand or with Refactor > Rename (Ctrl+Shift+E)"
 msgstr ""
@@ -6949,7 +6950,7 @@ msgstr ""
 msgid "the bounds of the routine around the line are not safe to read"
 msgstr ""
 
-#: reDelphix/source/uRdxDeepNestingFix.pas:211
+#: reDelphix/source/uRdxDeepNestingFix.pas:219
 #: reDelphix/source/uRdxObjectListFix.pas:259
 msgid "the bounds of the routine around the reported line are not safe to read"
 msgstr ""
@@ -7105,8 +7106,8 @@ msgstr ""
 msgid "the condition as text - so the message names what failed"
 msgstr ""
 
-#: reDelphix/source/uRdxDeepNestingFix.pas:311
-#: reDelphix/source/uRdxDeepNestingFix.pas:318
+#: reDelphix/source/uRdxDeepNestingFix.pas:319
+#: reDelphix/source/uRdxDeepNestingFix.pas:326
 msgid "the condition contains a conditional expression (if .. then .. else)"
 msgstr ""
 
@@ -7314,7 +7315,7 @@ msgstr ""
 msgid "the file declares its own \"%s\" - it may be a routine that returns"
 msgstr ""
 
-#: reDelphix/source/uRdxDeepNestingFix.pas:260
+#: reDelphix/source/uRdxDeepNestingFix.pas:268
 #: reDelphix/source/uRdxGotoExitFix.pas:282
 msgid "the file declares its own \"Exit\" - it is not the procedure of the RTL"
 msgstr ""
@@ -7456,7 +7457,7 @@ msgstr ""
 msgid "the format string has a currency spec (m) - TFormatSettings.Invariant writes the generic currency sign instead of the local one"
 msgstr ""
 
-#: reDelphix/source/uRdxDeepNestingFix.pas:622
+#: reDelphix/source/uRdxDeepNestingFix.pas:607
 msgid "the function does not set Result by a plain statement before the if; by hand"
 msgstr ""
 
@@ -7602,7 +7603,7 @@ msgstr ""
 msgid "the last assignment to %s before Resume (line %d) is not \"T.Create(True);\""
 msgstr ""
 
-#: reDelphix/source/uRdxDeepNestingFix.pas:357
+#: reDelphix/source/uRdxDeepNestingFix.pas:365
 msgid "the last if is not a statement of the routine body itself (\"%s\" before it)"
 msgstr ""
 
@@ -7610,12 +7611,12 @@ msgstr ""
 msgid "the last statement is %s (line %d) - inherited after it would never run; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxDeepNestingFix.pas:307
-#: reDelphix/source/uRdxDeepNestingFix.pas:313
-#: reDelphix/source/uRdxDeepNestingFix.pas:325
-#: reDelphix/source/uRdxDeepNestingFix.pas:336
-#: reDelphix/source/uRdxDeepNestingFix.pas:354
-#: reDelphix/source/uRdxDeepNestingFix.pas:361
+#: reDelphix/source/uRdxDeepNestingFix.pas:315
+#: reDelphix/source/uRdxDeepNestingFix.pas:321
+#: reDelphix/source/uRdxDeepNestingFix.pas:333
+#: reDelphix/source/uRdxDeepNestingFix.pas:344
+#: reDelphix/source/uRdxDeepNestingFix.pas:362
+#: reDelphix/source/uRdxDeepNestingFix.pas:369
 msgid "the last statement of the routine is not \"if ... then begin ... end\" - a guard clause fits only there"
 msgstr ""
 
@@ -8023,7 +8024,7 @@ msgstr ""
 msgid "the message names no method with a lowercase first letter"
 msgstr ""
 
-#: reDelphix/source/uRdxDeepNestingFix.pas:607
+#: reDelphix/source/uRdxDeepNestingFix.pas:643
 msgid "the message names no nesting kind"
 msgstr ""
 
@@ -8285,7 +8286,7 @@ msgstr ""
 msgid "the reported line holds the implementation of \"%s\", not its declaration - no class of this file declares it before"
 msgstr ""
 
-#: reDelphix/source/uRdxDeepNestingFix.pas:619
+#: reDelphix/source/uRdxDeepNestingFix.pas:655
 msgid "the reported nesting is not inside the last if of the routine - a guard clause would not flatten it"
 msgstr ""
 
@@ -8301,7 +8302,7 @@ msgstr ""
 msgid "the routine contains a \"with\" statement - a name in it could bind to a member"
 msgstr ""
 
-#: reDelphix/source/uRdxDeepNestingFix.pas:252
+#: reDelphix/source/uRdxDeepNestingFix.pas:260
 msgid "the routine contains an anonymous method"
 msgstr ""
 
@@ -8309,7 +8310,7 @@ msgstr ""
 msgid "the routine contains an anonymous method - \"Exit\" would leave only that method if the \"goto\" sits in it"
 msgstr ""
 
-#: reDelphix/source/uRdxDeepNestingFix.pas:254
+#: reDelphix/source/uRdxDeepNestingFix.pas:262
 msgid "the routine contains goto or asm"
 msgstr ""
 
@@ -8577,8 +8578,8 @@ msgstr ""
 msgid "unclear what the statement belongs to (\"%s\" before it)"
 msgstr ""
 
-#: reDelphix/source/uRdxDeepNestingFix.pas:559
-#: reDelphix/source/uRdxDeepNestingFix.pas:573
+#: reDelphix/source/uRdxDeepNestingFix.pas:567
+#: reDelphix/source/uRdxDeepNestingFix.pas:581
 msgid "uneven indentation in the block - line %d"
 msgstr ""
 

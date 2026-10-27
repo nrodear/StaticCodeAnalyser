@@ -126,8 +126,8 @@ type
     // einer Fundzeile hinter der Fund-Hilfe wegfaellt (uFindingActionMenu,
     // Dedup per Caption). ckConcatToFormat (C16) wie das SCA044-Rezept
     // des Anbieters (keine Zeile dieser Tabelle): CAP_CONTEXT_FORMAT.
-    // Charge C78: die C7/C8-Arten ohne Fund-Hilfe:
-    // TRdxContextRunner.CaptionOf.
+    // Charge C78: ckGuardClause wie SCA018 (fkDeepNesting); die anderen
+    // C7/C8-Arten ohne Fund-Hilfe: TRdxContextRunner.CaptionOf.
     class function ContextCaption(
       const AOutcome: TRdxContextOutcome): string; static;
 
@@ -3051,6 +3051,10 @@ begin
   Fix := Default(TRdxFixOutcome);
   Fix.Name := AOutcome.Name;
   Fix.ChangesBehavior := AOutcome.ChangesBehavior;
+  // C7 Waechter-Klausel (Charge C78): dieselbe Kette wie die Fund-Hilfe
+  // SCA018, also ihr Menuetext (Dedup F2).
+  if AOutcome.Kind = ckGuardClause then
+    Exit(CaptionFor(fkDeepNesting, Fix));
   // Die anderen C7/C8-Arten haben keine Fund-Hilfe: ihr Text steht beim
   // Laeufer (FPC-Pruefstand).
   if AOutcome.Kind > ckTryFinallyCreate then
