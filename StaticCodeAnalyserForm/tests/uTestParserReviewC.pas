@@ -31,12 +31,44 @@ type
     [Test] procedure ArgumentScanner_LocalRecordTypeInAnonMethod_Continues;
   end;
 
+  // Parser-Charge P (2026-10-27): FPC-'type helper' (P1), anonyme Methode
+  // mit var-Sektion (P2), rohe String-Literale (P3). Eigene Fixture,
+  // damit TTestParserReviewC unter 20 Tests bleibt; Parse/NodeNamed/
+  // CountKind liegen auf Unit-Ebene.
+  [TestFixture]
+  TTestParserChargeP = class
+  public
+    // P1 - 'type helper for X'
+    [Test] procedure TypeHelper_ClassBehindHelperIsParsed;
+    [Test] procedure TypeHelper_StrongAliasAndEnumUnchanged;
+    [Test] procedure TypeHelper_MethodNameFoundAtDeclaration;
+    // P2 - anonyme Methode mit var-Sektion (Paket 9015)
+    [Test] procedure AnonVarSection_BodyStaysRhsText;
+    [Test] procedure AnonVarSection_InlineVarInitializer;
+    [Test] procedure AnonVarSection_LocalRoutineAndProcTypeInHead;
+    [Test] procedure AnonVarSection_FormatMismatchAtAssignment;
+    [Test] procedure AnonHead_LocalRoutineWithInnerBegin;
+    [Test] procedure AnonHead_InArgumentWithForward_DoesNotSwallow;
+    // P3 - einheitliche Literal-Ablage (TokSourceText)
+    [Test] procedure Literal_ExitArgumentInSourceForm;
+    [Test] procedure Literal_ForHeaderAndRaiseAtInSourceForm;
+    [Test] procedure Literal_ParamDefaultInSourceForm;
+    [Test] procedure Literal_ParamNameInExitOrForLiteral_StillUnused;
+  end;
+
 implementation
+
+// noinspection-file ClassPerFile
+// Zwei Fixtures (Grenze 20 Tests je Fixture): die Review-Befunde und die
+// Parser-Charge P teilen Parse/NodeNamed/CountKind - eine zweite Datei
+// braechte nur einen zweiten Projekteintrag.
 
 uses
   System.SysUtils, System.Classes, System.IOUtils,
   System.Generics.Collections,
-  uAstNode, uParser2;
+  uSCAConsts, uMethodd12,   // TLeakFinding, fkMethodName (Charge P)
+  uAstNode, uParser2,
+  uTestFindingHelper;       // FindingsOfFile (Charge P, Detektor-Tests)
 
 function Parse(const ASrc: string): TAstNode;
 var
@@ -492,7 +524,505 @@ begin
   end;
 end;
 
+{ ---- Parser-Charge P ---- }
+
+const
+  // Helper VOR der Klasse in derselben type-Sektion (stdctrls.pp-Muster).
+  SRC_TYPE_HELPER =
+    'unit h;'#13#10 +                              // 1
+    'interface'#13#10 +                            // 2
+    'type'#13#10 +                                 // 3
+    '  TIntHelper = type helper for Integer'#13#10 + // 4
+    '    function IsZero: Boolean;'#13#10 +        // 5
+    '  end;'#13#10 +                               // 6
+    '  TFoo = class'#13#10 +                       // 7
+    '    procedure doStuff;'#13#10 +               // 8
+    '  end;'#13#10 +                               // 9
+    'implementation'#13#10 +                       // 10
+    'function TIntHelper.IsZero: Boolean;'#13#10 + // 11
+    'begin'#13#10 +                                // 12
+    '  Result := Self = 0;'#13#10 +                // 13
+    'end;'#13#10 +                                 // 14
+    'procedure TFoo.doStuff;'#13#10 +              // 15
+    'begin'#13#10 +                                // 16
+    'end;'#13#10 +                                 // 17
+    'end.';                                        // 18
+
+procedure TTestParserChargeP.TypeHelper_ClassBehindHelperIsParsed;
+// Vorher: der Alias-Zweig las bis zum ';' hinter 'Boolean', das 'end'
+// beendete die type-Sektion, TFoo fehlte im AST (Exe 8c3eac8f: SCA106
+// meldet doStuff an der Implementierungszeile, s. Test unten).
+var
+  Root  : TAstNode;
+  HNode : TAstNode;
+begin
+  Root := Parse(SRC_TYPE_HELPER);
+  try
+    HNode := NodeNamed(Root, nkRecord, 'TIntHelper');
+    Assert.IsNotNull(HNode, 'der type helper ist ein nkRecord');
+    Assert.AreEqual<Integer>(4, HNode.Line);
+    Assert.AreEqual<Integer>(16, HNode.Col, 'Position = das type-Token');
+    Assert.IsNotNull(NodeNamed(Root, nkClass, 'TFoo'),
+      'die Klasse hinter dem Helper ist im AST');
+    Assert.IsNull(NodeNamed(Root, nkTypeAlias, 'TIntHelper'),
+      'kein Alias-Knoten mehr');
+  finally
+    Root.Free;
+  end;
+end;
+
+procedure TTestParserChargeP.TypeHelper_StrongAliasAndEnumUnchanged;
+// Gegenprobe: 'type' ohne 'helper' (starker Alias) bleibt im Alias-Zweig
+// mit demselben TypeRef; der Enum dahinter und record/class helper
+// laufen wie bisher.
+const
+  SRC =
+    'unit a; interface'#13#10 +
+    'type'#13#10 +
+    '  TMyInt = type Integer;'#13#10 +
+    '  TColor = (cRed, cGreen);'#13#10 +
+    '  TStrHelper = record helper for string'#13#10 +
+    '    function Len: Integer;'#13#10 +
+    '  end;'#13#10 +
+    '  TBar = class'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'end.';
+var
+  Root : TAstNode;
+begin
+  Root := Parse(SRC);
+  try
+    Assert.IsNotNull(NodeNamed(Root, nkTypeAlias, 'TMyInt'));
+    Assert.AreEqual('Integer', NodeNamed(Root, nkTypeAlias, 'TMyInt').TypeRef);
+    Assert.IsNotNull(NodeNamed(Root, nkEnumType, 'TColor'));
+    Assert.IsNotNull(NodeNamed(Root, nkRecord, 'TStrHelper'));
+    Assert.IsNotNull(NodeNamed(Root, nkClass, 'TBar'));
+  finally
+    Root.Free;
+  end;
+end;
+
+procedure TTestParserChargeP.TypeHelper_MethodNameFoundAtDeclaration;
+// Detektor-Sicht der sichtbarsten P1-Bewegung (SCA106, laz 28 Paare): mit
+// der Klasse im AST meldet SCA106 die Deklarationszeile 8. Ohne Fix kennt
+// der Parser TFoo nicht und meldet die Implementierung (Zeile 15) - Exe
+// 8c3eac8f an genau dieser Zeichenkette: 1 Fund, Zeile 15 (ROT).
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC_TYPE_HELPER);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMethodName),
+      'doStuff genau einmal');
+    Hit := nil;
+    for Fnd in F do
+    begin
+      if Fnd.Kind = fkMethodName then
+      begin
+        Hit := Fnd;
+      end;
+    end;
+    Assert.AreEqual('8', Hit.LineNumber, 'Fund an der Deklaration in TFoo');
+  finally
+    F.Free;
+  end;
+end;
+
+function AssignNamed(Root: TAstNode; const AName: string): TAstNode;
+// nkAssign mit genau diesem LHS; nil, wenn keiner.
+begin
+  Result := NodeNamed(Root, nkAssign, AName);
+end;
+
+procedure TTestParserChargeP.AnonVarSection_BodyStaysRhsText;
+// Vorher endete der RHS-Scan am ';' hinter 'TStringList' - der Rumpf lief
+// als Anweisungen von P weiter ('L.Free' als nkCall von P, 'L' als
+// Label-Phantom). Jetzt bleibt er RHS-Text wie bei jeder anonymen Methode
+// ohne var-Sektion; 'After' ist wieder eine Anweisung von P.
+const
+  SRC =
+    'unit a; interface implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var Q: TProc;'#13#10 +
+    'begin'#13#10 +
+    '  Q := procedure'#13#10 +
+    '    var'#13#10 +
+    '      L: TStringList;'#13#10 +
+    '    begin'#13#10 +
+    '      L := TStringList.Create;'#13#10 +
+    '      L.Free;'#13#10 +
+    '    end;'#13#10 +
+    '  After;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  Root : TAstNode;
+  Q    : TAstNode;
+begin
+  Root := Parse(SRC);
+  try
+    Q := AssignNamed(Root, 'Q');
+    Assert.IsNotNull(Q, 'die Zuweisung an Q');
+    Assert.IsTrue(Pos('L.Free', Q.TypeRef) > 0,
+      'der Rumpf gehoert zur RHS: ' + Q.TypeRef);
+    Assert.IsNull(NodeNamed(Root, nkCall, 'L.Free'), 'kein L.Free in P');
+    Assert.IsNull(AssignNamed(Root, 'L'), 'kein L := .. in P');
+    Assert.IsNotNull(NodeNamed(Root, nkCall, 'After'),
+      'die Anweisung dahinter gehoert wieder zu P');
+  finally
+    Root.Free;
+  end;
+end;
+
+procedure TTestParserChargeP.AnonVarSection_InlineVarInitializer;
+// Derselbe Fall im Initializer einer Inline-Variablen
+// (ScanInlineInitializer, delphimvcframework objectpool-Muster).
+const
+  SRC =
+    'unit b; interface implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'begin'#13#10 +
+    '  var R: TProc := procedure'#13#10 +
+    '    var I: Integer;'#13#10 +
+    '    begin'#13#10 +
+    '      I := 1;'#13#10 +
+    '    end;'#13#10 +
+    '  After;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  Root : TAstNode;
+  R    : TAstNode;
+begin
+  Root := Parse(SRC);
+  try
+    R := AssignNamed(Root, 'R');
+    Assert.IsNotNull(R, 'Initializer als nkAssign auf R');
+    Assert.IsTrue(Pos('I:=1', R.TypeRef) > 0, 'Rumpf im Initializer: ' + R.TypeRef);
+    Assert.IsNull(AssignNamed(Root, 'I'), 'kein I := 1 in P');
+    Assert.IsNotNull(NodeNamed(Root, nkCall, 'After'));
+  finally
+    Root.Free;
+  end;
+end;
+
+procedure TTestParserChargeP.AnonVarSection_LocalRoutineAndProcTypeInHead;
+// Im Kopf: eine Prozedurtyp-Variable (oeffnet keinen Kopf - sonst liefe
+// der Scan ueber das Ende der Zuweisung hinaus) und eine benannte lokale
+// Routine mit eigenem begin..end (TES5Edit-Muster). Beides bleibt in der
+// RHS; die Anweisung dahinter gehoert zu P.
+const
+  SRC =
+    'unit c; interface implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var Q: TFunc<Integer, Integer>;'#13#10 +
+    'begin'#13#10 +
+    '  Q := function(A: Integer): Integer'#13#10 +
+    '    var'#13#10 +
+    '      F: procedure(X: Integer);'#13#10 +
+    '    function Twice(B: Integer): Integer;'#13#10 +
+    '    begin'#13#10 +
+    '      Result := 2 * B;'#13#10 +
+    '    end;'#13#10 +
+    '    begin'#13#10 +
+    '      F := nil;'#13#10 +
+    '      Result := Twice(A);'#13#10 +
+    '    end;'#13#10 +
+    '  After;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  Root : TAstNode;
+  Q    : TAstNode;
+begin
+  Root := Parse(SRC);
+  try
+    Q := AssignNamed(Root, 'Q');
+    Assert.IsNotNull(Q);
+    Assert.IsTrue(Pos('Twice(A)', Q.TypeRef) > 0, 'Rumpf in der RHS: ' + Q.TypeRef);
+    Assert.IsNull(AssignNamed(Root, 'Result'), 'kein Result := .. in P');
+    Assert.IsNull(AssignNamed(Root, 'F'), 'kein F := nil in P');
+    Assert.IsNotNull(NodeNamed(Root, nkCall, 'After'));
+  finally
+    Root.Free;
+  end;
+end;
+
+procedure TTestParserChargeP.AnonHead_LocalRoutineWithInnerBegin;
+// Review P2, M1: das innere 'begin' im Rumpf der lokalen Routine Twice
+// (Tiefe 1) schloss im ersten Wurf den Kopf der anonymen Methode - das ';'
+// hinter Twice' 'end' beendete dann den Scan, der Rumpf fiel wieder in P.
+// Jetzt schliesst nur ein 'begin' auf der Tiefe des Kopfs.
+const
+  SRC =
+    'unit c; interface implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var Q: TFunc<Integer, Integer>;'#13#10 +
+    'begin'#13#10 +
+    '  Q := function(A: Integer): Integer'#13#10 +
+    '    function Twice(B: Integer): Integer;'#13#10 +
+    '    begin'#13#10 +
+    '      if B > 0 then'#13#10 +
+    '      begin'#13#10 +
+    '        Result := 2 * B;'#13#10 +
+    '      end;'#13#10 +
+    '    end;'#13#10 +
+    '    begin'#13#10 +
+    '      Result := Twice(A);'#13#10 +
+    '    end;'#13#10 +
+    '  After;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  Root : TAstNode;
+  Q    : TAstNode;
+begin
+  Root := Parse(SRC);
+  try
+    Q := AssignNamed(Root, 'Q');
+    Assert.IsNotNull(Q);
+    Assert.IsTrue(Pos('Twice(A)', Q.TypeRef) > 0, 'Rumpf in der RHS: ' + Q.TypeRef);
+    Assert.IsNull(AssignNamed(Root, 'Result'), 'kein Result := .. in P');
+    Assert.IsNotNull(NodeNamed(Root, nkCall, 'After'));
+  finally
+    Root.Free;
+  end;
+end;
+
+procedure TTestParserChargeP.AnonHead_InArgumentWithForward_DoesNotSwallow;
+// Review P2, m1: ein Kopf, der in einer Klammer aufgeht und kein eigenes
+// 'begin' bekommt (lokale forward-Deklaration), hielt im ersten Wurf das
+// ';' auf Tiefe 0 auf - die Zuweisung frass 'After;' (Rueckschritt
+// gegenueber vor P2). Jetzt schliesst 'forward' den Kopf, und Koepfe aus
+// einer geschlossenen Klammer fallen weg.
+const
+  SRC =
+    'unit g; interface implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'begin'#13#10 +
+    '  X := Run(procedure'#13#10 +
+    '    procedure L; forward;'#13#10 +
+    '    procedure L; begin end;'#13#10 +
+    '    begin'#13#10 +
+    '      L;'#13#10 +
+    '    end);'#13#10 +
+    '  After;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  Root : TAstNode;
+  X    : TAstNode;
+begin
+  Root := Parse(SRC);
+  try
+    X := AssignNamed(Root, 'X');
+    Assert.IsNotNull(X);
+    Assert.IsTrue(Pos('After', X.TypeRef) = 0, 'After gehoert nicht zur RHS: ' + X.TypeRef);
+    Assert.IsNotNull(NodeNamed(Root, nkCall, 'After'), 'After ist eine Anweisung von P');
+  finally
+    Root.Free;
+  end;
+end;
+
+procedure TTestParserChargeP.AnonVarSection_FormatMismatchAtAssignment;
+// Detektor-Sicht der sichtbarsten P2-Bewegung (SCA005, rw 9 von 12 Funden
+// wandern): der Format-Fehler im Rumpf bleibt gemeldet, jetzt an der Zeile
+// der Zuweisung (9) - wie bei jeder anonymen Methode ohne var-Sektion.
+// Exe 8c3eac8f an dieser Zeichenkette: 1 Fund, Zeile 13 (ROT).
+const
+  SRC =
+    'unit a;'#13#10 +                           // 1
+    'interface'#13#10 +                         // 2
+    'uses System.SysUtils;'#13#10 +             // 3
+    'implementation'#13#10 +                    // 4
+    'procedure Run(A, B: Integer);'#13#10 +     // 5
+    'var'#13#10 +                               // 6
+    '  P: TProc;'#13#10 +                       // 7
+    'begin'#13#10 +                             // 8
+    '  P := procedure'#13#10 +                  // 9
+    '    var'#13#10 +                           // 10
+    '      S: string;'#13#10 +                  // 11
+    '    begin'#13#10 +                         // 12
+    '      S := Format(''%d'', [A, B]);'#13#10 + // 13
+    '    end;'#13#10 +                          // 14
+    '  P();'#13#10 +                            // 15
+    'end;'#13#10 +                              // 16
+    'end.';                                     // 17
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFormatMismatch),
+      'ein Platzhalter, zwei Argumente');
+    Hit := nil;
+    for Fnd in F do
+    begin
+      if Fnd.Kind = fkFormatMismatch then
+      begin
+        Hit := Fnd;
+      end;
+    end;
+    Assert.AreEqual('9', Hit.LineNumber, 'Fund an der Zuweisung P := ..');
+  finally
+    F.Free;
+  end;
+end;
+
+function FirstOfKind(Root: TAstNode; AKind: TNodeKind): TAstNode;
+// Erster Knoten der Art AKind; nil, wenn keiner.
+begin
+  Result := Root.FindFirst(AKind);
+end;
+
+function TypeRefsOf(Root: TAstNode; AKind: TNodeKind): string;
+// TypeRef aller Knoten der Art AKind in Dokumentreihenfolge, mit '|'
+// getrennt - ein Vergleich statt einer Liste je Test.
+var
+  L     : TList<TAstNode>;
+  Parts : TArray<string>;
+  I     : Integer;
+begin
+  L := Root.FindAll(AKind);
+  try
+    SetLength(Parts, L.Count);
+    for I := 0 to L.Count - 1 do
+    begin
+      Parts[I] := L[I].TypeRef;
+    end;
+  finally
+    L.Free;
+  end;
+  Result := string.Join('|', Parts) + '|';
+end;
+
+procedure TTestParserChargeP.Literal_ExitArgumentInSourceForm;
+// Vorher stand der Literal-WERT roh im TypeRef ('it''s' -> it's, '' -> leer).
+// Ohne Literal bleibt die Form mit Leerzeichen je Token ('- 1').
+const
+  SRC =
+    'unit e; interface implementation'#13#10 +
+    'function F(N: Integer): string;'#13#10 +
+    'begin'#13#10 +
+    '  if N = 0 then Exit(''it''''s'');'#13#10 +
+    'end;'#13#10 +
+    'function G(N: Integer): string;'#13#10 +
+    'begin'#13#10 +
+    '  if N = 0 then Exit('''');'#13#10 +
+    'end;'#13#10 +
+    'function H: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  Exit(-1);'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  Root : TAstNode;
+begin
+  Root := Parse(SRC);
+  try
+    // Apostroph verdoppelt und aussen gequotet; leeres Literal sichtbar;
+    // ohne Literal unveraendert.
+    Assert.AreEqual('''it''''s''|''''|- 1|', TypeRefsOf(Root, nkExit));
+  finally
+    Root.Free;
+  end;
+end;
+
+procedure TTestParserChargeP.Literal_ForHeaderAndRaiseAtInSourceForm;
+// for-Kopf und 'raise .. at': bisher roh ('C in ab'), jetzt in Quellform.
+const
+  SRC =
+    'unit f; interface implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var C: Char;'#13#10 +
+    'begin'#13#10 +
+    '  for C in ''ab'' do'#13#10 +
+    '    Writeln(C);'#13#10 +
+    '  raise Exception.Create(''x'') at Addr(''y'');'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  Root : TAstNode;
+begin
+  Root := Parse(SRC);
+  try
+    Assert.AreEqual('C in ''ab''', FirstOfKind(Root, nkForStmt).TypeRef);
+    Assert.IsTrue(Pos('''y''', FirstOfKind(Root, nkRaise).TypeRef) > 0,
+      'at-Ausdruck: ' + FirstOfKind(Root, nkRaise).TypeRef);
+  finally
+    Root.Free;
+  end;
+end;
+
+procedure TTestParserChargeP.Literal_ParamDefaultInSourceForm;
+// Vorgabewert im Routinenkopf: 'string=a b' -> 'string=''a b'''.
+const
+  SRC =
+    'unit d; interface implementation'#13#10 +
+    'procedure P(const S: string = ''a b''; N: Integer = 1);'#13#10 +
+    'begin'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  Root : TAstNode;
+begin
+  Root := Parse(SRC);
+  try
+    // Zweiter Parameter ohne Literal: unveraendert.
+    Assert.AreEqual('string=''a b''|Integer=1|', TypeRefsOf(Root, nkParam));
+  finally
+    Root.Free;
+  end;
+end;
+
+procedure TTestParserChargeP.Literal_ParamNameInExitOrForLiteral_StillUnused;
+// Detektor-Sicht (SCA054): der Literalinhalt ist kein Lesen des
+// Parameters. Exe 8c3eac8f an genau diesen Zeichenketten: je 0 Funde
+// (ROT); Kontrolle ohne Literal 1, Simulation 'Exit(#39''AName''#39)' 1.
+// Im Referenzkorpus bewegt P3 nichts (Vertrag P3) - eine Zusage fuer
+// fremden Code.
+const
+  HEAD =
+    'unit u;'#13#10 +
+    'interface'#13#10 +
+    'type'#13#10 +
+    '  TFoo = class'#13#10 +
+    '    function Lbl(AName: string): string;'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'function TFoo.Lbl(AName: string): string;'#13#10 +
+    'begin'#13#10;
+  TAIL =
+    'end;'#13#10 +
+    'end.';
+  BODIES: array[0..1] of string = (
+    '  if Result = '''' then Exit(''AName'');'#13#10 +
+    '  Result := ''x'';'#13#10,
+    '  for var C in ''AName'' do'#13#10 +
+    '    Result := C;'#13#10);
+var
+  B : string;
+  F : TObjectList<TLeakFinding>;
+begin
+  for B in BODIES do
+  begin
+    F := TFindingHelper.FindingsOfFile(HEAD + B + TAIL);
+    try
+      Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+        'AName nur im Literal: ' + B);
+    finally
+      F.Free;
+    end;
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestParserReviewC);
+  TDUnitX.RegisterTestFixture(TTestParserChargeP);
 
 end.

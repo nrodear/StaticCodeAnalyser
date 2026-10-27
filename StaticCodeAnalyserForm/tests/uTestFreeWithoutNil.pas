@@ -79,7 +79,8 @@ type
 
   // U12 (2026-10-27): zwei Restklassen der Stichprobe vom 22.10. -
   // Nil-Test-Schleife (W) und Locals anonymer Methoden (A). Eigene
-  // Fixture; die beiden anderen tragen 37 bzw. 14 Faelle.
+  // Fixture; die beiden anderen tragen 37 bzw. 14 Faelle. (A) traegt seit
+  // der Parser-Charge P2 der Parser, nicht mehr ein Detektor-Gate.
   [TestFixture]
   TTestFreeWithoutNilU12 = class
   public
@@ -89,7 +90,7 @@ type
     [Test] procedure WhileNilTestOfOtherField_StillReported;   // Gegenprobe
     [Test] procedure AnonMethodVarLocal_NotReported;
     [Test] procedure AnonMethodConstParam_NotReported;
-    [Test] procedure AnonMethodVarParam_StillReported;   // Gegenprobe
+    [Test] procedure AnonMethodVarParam_BodyIsRhsText_KnownLimit;   // FN, seit P2
     [Test] procedure FieldFreedAfterAnonMethodEnds_StillReported;   // Gegenprobe
     [Test] procedure PlainFieldFree_FileHarness_Reported;
   end;
@@ -1577,9 +1578,10 @@ end;
 
 procedure TTestFreeWithoutNilU12.AnonMethodVarLocal_NotReported;
 // U12-A: L ist Local der anonymen Methode (delphimvcframework-Muster).
-// Der Parser kippt deren Rumpf in Run, die var-Zeile wird kein
-// nkLocalVar - ohne Gate sieht L.Free wie ein Feld-Free aus.
-// Bestehende Exe: 1 Fund. FindingsOfFile: das Gate liest die Quelle.
+// Bis zur Parser-Charge P2 kippte der Parser deren Rumpf in Run, L.Free
+// sah wie ein Feld-Free aus; ein Quelltext-Gate entlastete. Seit P2
+// bleibt der Rumpf RHS-Text der Zuweisung, das Gate ist entfernt.
+// Exe 0fe5d84c (Parser alt, ohne Gate): 1 Fund.
 const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +
@@ -1620,7 +1622,8 @@ end;
 
 procedure TTestFreeWithoutNilU12.AnonMethodConstParam_NotReported;
 // U12-A: const-Parameter der anonymen Methode - lokale Kopie wie
-// bei einer gewoehnlichen Methode (IsLocalCopyParam).
+// bei einer gewoehnlichen Methode (IsLocalCopyParam). Seit der Parser-
+// Charge P2 ist der ganze Rumpf RHS-Text (kein Gate mehr noetig).
 const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +
@@ -1655,9 +1658,16 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFreeWithoutNilU12.AnonMethodVarParam_StillReported;
-// GEGENPROBE U12-A: var-Parameter ist die Variable des Aufrufers -
-// dort haengt der Zeiger; Befund bleibt wie bei Methoden.
+procedure TTestFreeWithoutNilU12.AnonMethodVarParam_BodyIsRhsText_KnownLimit;
+// Bis P2 die Gegenprobe des U12-A-Gates (var-Parameter = Variable des
+// Aufrufers, Befund blieb). Seit der Parser-Charge P2 ist der Rumpf einer
+// anonymen Methode mit var-Sektion RHS-Text - wie der jeder anonymen
+// Methode ohne Sektion schon immer; AList.Free ist fuer SCA139 keine
+// Anweisung mehr (bekannte Grenze: anonyme Methoden haben keinen eigenen
+// Knoten, Paket 9015). Exe 8c3eac8f: 1 Fund (ROT ohne P2).
+// BEKANNTE GRENZE, kein Wunschverhalten: der Test pinnt einen FN - AList
+// ist die Variable des Aufrufers, nach dem Free haengt sie. Bekommen
+// anonyme Methoden eigene Knoten, kippt er auf 1 (dann bewusst anpassen).
 const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +
@@ -1687,7 +1697,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try
-    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFreeWithoutNil));
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil));
   finally F.Free; end;
 end;
 

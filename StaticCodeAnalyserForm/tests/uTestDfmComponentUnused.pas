@@ -70,7 +70,8 @@ type
     [Test] procedure Test_UsesInIfdefBranch_NotDetected;           // inaktiver Zweig
     [Test] procedure Test_UsesInElseBranch_NotDetected;            // inaktives ELSE
     [Test] procedure Test_UsesOnlyInComment_StillDetected;         // Kommentar/String
-    [Test] procedure Test_ClassBehindTypeHelper_LostByParser;      // Grenze, Parser
+    [Test] procedure Test_ClassBehindTypeHelper_NotDetected;       // Parser P1
+    [Test] procedure Test_ClassBehindTypeHelperInPpUnit_StillDetected; // LCL-Kriterium
   end;
 
 implementation
@@ -86,6 +87,7 @@ uses
   uAstNode, uParser2,
   uDfmParser, uComponentGraph,
   uFormBinder, uDfmRepoIndex, uSymbolReferenceIndex,
+  uStaticFiles,   // ScanDialect - .pp zaehlt nur unter dlFpc als Unit
   uDfmComponentUnused;
 
 // Schreibt Main- (+ optional Other-) .pas in einen temp-Ordner, baut Repo-
@@ -1060,30 +1062,53 @@ begin
   Result := Format(TEMPLATE, [AHelperHead]);
 end;
 
-procedure TTestDfmComponentUnusedVisibility.Test_ClassBehindTypeHelper_LostByParser;
-// GRENZE, kein Wunschverhalten (Nachtrag 2026-10-27, Entscheidungsfrage):
-// TParser2 kennt 'class helper'/'record helper', aber nicht den FPC-
-// 'type helper' ({$modeswitch typehelpers}). Die Deklaration faellt in den
-// Alias-Zweig, das erste 'function' im Helper beendet die type-Sektion -
-// alle Klassen dahinter fehlen im AST und damit in FClassDeclUnits.
-// Korpus: lcl/stdctrls.pp (TComboBoxStyleHelper vor TCustomComboBox ...
-// TLabel) - deshalb meldet SCA184 im Lazarus-Korpus TLabel/TButton/
-// TRadioButton aus StdCtrls. Behebt jemand den Parser, kippt der zweite
-// Fall auf 0 und SCA184 verliert im laz-Korpus 558 von 559 Funden
-// (Simulation perfS184-Exe) - dann bewusst entscheiden, nicht nur den
-// Test anpassen. Der erste Fall ist die Gegenprobe: derselbe Helper als
-// 'record helper' verdeckt nichts.
+procedure TTestDfmComponentUnusedVisibility.Test_ClassBehindTypeHelper_NotDetected;
+// Parser-Charge P1 (2026-10-27): TParser2 fuehrt den FPC-'type helper' wie
+// 'record helper'; die Klasse dahinter steht im AST und in FClassDeclUnits.
+// Vorher fiel die Deklaration in den Alias-Zweig, das erste 'function'
+// beendete die type-Sektion - TMyFrame fehlte, SCA184 meldete die
+// Komponente (Exe 8c3eac8f am Mini-Repo: record helper 0, type helper 1
+// -> der zweite Fall ist ohne den Fix ROT).
+const
+  HEADS: array[0..1] of string = ('record helper for Integer', 'type helper for Integer');
+var
+  S : string;
+begin
+  for S in HEADS do
+  begin
+    Assert.AreEqual<Integer>(0,
+      CountUnused(DFM_FRAME_OBJECT, FrameMain(USES_OTHER, ''), HelperUnit(S)),
+      'Klasse hinter einem Helper in einer .pas-Unit: ' + S);
+  end;
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_ClassBehindTypeHelperInPpUnit_StillDetected;
+// Nico 2026-10-27: LCL-Klassen sind fuer S4 NICHT projekteigen - die 559
+// SCA184-Funde im Lazarus-Korpus (TLabel/TButton/... aus lcl/stdctrls.pp)
+// bleiben. Kriterium (uDfmRepoIndex.CollectVisibleClassDecls): in einer
+// .pp-Unit zaehlen fuer S4 nur Klassen VOR der ersten 'type helper'-
+// Deklaration - genau die, die der Parser vor P1 sah. Ohne das Kriterium
+// faellt der zweite Fall mit dem Parser-Fix auf 0 (Simulation laz: -558).
+// Der erste Fall ist die Gegenprobe: ein record helper verdeckt nichts.
 const
   HEADS: array[0..1] of string = ('record helper for Integer', 'type helper for Integer');
   EXPECTED: array[0..1] of Integer = (0, 1);
 var
-  I : Integer;
+  I   : Integer;
+  Alt : TSourceDialect;
 begin
-  for I := Low(HEADS) to High(HEADS) do
-  begin
-    Assert.AreEqual<Integer>(EXPECTED[I],
-      CountUnused(DFM_FRAME_OBJECT, FrameMain(USES_OTHER, ''), HelperUnit(HEADS[I])),
-      'Klasse hinter einem Helper: ' + HEADS[I]);
+  Alt := TStaticFiles.ScanDialect;
+  TStaticFiles.ScanDialect := dlFpc;
+  try
+    for I := Low(HEADS) to High(HEADS) do
+    begin
+      Assert.AreEqual<Integer>(EXPECTED[I],
+        CountUnused(DFM_FRAME_OBJECT, FrameMain(USES_OTHER, ''),
+          HelperUnit(HEADS[I]), 'uOther.pp'),
+        'Klasse hinter einem Helper in einer .pp-Unit: ' + HEADS[I]);
+    end;
+  finally
+    TStaticFiles.ScanDialect := Alt;
   end;
 end;
 
