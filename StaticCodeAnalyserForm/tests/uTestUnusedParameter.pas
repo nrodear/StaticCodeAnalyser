@@ -99,6 +99,23 @@ type
     [Test] procedure TwoAbsoluteAliasesOnTwoLines_NotReported;
   end;
 
+  // U11 (2026-10-27): ein String-Literal mit dem Parameternamen zaehlte als
+  // Lesen - der AST-Flachtext traegt Literale in Quellform. Eigene Fixture,
+  // weil TTestUnusedParameter die 20-Tests-Grenze laengst ueberschreitet.
+  // Die drei Positiv-Tests laufen ueber FindingsOfFile (Produktionsweg MIT
+  // Quell-Rueckfrage - die darf den Fund nicht zurueckholen); die beiden
+  // Gegenproben ueber FindingsOf: ohne Quelle gibt es keine Rueckfrage, ein
+  // zu gieriges Ausblenden der Literale waere dort sofort ein falscher Fund.
+  [TestFixture]
+  TTestUnusedParameterLiteral = class
+  public
+    [Test] procedure OnlyInCallArgumentLiteral_Reported;
+    [Test] procedure OnlyInAssignedLiteral_Reported;
+    [Test] procedure OnlyInLocalConstLiteral_Reported;
+    [Test] procedure UsedInCodeAndLiteral_NoFinding;           // Gegenprobe
+    [Test] procedure EscapedQuoteBeforeCodeUse_NoFinding;      // Gegenprobe
+  end;
+
 implementation
 
 uses
@@ -1258,7 +1275,115 @@ begin
   finally F.Free; end;
 end;
 
+{ --- U11: String-Literale zaehlen nicht als Nutzung ---------------------- }
+
+procedure TTestUnusedParameterLiteral.OnlyInCallArgumentLiteral_Reported;
+// Korpusform mORMot TTextWriter.Add: RaiseUnimplemented('Add(Escape)').
+// Bestehende Exe (26.10.): 0 Funde; dieselbe Quelle mit 'Add(Xq)': 1 Fund.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Escape: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  NotImplemented(''Add(Escape)'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+      'Der Name im Aufruf-Literal ist keine Nutzung');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameterLiteral.OnlyInAssignedLiteral_Reported;
+// Literal auf der rechten Seite einer Zuweisung (nkAssign.TypeRef).
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'var G: string;'#13#10 +
+  'procedure Foo(Mode: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  G := ''Mode: '' + ''x'';'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+      'Der Name im Literal einer Zuweisung ist keine Nutzung');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameterLiteral.OnlyInLocalConstLiteral_Reported;
+// Korpusform JvProps: Parameter 'S', Literal mit '%s'. Das Literal steht
+// hier in einer lokalen const-Sektion (nkConstSection) - VOR dem begin,
+// also auch ausserhalb der Quell-Rueckfrage.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(S: string);'#13#10 +
+  'const'#13#10 +
+  '  Pattern = ''%s.%s'';'#13#10 +
+  'begin'#13#10 +
+  '  Log(Pattern);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+      '''%s'' im Literal ist kein Lesen von S');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameterLiteral.UsedInCodeAndLiteral_NoFinding;
+// GEGENPROBE: der Name steht im Literal UND als Argument. Ausgeblendet
+// werden darf nur das Literal.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Mode: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  Log(''Mode='', Mode);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+      'Das Argument Mode ist eine Nutzung');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameterLiteral.EscapedQuoteBeforeCodeUse_NoFinding;
+// GEGENPROBE zur Quote-Paarung: verdoppeltes Apostroph im Literal davor
+// und ein Ein-Zeichen-Literal '''' dahinter. Paart das Ausblenden falsch,
+// verschwindet das Argument Mode mit - und ohne Quelle (FindingsOf) holt
+// es keine Rueckfrage zurueck.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Mode: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  Log(''it''''s'', Mode, '''''''');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+      'Mode zwischen zwei Literalen mit Escape bleibt eine Nutzung');
+  finally F.Free; end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestUnusedParameter);
+  TDUnitX.RegisterTestFixture(TTestUnusedParameterLiteral);
 
 end.

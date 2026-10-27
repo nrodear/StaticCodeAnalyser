@@ -41,7 +41,19 @@ unit uFreeWithoutNil;
 //     2 Parameter mit Modifier (const: jetzt lokal; out bleibt Befund - die
 //     Variable des Aufrufers haengt), 2 Inline-const, 1 BeforeDestruction
 //     (unten behoben), 1 sich selbst aushaengende Liste
-//     ('while FNext <> nil do FNext.Free', bekannte Grenze).
+//     ('while FNext <> nil do FNext.Free', seit U12 entlastet).
+//
+// U12 (2026-10-27), zwei weitere Restklassen, beide als letzte Gates vor
+// dem Melden: (W) Free im Rumpf von 'while X <> nil' / 'while
+// Assigned(X)' - FreeInNilTestedLoop; (A) X ist Local oder Parameter
+// einer anonymen Methode, deren Rumpf der Parser in die umgebende Methode
+// gekippt hat - DeclaredInEnclosingAnonMethod (liest die Quelle).
+// BEWUSST NICHT entlastet: Neubelegung ueber einen Property-Setter
+// ('FX.Free; X := TFoo.Create'). Der Setter liest bzw. gibt das alte Feld
+// typischerweise selbst frei ('if FX = Value', 'FX.Assign(Value)',
+// 'FX.Free; FX := Value') - nach einem Free ohne nil-Out ist das UAF oder
+// Double Free. Einziger Referenzfall (Lazarus menuintf.pas
+// CreateNewMenuItem) ist nur dank eines OnDestroy-Handlers heil.
 //
 // Limitierung: einfache lexische Heuristik, keine Path-Analysis. False
 // Positives bei try/finally L.Free; end mit `Exit;`/`raise;` direkt
@@ -66,7 +78,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.StrUtils;
+  System.StrUtils, System.Classes,
+  uDetectorUtils, uFileTextCache;   // U12-A: gestrippte Quelle (lazy)
 
 // Letzte Segment-Komponente vor `.Free`/`.Destroy` extrahieren.
 // `L.Free` -> `L`; `Self.FList.Free` -> `FList`; `'foo'` -> ''.
@@ -186,6 +199,351 @@ begin
   end;
 end;
 
+// ---------------------------------------------------------------------------
+// U12 (2026-10-27) - zwei Restklassen der Stichprobe vom 22.10.
+// ---------------------------------------------------------------------------
+
+const
+  IDENT_LOW = ['a'..'z', '0'..'9', '_'];
+
+function IsIdentCharLow(C: Char): Boolean; inline;
+begin
+  Result := CharInSet(C, IDENT_LOW);
+end;
+
+function ContainsBounded(const S, Pat: string;
+  const AStopAfter: TSysCharSet): Boolean;
+// Pat in S, davor kein Identzeichen ('.' davor ist erlaubt: 'self.x'),
+// dahinter keines aus AStopAfter. Fuer 'nil<>x' gehoert '.' dazu
+// ('nil<>x.next' prueft x.next, nicht x). Endet Pat selbst auf ein
+// Nicht-Identzeichen (')'), gibt es dahinter keine Wortgrenze zu pruefen:
+// der Parser klebt 'Assigned(X)and' ohne Leerzeichen an.
+var
+  P, E    : Integer;
+  CheckAt : Boolean;
+begin
+  Result := False;
+  CheckAt := (Pat <> '') and IsIdentCharLow(Pat[Length(Pat)]);
+  P := Pos(Pat, S);
+  while P > 0 do
+  begin
+    E := P + Length(Pat);
+    if ((P = 1) or not IsIdentCharLow(S[P - 1])) and
+       (not CheckAt or (E > Length(S)) or not CharInSet(S[E], AStopAfter)) then
+      Exit(True);
+    P := Pos(Pat, S, P + 1);
+  end;
+end;
+
+function CondTestsNil(const ACond, AIdentLow: string): Boolean;
+// U12-W: testet die while-Bedingung (nkWhileStmt.TypeRef) den Receiver auf
+// nil? Erkannt: 'x<>nil', 'nil<>x', 'Assigned(x)', 'Assigned(Self.x)',
+// kleingeschrieben. Leerzeichen muessen nicht weg: der Parser fuegt die
+// Bedingung per JoinTokInto zusammen und setzt ein Leerzeichen NUR
+// zwischen zwei Bezeichnern ('X <> nil' steht als 'X<>nil' im TypeRef,
+// 'X<>nil and Y' behaelt seine Wortgrenze). Bewusst NUR der Nil-Test:
+// 'while X.Count > 0 do X.Free' laeuft nach dem ersten Free auf
+// freigegebenem Speicher weiter und bleibt Befund.
+var
+  C : string;
+begin
+  Result := False;
+  if (ACond = '') or (AIdentLow = '') then Exit;
+  C := LowerCase(ACond);
+  Result := ContainsBounded(C, AIdentLow + '<>nil', IDENT_LOW)
+         or ContainsBounded(C, 'nil<>' + AIdentLow, IDENT_LOW + ['.'])
+         or ContainsBounded(C, 'assigned(' + AIdentLow + ')', IDENT_LOW)
+         or ContainsBounded(C, 'assigned(self.' + AIdentLow + ')', IDENT_LOW);
+end;
+
+function SubtreeContains(ARoot, ATarget: TAstNode): Boolean;
+var
+  Stack : TStack<TAstNode>;
+  Cur   : TAstNode;
+  i     : Integer;
+begin
+  Result := False;
+  Stack := TStack<TAstNode>.Create;
+  try
+    Stack.Push(ARoot);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack.Pop;
+      if Cur = ATarget then Exit(True);
+      for i := 0 to Cur.Children.Count - 1 do
+        Stack.Push(Cur.Children[i]);
+    end;
+  finally
+    Stack.Free;
+  end;
+end;
+
+function FreeInNilTestedLoop(MethodNode, FreeCall: TAstNode;
+  const IdentLow: string): Boolean;
+// U12-W - sich selbst aushaengende Liste (Lazarus-Baeume):
+//   while FFirstChild <> nil do FFirstChild.Free;
+// Die Schleife endet nur, weil der Destruktor den Knoten aushaengt und
+// FFirstChild weiterschaltet; danach IST das Feld nil. 'Free ohne nil-Out'
+// stimmt dort nicht (Referenz perfS184: 8 Funde, alle laz, alle so).
+// Der Parser haengt den Schleifenrumpf als Kind an den nkWhileStmt-Knoten
+// (ParseWhileStmt -> ParseStatement(WhileNode)), die Bedingung steht im
+// TypeRef - beides ohne Quelltext entscheidbar.
+var
+  Loops : TList<TAstNode>;
+  W     : TAstNode;
+begin
+  Result := False;
+  Loops := MethodNode.FindAllRef(nkWhileStmt);
+  for W in Loops do
+    if (W.Line <= FreeCall.Line) and CondTestsNil(W.TypeRef, IdentLow)
+       and SubtreeContains(W, FreeCall) then
+      Exit(True);
+end;
+
+type
+  // Zustand einer offenen anonymen Methode beim Vorwaertslesen (U12-A).
+  TAnonState = (asHead, asDecl, asBody);
+  TAnonCtx = record
+    Names    : string;      // ' a b ' - Parameter (ohne var/out) + var-Locals
+    State    : TAnonState;
+    Depth    : Integer;     // begin/case/try/asm .. end im Rumpf
+    Paren    : Integer;     // Klammertiefe der Parameterliste
+    PStart   : Boolean;     // Anfang einer Parametergruppe
+    Modifier : string;      // const/var/out/constref der Gruppe
+    InVar    : Boolean;     // in einer var-Sektion
+    DStart   : Boolean;     // Anfang einer Deklaration
+  end;
+
+procedure AppendAnonTokens(const ALine: string; AToks: TList<string>);
+// Bezeichner (klein) und die Zeichen, die die Zustandsmaschine braucht.
+// ALine ist GESTRIPPT - Strings und Kommentare sind Leerzeichen.
+var
+  L    : string;
+  i, j : Integer;
+begin
+  L := LowerCase(ALine);
+  i := 1;
+  while i <= Length(L) do
+  begin
+    if IsIdentCharLow(L[i]) then
+    begin
+      j := i + 1;
+      while (j <= Length(L)) and IsIdentCharLow(L[j]) do Inc(j);
+      AToks.Add(Copy(L, i, j - i));
+      i := j;
+      Continue;
+    end;
+    if (L[i] = ':') and (i < Length(L)) and (L[i + 1] = '=') then
+    begin
+      AToks.Add(':=');
+      Inc(i, 2);
+      Continue;
+    end;
+    if CharInSet(L[i], ['(', ')', ';', ':', ',', '[', ']']) then
+      AToks.Add(L[i]);
+    Inc(i);
+  end;
+end;
+
+function IsDeclaredNameAt(const T, Nx: string): Boolean;
+// T ist ein deklarierter Name: 'T,' oder 'T:' ('a, b: Integer').
+begin
+  Result := (T <> ',') and (T <> ':') and MatchStr(Nx, [',', ':']);
+end;
+
+procedure AnonStepParams(var C: TAnonCtx; const T, Nx: string);
+// Innerhalb der Parameterliste (C.Paren > 0): Namen je Gruppe sammeln.
+begin
+  if T = ';' then
+  begin
+    C.PStart := True;
+    C.Modifier := '';
+    Exit;
+  end;
+  if not C.PStart then Exit;
+  if MatchStr(T, ['const', 'var', 'out', 'constref']) then
+  begin
+    C.Modifier := T;
+    Exit;
+  end;
+  if not IsDeclaredNameAt(T, Nx) then Exit;
+  // var/out-Parameter sind die Variable des Aufrufers: Befund bleibt.
+  if not MatchStr(C.Modifier, ['var', 'out']) then
+    C.Names := C.Names + T + ' ';
+  if Nx = ':' then C.PStart := False;
+end;
+
+procedure AnonEnterSection(var C: TAnonCtx; const T: string);
+// 'var' oeffnet eine Namen-Sektion, 'const'/'type' eine ohne Namen,
+// 'begin' den Rumpf. Fuer Kopf UND Deklarationsteil gleich.
+begin
+  if T = 'begin' then
+  begin
+    C.State := asBody;
+    C.Depth := 1;
+  end
+  else if T = 'var' then
+  begin
+    C.State  := asDecl;
+    C.InVar  := True;
+    C.DStart := True;
+  end
+  else if (T = 'const') or (T = 'type') then
+  begin
+    C.State  := asDecl;
+    C.InVar  := False;
+    C.DStart := False;
+  end;
+end;
+
+procedure AnonStepHead(var C: TAnonCtx; const T, Nx: string);
+// Kopf einer anonymen Methode: Parameterliste, dann var/const/type/begin.
+begin
+  if T = '(' then
+  begin
+    Inc(C.Paren);
+    C.PStart := True;
+  end
+  else if T = ')' then
+    Dec(C.Paren)
+  else if C.Paren > 0 then
+    AnonStepParams(C, T, Nx)
+  else
+    AnonEnterSection(C, T);
+end;
+
+procedure AnonStepDecl(var C: TAnonCtx; const T, Nx: string);
+// Deklarationsteil: nur die Namen der var-Sektionen zaehlen.
+begin
+  if MatchStr(T, ['begin', 'var', 'const', 'type']) then
+    AnonEnterSection(C, T)
+  else if T = ';' then
+    C.DStart := C.InVar
+  else if C.DStart and IsDeclaredNameAt(T, Nx) then
+  begin
+    C.Names := C.Names + T + ' ';
+    if Nx = ':' then C.DStart := False;
+  end;
+end;
+
+procedure AnonStepBody(var AStack: TArray<TAnonCtx>; var ACount: Integer;
+  const T: string);
+// Rumpf: Blocktiefe zaehlen; das schliessende 'end' nimmt die Methode
+// vom Stapel.
+begin
+  if (T = 'begin') or (T = 'case') or (T = 'try') or (T = 'asm') then
+    Inc(AStack[ACount - 1].Depth)
+  else if T = 'end' then
+  begin
+    Dec(AStack[ACount - 1].Depth);
+    if AStack[ACount - 1].Depth = 0 then Dec(ACount);
+  end;
+end;
+
+procedure AnonPush(var AStack: TArray<TAnonCtx>; var ACount: Integer);
+var
+  C : TAnonCtx;
+begin
+  C := Default(TAnonCtx);
+  C.Names  := ' ';
+  C.State  := asHead;
+  C.PStart := True;
+  if ACount >= Length(AStack) then SetLength(AStack, ACount + 4);
+  AStack[ACount] := C;
+  Inc(ACount);
+end;
+
+procedure AnonStep(var AStack: TArray<TAnonCtx>; var ACount: Integer;
+  const T, Nx, Prev: string);
+// Ein Token: oeffnet eine anonyme Methode oder fuettert die oberste.
+begin
+  if ((T = 'procedure') or (T = 'function'))
+     and ((Prev = ':=') or (Prev = '(') or (Prev = ',')) then
+    AnonPush(AStack, ACount)
+  else if ACount = 0 then
+    Exit
+  else if AStack[ACount - 1].State = asHead then
+    AnonStepHead(AStack[ACount - 1], T, Nx)
+  else if AStack[ACount - 1].State = asDecl then
+    AnonStepDecl(AStack[ACount - 1], T, Nx)
+  else
+    AnonStepBody(AStack, ACount, T);
+end;
+
+function AnyOpenAnonDeclares(const AStack: TArray<TAnonCtx>;
+  ACount: Integer; const AIdentLow: string): Boolean;
+// Steht AIdentLow in einer anonymen Methode, deren Rumpf noch offen ist?
+var
+  i : Integer;
+begin
+  Result := False;
+  for i := 0 to ACount - 1 do
+    if (AStack[i].State = asBody) and
+       (Pos(' ' + AIdentLow + ' ', AStack[i].Names) > 0) then
+      Exit(True);
+end;
+
+function CollectAnonTokens(const ALines: TArray<string>;
+  AFromLine, AToLine: Integer): TList<string>;
+// Token der Zeilen AFromLine..AToLine (1-basiert). Aufrufer gibt frei.
+var
+  li : Integer;
+begin
+  Result := TList<string>.Create;
+  for li := AFromLine to AToLine do
+    if (li >= 1) and (li <= Length(ALines)) then
+      AppendAnonTokens(ALines[li - 1], Result);
+end;
+
+function DeclaredInEnclosingAnonMethod(const ALines: TArray<string>;
+  AFromLine, AFreeLine: Integer; const AIdentLow: string): Boolean;
+// U12-A - Local einer anonymen Methode:
+//   lProc := procedure
+//     var L: TCustomer;
+//   begin
+//     L := TCustomer.Create; try ... finally L.Free; end;
+//   end;
+// WARUM DER AST DAS NICHT SIEHT: der RHS-Scan der Zuweisung endet am ';'
+// der var-Sektion (Klammertiefe 0). Der Rumpf der anonymen Methode wird
+// danach als gewoehnliche Anweisungen der UMGEBENDEN Methode geparst, die
+// var-Zeilen als Label-Phantome - ein nkLocalVar entsteht nie. 'L.Free'
+// sieht damit aus wie das Free eines Feldes. Referenz perfS184: 44 Funde
+// (delphimvcframework in drei Kopien, skia4delphi), alle so.
+//
+// Gelesen wird die gestrippte Quelle von AFromLine (Kopf der Routine) bis
+// VOR AFreeLine. Anonym ist ein 'procedure'/'function' hinter ':=', '('
+// oder ',' - Typ-Stellen ('= procedure', ': procedure', 'reference to')
+// und nested routines (hinter ';') fallen so heraus. Gezaehlt werden die
+// Parameter ohne var/out (var/out ist die Variable des Aufrufers - Befund
+// bleibt) und die Namen der var-Sektion. True nur, wenn eine solche
+// Methode bei AFreeLine noch OFFEN ist, ihr Rumpf das Free also umschliesst.
+// Ein gleichnamiges Feld, das nach dem Ende der anonymen Methode
+// freigegeben wird, bleibt damit Befund.
+var
+  Toks  : TList<string>;
+  Stack : TArray<TAnonCtx>;
+  Count : Integer;
+  i     : Integer;
+  Nx    : string;
+begin
+  Count := 0;
+  Toks := CollectAnonTokens(ALines, AFromLine, AFreeLine - 1);
+  try
+    for i := 0 to Toks.Count - 1 do
+    begin
+      Nx := '';
+      if i + 1 < Toks.Count then Nx := Toks[i + 1];
+      if i = 0 then
+        AnonStep(Stack, Count, Toks[i], Nx, '')
+      else
+        AnonStep(Stack, Count, Toks[i], Nx, Toks[i - 1]);
+    end;
+  finally
+    Toks.Free;
+  end;
+  Result := AnyOpenAnonDeclares(Stack, Count, AIdentLow);
+end;
+
 function IsAssignLhs(const N: TAstNode; const IdentLow: string): Boolean;
 // True wenn N ein nkAssign ist, dessen LHS der Ident selbst
 // (`<ident> := ...`) oder eine Feld-Kette darauf (`<owner>.<ident> := ...`) ist.
@@ -209,6 +567,36 @@ var
   RecvLow : string;
   RootLow : string;
   F       : TLeakFinding;
+  // U12-A: gestrippte Quelle dieser Datei, erst beim ersten Kandidaten
+  // gelesen, der alle AST-Gates passiert hat (Datei ohne Kandidaten: nie).
+  Stripped      : TArray<string>;
+  StrippedReady : Boolean;
+
+  function StrippedLines: TArray<string>;
+  // Strings und Kommentare positionserhaltend durch ' ' ersetzt - ein
+  // 'procedure' im Kommentar oeffnet keine anonyme Methode. Unlesbare
+  // Datei (Test-Harness ohne Datei): leer, das Gate greift dann nie.
+  var
+    Src     : TStringList;
+    Owned   : Boolean;
+    LineFor : TArray<Integer>;
+    Code    : string;
+  begin
+    if not StrippedReady then
+    begin
+      StrippedReady := True;
+      Src := AcquireLines(FileName, Owned, nil);
+      if Src <> nil then
+      try
+        Code := TDetectorUtils.StripStringsAndCommentsCached(
+          Src, LineFor, nil, FileName, ' ');
+        Stripped := Code.Split([#10]);
+      finally
+        ReleaseLines(Src, Owned);
+      end;
+    end;
+    Result := Stripped;
+  end;
 
   function HasNilOutAfter(MethodNode, FreeCall: TAstNode;
     const IdentLow: string): Boolean;
@@ -325,6 +713,24 @@ var
       if S.Line >= FreeCall.Line then Exit(True);
   end;
 
+  // Zeigt X nach dem Free nachweislich auf nichts Freigegebenes mehr?
+  //  * sicher neu belegt (HasSafeReassignAfter, Audit 2026-07-11)
+  //  * U12-W: 'while X <> nil do X.Free' - der Destruktor haengt X aus,
+  //    nach der Schleife ist X nil (FreeInNilTestedLoop)
+  //  * U12-A: X ist Local/Parameter einer anonymen Methode, deren Rumpf
+  //    der Parser in diese Methode gekippt hat (DeclaredInEnclosing-
+  //    AnonMethod) - als letztes, weil es als einziges die Datei liest.
+  // Ein Aufruf statt drei Gates im Rumpf von AnalyzeUnit: die Schleife
+  // dort ist schon tief verschachtelt.
+  function NoDanglingAfterFree(MethodNode, FreeCall: TAstNode;
+    const IdentLow: string): Boolean;
+  begin
+    Result := HasSafeReassignAfter(MethodNode, FreeCall, IdentLow)
+      or FreeInNilTestedLoop(MethodNode, FreeCall, IdentLow)
+      or DeclaredInEnclosingAnonMethod(StrippedLines, MethodNode.Line,
+           FreeCall.Line, IdentLow);
+  end;
+
   // Ist der Parameter eine LOKALE Kopie der Referenz? Ohne Modifier, 'const'
   // und 'constref' ja - nil-Setzen erreicht den Aufrufer ohnehin nicht. 'var'
   // und 'out' sind die Variable des Aufrufers: dort bleibt der Fund (und
@@ -357,6 +763,8 @@ var
   Sec        : TAstNode;
   PIdent     : string;
 begin
+  StrippedReady := False;
+  Stripped      := nil;
   Methods := UnitNode.FindAllRef(nkMethod);
   for M in Methods do
   begin
@@ -479,8 +887,10 @@ begin
 
         if HasNilOutAfter(M, N, RecvLow) then Continue;
         // Reassigned-after-free (FPopUpBitmap.Free; FPopUpBitmap := TBitmap.Create):
-        // Feld vor jedem Read neu belegt -> kein Dangling-Pointer.
-        if HasSafeReassignAfter(M, N, RecvLow) then Continue;
+        // Feld vor jedem Read neu belegt -> kein Dangling-Pointer. Seit U12
+        // im selben Aufruf: Nil-Test-Schleife und Local einer anonymen
+        // Methode (NoDanglingAfterFree).
+        if NoDanglingAfterFree(M, N, RecvLow) then Continue;
         if IsFreeRoutine and IsLastStmtOfMethod(M, N)
            and not RaiseFollows(M, N) then Continue;
 
