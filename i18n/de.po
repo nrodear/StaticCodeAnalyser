@@ -6661,3 +6661,83 @@ msgstr "die Meldung nennt keine Funktion (\"Name :=\")"
 
 msgid "the unit is also compiled with Free Pascal ({$IFDEF FPC} in line %d) and sets no {$mode} - whether Result exists depends on the mode of the project"
 msgstr "die Unit wird auch mit Free Pascal übersetzt ({$IFDEF FPC} in Zeile %d) und setzt kein {$mode} - ob es Result gibt, hängt am Modus des Projekts"
+
+# reDelphix C7/C8 (uRdxIfFixes, uRdxCondFixes, uRdxContextRunner): if umkehren, De Morgan, Vergleich drehen, if teilen/zusammenfuegen
+
+msgid "compiler directive in the if statement - conditional code could change its branches"
+msgstr "Compiler-Direktive in der if-Anweisung - bedingter Code könnte ihre Zweige ändern"
+
+msgid "comment in the condition - it would be lost or swallow the new parenthesis"
+msgstr "Kommentar in der Bedingung - er ginge verloren oder schluckte die neue Klammer"
+
+msgid "the condition is not readable (multi-line string or comment)"
+msgstr "die Bedingung ist nicht lesbar (mehrzeiliger String oder Kommentar)"
+
+msgid "empty then or else branch"
+msgstr "leerer then- oder else-Zweig"
+
+msgid "the else branch is another if (else-if chain) - after the swap it would take the new else"
+msgstr "der else-Zweig ist wieder ein if (else-if-Kette) - nach dem Tausch nähme es das neue else"
+
+msgid "the else branch ends with an if without else - after the swap that if would take the new else"
+msgstr "der else-Zweig endet auf ein if ohne else - nach dem Tausch nähme dieses if das neue else"
+
+msgid "the if statement is not safe to read (anonymous method, conditional expression, asm or label in it)"
+msgstr "die if-Anweisung ist nicht sicher lesbar (anonyme Methode, bedingter Ausdruck, asm oder Marke darin)"
+
+msgid "the if has an else - it would have to stand twice"
+msgstr "das if hat ein else - es müsste doppelt stehen"
+
+msgid "complete boolean evaluation is switched on (line %d) - with it \"A and B\" always evaluates B"
+msgstr "vollständige boolesche Auswertung ist eingeschaltet (Zeile %d) - damit wertet \"A and B\" B immer aus"
+
+msgid "line %d starts inside a block comment or multi-line string - indenting it would change it"
+msgstr "Zeile %d beginnt in einem Block-Kommentar oder mehrzeiligen String - Einrücken änderte ihn"
+
+msgid "the outer if has an else"
+msgstr "das äußere if hat ein else"
+
+msgid "the inner if has an else"
+msgstr "das innere if hat ein else"
+
+msgid "comment between the two if heads or around begin/end - it would be lost"
+msgstr "Kommentar zwischen den beiden if-Köpfen oder um begin/end - er ginge verloren"
+
+msgid "the end of the block does not stand first on its own line"
+msgstr "das end des Blocks steht nicht als erstes auf seiner Zeile"
+
+msgid "comment or directive in the expression - it would be lost"
+msgstr "Kommentar oder Direktive im Ausdruck - er ginge verloren"
+
+msgid "the chain mixes \"%s\" and \"%s\" - De Morgan needs one operator"
+msgstr "die Kette mischt \"%s\" und \"%s\" - De Morgan braucht einen Operator"
+
+msgid "a side calls %s - swapping the sides would change the order of evaluation"
+msgstr "eine Seite ruft %s auf - das Tauschen änderte die Reihenfolge der Auswertung"
+
+msgid "Invert the if (swap then and else)"
+msgstr "if umkehren (then und else tauschen)"
+
+msgid "Apply De Morgan to \"%s\""
+msgstr "De Morgan auf \"%s\" anwenden"
+
+msgid "Swap the sides of \"%s\""
+msgstr "Seiten von \"%s\" tauschen"
+
+msgid "Split the if at \"and\""
+msgstr "if am \"and\" teilen"
+
+msgid "Merge with the inner if (and)"
+msgstr "Mit dem inneren if zusammenfügen (and)"
+
+msgid "same meaning - the condition is negated once, then and else swap places"
+msgstr "gleiche Bedeutung - die Bedingung wird einmal verneint, then und else tauschen die Plätze"
+
+msgid "same meaning - the same terms in the same order, each negated; the evaluation stops at the same term"
+msgstr "gleiche Bedeutung - dieselben Glieder in derselben Reihenfolge, je verneint; die Auswertung endet am selben Glied"
+
+msgid "same meaning - the comparison is mirrored; neither side calls a routine"
+msgstr "gleiche Bedeutung - der Vergleich wird gespiegelt; keine Seite ruft eine Routine auf"
+
+msgid "same meaning with short-circuit evaluation ({$B-}): the second condition is evaluated only if the first one is true, as before"
+msgstr "gleiche Bedeutung bei Kurzschlussauswertung ({$B-}): die zweite Bedingung wird wie vorher nur ausgewertet, wenn die erste wahr ist"

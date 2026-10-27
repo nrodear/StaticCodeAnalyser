@@ -67,6 +67,10 @@ type
     [Test] procedure Test_ExternalOnlyUnit_NotDetected;            // external: kein Rumpf
     [Test] procedure Test_UnitScopeSuffixInUses_NotDetected;       // 'Other' -> Vcl.Other
     [Test] procedure Test_InterposerInOwnUnit_NotDetected;         // eigene Unit
+    [Test] procedure Test_UsesInIfdefBranch_NotDetected;           // inaktiver Zweig
+    [Test] procedure Test_UsesInElseBranch_NotDetected;            // inaktives ELSE
+    [Test] procedure Test_UsesOnlyInComment_StillDetected;         // Kommentar/String
+    [Test] procedure Test_ClassBehindTypeHelper_LostByParser;      // Grenze, Parser
   end;
 
 implementation
@@ -740,20 +744,27 @@ begin
   end;
 end;
 
-function FrameMain(const AIfaceUses, AImplPart: string): string;
-// uMain mit der Komponente fraEmbedded: TMyFrame. AIfaceUses = uses-Liste
-// des interface-Teils, AImplPart steht direkt hinter 'implementation'.
+function FrameMainBlock(const AUsesBlock, AImplPart: string): string;
+// uMain mit der Komponente fraEmbedded: TMyFrame. AUsesBlock steht
+// woertlich zwischen 'interface' und 'type' (uses-Klausel samt Direktiven
+// und Kommentaren), AImplPart direkt hinter 'implementation'.
 begin
   Result := Format(
     'unit uMain;'#13#10 +
     'interface'#13#10 +
-    'uses %s;'#13#10 +
+    '%s' +
     'type TForm1 = class(TForm)'#13#10 +
     '  fraEmbedded: TMyFrame;'#13#10 +
     'end;'#13#10 +
     'var Form1: TForm1;'#13#10 +
     'implementation'#13#10 +
-    '%send.', [AIfaceUses, AImplPart]);
+    '%send.', [AUsesBlock, AImplPart]);
+end;
+
+function FrameMain(const AIfaceUses, AImplPart: string): string;
+// FrameMainBlock mit einer schlichten uses-Liste AIfaceUses.
+begin
+  Result := FrameMainBlock(Format('uses %s;'#13#10, [AIfaceUses]), AImplPart);
 end;
 
 function FrameUnit(const AMember, AImplPart: string;
@@ -955,6 +966,125 @@ const DFM =
 begin
   Assert.AreEqual<Integer>(0, CountUnused(DFM, PAS_MAIN, ''),
     'Interposer in der eigenen Unit bleibt projekteigen');
+end;
+
+// ---- uses in bedingten Zweigen (Nachtrag 2026-10-27, A/B perfS184) --------
+//
+// Der Lexer verwirft inaktive {$IFDEF}-Zweige; steht die uses-Klausel dort,
+// fehlen die nkUsesItem. S4 nimmt deshalb zusaetzlich die uses-Namen aus dem
+// Quelltext ALLER Zweige (CollectUsedUnits -> TDetectorUtils.UsesNamesOfText).
+// SCA_NIE_DEFINIERT ist in keiner Konfiguration gesetzt. Am gebauten Stand
+// 0fe5d84c (ohne Textscan) per Mini-Repo nachgemessen (scratchpad sca184b\
+// mini): IFDEF-Faelle und ELSE-Fall je 1 Fund - die beiden Tests sind dort
+// ROT (erwartet 0); die Kommentar-/String-Faelle je 1 = gruen.
+
+procedure TTestDfmComponentUnusedVisibility.Test_UsesInIfdefBranch_NotDetected;
+// fEdits-Muster (jvcl examples/JvEdits): die ganze uses-Klausel steht in
+// einem {$IFDEF}, dessen Symbol der Lexer nicht kennt. Zweiter Fall: das
+// Cross-Platform-Idiom mitten in der Liste.
+const
+  BLOCKS: array[0..1] of string = (
+    '{$IFDEF SCA_NIE_DEFINIERT}'#13#10'uses Vcl.Forms, uOther;'#13#10'{$ENDIF}'#13#10,
+    'uses Vcl.Forms{$IFDEF SCA_NIE_DEFINIERT}, uOther{$ENDIF};'#13#10);
+var
+  S : string;
+begin
+  for S in BLOCKS do
+  begin
+    Assert.AreEqual<Integer>(0,
+      CountUnused(DFM_FRAME_OBJECT, FrameMainBlock(S, ''), FrameUnit('', '')),
+      'uses im inaktiven Zweig zaehlt fuer S4: ' + S);
+  end;
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_UsesInElseBranch_NotDetected;
+// Zwei vollstaendige Klauseln als IFNDEF/ELSE-Weiche; uOther steht nur im
+// ELSE-Zweig, den der Lexer verwirft (IFNDEF eines unbekannten Symbols ist
+// aktiv).
+const
+  BLOCK =
+    '{$IFNDEF SCA_NIE_DEFINIERT}'#13#10 +
+    'uses Vcl.Forms;'#13#10 +
+    '{$ELSE}'#13#10 +
+    'uses Vcl.Forms, uOther;'#13#10 +
+    '{$ENDIF}'#13#10;
+begin
+  Assert.AreEqual<Integer>(0,
+    CountUnused(DFM_FRAME_OBJECT, FrameMainBlock(BLOCK, ''), FrameUnit('', '')),
+    'uses im inaktiven ELSE-Zweig zaehlt fuer S4');
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_UsesOnlyInComment_StillDetected;
+// Gegenprobe zum Textscan: Kommentare und Strings sind NIE Code. Ein
+// Scan ohne Kommentar-/String-Blanking machte uOther in jedem Fall sichtbar
+// (0 statt 1). Traeger: StripForUsesScan (uDetectorUtils).
+const
+  BLOCKS: array[0..3] of string = (
+    'uses Vcl.Forms { , uOther };'#13#10,
+    'uses Vcl.Forms (* , uOther *);'#13#10,
+    'uses Vcl.Forms; // uses uOther;'#13#10,
+    'uses Vcl.Forms;'#13#10'const SHinweis = ''uses uOther;'';'#13#10);
+var
+  S : string;
+begin
+  for S in BLOCKS do
+  begin
+    Assert.AreEqual<Integer>(1,
+      CountUnused(DFM_FRAME_OBJECT, FrameMainBlock(S, ''), FrameUnit('', '')),
+      'uOther nur im Kommentar/String darf nicht sichtbar machen: ' + S);
+  end;
+end;
+
+function HelperUnit(const AHelperHead: string): string;
+// uOther mit einem Helper VOR TMyFrame; AHelperHead = 'record helper for
+// Integer' oder 'type helper for Integer'. Helper und Klasse stehen in
+// DERSELBEN type-Sektion - ein zweites 'type' faengt den Parser wieder.
+const
+  TEMPLATE =
+    'unit uOther;'#13#10 +
+    'interface'#13#10 +
+    'uses Vcl.Forms;'#13#10 +
+    'type'#13#10 +
+    '  TIntHelper = %s'#13#10 +
+    '    function IsZero: Boolean;'#13#10 +
+    '  end;'#13#10 +
+    '  TMyFrame = class(TFrame)'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'function TIntHelper.IsZero: Boolean;'#13#10 +
+    'begin'#13#10 +
+    '  Result := Self = 0;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+begin
+  Result := Format(TEMPLATE, [AHelperHead]);
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_ClassBehindTypeHelper_LostByParser;
+// GRENZE, kein Wunschverhalten (Nachtrag 2026-10-27, Entscheidungsfrage):
+// TParser2 kennt 'class helper'/'record helper', aber nicht den FPC-
+// 'type helper' ({$modeswitch typehelpers}). Die Deklaration faellt in den
+// Alias-Zweig, das erste 'function' im Helper beendet die type-Sektion -
+// alle Klassen dahinter fehlen im AST und damit in FClassDeclUnits.
+// Korpus: lcl/stdctrls.pp (TComboBoxStyleHelper vor TCustomComboBox ...
+// TLabel) - deshalb meldet SCA184 im Lazarus-Korpus TLabel/TButton/
+// TRadioButton aus StdCtrls. Behebt jemand den Parser, kippt der zweite
+// Fall auf 0 und SCA184 verliert im laz-Korpus 558 von 559 Funden
+// (Simulation perfS184-Exe) - dann bewusst entscheiden, nicht nur den
+// Test anpassen. Der erste Fall ist die Gegenprobe: derselbe Helper als
+// 'record helper' verdeckt nichts.
+const
+  HEADS: array[0..1] of string = ('record helper for Integer', 'type helper for Integer');
+  EXPECTED: array[0..1] of Integer = (0, 1);
+var
+  I : Integer;
+begin
+  for I := Low(HEADS) to High(HEADS) do
+  begin
+    Assert.AreEqual<Integer>(EXPECTED[I],
+      CountUnused(DFM_FRAME_OBJECT, FrameMain(USES_OTHER, ''), HelperUnit(HEADS[I])),
+      'Klasse hinter einem Helper: ' + HEADS[I]);
+  end;
 end;
 
 initialization

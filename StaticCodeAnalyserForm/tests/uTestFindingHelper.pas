@@ -381,6 +381,13 @@ begin
         // Quellzeilen per AcquireLines) - MUSS wie UnusedLocal/GodClass auch
         // im File-Harness laufen, sonst sind die nested-Range-Tests inert.
         TUnusedParameterDetector.AnalyzeUnit(Root, TempPath, Result);
+        // U12 2026-10-27: SCA139 hat ein quellzeilen-lesendes Gate
+        // (DeclaredInEnclosingAnonMethod - Locals anonymer Methoden stehen
+        // in keinem AST-Knoten). Bis hierher lief der Detektor nur in
+        // FindingsOf; ohne diese Zeile waere jeder FindingsOfFile-Test der
+        // Regel stumm-gruen. Positiv-Waechter:
+        // TTestFreeWithoutNilU12.PlainFieldFree_FileHarness_Reported.
+        TFreeWithoutNilDetector.AnalyzeUnit(Root, TempPath, Result);
         // A2 2026-07-25: LeakDetector2 + MissingFinally haben Lines-abhaengige
         // Source-Guards (EnsureStripped/FreeInFinallyRegionBySource liest die
         // Datei) - MUESSEN im File-Harness laufen, sonst sind with-Free-/
