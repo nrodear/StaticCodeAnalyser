@@ -109,6 +109,14 @@ type
     class function GuardClause(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
+    // Code-Aktion C7 ohne Fund (Charge C78, uRdxContextRunner): dieselbe
+    // Waechter-Klausel fuer das if am Caret - 'if' oder 'then' auf (ALine,
+    // ACol). Kandidat nur, wenn es das letzte 'if A then begin B end' der
+    // Routine ist (LastIf); sonst False mit leerem AReason (kein Eintrag).
+    // Danach dieselben Sperren wie GuardClause ausser Meldung und
+    // R_DN_NOT_INSIDE (es gibt keine gemeldete Stelle).
+    class function GuardAt(AMap: TRdxCodeMap; ALine, ACol: Integer;
+      out AEdit: TRdxEdit; out AReason: string): Boolean; static;
   end;
 
 implementation
@@ -583,6 +591,36 @@ begin
   end;
 end;
 
+// Die Waechter-Klausel fuer das letzte if AParts der Routine ARoutine, ab
+// der Result-Pruefung - der gemeinsame Schluss von GuardClause (SCA018)
+// und GuardAt (Code-Aktion C7). '' und AEdit oder der Grund.
+function BuildGuard(AMap: TRdxCodeMap; const ARoutine: TRdxRoutine;
+  const AParts: TIfParts; out AEdit: TRdxEdit): string;
+var
+  Body : string;
+begin
+  AEdit := Default(TRdxEdit);
+  Body := '';
+  Result := '';
+  if InList(ARoutine.Keyword.Low, RESULT_HEADS)
+     and not ResultSetBefore(AMap, ARoutine, AParts.IfTok) then
+    Result := _(R_DN_RESULT);
+  if Result = '' then
+    Result := LayoutReason(AMap, AParts);
+  if Result = '' then
+    Result := InlineReason(AMap, AParts);
+  if Result = '' then
+    Result := DedentedBlock(AMap, AParts, Body);
+  if Result <> '' then
+    Exit;
+  AEdit.Span := TRefactorSpan.Make(SPAN_018, AParts.IfTok.Line,
+    AParts.IfTok.Col, AParts.EndTok.Line,
+    Length(AMap.Raw(AParts.EndTok.Line)) + 1);
+  AEdit.Expected := RangeText(AMap, AEdit.Span);
+  AEdit.NewText := KW_IF + ' ' + Negated(AMap, AParts) + GUARD_THEN + #10
+    + Body;
+end;
+
 { TRdxDeepNestingFix }
 
 class function TRdxDeepNestingFix.GuardClause(AMap: TRdxCodeMap;
@@ -590,14 +628,12 @@ class function TRdxDeepNestingFix.GuardClause(AMap: TRdxCodeMap;
   out AReason: string): Boolean;
 var
   Kind    : string;
-  Body    : string;
   Report  : TRdxToken;
   Routine : TRdxRoutine;
   Parts   : TIfParts;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  Body := '';
   Report := Default(TRdxToken);
   Routine := Default(TRdxRoutine);
   Parts := Default(TIfParts);
@@ -617,22 +653,41 @@ begin
   if (AReason = '') and not (TokBefore(Parts.BeginTok, Report)
                              and TokBefore(Report, Parts.EndTok)) then
     AReason := _(R_DN_NOT_INSIDE);
-  if (AReason = '') and InList(Routine.Keyword.Low, RESULT_HEADS)
-     and not ResultSetBefore(AMap, Routine, Parts.IfTok) then
-    AReason := _(R_DN_RESULT);
   if AReason = '' then
-    AReason := LayoutReason(AMap, Parts);
-  if AReason = '' then
-    AReason := InlineReason(AMap, Parts);
-  if AReason = '' then
-    AReason := DedentedBlock(AMap, Parts, Body);
-  if AReason <> '' then
+    AReason := BuildGuard(AMap, Routine, Parts, AEdit);
+  Result := AReason = '';
+end;
+
+class function TRdxDeepNestingFix.GuardAt(AMap: TRdxCodeMap; ALine,
+  ACol: Integer; out AEdit: TRdxEdit; out AReason: string): Boolean;
+var
+  T, IfTok : TRdxToken;
+  Routine  : TRdxRoutine;
+  Parts    : TIfParts;
+begin
+  Result := False;
+  AEdit := Default(TRdxEdit);
+  AReason := '';
+  Routine := Default(TRdxRoutine);
+  Parts := Default(TIfParts);
+  // Kein Kandidat: kein if/then am Caret, keine Routine darum, das if ist
+  // nicht ihr letztes 'if A then begin B end'.
+  T := TokenContaining(AMap, ALine, ACol);
+  if not IsKeywordAfter(T, Before(AMap, T)) then
     Exit;
-  AEdit.Span := TRefactorSpan.Make(SPAN_018, Parts.IfTok.Line, Parts.IfTok.Col,
-    Parts.EndTok.Line, Length(AMap.Raw(Parts.EndTok.Line)) + 1);
-  AEdit.Expected := RangeText(AMap, AEdit.Span);
-  AEdit.NewText := KW_IF + ' ' + Negated(AMap, Parts) + GUARD_THEN + #10 + Body;
-  Result := True;
+  if T.Low = KW_IF then
+    IfTok := T
+  else if (T.Low <> KW_THEN)
+     or (FindOwner(AMap, T, IF_OWNERS, IfTok) <> '') then
+    Exit;
+  if (EnclosingRoutine(AMap, IfTok, Routine) <> '')
+     or (LastIf(AMap, Routine, Parts) <> '')
+     or not SameTok(Parts.IfTok, IfTok) then
+    Exit;
+  AReason := BodyReason(AMap, Routine);
+  if AReason = '' then
+    AReason := BuildGuard(AMap, Routine, Parts, AEdit);
+  Result := AReason = '';
 end;
 
 end.
