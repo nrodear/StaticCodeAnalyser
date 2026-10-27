@@ -371,6 +371,20 @@ type
     class function LinesTextCached(Lines: TStrings; AContext: TAnalyzeContext;
       const FileName: string): string; static;
 
+    // uses-Namen eines Quelltexts (klein, voller - ggf. gepunkteter -
+    // Name, Reihenfolge des Texts, Doppelte moeglich). Lexikalisch auf
+    // dem gestrippten Text (StripForUsesScan): Kommentare, Direktiven und
+    // Strings zaehlen NIE, beide Zweige einer {$IFDEF}-Weiche zaehlen, der
+    // 'in'-Pfad faellt weg. AExtraClauseWord (klein): ein zweites Wort, das
+    // wie 'uses' eine Liste eroeffnet - 'contains' fuer .dpk-Wurzeln.
+    // 2026-10-27 aus uNotIncludedInProject (SCA195) hierher gezogen, weil
+    // SCA184/S4 dieselbe Sicht braucht: der Parser verwirft inaktive
+    // Zweige, eine uses-Klausel in {$IFDEF VCL} war fuer S4 unsichtbar.
+    // GRENZE: ein Zweig, der die Liste mit ';' schliesst, beendet den
+    // Walk - 'uses {$IFDEF X} A; {$ELSE} B; {$ENDIF}' liefert nur A.
+    class function UsesNamesOfText(const ARaw: string;
+      const AExtraClauseWord: string = ''): TArray<string>; static;
+
     /// <summary>True, wenn APos INNERHALB eines Pascal-String-Literals
     /// liegt.</summary>
     /// <remarks>
@@ -2779,6 +2793,203 @@ begin
     end;
   SetLength(Result, o);
   Result := LowerCase(Result);
+end;
+
+// --- uses-Scan (2026-10-27 aus uNotIncludedInProject, SCA195 + SCA184/S4) ---
+//
+// UsesNamesOfText: alle uses-Referenzen (lowercase, voller - ggf.
+// gepunkteter - Name) eines Quelltexts. Lexikalisch auf dem GESTRIPPTEN
+// Text: Kommentare und String-Literale sind geblankt, bevor irgendetwas zaehlt (Projektregel:
+// Kommentare sind NIE Code-Use; und der Pfad-String einer
+// "X in 'file.pas'"-Klausel kann so kein Phantom-'uses' liefern).
+// Danach reiner Wort-Lauf: ab jedem Wort 'uses' werden Ident-Folgen
+// (inklusive Punkten fuer dotted units) bis zum ';' eingesammelt; das
+// reservierte 'in' wird uebersprungen. 'uses' ist ein reserviertes Wort und
+// kann im gestrippten Code nirgendwo sonst als ganzes Wort auftauchen -
+// interface- und implementation-Klausel werden so automatisch beide erfasst.
+// Eigener Mini-Stripper NUR fuer den uses-Scan: Kommentare, Compiler-
+// Direktiven und String-Literale werden durch je EIN Leerzeichen ersetzt.
+//
+// Warum nicht TDetectorUtils.StripStringsAndComments: das entfernt
+// {..}-Bloecke ERSATZLOS - beim Cross-Platform-Idiom
+//   uses {$IFDEF FPC}fgl{$ELSE}Generics.Collections{$ENDIF};
+// verschmolzen die Nachbar-Idents zum Phantom-Token
+// 'fglgenerics.collections' und KEINER der beiden Namen wurde gesammelt
+// (Review 2026-07-29). Mit Leerzeichen-Ersatz zaehlen BEIDE Zweige - fuer
+// diese Regel die richtige Semantik: welcher Zweig aktiv ist, haengt von
+// Defines ab, und eine Unit, die in irgendeinem Zweig gezogen wird, ist
+// nicht tot.
+function StripForUsesScan(const Raw: string): string;
+var
+  SB   : TStringBuilder;
+  i, n : Integer;
+
+  // Delphi-12-Multiline-Literal (Review 2026-07-30): drei Apostrophe, nach
+  // denen bis zum Zeilenende nur Whitespace folgt, eroeffnen ein '''-Literal;
+  // es endet an der ersten Zeile, deren erster Nicht-Whitespace wieder '''
+  // ist. Ohne diese Behandlung liefen alle Folgezeilen des Literals als
+  // Code in den uses-Scan - eingebettetes 'uses uGhost;' haette eine tote
+  // Orphan-Datei auf 195 gekippt (String-Inhalte zaehlen NIE als Code).
+  // 5+-Quote-Varianten (Literal enthaelt selbst ''') fallen auf die
+  // Einzeiler-Logik zurueck - nicht schlechter als vorher, dokumentierte
+  // Restluecke.
+  function IsMultilineOpener(p: Integer): Boolean;
+  begin
+    if (p + 2 > n) or (Raw[p + 1] <> '''') or (Raw[p + 2] <> '''') then
+      Exit(False);
+    p := p + 3;
+    while (p <= n) and CharInSet(Raw[p], [' ', #9, #13]) do Inc(p);
+    Result := (p > n) or (Raw[p] = #10);
+  end;
+
+  procedure SkipMultilineLiteral;   // i steht auf dem ersten der drei Quotes
+  var
+    AtLineStart : Boolean;
+  begin
+    Inc(i, 3);
+    AtLineStart := False;           // Rest der Startzeile ist nur Whitespace
+    while i <= n do
+    begin
+      if Raw[i] = #10 then
+        AtLineStart := True
+      else if not CharInSet(Raw[i], [' ', #9, #13]) then
+      begin
+        if AtLineStart and (i + 2 <= n) and (Raw[i] = '''') and
+           (Raw[i + 1] = '''') and (Raw[i + 2] = '''') then
+        begin
+          Inc(i, 3);                // Abschluss-''' konsumieren
+          Exit;
+        end;
+        AtLineStart := False;
+      end;
+      Inc(i);
+    end;                            // unterminiert -> Rest der Datei geblankt
+  end;
+
+begin
+  SB := TStringBuilder.Create(Length(Raw));
+  try
+    i := 1;
+    n := Length(Raw);
+    while i <= n do
+    begin
+      case Raw[i] of
+        '''':
+          begin
+            if IsMultilineOpener(i) then
+              SkipMultilineLiteral
+            else
+            begin
+              Inc(i);
+              while i <= n do
+              begin
+                if Raw[i] = '''' then
+                begin
+                  if (i < n) and (Raw[i + 1] = '''') then
+                    Inc(i, 2)          // verdoppeltes Apostroph im Literal
+                  else
+                  begin
+                    Inc(i);
+                    Break;
+                  end;
+                end
+                else if Raw[i] = #10 then
+                  Break                // Delphi-Literal endet an der Zeile
+                else
+                  Inc(i);
+              end;
+            end;
+            SB.Append(' ');
+          end;
+        '{':
+          begin
+            while (i <= n) and (Raw[i] <> '}') do Inc(i);
+            if i <= n then Inc(i);   // '}' konsumieren
+            SB.Append(' ');
+          end;
+        '(':
+          if (i < n) and (Raw[i + 1] = '*') then
+          begin
+            Inc(i, 2);
+            while (i < n) and not ((Raw[i] = '*') and (Raw[i + 1] = ')')) do
+              Inc(i);
+            if i < n then Inc(i, 2) else i := n + 1;
+            SB.Append(' ');
+          end
+          else
+          begin
+            SB.Append(Raw[i]);
+            Inc(i);
+          end;
+        '/':
+          if (i < n) and (Raw[i + 1] = '/') then
+          begin
+            while (i <= n) and (Raw[i] <> #10) do Inc(i);
+            SB.Append(' ');          // das #10 bleibt fuer die naechste Runde
+          end
+          else
+          begin
+            SB.Append(Raw[i]);
+            Inc(i);
+          end;
+      else
+        SB.Append(Raw[i]);
+        Inc(i);
+      end;
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+class function TDetectorUtils.UsesNamesOfText(const ARaw: string;
+  const AExtraClauseWord: string): TArray<string>;
+var
+  Names  : TList<string>;
+  Text   : string;
+  i, n   : Integer;
+  Start  : Integer;
+  W      : string;
+  InUses : Boolean;
+begin
+  Text := LowerCase(StripForUsesScan(ARaw));
+  Names := TList<string>.Create;
+  try
+    n := Length(Text);
+    i := 1;
+    InUses := False;
+    while i <= n do
+    begin
+      if IsIdentChar(Text[i]) then
+      begin
+        Start := i;
+        while (i <= n) and (IsIdentChar(Text[i]) or
+              (InUses and (Text[i] = '.'))) do
+          Inc(i);
+        W := Copy(Text, Start, i - Start);
+        if not InUses then
+        begin
+          // '&uses' waere ein escaped Ident, kein Schluesselwort.
+          // W ist nie leer - ein leeres AExtraClauseWord trifft nichts.
+          if ((W = 'uses') or (W = AExtraClauseWord)) and
+             ((Start = 1) or (Text[Start - 1] <> '&')) then
+            InUses := True;
+        end
+        else if (W <> 'in') and (W <> '') then
+          Names.Add(W);
+      end
+      else
+      begin
+        if InUses and (Text[i] = ';') then
+          InUses := False;
+        Inc(i);
+      end;
+    end;
+    Result := Names.ToArray;
+  finally
+    Names.Free;
+  end;
 end;
 
 end.
