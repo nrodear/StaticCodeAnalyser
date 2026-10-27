@@ -149,8 +149,15 @@ type
     procedure WriteString(const ASection, AKey, AValue: string);
     procedure WriteBool(const ASection, AKey: string; AValue: Boolean);
     procedure WriteInteger(const ASection, AKey: string; AValue: Integer);
-    /// <summary>Schreibt nur, wenn sich wirklich ein Wert geaendert hat.</summary>
-    procedure UpdateFile;
+    /// <summary>
+    ///   Schreibt nur, wenn sich wirklich ein Wert geaendert hat. False
+    ///   NUR, wenn das Schreiben scheiterte (Datei gesperrt, schreib-
+    ///   geschuetzt, Rechte) - ohne Aenderung gibt es nichts zu scheitern,
+    ///   dann True. Wirft nie; wer den Fehlschlag melden will (QuickWriteStr),
+    ///   wertet das Ergebnis aus, alle anderen rufen es wie bisher als
+    ///   Anweisung.
+    /// </summary>
+    function UpdateFile: Boolean;
   end;
 
   TRepoSettings = class
@@ -1438,7 +1445,8 @@ class function TRepoSettings.QuickWriteStr(const ASection, AKey,
 // die analyser.ini traegt selbstdokumentierende Kommentare neben jedem
 // Wert, und ein Voll-Rewrite wuerde sie verlieren (Lehre der
 // Kommentar-Charge 2026-08-21). UpdateFile schreibt nur bei echter
-// Aenderung.
+// Aenderung und meldet, ob das Schreiben gelang - sein Ergebnis IST das
+// Ergebnis hier (unveraenderter Wert = nichts zu schreiben = True).
 var
   Ini     : TCommentPreservingIni;
   CfgPath : string;
@@ -1450,8 +1458,7 @@ begin
     Ini := TCommentPreservingIni.Create(CfgPath);
     try
       Ini.WriteString(ASection, AKey, AValue);
-      Ini.UpdateFile;
-      Result := True;
+      Result := Ini.UpdateFile;
     finally
       Ini.Free;
     end;
@@ -2083,18 +2090,23 @@ begin
   WriteString(ASection, AKey, IntToStr(AValue));
 end;
 
-procedure TCommentPreservingIni.UpdateFile;
+function TCommentPreservingIni.UpdateFile: Boolean;
 // Nur schreiben, wenn sich etwas geaendert hat: ein Options-Dialog, der
 // ohne Aenderung geschlossen wird, soll die Datei nicht anfassen (und
 // damit auch keinen Zeitstempel bewegen).
 begin
+  Result := True;
   if not FChanged then Exit;
   try
     FLines.SaveToFile(FPath, TEncoding.UTF8);
     FChanged := False;
   except
-    // Schreibfehler (Datei gesperrt, Rechte): still. Dasselbe tat der
-    // bisherige Pfad - UpdateFile von TMemIniFile schluckt ebenfalls.
+    // Schreibfehler (Datei gesperrt, Rechte): kein Wurf - dasselbe tat der
+    // bisherige Pfad, UpdateFile von TMemIniFile schluckt ebenfalls. Aber
+    // nicht mehr STILL: bis 2026-10-28 lieferte QuickWriteStr hier True,
+    // obwohl es "False, wenn nicht schreibbar" zusagt - ein schreib-
+    // geschuetzter [Scan] Dialect meldete Erfolg.
+    Result := False;
   end;
 end;
 

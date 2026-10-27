@@ -38,6 +38,9 @@ type
     [Test] procedure SectionAndKey_MatchCaseInsensitively;
     [Test] procedure UnchangedValue_LeavesFileUntouched;
     [Test] procedure BoolAndInteger_UseTheSameShapeAsBefore;
+    // ---- 2026-10-28: UpdateFile meldet, ob das Schreiben gelang ----
+    [Test] procedure UpdateFile_ReadOnlyFile_ReportsFailure;
+    [Test] procedure UpdateFile_UnchangedValue_ReportsSuccess;
     // ---- J1 (2026-09-20): Default der Overlay-Position ----
     [Test] procedure OverlayPosition_DefaultIsBelow;
   end;
@@ -82,6 +85,9 @@ procedure TTestIniComments.TearDown;
 begin
   if TFile.Exists(FPath) then
   begin
+    // Der Schreibschutz-Test laesst die Datei schreibgeschuetzt zurueck -
+    // ohne das Zuruecksetzen scheiterte das Loeschen.
+    TFile.SetAttributes(FPath, [TFileAttribute.faNormal]);
     TFile.Delete(FPath);
   end;
 end;
@@ -291,6 +297,53 @@ begin
   Assert.IsTrue(HasLine('OverlayTextOnly=1'));
   Assert.IsTrue(HasLine('OverlayShowOnHover=0'));
   Assert.IsTrue(HasLine(CLIP_SET));
+end;
+
+{ ---- 2026-10-28: UpdateFile meldet, ob das Schreiben gelang ------- }
+
+procedure TTestIniComments.UpdateFile_ReadOnlyFile_ReportsFailure;
+// TRepoSettings.QuickWriteStr sagt "False, wenn nicht schreibbar" zu und
+// reicht dafuer das Ergebnis von UpdateFile durch. Bis 2026-10-28 schluckte
+// UpdateFile den Schreibfehler ohne Rueckmeldung, und QuickWriteStr meldete
+// bei schreibgeschuetzter analyser.ini Erfolg. Geprueft am Helfer selbst:
+// QuickWriteStr schreibt in die APPDATA-INI, und die fasst kein Test an.
+var
+  Ini    : TCommentPreservingIni;
+  Before : string;
+  Ok     : Boolean;
+begin
+  Given(SAMPLE);
+  Before := Content;
+  TFile.SetAttributes(FPath, [TFileAttribute.faReadOnly]);
+  Ini := TCommentPreservingIni.Create(FPath);
+  try
+    Ini.WriteString('UI', KEY_LANG, 'en');
+    Ok := Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+  Assert.IsFalse(Ok, 'ein gescheitertes Schreiben muss False liefern');
+  Assert.AreEqual(Before, Content, 'und die Datei ist unberuehrt');
+end;
+
+procedure TTestIniComments.UpdateFile_UnchangedValue_ReportsSuccess;
+// Gegenstueck: ohne Aenderung gibt es nichts zu scheitern. Auch eine
+// schreibgeschuetzte Datei liefert dann True - sonst meldete der Dialekt-
+// Schalter "nicht schreibbar", wenn man den bereits aktiven Wert waehlt.
+var
+  Ini : TCommentPreservingIni;
+  Ok  : Boolean;
+begin
+  Given(SAMPLE);
+  TFile.SetAttributes(FPath, [TFileAttribute.faReadOnly]);
+  Ini := TCommentPreservingIni.Create(FPath);
+  try
+    Ini.WriteString('UI', KEY_LANG, 'de');   // derselbe Wert
+    Ok := Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+  Assert.IsTrue(Ok, 'unveraendert ist kein Fehlschlag');
 end;
 
 { ---- J1 (2026-09-20): Default der Overlay-Position ---------------- }
