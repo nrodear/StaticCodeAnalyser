@@ -37,9 +37,19 @@ type
     [Test] procedure ExitMinusOneDiffersFromResult_NotReported;
   end;
 
+  // Parser-Charge P3 (Review m2): Exit-Literale stehen in Quellform, die
+  // Leerzeichen-Normalisierung von ExtractExitArg darf sie nicht
+  // verstuemmeln. Eigene Fixture - TTestConstantReturn traegt schon 21.
+  [TestFixture]
+  TTestConstantReturnLiterals = class
+  public
+    [Test] procedure ExitBlankLiteralDiffersFromEmpty_NotReported;
+    [Test] procedure ExitLiteralWithBlankMatchesResult_Reported;
+  end;
+
 implementation
 
-// noinspection-file GodClass
+// noinspection-file GodClass, ClassPerFile
 // Eine Test-Fixture je Detektor ist die Projektkonvention; die Klasse
 // waechst mit jedem gepinnten Fall. Mit den zwei Faellen aus
 // Testluecke 103 (Voll-Review 2026-09-12) hat sie die
@@ -471,7 +481,65 @@ begin
   finally F.Free; end;
 end;
 
+{ ---- Parser-Charge P3, Review m2 ---- }
+
+procedure TTestConstantReturnLiterals.ExitBlankLiteralDiffersFromEmpty_NotReported;
+// ' ' und '' sind verschiedene Rueckgabewerte. Mit P3 und dem alten
+// StringReplace(' ', '') wurde aus Exit(' ') "''" - gleich Result := ''
+// und damit ein falscher "always returns ''"-Fund (Exe 8c3eac8f mit der
+// P3-Form Exit(#39' '#39): 1 Fund - ROT ohne den Fix).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function F(A: Integer): string;'#13#10 +
+  'begin'#13#10 +
+  '  if A > 0 then'#13#10 +
+  '    Exit('' '');'#13#10 +
+  '  Result := '''';'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkConstantReturn),
+    'Leerzeichen-Literal ist nicht das leere Literal');
+  finally F.Free; end;
+end;
+
+procedure TTestConstantReturnLiterals.ExitLiteralWithBlankMatchesResult_Reported;
+// Gegenprobe: Exit('a b') und Result := 'a b' sind dasselbe Literal. Mit
+// dem alten StringReplace wurde daraus "'ab'" - ungleich, Fund weg, und
+// ein Meldetext haette das Literal verstuemmelt. Exe 8c3eac8f: 0 Funde,
+// roh ('a b' ist dort kein Literal) wie in der P3-Form Exit(#39'a b'#39)
+// - ROT; Kontrolle Exit(#39'ab'#39) + Result := 'ab': 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function G(A: Integer): string;'#13#10 +
+  'begin'#13#10 +
+  '  if A > 0 then'#13#10 +
+  '    Exit(''a b'');'#13#10 +
+  '  Result := ''a b'';'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkConstantReturn),
+      'Exit(''a b'') und Result := ''a b'' sind dasselbe Literal');
+    for Fnd in F do
+    begin
+      if Fnd.Kind = fkConstantReturn then
+      begin
+        Assert.IsTrue(Pos('''a b''', Fnd.MissingVar) > 0, Fnd.MissingVar);
+      end;
+    end;
+  finally
+    F.Free;
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestConstantReturn);
+  TDUnitX.RegisterTestFixture(TTestConstantReturnLiterals);
 
 end.
