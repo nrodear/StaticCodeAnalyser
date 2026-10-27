@@ -6687,14 +6687,23 @@ msgstr "commentaire ou directive dans l'expression - il serait perdu"
 msgid "the chain mixes \"%s\" and \"%s\" - De Morgan needs one operator"
 msgstr "la chaîne mélange « %s » et « %s » - De Morgan exige un seul opérateur"
 
+msgid "a side calls %s - swapping the sides would change the order of evaluation"
+msgstr "un côté appelle %s - échanger les côtés changerait l'ordre d'évaluation"
+
 msgid "Invert the if (swap then and else)"
 msgstr "Inverser le if (échanger then et else)"
 
 msgid "Apply De Morgan to \"%s\""
 msgstr "Appliquer De Morgan à « %s »"
 
+msgid "Swap the sides of \"%s\""
+msgstr "Échanger les côtés de « %s »"
+
 msgid "same meaning - the condition is negated once, then and else swap places"
 msgstr "même sens - la condition est niée une fois, then et else échangent leurs places"
 
 msgid "same meaning - the same terms in the same order, each negated; the evaluation stops at the same term"
 msgstr "même sens - les mêmes termes dans le même ordre, chacun nié ; l'évaluation s'arrête au même terme"
+
+msgid "same meaning - the comparison is mirrored; neither side calls a routine"
+msgstr "même sens - la comparaison est inversée en miroir ; aucun côté n'appelle de routine"

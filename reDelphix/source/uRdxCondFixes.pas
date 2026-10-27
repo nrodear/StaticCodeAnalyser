@@ -56,6 +56,8 @@ const
   // mit _()).
   R_CF_COMMENT = 'comment or directive in the expression - it would be lost';
   R_CF_MIXED = 'the chain mixes "%s" and "%s" - De Morgan needs one operator';
+  R_CF_CALL = 'a side calls %s - swapping the sides would change the order '
+    + 'of evaluation';
 
 type
   TRdxCondFixes = class
@@ -64,11 +66,15 @@ type
     // False mit leerem AReason: kein Kandidat.
     class function DeMorgan(AMap: TRdxCodeMap; ALine, ACol: Integer;
       out AEdit: TRdxEdit; out AOp, AReason: string): Boolean; static;
+    // C8 Vergleich drehen am Caret; AOp: der Operator wie im Quelltext.
+    class function FlipCompare(AMap: TRdxCodeMap; ALine, ACol: Integer;
+      out AEdit: TRdxEdit; out AOp, AReason: string): Boolean; static;
   end;
 
 implementation
 
 uses
+  System.SysUtils,  // LowerCase
   uRefactorInfo,    // TRefactorSpan
   uRdxCondExpr,     // TRdxCondExpr, ExprRootAt
   uRdxText;         // _(): in die reDelphix-Sprache
@@ -76,6 +82,11 @@ uses
 const
   SPAN_COND = 'ctxcond';
   BOOL_OPS: array[0..2] of string = ('and', 'or', 'xor');
+  REL_SYMS: array[0..5] of string = ('=', '<>', '<', '>', '<=', '>=');
+  REL_MIRROR: array[0..5] of string = ('=', '<>', '>', '<', '>=', '<=');
+  // Reine Intrinsics: ohne Seiteneffekt, mit beliebiger Reihenfolge.
+  PURE_CALLS: array[0..9] of string = ('length', 'high', 'low', 'ord', 'chr',
+    'sizeof', 'abs', 'odd', 'succ', 'pred');
 
 function InArr(const S: string; const A: array of string): Boolean;
 var
@@ -85,6 +96,16 @@ begin
   for i := Low(A) to High(A) do
     if A[i] = S then
       Exit(True);
+end;
+
+function IndexIn(const S: string; const A: array of string): Integer;
+var
+  i : Integer;
+begin
+  for i := Low(A) to High(A) do
+    if A[i] = S then
+      Exit(i);
+  Result := -1;
 end;
 
 // Alle Operatoren der Kette sind and/or/xor.
@@ -232,5 +253,84 @@ begin
   end;
 end;
 
+// Der erste Aufruf mit Seiteneffekt im Teilbaum ANode: sein Name ('as',
+// 'inherited' eingeschlossen), sonst ''.
+function SideEffectIn(AMap: TRdxCodeMap; AExpr: TRdxCondExpr;
+  ANode: Integer): string;
+var
+  N : TRdxExprNode;
+  i : Integer;
+begin
+  Result := '';
+  N := AExpr.Node(ANode);
+  for i := 0 to High(N.Calls) do
+    if not InArr(LowerCase(N.Calls[i]), PURE_CALLS)
+       or DeclaresRoutine(AMap, N.Calls[i]) then
+      Exit(N.Calls[i]);
+  if N.Kind = ekChain then
+    for i := 0 to High(N.Ops) do
+      if AExpr.Tok(N.Ops[i]).Low = 'as' then
+        Exit('as');
+  for i := 0 to High(N.Kids) do
+  begin
+    Result := SideEffectIn(AMap, AExpr, N.Kids[i]);
+    if Result <> '' then
+      Exit;
+  end;
+end;
+
+class function TRdxCondFixes.FlipCompare(AMap: TRdxCodeMap; ALine,
+  ACol: Integer; out AEdit: TRdxEdit; out AOp, AReason: string): Boolean;
+var
+  T       : TRdxToken;
+  Root    : TRdxExprRoot;
+  Expr    : TRdxCondExpr;
+  Ti, N   : Integer;
+  L, R    : Integer;
+  Call    : string;
+  Span    : TRefactorSpan;
+begin
+  Result := False;
+  AEdit := Default(TRdxEdit);
+  AOp := '';
+  AReason := '';
+  T := TokenContaining(AMap, ALine, ACol);
+  if IndexIn(T.Low, REL_SYMS) < 0 then
+    Exit;
+  if not ExprRootAt(AMap, T, True, Root) then
+    Exit;
+  Expr := TRdxCondExpr.Create(AMap);
+  try
+    if not Expr.ParseRoot(Root) then
+      Exit;
+    Ti := Expr.TokenAt(T.Line, T.Col);
+    if Ti < 0 then
+      Exit;
+    N := Expr.OwnerOfOp(Ti);
+    if (N < 0) or (Expr.Node(N).Kind <> ekRel) then
+      Exit;
+    // Kandidat.
+    AOp := Expr.OpOf(N);
+    L := Expr.Node(N).Kids[0];
+    R := Expr.Node(N).Kids[1];
+    Span := Expr.Span(N, SPAN_COND);
+    Call := SideEffectIn(AMap, Expr, L);
+    if Call = '' then
+      Call := SideEffectIn(AMap, Expr, R);
+    if Call <> '' then
+      AReason := _(R_CF_CALL, [Call])
+    else if CommentInRange(AMap, Span) then
+      AReason := _(R_CF_COMMENT);
+    if AReason <> '' then
+      Exit;
+    AEdit.Span := Span;
+    AEdit.Expected := RangeText(AMap, Span);
+    AEdit.NewText := Expr.Text(R) + ' ' + REL_MIRROR[IndexIn(AOp, REL_SYMS)]
+      + ' ' + Expr.Text(L);
+    Result := True;
+  finally
+    Expr.Free;
+  end;
+end;
 
 end.

@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6704 Zeilen, 301976 Bytes
-  CPoLines_de: array[0..6703] of string = (
+  // i18n\de.po - 6713 Zeilen, 302391 Bytes
+  CPoLines_de: array[0..6712] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6708,17 +6708,26 @@ const
     'msgid "the chain mixes \"%s\" and \"%s\" - De Morgan needs one operator"',
     'msgstr "die Kette mischt \"%s\" und \"%s\" - De Morgan braucht einen Operator"',
     '',
+    'msgid "a side calls %s - swapping the sides would change the order of evaluation"',
+    'msgstr "eine Seite ruft %s auf - das Tauschen '#$00E4'nderte die Reihenfolge der Auswertung"',
+    '',
     'msgid "Invert the if (swap then and else)"',
     'msgstr "if umkehren (then und else tauschen)"',
     '',
     'msgid "Apply De Morgan to \"%s\""',
     'msgstr "De Morgan auf \"%s\" anwenden"',
     '',
+    'msgid "Swap the sides of \"%s\""',
+    'msgstr "Seiten von \"%s\" tauschen"',
+    '',
     'msgid "same meaning - the condition is negated once, then and else swap places"',
     'msgstr "gleiche Bedeutung - die Bedingung wird einmal verneint, then und else tauschen die Pl'#$00E4'tze"',
     '',
     'msgid "same meaning - the same terms in the same order, each negated; the evaluation stops at the same term"',
-    'msgstr "gleiche Bedeutung - dieselben Glieder in derselben Reihenfolge, je verneint; die Auswertung endet am selben Glied"'
+    'msgstr "gleiche Bedeutung - dieselben Glieder in derselben Reihenfolge, je verneint; die Auswertung endet am selben Glied"',
+    '',
+    'msgid "same meaning - the comparison is mirrored; neither side calls a routine"',
+    'msgstr "gleiche Bedeutung - der Vergleich wird gespiegelt; keine Seite ruft eine Routine auf"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -6993,8 +7002,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6700 Zeilen, 314165 Bytes
-  CPoLines_fr: array[0..6699] of string = (
+  // i18n\fr.po - 6709 Zeilen, 314590 Bytes
+  CPoLines_fr: array[0..6708] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -13684,17 +13693,26 @@ const
     'msgid "the chain mixes \"%s\" and \"%s\" - De Morgan needs one operator"',
     'msgstr "la cha'#$00EE'ne m'#$00E9'lange '#$00AB' %s '#$00BB' et '#$00AB' %s '#$00BB' - De Morgan exige un seul op'#$00E9'rateur"',
     '',
+    'msgid "a side calls %s - swapping the sides would change the order of evaluation"',
+    'msgstr "un c'#$00F4't'#$00E9' appelle %s - '#$00E9'changer les c'#$00F4't'#$00E9's changerait l''ordre d'''#$00E9'valuation"',
+    '',
     'msgid "Invert the if (swap then and else)"',
     'msgstr "Inverser le if ('#$00E9'changer then et else)"',
     '',
     'msgid "Apply De Morgan to \"%s\""',
     'msgstr "Appliquer De Morgan '#$00E0' '#$00AB' %s '#$00BB'"',
     '',
+    'msgid "Swap the sides of \"%s\""',
+    'msgstr "'#$00C9'changer les c'#$00F4't'#$00E9's de '#$00AB' %s '#$00BB'"',
+    '',
     'msgid "same meaning - the condition is negated once, then and else swap places"',
     'msgstr "m'#$00EA'me sens - la condition est ni'#$00E9'e une fois, then et else '#$00E9'changent leurs places"',
     '',
     'msgid "same meaning - the same terms in the same order, each negated; the evaluation stops at the same term"',
-    'msgstr "m'#$00EA'me sens - les m'#$00EA'mes termes dans le m'#$00EA'me ordre, chacun ni'#$00E9' ; l'''#$00E9'valuation s''arr'#$00EA'te au m'#$00EA'me terme"'
+    'msgstr "m'#$00EA'me sens - les m'#$00EA'mes termes dans le m'#$00EA'me ordre, chacun ni'#$00E9' ; l'''#$00E9'valuation s''arr'#$00EA'te au m'#$00EA'me terme"',
+    '',
+    'msgid "same meaning - the comparison is mirrored; neither side calls a routine"',
+    'msgstr "m'#$00EA'me sens - la comparaison est invers'#$00E9'e en miroir ; aucun c'#$00F4't'#$00E9' n''appelle de routine"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

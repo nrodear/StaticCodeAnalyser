@@ -1197,7 +1197,7 @@ msgstr ""
 msgid "Applies to the plugin user interface only - detector messages, findings and exports are never translated. The list holds the built-in translations plus every i18n\\<code>.po file placed next to the plugin BPL. Captions already on screen switch after an IDE restart."
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:555
+#: reDelphix/source/uRdxContextRunner.pas:565
 msgid "Apply De Morgan to \"%s\""
 msgstr ""
 
@@ -2157,7 +2157,7 @@ msgstr ""
 msgid "Free is outside the protecting finally block"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:257
+#: reDelphix/source/uRdxContextRunner.pas:262
 #: reDelphix/source/uRdxFixTable.pas:2996
 msgid "Free now also runs on an exception and on Exit - the lines in between move into the try part"
 msgstr ""
@@ -2399,7 +2399,7 @@ msgstr ""
 msgid "Invalid UTF-8 sequence - compiler substitutes U+FFFD (data corruption)"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:554
+#: reDelphix/source/uRdxContextRunner.pas:564
 msgid "Invert the if (swap then and else)"
 msgstr ""
 
@@ -3702,6 +3702,10 @@ msgstr ""
 msgid "Swap the loop bounds"
 msgstr ""
 
+#: reDelphix/source/uRdxContextRunner.pas:566
+msgid "Swap the sides of \"%s\""
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:3043
 msgid "Synchronize() in a destructor - worker and UI thread deadlock each other"
 msgstr ""
@@ -4201,6 +4205,10 @@ msgstr ""
 msgid "a second routine %s in line %d - overload, $IFDEF twin or local routine"
 msgstr ""
 
+#: reDelphix/source/uRdxCondFixes.pas:321
+msgid "a side calls %s - swapping the sides would change the order of evaluation"
+msgstr ""
+
 #: reDelphix/source/uRdxLoopBoundFix.pas:436
 msgid "a string from 0 to High() + 1 is wrong at both ends - correct the range by hand"
 msgstr ""
@@ -4631,7 +4639,8 @@ msgstr ""
 msgid "comment or directive in or beside the handler - intent, no help"
 msgstr ""
 
-#: reDelphix/source/uRdxCondFixes.pas:208
+#: reDelphix/source/uRdxCondFixes.pas:229
+#: reDelphix/source/uRdxCondFixes.pas:323
 msgid "comment or directive in the expression - it would be lost"
 msgstr ""
 
@@ -6601,16 +6610,20 @@ msgstr ""
 msgid "same meaning - the code never ran; parked code then only lives in version control"
 msgstr ""
 
+#: reDelphix/source/uRdxContextRunner.pas:557
+msgid "same meaning - the comparison is mirrored; neither side calls a routine"
+msgstr ""
+
 #: reDelphix/source/uRdxFixTable.pas:2996
 msgid "same meaning - the compiler does not read \"_\" in numbers; digit separators exist only from Delphi 11 on, FPC does not know them"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:542
+#: reDelphix/source/uRdxContextRunner.pas:547
 #: reDelphix/source/uRdxFixTable.pas:2996
 msgid "same meaning - the condition is evaluated once as before; if it is false, the routine ends as before; the body moves out one level"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:537
+#: reDelphix/source/uRdxContextRunner.pas:542
 msgid "same meaning - the condition is negated once, then and else swap places"
 msgstr ""
 
@@ -6618,7 +6631,7 @@ msgstr ""
 msgid "same meaning - the condition was always true (Length is never negative): the then branch runs as before, an else branch never ran and goes away; if another comparison was meant (e.g. > 0), it is still missing"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:231
+#: reDelphix/source/uRdxContextRunner.pas:236
 #: reDelphix/source/uRdxFixTable.pas:1295
 msgid "same meaning - the constant %s holds the literal; rename it by hand or with Refactor > Rename (Ctrl+Shift+E)"
 msgstr ""
@@ -6639,7 +6652,7 @@ msgstr ""
 msgid "same meaning - the name appears nowhere else in the code of the file; documentation and a comment above it that names the routine go with it"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:547
+#: reDelphix/source/uRdxContextRunner.pas:552
 msgid "same meaning - the same terms in the same order, each negated; the evaluation stops at the same term"
 msgstr ""
 
@@ -7054,7 +7067,7 @@ msgstr ""
 msgid "the chain already contains Format()"
 msgstr ""
 
-#: reDelphix/source/uRdxCondFixes.pas:206
+#: reDelphix/source/uRdxCondFixes.pas:227
 msgid "the chain mixes \"%s\" and \"%s\" - De Morgan needs one operator"
 msgstr ""
 

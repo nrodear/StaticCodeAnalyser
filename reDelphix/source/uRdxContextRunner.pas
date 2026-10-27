@@ -48,6 +48,8 @@ unit uRdxContextRunner;
 //   ckDeMorgan         C8 De Morgan: Caret auf 'and'/'or' einer Kette bzw.
 //                      'not' vor '( .. )' in der Bedingung von if, while,
 //                      until (uRdxCondFixes.DeMorgan).
+//   ckFlipCompare      C8 Vergleich drehen: Caret auf einem
+//                      Vergleichsoperator (uRdxCondFixes.FlipCompare).
 //                      Alle sechs bedeutungsgleich (Annahmen in den Units:
 //                      'not' logisch, {$B-} fuer Teilen/Zusammenfuegen);
 //                      ein Kandidat entsteht nur am ausloesenden Token,
@@ -99,7 +101,7 @@ uses
 
 type
   TRdxContextKind = (ckIntroduceConst, ckTryFinallyCreate, ckConcatToFormat,
-    ckInvertIf, ckGuardClause, ckDeMorgan);
+    ckInvertIf, ckGuardClause, ckDeMorgan, ckFlipCompare);
 
   // Ein Eintrag am Caret.
   //   Kind     die Aktion
@@ -188,10 +190,13 @@ const
   // C7/C8 (Charge C78): Menuetexte und Hinweise der Arten ohne Fund-Hilfe.
   CAP_INVERT_IF = 'Invert the if (swap then and else)';
   CAP_DEMORGAN = 'Apply De Morgan to "%s"';
+  CAP_FLIP = 'Swap the sides of "%s"';
   R_INVERT_HINT = 'same meaning - the condition is negated once, then and '
     + 'else swap places';
   R_DEMORGAN_HINT = 'same meaning - the same terms in the same order, each '
     + 'negated; the evaluation stops at the same term';
+  R_FLIP_HINT = 'same meaning - the comparison is mirrored; neither side '
+    + 'calls a routine';
 
 // Haengt AOutcome an AList an.
 procedure AddOutcome(var AList: TArray<TRdxContextOutcome>;
@@ -545,6 +550,11 @@ begin
   if Ok then
     AddEdit(Edits, Edit);
   AddPlanned(AList, ckDeMorgan, Ok, Why, Op, _(R_DEMORGAN_HINT), Edits);
+  Edits := nil;
+  Ok := TRdxCondFixes.FlipCompare(AMap, ALine, ACol, Edit, Op, Why);
+  if Ok then
+    AddEdit(Edits, Edit);
+  AddPlanned(AList, ckFlipCompare, Ok, Why, Op, _(R_FLIP_HINT), Edits);
 end;
 
 class function TRdxContextRunner.CaptionOf(
@@ -553,6 +563,7 @@ begin
   case AOutcome.Kind of
     ckInvertIf:    Result := _(CAP_INVERT_IF);
     ckDeMorgan:    Result := _(CAP_DEMORGAN, [AOutcome.Name]);
+    ckFlipCompare: Result := _(CAP_FLIP, [AOutcome.Name]);
   else
     Result := '';
   end;

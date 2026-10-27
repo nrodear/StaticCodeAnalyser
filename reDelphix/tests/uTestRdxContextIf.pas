@@ -73,6 +73,22 @@ type
   end;
 
   [TestFixture]
+  TTestRdxCtxFlip = class
+  public
+    [Test] procedure Flip_Less;
+    [Test] procedure Flip_AllOperators;
+    [Test] procedure Flip_Assignment;
+    [Test] procedure Flip_InParentheses;
+    [Test] procedure Flip_PureIntrinsic;
+    [Test] procedure Flip_Literals;
+    [Test] procedure Flip_RoundTrip;
+    [Test] procedure Flip_Call_Refused;
+    [Test] procedure Flip_ShadowedIntrinsic_Refused;
+    [Test] procedure Flip_AsAndComment_Refused;
+    [Test] procedure Flip_NoCandidate_NoEntry;
+  end;
+
+  [TestFixture]
   TTestRdxCtxIfTexts = class
   public
     [Test] procedure Captions_German;
@@ -591,6 +607,114 @@ begin
     _(R_CF_COMMENT));
 end;
 
+{ ---- C8 Vergleich drehen ---- }
+
+procedure TTestRdxCtxFlip.Flip_Less;
+var
+  O   : TRdxContextOutcome;
+  Src : string;
+begin
+  Assert.AreEqual(InProc(['  if List.Count > Index then Foo;']),
+    Fixed(InProc(['  if Index {^}< List.Count then Foo;']), ckFlipCompare));
+  O := KindAt(InProc(['  if Index <{^} List.Count then Foo;']), ckFlipCompare,
+    Src);
+  Assert.AreEqual('<', O.Name, 'Menuetext');
+end;
+
+procedure TTestRdxCtxFlip.Flip_AllOperators;
+const
+  OPS: array[0..5] of string = ('<', '>', '<=', '>=', '=', '<>');
+  MIRROR: array[0..5] of string = ('>', '<', '>=', '<=', '=', '<>');
+var
+  i : Integer;
+begin
+  for i := 0 to High(OPS) do
+    Assert.AreEqual(InProc(['  if B + 1 ' + MIRROR[i] + ' A then Foo;']),
+      Fixed(InProc(['  if A {^}' + OPS[i] + ' B + 1 then Foo;']),
+      ckFlipCompare), OPS[i]);
+end;
+
+procedure TTestRdxCtxFlip.Flip_Assignment;
+begin
+  Assert.AreEqual(InProc(['  B := Y * 2 <= X;']),
+    Fixed(InProc(['  B := X {^}>= Y * 2;']), ckFlipCompare));
+  Assert.AreEqual(InProc(['  while Limit > I do Inc(I);']),
+    Fixed(InProc(['  while I {^}< Limit do Inc(I);']), ckFlipCompare));
+end;
+
+// In einer Klammer: der Vergleich ist schon begrenzt, keine neue Klammer.
+procedure TTestRdxCtxFlip.Flip_InParentheses;
+begin
+  Assert.AreEqual(InProc(['  if (B > A) and Ready then Foo;']),
+    Fixed(InProc(['  if (A {^}< B) and Ready then Foo;']), ckFlipCompare));
+end;
+
+procedure TTestRdxCtxFlip.Flip_PureIntrinsic;
+begin
+  Assert.AreEqual(InProc(['  if Length(S) > I then Foo;']),
+    Fixed(InProc(['  if I {^}< Length(S) then Foo;']), ckFlipCompare));
+  Assert.AreEqual(InProc(['  if I <= High(A) then Foo;']),
+    Fixed(InProc(['  if High(A) {^}>= I then Foo;']), ckFlipCompare));
+end;
+
+procedure TTestRdxCtxFlip.Flip_Literals;
+begin
+  Assert.AreEqual(InProc(['  if ''x'' = S then Foo;']),
+    Fixed(InProc(['  if S {^}= ''x'' then Foo;']), ckFlipCompare));
+  Assert.AreEqual(InProc(['  if P <> nil then Foo;']),
+    Fixed(InProc(['  if nil {^}<> P then Foo;']), ckFlipCompare));
+  Assert.AreEqual(InProc(['  if X > -1.5e3 then Foo;']),
+    Fixed(InProc(['  if -1.5e3 {^}< X then Foo;']), ckFlipCompare));
+end;
+
+procedure TTestRdxCtxFlip.Flip_RoundTrip;
+var
+  Src, Once : string;
+begin
+  Src := InProc(['  if Index < List.Count then Foo;']);
+  Once := FixedOnWord(Src, 'if Index', '<', ckFlipCompare);
+  Assert.AreEqual(Src, FixedOnWord(Once, 'if List', '>', ckFlipCompare));
+end;
+
+procedure TTestRdxCtxFlip.Flip_Call_Refused;
+begin
+  AssertRefused(InProc(['  if List.IndexOf(X) {^}< 0 then Foo;']),
+    ckFlipCompare, _(R_CF_CALL, ['IndexOf']));
+  AssertRefused(InProc(['  if A {^}= GetValue() then Foo;']), ckFlipCompare,
+    _(R_CF_CALL, ['GetValue']));
+end;
+
+procedure TTestRdxCtxFlip.Flip_ShadowedIntrinsic_Refused;
+var
+  Src : string;
+begin
+  Src := Join(['unit u;', 'interface', 'implementation',
+    'function Length(const S: string): Integer;', 'begin', '  Result := 0;',
+    'end;', 'procedure P;', 'begin', '  if I {^}< Length(S) then Foo;',
+    'end;', 'end.']);
+  AssertRefused(Src, ckFlipCompare, _(R_CF_CALL, ['Length']));
+end;
+
+procedure TTestRdxCtxFlip.Flip_AsAndComment_Refused;
+begin
+  AssertRefused(InProc(['  if (X as TFoo).Count {^}> 0 then Foo;']),
+    ckFlipCompare, _(R_CF_CALL, ['as']));
+  AssertRefused(InProc(['  if A { a } {^}< B then Foo;']), ckFlipCompare,
+    _(R_CF_COMMENT));
+end;
+
+procedure TTestRdxCtxFlip.Flip_NoCandidate_NoEntry;
+begin
+  AssertNone(InProc(['  L := TList{^}<Integer>.Create;']), ckFlipCompare,
+    'Typparameter');
+  AssertNone(InProc(['  if X in [1, 2] {^}then Foo;']), ckFlipCompare,
+    'Caret auf then');
+  AssertNone(InProc(['  Foo(A {^}< B, C);']), ckFlipCompare,
+    'Argument eines Aufrufs (keine Wurzel)');
+  AssertNone(InProc(['  // if A {^}< B then Foo;']), ckFlipCompare,
+    'Kommentar');
+end;
+
 { ---- Texte und Reihenfolge ---- }
 
 function OutcomeOf(AKind: TRdxContextKind;
@@ -607,6 +731,8 @@ begin
     TRdxContextRunner.CaptionOf(OutcomeOf(ckInvertIf, '')));
   Assert.AreEqual('De Morgan auf "and" anwenden',
     TRdxContextRunner.CaptionOf(OutcomeOf(ckDeMorgan, 'and')));
+  Assert.AreEqual('Seiten von "<=" tauschen',
+    TRdxContextRunner.CaptionOf(OutcomeOf(ckFlipCompare, '<=')));
   // Arten mit Fund-Hilfe: den Text baut uRdxFixTable.ContextCaption.
   Assert.AreEqual('', TRdxContextRunner.CaptionOf(OutcomeOf(ckGuardClause, '')));
   Assert.AreEqual('', TRdxContextRunner.CaptionOf(OutcomeOf(ckIntroduceConst,
@@ -645,7 +771,7 @@ var
   K : TRdxContextKind;
   O : TRdxContextOutcome;
 begin
-  for K in [ckInvertIf, ckDeMorgan] do
+  for K in [ckInvertIf, ckDeMorgan, ckFlipCompare] do
   begin
     O := OutcomeOf(K, 'and');
     Assert.AreEqual(TRdxContextRunner.CaptionOf(O),
@@ -660,6 +786,7 @@ initialization
   TDUnitX.RegisterTestFixture(TTestRdxCtxInvertIf);
   TDUnitX.RegisterTestFixture(TTestRdxCtxGuard);
   TDUnitX.RegisterTestFixture(TTestRdxCtxDeMorgan);
+  TDUnitX.RegisterTestFixture(TTestRdxCtxFlip);
   TDUnitX.RegisterTestFixture(TTestRdxCtxIfTexts);
   {$IFNDEF FPC}
   TDUnitX.RegisterTestFixture(TTestRdxCtxIfCaption);
