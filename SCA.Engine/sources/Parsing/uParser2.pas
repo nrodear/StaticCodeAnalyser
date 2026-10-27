@@ -14,6 +14,14 @@ type
   // Stop-Menge der Sammel-Schleifen (CollectTypeNameUntil).
   TTokenKinds = set of TTokenKind;
 
+  // Zustand der RHS-Scanner fuer Koepfe anonymer Methoden (Parser-Charge
+  // P2, 2026-10-27) - s. TParser2.StepAnonHead.
+  TAnonHeadScan = record
+    Heads     : Integer;     // offene Koepfe, deren 'begin' noch fehlt
+    KwPending : Boolean;     // das letzte Token war procedure/function
+    KwPrev    : TTokenKind;  // das Token VOR diesem procedure/function
+  end;
+
   TParser2 = class
   public
     constructor Create;
@@ -64,9 +72,11 @@ type
     FConsumeCount: Integer;
 
     // Kind des ZULETZT konsumierten Tokens (tkUnknown = noch keines).
-    // Einziger Konsument ist ParseIfStmt: ein ';' unmittelbar vor einem
-    // 'else' ist ein Indiz dafuer, dass das else NICHT zum if gehoert
-    // (vollstaendige Begruendung samt Gegenbeispielen dort).
+    // Konsumenten: ParseIfStmt - ein ';' unmittelbar vor einem 'else' ist
+    // ein Indiz dafuer, dass das else NICHT zum if gehoert (vollstaendige
+    // Begruendung samt Gegenbeispielen dort) - und StepAnonHead (P2): steht
+    // vor 'procedure'/'function' ein ':=', '(' oder ',', ist es der Kopf
+    // einer anonymen Methode.
     //
     // +---------------------------------------------------------------+
     // | INVARIANTE - BEIM AENDERN DIESER UNIT LESEN:                   |
@@ -221,6 +231,15 @@ type
     // Argumenten oder ein Sektions-Schluesselwort; zaehlt begin/case/try/
     // asm/record und ihr 'end' in ABlockDepth mit.
     function ArgScanContinues(var ABlockDepth: Integer): Boolean;
+    // RHS-Scanner (ParseCallOrAssign, ScanInlineInitializer): fuehrt die
+    // offenen Koepfe anonymer Methoden mit, BEVOR das aktuelle Token
+    // ausgewertet wird. Solange AScan.Heads > 0 ist, beendet ein ';' auf
+    // Tiefe 0 den Scan nicht (var-/const-/type-Sektion im Kopf). 'record'
+    // im Kopf erhoeht ANestDepth (sein 'end' senkt sie wieder).
+    procedure StepAnonHead(var AScan: TAnonHeadScan; var ANestDepth: Integer);
+    // Abbruch der beiden RHS-Scanner auf Tiefe 0: ';' (nur ohne offenen
+    // Kopf einer anonymen Methode), else, until, except, finally, Dateiende.
+    function RhsStopsAt(ANestDepth: Integer; const AScan: TAnonHeadScan): Boolean;
   end;
 
 implementation
@@ -3542,14 +3561,74 @@ begin
   Result := True;
 end;
 
+procedure TParser2.StepAnonHead(var AScan: TAnonHeadScan;
+  var ANestDepth: Integer);
+// Ein Kopf oeffnet sich an 'procedure'/'function', wenn
+//   * davor ':=', '(' oder ',' steht - die anonyme Methode selbst
+//     (FLastConsumed ist hier das Token VOR dem Schluesselwort), oder
+//   * dahinter ein Bezeichner folgt - eine benannte lokale Routine im
+//     Deklarationsteil der anonymen Methode; sie bringt ihr eigenes begin.
+// Prozedurtypen ('F: procedure(X: Integer);', '= procedure of object',
+// 'reference to function') oeffnen nichts. Der Lexer hat nur 1-Token-Peek,
+// darum faellt die Entscheidung einen Schritt spaeter (KwPending).
+// Das erste 'begin' bei offenem Kopf gehoert ihm und schliesst ihn; die
+// Tiefe dafuer zaehlt der Aufrufer wie bisher.
+// Grenzen (Korpus je 0 Stellen): eine forward-Deklaration im Kopf oder ein
+// varianter record ('case .. of' ohne eigenes 'end') lassen den Scan bis
+// zum naechsten 'end' auf Tiefe 0 laufen.
+begin
+  if AScan.KwPending then
+  begin
+    AScan.KwPending := False;
+    if (Tok.Kind = tkIdent) or
+       (AScan.KwPrev in [tkAssign, tkLParen, tkComma]) then
+      Inc(AScan.Heads);
+  end;
+  case Tok.Kind of
+    tkKwProcedure, tkKwFunction:
+      begin
+        AScan.KwPending := True;
+        AScan.KwPrev    := FLastConsumed;
+      end;
+    tkKwBegin:
+      if AScan.Heads > 0 then Dec(AScan.Heads);
+    tkKwRecord:
+      if AScan.Heads > 0 then Inc(ANestDepth);
+  else
+    ;   // jedes andere Token aendert den Kopf-Zustand nicht
+  end;
+end;
+
+function TParser2.RhsStopsAt(ANestDepth: Integer;
+  const AScan: TAnonHeadScan): Boolean;
+// Dieselben Abbruch-Token wie vor P2, nur ';' wartet auf das 'begin' eines
+// offenen Kopfs. Die Token aendern die Tiefe nicht - die Pruefung vor dem
+// case ist darum gleichwertig zur frueheren im case.
+begin
+  Result := False;
+  if ANestDepth > 0 then Exit;
+  case Tok.Kind of
+    tkSemicolon:
+      Result := AScan.Heads = 0;
+    tkKwElse, tkKwUntil, tkKwExcept, tkKwFinally, tkEof:
+      Result := True;
+  else
+    ;   // jedes andere Token setzt den Scan fort
+  end;
+end;
+
 function TParser2.ScanInlineInitializer: string;
 var
   NestDepth : Integer;
+  Anon      : TAnonHeadScan;
 begin
   Result := '';
   NestDepth := 0;
+  Anon := Default(TAnonHeadScan);
   while not FLex.AtEnd do
   begin
+    StepAnonHead(Anon, NestDepth);   // P2: 'var X := procedure var ..'
+    if RhsStopsAt(NestDepth, Anon) then Break;
     case Tok.Kind of
       // [8] (Core-Audit 2026-07-17): case/try/asm oeffnen einen mit 'end'
       // schliessenden Block und muessen wie 'begin' die Tiefe erhoehen -
@@ -3561,9 +3640,8 @@ begin
       tkRParen, tkRBracket            : if NestDepth > 0 then Dec(NestDepth);
       tkKwEnd:
         if NestDepth > 0 then Dec(NestDepth) else Break;
-      tkSemicolon, tkKwElse, tkKwUntil,
-      tkKwExcept, tkKwFinally, tkEof:
-        if NestDepth = 0 then Break;
+    else
+      ;   // ';' else until except finally: RhsStopsAt oben
     end;
     if Tok.Kind = tkStrLit then
       JoinTokInto(Result, QuoteStrLit(Tok.Value))
@@ -3754,8 +3832,19 @@ begin
     // Wichtig: '+'-Verkettungen, Klammern und Zeichenketten vollstaendig mitladen.
     var FullRHS := '';
     var NestDepth := 0;
+    // P2 (Paket 9015): Kopf einer anonymen Methode mit var-/const-/type-
+    // Sektion. Bis dahin endete der Scan am ';' der Sektion, der Rumpf lief
+    // als Anweisungen DIESER Methode weiter (var-Zeilen als Label-Phantome).
+    // Jetzt bleibt er RHS-Text wie bei jeder anonymen Methode ohne Sektion.
+    var Anon := Default(TAnonHeadScan);
     while not FLex.AtEnd do
     begin
+      StepAnonHead(Anon, NestDepth);
+      // RHS endet an ';' (nicht bei offenem Kopf einer anonymen Methode, P2)
+      // und an else/until/except/finally - eine Zuweisung im THEN-Zweig hat
+      // keinen ';' vor dem else, sonst wuerde der else-Zweig verschluckt und
+      // das end;-Zaehlen geht schief. Alles nur auf Tiefe 0.
+      if RhsStopsAt(NestDepth, Anon) then Break;
       case Tok.Kind of
         // [8] (Core-Audit 2026-07-17): case/try/asm oeffnen einen mit 'end'
         // schliessenden Block - wie 'begin' Tiefe erhoehen, sonst bricht der
@@ -3769,12 +3858,8 @@ begin
         // oberster Ebene.
         tkKwEnd:
           if NestDepth > 0 then Dec(NestDepth) else Break;
-        // RHS endet auch an else/until/except/finally - eine Zuweisung im
-        // THEN-Zweig hat keinen ';' vor dem else, sonst wuerde der else-Zweig
-        // verschluckt und das end;-Zaehlen geht schief.
-        tkSemicolon, tkKwElse, tkKwUntil,
-        tkKwExcept, tkKwFinally, tkEof:
-          if NestDepth = 0 then Break;
+      else
+        ;   // Abbruch-Token: RhsStopsAt oben
       end;
       if Tok.Kind = tkStrLit then
         JoinTokInto(FullRHS, QuoteStrLit(Tok.Value))
