@@ -45,7 +45,6 @@ uses
   Vcl.Themes,          // TStyleManager - Hell/Dunkel der Standalone-EXE
   Vcl.Styles,          // registriert die gelinkten VCL-Styles
   System.SysUtils,
-  MainController in 'sources\MainController.pas',
   uMainForm in 'sources\UI\uMainForm.pas' {Form2},
   uDfmTextViewer in 'sources\UI\uDfmTextViewer.pas',
   uConsoleRunner in 'sources\Console\uConsoleRunner.pas',
