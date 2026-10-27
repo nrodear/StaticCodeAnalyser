@@ -17,9 +17,14 @@ type
   // Zustand der RHS-Scanner fuer Koepfe anonymer Methoden (Parser-Charge
   // P2, 2026-10-27) - s. TParser2.StepAnonHead.
   TAnonHeadScan = record
-    Heads     : Integer;     // offene Koepfe, deren 'begin' noch fehlt
+    // Stapel der offenen Koepfe (deren 'begin' noch fehlt): je Kopf die
+    // Schachtelungstiefe des Scanners an seinem procedure/function. Nur
+    // ein 'begin' auf GENAU dieser Tiefe schliesst ihn (Review P2, M1).
+    Depths    : TArray<Integer>;
+    Count     : Integer;
     KwPending : Boolean;     // das letzte Token war procedure/function
     KwPrev    : TTokenKind;  // das Token VOR diesem procedure/function
+    KwDepth   : Integer;     // Tiefe an diesem procedure/function
   end;
 
   TParser2 = class
@@ -233,9 +238,9 @@ type
     function ArgScanContinues(var ABlockDepth: Integer): Boolean;
     // RHS-Scanner (ParseCallOrAssign, ScanInlineInitializer): fuehrt die
     // offenen Koepfe anonymer Methoden mit, BEVOR das aktuelle Token
-    // ausgewertet wird. Solange AScan.Heads > 0 ist, beendet ein ';' auf
-    // Tiefe 0 den Scan nicht (var-/const-/type-Sektion im Kopf). 'record'
-    // im Kopf erhoeht ANestDepth (sein 'end' senkt sie wieder).
+    // ausgewertet wird. Solange ein auf Tiefe 0 geoeffneter Kopf offen ist,
+    // beendet ein ';' auf Tiefe 0 den Scan nicht (var-/const-/type-Sektion
+    // im Kopf). 'record' im Kopf erhoeht ANestDepth (sein 'end' senkt sie).
     procedure StepAnonHead(var AScan: TAnonHeadScan; var ANestDepth: Integer);
     // Abbruch der beiden RHS-Scanner auf Tiefe 0: ';' (nur ohne offenen
     // Kopf einer anonymen Methode), else, until, except, finally, Dateiende.
@@ -3576,29 +3581,44 @@ procedure TParser2.StepAnonHead(var AScan: TAnonHeadScan;
 // Prozedurtypen ('F: procedure(X: Integer);', '= procedure of object',
 // 'reference to function') oeffnen nichts. Der Lexer hat nur 1-Token-Peek,
 // darum faellt die Entscheidung einen Schritt spaeter (KwPending).
-// Das erste 'begin' bei offenem Kopf gehoert ihm und schliesst ihn; die
-// Tiefe dafuer zaehlt der Aufrufer wie bisher.
-// Grenzen (Korpus je 0 Stellen): eine forward-Deklaration im Kopf oder ein
-// varianter record ('case .. of' ohne eigenes 'end') lassen den Scan bis
-// zum naechsten 'end' auf Tiefe 0 laufen.
+// Jeder Kopf merkt sich die Tiefe an seinem Schluesselwort. Ein 'begin'
+// (oder 'forward' einer lokalen Routine) schliesst den obersten Kopf nur
+// auf GENAU dieser Tiefe - ein inneres 'begin' im Rumpf einer lokalen
+// Routine (Tiefe + 1) gehoert ihr, nicht dem Kopf (Review P2, M1). Ist der
+// Scanner unter die Tiefe eines Kopfs zurueckgefallen (dessen Klammer bzw.
+// Block ist zu), kann der Kopf kein 'begin' mehr bekommen und faellt weg -
+// ein Kopf in einer Klammer ohne 'begin' haelt das ';' auf Tiefe 0 also
+// nicht mehr auf (Review P2, m1). Die Tiefe selbst zaehlt der Aufrufer.
+// Grenze (Korpus 0 Stellen): ein varianter record ('case .. of' ohne
+// eigenes 'end') im Kopf zaehlt eine Tiefe zu viel.
 begin
+  while (AScan.Count > 0) and (AScan.Depths[AScan.Count - 1] > ANestDepth) do
+    Dec(AScan.Count);
   if AScan.KwPending then
   begin
     AScan.KwPending := False;
     if (Tok.Kind = tkIdent) or
        (AScan.KwPrev in [tkAssign, tkLParen, tkComma]) then
-      Inc(AScan.Heads);
+    begin
+      if AScan.Count >= Length(AScan.Depths) then
+        SetLength(AScan.Depths, AScan.Count + 4);
+      AScan.Depths[AScan.Count] := AScan.KwDepth;
+      Inc(AScan.Count);
+    end;
   end;
   case Tok.Kind of
     tkKwProcedure, tkKwFunction:
       begin
         AScan.KwPending := True;
         AScan.KwPrev    := FLastConsumed;
+        AScan.KwDepth   := ANestDepth;
       end;
-    tkKwBegin:
-      if AScan.Heads > 0 then Dec(AScan.Heads);
+    tkKwBegin, tkKwForward:
+      if (AScan.Count > 0) and
+         (AScan.Depths[AScan.Count - 1] = ANestDepth) then
+        Dec(AScan.Count);
     tkKwRecord:
-      if AScan.Heads > 0 then Inc(ANestDepth);
+      if AScan.Count > 0 then Inc(ANestDepth);
   else
     ;   // jedes andere Token aendert den Kopf-Zustand nicht
   end;
@@ -3608,13 +3628,15 @@ function TParser2.RhsStopsAt(ANestDepth: Integer;
   const AScan: TAnonHeadScan): Boolean;
 // Dieselben Abbruch-Token wie vor P2, nur ';' wartet auf das 'begin' eines
 // offenen Kopfs. Die Token aendern die Tiefe nicht - die Pruefung vor dem
-// case ist darum gleichwertig zur frueheren im case.
+// case ist darum gleichwertig zur frueheren im case. Auf Tiefe 0 hat
+// StepAnonHead alle tieferen Koepfe schon verworfen: Count > 0 heisst
+// 'ein Kopf auf Tiefe 0 ist offen'.
 begin
   Result := False;
   if ANestDepth > 0 then Exit;
   case Tok.Kind of
     tkSemicolon:
-      Result := AScan.Heads = 0;
+      Result := AScan.Count = 0;
     tkKwElse, tkKwUntil, tkKwExcept, tkKwFinally, tkEof:
       Result := True;
   else

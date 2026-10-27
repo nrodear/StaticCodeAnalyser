@@ -47,6 +47,8 @@ type
     [Test] procedure AnonVarSection_InlineVarInitializer;
     [Test] procedure AnonVarSection_LocalRoutineAndProcTypeInHead;
     [Test] procedure AnonVarSection_FormatMismatchAtAssignment;
+    [Test] procedure AnonHead_LocalRoutineWithInnerBegin;
+    [Test] procedure AnonHead_InArgumentWithForward_DoesNotSwallow;
     // P3 - einheitliche Literal-Ablage (TokSourceText)
     [Test] procedure Literal_ExitArgumentInSourceForm;
     [Test] procedure Literal_ForHeaderAndRaiseAtInSourceForm;
@@ -744,6 +746,82 @@ begin
     Assert.IsNull(AssignNamed(Root, 'Result'), 'kein Result := .. in P');
     Assert.IsNull(AssignNamed(Root, 'F'), 'kein F := nil in P');
     Assert.IsNotNull(NodeNamed(Root, nkCall, 'After'));
+  finally
+    Root.Free;
+  end;
+end;
+
+procedure TTestParserChargeP.AnonHead_LocalRoutineWithInnerBegin;
+// Review P2, M1: das innere 'begin' im Rumpf der lokalen Routine Twice
+// (Tiefe 1) schloss im ersten Wurf den Kopf der anonymen Methode - das ';'
+// hinter Twice' 'end' beendete dann den Scan, der Rumpf fiel wieder in P.
+// Jetzt schliesst nur ein 'begin' auf der Tiefe des Kopfs.
+const
+  SRC =
+    'unit c; interface implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var Q: TFunc<Integer, Integer>;'#13#10 +
+    'begin'#13#10 +
+    '  Q := function(A: Integer): Integer'#13#10 +
+    '    function Twice(B: Integer): Integer;'#13#10 +
+    '    begin'#13#10 +
+    '      if B > 0 then'#13#10 +
+    '      begin'#13#10 +
+    '        Result := 2 * B;'#13#10 +
+    '      end;'#13#10 +
+    '    end;'#13#10 +
+    '    begin'#13#10 +
+    '      Result := Twice(A);'#13#10 +
+    '    end;'#13#10 +
+    '  After;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  Root : TAstNode;
+  Q    : TAstNode;
+begin
+  Root := Parse(SRC);
+  try
+    Q := AssignNamed(Root, 'Q');
+    Assert.IsNotNull(Q);
+    Assert.IsTrue(Pos('Twice(A)', Q.TypeRef) > 0, 'Rumpf in der RHS: ' + Q.TypeRef);
+    Assert.IsNull(AssignNamed(Root, 'Result'), 'kein Result := .. in P');
+    Assert.IsNotNull(NodeNamed(Root, nkCall, 'After'));
+  finally
+    Root.Free;
+  end;
+end;
+
+procedure TTestParserChargeP.AnonHead_InArgumentWithForward_DoesNotSwallow;
+// Review P2, m1: ein Kopf, der in einer Klammer aufgeht und kein eigenes
+// 'begin' bekommt (lokale forward-Deklaration), hielt im ersten Wurf das
+// ';' auf Tiefe 0 auf - die Zuweisung frass 'After;' (Rueckschritt
+// gegenueber vor P2). Jetzt schliesst 'forward' den Kopf, und Koepfe aus
+// einer geschlossenen Klammer fallen weg.
+const
+  SRC =
+    'unit g; interface implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'begin'#13#10 +
+    '  X := Run(procedure'#13#10 +
+    '    procedure L; forward;'#13#10 +
+    '    procedure L; begin end;'#13#10 +
+    '    begin'#13#10 +
+    '      L;'#13#10 +
+    '    end);'#13#10 +
+    '  After;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  Root : TAstNode;
+  X    : TAstNode;
+begin
+  Root := Parse(SRC);
+  try
+    X := AssignNamed(Root, 'X');
+    Assert.IsNotNull(X);
+    Assert.IsTrue(Pos('After', X.TypeRef) = 0, 'After gehoert nicht zur RHS: ' + X.TypeRef);
+    Assert.IsNotNull(NodeNamed(Root, nkCall, 'After'), 'After ist eine Anweisung von P');
   finally
     Root.Free;
   end;

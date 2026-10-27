@@ -90,7 +90,7 @@ type
     [Test] procedure WhileNilTestOfOtherField_StillReported;   // Gegenprobe
     [Test] procedure AnonMethodVarLocal_NotReported;
     [Test] procedure AnonMethodConstParam_NotReported;
-    [Test] procedure AnonMethodVarParam_BodyIsRhsText_NotReported;   // seit P2
+    [Test] procedure AnonMethodVarParam_BodyIsRhsText_KnownLimit;   // FN, seit P2
     [Test] procedure FieldFreedAfterAnonMethodEnds_StillReported;   // Gegenprobe
     [Test] procedure PlainFieldFree_FileHarness_Reported;
   end;
@@ -1658,13 +1658,16 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFreeWithoutNilU12.AnonMethodVarParam_BodyIsRhsText_NotReported;
+procedure TTestFreeWithoutNilU12.AnonMethodVarParam_BodyIsRhsText_KnownLimit;
 // Bis P2 die Gegenprobe des U12-A-Gates (var-Parameter = Variable des
 // Aufrufers, Befund blieb). Seit der Parser-Charge P2 ist der Rumpf einer
 // anonymen Methode mit var-Sektion RHS-Text - wie der jeder anonymen
 // Methode ohne Sektion schon immer; AList.Free ist fuer SCA139 keine
 // Anweisung mehr (bekannte Grenze: anonyme Methoden haben keinen eigenen
 // Knoten, Paket 9015). Exe 8c3eac8f: 1 Fund (ROT ohne P2).
+// BEKANNTE GRENZE, kein Wunschverhalten: der Test pinnt einen FN - AList
+// ist die Variable des Aufrufers, nach dem Free haengt sie. Bekommen
+// anonyme Methoden eigene Knoten, kippt er auf 1 (dann bewusst anpassen).
 const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +
