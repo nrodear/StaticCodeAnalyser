@@ -701,7 +701,15 @@ mehrzeiligem String, OpenTail hinter do) werden rot. FPC-Mikroprobe
 ihr Original ueber alle Belegungen (A/B/C als Funktionen mit Spur: Zweig UND
 Aufruf-Reihenfolge; Integer, Double mit NaN, Mengen, nil) gleich; die
 Gegenproben `not X = 0`, else-if ohne Block, De Morgan ohne Klammer und
-Teilen unter `{$B+}` erkennt sie als verschieden.
+Teilen unter `{$B+}` erkennt sie als verschieden. Korpus-Probe (2026-10-27,
+`D:\git-sca-realworld`, 400 zufaellige .pas, Caret auf jedes `if`, `then`,
+`and`, `or`, `not`, `<`, `=`, `>=` einer Zeile, FPC-Harness mit `-Cr -Co`
+gegen `TRdxContextRunner.Run`): 57.423 Laeufe, 0 Ausnahmen, jede
+Ersetzung besteht `PlanByteEdits` (Expected = Puffer); haeufigste Sperren:
+else-if-Kette (Umkehren), else am inneren/aeusseren if (Zusammenfuegen),
+Direktive in der Anweisung, Typumwandlung als Aufruf (Drehen). Stichprobe
+je Art von Hand: bedeutungsgleich, auch in case-Zweigen und mit dangling
+else hinter dem inneren if.
 
 **Korpus-Probe (Charge B3, `D:\git-sca-realworld`, 13.446 .pas, je 3.000
 zufaellige Stellen, FPC-Harness gegen `TRdxContextRunner.Run`):**
