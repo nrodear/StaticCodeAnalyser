@@ -41,6 +41,9 @@ type
     // ---- 2026-10-28: UpdateFile meldet, ob das Schreiben gelang ----
     [Test] procedure UpdateFile_ReadOnlyFile_ReportsFailure;
     [Test] procedure UpdateFile_UnchangedValue_ReportsSuccess;
+    // ---- 2026-10-28: die frueheren TIniFile-Schreiber ----
+    [Test] procedure UiTheme_Write_KeepsCommentsAndExample;
+    [Test] procedure EditorDfmTarget_Write_KeepsCommentsAndExample;
     // ---- J1 (2026-09-20): Default der Overlay-Position ----
     [Test] procedure OverlayPosition_DefaultIsBelow;
   end;
@@ -48,7 +51,8 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Classes, System.IOUtils, uRepoSettings;
+  System.SysUtils, System.Classes, System.IOUtils, uRepoSettings,
+  uEditorCommand;   // TEditorCommand - Abschnitt/Schluessel/Wert wie PersistDfmTarget
 
 const
   // Ausschnitt im Stil der echten analyser.ini: Erklaerblock, Wert,
@@ -74,6 +78,17 @@ const
   // falsche Antwort.
   KEY_LANG = 'Language';
   CLIP_SET = 'ClipboardOnClick=2';
+  // [Editor]-Ausschnitt im Stil der Vorlage (DEFAULT_INI_CONTENT).
+  EDITOR_SAMPLE =
+    '[Editor]'#13#10 +
+    '; DfmTarget (string, default: ide)'#13#10 +
+    ';   ide    = Delphi IDE'#13#10 +
+    ';   viewer = built-in text viewer'#13#10 +
+    'DfmTarget=ide'#13#10 +
+    ';DfmTarget=viewer'#13#10 +
+    ''#13#10 +
+    '[UI]'#13#10 +
+    'Language=de'#13#10;
 
 procedure TTestIniComments.Setup;
 begin
@@ -344,6 +359,69 @@ begin
     Ini.Free;
   end;
   Assert.IsTrue(Ok, 'unveraendert ist kein Fehlschlag');
+end;
+
+{ ---- 2026-10-28: die frueheren TIniFile-Schreiber ------------------ }
+// TAppTheme.PersistMode ([UI] Theme) und TForm2.PersistDfmTarget
+// ([Editor] DfmTarget) schrieben bis 2026-10-28 ueber TIniFile und
+// schreiben jetzt ueber TRepoSettings.QuickWriteStr. Beide Schreiber
+// selbst sind hier nicht pruefbar: sie zielen auf die APPDATA-INI, die
+// kein Test anfasst, und PersistDfmTarget steckt in der Form. Geprueft
+// wird deshalb der Helfer, ueber den QuickWriteStr schreibt - mit genau
+// dem Abschnitt, Schluessel und Wert, den die beiden uebergeben.
+
+procedure TTestIniComments.UiTheme_Write_KeepsCommentsAndExample;
+var
+  Ini : TCommentPreservingIni;
+begin
+  Given(SAMPLE);
+  Ini := TCommentPreservingIni.Create(FPath);
+  try
+    Ini.WriteString('UI', 'Theme', 'dark');   // ModeToStr(atmDark)
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+  Assert.IsTrue(HasLine('; Theme (string, default: system)'),
+    'der Erklaerblock zu Theme bleibt stehen');
+  Assert.IsTrue(HasLine(';Theme=dark'),
+    'das auskommentierte Beispiel bleibt ein Kommentar');
+  Assert.IsTrue(HasLine('Theme=dark'), 'der Wert muss ankommen');
+  Assert.IsFalse(HasLine('Theme=system'), 'der alte Wert ist ersetzt');
+  Assert.IsTrue(HasLine('; Sprache der Oberflaeche.'),
+    'Kommentare anderer Schluessel in [UI] bleiben');
+end;
+
+procedure TTestIniComments.EditorDfmTarget_Write_KeepsCommentsAndExample;
+var
+  Ini : TCommentPreservingIni;
+  SL  : TStringList;
+begin
+  Given(EDITOR_SAMPLE);
+  Ini := TCommentPreservingIni.Create(FPath);
+  try
+    Ini.WriteString(TEditorCommand.INI_SECTION, TEditorCommand.KEY_DFMTARGET,
+      TEditorCommand.DfmTargetToStr(dtViewer));
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+  Assert.IsTrue(HasLine('; DfmTarget (string, default: ide)'),
+    'der Erklaerblock zu DfmTarget bleibt stehen');
+  Assert.IsTrue(HasLine(';   viewer = built-in text viewer'));
+  Assert.IsTrue(HasLine(';DfmTarget=viewer'),
+    'das auskommentierte Beispiel bleibt ein Kommentar');
+  Assert.IsFalse(HasLine('DfmTarget=ide'), 'der alte Wert ist ersetzt');
+  SL := TStringList.Create;
+  try
+    SL.Text := Content;
+    Assert.IsTrue(SL.IndexOf('DfmTarget=viewer') > SL.IndexOf('[Editor]'),
+      'der Wert steht in [Editor]');
+    Assert.IsTrue(SL.IndexOf('DfmTarget=viewer') < SL.IndexOf('[UI]'),
+      'und nicht in der folgenden Sektion');
+  finally
+    SL.Free;
+  end;
 end;
 
 { ---- J1 (2026-09-20): Default der Overlay-Position ---------------- }

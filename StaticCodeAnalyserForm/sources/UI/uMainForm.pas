@@ -390,7 +390,7 @@ implementation
 
 uses
   clipbrd,
-  System.IniFiles,                // TIniFile (PersistDfmTarget - kommentarschonend)
+  System.IniFiles,                // TIniFile (Fenster-Layout in der Recent-INI, nicht analyser.ini)
   // uBaseline ist in interface uses (TBaselineSet-Feld) - hier nicht mehr
   // listen, sonst E2004 Bezeichner redeklariert.
   uSourceLineEdit,                // Suppress schreibt in die Datei
@@ -3554,49 +3554,52 @@ begin
 end;
 
 procedure TForm2.PersistDfmTarget(AValue: TDfmTarget);
-// Ueber TIniFile schreiben, NICHT ueber TRepoSettings.Save: dessen
-// TMemIniFile schreibt die Datei komplett neu und wirft dabei saemtliche
-// Kommentare weg - und die Kommentare SIND hier die Dokumentation.
-// Dieselbe Entscheidung wie beim Theme (uAppTheme.PersistMode).
+// Ueber den Einzelschluessel-Schreiber TRepoSettings.QuickWriteStr
+// (TCommentPreservingIni), NICHT ueber TRepoSettings.Save: Save schreibt
+// das ganze bekannte Modell. Und nicht mehr ueber TIniFile (bis
+// 2026-10-28): die Profil-API liest die als UTF-8+BOM angelegte Datei als
+// ANSI und ist im Projekt ausgeschlossen (Begruendung an
+// TCommentPreservingIni) - alle anderen analyser.ini-Schreiber gehen
+// den kommentarerhaltenden Weg. Dieselbe Entscheidung wie beim Theme
+// (uAppTheme.PersistMode).
 var
-  Ini      : TIniFile;
   Settings : TRepoSettings;
+  Saved    : Boolean;
 begin
   // Unveraendert? Dann nichts anfassen. Ein Klick auf das bereits aktive
-  // Radio-Item schrieb sonst trotzdem - und zwar VOR dem EnsureSection-
-  // Nachtrag unten haette WritePrivateProfileString bei Alt-INIs ein
-  // nacktes [Editor] ans Dateiende gelegt.
+  // Radio-Item schrieb sonst trotzdem - bei einer Alt-INI samt
+  // EnsureSection-Nachtrag, den niemand angefordert hat.
   if TEditorCommand.Load.DfmTarget = AValue then Exit;
 
   try
-    // Erst dafuer sorgen, dass Verzeichnis UND Datei da sind. Ohne das
-    // wirft TIniFile.Create/WriteString beim allerersten Start
-    // (%APPDATA%\StaticCodeAnalyser\ existiert noch nicht), der leere
-    // except unten schluckt es, und der Menuepunkt springt sichtbar
-    // zurueck, ohne dass jemand erfaehrt warum.
+    // Erst dafuer sorgen, dass Verzeichnis UND Datei da sind. QuickWriteStr
+    // legt keine Datei an (False bei fehlender ini) - beim allerersten
+    // Start (%APPDATA%\StaticCodeAnalyser\ existiert noch nicht) ginge die
+    // Wahl sonst verloren.
     Settings := TRepoSettings.Create;
     try
       Settings.EnsureConfigExists;
     finally
       Settings.Free;
     end;
-    // Und den DOKUMENTIERTEN [Editor]-Block nachtragen, BEVOR die
-    // Profil-API schreibt. Andersherum legte WritePrivateProfileString
-    // bei einer Alt-INI ein nacktes '[Editor]' mit nur der einen Zeile
-    // an - und EnsureSection, das nur die Kopfzeile prueft, haengt den
-    // erklaerten Block danach nie mehr an. 'Configure external
-    // editor...' zeigte dann genau die unkommentierte Datei, die das
-    // Feature verhindern sollte.
+    // Und den DOKUMENTIERTEN [Editor]-Block nachtragen, BEVOR der Wert
+    // geschrieben wird. Andersherum legte der Schreiber bei einer Alt-INI
+    // ein nacktes '[Editor]' mit nur der einen Zeile an - und
+    // EnsureSection, das nur die Kopfzeile prueft, haengt den erklaerten
+    // Block danach nie mehr an. 'Configure external editor...' zeigte
+    // dann genau die unkommentierte Datei, die das Feature verhindern
+    // sollte.
     TRepoSettings.EnsureSection(TEditorCommand.INI_SECTION);
-    Ini := TIniFile.Create(TRepoSettings.ResolvedConfigPath);
-    try
-      Ini.WriteString(TEditorCommand.INI_SECTION,
-                      TEditorCommand.KEY_DFMTARGET,
-                      TEditorCommand.DfmTargetToStr(AValue));
-    finally
-      Ini.Free;
-    end;
+    Saved := TRepoSettings.QuickWriteStr(TEditorCommand.INI_SECTION,
+               TEditorCommand.KEY_DFMTARGET,
+               TEditorCommand.DfmTargetToStr(AValue));
   except
+    // TRepoSettings.Create/EnsureConfigExists koennen werfen;
+    // QuickWriteStr selbst wirft nie.
+    Saved := False;
+  end;
+  if not Saved then
+  begin
     // Ehrlich melden statt still verwerfen: es gibt KEINEN
     // Sitzungszustand fuer diese Wahl - Menue und Doppelklick lesen die
     // INI jedes Mal neu. Eine schreibgeschuetzte Datei heisst also

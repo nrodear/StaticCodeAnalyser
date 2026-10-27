@@ -107,8 +107,12 @@ type
   ///   Sektion, die es noch nicht gibt, ans Dateiende.
   ///
   ///   Bewusst NICHT unterstuetzt: Loeschen von Schluesseln und Sektionen.
-  ///   Der einzige Aufrufer (TRepoSettings.Save) schreibt eine feste Liste
-  ///   von Schluesseln und loescht nie.
+  ///   Kein Aufrufer loescht: TRepoSettings.Save schreibt eine feste Liste
+  ///   von Schluesseln, TRepoSettings.QuickWriteStr genau einen (dahinter
+  ///   [Scan] Dialect, [Editor] DfmTarget, [UI] Theme), dazu die
+  ///   Sonar-Token- und Sonar-Optionen-Schreiber und das Properties-Panel
+  ///   des IDE-Plugins. Jeder analyser.ini-Schreiber geht ueber diese
+  ///   Klasse - TIniFile/TMemIniFile schreiben die Datei nicht.
   /// </remarks>
   /// <summary>
   ///   Wo in der Datei ein Schluessel steht - bzw. wo er hingehoerte.
@@ -576,10 +580,12 @@ implementation
 
 // noinspection-file BeginEndRequired, CanBeClassMethod, CanBeStrictPrivate, CaseStatementSize, ClassPerFile, CyclomaticComplexity, DuplicateString, EmptyExcept, ExceptOnException, FreeWithoutNil, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, NestedRoutine, NestedTry, PublicMemberWithoutDoc, TooLongLine, UnsortedUses, UnusedPublicMember
 // ClassPerFile (2026-08-21): TCommentPreservingIni steht bewusst hier und
-// nicht in einer eigenen Unit. Sie hat genau einen Aufrufer - TRepoSettings.Save
-// -, existiert nur wegen dessen Kommentarproblem, und eine eigene Unit haette
-// Eintraege in vier Projektdateien verlangt (Engine- und Plugin-dpk/dproj).
-// Wird sie je woanders gebraucht, ist das Herausziehen der richtige Moment.
+// nicht in einer eigenen Unit. Entstanden ist sie fuer TRepoSettings.Save;
+// inzwischen schreiben auch QuickWriteStr, uSonarConfig, uIDESonarOptions
+// und uIDEFindingsPropertiesForm darueber (Liste an der Deklaration) - alle
+// binden uRepoSettings ohnehin ein. Eine eigene Unit haette Eintraege in
+// vier Projektdateien verlangt (Engine- und Plugin-dpk/dproj) und braechte
+// den Aufrufern nichts.
 // Destructor-Pattern: Free im Destruktor ohne nil-out (Object wird sofort
 // danach freigegeben).
 

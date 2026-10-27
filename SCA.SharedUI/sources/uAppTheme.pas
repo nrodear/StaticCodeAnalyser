@@ -172,12 +172,12 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Win.Registry, System.IniFiles,
+  System.SysUtils, System.Win.Registry,
   Winapi.Windows,
   Vcl.Forms,      // TCustomForm - Titelzeile nur fuer echte Fenster
   Vcl.Styles,
   uWindowFrame,   // ApplyTitleBarTheme - die Titelzeile folgt nur DWM
-  uRepoSettings;
+  uRepoSettings;  // QuickReadStr/QuickWriteStr [UI] Theme, EnsureConfigExists
 
 const
   // Der native Windows-Stil. Bewusst NICHT 'Windows10': ohne gesetzten
@@ -500,23 +500,35 @@ begin
 end;
 
 class procedure TAppTheme.PersistMode(AMode: TAppThemeMode);
+// Ueber den Einzelschluessel-Schreiber TRepoSettings.QuickWriteStr
+// (TCommentPreservingIni) wie jeder andere analyser.ini-Schreiber. Bis
+// 2026-10-28 stand hier TIniFile: die Profil-API liest die als UTF-8+BOM
+// angelegte Datei als ANSI und ist im Projekt ausgeschlossen (Begruendung
+// an TCommentPreservingIni), und bei fehlender Datei legte sie eine
+// nackte ini mit nur [UI] Theme an - EnsureConfigExists schrieb die
+// dokumentierte Vorlage danach nie mehr.
 var
-  Ini : TIniFile;
+  Settings : TRepoSettings;
 begin
   // Die Verschachtelung ist hier die richtige Form, nicht ein Versehen:
-  // das innere try/finally gehoert der RESSOURCE (TIniFile muss auch bei
-  // einem Schreibfehler freigegeben werden), das aeussere try/except der
+  // das innere try/finally gehoert der RESSOURCE (Settings muss auch bei
+  // einem Fehler freigegeben werden), das aeussere try/except der
   // POLITIK (ein nicht schreibbares Ziel darf die Umschaltung nicht
   // verhindern - die Wahl gilt dann nur fuer diese Sitzung). Beides in
   // einen Block zu ziehen hiesse, eines von beidem aufzugeben.
   try
-    Ini := TIniFile.Create(TRepoSettings.ResolvedConfigPath);
+    // Erst Verzeichnis und Datei (mit Vorlage) sicherstellen:
+    // QuickWriteStr legt keine Datei an.
+    Settings := TRepoSettings.Create;
     // noinspection NestedTry
     try
-      Ini.WriteString(INI_SECTION, INI_KEY, ModeToStr(AMode));
+      Settings.EnsureConfigExists;
     finally
-      Ini.Free;
+      Settings.Free;
     end;
+    // Ergebnis bewusst verworfen: False heisst "nicht schreibbar", und
+    // genau dann gilt die Wahl laut Deklaration nur fuer diese Sitzung.
+    TRepoSettings.QuickWriteStr(INI_SECTION, INI_KEY, ModeToStr(AMode));
   // noinspection EmptyExcept
   // BEWUSST leer: eine nicht schreibbare Konfiguration ist kein Fehler,
   // den diese Unit behandeln koennte oder muesste - die Wahl gilt dann

@@ -563,8 +563,10 @@ begin
   // Erklaerblock. TMemIniFile.UpdateFile schreibt die Datei aus seinem
   // Speichermodell neu und kennt darin keine Kommentare - ein einziges
   // Token-Speichern haette die ganze Dokumentation geloescht. Das
-  // Encoding-Argument von oben gilt unveraendert: UTF-8 ohne BOM, jetzt
-  // vom Schreiber fest gesetzt.
+  // Encoding-Argument von oben gilt unveraendert: ein Schreiber, fest
+  // UTF-8 - und zwar MIT BOM (TStrings.SaveToFile mit TEncoding.UTF8
+  // schreibt die Praeambel), genau wie EnsureConfigExists die Datei anlegt.
+  // Die Leser (TMemIniFile mit TEncoding.UTF8) erkennen die BOM.
   Ini := TCommentPreservingIni.Create(FileName);
   try
     Ini.WriteString('SonarTokens', TokenRef, Hex);
