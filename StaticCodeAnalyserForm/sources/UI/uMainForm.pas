@@ -9,7 +9,7 @@ uses
   System.Classes, Vcl.Graphics, System.Generics.Collections,
    Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Grids, Vcl.Menus,   // Vcl.Menus: TPopupMenu/TMenuItem (Hamburger-Felder)
-  uStaticAnalyzer2, uEngineApi,
+  uEngineApi,
   uMethodd12, uSCAConsts, uFixHint, uClaudePrompt, uFindingCopyText,
   uLocalization,
   uAnalyserTypes,  // SeverityFromKindLevel, TFindingSeverity (Grid-Renderer-Callback)
