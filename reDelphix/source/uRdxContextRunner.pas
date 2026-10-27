@@ -52,6 +52,8 @@ unit uRdxContextRunner;
 //                      Vergleichsoperator (uRdxCondFixes.FlipCompare).
 //   ckSplitIf          C8 if teilen: Caret auf einem obersten 'and' der
 //                      Bedingung (uRdxIfFixes.SplitIf).
+//   ckMergeIf          C8 if zusammenfuegen: Caret auf 'if'/'then' des
+//                      aeusseren if (uRdxIfFixes.MergeIf).
 //                      Alle sechs bedeutungsgleich (Annahmen in den Units:
 //                      'not' logisch, {$B-} fuer Teilen/Zusammenfuegen);
 //                      ein Kandidat entsteht nur am ausloesenden Token,
@@ -103,7 +105,8 @@ uses
 
 type
   TRdxContextKind = (ckIntroduceConst, ckTryFinallyCreate, ckConcatToFormat,
-    ckInvertIf, ckGuardClause, ckDeMorgan, ckFlipCompare, ckSplitIf);
+    ckInvertIf, ckGuardClause, ckDeMorgan, ckFlipCompare, ckSplitIf,
+    ckMergeIf);
 
   // Ein Eintrag am Caret.
   //   Kind     die Aktion
@@ -194,6 +197,7 @@ const
   CAP_DEMORGAN = 'Apply De Morgan to "%s"';
   CAP_FLIP = 'Swap the sides of "%s"';
   CAP_SPLIT_IF = 'Split the if at "and"';
+  CAP_MERGE_IF = 'Merge with the inner if (and)';
   R_INVERT_HINT = 'same meaning - the condition is negated once, then and '
     + 'else swap places';
   R_DEMORGAN_HINT = 'same meaning - the same terms in the same order, each '
@@ -566,6 +570,11 @@ begin
   if Ok then
     AddEdit(Edits, Edit);
   AddPlanned(AList, ckSplitIf, Ok, Why, '', _(R_ANDIF_HINT), Edits);
+  Edits := nil;
+  Ok := TRdxIfFixes.MergeIf(AMap, ALine, ACol, Edit, Why);
+  if Ok then
+    AddEdit(Edits, Edit);
+  AddPlanned(AList, ckMergeIf, Ok, Why, '', _(R_ANDIF_HINT), Edits);
 end;
 
 class function TRdxContextRunner.CaptionOf(
@@ -576,6 +585,7 @@ begin
     ckDeMorgan:    Result := _(CAP_DEMORGAN, [AOutcome.Name]);
     ckFlipCompare: Result := _(CAP_FLIP, [AOutcome.Name]);
     ckSplitIf:     Result := _(CAP_SPLIT_IF);
+    ckMergeIf:     Result := _(CAP_MERGE_IF);
   else
     Result := '';
   end;

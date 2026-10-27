@@ -96,6 +96,7 @@ type
     [Test] procedure Split_SingleLine;
     [Test] procedure Split_ThreeTerms;
     [Test] procedure Split_Comparisons;
+    [Test] procedure Split_MergeRoundTrip;
     [Test] procedure Split_Else_Refused;
     [Test] procedure Split_BoolEval_Refused;
     [Test] procedure Split_Comment_Refused;
@@ -103,10 +104,27 @@ type
   end;
 
   [TestFixture]
+  TTestRdxCtxMergeIf = class
+  public
+    [Test] procedure Merge_Simple;
+    [Test] procedure Merge_Block;
+    [Test] procedure Merge_BeginOnThenLine;
+    [Test] procedure Merge_Parentheses;
+    [Test] procedure Merge_AndChainSingleLine;
+    [Test] procedure Merge_CaretOnThen;
+    [Test] procedure Merge_OuterElse_Refused;
+    [Test] procedure Merge_InnerElse_Refused;
+    [Test] procedure Merge_BoolEval_Refused;
+    [Test] procedure Merge_Comment_Refused;
+    [Test] procedure Merge_NoCandidate_NoEntry;
+  end;
+
+  [TestFixture]
   TTestRdxCtxIfTexts = class
   public
     [Test] procedure Captions_German;
     [Test] procedure Hints_German;
+    [Test] procedure Order_DeMorganBeforeSplit;
   end;
 
 {$IFNDEF FPC}
@@ -766,6 +784,21 @@ begin
     '    Foo;']), ckSplitIf));
 end;
 
+// Teilen und wieder zusammenfuegen = das Original.
+procedure TTestRdxCtxSplitIf.Split_MergeRoundTrip;
+var
+  Src, Once : string;
+begin
+  Src := InProc(['  if Assigned(P) and P.Visible then', '  begin',
+    '    Paint(P);', '  end;']);
+  Once := FixedOnWord(Src, 'if Assigned', 'and', ckSplitIf);
+  Assert.AreEqual(InProc(['  if Assigned(P) then', '    if P.Visible then',
+    '    begin', '      Paint(P);', '    end;']), Once);
+  Assert.AreEqual(InProc(['  if Assigned(P) and P.Visible then', '  begin',
+    '    Paint(P);', '  end;']), FixedOnWord(Once, 'if Assigned', 'if',
+    ckMergeIf));
+end;
+
 procedure TTestRdxCtxSplitIf.Split_Else_Refused;
 begin
   AssertRefused(InProc(['  if A {^}and B then Foo else Bar;']), ckSplitIf,
@@ -795,6 +828,94 @@ begin
   AssertNone(InProc(['  while A {^}and B do Foo;']), ckSplitIf, 'while');
 end;
 
+{ ---- C8 if zusammenfuegen ---- }
+
+procedure TTestRdxCtxMergeIf.Merge_Simple;
+begin
+  Assert.AreEqual(InProc(['  if A and B then', '    Foo;']),
+    Fixed(InProc(['  {^}if A then', '    if B then', '      Foo;']),
+    ckMergeIf));
+end;
+
+procedure TTestRdxCtxMergeIf.Merge_Block;
+begin
+  Assert.AreEqual(InProc(['  if A and B then', '    Foo;']),
+    Fixed(InProc(['  {^}if A then', '  begin', '    if B then', '      Foo;',
+    '  end;']), ckMergeIf));
+  Assert.AreEqual(InProc(['  if A and B then', '  begin', '    Foo;',
+    '    Bar;', '  end;']), Fixed(InProc(['  {^}if A then', '  begin',
+    '    if B then', '    begin', '      Foo;', '      Bar;', '    end;',
+    '  end;']), ckMergeIf));
+end;
+
+procedure TTestRdxCtxMergeIf.Merge_BeginOnThenLine;
+begin
+  Assert.AreEqual(InProc(['  if A and B then', '    Foo;']),
+    Fixed(InProc(['  {^}if A then begin', '    if B then', '      Foo;',
+    '  end;']), ckMergeIf));
+end;
+
+// Ein Glied, das kein Faktor ist, kommt in Klammern (or bindet schwaecher
+// als and, ein Vergleich schwaecher als beide).
+procedure TTestRdxCtxMergeIf.Merge_Parentheses;
+begin
+  Assert.AreEqual(InProc(['  if (A or B) and (X > 0) then', '    Foo;']),
+    Fixed(InProc(['  {^}if A or B then', '    if X > 0 then', '      Foo;']),
+    ckMergeIf));
+  Assert.AreEqual(InProc(['  if not A and Assigned(P) then', '    Foo;']),
+    Fixed(InProc(['  {^}if not A then', '    if Assigned(P) then',
+    '      Foo;']), ckMergeIf));
+end;
+
+procedure TTestRdxCtxMergeIf.Merge_AndChainSingleLine;
+begin
+  Assert.AreEqual(InProc(['  if A and B and C then Foo;']),
+    Fixed(InProc(['  {^}if A and B then if C then Foo;']), ckMergeIf));
+end;
+
+procedure TTestRdxCtxMergeIf.Merge_CaretOnThen;
+begin
+  Assert.AreEqual(InProc(['  if A and B then', '    Foo;']),
+    Fixed(InProc(['  if A th{^}en', '    if B then', '      Foo;']),
+    ckMergeIf));
+end;
+
+procedure TTestRdxCtxMergeIf.Merge_OuterElse_Refused;
+begin
+  AssertRefused(InProc(['  {^}if A then', '  begin', '    if B then Foo;',
+    '  end', '  else', '    Bar;']), ckMergeIf, _(R_IF_MERGE_OUTER_ELSE));
+end;
+
+// Ohne begin..end gehoert das else dem inneren if (dangling else).
+procedure TTestRdxCtxMergeIf.Merge_InnerElse_Refused;
+begin
+  AssertRefused(InProc(['  {^}if A then if B then Foo else Bar;']), ckMergeIf,
+    _(R_IF_MERGE_INNER_ELSE));
+end;
+
+procedure TTestRdxCtxMergeIf.Merge_BoolEval_Refused;
+begin
+  AssertRefused(UnitWith(['{$B+,R-}'], ['  {^}if A then', '    if B then Foo;']),
+    ckMergeIf, _(R_IF_BOOLEVAL, [2]));
+end;
+
+procedure TTestRdxCtxMergeIf.Merge_Comment_Refused;
+begin
+  AssertRefused(InProc(['  {^}if A then // erst', '    if B then', '      Foo;']),
+    ckMergeIf, _(R_IF_MERGE_COMMENT));
+  AssertRefused(InProc(['  {^}if A then', '  begin', '    if B then Foo; // b',
+    '  end;']), ckMergeIf, _(R_IF_MERGE_COMMENT));
+end;
+
+procedure TTestRdxCtxMergeIf.Merge_NoCandidate_NoEntry;
+begin
+  AssertNone(InProc(['  {^}if A then', '  begin', '    if B then Foo;',
+    '    Bar;', '  end;']), ckMergeIf, 'zwei Anweisungen im Block');
+  AssertNone(InProc(['  {^}if A then Foo;']), ckMergeIf, 'kein inneres if');
+  AssertNone(InProc(['  if A then', '    {^}if B then', '      Foo;']),
+    ckMergeIf, 'Caret auf dem inneren if');
+end;
+
 { ---- Texte und Reihenfolge ---- }
 
 function OutcomeOf(AKind: TRdxContextKind;
@@ -815,6 +936,8 @@ begin
     TRdxContextRunner.CaptionOf(OutcomeOf(ckFlipCompare, '<=')));
   Assert.AreEqual('if am "and" teilen',
     TRdxContextRunner.CaptionOf(OutcomeOf(ckSplitIf, '')));
+  Assert.IsTrue(Pos('Mit dem inneren if zusammenf',
+    TRdxContextRunner.CaptionOf(OutcomeOf(ckMergeIf, ''))) = 1);
   // Arten mit Fund-Hilfe: den Text baut uRdxFixTable.ContextCaption.
   Assert.AreEqual('', TRdxContextRunner.CaptionOf(OutcomeOf(ckGuardClause, '')));
   Assert.AreEqual('', TRdxContextRunner.CaptionOf(OutcomeOf(ckIntroduceConst,
@@ -837,6 +960,23 @@ begin
     + 'Kommentar)', _(R_IF_COND_UNREADABLE));
 end;
 
+// Mehrere Aktionen am selben Token: in der Reihenfolge von TRdxContextKind.
+procedure TTestRdxCtxIfTexts.Order_DeMorganBeforeSplit;
+var
+  All : TArray<TRdxContextOutcome>;
+  Src : string;
+begin
+  All := RunAt(InProc(['  if A {^}and B then Foo;']), Src);
+  Assert.AreEqual<Integer>(2, Length(All));
+  Assert.IsTrue(All[0].Kind = ckDeMorgan, 'De Morgan zuerst');
+  Assert.IsTrue(All[1].Kind = ckSplitIf, 'dann teilen');
+  All := RunAt(InProc(['  {^}if A then', '  begin', '    if B then Foo;',
+    '  end;']), Src);
+  Assert.AreEqual<Integer>(2, Length(All), 'Waechter-Klausel und zusammenfuegen');
+  Assert.IsTrue(All[0].Kind = ckGuardClause);
+  Assert.IsTrue(All[1].Kind = ckMergeIf);
+end;
+
 {$IFNDEF FPC}
 
 procedure TTestRdxCtxIfCaption.Caption_GuardLikeSca018;
@@ -855,7 +995,7 @@ var
   K : TRdxContextKind;
   O : TRdxContextOutcome;
 begin
-  for K in [ckInvertIf, ckDeMorgan, ckFlipCompare, ckSplitIf] do
+  for K in [ckInvertIf, ckDeMorgan, ckFlipCompare, ckSplitIf, ckMergeIf] do
   begin
     O := OutcomeOf(K, 'and');
     Assert.AreEqual(TRdxContextRunner.CaptionOf(O),
@@ -872,6 +1012,7 @@ initialization
   TDUnitX.RegisterTestFixture(TTestRdxCtxDeMorgan);
   TDUnitX.RegisterTestFixture(TTestRdxCtxFlip);
   TDUnitX.RegisterTestFixture(TTestRdxCtxSplitIf);
+  TDUnitX.RegisterTestFixture(TTestRdxCtxMergeIf);
   TDUnitX.RegisterTestFixture(TTestRdxCtxIfTexts);
   {$IFNDEF FPC}
   TDUnitX.RegisterTestFixture(TTestRdxCtxIfCaption);

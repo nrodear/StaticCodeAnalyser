@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6728 Zeilen, 303263 Bytes
-  CPoLines_de: array[0..6727] of string = (
+  // i18n\de.po - 6743 Zeilen, 303797 Bytes
+  CPoLines_de: array[0..6742] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6711,6 +6711,18 @@ const
     'msgid "line %d starts inside a block comment or multi-line string - indenting it would change it"',
     'msgstr "Zeile %d beginnt in einem Block-Kommentar oder mehrzeiligen String - Einr'#$00FC'cken '#$00E4'nderte ihn"',
     '',
+    'msgid "the outer if has an else"',
+    'msgstr "das '#$00E4'u'#$00DF'ere if hat ein else"',
+    '',
+    'msgid "the inner if has an else"',
+    'msgstr "das innere if hat ein else"',
+    '',
+    'msgid "comment between the two if heads or around begin/end - it would be lost"',
+    'msgstr "Kommentar zwischen den beiden if-K'#$00F6'pfen oder um begin/end - er ginge verloren"',
+    '',
+    'msgid "the end of the block does not stand first on its own line"',
+    'msgstr "das end des Blocks steht nicht als erstes auf seiner Zeile"',
+    '',
     'msgid "comment or directive in the expression - it would be lost"',
     'msgstr "Kommentar oder Direktive im Ausdruck - er ginge verloren"',
     '',
@@ -6731,6 +6743,9 @@ const
     '',
     'msgid "Split the if at \"and\""',
     'msgstr "if am \"and\" teilen"',
+    '',
+    'msgid "Merge with the inner if (and)"',
+    'msgstr "Mit dem inneren if zusammenf'#$00FC'gen (and)"',
     '',
     'msgid "same meaning - the condition is negated once, then and else swap places"',
     'msgstr "gleiche Bedeutung - die Bedingung wird einmal verneint, then und else tauschen die Pl'#$00E4'tze"',
@@ -7017,8 +7032,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6724 Zeilen, 315486 Bytes
-  CPoLines_fr: array[0..6723] of string = (
+  // i18n\fr.po - 6739 Zeilen, 316014 Bytes
+  CPoLines_fr: array[0..6738] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -13711,6 +13726,18 @@ const
     'msgid "line %d starts inside a block comment or multi-line string - indenting it would change it"',
     'msgstr "la ligne %d commence dans un commentaire de bloc ou une cha'#$00EE'ne multiligne - l''indenter la modifierait"',
     '',
+    'msgid "the outer if has an else"',
+    'msgstr "le if ext'#$00E9'rieur a un else"',
+    '',
+    'msgid "the inner if has an else"',
+    'msgstr "le if int'#$00E9'rieur a un else"',
+    '',
+    'msgid "comment between the two if heads or around begin/end - it would be lost"',
+    'msgstr "commentaire entre les deux t'#$00EA'tes if ou autour de begin/end - il serait perdu"',
+    '',
+    'msgid "the end of the block does not stand first on its own line"',
+    'msgstr "le end du bloc n''est pas le premier '#$00E9'l'#$00E9'ment de sa ligne"',
+    '',
     'msgid "comment or directive in the expression - it would be lost"',
     'msgstr "commentaire ou directive dans l''expression - il serait perdu"',
     '',
@@ -13731,6 +13758,9 @@ const
     '',
     'msgid "Split the if at \"and\""',
     'msgstr "Scinder le if au '#$00AB' and '#$00BB'"',
+    '',
+    'msgid "Merge with the inner if (and)"',
+    'msgstr "Fusionner avec le if int'#$00E9'rieur (and)"',
     '',
     'msgid "same meaning - the condition is negated once, then and else swap places"',
     'msgstr "m'#$00EA'me sens - la condition est ni'#$00E9'e une fois, then et else '#$00E9'changent leurs places"',

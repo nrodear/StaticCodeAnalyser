@@ -86,6 +86,12 @@ const
     + 'with it "A and B" always evaluates B';
   R_IF_INSIDE = 'line %d starts inside a block comment or multi-line '
     + 'string - indenting it would change it';
+  R_IF_MERGE_OUTER_ELSE = 'the outer if has an else';
+  R_IF_MERGE_INNER_ELSE = 'the inner if has an else';
+  R_IF_MERGE_COMMENT = 'comment between the two if heads or around '
+    + 'begin/end - it would be lost';
+  R_IF_MERGE_LAYOUT = 'the end of the block does not stand first on its '
+    + 'own line';
 
 type
   TRdxStmtKind = (skEmpty, skSimple, skIf, skBlock, skLoop, skOther);
@@ -127,6 +133,9 @@ type
       out AEdits: TArray<TRdxEdit>; out AReason: string): Boolean; static;
     // C8 if am 'and' am Caret teilen.
     class function SplitIf(AMap: TRdxCodeMap; ALine, ACol: Integer;
+      out AEdit: TRdxEdit; out AReason: string): Boolean; static;
+    // C8 das if am Caret mit dem inneren if zusammenfuegen.
+    class function MergeIf(AMap: TRdxCodeMap; ALine, ACol: Integer;
       out AEdit: TRdxEdit; out AReason: string): Boolean; static;
   end;
 
@@ -591,5 +600,191 @@ begin
   end;
 end;
 
+// Der Text einer Bedingung als Glied einer and-Kette: unveraendert, wenn
+// sie ein Faktor oder selbst eine and-Kette ist, sonst geklammert.
+function AndOperand(AMap: TRdxCodeMap; const AIf, AThen: TRdxToken): string;
+var
+  Expr : TRdxCondExpr;
+  F, L : TRdxExprTok;
+  Kind : TRdxExprKind;
+begin
+  Expr := TRdxCondExpr.Create(AMap);
+  try
+    if Expr.ParseRoot(CondRootOf(AIf, AThen)) then
+    begin
+      Result := Expr.Text(Expr.Root);
+      Kind := Expr.Node(Expr.Root).Kind;
+      if not ((Kind in [ekPrimary, ekParen, ekNot])
+              or Expr.IsChainOf(Expr.Root, 'and')) then
+        Result := '(' + Result + ')';
+    end
+    else
+    begin
+      F := Expr.Tok(0);
+      L := Expr.Tok(Expr.TokCount - 1);
+      Result := '(' + TextOf(AMap, F.Line, F.Col, L.Line, L.EndCol) + ')';
+    end;
+  finally
+    Expr.Free;
+  end;
+end;
+
+// Kann die Bedingung zwischen AIf und AThen gelesen werden (Lexer)?
+function CondReadable(AMap: TRdxCodeMap; const AIf, AThen: TRdxToken): Boolean;
+var
+  Expr : TRdxCondExpr;
+begin
+  Expr := TRdxCondExpr.Create(AMap);
+  try
+    Expr.ParseRoot(CondRootOf(AIf, AThen));
+    Result := Expr.TokCount > 0;
+  finally
+    Expr.Free;
+  end;
+end;
+
+class function TRdxIfFixes.MergeIf(AMap: TRdxCodeMap; ALine, ACol: Integer;
+  out AEdit: TRdxEdit; out AReason: string): Boolean;
+var
+  Outer, Inner, B, EndTok, X : TRdxToken;
+  Sh, ISh                    : TRdxIfShape;
+  IS1                        : TRdxStmt;
+  Block                      : Boolean;
+  OuterInd, InnerInd, Step   : string;
+  Body, Line, Tail, Head     : string;
+  i, LastLine, BodyLast, Inside : Integer;
+  BoolLine                   : Integer;
+  Dedent                     : Boolean;
+begin
+  Result := False;
+  AEdit := Default(TRdxEdit);
+  AReason := '';
+  if not IfAt(AMap, ALine, ACol, Outer) then
+    Exit;
+  if ReadIf(AMap, Outer, Sh) <> '' then
+    Exit;
+  // Das innere if: der then-Zweig selbst oder allein in begin..end.
+  Block := False;
+  EndTok := Default(TRdxToken);
+  if Sh.ThenStmt.Kind = skIf then
+    Inner := Sh.ThenStmt.First
+  else if Sh.ThenStmt.Kind = skBlock then
+  begin
+    B := Sh.ThenStmt.First;
+    if (ReadStmt(AMap, After(AMap, B), B, 1, IS1) <> '')
+       or (IS1.Kind <> skIf) then
+      Exit;
+    X := IS1.Next;
+    if X.Low = ';' then
+      X := After(AMap, X);
+    if not (IsKeywordAfter(X, Before(AMap, X)) and (X.Low = 'end')) then
+      Exit;
+    // Dieses end muss das des Blocks sein.
+    if not SameTok(After(AMap, X), Sh.ThenStmt.Next) then
+      Exit;
+    Inner := IS1.First;
+    EndTok := X;
+    Block := True;
+  end
+  else
+    Exit;
+  // Kandidat.
+  AReason := ReadIf(AMap, Inner, ISh);
+  if AReason <> '' then
+    Exit;
+  BoolLine := CompleteBoolEvalLine(AMap);
+  if Sh.ElseTok.Low <> '' then
+    AReason := _(R_IF_MERGE_OUTER_ELSE)
+  else if ISh.ElseTok.Low <> '' then
+    AReason := _(R_IF_MERGE_INNER_ELSE)
+  else if DirectiveIn(AMap, Sh) then
+    AReason := _(R_IF_DIRECTIVE)
+  else if CondComment(AMap, Sh.IfTok, Sh.ThenTok)
+     or CondComment(AMap, ISh.IfTok, ISh.ThenTok) then
+    AReason := _(R_IF_COND_COMMENT)
+  else if CommentInRange(AMap, SpanOf(Sh.ThenTok.Line, Sh.ThenTok.EndCol,
+       Inner.Line, Inner.Col))
+     or (Block and CommentInRange(AMap, SpanOf(ISh.EndLine, ISh.EndCol,
+       EndTok.Line, EndTok.Col))) then
+    AReason := _(R_IF_MERGE_COMMENT)
+  else if BoolLine > 0 then
+    AReason := _(R_IF_BOOLEVAL, [BoolLine])
+  else if ISh.ThenStmt.Kind = skEmpty then
+    AReason := _(R_IF_EMPTY_BRANCH)
+  else if Block and (not FirstOnLine(AMap, EndTok)
+     or (EndTok.Line <= ISh.EndLine)) then
+    AReason := _(R_IF_MERGE_LAYOUT)
+  else if not CondReadable(AMap, Sh.IfTok, Sh.ThenTok)
+     or not CondReadable(AMap, ISh.IfTok, ISh.ThenTok) then
+    AReason := _(R_IF_COND_UNREADABLE);
+  if AReason <> '' then
+    Exit;
+  // Ausruecken: um die Einrueckung des inneren if gegenueber dem aeusseren.
+  OuterInd := IndentOf(AMap.Raw(Outer.Line));
+  Step := '';
+  if FirstOnLine(AMap, Inner) then
+  begin
+    InnerInd := IndentOf(AMap.Raw(Inner.Line));
+    if (Length(InnerInd) > Length(OuterInd))
+       and (Copy(InnerInd, 1, Length(OuterInd)) = OuterInd) then
+      Step := Copy(InnerInd, Length(OuterInd) + 1, MaxInt);
+  end;
+  if Block then
+    BodyLast := ISh.EndLine
+  else
+    BodyLast := Sh.EndLine;
+  // Nur, wenn jede nicht leere Zeile die Stufe traegt.
+  Dedent := Step <> '';
+  for i := ISh.ThenTok.Line + 1 to BodyLast do
+  begin
+    Line := AMap.Raw(i);
+    if not IsBlankLine(Line)
+       and (Copy(Line, 1, Length(OuterInd) + Length(Step)) <> OuterInd + Step) then
+      Dedent := False;
+  end;
+  if Dedent then
+  begin
+    Inside := InsideLine(AMap, ISh.ThenTok.Line + 1, BodyLast);
+    if Inside > 0 then
+    begin
+      AReason := _(R_IF_INSIDE, [Inside]);
+      Exit;
+    end;
+  end;
+  Head := 'if ' + AndOperand(AMap, Sh.IfTok, Sh.ThenTok) + ' and '
+    + AndOperand(AMap, ISh.IfTok, ISh.ThenTok) + ' then';
+  // Der Rumpf: ab hinter dem inneren then bis zum Ende des inneren if (im
+  // Block, dahinter der Rest der end-Zeile) bzw. bis zum Zeilenende der
+  // Anweisung; Zeile fuer Zeile, die Folgezeilen ausgerueckt.
+  if Block then
+  begin
+    Tail := Copy(AMap.Raw(EndTok.Line), EndTok.EndCol, MaxInt);
+    LastLine := EndTok.Line;
+  end
+  else
+  begin
+    Tail := '';
+    LastLine := Sh.EndLine;
+  end;
+  Body := '';
+  for i := ISh.ThenTok.Line to BodyLast do
+  begin
+    Line := AMap.Raw(i);
+    if Block and (i = BodyLast) then
+      Line := Copy(Line, 1, ISh.EndCol - 1);
+    if i = ISh.ThenTok.Line then
+      Body := Copy(Line, ISh.ThenTok.EndCol, MaxInt)
+    else
+    begin
+      if Dedent and not IsBlankLine(Line) then
+        Line := OuterInd + Copy(Line, Length(OuterInd) + Length(Step) + 1,
+          MaxInt);
+      Body := Body + #10 + Line;
+    end;
+  end;
+  AEdit := MakeEdit(AMap, SpanOf(Outer.Line, Outer.Col, LastLine,
+    Length(AMap.Raw(LastLine)) + 1), Head + Body + Tail);
+  Result := True;
+end;
 
 end.

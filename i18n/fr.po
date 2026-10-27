@@ -6690,6 +6690,18 @@ msgstr "l'évaluation booléenne complète est activée (ligne %d) - avec elle �
 msgid "line %d starts inside a block comment or multi-line string - indenting it would change it"
 msgstr "la ligne %d commence dans un commentaire de bloc ou une chaîne multiligne - l'indenter la modifierait"
 
+msgid "the outer if has an else"
+msgstr "le if extérieur a un else"
+
+msgid "the inner if has an else"
+msgstr "le if intérieur a un else"
+
+msgid "comment between the two if heads or around begin/end - it would be lost"
+msgstr "commentaire entre les deux têtes if ou autour de begin/end - il serait perdu"
+
+msgid "the end of the block does not stand first on its own line"
+msgstr "le end du bloc n'est pas le premier élément de sa ligne"
+
 msgid "comment or directive in the expression - it would be lost"
 msgstr "commentaire ou directive dans l'expression - il serait perdu"
 
@@ -6710,6 +6722,9 @@ msgstr "Échanger les côtés de « %s »"
 
 msgid "Split the if at \"and\""
 msgstr "Scinder le if au « and »"
+
+msgid "Merge with the inner if (and)"
+msgstr "Fusionner avec le if intérieur (and)"
 
 msgid "same meaning - the condition is negated once, then and else swap places"
 msgstr "même sens - la condition est niée une fois, then et else échangent leurs places"

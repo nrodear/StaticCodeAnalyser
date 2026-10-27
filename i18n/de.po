@@ -6694,6 +6694,18 @@ msgstr "vollständige boolesche Auswertung ist eingeschaltet (Zeile %d) - damit 
 msgid "line %d starts inside a block comment or multi-line string - indenting it would change it"
 msgstr "Zeile %d beginnt in einem Block-Kommentar oder mehrzeiligen String - Einrücken änderte ihn"
 
+msgid "the outer if has an else"
+msgstr "das äußere if hat ein else"
+
+msgid "the inner if has an else"
+msgstr "das innere if hat ein else"
+
+msgid "comment between the two if heads or around begin/end - it would be lost"
+msgstr "Kommentar zwischen den beiden if-Köpfen oder um begin/end - er ginge verloren"
+
+msgid "the end of the block does not stand first on its own line"
+msgstr "das end des Blocks steht nicht als erstes auf seiner Zeile"
+
 msgid "comment or directive in the expression - it would be lost"
 msgstr "Kommentar oder Direktive im Ausdruck - er ginge verloren"
 
@@ -6714,6 +6726,9 @@ msgstr "Seiten von \"%s\" tauschen"
 
 msgid "Split the if at \"and\""
 msgstr "if am \"and\" teilen"
+
+msgid "Merge with the inner if (and)"
+msgstr "Mit dem inneren if zusammenfügen (and)"
 
 msgid "same meaning - the condition is negated once, then and else swap places"
 msgstr "gleiche Bedeutung - die Bedingung wird einmal verneint, then und else tauschen die Plätze"
