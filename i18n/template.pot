@@ -1197,7 +1197,7 @@ msgstr ""
 msgid "Applies to the plugin user interface only - detector messages, findings and exports are never translated. The list holds the built-in translations plus every i18n\\<code>.po file placed next to the plugin BPL. Captions already on screen switch after an IDE restart."
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:565
+#: reDelphix/source/uRdxContextRunner.pas:576
 msgid "Apply De Morgan to \"%s\""
 msgstr ""
 
@@ -2157,7 +2157,7 @@ msgstr ""
 msgid "Free is outside the protecting finally block"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:262
+#: reDelphix/source/uRdxContextRunner.pas:268
 #: reDelphix/source/uRdxFixTable.pas:2996
 msgid "Free now also runs on an exception and on Exit - the lines in between move into the try part"
 msgstr ""
@@ -2399,7 +2399,7 @@ msgstr ""
 msgid "Invalid UTF-8 sequence - compiler substitutes U+FFFD (data corruption)"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:564
+#: reDelphix/source/uRdxContextRunner.pas:575
 msgid "Invert the if (swap then and else)"
 msgstr ""
 
@@ -3611,6 +3611,10 @@ msgstr ""
 msgid "Split the grouped declaration"
 msgstr ""
 
+#: reDelphix/source/uRdxContextRunner.pas:578
+msgid "Split the if at \"and\""
+msgstr ""
+
 #: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:634
 msgid "Static Code Analyser: actions for this line"
 msgstr ""
@@ -3702,7 +3706,7 @@ msgstr ""
 msgid "Swap the loop bounds"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:566
+#: reDelphix/source/uRdxContextRunner.pas:577
 msgid "Swap the sides of \"%s\""
 msgstr ""
 
@@ -4555,7 +4559,8 @@ msgstr ""
 msgid "comment in the condition"
 msgstr ""
 
-#: reDelphix/source/uRdxIfFixes.pas:453
+#: reDelphix/source/uRdxIfFixes.pas:461
+#: reDelphix/source/uRdxIfFixes.pas:559
 msgid "comment in the condition - it would be lost or swallow the new parenthesis"
 msgstr ""
 
@@ -4763,7 +4768,8 @@ msgstr ""
 msgid "compiler directive in the header"
 msgstr ""
 
-#: reDelphix/source/uRdxIfFixes.pas:451
+#: reDelphix/source/uRdxIfFixes.pas:459
+#: reDelphix/source/uRdxIfFixes.pas:557
 msgid "compiler directive in the if statement - conditional code could change its branches"
 msgstr ""
 
@@ -4825,6 +4831,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxRoutineFixes.pas:640
 msgid "compiler directive {$%s} in line %d - it may act beyond the routine"
+msgstr ""
+
+#: reDelphix/source/uRdxIfFixes.pas:561
+msgid "complete boolean evaluation is switched on (line %d) - with it \"A and B\" always evaluates B"
 msgstr ""
 
 #: reDelphix/source/uRdxSimpleFixes.pas:773
@@ -4961,7 +4971,8 @@ msgstr ""
 msgid "empty statement after the %s"
 msgstr ""
 
-#: reDelphix/source/uRdxIfFixes.pas:455
+#: reDelphix/source/uRdxIfFixes.pas:463
+#: reDelphix/source/uRdxIfFixes.pas:563
 msgid "empty then or else branch"
 msgstr ""
 
@@ -5295,6 +5306,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxHomoglyphFix.pas:574
 msgid "line %d spells the name differently - the help renames one spelling only"
+msgstr ""
+
+#: reDelphix/source/uRdxIfFixes.pas:565
+msgid "line %d starts inside a block comment or multi-line string - indenting it would change it"
 msgstr ""
 
 #: reDelphix/source/uRdxObjectListFix.pas:491
@@ -6610,7 +6625,7 @@ msgstr ""
 msgid "same meaning - the code never ran; parked code then only lives in version control"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:557
+#: reDelphix/source/uRdxContextRunner.pas:563
 msgid "same meaning - the comparison is mirrored; neither side calls a routine"
 msgstr ""
 
@@ -6618,12 +6633,12 @@ msgstr ""
 msgid "same meaning - the compiler does not read \"_\" in numbers; digit separators exist only from Delphi 11 on, FPC does not know them"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:547
+#: reDelphix/source/uRdxContextRunner.pas:553
 #: reDelphix/source/uRdxFixTable.pas:2996
 msgid "same meaning - the condition is evaluated once as before; if it is false, the routine ends as before; the body moves out one level"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:542
+#: reDelphix/source/uRdxContextRunner.pas:548
 msgid "same meaning - the condition is negated once, then and else swap places"
 msgstr ""
 
@@ -6631,7 +6646,7 @@ msgstr ""
 msgid "same meaning - the condition was always true (Length is never negative): the then branch runs as before, an else branch never ran and goes away; if another comparison was meant (e.g. > 0), it is still missing"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:236
+#: reDelphix/source/uRdxContextRunner.pas:242
 #: reDelphix/source/uRdxFixTable.pas:1295
 msgid "same meaning - the constant %s holds the literal; rename it by hand or with Refactor > Rename (Ctrl+Shift+E)"
 msgstr ""
@@ -6652,7 +6667,7 @@ msgstr ""
 msgid "same meaning - the name appears nowhere else in the code of the file; documentation and a comment above it that names the routine go with it"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:552
+#: reDelphix/source/uRdxContextRunner.pas:558
 msgid "same meaning - the same terms in the same order, each negated; the evaluation stops at the same term"
 msgstr ""
 
@@ -6678,6 +6693,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxFixTable.pas:2996
 msgid "same meaning for COM - the empty last argument of the late-bound call (an omitted optional parameter) is now not passed at all; only a server that counts its arguments sees one fewer"
+msgstr ""
+
+#: reDelphix/source/uRdxContextRunner.pas:568
+msgid "same meaning with short-circuit evaluation ({$B-}): the second condition is evaluated only if the first one is true, as before"
 msgstr ""
 
 #: reDelphix/source/uRdxTrySpan.pas:803
@@ -7152,7 +7171,7 @@ msgstr ""
 msgid "the condition is not proven as Boolean (a call, a path or arithmetic as operand) - with a Variant \"not\" would be bitwise"
 msgstr ""
 
-#: reDelphix/source/uRdxIfFixes.pas:474
+#: reDelphix/source/uRdxIfFixes.pas:482
 msgid "the condition is not readable (multi-line string or comment)"
 msgstr ""
 
@@ -7258,11 +7277,11 @@ msgstr ""
 msgid "the else belongs to a case or except - a statement list follows it"
 msgstr ""
 
-#: reDelphix/source/uRdxIfFixes.pas:459
+#: reDelphix/source/uRdxIfFixes.pas:467
 msgid "the else branch ends with an if without else - after the swap that if would take the new else"
 msgstr ""
 
-#: reDelphix/source/uRdxIfFixes.pas:457
+#: reDelphix/source/uRdxIfFixes.pas:465
 msgid "the else branch is another if (else-if chain) - after the swap it would take the new else"
 msgstr ""
 
@@ -7544,29 +7563,33 @@ msgstr ""
 msgid "the if condition on line %d compares with %s and with %s - ambiguous (with digit separators the detector reads only the first block); the quick fix replaces exactly one literal"
 msgstr ""
 
+#: reDelphix/source/uRdxIfFixes.pas:555
+msgid "the if has an else - it would have to stand twice"
+msgstr ""
+
 #: reDelphix/source/uRdxFlowFixes.pas:421
 msgid "the if is inside an expression (conditional expression, Delphi 13) - not a statement"
 msgstr ""
 
-#: reDelphix/source/uRdxIfFixes.pas:168
-#: reDelphix/source/uRdxIfFixes.pas:193
-#: reDelphix/source/uRdxIfFixes.pas:197
-#: reDelphix/source/uRdxIfFixes.pas:200
+#: reDelphix/source/uRdxIfFixes.pas:176
+#: reDelphix/source/uRdxIfFixes.pas:201
 #: reDelphix/source/uRdxIfFixes.pas:205
-#: reDelphix/source/uRdxIfFixes.pas:223
-#: reDelphix/source/uRdxIfFixes.pas:240
-#: reDelphix/source/uRdxIfFixes.pas:256
-#: reDelphix/source/uRdxIfFixes.pas:280
-#: reDelphix/source/uRdxIfFixes.pas:284
-#: reDelphix/source/uRdxIfFixes.pas:305
-#: reDelphix/source/uRdxIfFixes.pas:328
-#: reDelphix/source/uRdxIfFixes.pas:330
-#: reDelphix/source/uRdxIfFixes.pas:333
-#: reDelphix/source/uRdxIfFixes.pas:343
-#: reDelphix/source/uRdxIfFixes.pas:350
-#: reDelphix/source/uRdxIfFixes.pas:352
-#: reDelphix/source/uRdxIfFixes.pas:355
+#: reDelphix/source/uRdxIfFixes.pas:208
+#: reDelphix/source/uRdxIfFixes.pas:213
+#: reDelphix/source/uRdxIfFixes.pas:231
+#: reDelphix/source/uRdxIfFixes.pas:248
+#: reDelphix/source/uRdxIfFixes.pas:264
+#: reDelphix/source/uRdxIfFixes.pas:288
+#: reDelphix/source/uRdxIfFixes.pas:292
+#: reDelphix/source/uRdxIfFixes.pas:313
+#: reDelphix/source/uRdxIfFixes.pas:336
+#: reDelphix/source/uRdxIfFixes.pas:338
+#: reDelphix/source/uRdxIfFixes.pas:341
+#: reDelphix/source/uRdxIfFixes.pas:351
+#: reDelphix/source/uRdxIfFixes.pas:358
 #: reDelphix/source/uRdxIfFixes.pas:360
+#: reDelphix/source/uRdxIfFixes.pas:363
+#: reDelphix/source/uRdxIfFixes.pas:368
 msgid "the if statement is not safe to read (anonymous method, conditional expression, asm or label in it)"
 msgstr ""
 

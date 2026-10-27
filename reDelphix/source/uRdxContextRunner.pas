@@ -50,6 +50,8 @@ unit uRdxContextRunner;
 //                      until (uRdxCondFixes.DeMorgan).
 //   ckFlipCompare      C8 Vergleich drehen: Caret auf einem
 //                      Vergleichsoperator (uRdxCondFixes.FlipCompare).
+//   ckSplitIf          C8 if teilen: Caret auf einem obersten 'and' der
+//                      Bedingung (uRdxIfFixes.SplitIf).
 //                      Alle sechs bedeutungsgleich (Annahmen in den Units:
 //                      'not' logisch, {$B-} fuer Teilen/Zusammenfuegen);
 //                      ein Kandidat entsteht nur am ausloesenden Token,
@@ -101,7 +103,7 @@ uses
 
 type
   TRdxContextKind = (ckIntroduceConst, ckTryFinallyCreate, ckConcatToFormat,
-    ckInvertIf, ckGuardClause, ckDeMorgan, ckFlipCompare);
+    ckInvertIf, ckGuardClause, ckDeMorgan, ckFlipCompare, ckSplitIf);
 
   // Ein Eintrag am Caret.
   //   Kind     die Aktion
@@ -191,12 +193,16 @@ const
   CAP_INVERT_IF = 'Invert the if (swap then and else)';
   CAP_DEMORGAN = 'Apply De Morgan to "%s"';
   CAP_FLIP = 'Swap the sides of "%s"';
+  CAP_SPLIT_IF = 'Split the if at "and"';
   R_INVERT_HINT = 'same meaning - the condition is negated once, then and '
     + 'else swap places';
   R_DEMORGAN_HINT = 'same meaning - the same terms in the same order, each '
     + 'negated; the evaluation stops at the same term';
   R_FLIP_HINT = 'same meaning - the comparison is mirrored; neither side '
     + 'calls a routine';
+  R_ANDIF_HINT = 'same meaning with short-circuit evaluation ({$B-}): the '
+    + 'second condition is evaluated only if the first one is true, as '
+    + 'before';
 
 // Haengt AOutcome an AList an.
 procedure AddOutcome(var AList: TArray<TRdxContextOutcome>;
@@ -555,6 +561,11 @@ begin
   if Ok then
     AddEdit(Edits, Edit);
   AddPlanned(AList, ckFlipCompare, Ok, Why, Op, _(R_FLIP_HINT), Edits);
+  Edits := nil;
+  Ok := TRdxIfFixes.SplitIf(AMap, ALine, ACol, Edit, Why);
+  if Ok then
+    AddEdit(Edits, Edit);
+  AddPlanned(AList, ckSplitIf, Ok, Why, '', _(R_ANDIF_HINT), Edits);
 end;
 
 class function TRdxContextRunner.CaptionOf(
@@ -564,6 +575,7 @@ begin
     ckInvertIf:    Result := _(CAP_INVERT_IF);
     ckDeMorgan:    Result := _(CAP_DEMORGAN, [AOutcome.Name]);
     ckFlipCompare: Result := _(CAP_FLIP, [AOutcome.Name]);
+    ckSplitIf:     Result := _(CAP_SPLIT_IF);
   else
     Result := '';
   end;

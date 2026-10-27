@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6713 Zeilen, 302391 Bytes
-  CPoLines_de: array[0..6712] of string = (
+  // i18n\de.po - 6728 Zeilen, 303263 Bytes
+  CPoLines_de: array[0..6727] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6702,6 +6702,15 @@ const
     'msgid "the if statement is not safe to read (anonymous method, conditional expression, asm or label in it)"',
     'msgstr "die if-Anweisung ist nicht sicher lesbar (anonyme Methode, bedingter Ausdruck, asm oder Marke darin)"',
     '',
+    'msgid "the if has an else - it would have to stand twice"',
+    'msgstr "das if hat ein else - es m'#$00FC'sste doppelt stehen"',
+    '',
+    'msgid "complete boolean evaluation is switched on (line %d) - with it \"A and B\" always evaluates B"',
+    'msgstr "vollst'#$00E4'ndige boolesche Auswertung ist eingeschaltet (Zeile %d) - damit wertet \"A and B\" B immer aus"',
+    '',
+    'msgid "line %d starts inside a block comment or multi-line string - indenting it would change it"',
+    'msgstr "Zeile %d beginnt in einem Block-Kommentar oder mehrzeiligen String - Einr'#$00FC'cken '#$00E4'nderte ihn"',
+    '',
     'msgid "comment or directive in the expression - it would be lost"',
     'msgstr "Kommentar oder Direktive im Ausdruck - er ginge verloren"',
     '',
@@ -6720,6 +6729,9 @@ const
     'msgid "Swap the sides of \"%s\""',
     'msgstr "Seiten von \"%s\" tauschen"',
     '',
+    'msgid "Split the if at \"and\""',
+    'msgstr "if am \"and\" teilen"',
+    '',
     'msgid "same meaning - the condition is negated once, then and else swap places"',
     'msgstr "gleiche Bedeutung - die Bedingung wird einmal verneint, then und else tauschen die Pl'#$00E4'tze"',
     '',
@@ -6727,7 +6739,10 @@ const
     'msgstr "gleiche Bedeutung - dieselben Glieder in derselben Reihenfolge, je verneint; die Auswertung endet am selben Glied"',
     '',
     'msgid "same meaning - the comparison is mirrored; neither side calls a routine"',
-    'msgstr "gleiche Bedeutung - der Vergleich wird gespiegelt; keine Seite ruft eine Routine auf"'
+    'msgstr "gleiche Bedeutung - der Vergleich wird gespiegelt; keine Seite ruft eine Routine auf"',
+    '',
+    'msgid "same meaning with short-circuit evaluation ({$B-}): the second condition is evaluated only if the first one is true, as before"',
+    'msgstr "gleiche Bedeutung bei Kurzschlussauswertung ({$B-}): die zweite Bedingung wird wie vorher nur ausgewertet, wenn die erste wahr ist"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7002,8 +7017,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6709 Zeilen, 314590 Bytes
-  CPoLines_fr: array[0..6708] of string = (
+  // i18n\fr.po - 6724 Zeilen, 315486 Bytes
+  CPoLines_fr: array[0..6723] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -13687,6 +13702,15 @@ const
     'msgid "the if statement is not safe to read (anonymous method, conditional expression, asm or label in it)"',
     'msgstr "l''instruction if n''est pas lisible de fa'#$00E7'on s'#$00FB're (m'#$00E9'thode anonyme, expression conditionnelle, asm ou '#$00E9'tiquette)"',
     '',
+    'msgid "the if has an else - it would have to stand twice"',
+    'msgstr "le if a un else - il devrait figurer deux fois"',
+    '',
+    'msgid "complete boolean evaluation is switched on (line %d) - with it \"A and B\" always evaluates B"',
+    'msgstr "l'''#$00E9'valuation bool'#$00E9'enne compl'#$00E8'te est activ'#$00E9'e (ligne %d) - avec elle '#$00AB' A and B '#$00BB' '#$00E9'value toujours B"',
+    '',
+    'msgid "line %d starts inside a block comment or multi-line string - indenting it would change it"',
+    'msgstr "la ligne %d commence dans un commentaire de bloc ou une cha'#$00EE'ne multiligne - l''indenter la modifierait"',
+    '',
     'msgid "comment or directive in the expression - it would be lost"',
     'msgstr "commentaire ou directive dans l''expression - il serait perdu"',
     '',
@@ -13705,6 +13729,9 @@ const
     'msgid "Swap the sides of \"%s\""',
     'msgstr "'#$00C9'changer les c'#$00F4't'#$00E9's de '#$00AB' %s '#$00BB'"',
     '',
+    'msgid "Split the if at \"and\""',
+    'msgstr "Scinder le if au '#$00AB' and '#$00BB'"',
+    '',
     'msgid "same meaning - the condition is negated once, then and else swap places"',
     'msgstr "m'#$00EA'me sens - la condition est ni'#$00E9'e une fois, then et else '#$00E9'changent leurs places"',
     '',
@@ -13712,7 +13739,10 @@ const
     'msgstr "m'#$00EA'me sens - les m'#$00EA'mes termes dans le m'#$00EA'me ordre, chacun ni'#$00E9' ; l'''#$00E9'valuation s''arr'#$00EA'te au m'#$00EA'me terme"',
     '',
     'msgid "same meaning - the comparison is mirrored; neither side calls a routine"',
-    'msgstr "m'#$00EA'me sens - la comparaison est invers'#$00E9'e en miroir ; aucun c'#$00F4't'#$00E9' n''appelle de routine"'
+    'msgstr "m'#$00EA'me sens - la comparaison est invers'#$00E9'e en miroir ; aucun c'#$00F4't'#$00E9' n''appelle de routine"',
+    '',
+    'msgid "same meaning with short-circuit evaluation ({$B-}): the second condition is evaluated only if the first one is true, as before"',
+    'msgstr "m'#$00EA'me sens avec l'''#$00E9'valuation en court-circuit ({$B-}) : la deuxi'#$00E8'me condition n''est '#$00E9'valu'#$00E9'e que si la premi'#$00E8're est vraie, comme avant"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

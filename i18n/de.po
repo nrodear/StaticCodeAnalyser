@@ -6685,6 +6685,15 @@ msgstr "der else-Zweig endet auf ein if ohne else - nach dem Tausch nähme diese
 msgid "the if statement is not safe to read (anonymous method, conditional expression, asm or label in it)"
 msgstr "die if-Anweisung ist nicht sicher lesbar (anonyme Methode, bedingter Ausdruck, asm oder Marke darin)"
 
+msgid "the if has an else - it would have to stand twice"
+msgstr "das if hat ein else - es müsste doppelt stehen"
+
+msgid "complete boolean evaluation is switched on (line %d) - with it \"A and B\" always evaluates B"
+msgstr "vollständige boolesche Auswertung ist eingeschaltet (Zeile %d) - damit wertet \"A and B\" B immer aus"
+
+msgid "line %d starts inside a block comment or multi-line string - indenting it would change it"
+msgstr "Zeile %d beginnt in einem Block-Kommentar oder mehrzeiligen String - Einrücken änderte ihn"
+
 msgid "comment or directive in the expression - it would be lost"
 msgstr "Kommentar oder Direktive im Ausdruck - er ginge verloren"
 
@@ -6703,6 +6712,9 @@ msgstr "De Morgan auf \"%s\" anwenden"
 msgid "Swap the sides of \"%s\""
 msgstr "Seiten von \"%s\" tauschen"
 
+msgid "Split the if at \"and\""
+msgstr "if am \"and\" teilen"
+
 msgid "same meaning - the condition is negated once, then and else swap places"
 msgstr "gleiche Bedeutung - die Bedingung wird einmal verneint, then und else tauschen die Plätze"
 
@@ -6711,3 +6723,6 @@ msgstr "gleiche Bedeutung - dieselben Glieder in derselben Reihenfolge, je verne
 
 msgid "same meaning - the comparison is mirrored; neither side calls a routine"
 msgstr "gleiche Bedeutung - der Vergleich wird gespiegelt; keine Seite ruft eine Routine auf"
+
+msgid "same meaning with short-circuit evaluation ({$B-}): the second condition is evaluated only if the first one is true, as before"
+msgstr "gleiche Bedeutung bei Kurzschlussauswertung ({$B-}): die zweite Bedingung wird wie vorher nur ausgewertet, wenn die erste wahr ist"

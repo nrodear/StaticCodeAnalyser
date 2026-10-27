@@ -81,6 +81,11 @@ const
     + 'the swap that if would take the new else';
   R_IF_UNREADABLE = 'the if statement is not safe to read (anonymous '
     + 'method, conditional expression, asm or label in it)';
+  R_IF_SPLIT_ELSE = 'the if has an else - it would have to stand twice';
+  R_IF_BOOLEVAL = 'complete boolean evaluation is switched on (line %d) - '
+    + 'with it "A and B" always evaluates B';
+  R_IF_INSIDE = 'line %d starts inside a block comment or multi-line '
+    + 'string - indenting it would change it';
 
 type
   TRdxStmtKind = (skEmpty, skSimple, skIf, skBlock, skLoop, skOther);
@@ -120,6 +125,9 @@ type
     // C7 if umkehren (s. Kopf); AEdits: Bedingung, then- und else-Zweig.
     class function InvertIf(AMap: TRdxCodeMap; ALine, ACol: Integer;
       out AEdits: TArray<TRdxEdit>; out AReason: string): Boolean; static;
+    // C8 if am 'and' am Caret teilen.
+    class function SplitIf(AMap: TRdxCodeMap; ALine, ACol: Integer;
+      out AEdit: TRdxEdit; out AReason: string): Boolean; static;
   end;
 
 implementation
@@ -482,6 +490,101 @@ begin
       Neg));
     AddEdit(AEdits, MakeEdit(AMap, StmtSpan(Sh.ThenStmt), ElseText));
     AddEdit(AEdits, MakeEdit(AMap, StmtSpan(Sh.ElseStmt), ThenText));
+    Result := True;
+  finally
+    Expr.Free;
+  end;
+end;
+
+// Die Zeilen AFrom..ATo: StartsInside? Die erste solche Zeile, sonst 0.
+function InsideLine(AMap: TRdxCodeMap; AFrom, ATo: Integer): Integer;
+var
+  Li : Integer;
+begin
+  Result := 0;
+  for Li := AFrom to ATo do
+    if AMap.StartsInside(Li) then
+      Exit(Li);
+end;
+
+class function TRdxIfFixes.SplitIf(AMap: TRdxCodeMap; ALine, ACol: Integer;
+  out AEdit: TRdxEdit; out AReason: string): Boolean;
+var
+  T          : TRdxToken;
+  Root       : TRdxExprRoot;
+  Expr       : TRdxCondExpr;
+  Top, k, i  : Integer;
+  N          : TRdxExprNode;
+  Sh         : TRdxIfShape;
+  Ind, Step  : string;
+  Left, Right, NewText, Line : string;
+  BoolLine, Inside, LastLine : Integer;
+  Lt, Rf, Rl : TRdxExprTok;
+begin
+  Result := False;
+  AEdit := Default(TRdxEdit);
+  AReason := '';
+  T := TokenContaining(AMap, ALine, ACol);
+  if (T.Low <> 'and') or not IsKeywordAfter(T, Before(AMap, T)) then
+    Exit;
+  if not ExprRootAt(AMap, T, False, Root) or (Root.Kind <> erkIf) then
+    Exit;
+  Expr := TRdxCondExpr.Create(AMap);
+  try
+    if not Expr.ParseRoot(Root) then
+      Exit;
+    Top := Expr.Root;
+    if not Expr.IsChainOf(Top, 'and') then
+      Exit;
+    N := Expr.Node(Top);
+    k := -1;
+    for i := 0 to High(N.Ops) do
+      if (Expr.Tok(N.Ops[i]).Line = T.Line)
+         and (Expr.Tok(N.Ops[i]).Col = T.Col) then
+        k := i;
+    if k < 0 then
+      Exit;
+    // Kandidat: ein oberstes 'and' der Bedingung eines if.
+    AReason := ReadIf(AMap, Root.Head, Sh);
+    if AReason <> '' then
+      Exit;
+    BoolLine := CompleteBoolEvalLine(AMap);
+    LastLine := Sh.EndLine;
+    Inside := InsideLine(AMap, Sh.ThenTok.Line + 1, LastLine);
+    if Sh.ElseTok.Low <> '' then
+      AReason := _(R_IF_SPLIT_ELSE)
+    else if DirectiveIn(AMap, Sh) then
+      AReason := _(R_IF_DIRECTIVE)
+    else if Expr.HasComment then
+      AReason := _(R_IF_COND_COMMENT)
+    else if BoolLine > 0 then
+      AReason := _(R_IF_BOOLEVAL, [BoolLine])
+    else if Sh.ThenStmt.Kind = skEmpty then
+      AReason := _(R_IF_EMPTY_BRANCH)
+    else if Inside > 0 then
+      AReason := _(R_IF_INSIDE, [Inside]);
+    if AReason <> '' then
+      Exit;
+    Lt := Expr.Tok(Expr.Node(N.Kids[k]).Last);
+    Rf := Expr.Tok(Expr.Node(N.Kids[k + 1]).First);
+    Rl := Expr.Tok(N.Last);
+    Left := TextOf(AMap, Expr.Tok(N.First).Line, Expr.Tok(N.First).Col,
+      Lt.Line, Lt.EndCol);
+    Right := TextOf(AMap, Rf.Line, Rf.Col, Rl.Line, Rl.EndCol);
+    Ind := IndentOf(AMap.Raw(Sh.IfTok.Line));
+    Step := IndentStep(Ind, AMap.Raw(Sh.ThenTok.Line + 1));
+    NewText := 'if ' + Left + ' then' + #10 + Ind + Step + 'if ' + Right
+      + ' then' + Copy(AMap.Raw(Sh.ThenTok.Line), Sh.ThenTok.EndCol, MaxInt);
+    // Die Zeilen des Zweigs eine Stufe tiefer.
+    for i := Sh.ThenTok.Line + 1 to LastLine do
+    begin
+      Line := AMap.Raw(i);
+      if not IsBlankLine(Line) then
+        Line := Step + Line;
+      NewText := NewText + #10 + Line;
+    end;
+    AEdit := MakeEdit(AMap, SpanOf(Sh.IfTok.Line, Sh.IfTok.Col, LastLine,
+      Length(AMap.Raw(LastLine)) + 1), NewText);
     Result := True;
   finally
     Expr.Free;

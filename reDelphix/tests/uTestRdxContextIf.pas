@@ -89,6 +89,20 @@ type
   end;
 
   [TestFixture]
+  TTestRdxCtxSplitIf = class
+  public
+    [Test] procedure Split_Simple;
+    [Test] procedure Split_Block;
+    [Test] procedure Split_SingleLine;
+    [Test] procedure Split_ThreeTerms;
+    [Test] procedure Split_Comparisons;
+    [Test] procedure Split_Else_Refused;
+    [Test] procedure Split_BoolEval_Refused;
+    [Test] procedure Split_Comment_Refused;
+    [Test] procedure Split_NotTopLevel_NoEntry;
+  end;
+
+  [TestFixture]
   TTestRdxCtxIfTexts = class
   public
     [Test] procedure Captions_German;
@@ -715,6 +729,72 @@ begin
     'Kommentar');
 end;
 
+{ ---- C8 if teilen ---- }
+
+procedure TTestRdxCtxSplitIf.Split_Simple;
+begin
+  Assert.AreEqual(InProc(['  if A then', '    if B then', '      Foo;']),
+    Fixed(InProc(['  if A {^}and B then', '    Foo;']), ckSplitIf));
+end;
+
+procedure TTestRdxCtxSplitIf.Split_Block;
+begin
+  Assert.AreEqual(InProc(['  if A then', '    if B then', '    begin',
+    '      Foo;', '    end;']), Fixed(InProc(['  if A {^}and B then',
+    '  begin', '    Foo;', '  end;']), ckSplitIf));
+end;
+
+procedure TTestRdxCtxSplitIf.Split_SingleLine;
+begin
+  Assert.AreEqual(InProc(['  if A then', '    if B then Foo;']),
+    Fixed(InProc(['  if A {^}and B then Foo;']), ckSplitIf));
+end;
+
+// Am 'and' des Carets: links bleibt die Kette, rechts auch.
+procedure TTestRdxCtxSplitIf.Split_ThreeTerms;
+begin
+  Assert.AreEqual(InProc(['  if A and B then', '    if C then', '      Foo;']),
+    Fixed(InProc(['  if A and B {^}and C then', '    Foo;']), ckSplitIf));
+  Assert.AreEqual(InProc(['  if A then', '    if B and C then', '      Foo;']),
+    Fixed(InProc(['  if A {^}and B and C then', '    Foo;']), ckSplitIf));
+end;
+
+procedure TTestRdxCtxSplitIf.Split_Comparisons;
+begin
+  Assert.AreEqual(InProc(['  if (X > 0) then', '    if (Y > 0) then',
+    '      Foo;']), Fixed(InProc(['  if (X > 0) {^}and (Y > 0) then',
+    '    Foo;']), ckSplitIf));
+end;
+
+procedure TTestRdxCtxSplitIf.Split_Else_Refused;
+begin
+  AssertRefused(InProc(['  if A {^}and B then Foo else Bar;']), ckSplitIf,
+    _(R_IF_SPLIT_ELSE));
+end;
+
+procedure TTestRdxCtxSplitIf.Split_BoolEval_Refused;
+begin
+  AssertRefused(UnitWith(['{$B+}'], ['  if A {^}and B then Foo;']), ckSplitIf,
+    _(R_IF_BOOLEVAL, [2]));
+  AssertRefused(UnitWith(['{$BOOLEVAL ON}'], ['  if A {^}and B then Foo;']),
+    ckSplitIf, _(R_IF_BOOLEVAL, [2]));
+end;
+
+procedure TTestRdxCtxSplitIf.Split_Comment_Refused;
+begin
+  AssertRefused(InProc(['  if A {^}and { b } B then Foo;']), ckSplitIf,
+    _(R_IF_COND_COMMENT));
+end;
+
+procedure TTestRdxCtxSplitIf.Split_NotTopLevel_NoEntry;
+begin
+  AssertNone(InProc(['  if A or B {^}and C then Foo;']), ckSplitIf,
+    'and unter or');
+  AssertNone(InProc(['  if (A {^}and B) or C then Foo;']), ckSplitIf,
+    'in Klammern');
+  AssertNone(InProc(['  while A {^}and B do Foo;']), ckSplitIf, 'while');
+end;
+
 { ---- Texte und Reihenfolge ---- }
 
 function OutcomeOf(AKind: TRdxContextKind;
@@ -733,6 +813,8 @@ begin
     TRdxContextRunner.CaptionOf(OutcomeOf(ckDeMorgan, 'and')));
   Assert.AreEqual('Seiten von "<=" tauschen',
     TRdxContextRunner.CaptionOf(OutcomeOf(ckFlipCompare, '<=')));
+  Assert.AreEqual('if am "and" teilen',
+    TRdxContextRunner.CaptionOf(OutcomeOf(ckSplitIf, '')));
   // Arten mit Fund-Hilfe: den Text baut uRdxFixTable.ContextCaption.
   Assert.AreEqual('', TRdxContextRunner.CaptionOf(OutcomeOf(ckGuardClause, '')));
   Assert.AreEqual('', TRdxContextRunner.CaptionOf(OutcomeOf(ckIntroduceConst,
@@ -746,6 +828,8 @@ var
 begin
   O := KindAt(InProc(['  {^}if A then Foo else Bar;']), ckInvertIf, Src);
   Assert.IsTrue(Pos('gleiche Bedeutung', O.Hint) = 1, O.Hint);
+  O := KindAt(InProc(['  if A {^}and B then Foo;']), ckSplitIf, Src);
+  Assert.IsTrue(Pos('{$B-}', O.Hint) > 0, O.Hint);
   O := KindAt(InProc(['  {^}if A then', '  begin', '    Foo;', '  end;']),
     ckGuardClause, Src);
   Assert.IsTrue(Pos('gleiche Bedeutung', O.Hint) = 1, O.Hint);
@@ -771,7 +855,7 @@ var
   K : TRdxContextKind;
   O : TRdxContextOutcome;
 begin
-  for K in [ckInvertIf, ckDeMorgan, ckFlipCompare] do
+  for K in [ckInvertIf, ckDeMorgan, ckFlipCompare, ckSplitIf] do
   begin
     O := OutcomeOf(K, 'and');
     Assert.AreEqual(TRdxContextRunner.CaptionOf(O),
@@ -787,6 +871,7 @@ initialization
   TDUnitX.RegisterTestFixture(TTestRdxCtxGuard);
   TDUnitX.RegisterTestFixture(TTestRdxCtxDeMorgan);
   TDUnitX.RegisterTestFixture(TTestRdxCtxFlip);
+  TDUnitX.RegisterTestFixture(TTestRdxCtxSplitIf);
   TDUnitX.RegisterTestFixture(TTestRdxCtxIfTexts);
   {$IFNDEF FPC}
   TDUnitX.RegisterTestFixture(TTestRdxCtxIfCaption);

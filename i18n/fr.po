@@ -6681,6 +6681,15 @@ msgstr "la branche else se termine par un if sans else - après l'échange ce if
 msgid "the if statement is not safe to read (anonymous method, conditional expression, asm or label in it)"
 msgstr "l'instruction if n'est pas lisible de façon sûre (méthode anonyme, expression conditionnelle, asm ou étiquette)"
 
+msgid "the if has an else - it would have to stand twice"
+msgstr "le if a un else - il devrait figurer deux fois"
+
+msgid "complete boolean evaluation is switched on (line %d) - with it \"A and B\" always evaluates B"
+msgstr "l'évaluation booléenne complète est activée (ligne %d) - avec elle « A and B » évalue toujours B"
+
+msgid "line %d starts inside a block comment or multi-line string - indenting it would change it"
+msgstr "la ligne %d commence dans un commentaire de bloc ou une chaîne multiligne - l'indenter la modifierait"
+
 msgid "comment or directive in the expression - it would be lost"
 msgstr "commentaire ou directive dans l'expression - il serait perdu"
 
@@ -6699,6 +6708,9 @@ msgstr "Appliquer De Morgan à « %s »"
 msgid "Swap the sides of \"%s\""
 msgstr "Échanger les côtés de « %s »"
 
+msgid "Split the if at \"and\""
+msgstr "Scinder le if au « and »"
+
 msgid "same meaning - the condition is negated once, then and else swap places"
 msgstr "même sens - la condition est niée une fois, then et else échangent leurs places"
 
@@ -6707,3 +6719,6 @@ msgstr "même sens - les mêmes termes dans le même ordre, chacun nié ; l'éva
 
 msgid "same meaning - the comparison is mirrored; neither side calls a routine"
 msgstr "même sens - la comparaison est inversée en miroir ; aucun côté n'appelle de routine"
+
+msgid "same meaning with short-circuit evaluation ({$B-}): the second condition is evaluated only if the first one is true, as before"
+msgstr "même sens avec l'évaluation en court-circuit ({$B-}) : la deuxième condition n'est évaluée que si la première est vraie, comme avant"
