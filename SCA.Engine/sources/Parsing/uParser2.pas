@@ -1195,6 +1195,37 @@ begin
       Continue;
     end;
 
+    // FPC-'type helper for X' ({$modeswitch typehelpers}, Parser-Charge
+    // P1, 2026-10-27). Bis dahin fiel die Deklaration in den Alias-Zweig
+    // unten: er las bis zum ersten ';' (erste Methode des Helpers), das
+    // naechste 'function'/'end' beendete die GANZE Typsektion - jede
+    // Klasse dahinter fehlte im AST (lcl/stdctrls.pp: TCustomComboBox ..
+    // TLabel hinter TComboBoxStyleHelper; Korpus laz 16 Dateien, rw 0).
+    // Jetzt wie 'record helper': SkipHelperFor, nkRecord, ParseClassBody.
+    // Der Lexer hat nur 1-Token-Peek - 'type' wird darum konsumiert, bevor
+    // 'helper' sichtbar ist. Folgt kein 'helper' (starker Alias
+    // 'TFoo = type Integer'), laeuft der Alias-Zweig ohne das 'type'
+    // weiter; er sammelt nur Bezeichner, das Ergebnis ist dasselbe.
+    // Knoten-Position = das 'type'-Token: uDfmRepoIndex erkennt den
+    // type helper daran (SCA184/S4-Kriterium fuer .pp-Units).
+    // Grenze wie bei 'class helper(TBase) for': ein Ahnen-Helper
+    // 'type helper(TBase) for X' bricht SkipHelperFor am '(' ab.
+    var TypeKwConsumed := False;
+    if T.Kind = tkKwType then
+    begin
+      Next; // 'type'
+      TypeKwConsumed := True;
+      if (Tok.Kind = tkIdent) and SameText(Tok.Value, 'helper') then
+      begin
+        SkipHelperFor;
+        var HNode := SecNode.Add(nkRecord, Name, T.Line, T.Col);
+        ParseClassBody(HNode, SecNode);
+        Eat(tkSemicolon);
+        GuardAdvance(StartCount);
+        Continue;
+      end;
+    end;
+
     case T.Kind of
       tkKwClass:
         begin
@@ -1270,7 +1301,9 @@ begin
         // liefert. Ripple ~0: KEIN Detektor konsumiert nkTypeAlias/tkiAlias,
         // und CollectText (uUnusedUses) addiert TypeRef fuer JEDE Knotenart
         // (nur nkUsesItem ausgenommen) -> Usage-Zaehlung unveraendert.
-        var IsEnum       := (Tok.Kind = tkLParen);
+        // Nach einem konsumierten 'type' (starker Alias) ist '(' kein
+        // Enum-Anfang - wie vor P1, als Tok noch auf 'type' stand.
+        var IsEnum       := (Tok.Kind = tkLParen) and not TypeKwConsumed;
         var AliasContent := '';
         var Depth        := 0;
         while not (Tok.Kind in [tkKwEnd, tkEof]) do

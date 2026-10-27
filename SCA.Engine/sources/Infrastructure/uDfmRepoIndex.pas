@@ -426,23 +426,80 @@ begin
   end;
 end;
 
+function IsTypeHelperAt(Lines: TStringList; R: TAstNode): Boolean;
+// Steht an (R.Line, R.Col) das Schluesselwort 'type'? (s. FirstTypeHelperLine)
+begin
+  Result := (R.Line >= 1) and (R.Line <= Lines.Count) and
+            SameText(Copy(Lines[R.Line - 1], R.Col, 4), 'type');
+end;
+
+function FirstTypeHelperLine(Section: TAstNode;
+  const PasFileName: string): Integer;
+// Zeile der ersten FPC-'type helper'-Deklaration einer .pp-Unit, 0 = keine
+// (oder keine .pp-Unit). TParser2 fuehrt den type helper seit der Parser-
+// Charge P1 (2026-10-27) als nkRecord an der Position des 'type'-Tokens;
+// ein gewoehnlicher record steht auf 'record'. Der Quelltext an (Zeile,
+// Spalte) entscheidet also - Kommentare und Strings erzeugen keinen Knoten.
+// Lesefehler -> 0 (Klassen zaehlen wie bei jeder anderen Unit).
+var
+  Recs  : TList<TAstNode>;
+  R     : TAstNode;
+  Lines : TStringList;
+begin
+  Result := 0;
+  if not SameText(ExtractFileExt(PasFileName), '.pp') then Exit;
+  Recs := Section.FindAll(nkRecord);
+  try
+    if Recs.Count = 0 then Exit;
+    Lines := TStringList.Create;
+    try
+      try
+        Lines.LoadFromFile(PasFileName);
+      except
+        // wie ImplHasIncludeDirective: nur Dateiprobleme abfangen
+        on EStreamError do Exit;
+        on EEncodingError do Exit;
+      end;
+      for R in Recs do
+        if IsTypeHelperAt(Lines, R) and ((Result = 0) or (R.Line < Result)) then
+          Result := R.Line;
+    finally
+      Lines.Free;
+    end;
+  finally
+    Recs.Free;
+  end;
+end;
+
 procedure TDfmRepoIndex.CollectVisibleClassDecls(Section: TAstNode;
   const Unitname: string);
 // S4-Sicht: ALLE deklarierenden Units je Klasse (FClassUnit behaelt nur
 // den ersten Treffer). Der Pfad wird hier EINMAL je Unit normalisiert.
+//
+// Was als Projekt-Unit zaehlt (Nico, 2026-10-27): LCL-Klassen sind fuer S4
+// NICHT projekteigen - die SCA184-Funde zu TLabel/TButton/... im Lazarus-
+// Korpus bleiben. Bis zur Parser-Charge P1 sorgte dafuer ein Parserfehler:
+// hinter einem FPC-'type helper' fehlten alle Klassen der Unit im AST
+// (lcl/stdctrls.pp). Seit P1 sieht der Parser sie; damit S4 sein bisheriges
+// Ergebnis behaelt, zaehlen in einer .pp-Unit (FPC-/LCL-Bibliotheksform)
+// nur die Klassen VOR der ersten 'type helper'-Deklaration. Alle anderen
+// Sichten (FClassUnit, FormBinder, Detektoren) sehen die Klassen voll.
 var
   Classes : TList<TAstNode>;
   C       : TAstNode;
   Key     : string;
   FullFn  : string;
   Decls   : TStringList;
+  HelperLine : Integer;
 begin
   FullFn  := NormalizeUnitPath(Unitname);
+  HelperLine := FirstTypeHelperLine(Section, Unitname);
   Classes := Section.FindAll(nkClass);
   try
     for C in Classes do
     begin
       if C.Name = '' then Continue;
+      if (HelperLine > 0) and (C.Line > HelperLine) then Continue;
       Key := LowerCase(C.Name);
       if not FClassDeclUnits.TryGetValue(Key, Decls) then
       begin

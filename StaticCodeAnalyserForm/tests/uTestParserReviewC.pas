@@ -31,12 +31,31 @@ type
     [Test] procedure ArgumentScanner_LocalRecordTypeInAnonMethod_Continues;
   end;
 
+  // Parser-Charge P (2026-10-27): FPC-'type helper' (P1). Eigene Fixture,
+  // damit TTestParserReviewC unter 20 Tests bleibt; Parse/NodeNamed/
+  // CountKind liegen auf Unit-Ebene.
+  [TestFixture]
+  TTestParserChargeP = class
+  public
+    // P1 - 'type helper for X'
+    [Test] procedure TypeHelper_ClassBehindHelperIsParsed;
+    [Test] procedure TypeHelper_StrongAliasAndEnumUnchanged;
+    [Test] procedure TypeHelper_MethodNameFoundAtDeclaration;
+  end;
+
 implementation
+
+// noinspection-file ClassPerFile
+// Zwei Fixtures (Grenze 20 Tests je Fixture): die Review-Befunde und die
+// Parser-Charge P teilen Parse/NodeNamed/CountKind - eine zweite Datei
+// braechte nur einen zweiten Projekteintrag.
 
 uses
   System.SysUtils, System.Classes, System.IOUtils,
   System.Generics.Collections,
-  uAstNode, uParser2;
+  uSCAConsts, uMethodd12,   // TLeakFinding, fkMethodName (Charge P)
+  uAstNode, uParser2,
+  uTestFindingHelper;       // FindingsOfFile (Charge P, Detektor-Tests)
 
 function Parse(const ASrc: string): TAstNode;
 var
@@ -492,7 +511,115 @@ begin
   end;
 end;
 
+{ ---- Parser-Charge P ---- }
+
+const
+  // Helper VOR der Klasse in derselben type-Sektion (stdctrls.pp-Muster).
+  SRC_TYPE_HELPER =
+    'unit h;'#13#10 +                              // 1
+    'interface'#13#10 +                            // 2
+    'type'#13#10 +                                 // 3
+    '  TIntHelper = type helper for Integer'#13#10 + // 4
+    '    function IsZero: Boolean;'#13#10 +        // 5
+    '  end;'#13#10 +                               // 6
+    '  TFoo = class'#13#10 +                       // 7
+    '    procedure doStuff;'#13#10 +               // 8
+    '  end;'#13#10 +                               // 9
+    'implementation'#13#10 +                       // 10
+    'function TIntHelper.IsZero: Boolean;'#13#10 + // 11
+    'begin'#13#10 +                                // 12
+    '  Result := Self = 0;'#13#10 +                // 13
+    'end;'#13#10 +                                 // 14
+    'procedure TFoo.doStuff;'#13#10 +              // 15
+    'begin'#13#10 +                                // 16
+    'end;'#13#10 +                                 // 17
+    'end.';                                        // 18
+
+procedure TTestParserChargeP.TypeHelper_ClassBehindHelperIsParsed;
+// Vorher: der Alias-Zweig las bis zum ';' hinter 'Boolean', das 'end'
+// beendete die type-Sektion, TFoo fehlte im AST (Exe 8c3eac8f: SCA106
+// meldet doStuff an der Implementierungszeile, s. Test unten).
+var
+  Root  : TAstNode;
+  HNode : TAstNode;
+begin
+  Root := Parse(SRC_TYPE_HELPER);
+  try
+    HNode := NodeNamed(Root, nkRecord, 'TIntHelper');
+    Assert.IsNotNull(HNode, 'der type helper ist ein nkRecord');
+    Assert.AreEqual<Integer>(4, HNode.Line);
+    Assert.AreEqual<Integer>(16, HNode.Col, 'Position = das type-Token');
+    Assert.IsNotNull(NodeNamed(Root, nkClass, 'TFoo'),
+      'die Klasse hinter dem Helper ist im AST');
+    Assert.IsNull(NodeNamed(Root, nkTypeAlias, 'TIntHelper'),
+      'kein Alias-Knoten mehr');
+  finally
+    Root.Free;
+  end;
+end;
+
+procedure TTestParserChargeP.TypeHelper_StrongAliasAndEnumUnchanged;
+// Gegenprobe: 'type' ohne 'helper' (starker Alias) bleibt im Alias-Zweig
+// mit demselben TypeRef; der Enum dahinter und record/class helper
+// laufen wie bisher.
+const
+  SRC =
+    'unit a; interface'#13#10 +
+    'type'#13#10 +
+    '  TMyInt = type Integer;'#13#10 +
+    '  TColor = (cRed, cGreen);'#13#10 +
+    '  TStrHelper = record helper for string'#13#10 +
+    '    function Len: Integer;'#13#10 +
+    '  end;'#13#10 +
+    '  TBar = class'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'end.';
+var
+  Root : TAstNode;
+begin
+  Root := Parse(SRC);
+  try
+    Assert.IsNotNull(NodeNamed(Root, nkTypeAlias, 'TMyInt'));
+    Assert.AreEqual('Integer', NodeNamed(Root, nkTypeAlias, 'TMyInt').TypeRef);
+    Assert.IsNotNull(NodeNamed(Root, nkEnumType, 'TColor'));
+    Assert.IsNotNull(NodeNamed(Root, nkRecord, 'TStrHelper'));
+    Assert.IsNotNull(NodeNamed(Root, nkClass, 'TBar'));
+  finally
+    Root.Free;
+  end;
+end;
+
+procedure TTestParserChargeP.TypeHelper_MethodNameFoundAtDeclaration;
+// Detektor-Sicht der sichtbarsten P1-Bewegung (SCA106, laz 28 Paare): mit
+// der Klasse im AST meldet SCA106 die Deklarationszeile 8. Ohne Fix kennt
+// der Parser TFoo nicht und meldet die Implementierung (Zeile 15) - Exe
+// 8c3eac8f an genau dieser Zeichenkette: 1 Fund, Zeile 15 (ROT).
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC_TYPE_HELPER);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMethodName),
+      'doStuff genau einmal');
+    Hit := nil;
+    for Fnd in F do
+    begin
+      if Fnd.Kind = fkMethodName then
+      begin
+        Hit := Fnd;
+      end;
+    end;
+    Assert.AreEqual('8', Hit.LineNumber, 'Fund an der Deklaration in TFoo');
+  finally
+    F.Free;
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestParserReviewC);
+  TDUnitX.RegisterTestFixture(TTestParserChargeP);
 
 end.
