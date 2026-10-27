@@ -43,7 +43,8 @@
 //
 // Erkennung:
 //   * MethodNode.FindAll(nkParam) → Liste der Param-Knoten
-//   * Body-Tokens einsammeln (rekursiv Name+TypeRef aller Children)
+//   * Body-Tokens einsammeln (rekursiv Name+TypeRef aller Children),
+//     Inhalt von String-Literalen ausgeblendet (U11, s. CodeTextOf)
 //   * Pro Param: zaehle case-insensitive Wortgrenzen-Vorkommen im Body
 //   * Wenn 0 -> Finding
 //
@@ -738,12 +739,60 @@ begin
   end;
 end;
 
-procedure CollectAllTokens(Root: TAstNode; SB: TStringBuilder);
-// Seit Voll-Review 2026-09-12 (Posten 89) byte-identisch in
-// TDetectorUtils.CollectNameTypeTokens (dritte Kopie derselben
-// Routine). Wrapper bleibt fuer die Aufrufer dieser Unit.
+function CodeTextOf(const AText: string): string;
+// U11 (2026-10-27): ein Knotenstueck OHNE den Inhalt seiner String-
+// Literale. Der Parser legt Literale in QUELLFORM in Name/TypeRef ab
+// (QuoteStrLit, z. B. nkCall "RaiseUnimplemented('Add(Escape)')"). Ohne
+// diesen Schritt war ein Literal mit dem Parameternamen das zweite
+// Vorkommen neben der Deklaration - der Parameter galt als gelesen, der
+// Fund fehlte (Referenz perfS184: 12 Faelle, u. a. mORMot
+// TTextWriter.Add 'Escape', JvProps 'S' in Format('%s.%s', ...)). Die
+// Quell-Rueckfragen unten lesen die gestrippte Quelle und hielten die
+// Zusage 'Strings zaehlen nie' schon immer - jetzt auch die AST-Zaehlung.
+//
+// JE STUECK, nicht auf dem verketteten Text: ein unpaariges Apostroph
+// (Literalinhalt aus einem ROH abgelegten Pfad, s. u.) blendet so
+// hoechstens den Rest SEINES Stuecks aus, nie die Folgeknoten. Und auch
+// dann schuetzt die Quell-Rueckfrage (UsedInMethodSource): steht der
+// Name im Rumpf als Code, bleibt der Parameter benutzt.
+//
+// BEKANNTER REST (FN, nicht Teil von U11): Literale, die der Parser
+// ohne Quotes ablegt - Exit(...)-Argumente, for-Kopf, 'raise .. at ..',
+// Parameter-Defaults. Ihr Inhalt ist vom Code nicht zu unterscheiden
+// und zaehlt weiter als Nutzung.
 begin
-  TDetectorUtils.CollectNameTypeTokens(Root, SB);
+  if Pos('''', AText) = 0 then
+    Result := AText
+  else
+    Result := TDetectorUtils.BlankStringLiterals(AText);
+end;
+
+procedure CollectAllTokens(Root: TAstNode; SB: TStringBuilder);
+// Bis U11 ein Wrapper um TDetectorUtils.CollectNameTypeTokens; jetzt
+// derselbe Lauf (gleiche Reihenfolge, gleiche ' '-Trenner), aber jedes
+// Stueck durch CodeTextOf - String-Literale zaehlen nicht als Nutzung.
+// Bewusst eine eigene Schleife statt einer Aenderung am geteilten
+// Helfer: der hat weitere Aufrufer, deren Vertrag U11 nicht beruehrt.
+var
+  Stack : TStack<TAstNode>;
+  Cur   : TAstNode;
+  i     : Integer;
+begin
+  if Root = nil then Exit;
+  Stack := TStack<TAstNode>.Create;
+  try
+    Stack.Push(Root);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack.Pop;
+      if Cur.Name    <> '' then SB.Append(' ').Append(CodeTextOf(Cur.Name));
+      if Cur.TypeRef <> '' then SB.Append(' ').Append(CodeTextOf(Cur.TypeRef));
+      for i := 0 to Cur.Children.Count - 1 do
+        Stack.Push(Cur.Children[i]);
+    end;
+  finally
+    Stack.Free;
+  end;
 end;
 
 function RoutineUsedAsProcValue(var AStripped: TStrippedUnit;
