@@ -123,7 +123,11 @@ begin
   begin
     // Der Schreibschutz-Test laesst die Datei schreibgeschuetzt zurueck -
     // ohne das Zuruecksetzen scheiterte das Loeschen.
+    // TFileAttribute.faNormal/faReadOnly sind 'platform' (nur Windows) -
+    // die Tests laufen nur dort; Muster wie uStaticFiles (faSymLink).
+    {$WARN SYMBOL_PLATFORM OFF}
     TFile.SetAttributes(FPath, [TFileAttribute.faNormal]);
+    {$WARN SYMBOL_PLATFORM ON}
     TFile.Delete(FPath);
   end;
 end;
@@ -350,7 +354,9 @@ var
 begin
   Given(SAMPLE);
   Before := Content;
+  {$WARN SYMBOL_PLATFORM OFF}
   TFile.SetAttributes(FPath, [TFileAttribute.faReadOnly]);
+  {$WARN SYMBOL_PLATFORM ON}
   Ini := TCommentPreservingIni.Create(FPath);
   try
     Ini.WriteString('UI', KEY_LANG, 'en');
@@ -371,7 +377,9 @@ var
   Ok  : Boolean;
 begin
   Given(SAMPLE);
+  {$WARN SYMBOL_PLATFORM OFF}
   TFile.SetAttributes(FPath, [TFileAttribute.faReadOnly]);
+  {$WARN SYMBOL_PLATFORM ON}
   Ini := TCommentPreservingIni.Create(FPath);
   try
     Ini.WriteString('UI', KEY_LANG, 'de');   // derselbe Wert
