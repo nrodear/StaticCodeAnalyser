@@ -290,6 +290,15 @@ type
     procedure PairBool(const AName: string; AValue: Boolean);
     // String-Element in einem Array.
     procedure ArrStr(const AValue: string);
+    // '"AName": ["a","b"]' - String-Array auf EINER Zeile (Form von
+    // TJSONArray.ToJSON, nicht von Format(2)). Zweite bewusste Abweichung
+    // vom RTL-Vorbild (neben \u00XX, s. oben), nur im Layout, nicht im
+    // JSON-Wert: properties.editorHelp (2026-10-28) steht so je Fund
+    // auf einer Zeile, und die zeilenweisen SARIF-Leser (rw_audit_sample,
+    // fp_uebersicht, sites_from_sarif, perf_rdx/gen_harness) sehen keine
+    // neuen Zeilen mit Werten, die sie fuer ihre Schluessel halten koennten.
+    procedure PairStrArrInline(const AName: string;
+      const AValues: TArray<string>);
     // Datei-Modus: Puffer ab Schwelle (AForce: immer) UTF-8-kodiert in
     // den Stream schreiben. String-Modus: No-op.
     procedure FlushChunk(AForce: Boolean);
@@ -462,6 +471,23 @@ begin
   AppendEscaped(AValue);
 end;
 
+procedure TSarifJsonEmitter.PairStrArrInline(const AName: string;
+  const AValues: TArray<string>);
+var
+  i : Integer;
+begin
+  ItemSeparator;
+  AppendEscaped(AName);
+  FSb.Append(': [');
+  for i := 0 to High(AValues) do
+  begin
+    if i > 0 then
+      FSb.Append(',');
+    AppendEscaped(AValues[i]);
+  end;
+  FSb.Append(']');
+end;
+
 procedure TSarifJsonEmitter.FlushChunk(AForce: Boolean);
 var
   Bytes : TBytes;
@@ -574,6 +600,29 @@ begin
   E.EndArr;                                            // invocations
 end;
 
+type
+  // properties.editorHelp je Art ('id:effect:slug', s. EditorHelpTokens).
+  THelpTokensJeArt = array[TFindingKind] of TArray<string>;
+
+function HelpTokensJeArt: THelpTokensJeArt;
+// Die Editorhilfen aller Arten, einmal je Export aus dem Katalog gebaut -
+// je Fund dann nur ein Lookup statt Katalogkopie und String-Bau.
+var
+  K : TFindingKind;
+begin
+  for K := Low(TFindingKind) to High(TFindingKind) do
+    Result[K] := EditorHelpTokens(TRuleCatalog.GetRuleCanonical(K));
+end;
+
+procedure EmitEditorHelp(E: TSarifJsonEmitter; const ATokens: TArray<string>);
+// properties.editorHelp (Nico 2026-10-28) - je Fund und je Regel in
+// rules[]. Nur, wenn die Regel Hilfen hat: wie variant keine leeren
+// Felder.
+begin
+  if Length(ATokens) > 0 then
+    E.PairStrArrInline('editorHelp', ATokens);
+end;
+
 procedure EmitSarifDocument(E: TSarifJsonEmitter;
   const AFindings: TObjectList<TLeakFinding>;
   const ABaseDir, AToolVersion, AToolName: string;
@@ -595,23 +644,40 @@ var
   // obwohl ABaseDir konstant ist und nur ~10k eindeutige FileNames existieren.
   // Caller-scoped Memo FileName->RelPath (reine Funktion -> byte-identisch).
   RelMemo : TDictionary<string, string>;
+  // properties.editorHelp je Art, vor der Ergebnis-Schleife gebaut.
+  HelpTokens : THelpTokensJeArt;
 
   procedure WriteResultProperties(AFinding: TLeakFinding);
   // Der properties-Bag eines Results: Konfidenz (nur bei aktiver
-  // Evidenz-Politik) und die Leck-Variante (nur bei fkMemoryLeak).
+  // Evidenz-Politik), die Leck-Variante (nur bei fkMemoryLeak) und die
+  // Editorhilfen der Regel (nur bei einer Regel mit Hilfe).
   // Eigene Routine, weil die Ergebnis-Schleife mit den drei zusaetzlichen
   // Verzweigungen sonst ueber die McCabe-Schwelle geht - der Bag ist eine
   // abgeschlossene Sache und liest sich hier besser als eingebettet.
+  //
+  // editorHelp (Nico 2026-10-28): welche Code-Aktionen von reDelphix es
+  // fuer den Fund gibt, je Menueeintrag 'id:effect:slug' aus dem Katalog
+  // (TRuleMeta.EditorHelps - die CLI linkt reDelphix nicht). Ob die Hilfe
+  // an genau diesem Fund greift, entscheidet das Modul; das Feld sagt nur,
+  // was die Regel anbietet. Steht HINTER confidence/variant und auf einer
+  // Zeile (PairStrArrInline) - die zeilenweisen Leser suchen confidence
+  // dort, wo es war. Wie variant nur, wenn es etwas zu sagen gibt: die
+  // Funde der Regeln ohne Hilfe bleiben byte-gleich. Die Texte kommen aus
+  // HelpTokens (je Art einmal gebaut, nicht je Fund).
   var
     LeakVariant : string;
+    Helps       : TArray<string>;
   begin
     LeakVariant := AFinding.MemoryLeakVariant;
-    if not (AConfidenceProps or (LeakVariant <> '')) then Exit;
+    Helps       := HelpTokens[AFinding.Kind];
+    if not (AConfidenceProps or (LeakVariant <> '') or (Length(Helps) > 0)) then
+      Exit;
     E.BeginObjPair('properties');
     if AConfidenceProps then
       E.PairStr('confidence', ConfidenceName(AFinding.Confidence));
     if LeakVariant <> '' then
       E.PairStr('variant', LeakVariant);
+    EmitEditorHelp(E, Helps);
     E.EndObj;
   end;
 
@@ -670,6 +736,9 @@ begin
         E.PairStr('detectorUnit', M.DetectorUnit);
       if M.ConfigKey <> '' then
         E.PairStr('configKey', M.ConfigKey);
+      // Dieselbe Liste wie je Fund (WriteResultProperties) - hier fuer
+      // Konsumenten, die die Regel statt des Funds ansehen.
+      EmitEditorHelp(E, EditorHelpTokens(M));
       E.EndObj;
 
       // Help-URI: GitHub zeigt das im Detail-Panel - Anker auf konsoli-
@@ -728,6 +797,8 @@ begin
   end;
 
   EmitRunDiagnostics(E, AFindings, ABaseDir);
+
+  HelpTokens := HelpTokensJeArt;
 
   // runs[0].results[] - pro Finding direkt streamen, kein DOM.
   E.BeginArrPair('results');

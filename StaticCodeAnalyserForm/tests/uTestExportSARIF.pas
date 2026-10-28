@@ -67,6 +67,24 @@ type
     [Test] procedure FingerprintBleibtRohBeiAbsolutemPfad;
   end;
 
+  // properties.editorHelp (Nico 2026-10-28): je Fund die Editorhilfen der
+  // Regel aus dem Katalog (TRuleMeta.EditorHelps), 'id:effect:slug' als
+  // einzeiliges Array. Eigene Fixture - TTestExportSARIF liegt schon ueber
+  // der Methoden-Schwelle (s. Kopf).
+  [TestFixture]
+  TTestExportSarifEditorHelp = class
+  public
+    // SCA017 traegt beide Eintraege; der Fund einer Regel ohne Hilfe
+    // (SCA010) bekommt kein Feld - ohne Konfidenz auch keinen Bag.
+    [Test] procedure HelpRule_CarriesBothEntries_RuleWithoutHelpHasNone;
+    // Das Feld steht HINTER confidence und variant und auf EINER Zeile -
+    // so lesen es die zeilenweisen SARIF-Leser (tools/fp_uebersicht.py
+    // u.a.) nicht als ihre Schluessel.
+    [Test] procedure EditorHelp_OneLine_BehindConfidenceAndVariant;
+    // rules[]: dieselbe Liste im properties-Bag der Regel.
+    [Test] procedure RulesBlock_CarriesEditorHelp;
+  end;
+
 implementation
 
 uses
@@ -954,6 +972,140 @@ begin
           'endLine darf NIE kleiner als startLine sein');
     finally Root.Free; end;
   finally Findings.Free; end;
+end;
+
+{ TTestExportSarifEditorHelp }
+
+const
+  HELP_017 = '["SCA017:changes:put-debug-output-in-ifdef-debug",' +
+             '"SCA017.2:changes:delete-debug-output"]';
+
+function HelpFinding(K: TFindingKind; LineNo: Integer): TLeakFinding;
+begin
+  Result := TLeakFinding.Create;
+  Result.Kind       := K;
+  Result.Severity   := lsWarning;
+  Result.FileName   := 'src\Help.pas';
+  Result.LineNumber := IntToStr(LineNo);
+  Result.MissingVar := 'Probe';
+  Result.MethodName := 'TestMethod';
+end;
+
+function RunOf(Root: TJSONObject): TJSONObject;
+begin
+  Result := Root.GetValue<TJSONArray>('runs').Items[0] as TJSONObject;
+end;
+
+procedure TTestExportSarifEditorHelp.HelpRule_CarriesBothEntries_RuleWithoutHelpHasNone;
+var
+  Findings : TObjectList<TLeakFinding>;
+  Root     : TJSONObject;
+  Results  : TJSONArray;
+  Props    : TJSONObject;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(HelpFinding(fkDebugOutput, 3));
+    Findings.Add(HelpFinding(fkDivByZero, 4));
+    Root := TJSONObject.ParseJSONValue(TSARIFWriter.ToJsonString(Findings, '',
+      '0.9.9', 'TestTool', False)) as TJSONObject;
+    try
+      Results := RunOf(Root).GetValue<TJSONArray>('results');
+      Assert.AreEqual<Integer>(2, Results.Count);
+      Props := (Results.Items[0] as TJSONObject).GetValue('properties') as TJSONObject;
+      Assert.IsNotNull(Props, 'SCA017: properties-Bag fehlt');
+      Assert.AreEqual(HELP_017, Props.GetValue('editorHelp').ToJSON,
+        'SCA017: beide Eintraege, Reihenfolge wie im Menue');
+      Assert.IsNull((Results.Items[1] as TJSONObject).GetValue('properties'),
+        'SCA010 ohne Editorhilfe und ohne Konfidenz: kein properties-Bag');
+    finally
+      Root.Free;
+    end;
+  finally
+    Findings.Free;
+  end;
+end;
+
+procedure TTestExportSarifEditorHelp.EditorHelp_OneLine_BehindConfidenceAndVariant;
+var
+  Findings : TObjectList<TLeakFinding>;
+  S        : string;
+  Zeilen   : TArray<string>;
+  Zeile    : string;
+  Treffer  : string;
+  PRes     : Integer;
+  PCnf     : Integer;
+  PVar     : Integer;
+  PHelp    : Integer;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    // SCA001 (fkMemoryLeak) traegt immer eine Variante, mit Konfidenz
+    // stehen also alle drei Felder im Bag.
+    Findings.Add(HelpFinding(fkMemoryLeak, 7));
+    S := TSARIFWriter.ToJsonString(Findings, '', '0.9.9', 'TestTool', True);
+  finally
+    Findings.Free;
+  end;
+  // Nur im results-Teil suchen - rules[] traegt editorHelp auch.
+  PRes  := Pos('"results"', S);
+  PCnf  := Pos('"confidence"', S, PRes);
+  PVar  := Pos('"variant"', S, PRes);
+  PHelp := Pos('"editorHelp"', S, PRes);
+  Assert.IsTrue((PRes > 0) and (PCnf > PRes), 'confidence fehlt im Result');
+  Assert.IsTrue(PVar > PCnf, 'variant hinter confidence');
+  Assert.IsTrue(PHelp > PVar, 'editorHelp hinter variant');
+  Treffer := '';
+  Zeilen := Copy(S, PRes, MaxInt).Split([sLineBreak]);
+  for Zeile in Zeilen do
+    if Pos('"editorHelp"', Zeile) > 0 then
+      Treffer := Trim(Zeile);
+  Assert.AreEqual('"editorHelp": ["SCA001:changes:free-in-try-finally-block"]',
+    Treffer, 'editorHelp: Name und Liste auf EINER Zeile');
+end;
+
+procedure TTestExportSarifEditorHelp.RulesBlock_CarriesEditorHelp;
+var
+  Findings : TObjectList<TLeakFinding>;
+  Root     : TJSONObject;
+  Rules    : TJSONArray;
+  Rule     : TJSONObject;
+  Props    : TJSONObject;
+  i        : Integer;
+  Gesehen  : Integer;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Root := TJSONObject.ParseJSONValue(TSARIFWriter.ToJsonString(Findings, '',
+      '0.9.9', 'TestTool', False)) as TJSONObject;
+    try
+      Rules := RunOf(Root).GetValue<TJSONObject>('tool')
+                 .GetValue<TJSONObject>('driver').GetValue<TJSONArray>('rules');
+      Gesehen := 0;
+      for i := 0 to Rules.Count - 1 do
+      begin
+        Rule  := Rules.Items[i] as TJSONObject;
+        Props := Rule.GetValue<TJSONObject>('properties');
+        if Rule.GetValue<string>('id') = 'SCA017' then
+        begin
+          Assert.AreEqual(HELP_017, Props.GetValue('editorHelp').ToJSON,
+            'rules[] SCA017: dieselbe Liste wie je Fund');
+          Inc(Gesehen);
+        end
+        else if Rule.GetValue<string>('id') = 'SCA010' then
+        begin
+          Assert.IsNull(Props.GetValue('editorHelp'),
+            'rules[] SCA010 ohne Editorhilfe: kein Feld');
+          Inc(Gesehen);
+        end;
+      end;
+      Assert.AreEqual<Integer>(2, Gesehen, 'SCA017 und SCA010 in rules[]');
+    finally
+      Root.Free;
+    end;
+  finally
+    Findings.Free;
+  end;
 end;
 
 end.
