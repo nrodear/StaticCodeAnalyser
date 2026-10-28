@@ -4,7 +4,8 @@ unit uRdxRecipeRunner;
 // den Quellstellen-Dienst des SCA-Cores (TSourcePlaces) aus. Ohne
 // ToolsAPI, ohne Clipboard, ohne Menue - damit ist dieser Weg vom Fund
 // bis zum fertigen Ersatztext in reDelphix.Test ohne IDE pruefbar. Der
-// Anbieter (uRdxProvider) baut daraus nur noch Menuepunkte.
+// Kern des Anbieters (uRdxActionCore, seit E3) baut daraus die Eintraege,
+// uRdxProvider nur noch die Menuepunkte.
 //
 // ABLAUF FUER SCA044 (Rezept 5.1)
 //

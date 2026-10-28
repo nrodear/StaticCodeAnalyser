@@ -977,8 +977,15 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   `FormatRewrite`), SCA165 gesperrt mit Grund, Parser-Watchdog bzw. nicht
   lesbare Quelle (nur Diagnose, Text-Rezept und Unterdruecken), Regel ohne
   Hilfe (Diagnose), uses-Zeile ohne Lieferanten der Projekt-Units
-  (`UsesSkipped`), `FindingDiagnosis` und `MsgTooLongForEditor` - 9 Tests,
-  nur reDelphix.Test (anonyme Methoden, Watchdog).
+  (`UsesSkipped`), `FindingDiagnosis` und `MsgTooLongForEditor`; nach dem
+  Review E3 dazu `FindingActionOf` (jedes Feld des Eintrags in der
+  `TFindingAction`, bis dahin ungetestet in `TRdxProvider.AddEntry`), die
+  per RTTI gepinnten Felder von `TFindingAction`, `TRdxActionData` und
+  `TRdxActionEntry` (ein neues Feld wird rot, bis das Mapping es kennt),
+  die SQL-Vorlage (SCA003) gleich `SqlTemplate`, Format() mit fehlendem
+  `System.SysUtils` (zwei Ersetzungen) und eine Ausnahme in einem
+  Baum-Rezept (laeuft zum Aufrufer, Quelle vergessen) - 14 Tests, nur
+  reDelphix.Test (anonyme Methoden, Watchdog, RTTI).
 * `uTestRdxText` - die Sprache der Texte (`uRdxText`, Charge C0, Entscheid
   E29): Override (de/fr/en, Kuerzel ohne Uebersetzung, Normalisierung wie
   in der SCA), `auto` ueber die gesetzte Sprache der SCA, ohne sie ueber

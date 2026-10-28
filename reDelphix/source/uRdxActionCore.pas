@@ -53,13 +53,27 @@ uses
   System.SysUtils, System.Classes,
   uEngineApi, uRefactorInfo, uMethodd12, uFindingActions,
   uRdxScopeTable,   // TRdxScopeTable, TRdxProjectUnits
-  uRdxBufferMath,   // TRdxTextSource, TRdxEdit, SpanFitsEditor
-  uRdxRecipeRunner;
+  uRdxBufferMath;   // TRdxTextSource, TRdxEdit, SpanFitsEditor
 
 const
   // Vor jedem Eintrag, der nur einen Grund nennt ("reDelphix: Datei nicht
   // lesbar") - Code, kein Text: keine msgid.
   DIAG_PREFIX = 'reDelphix: ';
+  // Die Namen der Rezepte (TRdxActionEntry.Recipe) - Code, keine msgid. Die
+  // Probe (Spalte Eintrag) und die Tests lesen sie; eine neue Hilfe mit
+  // eigenem Rezept bekommt hier ihren Namen und im Konstruktor ihren Platz.
+  RECIPE_SHOW_SPAN     = 'ShowSpan';
+  RECIPE_FORMAT_CALL   = 'FormatCall';
+  RECIPE_SQL_TEMPLATE  = 'SqlTemplate';
+  RECIPE_USES_ACTIONS  = 'UsesActions';
+  RECIPE_SIMPLE_FIX    = 'SimpleFix';
+  RECIPE_REMOVE_MARKER = 'RemoveMarker';
+  RECIPE_SUPPRESS      = 'Suppress';
+  // Keine Rezepte, aber Herkunft eines Eintrags: die Quelle liess sich
+  // nicht oeffnen (Datei nicht lesbar, Parser) bzw. "reDelphix: <Grund>",
+  // wenn nichts anderes entstand.
+  RECIPE_OPEN          = 'Open';
+  RECIPE_DIAGNOSIS     = 'Diagnosis';
 
 type
   // Was ein verfuegbarer Eintrag beim Ausfuehren tut (der Anbieter fuehrt
@@ -76,13 +90,18 @@ type
     // prueft sie gegen den Puffer und sortiert selbst).
     Edits    : TArray<TRdxEdit>;
   end;
+  // Die Rezepte reichen Add die Daten eines verfuegbaren Eintrags als
+  // Zeiger auf ihren lokalen Record (Add kopiert sie sofort); nil heisst
+  // "ohne Daten", der Eintrag ist dann gesperrt. So bleibt die Aufrufform
+  // Add(AList, Menuetext, Hinweis, Enabled, nil) erhalten, die
+  // tools/gen-quickfix-doc.py in den Rezeptruempfen liest.
   PRdxActionData = ^TRdxActionData;
 
   // Ein Eintrag wie TFindingAction, als Beschreibung.
   TRdxActionEntry = record
-    // Das Rezept, das ihn anlegte: 'ShowSpan', 'FormatCall', 'SqlTemplate',
-    // 'UsesActions', 'SimpleFix', 'RemoveMarker', 'Suppress', dazu 'Open'
-    // (Quelle nicht lesbar, Parser) und 'Diagnosis' ("reDelphix: <Grund>").
+    // Das Rezept, das ihn anlegte: eine der Konstanten RECIPE_* oben
+    // (RECIPE_OPEN: Quelle nicht lesbar, Parser; RECIPE_DIAGNOSIS:
+    // "reDelphix: <Grund>").
     Recipe          : string;
     Caption         : string;       // Menuetext, uebersetzt (uRdxText)
     Hint            : string;       // Hinweis, bei Enabled = False der Grund
@@ -147,6 +166,11 @@ type
   TRdxProjectUnitsSource = reference to function(
     const AFileName: string): TRdxProjectUnits;
 
+  // Der Ablauf des Anbieters je Fund ohne IDE (s. Kopf): Describe liefert
+  // die Eintraege, FindingActionOf macht aus einem Eintrag die
+  // TFindingAction ohne Execute. Ein Kern haelt die zuletzt geoeffnete
+  // Quelle (Source) ueber mehrere Aufrufe; er ist nicht threadsicher - je
+  // Thread ein Kern (der Anbieter haelt genau einen, die Probe einen).
   TRdxActionCore = class
   private
     FSource       : TRdxSourceCache;
@@ -237,9 +261,20 @@ type
     function Describe(const AFinding: TLeakFinding; ALines: TStrings;
       ASource: TRdxTextSource; const AText: string): TArray<TRdxActionEntry>;
 
+    // Der Menuepunkt zu AEntry ohne Execute (das haengt der Anbieter an,
+    // wenn AEntry.HasAction): Menuetext, Hinweis, Art und Kennzeichnung wie
+    // beschrieben, verfuegbar nur mit Daten zum Ausfuehren (wie bis E3
+    // TRdxProvider.Add: Enabled and Assigned(Aktion)). Recipe und Variant
+    // gehen nicht in die TFindingAction - sie kennt keine solchen Felder
+    // (uTestRdxActionCore pinnt die Felder beider Records).
+    class function FindingActionOf(
+      const AEntry: TRdxActionEntry): TFindingAction; static;
+
     // Die offene Quelle - der Anbieter teilt sie mit der Code-Aktion am
     // Caret (ContextPlaces).
     property Source: TRdxSourceCache read FSource;
+    // Die Scope-Tabelle aus dem Konstruktor (gehoert dem Aufrufer); nil
+    // oder leer: 'uses: X -> Scope.X' ist gesperrt (qbNoTable).
     property Scopes: TRdxScopeTable read FScopes;
     // Lieferant der Projekt-Units; nil (Vorgabe): kein uses-Umbau.
     property ProjectUnits: TRdxProjectUnitsSource read FProjectUnits
@@ -261,6 +296,7 @@ uses
   uRuleCatalog,
   uRdxFixTable,     // Tabelle der einfachen Hilfen: Planer und Menuetexte
   uRdxSuppress,
+  uRdxRecipeRunner, // Describe, FormatRewrite, SqlTemplate, QualifyUses
   uRdxLog;          // Protokoll: DebugView + %TEMP%\reDelphix.log
 
 const
@@ -351,14 +387,33 @@ begin
   FTreeRecipes[2] := AddSqlTemplate;
   FTreeRecipes[3] := AddUsesActions;
   FTreeRecipes[4] := AddSimpleFix;
-  FTreeNames := ['ShowSpan', 'FormatCall', 'SqlTemplate', 'UsesActions',
-    'SimpleFix'];
+  FTreeNames := [RECIPE_SHOW_SPAN, RECIPE_FORMAT_CALL, RECIPE_SQL_TEMPLATE,
+    RECIPE_USES_ACTIONS, RECIPE_SIMPLE_FIX];
   SetLength(FTextRecipes, 1);
   FTextRecipes[0] := AddRemoveMarker;
-  FTextNames := ['RemoveMarker'];
+  FTextNames := [RECIPE_REMOVE_MARKER];
   SetLength(FSuppressRecipes, 1);
   FSuppressRecipes[0] := AddSuppress;
-  FSuppressNames := ['Suppress'];
+  FSuppressNames := [RECIPE_SUPPRESS];
+  // Je Rezept ein Name in derselben Reihenfolge - ein Rezept ohne Namen
+  // truege Recipe = '' (RunRecipes), die Probe ordnete es nicht zu.
+  Assert(Length(FTreeNames) = Length(FTreeRecipes), 'FTreeNames');
+  Assert(Length(FTextNames) = Length(FTextRecipes), 'FTextNames');
+  Assert(Length(FSuppressNames) = Length(FSuppressRecipes), 'FSuppressNames');
+end;
+
+class function TRdxActionCore.FindingActionOf(
+  const AEntry: TRdxActionEntry): TFindingAction;
+begin
+  // Default: Execute nil, und kein Feld bleibt auf Zufall (Review Welle 1,
+  // Bereich D) - jedes andere Feld setzt die Zuweisung unten ausdruecklich.
+  Result := Default(TFindingAction);
+  Result.Caption         := AEntry.Caption;
+  Result.Hint            := AEntry.Hint;
+  Result.Enabled         := AEntry.Enabled and AEntry.HasAction;
+  Result.Kind            := AEntry.Kind;
+  Result.ChangesBehavior := AEntry.ChangesBehavior;
+  Result.Execute         := nil;   // haengt der Anbieter an (TRdxAction)
 end;
 
 destructor TRdxActionCore.Destroy;
@@ -733,7 +788,7 @@ var
   Opened : TRdxOpenResult;
   Done   : Boolean;
 begin
-  FRecipe := 'Open';
+  FRecipe := RECIPE_OPEN;
   try
     // Der EDITOR-PUFFER ist die Wahrheit, wenn die Datei offen ist: nur
     // dann passen die beschriebenen Bereiche zu dem Text, in den nachher
@@ -802,7 +857,7 @@ procedure TRdxActionCore.AddDiagnosis(var AList: TArray<TRdxActionEntry>;
   const ACtx: TRdxRecipeContext);
 begin
   if Length(AList) > 0 then Exit;
-  FRecipe := 'Diagnosis';
+  FRecipe := RECIPE_DIAGNOSIS;
   if ACtx.Why <> '' then
     Add(AList, DIAG_PREFIX + ACtx.Why, '', False, nil)
   else if ACtx.FixMode = '' then

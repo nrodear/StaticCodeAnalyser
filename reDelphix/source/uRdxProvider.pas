@@ -92,7 +92,7 @@ interface
 uses
   System.SysUtils, System.Classes,
   System.Diagnostics,   // TStopwatch (Fenster des Plattenblick-Caches)
-  uEngineApi, uRefactorInfo, uMethodd12, uFindingActions,
+  uEngineApi, uMethodd12, uFindingActions,
   uRdxScopeTable,
   uRdxBufferMath,   // TRdxTextSource, TRdxEdit
   uRdxCodeMap,      // TRdxMappedLines: Zeilen mit geteilter Code-Sicht (P5)
@@ -114,14 +114,12 @@ type
   // Aktionen mehrerer Funde in ein Menue (Stufe B, Konzept Editor-
   // Gluehbirne 2026-10-06). Mehrere Ersetzungen (TRdxEdit aus uRdxBufferMath)
   // prueft uRdxEditor.ReplaceSpans alle gegen den Puffer und schreibt sie
-  // dann aufsteigend durch EINEN Writer - ein Undo-Schritt.
+  // dann aufsteigend durch EINEN Writer - ein Undo-Schritt. Die Daten sind
+  // der ganze Record des Kerns (Review E3: kein Feld kann beim Umkopieren
+  // verloren gehen).
   TRdxAction = class
   private
-    FKind     : TRdxActionKind;
-    FFileName : string;
-    FSpan     : TRefactorSpan;
-    FTemplate : string;
-    FEdits    : TArray<TRdxEdit>;
+    FData : TRdxActionData;
   public
     // TNotifyEvent fuer TFindingAction.Execute. Fehler laufen als
     // ERdxActionFailed zum Host, der sie anzeigt.
@@ -148,12 +146,13 @@ type
     // Plattenblick je Menueaufbau (Charge P5, s. BeginDiskBatch).
     FDiskCache   : TRdxDiskReasonCache;
     FDiskWatch   : TStopwatch;
-    function NewAction(AKind: TRdxActionKind;
-      const AFileName: string): TRdxAction;
+    // Ein Aktionsobjekt mit AData, im Ring der laufenden Charge.
+    function NewAction(const AData: TRdxActionData): TRdxAction;
     procedure Add(var AList: TArray<TFindingAction>;
       const ACaption, AHint: string; AEnabled: Boolean; AAction: TRdxAction);
-    // Ein Eintrag des Kerns als Menuepunkt: Art, Kennzeichnung und
-    // Hinweis wie beschrieben, die Daten in einem TRdxAction im Ring.
+    // Ein Eintrag des Kerns als Menuepunkt: die Felder ueber
+    // TRdxActionCore.FindingActionOf (getestet in uTestRdxActionCore), hier
+    // nur noch Execute aus einem TRdxAction im Ring.
     procedure AddEntry(var AList: TArray<TFindingAction>;
       const AEntry: TRdxActionEntry);
     // Die Zeilen zu AText (Charge P5, Performance): txBuffer - AText als
@@ -261,21 +260,21 @@ procedure TRdxAction.Execute(Sender: TObject);
 var
   Err : string;
 begin
-  case FKind of
+  case FData.Kind of
     akShowSpan:
-      if not TRdxEditor.SelectSpan(FFileName, FSpan, Err) then
+      if not TRdxEditor.SelectSpan(FData.FileName, FData.Span, Err) then
         raise ERdxActionFailed.Create(Err);
     akReplace:
       // Alle Ersetzungen auf einmal: geprueft, dann EIN Undo-Schritt.
-      if not TRdxEditor.ReplaceSpans(FFileName, FEdits, Err) then
+      if not TRdxEditor.ReplaceSpans(FData.FileName, FData.Edits, Err) then
         raise ERdxActionFailed.Create(Err);
     akSqlTemplate:
-      Clipboard.AsText := FTemplate;
+      Clipboard.AsText := FData.Template;
   else
     // Jede Art hat oben ihren Zweig; eine neue ohne Zweig faellt hier auf,
     // statt still nichts zu tun (SCA168) - der Host zeigt die Meldung.
     raise ERdxActionFailed.Create(DIAG_PREFIX
-      + _('action kind %d without execution', [Ord(FKind)]));
+      + _('action kind %d without execution', [Ord(FData.Kind)]));
   end;
 end;
 
@@ -351,12 +350,10 @@ begin
   end;
 end;
 
-function TRdxProvider.NewAction(AKind: TRdxActionKind;
-  const AFileName: string): TRdxAction;
+function TRdxProvider.NewAction(const AData: TRdxActionData): TRdxAction;
 begin
   Result := TRdxAction.Create;
-  Result.FKind     := AKind;
-  Result.FFileName := AFileName;
+  Result.FData := AData;
   FActions.Keep(Result);
 end;
 
@@ -385,20 +382,19 @@ end;
 procedure TRdxProvider.AddEntry(var AList: TArray<TFindingAction>;
   const AEntry: TRdxActionEntry);
 var
+  A   : TFindingAction;
   Act : TRdxAction;
 begin
-  Act := nil;
+  // Menuetext, Hinweis, verfuegbar, Art und Kennzeichnung (E2) mappt der
+  // Kern; hier haengt nur noch die Ausfuehrung daran.
+  A := TRdxActionCore.FindingActionOf(AEntry);
   if AEntry.HasAction then
   begin
-    Act := NewAction(AEntry.Action.Kind, AEntry.Action.FileName);
-    Act.FSpan     := AEntry.Action.Span;
-    Act.FTemplate := AEntry.Action.Template;
-    Act.FEdits    := AEntry.Action.Edits;
+    Act := NewAction(AEntry.Action);
+    A.Execute := Act.Execute;
   end;
-  Add(AList, AEntry.Caption, AEntry.Hint, AEntry.Enabled, Act);
-  AList[High(AList)].Kind := AEntry.Kind;
-  // E2: Ctrl+Alt+F fuehrt eine solche Hilfe nicht ungesehen aus.
-  AList[High(AList)].ChangesBehavior := AEntry.ChangesBehavior;
+  SetLength(AList, Length(AList) + 1);
+  AList[High(AList)] := A;
 end;
 
 function TRdxProvider.SharedLines(const AFileName: string;
@@ -540,6 +536,7 @@ var
   Outcomes : TArray<TRdxContextOutcome>;
   O        : TRdxContextOutcome;
   Caption  : string;
+  Data     : TRdxActionData;
   Act      : TRdxAction;
   PrevDisk : TRdxDiskReasonCache;
 begin
@@ -571,8 +568,11 @@ begin
       if Caption = '' then Continue;
       if O.Enabled then
       begin
-        Act := NewAction(akReplace, AContext.FileName);
-        Act.FEdits := O.Edits;
+        Data := Default(TRdxActionData);
+        Data.Kind     := akReplace;
+        Data.FileName := AContext.FileName;
+        Data.Edits    := O.Edits;
+        Act := NewAction(Data);
         Add(Result, Caption, O.Hint, True, Act);
       end
       else

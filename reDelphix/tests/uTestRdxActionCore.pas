@@ -22,7 +22,16 @@ unit uTestRdxActionCore;
 //     Umbau, UsesSkipped; mit Lieferant der Umbau-Eintrag wie bisher
 //   * der gemeinsame Text MsgTooLongForEditor (bis E3 S_TOO_LONG in
 //     uRdxEditor)
-// Nur Delphi (anonyme Methoden im Kern, echter Parser mit Watchdog).
+// Nach dem Review E3 (2026-10-29):
+//   * FindingActionOf: jedes Feld des Eintrags landet in der TFindingAction
+//     (bis dahin TRdxProvider.AddEntry, ungetestet), und die Felder der drei
+//     Records sind per RTTI gepinnt - ein neues Feld wird rot, bis das
+//     Mapping es kennt
+//   * SQL-Vorlage (SCA003) gleich TRdxRecipeRunner.SqlTemplate
+//   * Format() mit fehlendem System.SysUtils: zwei Ersetzungen
+//   * eine Ausnahme in einem Baum-Rezept laeuft zum Aufrufer, die Quelle
+//     ist danach vergessen, der naechste Fund laeuft normal
+// Nur Delphi (anonyme Methoden im Kern, echter Parser mit Watchdog, RTTI).
 
 interface
 
@@ -42,12 +51,18 @@ type
     [Test] procedure UsesLine_WithoutProjectUnits_Skipped;
     [Test] procedure FindingDiagnosis_NonPascalAndNoLine;
     [Test] procedure TextMsg_TooLongForEditor;
+    [Test] procedure FindingActionOf_MapsEveryField;
+    [Test] procedure Records_FieldsPinned;
+    [Test] procedure SqlTemplate_LikeRunner;
+    [Test] procedure FormatCall_NeedsUses_TwoEdits;
+    [Test] procedure RecipeException_RaisesAndForgetsSource;
   end;
 
 implementation
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
+  System.Rtti,        // TRttiContext (Records_FieldsPinned)
   uAstNode, uParser2,
   uMethodd12,         // TLeakFinding
   uSCAConsts,         // fk*
@@ -151,7 +166,7 @@ end;
 procedure AssertLikeOutcome(const AEntry: TRdxActionEntry;
   AKind: TFindingKind; const AOutcome: TRdxFixOutcome; const AWhat: string);
 begin
-  Assert.AreEqual('SimpleFix', AEntry.Recipe, AWhat + ': Rezept');
+  Assert.AreEqual(RECIPE_SIMPLE_FIX, AEntry.Recipe, AWhat + ': Rezept');
   Assert.AreEqual(TRdxFixTable.CaptionFor(AKind, AOutcome), AEntry.Caption,
     AWhat + ': Menuetext');
   Assert.IsTrue(AOutcome.Enabled = AEntry.Enabled, AWhat + ': verfuegbar');
@@ -176,12 +191,12 @@ var
 begin
   n := Length(AEntries);
   Assert.IsTrue(n >= 2, 'Unterdruecken am Ende');
-  Assert.AreEqual('Suppress', AEntries[n - 2].Recipe);
+  Assert.AreEqual(RECIPE_SUPPRESS, AEntries[n - 2].Recipe);
   Assert.IsTrue(AEntries[n - 2].Kind = fakSuppress, 'Zeile: fakSuppress');
   Assert.AreEqual(_('Suppress here'), AEntries[n - 2].Caption);
   Assert.AreEqual('// noinspection ' + AKindName, AEntries[n - 2].Hint);
   Assert.IsTrue(AEntries[n - 2].Enabled and AEntries[n - 2].HasAction);
-  Assert.AreEqual('Suppress', AEntries[n - 1].Recipe);
+  Assert.AreEqual(RECIPE_SUPPRESS, AEntries[n - 1].Recipe);
   Assert.IsTrue(AEntries[n - 1].Kind = fakSuppress, 'Datei: fakSuppress');
   Assert.AreEqual(_('Suppress in this file'), AEntries[n - 1].Caption);
   Assert.AreEqual('// noinspection-file ' + AKindName, AEntries[n - 1].Hint);
@@ -222,7 +237,7 @@ begin
       'Hilfe, zweiter Eintrag, zwei Unterdruecken');
     AssertLikeOutcome(Entries[0], fkDebugOutput, Main, 'erster Eintrag');
     AssertLikeOutcome(Entries[1], fkDebugOutput, Alt, 'zweiter Eintrag');
-    Assert.AreEqual<Integer>(0, CountOf(Entries, 'Diagnosis'),
+    Assert.AreEqual<Integer>(0, CountOf(Entries, RECIPE_DIAGNOSIS),
       'keine Diagnose neben einer Hilfe');
     AssertSuppressTail(Entries, 'DebugOutput');
   finally
@@ -300,7 +315,7 @@ begin
       Entries := DescribeIn(SRC, F);
       Assert.AreEqual<Integer>(4, Length(Entries),
         'Stelle zeigen, Format(), zwei Unterdruecken');
-      Assert.AreEqual('ShowSpan', Entries[0].Recipe);
+      Assert.AreEqual(RECIPE_SHOW_SPAN, Entries[0].Recipe);
       Assert.IsTrue(Entries[0].Kind = fakNavigate, 'Stelle zeigen fuehrt hin');
       Assert.IsTrue(Entries[0].Enabled and Entries[0].HasAction);
       Assert.IsTrue(Entries[0].Action.Kind = akShowSpan);
@@ -311,7 +326,7 @@ begin
       Assert.AreEqual<Integer>(Info.Span.EndCol,
         Entries[0].Action.Span.EndCol, 'Bereich: Endspalte');
 
-      Assert.AreEqual('FormatCall', Entries[1].Recipe);
+      Assert.AreEqual(RECIPE_FORMAT_CALL, Entries[1].Recipe);
       Assert.IsTrue(Entries[1].Kind = fakFix);
       Assert.IsTrue(Entries[1].Enabled and Entries[1].HasAction);
       Assert.AreEqual(O.Hint, Entries[1].Hint, 'Hinweis');
@@ -351,7 +366,7 @@ begin
   try
     Entries := DescribeIn(Src, F);
     Assert.AreEqual<Integer>(1, Length(Entries), 'nur der gesperrte Eintrag');
-    Assert.AreEqual('RemoveMarker', Entries[0].Recipe);
+    Assert.AreEqual(RECIPE_REMOVE_MARKER, Entries[0].Recipe);
     Assert.AreEqual(_('Remove ineffective suppression marker'),
       Entries[0].Caption);
     Assert.IsFalse(Entries[0].Enabled, 'gesperrt');
@@ -398,7 +413,7 @@ begin
     Lines := LinesOf(Src);
     Entries := Core.Describe(F, Lines, txBuffer, Src);
     Assert.IsTrue(Length(Entries) >= 1, 'mindestens die Diagnose');
-    Assert.AreEqual('Open', Entries[0].Recipe);
+    Assert.AreEqual(RECIPE_OPEN, Entries[0].Recipe);
     Assert.IsTrue(Entries[0].Caption.StartsWith(DIAG_PREFIX + 'Parser: '),
       Entries[0].Caption);
     Assert.IsFalse(Entries[0].Enabled, 'die Diagnose ist gesperrt');
@@ -408,9 +423,9 @@ begin
       Assert.IsTrue(E.Kind = fakSuppress,
         'hinter der Diagnose nur Unterdruecken: ' + E.Caption);
     end;
-    Assert.AreEqual<Integer>(0, CountOf(Entries, 'SimpleFix'),
+    Assert.AreEqual<Integer>(0, CountOf(Entries, RECIPE_SIMPLE_FIX),
       'keine Baum-Rezepte');
-    Assert.AreEqual<Integer>(0, CountOf(Entries, 'Diagnosis'),
+    Assert.AreEqual<Integer>(0, CountOf(Entries, RECIPE_DIAGNOSIS),
       'keine zweite Diagnose');
     Assert.IsFalse(Core.Source.Places.IsOpen, 'kein halboffener Dienst');
   finally
@@ -443,10 +458,10 @@ begin
     Lines := LinesOf(Src);
     Entries := Core.Describe(F, Lines, txBuffer, '');
     Assert.AreEqual<Integer>(2, Length(Entries), 'Diagnose und SCA165');
-    Assert.AreEqual('Open', Entries[0].Recipe);
+    Assert.AreEqual(RECIPE_OPEN, Entries[0].Recipe);
     Assert.AreEqual(DIAG_PREFIX + _('file not readable'), Entries[0].Caption);
     Assert.IsFalse(Entries[0].Enabled);
-    Assert.AreEqual('RemoveMarker', Entries[1].Recipe);
+    Assert.AreEqual(RECIPE_REMOVE_MARKER, Entries[1].Recipe);
     Assert.IsTrue(Entries[1].Enabled and Entries[1].HasAction,
       Entries[1].Hint);
     Assert.IsTrue(Entries[1].Kind = fakFix);
@@ -472,7 +487,7 @@ begin
       'Voraussetzung: keine einfache Hilfe');
     Entries := DescribeIn(Wrap(['  Foo;']), F);
     Assert.AreEqual<Integer>(3, Length(Entries));
-    Assert.AreEqual('Diagnosis', Entries[0].Recipe);
+    Assert.AreEqual(RECIPE_DIAGNOSIS, Entries[0].Recipe);
     Assert.AreEqual(DIAG_PREFIX + Format(
       _('%s: no fixMode in the rule catalog'), [F.ResolvedRuleId]),
       Entries[0].Caption);
@@ -514,7 +529,7 @@ begin
         Result := TRdxProjectUnits.Create;
       end, Skipped);
     Assert.IsFalse(Skipped, 'mit Lieferant: nichts ausgelassen');
-    Assert.AreEqual('UsesActions', Entries[0].Recipe);
+    Assert.AreEqual(RECIPE_USES_ACTIONS, Entries[0].Recipe);
     Assert.IsTrue(Entries[0].Kind = fakRefactor, 'ein Umbau');
     Assert.AreEqual(_('uses: qualify entries'), Entries[0].Caption);
     Assert.IsFalse(Entries[0].Enabled, 'ohne Scope-Tabelle gesperrt');
@@ -569,6 +584,295 @@ begin
     Assert.IsTrue(Pos('32767', MsgTooLongForEditor(32767)) > 0);
   finally
     SetRdxLanguageOverride(Prev);
+  end;
+end;
+
+{ ---- Nach dem Review E3 ---- }
+
+type
+  // Zeilen, die beim ersten Zugriff auf Count werfen: eine Ausnahme mitten
+  // in einem Baum-Rezept (der Planer von SCA017 liest die Zeilen).
+  ERdxCoreProbe = class(Exception);
+  TThrowingLines = class(TStringList)
+  protected
+    function GetCount: Integer; override;
+  end;
+
+function TThrowingLines.GetCount: Integer;
+begin
+  raise ERdxCoreProbe.Create('Probe: Zeilen nicht lesbar');
+end;
+
+// Die Namen der Felder eines Records in Deklarationsreihenfolge, mit Komma.
+function FieldNames(AType: Pointer): string;
+var
+  Ctx   : TRttiContext;
+  Field : TRttiField;
+begin
+  Result := '';
+  for Field in Ctx.GetType(AType).GetFields do
+  begin
+    if Result <> '' then Result := Result + ',';
+    Result := Result + Field.Name;
+  end;
+end;
+
+// Die SCA044-Funde des echten Detektors in ASource (Temp-Datei APath, die
+// der Aufrufer loescht). Der Aufrufer gibt die Liste frei.
+function Sca044Findings(const ASource: string;
+  out APath: string): TObjectList<TLeakFinding>;
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+begin
+  APath := TempName('rdx_core_', '.pas');
+  WriteText(APath, ASource);
+  Result := TObjectList<TLeakFinding>.Create(True);
+  try
+    Parser := TParser2.Create;
+    try
+      Root := Parser.ParseFile(APath);
+      try
+        TConcatToFormatDetector.AnalyzeUnit(Root, APath, Result);
+      finally
+        Root.Free;
+      end;
+    finally
+      Parser.Free;
+    end;
+  except
+    Result.Free;
+    raise;
+  end;
+end;
+
+// Der erste Eintrag des Rezepts ARecipe; Index -1 ohne.
+function IndexOfRecipe(const AEntries: TArray<TRdxActionEntry>;
+  const ARecipe: string): Integer;
+var
+  i : Integer;
+begin
+  Result := -1;
+  for i := 0 to High(AEntries) do
+    if AEntries[i].Recipe = ARecipe then
+      Exit(i);
+end;
+
+procedure TTestRdxActionCore.FindingActionOf_MapsEveryField;
+var
+  E : TRdxActionEntry;
+  A : TFindingAction;
+  K : TFindingActionKind;
+begin
+  // Jedes Feld mit einem Wert, der nicht die Vorgabe ist (Default) - ein
+  // vergessenes Feld faellt so auf.
+  E := Default(TRdxActionEntry);
+  E.Recipe          := RECIPE_SIMPLE_FIX;
+  E.Caption         := 'Menuetext';
+  E.Hint            := 'Hinweis';
+  E.Enabled         := True;
+  E.Kind            := fakRefactor;
+  E.ChangesBehavior := True;
+  E.Variant         := 1;
+  E.HasAction       := True;
+  E.Action.Kind     := akReplace;
+  A := TRdxActionCore.FindingActionOf(E);
+  Assert.AreEqual('Menuetext', A.Caption);
+  Assert.AreEqual('Hinweis', A.Hint);
+  Assert.IsTrue(A.Enabled, 'verfuegbar mit Daten');
+  Assert.IsTrue(A.Kind = fakRefactor, 'Art');
+  Assert.IsTrue(A.ChangesBehavior, 'Kennzeichnung E2');
+  Assert.IsFalse(Assigned(A.Execute), 'Execute haengt erst der Anbieter an');
+  // Jede Art kommt unveraendert an (auch fakUnset - die sichere Vorgabe).
+  for K := Low(TFindingActionKind) to High(TFindingActionKind) do
+  begin
+    E.Kind := K;
+    Assert.IsTrue(TRdxActionCore.FindingActionOf(E).Kind = K,
+      'Art ' + IntToStr(Ord(K)));
+  end;
+  // Wie bis E3 TRdxProvider.Add: verfuegbar nur mit Daten zum Ausfuehren.
+  E.HasAction := False;
+  Assert.IsFalse(TRdxActionCore.FindingActionOf(E).Enabled, 'ohne Daten');
+  E.HasAction := True;
+  E.Enabled := False;
+  Assert.IsFalse(TRdxActionCore.FindingActionOf(E).Enabled, 'gesperrt');
+  E.ChangesBehavior := False;
+  Assert.IsFalse(TRdxActionCore.FindingActionOf(E).ChangesBehavior,
+    'ohne Kennzeichnung');
+end;
+
+procedure TTestRdxActionCore.Records_FieldsPinned;
+begin
+  // Ein neues Feld in TFindingAction braucht eine Zeile in
+  // FindingActionOf, eines in TRdxActionData einen Blick in
+  // TRdxAction.Execute, eines in TRdxActionEntry eine Entscheidung, ob es in
+  // die TFindingAction gehoert (Recipe und Variant gehen nicht hinein) -
+  // danach hier nachziehen.
+  Assert.AreEqual('Caption,Hint,Enabled,Execute,Kind,ChangesBehavior',
+    FieldNames(TypeInfo(TFindingAction)), 'TFindingAction');
+  Assert.AreEqual('Kind,FileName,Span,Template,Edits',
+    FieldNames(TypeInfo(TRdxActionData)), 'TRdxActionData');
+  Assert.AreEqual('Recipe,Caption,Hint,Enabled,Kind,ChangesBehavior,Variant,'
+    + 'HasAction,Action', FieldNames(TypeInfo(TRdxActionEntry)),
+    'TRdxActionEntry');
+end;
+
+procedure TTestRdxActionCore.SqlTemplate_LikeRunner;
+const
+  // Wie uTestRdxSca044 (HEAD/FOOT, SQL_ADD, SQL_ADD_MSG): ein Aufruf mit
+  // einem Parameter, die Meldung von SCA003 dazu.
+  SRC =
+    'unit t;'#13#10 +
+    'interface'#13#10 +
+    'uses System.SysUtils;'#13#10 +
+    'type TFoo = class'#13#10 +
+    '  FName: string;'#13#10 +
+    '  procedure Run(Id: Integer; const Tag: string);'#13#10 +
+    'end;'#13#10 +
+    'implementation'#13#10 +
+    'procedure TFoo.Run(Id: Integer; const Tag: string);'#13#10 +
+    'var Marker, Text: string; n: Integer; c: Char; Obj: TObject;'#13#10 +
+    'var Cnt: Cardinal; V: Variant; A: AnsiString; Arr: array[0..3] of string;'#13#10 +
+    'begin'#13#10 +
+    '  Obj.SQL.Add(''SELECT * FROM t WHERE a = '' + Marker);'#13#10 +
+    'end;'#13#10 +
+    'end.';
+  MSG = 'Obj.SQL.Add()  [Fix 1/5 [*    ] (Trivial)]';
+var
+  F       : TLeakFinding;
+  Places  : TSourcePlaces;
+  Lines   : TStringList;
+  Info    : TRefactorInfo;
+  IsCall  : Boolean;
+  Why     : string;
+  Offer   : TRdxSqlOffer;
+  Entries : TArray<TRdxActionEntry>;
+  i       : Integer;
+begin
+  F := nil;
+  Places := nil;
+  Lines := nil;
+  try
+    F := TLeakFinding.New('t.pas', 'Run', LineOf(SRC, 'Obj.SQL.Add'), MSG,
+      fkSQLInjection);
+    // Was der Anbieter bis E3 selbst rief: Anker 'assign-or-call' aus dem
+    // Katalog, Gegenprobe, dann SqlTemplate.
+    Places := TSourcePlaces.Create;
+    Places.SetIfdefDefines(TScanRequest.DefaultIfdefDefines);
+    Assert.IsTrue(Places.OpenSource('t.pas', SRC), 'OpenSource');
+    Lines := LinesOf(SRC);
+    Info := TRdxRecipeRunner.Describe(Places,
+      TRdxRecipeRunner.QueryOf(F, 'assign-or-call'), IsCall, Why);
+    try
+      Assert.IsTrue(Assigned(Info), Why);
+      Assert.IsTrue(TRdxRecipeRunner.SqlTemplate(Places, Lines, Info, IsCall,
+        Offer), Offer.Reason);
+    finally
+      Info.Free;
+    end;
+    Entries := DescribeIn(SRC, F);
+    i := IndexOfRecipe(Entries, RECIPE_SQL_TEMPLATE);
+    Assert.IsTrue(i >= 0, 'ein Eintrag der SQL-Vorlage');
+    Assert.IsTrue(Entries[i].Enabled and Entries[i].HasAction, Entries[i].Hint);
+    Assert.IsTrue(Entries[i].Kind = fakFix, 'eine Hilfe');
+    Assert.IsTrue(Entries[i].Action.Kind = akSqlTemplate, 'Zwischenablage');
+    Assert.AreEqual(Offer.Template, Entries[i].Action.Template, 'Vorlage');
+    Assert.AreEqual(Offer.Hint, Entries[i].Hint, 'Hinweis');
+    Assert.AreEqual('', Entries[i].Action.FileName,
+      'die Vorlage schreibt in keine Datei');
+    Assert.AreEqual(_('Copy parameterized template to clipboard'),
+      Entries[i].Caption);
+  finally
+    Lines.Free;
+    Places.Free;
+    F.Free;
+  end;
+end;
+
+procedure TTestRdxActionCore.FormatCall_NeedsUses_TwoEdits;
+const
+  // Wie uTestRdxSca044.Uses_Missing_SortedInsert_Qualified: System.SysUtils
+  // fehlt in einer sortierten Klausel.
+  SRC =
+    'unit t;'#13#10 +
+    'interface'#13#10 +
+    'uses System.Classes, Vcl.Forms;'#13#10 +
+    'type TFoo = class'#13#10 +
+    '  FName: string;'#13#10 +
+    '  procedure Run(const Tag: string);'#13#10 +
+    'end;'#13#10 +
+    'implementation'#13#10 +
+    'procedure TFoo.Run(const Tag: string);'#13#10 +
+    'var Marker, Text: string;'#13#10 +
+    'begin'#13#10 +
+    '  Text := Marker + ''a'' + Tag + ''b'' + FName;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  Path     : string;
+  Findings : TObjectList<TLeakFinding>;
+  Entries  : TArray<TRdxActionEntry>;
+  i        : Integer;
+begin
+  Findings := Sca044Findings(SRC, Path);
+  try
+    Assert.AreEqual<Integer>(1, Findings.Count, 'ein SCA044-Fund');
+    Entries := DescribeIn(SRC, Findings[0]);
+    i := IndexOfRecipe(Entries, RECIPE_FORMAT_CALL);
+    Assert.IsTrue(i >= 0, 'ein Format()-Eintrag');
+    Assert.IsTrue(Entries[i].Enabled, Entries[i].Hint);
+    Assert.AreEqual<Integer>(2, Length(Entries[i].Action.Edits),
+      'Kette und uses-Ergaenzung in EINER Aktion');
+    Assert.AreEqual('Vcl.Forms', Entries[i].Action.Edits[1].Expected,
+      'die uses-Ersetzung');
+    Assert.AreEqual('System.SysUtils, Vcl.Forms',
+      Entries[i].Action.Edits[1].NewText);
+    Assert.IsTrue(Pos('+ uses System.SysUtils', Entries[i].Hint) > 0,
+      Entries[i].Hint);
+  finally
+    Findings.Free;
+    DeleteFile(Path);
+  end;
+end;
+
+procedure TTestRdxActionCore.RecipeException_RaisesAndForgetsSource;
+var
+  Src     : string;
+  F       : TLeakFinding;
+  Core    : TRdxActionCore;
+  Bad     : TThrowingLines;
+  Good    : TStringList;
+  Entries : TArray<TRdxActionEntry>;
+begin
+  // Wie bis E3 im Anbieter: eine Ausnahme in einem Baum-Rezept laeuft zum
+  // Aufrufer (der Host zeigt sie, die Probe zaehlt sie) - und die offene
+  // Quelle ist danach vergessen (die faul gebauten Teile des Dienstes
+  // koennten halb stehen). Der naechste Fund laeuft normal.
+  Src := Wrap(['  Foo;', '  WriteLn(''here #3'');', '  Bar;']);
+  F := nil;
+  Bad := nil;
+  Good := nil;
+  Core := TRdxActionCore.Create(nil);
+  try
+    Core.Logging := False;
+    F := TLeakFinding.New('t.pas', 'Foo', BODY + 1, 'Debug output: writeln',
+      fkDebugOutput);
+    Bad := TThrowingLines.Create;
+    Assert.WillRaise(
+      procedure
+      begin
+        Core.Describe(F, Bad, txBuffer, Src);
+      end, ERdxCoreProbe, 'die Ausnahme laeuft zum Aufrufer');
+    Assert.IsFalse(Core.Source.Places.IsOpen, 'die Quelle ist vergessen');
+    Good := LinesOf(Src);
+    Entries := Core.Describe(F, Good, txBuffer, Src);
+    Assert.AreEqual<Integer>(4, Length(Entries),
+      'danach wieder Hilfe, zweiter Eintrag, zwei Unterdruecken');
+  finally
+    Good.Free;
+    Bad.Free;
+    F.Free;
+    Core.Free;
   end;
 end;
 

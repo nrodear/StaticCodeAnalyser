@@ -938,7 +938,7 @@ msgstr ""
 msgid "%s.Resume is the body of a loop or with statement (\"%s\" before it)"
 msgstr ""
 
-#: reDelphix/source/uRdxActionCore.pas:809
+#: reDelphix/source/uRdxActionCore.pas:864
 msgid "%s: no fixMode in the rule catalog"
 msgstr ""
 
@@ -1361,8 +1361,8 @@ msgstr ""
 msgid "Bugs"
 msgstr ""
 
-#: reDelphix/source/uRdxActionCore.pas:452
-#: reDelphix/source/uRdxActionCore.pas:469
+#: reDelphix/source/uRdxActionCore.pas:507
+#: reDelphix/source/uRdxActionCore.pas:524
 #: reDelphix/source/uRdxFixTable.pas:3050
 msgid "Build Format() from concatenation"
 msgstr ""
@@ -1645,9 +1645,9 @@ msgstr ""
 msgid "Copy Jira issue"
 msgstr ""
 
-#: reDelphix/source/uRdxActionCore.pas:481
-#: reDelphix/source/uRdxActionCore.pas:487
-#: reDelphix/source/uRdxActionCore.pas:493
+#: reDelphix/source/uRdxActionCore.pas:536
+#: reDelphix/source/uRdxActionCore.pas:542
+#: reDelphix/source/uRdxActionCore.pas:548
 msgid "Copy parameterized template to clipboard"
 msgstr ""
 
@@ -2530,7 +2530,7 @@ msgstr ""
 msgid "Line"
 msgstr ""
 
-#: reDelphix/source/uRdxActionCore.pas:433
+#: reDelphix/source/uRdxActionCore.pas:488
 msgid "Line %d:%d to %d:%d"
 msgstr ""
 
@@ -3116,8 +3116,8 @@ msgstr ""
 msgid "Remove bidi control characters (as #$ code in strings)"
 msgstr ""
 
-#: reDelphix/source/uRdxActionCore.pas:705
-#: reDelphix/source/uRdxActionCore.pas:708
+#: reDelphix/source/uRdxActionCore.pas:760
+#: reDelphix/source/uRdxActionCore.pas:763
 msgid "Remove ineffective suppression marker"
 msgstr ""
 
@@ -3415,7 +3415,7 @@ msgstr ""
 msgid "Scanning... %d found"
 msgstr ""
 
-#: reDelphix/source/uRdxActionCore.pas:502
+#: reDelphix/source/uRdxActionCore.pas:557
 msgid "Scope table not loaded (unitscopes.txt)"
 msgstr ""
 
@@ -3527,8 +3527,8 @@ msgstr ""
 msgid "Show annotation overlay on hover (otherwise click marked line)"
 msgstr ""
 
-#: reDelphix/source/uRdxActionCore.pas:424
-#: reDelphix/source/uRdxActionCore.pas:433
+#: reDelphix/source/uRdxActionCore.pas:479
+#: reDelphix/source/uRdxActionCore.pas:488
 msgid "Show location"
 msgstr ""
 
@@ -3661,11 +3661,11 @@ msgstr ""
 msgid "Suppress"
 msgstr ""
 
-#: reDelphix/source/uRdxActionCore.pas:676
+#: reDelphix/source/uRdxActionCore.pas:731
 msgid "Suppress here"
 msgstr ""
 
-#: reDelphix/source/uRdxActionCore.pas:681
+#: reDelphix/source/uRdxActionCore.pas:736
 msgid "Suppress in this file"
 msgstr ""
 
@@ -4242,7 +4242,7 @@ msgstr ""
 msgid "absolute variable - it occupies the memory of another one"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:278
+#: reDelphix/source/uRdxProvider.pas:277
 msgid "action kind %d without execution"
 msgstr ""
 
@@ -4961,7 +4961,7 @@ msgstr ""
 msgid "doubled apostrophes"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:482
+#: reDelphix/source/uRdxProvider.pas:478
 msgid "editor buffer empty or not readable"
 msgstr ""
 
@@ -5028,12 +5028,12 @@ msgstr ""
 msgid "except on E: Exception catches every error - prefer a specific subclass"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:488
+#: reDelphix/source/uRdxProvider.pas:484
 msgid "file not found: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxActionCore.pas:744
-#: reDelphix/source/uRdxProvider.pas:498
+#: reDelphix/source/uRdxActionCore.pas:799
+#: reDelphix/source/uRdxProvider.pas:494
 msgid "file not readable"
 msgstr ""
 
@@ -5041,7 +5041,7 @@ msgstr ""
 msgid "file uses VCL and FMX: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxActionCore.pas:507
+#: reDelphix/source/uRdxActionCore.pas:562
 msgid "file with an FPC switch or FPC mode - FPC 3.2 knows no unit scopes"
 msgstr ""
 
@@ -5053,11 +5053,11 @@ msgstr ""
 msgid "finally and end are not alone on their lines (code or comment beside them)"
 msgstr ""
 
-#: reDelphix/source/uRdxActionCore.pas:819
+#: reDelphix/source/uRdxActionCore.pas:874
 msgid "finding without file name"
 msgstr ""
 
-#: reDelphix/source/uRdxActionCore.pas:821
+#: reDelphix/source/uRdxActionCore.pas:876
 msgid "finding without line"
 msgstr ""
 
@@ -5733,7 +5733,7 @@ msgid "no declaration that can carry the attribute follows the blank line"
 msgstr ""
 
 #: reDelphix/source/uRdxPlacesRunner.pas:564
-#: reDelphix/source/uRdxRecipeRunner.pas:481
+#: reDelphix/source/uRdxRecipeRunner.pas:482
 msgid "no description"
 msgstr ""
 
@@ -6045,7 +6045,7 @@ msgstr ""
 msgid "no tab at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxRecipeRunner.pas:487
+#: reDelphix/source/uRdxRecipeRunner.pas:488
 msgid "no target recognized"
 msgstr ""
 
@@ -6156,8 +6156,8 @@ msgstr ""
 msgid "nothing precedes the range, and it reaches the end of the file - %s"
 msgstr ""
 
-#: reDelphix/source/uRdxActionCore.pas:812
-#: reDelphix/source/uRdxActionCore.pas:823
+#: reDelphix/source/uRdxActionCore.pas:867
+#: reDelphix/source/uRdxActionCore.pas:878
 msgid "nothing to offer"
 msgstr ""
 
@@ -6415,7 +6415,7 @@ msgstr ""
 msgid "own constructor %s.Create - not provable that True still means CreateSuspended"
 msgstr ""
 
-#: reDelphix/source/uRdxActionCore.pas:526
+#: reDelphix/source/uRdxActionCore.pas:581
 msgid "own unit %s in the project"
 msgstr ""
 
@@ -7138,8 +7138,8 @@ msgstr ""
 msgid "the class name \"%s\" contains characters outside A-Z, a-z, 0-9 and \"_\" - the help cannot find every spelling of it"
 msgstr ""
 
-#: reDelphix/source/uRdxActionCore.pas:529
-#: reDelphix/source/uRdxActionCore.pas:600
+#: reDelphix/source/uRdxActionCore.pas:584
+#: reDelphix/source/uRdxActionCore.pas:655
 msgid "the clause would no longer be sorted (new SCA142)"
 msgstr ""
 
@@ -8696,7 +8696,7 @@ msgstr ""
 msgid "untyped \"out\" parameter - \"var\" would mean something else"
 msgstr ""
 
-#: reDelphix/source/uRdxActionCore.pas:504
+#: reDelphix/source/uRdxActionCore.pas:559
 #: reDelphix/source/uRdxPlacesRunner.pas:916
 msgid "uses clause contains compiler directives (line %d)"
 msgstr ""
@@ -8709,16 +8709,16 @@ msgstr ""
 msgid "uses entry in line %d not readable"
 msgstr ""
 
-#: reDelphix/source/uRdxActionCore.pas:595
+#: reDelphix/source/uRdxActionCore.pas:650
 msgid "uses: qualify %s"
 msgstr ""
 
-#: reDelphix/source/uRdxActionCore.pas:599
-#: reDelphix/source/uRdxActionCore.pas:607
+#: reDelphix/source/uRdxActionCore.pas:654
+#: reDelphix/source/uRdxActionCore.pas:662
 msgid "uses: qualify all %d entries"
 msgstr ""
 
-#: reDelphix/source/uRdxActionCore.pas:580
+#: reDelphix/source/uRdxActionCore.pas:635
 msgid "uses: qualify entries"
 msgstr ""
 
