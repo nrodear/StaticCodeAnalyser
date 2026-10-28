@@ -1642,27 +1642,38 @@ Results der Regel im SARIF, Repos = Repos der Stichprobe, ReposGesamt =
 Repos mit einem Fund der Regel).
 
 CSV der Probe (UTF-8, `;`, RFC 4180), eine Zeile je Hilfe-Eintrag:
-`Datei;Zeile;Regel;Eintrag;Kind;Menuetext;angeboten;aendert;Grund;Edits;VorherZeilen;NachherZeilen;Meldung;Hinweis;Quelle`.
+`Datei;Zeile;Regel;Eintrag;Kind;Menuetext;angeboten;aendert;Grund;Edits;VorherZeilen;NachherZeilen;Meldung;Hinweis;Quelle;inBirne`.
 Eintrag `1`/`2` ist der erste bzw. zweite Eintrag der einfachen Hilfe,
-`rezept:<Name>` ein Rezept (ShowSpan, FormatCall, SqlTemplate,
-UsesActions, RemoveMarker), `diagnose` der Eintrag "reDelphix: <Grund>",
-`-` eine Stelle ohne Eintrag ("Fund nicht reproduziert", Scan-/Lesefehler,
-Ausnahme). Vorher/Nachher sind die Zeilen der Ersetzungen mit 2 Zeilen
-Kontext vor und nach `PlanByteEdits`/`ApplyByteEdits` (der Weg des
-Editors); eine Ersetzung, die dort scheitert, steht als "Ersetzung
-scheitert: ..." im Grund. In den Textspalten steht ein Zeilenumbruch als
-`\n`, ein einzelnes CR als `\r` und ein Backslash als `\\` - umkehrbar,
-etwa in Python `re.sub(r'\\(.)', lambda m: {'n': '\n', 'r': '\r'}.get(m.group(1), m.group(1)), s)`.
+`rezept:<Name>` ein Rezept (`RECIPE_*` in `uRdxActionCore`: ShowSpan,
+FormatCall, SqlTemplate, UsesActions, RemoveMarker), `diagnose` der
+Eintrag "reDelphix: <Grund>", `-` eine Stelle ohne Eintrag ("Fund nicht
+reproduziert", Scan-/Lesefehler - auch ein Scan, der nur SCA006 liefert -,
+Ausnahme, Abbruch nach Stapelueberlauf). `inBirne` sagt, ob der Eintrag
+in der Gluehbirne stuende - nach den Regeln des Hosts selbst
+(`uFindingActionMenu.BuildFindingMenuModelFrom` mit `moAvailableFixesOnly`:
+nur verfuegbare Hilfen, nie Stelle zeigen, Umbau oder Diagnose); gefragt
+wird je Stelle nur ihr eigener Fund, das Abschneiden nach
+`MAX_FINDINGS_PER_MENU` Funden einer Zeile bildet die Probe nicht nach.
+Vorher/Nachher sind die Zeilen der Ersetzungen mit 2 Zeilen Kontext vor
+und nach `PlanByteEdits`/`ApplyByteEdits` (der Weg des Editors); eine
+Ersetzung, die dort scheitert, steht als "Ersetzung scheitert: ..." im
+Grund. In den Textspalten steht LF als `\n`, CR als `\r` (ein CRLF also
+als `\r\n`) und ein Backslash als `\\` - umkehrbar, etwa in Python
+`re.sub(r'\\(.)', lambda m: {'n': '\n', 'r': '\r', 't': '\t'}.get(m.group(1), m.group(1)), s)`.
 Unterdruecken steht nur in der Zusammenfassung, "Stelle zeigen" ohne
 Ersetzungen, die SQL-Vorlage als "nachher", SCA197 traegt "nicht
 deterministisch (frische GUID)". Den uses-Umbau prueft die Probe nicht
 (keine Projekt-Units ohne IDE): auf einer uses-Zeile steht
 `rezept:UsesActions` mit `nicht geprueft`. Die Zusammenfassung (stdout)
 zaehlt Stellen je Regel und Quelle (scan, sarif, nicht reproduziert), je
-Regel und Eintrag angeboten/gesperrt getrennt nach Quelle und die Gruende
-der Sperren nach Kategorie (Ziffern maskiert). Eine Ausnahme kostet nur Datei
-bzw. Fund, nie den Lauf; ein Stapelueberlauf wird gezaehlt, ein zweiter
-beendete den Prozess - deshalb der 32-MB-Patch.
+Regel und Eintrag angeboten/gesperrt/in der Birne getrennt nach Quelle und
+die Gruende der Sperren nach Kategorie (Ziffern maskiert). Eine Ausnahme
+kostet nur Datei bzw. Stelle, nie den Lauf. Ein Stapelueberlauf ist die
+Ausnahme: ein zweiter beendete den Prozess still, deshalb prueft die Probe
+nach dem ersten nichts mehr - die uebrigen Stellen stehen als "nicht
+geprueft: Abbruch nach Stapelueberlauf" in der CSV, die Zusammenfassung
+kommt, Exit-Code 3 (sonst 0; 1 Abbruch, 2 Aufruf). Deshalb der
+32-MB-Patch.
 
 ## Grenzen (Stand 2026-10-15)
 
