@@ -30,7 +30,8 @@ Konzept: `Konzept_SourceRefactor_Quellstellen_2026-10-02.md`, Abschnitt 15
 ```
 reDelphix.d12.dpk / .dproj        {$DESIGNONLY}, requires rtl, vcl, designide, SCA.Engine
 source\uRdxRegister.pas           Register -> Anbieter an TFindingActions anmelden; finalization: abmelden
-source\uRdxProvider.pas           je Fund die Aktionen bauen (Anker/fixMode aus dem Regelkatalog); Quell-Cache TRdxSourceCache; seit Charge P5 die Zeilen der zuletzt gelesenen Datei samt geteilter Code-Sicht (SharedLines) und ein Plattenblick je Menueaufbau (BeginDiskBatch, DISK_BATCH_MS)
+source\uRdxProvider.pas           ToolsAPI-Seite des Anbieters: Text lesen (Puffer oder Platte), die Eintraege des Kerns als Menuepunkte mit Execute (Ersetzen, Markieren, Zwischenablage), Projekt-Units fuer den Kern; seit Charge P5 die Zeilen der zuletzt gelesenen Datei samt geteilter Code-Sicht (SharedLines) und ein Plattenblick je Menueaufbau (BeginDiskBatch, DISK_BATCH_MS); Code-Aktionen ohne Fund (ProvideContext)
+source\uRdxActionCore.pas         Kern des Anbieters ohne ToolsAPI/VCL (Entscheid E3, 2026-10-28): je Fund die Eintraege als Beschreibung (Rezept, Menuetext, Grund, Art, Kennzeichnung, Variante, Ersetzungen) - Rezepte und ihre Reihenfolge (Anker/fixMode aus dem Regelkatalog), Quell-Cache TRdxSourceCache; dieselbe Unit fragt die Probe tools\probe\RdxActionProbe
 source\uRdxRecipeRunner.pas       Rezept-Laeufer auf TSourcePlaces: Fund -> Beschreibung -> Ersetzung fuer SCA044 (Format), SCA003 (SQL-Vorlage) und die uses-Klauseln (PlanUses, QualifyUses, ClausesOf); dazu die geteilten Ergebnistypen (TRdxFixOutcome) und der Aktionsring des Anbieters; ohne ToolsAPI, testbar. Describe, PartsOf, FormatRewrite und die uses-Fragen delegiert er seit C16 an uRdxPlacesRunner
 source\uRdxPlacesRunner.pas       der Teil des Rezept-Laeufers, der nur TSourcePlaces braucht (Charge N, C16; 1:1 aus uRdxRecipeRunner): Describe/DescribeAnchor, PartsOf, FormatRewrite (SCA044 und die Code-Aktion "Format() aus Verkettung"), PlanUses, Klauseln, Direktiven, FPC-Weiche; ohne Fund und Katalog, FPC-Pruefstand
 source\uRdxFixRunner.pas          die Ruempfe der einfachen Hilfen, die den Quellstellen-Dienst brauchen (TRdxFixRunner: SCA075/SCA085/SCA126/SCA074/SCA087/SCA139/SCA066/SCA072/SCA084/SCA007/SCA168/SCA101/SCA099), und die Bausteine der Tabelle (MapFix, CastFreeFix, EmptyRaiseFix, AppendUses, CondAssignReason, SelfAssignReason) - bis Charge B2S-b in uRdxRecipeRunner (Review R6-12); ohne ToolsAPI, nur Delphi; nur uRdxFixTable ruft sie
@@ -648,7 +649,7 @@ baut ihn ueber `CaptionFor` der Zeile `fkMagicNumber` bzw.
 `fkMissingFinally` - gleich geschrieben, also faellt die Kontextaktion auf
 einer SCA014- bzw. SCA009-Fundzeile hinter der Fund-Hilfe weg; "Format()
 aus Verkettung" nimmt die msgid des SCA044-Rezepts (`CAP_FORMAT` in
-`uRdxProvider`, `CAP_CONTEXT_FORMAT` in `uRdxFixTable` - SCA044 ist keine
+`uRdxActionCore`, `CAP_CONTEXT_FORMAT` in `uRdxFixTable` - SCA044 ist keine
 Zeile der Tabelle; die Gleichheit prueft
 `uTestRdxContextFormat.Caption_IsSca044RecipeCaption` am Quelltext)
 (`uFindingActionMenu`, Dedup per Caption). Die Hinweise sind dieselben
@@ -966,6 +967,16 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   englische msgid. Seit Charge FB pinnt `ResultDefaultHint_NamesShownValue` den
   festen Hinweis von SCA121 (er nennt keinen Default(T) mehr, der Menuetext
   nennt den Wert).
+* `uTestRdxActionCore` - der Kern des Anbieters (`uRdxActionCore`,
+  Entscheid E3): die Eintraege zu einem Fund gleich den Bausteinen, die
+  `uRdxProvider` bis dahin selbst rief - SCA017 mit erstem und zweitem
+  Eintrag (`FixFor`/`AlternativeFixFor` samt `CaptionFor`), SCA044 mit
+  "Stelle zeigen" und Format() (echte Detektor-Meldung, `Describe`/
+  `FormatRewrite`), SCA165 gesperrt mit Grund, Parser-Watchdog bzw. nicht
+  lesbare Quelle (nur Diagnose, Text-Rezept und Unterdruecken), Regel ohne
+  Hilfe (Diagnose), uses-Zeile ohne Lieferanten der Projekt-Units
+  (`UsesSkipped`), `FindingDiagnosis` und `MsgTooLongForEditor` - 9 Tests,
+  nur reDelphix.Test (anonyme Methoden, Watchdog).
 * `uTestRdxText` - die Sprache der Texte (`uRdxText`, Charge C0, Entscheid
   E29): Override (de/fr/en, Kuerzel ohne Uebersetzung, Normalisierung wie
   in der SCA), `auto` ueber die gesetzte Sprache der SCA, ohne sie ueber
@@ -1514,9 +1525,11 @@ ab (keine Fixture).
   ```
 
 `uRdxEditor` und `uRdxProvider` sind ToolsAPI und nur im Package
-uebersetzbar; `uRdxRecipeRunner` ist der testbare Kern dazwischen, mit
+uebersetzbar; `uRdxActionCore` (der Ablauf des Anbieters je Fund, seit E3)
+und `uRdxRecipeRunner` sind der testbare Kern dazwischen, mit
 `uRdxFixRunner` und `uRdxFixTable` fuer die einfachen Hilfen (in
-reDelphix.Test, nicht im FPC-Pruefstand).
+reDelphix.Test - `uTestRdxActionCore` vergleicht die Eintraege des Kerns
+mit diesen Bausteinen -, nicht im FPC-Pruefstand).
 
 **Doku der Quick-Fixes** (`QUICKFIXES.md`, Entscheid E30), ohne Delphi
 (Repo-Wurzel; auch in der CI, `.github/workflows/quickfix-doc.yml`):

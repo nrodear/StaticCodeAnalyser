@@ -911,7 +911,8 @@ begin
   if i > 0 then
   begin
     // Dieselbe msgid wie der Sperrgrund 'uses qualifizieren' des Anbieters
-    // (uRdxProvider) - derselbe Satz, schon in de.po/fr.po.
+    // (uRdxActionCore, bis E3 uRdxProvider) - derselbe Satz, schon in
+    // de.po/fr.po.
     APlan.Reason := _('uses clause contains compiler directives (line %d)',
       [i]);
     Exit;

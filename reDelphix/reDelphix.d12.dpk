@@ -143,6 +143,7 @@ contains
   uRdxFixRunner in 'source\uRdxFixRunner.pas',
   uRdxFixTable in 'source\uRdxFixTable.pas',
   uRdxLog in 'source\uRdxLog.pas',
+  uRdxActionCore in 'source\uRdxActionCore.pas',
   uRdxEditor in 'source\uRdxEditor.pas',
   uRdxProvider in 'source\uRdxProvider.pas',
   uRdxRegister in 'source\uRdxRegister.pas';

@@ -156,7 +156,7 @@ type
 
 const
   // Menuetext von ckConcatToFormat - die msgid von CAP_FORMAT des SCA044-
-  // Rezepts in uRdxProvider (Dedup per Caption, F2). Uebersetzt wird er in
+  // Rezepts in uRdxActionCore (Dedup per Caption, F2). Uebersetzt wird er in
   // uRdxFixTable.ContextCaption (eigene Konstante dort: der Extraktor loest
   // Konstanten nur in ihrer Unit auf); uTestRdxContextFormat prueft, dass
   // alle drei gleich lauten.
