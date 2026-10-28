@@ -17,7 +17,8 @@ unit uTestRdxContextFormat;
 // die Fund-Hilfe SCA044 nennt dort weiter den Grund -, ohne Dienst kein
 // Eintrag, die Vorprobe WantsPlaces; jede Ersetzung beginnt auf einem
 // Zeichen (nie auf einer leeren Zeile); der Menuetext ist die msgid des
-// SCA044-Rezepts (Quelltext von uRdxProvider und uRdxFixTable gelesen).
+// SCA044-Rezepts (Quelltext von uRdxActionCore und uRdxFixTable gelesen;
+// bis E3, 2026-10-28, stand das Rezept in uRdxProvider).
 // Zweite Fixture (nur Delphi, echter Parser und Typen): ContextCaption,
 // Variant-Lokale, mehrzeilige Kette am Caret der Fortsetzungszeile, und die
 // Ersetzung gleich der des Fund-Wegs (TRdxRecipeRunner.Describe +
@@ -528,12 +529,13 @@ end;
 procedure TTestRdxContextFormat.Caption_IsSca044RecipeCaption;
 begin
   // Dedup per Caption (F2): der Menuetext der Kontextaktion ist die msgid
-  // des SCA044-Rezepts (CAP_FORMAT im Anbieter) - und die Konstante, die
-  // uRdxFixTable.ContextCaption uebersetzt. Gelesen wird der Quelltext,
-  // beide Units uebersetzt der FPC-Pruefstand nicht.
+  // des SCA044-Rezepts (CAP_FORMAT im Kern des Anbieters) - und die
+  // Konstante, die uRdxFixTable.ContextCaption uebersetzt. Gelesen wird der
+  // Quelltext, beide Units uebersetzt der FPC-Pruefstand nicht.
   Assert.AreEqual('Build Format() from concatenation', CONTEXT_FORMAT_CAPTION);
   Assert.AreEqual(CONTEXT_FORMAT_CAPTION,
-    SourceConst('uRdxProvider.pas', 'CAP_FORMAT '), 'uRdxProvider.CAP_FORMAT');
+    SourceConst('uRdxActionCore.pas', 'CAP_FORMAT '),
+    'uRdxActionCore.CAP_FORMAT');
   Assert.AreEqual(CONTEXT_FORMAT_CAPTION,
     SourceConst('uRdxFixTable.pas', 'CAP_CONTEXT_FORMAT '),
     'uRdxFixTable.CAP_CONTEXT_FORMAT');

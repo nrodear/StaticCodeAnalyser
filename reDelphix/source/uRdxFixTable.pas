@@ -343,7 +343,7 @@ const
   CAP_CHANGES  = '(changes behavior)';
   NAME_UNKNOWN = 'X';
   // C16 (Charge N): der Menuetext von ckConcatToFormat - die msgid von
-  // CAP_FORMAT des SCA044-Rezepts (uRdxProvider) und
+  // CAP_FORMAT des SCA044-Rezepts (uRdxActionCore, bis E3 uRdxProvider) und
   // uRdxContextRunner.CONTEXT_FORMAT_CAPTION; hier noch einmal, weil der
   // Extraktor eine msgid-Konstante nur in der Unit ihres _() aufloest.
   // Gleichheit: uTestRdxContextFormat.Caption_IsSca044RecipeCaption.

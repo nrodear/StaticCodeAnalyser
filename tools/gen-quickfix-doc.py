@@ -14,10 +14,11 @@ WOHER WAS KOMMT - je Angabe EINE Quelle:
                              reDelphix/source/uRdxFixRunner.pas (Rumpf-
                              Routinen, die die Kennzeichnung setzen; bis
                              Charge B2S-b in uRdxRecipeRunner.pas);
-                             reDelphix/source/uRdxProvider.pas: die Rezepte
-                             (Konstruktor), ihre Menuetexte (CAP_*, _('..')),
-                             Art (fakFix ...) und Regel-Bindung (fixMode,
-                             Fundart)
+                             reDelphix/source/uRdxActionCore.pas: die Rezepte
+                             des Anbieters (Konstruktor des Kerns, seit E3
+                             2026-10-28; bis dahin uRdxProvider.pas), ihre
+                             Menuetexte (CAP_*, _('..')), Art (fakFix ...)
+                             und Regel-Bindung (fixMode, Fundart)
   Regel-ID, Name, editorHelp rules/sca-rules.json (editorHelps wird hier
                              nur GEPRUEFT, nicht geschrieben)
   Menuetexte de/fr           i18n/de.po, i18n/fr.po - gelesen wie
@@ -54,7 +55,8 @@ AUFRUF (Repo-Wurzel):
               (reDelphix/data/profile-code-aktionen.json), keine ohne Hilfe
               ausser PROFILE_EXTRA. Quellfehler (Exit 2) ist eine Unit in
               reDelphix/source, die 'ChangesBehavior :=' setzt, ohne dass
-              der Generator sie liest (Tabelle, Laeufer, Anbieter).
+              der Generator sie liest (Tabelle, Laeufer, Kern des
+              Anbieters) und ohne Grund in NOT_DOCUMENTED.
   DRIFT       QUICKFIXES.md ist byte-gleich mit dem, was der Generator jetzt
               schreiben wuerde (UTF-8 mit BOM, CRLF - so liegt jede .md im
               Checkout, .gitattributes: *.md eol=crlf); gemeldet wird die
@@ -64,7 +66,7 @@ fehlende Uebersetzung ist KEIN Fehler (die IDE zeigt dann die englische
 msgid): sie steht sichtbar als '(fehlt)' in der Datei, --check nennt sie
 als Hinweis.
 
-Neue Hilfe: Zeile in FIX_ROWS (bzw. Rezept im Konstruktor des Anbieters)
+Neue Hilfe: Zeile in FIX_ROWS (bzw. Rezept im Konstruktor des Kerns)
 -> Eintrag in quickfixes-doc.json -> Art ins Profil code-aktionen
 -> python tools/gen-quickfix-doc.py.
 
@@ -90,7 +92,11 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RDX = os.path.join(REPO, 'reDelphix')
 SRC_TABLE = os.path.join(RDX, 'source', 'uRdxFixTable.pas')
 SRC_RUNNER = os.path.join(RDX, 'source', 'uRdxFixRunner.pas')
-SRC_PROVIDER = os.path.join(RDX, 'source', 'uRdxProvider.pas')
+# Die Rezepte des Anbieters stehen seit Entscheid E3 (2026-10-28) im Kern
+# uRdxActionCore (TRdxActionCore, ohne ToolsAPI - die Probe RdxActionProbe
+# fragt denselben Kern); uRdxProvider reicht seine Eintraege nur ins Menue.
+SRC_CORE = os.path.join(RDX, 'source', 'uRdxActionCore.pas')
+CORE_CLASS = 'TRdxActionCore'
 # Alle Planer der Tabelle (TRdxFixPlanner) stehen in uRdxFixTable - seit der
 # Folgewelle des Wochen-Reviews 2026-10-21 (G09-07) auch die der Chargen Q
 # und R; bis dahin trug jede Planer-Unit uRdx*Fix.pas ihren Adapter selbst,
@@ -106,6 +112,11 @@ NOT_DOCUMENTED = {
         'Kennzeichnung sind die der Fund-Hilfen SCA014/SCA009/SCA044 '
         '(uRdxFixTable.ContextCaption, Test uTestRdxContextRunner); Doku: '
         'reDelphix/README.md, "Code-Aktionen ohne Fund".',
+    'uRdxProvider.pas':
+        'reicht die Kennzeichnung nur durch: die der Eintraege des Kerns '
+        '(AddEntry, gesetzt in uRdxActionCore, das der Generator liest) und '
+        'die der Code-Aktionen ohne Fund (ProvideContext, aus '
+        'uRdxContextRunner, s. dort). Seit Entscheid E3 (2026-10-28).',
 }
 # Profil code-aktionen (README 'Code-Aktionen in der IDE ausprobieren'): jede
 # Art mit Hilfe steht darin, sonst gibt es nach dem Import keinen Fund und
@@ -488,10 +499,11 @@ def parse_row(item, i):
 def unmarked_units(read=None):
     """Units in reDelphix/source, die die Kennzeichnung setzen ('Changes-
     Behavior :=' im Code), deren Ruempfe der Generator aber nicht liest -
-    er liest Tabelle, Laeufer und Anbieter (Rezepte). read: die gelesenen
+    er liest Tabelle, Laeufer und den Kern des Anbieters (Rezepte). read:
+    die gelesenen
     Pfade (nur der Selbsttest gibt sie vor)."""
     if read is None:
-        read = (SRC_TABLE, SRC_RUNNER, SRC_PROVIDER)
+        read = (SRC_TABLE, SRC_RUNNER, SRC_CORE)
     read = {os.path.normcase(os.path.abspath(p)) for p in read}
     out = []
     for path in sorted(glob.glob(os.path.join(SRC_DIR, '*.pas'))):
@@ -607,7 +619,7 @@ def analyze_recipe(meth, group, body, resolve):
             caps.append(cap)
     kinds.update(re.findall(r'\.\s*Kind\s*:=\s*(fak\w+)', body))
     if not kinds:
-        kinds = {'fakFix'}       # TRdxProvider.Add setzt fakFix
+        kinds = {'fakFix'}       # TRdxActionCore.Add setzt fakFix
     if len(kinds) > 1:
         raise SourceError('%s erzeugt Aktionen mehrerer Arten (%s) - '
                           'Generator erweitern' % (meth, ', '.join(sorted(kinds))))
@@ -634,22 +646,23 @@ def analyze_recipe(meth, group, body, resolve):
 
 
 def parse_provider(provider_text=None):
-    """uRdxProvider: die Rezepte in der Reihenfolge des Konstruktors (=
+    """uRdxActionCore (Kern des Anbieters): die Rezepte in der Reihenfolge
+    des Konstruktors (=
     Reihenfolge im Menue); das Rezept, das die Tabelle ruft, ist die
     Bruecke zu FIX_ROWS, kein eigenes."""
     if provider_text is None:
-        provider_text = load_text(SRC_PROVIDER)
+        provider_text = load_text(SRC_CORE)
     st = strip_comments(provider_text)
     resolve = make_resolver(st)
-    index = routines(st, SRC_PROVIDER)
-    ctor = index.get('TRdxProvider.Create')
+    index = routines(st, SRC_CORE)
+    ctor = index.get(CORE_CLASS + '.Create')
     if not ctor:
-        raise SourceError('%s: constructor TRdxProvider.Create nicht gefunden'
-                          % rel(SRC_PROVIDER))
+        raise SourceError('%s: constructor %s.Create nicht gefunden'
+                          % (rel(SRC_CORE), CORE_CLASS))
     regs = REG_RE.findall(ctor[0])
     if not regs:
         raise SourceError('%s: keine Rezepte im Konstruktor (erwartet '
-                          '"F..Recipes[i] := AddXxx;")' % rel(SRC_PROVIDER))
+                          '"F..Recipes[i] := AddXxx;")' % rel(SRC_CORE))
     # Jede Liste so viele Zuweisungen wie Plaetze (SetLength) - sonst stuende
     # ein Rezept in einer Form da, die der Generator nicht liest, und fehlte
     # still in der Doku.
@@ -662,14 +675,14 @@ def parse_provider(provider_text=None):
             raise SourceError('%s: F%sRecipes hat %s Plaetze (SetLength) und '
                               '%d Zuweisungen "F%sRecipes[i] := AddXxx;" - '
                               'Form unbekannt, Generator erweitern'
-                              % (rel(SRC_PROVIDER), group,
+                              % (rel(SRC_CORE), group,
                                  slots.get(group, 'keine'), found, group))
     recipes, bridge = [], None
     for group, meth in regs:
-        bodies = index.get('TRdxProvider.' + meth)
+        bodies = index.get(CORE_CLASS + '.' + meth)
         if not bodies:
             raise SourceError('%s: Rezept %s ohne Rumpf'
-                              % (rel(SRC_PROVIDER), meth))
+                              % (rel(SRC_CORE), meth))
         info = analyze_recipe(meth, group, bodies[0], resolve)
         if info['table_bridge']:
             if bridge:
@@ -1423,7 +1436,8 @@ def render(model, po):
       'gibt, ihre Menütexte und ob sie das Verhalten ändern, stehen in '
       '[`source/uRdxFixTable.pas`](source/uRdxFixTable.pas) (`FIX_ROWS`, '
       '`FIX_CAPTIONS`, `FIX_ALT_CAPTIONS`) und '
-      '[`source/uRdxProvider.pas`](source/uRdxProvider.pas) (Rezepte), die '
+      '[`source/uRdxActionCore.pas`](source/uRdxActionCore.pas) (Rezepte), '
+      'die '
       'Übersetzungen in [`i18n/de.po`](../i18n/de.po) und '
       '[`i18n/fr.po`](../i18n/fr.po), Regel-IDs und Namen in '
       '[`rules/sca-rules.json`](../rules/sca-rules.json).')
@@ -1485,7 +1499,8 @@ def render(model, po):
         render_entry(e, po, a)
     a('## Weitere Code-Aktionen')
     a('')
-    a('Rezepte des Anbieters (`uRdxProvider`), in der Reihenfolge des Menüs.')
+    a('Rezepte des Anbieters (Kern `uRdxActionCore`), in der Reihenfolge '
+      'des Menüs.')
     a('')
     for e in recipes:
         render_entry(e, po, a)
@@ -1729,15 +1744,15 @@ def selftest():
            and any('Art %s:' % free_kind in e and 'kein Eintrag' in e
                    for e in errs),
            'Quelltext-Mutant erkannt: neue Zeile in FIX_ROWS ohne JSON-Eintrag')
-    prov = load_text(SRC_PROVIDER)
+    prov = load_text(SRC_CORE)
     last = list(REG_RE.finditer(strip_comments(prov)))[-1]
     unsized = prov[:last.end()] + '\n  FTextRecipes[9] := AddProbe;' \
         + prov[last.end():]
     end = UNIT_END_RE.search(strip_comments(unsized),
                              unsized.index('\nimplementation') + 1)
     unsized = (unsized[:end.start()]
-               + 'procedure TRdxProvider.AddProbe(var AList: '
-                 'TArray<TFindingAction>;\n  const ACtx: TRdxRecipeContext);\n'
+               + 'procedure ' + CORE_CLASS + '.AddProbe(var AList: '
+                 'TArray<TRdxActionEntry>;\n  const ACtx: TRdxRecipeContext);\n'
                  "begin\n  Add(AList, _('Probe'), '', True, nil);\nend;\n\n"
                + unsized[end.start():])
     sized = sub_code(unsized, r'\bSetLength\s*\(\s*FTextRecipes\s*,\s*(\d+)',
@@ -1773,7 +1788,7 @@ def selftest():
     # Generator eine Unit nicht, die 'ChangesBehavior :=' setzt, faellt sie
     # auf - hier die Tabelle (ihre Adapter setzen die Kennzeichnung, seit
     # G09-07 auch die der zweiten Eintraege SCA093 und SCA046).
-    outside = unmarked_units(read=(SRC_RUNNER, SRC_PROVIDER))
+    outside = unmarked_units(read=(SRC_RUNNER, SRC_CORE))
     expect(rel(SRC_TABLE) in outside and not unmarked_units(),
            'Kennzeichnung ausserhalb erkannt (%s)'
            % os.path.basename(SRC_TABLE))

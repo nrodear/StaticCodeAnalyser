@@ -186,6 +186,8 @@
         <DCCReference Include="..\source\uRdxIfFixes.pas"/>
         <DCCReference Include="..\source\uRdxCondFixes.pas"/>
         <DCCReference Include="..\source\uRdxContextRunner.pas"/>
+        <DCCReference Include="..\source\uRdxLog.pas"/>
+        <DCCReference Include="..\source\uRdxActionCore.pas"/>
         <DCCReference Include="uTestRdxRecipes.pas"/>
         <DCCReference Include="uTestRdxBench.pas"/>
         <DCCReference Include="uTestRdxSca044.pas"/>
@@ -299,6 +301,7 @@
         <DCCReference Include="uTestRdxIntroContext.pas"/>
         <DCCReference Include="uTestRdxText.pas"/>
         <DCCReference Include="uTestRdxTextMsgs.pas"/>
+        <DCCReference Include="uTestRdxActionCore.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

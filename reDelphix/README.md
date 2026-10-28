@@ -30,7 +30,8 @@ Konzept: `Konzept_SourceRefactor_Quellstellen_2026-10-02.md`, Abschnitt 15
 ```
 reDelphix.d12.dpk / .dproj        {$DESIGNONLY}, requires rtl, vcl, designide, SCA.Engine
 source\uRdxRegister.pas           Register -> Anbieter an TFindingActions anmelden; finalization: abmelden
-source\uRdxProvider.pas           je Fund die Aktionen bauen (Anker/fixMode aus dem Regelkatalog); Quell-Cache TRdxSourceCache; seit Charge P5 die Zeilen der zuletzt gelesenen Datei samt geteilter Code-Sicht (SharedLines) und ein Plattenblick je Menueaufbau (BeginDiskBatch, DISK_BATCH_MS)
+source\uRdxProvider.pas           ToolsAPI-Seite des Anbieters: Text lesen (Puffer oder Platte), die Eintraege des Kerns als Menuepunkte mit Execute (Ersetzen, Markieren, Zwischenablage), Projekt-Units fuer den Kern; seit Charge P5 die Zeilen der zuletzt gelesenen Datei samt geteilter Code-Sicht (SharedLines) und ein Plattenblick je Menueaufbau (BeginDiskBatch, DISK_BATCH_MS); Code-Aktionen ohne Fund (ProvideContext)
+source\uRdxActionCore.pas         Kern des Anbieters ohne ToolsAPI/VCL (Entscheid E3, 2026-10-28): je Fund die Eintraege als Beschreibung (Rezept, Menuetext, Grund, Art, Kennzeichnung, Variante, Ersetzungen) - Rezepte und ihre Reihenfolge (Anker/fixMode aus dem Regelkatalog), Quell-Cache TRdxSourceCache; dieselbe Unit fragt die Probe tools\probe\RdxActionProbe
 source\uRdxRecipeRunner.pas       Rezept-Laeufer auf TSourcePlaces: Fund -> Beschreibung -> Ersetzung fuer SCA044 (Format), SCA003 (SQL-Vorlage) und die uses-Klauseln (PlanUses, QualifyUses, ClausesOf); dazu die geteilten Ergebnistypen (TRdxFixOutcome) und der Aktionsring des Anbieters; ohne ToolsAPI, testbar. Describe, PartsOf, FormatRewrite und die uses-Fragen delegiert er seit C16 an uRdxPlacesRunner
 source\uRdxPlacesRunner.pas       der Teil des Rezept-Laeufers, der nur TSourcePlaces braucht (Charge N, C16; 1:1 aus uRdxRecipeRunner): Describe/DescribeAnchor, PartsOf, FormatRewrite (SCA044 und die Code-Aktion "Format() aus Verkettung"), PlanUses, Klauseln, Direktiven, FPC-Weiche; ohne Fund und Katalog, FPC-Pruefstand
 source\uRdxFixRunner.pas          die Ruempfe der einfachen Hilfen, die den Quellstellen-Dienst brauchen (TRdxFixRunner: SCA075/SCA085/SCA126/SCA074/SCA087/SCA139/SCA066/SCA072/SCA084/SCA007/SCA168/SCA101/SCA099), und die Bausteine der Tabelle (MapFix, CastFreeFix, EmptyRaiseFix, AppendUses, CondAssignReason, SelfAssignReason) - bis Charge B2S-b in uRdxRecipeRunner (Review R6-12); ohne ToolsAPI, nur Delphi; nur uRdxFixTable ruft sie
@@ -75,6 +76,8 @@ tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik (dazu die Hi
 tools\fpc-pruefstand\selftest.sh  Selbsttest von build.sh (zwei Laeufe zugleich, FPC-Exit, Testzahl, Registrierung, Test ohne Assert, PRUEFSTAND_DIR, Grabsteine, TMPDIR mit Backslashes, Hilfs-Unit, mehrere Fixtures und {$IFNDEF FPC}-Teile)
 tools\probe\RdxCorpusProbe.dpr    Korpus-Probe: Rezept 5.1 ueber eine Liste von Fundstellen, CSV
 tools\probe\sites_from_sarif.py   Fundstellen einer Regel aus einem SARIF-Lauf ziehen
+tools\probe\RdxActionProbe.dpr    Realworld-Probe der Editorhilfen (Entscheid E3): je Fundstelle die Eintraege des Kerns uRdxActionCore wie in Gluehbirne und Menue, CSV mit Grund, Kennzeichnung und Vorher/Nachher (siehe "Realworld-Probe der Editorhilfen")
+tools\probe\sites_sample.py       Stichprobe je Regel aus einem SARIF-Lauf (seed, Deckel je Repo, Inhalts-Dubletten einmal) als Eingabe von RdxActionProbe; --selftest
 ```
 
 ## Voraussetzungen in der IDE
@@ -648,7 +651,7 @@ baut ihn ueber `CaptionFor` der Zeile `fkMagicNumber` bzw.
 `fkMissingFinally` - gleich geschrieben, also faellt die Kontextaktion auf
 einer SCA014- bzw. SCA009-Fundzeile hinter der Fund-Hilfe weg; "Format()
 aus Verkettung" nimmt die msgid des SCA044-Rezepts (`CAP_FORMAT` in
-`uRdxProvider`, `CAP_CONTEXT_FORMAT` in `uRdxFixTable` - SCA044 ist keine
+`uRdxActionCore`, `CAP_CONTEXT_FORMAT` in `uRdxFixTable` - SCA044 ist keine
 Zeile der Tabelle; die Gleichheit prueft
 `uTestRdxContextFormat.Caption_IsSca044RecipeCaption` am Quelltext)
 (`uFindingActionMenu`, Dedup per Caption). Die Hinweise sind dieselben
@@ -966,6 +969,23 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   englische msgid. Seit Charge FB pinnt `ResultDefaultHint_NamesShownValue` den
   festen Hinweis von SCA121 (er nennt keinen Default(T) mehr, der Menuetext
   nennt den Wert).
+* `uTestRdxActionCore` - der Kern des Anbieters (`uRdxActionCore`,
+  Entscheid E3): die Eintraege zu einem Fund gleich den Bausteinen, die
+  `uRdxProvider` bis dahin selbst rief - SCA017 mit erstem und zweitem
+  Eintrag (`FixFor`/`AlternativeFixFor` samt `CaptionFor`), SCA044 mit
+  "Stelle zeigen" und Format() (echte Detektor-Meldung, `Describe`/
+  `FormatRewrite`), SCA165 gesperrt mit Grund, Parser-Watchdog bzw. nicht
+  lesbare Quelle (nur Diagnose, Text-Rezept und Unterdruecken), Regel ohne
+  Hilfe (Diagnose), uses-Zeile ohne Lieferanten der Projekt-Units
+  (`UsesSkipped`), `FindingDiagnosis` und `MsgTooLongForEditor`; nach dem
+  Review E3 dazu `FindingActionOf` (jedes Feld des Eintrags in der
+  `TFindingAction`, bis dahin ungetestet in `TRdxProvider.AddEntry`), die
+  per RTTI gepinnten Felder von `TFindingAction`, `TRdxActionData` und
+  `TRdxActionEntry` (ein neues Feld wird rot, bis das Mapping es kennt),
+  die SQL-Vorlage (SCA003) gleich `SqlTemplate`, Format() mit fehlendem
+  `System.SysUtils` (zwei Ersetzungen) und eine Ausnahme in einem
+  Baum-Rezept (laeuft zum Aufrufer, Quelle vergessen) - 14 Tests, nur
+  reDelphix.Test (anonyme Methoden, Watchdog, RTTI).
 * `uTestRdxText` - die Sprache der Texte (`uRdxText`, Charge C0, Entscheid
   E29): Override (de/fr/en, Kuerzel ohne Uebersetzung, Normalisierung wie
   in der SCA), `auto` ueber die gesetzte Sprache der SCA, ohne sie ueber
@@ -1514,9 +1534,11 @@ ab (keine Fixture).
   ```
 
 `uRdxEditor` und `uRdxProvider` sind ToolsAPI und nur im Package
-uebersetzbar; `uRdxRecipeRunner` ist der testbare Kern dazwischen, mit
+uebersetzbar; `uRdxActionCore` (der Ablauf des Anbieters je Fund, seit E3)
+und `uRdxRecipeRunner` sind der testbare Kern dazwischen, mit
 `uRdxFixRunner` und `uRdxFixTable` fuer die einfachen Hilfen (in
-reDelphix.Test, nicht im FPC-Pruefstand).
+reDelphix.Test - `uTestRdxActionCore` vergleicht die Eintraege des Kerns
+mit diesen Bausteinen -, nicht im FPC-Pruefstand).
 
 **Doku der Quick-Fixes** (`QUICKFIXES.md`, Entscheid E30), ohne Delphi
 (Repo-Wurzel; auch in der CI, `.github/workflows/quickfix-doc.yml`):
@@ -1568,6 +1590,92 @@ Aktiv-Quote der Probe zu druecken. Exit 2 bei falschem Aufruf, nicht
 lesbarer Eingabe oder nicht schreibbarer Ausgabe. Die Python-Nachbildung
 der Regeln (Audit 2026-10-06) ist eine Obergrenze; was zaehlt, ist die
 Probe.
+
+## Realworld-Probe der Editorhilfen
+
+**`tools\probe\RdxActionProbe.dproj`** (Konsole, Win64 Release, in der
+d12-Projektgruppe; Entscheid E3, 2026-10-28) ermittelt fuer eine Liste von
+Fundstellen, was Gluehbirne und Kontextmenue anbieten wuerden - ueber
+DENSELBEN Kern wie das Package (`uRdxActionCore.TRdxActionCore.Describe`),
+nicht ueber einen Nachbau. Je Datei scannt die Probe selbst (Engine,
+`ssSingleFile` wie die CLI fuer `--file`, Direkt-Modus ohne `analyser.ini`,
+Profil `strict`, Mindestschwere hint, Delphi, `DefaultIfdefDefines`),
+nimmt den echten Fund gleicher Regel und Zeile (unter mehreren den mit
+derselben Meldung wie im SARIF; Spalte `Quelle` = `scan`) und ruft den Kern
+mit den Zeilen der Datei wie der Anbieter fuer eine geschlossene Datei.
+Liefert der Einzeldatei-Scan den Fund nicht - Funde ueber Projekt-Index,
+Querverweise oder die `analyser.ini` des Referenzlaufs, etwa die
+Unused-Familie SCA007/SCA053/SCA054/SCA147/SCA164 -, baut die Probe ihn aus
+den SARIF-Feldern der Stelle (`Quelle` = `sarif`): Art ueber den Katalog
+aus der RuleId, Zeile, EndLine, Meldung, Variante (SCA001), Konfidenz. Das
+SARIF traegt nicht: MethodName, RelatedLines, StructureChain, Spalte,
+Schwere, Custom-RuleID - die Planer und Rezepte lesen heute nur Datei,
+Zeile, Meldung, Art, Variante (SCA001) und Konfidenz (SCA144); eine leere
+Meldung schreibt der Export als Kurzbeschreibung der Regel. Die Stellen
+zieht `sites_sample.py` je Regel aus einem SARIF-Referenzlauf:
+
+```
+python reDelphix\tools\probe\sites_sample.py rw.sarif D:\git-sca-realworld sites.tsv --catalog --n 200 --seed 1
+python reDelphix\tools\probe\sites_sample.py rw.sarif D:\git-sca-realworld sites.tsv --rules SCA017,SCA044 --n 100
+powershell -File tools\patch-stack-size.ps1 "Output\RdxActionProbe\Win64 Release\RdxActionProbe.exe"
+"Output\RdxActionProbe\Win64 Release\RdxActionProbe.exe" sites.tsv actions.csv --lang de
+python reDelphix\tools\probe\sites_sample.py --selftest
+```
+
+`sites_sample.py`: Regeln aus `--rules`, sonst die mit
+`properties.editorHelp` im SARIF (Schalter `--sarif-editor-help`:
+`"editorHelp": ["SCA017:changes:slug", "SCA017.2:changes:slug"]` im
+properties-Bag der Results; auch `"editorHelp": true` im Regelblock), sonst
+mit `--catalog [datei.json]` die mit `"editorHelp": true` im Regelkatalog;
+je Regel gleiche Stelle (Datei, Zeile, Meldung) einmal, Dateien gleichen
+Inhalts (SHA-1) einmal, fehlende Dateien fallen weg (Warnung),
+reproduzierbare Stichprobe `--n` mit `--seed`, hoechstens `int(--cap x
+--n)` Stellen aus einem Repo (erster Pfadteil unter der Korpuswurzel;
+`--cap` Vorgabe 0,25, Bezug ist die angefragte Groesse `--n`). Das SARIF
+wird streamend gefiltert: gehalten werden nur Results der Regeln, die in
+Frage kommen. uri-Dekodierung und Korpuswurzel wie `sites_from_sarif.py`.
+Ausgabe `Datei<TAB>Zeile<TAB>RuleId<TAB>Meldung<TAB>EndLine<TAB>variant<TAB>confidence`
+(die vier hinteren Spalten aus dem SARIF, kodiert wie die Textspalten der
+CSV, dazu TAB als `\t`; die Probe liest auch das alte Format mit drei
+Spalten, dann ohne Quelle `sarif`) und `counts.tsv` (`--counts`, Vorgabe
+neben `sites.tsv`) mit der Grundgesamtheit je Regel:
+`RuleId<TAB>Funde<TAB>gezogen<TAB>Repos<TAB>ReposGesamt` (Funde = alle
+Results der Regel im SARIF, Repos = Repos der Stichprobe, ReposGesamt =
+Repos mit einem Fund der Regel).
+
+CSV der Probe (UTF-8, `;`, RFC 4180), eine Zeile je Hilfe-Eintrag:
+`Datei;Zeile;Regel;Eintrag;Kind;Menuetext;angeboten;aendert;Grund;Edits;VorherZeilen;NachherZeilen;Meldung;Hinweis;Quelle;inBirne`.
+Eintrag `1`/`2` ist der erste bzw. zweite Eintrag der einfachen Hilfe,
+`rezept:<Name>` ein Rezept (`RECIPE_*` in `uRdxActionCore`: ShowSpan,
+FormatCall, SqlTemplate, UsesActions, RemoveMarker), `diagnose` der
+Eintrag "reDelphix: <Grund>", `-` eine Stelle ohne Eintrag ("Fund nicht
+reproduziert", Scan-/Lesefehler - auch ein Scan, der nur SCA006 liefert -,
+Ausnahme, Abbruch nach Stapelueberlauf). `inBirne` sagt, ob der Eintrag
+in der Gluehbirne stuende - nach den Regeln des Hosts selbst
+(`uFindingActionMenu.BuildFindingMenuModelFrom` mit `moAvailableFixesOnly`:
+nur verfuegbare Hilfen, nie Stelle zeigen, Umbau oder Diagnose); gefragt
+wird je Stelle nur ihr eigener Fund, das Abschneiden nach
+`MAX_FINDINGS_PER_MENU` Funden einer Zeile bildet die Probe nicht nach.
+Vorher/Nachher sind die Zeilen der Ersetzungen mit 2 Zeilen Kontext vor
+und nach `PlanByteEdits`/`ApplyByteEdits` (der Weg des Editors); eine
+Ersetzung, die dort scheitert, steht als "Ersetzung scheitert: ..." im
+Grund. In den Textspalten steht LF als `\n`, CR als `\r` (ein CRLF also
+als `\r\n`) und ein Backslash als `\\` - umkehrbar, etwa in Python
+`re.sub(r'\\(.)', lambda m: {'n': '\n', 'r': '\r', 't': '\t'}.get(m.group(1), m.group(1)), s)`.
+Unterdruecken steht nur in der Zusammenfassung, "Stelle zeigen" ohne
+Ersetzungen, die SQL-Vorlage als "nachher", SCA197 traegt "nicht
+deterministisch (frische GUID)". Den uses-Umbau prueft die Probe nicht
+(keine Projekt-Units ohne IDE): auf einer uses-Zeile steht
+`rezept:UsesActions` mit `nicht geprueft`. Die Zusammenfassung (stdout)
+zaehlt Stellen je Regel und Quelle (scan, sarif, nicht reproduziert), je
+Regel und Eintrag angeboten/gesperrt/in der Birne getrennt nach Quelle und
+die Gruende der Sperren nach Kategorie (Ziffern maskiert). Eine Ausnahme
+kostet nur Datei bzw. Stelle, nie den Lauf. Ein Stapelueberlauf ist die
+Ausnahme: ein zweiter beendete den Prozess still, deshalb prueft die Probe
+nach dem ersten nichts mehr - die uebrigen Stellen stehen als "nicht
+geprueft: Abbruch nach Stapelueberlauf" in der CSV, die Zusammenfassung
+kommt, Exit-Code 3 (sonst 0; 1 Abbruch, 2 Aufruf). Deshalb der
+32-MB-Patch.
 
 ## Grenzen (Stand 2026-10-15)
 

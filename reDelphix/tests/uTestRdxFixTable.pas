@@ -605,7 +605,8 @@ begin
 end;
 
 // Jeder zweite Eintrag setzt Variant = 1 - auch ohne Zeilen (gesperrt):
-// der Anbieter nimmt ihn nur mit Variant > 0 (uRdxProvider), sonst
+// der Anbieter nimmt ihn nur mit Variant > 0 (uRdxActionCore.AddSimpleFix,
+// bis E3 uRdxProvider), sonst
 // verschwaende er still aus dem Menue.
 procedure TTestRdxFixTable.AltRows_SetVariantOne;
 var
