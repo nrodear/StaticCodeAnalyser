@@ -240,6 +240,7 @@
         <DCCReference Include="uTestEditorContextModel.pas"/>
         <DCCReference Include="uTestEditorBulbGeometry.pas"/>
         <DCCReference Include="uTestEditorFindingStore.pas"/>
+        <DCCReference Include="uTestFindingCopy.pas"/>
         <DCCReference Include="uTestFindingKeyPolicy.pas"/>
         <DCCReference Include="uTestBulbDecision.pas"/>
         <DCCReference Include="uTestFindingSourcePick.pas"/>

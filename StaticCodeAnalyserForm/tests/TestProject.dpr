@@ -159,6 +159,7 @@ uses
   uTestEditorContextModel in 'uTestEditorContextModel.pas',
   uTestEditorBulbGeometry in 'uTestEditorBulbGeometry.pas',
   uTestEditorFindingStore in 'uTestEditorFindingStore.pas',
+  uTestFindingCopy in 'uTestFindingCopy.pas',
   uTestFindingKeyPolicy in 'uTestFindingKeyPolicy.pas',
   uTestBulbDecision in 'uTestBulbDecision.pas',
   uTestFindingSourcePick in 'uTestFindingSourcePick.pas',
