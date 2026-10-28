@@ -223,14 +223,25 @@ Chaque résultat :
 | `FileName` | `string` | Fichier source. |
 | `MethodName` | `string` | Méthode/routine (si connue). |
 | `LineNumber` / `LineInt` | `string` / `Integer` | Ligne (champ chaîne + assistant entier). |
+| `EndLine` / `SpanEnd` / `IsMultiLine` / `SpanLineCount` | `Integer` / `Integer` / `Boolean` / `Integer` | Dernière ligne de la plage du résultat. `EndLine = 0` (défaut) = une seule ligne ; lire `SpanEnd` (borné, jamais inférieur à la ligne de début) plutôt que le champ brut. Une plage ne change que la surface marquée, jamais le nombre de résultats. |
 | `MissingVar` / `Message` | `string` | Message de détail (`Message` = alias). |
-| `Severity` | `TLeakSeverity` | `lsError` / `lsWarning` / `lsHint`. |
+| `Severity` | `TLeakSeverity` | `lsError` / `lsWarning` / `lsHint` — telle qu'elle est après les post-filtres (politique de preuve, `[PathOverrides]`). |
+| `OriginalSeverity` | `TLeakSeverity` | La sévérité attribuée par le **détecteur**. Les post-filtres ne modifient `Severity` que via `OverrideSeverity`, qui conserve la première valeur d'origine ; `SavedDetectorSeverity`/`SeverityWasOverridden` en sont le stockage — ne pas les lire directement. |
 | `Kind` | `TFindingKind` | Type de règle concret (`fkXxx`). |
 | `Confidence` | `TFindingConfidence` | `fcLow` / `fcMedium` / `fcHigh`. |
 | `RuleID` | `string` | ID de règle personnalisée (sinon vide). |
+| `RelatedLines` | `string` | Autres lignes de la même chose — aujourd'hui seulement SCA015/SCA021 (les emplacements partenaires d'un groupe de doublons) : numéros de ligne à base 1 séparés par des virgules, croissants, sans la ligne d'ancrage ; vide pour toutes les autres règles. |
+| `StructureChain` | `string` | Chaîne d'imbrication jusqu'au résultat, de l'extérieur vers l'intérieur, jointe par `CHAIN_SEP` (`' → '`), p. ex. `if → for → while` ; aujourd'hui seulement SCA018 (DeepNesting), sinon vide. |
+| `LeakVariant` / `MemoryLeakVariant` | `string` | Variante de SCA001 (MemoryLeak) : `never-freed`, `freed-outside-finally`, `return-value-not-freed`, `proven-leak`. `LeakVariant` est le champ que pose le détecteur (vide = non posé) ; `MemoryLeakVariant` le renvoie ou le déduit de `OriginalSeverity` et du message ; `''` pour tout autre type. |
 | `FindingType` | `TFindingType` | Catégorie (voir ci-dessous). |
 | `SeverityText` / `TypeText` | `string` | Libellés lisibles. |
 | `ResolvedRuleId` | `string` | `SCAxxx` (RuleID si défini, sinon consultation du catalogue). |
+
+`RelatedLines`, `StructureChain` et `LeakVariant` ne figurent volontairement pas
+dans le message, donc ni dans l'empreinte SARIF ni dans celle de la baseline.
+Les producteurs créent des résultats avec `TLeakFinding.New(...)`/`NewAtPos(...)`
+ou `Create` + `SetKind(Kind[, Confidence])` (sévérité issue du défaut du
+catalogue).
 
 Enums (`uSCAConsts`) :
 

@@ -217,14 +217,24 @@ Each finding:
 | `FileName` | `string` | Source file. |
 | `MethodName` | `string` | Method/routine (if known). |
 | `LineNumber` / `LineInt` | `string` / `Integer` | Line (string field + integer helper). |
+| `EndLine` / `SpanEnd` / `IsMultiLine` / `SpanLineCount` | `Integer` / `Integer` / `Boolean` / `Integer` | Last line of the finding's range. `EndLine = 0` (default) = single line; read `SpanEnd` (clamped, never below the start line) instead of the raw field. A range changes only how much a finding marks, never the number of findings. |
 | `MissingVar` / `Message` | `string` | Detail message (`Message` = alias). |
-| `Severity` | `TLeakSeverity` | `lsError` / `lsWarning` / `lsHint`. |
+| `Severity` | `TLeakSeverity` | `lsError` / `lsWarning` / `lsHint` — as it stands after the post-filters (evidence tiering, `[PathOverrides]`). |
+| `OriginalSeverity` | `TLeakSeverity` | The severity the **detector** assigned. Post-filters change `Severity` only via `OverrideSeverity`, which keeps the first original; `SavedDetectorSeverity`/`SeverityWasOverridden` are its storage — do not read them directly. |
 | `Kind` | `TFindingKind` | Concrete rule kind (`fkXxx`). |
 | `Confidence` | `TFindingConfidence` | `fcLow` / `fcMedium` / `fcHigh`. |
 | `RuleID` | `string` | Custom rule ID (else empty). |
+| `RelatedLines` | `string` | Further lines of the same thing — today only SCA015/SCA021 (the partner places of a duplicate group): comma-separated 1-based line numbers, ascending, without the anchor line; empty for every other rule. |
+| `StructureChain` | `string` | Nesting chain to the finding, outside in, joined with `CHAIN_SEP` (`' → '`), e.g. `if → for → while`; today only SCA018 (DeepNesting), otherwise empty. |
+| `LeakVariant` / `MemoryLeakVariant` | `string` | SCA001 (MemoryLeak) variant: `never-freed`, `freed-outside-finally`, `return-value-not-freed`, `proven-leak`. `LeakVariant` is the field the detector sets (empty = not set); `MemoryLeakVariant` returns it or derives it from `OriginalSeverity` and the message; `''` for every other kind. |
 | `FindingType` | `TFindingType` | Category (see below). |
 | `SeverityText` / `TypeText` | `string` | Readable labels. |
 | `ResolvedRuleId` | `string` | `SCAxxx` (RuleID if set, else catalog lookup). |
+
+`RelatedLines`, `StructureChain` and `LeakVariant` are deliberately not part of
+the message, so they are in neither the SARIF nor the baseline fingerprint.
+Producers create findings with `TLeakFinding.New(...)`/`NewAtPos(...)` or
+`Create` + `SetKind(Kind[, Confidence])` (severity from the catalog default).
 
 Enums (`uSCAConsts`):
 

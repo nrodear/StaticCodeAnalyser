@@ -219,14 +219,24 @@ Jeder Befund:
 | `FileName` | `string` | Quelldatei. |
 | `MethodName` | `string` | Methode/Routine (falls bekannt). |
 | `LineNumber` / `LineInt` | `string` / `Integer` | Zeile (String-Feld + Integer-Helper). |
+| `EndLine` / `SpanEnd` / `IsMultiLine` / `SpanLineCount` | `Integer` / `Integer` / `Boolean` / `Integer` | Letzte Zeile des Befund-Bereichs. `EndLine = 0` (Default) = einzeilig; `SpanEnd` lesen (geklemmt, nie kleiner als die Startzeile) statt des Rohfelds. Ein Bereich ändert nur, wie viel Fläche ein Fund markiert, nie die Zahl der Funde. |
 | `MissingVar` / `Message` | `string` | Detailmeldung (`Message` = Alias). |
-| `Severity` | `TLeakSeverity` | `lsError` / `lsWarning` / `lsHint`. |
+| `Severity` | `TLeakSeverity` | `lsError` / `lsWarning` / `lsHint` — so, wie sie nach den Post-Filtern (Evidenz-Politik, `[PathOverrides]`) steht. |
+| `OriginalSeverity` | `TLeakSeverity` | Die Schwere, die der **Detektor** vergeben hat. Post-Filter ändern `Severity` nur über `OverrideSeverity`, das die erste Original-Schwere sichert; `SavedDetectorSeverity`/`SeverityWasOverridden` sind deren Speicher — nicht direkt lesen. |
 | `Kind` | `TFindingKind` | Konkrete Regel-Art (`fkXxx`). |
 | `Confidence` | `TFindingConfidence` | `fcLow` / `fcMedium` / `fcHigh`. |
 | `RuleID` | `string` | Custom-Rule-ID (sonst leer). |
+| `RelatedLines` | `string` | Weitere Zeilen derselben Sache — heute nur SCA015/SCA021 (die Partnerstellen einer Duplikat-Gruppe): kommagetrennte 1-basierte Zeilennummern, aufsteigend, ohne die Ankerzeile; leer bei allen anderen Regeln. |
+| `StructureChain` | `string` | Verschachtelungskette zur Fundstelle, von außen nach innen, verbunden mit `CHAIN_SEP` (`' → '`), z. B. `if → for → while`; heute nur SCA018 (DeepNesting), sonst leer. |
+| `LeakVariant` / `MemoryLeakVariant` | `string` | Variante von SCA001 (MemoryLeak): `never-freed`, `freed-outside-finally`, `return-value-not-freed`, `proven-leak`. `LeakVariant` ist das Feld, das der Detektor setzt (leer = nicht gesetzt); `MemoryLeakVariant` liefert es oder leitet es aus `OriginalSeverity` und Meldung ab; `''` bei jeder anderen Art. |
 | `FindingType` | `TFindingType` | Kategorie (s.u.). |
 | `SeverityText` / `TypeText` | `string` | Lesbare Labels. |
 | `ResolvedRuleId` | `string` | `SCAxxx` (RuleID falls gesetzt, sonst Catalog-Lookup). |
+
+`RelatedLines`, `StructureChain` und `LeakVariant` stehen bewusst nicht in der
+Meldung und damit weder im SARIF- noch im Baseline-Fingerprint. Erzeuger legen
+Funde mit `TLeakFinding.New(...)`/`NewAtPos(...)` oder `Create` +
+`SetKind(Kind[, Confidence])` an (Schwere aus der Katalog-Vorgabe).
 
 Enums (`uSCAConsts`):
 
