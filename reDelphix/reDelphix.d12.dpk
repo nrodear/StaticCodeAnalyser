@@ -16,6 +16,15 @@ package reDelphix.d12;
 // .dproj nur der MSBuild-Spiegel - beide gehoeren zusammen (Erfahrung
 // im Kopf von StaticCodeAnalyser.IDE.d12.dpk).
 // ---------------------------------------------------------------------
+// Win64 gibt es fuer dieses Paket erst ab Delphi 13 (Paketsatz S4,
+// 2026-10-28): Delphi 12 liefert designide nur fuer Win32 und hat keine
+// 64-Bit-IDE. Ohne die Sperre endet ein D12-Win64-Bau mit "E2202 Package
+// 'designide' wird benoetigt", ohne die Plattform zu nennen. VER360 =
+// Delphi 12, bewusst nur dagegen geprueft. Belege und Herleitung im Kopf
+// von StaticCodeAnalyser.IDE.d12.dpk.
+{$IF Defined(WIN64) and Defined(VER360)}
+  {$MESSAGE FATAL 'Win64 gibt es fuer dieses Paket erst ab Delphi 13 - Delphi 12 liefert kein designide fuer Win64. Unter D12 bitte Win32 bauen.'}
+{$IFEND}
 {$R *.res}
 // Scope-Tabelle als RCDATA (data\unitscopes.rc -> BRCC32 legt die .res
 // neben die dpk). Eine unitscopes.txt neben der BPL hat Vorrang.
