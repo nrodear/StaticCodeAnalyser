@@ -11,8 +11,12 @@ program RdxActionProbe;
 //
 //   RdxActionProbe <sites.tsv> <out.csv> [--lang de|en] [--profile NAME]
 //
-// sites.tsv (UTF-8, z. B. von sites_sample.py): Datei<TAB>Zeile<TAB>RuleId
-// je Zeile; leere Zeilen und Zeilen mit '#' am Anfang zaehlen nicht.
+// sites.tsv (UTF-8, z. B. von sites_sample.py), je Zeile
+//   Datei<TAB>Zeile<TAB>RuleId[<TAB>Meldung<TAB>EndLine<TAB>variant<TAB>confidence]
+// - die vier hinteren Spalten sind die SARIF-Felder des Funds (message.text,
+// region.endLine, properties.variant/confidence; leer = nicht im SARIF),
+// kodiert wie die Textspalten der CSV, dazu TAB als \t. Leere Zeilen und
+// Zeilen mit '#' am Anfang zaehlen nicht.
 //
 // ABLAUF JE DATEI
 //
@@ -20,20 +24,37 @@ program RdxActionProbe;
 // selbst mit der Engine (uEngineApi, TAnalysisSession.Run mit ssSingleFile
 // - der Weg der CLI fuer --file, aber ohne analyser.ini: Direkt-Modus mit
 // Profil --profile (Vorgabe strict), Mindestschwere hint, Konfidenz ab
-// low, UsesCheck, Dialekt Delphi, IFDEF-Sicht DefaultIfdefDefines), sucht
-// zu jeder Stelle den echten TLeakFinding (gleiche Regel, gleiche Zeile;
-// zwei Stellen derselben Regel und Zeile nehmen zwei Funde, solange es sie
-// gibt) und ruft den Kern mit den Zeilen der Datei, gelesen wie der Scan
+// low, UsesCheck, Dialekt Delphi, IFDEF-Sicht DefaultIfdefDefines) und
+// ruft den Kern mit den Zeilen der Datei, gelesen wie der Scan
 // (LoadFileSmart) - genau der Weg des Anbieters fuer eine Datei, die nicht
-// im Editor offen ist (txDisk). Ein Fund, den der Einzeldatei-Scan nicht
-// liefert (Projekt-Index, andere Konfiguration des Referenzlaufs), steht
-// als "Fund nicht reproduziert" in der CSV.
+// im Editor offen ist (txDisk).
+//
+// WELCHER FUND (Spalte Quelle)
+//
+// scan:  der echte TLeakFinding des Einzeldatei-Scans - gleiche Regel und
+//        Zeile, noch nicht von einer anderen Stelle genommen; unter
+//        mehreren der mit derselben Meldung wie im SARIF (sonst der erste).
+// sarif: liefert der Scan keinen (Funde ueber Projekt-Index, Querverweise
+//        oder analyser.ini des Referenzlaufs - die Unused-Familie SCA007/
+//        SCA053/SCA054/SCA147/SCA164 u. a.), baut die Probe den Fund aus
+//        den SARIF-Feldern: Kind ueber den Katalog aus der RuleId, Zeile,
+//        EndLine, Meldung (MissingVar), LeakVariant, Confidence (fehlt sie
+//        im SARIF: fcHigh wie TLeakFinding.Create). Was das SARIF nicht
+//        traegt, bleibt leer: MethodName, RelatedLines, StructureChain,
+//        RuleID (Custom-Regeln), Severity/OriginalSeverity, Spalte - die
+//        Planer und Rezepte lesen heute nur FileName, LineInt, Message/
+//        MissingVar, Kind, LeakVariant/MemoryLeakVariant (SCA001) und
+//        Confidence (SCA144). Eine leere Meldung schreibt der SARIF-Export
+//        als Kurzbeschreibung der Regel - dann sieht der Planer diese.
+// Ohne SARIF-Spalten (altes Format) bzw. mit unbekannter RuleId bleibt es
+// bei "Fund nicht reproduziert".
 //
 // CSV (UTF-8 mit BOM, ';'-getrennt, RFC 4180: eine Zelle mit ';', '"',
 // Zeilenumbruch oder Leerraum am Rand steht in "...", '"' darin doppelt),
 // je Hilfe-Eintrag eine Zeile:
 //   Datei;Zeile;Regel;Eintrag;Kind;Menuetext;angeboten;aendert;Grund;
-//   Edits;VorherZeilen;NachherZeilen;Meldung;Hinweis
+//   Edits;VorherZeilen;NachherZeilen;Meldung;Hinweis;Quelle
+// Quelle: scan / sarif (s. oben), '-' bei einer Stelle ohne Fund.
 // Eintrag: 1 / 2 (erster bzw. zweiter Eintrag der einfachen Hilfe),
 // rezept:<Name> (ShowSpan, FormatCall, SqlTemplate, UsesActions,
 // RemoveMarker), diagnose ("reDelphix: <Grund>"), '-' bei einer Stelle
@@ -58,8 +79,9 @@ program RdxActionProbe;
 // Spalten Datei, Regel, Eintrag und Edits bleiben unkodiert.
 //
 // Am Ende eine Zusammenfassung nach stdout: je Regel und Eintrag
-// angeboten/gesperrt, gesperrt nach Grund-Kategorie (Ziffern maskiert wie
-// MaskDigits in RdxCorpusProbe), dazu nicht reproduzierte Stellen,
+// angeboten/gesperrt getrennt nach Quelle scan und sarif, gesperrt nach
+// Grund-Kategorie (Ziffern maskiert wie MaskDigits in RdxCorpusProbe),
+// dazu Stellen je Quelle und Regel, nicht reproduzierte Stellen,
 // Unterdruecken-Eintraege und Ausnahmen.
 //
 // ROBUSTHEIT
@@ -90,6 +112,7 @@ uses
   uSCAConsts,       // lsHint, fcLow, dlDelphi
   uFindingActions,  // TFindingActionKind
   uFileTextCache,   // LoadFileSmart: dieselbe Dekodierung wie der Scan
+  uRuleCatalog,     // GetRuleByIDCanonical: Kind zur RuleId (Quelle sarif)
   uRdxText in '..\..\source\uRdxText.pas',
   uRdxBufferMath in '..\..\source\uRdxBufferMath.pas',
   uRdxCodeMap in '..\..\source\uRdxCodeMap.pas',
@@ -105,15 +128,24 @@ const
   MAX_CATEGORY    = 100;    // Zeichen einer Grund-Kategorie
   CSV_HEADER =
     'Datei;Zeile;Regel;Eintrag;Kind;Menuetext;angeboten;aendert;Grund;'
-    + 'Edits;VorherZeilen;NachherZeilen;Meldung;Hinweis';
+    + 'Edits;VorherZeilen;NachherZeilen;Meldung;Hinweis;Quelle';
+  SOURCE_SCAN  = 'scan';
+  SOURCE_SARIF = 'sarif';
   KIND_NAMES : array[TFindingActionKind] of string =
     ('unset', 'fix', 'navigate', 'suppress', 'refactor', 'context');
 
 type
   TSite = record
-    FileName : string;
-    Line     : Integer;
-    RuleId   : string;
+    FileName   : string;
+    Line       : Integer;
+    RuleId     : string;
+    // Die SARIF-Felder (sites.tsv, Spalten 4-7; dekodiert). HasSarif:
+    // die Zeile traegt sie - nur dann baut die Probe einen Fund daraus.
+    HasSarif   : Boolean;
+    Msg        : string;
+    EndLine    : Integer;
+    Variant    : string;
+    Confidence : string;
   end;
 
   // Die Felder einer CSV-Zeile ausser Datei, Zeile und Regel.
@@ -129,6 +161,7 @@ type
     After   : string;
     Msg     : string;
     Hint    : string;
+    Source  : string;   // scan / sarif / '-'
   end;
 
   TCounter = TDictionary<string, Integer>;
@@ -139,12 +172,14 @@ type
     FCore     : TRdxActionCore;
     FDisk     : TRdxDiskReasonCache;
     FProfile  : string;
-    FOffered  : TCounter;   // Regel|Eintrag
-    FBlocked  : TCounter;   // Regel|Eintrag
+    FOffered  : TCounter;   // Regel|Eintrag|Quelle
+    FBlocked  : TCounter;   // Regel|Eintrag|Quelle
     FReasons  : TCounter;   // Regel|Eintrag|Kategorie
     FNotRepro : TCounter;   // Regel
     FSuppress : TCounter;   // Regel
     FFailures : TCounter;   // Kategorie (Scan, Lesen, Ausnahme)
+    FBySource : TCounter;   // Regel|Quelle: Stellen je Quelle
+    FSource   : string;     // Quelle des Funds, den ProbeSite gerade prueft
     FSites    : Integer;
     FFiles    : Integer;
     FRows     : Integer;
@@ -156,8 +191,9 @@ type
     function Scan(const AFile: string): TObjectList<TLeakFinding>;
     procedure ProbeEntry(const ASite: TSite; AFinding: TLeakFinding;
       const AEntry: TRdxActionEntry; ALines: TStrings; const AText: string);
+    // ASource: SOURCE_SCAN oder SOURCE_SARIF (Spalte Quelle, Zaehler).
     procedure ProbeSite(const ASite: TSite; AFinding: TLeakFinding;
-      ALines: TStrings; const AText: string);
+      ALines: TStrings; const AText, ASource: string);
     procedure ProbeFile(const AFile: string; ASites: TList<TSite>);
   public
     constructor Create(const AOutFile, AProfile: string);
@@ -167,6 +203,60 @@ type
   end;
 
 { ---- Text der Zellen ---- }
+
+// Umkehrung der Kodierung von sites.tsv (sites_sample.tsv_enc): \\ -> \,
+// \n -> LF, \r -> CR, \t -> TAB; ein anderes Zeichen hinter \ bleibt.
+function Unesc(const S: string): string;
+var
+  SB : TStringBuilder;
+  i  : Integer;
+begin
+  SB := TStringBuilder.Create(Length(S));
+  try
+    i := 1;
+    while i <= Length(S) do
+    begin
+      if (S[i] = '\') and (i < Length(S)) then
+      begin
+        Inc(i);
+        case S[i] of
+          'n': SB.Append(#10);
+          'r': SB.Append(#13);
+          't': SB.Append(#9);
+        else
+          SB.Append(S[i]);
+        end;
+      end
+      else
+        SB.Append(S[i]);
+      Inc(i);
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+// Ein Fund aus den SARIF-Feldern der Stelle (Quelle sarif, s. Kopf); nil,
+// wenn die Stelle keine traegt oder der Katalog die RuleId nicht kennt.
+// Der Aufrufer gibt frei.
+function FindingFromSarif(const ASite: TSite): TLeakFinding;
+var
+  Meta : TRuleMeta;
+begin
+  Result := nil;
+  if not ASite.HasSarif then Exit;
+  if not TRuleCatalog.GetRuleByIDCanonical(ASite.RuleId, Meta) then Exit;
+  // New setzt ueber SetKind Confidence := fcHigh - die SARIF-Konfidenz
+  // danach (fehlt sie, gilt wie bei TLeakFinding.Create fcHigh).
+  Result := TLeakFinding.New(ASite.FileName, '', ASite.Line, ASite.Msg,
+    Meta.Kind);
+  if ASite.EndLine > ASite.Line then
+    Result.EndLine := ASite.EndLine;
+  Result.LeakVariant := ASite.Variant;
+  if ASite.Confidence <> '' then
+    Result.Confidence := ParseConfidence(ASite.Confidence, fcHigh);
+end;
 
 // Zeilenumbruch -> \n, einzelnes CR -> \r, Backslash -> \\ (umkehrbar).
 function Esc(const S: string): string;
@@ -395,6 +485,7 @@ begin
   FNotRepro := TCounter.Create;
   FSuppress := TCounter.Create;
   FFailures := TCounter.Create;
+  FBySource := TCounter.Create;
   FDisk     := TRdxDiskReasonCache.Create;
   RenewCore;
   // UTF-8 mit BOM (wie RdxCorpusProbe ueber TStringList.SaveToFile) -
@@ -408,6 +499,7 @@ begin
   FOut.Free;
   FCore.Free;
   FDisk.Free;
+  FBySource.Free;
   FFailures.Free;
   FSuppress.Free;
   FNotRepro.Free;
@@ -442,7 +534,7 @@ begin
     + Cell(ARow.Changes) + ';' + Cell(Esc(ARow.Reason)) + ';'
     + Cell(ARow.Edits) + ';' + Cell(Esc(ARow.Before)) + ';'
     + Cell(Esc(ARow.After)) + ';' + Cell(Esc(ARow.Msg)) + ';'
-    + Cell(Esc(ARow.Hint)));
+    + Cell(Esc(ARow.Hint)) + ';' + Cell(ARow.Source));
   Inc(FRows);
 end;
 
@@ -457,6 +549,7 @@ begin
   R.Changes := '-';
   R.Reason  := AReason;
   R.Msg     := AMsg;
+  R.Source  := '-';
   WriteRow(ASite, R);
 end;
 
@@ -510,6 +603,7 @@ begin
   R.Offered := YesNo(AEntry.Enabled);
   R.Changes := YesNo(AEntry.ChangesBehavior);
   R.Msg     := AFinding.Message;
+  R.Source  := FSource;
   Key := ASite.RuleId + '|' + R.Entry;
   if AEntry.Enabled then
   begin
@@ -545,23 +639,25 @@ begin
     end;
   end;
   if AEntry.Enabled then
-    Bump(FOffered, Key)
+    Bump(FOffered, Key + '|' + FSource)
   else
   begin
-    Bump(FBlocked, Key);
+    Bump(FBlocked, Key + '|' + FSource);
     Bump(FReasons, Key + '|' + CategoryOf(AEntry.Hint));
   end;
   WriteRow(ASite, R);
 end;
 
 procedure TProbe.ProbeSite(const ASite: TSite; AFinding: TLeakFinding;
-  ALines: TStrings; const AText: string);
+  ALines: TStrings; const AText, ASource: string);
 var
   Why     : string;
   Entries : TArray<TRdxActionEntry>;
   Entry   : TRdxActionEntry;
   R       : TRow;
 begin
+  FSource := ASource;
+  Bump(FBySource, ASite.RuleId + '|' + ASource);
   Why := TRdxActionCore.FindingDiagnosis(AFinding);
   if Why <> '' then
   begin
@@ -574,7 +670,8 @@ begin
     R.Changes := 'nein';
     R.Reason  := Why;
     R.Msg     := AFinding.Message;
-    Bump(FBlocked, ASite.RuleId + '|diagnose');
+    R.Source  := ASource;
+    Bump(FBlocked, ASite.RuleId + '|diagnose|' + ASource);
     Bump(FReasons, ASite.RuleId + '|diagnose|' + CategoryOf(Why));
     WriteRow(ASite, R);
     Exit;
@@ -607,8 +704,43 @@ begin
     R.Reason  := 'uses-Umbau nicht geprueft: die Probe hat keine '
       + 'Projekt-Units (IDE: TRdxEditor.ProjectUnits)';
     R.Msg     := AFinding.Message;
+    R.Source  := ASource;
     Bump(FReasons, ASite.RuleId + '|rezept:UsesActions|nicht geprueft');
     WriteRow(ASite, R);
+  end;
+end;
+
+// Der Fund des Einzeldatei-Scans zu ASite (gleiche Regel, gleiche Zeile);
+// -1 ohne Treffer. Reihenfolge der Durchgaenge:
+//   0  noch nicht benutzt, Meldung wie im SARIF (nur mit SARIF-Feldern)
+//   1  noch nicht benutzt
+//   2  schon benutzt, Meldung wie im SARIF (dieselbe Stelle zweimal in der
+//      Liste; nur mit SARIF-Feldern)
+//   3  irgendeiner (nur OHNE SARIF-Feldern - mit ihnen baut die Probe
+//      lieber den Fund aus dem SARIF, als einen fremden doppelt zu nehmen)
+function PickFinding(AFindings: TObjectList<TLeakFinding>;
+  const AUsed: TArray<Boolean>; const ASite: TSite): Integer;
+var
+  Pass : Integer;
+  i    : Integer;
+  F    : TLeakFinding;
+begin
+  Result := -1;
+  for Pass := 0 to 3 do
+  begin
+    // Mit SARIF-Feldern die Durchgaenge 0-2, ohne sie 1 und 3.
+    if ASite.HasSarif and (Pass = 3) then Continue;
+    if not ASite.HasSarif and not Odd(Pass) then Continue;
+    for i := 0 to AFindings.Count - 1 do
+    begin
+      F := AFindings[i];
+      if (F.LineInt <> ASite.Line)
+         or not SameText(F.ResolvedRuleId, ASite.RuleId) then Continue;
+      if (Pass <= 1) and AUsed[i] then Continue;
+      if (Pass = 2) and not AUsed[i] then Continue;
+      if not Odd(Pass) and (F.Message <> ASite.Msg) then Continue;
+      Exit(i);
+    end;
   end;
 end;
 
@@ -619,10 +751,12 @@ var
   Lines    : TRdxMappedLines;
   Text     : string;
   Site     : TSite;
-  i, Hit   : Integer;
+  Hit      : Integer;
   F        : TLeakFinding;
+  Own      : TLeakFinding;
   Same     : TStringList;
-  Fail     : string;
+  ScanFail : string;
+  Why      : string;
   PrevDisk : TRdxDiskReasonCache;
 begin
   Inc(FFiles);
@@ -637,27 +771,32 @@ begin
   end;
   Findings := nil;
   Lines := nil;
-  Fail := '';
+  ScanFail := '';
   try
+    // Ohne die Zeilen gibt es weder einen Scan- noch einen SARIF-Fund.
+    Lines := TRdxMappedLines.Create;
+    if not LoadFileSmart(AFile, Lines) then
+    begin
+      Bump(FFailures, 'Datei nicht lesbar');
+      for Site in ASites do
+        SiteProblem(Site, 'Datei nicht lesbar', '');
+      Exit;
+    end;
     try
       Findings := Scan(AFile);
-      Lines := TRdxMappedLines.Create;
-      if not LoadFileSmart(AFile, Lines) then
-        Fail := 'Datei nicht lesbar';
     except
       on EAbort do raise;
       // noinspection ExceptionTooGeneral
-      // Ein Scan- oder Lesefehler kostet nur die Stellen dieser Datei.
+      // Ein Scan-Fehler kostet nur die Scan-Funde dieser Datei: Stellen
+      // mit SARIF-Feldern laufen mit Quelle sarif weiter.
       on E: Exception do
-        Fail := 'Scan: ' + DescribeException(E);
+      begin
+        ScanFail := 'Scan: ' + DescribeException(E);
+        Bump(FFailures, CategoryOf(ScanFail));
+      end;
     end;
-    if Fail <> '' then
-    begin
-      Bump(FFailures, CategoryOf(Fail));
-      for Site in ASites do
-        SiteProblem(Site, Fail, '');
-      Exit;
-    end;
+    if Findings = nil then
+      Findings := TObjectList<TLeakFinding>.Create(True);
     Text := Lines.Text;
     SetLength(Used, Findings.Count);
     FDisk.Clear;
@@ -665,25 +804,29 @@ begin
     try
       for Site in ASites do
       begin
-        // Erst ein noch nicht benutzter Fund gleicher Regel und Zeile, dann
-        // irgendeiner (dieselbe Stelle zweimal in der Liste).
-        Hit := -1;
-        for i := 0 to Findings.Count - 1 do
-          if not Used[i] and (Findings[i].LineInt = Site.Line)
-             and SameText(Findings[i].ResolvedRuleId, Site.RuleId) then
-          begin
-            Hit := i;
-            Break;
+        Hit := PickFinding(Findings, Used, Site);
+        if Hit >= 0 then
+        begin
+          Used[Hit] := True;
+          ProbeSite(Site, Findings[Hit], Lines, Text, SOURCE_SCAN);
+          Continue;
+        end;
+        // Der Scan liefert ihn nicht (Projekt-Index, Querverweise, ini des
+        // Referenzlaufs): der Fund aus den SARIF-Feldern (s. Kopf).
+        Own := FindingFromSarif(Site);
+        if Own <> nil then
+        begin
+          try
+            ProbeSite(Site, Own, Lines, Text, SOURCE_SARIF);
+          finally
+            Own.Free;
           end;
-        if Hit < 0 then
-          for i := 0 to Findings.Count - 1 do
-            if (Findings[i].LineInt = Site.Line)
-               and SameText(Findings[i].ResolvedRuleId, Site.RuleId) then
-            begin
-              Hit := i;
-              Break;
-            end;
-        if Hit < 0 then
+          Continue;
+        end;
+        Bump(FNotRepro, Site.RuleId);
+        if ScanFail <> '' then
+          Why := ScanFail
+        else
         begin
           Same := TStringList.Create;
           try
@@ -691,20 +834,21 @@ begin
               if SameText(F.ResolvedRuleId, Site.RuleId)
                  and (Same.Count < MAX_LINES_LISTED) then
                 Same.Add(IntToStr(F.LineInt));
-            Bump(FNotRepro, Site.RuleId);
             if Same.Count = 0 then
-              SiteProblem(Site, 'Fund nicht reproduziert (keiner dieser '
-                + 'Regel in der Datei)', '')
+              Why := 'Fund nicht reproduziert (keiner dieser Regel in der '
+                + 'Datei)'
             else
-              SiteProblem(Site, 'Fund nicht reproduziert (Regel in der Datei '
-                + 'auf Zeile ' + Same.CommaText + ')', '');
+              Why := 'Fund nicht reproduziert (Regel in der Datei auf Zeile '
+                + Same.CommaText + ')';
           finally
             Same.Free;
           end;
-          Continue;
         end;
-        Used[Hit] := True;
-        ProbeSite(Site, Findings[Hit], Lines, Text);
+        if not Site.HasSarif then
+          Why := Why + ' - sites.tsv ohne SARIF-Felder'
+        else
+          Why := Why + ' - RuleId ' + Site.RuleId + ' im Katalog unbekannt';
+        SiteProblem(Site, Why, Site.Msg);
       end;
     finally
       TRdxMagicFixes.UseDiskCache(PrevDisk);
@@ -746,6 +890,19 @@ begin
       Site.Line     := StrToIntDef(Trim(Parts[1]), 0);
       if Length(Parts) > 2 then
         Site.RuleId := Trim(Parts[2]);
+      // Die SARIF-Felder (sites_sample.py): Meldung, EndLine, variant,
+      // confidence - kodiert wie die Textspalten (Unesc).
+      if Length(Parts) > 3 then
+      begin
+        Site.HasSarif   := True;
+        Site.Msg        := Unesc(Parts[3]);
+        if Length(Parts) > 4 then
+          Site.EndLine  := StrToIntDef(Trim(Parts[4]), 0);
+        if Length(Parts) > 5 then
+          Site.Variant  := Unesc(Parts[5]);
+        if Length(Parts) > 6 then
+          Site.Confidence := Trim(Unesc(Parts[6]));
+      end;
       if Site.Line < 1 then Continue;
       Inc(FSites);
       Key := AnsiUpperCase(Site.FileName);
@@ -789,55 +946,99 @@ begin
   TArray.Sort<string>(Result);
 end;
 
+// Zaehler zu AKey, 0 ohne Eintrag.
+function CountOf(ACounter: TCounter; const AKey: string): Integer;
+begin
+  if not ACounter.TryGetValue(AKey, Result) then Result := 0;
+end;
+
+// 'Regel|Eintrag' aus 'Regel|Eintrag|Quelle'.
+function WithoutSource(const AKey: string): string;
+var
+  P : Integer;
+begin
+  P := AKey.LastIndexOf('|');
+  if P > 0 then
+    Result := Copy(AKey, 1, P)
+  else
+    Result := AKey;
+end;
+
 procedure TProbe.Summary(AElapsedMs: Int64);
 var
   Keys    : TStringList;
+  Rules   : TStringList;
   K       : string;
   Reason  : string;
   Parts   : TArray<string>;
-  Off     : Integer;
-  Blk     : Integer;
   Total   : Integer;
   Sup     : Integer;
+  NScan   : Integer;
+  NSarif  : Integer;
 begin
   Total := 0;
   for K in FNotRepro.Keys do Inc(Total, FNotRepro[K]);
   Sup := 0;
   for K in FSuppress.Keys do Inc(Sup, FSuppress[K]);
-  Writeln(Format('Stellen: %d  Dateien: %d  CSV-Zeilen: %d  nicht '
-    + 'reproduziert: %d  Unterdruecken-Eintraege (nicht in der CSV): %d  '
-    + 'Zeit: %.1f s', [FSites, FFiles, FRows, Total, Sup,
-      AElapsedMs / 1000]));
-  // Je Regel und Eintrag angeboten/gesperrt, darunter die Kategorien.
+  NScan := 0;
+  NSarif := 0;
+  for K in FBySource.Keys do
+    if K.EndsWith('|' + SOURCE_SCAN) then
+      Inc(NScan, FBySource[K])
+    else
+      Inc(NSarif, FBySource[K]);
+  Writeln(Format('Stellen: %d  Dateien: %d  CSV-Zeilen: %d  Quelle scan: %d  '
+    + 'Quelle sarif: %d  nicht reproduziert: %d  Unterdruecken-Eintraege '
+    + '(nicht in der CSV): %d  Zeit: %.1f s', [FSites, FFiles, FRows, NScan,
+      NSarif, Total, Sup, AElapsedMs / 1000]));
+  // Stellen je Regel und Quelle.
+  Rules := TStringList.Create;
+  try
+    Rules.Sorted := True;
+    Rules.Duplicates := dupIgnore;
+    for K in FBySource.Keys do Rules.Add(WithoutSource(K));
+    for K in FNotRepro.Keys do Rules.Add(K);
+    Writeln(Format('%-10s %8s %8s %8s', ['Regel', 'scan', 'sarif',
+      'fehlt']));
+    for K in Rules do
+      Writeln(Format('%-10s %8d %8d %8d', [K,
+        CountOf(FBySource, K + '|' + SOURCE_SCAN),
+        CountOf(FBySource, K + '|' + SOURCE_SARIF), CountOf(FNotRepro, K)]));
+  finally
+    Rules.Free;
+  end;
+  // Je Regel und Eintrag angeboten/gesperrt getrennt nach Quelle, darunter
+  // die Kategorien (beide Quellen zusammen).
   Keys := TStringList.Create;
   try
     Keys.Sorted := True;
     Keys.Duplicates := dupIgnore;
-    for K in FOffered.Keys do Keys.Add(K);
-    for K in FBlocked.Keys do Keys.Add(K);
+    for K in FOffered.Keys do Keys.Add(WithoutSource(K));
+    for K in FBlocked.Keys do Keys.Add(WithoutSource(K));
     for K in Keys do
     begin
-      if not FOffered.TryGetValue(K, Off) then Off := 0;
-      if not FBlocked.TryGetValue(K, Blk) then Blk := 0;
-      Writeln(Format('%-28s angeboten %6d  gesperrt %6d',
-        [StringReplace(K, '|', ' ', []), Off, Blk]));
+      Writeln(Format('%-28s scan: angeboten %6d gesperrt %6d   sarif: '
+        + 'angeboten %6d gesperrt %6d', [StringReplace(K, '|', ' ', []),
+        CountOf(FOffered, K + '|' + SOURCE_SCAN),
+        CountOf(FBlocked, K + '|' + SOURCE_SCAN),
+        CountOf(FOffered, K + '|' + SOURCE_SARIF),
+        CountOf(FBlocked, K + '|' + SOURCE_SARIF)]));
       for Reason in SortedKeys(FReasons) do
         if Reason.StartsWith(K + '|') then
           Writeln(Format('      %6d  %s', [FReasons[Reason],
             Copy(Reason, Length(K) + 2, MaxInt)]));
     end;
+    // uses ohne Projekt-Units (nur Kategorien, keine angeboten/gesperrt).
+    for Reason in SortedKeys(FReasons) do
+    begin
+      Parts := Reason.Split(['|']);
+      if (Length(Parts) >= 3) and (Parts[1] = 'rezept:UsesActions')
+         and (Keys.IndexOf(Parts[0] + '|' + Parts[1]) < 0) then
+        Writeln(Format('%-28s %6d  %s', [Parts[0] + ' ' + Parts[1],
+          FReasons[Reason], Parts[2]]));
+    end;
   finally
     Keys.Free;
-  end;
-  // uses ohne Projekt-Units (nur Kategorien, keine angeboten/gesperrt).
-  for Reason in SortedKeys(FReasons) do
-  begin
-    Parts := Reason.Split(['|']);
-    if (Length(Parts) >= 3) and (Parts[1] = 'rezept:UsesActions')
-       and not FOffered.ContainsKey(Parts[0] + '|' + Parts[1])
-       and not FBlocked.ContainsKey(Parts[0] + '|' + Parts[1]) then
-      Writeln(Format('%-28s %6d  %s', [Parts[0] + ' ' + Parts[1],
-        FReasons[Reason], Parts[2]]));
   end;
   if FNotRepro.Count > 0 then
   begin

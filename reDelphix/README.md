@@ -1593,9 +1593,19 @@ DENSELBEN Kern wie das Package (`uRdxActionCore.TRdxActionCore.Describe`),
 nicht ueber einen Nachbau. Je Datei scannt die Probe selbst (Engine,
 `ssSingleFile` wie die CLI fuer `--file`, Direkt-Modus ohne `analyser.ini`,
 Profil `strict`, Mindestschwere hint, Delphi, `DefaultIfdefDefines`),
-nimmt den echten Fund gleicher Regel und Zeile und ruft den Kern mit den
-Zeilen der Datei wie der Anbieter fuer eine geschlossene Datei. Die
-Stellen zieht `sites_sample.py` je Regel aus einem SARIF-Referenzlauf:
+nimmt den echten Fund gleicher Regel und Zeile (unter mehreren den mit
+derselben Meldung wie im SARIF; Spalte `Quelle` = `scan`) und ruft den Kern
+mit den Zeilen der Datei wie der Anbieter fuer eine geschlossene Datei.
+Liefert der Einzeldatei-Scan den Fund nicht - Funde ueber Projekt-Index,
+Querverweise oder die `analyser.ini` des Referenzlaufs, etwa die
+Unused-Familie SCA007/SCA053/SCA054/SCA147/SCA164 -, baut die Probe ihn aus
+den SARIF-Feldern der Stelle (`Quelle` = `sarif`): Art ueber den Katalog
+aus der RuleId, Zeile, EndLine, Meldung, Variante (SCA001), Konfidenz. Das
+SARIF traegt nicht: MethodName, RelatedLines, StructureChain, Spalte,
+Schwere, Custom-RuleID - die Planer und Rezepte lesen heute nur Datei,
+Zeile, Meldung, Art, Variante (SCA001) und Konfidenz (SCA144); eine leere
+Meldung schreibt der Export als Kurzbeschreibung der Regel. Die Stellen
+zieht `sites_sample.py` je Regel aus einem SARIF-Referenzlauf:
 
 ```
 python reDelphix\tools\probe\sites_sample.py rw.sarif D:\git-sca-realworld sites.tsv --catalog --n 200 --seed 1
@@ -1606,16 +1616,26 @@ python reDelphix\tools\probe\sites_sample.py --selftest
 ```
 
 `sites_sample.py`: Regeln aus `--rules`, sonst die mit
-`properties.editorHelp` im SARIF (falls der Lauf das Feld fuehrt), sonst
+`properties.editorHelp` im SARIF (Schalter `--sarif-editor-help`:
+`"editorHelp": ["SCA017:changes:slug", "SCA017.2:changes:slug"]` im
+properties-Bag der Results; auch `"editorHelp": true` im Regelblock), sonst
 mit `--catalog [datei.json]` die mit `"editorHelp": true` im Regelkatalog;
-je Regel gleiche Stelle einmal, Dateien gleichen Inhalts (SHA-1) einmal,
-fehlende Dateien fallen weg (Warnung), reproduzierbare Stichprobe `--n`
-mit `--seed`, hoechstens `--cap` (Vorgabe 0,25) der Stichprobe aus einem
-Repo (erster Pfadteil unter der Korpuswurzel). uri-Dekodierung und
-Korpuswurzel wie `sites_from_sarif.py`. Ausgabe `Datei<TAB>Zeile<TAB>RuleId`.
+je Regel gleiche Stelle (Datei, Zeile, Meldung) einmal, Dateien gleichen
+Inhalts (SHA-1) einmal, fehlende Dateien fallen weg (Warnung),
+reproduzierbare Stichprobe `--n` mit `--seed`, hoechstens `--cap` (Vorgabe
+0,25) der Stichprobe aus einem Repo (erster Pfadteil unter der
+Korpuswurzel). uri-Dekodierung und Korpuswurzel wie `sites_from_sarif.py`.
+Ausgabe `Datei<TAB>Zeile<TAB>RuleId<TAB>Meldung<TAB>EndLine<TAB>variant<TAB>confidence`
+(die vier hinteren Spalten aus dem SARIF, kodiert wie die Textspalten der
+CSV, dazu TAB als `\t`; die Probe liest auch das alte Format mit drei
+Spalten, dann ohne Quelle `sarif`) und `counts.tsv` (`--counts`, Vorgabe
+neben `sites.tsv`) mit der Grundgesamtheit je Regel:
+`RuleId<TAB>Funde<TAB>gezogen<TAB>Repos<TAB>ReposGesamt` (Funde = alle
+Results der Regel im SARIF, Repos = Repos der Stichprobe, ReposGesamt =
+Repos mit einem Fund der Regel).
 
 CSV der Probe (UTF-8, `;`, RFC 4180), eine Zeile je Hilfe-Eintrag:
-`Datei;Zeile;Regel;Eintrag;Kind;Menuetext;angeboten;aendert;Grund;Edits;VorherZeilen;NachherZeilen;Meldung;Hinweis`.
+`Datei;Zeile;Regel;Eintrag;Kind;Menuetext;angeboten;aendert;Grund;Edits;VorherZeilen;NachherZeilen;Meldung;Hinweis;Quelle`.
 Eintrag `1`/`2` ist der erste bzw. zweite Eintrag der einfachen Hilfe,
 `rezept:<Name>` ein Rezept (ShowSpan, FormatCall, SqlTemplate,
 UsesActions, RemoveMarker), `diagnose` der Eintrag "reDelphix: <Grund>",
@@ -1631,8 +1651,9 @@ Ersetzungen, die SQL-Vorlage als "nachher", SCA197 traegt "nicht
 deterministisch (frische GUID)". Den uses-Umbau prueft die Probe nicht
 (keine Projekt-Units ohne IDE): auf einer uses-Zeile steht
 `rezept:UsesActions` mit `nicht geprueft`. Die Zusammenfassung (stdout)
-zaehlt je Regel und Eintrag angeboten/gesperrt und die Gruende der
-Sperren nach Kategorie (Ziffern maskiert). Eine Ausnahme kostet nur Datei
+zaehlt Stellen je Regel und Quelle (scan, sarif, nicht reproduziert), je
+Regel und Eintrag angeboten/gesperrt getrennt nach Quelle und die Gruende
+der Sperren nach Kategorie (Ziffern maskiert). Eine Ausnahme kostet nur Datei
 bzw. Fund, nie den Lauf; ein Stapelueberlauf wird gezaehlt, ein zweiter
 beendete den Prozess - deshalb der 32-MB-Patch.
 
