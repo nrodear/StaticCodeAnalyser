@@ -146,6 +146,33 @@
           "type": "boolean",
           "description": "Whether an IDE module offers a quick fix for this rule's findings - a code action that writes the fix in place (reDelphix: light bulb, Ctrl+Alt+F). Optional; absent = the tool's compiled-in value (uRuleCatalogData.inc), false if it has none; a non-boolean value is ignored the same way. Informational for reports (HTML 'QF' badge, 'Quick-Wins' filter): whether the quick fix applies to a given finding is decided by the module."
         },
+        "editorHelps": {
+          "type": "array",
+          "minItems": 1,
+          "description": "The quick fixes behind editorHelp, one item per menu entry (a rule can have two). Present exactly when editorHelp is true; tools/gen-quickfix-doc.py --check keeps the list identical to the IDE module's fix table and recipes. Exported per finding as SARIF result properties.editorHelp (\"id:effect:slug\"). Optional; absent = the tool's compiled-in value (uRuleCatalogData.inc) if editorHelp is true, none otherwise; a malformed value is ignored the same way.",
+          "items": {
+            "type": "object",
+            "required": ["id", "effect", "slug"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^SCA\\d{3}(\\.[2-9])?$",
+                "description": "Stable key of the entry: the rule ID for the first entry, '<rule ID>.2' for the second."
+              },
+              "effect": {
+                "type": "string",
+                "enum": ["same", "changes", "depends", "template"],
+                "description": "'same' = the rewrite keeps the behaviour; 'changes' = it changes behaviour (menu entry marked, never on Ctrl+Alt+F); 'depends' = marked or not depending on the finding; 'template' = writes nothing into the source (parameterised SQL template to the clipboard)."
+              },
+              "slug": {
+                "type": "string",
+                "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+                "description": "Short name derived from the English menu text (placeholders, '(s)' and the articles a/an/the dropped, kebab-case) - to tell the entries apart, not a stable key."
+              }
+            }
+          }
+        },
         "detectorUnit": {
           "type": "string",
           "pattern": "^([uU]\\w+\\.pas|\\(\\w+\\))$",

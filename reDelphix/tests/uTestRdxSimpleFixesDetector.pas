@@ -113,6 +113,12 @@ type
     // Katalogfeld editorHelp (Beschluss 2026-10-10, HTML-QF-Badge) =
     // die Regeln mit einer Hilfe dieses Moduls.
     [Test] procedure Catalog_EditorHelpMatchesHelps;
+    // Katalogfeld editorHelps (SARIF properties.editorHelp, 2026-10-28):
+    // je Zeile von FIX_ROWS ein Eintrag, mit zweitem Eintrag (Alt) zwei,
+    // ids 'SCAnnn'/'SCAnnn.2', Changes der Zeile = Wirkung 'changes'. Den
+    // vollen Abgleich (Wirkung je nach Planer, Kurzname) macht
+    // tools/gen-quickfix-doc.py --check.
+    [Test] procedure Catalog_EditorHelpsMatchRows;
   end;
 
   // Stufe 3 (uRdxStructFixes): SCA007 uses-Eintrag, SCA168 case-else.
@@ -1173,6 +1179,31 @@ begin
       or (K in [fkConcatToFormat, fkSQLInjection, fkUnusedSuppression]);
     Assert.AreEqual(Want, TRuleCatalog.GetRuleCanonical(K).EditorHelp,
       'editorHelp in rules/sca-rules.json: ' + KindName(K));
+  end;
+end;
+
+procedure TTestRdxSimpleFixesDetector3.Catalog_EditorHelpsMatchRows;
+var
+  i    : Integer;
+  Row  : TRdxFixRow;
+  Meta : TRuleMeta;
+  Soll : Integer;
+begin
+  for i := 0 to TRdxFixTable.RowCount - 1 do
+  begin
+    Row  := TRdxFixTable.Row(i);
+    Meta := TRuleCatalog.GetRuleCanonical(Row.Kind);
+    Soll := 1;
+    if Assigned(Row.Alt) then
+      Soll := 2;
+    Assert.AreEqual<Integer>(Soll, Length(Meta.EditorHelps),
+      'editorHelps in rules/sca-rules.json: ' + Meta.ID);
+    Assert.AreEqual(Meta.ID, Meta.EditorHelps[0].Id, 'erster Eintrag');
+    if Soll = 2 then
+      Assert.AreEqual(Meta.ID + '.2', Meta.EditorHelps[1].Id, 'zweiter Eintrag');
+    if Row.Changes then
+      Assert.AreEqual('changes', Meta.EditorHelps[0].Effect,
+        'Zeile kennzeichnet: ' + Meta.ID);
   end;
 end;
 
