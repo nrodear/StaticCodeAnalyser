@@ -76,6 +76,8 @@ tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik (dazu die Hi
 tools\fpc-pruefstand\selftest.sh  Selbsttest von build.sh (zwei Laeufe zugleich, FPC-Exit, Testzahl, Registrierung, Test ohne Assert, PRUEFSTAND_DIR, Grabsteine, TMPDIR mit Backslashes, Hilfs-Unit, mehrere Fixtures und {$IFNDEF FPC}-Teile)
 tools\probe\RdxCorpusProbe.dpr    Korpus-Probe: Rezept 5.1 ueber eine Liste von Fundstellen, CSV
 tools\probe\sites_from_sarif.py   Fundstellen einer Regel aus einem SARIF-Lauf ziehen
+tools\probe\RdxActionProbe.dpr    Realworld-Probe der Editorhilfen (Entscheid E3): je Fundstelle die Eintraege des Kerns uRdxActionCore wie in Gluehbirne und Menue, CSV mit Grund, Kennzeichnung und Vorher/Nachher (siehe "Realworld-Probe der Editorhilfen")
+tools\probe\sites_sample.py       Stichprobe je Regel aus einem SARIF-Lauf (seed, Deckel je Repo, Inhalts-Dubletten einmal) als Eingabe von RdxActionProbe; --selftest
 ```
 
 ## Voraussetzungen in der IDE
@@ -1581,6 +1583,58 @@ Aktiv-Quote der Probe zu druecken. Exit 2 bei falschem Aufruf, nicht
 lesbarer Eingabe oder nicht schreibbarer Ausgabe. Die Python-Nachbildung
 der Regeln (Audit 2026-10-06) ist eine Obergrenze; was zaehlt, ist die
 Probe.
+
+## Realworld-Probe der Editorhilfen
+
+**`tools\probe\RdxActionProbe.dproj`** (Konsole, Win64 Release, in der
+d12-Projektgruppe; Entscheid E3, 2026-10-28) ermittelt fuer eine Liste von
+Fundstellen, was Gluehbirne und Kontextmenue anbieten wuerden - ueber
+DENSELBEN Kern wie das Package (`uRdxActionCore.TRdxActionCore.Describe`),
+nicht ueber einen Nachbau. Je Datei scannt die Probe selbst (Engine,
+`ssSingleFile` wie die CLI fuer `--file`, Direkt-Modus ohne `analyser.ini`,
+Profil `strict`, Mindestschwere hint, Delphi, `DefaultIfdefDefines`),
+nimmt den echten Fund gleicher Regel und Zeile und ruft den Kern mit den
+Zeilen der Datei wie der Anbieter fuer eine geschlossene Datei. Die
+Stellen zieht `sites_sample.py` je Regel aus einem SARIF-Referenzlauf:
+
+```
+python reDelphix\tools\probe\sites_sample.py rw.sarif D:\git-sca-realworld sites.tsv --catalog --n 200 --seed 1
+python reDelphix\tools\probe\sites_sample.py rw.sarif D:\git-sca-realworld sites.tsv --rules SCA017,SCA044 --n 100
+powershell -File tools\patch-stack-size.ps1 "Output\RdxActionProbe\Win64 Release\RdxActionProbe.exe"
+"Output\RdxActionProbe\Win64 Release\RdxActionProbe.exe" sites.tsv actions.csv --lang de
+python reDelphix\tools\probe\sites_sample.py --selftest
+```
+
+`sites_sample.py`: Regeln aus `--rules`, sonst die mit
+`properties.editorHelp` im SARIF (falls der Lauf das Feld fuehrt), sonst
+mit `--catalog [datei.json]` die mit `"editorHelp": true` im Regelkatalog;
+je Regel gleiche Stelle einmal, Dateien gleichen Inhalts (SHA-1) einmal,
+fehlende Dateien fallen weg (Warnung), reproduzierbare Stichprobe `--n`
+mit `--seed`, hoechstens `--cap` (Vorgabe 0,25) der Stichprobe aus einem
+Repo (erster Pfadteil unter der Korpuswurzel). uri-Dekodierung und
+Korpuswurzel wie `sites_from_sarif.py`. Ausgabe `Datei<TAB>Zeile<TAB>RuleId`.
+
+CSV der Probe (UTF-8, `;`, RFC 4180), eine Zeile je Hilfe-Eintrag:
+`Datei;Zeile;Regel;Eintrag;Kind;Menuetext;angeboten;aendert;Grund;Edits;VorherZeilen;NachherZeilen;Meldung;Hinweis`.
+Eintrag `1`/`2` ist der erste bzw. zweite Eintrag der einfachen Hilfe,
+`rezept:<Name>` ein Rezept (ShowSpan, FormatCall, SqlTemplate,
+UsesActions, RemoveMarker), `diagnose` der Eintrag "reDelphix: <Grund>",
+`-` eine Stelle ohne Eintrag ("Fund nicht reproduziert", Scan-/Lesefehler,
+Ausnahme). Vorher/Nachher sind die Zeilen der Ersetzungen mit 2 Zeilen
+Kontext vor und nach `PlanByteEdits`/`ApplyByteEdits` (der Weg des
+Editors); eine Ersetzung, die dort scheitert, steht als "Ersetzung
+scheitert: ..." im Grund. In den Textspalten steht ein Zeilenumbruch als
+`\n`, ein einzelnes CR als `\r` und ein Backslash als `\\` - umkehrbar,
+etwa in Python `re.sub(r'\\(.)', lambda m: {'n': '\n', 'r': '\r'}.get(m.group(1), m.group(1)), s)`.
+Unterdruecken steht nur in der Zusammenfassung, "Stelle zeigen" ohne
+Ersetzungen, die SQL-Vorlage als "nachher", SCA197 traegt "nicht
+deterministisch (frische GUID)". Den uses-Umbau prueft die Probe nicht
+(keine Projekt-Units ohne IDE): auf einer uses-Zeile steht
+`rezept:UsesActions` mit `nicht geprueft`. Die Zusammenfassung (stdout)
+zaehlt je Regel und Eintrag angeboten/gesperrt und die Gruende der
+Sperren nach Kategorie (Ziffern maskiert). Eine Ausnahme kostet nur Datei
+bzw. Fund, nie den Lauf; ein Stapelueberlauf wird gezaehlt, ein zweiter
+beendete den Prozess - deshalb der 32-MB-Patch.
 
 ## Grenzen (Stand 2026-10-15)
 
