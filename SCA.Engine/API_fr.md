@@ -224,6 +224,8 @@ TFindingType      = (ftBug, ftCodeSmell, ftVulnerability,
                      ftSecurityHotspot, ftCodeDuplication, ftFileError);
 ```
 
+Copier un résultat : `procedure CopyFrom(ASource: TLeakFinding)` reprend **tous** les champs de `ASource` (non nil) ; `function Clone: TLeakFinding` renvoie un nouveau résultat avec tous les champs de `Self`, qui appartient à l'appelant - toujours un `TLeakFinding` simple, même pour une sous-classe. Ne pas copier les résultats champ par champ. Un nouveau champ de `TLeakFinding` est ajouté à `CopyFrom`, puis `FINDING_FIELD_COUNT` de `uTestFindingCopy` est augmenté ; ce test énumère les champs par RTTI et échoue si `CopyFrom` en oublie un.
+
 ### 3.8 Emplacements source : `TSourcePlaces` (`uSourcePlaces`)
 
 Décrit des emplacements d'un fichier source **à la demande** — pour les consommateurs qui veulent réécrire du code (p. ex. le module « Source Refactor » reDelphix). Le service ne fait que lire : aucun scan ne tourne, aucun résultat, champ ou export n'est touché, et aucun détecteur ne l'utilise. Une instance par fichier.

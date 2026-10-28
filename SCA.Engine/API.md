@@ -219,6 +219,8 @@ TFindingType      = (ftBug, ftCodeSmell, ftVulnerability,
                      ftSecurityHotspot, ftCodeDuplication, ftFileError);
 ```
 
+Copying a finding: `procedure CopyFrom(ASource: TLeakFinding)` takes over **all** fields of `ASource` (not nil); `function Clone: TLeakFinding` returns a new finding with all fields of `Self`, owned by the caller - always a plain `TLeakFinding`, also for a subclass. Do not copy findings field by field. A new field in `TLeakFinding` is added to `CopyFrom`, then `FINDING_FIELD_COUNT` in `uTestFindingCopy` is raised; that test enumerates the fields by RTTI and fails on a field `CopyFrom` misses.
+
 ### 3.8 Source places: `TSourcePlaces` (`uSourcePlaces`)
 
 Describes places in a source file **on request** — for consumers that want to rewrite code (e.g. the "Source Refactor" module reDelphix). It only reads: no scan runs, no finding, field or export is touched, and no detector uses it. One instance per file.
