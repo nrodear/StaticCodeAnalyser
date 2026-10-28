@@ -571,9 +571,26 @@ begin
     Result := '';
 end;
 
-function EditorHelpAusJson(AVal: TJSONValue; out AHelp: TRuleEditorHelp): Boolean;
+function HilfeIdPasst(const AId, ARuleID: string): Boolean;
+// Die id eines Eintrags gehoert zur Regel: 'SCA017' oder 'SCA017.2'..'.9'
+// (Schema-Muster, ohne Regex).
+var
+  L : Integer;
+begin
+  if AId = ARuleID then Exit(True);
+  L := Length(ARuleID);
+  Result := (Length(AId) = L + 2) and (Copy(AId, 1, L + 1) = ARuleID + '.')
+            and CharInSet(AId[L + 2], ['2'..'9']);
+end;
+
+function EditorHelpAusJson(AVal: TJSONValue; const ARuleID: string;
+  out AHelp: TRuleEditorHelp): Boolean;
 // Ein Eintrag von "editorHelps": ein Objekt mit drei nicht-leeren Strings
-// id/effect/slug, effect aus KNOWN_HELP_EFFECTS. Alles andere: False.
+// id/effect/slug. Die id gehoert zur Regel (HilfeIdPasst), effect ist
+// einer aus KNOWN_HELP_EFFECTS - Gross/klein egal wie bei BekannterWert,
+// geliefert in der Schreibweise der Liste -, der slug traegt kein ':' und
+// kein ',' (die Trenner von EditorHelpTokens und der einkompilierten
+// Form). Alles andere: False.
 var
   Obj : TJSONObject;
   i   : Integer;
@@ -585,10 +602,15 @@ begin
   AHelp.Id     := JsonTextFeld(Obj, 'id');
   AHelp.Effect := JsonTextFeld(Obj, 'effect');
   AHelp.Slug   := JsonTextFeld(Obj, 'slug');
-  if (AHelp.Id = '') or (AHelp.Slug = '') then Exit;
+  if not HilfeIdPasst(AHelp.Id, ARuleID) or (AHelp.Slug = '')
+     or (Pos(':', AHelp.Slug) > 0) or (Pos(',', AHelp.Slug) > 0) then
+    Exit;
   for i := Low(KNOWN_HELP_EFFECTS) to High(KNOWN_HELP_EFFECTS) do
-    if AHelp.Effect = KNOWN_HELP_EFFECTS[i] then
+    if SameText(AHelp.Effect, KNOWN_HELP_EFFECTS[i]) then
+    begin
+      AHelp.Effect := KNOWN_HELP_EFFECTS[i];
       Exit(True);
+    end;
 end;
 
 function EditorHelpsVon(AObj: TJSONObject; K: TFindingKind;
@@ -596,9 +618,11 @@ function EditorHelpsVon(AObj: TJSONObject; K: TFindingKind;
 // "editorHelps" einer Regel MIT Editorhilfe (der Aufrufer prueft
 // EditorHelp - so bleibt die Invariante 'Hilfen nur bei editorHelp' auch
 // bei fixMode 'none' und bei einer Datei mit "editorHelp": false ohne
-// Liste). Ein Array, dessen Eintraege alle brauchbar sind, gilt - auch
-// leer. Fehlt das Feld, der einkompilierte Wert; ist es da, aber kein
-// solches Array, ebenfalls - mit Diagnose wie bei editorHelp.
+// Liste). Ein NICHT-LEERES Array, dessen Eintraege alle brauchbar sind,
+// gilt. Fehlt das Feld, der einkompilierte Wert; ist es da, aber kein
+// solches Array - auch [] (Schema minItems 1, gen-rules-inc.py
+// validate_helps; die Regel hat ja editorHelp) -, ebenfalls, mit Diagnose
+// wie bei editorHelp.
 var
   V      : TJSONValue;
   Arr    : TJSONArray;
@@ -612,8 +636,8 @@ begin
     SetLength(Result, Arr.Count);
     Gut := True;
     for i := 0 to Arr.Count - 1 do
-      Gut := Gut and EditorHelpAusJson(Arr.Items[i], Result[i]);
-    if Gut then Exit;
+      Gut := Gut and EditorHelpAusJson(Arr.Items[i], ARuleID, Result[i]);
+    if Gut and (Arr.Count > 0) then Exit;
   end;
   if Assigned(V) then
     // noinspection DebugOutput (Diagnose-Kanal, Politik s. Overlay-Warnung)
@@ -623,6 +647,15 @@ begin
   Result := nil;
   if FallbackZeileVon(K, Idx) then
     Result := EditorHelpsAusText(RULE_CATALOG_DATA[Idx].EditorHelps);
+  // editorHelp ohne eine einzige Hilfe (weder in der Datei noch in der
+  // Tabelle): der Bericht zeigt das QF-Badge, das SARIF nennt nichts -
+  // laut melden statt still (gen-quickfix-doc.py --check verhindert es im
+  // ausgelieferten Katalog). Nur hier moeglich: eine gueltige Liste der
+  // Datei ist nie leer.
+  if Length(Result) = 0 then
+    // noinspection DebugOutput (Diagnose-Kanal, Politik s. Overlay-Warnung)
+    OutputDebugString(PChar(Format(
+      'TRuleCatalog: %s editorHelp=true ohne editorHelps', [ARuleID])));
 end;
 
 function EditorHelpTokens(const AMeta: TRuleMeta): TArray<string>;

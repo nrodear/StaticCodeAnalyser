@@ -975,13 +975,26 @@ def help_slug(msgid):
 
 
 def expected_editor_helps(entries):
-    """Art -> Liste {'id', 'effect', 'slug'} aus Tabelle und Rezepten."""
+    """Art -> Liste {'id', 'effect', 'slug'} aus Tabelle und Rezepten.
+
+    Reihenfolge je Art: erst die Zeile von FIX_ROWS (Haupt-, dann zweiter
+    Eintrag), dann die Quick-Fix-Rezepte in Konstruktor-Reihenfolge. Im
+    Menue stehen FormatCall/SqlTemplate VOR der Tabellen-Bruecke
+    (uRdxProvider, FTreeRecipes) - heute ohne Wirkung: keine Art hat
+    zugleich eine Zeile und ein Rezept, und kein Rezept teilt sich eine
+    Art mit einem anderen. Bekommt eine Art beides, hier die Bruecken-
+    Position aus parse_provider nachziehen (und die Reihenfolge der
+    Gruppen Tree/Text im Menue pruefen). Arten, die ein Rezept ausdruecklich
+    ausnimmt (Kind = fkX im Rumpf, exc_rules), zaehlen nicht."""
     out = {}
     for e in sorted(entries, key=lambda e: e['sort']):
         if e['art'] != 'fakFix':
             continue
         caps = [c for c in e['captions'] if c['active']]
+        excluded = {r['kind'] for r in e['exc_rules']}
         for rule in e['rules']:
+            if rule['kind'] in excluded:
+                continue
             lst = out.setdefault(rule['kind'], [])
             for c in caps:
                 n = len(lst) + 1

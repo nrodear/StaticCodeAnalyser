@@ -1199,4 +1199,12 @@ begin
   end;
 end;
 
+initialization
+  // Anmeldung ausdruecklich, nicht nur ueber UseRTTI (Muster
+  // uTestRuleCatalog, Review Woche G03-25). Doppelt laeuft nichts: der
+  // RTTI-Lauf des Fixture-Providers nimmt eine Klasse nur, wenn sie noch
+  // nicht registriert ist (DUnitX.FixtureProviderPlugin, ContainsKey).
+  TDUnitX.RegisterTestFixture(TTestExportSARIF);
+  TDUnitX.RegisterTestFixture(TTestExportSarifEditorHelp);
+
 end.

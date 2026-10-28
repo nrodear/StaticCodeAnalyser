@@ -177,8 +177,10 @@ type
     [Test] procedure EveryKind_InvariantAndIdsBelongToRule;
     // Fallback (uRuleCatalogData.inc) = geladene JSON, je Kind.
     [Test] procedure Fallback_EqualsJson;
-    // Lader: eine Liste aus der Datei gilt; unbrauchbar -> Tabellenwert;
-    // editorHelp false oder fixMode none -> keine Hilfen.
+    // Lader: eine Liste aus der Datei gilt (effect Gross/klein egal);
+    // unbrauchbar (kein Array, [], unbekannte Wirkung, fremde id, ':' im
+    // slug) -> Tabellenwert; editorHelp false oder fixMode none -> keine
+    // Hilfen.
     [Test] procedure Loader_FileWins_MalformedFallsBack_FalseClears;
   end;
 
@@ -1748,9 +1750,19 @@ begin
   AltPfad := TRuleCatalog.JsonFilePath;
   Datei   := SchreibeTempJson(
     '{"rules":[' +
-    // eine Liste aus der Datei gilt (nicht die Tabelle)
+    // eine Liste aus der Datei gilt (nicht die Tabelle); effect Gross/klein
+    // egal, geliefert klein
     '{"id":"SCA044","kind":"ConcatToFormat","name":"n44","editorHelp":true,' +
-    '"editorHelps":[{"id":"SCA044","effect":"changes","slug":"probe"}]},' +
+    '"editorHelps":[{"id":"SCA044","effect":"Changes","slug":"probe"}]},' +
+    // leeres Array -> Tabellenwert (Schema minItems 1)
+    '{"id":"SCA093","kind":"TwiceInheritedCalls","name":"n93","editorHelp":true,' +
+    '"editorHelps":[]},' +
+    // id einer anderen Regel -> Tabellenwert
+    '{"id":"SCA002","kind":"EmptyExcept","name":"n2","editorHelp":true,' +
+    '"editorHelps":[{"id":"SCA003","effect":"changes","slug":"x"}]},' +
+    // slug mit ':' (Trenner von EditorHelpTokens) -> Tabellenwert
+    '{"id":"SCA007","kind":"UnusedUses","name":"n7","editorHelp":true,' +
+    '"editorHelps":[{"id":"SCA007","effect":"changes","slug":"a:b"}]},' +
     // kein Array -> Tabellenwert (zwei Eintraege)
     '{"id":"SCA017","kind":"DebugOutput","name":"n17","editorHelp":true,' +
     '"editorHelps":"ja"},' +
@@ -1773,7 +1785,14 @@ begin
       'die Test-JSON ist geladen, nicht der Fallback');
 
     Assert.AreEqual('SCA044:changes:probe', HilfenVon(fkConcatToFormat),
-      'die Liste der Datei gilt');
+      'die Liste der Datei gilt, effect "Changes" -> "changes"');
+    Assert.AreEqual('SCA093:changes:remove-second-duplicate-inherited-call ' +
+      'SCA093.2:changes:remove-first-duplicate-inherited-call',
+      HilfenVon(fkTwiceInheritedCalls), '[] -> Tabellenwert');
+    Assert.AreEqual('SCA002:changes:add-raise-to-empty-except-block',
+      HilfenVon(fkEmptyExcept), 'fremde id -> Tabellenwert');
+    Assert.AreEqual('SCA007:changes:remove-unit-from-uses',
+      HilfenVon(fkUnusedUses), 'slug mit ":" -> Tabellenwert');
     Assert.AreEqual('SCA017:changes:put-debug-output-in-ifdef-debug ' +
       'SCA017.2:changes:delete-debug-output', HilfenVon(fkDebugOutput),
       'editorHelps "ja" ist keine Liste -> Tabellenwert');

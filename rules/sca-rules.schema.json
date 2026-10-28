@@ -158,7 +158,7 @@
               "id": {
                 "type": "string",
                 "pattern": "^SCA\\d{3}(\\.[2-9])?$",
-                "description": "Stable key of the entry: the rule ID for the first entry, '<rule ID>.2' for the second."
+                "description": "Key of the entry, positional: the rule ID for the first menu entry, '<rule ID>.2' for the second - stable while the menu entries of the rule stay the same."
               },
               "effect": {
                 "type": "string",

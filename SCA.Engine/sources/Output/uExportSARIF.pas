@@ -707,9 +707,11 @@ var
   // an genau diesem Fund greift, entscheidet das Modul; das Feld sagt nur,
   // was die Regel anbietet. Steht HINTER confidence/variant und auf einer
   // Zeile (PairStrArrInline) - die zeilenweisen Leser suchen confidence
-  // dort, wo es war. Wie variant nur, wenn es etwas zu sagen gibt: die
-  // Funde der Regeln ohne Hilfe bleiben byte-gleich. Die Texte kommen aus
-  // HelpTokens (je Art einmal gebaut, nicht je Fund).
+  // dort, wo es war. Byte-Identitaet: OHNE den Schalter ist das ganze
+  // SARIF byte-gleich zum Stand vor editorHelp (HelpTokens leer, auch
+  // rules[] schreibt nichts); MIT ihm bleiben nur die Funde der Regeln
+  // ohne Hilfe unveraendert - wie variant kein leeres Feld. Die Texte
+  // kommen aus HelpTokens (je Art einmal gebaut, nicht je Fund).
   var
     LeakVariant : string;
     Helps       : TArray<string>;
@@ -943,7 +945,7 @@ begin
         // Korpus-Exports wachsen nur im Politik-Modus).
         //
         // Kohorten-Fix (Gegenpruefungs-MINOR, umgesetzt 2026-08-26):
-        // AConfidenceProps kommt vom Aufrufer - TScanResult traegt den
+        // AOptions.ConfidenceProps kommt vom Aufrufer - TScanResult traegt den
         // Stempel seines Scans, die parameterlosen Ueberladungen lesen
         // uSCAConsts.LastScanEvidenceTiering (Politik-Zustand des letzten
         // Scans dieses Prozesses, gestempelt in uStaticAnalyzer2). Damit
