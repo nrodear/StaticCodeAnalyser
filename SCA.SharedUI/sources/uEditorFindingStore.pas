@@ -3,7 +3,9 @@ unit uEditorFindingStore;
 // Speicher der Editor-Funde: Kopien der Funde der letzten Silent-Laeufe,
 // JE DATEI, fuer Editor-Kontextmenue und Gluehbirne (AH10, 2026-10-05).
 // Der Silent-Lauf gibt seine Liste nach dem Markieren frei; die Kopien
-// tragen nur die Felder, die ein Anbieter liest.
+// tragen ALLE Felder (TLeakFinding.Clone). Bis 2026-10-28 nur die, von
+// denen man annahm, ein Anbieter lese sie - LeakVariant fehlte, reDelphix
+// sperrte den SCA001-Fix "Free ausserhalb finally" (Befund B1).
 //
 // Ohne VCL und ohne ToolsAPI (Review Woche 2026-10-21, G04-06): bis dahin
 // standen Speicher und Verdraengung in uIDEAnalyserForm (TEditorFindingsCopy,
@@ -48,7 +50,7 @@ type
     FCopies   : TObjectDictionary<string, TEditorFindingsCopy>;
     procedure DropOldest;
   protected
-    // Kopie EINES Funds - nur die Felder, die ein Anbieter liest. Virtuell
+    // Kopie EINES Funds mit allen Feldern (TLeakFinding.Clone). Virtuell
     // nur fuer den Test: er zaehlt die Freigaben der Kopien und laesst das
     // Kopieren mitten in einem Lauf scheitern.
     function CopyOf(AFinding: TLeakFinding): TLeakFinding; virtual;
@@ -101,21 +103,7 @@ end;
 
 function TEditorFindingStore.CopyOf(AFinding: TLeakFinding): TLeakFinding;
 begin
-  Result := TLeakFinding.Create;
-  try
-    Result.FileName   := AFinding.FileName;
-    Result.MethodName := AFinding.MethodName;
-    Result.LineNumber := AFinding.LineNumber;
-    Result.EndLine    := AFinding.EndLine;
-    Result.MissingVar := AFinding.MissingVar;
-    Result.Severity   := AFinding.Severity;
-    Result.Kind       := AFinding.Kind;
-    Result.Confidence := AFinding.Confidence;
-    Result.RuleID     := AFinding.RuleID;
-  except
-    Result.Free;
-    raise;
-  end;
+  Result := AFinding.Clone;
 end;
 
 // Die Kopie mit der kleinsten Generation weicht.
