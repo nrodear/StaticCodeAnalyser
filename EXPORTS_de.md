@@ -265,7 +265,28 @@ mit `level: warning` meldet. Der Zustand wird zur **Scan**-Zeit
 gestempelt und wandert mit der Fund-Kohorte: ein ini-Wechsel zwischen
 Scan und Export kann Levels und Konfidenzen nicht aus zwei Welten
 mischen. Mit `EvidenceTiering=0` ist das SARIF byte-identisch zum
-Stand vor 0.9.18.
+Stand vor 0.9.18 (bis auf `properties.editorHelp`, unten).
+
+Ein Result einer Regel mit **Editorhilfe** (einer Code-Aktion des
+IDE-Moduls reDelphix: Glühbirne, Strg+Alt+F) trägt
+`properties.editorHelp`, je Menüeintrag ein Eintrag `id:effect:slug`,
+auf einer Zeile:
+
+```json
+"editorHelp": ["SCA017:changes:put-debug-output-in-ifdef-debug","SCA017.2:changes:delete-debug-output"]
+```
+
+`id` ist die Regel-ID, `<Regel-ID>.2` für einen zweiten Eintrag;
+`effect` ist `same` (bedeutungsgleich), `changes` (ändert Verhalten —
+nie über Strg+Alt+F), `depends` (je nach Fund) oder `template`
+(schreibt nichts in den Quelltext: SCA003 legt eine parametrisierte
+SQL-Vorlage in die Zwischenablage); `slug` benennt den Menütext. Die
+Liste kommt aus dem Regelkatalog (`editorHelps` in
+`rules/sca-rules.json`; die CLI linkt reDelphix nicht), sie sagt also,
+was die Regel anbietet — ob die Hilfe an genau diesem Fund greift,
+entscheidet die IDE. Results von Regeln ohne Hilfe tragen kein solches
+Feld; `tool.driver.rules[]` trägt dieselbe Liste in den `properties`
+jeder Regel.
 
 Zwei Fallen: Ein SARIF aus **v0.9.14 oder älter** trägt ein UTF-8-BOM,
 das Node-basierte Uploader stört (die aktuelle Ausgabe ist BOM-frei,

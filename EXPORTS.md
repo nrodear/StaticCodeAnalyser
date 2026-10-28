@@ -260,7 +260,27 @@ active, every result also carries `properties.confidence`
 and travels with the finding cohort, so toggling the ini between scan
 and export cannot mix levels and confidence values from two different
 policy states. With `EvidenceTiering=0` the SARIF is byte-identical to
-pre-0.9.18 output.
+pre-0.9.18 output (apart from `properties.editorHelp`, below).
+
+A result of a rule that has an **editor help** (a code action of the
+IDE module reDelphix: light bulb, Ctrl+Alt+F) carries
+`properties.editorHelp`, one entry per menu entry as `id:effect:slug`,
+on one line:
+
+```json
+"editorHelp": ["SCA017:changes:put-debug-output-in-ifdef-debug","SCA017.2:changes:delete-debug-output"]
+```
+
+`id` is the rule ID, `<rule ID>.2` for a second entry; `effect` is
+`same` (keeps the behaviour), `changes` (changes it — never on
+Ctrl+Alt+F), `depends` (depends on the finding) or `template` (writes
+nothing into the source: SCA003 copies a parameterised SQL template to
+the clipboard); `slug` names the menu text. The list comes from the
+rule catalog (`editorHelps` in `rules/sca-rules.json`; the CLI does not
+link reDelphix), so it says what the rule offers — whether the help
+applies to that very finding is decided in the IDE. Results of rules
+without a help carry no such field; `tool.driver.rules[]` carries the
+same list in each rule's `properties`.
 
 Two things to watch: a SARIF written by **v0.9.14 or earlier** carries a
 UTF-8 BOM that trips Node-based uploaders (current output is BOM-free,

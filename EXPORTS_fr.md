@@ -278,7 +278,28 @@ L'état est estampillé au moment du **scan** et voyage avec la cohorte
 de résultats : basculer l'ini entre le scan et l'export ne peut pas
 mélanger niveaux et confiances de deux mondes différents. Avec
 `EvidenceTiering=0`, le SARIF est identique octet pour octet à la
-sortie d'avant 0.9.18.
+sortie d'avant 0.9.18 (hormis `properties.editorHelp`, ci-dessous).
+
+Un résultat d'une règle dotée d'une **aide d'édition** (une action de
+code du module IDE reDelphix : ampoule, Ctrl+Alt+F) porte
+`properties.editorHelp`, une entrée `id:effect:slug` par entrée de
+menu, sur une seule ligne :
+
+```json
+"editorHelp": ["SCA017:changes:put-debug-output-in-ifdef-debug","SCA017.2:changes:delete-debug-output"]
+```
+
+`id` est l'ID de la règle, `<ID de règle>.2` pour une deuxième entrée ;
+`effect` vaut `same` (comportement inchangé), `changes` (change le
+comportement — jamais via Ctrl+Alt+F), `depends` (selon le résultat)
+ou `template` (n'écrit rien dans le source : SCA003 copie un modèle SQL
+paramétré dans le presse-papiers) ; `slug` nomme le texte du menu. La
+liste vient du catalogue de règles (`editorHelps` dans
+`rules/sca-rules.json` ; la CLI ne lie pas reDelphix) : elle dit ce que
+la règle propose — si l'aide s'applique à ce résultat précis, c'est
+l'IDE qui en décide. Les résultats des règles sans aide ne portent pas
+ce champ ; `tool.driver.rules[]` porte la même liste dans les
+`properties` de chaque règle.
 
 Deux points à surveiller : un SARIF écrit par la **v0.9.14 ou une version
 antérieure** porte un BOM UTF-8 qui fait trébucher les uploaders basés sur
