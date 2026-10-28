@@ -8,9 +8,9 @@ lance l'analyse complète sans connaître les unités internes.
 
 > Exemple minimal exécutable : [../SCA.CLI.Demo/](../SCA.CLI.Demo/).
 
-- **Package :** `SCA.Engine` (`requires rtl;` — aucune dépendance VCL/FMX)
-- **Version :** 0.9.14 (`uSCAConsts.SCA_VERSION`)
-- **Périmètre :** ~196 détecteurs (IDs de règle `SCA001`–`SCA196`)
+- **Package :** `SCA.Engine` (`requires rtl, xmlrtl;` — `xmlrtl` lit `.dproj`/`.groupproj` pour les scopes de projet ; aucune dépendance VCL/FMX)
+- **Version :** 0.9.18 (`uSCAConsts.SCA_VERSION`)
+- **Périmètre :** 205 règles (IDs de règle `SCA001`–`SCA205`, `rules/sca-rules.json`)
 
 ---
 
@@ -91,7 +91,8 @@ Un exemple complet et exécutable est le projet **`SCA.CLI.Demo`**.
 ## 3. L'API : `uEngineApi`
 
 La façade se compose d'un record de requête, d'un objet résultat, d'une
-classe de session et de deux fonctions de commodité.
+classe de session, d'un filtre de fixtures de test et de deux fonctions de
+commodité.
 
 ### 3.1 Points d'entrée
 
@@ -104,13 +105,14 @@ classe de session et de deux fonctions de commodité.
 ### 3.2 `TScanRequest`
 
 Remplir via `TScanRequest.Init` avec des valeurs par défaut raisonnables
-(`ssRecursive`, tous les détecteurs, seuils les plus permissifs), puis
-surcharger de façon ciblée.
+(`ssRecursive`, tous les détecteurs, seuils les plus permissifs, vue
+`{$IFDEF}` à une branche avec `TScanRequest.DefaultIfdefDefines`, defines
+d'include activés, `dlDelphi`, en série), puis surcharger de façon ciblée.
 
 | Champ | Type | Signification |
 |-------|------|---------------|
 | `Scope` | `TScanScope` | Type d'analyse (voir 3.5). Défaut `ssRecursive`. |
-| `Path` | `string` | Racine (récursif) / fichier (unique) / répertoire de base (liste). |
+| `Path` | `string` | Racine (récursif) / fichier (unique) / répertoire de base (liste) / `.dproj`, `.lpi`, `.lpk` (projet) / `.groupproj`, `.lpg` (groupe de projets). |
 | `Files` | `TArray<string>` | Liste de fichiers explicite pour `ssFileList`. |
 | `Source` | `string` | Code source en mémoire pour `ssSource`. |
 | `VcsRange` | `string` | `ssVcsChanged` : `''`=auto, sinon `shaA..shaB`. |
@@ -120,7 +122,9 @@ surcharger de façon ciblée.
 | `MaxFileBytes` | `Integer` | `<=0` → défaut du moteur (5 Mo). |
 | `UsesCheck` | `Boolean` | Exécuter le coûteux détecteur de `uses` inutilisés. |
 | `AutoDiscover` | `Boolean` | Découvrir les classes personnalisées pendant l'analyse. |
-| `IfdefDefines` | `TArray<string>` | Parsing sensible aux `{$IFDEF}` avec ces defines. |
+| `IfdefDefines` | `TArray<string>` | Parsing sensible aux `{$IFDEF}` avec ces defines : une branche, comme la voit un compilateur. `Init` pose `DefaultIfdefDefines` (`MSWINDOWS`, `WIN64`, `UNICODE`, `CONDITIONALEXPRESSIONS`) ; `nil`/vide = les deux branches de chaque `{$IFDEF}`. Vue d'analyse : `Run` l'applique même avec `SkipConfig`. |
+| `IncludeDefines` | `Boolean` | Lire les fichiers `{$I}` pour l'effet de leurs `{$DEFINE}`. `Init` pose `True` ; `False` = aveugle aux includes (CLI `--no-include-defines`). Vue d'analyse comme `IfdefDefines`. |
+| `Dialect` | `TSourceDialect` | `dlDelphi` (`Init`) ou `dlFpc` (`uSCAConsts`) : `dlFpc` collecte en plus les `*.pp` lors du parcours de répertoires et, avec un `IfdefDefines` non vide, ajoute `FPC` et `LCL`. Forcé à `dlFpc` pour les scopes de projet `.lpi`/`.lpk`/`.lpg`. Vue d'analyse comme `IfdefDefines`. |
 | `CustomRulesPath` | `string` | YAML de règles personnalisées (`''`=aucune). |
 | `BaselinePath` | `string` | Filtrer les résultats contre un JSON de référence (`''`=désactivé). |
 | `WriteBaselinePath` | `string` | Écrire les résultats actuels comme nouvelle référence. |
@@ -128,9 +132,12 @@ surcharger de façon ciblée.
 | `MinSeverityName` | `string` | Mode INI : surcharge `'error'`/`'warning'`/`'hint'`. |
 | `ConfigRoot` | `string` | Mode INI : racine pour la résolution INI/règles. |
 | `SkipConfig` | `Boolean` | `true` : n'appliquer aucune config (le consommateur a posé l'état lui-même). |
+| `IndexRoot` | `string` | `ssProject`/`ssProjectGroup`/`ssFileList` : répertoire sur lequel sont construits les index inter-unités (références de symboles, types, DFM) tandis que l'analyse reste sur la liste. `''` = racine commune de la liste résolue (scopes de projet) ou la liste elle-même (`ssFileList`). |
 | `SingleFileProjectRoot` | `string` | `ssSingleFile` : racine de projet pour l'index inter-unités. |
-| `IgnoreList` | `TIgnoreList` | `ssRecursive` : filtre d'exclusions/de tests (`nil`=aucun). |
-| `Progress` | `TProc<Integer,Integer>` | `(current,total)` ; un `EAbort` levé dedans interrompt. |
+| `IgnoreList` | `TIgnoreList` | `ssRecursive`, `ssProject`, `ssProjectGroup` : filtre d'exclusions/de tests (`nil`=aucun). |
+| `Parallel` | `Boolean` | Analyse parallèle par fichier (opt-in, `Init` : `False` ; CLI `--parallel`). Revient au mode série quand un mode non sûr en parallèle est actif (découverte automatique, règles personnalisées, chronométrage des détecteurs) ; l'ordre des résultats est celui du mode série. Non appliqué avec `SkipConfig`. |
+| `ParallelWorkers` | `Integer` | Nombre de workers avec `Parallel` ; `0` = `TThread.ProcessorCount`. |
+| `Progress` | `TProc<Integer,Integer>` | `(current,total)` ; un `EAbort` levé dedans interrompt. En mode parallèle, le callback n'arrive que pendant la phase de fusion, sur le thread appelant. |
 
 ### 3.3 `TScanResult`
 
@@ -171,7 +178,9 @@ configuration des détecteurs :
 3. **`SkipConfig := True` :** `Run` n'applique **aucune** config — le
    consommateur a déjà posé lui-même l'état global des détecteurs/seuils
    (c'est ce que font le plugin IDE et la Form via leur propre
-   préparation). `Run` ne fait alors que scope → analyse → référence.
+   préparation). `Run` ne fait alors que scope → analyse → référence. La
+   vue d'analyse (`IfdefDefines`, `IncludeDefines`, `Dialect`) s'applique
+   dans tous les modes.
 
 ### 3.5 Scopes (`TScanScope`)
 
@@ -182,6 +191,11 @@ configuration des détecteurs :
 | `ssFileList` | Liste de fichiers explicite (`Files`) ; `Path` = répertoire de base optionnel. |
 | `ssVcsChanged` | Uniquement les fichiers modifiés selon le VCS (`Path`=dépôt, `VcsRange` en option). |
 | `ssSource` | Code source en mémoire (`Source`) ; `Path`=nom logique optionnel. |
+| `ssProject` | Fichiers d'un projet (`Path` = `.dproj` : sa liste `DCCReference` ; `.lpi`/`.lpk` : l'équivalent Lazarus) ; signale en plus les fichiers du dossier du projet que celui-ci ne liste pas (SCA194/SCA195). |
+| `ssProjectGroup` | Union des listes de projets d'un groupe (`Path` = `.groupproj` ou `.lpg`). |
+
+Un fichier de projet non résoluble donne un résultat avec un seul résultat
+`fkFileReadError` au lieu d'une exception.
 
 ### 3.6 Profils
 
@@ -190,12 +204,15 @@ Un profil est une liste blanche de types de résultats. `''` (vide) =
 
 | Profil | Contenu |
 |--------|---------|
-| `default` / `strict` | Toutes les règles. |
+| `default` | Toutes les règles sauf les règles de style de `style`. |
+| `strict` | Toutes les règles. |
 | `ide-fast` | Sous-ensemble rapide pour l'analyse en direct (bugs + vulnérabilités + DFM critique). |
 | `security` | Vulnérabilités/secrets uniquement (SQLInjection, HardcodedSecret, …). |
 | `bugs-only` | Vrais bugs uniquement (fuites, NilDeref, DivByZero, FormatMismatch, …). |
 | `code-quality` | Code smells (LongMethod, MagicNumber, Cyclomatic, duplications, …). |
 | `dfm-only` | Règles DFM/fiches uniquement. |
+| `style` | Règles de style uniquement (PublicMemberWithoutDoc, BeginEndRequired, WithStatement, …). |
+| `selftest-quiet` | Toutes les règles sauf quelques règles de mise en page — pour analyser l'analyseur lui-même. |
 
 ### 3.7 Modèle de données : `TLeakFinding` (`uMethodd12`)
 
@@ -288,16 +305,37 @@ end;
 
 **Ce que `ChainOf` et `CallOf` prouvent.** Un opérande qui est un simple identificateur reçoit son type déclaré (`rvString`/`rvNonString`, `Resolved` = nom du type), et `FixSafe` est redérivé. Un opérande de type `Char`, `WideChar`, `AnsiChar`, `ShortString` ou `PAnsiChar` reste `rvString` (Format l'accepte pour `%s`), mais pas sans perte - un `#0` termine le texte, un `AnsiChar` à partir de `#$80` passe comme ordinal -, il ne rend donc jamais `FixSafe`. L'inconnu reste inconnu : `rvUnknown` et `FixSafe = False` sont le cas normal. Il n'y a aucune preuve `rvString` dans un bloc `with` (`InWithBlock` ; `Resolved` nomme toujours la déclaration trouvée), ni pour un appel RTL connu ou un terme `.ToString` dont le nom est déclaré par une fonction de l'unité elle-même avec un résultat non chaîne — cette fonction masque la routine RTL (p. ex. un `function Trim(..): Variant` local à l'unité). Les appels qualifiés par `SysUtils.`/`StrUtils.` gardent leur preuve. Une fonction déclarée dans une routine imbriquée n'est pas vue (le parseur écarte les routines imbriquées).
 
-Les coordonnées sont à base 1 ; `EndCol` pointe **derrière** le dernier caractère. Chaque primitive sauf `Open`/`OpenSource` est totale (`nil`, vide, `0` ou `False` plutôt qu'une exception, même si rien n'est ouvert). `SOURCE_PLACES_VERSION` (= 1) est la version du contrat — une constante **de compilation** : un consommateur la vérifie avec `{$IF SOURCE_PLACES_VERSION <> 1}{$MESSAGE ERROR '...'}{$IFEND}` (reDelphix le fait dans `uRdxRecipeRunner` et `uRdxFixRunner`) et ne compile alors plus contre un contrat modifié. Elle ne détecte pas une BPL échangée à l'exécution ; c'est le rôle de la liaison de package (DCP/`requires`). La version augmente lors d'un changement de signature d'une primitive existante, de rôles, de coordonnées ou d'une dérivation de `FixSafe`/`ValueType`/`Resolved` qui déclare nouvellement quelque chose comme prouvé ; elle reste pour de nouvelles primitives, de nouveaux paramètres avec valeur par défaut et des dérivations qui ne font que devenir plus strictes.
+Les coordonnées sont à base 1 ; `EndCol` pointe **derrière** le dernier caractère. Chaque primitive sauf `Open`/`OpenSource` est totale (`nil`, vide, `0` ou `False` plutôt qu'une exception, même si rien n'est ouvert). `SOURCE_PLACES_VERSION` (= 1) est la version du contrat — une constante **de compilation** : un consommateur la vérifie avec `{$IF SOURCE_PLACES_VERSION <> 1}{$MESSAGE ERROR '...'}{$IFEND}` (reDelphix le fait dans `uRdxRecipeRunner`, `uRdxPlacesRunner` et `uRdxFixRunner`) et ne compile alors plus contre un contrat modifié. Elle ne détecte pas une BPL échangée à l'exécution ; c'est le rôle de la liaison de package (DCP/`requires`). La version augmente lors d'un changement de signature d'une primitive existante, de rôles, de coordonnées ou d'une dérivation de `FixSafe`/`ValueType`/`Resolved` qui déclare nouvellement quelque chose comme prouvé ; elle reste pour de nouvelles primitives, de nouveaux paramètres avec valeur par défaut et des dérivations qui ne font que devenir plus strictes.
 
 Par règle, `rules/sca-rules.json` peut porter `anchor` (sur quoi ancrent les résultats : `statement`, `assign`, `call`, `assign-or-call` ; `uses-item` est réservé) et `fixMode` (`none` / `assisted` / `auto`) ; lus via `TRuleCatalog` (`TRuleMeta.Anchor`, `TRuleMeta.FixMode`). Une valeur absente ou inconnue retombe sur le catalogue compilé ; on désactive une règle avec `"fixMode": "none"` - un module n'offre alors plus aucune aide de réécriture sur son signal. `assisted` = modèle ou aperçu seulement, jamais écrit ; `auto` = peut écrire. Sans valeur, les recettes sur l'instruction (Format()/SQL) n'offrent rien, et les aides par ligne d'un module décident elles-mêmes. `editorHelp` (booléen) indique si un module IDE propose une aide d’édition pour la règle (reDelphix : ampoule, Ctrl+Alt+F) ; les rapports le lisent pour le badge QF et le filtre « Quick-Wins » du HTML (`TRuleMeta.EditorHelp`, une valeur absente retombe sur le catalogue compilé).
+
+### 3.9 Méthodes de classe de la session : verrou du moteur et caches
+
+| Appel | Rôle |
+|-------|------|
+| `TAnalysisSession.AcquireEngineLock` / `ReleaseEngineLock` | Verrou du moteur à l'échelle du processus pour les consommateurs qui modifient eux-mêmes l'état global des détecteurs (p. ex. avant une analyse `SkipConfig`). Récursif : un détenteur qui appelle ensuite `Run` y entre à nouveau. Ne jamais le garder à travers `Synchronize`/`ProcessMessages`. |
+| `TAnalysisSession.TryAcquireEngineLock: Boolean` | Sonde non bloquante pour les appelants du thread UI qui passent leur tour au lieu de geler pendant une analyse. `True` = verrou détenu ; l'appelant **doit** appeler `ReleaseEngineLock`. |
+| `TAnalysisSession.ReleaseTransientCaches` | Libère les caches transitoires du moteur (aujourd'hui : le cache de texte des fichiers à l'échelle du processus). À appeler au dernier point du consommateur (après affichage, rapports ou export). Trop tôt ne coûte qu'un redémarrage à chaud, jamais la justesse ; ne pas l'appeler pendant une analyse en cours. |
+
+### 3.10 Fixtures de test : `TFixtureFilter`
+
+La règle qui masque les résultats dans les chemins de fixtures de test
+appartient au moteur ; `Run` ne l'applique **pas** — c'est au consommateur de
+décider (aujourd'hui seule la CLI le fait).
+
+| Appel | Rôle |
+|-------|------|
+| `TFixtureFilter.AutoHidesFixtures(AProfile): Boolean` | Si un profil masque d'office les résultats de fixtures : `default` et `selftest-quiet` oui, `strict` et tout autre profil non. |
+| `TFixtureFilter.Apply(AFindings, ABaseDir, ADroppedFiles = nil): Integer` | Retire les résultats de fixtures de la liste et renvoie leur nombre. `ABaseDir` (la racine de l'analyse) ancre les motifs de chemin ; `fkFileReadError` reste toujours ; `ADroppedFiles` recueille en option les noms de fichiers concernés. |
 
 ---
 
 ## 4. Cycle de vie / threading
 
 - Le moteur n'est **pas thread-safe** (état global partagé de
-  configuration et de cache). Une analyse à la fois par processus.
+  configuration et de cache). Une analyse à la fois par processus ; `Run`
+  prend le verrou du moteur (voir 3.9). `Parallel` parallélise les fichiers
+  *au sein* d'une analyse.
 - L'**analyse récursive** est sûre pour des processus éphémères à analyse
   unique (CLI/démo). Dans les hôtes résidents (IDE), préférer la voie
   fichier unique/source.
@@ -313,8 +351,9 @@ moteur :
 
 - `.dproj` : `UsePackages=true` et `DCC_UsePackage` contient `SCA.Engine;rtl`.
 - **Aucun** répertoire de sources du moteur dans `DCC_UnitSearchPath`.
-- À l'exécution, `SCA.Engine290.bpl` doit être trouvable (répertoire BPL
-  global ou à côté de l'`.exe`).
+- À l'exécution, `SCA.Engine290.bpl` (Delphi 12 ; `{$LIBSUFFIX AUTO}`) et les
+  packages d'exécution Delphi qu'il requiert (`rtl`, `xmlrtl`) doivent être
+  trouvables (répertoire BPL global ou à côté de l'`.exe`).
 - `uses uEngineApi;` (+ `uMethodd12`, `uSCAConsts` pour l'accès au détail ;
   `uRefactorInfo`, `uSourcePlaces` pour les constantes du service des
   emplacements source, voir 3.8) — le tout depuis le package.
