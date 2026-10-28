@@ -143,7 +143,6 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="sources\MainController.pas"/>
         <DCCReference Include="sources\UI\uMainForm.pas">
             <Form>Form2</Form>
             <FormType>dfm</FormType>

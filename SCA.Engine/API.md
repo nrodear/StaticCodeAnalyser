@@ -9,9 +9,9 @@ knowing the internal units.
 
 > Runnable minimal example: [../SCA.CLI.Demo/](../SCA.CLI.Demo/).
 
-- **Package:** `SCA.Engine` (`requires rtl;` — no VCL/FMX dependency)
-- **Version:** 0.9.14 (`uSCAConsts.SCA_VERSION`)
-- **Scope:** ~196 detectors (rule IDs `SCA001`–`SCA196`)
+- **Package:** `SCA.Engine` (`requires rtl, xmlrtl;` — `xmlrtl` reads `.dproj`/`.groupproj` for the project scopes; no VCL/FMX dependency)
+- **Version:** 0.9.18 (`uSCAConsts.SCA_VERSION`)
+- **Scope:** 205 rules (rule IDs `SCA001`–`SCA205`, `rules/sca-rules.json`)
 
 ---
 
@@ -88,8 +88,8 @@ A complete, runnable example is the **`SCA.CLI.Demo`** project.
 
 ## 3. The API: `uEngineApi`
 
-The facade consists of a request record, a result object, a session class and
-two convenience functions.
+The facade consists of a request record, a result object, a session class, a
+test-fixture filter and two convenience functions.
 
 ### 3.1 Entry points
 
@@ -102,12 +102,14 @@ two convenience functions.
 ### 3.2 `TScanRequest`
 
 Fill via `TScanRequest.Init` with sensible defaults (`ssRecursive`, all
-detectors, loosest thresholds), then override selectively.
+detectors, loosest thresholds, one-branch `{$IFDEF}` view with
+`TScanRequest.DefaultIfdefDefines`, include defines on, `dlDelphi`, serial),
+then override selectively.
 
 | Field | Type | Meaning |
 |-------|------|---------|
 | `Scope` | `TScanScope` | Scan kind (see 3.5). Default `ssRecursive`. |
-| `Path` | `string` | Root (recursive) / file (single) / base dir (list). |
+| `Path` | `string` | Root (recursive) / file (single) / base dir (list) / `.dproj`, `.lpi`, `.lpk` (project) / `.groupproj`, `.lpg` (project group). |
 | `Files` | `TArray<string>` | Explicit file list for `ssFileList`. |
 | `Source` | `string` | In-memory source for `ssSource`. |
 | `VcsRange` | `string` | `ssVcsChanged`: `''`=auto, else `shaA..shaB`. |
@@ -117,7 +119,9 @@ detectors, loosest thresholds), then override selectively.
 | `MaxFileBytes` | `Integer` | `<=0` → engine default (5 MB). |
 | `UsesCheck` | `Boolean` | Run the expensive unused-uses detector. |
 | `AutoDiscover` | `Boolean` | Discover custom classes during the scan. |
-| `IfdefDefines` | `TArray<string>` | `{$IFDEF}`-aware parsing with these defines. |
+| `IfdefDefines` | `TArray<string>` | `{$IFDEF}`-aware parsing with these defines: one branch, as a compiler sees it. `Init` sets `DefaultIfdefDefines` (`MSWINDOWS`, `WIN64`, `UNICODE`, `CONDITIONALEXPRESSIONS`); `nil`/empty = both branches of every `{$IFDEF}`. Scan view: applied by `Run` even with `SkipConfig`. |
+| `IncludeDefines` | `Boolean` | Read `{$I}` include files for their `{$DEFINE}` effect. `Init` sets `True`; `False` = include-blind (CLI `--no-include-defines`). Scan view like `IfdefDefines`. |
+| `Dialect` | `TSourceDialect` | `dlDelphi` (`Init`) or `dlFpc` (`uSCAConsts`): `dlFpc` also collects `*.pp` in directory walks and, with a non-empty `IfdefDefines`, adds `FPC` and `LCL`. Forced to `dlFpc` for `.lpi`/`.lpk`/`.lpg` project scopes. Scan view like `IfdefDefines`. |
 | `CustomRulesPath` | `string` | YAML with custom rules (`''`=none). |
 | `BaselinePath` | `string` | Filter findings against a baseline JSON (`''`=off). |
 | `WriteBaselinePath` | `string` | Write current findings as a new baseline. |
@@ -125,9 +129,12 @@ detectors, loosest thresholds), then override selectively.
 | `MinSeverityName` | `string` | INI mode: override `'error'`/`'warning'`/`'hint'`. |
 | `ConfigRoot` | `string` | INI mode: root for INI/rules resolution. |
 | `SkipConfig` | `Boolean` | `true`: apply no config (consumer has set state itself). |
+| `IndexRoot` | `string` | `ssProject`/`ssProjectGroup`/`ssFileList`: directory over which the cross-unit indexes (symbol references, types, DFM) are built while the analysis stays on the list. `''` = common root of the resolved list (project scopes) or the list itself (`ssFileList`). |
 | `SingleFileProjectRoot` | `string` | `ssSingleFile`: project root for the cross-unit index. |
-| `IgnoreList` | `TIgnoreList` | `ssRecursive`: ignore/test filter (`nil`=none). |
-| `Progress` | `TProc<Integer,Integer>` | `(current,total)`; `EAbort` inside aborts. |
+| `IgnoreList` | `TIgnoreList` | `ssRecursive`, `ssProject`, `ssProjectGroup`: ignore/test filter (`nil`=none). |
+| `Parallel` | `Boolean` | Per-file parallel scan (opt-in, `Init`: `False`; CLI `--parallel`). Falls back to serial when a mode that is not parallel-safe is active (auto-discovery, custom rules, detector timing); the result order equals the serial run. Not applied with `SkipConfig`. |
+| `ParallelWorkers` | `Integer` | Worker count with `Parallel`; `0` = `TThread.ProcessorCount`. |
+| `Progress` | `TProc<Integer,Integer>` | `(current,total)`; `EAbort` inside aborts. In parallel mode the callback is delivered during the merge phase, on the caller's thread. |
 
 ### 3.3 `TScanResult`
 
@@ -166,7 +173,8 @@ on the request:
 3. **`SkipConfig := True`:** `Run` applies **no** config — the consumer has
    already set the global detector/threshold state itself (this is what the IDE
    plugin and the Form do via their own preparation). `Run` then only does
-   scope → scan → baseline.
+   scope → scan → baseline. The scan view (`IfdefDefines`, `IncludeDefines`,
+   `Dialect`) is applied in every mode.
 
 ### 3.5 Scopes (`TScanScope`)
 
@@ -177,6 +185,11 @@ on the request:
 | `ssFileList` | Explicit file list (`Files`); `Path` = optional base dir. |
 | `ssVcsChanged` | Only VCS-changed files (`Path`=repo, `VcsRange` optional). |
 | `ssSource` | In-memory source (`Source`); `Path`=optional logical name. |
+| `ssProject` | Files of a project (`Path` = `.dproj`: its `DCCReference` list; `.lpi`/`.lpk`: the Lazarus counterpart); also reports files in the project folder that the project does not list (SCA194/SCA195). |
+| `ssProjectGroup` | Union of the project lists of a group (`Path` = `.groupproj` or `.lpg`). |
+
+An unresolvable project file yields a result with a single `fkFileReadError`
+finding instead of an exception.
 
 ### 3.6 Profiles
 
@@ -185,12 +198,15 @@ Built-in profiles (`uRuleCatalog`):
 
 | Profile | Content |
 |---------|---------|
-| `default` / `strict` | All rules. |
+| `default` | All rules except the style rules of `style`. |
+| `strict` | All rules. |
 | `ide-fast` | Fast subset for live analysis (bugs + vulnerabilities + critical DFM). |
 | `security` | Vulnerabilities/secrets only (SQLInjection, HardcodedSecret, …). |
 | `bugs-only` | Real bugs only (leaks, NilDeref, DivByZero, FormatMismatch, …). |
 | `code-quality` | Code smells (LongMethod, MagicNumber, Cyclomatic, duplicates, …). |
 | `dfm-only` | DFM/form rules only. |
+| `style` | Style rules only (PublicMemberWithoutDoc, BeginEndRequired, WithStatement, …). |
+| `selftest-quiet` | All rules except a few layout rules — for scanning the analyser itself. |
 
 ### 3.7 Data model: `TLeakFinding` (`uMethodd12`)
 
@@ -201,14 +217,24 @@ Each finding:
 | `FileName` | `string` | Source file. |
 | `MethodName` | `string` | Method/routine (if known). |
 | `LineNumber` / `LineInt` | `string` / `Integer` | Line (string field + integer helper). |
+| `EndLine` / `SpanEnd` / `IsMultiLine` / `SpanLineCount` | `Integer` / `Integer` / `Boolean` / `Integer` | Last line of the finding's range. `EndLine = 0` (default) = single line; read `SpanEnd` (clamped, never below the start line) instead of the raw field. A range changes only how much a finding marks, never the number of findings. |
 | `MissingVar` / `Message` | `string` | Detail message (`Message` = alias). |
-| `Severity` | `TLeakSeverity` | `lsError` / `lsWarning` / `lsHint`. |
+| `Severity` | `TLeakSeverity` | `lsError` / `lsWarning` / `lsHint` — as it stands after the post-filters (evidence tiering, `[PathOverrides]`). |
+| `OriginalSeverity` | `TLeakSeverity` | The severity the **detector** assigned. Post-filters change `Severity` only via `OverrideSeverity`, which keeps the first original; `SavedDetectorSeverity`/`SeverityWasOverridden` are its storage — do not read them directly. |
 | `Kind` | `TFindingKind` | Concrete rule kind (`fkXxx`). |
 | `Confidence` | `TFindingConfidence` | `fcLow` / `fcMedium` / `fcHigh`. |
 | `RuleID` | `string` | Custom rule ID (else empty). |
+| `RelatedLines` | `string` | Further lines of the same thing — today only SCA015/SCA021 (the partner places of a duplicate group): comma-separated 1-based line numbers, ascending, without the anchor line; empty for every other rule. |
+| `StructureChain` | `string` | Nesting chain to the finding, outside in, joined with `CHAIN_SEP` (`' → '`), e.g. `if → for → while`; today only SCA018 (DeepNesting), otherwise empty. |
+| `LeakVariant` / `MemoryLeakVariant` | `string` | SCA001 (MemoryLeak) variant: `never-freed`, `freed-outside-finally`, `return-value-not-freed`, `proven-leak`. `LeakVariant` is the field the detector sets (empty = not set); `MemoryLeakVariant` returns it or derives it from `OriginalSeverity` and the message; `''` for every other kind. |
 | `FindingType` | `TFindingType` | Category (see below). |
 | `SeverityText` / `TypeText` | `string` | Readable labels. |
 | `ResolvedRuleId` | `string` | `SCAxxx` (RuleID if set, else catalog lookup). |
+
+`RelatedLines`, `StructureChain` and `LeakVariant` are deliberately not part of
+the message, so they are in neither the SARIF nor the baseline fingerprint.
+Producers create findings with `TLeakFinding.New(...)`/`NewAtPos(...)` or
+`Create` + `SetKind(Kind[, Confidence])` (severity from the catalog default).
 
 Enums (`uSCAConsts`):
 
@@ -283,16 +309,35 @@ end;
 
 **What `ChainOf` and `CallOf` prove.** An operand that is a bare identifier gets its declared type (`rvString`/`rvNonString`, `Resolved` = type name), and `FixSafe` is derived again. A `Char`, `WideChar`, `AnsiChar`, `ShortString` or `PAnsiChar` operand stays `rvString` (Format takes it for `%s`), but not lossless - a `#0` ends the text, an `AnsiChar` from `#$80` passes as its ordinal - so it never makes `FixSafe`. Unknown stays unknown: `rvUnknown` and `FixSafe = False` are the normal case. There is no `rvString` proof inside a `with` block (`InWithBlock`; `Resolved` still names the declaration found), and none for a known RTL call or a `.ToString` term whose name a function of the unit itself declares with a non-string result — that function shadows the RTL routine (e.g. a unit-local `function Trim(..): Variant`). Calls qualified with `SysUtils.`/`StrUtils.` keep their proof. A function declared in a nested routine is not seen (the parser drops nested routines).
 
-Coordinates are 1-based; `EndCol` points **behind** the last character. Every primitive except `Open`/`OpenSource` is total (`nil`, empty, `0` or `False` instead of an exception, also when nothing is open). `SOURCE_PLACES_VERSION` (= 1) is the contract version — a **compile-time** constant: a consumer checks it with `{$IF SOURCE_PLACES_VERSION <> 1}{$MESSAGE ERROR '...'}{$IFEND}` (reDelphix does this in `uRdxRecipeRunner` and `uRdxFixRunner`) and then no longer builds against a changed contract. It cannot detect a BPL swapped at runtime; the package binding (DCP/`requires`) does that. The version rises with a change to the signature of an existing primitive, to roles, to coordinates, or to a `FixSafe`/`ValueType`/`Resolved` derivation that newly reports something as proven; it stays for new primitives, new parameters with a default value and derivations that only get stricter.
+Coordinates are 1-based; `EndCol` points **behind** the last character. Every primitive except `Open`/`OpenSource` is total (`nil`, empty, `0` or `False` instead of an exception, also when nothing is open). `SOURCE_PLACES_VERSION` (= 1) is the contract version — a **compile-time** constant: a consumer checks it with `{$IF SOURCE_PLACES_VERSION <> 1}{$MESSAGE ERROR '...'}{$IFEND}` (reDelphix does this in `uRdxRecipeRunner`, `uRdxPlacesRunner` and `uRdxFixRunner`) and then no longer builds against a changed contract. It cannot detect a BPL swapped at runtime; the package binding (DCP/`requires`) does that. The version rises with a change to the signature of an existing primitive, to roles, to coordinates, or to a `FixSafe`/`ValueType`/`Resolved` derivation that newly reports something as proven; it stays for new primitives, new parameters with a default value and derivations that only get stricter.
 
 Per rule, `rules/sca-rules.json` may carry `anchor` (what the findings anchor on: `statement`, `assign`, `call`, `assign-or-call`; `uses-item` is reserved) and `fixMode` (`none` / `assisted` / `auto`); read them via `TRuleCatalog` (`TRuleMeta.Anchor`, `TRuleMeta.FixMode`). A missing or unknown value falls back to the compiled-in catalog; a rule is switched off with `"fixMode": "none"` - then a module offers no rewriting help on its signal at all. `assisted` = template or preview only, never written; `auto` = may write. Without a value the statement recipes (Format()/SQL) offer nothing, and line-based helpers of a module decide for themselves. `editorHelp` (boolean) says whether an IDE module offers a quick fix (a code action for its findings) for the rule (reDelphix: light bulb, Ctrl+Alt+F); reports read it for the HTML "QF" badge and the "Quick-Wins" filter (`TRuleMeta.EditorHelp`, a missing value falls back to the compiled-in catalog).
+
+### 3.9 Session class methods: engine lock and caches
+
+| Call | Purpose |
+|------|---------|
+| `TAnalysisSession.AcquireEngineLock` / `ReleaseEngineLock` | Process-wide engine lock for consumers that change the global detector state themselves (e.g. before a `SkipConfig` run). Recursive: a holder that then calls `Run` re-enters it. Never hold it across `Synchronize`/`ProcessMessages`. |
+| `TAnalysisSession.TryAcquireEngineLock: Boolean` | Non-blocking probe for UI-thread callers that skip instead of freezing while a scan runs. `True` = lock held; the caller **must** call `ReleaseEngineLock`. |
+| `TAnalysisSession.ReleaseTransientCaches` | Frees the transient engine caches (today: the process-wide file-text cache). Call it at the consumer's last point (after display, reports or export). Too early only costs a warm start, never correctness; do not call it during a running scan. |
+
+### 3.10 Test fixtures: `TFixtureFilter`
+
+The engine owns the rule for hiding findings in test-fixture paths; `Run` does
+**not** apply it — a consumer decides (today only the CLI does).
+
+| Call | Purpose |
+|------|---------|
+| `TFixtureFilter.AutoHidesFixtures(AProfile): Boolean` | Whether a profile hides fixture findings by default: `default` and `selftest-quiet` yes, `strict` and every other profile no. |
+| `TFixtureFilter.Apply(AFindings, ABaseDir, ADroppedFiles = nil): Integer` | Removes fixture findings from the list and returns their count. `ABaseDir` (the scan root) anchors the path patterns; `fkFileReadError` always stays; `ADroppedFiles` optionally collects the affected file names. |
 
 ---
 
 ## 4. Lifecycle / threading
 
 - The engine is **not thread-safe** (shared global config/cache state). One scan
-  at a time per process.
+  at a time per process; `Run` takes the engine lock (see 3.9). `Parallel`
+  parallelises the files *within* one scan.
 - The **recursive scan** is safe for short-lived single-scan processes
   (CLI/demo). In resident hosts (IDE) prefer the single-file/source path.
 - `TScanResult` owns the findings; `Free` releases them. With `ReleaseFindings`
@@ -306,8 +351,9 @@ A third-party consumer needs **only the package**, no engine source:
 
 - `.dproj`: `UsePackages=true` and `DCC_UsePackage` contains `SCA.Engine;rtl`.
 - **No** engine source directory in `DCC_UnitSearchPath`.
-- At runtime `SCA.Engine290.bpl` must be findable (global BPL directory or next to
-  the `.exe`).
+- At runtime `SCA.Engine290.bpl` (Delphi 12; `{$LIBSUFFIX AUTO}`) and the
+  Delphi runtime packages it requires (`rtl`, `xmlrtl`) must be findable
+  (global BPL directory or next to the `.exe`).
 - `uses uEngineApi;` (+ `uMethodd12`, `uSCAConsts` for detail access;
   `uRefactorInfo`, `uSourcePlaces` for the constants of the source-places
   service, see 3.8) — all from the package.

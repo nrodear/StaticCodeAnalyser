@@ -1122,7 +1122,6 @@ SCA.SharedUI/sources/                  UI pieces shared by EXE and IDE plugin
   uRecentPaths.pas                     recent.ini handling
 
 StaticCodeAnalyserForm/sources/        Standalone front-end
-  MainController.pas                   GUI shell wiring
   UI/                                  Forms, options dialog, panels
   Console/uConsoleRunner.pas           CLI (--path, --report-*, exit codes)
 ```

@@ -87,9 +87,10 @@ tools\probe\sites_from_sarif.py   Fundstellen einer Regel aus einem SARIF-Lauf z
   "Aktionen am Fund" (AH6 `uFindingActions`, mit `fakNavigate` und
   `fakSuppress`), `SCA.Engine.dcp` im Dcp-Verzeichnis der IDE.
 * reDelphix ist gegen Version 1 des Quellstellen-Vertrags geschrieben.
-  `uRdxRecipeRunner` (Rezept-Laeufer) und `uRdxFixRunner` (Ruempfe der
-  einfachen Hilfen, seit Charge B2S-b die meisten Typ- und with-Fragen an den
-  Vertrag) pruefen `SOURCE_PLACES_VERSION` beim Uebersetzen
+  `uRdxRecipeRunner` (Rezept-Laeufer), `uRdxPlacesRunner` (sein Teil, der
+  nur den Quellstellen-Dienst braucht - Charge N, C16) und `uRdxFixRunner`
+  (Ruempfe der einfachen Hilfen, seit Charge B2S-b die meisten Typ- und
+  with-Fragen an den Vertrag) pruefen `SOURCE_PLACES_VERSION` beim Uebersetzen
   (`{$IF SOURCE_PLACES_VERSION <> 1}` mit `{$MESSAGE ERROR}`, die Meldung
   nennt die Unit): hebt die Engine die Version, bricht der Bau von
   reDelphix ab, bis beide gegen den neuen Vertrag geprueft sind. Eine zur

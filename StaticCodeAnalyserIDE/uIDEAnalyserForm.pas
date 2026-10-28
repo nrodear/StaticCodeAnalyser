@@ -15,7 +15,7 @@ uses
   Vcl.ExtCtrls, Vcl.ComCtrls, Vcl.Grids, Vcl.ActnList, Vcl.ImgList, Vcl.Menus,
   Vcl.Clipbrd, Vcl.Themes,
   DesignIntf, ToolsAPI, DockForm,    // DockForm: TDockableForm (Editor-Service-Notifier-Signatur)
-  uStaticAnalyzer2, uEngineApi, uStaticFiles, uMethodd12, uSCAConsts, uExport,
+  uEngineApi, uStaticFiles, uMethodd12, uSCAConsts, uExport,
   uBaseline,
   uFixHint, uIgnoreList, uRepoSettings, uRuleCatalog, uClaudePrompt,
   uFindingCopyText,
