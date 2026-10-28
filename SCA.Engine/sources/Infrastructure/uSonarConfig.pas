@@ -553,11 +553,11 @@ begin
     TEncoding.UTF8.GetBytes(PlainTextToken));
   {$ENDIF}
 
-  // TMemIniFile haelt Writes in-memory bis UpdateFile aufgerufen wird.
-  // Vorher: TIniFile schrieb sofort via WritePrivateProfileString - das
-  // hat Win-Default-Encoding (typisch UTF-16 LE auf Win10+), kollidiert
-  // dann mit unserem TMemIniFile-Reader. Beides UTF-8 ohne BOM via
-  // TMemIniFile haelt die Datei konsistent.
+  // Geschichte: zuerst schrieb hier TIniFile sofort via
+  // WritePrivateProfileString - mit dem Encoding der Profil-API, das mit
+  // unserem UTF-8-Leser (TMemIniFile mit TEncoding.UTF8) kollidiert. Dann
+  // TMemIniFile fuer Leser UND Schreiber, damit beide dasselbe UTF-8
+  // sprechen.
   // TCommentPreservingIni statt TMemIniFile (2026-08-21): FileName ist in
   // aller Regel die analyser.ini, und die traegt zu jedem Schluessel einen
   // Erklaerblock. TMemIniFile.UpdateFile schreibt die Datei aus seinem
