@@ -111,8 +111,21 @@ type
   ///   von Schluesseln, TRepoSettings.QuickWriteStr genau einen (dahinter
   ///   [Scan] Dialect, [Editor] DfmTarget, [UI] Theme), dazu die
   ///   Sonar-Token- und Sonar-Optionen-Schreiber und das Properties-Panel
-  ///   des IDE-Plugins. Jeder analyser.ini-Schreiber geht ueber diese
-  ///   Klasse - TIniFile/TMemIniFile schreiben die Datei nicht.
+  ///   des IDE-Plugins. Jeder Schluessel-Schreiber der analyser.ini geht
+  ///   ueber diese Klasse - TIniFile/TMemIniFile schreiben die Datei
+  ///   nicht. (Anders schreiben nur EnsureConfigExists - die Vorlage, wenn
+  ///   es noch keine Datei gibt - und EnsureSection, das einen fehlenden
+  ///   Vorlagenblock byte-genau anhaengt.)
+  ///
+  ///   LADEN (2026-10-28): erst strikt als UTF-8 (BOM oder nicht). Eine
+  ///   aeltere ANSI-Datei ohne BOM mit Umlaut wirft dabei EEncodingError -
+  ///   dann zweiter Versuch mit TEncoding.Default (ANSI), wie TMemIniFile
+  ///   sie klaglos liest. Geschrieben wird immer UTF-8 mit BOM: der Inhalt
+  ///   bleibt erhalten, ein Umlaut wird dabei korrekt umkodiert. Scheitert
+  ///   das Laden einer VORHANDENEN Datei anders (gesperrt, Zugriff
+  ///   verweigert), schreibt UpdateFile NICHT und liefert False - bis dahin
+  ///   begann die Klasse dann mit einer leeren Liste und schrieb die Datei
+  ///   mit nur den neuen Schluesseln neu, alles andere war weg.
   /// </remarks>
   /// <summary>
   ///   Wo in der Datei ein Schluessel steht - bzw. wo er hingehoerte.
@@ -132,6 +145,12 @@ type
     FPath    : string;
     FLines   : TStringList;
     FChanged : Boolean;
+    /// <summary>
+    ///   Die Datei existierte, liess sich aber nicht laden (gesperrt,
+    ///   Zugriff verweigert). FLines ist dann NICHT die Datei - UpdateFile
+    ///   darf sie nicht ueberschreiben.
+    /// </summary>
+    FLoadFailed : Boolean;
     /// <summary>Sektionsname einer '[...]'-Zeile, sonst ''.</summary>
     class function SectionOf(const ALine: string): string; static;
     /// <summary>
@@ -154,10 +173,11 @@ type
     procedure WriteBool(const ASection, AKey: string; AValue: Boolean);
     procedure WriteInteger(const ASection, AKey: string; AValue: Integer);
     /// <summary>
-    ///   Schreibt nur, wenn sich wirklich ein Wert geaendert hat. False
-    ///   NUR, wenn das Schreiben scheiterte (Datei gesperrt, schreib-
-    ///   geschuetzt, Rechte) - ohne Aenderung gibt es nichts zu scheitern,
-    ///   dann True. Wirft nie; wer den Fehlschlag melden will (QuickWriteStr),
+    ///   Schreibt nur, wenn sich wirklich ein Wert geaendert hat. False,
+    ///   wenn das Schreiben scheiterte (Datei gesperrt, schreib-
+    ///   geschuetzt, Rechte) oder schon das Laden der vorhandenen Datei
+    ///   (dann wird gar nicht geschrieben, s. Remarks) - sonst ohne
+    ///   Aenderung True, es gibt nichts zu scheitern. Wirft nie; wer den Fehlschlag melden will (QuickWriteStr),
     ///   wertet das Ergebnis aus, alle anderen rufen es wie bisher als
     ///   Anweisung.
     /// </summary>
@@ -1977,14 +1997,38 @@ begin
   // Keine Sortierung, keine Dubletten-Behandlung: die Datei soll exakt so
   // bleiben, wie sie ist.
   FLines.Sorted := False;
-  if FileExists(FPath) then
-    try
-      FLines.LoadFromFile(FPath, TEncoding.UTF8);
-    except
-      // Unlesbar (gesperrt, kaputt): dann bleibt FLines leer und UpdateFile
-      // legt die Datei aus den geschriebenen Werten neu an. Das ist
-      // dasselbe Verhalten, das TMemIniFile hier zeigen wuerde.
-    end;
+  // Gibt es die Datei nicht, beginnt die Liste leer und UpdateFile legt sie
+  // an - das ist kein Ladefehler.
+  if not FileExists(FPath) then Exit;
+  try
+    FLines.LoadFromFile(FPath, TEncoding.UTF8);
+  except
+    on EEncodingError do
+      // Kein gueltiges UTF-8: TEncoding.UTF8 prueft strikt
+      // (MB_ERR_INVALID_CHARS) und wirft bei einem ANSI-Umlaut ohne BOM.
+      // Solche Dateien gibt es (von Hand gespeichert, Alt-Bestand - s.
+      // EnsureSection und QuickReadStr), und TMemIniFile liest sie
+      // klaglos als ANSI. Also ebenso lesen; UpdateFile schreibt sie als
+      // UTF-8 mit BOM zurueck - Inhalt erhalten, Umlaut korrekt umkodiert.
+      // Bis 2026-10-28 blieb die Liste hier leer, und das naechste
+      // Speichern schrieb die Datei mit nur den neuen Schluesseln neu.
+      try
+        FLines.Clear;
+        FLines.LoadFromFile(FPath, TEncoding.Default);
+      except
+        // Auch als ANSI unlesbar (z. B. inzwischen gesperrt): nicht
+        // schreiben, s. FLoadFailed.
+        FLines.Clear;
+        FLoadFailed := True;
+      end;
+    else
+      // Vorhanden, aber nicht lesbar (gesperrt, Zugriff verweigert): FLines
+      // ist NICHT die Datei. Frueher begann die Klasse dann leer und
+      // UpdateFile ueberschrieb die Datei mit den neuen Schluesseln allein;
+      // jetzt schreibt UpdateFile nicht und meldet False.
+      FLines.Clear;
+      FLoadFailed := True;
+  end;
 end;
 
 destructor TCommentPreservingIni.Destroy;
@@ -2101,6 +2145,10 @@ function TCommentPreservingIni.UpdateFile: Boolean;
 // ohne Aenderung geschlossen wird, soll die Datei nicht anfassen (und
 // damit auch keinen Zeitstempel bewegen).
 begin
+  // Die vorhandene Datei war nicht ladbar: FLines traegt nur die neuen
+  // Schluessel, ein Schreiben loeschte alles andere. Nicht schreiben,
+  // Fehlschlag melden (Vertrag an der Deklaration).
+  if FLoadFailed then Exit(False);
   Result := True;
   if not FChanged then Exit;
   try
