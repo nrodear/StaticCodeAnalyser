@@ -109,10 +109,32 @@ type
     // Fallback (uFieldLeak und Altpfade setzen nichts).
     // NICHT im Fingerprint - dieselbe Politik wie StructureChain.
     LeakVariant: string;
+    // NEUES FELD -> CopyFrom ergaenzen. uTestFindingCopy zaehlt die
+    // Felder per RTTI und wird sonst rot.
 
     // Setzt Confidence := fcHigh (Default). Bestehende Detektoren erzeugen
     // Befunde binaer und gelten damit als hochkonfident.
     constructor Create;
+    // Uebernimmt ALLE Felder von ASource (nicht nil) - die EINE Kopie
+    // eines Funds. Bis 2026-10-28 stand sie dreimal feldweise von Hand
+    // (Properties-Cache im Dock, IDE-Formular, Silent-Kopien je Datei in
+    // uEditorFindingStore) und verlor dabei Felder: den Silent-Kopien
+    // fehlte LeakVariant, reDelphix sperrte dort den SCA001-Fix "Free
+    // ausserhalb finally" (Befund B1); allen dreien fehlten
+    // SavedDetectorSeverity/SeverityWasOverridden, OriginalSeverity der
+    // Kopie war die gedeckelte Schwere.
+    //
+    // VERTRAG: ein neues Feld kommt HIER dazu. uTestFindingCopy zaehlt
+    // die Felder per RTTI, fuellt jedes mit einem Nicht-Vorgabewert und
+    // vergleicht die Kopie - ein vergessenes Feld macht ihn rot. Alle
+    // Felder sind Strings oder Werttypen, die Kopie ist damit tief; ein
+    // Feld mit Objekt oder dynamischem Array braucht hier eine eigene
+    // Kopie (und der Test einen eigenen Typzweig, er lehnt unbekannte
+    // Typen ab).
+    procedure CopyFrom(ASource: TLeakFinding);
+    // Neuer TLeakFinding mit allen Feldern von Self (CopyFrom); gehoert
+    // dem Aufrufer. Immer TLeakFinding, auch fuer eine Unterklasse.
+    function Clone: TLeakFinding;
     // Setzt Kind UND Severity in einem Schritt - Severity wird aus
     // KIND_META.DefaultSeverity gezogen (single source of truth). Detektoren
     // die einen kontext-abhaengigen Severity brauchen (z.B. uLeakDetector2,
@@ -283,6 +305,36 @@ constructor TLeakFinding.Create;
 begin
   inherited Create;
   Confidence := fcHigh; // sicherer Default - Detektoren senken bei Bedarf
+end;
+
+procedure TLeakFinding.CopyFrom(ASource: TLeakFinding);
+// Vertrag siehe Deklaration: JEDES Feld, in Deklarationsreihenfolge.
+begin
+  FileName              := ASource.FileName;
+  MethodName            := ASource.MethodName;
+  LineNumber            := ASource.LineNumber;
+  MissingVar            := ASource.MissingVar;
+  Severity              := ASource.Severity;
+  SavedDetectorSeverity := ASource.SavedDetectorSeverity;
+  SeverityWasOverridden := ASource.SeverityWasOverridden;
+  Kind                  := ASource.Kind;
+  EndLine               := ASource.EndLine;
+  Confidence            := ASource.Confidence;
+  RuleID                := ASource.RuleID;
+  RelatedLines          := ASource.RelatedLines;
+  StructureChain        := ASource.StructureChain;
+  LeakVariant           := ASource.LeakVariant;
+end;
+
+function TLeakFinding.Clone: TLeakFinding;
+begin
+  Result := TLeakFinding.Create;
+  try
+    Result.CopyFrom(Self);
+  except
+    Result.Free;
+    raise;
+  end;
 end;
 
 procedure TLeakFinding.SetKind(K: TFindingKind);

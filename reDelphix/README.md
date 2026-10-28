@@ -1099,10 +1099,11 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
 * `uTestRdxTryFixesDetector` - dieselben Hilfen gegen die echten Detektoren (nur
   Delphi): Rundlauf SCA009 (auch mit Suffix - try/except im Bereich bzw. umschliessend),
   SCA001 freed-outside-finally (Variante
-  aus dem Fund, gekennzeichnet, Menuetext), Katalog-Beispiele SCA153/SCA109/SCA156
+  aus dem Fund, gekennzeichnet, Menuetext; auch fuer die Kopie des Funds,
+  TLeakFinding.Clone - Befund B1), Katalog-Beispiele SCA153/SCA109/SCA156
   `bad` -> `good` (SCA109 ohne den Kommentar in `bad`; SCA009: `good` ist einzeilig),
   Funde, die die Hilfe ablehnt (bedingtes Free, never-freed, fremde Freigabe,
-  ReallocMem) - 14 Tests; ohne Delphi gegengeprueft (CLI-Exe und FPC-Planer, 12/12; der
+  ReallocMem) - 15 Tests; ohne Delphi gegengeprueft (CLI-Exe und FPC-Planer, 12/12; der
   Rundlauf der Charge H4c ebenso, und das SCA156-Katalogbeispiel der Charge B1-FE, das seitdem
   in einer Routine mit `var P: Pointer;` steht).
 * `uTestRdxResultFixes` / `uTestRdxInheritedFixes` - die Quick-Fixes der Charge H5 auf
