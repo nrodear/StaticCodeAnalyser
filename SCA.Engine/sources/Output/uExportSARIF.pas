@@ -35,8 +35,35 @@ uses
   uMethodd12;
 
 type
+  // Zuschnitt EINES SARIF-Exports (Nico 2026-10-28). Ein Record statt
+  // eines weiteren Boolean-Parameters - Muster THtmlReportOptions.
+  //   ConfidenceProps - wie AConfidenceProps unten (properties.confidence)
+  //   EditorHelp      - properties.editorHelp je Fund und in rules[] (die
+  //                     Editorhilfen der Regel aus dem Katalog). OPTIONAL,
+  //                     Voreinstellung AUS: ohne den Schalter ist das SARIF
+  //                     byte-gleich zum Stand davor (Byte-A/B gegen alte
+  //                     Referenzen). Einschalten nur die CLI
+  //                     (--sarif-editor-help); GUI-Export und IDE nie.
+  // Initialize setzt beide auf False - eine rohe Deklaration ist sicher.
+  // Den Scan-Stempel der Evidenz-Politik liest DefaultOptions zur
+  // AUFRUFZEIT, nicht Initialize: ein lokaler Record wird beim Eintritt
+  // in die Routine initialisiert, also VOR dem Scan, der den Stempel
+  // setzt.
+  TSarifOptions = record
+  public
+    ConfidenceProps : Boolean;
+    EditorHelp      : Boolean;
+    // noinspection AvoidOut
+    // 'out' schreibt die Signatur von class operator Initialize vor.
+    class operator Initialize(out Dest: TSarifOptions);
+  end;
+
   TSARIFWriter = class
   public
+    // Voreinstellung wie die Ueberladungen ohne Optionen: ConfidenceProps
+    // aus dem Scan-Stempel uSCAConsts.LastScanEvidenceTiering, EditorHelp
+    // aus.
+    class function DefaultOptions: TSarifOptions; static;
     // Schreibt einen kompletten SARIF-Report nach FileName.
     //   AFindings   - die gefundenen Befunde (Caller behaelt Ownership)
     //   ABaseDir    - Wurzelverzeichnis fuer relative Datei-Pfade
@@ -62,6 +89,12 @@ type
       const AFindings: TObjectList<TLeakFinding>;
       const ABaseDir, AToolVersion, AToolName: string;
       AConfidenceProps: Boolean); overload; static;
+    // Mit vollem Zuschnitt (TSarifOptions); die Ueberladungen oben
+    // schreiben nie properties.editorHelp.
+    class procedure WriteFile(const AFileName: string;
+      const AFindings: TObjectList<TLeakFinding>;
+      const ABaseDir, AToolVersion, AToolName: string;
+      const AOptions: TSarifOptions); overload; static;
 
     // Variante die direkt einen JSON-String liefert (fuer Tests).
     class function ToJsonString(
@@ -71,6 +104,10 @@ type
       const AFindings: TObjectList<TLeakFinding>;
       const ABaseDir, AToolVersion, AToolName: string;
       AConfidenceProps: Boolean): string; overload; static;
+    class function ToJsonString(
+      const AFindings: TObjectList<TLeakFinding>;
+      const ABaseDir, AToolVersion, AToolName: string;
+      const AOptions: TSarifOptions): string; overload; static;
   end;
 
 implementation
@@ -604,12 +641,16 @@ type
   // properties.editorHelp je Art ('id:effect:slug', s. EditorHelpTokens).
   THelpTokensJeArt = array[TFindingKind] of TArray<string>;
 
-function HelpTokensJeArt: THelpTokensJeArt;
+function HelpTokensJeArt(const AOptions: TSarifOptions): THelpTokensJeArt;
 // Die Editorhilfen aller Arten, einmal je Export aus dem Katalog gebaut -
-// je Fund dann nur ein Lookup statt Katalogkopie und String-Bau.
+// je Fund dann nur ein Lookup statt Katalogkopie und String-Bau. Ohne
+// AOptions.EditorHelp alle leer (Voreinstellung): dann schreibt weder ein
+// Fund noch rules[] das Feld, das SARIF ist byte-gleich zum Stand davor.
 var
   K : TFindingKind;
 begin
+  Result := Default(THelpTokensJeArt);
+  if not AOptions.EditorHelp then Exit;
   for K := Low(TFindingKind) to High(TFindingKind) do
     Result[K] := EditorHelpTokens(TRuleCatalog.GetRuleCanonical(K));
 end;
@@ -626,7 +667,7 @@ end;
 procedure EmitSarifDocument(E: TSarifJsonEmitter;
   const AFindings: TObjectList<TLeakFinding>;
   const ABaseDir, AToolVersion, AToolName: string;
-  AConfidenceProps: Boolean);
+  const AOptions: TSarifOptions);
 // Emittiert das komplette SARIF-Dokument in exakt der Pair-Reihenfolge,
 // die vorher der TJSONObject-Aufbau (ToJsonString + BuildRulesArray +
 // BuildResultsArray) erzeugt hat.
@@ -644,8 +685,12 @@ var
   // obwohl ABaseDir konstant ist und nur ~10k eindeutige FileNames existieren.
   // Caller-scoped Memo FileName->RelPath (reine Funktion -> byte-identisch).
   RelMemo : TDictionary<string, string>;
-  // properties.editorHelp je Art, vor der Ergebnis-Schleife gebaut.
-  HelpTokens : THelpTokensJeArt;
+  // properties.editorHelp je Art (leer ohne AOptions.EditorHelp, s.
+  // HelpTokensJeArt). Zwei Kopien derselben Liste: RegelTokens liest nur
+  // die anonyme Methode des rules[]-Blocks, HelpTokens nur die
+  // geschachtelte WriteResultProperties - keine Variable steht in beiden.
+  HelpTokens  : THelpTokensJeArt;
+  RegelTokens : THelpTokensJeArt;
 
   procedure WriteResultProperties(AFinding: TLeakFinding);
   // Der properties-Bag eines Results: Konfidenz (nur bei aktiver
@@ -655,7 +700,8 @@ var
   // Verzweigungen sonst ueber die McCabe-Schwelle geht - der Bag ist eine
   // abgeschlossene Sache und liest sich hier besser als eingebettet.
   //
-  // editorHelp (Nico 2026-10-28): welche Code-Aktionen von reDelphix es
+  // editorHelp (Nico 2026-10-28, nur mit AOptions.EditorHelp - CLI
+  // --sarif-editor-help): welche Code-Aktionen von reDelphix es
   // fuer den Fund gibt, je Menueeintrag 'id:effect:slug' aus dem Katalog
   // (TRuleMeta.EditorHelps - die CLI linkt reDelphix nicht). Ob die Hilfe
   // an genau diesem Fund greift, entscheidet das Modul; das Feld sagt nur,
@@ -670,10 +716,10 @@ var
   begin
     LeakVariant := AFinding.MemoryLeakVariant;
     Helps       := HelpTokens[AFinding.Kind];
-    if not (AConfidenceProps or (LeakVariant <> '') or (Length(Helps) > 0)) then
+    if not (AOptions.ConfidenceProps or (LeakVariant <> '') or (Length(Helps) > 0)) then
       Exit;
     E.BeginObjPair('properties');
-    if AConfidenceProps then
+    if AOptions.ConfidenceProps then
       E.PairStr('confidence', ConfidenceName(AFinding.Confidence));
     if LeakVariant <> '' then
       E.PairStr('variant', LeakVariant);
@@ -682,6 +728,10 @@ var
   end;
 
 begin
+  // Vor rules[]: der Regel-Block liest dieselben Tokens.
+  HelpTokens  := HelpTokensJeArt(AOptions);
+  RegelTokens := HelpTokens;
+
   E.BeginObjValue;                                     // Root {
   E.PairStr('$schema',
     'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json');
@@ -737,8 +787,9 @@ begin
       if M.ConfigKey <> '' then
         E.PairStr('configKey', M.ConfigKey);
       // Dieselbe Liste wie je Fund (WriteResultProperties) - hier fuer
-      // Konsumenten, die die Regel statt des Funds ansehen.
-      EmitEditorHelp(E, EditorHelpTokens(M));
+      // Konsumenten, die die Regel statt des Funds ansehen; leer ohne
+      // AOptions.EditorHelp.
+      EmitEditorHelp(E, RegelTokens[M.Kind]);
       E.EndObj;
 
       // Help-URI: GitHub zeigt das im Detail-Panel - Anker auf konsoli-
@@ -797,8 +848,6 @@ begin
   end;
 
   EmitRunDiagnostics(E, AFindings, ABaseDir);
-
-  HelpTokens := HelpTokensJeArt;
 
   // runs[0].results[] - pro Finding direkt streamen, kein DOM.
   E.BeginArrPair('results');
@@ -933,6 +982,18 @@ end;
 
 { ---- Public API ---- }
 
+class operator TSarifOptions.Initialize(out Dest: TSarifOptions);
+begin
+  Dest.ConfidenceProps := False;
+  Dest.EditorHelp      := False;
+end;
+
+class function TSARIFWriter.DefaultOptions: TSarifOptions;
+begin
+  Result.ConfidenceProps := uSCAConsts.LastScanEvidenceTiering;
+  Result.EditorHelp      := False;
+end;
+
 class function TSARIFWriter.ToJsonString(
   const AFindings: TObjectList<TLeakFinding>;
   const ABaseDir, AToolVersion, AToolName: string): string;
@@ -946,12 +1007,23 @@ class function TSARIFWriter.ToJsonString(
   const ABaseDir, AToolVersion, AToolName: string;
   AConfidenceProps: Boolean): string;
 var
+  Opts : TSarifOptions;   // Initialize: EditorHelp aus
+begin
+  Opts.ConfidenceProps := AConfidenceProps;
+  Result := ToJsonString(AFindings, ABaseDir, AToolVersion, AToolName, Opts);
+end;
+
+class function TSARIFWriter.ToJsonString(
+  const AFindings: TObjectList<TLeakFinding>;
+  const ABaseDir, AToolVersion, AToolName: string;
+  const AOptions: TSarifOptions): string;
+var
   E : TSarifJsonEmitter;
 begin
   E := TSarifJsonEmitter.Create(nil);                  // String-Modus
   try
     EmitSarifDocument(E, AFindings, ABaseDir, AToolVersion, AToolName,
-      AConfidenceProps);
+      AOptions);
     Result := E.AsString;
   finally
     E.Free;
@@ -970,6 +1042,17 @@ class procedure TSARIFWriter.WriteFile(const AFileName: string;
   const AFindings: TObjectList<TLeakFinding>;
   const ABaseDir, AToolVersion, AToolName: string;
   AConfidenceProps: Boolean);
+var
+  Opts : TSarifOptions;   // Initialize: EditorHelp aus
+begin
+  Opts.ConfidenceProps := AConfidenceProps;
+  WriteFile(AFileName, AFindings, ABaseDir, AToolVersion, AToolName, Opts);
+end;
+
+class procedure TSARIFWriter.WriteFile(const AFileName: string;
+  const AFindings: TObjectList<TLeakFinding>;
+  const ABaseDir, AToolVersion, AToolName: string;
+  const AOptions: TSarifOptions);
 var
   FS       : TFileStream;
   E        : TSarifJsonEmitter;
@@ -1011,7 +1094,7 @@ begin
     E := TSarifJsonEmitter.Create(FS);
     try
       EmitSarifDocument(E, AFindings, ABaseDir, AToolVersion, AToolName,
-        AConfidenceProps);
+        AOptions);
     finally
       E.Free;
     end;

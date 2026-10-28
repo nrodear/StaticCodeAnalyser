@@ -260,10 +260,11 @@ active, every result also carries `properties.confidence`
 and travels with the finding cohort, so toggling the ini between scan
 and export cannot mix levels and confidence values from two different
 policy states. With `EvidenceTiering=0` the SARIF is byte-identical to
-pre-0.9.18 output (apart from `properties.editorHelp`, below).
+pre-0.9.18 output.
 
-A result of a rule that has an **editor help** (a code action of the
-IDE module reDelphix: light bulb, Ctrl+Alt+F) carries
+With **`--sarif-editor-help`** (off by default; without it the SARIF
+is unchanged) a result of a rule that has an **editor help** (a code
+action of the IDE module reDelphix: light bulb, Ctrl+Alt+F) carries
 `properties.editorHelp`, one entry per menu entry as `id:effect:slug`,
 on one line:
 
@@ -280,7 +281,8 @@ rule catalog (`editorHelps` in `rules/sca-rules.json`; the CLI does not
 link reDelphix), so it says what the rule offers — whether the help
 applies to that very finding is decided in the IDE. Results of rules
 without a help carry no such field; `tool.driver.rules[]` carries the
-same list in each rule's `properties`.
+same list in each rule's `properties`. The export menu of the GUI and
+the IDE never write the field.
 
 Two things to watch: a SARIF written by **v0.9.14 or earlier** carries a
 UTF-8 BOM that trips Node-based uploaders (current output is BOM-free,

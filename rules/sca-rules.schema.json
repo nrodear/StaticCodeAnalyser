@@ -149,7 +149,7 @@
         "editorHelps": {
           "type": "array",
           "minItems": 1,
-          "description": "The quick fixes behind editorHelp, one item per menu entry (a rule can have two). Present exactly when editorHelp is true; tools/gen-quickfix-doc.py --check keeps the list identical to the IDE module's fix table and recipes. Exported per finding as SARIF result properties.editorHelp (\"id:effect:slug\"). Optional; absent = the tool's compiled-in value (uRuleCatalogData.inc) if editorHelp is true, none otherwise; a malformed value is ignored the same way.",
+          "description": "The quick fixes behind editorHelp, one item per menu entry (a rule can have two). Present exactly when editorHelp is true; tools/gen-quickfix-doc.py --check keeps the list identical to the IDE module's fix table and recipes. Exported per finding as SARIF result properties.editorHelp (\"id:effect:slug\") when the CLI runs with --sarif-editor-help (off by default). Optional; absent = the tool's compiled-in value (uRuleCatalogData.inc) if editorHelp is true, none otherwise; a malformed value is ignored the same way.",
           "items": {
             "type": "object",
             "required": ["id", "effect", "slug"],

@@ -265,12 +265,13 @@ mit `level: warning` meldet. Der Zustand wird zur **Scan**-Zeit
 gestempelt und wandert mit der Fund-Kohorte: ein ini-Wechsel zwischen
 Scan und Export kann Levels und Konfidenzen nicht aus zwei Welten
 mischen. Mit `EvidenceTiering=0` ist das SARIF byte-identisch zum
-Stand vor 0.9.18 (bis auf `properties.editorHelp`, unten).
+Stand vor 0.9.18.
 
-Ein Result einer Regel mit **Editorhilfe** (einer Code-Aktion des
-IDE-Moduls reDelphix: Glühbirne, Strg+Alt+F) trägt
-`properties.editorHelp`, je Menüeintrag ein Eintrag `id:effect:slug`,
-auf einer Zeile:
+Mit **`--sarif-editor-help`** (Voreinstellung aus; ohne den Schalter
+bleibt das SARIF unverändert) trägt ein Result einer Regel mit
+**Editorhilfe** (einer Code-Aktion des IDE-Moduls reDelphix: Glühbirne,
+Strg+Alt+F) `properties.editorHelp`, je Menüeintrag ein Eintrag
+`id:effect:slug`, auf einer Zeile:
 
 ```json
 "editorHelp": ["SCA017:changes:put-debug-output-in-ifdef-debug","SCA017.2:changes:delete-debug-output"]
@@ -286,7 +287,8 @@ Liste kommt aus dem Regelkatalog (`editorHelps` in
 was die Regel anbietet — ob die Hilfe an genau diesem Fund greift,
 entscheidet die IDE. Results von Regeln ohne Hilfe tragen kein solches
 Feld; `tool.driver.rules[]` trägt dieselbe Liste in den `properties`
-jeder Regel.
+jeder Regel. Das Exportmenü der Oberfläche und die IDE schreiben das
+Feld nie.
 
 Zwei Fallen: Ein SARIF aus **v0.9.14 oder älter** trägt ein UTF-8-BOM,
 das Node-basierte Uploader stört (die aktuelle Ausgabe ist BOM-frei,

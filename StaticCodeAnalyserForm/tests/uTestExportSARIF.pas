@@ -69,8 +69,10 @@ type
 
   // properties.editorHelp (Nico 2026-10-28): je Fund die Editorhilfen der
   // Regel aus dem Katalog (TRuleMeta.EditorHelps), 'id:effect:slug' als
-  // einzeiliges Array. Eigene Fixture - TTestExportSARIF liegt schon ueber
-  // der Methoden-Schwelle (s. Kopf).
+  // einzeiliges Array - OPTIONAL, nur mit TSarifOptions.EditorHelp (CLI
+  // --sarif-editor-help). Die ersten drei Tests schalten es ein, die
+  // letzten zwei pruefen die Voreinstellung aus. Eigene Fixture -
+  // TTestExportSARIF liegt schon ueber der Methoden-Schwelle (s. Kopf).
   [TestFixture]
   TTestExportSarifEditorHelp = class
   public
@@ -83,6 +85,11 @@ type
     [Test] procedure EditorHelp_OneLine_BehindConfidenceAndVariant;
     // rules[]: dieselbe Liste im properties-Bag der Regel.
     [Test] procedure RulesBlock_CarriesEditorHelp;
+    // Schalter aus: weder ein Result noch rules[] traegt editorHelp - ueber
+    // die alten Ueberladungen (GUI-Export, IDE, TScanResult) und ueber
+    // TSarifOptions in der Voreinstellung (CLI ohne den Schalter).
+    [Test] procedure SchalterAus_AlteUeberladung_KeinEditorHelp;
+    [Test] procedure SchalterAus_OptionenStandard_KeinEditorHelp;
   end;
 
 implementation
@@ -996,19 +1003,68 @@ begin
   Result := Root.GetValue<TJSONArray>('runs').Items[0] as TJSONObject;
 end;
 
+function SarifMitHilfe(Findings: TObjectList<TLeakFinding>;
+  const AOptions: TSarifOptions): string;
+// Wie ToJsonString, aber mit eingeschaltetem editorHelp; ConfidenceProps
+// kommt aus AOptions.
+var
+  Opts : TSarifOptions;
+begin
+  Opts := AOptions;
+  Opts.EditorHelp := True;
+  Result := TSARIFWriter.ToJsonString(Findings, '', '0.9.9', 'TestTool', Opts);
+end;
+
+function RegelSca017(Root: TJSONObject): TJSONObject;
+// Der Eintrag von SCA017 in tool.driver.rules[].
+var
+  Rules : TJSONArray;
+  i     : Integer;
+begin
+  Result := nil;
+  Rules := RunOf(Root).GetValue<TJSONObject>('tool')
+             .GetValue<TJSONObject>('driver').GetValue<TJSONArray>('rules');
+  for i := 0 to Rules.Count - 1 do
+    if (Rules.Items[i] as TJSONObject).GetValue<string>('id') = 'SCA017' then
+      Exit(Rules.Items[i] as TJSONObject);
+end;
+
+procedure PruefeKeinEditorHelp(const S: string);
+// Schalter aus: kein editorHelp irgendwo im Dokument, das Result von
+// SCA017 ohne Konfidenz ganz ohne properties-Bag (wie vor editorHelp),
+// rules[] SCA017 ohne das Feld.
+var
+  Root : TJSONObject;
+  Res  : TJSONObject;
+begin
+  Assert.AreEqual<Integer>(0, Pos('"editorHelp"', S),
+    'Schalter aus: kein editorHelp im SARIF');
+  Root := TJSONObject.ParseJSONValue(S) as TJSONObject;
+  try
+    Res := RunOf(Root).GetValue<TJSONArray>('results').Items[0] as TJSONObject;
+    Assert.IsNull(Res.GetValue('properties'),
+      'SCA017 ohne Konfidenz und ohne editorHelp: kein properties-Bag');
+    Assert.IsNull(RegelSca017(Root).GetValue<TJSONObject>('properties')
+      .GetValue('editorHelp'), 'rules[] SCA017: kein editorHelp');
+  finally
+    Root.Free;
+  end;
+end;
+
 procedure TTestExportSarifEditorHelp.HelpRule_CarriesBothEntries_RuleWithoutHelpHasNone;
 var
   Findings : TObjectList<TLeakFinding>;
   Root     : TJSONObject;
   Results  : TJSONArray;
   Props    : TJSONObject;
+  Opts     : TSarifOptions;   // Initialize: Konfidenz aus
 begin
   Findings := TObjectList<TLeakFinding>.Create(True);
   try
     Findings.Add(HelpFinding(fkDebugOutput, 3));
     Findings.Add(HelpFinding(fkDivByZero, 4));
-    Root := TJSONObject.ParseJSONValue(TSARIFWriter.ToJsonString(Findings, '',
-      '0.9.9', 'TestTool', False)) as TJSONObject;
+    Root := TJSONObject.ParseJSONValue(SarifMitHilfe(Findings, Opts))
+      as TJSONObject;
     try
       Results := RunOf(Root).GetValue<TJSONArray>('results');
       Assert.AreEqual<Integer>(2, Results.Count);
@@ -1033,6 +1089,7 @@ var
   Zeilen   : TArray<string>;
   Zeile    : string;
   Treffer  : string;
+  Opts     : TSarifOptions;
   PRes     : Integer;
   PCnf     : Integer;
   PVar     : Integer;
@@ -1043,7 +1100,8 @@ begin
     // SCA001 (fkMemoryLeak) traegt immer eine Variante, mit Konfidenz
     // stehen also alle drei Felder im Bag.
     Findings.Add(HelpFinding(fkMemoryLeak, 7));
-    S := TSARIFWriter.ToJsonString(Findings, '', '0.9.9', 'TestTool', True);
+    Opts.ConfidenceProps := True;
+    S := SarifMitHilfe(Findings, Opts);
   finally
     Findings.Free;
   end;
@@ -1073,11 +1131,12 @@ var
   Props    : TJSONObject;
   i        : Integer;
   Gesehen  : Integer;
+  Opts     : TSarifOptions;   // Initialize: Konfidenz aus
 begin
   Findings := TObjectList<TLeakFinding>.Create(True);
   try
-    Root := TJSONObject.ParseJSONValue(TSARIFWriter.ToJsonString(Findings, '',
-      '0.9.9', 'TestTool', False)) as TJSONObject;
+    Root := TJSONObject.ParseJSONValue(SarifMitHilfe(Findings, Opts))
+      as TJSONObject;
     try
       Rules := RunOf(Root).GetValue<TJSONObject>('tool')
                  .GetValue<TJSONObject>('driver').GetValue<TJSONArray>('rules');
@@ -1103,6 +1162,38 @@ begin
     finally
       Root.Free;
     end;
+  finally
+    Findings.Free;
+  end;
+end;
+
+procedure TTestExportSarifEditorHelp.SchalterAus_AlteUeberladung_KeinEditorHelp;
+var
+  Findings : TObjectList<TLeakFinding>;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(HelpFinding(fkDebugOutput, 3));
+    PruefeKeinEditorHelp(
+      TSARIFWriter.ToJsonString(Findings, '', '0.9.9', 'TestTool', False));
+  finally
+    Findings.Free;
+  end;
+end;
+
+procedure TTestExportSarifEditorHelp.SchalterAus_OptionenStandard_KeinEditorHelp;
+var
+  Findings : TObjectList<TLeakFinding>;
+  Opts     : TSarifOptions;   // Initialize: beide aus
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(HelpFinding(fkDebugOutput, 3));
+    Assert.IsFalse(Opts.EditorHelp, 'Initialize: editorHelp aus');
+    Assert.IsFalse(TSARIFWriter.DefaultOptions.EditorHelp,
+      'DefaultOptions: editorHelp aus');
+    PruefeKeinEditorHelp(
+      TSARIFWriter.ToJsonString(Findings, '', '0.9.9', 'TestTool', Opts));
   finally
     Findings.Free;
   end;
