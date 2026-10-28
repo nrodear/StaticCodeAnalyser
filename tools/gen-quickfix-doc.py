@@ -18,7 +18,8 @@ WOHER WAS KOMMT - je Angabe EINE Quelle:
                              (Konstruktor), ihre Menuetexte (CAP_*, _('..')),
                              Art (fakFix ...) und Regel-Bindung (fixMode,
                              Fundart)
-  Regel-ID, Name, editorHelp rules/sca-rules.json
+  Regel-ID, Name, editorHelp rules/sca-rules.json (editorHelps wird hier
+                             nur GEPRUEFT, nicht geschrieben)
   Menuetexte de/fr           i18n/de.po, i18n/fr.po - gelesen wie
                              uLocalization.ParsePo (leeres msgstr = keine
                              Uebersetzung, erster Treffer gewinnt)
@@ -38,8 +39,13 @@ AUFRUF (Repo-Wurzel):
               bzw. einem Rezept; jede Art mit editorHelp im Katalog hat eine
               Zeile in FIX_ROWS oder ein Rezept, das sie bindet, und jede
               Zeile traegt editorHelp, ebenso jede Regel, die ein
-              Quick-Fix-Rezept (fakFix) bindet; die vier Arrays (FIX_ROWS,
-              FIX_CAPTIONS, FIX_ALT_CAPTIONS, FIX_HINTS) sind gleich lang,
+              Quick-Fix-Rezept (fakFix) bindet; die Liste "editorHelps"
+              jeder Regel im Katalog (id/effect/slug je Menueeintrag, Quelle
+              von SARIF properties.editorHelp) folgt genau aus Zeilen, zweiten
+              Eintraegen, Kennzeichnung und Rezepten, und editorHelp =
+              (editorHelps nicht leer) - s. check_editor_helps; die vier
+              Arrays (FIX_ROWS, FIX_CAPTIONS, FIX_ALT_CAPTIONS, FIX_HINTS)
+              sind gleich lang,
               ein fester Hinweis steht in FIX_HINTS genau bei HintByPlanner =
               False (wie uTestRdxFixTable, das nur der IDE-Bau laeuft); die
               Pflichtfelder sind da (Platzhalter erklaert, Kennzeichnung "je
@@ -937,6 +943,108 @@ def check_doc(entry, errors):
         errors.append('%s: "regelText" nur fuer Rezepte' % where)
 
 
+# ---------------------------------------------------------------------------
+# Katalogfeld "editorHelps" (SARIF properties.editorHelp, Nico 2026-10-28)
+# ---------------------------------------------------------------------------
+# Die CLI linkt reDelphix nicht - welche Editorhilfen eine Regel hat, steht
+# darum als Liste im Katalog (rules/sca-rules.json "editorHelps"), und
+# dieses Gate haelt sie deckungsgleich mit der Tabelle und den Rezepten:
+#   id      "<RuleId>" fuer den ersten Eintrag einer Regel, "<RuleId>.2" fuer
+#           den zweiten (Reihenfolge: Zeile, zweiter Eintrag der Zeile,
+#           dann die Quick-Fix-Rezepte in der Reihenfolge des Konstruktors)
+#   effect  aus der Kennzeichnung: 'nein' -> same, 'ja' -> changes, 'je nach
+#           Fund' -> depends; ein Rezept auf fixMode 'assisted' schreibt nie
+#           in den Editor (SQL-Vorlage in die Zwischenablage) -> template
+#   slug    der englische Menuetext (msgid), mechanisch: Platzhalter (%s,
+#           %d) und '(s)' weg, klein, jedes Nicht-[a-z0-9] trennt, die
+#           Artikel a/an/the fallen weg, Bindestrich dazwischen
+# Gezaehlt werden die Code-Aktionen zum Fund (fakFix): Zeilen von FIX_ROWS
+# und Quick-Fix-Rezepte, die eine Regel binden - dieselbe Menge wie
+# editorHelp, nur je Eintrag.
+EFFECT_OF_MARKING = {'nein': 'same', 'ja': 'changes',
+                     'je nach Fund': 'depends'}
+EFFECT_TEMPLATE = 'template'
+SLUG_DROP_WORDS = {'a', 'an', 'the'}
+
+
+def help_slug(msgid):
+    """Kurzname eines Menuetexts (s. Block oben)."""
+    s = PLACEHOLDER_RE.sub(' ', msgid).replace('(s)', ' ').lower()
+    return '-'.join(w for w in re.split(r'[^a-z0-9]+', s)
+                    if w and w not in SLUG_DROP_WORDS)
+
+
+def expected_editor_helps(entries):
+    """Art -> Liste {'id', 'effect', 'slug'} aus Tabelle und Rezepten.
+
+    Reihenfolge je Art: erst die Zeile von FIX_ROWS (Haupt-, dann zweiter
+    Eintrag), dann die Quick-Fix-Rezepte in Konstruktor-Reihenfolge. Im
+    Menue stehen FormatCall/SqlTemplate VOR der Tabellen-Bruecke
+    (uRdxProvider, FTreeRecipes) - heute ohne Wirkung: keine Art hat
+    zugleich eine Zeile und ein Rezept, und kein Rezept teilt sich eine
+    Art mit einem anderen. Bekommt eine Art beides, hier die Bruecken-
+    Position aus parse_provider nachziehen (und die Reihenfolge der
+    Gruppen Tree/Text im Menue pruefen). Arten, die ein Rezept ausdruecklich
+    ausnimmt (Kind = fkX im Rumpf, exc_rules), zaehlen nicht."""
+    out = {}
+    for e in sorted(entries, key=lambda e: e['sort']):
+        if e['art'] != 'fakFix':
+            continue
+        caps = [c for c in e['captions'] if c['active']]
+        excluded = {r['kind'] for r in e['exc_rules']}
+        for rule in e['rules']:
+            if rule['kind'] in excluded:
+                continue
+            lst = out.setdefault(rule['kind'], [])
+            for c in caps:
+                n = len(lst) + 1
+                if e['is_recipe'] and 'assisted' in e['modes']:
+                    effect = EFFECT_TEMPLATE
+                else:
+                    effect = EFFECT_OF_MARKING.get(c['changes'], '?')
+                lst.append({'id': rule['id'] + ('' if n == 1 else '.%d' % n),
+                            'effect': effect, 'slug': help_slug(c['msgid'])})
+    return out
+
+
+def editor_helps_json(helps):
+    """Die erwartete Liste in der Schreibweise der Katalogdatei (fuer die
+    Fehlermeldung: zum Einfuegen hinter "editorHelp": true)."""
+    rows = ['        { "id": "%s", "effect": "%s", "slug": "%s" }'
+            % (h['id'], h['effect'], h['slug']) for h in helps]
+    return '"editorHelps": [\n' + ',\n'.join(rows) + '\n      ],'
+
+
+def check_editor_helps(entries, catalog, errors):
+    """Katalogfeld "editorHelps" gegen Tabelle und Rezepte, dazu die
+    Invariante editorHelp = (editorHelps nicht leer)."""
+    want = expected_editor_helps(entries)
+    for kind, rule in sorted(catalog.items(),
+                             key=lambda kv: rule_number(kv[1])):
+        rid = rule.get('id', '?')
+        have = rule.get('editorHelps')
+        exp = want.get(kind, [])
+        if have is not None and not (
+                isinstance(have, list)
+                and all(isinstance(h, dict)
+                        and sorted(h) == ['effect', 'id', 'slug']
+                        and all(isinstance(v, str) for v in h.values())
+                        for h in have)):
+            errors.append('%s %s: "editorHelps" ist keine Liste von '
+                          '{"id", "effect", "slug"}' % (rid, kind))
+            continue
+        have = have or []
+        if (rule.get('editorHelp') is True) != bool(have):
+            errors.append('%s %s: "editorHelp" %s, aber "editorHelps" hat %d '
+                          'Eintraege - editorHelp = (editorHelps nicht leer)'
+                          % (rid, kind, rule.get('editorHelp'), len(have)))
+        if have != exp:
+            errors.append('%s %s: "editorHelps" im Katalog weicht von Tabelle/'
+                          'Rezepten ab - erwartet %s'
+                          % (rid, kind, editor_helps_json(exp) if exp
+                             else 'kein Feld'))
+
+
 def build(inputs):
     """Eingaben -> {'entries', 'errors', 'notes'}; aendert inputs nicht."""
     table, provider = inputs['table'], inputs['provider']
@@ -1077,6 +1185,7 @@ def build(inputs):
             errors.append('%s %s: "editorHelp": true im Katalog, aber keine '
                           'Zeile in FIX_ROWS und kein Rezept, das sie bindet'
                           % (rule.get('id', '?'), kind))
+    check_editor_helps(entries, catalog, errors)
     # Profil code-aktionen: jede Art mit Hilfe darin, keine ohne Hilfe ausser
     # PROFILE_EXTRA, keine doppelt.
     profile = inputs['profile']
@@ -1558,6 +1667,35 @@ def selftest():
         ('Beispiel fehlt',
          set_field(['data', 'eintraege', first['key'], 'beispielNachher'],
                    None), (first['key'], 'Feld "beispielNachher" fehlt')),
+    ]
+    # Katalogfeld editorHelps (2026-10-28): Katalog-Seite und Tabellen-Seite.
+    marked = next(r for r in rows if r['changes_main'] == 'ja')
+    no_alt = next(r for r in rows if not r['alt'])
+
+    def grow_alt(i):
+        row = i['table']['rows'][no_alt['index']]
+        row['alt'], row['changes_alt'] = with_alt['alt'], 'nein'
+        i['table']['alt_captions'][no_alt['index']] = 'Probe two'
+    mutants += [
+        ('editorHelps: Wirkung im Katalog falsch',
+         set_field(['catalog', with_alt['kind'], 'editorHelps', 0, 'effect'],
+                   'depends'),
+         (with_alt['kind'], '"editorHelps" im Katalog weicht')),
+        ('editorHelps: zweiter Eintrag fehlt im Katalog',
+         lambda i: i['catalog'][with_alt['kind']]['editorHelps'].pop(),
+         (with_alt['kind'], '"editorHelps" im Katalog weicht')),
+        ('editorHelps: Kurzname im Katalog falsch',
+         set_field(['catalog', rows[0]['kind'], 'editorHelps', 0, 'slug'],
+                   'probe'),
+         (rows[0]['kind'], '"editorHelps" im Katalog weicht')),
+        ('editorHelps fehlt bei editorHelp true',
+         set_field(['catalog', rows[0]['kind'], 'editorHelps'], None),
+         (rows[0]['kind'], 'editorHelp = (editorHelps nicht leer)')),
+        ('editorHelps: Tabelle kennzeichnet nicht mehr',
+         set_field(['table', 'rows', marked['index'], 'changes_main'], 'nein'),
+         (marked['kind'], '"editorHelps" im Katalog weicht')),
+        ('editorHelps: Tabelle bekommt einen zweiten Eintrag', grow_alt,
+         (no_alt['kind'], '"editorHelps" im Katalog weicht')),
     ]
     if by_planner:
         mutants.append(('Kennzeichnung je nach Fund nicht erklaert',

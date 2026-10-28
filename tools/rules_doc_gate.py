@@ -22,7 +22,8 @@ docs/rules.md (noch) nicht generiert wird.
 Geprueft wird je Regel:
   * Abschnitt vorhanden (und kein Abschnitt ohne Regel)
   * Zeile in der Uebersichtstabelle: Name, Severity, Typ, Detektor
-  * Feld-Tabelle: Severity, Typ, Tags, CWE, OWASP, Config, Detektor
+  * Feld-Tabelle: Severity, Typ, Tags, CWE, OWASP, Config, Detektor,
+    Editor help (editorHelps, wortgleich)
   * Prosa: Name, Kurzbeschreibung, Volltext - je modulo Backticks
 
 EXIT-CODE
@@ -207,6 +208,18 @@ def pruefe(rules, md, voll):
                 fehlend = [x for x in soll.split() if x not in ist]
                 if fehlend:
                     melde(rid, was, ist, soll)
+
+        # Editorhilfen (2026-10-28): optional wie Config, aber wortgleich -
+        # dieselben 'id:effect:slug' wie SARIF properties.editorHelp.
+        ist = feld(body, 'Editor help')
+        soll = ', '.join(BT + ':'.join((h['id'], h['effect'], h['slug'])) + BT
+                         for h in r.get('editorHelps') or [])
+        if soll and ist is None:
+            melde(rid, 'Editor help fehlt in der Doku', '-', soll)
+        elif not soll and ist is not None:
+            melde(rid, 'Editor help steht nur in der Doku', ist, '-')
+        elif soll and ist != soll:
+            melde(rid, 'Editor help', ist, soll)
 
         # --- Prosa ----------------------------------------------------------
         mn = re.search(r'^\*\*(.+?)\*\*$', body, re.M)

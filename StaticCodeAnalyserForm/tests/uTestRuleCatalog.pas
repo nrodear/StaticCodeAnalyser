@@ -158,6 +158,32 @@ type
     [Test] procedure SaveUserProfile_TargetReadOnly_KeepsOldFileNoTempLeft;
   end;
 
+  // Katalogfeld "editorHelps" (Nico 2026-10-28): die Editorhilfen einer
+  // Regel je Menueeintrag, Quelle von SARIF properties.editorHelp. Dass die
+  // Liste zu reDelphix passt, haelt tools/gen-quickfix-doc.py --check; hier
+  // stehen Lader, Fallback und Invariante. Eigene Fixture aus demselben
+  // Grund wie TTestRuleCatalogGuard.
+  [TestFixture]
+  TTestRuleCatalogEditorHelps = class
+  public
+    // SCA017 hat zwei Eintraege: 'SCA017' und 'SCA017.2', beide aendern
+    // das Verhalten, Kurznamen aus dem Menuetext.
+    [Test] procedure Sca017_TwoEntries_IdEffectSlug;
+    // Die vier Wirkungen kommen vor: template (SCA003), depends (SCA086),
+    // same und changes (SCA020 Eintrag 1 und 2).
+    [Test] procedure Effects_TemplateDependsSameChanges;
+    // Ueber alle Kinds: EditorHelp = (EditorHelps nicht leer), jede id
+    // gehoert zur Regel ('SCAnnn', dann 'SCAnnn.2'), effect bekannt.
+    [Test] procedure EveryKind_InvariantAndIdsBelongToRule;
+    // Fallback (uRuleCatalogData.inc) = geladene JSON, je Kind.
+    [Test] procedure Fallback_EqualsJson;
+    // Lader: eine Liste aus der Datei gilt (effect Gross/klein egal);
+    // unbrauchbar (kein Array, [], unbekannte Wirkung, fremde id, ':' im
+    // slug) -> Tabellenwert; editorHelp false oder fixMode none -> keine
+    // Hilfen.
+    [Test] procedure Loader_FileWins_MalformedFallsBack_FalseClears;
+  end;
+
 
 implementation
 
@@ -1596,11 +1622,202 @@ begin
   end;
 end;
 
+{ TTestRuleCatalogEditorHelps }
+
+function HilfenVon(K: TFindingKind): string;
+// Die Hilfen einer Regel als ein Text ('id:effect:slug' mit ' ' getrennt)
+// - eine Assertion vergleicht die ganze Liste samt Reihenfolge.
+begin
+  Result := string.Join(' ', EditorHelpTokens(TRuleCatalog.GetRuleCanonical(K)));
+end;
+
+procedure TTestRuleCatalogEditorHelps.Sca017_TwoEntries_IdEffectSlug;
+var
+  Meta : TRuleMeta;
+begin
+  Meta := TRuleCatalog.GetRuleCanonical(fkDebugOutput);
+  Assert.IsTrue(Meta.EditorHelp, 'Vorbedingung: SCA017 editorHelp');
+  Assert.AreEqual<Integer>(2, Length(Meta.EditorHelps),
+    'SCA017: {$IFDEF DEBUG} und Loeschen - zwei Menueeintraege');
+  Assert.AreEqual('SCA017', Meta.EditorHelps[0].Id);
+  Assert.AreEqual('changes', Meta.EditorHelps[0].Effect);
+  Assert.AreEqual('put-debug-output-in-ifdef-debug', Meta.EditorHelps[0].Slug);
+  Assert.AreEqual('SCA017.2', Meta.EditorHelps[1].Id);
+  Assert.AreEqual('changes', Meta.EditorHelps[1].Effect);
+  Assert.AreEqual('delete-debug-output', Meta.EditorHelps[1].Slug);
+end;
+
+procedure TTestRuleCatalogEditorHelps.Effects_TemplateDependsSameChanges;
+begin
+  Assert.AreEqual('SCA003:template:copy-parameterized-template-to-clipboard',
+    HilfenVon(fkSQLInjection), 'SQL-Vorlage schreibt nicht in den Editor');
+  Assert.AreEqual('SCA086:depends:replace-out-with-var-for',
+    HilfenVon(fkAvoidOut), 'out -> var: Kennzeichnung je nach Fund');
+  Assert.AreEqual('SCA020:same:mark-empty-body-as-intentional ' +
+    'SCA020.2:changes:raise-enotimplemented-in-empty-body',
+    HilfenVon(fkEmptyMethod), 'zwei Eintraege mit verschiedener Wirkung');
+  Assert.AreEqual('', HilfenVon(fkDivByZero), 'SCA010 ohne Editorhilfe');
+end;
+
+function HilfeBefund(const AMeta: TRuleMeta; AIdx: Integer): string;
+// Was am Eintrag AIdx der Hilfen von AMeta nicht stimmt; '' = nichts.
+var
+  Soll : string;
+  H    : TRuleEditorHelp;
+begin
+  Result := '';
+  H := AMeta.EditorHelps[AIdx];
+  if AIdx = 0 then
+    Soll := AMeta.ID
+  else
+    Soll := Format('%s.%d', [AMeta.ID, AIdx + 1]);
+  if H.Id <> Soll then
+    Result := Format(' %s (id %s statt %s)', [AMeta.ID, H.Id, Soll]);
+  if Pos(',' + H.Effect + ',', ',same,changes,depends,template,') = 0 then
+    Result := Result + Format(' %s (effect %s)', [AMeta.ID, H.Effect]);
+  if H.Slug = '' then
+    Result := Result + Format(' %s (slug leer)', [AMeta.ID]);
+end;
+
+procedure TTestRuleCatalogEditorHelps.EveryKind_InvariantAndIdsBelongToRule;
+var
+  K    : TFindingKind;
+  Meta : TRuleMeta;
+  i    : Integer;
+  SB   : TStringBuilder;
+begin
+  SB := TStringBuilder.Create;
+  try
+    for K := Low(TFindingKind) to High(TFindingKind) do
+    begin
+      Meta := TRuleCatalog.GetRuleCanonical(K);
+      if Meta.EditorHelp <> (Length(Meta.EditorHelps) > 0) then
+        SB.Append(Format(' %s (editorHelp %s, %d Hilfen)', [Meta.ID,
+          BoolToStr(Meta.EditorHelp, True), Length(Meta.EditorHelps)]));
+      for i := 0 to High(Meta.EditorHelps) do
+        SB.Append(HilfeBefund(Meta, i));
+    end;
+    Assert.AreEqual('', SB.ToString, 'editorHelps im Katalog:' + SB.ToString);
+  finally
+    SB.Free;
+  end;
+end;
+
+procedure TTestRuleCatalogEditorHelps.Fallback_EqualsJson;
+// Wie FallbackCarriesAnchorAndFixMode: erst die Werte der echten JSON je
+// Kind merken, dann den Fallback erzwingen und vergleichen. Ohne das Feld
+// in uRuleCatalogData.inc haette das IDE-Plugin (dort ist der Fallback
+// der Normalfall) keine Hilfen, die CLI mit gefundener JSON schon.
+var
+  K          : TFindingKind;
+  AusJson    : array[TFindingKind] of string;
+  AltPfad    : string;
+  Kaputt     : string;
+  Abweichend : TStringBuilder;
+begin
+  Assert.IsNotEmpty(TRuleCatalog.GetRuleCanonical(fkDebugOutput).DetectorUnit,
+    'echte sca-rules.json nicht geladen - Fallback gegen Fallback');
+  for K := Low(TFindingKind) to High(TFindingKind) do
+    AusJson[K] := HilfenVon(K);
+  Assert.AreNotEqual('', AusJson[fkDebugOutput], 'Vorbedingung: SCA017 hat Hilfen');
+
+  AltPfad    := TRuleCatalog.JsonFilePath;
+  Kaputt     := SchreibeTempJson('{ das ist kein gueltiger Regelkatalog');
+  Abweichend := TStringBuilder.Create;
+  try
+    TRuleCatalog.JsonFilePath := Kaputt;
+    TRuleCatalog.Reload;
+    for K := Low(TFindingKind) to High(TFindingKind) do
+      if HilfenVon(K) <> AusJson[K] then
+        Abweichend.Append(Format(' %s [%s] statt [%s]',
+          [TRuleCatalog.GetRuleCanonical(K).ID, HilfenVon(K), AusJson[K]]));
+    Assert.AreEqual('', Abweichend.ToString,
+      'editorHelps im Fallback abweichend - uRuleCatalogData.inc regenerieren:' +
+      Abweichend.ToString);
+  finally
+    Abweichend.Free;
+    TRuleCatalog.JsonFilePath := AltPfad;
+    if TFile.Exists(Kaputt) then TFile.Delete(Kaputt);
+    TRuleCatalog.Reload;   // echten Katalog wiederherstellen
+  end;
+end;
+
+procedure TTestRuleCatalogEditorHelps.Loader_FileWins_MalformedFallsBack_FalseClears;
+var
+  AltPfad : string;
+  Datei   : string;
+begin
+  AltPfad := TRuleCatalog.JsonFilePath;
+  Datei   := SchreibeTempJson(
+    '{"rules":[' +
+    // eine Liste aus der Datei gilt (nicht die Tabelle); effect Gross/klein
+    // egal, geliefert klein
+    '{"id":"SCA044","kind":"ConcatToFormat","name":"n44","editorHelp":true,' +
+    '"editorHelps":[{"id":"SCA044","effect":"Changes","slug":"probe"}]},' +
+    // leeres Array -> Tabellenwert (Schema minItems 1)
+    '{"id":"SCA093","kind":"TwiceInheritedCalls","name":"n93","editorHelp":true,' +
+    '"editorHelps":[]},' +
+    // id einer anderen Regel -> Tabellenwert
+    '{"id":"SCA002","kind":"EmptyExcept","name":"n2","editorHelp":true,' +
+    '"editorHelps":[{"id":"SCA003","effect":"changes","slug":"x"}]},' +
+    // slug mit ':' (Trenner von EditorHelpTokens) -> Tabellenwert
+    '{"id":"SCA007","kind":"UnusedUses","name":"n7","editorHelp":true,' +
+    '"editorHelps":[{"id":"SCA007","effect":"changes","slug":"a:b"}]},' +
+    // kein Array -> Tabellenwert (zwei Eintraege)
+    '{"id":"SCA017","kind":"DebugOutput","name":"n17","editorHelp":true,' +
+    '"editorHelps":"ja"},' +
+    // unbekannte Wirkung in einem Eintrag -> die ganze Liste faellt auf
+    // die Tabelle
+    '{"id":"SCA046","kind":"ReversedForRange","name":"n46","editorHelp":true,' +
+    '"editorHelps":[{"id":"SCA046","effect":"vielleicht","slug":"x"}]},' +
+    // Feld fehlt, editorHelp true -> Tabellenwert
+    '{"id":"SCA003","kind":"SQLInjection","name":"n3","editorHelp":true},' +
+    // editorHelp false ohne Liste -> keine Hilfen (Invariante)
+    '{"id":"SCA020","kind":"EmptyMethod","name":"n20","editorHelp":false},' +
+    // fixMode none -> keine Hilfen, auch mit Liste
+    '{"id":"SCA139","kind":"FreeWithoutNil","name":"n139","fixMode":"none",' +
+    '"editorHelp":true,' +
+    '"editorHelps":[{"id":"SCA139","effect":"same","slug":"use-freeandnil"}]}]}');
+  try
+    TRuleCatalog.JsonFilePath := Datei;
+    TRuleCatalog.Reload;
+    Assert.AreEqual('n44', TRuleCatalog.GetRuleCanonical(fkConcatToFormat).Name,
+      'die Test-JSON ist geladen, nicht der Fallback');
+
+    Assert.AreEqual('SCA044:changes:probe', HilfenVon(fkConcatToFormat),
+      'die Liste der Datei gilt, effect "Changes" -> "changes"');
+    Assert.AreEqual('SCA093:changes:remove-second-duplicate-inherited-call ' +
+      'SCA093.2:changes:remove-first-duplicate-inherited-call',
+      HilfenVon(fkTwiceInheritedCalls), '[] -> Tabellenwert');
+    Assert.AreEqual('SCA002:changes:add-raise-to-empty-except-block',
+      HilfenVon(fkEmptyExcept), 'fremde id -> Tabellenwert');
+    Assert.AreEqual('SCA007:changes:remove-unit-from-uses',
+      HilfenVon(fkUnusedUses), 'slug mit ":" -> Tabellenwert');
+    Assert.AreEqual('SCA017:changes:put-debug-output-in-ifdef-debug ' +
+      'SCA017.2:changes:delete-debug-output', HilfenVon(fkDebugOutput),
+      'editorHelps "ja" ist keine Liste -> Tabellenwert');
+    Assert.AreEqual('SCA046:changes:replace-to-with-downto ' +
+      'SCA046.2:changes:swap-loop-bounds', HilfenVon(fkReversedForRange),
+      'unbekannte Wirkung -> Tabellenwert');
+    Assert.AreEqual('SCA003:template:copy-parameterized-template-to-clipboard',
+      HilfenVon(fkSQLInjection), 'ohne Feld -> Tabellenwert');
+    Assert.AreEqual('', HilfenVon(fkEmptyMethod),
+      'editorHelp false -> keine Hilfen, auch nicht aus der Tabelle');
+    Assert.AreEqual('', HilfenVon(fkFreeWithoutNil),
+      'fixMode none -> keine Hilfen, auch nicht aus der Datei');
+  finally
+    TRuleCatalog.JsonFilePath := AltPfad;
+    if TFile.Exists(Datei) then TFile.Delete(Datei);
+    TRuleCatalog.Reload;   // echten Katalog wiederherstellen
+  end;
+end;
+
 initialization
   // Anmeldung ausdruecklich, nicht nur ueber UseRTTI des Runners (Review
   // Woche G03-25): ein Runner ohne RTTI-Suche liesse die Waechter sonst
   // still aus.
   TDUnitX.RegisterTestFixture(TTestRuleCatalog);
   TDUnitX.RegisterTestFixture(TTestRuleCatalogGuard);
+  TDUnitX.RegisterTestFixture(TTestRuleCatalogEditorHelps);
 
 end.

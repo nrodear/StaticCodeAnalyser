@@ -63,6 +63,10 @@ type
     Branch        : Boolean;        // --branch    (nur VCS-geaenderte)
     Diff          : string;         // --diff <sha1>..<sha2>  PR-Review-Mode
     ReportSarif   : string;         // --report-sarif <out.sarif>
+    // --sarif-editor-help: properties.editorHelp im SARIF (Editorhilfen
+    // der Regel aus dem Katalog, Nico 2026-10-28). Voreinstellung AUS -
+    // ohne den Schalter bleibt das SARIF byte-gleich zum Stand davor.
+    SarifEditorHelp : Boolean;
     ReportHtml    : string;         // --report-html  <out.html>  Self-contained Code-Review-Report
     HtmlMaxRows   : string;         // --html-max-rows <n>  Zeilendeckel des HTML-Berichts
                                     //   leer = Voreinstellung (20.000), 0 = unbegrenzt
@@ -397,10 +401,11 @@ const
 // sobald ein neuer Boolean-Schalter dazukommt, ohne hier einzutragen -
 // sonst waere die Liste in drei Monaten wieder unvollstaendig.
 const
-  CLI_SCHALTER_OHNE_WERT: array[0..20] of string = (
+  CLI_SCHALTER_OHNE_WERT: array[0..21] of string = (
     '--branch', '--full', '--gate-stats', '--help', '--hide-test-fixtures',
     '--ifdef-aware', '--include-defines', '--no-ifdef-aware',
-    '--no-include-defines', '--parallel', '--quiet', '--show-test-fixtures',
+    '--no-include-defines', '--parallel', '--quiet', '--sarif-editor-help',
+    '--show-test-fixtures',
     '--sonar-init', '--sonar-insecure', '--sonar-keep-downgraded',
     '--sonar-test', '--time-detectors', '--version', '-?', '-h', '/?');
 
@@ -507,6 +512,8 @@ begin
       GetValue(Result.IndexRoot, '--index-root')
     else if A = '--report-sarif' then
       GetValue(Result.ReportSarif, '--report-sarif')
+    else if A = '--sarif-editor-help' then
+      Result.SarifEditorHelp := True
     else if A = '--report-html' then
       GetValue(Result.ReportHtml, '--report-html')
     else if A = '--html-max-rows' then
@@ -766,6 +773,10 @@ begin
   WriteLn('');
   WriteLn('Output:');
   WriteLn('  --report-sarif <file> Write SARIF v2.1.0 report to <file>');
+  WriteLn('  --sarif-editor-help   SARIF: name the editor helps (reDelphix code');
+  WriteLn('                        actions) of each finding''s rule in');
+  WriteLn('                        properties.editorHelp, "id:effect:slug"');
+  WriteLn('                        (default off: SARIF unchanged)');
   WriteLn('  --report-html  <file> Write self-contained HTML Code-Review report');
   WriteLn('  --html-max-rows <n>   Row budget of the HTML table (default 20000,');
   WriteLn('                        0 = unlimited). Findings beyond the budget');
@@ -1600,6 +1611,15 @@ begin
   Result := dlDelphi;
 end;
 
+function SarifOptionenVon(const Args: TCliArgs): TSarifOptions;
+// Zuschnitt des SARIF-Exports: Konfidenz wie bisher aus dem Scan-Stempel
+// (DefaultOptions liest ihn HIER, zur Export-Zeit), properties.editorHelp
+// nur mit --sarif-editor-help (Nico 2026-10-28, Voreinstellung aus).
+begin
+  Result := TSARIFWriter.DefaultOptions;
+  Result.EditorHelp := Args.SarifEditorHelp;
+end;
+
 function HtmlZeilenBudget(const Args: TCliArgs): Integer;
 // AD3 (29.09.): --html-max-rows. Vorher war der Deckel des
 // HTML-Berichts (HTML_MAX_ROWS_DEFAULT = 20.000) per CLI nicht
@@ -1667,7 +1687,8 @@ var
         if Args.ReportSarif <> '' then
         begin
           TSARIFWriter.WriteFile(Args.ReportSarif, Leer, Args.BaseDir,
-                                 SCA_VERSION, SCA_TOOLNAME);
+                                 SCA_VERSION, SCA_TOOLNAME,
+                                 SarifOptionenVon(Args));
           if not Args.Quiet then
             WriteLn('SARIF report written (no findings): ', Args.ReportSarif);
         end;
@@ -2509,7 +2530,8 @@ begin
     begin
       try
         TSARIFWriter.WriteFile(Args.ReportSarif, Findings, Args.BaseDir,
-                               SCA_VERSION, SCA_TOOLNAME);
+                               SCA_VERSION, SCA_TOOLNAME,
+                               SarifOptionenVon(Args));
         if not Args.Quiet then
           WriteLn('SARIF report written: ', Args.ReportSarif);
       except
