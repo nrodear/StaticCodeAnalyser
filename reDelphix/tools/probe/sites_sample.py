@@ -1,4 +1,4 @@
-"""Zieht aus einem SARIF-Lauf je Regel eine reproduzierbare Stichprobe von
+r"""Zieht aus einem SARIF-Lauf je Regel eine reproduzierbare Stichprobe von
 Fundstellen fuer RdxActionProbe (Realworld-Probe der Editorhilfen, Entscheid
 E3). Streamt zeilenweise wie sites_from_sarif.py (huebsch formatiertes
 SARIF; kein json.load - die Referenzlaeufe sind > 700 MB), mit derselben
@@ -29,9 +29,11 @@ Je Regel:
     der Liste aendert die Stichproben der anderen nicht).
   * Deckel je Repo (erster Pfadteil unter der Korpuswurzel; bei file:-uris
     der erste Ordner unter dem Laufwerk bzw. der Freigabe): hoechstens
-    --cap (Vorgabe 0,25) der Stichprobe, mindestens 1 Stelle. Reichen die
-    Repos dafuer nicht, wird die Stichprobe kleiner (die Zusammenfassung
-    nennt es) - der Deckel gilt vor der Groesse.
+    int(--cap x --n) Stellen aus einem Repo, mindestens 1 (--cap Vorgabe
+    0,25). Bezug ist die ANGEFRAGTE Groesse --n, nicht die gezogene: hat
+    eine Regel nur 10 Stellen in einem Repo, bleiben bei --n 100 alle 10,
+    bei --n 20 nur 5. Reichen die Repos nicht, wird die Stichprobe kleiner
+    (die Zusammenfassung nennt es) - der Deckel gilt vor der Groesse.
 
 sites.tsv (UTF-8 ohne BOM, LF, sortiert nach Datei, Zeile, Regel), je
 Stelle sieben Spalten:
@@ -39,8 +41,8 @@ Stelle sieben Spalten:
 Meldung = message.text, EndLine = region.endLine (leer: einzeilig), variant
 und confidence aus dem properties-Bag (leer, wenn das SARIF sie nicht
 fuehrt - confidence nur bei aktiver Evidenz-Politik, variant nur SCA001).
-Kodierung der Textspalten wie die CSV der Probe: Backslash als \\,
-Zeilenumbruch als \n, einzelnes CR als \r, dazu TAB als \t - umkehrbar.
+Kodierung der Textspalten wie die CSV der Probe: Backslash als \\, LF als
+\n, CR als \r (CRLF also \r\n), dazu TAB als \t - umkehrbar.
 Die Probe nimmt damit den Fund aus dem SARIF, wenn ihr Einzeldatei-Scan ihn
 nicht liefert (Quelle 'sarif').
 
@@ -97,31 +99,18 @@ def tsv_enc(s):
 
     >>> tsv_enc('a' + BACKSLASH + 'b') == 'a' + BACKSLASH * 2 + 'b'
     True
-    >>> tsv_enc('x\\r\\ny\\tz\\rw') == 'x' + BACKSLASH + 'ny' + BACKSLASH + 'tz' + BACKSLASH + 'rw'
+    >>> tsv_enc('x\\r\\ny\\tz\\rw') == 'x' + BACKSLASH + 'r' + BACKSLASH + 'ny' + BACKSLASH + 'tz' + BACKSLASH + 'rw'
     True
-    >>> tsv_dec(tsv_enc('p' + BACKSLASH + 'n\\tq\\nr')) == 'p' + BACKSLASH + 'n\\tq\\nr'
+    >>> tsv_dec(tsv_enc('p' + BACKSLASH + 'n\\tq\\r\\nr')) == 'p' + BACKSLASH + 'n\\tq\\r\\nr'
     True
+
+    CR steht immer als \\r, LF als \\n - ein CRLF also als \\r\\n (Review
+    E3, Minor 7: bis dahin wurde CRLF zu \\n und war von LF nicht mehr zu
+    unterscheiden).
     """
-    out = []
-    i = 0
-    while i < len(s):
-        c = s[i]
-        if c == BACKSLASH:
-            out.append(BACKSLASH * 2)
-        elif c == '\n':
-            out.append(BACKSLASH + 'n')
-        elif c == '\r':
-            if i + 1 < len(s) and s[i + 1] == '\n':
-                i += 1
-                out.append(BACKSLASH + 'n')
-            else:
-                out.append(BACKSLASH + 'r')
-        elif c == '\t':
-            out.append(BACKSLASH + 't')
-        else:
-            out.append(c)
-        i += 1
-    return ''.join(out)
+    table = {BACKSLASH: BACKSLASH * 2, '\n': BACKSLASH + 'n',
+             '\r': BACKSLASH + 'r', '\t': BACKSLASH + 't'}
+    return ''.join(table.get(c, c) for c in s)
 
 
 def tsv_dec(s):
@@ -180,22 +169,44 @@ def help_rule(entry):
     return entry.split(':', 1)[0].split('.', 1)[0].strip()
 
 
-def read_sarif(path, wanted=None):
+def read_sarif(path, wanted=None, prefilter=None):
     """(Stellen, Regeln mit editorHelp, Funde je Regel, Repos je Regel).
-    Stellen: Liste von Dicts rule, uri, line, msg, end, variant, confidence;
-    wanted = Menge von RuleIds oder None (alle). Gezaehlt werden alle
-    Results, auch die nicht gewollter Regeln."""
+    Stellen: Liste von Dicts rule, uri, line, msg, end, variant, confidence.
+
+    Streamend gefiltert (Review E3, Minor 12): gehalten wird nur ein Result,
+    das in Frage kommt - mit wanted (Menge von RuleIds, --rules) nur dessen
+    Regeln; ohne wanted die Regeln mit editorHelp im Regelblock (der steht
+    vor den Results), die Results, deren eigener properties-Bag editorHelp
+    fuer ihre Regel traegt, und die Regeln aus prefilter (--catalog).
+    Welche davon gelten, entscheidet run(); gezaehlt (Funde, Repos) werden
+    alle Results, auch die nicht gehaltenen."""
     sites = []
-    helped = set()
+    helped = set()        # editorHelp im SARIF (Regelblock und Results)
+    rules_helped = set()  # nur Regelblock - vor den Results bekannt
     totals = {}
     repos = {}
-    cur = None          # das laufende Result einer gewollten Regel
+    cur = None          # das laufende Result (gepuffert bis close)
     in_result = None    # RuleId des laufenden Results (jeder Regel)
     rule_def = None     # "id" im Regelblock (vor den Results)
     in_help = False     # innerhalb eines mehrzeiligen editorHelp-Arrays
 
+    def note_help(raw):
+        rule = help_rule(json_str(raw))
+        helped.add(rule)
+        if cur is not None:
+            cur['help'].add(rule)
+
     def close():
-        if cur and 'uri' in cur and 'line' in cur:
+        if not (cur and 'uri' in cur and 'line' in cur):
+            return
+        rule = cur['rule']
+        if wanted is not None:
+            keep = rule in wanted
+        else:
+            keep = (rule in rules_helped or rule in cur['help']
+                    or (prefilter is not None and rule in prefilter))
+        if keep:
+            del cur['help']
             sites.append(cur)
 
     try:
@@ -203,7 +214,7 @@ def read_sarif(path, wanted=None):
             for line in f:
                 if in_help:
                     for raw in RE_JSON_STRING.findall(line):
-                        helped.add(help_rule(json_str(raw)))
+                        note_help(raw)
                     if ']' in line:
                         in_help = False
                     continue
@@ -214,14 +225,14 @@ def read_sarif(path, wanted=None):
                     in_result = rid
                     totals[rid] = totals.get(rid, 0) + 1
                     cur = ({'rule': rid, 'msg': '', 'end': 0, 'variant': '',
-                            'confidence': ''}
+                            'confidence': '', 'help': set()}
                            if wanted is None or rid in wanted else None)
                     continue
                 m = RE_EDITOR_HELP_ARRAY.match(line)
                 if m:
                     rest = m.group(1)
                     for raw in RE_JSON_STRING.findall(rest):
-                        helped.add(help_rule(json_str(raw)))
+                        note_help(raw)
                     in_help = ']' not in rest
                     continue
                 if in_result is None:
@@ -232,6 +243,7 @@ def read_sarif(path, wanted=None):
                         continue
                     if rule_def and RE_EDITOR_HELP_TRUE.match(line):
                         helped.add(rule_def)
+                        rules_helped.add(rule_def)
                     continue
                 if cur is None:
                     # Nicht gewollte Regel: nur ihre Repos (ReposGesamt).
@@ -414,13 +426,15 @@ def run(argv, out=sys.stdout):
     counts_path = opts['counts'] or os.path.join(
         os.path.dirname(os.path.abspath(dest)), 'counts.tsv')
     wanted = set(opts['rules']) if opts['rules'] else None
-    sites, helped, totals, repos = read_sarif(src, wanted)
+    prefilter = (set(catalog_rules(opts['catalog']))
+                 if wanted is None and opts['catalog'] else None)
+    sites, helped, totals, repos = read_sarif(src, wanted, prefilter)
     if wanted is None:
         if helped:
             wanted = helped
             out.write('Regeln mit editorHelp im SARIF: %d\n' % len(wanted))
         elif opts['catalog']:
-            wanted = set(catalog_rules(opts['catalog']))
+            wanted = prefilter
             out.write('Regeln mit editorHelp im Katalog %s: %d\n'
                       % (opts['catalog'], len(wanted)))
         else:
@@ -601,6 +615,15 @@ def selftest():
                % sorted(helped))
         expect(totals.get('SCA017') == 203 and totals.get('SCA044') == 2,
                'Funde je Regel gezaehlt (%r)' % totals)
+        expect({s['rule'] for s in sites} == {'SCA017'},
+               'streamend gefiltert: ohne Regelliste nur Results mit '
+               'editorHelp gehalten')
+        sites, _h, _t, _r = read_sarif(sarif, None, {'SCA044', 'SCA001'})
+        expect({s['rule'] for s in sites} == {'SCA017', 'SCA044', 'SCA001'},
+               'prefilter (--catalog) haelt seine Regeln dazu')
+        sites, _h, _t, _r = read_sarif(sarif, {'SCA044', 'SCA001'})
+        expect({s['rule'] for s in sites} == {'SCA044', 'SCA001'},
+               '--rules haelt nur diese Regeln')
         t = [s for s in sites if s['rule'] == 'SCA044' and s['end'] == 4]
         expect(len(t) == 1 and t[0]['msg'] == tricky
                and t[0]['confidence'] == 'medium',
@@ -633,9 +656,20 @@ def selftest():
             rel = os.path.relpath(r['path'], root).split(os.sep)[0]
             per[rel] = per.get(rel, 0) + 1
         expect(max(per.values()) <= 5, 'Deckel 25 %% je Repo: %r' % per)
-        expect(not any(r['path'].endswith('copy.pas') for r in a),
-               'Inhalts-Dublette (copy.pas) faellt weg')
-        expect(not any(r['path'].endswith('missing.pas') for r in a),
+        # Inhalts-Dubletten im ganzen Lauf (Review E3, Major 1 - bis dahin
+        # prueften die Tests falsch herum und waren nur gruen, weil copy.pas
+        # mit seed 7 nicht gezogen wurde): copy.pas und repo1\f0.pas haben
+        # denselben Inhalt, es bleibt der kleinere Pfad repo0\copy.pas.
+        with open(os.devnull, 'w') as quiet:
+            full = run([sarif, root, os.path.join(tmp, 'all.tsv'), '--n',
+                        '1000', '--cap', '1', '--counts',
+                        os.path.join(tmp, 'call.tsv')], quiet)
+        twin = os.path.join('repo1', 'f0.pas')
+        expect(sum(1 for r in full if r['path'].endswith('copy.pas')) == 1
+               and not any(r['path'].endswith(twin) for r in full),
+               'Inhalts-Dublette: copy.pas (kleinerer Pfad) bleibt einmal, '
+               'repo1' + BACKSLASH + 'f0.pas faellt weg')
+        expect(not any(r['path'].endswith('missing.pas') for r in full),
                'fehlende Datei faellt weg')
         lines = open(dest1, encoding='utf-8').read().splitlines()
         expect(all(len(l.split('\t')) == 7 for l in lines)
@@ -672,6 +706,21 @@ def selftest():
                              root, 8, 1, 0.25, Hasher())
         expect(st['sample'] == 2 and st['cap'] == 2,
                'ein Repo, Deckel 2 -> Stichprobe 2 statt 8')
+        # Dubletten direkt, beide Richtungen: die Kopie hat den kleineren
+        # bzw. den groesseren Pfad; die Reihenfolge der Kandidaten zaehlt
+        # nicht. Je Paar genau eine Dublette, es bleibt der kleinere Pfad.
+        with open(os.path.join(root, 'repo4', 'twin.pas'), 'w') as f:
+            f.write('unit f2_3;\n')                    # = repo2/f3.pas
+        for small, large in (('repo0/copy.pas', 'repo1/f0.pas'),
+                             ('repo2/f3.pas', 'repo4/twin.pas')):
+            for order in ((small, large), (large, small)):
+                picked, st = sample_rule(
+                    'SCA017', [{'uri': u, 'line': 3, 'rule': 'SCA017'}
+                               for u in order], root, 100, 1, 1.0, Hasher())
+                expect(st['dup_content'] == 1 and len(picked) == 1
+                       and picked[0]['path'] == to_path(root, small),
+                       'Dublette %s/%s (Reihenfolge %s): bleibt %s'
+                       % (small, large, order[0], small))
     for good, what in checks:
         print('  %s  %s' % ('ok  ' if good else 'ROT ', what))
         ok = ok and good

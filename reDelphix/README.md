@@ -1629,9 +1629,11 @@ properties-Bag der Results; auch `"editorHelp": true` im Regelblock), sonst
 mit `--catalog [datei.json]` die mit `"editorHelp": true` im Regelkatalog;
 je Regel gleiche Stelle (Datei, Zeile, Meldung) einmal, Dateien gleichen
 Inhalts (SHA-1) einmal, fehlende Dateien fallen weg (Warnung),
-reproduzierbare Stichprobe `--n` mit `--seed`, hoechstens `--cap` (Vorgabe
-0,25) der Stichprobe aus einem Repo (erster Pfadteil unter der
-Korpuswurzel). uri-Dekodierung und Korpuswurzel wie `sites_from_sarif.py`.
+reproduzierbare Stichprobe `--n` mit `--seed`, hoechstens `int(--cap x
+--n)` Stellen aus einem Repo (erster Pfadteil unter der Korpuswurzel;
+`--cap` Vorgabe 0,25, Bezug ist die angefragte Groesse `--n`). Das SARIF
+wird streamend gefiltert: gehalten werden nur Results der Regeln, die in
+Frage kommen. uri-Dekodierung und Korpuswurzel wie `sites_from_sarif.py`.
 Ausgabe `Datei<TAB>Zeile<TAB>RuleId<TAB>Meldung<TAB>EndLine<TAB>variant<TAB>confidence`
 (die vier hinteren Spalten aus dem SARIF, kodiert wie die Textspalten der
 CSV, dazu TAB als `\t`; die Probe liest auch das alte Format mit drei
