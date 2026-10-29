@@ -1071,14 +1071,27 @@ begin
     APlaces, ALines, AFinding, P);
 end;
 
+// SCA164: zuerst der Name der Unit gegen ihre Datei (rwE30 Stufe 2, jvcl
+// 'sample - form.pas': ein Interpreter-Skript, TRdxRoutineFixes.
+// UnitFileReason), dann die Includes wie bei SCA147 (IncludeCheck).
+function UnusedRoutineCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  AFinding: TLeakFinding; const APlan: TRdxRoutinePlan): string;
+begin
+  Result := TRdxRoutineFixes.UnitFileReason(AFinding.FileName, AMap);
+  if Result = '' then
+    Result := IncludeCheck(APlaces, AMap, AFinding, APlan);
+end;
+
 function PlanUnusedRoutine(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
-  P : TRdxRoutinePlan;
+  P    : TRdxRoutinePlan;
+  Form : TRdxPlanForm<TRdxRoutinePlan>;
 begin
-  Result := TRdxFixFrame.Run<TRdxRoutinePlan>(
-    RoutineForm(TRdxRoutineFixes.UnusedRoutine),
-    APlaces, ALines, AFinding, P);
+  Form := RoutineForm(TRdxRoutineFixes.UnusedRoutine);
+  Form.Check := UnusedRoutineCheck;
+  Result := TRdxFixFrame.Run<TRdxRoutinePlan>(Form, APlaces, ALines,
+    AFinding, P);
 end;
 
 // SCA147: bindet die Formdatei neben der Unit (.dfm/.fmx/.lfm) die Methode
