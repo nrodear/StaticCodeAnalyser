@@ -72,6 +72,20 @@ type
       out AReason: string): Boolean; static;
   end;
 
+// SCA020 (b) und die raise-Variante von SCA168 (uRdxStructFixes.CaseElse),
+// rwE31 Stufe 3 (cnwizards Bin\PSDeclEx\CnWizIdeUtils.pas:1226: die Unit
+// fragt '{$IFNDEF VER130}' und baut damit auch mit Delphi 5): AClass
+// (ENotImplemented bzw. EInvalidOpException) steht in SysUtils erst ab
+// Delphi 2009 - dieselbe Schwelle wie SCA127 (FLOOR_DEFAULT_FN,
+// uRdxRawExceptionFix, lfExceptionClasses). Fragt die Datei nach einem
+// aelteren Compiler (uRdxCompilerTraces.OldCompilerTrace) und beweist sie
+// keinen neueren (ModernProof), der Grund; sonst ''. Nur die Spuren in der
+// Datei (Nico-Entscheid "Sperre nur bei Beleg") - den Plattenblick
+// (Projektdateien) fragt fuer diese Klassen niemand: seine Gruende nennen
+// EArgumentException/EInvalidOpException (uRdxMagicFixes, lfExceptionClasses).
+function OldExceptionClassReason(AMap: TRdxCodeMap;
+  const AClass: string): string;
+
 implementation
 
 uses
@@ -81,6 +95,7 @@ uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
   uRdxBlocks,        // ReadRoutine, FindMethodDecls, MethodDecl (HookReason)
+  uRdxCompilerTraces, // OldCompilerTrace, ModernProof, FLOOR_DEFAULT_FN
   uRdxText;          // _() - Gruende in der Sprache der SCA (E29)
 
 const
@@ -113,6 +128,26 @@ const
   MAX_INTF_DEPTH = 8;
   // Davor steht eine Routine als WERT, nicht als Aufruf (ValueUse).
   VALUE_PREV: array[0..3] of string = (':=', '(', ',', '=');
+  // Die Klasse in RAISE_NOT_IMPLEMENTED (OldExceptionClassReason).
+  CLASS_NOT_IMPLEMENTED = 'ENotImplemented';
+
+function OldExceptionClassReason(AMap: TRdxCodeMap;
+  const AClass: string): string;
+var
+  Trace : string;
+  Li    : Integer;
+begin
+  Result := '';
+  // Eine Inline-Variable bzw. ein RTL-Namensraum ausserhalb jeder Weiche
+  // beweist Delphi ab XE2 - die Spur widerlegt (wie SCA127).
+  if ProofCovers(ModernProof(AMap), FLOOR_DEFAULT_FN) then Exit;
+  Trace := OldCompilerTrace(AMap, FLOOR_DEFAULT_FN, Li);
+  // Derselbe Satz wie uRdxRawExceptionFix.R_RAWEXC_OLD (SCA127) - eine
+  // msgid; die Unit steht nicht im FPC-Pruefstand, darum hier als Literal.
+  if Trace <> '' then
+    Result := _('the file asks for old compilers (%s, line %d) - %s exists '
+      + 'in SysUtils only from Delphi 2009 on', [Trace, Li, AClass]);
+end;
 
 { ---- SCA020 ---- }
 
@@ -704,6 +739,9 @@ begin
        Body.EndTok.Col)) then
     AReason := _('the body holds an empty comment - a mark for "nothing to '
       + 'do here"; raise would contradict it');
+  // Alte Compiler kennen ENotImplemented nicht (rwE31 Stufe 3).
+  if (AReason = '') and (AStatementFmt <> '') then
+    AReason := OldExceptionClassReason(AMap, CLASS_NOT_IMPLEMENTED);
   if AReason <> '' then Exit;
   if AStatementFmt = '' then
     AReason := BodyEdit(AMap, Body, INTENT_LINE, INTENT_INLINE, AEdit)

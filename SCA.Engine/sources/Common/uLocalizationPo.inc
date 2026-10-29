@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7007 Zeilen, 328875 Bytes
-  CPoLines_de: array[0..7006] of string = (
+  // i18n\de.po - 7025 Zeilen, 330374 Bytes
+  CPoLines_de: array[0..7024] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6975,8 +6975,26 @@ const
     'msgid "the try only releases (%s) - an error while freeing or closing is swallowed on purpose so that the cleanup after it still runs; \"raise;\" would skip it"',
     'msgstr "der try-Teil gibt nur frei (%s) - ein Fehler beim Freigeben oder Schlie'#$00DF'en wird mit Absicht geschluckt, damit das Aufr'#$00E4'umen danach l'#$00E4'uft; \"raise;\" '#$00FC'berspr'#$00E4'nge es"',
     '',
+    'msgid "the function reports the failure through its result (Result := False in line %d before the try, Result := True in line %d in the try part) - \"raise;\" would break callers that only check the result"',
+    'msgstr "die Funktion meldet den Fehler '#$00FC'ber ihr Ergebnis (Result := False in Zeile %d vor dem try, Result := True in Zeile %d im try-Teil) - \"raise;\" br'#$00E4'che Aufrufer, die nur das Ergebnis pr'#$00FC'fen"',
+    '',
     'msgid "the case selects on characters or strings - every other value is normal input there (a lexer, a parser); raise would break it"',
     'msgstr "das case w'#$00E4'hlt nach Zeichen oder Strings - jeder andere Wert ist dort gew'#$00F6'hnliche Eingabe (ein Lexer, ein Parser); raise br'#$00E4'che ihn"',
+    '',
+    'msgid "compiler directive in the case - which values have an arm is not provable"',
+    'msgstr "Compiler-Direktive im case - welche Werte einen Zweig haben, ist nicht beweisbar"',
+    '',
+    'msgid "the arm labels are not all names of one enumeration - whether the values without an arm occur normally is not provable"',
+    'msgstr "die Marken der Zweige sind nicht alle Namen einer Aufz'#$00E4'hlung - ob die Werte ohne Zweig im normalen Ablauf vorkommen, ist nicht beweisbar"',
+    '',
+    'msgid "the enumeration of %s is not declared in this file - whether its values without an arm occur normally is not provable"',
+    'msgstr "die Aufz'#$00E4'hlung von %s ist nicht in dieser Datei deklariert - ob ihre Werte ohne Zweig im normalen Ablauf vorkommen, ist nicht beweisbar"',
+    '',
+    'msgid "values of %s without an arm: %s - they may be normal here, and raise would break that path"',
+    'msgstr "Werte von %s ohne Zweig: %s - sie k'#$00F6'nnen hier Normalfall sein, und raise br'#$00E4'che diesen Weg"',
+    '',
+    'msgid "not in the light bulb: %s; unhandled values raise EInvalidOpException"',
+    'msgstr "nicht in der Gl'#$00FC'hbirne: %s; unbehandelte Werte l'#$00F6'sen EInvalidOpException aus"',
     '',
     'msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which has neither EArgumentException nor EInvalidOpException; %s"',
     'msgstr "Delphi-Programm %s ohne .dproj neben dem Lazarus-Projekt %s im Verzeichnis %s - f'#$00FC'r FPC und ein '#$00E4'lteres Delphi geschrieben, und dort gibt es weder EArgumentException noch EInvalidOpException; %s"',
@@ -7296,8 +7314,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7003 Zeilen, 342060 Bytes
-  CPoLines_fr: array[0..7002] of string = (
+  // i18n\fr.po - 7021 Zeilen, 343603 Bytes
+  CPoLines_fr: array[0..7020] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14254,8 +14272,26 @@ const
     'msgid "the try only releases (%s) - an error while freeing or closing is swallowed on purpose so that the cleanup after it still runs; \"raise;\" would skip it"',
     'msgstr "le try ne fait que lib'#$00E9'rer (%s) - une erreur lors de la lib'#$00E9'ration ou de la fermeture est aval'#$00E9'e expr'#$00E8's pour que le nettoyage qui suit s''ex'#$00E9'cute ; \"raise;\" le sauterait"',
     '',
+    'msgid "the function reports the failure through its result (Result := False in line %d before the try, Result := True in line %d in the try part) - \"raise;\" would break callers that only check the result"',
+    'msgstr "la fonction signale l'''#$00E9'chec par son r'#$00E9'sultat (Result := False ligne %d avant le try, Result := True ligne %d dans le try) - \"raise;\" casserait les appelants qui ne v'#$00E9'rifient que le r'#$00E9'sultat"',
+    '',
     'msgid "the case selects on characters or strings - every other value is normal input there (a lexer, a parser); raise would break it"',
     'msgstr "le case porte sur des caract'#$00E8'res ou des cha'#$00EE'nes - toute autre valeur y est une entr'#$00E9'e normale (un lexer, un parser) ; raise le casserait"',
+    '',
+    'msgid "compiler directive in the case - which values have an arm is not provable"',
+    'msgstr "directive de compilation dans le case - on ne peut pas prouver quelles valeurs ont une branche"',
+    '',
+    'msgid "the arm labels are not all names of one enumeration - whether the values without an arm occur normally is not provable"',
+    'msgstr "les '#$00E9'tiquettes des branches ne sont pas toutes des noms d''une m'#$00EA'me '#$00E9'num'#$00E9'ration - on ne peut pas prouver si les valeurs sans branche surviennent normalement"',
+    '',
+    'msgid "the enumeration of %s is not declared in this file - whether its values without an arm occur normally is not provable"',
+    'msgstr "l'''#$00E9'num'#$00E9'ration de %s n''est pas d'#$00E9'clar'#$00E9'e dans ce fichier - on ne peut pas prouver si ses valeurs sans branche surviennent normalement"',
+    '',
+    'msgid "values of %s without an arm: %s - they may be normal here, and raise would break that path"',
+    'msgstr "valeurs de %s sans branche : %s - elles peuvent '#$00EA'tre normales ici, et raise casserait ce chemin"',
+    '',
+    'msgid "not in the light bulb: %s; unhandled values raise EInvalidOpException"',
+    'msgstr "pas dans l''ampoule : %s ; les valeurs non trait'#$00E9'es l'#$00E8'vent EInvalidOpException"',
     '',
     'msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which has neither EArgumentException nor EInvalidOpException; %s"',
     'msgstr "programme Delphi %s sans .dproj '#$00E0' c'#$00F4't'#$00E9' du projet Lazarus %s dans le r'#$00E9'pertoire %s - '#$00E9'crit pour FPC et un Delphi plus ancien, qui n''a ni EArgumentException ni EInvalidOpException; %s"',

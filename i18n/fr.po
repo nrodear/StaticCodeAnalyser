@@ -6954,8 +6954,26 @@ msgstr "le gestionnaire est dans %s - \"raise;\" sauterait le reste (inherited, 
 msgid "the try only releases (%s) - an error while freeing or closing is swallowed on purpose so that the cleanup after it still runs; \"raise;\" would skip it"
 msgstr "le try ne fait que libérer (%s) - une erreur lors de la libération ou de la fermeture est avalée exprès pour que le nettoyage qui suit s'exécute ; \"raise;\" le sauterait"
 
+msgid "the function reports the failure through its result (Result := False in line %d before the try, Result := True in line %d in the try part) - \"raise;\" would break callers that only check the result"
+msgstr "la fonction signale l'échec par son résultat (Result := False ligne %d avant le try, Result := True ligne %d dans le try) - \"raise;\" casserait les appelants qui ne vérifient que le résultat"
+
 msgid "the case selects on characters or strings - every other value is normal input there (a lexer, a parser); raise would break it"
 msgstr "le case porte sur des caractères ou des chaînes - toute autre valeur y est une entrée normale (un lexer, un parser) ; raise le casserait"
+
+msgid "compiler directive in the case - which values have an arm is not provable"
+msgstr "directive de compilation dans le case - on ne peut pas prouver quelles valeurs ont une branche"
+
+msgid "the arm labels are not all names of one enumeration - whether the values without an arm occur normally is not provable"
+msgstr "les étiquettes des branches ne sont pas toutes des noms d'une même énumération - on ne peut pas prouver si les valeurs sans branche surviennent normalement"
+
+msgid "the enumeration of %s is not declared in this file - whether its values without an arm occur normally is not provable"
+msgstr "l'énumération de %s n'est pas déclarée dans ce fichier - on ne peut pas prouver si ses valeurs sans branche surviennent normalement"
+
+msgid "values of %s without an arm: %s - they may be normal here, and raise would break that path"
+msgstr "valeurs de %s sans branche : %s - elles peuvent être normales ici, et raise casserait ce chemin"
+
+msgid "not in the light bulb: %s; unhandled values raise EInvalidOpException"
+msgstr "pas dans l'ampoule : %s ; les valeurs non traitées lèvent EInvalidOpException"
 
 msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which has neither EArgumentException nor EInvalidOpException; %s"
 msgstr "programme Delphi %s sans .dproj à côté du projet Lazarus %s dans le répertoire %s - écrit pour FPC et un Delphi plus ancien, qui n'a ni EArgumentException ni EInvalidOpException; %s"

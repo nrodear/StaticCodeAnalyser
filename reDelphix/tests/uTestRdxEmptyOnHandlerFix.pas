@@ -51,6 +51,9 @@ type
     // rwE30 (HeidiSQL dbconnection.pas:2928/2968): der try-Teil gibt nur
     // frei, danach folgt weiteres Aufraeumen.
     [Test] procedure Sca159_ReleaseOnly_NoHelp;
+    // rwE31 Stufe 3 (issrc Compiler.SetupCompiler.pas:2100): eine Funktion,
+    // die den Fehler ueber ihr Ergebnis meldet (Try-Parse).
+    [Test] procedure Sca159_TryParse_NoHelp;
     {$IFNDEF FPC}
     [Test] procedure Sca159_Detector_CatalogExample;
     [Test] procedure Sca159_Detector_BlockForm;
@@ -455,6 +458,39 @@ begin
     '    on E:EFoo do;', '  end;', 'end;', 'end.']);
   Assert.AreEqual(StringReplace(Src, 'on E:EFoo do;', 'on E:EFoo do raise;', []),
     FixAt(Src, 9, Msg('EFoo'), R), R);
+end;
+
+procedure TTestRdxEmptyOnHandlerFix.Sca159_TryParse_NoHelp;
+var
+  R, Src, Other : string;
+begin
+  // issrc Compiler.SetupCompiler.pas:2100 (minimiert): StrToInteger64
+  // meldet den Ueberlauf ueber das Ergebnis ('Returns True if successful, or
+  // False if ... an overflow occurred') - 'raise;' machte daraus eine
+  // Ausnahme fuer jeden Aufrufer, der nur das Ergebnis prueft. Ohne Fix
+  // angeboten (rot). Der Handler steht auf Zeile 18.
+  Src := Join(['unit t;', 'interface', 'implementation',
+    'function StrToInteger64(const S: String; var X: Int64): Boolean;', 'var',
+    '  V: Int64;', 'begin', '  Result := False;', '  V := 0;', '  try',
+    '    for I := 1 to Length(S) do begin', '      if S[I] = ''_'' then',
+    '        Exit;', '      V := V * 10;', '    end;', '    X := V;',
+    '    Result := True;', '  except on E: EIntOverflow do', '    ;', '  end;',
+    'end;', 'end.']);
+  Assert.AreEqual('', FixAt(Src, 18, Msg('EIntOverflow'), R), 'Try-Parse');
+  Assert.AreEqual(_(R_EOH_TRYPARSE, [8, 17]), R);
+  // Mit dem Namen der Funktion statt Result ebenso.
+  Other := StringReplace(StringReplace(Src, '  Result := False;',
+    '  StrToInteger64 := False;', []), '    Result := True;',
+    '    StrToInteger64 := True;', []);
+  Assert.AreEqual('', FixAt(Other, 18, Msg('EIntOverflow'), R), 'Funktionsname');
+  // Gegenprobe: der try-Teil setzt das Ergebnis nicht - die Hilfe bleibt.
+  Other := StringReplace(Src, '    Result := True;', '    Done := True;', []);
+  Assert.AreEqual(StringReplace(Other, #13#10'    ;', #13#10'    raise;', []),
+    FixAt(Other, 18, Msg('EIntOverflow'), R), R);
+  // Gegenprobe: ohne 'Result := False' vor dem try die Hilfe ebenso.
+  Other := StringReplace(Src, '  Result := False;', '  X := 0;', []);
+  Assert.AreEqual(StringReplace(Other, #13#10'    ;', #13#10'    raise;', []),
+    FixAt(Other, 18, Msg('EIntOverflow'), R), R);
 end;
 
 procedure TTestRdxEmptyOnHandlerFix.Sca159_Adapter_Outcome;

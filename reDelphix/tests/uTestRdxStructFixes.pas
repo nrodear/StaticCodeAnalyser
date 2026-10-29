@@ -53,6 +53,15 @@ type
     // rwE30 (Todo_SCA168 "verpasst-direktive"): bedingte Bereiche ohne
     // Blockwort im case sperren nicht mehr.
     [Test] procedure Sca168_HarmlessDirective_Helps;
+    // rwE31 Stufe 3 (JsonDataObjects.pas:7695): Marken 'Ord('-'):' auf einem
+    // Byte-Zeiger sind Zeichen - kein raise.
+    [Test] procedure Sca168_OrdCharLabels_RaiseRefused;
+    // rwE31 Stufe 3 (vier Fehler): raise nur in die Gluehbirne, wenn jeder
+    // Wert eines Aufzaehlungstyps der Datei einen Arm hat.
+    [Test] procedure Sca168_RaiseMenuReason_ValuesWithoutArm;
+    [Test] procedure Sca168_RaiseMenuReason_AllValuesCovered;
+    // rwE31 Stufe 3: EInvalidOpException gibt es vor Delphi 2009 nicht.
+    [Test] procedure Sca168_RaiseOldCompiler_Refused;
     // rwE30 Stufe 2 (21 Fehler): der Bezeichner-Beweis (ForeignIdent) -
     // Aufzaehlungswert, Typ, Konstante, Aufruf ohne Quelle ...
     [Test] procedure Sca007_ForeignIdent_Found;
@@ -146,6 +155,35 @@ function InProc(const ALines: array of string): string;
 begin
   Result := Join(['unit u;', 'implementation', 'procedure P;']) + #13#10
     + 'begin' + #13#10 + Join(ALines) + #13#10 + Join(['end;', 'end.']);
+end;
+
+// SCA168, raise-Variante: der Grund fuer "nur im Menue" (CaseRaiseMenuReason)
+// am case auf ALine; '' heisst Gluehbirne.
+function CaseMenu(const ASource: string; ALine: Integer): string;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Result := TRdxStructFixes.CaseRaiseMenuReason(Map, ALine);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+// Eine Unit mit den Typzeilen ATypes im interface und einer Routine, deren
+// Rumpf AStmts traegt; das erste Statement steht auf Zeile
+// 7 + Length(ATypes).
+function WithTypes(const ATypes, AStmts: array of string): string;
+begin
+  Result := Join(['unit u;', 'interface', 'type']) + #13#10 + Join(ATypes)
+    + #13#10 + Join(['implementation', 'procedure P;', 'begin']) + #13#10
+    + Join(AStmts) + #13#10 + Join(['end;', 'end.']);
 end;
 
 // ---- SCA007 ----
@@ -772,6 +810,123 @@ begin
     Entry(4, Pos('uCEF', L), 'uCEF')]);
   Assert.AreEqual('', FixUses(Src, C, 0, R), 'Bereich ueber die Direktive');
   Assert.IsTrue(Pos('Direktive', R) > 0, R);
+end;
+
+procedure TTestRdxStructFixes.Sca168_OrdCharLabels_RaiseRefused;
+var
+  R, Src : string;
+begin
+  // JsonDataObjects.pas:7695 (minimiert): der Exponent einer Zahl, P ist ein
+  // PByte - jedes Zeichen ohne Vorzeichen ('1e5') ist Normalfall. Bis rwE31
+  // sah die Zeichen-Sperre nur ein Literal am Anfang der Marke: raise
+  // angeboten (rot ohne Fix).
+  Src := InProc(['  case P^ of', '    Ord(''-''):', '      begin',
+    '        {$IFNDEF KEEP_BIGDECIMAL_PRECISION}', '        NegE := True;',
+    '        {$ENDIF ~KEEP_BIGDECIMAL_PRECISION}', '        Inc(P);', '      end;',
+    '    Ord(''+''):', '      Inc(P);', '  end;']);
+  Assert.AreEqual('', FixCase(Src, 5, RAISE_UNHANDLED, R), 'Ord-Zeichen');
+  Assert.IsTrue(Pos('Zeichen', R) > 0, R);
+  // Das leere else bleibt (bedeutungsgleich).
+  Assert.AreEqual(StringReplace(Src, '      Inc(P);'#13#10'  end;',
+    '      Inc(P);'#13#10'  else'#13#10'  end;', []), FixCase(Src, 5, '', R), R);
+  // 'Chr(13):' ist immer ein Zeichen, 'Byte(#10):' ebenso.
+  Assert.AreEqual('', FixCase(InProc(['  case C of', '    Chr(13): Inc(L);',
+    '  end;']), 5, RAISE_UNHANDLED, R), 'Chr');
+  Assert.AreEqual('', FixCase(InProc(['  case B of', '    Byte(#10): Inc(L);',
+    '  end;']), 5, RAISE_UNHANDLED, R), 'Byte(#10)');
+  // Gegenprobe: Ord um einen Namen ist kein Zeichen - die Sperre greift
+  // nicht (ob raise in die Gluehbirne kommt, sagt CaseRaiseMenuReason).
+  Assert.AreNotEqual('', FixCase(InProc(['  case K of', '    Ord(kA): A;',
+    '  end;']), 5, RAISE_UNHANDLED, R), R);
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseMenuReason_ValuesWithoutArm;
+var
+  R : string;
+begin
+  // abziptyp.pas:2343 (minimiert): aaFailed hat keinen Arm und ist in der
+  // Routine ein erwarteter Wert. Der Typ steht hier in der Datei - der Grund
+  // nennt den Wert. Bis rwE31 gab es keinen Grund: raise in der Gluehbirne
+  // (rot ohne Fix).
+  R := CaseMenu(WithTypes(['  TAbArchiveAction = (aaFailed, aaNone, aaAdd, '
+    + 'aaDelete, aaFreshen, aaMove, aaReplace, aaStreamAdd);'],
+    ['  case CurrItem.Action of', '    aaNone, aaMove: CopyIt;',
+    '    aaDelete: begin', '      end;',
+    '    aaAdd, aaFreshen, aaReplace, aaStreamAdd: AddIt;', '  end;']), 8);
+  Assert.IsTrue(Pos('aaFailed', R) > 0, R);
+  Assert.IsTrue(Pos('TAbArchiveAction', R) > 0, R);
+  // Im Korpus steht TAbArchiveAction in abutils.pas - der Typ ist hier
+  // unbekannt.
+  R := CaseMenu(InProc(['  case CurrItem.Action of', '    aaNone, aaMove: CopyIt;',
+    '    aaAdd, aaFreshen: AddIt;', '  end;']), 5);
+  Assert.IsTrue(Pos('aaNone', R) > 0, R);
+  // mormot.orm.mongodb.pas:1596 (minimiert): ein Arm, mDELETE kommt
+  // regulaer vor; TUriMethod steht in einer anderen Unit.
+  Assert.AreNotEqual('', CaseMenu(InProc(['  case fBatchMethod of',
+    '    mPOST:', '      begin', '        fBatchWriter := TBsonWriter.Create(S);',
+    '      end;', '  end;']), 5));
+  // mormot.orm.core.pas:5897 (minimiert, Typ in der Datei): der aeussere
+  // Arm laesst oftID und oftSet durch, der innere case nennt sie nicht.
+  R := CaseMenu(WithTypes(['  TOrmFieldType = (oftUnknown, oftEnumerate, '
+    + 'oftSet, oftID, oftTimeLog);'], ['  case result of',
+    '    oftEnumerate, oftSet, oftID, oftTimeLog:', '      begin',
+    '        if err <> 0 then', '          result := oftUnknown', '        else',
+    '          case result of', '            oftEnumerate: Exit;',
+    '            oftTimeLog: goto dt;', '          end;', '      end;', '  end;']),
+    14);
+  Assert.IsTrue(Pos('oftUnknown, oftSet, oftID', R) > 0, R);
+  // Zahlen als Marken: nicht beweisbar.
+  Assert.AreNotEqual('', CaseMenu(InProc(['  case X of', '    1: A;', '  end;']),
+    5));
+  // Ein Typ mit eigenen Zahlen hat Werte ohne Namen; zwei Deklarationen in
+  // Zweigen; eine Direktive im case - je nicht beweisbar.
+  Assert.AreNotEqual('', CaseMenu(WithTypes(['  TE = (eA = 1, eB = 5);'],
+    ['  case E of', '    eA: A;', '    eB: B;', '  end;']), 8), 'eigene Zahlen');
+  Assert.AreNotEqual('', CaseMenu(WithTypes(['{$IFDEF X}', '  TE = (eA, eB);',
+    '{$ELSE}', '  TE = (eA, eB, eC);', '{$ENDIF}'], ['  case E of', '    eA: A;',
+    '    eB: B;', '  end;']), 12), 'zwei Deklarationen');
+  Assert.AreNotEqual('', CaseMenu(WithTypes(['  TE = (eA, eB);'], ['  case E of',
+    '    eA: A;', '    {$IFDEF X}', '    eB: B;', '    {$ENDIF}', '  end;']), 8),
+    'Direktive');
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseMenuReason_AllValuesCovered;
+begin
+  // Jeder Wert hat einen Arm (auch ueber einen Bereich, qualifiziert, mit
+  // einem verschachtelten case im Arm): das else erreicht nur ein Wert
+  // ausserhalb des Typs - raise sichert ab, die Gluehbirne bleibt.
+  Assert.AreEqual('', CaseMenu(WithTypes(['  TE = (eA, eB, eC, eD);'],
+    ['  case E of', '    eA: begin', '        case F of 1: X; end;', '      end;',
+    '    eB..eC: Y;', '    TE.eD: if Z then Exit else Y;', '  end;']), 8));
+  // False und True.
+  Assert.AreEqual('', CaseMenu(InProc(['  case Ok of', '    False: A;',
+    '    True: B;', '  end;']), 5));
+  // Gegenprobe: der Bereich laesst eD aus.
+  Assert.IsTrue(Pos('eD', CaseMenu(WithTypes(['  TE = (eA, eB, eC, eD);'],
+    ['  case E of', '    eA..eC: Y;', '  end;']), 8)) > 0);
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseOldCompiler_Refused;
+var
+  R, Src : string;
+begin
+  // Eine Unit, die nach Delphi 7 fragt (VER150): EInvalidOpException steht
+  // in SysUtils erst ab Delphi 2009 - der Klick braeche dort den Bau. Bis
+  // rwE31 angeboten (rot ohne Fix).
+  Src := Join(['unit u;', '{$IFDEF VER150}', '{$DEFINE OLD}', '{$ENDIF}',
+    'implementation', 'procedure P;', 'begin', '  case X of', '    1: A;',
+    '  end;', 'end;', 'end.']);
+  Assert.AreEqual('', FixCase(Src, 8, RAISE_UNHANDLED, R), 'Delphi 7');
+  Assert.IsTrue(Pos('VER150', R) > 0, R);
+  Assert.IsTrue(Pos('EInvalidOpException', R) > 0, R);
+  // Das leere else bleibt.
+  Assert.AreNotEqual('', FixCase(Src, 8, '', R), R);
+  // Gegenprobe: ein RTL-Namensraum ausserhalb der Weiche beweist Delphi
+  // ab XE2.
+  Src := Join(['unit u;', '{$IFDEF VER150}', '{$DEFINE OLD}', '{$ENDIF}',
+    'implementation', 'uses System.SysUtils;', 'procedure P;', 'begin',
+    '  case X of', '    1: A;', '  end;', 'end;', 'end.']);
+  Assert.AreNotEqual('', FixCase(Src, 9, RAISE_UNHANDLED, R), R);
 end;
 
 function UsesOnly(const ASource: string): Boolean;

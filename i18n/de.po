@@ -6958,8 +6958,26 @@ msgstr "der Handler steht in %s - \"raise;\" überspränge den Rest (inherited, 
 msgid "the try only releases (%s) - an error while freeing or closing is swallowed on purpose so that the cleanup after it still runs; \"raise;\" would skip it"
 msgstr "der try-Teil gibt nur frei (%s) - ein Fehler beim Freigeben oder Schließen wird mit Absicht geschluckt, damit das Aufräumen danach läuft; \"raise;\" überspränge es"
 
+msgid "the function reports the failure through its result (Result := False in line %d before the try, Result := True in line %d in the try part) - \"raise;\" would break callers that only check the result"
+msgstr "die Funktion meldet den Fehler über ihr Ergebnis (Result := False in Zeile %d vor dem try, Result := True in Zeile %d im try-Teil) - \"raise;\" bräche Aufrufer, die nur das Ergebnis prüfen"
+
 msgid "the case selects on characters or strings - every other value is normal input there (a lexer, a parser); raise would break it"
 msgstr "das case wählt nach Zeichen oder Strings - jeder andere Wert ist dort gewöhnliche Eingabe (ein Lexer, ein Parser); raise bräche ihn"
+
+msgid "compiler directive in the case - which values have an arm is not provable"
+msgstr "Compiler-Direktive im case - welche Werte einen Zweig haben, ist nicht beweisbar"
+
+msgid "the arm labels are not all names of one enumeration - whether the values without an arm occur normally is not provable"
+msgstr "die Marken der Zweige sind nicht alle Namen einer Aufzählung - ob die Werte ohne Zweig im normalen Ablauf vorkommen, ist nicht beweisbar"
+
+msgid "the enumeration of %s is not declared in this file - whether its values without an arm occur normally is not provable"
+msgstr "die Aufzählung von %s ist nicht in dieser Datei deklariert - ob ihre Werte ohne Zweig im normalen Ablauf vorkommen, ist nicht beweisbar"
+
+msgid "values of %s without an arm: %s - they may be normal here, and raise would break that path"
+msgstr "Werte von %s ohne Zweig: %s - sie können hier Normalfall sein, und raise bräche diesen Weg"
+
+msgid "not in the light bulb: %s; unhandled values raise EInvalidOpException"
+msgstr "nicht in der Glühbirne: %s; unbehandelte Werte lösen EInvalidOpException aus"
 
 msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which has neither EArgumentException nor EInvalidOpException; %s"
 msgstr "Delphi-Programm %s ohne .dproj neben dem Lazarus-Projekt %s im Verzeichnis %s - für FPC und ein älteres Delphi geschrieben, und dort gibt es weder EArgumentException noch EInvalidOpException; %s"
