@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6908 Zeilen, 319369 Bytes
-  CPoLines_de: array[0..6907] of string = (
+  // i18n\de.po - 6944 Zeilen, 323266 Bytes
+  CPoLines_de: array[0..6943] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6922,7 +6922,43 @@ const
     'msgstr "der try-Teil gibt nur frei (%s) - ein Fehler beim Freigeben oder Schlie'#$00DF'en wird mit Absicht geschluckt, damit das Aufr'#$00E4'umen danach l'#$00E4'uft; \"raise;\" '#$00FC'berspr'#$00E4'nge es"',
     '',
     'msgid "the case selects on characters or strings - every other value is normal input there (a lexer, a parser); raise would break it"',
-    'msgstr "das case w'#$00E4'hlt nach Zeichen oder Strings - jeder andere Wert ist dort gew'#$00F6'hnliche Eingabe (ein Lexer, ein Parser); raise br'#$00E4'che ihn"'
+    'msgstr "das case w'#$00E4'hlt nach Zeichen oder Strings - jeder andere Wert ist dort gew'#$00F6'hnliche Eingabe (ein Lexer, ein Parser); raise br'#$00E4'che ihn"',
+    '',
+    'msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which has neither EArgumentException nor EInvalidOpException; %s"',
+    'msgstr "Delphi-Programm %s ohne .dproj neben dem Lazarus-Projekt %s im Verzeichnis %s - f'#$00FC'r FPC und ein '#$00E4'lteres Delphi geschrieben, und dort gibt es weder EArgumentException noch EInvalidOpException; %s"',
+    '',
+    'msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which has no global variable FormatSettings; %s"',
+    'msgstr "Delphi-Programm %s ohne .dproj neben dem Lazarus-Projekt %s im Verzeichnis %s - f'#$00FC'r FPC und ein '#$00E4'lteres Delphi geschrieben, und dort gibt es keine globale Variable FormatSettings; %s"',
+    '',
+    'msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 2009, which has neither EArgumentException nor EInvalidOpException; %s"',
+    'msgstr "alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl auch mit einem Delphi vor 2009, und dort gibt es weder EArgumentException noch EInvalidOpException; %s"',
+    '',
+    'msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 2009 (%s), which has neither EArgumentException nor EInvalidOpException; %s"',
+    'msgstr "Paket %s im Verzeichnis %s enth'#$00E4'lt die Unit und ist f'#$00FC'r ein Delphi vor 2009 (%s), und dort gibt es weder EArgumentException noch EInvalidOpException; %s"',
+    '',
+    'msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 2009 = %s) - there is neither EArgumentException nor EInvalidOpException there; %s"',
+    'msgstr "Projekt %s im Verzeichnis %s mit ProjectVersion %s (vor Delphi 2009 = %s) - dort gibt es weder EArgumentException noch EInvalidOpException; %s"',
+    '',
+    'msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 2009, which has neither EArgumentException nor EInvalidOpException; %s"',
+    'msgstr "Projekt %s im Verzeichnis %s ohne lesbare ProjectVersion (Delphi 2007 schrieb keine) - die Unit baut wohl auch mit einem Delphi vor 2009, und dort gibt es weder EArgumentException noch EInvalidOpException; %s"',
+    '',
+    'msgid "the call of %s does not close within %d lines"',
+    'msgstr "der Aufruf von %s schlie'#$00DF't nicht innerhalb von %d Zeilen"',
+    '',
+    'msgid "the call of %s runs from line %d to line %d across a compiler directive or a comment or string spanning lines"',
+    'msgstr "der Aufruf von %s l'#$00E4'uft von Zeile %d bis Zeile %d '#$00FC'ber eine Compiler-Direktive oder einen zeilen'#$00FC'bergreifenden Kommentar bzw. String"',
+    '',
+    'msgid "the file sets the global FormatSettings itself (%s, line %d) - TFormatSettings.Invariant would bypass these settings"',
+    'msgstr "die Datei stellt die globale FormatSettings selbst ein (%s, Zeile %d) - TFormatSettings.Invariant liefe an diesen Einstellungen vorbei"',
+    '',
+    'msgid "the include %s shows traces of older compilers (%s, line %d) - EArgumentException and EInvalidOpException exist only from Delphi 2009 on; %s"',
+    'msgstr "das Include %s tr'#$00E4'gt Spuren '#$00E4'lterer Compiler (%s, Zeile %d) - EArgumentException und EInvalidOpException gibt es erst ab Delphi 2009; %s"',
+    '',
+    'msgid "the program %s in the directory %s contains the unit and sets the global FormatSettings itself (%s, line %d) - TFormatSettings.Invariant would bypass these settings; %s"',
+    'msgstr "das Programm %s im Verzeichnis %s enth'#$00E4'lt die Unit und stellt die globale FormatSettings selbst ein (%s, Zeile %d) - TFormatSettings.Invariant liefe an diesen Einstellungen vorbei; %s"',
+    '',
+    'msgid "the statement also carries the literal %s - with TFormatSettings.Invariant %s writes another format (decimal point, MM/dd/yyyy), a comparison with the literal would fail"',
+    'msgstr "die Anweisung tr'#$00E4'gt auch das Literal %s - mit TFormatSettings.Invariant schreibt %s ein anderes Format (Dezimalpunkt, MM/dd/yyyy), ein Vergleich mit dem Literal schl'#$00FC'ge fehl"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7197,8 +7233,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6904 Zeilen, 332337 Bytes
-  CPoLines_fr: array[0..6903] of string = (
+  // i18n\fr.po - 6940 Zeilen, 336292 Bytes
+  CPoLines_fr: array[0..6939] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14102,7 +14138,43 @@ const
     'msgstr "le try ne fait que lib'#$00E9'rer (%s) - une erreur lors de la lib'#$00E9'ration ou de la fermeture est aval'#$00E9'e expr'#$00E8's pour que le nettoyage qui suit s''ex'#$00E9'cute ; \"raise;\" le sauterait"',
     '',
     'msgid "the case selects on characters or strings - every other value is normal input there (a lexer, a parser); raise would break it"',
-    'msgstr "le case porte sur des caract'#$00E8'res ou des cha'#$00EE'nes - toute autre valeur y est une entr'#$00E9'e normale (un lexer, un parser) ; raise le casserait"'
+    'msgstr "le case porte sur des caract'#$00E8'res ou des cha'#$00EE'nes - toute autre valeur y est une entr'#$00E9'e normale (un lexer, un parser) ; raise le casserait"',
+    '',
+    'msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which has neither EArgumentException nor EInvalidOpException; %s"',
+    'msgstr "programme Delphi %s sans .dproj '#$00E0' c'#$00F4't'#$00E9' du projet Lazarus %s dans le r'#$00E9'pertoire %s - '#$00E9'crit pour FPC et un Delphi plus ancien, qui n''a ni EArgumentException ni EInvalidOpException; %s"',
+    '',
+    'msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which has no global variable FormatSettings; %s"',
+    'msgstr "programme Delphi %s sans .dproj '#$00E0' c'#$00F4't'#$00E9' du projet Lazarus %s dans le r'#$00E9'pertoire %s - '#$00E9'crit pour FPC et un Delphi plus ancien, qui n''a pas de variable globale FormatSettings; %s"',
+    '',
+    'msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 2009, which has neither EArgumentException nor EInvalidOpException; %s"',
+    'msgstr "ancien fichier de projet %s dans le r'#$00E9'pertoire %s - l''unit'#$00E9' se compile sans doute aussi avec un Delphi ant'#$00E9'rieur '#$00E0' 2009, qui n''a ni EArgumentException ni EInvalidOpException; %s"',
+    '',
+    'msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 2009 (%s), which has neither EArgumentException nor EInvalidOpException; %s"',
+    'msgstr "le paquet %s dans le r'#$00E9'pertoire %s contient l''unit'#$00E9' et vise un Delphi ant'#$00E9'rieur '#$00E0' 2009 (%s), qui n''a ni EArgumentException ni EInvalidOpException; %s"',
+    '',
+    'msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 2009 = %s) - there is neither EArgumentException nor EInvalidOpException there; %s"',
+    'msgstr "projet %s dans le r'#$00E9'pertoire %s avec ProjectVersion %s (avant Delphi 2009 = %s) - ni EArgumentException ni EInvalidOpException n''y existent; %s"',
+    '',
+    'msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 2009, which has neither EArgumentException nor EInvalidOpException; %s"',
+    'msgstr "projet %s dans le r'#$00E9'pertoire %s sans ProjectVersion lisible (Delphi 2007 n''en '#$00E9'crivait pas) - l''unit'#$00E9' se compile sans doute aussi avec un Delphi ant'#$00E9'rieur '#$00E0' 2009, qui n''a ni EArgumentException ni EInvalidOpException; %s"',
+    '',
+    'msgid "the call of %s does not close within %d lines"',
+    'msgstr "l''appel de %s ne se ferme pas dans les %d lignes"',
+    '',
+    'msgid "the call of %s runs from line %d to line %d across a compiler directive or a comment or string spanning lines"',
+    'msgstr "l''appel de %s s'''#$00E9'tend de la ligne %d '#$00E0' la ligne %d par-dessus une directive de compilation ou un commentaire ou une cha'#$00EE'ne sur plusieurs lignes"',
+    '',
+    'msgid "the file sets the global FormatSettings itself (%s, line %d) - TFormatSettings.Invariant would bypass these settings"',
+    'msgstr "le fichier r'#$00E8'gle lui-m'#$00EA'me la variable globale FormatSettings (%s, ligne %d) - TFormatSettings.Invariant contournerait ces r'#$00E9'glages"',
+    '',
+    'msgid "the include %s shows traces of older compilers (%s, line %d) - EArgumentException and EInvalidOpException exist only from Delphi 2009 on; %s"',
+    'msgstr "le fichier include %s porte des traces de compilateurs plus anciens (%s, ligne %d) - EArgumentException et EInvalidOpException n''existent qu'''#$00E0' partir de Delphi 2009; %s"',
+    '',
+    'msgid "the program %s in the directory %s contains the unit and sets the global FormatSettings itself (%s, line %d) - TFormatSettings.Invariant would bypass these settings; %s"',
+    'msgstr "le programme %s dans le r'#$00E9'pertoire %s contient l''unit'#$00E9' et r'#$00E8'gle lui-m'#$00EA'me la variable globale FormatSettings (%s, ligne %d) - TFormatSettings.Invariant contournerait ces r'#$00E9'glages; %s"',
+    '',
+    'msgid "the statement also carries the literal %s - with TFormatSettings.Invariant %s writes another format (decimal point, MM/dd/yyyy), a comparison with the literal would fail"',
+    'msgstr "l''instruction porte aussi le litt'#$00E9'ral %s - avec TFormatSettings.Invariant, %s '#$00E9'crit un autre format (point d'#$00E9'cimal, MM/dd/yyyy), une comparaison avec le litt'#$00E9'ral '#$00E9'chouerait"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

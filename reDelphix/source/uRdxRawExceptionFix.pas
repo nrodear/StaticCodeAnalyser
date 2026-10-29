@@ -44,11 +44,24 @@ unit uRdxRawExceptionFix;
 //     Klasse sich aendern koennte),
 //   - eine Compiler-Direktive zwischen 'raise' und dem Konstruktor,
 //   - die Datei deklariert selbst 'Exception' (dann ist es nicht die Klasse
-//     aus SysUtils, und die neue haette eine andere Hierarchie) oder die
-//     Zielklasse (dann bande der neue Name an die eigene),
+//     aus SysUtils, und die neue haette eine andere Hierarchie) - seit
+//     rwE30 Stufe 2 nur, wo die Deklaration am raise gilt: ein Parameter
+//     oder eine lokale Variable einer ANDEREN Routine sperrt nicht
+//     (DeclReaches; Alcinoe.FBX.Lib.pas, Setup.MainFunc.pas) - oder die
+//     Zielklasse (dann bande der neue Name an die eigene; jede Deklaration),
 //   - die Datei fragt nach Compilern vor Delphi 2009 (uRdxCompilerTraces,
 //     FLOOR_DEFAULT_FN - dieselbe Schwelle wie Default(T) bei SCA121; die
-//     Schwelle selbst zaehlt mit: wer nach 2009 fragt, baut auch davor).
+//     Schwelle selbst zaehlt mit: wer nach 2009 fragt, baut auch davor;
+//     seit rwE30 Stufe 2 auch die mORMot-Symbole und mormot.defines.inc) -
+//     ausser die Datei beweist selbst einen neueren Compiler
+//     (ModernProof: Inline-Variable, RTL-Namensraum im uses),
+//   - was nur die Platte weiss, prueft der Adapter (uRdxFixTable,
+//     TRdxMagicFixes.ProjectReason mit lfExceptionClasses, rwE30 Stufe 2):
+//     alte Projektdateien in der Nachbarschaft (.dof, .cfg/.dof eines
+//     Projekts ohne eigene .dproj, .dproj vor 2009), Pakete fuer ein Delphi
+//     vor 2009, alte Spuren in den Includes - nur ein Beleg sperrt; ein
+//     erschoepfter Deckel, ein nicht gefundenes Include und ein Netzpfad
+//     nicht (der Normalfall ist ein Delphi ab 2009).
 // Grenze: eine Unit im uses, die selbst EArgumentException bzw.
 // EInvalidOpException deklariert, sieht der Planer nicht (nur die Datei);
 // ebensowenig ein with-Ausdruck mit einem Member 'Exception'.
@@ -111,7 +124,9 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
-  uRdxCompilerTraces, // OldCompilerTrace, FLOOR_DEFAULT_FN (Delphi 2009)
+  uRdxBlocks,        // TRdxBlocks.HeadBefore/ReadRoutine (DeclReaches)
+  uRdxCompilerTraces, // OldCompilerTrace, FLOOR_DEFAULT_FN (Delphi 2009),
+                     // ModernProof
   uRdxText;          // _(), MsgMovedSuffix (E29, nie uLocalization)
 
 const
@@ -123,6 +138,16 @@ const
   DECL_PREV: array[0..4] of string = ('var', 'const', 'property',
     'procedure', 'function');
   DECL_NEXT: array[0..1] of string = (':', '=');
+  // DeclReaches (rwE30 Stufe 2): Kopfwoerter, Woerter, an denen die Suche
+  // nach der Parameterliste endet, und die Abschnitte der Unit.
+  ROUTINE_HEAD_WORDS: array[0..4] of string = ('procedure', 'function',
+    'constructor', 'destructor', 'operator');
+  PARAM_STOPS: array[0..7] of string = ('begin', 'end', 'type',
+    'implementation', 'interface', 'uses', 'do', 'then');
+  SECTION_WORDS: array[0..3] of string = ('interface', 'implementation',
+    'initialization', 'finalization');
+  KW_IMPLEMENTATION = 'implementation';
+  MAX_PARAM_TOKENS = 400;
 
 type
   // Ein 'raise Exception' im Code: das raise, der Klassenname und - wenn
@@ -182,14 +207,143 @@ begin
   end;
 end;
 
+// Der Routinenkopf, in dessen Parameterliste ADecl steht ('procedure
+// X(const Exception: AnsiString)') - das Kopfwort; Low = '' sonst. Rueckwaerts
+// bis zur offenen '(' (ein ';' auf Tiefe 0 trennt dort nur Parameter); ein
+// Schluesselwort, das keine Parameterliste traegt, beendet die Suche.
+function ParamHead(AMap: TRdxCodeMap; const ADecl: TRdxToken): TRdxToken;
+var
+  T, P  : TRdxToken;
+  Depth : Integer;
+  Count : Integer;
+begin
+  Result := Default(TRdxToken);
+  T := Before(AMap, ADecl);
+  Depth := 0;
+  Count := 0;
+  while (T.Low <> '') and (Count < MAX_PARAM_TOKENS) do
+  begin
+    Depth := Depth - ParenDelta(T);
+    if Depth < 0 then Break;
+    if (Depth = 0) and IsKeywordAfter(T, Before(AMap, T))
+       and InList(T.Low, PARAM_STOPS) then
+      Exit;
+    T := Before(AMap, T);
+    Inc(Count);
+  end;
+  if (Depth >= 0) or (T.Low <> '(') then Exit;
+  // Vor der '(' der Name (auch 'TFoo.Bar', 'Foo<T>' bleibt aussen vor) und
+  // davor das Kopfwort.
+  P := Before(AMap, T);
+  while P.IsWord and not InList(P.Low, ROUTINE_HEAD_WORDS) do
+  begin
+    P := Before(AMap, P);
+    if P.Low <> '.' then Break;
+    P := Before(AMap, P);
+  end;
+  if InList(P.Low, ROUTINE_HEAD_WORDS) and IsRoutineHead(AMap, P) then
+    Result := P;
+end;
+
+// Die innerste Routine (Kopf bis letztes ';'), die AAt umfasst: rbfFound
+// mit ARoutine; rbfUnsure, wenn davor ein Kopf mit unsicheren Grenzen steht
+// (er koennte es sein); rbfNone ausserhalb jeder Routine (Abschnittswort
+// der Unit oder Dateianfang).
+function RoutineAround(AMap: TRdxCodeMap; const AAt: TRdxToken;
+  out ARoutine: TRdxRoutine): TRdxBodyFind;
+var
+  T : TRdxToken;
+  S : TRdxHeadStep;
+begin
+  ARoutine := Default(TRdxRoutine);
+  T := AAt;
+  while TRdxBlocks.HeadBefore(AMap, T, SECTION_WORDS, S) do
+  begin
+    if S.Stop then
+      Break;
+    if S.Reason <> '' then
+      Exit(rbfUnsure);
+    if TokBefore(S.Routine.Head, AAt) and (S.Routine.Last.Low <> '')
+       and TokBefore(AAt, S.Routine.Last) then
+    begin
+      ARoutine := S.Routine;
+      Exit(rbfFound);
+    end;
+  end;
+  Result := rbfNone;
+end;
+
+// Umfasst die Routine R (Kopf bis letztes ';') das Token AAt?
+function Encloses(const R: TRdxRoutine; const AAt: TRdxToken): Boolean;
+begin
+  Result := (R.Last.Low <> '') and TokBefore(R.Head, AAt)
+    and TokBefore(AAt, R.Last);
+end;
+
+// Das Schluesselwort 'implementation' der Datei; Low = '' ohne.
+function ImplementationTok(AMap: TRdxCodeMap): TRdxToken;
+var
+  T : TRdxToken;
+begin
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), KW_IMPLEMENTATION);
+  while T.Low <> '' do
+  begin
+    if (T.Low = KW_IMPLEMENTATION) and IsKeywordAfter(T, Before(AMap, T)) then
+      Exit(T);
+    T := NextTokenOnLineWith(AMap, T, KW_IMPLEMENTATION);
+  end;
+  Result := Default(TRdxToken);
+end;
+
+// Gilt die Deklaration ADecl am raise ARaise (rwE30 Stufe 2: Alcinoe.FBX.
+// Lib.pas - 'Exception: EALFBXError' lokal in einer verschachtelten Prozedur
+// einer ANDEREN Methode; Setup.MainFunc.pas - 'const Exception: AnsiString'
+// Parameter einer anderen Routine)? Ein Parameter bzw. eine lokale
+// Deklaration gilt nur in ihrer Routine samt deren lokalen Routinen; ein
+// Parameter im interface-Teil gilt im implementation-Teil nie. Was
+// ausserhalb jeder Routine steht (Typ, globale Variable, Feld, Property)
+// oder in einer Routine mit unsicheren Grenzen, gilt - vorsichtig - in der
+// ganzen Datei.
+function DeclReaches(AMap: TRdxCodeMap; const ADecl, ARaise,
+  AImpl: TRdxToken): Boolean;
+var
+  Head : TRdxToken;
+  R    : TRdxRoutine;
+begin
+  Head := ParamHead(AMap, ADecl);
+  if Head.Low <> '' then
+  begin
+    if (AImpl.Low <> '') and TokBefore(ADecl, AImpl)
+       and TokBefore(AImpl, ARaise) then
+      Exit(False);
+    if TRdxBlocks.ReadRoutine(AMap, Head, R) <> '' then
+      Exit(True);
+    Exit(Encloses(R, ARaise));
+  end;
+  // Lokal heisst: zwischen Kopf und Rumpf einer Routine MIT Rumpf (eine
+  // Methodendeklaration im Klassenrumpf hat keinen - ihr Feld gilt der
+  // ganzen Klasse).
+  if (RoutineAround(AMap, ADecl, R) = rbfFound) and (R.Body.Low <> '')
+     and TokBefore(R.HeaderEnd, ADecl) and TokBefore(ADecl, R.Body) then
+    Result := Encloses(R, ARaise)
+  else
+    Result := True;
+end;
+
 // Deklariert die Datei einen Namen ALow (klein) - als Typ, Variable,
 // Konstante, Feld, Parameter, Property oder Routine? Ein Treffer zu viel
-// ('if Exception = X') sperrt nur.
-function DeclaresOwn(AMap: TRdxCodeMap; const ALow: string): Boolean;
+// ('if Exception = X') sperrt nur. Mit ARaise (Low <> '') zaehlen nur
+// Deklarationen, die dort gelten (DeclReaches, rwE30 Stufe 2) - fuer
+// 'Exception'; die Zielklasse fragt ohne (jede Deklaration sperrt).
+function DeclaresOwn(AMap: TRdxCodeMap; const ALow: string;
+  const ARaise: TRdxToken): Boolean;
 var
-  T, P : TRdxToken;
+  T, P, Impl : TRdxToken;
 begin
   Result := False;
+  Impl := Default(TRdxToken);
+  if ARaise.Low <> '' then
+    Impl := ImplementationTok(AMap);
   T := NextTokenOnLineWith(AMap, Default(TRdxToken), ALow);
   while T.Low <> '' do
   begin
@@ -198,6 +352,7 @@ begin
       P := Before(AMap, T);
       if (P.Low <> '.')
          and (InList(After(AMap, T).Low, DECL_NEXT) or InList(P.Low, DECL_PREV))
+         and ((ARaise.Low = '') or DeclReaches(AMap, T, ARaise, Impl))
       then
         Exit(True);
     end;
@@ -227,12 +382,14 @@ begin
   else if DirectiveBetween(AMap, Site.RaiseTok, Site.CtorTok.Line,
             Site.CtorTok.Col) then
     AReason := _(R_RAWEXC_DIRECTIVE)
-  else if DeclaresOwn(AMap, EXC_LOW) then
+  else if DeclaresOwn(AMap, EXC_LOW, Site.RaiseTok) then
     AReason := _(R_RAWEXC_OWN, ['Exception'])
-  else if DeclaresOwn(AMap, LowerCase(AClass)) then
+  else if DeclaresOwn(AMap, LowerCase(AClass), Default(TRdxToken)) then
     AReason := _(R_RAWEXC_OWN, [AClass])
-  else
+  else if not ProofCovers(ModernProof(AMap), FLOOR_DEFAULT_FN) then
   begin
+    // Eine Inline-Variable bzw. ein RTL-Namensraum ausserhalb jeder Weiche
+    // beweist Delphi ab XE2 - die Spur widerlegt (rwE30 Stufe 2).
     Trace := OldCompilerTrace(AMap, FLOOR_DEFAULT_FN, Li);
     if Trace <> '' then
       AReason := _(R_RAWEXC_OLD, [Trace, Li, AClass]);

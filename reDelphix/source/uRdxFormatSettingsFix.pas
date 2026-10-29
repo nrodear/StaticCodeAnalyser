@@ -33,9 +33,11 @@ unit uRdxFormatSettingsFix;
 //     im Text steht. Meldung '<name klein> called without explicit
 //     TFormatSettings - depends on system locale', Zeile der Anweisung.
 //     Weil EIN Settings-Argument die ganze Anweisung stumm schaltet, setzt
-//     die Hilfe es an JEDEN Aufruf der Liste auf der Zeile (eine Ersetzung)
-//     und lehnt ab, wenn die Anweisung auf einer Folgezeile einen weiteren
-//     nennt - der bliebe sonst still ungeaendert.
+//     die Hilfe es an JEDEN Aufruf der Liste der Anweisung (eine Ersetzung)
+//     - bis zum Realworld-Test rwE30 Stufe 2 nur auf der Fundzeile, und ein
+//     Aufruf auf einer Folgezeile sperrte (R_FS_CONTINUES, R_FS_NEXT_LINE);
+//     seitdem kommen die Aufrufe der Folgezeilen mit (FollowNames:
+//     MainControllerU.pas:47, wbLOD.pas:3082).
 //   SCA059 (uFormatMismatch): den ersten 'format(' der Anweisung mit
 //     Float-Spec (%f %g %e %m %n) und hoechstens zwei Argumenten. Meldung
 //     'Format: float spec <Formatstring> without TFormatSettings - ...';
@@ -45,43 +47,64 @@ unit uRdxFormatSettingsFix;
 //
 // GRUNDSATZ wie in uRdxLineFixes: lieber keine Hilfe als eine falsche. Keine
 // Hilfe, wenn
-//   * die Meldung den Namen bzw. Formatstring nicht nennt, die Zeile ihn
+//   * die Meldung den Namen bzw. Formatstring nicht nennt, die Anweisung ihn
 //     nicht (mehr) als Aufruf auf den Code-Spalten traegt (verschoben,
-//     Kommentar, String) oder der Aufruf erst auf einer Folgezeile beginnt;
+//     Kommentar, String);
 //   * der Aufruf qualifiziert ist (nur 'SysUtils.' und 'System.SysUtils.'
-//     sind die RTL), nicht auf der Zeile schliesst oder eine andere Zahl
-//     von Argumenten traegt; SCA059: mehr als ein Format auf der Zeile;
-//   * auf der Zeile eine Direktive steht;
+//     sind die RTL), seine Klammer nicht innerhalb von MAX_CALL_LINES Zeilen
+//     schliesst bzw. dazwischen eine Direktive oder ein zeilenuebergreifender
+//     Kommentar/String steht (bis rwE30 Stufe 2 musste sie auf der Zeile
+//     schliessen: MainFormU.pas:1471, WrapFmxTypes.pas:391) oder eine andere
+//     Zahl von Argumenten traegt; SCA059: mehr als ein Format in der
+//     Anweisung;
+//   * auf der Zeile bzw. zwischen Fundzeile und letztem Aufruf eine
+//     Direktive steht;
 //   * SysUtils in keiner uses-Klausel steht, die Datei eine eigene Routine
-//     des Namens deklariert, vor dem Aufruf in seiner Routine ein with
-//     steht (die Namen koennten an einen Member binden);
-//   * Hauptweg: die Datei einen Bezeichner FormatSettings deklariert (Feld,
-//     Variable, Parameter, Property) oder als Member nutzt ('X.FormatSettings'
-//     ausser 'SysUtils.FormatSettings') - der blosse Name bande dort; die
-//     Datei nach Compilern vor Delphi XE fragt (die globale Variable gibt es
-//     erst seit XE; FPC vor 2.6);
+//     des Namens deklariert, ein with in der Routine den Aufruf umfasst (die
+//     Namen koennten an einen Member binden; seit rwE30 Stufe 2 zaehlt ein
+//     with, dessen Anweisung vor dem Aufruf endet, nicht mehr -
+//     WithEndsBefore);
+//   * Hauptweg: die Datei nach Compilern vor Delphi XE fragt (die globale
+//     Variable gibt es erst seit XE; FPC vor 2.6) - ausser sie beweist
+//     selbst einen neueren (uRdxCompilerTraces.ModernProof). Deklariert die
+//     Datei einen Bezeichner FormatSettings (Feld, Variable, Parameter,
+//     Property) oder nutzt sie ihn als Member, bande der blosse Name dort:
+//     seit rwE30 Stufe 2 steht dann die globale Variable qualifiziert da
+//     (', System.SysUtils.FormatSettings' in der Schreibweise der uses-
+//     Klausel - dieselbe Variable; bis dahin sperrte das);
 //   * Alt-Weg: die Datei eine FPC-Weiche oder einen FPC-Modus traegt (FPC
-//     3.2.2 kennt kein TFormatSettings.Invariant), nach Compilern bis Delphi
-//     10.3 fragt (belegt ist Invariant in den Docwiki-Staenden ab Rio -
-//     dieselbe Schwelle wie SCA014, FLOOR_INLINE_DECL), ein eigenes
-//     TFormatSettings deklariert; SCA059 dazu bei einer Waehrungs-Spec m
-//     (Invariant schreibt das allgemeine Waehrungszeichen); SCA128, wenn
-//     ein Lese-Aufruf (StrToDate, StrToTime, StrToDateTime, StrToFloat,
-//     StrToCurr) ein Literal liest, das nicht zum Invariant-Format passt
-//     (rwE29: StrToDateTime('17/02/2017 16:37:50') - Monat 17, sicherer
-//     EConvertError; LiteralMisfit; reine Zeit-Literale bei StrToTime
-//     sperren nicht - Review e/HilfeFixC).
+//     3.2.2 kennt kein TFormatSettings.Invariant) - ausser alle Aufrufe
+//     stehen in einem Zweig ohne FPC ('{$IF NOT DEFINED(FPC)}') -, nach
+//     Compilern bis Delphi 10.3 fragt (belegt ist Invariant in den Docwiki-
+//     Staenden ab Rio - dieselbe Schwelle wie SCA014, FLOOR_INLINE_DECL) -
+//     beides nicht, wenn die Datei eine Inline-Variable oder Invariant selbst
+//     ohne Weiche nutzt (rwE30 Stufe 2) -, ein eigenes TFormatSettings
+//     deklariert, die globale FormatSettings fuer Datum/Uhrzeit selbst
+//     einstellt (Invariant liefe daran vorbei; rwE30 Stufe 2, HeidiSQL);
+//     SCA059 dazu bei einer Waehrungs-Spec m (Invariant schreibt das
+//     allgemeine Waehrungszeichen); SCA128, wenn ein Lese-Aufruf (StrToDate,
+//     StrToTime, StrToDateTime, StrToFloat, StrToCurr) ein Literal liest,
+//     das nicht zum Invariant-Format passt (rwE29: StrToDateTime('17/02/2017
+//     16:37:50') - Monat 17, sicherer EConvertError; LiteralMisfit; reine
+//     Zeit-Literale bei StrToTime sperren nicht - Review e/HilfeFixC), bzw.
+//     die Anweisung ein Literal traegt, mit dem ein schreibender Aufruf
+//     verglichen wird und das Invariant nicht schreibt ('5,5', '29.10.2026';
+//     rwE30 Stufe 2, horse Tests.Horse.Core.Param.pas:292 -
+//     CompareLiteralReason).
 // Ruft die Datei eine weitere Routine derselben Familie (Datum/Uhrzeit bzw.
 // Zahl, auch Try..., ...Def) ohne Invariant, koennte ein Paar aus Schreiben
 // und Lesen bzw. Vergleich brechen (rwE29: HeidiSQL main.pas). Das SPERRT
 // NICHT (Entscheid Nico nach dem Review e/HilfeFixC, M2 - der Alt-Weg ist
 // ohnehin als aendernd gekennzeichnet und nie per Taste): der Hinweis nennt
-// das Gegenstueck (PairHint, PairBreakLine).
+// das Gegenstueck (PairHint, PairBreakLine) - seit rwE30 Stufe 2 zuerst
+// eines in derselben Routine (HeidiSQL main.pas:14718).
 // Was nur die Platte weiss (Projektdateien, Includes), prueft der Adapter
 // in uRdxFixTable (FormatSettingsDiskCheck, rwE29).
 // Der Bereich der Ersetzung beginnt hinter dem letzten Zeichen des letzten
-// Arguments (nie auf einer leeren Zeile) und endet hinter der letzten
-// schliessenden Klammer; ein Leerraum vor der Klammer bleibt dahinter.
+// Arguments (nie auf einer leeren Zeile; steht die Klammer tiefer, auf dem
+// letzten Zeichen davor) und endet hinter der letzten schliessenden
+// Klammer; Leerraum und Kommentar vor der Klammer bleiben dahinter. Er darf
+// seit rwE30 Stufe 2 ueber Zeilen gehen (BuildEdit).
 
 interface
 
@@ -94,12 +117,16 @@ const
   R_FS_NO_NAME = 'the message names none of the locale-dependent RTL '
     + 'functions of SCA128';
   R_FS_MOVED = 'no call of %s on the code columns of the reported line';
-  R_FS_NEXT_LINE = 'the call stands on line %d, a following line of the '
-    + 'statement - the help only handles calls on the reported line';
+
   R_FS_NOT_CALL = '%s stands without an argument list - no call';
   R_FS_QUALIFIED = '%s is called as %s - another routine than the one of '
     + 'SysUtils';
-  R_FS_OPEN = 'the call of %s does not close on the reported line';
+  // Seit rwE30 Stufe 2 darf die Klammer bis MAX_CALL_LINES Zeilen tiefer
+  // schliessen (ReadCall) - ohne Direktive und ohne Zeile, die in einem
+  // Kommentar oder mehrzeiligen String beginnt (R_FS_CALL_BREAK).
+  R_FS_OPEN = 'the call of %s does not close within %d lines';
+  R_FS_CALL_BREAK = 'the call of %s runs from line %d to line %d across a '
+    + 'compiler directive or a comment or string spanning lines';
   R_FS_ARITY = '%s carries %d arguments here, the RTL form without '
     + 'TFormatSettings has %d';
   R_FS_DIRECTIVE = 'a compiler directive stands on the reported line';
@@ -109,10 +136,7 @@ const
     + 'need not bind to the RTL';
   R_FS_OWN_ROUTINE = 'the file declares its own routine %s - the call need '
     + 'not bind to the RTL';
-  R_FS_SHADOW = 'the file declares an identifier FormatSettings (line %d) - '
-    + 'the name would bind there, not to SysUtils.FormatSettings';
-  R_FS_MEMBER = 'the file uses FormatSettings as a member (line %d) - inside '
-    + 'such a class the bare name binds to the member';
+
   R_FS_WITH = 'a with statement stands before the call in its routine (line '
     + '%d) - the names could bind to a member';
   R_FS_OLD_VAR = 'the file asks for old compilers (%s, line %d) - the global '
@@ -122,6 +146,15 @@ const
   R_FS_OLD_INVARIANT = 'the file asks for compilers up to Delphi 10.3 (%s, '
     + 'line %d) - TFormatSettings.Invariant is only checked from there on';
   R_FS_OWN_TYPE = 'the file declares its own TFormatSettings (line %d)';
+  // Alt-Weg (rwE30 Stufe 2): die Datei stellt die globale FormatSettings
+  // selbst ein - %s das Feld, %d die Zeile.
+  R_FS_SETTINGS_SET = 'the file sets the global FormatSettings itself (%s, '
+    + 'line %d) - TFormatSettings.Invariant would bypass these settings';
+  // Alt-Weg (rwE30 Stufe 2): ein Literal der Anweisung, mit dem das Ergebnis
+  // verglichen wird - %s das Literal (mit Quotes), %s der Aufruf.
+  R_FS_LIT_COMPARE = 'the statement also carries the literal %s - with '
+    + 'TFormatSettings.Invariant %s writes another format (decimal point, '
+    + 'MM/dd/yyyy), a comparison with the literal would fail';
   // Alt-Weg (rwE29): das Literal, das der Aufruf liest, passt nicht zu
   // TFormatSettings.Invariant - %s das Literal (mit Quotes), %s der Aufruf.
   R_FS_LIT_DATE = 'the literal %s does not fit the date and time format of '
@@ -193,6 +226,7 @@ uses
   uRefactorInfo,        // TRefactorSpan.Make
   uRdxText,             // _(), MsgMovedSuffix (E29, nie uLocalization)
   uRdxRecipes,          // TRdxRecipes.LineLooksFpcAware (FpcTellLine)
+  uRdxBlocks,           // BeginBodyAround (PairBreakLine, rwE30 Stufe 2)
   uRdxCompilerTraces;   // OldCompilerTrace, FLOOR_SETTINGS_VAR, FLOOR_INLINE_DECL
 
 const
@@ -230,6 +264,16 @@ const
   SCOPE_STOPS: array[0..3] of string = ('implementation', 'initialization',
     'finalization', 'interface');
   MAX_FOLLOW_LINES = 30;
+  // So tief darf die Klammer eines Aufrufs schliessen (ReadCall) und so
+  // weit liest WithEndsBefore die Anweisung eines with.
+  MAX_CALL_LINES = 10;
+  MAX_WITH_TOKENS = 5000;
+  // Was ein Ergebnis schreibt, das mit einem Literal verglichen werden
+  // koennte (CompareLiteralReason, Alt-Weg).
+  NUMBER_WRITERS: array[0..3] of string = ('floattostr', 'currtostr',
+    'formatfloat', 'formatcurr');
+  DATE_WRITERS: array[0..3] of string = ('datetostr', 'timetostr',
+    'datetimetostr', 'formatdatetime');
   // Was ein Literal liest (LiteralMisfit, Alt-Weg): Zahl bzw. Datum/Uhrzeit.
   PARSE_NUMBER: array[0..1] of string = ('strtofloat', 'strtocurr');
   PARSE_DATE     = 'strtodate';
@@ -259,14 +303,15 @@ const
   // davor.
 
 type
-  // Ein Aufruf auf der Zeile: Name, Klammern und die Spalte, vor der das
+  // Ein Aufruf: Name, Klammern und die Stelle (Zeile, Spalte), vor der das
   // Argument eingefuegt wird (hinter dem letzten Zeichen des letzten
-  // Arguments).
+  // Arguments - seit rwE30 Stufe 2 auch auf einer Folgezeile).
   TCallSite = record
-    Name  : TRdxToken;
-    Open  : TRdxToken;
-    Close : TRdxToken;
-    InsAt : Integer;
+    Name    : TRdxToken;
+    Open    : TRdxToken;
+    Close   : TRdxToken;
+    InsLine : Integer;
+    InsAt   : Integer;
   end;
   TCallSites = array of TCallSite;
 
@@ -339,6 +384,35 @@ begin
   end;
 end;
 
+// Die Woerter ANames (nicht hinter '@') auf den Folgezeilen der Anweisung
+// von ALine - dieselbe Grenze wie FollowLineWith (';', ein Schluesselwort
+// aus STATEMENT_STOP, MAX_FOLLOW_LINES). Seit rwE30 Stufe 2 bearbeitet die
+// Hilfe sie mit (Planer kennt die Aufrufzeile; MainControllerU.pas:47,
+// wbLOD.pas:3082), statt abzulehnen.
+function FollowNames(AMap: TRdxCodeMap; ALine: Integer;
+  const ANames: array of string): TArray<TRdxToken>;
+var
+  T, P : TRdxToken;
+begin
+  Result := nil;
+  T := LastTokenOn(AMap, ALine);
+  if (T.Low = '') or InList(T.Low, STATEMENT_DONE) then
+    Exit;
+  P := T;
+  T := After(AMap, T);
+  while (T.Low <> '') and (T.Line - ALine <= MAX_FOLLOW_LINES) do
+  begin
+    if T.Low = ';' then
+      Exit;
+    if IsKeywordAfter(T, P) and InList(T.Low, STATEMENT_STOP) then
+      Exit;
+    if T.IsWord and InList(T.Low, ANames) and (P.Low <> '@') then
+      AddToken(Result, T);
+    P := T;
+    T := After(AMap, T);
+  end;
+end;
+
 // Steht vor ADot genau 'SysUtils' bzw. 'System.SysUtils' (davor kein
 // weiteres Glied)? Dann ist der qualifizierte Aufruf die RTL.
 function RtlQualified(AMap: TRdxCodeMap; const ADot: TRdxToken): Boolean;
@@ -356,39 +430,49 @@ begin
   Result := (P.Low = QUAL_SCOPE) and (Before(AMap, P).Low <> '.');
 end;
 
-// Die Argumente zwischen AFrom und ATo (die Spalten innerhalb der
-// Klammern): Kommas auf oberster Ebene + 1, 0 ohne Inhalt. Strings zaehlen
-// als Inhalt, ihre Kommas und Klammern nicht; Kommentare gar nicht. Ein
-// Typparameter mit Komma ('TPair<A, B>') zaehlt eins zu viel - die Hilfe
-// lehnt dann ab (die Richtung ist sicher).
-function ArgCount(AMap: TRdxCodeMap; ALine, AFrom, ATo: Integer): Integer;
+// Die Argumente zwischen den Klammern AOpen und AClose (auch ueber Zeilen,
+// seit rwE30 Stufe 2): Kommas auf oberster Ebene + 1, 0 ohne Inhalt.
+// Strings zaehlen als Inhalt, ihre Kommas und Klammern nicht; Kommentare
+// gar nicht. Ein Typparameter mit Komma ('TPair<A, B>') zaehlt eins zu viel
+// - die Hilfe lehnt dann ab (die Richtung ist sicher).
+function ArgCount(AMap: TRdxCodeMap; const AOpen, AClose: TRdxToken): Integer;
 var
-  L       : string;
-  c       : Integer;
-  Depth   : Integer;
-  Commas  : Integer;
-  K       : Char;
-  Content : Boolean;
+  L          : string;
+  Li, c      : Integer;
+  First, Stp : Integer;
+  Depth      : Integer;
+  Commas     : Integer;
+  K          : Char;
+  Content    : Boolean;
 begin
-  L := AMap.Raw(ALine);
   Depth := 0;
   Commas := 0;
   Content := False;
-  for c := AFrom to ATo do
+  for Li := AOpen.Line to AClose.Line do
   begin
-    K := AMap.ClassAt(ALine, c);
-    if K = 's' then
-      Content := True
-    else if K = 'c' then
+    L := AMap.Raw(Li);
+    First := 1;
+    if Li = AOpen.Line then
+      First := AOpen.EndCol;
+    Stp := Length(L);
+    if Li = AClose.Line then
+      Stp := AClose.Col - 1;
+    for c := First to Stp do
     begin
-      if not IsBlank(L[c]) then
-        Content := True;
-      if CharInSet(L[c], ['(', '[']) then
-        Inc(Depth)
-      else if CharInSet(L[c], [')', ']']) then
-        Dec(Depth)
-      else if (L[c] = ',') and (Depth = 0) then
-        Inc(Commas);
+      K := AMap.ClassAt(Li, c);
+      if K = 's' then
+        Content := True
+      else if K = 'c' then
+      begin
+        if not IsBlank(L[c]) then
+          Content := True;
+        if CharInSet(L[c], ['(', '[']) then
+          Inc(Depth)
+        else if CharInSet(L[c], [')', ']']) then
+          Dec(Depth)
+        else if (L[c] = ',') and (Depth = 0) then
+          Inc(Commas);
+      end;
     end;
   end;
   if Content then
@@ -398,16 +482,20 @@ begin
 end;
 
 // Der Aufruf am Namen AName mit AArity Argumenten: '' und ASite, sonst der
-// Grund (qualifiziert, kein Aufruf, schliesst nicht auf der Zeile, andere
-// Argumentzahl).
+// Grund (qualifiziert, kein Aufruf, schliesst nicht, andere Argumentzahl).
+// Die schliessende Klammer darf seit rwE30 Stufe 2 bis MAX_CALL_LINES
+// Zeilen tiefer stehen (MainFormU.pas:1471 'lOrder.Total]));',
+// WrapFmxTypes.pas:391) - wenn dazwischen keine Direktive steht und keine
+// Zeile in einem Kommentar oder mehrzeiligen String beginnt; die Klammer
+// sucht MatchClose ueber die Code-Token (Strings und Kommentare zaehlen
+// nicht).
 function ReadCall(AMap: TRdxCodeMap; const AName: TRdxToken; AArity: Integer;
   out ASite: TCallSite): string;
 var
   Prev  : TRdxToken;
-  L     : string;
   Text  : string;
   Args  : Integer;
-  c     : Integer;
+  Li    : Integer;
 begin
   Result := '';
   ASite := Default(TCallSite);
@@ -423,19 +511,27 @@ begin
   if ASite.Open.Low <> '(' then
     Exit(_(R_FS_NOT_CALL, [Text]));
   if ASite.Open.Line <> AName.Line then
-    Exit(_(R_FS_OPEN, [Text]));
-  ASite.Close := MatchClose(AMap, ASite.Open, 0);
+    Exit(_(R_FS_OPEN, [Text, MAX_CALL_LINES]));
+  ASite.Close := MatchClose(AMap, ASite.Open, MAX_CALL_LINES);
   if ASite.Close.Low = '' then
-    Exit(_(R_FS_OPEN, [Text]));
-  Args := ArgCount(AMap, AName.Line, ASite.Open.EndCol, ASite.Close.Col - 1);
+    Exit(_(R_FS_OPEN, [Text, MAX_CALL_LINES]));
+  if ASite.Close.Line > ASite.Open.Line then
+  begin
+    if DirectiveInLines(AMap, ASite.Open.Line, ASite.Close.Line) then
+      Exit(_(R_FS_CALL_BREAK, [Text, ASite.Open.Line, ASite.Close.Line]));
+    for Li := ASite.Open.Line + 1 to ASite.Close.Line do
+      if AMap.StartsInside(Li) then
+        Exit(_(R_FS_CALL_BREAK, [Text, ASite.Open.Line, ASite.Close.Line]));
+  end;
+  Args := ArgCount(AMap, ASite.Open, ASite.Close);
   if Args <> AArity then
     Exit(_(R_FS_ARITY, [Text, Args, AArity]));
-  // Hinter das letzte Zeichen vor der Klammer (Leerraum bleibt dahinter).
-  L := AMap.Raw(AName.Line);
-  c := ASite.Close.Col - 1;
-  while (c > ASite.Open.Col) and IsBlank(L[c]) do
-    Dec(c);
-  ASite.InsAt := c + 1;
+  // Hinter das letzte Zeichen aus Code oder String vor der Klammer
+  // (Leerraum und Kommentar bleiben dahinter) - mit Argumenten nie die
+  // Klammer selbst.
+  if not LastCharBefore(AMap, ASite.Close, ASite.InsLine, ASite.InsAt) then
+    Exit(_(R_FS_ARITY, [Text, 0, AArity]));
+  Inc(ASite.InsAt);
 end;
 
 // Ist das erste Argument (ab AFrom bis zum ersten Komma, hoechstens bis
@@ -656,13 +752,25 @@ end;
 
 // Der Grund, wenn der Aufruf ASite ein Literal liest, das nicht zu
 // TFormatSettings.Invariant passt; '' sonst (kein Literal, kein Leser).
+// Das Literal darf auf einer Folgezeile beginnen ('StrToDateTime(' am
+// Zeilenende, das Literal darunter - seit rwE30 Stufe 2 schliesst die
+// Klammer bis MAX_CALL_LINES tiefer; Review e/HilfeFixG: bis dahin las die
+// Probe nur die Zeile des Namens und liess das Literal durch).
 function LiteralReason(AMap: TRdxCodeMap; const ASite: TCallSite): string;
 var
   Lit, Kind : string;
+  Li, Co    : Integer;
+  Upto      : Integer;
 begin
   Result := '';
-  if not LiteralFirstArg(AMap, ASite.Name.Line, ASite.Open.EndCol,
-       ASite.Close.Col - 1, Lit) then
+  if not FirstCharAfter(AMap, ASite.Open, Li, Co)
+     or (Li > ASite.Close.Line)
+     or ((Li = ASite.Close.Line) and (Co >= ASite.Close.Col)) then
+    Exit;
+  Upto := Length(AMap.Raw(Li));
+  if Li = ASite.Close.Line then
+    Upto := ASite.Close.Col - 1;
+  if not LiteralFirstArg(AMap, Li, Co, Upto, Lit) then
     Exit;
   Kind := LiteralMisfit(ASite.Name.Low, Lit);
   if Kind = MISFIT_DATE then
@@ -729,8 +837,8 @@ end;
 // ohne Invariant (s. Kopf des Abschnitts): seine Zeile und sein Name wie
 // geschrieben in AName; 0 ohne. Ein Member-Aufruf ('X.DateToStr', X nicht
 // SysUtils) ist eine andere Routine und zaehlt nicht.
-function PairBreakLine(AMap: TRdxCodeMap; const ASites: TCallSites;
-  out AName: string): Integer;
+function PairBreakIn(AMap: TRdxCodeMap; const ASites: TCallSites;
+  AFrom, ATo: Integer; out AName: string): Integer;
 var
   WantDate, WantNum : Boolean;
   i, Li             : Integer;
@@ -747,7 +855,7 @@ begin
     WantDate := WantDate or InList(ASites[i].Name.Low, PAIR_DATE);
     WantNum := WantNum or InList(ASites[i].Name.Low, PAIR_NUMBER);
   end;
-  for Li := 1 to AMap.LineCount do
+  for Li := AFrom to ATo do
   begin
     LowText := LowerCase(AMap.Raw(Li));
     if not ((WantDate and MentionsAny(LowText, PAIR_DATE_HINTS))
@@ -772,6 +880,23 @@ begin
       T := After(AMap, T);
     end;
   end;
+end;
+
+// PairBreakIn erst im Rumpf der Routine um den ersten Aufruf, dann in der
+// ganzen Datei (rwE30 Stufe 2, HeidiSQL main.pas:14718: der Vergleich mit
+// 'DateToStr(Item.Time)' steht in derselben Routine, der Hinweis nannte
+// Zeile 1782 einer anderen).
+function PairBreakLine(AMap: TRdxCodeMap; const ASites: TCallSites;
+  out AName: string): Integer;
+var
+  R : TRdxRoutine;
+begin
+  Result := 0;
+  if (Length(ASites) > 0)
+     and (BeginBodyAround(AMap, ASites[0].Name, R) = rbfFound) then
+    Result := PairBreakIn(AMap, ASites, R.Body.Line, R.EndTok.Line, AName);
+  if Result = 0 then
+    Result := PairBreakIn(AMap, ASites, 1, AMap.LineCount, AName);
 end;
 
 // Steht das Token T wie eine Deklaration da - 'T: Typ', 'T = Wert' oder
@@ -820,14 +945,18 @@ begin
   end;
 end;
 
-// Nennt die uses-Klausel ab AUses SysUtils bzw. System.SysUtils?
-function ClauseHasSysUtils(AMap: TRdxCodeMap; const AUses: TRdxToken): Boolean;
+// Nennt die uses-Klausel ab AUses SysUtils bzw. System.SysUtils? ASpelled:
+// der Name wie geschrieben ('System.SysUtils') - fuer die qualifizierte
+// Form 'System.SysUtils.FormatSettings' (rwE30 Stufe 2).
+function ClauseHasSysUtils(AMap: TRdxCodeMap; const AUses: TRdxToken;
+  out ASpelled: string): Boolean;
 var
   N    : TRdxToken;
   Name : string;
 begin
   Result := False;
   Name := '';
+  ASpelled := '';
   N := After(AMap, AUses);
   while N.Low <> '' do
   begin
@@ -838,32 +967,113 @@ begin
       if N.Low = ';' then
         Exit;
       Name := '';
+      ASpelled := '';
     end
     else
+    begin
       Name := Name + N.Low;
+      ASpelled := ASpelled + TokText(AMap, N);
+    end;
     N := After(AMap, N);
   end;
 end;
 
-// Steht SysUtils in einer uses-Klausel der Datei?
-function UsesSysUtils(AMap: TRdxCodeMap): Boolean;
+// Steht SysUtils in einer uses-Klausel der Datei? ASpelled wie oben.
+function UsesSysUtils(AMap: TRdxCodeMap; out ASpelled: string): Boolean;
 var
   T : TRdxToken;
 begin
   Result := False;
+  ASpelled := '';
   T := NextTokenOnLineWith(AMap, Default(TRdxToken), NAME_USES);
   while T.Low <> '' do
   begin
     if (T.Low = NAME_USES) and IsKeywordAfter(T, Before(AMap, T))
-       and ClauseHasSysUtils(AMap, T) then
+       and ClauseHasSysUtils(AMap, T, ASpelled) then
       Exit(True);
     T := NextTokenOnLineWith(AMap, T, NAME_USES);
   end;
 end;
 
+// Endet die Anweisung des with AWith vor ATok? Ihr Bereich: hinter 'do'
+// ein Block (begin, try, case, asm) bis zu seinem end, sonst die Anweisung
+// bis zum ';' auf Klammer- und Blocktiefe 0 bzw. bis zum Ende des
+// umgebenden Blocks (end, until, except, finally auf Tiefe 0). Ein 'else'
+// zaehlt mit (es kann einem if der Anweisung gehoeren - der Bereich wird
+// eher zu gross, das sperrt nur). Ohne 'do' bzw. hinter MAX_WITH_TOKENS
+// Token: nein (der Bereich koennte ATok umfassen). Realworld-Test rwE30
+// Stufe 2: Dev-Cpp Project.pas:1501 ('with TSaveDialog.Create(nil) do try
+// .. finally Free; end;' endet in Zeile 1470), ProcAnalyzeMesh.pas:213
+// (das with steht in einer lokalen Prozedur davor).
+function WithEndsBefore(AMap: TRdxCodeMap; const AWith,
+  ATok: TRdxToken): Boolean;
+var
+  T, P, Body : TRdxToken;
+  Parens     : Integer;
+  Blocks     : Integer;
+  Count      : Integer;
+  IsBlock    : Boolean;
+begin
+  Result := False;
+  Parens := 0;
+  Count := 0;
+  P := AWith;
+  T := After(AMap, AWith);
+  // Bis zum 'do' auf Klammertiefe 0.
+  while (T.Low <> '') and not ((Parens = 0) and (T.Low = 'do')
+        and IsKeywordAfter(T, P)) do
+  begin
+    Parens := Parens + ParenDelta(T);
+    Inc(Count);
+    if (Count > MAX_WITH_TOKENS) or not TokBefore(T, ATok) then Exit;
+    P := T;
+    T := After(AMap, T);
+  end;
+  if T.Low = '' then Exit;
+  Body := After(AMap, T);
+  IsBlock := IsEndOpener(Body.Low) and IsKeywordAfter(Body, T);
+  Parens := 0;
+  Blocks := 0;
+  P := T;
+  T := Body;
+  while T.Low <> '' do
+  begin
+    // ATok erreicht, bevor die Anweisung endet: das with umfasst ihn.
+    if not TokBefore(T, ATok) then Exit;
+    Inc(Count);
+    if Count > MAX_WITH_TOKENS then Exit;
+    Parens := Parens + ParenDelta(T);
+    if IsKeywordAfter(T, P) then
+    begin
+      if IsEndOpener(T.Low) or (T.Low = 'repeat') then
+        Inc(Blocks)
+      else if (T.Low = 'end') or (T.Low = 'until') then
+      begin
+        // Auf Tiefe 0 schliesst es den umgebenden Block.
+        if Blocks = 0 then
+          Exit(True);
+        Dec(Blocks);
+        // Der Block direkt hinter 'do' ist zu Ende.
+        if IsBlock and (Blocks = 0) then
+          Exit(True);
+      end
+      else if (Blocks = 0) and ((T.Low = 'except') or (T.Low = 'finally'))
+      then
+        Exit(True);
+    end;
+    if (T.Low = ';') and (Parens = 0) and (Blocks = 0) then
+      Exit(True);
+    P := T;
+    T := After(AMap, T);
+  end;
+end;
+
 // Die Zeile eines with vor ATok in seiner Routine (rueckwaerts bis zum
-// Routinenkopf oder Unit-Abschnitt); 0 ohne. Ein with, dessen Bereich schon
-// endete, sperrt mit - vorsichtig, nie falsch.
+// Routinenkopf oder Unit-Abschnitt), dessen Anweisung ATok umfasst; 0
+// ohne. Seit rwE30 Stufe 2 zaehlt ein with, dessen Anweisung schon vor ATok
+// endet, nicht mehr (WithEndsBefore) - auch nicht eines in einer lokalen
+// Routine davor (deren Kopf steht zwischen with und ATok nicht: die Suche
+// laeuft ueber ihren Rumpf hinweg bis zu ihrem Kopf).
 function WithLineBefore(AMap: TRdxCodeMap; const ATok: TRdxToken): Integer;
 var
   T, P : TRdxToken;
@@ -875,7 +1085,7 @@ begin
     P := Before(AMap, T);
     if IsKeywordAfter(T, P) then
     begin
-      if T.Low = 'with' then
+      if (T.Low = 'with') and not WithEndsBefore(AMap, T, ATok) then
         Exit(T.Line);
       if InList(T.Low, SCOPE_STOPS) or IsRoutineHeadAfter(T, P) then
         Exit;
@@ -902,13 +1112,46 @@ end;
 
 // Die Fragen an die ganze Datei (s. Kopf); '' oder der Grund. ANames: die
 // Namen der Aufrufe wie im Quelltext, AAt: der erste Aufruf.
+// Stehen alle Aufrufe ASites in einem Zweig, den FPC nie uebersetzt
+// ('{$IF NOT DEFINED(FPC)}', '{$IFNDEF FPC}' ...; uRdxCompilerTraces.
+// FpcExcludedAt)? Realworld-Test rwE30 Stufe 2: Horse.Core.Param.Field.pas
+// :245 (AsList<T> nur fuer Delphi), die FPC-Weiche in Zeile 3 gilt dort
+// nicht.
+function AllFpcExcluded(const ADirs: TRdxCondDirectives;
+  const ASites: TCallSites): Boolean;
+var
+  i : Integer;
+begin
+  Result := Length(ASites) > 0;
+  for i := 0 to High(ASites) do
+    Result := Result and FpcExcludedAt(ADirs, ASites[i].Name.Line,
+      ASites[i].Name.Col);
+end;
+
+// Die Fragen an die ganze Datei (s. Kopf); '' oder der Grund. ANames: die
+// Namen der Aufrufe wie im Quelltext, ASites: die Aufrufe (der erste fuer
+// das with). ASettings: das Argument - ', TFormatSettings.Invariant' bzw.
+// ', FormatSettings', seit rwE30 Stufe 2 qualifiziert (', System.SysUtils.
+// FormatSettings', Schreibweise der uses-Klausel), wenn die Datei einen
+// Bezeichner FormatSettings deklariert oder als Member nutzt: bis dahin
+// sperrte das (TemplatePro.pas:3170 - die Property FormatSettings verdeckt
+// den Namen; die qualifizierte globale Variable ist dieselbe, die die
+// Ueberladung ohne Settings liest). Der Gegenbeweis der Datei (ModernProof,
+// Invariant ohne Weiche) widerlegt Spuren alter Compiler und - fuer
+// Invariant - die FPC-Weiche; ebenso ein Aufruf in einem Zweig ohne FPC.
 function FileReason(AMap: TRdxCodeMap; const ANames: array of string;
-  const AAt: TRdxToken; AInvariant: Boolean): string;
+  const ASites: TCallSites; AInvariant: Boolean;
+  out ASettings: string): string;
 var
   i, Li, Member : Integer;
-  Trace         : string;
+  Trace, Spell  : string;
+  Proof         : TRdxModernProof;
+  Proven        : Boolean;
 begin
-  if not UsesSysUtils(AMap) then
+  ASettings := INSERT_INVARIANT;
+  if not AInvariant then
+    ASettings := INSERT_GLOBAL;
+  if not UsesSysUtils(AMap, Spell) then
     Exit(_(R_FS_NO_SYSUTILS));
   for i := Low(ANames) to High(ANames) do
     if DeclaresRoutine(AMap, ANames[i]) then
@@ -916,85 +1159,288 @@ begin
   if not AInvariant then
   begin
     Li := DeclLineOf(AMap, NAME_SETTINGS, Member);
-    if Li > 0 then
-      Exit(_(R_FS_SHADOW, [Li]));
-    if Member > 0 then
-      Exit(_(R_FS_MEMBER, [Member]));
+    if (Li > 0) or (Member > 0) then
+      ASettings := ', ' + Spell + '.FormatSettings';
   end;
-  Li := WithLineBefore(AMap, AAt);
+  Li := WithLineBefore(AMap, ASites[0].Name);
   if Li > 0 then
     Exit(_(R_FS_WITH, [Li]));
+  Proof := ModernProof(AMap);
   if not AInvariant then
   begin
+    if ProofCovers(Proof, FLOOR_SETTINGS_VAR) then
+      Exit('');
     Trace := OldCompilerTrace(AMap, FLOOR_SETTINGS_VAR, Li);
     if Trace <> '' then
       Exit(_(R_FS_OLD_VAR, [Trace, Li]));
     Exit('');
   end;
-  Li := FpcTellLine(AMap);
-  if Li > 0 then
-    Exit(_(R_FS_FPC, [Li]));
-  Trace := OldCompilerTrace(AMap, FLOOR_INLINE_DECL, Li);
-  if Trace <> '' then
-    Exit(_(R_FS_OLD_INVARIANT, [Trace, Li]));
+  // Invariant: eine Inline-Variable (Delphi 10.3, kein FPC) bzw. eine
+  // Nutzung von Invariant ohne Weiche beweist es (rwE30 Stufe 2:
+  // dwsJSON.pas, demos.pas, TemplatePro.pas).
+  Proven := (ProofCovers(Proof, FLOOR_INLINE_DECL) and Proof.NoFpc)
+    or (UnconditionalInvariantLine(AMap) > 0);
+  if not Proven then
+  begin
+    Li := FpcTellLine(AMap);
+    if (Li > 0)
+       and not AllFpcExcluded(ConditionalDirectives(AMap), ASites) then
+      Exit(_(R_FS_FPC, [Li]));
+    Trace := OldCompilerTrace(AMap, FLOOR_INLINE_DECL, Li);
+    if Trace <> '' then
+      Exit(_(R_FS_OLD_INVARIANT, [Trace, Li]));
+  end;
   Li := DeclLineOf(AMap, NAME_SETTINGS_TYPE, Member);
   if Li > 0 then
     Exit(_(R_FS_OWN_TYPE, [Li]));
+  // Die Datei stellt die globale FormatSettings selbst ein: Invariant liefe
+  // daran vorbei (rwE30 Stufe 2; ein Programm, das die Unit enthaelt,
+  // prueft der Plattenblick).
+  Li := GlobalSettingsWriteLine(AMap, Trace);
+  if Li > 0 then
+    Exit(_(R_FS_SETTINGS_SET, [Trace, Li]));
   Result := '';
 end;
 
-// EINE Ersetzung auf ALine: AInsert vor jede InsAt-Spalte; der Bereich von
-// der ersten InsAt-Spalte bis hinter die letzte schliessende Klammer.
-procedure BuildEdit(AMap: TRdxCodeMap; ALine: Integer;
-  const ASites: array of TCallSite; const AInsert, ARole: string;
-  out AEdit: TRdxEdit);
+// EINE Ersetzung: AInsert vor jede Einfuegestelle (InsLine/InsAt); der
+// Bereich von der ersten Einfuegestelle bis hinter die letzte schliessende
+// Klammer - seit rwE30 Stufe 2 auch ueber Zeilen (verbunden mit #10 wie
+// RangeText; der Text dazwischen bleibt, wie er ist). Liegt die erste
+// Einfuegestelle hinter dem Zeilenende (das letzte Argument endet dort,
+// die Klammer steht tiefer), beginnt der Bereich auf dem letzten Zeichen
+// davor - ein Bereich beginnt auf einem Zeichen.
+// AInsert so oft, wie Aufrufe aus ASites vor (ALine, ACol) einfuegen.
+function InsertsAt(const ASites: array of TCallSite; ALine, ACol: Integer;
+  const AInsert: string): string;
 var
-  L, S        : string;
-  i, c        : Integer;
-  First, Last : Integer;
+  k : Integer;
+begin
+  Result := '';
+  for k := Low(ASites) to High(ASites) do
+    if (ASites[k].InsLine = ALine) and (ASites[k].InsAt = ACol) then
+      Result := Result + AInsert;
+end;
+
+procedure BuildEdit(AMap: TRdxCodeMap; const ASites: array of TCallSite;
+  const AInsert, ARole: string; out AEdit: TRdxEdit);
+var
+  L, S                : string;
+  i, c, Li            : Integer;
+  FirstLine, FirstCol : Integer;
+  LastLine, LastCol   : Integer;
+  From, Upto          : Integer;
 begin
   AEdit := Default(TRdxEdit);
-  L := AMap.Raw(ALine);
-  First := MaxInt;
-  Last := 0;
+  FirstLine := MaxInt;
+  FirstCol := MaxInt;
+  LastLine := 0;
+  LastCol := 0;
   for i := Low(ASites) to High(ASites) do
   begin
-    if ASites[i].InsAt < First then
-      First := ASites[i].InsAt;
-    if ASites[i].Close.Col > Last then
-      Last := ASites[i].Close.Col;
+    if (ASites[i].InsLine < FirstLine) or ((ASites[i].InsLine = FirstLine)
+       and (ASites[i].InsAt < FirstCol)) then
+    begin
+      FirstLine := ASites[i].InsLine;
+      FirstCol := ASites[i].InsAt;
+    end;
+    if (ASites[i].Close.Line > LastLine) or ((ASites[i].Close.Line = LastLine)
+       and (ASites[i].Close.Col > LastCol)) then
+    begin
+      LastLine := ASites[i].Close.Line;
+      LastCol := ASites[i].Close.Col;
+    end;
   end;
+  if FirstCol > Length(AMap.Raw(FirstLine)) then
+    Dec(FirstCol);
   S := '';
-  for c := First to Last do
+  for Li := FirstLine to LastLine do
   begin
-    for i := Low(ASites) to High(ASites) do
-      if ASites[i].InsAt = c then
-        S := S + AInsert;
-    S := S + L[c];
+    L := AMap.Raw(Li);
+    From := 1;
+    if Li = FirstLine then
+      From := FirstCol;
+    Upto := Length(L);
+    if Li = LastLine then
+      Upto := LastCol;
+    for c := From to Upto do
+      S := S + InsertsAt(ASites, Li, c, AInsert) + L[c];
+    if Li < LastLine then
+      S := S + InsertsAt(ASites, Li, Length(L) + 1, AInsert) + #10;
   end;
-  AEdit.Span := TRefactorSpan.Make(ARole, ALine, First, ALine, Last + 1);
+  AEdit.Span := TRefactorSpan.Make(ARole, FirstLine, FirstCol, LastLine,
+    LastCol + 1);
   AEdit.Expected := RangeText(AMap, AEdit.Span);
   AEdit.NewText := S;
 end;
 
-function InsertFor(AInvariant: Boolean): string;
+// Haengt ATail an AList an.
+procedure AppendTokens(var AList: TArray<TRdxToken>;
+  const ATail: TArray<TRdxToken>);
+var
+  T : TRdxToken;
 begin
-  if AInvariant then
-    Result := INSERT_INVARIANT
-  else
-    Result := INSERT_GLOBAL;
+  for T in ATail do
+    AddToken(AList, T);
 end;
 
-// SCA128 fuer beide Wege.
+// Die Aufrufe der Liste ANames in der Anweisung von ALine: auf der Zeile
+// und - seit rwE30 Stufe 2 - auf ihren Folgezeilen (FollowNames).
+function StatementNames(AMap: TRdxCodeMap; ALine: Integer;
+  const ANames: array of string): TArray<TRdxToken>;
+begin
+  Result := nil;
+  if (ALine < 1) or (ALine > AMap.LineCount) then Exit;
+  Result := NamesOnLine(AMap, ALine, ANames);
+  AppendTokens(Result, FollowNames(AMap, ALine, ANames));
+end;
+
+// Ein String-Literal ab dem Quote an L[AAt] ('..' mit '' als Quote): sein
+// Text, AAt dahinter. Nur dieser Teil - '#13' und '+' gehoeren nicht dazu.
+function ReadQuoted(const L: string; var AAt: Integer): string;
+begin
+  Result := '';
+  Inc(AAt);
+  while AAt <= Length(L) do
+  begin
+    if L[AAt] <> '''' then
+      Result := Result + L[AAt]
+    else if (AAt < Length(L)) and (L[AAt + 1] = '''') then
+    begin
+      Result := Result + '''';
+      Inc(AAt);
+    end
+    else
+    begin
+      Inc(AAt);
+      Exit;
+    end;
+    Inc(AAt);
+  end;
+end;
+
+// Nur Ziffern (und mindestens eine)?
+function AllDigits(const S: string): Boolean;
+var
+  C : Char;
+begin
+  Result := S <> '';
+  for C in S do
+    Result := Result and CharInSet(C, ['0'..'9']);
+end;
+
+// Eine Zahl mit Komma als Dezimaltrenner ('5,5', '-1,25')?
+function IsCommaNumber(const S: string): Boolean;
+var
+  Body : string;
+  P    : Integer;
+begin
+  Body := S;
+  if (Body <> '') and CharInSet(Body[1], ['+', '-']) then
+    Delete(Body, 1, 1);
+  P := Pos(',', Body);
+  Result := (P > 1) and AllDigits(Copy(Body, 1, P - 1))
+    and AllDigits(Copy(Body, P + 1, MaxInt));
+end;
+
+// Ein Datum aus Ziffern mit '.', '-' oder '/' ('29.10.2026', '2026-10-29'),
+// das nicht im Invariant-Format (M/d/yyyy) steht?
+function IsForeignDate(const S: string): Boolean;
+var
+  i, Seps : Integer;
+  P       : Integer;
+begin
+  Result := False;
+  Seps := 0;
+  for i := 1 to Length(S) do
+    if CharInSet(S[i], ['.', '-', '/']) then
+      Inc(Seps)
+    else if not CharInSet(S[i], ['0'..'9', ' ', ':']) then
+      Exit;
+  if (Seps < 2) or (S = '') or not CharInSet(S[1], ['0'..'9']) then Exit;
+  P := 1;
+  Result := not InvariantDateAt(S, P);
+end;
+
+// Steht (ALine, ACol) innerhalb der Klammern eines Aufrufs aus ASites?
+function InsideSite(const ASites: TCallSites; ALine, ACol: Integer): Boolean;
+var
+  i : Integer;
+begin
+  for i := 0 to High(ASites) do
+    if ((ALine > ASites[i].Open.Line)
+        or ((ALine = ASites[i].Open.Line) and (ACol > ASites[i].Open.Col)))
+       and ((ALine < ASites[i].Close.Line)
+        or ((ALine = ASites[i].Close.Line) and (ACol < ASites[i].Close.Col)))
+    then
+      Exit(True);
+  Result := False;
+end;
+
+// Alt-Weg (rwE30 Stufe 2, horse Tests.Horse.Core.Param.pas:292:
+// 'Assert.AreEqual(''5,5'', CurrToStr(..))'): steht in der Anweisung
+// (Zeilen AFirst..ALast, ausserhalb der Klammern der Aufrufe) ein Literal,
+// mit dem das Ergebnis eines schreibenden Aufrufs verglichen werden
+// koennte - eine Zahl mit Dezimalkomma bzw. ein Datum, das nicht
+// M/d/yyyy ist -, schriebe der Aufruf mit Invariant ein anderes Format:
+// der Vergleich bricht. '' oder der Grund.
+function CompareLiteralReason(AMap: TRdxCodeMap; AFirst, ALast: Integer;
+  const ASites: TCallSites): string;
+var
+  WantNum, WantDate : Boolean;
+  i, Li, c, Start   : Integer;
+  L, Lit            : string;
+  Writer            : string;
+begin
+  Result := '';
+  WantNum := False;
+  WantDate := False;
+  Writer := '';
+  for i := 0 to High(ASites) do
+    if InList(ASites[i].Name.Low, NUMBER_WRITERS) then
+    begin
+      WantNum := True;
+      Writer := TokText(AMap, ASites[i].Name);
+    end
+    else if InList(ASites[i].Name.Low, DATE_WRITERS) then
+    begin
+      WantDate := True;
+      Writer := TokText(AMap, ASites[i].Name);
+    end;
+  if not (WantNum or WantDate) then Exit;
+  for Li := AFirst to ALast do
+  begin
+    L := AMap.Raw(Li);
+    c := 1;
+    while c <= Length(L) do
+    begin
+      if (L[c] = '''') and (AMap.ClassAt(Li, c) = 's')
+         and ((c = 1) or (AMap.ClassAt(Li, c - 1) <> 's')) then
+      begin
+        Start := c;
+        Lit := ReadQuoted(L, c);
+        if not InsideSite(ASites, Li, Start)
+           and ((WantNum and IsCommaNumber(Trim(Lit)))
+                or (WantDate and IsForeignDate(Trim(Lit)))) then
+          Exit(_(R_FS_LIT_COMPARE, [QuotedStr(Lit), Writer]));
+      end
+      else
+        Inc(c);
+    end;
+  end;
+end;
+
+// SCA128 fuer beide Wege. Seit rwE30 Stufe 2 auch Aufrufe auf Folgezeilen
+// der Anweisung und Aufrufe, deren Klammer tiefer schliesst (ReadCall).
 function PlanLocale(AMap: TRdxCodeMap; ALine: Integer; const AMessage: string;
   AInvariant: Boolean; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
-  Want  : string;
-  Hits  : TArray<TRdxToken>;
-  Sites : TCallSites;
-  Names : TArray<string>;
-  i, Li : Integer;
-  Found : Boolean;
+  Want     : string;
+  Settings : string;
+  Hits     : TArray<TRdxToken>;
+  Sites    : TCallSites;
+  Names    : TArray<string>;
+  i, Last  : Integer;
+  Found    : Boolean;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -1005,20 +1451,7 @@ begin
     AReason := _(R_FS_NO_NAME);
     Exit;
   end;
-  Hits := nil;
-  if (ALine >= 1) and (ALine <= AMap.LineCount) then
-    Hits := NamesOnLine(AMap, ALine, LOCALE_FUNCS);
-  if Length(Hits) = 0 then
-  begin
-    Li := 0;
-    if (ALine >= 1) and (ALine <= AMap.LineCount) then
-      Li := FollowLineWith(AMap, ALine, LOCALE_FUNCS);
-    if Li > 0 then
-      AReason := _(R_FS_NEXT_LINE, [Li])
-    else
-      AReason := MsgMovedSuffix(_(R_FS_MOVED, [Want]));
-    Exit;
-  end;
+  Hits := StatementNames(AMap, ALine, LOCALE_FUNCS);
   Found := False;
   for i := 0 to High(Hits) do
     Found := Found or (Hits[i].Low = Want);
@@ -1034,6 +1467,7 @@ begin
   end;
   SetLength(Sites, Length(Hits));
   SetLength(Names, Length(Hits));
+  Last := ALine;
   for i := 0 to High(Hits) do
   begin
     AReason := ReadCall(AMap, Hits[i], LOCALE_ARITY[LocaleIndex(Hits[i].Low)],
@@ -1041,6 +1475,8 @@ begin
     if AReason <> '' then
       Exit;
     Names[i] := TokText(AMap, Hits[i]);
+    if Sites[i].Close.Line > Last then
+      Last := Sites[i].Close.Line;
     // Alt-Weg: ein gelesenes Literal muss zu Invariant passen (rwE29).
     if AInvariant then
     begin
@@ -1049,27 +1485,53 @@ begin
         Exit;
     end;
   end;
-  Li := FollowLineWith(AMap, ALine, LOCALE_FUNCS);
-  if Li > 0 then
+  // Eine Direktive zwischen Fundzeile und letztem Aufruf: Code unter
+  // Bedingung (die Aufrufe einer Folgezeile koennten fehlen).
+  if DirectiveInLines(AMap, ALine, Last) then
   begin
-    AReason := _(R_FS_CONTINUES, [Li]);
+    AReason := _(R_FS_DIRECTIVE);
     Exit;
   end;
-  AReason := FileReason(AMap, Names, Hits[0], AInvariant);
+  AReason := FileReason(AMap, Names, Sites, AInvariant, Settings);
+  if (AReason = '') and AInvariant then
+    AReason := CompareLiteralReason(AMap, ALine, Last, Sites);
   if AReason <> '' then
     Exit;
-  BuildEdit(AMap, ALine, Sites, InsertFor(AInvariant), SPAN_128, AEdit);
+  BuildEdit(AMap, Sites, Settings, SPAN_128, AEdit);
   Result := True;
 end;
 
-// SCA059 fuer beide Wege.
+// Der Formatstring als Literal am Anfang des ersten Arguments von ASite -
+// auch auf der Zeile hinter '(' (IDE.MainForm.pas:6170 'Format(' am
+// Zeilenende); False, wenn dort kein Literal steht.
+function FirstArgLiteral(AMap: TRdxCodeMap; const ASite: TCallSite;
+  out AText: string): Boolean;
+var
+  Li, Co, Upto : Integer;
+begin
+  AText := '';
+  Result := FirstCharAfter(AMap, ASite.Open, Li, Co)
+    and ((Li < ASite.Close.Line)
+         or ((Li = ASite.Close.Line) and (Co < ASite.Close.Col)));
+  if not Result then Exit;
+  Upto := Length(AMap.Raw(Li));
+  if Li = ASite.Close.Line then
+    Upto := ASite.Close.Col - 1;
+  Result := LiteralFirstArg(AMap, Li, Co, Upto, AText);
+end;
+
+// SCA059 fuer beide Wege. Seit rwE30 Stufe 2 auch das eine Format auf
+// einer Folgezeile der Anweisung (frmMain.pas:1519 - der Aufruf steht in
+// Zeile 1520) und eines, dessen Klammer tiefer schliesst.
 function PlanFormat(AMap: TRdxCodeMap; ALine: Integer; const AMessage: string;
   AInvariant: Boolean; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   Fmt, Lit : string;
+  Settings : string;
   Hits     : TArray<TRdxToken>;
+  Follow   : TArray<TRdxToken>;
   Site     : TCallSite;
-  Li       : Integer;
+  Sites    : TCallSites;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -1080,22 +1542,29 @@ begin
     Exit;
   end;
   Hits := nil;
+  Follow := nil;
   if (ALine >= 1) and (ALine <= AMap.LineCount) then
-    Hits := NamesOnLine(AMap, ALine, FORMAT_FUNCS);
-  if Length(Hits) = 0 then
   begin
-    Li := 0;
-    if (ALine >= 1) and (ALine <= AMap.LineCount) then
-      Li := FollowLineWith(AMap, ALine, FORMAT_FUNCS);
-    if Li > 0 then
-      AReason := _(R_FS_NEXT_LINE, [Li])
-    else
-      AReason := MsgMovedSuffix(_(R_FL_NO_FORMAT));
-    Exit;
+    Hits := NamesOnLine(AMap, ALine, FORMAT_FUNCS);
+    Follow := FollowNames(AMap, ALine, FORMAT_FUNCS);
   end;
   if Length(Hits) > 1 then
   begin
     AReason := _(R_FL_MANY, [ALine, Length(Hits)]);
+    Exit;
+  end;
+  // Ein Format mehr auf einer Folgezeile bliebe ungeaendert, und der
+  // Detektor (ein Fund je Anweisung) schwiege.
+  if (Length(Hits) + Length(Follow) > 1) then
+  begin
+    AReason := _(R_FS_CONTINUES, [Follow[Length(Follow) - 1].Line]);
+    Exit;
+  end;
+  if Length(Hits) = 0 then
+    Hits := Follow;
+  if Length(Hits) = 0 then
+  begin
+    AReason := MsgMovedSuffix(_(R_FL_NO_FORMAT));
     Exit;
   end;
   if DirectiveInLines(AMap, ALine, ALine) then
@@ -1106,8 +1575,12 @@ begin
   AReason := ReadCall(AMap, Hits[0], FORMAT_ARITY, Site);
   if AReason <> '' then
     Exit;
-  if LiteralFirstArg(AMap, ALine, Site.Open.EndCol, Site.Close.Col - 1, Lit)
-     and (Lit <> Fmt) then
+  if DirectiveInLines(AMap, ALine, Site.Close.Line) then
+  begin
+    AReason := _(R_FS_DIRECTIVE);
+    Exit;
+  end;
+  if FirstArgLiteral(AMap, Site, Lit) and (Lit <> Fmt) then
   begin
     AReason := MsgMovedSuffix(_(R_FL_OTHER_FMT));
     Exit;
@@ -1117,16 +1590,13 @@ begin
     AReason := _(R_FL_MONEY);
     Exit;
   end;
-  Li := FollowLineWith(AMap, ALine, FORMAT_FUNCS);
-  if Li > 0 then
-  begin
-    AReason := _(R_FS_CONTINUES, [Li]);
-    Exit;
-  end;
-  AReason := FileReason(AMap, [TokText(AMap, Hits[0])], Hits[0], AInvariant);
+  SetLength(Sites, 1);
+  Sites[0] := Site;
+  AReason := FileReason(AMap, [TokText(AMap, Hits[0])], Sites, AInvariant,
+    Settings);
   if AReason <> '' then
     Exit;
-  BuildEdit(AMap, ALine, [Site], InsertFor(AInvariant), SPAN_059, AEdit);
+  BuildEdit(AMap, Sites, Settings, SPAN_059, AEdit);
   Result := True;
 end;
 
@@ -1225,9 +1695,8 @@ var
   Other : string;
 begin
   Result := ABaseHint;
-  if (ALine < 1) or (ALine > AMap.LineCount) then
-    Exit;
-  Hits := NamesOnLine(AMap, ALine, LOCALE_FUNCS);
+  // Dieselben Aufrufe wie der Planer (auch auf Folgezeilen, rwE30 Stufe 2).
+  Hits := StatementNames(AMap, ALine, LOCALE_FUNCS);
   if Length(Hits) = 0 then
     Exit;
   SetLength(Sites, Length(Hits));

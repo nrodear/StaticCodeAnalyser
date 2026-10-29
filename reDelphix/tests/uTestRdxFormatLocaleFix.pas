@@ -39,10 +39,15 @@ type
     [Test] procedure Sca059_Moved_NoHelp;
     [Test] procedure Sca059_TwoFormats_NoHelp;
     [Test] procedure Sca059_QualifiedOrArity_NoHelp;
-    [Test] procedure Sca059_OpenOrFollowingLine_NoHelp;
+    [Test] procedure Sca059_OpenOrFollowingLine_Helps;
     [Test] procedure Sca059_Directive_NoHelp;
     [Test] procedure Sca059_FileChecks_NoHelp;
     [Test] procedure Sca059_Alt_FpcOrOldCompiler_NoHelp;
+    // ---- Realworld-Test rwE30 Stufe 2 ----
+    [Test] procedure Sca059_MultiLine_RealworldShapes;
+    [Test] procedure Sca059_FollowLine_OneFormat;
+    [Test] procedure Sca059_ShadowedSettings_Qualified;
+    [Test] procedure Sca059_Alt_InlineVarRefutesInclude;
   end;
 
 {$IFNDEF FPC}
@@ -329,15 +334,22 @@ begin
     _(R_FS_NOT_CALL, ['Format']));
 end;
 
-procedure TTestRdxFormatLocaleFix.Sca059_OpenOrFollowingLine_NoHelp;
+procedure TTestRdxFormatLocaleFix.Sca059_OpenOrFollowingLine_Helps;
 begin
-  AssertRefused(InUnit(['  r := Format(''%.2f'',', '    [x]);']), BODY_LINE,
-    Msg('%.2f'), _(R_FS_OPEN, ['Format']));
-  AssertRefused(InUnit(['  r :=', '    Format(''%.2f'', [x]);']), BODY_LINE,
-    Msg('%.2f'), _(R_FS_NEXT_LINE, [BODY_LINE + 1]));
+  // rwE30 Stufe 2: die Klammer darf tiefer schliessen, das eine Format darf
+  // auf einer Folgezeile stehen (bis dahin R_FS_OPEN bzw. R_FS_NEXT_LINE).
+  AssertFixed(InUnit(['  r := Format(''%.2f'',', '    [x], FormatSettings);']),
+    InUnit(['  r := Format(''%.2f'',', '    [x]);']), BODY_LINE, Msg('%.2f'));
+  AssertFixed(InUnit(['  r :=', '    Format(''%.2f'', [x], FormatSettings);']),
+    InUnit(['  r :=', '    Format(''%.2f'', [x]);']), BODY_LINE, Msg('%.2f'));
+  // Zwei Format in der Anweisung bleiben gesperrt: der Detektor meldet
+  // eines, das andere bliebe ungeaendert.
   AssertRefused(InUnit(['  r := Format(''%.2f'', [x]) +',
     '    Format(''%.3f'', [x]);']), BODY_LINE, Msg('%.2f'),
     _(R_FS_CONTINUES, [BODY_LINE + 1]));
+  AssertRefused(InUnit(['  r :=', '    Format(''%.2f'', [x]) +',
+    '    Format(''%.3f'', [x]);']), BODY_LINE, Msg('%.2f'),
+    _(R_FS_CONTINUES, [BODY_LINE + 2]));
 end;
 
 procedure TTestRdxFormatLocaleFix.Sca059_Directive_NoHelp;
@@ -354,10 +366,6 @@ begin
     ['function Format(const F: string; const A: array of const): string; forward;'],
     ['  r := Format(''%.2f'', [x]);']), BODY_LINE + 1, Msg('%.2f'),
     _(R_FS_OWN_ROUTINE, ['Format']), True);
-  AssertRefused(UnitText(RTL_USES,
-    ['var', '  FormatSettings: TFormatSettings;'],
-    ['  r := Format(''%.2f'', [x]);']), BODY_LINE + 2, Msg('%.2f'),
-    _(R_FS_SHADOW, [7]));
   AssertRefused(InUnit(['  with Obj do r := Format(''%.2f'', [x]);']),
     BODY_LINE, Msg('%.2f'), _(R_FS_WITH, [BODY_LINE]));
 end;
@@ -378,10 +386,74 @@ begin
     Msg('%.2f'));
   AssertRefused(Src, BODY_LINE, Msg('%.2f'),
     _(R_FS_OLD_INVARIANT, ['COMPILERVERSION >= 32', BODY_LINE + 1]), True);
-  // Delphi 2009 kennt die globale FormatSettings nicht.
-  AssertRefused(InUnit(['  r := Format(''%.2f'', [x]);',
+  // Delphi 2009 kennt die globale FormatSettings nicht ('SysUtils' ohne
+  // Namensraum - System.SysUtils bewiese XE2, rwE30 Stufe 2).
+  AssertRefused(UnitText('SysUtils', [], ['  r := Format(''%.2f'', [x]);',
     '  {$IFDEF DELPHI2009_UP} Foo; {$ENDIF}']), BODY_LINE, Msg('%.2f'),
     _(R_FS_OLD_VAR, ['DELPHI2009_UP', BODY_LINE + 1]));
+end;
+
+// ---- Realworld-Test rwE30 Stufe 2 ----
+
+procedure TTestRdxFormatLocaleFix.Sca059_MultiLine_RealworldShapes;
+begin
+  // delphimvcframework activerecord_showcase\MainFormU.pas:1471 (ohne %m):
+  // die Klammer schliesst eine Zeile tiefer mit 'lOrder.Total]));'.
+  AssertFixed(InUnit(['  Log(Format(''%-20s - %4d - %.2f'', [Desc, Qty,',
+    '    Total], FormatSettings));']),
+    InUnit(['  Log(Format(''%-20s - %4d - %.2f'', [Desc, Qty,',
+    '    Total]));']), BODY_LINE, Msg('%-20s - %4d - %.2f'));
+  // python4delphi WrapFmxTypes.pas:391 - Invariant fuer repr.
+  AssertFixed(InUnit(['  r := Str(Format(''<PointF (%f, %f)>'',',
+    '    [Value.X, Value.Y], TFormatSettings.Invariant));']),
+    InUnit(['  r := Str(Format(''<PointF (%f, %f)>'',',
+    '    [Value.X, Value.Y]));']), BODY_LINE, Msg('<PointF (%f, %f)>'), True);
+  // issrc IDE.MainForm.pas:6170: 'Format(' am Zeilenende, der Formatstring
+  // auf der naechsten Zeile wird gegen die Meldung geprueft.
+  AssertFixed(InUnit(['  r := Format(', '    ''%.0n KB'',',
+    '    [x / 1024], FormatSettings);']),
+    InUnit(['  r := Format(', '    ''%.0n KB'',', '    [x / 1024]);']),
+    BODY_LINE, Msg('%.0n KB'));
+  AssertRefused(InUnit(['  r := Format(', '    ''%.0n KB'',', '    [x / 1024]);']),
+    BODY_LINE, Msg('%.1n KB'), MsgMovedSuffix(_(R_FL_OTHER_FMT)));
+end;
+
+procedure TTestRdxFormatLocaleFix.Sca059_FollowLine_OneFormat;
+begin
+  // TES5Edit BSArch\frmMain.pas:1519: 'DialogMessage(' - das Format steht
+  // in Zeile 1520 (bis dahin 'der Aufruf steht in Zeile 1520 ...').
+  AssertFixed(InUnit(['  DialogMessage(',
+    '    Format(''Size %.2n MB'', [x / 1024], FormatSettings) +',
+    '    ''more'');']),
+    InUnit(['  DialogMessage(', '    Format(''Size %.2n MB'', [x / 1024]) +',
+    '    ''more'');']), BODY_LINE, Msg('Size %.2n MB'));
+end;
+
+procedure TTestRdxFormatLocaleFix.Sca059_ShadowedSettings_Qualified;
+begin
+  // Eine Variable FormatSettings der Datei: bis rwE30 Stufe 2 R_FS_SHADOW,
+  // jetzt die globale Variable qualifiziert (gleiche Bedeutung).
+  AssertFixed(UnitText(RTL_USES,
+    ['var', '  FormatSettings: TFormatSettings;'],
+    ['  r := Format(''%.2f'', [x], System.SysUtils.FormatSettings);']),
+    UnitText(RTL_USES, ['var', '  FormatSettings: TFormatSettings;'],
+    ['  r := Format(''%.2f'', [x]);']), BODY_LINE + 2, Msg('%.2f'));
+end;
+
+procedure TTestRdxFormatLocaleFix.Sca059_Alt_InlineVarRefutesInclude;
+begin
+  // mORMot2 ...\dmvc-ai\50-utilities_batch\src\demos.pas:243: die Datei
+  // bindet mormot.defines.inc ein, nutzt aber 'for var' - Delphi 10.3+.
+  AssertFixed(UnitText(RTL_USES, ['{$I mormot.defines.inc}'],
+    ['  r := Format(''%.2f'', [x], TFormatSettings.Invariant);',
+    '  for var i := 1 to 3 do Foo;']),
+    UnitText(RTL_USES, ['{$I mormot.defines.inc}'],
+    ['  r := Format(''%.2f'', [x]);', '  for var i := 1 to 3 do Foo;']),
+    BODY_LINE + 1, Msg('%.2f'), True);
+  // Gegenprobe: ohne Inline-Variable sperrt das Kit-Include.
+  AssertRefused(UnitText(RTL_USES, ['{$I mormot.defines.inc}'],
+    ['  r := Format(''%.2f'', [x]);']), BODY_LINE + 1, Msg('%.2f'),
+    _(R_FS_OLD_INVARIANT, ['mormot.defines.inc', 6]), True);
 end;
 
 {$IFNDEF FPC}
