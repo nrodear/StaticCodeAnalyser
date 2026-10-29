@@ -1170,20 +1170,37 @@ begin
   end;
 end;
 
-// Das Ziel einer Zuweisung am Anfang des Stuecks ('V := ..', auch die
-// Inline-Variable 'var V := ..'); leer ohne.
+// Das Ziel der Zuweisung des Stuecks: der Bezeichner vor dem ersten ':='
+// auf Klammertiefe 0 - 'V := ..', hinter einer case-Marke 'dbdtDate: V :=
+// ..' (HeidiSQL main.pas:11246 - die Zweige schreiben alle dieselbe
+// Variable, das ist keine Kopplung), die Inline-Variable 'var V := ..' bzw.
+// 'var V: T := ..'. Leer ohne bzw. fuer ein Member ('X.V :=', 'A[i] :=').
 function PieceTarget(AMap: TRdxCodeMap; const APiece: TPiece): TRdxToken;
 var
-  T, N : TRdxToken;
+  T, P, B : TRdxToken;
+  Depth   : Integer;
 begin
   Result := Default(TRdxToken);
+  Depth := 0;
+  P := Default(TRdxToken);
   T := APiece.First;
-  if (T.Low = NAME_VAR) and not SameTok(T, APiece.Last) then
+  while T.Low <> '' do
+  begin
+    if (T.Low = ':=') and (Depth = 0) then
+    begin
+      if not P.IsWord then Exit;
+      B := Before(AMap, P);
+      // 'var V: T :=' - das Ziel steht vor dem ':'.
+      if (B.Low = ':') and (Before(AMap, Before(AMap, B)).Low = NAME_VAR) then
+        Exit(Before(AMap, B));
+      if B.Low = '.' then Exit;
+      Exit(P);
+    end;
+    Depth := Depth + ParenDelta(T);
+    if SameTok(T, APiece.Last) then Exit;
+    P := T;
     T := After(AMap, T);
-  if not T.IsWord or SameTok(T, APiece.Last) then Exit;
-  N := After(AMap, T);
-  if N.Low = ':=' then
-    Result := T;
+  end;
 end;
 
 // Das erste Gegenstueck (IsPartnerAt) im Stueck; leer ohne.

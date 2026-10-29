@@ -1120,6 +1120,15 @@ begin
     UnitText(RTL_USES, ['procedure Q;', 'begin',
     '  r := Pos(FormatSettings.DecimalSeparator, r);', 'end;'],
     ['  r := FloatToStr(x);']), BODY_LINE + 4, Msg('floattostr'), True);
+  // HeidiSQL main.pas:11246: die Zweige einer case-Anweisung schreiben
+  // dieselbe Variable - Alternativen, keine Kopplung.
+  AssertFixed(InUnit(['  case k of',
+    '    1: NowText := DateToStr(Now, TFormatSettings.Invariant);',
+    '    2: NowText := TimeToStr(Now);', '    else NowText := DateTimeToStr(Now);',
+    '  end;']),
+    InUnit(['  case k of', '    1: NowText := DateToStr(Now);',
+    '    2: NowText := TimeToStr(Now);', '    else NowText := DateTimeToStr(Now);',
+    '  end;']), BODY_LINE + 1, Msg('datetostr'), True);
   AssertFixed(InUnit(['  r := FloatToStr(x, TFormatSettings.Invariant);',
     '  Obj.r := Pos(''.'', Obj.FormatSettingsText);']),
     InUnit(['  r := FloatToStr(x);',
