@@ -795,9 +795,10 @@ const
 
   // ---- Label-Widths -----------------------------------------------------
   LBL_W_PATH         = 78;     // "Path:" (AutoSize, Wert nur als Fallback)
-  LBL_W_FILTER       = 83;     // "Severity:" (de "Schweregrad:" braucht +7)
+  LBL_W_FILTER       = 87;     // "Severity:" (de "Schweregrad:" braucht +11)
   LBL_W_TYPE         = 36;     // "Type:"
   LBL_W_PROFILE      = 48;     // "Profile:"
+  LBL_PAD_PROFILE    = 2;      // Abstand "Profile:" zum ⊘-Knopf davor (Margins.Left)
 
   // ---- Combo-Widths (innerhalb der Sub-Panel-Container) -----------------
   // Severity-Combo: 200 px statt 160, damit die laengsten deutschen Labels
@@ -1206,6 +1207,11 @@ begin
                               'Takes effect at the next analysis run.');
   FProfileCombo.ShowHint := True;
   FPanelProfile := FProfileCombo.Parent as TPanel;
+  // Das Label klebte am ⊘-Knopf: linker Rand ueber Margins, der Sub-
+  // Container waechst um denselben Betrag (Combo bleibt gleich breit).
+  FLblProfile.AlignWithMargins := True;
+  FLblProfile.Margins.SetBounds(ScaleW(LBL_PAD_PROFILE), 0, 0, 0);
+  FPanelProfile.Width := ScaleW(LBL_PAD_PROFILE + LBL_W_PROFILE + CMB_W_PROFILE);
   PopulateProfileCombo;
 
   // FBtnAnalyseChanged + FBtnCancel + FBtnExport sind aus der Toolbar raus -
@@ -3657,7 +3663,7 @@ begin
   if Assigned(FPanelProfile) and Assigned(FLblProfile) then
   begin
     if FLblProfile.Visible then
-      FPanelProfile.Width := ScaleW(LBL_W_PROFILE + CMB_W_PROFILE)
+      FPanelProfile.Width := ScaleW(LBL_PAD_PROFILE + LBL_W_PROFILE + CMB_W_PROFILE)
     else
       FPanelProfile.Width := ScaleW(CMB_W_PROFILE);
   end;
