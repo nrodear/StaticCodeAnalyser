@@ -1057,10 +1057,13 @@ procedure TTestRdxSca044.Uses_Missing_DirectiveInClause_Disabled;
 var
   O : TRdxFormatOutcome;
 begin
-  // 'uses Classes {$IFNDEF X}, Windows{$ENDIF};' - jede Einfuegestelle
-  // neben einem Eintrag kann in einem Zweig liegen: von Hand.
+  // 'uses {$IFDEF X}Windows{$ELSE}Classes{$ENDIF};' - jeder Eintrag
+  // steht in einem Zweig, jede Einfuegestelle neben einem Eintrag also
+  // auch: von Hand. Bis rwE31 'uses Classes {$IFNDEF X}, Windows
+  // {$ENDIF};' - seitdem geht 'SysUtils, Classes' (Classes ausserhalb
+  // jedes Zweigs, PlanIntoClause/UnconditionalPlace).
   Assert.IsFalse(RunRecipe(WithUses(CHAIN,
-    'uses Classes {$IFNDEF RDX_NEVER_DEFINED}, Windows{$ENDIF};'), 'Text := Marker', O));
+    'uses {$IFDEF RDX_NEVER_DEFINED}Windows{$ELSE}Classes{$ENDIF};'), 'Text := Marker', O));
   Assert.IsTrue(Pos('Direktiven', O.Reason) > 0, O.Reason);
 end;
 

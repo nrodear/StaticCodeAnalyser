@@ -180,10 +180,12 @@ function SelfAssignReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
 // ' + uses <Name>' an den Hinweis. False (Edits geleert, Grund gesetzt),
 // wenn sie nicht planbar ist. Bis Charge H5 nur fuer SysUtils
 // (AppendSysUtils: FreeAndNil, raise ...); seitdem auch fuer Variants
-// (SCA196: VarClear(Result)).
+// (SCA196: VarClear(Result)). AAtLine: die Zeile der Stelle, die die Unit
+// braucht (PlanUses: eine nur bedingt eingebundene Unit gilt, wenn jeder
+// Zweig um ihren Eintrag die Stelle umfasst - rwE31); 0 = unbekannt.
 function AppendUses(APlaces: TSourcePlaces; const AUsesNames: TArray<string>;
   const AShortName, AQualifiedName: string;
-  var AOutcome: TRdxFixOutcome): Boolean;
+  var AOutcome: TRdxFixOutcome; AAtLine: Integer = 0): Boolean;
 
 implementation
 
@@ -566,13 +568,14 @@ end;
 
 function AppendUses(APlaces: TSourcePlaces; const AUsesNames: TArray<string>;
   const AShortName, AQualifiedName: string;
-  var AOutcome: TRdxFixOutcome): Boolean;
+  var AOutcome: TRdxFixOutcome; AAtLine: Integer): Boolean;
 var
   Plan : TRdxUsesPlan;
 begin
   Result := True;
   if TRdxRecipes.HasUnit(AUsesNames, AShortName) then Exit;
-  Plan := TRdxRecipeRunner.PlanUses(APlaces, AShortName, AQualifiedName);
+  Plan := TRdxRecipeRunner.PlanUses(APlaces, AShortName, AQualifiedName,
+    AAtLine);
   if Plan.Needed and (Plan.Reason <> '') then
   begin
     // Dieselbe msgid wie uRdxRecipeRunner.FormatUsesReason (Format()).
@@ -593,10 +596,11 @@ end;
 // Einfuegung an AOutcome.Edits und an den Hinweis (AppendUses). False
 // (Edits geleert, Grund gesetzt), wenn die Einfuegung nicht planbar ist.
 function AppendSysUtils(APlaces: TSourcePlaces;
-  const AUsesNames: TArray<string>; var AOutcome: TRdxFixOutcome): Boolean;
+  const AUsesNames: TArray<string>; var AOutcome: TRdxFixOutcome;
+  AAtLine: Integer = 0): Boolean;
 begin
   Result := AppendUses(APlaces, AUsesNames, 'SysUtils', 'System.SysUtils',
-    AOutcome);
+    AOutcome, AAtLine);
 end;
 
 class function TRdxFixRunner.FreeAndNilFix(APlaces: TSourcePlaces;
@@ -630,7 +634,7 @@ begin
     Exit;
   end;
   Result.Hint := _(R_FREENIL_HINT, [Result.Name]);
-  Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
+  Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result, ALine);
 end;
 
 class function TRdxFixRunner.AssertMessageFix(APlaces: TSourcePlaces;
@@ -849,7 +853,7 @@ begin
     Exit;
   end;
   Result.Hint := _(R_FREENIL_HINT, [Result.Name]);
-  Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
+  Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result, ALine);
 end;
 
 // SCA066: die Namen um den Aufruf (TRdxCallEdit). Ein blosser Name mit

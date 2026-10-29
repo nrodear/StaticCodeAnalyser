@@ -408,9 +408,12 @@ var
   Why     : string;
   Outcome : TRdxFormatOutcome;
 begin
-  // SysUtils fehlt, und die Klausel traegt eine Direktive: die Einfuegung
-  // ist nirgends planbar - das gilt jeder Kette der Datei, kein Eintrag.
-  Src := UnitWith('Classes {$IFDEF X}, Foo{$ENDIF};',
+  // SysUtils fehlt, und jeder Eintrag der Klausel steht in einem
+  // bedingten Zweig: die Einfuegung ist nirgends planbar - das gilt jeder
+  // Kette der Datei, kein Eintrag. Bis rwE31 'Classes {$IFDEF X},
+  // Foo{$ENDIF};' - seitdem geht 'SysUtils, Classes' (Classes steht
+  // ausserhalb jedes Zweigs, PlanIntoClause/UnconditionalPlace).
+  Src := UnitWith('{$IFDEF X}Foo{$ELSE}Classes{$ENDIF};',
     ['  S := ''a'' + Name + ''{^}b'';']);
   AssertNoFormat(Src, 'uses mit Direktive');
   // Die Fund-Hilfe (dieselbe Kette) nennt den Grund weiter.
