@@ -160,9 +160,10 @@ type
   //                     FPC-Weiche im Include sperren hier NICHT (FpcKnows),
   //                     nur alte Delphi-Projekte (rwE29: GExperts mit
   //                     GExpert4.dof). IncludeReason fragt der Adapter fuer
-  //                     den Hauptweg nicht (Entscheid M1, uRdxFixTable.
-  //                     FormatSettingsDiskCheck) - der Satz in R_INC_OLD
-  //                     steht nur fuer einen kuenftigen Aufrufer.
+  //                     den Hauptweg seit dem Nico-Entscheid M1b
+  //                     (2026-10-30) ueber ProjectReason - nur ohne
+  //                     Projekt der Unit ab XE, nur Delphi-Weichen bis XE
+  //                     (R_INC_OLD), kein Grund fuer ein fehlendes Include.
   //   lfExceptionClasses SCA127 EArgumentException/EInvalidOpException - ab
   //                     Delphi 2009 (FLOOR_DEFAULT_FN; Realworld-Test rwE30
   //                     Stufe 2, Nico-Entscheid "Sperre bei Beleg": GExperts
@@ -345,9 +346,17 @@ type
     // Weiche, fragt er die Platte nicht nach Compilern - fuer
     // lfFormatInvariant aber weiter nach Programmen, die die globale
     // FormatSettings selbst einstellen (SettingsWalkReason, Review
-    // e/HilfeFixG). Sonst FileReason und - mit
-    // AIncludes - IncludeReason. Netzpfad: fuer lfExceptionClasses kein
-    // Grund (MissingBlocks), sonst wie FileReason. '' oder der Grund.
+    // e/HilfeFixG). Sonst - fuer lfFormatSettingsVar seit rwE31 Stufe 3
+    // zuerst ein Kit-Include der Unit (KitIncludeReason; widerlegt nur durch
+    // ein Programm mit .dproj ab XE, das die Unit enthaelt, auch ohne
+    // Dateinamen geprueft) - FileReason und, mit AIncludes bzw. seit dem
+    // Nico-Entscheid M1b fuer lfFormatSettingsVar ohne Projekt der Unit ab
+    // XE, IncludeReason
+    // (fuer lfFormatInvariant widerlegt durch ein Paket der Unit, das
+    // Invariant nutzt, bzw. seit rwE31 Stufe 3 bei einer FMX-Unit durch
+    // Pakete nur ab 10.3 - PackageFloorProof).
+    // Netzpfad: fuer lfExceptionClasses kein Grund (MissingBlocks), sonst
+    // wie FileReason. '' oder der Grund.
     class function ProjectReason(const AFileName: string; AMap: TRdxCodeMap;
       AFeature: TRdxLateFeature; AIncludes: Boolean): string; static;
   end;
@@ -669,6 +678,11 @@ const
     + 'and sets the global FormatSettings itself (%s, line %d) - '
     + 'TFormatSettings.Invariant would bypass these settings; %s';
   // UNC und Netzlaufwerk (uRdxPaths.IsNetworkPath, seit Charge B1-FD).
+  // Hauptweg SCA128/SCA059 (KitIncludeReason, rwE31 Stufe 3): derselbe Satz
+  // wie R_FS_OLD_VAR in uRdxFormatSettingsFix (eine msgid) - %s das
+  // Kit-Include, %d seine Zeile.
+  R_KIT_OLD_VAR = 'the file asks for old compilers (%s, line %d) - the global '
+    + 'variable FormatSettings exists from Delphi XE on';
   R_NETWORK = 'network path %s - the quick fix reads no project or include '
     + 'files there (the menu is built in the main thread); %s';
   R_MAIN_BLOCK = 'the line is in the main block of the program or library '
@@ -2159,13 +2173,233 @@ begin
     GDiskCache.FItems.AddOrSetValue(Key, Result);
 end;
 
+
+// Hauptweg SCA128/SCA059 (lfFormatSettingsVar, rwE31 Stufe 3): ist die
+// Unit Teil eines Delphi-Projekts ab der Schwelle? Das NAECHSTE Verzeichnis
+// im Fenster mit Delphi-Projektdateien (wie ProjectWalkReason) traegt keine
+// alte (DelphiProjectReason leer: jede .dproj ab der Schwelle, kein .dof-
+// Paar, kein Doppel-Compiler-Projekt), und ein Programm dort mit .dproj
+// gleichen Namens enthaelt die Unit (in-Klausel, DpkContains). Das
+// widerlegt ein Kit-Include der Unit: mORMot2 ex\ThirdPartyDemos\dmvc-ai\
+// 01-basicdemo_server\src\api.impl.pas:50 bindet mormot.defines.inc ein
+// (mORMot baut ab Delphi 7), gebaut wird sie aber nur von
+// 01-basicdemo_server.dpr mit .dproj (ProjectVersion 20.3, Delphi 12) -
+// der mORMot-Kern unter src\ hat kein solches Projekt und bleibt gesperrt.
+// Netzpfad: nein (die Hilfe liest dort nichts). Mit Cache (GDiskCache, Art
+// 'K').
+function ModernProjectProof(const AFileName: string;
+  AFeature: TRdxLateFeature): Boolean;
+var
+  Dir, Up, LowFile, Prg, Text, Key, Cached : string;
+  Level                                     : Integer;
+  Files                                     : TRdxProjectFiles;
+begin
+  Result := False;
+  if (AFileName = '') or IsNetworkPath(AFileName) then Exit;
+  Key := DiskKey('K', AFeature, AFileName, '');
+  if (GDiskCache <> nil) and GDiskCache.FItems.TryGetValue(Key, Cached) then
+    Exit(Cached <> '');
+  LowFile := LowerCase(ExtractFileName(AFileName));
+  Dir := ExtractFileDir(AFileName);
+  for Level := 0 to PROJECT_LEVELS do
+  begin
+    if Dir = '' then Break;
+    Files := ProjectFilesIn(Dir, FloorOf(AFeature).ProjectVersion);
+    if HasDelphiProject(Files) then
+    begin
+      if DelphiProjectReason(Files, Dir, AFeature) = '' then
+        for Prg in Files.Programs do
+          if not Result
+             and InList(LowerCase(ChangeFileExt(Prg, '')), Files.DprojBases)
+             and HeadText(IncludeTrailingPathDelimiter(Dir) + Prg, Text) then
+            Result := DpkContains(LowerCase(Text), LowFile);
+      Break;
+    end;
+    Up := ExtractFileDir(Dir);
+    if Up = Dir then Break;
+    Dir := Up;
+  end;
+  if GDiskCache <> nil then
+  begin
+    Cached := '';
+    if Result then
+      Cached := 'K';
+    GDiskCache.FItems.AddOrSetValue(Key, Cached);
+  end;
+end;
+
+// Hauptweg SCA128/SCA059: ein Kit-Include der Unit (mormot.defines.inc,
+// jvcl.inc .. - uRdxCompilerTraces.OldCompilerTraceOf; der Planer prueft
+// seit rwE31 Stufe 3 nur die Bedingungen der Datei) sperrt, ausser ein
+// Projekt der Unit ab Delphi XE widerlegt es (AModern: ModernProjectProof).
+// '' oder der Grund.
+function KitIncludeReason(AMap: TRdxCodeMap; AModern: Boolean): string;
+var
+  Kit : string;
+  Li  : Integer;
+begin
+  Result := '';
+  Kit := OldCompilerTraceOf(AMap, FLOOR_SETTINGS_VAR, False, True, Li);
+  if (Kit = '') or AModern then
+    Exit;
+  Result := _(R_KIT_OLD_VAR, [Kit, Li]);
+end;
+
+
+// Der Ausgang von DirFloorVerdict: keine .dpk mit der Unit, nur solche ab
+// der Schwelle, mindestens eine alte bzw. unbekannte (oder der Deckel ist
+// erschoepft - keine Aussage).
+type
+  TRdxFloorVerdict = (fvNone, fvNew, fvOld);
+
+// Nennt der Ordnername eine Obergrenze ('Delphi 10.3-': 10.3 und davor)?
+// Dann belegt seine Zahl keine Mindestversion.
+function NamesUpperBound(const AName: string): Boolean;
+var
+  S : string;
+begin
+  S := Trim(AName);
+  Result := (S <> '') and (S[Length(S)] = '-');
+end;
+
+// Die .dpk in ADir, die die Unit ALowFile enthalten, gegen die Version
+// AFloor: ihre Version aus dem Ordnernamen bzw. {$LIBSUFFIX} (wie
+// DpkDirReason; ohne Beleg oder mit Obergrenze unbekannt).
+function DirFloorVerdict(const ADir, ALowFile: string; AFloor: Integer;
+  var ABudget: TRdxWalkBudget): TRdxFloorVerdict;
+var
+  SR        : TSearchRec;
+  Text, Lib : string;
+  V, LibV   : Integer;
+begin
+  Result := fvNone;
+  if FindFirst(IncludeTrailingPathDelimiter(ADir) + '*' + DPK_EXTENSION,
+       faAnyFile, SR) <> 0 then
+    Exit;
+  try
+    repeat
+      if ((SR.Attr and faDirectory) <> 0)
+         or (LowerCase(ExtractFileExt(SR.Name)) <> DPK_EXTENSION) then
+        Continue;
+      if ABudget.Packages >= MAX_PACKAGE_READS then
+        Exit(fvOld);
+      Inc(ABudget.Packages);
+      if not HeadText(IncludeTrailingPathDelimiter(ADir) + SR.Name, Text) then
+        Exit(fvOld);
+      Text := LowerCase(Text);
+      if not DpkContains(Text, ALowFile) then Continue;
+      V := -1;
+      if not NamesUpperBound(ExtractFileName(
+           ExcludeTrailingPathDelimiter(ADir))) then
+        V := TRdxPackageVersion.Folder(ExtractFileName(
+          ExcludeTrailingPathDelimiter(ADir)));
+      LibV := TRdxPackageVersion.LibSuffix(Text, Lib);
+      if LibV > V then
+        V := LibV;
+      if V < AFloor then
+        Exit(fvOld);
+      Result := fvNew;
+    until FindNext(SR) <> 0;
+  finally
+    FindClose(SR);
+  end;
+end;
+
+// Die Unterordner von ADir (eine Ebene).
+function SubDirsOf(const ADir: string): TArray<string>;
+var
+  SR : TSearchRec;
+begin
+  Result := nil;
+  if FindFirst(IncludeTrailingPathDelimiter(ADir) + '*', faDirectory,
+       SR) <> 0 then
+    Exit;
+  try
+    repeat
+      if ((SR.Attr and faDirectory) <> 0) and (SR.Name <> '.')
+         and (SR.Name <> '..') then
+        AddText(Result, IncludeTrailingPathDelimiter(ADir) + SR.Name);
+    until FindNext(SR) <> 0;
+  finally
+    FindClose(SR);
+  end;
+end;
+
+// Invariant-Weg (rwE31 Stufe 3): bauen NUR Pakete ab der Schwelle von
+// AFeature die Unit? Gesucht wird wie PackagesReason im Fenster (Verzeichnis
+// der Unit und bis PROJECT_LEVELS darueber, je Unterordner packages bzw.
+// package), aber zwei Ebenen tief (python4delphi Packages\Delphi\Delphi
+// 10.4+\PythonFmx.dpk - PackagesReason sieht nur eine). Ja, wenn
+// mindestens eine .dpk die Unit enthaelt und jede davon ab der Schwelle ist
+// (Ordnername, LIBSUFFIX; ohne Beleg, mit Obergrenze 'Delphi 10.3-' oder
+// mit erschoepftem Deckel: nein). Mit Cache (GDiskCache, Art 'L').
+function PackageFloorProof(const AFileName: string;
+  AFeature: TRdxLateFeature): Boolean;
+var
+  Dir, Up, Pkg, LowFile, Key, Cached, D1, D2 : string;
+  Level, i                                   : Integer;
+  Budget                                     : TRdxWalkBudget;
+  Floor                                      : Integer;
+  Found, Old                                 : Boolean;
+
+  procedure Judge(const ADir: string);
+  begin
+    if Old then Exit;
+    case DirFloorVerdict(ADir, LowFile, Floor, Budget) of
+      fvNew: Found := True;
+      fvOld: Old := True;
+    end;
+  end;
+
+begin
+  Result := False;
+  if (AFileName = '') or IsNetworkPath(AFileName) then Exit;
+  Key := DiskKey('L', AFeature, AFileName, '');
+  if (GDiskCache <> nil) and GDiskCache.FItems.TryGetValue(Key, Cached) then
+    Exit(Cached <> '');
+  Budget := Default(TRdxWalkBudget);
+  Floor := FloorOf(AFeature).Version;
+  LowFile := LowerCase(ExtractFileName(AFileName));
+  Found := False;
+  Old := False;
+  Dir := ExtractFileDir(AFileName);
+  for Level := 0 to PROJECT_LEVELS do
+  begin
+    if (Dir = '') or Old then Break;
+    for i := 0 to High(PACKAGE_DIRS) do
+    begin
+      Pkg := IncludeTrailingPathDelimiter(Dir) + PACKAGE_DIRS[i];
+      if Old or not DirectoryExists(Pkg) then Continue;
+      Judge(Pkg);
+      for D1 in SubDirsOf(Pkg) do
+      begin
+        Judge(D1);
+        for D2 in SubDirsOf(D1) do
+          Judge(D2);
+      end;
+    end;
+    Up := ExtractFileDir(Dir);
+    if Up = Dir then Break;
+    Dir := Up;
+  end;
+  Result := Found and not Old;
+  if GDiskCache <> nil then
+  begin
+    Cached := '';
+    if Result then
+      Cached := 'L';
+    GDiskCache.FItems.AddOrSetValue(Key, Cached);
+  end;
+end;
+
 class function TRdxMagicFixes.ProjectReason(const AFileName: string;
   AMap: TRdxCodeMap; AFeature: TRdxLateFeature; AIncludes: Boolean): string;
 var
-  Proof : TRdxModernProof;
+  Proof  : TRdxModernProof;
+  Modern : Boolean;
 begin
   Result := '';
-  if AFileName = '' then Exit;
+  Modern := False;
   // Kein Beleg auf einem Netzpfad: SCA127 liest dort nichts und sperrt
   // nicht (die anderen Sprachmittel sperren dort, FileReason).
   if not MissingBlocks(AFeature) and IsNetworkPath(AFileName) then Exit;
@@ -2178,12 +2412,30 @@ begin
      or ((AFeature = lfFormatInvariant)
          and (UnconditionalInvariantLine(AMap) > 0)) then
   begin
-    if AFeature = lfFormatInvariant then
+    if (AFeature = lfFormatInvariant) and (AFileName <> '') then
       Result := SettingsWalkReason(AFileName);
     Exit;
   end;
+  // Hauptweg: ein Kit-Include der Unit (seit rwE31 Stufe 3 hier statt im
+  // Planer) - auch ohne Dateinamen (dann ohne Widerlegung).
+  if AFeature = lfFormatSettingsVar then
+  begin
+    Modern := ModernProjectProof(AFileName, AFeature);
+    Result := KitIncludeReason(AMap, Modern);
+    if Result <> '' then Exit;
+  end;
+  if AFileName = '' then Exit;
   Result := FileReason(AFileName, AFeature);
-  if (Result = '') and AIncludes then
+  // Nico-Entscheid M1b (2026-10-30, ersetzt M1 fuer diesen Fall): auch der
+  // Hauptweg liest die Includes - aber nur ohne Projekt der Unit ab XE
+  // (Modern). Es sperrt nur eine Delphi-Weiche bis XE (OldCompilerTrace mit
+  // FLOOR_SETTINGS_VAR); FPC-Weichen nicht (FpcKnows), ein nicht gefundenes
+  // oder nicht lesbares Include auch nicht (IncludeReason: kein Beleg).
+  // doublecmd Image32\source\Clipper2\Clipper.pas:657 - Clipper.inc fragt
+  // 'COMPILERVERSION < 14' (Delphi 6+), die globale FormatSettings gibt es
+  // erst ab XE.
+  if (Result = '') and (AIncludes
+     or ((AFeature = lfFormatSettingsVar) and not Modern)) then
   begin
     Result := IncludeReason(AFileName, AMap, AFeature);
     // Die Spuren im Include widerlegt ein Paket der Unit, das Invariant
@@ -2191,6 +2443,13 @@ begin
     // eine .dof baut die Unit ohne das Paket).
     if (Result <> '') and (AFeature = lfFormatInvariant)
        and PackageInvariantProof(AFileName) then
+      Result := '';
+    // Eine FMX-Unit (kein FPC, ModernProof.NoFpc), die nur Pakete ab der
+    // Schwelle bauen: weder die FPC-Weiche noch die alten Versionen des
+    // Includes treffen sie (rwE31 Stufe 3, python4delphi WrapFmxTypes.pas -
+    // Definition.Inc, nur in Packages\Delphi\Delphi 10.4+\PythonFmx.dpk).
+    if (Result <> '') and (AFeature = lfFormatInvariant) and Proof.NoFpc
+       and PackageFloorProof(AFileName, AFeature) then
       Result := '';
   end;
 end;
@@ -2271,8 +2530,10 @@ begin
   Check.Test := CompilerInInclude;
   Check.Arg := IntToStr(Ord(AFeature));
   // Ein Include, das nicht zu lesen ist, ist fuer lfExceptionClasses kein
-  // Beleg (MissingBlocks): das leere Muster gibt keinen Grund.
-  if MissingBlocks(AFeature) then
+  // Beleg (MissingBlocks): das leere Muster gibt keinen Grund. Ebenso fuer
+  // lfFormatSettingsVar (Nico-Entscheid M1b: nur eine gelesene Weiche
+  // sperrt den Hauptweg).
+  if MissingBlocks(AFeature) and (AFeature <> lfFormatSettingsVar) then
     Check.MissingFmt := _(R_INC_UNSEEN)
   else
     Check.MissingFmt := '';

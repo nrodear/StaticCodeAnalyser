@@ -47,6 +47,10 @@ type
     [Test] procedure Disk_ModernProof_SkipsDisk;
     [Test] procedure Disk_PackageUsesInvariant_Refutes;
     [Test] procedure Disk_ProgramSetsSettings_Refused;
+    // ---- Realworld-Test rwE31 Stufe 3 ----
+    [Test] procedure Disk_KitIncludeModernProject_Refutes;
+    [Test] procedure Disk_FmxPackageFloor_RefutesInclude;
+    [Test] procedure Disk_MainWayIncludeSwitch_M1b;
   end;
 
 implementation
@@ -671,6 +675,173 @@ begin
       lfFormatSettingsVar, False) <> '', 'Netzpfad, FormatSettings');
     Assert.IsFalse(TRdxMagicFixes.MissingBlocks(lfExceptionClasses));
     Assert.IsTrue(TRdxMagicFixes.MissingBlocks(lfFormatSettingsVar));
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Disk_KitIncludeModernProject_Refutes;
+const
+  KIT_SRC = 'unit u;' + #13#10 + '{$I mormot.defines.inc}' + #13#10
+    + 'interface' + #13#10 + 'uses SysUtils;' + #13#10 + 'implementation'
+    + #13#10 + 'end.';
+  DPR_SRC = 'program demo;' + #13#10 + 'uses' + #13#10
+    + '  u in ''c\u.pas'';' + #13#10 + 'begin' + #13#10 + 'end.';
+var
+  T : TTree;
+begin
+  // mORMot2 ex\ThirdPartyDemos\dmvc-ai\01-basicdemo_server\src\api.impl.pas
+  // :50 (ebenso 56-articles_crud_vcl_client\MainFormU.pas:206): die Unit
+  // bindet mormot.defines.inc ein (mORMot baut ab Delphi 7) - bis rwE31
+  // Stufe 3 sperrte das den Hauptweg im Planer. Gebaut wird sie aber nur von
+  // 01-basicdemo_server.dpr mit .dproj ProjectVersion 20.3 (Delphi 12).
+  T := NewTree;
+  try
+    // Ohne Projekt (der mORMot-Kern unter src\): das Kit-Include sperrt.
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfFormatSettingsVar, False),
+      ['mormot.defines.inc']);
+    AssertNames(ProjectReasonOf('', KIT_SRC, lfFormatSettingsVar, False),
+      ['mormot.defines.inc']);
+    // Das Programm eine Ebene hoeher enthaelt die Unit, seine .dproj ist ab
+    // XE: widerlegt.
+    WriteText(T.B + 'demo.dpr', DPR_SRC);
+    WriteDproj(T.B + 'demo.dproj', '20.3');
+    Assert.AreEqual('', ProjectReasonOf(T.U, KIT_SRC, lfFormatSettingsVar,
+      False), 'Projekt ab XE');
+    // Gegenproben: die .dproj vor XE (Delphi 2009/2010 schrieben 12.0) ...
+    WriteDproj(T.B + 'demo.dproj', '12.0');
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfFormatSettingsVar, False),
+      ['mormot.defines.inc']);
+    WriteDproj(T.B + 'demo.dproj', '20.3');
+    // ... ein altes Projekt daneben (.dof-Paar) ...
+    WriteText(T.B + 'old.dpr', 'program old;');
+    WriteText(T.B + 'old.dof', '[Compiler]');
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfFormatSettingsVar, False),
+      ['mormot.defines.inc']);
+    DeleteFile(T.B + 'old.dpr');
+    DeleteFile(T.B + 'old.dof');
+    // ... ein Programm, das die Unit nicht enthaelt ...
+    WriteText(T.B + 'demo.dpr', 'program demo;' + #13#10 + 'begin' + #13#10
+      + 'end.');
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfFormatSettingsVar, False),
+      ['mormot.defines.inc']);
+    // ... und ein Programm ohne .dproj gleichen Namens.
+    WriteText(T.B + 'demo.dpr', DPR_SRC);
+    DeleteFile(T.B + 'demo.dproj');
+    WriteDproj(T.B + 'other.dproj', '20.3');
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfFormatSettingsVar, False),
+      ['mormot.defines.inc']);
+    // Der Invariant-Weg fragt das Kit-Include weiter im Planer (hier nicht).
+    Assert.AreEqual('', ProjectReasonOf(T.U, KIT_SRC, lfFormatInvariant,
+      False), 'Invariant ohne Includes');
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Disk_FmxPackageFloor_RefutesInclude;
+const
+  FMX_SRC = 'unit u;' + #13#10 + '{$I defs.inc}' + #13#10 + 'interface'
+    + #13#10 + 'uses System.Types, FMX.Types;' + #13#10 + 'implementation'
+    + #13#10 + 'end.';
+  RTL_SRC = 'unit u;' + #13#10 + '{$I defs.inc}' + #13#10 + 'interface'
+    + #13#10 + 'uses System.Types;' + #13#10 + 'implementation' + #13#10
+    + 'end.';
+  DPK_SRC = 'package PythonFmx;' + #13#10 + 'contains' + #13#10
+    + '  WrapFmxTypes in ''..\..\..\b\c\u.pas'';' + #13#10 + 'end.';
+var
+  T          : TTree;
+  New4, Old3 : string;
+begin
+  // python4delphi Source\fmx\WrapFmxTypes.pas:391/785/1038/1167 (SCA059.2):
+  // das Include ..\Definition.Inc traegt eine FPC-Weiche und Versionen ab
+  // XE2 - die FMX-Unit uebersetzt FPC nie, und sie steht nur in
+  // Packages\Delphi\Delphi 10.4+\PythonFmx.dpk (zwei Ebenen unter
+  // Packages). Bis rwE31 Stufe 3 sperrte die FPC-Weiche des Includes.
+  T := NewTree;
+  try
+    WriteText(T.C + 'defs.inc', '{$IFDEF FPC}' + #13#10 + '  {$MODE DELPHI}'
+      + #13#10 + '{$ENDIF}' + #13#10 + '{$IFDEF VER230}' + #13#10
+      + '  {$DEFINE DELPHIXE2}' + #13#10 + '{$ENDIF}');
+    New4 := T.A + 'Packages' + PathDelim + 'Delphi' + PathDelim
+      + 'Delphi 10.4+' + PathDelim;
+    Old3 := T.A + 'Packages' + PathDelim + 'Delphi' + PathDelim
+      + 'Delphi 10.3-' + PathDelim;
+    ForceDirectories(New4);
+    ForceDirectories(Old3);
+    // Ohne Paket: das Include sperrt.
+    AssertNames(ProjectReasonOf(T.U, FMX_SRC, lfFormatInvariant, True),
+      ['defs.inc']);
+    WriteText(New4 + 'PythonFmx.dpk', DPK_SRC);
+    WriteText(Old3 + 'Python_D.dpk', 'package Python_D;' + #13#10
+      + 'contains' + #13#10 + '  Other in ''..\..\..\b\c\other.pas'';'
+      + #13#10 + 'end.');
+    Assert.AreEqual('', ProjectReasonOf(T.U, FMX_SRC, lfFormatInvariant,
+      True), 'FMX, nur Paket ab 10.4');
+    // Gegenproben: ohne FMX-Unit-Name (FPC nicht ausgeschlossen) ...
+    AssertNames(ProjectReasonOf(T.U, RTL_SRC, lfFormatInvariant, True),
+      ['defs.inc']);
+    // ... ein Paket bis 10.3 ('Delphi 10.3-' ist eine Obergrenze), das die
+    // Unit auch enthaelt ...
+    WriteText(Old3 + 'Python_D.dpk', DPK_SRC);
+    AssertNames(ProjectReasonOf(T.U, FMX_SRC, lfFormatInvariant, True),
+      ['defs.inc']);
+    // ... und ein Paket ab 10.4, das die Unit nicht enthaelt.
+    DeleteFile(Old3 + 'Python_D.dpk');
+    WriteText(New4 + 'PythonFmx.dpk', 'package PythonFmx;' + #13#10
+      + 'contains' + #13#10 + '  Other in ''other.pas'';' + #13#10 + 'end.');
+    AssertNames(ProjectReasonOf(T.U, FMX_SRC, lfFormatInvariant, True),
+      ['defs.inc']);
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Disk_MainWayIncludeSwitch_M1b;
+const
+  CLIPPER_SRC = 'unit u;' + #13#10 + 'interface' + #13#10
+    + '{$I Clipper.inc}' + #13#10 + 'uses' + #13#10
+    + '  Math, SysUtils, Classes;' + #13#10 + 'implementation' + #13#10
+    + 'end.';
+  CLIPPER_INC = '{$IFDEF FPC}' + #13#10 + '  {$DEFINE INLINING}' + #13#10
+    + '  {$MODE DELPHI}' + #13#10 + '{$ELSE}' + #13#10
+    + '  {$IF COMPILERVERSION < 14}' + #13#10
+    + '    Requires Delphi version 6 or above.' + #13#10 + '  {$IFEND}'
+    + #13#10 + '{$ENDIF}';
+  FPC_INC = '{$IFDEF FPC}' + #13#10 + '  {$MODE DELPHI}' + #13#10
+    + '{$ENDIF}';
+  DPR_SRC = 'program demo;' + #13#10 + 'uses' + #13#10
+    + '  u in ''c\u.pas'';' + #13#10 + 'begin' + #13#10 + 'end.';
+var
+  T : TTree;
+begin
+  // Nico-Entscheid M1b (2026-10-30): doublecmd components\Image32\source\
+  // Clipper2\Clipper.pas:657/659 (SCA059) - Clipper.inc laesst Delphi 6+
+  // zu ('COMPILERVERSION < 14'), die globale FormatSettings gibt es erst ab
+  // XE; im Fenster nur Image32.lpk (Lazarus sperrt den Hauptweg nicht). Bis
+  // dahin las der Hauptweg keine Includes (M1) und bot ', FormatSettings' an.
+  T := NewTree;
+  try
+    WriteText(T.C + 'Clipper.inc', CLIPPER_INC);
+    WriteText(T.A + 'Image32.lpk', '<CONFIG/>');
+    AssertNames(ProjectReasonOf(T.U, CLIPPER_SRC, lfFormatSettingsVar, False),
+      ['Clipper.inc', 'COMPILERVERSION < 14']);
+    // Gegenprobe: ein Programm mit .dproj ab XE im Fenster enthaelt die
+    // Unit - frei (ModernProjectProof geht vor).
+    WriteText(T.B + 'demo.dpr', DPR_SRC);
+    WriteDproj(T.B + 'demo.dproj', '20.3');
+    Assert.AreEqual('', ProjectReasonOf(T.U, CLIPPER_SRC, lfFormatSettingsVar,
+      False), 'Projekt ab XE');
+    DeleteFile(T.B + 'demo.dpr');
+    DeleteFile(T.B + 'demo.dproj');
+    // Gegenprobe: nur eine FPC-Weiche im Include - FPC kennt FormatSettings.
+    WriteText(T.C + 'Clipper.inc', FPC_INC);
+    Assert.AreEqual('', ProjectReasonOf(T.U, CLIPPER_SRC, lfFormatSettingsVar,
+      False), 'nur FPC-Weiche');
+    // Gegenprobe: ein nicht gefundenes Include ist kein Beleg.
+    DeleteFile(T.C + 'Clipper.inc');
+    Assert.AreEqual('', ProjectReasonOf(T.U, CLIPPER_SRC, lfFormatSettingsVar,
+      False), 'Include fehlt');
   finally
     RemoveTree(T.Root);
   end;

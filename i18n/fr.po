@@ -6992,3 +6992,12 @@ msgstr "le programme %s dans le répertoire %s contient l'unité et règle lui-m
 
 msgid "the statement also carries the literal %s - with TFormatSettings.Invariant %s writes another format (decimal point, MM/dd/yyyy), a comparison with the literal would fail"
 msgstr "l'instruction porte aussi le littéral %s - avec TFormatSettings.Invariant, %s écrit un autre format (point décimal, MM/dd/yyyy), une comparaison avec le littéral échouerait"
+
+msgid "line %d evaluates %s together with %s - with TFormatSettings.Invariant here alone, the two would no longer fit together (decimal separator, date format)"
+msgstr "la ligne %d évalue %s avec %s - avec TFormatSettings.Invariant seulement ici, les deux ne concorderaient plus (séparateur décimal, format de date)"
+
+msgid "line %d evaluates %s together with %s, which line %d writes with %s without TFormatSettings.Invariant - with only this call changed, the two no longer match"
+msgstr "la ligne %d évalue %s avec %s, que la ligne %d écrit avec %s sans TFormatSettings.Invariant - si seul cet appel change, les deux ne concordent plus"
+
+msgid "line %d evaluates %s together with %s without TFormatSettings.Invariant - with only this call changed, the two no longer match"
+msgstr "la ligne %d évalue %s avec %s sans TFormatSettings.Invariant - si seul cet appel change, les deux ne concordent plus"

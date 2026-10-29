@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6998 Zeilen, 327929 Bytes
-  CPoLines_de: array[0..6997] of string = (
+  // i18n\de.po - 7007 Zeilen, 328875 Bytes
+  CPoLines_de: array[0..7006] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -7012,7 +7012,16 @@ const
     'msgstr "das Programm %s im Verzeichnis %s enth'#$00E4'lt die Unit und stellt die globale FormatSettings selbst ein (%s, Zeile %d) - TFormatSettings.Invariant liefe an diesen Einstellungen vorbei; %s"',
     '',
     'msgid "the statement also carries the literal %s - with TFormatSettings.Invariant %s writes another format (decimal point, MM/dd/yyyy), a comparison with the literal would fail"',
-    'msgstr "die Anweisung tr'#$00E4'gt auch das Literal %s - mit TFormatSettings.Invariant schreibt %s ein anderes Format (Dezimalpunkt, MM/dd/yyyy), ein Vergleich mit dem Literal schl'#$00FC'ge fehl"'
+    'msgstr "die Anweisung tr'#$00E4'gt auch das Literal %s - mit TFormatSettings.Invariant schreibt %s ein anderes Format (Dezimalpunkt, MM/dd/yyyy), ein Vergleich mit dem Literal schl'#$00FC'ge fehl"',
+    '',
+    'msgid "line %d evaluates %s together with %s - with TFormatSettings.Invariant here alone, the two would no longer fit together (decimal separator, date format)"',
+    'msgstr "Zeile %d wertet %s zusammen mit %s aus - mit TFormatSettings.Invariant nur hier passten beide nicht mehr zusammen (Dezimaltrenner, Datumsformat)"',
+    '',
+    'msgid "line %d evaluates %s together with %s, which line %d writes with %s without TFormatSettings.Invariant - with only this call changed, the two no longer match"',
+    'msgstr "Zeile %d wertet %s zusammen mit %s aus, das Zeile %d mit %s ohne TFormatSettings.Invariant schreibt - wird nur dieser Aufruf umgestellt, passen beide nicht mehr zusammen"',
+    '',
+    'msgid "line %d evaluates %s together with %s without TFormatSettings.Invariant - with only this call changed, the two no longer match"',
+    'msgstr "Zeile %d wertet %s zusammen mit %s ohne TFormatSettings.Invariant aus - wird nur dieser Aufruf umgestellt, passen beide nicht mehr zusammen"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7287,8 +7296,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6994 Zeilen, 341151 Bytes
-  CPoLines_fr: array[0..6993] of string = (
+  // i18n\fr.po - 7003 Zeilen, 342060 Bytes
+  CPoLines_fr: array[0..7002] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14282,7 +14291,16 @@ const
     'msgstr "le programme %s dans le r'#$00E9'pertoire %s contient l''unit'#$00E9' et r'#$00E8'gle lui-m'#$00EA'me la variable globale FormatSettings (%s, ligne %d) - TFormatSettings.Invariant contournerait ces r'#$00E9'glages; %s"',
     '',
     'msgid "the statement also carries the literal %s - with TFormatSettings.Invariant %s writes another format (decimal point, MM/dd/yyyy), a comparison with the literal would fail"',
-    'msgstr "l''instruction porte aussi le litt'#$00E9'ral %s - avec TFormatSettings.Invariant, %s '#$00E9'crit un autre format (point d'#$00E9'cimal, MM/dd/yyyy), une comparaison avec le litt'#$00E9'ral '#$00E9'chouerait"'
+    'msgstr "l''instruction porte aussi le litt'#$00E9'ral %s - avec TFormatSettings.Invariant, %s '#$00E9'crit un autre format (point d'#$00E9'cimal, MM/dd/yyyy), une comparaison avec le litt'#$00E9'ral '#$00E9'chouerait"',
+    '',
+    'msgid "line %d evaluates %s together with %s - with TFormatSettings.Invariant here alone, the two would no longer fit together (decimal separator, date format)"',
+    'msgstr "la ligne %d '#$00E9'value %s avec %s - avec TFormatSettings.Invariant seulement ici, les deux ne concorderaient plus (s'#$00E9'parateur d'#$00E9'cimal, format de date)"',
+    '',
+    'msgid "line %d evaluates %s together with %s, which line %d writes with %s without TFormatSettings.Invariant - with only this call changed, the two no longer match"',
+    'msgstr "la ligne %d '#$00E9'value %s avec %s, que la ligne %d '#$00E9'crit avec %s sans TFormatSettings.Invariant - si seul cet appel change, les deux ne concordent plus"',
+    '',
+    'msgid "line %d evaluates %s together with %s without TFormatSettings.Invariant - with only this call changed, the two no longer match"',
+    'msgstr "la ligne %d '#$00E9'value %s avec %s sans TFormatSettings.Invariant - si seul cet appel change, les deux ne concordent plus"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

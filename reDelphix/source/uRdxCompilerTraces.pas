@@ -67,6 +67,10 @@ unit uRdxCompilerTraces;
 // die Datei uebersetzt mit keinem aelteren Compiler. Die Aufrufer fragen
 // ihn selbst (uRdxFormatSettingsFix, uRdxRawExceptionFix, uRdxMagicFixes.
 // ProjectReason); OldCompilerTrace bleibt, wie er war.
+// Seit rwE31 Stufe 3 schliesst ein FMX-Unit-Name im uses ('FMX.Types')
+// FPC aus (NoFpc): FireMonkey gibt es nur in Delphi (python4delphi
+// Source\fmx\WrapFmxTypes.pas - die FPC-Weiche im gemeinsamen
+// Definition.Inc betrifft die Unit nicht).
 // Die Bedingungsbloecke liest ConditionalDirectives einmal je Frage
 // (UnconditionalAt, FpcExcludedAt).
 
@@ -170,9 +174,9 @@ type
 
   // Der Gegenbeweis einer Datei (ModernProof, s. Kopf): die bewiesene
   // CompilerVersion (33 Inline-Variable, 23 RTL-Unit-Name; 0 ohne), ob FPC
-  // 3.2 die Datei uebersetzt (NoFpc: nein - nur die Inline-Variable), die
-  // Form wie im Text ('for var', 'var X :=', 'System.SysUtils') und ihre
-  // Zeile.
+  // 3.2 die Datei uebersetzt (NoFpc: nein - die Inline-Variable und seit
+  // rwE31 Stufe 3 ein FMX-Unit-Name), die Form wie im Text ('for var',
+  // 'var X :=', 'System.SysUtils', 'FMX.Types') und ihre Zeile.
   TRdxModernProof = record
     Version : Integer;
     NoFpc   : Boolean;
@@ -189,6 +193,15 @@ const
 // das Symbol, der Vergleich ('COMPILERVERSION >= 33') bzw. der Name der
 // Include-Datei, ALine ihre Zeile; '' und 0 ohne Spur.
 function OldCompilerTrace(AMap: TRdxCodeMap; const AFloor: TRdxCompilerFloor;
+  out ALine: Integer): string;
+// Wie OldCompilerTrace, aber nur die Spuren einer Art: AConditions die
+// Versionssymbole und Vergleiche in Bedingungen, AKits die Kit-Includes
+// (KIT_INCLUDES). Seit rwE31 Stufe 3 trennt der Hauptweg von SCA128/SCA059
+// beide: die Bedingungen der Datei sperren im Planer, ein Kit-Include
+// widerlegt der Plattenblick mit dem Projekt der Unit
+// (uRdxMagicFixes.ProjectReason).
+function OldCompilerTraceOf(AMap: TRdxCodeMap;
+  const AFloor: TRdxCompilerFloor; AConditions, AKits: Boolean;
   out ALine: Integer): string;
 
 // Die Bedingungs-Direktiven der Datei in ihrer Reihenfolge (s.
@@ -288,6 +301,8 @@ const
   // ModernProof: Unit-Namensraeume der RTL ab Delphi XE2 (klein, mit
   // Punkt) und so weit liest die Probe 'var X: T := ..' bis zum ':='.
   RTL_SCOPES: array[0..3] of string = ('system.', 'winapi.', 'vcl.', 'fmx.');
+  // ... davon nur in Delphi (NoFpc; FireMonkey hat FPC nie).
+  FMX_SCOPE = 'fmx.';
   MAX_INLINE_DECL_TOKENS = 40;
   // Die globale Variable (GlobalSettingsWriteLine) und ihre Felder fuer
   // Datum und Uhrzeit - nur sie zaehlen: ein Programm, das
@@ -486,27 +501,34 @@ end;
 // Kit-Include (KIT_INCLUDES, klein ohne Pfad) oder ein Versionssymbol in
 // einer Bedingung; '' ohne.
 function OldTraceAt(AMap: TRdxCodeMap; ALine, ACol: Integer;
-  const AFloor: TRdxCompilerFloor): string;
+  const AFloor: TRdxCompilerFloor; AConditions, AKits: Boolean): string;
 var
   W   : string;
   Arg : Boolean;
 begin
   Result := '';
   W := DirectiveWord(AMap, ALine, ACol, Arg);
-  if InList(W, INCLUDE_WORDS) then
+  if AKits and InList(W, INCLUDE_WORDS) then
   begin
     Result := LowerCase(IncludeFileAt(AMap, ALine, ACol));
     Result := Copy(Result, LastDelimiter('\/', Result) + 1, MaxInt);
     if not InList(Result, KIT_INCLUDES) then
       Result := '';
   end
-  else if InList(W, CONDITION_WORDS) then
+  else if AConditions and InList(W, CONDITION_WORDS) then
     Result := OldSymbolIn(DirectiveArgs(AMap, ALine, ACol), AFloor);
 end;
 
 // Der Lauf ueber alle Direktiven: NextDirective (uRdxCodeMap; bis zur
 // Folgewelle des Wochen-Reviews, G08-01, hier ausgeschrieben).
 function OldCompilerTrace(AMap: TRdxCodeMap; const AFloor: TRdxCompilerFloor;
+  out ALine: Integer): string;
+begin
+  Result := OldCompilerTraceOf(AMap, AFloor, True, True, ALine);
+end;
+
+function OldCompilerTraceOf(AMap: TRdxCodeMap;
+  const AFloor: TRdxCompilerFloor; AConditions, AKits: Boolean;
   out ALine: Integer): string;
 var
   Li, Co : Integer;
@@ -517,7 +539,7 @@ begin
   Co := 1;
   while NextDirective(AMap, Li, Co) do
   begin
-    Result := OldTraceAt(AMap, Li, Co, AFloor);
+    Result := OldTraceAt(AMap, Li, Co, AFloor, AConditions, AKits);
     if Result <> '' then
     begin
       ALine := Li;
@@ -704,7 +726,9 @@ begin
 end;
 
 // Ein RTL-Namensraum im uses ausserhalb jedes Bedingungsblocks: der Name
-// wie geschrieben und seine Zeile in AProof (Version PROOF_RTL_SCOPE).
+// wie geschrieben und seine Zeile in AProof (Version PROOF_RTL_SCOPE). Seit
+// rwE31 Stufe 3 liest die Probe weiter bis zu einem FMX-Namen: er setzt
+// NoFpc und steht dann in What und Line.
 procedure ScopeProof(AMap: TRdxCodeMap; const ADirs: TRdxCondDirectives;
   var AProof: TRdxModernProof);
 var
@@ -722,12 +746,17 @@ begin
         Name := UsesEntry(AMap, E, Stop);
         for S in RTL_SCOPES do
           if (Copy(Name, 1, Length(S)) = S)
+             and ((AProof.Version = 0) or (S = FMX_SCOPE))
              and UnconditionalAt(ADirs, E.Line, E.Col) then
           begin
             AProof.Version := PROOF_RTL_SCOPE;
             AProof.What := Copy(AMap.Raw(E.Line), E.Col, Length(Name));
             AProof.Line := E.Line;
-            Exit;
+            if S = FMX_SCOPE then
+            begin
+              AProof.NoFpc := True;
+              Exit;
+            end;
           end;
         // Hinter 'in' der Pfad, dann ',' oder ';'.
         while (Stop.Low <> '') and (Stop.Low <> ',') and (Stop.Low <> ';') do
