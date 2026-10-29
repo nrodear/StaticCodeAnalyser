@@ -345,6 +345,12 @@ def render(rep, server_info, max_list):
         for s in rep['diff_samples'][what]:
             out.append('    ' + s)
     out.append('Regel-Abweichungen: %d' % len(rep['rules']))
+    mm = sum(1 for _, t in rep['rules'] if "Server [('MAINTAINABILITY', 'MEDIUM')]" in t)
+    if mm and mm == sum(1 for _, t in rep['rules'] if 'impacts:' in t) and mm >= 3:
+        out.append('  HINWEIS: alle abweichenden Regeln stehen auf dem Server als '
+                   'MAINTAINABILITY/MEDIUM - das ist der Vorgabewert des ALTFORMATS. '
+                   'Der Scanner hat rules[] offenbar nicht ausgewertet (Scanner-Log auf '
+                   '"deprecated format" pruefen).')
     for rid, t in rep['rules'][:max_list * 4]:
         out.append('    %s: %s' % (rid, t))
     return '\n'.join(out)
