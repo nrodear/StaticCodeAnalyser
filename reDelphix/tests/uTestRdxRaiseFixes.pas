@@ -38,6 +38,8 @@ type
     // rwE29: raise ENotImplemented nicht in einen Haken (virtual/override,
     // per inherited bzw. vom Framework gerufen) und nicht in einen Callback.
     [Test] procedure Sca020_RaiseInHookOrCallback_Refused;
+    // rwE29: ein Kommentar nennt das fehlende raise - der Autor kennt es.
+    [Test] procedure Sca120_KnownMissingRaise_Refused;
   end;
 
 implementation
@@ -400,6 +402,31 @@ begin
   Assert.AreEqual('', Fix(rkEmpty, Src, 4, RAISE_NOT_IMPLEMENTED, R),
     '@Self.Bar');
   Assert.IsTrue(Pos('@Bar', R) > 0, R);
+end;
+
+procedure TTestRdxRaiseFixes.Sca120_KnownMissingRaise_Refused;
+var
+  R : string;
+begin
+  // Indy IdHTTPWebBrokerBridge.pas:741 (minimiert): Arm eines Setters, der
+  // Kommentar fragt nach dem raise - der eigene Konstruktor ruft den Setter,
+  // mit raise scheiterte jede Antwort. Ohne Fix angeboten (rot).
+  Assert.AreEqual('', Fix(rkMissing, InProc(['  case Index of',
+    '    1: EFoo.Create(''x''); // shouldn''t this be calling ''raise''?',
+    '    2: S := V;', '  end;']), 7, MissingMsg('EFoo'), R), 'Kommentar');
+  Assert.IsTrue(Pos('raise', R) > 0, R);
+  // Ebenso auf der Zeile darueber.
+  Assert.AreEqual('', Fix(rkMissing, InProc(['  // no raise here: called while '
+    + 'constructing', '  EFoo.Create(''x'');']), 7, MissingMsg('EFoo'), R),
+    'Kommentar darueber');
+  // Gegenprobe: 'raised' ist ein anderes Wort (Katalog: '// never raised!'),
+  // 'raise' in einem String zaehlt nicht.
+  Assert.AreEqual(InProc(['  raise EFoo.Create(''x''); // never raised!']),
+    Fix(rkMissing, InProc(['  EFoo.Create(''x''); // never raised!']), 6,
+      MissingMsg('EFoo'), R), R);
+  Assert.AreEqual(InProc(['  raise EFoo.Create(''raise'');']),
+    Fix(rkMissing, InProc(['  EFoo.Create(''raise'');']), 6, MissingMsg('EFoo'),
+      R), R);
 end;
 
 initialization

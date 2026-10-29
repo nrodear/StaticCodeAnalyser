@@ -6766,3 +6766,6 @@ msgstr "die Zeile steht in {$%s %s} (Zeile %d) - der Code trennt 32 und 64 Bit s
 
 msgid "after the try..except, %s (line %d) undoes %s from before the try - \"raise;\" would skip it (no finally)"
 msgstr "hinter dem try..except hebt %s (Zeile %d) das %s vor dem try auf - \"raise;\" überspränge es (kein finally)"
+
+msgid "a comment on or above the line mentions raise - the author knows the missing raise and left it; decide by hand (raising here can break callers)"
+msgstr "ein Kommentar auf oder über der Zeile nennt raise - der Autor kennt das fehlende raise und hat es gelassen; von Hand entscheiden (ein raise hier kann Aufrufer brechen)"

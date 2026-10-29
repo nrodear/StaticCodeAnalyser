@@ -414,6 +414,37 @@ begin
   Result := CreateAt(AMap, T, Before(AMap, T), AArg, Whole);
 end;
 
+// Der Kommentartext (Klasse 'k') der Zeile ALine, sonst Leerzeichen; ''
+// ausserhalb der Datei.
+function CommentTextOf(AMap: TRdxCodeMap; ALine: Integer): string;
+var
+  L : string;
+  i : Integer;
+begin
+  Result := '';
+  if (ALine < 1) or (ALine > AMap.LineCount) then Exit;
+  L := AMap.Raw(ALine);
+  SetLength(Result, Length(L));
+  for i := 1 to Length(L) do
+    if AMap.ClassAt(ALine, i) = 'k' then
+      Result[i] := L[i]
+    else
+      Result[i] := ' ';
+end;
+
+// SCA120: nennt ein Kommentar auf der Fundzeile oder der Zeile darueber
+// das Wort raise? Dann kennt der Autor das fehlende raise und hat es
+// stehen lassen - oft, weil der Aufruf in einem Pfad liegt, den ein raise
+// braeche (rwE29, Indy IdHTTPWebBrokerBridge.pas:741: 'EWBBInvalidStringVar
+// .Create(..); // RLebeau: shouldn't this be calling 'raise'?' im Setter
+// SetStringVariable - der eigene Konstruktor setzt 'Version := ''1.0''',
+// mit raise scheiterte schon das Erzeugen jeder Antwort).
+function KnownMissingRaise(AMap: TRdxCodeMap; ALine: Integer): Boolean;
+begin
+  Result := HasWordNoCase(CommentTextOf(AMap, ALine), 'raise')
+    or HasWordNoCase(CommentTextOf(AMap, ALine - 1), 'raise');
+end;
+
 class function TRdxRaiseFixes.MissingRaise(AMap: TRdxCodeMap; ALine: Integer;
   const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
@@ -446,6 +477,10 @@ begin
      and not Whole then
     AReason := _('%s.Create(..) is not a whole statement - part of an '
       + 'expression?', [Target]);
+  if (AReason = '') and KnownMissingRaise(AMap, ALine) then
+    AReason := _('a comment on or above the line mentions raise - the author '
+      + 'knows the missing raise and left it; decide by hand (raising here '
+      + 'can break callers)');
   if AReason <> '' then Exit;
   AEdit.Span := TRefactorSpan.Make(SPAN_120, ALine, Hit.Col, ALine, Hit.EndCol);
   AEdit.Expected := Copy(AMap.Raw(ALine), Hit.Col, Hit.Len);

@@ -6762,3 +6762,6 @@ msgstr "la ligne se trouve dans {$%s %s} (ligne %d) - le code sépare déjà 32 
 
 msgid "after the try..except, %s (line %d) undoes %s from before the try - \"raise;\" would skip it (no finally)"
 msgstr "après le try..except, %s (ligne %d) annule %s d'avant le try - \"raise;\" le sauterait (pas de finally)"
+
+msgid "a comment on or above the line mentions raise - the author knows the missing raise and left it; decide by hand (raising here can break callers)"
+msgstr "un commentaire sur la ligne ou au-dessus mentionne raise - l'auteur connaît le raise manquant et l'a laissé ; décider à la main (un raise ici peut casser les appelants)"

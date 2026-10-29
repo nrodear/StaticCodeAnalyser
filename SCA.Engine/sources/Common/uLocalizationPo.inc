@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6768 Zeilen, 305687 Bytes
-  CPoLines_de: array[0..6767] of string = (
+  // i18n\de.po - 6771 Zeilen, 306018 Bytes
+  CPoLines_de: array[0..6770] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6782,7 +6782,10 @@ const
     'msgstr "die Zeile steht in {$%s %s} (Zeile %d) - der Code trennt 32 und 64 Bit schon selbst"',
     '',
     'msgid "after the try..except, %s (line %d) undoes %s from before the try - \"raise;\" would skip it (no finally)"',
-    'msgstr "hinter dem try..except hebt %s (Zeile %d) das %s vor dem try auf - \"raise;\" '#$00FC'berspr'#$00E4'nge es (kein finally)"'
+    'msgstr "hinter dem try..except hebt %s (Zeile %d) das %s vor dem try auf - \"raise;\" '#$00FC'berspr'#$00E4'nge es (kein finally)"',
+    '',
+    'msgid "a comment on or above the line mentions raise - the author knows the missing raise and left it; decide by hand (raising here can break callers)"',
+    'msgstr "ein Kommentar auf oder '#$00FC'ber der Zeile nennt raise - der Autor kennt das fehlende raise und hat es gelassen; von Hand entscheiden (ein raise hier kann Aufrufer brechen)"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7057,8 +7060,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6764 Zeilen, 317947 Bytes
-  CPoLines_fr: array[0..6763] of string = (
+  // i18n\fr.po - 6767 Zeilen, 318282 Bytes
+  CPoLines_fr: array[0..6766] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -13822,7 +13825,10 @@ const
     'msgstr "la ligne se trouve dans {$%s %s} (ligne %d) - le code s'#$00E9'pare d'#$00E9'j'#$00E0' 32 et 64 bits"',
     '',
     'msgid "after the try..except, %s (line %d) undoes %s from before the try - \"raise;\" would skip it (no finally)"',
-    'msgstr "apr'#$00E8's le try..except, %s (ligne %d) annule %s d''avant le try - \"raise;\" le sauterait (pas de finally)"'
+    'msgstr "apr'#$00E8's le try..except, %s (ligne %d) annule %s d''avant le try - \"raise;\" le sauterait (pas de finally)"',
+    '',
+    'msgid "a comment on or above the line mentions raise - the author knows the missing raise and left it; decide by hand (raising here can break callers)"',
+    'msgstr "un commentaire sur la ligne ou au-dessus mentionne raise - l''auteur conna'#$00EE't le raise manquant et l''a laiss'#$00E9' ; d'#$00E9'cider '#$00E0' la main (un raise ici peut casser les appelants)"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle
