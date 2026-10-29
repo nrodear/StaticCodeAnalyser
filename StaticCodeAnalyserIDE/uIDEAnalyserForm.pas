@@ -798,7 +798,7 @@ const
   LBL_W_FILTER       = 87;     // "Severity:" (de "Schweregrad:" braucht +11)
   LBL_W_TYPE         = 36;     // "Type:"
   LBL_W_PROFILE      = 48;     // "Profile:"
-  LBL_PAD_PROFILE    = 2;      // Abstand "Profile:" zum ⊘-Knopf davor (Margins.Left)
+  LBL_PAD_LEFT       = 2;      // Abstand "Profile:"/"Severity:" zum Control davor (Margins.Left)
 
   // ---- Combo-Widths (innerhalb der Sub-Panel-Container) -----------------
   // Severity-Combo: 200 px statt 160, damit die laengsten deutschen Labels
@@ -1154,6 +1154,10 @@ begin
   FFilterCombo.DropDownCount := 16;
   FFilterCombo.OnChange := FilterChange;
   FPanelSev := FFilterCombo.Parent as TPanel;
+  // Linker Rand wie beim Profil-Label; der Sub-Container waechst mit.
+  FLblFilter.AlignWithMargins := True;
+  FLblFilter.Margins.SetBounds(ScaleW(LBL_PAD_LEFT), 0, 0, 0);
+  FPanelSev.Width := ScaleW(LBL_PAD_LEFT + LBL_W_FILTER + CMB_W_FILTER);
   PopulateFilterCombo;
 
   // Type-Filter (Sonar-Kategorie).
@@ -1210,8 +1214,8 @@ begin
   // Das Label klebte am ⊘-Knopf: linker Rand ueber Margins, der Sub-
   // Container waechst um denselben Betrag (Combo bleibt gleich breit).
   FLblProfile.AlignWithMargins := True;
-  FLblProfile.Margins.SetBounds(ScaleW(LBL_PAD_PROFILE), 0, 0, 0);
-  FPanelProfile.Width := ScaleW(LBL_PAD_PROFILE + LBL_W_PROFILE + CMB_W_PROFILE);
+  FLblProfile.Margins.SetBounds(ScaleW(LBL_PAD_LEFT), 0, 0, 0);
+  FPanelProfile.Width := ScaleW(LBL_PAD_LEFT + LBL_W_PROFILE + CMB_W_PROFILE);
   PopulateProfileCombo;
 
   // FBtnAnalyseChanged + FBtnCancel + FBtnExport sind aus der Toolbar raus -
@@ -3649,7 +3653,7 @@ begin
   if Assigned(FPanelSev) and Assigned(FLblFilter) then
   begin
     if FLblFilter.Visible then
-      FPanelSev.Width := ScaleW(LBL_W_FILTER + CMB_W_FILTER)
+      FPanelSev.Width := ScaleW(LBL_PAD_LEFT + LBL_W_FILTER + CMB_W_FILTER)
     else
       FPanelSev.Width := ScaleW(CMB_W_FILTER);
   end;
@@ -3663,7 +3667,7 @@ begin
   if Assigned(FPanelProfile) and Assigned(FLblProfile) then
   begin
     if FLblProfile.Visible then
-      FPanelProfile.Width := ScaleW(LBL_PAD_PROFILE + LBL_W_PROFILE + CMB_W_PROFILE)
+      FPanelProfile.Width := ScaleW(LBL_PAD_LEFT + LBL_W_PROFILE + CMB_W_PROFILE)
     else
       FPanelProfile.Width := ScaleW(CMB_W_PROFILE);
   end;
