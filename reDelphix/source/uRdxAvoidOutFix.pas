@@ -153,11 +153,6 @@ const
   STREAMED_VIS: array[0..1] of string = ('published', '');
   // Sichtbarkeiten, die eine Methode nur in dieser Unit zeigen.
   PRIVATE_VIS: array[0..1] of string = ('private', 'strict private');
-  // Typen mit Rumpf, die einen Kopf umschliessen koennen (InsideType) ...
-  TYPE_OPENERS: array[0..3] of string = ('class', 'object', 'interface',
-    'dispinterface');
-  // ... wenn davor '=' bzw. 'packed' steht.
-  TYPE_HEAD_PREV: array[0..1] of string = ('=', 'packed');
   // Typen, fuer die 'out' und 'var' gleich sind (klein, ohne 'system.').
   PLAIN_TYPES: array[0..47] of string = ('integer', 'cardinal', 'shortint',
     'smallint', 'longint', 'int64', 'uint64', 'byte', 'word', 'longword',
@@ -404,40 +399,6 @@ begin
     Result := Default(TRdxToken);
 end;
 
-// Steht der Kopf ab AHead im Rumpf eines Typs (class, record, interface
-// ...)? Rueckwaerts bis zum Abschnitt interface bzw. implementation der
-// Unit; ohne ihn: ja (unsicher).
-function InsideType(AMap: TRdxCodeMap; const AHead: TRdxToken): Boolean;
-var
-  T, P  : TRdxToken;
-  Depth : Integer;
-begin
-  Depth := 0;
-  T := Before(AMap, AHead);
-  while T.Low <> '' do
-  begin
-    P := Before(AMap, T);
-    if IsKeywordAfter(T, P) then
-    begin
-      if T.Low = 'end' then
-        Inc(Depth)
-      else if (T.Low = 'record')
-         or (InList(T.Low, TYPE_OPENERS) and InList(P.Low, TYPE_HEAD_PREV)
-             and TypeHasBody(AMap, T)) then
-      begin
-        if Depth = 0 then
-          Exit(True);
-        Dec(Depth);
-      end
-      else if ((T.Low = 'interface') or (T.Low = 'implementation'))
-         and not InList(P.Low, TYPE_HEAD_PREV) then
-        Exit(False);
-    end;
-    T := P;
-  end;
-  Result := True;
-end;
-
 // Das Schluesselwort 'implementation' der Unit; Low = '' ohne.
 function ImplementationTok(AMap: TRdxCodeMap): TRdxToken;
 var
@@ -522,7 +483,7 @@ function SingleReason(AMap: TRdxCodeMap; const AImpl: TRdxOutHead;
 var
   IR : TRdxRoutine;
 begin
-  if InsideType(AMap, HeadStart(AMap, AImpl.Kw)) then
+  if InsideTypeBody(AMap, HeadStart(AMap, AImpl.Kw)) then
     Exit(_(R_OUT_IN_TYPE, [AName]));
   Result := ImplReason(AMap, AImpl, AName, IR);
   if Result <> '' then
@@ -548,7 +509,7 @@ begin
   Impl := ImplementationTok(AMap);
   if (Impl.Low <> '') and TokBefore(ADecl.Kw, Impl) then
   begin
-    if InsideType(AMap, HeadStart(AMap, ADecl.Kw)) then
+    if InsideTypeBody(AMap, HeadStart(AMap, ADecl.Kw)) then
       Exit(_(R_OUT_IN_TYPE, [AName]));
     Exit(_(R_OUT_INTERFACE, [ADecl.Kw.Line]));
   end
