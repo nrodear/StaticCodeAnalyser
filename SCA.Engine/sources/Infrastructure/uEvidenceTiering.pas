@@ -37,9 +37,11 @@ unit uEvidenceTiering;
 //   * --fail-on error schlaegt fuer gedeckelte Befunde nicht mehr an -
 //     das ist der ZWECK der Politik ("Error = bewiesen"); Opt-out fuer
 //     Bestandsnutzer: [Rules] EvidenceTiering=0 in analyser.ini.
-//   * Der Sonar-Export laesst zur Laufzeit herabgestufte Befunde
-//     by-default weg (uExportSonarGeneric.IsDowngraded) - gedeckelte
-//     zaehlen dazu; --sonar-keep-downgraded nimmt sie wieder auf.
+//   * Der Sonar-Export fuehrt gedeckelte Befunde NICHT als herabgestuft
+//     (uExportSonarGeneric.IsDowngraded, Nico-Entscheid 2026-10-29): sie
+//     gehen mit, ihre Regel traegt die gedeckelte Schwere als Impact.
+//     Weg faellt by-default nur eine Nutzer-Herabstufung ([PathOverrides]);
+//     --sonar-keep-downgraded nimmt sie wieder auf.
 //   * Der Baseline-Fingerprint enthaelt weder Severity noch Konfidenz
 //     (uBaseline.Fingerprint, uFindingFingerprint.ContextHash) -
 //     bestehende Baselines und Suppressions bleiben gueltig.

@@ -20,7 +20,7 @@ type
     [Test] procedure EmptyFindingsProducesEmptyArrays;
     [Test] procedure SingleFindingHasBothRuleAndIssue;
     [Test] procedure RulesAreDedupedAcrossMultipleFindings;
-    [Test] procedure IssueHasEngineIdAndRuleId;
+    [Test] procedure IssueHasRuleIdButNoEngineId;
     [Test] procedure IssueHasPrimaryLocationWithTextRange;
     [Test] procedure RuleHasMqrFields;
     [Test] procedure FilePathIsRelativeToBaseDir;
@@ -32,7 +32,8 @@ type
     // ---- Lauf-Diagnosen gehoeren nicht in einen Issue-Report -----------
     [Test] procedure FileReadError_ProducesNoIssueAndNoRule;
     [Test] procedure RealFindingsSurviveAlongsideReadError;
-    // Herabgestufte Funde (Pfad-Ueberschreibung / Konfidenz), 2026-08-22
+    // Herabgestufte Funde (Pfad-Ueberschreibung; der Konfidenz-Deckel ist
+    // seit 2026-10-29 keine Herabstufung), 2026-08-22
     [Test] procedure DowngradedFinding_IsNotExported;
     [Test] procedure UpgradedFinding_StaysExported;
     [Test] procedure DowngradedFinding_KeptWhenAsked;
@@ -176,7 +177,9 @@ begin
   end;
 end;
 
-procedure TTestExportSonarGeneric.IssueHasEngineIdAndRuleId;
+procedure TTestExportSonarGeneric.IssueHasRuleIdButNoEngineId;
+// engineId steht seit dem Format von SonarQube 10.3 nur noch an der REGEL;
+// am Issue ist es ein Altformat-Feld (Begruendung an BuildIssueObject).
 var
   Findings : TObjectList<TLeakFinding>;
   Json     : string;
@@ -190,8 +193,12 @@ begin
     Root := TJSONObject.ParseJSONValue(Json) as TJSONObject;
     try
       Issue := Root.GetValue<TJSONArray>('issues').Items[0] as TJSONObject;
-      Assert.AreEqual('static-code-analyser', Issue.GetValue<string>('engineId'));
-      Assert.AreEqual('SCA003',               Issue.GetValue<string>('ruleId'));
+      Assert.IsFalse(Assigned(Issue.GetValue('engineId')),
+        'engineId gehoert an die Regel, nicht an das Issue');
+      Assert.AreEqual('SCA003', Issue.GetValue<string>('ruleId'));
+      Assert.AreEqual('static-code-analyser',
+        (Root.GetValue<TJSONArray>('rules').Items[0] as TJSONObject)
+          .GetValue<string>('engineId'));
     finally
       Root.Free;
     end;
@@ -232,6 +239,9 @@ begin
 end;
 
 procedure TTestExportSonarGeneric.RuleHasMqrFields;
+// Katalog-Impacts unveraendert - dafuer OHNE Evidenz-Politik: mit ihr deckelt
+// KindCappedMeta SCA001 (Konfidenz medium) auf MEDIUM, das prueft
+// uTestExportSonarRoundtrip.CappedErrorRule_IsExportedWithCappedImpact.
 var
   Findings : TObjectList<TLeakFinding>;
   Json     : string;
@@ -239,7 +249,10 @@ var
   Rule     : TJSONObject;
   Impacts  : TJSONArray;
   Impact   : TJSONObject;
+  OldTier  : Boolean;
 begin
+  OldTier := uSCAConsts.LastScanEvidenceTiering;
+  uSCAConsts.LastScanEvidenceTiering := False;
   Findings := TObjectList<TLeakFinding>.Create(True);
   try
     Findings.Add(MakeFinding(fkMemoryLeak, 'src\Foo.pas', 1, 'msg'));
@@ -258,6 +271,7 @@ begin
     end;
   finally
     Findings.Free;
+    uSCAConsts.LastScanEvidenceTiering := OldTier;
   end;
 end;
 
@@ -503,7 +517,9 @@ begin
   Findings := TObjectList<TLeakFinding>.Create(True);
   try
     Fnd := MakeFinding(fkMemoryLeak, 'src\Gen.pas', 12, 'list not freed');
-    Fnd.Severity := lsHint;          // herabgestuft, Katalog sagt Error
+    // Herabgestuft wie von uPathOverrides: per OverrideSeverity, die die
+    // Detektor-Aussage sichert (IsDowngraded vergleicht gegen sie).
+    Fnd.OverrideSeverity(lsHint);
     Findings.Add(Fnd);
     Root := TJSONObject.ParseJSONValue(
       TSonarGenericWriter.ToJsonString(Findings, '')) as TJSONObject;
@@ -531,7 +547,7 @@ begin
   Findings := TObjectList<TLeakFinding>.Create(True);
   try
     Fnd := MakeFinding(fkDebugOutput, 'src\Foo.pas', 7, 'OutputDebugString');
-    Fnd.Severity := lsError;         // hochgestuft, Katalog sagt Hint
+    Fnd.OverrideSeverity(lsError);   // hochgestuft, Katalog sagt Hint
     Findings.Add(Fnd);
     Root := TJSONObject.ParseJSONValue(
       TSonarGenericWriter.ToJsonString(Findings, '')) as TJSONObject;
@@ -557,7 +573,7 @@ begin
   Findings := TObjectList<TLeakFinding>.Create(True);
   try
     Fnd := MakeFinding(fkMemoryLeak, 'src\Gen.pas', 12, 'list not freed');
-    Fnd.Severity := lsHint;
+    Fnd.OverrideSeverity(lsHint);
     Findings.Add(Fnd);
     Root := TJSONObject.ParseJSONValue(
       TSonarGenericWriter.ToJsonString(Findings, '', True)) as TJSONObject;

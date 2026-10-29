@@ -105,7 +105,7 @@ sonar.externalIssuesReportPaths=sca-findings.json
 | `--sonar-project <key>` | Project-Key überschreiben |
 | `--sonar-branch <name>` | Branch-Name für das `--sonar-init`-Template (`sonar.branch.name`). Der Findings-Export hat kein Branch-Feld — den Branch liest der `sonar-scanner` |
 | `--sonar-insecure` | Self-signed TLS-Cert akzeptieren |
-| `--sonar-keep-downgraded` | Auch Funde exportieren, deren Severity zur Laufzeit **herabgestuft** wurde (Pfad-Überschreibung, Konfidenz). Standard: aus — siehe Kasten unten |
+| `--sonar-keep-downgraded` | Auch Funde exportieren, deren Severity per Pfad-Überschreibung **herabgestuft** wurde (der Konfidenz-Deckel zählt nicht dazu). Standard: aus — siehe Kasten unten |
 | `--sonar-config <ini>` | Alternativer `analyser.ini`-Pfad |
 
 `--sonar-test` und `--sonar-init` sind **Standalone-Aktionen** und brauchen
@@ -124,6 +124,24 @@ in der Konsolenausgabe bleiben sie vollständig erhalten.
 
 **Hoch**gestufte Funde sind nie betroffen — sie gehen immer in den Report
 (mit der Katalog-Schwere, mehr gibt das Format nicht her).
+
+**Custom-Regeln** (`--custom-rules`): ihre Severity steht in der YAML-Regel
+selbst und ist der Maßstab – auch `severity: hint` gilt nicht als
+herabgestuft. Herabgestuft ist ein Custom-Fund nur, wenn eine
+Pfad-Überschreibung ihn unter seine YAML-Severity setzt; dann bleibt er wie
+jeder andere draußen. Jede Custom-Regel erscheint in Sonar
+unter eigenem Namen („User-defined custom rule PROJ001“) mit einem Impact nach
+ihrer YAML-Severity (error → HIGH, warning → MEDIUM, hint → LOW).
+
+**Konfidenz-Deckel ist keine Herabstufung:** die Evidenz-Politik deckelt
+Funde mit Konfidenz *medium* auf Warning (*low* auf Hint). Das zählt nicht
+als Herabstufung — solche Funde gehen in den Report. Bis Oktober 2026 galten
+sie als herabgestuft und fehlten: im Realwelt-Korpus 726 Funde, u. a. fast
+alle von SCA001, SCA003 und SCA004. Eine Regel, deren Funde die Politik
+schon mit der Standard-Konfidenz des Kinds deckelt, trägt in Sonar die
+gedeckelte Schwere als Impact (Warning → höchstens MEDIUM): SCA004 kommt als
+SECURITY/MEDIUM statt BLOCKER an. Mit `[Rules] EvidenceTiering=0` bleiben die
+Katalog-Impacts.
 
 Mit `--sonar-keep-downgraded` lässt sich das umstellen. Zu bedenken: was
 einmal im Report stand und künftig fehlt, zählt SonarQube als *behoben*, und
@@ -230,6 +248,13 @@ Jede SCA-Rule trägt im Catalog [`rules/sca-rules.json`](../rules/sca-rules.json
 - **`impacts[]`** — `{ softwareQuality, severity }` mit
   `softwareQuality ∈ {SECURITY, RELIABILITY, MAINTAINABILITY}` und
   `severity ∈ {BLOCKER, HIGH, MEDIUM, LOW, INFO}`
+
+**Mindestversion:** `BLOCKER` und `INFO` als Impact-Severity kennt SonarQube
+erst ab **10.8** (Server 2025.x, Community Build 24.12+). 10.3 bis 10.7
+erlauben laut Spezifikation nur `HIGH`/`MEDIUM`/`LOW`; ein Report mit
+`BLOCKER`/`INFO` ist dort ungültig (zu erwarten: der Scanner verwirft ihn
+ganz, am Server noch nicht beobachtet). Vor 10.3 versteht Sonar das Format mit
+`rules[]` gar nicht.
 
 Diese Felder landen automatisch in der Generic-Issue-Output. Sonar nutzt sie
 für das MQR-Dashboard. Beispiele:

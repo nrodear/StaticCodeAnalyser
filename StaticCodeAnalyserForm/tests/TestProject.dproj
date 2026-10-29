@@ -203,6 +203,7 @@
         <DCCReference Include="uTestDetectorTimings.pas"/>
         <DCCReference Include="uTestExportSarifDiagnostics.pas"/>
         <DCCReference Include="uTestExportSonarTextRange.pas"/>
+        <DCCReference Include="uTestExportSonarRoundtrip.pas"/>
         <DCCReference Include="uTestContrastColor.pas"/>
         <DCCReference Include="uTestUiElementRegistry.pas"/>
         <DCCReference Include="uTestSonarPush.pas"/>
