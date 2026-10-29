@@ -8,8 +8,8 @@ unit uTestRdxFormatSettingsFix;
 // der Tabelle (TRdxFixTable.FixFor bzw. AlternativeFixFor, Adapter
 // PlanDateFormatSettings/PlanDateFormatSettingsAlt) und stehen in einer
 // eigenen Fixture hinter {$IFNDEF FPC} - die Text-Fixture bleibt
-// FPC-tauglich. Im FPC-Pruefstand steht die Unit nicht
-// (uRdxFormatSettingsFix fehlt in der Unit-Liste von build.sh).
+// FPC-tauglich und laeuft seit HilfeFix K (rwE31 Stufe 3) im FPC-
+// Pruefstand (uRdxFormatSettingsFix steht in der Unit-Liste von build.sh).
 // Prueft: Hilfe fuer ein und zwei Argumente, Schreibweise und Leerraum,
 // alle Aufrufe der Zeile in einer Ersetzung, verschachtelt, RTL-qualifiziert,
 // der Bereich, der Alt-Weg; die Sperren - verschoben, Folgezeile, Anweisung
