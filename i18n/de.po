@@ -6876,3 +6876,6 @@ msgstr "das Literal %s passt nicht zum Zahlenformat von TFormatSettings.Invarian
 
 msgid "%s; line %d calls %s of the same family without TFormatSettings.Invariant - change it along with this one, otherwise values written there and read or compared here (or the other way round) no longer match"
 msgstr "%s; Zeile %d ruft %s derselben Familie ohne TFormatSettings.Invariant auf - mit umstellen, sonst passen dort geschriebene und hier gelesene oder verglichene Werte (oder umgekehrt) nicht mehr zusammen"
+
+msgid "the body holds an empty comment - a mark for \"nothing to do here\"; raise would contradict it"
+msgstr "der Rumpf enthält einen leeren Kommentar - eine Marke für \"hier ist nichts zu tun\"; raise widerspräche ihr"

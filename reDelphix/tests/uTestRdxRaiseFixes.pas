@@ -40,6 +40,9 @@ type
     [Test] procedure Sca020_RaiseInHookOrCallback_Refused;
     // rwE29: ein Kommentar nennt das fehlende raise - der Autor kennt es.
     [Test] procedure Sca120_KnownMissingRaise_Refused;
+    // rwE30: ein Kommentar ohne Inhalt ('//') bzw. eine Leerzeile im Rumpf
+    // wird ersetzt statt zu sperren bzw. stehen zu bleiben.
+    [Test] procedure Sca020_EmptyCommentOrBlankLine_Replaced;
   end;
 
 implementation
@@ -427,6 +430,63 @@ begin
   Assert.AreEqual(InProc(['  raise EFoo.Create(''raise'');']),
     Fix(rkMissing, InProc(['  EFoo.Create(''raise'');']), 6, MissingMsg('EFoo'),
       R), R);
+end;
+
+procedure TTestRdxRaiseFixes.Sca020_EmptyCommentOrBlankLine_Replaced;
+var
+  R, Src : string;
+begin
+  // CEF4Delphi uCEFAccessibilityHandler.pas:80 (minimiert): im Rumpf nur
+  // ein nacktes '//' - bis rwE30 gesperrt als 'auskommentierter Code
+  // (SCA070)?' (rot ohne Fix). Die Zeile wird ersetzt.
+  Src := InImpl(['procedure TCEFAccessibilityHandlerOwn.OnAccessibilityTreeChange'
+    + '(const value: ICefValue);', 'begin', '  //', 'end;']);
+  Assert.AreEqual(InImpl(['procedure TCEFAccessibilityHandlerOwn.'
+      + 'OnAccessibilityTreeChange(const value: ICefValue);', 'begin',
+      '  ' + INTENT_LINE, 'end;']), Fix(rkEmpty, Src, 4, '', R), R);
+  // jcl StackTraceViewerHelloWorldExampleReg.pas:321: '//' in Spalte 1, die
+  // neue Zeile eine Stufe unter dem end.
+  Assert.AreEqual(InImpl(['procedure TTestLocationInfo.SetFileName(AValue: '
+      + 'string);', 'begin', '  ' + INTENT_LINE, 'end;']),
+    Fix(rkEmpty, InImpl(['procedure TTestLocationInfo.SetFileName(AValue: '
+      + 'string);', 'begin', '//', 'end;']), 4, '', R), R);
+  // Die raise-Variante bleibt beim leeren '//' gesperrt - es kann die Marke
+  // "nichts zu tun" sein (HeidiSQL main.pas:4641) -, jetzt mit diesem Grund
+  // statt 'SCA070?'; eine Leerzeile ersetzt sie.
+  Assert.AreEqual('', Fix(rkEmpty, InImpl(['procedure P;', 'begin', '  //',
+    'end;']), 4, RAISE_NOT_IMPLEMENTED, R), 'raise und //');
+  Assert.IsTrue(Pos('SCA070', R) = 0, R);
+  Assert.AreEqual(InImpl(['procedure P;', 'begin',
+      '  raise ENotImplemented.Create(''P'');', 'end;']),
+    Fix(rkEmpty, InImpl(['procedure P;', 'begin', '', 'end;']), 4,
+      RAISE_NOT_IMPLEMENTED, R), R);
+  // Leere Blockkommentare ebenso.
+  Assert.AreEqual(InImpl(['procedure P;', 'begin', '  ' + INTENT_LINE, 'end;']),
+    Fix(rkEmpty, InImpl(['procedure P;', 'begin', '  { }', 'end;']), 4, '', R), R);
+  // cnwizards CnWizIdeUtils.pas:1226 (minimiert): eine Leerzeile im Rumpf -
+  // bis rwE30 kam der Kommentar hinter das begin, die Leerzeile blieb
+  // darunter stehen (rot ohne Fix).
+  Src := InImpl(['procedure TCnEditControlWrapper.AddEditorMouseMoveNotifier(',
+    '  Notifier: TEditorMouseMoveNotifier);', 'begin', '', 'end;']);
+  Assert.AreEqual(InImpl(['procedure TCnEditControlWrapper.'
+      + 'AddEditorMouseMoveNotifier(', '  Notifier: TEditorMouseMoveNotifier);',
+      'begin', '  ' + INTENT_LINE, 'end;']), Fix(rkEmpty, Src, 4, '', R), R);
+  // Leerzeilen und '//' gemischt, eingerueckt (Tabs).
+  Assert.AreEqual(InImpl(['procedure P;', #9'begin', #9#9 + INTENT_LINE,
+      #9'end;']),
+    Fix(rkEmpty, InImpl(['procedure P;', #9'begin', '', #9#9'//', '   ',
+      #9'end;']), 4, '', R), R);
+  // Gegenproben: ein Kommentar MIT Text bleibt gesperrt (SCA070?), eine
+  // Direktive ebenso, ein '//' hinter dem begin ebenso.
+  Assert.AreEqual('', Fix(rkEmpty, InImpl(['procedure P;', 'begin', '  //',
+    '  // X := 1;', 'end;']), 4, '', R));
+  Assert.IsTrue(Pos('SCA070', R) > 0, R);
+  Assert.AreEqual('', Fix(rkEmpty, InImpl(['procedure P;', 'begin', '  {$R-}',
+    'end;']), 4, '', R));
+  Assert.IsTrue(Pos('SCA070', R) > 0, R);
+  Assert.AreEqual('', Fix(rkEmpty, InImpl(['procedure P;', 'begin //', '',
+    'end;']), 4, '', R));
+  Assert.IsTrue(Pos('SCA070', R) > 0, R);
 end;
 
 initialization

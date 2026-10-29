@@ -6872,3 +6872,6 @@ msgstr "le littéral %s ne correspond pas au format numérique de TFormatSetting
 
 msgid "%s; line %d calls %s of the same family without TFormatSettings.Invariant - change it along with this one, otherwise values written there and read or compared here (or the other way round) no longer match"
 msgstr "%s ; la ligne %d appelle %s de la même famille sans TFormatSettings.Invariant - à modifier aussi, sinon les valeurs écrites là-bas et lues ou comparées ici (ou l'inverse) ne correspondent plus"
+
+msgid "the body holds an empty comment - a mark for \"nothing to do here\"; raise would contradict it"
+msgstr "le corps contient un commentaire vide - une marque pour \"rien à faire ici\" ; raise la contredirait"

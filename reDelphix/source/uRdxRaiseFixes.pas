@@ -41,7 +41,10 @@ type
     // tiefer), sonst inline hinter das begin. Keine Hilfe bei lokalen
     // Routinen zwischen Kopf und Rumpf, bei asm, wenn der Rumpf nicht leer
     // ist, und - nur mit Anweisung - bei constructor/destructor (eine
-    // Exception dort hinterliesse ein halbes Objekt).
+    // Exception dort hinterliesse ein halbes Objekt), bei einem Rumpf, den
+    // Aufrufer still erwarten (HookReason) und bei einem Kommentar ohne
+    // Inhalt im Rumpf. Leere Zeilen und Kommentare ohne Inhalt zwischen
+    // begin und end ersetzt die neue Zeile (QuietBody, rwE30).
     class function EmptyBody(AMap: TRdxCodeMap; ALine: Integer;
       const AStatementFmt: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
@@ -201,6 +204,46 @@ begin
   Result := _('no body found for the method');
 end;
 
+// Ein Kommentar ohne Inhalt als ganze Zeile S (getrimmt): '//', '{ }',
+// '(* *)' - keine Direktive ('{$..}').
+function IsEmptyComment(const S: string): Boolean;
+var
+  n : Integer;
+begin
+  n := Length(S);
+  if S = '//' then
+    Exit(True);
+  if (n >= 2) and (S[1] = '{') and (S[n] = '}') then
+    Exit((n = 2) or ((S[2] <> '$') and (Trim(Copy(S, 2, n - 2)) = '')));
+  Result := (n >= 4) and (Copy(S, 1, 2) = '(*') and (Copy(S, n - 1, 2) = '*)')
+    and ((n = 4) or ((S[3] <> '$') and (Trim(Copy(S, 3, n - 4)) = '')));
+end;
+
+// Stehen begin und end auf eigenen Zeilen (hinter dem begin, vor dem end
+// nichts) und dazwischen nur Leerzeilen und Kommentare ohne Inhalt (rwE30:
+// CEF4Delphi uCEFAccessibilityHandler.pas:80, Kastri DW.JsonConfig.pas:65 -
+// 'begin' / '  //' / 'end;')? Ein solcher Rumpf ist so leer wie einer ohne
+// Kommentar: ein nacktes '//' ist kein auskommentierter Code (SCA070) und
+// nennt keine Absicht (der Detektor meldet den Rumpf). BodyEdit ersetzt
+// die Zeilen dazwischen durch die eine neue Zeile.
+function QuietBody(AMap: TRdxCodeMap; const ABody: TRdxMethodBody): Boolean;
+var
+  B, E : TRdxToken;
+  Li   : Integer;
+begin
+  B := ABody.BeginTok;
+  E := ABody.EndTok;
+  Result := (E.Line > B.Line)
+    and (SkipBlanks(AMap.Raw(B.Line), B.EndCol) > Length(AMap.Raw(B.Line)))
+    and (Trim(Copy(AMap.Raw(E.Line), 1, E.Col - 1)) = '');
+  Li := B.Line + 1;
+  while Result and (Li < E.Line) do
+  begin
+    Result := (Trim(AMap.Raw(Li)) = '') or IsEmptyComment(Trim(AMap.Raw(Li)));
+    Inc(Li);
+  end;
+end;
+
 // Kopf, Name und der leere Rumpf der Methode auf ALine. '' oder der Grund.
 function MethodBodyOn(AMap: TRdxCodeMap; ALine: Integer;
   out ABody: TRdxMethodBody): string;
@@ -223,21 +266,27 @@ begin
   // als CommentBetween kopiert, derselbe Lauf mit Token statt Bereich).
   // Eigene msgid, nicht MsgDecideByHand: 'Von' steht gross am Satzanfang
   // hinter dem '?' (Texte umstellen, Varianten behalten ihren Wortlaut).
+  // Ein Kommentar ohne Inhalt auf eigener Zeile zaehlt nicht (QuietBody,
+  // rwE30) - BodyEdit ersetzt ihn.
   else if CommentInRange(AMap, TRefactorSpan.Make(SPAN_020,
     ABody.BeginTok.Line, ABody.BeginTok.EndCol, ABody.EndTok.Line,
-    ABody.EndTok.Col)) then
+    ABody.EndTok.Col)) and not QuietBody(AMap, ABody) then
     Result := _('the body already holds a comment without intent - '
       + 'commented-out code (SCA070)? Decide by hand');
 end;
 
 // Die Ersetzung fuer das begin: AText inline dahinter oder (begin und end
 // auf eigenen Zeilen, hinter dem begin nichts) in einer eigenen Zeile eine
-// Stufe tiefer. '' oder der Grund.
+// Stufe tiefer. Stehen dazwischen Zeilen (leer oder ein Kommentar ohne
+// Inhalt, QuietBody), ersetzt die neue Zeile sie - bis rwE30 kam sie
+// hinter das begin, und die Leerzeile bzw. das '//' blieb darunter stehen
+// (cnwizards CnWizIdeUtils.pas:1226, jcl JclOtaUtils.pas:1733). '' oder
+// der Grund.
 function BodyEdit(AMap: TRdxCodeMap; const ABody: TRdxMethodBody;
   const AText, AInlineText: string; out AEdit: TRdxEdit): string;
 var
   L, Indent : string;
-  B         : TRdxToken;
+  B, E      : TRdxToken;
 begin
   Result := '';
   AEdit := Default(TRdxEdit);
@@ -259,6 +308,16 @@ begin
   // stehen ('procedure P; begin').
   L := AMap.Raw(ABody.EndTok.Line);
   Indent := IndentOf(L);
+  E := ABody.EndTok;
+  if (E.Line > B.Line + 1) and QuietBody(AMap, ABody) then
+  begin
+    // begin bis vor das end: die Zeilen dazwischen fallen weg.
+    AEdit.Span := TRefactorSpan.Make(SPAN_020, B.Line, B.Col, E.Line, E.Col);
+    AEdit.NewText := AEdit.Expected + #10 + Indent + IndentStep(Indent, '')
+      + AText + #10 + Copy(L, 1, E.Col - 1);
+    AEdit.Expected := RangeText(AMap, AEdit.Span);
+    Exit;
+  end;
   AEdit.NewText := AEdit.Expected + #10 + Indent + IndentStep(Indent, '')
     + AText;
 end;
@@ -350,6 +409,17 @@ begin
     AReason := _('name of the method not on the header line');
   if (AReason = '') and (AStatementFmt <> '') then
     AReason := HookReason(AMap, Body);
+  // Ein Kommentar ohne Inhalt ('//', QuietBody) kann die Marke "hier ist
+  // nichts zu tun" sein - der Absichtskommentar ersetzt ihn, ein raise
+  // widerspraeche ihm (rwE30: HeidiSQL main.pas:4641, Indy
+  // capturemainMLSD.pas:123 - die Sperre dort war richtig, nur ihr Grund
+  // 'SCA070?' nicht). Nach HookReason: ein Haken ist der genauere Grund.
+  if (AReason = '') and (AStatementFmt <> '')
+     and CommentInRange(AMap, TRefactorSpan.Make(SPAN_020,
+       Body.BeginTok.Line, Body.BeginTok.EndCol, Body.EndTok.Line,
+       Body.EndTok.Col)) then
+    AReason := _('the body holds an empty comment - a mark for "nothing to '
+      + 'do here"; raise would contradict it');
   if AReason <> '' then Exit;
   if AStatementFmt = '' then
     AReason := BodyEdit(AMap, Body, INTENT_LINE, INTENT_INLINE, AEdit)
