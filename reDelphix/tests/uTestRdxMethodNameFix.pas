@@ -44,7 +44,7 @@ type
     [Test] procedure ConditionalTwins_NoHelp;
     [Test] procedure NoImplementation_NoHelp;
     [Test] procedure TwoImplementations_NoHelp;
-    [Test] procedure FreeRoutineRecordInterface_NoHelp;
+    [Test] procedure RecordInterface_NoHelp;
     [Test] procedure MovedLine_NoHelp;
     [Test] procedure CommentOrString_NoHelp;
     [Test] procedure AlreadyCapitalized_NoHelp;
@@ -54,6 +54,19 @@ type
     [Test] procedure ImplementationOnly_NoHelp;
     [Test] procedure PublishedMethod_NoHelp;
     [Test] procedure ImplSpelling_Overload_NoHelp;
+    // rwE30 Stufe 2 (12 unnoetige Sperren): freie Routinen - alle Koepfe
+    // gross; gesperrt, wo ein Linker oder C-Code den genauen Namen braucht.
+    [Test] procedure FreeRoutine_DeclAndImpl_Capitalized;
+    [Test] procedure FreeRoutine_ImplOnly_Capitalized;
+    [Test] procedure FreeRoutine_BoundByName_NoHelp;
+    [Test] procedure FreeRoutine_Twins_NoHelp;
+    [Test] procedure FreeRoutine_ApiStyleName_NoHelp;
+    // rwE30 Stufe 2: nur die Implementierung gemeldet, die Deklaration
+    // beginnt auch klein - beide gross bzw. der richtige Grund.
+    [Test] procedure ImplSpelling_LowerDecl_BothCapitalized;
+    [Test] procedure ImplSpelling_LowerDecl_Published_Reason;
+    // rwE30 Stufe 2: ein reiner Punktpfad im Literal ist eine Log-Kennung.
+    [Test] procedure Literal_DottedPath_Helps;
   end;
 
 {$IFNDEF FPC}
@@ -66,7 +79,7 @@ type
     [Test] procedure Detector_ImplSpelledDifferently_Fixed;
     [Test] procedure Detector_ImplOnly_Fixed;
     [Test] procedure Detector_CatalogExample_InClass_Fixed;
-    [Test] procedure Detector_CatalogExample_FreeRoutine_NoHelp;
+    [Test] procedure Detector_CatalogExample_FreeRoutine_Fixed;
     [Test] procedure Detector_Overload_NoHelp;
     [Test] procedure Table_NameAndTwoEdits;
   end;
@@ -334,16 +347,10 @@ begin
     DECL_LINE, 'doWork', _(R_MN_IMPLS, [2, 'TFoo', 'doWork']));
 end;
 
-procedure TTestRdxMethodNameFix.FreeRoutineRecordInterface_NoHelp;
-var
-  Src : string;
+procedure TTestRdxMethodNameFix.RecordInterface_NoHelp;
 begin
-  // Freie Routine: die Deklaration im interface-Teil und der Kopf im
-  // implementation-Teil.
-  Src := Join(['unit t;', 'interface', 'procedure doWork;', 'implementation',
-    'procedure doWork;', 'begin', 'end;', 'end.']);
-  AssertRefused(Src, 3, 'doWork', _(R_MN_NO_CLASS, ['doWork']));
-  AssertRefused(Src, 5, 'doWork', _(R_MN_NO_CLASS, ['doWork']));
+  // Freie Routinen bekommen seit rwE30 Stufe 2 die Hilfe
+  // (FreeRoutine_DeclAndImpl_Capitalized); Methoden anderer Typen nicht.
   // Methode eines records.
   AssertRefused(Join(['unit t;', 'interface', 'type', '  TRec = record',
     '    procedure doWork;', '  end;', 'implementation',
@@ -458,6 +465,165 @@ begin
     ['procedure TFoo.visit;', 'begin', 'end;',
      'procedure TFoo.Visit(N: Integer);', 'begin', 'end;']), 10, 'visit',
     _(R_MN_DECLS, [2, 'visit', 'TFoo']));
+end;
+
+// ---- rwE30 Stufe 2 ----
+
+procedure TTestRdxMethodNameFix.FreeRoutine_DeclAndImpl_Capitalized;
+var
+  Src, Want : string;
+begin
+  // DCU32 DAsmUtil.pas:43/440 (minimiert): 'function imPtr' im interface-
+  // Teil, der Rumpf im implementation-Teil, ein Aufruf. Bis dahin
+  // R_MN_NO_CLASS. Der Aufruf bleibt - er bindet ohne Gross/klein.
+  Src := Join(['unit t;', 'interface', 'function imPtr: Boolean;',
+    'implementation', 'function imPtr: Boolean;', 'begin', '  Result := True;',
+    'end;', 'procedure Use;', 'begin', '  if imPtr then Exit;', 'end;',
+    'end.']);
+  Want := Join(['unit t;', 'interface', 'function ImPtr: Boolean;',
+    'implementation', 'function ImPtr: Boolean;', 'begin', '  Result := True;',
+    'end;', 'procedure Use;', 'begin', '  if imPtr then Exit;', 'end;',
+    'end.']);
+  Assert.AreEqual(Want, Applied(Src, 3, 'imPtr'), 'Fund an der Deklaration');
+  Assert.AreEqual(Want, Applied(Src, 5, 'imPtr'), 'Fund am Rumpf');
+  // forward statt interface-Teil.
+  Assert.AreEqual(Join(['unit t;', 'interface', 'implementation',
+    'procedure DoIt; forward;', 'procedure DoIt;', 'begin', 'end;', 'end.']),
+    Applied(Join(['unit t;', 'interface', 'implementation',
+    'procedure doIt; forward;', 'procedure doIt;', 'begin', 'end;', 'end.']),
+    4, 'doIt'));
+end;
+
+procedure TTestRdxMethodNameFix.FreeRoutine_ImplOnly_Capitalized;
+var
+  Src : string;
+begin
+  // Double Commander uluapas.pas:233 (minimiert): nur der Rumpf, registriert
+  // per Zeiger und mit einem ANDEREN Namen als Literal.
+  Src := Join(['unit t;', 'interface', 'procedure Reg;', 'implementation',
+    'function luaMatchesMask(L: Pointer): Integer;', 'begin', '  Result := 0;',
+    'end;', 'procedure Reg;', 'begin',
+    '  Register(''MatchesMask'', @luaMatchesMask);', 'end;', 'end.']);
+  Assert.AreEqual(StringReplace(Src, 'function luaMatchesMask',
+    'function LuaMatchesMask', []), Applied(Src, 5, 'luaMatchesMask'));
+end;
+
+procedure TTestRdxMethodNameFix.FreeRoutine_BoundByName_NoHelp;
+var
+  Src : string;
+begin
+  // Gegenproben: ein Linker, eine Bibliothek oder C-Code bindet den genauen
+  // Namen (Kastri/Alcinoe-Importe, AbCrtl.pas 'isdigit; cdecl', JvUIBase
+  // 'isc_..; external').
+  AssertRefused(Join(['unit t;', 'interface', 'implementation',
+    'function getVal: Integer; external ''x.dll'';', 'end.']), 4, 'getVal',
+    _(R_MN_FREE_BOUND, ['getVal', 'external']));
+  AssertRefused(Join(['unit t;', 'interface', 'implementation',
+    'function isDigit(C: Integer): Integer; cdecl;', 'begin', '  Result := C;',
+    'end;', 'end.']), 4, 'isDigit', _(R_MN_FREE_BOUND, ['isDigit', 'cdecl']));
+  AssertRefused(Join(['unit t;', 'interface', 'implementation',
+    'procedure doIt; [public, alias: ''DOIT''];', 'begin', 'end;', 'end.']), 4,
+    'doIt', _(R_MN_FREE_BOUND, ['doIt', '[']));
+  AssertRefused(Join(['unit t;', 'interface', 'implementation',
+    'procedure doIt;', 'begin', 'end;', 'exports doIt;', 'end.']), 4, 'doIt',
+    _(R_MN_FREE_EXPORTS, ['doIt', 7]));
+  AssertRefused(Join(['unit t;', 'interface', 'implementation',
+    '{$L doit.obj}', 'procedure doIt;', 'begin', 'end;', 'end.']), 5, 'doIt',
+    _(R_MN_FREE_LINK, [4, 'doIt']));
+  AssertRefused(Join(['unit t;', 'interface', '{$EXTERNALSYM doIt}',
+    'procedure doIt;', 'implementation', 'procedure doIt;', 'begin', 'end;',
+    'end.']), 4, 'doIt', _(R_MN_FREE_DIRECTIVE, ['doIt', 3]));
+  Src := Join(['unit t;', 'interface', 'implementation', 'procedure doIt;',
+    'begin', 'end;', 'procedure Run;', 'begin',
+    '  GetProcAddress(0, ''doIt'');', 'end;', 'end.']);
+  AssertRefused(Src, 4, 'doIt',
+    _(R_MN_LITERAL, ['doIt', LineOf(Src, 'GetProcAddress')]));
+  // Nur die Deklaration im interface-Teil, kein Rumpf in der Datei.
+  AssertRefused(Join(['unit t;', 'interface', 'procedure doIt;',
+    'implementation', 'end.']), 3, 'doIt', _(R_MN_FREE_PAIR, ['doIt']));
+  // Ueberladen.
+  AssertRefused(Join(['unit t;', 'interface', 'implementation',
+    'procedure doIt; overload;', 'begin', 'end;',
+    'procedure doIt(A: Integer); overload;', 'begin', 'end;', 'end.']), 4,
+    'doIt', _(R_MN_FREE_BOUND, ['doIt', 'overload']));
+end;
+
+procedure TTestRdxMethodNameFix.FreeRoutine_Twins_NoHelp;
+begin
+  // $IFDEF-Zwillinge: zwei Rumpfe - kein Paar aus Deklaration und Rumpf.
+  AssertRefused(Join(['unit t;', 'interface', 'implementation', '{$IFDEF A}',
+    'procedure doIt;', 'begin', 'end;', '{$ELSE}', 'procedure doIt;', 'begin',
+    'end;', '{$ENDIF}', 'end.']), 5, 'doIt', _(R_MN_FREE_PAIR, ['doIt']));
+  AssertRefused(Join(['unit t;', 'interface', 'procedure doIt;',
+    'implementation', '{$IFDEF A}', 'procedure doIt;', 'begin', 'end;',
+    '{$ELSE}', 'procedure doIt;', 'begin', 'end;', '{$ENDIF}', 'end.']), 3,
+    'doIt', _(R_MN_FREE_HEADS, [3, 'doIt']));
+end;
+
+procedure TTestRdxMethodNameFix.FreeRoutine_ApiStyleName_NoHelp;
+begin
+  // Double Commander lua.pas:381 'lua_tocstring', kascrypt kdf.pas:83 'kdf3',
+  // Kastri DW.iOSapi.FirebaseAnalytics.pas:161 'kFIRUser..' (rwE30 Stufe 2,
+  // dort Sperre ok): Spiegel einer C- oder Plattform-API.
+  AssertRefused(Join(['unit t;', 'interface', 'implementation',
+    'function lua_tocstring(L: Pointer): PChar;', 'begin', '  Result := nil;',
+    'end;', 'end.']), 4, 'lua_tocstring', _(R_MN_FREE_API, ['lua_tocstring']));
+  AssertRefused(Join(['unit t;', 'interface', 'implementation',
+    'procedure kdf3;', 'begin', 'end;', 'end.']), 4, 'kdf3',
+    _(R_MN_FREE_API, ['kdf3']));
+  AssertRefused(Join(['unit t;', 'interface', 'implementation',
+    'function kFIRSignUp: Pointer;', 'begin', '  Result := nil;', 'end;',
+    'end.']), 4, 'kFIRSignUp', _(R_MN_FREE_API, ['kFIRSignUp']));
+end;
+
+procedure TTestRdxMethodNameFix.ImplSpelling_LowerDecl_BothCapitalized;
+var
+  Src : string;
+  P   : TRdxMethodNamePlan;
+  R   : string;
+begin
+  // cnwizards DCURecs.pas:7438 (rwE30 Stufe 2): Deklaration 'visitUnit'
+  // (klein) in der Klasse, gemeldet der Implementierungskopf. Bis dahin
+  // R_MN_SPELLING mit zweimal demselben Namen und "Fund veraltet?".
+  Src := UnitWith(['  public', '    procedure visitUnit(U: TObject); virtual;'],
+    ['procedure TFoo.visitUnit(U: TObject);', 'begin', 'end;']);
+  Assert.IsTrue(PlanOf(Src, IMPL_LINE, Format(MSG_FMT, ['visitUnit']), P, R),
+    R);
+  Assert.AreEqual('VisitUnit', P.Name);
+  Assert.AreEqual(StringReplace(Src, 'visitUnit', 'VisitUnit', [rfReplaceAll]),
+    Apply(Src, P.Edits));
+end;
+
+procedure TTestRdxMethodNameFix.ImplSpelling_LowerDecl_Published_Reason;
+begin
+  // Double Commander fviewer.pas:4163 (rwE30 Stufe 2, Fragwuerdig): der
+  // Grund war "Deklaration lautet cm_GotoLine, der Fund nennt cm_GotoLine -
+  // Fund veraltet?"; richtig ist published.
+  AssertRefused(UnitWith(['  published',
+    '    procedure cm_GotoLine(const Params: array of string);'],
+    ['procedure TFoo.cm_GotoLine(const Params: array of string);', 'begin',
+     'end;']), IMPL_LINE, 'cm_GotoLine', _(R_MN_PUBLISHED, ['cm_GotoLine']));
+end;
+
+procedure TTestRdxMethodNameFix.Literal_DottedPath_Helps;
+var
+  Src : string;
+begin
+  // Alcinoe.FMX.ScrollEngine.pas:1690 und CEF4Delphi uCEFCookieVisitor.pas:189
+  // (rwE30 Stufe 2, minimiert): Log-Kennungen als reiner Punktpfad.
+  Src := UnitWith(['  public', '    procedure doWork;', '    procedure Run;'],
+    ['procedure TFoo.doWork;', 'begin', 'end;', 'procedure TFoo.Run;', 'begin',
+     '  Log(''Unit1.TFoo.doWork'');', '  Log(''TOther.doWork'');', 'end;']);
+  Assert.AreEqual(StringReplace(StringReplace(Src, 'procedure doWork;',
+    'procedure DoWork;', []), 'procedure TFoo.doWork;',
+    'procedure TFoo.DoWork;', []), Applied(Src, DECL_LINE, 'doWork'));
+  // Gegenprobe: ein Ausdruck ('form.doWork()', ein Skript) ist kein reiner
+  // Pfad - gesperrt wie der blosse Name (StringLiteral_NoHelp).
+  Src := UnitWith(['  public', '    procedure doWork;', '    procedure Run;'],
+    ['procedure TFoo.doWork;', 'begin', 'end;', 'procedure TFoo.Run;', 'begin',
+     '  RunScript(''form.doWork()'');', 'end;']);
+  AssertRefused(Src, DECL_LINE, 'doWork',
+    _(R_MN_LITERAL, ['doWork', LineOf(Src, 'RunScript')]));
 end;
 
 {$IFNDEF FPC}
@@ -597,16 +763,18 @@ begin
     FixAll(Src));
 end;
 
-procedure TTestRdxMethodNameDetector.Detector_CatalogExample_FreeRoutine_NoHelp;
+procedure TTestRdxMethodNameDetector.Detector_CatalogExample_FreeRoutine_Fixed;
 var
   Meta : TRuleMeta;
 begin
-  // Das Beispiel wortgetreu ist eine freie Routine - keine Hilfe (die
-  // Hilfe deckt nur Methoden einer Klasse).
+  // Das Beispiel wortgetreu ist eine freie Routine - seit rwE30 Stufe 2
+  // eine Hilfe (bis dahin R_MN_NO_CLASS): Deklaration und Rumpf gross, der
+  // Detektor schweigt danach.
   Meta := TRuleCatalog.GetRuleCanonical(fkMethodName);
-  AssertDetectorRefused(Join(['unit t;', 'interface',
-    CatalogText(Meta.BadExample), 'implementation', 'procedure doStuff;',
-    'begin', 'end;', 'end.']), _(R_MN_NO_CLASS, ['doStuff']));
+  Assert.AreEqual(Join(['unit t;', 'interface', 'procedure DoStuff;',
+    'implementation', 'procedure DoStuff;', 'begin', 'end;', 'end.']),
+    FixAll(Join(['unit t;', 'interface', CatalogText(Meta.BadExample),
+    'implementation', 'procedure doStuff;', 'begin', 'end;', 'end.'])));
 end;
 
 procedure TTestRdxMethodNameDetector.Detector_Overload_NoHelp;
