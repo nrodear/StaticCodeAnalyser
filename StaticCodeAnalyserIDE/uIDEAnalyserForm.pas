@@ -791,11 +791,11 @@ const
   BTN_W_MED_SHORT    = 64;     // "Settings..."
   BTN_W_MED          = 68;     // "Cancel", "Export"
   BTN_W_MED_LONG     = 48;     // "📄 File"
-  BTN_W_LONG         = 64;     // "▶ Analyse"
+  BTN_W_LONG         = 71;     // "▶ Analyse" (de "▶ Analysieren" braucht +7)
 
   // ---- Label-Widths -----------------------------------------------------
   LBL_W_PATH         = 78;     // "Path:" (AutoSize, Wert nur als Fallback)
-  LBL_W_FILTER       = 76;     // "Severity:"
+  LBL_W_FILTER       = 83;     // "Severity:" (de "Schweregrad:" braucht +7)
   LBL_W_TYPE         = 36;     // "Type:"
   LBL_W_PROFILE      = 48;     // "Profile:"
 
