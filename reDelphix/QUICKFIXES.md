@@ -923,17 +923,17 @@ end;
 |---|---|---|
 | `Replace the tabs in this line with spaces` | `Tabulatoren dieser Zeile durch Leerzeichen ersetzen` | `Remplacer les tabulations de cette ligne par des espaces` |
 
-**Wirkung:** Ersetzt die Tabulatoren im Code der gemeldeten Zeile durch Leerzeichen bis zum nächsten Tabstopp (Leerzeichen und Tab davor werden sauber zusammengezogen). Die Tabweite (2, 4 oder 8) leitet die Hilfe aus den acht Zeilen darüber und darunter ab: die Weite, bei der die Textspalten hinter den Tabs der Zeile am häufigsten mit denen der Nachbarn zusammenfallen (Einrückung, `=`, `:`, Kommentarspalte) – etwa Tab plus Leerzeichen gegen Nachbarn nur aus Leerzeichen oder Tabellen mit verschieden vielen Tabs vor derselben Spalte. Zeigen die Nachbarn keine, gilt die Annahme 2; der Hinweis nennt die Weite und woher sie kommt. Eine Ersetzung vom ersten bis zum letzten Code-Tab; Tabs in Strings und Kommentaren dazwischen bleiben. Nur die gemeldete Zeile.
+**Wirkung:** Ersetzt die Tabulatoren der gemeldeten Zeile im Code und in Kommentaren durch Leerzeichen bis zum nächsten Tabstopp (Leerzeichen und Tab davor werden sauber zusammengezogen); Leerraum mit Tab am Zeilenende entfällt ganz, eine Zeile nur aus Leerraum wird leer. Die Tabweite (2, 4 oder 8; 3 nur, wenn die ganze Datei sie belegt) leitet die Hilfe zuerst aus den acht Zeilen darüber und darunter ab, und wenn die nicht entscheiden, aus der ganzen Datei: Einrückung (hinter `begin`, `then`, `do` … steht die Folgezeile tiefer, und zwar um die Stufe der Datei; hinter einer abgeschlossenen Anweisung nicht tiefer) und Ausrichtung (Textspalten hinter den Tabs gegen Nachbarn nur aus Leerzeichen bzw. gegen dieselben Zeichen wie `= `, `: `, `//` in Tabellen). Ergeben alle in Frage kommenden Weiten dieselbe Zeile, spielt die Weite keine Rolle; belegt nichts eine, gilt die Annahme 2. Der Hinweis nennt die Weite und woher sie kommt. Eine Ersetzung vom ersten Tab bis zum letzten ersetzten Tab bzw. bis zum Zeilenende; Tabs in Strings und Compiler-Direktiven dazwischen bleiben. Nur die gemeldete Zeile.
 
 **Nicht angeboten**
 
-- der erste Tab der Zeile liegt in einem String, Kommentar oder mehrzeiligen String (der Detektor meldet ihn trotzdem, der Fund bliebe stehen)
-- die Nachbarzeilen passen zu zwei Tabweiten (4 und 8) gleich gut – welcher die Ausrichtung folgt, ist offen
+- der erste Tab der Zeile liegt in einem String, mehrzeiligen String oder einer Compiler-Direktive (der Detektor meldet ihn trotzdem, der Fund bliebe stehen)
+- die Nachbarzeilen passen zu zwei Tabweiten (etwa 4 und 8) gleich gut, die Datei entscheidet nicht, und die beiden ergeben verschiedene Zeilen
 - die Zeile ist verschoben, oder die Meldung nennt keine Spalte
 
 **Beispiel:** nicht abbildbar – der Unterschied ist nur Leerraum (Tab gegen Leerzeichen).
 
-**Hinweis.** Bleibt hinter dem letzten Code-Tab ein Tab in einem String oder Kommentar, meldet der Detektor die Zeile nach der Hilfe weiter.
+**Hinweis.** Bleibt hinter dem ersten Tab ein Tab in einem String oder einer Direktive stehen, meldet der Detektor die Zeile nach der Hilfe weiter.
 
 <a id="sca063"></a>
 
