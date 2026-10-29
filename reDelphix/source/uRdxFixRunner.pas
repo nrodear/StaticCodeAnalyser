@@ -61,7 +61,10 @@ type
     // beides keine Hilfe. Dazu dieselbe Typ-Sperre wie SCA139 (seit Review
     // FB, R2-01/R3-01): kein record/object/interface/Zeiger dieser Unit,
     // keine eigene Methode Free in der Unit, kein fremder Zeigertyp nach
-    // Namenskonvention. Fehlt SysUtils, kommt die uses-Einfuegung mit.
+    // Namenskonvention, kein Erbe einer Klasse des alten Open Tools API mit
+    // eigenem Free (VirtIntf.TInterface), kein Kommentar an der Stelle, der
+    // FreeAndNil nennt (Realwelt-Test rwE29). Fehlt SysUtils, kommt die
+    // uses-Einfuegung mit.
     class function FreeAndNilFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer; const AUsesNames: TArray<string>): TRdxFixOutcome; static;
 
@@ -87,7 +90,8 @@ type
     // Variablen- und Typ-Pruefung wie SCA085 (kein record/object/interface/
     // Zeiger dieser Unit, keine eigene Methode Free in der Unit - 'X.Free'
     // riefe sie, FreeAndNil nicht -, kein fremder Zeigertyp nach
-    // Namenskonvention); dazu kein const-/constref-Parameter (Review FB,
+    // Namenskonvention, kein Erbe von VirtIntf.TInterface, kein Kommentar
+    // mit FreeAndNil an der Stelle); dazu kein const-/constref-Parameter (Review FB,
     // R2-03: FPC und Delphi bis 10.3 uebersetzen das nicht, ab 10.4 wird
     // nur die lokale Kopie nil). Fehlt SysUtils, kommt die uses-
     // Einfuegung mit.
@@ -184,6 +188,7 @@ uses
   System.StrUtils,   // IndexText (UnitStillUsed)
   uRefactorInfo,     // TRefactorSpan (FindUsesEntry)
   uRdxRecipes,       // TRdxRecipes (IsPlainIdent, HasUnit)
+  uRdxBlocks,        // TRdxBlocks.FindClassHeads/HeritageOf (OtaFreeAncestor)
   uRdxSimpleFixes,   // Planer der einfachen Hilfen (reine Textlogik)
   uRdxTypeProof,     // Typbeweis auf dem Text (bis Folgewelle A4 in uRdxSimpleFixes)
   uRdxStructFixes,   // Planer SCA007/SCA168 (uses-Eintrag, case-else)
@@ -234,6 +239,29 @@ const
   R_POINTER_NAME = '%s has the type %s - by Delphi convention a pointer from '
     + 'another unit (Free is then the one of the target, FreeAndNil takes '
     + 'only a TObject)';
+  // Realwelt-Test rwE29 (SCA085, GExperts GX_PriorityBoost/GX_Search).
+  R_OTA_FREE = '%s descends from %s (old Open Tools API, VirtIntf.'
+    + 'TInterface) - its own Free calls Release, FreeAndNil would destroy '
+    + 'the object';
+  // Realwelt-Test rwE29 (SCA085, HeidiSQL SynEdit.pas).
+  R_FREE_COMMENT = 'the comment in line %d mentions FreeAndNil - free first, '
+    + 'then nil is probably intended there';
+  // Die Klassen des alten Open Tools API (ToolIntf, EditIntf, ExptIntf,
+  // FileIntf) mit VirtIntf.TInterface als Vorfahr: TInterface deklariert
+  // 'procedure Free' NICHT virtuell neu (ruft Release, Referenzzaehlung).
+  // 'X.Free' ruft diese Methode, FreeAndNil(X) dagegen TObject.Free und
+  // damit sofort Destroy. Erhoben aus den Quellen von Delphi 12 und 13
+  // (source\ToolsAPI\*.pas, transitiv ueber 'class(..)'), 2026-10-29.
+  OTA_FREE_CLASSES: array[0..20] of string = ('TInterface',
+    'TIAddInNotifier', 'TIComponentInterface', 'TIEditorInterface',
+    'TIEditReader', 'TIEditView', 'TIEditWriter', 'TIExpert',
+    'TIFormInterface', 'TIMainMenuIntf', 'TIMenuItemIntf', 'TIModuleCreator',
+    'TIModuleCreatorEx', 'TIModuleInterface', 'TIModuleNotifier',
+    'TIProjectCreator', 'TIProjectCreatorEx', 'TIResourceEntry',
+    'TIResourceFile', 'TIToolServices', 'TIVirtualFileSystem');
+  // So viele Vorfahren dieser Unit verfolgt OtaFreeAncestor.
+  MAX_HERITAGE = 16;
+  FREEANDNIL_LOW = 'freeandnil';
   R_CONST_PARAM = '%s is a const parameter - FreeAndNil does not reach the '
     + 'caller''s variable (FPC: error, Delphi up to 10.3: E2197)';
   R_WITH_MEMBER  = 'with statement in the routine - %s could be a member';
@@ -384,6 +412,93 @@ end;
 // und Delphi bis 10.3: TObject.Free auf einer OpenSSL-Struktur. Typen
 // anderer Units ohne Konventionsnamen sieht das nicht; ein Record dort
 // faellt in Delphi ab 10.4 als Fehler E2010 auf. '' oder der Grund.
+// Ist ATypeLow eine Klasse des alten Open Tools API mit eigenem Free
+// (OTA_FREE_CLASSES) oder erbt sie von einer? Verfolgt wird der erste
+// Vorfahr der Klassenkoepfe DIESER Unit ('TGxBoostNotifier =
+// class(TIAddInNotifier)'), hoechstens MAX_HERITAGE Stufen; ein Alias, der
+// die Unit verlaesst, ueber ForeignTypeName ('TMyIntf = TIModuleInterface').
+// Die Zuordnung geht ueber den NAMEN wie in uRdxRtlTypes (E27). Ein
+// Kundenerbe von TInterface in einer ANDEREN Unit sieht das nicht.
+// AAncestor: der Name aus der Liste, wie er dort steht.
+function OtaFreeAncestor(AMap: TRdxCodeMap; const ATypeLow: string;
+  out AAncestor: string): Boolean;
+var
+  T, Known : string;
+  Heads    : TArray<TRdxToken>;
+  Parents  : TArray<string>;
+  i        : Integer;
+begin
+  Result := False;
+  AAncestor := '';
+  T := ForeignTypeName(AMap, ATypeLow);
+  if T = '' then
+    T := ATypeLow;
+  for i := 1 to MAX_HERITAGE do
+  begin
+    for Known in OTA_FREE_CLASSES do
+      if SameText(T, Known) then
+      begin
+        AAncestor := Known;
+        Exit(True);
+      end;
+    Heads := TRdxBlocks.FindClassHeads(AMap, T);
+    if Length(Heads) <> 1 then
+      Exit;
+    Parents := TRdxBlocks.HeritageOf(AMap, Heads[0]);
+    if Length(Parents) = 0 then
+      Exit;
+    T := LowerCase(Parents[0]);
+  end;
+end;
+
+// Nennt ein Kommentar an der Freigabe auf ALine FreeAndNil? Gelesen wird
+// der Nicht-Code der Zeile selbst (ein Kommentar dahinter) und die Zeilen
+// ohne Code direkt darueber (Kommentare, Leerzeilen) bis zur ersten
+// Code-Zeile. HeidiSQL SynEdit.pas:1592 (rwE29): '// do not use
+// FreeAndNil, it first nils and then frees causing problems with code
+// accessing FHookedCommandHandlers while destruction' - die Reihenfolge
+// Free, dann nil ist dort Absicht. Die Zeile des Treffers, 0 ohne.
+function FreeAndNilCommentLine(AMap: TRdxCodeMap; ALine: Integer): Integer;
+
+  // Steht 'freeandnil' auf Li ausserhalb des Codes?
+  function MentionsOutsideCode(Li: Integer): Boolean;
+  var
+    L    : string;
+    P, k : Integer;
+  begin
+    Result := False;
+    L := LowerCase(AMap.Raw(Li));
+    P := Pos(FREEANDNIL_LOW, L);
+    while P > 0 do
+    begin
+      if not AMap.IsCode(Li, P) then
+        Exit(True);
+      k := P + Length(FREEANDNIL_LOW);
+      P := Pos(FREEANDNIL_LOW, Copy(L, k, MaxInt));
+      if P > 0 then
+        P := P + k - 1;
+    end;
+  end;
+
+var
+  Li : Integer;
+begin
+  Result := 0;
+  if (ALine < 1) or (ALine > AMap.LineCount) then
+    Exit;
+  if MentionsOutsideCode(ALine) then
+    Exit(ALine);
+  Li := ALine - 1;
+  // NextToken ab Spaltenanfang: liegt das naechste Code-Token auf einer
+  // spaeteren Zeile, traegt Li keinen Code.
+  while (Li >= 1) and (NextToken(AMap, Li, 1).Line <> Li) do
+  begin
+    if MentionsOutsideCode(Li) then
+      Exit(Li);
+    Dec(Li);
+  end;
+end;
+
 function FreeTypeReason(AMap: TRdxCodeMap;
   const AName, ATypeLow: string): string;
 var
@@ -396,12 +511,21 @@ begin
     Result := _(R_OWN_FREE)
   else if PointerNamedType(AMap, ForeignTypeName(AMap, ATypeLow),
        Spelling) then
-    Result := _(R_POINTER_NAME, [AName, Spelling]);
+    Result := _(R_POINTER_NAME, [AName, Spelling])
+  else if OtaFreeAncestor(AMap, ATypeLow, Spelling) then
+    Result := _(R_OTA_FREE, [AName, Spelling]);
 end;
 
+// SCA085/SCA139: der Kommentar an der Stelle (FreeAndNilCommentLine), dann
+// der Typ (FreeTypeReason). '' oder der Grund.
 function FreeMethodReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
   ALine: Integer; const AName: string): string;
+var
+  Li : Integer;
 begin
+  Li := FreeAndNilCommentLine(AMap, ALine);
+  if Li > 0 then
+    Exit(_(R_FREE_COMMENT, [Li]));
   Result := FreeTypeReason(AMap, AName, APlaces.DeclaredTypeOf(ALine, AName));
 end;
 

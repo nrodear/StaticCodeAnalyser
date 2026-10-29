@@ -28,6 +28,12 @@ unit uTestRdxFreeGatesDetector;
 //   * Gegenpruefung V-B2S-3 (Charge B2S-a): SCA147 auf einem Netzlaufwerk,
 //     auch lang geschrieben - der Grund nennt das Laufwerk (Naht
 //     SetRdxRemoteDriveTest statt GetDriveType).
+//   * Realwelt-Test rwE29 (SCA085, drei Fehler): Erben des alten Open
+//     Tools API (VirtIntf.TInterface: Free ruft Release) - in der Unit
+//     ueber die Vorfahrenkette und als fremder Typ - und ein Kommentar,
+//     der FreeAndNil an der Stelle verbietet. Die drei Sperrtests waren
+//     gegen 7d5de210 rot (angeboten); die Gegenprobe
+//     Sca085_PlainHeritageAndComment_Helps war dort schon gruen.
 // Jeder Test ausser den beiden Hilfe-Gegenproben (Sca139_VarParam_Helps,
 // Sca072_*) und dem Netzlaufwerk-Test (die Naht gibt es erst seit Charge
 // B2S-a) war gegen den Stand 4358b769 rot: dort bot der Laeufer die
@@ -46,6 +52,11 @@ type
     [Test] procedure Sca085_PointerToObjectWithFree_NoHelp;
     [Test] procedure Sca085_OwnFreeMethod_NoHelp;
     [Test] procedure Sca085_ForeignPointerName_NoHelp;
+    // ---- SCA085, Realwelt-Test rwE29 ----
+    [Test] procedure Sca085_OtaAncestorInUnit_NoHelp;
+    [Test] procedure Sca085_OtaForeignType_NoHelp;
+    [Test] procedure Sca085_CommentNamesFreeAndNil_NoHelp;
+    [Test] procedure Sca085_PlainHeritageAndComment_Helps;
     // ---- SCA139 ----
     [Test] procedure Sca139_PointerAlias_NoHelp;
     [Test] procedure Sca139_ForeignPointerName_NoHelp;
@@ -249,6 +260,69 @@ begin
     '    procedure Clear;', '  end;', 'implementation', 'procedure TCert.Clear;',
     'begin', '  fPrivKey.Free;', '  fPrivKey := nil;', 'end;', 'end.']),
     fkFreeAndNilHint, 'Zeiger');
+end;
+
+{ ---- SCA085, Realwelt-Test rwE29 ---- }
+
+// Eine Unit mit der Klasse TOwner, deren Feld AField in Done freigegeben
+// wird: davor die Zeilen AAbove, ADecls vor TOwner.
+function OwnerUnit(const AUses, ADecls, AField: string;
+  const AAbove: array of string): string;
+begin
+  Result := Join(['unit t;', 'interface', 'uses ' + AUses + ';', 'type',
+    ADecls, '  TOwner = class', '  private', '    ' + AField + ';', '  public',
+    '    procedure Done;', '  end;', 'implementation', 'procedure TOwner.Done;',
+    'begin', '  Assert(True);']) + #13#10 + Join(AAbove) + #13#10
+    + Join(['  FX.Free;', '  FX := nil;', 'end;', 'end.']);
+end;
+
+procedure TTestRdxFreeGatesDetector.Sca085_OtaAncestorInUnit_NoHelp;
+begin
+  // GExperts GX_PriorityBoost.pas:187 (rwE29, Fehler): 'TGxBoostNotifier =
+  // class(TIAddInNotifier)' - TIAddInNotifier (ToolIntf) erbt von
+  // VirtIntf.TInterface, dessen nicht-virtuelles Free Release ruft.
+  // FreeAndNil(FCompileNotifier) riefe TObject.Free und zerstoerte sofort.
+  // Ohne Fix gruen angeboten (keine eigene Free IN der Unit, kein P-Typ).
+  AssertNoHelp(OwnerUnit('System.SysUtils, ToolIntf',
+    '  TGxBoostNotifier = class(TIAddInNotifier)' + #13#10 + '  end;',
+    'FX: TGxBoostNotifier', []), fkFreeAndNilHint, 'Open Tools API');
+end;
+
+procedure TTestRdxFreeGatesDetector.Sca085_OtaForeignType_NoHelp;
+begin
+  // GExperts GX_Search.pas:315 (rwE29, Fehler): 'FModuleIntf:
+  // TIModuleInterface' aus EditIntf direkt - ToolServices liefert ein
+  // referenzgezaehltes Modul-Interface, Free ist dort Release.
+  AssertNoHelp(OwnerUnit('System.SysUtils, EditIntf', '',
+    'FX: TIModuleInterface', []), fkFreeAndNilHint, 'Open Tools API');
+end;
+
+procedure TTestRdxFreeGatesDetector.Sca085_CommentNamesFreeAndNil_NoHelp;
+begin
+  // HeidiSQL SynEdit.pas:1592 (rwE29, Fehler): der Kommentar direkt ueber
+  // der Freigabe verbietet FreeAndNil - Code liest das Feld waehrend der
+  // Zerstoerung. Ohne Fix angeboten (der Kommentar zaehlt nie als Code).
+  AssertNoHelp(OwnerUnit('System.SysUtils, System.Classes', '',
+    'FX: TList', ['', '  // do not use FreeAndNil, it first nils and then '
+    + 'frees causing problems with', '  // code accessing FX while '
+    + 'destruction']), fkFreeAndNilHint, 'Kommentar in Zeile');
+end;
+
+procedure TTestRdxFreeGatesDetector.Sca085_PlainHeritageAndComment_Helps;
+var
+  Src : string;
+  O   : TRdxFixOutcome;
+begin
+  // Gegenprobe zu den drei Sperren: eine Vorfahrenkette DIESER Unit ohne
+  // Open-Tools-Klasse (TB = class(TA), TA = class) und ein Kommentar ohne
+  // FreeAndNil darueber - die Hilfe bleibt.
+  Src := OwnerUnit('System.SysUtils', '  TA = class' + #13#10 + '  end;'
+    + #13#10 + '  TB = class(TA)' + #13#10 + '  end;', 'FX: TB',
+    ['  // free the helper']);
+  O := PlanAt(Src, 't.pas', fkFreeAndNilHint, LineOfOrFail(Src, '  FX.Free;'));
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual(StringReplace(Src, '  FX.Free;' + #13#10 + '  FX := nil;',
+    '  FreeAndNil(FX);', []), Apply(Src, O.Edits));
 end;
 
 { ---- SCA139 ---- }
