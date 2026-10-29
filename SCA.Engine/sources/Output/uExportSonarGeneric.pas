@@ -26,10 +26,12 @@
 // fuehrt sie zusaetzlich in invocations[].toolExecutionNotifications.
 //
 // EBENFALLS NICHT exportiert werden HERABGESTUFTE Funde (Voreinstellung;
-// AKeepDowngraded schaltet es ab). Wurde die Severity eines Fundes zur
-// Laufzeit abgeschwaecht - per Pfad-Ueberschreibung ("generierter Code
-// zaehlt nur als Hinweis") oder konfidenzabhaengig -, dann kommt davon in
-// Sonar nichts an: das Generic-Format kennt Severity nur je REGEL, nicht
+// AKeepDowngraded schaltet es ab). Herabgestuft heisst: ein NUTZER hat die
+// Severity abgeschwaecht, per Pfad-Ueberschreibung ("generierter Code
+// zaehlt nur als Hinweis"). Der Deckel der Evidenz-Politik zaehlt NICHT
+// dazu (Nico-Entscheid 2026-10-29, s. IsDowngraded) - gedeckelte Funde
+// gehen mit, ihre Regel traegt die gedeckelte Schwere als Impact. Von einer
+// Nutzer-Herabstufung kommt in Sonar nichts an: das Generic-Format kennt Severity nur je REGEL, nicht
 // je Fund (Details und Belege an BuildIssueObject). Der Fund wuerde dort
 // also in voller Katalog-Schwere erscheinen und das Quality Gate reissen -
 // das Gegenteil dessen, was die Herabstufung ausdruecken sollte. Lieber
@@ -62,9 +64,10 @@ type
     // Liefert die Anzahl der Issues, deren Pfad ausserhalb von ABaseDir lag
     // und deshalb absolut blieb - Sonar verwirft die still als "unknown
     // files", der Aufrufer sollte das melden.
-    //   AKeepDowngraded - True exportiert auch Funde, deren Severity zur
-    //               Laufzeit HERABgestuft wurde (Pfad-Ueberschreibung,
-    //               Konfidenz). Voreinstellung False: sie bleiben draussen.
+    //   AKeepDowngraded - True exportiert auch Funde, deren Severity ein
+    //               Nutzer HERABgestuft hat (Pfad-Ueberschreibung; der
+    //               Konfidenz-Deckel zaehlt nicht dazu). Voreinstellung
+    //               False: sie bleiben draussen.
     //               Grund steht im Kopf der Unit; kurz: Sonar kann keine
     //               Severity je Fund, ein herabgestufter Fund wuerde dort
     //               in voller Schwere ankommen und das Quality Gate
@@ -94,6 +97,7 @@ uses
   System.Classes,          // TStream/TFileStream/TStringStream fuer EmitReport
   System.IOUtils, System.JSON, System.StrUtils,
   uRuleCatalog,
+  uEvidenceTiering,    // MaxSeverityFor: der Konfidenz-Deckel (IsDowngraded)
   uReportFileWriter;   // atomarer Stream (C-Charge 2026-09-19)
 
 { ---- Helpers ---- }
@@ -291,8 +295,18 @@ type
   // eine gueltige textRange braucht.
   TSonarFileView = record
     Readable : Boolean;   // Datei gelesen; sonst bleibt der Fund unveraendert
-    Binary   : Boolean;   // NUL-Byte im Inhalt (binaere DFM, UTF-16 ...)
+    Binary   : Boolean;   // NUL im Inhalt (binaere DFM, UTF-16 ohne BOM ...)
     Lines    : Integer;   // Zeilenzahl nach Sonar-Zaehlung
+  end;
+
+  // Alles, was der Export je DATEI wissen muss - einmal bestimmt, dann je
+  // Fund nur noch ein Dictionary-Lookup (EmitIssues). Bei 770.000 Funden in
+  // 15.000 Dateien spart das je Fund GetFullPath, die Schreibweisen-
+  // Nachfrage und den Lookup der Datei-Sicht (Review e/SonarFix).
+  TSonarFileEntry = record
+    RelPath : string;          // filePath fuer Sonar (relativ, Platten-Schreibweise)
+    Outside : Boolean;         // ausserhalb von ABaseDir, absolut geblieben
+    View    : TSonarFileView;
   end;
 
 function ReadSonarFileView(const AFileName: string): TSonarFileView;
@@ -301,16 +315,39 @@ function ReadSonarFileView(const AFileName: string): TSonarFileView;
 // leere Zeile zaehlt also mit. Bytebasiert: fuer UTF-8 und jede
 // ANSI-Codepage dasselbe, weil CR und LF dort einbytig sind.
 //
+// UTF-16 MIT BOM (FF FE / FE FF) ist Text, nicht binaer: Sonar erkennt die
+// Kodierung am BOM und liest die Datei richtig. Gezaehlt wird dann in
+// 16-Bit-Einheiten - bytebasiert waere jedes ASCII-Zeichen von einem
+// NUL-Byte begleitet (faelschlich "binaer") und CRLF als zwei Zeilenenden
+// gezaehlt (Review e/SonarFix). UTF-16 OHNE BOM bleibt "binaer"
+// (Dateiebene) - welche Zeile Sonar dort sieht, haengt an
+// sonar.sourceEncoding.
+//
 // Eine Datei, die nicht zu lesen ist (fehlt, gesperrt), liefert
 // Readable = False - dann aendert der Export nichts am Fund. Das ist auch
 // der Fall aller Unit-Tests mit erfundenen Pfaden.
 const
+  // Gerade: eine 16-Bit-Einheit steht nie ueber einer Puffergrenze.
   BUF_SIZE = 65536;
 var
-  FS   : TFileStream;
-  Buf  : TBytes;
-  N, I : Integer;
-  Prev : Byte;
+  FS     : TFileStream;
+  Buf    : TBytes;
+  N, I   : Integer;
+  Wide   : Integer;   // 0 = Bytes, 1 = UTF-16LE, 2 = UTF-16BE
+  Lines  : Integer;
+  Binary : Boolean;
+  Prev   : Word;
+
+  procedure Count(U: Word);
+  begin
+    case U of
+      0  : Binary := True;
+      13 : Inc(Lines);
+      10 : if Prev <> 13 then Inc(Lines);
+    end;
+    Prev := U;
+  end;
+
 begin
   Result := Default(TSonarFileView);
   if (AFileName = '') or not FileExists(AFileName) then Exit;
@@ -323,20 +360,46 @@ begin
   end;
   try
     SetLength(Buf, BUF_SIZE);
-    Result.Lines := 1;
-    Prev := 0;
-    repeat
-      N := FS.Read(Buf[0], BUF_SIZE);
-      for I := 0 to N - 1 do
+    Lines  := 1;
+    Binary := False;
+    Prev   := 0;
+    N := FS.Read(Buf[0], BUF_SIZE);
+    Wide := 0;
+    if (N >= 2) and (Buf[0] = $FF) and (Buf[1] = $FE) then
+      Wide := 1
+    else if (N >= 2) and (Buf[0] = $FE) and (Buf[1] = $FF) then
+      Wide := 2;
+    if Wide = 0 then
+      I := 0
+    else
+      I := 2;   // BOM ueberspringen
+    while N > 0 do
+    begin
+      if Wide = 0 then
       begin
-        case Buf[I] of
-          0  : Result.Binary := True;
-          13 : Inc(Result.Lines);
-          10 : if Prev <> 13 then Inc(Result.Lines);
+        while I < N do
+        begin
+          Count(Buf[I]);
+          Inc(I);
         end;
-        Prev := Buf[I];
+      end
+      else
+      begin
+        while I + 1 < N do
+        begin
+          if Wide = 1 then
+            Count(Word(Buf[I]) or (Word(Buf[I + 1]) shl 8))
+          else
+            Count((Word(Buf[I]) shl 8) or Word(Buf[I + 1]));
+          Inc(I, 2);
+        end;
       end;
-    until N < BUF_SIZE;
+      if N < BUF_SIZE then Break;
+      N := FS.Read(Buf[0], BUF_SIZE);
+      I := 0;
+    end;
+    Result.Lines    := Lines;
+    Result.Binary   := Binary;
     Result.Readable := True;
   finally
     FS.Free;
@@ -568,37 +631,119 @@ begin
   end;
 end;
 
-function IsDowngraded(const F: TLeakFinding; const M: TRuleMeta): Boolean;
-// True, wenn die Laufzeit-Severity dieses Fundes SCHWAECHER ist als die des
-// Regelkatalogs - der Fund wurde also herabgestuft, per Pfad-Ueberschreibung
-// ("generierter Code zaehlt nur als Hinweis", uPathOverrides) oder durch
-// eine konfidenzabhaengige Abstufung.
+function Weaker(A, B: TLeakSeverity): TLeakSeverity;
+// Die schwaechere zweier Schweren. TLeakSeverity ist ABSTEIGEND nach
+// Schwere deklariert (lsError = 0, lsWarning = 1, lsHint = 2): ein
+// groesserer Ord-Wert heisst schwaecher.
+begin
+  if Ord(A) >= Ord(B) then
+    Result := A
+  else
+    Result := B;
+end;
+
+function PolicySeverity(const F: TLeakFinding): TLeakSeverity;
+// Die Schwere, die der Fund OHNE Nutzer-Eingriff traegt: die Aussage des
+// Detektors (OriginalSeverity), gedeckelt nach seiner Konfidenz, wenn der
+// Lauf die Evidenz-Politik angewandt hat. Massgeblich ist der Scan-Stempel
+// LastScanEvidenceTiering, nicht der Live-Schalter - dieselbe Regel wie im
+// SARIF-Export (TSARIFWriter.DefaultOptions).
+begin
+  Result := F.OriginalSeverity;
+  if uSCAConsts.LastScanEvidenceTiering then
+    Result := Weaker(Result, TEvidenceTiering.MaxSeverityFor(F.Confidence));
+end;
+
+function IsDowngraded(const F: TLeakFinding): Boolean;
+// True, wenn ein NUTZER die Severity dieses Fundes abgeschwaecht hat - per
+// Pfad-Ueberschreibung ("generierter Code zaehlt nur als Hinweis",
+// uPathOverrides). Massstab ist PolicySeverity: Detektor-Aussage, gedeckelt
+// nach Konfidenz.
 //
-// TLeakSeverity ist ABSTEIGEND nach Schwere deklariert (lsError = 0,
-// lsWarning = 1, lsHint = 2). Ein groesserer Ord-Wert heisst also
-// schwaecher.
+// DER KONFIDENZ-DECKEL IST KEINE HERABSTUFUNG (Nico-Entscheid 2026-10-29).
+// Bis dahin war der Massstab die Katalog-Severity; die Evidenz-Politik
+// deckelt aber jede Fehler-Regel mit Konfidenz medium auf Warning - deren
+// Funde galten damit fast ALLE als herabgestuft und fehlten in Sonar: JVCL
+// SCA001 51 von 53, SCA003 10 von 10, Realwelt-Korpus 726 Funde
+// (Sonar-Roundtrip-Pruefung). Gedeckelte Funde gehen jetzt mit; ihre Regel
+// traegt die gedeckelte Schwere als Impact (KindCappedMeta), damit Sonar
+// sie nicht in voller Katalog-Schwere zeigt.
+//
+// Ebenso keine Herabstufung ist eine Schwere, die der DETEKTOR selbst
+// niedriger als der Katalog vergibt (z. B. SCA001 "Free ausserhalb
+// finally"): auch das ist keine Nutzer-Entscheidung. Deshalb ist die Basis
+// OriginalSeverity und nicht die Katalog-Severity des Kinds - fuer einen
+// Fund mit Katalog-Schwere und Standard-Konfidenz ist beides dasselbe.
+//
+// CUSTOM-REGELN brauchen damit keinen Sonderfall mehr: ihre
+// OriginalSeverity IST die YAML-Severity. 'hint' ist keine Abschwaechung
+// (bis 2026-10-29 fiel jede hint-Regel gegen den Platzhalter SCA023 =
+// Warning still heraus, Mini-Roundtrip MINI001 6/0); eine Pfad-
+// Ueberschreibung stuft auch sie herab und bleibt draussen.
 //
 // BEWUSST NUR DIESE EINE RICHTUNG: poaSeverityError stuft HOCH, und ein
 // hochgestufter Fund gehoert selbstverstaendlich in den Report. Ein
-// blosser Ungleichheitsvergleich haette ihn mitverschluckt - genau der
-// Fehler, den diese Funktion verhindert.
+// blosser Ungleichheitsvergleich haette ihn mitverschluckt.
 //
-// CUSTOM-REGELN: MASSSTAB IST DIE YAML, NICHT DER KATALOG (2026-10-29):
-// ihre Severity steht in der YAML-Regel und wird vom Detektor 1:1 in
-// F.Severity geschrieben, M ist
-// dagegen nur der Katalog-Platzhalter SCA023 (Warning). Der Vergleich warf
-// deshalb jede als 'hint' deklarierte Custom-Regel still aus dem Export -
-// am Mini-Roundtrip belegt (MINI001: 6 Funde in Konsole/JSON, 0 im
-// Sonar-Report). Was die YAML sagt, ist keine Abschwaechung von irgendwas.
-// Der Massstab einer Custom-Regel ist deshalb ihre Detektor-Schwere
-// (OriginalSeverity = YAML), nicht der Platzhalter: eine Pfad-
-// Ueberschreibung ("generierter Code nur Hinweis") stuft auch sie herab und
-// bleibt - wie bei jeder anderen Regel - draussen (Review 2026-10-29; mit
-// Exit(False) gingen solche Funde in voller YAML-Schwere nach Sonar).
+// VORAUSSETZUNG: Post-Filter aendern Severity nur per OverrideSeverity
+// (Vertrag in uMethodd12) - eine Direktzuweisung waere hier von einer
+// Detektor-Aussage nicht zu unterscheiden.
 begin
-  if F.Kind = fkCustomRule then
-    Exit(Ord(F.Severity) > Ord(F.OriginalSeverity));
-  Result := Ord(F.Severity) > Ord(M.DefaultSeverity);
+  Result := Ord(F.Severity) > Ord(PolicySeverity(F));
+end;
+
+function MaxImpactFor(S: TLeakSeverity): TSonarImpactSeverity;
+// Staerkster Impact, den eine Schwere traegt: Error unbegrenzt (BLOCKER),
+// Warning hoechstens MEDIUM, Hint hoechstens LOW - dieselbe Abbildung wie
+// SeverityToSonarImpactSev.
+begin
+  case S of
+    lsError   : Result := isBlocker;
+    lsWarning : Result := isMedium;
+  else
+    Result := isLow;
+  end;
+end;
+
+function CapImpacts(const AImpacts: TArray<TSonarImpact>;
+  ACap: TSonarImpactSeverity): TArray<TSonarImpact>;
+// Kopie, jede Severity hoechstens ACap. TSonarImpactSeverity steht wie
+// TLeakSeverity absteigend (isBlocker = 0 ... isInfo = 4); INFO bleibt INFO.
+var
+  I : Integer;
+begin
+  Result := Copy(AImpacts);
+  for I := 0 to High(Result) do
+    if Ord(Result[I].Severity) < Ord(ACap) then
+      Result[I].Severity := ACap;
+end;
+
+function KindCappedMeta(const M: TRuleMeta; K: TFindingKind): TRuleMeta;
+// Regel-Metadaten mit der GEDECKELTEN Kind-Schwere.
+//
+// Deckelt die Evidenz-Politik das Kind schon mit seiner Standard-Konfidenz
+// (KindDefaultConfidence; SCA001, SCA003, SCA004 u. a. = medium -> Warning),
+// steht praktisch jeder Fund der Regel gedeckelt im Lauf. Sonar kennt die
+// Schwere nur je Regel; mit den Katalog-Impacts erschiene SCA004 dort als
+// SECURITY/BLOCKER, obwohl der Lauf ihn als Warning fuehrt. Deshalb werden
+// die Impacts auf die gedeckelte Schwere begrenzt (Warning -> hoechstens
+// MEDIUM) und DefaultSeverity mitgezogen (sie speist den Fallback-Impact in
+// BuildRuleObject). Ohne Deckel - Politik aus oder Kind fcHigh - bleibt der
+// Katalog unveraendert.
+//
+// Je Regel, nicht je Fund: ein einzelner fcHigh-Fund einer medium-Regel
+// (SCA001 proven-leak) aendert die Regel nicht - mehr als eine Schwere je
+// Regel gibt das Format nicht her.
+var
+  Capped : TLeakSeverity;
+begin
+  Result := M;
+  if not uSCAConsts.LastScanEvidenceTiering then Exit;
+  Capped := Weaker(M.DefaultSeverity,
+                   TEvidenceTiering.MaxSeverityFor(KindDefaultConfidence(K)));
+  if Capped = M.DefaultSeverity then Exit;
+  Result.DefaultSeverity := Capped;
+  Result.Impacts := CapImpacts(M.Impacts, MaxImpactFor(Capped));
 end;
 
 function CustomRuleMeta(const M: TRuleMeta; const F: TLeakFinding;
@@ -619,8 +764,11 @@ function CustomRuleMeta(const M: TRuleMeta; const F: TLeakFinding;
 // einer Regel die YAML-Severity. F.Severity dagegen kann eine Pfad-
 // Ueberschreibung verschoben haben - stuende der erste Fund in so einer
 // Datei, bekaeme sonst die GANZE Regel deren Schwere (Review 2026-10-29).
+// Gedeckelt wie jede Regel (s. KindCappedMeta); fkCustomRule ist heute
+// fcHigh, der Deckel greift also nicht.
 var
   Imp : TSonarImpact;
+  Sev : TLeakSeverity;
 begin
   Result := M;
   Result.Name := Format('%s %s', [M.Name, ARuleID]);
@@ -628,12 +776,17 @@ begin
     Imp.SoftwareQuality := M.Impacts[0].SoftwareQuality
   else
     Imp.SoftwareQuality := sqMaintainability;
-  case F.OriginalSeverity of
+  Sev := F.OriginalSeverity;
+  if uSCAConsts.LastScanEvidenceTiering then
+    Sev := Weaker(Sev, TEvidenceTiering.MaxSeverityFor(
+                         KindDefaultConfidence(fkCustomRule)));
+  case Sev of
     lsError   : Imp.Severity := isHigh;
     lsWarning : Imp.Severity := isMedium;
   else
     Imp.Severity := isLow;
   end;
+  Result.DefaultSeverity := Sev;
   Result.Impacts := [Imp];
 end;
 
@@ -669,16 +822,19 @@ begin
       // Herabgestufte Funde bleiben draussen - Begruendung an IsDowngraded
       // und im Kopf der Unit. Auch hier, nicht nur bei den Issues: eine
       // Regel ohne Fund waere ein toter Eintrag im rules-Array.
-      if not AKeepDowngraded and IsDowngraded(F, Meta) then Continue;
+      if not AKeepDowngraded and IsDowngraded(F) then Continue;
       RuleID := EffectiveRuleID(F, Meta);
       if (RuleID = '') or Seen.ContainsKey(RuleID) then Continue;
       Seen.Add(RuleID, True);
       if not First then WStr(AStream, ',');
       First := False;
       // Custom-Regel: Name und Impact aus der YAML-Regel statt aus dem
-      // gemeinsamen Katalog-Platzhalter (s. CustomRuleMeta).
+      // gemeinsamen Katalog-Platzhalter (s. CustomRuleMeta); jede andere
+      // Regel mit der gedeckelten Kind-Schwere (s. KindCappedMeta).
       if F.Kind = fkCustomRule then
-        Meta := CustomRuleMeta(Meta, F, RuleID);
+        Meta := CustomRuleMeta(Meta, F, RuleID)
+      else
+        Meta := KindCappedMeta(Meta, F.Kind);
       // Dieselbe ID, die oben schon der Dedup-Schluessel war und die
       // EmitIssues fuer issue.ruleId bekommt - EINE Quelle, sonst
       // koppelt Sonar die beiden Eintraege nicht.
@@ -699,12 +855,11 @@ function EmitIssues(AStream: TStream;
 var
   F         : TLeakFinding;
   Meta      : TRuleMeta;
-  RelPath   : string;
   First     : Boolean;
   BaseFull  : string;
   CaseCache : TDictionary<string, string>;
-  Views     : TDictionary<string, TSonarFileView>;
-  View      : TSonarFileView;
+  Files     : TDictionary<string, TSonarFileEntry>;
+  Entry     : TSonarFileEntry;
 begin
   Result := 0;
   First  := True;
@@ -717,11 +872,11 @@ begin
     BaseFull := IncludeTrailingPathDelimiter(TPath.GetFullPath(ABaseDir))
   else
     BaseFull := '';
-  Views     := nil;
+  Files     := nil;
   CaseCache := TDictionary<string, string>.Create;
   try
-    // Je Datei EIN Lesedurchgang fuer die Zeilenzahl (BuildIssueObject).
-    Views := TDictionary<string, TSonarFileView>.Create;
+    // Je Datei EINMAL Pfad, Schreibweise und Zeilenzahl (TSonarFileEntry).
+    Files := TDictionary<string, TSonarFileEntry>.Create;
     for F in AFindings do
     begin
       if F.Kind = fkFileReadError then Continue;
@@ -729,7 +884,7 @@ begin
       // s. EmitRules - beide Schleifen muessen dieselbe Menge sehen, sonst
       // zeigt der Report Regeln ohne Funde oder Funde ohne Regel (letzteres
       // lehnt der Validator ab: checkRuleExistsInReport).
-      if not AKeepDowngraded and IsDowngraded(F, Meta) then Continue;
+      if not AKeepDowngraded and IsDowngraded(F) then Continue;
       // Die DRITTE Bedingung aus EmitRules, die hier bis 08.09. fehlte: dort
       // faellt ein Fund ohne Regel-ID raus, hier nicht - das Ergebnis waere
       // ein Issue ohne zugehoerige Regel, und genau das lehnt der Validator
@@ -744,22 +899,24 @@ begin
       // darueber steht und nicht im Code - und weil der Preis eines
       // Irrtums der komplette Report ist.
       if EffectiveRuleID(F, Meta) = '' then Continue;
-      RelPath := MakeRelative(F.FileName, ABaseDir);
-      if PathLeftAbsolute(RelPath) then
-        Inc(Result)
-      else if BaseFull <> '' then
-        RelPath := TrueCaseRelPath(BaseFull, RelPath, CaseCache);
-      if not Views.TryGetValue(F.FileName, View) then
+      if not Files.TryGetValue(F.FileName, Entry) then
       begin
-        View := ReadSonarFileView(F.FileName);
-        Views.Add(F.FileName, View);
+        Entry.RelPath := MakeRelative(F.FileName, ABaseDir);
+        Entry.Outside := PathLeftAbsolute(Entry.RelPath);
+        if (not Entry.Outside) and (BaseFull <> '') then
+          Entry.RelPath := TrueCaseRelPath(BaseFull, Entry.RelPath, CaseCache);
+        Entry.View := ReadSonarFileView(F.FileName);
+        Files.Add(F.FileName, Entry);
       end;
+      // Gezaehlt wird je ISSUE, nicht je Datei - der Rueckgabewert war
+      // schon immer "Anzahl der Issues ausserhalb der Wurzel".
+      if Entry.Outside then Inc(Result);
       if not First then WStr(AStream, ',');
       First := False;
-      WObj(AStream, BuildIssueObject(F, RelPath, Meta, View));
+      WObj(AStream, BuildIssueObject(F, Entry.RelPath, Meta, Entry.View));
     end;
   finally
-    Views.Free;
+    Files.Free;
     CaseCache.Free;
   end;
 end;

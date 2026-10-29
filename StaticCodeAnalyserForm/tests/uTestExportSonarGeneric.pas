@@ -238,6 +238,9 @@ begin
 end;
 
 procedure TTestExportSonarGeneric.RuleHasMqrFields;
+// Katalog-Impacts unveraendert - dafuer OHNE Evidenz-Politik: mit ihr deckelt
+// KindCappedMeta SCA001 (Konfidenz medium) auf MEDIUM, das prueft
+// uTestExportSonarRoundtrip.CappedErrorRule_IsExportedWithCappedImpact.
 var
   Findings : TObjectList<TLeakFinding>;
   Json     : string;
@@ -245,7 +248,10 @@ var
   Rule     : TJSONObject;
   Impacts  : TJSONArray;
   Impact   : TJSONObject;
+  OldTier  : Boolean;
 begin
+  OldTier := uSCAConsts.LastScanEvidenceTiering;
+  uSCAConsts.LastScanEvidenceTiering := False;
   Findings := TObjectList<TLeakFinding>.Create(True);
   try
     Findings.Add(MakeFinding(fkMemoryLeak, 'src\Foo.pas', 1, 'msg'));
@@ -264,6 +270,7 @@ begin
     end;
   finally
     Findings.Free;
+    uSCAConsts.LastScanEvidenceTiering := OldTier;
   end;
 end;
 
@@ -509,7 +516,9 @@ begin
   Findings := TObjectList<TLeakFinding>.Create(True);
   try
     Fnd := MakeFinding(fkMemoryLeak, 'src\Gen.pas', 12, 'list not freed');
-    Fnd.Severity := lsHint;          // herabgestuft, Katalog sagt Error
+    // Herabgestuft wie von uPathOverrides: per OverrideSeverity, die die
+    // Detektor-Aussage sichert (IsDowngraded vergleicht gegen sie).
+    Fnd.OverrideSeverity(lsHint);
     Findings.Add(Fnd);
     Root := TJSONObject.ParseJSONValue(
       TSonarGenericWriter.ToJsonString(Findings, '')) as TJSONObject;
@@ -537,7 +546,7 @@ begin
   Findings := TObjectList<TLeakFinding>.Create(True);
   try
     Fnd := MakeFinding(fkDebugOutput, 'src\Foo.pas', 7, 'OutputDebugString');
-    Fnd.Severity := lsError;         // hochgestuft, Katalog sagt Hint
+    Fnd.OverrideSeverity(lsError);   // hochgestuft, Katalog sagt Hint
     Findings.Add(Fnd);
     Root := TJSONObject.ParseJSONValue(
       TSonarGenericWriter.ToJsonString(Findings, '')) as TJSONObject;
@@ -563,7 +572,7 @@ begin
   Findings := TObjectList<TLeakFinding>.Create(True);
   try
     Fnd := MakeFinding(fkMemoryLeak, 'src\Gen.pas', 12, 'list not freed');
-    Fnd.Severity := lsHint;
+    Fnd.OverrideSeverity(lsHint);
     Findings.Add(Fnd);
     Root := TJSONObject.ParseJSONValue(
       TSonarGenericWriter.ToJsonString(Findings, '', True)) as TJSONObject;

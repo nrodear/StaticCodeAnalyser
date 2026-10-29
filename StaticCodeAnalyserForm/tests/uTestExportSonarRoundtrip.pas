@@ -40,12 +40,19 @@ type
     [Test] procedure CustomRuleError_GetsHighImpactAndOwnName;
     // ... eine Pfad-Ueberschreibung aber sehr wohl
     [Test] procedure CustomRulePathDowngrade_StaysOutAndKeepsYamlImpact;
+    // UTF-16 mit BOM ist Text
+    [Test] procedure Utf16Bom_IsTextNotBinary;
+    // Konfidenz-Deckel ist keine Herabstufung (Nico-Entscheid 2026-10-29)
+    [Test] procedure CappedErrorRule_IsExportedWithCappedImpact;
+    [Test] procedure CappedFinding_PathDowngrade_StaysOut;
+    [Test] procedure TieringOff_KeepsCatalogImpact;
   end;
 
 implementation
 
 uses
   System.IOUtils,
+  uEvidenceTiering,
   uExportSonarGeneric;
 
 const
@@ -380,6 +387,137 @@ begin
   finally
     Root.Free;
     Findings.Free;
+  end;
+end;
+
+{ ---- UTF-16 mit BOM ---- }
+
+procedure TTestExportSonarRoundtrip.Utf16Bom_IsTextNotBinary;
+// UTF-16LE mit BOM, 'a' CRLF 'b' CRLF 'c': drei Zeilen. Bytebasiert sah die
+// Datei binaer aus (NUL nach jedem ASCII-Zeichen) und jedes CRLF zaehlte
+// doppelt. Zeile 3 behaelt ihre textRange, Zeile 4 gibt es nicht.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Root     : TJSONObject;
+  Body     : TBytes;
+begin
+  Root := nil;
+  Body := TEncoding.Unicode.GetBytes('a'#13#10'b'#13#10'c');
+  WriteBytes('Wide.pas', TBytes.Create($FF, $FE) + Body);
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, TPath.Combine(FDir, 'Wide.pas'), 3));
+    Root := Report(Findings);
+    Assert.IsNotNull(TextRangeOf(Root), 'UTF-16 mit BOM ist Text');
+    Assert.AreEqual<Integer>(3, TextRangeOf(Root).GetValue<Integer>('startLine'));
+    FreeAndNil(Root);
+    Findings.Clear;
+    Findings.Add(MakeFinding(fkMemoryLeak, TPath.Combine(FDir, 'Wide.pas'), 4));
+    Root := Report(Findings);
+    Assert.IsNull(TextRangeOf(Root), 'Zeile 4 gibt es nicht - CRLF zaehlt einmal');
+  finally
+    Root.Free;
+    Findings.Free;
+  end;
+end;
+
+{ ---- Konfidenz-Deckel ---- }
+
+function CappedSecret(const AFile: string;
+  AFindings: TObjectList<TLeakFinding>): TLeakFinding;
+// SCA004: Katalog Error + SECURITY/BLOCKER, Standard-Konfidenz medium. Der
+// Deckel laeuft wie im Scan ueber TEvidenceTiering - nicht nachgebaut.
+begin
+  Result := MakeFinding(fkHardcodedSecret, AFile, 2);
+  AFindings.Add(Result);
+  TEvidenceTiering.ApplyToFindings(AFindings);
+end;
+
+procedure TTestExportSonarRoundtrip.CappedErrorRule_IsExportedWithCappedImpact;
+// Bis 2026-10-29 galt der gedeckelte Fund als herabgestuft und fehlte in
+// Sonar ganz (JVCL SCA003 10 von 10). Jetzt geht er mit - und die Regel
+// traegt die gedeckelte Schwere: Warning -> hoechstens MEDIUM, nicht der
+// BLOCKER des Katalogs.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Root     : TJSONObject;
+  Imp      : TJSONObject;
+  OldTier  : Boolean;
+begin
+  Root    := nil;
+  OldTier := uSCAConsts.LastScanEvidenceTiering;
+  uSCAConsts.LastScanEvidenceTiering := True;
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    CappedSecret(TPath.Combine(FDir, 'Secret.pas'), Findings);
+    Assert.AreEqual(Ord(lsWarning), Ord(Findings[0].Severity),
+      'Vorbedingung: der Deckel hat auf Warning gesetzt');
+    Root := Report(Findings);
+    Assert.AreEqual<Integer>(1, Root.GetValue<TJSONArray>(KEY_ISSUES).Count,
+      'gedeckelter Fund gehoert in den Report');
+    Imp := FirstRule(Root).GetValue<TJSONArray>('impacts').Items[0] as TJSONObject;
+    Assert.AreEqual('SECURITY', Imp.GetValue<string>('softwareQuality'));
+    Assert.AreEqual('MEDIUM', Imp.GetValue<string>('severity'),
+      'Impact = gedeckelte Schwere, nicht Katalog-BLOCKER');
+  finally
+    Root.Free;
+    Findings.Free;
+    uSCAConsts.LastScanEvidenceTiering := OldTier;
+  end;
+end;
+
+procedure TTestExportSonarRoundtrip.CappedFinding_PathDowngrade_StaysOut;
+// Gegenprobe: auf den gedeckelten Fund setzt eine Pfad-Ueberschreibung noch
+// Hint - DAS ist eine Nutzer-Herabstufung und bleibt draussen; mit
+// --sonar-keep-downgraded kommt sie wieder.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Root     : TJSONObject;
+  OldTier  : Boolean;
+begin
+  Root    := nil;
+  OldTier := uSCAConsts.LastScanEvidenceTiering;
+  uSCAConsts.LastScanEvidenceTiering := True;
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    CappedSecret(TPath.Combine(FDir, 'Gen.pas'), Findings).OverrideSeverity(lsHint);
+    Root := Report(Findings);
+    Assert.AreEqual<Integer>(0, Root.GetValue<TJSONArray>(KEY_ISSUES).Count,
+      'Pfad-Herabstufung bleibt draussen');
+    FreeAndNil(Root);
+    Root := TJSONObject.ParseJSONValue(
+      TSonarGenericWriter.ToJsonString(Findings, FDir, True)) as TJSONObject;
+    Assert.IsNotNull(Root, MSG_NOT_JSON);
+    Assert.AreEqual<Integer>(1, Root.GetValue<TJSONArray>(KEY_ISSUES).Count,
+      'mit --sonar-keep-downgraded drin');
+  finally
+    Root.Free;
+    Findings.Free;
+    uSCAConsts.LastScanEvidenceTiering := OldTier;
+  end;
+end;
+
+procedure TTestExportSonarRoundtrip.TieringOff_KeepsCatalogImpact;
+// [Rules] EvidenceTiering=0: kein Deckel, also auch kein gedeckelter Impact -
+// der Katalog-BLOCKER bleibt.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Root     : TJSONObject;
+  OldTier  : Boolean;
+begin
+  Root    := nil;
+  OldTier := uSCAConsts.LastScanEvidenceTiering;
+  uSCAConsts.LastScanEvidenceTiering := False;
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkHardcodedSecret, TPath.Combine(FDir, 'S.pas'), 2));
+    Root := Report(Findings);
+    Assert.AreEqual<Integer>(1, Root.GetValue<TJSONArray>(KEY_ISSUES).Count);
+    Assert.AreEqual('BLOCKER', ImpactSeverityOf(FirstRule(Root)));
+  finally
+    Root.Free;
+    Findings.Free;
+    uSCAConsts.LastScanEvidenceTiering := OldTier;
   end;
 end;
 

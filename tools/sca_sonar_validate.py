@@ -36,7 +36,6 @@ Aufruf:
 import argparse
 import codecs
 import collections
-import fnmatch  # noqa: F401  (bewusst NICHT benutzt: Sonar-Wildcards weichen ab)
 import io
 import json
 import os
@@ -259,6 +258,20 @@ def iter_report(path, on_top_key):
 # Quelldateien wie Sonar sehen
 # ---------------------------------------------------------------------------
 
+# Zaehlt nicht dekodierbare Bytefolgen. EINMAL registriert (Review e/SonarFix:
+# je Datei ein neuer Name fuellte die Codec-Registry, die nie aufraeumt);
+# der Zaehler ist modulweit und wird je Datei zurueckgesetzt.
+_DECODE_ERRORS = [0]
+
+
+def _count_decode_error(exc):
+    _DECODE_ERRORS[0] += 1
+    return ('\ufffd', exc.end)
+
+
+codecs.register_error('sca_sonar_count', _count_decode_error)
+
+
 class SourceFile:
     __slots__ = ('lines', 'lens', 'nul', 'bom', 'decode_errors')
 
@@ -312,20 +325,20 @@ class SourceIndex:
         with open(abs_path, 'rb') as fh:
             data = fh.read()
         sf = SourceFile()
-        sf.nul = b'\x00' in data
         sf.bom = data.startswith(codecs.BOM_UTF8)
         enc = self.encoding
-        if sf.bom and enc.replace('-', '').lower() == 'utf8':
-            data = data[3:]
-        errs = [0]
-
-        def handler(exc):
-            errs[0] += 1
-            return ('\ufffd', exc.end)
-        name = 'sca_sonar_count_%d' % id(errs)
-        codecs.register_error(name, handler)
-        text = data.decode(enc, errors=name)
-        sf.decode_errors = errs[0]
+        # Ein BOM gewinnt gegen sonar.sourceEncoding (Sonar erkennt UTF-8-
+        # und UTF-16-BOMs selbst); UTF-16 mit BOM ist Text, nicht binaer.
+        if data.startswith(codecs.BOM_UTF16_LE) and not data.startswith(codecs.BOM_UTF32_LE):
+            enc, data = 'utf-16-le', data[2:]
+        elif data.startswith(codecs.BOM_UTF16_BE):
+            enc, data = 'utf-16-be', data[2:]
+        elif sf.bom:
+            enc, data = 'utf-8', data[3:]
+        _DECODE_ERRORS[0] = 0
+        text = data.decode(enc, errors='sca_sonar_count')
+        sf.decode_errors = _DECODE_ERRORS[0]
+        sf.nul = '\x00' in text
         # Sonar (FileMetadata/LineCounter): CR, LF und CRLF beenden je eine
         # Zeile; Zeilenzahl = Terminatoren + 1 (eine abschliessende leere
         # Zeile zaehlt mit).
@@ -883,6 +896,8 @@ def _selftest():
             fh.write('x := \'Größe\';\n\tend.'.encode('utf-8'))
         with open(os.path.join(src, 'Ansi.pas'), 'wb') as fh:
             fh.write('s := \'Ä\';'.encode('cp1252'))
+        with open(os.path.join(src, 'Wide.pas'), 'wb') as fh:
+            fh.write(codecs.BOM_UTF16_LE + 'a\r\nb\r\nc'.encode('utf-16-le'))
         with open(os.path.join(src, 'Form.dfm'), 'wb') as fh:
             fh.write(b'TPF0\x00\x01binary')
         with open(os.path.join(tmp, 'proj', 'sonar-project.properties'), 'w',
@@ -916,6 +931,7 @@ def _selftest():
         good = {'rules': [rule('R1')], 'issues': [
             issue('R1', 'src/Crlf.pas', 3),
             issue('R1', 'src/Mix.pas', 4),
+            issue('R1', 'src/Wide.pas', 3),
             issue('R1', 'src/Ümlaut/Größe.pas', 1, startColumn=0, endColumn=13),
             issue('R1', 'src/Ümlaut/Größe.pas', 1, endLine=2, startColumn=0),
         ]}
@@ -924,6 +940,9 @@ def _selftest():
         check(not bad_sev, 'gueltiger Report ohne REJECT/ABORT/DROP (%s)' % sorted(bad_sev))
         check(v.src.metrics(os.path.join(src, 'Mix.pas')).lines == 4,
               'CR allein zaehlt als Zeilenende (Mix.pas = 4 Zeilen)')
+        wide = v.src.metrics(os.path.join(src, 'Wide.pas'))
+        check(wide.lines == 3 and not wide.nul,
+              'UTF-16LE mit BOM: 3 Zeilen, nicht binaer (%d, nul=%s)' % (wide.lines, wide.nul))
 
         cases = [
             ('Zeile hinter Dateiende', {'rules': [rule('R1')], 'issues': [
