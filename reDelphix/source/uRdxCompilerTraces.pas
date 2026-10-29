@@ -74,9 +74,14 @@ type
   //                bewegen)
   //   ProjectVersion  die <ProjectVersion> einer .dproj in Zehnteln, UNTER
   //                der ein Projekt alt ist (Delphi 2009 = 12.0, 10.3 =
-  //                18.5). Nur der Plattenblick von SCA014 liest sie
-  //                (uRdxMagicFixes.FileReason, Gegen-Review Q14, Major 3);
-  //                SCA121 hat keinen - der braeuchte eine eigene Messung.
+  //                18.5). Nur der Plattenblick liest sie
+  //                (uRdxMagicFixes.FileReason, Gegen-Review Q14, Major 3):
+  //                SCA014, SCA069, SCA111/SCA112 und seit dem Realworld-
+  //                Test rwE29 SCA128/SCA059 (FLOOR_INLINE_DECL fuer den
+  //                Invariant-Weg, FLOOR_SETTINGS_VAR fuer den Hauptweg).
+  //                SCA121 und SCA127 (FLOOR_DEFAULT_FN, nur die Spuren in
+  //                der Datei) haben keinen - die braeuchten eine eigene
+  //                Messung.
   TRdxCompilerFloor = record
     Ver            : Integer;
     Version        : Integer;

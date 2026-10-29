@@ -67,6 +67,7 @@ type
     // ---- Realworld-Test rwE29: was nur die Platte weiss ----
     [Test] procedure Sca128_Detector_OldDelphiProject_NoHelp;
     [Test] procedure Sca128_Detector_LazarusProject_OnlyMainWay;
+    [Test] procedure Sca128_Detector_OldTraceOnlyInInclude_MainWayStays;
     [Test] procedure Sca128_Detector_PairInFile_OnlyMainWay;
   end;
 {$ENDIF}
@@ -787,6 +788,45 @@ begin
     Assert.IsTrue(O.Enabled, O.Reason);
     Assert.AreEqual(InUnit(['  r := FloatToStr(x, FormatSettings);']),
       Apply(Src, O.Edits));
+  finally
+    RemoveTree(Root);
+  end;
+end;
+
+procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_OldTraceOnlyInInclude_MainWayStays;
+var
+  Root, U, Src : string;
+  Seen         : TArray<TSeen>;
+  O            : TRdxFixOutcome;
+begin
+  // Entscheid M1 (Review e/HilfeFixC): der Hauptweg fragt die Includes
+  // nicht - eine alte Versionsweiche in einem Include ('{$IFDEF VER150}',
+  // wie jedi.inc & Co.) und ein nicht gefundenes Include sperren ihn nicht
+  // (mit der Include-Pruefung fiel er hier weg). Der Invariant-Weg bleibt
+  // streng. Gegenprobe: eine alte Projektdatei (Delphi 7, .dof) daneben
+  // sperrt auch den Hauptweg.
+  Src := UnitText(RTL_USES, ['{$I defs.inc}', '{$I fehlt.inc}'],
+    ['  r := DateTimeToStr(d);']);
+  Seen := Detect(Src);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
+  Root := NewTempDir(FILE_PREFIX);
+  try
+    U := Root + 'u.pas';
+    WriteText(Root + 'defs.inc', '{$IFDEF VER150}' + CRLF + '  {$DEFINE D7}'
+      + CRLF + '{$ENDIF}');
+    O := PlanFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsTrue(O.Enabled, O.Reason);
+    Assert.IsTrue(Pos('DateTimeToStr(d, FormatSettings)', Apply(Src, O.Edits))
+      > 0, 'Hauptweg angewendet');
+    O := PlanAltFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsFalse(O.Enabled, 'Invariant-Weg gesperrt (Include)');
+    Assert.IsTrue(O.Reason <> '', 'mit Grund');
+    WriteText(Root + 'Prj.dof', '[Compiler]');
+    O := PlanFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsFalse(O.Enabled, 'Hauptweg gesperrt (.dof)');
+    Assert.AreEqual(TRdxMagicFixes.FileReason(U, lfFormatSettingsVar),
+      O.Reason);
+    Assert.IsTrue(Pos('Prj.dof', O.Reason) > 0, O.Reason);
   finally
     RemoveTree(Root);
   end;

@@ -1488,6 +1488,16 @@ end;
 // Datei prueft schon der Planer. Fundstellen: GExperts GX_DbugIntf.pas
 // (Delphi 1-6, GExpert4.dof), Rechnung.lpi (rgReportPayments.pas,
 // rgInvoiceItemEdit.pas), Img32.inc mit '{$IFDEF FPC}' (Img32.SVG.Path.pas).
+// Die Includes fragt NUR der Alt-Weg (Entscheid Nico nach dem Review
+// e/HilfeFixC, M1): fuer den Hauptweg beweist eine Versionsweiche in
+// jedi.inc & Co. nichts (die Kits bauen mit vielen Versionen, auch ab XE),
+// und ein nicht gefundenes Include sperrt ihn nicht - sonst fielen rund
+// 40 % (SCA128) bzw. 50 % (SCA059) der Hauptweg-Angebote weg. Der Hauptweg
+// sperrt also nur ueber Spuren in der Unit (Planer) und alte
+// Projektdateien (FileReason). Die Netzpfad-Sperre bleibt fuer beide Wege:
+// sie ist die Politik des Plattenblicks von SCA014 (auf einem Netzpfad
+// liest die Hilfe im Hauptthread keine Projektdatei - ohne den Blick ist
+// die Projekt-Sperre nicht pruefbar).
 procedure FormatSettingsDiskCheck(ALines: TStrings; AFinding: TLeakFinding;
   AFeature: TRdxLateFeature; var AOutcome: TRdxFixOutcome);
 var
@@ -1497,7 +1507,7 @@ begin
   AOutcome.Reason := NetworkPathReason(AFinding.FileName, rrProjectFiles);
   if AOutcome.Reason = '' then
     AOutcome.Reason := TRdxMagicFixes.FileReason(AFinding.FileName, AFeature);
-  if AOutcome.Reason = '' then
+  if (AOutcome.Reason = '') and (AFeature = lfFormatInvariant) then
   begin
     Map := TRdxCodeMap.Acquire(ALines);
     try

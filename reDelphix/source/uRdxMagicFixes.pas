@@ -149,8 +149,11 @@ type
   //                     Variable ab Delphi XE (FLOOR_SETTINGS_VAR); FPC
   //                     kennt sie (ab 2.6): Lazarus-Dateiart, -Projekt und
   //                     FPC-Weiche im Include sperren hier NICHT (FpcKnows),
-  //                     nur alte Delphi-Projekte und alte Spuren in Includes
-  //                     (rwE29: GExperts mit GExpert4.dof)
+  //                     nur alte Delphi-Projekte (rwE29: GExperts mit
+  //                     GExpert4.dof). IncludeReason fragt der Adapter fuer
+  //                     den Hauptweg nicht (Entscheid M1, uRdxFixTable.
+  //                     FormatSettingsDiskCheck) - der Satz in R_INC_OLD
+  //                     steht nur fuer einen kuenftigen Aufrufer.
   // FPC 3.2 kennt keines davon ausser lfFormatSettingsVar.
   TRdxLateFeature = (lfInlineConst, lfDigitSeparator, lfInlineVar,
     lfFormatInvariant, lfFormatSettingsVar);
