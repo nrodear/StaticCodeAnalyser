@@ -31,6 +31,12 @@ unit uRdxFloatEqualityFix;
 //     Teilausdruck 'b = c';
 //   - das Waechter-Idiom 'if X = 0 then X := ...' (der exakte Vergleich
 //     mit 0 setzt dort einen Vorgabewert - der Detektor stuft es herab);
+//   - der then-Zweig prueft einen Operanden selbst mit Toleranz (IsZero,
+//     SameValue, SingleSameValue ... mit ihm als Argument): der exakte
+//     Vergleich ist dort Absicht - 'if Value <> 0.0 then if
+//     SingleSameValue(Value, 0.0) then Value := 0.0' normalisiert fast-null
+//     Werte, IsZero davor uebersprange genau sie (Realwelt-Test rwE29,
+//     TES5Edit wbDataFormat.pas:3315);
 //   - die Datei deklariert selbst ein SameValue bzw. IsZero, oder vor der
 //     Zeile steht in der Routine ein 'with' (ein Operand oder die Funktion
 //     koennte an ein Member binden).
@@ -68,6 +74,8 @@ const
     + '(enumeration, set or declaration)';
   R_FLOAT_GUARD = '"%s" guards a default value (if X = 0 then X := ...) - '
     + 'the exact comparison is intended there';
+  R_FLOAT_TOLERANT = '"%s" guards a tolerance check of the same value (line '
+    + '%d) - the exact comparison is intended there';
   R_FLOAT_OWN = 'the file declares its own %s - it is not the function of '
     + 'System.Math';
   R_FLOAT_WITH = 'with statement in the routine - an operand or %s could '
@@ -153,6 +161,14 @@ const
   // Auf oberster Ebene beenden diese Token die Suche nach der Klammer.
   LIST_STOP: array[0..7] of string = (';', 'begin', 'then', 'else', 'do',
     'type', 'const', 'var');
+  // Diese Woerter oeffnen einen Block mit end (TolerantCheckLine).
+  END_OPENERS: array[0..3] of string = ('begin', 'case', 'try', 'asm');
+  // Toleranzvergleiche: genau IsZero oder ein Name, der auf SameValue endet
+  // (SameValue, SingleSameValue, DoubleSameValue ...).
+  CALL_IS_ZERO_LOW = 'iszero';
+  SAME_VALUE_LOW = 'samevalue';
+  // So weit liest TolerantCheckLine den then-Zweig (Token).
+  MAX_BRANCH = 2000;
 
 // Eine Null wie der Detektor sie liest: '0', '00', '0.0', '0.00'.
 function IsZeroText(const S: string): Boolean;
@@ -367,6 +383,63 @@ begin
   Result := V.IsWord and (V.Low = AVarLow) and (After(AMap, V).Low = ':=');
 end;
 
+// Ist ALow der Name eines Toleranzvergleichs (IsZero, *SameValue)?
+function IsToleranceCall(const ALow: string): Boolean;
+var
+  n : Integer;
+begin
+  n := Length(SAME_VALUE_LOW);
+  Result := (ALow = CALL_IS_ZERO_LOW) or ((Length(ALow) >= n)
+    and (Copy(ALow, Length(ALow) - n + 1, n) = SAME_VALUE_LOW));
+end;
+
+// Prueft der then-Zweig hinter AThen einen der Bezeichner ANames (klein)
+// mit Toleranz - 'IsZero(X)', 'SingleSameValue(X, 0.0)'? Gelesen wird bis
+// zum Ende der Anweisung: ';' bzw. else auf Tiefe 0, das end eines
+// umschliessenden Blocks; Bloecke mit end (END_OPENERS) zaehlen. Die Zeile
+// des Aufrufs, 0 ohne.
+function TolerantCheckLine(AMap: TRdxCodeMap; const AThen: TRdxToken;
+  const ANames: array of string): Integer;
+var
+  T, Open, Close, A : TRdxToken;
+  Depth, Steps      : Integer;
+begin
+  Result := 0;
+  Depth := 0;
+  Steps := 0;
+  T := After(AMap, AThen);
+  while (T.Low <> '') and (Steps < MAX_BRANCH) do
+  begin
+    if InList(T.Low, END_OPENERS) then
+      Inc(Depth)
+    else if T.Low = 'end' then
+    begin
+      Dec(Depth);
+      if Depth < 0 then
+        Exit;
+    end
+    else if (Depth = 0) and ((T.Low = ';') or (T.Low = 'else')) then
+      Exit
+    else if T.IsWord and IsToleranceCall(T.Low) then
+    begin
+      Open := After(AMap, T);
+      if Open.Low = '(' then
+      begin
+        Close := MatchClose(AMap, Open);
+        A := After(AMap, Open);
+        while (Close.Low <> '') and (A.Low <> '') and TokBefore(A, Close) do
+        begin
+          if A.IsWord and InList(A.Low, ANames) then
+            Exit(T.Line);
+          A := After(AMap, A);
+        end;
+      end;
+    end;
+    Inc(Steps);
+    T := After(AMap, T);
+  end;
+end;
+
 class function TRdxFloatEqualityFix.ToleranceCompare(AMap: TRdxCodeMap;
   ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
@@ -375,6 +448,8 @@ var
   T, OpTok, RTok, LTok, P, N : TRdxToken;
   LEnd, REnd, Count, FirstREnd : Integer;
   ZeroLeft, ZeroRight : Boolean;
+  Names : array[0..1] of string;
+  Li    : Integer;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -470,6 +545,24 @@ begin
   begin
     AReason := _(R_FLOAT_GUARD, [Cmp]);
     Exit;
+  end;
+  if N.Low = 'then' then
+  begin
+    // Literale nennt der Zweig nicht als Bezeichner - '' passt nie.
+    if IsLiteral(Left) then
+      Names[0] := ''
+    else
+      Names[0] := LowerCase(Left);
+    if IsLiteral(Right) then
+      Names[1] := ''
+    else
+      Names[1] := LowerCase(Right);
+    Li := TolerantCheckLine(AMap, N, Names);
+    if Li > 0 then
+    begin
+      AReason := _(R_FLOAT_TOLERANT, [Cmp, Li]);
+      Exit;
+    end;
   end;
 
   Call := CallName(AMessage);

@@ -8,6 +8,12 @@ unit uTestRdxFloatEqualityFix;
 // Charge QF stand hier eine woertliche Kopie des Adapters). Die Fixtures der
 // ersten stehen in 'procedure Foo(Ratio: Double; Other: Double)', der Rumpf
 // beginnt auf Zeile 6 (LINE).
+//
+// Realwelt-Test rwE29 (Fehler TES5Edit wbDataFormat.pas:3315): prueft der
+// then-Zweig denselben Operanden mit Toleranz ('if Value <> 0.0 then if
+// SingleSameValue(Value, 0.0) then Value := 0.0'), ist der exakte Vergleich
+// Absicht - gesperrt (TolerantBranch_NoHelp, gegen 7d5de210 rot: dort
+// 'not IsZero(Value)' angeboten; die Gegenproben darin waren schon gruen).
 
 interface
 
@@ -31,6 +37,7 @@ type
     [Test] procedure CommentOrString_NoHelp;
     [Test] procedure TwiceOnLine_NoHelp;
     [Test] procedure GuardIdiom_NoHelp;
+    [Test] procedure TolerantBranch_NoHelp;
     [Test] procedure OwnFunction_NoHelp;
     [Test] procedure WithBefore_NoHelp;
     [Test] procedure DeclarationList_NoHelp;
@@ -310,6 +317,33 @@ begin
   Assert.AreEqual(Wrap(['  if SameValue(Ratio, 0.5) then Ratio := 1;']),
     Applied(Wrap(['  if Ratio = 0.5 then Ratio := 1;']), LINE, 'Ratio', '=',
       '0.5'));
+end;
+
+procedure TTestRdxFloatEqualityFix.TolerantBranch_NoHelp;
+begin
+  // TES5Edit (rwE29): fast-null Werte werden auf exakt 0 normalisiert - mit
+  // 'not IsZero(Ratio)' uebersprange der Zweig genau sie.
+  AssertRefused(Wrap(['  if Ratio <> 0.0 then',
+    '    if SingleSameValue(Ratio, 0.0) then', '      Ratio := 0.0;']), LINE,
+    'Ratio', '<>', '0.0', _(R_FLOAT_TOLERANT, ['Ratio <> 0.0', LINE + 1]));
+  // Im begin-Block, IsZero, auch hinter einem Aufruf davor.
+  AssertRefused(Wrap(['  if Ratio = Other then', '  begin', '    Work;',
+    '    if not IsZero(Other) then Exit;', '  end;']), LINE, 'Ratio', '=',
+    'Other', _(R_FLOAT_TOLERANT, ['Ratio = Other', LINE + 3]));
+  // Gegenproben: der Toleranzvergleich steht hinter dem Zweig (nach ';'
+  // bzw. im else-Zweig) oder nennt eine andere Variable - die Hilfe bleibt.
+  Assert.AreEqual(Wrap(['  if not IsZero(Ratio) then Work;',
+    '  if SameValue(Ratio, 0.0) then Work;']),
+    Applied(Wrap(['  if Ratio <> 0.0 then Work;',
+      '  if SameValue(Ratio, 0.0) then Work;']), LINE, 'Ratio', '<>', '0.0'));
+  Assert.AreEqual(Wrap(['  if IsZero(Ratio) then Work',
+    '  else if IsZero(Ratio) then Work;']),
+    Applied(Wrap(['  if Ratio = 0 then Work',
+      '  else if IsZero(Ratio) then Work;']), LINE, 'Ratio', '=', '0'));
+  Assert.AreEqual(Wrap(['  if not IsZero(Ratio) then',
+    '    if IsZero(Other) then Work;']),
+    Applied(Wrap(['  if Ratio <> 0 then', '    if IsZero(Other) then Work;']),
+      LINE, 'Ratio', '<>', '0'));
 end;
 
 procedure TTestRdxFloatEqualityFix.OwnFunction_NoHelp;
