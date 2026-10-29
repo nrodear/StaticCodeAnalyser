@@ -70,6 +70,27 @@ rule profile the scan ran with. An empty value means *no profile
 filter* — every detector ran — and is not the same as the curated
 `default` profile.
 
+**Editor helps in the CLI report.** For a rule with an **editor help**
+(a code action of the IDE module reDelphix: light bulb, Ctrl+Alt+F)
+the `--report-html` page names the helps — on by default;
+`--html-no-editor-help` leaves them out, and the page is then exactly
+the one without them. The rule report gets a column *Editor helps*
+with the list of each rule, one entry per menu entry: the id
+(`SCA017`, `SCA017.2` for a second entry), the menu text read from its
+slug (`put-debug-output-in-ifdef-debug` becomes "Put debug output in
+ifdef debug": hyphens become spaces, the first letter upper case — the
+CLI does not link reDelphix and does not know the menu text itself)
+and the effect, translated by the language switch of the page (keeps
+behaviour / changes behaviour / depends on the finding / template,
+writes nothing). The details of a finding show the same list in one
+line, "Editor helps: …". The list stands **once per rule**; a finding
+carries only a reference of about 40 bytes, so the report does not
+grow by the list with the number of findings. The list comes from the
+rule catalog (`editorHelps`), like the SARIF field below. The workbench
+page of the GUI and the IDE and the other exports (CSV, JSON, Sonar)
+carry no editor helps; SARIF names them only with
+`--sarif-editor-help`.
+
 The workbench page keeps the rule documentation **once per rule**, the
 source excerpt as plain text, and no per-finding copy of the search
 text — which is why it stays roughly half the size the same report used

@@ -74,6 +74,28 @@ lignes affichées.
 signifie *aucun filtre de profil* — tous les détecteurs ont tourné —
 et n'équivaut pas au profil curé `default`.
 
+**Aides d'édition dans le rapport CLI.** Pour une règle dotée d'une
+**aide d'édition** (une action de code du module IDE reDelphix :
+ampoule, Ctrl+Alt+F), la page de `--report-html` nomme les aides —
+activé par défaut ; `--html-no-editor-help` les omet, et la page est
+alors exactement celle sans elles. Le rapport par règle reçoit une
+colonne *Aides d'édition* avec la liste de chaque règle, une entrée par
+entrée de menu : l'id (`SCA017`, `SCA017.2` pour une deuxième entrée),
+le texte de menu lu depuis son slug (`put-debug-output-in-ifdef-debug`
+devient « Put debug output in ifdef debug » : les tirets deviennent
+des espaces, la première lettre une majuscule — la CLI ne lie pas
+reDelphix et ne connaît pas le texte de menu lui-même) et l'effet,
+traduit par le sélecteur de langue de la page (comportement inchangé /
+modifie le comportement / selon l'occurrence / modèle, n'écrit rien).
+Le détail d'un résultat montre la même liste sur une ligne, « Aides
+d'édition : … ». La liste figure **une fois par règle** ; un résultat
+ne porte qu'une référence d'environ 40 octets, le rapport ne grossit
+donc pas de la liste avec le nombre de résultats. La liste vient du
+catalogue de règles (`editorHelps`), comme le champ SARIF plus bas. La
+page d'atelier de l'interface et de l'IDE et les autres exports (CSV,
+JSON, Sonar) ne portent aucune aide d'édition ; SARIF ne les nomme
+qu'avec `--sarif-editor-help`.
+
 La page d'atelier conserve la documentation de règle **une fois par
 règle**, l'extrait de code en texte brut et aucune copie du texte de
 recherche par résultat — c'est pourquoi elle reste environ deux fois
