@@ -857,7 +857,7 @@ msgstr ""
 msgid "%s is used without a call in line %d (method pointer, event, callback, property) - its type would no longer match"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:1256
+#: reDelphix/source/uRdxAvoidOutFix.pas:1263
 msgid "%s is used without a call in line %d (method pointer?) - its type would change"
 msgstr ""
 
@@ -5639,7 +5639,7 @@ msgid "no \"if .. then %s := .. else %s := ..\" on the reported line"
 msgstr ""
 
 #: reDelphix/source/uRdxAvoidOutFix.pas:245
-#: reDelphix/source/uRdxAvoidOutFix.pas:1224
+#: reDelphix/source/uRdxAvoidOutFix.pas:1231
 msgid "no \"out\" parameter at the reported column"
 msgstr ""
 
@@ -6207,10 +6207,10 @@ msgstr ""
 msgid "not found next to the unit"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:907
-#: reDelphix/source/uRdxAvoidOutFix.pas:911
-#: reDelphix/source/uRdxAvoidOutFix.pas:915
-#: reDelphix/source/uRdxAvoidOutFix.pas:937
+#: reDelphix/source/uRdxAvoidOutFix.pas:914
+#: reDelphix/source/uRdxAvoidOutFix.pas:918
+#: reDelphix/source/uRdxAvoidOutFix.pas:922
+#: reDelphix/source/uRdxAvoidOutFix.pas:944
 msgid "not in the light bulb - %s has a managed type and is not set as the first statement of %s (line %d): with \"var\" the caller's old value can stay where \"out\" cleared it"
 msgstr ""
 
@@ -6486,7 +6486,7 @@ msgstr ""
 msgid "operand spans several lines"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:1234
+#: reDelphix/source/uRdxAvoidOutFix.pas:1241
 msgid "operator - its signature is fixed"
 msgstr ""
 
@@ -8566,7 +8566,7 @@ msgstr ""
 msgid "the override or the method of the ancestor %s stands before any visibility section - the visibility is not certain; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:1229
+#: reDelphix/source/uRdxAvoidOutFix.pas:1236
 msgid "the parameter list belongs to a procedural type or an anonymous method - its signature is a contract"
 msgstr ""
 
@@ -9044,7 +9044,7 @@ msgstr ""
 msgid "unknown message - no \"%s\""
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:1214
+#: reDelphix/source/uRdxAvoidOutFix.pas:1221
 msgid "untyped \"out\" parameter - \"var\" would mean something else"
 msgstr ""
 
