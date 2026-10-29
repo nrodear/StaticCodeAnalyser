@@ -60,6 +60,11 @@ type
     // Beweis (TRdxFixOutcome.MenuOnly, SCA007) steht im Menue, nicht in der
     // Gluehbirne - Art fakRefactor; Gegenprobe fakFix.
     [Test] procedure SimpleFix_MenuOnly_NotInBulb;
+    // rwE31 Stufe 3 (CEF4Delphi uChildForm.pas:10 u. a.): der SCA007-Fund
+    // im Zweig eines Defines aus einer Include-Datei - der Dienst parst mit
+    // der Ein-Zweig-Sicht der IDE (DefaultIfdefDefines) und liefert den
+    // Eintrag nicht; die Hilfe liest ihn aus dem Text.
+    [Test] procedure Sca007_EntryInIncludeBranch_Helps;
   end;
 
 implementation
@@ -931,6 +936,63 @@ begin
   E := Sca007Entry('Result := AResult = 1;');
   Assert.IsTrue(E.Enabled and E.HasAction, 'verfuegbar');
   Assert.IsTrue(E.Kind = fakFix, 'Gluehbirne');
+end;
+
+// Der Eintrag der einfachen Hilfe zum SCA007-Fund AUnit auf ALine von ASrc.
+function SimpleEntryOf(const ASrc, AUnit: string;
+  ALine: Integer): TRdxActionEntry;
+var
+  F       : TLeakFinding;
+  Entries : TArray<TRdxActionEntry>;
+  E       : TRdxActionEntry;
+  n       : Integer;
+begin
+  Result := Default(TRdxActionEntry);
+  F := TLeakFinding.New('t.pas', '', ALine, AUnit, fkUnusedUses);
+  try
+    Entries := DescribeIn(ASrc, F);
+  finally
+    F.Free;
+  end;
+  n := 0;
+  for E in Entries do
+    if E.Recipe = RECIPE_SIMPLE_FIX then
+    begin
+      Result := E;
+      Inc(n);
+    end;
+  Assert.AreEqual<Integer>(1, n, 'ein Eintrag der einfachen Hilfe');
+end;
+
+procedure TTestRdxActionCore.Sca007_EntryInIncludeBranch_Helps;
+var
+  Src : string;
+  E   : TRdxActionEntry;
+begin
+  // uSimpleServer.pas:9 (minimiert): DELPHI16_UP steht in keiner Sicht des
+  // Dienstes (cef.inc) - er liefert SysUtils, Variants, Classes, System.Math.
+  // Vorher gesperrt: "System.Variants steht nicht mehr auf Zeile 5".
+  Src := Join(['unit t;', 'interface', 'uses', '  {$IFDEF DELPHI16_UP}',
+    '  System.SysUtils, System.Variants, System.Classes,', '  {$ELSE}',
+    '  SysUtils, Variants, Classes,', '  {$ENDIF}', '  System.Math;', 'type',
+    '  TFoo = class(TComponent)', '  end;', 'implementation', 'end.']);
+  E := SimpleEntryOf(Src, 'System.Variants', 5);
+  Assert.IsTrue(E.Enabled and E.HasAction, E.Hint);
+  Assert.AreEqual(Join(['unit t;', 'interface', 'uses',
+    '  {$IFDEF DELPHI16_UP}', '  System.SysUtils, System.Classes,',
+    '  {$ELSE}', '  SysUtils, Variants, Classes,', '  {$ENDIF}',
+    '  System.Math;', 'type', '  TFoo = class(TComponent)', '  end;',
+    'implementation', 'end.']), Apply(Src, E.Action.Edits));
+  // Gegenprobe: der letzte Eintrag des Zweigs vor {$ELSE} - geloescht
+  // wuerde bis zum naechsten Eintrag im {$ELSE}-Zweig, ueber die Direktive.
+  Src := Join(['unit t;', 'interface', 'uses',
+    '  {$IFDEF DELPHI16_UP} System.Types, System.Variants, {$ELSE} Types, '
+    + 'Variants, {$ENDIF}', '  System.Math;', 'type',
+    '  TFoo = class(TComponent)', '  end;', 'implementation', 'end.']);
+  E := SimpleEntryOf(Src, 'System.Variants', 4);
+  Assert.IsFalse(E.Enabled, 'Bereich ueber die Direktive');
+  Assert.IsTrue(Pos(_('comment or directive in the range to be deleted'),
+    E.Hint) > 0, E.Hint);
 end;
 
 initialization

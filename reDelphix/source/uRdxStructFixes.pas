@@ -97,6 +97,25 @@ type
     // ein Eintrag weniger nimmt die Unit aus dem Bau.
     class function UsesOnlyUnit(AMap: TRdxCodeMap): Boolean; static;
 
+    // SCA007 (rwE31 Stufe 3, CEF4Delphi uChildForm.pas:10,
+    // uCEFWindowDelegate.pas:16 ...): der Eintrag AUnit auf ALine aus dem
+    // TEXT der uses-Klauseln - fuer einen Eintrag, den
+    // TSourcePlaces.UsesEntries nicht liefert. Der Dienst parst mit der
+    // Ein-Zweig-Sicht der IDE-Funde (MSWINDOWS, WIN64 ...) ohne die Defines
+    // aus Include-Dateien: '{$I cef.inc}' definiert DELPHI16_UP, der Dienst
+    // nimmt den {$ELSE}-Zweig, der Fund steht im {$IFDEF}-Zweig - bis dahin
+    // "steht nicht mehr auf Zeile 10" (falsch). Der Token-Leser sieht keine
+    // Direktiven: eine Klausel ist hier die Folge ALLER Zweige (wie die
+    // Doppelzweig-Sicht). RemoveUsesEntry braucht davon nur die Nachbarn des
+    // Eintrags; ein Bereich ueber eine Direktive sperrt RangeReason weiter.
+    // Eine Klausel, deren Folge nicht 'Name [in], Name [in] .. ;' ist (Zweige
+    // mit eigener Kommafolge: '{$IFDEF X} A, B {$ELSE} C {$ENDIF};'), zaehlt
+    // nicht. Ergebnis: die Zahl der Treffer (Name gleich, erstes Zeichen auf
+    // ALine); bei genau einem die Klausel und der Index.
+    class function TextUsesEntry(AMap: TRdxCodeMap; ALine: Integer;
+      const AUnit: string; out AClause: TRdxUsesClause;
+      out AIndex: Integer): Integer; static;
+
     // SCA168: ein else vor das end des case-Statements auf Zeile ALine
     // (genau ein 'case' im Code der Zeile). AStatement = '': leer ('else'
     // vor 'end', bedeutungsgleich); sonst diese Anweisung im else-Zweig
@@ -824,6 +843,75 @@ begin
     else if not InList(Toks[k].Low, ['interface', 'implementation', 'end',
        '.']) then
       Exit(False);
+  end;
+end;
+
+// Die Eintraege einer uses-Klausel aus dem Text, ab dem ersten Token hinter
+// 'uses' (T): je Eintrag die Namensteile ohne Luecke auf einer Zeile (wie
+// TSourcePlaces.UsesEntries), ein 'in'-Pfad (der String ist kein Code-
+// Token), dann ',' oder ';'. False bei jeder anderen Folge.
+function ReadTextClause(AMap: TRdxCodeMap; T: TRdxToken;
+  out AEntries: TArray<TRefactorSpan>): Boolean;
+var
+  Last, N : TRdxToken;
+  E       : TRefactorSpan;
+begin
+  Result := False;
+  AEntries := nil;
+  while T.IsWord do
+  begin
+    E := TRefactorSpan.Make(ROLE_UNIT, T.Line, T.Col, T.Line, T.EndCol);
+    E.Resolved := TokText(AMap, T);
+    Last := T;
+    T := After(AMap, T);
+    while (T.Low = '.') and (T.Line = Last.Line) and (T.Col = Last.EndCol) do
+    begin
+      N := After(AMap, T);
+      if not N.IsWord or (N.Line <> T.Line) or (N.Col <> T.EndCol) then
+        Exit;
+      E.Resolved := E.Resolved + '.' + TokText(AMap, N);
+      E.EndCol := N.EndCol;
+      Last := N;
+      T := After(AMap, N);
+    end;
+    SetLength(AEntries, Length(AEntries) + 1);
+    AEntries[High(AEntries)] := E;
+    if T.Low = 'in' then
+      T := After(AMap, T);
+    if T.Low = ';' then
+      Exit(True);
+    if T.Low <> ',' then
+      Exit;
+    T := After(AMap, T);
+  end;
+end;
+
+class function TRdxStructFixes.TextUsesEntry(AMap: TRdxCodeMap;
+  ALine: Integer; const AUnit: string; out AClause: TRdxUsesClause;
+  out AIndex: Integer): Integer;
+var
+  T       : TRdxToken;
+  Entries : TArray<TRefactorSpan>;
+  k       : Integer;
+begin
+  Result := 0;
+  AClause := Default(TRdxUsesClause);
+  AIndex := -1;
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), 'uses');
+  while T.Low <> '' do
+  begin
+    if (T.Low = 'uses') and IsKeywordAfter(T, Before(AMap, T))
+       and ReadTextClause(AMap, After(AMap, T), Entries) then
+      for k := 0 to High(Entries) do
+        if (Entries[k].StartLine = ALine)
+           and SameText(Entries[k].Resolved, AUnit) then
+        begin
+          Inc(Result);
+          AClause.Entries := Entries;
+          AClause.UsesLine := T.Line;
+          AIndex := k;
+        end;
+    T := NextTokenOnLineWith(AMap, T, 'uses');
   end;
 end;
 
