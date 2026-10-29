@@ -163,6 +163,8 @@ type
     [Test] procedure PlanUses_TextClauseInBranch_NoNewClause;
     [Test] procedure PlanUses_EntryBranchCoversLine_Present;
     [Test] procedure PlanUses_DirectiveInClause_UnconditionalEntry;
+    // Review e/HilfeFixL: in eine Klausel mit Direktiven der Kurzname.
+    [Test] procedure PlanUses_DirectiveInClause_ScopedNameShort;
   end;
 
   // Stufe 3: SCA101 und SCA099, Zweig als Block (Entscheid E7).
@@ -1582,6 +1584,33 @@ begin
     'uses Bar, {$I extra.inc} Baz;', 'end.']), 'Math', 'System.Math', 0);
   Assert.IsTrue(Plan.Needed);
   Assert.AreEqual('', Plan.Edit.NewText, Plan.Reason);
+end;
+
+// Review e/HilfeFixL: Direktiven in der Klausel koennen Compiler-Zweige
+// trennen ('{$IFDEF D16} Vcl.Forms, .. {$ELSE} Forms, .. {$ENDIF} uCEF;',
+// uChildForm.pas; '{$IF CompilerVersion >= 23} System.SysUtils ..'). Der
+// Name kommt unbedingt hinein (hinter Baz) und gilt in jedem Zweig - als
+// 'Math', nicht 'System.Math', das Compiler vor XE2 nicht kennen. Ohne
+// den Fix 'Baz, System.Math' (die Datei schreibt Unit-Scopes).
+// Gegenprobe: ohne Direktive bleibt der qualifizierte Name.
+procedure TTestRdxSimpleFixesDetector4.PlanUses_DirectiveInClause_ScopedNameShort;
+var
+  Plan : TRdxUsesPlan;
+begin
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'implementation',
+    'uses {$IFDEF MSWINDOWS} System.Classes, {$ELSE} Classes, {$ENDIF} Baz;',
+    'end.']), 'Math', 'System.Math', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Reason);
+  Assert.AreEqual('Math', Plan.Name);
+  Assert.AreEqual('Baz', Plan.Edit.Expected);
+  Assert.AreEqual('Baz, Math', Plan.Edit.NewText);
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'implementation',
+    'uses System.Classes, Baz;', 'end.']), 'Math', 'System.Math', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Reason);
+  Assert.AreEqual('System.Math', Plan.Name);
+  Assert.AreEqual('System.Math, System.Classes', Plan.Edit.NewText);
 end;
 
 // Ohne die Unit im Text, aber mit dem einzigen sichtbaren 'implementation'

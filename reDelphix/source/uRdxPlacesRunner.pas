@@ -188,7 +188,8 @@ type
     // eingefuegt wird, ausserhalb jedes bedingten Zweigs stehen und die
     // Klausel kein {$I} traegt (UnconditionalPlace; JvCalc.pas:487 'uses
     // {$IFNDEF WIN32} JvStr16, {$ENDIF} JvVCLUtils, .. JvToolEdit;' - der
-    // neue Name gilt dann in jedem Zweig). Ohne jede uses-Klausel
+    // neue Name gilt dann in jedem Zweig - als Kurzname, die Zweige
+    // koennen Compiler ohne Unit-Scopes bedienen). Ohne jede uses-Klausel
     // wird hinter 'implementation' (sonst 'interface') eine neue angelegt;
     // ein Programm oder eine Library ohne uses-Klausel bekommt keine -
     // Reason 'keine uses-Klausel und kein interface/implementation'; steht
@@ -938,6 +939,16 @@ var
   Append : Boolean;
   Old    : string;
 begin
+  Dir := TRdxPlacesRunner.DirectiveLineIn(APlaces, AEntries);
+  // Eine Klausel mit Direktiven kann Compiler-Zweige tragen ('{$IF
+  // CompilerVersion >= 23} System.SysUtils, {$ELSE} SysUtils, {$IFEND}',
+  // '{$IFDEF D16} Vcl.Forms, {$ELSE} Forms, {$ENDIF}' - uChildForm.pas):
+  // der Name kommt unbedingt hinein (UnconditionalPlace) und gilt in
+  // jedem Zweig, einen Unit-Scope-Namen kennen Compiler vor XE2 nicht.
+  // Darum der Kurzname wie in einer Datei mit FPC-Weiche - Delphi loest
+  // ihn ueber die Vorgabe-Scopes ebenso auf (Review e/HilfeFixL).
+  if (Dir > 0) and TRdxRecipes.IsRtlScopedName(APlan.Name) then
+    APlan.Name := Copy(APlan.Name, Pos('.', APlan.Name) + 1, MaxInt);
   SetLength(Names, Length(AEntries));
   for i := 0 to High(AEntries) do
     Names[i] := AEntries[i].Resolved;
@@ -959,7 +970,6 @@ begin
   // vor bzw. hinter den der Name kommt, ausserhalb jedes Zweigs stehen
   // (UnconditionalPlace; E und Append koennen dafuer wechseln): der Name
   // steht dann in jedem Zweig.
-  Dir := TRdxPlacesRunner.DirectiveLineIn(APlaces, AEntries);
   if (Dir > 0) and not UnconditionalPlace(APlaces, AEntries, E, Append) then
   begin
     // Dieselbe msgid wie der Sperrgrund 'uses qualifizieren' des Anbieters
