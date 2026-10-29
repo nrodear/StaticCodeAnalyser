@@ -313,15 +313,9 @@ const
   // 'Strg+Umschalt+E').
   R_MAGIC_HINT = 'same meaning - the constant %s holds the literal; rename '
     + 'it by hand or with Refactor > Rename (Ctrl+Shift+E)';
-  // SCA061 (rwE29): die Tabweite leitet uRdxTabsFix.TabWidth aus den
-  // Nachbarzeilen ab - der Hinweis nennt sie und woher sie kommt (bis dahin
-  // fest 'tab width 2 (assumption)' in FIX_HINTS). %d die Weite.
-  R_TABS_DERIVED_HINT = 'tabs in code become spaces - tab width %d, as the '
-    + 'alignment of the neighbouring lines shows; tabs in strings and '
-    + 'comments stay';
-  R_TABS_DEFAULT_HINT = 'tabs in code become spaces - tab width %d '
-    + '(assumption, the neighbouring lines do not show one); tabs in strings '
-    + 'and comments stay';
+  // SCA061: die Hinweise (Tabweite und woher sie kommt) stehen seit rwE30 in
+  // uRdxTabsFix (TRdxTabsFix.Hint; bis dahin R_TABS_DERIVED_HINT und
+  // R_TABS_DEFAULT_HINT hier).
 
   // ---- Gruende, Dateiarten und Menuetext-Bausteine (keine Hinweise) ----
   // SCA147: Formdateien, die eine Methode per Name an ein Ereignis binden.
@@ -1397,28 +1391,23 @@ begin
     Result.Hint := _(R_FORRANGE_SWAP_HINT);
 end;
 
-// SCA061: der Hinweis nennt die Tabweite des Plans (TabWidth rechnet sie
-// fuer dieselbe Zeile noch einmal; HintByPlanner).
+// SCA061: der Hinweis nennt die Tabweite des Plans und woher sie kommt
+// (TRdxTabsFix.Hint rechnet sie fuer dieselbe Zeile noch einmal - die
+// Belege der Datei aus dem Cache; HintByPlanner).
 function PlanTabs(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
-  Map    : TRdxCodeMap;
-  W, Alt : Integer;
-  Source : TRdxTabWidthSource;
+  Map : TRdxCodeMap;
 begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxTabsFix.Tabs);
   if not Result.Enabled then Exit;
   Map := TRdxCodeMap.Acquire(ALines);
   try
-    W := TRdxTabsFix.TabWidth(Map, AFinding.LineInt, Source, Alt);
+    Result.Hint := TRdxTabsFix.Hint(Map, AFinding.LineInt);
   finally
     TRdxCodeMap.Release(Map);
   end;
-  if Source = twDerived then
-    Result.Hint := _(R_TABS_DERIVED_HINT, [W])
-  else
-    Result.Hint := _(R_TABS_DEFAULT_HINT, [W]);
 end;
 
 function PlanTrailingBlanks(APlaces: TSourcePlaces; ALines: TStrings;

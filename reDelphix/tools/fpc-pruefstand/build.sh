@@ -209,6 +209,10 @@ for u in uRdxText uRdxRecipes uRdxPaths uRdxScopeTable uRdxBufferMath uRdxCodeMa
     echo "WARNUNG: $RDX/source/$u.pas fehlt - Testunits, die $u brauchen, scheitern beim Bau" >&2
   fi
 done
+# Seit rwE30 Runde 2 (SCA061) auch uRdxTabsFix: uTestRdxTabsFix hat seither
+# eine FPC-sichtbare Text-Fixture (Adapter und Detektor nur unter Delphi).
+need "$RDX/source/uRdxTabsFix.pas"
+UNITS+=("$RDX/source/uRdxTabsFix.pas")
 # Die Hilfs-Unit der Testunits (Review R6-08: bis dahin je Testunit eine
 # Kopie von Join, Apply, LineOf ...) kommt bei JEDEM Lauf mit, unabhaengig
 # von den aufgerufenen Testunits - FPC uebersetzt sie nur, wenn eine sie
