@@ -199,7 +199,6 @@ const
   // sie nur bei einem Kopf im interface-Teil.
   FREE_CALLCONV: array[0..3] of string = ('cdecl', 'stdcall', 'safecall',
     'winapi');
-  DIR_OVERLOAD_FREE = 'overload';
   // Hier beginnt hinter einem Routinenkopf ohne ';' schon der Rumpf.
   FREE_HEAD_BREAKS: array[0..5] of string = ('begin', 'asm', 'var', 'const',
     'type', 'label');
@@ -806,7 +805,7 @@ begin
       if InList(W, FREE_BOUND) or (InIntf and InList(W, FREE_CALLCONV)) then
         Exit(_(R_MN_FREE_BOUND, [AName, W]));
     Forwards[i] := InList(WORD_FORWARD, Words);
-    if InList(DIR_OVERLOAD_FREE, Words) then
+    if InList(DIR_OVERLOAD, Words) then
       Overloaded := True;
     if Forwards[i] or InIntf then
       Inc(Decls);

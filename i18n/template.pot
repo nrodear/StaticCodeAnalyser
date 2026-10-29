@@ -132,7 +132,7 @@ msgstr ""
 msgid "\"%s\" in the type - declaration not readable"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:807
+#: reDelphix/source/uRdxMethodNameFix.pas:806
 msgid "\"%s\" is \"%s\" - a linker, a library or C code binds the routine by its exact name"
 msgstr ""
 
@@ -175,9 +175,9 @@ msgstr ""
 msgid "\"%s\" is not a local variable of the routine - a field or global list can be filled or freed elsewhere"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:386
-#: reDelphix/source/uRdxMethodNameFix.pas:425
-#: reDelphix/source/uRdxMethodNameFix.pas:881
+#: reDelphix/source/uRdxMethodNameFix.pas:385
+#: reDelphix/source/uRdxMethodNameFix.pas:424
+#: reDelphix/source/uRdxMethodNameFix.pas:880
 msgid "\"%s\" is not declared in the body of a class of this file (free routine, record, interface, or the class sits in an include)"
 msgstr ""
 
@@ -185,7 +185,7 @@ msgstr ""
 msgid "\"%s\" is not declared in the declaration part of a routine"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:996
+#: reDelphix/source/uRdxMethodNameFix.pas:995
 msgid "\"%s\" is overloaded - the help does not pick one of the declarations"
 msgstr ""
 
@@ -197,8 +197,8 @@ msgstr ""
 msgid "\"%s\" is part of a larger expression (\"%s\" before it) - only a whole condition or assignment is rewritten"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:388
-#: reDelphix/source/uRdxMethodNameFix.pas:427
+#: reDelphix/source/uRdxMethodNameFix.pas:387
+#: reDelphix/source/uRdxMethodNameFix.pas:426
 msgid "\"%s\" is published - its name is in the method table, code that looks it up by name (RTTI, MethodName, a command list) may compare case-sensitively"
 msgstr ""
 
@@ -210,7 +210,7 @@ msgstr ""
 msgid "\"%s\" is used on line %d before its declaration - there it means another type"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:883
+#: reDelphix/source/uRdxMethodNameFix.pas:882
 msgid "\"%s\" is written like a C or platform API name (underscore, no capital letter or a k constant) - a capital first letter does not make it PascalCase; rename it by hand or suppress the finding"
 msgstr ""
 
@@ -326,7 +326,7 @@ msgstr ""
 msgid "%d context hashes"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:977
+#: reDelphix/source/uRdxMethodNameFix.pas:976
 msgid "%d declarations of \"%s\" in classes named %s - overload or conditional twin?"
 msgstr ""
 
@@ -359,8 +359,8 @@ msgstr ""
 msgid "%d headers %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:795
-#: reDelphix/source/uRdxMethodNameFix.pas:822
+#: reDelphix/source/uRdxMethodNameFix.pas:794
+#: reDelphix/source/uRdxMethodNameFix.pas:821
 msgid "%d headers of a free routine \"%s\" - overload or conditional twin?"
 msgstr ""
 
@@ -382,8 +382,8 @@ msgstr ""
 msgid "%d implementations of %s.%s - overload?"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:466
-#: reDelphix/source/uRdxMethodNameFix.pas:999
+#: reDelphix/source/uRdxMethodNameFix.pas:465
+#: reDelphix/source/uRdxMethodNameFix.pas:998
 msgid "%d implementations of %s.%s in this file - overload or conditional twin?"
 msgstr ""
 
@@ -4209,7 +4209,7 @@ msgstr ""
 msgid "a compiler directive names \"%s\""
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:754
+#: reDelphix/source/uRdxMethodNameFix.pas:753
 msgid "a compiler directive names \"%s\" (line %d)"
 msgstr ""
 
@@ -4290,8 +4290,8 @@ msgstr ""
 msgid "a string literal names \"%s\" (ClassName, FindClass, RTTI)"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:892
-#: reDelphix/source/uRdxMethodNameFix.pas:926
+#: reDelphix/source/uRdxMethodNameFix.pas:891
+#: reDelphix/source/uRdxMethodNameFix.pas:925
 msgid "a string literal names \"%s\" (line %d) - a lookup by name (RTTI, MethodAddress, script) may compare case-sensitively"
 msgstr ""
 
@@ -5233,7 +5233,7 @@ msgstr ""
 msgid "include %s %s - the quick fix does not see its compiler switches (FPC, older Delphi)"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:370
+#: reDelphix/source/uRdxMethodNameFix.pas:369
 msgid "include directive in the class body (line %d) - it can declare more of the class"
 msgstr ""
 
@@ -5795,7 +5795,7 @@ msgstr ""
 msgid "no declaration follows the keyword"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:305
+#: reDelphix/source/uRdxMethodNameFix.pas:304
 msgid "no declaration of \"%s\" on the reported line"
 msgstr ""
 
@@ -5932,10 +5932,10 @@ msgstr ""
 msgid "no if, case or except found for the else"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:438
-#: reDelphix/source/uRdxMethodNameFix.pas:446
-#: reDelphix/source/uRdxMethodNameFix.pas:464
-#: reDelphix/source/uRdxMethodNameFix.pas:472
+#: reDelphix/source/uRdxMethodNameFix.pas:437
+#: reDelphix/source/uRdxMethodNameFix.pas:445
+#: reDelphix/source/uRdxMethodNameFix.pas:463
+#: reDelphix/source/uRdxMethodNameFix.pas:471
 msgid "no implementation %s.%s in this file (abstract, external or in an include)"
 msgstr ""
 
@@ -7449,8 +7449,8 @@ msgstr ""
 msgid "the declaration is not in the body of class %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:393
-#: reDelphix/source/uRdxMethodNameFix.pas:994
+#: reDelphix/source/uRdxMethodNameFix.pas:392
+#: reDelphix/source/uRdxMethodNameFix.pas:993
 msgid "the declaration is spelled \"%s\", the finding names \"%s\""
 msgstr ""
 
@@ -7463,9 +7463,9 @@ msgstr ""
 msgid "the declaration of \"%s\" (line %d) is not \"TList<%s>\""
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:390
-#: reDelphix/source/uRdxMethodNameFix.pas:429
-#: reDelphix/source/uRdxMethodNameFix.pas:979
+#: reDelphix/source/uRdxMethodNameFix.pas:389
+#: reDelphix/source/uRdxMethodNameFix.pas:428
+#: reDelphix/source/uRdxMethodNameFix.pas:978
 msgid "the declaration of \"%s\" cannot be read safely"
 msgstr ""
 
@@ -7551,7 +7551,7 @@ msgstr ""
 msgid "the exception is now raised - the code after it no longer runs in the error case"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:766
+#: reDelphix/source/uRdxMethodNameFix.pas:765
 msgid "the exports clause names \"%s\" (line %d) - the exported name keeps the spelling"
 msgstr ""
 
@@ -7799,7 +7799,7 @@ msgstr ""
 msgid "the header names %s, the message %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:803
+#: reDelphix/source/uRdxMethodNameFix.pas:802
 msgid "the header of \"%s\" in line %d cannot be read safely"
 msgstr ""
 
@@ -7810,9 +7810,9 @@ msgstr ""
 msgid "the header of %s is not safe to read"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:818
-#: reDelphix/source/uRdxMethodNameFix.pas:827
-#: reDelphix/source/uRdxMethodNameFix.pas:832
+#: reDelphix/source/uRdxMethodNameFix.pas:817
+#: reDelphix/source/uRdxMethodNameFix.pas:826
+#: reDelphix/source/uRdxMethodNameFix.pas:831
 msgid "the headers of \"%s\" are not one declaration (interface or forward) and one implementation"
 msgstr ""
 
@@ -8373,7 +8373,7 @@ msgstr ""
 msgid "the message names no list variable or no item type"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:1021
+#: reDelphix/source/uRdxMethodNameFix.pas:1020
 msgid "the message names no method with a lowercase first letter"
 msgstr ""
 
@@ -8652,7 +8652,7 @@ msgstr ""
 msgid "the reported line carries several \"except\" - ambiguous"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:307
+#: reDelphix/source/uRdxMethodNameFix.pas:306
 msgid "the reported line declares \"%s\" more than once"
 msgstr ""
 
@@ -8664,8 +8664,8 @@ msgstr ""
 msgid "the reported line holds \"%s := %s * %s;\" more than once"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:302
-#: reDelphix/source/uRdxMethodNameFix.pas:955
+#: reDelphix/source/uRdxMethodNameFix.pas:301
+#: reDelphix/source/uRdxMethodNameFix.pas:954
 msgid "the reported line holds the implementation of \"%s\", not its declaration - no class of this file declares it before"
 msgstr ""
 
@@ -8925,7 +8925,7 @@ msgstr ""
 msgid "the unit is test code (\"%s\") in the test folder \"%s\" - a test may compare this address literally; decide by hand"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:752
+#: reDelphix/source/uRdxMethodNameFix.pas:751
 msgid "the unit links an object file ({$L} in line %d) - C code may call \"%s\" by its exact name"
 msgstr ""
 
