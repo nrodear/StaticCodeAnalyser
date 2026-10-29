@@ -1155,8 +1155,7 @@ const
     ';       shown permanently on every finding line instead of the mini'#13#10 +
     ';       info bar. No window: description and fix example live in the'#13#10 +
     ';       findings panel; dismiss by double-clicking the text; long'#13#10 +
-    ';       titles
-    ';       appear in short form (badge + rule name).'#13#10 +
+    ';       titles appear in short form (badge + rule name).'#13#10 +
     '; Also configurable via Tools > Options > Third Party >'#13#10 +
     '; Static Code Analyser. Takes effect once the options are saved;'#13#10 +
     '; OverlayPosition applies to the window overlay (mode 0) only.'#13#10 +
