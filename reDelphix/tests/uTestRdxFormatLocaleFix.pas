@@ -48,6 +48,8 @@ type
     [Test] procedure Sca059_FollowLine_OneFormat;
     [Test] procedure Sca059_ShadowedSettings_Qualified;
     [Test] procedure Sca059_Alt_InlineVarRefutesInclude;
+    // ---- Realworld-Test rwE31 Stufe 3 ----
+    [Test] procedure Sca059_Alt_ArgsReadFormatSettings_NoHelp;
   end;
 
 {$IFNDEF FPC}
@@ -454,6 +456,29 @@ begin
   AssertRefused(UnitText(RTL_USES, ['{$I mormot.defines.inc}'],
     ['  r := Format(''%.2f'', [x]);']), BODY_LINE + 1, Msg('%.2f'),
     _(R_FS_OLD_INVARIANT, ['mormot.defines.inc', 6]), True);
+end;
+
+procedure TTestRdxFormatLocaleFix.Sca059_Alt_ArgsReadFormatSettings_NoHelp;
+var
+  Src : string;
+begin
+  // issrc IDE.MainForm.pas:6170: die Argumente lesen selbst
+  // FormatSettings.TimeSeparator - mit Invariant mischte die Statusleiste
+  // lokalen Zeittrenner und invarianten Tausendertrenner (rwE31 Stufe 3,
+  // gekoppelte Auswertung). Bis dahin angeboten.
+  Src := InUnit(['  StatusBar.Panels[1].Text := Format(',
+    '    '' Remaining: %.2d%s%.2d     Average KB/sec: %.0n'',',
+    '    [m div 60, FormatSettings.TimeSeparator, m mod 60, x / 1024]);']);
+  AssertRefused(Src, BODY_LINE,
+    Msg(' Remaining: %.2d%s%.2d     Average KB/sec: %.0n'),
+    _(R_FS_COUPLED_SETTINGS, [BODY_LINE + 2, 'Format',
+    'FormatSettings.TimeSeparator']), True);
+  // Der Hauptweg bleibt.
+  AssertFixed(InUnit(['  StatusBar.Panels[1].Text := Format(',
+    '    '' Remaining: %.2d%s%.2d     Average KB/sec: %.0n'',',
+    '    [m div 60, FormatSettings.TimeSeparator, m mod 60, x / 1024], '
+    + 'FormatSettings);']), Src, BODY_LINE,
+    Msg(' Remaining: %.2d%s%.2d     Average KB/sec: %.0n'));
 end;
 
 {$IFNDEF FPC}

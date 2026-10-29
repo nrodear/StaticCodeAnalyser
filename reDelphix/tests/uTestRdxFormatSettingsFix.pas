@@ -68,6 +68,11 @@ type
     [Test] procedure Sca128_Alt_GlobalSettingsSet_NoHelp;
     [Test] procedure Sca128_Alt_CompareLiteral_NoHelp;
     [Test] procedure Sca128_Alt_PairInSameRoutineFirst;
+    // ---- Realworld-Test rwE31 Stufe 3: gekoppelte Auswertung ----
+    [Test] procedure Sca128_Alt_CoupledCompare_NoHelp;
+    [Test] procedure Sca128_Alt_CoupledSettings_NoHelp;
+    [Test] procedure Sca128_Alt_NotCoupled_Helps;
+    [Test] procedure Sca128_Alt_PairHint_NearestWithoutOwnSettings;
   end;
 
 {$IFNDEF FPC}
@@ -603,11 +608,17 @@ begin
   // in en-US immer ungleich. Entscheid M2 (Review e/HilfeFixC): der
   // Alt-Weg bleibt angeboten (aendert Verhalten, nie per Taste), der
   // Hinweis nennt das Gegenstueck. Ohne PairHint bliebe er 'B'.
+  // Seit rwE31 Stufe 3 (Nico-Ergaenzung zu M2) sperrt der DIREKTE
+  // Vergleich in derselben Routine ('if r <> DateToStr(..)', CoupledReason,
+  // Sca128_Alt_CoupledCompare_NoHelp); das Gegenstueck ohne Kopplung bleibt
+  // ein Hinweisfall.
+  Src := InUnit(['  r := DateToStr(d);', '  Log(DateToStr(Date));']);
+  AssertFixed(InUnit(['  r := DateToStr(d, TFormatSettings.Invariant);',
+    '  Log(DateToStr(Date));']), Src, BODY_LINE, Msg('datetostr'), True);
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'DateToStr']),
+    PairHintOf(Src, BODY_LINE));
   Src := InUnit(['  r := DateToStr(d);', '  if r <> DateToStr(Date) then',
     '    r := '''';']);
-  AssertFixed(InUnit(['  r := DateToStr(d, TFormatSettings.Invariant);',
-    '  if r <> DateToStr(Date) then', '    r := '''';']), Src, BODY_LINE,
-    Msg('datetostr'), True);
   Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'DateToStr']),
     PairHintOf(Src, BODY_LINE));
   // rwE29, rgInvoiceItemEdit.pas:217: CurrToStr ins Eingabefeld, zurueck
@@ -957,6 +968,138 @@ begin
     ['  s := DateToStr(d);']);
   Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', 8, 'DateTimeToStr']),
     PairHintOf(Src, BODY_LINE + 4));
+end;
+
+// ---- Realworld-Test rwE31 Stufe 3: gekoppelte Auswertung ----
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_CoupledCompare_NoHelp;
+var
+  Src : string;
+begin
+  // delphimvcframework FrameworkTestsU.pas:1986: nur s2 auf Invariant, s1
+  // bleibt lokal - 'Assert.areEqual(s1,s2)' scheitert danach ausser in
+  // en-US. Bis rwE31 Stufe 3 angeboten (nur Hinweis auf Zeile 1985).
+  Src := InUnit([
+    '  lDate := ISOTimeStampToDateTime(''2020-08-15T12:12:12Z'');',
+    '  s1 := DateTimeToStr(lDate);',
+    '  s2 := DateTimeToStr(lDateToCompare);',
+    '  Assert.areEqual(s1,s2, ''UTC with no time zone (in DST period)'');']);
+  AssertRefused(Src, BODY_LINE + 2, Msg('datetimetostr'),
+    _(R_FS_COUPLED_PAIR, [BODY_LINE + 3, 's2', 's1', BODY_LINE + 1,
+    'DateTimeToStr']), True);
+  // Der Hauptweg aendert nichts am Verhalten und bleibt.
+  AssertFixed(InUnit([
+    '  lDate := ISOTimeStampToDateTime(''2020-08-15T12:12:12Z'');',
+    '  s1 := DateTimeToStr(lDate);',
+    '  s2 := DateTimeToStr(lDateToCompare, FormatSettings);',
+    '  Assert.areEqual(s1,s2, ''UTC with no time zone (in DST period)'');']),
+    Src, BODY_LINE + 2, Msg('datetimetostr'));
+  // FrameworkTestsU.pas:1964: zwei Bloecke in der Routine - gemeldet wird
+  // der Partner des eigenen Blocks (Zeile 1965) und sein Vergleich (1966),
+  // nicht der vorige Block (bis dahin nannte der Hinweis Zeile 1956).
+  Src := InUnit(['  s1 := DateTimeToStr(lDate);',
+    '  s2 := DateTimeToStr(lDateToCompare);',
+    '  Assert.areEqual(s1,s2, ''DST'');',
+    '  s1 := DateTimeToStr(lDate);',
+    '  s2 := DateTimeToStr(lDateToCompare);',
+    '  Assert.areEqual(s1,s2, ''no DST'');']);
+  AssertRefused(Src, BODY_LINE + 3, Msg('datetimetostr'),
+    _(R_FS_COUPLED_PAIR, [BODY_LINE + 5, 's1', 's2', BODY_LINE + 4,
+    'DateTimeToStr']), True);
+  // Das Gegenstueck selbst vergleicht mit dem Ergebnis.
+  AssertRefused(InUnit(['  r := DateToStr(d);',
+    '  if r <> DateToStr(Date) then', '    r := '''';']), BODY_LINE,
+    Msg('datetostr'), _(R_FS_COUPLED_CALL, [BODY_LINE + 1, 'r', 'DateToStr']),
+    True);
+  // Schreiben und Lesen: CurrToStr ins Feld, TryStrToCurr liest es zurueck.
+  AssertRefused(InUnit(['  r := CurrToStr(x);', '  if TryStrToCurr(r, x) then',
+    '    Foo;']), BODY_LINE, Msg('currtostr'),
+    _(R_FS_COUPLED_CALL, [BODY_LINE + 1, 'r', 'TryStrToCurr']), True);
+  // Der umgestellte Aufruf nennt das Ziel des Gegenstuecks.
+  AssertRefused(InUnit(['  r := DateToStr(Date);',
+    '  Result := DateToStr(d) = r;']), BODY_LINE + 1, Msg('datetostr'),
+    _(R_FS_COUPLED_PAIR, [BODY_LINE + 1, 'DateToStr', 'r', BODY_LINE,
+    'DateToStr']), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_CoupledSettings_NoHelp;
+var
+  Src : string;
+begin
+  // delphimvcframework MVCFramework.Validators.pas:1647: mit Invariant faende
+  // 'Pos(FormatSettings.DecimalSeparator, LStrValue)' in Komma-Locales
+  // keinen Trenner mehr - die Scale-Pruefung entfiele. Bis rwE31 Stufe 3
+  // angeboten.
+  Src := InUnit(['  LValue := AValue.AsExtended;',
+    '  LStrValue := FloatToStr(Abs(LValue));', '',
+    '  LDecimalPos := Pos(FormatSettings.DecimalSeparator, LStrValue);',
+    '  if LDecimalPos > 0 then', '    Foo;']);
+  AssertRefused(Src, BODY_LINE + 1, Msg('floattostr'),
+    _(R_FS_COUPLED_SETTINGS, [BODY_LINE + 3, 'LStrValue',
+    'FormatSettings.DecimalSeparator']), True);
+  // Der Hauptweg bleibt (dieselbe globale FormatSettings auf beiden Seiten).
+  AssertFixed(InUnit(['  LValue := AValue.AsExtended;',
+    '  LStrValue := FloatToStr(Abs(LValue), FormatSettings);', '',
+    '  LDecimalPos := Pos(FormatSettings.DecimalSeparator, LStrValue);',
+    '  if LDecimalPos > 0 then', '    Foo;']), Src, BODY_LINE + 1,
+    Msg('floattostr'));
+  // Ein Leser, dessen Argument FormatSettings liest: der normalisierte
+  // Text passt nicht mehr zu Invariant.
+  AssertRefused(InUnit(['  x := StrToFloat(StringReplace(s, ''.'', '
+    + 'FormatSettings.DecimalSeparator, []));']), BODY_LINE,
+    Msg('strtofloat'), _(R_FS_COUPLED_SETTINGS, [BODY_LINE, 'StrToFloat',
+    'FormatSettings.DecimalSeparator']), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_NotCoupled_Helps;
+begin
+  // Gegenproben: zwei Werte derselben Familie, getrennt ausgegeben; ein
+  // Leser, dessen Zahl formatiert wird (keine Text-Kopplung, Rundlauf des
+  // Detektors 'x := StrToCurr(s); r := FormatCurr(.., x)'); FormatSettings
+  // in einer anderen Routine; ein Member mit aehnlichem Namen.
+  AssertFixed(InUnit(['  s1 := DateTimeToStr(d);', '  Log(s1);',
+    '  s2 := DateTimeToStr(Now, TFormatSettings.Invariant);', '  Log(s2);']),
+    InUnit(['  s1 := DateTimeToStr(d);', '  Log(s1);',
+    '  s2 := DateTimeToStr(Now);', '  Log(s2);']), BODY_LINE + 2,
+    Msg('datetimetostr'), True);
+  AssertFixed(InUnit(['  x := StrToCurr(s, TFormatSettings.Invariant);',
+    '  r := FormatCurr(''0.00'', x);']),
+    InUnit(['  x := StrToCurr(s);', '  r := FormatCurr(''0.00'', x);']),
+    BODY_LINE, Msg('strtocurr'), True);
+  AssertFixed(InUnit(['  x := StrToCurr(s);',
+    '  r := FormatCurr(''0.00'', x, TFormatSettings.Invariant);']),
+    InUnit(['  x := StrToCurr(s);', '  r := FormatCurr(''0.00'', x);']),
+    BODY_LINE + 1, Msg('formatcurr'), True);
+  AssertFixed(UnitText(RTL_USES, ['procedure Q;', 'begin',
+    '  r := Pos(FormatSettings.DecimalSeparator, r);', 'end;'],
+    ['  r := FloatToStr(x, TFormatSettings.Invariant);']),
+    UnitText(RTL_USES, ['procedure Q;', 'begin',
+    '  r := Pos(FormatSettings.DecimalSeparator, r);', 'end;'],
+    ['  r := FloatToStr(x);']), BODY_LINE + 4, Msg('floattostr'), True);
+  AssertFixed(InUnit(['  r := FloatToStr(x, TFormatSettings.Invariant);',
+    '  Obj.r := Pos(''.'', Obj.FormatSettingsText);']),
+    InUnit(['  r := FloatToStr(x);',
+    '  Obj.r := Pos(''.'', Obj.FormatSettingsText);']), BODY_LINE,
+    Msg('floattostr'), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_PairHint_NearestWithoutOwnSettings;
+begin
+  // FrameworkTestsU.pas:1964 / wbLOD.pas:3543: der Hinweis nennt das
+  // NAECHSTE Gegenstueck (bis rwE31 Stufe 3 das erste der Routine bzw.
+  // Datei).
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 4, 'DateToStr']),
+    PairHintOf(InUnit(['  r := DateToStr(Date);', '  Foo;', '  Foo;',
+    '  s := DateToStr(d);', '  Bar(DateToStr(e));']), BODY_LINE + 3));
+  // TemplatePro.pas:3365: ein Aufruf mit eigenen Einstellungen
+  // (fLocaleFormatSettings) ist kein Gegenstueck - der Hinweis riet, ihn
+  // auf Invariant umzustellen.
+  Assert.AreEqual('B', PairHintOf(InUnit(['  r := FormatFloat(''0.00'', x);',
+    '  s := FormatFloat(''0'', x, fLocaleFormatSettings);']), BODY_LINE));
+  // Gegenprobe: die globale FormatSettings ausdruecklich bleibt eines.
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'FormatFloat']),
+    PairHintOf(InUnit(['  r := FormatFloat(''0.00'', x);',
+    '  s := FormatFloat(''0'', x, FormatSettings);']), BODY_LINE));
 end;
 
 {$IFNDEF FPC}

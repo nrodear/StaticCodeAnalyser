@@ -97,7 +97,12 @@ unit uRdxFormatSettingsFix;
 // NICHT (Entscheid Nico nach dem Review e/HilfeFixC, M2 - der Alt-Weg ist
 // ohnehin als aendernd gekennzeichnet und nie per Taste): der Hinweis nennt
 // das Gegenstueck (PairHint, PairBreakLine) - seit rwE30 Stufe 2 zuerst
-// eines in derselben Routine (HeidiSQL main.pas:14718).
+// eines in derselben Routine (HeidiSQL main.pas:14718), seit rwE31 Stufe 3
+// das naechste. AUSSER (Nico-Ergaenzung zu M2, rwE31 Stufe 3) das Ergebnis
+// wird in derselben Routine direkt mit dem Gegenstueck bzw. mit
+// FormatSettings gekoppelt ausgewertet ('Assert.AreEqual(s1, s2)',
+// 'Pos(FormatSettings.DecimalSeparator, S)'): das bricht Verhalten, die
+// Hilfe sperrt (CoupledReason; auch SCA059).
 // Was nur die Platte weiss (Projektdateien, Includes), prueft der Adapter
 // in uRdxFixTable (FormatSettingsDiskCheck, rwE29).
 // Der Bereich der Ersetzung beginnt hinter dem letzten Zeichen des letzten
@@ -170,6 +175,23 @@ const
     + 'TFormatSettings.Invariant - change it along with this one, otherwise '
     + 'values written there and read or compared here (or the other way '
     + 'round) no longer match';
+  // Alt-Weg (rwE31 Stufe 3, Nico-Ergaenzung zu M2): gekoppelte Auswertung
+  // in derselben Routine (CoupledReason) - sperrt. %d die Zeile der
+  // Kopplung, %s der Aufruf bzw. sein Ziel, %s FormatSettings wie
+  // geschrieben samt Feld ...
+  R_FS_COUPLED_SETTINGS = 'line %d evaluates %s together with %s - with '
+    + 'TFormatSettings.Invariant here alone, the two would no longer fit '
+    + 'together (decimal separator, date format)';
+  // ... %d die Zeile der Kopplung, %s der Aufruf bzw. sein Ziel, %s das Ziel
+  // des Gegenstuecks, %d seine Zeile, %s sein Aufruf ...
+  R_FS_COUPLED_PAIR = 'line %d evaluates %s together with %s, which line %d '
+    + 'writes with %s without TFormatSettings.Invariant - with only this call '
+    + 'changed, the two no longer match';
+  // ... %d die Zeile des Gegenstuecks, %s das Ziel des Aufrufs, %s das
+  // Gegenstueck.
+  R_FS_COUPLED_CALL = 'line %d evaluates %s together with %s without '
+    + 'TFormatSettings.Invariant - with only this call changed, the two no '
+    + 'longer match';
   R_FL_NO_SPEC = 'the message does not name the format string - analyse the '
     + 'file again';
   R_FL_NO_FORMAT = 'no Format call on the code columns of the reported line';
@@ -213,8 +235,10 @@ type
     class function HasMoneySpec(const AFormat: string): Boolean; static;
     // SCA128, Alt-Weg (Entscheid M2): ABaseHint, oder - ruft die Datei
     // ausser den Aufrufen der Liste auf ALine eine Routine derselben
-    // Familie ohne Invariant - R_FS_PAIR_HINT mit ABaseHint, Zeile und Name
-    // des ersten solchen Aufrufs. Liest die Zeile keinen Aufruf, ABaseHint.
+    // Familie ohne Invariant bzw. eigene Einstellungen - R_FS_PAIR_HINT mit
+    // ABaseHint, Zeile und Name des naechsten solchen Aufrufs (erst in der
+    // Routine, dann in der Datei; bis rwE31 Stufe 3 des ersten). Liest die
+    // Zeile keinen Aufruf, ABaseHint.
     class function PairHint(AMap: TRdxCodeMap; ALine: Integer;
       const ABaseHint: string): string; static;
   end;
@@ -250,6 +274,7 @@ const
   SPEC_SUFFIX = ' without TFormatSettings - locale-dependent (comma vs. dot '
     + 'decimal separator)';
   NAME_SETTINGS      = 'formatsettings';
+  NAME_FMT_SETTINGS  = 'fmtsettings';
   NAME_SETTINGS_TYPE = 'tformatsettings';
   NAME_USES          = 'uses';
   QUAL_UNIT  = 'sysutils';
@@ -799,8 +824,30 @@ begin
   Result := False;
 end;
 
-// Nennt der Aufruf am Namen T in seinen Klammern 'Invariant'? Ohne
-// Klammer bzw. ohne gefundene schliessende: nein.
+// Traegt ein Bezeichner eigene Einstellungen im Namen ('fLocaleFormatSettings',
+// 'FmtSettings') - nicht den blossen globalen Namen FormatSettings?
+function NamesOwnSettings(AMap: TRdxCodeMap; const N: TRdxToken): Boolean;
+var
+  P : TRdxToken;
+begin
+  Result := False;
+  if not N.IsWord then Exit;
+  if N.Low = NAME_SETTINGS then
+  begin
+    // 'X.FormatSettings' (X nicht SysUtils) ist ein Member - eigene.
+    P := Before(AMap, N);
+    Exit((P.Low = '.') and not RtlQualified(AMap, P));
+  end;
+  Result := (Pos(NAME_SETTINGS, N.Low) > 0) or (Pos(NAME_FMT_SETTINGS, N.Low) > 0);
+end;
+
+// Uebergibt der Aufruf am Namen T in seinen Klammern eigene Einstellungen -
+// 'Invariant' oder seit rwE31 Stufe 3 einen Bezeichner wie
+// 'fLocaleFormatSettings' (NamesOwnSettings)? Dann liest er die globale
+// FormatSettings nicht und ist kein Gegenstueck: TemplatePro.pas:3365 - der
+// Hinweis riet, Zeile 3378 mit fLocaleFormatSettings mit umzustellen (das
+// verwuerfe die Template-Locale). Ohne Klammer bzw. ohne gefundene
+// schliessende: nein.
 function PassesInvariant(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
 var
   Open, Close, N : TRdxToken;
@@ -813,7 +860,7 @@ begin
   N := After(AMap, Open);
   while (N.Low <> '') and TokBefore(N, Close) do
   begin
-    if N.Low = NAME_INVARIANT then
+    if (N.Low = NAME_INVARIANT) or NamesOwnSettings(AMap, N) then
       Exit(True);
     N := After(AMap, N);
   end;
@@ -832,30 +879,65 @@ begin
   Result := False;
 end;
 
-// Der erste weitere Aufruf der Familie(n) der Aufrufe ASites in der Datei
-// ohne Invariant (s. Kopf des Abschnitts): seine Zeile und sein Name wie
-// geschrieben in AName; 0 ohne. Ein Member-Aufruf ('X.DateToStr', X nicht
-// SysUtils) ist eine andere Routine und zaehlt nicht.
+// Die Familien der Aufrufe ASites: Datum/Uhrzeit (PAIR_DATE), Zahl
+// (PAIR_NUMBER).
+procedure FamiliesOf(const ASites: TCallSites; out AWantDate,
+  AWantNum: Boolean);
+var
+  i : Integer;
+begin
+  AWantDate := False;
+  AWantNum := False;
+  for i := 0 to High(ASites) do
+  begin
+    AWantDate := AWantDate or InList(ASites[i].Name.Low, PAIR_DATE);
+    AWantNum := AWantNum or InList(ASites[i].Name.Low, PAIR_NUMBER);
+  end;
+end;
+
+// Ist T ein Gegenstueck der Aufrufe ASites: ein Aufruf der gewuenschten
+// Familie, nicht einer der Aufrufe selbst, kein Member-Aufruf ('X.DateToStr',
+// X nicht SysUtils - eine andere Routine) und ohne eigene Einstellungen
+// (PassesInvariant)?
+function IsPartnerAt(AMap: TRdxCodeMap; const T: TRdxToken;
+  const ASites: TCallSites; AWantDate, AWantNum: Boolean): Boolean;
+var
+  P : TRdxToken;
+begin
+  Result := T.IsWord
+    and ((AWantDate and InList(T.Low, PAIR_DATE))
+         or (AWantNum and InList(T.Low, PAIR_NUMBER)))
+    and not IsEditedName(T, ASites);
+  if not Result then Exit;
+  P := Before(AMap, T);
+  Result := ((P.Low <> '.') or RtlQualified(AMap, P))
+    and not PassesInvariant(AMap, T);
+end;
+
+// Der weitere Aufruf der Familie(n) der Aufrufe ASites in den Zeilen
+// AFrom..ATo ohne Invariant (s. Kopf des Abschnitts), der ASites[0] am
+// NAECHSTEN steht: seine Zeile und sein Name wie geschrieben in AName; 0
+// ohne. Bis rwE31 Stufe 3 der ERSTE der Zeilen - FrameworkTestsU.pas:1964
+// nannte Zeile 1956 (s1 des vorigen Blocks) statt des direkt verglichenen
+// s2 in Zeile 1965, wbLOD.pas:3543 Zeile 1902 statt 3513.
 function PairBreakIn(AMap: TRdxCodeMap; const ASites: TCallSites;
   AFrom, ATo: Integer; out AName: string): Integer;
 var
   WantDate, WantNum : Boolean;
-  i, Li             : Integer;
-  T, P              : TRdxToken;
+  Li, Dist, Best    : Integer;
+  T                 : TRdxToken;
   LowText           : string;
-  InFamily          : Boolean;
 begin
   Result := 0;
   AName := '';
-  WantDate := False;
-  WantNum := False;
-  for i := 0 to High(ASites) do
-  begin
-    WantDate := WantDate or InList(ASites[i].Name.Low, PAIR_DATE);
-    WantNum := WantNum or InList(ASites[i].Name.Low, PAIR_NUMBER);
-  end;
+  if Length(ASites) = 0 then Exit;
+  Best := MaxInt;
+  FamiliesOf(ASites, WantDate, WantNum);
   for Li := AFrom to ATo do
   begin
+    Dist := Abs(Li - ASites[0].Name.Line);
+    if Dist >= Best then
+      Continue;
     LowText := LowerCase(AMap.Raw(Li));
     if not ((WantDate and MentionsAny(LowText, PAIR_DATE_HINTS))
             or (WantNum and MentionsAny(LowText, PAIR_NUMBER_HINTS))) then
@@ -863,18 +945,12 @@ begin
     T := NextToken(AMap, Li, 1);
     while (T.Low <> '') and (T.Line = Li) do
     begin
-      InFamily := T.IsWord
-        and ((WantDate and InList(T.Low, PAIR_DATE))
-             or (WantNum and InList(T.Low, PAIR_NUMBER)));
-      if InFamily and not IsEditedName(T, ASites) then
+      if IsPartnerAt(AMap, T, ASites, WantDate, WantNum) then
       begin
-        P := Before(AMap, T);
-        if ((P.Low <> '.') or RtlQualified(AMap, P))
-           and not PassesInvariant(AMap, T) then
-        begin
-          AName := TokText(AMap, T);
-          Exit(Li);
-        end;
+        AName := TokText(AMap, T);
+        Result := Li;
+        Best := Dist;
+        Break;
       end;
       T := After(AMap, T);
     end;
@@ -896,6 +972,292 @@ begin
     Result := PairBreakIn(AMap, ASites, R.Body.Line, R.EndTok.Line, AName);
   if Result = 0 then
     Result := PairBreakIn(AMap, ASites, 1, AMap.LineCount, AName);
+end;
+
+// ---- Gekoppelte Auswertung (Alt-Weg, rwE31 Stufe 3) ----
+// Nico-Ergaenzung zu M2: ein Gegenstueck, das in derselben Routine DIREKT
+// mit dem Ergebnis verglichen oder mit ihm gekoppelt ausgewertet wird, ist
+// kein Hinweisfall - nur diese Seite auf Invariant gestellt, bricht das
+// Verhalten; die Hilfe sperrt (CoupledReason). Fundstellen:
+// FrameworkTestsU.pas:1986 ('s1 := DateTimeToStr(lDate); s2 :=
+// DateTimeToStr(lDateToCompare); Assert.areEqual(s1,s2, ..)' - nur s2 auf
+// Invariant, und der Test scheitert ausser in en-US), :1964 (dasselbe mit
+// s1), MVCFramework.Validators.pas:1647 ('LStrValue := FloatToStr(..);
+// LDecimalPos := Pos(FormatSettings.DecimalSeparator, LStrValue)' - mit
+// Invariant findet Pos in Komma-Locales keinen Trenner mehr), SCA059
+// IDE.MainForm.pas:6170 (die Argumente des Format lesen selbst
+// FormatSettings.TimeSeparator - Invariant mischte beide Formate).
+// Gelesen wird je Stueck einer Anweisung (PiecesIn): die Token zwischen
+// ';' und den Schluesselwoertern PIECE_BREAKS - 'if s1 = s2 then' traegt
+// das Stueck 'if s1 = s2', 'Assert.AreEqual(s1, s2);' eines. Ein Stueck ist
+// gekoppelt, wenn es
+//   * einen der umgestellten Aufrufe traegt bzw. das Ziel V der
+//     umgestellten Zuweisung ('V := FloatToStr(..)') nennt und dazu
+//     FormatSettings liest (R_FS_COUPLED_SETTINGS);
+//   * V und das Ziel W eines Gegenstuecks (IsPartnerAt; 'W := DateToStr(..)')
+//     nennt, bzw. das umgestellte Stueck W nennt (R_FS_COUPLED_PAIR);
+//   * selbst das Gegenstueck traegt und V nennt ('if DateToStr(x) = V',
+//     'TryStrToCurr(V, y)' - R_FS_COUPLED_CALL).
+// V bzw. W zaehlen nur hinter einem schreibenden Aufruf (TEXT_WRITERS):
+// dann sind sie Text im jeweiligen Format; hinter einem Leser stehen Zahl
+// bzw. Datum, und deren Vergleich haengt nicht am Format.
+// Gemeldet wird die Kopplung mit dem Gegenstueck, das dem Aufruf am
+// naechsten steht. Ohne gefundene Routine (rbfUnsure, rbfNone) bleibt es
+// beim Hinweis (PairHint). Was ueber weitere Variablen laeuft, sieht die
+// Hilfe nicht - sie sperrt die direkte Kopplung, nicht jede.
+
+type
+  // Ein Stueck einer Anweisung: erstes und letztes Token (s. oben).
+  TPiece = record
+    First : TRdxToken;
+    Last  : TRdxToken;
+  end;
+  TPieces = array of TPiece;
+
+const
+  // Hier endet ein Stueck (dazu ';').
+  PIECE_BREAKS: array[0..10] of string = ('begin', 'end', 'then', 'do',
+    'else', 'try', 'finally', 'except', 'repeat', 'until', 'of');
+  NAME_VAR = 'var';
+  // Was TEXT schreibt (das Ziel V bzw. W traegt dann das Format; bei einem
+  // Leser ist es eine Zahl bzw. ein Datum - dessen Vergleich haengt nicht
+  // am Format: 'x := StrToCurr(s); r := FormatCurr(.., x)' ist keine
+  // Kopplung).
+  TEXT_WRITERS: array[0..10] of string = ('datetostr', 'timetostr',
+    'datetimetostr', 'formatdatetime', 'floattostr', 'currtostr',
+    'formatfloat', 'formatcurr', 'floattostrf', 'currtostrf', 'format');
+
+// Die Stuecke zwischen AFrom und ATo (beide ausgenommen).
+function PiecesIn(AMap: TRdxCodeMap; const AFrom, ATo: TRdxToken): TPieces;
+var
+  T, P : TRdxToken;
+  N    : Integer;
+  Open : Boolean;
+begin
+  Result := nil;
+  N := 0;
+  Open := False;
+  P := AFrom;
+  T := After(AMap, AFrom);
+  while (T.Low <> '') and TokBefore(T, ATo) do
+  begin
+    if (T.Low = ';')
+       or (IsKeywordAfter(T, P) and InList(T.Low, PIECE_BREAKS)) then
+      Open := False
+    else
+    begin
+      if not Open then
+      begin
+        if N = Length(Result) then
+          SetLength(Result, 2 * N + 16);
+        Result[N].First := T;
+        Inc(N);
+        Open := True;
+      end;
+      Result[N - 1].Last := T;
+    end;
+    P := T;
+    T := After(AMap, T);
+  end;
+  SetLength(Result, N);
+end;
+
+// Liegt T im Stueck APiece?
+function InPiece(const T: TRdxToken; const APiece: TPiece): Boolean;
+begin
+  Result := not TokBefore(T, APiece.First) and not TokBefore(APiece.Last, T);
+end;
+
+// Traegt das Stueck einen der Aufrufe ASites?
+function PieceHasSite(const APiece: TPiece; const ASites: TCallSites): Boolean;
+var
+  i : Integer;
+begin
+  for i := 0 to High(ASites) do
+    if InPiece(ASites[i].Name, APiece) then
+      Exit(True);
+  Result := False;
+end;
+
+// Nennt das Stueck den Namen ALow (klein) als Wort, nicht als Member
+// ('X.s1')? '' nie.
+function PieceNames(AMap: TRdxCodeMap; const APiece: TPiece;
+  const ALow: string): Boolean;
+var
+  T : TRdxToken;
+begin
+  Result := False;
+  if ALow = '' then Exit;
+  T := APiece.First;
+  while T.Low <> '' do
+  begin
+    if T.IsWord and (T.Low = ALow) and (Before(AMap, T).Low <> '.') then
+      Exit(True);
+    if SameTok(T, APiece.Last) then Exit;
+    T := After(AMap, T);
+  end;
+end;
+
+// Liest das Stueck FormatSettings - die globale Variable oder einen Member
+// dieses Namens (beide passen nicht zu Invariant)? AText: wie geschrieben
+// samt Feld ('FormatSettings.DecimalSeparator'), ALine seine Zeile.
+function PieceSettings(AMap: TRdxCodeMap; const APiece: TPiece;
+  out AText: string; out ALine: Integer): Boolean;
+var
+  T, D, F : TRdxToken;
+begin
+  Result := False;
+  AText := '';
+  ALine := 0;
+  T := APiece.First;
+  while T.Low <> '' do
+  begin
+    if T.IsWord and (T.Low = NAME_SETTINGS) then
+    begin
+      AText := TokText(AMap, T);
+      ALine := T.Line;
+      D := After(AMap, T);
+      F := After(AMap, D);
+      if (D.Low = '.') and F.IsWord and InPiece(F, APiece) then
+        AText := AText + '.' + TokText(AMap, F);
+      Exit(True);
+    end;
+    if SameTok(T, APiece.Last) then Exit;
+    T := After(AMap, T);
+  end;
+end;
+
+// Das Ziel einer Zuweisung am Anfang des Stuecks ('V := ..', auch die
+// Inline-Variable 'var V := ..'); leer ohne.
+function PieceTarget(AMap: TRdxCodeMap; const APiece: TPiece): TRdxToken;
+var
+  T, N : TRdxToken;
+begin
+  Result := Default(TRdxToken);
+  T := APiece.First;
+  if (T.Low = NAME_VAR) and not SameTok(T, APiece.Last) then
+    T := After(AMap, T);
+  if not T.IsWord or SameTok(T, APiece.Last) then Exit;
+  N := After(AMap, T);
+  if N.Low = ':=' then
+    Result := T;
+end;
+
+// Das erste Gegenstueck (IsPartnerAt) im Stueck; leer ohne.
+function PiecePartner(AMap: TRdxCodeMap; const APiece: TPiece;
+  const ASites: TCallSites; AWantDate, AWantNum: Boolean): TRdxToken;
+var
+  T : TRdxToken;
+begin
+  Result := Default(TRdxToken);
+  T := APiece.First;
+  while T.Low <> '' do
+  begin
+    if IsPartnerAt(AMap, T, ASites, AWantDate, AWantNum) then
+      Exit(T);
+    if SameTok(T, APiece.Last) then Exit;
+    T := After(AMap, T);
+  end;
+end;
+
+// Merkt den Grund AReason vor, wenn das Gegenstueck auf APartnerLine
+// naeher an ALine0 steht als das bisher beste (ABest), bei Gleichstand die
+// Kopplung auf ACoupleLine, die ALine0 am naechsten FOLGT (eine Kopplung
+// davor gilt einem frueheren Wert: FrameworkTestsU.pas:1964 - der
+// Vergleich in Zeile 1958 gehoert zum vorigen s1, der in 1966 zu diesem).
+procedure NoteCoupling(ALine0, APartnerLine, ACoupleLine: Integer;
+  const AReason: string; var ABest: Int64; var AResult: string);
+var
+  Score : Int64;
+  Ahead : Integer;
+begin
+  Ahead := ACoupleLine - ALine0;
+  if Ahead < 0 then
+    Ahead := MaxInt div 2 - Ahead;
+  Score := Int64(Abs(APartnerLine - ALine0)) * MaxInt + Ahead;
+  if Score < ABest then
+  begin
+    ABest := Score;
+    AResult := AReason;
+  end;
+end;
+
+// Der Grund der gekoppelten Auswertung (s. Kopf des Abschnitts); '' ohne.
+function CoupledReason(AMap: TRdxCodeMap; const ASites: TCallSites): string;
+var
+  R                 : TRdxRoutine;
+  Pieces            : TPieces;
+  Edited            : array of Boolean;
+  i, k, Li, Line0   : Integer;
+  V, W, Partner     : TRdxToken;
+  Text, Call        : string;
+  WantDate, WantNum : Boolean;
+  Writer            : Boolean;
+  Best              : Int64;
+begin
+  Result := '';
+  if (Length(ASites) = 0)
+     or (BeginBodyAround(AMap, ASites[0].Name, R) <> rbfFound) then
+    Exit;
+  Line0 := ASites[0].Name.Line;
+  Call := TokText(AMap, ASites[0].Name);
+  Pieces := PiecesIn(AMap, R.Body, R.EndTok);
+  SetLength(Edited, Length(Pieces));
+  V := Default(TRdxToken);
+  for i := 0 to High(Pieces) do
+  begin
+    Edited[i] := PieceHasSite(Pieces[i], ASites);
+    if Edited[i] and (V.Low = '') then
+      V := PieceTarget(AMap, Pieces[i]);
+  end;
+  // Nur ein schreibender Aufruf macht V zu Text im umgestellten Format.
+  Writer := False;
+  for i := 0 to High(ASites) do
+    Writer := Writer or InList(ASites[i].Name.Low, TEXT_WRITERS);
+  if not Writer then
+    V := Default(TRdxToken);
+  Best := High(Int64);
+  // FormatSettings im umgestellten Stueck bzw. neben V.
+  for i := 0 to High(Pieces) do
+    if Edited[i] and PieceSettings(AMap, Pieces[i], Text, Li) then
+      NoteCoupling(Line0, Li, Li, _(R_FS_COUPLED_SETTINGS, [Li, Call, Text]),
+        Best, Result)
+    else if (V.Low <> '') and PieceNames(AMap, Pieces[i], V.Low)
+            and PieceSettings(AMap, Pieces[i], Text, Li) then
+      NoteCoupling(Line0, Li, Li, _(R_FS_COUPLED_SETTINGS,
+        [Li, TokText(AMap, V), Text]), Best, Result);
+  if Result <> '' then Exit;
+  // Gegenstuecke derselben Familie.
+  FamiliesOf(ASites, WantDate, WantNum);
+  if not (WantDate or WantNum) then Exit;
+  for i := 0 to High(Pieces) do
+  begin
+    if Edited[i] then Continue;
+    Partner := PiecePartner(AMap, Pieces[i], ASites, WantDate, WantNum);
+    if Partner.Low = '' then Continue;
+    W := Default(TRdxToken);
+    if InList(Partner.Low, TEXT_WRITERS) then
+      W := PieceTarget(AMap, Pieces[i]);
+    if (V.Low <> '') and (W.Low <> V.Low)
+       and PieceNames(AMap, Pieces[i], V.Low) then
+      NoteCoupling(Line0, Partner.Line, Partner.Line, _(R_FS_COUPLED_CALL,
+        [Partner.Line, TokText(AMap, V), TokText(AMap, Partner)]), Best,
+        Result);
+    if (W.Low = '') or (W.Low = V.Low) then Continue;
+    for k := 0 to High(Pieces) do
+      if Edited[k] and PieceNames(AMap, Pieces[k], W.Low) then
+        NoteCoupling(Line0, Partner.Line, Pieces[k].First.Line,
+          _(R_FS_COUPLED_PAIR, [Pieces[k].First.Line, Call,
+          TokText(AMap, W), Partner.Line, TokText(AMap, Partner)]), Best,
+          Result)
+      else if (k <> i) and not Edited[k] and (V.Low <> '')
+              and PieceNames(AMap, Pieces[k], V.Low)
+              and PieceNames(AMap, Pieces[k], W.Low) then
+        NoteCoupling(Line0, Partner.Line, Pieces[k].First.Line,
+          _(R_FS_COUPLED_PAIR, [Pieces[k].First.Line, TokText(AMap, V),
+          TokText(AMap, W), Partner.Line, TokText(AMap, Partner)]), Best,
+          Result);
+  end;
 end;
 
 // Steht das Token T wie eine Deklaration da - 'T: Typ', 'T = Wert' oder
@@ -1494,6 +1856,9 @@ begin
   AReason := FileReason(AMap, Names, Sites, AInvariant, Settings);
   if (AReason = '') and AInvariant then
     AReason := CompareLiteralReason(AMap, ALine, Last, Sites);
+  // Gekoppelte Auswertung in derselben Routine (rwE31 Stufe 3).
+  if (AReason = '') and AInvariant then
+    AReason := CoupledReason(AMap, Sites);
   if AReason <> '' then
     Exit;
   BuildEdit(AMap, Sites, Settings, SPAN_128, AEdit);
@@ -1593,6 +1958,10 @@ begin
   Sites[0] := Site;
   AReason := FileReason(AMap, [TokText(AMap, Hits[0])], Sites, AInvariant,
     Settings);
+  // Gekoppelte Auswertung (rwE31 Stufe 3): IDE.MainForm.pas:6170 - die
+  // Argumente lesen selbst FormatSettings.TimeSeparator.
+  if (AReason = '') and AInvariant then
+    AReason := CoupledReason(AMap, Sites);
   if AReason <> '' then
     Exit;
   BuildEdit(AMap, Sites, Settings, SPAN_059, AEdit);
