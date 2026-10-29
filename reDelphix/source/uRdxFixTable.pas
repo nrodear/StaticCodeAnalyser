@@ -1984,7 +1984,12 @@ begin
     APlaces, ALines, AFinding, P);
   Result.ChangesBehavior := P.Changes;
   if not Result.Enabled then Exit;
-  if P.Changes then
+  // Verwaltet und nicht zuerst gesetzt (rwE30 Stufe 2): nur im Menue, der
+  // Hinweis nennt die Stelle (TRdxOutPlan.Caution, schon uebersetzt).
+  Result.MenuOnly := P.MenuOnly;
+  if P.MenuOnly then
+    Result.Hint := P.Caution
+  else if P.Changes then
     Result.Hint := _(R_OUT_MANAGED_HINT)
   else
     Result.Hint := _(R_OUT_PLAIN_HINT);

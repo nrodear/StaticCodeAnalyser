@@ -156,6 +156,15 @@ type
     class function UnitFileReason(const AUnitFile: string;
       AMap: TRdxCodeMap): string; static;
 
+    // SCA147, seit rwE30 Stufe 2 auch SCA086 (uRdxAvoidOutFix): implementiert
+    // die Klasse ab AClass (das Token 'class') ein Interface aus einer
+    // anderen Unit - direkt oder als Vorfahr eines Interfaces dieser Datei -
+    // bzw. eine Wurzel (IInterface/IUnknown/IDispatch), zu deren Membern
+    // ALowMethod gehoert? Dann kann die Methode ein Interface-Member sein.
+    // '' oder der Grund (Gate E des Detektors nachgebildet, s. Rumpf).
+    class function InterfaceMemberReason(AMap: TRdxCodeMap;
+      const AClass: TRdxToken; const ALowMethod: string): string; static;
+
     // SCA125 (uRdxInheritedEmptyFix, Charge A4): Deklaration D und
     // Implementierung R einer Methode loeschen wie bei SCA147 - Bereiche
     // samt '///'-Doku und Attributen ueber der Deklaration bzw. den
@@ -1388,6 +1397,12 @@ begin
   Check.Arg := AName;
   Check.MissingFmt := _(R_INC_MISSING);
   Result := IncludeChainReason(AUnitFile, AIncludes, Check);
+end;
+
+class function TRdxRoutineFixes.InterfaceMemberReason(AMap: TRdxCodeMap;
+  const AClass: TRdxToken; const ALowMethod: string): string;
+begin
+  Result := ForeignInterfaceReason(AMap, AClass, ALowMethod);
 end;
 
 class function TRdxRoutineFixes.UnitFileReason(const AUnitFile: string;

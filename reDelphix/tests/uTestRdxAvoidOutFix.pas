@@ -46,6 +46,14 @@ type
     [Test] procedure OtherHeadMismatch_NoHelp;
     [Test] procedure DeclarationMissingOrInclude_NoHelp;
     [Test] procedure Exported_NoHelp;
+    // rwE30 Stufe 2 (Sperre unnoetig): Interfaces derselben Unit ohne die
+    // Methode, Includes im Kopf der Unit, lokale Routinen.
+    [Test] procedure LocalInterfaces_Helps;
+    [Test] procedure HeaderInclude_Helps;
+    [Test] procedure LocalRoutines_ScopedToOuter;
+    // rwE30 Stufe 2 (mormot.lib.win7zip.pas:1070, ColorPreview.Parser.pas:
+    // 341): verwalteter Typ, nicht als erste Anweisung gesetzt.
+    [Test] procedure ManagedNotSetFirst_MenuOnly;
   end;
 
 {$IFNDEF FPC}
@@ -97,6 +105,15 @@ function GetUnit(const AHead: string; const AMembers: array of string): string;
 begin
   Result := ClassUnit(AHead, AMembers, ['procedure TFoo.Get(out S: string);',
     'begin', '  S := ''x'';', 'end;']);
+end;
+
+// Die Methode Get mit 'out S: string' unter private, ABody als Rumpf.
+function GetUnitBody(const ABody: array of string): string;
+begin
+  Result := Join(['unit t;', 'interface', 'type', '  TFoo = class',
+    '  private', '    procedure Get(out S: string);', '  end;',
+    'implementation', 'procedure TFoo.Get(out S: string);', 'begin'])
+    + #13#10 + Join(ABody) + #13#10 + Join(['end;', 'end.']);
 end;
 
 // Die Meldung des Detektors fuer Spalte ACol; ohne Spalte (0) eine Meldung
@@ -263,10 +280,14 @@ var
   P   : TRdxOutPlan;
 begin
   Src := ClassUnit('class', ['  private', '    procedure Get(out A, B: string);'],
-    ['procedure TFoo.Get(out A, B: string);', 'begin', 'end;']);
+    ['procedure TFoo.Get(out A, B: string);', 'begin', '  A := ''a'';',
+     '  B := ''b'';', 'end;']);
   Assert.AreEqual(StringReplace(Src, 'out A', 'var A', [rfReplaceAll]),
     Fix(Src, 'procedure Get(', P));
-  Assert.AreEqual('A', P.Name);
+  // Der Menuetext nennt beide Parameter, die die Ersetzung trifft (rwE30
+  // Stufe 2, MVCFramework.JWT.pas:698 'out Header, Payload' - bis dahin
+  // nur 'A').
+  Assert.AreEqual('A, B', P.Name);
 end;
 
 procedure TTestRdxAvoidOutFix.IsManagedType_PlainAndManaged;
@@ -398,7 +419,7 @@ begin
   AssertRefused(ClassUnit('class', ['  private',
     '    procedure Get(out A, B: string);'],
     ['procedure TFoo.Get(out A: string; out B: string);', 'begin', 'end;']),
-    'procedure Get(', _(R_OUT_MISMATCH, ['Get', 'A']));
+    'procedure Get(', _(R_OUT_MISMATCH, ['Get', 'A, B']));
 end;
 
 procedure TTestRdxAvoidOutFix.DeclarationMissingOrInclude_NoHelp;
@@ -441,6 +462,140 @@ begin
     '    procedure Get(out S: string);']), 'procedure Get(', _(R_OUT_VISIBLE));
   AssertRefused(GetUnit('class', ['  strict protected',
     '    procedure Get(out S: string);']), 'TFoo.Get(', _(R_OUT_VISIBLE));
+end;
+
+procedure TTestRdxAvoidOutFix.LocalInterfaces_Helps;
+var
+  Src : string;
+  P   : TRdxOutPlan;
+begin
+  // delphimvcframework MVCFramework.DotEnv.pas:96 (minimiert): TFoo
+  // implementiert IFoo und IBar, beide in derselben Unit, keines nennt Get.
+  // Bis dahin R_OUT_INTERFACES.
+  Src := Join(['unit t;', 'interface', 'type', '  IFoo = interface',
+    '    procedure Run;', '  end;', '  IBar = interface(IFoo)', '  end;',
+    '  TFoo = class(TInterfacedObject, IFoo, IBar)', '  private',
+    '    procedure Get(out S: string);', '  public', '    procedure Run;',
+    '  end;', 'implementation', 'procedure TFoo.Get(out S: string);', 'begin',
+    '  S := ''x'';', 'end;', 'procedure TFoo.Run;', 'begin', 'end;', 'end.']);
+  Assert.AreEqual(StringReplace(Src, 'out S', 'var S', [rfReplaceAll]),
+    Fix(Src, 'procedure Get(', P));
+  // Gegenprobe: ein Interface dieser Datei mit Get - ein dritter Kopf.
+  Src := StringReplace(Src, '    procedure Run;'#13#10'  end;'#13#10'  IBar',
+    '    procedure Get(out S: string);'#13#10'  end;'#13#10'  IBar', []);
+  AssertRefused(Src, 'TFoo.Get(', _(R_OUT_HEADS, [3, 'Get']));
+  // Gegenprobe: das lokale Interface erbt von einem fremden.
+  AssertRefused(GetUnit('class(TInterfacedObject, IFoo)', ['  private',
+    '    procedure Get(out S: string);', '  end;',
+    '  IFoo = interface(IForeign)']), 'procedure Get(',
+    _(R_OUT_INTERFACES, ['TFoo', 'Get']));
+end;
+
+// Die Hilfe muss gelten und nur im Menue stehen - mit dem Hinweis
+// R_OUT_NOT_FIRST fuer die Zeile mit AAt.
+procedure AssertMenuOnly(const ASource, AAt: string);
+var
+  P : TRdxOutPlan;
+  R : string;
+begin
+  Assert.IsTrue(PlanOn(ASource, 'procedure Get(', P, R), R);
+  Assert.IsTrue(P.MenuOnly, 'nur im Menue');
+  Assert.AreEqual(_(R_OUT_NOT_FIRST, ['s', 'Get', LineOf(ASource, AAt)]),
+    P.Caution);
+  Assert.AreEqual(StringReplace(ASource, 'out S', 'var S', [rfReplaceAll]),
+    Apply(ASource, P.Edits));
+end;
+
+procedure TTestRdxAvoidOutFix.ManagedNotSetFirst_MenuOnly;
+var
+  Src : string;
+  P   : TRdxOutPlan;
+begin
+  // mORMot mormot.lib.win7zip.pas:1070 (minimiert): dest wird nur bedingt
+  // gesetzt - mit var bliebe der alte Wert des Aufrufers ('result') stehen,
+  // wo out ihn leerte. Bis dahin sperrte R_OUT_INTERFACES (aus dem falschen
+  // Grund; die Interfaces stehen in derselben Datei), bzw. die Hilfe stand
+  // gekennzeichnet in der Gluehbirne (ColorPreview.Parser.pas:341).
+  AssertMenuOnly(GetUnitBody(['  if Ready then', '    S := ''x'';']),
+    '    S := ''x'';');
+  // Ein Exit vor dem Setzen.
+  AssertMenuOnly(GetUnitBody(['  if not Ready then', '    Exit;',
+    '  S := ''x'';']), '    Exit;');
+  // Gelesen auf der rechten Seite.
+  AssertMenuOnly(GetUnitBody(['  S := S + ''x'';']), '  S := S');
+  // Gegenprobe: zuerst gesetzt, dann bedingt weiter - in der Gluehbirne
+  // (gekennzeichnet wie bisher).
+  Src := GetUnitBody(['  S := '''';', '  if Ready then', '    S := ''x'';']);
+  Assert.AreEqual(StringReplace(Src, 'out S', 'var S', [rfReplaceAll]),
+    Fix(Src, 'procedure Get(', P));
+  Assert.IsTrue(P.Changes, 'verwaltet: gekennzeichnet');
+  Assert.IsFalse(P.MenuOnly, 'Gluehbirne');
+  // Gegenprobe: ein einfacher Typ braucht das nicht (out = var).
+  Src := ClassUnit('class', ['  private', '    procedure Get(out N: Integer);'],
+    ['procedure TFoo.Get(out N: Integer);', 'begin', '  if Ready then',
+     '    N := 1;', 'end;']);
+  Assert.AreEqual(StringReplace(Src, 'out N', 'var N', [rfReplaceAll]),
+    Fix(Src, 'procedure Get(', P));
+  Assert.IsFalse(P.MenuOnly, 'einfacher Typ: Gluehbirne');
+end;
+
+procedure TTestRdxAvoidOutFix.HeaderInclude_Helps;
+var
+  Src : string;
+  P   : TRdxOutPlan;
+begin
+  // cnwizards CnIDEVersion.pas:331 (minimiert): das einzige Include steht
+  // zwischen interface und uses - dort stehen nur Direktiven, es kann die
+  // Routine nicht deklarieren. Bis dahin R_OUT_INCLUDE.
+  Src := Join(['unit t;', 'interface', '{$I CnWizards.inc}', 'uses Classes;',
+    'implementation', 'procedure Load(out Count: Integer);', 'begin',
+    '  Count := 1;', 'end;', 'end.']);
+  Assert.AreEqual(StringReplace(Src, 'out Count', 'var Count', []),
+    Fix(Src, 'procedure Load(', P));
+  // mORMot test.core.data.pas: vor interface.
+  Src := Join(['unit t;', '{$I mormot.defines.inc}', 'interface',
+    'implementation', 'procedure Load(out Count: Integer);', 'begin',
+    '  Count := 1;', 'end;', 'end.']);
+  Assert.AreEqual(StringReplace(Src, 'out Count', 'var Count', []),
+    Fix(Src, 'procedure Load(', P));
+  // Gegenprobe: ein Include hinter implementation sperrt weiter
+  // (DeclarationMissingOrInclude_NoHelp).
+end;
+
+procedure TTestRdxAvoidOutFix.LocalRoutines_ScopedToOuter;
+var
+  Src : string;
+  P   : TRdxOutPlan;
+  R   : string;
+begin
+  // skia4delphi FMX.Skia.Canvas.pas:636/767/1470 (minimiert): drei lokale
+  // TryGetVMT in drei Routinen. Bis dahin R_OUT_HEADS (3 Koepfe).
+  Src := Join(['unit t;', 'interface', 'implementation', 'procedure A;',
+    '  function TryGetVMT(out V: Integer): Boolean;', '  begin',
+    '    V := 1;', '    Result := True;', '  end;', 'var', '  X: Integer;',
+    'begin', '  TryGetVMT(X);', 'end;', 'procedure B;',
+    '  function TryGetVMT(out V: Integer): Boolean;', '  begin',
+    '    V := 2;', '    Result := True;', '  end;', 'var', '  Y: Integer;',
+    'begin', '  TryGetVMT(Y);', 'end;', 'end.']);
+  Assert.IsTrue(PlanAt(Src, 16, Pos('out ', LineText(Src, 16)), P, R), R);
+  Assert.AreEqual<Integer>(1, Length(P.Edits), 'nur der Kopf in B');
+  Assert.AreEqual<Integer>(16, P.Edits[0].Span.StartLine);
+  // jvcl JvLinkLabelTextHandler.pas:455: lokal, ein Include im Kopf.
+  Src := Join(['unit t;', '{$I jvcl.inc}', 'interface', 'implementation',
+    'procedure A;', '  function GetWidth(out W: Integer): Boolean;',
+    '  begin', '    W := 1;', '    Result := True;', '  end;', 'var',
+    '  X: Integer;', 'begin', '  GetWidth(X);', 'end;', 'end.']);
+  Assert.IsTrue(PlanOn(Src, 'function GetWidth(', P, R), R);
+  // Gegenprobe: ein Zeiger auf die lokale Routine in ihrer Routine.
+  Src := Join(['unit t;', 'interface', 'implementation', 'procedure A;',
+    '  function TryGetVMT(out V: Integer): Boolean;', '  begin',
+    '    V := 1;', '    Result := True;', '  end;', 'begin', '  Run(@TryGetVMT);',
+    'end;', 'procedure B;', '  function TryGetVMT(out V: Integer): Boolean;',
+    '  begin', '    V := 2;', '    Result := True;', '  end;', 'begin',
+    'end;', 'end.']);
+  Assert.IsFalse(PlanAt(Src, 5, Pos('out ', LineText(Src, 5)), P, R),
+    'Zeiger in A');
+  Assert.AreEqual(_(R_OUT_REFERENCE, ['TryGetVMT', 11]), R);
 end;
 
 {$IFNDEF FPC}

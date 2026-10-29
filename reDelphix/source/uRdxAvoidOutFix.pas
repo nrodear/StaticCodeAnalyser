@@ -31,16 +31,20 @@ unit uRdxAvoidOutFix;
 //     Deklaration + Implementierung (Methode: Kopf in der Klasse und
 //     'TFoo.Bar'; Routine: Kopf im interface-Teil bzw. forward und Rumpf;
 //     oder nur der Rumpf - dann ohne Include-Datei, die ihn deklarieren
-//     koennte) - Overload, gleichnamige Methoden anderer Klassen,
-//     Deklaration oder Implementierung fehlt,
+//     koennte; eines im Kopf der Unit traegt nur Direktiven) - Overload,
+//     gleichnamige Methoden anderer Klassen, Deklaration oder
+//     Implementierung fehlt; bei einer lokalen Routine zaehlt nur ihre
+//     umschliessende Routine (rwE30 Stufe 2),
 //   * der Name steht im Code ohne Aufruf ('@Bar', 'OnX := Bar') - als
 //     Methodenzeiger aendert sich sein Typ,
 //   * die Methode ist virtual/dynamic/abstract/override/final, message,
 //     dispid oder overload bzw. hat eine Aufrufkonvention oder external,
 //   * sie steht unter published oder ohne Sichtbarkeit (eine Formdatei kann
-//     sie an ein Ereignis binden), ihre Klasse implementiert Interfaces
-//     (sie koennte eine Interface-Methode sein), oder ihre Deklaration
-//     steht nicht direkt in der Klasse,
+//     sie an ein Ereignis binden), ihre Klasse implementiert ein Interface
+//     aus einer anderen Unit oder eine Wurzel mit diesem Member (sie
+//     koennte eine Interface-Methode sein; Interfaces dieser Datei ohne den
+//     Namen sperren seit rwE30 Stufe 2 nicht), oder ihre Deklaration steht
+//     nicht direkt in der Klasse,
 //   * die Deklaration einer Routine steht in einem Typ (Methode eines
 //     interface-Typs u. a.),
 //   * der andere Kopf traegt das 'out' nicht genau so ('out A, B: T'),
@@ -96,6 +100,11 @@ const
   // R_CS_INTERFACE/R_CS_VISIBLE) - dieselbe msgid, dieselbe Uebersetzung.
   R_OUT_INTERFACE = 'the routine is declared in the interface section (line '
     + '%d) - other units can use it as a procedure value';
+  // rwE30 Stufe 2 (AssignedFirstReason): der Hinweis einer Hilfe nur im
+  // Menue.
+  R_OUT_NOT_FIRST = 'not in the light bulb - %s has a managed type and is '
+    + 'not set as the first statement of %s (line %d): with "var" the '
+    + 'caller''s old value can stay where "out" cleared it';
   R_OUT_VISIBLE = 'the method is visible outside the unit (not private, '
     + 'class in the interface section) - other units can use it as a method '
     + 'pointer';
@@ -106,10 +115,16 @@ type
   //            danach ablehnt
   //   Changes  verwalteter oder unbekannter Typ: aendert das Verhalten (E2)
   //   Edits    je Kopf das 'out' durch 'var', in der Reihenfolge der Datei
+  //   MenuOnly verwalteter Typ, und der Rumpf setzt den Parameter nicht als
+  //            erste Anweisung (AssignedFirstReason, rwE30 Stufe 2): die
+  //            Hilfe steht nur im Menue (TRdxFixOutcome.MenuOnly), Caution
+  //            ist ihr Hinweis (uebersetzt)
   TRdxOutPlan = record
-    Name    : string;
-    Changes : Boolean;
-    Edits   : TArray<TRdxEdit>;
+    Name     : string;
+    Changes  : Boolean;
+    Edits    : TArray<TRdxEdit>;
+    MenuOnly : Boolean;
+    Caution  : string;
   end;
 
   TRdxAvoidOutFix = class
@@ -133,7 +148,9 @@ uses
   System.SysUtils,
   uRefactorInfo,    // TRefactorSpan.Make
   uRdxText,         // _(): in die reDelphix-Sprache, nie uLocalization
-  uRdxBlocks;       // TRdxBlocks, HeadStart, HasDirective, EnclosingClass
+  uRdxBlocks,       // TRdxBlocks, HeadStart, HasDirective, EnclosingClass,
+                    // InsideTypeBody, IncludesUpTo
+  uRdxRoutineFixes; // InterfaceMemberReason (wie SCA147)
 
 const
   SPAN_086 = 'sca086';
@@ -163,6 +180,14 @@ const
     'pwidechar', 'tdatetime', 'tdate', 'ttime', 'thandle', 'hwnd',
     'tobject', 'tclass', 'tpoint', 'trect', 'tsize', 'tguid');
   SYSTEM_PREFIX = 'system.';
+  // So viele Koepfe liest OuterOf rueckwaerts hoechstens.
+  MAX_OUTER_STEPS = 400;
+  // AssignedFirstReason: Bloecke mit eigenem end bzw. until ...
+  BLOCK_OPENERS: array[0..4] of string = ('begin', 'try', 'case', 'asm',
+    'repeat');
+  // ... und Spruenge aus dem Rumpf.
+  JUMP_WORDS: array[0..5] of string = ('exit', 'raise', 'goto', 'break',
+    'continue', 'halt');
 
 type
   // Ein Routinenkopf mit dem gesuchten Namen.
@@ -334,9 +359,11 @@ begin
 end;
 
 // Alle Koepfe mit dem Namen ALow; AUseLine: die erste Zeile, auf der der
-// Name im Code ohne Aufruf steht ('@Bar', 'OnX := Bar'), 0 ohne.
+// Name im Code ohne Aufruf steht ('@Bar', 'OnX := Bar'), 0 ohne. Nur
+// zwischen AFrom und ATo (beide eingeschlossen), wenn AFrom.Low <> '' - der
+// Bereich einer Routine, die die gesuchte lokal deklariert.
 function HeadsNamed(AMap: TRdxCodeMap; const ALow: string;
-  out AUseLine: Integer): TRdxOutHeads;
+  const AFrom, ATo: TRdxToken; out AUseLine: Integer): TRdxOutHeads;
 var
   T : TRdxToken;
   H : TRdxOutHead;
@@ -347,7 +374,8 @@ begin
   T := NextTokenOnLineWith(AMap, Default(TRdxToken), ALow);
   while T.Low <> '' do
   begin
-    if T.Low = ALow then
+    if (T.Low = ALow) and ((AFrom.Low = '')
+       or (not TokBefore(T, AFrom) and not TokBefore(ATo, T))) then
     begin
       if HeadAt(AMap, T, H) then
       begin
@@ -444,7 +472,6 @@ var
   IR, DR         : TRdxRoutine;
   ClassLow, Disp : string;
   CH             : TRdxClassHead;
-  Heritage       : TArray<string>;
   Impl           : TRdxToken;
 begin
   Result := ImplReason(AMap, AImpl, AName, IR);
@@ -463,9 +490,16 @@ begin
   if (Impl.Low <> '') and TokBefore(CH.ClassTok, Impl)
      and not InList(CH.Vis, PRIVATE_VIS) then
     Exit(_(R_OUT_VISIBLE));
-  Heritage := TRdxBlocks.HeritageOf(AMap, CH.ClassTok);
-  if (Length(Heritage) > 1)
-     or ((Length(Heritage) = 1) and LooksLikeInterfaceName(Heritage[0])) then
+  // Interfaces der Klasse: nur eines aus einer anderen Unit (direkt oder
+  // als Vorfahr eines Interfaces dieser Datei) bzw. eine Wurzel mit einem
+  // Member dieses Namens sperrt - wie bei SCA147 (InterfaceMemberReason).
+  // Ein Interface dieser Datei mit einem Member gleichen Namens waere ein
+  // weiterer Kopf, und PairOf sperrte schon (rwE30 Stufe 2:
+  // delphimvcframework MVCFramework.DotEnv.pas:96, MVCFramework.Utils.pas:62,
+  // TemplatePro.pas:757 - alle Interfaces in derselben Unit, ohne die
+  // Methode).
+  if TRdxRoutineFixes.InterfaceMemberReason(AMap, CH.ClassTok,
+       LowerCase(AName)) <> '' then
     Exit(_(R_OUT_INTERFACES, [Disp, AName]));
   if TRdxBlocks.MethodDecl(AMap, HeadStart(AMap, ADecl.Kw), DR) <> '' then
     Exit(_(R_OUT_HEAD_UNSAFE, [AName]));
@@ -475,20 +509,30 @@ begin
 end;
 
 // Routine ohne eigene Deklaration: nur AImpl mit Rumpf, keine Include-
-// Datei. Steht der einzige Kopf in einem Typ, ist er die Methode eines
-// interface-Typs (oder einer Klasse ohne Implementierung hier). '' oder der
-// Grund.
+// Datei, die sie deklarieren koennte. Steht der einzige Kopf in einem Typ,
+// ist er die Methode eines interface-Typs (oder einer Klasse ohne
+// Implementierung hier). Includes im Kopf der Unit (vor interface bzw.
+// vor uses) tragen nur Direktiven (IncludesUpTo; rwE30 Stufe 2: cnwizards
+// CnIDEVersion.pas:331 'CnWizards.inc', jcl JclGraphics.pas:5302
+// 'jcl.inc', mORMot test.core.data.pas:1332 'mormot.defines.inc'). Eine
+// lokale Routine (AOuter.Head.Low <> '': ihre umschliessende Routine)
+// deklariert nur ein Include in AOuter. '' oder der Grund.
 function SingleReason(AMap: TRdxCodeMap; const AImpl: TRdxOutHead;
-  const AName: string): string;
+  const AName: string; const AOuter: TRdxRoutine): string;
 var
-  IR : TRdxRoutine;
+  IR      : TRdxRoutine;
+  Include : Boolean;
 begin
   if InsideTypeBody(AMap, HeadStart(AMap, AImpl.Kw)) then
     Exit(_(R_OUT_IN_TYPE, [AName]));
   Result := ImplReason(AMap, AImpl, AName, IR);
   if Result <> '' then
     Exit;
-  if Length(AllIncludes(AMap)) > 0 then
+  if AOuter.Head.Low <> '' then
+    Include := IncludeInLines(AMap, AOuter.Head.Line, AOuter.Last.Line) > 0
+  else
+    Include := Length(IncludesUpTo(AMap, AMap.LineCount)) > 0;
+  if Include then
     Exit(_(R_OUT_INCLUDE, [AName]));
   Result := DirectiveReason(IR, AName);
 end;
@@ -529,8 +573,8 @@ end;
 // Deklaration und Implementierung aus den Koepfen AHeads: '' mit dem Paar
 // (AHasDecl = False: nur die Implementierung), sonst der Grund.
 function PairOf(AMap: TRdxCodeMap; const AHeads: TRdxOutHeads;
-  const AName: string; out ADecl, AImpl: TRdxOutHead;
-  out AHasDecl: Boolean): string;
+  const AName: string; const AOuter: TRdxRoutine; out ADecl,
+  AImpl: TRdxOutHead; out AHasDecl: Boolean): string;
 var
   Q, U : TRdxOutHeads;
   H    : TRdxOutHead;
@@ -561,7 +605,7 @@ begin
   else if (Length(Q) = 0) and (Length(U) = 1) then
   begin
     AImpl := U[0];
-    Result := SingleReason(AMap, AImpl, AName);
+    Result := SingleReason(AMap, AImpl, AName, AOuter);
   end
   else if (Length(Q) = 0) and (Length(U) = 2) then
   begin
@@ -607,6 +651,154 @@ begin
     Result := _(R_OUT_MISMATCH, [AName, AParam]);
 end;
 
+// Ist ALow (klein) an T ein Sprung aus dem Rumpf - exit, raise, goto,
+// break, continue, halt (nicht hinter '.')?
+function JumpAt(const T, APrev: TRdxToken): Boolean;
+begin
+  Result := IsKeywordAfter(T, APrev) and InList(T.Low, JUMP_WORDS);
+end;
+
+// Wo im Rumpf von R wird der Parameter ALow zuerst genannt - als
+// Zuweisung 'ALow := ..' auf oberster Ebene, ohne Sprung davor? '' oder der
+// Grund mit der Zeile der Stelle, an der es scheitert.
+function FirstAssignReason(AMap: TRdxCodeMap; const R: TRdxRoutine;
+  const ALow, AName, ARoutine: string): string;
+var
+  T, P  : TRdxToken;
+  Depth : Integer;
+begin
+  // Vor dem Rumpf (lokale Routinen, Deklarationsteil) sperrt jede Nennung.
+  T := After(AMap, R.HeaderEnd);
+  while (T.Low <> '') and TokBefore(T, R.Body) do
+  begin
+    if SameIdent(T.Low, ALow) and (Before(AMap, T).Low <> '.') then
+      Exit(_(R_OUT_NOT_FIRST, [AName, ARoutine, T.Line]));
+    T := After(AMap, T);
+  end;
+  Depth := 1;
+  P := R.Body;
+  T := After(AMap, R.Body);
+  while (T.Low <> '') and TokBefore(T, R.EndTok) do
+  begin
+    if IsKeywordAfter(T, P) then
+    begin
+      if InList(T.Low, BLOCK_OPENERS) then
+        Inc(Depth)
+      else if (T.Low = 'end') or (T.Low = 'until') then
+        Dec(Depth);
+    end;
+    if JumpAt(T, P) then
+      Exit(_(R_OUT_NOT_FIRST, [AName, ARoutine, T.Line]));
+    if SameIdent(T.Low, ALow) and (P.Low <> '.') then
+    begin
+      if (Depth = 1) and ((P.Low = ';') or SameTok(P, R.Body))
+         and (After(AMap, T).Low = ':=') then
+      begin
+        // Die rechte Seite darf ihn nicht lesen ('S := S + ..').
+        P := T;
+        T := After(AMap, After(AMap, T));
+        while (T.Low <> '') and (T.Low <> ';') and TokBefore(T, R.EndTok) do
+        begin
+          if SameIdent(T.Low, ALow) and (P.Low <> '.') then
+            Exit(_(R_OUT_NOT_FIRST, [AName, ARoutine, T.Line]));
+          P := T;
+          T := After(AMap, T);
+        end;
+        Exit('');
+      end;
+      Exit(_(R_OUT_NOT_FIRST, [AName, ARoutine, T.Line]));
+    end;
+    P := T;
+    T := After(AMap, T);
+  end;
+  Result := _(R_OUT_NOT_FIRST, [AName, ARoutine, R.EndTok.Line]);
+end;
+
+// Verwaltete Typen (Changes): out gibt den Wert des Aufrufers beim Aufruf
+// frei, var nicht. Gleich bleibt das nur, wenn der Rumpf den Parameter als
+// erste Anweisung auf oberster Ebene setzt - ohne Sprung (Exit, raise ..)
+// und ohne Lesen davor; sonst bleibt mit var auf einem Weg der alte Wert
+// stehen, wo out ihn leerte (rwE30 Stufe 2: mORMot mormot.lib.win7zip.pas:
+// 1070 'GetPropUtf8(.. out dest: RawUtf8)' setzt dest nur bedingt, die
+// Aufrufer reichen 'result' durch; ColorPreview.Parser.pas:341). Je Name
+// aus ANames ('a,b'). '' oder der Hinweis (R_OUT_NOT_FIRST) - auch ohne
+// lesbaren begin-Rumpf (asm).
+function AssignedFirstReason(AMap: TRdxCodeMap; const AImpl: TRdxOutHead;
+  const ANames, AName: string): string;
+var
+  R     : TRdxRoutine;
+  Rest  : string;
+  Comma : Integer;
+begin
+  if (TRdxBlocks.ReadRoutine(AMap, AImpl.Kw, R) <> '')
+     or (R.Body.Low <> 'begin') then
+    Exit(_(R_OUT_NOT_FIRST, [ANames, AName, AImpl.Kw.Line]));
+  Result := '';
+  Rest := ANames;
+  while (Result = '') and (Rest <> '') do
+  begin
+    Comma := Pos(',', Rest);
+    if Comma = 0 then
+      Comma := Length(Rest) + 1;
+    Result := FirstAssignReason(AMap, R, Copy(Rest, 1, Comma - 1),
+      Copy(Rest, 1, Comma - 1), AName);
+    Delete(Rest, 1, Comma);
+  end;
+end;
+
+// Die Namen hinter AOut bis zum ':' wie im Text, mit ', ' verbunden ('out
+// Header, Payload: T' -> 'Header, Payload'): der Menuetext nennt jeden
+// Parameter, den die Ersetzung trifft (rwE30 Stufe 2, Fragwuerdig:
+// MVCFramework.JWT.pas:698, IndyDirectSingleFlushTestU.pas:260 - bis dahin
+// nur der erste).
+function ParamNames(AMap: TRdxCodeMap; const AOut: TRdxToken): string;
+var
+  T : TRdxToken;
+begin
+  T := After(AMap, AOut);
+  Result := TokText(AMap, T);
+  T := After(AMap, T);
+  while T.Low = ',' do
+  begin
+    T := After(AMap, T);
+    if not T.IsWord then Break;
+    Result := Result + ', ' + TokText(AMap, T);
+    T := After(AMap, T);
+  end;
+end;
+
+// Ist der Kopf ab AKw eine lokale Routine - steht er im Deklarationsteil
+// einer Routine (zwischen ihrem Kopf und ihrem begin)? Dann AOuter. Von AKw
+// rueckwaerts ueber die Koepfe (TRdxBlocks.HeadBefore) bis zum Abschnitt der
+// Unit, hoechstens MAX_OUTER_STEPS Koepfe (sonst: nicht lokal - die Sperren
+// fuer die ganze Datei bleiben).
+function OuterOf(AMap: TRdxCodeMap; const AKw: TRdxToken;
+  out AOuter: TRdxRoutine): Boolean;
+var
+  T, Head : TRdxToken;
+  Step    : TRdxHeadStep;
+  n       : Integer;
+begin
+  Result := False;
+  AOuter := Default(TRdxRoutine);
+  Head := HeadStart(AMap, AKw);
+  T := Head;
+  n := 0;
+  while (n < MAX_OUTER_STEPS)
+     and TRdxBlocks.HeadBefore(AMap, T, UNIT_BOUNDS, Step) do
+  begin
+    Inc(n);
+    if Step.Stop then Exit;
+    if (Step.Reason = '') and (Step.Routine.Body.Low <> '')
+       and TokBefore(Step.Routine.Head, Head)
+       and TokBefore(Head, Step.Routine.Body) then
+    begin
+      AOuter := Step.Routine;
+      Exit(True);
+    end;
+  end;
+end;
+
 class function TRdxAvoidOutFix.OutToVar(AMap: TRdxCodeMap; ALine: Integer;
   const AMessage: string; out APlan: TRdxOutPlan;
   out AReason: string): Boolean;
@@ -619,6 +811,7 @@ var
   Own, Decl, Impl : TRdxOutHead;
   Heads          : TRdxOutHeads;
   HasDecl        : Boolean;
+  Outer          : TRdxRoutine;
 begin
   Result := False;
   APlan := Default(TRdxOutPlan);
@@ -636,7 +829,7 @@ begin
     AReason := _(R_OUT_UNTYPED);
     Exit;
   end;
-  APlan.Name := TokText(AMap, After(AMap, OutTok));
+  APlan.Name := ParamNames(AMap, OutTok);
   APlan.Changes := IsManagedType(Typ);
   Open := ListOpen(AMap, OutTok);
   if Open.Low = '' then
@@ -657,11 +850,22 @@ begin
   Name := TokText(AMap, Own.Name);
   // Gebrauch ohne Aufruf, dann das Paar der Koepfe (der gemeldete ist einer
   // davon).
-  Heads := HeadsNamed(AMap, Own.Name.Low, UseLine);
+  Heads := HeadsNamed(AMap, Own.Name.Low, Default(TRdxToken),
+    Default(TRdxToken), UseLine);
+  // Eine lokale Routine sieht nur ihre umschliessende Routine - dort zaehlen
+  // Koepfe, Gebrauch und Includes (rwE30 Stufe 2: skia4delphi
+  // FMX.Skia.Canvas.pas:636/767/1470 drei lokale 'TryGetVMT' in drei
+  // Routinen; jvcl JvLinkLabelTextHandler.pas:455 'GetWidth'). Gefragt nur,
+  // wenn die ganze Datei sperrte - HeadBefore liest Routine fuer Routine.
+  Outer := Default(TRdxRoutine);
+  if not Own.Qual and ((Length(Heads) > 1) or (UseLine > 0)
+     or (Length(IncludesUpTo(AMap, AMap.LineCount)) > 0))
+     and OuterOf(AMap, Own.Kw, Outer) then
+    Heads := HeadsNamed(AMap, Own.Name.Low, Outer.Head, Outer.Last, UseLine);
   if UseLine > 0 then
     AReason := _(R_OUT_REFERENCE, [Name, UseLine])
   else
-    AReason := PairOf(AMap, Heads, Name, Decl, Impl, HasDecl);
+    AReason := PairOf(AMap, Heads, Name, Outer, Decl, Impl, HasDecl);
   if AReason <> '' then
     Exit;
   DeclOut := Default(TRdxToken);
@@ -676,6 +880,16 @@ begin
     True, Found);
   if AReason <> '' then
     Exit;
+  // Verwaltet und nicht zuerst gesetzt: die Hilfe gilt (gekennzeichnet),
+  // aber nur im Menue - wie weit der alte Wert reicht, entscheiden die
+  // Aufrufer (rwE30 Stufe 2: mormot.lib.win7zip.pas:1070 reicht 'result'
+  // durch; Fragwuerdig ColorPreview.Parser.pas:341, MVCFramework.JWT.pas:
+  // 698 - verhaltensaendernd und in der Gluehbirne).
+  if APlan.Changes then
+  begin
+    APlan.Caution := AssignedFirstReason(AMap, Impl, Names, Name);
+    APlan.MenuOnly := APlan.Caution <> '';
+  end;
   if HasDecl then
     AddEdit(APlan.Edits, OutEdit(AMap, DeclOut));
   if Found.Low <> '' then
