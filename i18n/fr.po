@@ -6954,6 +6954,9 @@ msgstr "le gestionnaire est dans %s - \"raise;\" sauterait le reste (inherited, 
 msgid "the try only releases (%s) - an error while freeing or closing is swallowed on purpose so that the cleanup after it still runs; \"raise;\" would skip it"
 msgstr "le try ne fait que libérer (%s) - une erreur lors de la libération ou de la fermeture est avalée exprès pour que le nettoyage qui suit s'exécute ; \"raise;\" le sauterait"
 
+msgid "the function reports the failure through its result (Result := False in line %d before the try, Result := True in line %d in the try part) - \"raise;\" would break callers that only check the result"
+msgstr "la fonction signale l'échec par son résultat (Result := False ligne %d avant le try, Result := True ligne %d dans le try) - \"raise;\" casserait les appelants qui ne vérifient que le résultat"
+
 msgid "the case selects on characters or strings - every other value is normal input there (a lexer, a parser); raise would break it"
 msgstr "le case porte sur des caractères ou des chaînes - toute autre valeur y est une entrée normale (un lexer, un parser) ; raise le casserait"
 

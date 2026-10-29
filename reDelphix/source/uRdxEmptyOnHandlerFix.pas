@@ -37,6 +37,12 @@ unit uRdxEmptyOnHandlerFix;
 //     (DestructorReason, rwE30 HeidiSQL dbconnection.pas:10202): 'raise;'
 //     ueberspraenge den Rest (inherited) und liesse eine Exception aus dem
 //     Destruktor;
+//   * die Routine ist eine Funktion, die den Fehler ueber ihr Ergebnis
+//     meldet - 'Result := False' vor dem try, 'Result := True' auf oberster
+//     Ebene des try-Teils (TryParseReason, rwE31 Stufe 3: issrc
+//     Compiler.SetupCompiler.pas:2100 StrToInteger64, 'Returns True if
+//     successful, or False if ... an overflow occurred'): 'raise;' braeche
+//     den Vertrag fuer jeden Aufrufer, der nur das Ergebnis prueft;
 //   * der try-Teil ist eine einzige Freigabe (Free, PQfinish,
 //     sqlite3_finalize, Close ... - ReleaseGuardReason, rwE30 HeidiSQL
 //     dbconnection.pas:2928/2968): der Fehler beim Freigeben wird mit
@@ -74,6 +80,10 @@ const
   R_EOH_RELEASE   = 'the try only releases (%s) - an error while freeing or '
     + 'closing is swallowed on purpose so that the cleanup after it still '
     + 'runs; "raise;" would skip it';
+  R_EOH_TRYPARSE  = 'the function reports the failure through its result '
+    + '(Result := False in line %d before the try, Result := True in line %d '
+    + 'in the try part) - "raise;" would break callers that only check the '
+    + 'result';
 
 type
   // Der Planer von SCA159 (Form TRdxMapPlanner, uRdxFixRunner).
@@ -362,6 +372,43 @@ begin
     Result := _(R_EOH_DESTRUCTOR, [R.Name]);
 end;
 
+// Ein Schritt der Tiefe vorwaerts im try-Teil (ReleaseGuardReason,
+// TryParseReason): Bloecke (END_OPENERS und repeat..until) und Klammern
+// zaehlen. True, wenn T die Tiefe aenderte.
+function StepDepth(const T, P: TRdxToken; var ADepth: Integer): Boolean;
+begin
+  Result := True;
+  if IsKeywordAfter(T, P) and (IsEndOpener(T.Low) or (T.Low = 'repeat')) then
+    Inc(ADepth)
+  else if IsKeywordAfter(T, P) and ((T.Low = 'end') or (T.Low = 'until')) then
+    Dec(ADepth)
+  else if (T.Low = '(') or (T.Low = '[') then
+    Inc(ADepth)
+  else if (T.Low = ')') or (T.Low = ']') then
+    Dec(ADepth)
+  else
+    Result := False;
+end;
+
+// Steht an T die ganze Zuweisung 'Name := AValue' - Name einer aus ANames
+// ('result' oder der Name der Funktion), nicht hinter '.', '&' oder '@',
+// dahinter das Ende der Anweisung?
+function ResultAssignAt(AMap: TRdxCodeMap; const T: TRdxToken;
+  const ANames: array of string; const AValue: string): Boolean;
+var
+  A, V : TRdxToken;
+begin
+  Result := False;
+  if not T.IsWord or not InList(T.Low, ANames)
+     or InList(Before(AMap, T).Low, IDENT_PREFIXES) then
+    Exit;
+  A := After(AMap, T);
+  if A.Low <> ':=' then Exit;
+  V := After(AMap, A);
+  Result := (V.Low = AValue)
+    and InList(After(AMap, V).Low, [';', 'end', 'except', 'finally', 'else']);
+end;
+
 // Gibt der Aufruf an T etwas frei (RELEASE_ENDS) - ein Name mit '(' oder
 // ';' dahinter bzw. hinter einem '.'?
 function IsReleaseCall(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
@@ -401,24 +448,63 @@ begin
   while (T.Low <> '') and TokBefore(T, ExceptTok) do
   begin
     P := Before(AMap, T);
-    if IsKeywordAfter(T, P) and (IsEndOpener(T.Low) or (T.Low = 'repeat')) then
-      Inc(Depth)
-    else if IsKeywordAfter(T, P) and ((T.Low = 'end') or (T.Low = 'until')) then
-      Dec(Depth)
-    else if (T.Low = '(') or (T.Low = '[') then
-      Inc(Depth)
-    else if (T.Low = ')') or (T.Low = ']') then
-      Dec(Depth)
-    // Ein ';' auf oberster Ebene vor dem letzten: mehr als eine Anweisung.
-    else if (T.Low = ';') and (Depth = 0)
-       and not SameTok(After(AMap, T), ExceptTok) then
-      Exit
-    else if (Hit.Low = '') and IsReleaseCall(AMap, T) then
-      Hit := T;
+    if not StepDepth(T, P, Depth) then
+    begin
+      // Ein ';' auf oberster Ebene vor dem letzten: mehr als eine
+      // Anweisung.
+      if (T.Low = ';') and (Depth = 0)
+         and not SameTok(After(AMap, T), ExceptTok) then
+        Exit;
+      if (Hit.Low = '') and IsReleaseCall(AMap, T) then
+        Hit := T;
+    end;
     T := After(AMap, T);
   end;
   if Hit.Low <> '' then
     Result := _(R_EOH_RELEASE, [TokText(AMap, Hit)]);
+end;
+
+// Meldet die Funktion um den Handler den Fehler ueber ihr Ergebnis? Vor
+// dem try (ab dem begin der Routine) 'Result := False', im try-Teil auf
+// oberster Ebene 'Result := True' (auch mit dem Namen der Funktion statt
+// Result) - das Try-Parse-Muster: der leere Handler laesst False stehen,
+// und das ist der Vertrag (rwE31 Stufe 3, issrc Compiler.SetupCompiler.pas:
+// 2100 StrToInteger64 - 'raise;' machte aus False eine Ausnahme fuer jeden
+// Aufrufer, der nur das Ergebnis prueft). '' oder der Grund.
+function TryParseReason(AMap: TRdxCodeMap; const AHead: TOnHead): string;
+var
+  R                         : TRdxRoutine;
+  TryTok, ExceptTok, T      : TRdxToken;
+  FalseTok, TrueTok         : TRdxToken;
+  Depth                     : Integer;
+  FnLow                     : string;
+begin
+  Result := '';
+  if BeginBodyAround(AMap, AHead.OnTok, R) <> rbfFound then Exit;
+  if (R.Keyword.Low <> 'function') or (Length(R.Parts) = 0) then Exit;
+  if not TryOfHandler(AMap, AHead, TryTok, ExceptTok) then Exit;
+  FnLow := R.Parts[High(R.Parts)];
+  FalseTok := Default(TRdxToken);
+  T := After(AMap, R.Body);
+  while (T.Low <> '') and TokBefore(T, TryTok) do
+  begin
+    if ResultAssignAt(AMap, T, ['result', FnLow], 'false') then
+      FalseTok := T;
+    T := After(AMap, T);
+  end;
+  if FalseTok.Low = '' then Exit;
+  TrueTok := Default(TRdxToken);
+  Depth := 0;
+  T := After(AMap, TryTok);
+  while (T.Low <> '') and TokBefore(T, ExceptTok) do
+  begin
+    if not StepDepth(T, Before(AMap, T), Depth) and (Depth = 0)
+       and ResultAssignAt(AMap, T, ['result', FnLow], 'true') then
+      TrueTok := T;
+    T := After(AMap, T);
+  end;
+  if TrueTok.Low <> '' then
+    Result := _(R_EOH_TRYPARSE, [FalseTok.Line, TrueTok.Line]);
 end;
 
 function CleanupReason(AMap: TRdxCodeMap; const AHead: TOnHead): string;
@@ -561,6 +647,8 @@ begin
     AReason := CommentReason(AMap, Head, Body);
   if AReason = '' then
     AReason := DestructorReason(AMap, Head);
+  if AReason = '' then
+    AReason := TryParseReason(AMap, Head);
   if AReason = '' then
     AReason := ReleaseGuardReason(AMap, Head);
   if AReason = '' then

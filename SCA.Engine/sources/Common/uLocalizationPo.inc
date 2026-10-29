@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6998 Zeilen, 327929 Bytes
-  CPoLines_de: array[0..6997] of string = (
+  // i18n\de.po - 7001 Zeilen, 328338 Bytes
+  CPoLines_de: array[0..7000] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6975,6 +6975,9 @@ const
     'msgid "the try only releases (%s) - an error while freeing or closing is swallowed on purpose so that the cleanup after it still runs; \"raise;\" would skip it"',
     'msgstr "der try-Teil gibt nur frei (%s) - ein Fehler beim Freigeben oder Schlie'#$00DF'en wird mit Absicht geschluckt, damit das Aufr'#$00E4'umen danach l'#$00E4'uft; \"raise;\" '#$00FC'berspr'#$00E4'nge es"',
     '',
+    'msgid "the function reports the failure through its result (Result := False in line %d before the try, Result := True in line %d in the try part) - \"raise;\" would break callers that only check the result"',
+    'msgstr "die Funktion meldet den Fehler '#$00FC'ber ihr Ergebnis (Result := False in Zeile %d vor dem try, Result := True in Zeile %d im try-Teil) - \"raise;\" br'#$00E4'che Aufrufer, die nur das Ergebnis pr'#$00FC'fen"',
+    '',
     'msgid "the case selects on characters or strings - every other value is normal input there (a lexer, a parser); raise would break it"',
     'msgstr "das case w'#$00E4'hlt nach Zeichen oder Strings - jeder andere Wert ist dort gew'#$00F6'hnliche Eingabe (ein Lexer, ein Parser); raise br'#$00E4'che ihn"',
     '',
@@ -7287,8 +7290,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6994 Zeilen, 341151 Bytes
-  CPoLines_fr: array[0..6993] of string = (
+  // i18n\fr.po - 6997 Zeilen, 341564 Bytes
+  CPoLines_fr: array[0..6996] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14244,6 +14247,9 @@ const
     '',
     'msgid "the try only releases (%s) - an error while freeing or closing is swallowed on purpose so that the cleanup after it still runs; \"raise;\" would skip it"',
     'msgstr "le try ne fait que lib'#$00E9'rer (%s) - une erreur lors de la lib'#$00E9'ration ou de la fermeture est aval'#$00E9'e expr'#$00E8's pour que le nettoyage qui suit s''ex'#$00E9'cute ; \"raise;\" le sauterait"',
+    '',
+    'msgid "the function reports the failure through its result (Result := False in line %d before the try, Result := True in line %d in the try part) - \"raise;\" would break callers that only check the result"',
+    'msgstr "la fonction signale l'''#$00E9'chec par son r'#$00E9'sultat (Result := False ligne %d avant le try, Result := True ligne %d dans le try) - \"raise;\" casserait les appelants qui ne v'#$00E9'rifient que le r'#$00E9'sultat"',
     '',
     'msgid "the case selects on characters or strings - every other value is normal input there (a lexer, a parser); raise would break it"',
     'msgstr "le case porte sur des caract'#$00E8'res ou des cha'#$00EE'nes - toute autre valeur y est une entr'#$00E9'e normale (un lexer, un parser) ; raise le casserait"',
