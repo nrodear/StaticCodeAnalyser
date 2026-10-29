@@ -1680,9 +1680,11 @@ Nachher:
 
 **Nicht angeboten**
 
-- X ist nicht in der Unit deklariert (Property, geerbtes Feld) oder steht im `with`-Block
+- X ist weder vom Quellstellen-Dienst noch aus dem Text als Variable bewiesen (Property, geerbtes Feld, Variable einer anderen Unit) oder ein `with`-Rumpf umfasst die Zeile; ein Parameter oder eine lokale Variable – auch einer verschachtelten Routine – verdeckt dabei eine gleichnamige Property der Unit, ein Feld der eigenen Klasse und eine Variable auf Unit-Ebene (auch `threadvar`, `X: T = nil`) gelten als bewiesen
 - der Typ von X ist in der Unit – auch über einen Alias – ein `record`, `object`, `interface`, ein Zeiger (`PFoo = ^TFoo`) oder ein eigener Typ (`= type ..`), die Unit deklariert eine Routine `Free`, oder der Typ ist nach Konvention ein Zeiger einer anderen Unit (`PEVP_PKEY`, auch hinter einem Alias der Unit) – `FreeAndNil` nimmt nur ein `TObject`
-- eine Direktive vor `X.Free;` (das nil würde bedingt)
+- eine Direktive vor `X.Free;`, wenn eine Konfiguration es dadurch allein hinter `then`/`else`/`do` stellt (das nil würde bedingt), oder ein Include davor
+- die Stelle liegt in einem Zweig nur für Compiler vor Delphi 5 (`{$IFNDEF GX_VER130_up}`, `{$IFNDEF WIN32}`) – dort gibt es kein `FreeAndNil`
+- die nil-Zeile trägt einen `{..}`-Kommentar oder einen `//`-Kommentar, der `FreeAndNil` nennt, oder beide Zeilen tragen einen (ein anderer `//`-Kommentar wandert an die FreeAndNil-Zeile)
 - die Zeile trägt ein anderes Paar als die Meldung (Zeile verschoben)
 - ein Kommentar im Ausdruck (`X{owned}.Free;`, `X.{c}Free;`, `X.Free {c};`) – der Detektor meldet diese Formen wie `X.Free;`, der Grund nennt den Kommentar
 - `System.SysUtils` fehlt und die uses-Klausel trägt Direktiven oder liegt in einem `$IFDEF`-Zweig
@@ -3168,7 +3170,7 @@ begin
 
 **Nicht angeboten**
 
-- X ist kein bloßer Bezeichner (`Self.X`, Pfad) oder nicht in der Unit deklariert; `with`-Block
+- X ist kein bloßer Bezeichner (`Self.X`, Pfad) oder nicht als Variable bewiesen (wie bei SCA085); ein `with`-Rumpf umfasst die Zeile
 - der Typ von X ist in der Unit – auch über einen Alias – ein `record`, `object`, `interface`, ein Zeiger oder ein eigener Typ (`= type ..`; `Free` ist dort eine eigene Methode bzw. die des Ziels), die Unit deklariert eine Routine `Free`, oder der Typ ist nach Konvention ein Zeiger einer anderen Unit (auch hinter einem Alias der Unit)
 - X ist ein `const`- bzw. `constref`-Parameter (FPC: Fehler, Delphi bis 10.3: E2197; ab 10.4 würde nur die lokale Kopie nil)
 - `Free` mit Klammern oder mehrfach auf der Zeile, `X.Destroy`
@@ -3206,9 +3208,10 @@ Nachher:
 **Nicht angeboten**
 
 - der Vergleich ist nicht der ganze Ausdruck einer Bedingung, Zuweisung oder eines Arguments: davor steht nicht `if`, `while`, `until`, `(`, `:=` oder `,`, dahinter nicht `then`, `do`, `)`, `;`, `,`, `else` oder `end` – der Operatorrang: `if A = B and C` heißt `A = (B and C)`, `not A = B` heißt `(not A) = B`, und bei `a + b = c` meldet der Detektor den Teil `b = c`
-- ein Operand ist nicht als Single, Double, Extended oder Real bewiesen – Currency vergleicht als Festkommatyp exakt; ein unbekannter Typ (auch in einer verschachtelten Routine) oder ein eigener Alias wie `TFloat`; Single gegen etwas anderes als Single (die Überladungen von SameValue wären mehrdeutig)
+- ein Operand ist nicht als Single, Double, Extended oder Real bewiesen – Currency vergleicht als Festkommatyp exakt; ein unbekannter Typ oder ein eigener Alias wie `TFloat` (ein Parameter oder eine lokale Variable einer verschachtelten Routine ist bewiesen); Single gegen etwas anderes als Single oder eine ganze Zahl (die Überladungen von SameValue wären mehrdeutig)
 - das Wächter-Idiom `if X = 0 then X := ...` und jeder Fund, den der Detektor als gewollt herabstuft
-- eine `with`-Anweisung in der Routine, ein eigenes `SameValue` bzw. `IsZero` in der Datei
+- ein `with`-Rumpf um den Vergleich – außer jedes Ziel ist ein bloßer Name, dessen Typ ein Record dieser Unit nur mit Feldern ist (ein Operand, der ein Feld davon ist, hat dessen Typ) –, ein eigenes `SameValue` bzw. `IsZero` in der Datei
+- die Stelle liegt in einem Zweig nur für Compiler vor Delphi 6 (`{$IFNDEF COMPILER6_UP}`) – dort gibt es `Math.IsZero`/`SameValue` nicht
 - der Vergleich steht nicht oder mehrfach auf der Zeile, trägt einen Kommentar oder steht in einer Aufzählung `(A = 1, B = 2)`
 - `Math` fehlt und die uses-Klausel trägt Direktiven oder liegt in einem `$IFDEF`-Zweig
 
