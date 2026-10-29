@@ -398,6 +398,60 @@ begin
             StartsStr('//', ARelPath);
 end;
 
+function TrueCaseRelPath(const ABaseFull, ARelPath: string;
+  ACache: TDictionary<string, string>): string;
+// Der relative Pfad in der Schreibweise, die auf der PLATTE steht.
+//
+// WARUM (Sonar-Roundtrip-Pruefung 2026-10-29): Sonar ordnet ein Issue
+// seiner Datei per exaktem, gross-/kleinschreibungsTREUEM Vergleich des
+// relativen Pfads zu - auch unter Windows. Der Scanner kennt die Datei so,
+// wie sie im Verzeichnis steht; weicht der filePath nur in der Schreibweise
+// ab, verwirft Sonar das Issue still als "unknown file". Genau das passiert
+// bei Formdateien: die Engine bildet den DFM-Namen aus dem Unit-Namen
+// (TStaticFiles.PairedFormFile, ChangeFileExt(.., '.dfm')), unter Windows
+// findet TFile.Exists die 'ABOUT.DFM' auch als 'ABOUT.dfm'. Gemessen am
+// Realwelt-Korpus: 960 DFM-Issues in 48 Dateien mit falscher Endung.
+//
+// Repariert wird hier am Export und nicht an der Quelle: eine andere
+// Schreibweise im Fund aendert dessen Identitaet in SARIF, Baseline und
+// A/B-Referenzen; der Sonar-Export dagegen braucht die Platten-Schreibweise
+// zwingend und kann sie billig nachschlagen.
+//
+// ABaseFull: GetFullPath der Wurzel MIT abschliessendem Trenner. ARelPath
+// mit '/' (Ausgabe von MakeRelative). Je Verzeichnisebene EIN FindFirst,
+// zwischengespeichert in ACache - bei einem grossen Korpus sind das so
+// viele Abfragen wie es verschiedene Ordner und Dateien mit Funden gibt.
+// Was FindFirst nicht findet, bleibt wie es war.
+var
+  Parts : TArray<string>;
+  Dir   : string;
+  Key   : string;
+  Real  : string;
+  SR    : TSearchRec;
+  I     : Integer;
+begin
+  Parts := ARelPath.Split(['/']);
+  Dir   := ABaseFull;
+  for I := 0 to High(Parts) do
+  begin
+    Key := AnsiUpperCase(Dir + Parts[I]);
+    if not ACache.TryGetValue(Key, Real) then
+    begin
+      Real := Parts[I];
+      if (Real <> '') and (Real <> '.') and (Real <> '..') and
+         (FindFirst(Dir + Real, faAnyFile, SR) = 0) then
+      begin
+        Real := SR.Name;
+        FindClose(SR);
+      end;
+      ACache.Add(Key, Real);
+    end;
+    Parts[I] := Real;
+    Dir := Dir + Real + PathDelim;
+  end;
+  Result := string.Join('/', Parts);
+end;
+
 { ---- TSonarGenericWriter ---- }
 
 procedure WStr(AStream: TStream; const S: string);
@@ -507,43 +561,59 @@ function EmitIssues(AStream: TStream;
 // issues[]. Liefert die Anzahl der Pfade, die ausserhalb von ABaseDir lagen
 // und deshalb absolut blieben.
 var
-  F       : TLeakFinding;
-  Meta    : TRuleMeta;
-  RelPath : string;
-  First   : Boolean;
+  F         : TLeakFinding;
+  Meta      : TRuleMeta;
+  RelPath   : string;
+  First     : Boolean;
+  BaseFull  : string;
+  CaseCache : TDictionary<string, string>;
 begin
   Result := 0;
   First  := True;
   // s. EmitRules - der Guard steht auch hier lokal, damit die Zusage
   // nicht am Aufrufer haengt.
   if not Assigned(AFindings) then Exit;
-  for F in AFindings do
-  begin
-    if F.Kind = fkFileReadError then Continue;
-    Meta    := TRuleCatalog.GetRuleCanonical(F.Kind);  // kanonisch, s.o.
-    // s. EmitRules - beide Schleifen muessen dieselbe Menge sehen, sonst
-    // zeigt der Report Regeln ohne Funde oder Funde ohne Regel (letzteres
-    // lehnt der Validator ab: checkRuleExistsInReport).
-    if not AKeepDowngraded and IsDowngraded(F, Meta) then Continue;
-    // Die DRITTE Bedingung aus EmitRules, die hier bis 08.09. fehlte: dort
-    // faellt ein Fund ohne Regel-ID raus, hier nicht - das Ergebnis waere
-    // ein Issue ohne zugehoerige Regel, und genau das lehnt der Validator
-    // ab (checkRuleExistsInReport). Nicht ein Fund fehlt dann, sondern der
-    // ganze Report wird verworfen.
-    //
-    // HEUTE IST DER ZWEIG EIN NO-OP, und das ist so gemessen: die
-    // Fallback-Metadaten bauen die ID aus dem Ordinalwert des Kinds
-    // (Format('SCA%.3d', [Ord(K) + 1]) in TRuleCatalog.MakeFallbackMeta),
-    // sie kann also nicht leer werden. Er steht hier, weil die Zusage
-    // "beide Schleifen sehen dieselbe Menge" sonst nur im Kommentar
-    // darueber steht und nicht im Code - und weil der Preis eines
-    // Irrtums der komplette Report ist.
-    if EffectiveRuleID(F, Meta) = '' then Continue;
-    RelPath := MakeRelative(F.FileName, ABaseDir);
-    if PathLeftAbsolute(RelPath) then Inc(Result);
-    if not First then WStr(AStream, ',');
-    First := False;
-    WObj(AStream, BuildIssueObject(F, RelPath, Meta));
+  // Ohne Wurzel gibt es keinen relativen Pfad, dessen Schreibweise man
+  // nachschlagen koennte (MakeRelative reicht den Pfad dann durch).
+  if ABaseDir <> '' then
+    BaseFull := IncludeTrailingPathDelimiter(TPath.GetFullPath(ABaseDir))
+  else
+    BaseFull := '';
+  CaseCache := TDictionary<string, string>.Create;
+  try
+    for F in AFindings do
+    begin
+      if F.Kind = fkFileReadError then Continue;
+      Meta    := TRuleCatalog.GetRuleCanonical(F.Kind);  // kanonisch, s.o.
+      // s. EmitRules - beide Schleifen muessen dieselbe Menge sehen, sonst
+      // zeigt der Report Regeln ohne Funde oder Funde ohne Regel (letzteres
+      // lehnt der Validator ab: checkRuleExistsInReport).
+      if not AKeepDowngraded and IsDowngraded(F, Meta) then Continue;
+      // Die DRITTE Bedingung aus EmitRules, die hier bis 08.09. fehlte: dort
+      // faellt ein Fund ohne Regel-ID raus, hier nicht - das Ergebnis waere
+      // ein Issue ohne zugehoerige Regel, und genau das lehnt der Validator
+      // ab (checkRuleExistsInReport). Nicht ein Fund fehlt dann, sondern der
+      // ganze Report wird verworfen.
+      //
+      // HEUTE IST DER ZWEIG EIN NO-OP, und das ist so gemessen: die
+      // Fallback-Metadaten bauen die ID aus dem Ordinalwert des Kinds
+      // (Format('SCA%.3d', [Ord(K) + 1]) in TRuleCatalog.MakeFallbackMeta),
+      // sie kann also nicht leer werden. Er steht hier, weil die Zusage
+      // "beide Schleifen sehen dieselbe Menge" sonst nur im Kommentar
+      // darueber steht und nicht im Code - und weil der Preis eines
+      // Irrtums der komplette Report ist.
+      if EffectiveRuleID(F, Meta) = '' then Continue;
+      RelPath := MakeRelative(F.FileName, ABaseDir);
+      if PathLeftAbsolute(RelPath) then
+        Inc(Result)
+      else if BaseFull <> '' then
+        RelPath := TrueCaseRelPath(BaseFull, RelPath, CaseCache);
+      if not First then WStr(AStream, ',');
+      First := False;
+      WObj(AStream, BuildIssueObject(F, RelPath, Meta));
+    end;
+  finally
+    CaseCache.Free;
   end;
 end;
 

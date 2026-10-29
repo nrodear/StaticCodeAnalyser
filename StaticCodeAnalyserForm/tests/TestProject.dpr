@@ -122,6 +122,7 @@ uses
   uTestDetectorTimings in 'uTestDetectorTimings.pas',
   uTestExportSarifDiagnostics in 'uTestExportSarifDiagnostics.pas',
   uTestExportSonarTextRange in 'uTestExportSonarTextRange.pas',
+  uTestExportSonarRoundtrip in 'uTestExportSonarRoundtrip.pas',
   uTestContrastColor in 'uTestContrastColor.pas',
   uTestUiElementRegistry in 'uTestUiElementRegistry.pas',
   uTestSonarPush in 'uTestSonarPush.pas',
