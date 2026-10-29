@@ -67,6 +67,29 @@ type
       const AClause: TRdxUsesClause; AIndex: Integer; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
+    // SCA007, Bezeichner-Beweis (Nico 2026-10-29, Realworld-Test rwE30
+    // Stufe 2: 21 Fehler, alle auf Funden, deren Unit doch gebraucht wurde -
+    // mrOk, crHourGlass, fsBold, TShortCut, CN_NOTIFY ... stehen in keiner
+    // Bezeichnerliste des Detektors): der erste Bezeichner der Datei im Stil
+    // einer Bibliothek, den der Planer keiner Quelle zuordnen kann - '' heisst
+    // "Beweis vollstaendig", sonst steht die Hilfe nur im Menue
+    // (TRdxFixOutcome.MenuOnly). Im Stil einer Bibliothek: ein Typ (T, I oder
+    // E, dann ein Grossbuchstabe: TShortCut, ITaskbarList), ein
+    // Aufzaehlungswert (zwei oder drei Kleinbuchstaben, dann ein
+    // Grossbuchstabe: mrOk, clNone, akLeft), eine Konstante (GROSS_..:
+    // CM_MOUSEENTER, CSIDL_PERSONAL) oder ein Aufruf eines gross beginnenden
+    // Namens (InRange(..), ValidParentForm(..)). Zugeordnet ist er, wenn die
+    // Datei ihn deklariert (Typ, Konstante, Variable, Feld, Parameter,
+    // Routine, Property, Aufzaehlungswert - eine Textregel, s. ScanDecls), ihn
+    // AKnown nennt (die bekannten Bezeichner der UEBRIGEN uses-Eintraege,
+    // klein; der Aufrufer fragt den Detektor) oder er aus System kommt
+    // (SYSTEM_NAMES). Nicht gefragt: Member hinter '.', die uses-Klauseln,
+    // Kommentare und Strings. GRENZE: Namen ohne diesen Stil (Screen, Mouse,
+    // Application) prueft die Regel nicht - sie stehen meist in den Listen
+    // des Detektors. ALine: die Zeile des Bezeichners.
+    class function ForeignIdent(AMap: TRdxCodeMap;
+      const AKnown: TArray<string>; out ALine: Integer): string; static;
+
     // SCA168: ein else vor das end des case-Statements auf Zeile ALine
     // (genau ein 'case' im Code der Zeile). AStatement = '': leer ('else'
     // vor 'end', bedeutungsgleich); sonst diese Anweisung im else-Zweig
@@ -114,6 +137,8 @@ implementation
 
 uses
   System.SysUtils,
+  System.Generics.Collections,   // TDictionary (ForeignIdent)
+  uRdxBlocks, // TypeHasBody (ForeignIdent: Typ mit Rumpf)
   uRdxText;   // _() und die gemeinsamen Texte der Gruende (Entscheid E29)
 
 const
@@ -160,6 +185,54 @@ const
     + 'the case - a branch can leave the parenthesis open, so it is unclear '
     + 'whether the case is a statement';
   R_BRANCH = 'no then/else/do at the reported place';
+  // SCA007, Bezeichner-Beweis (ForeignIdent, ScanDecls). Davor steht ein
+  // Name, den die Datei deklariert ...
+  NAMING_WORDS: array[0..5] of string = ('procedure', 'function',
+    'constructor', 'destructor', 'property', 'operator');
+  UNIT_HEADS: array[0..3] of string = ('unit', 'program', 'library',
+    'package');
+  // ... davor beginnt im Anweisungsteil eine Liste 'A, B: T' (Inline-
+  // Variable, 'on E: Exception') ...
+  INLINE_DECL_PREV: array[0..4] of string = ('var', 'const', 'out', 'on',
+    'threadvar');
+  // ... davor beginnt im Deklarationsteil 'Name = ..' (Typ, Konstante).
+  EQ_DECL_PREV: array[0..9] of string = (';', 'type', 'const',
+    'resourcestring', ']', 'private', 'protected', 'public', 'published',
+    'strict');
+  // Typen mit Rumpf und end, wenn davor '=' bzw. 'packed' steht.
+  BODY_TYPES: array[0..3] of string = ('class', 'object', 'interface',
+    'dispinterface');
+  BODY_TYPE_PREV: array[0..1] of string = ('=', 'packed');
+  STMT_OPENERS: array[0..2] of string = ('begin', 'try', 'asm');
+  // Der Stapel der offenen Bloecke (ScanDecls): Anweisungsteil, record, Typ.
+  BLOCK_STMT   = 's';
+  BLOCK_RECORD = 'r';
+  BLOCK_TYPE   = 'd';
+  // Aus System (und Compiler-Magie), klein: was die Stil-Regeln von
+  // ForeignIdent trifft und nie aus einer uses-Unit kommt - Typen, Routinen,
+  // die eingebauten Typen als Umwandlung ('Integer(X)').
+  SYSTEM_NAMES: array[0..136] of string = ('tobject', 'tclass', 'tguid',
+    'tdatetime', 'tdate', 'ttime', 'tvarrec', 'tarray', 'tmethod',
+    'tinterfacedobject', 'iinterface', 'iunknown', 'iinvokable', 'idispatch',
+    'tinterfacedclass', 'tvardata', 'tcustomattribute', 'tmonitor', 'tbytes',
+    'tfilerec', 'ttextrec', 'tthreadid', 'ioresult', 'tboundarray',
+    'tptrwrapper', 'ienumerable', 'ienumerator', 'assigned', 'length',
+    'setlength', 'high', 'low', 'inc', 'dec', 'ord', 'chr', 'succ', 'pred',
+    'sizeof', 'typeinfo', 'copy', 'delete', 'insert', 'pos', 'trunc',
+    'round', 'abs', 'sqr', 'sqrt', 'exit', 'halt', 'new', 'dispose', 'getmem',
+    'freemem', 'reallocmem', 'fillchar', 'move', 'include', 'exclude', 'odd',
+    'swap', 'lo', 'hi', 'ptr', 'addr', 'val', 'str', 'random', 'randomize',
+    'assert', 'concat', 'upcase', 'writeln', 'write', 'readln', 'read',
+    'assign', 'assignfile', 'reset', 'rewrite', 'append', 'closefile', 'eof',
+    'eoln', 'blockread', 'blockwrite', 'seek', 'filepos', 'filesize',
+    'finalize', 'initialize', 'default', 'typeof', 'paramstr', 'paramcount',
+    'int', 'frac', 'exp', 'ln', 'sin', 'cos', 'arctan', 'uniquestring',
+    'stringofchar', 'setstring', 'slice', 'integer', 'cardinal', 'byte',
+    'word', 'longint', 'longword', 'shortint', 'smallint', 'int64', 'uint64',
+    'nativeint', 'nativeuint', 'boolean', 'char', 'ansichar', 'widechar',
+    'ansistring', 'widestring', 'unicodestring', 'shortstring', 'pointer',
+    'pchar', 'pansichar', 'pwidechar', 'single', 'double', 'extended',
+    'currency', 'variant', 'olevariant');
 
 type
   // Code-Token eines Bereichs nach Art (CountRangeTokens).
@@ -427,6 +500,274 @@ begin
   AEdit.Expected := RangeText(AMap, Span);
   AEdit.NewText := '';
   Result := True;
+end;
+
+{ ---- SCA007: Bezeichner-Beweis (ForeignIdent) ---- }
+
+// Alle Code-Token der Datei der Reihe nach (Strings und Kommentare sieht der
+// Token-Leser nicht).
+function AllCodeTokens(AMap: TRdxCodeMap): TArray<TRdxToken>;
+var
+  T : TRdxToken;
+  n : Integer;
+begin
+  SetLength(Result, 256);
+  n := 0;
+  T := NextToken(AMap, 1, 1);
+  while T.Low <> '' do
+  begin
+    if n = Length(Result) then
+      SetLength(Result, 2 * n);
+    Result[n] := T;
+    Inc(n);
+    T := After(AMap, T);
+  end;
+  SetLength(Result, n);
+end;
+
+// Low des Tokens Nummer AIndex; '' ausserhalb.
+function LowOf(const AToks: TArray<TRdxToken>; AIndex: Integer): string;
+begin
+  if (AIndex < 0) or (AIndex > High(AToks)) then
+    Result := ''
+  else
+    Result := AToks[AIndex].Low;
+end;
+
+// Ein Wort, das die Datei als Schluesselwort liest: reserviert und nicht
+// hinter '&', '@' oder '.'.
+function ReservedAt(const AToks: TArray<TRdxToken>; AIndex: Integer): Boolean;
+begin
+  Result := AToks[AIndex].IsWord and InList(AToks[AIndex].Low, RESERVED)
+    and not InList(LowOf(AToks, AIndex - 1), IDENT_PREFIXES);
+end;
+
+// Die Aufzaehlungswerte '(a, b, c)' ab der '(' Nummer AOpen als deklariert.
+procedure AddEnumValues(const AToks: TArray<TRdxToken>; AOpen: Integer;
+  ADecl: TDictionary<string, Boolean>);
+var
+  j, Depth : Integer;
+begin
+  Depth := 1;
+  j := AOpen + 1;
+  while (j <= High(AToks)) and (Depth > 0) do
+  begin
+    if AToks[j].Low = '(' then
+      Inc(Depth)
+    else if AToks[j].Low = ')' then
+      Dec(Depth)
+    else if (Depth = 1) and AToks[j].IsWord
+       and ((LowOf(AToks, j - 1) = '(') or (LowOf(AToks, j - 1) = ',')) then
+      ADecl.AddOrSetValue(AToks[j].Low, True);
+    Inc(j);
+  end;
+end;
+
+// Eine Liste 'A, B: T' ab dem Wort Nummer k: True, wenn hinter dem letzten
+// Namen ein ':' steht (kein ':=' - das ist ein eigenes Token); AEnd ist das
+// letzte Wort.
+function ColonList(const AToks: TArray<TRdxToken>; k: Integer;
+  out AEnd: Integer): Boolean;
+begin
+  AEnd := k;
+  while (LowOf(AToks, AEnd + 1) = ',') and (AEnd + 2 <= High(AToks))
+     and AToks[AEnd + 2].IsWord do
+    Inc(AEnd, 2);
+  Result := LowOf(AToks, AEnd + 1) = ':';
+end;
+
+// Ein Schritt des Blockstapels (ScanDecls) am Schluesselwort Nummer k:
+// begin/try/asm und ein case ausserhalb eines records oeffnen einen
+// Anweisungsteil, record und ein Typ mit Rumpf einen Deklarationsblock,
+// end schliesst den innersten.
+procedure StepBlocks(AMap: TRdxCodeMap; const AToks: TArray<TRdxToken>;
+  k: Integer; var AStack: string);
+var
+  W : string;
+begin
+  W := AToks[k].Low;
+  if InList(W, STMT_OPENERS) then
+    AStack := AStack + BLOCK_STMT
+  else if W = 'case' then
+  begin
+    // 'case' im record ist der Variantenteil - er endet mit dem record.
+    if Copy(AStack, Length(AStack), 1) <> BLOCK_RECORD then
+      AStack := AStack + BLOCK_STMT;
+  end
+  else if W = 'record' then
+    AStack := AStack + BLOCK_RECORD
+  else if InList(W, BODY_TYPES) and InList(LowOf(AToks, k - 1), BODY_TYPE_PREV)
+     and TypeHasBody(AMap, AToks[k]) then
+    AStack := AStack + BLOCK_TYPE
+  else if (W = 'end') and (AStack <> '') then
+    SetLength(AStack, Length(AStack) - 1);
+end;
+
+// Die Namen, die die Datei deklariert (klein, nach ADecl) - eine Textregel:
+//   - hinter procedure/function/constructor/destructor/property/operator und
+//     unit/program/library/package (bei 'TFoo.Bar' beide Glieder),
+//   - eine Liste 'A, B: T' in Klammern (Parameter), im Deklarationsteil
+//     (Variable, Feld, Konstante mit Typ) oder hinter var/const/out/on/
+//     threadvar (Inline-Variable, 'on E: Exception'); im Anweisungsteil
+//     sonst nicht - 'mrOk:' ist dort die Marke eines case-Zweigs,
+//   - 'Name =' bzw. 'Name<' im Deklarationsteil hinter ';', type, const,
+//     resourcestring, ']' oder einem Abschnittswort (Typ, Konstante) samt
+//     der Aufzaehlungswerte '= (a, b)',
+//   - im Anweisungsteil das Wort hinter var/const (Inline 'var X := ..').
+// Ein Wort zu viel hiesse hier "deklariert", also eine Gluehbirne zu viel -
+// darum die Strenge im Anweisungsteil.
+procedure ScanDecls(AMap: TRdxCodeMap; const AToks: TArray<TRdxToken>;
+  ADecl: TDictionary<string, Boolean>);
+var
+  k, q, Last, Paren : Integer;
+  Stack, P, N       : string;
+  InUses, Stmt      : Boolean;
+begin
+  Stack := '';
+  Paren := 0;
+  InUses := False;
+  for k := 0 to High(AToks) do
+  begin
+    P := LowOf(AToks, k - 1);
+    N := LowOf(AToks, k + 1);
+    if InUses then
+    begin
+      InUses := AToks[k].Low <> ';';
+      Continue;
+    end;
+    if (AToks[k].Low = '(') or (AToks[k].Low = '[') then
+      Inc(Paren)
+    else if ((AToks[k].Low = ')') or (AToks[k].Low = ']')) and (Paren > 0) then
+      Dec(Paren);
+    Stmt := Pos(BLOCK_STMT, Stack) > 0;
+    if ReservedAt(AToks, k) then
+    begin
+      InUses := AToks[k].Low = 'uses';
+      StepBlocks(AMap, AToks, k, Stack);
+      Continue;
+    end;
+    if not AToks[k].IsWord or InList(P, IDENT_PREFIXES) then Continue;
+    if InList(P, NAMING_WORDS) or InList(P, UNIT_HEADS) then
+    begin
+      ADecl.AddOrSetValue(AToks[k].Low, True);
+      if (N = '.') and (k + 2 <= High(AToks)) then
+        ADecl.AddOrSetValue(AToks[k + 2].Low, True);
+      Continue;
+    end;
+    if Stmt and ((P = 'var') or (P = 'const')) then
+      ADecl.AddOrSetValue(AToks[k].Low, True);
+    if ((N = ',') or (N = ':')) and (P <> ',') and ColonList(AToks, k, Last)
+       and ((Paren > 0) or not Stmt or InList(P, INLINE_DECL_PREV)) then
+    begin
+      q := k;
+      while q <= Last do
+      begin
+        ADecl.AddOrSetValue(AToks[q].Low, True);
+        Inc(q, 2);
+      end;
+    end;
+    if ((N = '=') or (N = '<')) and (Paren = 0) and not Stmt
+       and InList(P, EQ_DECL_PREV) then
+    begin
+      ADecl.AddOrSetValue(AToks[k].Low, True);
+      if (N = '=') and (LowOf(AToks, k + 2) = '(') then
+        AddEnumValues(AToks, k + 2, ADecl);
+    end;
+  end;
+end;
+
+function IsUpperAZ(C: Char): Boolean;
+begin
+  Result := (C >= 'A') and (C <= 'Z');
+end;
+
+function IsLowerAZ(C: Char): Boolean;
+begin
+  Result := (C >= 'a') and (C <= 'z');
+end;
+
+// Traegt S den Stil eines Bibliotheks-Bezeichners (s. ForeignIdent)?
+// ACall: dahinter steht '('.
+function LibraryStyle(const S: string; ACall: Boolean): Boolean;
+var
+  i, n, Bar : Integer;
+  Prefix    : Boolean;
+begin
+  Result := False;
+  n := Length(S);
+  if n < 2 then Exit;
+  // Typ: T/I/E, Grossbuchstabe, irgendwo ein Kleinbuchstabe (nicht 'TRUE').
+  if (n >= 3) and CharInSet(S[1], ['T', 'I', 'E']) and IsUpperAZ(S[2]) then
+    for i := 3 to n do
+      if IsLowerAZ(S[i]) then
+        Exit(True);
+  // Aufzaehlungswert: zwei oder drei Kleinbuchstaben, ein Grossbuchstabe,
+  // mindestens ein Zeichen dahinter.
+  i := 1;
+  while (i <= n) and IsLowerAZ(S[i]) do
+    Inc(i);
+  if (i >= 3) and (i <= 4) and (i < n) and IsUpperAZ(S[i]) then
+    Exit(True);
+  // Konstante: mindestens zwei Grossbuchstaben/Ziffern vor dem ersten '_'.
+  Bar := Pos('_', S);
+  if (Bar >= 3) and (Bar < n) and IsUpperAZ(S[1]) then
+  begin
+    Prefix := True;
+    for i := 1 to Bar - 1 do
+      if not (IsUpperAZ(S[i]) or CharInSet(S[i], ['0'..'9'])) then
+        Prefix := False;
+    if Prefix then
+      Exit(True);
+  end;
+  Result := ACall and IsUpperAZ(S[1]);
+end;
+
+class function TRdxStructFixes.ForeignIdent(AMap: TRdxCodeMap;
+  const AKnown: TArray<string>; out ALine: Integer): string;
+var
+  Toks   : TArray<TRdxToken>;
+  Decl   : TDictionary<string, Boolean>;
+  k      : Integer;
+  P, S   : string;
+  InUses : Boolean;
+begin
+  Result := '';
+  ALine := 0;
+  Toks := AllCodeTokens(AMap);
+  Decl := TDictionary<string, Boolean>.Create;
+  try
+    for S in SYSTEM_NAMES do
+      Decl.AddOrSetValue(S, True);
+    for S in AKnown do
+      Decl.AddOrSetValue(LowerCase(S), True);
+    ScanDecls(AMap, Toks, Decl);
+    InUses := False;
+    for k := 0 to High(Toks) do
+    begin
+      if InUses then
+      begin
+        InUses := Toks[k].Low <> ';';
+        Continue;
+      end;
+      if ReservedAt(Toks, k) then
+      begin
+        InUses := Toks[k].Low = 'uses';
+        Continue;
+      end;
+      P := LowOf(Toks, k - 1);
+      if not Toks[k].IsWord or (P = '.') or (P = '&') or (P = 'inherited')
+         or Decl.ContainsKey(Toks[k].Low) then
+        Continue;
+      S := TokText(AMap, Toks[k]);
+      if LibraryStyle(S, LowOf(Toks, k + 1) = '(') then
+      begin
+        ALine := Toks[k].Line;
+        Exit(S);
+      end;
+    end;
+  finally
+    Decl.Free;
+  end;
 end;
 
 { ---- SCA168 ---- }
