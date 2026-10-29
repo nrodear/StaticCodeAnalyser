@@ -718,7 +718,6 @@ begin
   Result := '';
   T := Trim(AText);
   P := 1;
-  Ok := False;
   if InList(ALow, PARSE_NUMBER) then
   begin
     if not InvariantNumberFits(T) then

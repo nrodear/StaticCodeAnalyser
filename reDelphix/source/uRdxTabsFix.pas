@@ -663,7 +663,8 @@ begin
     if HasPrev and (Prev.Indent <> Cur.Indent)
        and ((Pos(TAB, Prev.Indent) > 0) or (Pos(TAB, Cur.Indent) > 0)) then
     begin
-      Applies := False;
+      // Applies kommt aus dem letzten Kandidaten - TAB_CANDIDATES ist nie
+      // leer, die Schleife setzt es immer (H2077 bei Vorbelegung).
       for c := 0 to High(TAB_CANDIDATES) do
       begin
         Applies := PairRule(Prev, Cur, TAB_CANDIDATES[c], AStep, V, M);
