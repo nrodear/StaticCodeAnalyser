@@ -1320,9 +1320,12 @@ var
 begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxHttpsFix.Https);
-  // rwE29: in Testcode vergleicht ein Test die Adresse oft woertlich.
-  Why := TRdxHttpsFix.TestPathReason(AFinding.FileName);
-  if Result.Enabled and (Why <> '') then
+  // rwE29: in Testcode vergleicht ein Test die Adresse oft woertlich;
+  // rwE30: Testcode nur mit Merkmal, nicht schon wegen des Ordners - die
+  // Frage liest die Platte, also nur fuer eine angebotene Hilfe.
+  if not Result.Enabled then Exit;
+  Why := TRdxHttpsFix.TestPathReason(AFinding.FileName, ALines);
+  if Why <> '' then
   begin
     Result.Enabled := False;
     Result.Reason := Why;
