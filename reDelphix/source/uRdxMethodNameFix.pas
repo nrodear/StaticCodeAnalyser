@@ -16,7 +16,13 @@ unit uRdxMethodNameFix;
 // Deklaration selbst (ClassAround). Steht die Implementierung vor jeder
 // Deklaration (Klasse in einem Include) oder ist es eine freie Routine,
 // meldet der Detektor den Kopf 'procedure TFoo.doWork' bzw. 'procedure
-// doWork' - beides bekommt keine Hilfe.
+// doWork' - beides bekommt keine Hilfe. Den Kopf 'procedure TFoo.doWork'
+// meldet er auch, wenn die Deklaration schon gross geschrieben ist
+// ('procedure DoWork;' besteht die Pruefung, die Implementierung nicht):
+// dann gleicht die Hilfe NUR den Implementierungskopf an die Schreibweise
+// der Deklaration an (ImplSpellingPlan; Realwelt-Test rwE29, cnwizards
+// DCURecs.pas:7864 'TDispPropDecl.visit' zu 'Visit') - der Laufzeit-Name
+// kommt aus der Deklaration und bleibt.
 //
 // BEDEUTUNGSGLEICH: Delphi vergleicht Bezeichner ohne Gross/klein. Aufrufe,
 // Property-Accessoren ('read doWork'), Methodenzuweisungen und
@@ -29,7 +35,11 @@ unit uRdxMethodNameFix;
 // ist nur der Laufzeit-Name: RTTI (TRttiMethod.Name) und TObject.MethodName
 // nennen danach 'DoWork'. Wer diese Namen mit Gross/klein vergleicht, sieht
 // den Unterschied - der Hinweis nennt es. Nennt ein String-Literal der Datei
-// den Namen (Aufruf per Name), sperrt die Hilfe (s. unten).
+// den Namen (Aufruf per Name), sperrt die Hilfe (s. unten); ebenso unter
+// 'published': die published-Methodentabelle ist genau die Liste, die
+// Frameworks per Name durchsuchen (Realwelt-Test rwE29: Double Commander
+// TFormCommands.GetMethodsList filtert sie mit StrBegins(Name, 'cm_'),
+// case-sensitiv - nach 'Cm_Start' verschwand das Kommando).
 //
 // GESPERRT (lieber keine Hilfe als eine falsche):
 //   - die Meldung nennt keinen Namen mit kleinem Anfangsbuchstaben,
@@ -38,6 +48,9 @@ unit uRdxMethodNameFix;
 //     veraltet) - Kommentare und Strings sind nie Code (Code-Sicht),
 //   - die Deklaration steht nicht im Rumpf einer Klasse dieser Datei:
 //     freie Routine, record, Interface, Klasse in einem Include,
+//   - sie steht unter 'published' (Methodentabelle, s. oben; der Abschnitt
+//     ohne Wort - published in TPersistent-Erben, dort stehen die
+//     Ereignis-Methoden der Formulare - bleibt eine Hilfe),
 //   - 'overload' oder mehr als eine Deklaration in Klassen dieses Namens
 //     ($IFDEF-Zwillinge, gleichnamige Klassen),
 //   - keine oder mehr als eine Implementierung in der Datei (abstract,
@@ -83,6 +96,9 @@ const
     + 'declare more of the class';
   R_MN_LITERAL = 'a string literal names "%s" (line %d) - a lookup by name '
     + '(RTTI, MethodAddress, script) may compare case-sensitively';
+  R_MN_PUBLISHED = '"%s" is published - its name is in the method table, '
+    + 'code that looks it up by name (RTTI, MethodName, a command list) may '
+    + 'compare case-sensitively';
 
 type
   // Ergebnis des Planers: die Ersetzungen (EIN Undo-Schritt; die der
@@ -123,6 +139,7 @@ const
   QUOTE_NAME = '`';
   KW_CLASS = 'class';
   DIR_OVERLOAD = 'overload';
+  VIS_PUBLISHED = 'published';
   // Hier endet die Suche nach der Klasse um die Deklaration ('interface'
   // auch als Typ 'IFoo = interface': eine Deklaration darin hat keine
   // Klasse).
@@ -157,6 +174,17 @@ begin
   Result.NewText := PascalName(S);
 end;
 
+// Die Ersetzung, die das Wort T als ASpelling schreibt (dieselbe Zeichen-
+// folge bis auf Gross/klein).
+function SpellEdit(AMap: TRdxCodeMap; const T: TRdxToken;
+  const ASpelling: string): TRdxEdit;
+begin
+  Result := Default(TRdxEdit);
+  Result.Span := TRefactorSpan.Make(SPAN_106, T.Line, T.Col, T.Line, T.EndCol);
+  Result.Expected := TokText(AMap, T);
+  Result.NewText := ASpelling;
+end;
+
 // Traegt ALine einen qualifizierten Kopf 'procedure TFoo.AName' - eine
 // Implementierung, die der Detektor meldet, weil keine Deklaration davor
 // steht (Klasse in einem Include)?
@@ -180,15 +208,17 @@ begin
 end;
 
 // Der eine Kopf der Methode AName auf ALine (Anfang: 'class' davor oder das
-// Routinenwort, HeadStart). '' oder der Grund.
+// Routinenwort, HeadStart). '' oder der Grund; AImplOnly: die Zeile traegt
+// statt der Deklaration nur die Implementierung (Grund R_MN_IMPL_ONLY).
 function HeadOnLine(AMap: TRdxCodeMap; ALine: Integer; const AName: string;
-  out AHead: TRdxToken): string;
+  out AHead: TRdxToken; out AImplOnly: Boolean): string;
 var
   T, Hit  : TRdxToken;
   n       : Integer;
   LowName : string;
 begin
   AHead := Default(TRdxToken);
+  AImplOnly := False;
   Hit := Default(TRdxToken);
   LowName := LowerCase(AName);
   n := 0;
@@ -207,7 +237,10 @@ begin
   end;
   if (n = 0) and (ALine >= 1) and (ALine <= AMap.LineCount)
      and ImplHeadOnLine(AMap, ALine, LowName) then
+  begin
+    AImplOnly := True;
     Exit(_(R_MN_IMPL_ONLY, [AName]));
+  end;
   if n = 0 then
     Exit(MsgMovedSuffix(_(R_MN_NO_HEAD, [AName])));
   if n > 1 then
@@ -276,6 +309,8 @@ begin
   ADecl := Default(TRdxRoutine);
   if not ClassAround(AMap, AHead, AClass) then
     Exit(_(R_MN_NO_CLASS, [AName]));
+  if AClass.Vis = VIS_PUBLISHED then
+    Exit(_(R_MN_PUBLISHED, [AName]));
   if TRdxBlocks.MethodDecl(AMap, AHead, ADecl) <> '' then
     Exit(_(R_MN_DECL, [AName]));
   Spelled := TokText(AMap, ADecl.NameTok);
@@ -352,6 +387,63 @@ begin
   end;
 end;
 
+// Nur der Implementierungskopf auf ALine ('procedure TFoo.doWork'), die
+// Deklaration in der Klasse dieser Datei ist schon gross geschrieben: der
+// Name der Implementierung bekommt die Schreibweise der Deklaration (EINE
+// Ersetzung, APlan.Name = diese Schreibweise). Gesperrt ohne lesbaren Kopf
+// oder ohne Deklaration (der bisherige Grund R_MN_IMPL_ONLY), bei mehr als
+// einer Deklaration bzw. Implementierung, overload oder einer Deklaration,
+// die selbst klein beginnt. '' oder der Grund.
+function ImplSpellingPlan(AMap: TRdxCodeMap; ALine: Integer;
+  const AName: string; var APlan: TRdxMethodNamePlan): string;
+var
+  T, N      : TRdxToken;
+  R, D      : TRdxRoutine;
+  ClassPath : string;
+  Spelled   : string;
+  W         : string;
+  Decls     : TArray<TRdxToken>;
+  ImplCount : Integer;
+  Found     : Boolean;
+begin
+  Result := _(R_MN_IMPL_ONLY, [AName]);
+  Found := False;
+  T := NextToken(AMap, ALine, 1);
+  while (T.Low <> '') and (T.Line = ALine) and not Found do
+  begin
+    if IsRoutineHead(AMap, T) then
+    begin
+      N := NameAfter(AMap, T);
+      Found := SameIdent(N.Low, LowerCase(AName))
+        and not SameTok(N, After(AMap, T));
+    end;
+    if not Found then
+      T := After(AMap, T);
+  end;
+  if not Found or (TRdxBlocks.ReadRoutine(AMap, HeadStart(AMap, T), R) <> '')
+     or (Pos('.', R.Name) = 0) then
+    Exit;
+  ClassPath := Copy(R.Name, 1, LastDelimiter('.', R.Name) - 1);
+  Decls := TRdxBlocks.FindMethodDecls(AMap, ClassPath, AName);
+  if Length(Decls) = 0 then
+    Exit;
+  if Length(Decls) > 1 then
+    Exit(_(R_MN_DECLS, [Length(Decls), AName, LastPart(ClassPath)]));
+  if TRdxBlocks.MethodDecl(AMap, Decls[0], D) <> '' then
+    Exit(_(R_MN_DECL, [AName]));
+  Spelled := TokText(AMap, D.NameTok);
+  if StartsLower(Spelled) then
+    Exit(MsgStaleSuffix(_(R_MN_SPELLING, [Spelled, AName])));
+  if HasDirective(D, [DIR_OVERLOAD], W) then
+    Exit(_(R_MN_OVERLOAD, [AName]));
+  ImplCount := Length(TRdxBlocks.FindMethodImpls(AMap, ClassPath, AName));
+  if ImplCount <> 1 then
+    Exit(_(R_MN_IMPLS, [ImplCount, ClassPath, AName]));
+  APlan.Name := Spelled;
+  AddEdit(APlan.Edits, SpellEdit(AMap, R.NameTok, Spelled));
+  Result := '';
+end;
+
 { TRdxMethodNameFix }
 
 class function TRdxMethodNameFix.Capitalize(AMap: TRdxCodeMap; ALine: Integer;
@@ -364,8 +456,10 @@ var
   C    : TRdxClassHead;
   D    : TRdxRoutine;
   Li   : Integer;
+  ImplOnly : Boolean;
 begin
   APlan := Default(TRdxMethodNamePlan);
+  ImplOnly := False;
   Head := Default(TRdxToken);
   Impl := Default(TRdxToken);
   C := Default(TRdxClassHead);
@@ -375,7 +469,14 @@ begin
   if not StartsLower(Name) then
     AReason := _(R_MN_NO_NAME)
   else
-    AReason := HeadOnLine(AMap, ALine, Name, Head);
+    AReason := HeadOnLine(AMap, ALine, Name, Head, ImplOnly);
+  // Nur die Implementierung gemeldet: ist die Deklaration schon gross,
+  // gleicht die Hilfe die Implementierung an (rwE29).
+  if ImplOnly then
+  begin
+    AReason := ImplSpellingPlan(AMap, ALine, Name, APlan);
+    Exit(AReason = '');
+  end;
   if AReason = '' then
     AReason := DeclReason(AMap, Head, Name, C, D);
   if AReason = '' then

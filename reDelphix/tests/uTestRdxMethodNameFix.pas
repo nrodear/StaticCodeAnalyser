@@ -8,6 +8,17 @@ unit uTestRdxMethodNameFix;
 // Die Standard-Unit (StdUnit) hat die Klasse TFoo ab Zeile 4, 'public' auf
 // Zeile 5, die Deklaration auf Zeile 6 (DECL_LINE) und den Kopf der
 // Implementierung auf Zeile 9 (IMPL_LINE).
+//
+// Realwelt-Test rwE29: published sperrt (Double Commander fFindDlg.pas:345
+// 'cm_Start', umaincommands.pas:326 'cm_FileLinker' - die Kommandoliste
+// filtert die published-Methodentabelle case-sensitiv mit 'cm_';
+// PublishedMethod_NoHelp, gegen 7d5de210 rot: dort angeboten, bis dahin
+// PublishedMethod_Capitalized). Der Abschnitt ohne Wort bleibt eine Hilfe
+// (DefaultSection_Capitalized, auch vorher gruen). Nur die Implementierung
+// gemeldet, die Deklaration schon gross (cnwizards DCURecs.pas:7864
+// 'TDispPropDecl.visit'): die Implementierung bekommt die Schreibweise der
+// Deklaration (ImplSpelling_OnlyImplementation, Detector_ImplOnly_Fixed -
+// gegen 7d5de210 rot: R_MN_IMPL_ONLY).
 
 interface
 
@@ -25,7 +36,8 @@ type
     [Test] procedure NestedClass_Capitalized;
     [Test] procedure ImplAlreadyUpper_OnlyDeclaration;
     [Test] procedure CallsAndComments_Unchanged;
-    [Test] procedure PublishedMethod_Capitalized;
+    [Test] procedure DefaultSection_Capitalized;
+    [Test] procedure ImplSpelling_OnlyImplementation;
     [Test] procedure OtherClassSameName_Untouched;
     // ---- Gegenproben ----
     [Test] procedure Overload_NoHelp;
@@ -40,6 +52,8 @@ type
     [Test] procedure IncludeInClass_NoHelp;
     [Test] procedure MessageWithoutName_NoHelp;
     [Test] procedure ImplementationOnly_NoHelp;
+    [Test] procedure PublishedMethod_NoHelp;
+    [Test] procedure ImplSpelling_Overload_NoHelp;
   end;
 
 {$IFNDEF FPC}
@@ -50,6 +64,7 @@ type
     [Test] procedure Detector_RoundTrip;
     [Test] procedure Detector_TwoMethods_BothFixed;
     [Test] procedure Detector_ImplSpelledDifferently_Fixed;
+    [Test] procedure Detector_ImplOnly_Fixed;
     [Test] procedure Detector_CatalogExample_InClass_Fixed;
     [Test] procedure Detector_CatalogExample_FreeRoutine_NoHelp;
     [Test] procedure Detector_Overload_NoHelp;
@@ -228,15 +243,36 @@ begin
       DECL_LINE, 'doWork'));
 end;
 
-procedure TTestRdxMethodNameFix.PublishedMethod_Capitalized;
+procedure TTestRdxMethodNameFix.DefaultSection_Capitalized;
 begin
-  // published: eine Formdatei, die 'OnClick = doWork' bindet, bindet weiter
-  // (TObject.MethodAddress vergleicht ohne Gross/klein) - keine Sperre.
+  // Der Abschnitt ohne Wort (published in TPersistent-Erben, die
+  // Ereignis-Methoden eines Formulars): eine Formdatei, die 'OnClick =
+  // doWork' bindet, bindet weiter (TObject.MethodAddress vergleicht ohne
+  // Gross/klein) - keine Sperre. Die Deklaration steht hier auf Zeile 5.
   Assert.AreEqual(
-    UnitWith(['  published', '    procedure DoWork;'],
+    UnitWith(['    procedure DoWork;'],
       ['procedure TFoo.DoWork;', 'begin', 'end;']),
-    Applied(UnitWith(['  published', '    procedure doWork;'],
-      ['procedure TFoo.doWork;', 'begin', 'end;']), DECL_LINE, 'doWork'));
+    Applied(UnitWith(['    procedure doWork;'],
+      ['procedure TFoo.doWork;', 'begin', 'end;']), 5, 'doWork'));
+end;
+
+procedure TTestRdxMethodNameFix.ImplSpelling_OnlyImplementation;
+var
+  Src : string;
+  P   : TRdxMethodNamePlan;
+  R   : string;
+begin
+  // cnwizards DCURecs.pas:7864 (rwE29): 'procedure Visit(..); override;' in
+  // der Klasse, 'procedure TDispPropDecl.visit(' als Implementierung - der
+  // Detektor meldet die Implementierung (Zeile 9). Bis rwE29 gesperrt mit
+  // "keine Klasse dieser Datei deklariert sie davor" - falsch.
+  Src := UnitWith(['  public', '    procedure Visit(V: TObject); override;'],
+    ['procedure TFoo.visit(V: TObject);', 'begin', 'end;']);
+  Assert.IsTrue(PlanOf(Src, IMPL_LINE, Format(MSG_FMT, ['visit']), P, R), R);
+  Assert.AreEqual('Visit', P.Name, 'Schreibweise der Deklaration');
+  Assert.AreEqual<Integer>(1, Length(P.Edits), 'nur die Implementierung');
+  Assert.AreEqual(StringReplace(Src, 'TFoo.visit', 'TFoo.Visit', []),
+    Apply(Src, P.Edits));
 end;
 
 procedure TTestRdxMethodNameFix.OtherClassSameName_Untouched;
@@ -400,6 +436,30 @@ begin
     _(R_MN_IMPL_ONLY, ['doWork']));
 end;
 
+procedure TTestRdxMethodNameFix.PublishedMethod_NoHelp;
+begin
+  // Double Commander fFindDlg.pas:345 (rwE29, Fehler): 'cm_Start' unter
+  // published - TFormCommands.GetMethodsList liest die Methodentabelle und
+  // filtert mit StrBegins(Name, 'cm_') (CompareChar, case-sensitiv); nach
+  // 'Cm_Start' fehlte das Kommando in Hotkeys und Werkzeugleiste.
+  AssertRefused(UnitWith(['  published',
+    '    procedure cm_Start(const Params: array of string);'],
+    ['procedure TFoo.cm_Start(const Params: array of string);', 'begin',
+     'end;']), DECL_LINE, 'cm_Start', _(R_MN_PUBLISHED, ['cm_Start']));
+end;
+
+procedure TTestRdxMethodNameFix.ImplSpelling_Overload_NoHelp;
+begin
+  // Nur die Implementierung gemeldet, die Deklaration ueberladen: zwei
+  // Deklarationen dieses Namens - welche zur Implementierung gehoert, liest
+  // die Hilfe nicht.
+  AssertRefused(UnitWith(['  public', '    procedure Visit; overload;',
+    '    procedure Visit(N: Integer); overload;'],
+    ['procedure TFoo.visit;', 'begin', 'end;',
+     'procedure TFoo.Visit(N: Integer);', 'begin', 'end;']), 10, 'visit',
+    _(R_MN_DECLS, [2, 'visit', 'TFoo']));
+end;
+
 {$IFNDEF FPC}
 
 { ---- Detektor ---- }
@@ -500,6 +560,24 @@ begin
   Assert.AreEqual<Integer>(1, Length(Detect(Src)), 'ein Fund');
   Fixed := FixAll(Src);
   Assert.AreEqual(StdUnit('DoWork', 'Dowork'), Fixed);
+  Assert.AreEqual<Integer>(0, Length(Detect(Fixed)),
+    'der Detektor schweigt danach');
+end;
+
+procedure TTestRdxMethodNameDetector.Detector_ImplOnly_Fixed;
+var
+  Src, Fixed : string;
+  Seen       : TArray<TSeen>;
+begin
+  // Die Deklaration 'DoWork' besteht die Pruefung, der Detektor meldet die
+  // Implementierung 'TFoo.doWork' (rwE29, DCURecs.pas:7864) - die Hilfe
+  // gleicht sie an, danach schweigt er.
+  Src := StdUnit('DoWork', 'doWork');
+  Seen := Detect(Src);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
+  Assert.AreEqual<Integer>(IMPL_LINE, Seen[0].Line, 'an der Implementierung');
+  Fixed := FixAll(Src);
+  Assert.AreEqual(StdUnit('DoWork', 'DoWork'), Fixed);
   Assert.AreEqual<Integer>(0, Length(Detect(Fixed)),
     'der Detektor schweigt danach');
 end;
