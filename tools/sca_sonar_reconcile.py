@@ -80,6 +80,19 @@ def load_export(path):
 # Server
 # ---------------------------------------------------------------------------
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Folgt KEINER Weiterleitung.
+
+    urllib reicht beim Weiterleiten alle Kopfzeilen ausser Content-* an das
+    neue Ziel weiter - auch den Authorization-Header, auch an einen fremden
+    Host und auch von https:// nach http://. Ein umgeleiteter Server bekaeme
+    so das Token. Statt Weiterleitungen zu filtern, wird gar keiner gefolgt:
+    urlopen wirft dann HTTPError mit dem 30x-Code, und get() nennt das Ziel."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 class Server:
     def __init__(self, host, token, insecure=False, cafile=None, timeout=60):
         self.host = host.rstrip('/')
@@ -91,6 +104,8 @@ class Server:
             self.ctx = ssl.create_default_context(cafile=cafile)
         else:
             self.ctx = ssl.create_default_context()
+        self.opener = urllib.request.build_opener(
+            urllib.request.HTTPSHandler(context=self.ctx), _NoRedirect())
         self.basic = False
         self.calls = 0
 
@@ -112,8 +127,7 @@ class Server:
             req = urllib.request.Request(url, headers=self._headers(), method='GET')
             self.calls += 1
             try:
-                with urllib.request.urlopen(req, timeout=self.timeout,
-                                            context=self.ctx) as resp:
+                with self.opener.open(req, timeout=self.timeout) as resp:
                     body = resp.read().decode('utf-8')
                     return body if raw else json.loads(body)
             except urllib.error.HTTPError as e:
@@ -122,6 +136,10 @@ class Server:
                 if e.code == 401 and self.token and not self.basic and attempt == 0:
                     self.basic = True
                     continue
+                if 300 <= e.code < 400:
+                    raise RuntimeError('HTTP %d bei GET %s: Weiterleitung nach %s nicht '
+                                       'verfolgt (Token-Schutz) - --host auf das Ziel setzen'
+                                       % (e.code, path, e.headers.get('Location', '?')))
                 detail = e.read().decode('utf-8', 'replace')[:300]
                 raise RuntimeError('HTTP %d bei GET %s: %s' % (e.code, path, detail))
         raise RuntimeError('unerreichbar')
@@ -371,6 +389,11 @@ def _selftest():
     check(parse_effort('1h30min') == 90, "parse_effort('1h30min') == 90")
     check(parse_effort('1d') == 480, "parse_effort('1d') == 480")
     check(parse_effort('10min') == 10, "parse_effort('10min') == 10")
+    srv0 = Server('https://x.invalid', 'geheim')
+    check(any(isinstance(h, _NoRedirect) for h in srv0.opener.handlers),
+          'Opener folgt keiner Weiterleitung (Token bleibt beim --host)')
+    check(_NoRedirect().redirect_request(None, None, 302, '', {}, 'http://y/') is None,
+          '302 wird nicht verfolgt')
     exp_rules = {'R1': {'id': 'R1', 'name': 'Eins', 'cleanCodeAttribute': 'LOGICAL',
                         'impacts': [{'softwareQuality': 'RELIABILITY', 'severity': 'HIGH'}]},
                  'R2': {'id': 'R2', 'name': 'Zwei', 'impacts': []}}
