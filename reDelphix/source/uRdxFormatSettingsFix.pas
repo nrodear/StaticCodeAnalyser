@@ -603,8 +603,8 @@ end;
 // Art: 'date' (Datum/Uhrzeit) oder 'number'.
 function LiteralMisfit(const ALow, AText: string): string;
 var
-  T : string;
-  P : Integer;
+  T  : string;
+  P  : Integer;
   Ok : Boolean;
 begin
   Result := '';
@@ -696,7 +696,8 @@ begin
   end;
 end;
 
-// Traegt AText (klein) einen der Woerter-Teile AHints?
+// Traegt ALowText (klein) einen der Woerter-Teile AHints? Nur die
+// Vorpruefung je Zeile - die Token entscheiden.
 function MentionsAny(const ALowText: string;
   const AHints: array of string): Boolean;
 var
