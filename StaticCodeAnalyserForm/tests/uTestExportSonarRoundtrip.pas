@@ -38,6 +38,8 @@ type
     // Custom-Regeln: YAML-Severity ist keine Herabstufung
     [Test] procedure CustomRuleHint_IsExportedWithLowImpact;
     [Test] procedure CustomRuleError_GetsHighImpactAndOwnName;
+    // ... eine Pfad-Ueberschreibung aber sehr wohl
+    [Test] procedure CustomRulePathDowngrade_StaysOutAndKeepsYamlImpact;
   end;
 
 implementation
@@ -165,9 +167,13 @@ end;
 
 procedure TTestExportSonarRoundtrip.BinaryFile_IssueOnFileLevel;
 // Binaere DFM: die Engine zaehlt Zeilen der TEXT-Umwandlung, Sonar die der
-// Binaerdatei. Zeile 5 gibt es dort nicht ("5 is not a valid line for
-// pointer" - Scanner-Abbruch); und selbst eine Zeile innerhalb der Grenzen
-// zeigte auf Binaermuell. Also Dateiebene: keine textRange.
+// Binaerdatei. Eine Zeile dahinter laesst den Scanner abbrechen ("N is not a
+// valid line for pointer"); und selbst eine Zeile innerhalb der Grenzen
+// zeigt auf Binaermuell. Also Dateiebene: keine textRange.
+//
+// Zeile 1 mit Absicht: die Datei hat nach Sonar ZWEI Zeilen (ein $0A), der
+// Fund liegt also in den Grenzen. Mit einer Zeile dahinter waere der Test
+// auch ohne die NUL-Erkennung gruen (LineBeyondEof deckt jenen Zweig).
 var
   Findings : TObjectList<TLeakFinding>;
   Root     : TJSONObject;
@@ -177,7 +183,7 @@ begin
     Ord('F'), Ord('0'), $00, $01, $02));
   Findings := TObjectList<TLeakFinding>.Create(True);
   try
-    Findings.Add(MakeFinding(fkDfmDefaultName, TPath.Combine(FDir, 'Bin.dfm'), 5));
+    Findings.Add(MakeFinding(fkDfmDefaultName, TPath.Combine(FDir, 'Bin.dfm'), 1));
     Root := Report(Findings);
     Assert.IsNull(TextRangeOf(Root), 'binaere Datei: Issue ohne textRange');
     Assert.AreEqual('Bin.dfm', FilePathOf(Root), 'der Fund selbst bleibt');
@@ -333,6 +339,44 @@ begin
     Assert.AreEqual('HIGH', ImpactSeverityOf(FirstRule(Root)));
     Name := FirstRule(Root).GetValue<string>('name');
     Assert.IsTrue(Pos('MINI002', Name) > 0, 'Regelname nennt die ID: ' + Name);
+  finally
+    Root.Free;
+    Findings.Free;
+  end;
+end;
+
+procedure TTestExportSonarRoundtrip.CustomRulePathDowngrade_StaysOutAndKeepsYamlImpact;
+// YAML 'error', in generiertem Code per Pfad-Ueberschreibung auf Hint
+// gesetzt (OverrideSeverity, wie uPathOverrides): das IST eine Herabstufung
+// und bleibt ohne --sonar-keep-downgraded draussen. Mit dem Schalter steht
+// der Fund als ERSTER in der Liste - die Regel muss trotzdem HIGH bleiben,
+// sonst bestimmte ein einzelner Fund in generiertem Code die Schwere aller.
+var
+  Findings : TObjectList<TLeakFinding>;
+  F        : TLeakFinding;
+  Root     : TJSONObject;
+begin
+  Root     := nil;
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    F := CustomFinding(TPath.Combine(FDir, 'Gen.pas'), 'MINI003', lsError);
+    F.OverrideSeverity(lsHint);
+    Findings.Add(F);
+    Findings.Add(CustomFinding(TPath.Combine(FDir, 'Hand.pas'), 'MINI003', lsError));
+
+    Root := Report(Findings);
+    Assert.AreEqual<Integer>(1, Root.GetValue<TJSONArray>(KEY_ISSUES).Count,
+      'herabgestufter Custom-Fund bleibt draussen, der andere nicht');
+    Assert.AreEqual('HIGH', ImpactSeverityOf(FirstRule(Root)));
+    FreeAndNil(Root);
+
+    Root := TJSONObject.ParseJSONValue(
+      TSonarGenericWriter.ToJsonString(Findings, FDir, True)) as TJSONObject;
+    Assert.IsNotNull(Root, MSG_NOT_JSON);
+    Assert.AreEqual<Integer>(2, Root.GetValue<TJSONArray>(KEY_ISSUES).Count,
+      'mit --sonar-keep-downgraded beide');
+    Assert.AreEqual('HIGH', ImpactSeverityOf(FirstRule(Root)),
+      'Impact aus der YAML-Severity, nicht aus dem herabgestuften ersten Fund');
   finally
     Root.Free;
     Findings.Free;

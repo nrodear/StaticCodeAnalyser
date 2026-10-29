@@ -589,8 +589,14 @@ function IsDowngraded(const F: TLeakFinding; const M: TRuleMeta): Boolean;
 // deshalb jede als 'hint' deklarierte Custom-Regel still aus dem Export -
 // am Mini-Roundtrip belegt (MINI001: 6 Funde in Konsole/JSON, 0 im
 // Sonar-Report). Was die YAML sagt, ist keine Abschwaechung von irgendwas.
+// Der Massstab einer Custom-Regel ist deshalb ihre Detektor-Schwere
+// (OriginalSeverity = YAML), nicht der Platzhalter: eine Pfad-
+// Ueberschreibung ("generierter Code nur Hinweis") stuft auch sie herab und
+// bleibt - wie bei jeder anderen Regel - draussen (Review 2026-10-29; mit
+// Exit(False) gingen solche Funde in voller YAML-Schwere nach Sonar).
 begin
-  if F.Kind = fkCustomRule then Exit(False);
+  if F.Kind = fkCustomRule then
+    Exit(Ord(F.Severity) > Ord(F.OriginalSeverity));
   Result := Ord(F.Severity) > Ord(M.DefaultSeverity);
 end;
 
@@ -608,8 +614,10 @@ function CustomRuleMeta(const M: TRuleMeta; const F: TLeakFinding;
 // des Platzhalters - die YAML hat dafuer kein ausgewertetes Feld.
 //
 // Massgeblich ist der ERSTE Fund der Regel (EmitRules dedupliziert nach
-// Regel-ID). Alle Funde einer Regel tragen dieselbe YAML-Severity; nur eine
-// Pfad-Ueberschreibung koennte einzelne davon verschieben.
+// Regel-ID), und zwar seine OriginalSeverity: die ist bei allen Funden
+// einer Regel die YAML-Severity. F.Severity dagegen kann eine Pfad-
+// Ueberschreibung verschoben haben - stuende der erste Fund in so einer
+// Datei, bekaeme sonst die GANZE Regel deren Schwere (Review 2026-10-29).
 var
   Imp : TSonarImpact;
 begin
@@ -619,7 +627,7 @@ begin
     Imp.SoftwareQuality := M.Impacts[0].SoftwareQuality
   else
     Imp.SoftwareQuality := sqMaintainability;
-  case F.Severity of
+  case F.OriginalSeverity of
     lsError   : Imp.Severity := isHigh;
     lsWarning : Imp.Severity := isMedium;
   else
