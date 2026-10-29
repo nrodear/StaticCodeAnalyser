@@ -1292,9 +1292,18 @@ begin
   if not (WantDate or WantNum) then Exit;
   for i := 0 to High(Pieces) do
   begin
-    if Edited[i] then Continue;
     Partner := PiecePartner(AMap, Pieces[i], ASites, WantDate, WantNum);
     if Partner.Low = '' then Continue;
+    // Das Gegenstueck in der umgestellten Anweisung selbst (Review
+    // e/HilfeFixK): 'if TryStrToFloat(FloatToStr(x), y)', 'if FloatToStrF(a,
+    // ..) = FloatToStr(b)' - Rundlauf bzw. direkter Vergleich; TryStrToFloat
+    // und FloatToStrF stellt die Hilfe nicht mit um (LOCALE_FUNCS).
+    if Edited[i] then
+    begin
+      NoteCoupling(Line0, Partner.Line, Partner.Line, _(R_FS_COUPLED_CALL,
+        [Partner.Line, Call, TokText(AMap, Partner)]), Best, Result);
+      Continue;
+    end;
     W := Default(TRdxToken);
     if InList(Partner.Low, TEXT_WRITERS) then
       W := PieceTarget(AMap, Pieces[i]);

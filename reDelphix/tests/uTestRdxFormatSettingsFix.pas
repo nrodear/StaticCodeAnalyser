@@ -1064,6 +1064,17 @@ begin
     '  Result := DateToStr(d) = r;']), BODY_LINE + 1, Msg('datetostr'),
     _(R_FS_COUPLED_PAIR, [BODY_LINE + 1, 'DateToStr', 'r', BODY_LINE,
     'DateToStr']), True);
+  // Review e/HilfeFixK: das Gegenstueck in DERSELBEN Anweisung - ein Aufruf
+  // der Familie, den die Hilfe nicht mit umstellt (TryStrToFloat,
+  // FloatToStrF stehen nicht in LOCALE_FUNCS): Rundlauf bzw. direkter
+  // Vergleich. Bis dahin angeboten (das umgestellte Stueck wurde nach
+  // Gegenstuecken nicht durchsucht).
+  AssertRefused(InUnit(['  if TryStrToFloat(FloatToStr(x), y) then',
+    '    Foo;']), BODY_LINE, Msg('floattostr'),
+    _(R_FS_COUPLED_CALL, [BODY_LINE, 'FloatToStr', 'TryStrToFloat']), True);
+  AssertRefused(InUnit(['  if FloatToStrF(a, ffFixed, 15, 2) = FloatToStr(b) then',
+    '    Foo;']), BODY_LINE, Msg('floattostr'),
+    _(R_FS_COUPLED_CALL, [BODY_LINE, 'FloatToStr', 'FloatToStrF']), True);
 end;
 
 procedure TTestRdxFormatSettingsFix.Sca128_Alt_CoupledSettings_NoHelp;
