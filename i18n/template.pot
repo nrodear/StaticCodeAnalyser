@@ -108,8 +108,12 @@ msgstr ""
 msgid "\"%s\" follows the section - it is not empty"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:471
+#: reDelphix/source/uRdxFloatEqualityFix.pas:546
 msgid "\"%s\" guards a default value (if X = 0 then X := ...) - the exact comparison is intended there"
+msgstr ""
+
+#: reDelphix/source/uRdxFloatEqualityFix.pas:563
+msgid "\"%s\" guards a tolerance check of the same value (line %d) - the exact comparison is intended there"
 msgstr ""
 
 #: reDelphix/source/uRdxBlocks.pas:772
@@ -128,11 +132,11 @@ msgstr ""
 msgid "\"%s\" in the type - declaration not readable"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1833
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2010
 msgid "\"%s\" is a built-in profile and cannot be changed."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1873
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2050
 msgid "\"%s\" is a built-in profile."
 msgstr ""
 
@@ -167,7 +171,7 @@ msgstr ""
 msgid "\"%s\" is not a local variable of the routine - a field or global list can be filled or freed elsewhere"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:278
+#: reDelphix/source/uRdxMethodNameFix.pas:311
 msgid "\"%s\" is not declared in the body of a class of this file (free routine, record, interface, or the class sits in an include)"
 msgstr ""
 
@@ -175,16 +179,21 @@ msgstr ""
 msgid "\"%s\" is not declared in the declaration part of a routine"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:285
+#: reDelphix/source/uRdxMethodNameFix.pas:320
+#: reDelphix/source/uRdxMethodNameFix.pas:438
 msgid "\"%s\" is overloaded - the help does not pick one of the declarations"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:452
+#: reDelphix/source/uRdxFloatEqualityFix.pas:527
 msgid "\"%s\" is part of a larger expression (\"%s\" after it) - only a whole condition or assignment is rewritten"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:446
+#: reDelphix/source/uRdxFloatEqualityFix.pas:521
 msgid "\"%s\" is part of a larger expression (\"%s\" before it) - only a whole condition or assignment is rewritten"
+msgstr ""
+
+#: reDelphix/source/uRdxMethodNameFix.pas:313
+msgid "\"%s\" is published - its name is in the method table, code that looks it up by name (RTTI, MethodName, a command list) may compare case-sensitively"
 msgstr ""
 
 #: reDelphix/source/uRdxObjectListFix.pas:520
@@ -212,7 +221,7 @@ msgstr ""
 msgid "\"%s\" stands between the two sections - the declarations of the second one would belong to it"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:457
+#: reDelphix/source/uRdxFloatEqualityFix.pas:532
 msgid "\"%s\" stands in a list that is not a call argument (enumeration, set or declaration)"
 msgstr ""
 
@@ -307,7 +316,8 @@ msgstr ""
 msgid "%d context hashes"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:289
+#: reDelphix/source/uRdxMethodNameFix.pas:324
+#: reDelphix/source/uRdxMethodNameFix.pas:431
 msgid "%d declarations of \"%s\" in classes named %s - overload or conditional twin?"
 msgstr ""
 
@@ -358,7 +368,8 @@ msgstr ""
 msgid "%d implementations of %s.%s - overload?"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:314
+#: reDelphix/source/uRdxMethodNameFix.pas:349
+#: reDelphix/source/uRdxMethodNameFix.pas:441
 msgid "%d implementations of %s.%s in this file - overload or conditional twin?"
 msgstr ""
 
@@ -398,8 +409,8 @@ msgstr ""
 msgid "%d routine headers"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:540
-#: reDelphix/source/uRdxAvoidOutFix.pas:594
+#: reDelphix/source/uRdxAvoidOutFix.pas:561
+#: reDelphix/source/uRdxAvoidOutFix.pas:615
 msgid "%d routine headers named %s in this file - overload or ambiguous"
 msgstr ""
 
@@ -492,7 +503,7 @@ msgstr ""
 msgid "%s appears in line %d other than as \"%s.Member\" - assigned, passed on, declared or reached through another object"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:904
+#: reDelphix/source/uRdxFixRunner.pas:1028
 msgid "%s appears more than once on line %d"
 msgstr ""
 
@@ -508,6 +519,10 @@ msgstr ""
 msgid "%s contains no profiles."
 msgstr ""
 
+#: reDelphix/source/uRdxFixRunner.pas:516
+msgid "%s descends from %s (old Open Tools API, VirtIntf.TInterface) - its own Free calls Release, FreeAndNil would destroy the object"
+msgstr ""
+
 #: reDelphix/source/uRdxTrySpan.pas:1090
 msgid "%s directly follows line %d - nothing to protect"
 msgstr ""
@@ -516,11 +531,11 @@ msgstr ""
 msgid "%s ends in %s - not proven as a field in this unit: \"= nil\" would call a method without arguments, Assigned() would only check the method pointer"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:719
+#: reDelphix/source/uRdxFixRunner.pas:843
 msgid "%s has a procedural type (%s) - without () Delphi reads the name as a pointer"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:772
+#: reDelphix/source/uRdxFixRunner.pas:896
 msgid "%s has a procedural type - \"%s <> nil\" calls it, Assigned() does not"
 msgstr ""
 
@@ -528,7 +543,7 @@ msgstr ""
 msgid "%s has the procedural type %s (declared in this unit) - \"= nil\" calls it, Assigned() does not"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:399
+#: reDelphix/source/uRdxFixRunner.pas:514
 msgid "%s has the type %s - by Delphi convention a pointer from another unit (Free is then the one of the target, FreeAndNil takes only a TObject)"
 msgstr ""
 
@@ -565,7 +580,7 @@ msgstr ""
 msgid "%s in line %d writes Result (inactive branch?) - the detector did not see it, the finding is doubtful; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1159
+#: reDelphix/source/uRdxFixRunner.pas:1283
 msgid "%s in the condition is not proven as Boolean here - with a Variant \"not\" would be bitwise"
 msgstr ""
 
@@ -578,11 +593,11 @@ msgstr ""
 msgid "%s in the range - an intent comment stays"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:448
+#: reDelphix/source/uRdxAvoidOutFix.pas:464
 msgid "%s is \"%s\" - other code depends on its exact signature"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:510
+#: reDelphix/source/uRdxFloatEqualityFix.pas:603
 msgid "%s is Currency - a fixed-point type compares exactly, SameValue would add a tolerance"
 msgstr ""
 
@@ -594,7 +609,7 @@ msgstr ""
 msgid "%s is a binary or octal literal - the code action only handles decimal and hexadecimal numbers"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:647
+#: reDelphix/source/uRdxFixRunner.pas:771
 msgid "%s is a const parameter - FreeAndNil does not reach the caller's variable (FPC: error, Delphi up to 10.3: E2197)"
 msgstr ""
 
@@ -606,11 +621,11 @@ msgstr ""
 msgid "%s is a reserved word"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:711
+#: reDelphix/source/uRdxFixRunner.pas:835
 msgid "%s is a variable (procedural type) - only () calls it safely"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1096
+#: reDelphix/source/uRdxFixRunner.pas:1220
 msgid "%s is already declared as %s - the cast changes nothing"
 msgstr ""
 
@@ -635,11 +650,11 @@ msgstr ""
 msgid "%s is called as %s - another routine than the one of SysUtils"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:512
+#: reDelphix/source/uRdxFloatEqualityFix.pas:605
 msgid "%s is declared as %s - not Single, Double, Extended or Real"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1065
+#: reDelphix/source/uRdxFixRunner.pas:1189
 msgid "%s is declared as %s, not as %s - another type can hide Free, or the cast is needed to compile"
 msgstr ""
 
@@ -647,7 +662,7 @@ msgstr ""
 msgid "%s is declared as %s, not as %s - the call does not copy exactly one element"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:302
+#: reDelphix/source/uRdxFixRunner.pas:330
 msgid "%s is declared as a property in this unit - FreeAndNil needs a variable"
 msgstr ""
 
@@ -655,7 +670,7 @@ msgstr ""
 msgid "%s is declared as a property in this unit - if the call means it, it is not proven whether Delphi calls a property of procedural type without ()"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1183
+#: reDelphix/source/uRdxFixRunner.pas:1307
 msgid "%s is declared as a property in this unit - the assignment may call a setter"
 msgstr ""
 
@@ -663,8 +678,8 @@ msgstr ""
 msgid "%s is declared as a property or routine in this file - it could return another object on each call"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:505
-#: reDelphix/source/uRdxAvoidOutFix.pas:530
+#: reDelphix/source/uRdxAvoidOutFix.pas:526
+#: reDelphix/source/uRdxAvoidOutFix.pas:552
 msgid "%s is declared inside a type - its signature is a contract"
 msgstr ""
 
@@ -697,11 +712,11 @@ msgstr ""
 msgid "%s is in the interface section (line %d) - exported, callers in other units possible"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:483
+#: reDelphix/source/uRdxAvoidOutFix.pas:500
 msgid "%s is in the published or default section of %s - a form file may bind it to an event"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:420
+#: reDelphix/source/uRdxFixRunner.pas:544
 #: reDelphix/source/uRdxPlacesRunner.pas:626
 msgid "%s is missing in uses: %s"
 msgstr ""
@@ -714,7 +729,7 @@ msgstr ""
 msgid "%s is no longer at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:901
+#: reDelphix/source/uRdxFixRunner.pas:1025
 msgid "%s is no longer on line %d of a uses clause"
 msgstr ""
 
@@ -722,7 +737,7 @@ msgstr ""
 msgid "%s is not a local variable of the routine (field, global variable, parameter) - %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1056
+#: reDelphix/source/uRdxFixRunner.pas:1180
 msgid "%s is not a plain identifier - its type cannot be checked"
 msgstr ""
 
@@ -730,11 +745,11 @@ msgstr ""
 msgid "%s is not a pointer type of the RTL with one target type"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1625
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1802
 msgid "%s is not a valid JSON object."
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:394
+#: reDelphix/source/uRdxFixRunner.pas:509
 msgid "%s is not an object (%s: record, object, interface, pointer or own type of this unit) - Free is a method of its own, FreeAndNil takes only a TObject"
 msgstr ""
 
@@ -742,12 +757,12 @@ msgstr ""
 msgid "%s is not certainly a keyword here (also allowed as an identifier)"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:481
+#: reDelphix/source/uRdxAvoidOutFix.pas:498
 msgid "%s is not declared directly in class %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:308
-#: reDelphix/source/uRdxFixRunner.pas:1190
+#: reDelphix/source/uRdxFixRunner.pas:336
+#: reDelphix/source/uRdxFixRunner.pas:1314
 msgid "%s is not known as a variable here (property or field from another unit?)"
 msgstr ""
 
@@ -764,11 +779,11 @@ msgstr ""
 msgid "%s is not proven Integer or Cardinal here (type: %s) - the cast could change the computation or not compile"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1149
+#: reDelphix/source/uRdxFixRunner.pas:1273
 msgid "%s is not proven as Boolean here (type: %s) - with Variant %s would get the value of the condition instead of True/False"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:795
+#: reDelphix/source/uRdxFixRunner.pas:919
 msgid "%s is not proven as Boolean here (type: %s) - with Variant or LongBool \"= True\" is not the same"
 msgstr ""
 
@@ -818,7 +833,7 @@ msgstr ""
 msgid "%s is used in line %d not as a call - possibly as a method pointer (\"of object\")"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:929
+#: reDelphix/source/uRdxFixRunner.pas:1053
 msgid "%s is used in the text"
 msgstr ""
 
@@ -826,7 +841,7 @@ msgstr ""
 msgid "%s is used without a call in line %d (method pointer, event, callback, property) - its type would no longer match"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:680
+#: reDelphix/source/uRdxAvoidOutFix.pas:701
 msgid "%s is used without a call in line %d (method pointer?) - its type would change"
 msgstr ""
 
@@ -946,7 +961,7 @@ msgstr ""
 msgid "%s: type %s is not proven in this unit as a class, interface or pointer and is not a class of the Delphi sources - \"= nil\" would call a function type of another unit, Assigned() would not"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:774
+#: reDelphix/source/uRdxFixRunner.pas:898
 msgid "%s: type %s is not proven in this unit as a class, interface or pointer and is not a class of the Delphi sources - a function type would call \"%s <> nil\""
 msgstr ""
 
@@ -1002,7 +1017,7 @@ msgstr ""
 msgid "@%s in line %d - the pointer can change"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1824
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2001
 #: SCA.SharedUI/sources/uProfileViewer.pas:679
 msgid "A profile without rules would find nothing."
 msgstr ""
@@ -1119,7 +1134,7 @@ msgstr ""
 msgid "AllocMem without assignment - the buffer cannot be tracked"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1819
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1996
 msgid "Allowed characters: letters, digits, hyphen, underscore and dot."
 msgstr ""
 
@@ -1427,7 +1442,7 @@ msgstr ""
 msgid "Cannot open or find the file in the editor"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1617
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1794
 msgid "Cannot read %s: %s"
 msgstr ""
 
@@ -2092,7 +2107,7 @@ msgstr ""
 msgid "File not found: "
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1600
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1777
 msgid "File not found: %s"
 msgstr ""
 
@@ -2170,8 +2185,8 @@ msgstr ""
 msgid "Free without nil-out - prefer FreeAndNil for dangling-pointer safety"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:472
-#: reDelphix/source/uRdxFixRunner.pas:690
+#: reDelphix/source/uRdxFixRunner.pas:596
+#: reDelphix/source/uRdxFixRunner.pas:814
 msgid "FreeAndNil sets %s to nil before the destructor runs"
 msgstr ""
 
@@ -3550,8 +3565,8 @@ msgstr ""
 msgid "Silent Mode"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:531
-#: reDelphix/source/uRdxFloatEqualityFix.pas:533
+#: reDelphix/source/uRdxFloatEqualityFix.pas:624
+#: reDelphix/source/uRdxFloatEqualityFix.pas:626
 msgid "Single %s compared with %s - the SameValue overloads could be ambiguous (E2251)"
 msgstr ""
 
@@ -3770,11 +3785,11 @@ msgstr ""
 msgid "The function name on the right side is a recursive call, not the current result"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1810
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1987
 msgid "The profile name must not be empty."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1878
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2055
 msgid "There is no profile \"%s\"."
 msgstr ""
 
@@ -4094,7 +4109,7 @@ msgstr ""
 msgid "a block comment starts after the unit line"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1125
+#: reDelphix/source/uRdxFixRunner.pas:1249
 msgid "a call raises ENotImplemented instead of doing nothing"
 msgstr ""
 
@@ -4225,7 +4240,7 @@ msgstr ""
 msgid "a string literal names \"%s\" (ClassName, FindClass, RTTI)"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:387
+#: reDelphix/source/uRdxMethodNameFix.pas:488
 msgid "a string literal names \"%s\" (line %d) - a lookup by name (RTTI, MethodAddress, script) may compare case-sensitively"
 msgstr ""
 
@@ -4465,7 +4480,7 @@ msgstr ""
 msgid "class %s - without an inheritance chain, inherited does not belong there"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:487
+#: reDelphix/source/uRdxAvoidOutFix.pas:508
 msgid "class %s implements interfaces - %s could implement an interface method"
 msgstr ""
 
@@ -4602,7 +4617,7 @@ msgstr ""
 msgid "comment in the unreachable code - it may document parked code; delete by hand"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:438
+#: reDelphix/source/uRdxFloatEqualityFix.pas:513
 msgid "comment inside \"%s\""
 msgstr ""
 
@@ -4715,8 +4730,8 @@ msgstr ""
 msgid "comment, string or directive on the line"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:395
-#: reDelphix/source/uRdxFloatEqualityFix.pas:427
+#: reDelphix/source/uRdxFloatEqualityFix.pas:470
+#: reDelphix/source/uRdxFloatEqualityFix.pas:502
 msgid "comparison \"%s\" not on the reported line"
 msgstr ""
 
@@ -4937,7 +4952,7 @@ msgstr ""
 msgid "directive %s - the routine is reachable from outside or has no body"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:920
+#: reDelphix/source/uRdxFixRunner.pas:1044
 msgid "directive in a uses clause - an entry may apply only in one branch"
 msgstr ""
 
@@ -5045,7 +5060,7 @@ msgstr ""
 msgid "file with an FPC switch or FPC mode - FPC 3.2 knows no unit scopes"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:733
+#: reDelphix/source/uRdxFixRunner.pas:857
 msgid "file with an FPC switch or FPC mode - in objfpc only Foo() calls a procedure variable"
 msgstr ""
 
@@ -5127,7 +5142,7 @@ msgstr ""
 msgid "header without return type, not a method - the quick fix does not read the declaration; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:944
+#: reDelphix/source/uRdxFixRunner.pas:1068
 msgid "heuristic finding - compile afterwards; if %s has an initialization section (registration), it no longer runs"
 msgstr ""
 
@@ -5158,7 +5173,7 @@ msgstr ""
 msgid "include %s before implementation %s - it can declare the name, call it or name it as a property accessor, and the quick fix does not see it"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:296
+#: reDelphix/source/uRdxMethodNameFix.pas:331
 msgid "include directive in the class body (line %d) - it can declare more of the class"
 msgstr ""
 
@@ -5304,7 +5319,7 @@ msgstr ""
 msgid "line %d ends with the comment \"%s\" - a marker after code applies to the line after it or stays; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1240
+#: reDelphix/source/uRdxFixRunner.pas:1364
 msgid "line %d is ambiguous (%d statements with a nil comparison)"
 msgstr ""
 
@@ -5553,8 +5568,8 @@ msgstr ""
 msgid "no \"if .. then %s := .. else %s := ..\" on the reported line"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:181
-#: reDelphix/source/uRdxAvoidOutFix.pas:662
+#: reDelphix/source/uRdxAvoidOutFix.pas:197
+#: reDelphix/source/uRdxAvoidOutFix.pas:683
 msgid "no \"out\" parameter at the reported column"
 msgstr ""
 
@@ -5711,7 +5726,7 @@ msgstr ""
 msgid "no declaration follows the keyword"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:212
+#: reDelphix/source/uRdxMethodNameFix.pas:245
 msgid "no declaration of \"%s\" on the reported line"
 msgstr ""
 
@@ -5848,8 +5863,8 @@ msgstr ""
 msgid "no if, case or except found for the else"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:312
-#: reDelphix/source/uRdxMethodNameFix.pas:320
+#: reDelphix/source/uRdxMethodNameFix.pas:347
+#: reDelphix/source/uRdxMethodNameFix.pas:355
 msgid "no implementation %s.%s in this file (abstract, external or in an include)"
 msgstr ""
 
@@ -5933,8 +5948,8 @@ msgstr ""
 msgid "no previous \"%s\" section found"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:741
-#: reDelphix/source/uRdxFixRunner.pas:826
+#: reDelphix/source/uRdxFixRunner.pas:865
+#: reDelphix/source/uRdxFixRunner.pas:950
 msgid "no quick fix at this place"
 msgstr ""
 
@@ -6033,7 +6048,7 @@ msgstr ""
 msgid "no statement starts the reported line"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1237
+#: reDelphix/source/uRdxFixRunner.pas:1361
 msgid "no statement with a nil comparison starts on line %d"
 msgstr ""
 
@@ -6088,7 +6103,7 @@ msgstr ""
 msgid "no var section before the declaration"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:390
+#: reDelphix/source/uRdxFloatEqualityFix.pas:465
 msgid "no variable in \"%s\""
 msgstr ""
 
@@ -6371,7 +6386,7 @@ msgstr ""
 msgid "operand spans several lines"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:672
+#: reDelphix/source/uRdxAvoidOutFix.pas:693
 msgid "operator - its signature is fixed"
 msgstr ""
 
@@ -7147,6 +7162,10 @@ msgstr ""
 msgid "the comma ends a list inside \"[...]\" (set or array literal)"
 msgstr ""
 
+#: reDelphix/source/uRdxFixRunner.pas:528
+msgid "the comment in line %d mentions FreeAndNil - free first, then nil is probably intended there"
+msgstr ""
+
 #: reDelphix/source/uRdxNoSonarFix.pas:169
 msgid "the comment names NOSONAR more than once"
 msgstr ""
@@ -7181,7 +7200,7 @@ msgstr ""
 msgid "the condition is always False - the branch never ran; whether \"= 0\" was meant is for a human to decide"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1155
+#: reDelphix/source/uRdxFixRunner.pas:1279
 msgid "the condition is not proven as Boolean (a call, a path or arithmetic as operand) - with a Variant \"not\" would be bitwise"
 msgstr ""
 
@@ -7238,7 +7257,8 @@ msgstr ""
 msgid "the declaration is not in the body of class %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:283
+#: reDelphix/source/uRdxMethodNameFix.pas:318
+#: reDelphix/source/uRdxMethodNameFix.pas:436
 msgid "the declaration is spelled \"%s\", the finding names \"%s\""
 msgstr ""
 
@@ -7251,7 +7271,8 @@ msgstr ""
 msgid "the declaration of \"%s\" (line %d) is not \"TList<%s>\""
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:280
+#: reDelphix/source/uRdxMethodNameFix.pas:315
+#: reDelphix/source/uRdxMethodNameFix.pas:433
 msgid "the declaration of \"%s\" cannot be read safely"
 msgstr ""
 
@@ -7264,7 +7285,7 @@ msgstr ""
 msgid "the declaration of %s in line %d is not readable"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:592
+#: reDelphix/source/uRdxAvoidOutFix.pas:613
 msgid "the declaration of %s is not in this file"
 msgstr ""
 
@@ -7280,7 +7301,7 @@ msgstr ""
 msgid "the declaration of %s.%s in line %d cannot be read - whether it is abstract remains open; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:543
+#: reDelphix/source/uRdxFloatEqualityFix.pas:636
 msgid "the detector rates the comparison as intended (guard or sentinel value) - the exact comparison is right there"
 msgstr ""
 
@@ -7391,7 +7412,7 @@ msgstr ""
 msgid "the file declares its own %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:478
+#: reDelphix/source/uRdxFloatEqualityFix.pas:571
 msgid "the file declares its own %s - it is not the function of System.Math"
 msgstr ""
 
@@ -7440,7 +7461,7 @@ msgstr ""
 msgid "the file has an FPC switch (line %d) - FPC 3.2 has no inline variables"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:510
+#: reDelphix/source/uRdxAvoidOutFix.pas:531
 msgid "the file includes other files - they could declare %s"
 msgstr ""
 
@@ -7558,11 +7579,10 @@ msgstr ""
 msgid "the header names %s, the message %s"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:458
-#: reDelphix/source/uRdxAvoidOutFix.pas:476
-#: reDelphix/source/uRdxAvoidOutFix.pas:489
-#: reDelphix/source/uRdxAvoidOutFix.pas:532
-#: reDelphix/source/uRdxAvoidOutFix.pas:537
+#: reDelphix/source/uRdxAvoidOutFix.pas:474
+#: reDelphix/source/uRdxAvoidOutFix.pas:493
+#: reDelphix/source/uRdxAvoidOutFix.pas:510
+#: reDelphix/source/uRdxAvoidOutFix.pas:558
 msgid "the header of %s is not safe to read"
 msgstr ""
 
@@ -7616,7 +7636,7 @@ msgstr ""
 msgid "the implementation is not in the implementation section"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:460
+#: reDelphix/source/uRdxAvoidOutFix.pas:476
 msgid "the implementation of %s is not in this file"
 msgstr ""
 
@@ -7769,7 +7789,7 @@ msgstr ""
 msgid "the line has more than one header of the method %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:432
+#: reDelphix/source/uRdxFloatEqualityFix.pas:507
 msgid "the line has the comparison \"%s\" more than once - ambiguous"
 msgstr ""
 
@@ -7956,7 +7976,7 @@ msgstr ""
 msgid "the message does not name the bounds - analyse the file again"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:384
+#: reDelphix/source/uRdxFloatEqualityFix.pas:459
 msgid "the message does not name the comparison"
 msgstr ""
 
@@ -8095,7 +8115,7 @@ msgstr ""
 msgid "the message names no list variable or no item type"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:376
+#: reDelphix/source/uRdxMethodNameFix.pas:470
 msgid "the message names no method with a lowercase first letter"
 msgstr ""
 
@@ -8148,6 +8168,7 @@ msgstr ""
 msgid "the method is under \"%s\", not under private"
 msgstr ""
 
+#: reDelphix/source/uRdxAvoidOutFix.pas:504
 #: reDelphix/source/uRdxConstStringParameterFix.pas:235
 msgid "the method is visible outside the unit (not private, class in the interface section) - other units can use it as a method pointer"
 msgstr ""
@@ -8235,7 +8256,7 @@ msgstr ""
 msgid "the operand is not a plain identifier - a call or an index, for example; the cast could be needed to compile"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:625
+#: reDelphix/source/uRdxAvoidOutFix.pas:646
 msgid "the other header of %s has no matching \"out %s\""
 msgstr ""
 
@@ -8271,7 +8292,7 @@ msgstr ""
 msgid "the override or the method of the ancestor %s stands before any visibility section - the visibility is not certain; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:667
+#: reDelphix/source/uRdxAvoidOutFix.pas:688
 msgid "the parameter list belongs to a procedural type or an anonymous method - its signature is a contract"
 msgstr ""
 
@@ -8349,7 +8370,7 @@ msgstr ""
 msgid "the reported line carries several \"except\" - ambiguous"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:214
+#: reDelphix/source/uRdxMethodNameFix.pas:247
 msgid "the reported line declares \"%s\" more than once"
 msgstr ""
 
@@ -8361,7 +8382,8 @@ msgstr ""
 msgid "the reported line holds \"%s := %s * %s;\" more than once"
 msgstr ""
 
-#: reDelphix/source/uRdxMethodNameFix.pas:210
+#: reDelphix/source/uRdxMethodNameFix.pas:242
+#: reDelphix/source/uRdxMethodNameFix.pas:409
 msgid "the reported line holds the implementation of \"%s\", not its declaration - no class of this file declares it before"
 msgstr ""
 
@@ -8401,6 +8423,7 @@ msgstr ""
 msgid "the routine is called %s, the message names %s"
 msgstr ""
 
+#: reDelphix/source/uRdxAvoidOutFix.pas:553
 #: reDelphix/source/uRdxConstStringParameterFix.pas:229
 msgid "the routine is declared in the interface section (line %d) - other units can use it as a procedure value"
 msgstr ""
@@ -8502,7 +8525,7 @@ msgstr ""
 msgid "the target is a Variant - behind 'X +' Delphi computes Variant arithmetic instead of concatenating, the compiler vouches for no operand"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1180
+#: reDelphix/source/uRdxFixRunner.pas:1304
 msgid "the target is missing"
 msgstr ""
 
@@ -8556,12 +8579,12 @@ msgstr ""
 msgid "the unit declares a class operator Initialize/Finalize (managed record) - a variable can run code"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:396
+#: reDelphix/source/uRdxFixRunner.pas:511
 msgid "the unit declares its own method Free - FreeAndNil would not call it"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:495
-#: reDelphix/source/uRdxFixRunner.pas:765
+#: reDelphix/source/uRdxFixRunner.pas:619
+#: reDelphix/source/uRdxFixRunner.pas:889
 msgid "the unit declares its own routine %s"
 msgstr ""
 
@@ -8621,23 +8644,23 @@ msgstr ""
 msgid "type of %s not proven here - it must be declared as %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:508
+#: reDelphix/source/uRdxFloatEqualityFix.pas:601
 msgid "type of %s not proven here - only Single, Double, Extended and Real operands are rewritten"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1267
+#: reDelphix/source/uRdxFixRunner.pas:1391
 msgid "type of %s unknown - for a function or method pointer '= nil' calls it, Assigned() does not"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:767
+#: reDelphix/source/uRdxFixRunner.pas:891
 msgid "type of %s unknown - for a function type \"%s <> nil\" calls it, Assigned() does not"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:716
+#: reDelphix/source/uRdxFixRunner.pas:840
 msgid "type of %s unknown - if it is procedural, Delphi reads the name without () as a pointer"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1062
+#: reDelphix/source/uRdxFixRunner.pas:1186
 msgid "type of %s unknown - only a cast to its own type is provably without effect"
 msgstr ""
 
@@ -8670,7 +8693,7 @@ msgstr ""
 msgid "unexpected code after the empty block"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1003
+#: reDelphix/source/uRdxFixRunner.pas:1127
 msgid "unhandled values raise EInvalidOpException"
 msgstr ""
 
@@ -8678,8 +8701,8 @@ msgstr ""
 msgid "unit without an implementation part (script?) - only the compiler knows %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:794
-#: reDelphix/source/uRdxFixRunner.pas:1148
+#: reDelphix/source/uRdxFixRunner.pas:918
+#: reDelphix/source/uRdxFixRunner.pas:1272
 #: reDelphix/source/uRdxIntegerOverflowFix.pas:231
 msgid "unknown"
 msgstr ""
@@ -8692,7 +8715,7 @@ msgstr ""
 msgid "unknown message - no \"%s\""
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:654
+#: reDelphix/source/uRdxAvoidOutFix.pas:675
 msgid "untyped \"out\" parameter - \"var\" would mean something else"
 msgstr ""
 
@@ -8738,7 +8761,7 @@ msgstr ""
 msgid "whitespace only"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1317
+#: reDelphix/source/uRdxFixRunner.pas:1441
 msgid "with statement - an operand could be a member of the with expression"
 msgstr ""
 
@@ -8754,13 +8777,13 @@ msgstr ""
 msgid "with statement can silently rebind identifiers - avoid it"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:305
-#: reDelphix/source/uRdxFixRunner.pas:498
-#: reDelphix/source/uRdxFixRunner.pas:708
-#: reDelphix/source/uRdxFixRunner.pas:787
-#: reDelphix/source/uRdxFixRunner.pas:1059
-#: reDelphix/source/uRdxFixRunner.pas:1143
-#: reDelphix/source/uRdxFixRunner.pas:1177
+#: reDelphix/source/uRdxFixRunner.pas:333
+#: reDelphix/source/uRdxFixRunner.pas:622
+#: reDelphix/source/uRdxFixRunner.pas:832
+#: reDelphix/source/uRdxFixRunner.pas:911
+#: reDelphix/source/uRdxFixRunner.pas:1183
+#: reDelphix/source/uRdxFixRunner.pas:1267
+#: reDelphix/source/uRdxFixRunner.pas:1301
 msgid "with statement in the routine - %s could be a member"
 msgstr ""
 
@@ -8781,8 +8804,8 @@ msgstr ""
 msgid "with statement in the routine - an argument could be a member"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:483
-#: reDelphix/source/uRdxFloatEqualityFix.pas:549
+#: reDelphix/source/uRdxFloatEqualityFix.pas:576
+#: reDelphix/source/uRdxFloatEqualityFix.pas:642
 msgid "with statement in the routine - an operand or %s could bind to a member"
 msgstr ""
 
