@@ -160,9 +160,10 @@ type
   //                     FPC-Weiche im Include sperren hier NICHT (FpcKnows),
   //                     nur alte Delphi-Projekte (rwE29: GExperts mit
   //                     GExpert4.dof). IncludeReason fragt der Adapter fuer
-  //                     den Hauptweg nicht (Entscheid M1, uRdxFixTable.
-  //                     FormatSettingsDiskCheck) - der Satz in R_INC_OLD
-  //                     steht nur fuer einen kuenftigen Aufrufer.
+  //                     den Hauptweg seit dem Nico-Entscheid M1b
+  //                     (2026-10-30) ueber ProjectReason - nur ohne
+  //                     Projekt der Unit ab XE, nur Delphi-Weichen bis XE
+  //                     (R_INC_OLD), kein Grund fuer ein fehlendes Include.
   //   lfExceptionClasses SCA127 EArgumentException/EInvalidOpException - ab
   //                     Delphi 2009 (FLOOR_DEFAULT_FN; Realworld-Test rwE30
   //                     Stufe 2, Nico-Entscheid "Sperre bei Beleg": GExperts
@@ -348,7 +349,9 @@ type
     // e/HilfeFixG). Sonst - fuer lfFormatSettingsVar seit rwE31 Stufe 3
     // zuerst ein Kit-Include der Unit (KitIncludeReason; widerlegt nur durch
     // ein Programm mit .dproj ab XE, das die Unit enthaelt, auch ohne
-    // Dateinamen geprueft) - FileReason und, mit AIncludes, IncludeReason
+    // Dateinamen geprueft) - FileReason und, mit AIncludes bzw. seit dem
+    // Nico-Entscheid M1b fuer lfFormatSettingsVar ohne Projekt der Unit ab
+    // XE, IncludeReason
     // (fuer lfFormatInvariant widerlegt durch ein Paket der Unit, das
     // Invariant nutzt, bzw. seit rwE31 Stufe 3 bei einer FMX-Unit durch
     // Pakete nur ab 10.3 - PackageFloorProof).
@@ -2228,16 +2231,16 @@ end;
 // Hauptweg SCA128/SCA059: ein Kit-Include der Unit (mormot.defines.inc,
 // jvcl.inc .. - uRdxCompilerTraces.OldCompilerTraceOf; der Planer prueft
 // seit rwE31 Stufe 3 nur die Bedingungen der Datei) sperrt, ausser ein
-// Projekt der Unit ab Delphi XE widerlegt es (ModernProjectProof). '' oder
-// der Grund.
-function KitIncludeReason(const AFileName: string; AMap: TRdxCodeMap): string;
+// Projekt der Unit ab Delphi XE widerlegt es (AModern: ModernProjectProof).
+// '' oder der Grund.
+function KitIncludeReason(AMap: TRdxCodeMap; AModern: Boolean): string;
 var
   Kit : string;
   Li  : Integer;
 begin
   Result := '';
   Kit := OldCompilerTraceOf(AMap, FLOOR_SETTINGS_VAR, False, True, Li);
-  if (Kit = '') or ModernProjectProof(AFileName, lfFormatSettingsVar) then
+  if (Kit = '') or AModern then
     Exit;
   Result := _(R_KIT_OLD_VAR, [Kit, Li]);
 end;
@@ -2392,9 +2395,11 @@ end;
 class function TRdxMagicFixes.ProjectReason(const AFileName: string;
   AMap: TRdxCodeMap; AFeature: TRdxLateFeature; AIncludes: Boolean): string;
 var
-  Proof : TRdxModernProof;
+  Proof  : TRdxModernProof;
+  Modern : Boolean;
 begin
   Result := '';
+  Modern := False;
   // Kein Beleg auf einem Netzpfad: SCA127 liest dort nichts und sperrt
   // nicht (die anderen Sprachmittel sperren dort, FileReason).
   if not MissingBlocks(AFeature) and IsNetworkPath(AFileName) then Exit;
@@ -2415,12 +2420,22 @@ begin
   // Planer) - auch ohne Dateinamen (dann ohne Widerlegung).
   if AFeature = lfFormatSettingsVar then
   begin
-    Result := KitIncludeReason(AFileName, AMap);
+    Modern := ModernProjectProof(AFileName, AFeature);
+    Result := KitIncludeReason(AMap, Modern);
     if Result <> '' then Exit;
   end;
   if AFileName = '' then Exit;
   Result := FileReason(AFileName, AFeature);
-  if (Result = '') and AIncludes then
+  // Nico-Entscheid M1b (2026-10-30, ersetzt M1 fuer diesen Fall): auch der
+  // Hauptweg liest die Includes - aber nur ohne Projekt der Unit ab XE
+  // (Modern). Es sperrt nur eine Delphi-Weiche bis XE (OldCompilerTrace mit
+  // FLOOR_SETTINGS_VAR); FPC-Weichen nicht (FpcKnows), ein nicht gefundenes
+  // oder nicht lesbares Include auch nicht (IncludeReason: kein Beleg).
+  // doublecmd Image32\source\Clipper2\Clipper.pas:657 - Clipper.inc fragt
+  // 'COMPILERVERSION < 14' (Delphi 6+), die globale FormatSettings gibt es
+  // erst ab XE.
+  if (Result = '') and (AIncludes
+     or ((AFeature = lfFormatSettingsVar) and not Modern)) then
   begin
     Result := IncludeReason(AFileName, AMap, AFeature);
     // Die Spuren im Include widerlegt ein Paket der Unit, das Invariant
@@ -2515,8 +2530,10 @@ begin
   Check.Test := CompilerInInclude;
   Check.Arg := IntToStr(Ord(AFeature));
   // Ein Include, das nicht zu lesen ist, ist fuer lfExceptionClasses kein
-  // Beleg (MissingBlocks): das leere Muster gibt keinen Grund.
-  if MissingBlocks(AFeature) then
+  // Beleg (MissingBlocks): das leere Muster gibt keinen Grund. Ebenso fuer
+  // lfFormatSettingsVar (Nico-Entscheid M1b: nur eine gelesene Weiche
+  // sperrt den Hauptweg).
+  if MissingBlocks(AFeature) and (AFeature <> lfFormatSettingsVar) then
     Check.MissingFmt := _(R_INC_UNSEEN)
   else
     Check.MissingFmt := '';

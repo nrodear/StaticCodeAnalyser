@@ -50,6 +50,7 @@ type
     // ---- Realworld-Test rwE31 Stufe 3 ----
     [Test] procedure Disk_KitIncludeModernProject_Refutes;
     [Test] procedure Disk_FmxPackageFloor_RefutesInclude;
+    [Test] procedure Disk_MainWayIncludeSwitch_M1b;
   end;
 
 implementation
@@ -791,6 +792,56 @@ begin
       + 'contains' + #13#10 + '  Other in ''other.pas'';' + #13#10 + 'end.');
     AssertNames(ProjectReasonOf(T.U, FMX_SRC, lfFormatInvariant, True),
       ['defs.inc']);
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Disk_MainWayIncludeSwitch_M1b;
+const
+  CLIPPER_SRC = 'unit u;' + #13#10 + 'interface' + #13#10
+    + '{$I Clipper.inc}' + #13#10 + 'uses' + #13#10
+    + '  Math, SysUtils, Classes;' + #13#10 + 'implementation' + #13#10
+    + 'end.';
+  CLIPPER_INC = '{$IFDEF FPC}' + #13#10 + '  {$DEFINE INLINING}' + #13#10
+    + '  {$MODE DELPHI}' + #13#10 + '{$ELSE}' + #13#10
+    + '  {$IF COMPILERVERSION < 14}' + #13#10
+    + '    Requires Delphi version 6 or above.' + #13#10 + '  {$IFEND}'
+    + #13#10 + '{$ENDIF}';
+  FPC_INC = '{$IFDEF FPC}' + #13#10 + '  {$MODE DELPHI}' + #13#10
+    + '{$ENDIF}';
+  DPR_SRC = 'program demo;' + #13#10 + 'uses' + #13#10
+    + '  u in ''c\u.pas'';' + #13#10 + 'begin' + #13#10 + 'end.';
+var
+  T : TTree;
+begin
+  // Nico-Entscheid M1b (2026-10-30): doublecmd components\Image32\source\
+  // Clipper2\Clipper.pas:657/659 (SCA059) - Clipper.inc laesst Delphi 6+
+  // zu ('COMPILERVERSION < 14'), die globale FormatSettings gibt es erst ab
+  // XE; im Fenster nur Image32.lpk (Lazarus sperrt den Hauptweg nicht). Bis
+  // dahin las der Hauptweg keine Includes (M1) und bot ', FormatSettings' an.
+  T := NewTree;
+  try
+    WriteText(T.C + 'Clipper.inc', CLIPPER_INC);
+    WriteText(T.A + 'Image32.lpk', '<CONFIG/>');
+    AssertNames(ProjectReasonOf(T.U, CLIPPER_SRC, lfFormatSettingsVar, False),
+      ['Clipper.inc', 'COMPILERVERSION < 14']);
+    // Gegenprobe: ein Programm mit .dproj ab XE im Fenster enthaelt die
+    // Unit - frei (ModernProjectProof geht vor).
+    WriteText(T.B + 'demo.dpr', DPR_SRC);
+    WriteDproj(T.B + 'demo.dproj', '20.3');
+    Assert.AreEqual('', ProjectReasonOf(T.U, CLIPPER_SRC, lfFormatSettingsVar,
+      False), 'Projekt ab XE');
+    DeleteFile(T.B + 'demo.dpr');
+    DeleteFile(T.B + 'demo.dproj');
+    // Gegenprobe: nur eine FPC-Weiche im Include - FPC kennt FormatSettings.
+    WriteText(T.C + 'Clipper.inc', FPC_INC);
+    Assert.AreEqual('', ProjectReasonOf(T.U, CLIPPER_SRC, lfFormatSettingsVar,
+      False), 'nur FPC-Weiche');
+    // Gegenprobe: ein nicht gefundenes Include ist kein Beleg.
+    DeleteFile(T.C + 'Clipper.inc');
+    Assert.AreEqual('', ProjectReasonOf(T.U, CLIPPER_SRC, lfFormatSettingsVar,
+      False), 'Include fehlt');
   finally
     RemoveTree(T.Root);
   end;

@@ -88,7 +88,7 @@ type
     // ---- Realworld-Test rwE29: was nur die Platte weiss ----
     [Test] procedure Sca128_Detector_OldDelphiProject_NoHelp;
     [Test] procedure Sca128_Detector_LazarusProject_OnlyMainWay;
-    [Test] procedure Sca128_Detector_OldTraceOnlyInInclude_MainWayStays;
+    [Test] procedure Sca128_Detector_OldTraceInInclude_M1b;
     [Test] procedure Sca128_Detector_PairInFile_HintNamesLine;
   end;
 {$ENDIF}
@@ -1423,18 +1423,19 @@ begin
   end;
 end;
 
-procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_OldTraceOnlyInInclude_MainWayStays;
+procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_OldTraceInInclude_M1b;
 var
   Root, U, Src : string;
   Seen         : TArray<TSeen>;
   O            : TRdxFixOutcome;
 begin
-  // Entscheid M1 (Review e/HilfeFixC): der Hauptweg fragt die Includes
-  // nicht - eine alte Versionsweiche in einem Include ('{$IFDEF VER150}',
-  // wie jedi.inc & Co.) und ein nicht gefundenes Include sperren ihn nicht
-  // (mit der Include-Pruefung fiel er hier weg). Der Invariant-Weg bleibt
-  // streng. Gegenprobe: eine alte Projektdatei (Delphi 7, .dof) daneben
-  // sperrt auch den Hauptweg.
+  // Nico-Entscheid M1b (2026-10-30, ersetzt M1 fuer diesen Fall): eine
+  // Delphi-Weiche bis XE in einem Include ('{$IFDEF VER150}') sperrt auch
+  // den Hauptweg, wenn kein Projekt der Unit ab XE im Fenster liegt; ein
+  // nicht gefundenes Include sperrt ihn nicht (bis dahin: Hauptweg
+  // angeboten, M1). Gegenproben: ohne die Weiche nur das fehlende Include -
+  // angeboten; eine alte Projektdatei (Delphi 7, .dof) sperrt mit ihrem
+  // eigenen Grund.
   Src := UnitText('SysUtils', ['{$I defs.inc}', '{$I fehlt.inc}'],
     ['  r := DateTimeToStr(d);']);
   Seen := Detect(Src);
@@ -1445,12 +1446,17 @@ begin
     WriteText(Root + 'defs.inc', '{$IFDEF VER150}' + CRLF + '  {$DEFINE D7}'
       + CRLF + '{$ENDIF}');
     O := PlanFixIn(Src, U, fkDateFormatSettings, Seen[0]);
-    Assert.IsTrue(O.Enabled, O.Reason);
-    Assert.IsTrue(Pos('DateTimeToStr(d, FormatSettings)', Apply(Src, O.Edits))
-      > 0, 'Hauptweg angewendet');
+    Assert.IsFalse(O.Enabled, 'Hauptweg gesperrt (Weiche im Include)');
+    Assert.IsTrue((Pos('defs.inc', O.Reason) > 0)
+      and (Pos('VER150', O.Reason) > 0), O.Reason);
     O := PlanAltFixIn(Src, U, fkDateFormatSettings, Seen[0]);
     Assert.IsFalse(O.Enabled, 'Invariant-Weg gesperrt (Include)');
     Assert.IsTrue(O.Reason <> '', 'mit Grund');
+    WriteText(Root + 'defs.inc', '{$DEFINE NIX}');
+    O := PlanFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsTrue(O.Enabled, O.Reason);
+    Assert.IsTrue(Pos('DateTimeToStr(d, FormatSettings)', Apply(Src, O.Edits))
+      > 0, 'Hauptweg angewendet');
     WriteText(Root + 'Prj.dof', '[Compiler]');
     O := PlanFixIn(Src, U, fkDateFormatSettings, Seen[0]);
     Assert.IsFalse(O.Enabled, 'Hauptweg gesperrt (.dof)');
