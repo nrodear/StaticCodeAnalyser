@@ -286,8 +286,65 @@ begin
   end;
 end;
 
+type
+  // Wie Sonar eine Quelldatei sieht - genau so viel, wie der Export fuer
+  // eine gueltige textRange braucht.
+  TSonarFileView = record
+    Readable : Boolean;   // Datei gelesen; sonst bleibt der Fund unveraendert
+    Binary   : Boolean;   // NUL-Byte im Inhalt (binaere DFM, UTF-16 ...)
+    Lines    : Integer;   // Zeilenzahl nach Sonar-Zaehlung
+  end;
+
+function ReadSonarFileView(const AFileName: string): TSonarFileView;
+// Zaehlt Zeilen wie SonarQube (FileMetadata): CR, LF und CRLF beenden je
+// EINE Zeile, die Zeilenzahl ist Terminatoren + 1 - eine abschliessende
+// leere Zeile zaehlt also mit. Bytebasiert: fuer UTF-8 und jede
+// ANSI-Codepage dasselbe, weil CR und LF dort einbytig sind.
+//
+// Eine Datei, die nicht zu lesen ist (fehlt, gesperrt), liefert
+// Readable = False - dann aendert der Export nichts am Fund. Das ist auch
+// der Fall aller Unit-Tests mit erfundenen Pfaden.
+const
+  BUF_SIZE = 65536;
+var
+  FS   : TFileStream;
+  Buf  : TBytes;
+  N, I : Integer;
+  Prev : Byte;
+begin
+  Result := Default(TSonarFileView);
+  if (AFileName = '') or not FileExists(AFileName) then Exit;
+  try
+    FS := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyNone);
+  except
+    // Von einem anderen Prozess exklusiv gesperrt: den Fund unveraendert
+    // exportieren statt den ganzen Report abzubrechen.
+    on EFOpenError do Exit;
+  end;
+  try
+    SetLength(Buf, BUF_SIZE);
+    Result.Lines := 1;
+    Prev := 0;
+    repeat
+      N := FS.Read(Buf[0], BUF_SIZE);
+      for I := 0 to N - 1 do
+      begin
+        case Buf[I] of
+          0  : Result.Binary := True;
+          13 : Inc(Result.Lines);
+          10 : if Prev <> 13 then Inc(Result.Lines);
+        end;
+        Prev := Buf[I];
+      end;
+    until N < BUF_SIZE;
+    Result.Readable := True;
+  finally
+    FS.Free;
+  end;
+end;
+
 function BuildIssueObject(const F: TLeakFinding; const ARelPath: string;
-  const M: TRuleMeta): TJSONObject;
+  const M: TRuleMeta; const AView: TSonarFileView): TJSONObject;
 // WARUM HIER KEINE SEVERITY DES EINZELNEN FUNDES STEHT (Recherche
 // 2026-08-22, Engine-Quelltext geprueft) - bitte nicht "nachruesten":
 //
@@ -334,10 +391,23 @@ function BuildIssueObject(const F: TLeakFinding; const ARelPath: string;
 // gerufen, um Pfade ausserhalb der Wurzel zu zaehlen. Zweimal relativieren
 // hiesse zweimal TPath.GetFullPath pro Fund - genau die Arbeit, die P4
 // aus dem Hot-Path entfernt hat.
+//
+// AView: die Datei, wie Sonar sie zaehlt (ReadSonarFileView). Steht der Fund
+// auf einer Zeile, die Sonar nicht kennt, oder ist die Datei binaer, gibt es
+// KEINE textRange - das Issue landet auf Dateiebene (textRange ist an der
+// primaryLocation optional). Eine Zeile hinter dem Dateiende laesst den
+// Scanner sonst mit "N is not a valid line for pointer"
+// (IllegalArgumentException) aussteigen. Gemessen am Realwelt-Korpus 2026-10-29:
+// 1.232 solche Issues - 1.223 in binaeren DFMs (die Engine zaehlt Zeilen der
+// TEXT-Umwandlung, Sonar die der Binaerdatei) und 9 von SCA029, das die
+// .pas-Zeile des Handlers an die .dfm haengt. Bei binaeren DFMs ist auch eine
+// Zeile INNERHALB der Grenzen bedeutungslos, deshalb dort immer Dateiebene.
+// endLine hinter dem Dateiende wird auf die letzte Zeile geklemmt.
 var
   Loc, Range : TJSONObject;
   RuleID : string;
   LineNo : Integer;
+  EndLn  : Integer;
   Msg    : string;
 begin
   RuleID := EffectiveRuleID(F, M);
@@ -368,6 +438,10 @@ begin
   Loc := TJSONObject.Create;
   Loc.AddPair('message',  Msg);
   Loc.AddPair('filePath', ARelPath);
+  Result.AddPair('primaryLocation', Loc);
+
+  // Dateiebene statt einer Zeile, die Sonar nicht hat (s. Kopf).
+  if AView.Readable and (AView.Binary or (LineNo > AView.Lines)) then Exit;
 
   Range := TJSONObject.Create;
   Range.AddPair('startLine', TJSONNumber.Create(LineNo));
@@ -380,11 +454,18 @@ begin
   // direkt lesen - SpanEnd/IsMultiLine benutzen, die klemmen") gilt
   // auch hier; der SARIF-Schwesterpfad haelt sich laengst daran.
   // Ausgabe byte-identisch, solange EndLine geklemmt gueltig ist (G3-2).
-  if F.SpanEnd > LineNo then
-    Range.AddPair('endLine', TJSONNumber.Create(F.SpanEnd));
+  //
+  // OFFEN (2026-10-29): ohne startColumn markiert der Importer nach allem,
+  // was die Doku hergibt, nur die startLine (ganze Zeile) - endLine waere
+  // dann wirkungslos. Ob das stimmt, zeigt erst der Roundtrip gegen einen
+  // echten Server (sca_sonar_reconcile.py zaehlt "endLine angekommen/
+  // verloren"); bis dahin bleibt das Feld unveraendert.
+  EndLn := F.SpanEnd;
+  if AView.Readable and (EndLn > AView.Lines) then
+    EndLn := AView.Lines;
+  if EndLn > LineNo then
+    Range.AddPair('endLine', TJSONNumber.Create(EndLn));
   Loc.AddPair('textRange', Range);
-
-  Result.AddPair('primaryLocation', Loc);
 end;
 
 function PathLeftAbsolute(const ARelPath: string): Boolean;
@@ -567,6 +648,8 @@ var
   First     : Boolean;
   BaseFull  : string;
   CaseCache : TDictionary<string, string>;
+  Views     : TDictionary<string, TSonarFileView>;
+  View      : TSonarFileView;
 begin
   Result := 0;
   First  := True;
@@ -579,8 +662,11 @@ begin
     BaseFull := IncludeTrailingPathDelimiter(TPath.GetFullPath(ABaseDir))
   else
     BaseFull := '';
+  Views     := nil;
   CaseCache := TDictionary<string, string>.Create;
   try
+    // Je Datei EIN Lesedurchgang fuer die Zeilenzahl (BuildIssueObject).
+    Views := TDictionary<string, TSonarFileView>.Create;
     for F in AFindings do
     begin
       if F.Kind = fkFileReadError then Continue;
@@ -608,11 +694,17 @@ begin
         Inc(Result)
       else if BaseFull <> '' then
         RelPath := TrueCaseRelPath(BaseFull, RelPath, CaseCache);
+      if not Views.TryGetValue(F.FileName, View) then
+      begin
+        View := ReadSonarFileView(F.FileName);
+        Views.Add(F.FileName, View);
+      end;
       if not First then WStr(AStream, ',');
       First := False;
-      WObj(AStream, BuildIssueObject(F, RelPath, Meta));
+      WObj(AStream, BuildIssueObject(F, RelPath, Meta, View));
     end;
   finally
+    Views.Free;
     CaseCache.Free;
   end;
 end;

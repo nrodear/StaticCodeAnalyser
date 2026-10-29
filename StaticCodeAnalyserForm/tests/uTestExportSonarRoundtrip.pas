@@ -29,6 +29,12 @@ type
     // Gross-/Kleinschreibung: Sonar vergleicht den Pfad exakt
     [Test] procedure FilePath_TakesCasingFromDisk;
     [Test] procedure FilePath_MissingFileKeepsSpelling;
+    // Zeilen, die Sonar nicht kennt: Scanner-Abbruch statt Fund
+    [Test] procedure BinaryFile_IssueOnFileLevel;
+    [Test] procedure LineBeyondEof_IssueOnFileLevel;
+    [Test] procedure EndLineBeyondEof_IsClamped;
+    [Test] procedure LoneCr_CountsAsLineLikeSonar;
+    [Test] procedure UnreadableFile_KeepsTextRange;
   end;
 
 implementation
@@ -55,6 +61,18 @@ end;
 function FirstIssue(ARoot: TJSONObject): TJSONObject;
 begin
   Result := ARoot.GetValue<TJSONArray>(KEY_ISSUES).Items[0] as TJSONObject;
+end;
+
+function TextRangeOf(ARoot: TJSONObject): TJSONObject;
+// nil, wenn das Issue auf Dateiebene steht.
+var
+  V : TJSONValue;
+begin
+  V := FirstIssue(ARoot).GetValue<TJSONObject>(KEY_PRIMARY).GetValue('textRange');
+  if V is TJSONObject then
+    Result := TJSONObject(V)
+  else
+    Result := nil;
 end;
 
 function FilePathOf(ARoot: TJSONObject): string;
@@ -134,6 +152,118 @@ begin
       TPath.Combine(TPath.Combine(FDir, 'gibtsnicht'), 'Weg.PAS'), 3));
     Root := Report(Findings);
     Assert.AreEqual('gibtsnicht/Weg.PAS', FilePathOf(Root));
+  finally
+    Root.Free;
+    Findings.Free;
+  end;
+end;
+
+{ ---- Zeilen, die Sonar nicht kennt ---- }
+
+procedure TTestExportSonarRoundtrip.BinaryFile_IssueOnFileLevel;
+// Binaere DFM: die Engine zaehlt Zeilen der TEXT-Umwandlung, Sonar die der
+// Binaerdatei. Zeile 5 gibt es dort nicht ("5 is not a valid line for
+// pointer" - Scanner-Abbruch); und selbst eine Zeile innerhalb der Grenzen
+// zeigte auf Binaermuell. Also Dateiebene: keine textRange.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Root     : TJSONObject;
+begin
+  Root := nil;
+  WriteBytes('Bin.dfm', TBytes.Create($FF, $0A, $00, Ord('T'), Ord('P'),
+    Ord('F'), Ord('0'), $00, $01, $02));
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkDfmDefaultName, TPath.Combine(FDir, 'Bin.dfm'), 5));
+    Root := Report(Findings);
+    Assert.IsNull(TextRangeOf(Root), 'binaere Datei: Issue ohne textRange');
+    Assert.AreEqual('Bin.dfm', FilePathOf(Root), 'der Fund selbst bleibt');
+  finally
+    Root.Free;
+    Findings.Free;
+  end;
+end;
+
+procedure TTestExportSonarRoundtrip.LineBeyondEof_IssueOnFileLevel;
+// Zwei Zeilen nach Sonar ('a', 'b'), Fund auf Zeile 7.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Root     : TJSONObject;
+begin
+  Root := nil;
+  WriteBytes('Kurz.pas', TEncoding.ASCII.GetBytes('a'#13#10'b'));
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, TPath.Combine(FDir, 'Kurz.pas'), 7));
+    Root := Report(Findings);
+    Assert.IsNull(TextRangeOf(Root), 'Zeile hinter dem Dateiende: Dateiebene');
+  finally
+    Root.Free;
+    Findings.Free;
+  end;
+end;
+
+procedure TTestExportSonarRoundtrip.EndLineBeyondEof_IsClamped;
+// Fuenf Zeilen nach Sonar (vier CRLF + 'e'), Fund 2..9: endLine wird 5.
+var
+  Findings : TObjectList<TLeakFinding>;
+  F        : TLeakFinding;
+  Root     : TJSONObject;
+begin
+  Root := nil;
+  WriteBytes('Fuenf.pas', TEncoding.ASCII.GetBytes(
+    'a'#13#10'b'#13#10'c'#13#10'd'#13#10'e'));
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    F := MakeFinding(fkLongMethod, TPath.Combine(FDir, 'Fuenf.pas'), 2);
+    F.EndLine := 9;
+    Findings.Add(F);
+    Root := Report(Findings);
+    Assert.IsNotNull(TextRangeOf(Root));
+    Assert.AreEqual<Integer>(2, TextRangeOf(Root).GetValue<Integer>('startLine'));
+    Assert.AreEqual<Integer>(5, TextRangeOf(Root).GetValue<Integer>('endLine'));
+  finally
+    Root.Free;
+    Findings.Free;
+  end;
+end;
+
+procedure TTestExportSonarRoundtrip.LoneCr_CountsAsLineLikeSonar;
+// Sonar zaehlt ein einzelnes CR als Zeilenende: 'a'#13'b'#13'c' hat drei
+// Zeilen, Zeile 3 ist gueltig und behaelt ihre textRange.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Root     : TJSONObject;
+begin
+  Root := nil;
+  WriteBytes('Cr.pas', TEncoding.ASCII.GetBytes('a'#13'b'#13'c'));
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, TPath.Combine(FDir, 'Cr.pas'), 3));
+    Root := Report(Findings);
+    Assert.IsNotNull(TextRangeOf(Root), 'Zeile 3 existiert nach Sonar-Zaehlung');
+    Assert.AreEqual<Integer>(3, TextRangeOf(Root).GetValue<Integer>('startLine'));
+  finally
+    Root.Free;
+    Findings.Free;
+  end;
+end;
+
+procedure TTestExportSonarRoundtrip.UnreadableFile_KeepsTextRange;
+// Ohne lesbare Datei weiss der Export nichts ueber ihre Zeilen - dann bleibt
+// der Fund wie er ist (das ist auch der Fall aller Tests mit erfundenen
+// Pfaden in uTestExportSonarGeneric).
+var
+  Findings : TObjectList<TLeakFinding>;
+  Root     : TJSONObject;
+begin
+  Root     := nil;
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, TPath.Combine(FDir, 'Fehlt.pas'), 42));
+    Root := Report(Findings);
+    Assert.IsNotNull(TextRangeOf(Root));
+    Assert.AreEqual<Integer>(42, TextRangeOf(Root).GetValue<Integer>('startLine'));
   finally
     Root.Free;
     Findings.Free;
