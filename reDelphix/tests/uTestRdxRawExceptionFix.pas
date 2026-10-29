@@ -64,6 +64,10 @@ type
     // ---- Tabellenzeile ----
     [Test] procedure Table_BothEntriesMarked;
     [Test] procedure Table_MissingSysUtils_AddsUses;
+    // ---- Realworld-Test rwE29 (uses im Text, PlanUses) ----
+    [Test] procedure Table_SysUtilsBehindKeywordSegment_NoSecondUses;
+    [Test] procedure Table_SysUtilsOnlyUnderCondition_NoHelp;
+    [Test] procedure Table_SysUtilsOnlyInComment_AddsUses;
   end;
 {$ENDIF}
 
@@ -76,6 +80,7 @@ uses
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uRaisingRawException,
   uRdxRecipeRunner,      // TRdxFixOutcome
   uRdxFixTable,          // TRdxFixTable.CaptionFor
+  uRdxPlacesRunner,      // R_USES_CONDITIONAL (PlanUses)
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxRawExceptionFix,
@@ -644,6 +649,71 @@ begin
   Assert.IsTrue(Pos('raise EArgumentException.Create(''x'');', Done) > 0, Done);
   Assert.IsTrue(Pos('SysUtils', Done) > 0, Done);
   Assert.AreEqual<Integer>(0, Length(Detect(Done)), 'der Detektor schweigt');
+end;
+
+procedure TTestRdxRawExceptionDetector.Table_SysUtilsBehindKeywordSegment_NoSecondUses;
+var
+  Src : string;
+  S   : TSeen;
+  O   : TRdxFixOutcome;
+begin
+  // rwE29, MVCFramework.Serializer.JsonDataObjects.pas:2161: der Parser
+  // bricht das interface-uses am Glied 'Abstract' (ein Schluesselwort) ab,
+  // 'System.SysUtils' dahinter fehlt im Baum - die Hilfe fuegte es ein
+  // zweites Mal ins implementation-uses ein (E2004). Ohne den Blick auf den
+  // Text (PlanUses) kaemen zwei Ersetzungen und ' + uses System.SysUtils'.
+  Src := Join(['unit t;', 'interface', 'uses', '  System.Classes,',
+    '  MVCFramework.Serializer.Abstract,', '  System.SysUtils;',
+    'implementation', 'uses', '  System.SysConst;',
+    'procedure Foo(X: Integer);', 'begin',
+    '  raise Exception.Create(''x'');', 'end;', 'end.']);
+  O := PlanFirst(Src, False, S);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual<Integer>(1, Length(O.Edits), 'nur der Klassenname');
+  Assert.AreEqual<Integer>(0, Pos(' + uses', O.Hint), O.Hint);
+  O := PlanFirst(Src, True, S);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual<Integer>(1, Length(O.Edits), 'nur der Klassenname (Alt)');
+end;
+
+procedure TTestRdxRawExceptionDetector.Table_SysUtilsOnlyUnderCondition_NoHelp;
+var
+  Src : string;
+  S   : TSeen;
+  O   : TRdxFixOutcome;
+begin
+  // Der Baum sieht SysUtils nicht (Klausel am 'Abstract' abgebrochen), im
+  // Text steht es nur unter '{$IFDEF FPC}' (Zeile 5) - ob im gebauten
+  // Zweig, ist offen: gesperrt (rwE29, mormot.crypt.openssl.pas: sysutils
+  // nur im {$ifdef USE_OPENSSL}-Zweig, die Hilfe fuegte es in den anderen
+  // ein). Ohne den Fix fuegte PlanUses System.SysUtils ein.
+  Src := Join(['unit t;', 'interface', 'uses', '  Foo.Abstract,',
+    '  {$IFDEF FPC} SysUtils, {$ENDIF}', '  Classes;', 'implementation',
+    'procedure Foo(X: Integer);', 'begin',
+    '  raise Exception.Create(''x'');', 'end;', 'end.']);
+  O := PlanFirst(Src, False, S);
+  Assert.IsFalse(O.Enabled, 'gesperrt');
+  Assert.AreEqual(_('%s is missing in uses: %s', ['System.SysUtils',
+    _(R_USES_CONDITIONAL, [5, MsgByHand])]), O.Reason);
+  Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+end;
+
+procedure TTestRdxRawExceptionDetector.Table_SysUtilsOnlyInComment_AddsUses;
+var
+  Src : string;
+  S   : TSeen;
+  O   : TRdxFixOutcome;
+begin
+  // Gegenprobe zum Blick auf den Text: 'uses SysUtils' nur in einem
+  // Block-Kommentar und hinter '//' zaehlt nicht - die Einfuegung bleibt.
+  Src := Join(['unit t;', 'interface', 'implementation',
+    '{ uses SysUtils; }', 'uses System.Classes; // uses SysUtils;',
+    'procedure Foo(X: Integer);', 'begin',
+    '  raise Exception.Create(''x'');', 'end;', 'end.']);
+  O := PlanFirst(Src, False, S);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual<Integer>(2, Length(O.Edits), 'Klassenname und uses');
+  Assert.IsTrue(Pos(' + uses ', O.Hint) > 0, O.Hint);
 end;
 
 {$ENDIF}

@@ -44,6 +44,15 @@ uses
   uRdxRecipes,     // TRdxParts
   uRdxBufferMath;  // TRdxEdit
 
+const
+  // PlanUses (Realworld-Test rwE29): die Unit steht im Text der uses-
+  // Klauseln nur unter {$IF..}/{$IFDEF..} - ob im gebauten Zweig, bleibt
+  // offen. Der Satz folgt hinter '%s is missing in uses: ' (AppendUses in
+  // uRdxFixRunner, FormatUsesReason in uRdxRecipeRunner); %d die Zeile, %s
+  // MsgByHand.
+  R_USES_CONDITIONAL = 'it stands there only under a compiler condition '
+    + '(line %d); %s';
+
 type
   // Was fuer eine fehlende Unit in der uses-Klausel zu tun ist (AH19).
   TRdxUsesPlan = record
@@ -178,6 +187,10 @@ type
     // wird hinter 'implementation' (sonst 'interface') eine neue angelegt;
     // ein Programm oder eine Library ohne uses-Klausel bekommt keine -
     // Reason 'keine uses-Klausel und kein interface/implementation'.
+    // Ob die Unit schon da ist, fragt PlanUses den Baum UND den Text der
+    // uses-Klauseln (TextUsesLine, Realworld-Test rwE29): steht sie nur
+    // im Text, ist sie da; steht sie dort nur unter einer bedingten
+    // Uebersetzung, sperrt PlanUses (Needed mit Reason).
     class function PlanUses(APlaces: TSourcePlaces;
       const AShortName, AQualifiedName: string): TRdxUsesPlan; static;
 
@@ -225,7 +238,9 @@ implementation
 
 uses
   System.SysUtils,
-  uRdxText;          // _, MsgNoFileOpen, MsgMovedSuffix (E29)
+  System.Classes,    // TStringList (TextUsesLine)
+  uRdxCodeMap,       // TRdxCodeMap, Token, Direktiven (TextUsesLine)
+  uRdxText;          // _, MsgNoFileOpen, MsgMovedSuffix, MsgByHand (E29)
 
 // Gegen Version 1 des Quellstellen-Vertrags geschrieben (uSourcePlaces,
 // Abschnitt VERTRAGSVERSION) - wie uRdxRecipeRunner und uRdxFixRunner:
@@ -976,11 +991,127 @@ begin
     + APlan.Name + ';';
 end;
 
+// ---- Die uses-Klauseln im Text (PlanUses, Realworld-Test rwE29) ----
+// WARUM: der Baum kann einen Eintrag verlieren. uParser2.ParseUses bricht
+// eine Klausel an einem Namensglied ab, das ein Schluesselwort ist
+// ('MVCFramework.Serializer.Abstract,' - der Knoten heisst dann
+// 'MVCFramework.Serializer', alle Eintraege dahinter fehlen; Korpus:
+// MVCFramework.Serializer.JsonDataObjects.pas mit 'System.SysUtils;' als
+// letztem Eintrag des interface-uses). PlanUses fuegte die Unit dann ein
+// zweites Mal ein (E2004 - SCA127 und SCA168.2). Der Text der Klauseln
+// (Code-Sicht: Kommentare und Strings zaehlen nicht) entscheidet mit.
+
+// Offene bedingte Bloecke ({$IF}, {$IFDEF}, {$IFNDEF}, {$IFOPT} ohne ihr
+// {$ENDIF}/{$IFEND}) vor (ALine, ACol).
+function ConditionDepthAt(AMap: TRdxCodeMap; ALine, ACol: Integer): Integer;
+var
+  Li, Co : Integer;
+  W      : string;
+  Arg    : Boolean;
+begin
+  Result := 0;
+  Li := 1;
+  Co := 1;
+  while NextDirective(AMap, Li, Co) do
+  begin
+    if (Li > ALine) or ((Li = ALine) and (Co >= ACol)) then
+      Exit;
+    W := DirectiveWord(AMap, Li, Co, Arg);
+    if InList(W, COND_OPENERS) then
+      Inc(Result)
+    else if InList(W, COND_CLOSERS) and (Result > 0) then
+      Dec(Result);
+    Inc(Co);
+  end;
+end;
+
+// Die Zeile des ersten Eintrags AShortName (letztes Glied, Gross/klein egal
+// - wie TRdxRecipes.HasUnit) in einer uses-Klausel des Codes; ACond: er
+// steht nur unter bedingter Uebersetzung (ConditionDepthAt > 0 - jeder
+// Treffer). 0 ohne Treffer. Eine Klausel endet am ';'; ein 'in'-Pfad ist
+// ein String, kein Code-Token.
+function UsesLineInMap(AMap: TRdxCodeMap; const AShortName: string;
+  out ACond: Boolean): Integer;
+var
+  T, N, First : TRdxToken;
+  Name        : string;
+  CondLine    : Integer;
+begin
+  Result := 0;
+  ACond := False;
+  CondLine := 0;
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), 'uses');
+  while T.Low <> '' do
+  begin
+    if (T.Low = 'uses') and IsKeywordAfter(T, Before(AMap, T)) then
+    begin
+      Name := '';
+      First := Default(TRdxToken);
+      N := After(AMap, T);
+      while N.Low <> '' do
+      begin
+        if (N.Low = ',') or (N.Low = ';') or (N.Low = 'in') then
+        begin
+          if (Name <> '') and SameText(LastPart(Name), AShortName) then
+          begin
+            if ConditionDepthAt(AMap, First.Line, First.Col) = 0 then
+              Exit(First.Line);
+            if CondLine = 0 then
+              CondLine := First.Line;
+          end;
+          Name := '';
+          if N.Low = ';' then
+            Break;
+        end
+        else
+        begin
+          if Name = '' then
+            First := N;
+          Name := Name + N.Low;
+        end;
+        N := After(AMap, N);
+      end;
+    end;
+    T := NextTokenOnLineWith(AMap, T, 'uses');
+  end;
+  if CondLine > 0 then
+  begin
+    ACond := True;
+    Result := CondLine;
+  end;
+end;
+
+// Dasselbe auf den Zeilen von APlaces (eine eigene Code-Sicht: der Dienst
+// reicht seine Zeilen nur einzeln heraus).
+function TextUsesLine(APlaces: TSourcePlaces; const AShortName: string;
+  out ACond: Boolean): Integer;
+var
+  Lines : TStringList;
+  Map   : TRdxCodeMap;
+  Li    : Integer;
+begin
+  Lines := TStringList.Create;
+  try
+    for Li := 1 to APlaces.LineCount do
+      Lines.Add(APlaces.LineText(Li));
+    Map := TRdxCodeMap.Create(Lines);
+    try
+      Result := UsesLineInMap(Map, AShortName, ACond);
+    finally
+      Map.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
 class function TRdxPlacesRunner.PlanUses(APlaces: TSourcePlaces;
   const AShortName, AQualifiedName: string): TRdxUsesPlan;
 var
   AllNames : TArray<string>;
   Entries  : TArray<TRefactorSpan>;
+  Li       : Integer;
+  Cond     : Boolean;
 begin
   Result := Default(TRdxUsesPlan);
   if not Assigned(APlaces) or not APlaces.IsOpen then
@@ -991,7 +1122,16 @@ begin
   end;
   AllNames := UsesNamesOf(APlaces);
   if TRdxRecipes.HasUnit(AllNames, AShortName) then Exit;   // schon da
+  // Im Text da, der Baum sah sie nicht (s. TextUsesLine): nicht noetig;
+  // nur unter einer Bedingung: offen - gesperrt.
+  Li := TextUsesLine(APlaces, AShortName, Cond);
+  if (Li > 0) and not Cond then Exit;
   Result.Needed := True;
+  if Li > 0 then
+  begin
+    Result.Reason := _(R_USES_CONDITIONAL, [Li, MsgByHand]);
+    Exit;
+  end;
   // FPC 3.2 kennt keine Unit-Scopes: eine Datei mit FPC-Weiche bekommt
   // den Kurznamen, Delphi loest ihn ueber die Vorgabe-Scopes ebenso auf.
   if SourceLooksFpcAware(APlaces) then

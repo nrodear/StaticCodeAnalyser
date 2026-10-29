@@ -6742,3 +6742,6 @@ msgstr "même sens avec l'évaluation en court-circuit ({$B-}) : la deuxième co
 
 msgid "the file asks for old compilers (%s, line %d) - %s exists in SysUtils only from Delphi 2009 on"
 msgstr "le fichier teste d'anciens compilateurs (%s, ligne %d) - %s n'existe dans SysUtils que depuis Delphi 2009"
+
+msgid "it stands there only under a compiler condition (line %d); %s"
+msgstr "elle n'y figure que sous une condition de compilation (ligne %d) ; %s"

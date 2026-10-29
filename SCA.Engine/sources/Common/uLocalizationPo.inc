@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6748 Zeilen, 304117 Bytes
-  CPoLines_de: array[0..6747] of string = (
+  // i18n\de.po - 6751 Zeilen, 304262 Bytes
+  CPoLines_de: array[0..6750] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6762,7 +6762,10 @@ const
     '# reDelphix HilfeFix C (rwE29: uRdxRawExceptionFix, uRdxFormatSettingsFix, uRdxMagicFixes, uRdxPlacesRunner)',
     '',
     'msgid "the file asks for old compilers (%s, line %d) - %s exists in SysUtils only from Delphi 2009 on"',
-    'msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - %s gibt es in SysUtils erst ab Delphi 2009"'
+    'msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - %s gibt es in SysUtils erst ab Delphi 2009"',
+    '',
+    'msgid "it stands there only under a compiler condition (line %d); %s"',
+    'msgstr "sie steht dort nur unter einer Compiler-Bedingung (Zeile %d); %s"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7037,8 +7040,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6744 Zeilen, 316343 Bytes
-  CPoLines_fr: array[0..6743] of string = (
+  // i18n\fr.po - 6747 Zeilen, 316493 Bytes
+  CPoLines_fr: array[0..6746] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -13782,7 +13785,10 @@ const
     '# reDelphix HilfeFix C (rwE29: uRdxRawExceptionFix, uRdxFormatSettingsFix, uRdxMagicFixes, uRdxPlacesRunner)',
     '',
     'msgid "the file asks for old compilers (%s, line %d) - %s exists in SysUtils only from Delphi 2009 on"',
-    'msgstr "le fichier teste d''anciens compilateurs (%s, ligne %d) - %s n''existe dans SysUtils que depuis Delphi 2009"'
+    'msgstr "le fichier teste d''anciens compilateurs (%s, ligne %d) - %s n''existe dans SysUtils que depuis Delphi 2009"',
+    '',
+    'msgid "it stands there only under a compiler condition (line %d); %s"',
+    'msgstr "elle n''y figure que sous une condition de compilation (ligne %d) ; %s"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

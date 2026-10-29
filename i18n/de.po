@@ -6746,3 +6746,6 @@ msgstr "gleiche Bedeutung bei Kurzschlussauswertung ({$B-}): die zweite Bedingun
 
 msgid "the file asks for old compilers (%s, line %d) - %s exists in SysUtils only from Delphi 2009 on"
 msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - %s gibt es in SysUtils erst ab Delphi 2009"
+
+msgid "it stands there only under a compiler condition (line %d); %s"
+msgstr "sie steht dort nur unter einer Compiler-Bedingung (Zeile %d); %s"
