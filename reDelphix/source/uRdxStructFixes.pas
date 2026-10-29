@@ -528,6 +528,27 @@ begin
   Result := Result + Indent + EndText;
 end;
 
+// Die Zeile, nach der sich die Stufe der Anweisung im else richtet
+// (ElseText): die des ersten Arms - das Token hinter dem 'of' des case
+// ACase -, wenn er seine Zeile beginnt; sonst AFallback (die Zeile des
+// letzten Tokens vor dem end). Bis rwE29 galt immer die letzte Zeile -
+// endet der letzte Arm tief in einem begin..end, rueckte das raise mit
+// ein (skia4delphi Vcl.Styles.UxTheme.pas:1098: Spalte 57 statt 33).
+function ArmLineOf(AMap: TRdxCodeMap; const ACase: TRdxToken;
+  const AFallback: string): string;
+var
+  T : TRdxToken;
+begin
+  Result := AFallback;
+  T := After(AMap, ACase);
+  while (T.Low <> '') and (T.Low <> 'of') do
+    T := After(AMap, T);
+  if T.Low = '' then Exit;
+  T := After(AMap, T);
+  if (T.Low <> '') and (SkipBlanks(AMap.Raw(T.Line), 1) = T.Col) then
+    Result := AMap.Raw(T.Line);
+end;
+
 // Endet der letzte Arm vor AEnd nicht auf ';' (im Code), ein ';' hinter
 // sein letztes Zeichen - als eigene Ersetzung (das Zeichen wird mit ';'
 // dahinter neu geschrieben, ein leerer Erwartungstext ist nicht erlaubt).
@@ -648,7 +669,8 @@ begin
   AEdits[0].Span := TRefactorSpan.Make(SPAN_168, EndTok.Line, EndTok.Col,
     EndTok.Line, EndTok.EndCol);
   AEdits[0].Expected := Copy(L, EndTok.Col, EndTok.Len);
-  AEdits[0].NewText := ElseText(L, EndTok, AStatement, AMap.Raw(LastTok.Line));
+  AEdits[0].NewText := ElseText(L, EndTok, AStatement,
+    ArmLineOf(AMap, CaseTok, AMap.Raw(LastTok.Line)));
   AppendSemicolon(AMap, EndTok, AEdits);
   Result := True;
 end;

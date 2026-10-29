@@ -44,6 +44,9 @@ type
     // rwE29 (delphimvcframework MainFormU.pas:30): ein Eintrag am
     // Zeilenende zog beim Loeschen die Folgezeile herauf.
     [Test] procedure Sca007_LastOnLine_KeepsLineBreak;
+    // rwE29 (skia4delphi Vcl.Styles.UxTheme.pas:1098): die raise-Zeile
+    // rueckte wie die letzte Zeile des letzten Arms ein.
+    [Test] procedure Sca168_RaiseIndent_FollowsArms;
   end;
 
 implementation
@@ -491,6 +494,34 @@ begin
     'implementation', 'end.']);
   Assert.AreEqual('', FixUses(Src, C, 1, R), 'Kommentar dahinter');
   Assert.IsTrue(Pos('Kommentar', R) > 0, R);
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseIndent_FollowsArms;
+var
+  R : string;
+begin
+  // Muster der Fundstelle (minimiert): der letzte Arm endet tief in einem
+  // begin..end. Bis rwE29 nahm die raise-Zeile die Einrueckung der Zeile
+  // vor dem end ('         end;' -> sieben Stufen statt einer).
+  Assert.AreEqual(InProc(['  case X of', '    1:', '       begin',
+      '         if A then', '           Exit(1);', '       end;', '  else',
+      '    ' + RAISE_UNHANDLED, '  end;']),
+    FixCase(InProc(['  case X of', '    1:', '       begin',
+      '         if A then', '           Exit(1);', '       end;', '  end;']),
+      5, RAISE_UNHANDLED, R), R);
+  // Leerzeile und Kommentar vor dem ersten Arm zaehlen nicht.
+  Assert.AreEqual(InProc(['  case X of', '', '    // erster', '    1: A;',
+      '    2: begin', '          B;', '       end;', '  else',
+      '    ' + RAISE_UNHANDLED, '  end;']),
+    FixCase(InProc(['  case X of', '', '    // erster', '    1: A;',
+      '    2: begin', '          B;', '       end;', '  end;']), 5,
+      RAISE_UNHANDLED, R), R);
+  // Gegenprobe: erster Arm auf der case-Zeile - wie bisher die Zeile vor
+  // dem end.
+  Assert.AreEqual(InProc(['  case X of 1: A;', '    2: B;', '  else',
+      '    ' + RAISE_UNHANDLED, '  end;']),
+    FixCase(InProc(['  case X of 1: A;', '    2: B;', '  end;']), 5,
+      RAISE_UNHANDLED, R), R);
 end;
 
 initialization
