@@ -232,7 +232,7 @@ msgstr ""
 msgid "\"%s.IfThen\" is not the IfThen of System.Math or System.StrUtils"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:590
+#: reDelphix/source/uRdxRoutineFixes.pas:602
 msgid "\"// noinspection-file\" in line %d - the marker applies to the whole file and would be lost with it; %s"
 msgstr ""
 
@@ -354,7 +354,7 @@ msgstr ""
 msgid "%d implementations of %s - overload?"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1193
+#: reDelphix/source/uRdxRoutineFixes.pas:1210
 msgid "%d implementations of %s.%s - overload?"
 msgstr ""
 
@@ -468,7 +468,7 @@ msgstr ""
 msgid "%s - finding outdated? Analyse the file again"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1006
+#: reDelphix/source/uRdxRoutineFixes.pas:1023
 msgid "%s - hides inherited members or is called without a name; %s"
 msgstr ""
 
@@ -598,7 +598,7 @@ msgstr ""
 msgid "%s is a const parameter - FreeAndNil does not reach the caller's variable (FPC: error, Delphi up to 10.3: E2197)"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1097
+#: reDelphix/source/uRdxRoutineFixes.pas:1114
 msgid "%s is a member of %s - the method can implement it"
 msgstr ""
 
@@ -685,7 +685,7 @@ msgstr ""
 msgid "%s is handed over in line %d to %s - %s"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:756
+#: reDelphix/source/uRdxRoutineFixes.pas:770
 msgid "%s is in a string literal (line %d) - call by name (GetProcAddress, MethodAddress, RTTI, script)?"
 msgstr ""
 
@@ -693,7 +693,7 @@ msgstr ""
 msgid "%s is in line %d, a continuation line of the if condition - the constant would belong before the if line (not supported)"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:814
+#: reDelphix/source/uRdxRoutineFixes.pas:828
 msgid "%s is in the interface section (line %d) - exported, callers in other units possible"
 msgstr ""
 
@@ -801,11 +801,11 @@ msgstr ""
 msgid "%s is resumed or started more than once in this routine"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:822
+#: reDelphix/source/uRdxRoutineFixes.pas:836
 msgid "%s is the accessor of a property (line %d)"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:825
+#: reDelphix/source/uRdxRoutineFixes.pas:839
 msgid "%s is used in line %d"
 msgstr ""
 
@@ -4118,7 +4118,7 @@ msgstr ""
 msgid "a comment precedes the header on its line - the skeleton belongs above it, insert it by hand"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:497
+#: reDelphix/source/uRdxRoutineFixes.pas:509
 msgid "a comment spanning several lines begins after the end"
 msgstr ""
 
@@ -4126,7 +4126,7 @@ msgstr ""
 msgid "a comment spanning several lines ends above - the detector sees its last line as code; check the documentation by hand"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:495
+#: reDelphix/source/uRdxRoutineFixes.pas:507
 msgid "a comment spanning several lines ends on the header line"
 msgstr ""
 
@@ -4173,7 +4173,7 @@ msgstr ""
 msgid "a directive names \"%s\" (line %d) - macro or condition, the quick fix does not evaluate it"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:760
+#: reDelphix/source/uRdxRoutineFixes.pas:774
 msgid "a directive names %s (line %d)"
 msgstr ""
 
@@ -4377,7 +4377,7 @@ msgstr ""
 msgid "attribute before the declaration - %s"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1165
+#: reDelphix/source/uRdxRoutineFixes.pas:1182
 msgid "attribute on the class or method - RTTI can find the method by name"
 msgstr ""
 
@@ -4506,7 +4506,7 @@ msgstr ""
 msgid "code and finding do not match (%d instead of %d comparisons)"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:492
+#: reDelphix/source/uRdxRoutineFixes.pas:504
 msgid "code follows the end on the same line (two routines on one line?)"
 msgstr ""
 
@@ -4519,7 +4519,7 @@ msgstr ""
 msgid "code or a compiler directive follows the statement on its line"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:489
+#: reDelphix/source/uRdxRoutineFixes.pas:501
 msgid "code precedes the header on the same line (two routines on one line?)"
 msgstr ""
 
@@ -4839,7 +4839,7 @@ msgstr ""
 msgid "compiler directive up to the next section - the empty section may apply only in one branch"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:640
+#: reDelphix/source/uRdxRoutineFixes.pas:652
 msgid "compiler directive {$%s} in line %d - it may act beyond the routine"
 msgstr ""
 
@@ -4872,8 +4872,8 @@ msgstr ""
 msgid "declaration and implementation of %s have different parameter lists"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1249
-#: reDelphix/source/uRdxRoutineFixes.pas:1391
+#: reDelphix/source/uRdxRoutineFixes.pas:1269
+#: reDelphix/source/uRdxRoutineFixes.pas:1411
 msgid "declaration and implementation overlap"
 msgstr ""
 
@@ -4929,11 +4929,11 @@ msgstr ""
 msgid "directive %s - ancestors, descendants or the message dispatch share the signature"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1003
+#: reDelphix/source/uRdxRoutineFixes.pas:1020
 msgid "directive %s - ancestors, descendants, messages or overload siblings reach the method without its name"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:926
+#: reDelphix/source/uRdxRoutineFixes.pas:940
 msgid "directive %s - the routine is reachable from outside or has no body"
 msgstr ""
 
@@ -4949,7 +4949,7 @@ msgstr ""
 msgid "directive in the range (line %d) - it is active code, not a comment"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:662
+#: reDelphix/source/uRdxRoutineFixes.pas:674
 msgid "directive without a counterpart in the range ($IF.. without $ENDIF or $REGION without $ENDREGION)"
 msgstr ""
 
@@ -5086,7 +5086,7 @@ msgstr ""
 msgid "forward declaration - it carries no GUID"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:953
+#: reDelphix/source/uRdxRoutineFixes.pas:970
 msgid "forward declaration: %s"
 msgstr ""
 
@@ -5107,7 +5107,7 @@ msgstr ""
 msgid "git not found. Install Git for Windows (git-scm.com) or set the path to git.exe in analyser.ini."
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:923
+#: reDelphix/source/uRdxRoutineFixes.pas:937
 msgid "global operator (FPC) - the compiler calls it through its symbol or the conversion, not through its name"
 msgstr ""
 
@@ -5142,7 +5142,7 @@ msgstr ""
 msgid "if, begin and end do not stand on their own lines as usual (code beside them)"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1197
+#: reDelphix/source/uRdxRoutineFixes.pas:1214
 msgid "implementation: %s"
 msgstr ""
 
@@ -5154,7 +5154,7 @@ msgstr ""
 msgid "include %s %s - the quick fix does not see its compiler switches (FPC, older Delphi)"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1300
+#: reDelphix/source/uRdxRoutineFixes.pas:1320
 msgid "include %s before implementation %s - it can declare the name, call it or name it as a property accessor, and the quick fix does not see it"
 msgstr ""
 
@@ -5219,8 +5219,13 @@ msgstr ""
 msgid "inside a parameter list - the grouping is the style of the signature"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1138
+#: reDelphix/source/uRdxRoutineFixes.pas:1155
 msgid "interface chain too long - boundaries not certain"
+msgstr ""
+
+#: reDelphix/source/uRdxRoutineFixes.pas:949
+#: reDelphix/source/uRdxRoutineFixes.pas:1235
+msgid "jpp directive in line %d - the file is a JEDI preprocessor prototype; the unit generated from it declares and calls routines through macros that the quick fix does not see"
 msgstr ""
 
 #: reDelphix/source/uRdxFlowFixes.pas:689
@@ -5300,7 +5305,7 @@ msgstr ""
 msgid "line %d does not look like code (no \";\" at the end, no \":=\", no begin/procedure/function)"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:599
+#: reDelphix/source/uRdxRoutineFixes.pas:611
 msgid "line %d ends with the comment \"%s\" - a marker after code applies to the line after it or stays; %s"
 msgstr ""
 
@@ -5366,7 +5371,7 @@ msgstr ""
 msgid "method name missing from the message"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:918
+#: reDelphix/source/uRdxRoutineFixes.pas:932
 msgid "method of a class - SCA147 or SCA148 reports it"
 msgstr ""
 
@@ -5853,7 +5858,7 @@ msgstr ""
 msgid "no implementation %s.%s in this file (abstract, external or in an include)"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1190
+#: reDelphix/source/uRdxRoutineFixes.pas:1207
 msgid "no implementation of %s.%s in the file (include file? abstract?)"
 msgstr ""
 
@@ -6041,7 +6046,7 @@ msgstr ""
 msgid "no such uses entry"
 msgstr ""
 
-#: reDelphix/source/uRdxTabsFix.pas:282
+#: reDelphix/source/uRdxTabsFix.pas:283
 msgid "no tab at the reported place"
 msgstr ""
 
@@ -6185,11 +6190,11 @@ msgstr ""
 msgid "of a function"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1349
+#: reDelphix/source/uRdxRoutineFixes.pas:1369
 msgid "of the method %s"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1317
+#: reDelphix/source/uRdxRoutineFixes.pas:1337
 msgid "of the routine %s"
 msgstr ""
 
@@ -6717,7 +6722,7 @@ msgstr ""
 msgid "second assignment to %s in line %d - the release in the finally would hit a different object"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:819
+#: reDelphix/source/uRdxRoutineFixes.pas:833
 msgid "second routine %s in line %d - overload, $IFDEF twin or declaration"
 msgstr ""
 
@@ -7120,7 +7125,7 @@ msgstr ""
 msgid "the class has the ancestor list (%s) - only a direct descendant of TObject is checked"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1106
+#: reDelphix/source/uRdxRoutineFixes.pas:1123
 msgid "the class implements %s (not declared in this file) - the method can be an interface member"
 msgstr ""
 
@@ -7238,7 +7243,7 @@ msgstr ""
 msgid "the declaration is not in a var section (\"%s\")"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1153
+#: reDelphix/source/uRdxRoutineFixes.pas:1170
 msgid "the declaration is not in the body of class %s"
 msgstr ""
 
@@ -7333,7 +7338,7 @@ msgstr ""
 msgid "the exception is now raised - the code after it no longer runs in the error case"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:817
+#: reDelphix/source/uRdxRoutineFixes.pas:831
 msgid "the exports clause names %s (line %d)"
 msgstr ""
 
@@ -7500,7 +7505,7 @@ msgstr ""
 msgid "the first call goes away - the parent method runs only once; check order and side effects"
 msgstr ""
 
-#: reDelphix/source/uRdxTabsFix.pas:287
+#: reDelphix/source/uRdxTabsFix.pas:288
 msgid "the first tab of the line is inside a string or comment - it stays untouched, the help would leave the finding in place"
 msgstr ""
 
@@ -7549,7 +7554,7 @@ msgstr ""
 msgid "the header is already followed by '[' (GUID or attribute)"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:968
+#: reDelphix/source/uRdxRoutineFixes.pas:985
 msgid "the header is not in the implementation section (interface or program) - reachable from outside"
 msgstr ""
 
@@ -7616,7 +7621,7 @@ msgstr ""
 msgid "the if statement is not safe to read (anonymous method, conditional expression, asm or label in it)"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1234
+#: reDelphix/source/uRdxRoutineFixes.pas:1254
 msgid "the implementation is not in the implementation section"
 msgstr ""
 
@@ -7636,7 +7641,7 @@ msgstr ""
 msgid "the include %s carries an FPC switch (line %d) - FPC 3.2 has no inline variables"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1286
+#: reDelphix/source/uRdxRoutineFixes.pas:1306
 msgid "the include %s names %s - as a declaration (E2065 after the deletion), call or property accessor (E2003), and the quick fix does not see it"
 msgstr ""
 
@@ -7990,7 +7995,7 @@ msgstr ""
 msgid "the message has no allocation"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1347
+#: reDelphix/source/uRdxRoutineFixes.pas:1367
 msgid "the message has no class or method"
 msgstr ""
 
@@ -8035,7 +8040,7 @@ msgstr ""
 msgid "the message has no receiver"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1315
+#: reDelphix/source/uRdxRoutineFixes.pas:1335
 msgid "the message has no routine name"
 msgstr ""
 
@@ -8140,7 +8145,7 @@ msgstr ""
 msgid "the method is already a class method"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1160
+#: reDelphix/source/uRdxRoutineFixes.pas:1177
 msgid "the method is in the default section without a visibility keyword, not under private"
 msgstr ""
 
@@ -8148,7 +8153,7 @@ msgstr ""
 msgid "the method is published - the form designer can bind it to an event"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1162
+#: reDelphix/source/uRdxRoutineFixes.pas:1179
 msgid "the method is under \"%s\", not under private"
 msgstr ""
 
@@ -8209,7 +8214,7 @@ msgstr ""
 msgid "the name still occurs in the scope (line %d) - under {$IFDEF} and in asm it also counts as a use"
 msgstr ""
 
-#: reDelphix/source/uRdxTabsFix.pas:293
+#: reDelphix/source/uRdxTabsFix.pas:294
 msgid "the neighbouring lines fit tab width %d as well as %d - which one the alignment of the file follows is open; %s"
 msgstr ""
 
@@ -8401,7 +8406,7 @@ msgstr ""
 msgid "the routine contains goto or asm"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:499
+#: reDelphix/source/uRdxRoutineFixes.pas:511
 msgid "the routine ends on the last line of the file"
 msgstr ""
 
@@ -8585,7 +8590,7 @@ msgstr ""
 msgid "the unit is also compiled with Free Pascal ({$IFDEF FPC} in line %d) and sets no {$mode} - whether Result exists depends on the mode of the project"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:934
+#: reDelphix/source/uRdxRoutineFixes.pas:951
 msgid "the unit links an object file ({$L} in line %d) - the C code calls routines by name"
 msgstr ""
 
@@ -8798,11 +8803,11 @@ msgstr ""
 msgid "with statement names multiple targets - ambiguous member lookup"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:632
+#: reDelphix/source/uRdxRoutineFixes.pas:644
 msgid "{$%s} in line %d without $IF in the range"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:612
+#: reDelphix/source/uRdxRoutineFixes.pas:624
 msgid "{$%s} in line %d without a counterpart in the range"
 msgstr ""
 
@@ -8822,12 +8827,12 @@ msgstr ""
 msgid "{$I} include in line %d - it can use the routine as a value"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1175
+#: reDelphix/source/uRdxRoutineFixes.pas:1192
 msgid "{$I} include in the class body (line %d) - the method can appear there (property accessor)"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:937
-#: reDelphix/source/uRdxRoutineFixes.pas:1220
+#: reDelphix/source/uRdxRoutineFixes.pas:954
+#: reDelphix/source/uRdxRoutineFixes.pas:1240
 msgid "{$I} include in the implementation section (line %d) - a caller that the quick fix does not see may be there"
 msgstr ""
 
@@ -8835,7 +8840,7 @@ msgstr ""
 msgid "{$I} include in the scope (line %d) - it may contain the name in a place that the quick fix does not see"
 msgstr ""
 
-#: reDelphix/source/uRdxRoutineFixes.pas:1217
+#: reDelphix/source/uRdxRoutineFixes.pas:1237
 msgid "{$RTTI} in line %d - extended RTTI can call private methods by name"
 msgstr ""
 

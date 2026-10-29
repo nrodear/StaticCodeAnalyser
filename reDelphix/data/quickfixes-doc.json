@@ -839,7 +839,7 @@
       "nichtAngeboten": [
         "nicht unter `private`/`strict private`; `virtual`/`dynamic`/`override`/`abstract`/`reintroduce`/`message`/`overload`, Konstruktor, Destruktor, Operator",
         "mehr als eine Deklaration oder Implementierung, keine Implementierung in der Datei, Property-Accessor",
-        "der Name als String-Literal (`MethodAddress`), `{$RTTI}` in der Datei, ein Attribut an Methode oder Klasse",
+        "der Name als String-Literal (`MethodAddress`), `{$RTTI}` oder eine Direktive des JEDI-Präprozessors (`{$JPP…}`, Prototyp) in der Datei, ein Attribut an Methode oder Klasse",
         "`{$I}` im Klassenrumpf oder im implementation-Teil, ein Include davor, das den Namen nennt (Property-Accessor einer Nachfahrenklasse), nicht neben der Unit oder auf einem Netzpfad liegt, ein Interface der Klasse aus einer anderen Unit",
         "ein Marker-Kommentar (`noinspection`, TODO …) hinter der Deklaration oder dem `end;` der Implementierung – er gilt der Zeile dahinter –, oder ein `// noinspection` darüber, der auf sie zielt",
         "eine `.dfm`/`.fmx`/`.lfm` neben der Unit nennt den Namen (Bindung an ein Ereignis)",
@@ -1003,7 +1003,7 @@
       "platzhalter": "`%s` = die Routine.",
       "nichtAngeboten": [
         "Overloads, Methoden (das meldet SCA147), globale FPC-Operatoren",
-        "`export`/`public`/`alias`/`external`/`forward`/`interrupt`, `{$L}`/`{$LINK}` in der Datei",
+        "`export`/`public`/`alias`/`external`/`forward`/`interrupt`, `{$L}`/`{$LINK}` in der Datei, eine Direktive des JEDI-Präprozessors (`{$JPPEXPANDMACRO …}`, `(*$JPPLOOP …*)`) – die Datei ist ein Prototyp, Deklaration und Aufrufer erzeugen erst die Makros",
         "`{$I}` im implementation-Teil oder ein Include davor, das die Routine nennt, nicht neben der Unit liegt oder – wie die Unit selbst – auf einem Netzpfad (kein Plattenzugriff beim Menüaufbau)",
         "eine Direktive im Bereich außer ausgeglichenem `$IF..`/`$ENDIF` bzw. `$REGION`",
         "ein Marker-Kommentar (`noinspection`, TODO …) hinter dem `end;` bzw. der `forward`-Deklaration – er gilt der Zeile dahinter –, `// noinspection-file` in der Routine oder ein `// noinspection` über dem Kopf bzw. der `forward`-Deklaration, der auf die Routine zielt",

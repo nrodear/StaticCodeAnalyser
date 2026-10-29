@@ -68,6 +68,7 @@ type
     [Test] procedure Sca164_UmlautCall_NoHelp;
     [Test] procedure Sca164_MarkerAround_NoHelp;
     [Test] procedure Sca164_IncludeOnNetworkPath_NoDiskAccess;
+    [Test] procedure Sca164_JppPrototype_NoHelp;
   end;
 
 implementation
@@ -482,6 +483,35 @@ begin
   AssertRefused(InImpl(['procedure Dead(A: Integer); overload;', 'begin',
     'end;', 'procedure Dead(S: string); overload;', 'begin', 'end;']), 4,
     'Dead', 'zweite Routine');
+end;
+
+// rwE29, JCL source\prototypes\JclAlgorithms.pas:539 (minimiert): ein
+// Prototyp des JEDI-Praeprozessors jpp - die interface-Deklaration der
+// Routine entsteht erst aus dem Makro, ein Aufrufer (JclAbstractContainers)
+// steht in einer anderen Unit. Gegenprobe: ohne die jpp-Sperre fand der
+// Planer den Namen nirgends sonst und loeschte die Routine (nach dem
+// Generieren E2065).
+procedure TTestRdxRoutineFixes.Sca164_JppPrototype_NoHelp;
+begin
+  AssertRefused(Join(['unit u;', 'interface',
+    '(*$JPPLOOP ALLTYPEINDEX ALLTYPECOUNT',
+    '{$JPPEXPANDMACRO SIMPLEEQUALITYCOMPAREINT(,,)}',
+    '*)',
+    'implementation',
+    'function CardinalSimpleEqualityCompare(Obj1, Obj2: Cardinal): Boolean;',
+    'begin',
+    '  Result := Obj1 = Obj2;',
+    'end;',
+    'end.']), 7, 'CardinalSimpleEqualityCompare', 'jpp-Direktive in Zeile 3');
+  // Dieselbe Sperre fuer ein einzeiliges Makro im interface-Teil.
+  AssertRefused(Join(['unit u;', 'interface',
+    '{$JPPEXPANDMACRO SIMPLECOMPAREINT(IntegerCompare,,TObject)}',
+    'implementation',
+    'function IntegerCompare(Obj1, Obj2: TObject): Integer;',
+    'begin',
+    '  Result := 0;',
+    'end;',
+    'end.']), 5, 'IntegerCompare', 'jpp-Direktive in Zeile 3');
 end;
 
 procedure TTestRdxRoutineFixes.Sca164_ByName_NoHelp;

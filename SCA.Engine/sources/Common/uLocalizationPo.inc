@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6749 Zeilen, 304395 Bytes
-  CPoLines_de: array[0..6748] of string = (
+  // i18n\de.po - 6752 Zeilen, 304759 Bytes
+  CPoLines_de: array[0..6751] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -4972,6 +4972,9 @@ const
     'msgid "the routine ends on the last line of the file"',
     'msgstr "die Routine endet auf der letzten Zeile der Datei"',
     '',
+    'msgid "jpp directive in line %d - the file is a JEDI preprocessor prototype; the unit generated from it declares and calls routines through macros that the quick fix does not see"',
+    'msgstr "jpp-Direktive in Zeile %d - die Datei ist ein Prototyp des JEDI-Pr'#$00E4'prozessors; die daraus erzeugte Unit deklariert und ruft Routinen '#$00FC'ber Makros, die die Hilfe nicht sieht"',
+    '',
     'msgid "include %s before implementation %s - it can declare the name, call it or name it as a property accessor, and the quick fix does not see it"',
     'msgstr "Include %s vor implementation %s - es kann den Namen deklarieren, rufen oder als Property-Accessor nennen, die Hilfe sieht es nicht"',
     '',
@@ -7038,8 +7041,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6745 Zeilen, 316700 Bytes
-  CPoLines_fr: array[0..6744] of string = (
+  // i18n\fr.po - 6748 Zeilen, 317088 Bytes
+  CPoLines_fr: array[0..6747] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -11992,6 +11995,9 @@ const
     '',
     'msgid "the routine ends on the last line of the file"',
     'msgstr "la routine se termine sur la derni'#$00E8're ligne du fichier"',
+    '',
+    'msgid "jpp directive in line %d - the file is a JEDI preprocessor prototype; the unit generated from it declares and calls routines through macros that the quick fix does not see"',
+    'msgstr "directive jpp '#$00E0' la ligne %d - le fichier est un prototype du pr'#$00E9'processeur JEDI ; l''unit'#$00E9' g'#$00E9'n'#$00E9'r'#$00E9'e '#$00E0' partir de lui d'#$00E9'clare et appelle des routines via des macros que le Quick-Fix ne voit pas"',
     '',
     'msgid "include %s before implementation %s - it can declare the name, call it or name it as a property accessor, and the quick fix does not see it"',
     'msgstr "include %s avant implementation %s - il peut d'#$00E9'clarer le nom, l''appeler ou le citer comme accesseur de propri'#$00E9't'#$00E9', et le Quick-Fix ne le voit pas"',

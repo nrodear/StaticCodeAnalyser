@@ -4951,6 +4951,9 @@ msgstr "include {$I} dans la section implementation (ligne %d) - un appelant que
 msgid "the routine ends on the last line of the file"
 msgstr "la routine se termine sur la dernière ligne du fichier"
 
+msgid "jpp directive in line %d - the file is a JEDI preprocessor prototype; the unit generated from it declares and calls routines through macros that the quick fix does not see"
+msgstr "directive jpp à la ligne %d - le fichier est un prototype du préprocesseur JEDI ; l'unité générée à partir de lui déclare et appelle des routines via des macros que le Quick-Fix ne voit pas"
+
 msgid "include %s before implementation %s - it can declare the name, call it or name it as a property accessor, and the quick fix does not see it"
 msgstr "include %s avant implementation %s - il peut déclarer le nom, l'appeler ou le citer comme accesseur de propriété, et le Quick-Fix ne le voit pas"
 
