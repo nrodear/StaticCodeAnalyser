@@ -2849,6 +2849,16 @@ msgstr "\"%s\" sichert einen Vorgabewert (if X = 0 then X := ...) - der exakte V
 msgid "\"%s\" guards a tolerance check of the same value (line %d) - the exact comparison is intended there"
 msgstr "\"%s\" sichert eine Toleranzprüfung desselben Werts (Zeile %d) - der exakte Vergleich ist dort gewollt"
 
+# reDelphix rwE31 Gruppe L (uRdxFloatEqualityFix: Divisionsschutz, Text-Schnellpfad, stored-Funktion)
+msgid "\"%s\" guards a division by %s (line %d) - every value other than exactly 0 is a valid divisor, a tolerance would reject small ones"
+msgstr "\"%s\" schützt eine Division durch %s (Zeile %d) - jeder Wert außer genau 0 ist ein gültiger Teiler, eine Toleranz wiese kleine ab"
+
+msgid "\"%s\" writes text for exactly 0 (line %d) - with a tolerance small values would silently become that text"
+msgstr "\"%s\" schreibt für genau 0 einen Text (Zeile %d) - mit Toleranz würden kleine Werte still zu diesem Text"
+
+msgid "\"%s\" decides whether a property is stored (stored %s) - with a tolerance values close to the default would not be saved"
+msgstr "\"%s\" entscheidet, ob eine Property gespeichert wird (stored %s) - mit Toleranz würden Werte nahe am Vorgabewert nicht gespeichert"
+
 msgid "\"%s\" is not declared in the body of a class of this file (free routine, record, interface, or the class sits in an include)"
 msgstr "\"%s\" ist nicht im Rumpf einer Klasse dieser Datei deklariert (freie Routine, record, Interface oder die Klasse steht in einem Include)"
 
@@ -6847,6 +6857,10 @@ msgstr "gleiche Bedeutung bei Kurzschlussauswertung ({$B-}): die zweite Bedingun
 # reDelphix rwE29 Gruppe E (uRdxPlacesRunner: PlanNewClause - Abschnitts-Schluesselwort im bedingten Zweig)
 msgid "the section keyword in line %d is inside a conditional branch (line %d) - add the uses clause by hand"
 msgstr "das Abschnitts-Schlüsselwort in Zeile %d steht in einem bedingten Zweig (Zeile %d) - uses-Klausel von Hand anlegen"
+
+# reDelphix rwE31 Gruppe L (uRdxPlacesRunner: PlanNewClause - uses-Klausel im Text, die der Baum nicht sah)
+msgid "the uses clause in line %d is not read here (it lies in a conditional branch) - add the unit by hand"
+msgstr "die uses-Klausel in Zeile %d wird hier nicht gelesen (sie steht in einem bedingten Zweig) - Unit von Hand ergänzen"
 
 msgid "the declaration carries %s - an empty body there is a hook that callers (inherited, the framework) expect to do nothing; raise would break them"
 msgstr "die Deklaration trägt %s - ein leerer Rumpf dort ist ein Haken, den Aufrufer (inherited, das Framework) still erwarten; raise bräche sie"
