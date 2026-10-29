@@ -917,8 +917,11 @@ var
   E : TRdxActionEntry;
   A : TFindingAction;
 begin
-  // CnSelectMaskFrm.pas (rwE30, minimiert): mrOk kommt aus Vcl.Controls.
-  E := Sca007Entry('Result := AResult = mrOk;');
+  // CnSelectMaskFrm.pas (rwE30, minimiert): FindVCLWindow kommt aus
+  // Vcl.Controls und steht in keiner Liste des Detektors (im Korpus mrOk -
+  // das nimmt d/SCA007Export in die Liste auf, UnitStillUsed sperrte dann;
+  // Review e/HilfeFixH).
+  E := Sca007Entry('Result := FindVCLWindow(Point(AResult, 0)) <> nil;');
   Assert.IsTrue(E.Enabled and E.HasAction, 'im Menue ausfuehrbar');
   Assert.IsTrue(E.Kind = fakRefactor, 'nicht in der Gluehbirne');
   A := TRdxActionCore.FindingActionOf(E);

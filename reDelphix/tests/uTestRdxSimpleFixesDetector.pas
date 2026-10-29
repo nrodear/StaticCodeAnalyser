@@ -1512,9 +1512,12 @@ begin
 end;
 
 // rwE30 Stufe 2, Muster CnSelectMaskFrm.pas:39/106 (minimiert): die Unit
-// nutzt mrOk, das nur aus (Vcl.)Controls kommt; die Liste des Detektors
-// kennt es nicht und meldet Vcl.Controls ungenutzt. ABody ist der Rumpf von
-// TFoo.IsOk (Zeile 12).
+// nutzt einen Bezeichner, der nur aus (Vcl.)Controls kommt; die Liste des
+// Detektors kennt ihn nicht und meldet Vcl.Controls ungenutzt. ABody ist der
+// Rumpf von TFoo.IsOk (Zeile 12). Im Korpus war es mrOk - das nimmt der
+// Zweig d/SCA007Export (3f162348) in die Liste von Controls auf, danach
+// meldete der Detektor nichts mehr; die Tests nehmen darum FindVCLWindow
+// (Vcl.Controls, in keiner Liste - Review e/HilfeFixH).
 function ModalUnit(const ABody: string): string;
 begin
   Result := Join(['unit t;', 'interface', 'uses System.Classes, Vcl.Controls;',
@@ -1530,17 +1533,17 @@ var
   Seen : TArray<TSeen>;
   O    : TRdxFixOutcome;
 begin
-  Src := ModalUnit('Result := AResult = mrOk;');
+  Src := ModalUnit('Result := FindVCLWindow(Point(AResult, 0)) <> nil;');
   Seen := Detect(Src, fkUnusedUses);
   Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls');
   Assert.AreEqual('Vcl.Controls', Seen[0].Msg);
   O := PlanMain(Src, fkUnusedUses, Seen[0]);
   // Die Hilfe bleibt (Menue), aber nicht in der Gluehbirne; der Hinweis
   // nennt den Bezeichner. Vorher: MenuOnly gab es nicht - inBirne=ja, der
-  // Klick brach den Bau (E2003 mrOk).
+  // Klick brach den Bau (E2003 mrOk im Korpus).
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.IsTrue(O.MenuOnly, 'nur im Menue');
-  Assert.IsTrue(Pos('mrOk', O.Hint) > 0, O.Hint);
+  Assert.IsTrue(Pos('FindVCLWindow', O.Hint) > 0, O.Hint);
   Assert.IsTrue(Pos('12', O.Hint) > 0, 'Zeile: ' + O.Hint);
   Assert.IsTrue(O.ChangesBehavior, 'Kennzeichnung bleibt');
 end;
@@ -1551,9 +1554,9 @@ var
   Seen : TArray<TSeen>;
   O    : TRdxFixOutcome;
 begin
-  // Gegenprobe: dieselbe Unit ohne mrOk - jeder Bezeichner hat eine Quelle
-  // (TComponent aus der Liste von System.Classes), die Hilfe bleibt in der
-  // Gluehbirne.
+  // Gegenprobe: dieselbe Unit ohne FindVCLWindow - jeder Bezeichner hat
+  // eine Quelle (TComponent aus der Liste von System.Classes), die Hilfe
+  // bleibt in der Gluehbirne.
   Src := ModalUnit('Result := AResult = 1;');
   Seen := Detect(Src, fkUnusedUses);
   Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls');
