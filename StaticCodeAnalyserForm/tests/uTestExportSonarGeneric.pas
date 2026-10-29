@@ -20,7 +20,7 @@ type
     [Test] procedure EmptyFindingsProducesEmptyArrays;
     [Test] procedure SingleFindingHasBothRuleAndIssue;
     [Test] procedure RulesAreDedupedAcrossMultipleFindings;
-    [Test] procedure IssueHasEngineIdAndRuleId;
+    [Test] procedure IssueHasRuleIdButNoEngineId;
     [Test] procedure IssueHasPrimaryLocationWithTextRange;
     [Test] procedure RuleHasMqrFields;
     [Test] procedure FilePathIsRelativeToBaseDir;
@@ -176,7 +176,9 @@ begin
   end;
 end;
 
-procedure TTestExportSonarGeneric.IssueHasEngineIdAndRuleId;
+procedure TTestExportSonarGeneric.IssueHasRuleIdButNoEngineId;
+// engineId steht seit dem Format von SonarQube 10.3 nur noch an der REGEL;
+// am Issue ist es ein Altformat-Feld (Begruendung an BuildIssueObject).
 var
   Findings : TObjectList<TLeakFinding>;
   Json     : string;
@@ -190,8 +192,12 @@ begin
     Root := TJSONObject.ParseJSONValue(Json) as TJSONObject;
     try
       Issue := Root.GetValue<TJSONArray>('issues').Items[0] as TJSONObject;
-      Assert.AreEqual('static-code-analyser', Issue.GetValue<string>('engineId'));
-      Assert.AreEqual('SCA003',               Issue.GetValue<string>('ruleId'));
+      Assert.IsFalse(Assigned(Issue.GetValue('engineId')),
+        'engineId gehoert an die Regel, nicht an das Issue');
+      Assert.AreEqual('SCA003', Issue.GetValue<string>('ruleId'));
+      Assert.AreEqual('static-code-analyser',
+        (Root.GetValue<TJSONArray>('rules').Items[0] as TJSONObject)
+          .GetValue<string>('engineId'));
     finally
       Root.Free;
     end;

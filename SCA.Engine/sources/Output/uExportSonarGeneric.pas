@@ -55,7 +55,10 @@ type
     // Schreibt einen kompletten Generic-Issue-Report nach FileName.
     //   AFindings - die gefundenen Befunde (Caller behaelt Ownership)
     //   ABaseDir  - Wurzelverzeichnis fuer relative Datei-Pfade.
-    //               Sonar erwartet RELATIVE Pfade vom sonar.sources-Root.
+    //               Sonar loest filePath relativ zu sonar.projectBaseDir
+    //               auf (= Ordner der sonar-project.properties), NICHT
+    //               relativ zu sonar.sources - beide fallen nur zusammen,
+    //               wenn sonar.sources=. ist.
     // Liefert die Anzahl der Issues, deren Pfad ausserhalb von ABaseDir lag
     // und deshalb absolut blieb - Sonar verwirft die still als "unknown
     // files", der Aufrufer sollte das melden.
@@ -343,11 +346,18 @@ begin
   if Msg = '' then Msg := M.ShortDescription;
 
   Result := TJSONObject.Create;
-  // engineId je Issue ist im neuen Format erlaubt, aber WIRKUNGSLOS - der
-  // Importer nimmt rule.engineId. Bleibt stehen, weil es das Alt-Format
-  // verlangte und ein Entfernen die Ausgabe aendern wuerde, ohne etwas zu
-  // gewinnen.
-  Result.AddPair('engineId', SONAR_ENGINE_ID);
+  // KEIN engineId je Issue (2026-10-29, Sonar-Roundtrip-Pruefung). Bis dahin
+  // stand es hier mit der Begruendung "im neuen Format erlaubt, aber
+  // wirkungslos". Die aktuelle Spezifikation (SonarQube Server 10.3 bis
+  // 2025.x, Community Build) fuehrt am Issue nur noch ruleId,
+  // effortMinutes, primaryLocation und secondaryLocations; engineId steht
+  // dort allein an der Regel. Am Issue ist es ein Feld des Altformats - und
+  // das Altformat erkennt der Scanner an genau solchen Issue-Feldern
+  // (severity/type verwirft er mit rules[] sogar hart). Ein Feld, das
+  // bestenfalls nichts bewirkt und schlimmstenfalls den Report in den
+  // Altformat-Pfad schiebt (dort gilt fuer JEDE Regel MAINTAINABILITY/
+  // MEDIUM), gehoert nicht in den Export. Der Importer nimmt die Engine
+  // ohnehin aus rule.engineId.
   Result.AddPair('ruleId',   RuleID);
 
   if EffortMinutesFor(M.FindingType) > 0 then
