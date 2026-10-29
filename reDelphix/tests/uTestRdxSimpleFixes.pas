@@ -43,6 +43,8 @@ type
     [Test] procedure Sca085_VariableProof_FieldAndGlobal;
     [Test] procedure Sca085_VariableProof_Refused;
     [Test] procedure Sca085_OldCompilerBranch;
+    // ---- SCA085, Realwelt-Test rwE31 (Fix-Runde 3) ----
+    [Test] procedure Sca085_VariableProof_NeighbourGlobal;
     // ---- Stufe 2, Rest: SCA074, SCA087, SCA139 ----
     [Test] procedure Sca074_Variants;
     [Test] procedure Sca074_Refusals;
@@ -748,6 +750,61 @@ begin
     '  CMandalaSettings := nil;', 'end.']);
   AssertProof(Src, '// A', 'CMandalaSettings', vpGlobal, 'tsettings',
     'Programm-Hauptblock');
+end;
+
+// VariableProof wie ProofAt, mit der Datei AUnitFile der Quelle.
+function ProofIn(const ASource, AUnitFile, AText, AName: string): TRdxVarProof;
+var
+  Map : TRdxCodeMap;
+begin
+  Map := NewMap(ASource);
+  try
+    Result := TRdxSimpleFixes.VariableProof(Map, LineOf(ASource, AText), AName,
+      AUnitFile);
+  finally
+    Map.Free;
+  end;
+end;
+
+// rwE31 (HeidiSQL main.pas:2778, minimiert): 'frmPreferences' ist die
+// globale Variable aus preferences.pas (uses, gleiches Verzeichnis); bis
+// dahin 'nicht als Variable bekannt'. Gegenproben: ohne Datei (wie bis
+// dahin), eine Variable nur im implementation-Teil der anderen Unit, eine
+// spaetere Unit der uses-Klausel, die den Namen als Funktion deklariert.
+procedure TTestRdxSimpleFixes.Sca085_VariableProof_NeighbourGlobal;
+var
+  Dir, Src, Main : string;
+  P              : TRdxVarProof;
+begin
+  Dir := NewTempDir('rdx_sca085n_');
+  try
+    WriteText(Dir + 'preferences.pas', Join(['unit preferences;', 'interface',
+      'type', '  TfrmPreferences = class(TForm)', '  end;', 'var',
+      '  frmPreferences: TfrmPreferences;', 'implementation', 'var',
+      '  HiddenVar: TObject;', 'end.']));
+    WriteText(Dir + 'other.pas', Join(['unit other;', 'interface',
+      'function frmPreferences: TObject;', 'implementation',
+      'function frmPreferences: TObject;', 'begin', '  Result := nil;',
+      'end;', 'end.']));
+    Main := Dir + 'main.pas';
+    Src := Join(['unit main;', 'interface', 'uses', '  SysUtils, preferences;',
+      'type', '  TMainForm = class(TExtForm)', '    procedure Done;', '  end;',
+      'implementation', 'procedure TMainForm.Done;', 'begin',
+      '  frmPreferences.Free; // A', '  frmPreferences := nil;',
+      '  HiddenVar.Free; // B', 'end;', 'end.']);
+    P := ProofIn(Src, Main, '// A', 'frmPreferences');
+    Assert.IsTrue(P.Kind = vpGlobal, 'Global aus preferences.pas');
+    Assert.AreEqual('tfrmpreferences', P.TypeLow);
+    P := ProofIn(Src, '', '// A', 'frmPreferences');
+    Assert.IsTrue(P.Kind = vpNone, 'ohne Datei kein Beweis');
+    P := ProofIn(Src, Main, '// B', 'HiddenVar');
+    Assert.IsTrue(P.Kind = vpNone, 'implementation-Variable ist unsichtbar');
+    P := ProofIn(StringReplace(Src, 'preferences;', 'preferences, other;', []),
+      Main, '// A', 'frmPreferences');
+    Assert.IsTrue(P.Kind = vpNone, 'spaetere Unit verdeckt mit einer Funktion');
+  finally
+    RemoveTree(Dir);
+  end;
 end;
 
 procedure TTestRdxSimpleFixes.Sca085_VariableProof_Refused;

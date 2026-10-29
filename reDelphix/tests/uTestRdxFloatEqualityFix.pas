@@ -57,6 +57,7 @@ type
     [Test] procedure DivisorGuard_NoHelp;
     [Test] procedure TextFastPath_NoHelp;
     [Test] procedure StoredFunction_NoHelp;
+    [Test] procedure BaseFloatType_Aliases;
   end;
 
 {$IFNDEF FPC}
@@ -688,6 +689,61 @@ begin
   Src := StoredUnit('');
   Assert.AreEqual(StringReplace(Src, 'FOpacity <> 1',
     'not SameValue(FOpacity, 1)', []), Applied(Src, 14, 'FOpacity', '<>', '1'));
+end;
+
+// rwE31 (Dev-Cpp SVG.pas:3988, minimiert): 'X, Y: TFloat' mit 'TFloat =
+// single' in SVGTypes.pas (uses, gleiches Verzeichnis) - bis dahin 'als
+// tfloat deklariert - nicht Single ..'. Dazu die Alias-Kette der Datei
+// selbst. Gegenproben: ohne Datei, ein Alias nur im implementation-Teil,
+// verschiedene Typen in {$IFDEF}-Zweigen (mormot TSynExtended); eine
+// spaetere Unit, die den Typ nur benutzt, verdeckt nicht, eine, die ihn
+// neu deklariert, schon.
+procedure TTestRdxFloatEqualityFix.BaseFloatType_Aliases;
+var
+  Dir, Src, Main : string;
+  Map            : TRdxCodeMap;
+begin
+  Dir := NewTempDir('rdx_sca144a_');
+  try
+    WriteText(Dir + 'rdxtypes.pas', Join(['unit rdxtypes;', 'interface',
+      'type', '  TFloat = single;', '  {$IFDEF X}', '  TReal = extended;',
+      '  {$ELSE}', '  TReal = double;', '  {$ENDIF}', 'implementation', 'type',
+      '  THidden = double;', 'end.']));
+    WriteText(Dir + 'rdxuser.pas', Join(['unit rdxuser;', 'interface',
+      'type', '  TPoint2 = record X, Y: TFloat; end;', 'implementation',
+      'end.']));
+    WriteText(Dir + 'rdxnew.pas', Join(['unit rdxnew;', 'interface', 'type',
+      '  TFloat = double;', 'implementation', 'end.']));
+    Main := Dir + 'main.pas';
+    Src := Join(['unit main;', 'interface', 'uses', '  rdxtypes, rdxuser;',
+      'type', '  TLocal = TFloat2;', '  TFloat2 = double;', 'implementation',
+      'end.']);
+    Map := NewMap(Src);
+    try
+      Assert.AreEqual('single', TRdxFloatEqualityFix.BaseFloatType(Map, Main,
+        'tfloat'), 'Alias aus der Unit daneben');
+      Assert.AreEqual('double', TRdxFloatEqualityFix.BaseFloatType(Map, Main,
+        'tlocal'), 'Alias-Kette der Datei');
+      Assert.AreEqual('tfloat', TRdxFloatEqualityFix.BaseFloatType(Map, '',
+        'tfloat'), 'ohne Datei');
+      Assert.AreEqual('thidden', TRdxFloatEqualityFix.BaseFloatType(Map, Main,
+        'thidden'), 'nur im implementation-Teil');
+      Assert.AreEqual('treal', TRdxFloatEqualityFix.BaseFloatType(Map, Main,
+        'treal'), 'Zweige mit verschiedenen Typen');
+    finally
+      Map.Free;
+    end;
+    Map := NewMap(StringReplace(Src, 'rdxtypes, rdxuser;',
+      'rdxtypes, rdxnew;', []));
+    try
+      Assert.AreEqual('double', TRdxFloatEqualityFix.BaseFloatType(Map, Main,
+        'tfloat'), 'die spaetere Unit gilt');
+    finally
+      Map.Free;
+    end;
+  finally
+    RemoveTree(Dir);
+  end;
 end;
 
 {$IFNDEF FPC}

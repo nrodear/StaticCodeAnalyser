@@ -1704,6 +1704,10 @@ begin
   Result := APlaces.DeclaredTypeOf(ALine, AOperand);
   if Result = '' then
     Result := TRdxFloatEqualityFix.LocalType(AMap, ALine, AOperand);
+  // Ein Alias bis zum Gleitkommatyp ('TFloat = single', auch aus einer
+  // Unit neben der Datei - rwE31).
+  Result := TRdxFloatEqualityFix.BaseFloatType(AMap, APlaces.FileName,
+    Result);
 end;
 
 // SCA144: 'A = B' -> 'SameValue(A, B)', eine Null-Seite -> 'IsZero(A)', bei

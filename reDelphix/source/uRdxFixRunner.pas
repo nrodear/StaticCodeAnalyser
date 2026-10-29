@@ -349,7 +349,9 @@ begin
   ATypeLow := APlaces.DeclaredTypeOf(ALine, AName);
   if (ATypeLow <> '') and not Prop then
     Exit;
-  Proof := TRdxSimpleFixes.VariableProof(AMap, ALine, AName);
+  // Mit der Datei: ein Global aus einer Unit neben ihr (rwE31).
+  Proof := TRdxSimpleFixes.VariableProof(AMap, ALine, AName,
+    APlaces.FileName);
   if Proof.Kind = vpLocal then
   begin
     ATypeLow := Proof.TypeLow;

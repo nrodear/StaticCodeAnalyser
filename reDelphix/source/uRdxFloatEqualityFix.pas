@@ -180,6 +180,18 @@ type
     class function LocalType(AMap: TRdxCodeMap; ALine: Integer;
       const AOperand: string): string; static;
 
+    // Der Gleitkommatyp hinter einem Alias ATypeLow (klein, aus
+    // DeclaredTypeOf/LocalType): ATypeLow selbst, wenn es schon einer ist
+    // oder kein Alias zu einem Gleitkommatyp fuehrt; sonst der Typ nach der
+    // Alias-Kette dieser Datei (TRdxTypeProof.UniqueAliasBase) bzw. - wenn
+    // die Datei ATypeLow nicht deklariert - der Unit der uses-Klauseln
+    // neben AUnitFile, die ihn deklariert (NeighbourTypeBase; rwE31:
+    // Dev-Cpp SVG.pas:3988 'X, Y: TFloat', 'TFloat = single' in
+    // SVGTypes.pas). Eine mehrdeutige Kette ({$IFDEF}-Zweige mit
+    // verschiedenen Typen) bleibt ATypeLow.
+    class function BaseFloatType(AMap: TRdxCodeMap;
+      const AUnitFile, ATypeLow: string): string; static;
+
     // Was nur der Adapter weiss: der Detektor hat den Fund herabgestuft
     // (fcLow: Waechter- oder Sentinel-Vergleich, exakt gewollt), die Zeile
     // liegt in einem with-Block (InWithBlock). '' oder der Grund.
@@ -232,6 +244,14 @@ const
   // ... und Spruenge, hinter denen der Rest des Blocks geschuetzt ist
   // ('if X = 0 then Exit;').
   JUMP_WORDS: array[0..3] of string = ('exit', 'raise', 'continue', 'break');
+  // Eingebaute Typen - kein Alias, BaseFloatType liest fuer sie keine
+  // Units neben der Datei (der Vorfilter faende 'integer' fast ueberall).
+  BUILTIN_TYPES: array[0..27] of string = ('integer', 'cardinal', 'shortint',
+    'smallint', 'longint', 'int64', 'uint64', 'byte', 'word', 'longword',
+    'nativeint', 'nativeuint', 'boolean', 'char', 'ansichar', 'widechar',
+    'string', 'ansistring', 'widestring', 'unicodestring', 'shortstring',
+    'pointer', 'variant', 'olevariant', 'tdatetime', 'tdate', 'ttime',
+    'comp');
 
 // Eine Null wie der Detektor sie liest: '0', '00', '0.0', '0.00'.
 function IsZeroText(const S: string): Boolean;
@@ -1061,6 +1081,24 @@ begin
     Result := _(R_FLOAT_SINGLE, [ALeft, ARight])
   else if RSingle and not LSingle and not IsIntegerText(ALeft) then
     Result := _(R_FLOAT_SINGLE, [ARight, ALeft]);
+end;
+
+class function TRdxFloatEqualityFix.BaseFloatType(AMap: TRdxCodeMap;
+  const AUnitFile, ATypeLow: string): string;
+var
+  Low, Base : string;
+begin
+  Result := ATypeLow;
+  Low := LowerCase(ATypeLow);
+  if (Low = '') or InList(Low, FLOAT_TYPES) or (Low = TYPE_CURRENCY)
+     or InList(Low, BUILTIN_TYPES) or not IsIdentStart(Low[1]) then
+    Exit;
+  if TRdxTypeProof.DeclaredTypeKind(AMap, Low) <> '' then
+    Base := TRdxTypeProof.UniqueAliasBase(AMap, Low)
+  else
+    Base := TRdxTypeProof.NeighbourTypeBase(AMap, AUnitFile, Low);
+  if InList(Base, FLOAT_TYPES) then
+    Result := Base;
 end;
 
 class function TRdxFloatEqualityFix.ContextReason(ALowConfidence,
