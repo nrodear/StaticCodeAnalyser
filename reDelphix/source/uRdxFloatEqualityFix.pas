@@ -49,7 +49,22 @@ unit uRdxFloatEqualityFix;
 //     (Img32.SVG.Path.pas:657 'with fArcInfo do .. rectAngle <> 0');
 //   - die Stelle liegt in einem Zweig, den nur alte Compiler uebersetzen
 //     ('{$IFNDEF COMPILER6_UP}': Math.IsZero/SameValue gibt es ab Delphi 6,
-//     JvSimpleXml.pas:252, rwE30; TRdxTypeProof.OldCompilerBranchReason).
+//     JvSimpleXml.pas:252, rwE30; TRdxTypeProof.OldCompilerBranchReason);
+//   - seit rwE31 drei exakte Sonderfaelle, die eine Toleranz bricht:
+//     ein DIVISIONSSCHUTZ - der Vergleich mit 0 schuetzt eine Division
+//     durch den Operanden ('if D <> 0 then R := R / D else raise ..',
+//     JvgUtils.pas:1516: IsZero(Single) mit Epsilon 1E-4 meldete fuer
+//     1/0.00005 'Division durch Null'; 'function SinC(Value: Single)' in
+//     JvPaintFX/JvResample; '/', div oder mod vor dem Operanden bzw. einer
+//     Klammer mit ihm - im then-Zweig bei '<>' und 'while .. do', im
+//     else-Zweig bei '=' bzw. hinter 'if X = 0 then Exit/raise ..' im
+//     Rest des Blocks, DivisorGuardLine); ein TEXT-SCHNELLPFAD - der Zweig
+//     fuer exakt 0 setzt einen String ('if Value = 0 then result := ''0''',
+//     mormot.core.text.pas:6069 DoubleToString: mit IsZero wuerde jeder
+//     Wert unter 1E-12 still zu '0'); eine STORED-FUNKTION - 'Result := F
+//     <> 1' in einer Funktion, die eine Property mit 'stored' nennt
+//     (FMX.SVGIconImage.pas:244 StoreOpacity: ein Wert nahe am Vorgabewert
+//     wuerde nicht gespeichert und kaeme als genau 1 zurueck).
 // Der TYPBEWEIS gehoert in den Adapter (Hausregel uRdxFixTable): er fragt
 // DeclaredTypeOf je Bezeichner und reicht die Typen an TypeReason; dazu
 // InWithBlock und die Herabstufung des Detektors (fcLow) an ContextReason.
@@ -103,6 +118,14 @@ const
     + 'or Real';
   R_FLOAT_SINGLE = 'Single %s compared with %s - the SameValue overloads '
     + 'could be ambiguous (E2251)';
+  // rwE31: exakte Sonderfaelle (s. Kopf).
+  R_FLOAT_DIVISOR = '"%s" guards a division by %s (line %d) - every value '
+    + 'other than exactly 0 is a valid divisor, a tolerance would reject '
+    + 'small ones';
+  R_FLOAT_TEXT = '"%s" writes text for exactly 0 (line %d) - with a '
+    + 'tolerance small values would silently become that text';
+  R_FLOAT_STORED = '"%s" decides whether a property is stored (stored %s) '
+    + '- with a tolerance values close to the default would not be saved';
 
   // Die Funktionen der Ersetzung (Name im Menuetext).
   CALL_SAME_VALUE = 'SameValue';
@@ -204,6 +227,11 @@ const
   MAX_BRANCH = 2000;
   // Math.IsZero und Math.SameValue gibt es ab Delphi 6 (rwE30).
   MATH_SINCE_DELPHI = 6;
+  // Divisionsschutz (rwE31): Operatoren einer Division ...
+  DIV_OPS: array[0..2] of string = ('/', 'div', 'mod');
+  // ... und Spruenge, hinter denen der Rest des Blocks geschuetzt ist
+  // ('if X = 0 then Exit;').
+  JUMP_WORDS: array[0..3] of string = ('exit', 'raise', 'continue', 'break');
 
 // Eine Null wie der Detektor sie liest: '0', '00', '0.0', '0.00'.
 function IsZeroText(const S: string): Boolean;
@@ -540,6 +568,192 @@ begin
   end;
 end;
 
+// Teilt die Division an ADiv ('/', div, mod) durch AVarLow - steht der
+// Name direkt dahinter (ein Vorzeichen davor zaehlt nicht) oder in der
+// Klammer dahinter ('Sin(Value) / (Value * Pi)')?
+function DividesBy(AMap: TRdxCodeMap; const ADiv: TRdxToken;
+  const AVarLow: string): Boolean;
+var
+  D, C, A : TRdxToken;
+begin
+  Result := False;
+  D := After(AMap, ADiv);
+  while (D.Low = '-') or (D.Low = '+') do
+    D := After(AMap, D);
+  if D.IsWord and (D.Low = AVarLow) then
+    Exit(True);
+  if D.Low <> '(' then
+    Exit;
+  C := MatchClose(AMap, D);
+  A := After(AMap, D);
+  while (C.Low <> '') and (A.Low <> '') and TokBefore(A, C) do
+  begin
+    if A.IsWord and (A.Low = AVarLow) then
+      Exit(True);
+    A := After(AMap, A);
+  end;
+end;
+
+// Liest die Anweisung ab AFirst bis zu ihrem Ende - ';' bzw. else auf
+// Tiefe 0, das end/until eines umschliessenden Blocks; mit AToBlockEnd
+// nur das Blockende (der Rest des Blocks). Bloecke mit end (END_OPENERS)
+// und repeat..until zaehlen. Die Zeile der ersten Division durch AVarLow
+// (DividesBy), 0 ohne; AStop das Token, an dem die Anweisung endet (Low =
+// '' bei Abbruch), AJump: ein Sprung (JUMP_WORDS) steht darin.
+function WalkBranch(AMap: TRdxCodeMap; const AFirst: TRdxToken;
+  const AVarLow: string; AToBlockEnd: Boolean; out AStop: TRdxToken;
+  out AJump: Boolean): Integer;
+var
+  T            : TRdxToken;
+  Depth, Steps : Integer;
+begin
+  Result := 0;
+  AStop := Default(TRdxToken);
+  AJump := False;
+  Depth := 0;
+  Steps := 0;
+  T := AFirst;
+  while (T.Low <> '') and (Steps < MAX_BRANCH) do
+  begin
+    if InList(T.Low, END_OPENERS) or (T.Low = 'repeat') then
+      Inc(Depth)
+    else if (T.Low = 'end') or (T.Low = 'until') then
+    begin
+      Dec(Depth);
+      if Depth < 0 then
+      begin
+        AStop := T;
+        Exit;
+      end;
+    end
+    else if (Depth = 0) and not AToBlockEnd
+       and ((T.Low = ';') or (T.Low = 'else')) then
+    begin
+      AStop := T;
+      Exit;
+    end
+    else if InList(T.Low, JUMP_WORDS) then
+      AJump := True
+    else if (AVarLow <> '') and InList(T.Low, DIV_OPS)
+       and DividesBy(AMap, T, AVarLow) then
+      Exit(T.Line);
+    Inc(Steps);
+    T := After(AMap, T);
+  end;
+end;
+
+// Divisionsschutz (s. Kopf): AThen ist das then bzw. do hinter dem
+// Vergleich 'X AOp 0', AVarLow der Operand X (klein). Die Zeile der
+// geschuetzten Division, 0 ohne.
+function DivisorGuardLine(AMap: TRdxCodeMap; const AThen: TRdxToken;
+  const AOp, AVarLow: string): Integer;
+var
+  Stop, Rest : TRdxToken;
+  Jump, J2   : Boolean;
+begin
+  if AOp = '<>' then
+    Exit(WalkBranch(AMap, After(AMap, AThen), AVarLow, False, Stop, Jump));
+  Result := 0;
+  if AThen.Low <> 'then' then
+    Exit;
+  // '=': der then-Zweig bestimmt nur, wo es weitergeht.
+  WalkBranch(AMap, After(AMap, AThen), '', False, Stop, Jump);
+  if Stop.Low = 'else' then
+    Result := WalkBranch(AMap, After(AMap, Stop), AVarLow, False, Rest, J2)
+  else if Jump and (Stop.Low = ';') then
+    Result := WalkBranch(AMap, After(AMap, Stop), AVarLow, True, Rest, J2);
+end;
+
+// Setzt die Anweisung ab AFirst einen String ('X := ''0''', 'Result :=
+// #48', 'Exit(''0'')'; ein begin davor zaehlt nicht)?
+function AssignsText(AMap: TRdxCodeMap; const AFirst: TRdxToken): Boolean;
+var
+  F, A : TRdxToken;
+  L    : string;
+  c    : Integer;
+begin
+  Result := False;
+  F := AFirst;
+  if F.Low = 'begin' then
+    F := After(AMap, F);
+  if not F.IsWord then
+    Exit;
+  A := After(AMap, F);
+  if F.Low = 'exit' then
+  begin
+    if A.Low <> '(' then
+      Exit;
+  end
+  else
+  begin
+    while (A.Low = '.') and After(AMap, A).IsWord do
+      A := After(AMap, After(AMap, A));
+    if A.Low <> ':=' then
+      Exit;
+  end;
+  L := AMap.Raw(A.Line);
+  c := SkipBlanks(L, A.EndCol);
+  Result := (c <= Length(L)) and CharInSet(L[c], ['''', '#']);
+end;
+
+// Text-Schnellpfad (s. Kopf): der Zweig fuer exakt 0 - bei '=' der
+// then-Zweig, bei '<>' der else-Zweig - setzt einen String. Seine Zeile,
+// 0 ohne.
+function TextBranchLine(AMap: TRdxCodeMap; const AThen: TRdxToken;
+  const AOp: string): Integer;
+var
+  F, Stop : TRdxToken;
+  Jump    : Boolean;
+begin
+  Result := 0;
+  if AThen.Low <> 'then' then
+    Exit;
+  F := After(AMap, AThen);
+  if AOp = '<>' then
+  begin
+    WalkBranch(AMap, F, '', False, Stop, Jump);
+    if Stop.Low <> 'else' then
+      Exit;
+    F := After(AMap, Stop);
+  end;
+  if AssignsText(AMap, F) then
+    Result := F.Line;
+end;
+
+// Stored-Funktion (s. Kopf): steht der Vergleich ab ALTok als 'Result :=
+// ..' (bzw. '<Name> := ..') in einer Funktion, die eine Property der Datei
+// mit 'stored <Name>' nennt? Der Name der Funktion, sonst ''.
+function StoredFunction(AMap: TRdxCodeMap; const ALTok: TRdxToken): string;
+var
+  P, Tgt, T : TRdxToken;
+  Find      : TRdxLocalFind;
+  Name, Low : string;
+  i         : Integer;
+begin
+  Result := '';
+  P := Before(AMap, ALTok);
+  if P.Low <> ':=' then
+    Exit;
+  Tgt := Before(AMap, P);
+  if not Tgt.IsWord then
+    Exit;
+  Find := TRdxTypeProof.LocalBinding(AMap, ALTok, Tgt.Low);
+  Name := Find.OuterName;
+  i := LastDelimiter('.', Name);
+  if i > 0 then
+    Name := Copy(Name, i + 1, MaxInt);
+  Low := LowerCase(Name);
+  if (Low = '') or ((Tgt.Low <> 'result') and (Tgt.Low <> Low)) then
+    Exit;
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), Low);
+  while T.Low <> '' do
+  begin
+    if (T.Low = Low) and (Before(AMap, T).Low = 'stored') then
+      Exit(Name);
+    T := NextTokenOnLineWith(AMap, T, Low);
+  end;
+end;
+
 // Ein Operand klein, '' fuer eine Zahl (sie bindet an nichts).
 function OperandLow(const AOperand: string): string;
 begin
@@ -637,6 +851,8 @@ var
   Li    : Integer;
   InWith       : Boolean;
   WithL, WithR : string;
+  ThenTok      : TRdxToken;
+  Stored       : string;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -750,6 +966,34 @@ begin
       AReason := _(R_FLOAT_TOLERANT, [Cmp, Li]);
       Exit;
     end;
+  end;
+  // Exakte Sonderfaelle (rwE31, s. Kopf). Die Bedingung kann geklammert
+  // sein: 'if (Value <> 0.0) then'.
+  ThenTok := N;
+  if (N.Low = ')') and (P.Low = '(')
+     and InList(Before(AMap, P).Low, ['if', 'while']) then
+    ThenTok := After(AMap, N);
+  if (ZeroLeft or ZeroRight)
+     and ((ThenTok.Low = 'then') or (ThenTok.Low = 'do')) then
+  begin
+    Li := DivisorGuardLine(AMap, ThenTok, Op, LowerCase(VarText));
+    if Li > 0 then
+    begin
+      AReason := _(R_FLOAT_DIVISOR, [Cmp, VarText, Li]);
+      Exit;
+    end;
+    Li := TextBranchLine(AMap, ThenTok, Op);
+    if Li > 0 then
+    begin
+      AReason := _(R_FLOAT_TEXT, [Cmp, Li]);
+      Exit;
+    end;
+  end;
+  Stored := StoredFunction(AMap, LTok);
+  if Stored <> '' then
+  begin
+    AReason := _(R_FLOAT_STORED, [Cmp, Stored]);
+    Exit;
   end;
 
   Call := CallName(AMessage);
