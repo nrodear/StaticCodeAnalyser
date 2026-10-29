@@ -761,6 +761,18 @@ begin
     '  Owner: TObject;', 'implementation',
     'procedure TForm1.Done;', 'begin', '  Owner.Free; // A', 'end;', 'end.']);
   AssertProof(Src, '// A', 'Owner', vpNone, '', 'Global in TForm-Ableitung');
+  // Review e/HilfeFixI: ein class helper hat keine Vorfahrenliste - Self
+  // ist die erweiterte Klasse (TStrings), ihr Member verdeckte das Global.
+  // Bis dahin vpGlobal ('class' ohne Vorfahren galt als TObject).
+  Src := Join(['unit u;', 'interface', 'type',
+    '  TListHelper = class helper for TStrings', '    procedure Done;',
+    '  end;', 'var', '  Cache: TObject;', 'implementation',
+    'procedure TListHelper.Done;', 'begin', '  Cache.Free; // G', 'end;',
+    'end.']);
+  AssertProof(Src, '// G', 'Cache', vpNone, '', 'Global im class helper');
+  // Gegenprobe: dieselbe Methode einer Klasse ohne Vorfahren beweist es.
+  AssertProof(StringReplace(Src, 'class helper for TStrings', 'class', []),
+    '// G', 'Cache', vpGlobal, 'tobject', 'Global in Klasse ohne Vorfahren');
   // Eine lokale Variable der aeusseren Routine HINTER der verschachtelten
   // ist dort unsichtbar - der Quellstellen-Dienst saehe sie: offen.
   Src := InImplementation(['procedure Outer;',

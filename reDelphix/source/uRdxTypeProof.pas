@@ -245,8 +245,9 @@ type
     // Visible, TComponent.Owner ...)? True, wenn die Vorfahrenkette in der
     // Datei bei einer Klasse der Delphi-Quellen (uRdxRtlTypes) ausser
     // TObject endet, bei TObject (auch 'class' ohne Vorfahren) nur, wenn
-    // AName ein Member von TObject ist, und wenn die Klasse selbst nicht
-    // (eindeutig) in der Datei steht. False bei einer fremden Kundenklasse
+    // AName ein Member von TObject ist, wenn die Klasse selbst nicht
+    // (eindeutig) in der Datei steht und bei einem class helper (Self ist
+    // die erweiterte Klasse). False bei einer fremden Kundenklasse
     // als Vorfahr (deren Member kennt niemand - GRENZE, s. Aufrufer).
     class function RtlAncestorOrUnknown(AMap: TRdxCodeMap;
       const AClassPath, AName: string): Boolean; static;
@@ -1439,6 +1440,12 @@ begin
         Exit(ObjRisk);
       Exit(IsRtlClassOrInterface(LowerCase(Name)));
     end;
+    // 'class helper for TStrings': Self ist die erweiterte Klasse, deren
+    // Member (auch einer fremden Unit) ein Global verdecken; HeritageOf
+    // saehe keine Vorfahren und hielte sie fuer TObject (Review
+    // e/HilfeFixI).
+    if After(AMap, Heads[0]).Low = 'helper' then
+      Exit;
     Parents := TRdxBlocks.HeritageOf(AMap, Heads[0]);
     if Length(Parents) = 0 then
       Exit(ObjRisk);   // 'class' ohne Vorfahren: TObject
