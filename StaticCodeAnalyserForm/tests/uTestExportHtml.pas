@@ -79,6 +79,14 @@ type
     [Test] procedure DataSort_NichtNumerischeZeile_BrichtDasAttributNicht;
     [Test] procedure DataSort_GewoehnlicheZeile_Unveraendert;
     [Test] procedure DataSearch_UmbruchWirdAttributsicher;
+    // Editorhilfen (Nico 2026-10-29): Liste je Regel einmal im
+    // Regel-Report, je Fund nur ein Verweis; Option aus = alter Bericht.
+    [Test] procedure EditorHelp_An_RegelReportUndVerweisJeFund;
+    [Test] procedure EditorHelp_RegelOhneHilfe_Nichts;
+    [Test] procedure EditorHelp_Aus_KeinHilfeText_BerichtSonstGleich;
+    [Test] procedure EditorHelpListHtml_EscapetIdSlugUndWirkung;
+    [Test] procedure EditorHelpListHtml_JedeWirkungHatEinenSchluessel;
+    [Test] procedure EditorHelpSlugText_MachtDenSlugLesbar;
   end;
 
 
@@ -92,7 +100,10 @@ implementation
 // sind der Katalog, eine Aufspaltung duplizierte nur die Render-Helfer.
 
 uses
-  System.IOUtils, Winapi.Windows;
+  System.IOUtils,
+  System.RegularExpressions,   // EditorHelp_Aus_...: Hilfe-Teile herausnehmen
+  uRuleCatalog,                // TRuleEditorHelp (EditorHelpListHtml)
+  Winapi.Windows;
 
 // Der Pfad steht in drei Fixtures - einmal benannt statt dreimal
 // getippt (sonst meldet der Selfscan DuplicateString).
@@ -481,6 +492,9 @@ begin
   Assert.AreEqual('', O.SourceFile, 'SourceFile leer = Repo-Modus');
   Assert.AreEqual('', O.BaseDir,    'BaseDir leer = nur Basisdateinamen');
   Assert.AreEqual('', O.Profile,    'Profile leer = kein Profilfilter');
+  // Editorhilfen (Nico 2026-10-29): Voreinstellung AN - ein roh
+  // deklarierter Record (CLI ohne Schalter, Engine-Facade) zeigt sie.
+  Assert.IsTrue(O.EditorHelp, 'EditorHelp muss Voreinstellung an sein');
 end;
 
 procedure TTestExportHtml.Options_RohDeklariert_BerichtBleibtGedeckelt;
@@ -1188,6 +1202,233 @@ begin
     'en-Schluessel hint-this fehlt');
   Assert.IsTrue(Pos('"hint-this": "Remarque sur cette occurrence"',
     Html) > 0, 'fr-Schluessel hint-this fehlt');
+end;
+
+{ --- Editorhilfen (Nico 2026-10-29) ----------------------------- }
+//
+// Fixture: zwei Funde von SCA017 (DebugOutput, ZWEI Hilfen im Katalog:
+// SCA017 und SCA017.2) und einer von SCA019 (TodoComment, keine Hilfe).
+// Dieselben Eintraege pinnt uTestExportSARIF (HELP_017) - aendert sich
+// der Katalog, fallen beide Fixturen gemeinsam.
+
+const
+  EH_LISTE_017 =
+    '<ul class="eh-list" data-eh="SCA017">' +
+    '<li><span class="eh-id">SCA017</span> Put debug output in ifdef debug ' +
+    '(<span class="eh-eff" data-i18n="eh-eff-changes">aendert Verhalten</span>)</li>' +
+    '<li><span class="eh-id">SCA017.2</span> Delete debug output ' +
+    '(<span class="eh-eff" data-i18n="eh-eff-changes">aendert Verhalten</span>)</li>' +
+    '</ul>';
+  EH_VERWEIS_017 = '<div class="eh-ref" data-eh="SCA017"></div>';
+
+function RenderEditorHelp(AAn: Boolean): string;
+var
+  Findings : TObjectList<TLeakFinding>;
+  Fnd      : TLeakFinding;
+  Fn       : string;
+  i        : Integer;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    for i := 1 to 2 do
+    begin
+      Fnd := TLeakFinding.Create;
+      Fnd.SetKind(fkDebugOutput);
+      Fnd.FileName   := FIXTURE_PAS;
+      Fnd.LineNumber := IntToStr(i);
+      Fnd.MissingVar := 'WriteLn' + IntToStr(i);
+      Fnd.MethodName := 'TestMethod';
+      Findings.Add(Fnd);
+    end;
+    Fnd := TLeakFinding.Create;
+    Fnd.SetKind(fkTodoComment);
+    Fnd.FileName   := FIXTURE_PAS;
+    Fnd.LineNumber := '10';
+    Fnd.MissingVar := 'TODO: x';
+    Fnd.MethodName := 'TestMethod';
+    Findings.Add(Fnd);
+    Fn := NeueTempDatei('sca-test-eh-', '.html');
+    try
+      var Opts: THtmlReportOptions;
+      Opts.EditorHelp := AAn;
+      TExporterHtml.Run(Findings, Fn, Opts);
+      Result := TFile.ReadAllText(Fn, TEncoding.UTF8);
+    finally
+      if TFile.Exists(Fn) then
+      begin
+        TFile.Delete(Fn);
+      end;
+    end;
+  finally
+    Findings.Free;
+  end;
+end;
+
+function Vorkommen(const ANadel, AHeu: string): Integer;
+// Nicht ueberlappende Vorkommen von ANadel in AHeu.
+var
+  P : Integer;
+begin
+  Result := 0;
+  P := Pos(ANadel, AHeu);
+  while P > 0 do
+  begin
+    Inc(Result);
+    P := Pos(ANadel, AHeu, P + Length(ANadel));
+  end;
+end;
+
+procedure TTestExportHtml.EditorHelp_An_RegelReportUndVerweisJeFund;
+// Ohne die Aenderung ROT: es gab weder Spalte noch Liste noch Verweis.
+var
+  H : string;
+begin
+  H := RenderEditorHelp(True);
+  // Regelteil: eigene Spalte im Regel-Report, die Liste mit Id, lesbarem
+  // Slug und Wirkung - EINMAL, obwohl zwei Funde der Regel im Bericht
+  // stehen (Umfang waechst nicht mit der Fundzahl).
+  Assert.IsTrue(H.Contains('<th data-i18n="rr-eh">Editorhilfen</th>'),
+    'Spalte Editorhilfen im Regel-Report fehlt');
+  Assert.IsTrue(H.Contains('<td class="rr-eh">' + EH_LISTE_017 + '</td>'),
+    'Liste von SCA017 fehlt in ihrer Regel-Report-Zelle');
+  Assert.AreEqual<Integer>(1, Vorkommen('<ul class="eh-list"', H),
+    'die Liste steht je Regel EINMAL im Bericht, nicht je Fund');
+  // Je Fund: nur der Verweis, einmal je Fund der Regel.
+  Assert.AreEqual<Integer>(2, Vorkommen(EH_VERWEIS_017, H),
+    'jeder SCA017-Fund traegt im Detail genau einen Verweis');
+  // Der Drawer haengt die Liste ein - Definition UND Aufruf.
+  Assert.IsTrue(H.Contains('function fillEditorHelps(root)'),
+    'fillEditorHelps fehlt');
+  Assert.IsTrue(H.Contains('      fillEditorHelps(inhalt);'),
+    'openDrawer ruft fillEditorHelps nicht');
+  // Wirkung und Zeilenkopf uebersetzbar, in allen drei Sprachbloecken.
+  Assert.IsTrue(H.Contains('"eh-eff-changes": "changes behaviour"'),
+    'en-Schluessel eh-eff-changes fehlt');
+  Assert.IsTrue(H.Contains('"eh-eff-changes": "aendert Verhalten"'),
+    'de-Schluessel eh-eff-changes fehlt');
+  Assert.IsTrue(H.Contains('"eh-eff-same": "comportement inchang\u00e9"'),
+    'fr-Schluessel eh-eff-same fehlt (ein Backslash, s. FR-Test)');
+  Assert.AreEqual<Integer>(3, Vorkommen('"hint-eh": ', H),
+    'Zeilenkopf hint-eh muss in en, de und fr stehen');
+end;
+
+procedure TTestExportHtml.EditorHelp_RegelOhneHilfe_Nichts;
+// SCA019 hat keine Editorhilfe: leere Zelle, kein Verweis an seinem Fund.
+var
+  H : string;
+begin
+  H := RenderEditorHelp(True);
+  Assert.IsTrue(TRegEx.IsMatch(H,
+    '<tr data-kind="TodoComment">[^\r\n]*<td class="rr-eh"></td></tr>'),
+    'TodoComment-Zeile im Regel-Report muss eine LEERE Hilfe-Zelle haben');
+  Assert.IsFalse(H.Contains('data-eh="SCA019"'),
+    'eine Regel ohne Hilfe bekommt weder Liste noch Verweis');
+  Assert.AreEqual<Integer>(2, Vorkommen('<div class="eh-ref"', H),
+    'nur die zwei SCA017-Funde tragen einen Verweis, der Todo-Fund nicht');
+end;
+
+procedure TTestExportHtml.EditorHelp_Aus_KeinHilfeText_BerichtSonstGleich;
+// Option aus: kein Hilfe-Text - und der Bericht ist GENAU der mit
+// Option an, wenn man dort die Hilfe-Teile herausnimmt (sonst haette
+// das Feld nebenbei etwas anderes verschoben). Zeitstempel gepinnt,
+// sonst unterscheiden sich zwei Laeufe schon im generatedAt.
+var
+  An, Aus, Rest : string;
+begin
+  MitGepinntemZeitstempel('2026-10-29 12:00',
+    procedure
+    begin
+      An  := RenderEditorHelp(True);
+      Aus := RenderEditorHelp(False);
+    end);
+  Assert.IsFalse(Aus.Contains('Editorhilfen'), 'aus: kein deutscher Hilfe-Text');
+  Assert.IsFalse(Aus.Contains('Editor helps'), 'aus: kein englischer Hilfe-Text');
+  Assert.IsFalse(Aus.Contains('eh-list'), 'aus: keine Liste');
+  Assert.IsFalse(Aus.Contains('eh-ref'), 'aus: kein Verweis');
+  Assert.IsFalse(Aus.Contains('eh-eff'), 'aus: keine Wirkung');
+  Assert.IsFalse(Aus.Contains('rr-eh'), 'aus: keine Spalte');
+  Assert.IsFalse(Aus.Contains('fillEditorHelps'), 'aus: kein Skript');
+  Assert.AreNotEqual(Aus, An, 'an und aus muessen sich unterscheiden');
+  // Hilfe-Teile aus dem An-Bericht nehmen - Reihenfolge zaehlt: erst
+  // Zellen und Verweise (stehen in Zeilen, die bleiben), dann der
+  // Skriptblock, dann die ganzen Zeilen (CSS, th, Woerterbuch, Aufruf).
+  Rest := TRegEx.Replace(An, '<td class="rr-eh">.*?</td>', '');
+  Rest := TRegEx.Replace(Rest, '<div class="eh-ref" data-eh="[^"]*"></div>', '');
+  Rest := TRegEx.Replace(Rest,
+    '(?s)    var EH_LISTS = null;.*?\n    \}\r?\n', '');
+  Rest := TRegEx.Replace(Rest,
+    '(?m)^[^\r\n]*(\.eh-|"rr-eh"|"hint-eh"|"eh-eff-|fillEditorHelps)[^\r\n]*\r?\n',
+    '');
+  Assert.AreEqual(Aus, Rest,
+    'ohne die Hilfe-Teile muss der Bericht mit Option an der mit Option aus sein');
+end;
+
+procedure TTestExportHtml.EditorHelpListHtml_EscapetIdSlugUndWirkung;
+// Id/Slug/Wirkung kommen aus einer tauschbaren Katalogdatei. Element-
+// inhalt ueber HtmlEscape, data-eh ueber den ATTRIBUT-Weg (ein Umbruch
+// wird '&#10;', nicht '<br>'). Eine unbekannte Wirkung steht escapet
+// und OHNE i18n-Schluessel da.
+var
+  Hilfen : TArray<TRuleEditorHelp>;
+  H      : string;
+begin
+  SetLength(Hilfen, 1);
+  Hilfen[0].Id     := 'SCA0"17<x>';
+  Hilfen[0].Effect := 'bad"<eff>';
+  Hilfen[0].Slug   := 'a-<b>-&c';
+  H := TExporterHtml.EditorHelpListHtml('K"<' + #10 + '>', Hilfen);
+  Assert.IsTrue(
+    H.StartsWith('<ul class="eh-list" data-eh="K&quot;&lt;&#10;&gt;">'),
+    'data-eh muss attributsicher escapet sein: ' + H);
+  Assert.IsTrue(H.Contains('<span class="eh-id">SCA0&quot;17&lt;x&gt;</span>'),
+    'Id escapet: ' + H);
+  Assert.IsTrue(H.Contains(' A &lt;b&gt; &amp;c ('),
+    'Slug lesbar und escapet: ' + H);
+  Assert.IsTrue(H.Contains('<span class="eh-eff">bad&quot;&lt;eff&gt;</span>'),
+    'unbekannte Wirkung roh, escapet: ' + H);
+  Assert.IsFalse(H.Contains('data-i18n="eh-eff-bad'),
+    'unbekannte Wirkung bekommt keinen i18n-Schluessel');
+  Assert.IsFalse(H.Contains('<x>'), 'kein rohes Markup aus dem Katalog');
+  Assert.AreEqual('', TExporterHtml.EditorHelpListHtml('SCA001', nil),
+    'leere Liste = kein Fragment');
+end;
+
+procedure TTestExportHtml.EditorHelpListHtml_JedeWirkungHatEinenSchluessel;
+// Die vier Werte des Schema-enums bekommen je ihren i18n-Schluessel und
+// den deutschen Vorgabetext.
+const
+  WIRKUNGEN : array[0..3] of string = ('same', 'changes', 'depends',
+    'template');
+  TEXTE     : array[0..3] of string = ('Verhalten bleibt',
+    'aendert Verhalten', 'je nach Fund', 'Vorlage, schreibt nichts');
+var
+  Hilfen : TArray<TRuleEditorHelp>;
+  H      : string;
+  i      : Integer;
+begin
+  SetLength(Hilfen, Length(WIRKUNGEN));
+  for i := 0 to High(WIRKUNGEN) do
+  begin
+    Hilfen[i].Id     := 'SCA999';
+    Hilfen[i].Effect := WIRKUNGEN[i];
+    Hilfen[i].Slug   := 'x';
+  end;
+  H := TExporterHtml.EditorHelpListHtml('SCA999', Hilfen);
+  for i := 0 to High(WIRKUNGEN) do
+    Assert.IsTrue(H.Contains('<span class="eh-eff" data-i18n="eh-eff-' +
+      WIRKUNGEN[i] + '">' + TEXTE[i] + '</span>'),
+      'Wirkung ' + WIRKUNGEN[i] + ' ohne Schluessel/Text: ' + H);
+end;
+
+procedure TTestExportHtml.EditorHelpSlugText_MachtDenSlugLesbar;
+// Wahl dokumentiert an der Deklaration: '-' -> ' ', erster Buchstabe gross.
+begin
+  Assert.AreEqual('Free in try finally block',
+    TExporterHtml.EditorHelpSlugText('free-in-try-finally-block'));
+  Assert.AreEqual('Delete debug output',
+    TExporterHtml.EditorHelpSlugText('delete-debug-output'));
+  Assert.AreEqual('X', TExporterHtml.EditorHelpSlugText('x'));
+  Assert.AreEqual('', TExporterHtml.EditorHelpSlugText(''));
 end;
 
 initialization
