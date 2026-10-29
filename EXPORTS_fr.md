@@ -74,7 +74,7 @@ lignes affichées.
 signifie *aucun filtre de profil* — tous les détecteurs ont tourné —
 et n'équivaut pas au profil curé `default`.
 
-**Aides d'édition dans le rapport CLI.** Pour une règle dotée d'une
+**Aides d'édition dans les deux rapports HTML.** Pour une règle dotée d'une
 **aide d'édition** (une action de code du module IDE reDelphix :
 ampoule, Ctrl+Alt+F), la page de `--report-html` nomme les aides —
 activé par défaut ; `--html-no-editor-help` les omet, et la page est
@@ -92,9 +92,13 @@ d'édition : … ». La liste figure **une fois par règle** ; un résultat
 ne porte qu'une référence d'environ 40 octets, le rapport ne grossit
 donc pas de la liste avec le nombre de résultats. La liste vient du
 catalogue de règles (`editorHelps`), comme le champ SARIF plus bas. La
-page d'atelier de l'interface et de l'IDE et les autres exports (CSV,
-JSON, Sonar) ne portent aucune aide d'édition ; SARIF ne les nomme
-qu'avec `--sarif-editor-help`.
+**page d'atelier** de l'interface et de l'IDE montre la même liste,
+dans la langue de la page, comme première ligne de la documentation de
+règle dans le panneau — une fois par règle, sans un octet de plus par
+résultat (le menu d'export l'inclut toujours ; dans le code
+`AEditorHelp` de `TFindingsWorkbenchExport.BuildHtml`/`Run`, activé
+par défaut). Les autres exports (CSV, JSON, Sonar) ne portent aucune
+aide d'édition ; SARIF ne les nomme qu'avec `--sarif-editor-help`.
 
 La page d'atelier conserve la documentation de règle **une fois par
 règle**, l'extrait de code en texte brut et aucune copie du texte de

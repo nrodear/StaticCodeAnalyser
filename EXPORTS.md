@@ -70,7 +70,7 @@ rule profile the scan ran with. An empty value means *no profile
 filter* — every detector ran — and is not the same as the curated
 `default` profile.
 
-**Editor helps in the CLI report.** For a rule with an **editor help**
+**Editor helps in both HTML reports.** For a rule with an **editor help**
 (a code action of the IDE module reDelphix: light bulb, Ctrl+Alt+F)
 the `--report-html` page names the helps — on by default;
 `--html-no-editor-help` leaves them out, and the page is then exactly
@@ -86,10 +86,14 @@ writes nothing). The details of a finding show the same list in one
 line, "Editor helps: …". The list stands **once per rule**; a finding
 carries only a reference of about 40 bytes, so the report does not
 grow by the list with the number of findings. The list comes from the
-rule catalog (`editorHelps`), like the SARIF field below. The workbench
-page of the GUI and the IDE and the other exports (CSV, JSON, Sonar)
-carry no editor helps; SARIF names them only with
-`--sarif-editor-help`.
+rule catalog (`editorHelps`), like the SARIF field below. The
+**workbench page** of the GUI and the IDE shows the same list, in the
+language of the page, as the first line of the rule documentation in
+the drawer — once per rule, not one extra byte per finding (the export
+menu always includes it; in code `AEditorHelp` of
+`TFindingsWorkbenchExport.BuildHtml`/`Run`, default on). The other
+exports (CSV, JSON, Sonar) carry no editor helps; SARIF names them
+only with `--sarif-editor-help`.
 
 The workbench page keeps the rule documentation **once per rule**, the
 source excerpt as plain text, and no per-finding copy of the search
