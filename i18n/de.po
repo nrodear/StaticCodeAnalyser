@@ -6284,11 +6284,17 @@ msgstr "die Schleife lief bisher nie und zählt danach abwärts; war sie absicht
 msgid "the loop never ran so far and then counts up; if it was switched off on purpose, this is an intervention"
 msgstr "die Schleife lief bisher nie und zählt danach aufwärts; war sie absichtlich abgeschaltet, ist das ein Eingriff"
 
-msgid "tabs in code become spaces - tab width %d, as the alignment of the neighbouring lines shows; tabs in strings and comments stay"
-msgstr "Tabs im Code werden zu Leerzeichen - Tabweite %d, wie die Ausrichtung der Nachbarzeilen zeigt; Tabs in Strings und Kommentaren bleiben"
+msgid "tabs become spaces - tab width %d, as the alignment elsewhere in the file shows; tabs in strings stay"
+msgstr "Tabs werden zu Leerzeichen - Tabweite %d, wie die Ausrichtung an anderer Stelle der Datei zeigt; Tabs in Strings bleiben"
 
-msgid "tabs in code become spaces - tab width %d (assumption, the neighbouring lines do not show one); tabs in strings and comments stay"
-msgstr "Tabs im Code werden zu Leerzeichen - Tabweite %d (Annahme, die Nachbarzeilen zeigen keine); Tabs in Strings und Kommentaren bleiben"
+msgid "tabs become spaces - tab width %d, as the alignment of the neighbouring lines shows; tabs in strings stay"
+msgstr "Tabs werden zu Leerzeichen - Tabweite %d, wie die Ausrichtung der Nachbarzeilen zeigt; Tabs in Strings bleiben"
+
+msgid "tabs become spaces - the same result for every tab width in question; tabs in strings stay"
+msgstr "Tabs werden zu Leerzeichen - dasselbe Ergebnis für jede in Frage kommende Tabweite; Tabs in Strings bleiben"
+
+msgid "tabs become spaces - tab width %d (assumption, the file does not show one); tabs in strings stay"
+msgstr "Tabs werden zu Leerzeichen - Tabweite %d (Annahme, die Datei zeigt keine); Tabs in Strings bleiben"
 
 msgid "whitespace at the end of the line only"
 msgstr "nur Leerraum am Zeilenende"
@@ -6584,11 +6590,17 @@ msgstr "der Leerraum steht in einem mehrzeiligen oder offenen String - er ist In
 msgid "no tab at the reported place"
 msgstr "kein Tab an der gemeldeten Stelle"
 
-msgid "the first tab of the line is inside a string or comment - it stays untouched, the help would leave the finding in place"
-msgstr "der erste Tab der Zeile steht in einem String oder Kommentar - der bleibt unangetastet, die Hilfe ließe den Fund stehen"
+msgid "the place lies in a branch only old compilers translate (%s, line %d) - the help would not compile there, and current compilers never see the code"
+msgstr "die Stelle liegt in einem Zweig, den nur alte Compiler übersetzen (%s, Zeile %d) - dort übersetzte die Hilfe nicht, und aktuelle Compiler sehen den Code nie"
 
-msgid "the neighbouring lines fit tab width %d as well as %d - which one the alignment of the file follows is open; %s"
-msgstr "die Nachbarzeilen passen zu Tabweite %d ebenso wie zu %d - welcher die Ausrichtung der Datei folgt, ist offen; %s"
+msgid "the tabs at the end of the line are removed; nothing else changes"
+msgstr "die Tabs am Zeilenende entfallen; sonst ändert sich nichts"
+
+msgid "the first tab of the line is inside a string or a compiler directive - it stays untouched, the help would leave the finding in place"
+msgstr "der erste Tab der Zeile steht in einem String oder einer Compiler-Direktive - der bleibt unangetastet, die Hilfe ließe den Fund stehen"
+
+msgid "the neighbouring lines fit tab width %d as well as %d, and the rest of the file does not decide between them; %s"
+msgstr "die Nachbarzeilen passen zu Tabweite %d ebenso wie zu %d, und der Rest der Datei entscheidet nicht zwischen ihnen; %s"
 
 msgid "the message does not name the loop head - analyse the file again"
 msgstr "die Meldung nennt den Schleifenkopf nicht - Datei neu prüfen"
@@ -6826,6 +6838,15 @@ msgstr "ein Kommentar auf oder über der Zeile nennt raise - der Autor kennt das
 
 msgid "the file is in the test folder \"%s\" - a test may compare this address literally (also from another file); decide by hand"
 msgstr "die Datei liegt im Testordner \"%s\" - ein Test kann diese Adresse wörtlich vergleichen (auch aus einer anderen Datei); von Hand entscheiden"
+
+msgid "the test project \"%s\" lies beside the file or above it in the test folder \"%s\" - a test may compare this address literally (also from another file); decide by hand"
+msgstr "das Testprojekt \"%s\" liegt neben der Datei oder darüber im Testordner \"%s\" - ein Test kann diese Adresse wörtlich vergleichen (auch aus einer anderen Datei); von Hand entscheiden"
+
+msgid "the unit is test code (\"%s\") in the test folder \"%s\" - a test may compare this address literally; decide by hand"
+msgstr "die Unit ist Testcode (\"%s\") im Testordner \"%s\" - ein Test kann diese Adresse wörtlich vergleichen; von Hand entscheiden"
+
+msgid "the name \"%s\" in the test folder \"%s\" marks test code - a test may compare this address literally (also from another file); decide by hand"
+msgstr "der Name \"%s\" im Testordner \"%s\" kennzeichnet Testcode - ein Test kann diese Adresse wörtlich vergleichen (auch aus einer anderen Datei); von Hand entscheiden"
 
 # reDelphix HilfeFix C (rwE29: uRdxRawExceptionFix, uRdxFormatSettingsFix, uRdxMagicFixes, uRdxPlacesRunner)
 
