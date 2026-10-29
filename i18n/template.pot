@@ -67,7 +67,7 @@ msgstr ""
 msgid "\"%s\" after the expression binds only to its last part"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:932
+#: reDelphix/source/uRdxCleanupFixes.pas:1073
 msgid "\"%s\" after the type still belongs to the declaration - %s"
 msgstr ""
 
@@ -124,19 +124,19 @@ msgstr ""
 msgid "\"%s\" in the statement - structure, conditional expression, anonymous method or inline declaration"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:875
+#: reDelphix/source/uRdxCleanupFixes.pas:1016
 msgid "\"%s\" in the type - declaration not readable"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1833
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2010
 msgid "\"%s\" is a built-in profile and cannot be changed."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1873
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2050
 msgid "\"%s\" is a built-in profile."
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1553
+#: reDelphix/source/uRdxCleanupFixes.pas:1694
 msgid "\"%s\" is a keyword, not a variable (the parser read a section as a variable) - no quick fix"
 msgstr ""
 
@@ -428,7 +428,7 @@ msgstr ""
 msgid "%d terms, %s"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:816
+#: reDelphix/source/uRdxCleanupFixes.pas:957
 msgid "%d times \"%s\""
 msgstr ""
 
@@ -730,7 +730,7 @@ msgstr ""
 msgid "%s is not a pointer type of the RTL with one target type"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1625
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1802
 msgid "%s is not a valid JSON object."
 msgstr ""
 
@@ -1002,7 +1002,7 @@ msgstr ""
 msgid "@%s in line %d - the pointer can change"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1824
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2001
 #: SCA.SharedUI/sources/uProfileViewer.pas:679
 msgid "A profile without rules would find nothing."
 msgstr ""
@@ -1119,7 +1119,7 @@ msgstr ""
 msgid "AllocMem without assignment - the buffer cannot be tracked"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1819
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1996
 msgid "Allowed characters: letters, digits, hyphen, underscore and dot."
 msgstr ""
 
@@ -1427,7 +1427,7 @@ msgstr ""
 msgid "Cannot open or find the file in the editor"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1617
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1794
 msgid "Cannot read %s: %s"
 msgstr ""
 
@@ -2092,7 +2092,7 @@ msgstr ""
 msgid "File not found: "
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1600
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1777
 msgid "File not found: %s"
 msgstr ""
 
@@ -3770,11 +3770,11 @@ msgstr ""
 msgid "The function name on the right side is a recursive call, not the current result"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1810
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1987
 msgid "The profile name must not be empty."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1878
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2055
 msgid "There is no profile \"%s\"."
 msgstr ""
 
@@ -4169,7 +4169,7 @@ msgstr ""
 msgid "a conditional directive already encloses the call (on the line before or after it)"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1289
+#: reDelphix/source/uRdxCleanupFixes.pas:1430
 msgid "a directive names \"%s\" (line %d) - macro or condition, the quick fix does not evaluate it"
 msgstr ""
 
@@ -4189,7 +4189,7 @@ msgstr ""
 msgid "a local or internal host - not a safe remote target for https"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1329
+#: reDelphix/source/uRdxCleanupFixes.pas:1470
 msgid "a macro inserts \"%s\" ({$DEFINE ... := ...} in line %d) - the quick fix does not see its use"
 msgstr ""
 
@@ -4238,7 +4238,7 @@ msgstr ""
 msgid "a with statement stands before the call in its routine (line %d) - the names could bind to a member"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:867
+#: reDelphix/source/uRdxCleanupFixes.pas:1008
 msgid "absolute variable - it occupies the memory of another one"
 msgstr ""
 
@@ -4357,7 +4357,7 @@ msgstr ""
 msgid "asm in the routine - it can read parameters through registers without their names"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1296
+#: reDelphix/source/uRdxCleanupFixes.pas:1437
 msgid "asm in the scope (line %d) - assembler can address the variable via the stack frame, without its name"
 msgstr ""
 
@@ -4373,7 +4373,7 @@ msgstr ""
 msgid "at the literal in column %d the code action reads \"%s\" instead of %s"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1081
+#: reDelphix/source/uRdxCleanupFixes.pas:1222
 msgid "attribute before the declaration - %s"
 msgstr ""
 
@@ -4421,7 +4421,7 @@ msgstr ""
 msgid "boundary of the comparison unclear (\"%s %s ... %s\")"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:894
+#: reDelphix/source/uRdxCleanupFixes.pas:1035
 msgid "bracket without a counterpart in the type"
 msgstr ""
 
@@ -4490,7 +4490,7 @@ msgstr ""
 msgid "class or method missing from the message"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1099
+#: reDelphix/source/uRdxCleanupFixes.pas:1240
 msgid "class var - a class field, not a local variable"
 msgstr ""
 
@@ -4527,7 +4527,7 @@ msgstr ""
 msgid "code, a comment or a directive lies between the two attributes"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:568
+#: reDelphix/source/uRdxCleanupFixes.pas:587
 msgid "column %d points into the middle of a comment"
 msgstr ""
 
@@ -4535,11 +4535,11 @@ msgstr ""
 msgid "comma before or semicolon after the last entry not found"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:547
+#: reDelphix/source/uRdxCleanupFixes.pas:566
 msgid "comment at line %d column %d not readable"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:591
+#: reDelphix/source/uRdxCleanupFixes.pas:740
 msgid "comment before the first code of the file (license or header comment) - %s"
 msgstr ""
 
@@ -4553,6 +4553,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxConsecutiveSectionFix.pas:320
 msgid "comment between the two sections or on the line of the keyword"
+msgstr ""
+
+#: reDelphix/source/uRdxCleanupFixes.pas:743
+msgid "comment directly after the unit header (documentation of the unit) - %s"
 msgstr ""
 
 #: reDelphix/source/uRdxInheritedEmptyFix.pas:532
@@ -4577,7 +4581,7 @@ msgstr ""
 msgid "comment in the condition or in the \"else\" branch - it would be lost"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1469
+#: reDelphix/source/uRdxCleanupFixes.pas:1610
 msgid "comment in the declaration - it would be lost"
 msgstr ""
 
@@ -4698,7 +4702,7 @@ msgstr ""
 msgid "comment or string on the line - it would be lost on deletion"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:588
+#: reDelphix/source/uRdxCleanupFixes.pas:733
 msgid "comment without an end up to the end of the file"
 msgstr ""
 
@@ -4856,7 +4860,7 @@ msgstr ""
 msgid "decide by hand"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1108
+#: reDelphix/source/uRdxCleanupFixes.pas:1249
 msgid "declaration after \";\" in a statement block - unclear"
 msgstr ""
 
@@ -4941,11 +4945,11 @@ msgstr ""
 msgid "directive in a uses clause - an entry may apply only in one branch"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1476
+#: reDelphix/source/uRdxCleanupFixes.pas:1617
 msgid "directive in the declaration or its var section - a branch could become empty"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:582
+#: reDelphix/source/uRdxCleanupFixes.pas:727
 msgid "directive in the range (line %d) - it is active code, not a comment"
 msgstr ""
 
@@ -4953,8 +4957,12 @@ msgstr ""
 msgid "directive without a counterpart in the range ($IF.. without $ENDIF or $REGION without $ENDREGION)"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:585
+#: reDelphix/source/uRdxCleanupFixes.pas:730
 msgid "documentation comment (///, {* or (**, line %d) - its sample code stays"
+msgstr ""
+
+#: reDelphix/source/uRdxCleanupFixes.pas:736
+msgid "documentation comment (leading \"*\" or <PRE> in line %d) - its sample code stays"
 msgstr ""
 
 #: reDelphix/source/uRdxSqlTemplate.pas:913
@@ -4973,8 +4981,8 @@ msgstr ""
 msgid "empty condition"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:363
-#: reDelphix/source/uRdxCleanupFixes.pas:378
+#: reDelphix/source/uRdxCleanupFixes.pas:381
+#: reDelphix/source/uRdxCleanupFixes.pas:396
 msgid "empty range"
 msgstr ""
 
@@ -5069,7 +5077,7 @@ msgstr ""
 msgid "for loop runs one index past the end - the upper bound is Count - 1 or High()"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:919
+#: reDelphix/source/uRdxCleanupFixes.pas:1060
 msgid "for var - the control variable of a loop (the detector does not count the loop header as a use) - no quick fix"
 msgstr ""
 
@@ -5183,7 +5191,7 @@ msgstr ""
 msgid "independent of the system: period as decimal separator, date MM/dd/yyyy, English month and day names - for files, SQL and logs, not for display"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:863
+#: reDelphix/source/uRdxCleanupFixes.pas:1004
 msgid "initialized variable - the expression can have side effects"
 msgstr ""
 
@@ -5199,7 +5207,7 @@ msgstr ""
 msgid "inline declaration (%s) in the else branch - begin..end would narrow its scope"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:922
+#: reDelphix/source/uRdxCleanupFixes.pas:1063
 msgid "inline declaration with initializer \":=\" - the expression can have side effects"
 msgstr ""
 
@@ -5280,7 +5288,7 @@ msgstr ""
 msgid "line %d carries %s.Free, the finding names %s"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:444
+#: reDelphix/source/uRdxCleanupFixes.pas:463
 msgid "line %d carries code or text next to the comment (column %d) - %s"
 msgstr ""
 
@@ -5296,7 +5304,7 @@ msgstr ""
 msgid "line %d declares \"%s\" again or uses it as a name (parameter, field, nested declaration)"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:669
+#: reDelphix/source/uRdxCleanupFixes.pas:665
 msgid "line %d does not look like code (no \";\" at the end, no \":=\", no begin/procedure/function)"
 msgstr ""
 
@@ -5342,7 +5350,7 @@ msgstr ""
 msgid "literal with an apostrophe"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1040
+#: reDelphix/source/uRdxCleanupFixes.pas:1181
 msgid "local %s section - not a variable"
 msgstr ""
 
@@ -5394,8 +5402,8 @@ msgstr ""
 msgid "multi-line string literal in the range - indenting would change its content"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:834
-#: reDelphix/source/uRdxCleanupFixes.pas:845
+#: reDelphix/source/uRdxCleanupFixes.pas:975
+#: reDelphix/source/uRdxCleanupFixes.pas:986
 msgid "name list not readable"
 msgstr ""
 
@@ -5449,7 +5457,7 @@ msgstr ""
 msgid "no \"%s := T.Create(True)\" before Resume in this routine - that the thread was created suspended is not provable"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:815
+#: reDelphix/source/uRdxCleanupFixes.pas:956
 msgid "no \"%s\""
 msgstr ""
 
@@ -5473,7 +5481,7 @@ msgstr ""
 msgid "no \",\" after the entry"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:925
+#: reDelphix/source/uRdxCleanupFixes.pas:1066
 msgid "no \":\" after the name list (\"%s\")"
 msgstr ""
 
@@ -5481,7 +5489,7 @@ msgstr ""
 msgid "no \";\" after the only entry"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:909
+#: reDelphix/source/uRdxCleanupFixes.pas:1050
 msgid "no \";\" after the type"
 msgstr ""
 
@@ -5687,11 +5695,11 @@ msgstr ""
 msgid "no class %s with a body in this file (record, other unit?)"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:434
+#: reDelphix/source/uRdxCleanupFixes.pas:453
 msgid "no comment at line %d column %d"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:679
+#: reDelphix/source/uRdxCleanupFixes.pas:753
 msgid "no comment at the reported place"
 msgstr ""
 
@@ -5772,7 +5780,7 @@ msgstr ""
 msgid "no end of a declaration before the attribute - not a safe attribute context"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1351
+#: reDelphix/source/uRdxCleanupFixes.pas:1492
 msgid "no end of the block around the declaration found"
 msgstr ""
 
@@ -5950,7 +5958,7 @@ msgstr ""
 msgid "no reversed for header with literal bounds"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1115
+#: reDelphix/source/uRdxCleanupFixes.pas:1256
 msgid "no routine around the declaration (global variable?) - no quick fix"
 msgstr ""
 
@@ -6084,7 +6092,7 @@ msgstr ""
 msgid "no valid range"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1042
+#: reDelphix/source/uRdxCleanupFixes.pas:1183
 msgid "no var section before the declaration"
 msgstr ""
 
@@ -6530,15 +6538,15 @@ msgstr ""
 msgid "return type across several lines - %s"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1147
+#: reDelphix/source/uRdxCleanupFixes.pas:1288
 msgid "routine body not found"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1143
+#: reDelphix/source/uRdxCleanupFixes.pas:1284
 msgid "routine body not found - %s"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1150
+#: reDelphix/source/uRdxCleanupFixes.pas:1291
 msgid "routine body not found - too many local routines"
 msgstr ""
 
@@ -6727,10 +6735,6 @@ msgstr ""
 
 #: reDelphix/source/uRdxEmptyOnHandlerFix.pas:174
 msgid "several \"on ... do\" handlers on this line - the finding could mean any of them"
-msgstr ""
-
-#: reDelphix/source/uRdxCleanupFixes.pas:721
-msgid "several comments, and one reaches beyond the finding with text - the cut would not be contiguous; %s"
 msgstr ""
 
 #: reDelphix/source/uRdxEmptyBlockFix.pas:271
@@ -7226,11 +7230,11 @@ msgstr ""
 msgid "the declaration in line %d groups the parameter differently"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1094
+#: reDelphix/source/uRdxCleanupFixes.pas:1235
 msgid "the declaration is inside an open parenthesis - a parameter of a routine or of a procedural type, not a local variable"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1044
+#: reDelphix/source/uRdxCleanupFixes.pas:1185
 msgid "the declaration is not in a var section (\"%s\")"
 msgstr ""
 
@@ -7476,6 +7480,10 @@ msgstr ""
 msgid "the finally block is not empty"
 msgstr ""
 
+#: reDelphix/source/uRdxCleanupFixes.pas:868
+msgid "the finding covers only part of the comment (lines %d to %d), and its line %d is not plainly code - the rest would stay behind as a torso; %s"
+msgstr ""
+
 #: reDelphix/source/uRdxSuppress.pas:482
 msgid "the finding line is empty"
 msgstr ""
@@ -7484,7 +7492,7 @@ msgstr ""
 msgid "the finding line lies in a block comment or multi-line string - a marker would have no effect there or would become part of the string"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:431
+#: reDelphix/source/uRdxCleanupFixes.pas:450
 msgid "the finding reaches line %d, the file has %d lines"
 msgstr ""
 
@@ -7994,7 +8002,7 @@ msgstr ""
 msgid "the message has no column"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:748
+#: reDelphix/source/uRdxCleanupFixes.pas:889
 msgid "the message has no column or line count"
 msgstr ""
 
@@ -8055,7 +8063,7 @@ msgstr ""
 msgid "the message has no variable"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1551
+#: reDelphix/source/uRdxCleanupFixes.pas:1692
 msgid "the message has no variable name"
 msgstr ""
 
@@ -8193,15 +8201,15 @@ msgstr ""
 msgid "the name is declared in a routine but used outside of it (line %d) - another declaration may be meant there"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1083
+#: reDelphix/source/uRdxCleanupFixes.pas:1224
 msgid "the name is inside an attribute (\"[...]\") - not a variable"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1527
+#: reDelphix/source/uRdxCleanupFixes.pas:1668
 msgid "the name list does not start on the reported line"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1245
+#: reDelphix/source/uRdxCleanupFixes.pas:1386
 msgid "the name still occurs in the scope (line %d) - under {$IFDEF} and in asm it also counts as a use"
 msgstr ""
 
@@ -8409,7 +8417,7 @@ msgstr ""
 msgid "the same exception - the original stack trace is kept"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1110
+#: reDelphix/source/uRdxCleanupFixes.pas:1251
 msgid "the search for the routine ends at \"%s\" (line %d) - perhaps the variant part of a local record whose case has no end of its own; what the declaration belongs to is unclear - no quick fix"
 msgstr ""
 
@@ -8552,7 +8560,7 @@ msgstr ""
 msgid "the unit declares a class operator Assign - an assignment can run code there"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1390
+#: reDelphix/source/uRdxCleanupFixes.pas:1531
 msgid "the unit declares a class operator Initialize/Finalize (managed record) - a variable can run code"
 msgstr ""
 
@@ -8641,15 +8649,15 @@ msgstr ""
 msgid "type of %s unknown - only a cast to its own type is provably without effect"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:872
+#: reDelphix/source/uRdxCleanupFixes.pas:1013
 msgid "type with \"%s\" (across several lines) - %s"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1091
+#: reDelphix/source/uRdxCleanupFixes.pas:1232
 msgid "unclear what the declaration belongs to (\"%s\" before it)"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1422
+#: reDelphix/source/uRdxCleanupFixes.pas:1563
 msgid "unclear what the inline declaration belongs to (\"%s\" before it)"
 msgstr ""
 
@@ -8823,7 +8831,7 @@ msgstr ""
 msgid "{$I} include in the implementation section (line %d) - a caller that the quick fix does not see may be there"
 msgstr ""
 
-#: reDelphix/source/uRdxCleanupFixes.pas:1285
+#: reDelphix/source/uRdxCleanupFixes.pas:1426
 msgid "{$I} include in the scope (line %d) - it may contain the name in a place that the quick fix does not see"
 msgstr ""
 

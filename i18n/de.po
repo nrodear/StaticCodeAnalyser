@@ -4727,8 +4727,14 @@ msgstr "Doku-Kommentar (///, {* bzw. (**, Zeile %d) - sein Beispielcode bleibt"
 msgid "comment without an end up to the end of the file"
 msgstr "Kommentar ohne Ende bis zum Dateiende"
 
+msgid "documentation comment (leading \"*\" or <PRE> in line %d) - its sample code stays"
+msgstr "Doku-Kommentar (führender \"*\" oder <PRE> in Zeile %d) - sein Beispielcode bleibt"
+
 msgid "comment before the first code of the file (license or header comment) - %s"
 msgstr "Kommentar vor dem ersten Code der Datei (Lizenz- oder Kopfkommentar) - %s"
+
+msgid "comment directly after the unit header (documentation of the unit) - %s"
+msgstr "Kommentar direkt hinter dem Unit-Kopf (Doku der Unit) - %s"
 
 msgid "line %d does not look like code (no \";\" at the end, no \":=\", no begin/procedure/function)"
 msgstr "Zeile %d sieht nicht nach Code aus (kein \";\" am Ende, kein \":=\", kein begin/procedure/function)"
@@ -4736,8 +4742,8 @@ msgstr "Zeile %d sieht nicht nach Code aus (kein \";\" am Ende, kein \":=\", kei
 msgid "no comment at the reported place"
 msgstr "kein Kommentar an der gemeldeten Stelle"
 
-msgid "several comments, and one reaches beyond the finding with text - the cut would not be contiguous; %s"
-msgstr "mehrere Kommentare, und einer reicht mit Text über den Fund hinaus - der Schnitt wäre nicht zusammenhängend; %s"
+msgid "the finding covers only part of the comment (lines %d to %d), and its line %d is not plainly code - the rest would stay behind as a torso; %s"
+msgstr "der Fund deckt nur einen Teil des Kommentars (Zeilen %d bis %d), und dessen Zeile %d ist nicht eindeutig Code - der Rest bliebe als Torso stehen; %s"
 
 msgid "the message has no column or line count"
 msgstr "Spalte oder Zeilenzahl fehlt in der Meldung"

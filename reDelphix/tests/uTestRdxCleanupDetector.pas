@@ -28,7 +28,8 @@ type
   public
     [Test] procedure Sca070_LineComments_RoundTrip;
     [Test] procedure Sca070_BlockContent_RoundTrip;
-    [Test] procedure Sca070_ProseStays_RoundTrip;
+    [Test] procedure Sca070_PartOfComment_NoHelp;
+    [Test] procedure Sca070_PartOfComment_CodeWidens_RoundTrip;
     [Test] procedure Sca070_BehindCode_RoundTrip;
     [Test] procedure Sca070_HeaderComment_NoHelp;
     [Test] procedure Sca070_Todo_NoHelp;
@@ -116,13 +117,25 @@ begin
       '  Bar;']), fkCommentedOutCode));
 end;
 
-procedure TTestRdxCleanupDetector.Sca070_ProseStays_RoundTrip;
+procedure TTestRdxCleanupDetector.Sca070_PartOfComment_NoHelp;
 begin
-  // Nur die gemeldete Region geht - die Prosa davor und dahinter hat der
-  // Detektor nicht als Code gemeldet.
-  Assert.AreEqual(InProc(['  { Alte Fassung:', '    noch offen }', '  Foo;']),
-    FixAll(InProc(['  { Alte Fassung:', '    X := 1;', '    noch offen }',
-      '  Foo;']), fkCommentedOutCode));
+  // Die Prosa davor und dahinter hat der Detektor nicht als Code gemeldet;
+  // bis zur Fix-Charge rwE29 ging nur die Region, und Oeffner und
+  // Schliesser blieben mit der Prosa stehen - seitdem keine Hilfe: es
+  // gehen nur ganze Kommentare.
+  AssertNoHelp(InProc(['  { Alte Fassung:', '    X := 1;', '    noch offen }',
+    '  Foo;']), fkCommentedOutCode, 'nur einen Teil');
+end;
+
+procedure TTestRdxCleanupDetector.Sca070_PartOfComment_CodeWidens_RoundTrip;
+begin
+  // rwE29 fmain.pas:240 (Off-by-one): die Zeile mit '*)' meldet der
+  // Detektor nicht - bis zur Fix-Charge blieben '(*' und 'Exit;*)'
+  // stehen. Ist der Rest Code, geht der ganze Kommentar.
+  Assert.AreEqual(InProc(['  if A then begin', '    Foo;', '  end;']),
+    FixAll(InProc(['  if A then begin', '    Foo;',
+      '(*  end else if B then begin', '    Bar := 1;', '    Exit;*)',
+      '  end;']), fkCommentedOutCode));
 end;
 
 procedure TTestRdxCleanupDetector.Sca070_BehindCode_RoundTrip;
