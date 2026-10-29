@@ -396,6 +396,8 @@ var
   E           : TRefactorSpan;
   Sep         : TRdxToken;
   Span, Check : TRefactorSpan;
+  LineEnd     : TRefactorSpan;   // eigene Variable: LineEndSpan setzt sein
+                                 // out-Argument auch bei False zurueck
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -414,8 +416,11 @@ begin
     Check := TRefactorSpan.Make(SPAN_007, E.StartLine, 1, E.StartLine,
       Sep.EndCol);
   end
-  else if LineEndSpan(AMap, AClause, AIndex, Sep, Span) then
-    Check := Span;
+  else if LineEndSpan(AMap, AClause, AIndex, Sep, LineEnd) then
+  begin
+    Span := LineEnd;
+    Check := LineEnd;
+  end;
   AReason := RangeReason(AMap, Span, Check, E.Resolved);
   if AReason <> '' then Exit;
   AEdit.Span := Span;
