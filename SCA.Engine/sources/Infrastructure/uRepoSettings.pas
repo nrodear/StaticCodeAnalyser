@@ -486,7 +486,7 @@ type
     // Editor-Canvas, OHNE Hintergrundfarbe (kein FillRect - der Editor-
     // Hintergrund samt Auswahl bleibt sichtbar), permanent an jeder
     // Ankerzeile statt der Mini-Infobar; kein Fenster, keine Stufe 2
-    // (Beschreibung/Fix bleiben im Findings-Panel), Verwerfen per Klick
+    // (Beschreibung/Fix bleiben im Findings-Panel), Verwerfen per Doppelklick
     // auf den Text. False (Default) = Fenster-Overlay wie bisher.
     // Wirkt nach dem Speichern der Optionen (Modulcache im Highlighter).
     // noinspection BooleanPropertyNaming
@@ -1154,7 +1154,8 @@ const
     ';       background colour - selection and line colour stay visible),'#13#10 +
     ';       shown permanently on every finding line instead of the mini'#13#10 +
     ';       info bar. No window: description and fix example live in the'#13#10 +
-    ';       findings panel; dismiss by clicking the text; long titles'#13#10 +
+    ';       findings panel; dismiss by double-clicking the text; long'#13#10 +
+    ';       titles
     ';       appear in short form (badge + rule name).'#13#10 +
     '; Also configurable via Tools > Options > Third Party >'#13#10 +
     '; Static Code Analyser. Takes effect once the options are saved;'#13#10 +

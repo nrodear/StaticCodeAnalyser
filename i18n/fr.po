@@ -2048,8 +2048,8 @@ msgstr "Astuce de correction"
 msgid "Text (one-line hint, no window)"
 msgstr "Texte (conseil sur une ligne, sans fenêtre)"
 
-msgid "Affects only the editor marker stripe, mini-infobar and hover overlay titlebar. Properties Panel + main grid remain at the default severity colors. Light/Dark variants are automatic. \"Text\" replaces the overlay window with a transparent one-line hint (badge + rule name, no description/fix block - see the findings panel); dismiss a finding by clicking its text. Takes effect on save."
-msgstr "N'affecte que la bande de marqueurs de l'éditeur, la mini-barre d'information et la barre de titre de la surimpression au survol. Le panneau Propriétés et la grille principale conservent les couleurs de sévérité par défaut. Les variantes claire/sombre sont automatiques. \"Texte\" remplace la fenêtre de surimpression par un conseil transparent sur une ligne (badge + nom de la règle, sans bloc description/correction - voir le panneau des résultats) ; pour écarter un résultat, cliquez sur son texte. Prend effet à l'enregistrement."
+msgid "Affects only the editor marker stripe, mini-infobar and hover overlay titlebar. Properties Panel + main grid remain at the default severity colors. Light/Dark variants are automatic. \"Text\" replaces the overlay window with a transparent one-line hint (badge + rule name, no description/fix block - see the findings panel); dismiss a finding by double-clicking its text. Takes effect on save."
+msgstr "N'affecte que la bande de marqueurs de l'éditeur, la mini-barre d'information et la barre de titre de la surimpression au survol. Le panneau Propriétés et la grille principale conservent les couleurs de sévérité par défaut. Les variantes claire/sombre sont automatiques. \"Texte\" remplace la fenêtre de surimpression par un conseil transparent sur une ligne (badge + nom de la règle, sans bloc description/correction - voir le panneau des résultats) ; pour écarter un résultat, double-cliquez sur son texte. Prend effet à l'enregistrement."
 
 msgid "--- Errors (A-Z) ---"
 msgstr "--- Erreurs (A-Z) ---"

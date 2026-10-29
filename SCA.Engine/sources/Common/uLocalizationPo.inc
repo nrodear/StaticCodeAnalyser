@@ -13,7 +13,7 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6878 Zeilen, 316565 Bytes
+  // i18n\de.po - 6878 Zeilen, 316591 Bytes
   CPoLines_de: array[0..6877] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -2058,16 +2058,16 @@ const
     'msgid "Text only, transparent (no window)"',
     'msgstr "Nur Text, transparent (kein Fenster)"',
     '',
-    'msgid "Where the hover annotation overlay anchors relative to the finding line; position changes take effect after IDE restart. \"Text only\" instead draws a transparent one-line hint (badge + rule name) right of the code - no description or fix block (see the findings panel), long titles are shortened, dismiss a finding by clicking its text. Takes effect on save."',
-    'msgstr "Wo das Hover-Annotation-Overlay relativ zur Fundzeile ansetzt; Positionswechsel wirken nach IDE-Neustart. \"Nur Text\" zeichnet stattdessen einen transparenten einzeiligen Hinweis (Badge + Regelname) rechts vom Code - ohne Beschreibung und Fix-Block (siehe Findings-Panel), lange Titel werden gek'#$00FC'rzt, ein Fund l'#$00E4'sst sich per Klick auf seinen Text verwerfen. Wirkt beim Speichern."',
+    'msgid "Where the hover annotation overlay anchors relative to the finding line; position changes take effect after IDE restart. \"Text only\" instead draws a transparent one-line hint (badge + rule name) right of the code - no description or fix block (see the findings panel), long titles are shortened, dismiss a finding by double-clicking its text. Takes effect on save."',
+    'msgstr "Wo das Hover-Annotation-Overlay relativ zur Fundzeile ansetzt; Positionswechsel wirken nach IDE-Neustart. \"Nur Text\" zeichnet stattdessen einen transparenten einzeiligen Hinweis (Badge + Regelname) rechts vom Code - ohne Beschreibung und Fix-Block (siehe Findings-Panel), lange Titel werden gek'#$00FC'rzt, ein Fund l'#$00E4'sst sich per Doppelklick auf seinen Text verwerfen. Wirkt beim Speichern."',
     '',
     '# Combo-Umbau Nur-Text-Variante 2026-08-13.',
     '',
     'msgid "Text (one-line hint, no window)"',
     'msgstr "Text (einzeiliger Hinweis, kein Fenster)"',
     '',
-    'msgid "Affects only the editor marker stripe, mini-infobar and hover overlay titlebar. Properties Panel + main grid remain at the default severity colors. Light/Dark variants are automatic. \"Text\" replaces the overlay window with a transparent one-line hint (badge + rule name, no description/fix block - see the findings panel); dismiss a finding by clicking its text. Takes effect on save."',
-    'msgstr "Wirkt nur auf Editor-Markierungsstreifen, Mini-Infobar und Titelleiste des Hover-Overlays. Properties-Panel und Haupt-Grid behalten die Standard-Severity-Farben. Hell/Dunkel-Varianten automatisch. \"Text\" ersetzt das Overlay-Fenster durch einen transparenten einzeiligen Hinweis (Badge + Regelname, ohne Beschreibung/Fix-Block - siehe Findings-Panel); ein Fund l'#$00E4'sst sich per Klick auf seinen Text verwerfen. Wirkt beim Speichern."',
+    'msgid "Affects only the editor marker stripe, mini-infobar and hover overlay titlebar. Properties Panel + main grid remain at the default severity colors. Light/Dark variants are automatic. \"Text\" replaces the overlay window with a transparent one-line hint (badge + rule name, no description/fix block - see the findings panel); dismiss a finding by double-clicking its text. Takes effect on save."',
+    'msgstr "Wirkt nur auf Editor-Markierungsstreifen, Mini-Infobar und Titelleiste des Hover-Overlays. Properties-Panel und Haupt-Grid behalten die Standard-Severity-Farben. Hell/Dunkel-Varianten automatisch. \"Text\" ersetzt das Overlay-Fenster durch einen transparenten einzeiligen Hinweis (Badge + Regelname, ohne Beschreibung/Fix-Block - siehe Findings-Panel); ein Fund l'#$00E4'sst sich per Doppelklick auf seinen Text verwerfen. Wirkt beim Speichern."',
     '',
     '# i18n-Paritaet EXE-UI 2026-08-13: Typ-Combo-Separatoren, DFM-Viewer-',
     '# Dialogtitel und zwei bislang unuebersetzte CLI-Meldungen.',
@@ -7167,7 +7167,7 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6874 Zeilen, 329491 Bytes
+  // i18n\fr.po - 6874 Zeilen, 329505 Bytes
   CPoLines_fr: array[0..6873] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -9219,8 +9219,8 @@ const
     'msgid "Text (one-line hint, no window)"',
     'msgstr "Texte (conseil sur une ligne, sans fen'#$00EA'tre)"',
     '',
-    'msgid "Affects only the editor marker stripe, mini-infobar and hover overlay titlebar. Properties Panel + main grid remain at the default severity colors. Light/Dark variants are automatic. \"Text\" replaces the overlay window with a transparent one-line hint (badge + rule name, no description/fix block - see the findings panel); dismiss a finding by clicking its text. Takes effect on save."',
-    'msgstr "N''affecte que la bande de marqueurs de l'''#$00E9'diteur, la mini-barre d''information et la barre de titre de la surimpression au survol. Le panneau Propri'#$00E9't'#$00E9's et la grille principale conservent les couleurs de s'#$00E9'v'#$00E9'rit'#$00E9' par d'#$00E9'faut. Les variantes claire/sombre sont automatiques. \"Texte\" remplace la fen'#$00EA'tre de surimpression par un conseil transparent sur une ligne (badge + nom de la r'#$00E8'gle, sans bloc description/correction - voir le panneau des r'#$00E9'sultats) ; pour '#$00E9'carter un r'#$00E9'sultat, cliquez sur son texte. Prend effet '#$00E0' l''enregistrement."',
+    'msgid "Affects only the editor marker stripe, mini-infobar and hover overlay titlebar. Properties Panel + main grid remain at the default severity colors. Light/Dark variants are automatic. \"Text\" replaces the overlay window with a transparent one-line hint (badge + rule name, no description/fix block - see the findings panel); dismiss a finding by double-clicking its text. Takes effect on save."',
+    'msgstr "N''affecte que la bande de marqueurs de l'''#$00E9'diteur, la mini-barre d''information et la barre de titre de la surimpression au survol. Le panneau Propri'#$00E9't'#$00E9's et la grille principale conservent les couleurs de s'#$00E9'v'#$00E9'rit'#$00E9' par d'#$00E9'faut. Les variantes claire/sombre sont automatiques. \"Texte\" remplace la fen'#$00EA'tre de surimpression par un conseil transparent sur une ligne (badge + nom de la r'#$00E8'gle, sans bloc description/correction - voir le panneau des r'#$00E9'sultats) ; pour '#$00E9'carter un r'#$00E9'sultat, double-cliquez sur son texte. Prend effet '#$00E0' l''enregistrement."',
     '',
     'msgid "--- Errors (A-Z) ---"',
     'msgstr "--- Erreurs (A-Z) ---"',
