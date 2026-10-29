@@ -840,9 +840,14 @@ begin
     '  begin', '    if Ratio = 0.5 then Work;', '  end;', 'begin',
     '  Inner(1);', 'end;', 'end.']));
   Assert.IsTrue(O.Enabled, O.Reason);
-  // Gegenprobe: ein Name, den keine Routine deklariert, bleibt unbewiesen.
+  // Gegenprobe: ein Name, den keine umschliessende Routine deklariert,
+  // bleibt unbewiesen. Die Deklaration in der Nachbar-Routine Other braucht
+  // der Detektor (er sammelt Float-Variablen nur nach 'Name: Double' -
+  // ohne sie gaebe es keinen Fund und PlanFirst schluege fehl, Review
+  // e/HilfeFixI); Inner sieht sie nicht.
   O := PlanFirst(Join(['unit t;', 'interface', 'implementation',
-    'uses System.Math;', 'procedure Foo;', '  procedure Inner;',
+    'uses System.Math;', 'procedure Other(Ratio: Double);', 'begin',
+    'end;', 'procedure Foo;', '  procedure Inner;',
     '  begin', '    if Ratio = 0.5 then Work;', '  end;', 'begin',
     '  Inner;', 'end;', 'end.']));
   Assert.IsFalse(O.Enabled, 'keine Hilfe');
