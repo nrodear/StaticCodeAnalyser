@@ -639,6 +639,19 @@ begin
   Assert.AreEqual('mrOk', Foreign(FormUnit('Forms, Controls',
     'Edit1: TEdit;', 'case ModalResult of mrOk: Result := True; else '
     + 'Result := False; end;'), ['tform', 'tedit'], Li));
+  // Review e/HilfeFixH: dieselbe Marke in einer anonymen Methode als
+  // Argument (FMX-Muster TDialogService.MessageDialog) - die Klammer des
+  // Aufrufs macht sie nicht zur Parameterliste; der Parameter der anonymen
+  // Methode (im Stil eines Typs: EResult) ist dagegen deklariert. Vorher ''
+  // (mrYes galt als deklariert, die Hilfe stand in der Gluehbirne).
+  Assert.AreEqual('mrYes', Foreign(FormUnit('FMX.Forms, FMX.DialogService',
+    'Edit1: TEdit;', 'TDialogService.MessageDialog(''?'', '
+    + 'TMsgDlgType.mtConfirmation, [TMsgDlgBtn.mbYes], TMsgDlgBtn.mbNo, 0, '
+    + 'procedure(const EResult: TModalResult) begin case EResult of mrYes: '
+    + 'Close; end; end); Result := True;'), ['tform', 'tedit',
+    'tdialogservice', 'tmsgdlgtype', 'tmsgdlgbtn', 'tmodalresult'], Li),
+    'anonyme Methode als Argument');
+  Assert.AreEqual<Integer>(13, Li, 'Zeile');
   // Der Variantenteil eines records ist kein Anweisungsteil: 'fkA:' ist dort
   // ein Feld.
   Assert.AreEqual('', Foreign(Join(['unit U;', 'interface', 'type',

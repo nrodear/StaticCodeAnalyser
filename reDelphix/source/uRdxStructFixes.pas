@@ -622,16 +622,25 @@ end;
 //     der Aufzaehlungswerte '= (a, b)',
 //   - im Anweisungsteil das Wort hinter var/const (Inline 'var X := ..').
 // Ein Wort zu viel hiesse hier "deklariert", also eine Gluehbirne zu viel -
-// darum die Strenge im Anweisungsteil.
+// darum die Strenge im Anweisungsteil. "In Klammern" zaehlt ab dem
+// innersten offenen Block (Bases): eine anonyme Methode als Argument
+// ('MessageDialog(.., procedure(const R: TModalResult) begin case R of
+// mrYes: ..') steht zwar in der Klammer des Aufrufs, ihr 'mrYes:' ist aber
+// eine case-Marke ihres Anweisungsteils, ihre Parameterliste dagegen eine
+// eigene Klammer (Review e/HilfeFixH).
 procedure ScanDecls(AMap: TRdxCodeMap; const AToks: TArray<TRdxToken>;
   ADecl: TDictionary<string, Boolean>);
 var
   k, q, Last, Paren : Integer;
+  Opened            : Integer;
+  Bases             : TArray<Integer>;   // Paren beim Oeffnen je Block
   Stack, P, N       : string;
   InUses, Stmt      : Boolean;
+  InParen           : Boolean;
 begin
   Stack := '';
   Paren := 0;
+  Bases := nil;
   InUses := False;
   for k := 0 to High(AToks) do
   begin
@@ -650,9 +659,17 @@ begin
     if ReservedAt(AToks, k) then
     begin
       InUses := AToks[k].Low = 'uses';
+      Opened := Length(Stack);
       StepBlocks(AMap, AToks, k, Stack);
+      SetLength(Bases, Length(Stack));
+      if Length(Stack) > Opened then
+        Bases[High(Bases)] := Paren;
       Continue;
     end;
+    if Length(Bases) > 0 then
+      InParen := Paren > Bases[High(Bases)]
+    else
+      InParen := Paren > 0;
     if not AToks[k].IsWord or InList(P, IDENT_PREFIXES) then Continue;
     if InList(P, NAMING_WORDS) or InList(P, UNIT_HEADS) then
     begin
@@ -664,7 +681,7 @@ begin
     if Stmt and ((P = 'var') or (P = 'const')) then
       ADecl.AddOrSetValue(AToks[k].Low, True);
     if ((N = ',') or (N = ':')) and (P <> ',') and ColonList(AToks, k, Last)
-       and ((Paren > 0) or not Stmt or InList(P, INLINE_DECL_PREV)) then
+       and (InParen or not Stmt or InList(P, INLINE_DECL_PREV)) then
     begin
       q := k;
       while q <= Last do
