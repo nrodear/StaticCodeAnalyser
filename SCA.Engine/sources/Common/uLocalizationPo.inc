@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6905 Zeilen, 319064 Bytes
-  CPoLines_de: array[0..6904] of string = (
+  // i18n\de.po - 6908 Zeilen, 319343 Bytes
+  CPoLines_de: array[0..6907] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6919,7 +6919,10 @@ const
     'msgstr "der Handler steht in %s - \"raise;\" '#$00FC'berspr'#$00E4'nge den Rest (inherited, Freigaben) und lie'#$00DF'e eine Exception aus dem Destruktor"',
     '',
     'msgid "the try only releases (%s) - an error while freeing or closing is swallowed on purpose so that the cleanup after it still runs; \"raise;\" would skip it"',
-    'msgstr "der try-Teil gibt nur frei (%s) - ein Fehler beim Freigeben oder Schlie'#$00DF'en wird mit Absicht geschluckt, damit das Aufr'#$00E4'umen danach l'#$00E4'uft; \"raise;\" '#$00FC'berspr'#$00E4'nge es"'
+    'msgstr "der try-Teil gibt nur frei (%s) - ein Fehler beim Freigeben oder Schlie'#$00DF'en wird mit Absicht geschluckt, damit das Aufr'#$00E4'umen danach l'#$00E4'uft; \"raise;\" '#$00FC'berspr'#$00E4'nge es"',
+    '',
+    'msgid "the case selects on characters or strings - every other value is normal input there (a lexer, a parser); raise would break it"',
+    'msgstr "das case w'#$00E4'hlt nach Zeichen oder Strings - jeder andere Wert ist dort gew'#$00F6'hnliche Eingabe (ein Lexer, ein Parser); raise br'#$00E4'che ihn"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7194,8 +7197,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6901 Zeilen, 332039 Bytes
-  CPoLines_fr: array[0..6900] of string = (
+  // i18n\fr.po - 6904 Zeilen, 332323 Bytes
+  CPoLines_fr: array[0..6903] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14096,7 +14099,10 @@ const
     'msgstr "le gestionnaire est dans %s - \"raise;\" sauterait le reste (inherited, lib'#$00E9'rations) et laisserait une exception sortir du destructeur"',
     '',
     'msgid "the try only releases (%s) - an error while freeing or closing is swallowed on purpose so that the cleanup after it still runs; \"raise;\" would skip it"',
-    'msgstr "le try ne fait que lib'#$00E9'rer (%s) - une erreur lors de la lib'#$00E9'ration ou de la fermeture est aval'#$00E9'e expr'#$00E8's pour que le nettoyage qui suit s''ex'#$00E9'cute ; \"raise;\" le sauterait"'
+    'msgstr "le try ne fait que lib'#$00E9'rer (%s) - une erreur lors de la lib'#$00E9'ration ou de la fermeture est aval'#$00E9'e expr'#$00E8's pour que le nettoyage qui suit s''ex'#$00E9'cute ; \"raise;\" le sauterait"',
+    '',
+    'msgid "the case selects on characters or strings - every other value is normal input there (a lexer, a parser); raise would break it"',
+    'msgstr "le case porte sur des caract'#$00E8'res ou des cha'#$00EE'nes - toute autre valeur y est une entr'#$00E9'e normale (un lexer, un parser) ; raise le casserait"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

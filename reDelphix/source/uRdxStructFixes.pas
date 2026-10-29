@@ -539,19 +539,136 @@ end;
 // letzten Tokens vor dem end). Bis rwE29 galt immer die letzte Zeile -
 // endet der letzte Arm tief in einem begin..end, rueckte das raise mit
 // ein (skia4delphi Vcl.Styles.UxTheme.pas:1098: Spalte 57 statt 33).
-function ArmLineOf(AMap: TRdxCodeMap; const ACase: TRdxToken;
-  const AFallback: string): string;
+// Das erste Zeichen aus Code oder String hinter dem 'of' des case ACase
+// (die erste Arm-Marke): False ohne 'of' oder am Dateiende. Ein String ist
+// kein Token der Code-Sicht - bis rwE30 nahm ArmLineOf das erste TOKEN
+// hinter dem 'of' und sah bei einem Zeichen-Arm ("'.':") nur den ':'
+// mitten auf der Zeile.
+function FirstArmChar(AMap: TRdxCodeMap; const ACase: TRdxToken;
+  out ALine, ACol: Integer): Boolean;
 var
   T : TRdxToken;
 begin
-  Result := AFallback;
+  ALine := 0;
+  ACol := 0;
   T := After(AMap, ACase);
   while (T.Low <> '') and (T.Low <> 'of') do
     T := After(AMap, T);
-  if T.Low = '' then Exit;
-  T := After(AMap, T);
-  if (T.Low <> '') and (SkipBlanks(AMap.Raw(T.Line), 1) = T.Col) then
-    Result := AMap.Raw(T.Line);
+  Result := (T.Low <> '') and FirstCharAfter(AMap, T, ALine, ACol);
+end;
+
+function ArmLineOf(AMap: TRdxCodeMap; const ACase: TRdxToken;
+  const AFallback: string): string;
+var
+  Li, Co : Integer;
+begin
+  Result := AFallback;
+  // Das erste Zeichen der ersten Arm-Marke - auch ein String ("'.':",
+  // rwE30 cnwizards mwBCBTokenList.pas:1518: das raise stand vier statt
+  // zwei Spalten unter dem else, nach der Fortsetzungszeile des letzten
+  // Arms).
+  if FirstArmChar(AMap, ACase, Li, Co)
+     and (SkipBlanks(AMap.Raw(Li), 1) = Co) then
+    Result := AMap.Raw(Li);
+end;
+
+// SCA168, raise-Variante: waehlt das case nach Zeichen oder Strings - die
+// erste Arm-Marke ist ein Literal ("'.':", '#13:')? Dann ist jeder andere
+// Wert gewoehnliche Eingabe (ein Lexer, ein Highlighter, ein Parser), und
+// raise braeche ihn (rwE30: cnwizards mwBCBTokenList.pas:1518, Dev-Cpp
+// SynHighlighterCpp.pas:1051 - jede Ziffer bzw. jedes Zeichen loeste die
+// Exception aus). '' oder der Grund.
+function CharSelectorReason(AMap: TRdxCodeMap; const ACase: TRdxToken): string;
+var
+  Li, Co : Integer;
+  L      : string;
+begin
+  Result := '';
+  if not FirstArmChar(AMap, ACase, Li, Co) then Exit;
+  L := AMap.Raw(Li);
+  if (Co <= Length(L)) and CharInSet(L[Co], ['''', '#']) then
+    Result := _('the case selects on characters or strings - every other '
+      + 'value is normal input there (a lexer, a parser); raise would break '
+      + 'it');
+end;
+
+// Bedingte Direktiven im case (CaseElse): harmlos, wenn jeder bedingte
+// Bereich ({$IF..}..{$ENDIF}) zwischen case und end vollstaendig darin
+// liegt, kein Wort enthaelt, das die end-Bilanz verschiebt (begin, end,
+// case, try, asm, record, repeat, until, class, object), kein Include
+// ({$I ..}) im case steht, und der letzte Arm nicht in einem Bereich endet,
+// es sei denn, er und das Token vor dem Bereich enden auf ';' (sonst
+// traefe das neue else je Zweig ein anderes Ende - 'if A then B
+// {$IFDEF X};{$ENDIF}' + 'else'). Dann sieht jede Variante dieselbe
+// Bilanz, und das else vor dem end passt in jeder (rwE30, Todo_SCA168
+// "verpasst-direktive": mormot.core.rtti.pas:7170 - ein ganzer Arm unter
+// {$ifdef HASVARUSTRING}, mormot.db.rad.pas:1074 - je eine Zuweisung in
+// {$ifdef UNICODE}..{$else}..{$endif}, JvRegAuto.pas:615 - ein Label in
+// der Liste). Andere Direktiven ({$R-}, {$REGION}) aendern den Code nicht.
+function CaseDirectivesHarmless(AMap: TRdxCodeMap;
+  const ACase, AEnd, ALast: TRdxToken): Boolean;
+const
+  COND_OPEN: array[0..3] of string = ('if', 'ifdef', 'ifndef', 'ifopt');
+  COND_MID: array[0..1] of string = ('else', 'elseif');
+  COND_CLOSE: array[0..1] of string = ('endif', 'ifend');
+  BALANCE_WORDS: array[0..9] of string = ('begin', 'end', 'case', 'try',
+    'asm', 'record', 'repeat', 'until', 'class', 'object');
+var
+  T, Prev, RegionPrev, LastRegionPrev : TRdxToken;
+  Li, Co, Depth                       : Integer;
+  HaveDir, Arg, LastInRegion          : Boolean;
+  W                                   : string;
+begin
+  Result := False;
+  Li := ACase.Line;
+  Co := 1;
+  HaveDir := NextDirective(AMap, Li, Co);
+  Depth := 0;
+  Prev := Before(AMap, ACase);
+  RegionPrev := Default(TRdxToken);
+  LastRegionPrev := Default(TRdxToken);
+  LastInRegion := False;
+  T := ACase;
+  while True do
+  begin
+    // Die Direktiven vor T (bzw. vor dem end).
+    while HaveDir and ((Li < T.Line) or ((Li = T.Line) and (Co < T.Col))) do
+    begin
+      if IncludeFileAt(AMap, Li, Co) <> '' then Exit;
+      W := DirectiveWord(AMap, Li, Co, Arg);
+      if InList(W, COND_OPEN) then
+      begin
+        if Depth = 0 then
+          RegionPrev := Prev;
+        Inc(Depth);
+      end
+      else if InList(W, COND_CLOSE) then
+      begin
+        Dec(Depth);
+        if Depth < 0 then Exit;
+      end
+      else if InList(W, COND_MID) and (Depth = 0) then
+        Exit;
+      Inc(Co);
+      HaveDir := NextDirective(AMap, Li, Co);
+    end;
+    if SameTok(T, AEnd) then Break;
+    if (Depth > 0) and IsKeywordAfter(T, Prev)
+       and InList(T.Low, BALANCE_WORDS) then
+      Exit;
+    if SameTok(T, ALast) then
+    begin
+      LastInRegion := Depth > 0;
+      LastRegionPrev := RegionPrev;
+    end;
+    Prev := T;
+    T := After(AMap, T);
+    if T.Low = '' then Exit;
+  end;
+  if Depth <> 0 then Exit;
+  if LastInRegion and ((ALast.Low <> ';') or (LastRegionPrev.Low <> ';')) then
+    Exit;
+  Result := True;
 end;
 
 // Endet der letzte Arm vor AEnd nicht auf ';' (im Code), ein ';' hinter
@@ -665,9 +782,12 @@ begin
     AReason := _('the case has no branches');
   if AReason = '' then
     AReason := CaseContextReason(AMap, CaseTok);
-  if (AReason = '') and DirectiveBefore(AMap, CaseTok.Line, EndTok) then
+  if (AReason = '') and DirectiveBefore(AMap, CaseTok.Line, EndTok)
+     and not CaseDirectivesHarmless(AMap, CaseTok, EndTok, LastTok) then
     AReason := _('compiler directive in the case - a branch could shift the '
       + 'end count');
+  if (AReason = '') and (AStatement <> '') then
+    AReason := CharSelectorReason(AMap, CaseTok);
   if AReason <> '' then Exit;
   L := AMap.Raw(EndTok.Line);
   SetLength(AEdits, 1);

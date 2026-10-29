@@ -47,6 +47,12 @@ type
     // rwE29 (skia4delphi Vcl.Styles.UxTheme.pas:1098): die raise-Zeile
     // rueckte wie die letzte Zeile des letzten Arms ein.
     [Test] procedure Sca168_RaiseIndent_FollowsArms;
+    // rwE30 (cnwizards mwBCBTokenList.pas:1518, SynHighlighter*): case ueber
+    // Zeichen - kein raise fuer jedes andere Zeichen.
+    [Test] procedure Sca168_CharSelector_RaiseRefused;
+    // rwE30 (Todo_SCA168 "verpasst-direktive"): bedingte Bereiche ohne
+    // Blockwort im case sperren nicht mehr.
+    [Test] procedure Sca168_HarmlessDirective_Helps;
   end;
 
 implementation
@@ -522,6 +528,80 @@ begin
       '    ' + RAISE_UNHANDLED, '  end;']),
     FixCase(InProc(['  case X of 1: A;', '    2: B;', '  end;']), 5,
       RAISE_UNHANDLED, R), R);
+end;
+
+procedure TTestRdxStructFixes.Sca168_CharSelector_RaiseRefused;
+var
+  R, Src : string;
+begin
+  // cnwizards mwBCBTokenList.pas:1518 (minimiert): die Schleife liest
+  // Ziffern und '.', jedes andere Zeichen ist Normalfall - mit raise waere
+  // der Tokenizer kaputt. Bis rwE30 angeboten, dazu vier Spalten unter dem
+  // else statt zwei (rot ohne Fix).
+  Src := InProc(['        case FOrigin[Running] of', '          ''.'':',
+    '            if FOrigin[Running + 1] <> ''.'' then Result := ctkfloat '
+    + 'else break;', '        end;']);
+  Assert.AreEqual('', FixCase(Src, 5, RAISE_UNHANDLED, R), 'Zeichen-Arm');
+  Assert.IsTrue(Pos('Zeichen', R) > 0, R);
+  // Das leere else bleibt (bedeutungsgleich).
+  Assert.AreEqual(InProc(['        case FOrigin[Running] of', '          ''.'':',
+      '            if FOrigin[Running + 1] <> ''.'' then Result := ctkfloat '
+      + 'else break;', '        else', '        end;']),
+    FixCase(Src, 5, '', R), R);
+  // '#13'-Marken ebenso.
+  Assert.AreEqual('', FixCase(InProc(['  case S[i] of', '    #13, #10: Inc(L);',
+    '  end;']), 5, RAISE_UNHANDLED, R), '#13');
+  Assert.IsTrue(Pos('Zeichen', R) > 0, R);
+  // Gegenprobe: Zahl-Marken - raise bleibt.
+  Assert.AreEqual(InProc(['  case K of', '    1: A;', '  else',
+      '    ' + RAISE_UNHANDLED, '  end;']),
+    FixCase(InProc(['  case K of', '    1: A;', '  end;']), 5, RAISE_UNHANDLED,
+      R), R);
+end;
+
+procedure TTestRdxStructFixes.Sca168_HarmlessDirective_Helps;
+var
+  R, Src : string;
+begin
+  // delphimvcframework dmustache mormot.core.rtti.pas:7170 (minimiert): ein
+  // ganzer Arm unter {$ifdef} - bis rwE30 gesperrt (rot ohne Fix).
+  Src := InProc(['  case Value.Kind of', '    rkLString:', '      A;',
+    '    {$ifdef HASVARUSTRING}', '    rkUString:', '      B;',
+    '    {$endif HASVARUSTRING}', '    rkVariant:', '      begin', '        C;',
+    '      end;', '  end;']);
+  Assert.AreEqual(StringReplace(Src, '      end;'#13#10'  end;',
+    '      end;'#13#10'  else'#13#10'  end;', []), FixCase(Src, 5, '', R), R);
+  // mORMot2 mormot.db.rad.pas:1074: je eine Zuweisung in {$ifdef}..{$else}
+  // ..{$endif}, auch in einem begin..end-Arm.
+  Src := InProc(['  case aParam.VType of', '    ftInt64:', '      {$ifdef UNICODE}',
+    '      V := par.AsLargeInt;', '      {$else}', '      V := trunc(par.AsFloat);',
+    '      {$endif UNICODE}', '    ftBlob:', '      begin', '        {$ifdef UNICODE}',
+    '        tmp := par.AsBlob;', '        {$else}', '        D := par.AsString;',
+    '        {$endif UNICODE}', '      end;', '  end;']);
+  Assert.AreEqual(StringReplace(Src, '      end;'#13#10'  end;',
+    '      end;'#13#10'  else'#13#10'  end;', []), FixCase(Src, 5, '', R), R);
+  // jvcl JvRegAuto.pas:615: ein Label in der Liste.
+  Src := InProc(['  case PropTyp of', '    tkFloat:', '      LoadFloatPrp;',
+    '    tkString, tkLString {$IFDEF COMPILER3_UP}, tkWString {$ENDIF}:',
+    '      LoadStrPrp;', '  end;']);
+  Assert.AreEqual(StringReplace(Src, '      LoadStrPrp;'#13#10'  end;',
+    '      LoadStrPrp;'#13#10'  else'#13#10'  end;', []), FixCase(Src, 5, '', R),
+    R);
+  // Gegenproben - gesperrt bleiben: ein Blockwort im Bereich, ein Bereich
+  // ueber das case hinaus, ein Include, ein letzter Arm, dessen ';' nur in
+  // einem Zweig steht (das else binde sonst an das if).
+  Assert.AreEqual('', FixCase(InProc(['  case X of', '    1: A;', '    {$IFDEF Y}',
+    '    2: begin B; end;', '    {$ENDIF}', '  end;']), 5, '', R), 'begin');
+  Assert.IsTrue(Pos('Direktive', R) > 0, R);
+  Assert.AreEqual('', FixCase(InProc(['  case X of', '    1: A;', '    {$IFDEF Y}',
+    '    2: B;', '  end;', '  {$ENDIF}']), 5, '', R), 'offen');
+  Assert.IsTrue(Pos('Direktive', R) > 0, R);
+  Assert.AreEqual('', FixCase(InProc(['  case X of', '    1: A;',
+    '    {$I arms.inc}', '  end;']), 5, '', R), 'Include');
+  Assert.IsTrue(Pos('Direktive', R) > 0, R);
+  Assert.AreEqual('', FixCase(InProc(['  case X of', '    1: if A then B',
+    '    {$IFDEF Y};{$ENDIF}', '  end;']), 5, '', R), 'Semikolon im Zweig');
+  Assert.IsTrue(Pos('Direktive', R) > 0, R);
 end;
 
 initialization

@@ -6903,3 +6903,6 @@ msgstr "der Handler steht in %s - \"raise;\" überspränge den Rest (inherited, 
 
 msgid "the try only releases (%s) - an error while freeing or closing is swallowed on purpose so that the cleanup after it still runs; \"raise;\" would skip it"
 msgstr "der try-Teil gibt nur frei (%s) - ein Fehler beim Freigeben oder Schließen wird mit Absicht geschluckt, damit das Aufräumen danach läuft; \"raise;\" überspränge es"
+
+msgid "the case selects on characters or strings - every other value is normal input there (a lexer, a parser); raise would break it"
+msgstr "das case wählt nach Zeichen oder Strings - jeder andere Wert ist dort gewöhnliche Eingabe (ein Lexer, ein Parser); raise bräche ihn"
