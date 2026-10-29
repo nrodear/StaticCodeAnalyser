@@ -13,7 +13,7 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6793 Zeilen, 308423 Bytes
+  // i18n\de.po - 6793 Zeilen, 308518 Bytes
   CPoLines_de: array[0..6792] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -6806,8 +6806,8 @@ const
     'msgid "the literal %s does not fit the number format of TFormatSettings.Invariant (decimal point, no thousands separator) - %s would raise EConvertError"',
     'msgstr "das Literal %s passt nicht zum Zahlenformat von TFormatSettings.Invariant (Dezimalpunkt, kein Tausendertrenner) - %s w'#$00FC'rfe EConvertError"',
     '',
-    'msgid "line %d calls %s without TFormatSettings.Invariant - a value written there and read or compared here (or the other way round) would no longer match; %s"',
-    'msgstr "Zeile %d ruft %s ohne TFormatSettings.Invariant auf - ein dort geschriebener und hier gelesener oder verglichener Wert (oder umgekehrt) passte nicht mehr; %s"'
+    'msgid "%s; line %d calls %s of the same family without TFormatSettings.Invariant - change it along with this one, otherwise values written there and read or compared here (or the other way round) no longer match"',
+    'msgstr "%s; Zeile %d ruft %s derselben Familie ohne TFormatSettings.Invariant auf - mit umstellen, sonst passen dort geschriebene und hier gelesene oder verglichene Werte (oder umgekehrt) nicht mehr zusammen"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7082,7 +7082,7 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6789 Zeilen, 320932 Bytes
+  // i18n\fr.po - 6789 Zeilen, 321033 Bytes
   CPoLines_fr: array[0..6788] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -13871,8 +13871,8 @@ const
     'msgid "the literal %s does not fit the number format of TFormatSettings.Invariant (decimal point, no thousands separator) - %s would raise EConvertError"',
     'msgstr "le litt'#$00E9'ral %s ne correspond pas au format num'#$00E9'rique de TFormatSettings.Invariant (point d'#$00E9'cimal, sans s'#$00E9'parateur de milliers) - %s l'#$00E8'verait EConvertError"',
     '',
-    'msgid "line %d calls %s without TFormatSettings.Invariant - a value written there and read or compared here (or the other way round) would no longer match; %s"',
-    'msgstr "la ligne %d appelle %s sans TFormatSettings.Invariant - une valeur '#$00E9'crite l'#$00E0'-bas et lue ou compar'#$00E9'e ici (ou l''inverse) ne correspondrait plus ; %s"'
+    'msgid "%s; line %d calls %s of the same family without TFormatSettings.Invariant - change it along with this one, otherwise values written there and read or compared here (or the other way round) no longer match"',
+    'msgstr "%s ; la ligne %d appelle %s de la m'#$00EA'me famille sans TFormatSettings.Invariant - '#$00E0' modifier aussi, sinon les valeurs '#$00E9'crites l'#$00E0'-bas et lues ou compar'#$00E9'es ici (ou l''inverse) ne correspondent plus"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

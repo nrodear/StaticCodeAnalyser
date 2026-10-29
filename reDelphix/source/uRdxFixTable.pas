@@ -1535,14 +1535,24 @@ end;
 // SCA128, zweiter Eintrag: ', TFormatSettings.Invariant' (aendert Verhalten).
 function PlanDateFormatSettingsAlt(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Map : TRdxCodeMap;
 begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxFormatSettingsFix.DateFormatInvariant);
   Result.Variant := 1;
   Result.ChangesBehavior := True;
   FormatSettingsDiskCheck(ALines, AFinding, lfFormatInvariant, Result);
-  if Result.Enabled then
-    Result.Hint := _(R_FMTSET_INV_HINT);
+  if not Result.Enabled then Exit;
+  // Ein Gegenstueck derselben Familie ohne Invariant sperrt nicht, der
+  // Hinweis nennt es (Entscheid M2, Review e/HilfeFixC).
+  Map := TRdxCodeMap.Acquire(ALines);
+  try
+    Result.Hint := TRdxFormatSettingsFix.PairHint(Map, AFinding.LineInt,
+      _(R_FMTSET_INV_HINT));
+  finally
+    TRdxCodeMap.Release(Map);
+  end;
 end;
 
 // SCA059 (Charge QF1): drittes Argument ', FormatSettings' an das eine

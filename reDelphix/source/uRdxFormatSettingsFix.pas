@@ -69,10 +69,14 @@ unit uRdxFormatSettingsFix;
 //     ein Lese-Aufruf (StrToDate, StrToTime, StrToDateTime, StrToFloat,
 //     StrToCurr) ein Literal liest, das nicht zum Invariant-Format passt
 //     (rwE29: StrToDateTime('17/02/2017 16:37:50') - Monat 17, sicherer
-//     EConvertError; LiteralMisfit); SCA128, wenn die Datei eine weitere
-//     Routine derselben Familie (Datum/Uhrzeit bzw. Zahl, auch Try...,
-//     ...Def) ohne Invariant ruft - ein Paar aus Schreiben und Lesen bzw.
-//     Vergleich braeche (rwE29: HeidiSQL main.pas, PairBreakLine).
+//     EConvertError; LiteralMisfit; reine Zeit-Literale bei StrToTime
+//     sperren nicht - Review e/HilfeFixC).
+// Ruft die Datei eine weitere Routine derselben Familie (Datum/Uhrzeit bzw.
+// Zahl, auch Try..., ...Def) ohne Invariant, koennte ein Paar aus Schreiben
+// und Lesen bzw. Vergleich brechen (rwE29: HeidiSQL main.pas). Das SPERRT
+// NICHT (Entscheid Nico nach dem Review e/HilfeFixC, M2 - der Alt-Weg ist
+// ohnehin als aendernd gekennzeichnet und nie per Taste): der Hinweis nennt
+// das Gegenstueck (PairHint, PairBreakLine).
 // Was nur die Platte weiss (Projektdateien, Includes), prueft der Adapter
 // in uRdxFixTable (FormatSettingsDiskCheck, rwE29).
 // Der Bereich der Ersetzung beginnt hinter dem letzten Zeichen des letzten
@@ -126,11 +130,13 @@ const
   R_FS_LIT_NUMBER = 'the literal %s does not fit the number format of '
     + 'TFormatSettings.Invariant (decimal point, no thousands separator) - %s '
     + 'would raise EConvertError';
-  // Alt-Weg (rwE29, Paar-Bruch): %d die Zeile, %s der Aufruf dort, %s
-  // MsgByHand.
-  R_FS_PAIR = 'line %d calls %s without TFormatSettings.Invariant - a value '
-    + 'written there and read or compared here (or the other way round) '
-    + 'would no longer match; %s';
+  // Alt-Weg (rwE29, Paar-Bruch, Entscheid M2): der Hinweis mit dem
+  // Gegenstueck - %s der Hinweis des Adapters (schon uebersetzt), %d die
+  // Zeile, %s der Aufruf dort.
+  R_FS_PAIR_HINT = '%s; line %d calls %s of the same family without '
+    + 'TFormatSettings.Invariant - change it along with this one, otherwise '
+    + 'values written there and read or compared here (or the other way '
+    + 'round) no longer match';
   R_FL_NO_SPEC = 'the message does not name the format string - analyse the '
     + 'file again';
   R_FL_NO_FORMAT = 'no Format call on the code columns of the reported line';
@@ -172,6 +178,12 @@ type
       out AFormat: string): Boolean; static;
     // Traegt der Formatstring eine Waehrungs-Spec ('%m', '%.2m', '%0:m')?
     class function HasMoneySpec(const AFormat: string): Boolean; static;
+    // SCA128, Alt-Weg (Entscheid M2): ABaseHint, oder - ruft die Datei
+    // ausser den Aufrufen der Liste auf ALine eine Routine derselben
+    // Familie ohne Invariant - R_FS_PAIR_HINT mit ABaseHint, Zeile und Name
+    // des ersten solchen Aufrufs. Liest die Zeile keinen Aufruf, ABaseHint.
+    class function PairHint(AMap: TRdxCodeMap; ALine: Integer;
+      const ABaseHint: string): string; static;
   end;
 
 implementation
@@ -620,7 +632,10 @@ begin
   if ALow = PARSE_DATE then
     Ok := InvariantDateAt(T, P) and (P > Length(T))
   else if ALow = PARSE_TIME then
-    Ok := InvariantTimeAt(T, P) and (P > Length(T))
+    // Ein reines Zeit-Literal sperrt nicht (Review e/HilfeFixC): Invariant
+    // liest es wie die meisten Locales (':', AM/PM) - dass es dort sicher
+    // scheitert, liesse sich nicht behaupten.
+    Exit
   else if ALow = PARSE_DATETIME then
   begin
     Ok := InvariantDateAt(T, P);
@@ -662,8 +677,9 @@ end;
 // Seite auf Invariant gestellt, ist der Vergleich ausser in en-US immer
 // ungleich. Ebenso Schreiben und Lesen (CurrToStr ins Edit, TryStrToCurr
 // zurueck). Ob zwei Aufrufe zusammengehoeren, sieht der Planer nicht -
-// darum sperrt JEDER weitere Aufruf derselben Familie (PAIR_DATE bzw.
-// PAIR_NUMBER) in der Datei, der kein Invariant uebergibt.
+// darum nennt der Hinweis (PairHint) den ersten weiteren Aufruf derselben
+// Familie (PAIR_DATE bzw. PAIR_NUMBER) in der Datei, der kein Invariant
+// uebergibt. Bis zum Entscheid M2 (Review e/HilfeFixC) sperrte er.
 
 // Steht T in einem der Aufrufe ASites (die die Hilfe aendert)?
 function IsEditedName(const T: TRdxToken; const ASites: TCallSites): Boolean;
@@ -979,7 +995,6 @@ var
   Names : TArray<string>;
   i, Li : Integer;
   Found : Boolean;
-  Other : string;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -1043,16 +1058,6 @@ begin
   AReason := FileReason(AMap, Names, Hits[0], AInvariant);
   if AReason <> '' then
     Exit;
-  // Alt-Weg: kein weiterer Aufruf derselben Familie ohne Invariant (rwE29).
-  if AInvariant then
-  begin
-    Li := PairBreakLine(AMap, Sites, Other);
-    if Li > 0 then
-    begin
-      AReason := _(R_FS_PAIR, [Li, Other, MsgByHand]);
-      Exit;
-    end;
-  end;
   BuildEdit(AMap, ALine, Sites, InsertFor(AInvariant), SPAN_128, AEdit);
   Result := True;
 end;
@@ -1209,6 +1214,30 @@ begin
     end;
     Inc(i);
   end;
+end;
+
+class function TRdxFormatSettingsFix.PairHint(AMap: TRdxCodeMap;
+  ALine: Integer; const ABaseHint: string): string;
+var
+  Hits  : TArray<TRdxToken>;
+  Sites : TCallSites;
+  i, Li : Integer;
+  Other : string;
+begin
+  Result := ABaseHint;
+  if (ALine < 1) or (ALine > AMap.LineCount) then
+    Exit;
+  Hits := NamesOnLine(AMap, ALine, LOCALE_FUNCS);
+  if Length(Hits) = 0 then
+    Exit;
+  SetLength(Sites, Length(Hits));
+  for i := 0 to High(Hits) do
+    if ReadCall(AMap, Hits[i], LOCALE_ARITY[LocaleIndex(Hits[i].Low)],
+         Sites[i]) <> '' then
+      Exit;
+  Li := PairBreakLine(AMap, Sites, Other);
+  if Li > 0 then
+    Result := _(R_FS_PAIR_HINT, [ABaseHint, Li, Other]);
 end;
 
 end.

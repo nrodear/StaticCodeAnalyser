@@ -51,8 +51,8 @@ type
     [Test] procedure Sca128_Alt_LiteralNotInvariant_NoHelp;
     [Test] procedure Sca128_Alt_LiteralInvariant_Helps;
     // ---- Realworld-Test rwE29: Paar-Bruch ----
-    [Test] procedure Sca128_Alt_PairInFile_NoHelp;
-    [Test] procedure Sca128_Alt_NoPairInFile_Helps;
+    [Test] procedure Sca128_Alt_PairInFile_HintNamesLine;
+    [Test] procedure Sca128_Alt_NoPairInFile_PlainHint;
   end;
 
 {$IFNDEF FPC}
@@ -68,7 +68,7 @@ type
     [Test] procedure Sca128_Detector_OldDelphiProject_NoHelp;
     [Test] procedure Sca128_Detector_LazarusProject_OnlyMainWay;
     [Test] procedure Sca128_Detector_OldTraceOnlyInInclude_MainWayStays;
-    [Test] procedure Sca128_Detector_PairInFile_OnlyMainWay;
+    [Test] procedure Sca128_Detector_PairInFile_HintNamesLine;
   end;
 {$ENDIF}
 
@@ -486,9 +486,7 @@ begin
   AssertRefused(InUnit(['  d := StrToDate(''15/10/1987'');']), BODY_LINE,
     Msg('strtodate'), _(R_FS_LIT_DATE, ['''15/10/1987''', 'StrToDate']),
     True);
-  // Uhrzeit ohne Minuten, Zahl mit Komma bzw. Tausendertrenner.
-  AssertRefused(InUnit(['  d := StrToTime(''16 Uhr'');']), BODY_LINE,
-    Msg('strtotime'), _(R_FS_LIT_DATE, ['''16 Uhr''', 'StrToTime']), True);
+  // Zahl mit Komma bzw. Tausendertrenner.
   AssertRefused(InUnit(['  x := StrToFloat(''1,5'');']), BODY_LINE,
     Msg('strtofloat'), _(R_FS_LIT_NUMBER, ['''1,5''', 'StrToFloat']), True);
   AssertRefused(InUnit(['  x := StrToCurr(''1.234,50'');']), BODY_LINE,
@@ -507,6 +505,11 @@ begin
   AssertFixed(InUnit(['  d := StrToTime(''16:40:50'', TFormatSettings.Invariant);']),
     InUnit(['  d := StrToTime(''16:40:50'');']), BODY_LINE, Msg('strtotime'),
     True);
+  // Ein reines Zeit-Literal sperrt nie (Review e/HilfeFixC): dass es mit
+  // Invariant sicher scheitert, liesse sich nicht behaupten.
+  AssertFixed(InUnit(['  d := StrToTime(''16 Uhr'', TFormatSettings.Invariant);']),
+    InUnit(['  d := StrToTime(''16 Uhr'');']), BODY_LINE, Msg('strtotime'),
+    True);
   AssertFixed(InUnit(['  d := StrToDate(''12/31/1999'', TFormatSettings.Invariant);']),
     InUnit(['  d := StrToDate(''12/31/1999'');']), BODY_LINE, Msg('strtodate'),
     True);
@@ -520,49 +523,68 @@ begin
     Msg('formatdatetime'), True);
 end;
 
-procedure TTestRdxFormatSettingsFix.Sca128_Alt_PairInFile_NoHelp;
+// Der Hinweis zum Alt-Weg auf ALine mit dem Grundhinweis 'B' (PairHint).
+function PairHintOf(const ASource: string; ALine: Integer): string;
+var
+  Map : TRdxCodeMap;
+begin
+  Map := NewMap(ASource);
+  try
+    Result := TRdxFormatSettingsFix.PairHint(Map, ALine, 'B');
+  finally
+    Map.Free;
+  end;
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_PairInFile_HintNamesLine;
 var
   Src : string;
 begin
   // rwE29, HeidiSQL main.pas:14718: 'QueryDay := DateToStr(..)' wird mit
   // Eintraegen verglichen, die eine andere Zeile mit DateToStr (Locale)
   // schreibt - nur diese Seite auf Invariant, und der Vergleich ist ausser
-  // in en-US immer ungleich. Ohne die Sperre boete der Alt-Weg an.
+  // in en-US immer ungleich. Entscheid M2 (Review e/HilfeFixC): der
+  // Alt-Weg bleibt angeboten (aendert Verhalten, nie per Taste), der
+  // Hinweis nennt das Gegenstueck. Ohne PairHint bliebe er 'B'.
   Src := InUnit(['  r := DateToStr(d);', '  if r <> DateToStr(Date) then',
     '    r := '''';']);
-  AssertRefused(Src, BODY_LINE, Msg('datetostr'),
-    _(R_FS_PAIR, [BODY_LINE + 1, 'DateToStr', MsgByHand]), True);
-  // Der Hauptweg bleibt (gleiche Bedeutung).
-  AssertFixed(InUnit(['  r := DateToStr(d, FormatSettings);',
+  AssertFixed(InUnit(['  r := DateToStr(d, TFormatSettings.Invariant);',
     '  if r <> DateToStr(Date) then', '    r := '''';']), Src, BODY_LINE,
-    Msg('datetostr'));
+    Msg('datetostr'), True);
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'DateToStr']),
+    PairHintOf(Src, BODY_LINE));
   // rwE29, rgInvoiceItemEdit.pas:217: CurrToStr ins Eingabefeld, zurueck
   // mit TryStrToCurr (ohne eigenen Fund) - dieselbe Zahlen-Familie.
   Src := InUnit(['  r := CurrToStr(x);', '  if TryStrToCurr(s, x) then',
     '    r := '''';']);
-  AssertRefused(Src, BODY_LINE, Msg('currtostr'),
-    _(R_FS_PAIR, [BODY_LINE + 1, 'TryStrToCurr', MsgByHand]), True);
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'TryStrToCurr']),
+    PairHintOf(Src, BODY_LINE));
   // rwE29, wbDefinitionsCommon.pas:996/997: zwei StrToFloat, verglichen;
   // auch ein Aufruf mit der globalen FormatSettings ist kein Invariant.
   Src := InUnit(['  x := StrToFloat(s);',
     '  if x = StrToFloat(r, FormatSettings) then', '    r := '''';']);
-  AssertRefused(Src, BODY_LINE, Msg('strtofloat'),
-    _(R_FS_PAIR, [BODY_LINE + 1, 'StrToFloat', MsgByHand]), True);
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'StrToFloat']),
+    PairHintOf(Src, BODY_LINE));
 end;
 
-procedure TTestRdxFormatSettingsFix.Sca128_Alt_NoPairInFile_Helps;
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_NoPairInFile_PlainHint;
+var
+  Src : string;
 begin
   // Gegenprobe: eine andere Familie, ein Aufruf derselben Familie, der
   // schon Invariant uebergibt (auch ueber zwei Zeilen), ein Member gleichen
-  // Namens (eine andere Routine) und ein Kommentar sperren nicht.
+  // Namens (eine andere Routine) und ein Kommentar nennt der Hinweis nicht.
+  Src := InUnit(['  r := DateToStr(d);', '  x := StrToFloat(s);',
+    '  d := StrToDate(r,', '    TFormatSettings.Invariant);',
+    '  r := Fmt.DateToStr(d);', '  // DateToStr(d)']);
   AssertFixed(InUnit(['  r := DateToStr(d, TFormatSettings.Invariant);',
     '  x := StrToFloat(s);',
     '  d := StrToDate(r,', '    TFormatSettings.Invariant);',
-    '  r := Fmt.DateToStr(d);', '  // DateToStr(d)']),
-    InUnit(['  r := DateToStr(d);', '  x := StrToFloat(s);',
-    '  d := StrToDate(r,', '    TFormatSettings.Invariant);',
-    '  r := Fmt.DateToStr(d);', '  // DateToStr(d)']), BODY_LINE,
+    '  r := Fmt.DateToStr(d);', '  // DateToStr(d)']), Src, BODY_LINE,
     Msg('datetostr'), True);
+  Assert.AreEqual('B', PairHintOf(Src, BODY_LINE));
+  // Ohne Aufruf auf der Zeile bleibt der Grundhinweis.
+  Assert.AreEqual('B', PairHintOf(Src, BODY_LINE - 1));
 end;
 
 {$IFNDEF FPC}
@@ -665,27 +687,30 @@ end;
 
 procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_RoundTripAlt;
 begin
-  // Je Familie EIN Aufruf: seit dem Realworld-Test rwE29 sperrt der
-  // Alt-Weg, solange die Datei einen weiteren derselben Familie ohne
-  // Invariant ruft (Paar-Bruch) - bis dahin stand hier dazu
-  // 'r := FormatCurr(''0.00'', x);', das jetzt StrToCurr sperrt (und
-  // umgekehrt; Sca128_Detector_PairInFile_OnlyMainWay).
   Assert.AreEqual(InUnit([
     '  r := DateTimeToStr(d, TFormatSettings.Invariant);',
-    '  x := StrToCurr(s, TFormatSettings.Invariant);']),
+    '  x := StrToCurr(s, TFormatSettings.Invariant);',
+    '  r := FormatCurr(''0.00'', x, TFormatSettings.Invariant);']),
     FixAll(InUnit([
     '  r := DateTimeToStr(d);',
-    '  x := StrToCurr(s);']), True));
+    '  x := StrToCurr(s);',
+    '  r := FormatCurr(''0.00'', x);']), True));
 end;
 
-procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_PairInFile_OnlyMainWay;
+procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_PairInFile_HintNamesLine;
 var
-  Src  : string;
-  Seen : TArray<TSeen>;
-  O    : TRdxFixOutcome;
+  Src, Base : string;
+  Seen      : TArray<TSeen>;
+  O         : TRdxFixOutcome;
 begin
-  // Der echte Detektor meldet beide Zeilen; der Alt-Weg sperrt je die eine
-  // mit Blick auf die andere, der Hauptweg behebt beide.
+  // Entscheid M2 (Review e/HilfeFixC): der echte Detektor meldet beide
+  // Zeilen; der Alt-Weg bleibt angeboten, sein Hinweis nennt die andere
+  // Zeile (Paar-Bruch); bis dahin sperrte er. Den Grundhinweis des
+  // Adapters liefert eine Quelle ohne Gegenstueck.
+  Src := InUnit(['  r := DateTimeToStr(d);']);
+  O := TablePlan(Src, Detect(Src)[0], True);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Base := O.Hint;
   Src := InUnit(['  x := StrToCurr(s);', '  r := FormatCurr(''0.00'', x);']);
   Seen := Detect(Src);
   Assert.AreEqual<Integer>(2, Length(Seen), 'zwei Funde');
@@ -693,11 +718,10 @@ begin
     Seen[0] := Seen[1];
   Assert.AreEqual<Integer>(BODY_LINE, Seen[0].Line, 'Fund der StrToCurr-Zeile');
   O := TablePlan(Src, Seen[0], True);
-  Assert.IsFalse(O.Enabled, 'Alt-Weg gesperrt');
-  Assert.AreEqual(_(R_FS_PAIR, [BODY_LINE + 1, 'FormatCurr', MsgByHand]),
-    O.Reason);
-  Assert.AreEqual(InUnit(['  x := StrToCurr(s, FormatSettings);',
-    '  r := FormatCurr(''0.00'', x, FormatSettings);']), FixAll(Src, False));
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.ChangesBehavior, 'aendert Verhalten');
+  Assert.AreEqual(_(R_FS_PAIR_HINT, [Base, BODY_LINE + 1, 'FormatCurr']),
+    O.Hint);
 end;
 
 procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_ContinuedStatement_NoHelp;
