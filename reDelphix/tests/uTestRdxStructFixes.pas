@@ -41,6 +41,9 @@ type
     // Review R3-04 (Charge FC): ein verschobener Fund auf dem Variantenteil
     // eines Records bekommt kein else.
     [Test] procedure Sca168_VariantRecord_Refused;
+    // rwE29 (delphimvcframework MainFormU.pas:30): ein Eintrag am
+    // Zeilenende zog beim Loeschen die Folgezeile herauf.
+    [Test] procedure Sca007_LastOnLine_KeepsLineBreak;
   end;
 
 implementation
@@ -444,6 +447,50 @@ begin
     '  case X of', '    1: ;', '  end;']), 6, '', R), 'Direktive vor dem case');
   Assert.IsTrue(Pos('offenen ( und dem case', R) > 0, R);
   Assert.IsTrue(Pos('Variantenteil', R) = 0, R);
+end;
+
+procedure TTestRdxStructFixes.Sca007_LastOnLine_KeepsLineBreak;
+var
+  R, Src : string;
+  C      : TRdxUsesClause;
+begin
+  // Muster der Fundstelle (minimiert): 'Vcl.Graphics,' steht als letzter
+  // Eintrag am Ende von Zeile 4, die Klausel geht auf Zeile 5 weiter. Bis
+  // rwE29 reichte der Schnitt bis vor 'Vcl.Controls' und frass Umbruch und
+  // Einrueckung: 'uses' / '  System.Classes, Vcl.Controls, Vcl.Forms;'.
+  Src := Join(['unit u;', 'interface', 'uses',
+    '  System.Classes, Vcl.Graphics,', '  Vcl.Controls, Vcl.Forms;',
+    'implementation', 'end.']);
+  C := Clause(3, [Entry(4, 3, 'System.Classes'), Entry(4, 19, 'Vcl.Graphics'),
+    Entry(5, 3, 'Vcl.Controls'), Entry(5, 17, 'Vcl.Forms')]);
+  Assert.AreEqual(Join(['unit u;', 'interface', 'uses', '  System.Classes,',
+    '  Vcl.Controls, Vcl.Forms;', 'implementation', 'end.']),
+    FixUses(Src, C, 1, R), 'Zeilenende: ' + R);
+  // Leerraum hinter dem Komma geht mit (keine Leerzeichen am Zeilenende).
+  Src := Join(['unit u;', 'interface', 'uses',
+    '  System.Classes, Vcl.Graphics,   ', '  Vcl.Controls, Vcl.Forms;',
+    'implementation', 'end.']);
+  Assert.AreEqual(Join(['unit u;', 'interface', 'uses', '  System.Classes,',
+    '  Vcl.Controls, Vcl.Forms;', 'implementation', 'end.']),
+    FixUses(Src, C, 1, R), 'Zeilenende mit Leerraum: ' + R);
+  // Gegenproben: der erste Eintrag der Folgezeile und der erste der
+  // Klausel bleiben beim Schnitt bis vor den naechsten Eintrag.
+  Src := Join(['unit u;', 'interface', 'uses',
+    '  System.Classes, Vcl.Graphics,', '  Vcl.Controls, Vcl.Forms;',
+    'implementation', 'end.']);
+  Assert.AreEqual(Join(['unit u;', 'interface', 'uses',
+    '  System.Classes, Vcl.Graphics,', '  Vcl.Forms;', 'implementation',
+    'end.']), FixUses(Src, C, 2, R), 'Zeilenanfang: ' + R);
+  Assert.AreEqual(Join(['unit u;', 'interface', 'uses', '  Vcl.Graphics,',
+    '  Vcl.Controls, Vcl.Forms;', 'implementation', 'end.']),
+    FixUses(Src, C, 0, R), 'erster der Klausel: ' + R);
+  // Ein Kommentar hinter dem Komma: der neue Schnitt greift nicht, der
+  // alte bis vor den naechsten Eintrag sperrt wie bisher.
+  Src := Join(['unit u;', 'interface', 'uses',
+    '  System.Classes, Vcl.Graphics, // TBitmap', '  Vcl.Controls, Vcl.Forms;',
+    'implementation', 'end.']);
+  Assert.AreEqual('', FixUses(Src, C, 1, R), 'Kommentar dahinter');
+  Assert.IsTrue(Pos('Kommentar', R) > 0, R);
 end;
 
 initialization
