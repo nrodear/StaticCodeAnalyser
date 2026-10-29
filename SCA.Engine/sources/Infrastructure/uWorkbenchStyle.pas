@@ -62,8 +62,8 @@ type
     // Workbench-Seite, je bei ihrer Option EditorHelp); der
     // Detektor-Katalog und ein Bericht mit Option aus nicht - deren
     // Stylesheet bleibt dadurch byte-gleich (Nico 2026-10-29).
-    // .eh-zeile setzt die Liste in EINE Zeile ('Editorhilfen: A, Mittelpunkt, B').
-    // Nur Token-Farben: Themes brauchen keine eigenen Regeln.
+    // .eh-zeile setzt die Liste in EINE Zeile ('Editorhilfen: A . B',
+    // Trenner ist ein Mittelpunkt U+00B7). Nur Token-Farben: Themes brauchen keine eigenen Regeln.
     class function EditorHilfenCss: string; static;
   end;
 

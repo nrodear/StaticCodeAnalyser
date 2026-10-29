@@ -1299,6 +1299,15 @@ begin
   // Der Drawer haengt die Liste ein - Definition UND Aufruf.
   Assert.IsTrue(H.Contains('function fillEditorHelps(root)'),
     'fillEditorHelps fehlt');
+  // Die Ein-Zeilen-Optik haengt seit dem geteilten CSS an .eh-zeile
+  // (TWorkbenchStyle.EditorHilfenCss) - das Skript muss die Klasse am
+  // gefuellten Verweis setzen, sonst stuende die Liste im Drawer
+  // untereinander.
+  Assert.IsTrue(H.Contains('        ref.classList.add("eh-zeile");'),
+    'fillEditorHelps setzt eh-zeile am Verweis nicht');
+  Assert.IsTrue(H.Contains(
+    '.eh-zeile .eh-list,.eh-zeile .eh-list li{display:inline;}'),
+    'geteiltes Listen-CSS (TWorkbenchStyle.EditorHilfenCss) fehlt');
   Assert.IsTrue(H.Contains('      fillEditorHelps(inhalt);'),
     'openDrawer ruft fillEditorHelps nicht');
   // Wirkung und Zeilenkopf uebersetzbar, in allen drei Sprachbloecken.

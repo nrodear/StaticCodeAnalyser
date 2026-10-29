@@ -3,7 +3,10 @@ unit uWorkbenchI18n;
 // Die Oberflaechentexte BEIDER Workbench-HTML-Seiten in de/en/fr
 // (Nutzerauftrag 07.09.: "die neuen html Seiten in alle Sprachen en
 // und fr uebersetzen"). Schwester von uWorkbenchStyle: dort das
-// geteilte CSS, hier der geteilte Text.
+// geteilte CSS, hier der geteilte Text. Seit 2026-10-29 liest auch
+// der CLI-Bericht (uExportHtml) die Editorhilfen-Texte von hier
+// (wtEditorhilfen, wtWirkung*) - als Vorgabe 'de' und fuer sein
+// I18N-Woerterbuch ueber TJs; die Seite selbst bleibt umschaltbar.
 //
 // WARUM SERVERSEITIG GEBACKEN statt Laufzeit-Umschalter wie im
 // V1-Report: eine Workbench-Seite traegt ihre Sprache in MEHR als den
