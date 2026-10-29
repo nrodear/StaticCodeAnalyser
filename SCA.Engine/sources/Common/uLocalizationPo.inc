@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6899 Zeilen, 318455 Bytes
-  CPoLines_de: array[0..6898] of string = (
+  // i18n\de.po - 6905 Zeilen, 319064 Bytes
+  CPoLines_de: array[0..6904] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6913,7 +6913,13 @@ const
     'msgstr "die Routine wird als Callback '#$00FC'bergeben (%s in Zeile %d) - raise br'#$00E4'che ihren Aufrufer"',
     '',
     'msgid "the method is the write accessor of a property (line %d) - an empty setter ignores assignments on purpose; raise would make every assignment fail"',
-    'msgstr "die Methode ist der Schreibzugriff einer Eigenschaft (Zeile %d) - ein leerer Setter ignoriert Zuweisungen mit Absicht; mit raise scheiterte jede Zuweisung"'
+    'msgstr "die Methode ist der Schreibzugriff einer Eigenschaft (Zeile %d) - ein leerer Setter ignoriert Zuweisungen mit Absicht; mit raise scheiterte jede Zuweisung"',
+    '',
+    'msgid "the handler is in %s - \"raise;\" would skip the rest of it (inherited, freeing) and let an exception leave the destructor"',
+    'msgstr "der Handler steht in %s - \"raise;\" '#$00FC'berspr'#$00E4'nge den Rest (inherited, Freigaben) und lie'#$00DF'e eine Exception aus dem Destruktor"',
+    '',
+    'msgid "the try only releases (%s) - an error while freeing or closing is swallowed on purpose so that the cleanup after it still runs; \"raise;\" would skip it"',
+    'msgstr "der try-Teil gibt nur frei (%s) - ein Fehler beim Freigeben oder Schlie'#$00DF'en wird mit Absicht geschluckt, damit das Aufr'#$00E4'umen danach l'#$00E4'uft; \"raise;\" '#$00FC'berspr'#$00E4'nge es"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7188,8 +7194,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6895 Zeilen, 331415 Bytes
-  CPoLines_fr: array[0..6894] of string = (
+  // i18n\fr.po - 6901 Zeilen, 332039 Bytes
+  CPoLines_fr: array[0..6900] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14084,7 +14090,13 @@ const
     'msgstr "la routine est pass'#$00E9'e comme callback (%s '#$00E0' la ligne %d) - raise casserait son appelant"',
     '',
     'msgid "the method is the write accessor of a property (line %d) - an empty setter ignores assignments on purpose; raise would make every assignment fail"',
-    'msgstr "la m'#$00E9'thode est l''accesseur en '#$00E9'criture d''une propri'#$00E9't'#$00E9' (ligne %d) - un setter vide ignore les affectations expr'#$00E8's ; avec raise, chaque affectation '#$00E9'chouerait"'
+    'msgstr "la m'#$00E9'thode est l''accesseur en '#$00E9'criture d''une propri'#$00E9't'#$00E9' (ligne %d) - un setter vide ignore les affectations expr'#$00E8's ; avec raise, chaque affectation '#$00E9'chouerait"',
+    '',
+    'msgid "the handler is in %s - \"raise;\" would skip the rest of it (inherited, freeing) and let an exception leave the destructor"',
+    'msgstr "le gestionnaire est dans %s - \"raise;\" sauterait le reste (inherited, lib'#$00E9'rations) et laisserait une exception sortir du destructeur"',
+    '',
+    'msgid "the try only releases (%s) - an error while freeing or closing is swallowed on purpose so that the cleanup after it still runs; \"raise;\" would skip it"',
+    'msgstr "le try ne fait que lib'#$00E9'rer (%s) - une erreur lors de la lib'#$00E9'ration ou de la fermeture est aval'#$00E9'e expr'#$00E8's pour que le nettoyage qui suit s''ex'#$00E9'cute ; \"raise;\" le sauterait"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

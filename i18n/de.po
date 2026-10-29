@@ -6897,3 +6897,9 @@ msgstr "die Routine wird als Callback übergeben (%s in Zeile %d) - raise bräch
 
 msgid "the method is the write accessor of a property (line %d) - an empty setter ignores assignments on purpose; raise would make every assignment fail"
 msgstr "die Methode ist der Schreibzugriff einer Eigenschaft (Zeile %d) - ein leerer Setter ignoriert Zuweisungen mit Absicht; mit raise scheiterte jede Zuweisung"
+
+msgid "the handler is in %s - \"raise;\" would skip the rest of it (inherited, freeing) and let an exception leave the destructor"
+msgstr "der Handler steht in %s - \"raise;\" überspränge den Rest (inherited, Freigaben) und ließe eine Exception aus dem Destruktor"
+
+msgid "the try only releases (%s) - an error while freeing or closing is swallowed on purpose so that the cleanup after it still runs; \"raise;\" would skip it"
+msgstr "der try-Teil gibt nur frei (%s) - ein Fehler beim Freigeben oder Schließen wird mit Absicht geschluckt, damit das Aufräumen danach läuft; \"raise;\" überspränge es"

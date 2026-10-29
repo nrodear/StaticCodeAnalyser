@@ -6893,3 +6893,9 @@ msgstr "la routine est passée comme callback (%s à la ligne %d) - raise casser
 
 msgid "the method is the write accessor of a property (line %d) - an empty setter ignores assignments on purpose; raise would make every assignment fail"
 msgstr "la méthode est l'accesseur en écriture d'une propriété (ligne %d) - un setter vide ignore les affectations exprès ; avec raise, chaque affectation échouerait"
+
+msgid "the handler is in %s - \"raise;\" would skip the rest of it (inherited, freeing) and let an exception leave the destructor"
+msgstr "le gestionnaire est dans %s - \"raise;\" sauterait le reste (inherited, libérations) et laisserait une exception sortir du destructeur"
+
+msgid "the try only releases (%s) - an error while freeing or closing is swallowed on purpose so that the cleanup after it still runs; \"raise;\" would skip it"
+msgstr "le try ne fait que libérer (%s) - une erreur lors de la libération ou de la fermeture est avalée exprès pour que le nettoyage qui suit s'exécute ; \"raise;\" le sauterait"

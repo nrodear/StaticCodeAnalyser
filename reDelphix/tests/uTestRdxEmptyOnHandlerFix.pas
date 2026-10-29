@@ -44,6 +44,13 @@ type
     // rwE29 (HeidiSQL table_editor.pas:3209): hinter dem try..except steht
     // die Freigabe zu einer Sperre vor dem try - 'raise;' ueberspraenge sie.
     [Test] procedure Sca159_CleanupAfterExcept_NoHelp;
+    // rwE30 (jvcl JvParameterList.pas:977): 'do' / naechste Zeile ';'.
+    [Test] procedure Sca159_SemicolonNextLine_Helps;
+    // rwE30 (HeidiSQL dbconnection.pas:10202): Handler im Destruktor.
+    [Test] procedure Sca159_Destructor_NoHelp;
+    // rwE30 (HeidiSQL dbconnection.pas:2928/2968): der try-Teil gibt nur
+    // frei, danach folgt weiteres Aufraeumen.
+    [Test] procedure Sca159_ReleaseOnly_NoHelp;
     {$IFNDEF FPC}
     [Test] procedure Sca159_Detector_CatalogExample;
     [Test] procedure Sca159_Detector_BlockForm;
@@ -328,8 +335,10 @@ end;
 
 procedure TTestRdxEmptyOnHandlerFix.Sca159_Layout_NoHelp;
 begin
-  // Das ';' auf der Folgezeile.
-  AssertNoFix(['    on E: EFoo do', '    ;'], _(R_EOH_LAYOUT));
+  // Das ';' zwei Zeilen tiefer bzw. nicht am Zeilenanfang der Folgezeile
+  // (das ';' allein am Anfang der Folgezeile hilft seit rwE30,
+  // Sca159_SemicolonNextLine_Helps).
+  AssertNoFix(['    on E: EFoo do', '', '    ;'], _(R_EOH_LAYOUT));
   // Der Kopf ueber zwei Zeilen: auf der gemeldeten Zeile steht kein Kopf.
   AssertNoFix(['    on E: EFoo', '    do ;'], Moved);
 end;
@@ -367,6 +376,85 @@ begin
     '  L.Items.EndUpdate;', 'end;', 'end.']);
   Assert.AreEqual(StringReplace(Src, 'on EDbError do;', 'on EDbError do raise;',
     []), FixAt(Src, 9, Msg('EDbError'), R), R);
+end;
+
+procedure TTestRdxEmptyOnHandlerFix.Sca159_SemicolonNextLine_Helps;
+var
+  R, Src : string;
+begin
+  // jvcl JvParameterList.pas:977 (minimiert): bis rwE30 gesperrt (Layout,
+  // rot ohne Fix). 'raise' kommt vor das ';', die Zeilen bleiben.
+  Src := Join(['unit t;', 'interface', 'implementation',
+    'procedure TJvBaseParameter.SetWinControlData(Value: Variant);', 'begin',
+    '  if Assigned(JvDynControlData) then', '    try',
+    '      JvDynControlData.ControlValue := Value;', '    except',
+    '      on E: EConvertError do', '        ;',
+    '      on E: EVariantTypeCastError do', '        ;', '    end;', 'end;',
+    'end.']);
+  Assert.AreEqual(StringReplace(Src, #13#10'        ;'#13#10'      on E: EVariant',
+    #13#10'        raise;'#13#10'      on E: EVariant', []),
+    FixAt(Src, 10, Msg('EConvertError'), R), R);
+  Assert.AreEqual(StringReplace(Src, #13#10'        ;'#13#10'    end;',
+    #13#10'        raise;'#13#10'    end;', []),
+    FixAt(Src, 12, Msg('EVariantTypeCastError'), R), R);
+  // Gegenprobe: ein Kommentar auf der Zeile des ';' bleibt Absicht.
+  AssertNoFix(['    on E: EFoo do', '      ; // egal'], _(R_EOH_COMMENT));
+end;
+
+procedure TTestRdxEmptyOnHandlerFix.Sca159_Destructor_NoHelp;
+var
+  R, Src : string;
+begin
+  // HeidiSQL dbconnection.pas:10202 (minimiert): 'raise;' im Destruktor
+  // uebersprange 'inherited;' - ohne Fix angeboten (rot).
+  Src := Join(['unit t;', 'interface', 'implementation',
+    'destructor TSQLiteGridRows.Destroy;', 'begin', '  try',
+    '    if Statement <> nil then', '      Prepare(Statement);', '  except',
+    '    on E:Exception do;', '  end;', '  inherited;', 'end;', 'end.']);
+  Assert.AreEqual('', FixAt(Src, 10, Msg('Exception'), R), 'Destruktor');
+  Assert.AreEqual(_(R_EOH_DESTRUCTOR, ['TSQLiteGridRows.Destroy']), R);
+  // BeforeDestruction ebenso.
+  Assert.AreEqual('', FixAt(StringReplace(Src, 'destructor TSQLiteGridRows.Destroy',
+    'procedure TSQLiteGridRows.BeforeDestruction', []), 10, Msg('Exception'), R),
+    'BeforeDestruction');
+  // Gegenprobe: dieselbe Form in einer gewoehnlichen Methode hilft.
+  Src := StringReplace(Src, 'destructor TSQLiteGridRows.Destroy',
+    'procedure TSQLiteGridRows.Reset', []);
+  Assert.AreEqual(StringReplace(Src, 'on E:Exception do;',
+    'on E:Exception do raise;', []), FixAt(Src, 10, Msg('Exception'), R), R);
+end;
+
+procedure TTestRdxEmptyOnHandlerFix.Sca159_ReleaseOnly_NoHelp;
+var
+  R, Src : string;
+begin
+  // HeidiSQL dbconnection.pas:2928 (minimiert): der try-Teil gibt nur frei,
+  // danach FHandle := nil und EndSSHTunnel - ohne Fix angeboten (rot).
+  Src := Join(['unit t;', 'interface', 'implementation', 'procedure P;',
+    'begin', '  try', '    FLib.PQfinish(FHandle); // free the memory',
+    '  except', '    on E:EAccessViolation do;', '  end;', '  FHandle := nil;',
+    '  EndSSHTunnel;', 'end;', 'end.']);
+  Assert.AreEqual('', FixAt(Src, 9, Msg('EAccessViolation'), R), 'PQfinish');
+  Assert.AreEqual(_(R_EOH_RELEASE, ['PQfinish']), R);
+  // dbconnection.pas:2968: unter einer Bedingung.
+  Src := Join(['unit t;', 'interface', 'implementation', 'procedure P;',
+    'begin', '  try', '    if FActive then', '      FLib.PQfinish(FHandle);',
+    '  except', '    on E:EAccessViolation do;', '  end;', '  FActive := False;',
+    'end;', 'end.']);
+  Assert.AreEqual('', FixAt(Src, 10, Msg('EAccessViolation'), R), 'if');
+  Assert.AreEqual(_(R_EOH_RELEASE, ['PQfinish']), R);
+  // Gegenprobe: mehr als eine Anweisung im try - die Hilfe bleibt.
+  Src := Join(['unit t;', 'interface', 'implementation', 'procedure P;',
+    'begin', '  try', '    Load;', '    Obj.Free;', '  except',
+    '    on E:EFoo do;', '  end;', 'end;', 'end.']);
+  Assert.AreEqual(StringReplace(Src, 'on E:EFoo do;', 'on E:EFoo do raise;', []),
+    FixAt(Src, 10, Msg('EFoo'), R), R);
+  // Gegenprobe: ein Aufruf ohne Freigabe-Namen hilft (FreeSpace ist keiner).
+  Src := Join(['unit t;', 'interface', 'implementation', 'procedure P;',
+    'begin', '  try', '    X := FreeSpace(D);', '  except',
+    '    on E:EFoo do;', '  end;', 'end;', 'end.']);
+  Assert.AreEqual(StringReplace(Src, 'on E:EFoo do;', 'on E:EFoo do raise;', []),
+    FixAt(Src, 9, Msg('EFoo'), R), R);
 end;
 
 procedure TTestRdxEmptyOnHandlerFix.Sca159_Adapter_Outcome;
