@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6784 Zeilen, 307508 Bytes
-  CPoLines_de: array[0..6783] of string = (
+  // i18n\de.po - 6790 Zeilen, 308095 Bytes
+  CPoLines_de: array[0..6789] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6798,7 +6798,13 @@ const
     'msgstr "das Include %s tr'#$00E4'gt Spuren '#$00E4'lterer Compiler (%s, Zeile %d) - TFormatSettings.Invariant ist erst ab Delphi 10.3 gepr'#$00FC'ft; %s"',
     '',
     'msgid "the include %s shows traces of older compilers (%s, line %d) - the global variable FormatSettings exists only from Delphi XE on; %s"',
-    'msgstr "das Include %s tr'#$00E4'gt Spuren '#$00E4'lterer Compiler (%s, Zeile %d) - die globale Variable FormatSettings gibt es erst ab Delphi XE; %s"'
+    'msgstr "das Include %s tr'#$00E4'gt Spuren '#$00E4'lterer Compiler (%s, Zeile %d) - die globale Variable FormatSettings gibt es erst ab Delphi XE; %s"',
+    '',
+    'msgid "the literal %s does not fit the date and time format of TFormatSettings.Invariant (MM/dd/yyyy hh:nn:ss) - %s would raise EConvertError"',
+    'msgstr "das Literal %s passt nicht zum Datums- und Zeitformat von TFormatSettings.Invariant (MM/dd/yyyy hh:nn:ss) - %s w'#$00FC'rfe EConvertError"',
+    '',
+    'msgid "the literal %s does not fit the number format of TFormatSettings.Invariant (decimal point, no thousands separator) - %s would raise EConvertError"',
+    'msgstr "das Literal %s passt nicht zum Zahlenformat von TFormatSettings.Invariant (Dezimalpunkt, kein Tausendertrenner) - %s w'#$00FC'rfe EConvertError"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7073,8 +7079,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6780 Zeilen, 319992 Bytes
-  CPoLines_fr: array[0..6779] of string = (
+  // i18n\fr.po - 6786 Zeilen, 320612 Bytes
+  CPoLines_fr: array[0..6785] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -13854,7 +13860,13 @@ const
     'msgstr "le fichier include %s porte des traces de compilateurs plus anciens (%s, ligne %d) - TFormatSettings.Invariant n''est v'#$00E9'rifi'#$00E9' qu'''#$00E0' partir de Delphi 10.3; %s"',
     '',
     'msgid "the include %s shows traces of older compilers (%s, line %d) - the global variable FormatSettings exists only from Delphi XE on; %s"',
-    'msgstr "le fichier include %s porte des traces de compilateurs plus anciens (%s, ligne %d) - la variable globale FormatSettings n''existe qu'''#$00E0' partir de Delphi XE; %s"'
+    'msgstr "le fichier include %s porte des traces de compilateurs plus anciens (%s, ligne %d) - la variable globale FormatSettings n''existe qu'''#$00E0' partir de Delphi XE; %s"',
+    '',
+    'msgid "the literal %s does not fit the date and time format of TFormatSettings.Invariant (MM/dd/yyyy hh:nn:ss) - %s would raise EConvertError"',
+    'msgstr "le litt'#$00E9'ral %s ne correspond pas au format de date et d''heure de TFormatSettings.Invariant (MM/dd/yyyy hh:nn:ss) - %s l'#$00E8'verait EConvertError"',
+    '',
+    'msgid "the literal %s does not fit the number format of TFormatSettings.Invariant (decimal point, no thousands separator) - %s would raise EConvertError"',
+    'msgstr "le litt'#$00E9'ral %s ne correspond pas au format num'#$00E9'rique de TFormatSettings.Invariant (point d'#$00E9'cimal, sans s'#$00E9'parateur de milliers) - %s l'#$00E8'verait EConvertError"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

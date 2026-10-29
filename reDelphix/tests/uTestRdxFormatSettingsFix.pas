@@ -47,6 +47,9 @@ type
     [Test] procedure Sca128_With_NoHelp;
     [Test] procedure Sca128_OldCompiler_Blocks;
     [Test] procedure Sca128_Alt_FpcOrOwnType_NoHelp;
+    // ---- Realworld-Test rwE29: Literal gegen Invariant ----
+    [Test] procedure Sca128_Alt_LiteralNotInvariant_NoHelp;
+    [Test] procedure Sca128_Alt_LiteralInvariant_Helps;
   end;
 
 {$IFNDEF FPC}
@@ -458,6 +461,58 @@ begin
     ['  r := DateToStr(d);']);
   AssertRefused(Src, BODY_LINE + 1, Msg('datetostr'), _(R_FS_OWN_TYPE, [6]),
     True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_LiteralNotInvariant_NoHelp;
+var
+  Src : string;
+begin
+  // rwE29, delphimvcframework ...\Serializers.JsonDataObjectsTestU.pas:1221:
+  // StrToDateTime('17/02/2017 16:37:50') mit TFormatSettings.Invariant
+  // (MM/dd/yyyy) wirft sicher EConvertError (Monat 17). Ohne die Sperre
+  // boete der Alt-Weg es an (nichts sonst in der Datei sperrt) - der
+  // Hauptweg bleibt (gleiche Bedeutung).
+  Src := InUnit(['  d := StrToDateTime(''17/02/2017 16:37:50'');']);
+  AssertRefused(Src, BODY_LINE, Msg('strtodatetime'),
+    _(R_FS_LIT_DATE, ['''17/02/2017 16:37:50''', 'StrToDateTime']), True);
+  AssertFixed(InUnit(['  d := StrToDateTime(''17/02/2017 16:37:50'', '
+    + 'FormatSettings);']), Src, BODY_LINE, Msg('strtodatetime'));
+  // Dieselbe Datei, Zeile davor: StrToDate('15/10/1987').
+  AssertRefused(InUnit(['  d := StrToDate(''15/10/1987'');']), BODY_LINE,
+    Msg('strtodate'), _(R_FS_LIT_DATE, ['''15/10/1987''', 'StrToDate']),
+    True);
+  // Uhrzeit ohne Minuten, Zahl mit Komma bzw. Tausendertrenner.
+  AssertRefused(InUnit(['  d := StrToTime(''16 Uhr'');']), BODY_LINE,
+    Msg('strtotime'), _(R_FS_LIT_DATE, ['''16 Uhr''', 'StrToTime']), True);
+  AssertRefused(InUnit(['  x := StrToFloat(''1,5'');']), BODY_LINE,
+    Msg('strtofloat'), _(R_FS_LIT_NUMBER, ['''1,5''', 'StrToFloat']), True);
+  AssertRefused(InUnit(['  x := StrToCurr(''1.234,50'');']), BODY_LINE,
+    Msg('strtocurr'), _(R_FS_LIT_NUMBER, ['''1.234,50''', 'StrToCurr']),
+    True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_LiteralInvariant_Helps;
+begin
+  // Gegenprobe: Literale im Invariant-Format (und Aufrufe ohne Literal)
+  // bekommen den Alt-Weg.
+  AssertFixed(InUnit(['  d := StrToDateTime(''02/17/2017 16:37:50'', '
+    + 'TFormatSettings.Invariant);']),
+    InUnit(['  d := StrToDateTime(''02/17/2017 16:37:50'');']), BODY_LINE,
+    Msg('strtodatetime'), True);
+  AssertFixed(InUnit(['  d := StrToTime(''16:40:50'', TFormatSettings.Invariant);']),
+    InUnit(['  d := StrToTime(''16:40:50'');']), BODY_LINE, Msg('strtotime'),
+    True);
+  AssertFixed(InUnit(['  d := StrToDate(''12/31/1999'', TFormatSettings.Invariant);']),
+    InUnit(['  d := StrToDate(''12/31/1999'');']), BODY_LINE, Msg('strtodate'),
+    True);
+  AssertFixed(InUnit(['  x := StrToFloat(''-1.5e3'', TFormatSettings.Invariant);']),
+    InUnit(['  x := StrToFloat(''-1.5e3'');']), BODY_LINE, Msg('strtofloat'),
+    True);
+  // Ein Literal in einem Schreib-Aufruf liest niemand (Formatmuster).
+  AssertFixed(InUnit(['  r := FormatDateTime(''dd/mm/yyyy'', d, '
+    + 'TFormatSettings.Invariant);']),
+    InUnit(['  r := FormatDateTime(''dd/mm/yyyy'', d);']), BODY_LINE,
+    Msg('formatdatetime'), True);
 end;
 
 {$IFNDEF FPC}

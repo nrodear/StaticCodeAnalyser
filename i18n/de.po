@@ -6782,3 +6782,9 @@ msgstr "das Include %s trägt Spuren älterer Compiler (%s, Zeile %d) - TFormatS
 
 msgid "the include %s shows traces of older compilers (%s, line %d) - the global variable FormatSettings exists only from Delphi XE on; %s"
 msgstr "das Include %s trägt Spuren älterer Compiler (%s, Zeile %d) - die globale Variable FormatSettings gibt es erst ab Delphi XE; %s"
+
+msgid "the literal %s does not fit the date and time format of TFormatSettings.Invariant (MM/dd/yyyy hh:nn:ss) - %s would raise EConvertError"
+msgstr "das Literal %s passt nicht zum Datums- und Zeitformat von TFormatSettings.Invariant (MM/dd/yyyy hh:nn:ss) - %s würfe EConvertError"
+
+msgid "the literal %s does not fit the number format of TFormatSettings.Invariant (decimal point, no thousands separator) - %s would raise EConvertError"
+msgstr "das Literal %s passt nicht zum Zahlenformat von TFormatSettings.Invariant (Dezimalpunkt, kein Tausendertrenner) - %s würfe EConvertError"

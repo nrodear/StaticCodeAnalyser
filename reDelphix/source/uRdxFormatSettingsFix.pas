@@ -65,7 +65,13 @@ unit uRdxFormatSettingsFix;
 //     10.3 fragt (belegt ist Invariant in den Docwiki-Staenden ab Rio -
 //     dieselbe Schwelle wie SCA014, FLOOR_INLINE_DECL), ein eigenes
 //     TFormatSettings deklariert; SCA059 dazu bei einer Waehrungs-Spec m
-//     (Invariant schreibt das allgemeine Waehrungszeichen).
+//     (Invariant schreibt das allgemeine Waehrungszeichen); SCA128, wenn
+//     ein Lese-Aufruf (StrToDate, StrToTime, StrToDateTime, StrToFloat,
+//     StrToCurr) ein Literal liest, das nicht zum Invariant-Format passt
+//     (rwE29: StrToDateTime('17/02/2017 16:37:50') - Monat 17, sicherer
+//     EConvertError; LiteralMisfit).
+// Was nur die Platte weiss (Projektdateien, Includes), prueft der Adapter
+// in uRdxFixTable (FormatSettingsDiskCheck, rwE29).
 // Der Bereich der Ersetzung beginnt hinter dem letzten Zeichen des letzten
 // Arguments (nie auf einer leeren Zeile) und endet hinter der letzten
 // schliessenden Klammer; ein Leerraum vor der Klammer bleibt dahinter.
@@ -109,6 +115,14 @@ const
   R_FS_OLD_INVARIANT = 'the file asks for compilers up to Delphi 10.3 (%s, '
     + 'line %d) - TFormatSettings.Invariant is only checked from there on';
   R_FS_OWN_TYPE = 'the file declares its own TFormatSettings (line %d)';
+  // Alt-Weg (rwE29): das Literal, das der Aufruf liest, passt nicht zu
+  // TFormatSettings.Invariant - %s das Literal (mit Quotes), %s der Aufruf.
+  R_FS_LIT_DATE = 'the literal %s does not fit the date and time format of '
+    + 'TFormatSettings.Invariant (MM/dd/yyyy hh:nn:ss) - %s would raise '
+    + 'EConvertError';
+  R_FS_LIT_NUMBER = 'the literal %s does not fit the number format of '
+    + 'TFormatSettings.Invariant (decimal point, no thousands separator) - %s '
+    + 'would raise EConvertError';
   R_FL_NO_SPEC = 'the message does not name the format string - analyse the '
     + 'file again';
   R_FL_NO_FORMAT = 'no Format call on the code columns of the reported line';
@@ -196,6 +210,13 @@ const
   SCOPE_STOPS: array[0..3] of string = ('implementation', 'initialization',
     'finalization', 'interface');
   MAX_FOLLOW_LINES = 30;
+  // Was ein Literal liest (LiteralMisfit, Alt-Weg): Zahl bzw. Datum/Uhrzeit.
+  PARSE_NUMBER: array[0..1] of string = ('strtofloat', 'strtocurr');
+  PARSE_DATE     = 'strtodate';
+  PARSE_TIME     = 'strtotime';
+  PARSE_DATETIME = 'strtodatetime';
+  MISFIT_NUMBER  = 'number';
+  MISFIT_DATE    = 'date';
   // Die globale Variable FormatSettings: FLOOR_SETTINGS_VAR (Delphi XE, FPC
   // ab 2.6; seit rwE29 in uRdxCompilerTraces). Wer nach XE fragt, baut auch
   // davor.
@@ -382,7 +403,10 @@ end;
 
 // Ist das erste Argument (ab AFrom bis zum ersten Komma, hoechstens bis
 // ATo) nur aus String-Literalen mit '+' gefuegt? Dann True und ihr Text
-// ('' als ein Quote) - so liest der Detektor den Formatstring.
+// ('' als ein Quote) - so liest der Detektor den Formatstring. Ein Literal,
+// das bis ATo reicht (das einzige Argument: StrToDate('..'), rwE29), zaehlt
+// auch - bis dahin lieferte die Funktion dort False (SCA059 fragt nur
+// Format mit zwei Argumenten, dort folgt immer ein Komma).
 function LiteralFirstArg(AMap: TRdxCodeMap; ALine, AFrom, ATo: Integer;
   out AText: string): Boolean;
 var
@@ -419,13 +443,192 @@ begin
       Exit;
     i := SkipBlanks(L, i);
     if i > ATo then
-      Exit;
+      Exit(True);
     if L[i] = ',' then
       Exit(True);
     if L[i] <> '+' then
       Exit;
     i := SkipBlanks(L, i + 1);
   end;
+end;
+
+// ---- Literal gegen TFormatSettings.Invariant (Alt-Weg, rwE29) ----
+// Invariant: ShortDateFormat 'MM/dd/yyyy', DateSeparator '/',
+// TimeSeparator ':', TimeAMString/TimePMString 'AM'/'PM', DecimalSeparator
+// '.'; TextToFloat nimmt keinen Tausendertrenner. Gelesen wird streng -
+// was nicht sicher passt, gilt als unpassend (die Hilfe sperrt; lieber
+// keine Hilfe als StrToDateTime('17/02/2017 ..') mit sicherem
+// EConvertError).
+
+// Ab APos 1..AMax Ziffern: True mit ihrem Wert, APos dahinter.
+function ReadNumber(const S: string; var APos: Integer; AMax: Integer;
+  out AValue: Integer): Boolean;
+var
+  Start : Integer;
+begin
+  Start := APos;
+  AValue := 0;
+  while (APos <= Length(S)) and (APos - Start < AMax)
+        and CharInSet(S[APos], ['0'..'9']) do
+  begin
+    AValue := AValue * 10 + Ord(S[APos]) - Ord('0');
+    Inc(APos);
+  end;
+  Result := (APos > Start)
+    and not ((APos <= Length(S)) and CharInSet(S[APos], ['0'..'9']));
+end;
+
+// 'M/d/yyyy' bzw. 'M/d' ab APos (Monat 1..12, Tag 1..31, Jahr 1..4
+// Ziffern); APos dahinter.
+function InvariantDateAt(const S: string; var APos: Integer): Boolean;
+var
+  M, D, Y : Integer;
+begin
+  Result := ReadNumber(S, APos, 2, M) and (M >= 1) and (M <= 12)
+    and (APos <= Length(S)) and (S[APos] = '/');
+  if not Result then Exit;
+  Inc(APos);
+  Result := ReadNumber(S, APos, 2, D) and (D >= 1) and (D <= 31);
+  if Result and (APos <= Length(S)) and (S[APos] = '/') then
+  begin
+    Inc(APos);
+    Result := ReadNumber(S, APos, 4, Y);
+  end;
+end;
+
+// 'h:n', 'h:n:s', 'h:n:s.z', dahinter wahlweise ' AM'/' PM' ab APos;
+// APos dahinter.
+function InvariantTimeAt(const S: string; var APos: Integer): Boolean;
+var
+  H, N, Sec, Z : Integer;
+  Rest         : string;
+begin
+  Result := ReadNumber(S, APos, 2, H) and (H <= 23)
+    and (APos <= Length(S)) and (S[APos] = ':');
+  if not Result then Exit;
+  Inc(APos);
+  Result := ReadNumber(S, APos, 2, N) and (N <= 59);
+  if Result and (APos <= Length(S)) and (S[APos] = ':') then
+  begin
+    Inc(APos);
+    Result := ReadNumber(S, APos, 2, Sec) and (Sec <= 59);
+    if Result and (APos <= Length(S)) and (S[APos] = '.') then
+    begin
+      Inc(APos);
+      Result := ReadNumber(S, APos, 3, Z);
+    end;
+  end;
+  if not Result then Exit;
+  Rest := UpperCase(Trim(Copy(S, APos, MaxInt)));
+  if (Rest = 'AM') or (Rest = 'PM') then
+  begin
+    Result := (H >= 1) and (H <= 12);
+    APos := Length(S) + 1;
+  end;
+end;
+
+// Liest StrToFloat/StrToCurr den Text ATrimmed mit Invariant?
+// [+-] Ziffern [. Ziffern] bzw. [+-] . Ziffern, dahinter wahlweise ein
+// Exponent (e/E [+-] Ziffern).
+function InvariantNumberFits(const ATrimmed: string): Boolean;
+var
+  i, n    : Integer;
+  Digits  : Integer;
+begin
+  n := Length(ATrimmed);
+  i := 1;
+  if (i <= n) and CharInSet(ATrimmed[i], ['+', '-']) then
+    Inc(i);
+  Digits := 0;
+  while (i <= n) and CharInSet(ATrimmed[i], ['0'..'9']) do
+  begin
+    Inc(i);
+    Inc(Digits);
+  end;
+  if (i <= n) and (ATrimmed[i] = '.') then
+  begin
+    Inc(i);
+    while (i <= n) and CharInSet(ATrimmed[i], ['0'..'9']) do
+    begin
+      Inc(i);
+      Inc(Digits);
+    end;
+  end;
+  if Digits = 0 then
+    Exit(False);
+  if (i <= n) and CharInSet(ATrimmed[i], ['e', 'E']) then
+  begin
+    Inc(i);
+    if (i <= n) and CharInSet(ATrimmed[i], ['+', '-']) then
+      Inc(i);
+    Digits := 0;
+    while (i <= n) and CharInSet(ATrimmed[i], ['0'..'9']) do
+    begin
+      Inc(i);
+      Inc(Digits);
+    end;
+    if Digits = 0 then
+      Exit(False);
+  end;
+  Result := i > n;
+end;
+
+// Passt das Literal AText zum Lesen durch ALow (klein) mit
+// TFormatSettings.Invariant? '' wenn ja bzw. ALow nichts liest, sonst die
+// Art: 'date' (Datum/Uhrzeit) oder 'number'.
+function LiteralMisfit(const ALow, AText: string): string;
+var
+  T : string;
+  P : Integer;
+  Ok : Boolean;
+begin
+  Result := '';
+  T := Trim(AText);
+  P := 1;
+  Ok := False;
+  if InList(ALow, PARSE_NUMBER) then
+  begin
+    if not InvariantNumberFits(T) then
+      Result := MISFIT_NUMBER;
+    Exit;
+  end;
+  if ALow = PARSE_DATE then
+    Ok := InvariantDateAt(T, P) and (P > Length(T))
+  else if ALow = PARSE_TIME then
+    Ok := InvariantTimeAt(T, P) and (P > Length(T))
+  else if ALow = PARSE_DATETIME then
+  begin
+    Ok := InvariantDateAt(T, P);
+    if Ok and (P <= Length(T)) then
+    begin
+      Ok := T[P] = ' ';
+      while (P <= Length(T)) and (T[P] = ' ') do
+        Inc(P);
+      Ok := Ok and InvariantTimeAt(T, P);
+    end;
+    Ok := Ok and (P > Length(T));
+  end
+  else
+    Exit;
+  if not Ok then
+    Result := MISFIT_DATE;
+end;
+
+// Der Grund, wenn der Aufruf ASite ein Literal liest, das nicht zu
+// TFormatSettings.Invariant passt; '' sonst (kein Literal, kein Leser).
+function LiteralReason(AMap: TRdxCodeMap; const ASite: TCallSite): string;
+var
+  Lit, Kind : string;
+begin
+  Result := '';
+  if not LiteralFirstArg(AMap, ASite.Name.Line, ASite.Open.EndCol,
+       ASite.Close.Col - 1, Lit) then
+    Exit;
+  Kind := LiteralMisfit(ASite.Name.Low, Lit);
+  if Kind = MISFIT_DATE then
+    Result := _(R_FS_LIT_DATE, [QuotedStr(Lit), TokText(AMap, ASite.Name)])
+  else if Kind = MISFIT_NUMBER then
+    Result := _(R_FS_LIT_NUMBER, [QuotedStr(Lit), TokText(AMap, ASite.Name)]);
 end;
 
 // Steht das Token T wie eine Deklaration da - 'T: Typ', 'T = Wert' oder
@@ -695,6 +898,13 @@ begin
     if AReason <> '' then
       Exit;
     Names[i] := TokText(AMap, Hits[i]);
+    // Alt-Weg: ein gelesenes Literal muss zu Invariant passen (rwE29).
+    if AInvariant then
+    begin
+      AReason := LiteralReason(AMap, Sites[i]);
+      if AReason <> '' then
+        Exit;
+    end;
   end;
   Li := FollowLineWith(AMap, ALine, LOCALE_FUNCS);
   if Li > 0 then

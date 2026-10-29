@@ -6778,3 +6778,9 @@ msgstr "le fichier include %s porte des traces de compilateurs plus anciens (%s,
 
 msgid "the include %s shows traces of older compilers (%s, line %d) - the global variable FormatSettings exists only from Delphi XE on; %s"
 msgstr "le fichier include %s porte des traces de compilateurs plus anciens (%s, ligne %d) - la variable globale FormatSettings n'existe qu'à partir de Delphi XE; %s"
+
+msgid "the literal %s does not fit the date and time format of TFormatSettings.Invariant (MM/dd/yyyy hh:nn:ss) - %s would raise EConvertError"
+msgstr "le littéral %s ne correspond pas au format de date et d'heure de TFormatSettings.Invariant (MM/dd/yyyy hh:nn:ss) - %s lèverait EConvertError"
+
+msgid "the literal %s does not fit the number format of TFormatSettings.Invariant (decimal point, no thousands separator) - %s would raise EConvertError"
+msgstr "le littéral %s ne correspond pas au format numérique de TFormatSettings.Invariant (point décimal, sans séparateur de milliers) - %s lèverait EConvertError"
