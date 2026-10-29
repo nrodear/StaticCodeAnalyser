@@ -142,6 +142,11 @@ type
     [Test] procedure Alternative_OtherKinds_None;
     // Wochen-Review 2026-10-21
     [Test] procedure Sca007_NamespaceSibling_NotAUse;
+    // rwE29: die uses-Ergaenzung der raise-Variante liest auch den Text
+    // (der Baum verlor Eintraege hinter 'X.Abstract', ein Zweig fehlte).
+    [Test] procedure Sca168_Raise_UsesAfterAbstractEntry_NotAddedTwice;
+    [Test] procedure PlanUses_UnitOnlyInConditionalBranch_Refused;
+    [Test] procedure PlanUses_SectionInConditionalBranch_Refused;
   end;
 
   // Stufe 3: SCA101 und SCA099, Zweig als Block (Entscheid E7).
@@ -1397,6 +1402,88 @@ begin
   Assert.IsFalse(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason),
     'voll qualifizierter Bezug');
   Assert.IsTrue(Pos('benutzt', Reason) > 0, Reason);
+end;
+
+// rwE29 (delphimvcframework MVCFramework.Serializer.JsonDataObjects.pas:
+// 1502, minimiert): hinter dem Eintrag 'MVCFramework.Serializer.Abstract'
+// verliert der Baum alle weiteren Eintraege der Klausel (Parser, SCA.Engine
+// - dort notiert, nicht hier behoben); 'System.SysUtils' fehlte damit in
+// UsesNamesOf, und die raise-Variante fuegte es in die implementation-
+// Klausel ein zweites Mal ein (E2004). Seitdem liest PlanUses auch den
+// Text. Gegenprobe ohne die Zeile: ohne Fix 2 x SysUtils, rot.
+procedure TTestRdxSimpleFixesDetector4.Sca168_Raise_UsesAfterAbstractEntry_NotAddedTwice;
+var
+  Src, After : string;
+  Seen       : TArray<TSeen>;
+  O          : TRdxFixOutcome;
+begin
+  Src := Join(['unit t;', 'interface', 'uses', '  System.Classes,',
+    '  Foo.Serializer.Abstract,', '  System.SysUtils;', 'implementation',
+    'uses', '  System.SysConst;', 'procedure P(X: Integer);', 'begin',
+    '  case X of', '    1: Exit;', '  end;', 'end;', 'end.']);
+  Seen := Detect(Src, fkDefaultCaseInCaseStatement);
+  Assert.AreEqual<Integer>(1, Length(Seen));
+  O := PlanAltFix(Src, fkDefaultCaseInCaseStatement, Seen[0]);
+  Assert.AreEqual<Integer>(1, O.Variant, 'zweiter Eintrag');
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual<Integer>(1, Length(O.Edits), 'nur das else, keine uses-Ersetzung');
+  After := Apply(Src, O.Edits);
+  Assert.AreEqual<Integer>(1, CountOf('SysUtils', After), After);
+  Assert.AreEqual<Integer>(0, Pos(' + uses', O.Hint), O.Hint);
+end;
+
+// PlanUses auf einer Quelle in der Ein-Zweig-Sicht mit MSWINDOWS (RDX_X
+// fehlt, sein Zweig ist fuer den Baum leer).
+function PlanUsesIn(const ASource: string): TRdxUsesPlan;
+var
+  P : TSourcePlaces;
+begin
+  P := TSourcePlaces.Create;
+  try
+    P.SetIfdefDefines(['MSWINDOWS']);
+    Assert.IsTrue(P.OpenSource('t.pas', ASource));
+    Result := TRdxRecipeRunner.PlanUses(P, 'SysUtils', 'System.SysUtils');
+  finally
+    P.Free;
+  end;
+end;
+
+// rwE29 (mORMot2 mormot.crypt.openssl.pas:3239, minimiert): 'sysutils'
+// steht nur im {$IFDEF}-Zweig, den der Baum nicht sieht; bis dahin legte
+// PlanUses hinter das 'implementation' des {$ELSE}-Zweigs eine neue
+// Klausel an. Jetzt: von Hand (die Zeile des Eintrags im Grund).
+procedure TTestRdxSimpleFixesDetector4.PlanUses_UnitOnlyInConditionalBranch_Refused;
+var
+  Plan : TRdxUsesPlan;
+begin
+  Plan := PlanUsesIn(Join(['unit t;', 'interface', '{$IFDEF RDX_X}', 'uses',
+    '  sysutils;', 'implementation', '{$ELSE}', 'implementation', '{$ENDIF}',
+    'end.']));
+  Assert.IsTrue(Plan.Needed);
+  Assert.IsTrue(Pos('bedingten Zweig (Zeile 5)', Plan.Reason) > 0, Plan.Reason);
+  // Gegenprobe: ausserhalb jedes Zweigs gilt die Unit als vorhanden.
+  Plan := PlanUsesIn(Join(['unit t;', 'interface', 'uses', '  SysUtils;',
+    'implementation', 'end.']));
+  Assert.IsFalse(Plan.Needed, Plan.Reason);
+end;
+
+// Ohne die Unit im Text, aber mit dem einzigen sichtbaren 'implementation'
+// in einem bedingten Zweig: die neue Klausel galte nur dort.
+procedure TTestRdxSimpleFixesDetector4.PlanUses_SectionInConditionalBranch_Refused;
+var
+  Plan : TRdxUsesPlan;
+begin
+  Plan := PlanUsesIn(Join(['unit t;', 'interface', '{$IFDEF RDX_X}',
+    'implementation', 'procedure P; begin end;', '{$ELSE}', 'implementation',
+    '{$ENDIF}', 'end.']));
+  Assert.IsTrue(Plan.Needed);
+  Assert.IsTrue(Pos('Zeile 7', Plan.Reason) > 0, Plan.Reason);
+  Assert.IsTrue(Pos('bedingten Zweig', Plan.Reason) > 0, Plan.Reason);
+  // Gegenprobe: ohne Direktive die neue Klausel hinter 'implementation'.
+  Plan := PlanUsesIn(Join(['unit t;', 'interface', 'implementation', 'end.']));
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Reason);
+  Assert.IsTrue(Pos('uses', Plan.Edit.NewText) > 0, Plan.Edit.NewText);
 end;
 
 procedure TTestRdxSimpleFixesDetector4.Alternative_OtherKinds_None;

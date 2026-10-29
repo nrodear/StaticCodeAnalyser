@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6743 Zeilen, 303797 Bytes
-  CPoLines_de: array[0..6742] of string = (
+  // i18n\de.po - 6750 Zeilen, 304299 Bytes
+  CPoLines_de: array[0..6749] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6757,7 +6757,14 @@ const
     'msgstr "gleiche Bedeutung - der Vergleich wird gespiegelt; keine Seite ruft eine Routine auf"',
     '',
     'msgid "same meaning with short-circuit evaluation ({$B-}): the second condition is evaluated only if the first one is true, as before"',
-    'msgstr "gleiche Bedeutung bei Kurzschlussauswertung ({$B-}): die zweite Bedingung wird wie vorher nur ausgewertet, wenn die erste wahr ist"'
+    'msgstr "gleiche Bedeutung bei Kurzschlussauswertung ({$B-}): die zweite Bedingung wird wie vorher nur ausgewertet, wenn die erste wahr ist"',
+    '',
+    '# reDelphix rwE29 Gruppe E (uRdxPlacesRunner: PlanUses liest auch den Text)',
+    'msgid "%s is named in a uses clause inside a conditional branch (line %d) - add it by hand"',
+    'msgstr "%s steht in einer uses-Klausel in einem bedingten Zweig (Zeile %d) - von Hand erg'#$00E4'nzen"',
+    '',
+    'msgid "the section keyword in line %d is inside a conditional branch (line %d) - add the uses clause by hand"',
+    'msgstr "das Abschnitts-Schl'#$00FC'sselwort in Zeile %d steht in einem bedingten Zweig (Zeile %d) - uses-Klausel von Hand anlegen"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7032,8 +7039,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6739 Zeilen, 316014 Bytes
-  CPoLines_fr: array[0..6738] of string = (
+  // i18n\fr.po - 6746 Zeilen, 316549 Bytes
+  CPoLines_fr: array[0..6745] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -13772,7 +13779,14 @@ const
     'msgstr "m'#$00EA'me sens - la comparaison est invers'#$00E9'e en miroir ; aucun c'#$00F4't'#$00E9' n''appelle de routine"',
     '',
     'msgid "same meaning with short-circuit evaluation ({$B-}): the second condition is evaluated only if the first one is true, as before"',
-    'msgstr "m'#$00EA'me sens avec l'''#$00E9'valuation en court-circuit ({$B-}) : la deuxi'#$00E8'me condition n''est '#$00E9'valu'#$00E9'e que si la premi'#$00E8're est vraie, comme avant"'
+    'msgstr "m'#$00EA'me sens avec l'''#$00E9'valuation en court-circuit ({$B-}) : la deuxi'#$00E8'me condition n''est '#$00E9'valu'#$00E9'e que si la premi'#$00E8're est vraie, comme avant"',
+    '',
+    '# reDelphix rwE29 Gruppe E (uRdxPlacesRunner: PlanUses liest auch den Text)',
+    'msgid "%s is named in a uses clause inside a conditional branch (line %d) - add it by hand"',
+    'msgstr "%s figure dans une clause uses '#$00E0' l''int'#$00E9'rieur d''une branche conditionnelle (ligne %d) - l''ajouter '#$00E0' la main"',
+    '',
+    'msgid "the section keyword in line %d is inside a conditional branch (line %d) - add the uses clause by hand"',
+    'msgstr "le mot-cl'#$00E9' de section '#$00E0' la ligne %d se trouve dans une branche conditionnelle (ligne %d) - ajouter la clause uses '#$00E0' la main"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

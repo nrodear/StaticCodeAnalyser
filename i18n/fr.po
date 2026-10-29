@@ -6737,3 +6737,10 @@ msgstr "même sens - la comparaison est inversée en miroir ; aucun côté n'app
 
 msgid "same meaning with short-circuit evaluation ({$B-}): the second condition is evaluated only if the first one is true, as before"
 msgstr "même sens avec l'évaluation en court-circuit ({$B-}) : la deuxième condition n'est évaluée que si la première est vraie, comme avant"
+
+# reDelphix rwE29 Gruppe E (uRdxPlacesRunner: PlanUses liest auch den Text)
+msgid "%s is named in a uses clause inside a conditional branch (line %d) - add it by hand"
+msgstr "%s figure dans une clause uses à l'intérieur d'une branche conditionnelle (ligne %d) - l'ajouter à la main"
+
+msgid "the section keyword in line %d is inside a conditional branch (line %d) - add the uses clause by hand"
+msgstr "le mot-clé de section à la ligne %d se trouve dans une branche conditionnelle (ligne %d) - ajouter la clause uses à la main"

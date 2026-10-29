@@ -6741,3 +6741,10 @@ msgstr "gleiche Bedeutung - der Vergleich wird gespiegelt; keine Seite ruft eine
 
 msgid "same meaning with short-circuit evaluation ({$B-}): the second condition is evaluated only if the first one is true, as before"
 msgstr "gleiche Bedeutung bei Kurzschlussauswertung ({$B-}): die zweite Bedingung wird wie vorher nur ausgewertet, wenn die erste wahr ist"
+
+# reDelphix rwE29 Gruppe E (uRdxPlacesRunner: PlanUses liest auch den Text)
+msgid "%s is named in a uses clause inside a conditional branch (line %d) - add it by hand"
+msgstr "%s steht in einer uses-Klausel in einem bedingten Zweig (Zeile %d) - von Hand ergänzen"
+
+msgid "the section keyword in line %d is inside a conditional branch (line %d) - add the uses clause by hand"
+msgstr "das Abschnitts-Schlüsselwort in Zeile %d steht in einem bedingten Zweig (Zeile %d) - uses-Klausel von Hand anlegen"
