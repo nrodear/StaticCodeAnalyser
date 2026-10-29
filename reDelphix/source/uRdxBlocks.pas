@@ -243,6 +243,13 @@ function TypeHasBody(AMap: TRdxCodeMap; const AKind: TRdxToken): Boolean;
 // (SCA147: steht die Methode unter private?).
 function EnclosingClass(AMap: TRdxCodeMap; const AHead: TRdxToken;
   const ALowName: string; out AClass: TRdxClassHead): Boolean;
+// Dasselbe fuer einen record- oder object-Typ ('Name = [packed] record'
+// bzw. 'object'; AClass.ClassTok ist das Token der Art, Vis '' ohne
+// Abschnitt). Seit rwE31 Stufe 3 (SCA086: Kastri DW.Exif.Win.pas:102
+// 'TGdip = record' mit class-Methoden, mORMot-Typen mit dem Kopf
+// '{$ifdef USERECORDWITHMETHODS} record {$else} object {$endif}').
+function EnclosingRecord(AMap: TRdxCodeMap; const AHead: TRdxToken;
+  const ALowName: string; out AClass: TRdxClassHead): Boolean;
 // Das end des Klassenrumpfs ab AClass (dem Token 'class'); Low = ''
 // ohne. Seit Charge B2S-b oeffentlich (SCA147: Include im Klassenrumpf).
 function ClassEnd(AMap: TRdxCodeMap; const AClass: TRdxToken): TRdxToken;
@@ -387,6 +394,8 @@ const
     'dispinterface');
   // ... wenn davor '=' bzw. 'packed' steht (InsideTypeBody).
   TYPE_HEAD_PREV: array[0..1] of string = ('=', 'packed');
+  // Die Arten, die EnclosingRecord sucht.
+  RECORD_KINDS: array[0..1] of string = ('record', 'object');
   // Damit beginnt der Rumpf einer Routine.
   BODY_WORDS: array[0..1] of string = ('begin', 'asm');
   // Was hinter einer Routine folgen darf - sonst sind ihre Grenzen falsch
@@ -988,10 +997,12 @@ begin
   Result := not InList(N.Low, [KW_SEMI, 'of', '']);
 end;
 
-// 'AName [<..>] = [packed] class' mit Rumpf an T; AClass ist das Token
-// 'class'.
-function ClassHeadAt(AMap: TRdxCodeMap; const T: TRdxToken;
-  const ALowName: string; out AClass: TRdxToken): Boolean;
+// 'AName [<..>] = [packed] <Art>' mit Rumpf an T, die Art eines der Woerter
+// AKinds ('class'; 'record'/'object' fuer EnclosingRecord); AClass ist das
+// Token der Art.
+function TypeHeadAt(AMap: TRdxCodeMap; const T: TRdxToken;
+  const ALowName: string; const AKinds: array of string;
+  out AClass: TRdxToken): Boolean;
 var
   N : TRdxToken;
 begin
@@ -1006,7 +1017,15 @@ begin
   AClass := After(AMap, N);
   if AClass.Low = 'packed' then
     AClass := After(AMap, AClass);
-  Result := (AClass.Low = KW_CLASS) and TypeHasBody(AMap, AClass);
+  Result := InList(AClass.Low, AKinds) and TypeHasBody(AMap, AClass);
+end;
+
+// 'AName [<..>] = [packed] class' mit Rumpf an T; AClass ist das Token
+// 'class'.
+function ClassHeadAt(AMap: TRdxCodeMap; const T: TRdxToken;
+  const ALowName: string; out AClass: TRdxToken): Boolean;
+begin
+  Result := TypeHeadAt(AMap, T, ALowName, [KW_CLASS], AClass);
 end;
 
 { TRdxClassScan }
@@ -1142,10 +1161,11 @@ begin
   end;
 end;
 
-// Der naechste Kopf der Klasse ALowName ueber AHead (zeilenweise
-// rueckwaerts), dessen Rumpf AHead auf Tiefe 1 traegt.
-function EnclosingClass(AMap: TRdxCodeMap; const AHead: TRdxToken;
-  const ALowName: string; out AClass: TRdxClassHead): Boolean;
+// Der naechste Kopf des Typs ALowName einer der Arten AKinds ueber AHead
+// (zeilenweise rueckwaerts), dessen Rumpf AHead auf Tiefe 1 traegt.
+function EnclosingTypeOf(AMap: TRdxCodeMap; const AHead: TRdxToken;
+  const ALowName: string; const AKinds: array of string;
+  out AClass: TRdxClassHead): Boolean;
 var
   Li : Integer;
   T  : TRdxToken;
@@ -1156,7 +1176,7 @@ begin
     T := NextToken(AMap, Li, 1);
     while (T.Low <> '') and (T.Line = Li) and TokBefore(T, AHead) do
     begin
-      if ClassHeadAt(AMap, T, ALowName, AClass.ClassTok) then
+      if TypeHeadAt(AMap, T, ALowName, AKinds, AClass.ClassTok) then
       begin
         AClass.NameTok := T;
         Exit(VisibilityAt(AMap, AClass.ClassTok, AHead, AClass.Vis));
@@ -1165,6 +1185,18 @@ begin
     end;
   end;
   Result := False;
+end;
+
+function EnclosingClass(AMap: TRdxCodeMap; const AHead: TRdxToken;
+  const ALowName: string; out AClass: TRdxClassHead): Boolean;
+begin
+  Result := EnclosingTypeOf(AMap, AHead, ALowName, [KW_CLASS], AClass);
+end;
+
+function EnclosingRecord(AMap: TRdxCodeMap; const AHead: TRdxToken;
+  const ALowName: string; out AClass: TRdxClassHead): Boolean;
+begin
+  Result := EnclosingTypeOf(AMap, AHead, ALowName, RECORD_KINDS, AClass);
 end;
 
 // Die Namen der Vorfahrenliste 'class(TBase, IFoo, Unit.IBar)' (wie im
