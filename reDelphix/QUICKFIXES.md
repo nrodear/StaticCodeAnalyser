@@ -391,7 +391,7 @@ end;
 - die Zahl der Meldung steht nicht oder mehrfach als Vergleichswert in den if-Bedingungen der Fundzeile (Zeile verschoben bzw. mehrdeutig), oder nur in einer Folgezeile der Bedingung
 - eine Zahl mit Zifferntrennern (`if X > 200_000`, auch `200_000.5`): der Detektor meldet nur ihren ersten Block (`200`) – ein Fehlalarm, der Grund sagt es
 - die Sperren der Code-Aktion „Lokale Konstante einführen“: `else if`, Zweig über mehrere Zeilen, Zeile darüber ohne Anweisungsende, Direktive davor, case-Zweig, asm, initialization, mehrzeilige Strings und Kommentare
-- Dateien, die FPC oder ein Compiler vor Delphi 10.3 übersetzt: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, ein Include, das nicht neben der Unit liegt, ein Lazarus-Projekt/-Paket in der Nähe, `.pp`/`.lpr`, ein altes Delphi-Projekt (`.dproj` vor 10.3, `.dof`, `.bdsproj`, `.bpr`, `.bpg`)
+- Dateien, die FPC oder ein Compiler vor Delphi 10.3 übersetzt: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, ein Include, das nicht neben der Unit liegt, ein Lazarus-Projekt/-Paket in der Nähe, `.pp`/`.lpr`, ein altes Delphi-Projekt (`.dproj` vor 10.3, `.dof`, `.bdsproj`, `.bpr`, `.bpg`), ein Paket im Ordner `packages` bis zwei Ebenen über der Unit, das sie enthält und nach Ordnername (`d102`, `D10_2`, `Tokyo`, `DXE6`, `c6` …) oder `{$LIBSUFFIX}` für ein Delphi vor 10.3 ist, oder mehr `.dpk` in alten bzw. unbekannten Paketordnern, als die Hilfe liest (64)
 - ein Netzpfad oder Netzlaufwerk, auch für ein Include der Unit (kein Plattenzugriff beim Menüaufbau im Hauptthread)
 - der Hauptblock eines Programms bzw. einer Bibliothek
 
@@ -923,11 +923,12 @@ end;
 |---|---|---|
 | `Replace the tabs in this line with spaces` | `Tabulatoren dieser Zeile durch Leerzeichen ersetzen` | `Remplacer les tabulations de cette ligne par des espaces` |
 
-**Wirkung:** Ersetzt die Tabulatoren im Code der gemeldeten Zeile durch Leerzeichen bis zum nächsten Tabstopp (Tabweite 2, feste Annahme; Leerzeichen und Tab davor werden sauber zusammengezogen). Eine Ersetzung vom ersten bis zum letzten Code-Tab; Tabs in Strings und Kommentaren dazwischen bleiben. Nur die gemeldete Zeile.
+**Wirkung:** Ersetzt die Tabulatoren im Code der gemeldeten Zeile durch Leerzeichen bis zum nächsten Tabstopp (Leerzeichen und Tab davor werden sauber zusammengezogen). Die Tabweite (2, 4 oder 8) leitet die Hilfe aus den acht Zeilen darüber und darunter ab: die Weite, bei der die Textspalten hinter den Tabs der Zeile am häufigsten mit denen der Nachbarn zusammenfallen (Einrückung, `=`, `:`, Kommentarspalte) – etwa Tab plus Leerzeichen gegen Nachbarn nur aus Leerzeichen oder Tabellen mit verschieden vielen Tabs vor derselben Spalte. Zeigen die Nachbarn keine, gilt die Annahme 2; der Hinweis nennt die Weite und woher sie kommt. Eine Ersetzung vom ersten bis zum letzten Code-Tab; Tabs in Strings und Kommentaren dazwischen bleiben. Nur die gemeldete Zeile.
 
 **Nicht angeboten**
 
 - der erste Tab der Zeile liegt in einem String, Kommentar oder mehrzeiligen String (der Detektor meldet ihn trotzdem, der Fund bliebe stehen)
+- die Nachbarzeilen passen zu zwei Tabweiten (4 und 8) gleich gut – welcher die Ausrichtung folgt, ist offen
 - die Zeile ist verschoben, oder die Meldung nennt keine Spalte
 
 **Beispiel:** nicht abbildbar – der Unterschied ist nur Leerraum (Tab gegen Leerzeichen).
@@ -1127,7 +1128,7 @@ Nachher:
 
 **Nicht angeboten**
 
-- die Datei baut wohl auch mit einem anderen Compiler: FPC-Weiche oder FPC-Modus in der Datei, Dateiart `.pp`/`.lpr`, Lazarus-Projekt oder alte Delphi-Projektdatei neben der Unit, Spuren von Compilern vor Delphi 11 in der Datei oder ihren Includes (`{$IF CompilerVersion >= 35}`, `DELPHI27_UP`, `jedi.inc` …) – Zifferntrenner gibt es erst ab Delphi 11
+- die Datei baut wohl auch mit einem anderen Compiler: FPC-Weiche oder FPC-Modus in der Datei, Dateiart `.pp`/`.lpr`, Lazarus-Projekt oder alte Delphi-Projektdatei neben der Unit, ein Paket im Ordner `packages` bis zwei Ebenen über der Unit, das sie enthält und nach Ordnername (`d104`, `D10_4`, `Sydney`, `c6` …) oder `{$LIBSUFFIX}` für ein Delphi vor 11 ist, oder mehr `.dpk` in alten bzw. unbekannten Paketordnern, als die Hilfe liest (64), Spuren von Compilern vor Delphi 11 in der Datei oder ihren Includes (`{$IF CompilerVersion >= 35}`, `DELPHI27_UP`, `jedi.inc` …) – Zifferntrenner gibt es erst ab Delphi 11
 - ein Include oder eine Skript-Unit ohne implementation-Teil
 - ein Zeichencode (`#65279` – der Detektor meldet ihn mit), eine Sprungmarke (label-Abschnitt, `goto`), ein Literal in einem asm-Block
 - die Zeile ist verschoben, an der Spalte steht kein ungruppiertes Literal (Hex, Binär, Float, schon gruppiert, Teil eines Bezeichners, Kommentar, String), oder die Meldung nennt keine Spalte
@@ -2338,7 +2339,7 @@ Nachher:
 - der Empfänger ist kein einfacher Name (`Self.Q`, `DM.Q`, `Q.Parameters` bei ADO), ist in der Datei als Property oder Routine deklariert oder dem Quellstellen-Dienst nicht als Variable, Parameter oder Feld bekannt; das Argument ist kein einzelnes String-Literal auf der Zeile, oder ein Kommentar steht im Aufruf
 - in der Schleife: `Q.SQL`, `Q.Params`, `Q.Prepare`/`Unprepare`/`Prepared`, `Q.Connection`, `Q.Command`, `Q.Free` u. a., `Q` wird zugewiesen, weitergereicht oder über ein anderes Objekt erreicht, oder eine anonyme Methode
 - die Schleife beginnt keine eigene Zeile und Anweisung in einem `begin..end` (nach `then`, `do`, `else`, im try-, except-, finally- oder case-Teil); `with`, `asm`, `goto` oder eine Direktive in der Routine; der Hauptblock eines Programms; eine Schleife davor, die die Hilfe nicht sicher liest
-- Dateien, die FPC oder ein Delphi vor 10.3 übersetzt (wie bei SCA014: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, Lazarus- oder alte Delphi-Projektdatei, `.pp`/`.lpr`), Skript-Units, ein Netzpfad
+- Dateien, die FPC oder ein Delphi vor 10.3 übersetzt (wie bei SCA014: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, Lazarus- oder alte Delphi-Projektdatei, ein altes Paket im Ordner `packages`, das die Unit enthält, `.pp`/`.lpr`), Skript-Units, ein Netzpfad
 - kein freier Name (`PrmX` bis `PrmX9` kommen in der Datei schon vor)
 
 **Beispiel**
@@ -2388,7 +2389,7 @@ Nachher:
 - der Empfänger ist kein einfacher Name (`Self.Q`, `DM.Q`, `Q.Fields`), ist in der Datei als Property oder Routine deklariert oder dem Quellstellen-Dienst nicht als Variable, Parameter oder Feld bekannt; das Argument ist kein einzelnes String-Literal auf der Zeile, oder ein Kommentar steht im Aufruf
 - in der Schleife: `Q.Open`, `Close`, `Active`, `SQL`, `Fields`, `FieldDefs`, `Refresh`, `Requery`, `ExecSQL`, `Prepare`/`Unprepare`, `NextRecordset`, `Connection`, `LoadFromFile`, `Free` u. a., `Q` wird zugewiesen, weitergereicht oder über ein anderes Objekt erreicht, oder eine anonyme Methode
 - die Schleife beginnt keine eigene Zeile und Anweisung in einem `begin..end` (nach `then`, `do`, `else`, im try-, except-, finally- oder case-Teil); `with`, `asm`, `goto` oder eine Direktive in der Routine; der Hauptblock eines Programms; eine Schleife davor, die die Hilfe nicht sicher liest
-- Dateien, die FPC oder ein Delphi vor 10.3 übersetzt (wie bei SCA014: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, Lazarus- oder alte Delphi-Projektdatei, `.pp`/`.lpr`), Skript-Units, ein Netzpfad
+- Dateien, die FPC oder ein Delphi vor 10.3 übersetzt (wie bei SCA014: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, Lazarus- oder alte Delphi-Projektdatei, ein altes Paket im Ordner `packages`, das die Unit enthält, `.pp`/`.lpr`), Skript-Units, ein Netzpfad
 - kein freier Name (`FldX` bis `FldX9` kommen in der Datei schon vor)
 
 **Beispiel**
@@ -3247,7 +3248,7 @@ Nachher:
 
 - nicht unter `private`/`strict private`; `virtual`/`dynamic`/`override`/`abstract`/`reintroduce`/`message`/`overload`, Konstruktor, Destruktor, Operator
 - mehr als eine Deklaration oder Implementierung, keine Implementierung in der Datei, Property-Accessor
-- der Name als String-Literal (`MethodAddress`), `{$RTTI}` in der Datei, ein Attribut an Methode oder Klasse
+- der Name als String-Literal (`MethodAddress`), `{$RTTI}` oder eine Direktive des JEDI-Präprozessors (`{$JPP…}`, Prototyp) in der Datei, ein Attribut an Methode oder Klasse
 - `{$I}` im Klassenrumpf oder im implementation-Teil, ein Include davor, das den Namen nennt (Property-Accessor einer Nachfahrenklasse), nicht neben der Unit oder auf einem Netzpfad liegt, ein Interface der Klasse aus einer anderen Unit
 - ein Marker-Kommentar (`noinspection`, TODO …) hinter der Deklaration oder dem `end;` der Implementierung – er gilt der Zeile dahinter –, oder ein `// noinspection` darüber, der auf sie zielt
 - eine `.dfm`/`.fmx`/`.lfm` neben der Unit nennt den Namen (Bindung an ein Ereignis)
@@ -3720,7 +3721,7 @@ Nachher:
 **Nicht angeboten**
 
 - Overloads, Methoden (das meldet SCA147), globale FPC-Operatoren
-- `export`/`public`/`alias`/`external`/`forward`/`interrupt`, `{$L}`/`{$LINK}` in der Datei
+- `export`/`public`/`alias`/`external`/`forward`/`interrupt`, `{$L}`/`{$LINK}` in der Datei, eine Direktive des JEDI-Präprozessors (`{$JPPEXPANDMACRO …}`, `(*$JPPLOOP …*)`) – die Datei ist ein Prototyp, Deklaration und Aufrufer erzeugen erst die Makros
 - `{$I}` im implementation-Teil oder ein Include davor, das die Routine nennt, nicht neben der Unit liegt oder – wie die Unit selbst – auf einem Netzpfad (kein Plattenzugriff beim Menüaufbau)
 - eine Direktive im Bereich außer ausgeglichenem `$IF..`/`$ENDIF` bzw. `$REGION`
 - ein Marker-Kommentar (`noinspection`, TODO …) hinter dem `end;` bzw. der `forward`-Deklaration – er gilt der Zeile dahinter –, `// noinspection-file` in der Routine oder ein `// noinspection` über dem Kopf bzw. der `forward`-Deklaration, der auf die Routine zielt

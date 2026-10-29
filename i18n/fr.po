@@ -4963,6 +4963,9 @@ msgstr "include {$I} dans la section implementation (ligne %d) - un appelant que
 msgid "the routine ends on the last line of the file"
 msgstr "la routine se termine sur la dernière ligne du fichier"
 
+msgid "jpp directive in line %d - the file is a JEDI preprocessor prototype; the unit generated from it declares and calls routines through macros that the quick fix does not see"
+msgstr "directive jpp à la ligne %d - le fichier est un prototype du préprocesseur JEDI ; l'unité générée à partir de lui déclare et appelle des routines via des macros que le Quick-Fix ne voit pas"
+
 msgid "include %s before implementation %s - it can declare the name, call it or name it as a property accessor, and the quick fix does not see it"
 msgstr "include %s avant implementation %s - il peut déclarer le nom, l'appeler ou le citer comme accesseur de propriété, et le Quick-Fix ne le voit pas"
 
@@ -5704,6 +5707,36 @@ msgstr "ancien fichier de projet %s dans le répertoire %s - l'unité se compile
 msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 10.3, which has no inline variables; %s"
 msgstr "ancien fichier de projet %s dans le répertoire %s - l'unité se compile sans doute aussi avec un Delphi antérieur à 10.3, qui ne connaît pas les variables inline; %s"
 
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 10.3 (%s), which has no inline constants; %s"
+msgstr "le paquet %s dans le répertoire %s contient l'unité et vise un Delphi antérieur à 10.3 (%s), qui ne connaît pas les constantes inline; %s"
+
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 11 (%s), which has no digit separators; %s"
+msgstr "le paquet %s dans le répertoire %s contient l'unité et vise un Delphi antérieur à 11 (%s), qui ne connaît pas les séparateurs de chiffres; %s"
+
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 10.3 (%s), which has no inline variables; %s"
+msgstr "le paquet %s dans le répertoire %s contient l'unité et vise un Delphi antérieur à 10.3 (%s), qui ne connaît pas les variables inline; %s"
+
+msgid "package files in %s remain unread (the quick fix reads at most %d) - one of them may build the unit with a Delphi before 10.3, which has no inline constants; %s"
+msgstr "des fichiers de paquet dans %s restent non lus (le Quick-Fix en lit au plus %d) - l'un d'eux compile peut-être l'unité avec un Delphi antérieur à 10.3, qui ne connaît pas les constantes inline; %s"
+
+msgid "package files in %s remain unread (the quick fix reads at most %d) - one of them may build the unit with a Delphi before 11, which has no digit separators; %s"
+msgstr "des fichiers de paquet dans %s restent non lus (le Quick-Fix en lit au plus %d) - l'un d'eux compile peut-être l'unité avec un Delphi antérieur à 11, qui ne connaît pas les séparateurs de chiffres; %s"
+
+msgid "package files in %s remain unread (the quick fix reads at most %d) - one of them may build the unit with a Delphi before 10.3, which has no inline variables; %s"
+msgstr "des fichiers de paquet dans %s restent non lus (le Quick-Fix en lit au plus %d) - l'un d'eux compile peut-être l'unité avec un Delphi antérieur à 10.3, qui ne connaît pas les variables inline; %s"
+
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 10.3 (%s), and TFormatSettings.Invariant is only checked from there on; %s"
+msgstr "le paquet %s dans le répertoire %s contient l'unité et vise un Delphi antérieur à 10.3 (%s), et TFormatSettings.Invariant n'est vérifié qu'à partir de là; %s"
+
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before XE (%s), which has no global variable FormatSettings; %s"
+msgstr "le paquet %s dans le répertoire %s contient l'unité et vise un Delphi antérieur à XE (%s), qui n'a pas de variable globale FormatSettings; %s"
+
+msgid "package files in %s remain unread (the quick fix reads at most %d) - one of them may build the unit with a Delphi before 10.3, and TFormatSettings.Invariant is only checked from there on; %s"
+msgstr "des fichiers de paquet dans %s restent non lus (le Quick-Fix en lit au plus %d) - l'un d'eux compile peut-être l'unité avec un Delphi antérieur à 10.3, et TFormatSettings.Invariant n'est vérifié qu'à partir de là; %s"
+
+msgid "package files in %s remain unread (the quick fix reads at most %d) - one of them may build the unit with a Delphi before XE, which has no global variable FormatSettings; %s"
+msgstr "des fichiers de paquet dans %s restent non lus (le Quick-Fix en lit au plus %d) - l'un d'eux compile peut-être l'unité avec un Delphi antérieur à XE, qui n'a pas de variable globale FormatSettings; %s"
+
 msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 = %s) - there are no inline constants there; %s"
 msgstr "projet %s dans le répertoire %s avec ProjectVersion %s (avant Delphi 10.3 = %s) - les constantes inline n'y existent pas; %s"
 
@@ -6247,8 +6280,11 @@ msgstr "la boucle ne s'exécutait jamais jusqu'ici et compte ensuite à rebours 
 msgid "the loop never ran so far and then counts up; if it was switched off on purpose, this is an intervention"
 msgstr "la boucle ne s'exécutait jamais jusqu'ici et compte ensuite en montant ; si elle était désactivée exprès, c'est une intervention"
 
-msgid "tabs in code become spaces - tab width 2 (assumption); tabs in strings and comments stay"
-msgstr "les tabulations du code deviennent des espaces - largeur de tabulation 2 (hypothèse) ; les tabulations dans les chaînes et commentaires restent"
+msgid "tabs in code become spaces - tab width %d, as the alignment of the neighbouring lines shows; tabs in strings and comments stay"
+msgstr "les tabulations du code deviennent des espaces - largeur de tabulation %d, comme le montre l'alignement des lignes voisines ; les tabulations dans les chaînes et commentaires restent"
+
+msgid "tabs in code become spaces - tab width %d (assumption, the neighbouring lines do not show one); tabs in strings and comments stay"
+msgstr "les tabulations du code deviennent des espaces - largeur de tabulation %d (hypothèse, les lignes voisines n'en montrent aucune) ; les tabulations dans les chaînes et commentaires restent"
 
 msgid "whitespace at the end of the line only"
 msgstr "uniquement des espaces en fin de ligne"
@@ -6546,6 +6582,9 @@ msgstr "aucune tabulation à l'endroit signalé"
 
 msgid "the first tab of the line is inside a string or comment - it stays untouched, the help would leave the finding in place"
 msgstr "la première tabulation de la ligne se trouve dans une chaîne ou un commentaire - elle reste intacte, l'aide laisserait le résultat en place"
+
+msgid "the neighbouring lines fit tab width %d as well as %d - which one the alignment of the file follows is open; %s"
+msgstr "les lignes voisines conviennent aussi bien à la largeur de tabulation %d qu'à %d - on ne sait pas laquelle suit l'alignement du fichier ; %s"
 
 msgid "the message does not name the loop head - analyse the file again"
 msgstr "le message ne nomme pas l'en-tête de la boucle - analysez à nouveau le fichier"

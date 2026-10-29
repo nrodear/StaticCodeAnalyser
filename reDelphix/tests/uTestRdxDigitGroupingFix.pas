@@ -56,6 +56,7 @@ type
     [Test] procedure Table_PpFile_NoHelp;
     [Test] procedure Table_LazarusProject_NoHelp;
     [Test] procedure Table_DprojVersion_Threshold;
+    [Test] procedure Table_OldPackage_NoHelp;
   end;
 {$ENDIF}
 
@@ -602,6 +603,57 @@ begin
     WriteDproj(Dir + 'P.dproj', '19.3');
     O := PlanSeenIn(Src, U, S);
     Assert.IsTrue(O.Enabled, '19.3 = Delphi 11: ' + O.Reason);
+  finally
+    RemoveTree(Root);
+  end;
+end;
+
+// Eine .dpk wie in DMVC packages\dNNN: LIBSUFFIX ASuffix, enthaelt AUnit
+// ('u.pas') mit relativem Pfad.
+function DpkText(const ASuffix, AUnit: string): string;
+begin
+  Result := Join(['package RT;', '{$LIBSUFFIX ''' + ASuffix + '''}',
+    'requires', '  rtl;', 'contains',
+    '  ' + ChangeFileExt(AUnit, '') + ' in ''..\..\c\' + AUnit + ''';',
+    'end.']);
+end;
+
+procedure TTestRdxDigitGroupingDetector.Table_OldPackage_NoHelp;
+var
+  Root, Dir, Pkg, U, Src : string;
+  S                      : TSeen;
+  O                      : TRdxFixOutcome;
+begin
+  // rwE29, DMVC sources\MVCFramework.ObjectPool.pas:99 (minimiert): die Unit
+  // steht in packages\d100..d104\dmvcframeworkRT.dpk (Delphi 10.0-10.4) eine
+  // Ebene ueber ihrem Ordner; die .dproj dort sind neu gespeichert
+  // (ProjectVersion 20.3), Ordnername und LIBSUFFIX nennen die Version.
+  // Gegenprobe: bis rwE29 las der Plattenblick nur Projektdateien auf dem
+  // Weg nach oben und bot '1_048_576' an.
+  S := FirstSeen(Src);
+  Dir := NewUnitDir(Root);
+  try
+    U := Dir + 'u.pas';
+    Pkg := ExtractFilePath(ExcludeTrailingPathDelimiter(Dir)) + 'packages'
+      + PathDelim;
+    ForceDirectories(Pkg + 'd100');
+    ForceDirectories(Pkg + 'd104');
+    ForceDirectories(Pkg + 'd110');
+    // Delphi 11 baut die Unit, das alte Paket enthaelt sie nicht: Hilfe.
+    WriteText(Pkg + 'd110' + PathDelim + 'RT.dpk', DpkText('110', 'u.pas'));
+    WriteDproj(Pkg + 'd110' + PathDelim + 'RT.dproj', '20.3');
+    WriteText(Pkg + 'd100' + PathDelim + 'RT.dpk', DpkText('100', 'v.pas'));
+    WriteDproj(Pkg + 'd100' + PathDelim + 'RT.dproj', '20.3');
+    O := PlanSeenIn(Src, U, S);
+    Assert.IsTrue(O.Enabled, 'nur d110 enthaelt u.pas: ' + O.Reason);
+    // Das Paket fuer Delphi 10.4 enthaelt sie: keine Hilfe.
+    WriteText(Pkg + 'd104' + PathDelim + 'RT.dpk', DpkText('104', 'u.pas'));
+    WriteDproj(Pkg + 'd104' + PathDelim + 'RT.dproj', '20.3');
+    O := PlanSeenIn(Src, U, S);
+    Assert.IsFalse(O.Enabled, 'd104 = Delphi 10.4');
+    Assert.IsTrue(Pos('RT.dpk', O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos('(d104)', O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos('Zifferntrenner', O.Reason) > 0, O.Reason);
   finally
     RemoveTree(Root);
   end;

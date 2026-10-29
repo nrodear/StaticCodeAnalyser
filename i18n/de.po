@@ -4967,6 +4967,9 @@ msgstr "{$I}-Include im implementation-Teil (Zeile %d) - dort kann ein Aufrufer 
 msgid "the routine ends on the last line of the file"
 msgstr "die Routine endet auf der letzten Zeile der Datei"
 
+msgid "jpp directive in line %d - the file is a JEDI preprocessor prototype; the unit generated from it declares and calls routines through macros that the quick fix does not see"
+msgstr "jpp-Direktive in Zeile %d - die Datei ist ein Prototyp des JEDI-Präprozessors; die daraus erzeugte Unit deklariert und ruft Routinen über Makros, die die Hilfe nicht sieht"
+
 msgid "include %s before implementation %s - it can declare the name, call it or name it as a property accessor, and the quick fix does not see it"
 msgstr "Include %s vor implementation %s - es kann den Namen deklarieren, rufen oder als Property-Accessor nennen, die Hilfe sieht es nicht"
 
@@ -5708,6 +5711,36 @@ msgstr "alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl auch mit ein
 msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 10.3, which has no inline variables; %s"
 msgstr "alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl auch mit einem Delphi vor 10.3, und dort gibt es keine Inline-Variable; %s"
 
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 10.3 (%s), which has no inline constants; %s"
+msgstr "Paket %s im Verzeichnis %s enthält die Unit und ist für ein Delphi vor 10.3 (%s), und dort gibt es keine Inline-Konstante; %s"
+
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 11 (%s), which has no digit separators; %s"
+msgstr "Paket %s im Verzeichnis %s enthält die Unit und ist für ein Delphi vor 11 (%s), und dort gibt es keine Zifferntrenner; %s"
+
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 10.3 (%s), which has no inline variables; %s"
+msgstr "Paket %s im Verzeichnis %s enthält die Unit und ist für ein Delphi vor 10.3 (%s), und dort gibt es keine Inline-Variable; %s"
+
+msgid "package files in %s remain unread (the quick fix reads at most %d) - one of them may build the unit with a Delphi before 10.3, which has no inline constants; %s"
+msgstr "Paketdateien in %s bleiben ungelesen (die Hilfe liest höchstens %d) - eine davon baut die Unit vielleicht mit einem Delphi vor 10.3, und dort gibt es keine Inline-Konstante; %s"
+
+msgid "package files in %s remain unread (the quick fix reads at most %d) - one of them may build the unit with a Delphi before 11, which has no digit separators; %s"
+msgstr "Paketdateien in %s bleiben ungelesen (die Hilfe liest höchstens %d) - eine davon baut die Unit vielleicht mit einem Delphi vor 11, und dort gibt es keine Zifferntrenner; %s"
+
+msgid "package files in %s remain unread (the quick fix reads at most %d) - one of them may build the unit with a Delphi before 10.3, which has no inline variables; %s"
+msgstr "Paketdateien in %s bleiben ungelesen (die Hilfe liest höchstens %d) - eine davon baut die Unit vielleicht mit einem Delphi vor 10.3, und dort gibt es keine Inline-Variable; %s"
+
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 10.3 (%s), and TFormatSettings.Invariant is only checked from there on; %s"
+msgstr "Paket %s im Verzeichnis %s enthält die Unit und ist für ein Delphi vor 10.3 (%s), und TFormatSettings.Invariant ist erst ab dort geprüft; %s"
+
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before XE (%s), which has no global variable FormatSettings; %s"
+msgstr "Paket %s im Verzeichnis %s enthält die Unit und ist für ein Delphi vor XE (%s), und dort gibt es keine globale Variable FormatSettings; %s"
+
+msgid "package files in %s remain unread (the quick fix reads at most %d) - one of them may build the unit with a Delphi before 10.3, and TFormatSettings.Invariant is only checked from there on; %s"
+msgstr "Paketdateien in %s bleiben ungelesen (die Hilfe liest höchstens %d) - eine davon baut die Unit vielleicht mit einem Delphi vor 10.3, und TFormatSettings.Invariant ist erst ab dort geprüft; %s"
+
+msgid "package files in %s remain unread (the quick fix reads at most %d) - one of them may build the unit with a Delphi before XE, which has no global variable FormatSettings; %s"
+msgstr "Paketdateien in %s bleiben ungelesen (die Hilfe liest höchstens %d) - eine davon baut die Unit vielleicht mit einem Delphi vor XE, und dort gibt es keine globale Variable FormatSettings; %s"
+
 msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 = %s) - there are no inline constants there; %s"
 msgstr "Projekt %s im Verzeichnis %s mit ProjectVersion %s (vor Delphi 10.3 = %s) - dort gibt es keine Inline-Konstante; %s"
 
@@ -6251,8 +6284,11 @@ msgstr "die Schleife lief bisher nie und zählt danach abwärts; war sie absicht
 msgid "the loop never ran so far and then counts up; if it was switched off on purpose, this is an intervention"
 msgstr "die Schleife lief bisher nie und zählt danach aufwärts; war sie absichtlich abgeschaltet, ist das ein Eingriff"
 
-msgid "tabs in code become spaces - tab width 2 (assumption); tabs in strings and comments stay"
-msgstr "Tabs im Code werden zu Leerzeichen - Tabweite 2 (Annahme); Tabs in Strings und Kommentaren bleiben"
+msgid "tabs in code become spaces - tab width %d, as the alignment of the neighbouring lines shows; tabs in strings and comments stay"
+msgstr "Tabs im Code werden zu Leerzeichen - Tabweite %d, wie die Ausrichtung der Nachbarzeilen zeigt; Tabs in Strings und Kommentaren bleiben"
+
+msgid "tabs in code become spaces - tab width %d (assumption, the neighbouring lines do not show one); tabs in strings and comments stay"
+msgstr "Tabs im Code werden zu Leerzeichen - Tabweite %d (Annahme, die Nachbarzeilen zeigen keine); Tabs in Strings und Kommentaren bleiben"
 
 msgid "whitespace at the end of the line only"
 msgstr "nur Leerraum am Zeilenende"
@@ -6550,6 +6586,9 @@ msgstr "kein Tab an der gemeldeten Stelle"
 
 msgid "the first tab of the line is inside a string or comment - it stays untouched, the help would leave the finding in place"
 msgstr "der erste Tab der Zeile steht in einem String oder Kommentar - der bleibt unangetastet, die Hilfe ließe den Fund stehen"
+
+msgid "the neighbouring lines fit tab width %d as well as %d - which one the alignment of the file follows is open; %s"
+msgstr "die Nachbarzeilen passen zu Tabweite %d ebenso wie zu %d - welcher die Ausrichtung der Datei folgt, ist offen; %s"
 
 msgid "the message does not name the loop head - analyse the file again"
 msgstr "die Meldung nennt den Schleifenkopf nicht - Datei neu prüfen"

@@ -223,6 +223,17 @@ const
   R_IMPL_INCLUDE = '{$I} include in the implementation section (line %d) - a '
     + 'caller that the quick fix does not see may be there';
   R_LAST_LINE = 'the routine ends on the last line of the file';
+  // SCA164/SCA147 (rwE29, JCL source\prototypes\JclAlgorithms.pas: fuenf
+  // Loeschungen, nach dem Generieren E2065 bzw. fehlende Routinen fuer
+  // JclAbstractContainers): eine Direktive des JEDI-Praeprozessors jpp
+  // ({$JPPEXPANDMACRO ..}, (*$JPPLOOP ..*)) heisst, die Datei ist ein
+  // Prototyp - aus ihr entsteht die eigentliche Unit, und deren interface-
+  // Teil und Rumpf erzeugen die Makros; wer die Routine dort deklariert
+  // oder ruft, steht nicht im Puffer.
+  JPP_PREFIX = 'jpp';
+  R_JPP_PROTOTYPE = 'jpp directive in line %d - the file is a JEDI '
+    + 'preprocessor prototype; the unit generated from it declares and calls '
+    + 'routines through macros that the quick fix does not see';
   // SCA164/SCA147: Include-Dateien vor implementation (IncludeReason) - fuer
   // beide Regeln: die Routine deklarieren oder rufen (SCA164) bzw. die
   // Methode als Property-Accessor einer Nachfahrenklasse nennen (SCA147;
@@ -267,6 +278,7 @@ type
     Rtti          : Integer;   // {$RTTI ...}
     NameLiteral   : Integer;   // String-Literal mit dem Namen als Wort
     NameDirective : Integer;   // Direktive mit dem Namen als Wort
+    Jpp           : Integer;   // {$JPP..} / (*$JPP..*): JPP-Prototyp (rwE29)
   end;
 
   // Zustand der Zeilen-Durchsicht. Own: die geloeschten Bereiche - ein
@@ -701,6 +713,8 @@ begin
     Facts.ImplInclude := ALine;
   if (W = 'rtti') and (Facts.Rtti = 0) then
     Facts.Rtti := ALine;
+  if (Facts.Jpp = 0) and (Copy(W, 1, Length(JPP_PREFIX)) = JPP_PREFIX) then
+    Facts.Jpp := ALine;
   Text := LowerCase(Copy(AMap.Raw(ALine), ACol,
     RunEnd(AMap, ALine, ACol) - ACol + 1));
   if (Facts.NameDirective = 0) and not InOwn(ALine)
@@ -927,10 +941,13 @@ begin
       + 'no body', [W]);
 end;
 
-// SCA164: {$L}, {$I} im implementation-Teil, Name in Literal/Direktive.
+// SCA164: JPP-Prototyp, {$L}, {$I} im implementation-Teil, Name in
+// Literal/Direktive.
 function RoutineFactsReason(const F: TRdxFileFacts; const AName: string): string;
 begin
-  if F.LinksObject > 0 then
+  if F.Jpp > 0 then
+    Result := _(R_JPP_PROTOTYPE, [F.Jpp])
+  else if F.LinksObject > 0 then
     Result := _('the unit links an object file ({$L} in line %d) - the C '
       + 'code calls routines by name', [F.LinksObject])
   else if F.ImplInclude > 0 then
@@ -1210,10 +1227,13 @@ begin
       Exit(HitReason(AMap, H, D.Name, 0));
 end;
 
-// SCA147: {$RTTI}, {$I} im implementation-Teil, Name in Literal/Direktive.
+// SCA147: JPP-Prototyp, {$RTTI}, {$I} im implementation-Teil, Name in
+// Literal/Direktive.
 function MethodFactsReason(const F: TRdxFileFacts; const AName: string): string;
 begin
-  if F.Rtti > 0 then
+  if F.Jpp > 0 then
+    Result := _(R_JPP_PROTOTYPE, [F.Jpp])
+  else if F.Rtti > 0 then
     Result := _('{$RTTI} in line %d - extended RTTI can call private methods '
       + 'by name', [F.Rtti])
   else if F.ImplInclude > 0 then
