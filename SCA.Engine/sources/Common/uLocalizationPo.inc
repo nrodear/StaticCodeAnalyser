@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6749 Zeilen, 304205 Bytes
-  CPoLines_de: array[0..6748] of string = (
+  // i18n\de.po - 6761 Zeilen, 305258 Bytes
+  CPoLines_de: array[0..6760] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2863,6 +2863,9 @@ const
     'msgid "\"%s\" guards a default value (if X = 0 then X := ...) - the exact comparison is intended there"',
     'msgstr "\"%s\" sichert einen Vorgabewert (if X = 0 then X := ...) - der exakte Vergleich ist dort gewollt"',
     '',
+    'msgid "\"%s\" guards a tolerance check of the same value (line %d) - the exact comparison is intended there"',
+    'msgstr "\"%s\" sichert eine Toleranzpr'#$00FC'fung desselben Werts (Zeile %d) - der exakte Vergleich ist dort gewollt"',
+    '',
     'msgid "\"%s\" is not declared in the body of a class of this file (free routine, record, interface, or the class sits in an include)"',
     'msgstr "\"%s\" ist nicht im Rumpf einer Klasse dieser Datei deklariert (freie Routine, record, Interface oder die Klasse steht in einem Include)"',
     '',
@@ -2874,6 +2877,9 @@ const
     '',
     'msgid "\"%s\" is part of a larger expression (\"%s\" before it) - only a whole condition or assignment is rewritten"',
     'msgstr "\"%s\" ist Teil eines gr'#$00F6#$00DF'eren Ausdrucks (\"%s\" davor) - umgeschrieben wird nur eine ganze Bedingung oder Zuweisung"',
+    '',
+    'msgid "\"%s\" is published - its name is in the method table, code that looks it up by name (RTTI, MethodName, a command list) may compare case-sensitively"',
+    'msgstr "\"%s\" ist published - der Name steht in der Methodentabelle, Code, der ihn per Name sucht (RTTI, MethodName, eine Kommandoliste), kann Gro'#$00DF'- und Kleinschreibung unterscheiden"',
     '',
     'msgid "\"%s\" stands after \"%s\" - it is conditional, the code after it runs"',
     'msgstr "\"%s\" steht hinter \"%s\" - es ist bedingt, der Code danach l'#$00E4'uft"',
@@ -5257,6 +5263,12 @@ const
     'msgid "the unit declares its own method Free - FreeAndNil would not call it"',
     'msgstr "die Unit deklariert eine eigene Methode Free - FreeAndNil riefe sie nicht auf"',
     '',
+    'msgid "the comment in line %d mentions FreeAndNil - free first, then nil is probably intended there"',
+    'msgstr "der Kommentar in Zeile %d nennt FreeAndNil - erst freigeben, dann nil ist dort vermutlich Absicht"',
+    '',
+    'msgid "%s descends from %s (old Open Tools API, VirtIntf.TInterface) - its own Free calls Release, FreeAndNil would destroy the object"',
+    'msgstr "%s stammt von %s ab (altes Open Tools API, VirtIntf.TInterface) - sein eigenes Free ruft Release, FreeAndNil zerst'#$00F6'rte das Objekt"',
+    '',
     'msgid "%s has the type %s - by Delphi convention a pointer from another unit (Free is then the one of the target, FreeAndNil takes only a TObject)"',
     'msgstr "%s hat den Typ %s - nach Delphi-Konvention ein Zeiger aus einer anderen Unit (Free ist dann die des Ziels, FreeAndNil nimmt nur ein TObject)"',
     '',
@@ -7038,8 +7050,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6745 Zeilen, 316467 Bytes
-  CPoLines_fr: array[0..6744] of string = (
+  // i18n\fr.po - 6757 Zeilen, 317525 Bytes
+  CPoLines_fr: array[0..6756] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -9884,6 +9896,9 @@ const
     'msgid "\"%s\" guards a default value (if X = 0 then X := ...) - the exact comparison is intended there"',
     'msgstr "\"%s\" prot'#$00E8'ge une valeur par d'#$00E9'faut (if X = 0 then X := ...) - la comparaison exacte y est voulue"',
     '',
+    'msgid "\"%s\" guards a tolerance check of the same value (line %d) - the exact comparison is intended there"',
+    'msgstr "'#$00AB' %s '#$00BB' prot'#$00E8'ge un test avec tol'#$00E9'rance de la m'#$00EA'me valeur (ligne %d) - la comparaison exacte y est voulue"',
+    '',
     'msgid "\"%s\" is not declared in the body of a class of this file (free routine, record, interface, or the class sits in an include)"',
     'msgstr "'#$00AB' %s '#$00BB' n''est pas d'#$00E9'clar'#$00E9'e dans le corps d''une classe de ce fichier (routine libre, record, interface, ou la classe se trouve dans un include)"',
     '',
@@ -9895,6 +9910,9 @@ const
     '',
     'msgid "\"%s\" is part of a larger expression (\"%s\" before it) - only a whole condition or assignment is rewritten"',
     'msgstr "\"%s\" fait partie d''une expression plus large (\"%s\" avant) - seule une condition ou une affectation enti'#$00E8're est r'#$00E9#$00E9'crite"',
+    '',
+    'msgid "\"%s\" is published - its name is in the method table, code that looks it up by name (RTTI, MethodName, a command list) may compare case-sensitively"',
+    'msgstr "'#$00AB' %s '#$00BB' est published - son nom figure dans la table des m'#$00E9'thodes, le code qui le cherche par son nom (RTTI, MethodName, une liste de commandes) peut respecter la casse"',
     '',
     'msgid "\"%s\" stands after \"%s\" - it is conditional, the code after it runs"',
     'msgstr "'#$00AB' %s '#$00BB' suit '#$00AB' %s '#$00BB' - il est conditionnel, le code qui suit s''ex'#$00E9'cute"',
@@ -12277,6 +12295,12 @@ const
     '',
     'msgid "the unit declares its own method Free - FreeAndNil would not call it"',
     'msgstr "l''unit'#$00E9' d'#$00E9'clare sa propre m'#$00E9'thode Free - FreeAndNil ne l''appellerait pas"',
+    '',
+    'msgid "the comment in line %d mentions FreeAndNil - free first, then nil is probably intended there"',
+    'msgstr "le commentaire de la ligne %d mentionne FreeAndNil - lib'#$00E9'rer d''abord, puis nil y est probablement voulu"',
+    '',
+    'msgid "%s descends from %s (old Open Tools API, VirtIntf.TInterface) - its own Free calls Release, FreeAndNil would destroy the object"',
+    'msgstr "%s descend de %s (ancienne Open Tools API, VirtIntf.TInterface) - son propre Free appelle Release, FreeAndNil d'#$00E9'truirait l''objet"',
     '',
     'msgid "%s has the type %s - by Delphi convention a pointer from another unit (Free is then the one of the target, FreeAndNil takes only a TObject)"',
     'msgstr "%s a le type %s - selon la convention Delphi, un pointeur d''une autre unit'#$00E9' (Free est alors celle de la cible, FreeAndNil n''accepte qu''un TObject)"',

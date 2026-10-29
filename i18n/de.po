@@ -2846,6 +2846,9 @@ msgstr "\"%s\" steht nicht am Anfang einer eigenen Zeile"
 msgid "\"%s\" guards a default value (if X = 0 then X := ...) - the exact comparison is intended there"
 msgstr "\"%s\" sichert einen Vorgabewert (if X = 0 then X := ...) - der exakte Vergleich ist dort gewollt"
 
+msgid "\"%s\" guards a tolerance check of the same value (line %d) - the exact comparison is intended there"
+msgstr "\"%s\" sichert eine Toleranzprüfung desselben Werts (Zeile %d) - der exakte Vergleich ist dort gewollt"
+
 msgid "\"%s\" is not declared in the body of a class of this file (free routine, record, interface, or the class sits in an include)"
 msgstr "\"%s\" ist nicht im Rumpf einer Klasse dieser Datei deklariert (freie Routine, record, Interface oder die Klasse steht in einem Include)"
 
@@ -2857,6 +2860,9 @@ msgstr "\"%s\" ist Teil eines größeren Ausdrucks (\"%s\" dahinter) - umgeschri
 
 msgid "\"%s\" is part of a larger expression (\"%s\" before it) - only a whole condition or assignment is rewritten"
 msgstr "\"%s\" ist Teil eines größeren Ausdrucks (\"%s\" davor) - umgeschrieben wird nur eine ganze Bedingung oder Zuweisung"
+
+msgid "\"%s\" is published - its name is in the method table, code that looks it up by name (RTTI, MethodName, a command list) may compare case-sensitively"
+msgstr "\"%s\" ist published - der Name steht in der Methodentabelle, Code, der ihn per Name sucht (RTTI, MethodName, eine Kommandoliste), kann Groß- und Kleinschreibung unterscheiden"
 
 msgid "\"%s\" stands after \"%s\" - it is conditional, the code after it runs"
 msgstr "\"%s\" steht hinter \"%s\" - es ist bedingt, der Code danach läuft"
@@ -5239,6 +5245,12 @@ msgstr "%s ist kein Objekt (%s: record, object, interface, Zeiger oder eigener T
 
 msgid "the unit declares its own method Free - FreeAndNil would not call it"
 msgstr "die Unit deklariert eine eigene Methode Free - FreeAndNil riefe sie nicht auf"
+
+msgid "the comment in line %d mentions FreeAndNil - free first, then nil is probably intended there"
+msgstr "der Kommentar in Zeile %d nennt FreeAndNil - erst freigeben, dann nil ist dort vermutlich Absicht"
+
+msgid "%s descends from %s (old Open Tools API, VirtIntf.TInterface) - its own Free calls Release, FreeAndNil would destroy the object"
+msgstr "%s stammt von %s ab (altes Open Tools API, VirtIntf.TInterface) - sein eigenes Free ruft Release, FreeAndNil zerstörte das Objekt"
 
 msgid "%s has the type %s - by Delphi convention a pointer from another unit (Free is then the one of the target, FreeAndNil takes only a TObject)"
 msgstr "%s hat den Typ %s - nach Delphi-Konvention ein Zeiger aus einer anderen Unit (Free ist dann die des Ziels, FreeAndNil nimmt nur ein TObject)"
