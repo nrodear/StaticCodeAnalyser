@@ -1331,7 +1331,10 @@ begin
   // rwE30: Testcode nur mit Merkmal, nicht schon wegen des Ordners - die
   // Frage liest die Platte, also nur fuer eine angebotene Hilfe.
   if not Result.Enabled then Exit;
-  Why := TRdxHttpsFix.TestPathReason(AFinding.FileName, ALines);
+  // rwE31: mit Zeile und Meldung - ein Projekt nur mit 'test' im Namen
+  // sperrt ein Argument einer Aufruf-Anweisung nicht.
+  Why := TRdxHttpsFix.TestPathReason(AFinding.FileName, ALines,
+    AFinding.LineInt, AFinding.Message);
   if Why <> '' then
   begin
     Result.Enabled := False;

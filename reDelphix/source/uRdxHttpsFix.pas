@@ -25,7 +25,10 @@ unit uRdxHttpsFix;
 //     "koennte", nicht "ist kein Netzaufruf";
 //   * Testcode (TestPathReason, der Adapter fragt mit Dateiname und
 //     Zeilen): ein Test vergleicht die Adresse oft woertlich - keine Hilfe;
-//     ein Testordner allein macht noch keinen Testcode (rwE30, jvcl\tests).
+//     ein Testordner allein macht noch keinen Testcode (rwE30, jvcl\tests),
+//     ein Projekt mit 'test' nur im Namen sperrt ein Literal, das nur
+//     Argument einer Aufruf-Anweisung ist, nicht (rwE31, TMTimeLine
+//     SimpleTLTest1.dpr).
 
 interface
 
@@ -71,10 +74,18 @@ type
     //      DUnitX, FPCUnit, mORMot: TestFramework, TTestCase, [TestFixture]
     //      ...; TEST_MARKS);
     //   4. im Verzeichnis der Datei oder darueber bis zum Testordner liegt
-    //      ein Testprojekt: eine Projekt- oder Gruppendatei (.dpr .lpr .dpk
-    //      .lpk .dproj .lpi .bpg .groupproj) mit 'test' im Namen
-    //      (cnwizards Test\..\AICoder\AICoderTest.dpr) oder eine .dpr/.lpr,
-    //      deren Kopf ein Test-Merkmal nennt.
+    //      ein Testprojekt: eine .dpr/.lpr, deren Kopf ein Test-Merkmal
+    //      nennt, oder eine Projekt- oder Gruppendatei (.dpr .lpr .dpk .lpk
+    //      .dproj .lpi .bpg .groupproj) mit 'test' im Namen (cnwizards
+    //      Test\..\AICoder\AICoderTest.dpr). Der Name allein ist ein
+    //      schwaches Merkmal (rwE31: jvcl TMTimeLine SimpleTLTest1.dpr ist
+    //      eine Demo-Anwendung - 'Application.CreateForm', kein Framework):
+    //      er sperrt nicht, wenn das Literal auf ALine (die Adresse aus
+    //      AMessage) nur Argument einer Aufruf-Anweisung ist
+    //      ('ShellExecute(.., PChar(''http://..''), ..);' - der Wert geht
+    //      in keine Variable, keine Konstante, keinen Vergleich, den eine
+    //      andere Datei lesen koennte; CallStatementArg). Eine Konstante
+    //      ('A_URL = ''http://..''', AICoderUnit.pas:299) sperrt weiter.
     // Was der Planer nicht lesen kann, sperrt wie bisher mit dem Grund des
     // Testordners: ein Netzpfad (uRdxPaths.IsNetworkPath), mehr als
     // MAX_TEST_LEVELS Verzeichnisse bis zum Testordner, mehr als
@@ -82,7 +93,17 @@ type
     // Projektkoepfe oder ein Kopf, der sich nicht lesen laesst. Der Adapter
     // (uRdxFixTable.PlanHttps) fragt das mit Dateiname und Zeilen des Funds.
     class function TestPathReason(const AFileName: string;
-      ALines: TStrings): string; static;
+      ALines: TStrings; ALine: Integer = 0;
+      const AMessage: string = ''): string; static;
+
+    // Steht das Literal der Adresse aus AMessage (genau einmal) auf ALine
+    // nur als Argument einer Aufruf-Anweisung - auch geschachtelt
+    // ('ShellExecute(H, ''open'', PChar(''http://..''), nil, nil, 0);') -,
+    // vor dem Aufruf ein Anweisungsanfang (';', begin, then, else, do ..)
+    // und hinter seiner Klammer ein Anweisungsende? Nicht: Zuweisung,
+    // Konstante, Bedingung, Menge, Index.
+    class function CallStatementArg(ALines: TStrings; ALine: Integer;
+      const AMessage: string): Boolean; static;
   end;
 
 implementation
@@ -312,8 +333,10 @@ end;
 { ---- Testcode (TestPathReason) ---- }
 
 type
-  // Was der Plattenblick in einem Verzeichnis fand (TestProjectIn).
-  TTestDirLook = (tdNone, tdProject, tdUnread);
+  // Was der Plattenblick in einem Verzeichnis fand (TestProjectIn):
+  // nichts, ein Testprojekt mit Merkmal im Kopf, eines nur mit 'test' im
+  // Namen (rwE31), einen erschoepften Deckel.
+  TTestDirLook = (tdNone, tdProject, tdNamed, tdUnread);
 
 // Steht AMark (klein, auch mit Punkten: 'mormot.core.test') in ALow als
 // ganzer Name? Davor kein Bezeichnerzeichen und kein Punkt ('x.ttestcase'
@@ -405,12 +428,14 @@ begin
   Result := True;
 end;
 
-// Merkmal 4 in EINEM Verzeichnis ADir (nicht rekursiv): eine Projekt- oder
-// Gruppendatei mit 'test' im Namen bzw. eine .dpr/.lpr mit einem Test-
-// Merkmal im Kopf - tdProject, ihr Name in AName. tdUnread, wenn ein
-// Deckel erschoepft ist (MAX_DIR_ENTRIES, MAX_PROJECT_READS - AReads zaehlt
-// ueber alle Verzeichnisse eines Aufrufs) oder ein Kopf sich nicht lesen
-// laesst; tdNone sonst, auch fuer ein Verzeichnis, das es nicht gibt.
+// Merkmal 4 in EINEM Verzeichnis ADir (nicht rekursiv): eine .dpr/.lpr mit
+// einem Test-Merkmal im Kopf - tdProject; sonst eine Projekt- oder
+// Gruppendatei mit 'test' im Namen - tdNamed (seit rwE31: der Kopf einer
+// solchen .dpr/.lpr wird auch gelesen, bis dahin galt schon der Name als
+// tdProject); ihr Name in AName. tdUnread, wenn ein Deckel erschoepft ist
+// (MAX_DIR_ENTRIES, MAX_PROJECT_READS - AReads zaehlt ueber alle
+// Verzeichnisse eines Aufrufs) oder ein Kopf sich nicht lesen laesst;
+// tdNone sonst, auch fuer ein Verzeichnis, das es nicht gibt.
 function TestProjectIn(const ADir: string; var AReads: Integer;
   out AName: string): TTestDirLook;
 var
@@ -418,9 +443,11 @@ var
   Entries  : Integer;
   Low, Ext : string;
   Head     : string;
+  Named    : string;
 begin
   Result := tdNone;
   AName := '';
+  Named := '';
   if FindFirst(IncludeTrailingPathDelimiter(ADir) + '*', faAnyFile, SR) <> 0 then
     Exit;
   try
@@ -436,8 +463,6 @@ begin
       if not InList(Ext, PROJECT_EXTS) then
         Continue;
       AName := SR.Name;
-      if Pos(TEST_WORD, ChangeFileExt(Low, '')) > 0 then
-        Exit(tdProject);
       if InList(Ext, READ_EXTS) then
       begin
         Inc(AReads);
@@ -448,10 +473,17 @@ begin
         if TestMarkIn(Head) <> '' then
           Exit(tdProject);
       end;
+      if (Named = '') and (Pos(TEST_WORD, ChangeFileExt(Low, '')) > 0) then
+        Named := SR.Name;
       AName := '';
     until FindNext(SR) <> 0;
   finally
     FindClose(SR);
+  end;
+  if Named <> '' then
+  begin
+    AName := Named;
+    Result := tdNamed;
   end;
 end;
 
@@ -482,10 +514,94 @@ begin
     Result := Result + '\' + AParts[i];
 end;
 
+{ ---- Argument einer Aufruf-Anweisung (CallStatementArg, rwE31) ---- }
+
+const
+  // Davor beginnt eine Anweisung, dahinter endet sie.
+  STATEMENT_STARTS: array[0..9] of string = (';', 'begin', 'then', 'else',
+    'do', 'try', 'finally', 'except', 'repeat', ':');
+  STATEMENT_ENDS: array[0..5] of string = (';', 'end', 'else', 'until',
+    'finally', 'except');
+  // So tief geschachtelt und so weit zurueck liest CallStatementArg.
+  MAX_ARG_DEPTH = 8;
+  MAX_ARG_BACK  = 400;
+
+// Die Klammer, in der das Argument hinter ATok ('(' oder ',') steht -
+// rueckwaerts ueber geschlossene Klammern; '(' oder '[' (Low = '' ohne,
+// auch hinter einem ';' auf oberster Ebene).
+function EnclosingOpen(AMap: TRdxCodeMap; const ATok: TRdxToken): TRdxToken;
+var
+  T            : TRdxToken;
+  Depth, Steps : Integer;
+begin
+  Result := Default(TRdxToken);
+  if ATok.Low = '(' then
+    Exit(ATok);
+  Depth := 0;
+  Steps := 0;
+  T := Before(AMap, ATok);
+  while (T.Low <> '') and (Steps < MAX_ARG_BACK) do
+  begin
+    Depth := Depth + ParenDelta(T);
+    if Depth > 0 then
+      Exit(T);
+    if (Depth = 0) and (T.Low = ';') then
+      Exit;
+    Inc(Steps);
+    T := Before(AMap, T);
+  end;
+end;
+
+class function TRdxHttpsFix.CallStatementArg(ALines: TStrings;
+  ALine: Integer; const AMessage: string): Boolean;
+var
+  Map            : TRdxCodeMap;
+  L, Url         : string;
+  P, Depth       : Integer;
+  T, O, Head, B  : TRdxToken;
+begin
+  Result := False;
+  Url := QuotedText(AMessage, QUOTE_CHAR);
+  if (ALines = nil) or (ALine < 1) or (Url = '') then
+    Exit;
+  Map := TRdxCodeMap.Acquire(ALines);
+  try
+    if ALine > Map.LineCount then
+      Exit;
+    L := Map.Raw(ALine);
+    if CountLiterals(Map, ALine, L, Url, P) <> 1 then
+      Exit;
+    T := PrevToken(Map, ALine, P);
+    for Depth := 1 to MAX_ARG_DEPTH do
+    begin
+      if (T.Low <> '(') and (T.Low <> ',') then
+        Exit;
+      O := EnclosingOpen(Map, T);
+      if O.Low <> '(' then
+        Exit;   // Menge, Index oder keine Klammer
+      Head := Before(Map, O);
+      if not Head.IsWord or IsKeyword(Head.Low) then
+        Exit;
+      while (Before(Map, Head).Low = '.') and Before(Map, Before(Map, Head)).IsWord do
+        Head := Before(Map, Before(Map, Head));
+      B := Before(Map, Head);
+      if (B.Low = '(') or (B.Low = ',') then
+      begin
+        T := B;   // der Aufruf ist selbst ein Argument
+        Continue;
+      end;
+      Exit(((B.Low = '') or InList(B.Low, STATEMENT_STARTS))
+        and InList(AfterClose(Map, O).Low, STATEMENT_ENDS));
+    end;
+  finally
+    TRdxCodeMap.Release(Map);
+  end;
+end;
+
 { TRdxHttpsFix }
 
 class function TRdxHttpsFix.TestPathReason(const AFileName: string;
-  ALines: TStrings): string;
+  ALines: TStrings; ALine: Integer; const AMessage: string): string;
 var
   Parts        : TArray<string>;
   i, Anchor    : Integer;
@@ -529,6 +645,11 @@ begin
   for i := High(Parts) - 1 downto Anchor do
     case TestProjectIn(JoinedPath(Parts, i), Reads, Project) of
       tdProject: Exit(_(R_HTTPS_TEST_PROJECT, [Project, Parts[Anchor]]));
+      // Nur der Name: sperrt nicht, wenn das Literal nur Argument einer
+      // Aufruf-Anweisung ist (s. Kopf, rwE31).
+      tdNamed:
+        if not CallStatementArg(ALines, ALine, AMessage) then
+          Exit(_(R_HTTPS_TEST_PROJECT, [Project, Parts[Anchor]]));
       tdUnread:  Exit(_(R_HTTPS_TEST_DIR, [Parts[Anchor]]));
     end;
 end;
