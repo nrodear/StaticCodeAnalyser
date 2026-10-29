@@ -1678,13 +1678,22 @@ begin
 end;
 
 // SCA144 (Charge QF5): der deklarierte Typ eines Operanden; '' fuer eine
-// Zahl (sie braucht keinen Beweis).
-function FloatOperandType(APlaces: TSourcePlaces; ALine: Integer;
-  const AOperand: string): string;
+// Zahl (sie braucht keinen Beweis). Seit rwE30 zuerst der Feldtyp, wenn
+// der Operand ein Feld eines with-Records ist (AWithType,
+// WithMemberTypes), und - wenn DeclaredTypeOf schweigt - der Typ aus den
+// Routinen um die Zeile (LocalType: Parameter einer verschachtelten
+// Routine).
+function FloatOperandType(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  ALine: Integer; const AOperand, AWithType: string): string;
 begin
   Result := '';
-  if not TRdxFloatEqualityFix.IsLiteral(AOperand) then
-    Result := APlaces.DeclaredTypeOf(ALine, AOperand);
+  if TRdxFloatEqualityFix.IsLiteral(AOperand) then
+    Exit;
+  if AWithType <> '' then
+    Exit(AWithType);
+  Result := APlaces.DeclaredTypeOf(ALine, AOperand);
+  if Result = '' then
+    Result := TRdxFloatEqualityFix.LocalType(AMap, ALine, AOperand);
 end;
 
 // SCA144: 'A = B' -> 'SameValue(A, B)', eine Null-Seite -> 'IsZero(A)', bei
@@ -1700,8 +1709,10 @@ end;
 function PlanFloatEquality(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
-  Map      : TRdxCodeMap;
-  L, Op, R : string;
+  Map          : TRdxCodeMap;
+  L, Op, R     : string;
+  InWith       : Boolean;
+  WithL, WithR : string;
 begin
   Result := Default(TRdxFixOutcome);
   Result.Name := TRdxFloatEqualityFix.CallName(AFinding.Message);
@@ -1715,18 +1726,30 @@ begin
   try
     Result.Enabled := TRdxFloatEqualityFix.ToleranceCompare(Map,
       AFinding.LineInt, AFinding.Message, Result.Edits[0], Result.Reason);
+    // Ein with, dessen Ziele Records dieser Unit nur mit Feldern sind,
+    // bindet nur deren Felder (rwE30) - dann zaehlt der Blockbereich des
+    // Quellstellen-Dienstes nicht, und ein Operand, der ein Feld ist, hat
+    // dessen Typ.
+    InWith := False;
+    WithL := '';
+    WithR := '';
+    if Result.Enabled then
+    begin
+      TRdxFloatEqualityFix.WithMemberTypes(Map, AFinding.LineInt,
+        AFinding.Message, InWith, WithL, WithR);
+      Result.Reason := TRdxFloatEqualityFix.ContextReason(
+        AFinding.Confidence = fcLow,
+        APlaces.InWithBlock(AFinding.LineInt) and not InWith,
+        AFinding.Message);
+    end;
+    if Result.Enabled and (Result.Reason = '')
+       and TRdxFloatEqualityFix.Operands(AFinding.Message, L, Op, R) then
+      Result.Reason := TRdxFloatEqualityFix.TypeReason(
+        L, FloatOperandType(APlaces, Map, AFinding.LineInt, L, WithL),
+        R, FloatOperandType(APlaces, Map, AFinding.LineInt, R, WithR));
   finally
     TRdxCodeMap.Release(Map);
   end;
-  if Result.Enabled then
-    Result.Reason := TRdxFloatEqualityFix.ContextReason(
-      AFinding.Confidence = fcLow, APlaces.InWithBlock(AFinding.LineInt),
-      AFinding.Message);
-  if Result.Enabled and (Result.Reason = '')
-     and TRdxFloatEqualityFix.Operands(AFinding.Message, L, Op, R) then
-    Result.Reason := TRdxFloatEqualityFix.TypeReason(
-      L, FloatOperandType(APlaces, AFinding.LineInt, L),
-      R, FloatOperandType(APlaces, AFinding.LineInt, R));
   Result.Enabled := Result.Enabled and (Result.Reason = '');
   if not Result.Enabled then
   begin
