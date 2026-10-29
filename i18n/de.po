@@ -6876,3 +6876,33 @@ msgstr "das Literal %s passt nicht zum Zahlenformat von TFormatSettings.Invarian
 
 msgid "%s; line %d calls %s of the same family without TFormatSettings.Invariant - change it along with this one, otherwise values written there and read or compared here (or the other way round) no longer match"
 msgstr "%s; Zeile %d ruft %s derselben Familie ohne TFormatSettings.Invariant auf - mit umstellen, sonst passen dort geschriebene und hier gelesene oder verglichene Werte (oder umgekehrt) nicht mehr zusammen"
+
+msgid "the body holds an empty comment - a mark for \"nothing to do here\"; raise would contradict it"
+msgstr "der Rumpf enthält einen leeren Kommentar - eine Marke für \"hier ist nichts zu tun\"; raise widerspräche ihr"
+
+msgid "a method resolution clause of the class maps an interface method to %s - callers of the interface expect the empty body to do nothing; raise would break them"
+msgstr "eine Methodenzuordnung der Klasse leitet eine Interface-Methode auf %s um - Aufrufer des Interfaces erwarten, dass der leere Rumpf nichts tut; raise bräche sie"
+
+msgid "the method implements %s.%s - callers of the interface expect the empty body to do nothing; raise would break them"
+msgstr "die Methode implementiert %s.%s - Aufrufer des Interfaces erwarten, dass der leere Rumpf nichts tut; raise bräche sie"
+
+msgid "the class implements %s, declared outside this file - the method may implement it, and callers of the interface expect the empty body to do nothing; raise would break them"
+msgstr "die Klasse implementiert %s, deklariert außerhalb dieser Datei - die Methode kann dazugehören, und Aufrufer des Interfaces erwarten, dass der leere Rumpf nichts tut; raise bräche sie"
+
+msgid "the routine is %s - a callback for foreign code; an exception must not leave it"
+msgstr "die Routine ist %s - ein Callback für fremden Code; eine Exception darf sie nicht verlassen"
+
+msgid "the routine is passed as a callback (%s in line %d) - raise would break its caller"
+msgstr "die Routine wird als Callback übergeben (%s in Zeile %d) - raise bräche ihren Aufrufer"
+
+msgid "the method is the write accessor of a property (line %d) - an empty setter ignores assignments on purpose; raise would make every assignment fail"
+msgstr "die Methode ist der Schreibzugriff einer Eigenschaft (Zeile %d) - ein leerer Setter ignoriert Zuweisungen mit Absicht; mit raise scheiterte jede Zuweisung"
+
+msgid "the handler is in %s - \"raise;\" would skip the rest of it (inherited, freeing) and let an exception leave the destructor"
+msgstr "der Handler steht in %s - \"raise;\" überspränge den Rest (inherited, Freigaben) und ließe eine Exception aus dem Destruktor"
+
+msgid "the try only releases (%s) - an error while freeing or closing is swallowed on purpose so that the cleanup after it still runs; \"raise;\" would skip it"
+msgstr "der try-Teil gibt nur frei (%s) - ein Fehler beim Freigeben oder Schließen wird mit Absicht geschluckt, damit das Aufräumen danach läuft; \"raise;\" überspränge es"
+
+msgid "the case selects on characters or strings - every other value is normal input there (a lexer, a parser); raise would break it"
+msgstr "das case wählt nach Zeichen oder Strings - jeder andere Wert ist dort gewöhnliche Eingabe (ein Lexer, ein Parser); raise bräche ihn"
