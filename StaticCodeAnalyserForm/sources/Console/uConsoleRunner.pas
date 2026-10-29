@@ -871,9 +871,10 @@ begin
   WriteLn('                        template (sonar.branch.name). The findings');
   WriteLn('                        export has no branch field - the branch is');
   WriteLn('                        read by sonar-scanner, not by this tool.');
-  WriteLn('  --sonar-keep-downgraded  Also export findings whose severity was');
-  WriteLn('                        downgraded at runtime (path override or');
-  WriteLn('                        confidence). Off by default: Sonar has no');
+  WriteLn('  --sonar-keep-downgraded  Also export findings whose severity a');
+  WriteLn('                        path override ([PathOverrides]) downgraded');
+  WriteLn('                        (findings capped by the evidence policy are');
+  WriteLn('                        always exported). Off by default: Sonar has no');
   WriteLn('                        per-finding severity, so they would arrive');
   WriteLn('                        at full catalog severity and break the gate.');
   WriteLn('  --sonar-insecure      Accept self-signed TLS certificates');

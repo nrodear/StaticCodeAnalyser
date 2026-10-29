@@ -31,8 +31,9 @@
 // zaehlt nur als Hinweis"). Der Deckel der Evidenz-Politik zaehlt NICHT
 // dazu (Nico-Entscheid 2026-10-29, s. IsDowngraded) - gedeckelte Funde
 // gehen mit, ihre Regel traegt die gedeckelte Schwere als Impact. Von einer
-// Nutzer-Herabstufung kommt in Sonar nichts an: das Generic-Format kennt Severity nur je REGEL, nicht
-// je Fund (Details und Belege an BuildIssueObject). Der Fund wuerde dort
+// Nutzer-Herabstufung kommt in Sonar nichts an: das Generic-Format kennt
+// Severity nur je REGEL, nicht je Fund (Details und Belege an
+// BuildIssueObject). Der Fund wuerde dort
 // also in voller Katalog-Schwere erscheinen und das Quality Gate reissen -
 // das Gegenteil dessen, was die Herabstufung ausdruecken sollte. Lieber
 // gar nicht melden als falsch melden; in SARIF, HTML, CSV, JSON und

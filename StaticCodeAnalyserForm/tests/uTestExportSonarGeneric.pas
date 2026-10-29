@@ -32,7 +32,8 @@ type
     // ---- Lauf-Diagnosen gehoeren nicht in einen Issue-Report -----------
     [Test] procedure FileReadError_ProducesNoIssueAndNoRule;
     [Test] procedure RealFindingsSurviveAlongsideReadError;
-    // Herabgestufte Funde (Pfad-Ueberschreibung / Konfidenz), 2026-08-22
+    // Herabgestufte Funde (Pfad-Ueberschreibung; der Konfidenz-Deckel ist
+    // seit 2026-10-29 keine Herabstufung), 2026-08-22
     [Test] procedure DowngradedFinding_IsNotExported;
     [Test] procedure UpgradedFinding_StaysExported;
     [Test] procedure DowngradedFinding_KeptWhenAsked;
