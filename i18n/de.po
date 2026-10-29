@@ -6788,3 +6788,6 @@ msgstr "das Literal %s passt nicht zum Datums- und Zeitformat von TFormatSetting
 
 msgid "the literal %s does not fit the number format of TFormatSettings.Invariant (decimal point, no thousands separator) - %s would raise EConvertError"
 msgstr "das Literal %s passt nicht zum Zahlenformat von TFormatSettings.Invariant (Dezimalpunkt, kein Tausendertrenner) - %s würfe EConvertError"
+
+msgid "line %d calls %s without TFormatSettings.Invariant - a value written there and read or compared here (or the other way round) would no longer match; %s"
+msgstr "Zeile %d ruft %s ohne TFormatSettings.Invariant auf - ein dort geschriebener und hier gelesener oder verglichener Wert (oder umgekehrt) passte nicht mehr; %s"

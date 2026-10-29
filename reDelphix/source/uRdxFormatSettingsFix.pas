@@ -69,7 +69,10 @@ unit uRdxFormatSettingsFix;
 //     ein Lese-Aufruf (StrToDate, StrToTime, StrToDateTime, StrToFloat,
 //     StrToCurr) ein Literal liest, das nicht zum Invariant-Format passt
 //     (rwE29: StrToDateTime('17/02/2017 16:37:50') - Monat 17, sicherer
-//     EConvertError; LiteralMisfit).
+//     EConvertError; LiteralMisfit); SCA128, wenn die Datei eine weitere
+//     Routine derselben Familie (Datum/Uhrzeit bzw. Zahl, auch Try...,
+//     ...Def) ohne Invariant ruft - ein Paar aus Schreiben und Lesen bzw.
+//     Vergleich braeche (rwE29: HeidiSQL main.pas, PairBreakLine).
 // Was nur die Platte weiss (Projektdateien, Includes), prueft der Adapter
 // in uRdxFixTable (FormatSettingsDiskCheck, rwE29).
 // Der Bereich der Ersetzung beginnt hinter dem letzten Zeichen des letzten
@@ -123,6 +126,11 @@ const
   R_FS_LIT_NUMBER = 'the literal %s does not fit the number format of '
     + 'TFormatSettings.Invariant (decimal point, no thousands separator) - %s '
     + 'would raise EConvertError';
+  // Alt-Weg (rwE29, Paar-Bruch): %d die Zeile, %s der Aufruf dort, %s
+  // MsgByHand.
+  R_FS_PAIR = 'line %d calls %s without TFormatSettings.Invariant - a value '
+    + 'written there and read or compared here (or the other way round) '
+    + 'would no longer match; %s';
   R_FL_NO_SPEC = 'the message does not name the format string - analyse the '
     + 'file again';
   R_FL_NO_FORMAT = 'no Format call on the code columns of the reported line';
@@ -217,6 +225,23 @@ const
   PARSE_DATETIME = 'strtodatetime';
   MISFIT_NUMBER  = 'number';
   MISFIT_DATE    = 'date';
+  // Paar-Bruch (PairBreakLine, Alt-Weg, rwE29): die Familien der RTL-
+  // Routinen, die Datum/Uhrzeit bzw. Zahlen nach FormatSettings schreiben
+  // oder lesen - auch die ohne Fund (Try..., ...Def, ...F). Format gehoert
+  // nicht dazu (fast jede Datei ruft es fuer Text).
+  PAIR_DATE: array[0..13] of string = ('strtodate', 'strtotime',
+    'strtodatetime', 'datetostr', 'timetostr', 'datetimetostr',
+    'formatdatetime', 'trystrtodate', 'trystrtotime', 'trystrtodatetime',
+    'strtodatedef', 'strtotimedef', 'strtodatetimedef', 'datetimetostring');
+  PAIR_NUMBER: array[0..13] of string = ('strtofloat', 'strtocurr',
+    'floattostr', 'currtostr', 'formatfloat', 'formatcurr', 'trystrtofloat',
+    'trystrtocurr', 'strtofloatdef', 'strtocurrdef', 'floattostrf',
+    'currtostrf', 'floattotext', 'texttofloat');
+  // Davor schneidet die Zeilen-Vorpruefung von PairBreakLine (klein).
+  PAIR_DATE_HINTS: array[0..1] of string = ('date', 'time');
+  PAIR_NUMBER_HINTS: array[0..2] of string = ('float', 'curr', 'text');
+  NAME_INVARIANT = 'invariant';
+  MAX_PAIR_ARG_LINES = 10;
   // Die globale Variable FormatSettings: FLOOR_SETTINGS_VAR (Delphi XE, FPC
   // ab 2.6; seit rwE29 in uRdxCompilerTraces). Wer nach XE fragt, baut auch
   // davor.
@@ -631,6 +656,107 @@ begin
     Result := _(R_FS_LIT_NUMBER, [QuotedStr(Lit), TokText(AMap, ASite.Name)]);
 end;
 
+// ---- Paar-Bruch (Alt-Weg, rwE29) ----
+// HeidiSQL main.pas:14718: 'QueryDay := DateToStr(..)' wird mit Eintraegen
+// verglichen, die Zeile 14699 mit DateToStr (Locale) schreibt - nur EINE
+// Seite auf Invariant gestellt, ist der Vergleich ausser in en-US immer
+// ungleich. Ebenso Schreiben und Lesen (CurrToStr ins Edit, TryStrToCurr
+// zurueck). Ob zwei Aufrufe zusammengehoeren, sieht der Planer nicht -
+// darum sperrt JEDER weitere Aufruf derselben Familie (PAIR_DATE bzw.
+// PAIR_NUMBER) in der Datei, der kein Invariant uebergibt.
+
+// Steht T in einem der Aufrufe ASites (die die Hilfe aendert)?
+function IsEditedName(const T: TRdxToken; const ASites: TCallSites): Boolean;
+var
+  i : Integer;
+begin
+  for i := 0 to High(ASites) do
+    if SameTok(T, ASites[i].Name) then
+      Exit(True);
+  Result := False;
+end;
+
+// Nennt der Aufruf am Namen T in seinen Klammern 'Invariant'? Ohne
+// Klammer bzw. ohne gefundene schliessende: nein.
+function PassesInvariant(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
+var
+  Open, Close, N : TRdxToken;
+begin
+  Result := False;
+  Open := After(AMap, T);
+  if Open.Low <> '(' then Exit;
+  Close := MatchClose(AMap, Open, MAX_PAIR_ARG_LINES);
+  if Close.Low = '' then Exit;
+  N := After(AMap, Open);
+  while (N.Low <> '') and TokBefore(N, Close) do
+  begin
+    if N.Low = NAME_INVARIANT then
+      Exit(True);
+    N := After(AMap, N);
+  end;
+end;
+
+// Traegt AText (klein) einen der Woerter-Teile AHints?
+function MentionsAny(const ALowText: string;
+  const AHints: array of string): Boolean;
+var
+  i : Integer;
+begin
+  for i := Low(AHints) to High(AHints) do
+    if Pos(AHints[i], ALowText) > 0 then
+      Exit(True);
+  Result := False;
+end;
+
+// Der erste weitere Aufruf der Familie(n) der Aufrufe ASites in der Datei
+// ohne Invariant (s. Kopf des Abschnitts): seine Zeile und sein Name wie
+// geschrieben in AName; 0 ohne. Ein Member-Aufruf ('X.DateToStr', X nicht
+// SysUtils) ist eine andere Routine und zaehlt nicht.
+function PairBreakLine(AMap: TRdxCodeMap; const ASites: TCallSites;
+  out AName: string): Integer;
+var
+  WantDate, WantNum : Boolean;
+  i, Li             : Integer;
+  T, P              : TRdxToken;
+  LowText           : string;
+  InFamily          : Boolean;
+begin
+  Result := 0;
+  AName := '';
+  WantDate := False;
+  WantNum := False;
+  for i := 0 to High(ASites) do
+  begin
+    WantDate := WantDate or InList(ASites[i].Name.Low, PAIR_DATE);
+    WantNum := WantNum or InList(ASites[i].Name.Low, PAIR_NUMBER);
+  end;
+  for Li := 1 to AMap.LineCount do
+  begin
+    LowText := LowerCase(AMap.Raw(Li));
+    if not ((WantDate and MentionsAny(LowText, PAIR_DATE_HINTS))
+            or (WantNum and MentionsAny(LowText, PAIR_NUMBER_HINTS))) then
+      Continue;
+    T := NextToken(AMap, Li, 1);
+    while (T.Low <> '') and (T.Line = Li) do
+    begin
+      InFamily := T.IsWord
+        and ((WantDate and InList(T.Low, PAIR_DATE))
+             or (WantNum and InList(T.Low, PAIR_NUMBER)));
+      if InFamily and not IsEditedName(T, ASites) then
+      begin
+        P := Before(AMap, T);
+        if ((P.Low <> '.') or RtlQualified(AMap, P))
+           and not PassesInvariant(AMap, T) then
+        begin
+          AName := TokText(AMap, T);
+          Exit(Li);
+        end;
+      end;
+      T := After(AMap, T);
+    end;
+  end;
+end;
+
 // Steht das Token T wie eine Deklaration da - 'T: Typ', 'T = Wert' oder
 // in einer Liste 'T, U: Typ'?
 function DeclaredHere(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
@@ -852,6 +978,7 @@ var
   Names : TArray<string>;
   i, Li : Integer;
   Found : Boolean;
+  Other : string;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -915,6 +1042,16 @@ begin
   AReason := FileReason(AMap, Names, Hits[0], AInvariant);
   if AReason <> '' then
     Exit;
+  // Alt-Weg: kein weiterer Aufruf derselben Familie ohne Invariant (rwE29).
+  if AInvariant then
+  begin
+    Li := PairBreakLine(AMap, Sites, Other);
+    if Li > 0 then
+    begin
+      AReason := _(R_FS_PAIR, [Li, Other, MsgByHand]);
+      Exit;
+    end;
+  end;
   BuildEdit(AMap, ALine, Sites, InsertFor(AInvariant), SPAN_128, AEdit);
   Result := True;
 end;
