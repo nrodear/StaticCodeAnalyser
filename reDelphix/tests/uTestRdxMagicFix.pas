@@ -589,7 +589,10 @@ begin
   Assert.AreEqual<Integer>(34, TRdxPackageVersion.Number(270), '270');
   Assert.AreEqual<Integer>(35, TRdxPackageVersion.Number(280), '280');
   Assert.AreEqual<Integer>(15, TRdxPackageVersion.Number(70), '70');
-  Assert.AreEqual<Integer>(-1, TRdxPackageVersion.Number(200), '200');
+  // 200 = Paketversion von XE6 (JEDI 20), kein Produkt 20.0.
+  Assert.AreEqual<Integer>(27, TRdxPackageVersion.Number(200), '200');
+  // 105: kein voller Zehner, ein Delphi 10.5 gibt es nicht.
+  Assert.AreEqual<Integer>(-1, TRdxPackageVersion.Number(105), '105');
   Assert.AreEqual<Integer>(18, TRdxPackageVersion.Jedi(11), 'Jedi 11');
   Assert.AreEqual<Integer>(-1, TRdxPackageVersion.Product(10, 5), '10.5');
   Assert.AreEqual<Integer>(20, TRdxPackageVersion.Year(2009), '2009');
