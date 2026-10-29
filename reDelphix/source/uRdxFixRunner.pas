@@ -316,23 +316,47 @@ end;
 
 // SCA085: ist AName an ALine sicher eine Variable? FreeAndNil braucht eine;
 // eine Property uebersetzt als Argument nicht (vor 10.4) bzw. umgeht ihren
-// Setter (const [ref]). Gesperrt: irgendwo in der Unit als Property
-// deklariert, ein 'with' davor in der Routine oder ein with-Block um die
-// Zeile (auch 'with X do Y.Free;' auf EINER Zeile - InWithBlock; dort
-// bindet der Name evtl. an ein Member), weder deklariert (DeclaredTypeOf:
-// Parameter, lokal, Result, Feld oder Global der Unit) noch Inline-
-// Variable ohne Typ. '' oder der Grund.
+// Setter (const [ref]). Gesperrt: ein with-Rumpf um die Zeile (auch 'with
+// X do Y.Free;' auf EINER Zeile - InWithBlock; dort bindet der Name evtl.
+// an ein Member), irgendwo in der Unit als Property deklariert (ausser ein
+// Parameter oder eine lokale Variable verdeckt sie), weder deklariert
+// (DeclaredTypeOf: Parameter, lokal, Result, Feld oder Global der Unit)
+// noch Inline-Variable ohne Typ. '' oder der Grund. Seit dem Realwelt-Test rwE30
+// zuerst with (nur ein with-RUMPF um die Zeile, WithBefore), dann - wenn
+// der Quellstellen-Dienst nichts beweist oder die Unit eine gleichnamige
+// Property traegt - der Beweis aus dem Text (TRdxSimpleFixes.
+// VariableProof): ein Parameter bzw. eine lokale Variable einer
+// umschliessenden, auch verschachtelten Routine verdeckt die Property;
+// ein Feld der eigenen Klasse bzw. eine Variable auf Unit-Ebene beweist
+// die Variable, wo DeclaredTypeOf schweigt. ATypeLow: der Typ fuer die
+// Typ-Sperren (FreeMethodReason).
 function VariableCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
-  ALine: Integer; const AName: string): string;
+  ALine: Integer; const AName: string; out ATypeLow: string): string;
+var
+  Prop  : Boolean;
+  Proof : TRdxVarProof;
 begin
   Result := '';
-  if TRdxTypeProof.DeclaresProperty(AMap, AName) then
-    Exit(_('%s is declared as a property in this unit - FreeAndNil needs a '
-      + 'variable', [AName]));
   if TRdxSimpleFixes.WithBefore(AMap, ALine) or APlaces.InWithBlock(ALine) then
     Exit(_(R_WITH_MEMBER, [AName]));
-  if (APlaces.DeclaredTypeOf(ALine, AName) = '')
-     and not TRdxSimpleFixes.DeclaresInlineVar(AMap, ALine, AName) then
+  Prop := TRdxTypeProof.DeclaresProperty(AMap, AName);
+  ATypeLow := APlaces.DeclaredTypeOf(ALine, AName);
+  if (ATypeLow <> '') and not Prop then
+    Exit;
+  Proof := TRdxSimpleFixes.VariableProof(AMap, ALine, AName);
+  if Proof.Kind = vpLocal then
+  begin
+    ATypeLow := Proof.TypeLow;
+    Exit;
+  end;
+  if Prop then
+    Exit(_('%s is declared as a property in this unit - FreeAndNil needs a '
+      + 'variable', [AName]));
+  if TRdxSimpleFixes.DeclaresInlineVar(AMap, ALine, AName) then
+    Exit;
+  if Proof.Kind in [vpField, vpGlobal] then
+    ATypeLow := Proof.TypeLow
+  else
     Result := _(R_NOT_A_VARIABLE, [AName]);
 end;
 
@@ -507,7 +531,10 @@ var
   Spelling : string;
 begin
   Result := '';
-  if TRdxTypeProof.DeclaresNonClassType(AMap, ATypeLow) then
+  // Ein ausformulierter Typ aus dem Text-Beweis ('R: record .. end',
+  // 'P: ^TFoo', rwE30) ist nie die Klasse, die FreeAndNil braucht.
+  if InList(ATypeLow, OWN_TYPE_WORDS) or (ATypeLow = '^')
+     or TRdxTypeProof.DeclaresNonClassType(AMap, ATypeLow) then
     Result := _(R_NOT_AN_OBJECT, [AName, ATypeLow])
   else if TRdxTypeProof.DeclaresRoutine(AMap, 'Free') then
     Result := _(R_OWN_FREE)
@@ -519,16 +546,18 @@ begin
 end;
 
 // SCA085/SCA139: der Kommentar an der Stelle (FreeAndNilCommentLine), dann
-// der Typ (FreeTypeReason). '' oder der Grund.
-function FreeMethodReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
-  ALine: Integer; const AName: string): string;
+// der Typ ATypeLow aus VariableCheck (FreeTypeReason; bis rwE30 hier noch
+// einmal DeclaredTypeOf - der Typ aus dem Text-Beweis fehlte). '' oder der
+// Grund.
+function FreeMethodReason(AMap: TRdxCodeMap; ALine: Integer;
+  const AName, ATypeLow: string): string;
 var
   Li : Integer;
 begin
   Li := FreeAndNilCommentLine(AMap, ALine);
   if Li > 0 then
     Exit(_(R_FREE_COMMENT, [Li]));
-  Result := FreeTypeReason(AMap, AName, APlaces.DeclaredTypeOf(ALine, AName));
+  Result := FreeTypeReason(AMap, AName, ATypeLow);
 end;
 
 function AppendUses(APlaces: TSourcePlaces; const AUsesNames: TArray<string>;
@@ -570,7 +599,8 @@ class function TRdxFixRunner.FreeAndNilFix(APlaces: TSourcePlaces;
   ALines: TStrings; ALine: Integer;
   const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
-  Map : TRdxCodeMap;
+  Map     : TRdxCodeMap;
+  TypeLow : string;   // der Typ von X aus VariableCheck
 begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
@@ -583,10 +613,10 @@ begin
     if not TRdxSimpleFixes.FreeAndNilFix(Map, ALine, Result.Edits,
          Result.Name, Result.Reason) then
       Exit;
-    Result.Reason := VariableCheck(APlaces, Map, ALine, Result.Name);
+    Result.Reason := VariableCheck(APlaces, Map, ALine, Result.Name, TypeLow);
     // Dieselbe Typ-Sperre wie SCA139 (Review FB, R2-01/R3-01).
     if Result.Reason = '' then
-      Result.Reason := FreeMethodReason(APlaces, Map, ALine, Result.Name);
+      Result.Reason := FreeMethodReason(Map, ALine, Result.Name, TypeLow);
   finally
     TRdxCodeMap.Release(Map);
   end;
@@ -780,7 +810,8 @@ class function TRdxFixRunner.FreeWithoutNilFix(APlaces: TSourcePlaces;
   ALines: TStrings; ALine: Integer; const AMessage: string;
   const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
-  Map : TRdxCodeMap;
+  Map     : TRdxCodeMap;
+  TypeLow : string;   // der Typ von X aus VariableCheck
 begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
@@ -800,9 +831,9 @@ begin
       Result.Edits := nil;
       Exit;
     end;
-    Result.Reason := VariableCheck(APlaces, Map, ALine, Result.Name);
+    Result.Reason := VariableCheck(APlaces, Map, ALine, Result.Name, TypeLow);
     if Result.Reason = '' then
-      Result.Reason := FreeMethodReason(APlaces, Map, ALine, Result.Name);
+      Result.Reason := FreeMethodReason(Map, ALine, Result.Name, TypeLow);
     if Result.Reason = '' then
       Result.Reason := ConstParamReason(Map, ALine, Result.Name);
   finally
