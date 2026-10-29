@@ -70,6 +70,10 @@ type
     ReportHtml    : string;         // --report-html  <out.html>  Self-contained Code-Review-Report
     HtmlMaxRows   : string;         // --html-max-rows <n>  Zeilendeckel des HTML-Berichts
                                     //   leer = Voreinstellung (20.000), 0 = unbegrenzt
+    // --html-no-editor-help: der HTML-Bericht zeigt die Editorhilfen der
+    // Regeln NICHT (Nico 2026-10-29: Voreinstellung AN, s.
+    // THtmlReportOptions.EditorHelp - der Schalter schaltet ab).
+    HtmlNoEditorHelp : Boolean;
     // CSV und JSON gab es bis 2026-08-08 NUR im GUI-Exportmenue -
     // ausgerechnet die zwei Formate, zu denen man in einem Skript
     // greift (Excel, Ticket-Automatisierung), waren die einzigen, die
@@ -401,9 +405,9 @@ const
 // sobald ein neuer Boolean-Schalter dazukommt, ohne hier einzutragen -
 // sonst waere die Liste in drei Monaten wieder unvollstaendig.
 const
-  CLI_SCHALTER_OHNE_WERT: array[0..21] of string = (
+  CLI_SCHALTER_OHNE_WERT: array[0..22] of string = (
     '--branch', '--full', '--gate-stats', '--help', '--hide-test-fixtures',
-    '--ifdef-aware', '--include-defines', '--no-ifdef-aware',
+    '--html-no-editor-help', '--ifdef-aware', '--include-defines', '--no-ifdef-aware',
     '--no-include-defines', '--parallel', '--quiet', '--sarif-editor-help',
     '--show-test-fixtures',
     '--sonar-init', '--sonar-insecure', '--sonar-keep-downgraded',
@@ -518,6 +522,8 @@ begin
       GetValue(Result.ReportHtml, '--report-html')
     else if A = '--html-max-rows' then
       GetValue(Result.HtmlMaxRows, '--html-max-rows')
+    else if A = '--html-no-editor-help' then
+      Result.HtmlNoEditorHelp := True
     else if A = '--report-csv' then
       GetValue(Result.ReportCsv, '--report-csv')
     else if A = '--report-json' then
@@ -782,6 +788,10 @@ begin
   WriteLn('                        0 = unlimited). Findings beyond the budget');
   WriteLn('                        are named by a banner; the summary still');
   WriteLn('                        counts all of them.');
+  WriteLn('  --html-no-editor-help HTML: leave out the editor helps (reDelphix');
+  WriteLn('                        code actions) of the rules - shown by');
+  WriteLn('                        default in the finding details and in the');
+  WriteLn('                        rule report');
   WriteLn('  --report-csv   <file> Write findings as CSV (UTF-8 with BOM, so');
   WriteLn('                        Excel reads it correctly)');
   WriteLn('  --report-json  <file> Write findings as JSON array');
@@ -1703,6 +1713,7 @@ var
           LeerOpts.BaseDir := Args.BaseDir;
           LeerOpts.MaxRows := HtmlZeilenBudget(Args);
           LeerOpts.Profile := Args.Profile;
+          LeerOpts.EditorHelp := not Args.HtmlNoEditorHelp;
           TExporterHtml.Run(Leer, Args.ReportHtml, LeerOpts);
           if not Args.Quiet then
             WriteLn('HTML report written (no findings): ', Args.ReportHtml);
@@ -2560,6 +2571,8 @@ begin
         HtmlOpts.BaseDir := Args.BaseDir;
         HtmlOpts.MaxRows := HtmlZeilenBudget(Args);
         HtmlOpts.Profile := Settings.Profile;
+        // Editorhilfen: Voreinstellung an, --html-no-editor-help schaltet ab.
+        HtmlOpts.EditorHelp := not Args.HtmlNoEditorHelp;
         TExporterHtml.Run(Findings, Args.ReportHtml, HtmlOpts);
         if not Args.Quiet then
           WriteLn('HTML report written: ', Args.ReportHtml);

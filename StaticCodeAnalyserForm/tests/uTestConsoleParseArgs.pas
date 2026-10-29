@@ -32,6 +32,10 @@ type
     // Schalter schaltet ein, ein Wert daran ist ein Fehler.
     [Test] procedure SarifEditorHelp_StandardAus_SchalterSchaltetEin;
     [Test] procedure SarifEditorHelp_MitWert_IstEinFehler;
+    // --html-no-editor-help (Nico 2026-10-29): Editorhilfen im HTML sind
+    // Voreinstellung an, der Schalter schaltet AB, ein Wert ist ein Fehler.
+    [Test] procedure HtmlNoEditorHelp_StandardAn_SchalterSchaltetAb;
+    [Test] procedure HtmlNoEditorHelp_MitWert_IstEinFehler;
 
     // ---- Wert-Schalter nehmen weiter beide Schreibweisen ----
     [Test] procedure WertSchalter_MitGleichheitszeichen;
@@ -193,6 +197,32 @@ begin
   Assert.IsTrue(Pos('--sarif-editor-help', A.ParseError) > 0,
     'ein Wert am Schalter ohne Wert ist ein Parse-Fehler: ' + A.ParseError);
   Assert.IsFalse(A.SarifEditorHelp, '--sarif-editor-help=ja schaltet nicht ein');
+end;
+
+procedure TTestConsoleParseArgs.HtmlNoEditorHelp_StandardAn_SchalterSchaltetAb;
+var
+  A : TCliArgs;
+begin
+  A := TConsoleRunner.ParseArgs([QUELLE_A, QUELLE_B]);
+  Assert.AreEqual('', A.ParseError, KEIN_FEHLER);
+  Assert.IsFalse(A.HtmlNoEditorHelp,
+    'ohne Schalter zeigt der HTML-Bericht die Editorhilfen (Voreinstellung an)');
+  A := TConsoleRunner.ParseArgs([QUELLE_A, QUELLE_B, '--html-no-editor-help']);
+  Assert.AreEqual('', A.ParseError, KEIN_FEHLER);
+  Assert.IsTrue(A.HtmlNoEditorHelp, '--html-no-editor-help muss wirken');
+end;
+
+procedure TTestConsoleParseArgs.HtmlNoEditorHelp_MitWert_IstEinFehler;
+// Ohne Eintrag in CLI_SCHALTER_OHNE_WERT waere '--html-no-editor-help=nein'
+// still zu '--html-no-editor-help' geworden - das Gegenteil des Gemeinten.
+var
+  A : TCliArgs;
+begin
+  A := TConsoleRunner.ParseArgs([QUELLE_A, QUELLE_B, '--html-no-editor-help=nein']);
+  Assert.IsTrue(Pos('--html-no-editor-help', A.ParseError) > 0,
+    'ein Wert am Schalter ohne Wert ist ein Parse-Fehler: ' + A.ParseError);
+  Assert.IsFalse(A.HtmlNoEditorHelp,
+    '--html-no-editor-help=nein schaltet nicht ab');
 end;
 
 procedure TTestConsoleParseArgs.WertSchalter_MitGleichheitszeichen;
