@@ -139,8 +139,24 @@ type
   //                     wie die Inline-Konstante (FLOOR_INLINE_DECL;
   //                     Integration QFI3 - bis dahin haetten ihre Gruende
   //                     die Inline-Konstante genannt)
-  // FPC 3.2 kennt keines davon.
-  TRdxLateFeature = (lfInlineConst, lfDigitSeparator, lfInlineVar);
+  //   lfFormatInvariant SCA128.2/SCA059.2 ', TFormatSettings.Invariant' -
+  //                     geprueft ab Delphi 10.3 (FLOOR_INLINE_DECL, wie im
+  //                     Planer uRdxFormatSettingsFix); Realworld-Test rwE29:
+  //                     Units aus Lazarus-Projekten (Rechnung.lpi), FPC-
+  //                     Weichen im Include (Img32.inc), Delphi-1-6-Projekte
+  //                     (GExperts)
+  //   lfFormatSettingsVar  SCA128/SCA059 ', FormatSettings' - die globale
+  //                     Variable ab Delphi XE (FLOOR_SETTINGS_VAR); FPC
+  //                     kennt sie (ab 2.6): Lazarus-Dateiart, -Projekt und
+  //                     FPC-Weiche im Include sperren hier NICHT (FpcKnows),
+  //                     nur alte Delphi-Projekte (rwE29: GExperts mit
+  //                     GExpert4.dof). IncludeReason fragt der Adapter fuer
+  //                     den Hauptweg nicht (Entscheid M1, uRdxFixTable.
+  //                     FormatSettingsDiskCheck) - der Satz in R_INC_OLD
+  //                     steht nur fuer einen kuenftigen Aufrufer.
+  // FPC 3.2 kennt keines davon ausser lfFormatSettingsVar.
+  TRdxLateFeature = (lfInlineConst, lfDigitSeparator, lfInlineVar,
+    lfFormatInvariant, lfFormatSettingsVar);
 
   // Ergebnis des Planers (uRdxFixTable: MagicForm im Geruest TRdxFixFrame).
   //   Value  die Zahl aus der Meldung - Name im Menuetext; schon gesetzt,
@@ -269,6 +285,11 @@ type
     // Hilfe dann nicht.
     class function IncludeReason(const AFileName: string; AMap: TRdxCodeMap;
       AFeature: TRdxLateFeature): string; static;
+
+    // Kennt FPC 3.2 das Sprachmittel? Dann sperren Lazarus-Dateiart,
+    // Lazarus-Projekt und FPC-Weiche im Include nicht (nur
+    // lfFormatSettingsVar).
+    class function FpcKnows(AFeature: TRdxLateFeature): Boolean; static;
   end;
 
 implementation
@@ -283,7 +304,7 @@ uses
   uRdxPaths,            // IsNetworkPath
   uRdxBlocks,           // IncludeChainReason, AllIncludes
   uRdxCompilerTraces,   // OldCompilerTrace, ScriptReason, FLOOR_INLINE_DECL,
-                        // FLOOR_DIGIT_SEP
+                        // FLOOR_DIGIT_SEP, FLOOR_SETTINGS_VAR
   uRdxText;             // _, MsgMovedSuffix, MsgByHand (E29)
 
 const
@@ -337,32 +358,51 @@ const
   // nicht' mit 'Zifferntrenner') liesse sich nicht uebersetzen. Die
   // Versionsnummer des Sprachmittels (10.3, 11) steht im Satz; die
   // ProjectVersion der Schwelle kommt aus FloorOf (%s).
-  // Reihenfolge je Array: lfInlineConst, lfDigitSeparator, lfInlineVar.
+  // Reihenfolge je Array: lfInlineConst, lfDigitSeparator, lfInlineVar,
+  // lfFormatInvariant, lfFormatSettingsVar. Die FPC-Saetze (R_FPC_FILE,
+  // R_LAZARUS, R_INC_FPC) zeigt lfFormatSettingsVar nie (FpcKnows) - dort
+  // steht derselbe Satz wie bei lfFormatInvariant (keine eigene msgid).
   R_FPC_FILE: array[TRdxLateFeature] of string = (
     'Lazarus/FPC file (%s) - FPC 3.2 has no inline constants',
     'Lazarus/FPC file (%s) - FPC 3.2 has no digit separators',
-    'Lazarus/FPC file (%s) - FPC 3.2 has no inline variables');
+    'Lazarus/FPC file (%s) - FPC 3.2 has no inline variables',
+    'Lazarus/FPC file (%s) - FPC 3.2 has no TFormatSettings.Invariant',
+    'Lazarus/FPC file (%s) - FPC 3.2 has no TFormatSettings.Invariant');
   R_LAZARUS: array[TRdxLateFeature] of string = (
     'Lazarus project/package %s in the directory %s - the unit probably also '
       + 'builds with FPC, and FPC 3.2 has no inline constants',
     'Lazarus project/package %s in the directory %s - the unit probably also '
       + 'builds with FPC, and FPC 3.2 has no digit separators',
     'Lazarus project/package %s in the directory %s - the unit probably also '
-      + 'builds with FPC, and FPC 3.2 has no inline variables');
+      + 'builds with FPC, and FPC 3.2 has no inline variables',
+    'Lazarus project/package %s in the directory %s - the unit probably also '
+      + 'builds with FPC, and FPC 3.2 has no TFormatSettings.Invariant',
+    'Lazarus project/package %s in the directory %s - the unit probably also '
+      + 'builds with FPC, and FPC 3.2 has no TFormatSettings.Invariant');
   R_LEGACY: array[TRdxLateFeature] of string = (
     'old project file %s in the directory %s - the unit probably also builds '
       + 'with a Delphi before 10.3, which has no inline constants; %s',
     'old project file %s in the directory %s - the unit probably also builds '
       + 'with a Delphi before 11, which has no digit separators; %s',
     'old project file %s in the directory %s - the unit probably also builds '
-      + 'with a Delphi before 10.3, which has no inline variables; %s');
+      + 'with a Delphi before 10.3, which has no inline variables; %s',
+    'old project file %s in the directory %s - the unit probably also builds '
+      + 'with a Delphi before 10.3, and TFormatSettings.Invariant is only '
+      + 'checked from there on; %s',
+    'old project file %s in the directory %s - the unit probably also builds '
+      + 'with a Delphi before XE, which has no global variable FormatSettings; '
+      + '%s');
   R_OLD_DPROJ: array[TRdxLateFeature] of string = (
     'project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 '
       + '= %s) - there are no inline constants there; %s',
     'project %s in the directory %s with ProjectVersion %s (before Delphi 11 '
       + '= %s) - there are no digit separators there; %s',
     'project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 '
-      + '= %s) - there are no inline variables there; %s');
+      + '= %s) - there are no inline variables there; %s',
+    'project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 '
+      + '= %s) - TFormatSettings.Invariant is only checked from there on; %s',
+    'project %s in the directory %s with ProjectVersion %s (before Delphi XE '
+      + '= %s) - there is no global variable FormatSettings there; %s');
   R_NO_VERSION: array[TRdxLateFeature] of string = (
     'project %s in the directory %s without a readable ProjectVersion (Delphi '
       + '2007 wrote none) - the unit probably also builds with a Delphi before '
@@ -372,21 +412,35 @@ const
       + '11, which has no digit separators; %s',
     'project %s in the directory %s without a readable ProjectVersion (Delphi '
       + '2007 wrote none) - the unit probably also builds with a Delphi before '
-      + '10.3, which has no inline variables; %s');
+      + '10.3, which has no inline variables; %s',
+    'project %s in the directory %s without a readable ProjectVersion (Delphi '
+      + '2007 wrote none) - the unit probably also builds with a Delphi before '
+      + '10.3, and TFormatSettings.Invariant is only checked from there on; %s',
+    'project %s in the directory %s without a readable ProjectVersion (Delphi '
+      + '2007 wrote none) - the unit probably also builds with a Delphi before '
+      + 'XE, which has no global variable FormatSettings; %s');
   R_INC_FPC: array[TRdxLateFeature] of string = (
     'the include %s carries an FPC switch (line %d) - FPC 3.2 has no inline '
       + 'constants',
     'the include %s carries an FPC switch (line %d) - FPC 3.2 has no digit '
       + 'separators',
     'the include %s carries an FPC switch (line %d) - FPC 3.2 has no inline '
-      + 'variables');
+      + 'variables',
+    'the include %s carries an FPC switch (line %d) - FPC 3.2 has no '
+      + 'TFormatSettings.Invariant',
+    'the include %s carries an FPC switch (line %d) - FPC 3.2 has no '
+      + 'TFormatSettings.Invariant');
   R_INC_OLD: array[TRdxLateFeature] of string = (
     'the include %s shows traces of older compilers (%s, line %d) - an inline '
       + 'constant exists only from Delphi 10.3 on; %s',
     'the include %s shows traces of older compilers (%s, line %d) - digit '
       + 'separators exist only from Delphi 11 on; %s',
     'the include %s shows traces of older compilers (%s, line %d) - an inline '
-      + 'variable exists only from Delphi 10.3 on; %s');
+      + 'variable exists only from Delphi 10.3 on; %s',
+    'the include %s shows traces of older compilers (%s, line %d) - '
+      + 'TFormatSettings.Invariant is only checked from Delphi 10.3 on; %s',
+    'the include %s shows traces of older compilers (%s, line %d) - the global '
+      + 'variable FormatSettings exists only from Delphi XE on; %s');
   // UNC und Netzlaufwerk (uRdxPaths.IsNetworkPath, seit Charge B1-FD).
   R_NETWORK = 'network path %s - the quick fix reads no project or include '
     + 'files there (the menu is built in the main thread); %s';
@@ -402,6 +456,8 @@ function FloorOf(AFeature: TRdxLateFeature): TRdxCompilerFloor;
 begin
   if AFeature = lfDigitSeparator then
     Result := FLOOR_DIGIT_SEP
+  else if AFeature = lfFormatSettingsVar then
+    Result := FLOOR_SETTINGS_VAR
   else
     Result := FLOOR_INLINE_DECL;
 end;
@@ -1043,7 +1099,7 @@ begin
   begin
     if Dir = '' then Exit;
     Files := ProjectFilesIn(Dir, FloorOf(AFeature).ProjectVersion);
-    if Files.Lazarus <> '' then
+    if (Files.Lazarus <> '') and not TRdxMagicFixes.FpcKnows(AFeature) then
       Exit(_(R_LAZARUS[AFeature], [Files.Lazarus, Dir]));
     // Das NAECHSTE Verzeichnis mit Delphi-Projektdateien entscheidet
     // (eine .dproj ab der Schwelle dort macht alte Dateien weiter oben
@@ -1087,7 +1143,7 @@ begin
   Result := '';
   if AFileName = '' then Exit;
   Ext := LowerCase(ExtractFileExt(AFileName));
-  if InList(Ext, FPC_EXTENSIONS) then
+  if InList(Ext, FPC_EXTENSIONS) and not FpcKnows(AFeature) then
     Exit(_(R_FPC_FILE[AFeature], [Ext]));
   // Das Netzpfad-Gate laeuft je Aufruf, vor dem Cache (Charge P5).
   if IsNetworkPath(AFileName) then
@@ -1098,6 +1154,11 @@ begin
   if GDiskCache.FItems.TryGetValue(Key, Result) then Exit;
   Result := ProjectWalkReason(AFileName, AFeature);
   GDiskCache.FItems.AddOrSetValue(Key, Result);
+end;
+
+class function TRdxMagicFixes.FpcKnows(AFeature: TRdxLateFeature): Boolean;
+begin
+  Result := AFeature = lfFormatSettingsVar;
 end;
 
 class function TRdxMagicFixes.UseDiskCache(
@@ -1148,9 +1209,10 @@ var
 begin
   Result := '';
   Feature := TRdxLateFeature(StrToIntDef(AArg, Ord(lfInlineConst)));
-  for Li := 0 to ALines.Count - 1 do
-    if LineLooksFpcAware(ALines[Li]) then
-      Exit(_(R_INC_FPC[Feature], [AFile, Li + 1]));
+  if not TRdxMagicFixes.FpcKnows(Feature) then
+    for Li := 0 to ALines.Count - 1 do
+      if LineLooksFpcAware(ALines[Li]) then
+        Exit(_(R_INC_FPC[Feature], [AFile, Li + 1]));
   S := OldCompilerTrace(AMap, FloorOf(Feature), Li);
   if S <> '' then
     Result := _(R_INC_OLD[Feature], [AFile, S, Li, MsgByHand]);

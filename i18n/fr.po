@@ -6756,10 +6756,7 @@ msgstr "même sens - la comparaison est inversée en miroir ; aucun côté n'app
 msgid "same meaning with short-circuit evaluation ({$B-}): the second condition is evaluated only if the first one is true, as before"
 msgstr "même sens avec l'évaluation en court-circuit ({$B-}) : la deuxième condition n'est évaluée que si la première est vraie, comme avant"
 
-# reDelphix rwE29 Gruppe E (uRdxPlacesRunner: PlanUses liest auch den Text)
-msgid "%s is named in a uses clause inside a conditional branch (line %d) - add it by hand"
-msgstr "%s figure dans une clause uses à l'intérieur d'une branche conditionnelle (ligne %d) - l'ajouter à la main"
-
+# reDelphix rwE29 Gruppe E (uRdxPlacesRunner: PlanNewClause - Abschnitts-Schluesselwort im bedingten Zweig)
 msgid "the section keyword in line %d is inside a conditional branch (line %d) - add the uses clause by hand"
 msgstr "le mot-clé de section à la ligne %d se trouve dans une branche conditionnelle (ligne %d) - ajouter la clause uses à la main"
 
@@ -6786,3 +6783,53 @@ msgstr "un commentaire sur la ligne ou au-dessus mentionne raise - l'auteur conn
 
 msgid "the file is in the test folder \"%s\" - a test may compare this address literally (also from another file); decide by hand"
 msgstr "le fichier se trouve dans le dossier de test \"%s\" - un test peut comparer cette adresse littéralement (aussi depuis un autre fichier) ; décider à la main"
+
+# reDelphix HilfeFix C (rwE29: uRdxRawExceptionFix, uRdxFormatSettingsFix, uRdxMagicFixes, uRdxPlacesRunner)
+
+msgid "the file asks for old compilers (%s, line %d) - %s exists in SysUtils only from Delphi 2009 on"
+msgstr "le fichier teste d'anciens compilateurs (%s, ligne %d) - %s n'existe dans SysUtils que depuis Delphi 2009"
+
+msgid "it stands there only under a compiler condition (line %d); %s"
+msgstr "elle n'y figure que sous une condition de compilation (ligne %d) ; %s"
+
+msgid "Lazarus/FPC file (%s) - FPC 3.2 has no TFormatSettings.Invariant"
+msgstr "fichier Lazarus/FPC (%s) - FPC 3.2 ne connaît pas TFormatSettings.Invariant"
+
+msgid "Lazarus project/package %s in the directory %s - the unit probably also builds with FPC, and FPC 3.2 has no TFormatSettings.Invariant"
+msgstr "projet/paquet Lazarus %s dans le répertoire %s - l'unité se compile sans doute aussi avec FPC, et FPC 3.2 ne connaît pas TFormatSettings.Invariant"
+
+msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 10.3, and TFormatSettings.Invariant is only checked from there on; %s"
+msgstr "ancien fichier de projet %s dans le répertoire %s - l'unité se compile sans doute aussi avec un Delphi antérieur à 10.3, et TFormatSettings.Invariant n'est vérifié qu'à partir de là; %s"
+
+msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before XE, which has no global variable FormatSettings; %s"
+msgstr "ancien fichier de projet %s dans le répertoire %s - l'unité se compile sans doute aussi avec un Delphi antérieur à XE, qui n'a pas de variable globale FormatSettings; %s"
+
+msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 = %s) - TFormatSettings.Invariant is only checked from there on; %s"
+msgstr "projet %s dans le répertoire %s avec ProjectVersion %s (avant Delphi 10.3 = %s) - TFormatSettings.Invariant n'est vérifié qu'à partir de là; %s"
+
+msgid "project %s in the directory %s with ProjectVersion %s (before Delphi XE = %s) - there is no global variable FormatSettings there; %s"
+msgstr "projet %s dans le répertoire %s avec ProjectVersion %s (avant Delphi XE = %s) - la variable globale FormatSettings n'y existe pas; %s"
+
+msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 10.3, and TFormatSettings.Invariant is only checked from there on; %s"
+msgstr "projet %s dans le répertoire %s sans ProjectVersion lisible (Delphi 2007 n'en écrivait pas) - l'unité se compile sans doute aussi avec un Delphi antérieur à 10.3, et TFormatSettings.Invariant n'est vérifié qu'à partir de là; %s"
+
+msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before XE, which has no global variable FormatSettings; %s"
+msgstr "projet %s dans le répertoire %s sans ProjectVersion lisible (Delphi 2007 n'en écrivait pas) - l'unité se compile sans doute aussi avec un Delphi antérieur à XE, qui n'a pas de variable globale FormatSettings; %s"
+
+msgid "the include %s carries an FPC switch (line %d) - FPC 3.2 has no TFormatSettings.Invariant"
+msgstr "le fichier include %s porte un aiguillage FPC (ligne %d) - FPC 3.2 ne connaît pas TFormatSettings.Invariant"
+
+msgid "the include %s shows traces of older compilers (%s, line %d) - TFormatSettings.Invariant is only checked from Delphi 10.3 on; %s"
+msgstr "le fichier include %s porte des traces de compilateurs plus anciens (%s, ligne %d) - TFormatSettings.Invariant n'est vérifié qu'à partir de Delphi 10.3; %s"
+
+msgid "the include %s shows traces of older compilers (%s, line %d) - the global variable FormatSettings exists only from Delphi XE on; %s"
+msgstr "le fichier include %s porte des traces de compilateurs plus anciens (%s, ligne %d) - la variable globale FormatSettings n'existe qu'à partir de Delphi XE; %s"
+
+msgid "the literal %s does not fit the date and time format of TFormatSettings.Invariant (MM/dd/yyyy hh:nn:ss) - %s would raise EConvertError"
+msgstr "le littéral %s ne correspond pas au format de date et d'heure de TFormatSettings.Invariant (MM/dd/yyyy hh:nn:ss) - %s lèverait EConvertError"
+
+msgid "the literal %s does not fit the number format of TFormatSettings.Invariant (decimal point, no thousands separator) - %s would raise EConvertError"
+msgstr "le littéral %s ne correspond pas au format numérique de TFormatSettings.Invariant (point décimal, sans séparateur de milliers) - %s lèverait EConvertError"
+
+msgid "%s; line %d calls %s of the same family without TFormatSettings.Invariant - change it along with this one, otherwise values written there and read or compared here (or the other way round) no longer match"
+msgstr "%s ; la ligne %d appelle %s de la même famille sans TFormatSettings.Invariant - à modifier aussi, sinon les valeurs écrites là-bas et lues ou comparées ici (ou l'inverse) ne correspondent plus"

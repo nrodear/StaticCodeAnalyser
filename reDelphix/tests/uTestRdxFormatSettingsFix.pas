@@ -47,6 +47,12 @@ type
     [Test] procedure Sca128_With_NoHelp;
     [Test] procedure Sca128_OldCompiler_Blocks;
     [Test] procedure Sca128_Alt_FpcOrOwnType_NoHelp;
+    // ---- Realworld-Test rwE29: Literal gegen Invariant ----
+    [Test] procedure Sca128_Alt_LiteralNotInvariant_NoHelp;
+    [Test] procedure Sca128_Alt_LiteralInvariant_Helps;
+    // ---- Realworld-Test rwE29: Paar-Bruch ----
+    [Test] procedure Sca128_Alt_PairInFile_HintNamesLine;
+    [Test] procedure Sca128_Alt_NoPairInFile_PlainHint;
   end;
 
 {$IFNDEF FPC}
@@ -58,6 +64,11 @@ type
     [Test] procedure Sca128_Detector_RoundTrip;
     [Test] procedure Sca128_Detector_RoundTripAlt;
     [Test] procedure Sca128_Detector_ContinuedStatement_NoHelp;
+    // ---- Realworld-Test rwE29: was nur die Platte weiss ----
+    [Test] procedure Sca128_Detector_OldDelphiProject_NoHelp;
+    [Test] procedure Sca128_Detector_LazarusProject_OnlyMainWay;
+    [Test] procedure Sca128_Detector_OldTraceOnlyInInclude_MainWayStays;
+    [Test] procedure Sca128_Detector_PairInFile_HintNamesLine;
   end;
 {$ENDIF}
 
@@ -69,6 +80,7 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uDateFormatSettings,
   uRdxRecipeRunner,      // TRdxFixOutcome
+  uRdxMagicFixes,        // FileReason, lfFormatSettingsVar/lfFormatInvariant
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn,
                          // PlanAltFixIn, FixAllWith
   {$ENDIF}
@@ -456,6 +468,125 @@ begin
     True);
 end;
 
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_LiteralNotInvariant_NoHelp;
+var
+  Src : string;
+begin
+  // rwE29, delphimvcframework ...\Serializers.JsonDataObjectsTestU.pas:1221:
+  // StrToDateTime('17/02/2017 16:37:50') mit TFormatSettings.Invariant
+  // (MM/dd/yyyy) wirft sicher EConvertError (Monat 17). Ohne die Sperre
+  // boete der Alt-Weg es an (nichts sonst in der Datei sperrt) - der
+  // Hauptweg bleibt (gleiche Bedeutung).
+  Src := InUnit(['  d := StrToDateTime(''17/02/2017 16:37:50'');']);
+  AssertRefused(Src, BODY_LINE, Msg('strtodatetime'),
+    _(R_FS_LIT_DATE, ['''17/02/2017 16:37:50''', 'StrToDateTime']), True);
+  AssertFixed(InUnit(['  d := StrToDateTime(''17/02/2017 16:37:50'', '
+    + 'FormatSettings);']), Src, BODY_LINE, Msg('strtodatetime'));
+  // Dieselbe Datei, Zeile davor: StrToDate('15/10/1987').
+  AssertRefused(InUnit(['  d := StrToDate(''15/10/1987'');']), BODY_LINE,
+    Msg('strtodate'), _(R_FS_LIT_DATE, ['''15/10/1987''', 'StrToDate']),
+    True);
+  // Zahl mit Komma bzw. Tausendertrenner.
+  AssertRefused(InUnit(['  x := StrToFloat(''1,5'');']), BODY_LINE,
+    Msg('strtofloat'), _(R_FS_LIT_NUMBER, ['''1,5''', 'StrToFloat']), True);
+  AssertRefused(InUnit(['  x := StrToCurr(''1.234,50'');']), BODY_LINE,
+    Msg('strtocurr'), _(R_FS_LIT_NUMBER, ['''1.234,50''', 'StrToCurr']),
+    True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_LiteralInvariant_Helps;
+begin
+  // Gegenprobe: Literale im Invariant-Format (und Aufrufe ohne Literal)
+  // bekommen den Alt-Weg.
+  AssertFixed(InUnit(['  d := StrToDateTime(''02/17/2017 16:37:50'', '
+    + 'TFormatSettings.Invariant);']),
+    InUnit(['  d := StrToDateTime(''02/17/2017 16:37:50'');']), BODY_LINE,
+    Msg('strtodatetime'), True);
+  AssertFixed(InUnit(['  d := StrToTime(''16:40:50'', TFormatSettings.Invariant);']),
+    InUnit(['  d := StrToTime(''16:40:50'');']), BODY_LINE, Msg('strtotime'),
+    True);
+  // Ein reines Zeit-Literal sperrt nie (Review e/HilfeFixC): dass es mit
+  // Invariant sicher scheitert, liesse sich nicht behaupten.
+  AssertFixed(InUnit(['  d := StrToTime(''16 Uhr'', TFormatSettings.Invariant);']),
+    InUnit(['  d := StrToTime(''16 Uhr'');']), BODY_LINE, Msg('strtotime'),
+    True);
+  AssertFixed(InUnit(['  d := StrToDate(''12/31/1999'', TFormatSettings.Invariant);']),
+    InUnit(['  d := StrToDate(''12/31/1999'');']), BODY_LINE, Msg('strtodate'),
+    True);
+  AssertFixed(InUnit(['  x := StrToFloat(''-1.5e3'', TFormatSettings.Invariant);']),
+    InUnit(['  x := StrToFloat(''-1.5e3'');']), BODY_LINE, Msg('strtofloat'),
+    True);
+  // Ein Literal in einem Schreib-Aufruf liest niemand (Formatmuster).
+  AssertFixed(InUnit(['  r := FormatDateTime(''dd/mm/yyyy'', d, '
+    + 'TFormatSettings.Invariant);']),
+    InUnit(['  r := FormatDateTime(''dd/mm/yyyy'', d);']), BODY_LINE,
+    Msg('formatdatetime'), True);
+end;
+
+// Der Hinweis zum Alt-Weg auf ALine mit dem Grundhinweis 'B' (PairHint).
+function PairHintOf(const ASource: string; ALine: Integer): string;
+var
+  Map : TRdxCodeMap;
+begin
+  Map := NewMap(ASource);
+  try
+    Result := TRdxFormatSettingsFix.PairHint(Map, ALine, 'B');
+  finally
+    Map.Free;
+  end;
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_PairInFile_HintNamesLine;
+var
+  Src : string;
+begin
+  // rwE29, HeidiSQL main.pas:14718: 'QueryDay := DateToStr(..)' wird mit
+  // Eintraegen verglichen, die eine andere Zeile mit DateToStr (Locale)
+  // schreibt - nur diese Seite auf Invariant, und der Vergleich ist ausser
+  // in en-US immer ungleich. Entscheid M2 (Review e/HilfeFixC): der
+  // Alt-Weg bleibt angeboten (aendert Verhalten, nie per Taste), der
+  // Hinweis nennt das Gegenstueck. Ohne PairHint bliebe er 'B'.
+  Src := InUnit(['  r := DateToStr(d);', '  if r <> DateToStr(Date) then',
+    '    r := '''';']);
+  AssertFixed(InUnit(['  r := DateToStr(d, TFormatSettings.Invariant);',
+    '  if r <> DateToStr(Date) then', '    r := '''';']), Src, BODY_LINE,
+    Msg('datetostr'), True);
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'DateToStr']),
+    PairHintOf(Src, BODY_LINE));
+  // rwE29, rgInvoiceItemEdit.pas:217: CurrToStr ins Eingabefeld, zurueck
+  // mit TryStrToCurr (ohne eigenen Fund) - dieselbe Zahlen-Familie.
+  Src := InUnit(['  r := CurrToStr(x);', '  if TryStrToCurr(s, x) then',
+    '    r := '''';']);
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'TryStrToCurr']),
+    PairHintOf(Src, BODY_LINE));
+  // rwE29, wbDefinitionsCommon.pas:996/997: zwei StrToFloat, verglichen;
+  // auch ein Aufruf mit der globalen FormatSettings ist kein Invariant.
+  Src := InUnit(['  x := StrToFloat(s);',
+    '  if x = StrToFloat(r, FormatSettings) then', '    r := '''';']);
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'StrToFloat']),
+    PairHintOf(Src, BODY_LINE));
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_NoPairInFile_PlainHint;
+var
+  Src : string;
+begin
+  // Gegenprobe: eine andere Familie, ein Aufruf derselben Familie, der
+  // schon Invariant uebergibt (auch ueber zwei Zeilen), ein Member gleichen
+  // Namens (eine andere Routine) und ein Kommentar nennt der Hinweis nicht.
+  Src := InUnit(['  r := DateToStr(d);', '  x := StrToFloat(s);',
+    '  d := StrToDate(r,', '    TFormatSettings.Invariant);',
+    '  r := Fmt.DateToStr(d);', '  // DateToStr(d)']);
+  AssertFixed(InUnit(['  r := DateToStr(d, TFormatSettings.Invariant);',
+    '  x := StrToFloat(s);',
+    '  d := StrToDate(r,', '    TFormatSettings.Invariant);',
+    '  r := Fmt.DateToStr(d);', '  // DateToStr(d)']), Src, BODY_LINE,
+    Msg('datetostr'), True);
+  Assert.AreEqual('B', PairHintOf(Src, BODY_LINE));
+  // Ohne Aufruf auf der Zeile bleibt der Grundhinweis.
+  Assert.AreEqual('B', PairHintOf(Src, BODY_LINE - 1));
+end;
+
 {$IFNDEF FPC}
 
 // ---- echter Detektor ----
@@ -566,6 +697,33 @@ begin
     '  r := FormatCurr(''0.00'', x);']), True));
 end;
 
+procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_PairInFile_HintNamesLine;
+var
+  Src, Base : string;
+  Seen      : TArray<TSeen>;
+  O         : TRdxFixOutcome;
+begin
+  // Entscheid M2 (Review e/HilfeFixC): der echte Detektor meldet beide
+  // Zeilen; der Alt-Weg bleibt angeboten, sein Hinweis nennt die andere
+  // Zeile (Paar-Bruch); bis dahin sperrte er. Den Grundhinweis des
+  // Adapters liefert eine Quelle ohne Gegenstueck.
+  Src := InUnit(['  r := DateTimeToStr(d);']);
+  O := TablePlan(Src, Detect(Src)[0], True);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Base := O.Hint;
+  Src := InUnit(['  x := StrToCurr(s);', '  r := FormatCurr(''0.00'', x);']);
+  Seen := Detect(Src);
+  Assert.AreEqual<Integer>(2, Length(Seen), 'zwei Funde');
+  if Seen[0].Line <> BODY_LINE then
+    Seen[0] := Seen[1];
+  Assert.AreEqual<Integer>(BODY_LINE, Seen[0].Line, 'Fund der StrToCurr-Zeile');
+  O := TablePlan(Src, Seen[0], True);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.ChangesBehavior, 'aendert Verhalten');
+  Assert.AreEqual(_(R_FS_PAIR_HINT, [Base, BODY_LINE + 1, 'FormatCurr']),
+    O.Hint);
+end;
+
 procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_ContinuedStatement_NoHelp;
 var
   Src  : string;
@@ -579,6 +737,123 @@ begin
   O := TablePlan(Src, Seen[0], False);
   Assert.IsFalse(O.Enabled);
   Assert.AreEqual(_(R_FS_CONTINUES, [BODY_LINE + 1]), O.Reason);
+end;
+
+procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_OldDelphiProject_NoHelp;
+var
+  Root, Dir, U, Dof, Src : string;
+  Seen                   : TArray<TSeen>;
+  O                      : TRdxFixOutcome;
+begin
+  // rwE29, gexperts\Src\GX_DbugIntf.pas:149: GExperts baut mit Delphi 1-6
+  // (GExpert4.dof eine Ebene ueber Src, keine .dproj); die Unit selbst
+  // fragt nach keinem Compiler. Dort gibt es weder die globale
+  // FormatSettings noch TFormatSettings.Invariant (E2003). Der Adapter
+  // fragt jetzt den Plattenblick (FormatSettingsDiskCheck) - ohne ihn
+  // boeten beide Eintraege an (Gegenprobe unten: ohne .dof).
+  Src := InUnit(['  r := DateTimeToStr(d);']);
+  Seen := Detect(Src);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
+  Root := NewTempDir(FILE_PREFIX);
+  try
+    Dir := Root + 'gx' + PathDelim + 'Src' + PathDelim;
+    ForceDirectories(Dir);
+    U := Dir + 'GX_DbugIntf.pas';
+    Dof := Root + 'gx' + PathDelim + 'GExpert4.dof';
+    WriteText(Dof, '[Compiler]');
+    O := PlanFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsFalse(O.Enabled, 'Hauptweg gesperrt');
+    Assert.AreEqual(TRdxMagicFixes.FileReason(U, lfFormatSettingsVar),
+      O.Reason);
+    Assert.IsTrue(Pos('GExpert4.dof', O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos('FormatSettings', O.Reason) > 0, O.Reason);
+    Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+    O := PlanAltFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsFalse(O.Enabled, 'Alt-Weg gesperrt');
+    Assert.AreEqual(TRdxMagicFixes.FileReason(U, lfFormatInvariant),
+      O.Reason);
+    Assert.IsTrue(Pos('TFormatSettings.Invariant', O.Reason) > 0, O.Reason);
+    // Gegenprobe: ohne die alte Projektdatei bieten beide an.
+    DeleteFile(Dof);
+    O := PlanFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsTrue(O.Enabled, O.Reason);
+    O := PlanAltFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsTrue(O.Enabled, O.Reason);
+  finally
+    RemoveTree(Root);
+  end;
+end;
+
+procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_LazarusProject_OnlyMainWay;
+var
+  Root, U, Src : string;
+  Seen         : TArray<TSeen>;
+  O            : TRdxFixOutcome;
+begin
+  // rwE29, martin-doyle\10-InvoiceExample\src\rgReportPayments.pas:210 (und
+  // rgInvoiceItemEdit.pas:217): die Unit steht in Rechnung.lpi im selben
+  // Verzeichnis und baut mit FPC 3.2 - dort gibt es kein
+  // TFormatSettings.Invariant. Der Alt-Weg sperrt (ohne den Plattenblick
+  // boete er an: die Unit traegt keine FPC-Weiche); der Hauptweg bleibt -
+  // FPC kennt die globale FormatSettings (FpcKnows).
+  Src := InUnit(['  r := FloatToStr(x);']);
+  Seen := Detect(Src);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
+  Root := NewTempDir(FILE_PREFIX);
+  try
+    U := Root + 'rgReportPayments.pas';
+    WriteText(Root + 'Rechnung.lpi', '<CONFIG/>');
+    O := PlanAltFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsFalse(O.Enabled, 'Alt-Weg gesperrt');
+    Assert.AreEqual(TRdxMagicFixes.FileReason(U, lfFormatInvariant),
+      O.Reason);
+    Assert.IsTrue(Pos('Rechnung.lpi', O.Reason) > 0, O.Reason);
+    O := PlanFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsTrue(O.Enabled, O.Reason);
+    Assert.AreEqual(InUnit(['  r := FloatToStr(x, FormatSettings);']),
+      Apply(Src, O.Edits));
+  finally
+    RemoveTree(Root);
+  end;
+end;
+
+procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_OldTraceOnlyInInclude_MainWayStays;
+var
+  Root, U, Src : string;
+  Seen         : TArray<TSeen>;
+  O            : TRdxFixOutcome;
+begin
+  // Entscheid M1 (Review e/HilfeFixC): der Hauptweg fragt die Includes
+  // nicht - eine alte Versionsweiche in einem Include ('{$IFDEF VER150}',
+  // wie jedi.inc & Co.) und ein nicht gefundenes Include sperren ihn nicht
+  // (mit der Include-Pruefung fiel er hier weg). Der Invariant-Weg bleibt
+  // streng. Gegenprobe: eine alte Projektdatei (Delphi 7, .dof) daneben
+  // sperrt auch den Hauptweg.
+  Src := UnitText(RTL_USES, ['{$I defs.inc}', '{$I fehlt.inc}'],
+    ['  r := DateTimeToStr(d);']);
+  Seen := Detect(Src);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
+  Root := NewTempDir(FILE_PREFIX);
+  try
+    U := Root + 'u.pas';
+    WriteText(Root + 'defs.inc', '{$IFDEF VER150}' + CRLF + '  {$DEFINE D7}'
+      + CRLF + '{$ENDIF}');
+    O := PlanFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsTrue(O.Enabled, O.Reason);
+    Assert.IsTrue(Pos('DateTimeToStr(d, FormatSettings)', Apply(Src, O.Edits))
+      > 0, 'Hauptweg angewendet');
+    O := PlanAltFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsFalse(O.Enabled, 'Invariant-Weg gesperrt (Include)');
+    Assert.IsTrue(O.Reason <> '', 'mit Grund');
+    WriteText(Root + 'Prj.dof', '[Compiler]');
+    O := PlanFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsFalse(O.Enabled, 'Hauptweg gesperrt (.dof)');
+    Assert.AreEqual(TRdxMagicFixes.FileReason(U, lfFormatSettingsVar),
+      O.Reason);
+    Assert.IsTrue(Pos('Prj.dof', O.Reason) > 0, O.Reason);
+  finally
+    RemoveTree(Root);
+  end;
 end;
 
 {$ENDIF}

@@ -65,7 +65,20 @@ unit uRdxFormatSettingsFix;
 //     10.3 fragt (belegt ist Invariant in den Docwiki-Staenden ab Rio -
 //     dieselbe Schwelle wie SCA014, FLOOR_INLINE_DECL), ein eigenes
 //     TFormatSettings deklariert; SCA059 dazu bei einer Waehrungs-Spec m
-//     (Invariant schreibt das allgemeine Waehrungszeichen).
+//     (Invariant schreibt das allgemeine Waehrungszeichen); SCA128, wenn
+//     ein Lese-Aufruf (StrToDate, StrToTime, StrToDateTime, StrToFloat,
+//     StrToCurr) ein Literal liest, das nicht zum Invariant-Format passt
+//     (rwE29: StrToDateTime('17/02/2017 16:37:50') - Monat 17, sicherer
+//     EConvertError; LiteralMisfit; reine Zeit-Literale bei StrToTime
+//     sperren nicht - Review e/HilfeFixC).
+// Ruft die Datei eine weitere Routine derselben Familie (Datum/Uhrzeit bzw.
+// Zahl, auch Try..., ...Def) ohne Invariant, koennte ein Paar aus Schreiben
+// und Lesen bzw. Vergleich brechen (rwE29: HeidiSQL main.pas). Das SPERRT
+// NICHT (Entscheid Nico nach dem Review e/HilfeFixC, M2 - der Alt-Weg ist
+// ohnehin als aendernd gekennzeichnet und nie per Taste): der Hinweis nennt
+// das Gegenstueck (PairHint, PairBreakLine).
+// Was nur die Platte weiss (Projektdateien, Includes), prueft der Adapter
+// in uRdxFixTable (FormatSettingsDiskCheck, rwE29).
 // Der Bereich der Ersetzung beginnt hinter dem letzten Zeichen des letzten
 // Arguments (nie auf einer leeren Zeile) und endet hinter der letzten
 // schliessenden Klammer; ein Leerraum vor der Klammer bleibt dahinter.
@@ -109,6 +122,21 @@ const
   R_FS_OLD_INVARIANT = 'the file asks for compilers up to Delphi 10.3 (%s, '
     + 'line %d) - TFormatSettings.Invariant is only checked from there on';
   R_FS_OWN_TYPE = 'the file declares its own TFormatSettings (line %d)';
+  // Alt-Weg (rwE29): das Literal, das der Aufruf liest, passt nicht zu
+  // TFormatSettings.Invariant - %s das Literal (mit Quotes), %s der Aufruf.
+  R_FS_LIT_DATE = 'the literal %s does not fit the date and time format of '
+    + 'TFormatSettings.Invariant (MM/dd/yyyy hh:nn:ss) - %s would raise '
+    + 'EConvertError';
+  R_FS_LIT_NUMBER = 'the literal %s does not fit the number format of '
+    + 'TFormatSettings.Invariant (decimal point, no thousands separator) - %s '
+    + 'would raise EConvertError';
+  // Alt-Weg (rwE29, Paar-Bruch, Entscheid M2): der Hinweis mit dem
+  // Gegenstueck - %s der Hinweis des Adapters (schon uebersetzt), %d die
+  // Zeile, %s der Aufruf dort.
+  R_FS_PAIR_HINT = '%s; line %d calls %s of the same family without '
+    + 'TFormatSettings.Invariant - change it along with this one, otherwise '
+    + 'values written there and read or compared here (or the other way '
+    + 'round) no longer match';
   R_FL_NO_SPEC = 'the message does not name the format string - analyse the '
     + 'file again';
   R_FL_NO_FORMAT = 'no Format call on the code columns of the reported line';
@@ -150,6 +178,12 @@ type
       out AFormat: string): Boolean; static;
     // Traegt der Formatstring eine Waehrungs-Spec ('%m', '%.2m', '%0:m')?
     class function HasMoneySpec(const AFormat: string): Boolean; static;
+    // SCA128, Alt-Weg (Entscheid M2): ABaseHint, oder - ruft die Datei
+    // ausser den Aufrufen der Liste auf ALine eine Routine derselben
+    // Familie ohne Invariant - R_FS_PAIR_HINT mit ABaseHint, Zeile und Name
+    // des ersten solchen Aufrufs. Liest die Zeile keinen Aufruf, ABaseHint.
+    class function PairHint(AMap: TRdxCodeMap; ALine: Integer;
+      const ABaseHint: string): string; static;
   end;
 
 implementation
@@ -159,7 +193,7 @@ uses
   uRefactorInfo,        // TRefactorSpan.Make
   uRdxText,             // _(), MsgMovedSuffix (E29, nie uLocalization)
   uRdxRecipes,          // TRdxRecipes.LineLooksFpcAware (FpcTellLine)
-  uRdxCompilerTraces;   // OldCompilerTrace, TRdxCompilerFloor, FLOOR_INLINE_DECL
+  uRdxCompilerTraces;   // OldCompilerTrace, FLOOR_SETTINGS_VAR, FLOOR_INLINE_DECL
 
 const
   SPAN_128 = 'sca128';
@@ -196,13 +230,33 @@ const
   SCOPE_STOPS: array[0..3] of string = ('implementation', 'initialization',
     'finalization', 'interface');
   MAX_FOLLOW_LINES = 30;
-  // Die globale Variable FormatSettings: Delphi XE (VER220, CompilerVersion
-  // 22, COMPILER15/DELPHI15 der JEDI-Zaehlung, RTL220); FPC ab 2.6. Wer nach
-  // XE fragt, baut auch davor (s. uRdxCompilerTraces). ProjectVersion liest
-  // nur SCA014 - hier ohne Wirkung.
-  FLOOR_SETTINGS_VAR: TRdxCompilerFloor = (Ver: 220; Version: 22;
-    Compiler: 15; DelphiNumber: 15; DelphiYear: 2010; Rtl: 220;
-    FpcFull: 20600; XeNames: False; ProjectVersion: 0);
+  // Was ein Literal liest (LiteralMisfit, Alt-Weg): Zahl bzw. Datum/Uhrzeit.
+  PARSE_NUMBER: array[0..1] of string = ('strtofloat', 'strtocurr');
+  PARSE_DATE     = 'strtodate';
+  PARSE_TIME     = 'strtotime';
+  PARSE_DATETIME = 'strtodatetime';
+  MISFIT_NUMBER  = 'number';
+  MISFIT_DATE    = 'date';
+  // Paar-Bruch (PairBreakLine, Alt-Weg, rwE29): die Familien der RTL-
+  // Routinen, die Datum/Uhrzeit bzw. Zahlen nach FormatSettings schreiben
+  // oder lesen - auch die ohne Fund (Try..., ...Def, ...F). Format gehoert
+  // nicht dazu (fast jede Datei ruft es fuer Text).
+  PAIR_DATE: array[0..13] of string = ('strtodate', 'strtotime',
+    'strtodatetime', 'datetostr', 'timetostr', 'datetimetostr',
+    'formatdatetime', 'trystrtodate', 'trystrtotime', 'trystrtodatetime',
+    'strtodatedef', 'strtotimedef', 'strtodatetimedef', 'datetimetostring');
+  PAIR_NUMBER: array[0..13] of string = ('strtofloat', 'strtocurr',
+    'floattostr', 'currtostr', 'formatfloat', 'formatcurr', 'trystrtofloat',
+    'trystrtocurr', 'strtofloatdef', 'strtocurrdef', 'floattostrf',
+    'currtostrf', 'floattotext', 'texttofloat');
+  // Davor schneidet die Zeilen-Vorpruefung von PairBreakLine (klein).
+  PAIR_DATE_HINTS: array[0..1] of string = ('date', 'time');
+  PAIR_NUMBER_HINTS: array[0..2] of string = ('float', 'curr', 'text');
+  NAME_INVARIANT = 'invariant';
+  MAX_PAIR_ARG_LINES = 10;
+  // Die globale Variable FormatSettings: FLOOR_SETTINGS_VAR (Delphi XE, FPC
+  // ab 2.6; seit rwE29 in uRdxCompilerTraces). Wer nach XE fragt, baut auch
+  // davor.
 
 type
   // Ein Aufruf auf der Zeile: Name, Klammern und die Spalte, vor der das
@@ -386,7 +440,10 @@ end;
 
 // Ist das erste Argument (ab AFrom bis zum ersten Komma, hoechstens bis
 // ATo) nur aus String-Literalen mit '+' gefuegt? Dann True und ihr Text
-// ('' als ein Quote) - so liest der Detektor den Formatstring.
+// ('' als ein Quote) - so liest der Detektor den Formatstring. Ein Literal,
+// das bis ATo reicht (das einzige Argument: StrToDate('..'), rwE29), zaehlt
+// auch - bis dahin lieferte die Funktion dort False (SCA059 fragt nur
+// Format mit zwei Argumenten, dort folgt immer ein Komma).
 function LiteralFirstArg(AMap: TRdxCodeMap; ALine, AFrom, ATo: Integer;
   out AText: string): Boolean;
 var
@@ -423,12 +480,297 @@ begin
       Exit;
     i := SkipBlanks(L, i);
     if i > ATo then
-      Exit;
+      Exit(True);
     if L[i] = ',' then
       Exit(True);
     if L[i] <> '+' then
       Exit;
     i := SkipBlanks(L, i + 1);
+  end;
+end;
+
+// ---- Literal gegen TFormatSettings.Invariant (Alt-Weg, rwE29) ----
+// Invariant: ShortDateFormat 'MM/dd/yyyy', DateSeparator '/',
+// TimeSeparator ':', TimeAMString/TimePMString 'AM'/'PM', DecimalSeparator
+// '.'; TextToFloat nimmt keinen Tausendertrenner. Gelesen wird streng -
+// was nicht sicher passt, gilt als unpassend (die Hilfe sperrt; lieber
+// keine Hilfe als StrToDateTime('17/02/2017 ..') mit sicherem
+// EConvertError).
+
+// Ab APos 1..AMax Ziffern: True mit ihrem Wert, APos dahinter.
+function ReadNumber(const S: string; var APos: Integer; AMax: Integer;
+  out AValue: Integer): Boolean;
+var
+  Start : Integer;
+begin
+  Start := APos;
+  AValue := 0;
+  while (APos <= Length(S)) and (APos - Start < AMax)
+        and CharInSet(S[APos], ['0'..'9']) do
+  begin
+    AValue := AValue * 10 + Ord(S[APos]) - Ord('0');
+    Inc(APos);
+  end;
+  Result := (APos > Start)
+    and not ((APos <= Length(S)) and CharInSet(S[APos], ['0'..'9']));
+end;
+
+// 'M/d/yyyy' bzw. 'M/d' ab APos (Monat 1..12, Tag 1..31, Jahr 1..4
+// Ziffern); APos dahinter.
+function InvariantDateAt(const S: string; var APos: Integer): Boolean;
+var
+  M, D, Y : Integer;
+begin
+  Result := ReadNumber(S, APos, 2, M) and (M >= 1) and (M <= 12)
+    and (APos <= Length(S)) and (S[APos] = '/');
+  if not Result then Exit;
+  Inc(APos);
+  Result := ReadNumber(S, APos, 2, D) and (D >= 1) and (D <= 31);
+  if Result and (APos <= Length(S)) and (S[APos] = '/') then
+  begin
+    Inc(APos);
+    Result := ReadNumber(S, APos, 4, Y);
+  end;
+end;
+
+// 'h:n', 'h:n:s', 'h:n:s.z', dahinter wahlweise ' AM'/' PM' ab APos;
+// APos dahinter.
+function InvariantTimeAt(const S: string; var APos: Integer): Boolean;
+var
+  H, N, Sec, Z : Integer;
+  Rest         : string;
+begin
+  Result := ReadNumber(S, APos, 2, H) and (H <= 23)
+    and (APos <= Length(S)) and (S[APos] = ':');
+  if not Result then Exit;
+  Inc(APos);
+  Result := ReadNumber(S, APos, 2, N) and (N <= 59);
+  if Result and (APos <= Length(S)) and (S[APos] = ':') then
+  begin
+    Inc(APos);
+    Result := ReadNumber(S, APos, 2, Sec) and (Sec <= 59);
+    if Result and (APos <= Length(S)) and (S[APos] = '.') then
+    begin
+      Inc(APos);
+      Result := ReadNumber(S, APos, 3, Z);
+    end;
+  end;
+  if not Result then Exit;
+  Rest := UpperCase(Trim(Copy(S, APos, MaxInt)));
+  if (Rest = 'AM') or (Rest = 'PM') then
+  begin
+    Result := (H >= 1) and (H <= 12);
+    APos := Length(S) + 1;
+  end;
+end;
+
+// Liest StrToFloat/StrToCurr den Text ATrimmed mit Invariant?
+// [+-] Ziffern [. Ziffern] bzw. [+-] . Ziffern, dahinter wahlweise ein
+// Exponent (e/E [+-] Ziffern).
+function InvariantNumberFits(const ATrimmed: string): Boolean;
+var
+  i, n    : Integer;
+  Digits  : Integer;
+begin
+  n := Length(ATrimmed);
+  i := 1;
+  if (i <= n) and CharInSet(ATrimmed[i], ['+', '-']) then
+    Inc(i);
+  Digits := 0;
+  while (i <= n) and CharInSet(ATrimmed[i], ['0'..'9']) do
+  begin
+    Inc(i);
+    Inc(Digits);
+  end;
+  if (i <= n) and (ATrimmed[i] = '.') then
+  begin
+    Inc(i);
+    while (i <= n) and CharInSet(ATrimmed[i], ['0'..'9']) do
+    begin
+      Inc(i);
+      Inc(Digits);
+    end;
+  end;
+  if Digits = 0 then
+    Exit(False);
+  if (i <= n) and CharInSet(ATrimmed[i], ['e', 'E']) then
+  begin
+    Inc(i);
+    if (i <= n) and CharInSet(ATrimmed[i], ['+', '-']) then
+      Inc(i);
+    Digits := 0;
+    while (i <= n) and CharInSet(ATrimmed[i], ['0'..'9']) do
+    begin
+      Inc(i);
+      Inc(Digits);
+    end;
+    if Digits = 0 then
+      Exit(False);
+  end;
+  Result := i > n;
+end;
+
+// Passt das Literal AText zum Lesen durch ALow (klein) mit
+// TFormatSettings.Invariant? '' wenn ja bzw. ALow nichts liest, sonst die
+// Art: 'date' (Datum/Uhrzeit) oder 'number'.
+function LiteralMisfit(const ALow, AText: string): string;
+var
+  T  : string;
+  P  : Integer;
+  Ok : Boolean;
+begin
+  Result := '';
+  T := Trim(AText);
+  P := 1;
+  Ok := False;
+  if InList(ALow, PARSE_NUMBER) then
+  begin
+    if not InvariantNumberFits(T) then
+      Result := MISFIT_NUMBER;
+    Exit;
+  end;
+  if ALow = PARSE_DATE then
+    Ok := InvariantDateAt(T, P) and (P > Length(T))
+  else if ALow = PARSE_TIME then
+    // Ein reines Zeit-Literal sperrt nicht (Review e/HilfeFixC): Invariant
+    // liest es wie die meisten Locales (':', AM/PM) - dass es dort sicher
+    // scheitert, liesse sich nicht behaupten.
+    Exit
+  else if ALow = PARSE_DATETIME then
+  begin
+    Ok := InvariantDateAt(T, P);
+    if Ok and (P <= Length(T)) then
+    begin
+      Ok := T[P] = ' ';
+      while (P <= Length(T)) and (T[P] = ' ') do
+        Inc(P);
+      Ok := Ok and InvariantTimeAt(T, P);
+    end;
+    Ok := Ok and (P > Length(T));
+  end
+  else
+    Exit;
+  if not Ok then
+    Result := MISFIT_DATE;
+end;
+
+// Der Grund, wenn der Aufruf ASite ein Literal liest, das nicht zu
+// TFormatSettings.Invariant passt; '' sonst (kein Literal, kein Leser).
+function LiteralReason(AMap: TRdxCodeMap; const ASite: TCallSite): string;
+var
+  Lit, Kind : string;
+begin
+  Result := '';
+  if not LiteralFirstArg(AMap, ASite.Name.Line, ASite.Open.EndCol,
+       ASite.Close.Col - 1, Lit) then
+    Exit;
+  Kind := LiteralMisfit(ASite.Name.Low, Lit);
+  if Kind = MISFIT_DATE then
+    Result := _(R_FS_LIT_DATE, [QuotedStr(Lit), TokText(AMap, ASite.Name)])
+  else if Kind = MISFIT_NUMBER then
+    Result := _(R_FS_LIT_NUMBER, [QuotedStr(Lit), TokText(AMap, ASite.Name)]);
+end;
+
+// ---- Paar-Bruch (Alt-Weg, rwE29) ----
+// HeidiSQL main.pas:14718: 'QueryDay := DateToStr(..)' wird mit Eintraegen
+// verglichen, die Zeile 14699 mit DateToStr (Locale) schreibt - nur EINE
+// Seite auf Invariant gestellt, ist der Vergleich ausser in en-US immer
+// ungleich. Ebenso Schreiben und Lesen (CurrToStr ins Edit, TryStrToCurr
+// zurueck). Ob zwei Aufrufe zusammengehoeren, sieht der Planer nicht -
+// darum nennt der Hinweis (PairHint) den ersten weiteren Aufruf derselben
+// Familie (PAIR_DATE bzw. PAIR_NUMBER) in der Datei, der kein Invariant
+// uebergibt. Bis zum Entscheid M2 (Review e/HilfeFixC) sperrte er.
+
+// Steht T in einem der Aufrufe ASites (die die Hilfe aendert)?
+function IsEditedName(const T: TRdxToken; const ASites: TCallSites): Boolean;
+var
+  i : Integer;
+begin
+  for i := 0 to High(ASites) do
+    if SameTok(T, ASites[i].Name) then
+      Exit(True);
+  Result := False;
+end;
+
+// Nennt der Aufruf am Namen T in seinen Klammern 'Invariant'? Ohne
+// Klammer bzw. ohne gefundene schliessende: nein.
+function PassesInvariant(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
+var
+  Open, Close, N : TRdxToken;
+begin
+  Result := False;
+  Open := After(AMap, T);
+  if Open.Low <> '(' then Exit;
+  Close := MatchClose(AMap, Open, MAX_PAIR_ARG_LINES);
+  if Close.Low = '' then Exit;
+  N := After(AMap, Open);
+  while (N.Low <> '') and TokBefore(N, Close) do
+  begin
+    if N.Low = NAME_INVARIANT then
+      Exit(True);
+    N := After(AMap, N);
+  end;
+end;
+
+// Traegt ALowText (klein) einen der Woerter-Teile AHints? Nur die
+// Vorpruefung je Zeile - die Token entscheiden.
+function MentionsAny(const ALowText: string;
+  const AHints: array of string): Boolean;
+var
+  i : Integer;
+begin
+  for i := Low(AHints) to High(AHints) do
+    if Pos(AHints[i], ALowText) > 0 then
+      Exit(True);
+  Result := False;
+end;
+
+// Der erste weitere Aufruf der Familie(n) der Aufrufe ASites in der Datei
+// ohne Invariant (s. Kopf des Abschnitts): seine Zeile und sein Name wie
+// geschrieben in AName; 0 ohne. Ein Member-Aufruf ('X.DateToStr', X nicht
+// SysUtils) ist eine andere Routine und zaehlt nicht.
+function PairBreakLine(AMap: TRdxCodeMap; const ASites: TCallSites;
+  out AName: string): Integer;
+var
+  WantDate, WantNum : Boolean;
+  i, Li             : Integer;
+  T, P              : TRdxToken;
+  LowText           : string;
+  InFamily          : Boolean;
+begin
+  Result := 0;
+  AName := '';
+  WantDate := False;
+  WantNum := False;
+  for i := 0 to High(ASites) do
+  begin
+    WantDate := WantDate or InList(ASites[i].Name.Low, PAIR_DATE);
+    WantNum := WantNum or InList(ASites[i].Name.Low, PAIR_NUMBER);
+  end;
+  for Li := 1 to AMap.LineCount do
+  begin
+    LowText := LowerCase(AMap.Raw(Li));
+    if not ((WantDate and MentionsAny(LowText, PAIR_DATE_HINTS))
+            or (WantNum and MentionsAny(LowText, PAIR_NUMBER_HINTS))) then
+      Continue;
+    T := NextToken(AMap, Li, 1);
+    while (T.Low <> '') and (T.Line = Li) do
+    begin
+      InFamily := T.IsWord
+        and ((WantDate and InList(T.Low, PAIR_DATE))
+             or (WantNum and InList(T.Low, PAIR_NUMBER)));
+      if InFamily and not IsEditedName(T, ASites) then
+      begin
+        P := Before(AMap, T);
+        if ((P.Low <> '.') or RtlQualified(AMap, P))
+           and not PassesInvariant(AMap, T) then
+        begin
+          AName := TokText(AMap, T);
+          Exit(Li);
+        end;
+      end;
+      T := After(AMap, T);
+    end;
   end;
 end;
 
@@ -699,6 +1041,13 @@ begin
     if AReason <> '' then
       Exit;
     Names[i] := TokText(AMap, Hits[i]);
+    // Alt-Weg: ein gelesenes Literal muss zu Invariant passen (rwE29).
+    if AInvariant then
+    begin
+      AReason := LiteralReason(AMap, Sites[i]);
+      if AReason <> '' then
+        Exit;
+    end;
   end;
   Li := FollowLineWith(AMap, ALine, LOCALE_FUNCS);
   if Li > 0 then
@@ -865,6 +1214,30 @@ begin
     end;
     Inc(i);
   end;
+end;
+
+class function TRdxFormatSettingsFix.PairHint(AMap: TRdxCodeMap;
+  ALine: Integer; const ABaseHint: string): string;
+var
+  Hits  : TArray<TRdxToken>;
+  Sites : TCallSites;
+  i, Li : Integer;
+  Other : string;
+begin
+  Result := ABaseHint;
+  if (ALine < 1) or (ALine > AMap.LineCount) then
+    Exit;
+  Hits := NamesOnLine(AMap, ALine, LOCALE_FUNCS);
+  if Length(Hits) = 0 then
+    Exit;
+  SetLength(Sites, Length(Hits));
+  for i := 0 to High(Hits) do
+    if ReadCall(AMap, Hits[i], LOCALE_ARITY[LocaleIndex(Hits[i].Low)],
+         Sites[i]) <> '' then
+      Exit;
+  Li := PairBreakLine(AMap, Sites, Other);
+  if Li > 0 then
+    Result := _(R_FS_PAIR_HINT, [ABaseHint, Li, Other]);
 end;
 
 end.

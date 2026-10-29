@@ -1487,6 +1487,51 @@ end;
   (ProofReason, TypeReason, OperandReason, VariantReason - dort stehen die
   msgids, tools/i18n_extract.py loest nur Konstanten derselben Unit auf). ---- }
 
+// SCA128/SCA059 (Realworld-Test rwE29): was nur Dateiname und Platte
+// wissen - der Plattenblick von SCA014 (TRdxMagicFixes, wie
+// PlanDigitGrouping): Netzpfad, Lazarus-Dateiart bzw. -Projekt neben der
+// Unit, alte Delphi-Projektdatei bzw. .dproj vor der Schwelle, Weichen in
+// den Includes. AFeature: lfFormatSettingsVar fuer den Hauptweg (die
+// globale Variable ab Delphi XE; FPC kennt sie - Lazarus sperrt nicht),
+// lfFormatInvariant fuer den Alt-Weg (ab 10.3 geprueft, FPC 3.2 kennt
+// TFormatSettings.Invariant nicht). Die FPC-Weiche und alte Spuren IN der
+// Datei prueft schon der Planer. Fundstellen: GExperts GX_DbugIntf.pas
+// (Delphi 1-6, GExpert4.dof), Rechnung.lpi (rgReportPayments.pas,
+// rgInvoiceItemEdit.pas), Img32.inc mit '{$IFDEF FPC}' (Img32.SVG.Path.pas).
+// Die Includes fragt NUR der Alt-Weg (Entscheid Nico nach dem Review
+// e/HilfeFixC, M1): fuer den Hauptweg beweist eine Versionsweiche in
+// jedi.inc & Co. nichts (die Kits bauen mit vielen Versionen, auch ab XE),
+// und ein nicht gefundenes Include sperrt ihn nicht - sonst fielen rund
+// 40 % (SCA128) bzw. 50 % (SCA059) der Hauptweg-Angebote weg. Der Hauptweg
+// sperrt also nur ueber Spuren in der Unit (Planer) und alte
+// Projektdateien (FileReason). Die Netzpfad-Sperre bleibt fuer beide Wege:
+// sie ist die Politik des Plattenblicks von SCA014 (auf einem Netzpfad
+// liest die Hilfe im Hauptthread keine Projektdatei - ohne den Blick ist
+// die Projekt-Sperre nicht pruefbar).
+procedure FormatSettingsDiskCheck(ALines: TStrings; AFinding: TLeakFinding;
+  AFeature: TRdxLateFeature; var AOutcome: TRdxFixOutcome);
+var
+  Map : TRdxCodeMap;
+begin
+  if not AOutcome.Enabled then Exit;
+  AOutcome.Reason := NetworkPathReason(AFinding.FileName, rrProjectFiles);
+  if AOutcome.Reason = '' then
+    AOutcome.Reason := TRdxMagicFixes.FileReason(AFinding.FileName, AFeature);
+  if (AOutcome.Reason = '') and (AFeature = lfFormatInvariant) then
+  begin
+    Map := TRdxCodeMap.Acquire(ALines);
+    try
+      AOutcome.Reason := TRdxMagicFixes.IncludeReason(AFinding.FileName, Map,
+        AFeature);
+    finally
+      TRdxCodeMap.Release(Map);
+    end;
+  end;
+  if AOutcome.Reason = '' then Exit;
+  AOutcome.Enabled := False;
+  AOutcome.Edits := nil;
+end;
+
 // SCA128 (Charge QF1): ', FormatSettings' an jeden Aufruf der Liste auf der
 // Fundzeile - die Textlogik in uRdxFormatSettingsFix.
 function PlanDateFormatSettings(APlaces: TSourcePlaces; ALines: TStrings;
@@ -1494,18 +1539,30 @@ function PlanDateFormatSettings(APlaces: TSourcePlaces; ALines: TStrings;
 begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxFormatSettingsFix.DateFormatSettings);
+  FormatSettingsDiskCheck(ALines, AFinding, lfFormatSettingsVar, Result);
 end;
 
 // SCA128, zweiter Eintrag: ', TFormatSettings.Invariant' (aendert Verhalten).
 function PlanDateFormatSettingsAlt(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Map : TRdxCodeMap;
 begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxFormatSettingsFix.DateFormatInvariant);
   Result.Variant := 1;
   Result.ChangesBehavior := True;
-  if Result.Enabled then
-    Result.Hint := _(R_FMTSET_INV_HINT);
+  FormatSettingsDiskCheck(ALines, AFinding, lfFormatInvariant, Result);
+  if not Result.Enabled then Exit;
+  // Ein Gegenstueck derselben Familie ohne Invariant sperrt nicht, der
+  // Hinweis nennt es (Entscheid M2, Review e/HilfeFixC).
+  Map := TRdxCodeMap.Acquire(ALines);
+  try
+    Result.Hint := TRdxFormatSettingsFix.PairHint(Map, AFinding.LineInt,
+      _(R_FMTSET_INV_HINT));
+  finally
+    TRdxCodeMap.Release(Map);
+  end;
 end;
 
 // SCA059 (Charge QF1): drittes Argument ', FormatSettings' an das eine
@@ -1515,6 +1572,7 @@ function PlanFormatLocale(APlaces: TSourcePlaces; ALines: TStrings;
 begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxFormatSettingsFix.FormatLocale);
+  FormatSettingsDiskCheck(ALines, AFinding, lfFormatSettingsVar, Result);
 end;
 
 // SCA059, zweiter Eintrag: ', TFormatSettings.Invariant' (aendert Verhalten).
@@ -1525,6 +1583,7 @@ begin
     TRdxFormatSettingsFix.FormatLocaleInvariant);
   Result.Variant := 1;
   Result.ChangesBehavior := True;
+  FormatSettingsDiskCheck(ALines, AFinding, lfFormatInvariant, Result);
   if Result.Enabled then
     Result.Hint := _(R_FMTLOC_INV_HINT);
 end;

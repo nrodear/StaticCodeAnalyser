@@ -455,14 +455,18 @@ const
     + 'plus anciens)');
   // Lazarus-/FPC-Datei je Sprachmittel (TRdxLateFeature): je Sprache und
   // Sprachmittel ein eigener ganzer Satz - Geschlecht und Zahl ('eine
-  // Inline-Konstante', 'Zifferntrenner') stellt die Sprache selbst.
+  // Inline-Konstante', 'Zifferntrenner') stellt die Sprache selbst. Die
+  // globale FormatSettings kennt FPC (FpcKnows): dort kein Grund ('').
   FPC_TAIL: array[0..2, TRdxLateFeature] of string = (
     ('FPC 3.2 has no inline constants', 'FPC 3.2 has no digit separators',
-     'FPC 3.2 has no inline variables'),
+     'FPC 3.2 has no inline variables',
+     'FPC 3.2 has no TFormatSettings.Invariant', ''),
     ('eine Inline-Konstante gibt es in FPC 3.2 nicht',
      'Zifferntrenner gibt es in FPC 3.2 nicht',
-     'eine Inline-Variable gibt es in FPC 3.2 nicht'),
-    (' constantes inline', ' de chiffres', ' variables inline'));
+     'eine Inline-Variable gibt es in FPC 3.2 nicht',
+     'FPC 3.2 kennt kein TFormatSettings.Invariant', ''),
+    (' constantes inline', ' de chiffres', ' variables inline',
+     ' TFormatSettings.Invariant', ''));
 var
   T        : TTree;
   SL       : TStringList;
@@ -498,8 +502,12 @@ begin
       for F := Low(TRdxLateFeature) to High(TRdxLateFeature) do
       begin
         R := TRdxMagicFixes.FileReason('u.pp', F);
-        Assert.IsTrue(EndsWithText(R, FPC_TAIL[i, F]),
-          LANGS[i] + ', FPC-Datei ' + IntToStr(Ord(F)) + ': ' + R);
+        if TRdxMagicFixes.FpcKnows(F) then
+          Assert.AreEqual('', R, LANGS[i] + ', FPC-Datei (FPC kennt es) '
+            + IntToStr(Ord(F)))
+        else
+          Assert.IsTrue(EndsWithText(R, FPC_TAIL[i, F]),
+            LANGS[i] + ', FPC-Datei ' + IntToStr(Ord(F)) + ': ' + R);
       end;
     end;
     SetRdxLanguageOverride('en');

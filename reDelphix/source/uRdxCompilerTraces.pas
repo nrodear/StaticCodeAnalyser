@@ -74,9 +74,14 @@ type
   //                bewegen)
   //   ProjectVersion  die <ProjectVersion> einer .dproj in Zehnteln, UNTER
   //                der ein Projekt alt ist (Delphi 2009 = 12.0, 10.3 =
-  //                18.5). Nur der Plattenblick von SCA014 liest sie
-  //                (uRdxMagicFixes.FileReason, Gegen-Review Q14, Major 3);
-  //                SCA121 hat keinen - der braeuchte eine eigene Messung.
+  //                18.5). Nur der Plattenblick liest sie
+  //                (uRdxMagicFixes.FileReason, Gegen-Review Q14, Major 3):
+  //                SCA014, SCA069, SCA111/SCA112 und seit dem Realworld-
+  //                Test rwE29 SCA128/SCA059 (FLOOR_INLINE_DECL fuer den
+  //                Invariant-Weg, FLOOR_SETTINGS_VAR fuer den Hauptweg).
+  //                SCA121 und SCA127 (FLOOR_DEFAULT_FN, nur die Spuren in
+  //                der Datei) haben keinen - die braeuchten eine eigene
+  //                Messung.
   TRdxCompilerFloor = record
     Ver            : Integer;
     Version        : Integer;
@@ -114,6 +119,15 @@ const
   FLOOR_DIGIT_SEP: TRdxCompilerFloor = (Ver: 350; Version: 35; Compiler: 28;
     DelphiNumber: 28; DelphiYear: 2010; Rtl: 350; FpcFull: MaxInt;
     XeNames: True; ProjectVersion: 193);
+  // SCA128/SCA059, Hauptweg: die globale Variable FormatSettings gibt es ab
+  // Delphi XE (VER220, CompilerVersion 22, COMPILER15/DELPHI15 der JEDI-
+  // Zaehlung, RTL220; .dproj ProjectVersion 12.2 - Delphi 2009/2010
+  // schrieben 12.0), in FPC ab 2.6. Bis zum Realworld-Test rwE29 in
+  // uRdxFormatSettingsFix (dort ohne ProjectVersion); seitdem liest auch
+  // der Plattenblick (uRdxMagicFixes, lfFormatSettingsVar) die Schwelle.
+  FLOOR_SETTINGS_VAR: TRdxCompilerFloor = (Ver: 220; Version: 22;
+    Compiler: 15; DelphiNumber: 15; DelphiYear: 2010; Rtl: 220;
+    FpcFull: 20600; XeNames: False; ProjectVersion: 122);
 
 // Die erste Spur alter Compiler (bis AFloor) in den Direktiven der Datei:
 // das Symbol, der Vergleich ('COMPILERVERSION >= 33') bzw. der Name der

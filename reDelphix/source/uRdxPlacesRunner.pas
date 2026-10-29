@@ -44,6 +44,15 @@ uses
   uRdxRecipes,     // TRdxParts
   uRdxBufferMath;  // TRdxEdit
 
+const
+  // PlanUses (Realworld-Test rwE29): die Unit steht im Text der uses-
+  // Klauseln nur unter {$IF..}/{$IFDEF..} - ob im gebauten Zweig, bleibt
+  // offen. Der Satz folgt hinter '%s is missing in uses: ' (AppendUses in
+  // uRdxFixRunner, FormatUsesReason in uRdxRecipeRunner); %d die Zeile, %s
+  // MsgByHand.
+  R_USES_CONDITIONAL = 'it stands there only under a compiler condition '
+    + '(line %d); %s';
+
 type
   // Was fuer eine fehlende Unit in der uses-Klausel zu tun ist (AH19).
   TRdxUsesPlan = record
@@ -177,7 +186,13 @@ type
     // einem $IFDEF-Zweig sperrt (DirectiveLineIn). Ohne jede uses-Klausel
     // wird hinter 'implementation' (sonst 'interface') eine neue angelegt;
     // ein Programm oder eine Library ohne uses-Klausel bekommt keine -
-    // Reason 'keine uses-Klausel und kein interface/implementation'.
+    // Reason 'keine uses-Klausel und kein interface/implementation'; steht
+    // das Schluesselwort selbst in einem bedingten Zweig, sperrt PlanUses
+    // (die neue Klausel galte nur dort - ConditionLineOf, rwE29).
+    // Ob die Unit schon da ist, fragt PlanUses den Baum UND den Text der
+    // uses-Klauseln (TextUsesLine, Realworld-Test rwE29): steht sie nur
+    // im Text, ist sie da; steht sie dort nur unter einer bedingten
+    // Uebersetzung, sperrt PlanUses (Needed mit Reason).
     class function PlanUses(APlaces: TSourcePlaces;
       const AShortName, AQualifiedName: string): TRdxUsesPlan; static;
 
@@ -225,7 +240,9 @@ implementation
 
 uses
   System.SysUtils,
-  uRdxText;          // _, MsgNoFileOpen, MsgMovedSuffix (E29)
+  System.Classes,    // TStringList (PlacesLines)
+  uRdxCodeMap,       // TRdxCodeMap, Token, Direktiven (PlanUses)
+  uRdxText;          // _, MsgNoFileOpen, MsgMovedSuffix, MsgByHand (E29)
 
 // Gegen Version 1 des Quellstellen-Vertrags geschrieben (uSourcePlaces,
 // Abschnitt VERTRAGSVERSION) - wie uRdxRecipeRunner und uRdxFixRunner:
@@ -947,95 +964,168 @@ begin
     APlan.Edit.NewText := APlan.Name + ', ' + Old;
 end;
 
-// Erste Zeile eines bedingten Bereichs (ConditionalRanges), in dem ALine
-// liegt; 0 = in keinem.
-function ConditionalStartOf(APlaces: TSourcePlaces; ALine: Integer): Integer;
+// ---- Die uses-Klauseln im Text (PlanUses, Realworld-Test rwE29) ----
+// WARUM: der Baum kann einen Eintrag verlieren. uParser2.ParseUses bricht
+// eine Klausel an einem Namensglied ab, das ein Schluesselwort ist
+// ('MVCFramework.Serializer.Abstract,' - der Knoten heisst dann
+// 'MVCFramework.Serializer', alle Eintraege dahinter fehlen; Korpus:
+// MVCFramework.Serializer.JsonDataObjects.pas mit 'System.SysUtils;' als
+// letztem Eintrag des interface-uses). PlanUses fuegte die Unit dann ein
+// zweites Mal ein (E2004 - SCA127 und SCA168.2). Der Text der Klauseln
+// (Code-Sicht: Kommentare und Strings zaehlen nicht) entscheidet mit.
+
+// Offene bedingte Bloecke ({$IF}, {$IFDEF}, {$IFNDEF}, {$IFOPT} ohne ihr
+// {$ENDIF}/{$IFEND}) vor (ALine, ACol); AOuterLine ist die Zeile des
+// aeussersten davon (0 = keiner) - fuer den Grund in PlanNewClause.
+function ConditionDepthAt(AMap: TRdxCodeMap; ALine, ACol: Integer;
+  out AOuterLine: Integer): Integer; overload;
 var
-  Ranges : TArray<TSourceLineRange>;
-  i      : Integer;
+  Li, Co : Integer;
+  W      : string;
+  Arg    : Boolean;
 begin
   Result := 0;
-  Ranges := APlaces.ConditionalRanges;
-  for i := 0 to High(Ranges) do
-    if (Ranges[i].StartLine <= ALine) and (Ranges[i].EndLine >= ALine) then
-      Exit(Ranges[i].StartLine);
-end;
-
-function IsUsesWordStart(C: Char): Boolean;
-begin
-  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_']) or (Ord(C) > 127);
-end;
-
-function IsUsesWordChar(C: Char): Boolean;
-begin
-  Result := IsUsesWordStart(C) or CharInSet(C, ['0'..'9', '.']);
-end;
-
-// Die Zeile, auf der AShortName (letztes Glied, Gross/klein egal) als
-// Eintrag einer uses-Klausel im TEXT steht; 0 = nirgends. Gelesen wird die
-// Code-Sicht der ganzen Datei (CodeViewOf: Kommentare und Direktiven sind
-// Leerraum, Strings VIEW_FILL) - also jeder Zweig einer Direktive, anders
-// als der Baum. Die zweite Wand von PlanUses (rwE29): der Baum kann
-// Eintraege verlieren (delphimvcframework
-// MVCFramework.Serializer.JsonDataObjects.pas: hinter
-// 'MVCFramework.Serializer.Abstract,' fehlen alle Eintraege der Klausel,
-// auch 'System.SysUtils' - die Hilfe fuegte es ein zweites Mal ein, E2004)
-// oder einen Zweig nicht sehen (mORMot2 mormot.crypt.openssl.pas:
-// 'sysutils' im {$ifdef USE_OPENSSL}-Zweig).
-function UsesLineInText(APlaces: TSourcePlaces;
-  const AShortName: string): Integer;
-var
-  View            : TArray<string>;
-  N, Li, J, K     : Integer;
-  S, W            : string;
-  InUses, AtEntry : Boolean;
-  Prev            : Char;
-begin
-  Result := 0;
-  N := APlaces.LineCount;
-  if N < 1 then Exit;
-  View := APlaces.CodeViewOf(TRefactorSpan.Make(ROLE_STATEMENT, 1, 1, N,
-    Length(APlaces.LineText(N)) + 1));
-  InUses := False;
-  AtEntry := False;
-  Prev := ' ';
-  for Li := 0 to High(View) do
+  AOuterLine := 0;
+  Li := 1;
+  Co := 1;
+  while NextDirective(AMap, Li, Co) do
   begin
-    S := View[Li];
-    J := 1;
-    while J <= Length(S) do
+    if (Li > ALine) or ((Li = ALine) and (Co >= ACol)) then
+      Exit;
+    W := DirectiveWord(AMap, Li, Co, Arg);
+    if InList(W, COND_OPENERS) then
     begin
-      if IsUsesWordStart(S[J]) then
-      begin
-        K := J;
-        while (K <= Length(S)) and IsUsesWordChar(S[K]) do
-          Inc(K);
-        W := Copy(S, J, K - J);
-        if InUses and AtEntry then
-        begin
-          if SameText(Copy(W, LastDelimiter('.', W) + 1, MaxInt),
-               AShortName) then
-            Exit(Li + 1);
-          AtEntry := False;
-        end
-        else if not InUses and SameText(W, 'uses') and (Prev <> '.')
-           and (Prev <> '&') then
-        begin
-          InUses := True;
-          AtEntry := True;
-        end;
-        Prev := 'a';
-        J := K;
-        Continue;
-      end;
-      if InUses and (S[J] = ',') then
-        AtEntry := True
-      else if InUses and (S[J] = ';') then
-        InUses := False;
-      if not CharInSet(S[J], [' ', #9]) then
-        Prev := S[J];
-      Inc(J);
+      if Result = 0 then
+        AOuterLine := Li;
+      Inc(Result);
+    end
+    else if InList(W, COND_CLOSERS) and (Result > 0) then
+    begin
+      Dec(Result);
+      if Result = 0 then
+        AOuterLine := 0;
     end;
+    Inc(Co);
+  end;
+end;
+
+function ConditionDepthAt(AMap: TRdxCodeMap; ALine, ACol: Integer): Integer;
+  overload;
+var
+  Outer : Integer;
+begin
+  Result := ConditionDepthAt(AMap, ALine, ACol, Outer);
+end;
+
+// Die Zeile des ersten Eintrags AShortName (letztes Glied, Gross/klein egal
+// - wie TRdxRecipes.HasUnit) in einer uses-Klausel des Codes; ACond: er
+// steht nur unter bedingter Uebersetzung (ConditionDepthAt > 0 - jeder
+// Treffer). 0 ohne Treffer. Eine Klausel endet am ';'; ein 'in'-Pfad ist
+// ein String, kein Code-Token.
+function UsesLineInMap(AMap: TRdxCodeMap; const AShortName: string;
+  out ACond: Boolean): Integer;
+var
+  T, N, First : TRdxToken;
+  Name        : string;
+  CondLine    : Integer;
+begin
+  Result := 0;
+  ACond := False;
+  CondLine := 0;
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), 'uses');
+  while T.Low <> '' do
+  begin
+    if (T.Low = 'uses') and IsKeywordAfter(T, Before(AMap, T)) then
+    begin
+      Name := '';
+      First := Default(TRdxToken);
+      N := After(AMap, T);
+      while N.Low <> '' do
+      begin
+        if (N.Low = ',') or (N.Low = ';') or (N.Low = 'in') then
+        begin
+          if (Name <> '') and SameText(LastPart(Name), AShortName) then
+          begin
+            if ConditionDepthAt(AMap, First.Line, First.Col) = 0 then
+              Exit(First.Line);
+            if CondLine = 0 then
+              CondLine := First.Line;
+          end;
+          Name := '';
+          if N.Low = ';' then
+            Break;
+        end
+        else
+        begin
+          if Name = '' then
+            First := N;
+          Name := Name + N.Low;
+        end;
+        N := After(AMap, N);
+      end;
+    end;
+    T := NextTokenOnLineWith(AMap, T, 'uses');
+  end;
+  if CondLine > 0 then
+  begin
+    ACond := True;
+    Result := CondLine;
+  end;
+end;
+
+// Die Zeilen von APlaces als neue Liste - fuer eine eigene Code-Sicht (der
+// Dienst reicht seine Zeilen nur einzeln heraus). Der Aufrufer gibt sie
+// frei.
+function PlacesLines(APlaces: TSourcePlaces): TStringList;
+var
+  Li : Integer;
+begin
+  Result := TStringList.Create;
+  for Li := 1 to APlaces.LineCount do
+    Result.Add(APlaces.LineText(Li));
+end;
+
+// UsesLineInMap auf den Zeilen von APlaces.
+function TextUsesLine(APlaces: TSourcePlaces; const AShortName: string;
+  out ACond: Boolean): Integer;
+var
+  Lines : TStringList;
+  Map   : TRdxCodeMap;
+begin
+  Lines := PlacesLines(APlaces);
+  try
+    Map := TRdxCodeMap.Create(Lines);
+    try
+      Result := UsesLineInMap(Map, AShortName, ACond);
+    finally
+      Map.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+// Die Zeile des aeussersten bedingten Blocks, in dem der Code der Zeile
+// ALine von APlaces steht (ConditionDepthAt vor ihrem ersten Zeichen);
+// 0 = in keinem.
+function ConditionLineOf(APlaces: TSourcePlaces; ALine: Integer): Integer;
+var
+  Lines : TStringList;
+  Map   : TRdxCodeMap;
+  Text  : string;
+begin
+  Text := APlaces.LineText(ALine);
+  Lines := PlacesLines(APlaces);
+  try
+    Map := TRdxCodeMap.Create(Lines);
+    try
+      ConditionDepthAt(Map, ALine, Length(Text) - Length(TrimLeft(Text)) + 1,
+        Result);
+    finally
+      Map.Free;
+    end;
+  finally
+    Lines.Free;
   end;
 end;
 
@@ -1044,8 +1134,8 @@ end;
 // Programm oder eine Library hat keinen der beiden Abschnitte: Reason.
 procedure PlanNewClause(APlaces: TSourcePlaces; var APlan: TRdxUsesPlan);
 var
-  Line : Integer;
-  Text : string;
+  Line, CondLine : Integer;
+  Text           : string;
 begin
   Line := APlaces.SectionLine(TUsesSection.usImplementation);
   if Line = 0 then
@@ -1059,11 +1149,12 @@ begin
   // Klausel galte nur dort (rwE29, mORMot2 mormot.crypt.openssl.pas: das
   // zweite 'implementation' im {$else}-Zweig des leeren Moduls bekam die
   // Klausel, der Code der Fundstelle steht im {$ifdef}-Zweig).
-  if ConditionalStartOf(APlaces, Line) > 0 then
+  CondLine := ConditionLineOf(APlaces, Line);
+  if CondLine > 0 then
   begin
     APlan.Reason := _('the section keyword in line %d is inside a '
       + 'conditional branch (line %d) - add the uses clause by hand',
-      [Line, ConditionalStartOf(APlaces, Line)]);
+      [Line, CondLine]);
     Exit;
   end;
   Text := APlaces.LineText(Line);
@@ -1084,7 +1175,8 @@ class function TRdxPlacesRunner.PlanUses(APlaces: TSourcePlaces;
 var
   AllNames : TArray<string>;
   Entries  : TArray<TRefactorSpan>;
-  TextLine : Integer;
+  Li       : Integer;
+  Cond     : Boolean;
 begin
   Result := Default(TRdxUsesPlan);
   if not Assigned(APlaces) or not APlaces.IsOpen then
@@ -1095,21 +1187,14 @@ begin
   end;
   AllNames := UsesNamesOf(APlaces);
   if TRdxRecipes.HasUnit(AllNames, AShortName) then Exit;   // schon da
+  // Im Text da, der Baum sah sie nicht (s. TextUsesLine): nicht noetig;
+  // nur unter einer Bedingung: offen - gesperrt.
+  Li := TextUsesLine(APlaces, AShortName, Cond);
+  if (Li > 0) and not Cond then Exit;
   Result.Needed := True;
-  // Zweite Wand (rwE29): steht die Unit im TEXT in einer uses-Klausel,
-  // die der Baum nicht (ganz) sieht? Ausserhalb jedes bedingten Zweigs ist
-  // sie da - nichts einzufuegen; in einem Zweig gilt sie vielleicht nur
-  // dort, eine Einfuegung braeche den anderen (E2004) - von Hand.
-  TextLine := UsesLineInText(APlaces, AShortName);
-  if TextLine > 0 then
+  if Li > 0 then
   begin
-    if ConditionalStartOf(APlaces, TextLine) = 0 then
-    begin
-      Result.Needed := False;
-      Exit;
-    end;
-    Result.Reason := _('%s is named in a uses clause inside a conditional '
-      + 'branch (line %d) - add it by hand', [AShortName, TextLine]);
+    Result.Reason := _(R_USES_CONDITIONAL, [Li, MsgByHand]);
     Exit;
   end;
   // FPC 3.2 kennt keine Unit-Scopes: eine Datei mit FPC-Weiche bekommt

@@ -235,6 +235,8 @@ uses
   uRedundantConditional, uRedundantJump, uSelfAssignment,
   uEngineApi, uRdxBufferMath, uRdxRecipeRunner,
   uRdxFixTable,   // der Einstieg des Anbieters (Charge R8: Tabelle statt Ketten)
+  uRdxPlacesRunner,      // R_USES_CONDITIONAL (PlanUses)
+  uRdxText,              // _, MsgByHand
   uTestRdxDetectorKit,   // TSeen, Detect-/Plan-/FixAll-Helfer (Charge H3c)
   uTestRdxTextKit;       // Join, Apply
 
@@ -1451,7 +1453,9 @@ end;
 // rwE29 (mORMot2 mormot.crypt.openssl.pas:3239, minimiert): 'sysutils'
 // steht nur im {$IFDEF}-Zweig, den der Baum nicht sieht; bis dahin legte
 // PlanUses hinter das 'implementation' des {$ELSE}-Zweigs eine neue
-// Klausel an. Jetzt: von Hand (die Zeile des Eintrags im Grund).
+// Klausel an. Jetzt: von Hand (die Zeile des Eintrags im Grund,
+// R_USES_CONDITIONAL - derselbe Satz wie Table_SysUtilsOnlyUnderCondition_
+// NoHelp in uTestRdxRawExceptionFix).
 procedure TTestRdxSimpleFixesDetector4.PlanUses_UnitOnlyInConditionalBranch_Refused;
 var
   Plan : TRdxUsesPlan;
@@ -1460,7 +1464,7 @@ begin
     '  sysutils;', 'implementation', '{$ELSE}', 'implementation', '{$ENDIF}',
     'end.']));
   Assert.IsTrue(Plan.Needed);
-  Assert.IsTrue(Pos('bedingten Zweig (Zeile 5)', Plan.Reason) > 0, Plan.Reason);
+  Assert.AreEqual(_(R_USES_CONDITIONAL, [5, MsgByHand]), Plan.Reason);
   // Gegenprobe: ausserhalb jedes Zweigs gilt die Unit als vorhanden.
   Plan := PlanUsesIn(Join(['unit t;', 'interface', 'uses', '  SysUtils;',
     'implementation', 'end.']));
