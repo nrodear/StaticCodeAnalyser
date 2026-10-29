@@ -125,8 +125,11 @@ in der Konsolenausgabe bleiben sie vollständig erhalten.
 **Hoch**gestufte Funde sind nie betroffen — sie gehen immer in den Report
 (mit der Katalog-Schwere, mehr gibt das Format nicht her).
 
-**Custom-Regeln** (`--custom-rules`) gelten nie als herabgestuft: ihre
-Severity steht in der YAML-Regel selbst. Jede Custom-Regel erscheint in Sonar
+**Custom-Regeln** (`--custom-rules`): ihre Severity steht in der YAML-Regel
+selbst und ist der Maßstab – auch `severity: hint` gilt nicht als
+herabgestuft. Herabgestuft ist ein Custom-Fund nur, wenn eine
+Pfad-Überschreibung ihn unter seine YAML-Severity setzt; dann bleibt er wie
+jeder andere draußen. Jede Custom-Regel erscheint in Sonar
 unter eigenem Namen („User-defined custom rule PROJ001“) mit einem Impact nach
 ihrer YAML-Severity (error → HIGH, warning → MEDIUM, hint → LOW).
 
