@@ -44,7 +44,7 @@ type
     [Test] procedure Sca128_Directive_NoHelp;
     [Test] procedure Sca128_NoSysUtilsOrOwnRoutine_NoHelp;
     [Test] procedure Sca128_FormatSettingsDeclared_Qualified;
-    [Test] procedure Sca128_With_NoHelp;
+    [Test] procedure Sca128_With_MainQualified_AltNoHelp;
     [Test] procedure Sca128_OldCompiler_Blocks;
     [Test] procedure Sca128_Alt_FpcOrOwnType_NoHelp;
     // ---- Realworld-Test rwE29: Literal gegen Invariant ----
@@ -456,14 +456,40 @@ begin
     '  r := DateToStr(d);']), BODY_LINE + 1, Msg('datetostr'));
 end;
 
-procedure TTestRdxFormatSettingsFix.Sca128_With_NoHelp;
+procedure TTestRdxFormatSettingsFix.Sca128_With_MainQualified_AltNoHelp;
 var
   Src : string;
 begin
+  // Seit rwE31 Stufe 3 sperrt ein with nur den Alt-Weg; der Hauptweg nimmt
+  // die globale Variable qualifiziert (bis dahin R_FS_WITH auch hier).
   Src := InUnit(['  with Obj do', '    r := DateToStr(d);']);
-  AssertRefused(Src, BODY_LINE + 1, Msg('datetostr'), _(R_FS_WITH, [BODY_LINE]));
+  AssertFixed(InUnit(['  with Obj do',
+    '    r := DateToStr(d, System.SysUtils.FormatSettings);']), Src,
+    BODY_LINE + 1, Msg('datetostr'));
   AssertRefused(Src, BODY_LINE + 1, Msg('datetostr'), _(R_FS_WITH, [BODY_LINE]),
     True);
+  // HeidiSQL SynEditPrintMarginsDialog.pas:174 (ebenso pyscripter
+  // dlgSynPageSetup.pas:458): 'with SynEditMargins do begin' um die
+  // FloatToStr, uses mit 'SysUtils' - die Schreibweise der uses-Klausel.
+  Src := UnitText('SysUtils', [], ['  with SynEditMargins do begin',
+    '    CBUnits.ItemIndex := Ord(UnitSystem);',
+    '    EditLeft.Text := FloatToStr(Left);', '  end;']);
+  AssertFixed(UnitText('SysUtils', [], ['  with SynEditMargins do begin',
+    '    CBUnits.ItemIndex := Ord(UnitSystem);',
+    '    EditLeft.Text := FloatToStr(Left, SysUtils.FormatSettings);',
+    '  end;']), Src, BODY_LINE + 2, Msg('floattostr'));
+  // issrc ISPP.Funcs.pas:1599: with auf eine Interface-Typumwandlung, die
+  // Aufrufe im try des with-Blocks.
+  Src := InUnit(['  with IInternalFuncParams(Params) do', '  begin',
+    '    try', '      MakeStr(ResPtr^, FormatDateTime(Get(1).AsStr, Age));',
+    '    finally', '      Foo;', '    end;', '  end;']);
+  AssertFixed(InUnit(['  with IInternalFuncParams(Params) do', '  begin',
+    '    try', '      MakeStr(ResPtr^, FormatDateTime(Get(1).AsStr, Age, '
+    + 'System.SysUtils.FormatSettings));',
+    '    finally', '      Foo;', '    end;', '  end;']), Src, BODY_LINE + 3,
+    Msg('formatdatetime'));
+  AssertRefused(Src, BODY_LINE + 3, Msg('formatdatetime'),
+    _(R_FS_WITH, [BODY_LINE]), True);
   // Ein with in einer ANDEREN Routine davor stoert nicht.
   AssertFixed(UnitText(RTL_USES,
     ['procedure Q; begin with Obj do Foo; end;'],
@@ -772,15 +798,27 @@ end;
 
 procedure TTestRdxFormatSettingsFix.Sca128_WithEncloses_NoHelp;
 begin
-  // Gegenproben: der Aufruf im Block bzw. in der Anweisung des with.
+  // Gegenproben: der Aufruf im Block bzw. in der Anweisung des with - der
+  // Alt-Weg sperrt, der Hauptweg qualifiziert (seit rwE31 Stufe 3).
   AssertRefused(InUnit(['  with Obj do begin', '    r := FloatToStr(x);',
-    '  end;']), BODY_LINE + 1, Msg('floattostr'), _(R_FS_WITH, [BODY_LINE]));
+    '  end;']), BODY_LINE + 1, Msg('floattostr'), _(R_FS_WITH, [BODY_LINE]),
+    True);
   AssertRefused(InUnit(['  with Obj do', '    if x > 0 then', '      Foo',
     '    else', '      r := FloatToStr(x);']), BODY_LINE + 4,
-    Msg('floattostr'), _(R_FS_WITH, [BODY_LINE]));
+    Msg('floattostr'), _(R_FS_WITH, [BODY_LINE]), True);
   AssertRefused(InUnit(['  with Obj do try', '    r := FloatToStr(x);',
     '  finally', '    Free;', '  end;']), BODY_LINE + 1, Msg('floattostr'),
-    _(R_FS_WITH, [BODY_LINE]));
+    _(R_FS_WITH, [BODY_LINE]), True);
+  AssertFixed(InUnit(['  with Obj do try',
+    '    r := FloatToStr(x, System.SysUtils.FormatSettings);',
+    '  finally', '    Free;', '  end;']),
+    InUnit(['  with Obj do try', '    r := FloatToStr(x);',
+    '  finally', '    Free;', '  end;']), BODY_LINE + 1, Msg('floattostr'));
+  // Ein with in der anonymen Methode der Anweisung um einen spaeteren
+  // Aufruf (seit rwE31 Stufe 3 jeder Aufruf geprueft).
+  AssertRefused(InUnit(['  r := FloatToStr(x) + Run(procedure begin',
+    '    with Obj do s := FloatToStr(y); end);']), BODY_LINE,
+    Msg('floattostr'), _(R_FS_WITH, [BODY_LINE + 1]), True);
 end;
 
 procedure TTestRdxFormatSettingsFix.Sca128_OldMormotSymbols_Block;

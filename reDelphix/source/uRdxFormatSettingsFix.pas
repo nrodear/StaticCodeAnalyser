@@ -60,10 +60,18 @@ unit uRdxFormatSettingsFix;
 //   * auf der Zeile bzw. zwischen Fundzeile und letztem Aufruf eine
 //     Direktive steht;
 //   * SysUtils in keiner uses-Klausel steht, die Datei eine eigene Routine
-//     des Namens deklariert, ein with in der Routine den Aufruf umfasst (die
-//     Namen koennten an einen Member binden; seit rwE30 Stufe 2 zaehlt ein
-//     with, dessen Anweisung vor dem Aufruf endet, nicht mehr -
-//     WithEndsBefore);
+//     des Namens deklariert;
+//   * Alt-Weg: ein with in der Routine den Aufruf umfasst (die Namen
+//     koennten an einen Member binden; seit rwE30 Stufe 2 zaehlt ein with,
+//     dessen Anweisung vor dem Aufruf endet, nicht mehr - WithEndsBefore).
+//     Der Hauptweg schreibt dort seit rwE31 Stufe 3 die globale Variable
+//     qualifiziert (', System.SysUtils.FormatSettings' in der Schreibweise
+//     der uses-Klausel; SynEditPrintMarginsDialog.pas:174 'with
+//     SynEditMargins do .. FloatToStr(Left)', dlgSynPageSetup.pas:458,
+//     ISPP.Funcs.pas:1599, SynUniDesigner.pas:2978): so bindet das Argument
+//     an keinen Member. Haette das with-Ziel selbst eine Methode des
+//     Aufrufnamens (FloatToStr ..), uebersetzte das zusaetzliche Argument
+//     nicht - ein lauter Fehler, nie eine stille Aenderung;
 //   * Hauptweg: die Datei nach Compilern vor Delphi XE fragt (die globale
 //     Variable gibt es erst seit XE; FPC vor 2.6) - ausser sie beweist
 //     selbst einen neueren (uRdxCompilerTraces.ModernProof). Deklariert die
@@ -1555,9 +1563,21 @@ begin
     if (Li > 0) or (Member > 0) then
       ASettings := ', ' + Spell + '.FormatSettings';
   end;
-  Li := WithLineBefore(AMap, ASites[0].Name);
-  if Li > 0 then
-    Exit(_(R_FS_WITH, [Li]));
+  // Ein with um einen der Aufrufe (seit rwE31 Stufe 3 jeder Aufruf, nicht
+  // nur der erste - die Aufrufe einer anonymen Methode der Anweisung koennen
+  // in einem eigenen with stehen): der Alt-Weg sperrt, der Hauptweg nimmt
+  // die globale Variable qualifiziert (s. Kopf).
+  for i := 0 to High(ASites) do
+  begin
+    Li := WithLineBefore(AMap, ASites[i].Name);
+    if Li > 0 then
+    begin
+      if AInvariant then
+        Exit(_(R_FS_WITH, [Li]));
+      ASettings := ', ' + Spell + '.FormatSettings';
+      Break;
+    end;
+  end;
   Proof := ModernProof(AMap);
   if not AInvariant then
   begin

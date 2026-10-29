@@ -368,8 +368,14 @@ begin
     ['function Format(const F: string; const A: array of const): string; forward;'],
     ['  r := Format(''%.2f'', [x]);']), BODY_LINE + 1, Msg('%.2f'),
     _(R_FS_OWN_ROUTINE, ['Format']), True);
+  // with: seit rwE31 Stufe 3 sperrt es nur den Alt-Weg, der Hauptweg nimmt
+  // die globale Variable qualifiziert.
   AssertRefused(InUnit(['  with Obj do r := Format(''%.2f'', [x]);']),
-    BODY_LINE, Msg('%.2f'), _(R_FS_WITH, [BODY_LINE]));
+    BODY_LINE, Msg('%.2f'), _(R_FS_WITH, [BODY_LINE]), True);
+  AssertFixed(InUnit(['  with Obj do r := Format(''%.2f'', [x], '
+    + 'System.SysUtils.FormatSettings);']),
+    InUnit(['  with Obj do r := Format(''%.2f'', [x]);']), BODY_LINE,
+    Msg('%.2f'));
 end;
 
 procedure TTestRdxFormatLocaleFix.Sca059_Alt_FpcOrOldCompiler_NoHelp;
