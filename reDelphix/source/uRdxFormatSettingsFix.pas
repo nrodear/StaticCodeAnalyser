@@ -409,27 +409,59 @@ begin
   end;
 end;
 
+// Die Klammertiefe ('(' und '[') am Ende der Zeile ALine, ab ihrem ersten
+// Token gezaehlt.
+function DepthAtLineEnd(AMap: TRdxCodeMap; ALine: Integer): Integer;
+var
+  T : TRdxToken;
+begin
+  Result := 0;
+  T := NextToken(AMap, ALine, 1);
+  while (T.Low <> '') and (T.Line = ALine) do
+  begin
+    Result := Result + ParenDelta(T);
+    T := After(AMap, T);
+  end;
+end;
+
 // Die Woerter ANames (nicht hinter '@') auf den Folgezeilen der Anweisung
-// von ALine - dieselbe Grenze wie FollowLineWith (';', ein Schluesselwort
-// aus STATEMENT_STOP, MAX_FOLLOW_LINES). Seit rwE30 Stufe 2 bearbeitet die
-// Hilfe sie mit (Planer kennt die Aufrufzeile; MainControllerU.pas:47,
-// wbLOD.pas:3082), statt abzulehnen.
+// von ALine - die Anweisung endet am ';' bzw. an einem Schluesselwort aus
+// STATEMENT_STOP, gesucht wird hoechstens MAX_FOLLOW_LINES Zeilen weit.
+// Seit rwE30 Stufe 2 bearbeitet die Hilfe sie mit (Planer kennt die
+// Aufrufzeile; MainControllerU.pas:47, wbLOD.pas:3082), statt abzulehnen.
+// Seit rwE31 Stufe 3 zaehlen ';' und Schluesselwoerter nur auf Klammertiefe
+// 0: in einer offenen Klammer stehen sie in einer anonymen Methode, die zur
+// Anweisung gehoert (Alcinoe Main.pas:1444 'TTask.Create (procedure () begin
+// .. Text4.Text := .. FormatFloat(..) .. end).Start;' - der Detektor meldet
+// die Zeile von TTask.Create, die Aufrufe stehen in 1450/1451; bis dahin
+// 'kein Aufruf ... - Zeile verschoben?'). Eine Klammer, die vor ALine
+// geoeffnet wurde, beendet die Suche.
 function FollowNames(AMap: TRdxCodeMap; ALine: Integer;
   const ANames: array of string): TArray<TRdxToken>;
 var
-  T, P : TRdxToken;
+  T, P  : TRdxToken;
+  Depth : Integer;
 begin
   Result := nil;
   T := LastTokenOn(AMap, ALine);
-  if (T.Low = '') or InList(T.Low, STATEMENT_DONE) then
+  if T.Low = '' then
+    Exit;
+  Depth := DepthAtLineEnd(AMap, ALine);
+  if (Depth <= 0) and InList(T.Low, STATEMENT_DONE) then
     Exit;
   P := T;
   T := After(AMap, T);
   while (T.Low <> '') and (T.Line - ALine <= MAX_FOLLOW_LINES) do
   begin
-    if T.Low = ';' then
-      Exit;
-    if IsKeywordAfter(T, P) and InList(T.Low, STATEMENT_STOP) then
+    if Depth <= 0 then
+    begin
+      if T.Low = ';' then
+        Exit;
+      if IsKeywordAfter(T, P) and InList(T.Low, STATEMENT_STOP) then
+        Exit;
+    end;
+    Depth := Depth + ParenDelta(T);
+    if Depth < 0 then
       Exit;
     if T.IsWord and InList(T.Low, ANames) and (P.Low <> '@') then
       AddToken(Result, T);

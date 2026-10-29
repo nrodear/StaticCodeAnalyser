@@ -73,6 +73,7 @@ type
     [Test] procedure Sca128_Alt_CoupledSettings_NoHelp;
     [Test] procedure Sca128_Alt_NotCoupled_Helps;
     [Test] procedure Sca128_Alt_PairHint_NearestWithoutOwnSettings;
+    [Test] procedure Sca128_FollowLines_AnonymousMethod;
   end;
 
 {$IFNDEF FPC}
@@ -1081,6 +1082,37 @@ begin
     InUnit(['  r := FloatToStr(x);',
     '  Obj.r := Pos(''.'', Obj.FormatSettingsText);']), BODY_LINE,
     Msg('floattostr'), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_FollowLines_AnonymousMethod;
+const
+  HEAD: array[0..5] of string = ('  TTask.Create (procedure ()', '    begin',
+    '      sleep(250);', '      TThread.Synchronize(nil,', '        procedure',
+    '        begin');
+  TAIL: array[0..1] of string = ('        end);', '    end).Start;');
+var
+  Src : string;
+begin
+  // Alcinoe Demos\ALFmxControls\_Source\Main.pas:1444: der Detektor meldet
+  // die Zeile von 'TTask.Create (', die beiden FormatFloat stehen in der
+  // anonymen Methode in 1450/1451 - ';' und begin/end dort beenden die
+  // Anweisung nicht (offene Klammer). Bis rwE31 Stufe 3 'kein Aufruf von
+  // formatfloat ... - Zeile verschoben?'.
+  Src := InUnit([HEAD[0], HEAD[1], HEAD[2], HEAD[3], HEAD[4], HEAD[5],
+    '          Text4.Text := ''buffer: '' + FormatFloat(''0.#####'',a) + '' - '' +',
+    '                        ''Paint: '' + FormatFloat(''0.#####'',b) + '' ms'';',
+    TAIL[0], TAIL[1]]);
+  AssertFixed(InUnit([HEAD[0], HEAD[1], HEAD[2], HEAD[3], HEAD[4], HEAD[5],
+    '          Text4.Text := ''buffer: '' + FormatFloat(''0.#####'',a, '
+    + 'FormatSettings) + '' - '' +',
+    '                        ''Paint: '' + FormatFloat(''0.#####'',b, '
+    + 'FormatSettings) + '' ms'';',
+    TAIL[0], TAIL[1]]), Src, BODY_LINE, Msg('formatfloat'));
+  // Gegenprobe: schliesst die Klammer der anonymen Methode mit ';', gehoert
+  // der Aufruf der naechsten Anweisung nicht dazu.
+  AssertRefused(InUnit(['  Run(procedure begin Foo; end);',
+    '  r := FormatFloat(''0.0'', x);']), BODY_LINE, Msg('formatfloat'),
+    Moved('formatfloat'));
 end;
 
 procedure TTestRdxFormatSettingsFix.Sca128_Alt_PairHint_NearestWithoutOwnSettings;
