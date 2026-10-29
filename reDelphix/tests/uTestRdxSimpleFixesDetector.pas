@@ -1514,7 +1514,7 @@ end;
 // rwE30 Stufe 2, Muster CnSelectMaskFrm.pas:39/106 (minimiert): die Unit
 // nutzt mrOk, das nur aus (Vcl.)Controls kommt; die Liste des Detektors
 // kennt es nicht und meldet Vcl.Controls ungenutzt. ABody ist der Rumpf von
-// TFoo.IsOk (Zeile 11).
+// TFoo.IsOk (Zeile 12).
 function ModalUnit(const ABody: string): string;
 begin
   Result := Join(['unit t;', 'interface', 'uses System.Classes, Vcl.Controls;',
@@ -1541,7 +1541,7 @@ begin
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.IsTrue(O.MenuOnly, 'nur im Menue');
   Assert.IsTrue(Pos('mrOk', O.Hint) > 0, O.Hint);
-  Assert.IsTrue(Pos('11', O.Hint) > 0, 'Zeile: ' + O.Hint);
+  Assert.IsTrue(Pos('12', O.Hint) > 0, 'Zeile: ' + O.Hint);
   Assert.IsTrue(O.ChangesBehavior, 'Kennzeichnung bleibt');
 end;
 
