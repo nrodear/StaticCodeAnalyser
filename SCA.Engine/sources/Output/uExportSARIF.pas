@@ -44,18 +44,26 @@ type
   //                     byte-gleich zum Stand davor (Byte-A/B gegen alte
   //                     Referenzen). Einschalten nur die CLI
   //                     (--sarif-editor-help); GUI-Export und IDE nie.
-  // Initialize setzt beide auf False - eine rohe Deklaration ist sicher.
-  // Den Scan-Stempel der Evidenz-Politik liest DefaultOptions zur
-  // AUFRUFZEIT, nicht Initialize: ein lokaler Record wird beim Eintritt
-  // in die Routine initialisiert, also VOR dem Scan, der den Stempel
-  // setzt.
+  // Startwert IMMER ueber Default(TSarifOptions) (beide aus) oder
+  // TSARIFWriter.DefaultOptions (Scan-Stempel) - eine rohe Deklaration
+  // ist uninitialisiert.
+  //
+  // BEWUSST KEIN 'class operator Initialize' (Compilerfehler, Nico-Bau
+  // 2026-10-29, TestProject Win64 Release): ein Custom Managed Record von
+  // hoechstens 8 Byte als const-Parameter auf dem STACK (hier der sechste
+  // Parameter von ToJsonString/WriteFile) wird per Referenz uebergeben,
+  // der Aufgerufene kopiert die 8-Byte-Adresse aber in einen Rahmenplatz
+  // von Record-Groesse (2 Byte). Die naechste lokale Variable ueberschreibt
+  // die oberen 6 Byte, weitergereicht wird ein Zeigerrest ($F5AE) -
+  // Zugriffsverletzung in HelpTokensJeArt bei jedem SARIF-Export. Ohne
+  // Initialize ist der Record unverwaltet und geht als Wert (2 Byte im
+  // Register bzw. Stapelplatz) - der gewoehnliche Weg wie bei TPoint.
+  // THtmlReportOptions/TBaselineScope sind groesser als 8 Byte und nicht
+  // betroffen.
   TSarifOptions = record
   public
     ConfidenceProps : Boolean;
     EditorHelp      : Boolean;
-    // noinspection AvoidOut
-    // 'out' schreibt die Signatur von class operator Initialize vor.
-    class operator Initialize(out Dest: TSarifOptions);
   end;
 
   TSARIFWriter = class
@@ -984,14 +992,9 @@ end;
 
 { ---- Public API ---- }
 
-class operator TSarifOptions.Initialize(out Dest: TSarifOptions);
-begin
-  Dest.ConfidenceProps := False;
-  Dest.EditorHelp      := False;
-end;
-
 class function TSARIFWriter.DefaultOptions: TSarifOptions;
 begin
+  Result := Default(TSarifOptions);
   Result.ConfidenceProps := uSCAConsts.LastScanEvidenceTiering;
   Result.EditorHelp      := False;
 end;
@@ -1009,8 +1012,9 @@ class function TSARIFWriter.ToJsonString(
   const ABaseDir, AToolVersion, AToolName: string;
   AConfidenceProps: Boolean): string;
 var
-  Opts : TSarifOptions;   // Initialize: EditorHelp aus
+  Opts : TSarifOptions;
 begin
+  Opts := Default(TSarifOptions);                      // EditorHelp aus
   Opts.ConfidenceProps := AConfidenceProps;
   Result := ToJsonString(AFindings, ABaseDir, AToolVersion, AToolName, Opts);
 end;
@@ -1045,8 +1049,9 @@ class procedure TSARIFWriter.WriteFile(const AFileName: string;
   const ABaseDir, AToolVersion, AToolName: string;
   AConfidenceProps: Boolean);
 var
-  Opts : TSarifOptions;   // Initialize: EditorHelp aus
+  Opts : TSarifOptions;
 begin
+  Opts := Default(TSarifOptions);                      // EditorHelp aus
   Opts.ConfidenceProps := AConfidenceProps;
   WriteFile(AFileName, AFindings, ABaseDir, AToolVersion, AToolName, Opts);
 end;

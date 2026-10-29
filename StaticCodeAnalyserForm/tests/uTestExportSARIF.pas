@@ -1057,8 +1057,9 @@ var
   Root     : TJSONObject;
   Results  : TJSONArray;
   Props    : TJSONObject;
-  Opts     : TSarifOptions;   // Initialize: Konfidenz aus
+  Opts     : TSarifOptions;
 begin
+  Opts := Default(TSarifOptions);                      // Konfidenz aus
   Findings := TObjectList<TLeakFinding>.Create(True);
   try
     Findings.Add(HelpFinding(fkDebugOutput, 3));
@@ -1095,6 +1096,7 @@ var
   PVar     : Integer;
   PHelp    : Integer;
 begin
+  Opts := Default(TSarifOptions);
   Findings := TObjectList<TLeakFinding>.Create(True);
   try
     // SCA001 (fkMemoryLeak) traegt immer eine Variante, mit Konfidenz
@@ -1131,8 +1133,9 @@ var
   Props    : TJSONObject;
   i        : Integer;
   Gesehen  : Integer;
-  Opts     : TSarifOptions;   // Initialize: Konfidenz aus
+  Opts     : TSarifOptions;
 begin
+  Opts := Default(TSarifOptions);                      // Konfidenz aus
   Findings := TObjectList<TLeakFinding>.Create(True);
   try
     Root := TJSONObject.ParseJSONValue(SarifMitHilfe(Findings, Opts))
@@ -1184,12 +1187,13 @@ end;
 procedure TTestExportSarifEditorHelp.SchalterAus_OptionenStandard_KeinEditorHelp;
 var
   Findings : TObjectList<TLeakFinding>;
-  Opts     : TSarifOptions;   // Initialize: beide aus
+  Opts     : TSarifOptions;
 begin
+  Opts := Default(TSarifOptions);                      // beide aus
   Findings := TObjectList<TLeakFinding>.Create(True);
   try
     Findings.Add(HelpFinding(fkDebugOutput, 3));
-    Assert.IsFalse(Opts.EditorHelp, 'Initialize: editorHelp aus');
+    Assert.IsFalse(Opts.EditorHelp, 'Default: editorHelp aus');
     Assert.IsFalse(TSARIFWriter.DefaultOptions.EditorHelp,
       'DefaultOptions: editorHelp aus');
     PruefeKeinEditorHelp(
