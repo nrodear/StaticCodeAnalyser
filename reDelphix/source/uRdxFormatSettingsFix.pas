@@ -752,17 +752,25 @@ end;
 
 // Der Grund, wenn der Aufruf ASite ein Literal liest, das nicht zu
 // TFormatSettings.Invariant passt; '' sonst (kein Literal, kein Leser).
+// Das Literal darf auf einer Folgezeile beginnen ('StrToDateTime(' am
+// Zeilenende, das Literal darunter - seit rwE30 Stufe 2 schliesst die
+// Klammer bis MAX_CALL_LINES tiefer; Review e/HilfeFixG: bis dahin las die
+// Probe nur die Zeile des Namens und liess das Literal durch).
 function LiteralReason(AMap: TRdxCodeMap; const ASite: TCallSite): string;
 var
   Lit, Kind : string;
+  Li, Co    : Integer;
   Upto      : Integer;
 begin
   Result := '';
-  Upto := ASite.Close.Col - 1;
-  if ASite.Close.Line <> ASite.Name.Line then
-    Upto := Length(AMap.Raw(ASite.Name.Line));
-  if not LiteralFirstArg(AMap, ASite.Name.Line, ASite.Open.EndCol, Upto, Lit)
-  then
+  if not FirstCharAfter(AMap, ASite.Open, Li, Co)
+     or (Li > ASite.Close.Line)
+     or ((Li = ASite.Close.Line) and (Co >= ASite.Close.Col)) then
+    Exit;
+  Upto := Length(AMap.Raw(Li));
+  if Li = ASite.Close.Line then
+    Upto := ASite.Close.Col - 1;
+  if not LiteralFirstArg(AMap, Li, Co, Upto, Lit) then
     Exit;
   Kind := LiteralMisfit(ASite.Name.Low, Lit);
   if Kind = MISFIT_DATE then

@@ -535,6 +535,20 @@ begin
   AssertRefused(InUnit(['  x := StrToCurr(''1.234,50'');']), BODY_LINE,
     Msg('strtocurr'), _(R_FS_LIT_NUMBER, ['''1.234,50''', 'StrToCurr']),
     True);
+  // Review e/HilfeFixG: das Literal auf der Folgezeile (die Klammer darf
+  // seit rwE30 Stufe 2 tiefer schliessen) - bis dahin las die Probe nur die
+  // Zeile des Namens und bot Invariant an (sicherer EConvertError).
+  Src := InUnit(['  d := StrToDateTime(', '    ''17/02/2017 16:37:50'');']);
+  AssertRefused(Src, BODY_LINE, Msg('strtodatetime'),
+    _(R_FS_LIT_DATE, ['''17/02/2017 16:37:50''', 'StrToDateTime']), True);
+  AssertFixed(InUnit(['  d := StrToDateTime(',
+    '    ''17/02/2017 16:37:50'', FormatSettings);']), Src, BODY_LINE,
+    Msg('strtodatetime'));
+  // Gegenprobe: ein passendes Literal auf der Folgezeile bekommt Invariant.
+  AssertFixed(InUnit(['  d := StrToDateTime(',
+    '    ''02/17/2017 16:37:50'', TFormatSettings.Invariant);']),
+    InUnit(['  d := StrToDateTime(', '    ''02/17/2017 16:37:50'');']),
+    BODY_LINE, Msg('strtodatetime'), True);
 end;
 
 procedure TTestRdxFormatSettingsFix.Sca128_Alt_LiteralInvariant_Helps;
